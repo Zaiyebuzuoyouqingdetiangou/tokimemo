@@ -52,6 +52,10 @@ const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ITEMS]: 6144,
     [MODE.PHONE]: 6144,
 });
+const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.BUTTERFLY]);
+const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS, MODE.PHONE]);
+const MEMORY_PROVIDER_TRACE_RE = /(memory|memories|memo|recall|remember|summary|summar|history|lore|horae|vector|记忆|回忆|忆|摘要|总结|往事|历史)/i;
+const ARCHIVE_OVERVIEW_CACHE_MS = 60000;
 
 const CATEGORY_VALUES = new Set(['日常', '约会', '结局']);
 const ROOM_ZONE_VALUES = new Set(['左上', '右上', '左下', '右下', '中央', '近景']);
@@ -66,6 +70,10 @@ let roomLifeRefreshPromise = null;
 let activeTaskAbortController = null;
 let activeTaskLabel = '';
 let activeTaskBackgrounded = false;
+let butterflyTransitionTimer = 0;
+let archiveOverviewCache = { key: '', fetchedAt: 0, items: [] };
+let archiveOverviewPromise = null;
+const archiveOverviewAllowedChats = new Set();
 const connectionModelCache = new Map();
 
 function getContext() {
@@ -458,6 +466,122 @@ function getImportedMemory(context = getContext()) {
 }
 
 
+function safeGlobalValue(key) {
+    try { return globalThis?.[key]; } catch { return undefined; }
+}
+
+function publicMemoryProviderName(api, key) {
+    const candidates = [
+        api?.displayName, api?.pluginName, api?.extensionName, api?.name,
+        api?.meta?.displayName, api?.meta?.name,
+        api?.metadata?.displayName, api?.metadata?.name,
+        api?.manifest?.display_name, api?.manifest?.displayName, api?.manifest?.name,
+    ];
+    for (const value of candidates) {
+        const text = normalizeText(value, 100);
+        if (text && !/^(object|function|api)$/i.test(text)) return text;
+    }
+    return normalizeText(key, 100) || '记忆插件';
+}
+
+function publicMemoryTraceTokens(context = getContext()) {
+    const tokens = [];
+    try { tokens.push(...Object.keys(context.extensionSettings || {})); } catch {}
+    try {
+        for (const script of document.querySelectorAll('script[src]')) {
+            const src = String(script.getAttribute('src') || '');
+            if (!MEMORY_PROVIDER_TRACE_RE.test(src)) continue;
+            const parts = src.split(/[/?#]/).filter(Boolean);
+            const thirdParty = parts.findIndex(item => item === 'third-party');
+            tokens.push(thirdParty >= 0 ? parts[thirdParty + 1] : (parts.at(-2) || parts.at(-1) || src));
+        }
+    } catch {}
+    return tokens.map(value => normalizeText(value, 160)).filter(Boolean);
+}
+
+function detectPublicMemoryProviders(context = getContext()) {
+    const traces = publicMemoryTraceTokens(context);
+    const traceFolded = traces.map(value => value.toLowerCase().replace(/[^a-z0-9\u3400-\u9fff]+/g, ''));
+    const results = [];
+    let keys = [];
+    try { keys = Object.getOwnPropertyNames(globalThis); } catch { return results; }
+    const excluded = new Set(['window', 'self', 'globalThis', 'document', 'location', 'navigator', 'history', 'localStorage', 'sessionStorage', 'SillyTavern', '$', 'jQuery', 'toastr']);
+    for (const key of keys) {
+        if (excluded.has(key)) continue;
+        const api = safeGlobalValue(key);
+        if (!api || (typeof api !== 'object' && typeof api !== 'function')) continue;
+        let reader;
+        try { reader = api.getInjectedHistory; } catch { continue; }
+        if (typeof reader !== 'function') continue;
+        const name = publicMemoryProviderName(api, key);
+        const keyNorm = String(key).toLowerCase().replace(/[^a-z0-9\u3400-\u9fff]+/g, '');
+        const nameNorm = name.toLowerCase().replace(/[^a-z0-9\u3400-\u9fff]+/g, '');
+        const traced = traceFolded.some(token => token && (token.includes(keyNorm) || keyNorm.includes(token) || token.includes(nameNorm) || nameNorm.includes(token)));
+        if (!traced && !MEMORY_PROVIDER_TRACE_RE.test(`${key} ${name}`)) continue;
+        results.push({ key, name, api });
+        if (results.length >= 12) break;
+    }
+    return results;
+}
+
+function normalizePublicMemoryText(value) {
+    if (value == null) return '';
+    if (typeof value === 'string') return normalizeText(value, 20000);
+    if (Array.isArray(value)) return normalizeText(value.map(normalizePublicMemoryText).filter(Boolean).join('\n'), 20000);
+    if (typeof value !== 'object') return normalizeText(String(value), 20000);
+    for (const key of ['relativeText', 'text', 'content', 'memoryText', 'historyText', 'summary']) {
+        if (typeof value?.[key] === 'string' && value[key].trim()) return normalizeText(value[key], 20000);
+    }
+    if (Array.isArray(value?.nodes)) {
+        return normalizeText(value.nodes.map(node => normalizeText(node?.relativeText ?? node?.text ?? node?.content ?? node?.summary, 4000)).filter(Boolean).join('\n'), 20000);
+    }
+    return '';
+}
+
+function comparableChatId(value) {
+    return normalizeText(value, 260).replace(/\.jsonl$/i, '').trim();
+}
+
+function providerReturnedChatId(result, snapshot) {
+    const candidates = [
+        result?.chat?.id, result?.chat?.chatId, result?.chat?.fileId, result?.chat?.file_id,
+        result?.chatId, result?.currentChatId,
+        snapshot?.chat?.id, snapshot?.chat?.chatId, snapshot?.chat?.fileId, snapshot?.chat?.file_id,
+        snapshot?.chatId, snapshot?.currentChatId,
+    ];
+    return candidates.map(comparableChatId).find(Boolean) || '';
+}
+
+async function readPublicMemoryProviderCurrentChat(provider, context, expectedChatId, signal) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (comparableChatId(getChatId(currentCharacterGuard())) !== comparableChatId(expectedChatId)) throw new DOMException('Chat changed', 'AbortError');
+    const result = await Promise.resolve(provider.api.getInjectedHistory());
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (comparableChatId(getChatId(currentCharacterGuard())) !== comparableChatId(expectedChatId)) throw new DOMException('Chat changed', 'AbortError');
+    let snapshot = null;
+    if (typeof provider.api.getSnapshot === 'function') {
+        try { snapshot = await Promise.resolve(provider.api.getSnapshot()); } catch {}
+    }
+    const returnedChatId = providerReturnedChatId(result, snapshot);
+    if (returnedChatId && returnedChatId !== comparableChatId(expectedChatId)) {
+        console.warn('[HeartbeatMemories] rejected public memory provider from another chat', { provider: provider.name, returnedChatId, expectedChatId });
+        return [];
+    }
+    const records = [];
+    const nodes = Array.isArray(result?.nodes) ? result.nodes : Array.isArray(snapshot?.nodes) ? snapshot.nodes : [];
+    if (nodes.length) {
+        for (const node of nodes.slice(0, MAX_EXTERNAL_MEMORY_ITEMS)) {
+            const content = normalizePublicMemoryText(node);
+            if (!content) continue;
+            records.push({ provider: provider.name, type: normalizeText(node?.type ?? node?.category, 80) || 'public-api', date: normalizeText(node?.date ?? node?.timestamp, 100), content });
+        }
+    } else {
+        const text = normalizePublicMemoryText(result) || normalizePublicMemoryText(snapshot);
+        if (text) records.push({ provider: provider.name, type: 'public-api', content: text });
+    }
+    return normalizeExternalMemoryRecords(records);
+}
+
 function externalMemorySourceSummary(context = getContext()) {
     const sources = [];
     const summary = normalizeText(context.extensionPrompts?.['1_memory']?.value, 12000);
@@ -468,7 +592,12 @@ function externalMemorySourceSummary(context = getContext()) {
     if (evermindSettings?.enabled && normalizeText(evermindMeta?.group_id, 240)) {
         sources.push({ id: 'evermind', label: 'EverMind', kind: 'current-chat-api' });
     }
-    return sources;
+    for (const provider of detectPublicMemoryProviders(context)) {
+        const id = `public:${provider.key}`;
+        if (sources.some(item => item.id === id || item.label === provider.name)) continue;
+        sources.push({ id, label: provider.name, kind: 'current-chat-public-api' });
+    }
+    return sources.slice(0, 14);
 }
 
 function normalizeExternalMemoryRecords(records) {
@@ -596,6 +725,19 @@ async function collectCurrentChatExternalMemory(context, expectedChatId, signal)
         if (error?.name === 'AbortError') throw error;
         console.warn('[HeartbeatMemories] current-chat external memory source failed; archive import will continue without it', error?.message || error);
         globalThis.toastr?.warning?.('当前窗口的外部记忆补充读取失败，本次档案仍会只根据聊天正文继续整理。', '心跳回忆');
+    }
+
+    for (const provider of detectPublicMemoryProviders(context)) {
+        try {
+            const publicRecords = await readPublicMemoryProviderCurrentChat(provider, context, expectedChatId, signal);
+            if (publicRecords.length) {
+                records.push(...publicRecords.map((item, index) => ({ ...item, externalId: `PUBLIC-${hashString(provider.key).toString(16)}-${String(index + 1).padStart(3, '0')}` })));
+                sources.push({ id: `public:${provider.key}`, label: provider.name, count: publicRecords.length });
+            }
+        } catch (error) {
+            if (error?.name === 'AbortError') throw error;
+            console.warn('[HeartbeatMemories] public memory provider failed; skipped', provider.name, error?.message || error);
+        }
     }
 
     const normalized = normalizeExternalMemoryRecords(records).map((item, index) => ({
@@ -960,7 +1102,9 @@ ${imported}
 
 const PROMPTS = {
     [MODE.BUTTERFLY]: (context, memoryBank) => `${commonNarrativeRules(context, memoryBank)}
-任务：生成“平行时空观测终端 / 蝴蝶效应的时间节点”的结构化数据。所有分歧必须由当前档案记忆中的真实节点向外推演。
+任务：生成“平行时空观测终端 / 蝴蝶效应”。这里的外延节点是【明确标注为模拟的平行时空切片】，不是当前世界已经发生过的事实。
+
+生成依据：必须综合当前受控上下文中的 CHARACTER_CARD_JSON、USER_PERSONA_JSON、WORLD_INFO_TEXT 与 {{char}} 的背景；手动聊天档案用于确定【主时间线】和当前关系状态，但外延分歧不要求逐条从真实记忆改写。要真正利用人设与世界书想象“如果人生关键条件不同会怎样”。
 
 JSON 结构必须严格为：
 {
@@ -970,25 +1114,44 @@ JSON 结构必须严格为：
   "nodes": [
     {
       "id": "MAIN",
-      "label": "主时间线：简短名称",
-      "code": "SIMULATION RECORD #MAIN",
+      "label": "主时间线（锁定）：简短名称",
+      "code": "> SIMULATION RECORD #MAIN",
       "locked": true,
       "trueEnding": false,
       "sourceMemoryIds": ["M001"],
-      "sourceMemoryAnchor": "从所引用记忆的 anchors 中原样复制一个具体锚点",
-      "monologue": "该世界线角色第一人称独白，不少于100个汉字",
-      "intervention": "当前世界线角色的实时自省与告白",
-      "systemNote": "冷酷、客观的系统结局判定"
+      "sourceMemoryAnchor": "主时间线必须从真实档案 anchors/title 原样复制一个具体锚点",
+      "monologue": "主时间线 {{char}} 第一人称观测独白，不少于100个汉字",
+      "intervention": "当前世界线 {{char}} 对这条观测结果的实时自省和告白",
+      "systemNote": "冷酷、客观的系统算法结局判定"
+    },
+    {
+      "id": "EG01",
+      "label": "分歧点 A：未曾相遇",
+      "code": "> SIMULATION RECORD #EG-01",
+      "locked": false,
+      "trueEnding": false,
+      "sourceMemoryIds": [],
+      "sourceMemoryAnchor": "",
+      "monologue": "这个平行世界中的 {{char}} 第一人称独白，不少于100个汉字",
+      "intervention": "现世 {{char}} 的宿命共鸣、自省与告白",
+      "systemNote": "冷酷算法对该时空主体的最终判定与结局预测"
     }
   ]
 }
 
 硬性要求：
-- nodes 至少 10 条：1 条主时间线 + 至少 8 条不同平行分歧 + 1 条彩蛋 TRUE ENDING。
-- 每条 node 的 sourceMemoryIds 至少 1 个，只能引用当前档案中的记忆 ID；sourceMemoryAnchor 必须从所引用记忆的 anchors（或该记忆 title）中原样复制一个具体词组，插件会做语义证据校验；分歧必须说明“如果这段真实记忆中的关键节点发生改变会怎样”。
-- TRUE ENDING 必须位于数组最后一项，trueEnding=true，label 中包含“观测点 Ω”或“TRUE ENDING”。
-- 除主线外每个节点都必须是真正不同的蝴蝶效应分歧，不允许只换措辞。
-- 每条 monologue 至少 100 个汉字；intervention 从当前世界线角色立场回应；systemNote 用冷酷算法口吻。`,
+- nodes 至少 10 条：第 1 条必须是“主时间线（锁定）”；其后至少 8 条互不重复的外延分歧；数组最后 1 条必须是彩蛋 TRUE ENDING。
+- 主时间线必须 locked=true、trueEnding=false，并至少引用 1 条当前手动档案 sourceMemoryIds + sourceMemoryAnchor，用来锚定“当前世界”。
+- 外延节点是模拟，不得伪装成已经发生的回忆；它们可以不带 sourceMemoryIds。若恰好从某段档案作为分歧起点，可以附带真实引用，但平行世界里新增的事情仍只能写成模拟。
+- 至少 8 个外延节点要从角色卡、人设、世界书中的身份、职业、时代、地点、关系条件、选择或命运约束向外推演；不能只把同一场景换措辞。
+- 最后一项必须 trueEnding=true，label 必须包含“观测点 Ω”或“TRUE ENDING”，呈现“跨越维度的必然”式彩蛋，但仍是观测模拟，不写回档案。
+- 每条 code 使用“> SIMULATION RECORD #...”形式。
+- 每条 monologue 不少于 100 个汉字，要有沉浸感、具体生活/处境与情绪，不得只写概念摘要。
+- 每条 intervention 都站在【现世 {{char}}】立场，对刚看到的平行体产生实时自省、宿命共鸣或告白；不要写成系统旁白。
+- 每条 systemNote 使用中文、冷酷客观的 AI 算法口吻，对该时空主体作最终判定与结局预测。
+- 禁止出现任何前任、前女友相关情节。
+- 禁止出现 {{char}} 与除了 {{user}} 以外任何人恋爱、结婚或组建家庭；第三方只能保持非恋爱关系。
+- 只输出结构化 JSON；视觉快照、像素边框、噪点、1 秒干扰动画由插件本地渲染，不由模型输出 HTML/CSS。`,
     [MODE.ALBUM]: (context, memoryBank) => `${commonNarrativeRules(context, memoryBank)}
 任务：生成“回忆相簿”。结构只借鉴恋爱冒险游戏常见的回忆收集逻辑，不复刻任何具体商业游戏的文本、美术、代码或专有 UI。
 
@@ -1095,7 +1258,7 @@ JSON 结构必须严格为：
 - basis=“记忆”：必须至少引用 1 个真实 sourceMemoryIds，并填写 sourceMemoryAnchor（从所引用记忆的 anchors 或 title 中原样复制）；物件还必须确实能从对应档案记忆推出，例如收到过的礼物、留下的票根、共同选过的东西、某次事件留下的痕迹。
 - basis=“设定”：sourceMemoryIds 必须为空，只能依据角色卡/世界书/稳定人设推演；不得伪装成 {{user}} 已经做过的事。
 - 任何“{{user}} 来过这里 / 送过东西 / 留下私人物品 / 一起生活 / 一起买过某物”等既往事实，只有档案明确支持时才能写，而且必须 basis=“记忆”。
-- 物件点击只做浅层观察：外观、生活痕迹、角色一句话。不要把钱包/抽屉/手机继续展开成多层搜查、聊天记录、保险箱解谜等；那些属于未来独立的“他的物品 / 他的手机”深层玩法。
+- 房间物件本身先做浅层观察，但【翻找物品】与【查看私人通讯终端】是“他的房间”内部的深层玩法，不是档案室独立入口。spaces/objects 中应自然出现可通往这些深层玩法的收纳位置或私人终端痕迹；时代不合适时不要强行生成现代手机。
 - dayparts 的 spaceId 必须引用 spaces 中真实存在的空间；focusObjectId 必须属于该时段所在空间。
 - dayparts 是当前时间下合理的生活切片，不是新增主线剧情。四个时段都必须填写。
 - presenceLines 至少 4 句，符合当前关系阶段，但不能替 {{user}} 自动回应。
@@ -1107,7 +1270,7 @@ JSON 结构必须严格为：
 {
   "title": "他的物品",
   "containers": [{
-    "id": "BOX01", "label": "容器名称", "containerType": "具体形态", "description": "为什么这里会有这些东西",
+    "id": "BOX01", "label": "容器名称", "containerType": "具体形态", "spaceLabel": "它属于房间中的哪个空间，例如卧室/书房/船舱", "description": "为什么这里会有这些东西",
     "nodes": [{
       "id": "IT01", "label": "物件或子容器", "kind": "item 或 container", "basis": "设定 或 记忆",
       "summary": "外观、使用痕迹、位置或内容", "line": "{{char}} 的一句反应",
@@ -1117,7 +1280,7 @@ JSON 结构必须严格为：
 }
 
 硬性要求：
-- containers 至少 5 个，尽量来自不同生活区域/用途；containerType 可以是任何符合角色世界观的储物形态，绝不能全部写成“抽屉”。
+- containers 至少 5 个，尽量来自“他的房间”不同生活区域/用途；每个 container 填写 spaceLabel，尽量与 room.spaces[].label 对应。containerType 可以是任何符合角色世界观的储物形态，绝不能全部写成“抽屉”。
 - 每个容器至少 4 个可查看节点；允许 children 递归 1～3 层，形成“打开箱子 → 里面的小盒/夹层 → 具体物件”的翻找感，但总节点不要超过 45 个。
 - basis=“设定”表示依据角色卡/世界书/正常生活推导，不得写成 {{user}} 与 {{char}} 已经共同发生过的事。
 - basis=“记忆”才允许写“你送的、你留下的、你们一起买的、某次共同经历留下的”等具体共同痕迹，并且必须带有效 sourceMemoryIds + sourceMemoryAnchor。
@@ -1159,12 +1322,12 @@ function baseBundlePrompt(context, memoryBank) {
     const items = modeTaskTail(MODE.ITEMS, context, memoryBank);
     const phone = modeTaskTail(MODE.PHONE, context, memoryBank);
     return `${commonNarrativeRules(context, memoryBank)}
-现在只用【一次响应】生成“心跳回忆基础包”。这个基础包会同时供：回忆相簿、CG/ADV 事件索引、他的房间、他的物品、他的手机、蝴蝶效应六个入口使用。
+现在只用【一次响应】生成“心跳回忆基础包”。档案室只显示四个主入口：回忆相簿、CG/ADV、他的房间、蝴蝶效应；其中 items / phone 是【他的房间内部深层数据】，只能从房间里进入，不是独立档案室入口。
 
 【一致性要求】
 1. 回忆相簿里的已解锁 CG 同时就是 CG/ADV 的事件来源；插件会直接从相簿条目派生 ADV 事件索引，所以不要另造第二套矛盾的 CG。
 2. 所有基础包部分都必须引用同一份手动聊天档案；已经发生过的事实继续遵守 sourceMemoryIds + sourceMemoryAnchor 校验。
-3. 为控制 Token，文字要有内容但不要过度铺陈：蝴蝶节点独白约 100～220 汉字；相簿 desc 1～2 句、comments 按要求写 6～8 段；房间/物品/手机的单条说明控制在 1～3 句。
+3. 为控制 Token，文字要有内容但不要过度铺陈：蝴蝶节点独白至少 100 汉字；相簿 desc 1～2 句、comments 按要求写 6～8 段；房间内部的翻找物品/私人终端单条说明控制在 1～3 句。
 4. 最终只输出一个 JSON 对象，不能分别输出多段 JSON，不能 Markdown。
 
 最终顶层结构必须为：
@@ -1191,7 +1354,7 @@ ${items}
 【phone 子对象要求】
 ${phone}
 
-再次强调：上面各段里的“JSON 结构”都只是顶层对象中对应字段的子对象结构。最终只能返回一个包含 butterfly / album / room / items / phone 的 JSON。`;
+再次强调：上面各段里的“JSON 结构”都只是顶层对象中对应字段的子对象结构。最终仍返回 butterfly / album / room / items / phone；其中 items 与 phone 只作为 room 的内部深层缓存，不出现在档案室主入口。`;
 }
 
 function advPrompt(context, event, memoryBank) {
@@ -1241,38 +1404,58 @@ function extractJson(raw) {
 }
 
 function normalizeButterfly(data, memoryBank) {
-    const rawNodes = Array.isArray(data?.nodes) ? data.nodes : [];
-    const nodes = rawNodes.slice(0, 24).map((node, index) => {
+    const rawNodes = Array.isArray(data?.nodes) ? data.nodes.slice(0, 24) : [];
+    const normalized = rawNodes.map((node, rawIndex) => {
+        const isMain = rawIndex === 0;
         const label = normalizeText(node?.label, 120);
         const monologue = normalizeText(node?.monologue, 12000);
         const intervention = normalizeText(node?.intervention, 8000);
         const systemNote = normalizeText(node?.systemNote, 5000);
-        const reference = normalizeMemoryReference(node?.sourceMemoryIds, node?.sourceMemoryAnchor, `${label}
-${monologue}
-${intervention}
-${systemNote}`, memoryBank, 1);
+        const reference = normalizeMemoryReference(
+            node?.sourceMemoryIds,
+            node?.sourceMemoryAnchor,
+            `${label}\n${monologue}\n${intervention}\n${systemNote}`,
+            memoryBank,
+            isMain ? 1 : 0,
+        );
+        const numericCode = String(Math.max(1, rawIndex)).padStart(2, '0');
         return {
-            id: safeId(node?.id, `NODE${index + 1}`),
+            id: safeId(node?.id, isMain ? 'MAIN' : `EG${numericCode}`),
             label,
-            code: normalizeText(node?.code, 120) || `SIMULATION RECORD #${String(index + 1).padStart(2, '0')}`,
-            locked: !!node?.locked,
-            trueEnding: !!node?.trueEnding,
+            code: normalizeText(node?.code, 120) || (isMain ? '> SIMULATION RECORD #MAIN' : `> SIMULATION RECORD #EG-${numericCode}`),
+            locked: isMain ? true : !!node?.locked,
+            trueEnding: isMain ? false : !!node?.trueEnding,
             sourceMemoryIds: reference.sourceMemoryIds,
             sourceMemoryAnchor: reference.sourceMemoryAnchor,
             monologue,
             intervention,
             systemNote,
         };
-    }).filter(node => node.label && node.monologue && node.intervention && node.systemNote && node.sourceMemoryIds.length >= 1 && node.sourceMemoryAnchor);
-    if (nodes.length < 10) throw new Error(`平行时空节点不足：得到 ${nodes.length} 条，至少需要 10 条。`);
-    nodes[nodes.length - 1].trueEnding = true;
+    });
+    const main = normalized[0];
+    if (!main || !main.label || main.monologue.length < 100 || !main.intervention || !main.systemNote || !main.sourceMemoryIds.length || !main.sourceMemoryAnchor) {
+        throw new Error('蝴蝶效应主时间线缺少有效档案锚点或深度内容。');
+    }
+    main.locked = true;
+    main.trueEnding = false;
+    main.code = '> SIMULATION RECORD #MAIN';
+    const branches = normalized.slice(1).filter(node => node.label && node.monologue.length >= 100 && node.intervention && node.systemNote);
+    if (branches.length < 9) throw new Error(`平行时空节点不足：普通外延与 TRUE ENDING 合计 ${branches.length} 条，至少需要 9 条。`);
+    const ending = branches[branches.length - 1];
+    ending.trueEnding = true;
+    ending.locked = false;
+    if (!/(观测点\s*Ω|TRUE\s*ENDING)/i.test(ending.label)) ending.label = `观测点 Ω：${ending.label || '跨越维度的必然'}`;
+    const normalBranches = branches.slice(0, -1);
+    for (const branch of normalBranches) branch.trueEnding = false;
+    if (normalBranches.length < 8) throw new Error(`普通平行分歧不足：得到 ${normalBranches.length} 条，至少需要 8 条。`);
+    const nodes = [main, ...normalBranches, ending];
     return {
         kind: MODE.BUTTERFLY,
         title: normalizeText(data?.title, 120) || '平行时空观测终端',
         subject: normalizeText(data?.subject, 120),
-        status: normalizeText(data?.status, 80) || 'UNSTABLE',
+        status: 'UNSTABLE',
         nodes,
-        selected: Math.min(1, nodes.length - 1),
+        selected: 1,
     };
 }
 
@@ -1485,7 +1668,7 @@ function normalizeItems(data, memoryBank) {
         const id = safeId(box?.id, `BOX${String(boxIndex + 1).padStart(2, '0')}`);
         const nodes = (Array.isArray(box?.nodes) ? box.nodes : []).slice(0, 12).map((node, index) => normalizePossessionNode(node, memoryBank, 0, `${id}_IT${String(index + 1).padStart(2, '0')}`)).filter(Boolean);
         totalNodes += nodes.reduce((sum, node) => sum + countTree(node), 0);
-        return { id, label: normalizeText(box?.label, 80) || `收纳处 ${boxIndex + 1}`, containerType: normalizeText(box?.containerType, 100) || '私人收纳容器', description: normalizeText(box?.description, 1200) || '这是他日常会使用的收纳位置。', nodes };
+        return { id, label: normalizeText(box?.label, 80) || `收纳处 ${boxIndex + 1}`, containerType: normalizeText(box?.containerType, 100) || '私人收纳容器', spaceLabel: normalizeText(box?.spaceLabel, 100), description: normalizeText(box?.description, 1200) || '这是他日常会使用的收纳位置。', nodes };
     }).filter(box => box.nodes.length >= 3);
     if (containers.length < 4 || totalNodes < 16) throw new Error(`“他的物品”内容不足：${containers.length} 个容器 / ${totalNodes} 个节点。`);
     if (totalNodes > 60) throw new Error(`“他的物品”节点过多：${totalNodes} 个，最多允许 60 个，避免递归结构拖慢界面。`);
@@ -1570,6 +1753,7 @@ function saveImportedMemory(context, memoryBank, expectedChatId = memoryBank?.ch
     }
     context.chatMetadata[MEMORY_KEY] = memoryBank;
     delete context.chatMetadata[CACHE_KEY];
+    archiveOverviewCache = { key: '', fetchedAt: 0, items: [] };
     context.saveMetadataDebounced?.();
 }
 
@@ -1648,7 +1832,7 @@ async function buildControlledContextEnvelope(context) {
     let worldInfo = '';
     try {
         const memory = getImportedMemory(context);
-        const archiveScan = (memory?.memories || []).slice(-64).reverse().map(item => [
+        const archiveScan = evenlySample(memory?.memories || [], 64).map(item => [
             normalizeText(item?.title, 120),
             normalizeText(item?.summary, 1200),
             cleanArray(item?.anchors, 12, 120).join('；'),
@@ -1845,6 +2029,8 @@ async function importCurrentChatMemory() {
         activeTaskBackgrounded = false;
         activeMode = null;
         activeSession = null;
+        archiveOverviewCache = { key: '', fetchedAt: 0, items: [] };
+        archiveOverviewAllowedChats.clear();
         refreshSettingsMemoryStatus();
         const overlayAfterSave = document.getElementById(OVERLAY_ID);
         if (overlayAfterSave && !overlayAfterSave.hidden) {
@@ -1890,7 +2076,7 @@ async function generateBaseBundle(focusMode = MODE.ALBUM, options = {}) {
     try {
         const pending = requestJson(
             baseBundlePrompt(context, memoryBank),
-            '正在一次生成回忆相簿 / CG·ADV / 房间 / 物品 / 手机 / 蝴蝶效应…',
+            '正在一次生成回忆相簿 / CG·ADV / 房间（含深层物品与私人终端）/ 蝴蝶效应…',
             { maxTokens: 24000, background },
         );
         if (background) showChooser();
@@ -1918,7 +2104,7 @@ async function generateBaseBundle(focusMode = MODE.ALBUM, options = {}) {
             refreshSettingsMemoryStatus();
             const overlay = document.getElementById(OVERLAY_ID);
             if (overlay && !overlay.hidden && !activeMode) showChooser();
-            globalThis.toastr?.success?.(`档案室后台生成完成：${readyModes.length} 个入口已缓存。`, '心跳回忆');
+            globalThis.toastr?.success?.(`档案室后台生成完成：4 个主入口已更新，房间深层数据已缓存。`, '心跳回忆');
             if (missingModes.length) globalThis.toastr?.warning?.(`部分入口未通过校验：${missingModes.join('；')}`, '心跳回忆');
             return;
         }
@@ -2249,8 +2435,18 @@ function ensureStyles() {
   color:var(--crt-strong);background:linear-gradient(90deg,rgba(116,191,213,.09),rgba(242,168,198,.035));
   box-shadow:inset 0 0 18px rgba(116,191,213,.035),0 0 14px rgba(116,191,213,.045)
 }
-.rmt-divergence{display:grid;grid-template-columns:minmax(260px,.9fr) minmax(0,1.6fr);gap:14px;min-height:calc(100vh - 170px)}
-.rmt-node-map{border:1px solid rgba(191,239,255,.62);padding:12px;overflow:auto;max-height:calc(100vh - 180px);background:rgba(6,16,29,.38)}
+.rmt-terminal-block{position:relative;border:1px solid rgba(130,219,245,.36);background:rgba(4,14,27,.48);padding:12px;margin-bottom:12px;box-shadow:inset 0 0 18px rgba(41,180,226,.035)}
+.rmt-terminal-section-title{font-size:10px;letter-spacing:.16em;color:#86d7ee;margin-bottom:9px;font-weight:800}
+.rmt-terminal-codeflow{font-size:9px;opacity:.52;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rmt-divergence-map-block{min-height:220px;max-height:46vh;overflow:auto;position:sticky;top:0;z-index:9;backdrop-filter:blur(7px);box-shadow:0 8px 20px rgba(0,0,0,.18),inset 0 0 18px rgba(41,180,226,.035)}
+.rmt-tree-root{text-align:center;position:relative;z-index:2}.rmt-tree-trunk{height:22px;width:1px;background:linear-gradient(#76d7ef,#e79ab8);margin:0 auto;box-shadow:0 0 8px #76d7ef}
+.rmt-tree-branches{position:relative;display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:9px;padding:13px 0 8px;border-top:1px solid rgba(118,215,239,.55)}
+.rmt-tree-branches:before{content:"";position:absolute;left:50%;top:-14px;width:1px;height:14px;background:#76d7ef}
+.rmt-tree-ending{display:flex;justify-content:center;margin-top:12px;padding-top:12px;border-top:1px dashed rgba(229,142,181,.38)}
+.rmt-tree-root .rmt-node,.rmt-tree-branches .rmt-node,.rmt-tree-ending .rmt-node{margin-left:0;width:100%}.rmt-tree-root .rmt-node:before,.rmt-tree-branches .rmt-node:before,.rmt-tree-ending .rmt-node:before{display:none}.rmt-tree-ending .rmt-node{width:min(520px,88%)}
+.rmt-node span{display:inline-block;min-width:24px;margin-right:6px;color:#79d9f2;font-size:9px}.rmt-main-node{opacity:.82;border-style:dashed!important}.rmt-main-node em{font-style:normal;font-size:8px;color:#e7b0c5;margin-left:6px}
+.rmt-observation-screen{min-height:340px}.rmt-record-code{padding:6px 8px;border-left:3px solid #72d8f1;color:#bdeeff;font-size:11px;margin-bottom:9px;background:rgba(73,190,226,.06)}
+.rmt-intervention-block{border-color:rgba(241,163,195,.55);background:linear-gradient(135deg,rgba(255,244,249,.10),rgba(240,171,200,.06))}.rmt-system-block{border-style:dashed;border-color:rgba(231,212,154,.5)}
 .rmt-node-list{display:flex;flex-direction:column;gap:8px;position:relative}
 .rmt-node-list:before{content:"";position:absolute;left:11px;top:10px;bottom:10px;border-left:1px dashed var(--crt-dim);opacity:.5}
 .rmt-node{
@@ -2264,14 +2460,15 @@ function ensureStyles() {
   background:linear-gradient(100deg,#c8eff7 0%,#dff8fb 66%,#f2c6d8 135%);color:#102438;border-color:#e8fbff;text-shadow:none;
   box-shadow:0 0 18px rgba(191,239,255,.22),0 0 26px rgba(242,168,198,.07)
 }
-.rmt-node.true-ending{color:#ffe4ef;border-color:rgba(242,168,198,.88);animation:rmtOmega 1.55s steps(2,end) infinite}
-.rmt-node.true-ending.active{color:#16263a;border-color:#f8d1e1}
+.rmt-node.true-ending{color:#ffe4ef;border-color:rgba(242,168,198,.72);opacity:.58;filter:saturate(.75);animation:rmtOmega 1.55s steps(2,end) infinite}.rmt-node.true-ending:hover{opacity:.92;filter:saturate(1.05)}
+.rmt-node.true-ending.active{color:#16263a;border-color:#f8d1e1;opacity:1;filter:none}
 @keyframes rmtOmega{0%,100%{box-shadow:0 0 6px rgba(242,168,198,.10)}50%{filter:brightness(1.25);box-shadow:0 0 18px rgba(242,168,198,.48),0 0 28px rgba(231,212,154,.13)}}
 .rmt-observation{display:flex;flex-direction:column;gap:10px}
 .rmt-signal{
   min-height:180px;border:2px double rgba(191,239,255,.75);display:grid;place-items:center;text-align:center;
   background:repeating-linear-gradient(45deg,transparent 0 8px,rgba(116,191,213,.055) 8px 10px),rgba(7,18,32,.5);padding:20px;
-  box-shadow:inset 0 0 34px rgba(116,191,213,.035)
+  box-shadow:inset 0 0 34px rgba(116,191,255,.035),0 0 0 1px rgba(80,209,239,.30),4px 4px 0 rgba(42,123,151,.20),-4px -4px 0 rgba(225,157,189,.07);
+  position:relative;overflow:hidden;image-rendering:pixelated
 }
 .rmt-signal.loading{animation:rmtInterference .11s steps(2,end) infinite}
 @keyframes rmtInterference{0%{transform:translateX(-2px);filter:contrast(1.15)}50%{transform:translateX(2px);filter:contrast(1.55) hue-rotate(8deg)}}
@@ -2544,6 +2741,16 @@ function ensureStyles() {
 .rmt-items{display:grid;grid-template-columns:220px 1fr;gap:14px;min-height:520px}.rmt-items-boxes{display:flex;flex-direction:column;gap:8px}.rmt-items-main{min-width:0}.rmt-items-toolbar{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.72)}
 .rmt-items-grid{display:grid;grid-template-columns:minmax(220px,.75fr) minmax(0,1.25fr);gap:12px}.rmt-items-list{display:flex;flex-direction:column;gap:8px}.rmt-item-node{border:1px solid rgba(93,107,128,.16);background:rgba(255,255,255,.8);border-radius:14px;padding:10px;display:flex;align-items:center;gap:10px;text-align:left;color:inherit}.rmt-item-node.active{box-shadow:0 0 0 2px rgba(185,145,104,.22);border-color:rgba(185,145,104,.45)}.rmt-item-node span{display:flex;flex-direction:column;min-width:0;flex:1}.rmt-item-node small{opacity:.62;margin-top:3px}.rmt-item-detail{border-radius:18px;padding:18px;background:rgba(255,255,255,.82);border:1px solid rgba(93,107,128,.14);min-height:220px}.rmt-item-detail-head{display:flex;justify-content:space-between;gap:12px}.rmt-item-detail p{white-space:pre-wrap;line-height:1.8}.rmt-item-detail blockquote{margin:16px 0;padding:12px 14px;border-left:3px solid rgba(185,145,104,.55);background:rgba(246,237,228,.7);border-radius:8px}
 .rmt-phone{display:flex;justify-content:center;padding:8px}.rmt-phone-shell{width:min(940px,100%);min-height:560px;border-radius:28px;padding:16px;background:linear-gradient(155deg,#f8fbfc,#e9f2f5);border:1px solid rgba(74,112,124,.18);box-shadow:0 16px 42px rgba(44,70,79,.12)}.rmt-phone-notch{width:90px;height:5px;border-radius:999px;background:rgba(39,57,65,.28);margin:0 auto 12px}.rmt-phone-lock{display:flex;justify-content:space-between;align-items:center;padding:12px 14px}.rmt-phone-lock span{opacity:.6}.rmt-phone-apps{display:flex;gap:8px;overflow:auto;padding:8px 4px 14px}.rmt-phone-app{min-width:92px;border:0;border-radius:16px;background:rgba(255,255,255,.7);padding:11px 10px;display:flex;flex-direction:column;align-items:center;gap:6px}.rmt-phone-app.active{background:#fff;box-shadow:0 8px 20px rgba(77,113,126,.12)}.rmt-phone-content{display:grid;grid-template-columns:minmax(240px,.8fr) minmax(0,1.2fr);gap:12px}.rmt-phone-list,.rmt-phone-detail{border-radius:18px;background:rgba(255,255,255,.78);border:1px solid rgba(74,112,124,.12);padding:12px}.rmt-phone-app-summary{padding:5px 4px 12px;opacity:.68}.rmt-phone-entry{width:100%;border:0;border-top:1px solid rgba(74,112,124,.1);background:transparent;padding:10px 6px;text-align:left;display:flex;flex-direction:column;gap:3px}.rmt-phone-entry.active{background:rgba(159,201,213,.14);border-radius:10px}.rmt-phone-entry small{opacity:.55}.rmt-phone-entry span{opacity:.78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rmt-phone-detail h3{margin:8px 0}.rmt-phone-detail p{white-space:pre-wrap;line-height:1.8}.rmt-phone-evidence{margin-top:14px;font-size:12px;opacity:.58}
+
+.rmt-signal{position:relative;display:grid;place-items:center;min-height:190px;overflow:hidden;border:3px double rgba(117,222,247,.76)!important;background:#020912!important;box-shadow:inset 0 0 28px rgba(73,200,236,.08)}
+.rmt-signal:before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 1px,transparent 1px 4px);pointer-events:none}
+.rmt-signal-noise{position:absolute;inset:-20%;opacity:.18;background:repeating-radial-gradient(circle at 30% 40%,#9ee9fb 0 1px,transparent 1px 5px);mix-blend-mode:screen;animation:rmtNoiseDrift .7s steps(2,end) infinite}
+.rmt-signal-center{position:relative;z-index:2;text-align:center;letter-spacing:.12em;font-size:11px;color:#bcecf8;text-shadow:0 0 8px #65d7f2;padding:18px}
+@keyframes rmtNoiseDrift{0%{transform:translate(-2%,1%)}50%{transform:translate(2%,-1%)}100%{transform:translate(-1%,2%)}}
+.rmt-node.true-ending{animation:rmtOmegaGlow 2.6s ease-in-out infinite;border-color:#e9a0c0!important;color:#ffd7e7!important;box-shadow:0 0 8px rgba(233,154,185,.25)}
+@keyframes rmtOmegaGlow{0%,100%{opacity:.48;box-shadow:0 0 5px rgba(233,154,185,.16)}50%{opacity:1;box-shadow:0 0 18px rgba(233,154,185,.58)}}
+.rmt-room-deep-actions{display:grid;gap:8px;margin:7px 0}.rmt-room-deep-actions .rmt-btn{width:100%;justify-content:flex-start}.rmt-room-deep-toolbar{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #d8e5ec;background:#f8fbfd;color:#6e7f91;font-size:11px}
+.rmt-archive-overview{margin-top:14px}.rmt-archive-overview-head{display:flex;justify-content:space-between;gap:12px;align-items:center}.rmt-archive-overview-head>div{display:grid;gap:3px}.rmt-archive-overview-head small{font-size:10px;color:#96a1ad}.rmt-archive-overview-list{display:grid;gap:7px;margin-top:10px;max-height:270px;overflow:auto;padding-right:2px}.rmt-archive-overview-item{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;width:100%;text-align:left;border:1px solid #d8e5eb;background:rgba(255,255,255,.86);border-radius:11px;padding:9px 10px;color:#607184;font:inherit;cursor:pointer}.rmt-archive-overview-item.current{border-color:#e6b1c6;background:#fff7fa}.rmt-archive-overview-item b{display:block;font-size:12px}.rmt-archive-overview-item small{display:block;margin-top:2px;font-size:9px;color:#98a4af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rmt-overview-dot{color:#dfa0b9}.rmt-archive-overview-empty{padding:13px;text-align:center;color:#9aa5af;font-size:11px;border:1px dashed #d9e5ea;border-radius:10px;margin-top:10px}
 @media(max-width:760px){.rmt-items{grid-template-columns:1fr}.rmt-items-boxes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.rmt-items-grid,.rmt-phone-content{grid-template-columns:1fr}.rmt-phone-shell{min-height:0;border-radius:20px;padding:10px}}
 @media(max-width:760px){
   .rmt-archive-room{padding:12px 10px 18px}.rmt-archive-portals{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.rmt-archive-portal{min-height:188px;padding:14px 8px 12px}.rmt-portal-avatar{width:72px;height:72px;font-size:25px}.rmt-archive-generate-row{display:grid;gap:8px}.rmt-archive-generate{min-width:0;width:100%}
@@ -2554,7 +2761,7 @@ function ensureStyles() {
   .rmt-topbar button{padding:6px 9px;font-size:12px}
   .rmt-memory-gate{margin:14px 12px 0;padding:18px 14px 14px}.rmt-archive-title{font-size:19px!important}
   .rmt-choice{grid-template-columns:1fr;padding:12px;gap:10px}.rmt-choice-card{min-height:125px;padding:18px 16px}
-  .rmt-divergence{grid-template-columns:1fr;min-height:auto}.rmt-node-map{max-height:34vh}
+  .rmt-tree-branches{grid-template-columns:repeat(2,minmax(120px,1fr))}.rmt-divergence-map-block{min-height:190px}
   .rmt-album{padding:10px}.rmt-album-head{padding:11px}.rmt-album-layout{grid-template-columns:1fr}
   .rmt-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.rmt-info{position:static}
   .rmt-memory-cg{margin:10px 10px 7px;border-width:6px}.rmt-dialogue{margin:0 10px 10px}
@@ -2974,6 +3181,47 @@ function roomTemporaryPlacement(label, index) {
     return `--rtx:${x}%;--rty:${y}%;--rtr:${r}deg`;
 }
 
+function roomDeepAvailability() {
+    return {
+        items: loadSession(MODE.ITEMS),
+        phone: loadSession(MODE.PHONE),
+    };
+}
+
+function openRoomDeepMode(mode) {
+    if (!ROOM_DEEP_MODES.includes(mode)) return;
+    const room = activeMode === MODE.ROOM && activeSession?.kind === MODE.ROOM ? activeSession : loadSession(MODE.ROOM);
+    const deep = loadSession(mode);
+    if (!room || !deep) {
+        globalThis.toastr?.info?.('这部分还没有生成，请回档案室重新生成整套内容。', '心跳回忆');
+        return;
+    }
+    const selectedSpace = room.spaces.find(space => space.id === room.selectedSpaceId) || room.spaces[0];
+    if (mode === MODE.ITEMS && selectedSpace) {
+        const match = deep.containers.find(box => normalizeText(box.spaceLabel, 100) === normalizeText(selectedSpace.label, 100))
+            || deep.containers.find(box => normalizeText(`${box.label} ${box.containerType} ${box.description}`, 1500).includes(normalizeText(selectedSpace.label, 100)));
+        if (match) {
+            deep.selectedContainerId = match.id;
+            deep.viewPath = [];
+            deep.selectedNodeId = match.nodes[0]?.id || '';
+        }
+    }
+    deep.returnRoomSpaceId = selectedSpace?.id || '';
+    activeMode = mode;
+    activeSession = deep;
+    renderActive();
+}
+
+function returnToRoomFromDeep() {
+    const room = loadSession(MODE.ROOM);
+    if (!room) return showChooser();
+    const returnSpaceId = normalizeText(activeSession?.returnRoomSpaceId, 80);
+    if (returnSpaceId && room.spaces.some(space => space.id === returnSpaceId)) room.selectedSpaceId = returnSpaceId;
+    activeMode = MODE.ROOM;
+    activeSession = room;
+    renderRoom();
+}
+
 function renderRoom() {
     const session = activeSession;
     if (!session || session.kind !== MODE.ROOM || !Array.isArray(session.spaces) || !session.spaces.length) return;
@@ -2998,6 +3246,8 @@ function renderRoom() {
         : '来源：角色设定 / 世界观';
     const presenceLine = session.presenceLines[Math.max(0, Number(session.presenceIndex) || 0) % session.presenceLines.length] || slot?.line || '';
     const currentLocationText = `${daypart.label} · ${charName} 现在在「${presentSpace.label}」`;
+    const deep = roomDeepAvailability();
+    const phoneLabel = deep.phone?.deviceName || '私人通讯终端';
     const body = bodyEl();
     body.innerHTML = `<div class="rmt-room-view">
       <div class="rmt-room-heading">
@@ -3017,7 +3267,7 @@ function renderRoom() {
             ${hotspots}
             ${personIsHere ? `<button type="button" class="rmt-room-person" data-rmt-action="room-presence" aria-label="看看他现在在做什么"><span class="rmt-room-head"></span><span class="rmt-room-body-figure"></span><span class="rmt-room-person-label">看看他</span></button>` : ''}
           </div>
-          <div class="rmt-room-caption"><b>${esc(selectedSpace.label)}：</b>${esc(personIsHere ? (slot?.line || '') : selectedSpace.atmosphere)}${personIsHere && slot?.trace ? `<div class="rmt-room-live-trace">此刻留下的痕迹：${esc(slot.trace)}</div>` : ''}<div class="rmt-room-note">空间会按设备本地时间推进当天生活节点；聊天档案仍只在你手动更新时变化。物件点击只做浅层观察，不会在这里自动展开手机、钱包、抽屉或解谜。</div></div>
+          <div class="rmt-room-caption"><b>${esc(selectedSpace.label)}：</b>${esc(personIsHere ? (slot?.line || '') : selectedSpace.atmosphere)}${personIsHere && slot?.trace ? `<div class="rmt-room-live-trace">此刻留下的痕迹：${esc(slot.trace)}</div>` : ''}<div class="rmt-room-note">空间会按设备本地时间推进当天生活节点；聊天档案仍只在你手动更新时变化。需要更深入时，从房间里进入“翻找物品”或私人通讯终端。</div></div>
         </section>
         <aside class="rmt-room-side">
           <div class="rmt-room-card">
@@ -3025,6 +3275,14 @@ function renderRoom() {
             <div class="rmt-room-object-title">${esc(selected?.label || selectedSpace.label)}</div>
             <div class="rmt-room-object-desc">${esc(selected?.description || selectedSpace.atmosphere)}</div>
             ${selected ? `<div class="rmt-room-object-line">${esc(selected.line)}</div><div class="rmt-room-source">${esc(memorySource)}</div>` : ''}
+          </div>
+          <div class="rmt-room-card rmt-room-deep-card">
+            <div class="rmt-room-card-kicker">PRIVATE ACCESS</div>
+            <div class="rmt-room-deep-actions">
+              <button type="button" class="rmt-btn" data-rmt-action="room-open-items" ${deep.items ? '' : 'disabled'}><i class="fa-solid fa-box-open"></i> 翻找这里的物品 / 收纳</button>
+              <button type="button" class="rmt-btn" data-rmt-action="room-open-phone" ${deep.phone ? '' : 'disabled'}><i class="fa-solid fa-mobile-screen"></i> 查看${esc(phoneLabel)}</button>
+            </div>
+            <div class="rmt-room-note">这两个是“他的房间”内部深层玩法，不会出现在档案室一览或主入口。</div>
           </div>
           <div class="rmt-room-card">
             <div class="rmt-room-card-kicker">PRIVATE LIFE</div>
@@ -3143,6 +3401,121 @@ function memoryStateLabel(state) {
     return `已收录 ${memory.memories.length} 条记忆，记录到 ${memory.sourceMessageCount} 条聊天消息${suffix}。${pending}`;
 }
 
+function currentCharacterAvatar(context = currentCharacterGuard()) {
+    return normalizeText(context.characters?.[context.characterId]?.avatar, 300);
+}
+
+function archiveOverviewKey(context = currentCharacterGuard()) {
+    return `${context.characterId ?? ''}|${currentCharacterAvatar(context)}`;
+}
+
+function archiveOverviewEntryFromChat(chat, currentChatId) {
+    const fileId = comparableChatId(chat?.file_id || chat?.file_name);
+    if (!fileId) return null;
+    const meta = chat?.chat_metadata && typeof chat.chat_metadata === 'object' ? chat.chat_metadata : {};
+    let archive = meta?.[MEMORY_KEY];
+    if (fileId === comparableChatId(currentChatId)) {
+        const live = getImportedMemory(currentCharacterGuard());
+        if (live) archive = live;
+    }
+    const validArchive = archive && typeof archive === 'object' && archive.version === MEMORY_VERSION && Array.isArray(archive.memories)
+        ? archive : null;
+    return {
+        chatId: fileId,
+        fileName: normalizeText(chat?.file_name, 300) || `${fileId}.jsonl`,
+        chatItems: Math.max(0, Number(chat?.chat_items) || 0),
+        lastMessageAt: chat?.last_mes || 0,
+        current: fileId === comparableChatId(currentChatId),
+        archive: validArchive ? {
+            name: normalizeText(validArchive.archiveName, 120) || fallbackArchiveName(validArchive.memories),
+            summary: normalizeText(validArchive.archiveSummary, 420),
+            memoryCount: validArchive.memories.length,
+            updatedAt: Number(validArchive.updatedAt || validArchive.createdAt) || 0,
+        } : null,
+    };
+}
+
+async function refreshArchiveOverview({ force = false } = {}) {
+    const context = currentCharacterGuard();
+    const key = archiveOverviewKey(context);
+    const now = Date.now();
+    if (!force && archiveOverviewCache.key === key && archiveOverviewCache.fetchedAt > 0 && now - archiveOverviewCache.fetchedAt < ARCHIVE_OVERVIEW_CACHE_MS) {
+        return archiveOverviewCache.items;
+    }
+    if (archiveOverviewPromise && !force) return archiveOverviewPromise;
+    const avatar = currentCharacterAvatar(context);
+    if (!avatar || typeof context.getRequestHeaders !== 'function') return [];
+    const expectedCharacterId = context.characterId;
+    archiveOverviewPromise = (async () => {
+        const response = await fetch('/api/characters/chats', {
+            method: 'POST',
+            headers: context.getRequestHeaders(),
+            cache: 'no-cache',
+            body: JSON.stringify({ avatar_url: avatar, metadata: true }),
+        });
+        if (!response.ok) throw new Error(`档案室一览读取失败：HTTP ${response.status}`);
+        const rows = await response.json();
+        const latest = currentCharacterGuard();
+        if (latest.characterId !== expectedCharacterId) throw new DOMException('Character changed', 'AbortError');
+        const currentChatId = getChatId(latest);
+        const items = (Array.isArray(rows) ? rows : []).map(row => archiveOverviewEntryFromChat(row, currentChatId)).filter(Boolean)
+            .sort((a, b) => (b.current - a.current) || ((Number(new Date(b.lastMessageAt)) || 0) - (Number(new Date(a.lastMessageAt)) || 0)));
+        archiveOverviewAllowedChats.clear();
+        for (const item of items) archiveOverviewAllowedChats.add(item.chatId);
+        archiveOverviewCache = { key, fetchedAt: Date.now(), items };
+        return items;
+    })().finally(() => { archiveOverviewPromise = null; });
+    return archiveOverviewPromise;
+}
+
+function archiveOverviewHtml(items, { loading = false, error = '' } = {}) {
+    const list = Array.isArray(items) ? items : [];
+    if (loading && !list.length) return '<div class="rmt-archive-overview-empty">正在读取这个角色的聊天档案一览…</div>';
+    if (error && !list.length) return `<div class="rmt-archive-overview-empty">${esc(error)}</div>`;
+    if (!list.length) return '<div class="rmt-archive-overview-empty">还没有可显示的聊天窗口。</div>';
+    return list.map(item => {
+        const archive = item.archive;
+        const name = archive?.name || '尚未创建心跳回忆档案';
+        const meta = archive ? `${archive.memoryCount} 条记忆 · 更新 ${formatArchiveTime(archive.updatedAt)}` : `${item.chatItems} 条聊天 · 未建档`;
+        return `<button type="button" class="rmt-archive-overview-item ${item.current ? 'current' : ''}" data-rmt-archive-chat="${esc(item.chatId)}" ${busy && !item.current ? 'disabled' : ''}>
+          <span class="rmt-overview-dot">${item.current ? '●' : '○'}</span><span><b>${esc(name)}</b><small>${item.current ? '当前窗口 · ' : ''}${esc(item.chatId)} · ${esc(meta)}</small></span><i class="fa-solid fa-chevron-right"></i>
+        </button>`;
+    }).join('');
+}
+
+function renderArchiveOverviewAsync({ force = false } = {}) {
+    const host = document.querySelector(`#${OVERLAY_ID} [data-rmt-archive-overview-list]`);
+    if (!host) return;
+    const cached = archiveOverviewCache.key === archiveOverviewKey(currentCharacterGuard()) ? archiveOverviewCache.items : [];
+    host.innerHTML = archiveOverviewHtml(cached, { loading: !cached.length });
+    refreshArchiveOverview({ force }).then(items => {
+        const latestHost = document.querySelector(`#${OVERLAY_ID} [data-rmt-archive-overview-list]`);
+        if (latestHost) latestHost.innerHTML = archiveOverviewHtml(items);
+    }).catch(error => {
+        if (error?.name === 'AbortError') return;
+        const latestHost = document.querySelector(`#${OVERLAY_ID} [data-rmt-archive-overview-list]`);
+        if (latestHost) latestHost.innerHTML = archiveOverviewHtml(cached, { error: error?.message || String(error) });
+    });
+}
+
+async function openArchiveChatFromOverview(chatId) {
+    const id = comparableChatId(chatId);
+    if (!id || !archiveOverviewAllowedChats.has(id)) return;
+    if (busy) {
+        globalThis.toastr?.info?.('后台任务进行中时不能切换聊天窗口；可以先等待完成或关闭档案室继续当前聊天。', '心跳回忆');
+        return;
+    }
+    const context = currentCharacterGuard();
+    if (comparableChatId(getChatId(context)) === id) return;
+    if (typeof context.openCharacterChat !== 'function') return;
+    await context.openCharacterChat(id);
+    archiveOverviewCache = { key: '', fetchedAt: 0, items: [] };
+    archiveOverviewAllowedChats.clear();
+    activeMode = null;
+    activeSession = null;
+    showChooser();
+}
+
 function modePortalMeta(mode) {
     const meta = {
         [MODE.ALBUM]: { title: '回忆相簿', subtitle: '共同回忆与 CG 收藏', icon: 'fa-images', accent: 'album' },
@@ -3156,8 +3529,7 @@ function modePortalMeta(mode) {
 }
 
 function baseModeAvailability() {
-    const ordered = [MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.ITEMS, MODE.PHONE, MODE.BUTTERFLY];
-    return ordered.map(mode => ({ mode, session: loadSession(mode), meta: modePortalMeta(mode) }));
+    return ARCHIVE_PORTAL_MODES.map(mode => ({ mode, session: loadSession(mode), meta: modePortalMeta(mode) }));
 }
 
 function showChooser() {
@@ -3185,9 +3557,9 @@ function showChooser() {
     const archiveSummary = ready ? (memory.archiveSummary || fallbackArchiveSummary(memory.memories)) : '先为当前聊天创建档案。档案只在你手动创建 / 更新时变化，不会因为继续聊天而自动改写。';
     const keywords = ready ? cleanArray(memory.archiveKeywords, 10, 80) : [];
     const pendingClass = ready && (state.pendingMessages > 0 || state.sourceChanged) ? 'pending' : 'ready';
-    const portals = ready ? baseModeAvailability() : [MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.ITEMS, MODE.PHONE, MODE.BUTTERFLY].map(mode => ({ mode, session: null, meta: modePortalMeta(mode) }));
+    const portals = ready ? baseModeAvailability() : ARCHIVE_PORTAL_MODES.map(mode => ({ mode, session: null, meta: modePortalMeta(mode) }));
     const generatedCount = portals.filter(item => !!item.session).length;
-    const allGenerated = ready && generatedCount === portals.length;
+    const allGenerated = ready && generatedCount === portals.length && ROOM_DEEP_MODES.every(mode => !!loadSession(mode));
     topTitle(busy ? '心跳回忆 · 档案室 · 后台生成中' : `心跳回忆 · 档案室${ready ? ` · ${archiveName}` : ''}`);
     const busyBanner = busy ? `<div class="rmt-task-banner"><span class="rmt-task-dot"></span><div><b>后台任务进行中</b><small>${esc(activeTaskLabel || '正在生成心跳回忆内容…')} · 不会锁住档案室；你也可以关闭窗口继续聊天。</small></div></div>` : '';
     const portalHtml = portals.map(({ mode, session, meta }) => {
@@ -3213,8 +3585,8 @@ function showChooser() {
       <small>${esc(externalSourceText)} · 不读取角色级/跨聊天记忆。</small>
     </div>`;
     const generationAction = ready ? `<div class="rmt-archive-generate-row">
-      <button type="button" class="rmt-btn rmt-archive-generate" data-rmt-action="generate-bundle" ${busy ? 'disabled' : ''}>${allGenerated ? '重新生成整套档案室内容' : `生成整套档案室内容${generatedCount ? ` · 当前 ${generatedCount}/6` : ''}`}</button>
-      <small>一次 API 生成相簿、CG/ADV 索引、房间、物品、手机与蝴蝶效应；生成会直接转入后台。</small>
+      <button type="button" class="rmt-btn rmt-archive-generate" data-rmt-action="generate-bundle" ${busy ? 'disabled' : ''}>${allGenerated ? '重新生成整套档案室内容' : `生成整套档案室内容${generatedCount ? ` · 当前 ${generatedCount}/4` : ''}`}</button>
+      <small>一次 API 生成相簿、CG/ADV、房间（内含翻找物品 / 私人终端深层内容）与蝴蝶效应；生成会直接转入后台。</small>
     </div>` : '';
 
     body.innerHTML = `
@@ -3232,11 +3604,16 @@ function showChooser() {
           </div>
           <button class="rmt-btn rmt-archive-update" type="button" data-rmt-action="import-memory" ${busy ? 'disabled' : ''}>${esc(importLabel)}</button>
         </section>
+        <section class="rmt-archive-overview rmt-archive-card">
+          <div class="rmt-archive-overview-head"><div><div class="rmt-archive-kicker">ARCHIVE INDEX</div><b>档案室一览</b><small>一个聊天窗口对应一份独立档案；这里只列出当前角色的聊天窗口。</small></div><button type="button" class="rmt-btn" data-rmt-action="archive-overview-refresh">刷新</button></div>
+          <div class="rmt-archive-overview-list" data-rmt-archive-overview-list></div>
+        </section>
         ${externalMemoryControls}
         <section class="rmt-archive-portals" aria-label="档案室内容入口">${portalHtml}</section>
         ${generationAction}
       </div>`;
     refreshSettingsMemoryStatus();
+    renderArchiveOverviewAsync();
 }
 
 function showLoading(text) {
@@ -3335,7 +3712,7 @@ function openCachedOrGenerate(mode) {
 
 function renderActive() {
     if (!activeSession || !activeMode) return showChooser();
-    setRegenerateVisible(true);
+    setRegenerateVisible(!ROOM_DEEP_MODES.includes(activeMode));
     if (activeMode !== MODE.ROOM) stopRoomClock();
     if (activeMode === MODE.BUTTERFLY) renderButterfly();
     else if (activeMode === MODE.ALBUM) renderAlbum();
@@ -3348,36 +3725,56 @@ function renderActive() {
 function renderButterfly() {
     const session = activeSession;
     if (!session || session.kind !== MODE.BUTTERFLY) return;
-    session.selected = Math.max(0, Math.min(Number(session.selected) || 0, session.nodes.length - 1));
+    session.selected = Math.max(1, Math.min(Number(session.selected) || 1, session.nodes.length - 1));
     const selected = session.nodes[session.selected];
     topTitle(MODE_LABEL[MODE.BUTTERFLY]);
-    const nodes = session.nodes.map((node, i) => `<button type="button" class="rmt-node ${i === session.selected ? 'active' : ''} ${node.trueEnding ? 'true-ending' : ''}" data-rmt-node="${i}">${esc(node.label)}${node.locked ? ' [锁定]' : ''}</button>`).join('');
+    const main = session.nodes[0];
+    const branches = session.nodes.slice(1, -1);
+    const ending = session.nodes[session.nodes.length - 1];
+    const branchNodes = branches.map((node, index) => `<button type="button" class="rmt-node rmt-branch-node ${index + 1 === session.selected ? 'active' : ''}" data-rmt-node="${index + 1}"><span>${String(index + 1).padStart(2, '0')}</span>${esc(node.label)}</button>`).join('');
+    const endingIndex = session.nodes.length - 1;
     const body = bodyEl();
     body.innerHTML = `<div class="rmt-crt"><div class="rmt-crt-content">
-      <div class="rmt-terminal-head">&gt; TEMPORAL OBSERVATION UNIT // SUBJECT: ${esc(session.subject || getContext().name2)} // STATUS: ${esc(session.status)}</div>
-      <div class="rmt-divergence">
-        <section class="rmt-node-map"><div style="margin-bottom:8px;font-weight:700">时间分歧树</div><div class="rmt-node-list">${nodes}</div></section>
-        <section class="rmt-observation">
-          <div class="rmt-signal" data-rmt-signal><div><b>${esc(selected.code)}</b><br><br>[ SIGNAL LOST: IMAGE DATA CORRUPTED ]</div></div>
-          <div class="rmt-mono"><b>平行体独白</b><br>${esc(selected.monologue)}</div>
-          <div class="rmt-intervention"><b>现世介入</b><br>${esc(selected.intervention)}</div>
-          <div class="rmt-system-note"><b>SYSTEM NOTE</b><br>${esc(selected.systemNote)}</div>
-        </section>
-      </div>
+      <section class="rmt-terminal-block rmt-terminal-header-block">
+        <div class="rmt-terminal-section-title">I. TERMINAL HEADER // 终端抬头</div>
+        <div class="rmt-terminal-head">&gt; TEMPORAL OBSERVATION UNIT // SUBJECT: ${esc(session.subject || getContext().name2)} // STATUS: UNSTABLE</div>
+        <div class="rmt-terminal-codeflow">0101::TEMPORAL-LINK / WORLD-LINE SCAN / SUBJECT LOCKED / DIVERGENCE SIGNAL ACTIVE</div>
+      </section>
+      <section class="rmt-terminal-block rmt-divergence-map-block">
+        <div class="rmt-terminal-section-title">II. DIVERGENCE MAP // 时间分歧树</div>
+        <div class="rmt-tree-root"><button type="button" class="rmt-node rmt-main-node" disabled><span>MAIN</span>${esc(main.label)} <em>LOCKED</em></button></div>
+        <div class="rmt-tree-trunk" aria-hidden="true"></div>
+        <div class="rmt-tree-branches">${branchNodes}</div>
+        <div class="rmt-tree-ending"><button type="button" class="rmt-node true-ending ${endingIndex === session.selected ? 'active' : ''}" data-rmt-node="${endingIndex}"><span>Ω</span>${esc(ending.label)}</button></div>
+      </section>
+      <section class="rmt-terminal-block rmt-observation-screen">
+        <div class="rmt-terminal-section-title">III. OBSERVATION SCREEN // 观测屏幕</div>
+        <div class="rmt-record-code">${esc(selected.code)}</div>
+        <div class="rmt-signal" data-rmt-signal><div class="rmt-signal-noise"></div><div class="rmt-signal-center">[ SIGNAL LOST: IMAGE DATA CORRUPTED ]</div></div>
+        <div class="rmt-mono"><b>PARALLEL SUBJECT MONOLOGUE // 平行体独白</b><br>${esc(selected.monologue)}</div>
+      </section>
+      <section class="rmt-terminal-block rmt-intervention-block"><div class="rmt-terminal-section-title">IV. REALITY INTERVENTION // 现世介入</div><div class="rmt-intervention">${esc(selected.intervention)}</div></section>
+      <section class="rmt-terminal-block rmt-system-block"><div class="rmt-terminal-section-title">V. SYSTEM NOTE // 系统评估</div><div class="rmt-system-note">${esc(selected.systemNote)}</div></section>
     </div></div>`;
 }
 
 function selectButterflyNode(index) {
     if (!activeSession || activeSession.kind !== MODE.BUTTERFLY) return;
-    const next = Math.max(0, Math.min(Number(index) || 0, activeSession.nodes.length - 1));
-    activeSession.selected = next;
-    saveSession(MODE.BUTTERFLY, activeSession);
+    const next = Math.max(1, Math.min(Number(index) || 1, activeSession.nodes.length - 1));
+    if (butterflyTransitionTimer) clearTimeout(butterflyTransitionTimer);
     const signal = document.querySelector('[data-rmt-signal]');
+    document.querySelectorAll(`#${OVERLAY_ID} [data-rmt-node]`).forEach(button => { button.disabled = true; });
     if (signal) {
         signal.classList.add('loading');
-        signal.textContent = 'SIGNAL INTERFERENCE // LOADING TEMPORAL DATA';
+        signal.innerHTML = '<div class="rmt-signal-noise"></div><div class="rmt-signal-center">SIGNAL INTERFERENCE // LOADING TEMPORAL DATA</div>';
     }
-    setTimeout(() => renderButterfly(), 1000);
+    butterflyTransitionTimer = window.setTimeout(() => {
+        butterflyTransitionTimer = 0;
+        if (!activeSession || activeSession.kind !== MODE.BUTTERFLY) return;
+        activeSession.selected = next;
+        saveSession(MODE.BUTTERFLY, activeSession);
+        renderButterfly();
+    }, 1000);
 }
 
 function filteredAlbumEntries() {
@@ -3531,14 +3928,14 @@ function possessionPathNodes(container, path) {
     return { nodes, parents };
 }
 function renderItems() {
-    const session = activeSession; if (!session || session.kind !== MODE.ITEMS) return; topTitle(MODE_LABEL[MODE.ITEMS]);
+    const session = activeSession; if (!session || session.kind !== MODE.ITEMS) return; topTitle('他的房间 · 翻找物品');
     const box = selectedItemsContainer(); const { nodes, parents } = possessionPathNodes(box, session.viewPath);
     const selected = nodes.find(node => node.id === session.selectedNodeId) || nodes[0] || null; if (selected) session.selectedNodeId = selected.id;
     const boxes = session.containers.map(item => `<button type="button" class="rmt-event ${item.id === box?.id ? 'active' : ''}" data-rmt-items-box="${esc(item.id)}"><b>${esc(item.label)}</b><small>${esc(item.containerType)}</small></button>`).join('');
     const crumbs = [box?.label, ...parents.map(item => item.label)].filter(Boolean);
     const list = nodes.map(node => `<button type="button" class="rmt-item-node ${node.id === selected?.id ? 'active' : ''}" data-rmt-item-node="${esc(node.id)}"><i class="fa-solid ${node.kind === 'container' ? 'fa-box' : 'fa-tag'}"></i><span><b>${esc(node.label)}</b><small>${esc(node.basis === '记忆' ? `档案痕迹 · ${node.sourceMemoryAnchor}` : '生活设定')}</small></span>${node.kind === 'container' ? '<i class="fa-solid fa-chevron-right"></i>' : ''}</button>`).join('');
     const detail = selected ? `<div class="rmt-item-detail"><div class="rmt-item-detail-head"><b>${esc(selected.label)}</b><span>${esc(selected.kind === 'container' ? '可继续打开' : '物件')}</span></div><p>${esc(selected.summary)}</p><blockquote>${esc(selected.line)}</blockquote>${selected.kind === 'container' && selected.children.length ? `<button class="rmt-btn" type="button" data-rmt-action="items-open">打开 / 继续翻找</button>` : ''}</div>` : '<div class="rmt-item-detail">这里暂时没有可查看的东西。</div>';
-    bodyEl().innerHTML = `<div class="rmt-items"><aside class="rmt-items-boxes">${boxes}</aside><section class="rmt-items-main"><div class="rmt-items-toolbar"><span>${esc(crumbs.join(' › '))}</span>${session.viewPath.length ? '<button class="rmt-btn" type="button" data-rmt-action="items-back">返回上一层</button>' : ''}</div><div class="rmt-items-grid"><div class="rmt-items-list">${list}</div>${detail}</div></section></div>`;
+    bodyEl().innerHTML = `<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="room-deep-back">← 返回他的房间</button><span>正在翻找他的私人收纳</span></div><div class="rmt-items"><aside class="rmt-items-boxes">${boxes}</aside><section class="rmt-items-main"><div class="rmt-items-toolbar"><span>${esc(crumbs.join(' › '))}</span>${session.viewPath.length ? '<button class="rmt-btn" type="button" data-rmt-action="items-back">返回上一层</button>' : ''}</div><div class="rmt-items-grid"><div class="rmt-items-list">${list}</div>${detail}</div></section></div>`;
 }
 function itemsSelectBox(id) { if (!activeSession || activeSession.kind !== MODE.ITEMS) return; const box = activeSession.containers.find(item => item.id === id); if (!box) return; activeSession.selectedContainerId = box.id; activeSession.viewPath = []; activeSession.selectedNodeId = box.nodes[0]?.id || ''; saveSession(MODE.ITEMS, activeSession); renderItems(); }
 function itemsSelectNode(id) { if (!activeSession || activeSession.kind !== MODE.ITEMS) return; activeSession.selectedNodeId = id; saveSession(MODE.ITEMS, activeSession); renderItems(); }
@@ -3547,11 +3944,11 @@ function itemsBack() { if (!activeSession || activeSession.kind !== MODE.ITEMS |
 
 function selectedPhoneApp() { if (!activeSession || activeSession.kind !== MODE.PHONE) return null; return activeSession.apps.find(app => app.id === activeSession.selectedAppId) || activeSession.apps[0] || null; }
 function renderPhone() {
-    const session = activeSession; if (!session || session.kind !== MODE.PHONE) return; topTitle(MODE_LABEL[MODE.PHONE]); const app = selectedPhoneApp(); const entry = app?.entries.find(item => item.id === session.selectedEntryId) || app?.entries[0] || null; if (entry) session.selectedEntryId = entry.id;
+    const session = activeSession; if (!session || session.kind !== MODE.PHONE) return; topTitle('他的房间 · 私人终端'); const app = selectedPhoneApp(); const entry = app?.entries.find(item => item.id === session.selectedEntryId) || app?.entries[0] || null; if (entry) session.selectedEntryId = entry.id;
     const apps = session.apps.map(item => `<button type="button" class="rmt-phone-app ${item.id === app?.id ? 'active' : ''}" data-rmt-phone-app="${esc(item.id)}"><i class="fa-solid fa-square"></i><span>${esc(item.label)}</span></button>`).join('');
     const entries = (app?.entries || []).map(item => `<button type="button" class="rmt-phone-entry ${item.id === entry?.id ? 'active' : ''}" data-rmt-phone-entry="${esc(item.id)}"><b>${esc(item.title)}</b><small>${esc(item.meta || item.preview)}</small><span>${esc(item.preview)}</span></button>`).join('');
     const detail = entry ? `<div class="rmt-phone-detail"><div class="rmt-phone-detail-meta">${esc(entry.meta || app?.label || '')}</div><h3>${esc(entry.title)}</h3><p>${esc(entry.detail)}</p>${entry.basis === '记忆' ? `<div class="rmt-phone-evidence">档案痕迹：${esc(entry.sourceMemoryAnchor)}</div>` : ''}</div>` : '<div class="rmt-phone-detail">没有条目。</div>';
-    bodyEl().innerHTML = `<div class="rmt-phone"><div class="rmt-phone-shell"><div class="rmt-phone-notch"></div><div class="rmt-phone-lock"><b>${esc(session.deviceName)}</b><span>${esc(session.lockText || 'PRIVATE')}</span></div><div class="rmt-phone-apps">${apps}</div><div class="rmt-phone-content"><div class="rmt-phone-list"><div class="rmt-phone-app-summary">${esc(app?.summary || '')}</div>${entries}</div>${detail}</div></div></div>`;
+    bodyEl().innerHTML = `<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="room-deep-back">← 返回他的房间</button><span>从他的房间里查看私人通讯生活</span></div><div class="rmt-phone"><div class="rmt-phone-shell"><div class="rmt-phone-notch"></div><div class="rmt-phone-lock"><b>${esc(session.deviceName)}</b><span>${esc(session.lockText || 'PRIVATE')}</span></div><div class="rmt-phone-apps">${apps}</div><div class="rmt-phone-content"><div class="rmt-phone-list"><div class="rmt-phone-app-summary">${esc(app?.summary || '')}</div>${entries}</div>${detail}</div></div></div>`;
 }
 function phoneSelectApp(id) { if (!activeSession || activeSession.kind !== MODE.PHONE) return; const app = activeSession.apps.find(item => item.id === id); if (!app) return; activeSession.selectedAppId = app.id; activeSession.selectedEntryId = app.entries[0]?.id || ''; saveSession(MODE.PHONE, activeSession); renderPhone(); }
 function phoneSelectEntry(id) { if (!activeSession || activeSession.kind !== MODE.PHONE) return; const app = selectedPhoneApp(); if (!app?.entries.some(item => item.id === id)) return; activeSession.selectedEntryId = id; saveSession(MODE.PHONE, activeSession); renderPhone(); }
@@ -3635,6 +4032,8 @@ function handleOverlayClick(event) {
     if (phoneApp) return phoneSelectApp(phoneApp.dataset.rmtPhoneApp);
     const phoneEntry = event.target.closest?.('[data-rmt-phone-entry]');
     if (phoneEntry) return phoneSelectEntry(phoneEntry.dataset.rmtPhoneEntry);
+    const archiveChat = event.target.closest?.('[data-rmt-archive-chat]');
+    if (archiveChat) return void openArchiveChatFromOverview(archiveChat.dataset.rmtArchiveChat);
 
     const externalToggle = event.target.closest?.('[data-rmt-external-memory-toggle]');
     if (externalToggle) {
@@ -3662,6 +4061,7 @@ function handleOverlayClick(event) {
         return showChooser();
     }
     if (action === 'import-memory') return importCurrentChatMemory();
+    if (action === 'archive-overview-refresh') return renderArchiveOverviewAsync({ force: true });
     if (action === 'generate-bundle') return generateBaseBundle(MODE.ALBUM, { background: true });
     if (action === 'regenerate') return activeMode && generateMode(activeMode);
     if (action === 'album-prev') return albumPage(-1);
@@ -3708,6 +4108,9 @@ function handleOverlayClick(event) {
     if (action === 'room-presence') return roomPresenceNext();
     if (action === 'room-find-presence') return roomFindPresence();
     if (action === 'room-life-refresh') return ensureRoomLifePlan({ force: true });
+    if (action === 'room-open-items') return openRoomDeepMode(MODE.ITEMS);
+    if (action === 'room-open-phone') return openRoomDeepMode(MODE.PHONE);
+    if (action === 'room-deep-back') return returnToRoomFromDeep();
     if (action === 'items-open') return itemsOpenSelected();
     if (action === 'items-back') return itemsBack();
     if (action === 'adv-prev') return advStep(-1);
@@ -3955,6 +4358,8 @@ function bindChatStateEvents() {
         activeTaskAbortController = null;
         activeMode = null;
         activeSession = null;
+        archiveOverviewCache = { key: '', fetchedAt: 0, items: [] };
+        archiveOverviewAllowedChats.clear();
         refreshSettingsMemoryStatus();
         const overlay = document.getElementById(OVERLAY_ID);
         if (overlay && !overlay.hidden && !busy) showChooser();
