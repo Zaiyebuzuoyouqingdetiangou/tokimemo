@@ -1,7 +1,7 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.10-mobile-avatar-r4",
+  "js": "index.js?heartbeat=0.8.10-mobile-archive-r5",
   "author": "Toto",
   "version": "0.8.10",
   "auto_update": false,

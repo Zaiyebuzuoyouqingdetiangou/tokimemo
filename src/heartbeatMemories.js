@@ -3251,6 +3251,8 @@ function ensureStyles() {
   padding:16px;box-sizing:border-box
 }
 #${OVERLAY_ID}[hidden]{display:none!important}
+dialog#${OVERLAY_ID}{margin:0!important;width:100vw!important;width:100dvw!important;height:100vh!important;height:100dvh!important;max-width:none!important;max-height:none!important;border:0!important;padding:16px!important}
+dialog#${OVERLAY_ID}::backdrop{background:transparent}
 .rmt-shell{
   --gs-ink:#4d5d73;
   --gs-muted:#7b8798;
@@ -3744,6 +3746,7 @@ function ensureStyles() {
   .rmt-archive-room{padding:12px 10px 18px}.rmt-archive-portals{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.rmt-archive-portal{min-height:188px;padding:14px 8px 12px}.rmt-portal-avatar{width:72px;height:72px;font-size:25px}.rmt-archive-generate-row{display:grid;gap:8px}.rmt-archive-generate{min-width:0;width:100%}
 
   #${OVERLAY_ID}{padding:0}.rmt-shell{max-height:100vh;border-radius:0;border:0;outline:0}
+  dialog#${OVERLAY_ID}{padding:0!important}
   .rmt-shell:before{display:none}
   .rmt-topbar{min-height:50px;padding:7px 8px 7px 11px}.rmt-topbar-title{font-size:15px}.rmt-topbar-title:after{display:none}
   .rmt-topbar button{padding:6px 9px;font-size:12px}
@@ -4362,11 +4365,38 @@ function roomPresenceNext() {
     renderRoom();
 }
 
+function isArchiveMobileViewport() {
+    try {
+        return !!globalThis.matchMedia?.('(max-width: 1000px)')?.matches || Number(globalThis.navigator?.maxTouchPoints || 0) > 0;
+    } catch {
+        return false;
+    }
+}
+
+function revealArchiveOverlay(overlay) {
+    if (!overlay) return;
+    overlay.hidden = false;
+    overlay.removeAttribute('aria-hidden');
+    if (typeof globalThis.HTMLDialogElement === 'function' && overlay instanceof globalThis.HTMLDialogElement) {
+        if (!overlay.open) {
+            try { overlay.showModal(); }
+            catch {
+                try { overlay.setAttribute('open', ''); } catch {}
+            }
+        }
+    }
+}
+
 function openOverlay() {
     ensureStyles();
+    const preferDialog = isArchiveMobileViewport() && typeof globalThis.HTMLDialogElement === 'function';
     let overlay = document.getElementById(OVERLAY_ID);
+    if (overlay && preferDialog && !(overlay instanceof globalThis.HTMLDialogElement)) {
+        overlay.remove();
+        overlay = null;
+    }
     if (!overlay) {
-        overlay = document.createElement('div');
+        overlay = document.createElement(preferDialog ? 'dialog' : 'div');
         overlay.id = OVERLAY_ID;
         overlay.innerHTML = `
           <div class="rmt-shell" role="dialog" aria-modal="true" aria-label="心跳回忆">
@@ -4380,9 +4410,14 @@ function openOverlay() {
           </div>`;
         document.body.appendChild(overlay);
         overlay.addEventListener('click', handleOverlayClick);
-    } else {
-        overlay.hidden = false;
+        if (typeof globalThis.HTMLDialogElement === 'function' && overlay instanceof globalThis.HTMLDialogElement) {
+            overlay.addEventListener('cancel', event => {
+                event.preventDefault();
+                closeOverlay();
+            });
+        }
     }
+    revealArchiveOverlay(overlay);
     return overlay;
 }
 
@@ -4391,6 +4426,9 @@ function closeOverlay() {
     stopPhoneClock();
     const overlay = document.getElementById(OVERLAY_ID);
     if (overlay) {
+        if (typeof globalThis.HTMLDialogElement === 'function' && overlay instanceof globalThis.HTMLDialogElement && overlay.open) {
+            try { overlay.close(); } catch {}
+        }
         overlay.hidden = true;
         const body = overlay.querySelector('.rmt-body');
         if (body) body.replaceChildren();
@@ -5633,7 +5671,7 @@ function mountSettings() {
         }
         const openArchiveButton = event.target.closest?.('[data-rmt-settings-open-archive]');
         if (openArchiveButton) {
-            showArchiveLibrary();
+            safeShowArchiveLibrary('settings-click');
             return;
         }
     });
@@ -5652,7 +5690,7 @@ function mountMenuItem() {
     item.tabIndex = 0;
     item.setAttribute('role', 'button');
     item.innerHTML = '<i class="fa-solid fa-box-archive"></i><span>心跳回忆 · 档案室</span>';
-    const open = () => showArchiveLibrary();
+    const open = () => safeShowArchiveLibrary('extensions-menu');
     item.addEventListener('click', open);
     item.addEventListener('keydown', event => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -5673,34 +5711,38 @@ function archiveOpenButtonFromEvent(event) {
     return event?.target?.closest?.(selector) || null;
 }
 
+function safeShowArchiveLibrary(source = 'unknown') {
+    try {
+        showArchiveLibrary();
+        return true;
+    } catch (error) {
+        console.error(`[HeartbeatMemories] open archive failed (${source})`, error);
+        globalThis.toastr?.error?.(`档案室打开失败：${toastText(error?.message || error)}`, '心跳回忆');
+        return false;
+    }
+}
+
 function bindRobustArchiveOpenHandlers() {
     try { globalThis.__heartbeatMemoriesOpenCleanup?.(); } catch {}
     let lastOpenAt = 0;
-    const handler = event => {
+    const earlyHandler = event => {
         const button = archiveOpenButtonFromEvent(event);
         if (!button) return;
+        if (event.type === 'pointerdown' && Number(event.button ?? 0) !== 0) return;
         const now = Date.now();
-        if (now - lastOpenAt < 650) return;
+        if (now - lastOpenAt < 700) return;
         lastOpenAt = now;
-        // iOS/WebKit cloud wrappers can deliver touchend without a usable synthetic click.
-        // Prevent only the matched archive-button gesture; do not interfere with unrelated UI.
-        if (event.cancelable) event.preventDefault?.();
-        event.stopPropagation?.();
-        showArchiveLibrary();
-        const overlay = document.getElementById(OVERLAY_ID);
-        if (overlay) {
-            overlay.hidden = false;
-            overlay.removeAttribute('aria-hidden');
-        }
+        // Do NOT preventDefault/stopPropagation here. SillyTavern mobile sets body touch-action:none
+        // and owns the settings drawer gesture lifecycle. We only observe the earliest gesture and
+        // open our mobile dialog in the browser top layer, then let the host finish its own gesture.
+        safeShowArchiveLibrary(`early-${event.type}`);
     };
-    const touchOptions = { capture: true, passive: false };
-    document.addEventListener('touchend', handler, touchOptions);
-    document.addEventListener('pointerup', handler, true);
-    document.addEventListener('click', handler, true);
+    const touchOptions = { capture: true, passive: true };
+    document.addEventListener('touchstart', earlyHandler, touchOptions);
+    document.addEventListener('pointerdown', earlyHandler, true);
     globalThis.__heartbeatMemoriesOpenCleanup = () => {
-        document.removeEventListener('touchend', handler, touchOptions);
-        document.removeEventListener('pointerup', handler, true);
-        document.removeEventListener('click', handler, true);
+        document.removeEventListener('touchstart', earlyHandler, touchOptions);
+        document.removeEventListener('pointerdown', earlyHandler, true);
     };
 }
 

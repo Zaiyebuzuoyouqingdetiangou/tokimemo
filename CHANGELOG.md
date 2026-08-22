@@ -1,3 +1,9 @@
+## 0.8.10 mobile archive r5
+- 手机云酒馆：撤销会干扰宿主手势的 touchend/pointerup/click 阻断式兜底。
+- 在 touchstart/pointerdown 捕获阶段只观察、不阻断宿主事件，尽早打开档案室。
+- 移动端使用原生 dialog.showModal() top layer，避免右侧设置抽屉/固定定位层遮住档案室。
+- 打开失败时显示 toastr 并记录 console 错误，不再表现为“点了没反应”。
+
 ## 0.8.10
 
 - Prompt-split r3: CG 相簿、CG/ADV 索引、房间、储物、私人终端、蝴蝶效应改为模式独立 prompt；不再给每个模式重复附带一整份公共长 prompt。
