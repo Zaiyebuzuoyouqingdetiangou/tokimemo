@@ -102,3 +102,10 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - `available=true` 只表示当前档案具备该路线的进入条件；UI 必须持续标注“未来路线推演”。未解锁恋爱路线不得预先展示完整恋爱终章/后日谈。
 - 若角色/用户为未成年人或低龄设定，恋爱路线只能生成年龄适当的非性内容；成人承诺必须明确发生在双方成年后的未来。
 - Gallery r9 禁止模型/世界书 URL 进入结构化输出与 DOM；不得从相册创建新的浏览器第三方网络目的地。
+
+### 0.8.10 confirmation / current archive r10 additional invariants
+
+- 任何显式覆盖已有派生内容的“重新生成”操作必须经过用户确认；确认取消时不得创建请求、修改 session 或改变 archive revision。
+- 手动更新当前窗口档案必须在确认文本中说明 archive revision 变化会使旧派生剧场缓存失效；首次建档与更新档案都仍然是用户显式动作。
+- 确认 UI 不得接受模型生成 HTML/URL；确认标题与说明全部来自本地固定字符串。
+

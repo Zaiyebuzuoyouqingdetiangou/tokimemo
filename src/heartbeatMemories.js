@@ -4026,6 +4026,7 @@ dialog#${OVERLAY_ID}::backdrop{background:transparent}
 .rmt-archive-generate{min-width:220px}.rmt-archive-generate-row small{font-size:10px;line-height:1.55;color:#7d8b99}
 .rmt-external-memory-row{display:grid;gap:5px;margin:10px 0 2px;padding:10px 12px;border:1px solid #dbe7ec;border-radius:13px;background:rgba(250,253,254,.84);color:#66798a}.rmt-external-memory-toggle{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:750}.rmt-external-memory-row small{font-size:10px;line-height:1.55;color:#8794a0}
 #${SETTINGS_ID} .rmt-open-archive-room{width:100%!important;min-height:48px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;background:linear-gradient(90deg,#fff6fa,#f2faff)!important;border:1px solid #d4e2e9!important;color:#566a80!important;font-weight:850!important}
+#${SETTINGS_ID} .rmt-settings-archive-actions{display:grid;gap:8px;margin-top:10px}.rmt-current-archive-card{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.rmt-current-archive-card>div:first-child{display:grid;gap:4px}.rmt-current-archive-card small{font-size:10px;color:#8794a0}.rmt-current-archive-actions{display:flex;gap:8px;flex-wrap:wrap}
 .rmt-archive-portal-items .rmt-portal-avatar{background:linear-gradient(145deg,#ddb991,#b99168)}
 .rmt-archive-portal-phone .rmt-portal-avatar{background:linear-gradient(145deg,#9fc9d5,#6ca6b6)}
 .rmt-items{display:grid;grid-template-columns:220px 1fr;gap:14px;min-height:520px}.rmt-items-boxes{display:flex;flex-direction:column;gap:8px}.rmt-items-main{min-width:0}.rmt-items-toolbar{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.72)}
@@ -4048,7 +4049,7 @@ dialog#${OVERLAY_ID}::backdrop{background:transparent}
 @media (prefers-reduced-motion: reduce){
   #${OVERLAY_ID} *,#${OVERLAY_ID} *:before,#${OVERLAY_ID} *:after{animation:none!important;transition:none!important}
 }
-@media(max-width:760px){.rmt-items{grid-template-columns:1fr}.rmt-items-boxes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.rmt-items-grid,.rmt-phone-content{grid-template-columns:1fr}.rmt-phone-shell{min-height:0;border-radius:20px;padding:10px}}
+@media(max-width:760px){.rmt-current-archive-card{align-items:stretch}.rmt-current-archive-actions{display:grid;grid-template-columns:1fr;width:100%}.rmt-current-archive-actions .rmt-btn{width:100%;justify-content:center}.rmt-items{grid-template-columns:1fr}.rmt-items-boxes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.rmt-items-grid,.rmt-phone-content{grid-template-columns:1fr}.rmt-phone-shell{min-height:0;border-radius:20px;padding:10px}}
 @media(max-width:760px){
   /* Mobile archive: narrower reading column and compact single-column mode cards. */
   .rmt-archive-room{padding:10px 12px 20px;max-width:540px;margin:0 auto}
@@ -4833,6 +4834,62 @@ function setRegenerateVisible(visible) {
     if (button) button.hidden = !visible;
 }
 
+function confirmExplicitAction(title, detail, { destructive = false } = {}) {
+    const prefix = destructive ? '⚠️ ' : '';
+    const message = `${prefix}${normalizeText(title, 160)}\n\n${normalizeText(detail, 1200)}\n\n确定继续吗？`;
+    try {
+        if (typeof globalThis.confirm === 'function') return globalThis.confirm(message);
+    } catch (error) {
+        console.warn('[HeartbeatMemories] native confirmation unavailable', error);
+    }
+    globalThis.toastr?.warning?.('当前环境无法显示确认提示。为避免误操作，本次操作已取消。', '心跳回忆');
+    return false;
+}
+
+function confirmModeRegeneration(mode) {
+    const label = MODE_LABEL[mode] || mode || '当前内容';
+    return confirmExplicitAction(
+        `重新生成「${label}」？`,
+        '这会替换这一项现有的生成缓存。当前聊天档案本身不会被修改；取消可继续保留现在的内容。',
+        { destructive: true },
+    );
+}
+
+function confirmRoomLifeRefresh() {
+    return confirmExplicitAction(
+        '更新今日生活？',
+        '这会重新生成今天的房间生活状态并替换当前“今日生活”缓存；聊天档案和房间主体不会被修改。',
+        { destructive: true },
+    );
+}
+
+function requestCurrentArchiveImport() {
+    let context;
+    try { context = currentCharacterGuard(); }
+    catch (error) {
+        globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆');
+        return false;
+    }
+    const existing = getImportedMemory(context);
+    const settings = getPluginSettings(context);
+    const detected = externalMemorySourceSummary(context);
+    if (settings.useCurrentChatExternalMemory && detected.length && !getMemoryPreflight(context)) {
+        showChooser();
+        globalThis.toastr?.info?.('检测到当前窗口记忆插件来源。请先点“读取记忆插件”，确认读取范围后再生成/更新当前窗口档案。', '心跳回忆');
+        return false;
+    }
+    const title = existing ? '更新当前窗口档案？' : '生成当前窗口档案？';
+    const detail = existing
+        ? '这会重新读取当前聊天窗口并替换现有档案。更新成功后，旧档案版本对应的 CG / ADV / 房间 / 蝴蝶效应 / ENDING / 储物 / 私人终端等派生缓存会被清空，需要按需重新生成。聊天正文不会被修改。'
+        : '这会读取当前聊天窗口并建立一份只属于这个窗口的心跳回忆档案。聊天正文不会被修改；之后也只有你手动更新时档案才会变化。';
+    if (!confirmExplicitAction(title, detail, { destructive: !!existing })) return false;
+    void importCurrentChatMemory().catch(error => {
+        console.error('[HeartbeatMemories] current archive import action failed', error);
+        globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆');
+    });
+    return true;
+}
+
 function formatArchiveTime(value) {
     const time = Number(value) || 0;
     if (!time) return '未记录';
@@ -5088,8 +5145,14 @@ function showArchiveLibrary() {
     }).join('');
     let currentQuick = '';
     try {
-        const ctx = currentCharacterGuard(); const mem = getImportedMemory(ctx);
-        if (!mem) currentQuick = `<section class="rmt-archive-card" style="margin-top:12px"><b>当前聊天还没有档案</b><div style="margin-top:7px"><button type="button" class="rmt-btn" data-rmt-action="current-archive">进入当前聊天并创建档案</button></div></section>`;
+        const ctx = currentCharacterGuard();
+        const mem = getImportedMemory(ctx);
+        if (mem) {
+            const name = normalizeText(mem.archiveName, 120) || fallbackArchiveName(mem.memories);
+            currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前窗口档案</b><small>${esc(name)} · ${mem.memories.length} 条记忆</small></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive">打开当前窗口档案</button><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">更新当前窗口档案</button></div></section>`;
+        } else {
+            currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前聊天还没有档案</b><small>每个聊天窗口拥有自己的独立档案。</small></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">生成当前窗口档案</button></div></section>`;
+        }
     } catch {}
     body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">MEMORY ARCHIVE LIBRARY</div><strong class="rmt-archive-title">档案室一览</strong><div class="rmt-archive-summary">这里只显示已经建立过心跳回忆档案的角色。点进角色后，再选择这个角色不同聊天窗口各自的档案名称。</div><div style="margin-top:10px"><button type="button" class="rmt-btn" data-rmt-action="rebuild-archive-index">扫描旧版本已有档案</button></div></section>${cards ? `<section class="rmt-archive-portals rmt-character-portals">${cards}</section>` : '<div class="rmt-archive-overview-empty">还没有已索引的档案。当前版本创建/更新档案后会自动加入这里；旧版本档案可点上方按钮手动扫描一次。</div>'}${currentQuick}</div>`;
 }
@@ -5189,7 +5252,7 @@ function showChooser() {
     }
     const ready = state.status === 'ready';
     const memory = state.memory;
-    const importLabel = ready ? '更新聊天档案' : '创建聊天档案';
+    const importLabel = ready ? '更新当前窗口档案' : '生成当前窗口档案';
     const preview = ready ? memory.memories.slice(0, 7).map(item => item.title).join(' · ') : '';
     const archiveName = ready ? (memory.archiveName || fallbackArchiveName(memory.memories)) : '尚未创建档案';
     const archiveSummary = ready ? (memory.archiveSummary || fallbackArchiveSummary(memory.memories)) : '先为当前聊天创建档案。档案只在你手动创建 / 更新时变化，不会因为继续聊天而自动改写。';
@@ -5217,7 +5280,7 @@ function showChooser() {
             <span class="rmt-portal-subtitle">${esc(meta.subtitle)}</span>
             <span class="rmt-portal-status">${esc(statusText)}</span>
           </button>
-          <button type="button" class="rmt-btn rmt-portal-generate" data-rmt-generate-mode="${esc(mode)}" ${busy || generating || capacityReached ? 'disabled' : ''}>${esc(actionText)}</button>
+          <button type="button" class="rmt-btn rmt-portal-generate" data-rmt-generate-mode="${esc(mode)}" ${generated ? 'data-rmt-regenerate="true"' : ''} ${busy || generating || capacityReached ? 'disabled' : ''}>${esc(actionText)}</button>
         </article>`;
     }).join('');
     const externalSetting = getPluginSettings().useCurrentChatExternalMemory;
@@ -5832,6 +5895,7 @@ function handleOverlayClick(event) {
     const generateModeButton = event.target.closest?.('[data-rmt-generate-mode]');
     if (generateModeButton) {
         const mode = generateModeButton.dataset.rmtGenerateMode;
+        if (generateModeButton.dataset.rmtRegenerate === 'true' && !confirmModeRegeneration(mode)) return;
         void generateMode(mode, { background: true });
         return;
     }
@@ -5890,11 +5954,15 @@ function handleOverlayClick(event) {
     }
     if (action === 'archive-character-back') return showArchiveCharacter(currentCharacterKey(currentCharacterGuard()));
     if (action === 'current-archive') return showChooser();
+    if (action === 'current-archive-import') return requestCurrentArchiveImport();
     if (action === 'read-memory-plugins') return void readCurrentChatMemoryPlugins().catch(error => globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆'));
     if (action === 'rebuild-archive-index') return void rebuildArchiveIndexFromExisting();
-    if (action === 'import-memory') return importCurrentChatMemory();
+    if (action === 'import-memory') return requestCurrentArchiveImport();
     if (action === 'archive-overview-refresh') return renderArchiveOverviewAsync({ force: true });
-    if (action === 'regenerate') return activeMode && generateMode(activeMode, { background: false });
+    if (action === 'regenerate') {
+        if (!activeMode || !confirmModeRegeneration(activeMode)) return;
+        return generateMode(activeMode, { background: false });
+    }
     if (action === 'album-prev') return albumPage(-1);
     if (action === 'album-next') return albumPage(1);
     if (action === 'show-hint') return showAlbumHint();
@@ -5939,7 +6007,10 @@ function handleOverlayClick(event) {
     if (action === 'read-adv') return generateAdvForSelected();
     if (action === 'room-presence') return roomPresenceNext();
     if (action === 'room-find-presence') return roomFindPresence();
-    if (action === 'room-life-refresh') return ensureRoomLifePlan({ force: true });
+    if (action === 'room-life-refresh') {
+        if (!confirmRoomLifeRefresh()) return;
+        return ensureRoomLifePlan({ force: true });
+    }
     if (action === 'room-open-items') return openRoomDeepMode(MODE.ITEMS);
     if (action === 'room-open-phone') return openRoomDeepMode(MODE.PHONE);
     if (action === 'room-deep-back') return returnToRoomFromDeep();
@@ -6054,10 +6125,26 @@ function refreshSettingsMemoryStatus() {
     const panel = document.getElementById(SETTINGS_ID);
     if (!panel) return;
     const openButton = panel.querySelector('[data-rmt-settings-open-archive]');
-    if (!openButton) return;
-    openButton.disabled = false;
+    const archiveButton = panel.querySelector('[data-rmt-settings-current-archive]');
     const taskCount = activeGenerationTasks.size;
-    openButton.textContent = busy ? '打开档案室 · 档案整理中' : taskCount ? `打开档案室 · ${taskCount}项生成中` : '打开档案室';
+    if (openButton) {
+        openButton.disabled = false;
+        openButton.textContent = busy ? '打开档案室 · 档案整理中' : taskCount ? `打开档案室 · ${taskCount}项生成中` : '打开档案室';
+    }
+    if (archiveButton) {
+        let ready = false;
+        let actionable = false;
+        try {
+            const context = currentCharacterGuard();
+            actionable = !!getChatId(context);
+            ready = getMemoryState(context).status === 'ready';
+        } catch {}
+        archiveButton.disabled = busy || hasGenerationTasks() || !actionable;
+        archiveButton.textContent = !actionable
+            ? '当前窗口档案不可用'
+            : busy ? '当前窗口档案整理中…'
+            : ready ? '更新当前窗口档案' : '生成当前窗口档案';
+    }
 }
 
 function mountSettings() {
@@ -6095,7 +6182,11 @@ function mountSettings() {
           <div class="rmt-api-note" data-rmt-api-status></div>
           <div class="rmt-api-note">模型刷新只调用 SillyTavern 本地后端状态接口；插件保存 Connection Profile / Secret ID 引用，不保存 API Key 明文。</div>
         </div>
-        <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
+        <div class="rmt-settings-archive-actions">
+          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
+          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
+          <div class="rmt-api-note">当前聊天窗口一份独立档案。更新档案会使旧档案版本对应的派生 CG / ADV / 房间 / ENDING 等缓存失效，因此执行前会再次确认。</div>
+        </div>
       </div>`;
     mount.appendChild(panel);
     panel.addEventListener('change', event => {
@@ -6144,6 +6235,11 @@ function mountSettings() {
                 console.error('[HeartbeatMemories] import current connection failed', error);
                 globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆');
             });
+            return;
+        }
+        const currentArchiveButton = event.target.closest?.('[data-rmt-settings-current-archive]');
+        if (currentArchiveButton) {
+            requestCurrentArchiveImport();
             return;
         }
         const openArchiveButton = event.target.closest?.('[data-rmt-settings-open-archive]');

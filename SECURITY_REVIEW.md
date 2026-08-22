@@ -1,3 +1,17 @@
+## 0.8.10 confirmation / current archive r10 focused diff review
+
+Scope: exact current GitHub `main` r9 blob `24312b4f9980c4d41fd318a6fe7eb830873b1e25` → local r10 candidate (`src/heartbeatMemories.js`, cache-key metadata, docs).
+
+- Added a local, fixed-string confirmation gate for every explicit overwrite path: portal-level regeneration, topbar regeneration, room “今日生活” forced refresh, and current-window archive create/update. Cancel returns before any generation/import request is started.
+- Restored a direct “生成/更新当前窗口档案” action in plugin settings and made current-window archive actions visible on the archive-library home whether an archive already exists or not. The existing chooser action is retained and renamed explicitly to “当前窗口档案”.
+- Updating an existing archive now warns before action that a new `archiveRevision` will invalidate the old derived theater cache. This matches the pre-existing `saveImportedMemory()` behavior; the patch does not change cache invalidation semantics.
+- Confirmation title/body strings are local constants. No model output, world-info text, archive text, HTML, URL, or secret data is injected into the confirmation surface.
+- Static diff found no increase in `fetch(`, WebSocket, EventSource, `eval(`, `new Function`, `document.write`, or `insertAdjacentHTML`. No new network destination or credential-handling path was added.
+- Counts of `expectedChatId`, `expectedArchiveRevision`, `normalizeMemoryReference`, `isCurrentTaskOrigin`, and `saveSession` are unchanged from the exact GitHub r9 baseline.
+- `importCurrentChatMemory()` is now invoked only through the confirmation wrapper from user-facing actions; the implementation of archive import, external-memory scoping, origin binding, and archive write checks is unchanged.
+
+Result: no newly introduced Critical / High / Medium issue found in this targeted r9 → r10 review. Native browser confirmation behavior still needs real-device UX validation, but failure to display confirmation is fail-closed: the destructive action is cancelled.
+
 ## 0.8.10 ending / epilogue r9 focused diff review
 
 Scope: r8 → r9 (`src/heartbeatMemories.js`, cache-key metadata, docs).
