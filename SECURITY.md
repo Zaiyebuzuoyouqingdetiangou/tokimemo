@@ -36,9 +36,14 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 
 ## Current-chat external memory boundary
 
-21. 外部记忆桥接只允许在用户显式“创建/更新档案”时运行；CG / ADV / 房间 / 蝴蝶效应不得直接读取外部记忆服务。
+21. 外部记忆桥接只允许在用户显式“创建/更新档案”时运行；CG / ADV / 房间 / 物品 / 手机 / 蝴蝶效应不得直接读取外部记忆服务。
 22. 每个 provider 必须绑定发起任务时的 `chatId`；任何 await 返回后如果当前 `chatId` 变化，数据必须丢弃/中止。
 23. EverMind 适配器只允许读取当前聊天 metadata 中的 `st_evermind.group_id`；禁止读取或搜索 `char_group_id` / 角色级跨聊天记忆。
 24. 外部 provider 凭据不得复制到心跳回忆 extension settings、chat metadata、日志、DOM、Prompt 或错误文本。对 EverMind 的现有明文 key 仅允许作为一次 `/proxy` 请求的瞬时 Authorization header。
 25. 外部记忆内容与 API 响应均视为不可信数据；进入心跳回忆档案前必须经过结构化模型抽取、真实 provider record ID 白名单校验以及 `sourceExternalAnchor` 逐字证据校验。
 26. 外部记忆桥接必须有独立条数/字符预算，不得因为 provider 数据规模绕过主生成输入预算。
+
+27. “他的物品”递归容器最大深度与总节点数必须受限；所有模型文本仍经过 `esc()`，模型不得提供 HTML/CSS/URL/脚本。
+28. “他的手机”模型内容仅作为本地结构化展示数据；不得触发真实短信、邮件、外部 URL、联系人操作或设备 API。
+29. 物品/手机中 basis=“记忆”的共同历史必须通过与相簿/房间相同的 `sourceMemoryIds + sourceMemoryAnchor` 校验；basis=“设定”不得伪装为 User 已发生行为。
+30. 档案扫描允许跳过重复 token 化仅限于已经被保守字符上限约束的固定大小分块；字符预算仍必须在发送前执行，不能因此绕过总输入限制。

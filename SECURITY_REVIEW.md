@@ -1,55 +1,33 @@
-# 心跳回忆 0.8.4 — Security Diff Review
+# 心跳回忆 0.8.5 — 0.8.4 → 0.8.5 差分安全复核
 
-Scope: 0.8.3 → 0.8.4 only.
+## 结论
 
-## Result
+**可作为真机候选版继续测试。** 本轮变更未发现新增 Critical / High / Medium 级安全漏洞。0.8.0 独立审计后建立的 chatId/archiveRevision 隔离、sourceMemoryIds + anchor 证据校验、宏隔离、输入预算与每日生活失败熔断仍保留。
 
-No new Critical / High / Medium vulnerability was identified in the reviewed diff. The new network surface is limited to current-chat external-memory synchronization during an explicit manual archive create/update operation.
+## 本轮重点检查
 
-## Reviewed change surface
+1. **长聊天档案覆盖**：不再从尾部截取最近 36 万字符；扫描会分批让出主线程，超出 4000 条/120 万字符时才对整个窗口均匀取样。采样后仍保留原始 message index。
+2. **后台卡顿优化**：聊天扫描每 60 条消息 `yield` 一次；固定 30k 字符档案分块不再重复调用高成本 tokenizer，但仍执行 96k 字符硬预算。世界书受控 envelope 仍只构建一次复用。
+3. **去重正确性**：聊天记忆去重 key 纳入 `messageStart-messageEnd`，外部记忆纳入 provider record IDs，避免不同时间的相似标题被误删除。
+4. **他的物品**：模型数据经过结构化 normalize；递归深度 ≤3，归一化后总节点 ≤60；所有动态文本渲染均走 `esc()`；不存在模型控制 URL/CSS/脚本。basis=记忆条目必须通过档案 evidence 校验。
+5. **他的手机**：仅本地结构化浏览，不调用真实设备/短信/邮件/联系人 API；所有动态文本转义；basis=记忆条目必须通过档案 evidence 校验。
+6. **共同回忆**：从至少 3 句提升到至少 6 段，只增加结构化文本数量，不新增执行面。
+7. **网络面**：本轮没有新增 `fetch()`。仍只有既有的 SillyTavern 同源模型状态请求，以及用户手动更新档案时经 `/proxy` 读取兼容记忆 provider 的当前聊天资料。
+8. **凭据**：本轮没有新增 Secret/API Key 存储或显示路径。EverMind 兼容层仍只临时使用其自身已存在的配置，不写入心跳回忆设置、档案、日志或 Prompt。
 
-- Added current-chat external memory bridge.
-- Added SillyTavern `1_memory` summary ingestion for the active chat.
-- Added EverMind current-session ingestion using the active chat metadata `st_evermind.group_id` only.
-- Added external-memory record / anchor provenance checks.
-- Added per-provider record and character budgets.
-- Added archive-room opt-out UI.
-- Added proprietary test license and related documentation.
+## 回归验证
 
-## Security properties verified
+- `node --check index.js`：通过。
+- `node --check src/heartbeatMemories.js`：通过。
+- 800 条消息模拟：全部覆盖，第 1 条至第 800 条进入分块，不再近期截断。
+- 相簿：已解锁共同回忆少于 6 段会拒绝；6 段通过。
+- 物品：5 类容器 + 子容器递归通过；真实档案 anchor 可通过，无真实证据的伪造“共同物件”会被丢弃。
+- 手机：5 个分区、每区 3 条以上结构化数据通过；真实档案 anchor 可通过，无真实证据的伪造“共同手机记录”会被丢弃。
+- 一次基础包：`album + adv + room + items + phone + butterfly` 六个 session 同时形成。
 
-1. **Current chat only**: EverMind requests are built only from `chatMetadata.st_evermind.group_id`. The code has no `char_group_id` read path.
-2. **Cross-chat late response rejection**: after provider fetch and after model extraction, the active `chatId` is checked against the task snapshot. Chat changes also abort the task controller.
-3. **No automatic provider polling**: external memory is collected only from `importCurrentChatMemory()`, i.e. explicit manual archive create/update. Base bundle / ADV / room life generation do not call external providers.
-4. **Credential containment**: an EverMind key, if that third-party extension already stores one in its own settings, is read transiently to construct a single Authorization header. It is not copied into Heartbeat settings, archive metadata, prompts, DOM, logs, or error text.
-5. **Provider URL not model-controlled**: the `/proxy` destination comes only from the already-configured EverMind provider URL, not from model output, archive text, world info, or chat content. Only `http:` / `https:` schemes are accepted.
-6. **Untrusted provider data remains data**: provider responses are normalized and then passed to the model inside an explicitly untrusted JSON block. Generic ST macros remain neutralized by the existing safe role-macro expansion path.
-7. **Evidence validation**: an external candidate must reference an allowed provider record ID and supply a `sourceExternalAnchor` that occurs verbatim in the cited provider record. A guessed ID/anchor pair that is not supported by the record is rejected.
-8. **Budgets**: external memory is capped at 64 normalized records / ~30,000 characters before model extraction, and the existing final 96,000-character / ~32,000-token prompt budget still applies.
-9. **Archive provenance**: provider names/counts and an external-memory fingerprint may be persisted, but raw provider records and provider credentials are not persisted in Heartbeat metadata.
-10. **Manual-update semantics preserved**: external memory changes do not mutate Heartbeat archives automatically. They only affect a new archive revision after the user explicitly updates the current chat archive.
+## 仍需真机验证
 
-## Targeted runtime regression
-
-A Node VM mock test verified:
-
-- current SillyTavern Memory summary detection;
-- EverMind current-chat provider detection;
-- EverMind request includes current `group_id` and never `char_group_id`;
-- provider result flattening;
-- valid external anchor acceptance;
-- hallucinated external anchor rejection;
-- response rejection after changing from chat A to chat B.
-
-`node --check` passes for `index.js` and `src/heartbeatMemories.js`.
-
-## Remaining test-stage checks
-
-- Verify the real EverMind deployment used by testers returns the same list response shape for `GET /api/v0/memories?user_id=...&group_id=...&limit=...`.
-- Verify SillyTavern CORS proxy is enabled when EverMind is used.
-- Verify very large current-chat memory databases are truncated predictably by the 64-record / 30k-character bridge budget.
-- Verify a current-chat memory provider failure degrades to chat-text-only archive import without blocking the archive.
-
-## Licensing note
-
-The repository now carries `Tokimemo Proprietary Test License v1.0`. This is not an open-source license. A public GitHub repository still makes source code visible/downloadable under GitHub platform behavior; use a private repository during closed testing if source visibility itself is not acceptable.
+- 400+ 层真实长聊天在桌面端/手机端的 UI 流畅度。
+- 用户实际使用的记忆插件 API 在当前聊天窗口 scope 下的分页/数量行为。
+- 16k 默认最大输出在用户所选模型上能否稳定容纳六入口基础包；如果模型输出上限较小，需在设置里提高可用上限或调整基础包密度。
+- 手机和递归物品浏览在小屏幕上的滚动与返回层级体验。
