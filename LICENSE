@@ -1,0 +1,34 @@
+Tokimemo Proprietary Test License v1.0
+
+Copyright (c) 2026 Zaiyebuzuoyouqingdetiangou. All rights reserved.
+
+This software, including its source code, user interface code, prompts, documentation, assets, and all associated materials (the "Software"), is proprietary and is NOT open-source software.
+
+1. Limited testing permission
+The copyright holder grants only persons who have received the Software from an authorized distribution channel a limited, revocable, non-exclusive, non-transferable license to install and execute an unmodified copy of the Software solely for personal, non-commercial testing and evaluation with SillyTavern. Copies that are technically necessary for installation or one personal backup are permitted only for that purpose.
+
+2. No source-code reuse
+No permission is granted to copy, adapt, modify, translate, port, merge, extract, republish, redistribute, sublicense, sell, rent, host, mirror, or incorporate any source code, prompt, user-interface implementation, data schema, or other protected portion of the Software into another project, product, service, plugin, extension, repository, or model-training dataset.
+
+3. No derivative works or redistribution
+You may not create or distribute derivative works, modified builds, forks, patches containing substantial portions of the Software, unofficial mirrors, or repackaged releases without prior written permission from the copyright holder.
+
+4. No commercial use
+Commercial use, paid distribution, monetized hosting, resale, bundling with paid products or services, or use in a commercial offering is prohibited without a separate written license.
+
+5. No removal of notices
+Copyright, license, attribution, and proprietary notices must not be removed or obscured.
+
+6. Third-party components and services
+This license applies only to original material owned by the copyright holder. SillyTavern, KONAMI products, external memory providers, APIs, libraries, and other third-party names, software, services, or intellectual property remain subject to their own terms and rights. No ownership of third-party material is claimed.
+
+7. No warranty
+THE SOFTWARE IS PROVIDED "AS IS" FOR TESTING. TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE COPYRIGHT HOLDER DISCLAIMS ALL WARRANTIES AND LIABILITY ARISING FROM USE OF THE SOFTWARE.
+
+8. Termination
+Any permission granted by this license terminates automatically if these terms are violated. Upon termination, all copies in the user's possession or control must be deleted, except where retention is required by law.
+
+9. Other permissions
+Any permission not expressly granted above is reserved. Additional permission requires prior written authorization from the copyright holder.
+
+Public availability of source code does not grant an open-source license or any rights beyond the limited testing permission stated above.

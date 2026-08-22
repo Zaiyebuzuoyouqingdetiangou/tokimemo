@@ -1,14 +1,14 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.2",
+  "js": "index.js?heartbeat=0.8.4",
   "author": "Toto",
-  "version": "0.8.2",
+  "version": "0.8.4",
   "auto_update": false,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "独立的 SillyTavern 心跳回忆插件：手动聊天档案、回忆相簿、CG/ADV、蝴蝶效应与随现实时间流动的多空间私人生活；使用专用 Connection Manager 连接，可安全刷新模型；首次进入基础玩法时一次生成整套缓存，并支持真正后台生成。"
+  "description": "独立的 SillyTavern 心跳回忆插件：专用 API 设置、每聊天窗口独立档案室、当前窗口记忆插件补充同步、一次请求后台生成回忆相簿/CG·ADV/他的房间/蝴蝶效应；专有测试许可，非开源。"
 }
