@@ -1,14 +1,17 @@
 {
-  "display_name": "心跳回忆",
-  "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.9",
+  "display_name": "兔子镜测试版",
+  "loading_order": 100,
+  "js": "index.js?rmv=1.4.30.12",
+  "css": "style.css?rmv=1.4.30.12",
   "author": "Toto",
-  "version": "0.8.9",
+  "version": "1.4.30.12",
+  "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tototest",
   "auto_update": false,
-  "minimum_client_version": "1.18.0",
+  "generate_interceptor": "rabbitMirrorGenerateInterceptor",
+  "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "独立的 SillyTavern 心跳回忆插件：每聊天窗口独立档案、全角色档案馆、记忆插件预读取、四个主入口独立并行生成、房间内按需生成物品/私人终端、升级保留旧档案与压缩剧场缓存；Source Available，非开源。"
+  "description": "兔子镜测试版 1.4.30.12：基于 GitHub 1.4.30.10，恢复并扩展 1.3.57/1.3.93/1.3.94 的历史折叠镜轻量边界：CHAT_CHANGED 全聊天恢复不再为每面历史镜启动 geometry settle、渲染态外框采样、重型 ready 后处理或即时维修候选巡检；首次打开该镜时才补做。未采用 1.4.30.11 的历史 DOM 分批挂载方案；不改独立 API Prompt、请求 body、stream/retry/single-flight、世界书或生成内容。"
 }

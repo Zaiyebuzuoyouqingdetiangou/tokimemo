@@ -1,0 +1,850 @@
+
+
+#chat [data-rabbit-mirror-independent-inline-anchor="true"]{
+  display:block !important;
+  width:100% !important;
+  max-width:100% !important;
+  min-width:0 !important;
+  box-sizing:border-box !important;
+  margin-top:8px !important;
+}
+#chat [data-rabbit-mirror-follow-external-anchor="true"]{
+  display:block !important;
+  width:100% !important;
+  max-width:100% !important;
+  min-width:0 !important;
+  box-sizing:border-box !important;
+  margin-top:6px !important;
+}
+#chat [data-rabbit-mirror-follow-origin="true"]{
+  display:none !important;
+}
+/* “外置后内嵌” uses the full tinted external shell only while waiting.
+ * Once the independent result is ready, the same host moves to the正文 content
+ * lane and becomes a neutral transparent carrier, matching a normal follow-API
+ * inline RabbitMirror instead of looking like a second pure-external card. */
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-placement="inline"]{
+  display:block !important;
+  position:relative !important;
+  width:100% !important;
+  max-width:100% !important;
+  min-width:0 !important;
+  box-sizing:border-box !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  color:inherit !important;
+  box-shadow:none !important;
+  overflow:visible !important;
+  contain:none !important;
+  clear:both !important;
+  z-index:auto !important;
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-placement="inline"] > details[data-rabbit-mirror-external-details="true"]{
+  display:block !important;
+  width:100% !important;
+  max-width:100% !important;
+  min-width:0 !important;
+  box-sizing:border-box !important;
+  margin:0 !important;
+  overflow:visible !important;
+}
+/* 1.1.0-beta.14.65-test: settings drawer mobile performance containment. */
+.rabbit-mirror-settings {
+    contain: layout style !important;
+}
+.rabbit-mirror-settings .rabbit-mirror-section:not([open]) > .rabbit-mirror-section-content {
+    display: none !important;
+}
+.rabbit-mirror-settings .rabbit-mirror-section-content,
+.rabbit-mirror-settings .rabbit-mirror-token-meter {
+    contain: layout paint style !important;
+}
+@media (max-width: 900px) {
+    .rabbit-mirror-settings .rabbit-mirror-section > summary::after {
+        transition: none !important;
+    }
+}
+
+/* 0.33.8 TEST：小小维修兔 v1.7 完整登记旧急救库，并新增纯文字恢复入口。 */
+.rabbit-mirror-settings .inline-drawer-content {
+    padding: 10px;
+}
+
+/* 1.3.69: settings drawer owns a stable scroll area instead of relying on the host pane.
+   The blacklist made this drawer taller and exposed cases where the host scrollbar did not
+   scroll the extension content. Keep wheel/touch scrolling local and let it chain at bounds. */
+.rabbit-mirror-settings > .inline-drawer {
+    min-height: 0 !important;
+}
+.rabbit-mirror-settings > .inline-drawer > .inline-drawer-content {
+    box-sizing: border-box !important;
+    min-height: 0 !important;
+    max-height: calc(100vh - 96px) !important;
+    max-height: calc(100dvh - 96px) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+    scrollbar-gutter: stable;
+}
+.rabbit-mirror-settings .rabbit-mirror-blacklist-summary {
+    box-sizing: border-box;
+    max-height: 220px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+}
+.rabbit-mirror-settings label {
+    display: block;
+    margin-top: 8px;
+}
+.rabbit-mirror-settings .rh-num {
+    width: 64px;
+    min-width: 64px;
+}
+.rabbit-mirror-settings .rabbit-mirror-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+.rabbit-mirror-toto-watermark{margin-left:8px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;opacity:.45;border:1px solid var(--SmartThemeBorderColor);border-radius:999px;padding:1px 6px;vertical-align:middle;}
+
+toto[data-rabbit-mirror="true"] details {
+    display: block;
+    box-sizing: border-box;
+    max-width: 100%;
+}
+
+toto[data-rabbit-mirror="true"] summary {
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+/* 手机与桌面端设置按钮统一横排，避免全局主题把长按钮压成逐字竖排。 */
+.rabbit-mirror-settings button.menu_button {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    writing-mode: horizontal-tb !important;
+    text-orientation: mixed !important;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    overflow-wrap: normal !important;
+    line-height: 1.35 !important;
+}
+.rabbit-mirror-settings .rabbit-mirror-emergency,
+.rabbit-mirror-settings .rabbit-mirror-regex-helper,
+.rabbit-mirror-settings .rabbit-mirror-actions {
+    min-width: 0;
+}
+
+/* 0.32.68 TEST：新增源码恢复链，针对 TH/高亮代码壳瞬时重绘当前显示层。 */
+.rabbit-mirror-settings .rabbit-mirror-primary-toggle {
+    padding: 2px 2px 8px;
+}
+.rabbit-mirror-settings .rabbit-mirror-section {
+    display: block;
+    box-sizing: border-box;
+    min-width: 0;
+    margin: 8px 0;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.rabbit-mirror-settings .rabbit-mirror-section > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 9px 10px;
+    cursor: pointer;
+    list-style: none;
+    font-weight: 600;
+    user-select: none;
+}
+.rabbit-mirror-settings .rabbit-mirror-section > summary::-webkit-details-marker {
+    display: none;
+}
+.rabbit-mirror-settings .rabbit-mirror-section > summary::after {
+    content: '›';
+    flex: 0 0 auto;
+    margin-left: 2px;
+    font-size: 18px;
+    line-height: 1;
+    opacity: .68;
+    transform: rotate(0deg);
+    transition: transform .16s ease;
+}
+.rabbit-mirror-settings .rabbit-mirror-section[open] > summary::after {
+    transform: rotate(90deg);
+}
+.rabbit-mirror-settings .rabbit-mirror-section[open] > summary {
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+}
+.rabbit-mirror-settings .rabbit-mirror-section-note {
+    min-width: 0;
+    margin-left: auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 400;
+    opacity: .62;
+}
+.rabbit-mirror-settings .rabbit-mirror-section-content {
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 2px 10px 10px;
+    line-height: 1.55;
+}
+.rabbit-mirror-settings .rabbit-mirror-section .rabbit-mirror-regex-helper {
+    min-width: 0;
+    margin: 8px 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    line-height: 1.55;
+}
+
+
+
+/* 1.1.0-beta.14.56-test：酒馆重绘与兔子镜局部 CSS 下的稳定工具入口。 */
+[data-rabbit-mirror-tool-entry-host] {
+  all: initial !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 2px !important;
+  float: inline-end !important;
+  flex: 0 0 auto !important;
+  position: relative !important;
+  z-index: 2147483000 !important;
+  width: auto !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 0 0 6px !important;
+  margin-inline-start: auto !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  transform: none !important;
+  filter: none !important;
+  clip: auto !important;
+  clip-path: none !important;
+  white-space: nowrap !important;
+  vertical-align: middle !important;
+  color: inherit !important;
+  font: inherit !important;
+  line-height: 1 !important;
+  isolation: isolate !important;
+}
+
+/* 0.33.8 小小维修兔 v1.7：每条标题后独立入口，点击打开本地维修菜单。 */
+.rabbit-mirror-maintenance-rabbit {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: 0 0 0 6px !important;
+  padding: 1px 3px !important;
+  border: 0 !important;
+  border-radius: 5px !important;
+  background: transparent !important;
+  color: inherit !important;
+  font: inherit !important;
+  line-height: 1 !important;
+  vertical-align: middle !important;
+  cursor: pointer !important;
+  box-shadow: none !important;
+  opacity: .92 !important;
+}
+.rabbit-mirror-maintenance-rabbit::before,
+.rabbit-mirror-maintenance-rabbit::after { content: none !important; display: none !important; }
+.rabbit-mirror-maintenance-rabbit:hover { background: color-mix(in srgb, currentColor 10%, transparent) !important; }
+.rabbit-mirror-maintenance-rabbit:focus-visible { outline: 2px solid currentColor !important; outline-offset: 2px !important; }
+
+
+.rabbit-mirror-maintenance-menu {
+  position: fixed !important;
+  z-index: 100000 !important;
+  display: grid !important;
+  gap: 6px !important;
+  padding: 10px !important;
+  border: 1px solid var(--SmartThemeBorderColor, rgba(128,128,128,.45)) !important;
+  border-radius: 10px !important;
+  background: var(--SmartThemeBlurTintColor, var(--SmartThemeBodyColor, #fff)) !important;
+  color: var(--SmartThemeBodyColor, inherit) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,.2) !important;
+  font-family: inherit !important;
+  box-sizing: border-box !important;
+  max-height: calc(100vh - 24px) !important;
+  max-height: calc(100dvh - 24px) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+.rabbit-mirror-maintenance-menu-title {
+  font-weight: 700 !important;
+  line-height: 1.4 !important;
+  margin-bottom: 2px !important;
+}
+.rabbit-mirror-maintenance-menu button {
+  width: 100% !important;
+  min-height: 36px !important;
+  padding: 7px 9px !important;
+  border: 1px solid var(--SmartThemeBorderColor, rgba(128,128,128,.35)) !important;
+  border-radius: 7px !important;
+  background: color-mix(in srgb, currentColor 7%, transparent) !important;
+  color: inherit !important;
+  text-align: left !important;
+  cursor: pointer !important;
+}
+.rabbit-mirror-maintenance-menu button:hover,
+.rabbit-mirror-maintenance-menu button:focus-visible {
+  background: color-mix(in srgb, currentColor 14%, transparent) !important;
+}
+
+.rabbit-mirror-maintenance-recommendation {
+    margin: 0 0 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(127, 127, 127, 0.12);
+    font-size: 12px;
+    line-height: 1.45;
+    text-align: left;
+}
+
+/* 0.33.34 挨打猫 v1.0：用户主动反馈才会进入后续生成 Prompt。 */
+.rabbit-mirror-feedback-cat {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: 0 0 0 4px !important;
+  padding: 1px 3px !important;
+  border: 0 !important;
+  border-radius: 5px !important;
+  background: transparent !important;
+  color: inherit !important;
+  font: inherit !important;
+  line-height: 1 !important;
+  vertical-align: middle !important;
+  cursor: pointer !important;
+  box-shadow: none !important;
+  opacity: .92 !important;
+}
+.rabbit-mirror-feedback-cat::before,
+.rabbit-mirror-feedback-cat::after { content: none !important; display: none !important; }
+.rabbit-mirror-feedback-cat:hover { background: color-mix(in srgb, currentColor 10%, transparent) !important; }
+.rabbit-mirror-feedback-cat:focus-visible { outline: 2px solid currentColor !important; outline-offset: 2px !important; }
+
+.rabbit-mirror-feedback-cat-menu {
+  position: fixed !important;
+  z-index: 100001 !important;
+  display: grid !important;
+  gap: 6px !important;
+  padding: 10px !important;
+  border: 1px solid var(--SmartThemeBorderColor, rgba(128,128,128,.45)) !important;
+  border-radius: 10px !important;
+  background: var(--SmartThemeBlurTintColor, var(--SmartThemeBodyColor, #fff)) !important;
+  color: var(--SmartThemeBodyColor, inherit) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,.2) !important;
+  font-family: inherit !important;
+}
+.rabbit-mirror-feedback-cat-menu-title {
+  font-weight: 700 !important;
+  line-height: 1.4 !important;
+  margin-bottom: 2px !important;
+}
+.rabbit-mirror-feedback-cat-menu-copy,
+.rabbit-mirror-feedback-cat-status {
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+  text-align: left !important;
+}
+.rabbit-mirror-feedback-cat-status {
+  margin: 0 0 4px !important;
+  padding: 8px 9px !important;
+  border-radius: 8px !important;
+  background: rgba(127,127,127,.12) !important;
+  overflow-wrap: anywhere !important;
+}
+.rabbit-mirror-feedback-cat-menu button {
+  width: 100% !important;
+  min-height: 36px !important;
+  padding: 7px 9px !important;
+  border: 1px solid var(--SmartThemeBorderColor, rgba(128,128,128,.35)) !important;
+  border-radius: 7px !important;
+  background: color-mix(in srgb, currentColor 7%, transparent) !important;
+  color: inherit !important;
+  text-align: left !important;
+  cursor: pointer !important;
+}
+.rabbit-mirror-feedback-cat-menu button:hover,
+.rabbit-mirror-feedback-cat-menu button:focus-visible {
+  background: color-mix(in srgb, currentColor 14%, transparent) !important;
+}
+.rabbit-mirror-feedback-cat-input {
+  display: block !important;
+  width: 100% !important;
+  min-height: 108px !important;
+  resize: vertical !important;
+  box-sizing: border-box !important;
+  padding: 9px 10px !important;
+  border: 1px solid var(--SmartThemeBorderColor, rgba(128,128,128,.45)) !important;
+  border-radius: 8px !important;
+  background: color-mix(in srgb, currentColor 5%, transparent) !important;
+  color: inherit !important;
+  font: inherit !important;
+  line-height: 1.5 !important;
+}
+
+/* 0.33.65 挨打猫 v1.3：多选后统一提交。 */
+.rabbit-mirror-feedback-cat-menu button.is-selected {
+  border-color: color-mix(in srgb, currentColor 72%, transparent) !important;
+  background: color-mix(in srgb, currentColor 20%, transparent) !important;
+  font-weight: 700 !important;
+}
+.rabbit-mirror-feedback-cat-menu button.is-selected::after {
+  content: " ✓" !important;
+  float: right !important;
+}
+.rabbit-mirror-feedback-cat-custom-inline[hidden] { display: none !important; }
+.rabbit-mirror-feedback-cat-custom-inline.is-visible { display: block !important; }
+.rabbit-mirror-feedback-cat-actions {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  gap: 6px !important;
+}
+.rabbit-mirror-feedback-cat-menu button:disabled {
+  opacity: .45 !important;
+  cursor: not-allowed !important;
+}
+
+
+/* 0.33.86: per-generation RabbitMirror injection token estimate. */
+.rabbit-mirror-token-meter {
+  margin: 10px 0 12px !important;
+  padding: 10px 12px !important;
+  border: 1px solid #cdbda8 !important;
+  border-radius: 8px !important;
+  background: #f7f1e7 !important;
+  color: #382f28 !important;
+  box-shadow: 0 1px 0 rgba(255,255,255,.82) inset, 0 2px 8px rgba(69,52,38,.08) !important;
+  line-height: 1.45 !important;
+}
+.rabbit-mirror-token-meter-head {
+  display: flex !important;
+  align-items: baseline !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  flex-wrap: wrap !important;
+}
+.rabbit-mirror-token-meter-head [data-rh-token-meter-main] {
+  font-weight: 700 !important;
+  font-variant-numeric: tabular-nums !important;
+}
+.rabbit-mirror-token-meter-exact,
+.rabbit-mirror-token-meter-detail,
+.rabbit-mirror-token-meter-note {
+  margin-top: 4px !important;
+  font-size: 12px !important;
+  overflow-wrap: anywhere !important;
+}
+.rabbit-mirror-token-meter-exact { color: #4a3f36 !important; opacity: 1 !important; }
+.rabbit-mirror-token-meter-detail { color: #65574b !important; opacity: 1 !important; }
+.rabbit-mirror-token-meter-note { color: #77685b !important; opacity: 1 !important; font-size: 11px !important; }
+
+
+/* RabbitMirror message-level native details external presentation (test). */
+[data-rabbit-mirror-external-source="true"]{
+  display:block;
+  width:100%;
+  margin:6px 0 8px;
+  position:relative;
+  z-index:3;
+}
+[data-rabbit-mirror-external-source="true"] > details{
+  display:block;
+  width:100%;
+  max-width:100%;
+  margin:0!important;
+  box-sizing:border-box;
+}
+[data-rabbit-mirror-external-source="true"] > details > summary{
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.rabbit-mirror-external-placeholder{
+  border:1px solid var(--SmartThemeBorderColor,rgba(128,128,128,.28));
+  border-radius:10px;
+  background:var(--SmartThemeBlurTintColor,rgba(127,127,127,.08));
+  color:var(--SmartThemeBodyColor,inherit);
+  overflow:hidden;
+}
+.rabbit-mirror-external-placeholder > summary{
+  padding:8px 11px;
+  font-weight:600;
+}
+.rabbit-mirror-external-placeholder-body{
+  padding:8px 11px 11px;
+  border-top:1px solid var(--SmartThemeBorderColor,rgba(128,128,128,.2));
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  font-size:12px;
+  line-height:1.55;
+}
+
+.rabbit-mirror-external-error-message{
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  line-height:1.55;
+}
+/* 1.3.14: light pure-external shell.
+ * The external host owns only placement and the title bar. Generated content is
+ * intentionally unframed and receives no extension width/height/aspect-ratio rewrite. */
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-placement="external"]{
+  display:block !important;
+  position:relative !important;
+  isolation:isolate !important;
+  width:var(--rm-external-lane-width, 96%) !important;
+  max-width:none !important;
+  min-width:0 !important;
+  box-sizing:border-box !important;
+  align-self:auto !important;
+  margin:10px auto 14px var(--rm-external-lane-left, auto) !important;
+  padding:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  color:inherit !important;
+  box-shadow:none !important;
+  overflow:visible !important;
+  contain:none !important;
+  clear:both !important;
+  z-index:1 !important;
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="follow"][data-rm-placement="external"]{
+  display:block !important;
+  position:relative !important;
+  isolation:isolate !important;
+  width:100% !important;
+  max-width:100% !important;
+  min-width:0 !important;
+  box-sizing:border-box !important;
+  align-self:auto !important;
+  margin:8px auto 10px !important;
+  padding:6px !important;
+  border:1px solid var(--rm-shell-border, rgba(0,0,0,.10)) !important;
+  border-radius:18px !important;
+  background:linear-gradient(145deg, var(--rm-shell-highlight, rgba(255,255,255,.99)), var(--rm-shell-bg, rgba(255,255,255,.97))) !important;
+  color:var(--rm-shell-text, inherit) !important;
+  box-shadow:0 9px 22px var(--rm-shell-shadow, rgba(0,0,0,.07)), 3px 0 0 var(--rm-shell-accent, transparent) inset, 0 1px 0 var(--rm-shell-inner-light, rgba(255,255,255,.86)) inset !important;
+  overflow:visible !important;
+  contain:none !important;
+  clear:both !important;
+  z-index:1 !important;
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="follow"][data-rm-placement="external"][data-rm-external-width-mode="follow-stable-fallback"]{
+  width:96% !important;
+  max-width:96% !important;
+  margin-left:auto !important;
+  margin-right:auto !important;
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-placement="external"][data-rm-independent-external-compact-shell="true"]{
+  width:var(--rm-external-compact-width, var(--rm-external-lane-width, 96%)) !important;
+  max-width:var(--rm-external-lane-width, 96%) !important;
+  margin-left:var(--rm-external-lane-left, 0px) !important;
+  margin-right:auto !important;
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"] > .rabbit-mirror-resay-status{
+  position:absolute !important;
+  top:10px !important;
+  left:50% !important;
+  z-index:30 !important;
+  transform:translateX(-50%) !important;
+  width:max-content !important;
+  max-width:calc(100% - 28px) !important;
+  box-sizing:border-box !important;
+  padding:7px 12px !important;
+  border:1px solid color-mix(in srgb, var(--rm-shell-border, rgba(0,0,0,.16)) 72%, rgba(255,255,255,.55)) !important;
+  border-radius:999px !important;
+  background:color-mix(in srgb, var(--rm-shell-bg, rgba(255,255,255,.97)) 88%, rgba(255,255,255,.96)) !important;
+  color:var(--rm-shell-text, rgba(45,45,45,.88)) !important;
+  font-size:12px !important;
+  font-weight:650 !important;
+  line-height:1.4 !important;
+  text-align:center !important;
+  white-space:normal !important;
+  overflow-wrap:anywhere !important;
+  box-shadow:0 4px 14px var(--rm-shell-shadow, rgba(0,0,0,.10)) !important;
+  pointer-events:none !important;
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-pending="true"] > details[data-rabbit-mirror-external-details="true"]{
+  opacity:.76 !important;
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-placement="external"] > details[data-rabbit-mirror-external-details="true"]{
+  display:block !important;
+  width:auto !important;
+  max-width:100% !important;
+  min-width:0 !important;
+  box-sizing:border-box !important;
+  margin:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  overflow:visible !important;
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="follow"][data-rm-placement="external"] > details[data-rabbit-mirror-external-details="true"]{
+  display:block !important;
+  width:100% !important;
+  max-width:none !important;
+  min-width:0 !important;
+  box-sizing:border-box !important;
+  margin:0 !important;
+  border:0 !important;
+  border-radius:13px !important;
+  background:transparent !important;
+  overflow:visible !important;
+}
+/* Follow-current external keeps its legacy inner safety constraint. Pure independent
+ * external deliberately does not touch generated children. */
+#chat .rabbit-mirror-external-shell[data-rm-source="follow"][data-rm-placement="external"] > details[data-rabbit-mirror-external-details="true"] > :not(summary):not(style):not(script){
+  max-width:100% !important;
+  box-sizing:border-box !important;
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-placement="external"] > details.rabbit-mirror-external-placeholder{
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+}
+/* Independent pure-external: the summary alone is the visible shell/title. */
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-placement="external"] > details[data-rabbit-mirror-external-details="true"] > summary{
+  display:list-item !important;
+  visibility:visible !important;
+  opacity:1 !important;
+  /* 1.3.14: title-only shell must not become a full-width banner.
+   * The generated RabbitMirror body keeps the exact same content-lane sizing as
+   * external_then_inline; only the title shell shrink-wraps its own label. */
+  width:fit-content !important;
+  max-width:100% !important;
+  min-width:0 !important;
+  box-sizing:border-box !important;
+  margin:0 !important;
+  padding:10px 14px !important;
+  border:1px solid var(--rm-shell-border, rgba(0,0,0,.10)) !important;
+  border-radius:14px !important;
+  background:linear-gradient(145deg, var(--rm-shell-highlight, rgba(255,255,255,.99)), var(--rm-shell-bg, rgba(255,255,255,.97))) !important;
+  color:var(--rm-shell-text, inherit) !important;
+  box-shadow:0 6px 16px var(--rm-shell-shadow, rgba(0,0,0,.07)), 3px 0 0 var(--rm-shell-accent, transparent) inset !important;
+  cursor:pointer !important;
+  -webkit-tap-highlight-color:transparent !important;
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-placement="external"] > details[data-rabbit-mirror-external-details="true"][open] > summary{
+  margin-bottom:8px !important;
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="follow"][data-rm-placement="external"] > details[data-rabbit-mirror-external-details="true"] > summary{
+  width:100% !important;
+  max-width:none !important;
+  box-sizing:border-box !important;
+  margin:0 !important;
+  padding:12px 16px !important;
+  cursor:pointer !important;
+  -webkit-tap-highlight-color:transparent !important;
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="follow"][data-rm-placement="external"] > details[data-rabbit-mirror-external-details="true"][open] > summary{
+  border-bottom:1px solid var(--rm-shell-border, rgba(0,0,0,.08)) !important;
+}
+/* 1.3.52: mobile pure-external follows the owning message's measured正文 lane.
+ * The JS geometry path writes --rm-external-lane-width/left from the rendered
+ * .mes_text box when it is stable. Do not guess a viewport percentage here.
+ * Desktop still uses the same lane plus the PC-only compact-shell cap. */
+@media (max-width:899px){
+  #chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-placement="external"],
+  #chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-placement="external"][data-rm-independent-external-compact-shell="true"]{
+    width:var(--rm-external-lane-width, 84vw) !important;
+    max-width:none !important;
+    margin-left:var(--rm-external-lane-left, auto) !important;
+    margin-right:auto !important;
+  }
+  #chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-placement="external"] > details[data-rabbit-mirror-external-details="true"]{
+    width:100% !important;
+    max-width:none !important;
+  }
+}
+@media (max-width:420px){
+  #chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-placement="external"] > details[data-rabbit-mirror-external-details="true"] > summary{
+    border-radius:13px !important;
+    padding:9px 12px !important;
+  }
+  #chat .rabbit-mirror-external-shell[data-rm-source="follow"][data-rm-placement="external"]{
+    border-radius:16px !important;
+  }
+  #chat .rabbit-mirror-external-shell[data-rm-source="follow"][data-rm-placement="external"][data-rm-external-width-mode="follow-content-lane"]{
+    width:100% !important;
+    max-width:100% !important;
+  }
+  #chat .rabbit-mirror-external-shell[data-rm-source="follow"][data-rm-placement="external"][data-rm-external-width-mode="follow-stable-fallback"]{
+    width:96% !important;
+    max-width:96% !important;
+  }
+  #chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-placement="inline"]{
+    width:100% !important;
+    max-width:100% !important;
+    border-radius:0 !important;
+  }
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-placement="external"] > details.rabbit-mirror-external-placeholder > .rabbit-mirror-external-placeholder-body{
+  border-top:0 !important;
+}
+
+
+/* 1.3.14: independent RabbitMirror history viewer opened from the feedback cat.
+ * Mobile uses a real remaining-height flex body so the preview cannot collapse
+ * below the horizontal version strip. */
+.rabbit-mirror-history-overlay{
+  position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;
+  box-sizing:border-box;width:100vw;height:100vh;height:100dvh;min-height:0;overflow:hidden;
+  padding:18px;background:rgba(0,0,0,.46);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+  overscroll-behavior:contain;
+}
+.rabbit-mirror-history-dialog{
+  width:min(920px,100%);max-height:min(86vh,900px);min-height:0;display:flex;flex-direction:column;overflow:hidden;
+  border:1px solid var(--SmartThemeBorderColor,rgba(128,128,128,.32));border-radius:14px;
+  background:var(--SmartThemeBlurTintColor,rgba(245,245,245,.98));color:var(--SmartThemeBodyColor,inherit);
+  box-shadow:0 18px 60px rgba(0,0,0,.28);
+}
+.rabbit-mirror-history-header{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-bottom:1px solid var(--SmartThemeBorderColor,rgba(128,128,128,.24));}
+.rabbit-mirror-history-header button{min-width:36px;min-height:36px;border:0;border-radius:8px;background:transparent;color:inherit;font-size:24px;line-height:1;cursor:pointer;}
+.rabbit-mirror-history-body{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(170px,230px) minmax(0,1fr);overflow:hidden;}
+.rabbit-mirror-history-list{min-width:0;min-height:0;display:flex;flex-direction:column;gap:7px;padding:10px;overflow:auto;border-right:1px solid var(--SmartThemeBorderColor,rgba(128,128,128,.20));-webkit-overflow-scrolling:touch;}
+.rabbit-mirror-history-list button{width:100%;padding:9px 10px;border:1px solid var(--SmartThemeBorderColor,rgba(128,128,128,.24));border-radius:8px;background:transparent;color:inherit;text-align:left;cursor:pointer;overflow-wrap:anywhere;}
+.rabbit-mirror-history-list button.is-active{background:color-mix(in srgb,currentColor 12%,transparent);font-weight:700;}
+.rabbit-mirror-history-preview{min-width:0;min-height:0;padding:12px;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;}
+.rabbit-mirror-history-preview > details{width:100%;max-width:100%;min-width:0;box-sizing:border-box;margin:0 auto;}
+@media (max-width:640px){
+ .rabbit-mirror-history-overlay{
+   align-items:stretch;justify-content:stretch;
+   padding:max(6px,env(safe-area-inset-top)) max(6px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left));
+ }
+ .rabbit-mirror-history-dialog{width:100%;height:100%;max-height:100%;min-height:0;border-radius:12px;}
+ .rabbit-mirror-history-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
+ .rabbit-mirror-history-list{flex:0 0 auto;min-height:0;max-width:100%;display:flex;flex-direction:row;border-right:0;border-bottom:1px solid var(--SmartThemeBorderColor,rgba(128,128,128,.20));overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;}
+ .rabbit-mirror-history-list button{flex:0 0 min(210px,72vw);width:auto;}
+ .rabbit-mirror-history-preview{flex:1 1 auto;width:100%;min-height:0;box-sizing:border-box;overflow:auto;}
+}
+
+/* beta.14.54: a regenerated正文 must never keep displaying the old version's
+ * mirror. Preserve the one white shell so the layout does not jump, hide the
+ * stale details, and show a neutral status until the new mirror commits. */
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-awaiting-fresh-source="true"] > details[data-rabbit-mirror-external-details="true"]{
+  display:none !important;
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-awaiting-fresh-source="true"]::before{
+  content:"正文正在更新，兔子镜将在新回复完成后刷新…" !important;
+  display:block !important;
+  width:100% !important;
+  box-sizing:border-box !important;
+  padding:16px 18px !important;
+  color:rgba(78,78,78,.72) !important;
+  font-size:13px !important;
+  line-height:1.55 !important;
+  text-align:center !important;
+  overflow-wrap:anywhere !important;
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-awaiting-fresh-source="true"][data-rm-fresh-source-status="error"]::before{
+  content:"新正文的兔子镜生成失败，可在挨打猫中重说" !important;
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-awaiting-fresh-source="true"]::after{
+  content:none !important;
+  display:none !important;
+}
+
+/* beta.14.65: failed independent generation must remain actionable even when
+ * a theme hides or compresses the title tools. */
+.rabbit-mirror-external-error-actions{
+  display:flex !important;
+  flex-wrap:wrap !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:8px !important;
+  margin-top:12px !important;
+}
+.rabbit-mirror-external-error-action{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  min-height:36px !important;
+  min-width:0 !important;
+  padding:7px 12px !important;
+  border:1px solid var(--rm-shell-border, var(--SmartThemeBorderColor, rgba(128,128,128,.28))) !important;
+  border-radius:999px !important;
+  background:color-mix(in srgb, var(--rm-shell-bg, white) 88%, currentColor 12%) !important;
+  color:var(--rm-shell-text, var(--SmartThemeBodyColor, inherit)) !important;
+  box-shadow:0 2px 8px rgba(0,0,0,.06) !important;
+  font:inherit !important;
+  font-size:12px !important;
+  line-height:1.25 !important;
+  white-space:nowrap !important;
+  cursor:pointer !important;
+  -webkit-tap-highlight-color:transparent !important;
+}
+.rabbit-mirror-external-error-action:active{
+  transform:translateY(1px) !important;
+}
+
+/* 1.3.6 TEST: pure-external RabbitMirror is one visual body, not a neutral wrapper around another card.
+ * This is intentionally external-only. external_then_inline returns to the existing transparent inline carrier. */
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-placement="external"][data-rm-shell-integrated="true"]{
+  border-width:var(--rm-shell-border-width, 1px) !important;
+  border-style:solid !important;
+  border-color:var(--rm-shell-border, rgba(0,0,0,.12)) !important;
+  border-radius:var(--rm-shell-radius, 18px) !important;
+  background:var(--rm-shell-surface, var(--rm-shell-bg, rgba(255,255,255,.97))) !important;
+  box-shadow:0 10px 26px var(--rm-shell-shadow, rgba(0,0,0,.10)) !important;
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-placement="external"][data-rm-shell-integrated="true"] > details[data-rabbit-mirror-external-details="true"] > summary{
+  background:var(--rm-shell-header-bg, var(--rm-shell-surface, transparent)) !important;
+  color:var(--rm-shell-header-text, var(--rm-shell-text, inherit)) !important;
+  border-radius:calc(var(--rm-shell-radius, 18px) - var(--rm-shell-border-width, 1px)) calc(var(--rm-shell-radius, 18px) - var(--rm-shell-border-width, 1px)) 0 0 !important;
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-placement="external"][data-rm-shell-integrated="true"] > details[data-rabbit-mirror-external-details="true"][open] > summary{
+  border-bottom:var(--rm-shell-border-width, 1px) solid var(--rm-shell-border, rgba(0,0,0,.10)) !important;
+}
+#chat .rabbit-mirror-external-shell[data-rm-source="independent"][data-rm-placement="external"][data-rm-shell-integrated="true"] > details[data-rabbit-mirror-external-details="true"] > [data-rm-shell-integrated-body="true"]{
+  margin-top:0 !important;
+  border-top-left-radius:0 !important;
+  border-top-right-radius:0 !important;
+}
+
+/* RabbitMirror 大接近：临界反应由运行时解锁。生成 HTML 即使漏写 hidden，
+   或普通作者样式覆盖 [hidden]，也不能在 approach threshold 前提前显示。 */
+[data-rm-dai-sekkin-mode="true"] [data-rm-touch-threshold-reaction="true"],
+[data-rm-touch-theater="true"] [data-rm-touch-threshold-reaction="true"] {
+  display: none !important;
+}
+[data-rm-dai-sekkin-mode="true"] [data-rm-touch-threshold-reaction="true"][data-rm-touch-threshold-runtime-visible="true"],
+[data-rm-touch-theater="true"] [data-rm-touch-threshold-reaction="true"][data-rm-touch-threshold-runtime-visible="true"] {
+  display: block !important;
+}
