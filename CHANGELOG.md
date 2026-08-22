@@ -159,3 +159,14 @@
 - Mobile/cloud archive opener now handles touchend, pointerup, and click through one guarded capture path.
 - Archive index updates no longer erase a previously valid character avatar when a transient context exposes an empty avatar.
 - Archive cards recover missing avatar metadata from characterKey/current SillyTavern character data and merge canonical character groups.
+
+
+### 0.8.10 UX / phone r8
+- ADV 正文阅读时，顶栏“返回”会先回到当前事件 CG，再返回当前档案。
+- 手机顶栏将返回/主页/重新生成/关闭压成图标，标题使用省略显示，减少窄屏文字互相挤压。
+- 房间页按“地点 → SPACE NOTE → 大图 → PRIVATE LIFE → PRIVATE ACCESS”重排；大图内物件改成编号点，文字移到图下，避免手机互相遮挡。
+- ADV 手机端新增原生事件选择器与上/下一事件按钮，桌面保留事件索引。
+- 顶栏新增返回上级：档案层级、四个主入口、相簿共同回忆、房间深层内容均可逐级返回。
+- 私人终端恢复丰富 App 规格：社交、深度聊天、相册、备忘、日历、购物、浏览、联系人、定位与人设专属功能；列表→详情双层导航。
+- 现代手机对核心 App 数量做本地硬校验（动态5/聊天5/相册8/备忘15/日历8/购物8/浏览5/联系人5/定位3/人设专属3），并要求至少 1 个联系人详情含 3 项字段；3 个聊天必须至少 12 轮。首轮缩水会自动完整重做一次；手表/通讯器仍要求至少 8 个入口与 48 个可读条目。
+- 相册外部图床只在用户点击后加载；URL 必须逐字命中本轮已激活世界书中预先抽取的 http/https allowlist，并使用 no-referrer，模型编造的 URL 会被本地丢弃。

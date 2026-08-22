@@ -51,8 +51,8 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 29. “档案室一览”只允许请求 SillyTavern 同源 `/api/characters/chats`，并只列出当前角色服务器返回的 chat ID；点击切换必须命中本轮 allowlist。不得让模型输出或 DOM 篡改构造任意聊天路径。
 30. 蝴蝶效应外延节点属于显式模拟数据，不作为 archive evidence、不写回 `MEMORY_KEY`；取消外延 `sourceMemoryIds` 强制要求不得削弱相簿/ADV/房间实际既往事实的证据校验。
 31. “他的物品 / 私人终端”保留独立内部 session 仅作为房间深层缓存，但不得暴露为档案室主入口；所有 basis=“记忆”的内容仍必须通过 `sourceMemoryIds + sourceMemoryAnchor`。
-32. 房间内部的物品递归容器最大深度与总节点数必须受限；所有模型文本仍经过 `esc()`，模型不得提供 HTML/CSS/URL/脚本。
-33. 私人终端模型内容仅作为本地结构化展示数据；不得触发真实短信、邮件、外部 URL、联系人操作或设备 API。
+32. 房间内部的物品递归容器最大深度与总节点数必须受限；所有模型文本仍经过 `esc()`，模型不得提供 HTML/CSS/脚本。私人终端相册只有一个窄例外：模型可逐字回传本轮已激活 `WORLD_INFO_TEXT` 中真实存在的 http(s) 媒体 URL；归一化必须对该 URL 做精确 allowlist 匹配，未命中的 URL 一律丢弃。
+33. 私人终端模型内容仅作为本地结构化展示数据；不得触发真实短信、邮件、联系人操作或设备 API。相册 allowlist 图片只能在用户明确点击预览后由 `<img>` 加载，并使用 `referrerpolicy="no-referrer"`；不得自动加载、不得让模型构造任意目标、不得把图片 URL 当作指令。
 34. 档案扫描允许跳过重复 token 化仅限于已经被保守字符上限约束的固定大小分块；字符预算仍必须在发送前执行，不能因此绕过总输入限制。
 
 
@@ -84,3 +84,12 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - Full CG/ADV index regeneration must not race a concrete ADV-body request in the same chat; only one concrete ADV body may run per chat at a time.
 - Room daily-life generation must not race replacement of the room base session. If capacity is full or room base generation is active, daily-life generation waits/falls back without overwriting a newer room session.
 - Closing the Heartbeat overlay or navigating to another chat may hide the UI, but must not retarget active tasks. Extension destruction must abort every active controller.
+
+
+### 0.8.10 UX / phone r8 additional invariants
+
+- “返回上级”只能改变插件本地视图层级，不得更改 `chatId`、`archiveRevision`、任务 origin 或把后台结果重定向到其他聊天。
+- 房间移动端重排只改变 DOM 展示顺序；SPACE NOTE / PRIVATE LIFE / PRIVATE ACCESS 中引用的房间对象、记忆 basis 与证据校验仍来自同一已归一化 room session。
+- ADV 手机选择器只能从当前 `session.events` 的现有 ID 中切换；不得从 DOM/select 值创建新事件或更换档案作用域。
+- 私人终端扩容不会放宽共同历史边界：凡是声称 `{{user}}` 与 `{{char}}` 已发生的聊天、合照、纪念日、订单、约会或共同事件，仍必须 `basis=记忆` 并通过完整当前档案的 `sourceMemoryIds + sourceMemoryAnchor` 本地校验。
+- 相册外部媒体 URL 只允许来自受控上下文构建时抽取的当前聊天作用域世界书 URL 集；仅 http/https、精确匹配、用户点击后加载、无 Referrer。普通模型文本不得形成外部 URL 执行面。

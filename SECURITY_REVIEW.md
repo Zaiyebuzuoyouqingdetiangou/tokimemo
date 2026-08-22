@@ -109,3 +109,16 @@ Scope: `0.8.10 prompt-r3 -> 0.8.10 mobile-avatar-r4`.
 - The UI stylesheet block is byte-identical to prompt-r3; this hotfix does not alter the restored 0.8.9.1 visual baseline.
 
 Targeted diff conclusion: no newly introduced Critical / High / Medium security issue found in this r4 change set. Real mobile-cloud browser behavior still requires device runtime verification because browser gesture synthesis differs across WebKit/Chromium wrappers.
+
+## 0.8.10 UX / phone r8 focused diff review
+
+Scope: `src/heartbeatMemories.js`, `manifest.json`, `index.js`, `CHANGELOG.md`, and `SECURITY.md`, compared with the r7 / current-GitHub functional baseline.
+
+- Room rendering was reordered and de-overlapped without changing `normalizeRoom`, memory-reference validation, task origin binding, or session write scope.
+- ADV mobile selection only accepts IDs already present in the current normalized `session.events`; the new top-level back path changes local view state only.
+- Phone output is intentionally richer, but all `basis=记忆` entries still pass the unchanged `normalizeMemoryReference` ID + anchor check. Modern-phone core App counts (including location + persona-specific App), contact-detail depth, and 3×12-round deep-chat depth are now locally validated; one full regeneration retry is allowed if the first output is incomplete. Compact watch/communicator devices still have a higher richness floor (8 entries/apps minimum structure, 48 readable entries total) without forcing impossible modern-only features.
+- The only new external-media surface is Gallery preview. A URL is retained only when it is valid http(s) and exactly matches a URL extracted from the current chat scope's already-activated `WORLD_INFO_TEXT`; the model cannot invent a new target. The image is not loaded until the user clicks the preview control and uses `referrerpolicy="no-referrer"`.
+- No new `fetch()`, WebSocket, `eval()`, `new Function`, secret-value read, or cross-chat write path was added.
+- `normalizeMemoryReference`, `saveSession`, `isCurrentTaskOrigin`, `captureTaskOrigin`, `requestJson`, `queueDeferredCommit`, `normalizeButterfly`, `normalizeAlbum`, `normalizeRoom`, and `normalizeItems` are byte-identical to r7.
+
+Result: no new High/Medium security finding identified in this focused diff. Residual privacy note: if the user explicitly opens an allowlisted third-party Gallery image, that image host necessarily receives a network request from the browser; Referrer is suppressed and the load is never automatic.
