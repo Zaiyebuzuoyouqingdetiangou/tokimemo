@@ -1,3 +1,16 @@
+## 0.8.10 ending / epilogue r9 focused diff review
+
+Scope: r8 → r9 (`src/heartbeatMemories.js`, cache-key metadata, docs).
+
+- Removed the entire Gallery external-media chain: world-info URL extraction/cache, `imageUrl` normalization, preview state, image preview DOM, click handlers, and third-party `<img>` loads. This is a net reduction in browser network/privacy attack surface.
+- Added `MODE.ENDING` as a normal archive-derived session. It uses the existing generation task/origin pipeline and the unchanged `saveSession` chatId + archiveRevision guard.
+- Current relationship classification requires a real archive ID + anchor, and every ending route also requires a real archive ID + anchor. Future ending/epilogue prose remains simulation-only and is not written to the formal archive.
+- Added strings continue to be rendered through `esc()`; no HTML/CSS/JS returned by the model is executed.
+- Static diff found no newly added `fetch`, WebSocket, EventSource, `eval`, `new Function`, secret/API-key read, or external URL target. Existing same-origin Connection Manager/model-list and archive APIs are unchanged.
+- Counts of `expectedChatId`, `expectedArchiveRevision`, `isCurrentTaskOrigin`, `saveSession`, and `archiveRevision` are unchanged from r8; `normalizeMemoryReference` usage increased because ENDING adds more evidence checks.
+
+Result: no newly introduced Critical / High / Medium issue found in this targeted r8 → r9 review. Runtime validation is still needed for model compliance with the new ENDING schema.
+
 ## 0.8.10 r7 butterfly semantics delta
 
 - Scope: `src/heartbeatMemories.js` butterfly prompt/normalizer/renderer plus resource cache keys and changelog.
