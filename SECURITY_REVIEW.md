@@ -1,3 +1,18 @@
+## 0.8.10 r7 butterfly semantics delta
+
+- Scope: `src/heartbeatMemories.js` butterfly prompt/normalizer/renderer plus resource cache keys and changelog.
+- No new network endpoints, `fetch`, WebSocket, dynamic code execution, or credential/secret handling.
+- Existing `normalizeMemoryReference`, chat/revision origin guards, archive storage boundaries, and generated-string escaping remain unchanged.
+- Ω now clears `sourceMemoryIds/sourceMemoryAnchor` because it is a post-simulation current-world observation point, preventing simulated branch content from being presented as archive evidence.
+- Rendered model strings remain passed through `esc()`.
+
+## 0.8.10 mobile UI r6 — targeted diff review
+
+- Scope: responsive CSS plus one presentation-only `rmt-character-portals` class and resource cache key.
+- No generation, archive persistence, cross-chat guards, evidence validation, connection profiles, secrets, or network behavior changed from r5.
+- No new `fetch`, `WebSocket`, `eval`, or `new Function` use was introduced.
+- r5 mobile archive open/top-layer behavior is unchanged.
+
 # Codex Security Targeted Diff Review — 心跳回忆 0.8.9
 
 日期：2026-08-22

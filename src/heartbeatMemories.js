@@ -1565,9 +1565,14 @@ const PROMPTS = {
 UNTRUSTED_TIMELINE_ANCHORS_JSON:
 ${promptArchiveSlice(memoryBank, 16)}
 
-任务：生成“平行时空观测终端 / 蝴蝶效应”。这里的外延节点是【明确标注为模拟的平行时空切片】，不是当前世界已经发生过的事实。
+任务：生成“平行时空观测终端 / 蝴蝶效应”。外延节点是【明确标注为模拟的平行时空切片】，不是当前世界已经发生过的事实。
 
 生成依据：必须综合当前受控上下文中的 CHARACTER_CARD_JSON、USER_PERSONA_JSON、WORLD_INFO_TEXT 与 {{char}} 的背景；手动聊天档案用于确定【主时间线】和当前关系状态，但外延分歧不要求逐条从真实记忆改写。要真正利用人设与世界书想象“如果人生关键条件不同会怎样”。
+
+核心叙事结构：
+1. MAIN 是现世主时间线锚点。
+2. EG01～EG08（或更多）才是平行世界；每个平行世界都有【那个世界里的 {{char}}】自己的第一人称发言。
+3. 最后一项【观测点 Ω】不是另一个平行世界，而是【现世 {{char}} 已经依次看完前面所有平行世界发言之后】回到主时间线的最终观测点。因此 Ω 不存在“平行体”，不得生成平行体独白。
 
 JSON 结构必须严格为：
 {
@@ -1584,7 +1589,7 @@ JSON 结构必须严格为：
       "sourceMemoryIds": ["M001"],
       "sourceMemoryAnchor": "主时间线必须从真实档案 anchors/title 原样复制一个具体锚点",
       "monologue": "主时间线 {{char}} 第一人称观测独白，不少于100个汉字",
-      "intervention": "当前世界线 {{char}} 对这条观测结果的实时自省和告白",
+      "intervention": "当前世界线 {{char}} 的主时间线自省",
       "systemNote": "冷酷、客观的系统算法结局判定"
     },
     {
@@ -1595,23 +1600,37 @@ JSON 结构必须严格为：
       "trueEnding": false,
       "sourceMemoryIds": [],
       "sourceMemoryAnchor": "",
-      "monologue": "这个平行世界中的 {{char}} 第一人称独白，不少于100个汉字",
-      "intervention": "现世 {{char}} 的宿命共鸣、自省与告白",
-      "systemNote": "冷酷算法对该时空主体的最终判定与结局预测"
+      "monologue": "这个平行世界中的 {{char}} 第一人称发言，不少于100个汉字；这是平行体本人说的话",
+      "intervention": "现世 {{char}} 看见这个平行体后的即时共鸣、自省或告白",
+      "systemNote": "冷酷算法对该平行时空主体的最终判定与结局预测"
+    },
+    {
+      "id": "OMEGA",
+      "label": "观测点 Ω：回归现世",
+      "code": "> OBSERVATION POINT #OMEGA",
+      "locked": false,
+      "trueEnding": true,
+      "sourceMemoryIds": [],
+      "sourceMemoryAnchor": "",
+      "monologue": "",
+      "intervention": "现世 {{char}} 已经看完前面所有平行世界、听完所有平行体发言之后的最终第一人称发言，不少于160个汉字",
+      "systemNote": "系统对完整观测结束、现世主体回归主时间线后的最终判定"
     }
   ]
 }
 
 硬性要求：
-- nodes 至少 10 条：第 1 条必须是“主时间线（锁定）”；其后至少 8 条互不重复的外延分歧；数组最后 1 条必须是彩蛋 TRUE ENDING。
+- nodes 至少 10 条：第 1 条必须是“主时间线（锁定）”；其后至少 8 条互不重复的平行世界分歧；数组最后 1 条必须是【观测点 Ω】。
 - 主时间线必须 locked=true、trueEnding=false，并至少引用 1 条当前手动档案 sourceMemoryIds + sourceMemoryAnchor，用来锚定“当前世界”。
-- 外延节点是模拟，不得伪装成已经发生的回忆；它们可以不带 sourceMemoryIds。若恰好从某段档案作为分歧起点，可以附带真实引用，但平行世界里新增的事情仍只能写成模拟。
-- 至少 8 个外延节点要从角色卡、人设、世界书中的身份、职业、时代、地点、关系条件、选择或命运约束向外推演；不能只把同一场景换措辞。
-- 最后一项必须 trueEnding=true，label 必须包含“观测点 Ω”或“TRUE ENDING”，呈现“跨越维度的必然”式彩蛋，但仍是观测模拟，不写回档案。
-- 每条 code 使用“> SIMULATION RECORD #...”形式。
-- 每条 monologue 不少于 100 个汉字，要有沉浸感、具体生活/处境与情绪，不得只写概念摘要。
-- 每条 intervention 都站在【现世 {{char}}】立场，对刚看到的平行体产生实时自省、宿命共鸣或告白；不要写成系统旁白。
-- 每条 systemNote 使用中文、冷酷客观的 AI 算法口吻，对该时空主体作最终判定与结局预测。
+- 普通平行节点是模拟，不得伪装成已经发生的回忆；它们可以不带 sourceMemoryIds。若从某段档案作为分歧起点，可以附带真实引用，但平行世界里新增的事情仍只能写成模拟。
+- 至少 8 个普通平行节点要从角色卡、人设、世界书中的身份、职业、时代、地点、关系条件、选择或命运约束向外推演；不能只把同一场景换措辞。
+- 每个普通平行节点的 monologue 都必须是【那个平行世界里的 {{char}} 本人】第一人称发言，不少于 100 个汉字，有具体生活、处境、记忆感与情绪；不能由现世 {{char}} 代替平行体说话。
+- 每个普通平行节点的 intervention 才是【现世 {{char}}】刚看完该平行体后的即时反应；不要把两种说话者混在一个字段里。
+- 最后一项必须 id="OMEGA"、trueEnding=true，label 包含“观测点 Ω”或“TRUE ENDING”。【Ω 不是平行世界，不存在平行体】；它的 monologue 必须严格为空字符串 ""，绝对禁止再写平行体发言。
+- Ω 的 intervention 是【现世 {{char}} 在看完前面全部平行世界、听完全部平行体发言之后】的最终第一人称发言，不少于 160 个汉字。应自然综合至少 3 种以上前面出现过的命运差异/情绪冲击，而不是只回应最后一个节点，也不要逐条机械复述。
+- Ω 的 systemNote 只评价“完整观测结束后的现世主体/主时间线”，不要再判定不存在的 Ω 平行体。
+- 普通节点 code 使用“> SIMULATION RECORD #...”形式；Ω 使用“> OBSERVATION POINT #OMEGA”。
+- 每条 systemNote 使用中文、冷酷客观的 AI 算法口吻。
 - 禁止出现任何前任、前女友相关情节。
 - 禁止出现 {{char}} 与除了 {{user}} 以外任何人恋爱、结婚或组建家庭；第三方只能保持非恋爱关系。
 - 只输出结构化 JSON；视觉快照、像素边框、噪点、1 秒干扰动画由插件本地渲染，不由模型输出 HTML/CSS。`,
@@ -1987,7 +2006,7 @@ function normalizeButterfly(data, memoryBank) {
         const isMain = rawIndex === 0;
         const label = normalizeText(node?.label, 120);
         const monologue = normalizeText(node?.monologue, 12000);
-        const intervention = normalizeText(node?.intervention, 8000);
+        const intervention = normalizeText(node?.intervention, 12000);
         const systemNote = normalizeText(node?.systemNote, 5000);
         const reference = normalizeMemoryReference(
             node?.sourceMemoryIds,
@@ -2017,15 +2036,33 @@ function normalizeButterfly(data, memoryBank) {
     main.locked = true;
     main.trueEnding = false;
     main.code = '> SIMULATION RECORD #MAIN';
-    const branches = normalized.slice(1).filter(node => node.label && node.monologue.length >= 100 && node.intervention && node.systemNote);
-    if (branches.length < 9) throw new Error(`平行时空节点不足：普通外延与 TRUE ENDING 合计 ${branches.length} 条，至少需要 9 条。`);
-    const ending = branches[branches.length - 1];
+
+    const outerNodes = normalized.slice(1);
+    if (outerNodes.length < 9) throw new Error(`平行时空节点不足：普通平行分歧与观测点 Ω 合计 ${outerNodes.length} 条，至少需要 9 条。`);
+
+    // The final Ω node is not another parallel world. It represents the current-world
+    // subject after observing every prior parallel subject, so it intentionally has no
+    // parallel monologue and is validated separately from ordinary branches.
+    const ending = outerNodes[outerNodes.length - 1];
+    const normalBranches = outerNodes.slice(0, -1).filter(node => node.label && node.monologue.length >= 100 && node.intervention && node.systemNote);
+    if (normalBranches.length < 8) throw new Error(`普通平行分歧不足：得到 ${normalBranches.length} 条，至少需要 8 条。`);
+    for (const branch of normalBranches) {
+        branch.trueEnding = false;
+        branch.locked = false;
+    }
+
+    if (!ending?.label || !ending?.intervention || ending.intervention.length < 160 || !ending.systemNote) {
+        throw new Error('观测点 Ω 缺少现世终局发言或系统结论。');
+    }
+    ending.id = 'OMEGA';
     ending.trueEnding = true;
     ending.locked = false;
-    if (!/(观测点\s*Ω|TRUE\s*ENDING)/i.test(ending.label)) ending.label = `观测点 Ω：${ending.label || '跨越维度的必然'}`;
-    const normalBranches = branches.slice(0, -1);
-    for (const branch of normalBranches) branch.trueEnding = false;
-    if (normalBranches.length < 8) throw new Error(`普通平行分歧不足：得到 ${normalBranches.length} 条，至少需要 8 条。`);
+    ending.code = '> OBSERVATION POINT #OMEGA';
+    ending.monologue = '';
+    ending.sourceMemoryIds = [];
+    ending.sourceMemoryAnchor = '';
+    if (!/(观测点\s*Ω|TRUE\s*ENDING)/i.test(ending.label)) ending.label = `观测点 Ω：${ending.label || '回归现世'}`;
+
     const nodes = [main, ...normalBranches, ending];
     return {
         kind: MODE.BUTTERFLY,
@@ -3706,6 +3743,7 @@ dialog#${OVERLAY_ID}::backdrop{background:transparent}
 .rmt-portal-open:disabled{cursor:default}
 .rmt-portal-generate{width:100%;margin-top:10px;justify-content:center}
 .rmt-portal-avatar{position:relative;width:88px;height:88px;border-radius:50%;display:grid;place-items:center;margin:2px 0 12px;border:4px solid rgba(255,255,255,.92);outline:1px solid #cbdde6;box-shadow:0 7px 18px rgba(67,92,110,.10);font-size:31px;color:#fff;background:linear-gradient(145deg,#9dcddd,#7fb4ca)}
+.rmt-archive-portal[data-rmt-archive-character]>.rmt-portal-avatar{align-self:center;margin-left:auto;margin-right:auto;flex:0 0 auto}
 .rmt-archive-portal-album .rmt-portal-avatar{background:linear-gradient(145deg,#f0afc8,#d989aa)}
 .rmt-archive-portal-adv .rmt-portal-avatar{background:linear-gradient(145deg,#ebcf8c,#c9aa62)}
 .rmt-archive-portal-room .rmt-portal-avatar{background:linear-gradient(145deg,#9bcfc4,#78afa5)}
@@ -3743,14 +3781,41 @@ dialog#${OVERLAY_ID}::backdrop{background:transparent}
 }
 @media(max-width:760px){.rmt-items{grid-template-columns:1fr}.rmt-items-boxes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.rmt-items-grid,.rmt-phone-content{grid-template-columns:1fr}.rmt-phone-shell{min-height:0;border-radius:20px;padding:10px}}
 @media(max-width:760px){
-  .rmt-archive-room{padding:12px 10px 18px}.rmt-archive-portals{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.rmt-archive-portal{min-height:188px;padding:14px 8px 12px}.rmt-portal-avatar{width:72px;height:72px;font-size:25px}.rmt-archive-generate-row{display:grid;gap:8px}.rmt-archive-generate{min-width:0;width:100%}
+  /* Mobile archive: narrower reading column and compact single-column mode cards. */
+  .rmt-archive-room{padding:10px 12px 20px;max-width:540px;margin:0 auto}
+  .rmt-archive-card{border-radius:15px}
+  .rmt-memory-gate{margin:10px 0 0;padding:15px 13px 13px}
+  .rmt-archive-title{font-size:18px!important;line-height:1.38}
+  .rmt-archive-summary{font-size:11px;line-height:1.68}
+  .rmt-archive-keywords{gap:5px}.rmt-archive-keywords span{font-size:9px;padding:3px 7px}
+  .rmt-external-memory-row{margin:8px 0 0;padding:9px 10px}
+  .rmt-archive-portals{grid-template-columns:1fr;gap:9px;margin:12px 0}
+  .rmt-archive-portal{min-height:0;padding:11px 12px;border-radius:15px}
+  .rmt-portal-open{display:grid;grid-template-columns:60px minmax(0,1fr);grid-template-areas:"avatar title" "avatar subtitle" "avatar status";column-gap:12px;row-gap:1px;align-items:center;text-align:left;padding:0}
+  .rmt-portal-open>.rmt-portal-avatar{grid-area:avatar;width:58px;height:58px;margin:0;font-size:21px;border-width:3px}
+  .rmt-portal-open>.rmt-portal-title{grid-area:title;font-size:15px}
+  .rmt-portal-open>.rmt-portal-subtitle{grid-area:subtitle;min-height:0;margin-top:1px;font-size:9.5px;line-height:1.4}
+  .rmt-portal-open>.rmt-portal-status{grid-area:status;margin-top:0;padding-top:4px;font-size:9px}
+  .rmt-portal-open .rmt-portal-ready-dot,.rmt-portal-open .rmt-portal-lock{width:21px;height:21px;font-size:10px;right:-3px;bottom:-1px}
+  .rmt-portal-generate{margin-top:8px;min-height:36px;padding:7px 10px}
+  .rmt-archive-generate-row{display:grid;gap:8px;padding:10px 11px}.rmt-archive-generate{min-width:0;width:100%}
+  /* Character library remains visual, but one card no longer hugs the left edge. */
+  .rmt-character-portals{grid-template-columns:repeat(auto-fit,minmax(150px,220px));justify-content:center;align-items:stretch}
+  .rmt-character-portals .rmt-archive-portal{min-height:182px;padding:13px 12px;text-align:center}
+  .rmt-character-portals .rmt-portal-avatar{width:70px;height:70px;margin:1px auto 9px;font-size:24px;align-self:center}
+  .rmt-character-portals .rmt-portal-title{font-size:15px}
+  .rmt-character-portals .rmt-portal-subtitle{min-height:0;margin-top:4px}
+  .rmt-character-portals .rmt-portal-status{padding-top:8px}
 
   #${OVERLAY_ID}{padding:0}.rmt-shell{max-height:100vh;border-radius:0;border:0;outline:0}
   dialog#${OVERLAY_ID}{padding:0!important}
   .rmt-shell:before{display:none}
-  .rmt-topbar{min-height:50px;padding:7px 8px 7px 11px}.rmt-topbar-title{font-size:15px}.rmt-topbar-title:after{display:none}
-  .rmt-topbar button{padding:6px 9px;font-size:12px}
-  .rmt-memory-gate{margin:14px 12px 0;padding:18px 14px 14px}.rmt-archive-title{font-size:19px!important}
+  .rmt-topbar{min-height:48px;padding:6px 7px 6px 10px;gap:6px}.rmt-topbar-title{font-size:14px;letter-spacing:.025em}.rmt-topbar-title:after{display:none}
+  .rmt-topbar button{padding:6px 8px;font-size:11px;min-width:0}
+  .rmt-topbar button[data-rmt-action="home"]{font-size:0;width:36px;height:34px;padding:0;display:grid;place-items:center}
+  .rmt-topbar button[data-rmt-action="home"]:before{content:"⌂";font-size:16px;line-height:1}
+  .rmt-memory-gate{margin:10px 0 0;padding:15px 13px 13px}.rmt-archive-title{font-size:18px!important}
+  [data-rmt-action="archive-character-back"]{width:100%;justify-content:center}
   .rmt-choice{grid-template-columns:1fr;padding:12px;gap:10px}.rmt-choice-card{min-height:125px;padding:18px 16px}
   .rmt-tree-branches{grid-template-columns:repeat(2,minmax(120px,1fr))}.rmt-divergence-map-block{min-height:190px}
   .rmt-album{padding:10px}.rmt-album-head{padding:11px}.rmt-album-layout{grid-template-columns:1fr}
@@ -4708,7 +4773,7 @@ function showArchiveLibrary() {
         const ctx = currentCharacterGuard(); const mem = getImportedMemory(ctx);
         if (!mem) currentQuick = `<section class="rmt-archive-card" style="margin-top:12px"><b>当前聊天还没有档案</b><div style="margin-top:7px"><button type="button" class="rmt-btn" data-rmt-action="current-archive">进入当前聊天并创建档案</button></div></section>`;
     } catch {}
-    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">MEMORY ARCHIVE LIBRARY</div><strong class="rmt-archive-title">档案室一览</strong><div class="rmt-archive-summary">这里只显示已经建立过心跳回忆档案的角色。点进角色后，再选择这个角色不同聊天窗口各自的档案名称。</div><div style="margin-top:10px"><button type="button" class="rmt-btn" data-rmt-action="rebuild-archive-index">扫描旧版本已有档案</button></div></section>${cards ? `<section class="rmt-archive-portals">${cards}</section>` : '<div class="rmt-archive-overview-empty">还没有已索引的档案。当前版本创建/更新档案后会自动加入这里；旧版本档案可点上方按钮手动扫描一次。</div>'}${currentQuick}</div>`;
+    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">MEMORY ARCHIVE LIBRARY</div><strong class="rmt-archive-title">档案室一览</strong><div class="rmt-archive-summary">这里只显示已经建立过心跳回忆档案的角色。点进角色后，再选择这个角色不同聊天窗口各自的档案名称。</div><div style="margin-top:10px"><button type="button" class="rmt-btn" data-rmt-action="rebuild-archive-index">扫描旧版本已有档案</button></div></section>${cards ? `<section class="rmt-archive-portals rmt-character-portals">${cards}</section>` : '<div class="rmt-archive-overview-empty">还没有已索引的档案。当前版本创建/更新档案后会自动加入这里；旧版本档案可点上方按钮手动扫描一次。</div>'}${currentQuick}</div>`;
 }
 
 function showArchiveCharacter(characterKey) {
@@ -4998,11 +5063,29 @@ function renderButterfly() {
     const ending = session.nodes[session.nodes.length - 1];
     const branchNodes = branches.map((node, index) => `<button type="button" class="rmt-node rmt-branch-node ${index + 1 === session.selected ? 'active' : ''}" data-rmt-node="${index + 1}"><span>${String(index + 1).padStart(2, '0')}</span>${esc(node.label)}</button>`).join('');
     const endingIndex = session.nodes.length - 1;
+    const isOmega = session.selected === endingIndex || !!selected.trueEnding;
+    const observerName = esc(session.subject || getContext().name2 || '{{char}}');
+    const observationPanel = isOmega
+        ? `<section class="rmt-terminal-block rmt-observation-screen rmt-omega-screen">
+            <div class="rmt-terminal-section-title">III. OBSERVATION POINT Ω // 现世终局观测</div>
+            <div class="rmt-record-code">${esc(selected.code || '> OBSERVATION POINT #OMEGA')}</div>
+            <div class="rmt-signal rmt-omega-signal"><div class="rmt-signal-noise"></div><div class="rmt-signal-center">[ ALL PARALLEL SUBJECT FEEDS CLOSED ]<br>[ RETURNING TO MAIN WORLDLINE ]</div></div>
+            <div class="rmt-mono rmt-omega-monologue"><b>CURRENT WORLD SUBJECT // 现世 ${observerName} 最终发言</b><br>${esc(selected.intervention)}</div>
+          </section>
+          <section class="rmt-terminal-block rmt-system-block"><div class="rmt-terminal-section-title">IV. SYSTEM NOTE // 观测完成</div><div class="rmt-system-note">${esc(selected.systemNote)}</div></section>`
+        : `<section class="rmt-terminal-block rmt-observation-screen">
+            <div class="rmt-terminal-section-title">III. OBSERVATION SCREEN // 平行世界观测</div>
+            <div class="rmt-record-code">${esc(selected.code)}</div>
+            <div class="rmt-signal" data-rmt-signal><div class="rmt-signal-noise"></div><div class="rmt-signal-center">[ SIGNAL LOST: IMAGE DATA CORRUPTED ]</div></div>
+            <div class="rmt-mono"><b>PARALLEL SUBJECT // 平行世界 ${observerName} 本人发言</b><br>${esc(selected.monologue)}</div>
+          </section>
+          <section class="rmt-terminal-block rmt-intervention-block"><div class="rmt-terminal-section-title">IV. CURRENT-WORLD RESPONSE // 现世回应</div><div class="rmt-intervention">${esc(selected.intervention)}</div></section>
+          <section class="rmt-terminal-block rmt-system-block"><div class="rmt-terminal-section-title">V. SYSTEM NOTE // 系统评估</div><div class="rmt-system-note">${esc(selected.systemNote)}</div></section>`;
     const body = bodyEl();
     body.innerHTML = `<div class="rmt-crt"><div class="rmt-crt-content">
       <section class="rmt-terminal-block rmt-terminal-header-block">
         <div class="rmt-terminal-section-title">I. TERMINAL HEADER // 终端抬头</div>
-        <div class="rmt-terminal-head">&gt; TEMPORAL OBSERVATION UNIT // SUBJECT: ${esc(session.subject || getContext().name2)} // STATUS: UNSTABLE</div>
+        <div class="rmt-terminal-head">&gt; TEMPORAL OBSERVATION UNIT // SUBJECT: ${observerName} // STATUS: UNSTABLE</div>
         <div class="rmt-terminal-codeflow">0101::TEMPORAL-LINK / WORLD-LINE SCAN / SUBJECT LOCKED / DIVERGENCE SIGNAL ACTIVE</div>
       </section>
       <section class="rmt-terminal-block rmt-divergence-map-block">
@@ -5012,14 +5095,7 @@ function renderButterfly() {
         <div class="rmt-tree-branches">${branchNodes}</div>
         <div class="rmt-tree-ending"><button type="button" class="rmt-node true-ending ${endingIndex === session.selected ? 'active' : ''}" data-rmt-node="${endingIndex}"><span>Ω</span>${esc(ending.label)}</button></div>
       </section>
-      <section class="rmt-terminal-block rmt-observation-screen">
-        <div class="rmt-terminal-section-title">III. OBSERVATION SCREEN // 观测屏幕</div>
-        <div class="rmt-record-code">${esc(selected.code)}</div>
-        <div class="rmt-signal" data-rmt-signal><div class="rmt-signal-noise"></div><div class="rmt-signal-center">[ SIGNAL LOST: IMAGE DATA CORRUPTED ]</div></div>
-        <div class="rmt-mono"><b>PARALLEL SUBJECT MONOLOGUE // 平行体独白</b><br>${esc(selected.monologue)}</div>
-      </section>
-      <section class="rmt-terminal-block rmt-intervention-block"><div class="rmt-terminal-section-title">IV. REALITY INTERVENTION // 现世介入</div><div class="rmt-intervention">${esc(selected.intervention)}</div></section>
-      <section class="rmt-terminal-block rmt-system-block"><div class="rmt-terminal-section-title">V. SYSTEM NOTE // 系统评估</div><div class="rmt-system-note">${esc(selected.systemNote)}</div></section>
+      ${observationPanel}
     </div></div>`;
 }
 
