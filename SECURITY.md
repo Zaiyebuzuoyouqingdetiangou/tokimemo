@@ -51,3 +51,12 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 32. 房间内部的物品递归容器最大深度与总节点数必须受限；所有模型文本仍经过 `esc()`，模型不得提供 HTML/CSS/URL/脚本。
 33. 私人终端模型内容仅作为本地结构化展示数据；不得触发真实短信、邮件、外部 URL、联系人操作或设备 API。
 34. 档案扫描允许跳过重复 token 化仅限于已经被保守字符上限约束的固定大小分块；字符预算仍必须在发送前执行，不能因此绕过总输入限制。
+
+
+### 0.8.7 additional invariants
+
+- Background results are bound to `characterKey + chatId + archiveRevision`; chat navigation must not retarget them.
+- Deferred archive writes are applied only when the original chat is current again; archive imports also verify the usable message count before write-back.
+- External memory is read only after an explicit per-chat preflight and only from the current chat scope; cross-chat provider responses remain rejected.
+- The global archive index stores only lightweight metadata (character key/avatar/name, chat id, archive name, memory count, update time), never raw memory text.
+- Legacy archive discovery using `metadata:true` is explicit/manual and never runs on normal chat navigation.

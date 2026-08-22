@@ -1,14 +1,14 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.6",
+  "js": "index.js?heartbeat=0.8.7",
   "author": "Toto",
-  "version": "0.8.6",
+  "version": "0.8.7",
   "auto_update": false,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "独立的 SillyTavern 心跳回忆插件：专用 API 设置、每聊天窗口独立档案室、当前窗口记忆插件补充同步、档案室一览、当前窗口记忆插件桥接、一次请求后台生成回忆相簿/CG·ADV/他的房间（内含物品与私人终端）/蝴蝶效应；Source Available，非开源。"
+  "description": "独立的 SillyTavern 心跳回忆插件：专用 API 设置、每聊天窗口独立档案室、当前窗口记忆插件补充同步、全角色档案室一览、建档前记忆插件预读取、跨窗口安全后台生成、一次请求后台生成回忆相簿/CG·ADV/他的房间（内含物品与私人终端）/蝴蝶效应；Source Available，非开源。"
 }
