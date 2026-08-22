@@ -133,3 +133,8 @@
 
 - 移除“跟随酒馆当前 API”生成路径；心跳回忆固定使用一个 Connection Manager 专用连接。
 - 新增“从酒馆当前连接一键导入”，仅引用 Secret ID，不读取 API Key 明文。
+
+### 0.8.10 mobile/avatar r4
+- Mobile/cloud archive opener now handles touchend, pointerup, and click through one guarded capture path.
+- Archive index updates no longer erase a previously valid character avatar when a transient context exposes an empty avatar.
+- Archive cards recover missing avatar metadata from characterKey/current SillyTavern character data and merge canonical character groups.

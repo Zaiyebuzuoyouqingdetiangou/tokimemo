@@ -80,3 +80,17 @@
 - Legacy cache remains read-only compatible on normal chat entry; no deletion or schema migration is performed.
 - Mount retry performs only missing mounts and cannot repeatedly rebuild already-mounted API controls.
 - No new network endpoint, dynamic code execution sink, secret read, or cross-chat write path was introduced by this hotfix.
+
+## 0.8.10 mobile/avatar r4 targeted diff review
+
+Scope: `0.8.10 prompt-r3 -> 0.8.10 mobile-avatar-r4`.
+
+- Mobile archive-open fallback is limited to the two plugin-owned archive buttons and adds `touchend` alongside existing `pointerup`/`click`; it does not install a general touch interceptor.
+- Character-avatar recovery only reads SillyTavern's existing `characters` metadata / archive-index metadata and still renders the resolved thumbnail URL through HTML escaping.
+- A transient empty avatar can no longer overwrite a previously valid archive-index avatar. Existing entries with a usable avatar filename in `characterKey` can be recovered without rewriting memory text.
+- `currentCharacterKey` keeps the same character-id fallback behavior used by task-origin isolation; the avatar repair does not replace security identity with character-name matching.
+- No new `fetch`, WebSocket, dynamic-code execution, secret/API-key handling, raw-memory persistence, or external network destination was added.
+- Counts/usages of `expectedChatId`, `expectedArchiveRevision`, `normalizeMemoryReference`, `isCurrentTaskOrigin`, and `saveSession` are unchanged from prompt-r3.
+- The UI stylesheet block is byte-identical to prompt-r3; this hotfix does not alter the restored 0.8.9.1 visual baseline.
+
+Targeted diff conclusion: no newly introduced Critical / High / Medium security issue found in this r4 change set. Real mobile-cloud browser behavior still requires device runtime verification because browser gesture synthesis differs across WebKit/Chromium wrappers.

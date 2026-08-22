@@ -629,8 +629,47 @@ function comparableChatId(value) {
     return normalizeText(value, 260).replace(/\.jsonl$/i, '').trim();
 }
 
+function contextCharacterAvatar(context = getContext(), preferredName = '') {
+    const characters = Array.isArray(context?.characters) ? context.characters : [];
+    const id = context?.characterId;
+    const requestedName = normalizeText(preferredName, 120);
+    const currentName = normalizeText(context?.name2, 120);
+    const preferred = requestedName || currentName;
+    const direct = id !== undefined && id !== null ? characters[id] : null;
+    const candidates = [];
+    if (requestedName) {
+        const byName = characters.find(item => normalizeText(item?.name || item?.data?.name, 120) === requestedName);
+        if (byName) candidates.push(byName);
+        const directName = normalizeText(direct?.name || direct?.data?.name, 120);
+        if (direct && directName === requestedName && direct !== byName) candidates.push(direct);
+    } else {
+        if (direct) candidates.push(direct);
+        if (preferred) {
+            const byName = characters.find(item => normalizeText(item?.name || item?.data?.name, 120) === preferred);
+            if (byName && byName !== direct) candidates.push(byName);
+        }
+    }
+    for (const item of candidates) {
+        const avatar = normalizeText(item?.avatar || item?.data?.avatar, 300);
+        if (avatar) return avatar;
+    }
+    return '';
+}
+
+function archiveEntryAvatarName(entry, context = getContext()) {
+    const stored = normalizeText(entry?.avatar, 300);
+    if (stored) return stored;
+    const key = normalizeText(entry?.characterKey, 300);
+    if (key && !key.startsWith('character:')) return key;
+    return contextCharacterAvatar(context, normalizeText(entry?.characterName, 120));
+}
+
+function archiveCanonicalCharacterKey(entry, context = getContext()) {
+    return archiveEntryAvatarName(entry, context) || normalizeText(entry?.characterKey, 300);
+}
+
 function currentCharacterKey(context = currentCharacterGuard()) {
-    const avatar = normalizeText(context.characters?.[context.characterId]?.avatar, 300);
+    const avatar = normalizeText(context.characters?.[context.characterId]?.avatar || context.characters?.[context.characterId]?.data?.avatar, 300);
     return avatar || `character:${String(context.characterId ?? '')}`;
 }
 
@@ -752,19 +791,34 @@ function setArchiveIndex(context, items) {
 
 function upsertArchiveIndex(context, memoryBank) {
     if (!isCompatibleArchive(memoryBank)) return;
-    const characterKey = currentCharacterKey(context);
     const chatId = comparableChatId(memoryBank.chatId || getChatId(context));
-    if (!characterKey || !chatId) return;
-    const avatar = normalizeText(context.characters?.[context.characterId]?.avatar, 300);
+    if (!chatId) return;
+    const characterName = normalizeText(memoryBank.characterName || context.name2, 120) || '未命名角色';
+    const existingIndex = getArchiveIndex(context);
+    const rawCharacterKey = currentCharacterKey(context);
+    const existing = existingIndex.find(old => old.chatId === chatId && (
+        old.characterKey === rawCharacterKey
+        || normalizeText(old.characterName, 120) === characterName
+    ));
+    // Some mobile/cloud contexts briefly expose the character without an avatar while the
+    // drawer/chat UI is remounting. Never replace a previously valid archive avatar with ''.
+    const avatar = normalizeText(context.characters?.[context.characterId]?.avatar || context.characters?.[context.characterId]?.data?.avatar, 300)
+        || archiveEntryAvatarName(existing, context)
+        || contextCharacterAvatar(context, characterName);
+    const characterKey = avatar || normalizeText(existing?.characterKey, 300) || rawCharacterKey;
+    if (!characterKey) return;
     const item = {
         characterKey, avatar,
-        characterName: normalizeText(memoryBank.characterName || context.name2, 120) || '未命名角色',
+        characterName,
         chatId,
         archiveName: normalizeText(memoryBank.archiveName, 160) || fallbackArchiveName(memoryBank.memories),
         memoryCount: memoryBank.memories.length,
         updatedAt: Number(memoryBank.updatedAt || memoryBank.createdAt) || Date.now(),
     };
-    const index = getArchiveIndex(context).filter(old => !(old.characterKey === characterKey && old.chatId === chatId));
+    const canonicalKey = archiveCanonicalCharacterKey(item, context);
+    const index = existingIndex.filter(old => !(
+        old.chatId === chatId && archiveCanonicalCharacterKey(old, context) === canonicalKey
+    ));
     index.unshift(item);
     index.sort((a,b) => b.updatedAt - a.updatedAt);
     setArchiveIndex(context, index);
@@ -4386,7 +4440,7 @@ function memoryStateLabel(state) {
 }
 
 function currentCharacterAvatar(context = currentCharacterGuard()) {
-    return normalizeText(context.characters?.[context.characterId]?.avatar, 300);
+    return normalizeText(context.characters?.[context.characterId]?.avatar || context.characters?.[context.characterId]?.data?.avatar, 300);
 }
 
 function archiveOverviewKey(context = currentCharacterGuard()) {
@@ -4586,7 +4640,9 @@ function baseModeAvailability(options = {}) {
 
 
 function archiveCharacterAvatar(entry, context = getContext()) {
-    try { return context.getThumbnailUrl?.('avatar', entry.avatar) || ''; } catch { return ''; }
+    const avatar = archiveEntryAvatarName(entry, context);
+    if (!avatar) return '';
+    try { return context.getThumbnailUrl?.('avatar', avatar) || ''; } catch { return ''; }
 }
 
 function showArchiveLibrary() {
@@ -4594,11 +4650,16 @@ function showArchiveLibrary() {
     openOverlay(); setRegenerateVisible(false); topTitle('心跳回忆 · 档案室');
     const body = bodyEl(); if (!body) return;
     try { const ctx = currentCharacterGuard(); const mem = getImportedMemory(ctx); if (mem) upsertArchiveIndex(ctx, mem); } catch {}
-    const index = getArchiveIndex(getContext());
+    const archiveContext = getContext();
+    const index = getArchiveIndex(archiveContext);
     const groups = new Map();
     for (const item of index) {
-        const group = groups.get(item.characterKey) || { characterKey:item.characterKey, avatar:item.avatar, characterName:item.characterName, entries:[] };
-        group.entries.push(item); groups.set(item.characterKey, group);
+        const characterKey = archiveCanonicalCharacterKey(item, archiveContext);
+        if (!characterKey) continue;
+        const avatar = archiveEntryAvatarName(item, archiveContext);
+        const group = groups.get(characterKey) || { characterKey, avatar, characterName:item.characterName, entries:[] };
+        if (!group.avatar && avatar) group.avatar = avatar;
+        group.entries.push(item); groups.set(characterKey, group);
     }
     const cards = [...groups.values()].sort((a,b) => Math.max(...b.entries.map(x=>x.updatedAt)) - Math.max(...a.entries.map(x=>x.updatedAt))).map(group => {
         const src = archiveCharacterAvatar(group);
@@ -4615,7 +4676,8 @@ function showArchiveLibrary() {
 function showArchiveCharacter(characterKey) {
     const key = normalizeText(characterKey, 300); archiveLibraryCharacterKey = key;
     openOverlay(); setRegenerateVisible(false);
-    const entries = getArchiveIndex(getContext()).filter(item => item.characterKey === key).sort((a,b)=>b.updatedAt-a.updatedAt);
+    const context = getContext();
+    const entries = getArchiveIndex(context).filter(item => archiveCanonicalCharacterKey(item, context) === key).sort((a,b)=>b.updatedAt-a.updatedAt);
     const name = entries[0]?.characterName || '角色档案'; topTitle(`心跳回忆 · ${name}`);
     const body = bodyEl(); if (!body) return;
     const rows = entries.map(item => `<button type="button" class="rmt-archive-overview-item" data-rmt-indexed-chat="${esc(item.chatId)}" data-rmt-indexed-character="${esc(item.characterKey)}"><span class="rmt-overview-dot">●</span><span><b>${esc(item.archiveName)}</b><small>${esc(item.chatId)} · ${item.memoryCount} 条记忆 · ${esc(formatArchiveTime(item.updatedAt))}</small></span><i class="fa-solid fa-chevron-right"></i></button>`).join('');
@@ -4626,10 +4688,17 @@ async function openIndexedArchive(characterKey, chatId) {
     if (busy) activeTaskBackgrounded = true;
     const context = getContext();
     const index = getArchiveIndex(context);
-    const entry = index.find(item => item.characterKey === characterKey && item.chatId === comparableChatId(chatId));
+    const wantedChatId = comparableChatId(chatId);
+    const entry = index.find(item => item.characterKey === characterKey && item.chatId === wantedChatId);
     if (!entry) return;
-    const charIndex = (context.characters || []).findIndex(ch => normalizeText(ch?.avatar,300) === entry.avatar);
-    if (charIndex >= 0 && currentCharacterKey(context) !== characterKey && typeof context.selectCharacterById === 'function') await context.selectCharacterById(charIndex, { switchMenu:false });
+    const avatar = archiveEntryAvatarName(entry, context);
+    const entryName = normalizeText(entry.characterName, 120);
+    const charIndex = (context.characters || []).findIndex(ch => {
+        const candidateAvatar = normalizeText(ch?.avatar || ch?.data?.avatar, 300);
+        const candidateName = normalizeText(ch?.name || ch?.data?.name, 120);
+        return (avatar && candidateAvatar === avatar) || (!avatar && entryName && candidateName === entryName);
+    });
+    if (charIndex >= 0 && currentCharacterKey(context) !== archiveCanonicalCharacterKey(entry, context) && typeof context.selectCharacterById === 'function') await context.selectCharacterById(charIndex, { switchMenu:false });
     const latest = currentCharacterGuard();
     if (comparableChatId(getChatId(latest)) !== entry.chatId && typeof latest.openCharacterChat === 'function') await latest.openCharacterChat(entry.chatId);
     scheduleChooserRefresh(80);
@@ -5595,28 +5664,41 @@ function mountMenuItem() {
     return true;
 }
 
+function archiveOpenButtonFromEvent(event) {
+    const selector = '[data-rmt-settings-open-archive], #heartbeat_memories_menu_item';
+    const path = typeof event?.composedPath === 'function' ? event.composedPath() : [];
+    for (const node of path) {
+        if (node?.matches?.(selector)) return node;
+    }
+    return event?.target?.closest?.(selector) || null;
+}
+
 function bindRobustArchiveOpenHandlers() {
     try { globalThis.__heartbeatMemoriesOpenCleanup?.(); } catch {}
     let lastOpenAt = 0;
     const handler = event => {
-        const target = event.target;
-        const button = target?.closest?.('[data-rmt-settings-open-archive], #heartbeat_memories_menu_item');
+        const button = archiveOpenButtonFromEvent(event);
         if (!button) return;
         const now = Date.now();
-        if (now - lastOpenAt < 350) {
-            event.preventDefault?.();
-            event.stopPropagation?.();
-            return;
-        }
+        if (now - lastOpenAt < 650) return;
         lastOpenAt = now;
-        event.preventDefault?.();
+        // iOS/WebKit cloud wrappers can deliver touchend without a usable synthetic click.
+        // Prevent only the matched archive-button gesture; do not interfere with unrelated UI.
+        if (event.cancelable) event.preventDefault?.();
         event.stopPropagation?.();
         showArchiveLibrary();
+        const overlay = document.getElementById(OVERLAY_ID);
+        if (overlay) {
+            overlay.hidden = false;
+            overlay.removeAttribute('aria-hidden');
+        }
     };
-    // Capture phase fixes cloud/mobile layouts that stop the normal settings-panel bubble click.
+    const touchOptions = { capture: true, passive: false };
+    document.addEventListener('touchend', handler, touchOptions);
     document.addEventListener('pointerup', handler, true);
     document.addEventListener('click', handler, true);
     globalThis.__heartbeatMemoriesOpenCleanup = () => {
+        document.removeEventListener('touchend', handler, touchOptions);
         document.removeEventListener('pointerup', handler, true);
         document.removeEventListener('click', handler, true);
     };
