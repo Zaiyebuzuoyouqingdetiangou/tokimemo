@@ -22,10 +22,10 @@
 14. 不对包含不可信档案/聊天正文的完整 Prompt 调用 SillyTavern 通用宏展开；仅允许本地展开 `{{char}}` / `{{user}}`，其余 `{{...}}` 必须中和。
 15. 自动房间生活生成失败必须熔断当天自动重试；不得由定时器形成无上限 API 请求。
 16. 生成输入在发送前必须执行字符/Token 预算；超限失败关闭。
-17. 同一时刻只允许一个心跳回忆生成任务。把任务转到后台只是隐藏 UI，不得创建第二条并行模型请求。
+17. 内容生成采用显式并行任务表，最多 4 项同时运行；每个任务必须有独立 task key、AbortController、characterKey、chatId 与 archiveRevision。同一 task key 不得重复启动。
 18. 后台生成完成时仍必须执行与前台完全相同的 chatId/archiveRevision 校验；关闭 overlay 不能绕过数据隔离。
 19. User Persona 可以作为设定上下文和世界书 dry-run 的 personaDescription，但不得被当作“已经发生的共同往事”证据。
-20. 档案室未生成入口只允许显示锁定状态；查看入口不得隐式触发模型请求，基础包生成必须由用户显式点击“生成整套档案室内容”。
+20. 档案室查看入口不得隐式触发模型请求；未生成主入口只能由其自己的显式“生成这一项”按钮启动。物品/私人终端只能从房间内部的显式生成按钮启动。
 
 ## Credentials
 
@@ -60,3 +60,24 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - External memory is read only after an explicit per-chat preflight and only from the current chat scope; cross-chat provider responses remain rejected.
 - The global archive index stores only lightweight metadata (character key/avatar/name, chat id, archive name, memory count, update time), never raw memory text.
 - Legacy archive discovery using `metadata:true` is explicit/manual and never runs on normal chat navigation.
+
+### 0.8.8 storage / upgrade invariants
+
+- Plugin release version and archive schema version are separate concepts. A routine extension upgrade must not delete or invalidate a still-supported archive schema.
+- The currently supported archive schema is V3. Future schema changes require an explicit migration path; unsupported unknown schemas must not be silently coerced.
+- Derived theater cache stored in chat metadata may use the fixed `gzip-base64-v1` wrapper. Compression is a storage optimization only; chatId and archiveRevision isolation rules remain unchanged.
+- Compressed chat metadata is untrusted input. Base64 input, pre-compression JSON size and streamed decompressed output are all hard-capped before parsing to reduce decompression-bomb / memory-exhaustion risk.
+- Ordinary chat navigation must not hydrate/decompress theater cache. Hydration is allowed only when Heartbeat actually needs generated content.
+- Old uncompressed theater caches remain readable and are migrated lazily; migration must never delete the old durable value before a valid compressed replacement is ready for the same chat scope.
+- Manual archive update may invalidate derived theater cache because archiveRevision changes. A plugin version update by itself may not clear the archive or theater cache.
+- Decompressed runtime caches are bounded and evicted across chat scopes; they must not become an unbounded cross-chat memory store.
+
+
+### 0.8.9 concurrency invariants
+
+- Parallel generation is bounded to four active content tasks. Archive creation/update and external-memory preflight remain mutually exclusive with content generation because they can change archive evidence/revision.
+- Task identity is scoped by chat for mode generation. A mode running in chat A must not mark the same mode in chat B as running or prevent B from rendering its own cached content.
+- Deferred `sessions` commits for the same origin chat must merge by mode instead of replacing the entire deferred sessions batch. Concurrent completion of album/room/butterfly/ADV must not drop previously queued modes.
+- Full CG/ADV index regeneration must not race a concrete ADV-body request in the same chat; only one concrete ADV body may run per chat at a time.
+- Room daily-life generation must not race replacement of the room base session. If capacity is full or room base generation is active, daily-life generation waits/falls back without overwriting a newer room session.
+- Closing the Heartbeat overlay or navigating to another chat may hide the UI, but must not retarget active tasks. Extension destruction must abort every active controller.

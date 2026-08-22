@@ -1,6 +1,6 @@
-import { initMemoryTheater, destroyMemoryTheater } from './src/heartbeatMemories.js?heartbeat=0.8.7';
+import { initMemoryTheater, destroyMemoryTheater } from './src/heartbeatMemories.js?heartbeat=0.8.9';
 
-const VERSION = '0.8.7';
+const VERSION = '0.8.9';
 
 jQuery(() => {
     initMemoryTheater();
