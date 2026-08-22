@@ -27,6 +27,9 @@
 19. User Persona 可以作为设定上下文和世界书 dry-run 的 personaDescription，但不得被当作“已经发生的共同往事”证据。
 20. 档案室查看入口不得隐式触发模型请求；未生成主入口只能由其自己的显式“生成这一项”按钮启动。物品/私人终端只能从房间内部的显式生成按钮启动。
 
+35. 各玩法 prompt 可以只携带与本模式相关的档案子集以控制输入长度，但这只是“减少模型可见证据”，不得降低本地 `normalizeMemoryReference` 对完整当前档案的 ID + anchor 校验；单篇/批量 ADV 只允许使用对应 CG 已经引用的 sourceMemories。
+36. 储物深层 prompt 只允许收到房间中 `searchable=true` 的收纳对象及其关联记忆；不得为了缩短 prompt 而重新允许普通床、桌面、灯、照片等成为可翻找容器。
+
 ## Credentials
 
 API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只保存 Connection Manager Profile ID、可选模型覆盖 ID、输出上限、温度和功能开关。
