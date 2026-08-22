@@ -1,3 +1,12 @@
+## 0.8.10 r11 — 多来源记忆 / 摘要适配
+
+- 档案室将“蝴蝶效应”固定放在主入口最下方；桌面端也单独占最后一行。
+- 公开记忆插件兼容从单一 `getInjectedHistory()` 扩展为安全探测 `getInjectedHistory` / `getCurrentChatMemories` / `getCurrentChatMemory` / `getCurrentChatSummary` / `getCurrentSummary`。
+- 新增当前窗口提示注入摘要适配：仅扫描名称明确包含 memory/summary/摘要/总结等语义、且不是世界书/角色卡/作者设定的注入项。
+- 新增当前聊天 metadata 摘要适配：只读取摘要/记忆相关键，并且只递归白名单内容字段，避免把任意设置或凭据当作记忆。
+- 世界书、角色卡、作者设定继续仅作为生成时的设定上下文，不自动导入为“已经发生的聊天事实”。
+- 公开 API 发现继续避免执行全局 getter，并进一步避免通过访问器探测第三方 API 方法/名称。
+
 # 0.8.10 confirm / current archive r10
 
 - 所有会覆盖现有生成内容的“重新生成”入口增加显式确认，取消不会启动请求。

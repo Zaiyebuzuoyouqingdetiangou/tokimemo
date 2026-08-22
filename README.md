@@ -217,3 +217,13 @@
 ## 0.8.10 r10
 
 重新生成与当前窗口档案创建/更新均增加明确确认；设置面板重新提供“生成/更新当前窗口档案”直达入口。
+
+## 当前窗口记忆 / 摘要兼容（r11）
+
+建档时的补充资料不再绑定单一记忆插件。插件会按顺序尝试：
+
+1. 能明确表示“当前聊天”的公开 API（`getInjectedHistory`、`getCurrentChatMemories`、`getCurrentChatMemory`、`getCurrentChatSummary`、`getCurrentSummary`）；
+2. 当前 SillyTavern prompt 中明确标为 memory / summary / 摘要 / 总结的注入文本；
+3. 当前聊天 `chatMetadata` 中明确标为摘要/记忆的数据。
+
+所有补充资料都要经过 externalId + 原文 anchor 校验。世界书、角色卡、作者注记属于设定上下文，不作为“某件事已经发生”的证据；原始当前聊天正文仍是最可靠的事实来源。

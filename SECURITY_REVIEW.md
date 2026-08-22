@@ -149,3 +149,11 @@ Scope: `src/heartbeatMemories.js`, `manifest.json`, `index.js`, `CHANGELOG.md`, 
 - `normalizeMemoryReference`, `saveSession`, `isCurrentTaskOrigin`, `captureTaskOrigin`, `requestJson`, `queueDeferredCommit`, `normalizeButterfly`, `normalizeAlbum`, `normalizeRoom`, and `normalizeItems` are byte-identical to r7.
 
 Result: no new High/Medium security finding identified in this focused diff. Residual privacy note: if the user explicitly opens an allowlisted third-party Gallery image, that image host necessarily receives a network request from the browser; Referrer is suppressed and the load is never automatic.
+
+## r11 memory-adapter delta
+
+- Added only current-chat-scoped generic readers and summary adapters; no cross-chat index is used as evidence.
+- Generic global discovery uses property descriptors and data-value method checks; it does not execute arbitrary getters while probing provider APIs.
+- Chat metadata extraction traverses only summary/memory-labelled top-level keys and a fixed allowlist of content fields.
+- World info, character cards, personas, and author-setting material remain setting-only context and are explicitly excluded from external-memory import evidence.
+- External imported memories still require an existing externalId and an exact sourceExternalAnchor contained in the cited source content.
