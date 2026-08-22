@@ -16,6 +16,7 @@ const MAX_GENERATION_INPUT_CHARS = 96000;
 const EXTENSION_SETTINGS_KEY = 'heartbeatMemories';
 const DEFAULT_SETTINGS = Object.freeze({
     connectionProfileId: '',
+    modelOverride: '',
     maxTokens: 8192,
     temperature: 0.9,
     roomLifeAutoDaily: true,
@@ -53,6 +54,9 @@ let activeSession = null;
 let roomClockTimer = 0;
 let roomLifeRefreshPromise = null;
 let activeTaskAbortController = null;
+let activeTaskLabel = '';
+let activeTaskBackgrounded = false;
+const connectionModelCache = new Map();
 
 function getContext() {
     const context = globalThis.SillyTavern?.getContext?.();
@@ -67,6 +71,7 @@ function getPluginSettings(context = getContext()) {
     const settings = raw && typeof raw === 'object' ? raw : {};
     const normalized = {
         connectionProfileId: normalizeText(settings.connectionProfileId, 160),
+        modelOverride: normalizeText(settings.modelOverride, 240),
         maxTokens: Math.max(1024, Math.min(32000, Number(settings.maxTokens) || DEFAULT_SETTINGS.maxTokens)),
         temperature: Math.max(0, Math.min(2, Number.isFinite(Number(settings.temperature)) ? Number(settings.temperature) : DEFAULT_SETTINGS.temperature)),
         roomLifeAutoDaily: settings.roomLifeAutoDaily !== false,
@@ -104,7 +109,91 @@ function supportedConnectionProfiles(context = getContext()) {
 
 function generationSourceLabel(settings = getPluginSettings()) {
     const profile = supportedConnectionProfiles().find(item => item.id === settings.connectionProfileId);
-    return profile ? `专用连接：${profile.name}${profile.model ? ` · ${profile.model}` : ''}` : '专用连接：未选择';
+    if (!profile) return '专用连接：未选择';
+    const model = normalizeText(settings.modelOverride, 240) || profile.model;
+    return `专用连接：${profile.name}${model ? ` · ${model}` : ''}`;
+}
+
+function rawConnectionProfile(profileId, context = getContext()) {
+    const manager = connectionManagerSettings(context);
+    return manager.profiles.find(item => String(item?.id || '') === String(profileId || '')) || null;
+}
+
+function profileConnectionFingerprint(profile) {
+    const keys = ['mode', 'api', 'api-url', 'proxy', 'secret-id'];
+    return JSON.stringify(keys.map(key => normalizeText(profile?.[key], 1000)));
+}
+
+function savedModelsForProfile(profileId, context = getContext()) {
+    const manager = connectionManagerSettings(context);
+    const selected = rawConnectionProfile(profileId, context);
+    if (!selected) return [];
+    const fingerprint = profileConnectionFingerprint(selected);
+    const models = manager.profiles
+        .filter(item => profileConnectionFingerprint(item) === fingerprint)
+        .map(item => normalizeText(item?.model, 240))
+        .filter(Boolean);
+    const own = normalizeText(selected?.model, 240);
+    if (own) models.unshift(own);
+    return [...new Set(models)];
+}
+
+function connectionStatusPayload(profile, context = getContext()) {
+    const service = context.ConnectionManagerRequestService;
+    if (!service?.validateProfile) throw new Error('当前 SillyTavern 没有 Connection Manager 校验接口。');
+    const apiMap = service.validateProfile(profile);
+    if (apiMap?.selected !== 'openai' || !apiMap?.source) {
+        return { apiMap, payload: null };
+    }
+    const apiUrl = normalizeText(profile?.['api-url'], 2000);
+    const payload = {
+        chat_completion_source: apiMap.source,
+        secret_id: normalizeText(profile?.['secret-id'], 240) || undefined,
+    };
+    if (apiUrl) {
+        payload.custom_url = apiUrl;
+        payload.vertexai_region = apiUrl;
+        payload.zai_endpoint = apiUrl;
+        payload.siliconflow_endpoint = apiUrl;
+        payload.minimax_endpoint = apiUrl;
+        payload.workers_ai_account_id = apiUrl;
+    }
+    if (apiMap.source === 'custom') {
+        payload.custom_include_headers = normalizeText(context.chatCompletionSettings?.custom_include_headers, 8000) || undefined;
+    }
+    return { apiMap, payload };
+}
+
+async function fetchModelsForConnection(profileId, { force = false } = {}) {
+    const id = normalizeText(profileId, 160);
+    if (!id) return [];
+    if (!force && connectionModelCache.has(id)) return connectionModelCache.get(id);
+    const context = getContext();
+    const profile = rawConnectionProfile(id, context);
+    if (!profile) throw new Error('找不到当前选择的 Connection Manager 配置。');
+    const fallback = savedModelsForProfile(id, context);
+    const { payload } = connectionStatusPayload(profile, context);
+    let models = [...fallback];
+    if (payload && typeof context.getRequestHeaders === 'function') {
+        try {
+            const response = await fetch('/api/backends/chat-completions/status', {
+                method: 'POST',
+                headers: context.getRequestHeaders(),
+                cache: 'no-cache',
+                body: JSON.stringify(payload),
+            });
+            if (!response.ok) throw new Error(response.statusText || `HTTP ${response.status}`);
+            const data = await response.json();
+            const remote = Array.isArray(data?.data)
+                ? data.data.map(item => normalizeText(item?.id || item?.name, 240)).filter(Boolean)
+                : [];
+            models = [...new Set([...fallback, ...remote])];
+        } catch (error) {
+            console.warn('[HeartbeatMemories] remote model list failed; using saved profile models', error);
+        }
+    }
+    connectionModelCache.set(id, models);
+    return models;
 }
 
 function connectionManagerSettings(context = getContext()) {
@@ -151,8 +240,10 @@ async function importCurrentSillyTavernConnection() {
     if (selectedId) {
         const selected = manager.profiles.find(item => String(item?.id) === selectedId);
         if (selected && supportedConnectionProfiles(context).some(item => item.id === selectedId)) {
-            updatePluginSettings({ connectionProfileId: selectedId });
+            updatePluginSettings({ connectionProfileId: selectedId, modelOverride: '' });
+            connectionModelCache.delete(selectedId);
             refreshGenerationSettingsUi();
+            void refreshModelOptions({ fetchRemote: true });
             globalThis.toastr?.success?.('已引用酒馆当前选中的 Connection Manager 配置。', '心跳回忆');
             return selectedId;
         }
@@ -187,8 +278,10 @@ async function importCurrentSillyTavernConnection() {
     const fingerprint = profileFingerprint(profile);
     const existing = manager.profiles.find(item => profileFingerprint(item) === fingerprint);
     if (existing?.id) {
-        updatePluginSettings({ connectionProfileId: normalizeText(existing.id, 160) });
+        updatePluginSettings({ connectionProfileId: normalizeText(existing.id, 160), modelOverride: '' });
+        connectionModelCache.delete(normalizeText(existing.id, 160));
         refreshGenerationSettingsUi();
+        void refreshModelOptions({ fetchRemote: true });
         globalThis.toastr?.success?.('已找到相同的已保存连接，心跳回忆已直接引用。', '心跳回忆');
         return existing.id;
     }
@@ -203,8 +296,10 @@ async function importCurrentSillyTavernConnection() {
     } catch (error) {
         console.warn('[HeartbeatMemories] connection profile created event failed', error);
     }
-    updatePluginSettings({ connectionProfileId: normalizeText(profile.id, 160) });
+    updatePluginSettings({ connectionProfileId: normalizeText(profile.id, 160), modelOverride: '' });
+    connectionModelCache.delete(normalizeText(profile.id, 160));
     refreshGenerationSettingsUi();
+    void refreshModelOptions({ fetchRemote: true });
     globalThis.toastr?.success?.('已从酒馆当前连接创建“心跳回忆”专用配置；API Key 仍由 SillyTavern Secrets 保管。', '心跳回忆');
     return profile.id;
 }
@@ -765,6 +860,45 @@ JSON 结构必须严格为：
 - 不得出现前任/前女友痕迹，也不得暗示 {{char}} 与 {{user}} 以外的人存在恋爱、婚姻或家庭关系。`,
 };
 
+function modeTaskTail(mode, context, memoryBank) {
+    const full = PROMPTS[mode]?.(context, memoryBank) || '';
+    const marker = '\n任务：';
+    const index = full.indexOf(marker);
+    return index >= 0 ? full.slice(index + 1) : full;
+}
+
+function baseBundlePrompt(context, memoryBank) {
+    const butterfly = modeTaskTail(MODE.BUTTERFLY, context, memoryBank);
+    const album = modeTaskTail(MODE.ALBUM, context, memoryBank);
+    const room = modeTaskTail(MODE.ROOM, context, memoryBank);
+    return `${commonNarrativeRules(context, memoryBank)}
+现在只用【一次响应】生成“心跳回忆基础包”。这个基础包会同时供：蝴蝶效应、回忆相簿、CG/ADV 事件索引、他的房间四个入口使用。
+
+【一致性要求】
+1. 回忆相簿里的已解锁 CG 同时就是 CG/ADV 的事件来源；插件会直接从相簿条目派生 ADV 事件索引，所以不要另造第二套矛盾的 CG。
+2. 三个部分都必须引用同一份手动聊天档案；已经发生过的事实继续遵守 sourceMemoryIds + sourceMemoryAnchor 校验。
+3. 为控制 Token，文字要有内容但不要过度铺陈：蝴蝶节点独白约 100～220 汉字；相簿 desc 1～2 句、comments 每句尽量 20～80 汉字；房间 atmosphere/description 控制在 1～3 句。
+4. 最终只输出一个 JSON 对象，不能分别输出三段 JSON，不能 Markdown。
+
+最终顶层结构必须为：
+{
+  "butterfly": { ...按下方蝴蝶效应结构... },
+  "album": { ...按下方回忆相簿结构... },
+  "room": { ...按下方他的房间结构... }
+}
+
+【butterfly 子对象要求】
+${butterfly}
+
+【album 子对象要求】
+${album}
+
+【room 子对象要求】
+${room}
+
+再次强调：上面三段里的“JSON 结构”都只是顶层对象中对应字段的子对象结构。最终只能返回一个包含 butterfly / album / room 的 JSON。`;
+}
+
 function advPrompt(context, event, memoryBank) {
     const sourceIds = normalizeSourceMemoryIds(event?.sourceMemoryIds, memoryBank, 1);
     const eventData = JSON.stringify({
@@ -902,6 +1036,30 @@ ${hintLines.join('；')}`, memoryBank, 1);
     };
 }
 
+function deriveAdvFromAlbum(albumSession) {
+    const unlocked = Array.isArray(albumSession?.entries) ? albumSession.entries.filter(item => item.unlocked) : [];
+    const source = unlocked.slice(0, 24);
+    if (source.length < 12) throw new Error(`可用于 CG/ADV 的已解锁相簿事件不足：${source.length} 条。`);
+    const events = source.map((item, index) => ({
+        id: safeId(`EV_${item.id}`, `EV${String(index + 1).padStart(2, '0')}`),
+        title: normalizeText(item.title, 80) || `事件 ${index + 1}`,
+        date: normalizeText(item.date, 40) || '日期未记录',
+        cgDesc: normalizeText(item.desc, 1200),
+        sourceMemoryIds: [...(item.sourceMemoryIds || [])],
+        sourceMemoryAnchor: normalizeText(item.sourceMemoryAnchor, 120),
+        visualSeed: cleanArray(item.visualSeed, 12, 80),
+        adv: null,
+    }));
+    return {
+        kind: MODE.ADV,
+        title: '回想：CG事件与ADV长篇回放',
+        events,
+        selectedId: events[0]?.id || '',
+        view: 'cg',
+        paragraphIndex: 0,
+    };
+}
+
 function normalizeEventList(data, memoryBank) {
     const raw = Array.isArray(data?.events) ? data.events : [];
     const events = raw.slice(0, 24).map((item, index) => {
@@ -1026,6 +1184,32 @@ function normalizeByMode(mode, data, memoryBank) {
     if (mode === MODE.ADV) return normalizeEventList(data, memoryBank);
     if (mode === MODE.ROOM) return normalizeRoom(data, memoryBank);
     throw new Error('未知心跳回忆模式。');
+}
+
+function normalizeBaseBundle(data, memoryBank) {
+    const sessions = {};
+    const errors = {};
+    try {
+        sessions[MODE.BUTTERFLY] = normalizeButterfly(data?.butterfly, memoryBank);
+    } catch (error) {
+        errors[MODE.BUTTERFLY] = error?.message || String(error);
+    }
+    try {
+        sessions[MODE.ALBUM] = normalizeAlbum(data?.album, memoryBank);
+        sessions[MODE.ADV] = deriveAdvFromAlbum(sessions[MODE.ALBUM]);
+    } catch (error) {
+        errors[MODE.ALBUM] = error?.message || String(error);
+        errors[MODE.ADV] = `CG/ADV 事件索引由回忆相簿派生失败：${error?.message || error}`;
+    }
+    try {
+        sessions[MODE.ROOM] = normalizeRoom(data?.room, memoryBank);
+    } catch (error) {
+        errors[MODE.ROOM] = error?.message || String(error);
+    }
+    if (!Object.keys(sessions).length) {
+        throw new Error(`基础包没有任何部分通过校验：${Object.values(errors).join('；')}`);
+    }
+    return { sessions, errors };
 }
 
 function getCache(context) {
@@ -1176,12 +1360,17 @@ ${expanded}`;
     if (!service?.sendRequest) {
         throw new Error('当前 SillyTavern 未提供 Connection Manager Request Service，请启用官方 Connection Manager。');
     }
+    const overridePayload = {
+        temperature: Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : settings.temperature,
+    };
+    const modelOverride = normalizeText(options.model || settings.modelOverride, 240);
+    if (modelOverride) overridePayload.model = modelOverride;
     const result = await service.sendRequest(
         settings.connectionProfileId,
         controlledPrompt,
         responseLength,
         { stream: false, extractData: true, includePreset: true, includeInstruct: true, signal: options.signal || null },
-        { temperature: Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : settings.temperature },
+        overridePayload,
     );
     return extractJson(result?.content ?? result);
 }
@@ -1190,6 +1379,8 @@ async function requestJson(prompt, statusText = '正在根据当前聊天档案�
     if (busy) throw new Error('当前已有一个“心跳回忆”任务在进行。');
     const controller = new AbortController();
     activeTaskAbortController = controller;
+    activeTaskLabel = statusText;
+    activeTaskBackgrounded = false;
     busy = true;
     setBusyUi(true, statusText);
     try {
@@ -1197,6 +1388,7 @@ async function requestJson(prompt, statusText = '正在根据当前聊天档案�
     } finally {
         if (activeTaskAbortController === controller) activeTaskAbortController = null;
         busy = false;
+        activeTaskLabel = '';
         setBusyUi(false);
     }
 }
@@ -1215,9 +1407,11 @@ async function importCurrentChatMemory() {
 
     const importController = new AbortController();
     activeTaskAbortController = importController;
+    activeTaskLabel = `正在${actionLabel}当前聊天档案…`;
+    activeTaskBackgrounded = false;
     busy = true;
     openOverlay();
-    setBusyUi(true, `正在${actionLabel}当前聊天档案…`);
+    setBusyUi(true, activeTaskLabel);
     showLoading(`正在${actionLabel}当前聊天档案 · 0 / ${chunks.length}`);
     try {
         const contextEnvelope = await buildControlledContextEnvelope(context);
@@ -1276,10 +1470,16 @@ async function importCurrentChatMemory() {
             memories,
         };
         saveImportedMemory(context, memoryBank, snapshot.chatId);
+        const wasBackgrounded = activeTaskBackgrounded || document.getElementById(OVERLAY_ID)?.hidden;
+        activeTaskBackgrounded = false;
         activeMode = null;
         activeSession = null;
-        showChooser();
-        globalThis.toastr?.success?.(toastText(`${actionLabel}完成：${memoryBank.archiveName} · ${memories.length} 条记忆`), '心跳回忆');
+        refreshSettingsMemoryStatus();
+        if (!wasBackgrounded) showChooser();
+        globalThis.toastr?.success?.(
+            toastText(`${actionLabel}完成：${memoryBank.archiveName} · ${memories.length} 条记忆${wasBackgrounded ? '（后台）' : ''}`),
+            '心跳回忆',
+        );
     } catch (error) {
         activeMode = null;
         activeSession = null;
@@ -1290,13 +1490,87 @@ async function importCurrentChatMemory() {
             globalThis.toastr?.warning?.('档案整理期间聊天窗口已经切换，本次任务已中止，未写入任何聊天。', '心跳回忆');
         } else {
             console.error('[HeartbeatMemories] archive import failed', error);
-            showMemoryImportError(error?.message || String(error));
+            const wasBackgrounded = activeTaskBackgrounded || document.getElementById(OVERLAY_ID)?.hidden;
+            activeTaskBackgrounded = false;
+            if (!wasBackgrounded) showMemoryImportError(error?.message || String(error));
             globalThis.toastr?.error?.(toastText(error?.message || String(error)), '心跳回忆');
         }
     } finally {
         if (activeTaskAbortController === importController) activeTaskAbortController = null;
         busy = false;
+        activeTaskLabel = '';
         setBusyUi(false);
+    }
+}
+
+async function generateBaseBundle(focusMode) {
+    const context = currentCharacterGuard();
+    const expectedChatId = getChatId(context);
+    const memoryBank = requireArchive(context);
+    const expectedArchiveRevision = memoryBank.archiveRevision;
+    openOverlay();
+    showLoading('正在一次生成整套「心跳回忆基础包」');
+    try {
+        const raw = await requestJson(
+            baseBundlePrompt(context, memoryBank),
+            '正在一次生成蝴蝶效应 / 回忆相簿 / CG·ADV 索引 / 他的房间…',
+            { maxTokens: 16384 },
+        );
+        const wasBackgrounded = activeTaskBackgrounded;
+        activeTaskBackgrounded = false;
+        const latestContext = currentCharacterGuard();
+        const latestMemory = requireArchive(latestContext);
+        if (getChatId(latestContext) !== expectedChatId || latestMemory.archiveRevision !== expectedArchiveRevision) {
+            console.warn('[HeartbeatMemories] discarded stale base bundle response after chat/archive change', { expectedChatId });
+            globalThis.toastr?.warning?.('基础包生成期间聊天窗口或档案已经变化，本次结果已安全丢弃。', '心跳回忆');
+            return;
+        }
+        const bundle = normalizeBaseBundle(raw, memoryBank);
+        for (const [mode, session] of Object.entries(bundle.sessions)) {
+            session.chatId = expectedChatId;
+            session.archiveRevision = expectedArchiveRevision;
+            if (!saveSession(mode, session, expectedChatId)) {
+                throw new Error(`保存「${MODE_LABEL[mode] || mode}」缓存时检测到聊天已经变化。`);
+            }
+        }
+        const readyModes = Object.keys(bundle.sessions);
+        const missingModes = Object.entries(bundle.errors).map(([mode, message]) => `${MODE_LABEL[mode] || mode}：${message}`);
+        if (wasBackgrounded || document.getElementById(OVERLAY_ID)?.hidden) {
+            activeMode = null;
+            activeSession = null;
+            refreshSettingsMemoryStatus();
+            globalThis.toastr?.success?.(`基础包后台生成完成：${readyModes.length} 个入口已缓存。`, '心跳回忆');
+            if (missingModes.length) globalThis.toastr?.warning?.(`部分入口未通过校验：${missingModes.join('；')}`, '心跳回忆');
+            return;
+        }
+        const selected = bundle.sessions[focusMode] ? focusMode : readyModes[0];
+        activeMode = selected;
+        activeSession = bundle.sessions[selected];
+        renderActive();
+        globalThis.toastr?.success?.('整套基础包已用一次 API 请求生成并缓存。', '心跳回忆');
+        if (missingModes.length) globalThis.toastr?.warning?.(`部分入口未通过校验，可单独重新生成：${missingModes.join('；')}`, '心跳回忆');
+    } catch (error) {
+        const wasBackgrounded = activeTaskBackgrounded;
+        activeTaskBackgrounded = false;
+        if (error?.name === 'AbortError') {
+            console.warn('[HeartbeatMemories] base bundle generation aborted after chat/extension change');
+            activeMode = null;
+            activeSession = null;
+            if (!wasBackgrounded) {
+                const overlay = document.getElementById(OVERLAY_ID);
+                if (overlay && !overlay.hidden) showChooser();
+            }
+            return;
+        }
+        console.error('[HeartbeatMemories] base bundle generation failed', error);
+        activeMode = null;
+        activeSession = null;
+        if (wasBackgrounded || document.getElementById(OVERLAY_ID)?.hidden) {
+            globalThis.toastr?.error?.(toastText(error?.message || String(error)), '心跳回忆 · 基础包生成失败');
+            return;
+        }
+        showError(error?.message || String(error), focusMode);
+        globalThis.toastr?.error?.(toastText(error?.message || String(error)), '心跳回忆');
     }
 }
 
@@ -1311,6 +1585,8 @@ async function generateMode(mode) {
     showLoading(`正在生成「${MODE_LABEL[mode]}」`);
     try {
         const raw = await requestJson(promptFactory(context, memoryBank), `正在根据当前聊天档案生成「${MODE_LABEL[mode]}」…`, { maxTokens: MODE_TOKEN_CAPS[mode] || 6144 });
+        const wasBackgrounded = activeTaskBackgrounded;
+        activeTaskBackgrounded = false;
         const latestContext = currentCharacterGuard();
         const latestMemory = requireArchive(latestContext);
         if (getChatId(latestContext) !== expectedChatId || latestMemory.archiveRevision !== expectedArchiveRevision) {
@@ -1321,13 +1597,22 @@ async function generateMode(mode) {
         const session = normalizeByMode(mode, raw, memoryBank);
         session.chatId = expectedChatId;
         session.archiveRevision = expectedArchiveRevision;
+        if (!saveSession(mode, session, expectedChatId)) throw new Error('当前聊天已变化，生成结果没有写入缓存。');
+        if (wasBackgrounded || document.getElementById(OVERLAY_ID)?.hidden) {
+            activeMode = null;
+            activeSession = null;
+            refreshSettingsMemoryStatus();
+            globalThis.toastr?.success?.(`后台生成完成：${MODE_LABEL[mode]}`, '心跳回忆');
+            return;
+        }
         activeMode = mode;
         activeSession = session;
-        if (!saveSession(mode, session, expectedChatId)) throw new Error('当前聊天已变化，生成结果没有写入缓存。');
         renderActive();
         if (mode === MODE.ROOM) void ensureRoomLifePlan({ force: true });
         globalThis.toastr?.success?.(`已生成：${MODE_LABEL[mode]}`, '心跳回忆');
     } catch (error) {
+        const wasBackgrounded = activeTaskBackgrounded;
+        activeTaskBackgrounded = false;
         if (error?.name === 'AbortError') {
             console.warn('[HeartbeatMemories] generation aborted after chat/extension change');
             activeMode = null;
@@ -1337,6 +1622,10 @@ async function generateMode(mode) {
             return;
         }
         console.error('[HeartbeatMemories] generation failed', error);
+        if (wasBackgrounded || document.getElementById(OVERLAY_ID)?.hidden) {
+            globalThis.toastr?.error?.(toastText(error?.message || String(error)), `心跳回忆 · ${MODE_LABEL[mode]}生成失败`);
+            return;
+        }
         showError(error?.message || String(error), mode);
         globalThis.toastr?.error?.(toastText(error?.message || String(error)), '心跳回忆');
     }
@@ -1366,11 +1655,13 @@ async function generateAdvForSelected() {
     setInnerLoading(true, `正在为「${event.title}」生成长篇 ADV…`);
     try {
         const raw = await requestJson(advPrompt(context, event, memoryBank), `正在根据当前聊天档案生成「${event.title}」ADV…`, { maxTokens: 8192 });
+        const wasBackgrounded = activeTaskBackgrounded || document.getElementById(OVERLAY_ID)?.hidden;
+        activeTaskBackgrounded = false;
         const latestContext = currentCharacterGuard();
         const latestMemory = requireArchive(latestContext);
-        if (getChatId(latestContext) !== expectedChatId || latestMemory.archiveRevision !== expectedArchiveRevision || activeSession !== session) {
-            console.warn('[HeartbeatMemories] discarded stale ADV response after chat/session change');
-            globalThis.toastr?.warning?.('ADV 生成期间聊天窗口或会话已经变化，本次结果已安全丢弃。', '心跳回忆');
+        if (getChatId(latestContext) !== expectedChatId || latestMemory.archiveRevision !== expectedArchiveRevision) {
+            console.warn('[HeartbeatMemories] discarded stale ADV response after chat/archive change');
+            globalThis.toastr?.warning?.('ADV 生成期间聊天窗口或档案已经变化，本次结果已安全丢弃。', '心跳回忆');
             return;
         }
         const liveEvent = session.events.find(item => item.id === eventId);
@@ -1378,8 +1669,14 @@ async function generateAdvForSelected() {
         liveEvent.adv = normalizeAdv(raw);
         session.view = 'adv';
         session.paragraphIndex = 0;
-        saveSession(MODE.ADV, session, expectedChatId);
+        if (!saveSession(MODE.ADV, session, expectedChatId)) return;
+        if (wasBackgrounded || activeSession !== session) {
+            refreshSettingsMemoryStatus();
+            globalThis.toastr?.success?.(`ADV 后台生成完成：${event.title}`, '心跳回忆');
+            return;
+        }
         renderAdvMode();
+        globalThis.toastr?.success?.(`ADV 已生成：${event.title}`, '心跳回忆');
     } catch (error) {
         if (error?.name === 'AbortError') {
             console.warn('[HeartbeatMemories] ADV generation aborted after chat/extension change');
@@ -1810,7 +2107,34 @@ function ensureStyles() {
 .rmt-room-source{margin-top:9px;font-size:10px;color:#98a2ad}.rmt-room-atmosphere{white-space:pre-wrap;line-height:1.72;color:#6c7b8c;font-size:12px}
 .rmt-room-note{font-size:10px;color:#9aa5af;line-height:1.55;margin-top:7px}
 
-#${SETTINGS_ID}{margin-top:8px}.rmt-settings-buttons{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}.rmt-api-box{margin-top:9px;padding:9px 10px;border:1px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:9px;display:grid;gap:7px}.rmt-api-box .text_pole{width:100%;box-sizing:border-box}.rmt-api-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.rmt-api-note{font-size:10px;line-height:1.45;opacity:.68}
+#${SETTINGS_ID}{margin-top:10px;--rmt-s-ink:#53647a;--rmt-s-muted:#7c8998;--rmt-s-blue:#8ebfd5;--rmt-s-pink:#e99ab9;--rmt-s-line:#cddfe8}
+#${SETTINGS_ID} .rmt-settings-header{min-height:42px;border-radius:12px 12px 0 0;background:linear-gradient(90deg,rgba(233,154,185,.12),rgba(142,191,213,.10));border:1px solid var(--rmt-s-line);padding:8px 11px;color:var(--rmt-s-ink)}
+#${SETTINGS_ID} .rmt-settings-header small{font-size:8px;letter-spacing:.14em;color:#98a7b4;margin-left:6px}
+#${SETTINGS_ID} .rmt-settings-content{padding:11px!important;border:1px solid var(--rmt-s-line);border-top:0;border-radius:0 0 14px 14px;background:linear-gradient(180deg,rgba(248,252,254,.72),rgba(255,252,249,.70));display:grid;gap:10px}
+#${SETTINGS_ID} .rmt-settings-hero{padding:12px 13px;border-radius:13px;background:linear-gradient(135deg,#fff7fa,#f5fbfe 58%,#fffdf5);border:1px solid #d8e5eb;color:var(--rmt-s-ink);box-shadow:0 5px 14px rgba(70,95,112,.06)}
+#${SETTINGS_ID} .rmt-settings-hero span{display:block;font-size:8px;font-weight:850;letter-spacing:.16em;color:#a98293;margin-bottom:5px}
+#${SETTINGS_ID} .rmt-settings-hero b{display:block;font-size:13px;line-height:1.5;margin-bottom:5px}
+#${SETTINGS_ID} .rmt-settings-hero p{margin:0;font-size:10px;line-height:1.6;color:var(--rmt-s-muted)}
+#${SETTINGS_ID} .rmt-settings-card{padding:11px;border:1px solid var(--rmt-s-line);border-radius:13px;background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(249,252,253,.94));display:grid;gap:8px;box-shadow:0 4px 12px rgba(70,95,112,.05)}
+#${SETTINGS_ID} .rmt-settings-card-head{display:flex;gap:8px;align-items:center;color:var(--rmt-s-ink)}
+#${SETTINGS_ID} .rmt-settings-card-head>span{width:26px;height:26px;display:grid;place-items:center;border-radius:50%;font-size:9px;font-weight:900;background:linear-gradient(145deg,#f8c7da,#cde7f2);color:#667789;box-shadow:inset 0 0 0 2px rgba(255,255,255,.75)}
+#${SETTINGS_ID} .rmt-settings-card-head b{display:block;font-size:12px}.rmt-settings-card-head small{display:block;font-size:9px;color:#98a4af;margin-top:2px;line-height:1.35}
+#${SETTINGS_ID} .menu_button{writing-mode:horizontal-tb!important;text-orientation:mixed!important;width:auto!important;min-width:0!important;max-width:none!important;height:auto!important;min-height:34px!important;max-height:none!important;white-space:normal!important;line-height:1.25!important;padding:8px 11px!important;border-radius:10px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;text-align:center!important;overflow:visible!important;word-break:keep-all!important;flex:none}
+#${SETTINGS_ID} .rmt-settings-wide{width:100%!important}
+#${SETTINGS_ID} .rmt-settings-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:1px}
+#${SETTINGS_ID} .rmt-settings-buttons .menu_button{width:100%!important;min-height:42px!important;background:linear-gradient(180deg,#fff,#f5fafc)!important;border-color:#c9dce6!important;color:#586a7d!important}
+#${SETTINGS_ID} .rmt-api-box{margin-top:0}.rmt-api-box .text_pole{width:100%!important;max-width:none!important;box-sizing:border-box!important;min-height:34px;writing-mode:horizontal-tb!important}
+#${SETTINGS_ID} .rmt-settings-field{display:grid;gap:4px;min-width:0;font-size:10px;color:#7b8997}
+#${SETTINGS_ID} .rmt-settings-field>span{font-weight:750;color:#6c7c8e}
+#${SETTINGS_ID} .rmt-api-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#${SETTINGS_ID} .rmt-model-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:end}
+#${SETTINGS_ID} .rmt-model-refresh{min-width:84px!important;white-space:nowrap!important}
+#${SETTINGS_ID} .rmt-settings-check{font-size:10px!important;line-height:1.45;color:#6f7d8c}
+#${SETTINGS_ID} .rmt-api-note{font-size:9px;line-height:1.55;opacity:.72;color:#758493}
+#${SETTINGS_ID} .rmt-memory-settings-status{font-size:10px;line-height:1.55;color:#718092;white-space:pre-wrap;padding:7px 8px;border-radius:9px;background:#f6fafc}
+.rmt-loading-card{max-width:560px;padding:24px 26px;border:1px solid #d3e3ea;border-radius:18px;background:rgba(255,255,255,.82);box-shadow:0 10px 30px rgba(67,91,108,.08)}
+.rmt-task-banner{margin:0 0 12px;padding:10px 13px;border:1px solid #cfe3eb;border-radius:13px;background:linear-gradient(90deg,rgba(250,219,232,.72),rgba(218,239,247,.72));display:flex;align-items:center;gap:10px;color:#536679}.rmt-task-banner b{display:block;font-size:12px}.rmt-task-banner small{display:block;margin-top:2px;font-size:10px;line-height:1.45;color:#758795}.rmt-task-dot{width:9px;height:9px;border-radius:50%;background:#ed9fbe;box-shadow:0 0 0 4px rgba(237,159,190,.16);animation:rmtPulse 1.5s ease-in-out infinite}
+.rmt-loading-note{opacity:.66;margin-top:8px;font-size:11px;line-height:1.55}.rmt-loading-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:15px}
 #${MENU_ID}{cursor:pointer}
 
 @media(max-width:760px){
@@ -1828,6 +2152,7 @@ function ensureStyles() {
   .rmt-event-detail{padding:11px}.rmt-memory-scene{min-height:calc(100vh - 55px)}
   .rmt-big-cg{border-width:6px}
   .rmt-room-view{padding:10px}.rmt-room-heading{align-items:flex-start}.rmt-room-map{margin:0 -2px;padding-bottom:10px}.rmt-room-space{min-width:96px;padding:8px 9px}.rmt-room-layout{grid-template-columns:1fr}.rmt-room-scene{min-height:430px}.rmt-room-side{grid-template-columns:1fr}.rmt-room-activity{left:29%;max-width:62%}.rmt-room-person{left:44%;transform:scale(.9);transform-origin:bottom center}.rmt-room-location{font-size:10px}
+  #${SETTINGS_ID} .rmt-settings-buttons{grid-template-columns:1fr 1fr}#${SETTINGS_ID} .rmt-api-grid{grid-template-columns:1fr 1fr}#${SETTINGS_ID} .rmt-model-row{grid-template-columns:1fr}#${SETTINGS_ID} .rmt-model-refresh{width:100%!important}
 }
 `;
     document.head.appendChild(style);
@@ -2103,26 +2428,27 @@ async function ensureRoomLifePlan({ force = false, quiet = false } = {}) {
             const plan = normalizeRoomLifePlan(raw, roomSession, memoryBank, today);
             const latestContext = currentCharacterGuard();
             const latestMemory = requireArchive(latestContext);
-            if (getChatId(latestContext) !== chatId || latestMemory.archiveRevision !== archiveRevision || activeSession !== roomSession) {
-                console.warn('[HeartbeatMemories] discarded stale room life response after chat/session change');
+            if (getChatId(latestContext) !== chatId || latestMemory.archiveRevision !== archiveRevision) {
+                console.warn('[HeartbeatMemories] discarded stale room life response after chat/archive change');
                 return null;
             }
             roomSession.lifePlan = plan;
             roomSession.lifePlanAttempt = { dateKey, count: 0, failedAt: 0 };
             saveSession(MODE.ROOM, roomSession, chatId);
-            if (activeMode === MODE.ROOM) renderRoom();
+            if (activeMode === MODE.ROOM && activeSession === roomSession && !document.getElementById(OVERLAY_ID)?.hidden) renderRoom();
+            else globalThis.toastr?.success?.(`今日生活后台生成完成：${dateKey}`, '心跳回忆');
             return roomSession.lifePlan;
         } catch (error) {
             console.warn('[HeartbeatMemories] room life plan failed, using one-day fallback without automatic retry', error);
             try {
                 const latestContext = currentCharacterGuard();
                 const latestMemory = requireArchive(latestContext);
-                if (getChatId(latestContext) === chatId && latestMemory.archiveRevision === archiveRevision && activeSession === roomSession) {
+                if (getChatId(latestContext) === chatId && latestMemory.archiveRevision === archiveRevision) {
                     const previousCount = roomSession.lifePlanAttempt?.dateKey === dateKey ? Number(roomSession.lifePlanAttempt.count) || 0 : 0;
                     roomSession.lifePlanAttempt = { dateKey, count: previousCount + 1, failedAt: Date.now() };
                     roomSession.lifePlan = fallbackRoomLifePlan(roomSession, today);
                     saveSession(MODE.ROOM, roomSession, chatId);
-                    if (activeMode === MODE.ROOM) renderRoom();
+                    if (activeMode === MODE.ROOM && activeSession === roomSession && !document.getElementById(OVERLAY_ID)?.hidden) renderRoom();
                 }
             } catch (guardError) {
                 console.warn('[HeartbeatMemories] skipped fallback save after chat/session change', guardError);
@@ -2432,9 +2758,11 @@ function showChooser() {
     const archiveSummary = ready ? (memory.archiveSummary || fallbackArchiveSummary(memory.memories)) : '先手动整理这个聊天窗口的共同经历。创建后，后续聊天不会自动写进档案；什么时候更新由你决定。';
     const keywords = ready ? cleanArray(memory.archiveKeywords, 10, 80) : [];
     const pendingClass = ready && (state.pendingMessages > 0 || state.sourceChanged) ? 'pending' : 'ready';
-    topTitle(ready ? `心跳回忆 · ${archiveName}` : '心跳回忆');
+    topTitle(busy ? '心跳回忆 · 后台生成中' : (ready ? `心跳回忆 · ${archiveName}` : '心跳回忆'));
+    const busyBanner = busy ? `<div class="rmt-task-banner"><span class="rmt-task-dot"></span><div><b>后台任务进行中</b><small>${esc(activeTaskLabel || '正在生成心跳回忆内容…')} · 你可以关闭这个窗口继续聊天，完成后会通知。</small></div></div>` : '';
 
     body.innerHTML = `
+      ${busyBanner}
       <section class="rmt-memory-gate rmt-archive-card">
         <div class="rmt-memory-gate-text">
           <div class="rmt-archive-kicker">当前聊天窗口 · 回忆档案</div>
@@ -2477,7 +2805,7 @@ function showLoading(text) {
     setRegenerateVisible(false);
     const body = bodyEl();
     if (!body) return;
-    body.innerHTML = `<div class="rmt-loading"><div><div class="rmt-spinner"></div><b>${esc(text)}</b><div style="opacity:.62;margin-top:8px">${esc(generationSourceLabel())}；不会发送成主线消息。</div></div></div>`;
+    body.innerHTML = `<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>${esc(text)}</b><div class="rmt-loading-note">${esc(generationSourceLabel())}；不会发送成主线消息。</div><div class="rmt-loading-note">现在可以返回功能页或直接关闭窗口，生成会继续在后台进行，完成后会通知你。</div><div class="rmt-loading-actions"><button type="button" class="rmt-btn" data-rmt-action="home">返回功能页 · 后台继续</button><button type="button" class="rmt-btn" data-rmt-action="close">关闭 · 后台继续</button></div></div></div>`;
 }
 
 function showError(message, mode) {
@@ -2503,7 +2831,10 @@ function setBusyUi(isBusy, text = '') {
         try { memoryReady = getMemoryState(currentCharacterGuard()).status === 'ready'; } catch { memoryReady = false; }
     }
     document.querySelectorAll(`[data-rmt-mode],#${OVERLAY_ID} button`).forEach(el => {
-        if (el.matches?.('[data-rmt-action="close"]')) return;
+        if (el.matches?.('[data-rmt-action="close"],[data-rmt-action="home"]')) {
+            el.disabled = false;
+            return;
+        }
         if (isBusy) {
             el.disabled = true;
         } else if (el.matches?.('[data-rmt-mode]')) {
@@ -2516,7 +2847,7 @@ function setBusyUi(isBusy, text = '') {
         const title = document.querySelector(`#${OVERLAY_ID} .rmt-topbar-title`);
         if (title) title.textContent = text;
     }
-    if (!isBusy) refreshSettingsMemoryStatus();
+    refreshSettingsMemoryStatus();
 }
 
 function setInnerLoading(show, text = '') {
@@ -2560,7 +2891,9 @@ function openCachedOrGenerate(mode) {
         if (mode === MODE.ROOM) void ensureRoomLifePlan();
         return;
     }
-    generateMode(mode);
+    // 0.8.2: a missing base entry always rebuilds the coherent base bundle in one request.
+    // This also upgrades old/partial caches without falling back to four unrelated first-run requests.
+    generateBaseBundle(mode);
 }
 
 function renderActive() {
@@ -2824,8 +3157,22 @@ function handleOverlayClick(event) {
     const actionEl = event.target.closest?.('[data-rmt-action]');
     const action = actionEl?.dataset?.rmtAction;
     if (!action) return;
-    if (action === 'close') return closeOverlay();
-    if (action === 'home') return showChooser();
+    if (action === 'close') {
+        if (busy) {
+            activeTaskBackgrounded = true;
+            globalThis.toastr?.info?.('生成已转入后台，完成后会通知你。', '心跳回忆');
+        }
+        return closeOverlay();
+    }
+    if (action === 'home') {
+        if (busy) {
+            activeTaskBackgrounded = true;
+            showChooser();
+            setBusyUi(true, activeTaskLabel || '心跳回忆正在后台生成…');
+            return;
+        }
+        return showChooser();
+    }
     if (action === 'import-memory') return importCurrentChatMemory();
     if (action === 'regenerate') return activeMode && generateMode(activeMode);
     if (action === 'album-prev') return albumPage(-1);
@@ -2877,6 +3224,58 @@ function handleOverlayClick(event) {
 }
 
 
+async function refreshModelOptions({ fetchRemote = false } = {}) {
+    const panel = document.getElementById(SETTINGS_ID);
+    if (!panel) return;
+    const select = panel.querySelector('[data-rmt-api-model]');
+    const refreshButton = panel.querySelector('[data-rmt-api-model-refresh]');
+    if (!select) return;
+    const settings = getPluginSettings();
+    const profileId = normalizeText(settings.connectionProfileId, 160);
+    select.replaceChildren();
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    if (!profileId) {
+        defaultOption.textContent = '请先选择专用连接';
+        select.appendChild(defaultOption);
+        select.disabled = true;
+        if (refreshButton) refreshButton.disabled = true;
+        return;
+    }
+    let profile;
+    try { profile = rawConnectionProfile(profileId); } catch { profile = null; }
+    const profileModel = normalizeText(profile?.model, 240);
+    defaultOption.textContent = profileModel ? `使用配置默认模型 · ${profileModel}` : '使用配置默认模型';
+    select.appendChild(defaultOption);
+    select.disabled = false;
+    if (refreshButton) {
+        refreshButton.disabled = false;
+        refreshButton.textContent = fetchRemote ? '正在拉取…' : '刷新模型';
+    }
+    let models = [];
+    try {
+        models = fetchRemote
+            ? await fetchModelsForConnection(profileId, { force: true })
+            : (connectionModelCache.get(profileId) || savedModelsForProfile(profileId));
+    } catch (error) {
+        console.warn('[HeartbeatMemories] refresh model options failed', error);
+        models = profileModel ? [profileModel] : [];
+    }
+    const currentSettings = getPluginSettings();
+    if (currentSettings.connectionProfileId !== profileId) return;
+    const override = normalizeText(currentSettings.modelOverride, 240);
+    if (override && !models.includes(override)) models.unshift(override);
+    for (const model of [...new Set(models)]) {
+        if (!model) continue;
+        const option = document.createElement('option');
+        option.value = model;
+        option.textContent = model;
+        select.appendChild(option);
+    }
+    select.value = override;
+    if (refreshButton) refreshButton.textContent = '刷新模型';
+}
+
 function refreshGenerationSettingsUi() {
     const panel = document.getElementById(SETTINGS_ID);
     if (!panel) return;
@@ -2911,8 +3310,9 @@ function refreshGenerationSettingsUi() {
     if (status) {
         status.textContent = !settings.connectionProfileId
             ? '尚未选择心跳回忆专用连接。可一键读取酒馆当前已保存的连接；API Key 不会被显示或复制，只引用 SillyTavern 保存的 Secret ID。'
-            : `${generationSourceLabel(settings)}。心跳回忆固定使用这个连接，不会跟着主聊天切换模型；API Key 仍由 SillyTavern Secrets 管理。`;
+            : `${generationSourceLabel(settings)}。心跳回忆固定使用这个连接；模型可在下方单独选择，不会跟着主聊天切换。API Key 仍由 SillyTavern Secrets 管理。`;
     }
+    void refreshModelOptions();
 }
 
 function refreshSettingsMemoryStatus() {
@@ -2930,11 +3330,17 @@ function refreshSettingsMemoryStatus() {
             status.style.whiteSpace = 'pre-wrap';
             status.style.color = ready && (state.pendingMessages > 0 || state.sourceChanged) ? '#ffd27a' : (ready ? '#a7f3c3' : '');
         }
-        if (importButton) importButton.textContent = ready ? '更新档案' : '创建聊天档案';
-        modeButtons.forEach(button => { button.disabled = !ready; });
+        if (importButton) {
+            importButton.textContent = ready ? '更新档案' : '创建聊天档案';
+            importButton.disabled = busy;
+        }
+        modeButtons.forEach(button => { button.disabled = !ready || busy; });
     } catch (error) {
         if (status) status.textContent = error?.message || String(error);
-        if (importButton) importButton.textContent = '创建聊天档案';
+        if (importButton) {
+            importButton.textContent = '创建聊天档案';
+            importButton.disabled = true;
+        }
         modeButtons.forEach(button => { button.disabled = true; });
     }
 }
@@ -2953,40 +3359,60 @@ function mountSettings() {
     panel.id = SETTINGS_ID;
     panel.className = 'inline-drawer';
     panel.innerHTML = `
-      <div class="inline-drawer-toggle inline-drawer-header">
-        <b>心跳回忆</b>
+      <div class="inline-drawer-toggle inline-drawer-header rmt-settings-header">
+        <div><b>心跳回忆</b><small> MEMORY THEATER</small></div>
         <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
       </div>
-      <div class="inline-drawer-content">
-        <div style="opacity:.76;font-size:12px;line-height:1.55">每个聊天窗口都有一份独立“心跳回忆”档案。第一次由你手动创建；之后聊天继续发展也不会自动更新、不会锁住旧档案。只有你主动点“更新档案”，新聊天才会重新整理进这份档案，并按最新记忆重新命名和生成档案总结。角色卡与世界书只负责设定一致性，过去发生过什么以当前档案为准。</div>
-        <div class="rmt-api-box">
-          <b style="font-size:12px">心跳回忆专用 API</b>
-          <button type="button" class="menu_button" data-rmt-api-import-current>从酒馆当前连接一键导入</button>
-          <select class="text_pole" data-rmt-api-profile><option value="">选择 Connection Manager 配置</option></select>
-          <div class="rmt-api-grid">
-            <label style="font-size:11px">最大输出 <input class="text_pole" data-rmt-api-max-tokens type="number" min="1024" max="32000" step="256"></label>
-            <label style="font-size:11px">温度 <input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
+      <div class="inline-drawer-content rmt-settings-content">
+        <div class="rmt-settings-hero">
+          <span>PRIVATE MEMORY ARCHIVE</span>
+          <b>把这一整个聊天窗口，整理成只属于它自己的回忆档案。</b>
+          <p>档案永远只由你手动创建 / 更新；聊天继续发展不会自动写入。角色卡与世界书负责设定一致性，过去真正发生过什么只认当前手动档案。</p>
+        </div>
+        <div class="rmt-settings-card rmt-api-box">
+          <div class="rmt-settings-card-head"><span>01</span><div><b>心跳回忆专用 API</b><small>独立连接 · 不跟随主聊天切换</small></div></div>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-api-import-current>从酒馆当前连接一键导入</button>
+          <label class="rmt-settings-field"><span>连接配置</span><select class="text_pole" data-rmt-api-profile><option value="">选择 Connection Manager 配置</option></select></label>
+          <div class="rmt-model-row">
+            <label class="rmt-settings-field"><span>模型</span><select class="text_pole" data-rmt-api-model><option value="">请先选择专用连接</option></select></label>
+            <button type="button" class="menu_button rmt-model-refresh" data-rmt-api-model-refresh>刷新模型</button>
           </div>
-          <label class="checkbox_label" style="font-size:11px"><input data-rmt-room-life-auto type="checkbox"> 每天首次打开房间时自动生成“今日生活时间线”</label>
+          <div class="rmt-api-grid">
+            <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1024" max="32000" step="256"></label>
+            <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
+          </div>
+          <label class="checkbox_label rmt-settings-check"><input data-rmt-room-life-auto type="checkbox"> 每天首次打开房间时自动生成“今日生活时间线”</label>
           <div class="rmt-api-note" data-rmt-api-status></div>
-          <div class="rmt-api-note">“一键导入”只读取当前连接的 API 类型、地址、模型、Preset 与 Secret ID 引用；不会读取、显示或复制 API Key 明文。之后心跳回忆固定使用所选专用连接。</div>
+          <div class="rmt-api-note">“刷新模型”通过 SillyTavern 自己的后端状态接口读取模型列表，凭据只传 Secret ID；API Key 明文不会进入心跳回忆。</div>
         </div>
-        <div style="margin-top:9px;padding:8px 10px;border:1px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:9px;">
-          <div data-rmt-settings-memory-status style="font-size:11px;line-height:1.5;opacity:.82">正在读取当前聊天状态…</div>
-          <button type="button" class="menu_button" data-rmt-settings-import style="margin-top:7px">创建聊天档案</button>
+        <div class="rmt-settings-card">
+          <div class="rmt-settings-card-head"><span>02</span><div><b>当前聊天档案</b><small>只在你手动更新时变化</small></div></div>
+          <div data-rmt-settings-memory-status class="rmt-memory-settings-status">正在读取当前聊天状态…</div>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-settings-import>创建聊天档案</button>
         </div>
-        <div class="rmt-settings-buttons">
-          <button type="button" class="menu_button" data-rmt-settings-mode="${MODE.BUTTERFLY}">蝴蝶效应终端</button>
-          <button type="button" class="menu_button" data-rmt-settings-mode="${MODE.ALBUM}">回忆相簿</button>
-          <button type="button" class="menu_button" data-rmt-settings-mode="${MODE.ADV}">CG / ADV 回放</button>
-          <button type="button" class="menu_button" data-rmt-settings-mode="${MODE.ROOM}">他的房间</button>
+        <div class="rmt-settings-card">
+          <div class="rmt-settings-card-head"><span>03</span><div><b>回忆剧场</b><small>第一次打开任意入口，会用一次 API 生成整套基础包并缓存四个入口</small></div></div>
+          <div class="rmt-settings-buttons">
+            <button type="button" class="menu_button" data-rmt-settings-mode="${MODE.BUTTERFLY}">蝴蝶效应</button>
+            <button type="button" class="menu_button" data-rmt-settings-mode="${MODE.ALBUM}">回忆相簿</button>
+            <button type="button" class="menu_button" data-rmt-settings-mode="${MODE.ADV}">CG / ADV</button>
+            <button type="button" class="menu_button" data-rmt-settings-mode="${MODE.ROOM}">他的房间</button>
+          </div>
         </div>
       </div>`;
     mount.appendChild(panel);
     panel.addEventListener('change', event => {
         const target = event.target;
         if (target.matches?.('[data-rmt-api-profile]')) {
-            updatePluginSettings({ connectionProfileId: normalizeText(target.value, 160) });
+            const connectionProfileId = normalizeText(target.value, 160);
+            updatePluginSettings({ connectionProfileId, modelOverride: '' });
+            if (connectionProfileId) connectionModelCache.delete(connectionProfileId);
+            refreshGenerationSettingsUi();
+            void refreshModelOptions({ fetchRemote: !!connectionProfileId });
+            return;
+        }
+        if (target.matches?.('[data-rmt-api-model]')) {
+            updatePluginSettings({ modelOverride: normalizeText(target.value, 240) });
             refreshGenerationSettingsUi();
             return;
         }
@@ -3006,6 +3432,15 @@ function mountSettings() {
         }
     });
     panel.addEventListener('click', event => {
+        const modelRefreshButton = event.target.closest?.('[data-rmt-api-model-refresh]');
+        if (modelRefreshButton) {
+            modelRefreshButton.disabled = true;
+            refreshModelOptions({ fetchRemote: true })
+                .then(() => globalThis.toastr?.success?.('模型列表已刷新。', '心跳回忆'))
+                .catch(error => globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆'))
+                .finally(() => { modelRefreshButton.disabled = false; });
+            return;
+        }
         const apiImportButton = event.target.closest?.('[data-rmt-api-import-current]');
         if (apiImportButton) {
             importCurrentSillyTavernConnection().catch(error => {

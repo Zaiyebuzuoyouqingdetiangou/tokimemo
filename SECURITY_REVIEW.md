@@ -1,40 +1,59 @@
-# Codex Security Remediation Review — 心跳回忆 0.8.1
+# Codex Security Targeted Diff Review — 心跳回忆 0.8.2
 
 ## Scope
 
-Targeted remediation review of the 0.8.0 independent audit findings against `src/heartbeatMemories.js`, plus syntax/static checks and a local mock SillyTavern regression harness. This file replaces the obsolete 0.8.0 review that incorrectly stated there were no high/medium/low findings.
+Targeted review of the 0.8.1 → 0.8.2 changes: settings UI overrides, Connection Manager model discovery/model override, background generation, and one-request base bundle generation. The previously remediated 0.8.1 boundaries were regression-tested again.
 
-## Remediated blockers
+## New behavior reviewed
 
-- **H-1**: added `isPlaceholderText`; non-empty `temporaryObjects` no longer throws. Filtering now occurs before the final 3-item cap.
-- **H-2**: failed automatic room-life generation records `lifePlanAttempt`, persists a same-day local fallback (`generatedAt: 0`), and blocks further automatic retries for that date. Manual refresh may retry.
-- **H-3**: sessions and cache now carry `chatId`; `saveSession` refuses stale-chat writes; `loadSession` validates chatId + archiveRevision; mode and ADV generation re-check target chat/archive after await; room life uses the same boundary.
-- **M-1**: removed generic `substituteParams(prompt)` from generated prompts. Only `{{char}}` and `{{user}}` are locally expanded; remaining `{{...}}` tokens are neutralized with full-width braces before sending.
+### Settings UI
 
-## Additional hardening
+The extension now force-overrides SillyTavern `.menu_button` sizing/writing direction only under the Heartbeat settings root. This is a presentation change and does not add an execution sink.
 
-- **M-2**: source-memory claims now require both a valid `sourceMemoryIds` set and a `sourceMemoryAnchor` that matches an anchor/title of the referenced memory (or appears as that exact evidence term in generated content). A guessed valid ID alone is rejected.
-- **M-3**: generation memory payloads are bounded to a timeline-spanning sample of at most 48 memories with tighter per-field caps. Character/world-info envelope caps were reduced. Final input is rejected before API dispatch above 96,000 characters or approximately 32,000 tokens when a tokenizer is available. Archive chunk generation reuses one envelope instead of rebuilding it per chunk.
-- **M-4 / L-6**: chat changes and extension destruction abort the active request. Archive writes verify the original chat ID before persistence; stale archive work is discarded with an explicit warning.
+### Model discovery
 
-## Local regression harness
+The extension adds one browser `fetch` target only:
 
-The local mock harness verifies:
+`POST /api/backends/chat-completions/status`
 
-1. non-empty room temporary objects normalize without ReferenceError and placeholders are removed;
-2. `{{lastMessage}}` / `{{input}}` remain neutralized while `{{char}}` / `{{user}}` expand locally;
-3. a guessed existing memory ID without semantic evidence is rejected, while a correct archive anchor passes;
-4. an A-chat session cannot be saved into B metadata after a chat switch;
-5. a failed daily-life request makes one provider call, persists same-day fallback + failure state, and a second automatic ensure call does not call the provider again.
+The URL is a hard-coded same-origin SillyTavern endpoint. The request body is constructed from the selected Connection Manager Profile and includes `secret_id`, provider type, and provider endpoint metadata where required. The extension does **not** call a Secret-value reader and does not direct-fetch the Profile's third-party API URL. Returned model IDs are normalized as untrusted strings before being inserted as option text/value.
 
-Both JavaScript entry files pass Node syntax checks.
+Generation still goes through `ConnectionManagerRequestService.sendRequest()`. A selected Heartbeat model is passed only as an override payload for that request; it does not mutate the user's main chat model.
+
+### Background generation
+
+Close/home actions remain usable while `busy=true`. Hiding the overlay no longer means abandoning the task: successful base bundle, single-mode, archive, ADV and daily-room results save to the original chat-bound session and notify through toast. Cross-chat/archive guards remain mandatory after every await. Settings and chooser generation buttons are disabled while a task is active, so background mode does not create parallel duplicate requests.
+
+### One-request base bundle
+
+On a fresh archive cache, one model response now contains butterfly + album + room. The ADV event index is derived locally from unlocked album entries, so no fourth model call is required. Each normalized subsection is independently validated and saved. Long ADV prose and the date-specific room-life plan remain intentionally on-demand requests.
+
+## Regression checks
+
+Local mock tests passed for the 0.8.1 findings:
+
+- H-1 placeholder normalization;
+- H-2 room-life failure fuse;
+- H-3 stale-chat cache write rejection;
+- M-1 unsafe SillyTavern macro neutralization;
+- M-2 source memory semantic evidence;
+- M-3 input budget;
+- M-4 stale archive persistence rejection.
+
+Additional 0.8.2 tests passed:
+
+- a compliant fresh base bundle makes exactly **one** Connection Manager generation call and produces caches for butterfly / album / derived ADV / room;
+- model override is forwarded to the Heartbeat request without changing the Profile;
+- model discovery calls only the hard-coded same-origin SillyTavern status endpoint;
+- model discovery sends a Secret ID reference, not an API Key value;
+- both JavaScript entry files pass Node syntax checks.
 
 ## Remaining runtime validation
 
-The one-click “import current SillyTavern connection” path still relies on official Connection Manager slash-command getter behavior when no Connection Manager profile is already selected. The 0.8.0 independent audit classified this as a **potential runtime compatibility risk (M-6), not a verified vulnerability**. Before public release, verify on a real SillyTavern 1.18.x+ instance that reading `api / preset / api-url / model / proxy / prompt-post-processing / instruct / secret-id` with an empty value does not mutate the user's current connection and that the generated profile contains the expected fields. If this runtime check fails, disable snapshot creation and require selecting an existing Connection Manager Profile rather than exposing secret values.
+The older M-6 compatibility item remains: if no Connection Manager Profile is selected, “one-click import current connection” snapshots current settings through official slash-command callbacks. This must still be verified on a real SillyTavern 1.18.x+ instance for providers/templates in actual use. It is not an API-key exposure finding.
 
-Other non-blocking items from the independent audit (metadata growth, weak-model hard-count UX, dynamic mobile viewport, ESC/backdrop close, chat rename/archive ownership) remain product-quality follow-ups rather than release-blocking security findings.
+The new model refresh should also be tested against at least one real Custom/OpenAI-compatible Profile and one non-Custom provider because some provider status endpoints intentionally do not enumerate models; in that case the UI is expected to fall back to models already present in equivalent saved Profiles.
 
 ## Conclusion
 
-The independently reproduced 0.8.0 release blockers H-1/H-2/H-3 and M-1 are remediated in 0.8.1, with M-2/M-3/M-4 additionally hardened. No API secret-value read path was added. Candidate status still depends on the real SillyTavern runtime checks listed above, especially the one-click Connection Manager snapshot behavior.
+No new arbitrary third-party browser fetch, plaintext API-key read path, model-output execution sink, or cross-chat persistence bypass was identified in the reviewed 0.8.2 diff. The release remains a candidate pending the real SillyTavern compatibility checks above.
