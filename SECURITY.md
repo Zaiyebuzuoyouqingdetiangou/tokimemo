@@ -73,7 +73,7 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - Decompressed runtime caches are bounded and evicted across chat scopes; they must not become an unbounded cross-chat memory store.
 
 
-### 0.8.9 concurrency invariants
+### 0.8.9.1 concurrency invariants
 
 - Parallel generation is bounded to four active content tasks. Archive creation/update and external-memory preflight remain mutually exclusive with content generation because they can change archive evidence/revision.
 - Task identity is scoped by chat for mode generation. A mode running in chat A must not mark the same mode in chat B as running or prevent B from rendering its own cached content.

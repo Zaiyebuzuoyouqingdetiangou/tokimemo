@@ -1,9 +1,9 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.9",
+  "js": "index.js?heartbeat=0.8.9.1",
   "author": "Toto",
-  "version": "0.8.9",
+  "version": "0.8.9.1",
   "auto_update": false,
   "minimum_client_version": "1.18.0",
   "hooks": {

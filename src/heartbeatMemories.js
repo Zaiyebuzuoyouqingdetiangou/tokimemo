@@ -2204,11 +2204,11 @@ async function ensureCacheHydrated(context = currentCharacterGuard()) {
         return empty;
     }
     if (!isCompressedCacheRecord(stored)) {
+        // Legacy uncompressed caches stay readable as-is. Never auto-migrate them merely
+        // because a chat was opened: JSON.stringify + gzip of a large theater cache can
+        // spike CPU/RAM during SillyTavern startup, especially on mobile. A future explicit
+        // maintenance action may migrate them, but ordinary chat navigation must stay idle.
         rememberRuntimeSessionCache(scope, stored);
-        // One-time lazy migration: old versions kept the full derived theater cache in
-        // chat_metadata. Compress it only after the chat has already loaded, so future
-        // entries stop paying the large nested-JSON parse/serialization cost.
-        scheduleCompressedCachePersist(context, stored, 900);
         return stored;
     }
     const promise = (async () => {
@@ -2238,19 +2238,10 @@ async function ensureCacheHydrated(context = currentCharacterGuard()) {
     return promise;
 }
 
-function scheduleLegacyCacheCompressionIdle(context = currentCharacterGuard()) {
-    const stored = context.chatMetadata?.[CACHE_KEY];
-    if (!stored || typeof stored !== 'object' || isCompressedCacheRecord(stored)) return;
-    const scope = cacheScopeFromContext(context);
-    rememberRuntimeSessionCache(scope, stored);
-    const run = () => {
-        let latest;
-        try { latest = currentCharacterGuard(); } catch { return; }
-        if (cacheScopeFromContext(latest) !== scope || hasAnyTask()) return;
-        scheduleCompressedCachePersist(latest, stored, 0);
-    };
-    if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 5000 });
-    else setTimeout(run, 2500);
+function scheduleLegacyCacheCompressionIdle(_context = null) {
+    // 0.8.9.1 emergency performance guard: legacy-cache migration is intentionally disabled
+    // on startup/chat navigation. Keeping this no-op helper preserves call compatibility
+    // with older code paths without ever scheduling heavy JSON.stringify/gzip work.
 }
 
 async function flushPendingCompressedCacheForCurrentChat() {
@@ -5074,13 +5065,12 @@ function bindChatStateEvents() {
         try {
             const latest = currentCharacterGuard();
             // Keep ordinary chat entry extremely light. Archive overview bookkeeping is only
-            // needed while the Heartbeat UI is visible. Legacy heavy cache compression is
-            // scheduled for browser idle time and never awaited by SillyTavern's chat event.
+            // needed while the Heartbeat UI is visible. IMPORTANT: do not compress, hydrate,
+            // scan or migrate theater caches here; chat startup/navigation must remain inert.
             if (overlay && !overlay.hidden) {
                 resetArchiveOverviewForCharacter(latest);
                 syncArchiveOverviewCurrentRow(latest);
             }
-            scheduleLegacyCacheCompressionIdle(latest);
         } catch {}
         // SillyTavern emits CHAT_CHANGED and CHAT_LOADED during one navigation. Do not
         // synchronously rebuild the whole archive UI inside its awaited event path.
@@ -5116,13 +5106,21 @@ function bindChatStateEvents() {
     };
 }
 
-function scheduleMounts() {
+function scheduleMounts(initialSettingsMounted = false, initialMenuMounted = false) {
     let tries = 0;
+    let settingsMounted = !!initialSettingsMounted || !!document.getElementById(SETTINGS_ID);
+    let menuMounted = !!initialMenuMounted || !!document.getElementById(MENU_ID);
+    if (settingsMounted && menuMounted) return;
     const timer = setInterval(() => {
         tries += 1;
-        const a = mountSettings();
-        const b = mountMenuItem();
-        if ((a && b) || tries >= 30) clearInterval(timer);
+        // Retry only the missing mount. Calling mountSettings() after it already exists used
+        // to rebuild profile/model controls every 500 ms while #extensionsMenu was not ready.
+        if (!settingsMounted) settingsMounted = !!document.getElementById(SETTINGS_ID) || mountSettings();
+        if (!menuMounted) menuMounted = !!document.getElementById(MENU_ID) || mountMenuItem();
+        if ((settingsMounted && menuMounted) || tries >= 30) {
+            clearInterval(timer);
+            if (globalThis.__heartbeatMemoriesMountTimer === timer) globalThis.__heartbeatMemoriesMountTimer = null;
+        }
     }, 500);
     globalThis.__heartbeatMemoriesMountTimer = timer;
 }
@@ -5130,10 +5128,10 @@ function scheduleMounts() {
 export function initMemoryTheater() {
     try {
         ensureStyles();
-        mountSettings();
-        mountMenuItem();
+        const settingsMounted = mountSettings();
+        const menuMounted = mountMenuItem();
         bindChatStateEvents();
-        scheduleMounts();
+        scheduleMounts(settingsMounted, menuMounted);
         console.log('[HeartbeatMemories] initialized');
     } catch (error) {
         console.error('[HeartbeatMemories] init failed', error);

@@ -72,3 +72,11 @@
 - 不同模型供应商 / 代理是否允许同一个 Connection Manager profile 同时存在 2–4 个请求；服务端可能限流或主动取消并发请求。此类失败会被隔离到对应入口，不应造成跨聊天写入。
 - 低性能设备同时启动 4 个大型响应时的内存峰值需要实机观察；因此并发数没有设计成无限制。
 - 历史 M6：一键导入当前 Connection Manager 配置涉及 SillyTavern slash-command callback 行为，仍需要真实 SillyTavern 环境验证。
+
+
+## 0.8.9.1 startup hot-path review
+
+- Ordinary `CHAT_CHANGED` / `CHAT_LOADED` no longer schedules legacy-cache gzip migration.
+- Legacy cache remains read-only compatible on normal chat entry; no deletion or schema migration is performed.
+- Mount retry performs only missing mounts and cannot repeatedly rebuild already-mounted API controls.
+- No new network endpoint, dynamic code execution sink, secret read, or cross-chat write path was introduced by this hotfix.

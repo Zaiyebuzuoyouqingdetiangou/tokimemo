@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.9.1
+
+- Emergency startup/mobile performance hotfix.
+- Removed automatic legacy theater-cache compression/migration from `CHAT_CHANGED` / `CHAT_LOADED`; ordinary SillyTavern startup and chat navigation no longer schedule `JSON.stringify -> gzip -> Base64` work.
+- Legacy uncompressed generated content remains readable and is not deleted or forcibly migrated.
+- Mount retry now retries only missing UI mounts; an already-mounted settings panel is no longer rebuilt every 500 ms while another mount target is unavailable.
+- No archive schema bump. Existing `heartbeatMemoriesArchiveV3` archives remain compatible.
+
 ## 0.8.9
 
 - 移除一键整套基础包生成；回忆相簿、CG/ADV 事件索引、他的房间、蝴蝶效应改为独立生成 / 重生成。
