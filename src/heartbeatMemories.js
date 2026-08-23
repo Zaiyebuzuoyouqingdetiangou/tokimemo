@@ -82,6 +82,8 @@ const ROOM_BASIS_VALUES = new Set(['设定', '记忆']);
 const PHONE_DEVICE_KINDS = new Set(['phone', 'watch', 'terminal', 'communicator']);
 const ROOM_DAYPART_KEYS = ['morning', 'daytime', 'evening', 'night'];
 const ENDING_TYPES = new Set(['route', 'romance', 'bond', 'open', 'personal']);
+const CG_IMAGE_PROVIDER = 'sillytavern-imagine';
+const MAX_CG_IMAGE_PROMPT_CHARS = 1800;
 
 let busy = false; // exclusive archive/preflight task; mode generation uses activeGenerationTasks
 let activeMode = null;
@@ -97,6 +99,8 @@ let activeTaskOrigin = null;
 const activeGenerationTasks = new Map();
 const activeModeBuildScopes = new Set();
 const activeAdvBulkScopes = new Set();
+const activeCgImageTasks = new Map();
+let cgImageLifecycleEpoch = 0;
 const MAX_CONCURRENT_GENERATION_TASKS = 4;
 let butterflyTransitionTimer = 0;
 let archiveOverviewCache = { key: '', fetchedAt: 0, items: [] };
@@ -110,9 +114,13 @@ let memoryProviderDiscoveryCache = { signature: '', scannedAt: 0, items: [] };
 const memoryPreflightCache = new Map();
 const deferredChatCommits = new Map();
 let archiveLibraryCharacterKey = '';
+let activeArchiveSnapshot = null; // read-only indexed archive; never switches the host chat
+const archiveSnapshotCache = new Map();
+const ARCHIVE_SNAPSHOT_CACHE_MAX = 4;
 const connectionModelCache = new Map();
 const runtimeSessionCache = new Map();
 const cacheHydrationPromises = new Map();
+const cacheHydrationErrors = new Map();
 const cachePersistTimers = new Map();
 const pendingCompressedCacheWrites = new Map();
 const usableMessageCountCache = new Map();
@@ -462,18 +470,23 @@ function yieldToUi() {
     return new Promise(resolve => setTimeout(resolve, 0));
 }
 
-async function buildChatSnapshot(context = currentCharacterGuard()) {
+async function buildChatSnapshot(context = currentCharacterGuard(), options = {}) {
     const rawChat = Array.isArray(context.chat) ? context.chat : [];
     const usable = [];
+    const prefixCount = Math.max(0, Math.floor(Number(options.prefixCount) || 0));
     let fingerprint = 2166136261;
-    const mixHash = value => {
+    let prefixFingerprint = 2166136261;
+    const mix = (state, value) => {
+        let next = state >>> 0;
         for (const ch of String(value ?? '')) {
-            fingerprint ^= ch.codePointAt(0);
-            fingerprint = Math.imul(fingerprint, 16777619);
+            next ^= ch.codePointAt(0);
+            next = Math.imul(next, 16777619);
         }
-        fingerprint >>>= 0;
+        return next >>> 0;
     };
-    mixHash(getChatId(context));
+    const chatId = getChatId(context);
+    fingerprint = mix(fingerprint, chatId);
+    prefixFingerprint = mix(prefixFingerprint, chatId);
     for (let index = 0; index < rawChat.length; index += 1) {
         const message = rawChat[index];
         const text = normalizeText(message?.mes, 8000);
@@ -487,26 +500,47 @@ async function buildChatSnapshot(context = currentCharacterGuard()) {
                 text,
             };
             usable.push(item);
-            mixHash(`${item.index}|${item.role}|${item.date}|${item.text}`);
+            const signature = `${item.index}|${item.role}|${item.date}|${item.text}`;
+            fingerprint = mix(fingerprint, signature);
+            if (usable.length <= prefixCount) prefixFingerprint = mix(prefixFingerprint, signature);
         }
         if (index && index % 60 === 0) await yieldToUi();
     }
     const totalMessages = usable.length;
-    mixHash(String(totalMessages));
-    const cappedByCount = usable.length > MAX_IMPORT_MESSAGES ? evenlySample(usable, MAX_IMPORT_MESSAGES) : usable;
-    let selected = cappedByCount;
-    let selectedChars = selected.reduce((sum, item) => sum + item.text.length + item.name.length + item.date.length + 32, 0);
-    if (selectedChars > MAX_IMPORT_TOTAL_CHARS) {
-        const ratio = MAX_IMPORT_TOTAL_CHARS / Math.max(1, selectedChars);
-        const limit = Math.max(64, Math.floor(selected.length * ratio));
-        selected = evenlySample(selected, limit);
-        selectedChars = selected.reduce((sum, item) => sum + item.text.length + item.name.length + item.date.length + 32, 0);
-    }
+    fingerprint = mix(fingerprint, String(totalMessages));
+    if (prefixCount > 0) prefixFingerprint = mix(prefixFingerprint, String(Math.min(prefixCount, totalMessages)));
+
+    const capMessages = source => {
+        const cappedByCount = source.length > MAX_IMPORT_MESSAGES ? evenlySample(source, MAX_IMPORT_MESSAGES) : source;
+        let selected = cappedByCount;
+        let selectedChars = selected.reduce((sum, item) => sum + item.text.length + item.name.length + item.date.length + 32, 0);
+        if (selectedChars > MAX_IMPORT_TOTAL_CHARS) {
+            const ratio = MAX_IMPORT_TOTAL_CHARS / Math.max(1, selectedChars);
+            const limit = Math.max(64, Math.floor(selected.length * ratio));
+            selected = evenlySample(selected, limit);
+            selectedChars = selected.reduce((sum, item) => sum + item.text.length + item.name.length + item.date.length + 32, 0);
+        }
+        return { selected, selectedChars, truncated: source.length > selected.length };
+    };
+
+    const full = capMessages(usable);
+    const incrementalRaw = prefixCount > 0 && totalMessages >= prefixCount ? usable.slice(prefixCount) : usable;
+    const incremental = capMessages(incrementalRaw);
     return {
-        chatId: getChatId(context), totalMessages, usedMessages: selected.length, usedChars: selectedChars,
-        truncated: totalMessages > selected.length,
-        coverageMode: totalMessages > selected.length ? 'evenly-sampled-full-window' : 'full-window',
-        messages: selected, fingerprint: String(fingerprint >>> 0),
+        chatId,
+        totalMessages,
+        usedMessages: full.selected.length,
+        usedChars: full.selectedChars,
+        truncated: full.truncated,
+        coverageMode: full.truncated ? 'evenly-sampled-full-window' : 'full-window',
+        messages: full.selected,
+        fingerprint: String(fingerprint >>> 0),
+        prefixCount,
+        prefixFingerprint: prefixCount > 0 && totalMessages >= prefixCount ? String(prefixFingerprint >>> 0) : '',
+        incrementalMessages: incremental.selected,
+        incrementalUsedMessages: incremental.selected.length,
+        incrementalUsedChars: incremental.selectedChars,
+        incrementalTruncated: incremental.truncated,
     };
 }
 
@@ -787,7 +821,7 @@ function generationTaskKeyForMode(mode, context = null) {
 }
 
 function hasGenerationTasks() {
-    return activeGenerationTasks.size > 0 || activeModeBuildScopes.size > 0 || activeAdvBulkScopes.size > 0;
+    return activeGenerationTasks.size > 0 || activeModeBuildScopes.size > 0 || activeAdvBulkScopes.size > 0 || activeCgImageTasks.size > 0;
 }
 
 function hasAnyTask() {
@@ -799,8 +833,15 @@ function isGenerationTaskRunning(key) {
 }
 
 function isModeGenerating(mode, context = null) {
-    const key = generationTaskKeyForMode(mode, context);
-    return isGenerationTaskRunning(key) || activeModeBuildScopes.has(key);
+    const ctx = context || (() => { try { return currentCharacterGuard(); } catch { return null; } })();
+    const key = generationTaskKeyForMode(mode, ctx);
+    let cgDrawing = false;
+    try {
+        const scope = ctx ? chatScopeKey(ctx) : '';
+        const prefix = `cg-image:${scope}:${mode}:`;
+        cgDrawing = !!scope && [...activeCgImageTasks.keys()].some(taskKey => taskKey.startsWith(prefix));
+    } catch {}
+    return isGenerationTaskRunning(key) || activeModeBuildScopes.has(key) || cgDrawing;
 }
 
 function hasGenerationTaskPrefix(prefix) {
@@ -926,6 +967,66 @@ function mergeImportedMemories(items, limit = MAX_MEMORY_ITEMS) {
     return [...selectedChat, ...selectedExternal].slice(0, limit);
 }
 
+
+function archivedChatFingerprint(memoryBank) {
+    const source = normalizeText(memoryBank?.sourceFingerprint, 500);
+    if (source) return source.split(':', 1)[0] || '';
+    const revision = normalizeText(memoryBank?.archiveRevision, 500);
+    const match = revision.match(/^\d+-([^-]+)-/);
+    return match?.[1] || '';
+}
+
+function importedMemoryStableKey(item) {
+    const title = normalizeText(item?.title, 100).replace(/\s+/g, '').toLowerCase();
+    const summary = normalizeText(item?.summary, 260).replace(/\s+/g, ' ').toLowerCase();
+    const anchors = cleanArray(item?.anchors, 8, 120).map(value => value.replace(/\s+/g, '').toLowerCase()).sort().join('|');
+    const sourceKind = normalizeText(item?.sourceKind, 80) || 'chat';
+    const messageRange = sourceKind.startsWith('chat') ? `${Number(item?.messageStart) || 0}-${Number(item?.messageEnd) || 0}` : '';
+    const external = cleanArray(item?.externalSourceIds, 12, 100).sort().join(',');
+    return `${sourceKind}|${messageRange}|${external}|${title}|${anchors || summary}`;
+}
+
+function appendImportedMemoriesStable(existingMemories, freshMemories, limit = MAX_MEMORY_ITEMS) {
+    const out = (Array.isArray(existingMemories) ? existingMemories : []).slice(0, limit).map(item => structuredClone(item));
+    const seen = new Set(out.map(importedMemoryStableKey));
+    let nextNumber = out.reduce((max, item) => {
+        const match = String(item?.id || '').match(/^M(\d+)$/i);
+        return Math.max(max, match ? Number(match[1]) || 0 : 0);
+    }, 0) + 1;
+    for (const item of Array.isArray(freshMemories) ? freshMemories : []) {
+        if (out.length >= limit) break;
+        const key = importedMemoryStableKey(item);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({ id: `M${String(nextNumber).padStart(3, '0')}`, ...item });
+        nextNumber += 1;
+    }
+    return out;
+}
+
+function migrateDerivedCacheRevision(cache, oldMemoryBank, newMemoryBank) {
+    if (!cache || typeof cache !== 'object') return cache;
+    const oldRevision = normalizeText(oldMemoryBank?.archiveRevision, 240);
+    const newRevision = normalizeText(newMemoryBank?.archiveRevision, 240);
+    if (!oldRevision || !newRevision) return cache;
+    const migrated = cache;
+    migrated.chatId = normalizeText(newMemoryBank?.chatId, 240);
+    migrated.archiveRevision = newRevision;
+    migrated.updatedAt = Date.now();
+    for (const mode of Object.values(MODE)) {
+        const session = migrated?.[mode];
+        if (!session || session.kind !== mode) continue;
+        // Incremental archive updates never rewrite/delete an existing Mxxx record. Therefore
+        // every previously validated sourceMemoryIds/sourceMemoryAnchor pair remains valid.
+        // Only the revision fence changes; full rebuilds still discard all derived caches.
+        if (!session.archiveRevision || session.archiveRevision === oldRevision) session.archiveRevision = newRevision;
+        if (mode === MODE.ROOM && session.lifePlan && (!session.lifePlan.archiveRevision || session.lifePlan.archiveRevision === oldRevision)) {
+            session.lifePlan.archiveRevision = newRevision;
+        }
+    }
+    return migrated;
+}
+
 function splitExternalMemoryIntoChunks(records, maxChars = EXTERNAL_MEMORY_CHUNK_CHARS) {
     const chunks = [];
     let current = [];
@@ -971,7 +1072,14 @@ async function flushDeferredCommitsForCurrentChat() {
                     globalThis.toastr?.warning?.(`后台档案已完成，但原聊天在此期间发生变化，因此没有自动覆盖「${bank?.archiveName || '档案'}」。请重新更新档案。`, '心跳回忆');
                     continue;
                 }
-                saveImportedMemory(context, bank, item.origin.chatId);
+                if (item.preserveDerivedCache && isCompressedCacheRecord(context.chatMetadata?.[CACHE_KEY])) {
+                    try { await ensureCacheHydrated(context); }
+                    catch (error) {
+                        globalThis.toastr?.warning?.('后台增量档案已完成，但旧的 CG / ADV 缓存暂时无法读取，因此没有覆盖原档案。请刷新后重新更新。', '心跳回忆');
+                        continue;
+                    }
+                }
+                saveImportedMemory(context, bank, item.origin.chatId, { preserveDerivedCache: !!item.preserveDerivedCache });
                 clearMemoryPreflight(context);
                 globalThis.toastr?.success?.(`后台档案已写回：${bank.archiveName}`, '心跳回忆');
             } else if (item.kind === 'sessions') {
@@ -1926,6 +2034,7 @@ JSON 结构必须严格为：
       "sourceMemoryIds": ["M001"],
       "sourceMemoryAnchor": "从所引用记忆的 anchors 中原样复制一个具体锚点",
       "visualSeed": ["元素1","元素2","元素3","元素4"],
+      "imagePrompt": "只描述这张CG里肉眼可见的角色外貌、服装、动作、场景、构图与光线；不写对白、记忆ID、设定说明、URL或不可见心理活动",
       "comments": ["角色回想1","角色回想2","角色回想3","角色回想4","角色回想5","角色回想6"],
       "hintLines": []
     }
@@ -1937,6 +2046,7 @@ JSON 结构必须严格为：
 - unlocked=false 至少 3 条，可以是角色基于当前聊天档案产生的未来期许/计划，但 sourceMemoryIds 仍至少引用 1 条作为其情感或计划依据。
 - category 只能是“日常”“约会”“结局”。
 - 每条 visualSeed 至少 4 个具体画面元素。
+- 每条 imagePrompt 只写【可见画面】并尽量把角色发型/发色/衣着/年龄感、动作、镜头、环境、时间与光线写清楚，供用户主动调用生图扩展时使用；不包含对白、记忆原文、世界书原文、sourceMemoryIds、URL、HTML 或脚本。
 - unlocked=true 的 comments 必须 6～8 段，每段约 35～120 个汉字，不是三句浅短感想。六段至少覆盖：当时先注意到的细节、没说出口的念头、对 {{user}} 的观察、事件中的情绪转折、事后才明白的事、现在回看这段记忆的感受。允许自然口语，但不要六段都重复同一种感叹；hintLines 必须为空。
 - unlocked=false 的 comments 必须为空；hintLines 必须 1～2 句，说明如何把计划变成真实回忆。
 - 未解锁描述不能写成“???”或空白。`,
@@ -1958,7 +2068,8 @@ JSON 结构必须严格为：
       "cgDesc": "1到2句镜头语言+画面元素",
       "sourceMemoryIds": ["M001"],
       "sourceMemoryAnchor": "从所引用记忆的 anchors 中原样复制一个具体锚点",
-      "visualSeed": ["元素1","元素2","元素3","元素4"]
+      "visualSeed": ["元素1","元素2","元素3","元素4"],
+      "imagePrompt": "只描述这张CG里肉眼可见的角色外貌、服装、动作、场景、构图与光线；不写对白、记忆ID、设定说明、URL或不可见心理活动"
     }
   ]
 }
@@ -1967,6 +2078,7 @@ JSON 结构必须严格为：
 - events 至少 12 条，全部是当前聊天档案中的真实共同经历；不能把未来计划混进已发生事件。
 - 每条 sourceMemoryIds 至少 1 个，只能引用当前档案中的记忆 ID；sourceMemoryAnchor 必须从所引用记忆的 anchors（或 title）中原样复制一个具体词组。
 - 每条 visualSeed 至少 4 个具体元素，且彼此要有视觉区分。
+- 每条 imagePrompt 只写【可见画面】，用于用户主动点击“绘制CG”时交给 SillyTavern 已配置的图像生成扩展；不包含聊天原文、记忆原文、世界书原文、sourceMemoryIds、URL、HTML 或脚本。
 - title 不超过 12 个汉字；cgDesc 只写能形成 CG 的镜头、动作、环境、物件和光线。
 - 不要输出 adv 字段.`,
     [MODE.ROOM]: (context, memoryBank) => `${promptSafetyBoundary(context, '他的房间')}
@@ -2235,11 +2347,12 @@ ${existing}
     "cgDesc": "1到2句镜头语言+画面元素",
     "sourceMemoryIds": ["M001"],
     "sourceMemoryAnchor": "从所引用记忆 anchors/title 原样复制",
-    "visualSeed": ["元素1","元素2","元素3","元素4"]
+    "visualSeed": ["元素1","元素2","元素3","元素4"],
+    "imagePrompt": "只描述肉眼可见的角色外貌、服装、动作、场景、构图与光线，不写对白/记忆ID/URL"
   }
 }
 
-要求：必须和 EXISTING_EVENTS_JSON 已有事件不同；必须引用真实档案 ID 与真实锚点；只生成这一条。`;
+要求：必须和 EXISTING_EVENTS_JSON 已有事件不同；必须引用真实档案 ID 与真实锚点；imagePrompt 只写可见画面，不复制聊天/档案/世界书原文；只生成这一条。`;
 }
 
 function advBatchPrompt(context, events, memoryBank) {
@@ -2488,6 +2601,8 @@ ${hintLines.join('；')}`, memoryBank, 1);
             sourceMemoryIds: reference.sourceMemoryIds,
             sourceMemoryAnchor: reference.sourceMemoryAnchor,
             visualSeed: visualSeed.length >= 4 ? visualSeed : [...visualSeed, '光影', '人物', '环境', '物件'].slice(0, 4),
+            imagePrompt: normalizeText(item?.imagePrompt, MAX_CG_IMAGE_PROMPT_CHARS),
+            cgImage: null,
             comments,
             hintLines,
         };
@@ -2531,6 +2646,8 @@ function deriveAdvFromAlbum(albumSession) {
         sourceMemoryIds: [...(item.sourceMemoryIds || [])],
         sourceMemoryAnchor: normalizeText(item.sourceMemoryAnchor, 120),
         visualSeed: cleanArray(item.visualSeed, 12, 80),
+        imagePrompt: normalizeText(item.imagePrompt, MAX_CG_IMAGE_PROMPT_CHARS),
+        cgImage: normalizeCgImageRecord(item.cgImage),
         adv: null,
     }));
     return {
@@ -2576,6 +2693,8 @@ ${cgDesc}`, memoryBank, 1);
         sourceMemoryIds: reference.sourceMemoryIds,
         sourceMemoryAnchor: reference.sourceMemoryAnchor,
         visualSeed: visualSeed.length >= 4 ? visualSeed : [...visualSeed, '光影', '人物', '环境', '物件'].slice(0, 4),
+        imagePrompt: normalizeText(item?.imagePrompt, MAX_CG_IMAGE_PROMPT_CHARS),
+        cgImage: null,
         adv: null,
     };
 }
@@ -2875,9 +2994,11 @@ async function gzipJson(value) {
 }
 
 async function gunzipJson(base64) {
-    if (typeof DecompressionStream !== 'function') return null;
     const encoded = String(base64 || '');
     if (!encoded || encoded.length > MAX_CACHE_COMPRESSED_BASE64_CHARS) throw new Error('剧场缓存压缩数据大小异常。');
+    if (typeof DecompressionStream !== 'function') {
+        throw new Error('当前浏览器不支持 DecompressionStream。旧的已生成缓存仍保留在聊天 metadata 中，请使用支持该标准的浏览器内核读取，不要重新生成覆盖。');
+    }
     const bytes = base64ToBytes(encoded);
     const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
     const reader = stream.getReader();
@@ -2969,6 +3090,7 @@ async function ensureCacheHydrated(context = currentCharacterGuard()) {
     if (cacheHydrationPromises.has(scope)) return cacheHydrationPromises.get(scope);
     const stored = context.chatMetadata?.[CACHE_KEY];
     if (!stored || typeof stored !== 'object') {
+        cacheHydrationErrors.delete(scope);
         const empty = {};
         rememberRuntimeSessionCache(scope, empty);
         return empty;
@@ -2978,6 +3100,7 @@ async function ensureCacheHydrated(context = currentCharacterGuard()) {
         // because a chat was opened: JSON.stringify + gzip of a large theater cache can
         // spike CPU/RAM during SillyTavern startup, especially on mobile. A future explicit
         // maintenance action may migrate them, but ordinary chat navigation must stay idle.
+        cacheHydrationErrors.delete(scope);
         rememberRuntimeSessionCache(scope, stored);
         return stored;
     }
@@ -2994,13 +3117,14 @@ async function ensureCacheHydrated(context = currentCharacterGuard()) {
                 rememberRuntimeSessionCache(scope, empty);
                 return empty;
             }
+            cacheHydrationErrors.delete(scope);
             rememberRuntimeSessionCache(scope, cache);
             return cache;
         } catch (error) {
             // A damaged/imported compressed cache must not create an endless hydrate →
             // chooser refresh loop. Keep the canonical archive readable and treat only the
             // derived theater cache as unavailable for this runtime session.
-            rememberRuntimeSessionCache(scope, {});
+            cacheHydrationErrors.set(scope, normalizeText(error?.message || String(error), 1600));
             throw error;
         }
     })().finally(() => cacheHydrationPromises.delete(scope));
@@ -3042,7 +3166,7 @@ function getCache(context) {
     return {};
 }
 
-function saveImportedMemory(context, memoryBank, expectedChatId = memoryBank?.chatId) {
+function saveImportedMemory(context, memoryBank, expectedChatId = memoryBank?.chatId, options = {}) {
     const currentContext = currentCharacterGuard();
     const currentChatId = getChatId(currentContext);
     if (!expectedChatId || currentChatId !== expectedChatId || getChatId(context) !== expectedChatId) {
@@ -3051,17 +3175,38 @@ function saveImportedMemory(context, memoryBank, expectedChatId = memoryBank?.ch
     if (!context.chatMetadata || typeof context.chatMetadata !== 'object') {
         throw new Error('当前聊天无法保存 metadata，不能创建或更新档案。');
     }
+    const previousMemory = getImportedMemory(context);
+    const preserveDerivedCache = !!options.preserveDerivedCache && !!previousMemory;
+    const scope = cacheScopeFromContext(context);
+    let preservedCache = null;
+    if (preserveDerivedCache) {
+        const candidate = getCache(context);
+        if (candidate && typeof candidate === 'object' && Object.values(MODE).some(mode => candidate?.[mode]?.kind === mode)) {
+            preservedCache = candidate;
+        }
+    }
+
     memoryBank.version = ARCHIVE_SCHEMA_VERSION;
     context.chatMetadata[MEMORY_KEY] = memoryBank;
-    // Updating the archive intentionally invalidates derived theater content because its
-    // evidence revision changed. Extension upgrades alone never do this.
-    const scope = cacheScopeFromContext(context);
-    delete context.chatMetadata[CACHE_KEY];
-    runtimeSessionCache.delete(scope);
     pendingCompressedCacheWrites.delete(scope);
     const timer = cachePersistTimers.get(scope);
     if (timer) clearTimeout(timer);
     cachePersistTimers.delete(scope);
+
+    if (preservedCache) {
+        migrateDerivedCacheRevision(preservedCache, previousMemory, memoryBank);
+        rememberRuntimeSessionCache(scope, preservedCache);
+        // Keep a durable uncompressed copy until gzip finishes. This is an explicit archive
+        // update path, so a short one-off metadata write is preferable to losing every CG/ADV
+        // if the extension reloads before the compression timer fires.
+        context.chatMetadata[CACHE_KEY] = preservedCache;
+        context.saveMetadataDebounced?.();
+        scheduleCompressedCachePersist(context, preservedCache, 80);
+    } else {
+        delete context.chatMetadata[CACHE_KEY];
+        runtimeSessionCache.delete(scope);
+    }
+
     rememberCurrentArchiveForOverview(context);
     syncArchiveOverviewCurrentRow(context);
     upsertArchiveIndex(context, memoryBank);
@@ -3099,7 +3244,7 @@ function saveSession(mode, session, expectedChatId = normalizeText(session?.chat
             context.chatMetadata[CACHE_KEY] = cache;
             context.saveMetadataDebounced?.();
         }
-        scheduleCompressedCachePersist(context, cache, 1800);
+        scheduleCompressedCachePersist(context, cache, 250);
         return true;
     } catch (error) {
         console.warn('[HeartbeatMemories] cache save failed', error);
@@ -3109,10 +3254,12 @@ function saveSession(mode, session, expectedChatId = normalizeText(session?.chat
 
 function loadSession(mode, options = {}) {
     try {
-        const context = options.context || currentCharacterGuard();
-        const chatId = normalizeText(options.chatId, 240) || getChatId(context);
-        const memoryBank = options.memoryBank || requireArchive(context);
-        const cache = getCache(context);
+        const suppliedCache = options.cache && typeof options.cache === 'object' ? options.cache : null;
+        const context = options.context || (suppliedCache ? null : currentCharacterGuard());
+        const chatId = normalizeText(options.chatId, 240) || (context ? getChatId(context) : '');
+        const memoryBank = options.memoryBank || (context ? requireArchive(context) : null);
+        if (!chatId || !memoryBank) return null;
+        const cache = suppliedCache || getCache(context);
         const session = cache?.[mode];
         if (!session || session.kind !== mode) return null;
         if (normalizeText(cache.chatId, 240) !== chatId) return null;
@@ -3257,11 +3404,12 @@ async function requestJson(prompt, statusText = '正在根据当前聊天档案�
     }
 }
 
-async function importCurrentChatMemory() {
+async function importCurrentChatMemory({ fullRebuild = false } = {}) {
     const context = currentCharacterGuard();
     if (busy || hasGenerationTasks()) throw new Error('当前还有内容生成任务在进行，请等生成结束后再创建/更新档案。');
     const existing = getImportedMemory(context);
-    const actionLabel = existing ? '更新' : '创建';
+    const incrementalUpdate = !!existing && !fullRebuild;
+    const actionLabel = fullRebuild ? '完全重建' : existing ? '增量更新' : '创建';
     const detected = externalMemorySourceSummary(context);
     const settings = getPluginSettings(context);
     const preflight = getMemoryPreflight(context);
@@ -3270,12 +3418,38 @@ async function importCurrentChatMemory() {
         return;
     }
     const external = settings.useCurrentChatExternalMemory ? (preflight || { records: [], sources: [], fingerprint: 'none' }) : { records: [], sources: [], fingerprint: 'disabled' };
-    const snapshot = await buildChatSnapshot(context);
+
+    if (incrementalUpdate && isCompressedCacheRecord(context.chatMetadata?.[CACHE_KEY])) {
+        try {
+            await ensureCacheHydrated(context);
+        } catch (error) {
+            throw new Error(`旧的 CG / ADV 等生成缓存暂时无法读取，因此已取消档案更新，避免误清空缓存。请刷新页面后重试。${error?.message ? `
+${error.message}` : ''}`);
+        }
+    }
+
+    const previousMessageCount = incrementalUpdate ? Math.max(0, Number(existing?.sourceMessageCount) || 0) : 0;
+    const snapshot = await buildChatSnapshot(context, { prefixCount: previousMessageCount });
     if (!snapshot.chatId) throw new Error('无法识别当前聊天窗口 ID，请先保存或打开一个具体聊天。');
     if (!snapshot.messages.length) throw new Error('当前聊天窗口没有可用于创建档案的角色/用户消息。');
-    const origin = captureTaskOrigin(context);
-    const chunks = splitSnapshotIntoChunks(snapshot);
-    if (!chunks.length) throw new Error('当前聊天没有可用于整理档案的文本。');
+
+    if (incrementalUpdate) {
+        const oldChatFingerprint = archivedChatFingerprint(existing);
+        if (!oldChatFingerprint || previousMessageCount > snapshot.totalMessages || snapshot.prefixFingerprint !== oldChatFingerprint) {
+            throw new Error('检测到已归档范围内的旧聊天消息被编辑、删除或重排。为了不让旧记忆 ID 和已生成 CG / ADV 的证据引用错位，本次不会自动覆盖。请使用“完全重建档案”明确重做；普通“更新当前窗口档案”只处理旧档案之后新增的聊天。');
+        }
+    }
+
+    const chatInput = incrementalUpdate ? snapshot.incrementalMessages : snapshot.messages;
+    const externalChanged = !incrementalUpdate || normalizeText(existing?.externalMemoryFingerprint, 240) !== normalizeText(external.fingerprint, 240);
+    if (incrementalUpdate && !chatInput.length && !externalChanged) {
+        clearMemoryPreflight(context);
+        globalThis.toastr?.info?.('当前窗口没有发现新的聊天消息或新的记忆 / 摘要资料；现有档案和全部已生成内容保持不变。', '心跳回忆');
+        return;
+    }
+    const chunks = splitSnapshotIntoChunks({ messages: chatInput });
+    const externalChunks = externalChanged ? splitExternalMemoryIntoChunks(external.records) : [];
+    const origin = captureTaskOrigin(context, existing?.archiveRevision || '');
 
     const importController = new AbortController();
     activeTaskAbortController = importController;
@@ -3283,6 +3457,7 @@ async function importCurrentChatMemory() {
     activeTaskLabel = `正在${actionLabel}当前聊天档案…`;
     activeTaskBackgrounded = true;
     busy = true;
+    activeArchiveSnapshot = null;
     openOverlay();
     setBusyUi(true, activeTaskLabel);
     showChooser();
@@ -3290,27 +3465,36 @@ async function importCurrentChatMemory() {
     await yieldToUi();
     try {
         const contextEnvelope = await buildControlledContextEnvelope(context);
-        const all = [];
+        const fresh = [];
         for (let i = 0; i < chunks.length; i += 1) {
-            activeTaskLabel = `正在${actionLabel}聊天正文 · ${i + 1} / ${chunks.length}`;
+            activeTaskLabel = `正在${actionLabel}新增聊天 · ${i + 1} / ${chunks.length}`;
             updateBackgroundTaskLabel(activeTaskLabel);
             await yieldToUi();
             const raw = await generateConfiguredJson(memoryImportPrompt(context, chunks[i], i, chunks.length), { maxTokens: 4096, contextEnvelope, signal: importController.signal, skipTokenCount: true, context });
-            all.push(...normalizeImportedChunk(raw, chunks[i]).map(item => ({ ...item, sourceKind: 'chat' })));
+            fresh.push(...normalizeImportedChunk(raw, chunks[i]).map(item => ({ ...item, sourceKind: 'chat' })));
         }
-        const externalChunks = splitExternalMemoryIntoChunks(external.records);
         for (let i = 0; i < externalChunks.length; i += 1) {
             activeTaskLabel = `正在${actionLabel}记忆 / 摘要资料 · ${i + 1} / ${externalChunks.length}`;
             updateBackgroundTaskLabel(activeTaskLabel);
             await yieldToUi();
             const externalRaw = await generateConfiguredJson(externalMemoryImportPrompt(context, externalChunks[i]), { maxTokens: 4096, contextEnvelope, signal: importController.signal, skipTokenCount: true, context });
-            all.push(...normalizeExternalImportedMemories(externalRaw, externalChunks[i]));
+            fresh.push(...normalizeExternalImportedMemories(externalRaw, externalChunks[i]));
         }
 
-        const deduped = mergeImportedMemories(all, MAX_MEMORY_ITEMS);
-        if (!deduped.length) throw new Error('没有从当前聊天和补充记忆 / 摘要中抽取到可用的共同记忆。');
-        const memories = deduped.map((item, index) => ({ id: `M${String(index + 1).padStart(3, '0')}`, ...item }));
-        activeTaskLabel = `正在${actionLabel}档案名称与总结…`;
+        let memories;
+        if (incrementalUpdate) {
+            memories = appendImportedMemoriesStable(existing.memories, fresh, MAX_MEMORY_ITEMS);
+            if (fresh.length && memories.length === existing.memories.length && existing.memories.length >= MAX_MEMORY_ITEMS) {
+                throw new Error(`档案已经达到 ${MAX_MEMORY_ITEMS} 条记忆上限。为避免覆盖旧 Mxxx 证据 ID，本次增量更新已取消；如需压缩重整，请使用“完全重建档案”。`);
+            }
+        } else {
+            const deduped = mergeImportedMemories(fresh, MAX_MEMORY_ITEMS);
+            if (!deduped.length) throw new Error('没有从当前聊天和补充记忆 / 摘要中抽取到可用的共同记忆。');
+            memories = deduped.map((item, index) => ({ id: `M${String(index + 1).padStart(3, '0')}`, ...item }));
+        }
+        if (!memories.length) throw new Error('当前档案没有可保存的共同记忆。');
+
+        activeTaskLabel = `正在${actionLabel}档案摘要…`;
         updateBackgroundTaskLabel(activeTaskLabel);
         await yieldToUi();
         let profile;
@@ -3318,29 +3502,40 @@ async function importCurrentChatMemory() {
             const rawProfile = await generateConfiguredJson(archiveProfilePrompt(context, memories), { maxTokens: 2048, contextEnvelope, signal: importController.signal, context });
             profile = normalizeArchiveProfile(rawProfile, memories);
         } catch (error) {
-            console.warn('[HeartbeatMemories] archive profile generation failed; using local fallback', error);
-            profile = normalizeArchiveProfile({}, memories);
+            console.warn('[HeartbeatMemories] archive profile generation failed; using existing/local fallback', error);
+            profile = incrementalUpdate
+                ? { archiveName: existing.archiveName || fallbackArchiveName(memories), archiveSummary: existing.archiveSummary || fallbackArchiveSummary(memories), keywords: cleanArray(existing.archiveKeywords, 10, 80) }
+                : normalizeArchiveProfile({}, memories);
         }
         const now = Date.now();
         const memoryBank = {
-            version: MEMORY_VERSION, chatId: snapshot.chatId,
-            characterName: normalizeText(context.name2, 120), userName: normalizeText(context.name1, 120),
-            archiveName: profile.archiveName, archiveSummary: profile.archiveSummary, archiveKeywords: profile.keywords,
-            createdAt: Number(existing?.createdAt) || now, updatedAt: now,
+            version: MEMORY_VERSION,
+            chatId: snapshot.chatId,
+            characterName: normalizeText(context.name2, 120),
+            userName: normalizeText(context.name1, 120),
+            archiveName: profile.archiveName,
+            archiveSummary: profile.archiveSummary,
+            archiveKeywords: profile.keywords,
+            createdAt: Number(existing?.createdAt) || now,
+            updatedAt: now,
             archiveRevision: `${now}-${snapshot.fingerprint}-${external.fingerprint}`,
             sourceFingerprint: `${snapshot.fingerprint}:${external.fingerprint}`,
             externalMemoryFingerprint: external.fingerprint,
             externalMemorySources: external.sources.map(source => ({ id: source.id, label: source.label, count: source.count })),
             externalMemoryRecordCount: external.records.length,
-            sourceMessageCount: snapshot.totalMessages, usedMessageCount: snapshot.usedMessages,
-            usedCharacterCount: snapshot.usedChars, coverageMode: snapshot.coverageMode, truncated: snapshot.truncated, memories,
+            sourceMessageCount: snapshot.totalMessages,
+            usedMessageCount: incrementalUpdate ? (Number(existing?.usedMessageCount) || 0) + snapshot.incrementalUsedMessages : snapshot.usedMessages,
+            usedCharacterCount: incrementalUpdate ? (Number(existing?.usedCharacterCount) || 0) + snapshot.incrementalUsedChars : snapshot.usedChars,
+            coverageMode: incrementalUpdate ? 'incremental-append' : snapshot.coverageMode,
+            truncated: incrementalUpdate ? (!!existing?.truncated || snapshot.incrementalTruncated) : snapshot.truncated,
+            memories,
         };
         const wasBackgrounded = activeTaskBackgrounded || !isCurrentTaskOrigin(origin);
         if (isCurrentTaskOrigin(origin)) {
-            saveImportedMemory(currentCharacterGuard(), memoryBank, snapshot.chatId);
+            saveImportedMemory(currentCharacterGuard(), memoryBank, snapshot.chatId, { preserveDerivedCache: incrementalUpdate });
             clearMemoryPreflight(currentCharacterGuard());
         } else {
-            queueDeferredCommit(origin, { kind: 'archive', memoryBank });
+            queueDeferredCommit(origin, { kind: 'archive', memoryBank, preserveDerivedCache: incrementalUpdate });
         }
         activeTaskBackgrounded = false;
         activeMode = null;
@@ -3350,7 +3545,8 @@ async function importCurrentChatMemory() {
             const overlayAfterSave = document.getElementById(OVERLAY_ID);
             if (overlayAfterSave && !overlayAfterSave.hidden) setTimeout(() => { if (!busy && !activeMode) showChooser(); }, 0);
         }
-        globalThis.toastr?.success?.(toastText(`${actionLabel}完成：${memoryBank.archiveName} · ${memories.length} 条记忆${wasBackgrounded ? '（后台；回到原窗口自动写入）' : ''}`), '心跳回忆');
+        const added = Math.max(0, memories.length - (incrementalUpdate ? existing.memories.length : 0));
+        globalThis.toastr?.success?.(toastText(`${actionLabel}完成：${memoryBank.archiveName} · 当前 ${memories.length} 条记忆${incrementalUpdate ? ` · 新增 ${added} 条 · 已保留原 CG / ADV 等缓存` : ''}${wasBackgrounded ? '（后台；回到原窗口自动写入）' : ''}`), '心跳回忆');
     } catch (error) {
         activeMode = null;
         activeSession = null;
@@ -3562,15 +3758,17 @@ async function generateMode(mode, options = {}) {
 
 async function generateAllAdvForSession() {
     if (!activeSession || activeSession.kind !== MODE.ADV) return;
+    if (activeArchiveSnapshot) return showInlineError('只读档案浏览模式不能发起生成；需要生成时请回到对应聊天窗口。');
     const context = currentCharacterGuard();
     const scope = chatScopeKey(context);
-    if (activeAdvBulkScopes.has(scope)) return showInlineError('全部 ADV 已经在批量生成 / 补失败项。');
+    if (activeAdvBulkScopes.has(scope)) return showInlineError('ADV 批量任务已经在进行中。');
     if (isModeGenerating(MODE.ADV, context)) return showInlineError('CG/ADV 事件索引正在生成或补齐，请先等它完成。');
     if (hasGenerationTaskPrefix(`adv:${scope}:`)) return showInlineError('当前有单篇 ADV 正在生成，请等它完成后再批量生成。');
 
     const session = activeSession;
     const pending = session.events.filter(event => !event.adv?.paragraphs?.length);
     if (!pending.length) {
+        session.advBulkRecovery = null;
         globalThis.toastr?.info?.('全部 ADV 都已经生成完成。', '心跳回忆');
         return;
     }
@@ -3579,14 +3777,14 @@ async function generateAllAdvForSession() {
     const expectedArchiveRevision = memoryBank.archiveRevision;
     const origin = { ...captureTaskOrigin(context, expectedArchiveRevision), chatId: comparableChatId(expectedChatId) };
     activeAdvBulkScopes.add(scope);
-    setInnerLoading(true, `先尝试一次生成全部 ${pending.length} 篇 ADV…`);
+    setInnerLoading(true, `一次请求生成 ${pending.length} 篇未完成 ADV…`);
     let batchCount = 0;
-    let repairCount = 0;
+    let batchError = '';
     try {
         try {
             const raw = await requestJson(
                 advBatchPrompt(context, pending, memoryBank),
-                `正在一次请求生成全部 ${pending.length} 篇 ADV…`,
+                `正在一次请求生成 ${pending.length} 篇 ADV…`,
                 {
                     maxTokens: 32000,
                     context,
@@ -3605,36 +3803,18 @@ async function generateAllAdvForSession() {
             }
         } catch (error) {
             if (error?.name === 'AbortError') throw error;
-            console.warn('[HeartbeatMemories] bulk ADV request failed; individual fallback will handle every missing event', error);
+            batchError = normalizeText(error?.message || String(error), 1000);
+            console.warn('[HeartbeatMemories] bulk ADV request failed; waiting for user recovery choice', error);
         }
 
         const failedAfterBatch = pending.filter(event => !event.adv?.paragraphs?.length);
-        for (let i = 0; i < failedAfterBatch.length; i += 1) {
-            const event = failedAfterBatch[i];
-            setInnerLoading(true, `批量成功 ${batchCount} 篇；正在单独补失败项 ${i + 1} / ${failedAfterBatch.length}：${event.title}`);
-            try {
-                const raw = await requestJson(
-                    advPrompt(context, event, memoryBank),
-                    `正在单独补 ADV：${event.title}`,
-                    {
-                        maxTokens: 8192,
-                        context,
-                        origin,
-                        taskKey: `adv-bulk-retry:${scope}:${safeId(event.id, String(i + 1))}`,
-                        mode: MODE.ADV,
-                        background: true,
-                    },
-                );
-                event.adv = normalizeAdv(raw);
-                repairCount += 1;
-            } catch (error) {
-                if (error?.name === 'AbortError') throw error;
-                console.warn('[HeartbeatMemories] ADV individual retry still failed', { eventId: event.id, error });
-            }
-            await yieldToUi();
-        }
+        session.advBulkRecovery = failedAfterBatch.length ? {
+            failedIds: failedAfterBatch.map(event => event.id),
+            attemptedAt: Date.now(),
+            batchSucceeded: batchCount,
+            error: batchError,
+        } : null;
 
-        await yieldToUi();
         let committed = false;
         if (isCurrentTaskOrigin(origin)) {
             try {
@@ -3646,15 +3826,83 @@ async function generateAllAdvForSession() {
         const completed = session.events.filter(event => event.adv?.paragraphs?.length).length;
         const failed = session.events.length - completed;
         if (isCurrentTaskOrigin(origin) && activeSession === session && !document.getElementById(OVERLAY_ID)?.hidden) renderAdvMode();
-        globalThis.toastr?.[failed ? 'warning' : 'success']?.(
-            `ADV 批量流程完成：一次请求成功 ${batchCount} 篇，单独补回 ${repairCount} 篇；当前 ${completed}/${session.events.length}${failed ? `，仍失败 ${failed} 篇` : ''}。`,
-            '心跳回忆',
-        );
+        if (failed) {
+            globalThis.toastr?.warning?.(
+                `一键 ADV 完成 ${batchCount} 篇，仍有 ${failed} 篇未完成。已停止自动逐条请求，请在页面选择“再次一键生成失败项（1 次请求）”或“逐个补完失败项（最多 ${failed} 次请求）”。`,
+                '心跳回忆',
+            );
+        } else {
+            globalThis.toastr?.success?.(`一键 ADV 已完成：${completed}/${session.events.length}。`, '心跳回忆');
+        }
     } catch (error) {
         if (error?.name !== 'AbortError') {
             console.error('[HeartbeatMemories] bulk ADV flow failed', error);
             showInlineError(error?.message || String(error));
         }
+    } finally {
+        activeAdvBulkScopes.delete(scope);
+        setInnerLoading(false);
+        refreshConcurrentTaskUi(MODE.ADV, origin);
+    }
+}
+
+async function repairFailedAdvForSession() {
+    if (!activeSession || activeSession.kind !== MODE.ADV) return;
+    if (activeArchiveSnapshot) return showInlineError('只读档案浏览模式不能补生成 ADV。');
+    const context = currentCharacterGuard();
+    const scope = chatScopeKey(context);
+    if (activeAdvBulkScopes.has(scope) || hasGenerationTaskPrefix(`adv:${scope}:`)) return showInlineError('当前已有 ADV 生成任务，请稍候。');
+    const session = activeSession;
+    const requestedIds = new Set(cleanArray(session.advBulkRecovery?.failedIds, 64, 100));
+    const failed = session.events.filter(event => !event.adv?.paragraphs?.length && (!requestedIds.size || requestedIds.has(event.id)));
+    if (!failed.length) {
+        session.advBulkRecovery = null;
+        renderAdvMode();
+        return;
+    }
+    if (!confirmExplicitAction(
+        `逐个补完 ${failed.length} 篇失败 ADV？`,
+        `这最多会发出 ${failed.length} 次独立模型请求。若你更在意请求次数，请取消并选择“再次一键生成失败项（1 次请求）”。`,
+        { destructive: false },
+    )) return;
+
+    const memoryBank = requireArchive(context);
+    const expectedChatId = getChatId(context);
+    const expectedArchiveRevision = memoryBank.archiveRevision;
+    const origin = { ...captureTaskOrigin(context, expectedArchiveRevision), chatId: comparableChatId(expectedChatId) };
+    activeAdvBulkScopes.add(scope);
+    let repaired = 0;
+    try {
+        for (let i = 0; i < failed.length; i += 1) {
+            const event = failed[i];
+            setInnerLoading(true, `逐个补完 ${i + 1} / ${failed.length}：${event.title}`);
+            try {
+                const raw = await requestJson(
+                    advPrompt(context, event, memoryBank),
+                    `正在补 ADV：${event.title}`,
+                    {
+                        maxTokens: 8192,
+                        context,
+                        origin,
+                        taskKey: `adv-user-repair:${scope}:${safeId(event.id, String(i + 1))}`,
+                        mode: MODE.ADV,
+                        background: true,
+                    },
+                );
+                event.adv = normalizeAdv(raw);
+                repaired += 1;
+                if (isCurrentTaskOrigin(origin)) saveSession(MODE.ADV, session, expectedChatId);
+            } catch (error) {
+                if (error?.name === 'AbortError') throw error;
+                console.warn('[HeartbeatMemories] user-requested ADV repair failed', { eventId: event.id, error });
+            }
+            await yieldToUi();
+        }
+        const stillFailed = session.events.filter(event => !event.adv?.paragraphs?.length);
+        session.advBulkRecovery = stillFailed.length ? { failedIds: stillFailed.map(event => event.id), attemptedAt: Date.now(), batchSucceeded: 0, error: '' } : null;
+        if (isCurrentTaskOrigin(origin)) saveSession(MODE.ADV, session, expectedChatId);
+        if (activeSession === session && !document.getElementById(OVERLAY_ID)?.hidden) renderAdvMode();
+        globalThis.toastr?.[stillFailed.length ? 'warning' : 'success']?.(`逐个补完完成：成功 ${repaired} 篇${stillFailed.length ? `，仍有 ${stillFailed.length} 篇失败` : '，全部 ADV 已就绪'}。`, '心跳回忆');
     } finally {
         activeAdvBulkScopes.delete(scope);
         setInnerLoading(false);
@@ -3672,6 +3920,7 @@ async function generateAdvForSelected() {
         renderAdvMode();
         return;
     }
+    if (activeArchiveSnapshot) return showInlineError('这份只读档案还没有生成当前 ADV；请回到对应聊天窗口后再生成。');
     const context = currentCharacterGuard();
     const expectedChatId = getChatId(context);
     const scope = chatScopeKey(context);
@@ -4013,6 +4262,9 @@ dialog#${OVERLAY_ID}::backdrop{background:transparent}
 }
 .rmt-abstract:before,.rmt-abstract:after{content:"";position:absolute;border:2px solid rgba(255,255,255,.52);border-radius:42% 58% 54% 46%}
 .rmt-abstract:before{width:28%;height:55%;left:18%;top:24%}.rmt-abstract:after{width:34%;height:38%;right:12%;bottom:14%}
+.rmt-cg-real{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;z-index:1;background:#eef5f7}
+.rmt-cg-real[hidden]{display:none!important}.rmt-cg-real-badge{position:absolute;z-index:3;top:7px;right:7px;padding:3px 7px;border-radius:999px;background:rgba(33,48,62,.72);color:#fff;font-size:8px;font-weight:800;letter-spacing:.08em;backdrop-filter:blur(5px)}
+.rmt-cg-caption,.rmt-memory-caption{z-index:2}.rmt-cg-draw-note{font-size:10px;color:#8795a4;line-height:1.55;margin-top:8px}.rmt-btn.rmt-cg-drawing{opacity:.72;cursor:wait}
 .rmt-info{
   border:1px solid #cbdde7;border-radius:16px;padding:16px;min-height:300px;animation:rmtFade .2s ease;
   background:linear-gradient(180deg,#fff,#fffcf8);box-shadow:0 7px 18px rgba(71,94,111,.07);position:sticky;top:0;align-self:start
@@ -4316,6 +4568,212 @@ function abstractStyle(seed, id) {
     const y2 = 18 + ((h >>> 17) % 64);
     const angle = (h % 160) + 10;
     return `--x1:${x1}%;--y1:${y1}%;--x2:${x2}%;--y2:${y2}%;--angle:${angle}deg;--c1:hsla(${hue1},54%,72%,.68);--c2:hsla(${hue2},48%,76%,.56)`;
+}
+
+function imageGenerationCommand(context = getContext()) {
+    const command = context?.SlashCommandParser?.commands?.imagine;
+    return command && typeof command.callback === 'function' ? command : null;
+}
+
+function normalizeCgImageUrl(value) {
+    const raw = normalizeText(value, 4096);
+    if (!raw) return '';
+    try {
+        const base = globalThis.location?.href || 'http://localhost/';
+        const parsed = new URL(raw, base);
+        if (!['http:', 'https:'].includes(parsed.protocol)) return '';
+        const currentOrigin = globalThis.location?.origin;
+        if (currentOrigin && parsed.origin !== currentOrigin) return '';
+        // SillyTavern's image-generation extension saves provider output as a local user image.
+        // Persist only the same-origin path, never base64/data/blob/external provider URLs.
+        return `${parsed.pathname}${parsed.search}${parsed.hash}`.slice(0, 4096);
+    } catch {
+        return '';
+    }
+}
+
+function normalizeCgImageRecord(value) {
+    if (!value || typeof value !== 'object') return null;
+    const url = normalizeCgImageUrl(value.url);
+    if (!url) return null;
+    return {
+        url,
+        prompt: normalizeText(value.prompt, MAX_CG_IMAGE_PROMPT_CHARS),
+        provider: value.provider === CG_IMAGE_PROVIDER ? CG_IMAGE_PROVIDER : CG_IMAGE_PROVIDER,
+        generatedAt: Math.max(0, Number(value.generatedAt) || 0),
+    };
+}
+
+function sanitizeCgVisualText(value, limit = MAX_CG_IMAGE_PROMPT_CHARS) {
+    let text = normalizeText(value, limit);
+    if (!text) return '';
+    text = text
+        .replace(/https?:\/\/\S+/gi, ' ')
+        .replace(/\{\{[^{}]{1,100}\}\}/g, ' ')
+        .replace(/\b(?:sourceMemoryIds?|sourceMemoryAnchor|WORLD_INFO_TEXT|MEMORY_POOL_JSON|UNTRUSTED_[A-Z0-9_]+)\b/gi, ' ')
+        .replace(/<[^>]{0,500}>/g, ' ');
+    return normalizeText(text.replace(/\s{2,}/g, ' '), limit);
+}
+
+function cgImagePromptForItem(item) {
+    const authored = sanitizeCgVisualText(item?.imagePrompt, MAX_CG_IMAGE_PROMPT_CHARS);
+    const visibleDescription = authored || sanitizeCgVisualText(item?.cgDesc || item?.desc, 1100);
+    const seeds = cleanArray(item?.visualSeed, 10, 80).map(seed => sanitizeCgVisualText(seed, 80)).filter(Boolean);
+    const prompt = [
+        'visual novel event CG, cinematic anime illustration, 16:9 landscape composition, no text, no subtitle, no logo, no watermark',
+        visibleDescription,
+        seeds.length ? `visible details: ${seeds.join(', ')}` : '',
+        'single coherent still image, expressive composition, scene-accurate clothing and environment',
+    ].filter(Boolean).join(', ');
+    return normalizeText(prompt, MAX_CG_IMAGE_PROMPT_CHARS);
+}
+
+function cgImageTaskKey(mode, itemId, context = currentCharacterGuard()) {
+    return `cg-image:${chatScopeKey(context)}:${mode}:${safeId(itemId, 'cg')}`;
+}
+
+function isCgImageDrawing(mode, itemId) {
+    try { return activeCgImageTasks.has(cgImageTaskKey(mode, itemId)); }
+    catch { return false; }
+}
+
+function cgImageLayerHtml(item, { lazy = true } = {}) {
+    const image = normalizeCgImageRecord(item?.cgImage);
+    const abstract = `<div class="rmt-abstract" style="${abstractStyle(item?.visualSeed, item?.id)}"></div>`;
+    if (!image) return abstract;
+    const alt = `${normalizeText(item?.title, 120) || 'CG'} · 实图`;
+    return `${abstract}<img class="rmt-cg-real" data-rmt-cg-image src="${esc(image.url)}" alt="${esc(alt)}" ${lazy ? 'loading="lazy"' : ''} decoding="async" referrerpolicy="no-referrer"><span class="rmt-cg-real-badge">CG IMAGE</span>`;
+}
+
+function selectedCgTarget() {
+    if (activeMode === MODE.ALBUM && activeSession?.kind === MODE.ALBUM) {
+        const item = selectedAlbumEntry();
+        return item?.unlocked ? { mode: MODE.ALBUM, session: activeSession, item } : null;
+    }
+    if (activeMode === MODE.ADV && activeSession?.kind === MODE.ADV) {
+        const item = selectedAdvEvent();
+        return item ? { mode: MODE.ADV, session: activeSession, item } : null;
+    }
+    return null;
+}
+
+function renderCurrentCgMode(mode, session) {
+    if (activeMode !== mode || activeSession !== session || document.getElementById(OVERLAY_ID)?.hidden) return;
+    if (mode === MODE.ALBUM) renderAlbum();
+    else if (mode === MODE.ADV) renderAdvMode();
+}
+
+async function drawSelectedCgImage() {
+    const target = selectedCgTarget();
+    if (!target) return;
+    const { mode, session, item } = target;
+    let context;
+    try { context = currentCharacterGuard(); }
+    catch (error) {
+        globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆');
+        return;
+    }
+    const command = imageGenerationCommand(context);
+    if (!command) {
+        globalThis.toastr?.info?.('没有检测到 SillyTavern Image Generation 的 imagine 命令。请先启用并配置图像生成扩展。', '心跳回忆');
+        return;
+    }
+    if (activeCgImageTasks.size >= 1) {
+        globalThis.toastr?.info?.('已有一张 CG 正在绘制，请等它完成后再绘制下一张。', '心跳回忆');
+        return;
+    }
+    const previous = normalizeCgImageRecord(item.cgImage);
+    const confirmed = confirmExplicitAction(
+        previous ? `重新绘制「${item.title}」CG？` : `绘制「${item.title}」CG？`,
+        `${previous ? '新的图片成功后会替换当前 CG 图片引用；旧图片文件不会由心跳回忆主动删除。\n\n' : ''}这会调用你在 SillyTavern 中已经配置的 Image Generation 服务，可能消耗本地算力、额度或付费点数。只会发送这张 CG 的可见画面提示，不发送聊天原文、档案原文、世界书原文或私人终端内容。`,
+        { destructive: !!previous },
+    );
+    if (!confirmed) return;
+
+    const prompt = cgImagePromptForItem(item);
+    if (!prompt) {
+        globalThis.toastr?.error?.('这张 CG 没有可用的可视化描述，无法绘制。', '心跳回忆');
+        return;
+    }
+    const expectedChatId = getChatId(context);
+    const memoryBank = requireArchive(context);
+    const origin = { ...captureTaskOrigin(context, memoryBank.archiveRevision), chatId: comparableChatId(expectedChatId) };
+    const lifecycleEpoch = cgImageLifecycleEpoch;
+    const itemId = item.id;
+    const taskKey = cgImageTaskKey(mode, itemId, context);
+    activeCgImageTasks.set(taskKey, { mode, itemId, startedAt: Date.now() });
+    renderCurrentCgMode(mode, session);
+    try {
+        const rawUrl = await command.callback.call(command, { quiet: 'true', gallery: 'false' }, prompt);
+        const url = normalizeCgImageUrl(rawUrl);
+        if (!url) throw new Error('图像生成扩展没有返回可保存的 SillyTavern 本地图片路径。');
+        if (cgImageLifecycleEpoch !== lifecycleEpoch || !isCurrentTaskOrigin(origin)) {
+            globalThis.toastr?.warning?.('CG 已由生图扩展完成，但期间聊天窗口或插件状态发生变化，因此没有把图片写入当前档案缓存。', '心跳回忆');
+            return;
+        }
+        const liveContext = currentCharacterGuard();
+        const liveMemoryBank = requireArchive(liveContext);
+        const latestSession = loadSession(mode, { context: liveContext, chatId: expectedChatId, memoryBank: liveMemoryBank, clone: false }) || session;
+        const liveItem = mode === MODE.ALBUM
+            ? latestSession.entries?.find(entry => entry.id === itemId)
+            : latestSession.events?.find(entry => entry.id === itemId);
+        if (!liveItem) throw new Error('CG 事件已经变化，已停止保存图片引用。');
+        const previousImage = liveItem.cgImage;
+        const nextImage = {
+            url,
+            prompt,
+            provider: CG_IMAGE_PROVIDER,
+            generatedAt: Date.now(),
+        };
+        liveItem.cgImage = nextImage;
+        const committed = saveSession(mode, latestSession, expectedChatId);
+        if (!committed) {
+            liveItem.cgImage = previousImage;
+            throw new Error('图片已生成，但当前档案版本已变化，未保存 CG 图片引用。');
+        }
+        if (activeMode === mode && activeSession?.kind === mode) {
+            const activeItem = mode === MODE.ALBUM
+                ? activeSession.entries?.find(entry => entry.id === itemId)
+                : activeSession.events?.find(entry => entry.id === itemId);
+            if (activeItem) activeItem.cgImage = nextImage;
+        }
+        globalThis.toastr?.success?.(`CG 已绘制：${item.title}`, '心跳回忆');
+    } catch (error) {
+        console.error('[HeartbeatMemories] CG image generation failed', error);
+        globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆');
+    } finally {
+        activeCgImageTasks.delete(taskKey);
+        renderCurrentCgMode(mode, session);
+    }
+}
+
+function clearSelectedCgImage() {
+    const target = selectedCgTarget();
+    if (!target) return;
+    const { mode, session, item } = target;
+    const image = normalizeCgImageRecord(item.cgImage);
+    if (!image) return;
+    if (!confirmExplicitAction(
+        `恢复「${item.title}」的抽象 CG？`,
+        '只会从心跳回忆缓存中移除这张图片的引用，不会删除 SillyTavern 已保存的图片文件。',
+        { destructive: false },
+    )) return;
+    const previousImage = item.cgImage;
+    item.cgImage = null;
+    const expectedChatId = normalizeText(session.chatId, 240);
+    if (!saveSession(mode, session, expectedChatId)) {
+        item.cgImage = previousImage;
+        globalThis.toastr?.error?.('当前档案版本已经变化，未移除 CG 图片引用。', '心跳回忆');
+        return;
+    }
+    renderCurrentCgMode(mode, session);
+}
+
+function handleOverlayMediaError(event) {
+    const image = event.target?.closest?.('[data-rmt-cg-image]');
+    if (!image) return;
+    image.hidden = true;
+    image.nextElementSibling?.classList?.contains('rmt-cg-real-badge') && (image.nextElementSibling.hidden = true);
 }
 
 
@@ -4702,7 +5160,7 @@ function startRoomClock() {
         }
         const todayKey = localDateKey(now);
         const failedToday = activeSession.lifePlanAttempt?.dateKey === todayKey && Number(activeSession.lifePlanAttempt?.count) >= 1;
-        if (activeSession.lifePlan?.dateKey !== todayKey && !failedToday && getPluginSettings().roomLifeAutoDaily && !roomLifeRefreshPromise) {
+        if (!activeArchiveSnapshot && activeSession.lifePlan?.dateKey !== todayKey && !failedToday && getPluginSettings().roomLifeAutoDaily && !roomLifeRefreshPromise) {
             void ensureRoomLifePlan({ quiet: true });
         }
         if (clock) clock.textContent = `${state.label} · ${roomClockText(now)}`;
@@ -4718,16 +5176,18 @@ function roomTemporaryPlacement(label, index) {
 }
 
 function roomDeepAvailability() {
+    const options = activeArchiveSnapshot ? { chatId: activeArchiveSnapshot.chatId, memoryBank: activeArchiveSnapshot.memory, cache: activeArchiveSnapshot.cache, clone: true } : {};
     return {
-        items: loadSession(MODE.ITEMS),
-        phone: loadSession(MODE.PHONE),
+        items: loadSession(MODE.ITEMS, options),
+        phone: loadSession(MODE.PHONE, options),
     };
 }
 
 function openRoomDeepMode(mode) {
     if (!ROOM_DEEP_MODES.includes(mode)) return;
-    const room = activeMode === MODE.ROOM && activeSession?.kind === MODE.ROOM ? activeSession : loadSession(MODE.ROOM);
-    const deep = loadSession(mode);
+    const snapshotOptions = activeArchiveSnapshot ? { chatId: activeArchiveSnapshot.chatId, memoryBank: activeArchiveSnapshot.memory, cache: activeArchiveSnapshot.cache, clone: true } : null;
+    const room = activeMode === MODE.ROOM && activeSession?.kind === MODE.ROOM ? activeSession : loadSession(MODE.ROOM, snapshotOptions || {});
+    const deep = loadSession(mode, snapshotOptions || {});
     if (!room) {
         globalThis.toastr?.info?.('请先生成“他的房间”。', '心跳回忆');
         return;
@@ -4739,6 +5199,10 @@ function openRoomDeepMode(mode) {
         return;
     }
     if (!deep) {
+        if (activeArchiveSnapshot) {
+            globalThis.toastr?.info?.('这份只读档案还没有生成这一层；不会为了查看而切换聊天或自动生成。', '心跳回忆');
+            return;
+        }
         const taskKey = generationTaskKeyForMode(mode);
         if (isGenerationTaskRunning(taskKey) || activeModeBuildScopes.has(taskKey)) {
             globalThis.toastr?.info?.(`「${MODE_LABEL[mode]}」已经在后台生成中。`, '心跳回忆');
@@ -4776,8 +5240,10 @@ function openRoomDeepMode(mode) {
 }
 
 function returnToRoomFromDeep() {
-    const room = loadSession(MODE.ROOM);
-    if (!room) return showChooser();
+    const room = activeArchiveSnapshot
+        ? loadSession(MODE.ROOM, { chatId: activeArchiveSnapshot.chatId, memoryBank: activeArchiveSnapshot.memory, cache: activeArchiveSnapshot.cache, clone: true })
+        : loadSession(MODE.ROOM);
+    if (!room) return activeArchiveSnapshot ? showIndexedArchiveSnapshot(activeArchiveSnapshot) : showChooser();
     const returnSpaceId = normalizeText(activeSession?.returnRoomSpaceId, 80);
     const returnObjectId = normalizeText(activeSession?.returnRoomObjectId, 80);
     if (returnSpaceId && room.spaces.some(space => space.id === returnSpaceId)) room.selectedSpaceId = returnSpaceId;
@@ -4805,7 +5271,7 @@ function renderRoom() {
     const focusId = personIsHere ? (slot?.focusObjectId || '') : '';
     const visualState = normalizeRoomVisualState(slot?.visualState);
     const temporaryObjects = personIsHere ? normalizeTemporaryRoomObjects(slot?.temporaryObjects) : [];
-    const charName = normalizeText(getContext().name2 || '{{char}}', 120);
+    const charName = normalizeText(activeArchiveSnapshot?.characterName || getContext().name2 || '{{char}}', 120);
     const hotspots = selectedSpace.objects.map((item, index) => `<button type="button" class="rmt-room-hotspot ${item.id === selected?.id ? 'active' : ''} ${item.id === focusId ? 'focus' : ''}" style="${roomObjectPlacement(item, index)}" data-rmt-room-id="${esc(item.id)}" aria-label="${esc(item.label)}">${index + 1}</button>`).join('');
     const objectRail = selectedSpace.objects.map((item, index) => `<button type="button" class="rmt-room-object-chip ${item.id === selected?.id ? 'active' : ''}" data-rmt-room-id="${esc(item.id)}"><span>${index + 1}</span><b>${esc(item.label)}</b>${item.searchable ? '<em>▣ 可翻找</em>' : ''}</button>`).join('');
     const map = session.spaces.map(space => {
@@ -4821,8 +5287,9 @@ function renderRoom() {
     const deep = roomDeepAvailability();
     const phoneLabel = deep.phone?.deviceName || '私人通讯终端';
     const itemsGenerating = isModeGenerating(MODE.ITEMS);
+    const readOnlyArchive = !!activeArchiveSnapshot;
     const itemActionText = selectedSearchable
-        ? (deep.items ? `翻找「${selected.label}」` : itemsGenerating ? '物品生成中…' : `生成并翻找「${selected.label}」`)
+        ? (deep.items ? `翻找「${selected.label}」` : readOnlyArchive ? `「${selected.label}」尚未生成物品档案` : itemsGenerating ? '物品生成中…' : `生成并翻找「${selected.label}」`)
         : '先选中盒子 / 抽屉 / 柜子等收纳物';
     const sceneTitle = normalizeText(selectedSpace.label, 100) === normalizeText(selectedSpace.spaceType, 100)
         ? selectedSpace.label
@@ -4831,7 +5298,7 @@ function renderRoom() {
     const body = bodyEl();
     body.innerHTML = `<div class="rmt-room-view">
       <div class="rmt-room-map" aria-label="私人空间地图">${map}</div>
-      <div class="rmt-room-location"><div><b>${esc(currentLocationText)}</b><small>${esc(session.homeName)} · ${session.spaces.length} 个可观察区域</small></div><div class="rmt-room-location-actions">${!personIsHere ? `<button type="button" class="rmt-room-find" data-rmt-action="room-find-presence">去看看他</button>` : ''}<button type="button" class="rmt-room-find" data-rmt-action="room-life-refresh" ${busy ? 'disabled' : ''}>更新今日生活</button></div></div>
+      <div class="rmt-room-location"><div><b>${esc(currentLocationText)}</b><small>${esc(session.homeName)} · ${session.spaces.length} 个可观察区域</small></div><div class="rmt-room-location-actions">${!personIsHere ? `<button type="button" class="rmt-room-find" data-rmt-action="room-find-presence">去看看他</button>` : ''}${readOnlyArchive ? '' : `<button type="button" class="rmt-room-find" data-rmt-action="room-life-refresh" ${busy ? 'disabled' : ''}>更新今日生活</button>`}</div></div>
 
       <div class="rmt-room-flow">
         <section class="rmt-room-card rmt-room-space-note-card">
@@ -4866,8 +5333,8 @@ function renderRoom() {
         <section class="rmt-room-card rmt-room-deep-card rmt-room-private-access-card">
           <div class="rmt-room-card-kicker">PRIVATE ACCESS</div>
           <div class="rmt-room-deep-actions">
-            <button type="button" class="rmt-btn" data-rmt-action="room-open-items" ${!selectedSearchable || itemsGenerating ? 'disabled' : ''}><i class="fa-solid fa-box-open"></i> ${esc(itemActionText)}</button>
-            <button type="button" class="rmt-btn" data-rmt-action="room-open-phone" ${isModeGenerating(MODE.PHONE) ? 'disabled' : ''}><i class="fa-solid fa-mobile-screen"></i> ${deep.phone ? `查看${esc(phoneLabel)}` : isModeGenerating(MODE.PHONE) ? '私人终端生成中…' : `生成并查看${esc(phoneLabel)}`}</button>
+            <button type="button" class="rmt-btn" data-rmt-action="room-open-items" ${!selectedSearchable || itemsGenerating || (readOnlyArchive && !deep.items) ? 'disabled' : ''}><i class="fa-solid fa-box-open"></i> ${esc(itemActionText)}</button>
+            <button type="button" class="rmt-btn" data-rmt-action="room-open-phone" ${isModeGenerating(MODE.PHONE) || (readOnlyArchive && !deep.phone) ? 'disabled' : ''}><i class="fa-solid fa-mobile-screen"></i> ${deep.phone ? `查看${esc(phoneLabel)}` : readOnlyArchive ? `${esc(phoneLabel)}尚未生成` : isModeGenerating(MODE.PHONE) ? '私人终端生成中…' : `生成并查看${esc(phoneLabel)}`}</button>
           </div>
           <div class="rmt-room-note">物品只能从真实收纳物进入；私人终端会根据人设选择手机、儿童电话手表或其他通讯器形态。</div>
         </section>
@@ -4957,6 +5424,7 @@ function openOverlay() {
         document.body.appendChild(overlay);
         overlay.addEventListener('click', handleOverlayClick);
         overlay.addEventListener('change', handleOverlayChange);
+        overlay.addEventListener('error', handleOverlayMediaError, true);
         if (typeof globalThis.HTMLDialogElement === 'function' && overlay instanceof globalThis.HTMLDialogElement) {
             overlay.addEventListener('cancel', event => {
                 event.preventDefault();
@@ -5012,7 +5480,12 @@ function navigateBack() {
         activeSession.sharedMemory = false;
         return renderAlbum();
     }
-    if (activeMode) return showChooser();
+    if (activeMode) return activeArchiveSnapshot ? showIndexedArchiveSnapshot(activeArchiveSnapshot) : showChooser();
+    if (archiveViewLevel === 'snapshot' && activeArchiveSnapshot) {
+        const key = activeArchiveSnapshot.characterKey;
+        activeArchiveSnapshot = null;
+        return key ? showArchiveCharacter(key) : showArchiveLibrary();
+    }
     if (archiveViewLevel === 'chooser') {
         try {
             const key = currentCharacterKey(currentCharacterGuard());
@@ -5045,7 +5518,7 @@ function confirmModeRegeneration(mode) {
     const label = MODE_LABEL[mode] || mode || '当前内容';
     return confirmExplicitAction(
         `重新生成「${label}」？`,
-        '这会替换这一项现有的生成缓存。当前聊天档案本身不会被修改；取消可继续保留现在的内容。',
+        `这会替换这一项现有的生成缓存。${mode === MODE.ALBUM || mode === MODE.ADV ? '这一项里已经绘制的 CG 图片引用也会随旧缓存一起被替换（SillyTavern 已保存的图片文件不会由心跳回忆删除）。' : ''}当前聊天档案本身不会被修改；取消可继续保留现在的内容。`,
         { destructive: true },
     );
 }
@@ -5073,13 +5546,40 @@ function requestCurrentArchiveImport() {
         globalThis.toastr?.info?.('检测到当前窗口记忆 / 摘要来源。请先点“扫描记忆 / 摘要”，确认读取范围后再生成/更新当前窗口档案。', '心跳回忆');
         return false;
     }
-    const title = existing ? '更新当前窗口档案？' : '生成当前窗口档案？';
+    const title = existing ? '增量更新当前窗口档案？' : '生成当前窗口档案？';
     const detail = existing
-        ? '这会重新读取当前聊天窗口并替换现有档案。更新成功后，旧档案版本对应的 CG / ADV / 房间 / 蝴蝶效应 / ENDING / 储物 / 私人终端等派生缓存会被清空，需要按需重新生成。聊天正文不会被修改。'
+        ? '默认只整理“上次档案之后新增的聊天”和发生变化的当前窗口记忆/摘要。已有 Mxxx 记忆 ID 不重排，已生成的回忆相簿、CG、ADV、房间、ENDING、储物、私人终端会继续保留。若检测到旧聊天被编辑/删除，本次会停止并要求你明确选择“完全重建档案”。'
         : '这会读取当前聊天窗口并建立一份只属于这个窗口的心跳回忆档案。聊天正文不会被修改；之后也只有你手动更新时档案才会变化。';
-    if (!confirmExplicitAction(title, detail, { destructive: !!existing })) return false;
-    void importCurrentChatMemory().catch(error => {
+    if (!confirmExplicitAction(title, detail, { destructive: false })) return false;
+    void importCurrentChatMemory({ fullRebuild: false }).catch(error => {
         console.error('[HeartbeatMemories] current archive import action failed', error);
+        globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆');
+    });
+    return true;
+}
+
+function requestCurrentArchiveFullRebuild() {
+    let context;
+    try { context = currentCharacterGuard(); }
+    catch (error) {
+        globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆');
+        return false;
+    }
+    if (!getImportedMemory(context)) return requestCurrentArchiveImport();
+    const settings = getPluginSettings(context);
+    const detected = externalMemorySourceSummary(context);
+    if (settings.useCurrentChatExternalMemory && detected.length && !getMemoryPreflight(context)) {
+        showChooser();
+        globalThis.toastr?.info?.('完全重建前请先扫描当前窗口记忆 / 摘要，确认读取范围。', '心跳回忆');
+        return false;
+    }
+    if (!confirmExplicitAction(
+        '完全重建当前窗口档案？',
+        '这会重新读取整个当前聊天并重新编号 Mxxx 记忆，因此旧档案版本对应的回忆相簿、CG、ADV、房间、蝴蝶效应、ENDING、储物和私人终端缓存都会失效。只有当你明确需要从头整理（例如旧消息被大量编辑/删除）时才建议使用。',
+        { destructive: true },
+    )) return false;
+    void importCurrentChatMemory({ fullRebuild: true }).catch(error => {
+        console.error('[HeartbeatMemories] full archive rebuild failed', error);
         globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆');
     });
     return true;
@@ -5155,6 +5655,8 @@ function resetArchiveOverviewForCharacter(context = currentCharacterGuard()) {
         archiveOverviewCache = { key: '', fetchedAt: 0, items: [] };
         archiveOverviewAllowedChats.clear();
         archiveOverviewKnownArchives.clear();
+        archiveSnapshotCache.clear();
+        activeArchiveSnapshot = null;
     }
     archiveOverviewLastKey = key;
 }
@@ -5163,6 +5665,7 @@ function scheduleChooserRefresh(delay = 40) {
     if (chooserRefreshTimer) clearTimeout(chooserRefreshTimer);
     chooserRefreshTimer = setTimeout(() => {
         chooserRefreshTimer = 0;
+        if (activeArchiveSnapshot && archiveViewLevel === 'snapshot') return;
         const overlay = document.getElementById(OVERLAY_ID);
         if (!overlay || overlay.hidden || busy) return;
         let context;
@@ -5274,24 +5777,15 @@ function renderArchiveOverviewAsync({ force = false } = {}) {
 async function openArchiveChatFromOverview(chatId) {
     const id = comparableChatId(chatId);
     if (!id || !archiveOverviewAllowedChats.has(id)) return;
-    if (busy) {
-        globalThis.toastr?.info?.('后台任务进行中时不能切换聊天窗口；可以先等待完成或关闭档案室继续当前聊天。', '心跳回忆');
+    const context = currentCharacterGuard();
+    if (comparableChatId(getChatId(context)) === id) return showChooser();
+    const key = currentCharacterKey(context);
+    const entry = getArchiveIndex(getContext()).find(item => archiveCanonicalCharacterKey(item, getContext()) === key && item.chatId === id);
+    if (!entry) {
+        globalThis.toastr?.info?.('这个聊天还没有被索引为心跳回忆档案；不会为了查看而自动切换聊天。', '心跳回忆');
         return;
     }
-    const context = currentCharacterGuard();
-    if (comparableChatId(getChatId(context)) === id) return;
-    if (typeof context.openCharacterChat !== 'function') return;
-    await context.openCharacterChat(id);
-    activeMode = null;
-    activeSession = null;
-    try {
-        const latest = currentCharacterGuard();
-        resetArchiveOverviewForCharacter(latest);
-        syncArchiveOverviewCurrentRow(latest);
-    } catch {}
-    // CHAT_CHANGED + CHAT_LOADED already fire during openCharacterChat. Coalesce their UI work
-    // instead of forcing a third synchronous chooser render here.
-    scheduleChooserRefresh(0);
+    return openIndexedArchive(entry.characterKey, id);
 }
 
 function modePortalMeta(mode) {
@@ -5319,7 +5813,7 @@ function archiveCharacterAvatar(entry, context = getContext()) {
 }
 
 function showArchiveLibrary() {
-    stopRoomClock(); stopPhoneClock(); activeMode = null; activeSession = null; archiveLibraryCharacterKey = ''; archiveViewLevel = 'library';
+    stopRoomClock(); stopPhoneClock(); activeMode = null; activeSession = null; activeArchiveSnapshot = null; archiveLibraryCharacterKey = ''; archiveViewLevel = 'library';
     openOverlay(); setRegenerateVisible(false); setBackVisible(false); topTitle('心跳回忆 · 档案室');
     const body = bodyEl(); if (!body) return;
     try { const ctx = currentCharacterGuard(); const mem = getImportedMemory(ctx); if (mem) upsertArchiveIndex(ctx, mem); } catch {}
@@ -5344,7 +5838,7 @@ function showArchiveLibrary() {
         const mem = getImportedMemory(ctx);
         if (mem) {
             const name = normalizeText(mem.archiveName, 120) || fallbackArchiveName(mem.memories);
-            currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前窗口档案</b><small>${esc(name)} · ${mem.memories.length} 条记忆</small></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive">打开当前窗口档案</button><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">更新当前窗口档案</button></div></section>`;
+            currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前窗口档案</b><small>${esc(name)} · ${mem.memories.length} 条记忆</small></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive">打开当前窗口档案</button><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">增量更新当前窗口档案</button></div></section>`;
         } else {
             currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前聊天还没有档案</b><small>每个聊天窗口拥有自己的独立档案。</small></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">生成当前窗口档案</button></div></section>`;
         }
@@ -5353,6 +5847,7 @@ function showArchiveLibrary() {
 }
 
 function showArchiveCharacter(characterKey) {
+    activeArchiveSnapshot = null;
     const key = normalizeText(characterKey, 300); archiveLibraryCharacterKey = key; archiveViewLevel = 'character';
     openOverlay(); setRegenerateVisible(false); setBackVisible(true, '所有角色');
     const context = getContext();
@@ -5363,24 +5858,126 @@ function showArchiveCharacter(characterKey) {
     body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">CHARACTER ARCHIVES</div><strong class="rmt-archive-title">${esc(name)}</strong><div class="rmt-archive-summary">一个聊天窗口一份独立档案；每个窗口保留自己的档案名称。</div><div class="rmt-archive-overview-list" style="max-height:none">${rows || '<div class="rmt-archive-overview-empty">这个角色还没有已索引档案。</div>'}</div></section></div>`;
 }
 
+
+function archiveSnapshotCacheKey(entry) {
+    return `${normalizeText(entry?.characterKey, 300)}|${comparableChatId(entry?.chatId)}`;
+}
+
+function rememberArchiveSnapshot(snapshot) {
+    const key = archiveSnapshotCacheKey(snapshot);
+    if (!key || key === '|') return snapshot;
+    archiveSnapshotCache.delete(key);
+    archiveSnapshotCache.set(key, snapshot);
+    while (archiveSnapshotCache.size > ARCHIVE_SNAPSHOT_CACHE_MAX) {
+        archiveSnapshotCache.delete(archiveSnapshotCache.keys().next().value);
+    }
+    return snapshot;
+}
+
+async function fetchIndexedArchiveSnapshot(entry, context = getContext()) {
+    const key = archiveSnapshotCacheKey(entry);
+    const cached = archiveSnapshotCache.get(key);
+    if (cached && Date.now() - Number(cached.loadedAt || 0) < 120000) return cached;
+    const avatar = archiveEntryAvatarName(entry, context);
+    if (!avatar || typeof context.getRequestHeaders !== 'function') throw new Error('无法定位这个角色的聊天档案文件。');
+    const response = await fetch('/api/characters/chats', {
+        method: 'POST',
+        headers: context.getRequestHeaders(),
+        cache: 'no-cache',
+        body: JSON.stringify({ avatar_url: avatar, metadata: true }),
+    });
+    if (!response.ok) throw new Error(`读取档案失败：HTTP ${response.status}`);
+    const rows = await response.json();
+    const wantedChatId = comparableChatId(entry.chatId);
+    const row = (Array.isArray(rows) ? rows : []).find(item => comparableChatId(item?.file_id || item?.file_name) === wantedChatId);
+    if (!row) throw new Error('没有在这个角色的聊天文件中找到对应档案。');
+    const metadata = row?.chat_metadata && typeof row.chat_metadata === 'object' ? row.chat_metadata : {};
+    const memory = migrateArchiveInMemory(metadata[MEMORY_KEY]);
+    if (!memory || comparableChatId(memory.chatId) !== wantedChatId) throw new Error('这个聊天文件里没有可读取的心跳回忆档案。');
+    let cache = {};
+    const stored = metadata[CACHE_KEY];
+    if (isCompressedCacheRecord(stored)) {
+        const hydrated = await gunzipJson(stored.data);
+        if (!hydrated || typeof hydrated !== 'object') throw new Error('这个档案的已生成内容缓存无法解压。');
+        cache = hydrated;
+    } else if (stored && typeof stored === 'object') {
+        cache = stored;
+    }
+    if (Object.keys(cache).length) {
+        if (normalizeText(cache.chatId, 240) && comparableChatId(cache.chatId) !== wantedChatId) cache = {};
+        else if (normalizeText(cache.archiveRevision, 240) && cache.archiveRevision !== memory.archiveRevision) cache = {};
+    }
+    return rememberArchiveSnapshot({
+        characterKey: normalizeText(entry.characterKey, 300),
+        avatar,
+        characterName: normalizeText(entry.characterName || memory.characterName, 120) || '未命名角色',
+        chatId: wantedChatId,
+        archiveName: normalizeText(memory.archiveName, 160) || fallbackArchiveName(memory.memories),
+        memory,
+        cache,
+        loadedAt: Date.now(),
+    });
+}
+
+function showIndexedArchiveSnapshot(snapshot = activeArchiveSnapshot) {
+    if (!snapshot?.memory) return showArchiveLibrary();
+    activeArchiveSnapshot = snapshot;
+    activeMode = null;
+    activeSession = null;
+    archiveViewLevel = 'snapshot';
+    openOverlay();
+    setRegenerateVisible(false);
+    setBackVisible(true, '角色档案');
+    topTitle(`心跳回忆 · ${snapshot.characterName} · 只读档案`);
+    const body = bodyEl();
+    if (!body) return;
+    const memory = snapshot.memory;
+    const portals = baseModeAvailability({ chatId: snapshot.chatId, memoryBank: memory, cache: snapshot.cache, clone: false });
+    const generatedCount = portals.filter(item => !!item.session).length;
+    const portalHtml = portals.map(({ mode, session, meta }) => {
+        const generated = !!session;
+        return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} rmt-archive-portal-${esc(meta.accent)}">
+          <button type="button" class="rmt-portal-open" ${generated ? `data-rmt-mode="${esc(mode)}"` : 'disabled'}>
+            <span class="rmt-portal-avatar"><i class="fa-solid ${esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
+            <span class="rmt-portal-title">${esc(meta.title)}</span>
+            <span class="rmt-portal-subtitle">${esc(meta.subtitle)}</span>
+            <span class="rmt-portal-status">${generated ? '已生成 · 只读查看' : '这份档案尚未生成'}</span>
+          </button>
+        </article>`;
+    }).join('');
+    body.innerHTML = `<div class="rmt-archive-room">
+      <section class="rmt-memory-gate rmt-archive-card">
+        <div class="rmt-memory-gate-text">
+          <div class="rmt-archive-kicker">READ-ONLY ARCHIVE</div>
+          <strong class="rmt-archive-title">${esc(snapshot.archiveName)}</strong>
+          <div class="rmt-archive-summary">${esc(memory.archiveSummary || fallbackArchiveSummary(memory.memories))}</div>
+          <div class="rmt-memory-status ready">只读查看 · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${ARCHIVE_PORTAL_MODES.length}</div>
+          <div class="rmt-archive-meta">不会切换 SillyTavern 当前角色或聊天，也不会触发保存。</div>
+        </div>
+      </section>
+      <section class="rmt-archive-portals" aria-label="只读档案内容入口">${portalHtml}</section>
+    </div>`;
+}
+
 async function openIndexedArchive(characterKey, chatId) {
     if (busy) activeTaskBackgrounded = true;
     const context = getContext();
     const index = getArchiveIndex(context);
     const wantedChatId = comparableChatId(chatId);
-    const entry = index.find(item => item.characterKey === characterKey && item.chatId === wantedChatId);
+    const entry = index.find(item => item.characterKey === characterKey && item.chatId === wantedChatId)
+        || index.find(item => archiveCanonicalCharacterKey(item, context) === characterKey && item.chatId === wantedChatId);
     if (!entry) return;
-    const avatar = archiveEntryAvatarName(entry, context);
-    const entryName = normalizeText(entry.characterName, 120);
-    const charIndex = (context.characters || []).findIndex(ch => {
-        const candidateAvatar = normalizeText(ch?.avatar || ch?.data?.avatar, 300);
-        const candidateName = normalizeText(ch?.name || ch?.data?.name, 120);
-        return (avatar && candidateAvatar === avatar) || (!avatar && entryName && candidateName === entryName);
-    });
-    if (charIndex >= 0 && currentCharacterKey(context) !== archiveCanonicalCharacterKey(entry, context) && typeof context.selectCharacterById === 'function') await context.selectCharacterById(charIndex, { switchMenu:false });
-    const latest = currentCharacterGuard();
-    if (comparableChatId(getChatId(latest)) !== entry.chatId && typeof latest.openCharacterChat === 'function') await latest.openCharacterChat(entry.chatId);
-    scheduleChooserRefresh(80);
+    openOverlay();
+    topTitle('心跳回忆 · 正在读取只读档案…');
+    const body = bodyEl();
+    if (body) body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在读取这个聊天的档案与已生成内容…</b><div class="rmt-loading-note">只读取 metadata，不切换当前角色或聊天。</div></div></div>';
+    try {
+        const snapshot = await fetchIndexedArchiveSnapshot(entry, context);
+        showIndexedArchiveSnapshot(snapshot);
+    } catch (error) {
+        console.warn('[HeartbeatMemories] indexed archive read-only load failed', error);
+        if (bodyEl()) bodyEl().innerHTML = `<div class="rmt-error"><div><b>档案读取失败</b><div style="margin-top:10px;white-space:pre-wrap;opacity:.78">${esc(error?.message || String(error))}</div><button type="button" class="rmt-btn" data-rmt-action="library-home">返回档案室</button></div></div>`;
+    }
 }
 
 async function rebuildArchiveIndexFromExisting() {
@@ -5408,6 +6005,7 @@ async function rebuildArchiveIndexFromExisting() {
 }
 
 function showChooser() {
+    activeArchiveSnapshot = null;
     stopRoomClock();
     stopPhoneClock();
     activeMode = null;
@@ -5429,7 +6027,8 @@ function showChooser() {
             body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在读取已生成档案…</b><div class="rmt-loading-note">生成内容使用压缩存储；只有打开档案室时才解压，不再拖慢普通聊天切换。</div></div></div>';
             void ensureCacheHydrated(hydrationContext).then(() => scheduleChooserRefresh(0)).catch(error => {
                 console.warn('[HeartbeatMemories] compressed cache read failed', error);
-                scheduleChooserRefresh(0);
+                const latestBody = bodyEl();
+                if (latestBody) latestBody.innerHTML = `<div class="rmt-error"><div><b>已生成内容缓存读取失败</b><div style="margin:10px 0;white-space:pre-wrap;opacity:.78">${esc(error?.message || String(error))}</div><div style="margin:10px 0;opacity:.78">原缓存没有被删除。为避免把“暂时读不到”误当成“从未生成”，本页不会显示重新生成入口。请先刷新页面或换支持解压的浏览器内核再试。</div><button type="button" class="rmt-btn" data-rmt-action="library-home">返回档案室</button></div></div>`;
             });
             return;
         }
@@ -5447,7 +6046,7 @@ function showChooser() {
     }
     const ready = state.status === 'ready';
     const memory = state.memory;
-    const importLabel = ready ? '更新当前窗口档案' : '生成当前窗口档案';
+    const importLabel = ready ? '增量更新当前窗口档案' : '生成当前窗口档案';
     const preview = ready ? memory.memories.slice(0, 7).map(item => item.title).join(' · ') : '';
     const archiveName = ready ? (memory.archiveName || fallbackArchiveName(memory.memories)) : '尚未创建档案';
     const archiveSummary = ready ? (memory.archiveSummary || fallbackArchiveSummary(memory.memories)) : '先为当前聊天创建档案。档案只在你手动创建 / 更新时变化，不会因为继续聊天而自动改写。';
@@ -5496,7 +6095,7 @@ function showChooser() {
       <small>兼容顺序：公开 current-chat API → 当前提示注入的记忆/摘要 → 当前聊天 metadata 摘要。世界书、角色卡、作者设定仍会参与生成时的人设/世界观理解，但不会被扫描成“已经发生的记忆”。</small>
     </div>`;
     const generationAction = ready ? `<div class="rmt-archive-generate-row">
-      <small>已生成 ${generatedCount}/${ARCHIVE_PORTAL_MODES.length}。每个入口单独请求、单独校验；最多可同时生成 ${MAX_CONCURRENT_GENERATION_TASKS} 项。CG 事件索引先整批生成，校验失败的条目再单独补；ADV 正文也可在 CG/ADV 页面先整批请求，再逐条补失败项。ENDING 是独立未来路线推演，不写回聊天档案；物品与私人终端从“他的房间”内部按需生成。</small>
+      <small>已生成 ${generatedCount}/${ARCHIVE_PORTAL_MODES.length}。普通“更新当前窗口档案”只增量追加新聊天并保留这些已生成内容；只有“完全重建档案”才会使它们失效。每个入口单独请求、单独校验；ADV 正文批量失败后会停下来让你选择再次整批生成或逐条补失败项。</small>
     </div>` : '';
 
     body.innerHTML = `
@@ -5512,7 +6111,10 @@ function showChooser() {
             ${ready ? `<div class="rmt-archive-meta">上次手动更新：${esc(formatArchiveTime(memory.updatedAt || memory.createdAt))}</div>` : ''}
             ${preview ? `<div class="rmt-memory-preview">记忆索引：${esc(preview)}</div>` : ''}
           </div>
-          <button class="rmt-btn rmt-archive-update" type="button" data-rmt-action="import-memory" ${busy || hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>${esc(requirePreflight ? '先扫描记忆 / 摘要' : importLabel)}</button>
+          <div class="rmt-current-archive-actions">
+            <button class="rmt-btn rmt-archive-update" type="button" data-rmt-action="import-memory" ${busy || hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>${esc(requirePreflight ? '先扫描记忆 / 摘要' : (ready ? '增量更新当前窗口档案' : importLabel))}</button>
+            ${ready ? `<button class="rmt-btn" type="button" data-rmt-action="full-rebuild-memory" ${busy || hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>完全重建档案</button>` : ''}
+          </div>
         </section>
         ${externalMemoryControls}
         <section class="rmt-archive-portals" aria-label="档案室内容入口">${portalHtml}</section>
@@ -5558,6 +6160,7 @@ function updateBackgroundTaskLabel(text) {
 function setBusyUi(isBusy, text = '') {
     const requestSelectors = [
         '[data-rmt-action="import-memory"]',
+        '[data-rmt-action="full-rebuild-memory"]',
         '[data-rmt-action="regenerate"]',
         '[data-rmt-action="read-adv"]',
         '[data-rmt-action="room-life-refresh"]',
@@ -5598,6 +6201,18 @@ function showInlineError(message) {
 }
 
 function openCachedOrGenerate(mode) {
+    if (activeArchiveSnapshot) {
+        const snapshot = activeArchiveSnapshot;
+        const cached = loadSession(mode, { chatId: snapshot.chatId, memoryBank: snapshot.memory, cache: snapshot.cache, clone: true });
+        if (cached) {
+            activeMode = mode;
+            activeSession = cached;
+            return renderActive();
+        }
+        showIndexedArchiveSnapshot(snapshot);
+        globalThis.toastr?.info?.('这份旧档案还没有生成这一项。只读浏览不会替你切换聊天或发起生成。', '心跳回忆');
+        return;
+    }
     try {
         requireArchive(currentCharacterGuard());
     } catch (error) {
@@ -5618,9 +6233,9 @@ function openCachedOrGenerate(mode) {
 }
 
 function renderActive() {
-    if (!activeSession || !activeMode) return showChooser();
-    setRegenerateVisible(!ROOM_DEEP_MODES.includes(activeMode));
-    setBackVisible(true, ROOM_DEEP_MODES.includes(activeMode) ? '他的房间' : '当前档案');
+    if (!activeSession || !activeMode) return activeArchiveSnapshot ? showIndexedArchiveSnapshot(activeArchiveSnapshot) : showChooser();
+    setRegenerateVisible(!activeArchiveSnapshot && !ROOM_DEEP_MODES.includes(activeMode));
+    setBackVisible(true, activeArchiveSnapshot ? '只读档案' : ROOM_DEEP_MODES.includes(activeMode) ? '他的房间' : '当前档案');
     if (activeMode !== MODE.ROOM) stopRoomClock();
     if (activeMode !== MODE.PHONE) stopPhoneClock();
     if (activeMode === MODE.BUTTERFLY) renderButterfly();
@@ -5679,7 +6294,7 @@ function renderButterfly() {
     const branchNodes = branches.map((node, index) => `<button type="button" class="rmt-node rmt-branch-node ${index + 1 === session.selected ? 'active' : ''}" data-rmt-node="${index + 1}"><span>${String(index + 1).padStart(2, '0')}</span>${esc(node.label)}</button>`).join('');
     const endingIndex = session.nodes.length - 1;
     const isOmega = session.selected === endingIndex || !!selected.trueEnding;
-    const observerName = esc(session.subject || getContext().name2 || '{{char}}');
+    const observerName = esc(session.subject || activeArchiveSnapshot?.characterName || getContext().name2 || '{{char}}');
     const observationPanel = isOmega
         ? `<section class="rmt-terminal-block rmt-observation-screen rmt-omega-screen">
             <div class="rmt-terminal-section-title">III. OBSERVATION POINT Ω // 现世终局观测</div>
@@ -5762,9 +6377,10 @@ function renderAlbum() {
         session.selectedId = selected?.id || '';
     }
     const unlocked = session.entries.filter(x => x.unlocked).length;
+    const readOnlyArchive = !!activeArchiveSnapshot;
     const filters = ['全部', '日常', '约会', '结局'].map(cat => `<button type="button" class="rmt-btn ${session.category === cat ? 'active' : ''}" data-rmt-category="${cat}">${cat}</button>`).join('');
     const cards = pageItems.map(item => `<article class="rmt-card ${item.id === session.selectedId ? 'active' : ''} ${item.unlocked ? '' : 'locked'}" data-rmt-album-id="${esc(item.id)}">
-      <div class="rmt-thumb"><div class="rmt-abstract" style="${abstractStyle(item.visualSeed, item.id)}"></div></div>
+      <div class="rmt-thumb">${item.unlocked ? cgImageLayerHtml(item) : `<div class="rmt-abstract" style="${abstractStyle(item.visualSeed, item.id)}"></div>`}</div>
       <div class="rmt-card-meta">
         <div class="rmt-card-title">${esc(item.unlocked ? item.title : `（未解锁）${item.title}`)}</div>
         <div class="rmt-card-date">${esc(item.date)}</div>
@@ -5778,9 +6394,11 @@ function renderAlbum() {
       <div class="rmt-info-desc">${esc(selected.desc)}</div>
       <div class="rmt-actions">
         <button type="button" class="rmt-btn" data-rmt-action="shared-memory" ${selected.unlocked ? '' : 'disabled'}>${selected.unlocked ? '共同回忆' : '尚未解锁'}</button>
+        ${selected.unlocked && !readOnlyArchive ? `<button type="button" class="rmt-btn ${isCgImageDrawing(MODE.ALBUM, selected.id) ? 'rmt-cg-drawing' : ''}" data-rmt-action="draw-cg" ${isCgImageDrawing(MODE.ALBUM, selected.id) ? 'disabled' : ''}>${isCgImageDrawing(MODE.ALBUM, selected.id) ? '正在绘制CG…' : normalizeCgImageRecord(selected.cgImage) ? '↻ 重绘CG' : '🎨 绘制CG'}</button>${normalizeCgImageRecord(selected.cgImage) ? '<button type="button" class="rmt-btn" data-rmt-action="clear-cg-image">恢复抽象CG</button>' : ''}` : ''}
         ${selected.unlocked ? '' : '<button type="button" class="rmt-btn" data-rmt-action="show-hint">解锁提示</button>'}
         <button type="button" class="rmt-btn" data-rmt-action="album-cancel">取消选择</button>
       </div>
+      ${selected.unlocked && !readOnlyArchive ? `<div class="rmt-cg-draw-note">${imageGenerationCommand() ? '可调用 SillyTavern 已配置的 Image Generation 绘制实图；可能消耗额度。' : '未检测到 SillyTavern Image Generation；仍会保留原本的抽象 CG。'}</div>` : readOnlyArchive ? '<div class="rmt-cg-draw-note">只读档案浏览：保留已保存的 CG 实图，不在此处触发生图或修改。</div>' : ''}
       <div class="rmt-hint" ${hint ? '' : 'hidden'}>${esc(hint)}</div>
     </aside>` : '<aside class="rmt-info">当前分类没有条目。</aside>';
     const body = bodyEl();
@@ -5859,7 +6477,7 @@ function renderSharedMemory() {
     const body = bodyEl();
     body.innerHTML = `<div class="rmt-memory-scene">
       <div class="rmt-memory-cg">
-        <div class="rmt-abstract" style="${abstractStyle(item.visualSeed, item.id)}"></div>
+        ${cgImageLayerHtml(item, { lazy: false })}
         <div class="rmt-memory-caption"><b>${esc(item.title)}</b> · ${esc(item.date)}<br><span style="opacity:.82">${esc(item.desc)}</span></div>
       </div>
       <div class="rmt-dialogue">
@@ -6029,24 +6647,30 @@ function renderAdvMode() {
     try { scope = chatScopeKey(currentCharacterGuard()); } catch {}
     const bulkRunning = scope ? activeAdvBulkScopes.has(scope) : false;
     const completedAdv = session.events.filter(item => item.adv?.paragraphs?.length).length;
+    const readOnlyArchive = !!activeArchiveSnapshot;
     const selectedIndex = Math.max(0, session.events.findIndex(item => item.id === selected?.id));
-    const list = session.events.map((item, index) => `<button type="button" class="rmt-event ${item.id === session.selectedId ? 'active' : ''}" data-rmt-event-id="${esc(item.id)}"><span class="rmt-event-index">${String(index + 1).padStart(2, '0')}</span><span class="rmt-event-copy"><b>${esc(item.title)}</b><small>${esc(item.date)}</small></span><em class="rmt-event-state">${item.adv?.paragraphs?.length ? 'ADV✓' : 'CG'}</em></button>`).join('');
+    const list = session.events.map((item, index) => `<button type="button" class="rmt-event ${item.id === session.selectedId ? 'active' : ''}" data-rmt-event-id="${esc(item.id)}"><span class="rmt-event-index">${String(index + 1).padStart(2, '0')}</span><span class="rmt-event-copy"><b>${esc(item.title)}</b><small>${esc(item.date)}</small></span><em class="rmt-event-state">${normalizeCgImageRecord(item.cgImage) ? '图✓ ' : ''}${item.adv?.paragraphs?.length ? 'ADV✓' : 'CG'}</em></button>`).join('');
     const options = session.events.map((item, index) => `<option value="${esc(item.id)}" ${item.id === selected?.id ? 'selected' : ''}>${String(index + 1).padStart(2, '0')} · ${esc(item.title)} · ${esc(item.date)}${item.adv?.paragraphs?.length ? ' · ADV✓' : ''}</option>`).join('');
     let detail = '';
     if (selected) {
         if (session.view === 'adv' && selected.adv?.paragraphs?.length) {
             const paras = selected.adv.paragraphs;
             session.paragraphIndex = Math.max(0, Math.min(session.paragraphIndex, paras.length - 1));
-            detail = `<div class="rmt-big-cg"><div class="rmt-abstract" style="${abstractStyle(selected.visualSeed, selected.id)}"></div><div class="rmt-cg-caption"><b>${esc(selected.title)}</b> · ${esc(selected.date)}<br>${esc(selected.cgDesc)}</div></div>
-              <div class="rmt-mode-actions"><button type="button" class="rmt-btn" data-rmt-action="cg-only">只看CG</button><button type="button" class="rmt-btn" data-rmt-action="read-adv">阅读ADV</button></div>
+            detail = `<div class="rmt-big-cg">${cgImageLayerHtml(selected, { lazy: false })}<div class="rmt-cg-caption"><b>${esc(selected.title)}</b> · ${esc(selected.date)}<br>${esc(selected.cgDesc)}</div></div>
+              <div class="rmt-mode-actions"><button type="button" class="rmt-btn" data-rmt-action="cg-only">只看CG</button><button type="button" class="rmt-btn" data-rmt-action="read-adv">阅读ADV</button>${readOnlyArchive ? '' : `<button type="button" class="rmt-btn ${isCgImageDrawing(MODE.ADV, selected.id) ? 'rmt-cg-drawing' : ''}" data-rmt-action="draw-cg" ${isCgImageDrawing(MODE.ADV, selected.id) ? 'disabled' : ''}>${isCgImageDrawing(MODE.ADV, selected.id) ? '正在绘制CG…' : normalizeCgImageRecord(selected.cgImage) ? '↻ 重绘CG' : '🎨 绘制CG'}</button>${normalizeCgImageRecord(selected.cgImage) ? '<button type="button" class="rmt-btn" data-rmt-action="clear-cg-image">恢复抽象CG</button>' : ''}`}</div>
               <div class="rmt-adv-reader"><div class="rmt-progress">第 ${session.paragraphIndex + 1} 段 / 共 ${paras.length} 段</div><div class="rmt-adv-para">${esc(paras[session.paragraphIndex])}</div><div class="rmt-reader-actions"><button type="button" class="rmt-btn" data-rmt-action="adv-prev" ${session.paragraphIndex <= 0 ? 'disabled' : ''}>上一段</button><button type="button" class="rmt-btn" data-rmt-action="adv-next">${session.paragraphIndex >= paras.length - 1 ? '重看' : '下一段'}</button></div></div>`;
         } else {
-            detail = `<div class="rmt-big-cg"><div class="rmt-abstract" style="${abstractStyle(selected.visualSeed, selected.id)}"></div><div class="rmt-cg-caption"><b>${esc(selected.title)}</b> · ${esc(selected.date)}<br>${esc(selected.cgDesc)}</div></div>
-              <div class="rmt-mode-actions"><button type="button" class="rmt-btn" data-rmt-action="cg-only">只看CG</button><button type="button" class="rmt-btn" data-rmt-action="read-adv" ${bulkRunning ? 'disabled' : ''}>${selected.adv ? '阅读ADV' : '生成并阅读ADV'}</button></div>
+            detail = `<div class="rmt-big-cg">${cgImageLayerHtml(selected, { lazy: false })}<div class="rmt-cg-caption"><b>${esc(selected.title)}</b> · ${esc(selected.date)}<br>${esc(selected.cgDesc)}</div></div>
+              <div class="rmt-mode-actions"><button type="button" class="rmt-btn" data-rmt-action="cg-only">只看CG</button><button type="button" class="rmt-btn" data-rmt-action="read-adv" ${bulkRunning || (readOnlyArchive && !selected.adv) ? 'disabled' : ''}>${selected.adv ? '阅读ADV' : readOnlyArchive ? 'ADV 尚未生成' : '生成并阅读ADV'}</button>${readOnlyArchive ? '' : `<button type="button" class="rmt-btn ${isCgImageDrawing(MODE.ADV, selected.id) ? 'rmt-cg-drawing' : ''}" data-rmt-action="draw-cg" ${isCgImageDrawing(MODE.ADV, selected.id) ? 'disabled' : ''}>${isCgImageDrawing(MODE.ADV, selected.id) ? '正在绘制CG…' : normalizeCgImageRecord(selected.cgImage) ? '↻ 重绘CG' : '🎨 绘制CG'}</button>${normalizeCgImageRecord(selected.cgImage) ? '<button type="button" class="rmt-btn" data-rmt-action="clear-cg-image">恢复抽象CG</button>' : ''}`}</div>
               <div class="rmt-adv-summary">${esc(selected.cgDesc)}</div>`;
         }
     }
-    const bulkBar = `<div class="rmt-adv-bulkbar"><div><b>ADV ${completedAdv}/${session.events.length}</b><span>${completedAdv >= session.events.length ? '全部长篇已就绪' : '可先批量生成，再逐条阅读'}</span></div><button type="button" class="rmt-btn" data-rmt-action="generate-all-adv" ${bulkRunning || completedAdv >= session.events.length ? 'disabled' : ''}>${bulkRunning ? '批量生成 / 补失败项中…' : completedAdv ? '补齐剩余 ADV' : '一次生成全部 ADV'}</button></div>`;
+    const recoveryIds = new Set(cleanArray(session.advBulkRecovery?.failedIds, 64, 100));
+    const recoveryCount = session.events.filter(item => !item.adv?.paragraphs?.length && (!recoveryIds.size || recoveryIds.has(item.id))).length;
+    const recoveryActions = !readOnlyArchive && recoveryCount > 0 && session.advBulkRecovery
+        ? `<div class="rmt-adv-recovery"><small>上次一键生成仍有 ${recoveryCount} 篇失败；不会自动逐条补。</small><button type="button" class="rmt-btn" data-rmt-action="generate-all-adv" ${bulkRunning ? 'disabled' : ''}>再次一键生成失败项 · 1次请求</button><button type="button" class="rmt-btn" data-rmt-action="repair-failed-adv" ${bulkRunning ? 'disabled' : ''}>逐个补完失败项 · 最多${recoveryCount}次请求</button></div>`
+        : '';
+    const bulkBar = `<div class="rmt-adv-bulkbar"><div><b>ADV ${completedAdv}/${session.events.length}</b><span>${readOnlyArchive ? '只读档案浏览' : completedAdv >= session.events.length ? '全部长篇已就绪' : '优先一键生成；失败后由你选择恢复方式'}</span></div>${readOnlyArchive ? '' : `<button type="button" class="rmt-btn" data-rmt-action="generate-all-adv" ${bulkRunning || completedAdv >= session.events.length ? 'disabled' : ''}>${bulkRunning ? '一键生成中…' : completedAdv ? '一键生成未完成 ADV' : '一次生成全部 ADV'}</button>`}</div>${recoveryActions}`;
     const mobilePicker = `<div class="rmt-adv-mobile-picker"><div class="rmt-adv-picker-status"><b>${String(selectedIndex + 1).padStart(2, '0')} / ${session.events.length}</b><span>${esc(selected?.title || '')}</span></div><select data-rmt-adv-select aria-label="选择 CG / ADV 事件">${options}</select><div class="rmt-adv-picker-actions"><button type="button" class="rmt-btn" data-rmt-action="adv-event-prev" ${selectedIndex <= 0 ? 'disabled' : ''}>← 上一个</button><button type="button" class="rmt-btn" data-rmt-action="adv-event-next" ${selectedIndex >= session.events.length - 1 ? 'disabled' : ''}>下一个 →</button></div></div>`;
     const body = bodyEl();
     body.innerHTML = `<div class="rmt-adv"><aside class="rmt-event-list">${bulkBar}${mobilePicker}<div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail">${detail}</section><div class="rmt-inline-status" hidden></div></div>`;
@@ -6138,6 +6762,10 @@ function handleOverlayClick(event) {
     const actionEl = event.target.closest?.('[data-rmt-action]');
     const action = actionEl?.dataset?.rmtAction;
     if (!action) return;
+    if (activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'generate-all-adv', 'repair-failed-adv', 'room-life-refresh', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins'].includes(action)) {
+        globalThis.toastr?.info?.('当前是只读档案浏览：不会切换聊天，也不会修改或重新生成旧档案内容。', '心跳回忆');
+        return;
+    }
     if (action === 'back') return navigateBack();
     if (action === 'close') {
         if (busy) activeTaskBackgrounded = true;
@@ -6154,6 +6782,7 @@ function handleOverlayClick(event) {
     if (action === 'read-memory-plugins') return void readCurrentChatMemoryPlugins().catch(error => globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆'));
     if (action === 'rebuild-archive-index') return void rebuildArchiveIndexFromExisting();
     if (action === 'import-memory') return requestCurrentArchiveImport();
+    if (action === 'full-rebuild-memory') return requestCurrentArchiveFullRebuild();
     if (action === 'archive-overview-refresh') return renderArchiveOverviewAsync({ force: true });
     if (action === 'regenerate') {
         if (!activeMode || !confirmModeRegeneration(activeMode)) return;
@@ -6192,6 +6821,8 @@ function handleOverlayClick(event) {
         }
         return;
     }
+    if (action === 'draw-cg') return void drawSelectedCgImage();
+    if (action === 'clear-cg-image') return clearSelectedCgImage();
     if (action === 'cg-only') {
         if (activeSession?.kind === MODE.ADV) {
             activeSession.view = 'cg';
@@ -6200,6 +6831,7 @@ function handleOverlayClick(event) {
         return;
     }
     if (action === 'generate-all-adv') return generateAllAdvForSession();
+    if (action === 'repair-failed-adv') return repairFailedAdvForSession();
     if (action === 'read-adv') return generateAdvForSelected();
     if (action === 'room-presence') return roomPresenceNext();
     if (action === 'room-find-presence') return roomFindPresence();
@@ -6339,7 +6971,7 @@ function refreshSettingsMemoryStatus() {
         archiveButton.textContent = !actionable
             ? '当前窗口档案不可用'
             : busy ? '当前窗口档案整理中…'
-            : ready ? '更新当前窗口档案' : '生成当前窗口档案';
+            : ready ? '增量更新当前窗口档案' : '生成当前窗口档案';
     }
 }
 
@@ -6381,7 +7013,7 @@ function mountSettings() {
         <div class="rmt-settings-archive-actions">
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
-          <div class="rmt-api-note">当前聊天窗口一份独立档案。更新档案会使旧档案版本对应的派生 CG / ADV / 房间 / ENDING 等缓存失效，因此执行前会再次确认。</div>
+          <div class="rmt-api-note">当前聊天窗口一份独立档案。普通更新只追加上次归档后的新内容并保留已生成 CG / ADV / 房间 / ENDING；需要从头重整时请进入档案后明确选择“完全重建档案”。</div>
         </div>
       </div>`;
     mount.appendChild(panel);
@@ -6618,6 +7250,19 @@ export function initMemoryTheater() {
 
 export function destroyMemoryTheater() {
     try {
+        // Extension updates/reloads can destroy the module before the short gzip debounce fires.
+        // Persist the current in-memory theater cache as a raw compatibility copy first; the next
+        // explicit open/save will compress it again. This prevents a version update from making
+        // already generated Album/CG/ADV/etc. appear missing after login.
+        try {
+            const liveContext = currentCharacterGuard();
+            const liveScope = cacheScopeFromContext(liveContext);
+            const liveCache = runtimeSessionCache.get(liveScope);
+            if (liveCache && typeof liveCache === 'object' && Object.values(MODE).some(mode => liveCache?.[mode]?.kind === mode)) {
+                liveContext.chatMetadata[CACHE_KEY] = liveCache;
+                liveContext.saveMetadataDebounced?.();
+            }
+        } catch {}
         const timer = globalThis.__heartbeatMemoriesMountTimer;
         if (timer) clearInterval(timer);
         globalThis.__heartbeatMemoriesMountTimer = null;
@@ -6639,6 +7284,8 @@ export function destroyMemoryTheater() {
         activeGenerationTasks.clear();
         activeModeBuildScopes.clear();
         activeAdvBulkScopes.clear();
+        cgImageLifecycleEpoch += 1;
+        activeCgImageTasks.clear();
         roomLifeRefreshPromise = null;
         if (chooserRefreshTimer) clearTimeout(chooserRefreshTimer);
         chooserRefreshTimer = 0;
@@ -6650,6 +7297,7 @@ export function destroyMemoryTheater() {
         for (const timer of cachePersistTimers.values()) clearTimeout(timer);
         cachePersistTimers.clear();
         cacheHydrationPromises.clear();
+        cacheHydrationErrors.clear();
         runtimeSessionCache.clear();
         pendingCompressedCacheWrites.clear();
         usableMessageCountCache.clear();
