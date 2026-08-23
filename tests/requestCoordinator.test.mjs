@@ -5,7 +5,7 @@ import test from 'node:test';
 const sourceUrl = new URL('../src/heartbeatMemories.js', import.meta.url);
 const source = await readFile(sourceUrl, 'utf8');
 const testingExports = `
-export const __r25Testing = {
+export const __r26Testing = {
   reset() {
     activeGenerationTasks.clear();
     activeModeBuildScopes.clear();
@@ -29,13 +29,15 @@ export const __r25Testing = {
   normalizeEventList,
   mergeAdvIncremental,
   normalizePhonePlan,
+  normalizePhoneDraftApp,
+  PHONE_DRAFT_CACHE_KEY,
   normalizeHeart,
   normalizeAchievements,
   SEGMENT_REQUEST_CONCURRENCY,
   ADV_BULK_BATCH_SIZE,
 };`;
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(`${source}\n${testingExports}`).toString('base64')}`;
-const { __r25Testing: api } = await import(moduleUrl);
+const { __r26Testing: api } = await import(moduleUrl);
 
 test.afterEach(() => api.reset());
 
@@ -260,11 +262,13 @@ test('phone plan keeps many apps but accepts roughly thirty entries', () => {
         deviceName: '私人手机',
         deviceKind: 'phone',
         lockText: 'LOCK',
-        liveStates: { morning: {}, daytime: {}, evening: {}, night: {} },
+        liveStates: { morning: { lockText: '早', statusLine: '醒了', badgeCounts: { CHAT: 2, EVIL: 999 }, unknown: '<script>' }, daytime: {}, evening: {}, night: {} },
         apps,
     });
     assert.equal(plan.apps.length, 10);
     assert.equal(plan.apps.reduce((sum, app) => sum + app.entries.length, 0), 33);
+    assert.deepEqual({ ...plan.liveStates.morning.badgeCounts }, { CHAT: 2 });
+    assert.equal('unknown' in plan.liveStates.morning, false);
 });
 
 test('HEART can persist dialogue-only state before seasons and strips exist', () => {
@@ -336,4 +340,56 @@ test('achievement library separates evidence-backed unlocks from future locked g
     assert.equal(achievements.entries.filter(item => item.unlocked).length, 1);
     assert.equal(achievements.entries.filter(item => !item.unlocked).length, 1);
     assert.deepEqual(achievements.entries[1].sourceMemoryIds, []);
+});
+
+
+test('settings copy is trimmed and HEART speakers render real names instead of generic labels', () => {
+    assert.doesNotMatch(source, /模型刷新只调用 SillyTavern 本地后端状态接口/);
+    assert.doesNotMatch(source, /专用连接：.*心跳回忆固定使用这个连接/);
+    assert.doesNotMatch(source, /剧本中的你/);
+    assert.doesNotMatch(source, /<strong>角色<\/strong>/);
+    assert.match(source, /data-rmt-action="heart-generate-season"/);
+    assert.match(source, /activeArchiveSnapshot\?\.memory\?\.userName \|\| getContext\(\)\.name1/);
+    assert.equal((source.match(/const taskKey = `heart-section:\$\{scope\}`;/g) || []).length, 2);
+});
+
+test('one season of Drama can be normalized and kept without generating the other seasons', () => {
+    const longVoice = '春天的风从窗边吹进来，我还记得那一刻自己为什么会想到你。'.repeat(12);
+    const longScenario = '那是一个很普通的春日，我们只是一起处理了一件小事，却留下了很具体的生活感。'.repeat(12);
+    const baseGreetings = {
+        morning: ['早。', '醒了吗？'], noon: ['中午了。', '记得吃东西。'], evening: ['回来了。', '天已经暗了。'], night: ['还没睡？', '别熬太久。'], weekend: ['今天慢一点。', '不用赶时间。'],
+        birthday: ['今天陪我。'], userBirthday: ['生日快乐。'], holiday: ['今天也算特别。'], absenceWorry: ['最近没见到你。'], absenceSulky: ['你是不是忘了这里。'], absenceJealous: [],
+    };
+    const heart = api.normalizeHeart({
+        title: '角色互动', relationshipState: '关系发展中', relationshipSummary: '雨夜回家之后，两个人的距离更近了。',
+        relationshipSourceMemoryIds: ['M001'], relationshipSourceMemoryAnchor: '站台雨伞', birthdayMmDd: '', userBirthdayMmDd: '', specialDays: [], greetings: baseGreetings,
+        voiceDramas: [{ id: 'VOICE_SPRING', kind: 'spring', title: '春 Voice Drama', subtitle: '春日', setting: '春日模拟', script: Array.from({ length: 7 }, (_, i) => ({ speaker: i % 3 === 0 ? 'narrator' : 'char', text: longVoice })) }],
+        scenarioDramas: [{ id: 'SCENE_SPRING', season: 'spring', title: '春 Scenario Drama', subtitle: '小事', setting: '春日模拟', script: Array.from({ length: 8 }, (_, i) => ({ speaker: i % 4 === 0 ? 'user' : 'char', text: longScenario })) }],
+        dailyStrips: [], generationParts: { dialogues: true, seasons: true, strips: false }, selectedSeason: 'spring', view: 'seasons',
+    }, memoryBank);
+    assert.deepEqual(heart.voiceDramas.map(item => item.kind), ['spring']);
+    assert.deepEqual(heart.scenarioDramas.map(item => item.season), ['spring']);
+    assert.equal(heart.selectedSeason, 'spring');
+});
+
+test('phone continuation draft keeps only bounded normalized App fields', () => {
+    assert.equal(api.PHONE_DRAFT_CACHE_KEY, 'phoneGenerationDraftV1');
+    const planApp = {
+        id: 'CHAT', label: '通讯', kind: 'chat', summary: '联系人',
+        entries: [{ id: 'C1', title: '甲', meta: '' }, { id: 'C2', title: '乙', meta: '' }, { id: 'C3', title: '丙', meta: '' }],
+    };
+    const messages = Array.from({ length: 12 }, (_, i) => ({ speaker: i % 2 ? '角色' : '朋友', time: '21:00', text: `消息${i + 1}` }));
+    const raw = { app: {
+        id: 'CHAT', label: '模型乱改的标签', kind: 'chat', summary: '通讯摘要', unknownHtml: '<script>alert(1)</script>',
+        entries: planApp.entries.map((entry, index) => ({
+            ...entry, preview: `预览${index}`, detail: `详情${index}`, messages: index < 2 ? messages : [], fields: [], imageCaption: '', basis: '设定', sourceMemoryIds: [], sourceMemoryAnchor: '', unknown: { nested: true },
+        })),
+    } };
+    const normalized = api.normalizePhoneDraftApp(raw, planApp, memoryBank, 'phone');
+    assert.equal(normalized.id, 'CHAT');
+    assert.equal(normalized.label, '通讯');
+    assert.equal(normalized.entries.length, 3);
+    assert.equal('unknownHtml' in normalized, false);
+    assert.equal('unknown' in normalized.entries[0], false);
+    assert.equal(normalized.entries[0].messages.length, 12);
 });
