@@ -139,6 +139,9 @@ const ADV_BULK_BATCH_SIZE = 6;
 // Keep provider traffic lower than the UI task limit so Connection Manager profiles that only
 // tolerate one or two simultaneous requests do not fail when several archive modes are opened.
 const MAX_CONCURRENT_PROVIDER_REQUESTS = 2;
+// Metadata/cache writes can be much larger than a model prompt because chat metadata contains
+// the whole compressed theater cache. Never compete with provider traffic for the user's uplink.
+const CACHE_PERSIST_IDLE_RETRY_MS = 1200;
 const DEFAULT_GENERATION_REQUEST_TIMEOUT_MS = 300000;
 const MIN_GENERATION_REQUEST_TIMEOUT_MS = 30000;
 const MAX_GENERATION_REQUEST_TIMEOUT_MS = 600000;
@@ -1062,6 +1065,10 @@ function createGenerationAbortError(message = '生成任务已取消。') {
     error.name = 'AbortError';
     error.code = 'ABORT_ERR';
     return error;
+}
+
+function shouldDeferCachePersistForProviderTraffic() {
+    return activeProviderRequestCount > 0 || providerRequestQueue.length > 0;
 }
 
 function createProviderPermitRelease() {
@@ -4074,7 +4081,7 @@ async function savePhoneGenerationDraft(context, memoryBank, plan, completedApps
     cache.archiveRevision = latestMemory.archiveRevision;
     cache.updatedAt = Date.now();
     rememberRuntimeSessionCache(scope, cache);
-    if (!isCompressedCacheRecord(stored)) {
+    if (shouldWriteUncompressedCacheImmediately(stored)) {
         live.chatMetadata[CACHE_KEY] = cache;
         live.saveMetadataDebounced?.();
     }
@@ -5636,18 +5643,38 @@ async function persistCompressedCacheNow(context, cache, expectedScope = cacheSc
     return true;
 }
 
+function shouldWriteUncompressedCacheImmediately(stored) {
+    // Modern browsers can gzip the cache locally. In that case an immediate uncompressed metadata
+    // write only doubles network traffic (large raw cache first, compressed cache second). Keep the
+    // authoritative working copy in runtime memory and persist the compressed representation once.
+    return !isCompressedCacheRecord(stored) && typeof CompressionStream !== 'function';
+}
+
 function scheduleCompressedCachePersist(context, cache, delay = 1800) {
     const scope = cacheScopeFromContext(context);
     rememberRuntimeSessionCache(scope, cache);
     const previous = cachePersistTimers.get(scope);
     if (previous) clearTimeout(previous);
-    const timer = setTimeout(() => {
-        cachePersistTimers.delete(scope);
-        void persistCompressedCacheNow(context, cache, scope).catch(error => {
-            console.warn('[HeartbeatMemories] compressed cache persist failed', error);
-        });
-    }, Math.max(0, Number(delay) || 0));
-    cachePersistTimers.set(scope, timer);
+
+    const arm = waitMs => {
+        const timer = setTimeout(() => {
+            // Provider requests are latency-sensitive and may already be uploading a large prompt.
+            // Coalesce every partial save while generation is active, then do one compressed metadata
+            // write after the provider queue drains. This prevents repeated full-cache uploads from
+            // saturating home uplinks / causing router bufferbloat during generation.
+            if (shouldDeferCachePersistForProviderTraffic()) {
+                arm(CACHE_PERSIST_IDLE_RETRY_MS);
+                return;
+            }
+            cachePersistTimers.delete(scope);
+            void persistCompressedCacheNow(context, cache, scope).catch(error => {
+                console.warn('[HeartbeatMemories] compressed cache persist failed', error);
+            });
+        }, Math.max(0, Number(waitMs) || 0));
+        cachePersistTimers.set(scope, timer);
+    };
+
+    arm(delay);
 }
 
 async function ensureCacheHydrated(context = currentCharacterGuard()) {
@@ -5806,8 +5833,9 @@ function saveSession(mode, session, expectedChatId = normalizeText(session?.chat
         cache.archiveRevision = memoryBank.archiveRevision;
         cache.updatedAt = Date.now();
         rememberRuntimeSessionCache(scope, cache);
-        if (!isCompressedCacheRecord(stored)) {
-            // First save / legacy cache: keep the old durable object until compression finishes.
+        if (shouldWriteUncompressedCacheImmediately(stored)) {
+            // Fallback only for browsers without CompressionStream. Modern browsers avoid the
+            // expensive raw-cache metadata upload and persist the gzip record after network idle.
             context.chatMetadata[CACHE_KEY] = cache;
             context.saveMetadataDebounced?.();
         }
@@ -10031,7 +10059,9 @@ function renderHeart() {
             const hasVoice = session.voiceDramas.some(item => item.kind === season);
             const hasScenario = season === 'postending' || session.scenarioDramas.some(item => item.season === season);
             const ready = hasVoice && hasScenario;
-            const partial = !ready && (hasVoice || hasScenario);
+            // postending has no Scenario half. Treat it as a 1-part card instead of showing the
+            // misleading 1/2 state merely because hasScenario is a synthetic true placeholder.
+            const partial = season !== 'postending' && !ready && (hasVoice || hasScenario);
             return `<button type="button" class="rmt-heart-drama-card ${season === selectedSeason ? 'active' : ''}" data-rmt-heart-season="${esc(season)}"><b>${esc(seasonLabels[season])}</b><span>${ready ? '已生成' : partial ? '1/2' : '未生成'}</span></button>`;
         }).join('');
         const voice = session.voiceDramas.find(item => item.kind === selectedSeason) || null;
