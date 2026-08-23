@@ -65,7 +65,7 @@ const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ROOM]: 10000,
     [MODE.ITEMS]: 10000,
     [MODE.PHONE]: 16000,
-    [MODE.ENDING]: 14000,
+    [MODE.ENDING]: 16000,
 });
 const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.ENDING, MODE.BUTTERFLY]);
 const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS, MODE.PHONE]);
@@ -82,6 +82,7 @@ const ROOM_BASIS_VALUES = new Set(['设定', '记忆']);
 const PHONE_DEVICE_KINDS = new Set(['phone', 'watch', 'terminal', 'communicator']);
 const ROOM_DAYPART_KEYS = ['morning', 'daytime', 'evening', 'night'];
 const ENDING_TYPES = new Set(['route', 'romance', 'bond', 'open', 'personal']);
+const CONFESSION_REPLAY_TYPES = new Set(['true', 'mutual', 'friendship', 'indirect', 'relationship', 'rejected', 'other']);
 const CG_IMAGE_PROVIDER = 'sillytavern-imagine';
 const MAX_CG_IMAGE_PROMPT_CHARS = 1800;
 
@@ -1845,6 +1846,34 @@ function promptArchiveSlice(memoryBank, limit) {
     }, null, 2);
 }
 
+const ENDING_CONFESSION_HINT_RE = /(告白|表白|喜欢你|爱你|爱上|交往|恋人|情侣|在一起|确认关系|确定关系|心意|友情|拒绝|confess|confession|love\s+you|dating|relationship)/i;
+function endingArchiveSlice(memoryBank, limit = 48) {
+    const memories = Array.isArray(memoryBank?.memories) ? memoryBank.memories : [];
+    const safeLimit = Math.max(8, Math.min(MAX_MEMORY_PROMPT_ITEMS, Number(limit) || 48));
+    const focused = memories.filter(item => ENDING_CONFESSION_HINT_RE.test([
+        item?.title,
+        item?.summary,
+        ...(Array.isArray(item?.anchors) ? item.anchors : []),
+    ].map(value => normalizeText(value, 800)).join(' ')));
+    const sampled = evenlySample(memories, safeLimit);
+    const merged = [];
+    const seen = new Set();
+    for (const item of [...focused.slice(-20), ...sampled]) {
+        const id = normalizeText(item?.id, 40);
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        merged.push(item);
+        if (merged.length >= safeLimit) break;
+    }
+    const ids = merged.map(item => normalizeText(item?.id, 40)).filter(Boolean);
+    return JSON.stringify({
+        archiveName: normalizeText(memoryBank?.archiveName, 120),
+        archiveSummary: normalizeText(memoryBank?.archiveSummary, 1200),
+        archiveKeywords: cleanArray(memoryBank?.archiveKeywords, 8, 80),
+        memories: memoryPayload(memoryBank, ids, safeLimit),
+    }, null, 2);
+}
+
 function roomReferencedMemoryIds(roomSession, focusObject = null) {
     const ids = [];
     const seen = new Set();
@@ -1942,12 +1971,14 @@ JSON 结构必须严格为：
 - 禁止出现 {{char}} 与除了 {{user}} 以外任何人恋爱、结婚或组建家庭；第三方只能保持非恋爱关系。
 - 只输出结构化 JSON；视觉快照、像素边框、噪点、1 秒干扰动画由插件本地渲染，不由模型输出 HTML/CSS。`,
     [MODE.ENDING]: (context, memoryBank) => `${promptSafetyBoundary(context, '结局与后日谈')}
-本请求只负责“ENDING / 结局路线与后日谈”，不携带房间、手机、储物、CG/ADV 或蝴蝶效应规则。
-下面档案只用于判断【当前关系阶段、已发生事实和路线解锁依据】；所有 endingScene / confession / epilogue 都是【未来路线推演】，不会写回聊天档案，也不得冒充已经发生。
+本请求只负责“ENDING / 结局路线、告白回看与后日谈”，不携带房间、手机、储物、CG/ADV 或蝴蝶效应规则。
+下面档案只用于判断【当前关系阶段、已经发生的告白/关系确认、已发生事实和路线解锁依据】。
+- endings[].endingScene / endings[].confession / endings[].epilogue 都是【未来路线推演】，不会写回聊天档案，也不得冒充已经发生。
+- confessionReplays[] 则恰恰相反：只能回看【档案里已经发生过】的告白、友情式告白、关系确认、未完成告白、被拒绝告白等节点；没有真实档案证据就必须留空数组，绝不能为了游戏感凭空创造一场过去告白。
 UNTRUSTED_ENDING_ARCHIVE_JSON:
-${promptArchiveSlice(memoryBank, 36)}
+${endingArchiveSlice(memoryBank, 48)}
 
-任务：生成恋爱冒险游戏风格的“结局档案”。只借鉴通用的路线结局、解锁条件、后日谈结构，不复刻任何具体商业游戏的原文、角色结局、专有 UI 或资产。
+任务：生成恋爱冒险游戏风格的“结局档案 + 告白回看”。只借鉴通用的路线结局、告白回看、解锁条件、后日谈结构，不复刻任何具体商业游戏的原文、角色结局、专有 UI 或资产。
 
 严格输出：
 {
@@ -1957,6 +1988,21 @@ ${promptArchiveSlice(memoryBank, 36)}
   "relationshipSourceMemoryIds": ["M001"],
   "relationshipSourceMemoryAnchor": "从引用记忆的 anchors/title 原样复制一个关系锚点",
   "recommendedEndingId": "END_ROUTE",
+  "confessionReplays": [
+    {
+      "id": "CONF01",
+      "type": "true",
+      "title": "真心告白",
+      "subtitle": "根据这次已发生告白的气氛给出的短说明",
+      "date": "YYYY/MM/DD 或档案中可证明的时间；不确定则写待定",
+      "sourceMemoryIds": ["M010"],
+      "sourceMemoryAnchor": "从引用记忆的 anchors/title 原样复制一个能证明告白确实发生的锚点",
+      "scene": "只依据已归档事实重构当时的地点、状态和告白过程；不得新增关系结果",
+      "confessionText": "{{char}} 当时告白核心意思的第一人称档案式重构；若档案没有逐字台词，不能声称这是聊天原句",
+      "responseSummary": "只总结 {{user}} 当时在档案中确实发生的回应/结果，不替 {{user}} 编新台词",
+      "afterEffect": "告白之后在档案中已经发生的关系变化；没有就写仍未确认"
+    }
+  ],
   "endings": [
     {
       "id": "END_ROUTE",
@@ -1999,6 +2045,11 @@ ${promptArchiveSlice(memoryBank, 36)}
 
 硬性要求：
 - relationshipState / relationshipSummary 也必须引用至少 1 条真实 relationshipSourceMemoryIds + relationshipSourceMemoryAnchor，确保当前关系阶段不是模型凭空判断。
+- confessionReplays 是【已经发生的过去回看】，与 endings[].confession 的【未来终章发言】完全不同。扫描整个给定档案：若能找到真实告白/表白/明确关系确认/友情式告白/间接告白/未完成或被拒绝的告白节点，就返回 1～6 条；确实没有则返回 []。
+- confessionReplays[].type 只能是 true / mutual / friendship / indirect / relationship / rejected / other。可以按剧情实际情况只出现其中一两类，不要求凑齐。
+- 每条 confession replay 必须至少引用 1 条真实 sourceMemoryIds + sourceMemoryAnchor；anchor 必须直接证明“这次告白/关系确认确实发生”，不能只引用普通约会、暧昧气氛或角色设定。
+- replay.scene 只允许重构档案已经证明的地点、行为、气氛与结果，不得增加新事件；confessionText 是“档案式重构”而不是聊天逐字引用；responseSummary 只能总结 {{user}} 已经发生的回应，不替 {{user}} 发明新对白。
+- replay.scene 至少 140 个汉字；confessionText 至少 50 个汉字；若证据不足以满足，就不要生成这条 replay。
 - endings 至少 4 条、最多 6 条，必须包含 type=route、romance、bond、open；可以额外有 personal。
 - available 表示“按当前真实档案，这条未来路线是否已经具备进入条件”，绝不表示该结局已经发生。
 - route 和 open 必须 available=true；recommendedEndingId 必须指向一个 available=true 的 ending，并优先选择最符合当前档案关系状态的路线。
@@ -2502,6 +2553,34 @@ ${relationshipSummary}`,
     if (!relationshipReference.sourceMemoryIds.length || !relationshipReference.sourceMemoryAnchor) {
         throw new Error('结局档案的当前关系阶段缺少真实档案锚点。');
     }
+    const confessionReplays = (Array.isArray(data?.confessionReplays) ? data.confessionReplays : []).slice(0, 6).map((item, index) => {
+        const typeRaw = normalizeText(item?.type, 40).toLowerCase();
+        const type = CONFESSION_REPLAY_TYPES.has(typeRaw) ? typeRaw : 'other';
+        const title = normalizeText(item?.title, 100) || `告白回看 ${index + 1}`;
+        const subtitle = normalizeText(item?.subtitle, 240);
+        const date = normalizeText(item?.date, 80) || '待定';
+        const scene = normalizeText(item?.scene, 8000);
+        const confessionText = normalizeText(item?.confessionText, 4000);
+        const responseSummary = normalizeText(item?.responseSummary, 2400);
+        const afterEffect = normalizeText(item?.afterEffect, 2400);
+        if (scene.length < 140 || confessionText.length < 50) return null;
+        const evidenceText = `${title}\n${subtitle}\n${date}\n${scene}\n${confessionText}\n${responseSummary}\n${afterEffect}`;
+        const reference = normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, evidenceText, memoryBank, 1);
+        if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) return null;
+        return {
+            id: safeId(item?.id, `CONF${String(index + 1).padStart(2, '0')}`),
+            type,
+            title,
+            subtitle,
+            date,
+            sourceMemoryIds: reference.sourceMemoryIds,
+            sourceMemoryAnchor: reference.sourceMemoryAnchor,
+            scene,
+            confessionText,
+            responseSummary,
+            afterEffect,
+        };
+    }).filter(Boolean);
     const raw = Array.isArray(data?.endings) ? data.endings : [];
     const endings = raw.slice(0, 8).map((item, index) => {
         const typeRaw = normalizeText(item?.type, 40).toLowerCase();
@@ -2572,8 +2651,11 @@ ${relationshipSummary}`,
         relationshipSourceMemoryIds: relationshipReference.sourceMemoryIds,
         relationshipSourceMemoryAnchor: relationshipReference.sourceMemoryAnchor,
         recommendedEndingId: recommended?.id || endings[0].id,
+        confessionReplays,
         endings,
         selectedId: recommended?.id || endings[0].id,
+        selectedConfessionId: confessionReplays[0]?.id || '',
+        view: 'routes',
     };
 }
 
@@ -4487,6 +4569,8 @@ dialog#${OVERLAY_ID}::backdrop{background:transparent}
 .rmt-phone-lock>div,.rmt-phone-lock>span{display:grid;gap:2px}.rmt-phone-lock small{font-size:9px;opacity:.62}.rmt-phone-app{position:relative}.rmt-phone-badge{position:absolute;right:7px;top:6px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;display:grid;place-items:center;background:#e98eaf;color:#fff;font-size:9px;font-style:normal;font-weight:850;box-shadow:0 2px 6px rgba(91,48,67,.18)}
 .rmt-device-watch{width:min(560px,100%);border-radius:44px;border-width:6px;padding:18px}.rmt-device-watch .rmt-phone-notch{width:44px}.rmt-device-watch .rmt-phone-content{grid-template-columns:1fr}.rmt-device-watch .rmt-phone-apps{justify-content:flex-start}.rmt-device-watch .rmt-phone-detail{min-height:180px}.rmt-device-terminal,.rmt-device-communicator{border-radius:16px;background:linear-gradient(155deg,#edf4f6,#dce8ec)}
 .rmt-ending{display:grid;grid-template-columns:minmax(220px,.38fr) minmax(0,1fr);gap:14px;padding:14px}.rmt-ending-summary{grid-column:1/-1;border:1px solid #d9e5ea;border-radius:16px;background:linear-gradient(135deg,#fff8fb,#f5fbfd);padding:14px 16px}.rmt-ending-summary b{display:block;font-size:16px;color:#5a687b}.rmt-ending-summary p{margin:7px 0 0;line-height:1.75;color:#718093}.rmt-ending-disclaimer{margin-top:7px;font-size:9px;color:#9a8290}.rmt-ending-list{display:grid;gap:8px;align-content:start}.rmt-ending-route{width:100%;border:1px solid #d4e1e7;border-radius:14px;background:rgba(255,255,255,.86);padding:11px 12px;text-align:left;color:#596d82;font:inherit;display:grid;gap:3px}.rmt-ending-route.active{border-color:#e6a5bd;box-shadow:0 0 0 2px rgba(230,165,189,.14);background:#fff8fb}.rmt-ending-route.locked{opacity:.66}.rmt-ending-route b{font-size:12px}.rmt-ending-route span{font-size:9px;color:#8795a4}.rmt-ending-route em{font-style:normal;font-size:8px;color:#b16f8a}.rmt-ending-detail{border:1px solid #d8e5eb;border-radius:18px;background:rgba(255,255,255,.86);padding:18px;min-width:0}.rmt-ending-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.rmt-ending-head h2{margin:0;color:#52677b;font-size:21px}.rmt-ending-head span{font-size:9px;padding:4px 8px;border-radius:999px;background:#fff0f5;color:#b06c88;white-space:nowrap}.rmt-ending-subtitle{margin:5px 0 12px;color:#8a96a2}.rmt-ending-lock{padding:18px;border:1px dashed #d8c7cf;border-radius:14px;background:#fff9fb;color:#7b6a72;line-height:1.75}.rmt-ending-section{margin-top:14px;padding-top:14px;border-top:1px solid #e1eaee}.rmt-ending-section>small{display:block;letter-spacing:.12em;color:#b17a91;font-weight:800;margin-bottom:7px}.rmt-ending-section p{white-space:pre-wrap;line-height:1.85;margin:0;color:#5f6f7e}.rmt-ending-confession{margin-top:12px;padding:13px 14px;border-left:3px solid #e89fbc;background:#fff7fa;border-radius:9px;white-space:pre-wrap;line-height:1.85;color:#665c64}.rmt-ending-epilogue{display:grid;gap:9px;margin-top:10px}.rmt-ending-epilogue article{padding:11px 12px;border-radius:12px;background:#f8fbfd;border:1px solid #e0e9ed}.rmt-ending-epilogue b{display:block;margin-bottom:5px;color:#607285}.rmt-ending-epilogue p{font-size:11px}.rmt-ending-final{margin-top:12px;text-align:right;color:#a2667f;font-weight:750}.rmt-ending-evidence{margin-top:12px;font-size:9px;color:#9aa5ae}
+.rmt-ending-tabs{grid-column:1/-1;display:flex;gap:7px;flex-wrap:wrap}.rmt-ending-tab{border:1px solid #d8e4e9;border-radius:999px;background:#fff;color:#718193;padding:7px 11px;font:700 10px/1 inherit;cursor:pointer}.rmt-ending-tab.active{border-color:#e3a0bb;background:#fff3f8;color:#a85f7c}.rmt-ending-tab span{margin-left:4px;opacity:.72}.rmt-confession-card{width:100%;border:1px solid #d6e2e8;border-radius:14px;background:rgba(255,255,255,.9);padding:11px 12px;text-align:left;color:#5f7081;font:inherit;display:grid;gap:3px}.rmt-confession-card.active{border-color:#dda0b8;background:#fff7fa;box-shadow:0 0 0 2px rgba(221,160,184,.12)}.rmt-confession-card b{font-size:12px}.rmt-confession-card span{font-size:9px;color:#8a97a4}.rmt-confession-card em{font-style:normal;font-size:8px;color:#b36f8b}.rmt-confession-replay-note{margin-top:10px;padding:9px 10px;border:1px dashed #d9cbd1;border-radius:11px;background:#fff9fb;color:#8a747e;font-size:9px;line-height:1.6}
+.rmt-archive-readonly-control{margin-top:12px;padding:10px 11px;border:1px solid #d7e4ea;border-radius:12px;background:#f8fbfd;display:grid;gap:5px}.rmt-archive-readonly-control label{display:flex;align-items:center;gap:8px;color:#5f7184;font-weight:800;font-size:11px}.rmt-archive-readonly-control input{width:16px;height:16px}.rmt-archive-readonly-control small{color:#8a98a6;line-height:1.55}
 .rmt-adv-bulkbar{display:grid;gap:7px;margin:0 0 10px;padding:9px;border:1px dashed #c8dce6;border-radius:12px;background:#f7fbfd;color:#718295;font-size:10px}.rmt-adv-bulkbar .rmt-btn{width:100%}
 
 .rmt-signal{position:relative;display:grid;place-items:center;min-height:190px;overflow:hidden;border:3px double rgba(117,222,247,.76)!important;background:#020912!important;box-shadow:inset 0 0 28px rgba(73,200,236,.08)}
@@ -5946,6 +6030,58 @@ async function fetchIndexedArchiveSnapshot(entry, context = getContext()) {
     });
 }
 
+async function requestArchiveEditMode(snapshot = activeArchiveSnapshot, toggle = null) {
+    if (!snapshot?.memory) return;
+    if (hasAnyTask()) {
+        if (toggle) toggle.checked = true;
+        globalThis.toastr?.info?.('当前还有后台任务。为避免把结果写进切换后的聊天，请等任务完成后再关闭只读查看。', '心跳回忆');
+        return;
+    }
+    const context = getContext();
+    if (indexedArchiveMatchesCurrentChat(snapshot, context)) {
+        activeArchiveSnapshot = null;
+        showChooser();
+        return;
+    }
+    const ok = confirmExplicitAction(
+        `关闭“只读查看”并进入「${snapshot.characterName || '这个角色'}」的对应聊天？`,
+        `编辑历史档案必须让 SillyTavern 真正打开对应聊天，心跳回忆才有安全的 metadata 写入边界。\n\n这一步只切换聊天，不会自动重新生成任何内容。进入后你可以单独选择某一项“重新生成”，而每次重新生成仍会再次弹窗确认。`,
+        { destructive: false },
+    );
+    if (!ok) {
+        if (toggle) toggle.checked = true;
+        return;
+    }
+    const characters = Array.isArray(context.characters) ? context.characters : [];
+    const wantedAvatar = normalizeText(snapshot.avatar, 300);
+    const charIndex = characters.findIndex(ch => normalizeText(ch?.avatar || ch?.data?.avatar, 300) === wantedAvatar);
+    try {
+        setInnerLoading(true, '正在按你的选择进入该档案对应聊天…');
+        if (currentCharacterKey(context) !== archiveCanonicalCharacterKey(snapshot, context)) {
+            if (charIndex < 0) throw new Error('无法把这份档案安全映射到当前角色列表；仍保持只读。');
+            if (typeof context.selectCharacterById !== 'function') throw new Error('当前 SillyTavern 没有可用的角色切换接口。');
+            await context.selectCharacterById(charIndex, { switchMenu: false });
+        }
+        const afterCharacter = getContext();
+        if (comparableChatId(getChatId(afterCharacter)) !== comparableChatId(snapshot.chatId)) {
+            if (typeof afterCharacter.openCharacterChat !== 'function') throw new Error('当前 SillyTavern 没有可用的聊天打开接口。');
+            await afterCharacter.openCharacterChat(snapshot.chatId);
+        }
+        const latest = getContext();
+        if (!indexedArchiveMatchesCurrentChat(snapshot, latest)) throw new Error('目标聊天尚未完成切换或档案身份不匹配；没有进入编辑模式。');
+        activeArchiveSnapshot = null;
+        globalThis.toastr?.success?.('已进入对应聊天。只读保护已关闭；重新生成仍需逐项确认。', '心跳回忆');
+        showChooser();
+    } catch (error) {
+        console.warn('[HeartbeatMemories] explicit archive edit transition failed', error);
+        if (toggle) toggle.checked = true;
+        globalThis.toastr?.error?.(toastText(error?.message || String(error)), '心跳回忆');
+        showIndexedArchiveSnapshot(snapshot);
+    } finally {
+        setInnerLoading(false);
+    }
+}
+
 function showIndexedArchiveSnapshot(snapshot = activeArchiveSnapshot) {
     if (!snapshot?.memory) return showArchiveLibrary();
     activeArchiveSnapshot = snapshot;
@@ -5979,7 +6115,11 @@ function showIndexedArchiveSnapshot(snapshot = activeArchiveSnapshot) {
           <strong class="rmt-archive-title">${esc(snapshot.archiveName)}</strong>
           <div class="rmt-archive-summary">${esc(memory.archiveSummary || fallbackArchiveSummary(memory.memories))}</div>
           <div class="rmt-memory-status ready">只读查看 · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${ARCHIVE_PORTAL_MODES.length}</div>
-          <div class="rmt-archive-meta">不会切换 SillyTavern 当前角色或聊天，也不会触发保存。</div>
+          <div class="rmt-archive-meta">不会自动切换 SillyTavern 当前角色或聊天，也不会触发保存。</div>
+          <div class="rmt-archive-readonly-control">
+            <label><input type="checkbox" data-rmt-readonly-toggle checked> 只读查看</label>
+            <small>关闭开关不会立即重新生成任何内容。若这不是当前聊天，会先询问是否切换到对应聊天；只有你明确确认并成功进入该聊天后，才会显示“重新生成”等编辑操作，每次重新生成仍会再次弹窗确认。</small>
+          </div>
         </div>
       </section>
       <section class="rmt-archive-portals" aria-label="只读档案内容入口">${portalHtml}</section>
@@ -6266,6 +6406,16 @@ function openCachedOrGenerate(mode) {
     globalThis.toastr?.info?.('这个入口还没有生成。请在档案室直接点击这个入口下方的“生成这一项”。', '心跳回忆');
 }
 
+function decorateReadOnlyModeUi() {
+    if (!activeArchiveSnapshot) return;
+    const body = bodyEl();
+    if (!body || body.querySelector('[data-rmt-readonly-toggle]')) return;
+    const control = document.createElement('div');
+    control.className = 'rmt-archive-readonly-control';
+    control.innerHTML = '<label><input type="checkbox" data-rmt-readonly-toggle checked> 只读查看</label><small>想重新生成或修改这一项？关闭只读后会先询问是否进入这个档案对应的真实聊天；切换本身不会自动生成。</small>';
+    body.prepend(control);
+}
+
 function renderActive() {
     if (!activeSession || !activeMode) return activeArchiveSnapshot ? showIndexedArchiveSnapshot(activeArchiveSnapshot) : showChooser();
     setRegenerateVisible(!activeArchiveSnapshot && !ROOM_DEEP_MODES.includes(activeMode));
@@ -6279,6 +6429,7 @@ function renderActive() {
     else if (activeMode === MODE.ITEMS) renderItems();
     else if (activeMode === MODE.PHONE) renderPhone();
     else if (activeMode === MODE.ENDING) renderEnding();
+    decorateReadOnlyModeUi();
 }
 
 function selectedEndingRoute() {
@@ -6289,11 +6440,48 @@ function selectedEndingRoute() {
         || null;
 }
 
+function endingConfessionTypeLabel(type) {
+    return ({
+        true: '真心告白',
+        mutual: '双向告白',
+        friendship: '友情告白',
+        indirect: '间接告白',
+        relationship: '关系确认',
+        rejected: '未被接受',
+        other: '告白回看',
+    })[type] || '告白回看';
+}
+
+function selectedConfessionReplay() {
+    if (!activeSession || activeSession.kind !== MODE.ENDING) return null;
+    const list = Array.isArray(activeSession.confessionReplays) ? activeSession.confessionReplays : [];
+    return list.find(item => item.id === activeSession.selectedConfessionId) || list[0] || null;
+}
+
 function renderEnding() {
     const session = activeSession;
     if (!session || session.kind !== MODE.ENDING) return;
-    setBackVisible(true, '当前档案');
+    setBackVisible(true, activeArchiveSnapshot ? '只读档案' : '当前档案');
     topTitle(MODE_LABEL[MODE.ENDING]);
+    const replays = Array.isArray(session.confessionReplays) ? session.confessionReplays : [];
+    const view = session.view === 'confessions' ? 'confessions' : 'routes';
+    session.view = view;
+    const tabs = `<div class="rmt-ending-tabs"><button type="button" class="rmt-ending-tab ${view === 'routes' ? 'active' : ''}" data-rmt-ending-view="routes">结局路线 <span>${session.endings.length}</span></button><button type="button" class="rmt-ending-tab ${view === 'confessions' ? 'active' : ''}" data-rmt-ending-view="confessions">告白回看 <span>${replays.length}</span></button></div>`;
+    const summary = `<section class="rmt-ending-summary"><b>${esc(session.relationshipState)}</b><p>${esc(session.relationshipSummary)}</p><div class="rmt-ending-disclaimer">当前关系锚点：${esc(session.relationshipSourceMemoryAnchor || '')} · 结局与后日谈是未来路线推演；“告白回看”只允许来自当前手动档案里已经发生并通过锚点校验的事件。</div></section>`;
+    if (view === 'confessions') {
+        const selectedReplay = selectedConfessionReplay();
+        if (selectedReplay) session.selectedConfessionId = selectedReplay.id;
+        const replayList = replays.map(item => `<button type="button" class="rmt-confession-card ${selectedReplay?.id === item.id ? 'active' : ''}" data-rmt-confession-id="${esc(item.id)}"><b>${esc(item.title)}</b><span>${esc(item.subtitle || item.date || endingConfessionTypeLabel(item.type))}</span><em>${esc(endingConfessionTypeLabel(item.type))} · ${esc(item.date || '待定')}</em></button>`).join('');
+        const replayDetail = selectedReplay
+            ? `<div class="rmt-ending-head"><div><h2>${esc(selectedReplay.title)}</h2><div class="rmt-ending-subtitle">${esc(selectedReplay.subtitle || endingConfessionTypeLabel(selectedReplay.type))}</div></div><span>已发生 · 档案回看</span></div>
+               <section class="rmt-ending-section"><small>CONFESSION REPLAY // 告白场景</small><p>${esc(selectedReplay.scene)}</p><div class="rmt-ending-confession">${esc(selectedReplay.confessionText)}</div></section>
+               ${selectedReplay.responseSummary ? `<section class="rmt-ending-section"><small>RESPONSE // 当时回应与结果</small><p>${esc(selectedReplay.responseSummary)}</p></section>` : ''}
+               ${selectedReplay.afterEffect ? `<section class="rmt-ending-section"><small>AFTER EFFECT // 后续变化</small><p>${esc(selectedReplay.afterEffect)}</p></section>` : ''}
+               <div class="rmt-confession-replay-note">这是一份基于已归档事实的演出式回看，不声称重现聊天逐字原文。证据锚点：${esc(selectedReplay.sourceMemoryAnchor)}</div>`
+            : `<div class="rmt-ending-lock"><b>当前 ENDING 数据里没有可回看的已发生告白。</b><br>${activeArchiveSnapshot ? '如果这份档案确实发生过告白，需要先关闭只读并进入对应聊天，再重新生成 ENDING 才能重新检测。' : '如果档案里已经发生过告白/关系确认，可以重新生成 ENDING；模型只有在找到真实记忆 ID + anchor 后才允许生成回看。'}</div>`;
+        bodyEl().innerHTML = `<div class="rmt-ending">${summary}${tabs}<nav class="rmt-ending-list" aria-label="告白回看">${replayList || '<div class="rmt-ending-lock">没有检测到可验证的告白记录。</div>'}</nav><main class="rmt-ending-detail">${replayDetail}</main></div>`;
+        return;
+    }
     const selected = selectedEndingRoute();
     if (!selected) return;
     session.selectedId = selected.id;
@@ -6305,13 +6493,29 @@ function renderEnding() {
            <section class="rmt-ending-section"><small>EPILOGUE // 后日谈 · ${esc(selected.epilogue?.timeSkip || '未来')}</small><div class="rmt-ending-epilogue">${(selected.epilogue?.scenes || []).map(scene => `<article><b>${esc(scene.title)}</b><p>${esc(scene.text)}</p></article>`).join('')}</div>${selected.epilogue?.finalLine ? `<div class="rmt-ending-final">${esc(selected.epilogue.finalLine)}</div>` : ''}</section>
            <div class="rmt-ending-evidence">路线起点来自当前档案：${esc(selected.sourceMemoryAnchor)} · 这里只推演未来，不写回聊天档案。</div>`
         : `<div class="rmt-ending-head"><div><h2>${esc(selected.title)}</h2><div class="rmt-ending-subtitle">${esc(selected.subtitle || typeLabel[selected.type] || '')}</div></div><span>未解锁</span></div><div class="rmt-ending-lock"><b>这条路线还没有被当前档案解锁。</b><br>${esc(selected.unlockHint || '继续让关系在真实聊天中自然发展后，再更新档案并重新生成结局。')}<div class="rmt-ending-evidence">当前依据：${esc(selected.sourceMemoryAnchor)}</div></div>`;
-    bodyEl().innerHTML = `<div class="rmt-ending"><section class="rmt-ending-summary"><b>${esc(session.relationshipState)}</b><p>${esc(session.relationshipSummary)}</p><div class="rmt-ending-disclaimer">当前关系锚点：${esc(session.relationshipSourceMemoryAnchor || '')} · ENDING 与后日谈都是人设一致未来推演；不会自动写进聊天档案，也不会替 {{user}} 决定未来。</div></section><nav class="rmt-ending-list" aria-label="结局路线">${routes}</nav><main class="rmt-ending-detail">${detail}</main></div>`;
+    bodyEl().innerHTML = `<div class="rmt-ending">${summary}${tabs}<nav class="rmt-ending-list" aria-label="结局路线">${routes}</nav><main class="rmt-ending-detail">${detail}</main></div>`;
+}
+
+function endingSetView(view) {
+    if (!activeSession || activeSession.kind !== MODE.ENDING) return;
+    activeSession.view = view === 'confessions' ? 'confessions' : 'routes';
+    renderEnding();
+}
+
+function confessionSelect(id) {
+    if (!activeSession || activeSession.kind !== MODE.ENDING) return;
+    const item = (activeSession.confessionReplays || []).find(replay => replay.id === id);
+    if (!item) return;
+    activeSession.view = 'confessions';
+    activeSession.selectedConfessionId = item.id;
+    renderEnding();
 }
 
 function endingSelect(id) {
     if (!activeSession || activeSession.kind !== MODE.ENDING) return;
     const item = activeSession.endings.find(route => route.id === id);
     if (!item) return;
+    activeSession.view = 'routes';
     activeSession.selectedId = item.id;
     renderEnding();
 }
@@ -6778,6 +6982,10 @@ function handleOverlayClick(event) {
     }
     const node = event.target.closest?.('[data-rmt-node]');
     if (node) return selectButterflyNode(node.dataset.rmtNode);
+    const endingView = event.target.closest?.('[data-rmt-ending-view]');
+    if (endingView) return endingSetView(endingView.dataset.rmtEndingView);
+    const confessionReplay = event.target.closest?.('[data-rmt-confession-id]');
+    if (confessionReplay) return confessionSelect(confessionReplay.dataset.rmtConfessionId);
     const endingRoute = event.target.closest?.('[data-rmt-ending-id]');
     if (endingRoute) return endingSelect(endingRoute.dataset.rmtEndingId);
     const albumDraw = event.target.closest?.('[data-rmt-album-draw]');
@@ -6810,6 +7018,12 @@ function handleOverlayClick(event) {
     const externalToggle = event.target.closest?.('[data-rmt-external-memory-toggle]');
     if (externalToggle) {
         updatePluginSettings({ useCurrentChatExternalMemory: !!externalToggle.checked });
+        return;
+    }
+    const readOnlyToggle = event.target.closest?.('[data-rmt-readonly-toggle]');
+    if (readOnlyToggle) {
+        if (readOnlyToggle.checked) return;
+        void requestArchiveEditMode(activeArchiveSnapshot, readOnlyToggle);
         return;
     }
 
