@@ -4,6 +4,7 @@ const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
 const STYLE_ID = 'heartbeat_memories_styles';
 const CACHE_KEY = 'heartbeatMemoriesTheaterV3';
+const PHONE_DRAFT_CACHE_KEY = 'phoneGenerationDraftV1';
 const MEMORY_KEY = 'heartbeatMemoriesArchiveV3';
 const ARCHIVE_SCHEMA_VERSION = 3;
 // Archive schema is intentionally independent from the extension release version.
@@ -1887,6 +1888,9 @@ function migrateDerivedCacheRevision(cache, oldMemoryBank, newMemoryBank) {
     migrated.chatId = normalizeText(newMemoryBank?.chatId, 240);
     migrated.archiveRevision = newRevision;
     migrated.updatedAt = Date.now();
+    // A partially generated phone draft is tied to one exact archive revision. Do not carry it
+    // across an archive update; the user can start a fresh terminal plan from the new evidence set.
+    delete migrated[PHONE_DRAFT_CACHE_KEY];
     for (const mode of Object.values(MODE)) {
         const session = migrated?.[mode];
         if (!session || session.kind !== mode) continue;
@@ -3572,10 +3576,30 @@ async function generateHeartWithRepair(context, memoryBank, origin, taskKey) {
     return normalizeHeart(makeHeartSession(core, existing), memoryBank);
 }
 
+async function persistHeartSectionUpdate(updated, memoryBank, origin, expectedChatId, expectedArchiveRevision) {
+    updated = normalizeHeart(updated, memoryBank);
+    updated.chatId = expectedChatId;
+    updated.archiveRevision = expectedArchiveRevision;
+    let committed = false;
+    if (isCurrentTaskOrigin(origin)) {
+        try {
+            const latestMemory = requireArchive(currentCharacterGuard());
+            if (latestMemory.archiveRevision === expectedArchiveRevision) committed = saveSession(MODE.HEART, updated, expectedChatId);
+        } catch {}
+    }
+    if (!committed) queueDeferredCommit(origin, { kind: 'sessions', sessions: { [MODE.HEART]: updated } });
+    if (committed && activeSession?.kind === MODE.HEART) {
+        activeSession = updated;
+        renderHeart();
+    }
+    return { updated, committed };
+}
+
 async function generateHeartSection(part) {
     if (!activeSession || activeSession.kind !== MODE.HEART) return;
     if (!requireWritableArchiveAction()) return;
-    const normalizedPart = ['dialogues', 'seasons', 'strips'].includes(part) ? part : '';
+    if (part === 'seasons') return void generateHeartSeasonSection(activeSession.selectedSeason || 'postending');
+    const normalizedPart = ['dialogues', 'strips'].includes(part) ? part : '';
     if (!normalizedPart) return;
     const context = currentCharacterGuard();
     const memoryBank = requireArchive(context);
@@ -3583,9 +3607,9 @@ async function generateHeartSection(part) {
     const expectedArchiveRevision = memoryBank.archiveRevision;
     const scope = chatScopeKey(context);
     const origin = { ...captureTaskOrigin(context, expectedArchiveRevision), chatId: comparableChatId(expectedChatId) };
-    const taskKey = `heart-part:${scope}:${normalizedPart}`;
+    const taskKey = `heart-section:${scope}`;
     if (isGenerationTaskRunning(taskKey) || activeModeBuildScopes.has(taskKey)) {
-        globalThis.toastr?.info?.('这一部分已经在生成中。', '心跳回忆');
+        globalThis.toastr?.info?.('角色互动的另一个分区正在生成，请等它完成后再生成这一项。', '心跳回忆');
         return;
     }
     if (!canStartGenerationTask(taskKey)) {
@@ -3605,7 +3629,7 @@ async function generateHeartSection(part) {
                 raw => normalizeHeartCore(raw, memoryBank),
             );
             updated = makeHeartSession(core, base);
-        } else if (normalizedPart === 'strips') {
+        } else {
             const strips = await requestHeartPart(
                 heartStripsPrompt(context, memoryBank, base),
                 '角色互动 · 日常一格',
@@ -3616,53 +3640,74 @@ async function generateHeartSection(part) {
             updated.selectedStripId = strips[0]?.id || '';
             updated.generationParts = { ...(updated.generationParts || {}), strips: true };
             updated.view = 'strips';
-        } else {
-            const post = await requestHeartPart(
+        }
+        await persistHeartSectionUpdate(updated, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+        globalThis.toastr?.success?.(`角色互动已更新：${normalizedPart === 'dialogues' ? '时期对话' : '日常一格'}`, '心跳回忆');
+    } catch (error) {
+        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(toastText(error?.message || String(error)), '心跳回忆');
+    } finally {
+        activeModeBuildScopes.delete(taskKey);
+        refreshConcurrentTaskUi(MODE.HEART, origin);
+    }
+}
+
+async function generateHeartSeasonSection(season) {
+    if (!activeSession || activeSession.kind !== MODE.HEART) return;
+    if (!requireWritableArchiveAction()) return;
+    const allowed = new Set(['postending', 'spring', 'summer', 'autumn', 'winter']);
+    const normalizedSeason = allowed.has(season) ? season : '';
+    if (!normalizedSeason) return;
+    const context = currentCharacterGuard();
+    const memoryBank = requireArchive(context);
+    const expectedChatId = getChatId(context);
+    const expectedArchiveRevision = memoryBank.archiveRevision;
+    const scope = chatScopeKey(context);
+    const origin = { ...captureTaskOrigin(context, expectedArchiveRevision), chatId: comparableChatId(expectedChatId) };
+    const taskKey = `heart-section:${scope}`;
+    if (isGenerationTaskRunning(taskKey) || activeModeBuildScopes.has(taskKey)) {
+        globalThis.toastr?.info?.('角色互动的另一个分区正在生成，请等它完成后再生成这一项。', '心跳回忆');
+        return;
+    }
+    if (!canStartGenerationTask(taskKey)) {
+        globalThis.toastr?.info?.(`当前已有 ${MAX_CONCURRENT_GENERATION_TASKS} 项同时生成。`, '心跳回忆');
+        return;
+    }
+    const base = structuredClone(activeSession);
+    activeModeBuildScopes.add(taskKey);
+    refreshConcurrentTaskUi(MODE.HEART, origin);
+    try {
+        const updated = base;
+        if (normalizedSeason === 'postending') {
+            const voice = (await requestHeartPart(
                 heartPostVoicePrompt(context, memoryBank, base),
                 '角色互动 · Drama 未来',
                 { maxTokens: 5000, context, origin, taskKey: `${taskKey}:post`, mode: MODE.HEART, background: true },
                 raw => normalizeVoiceDramaPart(raw, ['postending']),
+            ))[0];
+            updated.voiceDramas = [...(updated.voiceDramas || []).filter(item => item.kind !== 'postending'), voice];
+            updated.selectedVoiceId = voice.id;
+        } else {
+            const result = await requestHeartPart(
+                heartSeasonPrompt(context, memoryBank, base, normalizedSeason),
+                `角色互动 · Drama ${heartSeasonLabel(normalizedSeason)}`,
+                { maxTokens: 6500, context, origin, taskKey: `${taskKey}:season:${normalizedSeason}`, mode: MODE.HEART, background: true },
+                raw => ({
+                    voice: normalizeVoiceDramaPart(raw, [normalizedSeason])[0],
+                    scenario: normalizeScenarioDramaPart(raw, normalizedSeason)[0],
+                }),
             );
-            const voices = [...post];
-            const scenarios = [];
-            for (const season of ['spring', 'summer', 'autumn', 'winter']) {
-                const result = await requestHeartPart(
-                    heartSeasonPrompt(context, memoryBank, base, season),
-                    `角色互动 · Drama ${heartSeasonLabel(season)}`,
-                    { maxTokens: 6500, context, origin, taskKey: `${taskKey}:season:${season}`, mode: MODE.HEART, background: true },
-                    raw => ({
-                        voice: normalizeVoiceDramaPart(raw, [season])[0],
-                        scenario: normalizeScenarioDramaPart(raw, season)[0],
-                    }),
-                );
-                voices.push(result.voice);
-                scenarios.push(result.scenario);
-            }
-            updated.voiceDramas = voices;
-            updated.scenarioDramas = scenarios;
-            updated.selectedVoiceId = voices[0]?.id || '';
-            updated.selectedScenarioId = scenarios[0]?.id || '';
-            updated.generationParts = { ...(updated.generationParts || {}), seasons: true };
-            updated.view = 'seasons';
+            updated.voiceDramas = [...(updated.voiceDramas || []).filter(item => item.kind !== normalizedSeason), result.voice];
+            updated.scenarioDramas = [...(updated.scenarioDramas || []).filter(item => item.season !== normalizedSeason), result.scenario];
+            updated.selectedVoiceId = result.voice.id;
+            updated.selectedScenarioId = result.scenario.id;
         }
-        updated = normalizeHeart(updated, memoryBank);
-        updated.chatId = expectedChatId;
-        updated.archiveRevision = expectedArchiveRevision;
-        let committed = false;
-        if (isCurrentTaskOrigin(origin)) {
-            try {
-                const latestMemory = requireArchive(currentCharacterGuard());
-                if (latestMemory.archiveRevision === expectedArchiveRevision) committed = saveSession(MODE.HEART, updated, expectedChatId);
-            } catch {}
-        }
-        if (!committed) queueDeferredCommit(origin, { kind: 'sessions', sessions: { [MODE.HEART]: updated } });
-        if (committed && activeSession?.kind === MODE.HEART) {
-            activeSession = updated;
-            renderHeart();
-        }
-        globalThis.toastr?.success?.(`角色互动已更新：${normalizedPart === 'dialogues' ? '时期对话' : normalizedPart === 'seasons' ? '春夏秋冬 / Drama' : '日常一格'}`, '心跳回忆');
+        updated.selectedSeason = normalizedSeason;
+        updated.generationParts = { ...(updated.generationParts || {}), seasons: true };
+        updated.view = 'seasons';
+        await persistHeartSectionUpdate(updated, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+        globalThis.toastr?.success?.(`已生成：${heartSeasonLabel(normalizedSeason)} Drama`, '心跳回忆');
     } catch (error) {
-        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(toastText(error?.message || String(error)), '心跳回忆');
+        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(toastText(error?.message || String(error)), `心跳回忆 · ${heartSeasonLabel(normalizedSeason)} Drama`);
     } finally {
         activeModeBuildScopes.delete(taskKey);
         refreshConcurrentTaskUi(MODE.HEART, origin);
@@ -3728,12 +3773,30 @@ function normalizePhonePlan(data) {
             if (!app || app.entries.length < minimum) throw new Error(`私人终端目录 ${kind} 不足：${app?.entries?.length || 0}/${minimum}。`);
         }
     }
+    const lockText = normalizeText(data?.lockText, 400);
+    const appIds = new Set(apps.map(app => app.id));
+    const liveStates = {};
+    for (const key of ROOM_DAYPART_KEYS) {
+        const rawState = data?.liveStates?.[key] || {};
+        const badgeCounts = Object.create(null);
+        const rawBadges = rawState?.badgeCounts && typeof rawState.badgeCounts === 'object' ? rawState.badgeCounts : {};
+        for (const [appId, count] of Object.entries(rawBadges).slice(0, 16)) {
+            if (!appIds.has(appId)) continue;
+            const number = Math.max(0, Math.min(99, Math.floor(Number(count) || 0)));
+            if (number > 0) badgeCounts[appId] = number;
+        }
+        liveStates[key] = {
+            lockText: normalizeText(rawState?.lockText, 400) || lockText,
+            statusLine: normalizeText(rawState?.statusLine, 500),
+            badgeCounts,
+        };
+    }
     return {
         title: normalizeText(data?.title, 100) || '他的私人终端',
         deviceName,
         deviceKind,
-        lockText: normalizeText(data?.lockText, 400),
-        liveStates: data?.liveStates && typeof data.liveStates === 'object' ? data.liveStates : {},
+        lockText,
+        liveStates,
         apps,
     };
 }
@@ -3795,15 +3858,138 @@ function validatePhoneAppPart(data, planApp, memoryBank, deviceKind) {
     return { ...raw, id: planApp.id, label: planApp.label, kind: planApp.kind };
 }
 
-async function generatePhoneWithRepair(context, memoryBank, origin, taskKey) {
+function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind) {
+    const raw = validatePhoneAppPart(data, planApp, memoryBank, deviceKind);
+    const plannedIds = new Set(planApp.entries.map(item => item.id));
+    const entries = (Array.isArray(raw?.entries) ? raw.entries : []).slice(0, 24).map((entry, index) => {
+        const id = safeId(entry?.id, '');
+        if (!plannedIds.has(id)) return null;
+        const basis = ROOM_BASIS_VALUES.has(entry?.basis) ? entry.basis : '设定';
+        const title = normalizeText(entry?.title, 100) || planApp.entries.find(item => item.id === id)?.title || `条目 ${index + 1}`;
+        const preview = normalizeText(entry?.preview, 1200);
+        const detail = normalizeText(entry?.detail, 5000);
+        const messages = (Array.isArray(entry?.messages) ? entry.messages : []).slice(0, 48).map(message => ({
+            speaker: normalizeText(message?.speaker, 100) || '对方',
+            time: normalizeText(message?.time, 40),
+            text: normalizeText(message?.text, 1200),
+        })).filter(message => message.text);
+        const fields = (Array.isArray(entry?.fields) ? entry.fields : []).slice(0, 16).map(field => ({
+            label: normalizeText(field?.label, 100),
+            value: normalizeText(field?.value, 1000),
+        })).filter(field => field.label && field.value);
+        const imageCaption = normalizeText(entry?.imageCaption, 1800);
+        const evidenceText = [title, preview, detail, imageCaption, ...messages.map(message => `${message.speaker}:${message.text}`), ...fields.map(field => `${field.label}:${field.value}`)].join('\n');
+        const reference = basis === '记忆'
+            ? normalizeMemoryReference(entry?.sourceMemoryIds, entry?.sourceMemoryAnchor, evidenceText, memoryBank, 1)
+            : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
+        if (!preview || (!detail && !messages.length && !fields.length && !imageCaption) || (basis === '记忆' && !reference.sourceMemoryIds.length)) return null;
+        return {
+            id,
+            title,
+            meta: normalizeText(entry?.meta, 200),
+            preview,
+            detail,
+            messages,
+            fields,
+            imageCaption,
+            basis,
+            sourceMemoryIds: reference.sourceMemoryIds,
+            sourceMemoryAnchor: reference.sourceMemoryAnchor,
+        };
+    }).filter(Boolean);
+    if (entries.length !== planApp.entries.length) throw new Error(`App ${planApp.label} 续写缓存不完整：${entries.length}/${planApp.entries.length}。`);
+    return {
+        id: planApp.id,
+        label: planApp.label,
+        kind: planApp.kind,
+        summary: normalizeText(raw?.summary, 1200) || planApp.summary,
+        entries,
+    };
+}
+
+function loadPhoneGenerationDraft(context = getContext(), memoryBank = null) {
+    try {
+        const bank = memoryBank || requireArchive(context);
+        const cache = getCache(context);
+        const raw = cache?.[PHONE_DRAFT_CACHE_KEY];
+        if (!raw || raw.kind !== 'phone-draft') return null;
+        const chatId = getChatId(context);
+        if (comparableChatId(raw.chatId) !== comparableChatId(chatId)) return null;
+        if (normalizeText(raw.archiveRevision, 240) !== normalizeText(bank.archiveRevision, 240)) return null;
+        const plan = normalizePhonePlan(raw.plan);
+        const completedApps = [];
+        const rawCompleted = Array.isArray(raw.completedApps) ? raw.completedApps : [];
+        for (const planApp of plan.apps) {
+            const saved = rawCompleted.find(item => safeId(item?.id, '') === planApp.id);
+            if (!saved) continue;
+            try {
+                completedApps.push(normalizePhoneDraftApp(saved, planApp, bank, plan.deviceKind));
+            } catch {}
+        }
+        return {
+            kind: 'phone-draft',
+            chatId,
+            archiveRevision: bank.archiveRevision,
+            plan,
+            completedApps,
+            failedAppId: safeId(raw.failedAppId, ''),
+            failedMessage: normalizeText(raw.failedMessage, 600),
+            updatedAt: Math.max(0, Number(raw.updatedAt) || 0),
+        };
+    } catch {
+        return null;
+    }
+}
+
+async function savePhoneGenerationDraft(context, memoryBank, plan, completedApps, failedAppId = '', failedMessage = '') {
+    let live;
+    try { live = currentCharacterGuard(); } catch { return false; }
+    if (comparableChatId(getChatId(live)) !== comparableChatId(memoryBank.chatId || getChatId(context))) return false;
+    let latestMemory;
+    try { latestMemory = requireArchive(live); } catch { return false; }
+    if (normalizeText(latestMemory.archiveRevision, 240) !== normalizeText(memoryBank.archiveRevision, 240)) return false;
+    try { await ensureCacheHydrated(live); } catch {}
+    if (!live.chatMetadata || typeof live.chatMetadata !== 'object') return false;
+    const scope = cacheScopeFromContext(live);
+    const stored = live.chatMetadata?.[CACHE_KEY];
+    const cache = getCache(live);
+    cache[PHONE_DRAFT_CACHE_KEY] = {
+        kind: 'phone-draft',
+        chatId: getChatId(live),
+        archiveRevision: latestMemory.archiveRevision,
+        plan,
+        completedApps: Array.isArray(completedApps) ? completedApps : [],
+        failedAppId: safeId(failedAppId, ''),
+        failedMessage: normalizeText(failedMessage, 600),
+        updatedAt: Date.now(),
+    };
+    cache.chatId = getChatId(live);
+    cache.archiveRevision = latestMemory.archiveRevision;
+    cache.updatedAt = Date.now();
+    rememberRuntimeSessionCache(scope, cache);
+    if (!isCompressedCacheRecord(stored)) {
+        live.chatMetadata[CACHE_KEY] = cache;
+        live.saveMetadataDebounced?.();
+    }
+    scheduleCompressedCachePersist(live, cache, 120);
+    return true;
+}
+
+async function generatePhoneWithRepair(context, memoryBank, origin, taskKey, options = {}) {
     const roomSession = loadSession(MODE.ROOM, { context, chatId: getChatId(context), memoryBank, clone: false });
-    const plan = await requestValidatedSegment(
+    const resumeDraft = options.continueDraft === true ? loadPhoneGenerationDraft(context, memoryBank) : null;
+    const plan = resumeDraft?.plan || await requestValidatedSegment(
         phonePlanPrompt(context, memoryBank, roomSession),
         '私人终端 1/2 · 正在生成设备与 App 目录…',
         { maxTokens: 8000, temperature: 0.35, context, origin, taskKey: `${taskKey}:plan`, mode: MODE.PHONE, background: true },
         normalizePhonePlan,
     );
-    const details = await mapGenerationConcurrent(plan.apps, SEGMENT_REQUEST_CONCURRENCY, async (app, index) => {
+    const completedById = new Map((resumeDraft?.completedApps || []).map(app => [app.id, app]));
+    if (!resumeDraft) await savePhoneGenerationDraft(context, memoryBank, plan, []);
+
+    for (let index = 0; index < plan.apps.length; index += 1) {
+        const app = plan.apps[index];
+        if (completedById.has(app.id)) continue;
         let lastError = null;
         for (let attempt = 0; attempt < 2; attempt += 1) {
             try {
@@ -3812,7 +3998,11 @@ async function generatePhoneWithRepair(context, memoryBank, origin, taskKey) {
                     `私人终端 2/2 · ${index + 1}/${plan.apps.length} ${app.label}${attempt ? '（重试）' : ''}…`,
                     { maxTokens: app.kind === 'chat' ? 8000 : app.entries.length >= 8 ? 7000 : 5000, context, origin, taskKey: `${taskKey}:app:${app.id}`, mode: MODE.PHONE, background: true },
                 );
-                return validateGeneratedSegment(raw, data => validatePhoneAppPart(data, app, memoryBank, plan.deviceKind));
+                const normalizedApp = validateGeneratedSegment(raw, data => normalizePhoneDraftApp(data, app, memoryBank, plan.deviceKind));
+                completedById.set(app.id, normalizedApp);
+                await savePhoneGenerationDraft(context, memoryBank, plan, [...completedById.values()]);
+                lastError = null;
+                break;
             } catch (error) {
                 if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
                 lastError = error;
@@ -3820,11 +4010,22 @@ async function generatePhoneWithRepair(context, memoryBank, origin, taskKey) {
                     await waitBeforeSegmentRetry(error);
                     continue;
                 }
-                throw error;
+                break;
             }
         }
-        throw new Error(`私人终端 App“${app.label}”连续两次失败：${normalizeText(lastError?.message || String(lastError || ''), 600)}`);
-    });
+        if (lastError) {
+            const detail = normalizeText(lastError?.message || String(lastError || ''), 600);
+            await savePhoneGenerationDraft(context, memoryBank, plan, [...completedById.values()], app.id, detail);
+            const error = new Error(`私人终端在 App“${app.label}”中断，已保存 ${completedById.size}/${plan.apps.length} 个 App。回到房间后点击“继续生成${plan.deviceName}”即可从这里续写，不会重做已完成 App。${detail ? `\n${detail}` : ''}`);
+            error.code = 'RMT_PHONE_DRAFT_AVAILABLE';
+            error.retryable = false;
+            throw error;
+        }
+    }
+    const details = plan.apps.map(app => completedById.get(app.id)).filter(Boolean);
+    if (details.length !== plan.apps.length) {
+        throw new Error(`私人终端续写结果不完整：${details.length}/${plan.apps.length} 个 App。`);
+    }
     return normalizePhone({ ...plan, apps: details }, memoryBank);
 }
 
@@ -5493,6 +5694,7 @@ function saveSession(mode, session, expectedChatId = normalizeText(session?.chat
         session.chatId = expectedChatId;
         session.archiveRevision = memoryBank.archiveRevision;
         cache[mode] = session;
+        if (mode === MODE.PHONE) delete cache[PHONE_DRAFT_CACHE_KEY];
         cache.chatId = expectedChatId;
         cache.archiveRevision = memoryBank.archiveRevision;
         cache.updatedAt = Date.now();
@@ -6125,7 +6327,7 @@ async function generateMode(mode, options = {}) {
         } else if (mode === MODE.HEART) {
             session = await generateHeartWithRepair(context, memoryBank, origin, taskKey);
         } else if (mode === MODE.PHONE) {
-            session = await generatePhoneWithRepair(context, memoryBank, origin, taskKey);
+            session = await generatePhoneWithRepair(context, memoryBank, origin, taskKey, { continueDraft: options.continueDraft === true });
         } else if (mode === MODE.ACHIEVEMENTS) {
             session = await generateAchievementsWithRepair(context, memoryBank, origin, taskKey);
         } else {
@@ -6171,6 +6373,9 @@ async function generateMode(mode, options = {}) {
             return;
         }
         console.error('[HeartbeatMemories] generation failed', { mode, error });
+        if (mode === MODE.PHONE && error?.code === 'RMT_PHONE_DRAFT_AVAILABLE' && activeMode === MODE.ROOM && activeSession?.kind === MODE.ROOM) {
+            renderRoom();
+        }
         if (background || document.getElementById(OVERLAY_ID)?.hidden || activeMode !== mode) {
             globalThis.toastr?.error?.(toastText(error?.message || String(error)), `心跳回忆 · ${MODE_LABEL[mode]}生成失败`);
             return;
@@ -7825,12 +8030,22 @@ function openRoomDeepMode(mode) {
             globalThis.toastr?.info?.(`当前已有 ${MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请等其中一项完成后再启动「${MODE_LABEL[mode]}」。`, '心跳回忆');
             return;
         }
+        let phoneDraft = null;
+        if (mode === MODE.PHONE) {
+            try {
+                const liveContext = currentCharacterGuard();
+                phoneDraft = loadPhoneGenerationDraft(liveContext, requireArchive(liveContext));
+            } catch {}
+        }
         void generateMode(mode, {
             background: true,
             roomSessionOverride: room,
             focusObjectId: selectedObject?.id || '',
+            continueDraft: mode === MODE.PHONE && !!phoneDraft,
         });
-        globalThis.toastr?.info?.(`已开始后台生成「${MODE_LABEL[mode]}」，你可以继续留在房间里。`, '心跳回忆');
+        globalThis.toastr?.info?.(phoneDraft
+            ? `已继续生成「${phoneDraft.plan.deviceName}」，已完成的 ${phoneDraft.completedApps.length}/${phoneDraft.plan.apps.length} 个 App 不会重做。`
+            : `已开始后台生成「${MODE_LABEL[mode]}」，你可以继续留在房间里。`, '心跳回忆');
         return;
     }
     if (mode === MODE.ITEMS && selectedSpace && selectedObject) {
@@ -7898,7 +8113,14 @@ function renderRoom() {
     const presenceLine = session.presenceLines[Math.max(0, Number(session.presenceIndex) || 0) % session.presenceLines.length] || slot?.line || '';
     const currentLocationText = `${daypart.label} · ${charName} 现在在「${presentSpace.label}」`;
     const deep = roomDeepAvailability();
-    const phoneLabel = deep.phone?.deviceName || '私人通讯终端';
+    let phoneDraft = null;
+    if (!activeArchiveSnapshot && !deep.phone) {
+        try {
+            const liveContext = currentCharacterGuard();
+            phoneDraft = loadPhoneGenerationDraft(liveContext, requireArchive(liveContext));
+        } catch {}
+    }
+    const phoneLabel = deep.phone?.deviceName || phoneDraft?.plan?.deviceName || '私人通讯终端';
     const itemsGenerating = isModeGenerating(MODE.ITEMS);
     const readOnlyArchive = !!activeArchiveSnapshot && activeArchiveReadOnly;
     const itemActionText = selectedSearchable
@@ -7950,7 +8172,7 @@ function renderRoom() {
           <div class="rmt-room-card-kicker">PRIVATE ACCESS</div>
           <div class="rmt-room-deep-actions">
             <button type="button" class="rmt-btn" data-rmt-action="room-open-items" ${!selectedSearchable || itemsGenerating || (readOnlyArchive && !deep.items) ? 'disabled' : ''}><i class="fa-solid fa-box-open"></i> ${esc(itemActionText)}</button>
-            <button type="button" class="rmt-btn" data-rmt-action="room-open-phone" ${isModeGenerating(MODE.PHONE) || (readOnlyArchive && !deep.phone) ? 'disabled' : ''}><i class="fa-solid fa-mobile-screen"></i> ${deep.phone ? `查看${esc(phoneLabel)}` : readOnlyArchive ? `${esc(phoneLabel)}尚未生成` : isModeGenerating(MODE.PHONE) ? '私人终端生成中…' : `生成并查看${esc(phoneLabel)}`}</button>
+            <button type="button" class="rmt-btn" data-rmt-action="room-open-phone" ${isModeGenerating(MODE.PHONE) || (readOnlyArchive && !deep.phone) ? 'disabled' : ''}><i class="fa-solid fa-mobile-screen"></i> ${deep.phone ? `查看${esc(phoneLabel)}` : readOnlyArchive ? `${esc(phoneLabel)}尚未生成` : isModeGenerating(MODE.PHONE) ? '私人终端生成中…' : phoneDraft ? `继续生成${esc(phoneLabel)} · ${phoneDraft.completedApps.length}/${phoneDraft.plan.apps.length}` : `生成并查看${esc(phoneLabel)}`}</button>
           </div>
           <div class="rmt-room-note">物品只能从真实收纳物进入；私人终端会根据人设选择手机、儿童电话手表或其他通讯器形态。</div>
         </section>
@@ -9499,12 +9721,14 @@ function selectedHeartStrip() {
 function renderHeartScriptLines(lines) {
     const charAvatar = heartCharacterAvatarUrl(activeArchiveSnapshot);
     const userAvatar = heartUserAvatarUrl();
+    const charName = normalizeText(activeArchiveSnapshot?.characterName || getContext().name2, 120) || '角色';
+    const userName = normalizeText(activeArchiveSnapshot?.memory?.userName || getContext().name1, 120) || '你';
     return `<div class="rmt-heart-script">${(lines || []).map(line => {
         if (line.speaker === 'narrator') return `<div class="rmt-heart-narration">${esc(line.text)}</div>`;
         const isUser = line.speaker === 'user';
         const avatar = isUser ? userAvatar : charAvatar;
         const fallback = isUser ? '<i class="fa-solid fa-user"></i>' : '<i class="fa-solid fa-heart"></i>';
-        return `<div class="rmt-heart-line ${isUser ? 'user' : 'char'}"><span class="rmt-heart-line-avatar">${avatar ? `<img src="${esc(avatar)}" alt="">` : fallback}</span><div><small>${isUser ? '剧本中的你 · 非正史' : '角色'}</small><p>${esc(line.text)}</p></div></div>`;
+        return `<div class="rmt-heart-line ${isUser ? 'user' : 'char'}"><span class="rmt-heart-line-avatar">${avatar ? `<img src="${esc(avatar)}" alt="">` : fallback}</span><div><small>${esc(isUser ? userName : charName)}</small><p>${esc(line.text)}</p></div></div>`;
     }).join('')}</div>`;
 }
 
@@ -9656,6 +9880,12 @@ function renderHeart() {
     const view = ['greetings', 'seasons', 'strips'].includes(session.view) ? session.view : 'greetings';
     session.view = view;
     const parts = session.generationParts || {};
+    const heartSeasons = ['postending', 'spring', 'summer', 'autumn', 'winter'];
+    const selectedHeartSeason = heartSeasons.includes(session.selectedSeason) ? session.selectedSeason : 'postending';
+    const heartSeasonLabels = { postending: '未来 / 后日谈', spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
+    const selectedHeartSeasonReady = selectedHeartSeason === 'postending'
+        ? session.voiceDramas.some(item => item.kind === 'postending')
+        : session.voiceDramas.some(item => item.kind === selectedHeartSeason) && session.scenarioDramas.some(item => item.season === selectedHeartSeason);
     const tabs = `<div class="rmt-heart-tabs">
       <button type="button" data-rmt-heart-view="greetings" class="${view === 'greetings' ? 'active' : ''}">各种时期的对话</button>
       <button type="button" data-rmt-heart-view="seasons" class="${view === 'seasons' ? 'active' : ''}">春夏秋冬 / Drama</button>
@@ -9664,7 +9894,7 @@ function renderHeart() {
     const generationButton = readOnly ? '' : view === 'greetings'
         ? '<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="dialogues">重新生成时期对话</button>'
         : view === 'seasons'
-            ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="seasons">${parts.seasons ? '重新生成春夏秋冬' : '生成春夏秋冬'}</button>`
+            ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-season" data-rmt-heart-season-target="${esc(selectedHeartSeason)}">${selectedHeartSeasonReady ? '重新生成' : '生成'}${esc(heartSeasonLabels[selectedHeartSeason])}</button>`
             : `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="strips">${parts.strips ? '重新生成日常一格' : '生成日常一格'}</button>`;
     const topActions = `<div class="rmt-heart-top-actions"><button type="button" class="rmt-btn" data-rmt-action="heart-avatar-talk">点头像听一句</button>${generationButton}</div>`;
     const summary = `<section class="rmt-heart-summary"><div><b>${esc(session.relationshipState)}</b><p>${esc(session.relationshipSummary)}</p></div>${topActions}</section>`;
@@ -9685,10 +9915,10 @@ function renderHeart() {
         }).join('');
         content = `<div class="rmt-heart-greetings"><div class="rmt-heart-current-line"><small>${esc(current.label)}</small><p>${esc(current.text)}</p></div><div class="rmt-heart-greeting-grid">${groups}</div></div>`;
     } else if (view === 'seasons') {
-        const availableSeasons = ['postending', 'spring', 'summer', 'autumn', 'winter'];
-        const selectedSeason = availableSeasons.includes(session.selectedSeason) ? session.selectedSeason : 'postending';
+        const availableSeasons = heartSeasons;
+        const selectedSeason = selectedHeartSeason;
         session.selectedSeason = selectedSeason;
-        const seasonLabels = { postending: '未来 / 后日谈', spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
+        const seasonLabels = heartSeasonLabels;
         const nav = availableSeasons.map(season => {
             const hasVoice = session.voiceDramas.some(item => item.kind === season);
             const hasScenario = season === 'postending' || session.scenarioDramas.some(item => item.season === season);
@@ -9704,7 +9934,7 @@ function renderHeart() {
         if (scenario) {
             detail += `<section class="rmt-heart-drama-section"><div class="rmt-heart-drama-head"><div><h2>${esc(scenario.title)}</h2><p>${esc(scenario.subtitle)}</p></div></div><div class="rmt-heart-setting">${esc(scenario.setting)}</div>${renderHeartScriptLines(scenario.script)}</section>`;
         }
-        if (!detail) detail = `<div class="rmt-heart-empty">${readOnly ? '这一部分还没有生成。' : '点击上方按钮生成春夏秋冬 / Drama。'}</div>`;
+        if (!detail) detail = `<div class="rmt-heart-empty">${readOnly ? '这一部分还没有生成。' : `点击上方按钮单独生成${esc(seasonLabels[selectedSeason])}。`}</div>`;
         content = `<div class="rmt-heart-drama-layout"><nav>${nav}</nav><main>${detail}</main></div>`;
     } else {
         const selected = selectedHeartStrip();
@@ -9713,7 +9943,9 @@ function renderHeart() {
         let detail = '';
         if (selected) {
             const image = normalizeCgImageRecord(selected.cgImage);
-            const panels = selected.panels.map((panel, index) => `<article class="rmt-heart-panel"><b>${index + 1}</b><div><small>${esc(panel.caption || `第 ${index + 1} 格`)}</small><p>${esc(panel.action)}</p>${panel.charLine ? `<div class="rmt-heart-panel-line"><strong>角色</strong>${esc(panel.charLine)}</div>` : ''}${panel.userLine ? `<div class="rmt-heart-panel-line user"><strong>剧本中的你</strong>${esc(panel.userLine)}</div>` : ''}</div></article>`).join('');
+            const charDisplayName = normalizeText(activeArchiveSnapshot?.characterName || getContext().name2, 120) || '角色';
+            const userDisplayName = normalizeText(activeArchiveSnapshot?.memory?.userName || getContext().name1, 120) || '你';
+            const panels = selected.panels.map((panel, index) => `<article class="rmt-heart-panel"><b>${index + 1}</b><div><small>${esc(panel.caption || `第 ${index + 1} 格`)}</small><p>${esc(panel.action)}</p>${panel.charLine ? `<div class="rmt-heart-panel-line"><strong>${esc(charDisplayName)}</strong>${esc(panel.charLine)}</div>` : ''}${panel.userLine ? `<div class="rmt-heart-panel-line user"><strong>${esc(userDisplayName)}</strong>${esc(panel.userLine)}</div>` : ''}</div></article>`).join('');
             detail = `<div class="rmt-heart-strip-head"><div><h2>${esc(selected.title)}</h2><p>${esc(selected.subtitle)}</p></div><span>${selected.panelCount}格</span></div><div class="rmt-heart-strip-image">${cgImageLayerHtml(selected, { lazy: false })}</div><div class="rmt-heart-strip-actions">${readOnly ? '' : `<button type="button" class="rmt-btn rmt-cg-primary" data-rmt-action="draw-heart-strip" data-rmt-heart-strip-id="${esc(selected.id)}" ${isCgImageDrawing(MODE.HEART, selected.id) ? 'disabled' : ''}>${isCgImageDrawing(MODE.HEART, selected.id) ? '正在绘制…' : image ? '↻ 重绘日常一格' : '🎨 绘制日常一格'}</button>${image ? `<button type="button" class="rmt-btn" data-rmt-action="clear-heart-strip" data-rmt-heart-strip-id="${esc(selected.id)}">恢复文字版</button>` : ''}`}</div><div class="rmt-heart-panels">${panels}</div>`;
         } else {
             detail = `<div class="rmt-heart-empty">${readOnly ? '日常一格还没有生成。' : '点击上方按钮单独生成日常一格。'}</div>`;
@@ -10268,7 +10500,7 @@ function handleOverlayClick(event) {
     const actionEl = event.target.closest?.('[data-rmt-action]');
     const action = actionEl?.dataset?.rmtAction;
     if (!action) return;
-    if (activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'draw-heart-strip', 'clear-heart-strip', 'generate-all-adv', 'repair-failed-adv', 'room-life-refresh', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins', 'memory-worldinfo-picker', 'refresh-ending-confessions', 'heart-generate-part'].includes(action)) {
+    if (activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'draw-heart-strip', 'clear-heart-strip', 'generate-all-adv', 'repair-failed-adv', 'room-life-refresh', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins', 'memory-worldinfo-picker', 'refresh-ending-confessions', 'heart-generate-part', 'heart-generate-season'].includes(action)) {
         if (!requireWritableArchiveAction()) return;
     }
     if (action === 'back') return navigateBack();
@@ -10288,6 +10520,7 @@ function handleOverlayClick(event) {
         return void showAvatarDialogueForCharacter(key);
     }
     if (action === 'heart-generate-part') return void generateHeartSection(actionEl.dataset.rmtHeartPart || 'dialogues');
+    if (action === 'heart-generate-season') return void generateHeartSeasonSection(actionEl.dataset.rmtHeartSeasonTarget || 'postending');
     if (action === 'avatar-talk-again') return renderAvatarDialoguePopup(activeAvatarDialogue, { repeat: true });
     if (action === 'avatar-heart-open') return openHeartFromAvatar();
     if (action === 'avatar-heart-generate') {
@@ -10647,11 +10880,6 @@ function mountSettings() {
           <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
           <label class="checkbox_label rmt-settings-check"><input data-rmt-room-life-auto type="checkbox"> 每天首次打开房间时允许一次“今日生活”自动请求</label>
           <label class="checkbox_label rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"> 手动确认 SillyTavern Image Generation 已启用（自动检测失败时，绘制会尝试受控的 /sd quiet=true 兜底）</label>
-          <div class="rmt-api-note" data-rmt-api-status></div>
-          <div class="rmt-api-note">“最大输出”最高 30,000 tokens。档案聊天分块与记忆/摘要分块不再硬限制 4,096；实际可用上限仍由所选模型/服务端决定。若模型只返回推理而没有最终 JSON，心跳回忆会停止并允许你明确选择只重试当前分块，不会自动重复请求。</div>
-          <div class="rmt-api-note">“生成禁用词”只约束模型新生成的派生内容，默认禁用“老子”。不会改写历史聊天、正式档案原文或 sourceMemoryAnchor 等证据锚点；命中时本次结果拒绝保存且不会自动重试。</div>
-          <div class="rmt-api-note">生图会优先直接调用已注册的 /imagine、/sd 或 /img callback。只有你手动勾选上面的兜底后，自动检测仍失败时才会通过 SillyTavern 公开 Slash 执行接口调用 /sd quiet=true；视觉 prompt 会先去掉宏语法、换行并转义管道，避免把模型文本当成额外 STscript 执行。</div>
-          <div class="rmt-api-note">模型刷新只调用 SillyTavern 本地后端状态接口；插件保存 Connection Profile / Secret ID 引用，不保存 API Key 明文。若酒馆当前自定义 Chat Completion 配置包含 custom headers，刷新模型时会按 SillyTavern 原生方式把它们提交给同源后端处理，不会写入心跳回忆缓存或 Prompt。</div>
         </div>
         <div class="rmt-settings-archive-actions">
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
