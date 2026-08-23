@@ -4264,6 +4264,11 @@ dialog#${OVERLAY_ID}::backdrop{background:transparent}
 .rmt-abstract:before{width:28%;height:55%;left:18%;top:24%}.rmt-abstract:after{width:34%;height:38%;right:12%;bottom:14%}
 .rmt-cg-real{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;z-index:1;background:#eef5f7}
 .rmt-cg-real[hidden]{display:none!important}.rmt-cg-real-badge{position:absolute;z-index:3;top:7px;right:7px;padding:3px 7px;border-radius:999px;background:rgba(33,48,62,.72);color:#fff;font-size:8px;font-weight:800;letter-spacing:.08em;backdrop-filter:blur(5px)}
+.rmt-cg-card-draw{position:absolute;z-index:6;right:7px;bottom:7px;min-height:28px;padding:5px 8px;border:1px solid rgba(255,255,255,.86);border-radius:999px;background:rgba(43,58,72,.78);color:#fff;font:700 9px/1.1 inherit;box-shadow:0 3px 9px rgba(37,52,65,.18);backdrop-filter:blur(6px);cursor:pointer}
+.rmt-cg-card-draw:hover{background:rgba(35,50,64,.9)}.rmt-cg-card-draw:disabled{opacity:.68;cursor:wait}
+.rmt-cg-provider-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 9px;padding:8px 10px;border:1px solid #d7e5eb;border-radius:11px;background:rgba(247,251,253,.92);font-size:10px;color:#718194}
+.rmt-cg-provider-bar b{color:#52667a}.rmt-cg-provider-dot{width:7px;height:7px;border-radius:50%;background:#b6c0c8;box-shadow:0 0 0 3px rgba(182,192,200,.14)}.rmt-cg-provider-bar.ready .rmt-cg-provider-dot{background:#6eb99b;box-shadow:0 0 0 3px rgba(110,185,155,.15)}
+.rmt-btn.rmt-cg-primary{border-color:#d98bab;background:linear-gradient(180deg,#f7b5cf,#e99ab9);color:#fff;font-weight:800;box-shadow:0 4px 10px rgba(214,126,162,.18)}
 .rmt-cg-caption,.rmt-memory-caption{z-index:2}.rmt-cg-draw-note{font-size:10px;color:#8795a4;line-height:1.55;margin-top:8px}.rmt-btn.rmt-cg-drawing{opacity:.72;cursor:wait}
 .rmt-info{
   border:1px solid #cbdde7;border-radius:16px;padding:16px;min-height:300px;animation:rmtFade .2s ease;
@@ -4544,7 +4549,7 @@ dialog#${OVERLAY_ID}::backdrop{background:transparent}
   .rmt-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.rmt-info{position:static}
   .rmt-memory-cg{margin:10px 10px 7px;border-width:6px}.rmt-dialogue{margin:0 10px 10px}
   .rmt-adv{grid-template-columns:1fr;min-height:0}.rmt-event-list{border-right:0;border-bottom:1px solid #c9dce6;max-height:none;padding:10px;position:sticky;top:0;z-index:5;background:rgba(248,252,254,.97);box-shadow:0 5px 12px rgba(67,91,108,.06)}.rmt-event-list:before{display:none}.rmt-event-items{display:none}.rmt-adv-mobile-picker{display:grid;gap:8px}.rmt-adv-mobile-picker select{width:100%;min-height:42px;border:1px solid #c9dce6;border-radius:12px;background:#fff;color:#586a7d;padding:8px 10px;font:inherit}.rmt-adv-picker-status{display:flex;align-items:center;gap:8px;min-width:0}.rmt-adv-picker-status b{font-size:10px;color:#9d6d82}.rmt-adv-picker-status span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}.rmt-adv-picker-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}.rmt-adv-bulkbar{margin-bottom:8px}.rmt-adv-bulkbar .rmt-btn{min-height:38px}.rmt-event-detail{padding:10px 11px 18px}.rmt-memory-scene{min-height:calc(100vh - 55px)}
-  .rmt-big-cg{border-width:5px;margin:2px 0 11px}.rmt-cg-caption{left:8px;right:8px;bottom:8px;padding:8px 9px;font-size:10px;line-height:1.45}.rmt-mode-actions .rmt-btn{flex:1}.rmt-adv-reader{padding:14px}.rmt-adv-para{font-size:12px;line-height:1.85}
+  .rmt-big-cg{border-width:5px;margin:2px 0 11px}.rmt-cg-caption{left:8px;right:8px;bottom:8px;padding:8px 9px;font-size:10px;line-height:1.45}.rmt-cg-card-draw{right:5px;bottom:5px;min-height:27px;padding:5px 7px;font-size:8px}.rmt-cg-provider-bar{padding:7px 8px;gap:6px;margin-bottom:8px;line-height:1.45}.rmt-mode-actions .rmt-btn{flex:1}.rmt-adv-reader{padding:14px}.rmt-adv-para{font-size:12px;line-height:1.85}
   .rmt-room-view{padding:10px 10px 18px}.rmt-room-map{margin:0 -2px;padding-bottom:9px}.rmt-room-space{min-width:96px;padding:8px 9px}.rmt-room-location{font-size:10px;margin-bottom:10px;align-items:flex-start;gap:7px}.rmt-room-location-actions{flex:0 0 auto;gap:5px}.rmt-room-location .rmt-room-find{padding:5px 7px;font-size:9px}.rmt-room-flow{gap:10px}.rmt-room-card{padding:13px;border-radius:14px}.rmt-room-object-title{font-size:16px}.rmt-room-object-desc,.rmt-room-atmosphere{font-size:11px;line-height:1.68}.rmt-room-stage{border-radius:14px}.rmt-room-stage-head{padding:9px 11px}.rmt-room-activity-strip{padding:8px 10px}.rmt-room-activity-strip>div{grid-template-columns:1fr;gap:3px}.rmt-room-activity-strip small{grid-column:1}.rmt-room-scene{min-height:350px}.rmt-room-person{left:44%;transform:scale(.82);transform-origin:bottom center}.rmt-room-person-label{font-size:9px;padding:2px 5px}.rmt-room-object-rail{grid-template-columns:repeat(2,minmax(0,1fr));padding:8px;gap:6px}.rmt-room-object-chip{grid-template-columns:22px minmax(0,1fr);padding:6px}.rmt-room-object-chip em{grid-column:2}.rmt-room-caption{padding:10px 11px 12px;font-size:11px}.rmt-room-private-access-card{margin-bottom:4px}
   .rmt-phone{padding:5px}.rmt-phone-shell{padding:9px}.rmt-phone-lock{padding:9px 7px}.rmt-phone-apps{gap:6px;padding:6px 0 10px}.rmt-phone-app{min-width:78px;padding:8px 7px}.rmt-phone-content{display:block}.rmt-phone-list,.rmt-phone-detail{padding:10px;border-radius:14px}.rmt-phone-view-list .rmt-phone-detail{display:none}.rmt-phone-view-detail .rmt-phone-list{display:none}.rmt-phone-detail-toolbar{position:sticky;top:0;background:rgba(255,255,255,.96);z-index:2;padding-bottom:7px}.rmt-phone-entry{padding:9px 5px}.rmt-phone-entry span{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.rmt-phone-message p{font-size:11px}.rmt-phone-fields>div{grid-template-columns:1fr}
   .rmt-ending{grid-template-columns:1fr;padding:9px;gap:10px}.rmt-ending-summary{padding:12px}.rmt-ending-list{grid-template-columns:1fr 1fr;gap:6px}.rmt-ending-route{padding:9px}.rmt-ending-detail{padding:13px;border-radius:15px}.rmt-ending-head h2{font-size:18px}.rmt-ending-section p,.rmt-ending-confession{font-size:11px;line-height:1.8}
@@ -4643,6 +4648,28 @@ function cgImageLayerHtml(item, { lazy = true } = {}) {
     if (!image) return abstract;
     const alt = `${normalizeText(item?.title, 120) || 'CG'} · 实图`;
     return `${abstract}<img class="rmt-cg-real" data-rmt-cg-image src="${esc(image.url)}" alt="${esc(alt)}" ${lazy ? 'loading="lazy"' : ''} decoding="async" referrerpolicy="no-referrer"><span class="rmt-cg-real-badge">CG IMAGE</span>`;
+}
+
+function cgImageProviderBar({ readOnly = false } = {}) {
+    if (readOnly) return '<div class="rmt-cg-provider-bar"><span class="rmt-cg-provider-dot"></span><b>CG 实图</b><span>只读档案 · 可查看已保存图片，不能在这里重新绘制</span></div>';
+    const ready = !!imageGenerationCommand();
+    return `<div class="rmt-cg-provider-bar ${ready ? 'ready' : ''}"><span class="rmt-cg-provider-dot"></span><b>CG 实图</b><span>${ready ? 'Image Generation 已连接 · 点击 🎨 绘制CG' : '未检测到 Image Generation · 启用后即可绘制'}</span></div>`;
+}
+
+function indexedArchiveMatchesCurrentChat(entry, context = getContext()) {
+    try {
+        if (!entry) return false;
+        const wantedChatId = comparableChatId(entry.chatId);
+        if (!wantedChatId || comparableChatId(getChatId(context)) !== wantedChatId) return false;
+        const currentKey = currentCharacterKey(context);
+        const entryKey = archiveCanonicalCharacterKey(entry, context);
+        if (!currentKey || !entryKey || currentKey !== entryKey) return false;
+        const memory = getImportedMemory(context);
+        if (!memory || comparableChatId(memory.chatId) !== wantedChatId) return false;
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 function selectedCgTarget() {
@@ -5967,6 +5994,13 @@ async function openIndexedArchive(characterKey, chatId) {
     const entry = index.find(item => item.characterKey === characterKey && item.chatId === wantedChatId)
         || index.find(item => archiveCanonicalCharacterKey(item, context) === characterKey && item.chatId === wantedChatId);
     if (!entry) return;
+    // If the indexed row is exactly the chat that SillyTavern already has open, use the live
+    // context instead of a read-only metadata snapshot. This keeps write actions such as CG
+    // drawing available without ever switching the host character/chat.
+    if (indexedArchiveMatchesCurrentChat(entry, context)) {
+        activeArchiveSnapshot = null;
+        return showChooser();
+    }
     openOverlay();
     topTitle('心跳回忆 · 正在读取只读档案…');
     const body = bodyEl();
@@ -6379,14 +6413,21 @@ function renderAlbum() {
     const unlocked = session.entries.filter(x => x.unlocked).length;
     const readOnlyArchive = !!activeArchiveSnapshot;
     const filters = ['全部', '日常', '约会', '结局'].map(cat => `<button type="button" class="rmt-btn ${session.category === cat ? 'active' : ''}" data-rmt-category="${cat}">${cat}</button>`).join('');
-    const cards = pageItems.map(item => `<article class="rmt-card ${item.id === session.selectedId ? 'active' : ''} ${item.unlocked ? '' : 'locked'}" data-rmt-album-id="${esc(item.id)}">
-      <div class="rmt-thumb">${item.unlocked ? cgImageLayerHtml(item) : `<div class="rmt-abstract" style="${abstractStyle(item.visualSeed, item.id)}"></div>`}</div>
+    const cards = pageItems.map(item => {
+        const drawing = item.unlocked && !readOnlyArchive && isCgImageDrawing(MODE.ALBUM, item.id);
+        const image = normalizeCgImageRecord(item.cgImage);
+        const drawPill = item.unlocked && !readOnlyArchive
+            ? `<button type="button" class="rmt-cg-card-draw ${drawing ? 'rmt-cg-drawing' : ''}" data-rmt-album-draw="${esc(item.id)}" ${drawing ? 'disabled' : ''} title="${image ? '重新绘制这张 CG' : '绘制这张 CG'}">${drawing ? '绘制中…' : image ? '↻ 重绘' : '🎨 绘制'}</button>`
+            : '';
+        return `<article class="rmt-card ${item.id === session.selectedId ? 'active' : ''} ${item.unlocked ? '' : 'locked'}" data-rmt-album-id="${esc(item.id)}">
+      <div class="rmt-thumb">${item.unlocked ? cgImageLayerHtml(item) : `<div class="rmt-abstract" style="${abstractStyle(item.visualSeed, item.id)}"></div>`}${drawPill}</div>
       <div class="rmt-card-meta">
         <div class="rmt-card-title">${esc(item.unlocked ? item.title : `（未解锁）${item.title}`)}</div>
         <div class="rmt-card-date">${esc(item.date)}</div>
         <div class="rmt-card-desc">${esc(item.desc)}</div>
       </div>
-    </article>`).join('');
+    </article>`;
+    }).join('');
     const hint = selected && !selected.unlocked && session.hintVisible ? selected.hintLines.join('\n') : '';
     const info = selected ? `<aside class="rmt-info">
       <h3>${esc(selected.unlocked ? selected.title : `（未解锁）${selected.title}`)}</h3>
@@ -6404,6 +6445,7 @@ function renderAlbum() {
     const body = bodyEl();
     body.innerHTML = `<div class="rmt-album">
       <div class="rmt-album-head"><h2>${esc(session.title)}</h2><span class="rmt-count">已解锁 ${unlocked} / 总数 ${session.entries.length}</span><div class="rmt-filter">${filters}</div></div>
+      ${cgImageProviderBar({ readOnly: readOnlyArchive })}
       <div class="rmt-album-layout">
         <section class="rmt-grid-wrap"><div class="rmt-grid">${cards}</div>
           <div class="rmt-pager"><button type="button" class="rmt-btn" data-rmt-action="album-prev" ${session.page <= 1 ? 'disabled' : ''}>上一页</button><span>第 ${session.page} 页 / 共 ${totalPages} 页</span><button type="button" class="rmt-btn" data-rmt-action="album-next" ${session.page >= totalPages ? 'disabled' : ''}>下一页</button></div>
@@ -6411,6 +6453,16 @@ function renderAlbum() {
         ${info}
       </div>
     </div>`;
+}
+
+function albumDrawCg(id) {
+    if (!activeSession || activeSession.kind !== MODE.ALBUM || activeArchiveSnapshot) return;
+    const item = activeSession.entries.find(entry => entry.id === id);
+    if (!item?.unlocked) return;
+    activeSession.selectedId = item.id;
+    activeSession.hintVisible = false;
+    renderAlbum();
+    void drawSelectedCgImage();
 }
 
 function albumSelect(id) {
@@ -6656,12 +6708,12 @@ function renderAdvMode() {
         if (session.view === 'adv' && selected.adv?.paragraphs?.length) {
             const paras = selected.adv.paragraphs;
             session.paragraphIndex = Math.max(0, Math.min(session.paragraphIndex, paras.length - 1));
-            detail = `<div class="rmt-big-cg">${cgImageLayerHtml(selected, { lazy: false })}<div class="rmt-cg-caption"><b>${esc(selected.title)}</b> · ${esc(selected.date)}<br>${esc(selected.cgDesc)}</div></div>
-              <div class="rmt-mode-actions"><button type="button" class="rmt-btn" data-rmt-action="cg-only">只看CG</button><button type="button" class="rmt-btn" data-rmt-action="read-adv">阅读ADV</button>${readOnlyArchive ? '' : `<button type="button" class="rmt-btn ${isCgImageDrawing(MODE.ADV, selected.id) ? 'rmt-cg-drawing' : ''}" data-rmt-action="draw-cg" ${isCgImageDrawing(MODE.ADV, selected.id) ? 'disabled' : ''}>${isCgImageDrawing(MODE.ADV, selected.id) ? '正在绘制CG…' : normalizeCgImageRecord(selected.cgImage) ? '↻ 重绘CG' : '🎨 绘制CG'}</button>${normalizeCgImageRecord(selected.cgImage) ? '<button type="button" class="rmt-btn" data-rmt-action="clear-cg-image">恢复抽象CG</button>' : ''}`}</div>
+            detail = `${cgImageProviderBar({ readOnly: readOnlyArchive })}<div class="rmt-big-cg">${cgImageLayerHtml(selected, { lazy: false })}<div class="rmt-cg-caption"><b>${esc(selected.title)}</b> · ${esc(selected.date)}<br>${esc(selected.cgDesc)}</div></div>
+              <div class="rmt-mode-actions">${readOnlyArchive ? '' : `<button type="button" class="rmt-btn rmt-cg-primary ${isCgImageDrawing(MODE.ADV, selected.id) ? 'rmt-cg-drawing' : ''}" data-rmt-action="draw-cg" ${isCgImageDrawing(MODE.ADV, selected.id) ? 'disabled' : ''}>${isCgImageDrawing(MODE.ADV, selected.id) ? '正在绘制CG…' : normalizeCgImageRecord(selected.cgImage) ? '↻ 重绘CG' : '🎨 绘制CG'}</button>`}<button type="button" class="rmt-btn" data-rmt-action="cg-only">只看CG</button><button type="button" class="rmt-btn" data-rmt-action="read-adv">阅读ADV</button>${!readOnlyArchive && normalizeCgImageRecord(selected.cgImage) ? '<button type="button" class="rmt-btn" data-rmt-action="clear-cg-image">恢复抽象CG</button>' : ''}</div>
               <div class="rmt-adv-reader"><div class="rmt-progress">第 ${session.paragraphIndex + 1} 段 / 共 ${paras.length} 段</div><div class="rmt-adv-para">${esc(paras[session.paragraphIndex])}</div><div class="rmt-reader-actions"><button type="button" class="rmt-btn" data-rmt-action="adv-prev" ${session.paragraphIndex <= 0 ? 'disabled' : ''}>上一段</button><button type="button" class="rmt-btn" data-rmt-action="adv-next">${session.paragraphIndex >= paras.length - 1 ? '重看' : '下一段'}</button></div></div>`;
         } else {
-            detail = `<div class="rmt-big-cg">${cgImageLayerHtml(selected, { lazy: false })}<div class="rmt-cg-caption"><b>${esc(selected.title)}</b> · ${esc(selected.date)}<br>${esc(selected.cgDesc)}</div></div>
-              <div class="rmt-mode-actions"><button type="button" class="rmt-btn" data-rmt-action="cg-only">只看CG</button><button type="button" class="rmt-btn" data-rmt-action="read-adv" ${bulkRunning || (readOnlyArchive && !selected.adv) ? 'disabled' : ''}>${selected.adv ? '阅读ADV' : readOnlyArchive ? 'ADV 尚未生成' : '生成并阅读ADV'}</button>${readOnlyArchive ? '' : `<button type="button" class="rmt-btn ${isCgImageDrawing(MODE.ADV, selected.id) ? 'rmt-cg-drawing' : ''}" data-rmt-action="draw-cg" ${isCgImageDrawing(MODE.ADV, selected.id) ? 'disabled' : ''}>${isCgImageDrawing(MODE.ADV, selected.id) ? '正在绘制CG…' : normalizeCgImageRecord(selected.cgImage) ? '↻ 重绘CG' : '🎨 绘制CG'}</button>${normalizeCgImageRecord(selected.cgImage) ? '<button type="button" class="rmt-btn" data-rmt-action="clear-cg-image">恢复抽象CG</button>' : ''}`}</div>
+            detail = `${cgImageProviderBar({ readOnly: readOnlyArchive })}<div class="rmt-big-cg">${cgImageLayerHtml(selected, { lazy: false })}<div class="rmt-cg-caption"><b>${esc(selected.title)}</b> · ${esc(selected.date)}<br>${esc(selected.cgDesc)}</div></div>
+              <div class="rmt-mode-actions">${readOnlyArchive ? '' : `<button type="button" class="rmt-btn rmt-cg-primary ${isCgImageDrawing(MODE.ADV, selected.id) ? 'rmt-cg-drawing' : ''}" data-rmt-action="draw-cg" ${isCgImageDrawing(MODE.ADV, selected.id) ? 'disabled' : ''}>${isCgImageDrawing(MODE.ADV, selected.id) ? '正在绘制CG…' : normalizeCgImageRecord(selected.cgImage) ? '↻ 重绘CG' : '🎨 绘制CG'}</button>`}<button type="button" class="rmt-btn" data-rmt-action="cg-only">只看CG</button><button type="button" class="rmt-btn" data-rmt-action="read-adv" ${bulkRunning || (readOnlyArchive && !selected.adv) ? 'disabled' : ''}>${selected.adv ? '阅读ADV' : readOnlyArchive ? 'ADV 尚未生成' : '生成并阅读ADV'}</button>${!readOnlyArchive && normalizeCgImageRecord(selected.cgImage) ? '<button type="button" class="rmt-btn" data-rmt-action="clear-cg-image">恢复抽象CG</button>' : ''}</div>
               <div class="rmt-adv-summary">${esc(selected.cgDesc)}</div>`;
         }
     }
@@ -6728,6 +6780,8 @@ function handleOverlayClick(event) {
     if (node) return selectButterflyNode(node.dataset.rmtNode);
     const endingRoute = event.target.closest?.('[data-rmt-ending-id]');
     if (endingRoute) return endingSelect(endingRoute.dataset.rmtEndingId);
+    const albumDraw = event.target.closest?.('[data-rmt-album-draw]');
+    if (albumDraw) return albumDrawCg(albumDraw.dataset.rmtAlbumDraw);
     const card = event.target.closest?.('[data-rmt-album-id]');
     if (card) return albumSelect(card.dataset.rmtAlbumId);
     const filter = event.target.closest?.('[data-rmt-category]');
