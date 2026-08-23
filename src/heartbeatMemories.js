@@ -940,6 +940,14 @@ function queueDeferredCommit(origin, commit) {
     if (!origin?.characterKey || !origin?.chatId || !commit?.kind) return;
     const key = `${origin.characterKey}|${origin.chatId}`;
     const list = deferredChatCommits.get(key) || [];
+    if (commit.kind === 'heartPatches') {
+        const previous = list.find(item => item.kind === 'heartPatches');
+        const mergedPatches = mergeDeferredHeartPatches(previous?.patches, commit.patches);
+        const filtered = list.filter(item => item.kind !== 'heartPatches');
+        filtered.push({ kind: 'heartPatches', patches: mergedPatches, origin, queuedAt: Date.now() });
+        deferredChatCommits.set(key, filtered);
+        return;
+    }
     if (commit.kind === 'sessions') {
         const previous = list.find(item => item.kind === 'sessions');
         const mergedSessions = { ...(previous?.sessions || {}), ...(commit.sessions || {}) };
@@ -1960,6 +1968,24 @@ async function flushDeferredCommitsForCurrentChat() {
                 saveImportedMemory(context, bank, item.origin.chatId, { preserveDerivedCache: !!item.preserveDerivedCache });
                 clearMemoryPreflight(context);
                 globalThis.toastr?.success?.(`后台档案已写回：${bank.archiveName}`, '心跳回忆');
+            } else if (item.kind === 'heartPatches') {
+                const memory = requireArchive(context);
+                if (memory.archiveRevision !== item.origin.archiveRevision) {
+                    globalThis.toastr?.warning?.('后台角色互动结果对应的是旧档案版本，已停止写回。', '心跳回忆');
+                    continue;
+                }
+                await ensureCacheHydrated(context);
+                let session = loadSession(MODE.HEART, { context, chatId: item.origin.chatId, memoryBank: memory, clone: true });
+                if (!session) continue;
+                for (const patch of Object.values(item.patches || {})) session = applyHeartPartialPatch(session, patch);
+                session = normalizeHeart(session, memory);
+                session.chatId = item.origin.chatId;
+                session.archiveRevision = memory.archiveRevision;
+                if (!saveSession(MODE.HEART, session, item.origin.chatId)) {
+                    queueDeferredCommit(item.origin, { kind: 'heartPatches', patches: item.patches });
+                    continue;
+                }
+                globalThis.toastr?.success?.('之前窗口的角色互动结果已自动写回。', '心跳回忆');
             } else if (item.kind === 'sessions') {
                 const memory = requireArchive(context);
                 if (memory.archiveRevision !== item.origin.archiveRevision) {
@@ -3427,24 +3453,35 @@ UNTRUSTED_HEART_RELATIONSHIP_JSON:
 ${heartDramaContext(core, memoryBank)}
 只生成一个 postending Voice Drama：
 {"voiceDramas":[{"id":"VOICE_POST","kind":"postending","title":"后日谈 Voice Drama","subtitle":"未来生活长篇剧场","setting":"明确这是未来模拟","script":[{"speaker":"narrator","text":"..."},{"speaker":"char","text":"..."}]}]}
-要求：恰好 1 个 kind=postending；script 至少12节点、总文本不少于700汉字；符合当前关系阶段，不能强行恋爱/婚姻；user 台词若出现仅是非正史剧本演出。只输出 JSON。`;
+要求：恰好 1 个 kind=postending；script 8～14节点、总文本不少于420汉字；符合当前关系阶段，不能强行恋爱/婚姻；user 台词若出现仅是非正史剧本演出。只输出 JSON。`;
 }
 
-function heartSeasonPrompt(context, memoryBank, core, season) {
+function heartSeasonVoicePrompt(context, memoryBank, core, season) {
     const labels = { spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
     const label = labels[season] || season;
-    return `${promptSafetyBoundary(context, `角色互动 / Drama：${label}`)}
+    return `${promptSafetyBoundary(context, `角色互动 / Drama：${label} Voice`)}
 UNTRUSTED_HEART_RELATIONSHIP_JSON:
 ${heartDramaContext(core, memoryBank)}
-本请求只生成【${label}】这一季，包含一个 Voice Drama 和一个 Scenario Drama：
-{
-  "voiceDramas":[{"id":"VOICE_${season.toUpperCase()}","kind":"${season}","title":"${label} Voice Drama","subtitle":"...","setting":"...","script":[]}],
-  "scenarioDramas":[{"id":"SCENE_${season.toUpperCase()}","season":"${season}","title":"${label} Scenario Drama","subtitle":"普通一天里的小事件","setting":"...","script":[]}]
-}
+本请求只生成【${label} Voice Drama】，不要生成 Scenario：
+{"voiceDramas":[{"id":"VOICE_${season.toUpperCase()}","kind":"${season}","title":"${label} Voice Drama","subtitle":"...","setting":"...","script":[{"speaker":"char","text":"..."}]}]}
 要求：
-- Voice script 至少7节点、总文本不少于450汉字，以 {{char}} 主观感受为中心。
-- Scenario script 至少8节点、总文本不少于550汉字，写普通一天的小事件。
-- 两者都是模拟，不新增历史事实，不给角色安排第三方恋爱。只输出 JSON。`;
+- 只返回 1 个 kind=${season} 的 Voice Drama。
+- script 5～10 节点、总文本不少于280汉字，以 {{char}} 主观感受为中心；允许少量 narrator/user。
+- 这是模拟，不新增历史事实，不给角色安排第三方恋爱。只输出 JSON。`;
+}
+
+function heartSeasonScenarioPrompt(context, memoryBank, core, season) {
+    const labels = { spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
+    const label = labels[season] || season;
+    return `${promptSafetyBoundary(context, `角色互动 / Drama：${label} Scenario`)}
+UNTRUSTED_HEART_RELATIONSHIP_JSON:
+${heartDramaContext(core, memoryBank)}
+本请求只生成【${label} Scenario Drama】，不要生成 Voice：
+{"scenarioDramas":[{"id":"SCENE_${season.toUpperCase()}","season":"${season}","title":"${label} Scenario Drama","subtitle":"普通一天里的小事件","setting":"...","script":[{"speaker":"narrator","text":"..."}]}]}
+要求：
+- 只返回 1 个 season=${season} 的 Scenario Drama。
+- script 6～12 节点、总文本不少于360汉字，写普通一天里的一个完整小事件。
+- 这是模拟，不新增历史事实，不给角色安排第三方恋爱。只输出 JSON。`;
 }
 
 function heartStripsPrompt(context, memoryBank, core) {
@@ -3467,9 +3504,9 @@ function normalizeVoiceDramaPart(data, expectedKinds) {
         if (!item) throw new Error(`Voice Drama 缺少 ${expected}。`);
         const post = expected === 'postending';
         const script = normalizeHeartScript(item?.script, {
-            minLines: post ? 12 : 7,
-            maxLines: post ? 30 : 20,
-            minChars: post ? 700 : 450,
+            minLines: post ? 8 : 5,
+            maxLines: post ? 24 : 16,
+            minChars: post ? 420 : 280,
         });
         if (!script.length) throw new Error(`Voice Drama ${expected} 长度不足。`);
         out.push({
@@ -3491,7 +3528,7 @@ function normalizeScenarioDramaPart(data, expectedSeason = '') {
     for (const expected of seasons) {
         const item = raw.find(candidate => normalizeText(candidate?.season, 40).toLowerCase() === expected);
         if (!item) throw new Error(`Scenario Drama 缺少 ${expected}。`);
-        const script = normalizeHeartScript(item?.script, { minLines: 8, maxLines: 26, minChars: 550 });
+        const script = normalizeHeartScript(item?.script, { minLines: 6, maxLines: 20, minChars: 360 });
         if (!script.length) throw new Error(`Scenario Drama ${expected} 长度不足。`);
         out.push({
             id: safeId(item?.id, `SCENE_${expected.toUpperCase()}`),
@@ -3576,18 +3613,62 @@ async function generateHeartWithRepair(context, memoryBank, origin, taskKey) {
     return normalizeHeart(makeHeartSession(core, existing), memoryBank);
 }
 
-async function persistHeartSectionUpdate(updated, memoryBank, origin, expectedChatId, expectedArchiveRevision) {
-    updated = normalizeHeart(updated, memoryBank);
-    updated.chatId = expectedChatId;
-    updated.archiveRevision = expectedArchiveRevision;
+function applyHeartPartialPatch(base, patch) {
+    const updated = structuredClone(base || {});
+    if (!patch || typeof patch !== 'object') return updated;
+    if (patch.type === 'dialogues' && patch.core) {
+        return makeHeartSession(patch.core, updated);
+    }
+    if (patch.type === 'strips' && Array.isArray(patch.dailyStrips)) {
+        updated.dailyStrips = patch.dailyStrips;
+        updated.selectedStripId = patch.dailyStrips[0]?.id || updated.selectedStripId || '';
+        updated.generationParts = { ...(updated.generationParts || {}), strips: true };
+        updated.view = 'strips';
+        return updated;
+    }
+    if (patch.type === 'season') {
+        const season = normalizeText(patch.season, 40).toLowerCase();
+        if (patch.voice?.kind === season) {
+            updated.voiceDramas = [...(updated.voiceDramas || []).filter(item => item.kind !== season), patch.voice];
+            updated.selectedVoiceId = patch.voice.id;
+        }
+        if (season !== 'postending' && patch.scenario?.season === season) {
+            updated.scenarioDramas = [...(updated.scenarioDramas || []).filter(item => item.season !== season), patch.scenario];
+            updated.selectedScenarioId = patch.scenario.id;
+        }
+        updated.selectedSeason = season || updated.selectedSeason || 'postending';
+        updated.generationParts = { ...(updated.generationParts || {}), seasons: true };
+        updated.view = 'seasons';
+    }
+    return updated;
+}
+
+function mergeDeferredHeartPatches(existing, incoming) {
+    return { ...(existing || {}), ...(incoming || {}) };
+}
+
+async function persistHeartPartialPatch(patchKey, patch, fallbackBase, memoryBank, origin, expectedChatId, expectedArchiveRevision) {
     let committed = false;
+    let updated = null;
     if (isCurrentTaskOrigin(origin)) {
         try {
-            const latestMemory = requireArchive(currentCharacterGuard());
-            if (latestMemory.archiveRevision === expectedArchiveRevision) committed = saveSession(MODE.HEART, updated, expectedChatId);
+            const context = currentCharacterGuard();
+            const latestMemory = requireArchive(context);
+            if (latestMemory.archiveRevision === expectedArchiveRevision) {
+                const latest = loadSession(MODE.HEART, { context, chatId: expectedChatId, memoryBank: latestMemory, clone: true }) || structuredClone(fallbackBase);
+                updated = normalizeHeart(applyHeartPartialPatch(latest, patch), latestMemory);
+                updated.chatId = expectedChatId;
+                updated.archiveRevision = expectedArchiveRevision;
+                committed = saveSession(MODE.HEART, updated, expectedChatId);
+            }
         } catch {}
     }
-    if (!committed) queueDeferredCommit(origin, { kind: 'sessions', sessions: { [MODE.HEART]: updated } });
+    if (!committed) {
+        queueDeferredCommit(origin, { kind: 'heartPatches', patches: { [patchKey]: patch } });
+        updated = normalizeHeart(applyHeartPartialPatch(fallbackBase, patch), memoryBank);
+        updated.chatId = expectedChatId;
+        updated.archiveRevision = expectedArchiveRevision;
+    }
     if (committed && activeSession?.kind === MODE.HEART) {
         activeSession = updated;
         renderHeart();
@@ -3607,9 +3688,9 @@ async function generateHeartSection(part) {
     const expectedArchiveRevision = memoryBank.archiveRevision;
     const scope = chatScopeKey(context);
     const origin = { ...captureTaskOrigin(context, expectedArchiveRevision), chatId: comparableChatId(expectedChatId) };
-    const taskKey = `heart-section:${scope}`;
+    const taskKey = `heart-part:${scope}:${normalizedPart}`;
     if (isGenerationTaskRunning(taskKey) || activeModeBuildScopes.has(taskKey)) {
-        globalThis.toastr?.info?.('角色互动的另一个分区正在生成，请等它完成后再生成这一项。', '心跳回忆');
+        globalThis.toastr?.info?.('这一项已经在生成中。', '心跳回忆');
         return;
     }
     if (!canStartGenerationTask(taskKey)) {
@@ -3620,7 +3701,6 @@ async function generateHeartSection(part) {
     activeModeBuildScopes.add(taskKey);
     refreshConcurrentTaskUi(MODE.HEART, origin);
     try {
-        let updated = base;
         if (normalizedPart === 'dialogues') {
             const core = await requestValidatedSegment(
                 heartCorePrompt(context, memoryBank),
@@ -3628,7 +3708,7 @@ async function generateHeartSection(part) {
                 { maxTokens: 6000, temperature: 0.35, context, origin, taskKey: `${taskKey}:dialogues`, mode: MODE.HEART, background: true },
                 raw => normalizeHeartCore(raw, memoryBank),
             );
-            updated = makeHeartSession(core, base);
+            await persistHeartPartialPatch('dialogues', { type: 'dialogues', core }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision);
         } else {
             const strips = await requestHeartPart(
                 heartStripsPrompt(context, memoryBank, base),
@@ -3636,12 +3716,8 @@ async function generateHeartSection(part) {
                 { maxTokens: 5000, context, origin, taskKey: `${taskKey}:strips`, mode: MODE.HEART, background: true },
                 normalizeHeartStripsPart,
             );
-            updated.dailyStrips = strips;
-            updated.selectedStripId = strips[0]?.id || '';
-            updated.generationParts = { ...(updated.generationParts || {}), strips: true };
-            updated.view = 'strips';
+            await persistHeartPartialPatch('strips', { type: 'strips', dailyStrips: strips }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision);
         }
-        await persistHeartSectionUpdate(updated, memoryBank, origin, expectedChatId, expectedArchiveRevision);
         globalThis.toastr?.success?.(`角色互动已更新：${normalizedPart === 'dialogues' ? '时期对话' : '日常一格'}`, '心跳回忆');
     } catch (error) {
         if (error?.name !== 'AbortError') globalThis.toastr?.error?.(toastText(error?.message || String(error)), '心跳回忆');
@@ -3663,9 +3739,9 @@ async function generateHeartSeasonSection(season) {
     const expectedArchiveRevision = memoryBank.archiveRevision;
     const scope = chatScopeKey(context);
     const origin = { ...captureTaskOrigin(context, expectedArchiveRevision), chatId: comparableChatId(expectedChatId) };
-    const taskKey = `heart-section:${scope}`;
+    const taskKey = `heart-season:${scope}:${normalizedSeason}`;
     if (isGenerationTaskRunning(taskKey) || activeModeBuildScopes.has(taskKey)) {
-        globalThis.toastr?.info?.('角色互动的另一个分区正在生成，请等它完成后再生成这一项。', '心跳回忆');
+        globalThis.toastr?.info?.(`${heartSeasonLabel(normalizedSeason)}正在生成中。`, '心跳回忆');
         return;
     }
     if (!canStartGenerationTask(taskKey)) {
@@ -3675,37 +3751,68 @@ async function generateHeartSeasonSection(season) {
     const base = structuredClone(activeSession);
     activeModeBuildScopes.add(taskKey);
     refreshConcurrentTaskUi(MODE.HEART, origin);
+    const errors = [];
+    let savedParts = 0;
     try {
-        const updated = base;
         if (normalizedSeason === 'postending') {
-            const voice = (await requestHeartPart(
-                heartPostVoicePrompt(context, memoryBank, base),
-                '角色互动 · Drama 未来',
-                { maxTokens: 5000, context, origin, taskKey: `${taskKey}:post`, mode: MODE.HEART, background: true },
-                raw => normalizeVoiceDramaPart(raw, ['postending']),
-            ))[0];
-            updated.voiceDramas = [...(updated.voiceDramas || []).filter(item => item.kind !== 'postending'), voice];
-            updated.selectedVoiceId = voice.id;
+            try {
+                const voice = (await requestHeartPart(
+                    heartPostVoicePrompt(context, memoryBank, base),
+                    '角色互动 · Drama 未来',
+                    { maxTokens: 3800, temperature: 0.55, context, origin, taskKey: `${taskKey}:voice`, mode: MODE.HEART, background: true },
+                    raw => normalizeVoiceDramaPart(raw, ['postending']),
+                ))[0];
+                await persistHeartPartialPatch('season:postending:voice', { type: 'season', season: 'postending', voice }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+                savedParts += 1;
+            } catch (error) {
+                errors.push(error);
+            }
         } else {
-            const result = await requestHeartPart(
-                heartSeasonPrompt(context, memoryBank, base, normalizedSeason),
-                `角色互动 · Drama ${heartSeasonLabel(normalizedSeason)}`,
-                { maxTokens: 6500, context, origin, taskKey: `${taskKey}:season:${normalizedSeason}`, mode: MODE.HEART, background: true },
-                raw => ({
-                    voice: normalizeVoiceDramaPart(raw, [normalizedSeason])[0],
-                    scenario: normalizeScenarioDramaPart(raw, normalizedSeason)[0],
-                }),
-            );
-            updated.voiceDramas = [...(updated.voiceDramas || []).filter(item => item.kind !== normalizedSeason), result.voice];
-            updated.scenarioDramas = [...(updated.scenarioDramas || []).filter(item => item.season !== normalizedSeason), result.scenario];
-            updated.selectedVoiceId = result.voice.id;
-            updated.selectedScenarioId = result.scenario.id;
+            const latestAtStart = loadSession(MODE.HEART, { context, chatId: expectedChatId, memoryBank, clone: true }) || base;
+            const hasVoice = latestAtStart.voiceDramas?.some(item => item.kind === normalizedSeason);
+            const hasScenario = latestAtStart.scenarioDramas?.some(item => item.season === normalizedSeason);
+            const regenerateAll = !!(hasVoice && hasScenario);
+            const needVoice = regenerateAll || !hasVoice;
+            const needScenario = regenerateAll || !hasScenario;
+
+            if (needVoice) {
+                try {
+                    const voice = (await requestHeartPart(
+                        heartSeasonVoicePrompt(context, memoryBank, latestAtStart, normalizedSeason),
+                        `角色互动 · ${heartSeasonLabel(normalizedSeason)} Voice`,
+                        { maxTokens: 3000, temperature: 0.55, context, origin, taskKey: `${taskKey}:voice`, mode: MODE.HEART, background: true },
+                        raw => normalizeVoiceDramaPart(raw, [normalizedSeason]),
+                    ))[0];
+                    await persistHeartPartialPatch(`season:${normalizedSeason}:voice`, { type: 'season', season: normalizedSeason, voice }, latestAtStart, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+                    savedParts += 1;
+                } catch (error) {
+                    errors.push(error);
+                }
+            }
+
+            if (needScenario) {
+                try {
+                    const currentForScenario = loadSession(MODE.HEART, { context, chatId: expectedChatId, memoryBank, clone: true }) || latestAtStart;
+                    const scenario = (await requestHeartPart(
+                        heartSeasonScenarioPrompt(context, memoryBank, currentForScenario, normalizedSeason),
+                        `角色互动 · ${heartSeasonLabel(normalizedSeason)} Scenario`,
+                        { maxTokens: 3200, temperature: 0.55, context, origin, taskKey: `${taskKey}:scenario`, mode: MODE.HEART, background: true },
+                        raw => normalizeScenarioDramaPart(raw, normalizedSeason),
+                    ))[0];
+                    await persistHeartPartialPatch(`season:${normalizedSeason}:scenario`, { type: 'season', season: normalizedSeason, scenario }, currentForScenario, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+                    savedParts += 1;
+                } catch (error) {
+                    errors.push(error);
+                }
+            }
         }
-        updated.selectedSeason = normalizedSeason;
-        updated.generationParts = { ...(updated.generationParts || {}), seasons: true };
-        updated.view = 'seasons';
-        await persistHeartSectionUpdate(updated, memoryBank, origin, expectedChatId, expectedArchiveRevision);
-        globalThis.toastr?.success?.(`已生成：${heartSeasonLabel(normalizedSeason)} Drama`, '心跳回忆');
+
+        if (errors.length && !savedParts) throw errors[0];
+        if (errors.length) {
+            globalThis.toastr?.warning?.(`${heartSeasonLabel(normalizedSeason)}已保存成功的部分；另一个小段失败，可再次点击只补缺失部分。`, '心跳回忆');
+        } else {
+            globalThis.toastr?.success?.(`已生成：${heartSeasonLabel(normalizedSeason)} Drama`, '心跳回忆');
+        }
     } catch (error) {
         if (error?.name !== 'AbortError') globalThis.toastr?.error?.(toastText(error?.message || String(error)), `心跳回忆 · ${heartSeasonLabel(normalizedSeason)} Drama`);
     } finally {
@@ -4803,9 +4910,9 @@ function normalizeHeart(data, memoryBank) {
         const kind = HEART_VOICE_KINDS.has(kindRaw) ? kindRaw : '';
         if (!kind) return null;
         const script = normalizeHeartScript(item?.script, {
-            minLines: kind === 'postending' ? 12 : 7,
-            maxLines: kind === 'postending' ? 30 : 20,
-            minChars: kind === 'postending' ? 700 : 450,
+            minLines: kind === 'postending' ? 8 : 5,
+            maxLines: kind === 'postending' ? 24 : 16,
+            minChars: kind === 'postending' ? 420 : 280,
         });
         if (!script.length) return null;
         return {
@@ -4821,7 +4928,7 @@ function normalizeHeart(data, memoryBank) {
         const seasonRaw = normalizeText(item?.season, 40).toLowerCase();
         const season = HEART_SCENARIO_SEASONS.has(seasonRaw) ? seasonRaw : '';
         if (!season) return null;
-        const script = normalizeHeartScript(item?.script, { minLines: 8, maxLines: 26, minChars: 550 });
+        const script = normalizeHeartScript(item?.script, { minLines: 6, maxLines: 20, minChars: 360 });
         if (!script.length) return null;
         return {
             id: safeId(item?.id, `SCENE${String(index + 1).padStart(2, '0')}`),
@@ -9700,7 +9807,7 @@ function heartVoiceKindLabel(kind) {
 }
 
 function heartSeasonLabel(season) {
-    return ({ spring: '春', summer: '夏', autumn: '秋', winter: '冬' })[season] || season || '四季';
+    return ({ postending: '未来 / 后日谈', spring: '春', summer: '夏', autumn: '秋', winter: '冬' })[season] || season || '四季';
 }
 
 function selectedHeartVoice() {
@@ -9883,9 +9990,10 @@ function renderHeart() {
     const heartSeasons = ['postending', 'spring', 'summer', 'autumn', 'winter'];
     const selectedHeartSeason = heartSeasons.includes(session.selectedSeason) ? session.selectedSeason : 'postending';
     const heartSeasonLabels = { postending: '未来 / 后日谈', spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
-    const selectedHeartSeasonReady = selectedHeartSeason === 'postending'
-        ? session.voiceDramas.some(item => item.kind === 'postending')
-        : session.voiceDramas.some(item => item.kind === selectedHeartSeason) && session.scenarioDramas.some(item => item.season === selectedHeartSeason);
+    const selectedHeartSeasonVoiceReady = session.voiceDramas.some(item => item.kind === selectedHeartSeason);
+    const selectedHeartSeasonScenarioReady = selectedHeartSeason === 'postending' || session.scenarioDramas.some(item => item.season === selectedHeartSeason);
+    const selectedHeartSeasonReady = selectedHeartSeasonVoiceReady && selectedHeartSeasonScenarioReady;
+    const selectedHeartSeasonPartial = selectedHeartSeason !== 'postending' && (selectedHeartSeasonVoiceReady !== selectedHeartSeasonScenarioReady);
     const tabs = `<div class="rmt-heart-tabs">
       <button type="button" data-rmt-heart-view="greetings" class="${view === 'greetings' ? 'active' : ''}">各种时期的对话</button>
       <button type="button" data-rmt-heart-view="seasons" class="${view === 'seasons' ? 'active' : ''}">春夏秋冬 / Drama</button>
@@ -9894,7 +10002,7 @@ function renderHeart() {
     const generationButton = readOnly ? '' : view === 'greetings'
         ? '<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="dialogues">重新生成时期对话</button>'
         : view === 'seasons'
-            ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-season" data-rmt-heart-season-target="${esc(selectedHeartSeason)}">${selectedHeartSeasonReady ? '重新生成' : '生成'}${esc(heartSeasonLabels[selectedHeartSeason])}</button>`
+            ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-season" data-rmt-heart-season-target="${esc(selectedHeartSeason)}">${selectedHeartSeasonReady ? '重新生成' : selectedHeartSeasonPartial ? '补全' : '生成'}${esc(heartSeasonLabels[selectedHeartSeason])}</button>`
             : `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="strips">${parts.strips ? '重新生成日常一格' : '生成日常一格'}</button>`;
     const topActions = `<div class="rmt-heart-top-actions"><button type="button" class="rmt-btn" data-rmt-action="heart-avatar-talk">点头像听一句</button>${generationButton}</div>`;
     const summary = `<section class="rmt-heart-summary"><div><b>${esc(session.relationshipState)}</b><p>${esc(session.relationshipSummary)}</p></div>${topActions}</section>`;
@@ -9923,7 +10031,8 @@ function renderHeart() {
             const hasVoice = session.voiceDramas.some(item => item.kind === season);
             const hasScenario = season === 'postending' || session.scenarioDramas.some(item => item.season === season);
             const ready = hasVoice && hasScenario;
-            return `<button type="button" class="rmt-heart-drama-card ${season === selectedSeason ? 'active' : ''}" data-rmt-heart-season="${esc(season)}"><b>${esc(seasonLabels[season])}</b><span>${ready ? '已生成' : '未生成'}</span></button>`;
+            const partial = !ready && (hasVoice || hasScenario);
+            return `<button type="button" class="rmt-heart-drama-card ${season === selectedSeason ? 'active' : ''}" data-rmt-heart-season="${esc(season)}"><b>${esc(seasonLabels[season])}</b><span>${ready ? '已生成' : partial ? '1/2' : '未生成'}</span></button>`;
         }).join('');
         const voice = session.voiceDramas.find(item => item.kind === selectedSeason) || null;
         const scenario = selectedSeason === 'postending' ? null : (session.scenarioDramas.find(item => item.season === selectedSeason) || null);
