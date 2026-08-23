@@ -1,3 +1,22 @@
+## 0.8.10 audit-r18
+
+- 根据 r17 独立安全审计报告收尾低风险回归：删除只读重绘残留的无效 `preserveMode` 实参，并将 `openArchiveChatFromOverview` 重命名为只读语义明确的 `openArchiveSnapshotFromOverview`，继续保证档案一览不会切换宿主聊天。
+- 五任务并发计数现在统一覆盖主模式构建、普通请求、ADV 批量/逐项恢复保留槽位以及 CG/日常一格生图任务；ADV 批量与房间“今日生活”在构建 Prompt 前也会执行前置容量检查，发送口继续保留第二道硬闸门。
+- 第三方记忆插件公开 current-chat reader 改为 **显式 opt-in，默认关闭**。提示注入摘要、当前聊天 metadata 摘要继续可被动读取；只有用户勾选“允许调用第三方记忆插件公开 current-chat 读取函数”后才会探测/执行其它扩展的 reader。
+- 调用 SillyTavern Slash Command 统一经过受控 `NamedArgumentsCapture` helper；不伪造 `_scope/_parserFlags/_abortController` 等解析器私有对象。Image Generation 仍只调用本地已注册 `imagine`，参数限 `quiet/gallery` 与净化后的视觉 prompt。
+- 扩展销毁时仍完整保留未压缩 runtime cache 作为升级/重载兜底，不为了优化体积丢弃任何模式；超过约 2M 字符仅输出 console 体积告警。
+- 文档同步：外部记忆预检入口、公开 reader 白名单、五任务并发以及自定义 header 仅提交 SillyTavern 同源模型状态后端的边界与实现保持一致。
+
+## 0.8.10 state-cg-r17
+
+- ENDING 的“告白回看”新增独立 **“只重新读取告白”**：只重新扫描当前手动档案里已发生的告白/关系确认并替换 `confessionReplays`，不会重生成结局路线、逆转告白、后日谈或 HEART/Voice Drama。
+- 五个主入口的内容生成并发上限从 4 调整为 **5**；同时修正快速连点时仅统计已发出请求、未统计正在构建的模式任务的竞态，确保最多 5 个逻辑生成任务。
+- 历史档案“只读查看”改成纯 UI 保护开关。关闭只读只显示重新生成/绘制等编辑按钮，**不再调用角色切换、聊天切换，也不再触发宿主界面刷新**。
+- 对跨聊天历史档案执行写操作时，若当前 SillyTavern 并未手动打开该档案对应的真实聊天，只提示用户手动打开；不会自动切换，也不会用 snapshot 覆盖当前聊天 metadata。
+- 当目标历史档案后来恰好成为当前真实聊天时，写入前重新校验 `characterKey + chatId + MEMORY_KEY`；若对应 live 派生缓存尚未加载，拒绝用只读快照替代。
+- CG/ADV 与相簿的 Image Generation 状态条新增 **“重新检测”**。用户在打开档案后再启动生图扩展，无需关闭/重开档案；绘制按钮本身不再依赖首次检测结果。
+- 删除 r15 的自动 `selectCharacterById/openCharacterChat` 编辑转换路径，修复关闭只读后宿主自动刷新、目标聊天未完成保存导致“档案读取失败/看起来消失”的问题。
+
 ## 0.8.10 heart-drama-r16
 
 - ENDING 新增 `reverse / 逆转告白` 路线：只有真实档案能证明强烈依恋，并出现吃醋、竞争感、明显错过时机、关系摇摆或差点失去 {{user}} 的压力时才可解锁；允许急切争取但禁止威胁、强迫或把第三方恋爱写成既成事实。

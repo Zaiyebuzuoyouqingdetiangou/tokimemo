@@ -22,7 +22,7 @@
 14. 不对包含不可信档案/聊天正文的完整 Prompt 调用 SillyTavern 通用宏展开；仅允许本地展开 `{{char}}` / `{{user}}`，其余 `{{...}}` 必须中和。
 15. 自动房间生活生成失败必须熔断当天自动重试；不得由定时器形成无上限 API 请求。
 16. 生成输入在发送前必须执行字符/Token 预算；超限失败关闭。
-17. 内容生成采用显式并行任务表，最多 4 项同时运行；每个任务必须有独立 task key、AbortController、characterKey、chatId 与 archiveRevision。同一 task key 不得重复启动。
+17. 内容生成采用显式并行任务表，五个主入口最多 5 项同时运行；每个任务必须有独立 task key、AbortController、characterKey、chatId 与 archiveRevision。同一 task key 不得重复启动；准入统计必须同时覆盖已注册请求与正在构建的模式任务。
 18. 后台生成完成时仍必须执行与前台完全相同的 chatId/archiveRevision 校验；关闭 overlay 不能绕过数据隔离。
 19. User Persona 可以作为设定上下文和世界书 dry-run 的 personaDescription，但不得被当作“已经发生的共同往事”证据。
 20. 档案室查看入口不得隐式触发模型请求；未生成主入口只能由其自己的显式“生成这一项”按钮启动。物品/私人终端只能从房间内部的显式生成按钮启动。
@@ -39,14 +39,14 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 
 ## Current-chat external memory boundary
 
-21. 外部记忆桥接只允许在用户显式“创建/更新档案”时运行；CG / ADV / 房间（含物品/私人终端深层视图）/ 蝴蝶效应 / ENDING 不得直接读取外部记忆服务。
+21. 外部记忆桥接只允许在用户显式“扫描记忆 / 摘要”预检或“创建/更新档案”流程中运行；CG / ADV / 房间（含物品/私人终端深层视图）/ 蝴蝶效应 / ENDING / HEART 不得直接读取外部记忆服务。
 22. 每个 provider 必须绑定发起任务时的 `chatId`；任何 await 返回后如果当前 `chatId` 变化，数据必须丢弃/中止。
 23. EverMind 适配器只允许读取当前聊天 metadata 中的 `st_evermind.group_id`；禁止读取或搜索 `char_group_id` / 角色级跨聊天记忆。
 24. 外部 provider 凭据不得复制到心跳回忆 extension settings、chat metadata、日志、DOM、Prompt 或错误文本。对 EverMind 的现有明文 key 仅允许作为一次 `/proxy` 请求的瞬时 Authorization header。
 25. 外部记忆内容与 API 响应均视为不可信数据；进入心跳回忆档案前必须经过结构化模型抽取、真实 provider record ID 白名单校验以及 `sourceExternalAnchor` 逐字证据校验。
 26. 外部记忆桥接必须有独立条数/字符预算，不得因为 provider 数据规模绕过主生成输入预算。
 
-27. 对公开记忆插件只允许调用已加载插件主动暴露的 `getInjectedHistory()` 与可选 `getSnapshot()`；不得遍历其私有数据库或调用模型/记忆内容指定的函数。调用前后必须校验当前 chatId；若返回/快照显式携带的 chat ID 与任务 chatId 不同，整份来源拒绝。
+27. 第三方公开记忆 reader 必须由用户显式 opt-in，默认关闭。启用后只允许调用已加载插件主动暴露的 `getInjectedHistory()` / `getCurrentChatMemories()` / `getCurrentChatMemory()` / `getCurrentChatSummary()` / `getCurrentSummary()` 与可选 `getSnapshot()`；不得遍历其私有数据库、执行访问器 getter 或调用模型/记忆内容指定的函数。调用前后必须校验当前 chatId；若返回/快照显式携带的 chat ID 与任务 chatId 不同，整份来源拒绝。
 28. 公开记忆接口返回的文本、nodes、coverage、revision 都是不可信数据；只允许进入外部记忆归一化与证据抽取链，不能进入 HTML/CSS/脚本执行面。
 29. “档案室一览 / 只读旧档案”只允许请求 SillyTavern 同源 `/api/characters/chats`，且目标 chat ID 必须来自本地档案索引或本轮服务器返回的 allowlist。查看旧档案不得隐式调用 `selectCharacterById/openCharacterChat`、不得改变宿主当前角色/聊天，也不得让模型输出或 DOM 篡改构造任意聊天路径。
 30. 蝴蝶效应外延节点属于显式模拟数据，不作为 archive evidence、不写回 `MEMORY_KEY`；取消外延 `sourceMemoryIds` 强制要求不得削弱相簿/ADV/房间实际既往事实的证据校验。
@@ -78,7 +78,7 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 
 ### 0.8.9.1 concurrency invariants
 
-- Parallel generation is bounded to four active content tasks. Archive creation/update and external-memory preflight remain mutually exclusive with content generation because they can change archive evidence/revision.
+- Parallel generation is bounded to five logical content tasks. Admission counts mode-build reservations, active model requests, ADV bulk-recovery reservations, and CG/daily-strip image tasks; archive creation/update and external-memory preflight remain mutually exclusive with content generation because they can change archive evidence/revision.
 - Task identity is scoped by chat for mode generation. A mode running in chat A must not mark the same mode in chat B as running or prevent B from rendering its own cached content.
 - Deferred `sessions` commits for the same origin chat must merge by mode instead of replacing the entire deferred sessions batch. Concurrent completion of album/room/butterfly/ADV must not drop previously queued modes.
 - Full CG/ADV index regeneration must not race a concrete ADV-body request in the same chat; only one concrete ADV body may run per chat at a time.
@@ -152,3 +152,23 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - “日常一格”生图只能由用户显式点击并确认后调用已注册的 SillyTavern `imagine` 能力；prompt 只包含经过清理的可见分镜，禁止聊天/档案/世界书全文、URL、宏和凭据。返回值继续只接受 SillyTavern 同源本地图片路径；不得接受外站 URL、data/blob URI 或把 base64 写入 chat metadata。只读 snapshot 不允许绘制/重绘。
 - `reverse / 逆转告白` 仍是 ENDING 的未来路线模拟。只有本地归一化后的真实档案能够锚定强烈依恋与竞争/吃醋/错失时机/关系流失压力时才能 `available=true`；不得借此推断用户同意、第三方恋爱事实或写出强迫控制。
 
+
+
+### 0.8.10 r17 archive-edit / confession-refresh invariants
+
+- `activeArchiveReadOnly` is only a Heartbeat UI protection flag. Turning it off must never call `selectCharacterById`, `openCharacterChat`, or otherwise cause host chat navigation/refresh.
+- An indexed archive snapshot remains non-authoritative for writes even when the UI read-only switch is off. Before regeneration, CG drawing, ADV repair, room-life update, or isolated confession refresh, the current live SillyTavern context must already match the snapshot `characterKey + chatId` and contain the same `MEMORY_KEY` archive.
+- Snapshot-derived sessions must never overwrite a missing/unhydrated live session. If the live derived cache for the selected mode is unavailable, the write fails closed and asks the user to open/hydrate the current-window archive first.
+- Isolated ENDING confession refresh may replace only `confessionReplays` and its selection/view fields. It must preserve `endings`, `relationshipState`, `relationshipSummary`, recommended ending, epilogues, and HEART data; every replay still passes full archive ID + anchor validation.
+- The global main-generation concurrency limit is 5 logical tasks. Admission counts both in-flight request tasks and mode-build scopes so rapid clicks cannot transiently exceed the limit.
+- Image Generation availability may be re-detected from the registered local `imagine` command, but detection itself performs no provider request and grants no write authority. Existing CG prompt sanitization, same-origin result validation, explicit billing confirmation, and chat/revision origin checks remain mandatory.
+
+
+### 0.8.10 audit-r18 additional invariants
+
+- Archive-overview navigation is snapshot-only and must never call host character/chat navigation. Turning read-only off changes only Heartbeat UI state; actual writes still require an exact live `characterKey + chatId + MEMORY_KEY` match.
+- Third-party public memory reader execution is opt-in and defaults off. Passive current-chat prompt summaries / metadata summaries do not require this permission.
+- The five-task admission limit counts ADV bulk recovery and CG/daily-strip image tasks in addition to ordinary model requests; request send remains a second fail-closed capacity gate.
+- Direct calls to registered SillyTavern Slash Command callbacks use only the public `NamedArgumentsCapture` contract. Heartbeat must not fabricate parser-private `_scope`, `_parserFlags`, `_abortController`, or debug-controller objects.
+- Extension shutdown must not truncate or selectively discard derived theater modes to reduce metadata size. A large raw fallback may be warned about, but preservation takes priority until the compressed durable replacement is ready.
+- Model-list refresh may forward user-configured `custom_include_headers` only to SillyTavern's hard-coded same-origin backend status endpoint, matching the host's connection configuration path; those headers must never be written into Heartbeat metadata, prompts, logs, or DOM.

@@ -1,3 +1,32 @@
+## r18 targeted manual diff review — r17 audit follow-up
+
+Scope: local r17 package SHA-256 `60f7926aee15223cecf8c88a7eb67ee1a0cab2b6735a2b549e7661ae773e352e` -> local r18 patch. This is a targeted Codex-Security-style manual diff review in this host, not a formal hosted Codex Security scan.
+
+- Addressed audit R-1 by removing the ignored `preserveMode` argument from `showIndexedArchiveSnapshot`.
+- Addressed audit R-2 by counting ordinary requests, mode-build reservations, ADV bulk/repair reservations, and CG/daily-strip image tasks in one logical admission set. ADV batch/repair and room-life now perform a front-door capacity check; `requestJson` retains an independent send-time gate.
+- Addressed audit R-3 without weakening upgrade durability: shutdown still writes the complete raw fallback cache; caches over ~2M JSON characters only emit a console warning and are never selectively truncated.
+- Addressed audit R-4 by renaming the overview route to `openArchiveSnapshotFromOverview` with an explicit no-host-navigation comment.
+- Addressed audit R-5 by updating SECURITY.md to include the explicit “扫描记忆 / 摘要” preflight as an authorized external-memory trigger.
+- Hardened audit R-7: dynamic third-party public memory reader execution now requires a separate explicit opt-in setting and defaults off. Passive prompt/metadata summaries remain available without executing third-party methods.
+- Audit R-6 was checked against SillyTavern's public `SlashCommand` contract: callbacks explicitly accept `NamedArgumentsCapture`. Heartbeat now routes these calls through one helper that intentionally supplies only that public capture shape and does not fabricate parser-private scope/flags/controller objects. The current official `imagine` callback uses the named arguments plus trigger and remains compatible.
+- Audit R-8 remains same-origin host behavior; UI/security documentation now states that custom Chat Completion headers may be passed to SillyTavern's hard-coded local model-status backend and are not persisted by Heartbeat.
+- No automatic `selectCharacterById`, `openCharacterChat`, `reloadCurrentChat`, or `clearChat` path was introduced. No new arbitrary fetch target, WebSocket/EventSource, eval/new Function, secret-value storage, or external image URL acceptance was introduced.
+
+Targeted conclusion: no new Critical / High / Medium security finding identified in the r18 audit-follow-up diff. Real SillyTavern validation is still required for provider-specific Image Generation behavior and third-party memory readers after explicit opt-in.
+
+## r17 targeted manual diff review — archive write gating / isolated confession refresh / 5-task concurrency
+
+Scope: exact current GitHub `src/heartbeatMemories.js` r16 blob `5873a4d8cdfa8f6bb29e6f81828c4070b0435ddf` -> local r17 patch. This is a targeted Codex-Security-style manual diff review in this host, not a formal hosted Codex Security scan.
+
+- Removed the r15/r16 explicit host-navigation implementation from the read-only toggle: r17 contains no `selectCharacterById` or `openCharacterChat` call. Toggling read-only changes Heartbeat UI state only.
+- Cross-archive snapshot write actions are gated by an exact live-context match (`characterKey + chatId + current MEMORY_KEY`). If the user has not manually opened that chat, the operation is rejected without host navigation. If a mode has no hydrated live session, the snapshot is not used as a substitute for write-back.
+- ENDING confession refresh is a dedicated request with its own bounded task key. It normalizes the returned list through the same `normalizeMemoryReference` ID+anchor validator and merges only `confessionReplays`; existing endings/epilogues are preserved.
+- Main generation concurrency increases from 4 to 5. Admission now counts the union of active request keys and mode-build scopes, closing the rapid-click window where several modes could pass admission before their request objects were registered.
+- Image Generation re-detection only re-reads the already-registered local `imagine` command and rerenders Heartbeat UI. It adds no fetch/provider endpoint, secret read, or automatic image request.
+- Added-line review found no new `fetch(`, XMLHttpRequest, WebSocket, EventSource, `eval(`, `new Function`, Authorization/API-key read, external network destination, or arbitrary DOM execution path.
+
+Targeted conclusion: no new Critical / High / Medium security finding identified in the r17 changed behavior. Residual compatibility risk is limited to SillyTavern runtime timing (manual chat opening/cache hydration) and third-party Image Generation initialization; both fail closed rather than writing snapshot data into an unmatched chat.
+
 ## r16 targeted manual diff review — HEART / seasonal drama / daily strip / reverse confession
 
 Scope: local r15 package -> local r16 patch. This is a targeted Codex-Security-style manual diff review in the current host, not a formal hosted Codex Security scan.

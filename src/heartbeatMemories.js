@@ -37,6 +37,9 @@ const DEFAULT_SETTINGS = Object.freeze({
     temperature: 0.9,
     roomLifeAutoDaily: true,
     useCurrentChatExternalMemory: true,
+    // Executing another extension's public reader is an explicit opt-in. Prompt/metadata summaries
+    // remain available without this because they are passive data already present in SillyTavern.
+    usePublicMemoryProviderReaders: false,
 });
 
 const MODE = Object.freeze({
@@ -112,7 +115,7 @@ const activeCgImageTasks = new Map();
 let cgImageLifecycleEpoch = 0;
 let avatarDialogueRequestEpoch = 0;
 let activeAvatarDialogue = null;
-const MAX_CONCURRENT_GENERATION_TASKS = 4;
+const MAX_CONCURRENT_GENERATION_TASKS = 5;
 let butterflyTransitionTimer = 0;
 let archiveOverviewCache = { key: '', fetchedAt: 0, items: [] };
 let archiveOverviewPromise = null;
@@ -125,7 +128,8 @@ let memoryProviderDiscoveryCache = { signature: '', scannedAt: 0, items: [] };
 const memoryPreflightCache = new Map();
 const deferredChatCommits = new Map();
 let archiveLibraryCharacterKey = '';
-let activeArchiveSnapshot = null; // read-only indexed archive; never switches the host chat
+let activeArchiveSnapshot = null; // indexed archive snapshot; browser-only until the same live chat is explicitly current
+let activeArchiveReadOnly = true; // UI protection only; turning it off never switches the host chat
 const archiveSnapshotCache = new Map();
 const ARCHIVE_SNAPSHOT_CACHE_MAX = 4;
 const connectionModelCache = new Map();
@@ -166,6 +170,7 @@ function getPluginSettings(context = getContext()) {
         temperature: Math.max(0, Math.min(2, Number.isFinite(Number(settings.temperature)) ? Number(settings.temperature) : DEFAULT_SETTINGS.temperature)),
         roomLifeAutoDaily: settings.roomLifeAutoDaily !== false,
         useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory !== false,
+        usePublicMemoryProviderReaders: settings.usePublicMemoryProviderReaders === true,
     };
     if (!raw || JSON.stringify(raw) !== JSON.stringify(normalized)) {
         context.extensionSettings[EXTENSION_SETTINGS_KEY] = normalized;
@@ -299,11 +304,31 @@ function connectionManagerSettings(context = getContext()) {
     return manager;
 }
 
+function slashCommandObject(command, context = getContext()) {
+    const key = normalizeText(command, 80);
+    const value = key ? context.SlashCommandParser?.commands?.[key] : null;
+    return value && typeof value.callback === 'function' ? value : null;
+}
+
+async function invokeSlashCommandCapture(commandOrObject, namedArgs = {}, unnamed = '', context = getContext()) {
+    const command = typeof commandOrObject === 'string'
+        ? slashCommandObject(commandOrObject, context)
+        : commandOrObject;
+    if (!command || typeof command.callback !== 'function') throw new Error('目标 Slash Command 当前不可用。');
+    // SillyTavern's public SlashCommand callback contract accepts a NamedArgumentsCapture object
+    // without parser-internal _scope/_parserFlags fields. Do not fabricate those private objects.
+    const capture = {};
+    for (const [key, value] of Object.entries(namedArgs || {})) {
+        if (!/^[A-Za-z0-9_-]{1,80}$/.test(key)) continue;
+        if (value == null || ['string', 'number', 'boolean'].includes(typeof value)) capture[key] = value;
+    }
+    return await command.callback.call(command, capture, String(unnamed ?? ''));
+}
+
 async function readCurrentSlashSetting(command, context = getContext()) {
-    const callback = context.SlashCommandParser?.commands?.[command]?.callback;
-    if (typeof callback !== 'function') return '';
+    if (!slashCommandObject(command, context)) return '';
     try {
-        return normalizeText(await callback({ quiet: 'true' }, ''), 1000);
+        return normalizeText(await invokeSlashCommandCapture(command, { quiet: 'true' }, '', context), 1000);
     } catch (error) {
         console.warn(`[HeartbeatMemories] failed to read current slash setting: ${command}`, error);
         return '';
@@ -861,13 +886,50 @@ function hasGenerationTaskPrefix(prefix) {
 }
 
 function generationTaskLabels() {
-    return [...activeGenerationTasks.values()].map(task => task.label).filter(Boolean);
+    const labels = [...activeGenerationTasks.values()].map(task => task.label).filter(Boolean);
+    for (const [taskKey, task] of activeCgImageTasks.entries()) {
+        if (activeGenerationTasks.has(taskKey)) continue;
+        labels.push(task?.mode === MODE.HEART ? '日常一格绘制中' : 'CG 实图绘制中');
+    }
+    for (const scope of activeAdvBulkScopes) {
+        const represented = [...activeGenerationTasks.keys()].some(key => key === `adv-bulk:${scope}` || key.startsWith(`adv-user-repair:${scope}:`));
+        if (!represented) labels.push('ADV 批量任务准备中');
+    }
+    return [...new Set(labels)];
+}
+
+function activeLogicalGenerationKeys() {
+    const keys = new Set([...activeGenerationTasks.keys(), ...activeModeBuildScopes]);
+    for (const taskKey of activeCgImageTasks.keys()) keys.add(taskKey);
+    for (const scope of activeAdvBulkScopes) {
+        const batchKey = `adv-bulk:${scope}`;
+        const hasConcreteBatchRequest = [...keys].some(key => key === batchKey || key.startsWith(`adv-user-repair:${scope}:`));
+        if (!hasConcreteBatchRequest) keys.add(batchKey);
+    }
+    return keys;
+}
+
+function advBulkReservationKeyForTask(taskKey) {
+    const key = String(taskKey || '');
+    for (const scope of activeAdvBulkScopes) {
+        if (key === `adv-bulk:${scope}` || key.startsWith(`adv-user-repair:${scope}:`)) return `adv-bulk:${scope}`;
+    }
+    return '';
+}
+
+function activeLogicalGenerationCount() {
+    return activeLogicalGenerationKeys().size;
 }
 
 function canStartGenerationTask(key) {
     if (busy) return false;
-    if (isGenerationTaskRunning(key)) return false;
-    return activeGenerationTasks.size < MAX_CONCURRENT_GENERATION_TASKS;
+    const taskKey = String(key || '');
+    if (isGenerationTaskRunning(taskKey) || activeModeBuildScopes.has(taskKey)) return false;
+    const keys = activeLogicalGenerationKeys();
+    keys.delete(taskKey);
+    const bulkReservation = advBulkReservationKeyForTask(taskKey);
+    if (bulkReservation) keys.delete(bulkReservation);
+    return keys.size < MAX_CONCURRENT_GENERATION_TASKS;
 }
 
 function refreshConcurrentTaskUi(taskMode = '', origin = null) {
@@ -1321,10 +1383,12 @@ function externalMemorySourceSummary(context = getContext()) {
     if (evermindSettings?.enabled && normalizeText(evermindMeta?.group_id, 240)) {
         sources.push({ id: 'evermind', label: 'EverMind', kind: 'current-chat-api' });
     }
-    for (const provider of detectPublicMemoryProviders(context)) {
-        const id = `public:${provider.key}`;
-        if (sources.some(item => item.id === id || item.label === provider.name)) continue;
-        sources.push({ id, label: provider.name, kind: `current-chat-public-api:${provider.readerName || 'reader'}` });
+    if (getPluginSettings(context).usePublicMemoryProviderReaders) {
+        for (const provider of detectPublicMemoryProviders(context)) {
+            const id = `public:${provider.key}`;
+            if (sources.some(item => item.id === id || item.label === provider.name)) continue;
+            sources.push({ id, label: provider.name, kind: `current-chat-public-api:${provider.readerName || 'reader'}` });
+        }
     }
     const unique = [];
     const seen = new Set();
@@ -1479,16 +1543,18 @@ async function collectCurrentChatExternalMemory(context, expectedChatId, signal)
         globalThis.toastr?.warning?.('当前窗口的补充记忆 / 摘要读取失败，本次档案仍会只根据聊天正文继续整理。', '心跳回忆');
     }
 
-    for (const provider of detectPublicMemoryProviders(context, { force: true })) {
-        try {
-            const publicRecords = await readPublicMemoryProviderCurrentChat(provider, context, expectedChatId, signal);
-            if (publicRecords.length) {
-                records.push(...publicRecords.map((item, index) => ({ ...item, externalId: `PUBLIC-${hashString(provider.key).toString(16)}-${String(index + 1).padStart(3, '0')}` })));
-                sources.push({ id: `public:${provider.key}`, label: provider.name, count: publicRecords.length });
+    if (settings.usePublicMemoryProviderReaders) {
+        for (const provider of detectPublicMemoryProviders(context, { force: true })) {
+            try {
+                const publicRecords = await readPublicMemoryProviderCurrentChat(provider, context, expectedChatId, signal);
+                if (publicRecords.length) {
+                    records.push(...publicRecords.map((item, index) => ({ ...item, externalId: `PUBLIC-${hashString(provider.key).toString(16)}-${String(index + 1).padStart(3, '0')}` })));
+                    sources.push({ id: `public:${provider.key}`, label: provider.name, count: publicRecords.length });
+                }
+            } catch (error) {
+                if (error?.name === 'AbortError') throw error;
+                console.warn('[HeartbeatMemories] public memory provider failed; skipped', provider.name, error?.message || error);
             }
-        } catch (error) {
-            if (error?.name === 'AbortError') throw error;
-            console.warn('[HeartbeatMemories] public memory provider failed; skipped', provider.name, error?.message || error);
         }
     }
 
@@ -1916,6 +1982,42 @@ function endingArchiveSlice(memoryBank, limit = 48) {
         archiveKeywords: cleanArray(memoryBank?.archiveKeywords, 8, 80),
         memories: memoryPayload(memoryBank, ids, safeLimit),
     }, null, 2);
+}
+
+function endingConfessionRefreshPrompt(context, memoryBank) {
+    return `${promptSafetyBoundary(context, '告白回看增量扫描')}
+本请求只重新读取 ENDING 里的【已发生告白回看】。不要生成或修改结局路线、recommendedEndingId、relationshipState、relationshipSummary、ENDING Scene、未来 confession 或 epilogue。
+
+下面只提供当前手动档案中与告白/关系确认相关的重点记忆和整体采样。过去事实只能来自这里；没有真实告白证据就返回空数组。
+UNTRUSTED_CONFESSION_ARCHIVE_JSON:
+${endingArchiveSlice(memoryBank, 64)}
+
+严格输出：
+{
+  "confessionReplays": [
+    {
+      "id": "CONF01",
+      "type": "true",
+      "title": "真心告白",
+      "subtitle": "这次已发生告白的短说明",
+      "date": "YYYY/MM/DD 或待定",
+      "sourceMemoryIds": ["M010"],
+      "sourceMemoryAnchor": "从引用记忆 anchors/title 原样复制、能直接证明告白/关系确认发生的锚点",
+      "scene": "只依据已归档事实重构当时地点、状态和过程，不新增事件或关系结果；不少于140汉字",
+      "confessionText": "{{char}} 当时告白核心意思的第一人称档案式重构；不是聊天逐字原文；不少于50汉字",
+      "responseSummary": "只总结 {{user}} 当时已经发生的回应/结果，不替 {{user}} 编新台词",
+      "afterEffect": "只总结告白后档案里已经发生的关系变化；没有就写仍未确认"
+    }
+  ]
+}
+
+硬性要求：
+- 扫描当前提供档案，返回当前能验证的完整告白回看集合 0～6 条，而不是只补一条。
+- type 只能是 true / mutual / friendship / indirect / relationship / rejected / other。
+- 每条都必须有真实 sourceMemoryIds + sourceMemoryAnchor；anchor 必须直接证明告白、友情式告白、明确关系确认、未完成/被拒绝告白等确实发生，普通暧昧和约会不能冒充。
+- scene/confessionText/responseSummary/afterEffect 都只重构已发生事实，不推进主线，不生成未来后日谈。
+- 如果没有足够证据，输出 {"confessionReplays":[]}。
+- 只输出 JSON。`;
 }
 
 function roomReferencedMemoryIds(roomSession, focusObject = null) {
@@ -2683,22 +2785,8 @@ function normalizeButterfly(data, memoryBank) {
     };
 }
 
-function normalizeEnding(data, memoryBank) {
-    const relationshipState = normalizeText(data?.relationshipState, 120) || '关系仍在发展';
-    const relationshipSummary = normalizeText(data?.relationshipSummary, 2400);
-    if (!relationshipSummary) throw new Error('结局档案缺少当前关系摘要。');
-    const relationshipReference = normalizeMemoryReference(
-        data?.relationshipSourceMemoryIds,
-        data?.relationshipSourceMemoryAnchor,
-        `${relationshipState}
-${relationshipSummary}`,
-        memoryBank,
-        1,
-    );
-    if (!relationshipReference.sourceMemoryIds.length || !relationshipReference.sourceMemoryAnchor) {
-        throw new Error('结局档案的当前关系阶段缺少真实档案锚点。');
-    }
-    const confessionReplays = (Array.isArray(data?.confessionReplays) ? data.confessionReplays : []).slice(0, 6).map((item, index) => {
+function normalizeEndingConfessionReplays(rawList, memoryBank) {
+    return (Array.isArray(rawList) ? rawList : []).slice(0, 6).map((item, index) => {
         const typeRaw = normalizeText(item?.type, 40).toLowerCase();
         const type = CONFESSION_REPLAY_TYPES.has(typeRaw) ? typeRaw : 'other';
         const title = normalizeText(item?.title, 100) || `告白回看 ${index + 1}`;
@@ -2726,6 +2814,24 @@ ${relationshipSummary}`,
             afterEffect,
         };
     }).filter(Boolean);
+}
+
+function normalizeEnding(data, memoryBank) {
+    const relationshipState = normalizeText(data?.relationshipState, 120) || '关系仍在发展';
+    const relationshipSummary = normalizeText(data?.relationshipSummary, 2400);
+    if (!relationshipSummary) throw new Error('结局档案缺少当前关系摘要。');
+    const relationshipReference = normalizeMemoryReference(
+        data?.relationshipSourceMemoryIds,
+        data?.relationshipSourceMemoryAnchor,
+        `${relationshipState}
+${relationshipSummary}`,
+        memoryBank,
+        1,
+    );
+    if (!relationshipReference.sourceMemoryIds.length || !relationshipReference.sourceMemoryAnchor) {
+        throw new Error('结局档案的当前关系阶段缺少真实档案锚点。');
+    }
+    const confessionReplays = normalizeEndingConfessionReplays(data?.confessionReplays, memoryBank);
     const raw = Array.isArray(data?.endings) ? data.endings : [];
     const endings = raw.slice(0, 9).map((item, index) => {
         const typeRaw = normalizeText(item?.type, 40).toLowerCase();
@@ -3754,7 +3860,11 @@ async function requestJson(prompt, statusText = '正在根据当前聊天档案�
     if (busy) throw new Error('当前正在创建/更新聊天档案，请等档案整理结束后再生成内容。');
     const taskKey = normalizeText(options.taskKey, 240) || `request:${Date.now()}:${Math.random().toString(16).slice(2)}`;
     if (isGenerationTaskRunning(taskKey)) throw new Error('这一项已经在生成中。');
-    if (activeGenerationTasks.size >= MAX_CONCURRENT_GENERATION_TASKS) {
+    const logicalKeys = activeLogicalGenerationKeys();
+    logicalKeys.delete(taskKey);
+    const bulkReservation = advBulkReservationKeyForTask(taskKey);
+    if (bulkReservation) logicalKeys.delete(bulkReservation);
+    if (logicalKeys.size >= MAX_CONCURRENT_GENERATION_TASKS) {
         throw new Error(`当前已有 ${MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请等其中一项完成后再启动新的任务。`);
     }
     const controller = new AbortController();
@@ -4128,12 +4238,14 @@ async function generateMode(mode, options = {}) {
 
 async function generateAllAdvForSession() {
     if (!activeSession || activeSession.kind !== MODE.ADV) return;
-    if (activeArchiveSnapshot) return showInlineError('只读档案浏览模式不能发起生成；需要生成时请回到对应聊天窗口。');
+    if (!requireWritableArchiveAction()) return showInlineError('当前档案尚未处于可写的真实聊天上下文。');
     const context = currentCharacterGuard();
     const scope = chatScopeKey(context);
+    const bulkTaskKey = `adv-bulk:${scope}`;
     if (activeAdvBulkScopes.has(scope)) return showInlineError('ADV 批量任务已经在进行中。');
     if (isModeGenerating(MODE.ADV, context)) return showInlineError('CG/ADV 事件索引正在生成或补齐，请先等它完成。');
     if (hasGenerationTaskPrefix(`adv:${scope}:`)) return showInlineError('当前有单篇 ADV 正在生成，请等它完成后再批量生成。');
+    if (!canStartGenerationTask(bulkTaskKey)) return showInlineError(`当前已有 ${MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请稍后再试。`);
 
     const session = activeSession;
     const pending = session.events.filter(event => !event.adv?.paragraphs?.length);
@@ -4159,7 +4271,7 @@ async function generateAllAdvForSession() {
                     maxTokens: 32000,
                     context,
                     origin,
-                    taskKey: `adv-bulk:${scope}`,
+                    taskKey: bulkTaskKey,
                     mode: MODE.ADV,
                     background: true,
                 },
@@ -4218,10 +4330,12 @@ async function generateAllAdvForSession() {
 
 async function repairFailedAdvForSession() {
     if (!activeSession || activeSession.kind !== MODE.ADV) return;
-    if (activeArchiveSnapshot) return showInlineError('只读档案浏览模式不能补生成 ADV。');
+    if (!requireWritableArchiveAction()) return showInlineError('当前档案尚未处于可写的真实聊天上下文。');
     const context = currentCharacterGuard();
     const scope = chatScopeKey(context);
+    const bulkTaskKey = `adv-bulk:${scope}`;
     if (activeAdvBulkScopes.has(scope) || hasGenerationTaskPrefix(`adv:${scope}:`)) return showInlineError('当前已有 ADV 生成任务，请稍候。');
+    if (!canStartGenerationTask(bulkTaskKey)) return showInlineError(`当前已有 ${MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请稍后再试。`);
     const session = activeSession;
     const requestedIds = new Set(cleanArray(session.advBulkRecovery?.failedIds, 64, 100));
     const failed = session.events.filter(event => !event.adv?.paragraphs?.length && (!requestedIds.size || requestedIds.has(event.id)));
@@ -4290,7 +4404,7 @@ async function generateAdvForSelected() {
         renderAdvMode();
         return;
     }
-    if (activeArchiveSnapshot) return showInlineError('这份只读档案还没有生成当前 ADV；请回到对应聊天窗口后再生成。');
+    if (!requireWritableArchiveAction()) return showInlineError('当前档案尚未处于可写的真实聊天上下文。');
     const context = currentCharacterGuard();
     const expectedChatId = getChatId(context);
     const scope = chatScopeKey(context);
@@ -5033,9 +5147,15 @@ function cgImageLayerHtml(item, { lazy = true } = {}) {
 }
 
 function cgImageProviderBar({ readOnly = false } = {}) {
-    if (readOnly) return '<div class="rmt-cg-provider-bar"><span class="rmt-cg-provider-dot"></span><b>CG 实图</b><span>只读档案 · 可查看已保存图片，不能在这里重新绘制</span></div>';
     const ready = !!imageGenerationCommand();
-    return `<div class="rmt-cg-provider-bar ${ready ? 'ready' : ''}"><span class="rmt-cg-provider-dot"></span><b>CG 实图</b><span>${ready ? 'Image Generation 已连接 · 点击 🎨 绘制CG' : '未检测到 Image Generation · 启用后即可绘制'}</span></div>`;
+    if (readOnly) return `<div class="rmt-cg-provider-bar ${ready ? 'ready' : ''}"><span class="rmt-cg-provider-dot"></span><b>CG 实图</b><span>只读档案 · ${ready ? 'Image Generation 已连接' : '当前未检测到 Image Generation'}</span><button type="button" class="rmt-btn" data-rmt-action="refresh-image-provider">重新检测</button></div>`;
+    return `<div class="rmt-cg-provider-bar ${ready ? 'ready' : ''}"><span class="rmt-cg-provider-dot"></span><b>CG 实图</b><span>${ready ? 'Image Generation 已连接 · 点击 🎨 绘制CG' : '未检测到 Image Generation · 启用后点“重新检测”即可，无需重开档案'}</span><button type="button" class="rmt-btn" data-rmt-action="refresh-image-provider">重新检测</button></div>`;
+}
+
+function refreshImageGenerationUi() {
+    const ready = !!imageGenerationCommand(getContext());
+    if (activeMode && activeSession) renderActive();
+    globalThis.toastr?.[ready ? 'success' : 'info']?.(ready ? '已检测到 SillyTavern Image Generation，绘制 CG 按钮现在可以直接使用。' : '仍未检测到 Image Generation。请确认生图扩展已经启用并完成初始化。', '心跳回忆');
 }
 
 function indexedArchiveMatchesCurrentChat(entry, context = getContext()) {
@@ -5073,6 +5193,7 @@ function renderCurrentCgMode(mode, session) {
 }
 
 async function drawSelectedCgImage() {
+    if (!requireWritableArchiveAction()) return;
     const target = selectedCgTarget();
     if (!target) return;
     const { mode, session, item } = target;
@@ -5110,10 +5231,14 @@ async function drawSelectedCgImage() {
     const lifecycleEpoch = cgImageLifecycleEpoch;
     const itemId = item.id;
     const taskKey = cgImageTaskKey(mode, itemId, context);
+    if (!canStartGenerationTask(taskKey)) {
+        globalThis.toastr?.info?.(`当前已有 ${MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请等其中一项完成后再绘制 CG。`, '心跳回忆');
+        return;
+    }
     activeCgImageTasks.set(taskKey, { mode, itemId, startedAt: Date.now() });
     renderCurrentCgMode(mode, session);
     try {
-        const rawUrl = await command.callback.call(command, { quiet: 'true', gallery: 'false' }, prompt);
+        const rawUrl = await invokeSlashCommandCapture(command, { quiet: 'true', gallery: 'false' }, prompt, context);
         const url = normalizeCgImageUrl(rawUrl);
         if (!url) throw new Error('图像生成扩展没有返回可保存的 SillyTavern 本地图片路径。');
         if (cgImageLifecycleEpoch !== lifecycleEpoch || !isCurrentTaskOrigin(origin)) {
@@ -5157,6 +5282,7 @@ async function drawSelectedCgImage() {
 }
 
 function clearSelectedCgImage() {
+    if (!requireWritableArchiveAction()) return;
     const target = selectedCgTarget();
     if (!target) return;
     const { mode, session, item } = target;
@@ -5437,14 +5563,14 @@ async function ensureRoomLifePlan({ force = false, quiet = false } = {}) {
     }
     if (!settings.roomLifeAutoDaily && !force) return current || null;
     if (roomLifeRefreshPromise) return roomLifeRefreshPromise;
-    if (isModeGenerating(MODE.ROOM, context) || activeGenerationTasks.size >= MAX_CONCURRENT_GENERATION_TASKS) {
+    const taskKey = `room-life:${chatScopeKey(context)}:${dateKey}`;
+    if (isModeGenerating(MODE.ROOM, context) || !canStartGenerationTask(taskKey)) {
         if (!quiet && force) globalThis.toastr?.info?.('当前生成队列较忙，等房间主体/其他任务完成后再更新今日生活。', '心跳回忆');
         return current || fallbackRoomLifePlan(roomSession, today);
     }
     roomLifeRefreshPromise = (async () => {
         try {
             if (!quiet) setInnerLoading(true, `正在生成 ${dateKey} 的生活时间线…`);
-            const taskKey = `room-life:${chatScopeKey(context)}:${dateKey}`;
             const origin = { ...captureTaskOrigin(context, archiveRevision), chatId: comparableChatId(chatId) };
             const raw = await requestJson(roomLifePrompt(context, roomSession, memoryBank, today), `正在让“他的房间”进入 ${dateKey} 的生活状态…`, { maxTokens: 6144, context, origin, taskKey, mode: MODE.ROOM, background: true });
             const plan = normalizeRoomLifePlan(raw, roomSession, memoryBank, today);
@@ -5609,8 +5735,12 @@ function openRoomDeepMode(mode) {
     }
     if (!deep) {
         if (activeArchiveSnapshot) {
-            globalThis.toastr?.info?.('这份只读档案还没有生成这一层；不会为了查看而切换聊天或自动生成。', '心跳回忆');
-            return;
+            if (activeArchiveReadOnly) {
+                globalThis.toastr?.info?.('这份档案还没有生成这一层。关闭只读后会显示编辑入口，但心跳回忆不会自动切换聊天。', '心跳回忆');
+                return;
+            }
+            if (!requireWritableArchiveAction()) return;
+            return openRoomDeepMode(mode);
         }
         const taskKey = generationTaskKeyForMode(mode);
         if (isGenerationTaskRunning(taskKey) || activeModeBuildScopes.has(taskKey)) {
@@ -5696,7 +5826,7 @@ function renderRoom() {
     const deep = roomDeepAvailability();
     const phoneLabel = deep.phone?.deviceName || '私人通讯终端';
     const itemsGenerating = isModeGenerating(MODE.ITEMS);
-    const readOnlyArchive = !!activeArchiveSnapshot;
+    const readOnlyArchive = !!activeArchiveSnapshot && activeArchiveReadOnly;
     const itemActionText = selectedSearchable
         ? (deep.items ? `翻找「${selected.label}」` : readOnlyArchive ? `「${selected.label}」尚未生成物品档案` : itemsGenerating ? '物品生成中…' : `生成并翻找「${selected.label}」`)
         : '先选中盒子 / 抽屉 / 柜子等收纳物';
@@ -5893,6 +6023,7 @@ function navigateBack() {
     if (archiveViewLevel === 'snapshot' && activeArchiveSnapshot) {
         const key = activeArchiveSnapshot.characterKey;
         activeArchiveSnapshot = null;
+        activeArchiveReadOnly = true;
         return key ? showArchiveCharacter(key) : showArchiveLibrary();
     }
     if (archiveViewLevel === 'chooser') {
@@ -6066,6 +6197,7 @@ function resetArchiveOverviewForCharacter(context = currentCharacterGuard()) {
         archiveOverviewKnownArchives.clear();
         archiveSnapshotCache.clear();
         activeArchiveSnapshot = null;
+        activeArchiveReadOnly = true;
     }
     archiveOverviewLastKey = key;
 }
@@ -6183,7 +6315,8 @@ function renderArchiveOverviewAsync({ force = false } = {}) {
     });
 }
 
-async function openArchiveChatFromOverview(chatId) {
+// Read-only archive overview navigation. This function must never switch the host character/chat.
+async function openArchiveSnapshotFromOverview(chatId) {
     const id = comparableChatId(chatId);
     if (!id || !archiveOverviewAllowedChats.has(id)) return;
     const context = currentCharacterGuard();
@@ -6383,8 +6516,8 @@ async function showAvatarDialogueForCharacter(characterKey) {
 function openHeartFromAvatar() {
     const state = activeAvatarDialogue;
     if (!state?.session) return;
-    if (state.readOnly && state.snapshot) activeArchiveSnapshot = state.snapshot;
-    else activeArchiveSnapshot = null;
+    if (state.readOnly && state.snapshot) { activeArchiveSnapshot = state.snapshot; activeArchiveReadOnly = true; }
+    else { activeArchiveSnapshot = null; activeArchiveReadOnly = true; }
     activeMode = MODE.HEART;
     activeSession = structuredClone(state.session);
     renderActive();
@@ -6417,7 +6550,7 @@ function openHeartMode() {
 
 
 function showArchiveLibrary() {
-    stopRoomClock(); stopPhoneClock(); activeMode = null; activeSession = null; activeArchiveSnapshot = null; archiveLibraryCharacterKey = ''; archiveViewLevel = 'library';
+    stopRoomClock(); stopPhoneClock(); activeMode = null; activeSession = null; activeArchiveSnapshot = null; activeArchiveReadOnly = true; archiveLibraryCharacterKey = ''; archiveViewLevel = 'library';
     openOverlay(); setRegenerateVisible(false); setBackVisible(false); topTitle('心跳回忆 · 档案室');
     const body = bodyEl(); if (!body) return;
     try { const ctx = currentCharacterGuard(); const mem = getImportedMemory(ctx); if (mem) upsertArchiveIndex(ctx, mem); } catch {}
@@ -6452,6 +6585,7 @@ function showArchiveLibrary() {
 
 function showArchiveCharacter(characterKey) {
     activeArchiveSnapshot = null;
+    activeArchiveReadOnly = true;
     const key = normalizeText(characterKey, 300); archiveLibraryCharacterKey = key; archiveViewLevel = 'character';
     openOverlay(); setRegenerateVisible(false); setBackVisible(true, '所有角色');
     const context = getContext();
@@ -6524,68 +6658,83 @@ async function fetchIndexedArchiveSnapshot(entry, context = getContext()) {
     });
 }
 
-async function requestArchiveEditMode(snapshot = activeArchiveSnapshot, toggle = null) {
-    if (!snapshot?.memory) return;
-    if (hasAnyTask()) {
-        if (toggle) toggle.checked = true;
-        globalThis.toastr?.info?.('当前还有后台任务。为避免把结果写进切换后的聊天，请等任务完成后再关闭只读查看。', '心跳回忆');
-        return;
+function setArchiveReadOnly(readOnly) {
+    if (!activeArchiveSnapshot) return;
+    activeArchiveReadOnly = readOnly !== false;
+    if (activeMode && activeSession) renderActive();
+    else showIndexedArchiveSnapshot(activeArchiveSnapshot);
+    if (!activeArchiveReadOnly) {
+        const live = indexedArchiveMatchesCurrentChat(activeArchiveSnapshot, getContext());
+        globalThis.toastr?.info?.(
+            live
+                ? '已关闭只读保护。当前酒馆正好打开这份档案对应聊天；重新生成/绘制仍会逐项确认。'
+                : '已关闭只读保护，但心跳回忆不会自动切换聊天。你可以查看编辑按钮；真正写入前必须先手动在酒馆打开这份档案对应聊天。',
+            '心跳回忆',
+        );
     }
+}
+
+function archiveSnapshotEditableUi() {
+    return !!activeArchiveSnapshot && !activeArchiveReadOnly;
+}
+
+function snapshotWriteBlockMessage() {
+    const snapshot = activeArchiveSnapshot;
+    if (!snapshot) return '';
+    return `这份档案当前不是 SillyTavern 正在打开的聊天。\n\n为避免再次出现“关闭只读后自动切聊天、刷新后档案看起来消失”的问题，r18 不会替你自动切换。请先手动在酒馆打开「${snapshot.characterName || '该角色'}」对应的这个聊天窗口，再回到档案室执行写入。现有档案不会因此被删除。`;
+}
+
+function promoteSnapshotToLiveIfCurrent() {
+    if (!activeArchiveSnapshot) return true;
+    if (activeArchiveReadOnly) {
+        globalThis.toastr?.info?.('当前仍是只读查看。请先关闭“只读查看”开关。', '心跳回忆');
+        return false;
+    }
+    const snapshot = activeArchiveSnapshot;
     const context = getContext();
-    if (indexedArchiveMatchesCurrentChat(snapshot, context)) {
-        activeArchiveSnapshot = null;
-        showChooser();
-        return;
+    if (!indexedArchiveMatchesCurrentChat(snapshot, context)) {
+        globalThis.toastr?.warning?.(snapshotWriteBlockMessage(), '心跳回忆');
+        return false;
     }
-    const ok = confirmExplicitAction(
-        `关闭“只读查看”并进入「${snapshot.characterName || '这个角色'}」的对应聊天？`,
-        `编辑历史档案必须让 SillyTavern 真正打开对应聊天，心跳回忆才有安全的 metadata 写入边界。\n\n这一步只切换聊天，不会自动重新生成任何内容。进入后你可以单独选择某一项“重新生成”，而每次重新生成仍会再次弹窗确认。`,
-        { destructive: false },
-    );
-    if (!ok) {
-        if (toggle) toggle.checked = true;
-        return;
-    }
-    const characters = Array.isArray(context.characters) ? context.characters : [];
-    const wantedAvatar = normalizeText(snapshot.avatar, 300);
-    const charIndex = characters.findIndex(ch => normalizeText(ch?.avatar || ch?.data?.avatar, 300) === wantedAvatar);
-    try {
-        setInnerLoading(true, '正在按你的选择进入该档案对应聊天…');
-        if (currentCharacterKey(context) !== archiveCanonicalCharacterKey(snapshot, context)) {
-            if (charIndex < 0) throw new Error('无法把这份档案安全映射到当前角色列表；仍保持只读。');
-            if (typeof context.selectCharacterById !== 'function') throw new Error('当前 SillyTavern 没有可用的角色切换接口。');
-            await context.selectCharacterById(charIndex, { switchMenu: false });
+    const mode = activeMode;
+    const oldSession = activeSession;
+    let live = null;
+    if (mode) {
+        live = loadSession(mode);
+        if (!live) {
+            globalThis.toastr?.warning?.('当前真实聊天的这项已生成缓存尚未加载，心跳回忆不会用只读快照覆盖它。请先从“当前窗口档案”打开一次这项，再执行绘制/修改。', '心跳回忆');
+            return false;
         }
-        const afterCharacter = getContext();
-        if (comparableChatId(getChatId(afterCharacter)) !== comparableChatId(snapshot.chatId)) {
-            if (typeof afterCharacter.openCharacterChat !== 'function') throw new Error('当前 SillyTavern 没有可用的聊天打开接口。');
-            await afterCharacter.openCharacterChat(snapshot.chatId);
-        }
-        const latest = getContext();
-        if (!indexedArchiveMatchesCurrentChat(snapshot, latest)) throw new Error('目标聊天尚未完成切换或档案身份不匹配；没有进入编辑模式。');
-        activeArchiveSnapshot = null;
-        globalThis.toastr?.success?.('已进入对应聊天。只读保护已关闭；重新生成仍需逐项确认。', '心跳回忆');
-        showChooser();
-    } catch (error) {
-        console.warn('[HeartbeatMemories] explicit archive edit transition failed', error);
-        if (toggle) toggle.checked = true;
-        globalThis.toastr?.error?.(toastText(error?.message || String(error)), '心跳回忆');
-        showIndexedArchiveSnapshot(snapshot);
-    } finally {
-        setInnerLoading(false);
     }
+    activeArchiveSnapshot = null;
+    activeArchiveReadOnly = true;
+    if (live) {
+        // Preserve only harmless view/selection state from the read-only clone.
+        for (const key of ['selectedId', 'selectedConfessionId', 'selectedVoiceId', 'selectedScenarioId', 'selectedStripId', 'selectedSpaceId', 'selectedObjectId', 'view', 'page', 'paragraphIndex', 'dialogueIndex']) {
+            if (oldSession && Object.hasOwn(oldSession, key)) live[key] = oldSession[key];
+        }
+        activeSession = live;
+    }
+    return true;
+}
+
+function requireWritableArchiveAction() {
+    if (!activeArchiveSnapshot) return true;
+    return promoteSnapshotToLiveIfCurrent();
 }
 
 function showIndexedArchiveSnapshot(snapshot = activeArchiveSnapshot) {
     if (!snapshot?.memory) return showArchiveLibrary();
+    const isNewSnapshot = activeArchiveSnapshot !== snapshot;
     activeArchiveSnapshot = snapshot;
+    if (isNewSnapshot) activeArchiveReadOnly = true;
     activeMode = null;
     activeSession = null;
     archiveViewLevel = 'snapshot';
     openOverlay();
     setRegenerateVisible(false);
     setBackVisible(true, '角色档案');
-    topTitle(`心跳回忆 · ${snapshot.characterName} · 只读档案`);
+    topTitle(`心跳回忆 · ${snapshot.characterName} · ${activeArchiveReadOnly ? '只读档案' : '编辑待命'}`);
     const body = bodyEl();
     if (!body) return;
     const memory = snapshot.memory;
@@ -6593,13 +6742,15 @@ function showIndexedArchiveSnapshot(snapshot = activeArchiveSnapshot) {
     const generatedCount = portals.filter(item => !!item.session).length;
     const portalHtml = portals.map(({ mode, session, meta }) => {
         const generated = !!session;
+        const editAction = activeArchiveReadOnly ? '' : `<button type="button" class="rmt-btn rmt-portal-generate" data-rmt-generate-mode="${esc(mode)}" ${generated ? 'data-rmt-regenerate="true"' : ''}>${generated ? '重新生成' : '生成这一项'}</button>`;
         return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} rmt-archive-portal-${esc(meta.accent)}">
           <button type="button" class="rmt-portal-open" ${generated ? `data-rmt-mode="${esc(mode)}"` : 'disabled'}>
             <span class="rmt-portal-avatar"><i class="fa-solid ${esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
             <span class="rmt-portal-title">${esc(meta.title)}</span>
             <span class="rmt-portal-subtitle">${esc(meta.subtitle)}</span>
-            <span class="rmt-portal-status">${generated ? '已生成 · 只读查看' : '这份档案尚未生成'}</span>
+            <span class="rmt-portal-status">${generated ? (activeArchiveReadOnly ? '已生成 · 只读查看' : '已生成 · 可选择重新生成') : (activeArchiveReadOnly ? '这份档案尚未生成' : '尚未生成 · 可选择生成')}</span>
           </button>
+          ${editAction}
         </article>`;
     }).join('');
     body.innerHTML = `<div class="rmt-archive-room">
@@ -6608,11 +6759,11 @@ function showIndexedArchiveSnapshot(snapshot = activeArchiveSnapshot) {
           <div class="rmt-archive-kicker">READ-ONLY ARCHIVE</div>
           <strong class="rmt-archive-title">${esc(snapshot.archiveName)}</strong>
           <div class="rmt-archive-summary">${esc(memory.archiveSummary || fallbackArchiveSummary(memory.memories))}</div>
-          <div class="rmt-memory-status ready">只读查看 · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${ARCHIVE_PORTAL_MODES.length}</div>
-          <div class="rmt-archive-meta">不会自动切换 SillyTavern 当前角色或聊天，也不会触发保存。</div>
+          <div class="rmt-memory-status ready">${activeArchiveReadOnly ? '只读查看' : '编辑待命'} · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${ARCHIVE_PORTAL_MODES.length}</div>
+          <div class="rmt-archive-meta">关闭只读只改变心跳回忆里的按钮显示，不会自动切换角色/聊天、刷新宿主界面或删除档案。</div>
           <div class="rmt-archive-readonly-control">
-            <label><input type="checkbox" data-rmt-readonly-toggle checked> 只读查看</label>
-            <small>关闭开关不会立即重新生成任何内容。若这不是当前聊天，会先询问是否切换到对应聊天；只有你明确确认并成功进入该聊天后，才会显示“重新生成”等编辑操作，每次重新生成仍会再次弹窗确认。</small>
+            <label><input type="checkbox" data-rmt-readonly-toggle ${activeArchiveReadOnly ? 'checked' : ''}> 只读查看</label>
+            <small>${activeArchiveReadOnly ? '关闭后会显示“重新生成 / 绘制”等按钮；真正写入前仍会验证当前酒馆是否正打开这份档案对应聊天。' : '编辑按钮已显示。若当前酒馆不是这份档案对应聊天，点击写操作只会提示你手动打开目标聊天，不会自动切换或刷新。每次重新生成仍会再次确认。'}</small>
           </div>
         </div>
       </section>
@@ -6633,6 +6784,7 @@ async function openIndexedArchive(characterKey, chatId) {
     // drawing available without ever switching the host character/chat.
     if (indexedArchiveMatchesCurrentChat(entry, context)) {
         activeArchiveSnapshot = null;
+        activeArchiveReadOnly = true;
         return showChooser();
     }
     openOverlay();
@@ -6674,6 +6826,7 @@ async function rebuildArchiveIndexFromExisting() {
 
 function showChooser() {
     activeArchiveSnapshot = null;
+    activeArchiveReadOnly = true;
     stopRoomClock();
     stopPhoneClock();
     activeMode = null;
@@ -6730,7 +6883,7 @@ function showChooser() {
     const portalHtml = portals.map(({ mode, session, meta }) => {
         const generated = !!session;
         const generating = isModeGenerating(mode);
-        const capacityReached = activeGenerationTasks.size >= MAX_CONCURRENT_GENERATION_TASKS && !generating;
+        const capacityReached = activeLogicalGenerationCount() >= MAX_CONCURRENT_GENERATION_TASKS && !generating;
         const statusText = generating
             ? (generated ? '重新生成中 · 旧内容仍可查看' : '后台生成中 · 可继续启动其他入口')
             : generated ? '已生成 · 点击头像查看' : '尚未生成';
@@ -6745,7 +6898,9 @@ function showChooser() {
           <button type="button" class="rmt-btn rmt-portal-generate" data-rmt-generate-mode="${esc(mode)}" ${generated ? 'data-rmt-regenerate="true"' : ''} ${busy || generating || capacityReached ? 'disabled' : ''}>${esc(actionText)}</button>
         </article>`;
     }).join('');
-    const externalSetting = getPluginSettings().useCurrentChatExternalMemory;
+    const memorySettings = getPluginSettings();
+    const externalSetting = memorySettings.useCurrentChatExternalMemory;
+    const publicReaderSetting = memorySettings.usePublicMemoryProviderReaders;
     const detectedExternalSources = externalMemorySourceSummary(context);
     const preflight = getMemoryPreflight(context);
     const importedSources = ready ? cleanArray((memory.externalMemorySources || []).map(item => `${normalizeText(item?.label, 80)} ${Number(item?.count) || 0}条`), 8, 120) : [];
@@ -6758,9 +6913,11 @@ function showChooser() {
     const requirePreflight = externalSetting && detectedExternalSources.length > 0 && !preflight;
     const externalMemoryControls = `<div class="rmt-external-memory-row">
       <label class="rmt-external-memory-toggle"><input type="checkbox" data-rmt-external-memory-toggle ${externalSetting ? 'checked' : ''} ${busy || hasGenerationTasks() ? 'disabled' : ''}> 建档时使用当前窗口的记忆 / 摘要补充</label>
+      <label class="rmt-external-memory-toggle"><input type="checkbox" data-rmt-public-memory-toggle ${publicReaderSetting ? 'checked' : ''} ${busy || hasGenerationTasks() || !externalSetting ? 'disabled' : ''}> 允许调用第三方记忆插件公开 current-chat 读取函数</label>
+      <small>第三方公开读取函数属于可执行扩展代码，默认关闭；开启后只探测明确的 current-chat reader，并继续执行 chatId 与证据锚点校验。提示注入摘要 / 当前聊天 metadata 摘要不需要开启此项。</small>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:7px"><button type="button" class="rmt-btn" data-rmt-action="read-memory-plugins" ${busy || hasGenerationTasks() || !externalSetting ? 'disabled' : ''}>扫描记忆 / 摘要</button></div>
       <small>${esc(externalSourceText)} · 只读当前窗口，不读角色级/跨聊天记忆。</small>
-      <small>兼容顺序：公开 current-chat API → 当前提示注入的记忆/摘要 → 当前聊天 metadata 摘要。世界书、角色卡、作者设定仍会参与生成时的人设/世界观理解，但不会被扫描成“已经发生的记忆”。</small>
+      <small>兼容顺序：${publicReaderSetting ? '已授权的公开 current-chat API → ' : ''}当前提示注入的记忆/摘要 → 当前聊天 metadata 摘要。世界书、角色卡、作者设定仍会参与生成时的人设/世界观理解，但不会被扫描成“已经发生的记忆”。</small>
     </div>`;
     const generationAction = ready ? `<div class="rmt-archive-generate-row">
       <small>已生成 ${generatedCount}/${ARCHIVE_PORTAL_MODES.length}。普通“更新当前窗口档案”只增量追加新聊天并保留这些已生成内容；只有“完全重建档案”才会使它们失效。每个入口单独请求、单独校验；ADV 正文批量失败后会停下来让你选择再次整批生成或逐条补失败项。</small>
@@ -6906,14 +7063,14 @@ function decorateReadOnlyModeUi() {
     if (!body || body.querySelector('[data-rmt-readonly-toggle]')) return;
     const control = document.createElement('div');
     control.className = 'rmt-archive-readonly-control';
-    control.innerHTML = '<label><input type="checkbox" data-rmt-readonly-toggle checked> 只读查看</label><small>想重新生成或修改这一项？关闭只读后会先询问是否进入这个档案对应的真实聊天；切换本身不会自动生成。</small>';
+    control.innerHTML = `<label><input type="checkbox" data-rmt-readonly-toggle ${activeArchiveReadOnly ? 'checked' : ''}> 只读查看</label><small>${activeArchiveReadOnly ? '关闭后会显示重新生成/绘制等按钮；不会自动切换聊天。' : '编辑按钮已显示。真正写入前会校验当前酒馆是否正打开这份档案；不匹配时只提示你手动打开，不自动切换。'}</small>`;
     body.prepend(control);
 }
 
 function renderActive() {
     if (!activeSession || !activeMode) return activeArchiveSnapshot ? showIndexedArchiveSnapshot(activeArchiveSnapshot) : showChooser();
-    setRegenerateVisible(!activeArchiveSnapshot && !ROOM_DEEP_MODES.includes(activeMode));
-    setBackVisible(true, activeArchiveSnapshot ? '只读档案' : ROOM_DEEP_MODES.includes(activeMode) ? '他的房间' : '当前档案');
+    setRegenerateVisible((!activeArchiveSnapshot || !activeArchiveReadOnly) && !ROOM_DEEP_MODES.includes(activeMode));
+    setBackVisible(true, activeArchiveSnapshot ? (activeArchiveReadOnly ? '只读档案' : '档案') : ROOM_DEEP_MODES.includes(activeMode) ? '他的房间' : '当前档案');
     if (activeMode !== MODE.ROOM) stopRoomClock();
     if (activeMode !== MODE.PHONE) stopPhoneClock();
     if (activeMode === MODE.BUTTERFLY) renderButterfly();
@@ -6956,13 +7113,15 @@ function selectedConfessionReplay() {
 function renderEnding() {
     const session = activeSession;
     if (!session || session.kind !== MODE.ENDING) return;
-    setBackVisible(true, activeArchiveSnapshot ? '只读档案' : '当前档案');
+    setBackVisible(true, activeArchiveSnapshot ? (activeArchiveReadOnly ? '只读档案' : '档案') : '当前档案');
     topTitle(MODE_LABEL[MODE.ENDING]);
     const replays = Array.isArray(session.confessionReplays) ? session.confessionReplays : [];
+    const readOnlyArchive = !!activeArchiveSnapshot && activeArchiveReadOnly;
     const view = session.view === 'confessions' ? 'confessions' : 'routes';
     session.view = view;
     const tabs = `<div class="rmt-ending-tabs"><button type="button" class="rmt-ending-tab ${view === 'routes' ? 'active' : ''}" data-rmt-ending-view="routes">结局路线 <span>${session.endings.length}</span></button><button type="button" class="rmt-ending-tab ${view === 'confessions' ? 'active' : ''}" data-rmt-ending-view="confessions">告白回看 <span>${replays.length}</span></button></div>`;
-    const summary = `<section class="rmt-ending-summary"><b>${esc(session.relationshipState)}</b><p>${esc(session.relationshipSummary)}</p><div class="rmt-ending-disclaimer">当前关系锚点：${esc(session.relationshipSourceMemoryAnchor || '')} · 结局与后日谈是未来路线推演；“告白回看”只允许来自当前手动档案里已经发生并通过锚点校验的事件。</div><div class="rmt-ending-extra-actions"><button type="button" class="rmt-btn" data-rmt-action="open-heart"><i class="fa-solid fa-heart"></i> 角色互动 / Voice Drama</button></div></section>`;
+    const confessionRefreshAction = view === 'confessions' && !readOnlyArchive ? '<button type="button" class="rmt-btn" data-rmt-action="refresh-ending-confessions"><i class="fa-solid fa-rotate"></i> 只重新读取告白</button>' : '';
+    const summary = `<section class="rmt-ending-summary"><b>${esc(session.relationshipState)}</b><p>${esc(session.relationshipSummary)}</p><div class="rmt-ending-disclaimer">当前关系锚点：${esc(session.relationshipSourceMemoryAnchor || '')} · 结局与后日谈是未来路线推演；“告白回看”只允许来自当前手动档案里已经发生并通过锚点校验的事件。</div><div class="rmt-ending-extra-actions">${confessionRefreshAction}<button type="button" class="rmt-btn" data-rmt-action="open-heart"><i class="fa-solid fa-heart"></i> 角色互动 / Voice Drama</button></div></section>`;
     if (view === 'confessions') {
         const selectedReplay = selectedConfessionReplay();
         if (selectedReplay) session.selectedConfessionId = selectedReplay.id;
@@ -6973,7 +7132,7 @@ function renderEnding() {
                ${selectedReplay.responseSummary ? `<section class="rmt-ending-section"><small>RESPONSE // 当时回应与结果</small><p>${esc(selectedReplay.responseSummary)}</p></section>` : ''}
                ${selectedReplay.afterEffect ? `<section class="rmt-ending-section"><small>AFTER EFFECT // 后续变化</small><p>${esc(selectedReplay.afterEffect)}</p></section>` : ''}
                <div class="rmt-confession-replay-note">这是一份基于已归档事实的演出式回看，不声称重现聊天逐字原文。证据锚点：${esc(selectedReplay.sourceMemoryAnchor)}</div>`
-            : `<div class="rmt-ending-lock"><b>当前 ENDING 数据里没有可回看的已发生告白。</b><br>${activeArchiveSnapshot ? '如果这份档案确实发生过告白，需要先关闭只读并进入对应聊天，再重新生成 ENDING 才能重新检测。' : '如果档案里已经发生过告白/关系确认，可以重新生成 ENDING；模型只有在找到真实记忆 ID + anchor 后才允许生成回看。'}</div>`;
+            : `<div class="rmt-ending-lock"><b>当前 ENDING 数据里没有可回看的已发生告白。</b><br>${activeArchiveSnapshot ? '如果这份档案确实发生过告白，可以关闭只读后使用“只重新读取告白”；若当前酒馆不是这份聊天，插件只会提示你手动打开，不会自动切换。' : '如果档案里后来已经发生过告白/关系确认，可以点“只重新读取告白”；结局路线和后日谈不会因此重做。模型只有在找到真实记忆 ID + anchor 后才允许生成回看。'}</div>`;
         bodyEl().innerHTML = `<div class="rmt-ending">${summary}${tabs}<nav class="rmt-ending-list" aria-label="告白回看">${replayList || '<div class="rmt-ending-lock">没有检测到可验证的告白记录。</div>'}</nav><main class="rmt-ending-detail">${replayDetail}</main></div>`;
         return;
     }
@@ -6989,6 +7148,73 @@ function renderEnding() {
            <div class="rmt-ending-evidence">路线起点来自当前档案：${esc(selected.sourceMemoryAnchor)} · 这里只推演未来，不写回聊天档案。</div>`
         : `<div class="rmt-ending-head"><div><h2>${esc(selected.title)}</h2><div class="rmt-ending-subtitle">${esc(selected.subtitle || typeLabel[selected.type] || '')}</div></div><span>未解锁</span></div><div class="rmt-ending-lock"><b>这条路线还没有被当前档案解锁。</b><br>${esc(selected.unlockHint || '继续让关系在真实聊天中自然发展后，再更新档案并重新生成结局。')}<div class="rmt-ending-evidence">当前依据：${esc(selected.sourceMemoryAnchor)}</div></div>`;
     bodyEl().innerHTML = `<div class="rmt-ending">${summary}${tabs}<nav class="rmt-ending-list" aria-label="结局路线">${routes}</nav><main class="rmt-ending-detail">${detail}</main></div>`;
+}
+
+async function refreshEndingConfessionReplays() {
+    if (!activeSession || activeSession.kind !== MODE.ENDING) return;
+    if (!requireWritableArchiveAction()) return;
+    const context = currentCharacterGuard();
+    if (isModeGenerating(MODE.ENDING, context)) {
+        globalThis.toastr?.info?.('ENDING / 告白扫描已经有任务在进行中，请等它完成。', '心跳回忆');
+        return;
+    }
+    const confirmed = confirmExplicitAction(
+        '只重新读取“告白回看”？',
+        '这次只扫描当前档案里已经发生的告白 / 关系确认，并替换“告白回看”列表。不会重新生成结局路线、逆转告白、后日谈或 Voice Drama。没有新的可验证告白时，列表可能保持为空。',
+        { destructive: false },
+    );
+    if (!confirmed) return;
+    const memoryBank = requireArchive(context);
+    const expectedChatId = getChatId(context);
+    const expectedArchiveRevision = memoryBank.archiveRevision;
+    const scope = chatScopeKey(context);
+    const origin = { ...captureTaskOrigin(context, expectedArchiveRevision), chatId: comparableChatId(expectedChatId) };
+    const baseSession = structuredClone(activeSession);
+    setInnerLoading(true, '正在只重新读取已发生的告白节点…');
+    try {
+        const raw = await requestJson(
+            endingConfessionRefreshPrompt(context, memoryBank),
+            '正在扫描当前档案里的告白 / 关系确认…',
+            {
+                maxTokens: 10000,
+                context,
+                origin,
+                taskKey: `ending-confessions:${scope}`,
+                mode: MODE.ENDING,
+                background: true,
+            },
+        );
+        const replays = normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank);
+        const updated = baseSession;
+        updated.confessionReplays = replays;
+        updated.selectedConfessionId = replays[0]?.id || '';
+        updated.view = 'confessions';
+        updated.chatId = expectedChatId;
+        updated.archiveRevision = expectedArchiveRevision;
+        let committed = false;
+        if (isCurrentTaskOrigin(origin)) {
+            try {
+                const latestMemory = requireArchive(currentCharacterGuard());
+                if (latestMemory.archiveRevision === expectedArchiveRevision) committed = saveSession(MODE.ENDING, updated, expectedChatId);
+            } catch {}
+        }
+        if (!committed) queueDeferredCommit(origin, { kind: 'sessions', sessions: { [MODE.ENDING]: updated } });
+        if (isCurrentTaskOrigin(origin) && !document.getElementById(OVERLAY_ID)?.hidden) {
+            activeMode = MODE.ENDING;
+            activeSession = updated;
+            renderEnding();
+        }
+        globalThis.toastr?.success?.(`告白回看已单独更新：${replays.length} 条。结局路线与后日谈保持不变。`, '心跳回忆');
+    } catch (error) {
+        if (error?.name !== 'AbortError') {
+            console.error('[HeartbeatMemories] confession replay refresh failed', error);
+            showInlineError(error?.message || String(error));
+            globalThis.toastr?.error?.(toastText(error?.message || String(error)), '心跳回忆 · 告白回看更新失败');
+        }
+    } finally {
+        setInnerLoading(false);
+        refreshConcurrentTaskUi(MODE.ENDING, origin);
+    }
 }
 
 function endingSetView(view) {
@@ -7065,7 +7291,8 @@ function heartStripImagePrompt(item) {
 }
 
 async function drawHeartStripImage(stripId) {
-    if (!activeSession || activeSession.kind !== MODE.HEART || activeArchiveSnapshot) return;
+    if (!activeSession || activeSession.kind !== MODE.HEART) return;
+    if (!requireWritableArchiveAction()) return;
     const item = activeSession.dailyStrips.find(strip => strip.id === stripId) || selectedHeartStrip();
     if (!item) return;
     const context = currentCharacterGuard();
@@ -7092,10 +7319,14 @@ async function drawHeartStripImage(stripId) {
     const origin = { ...captureTaskOrigin(context, memoryBank.archiveRevision), chatId: comparableChatId(expectedChatId) };
     const lifecycleEpoch = cgImageLifecycleEpoch;
     const taskKey = cgImageTaskKey(MODE.HEART, item.id, context);
+    if (!canStartGenerationTask(taskKey)) {
+        globalThis.toastr?.info?.(`当前已有 ${MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请等其中一项完成后再绘制日常一格。`, '心跳回忆');
+        return;
+    }
     activeCgImageTasks.set(taskKey, { mode: MODE.HEART, itemId: item.id, startedAt: Date.now() });
     renderHeart();
     try {
-        const rawUrl = await command.callback.call(command, { quiet: 'true', gallery: 'false' }, prompt);
+        const rawUrl = await invokeSlashCommandCapture(command, { quiet: 'true', gallery: 'false' }, prompt, context);
         const url = normalizeCgImageUrl(rawUrl);
         if (!url) throw new Error('图像生成扩展没有返回可保存的 SillyTavern 本地图片路径。');
         if (cgImageLifecycleEpoch !== lifecycleEpoch || !isCurrentTaskOrigin(origin)) {
@@ -7127,7 +7358,8 @@ async function drawHeartStripImage(stripId) {
 }
 
 function clearHeartStripImage(stripId) {
-    if (!activeSession || activeSession.kind !== MODE.HEART || activeArchiveSnapshot) return;
+    if (!activeSession || activeSession.kind !== MODE.HEART) return;
+    if (!requireWritableArchiveAction()) return;
     const item = activeSession.dailyStrips.find(strip => strip.id === stripId) || selectedHeartStrip();
     if (!item || !normalizeCgImageRecord(item.cgImage)) return;
     if (!confirmExplicitAction(`恢复「${item.title}」的文字/抽象小剧场？`, '只会移除心跳回忆缓存中的图片引用，不会删除 SillyTavern 已保存的图片文件。', { destructive: true })) return;
@@ -7174,8 +7406,8 @@ function heartSelectStrip(id) {
 function renderHeart() {
     const session = activeSession;
     if (!session || session.kind !== MODE.HEART) return;
-    const readOnly = !!activeArchiveSnapshot;
-    setBackVisible(true, readOnly ? '只读档案' : '当前档案');
+    const readOnly = !!activeArchiveSnapshot && activeArchiveReadOnly;
+    setBackVisible(true, activeArchiveSnapshot ? (readOnly ? '只读档案' : '档案') : '当前档案');
     topTitle('角色互动 · Voice Drama');
     const view = ['greetings', 'voice', 'scenario', 'strips'].includes(session.view) ? session.view : 'greetings';
     session.view = view;
@@ -7322,7 +7554,7 @@ function renderAlbum() {
         session.selectedId = selected?.id || '';
     }
     const unlocked = session.entries.filter(x => x.unlocked).length;
-    const readOnlyArchive = !!activeArchiveSnapshot;
+    const readOnlyArchive = !!activeArchiveSnapshot && activeArchiveReadOnly;
     const filters = ['全部', '日常', '约会', '结局'].map(cat => `<button type="button" class="rmt-btn ${session.category === cat ? 'active' : ''}" data-rmt-category="${cat}">${cat}</button>`).join('');
     const cards = pageItems.map(item => {
         const drawing = item.unlocked && !readOnlyArchive && isCgImageDrawing(MODE.ALBUM, item.id);
@@ -7367,7 +7599,8 @@ function renderAlbum() {
 }
 
 function albumDrawCg(id) {
-    if (!activeSession || activeSession.kind !== MODE.ALBUM || activeArchiveSnapshot) return;
+    if (!activeSession || activeSession.kind !== MODE.ALBUM) return;
+    if (!requireWritableArchiveAction()) return;
     const item = activeSession.entries.find(entry => entry.id === id);
     if (!item?.unlocked) return;
     activeSession.selectedId = item.id;
@@ -7610,7 +7843,7 @@ function renderAdvMode() {
     try { scope = chatScopeKey(currentCharacterGuard()); } catch {}
     const bulkRunning = scope ? activeAdvBulkScopes.has(scope) : false;
     const completedAdv = session.events.filter(item => item.adv?.paragraphs?.length).length;
-    const readOnlyArchive = !!activeArchiveSnapshot;
+    const readOnlyArchive = !!activeArchiveSnapshot && activeArchiveReadOnly;
     const selectedIndex = Math.max(0, session.events.findIndex(item => item.id === selected?.id));
     const list = session.events.map((item, index) => `<button type="button" class="rmt-event ${item.id === session.selectedId ? 'active' : ''}" data-rmt-event-id="${esc(item.id)}"><span class="rmt-event-index">${String(index + 1).padStart(2, '0')}</span><span class="rmt-event-copy"><b>${esc(item.title)}</b><small>${esc(item.date)}</small></span><em class="rmt-event-state">${normalizeCgImageRecord(item.cgImage) ? '图✓ ' : ''}${item.adv?.paragraphs?.length ? 'ADV✓' : 'CG'}</em></button>`).join('');
     const options = session.events.map((item, index) => `<option value="${esc(item.id)}" ${item.id === selected?.id ? 'selected' : ''}>${String(index + 1).padStart(2, '0')} · ${esc(item.title)} · ${esc(item.date)}${item.adv?.paragraphs?.length ? ' · ADV✓' : ''}</option>`).join('');
@@ -7678,6 +7911,7 @@ function handleOverlayClick(event) {
     const generateModeButton = event.target.closest?.('[data-rmt-generate-mode]');
     if (generateModeButton) {
         const mode = generateModeButton.dataset.rmtGenerateMode;
+        if (!requireWritableArchiveAction()) return;
         if (generateModeButton.dataset.rmtRegenerate === 'true' && !confirmModeRegeneration(mode)) return;
         void generateMode(mode, { background: true });
         return;
@@ -7696,7 +7930,10 @@ function handleOverlayClick(event) {
     const endingRoute = event.target.closest?.('[data-rmt-ending-id]');
     if (endingRoute) return endingSelect(endingRoute.dataset.rmtEndingId);
     const albumDraw = event.target.closest?.('[data-rmt-album-draw]');
-    if (albumDraw) return albumDrawCg(albumDraw.dataset.rmtAlbumDraw);
+    if (albumDraw) {
+        if (!requireWritableArchiveAction()) return;
+        return albumDrawCg(albumDraw.dataset.rmtAlbumDraw);
+    }
     const card = event.target.closest?.('[data-rmt-album-id]');
     if (card) return albumSelect(card.dataset.rmtAlbumId);
     const filter = event.target.closest?.('[data-rmt-category]');
@@ -7730,7 +7967,7 @@ function handleOverlayClick(event) {
         return void showAvatarDialogueForCharacter(avatarTalk.dataset.rmtAvatarTalk);
     }
     const archiveChat = event.target.closest?.('[data-rmt-archive-chat]');
-    if (archiveChat) return void openArchiveChatFromOverview(archiveChat.dataset.rmtArchiveChat);
+    if (archiveChat) return void openArchiveSnapshotFromOverview(archiveChat.dataset.rmtArchiveChat);
     const archiveCharacter = event.target.closest?.('[data-rmt-archive-character]');
     if (archiveCharacter) return showArchiveCharacter(archiveCharacter.dataset.rmtArchiveCharacter);
     const indexedChat = event.target.closest?.('[data-rmt-indexed-chat]');
@@ -7739,21 +7976,28 @@ function handleOverlayClick(event) {
     const externalToggle = event.target.closest?.('[data-rmt-external-memory-toggle]');
     if (externalToggle) {
         updatePluginSettings({ useCurrentChatExternalMemory: !!externalToggle.checked });
+        try { clearMemoryPreflight(currentCharacterGuard()); } catch {}
+        showChooser();
+        return;
+    }
+    const publicMemoryToggle = event.target.closest?.('[data-rmt-public-memory-toggle]');
+    if (publicMemoryToggle) {
+        updatePluginSettings({ usePublicMemoryProviderReaders: !!publicMemoryToggle.checked });
+        try { clearMemoryPreflight(currentCharacterGuard()); } catch {}
+        showChooser();
         return;
     }
     const readOnlyToggle = event.target.closest?.('[data-rmt-readonly-toggle]');
     if (readOnlyToggle) {
-        if (readOnlyToggle.checked) return;
-        void requestArchiveEditMode(activeArchiveSnapshot, readOnlyToggle);
+        setArchiveReadOnly(!!readOnlyToggle.checked);
         return;
     }
 
     const actionEl = event.target.closest?.('[data-rmt-action]');
     const action = actionEl?.dataset?.rmtAction;
     if (!action) return;
-    if (activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'draw-heart-strip', 'clear-heart-strip', 'generate-all-adv', 'repair-failed-adv', 'room-life-refresh', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins'].includes(action)) {
-        globalThis.toastr?.info?.('当前是只读档案浏览：不会切换聊天，也不会修改或重新生成旧档案内容。', '心跳回忆');
-        return;
+    if (activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'draw-heart-strip', 'clear-heart-strip', 'generate-all-adv', 'repair-failed-adv', 'room-life-refresh', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins', 'refresh-ending-confessions'].includes(action)) {
+        if (!requireWritableArchiveAction()) return;
     }
     if (action === 'back') return navigateBack();
     if (action === 'close') {
@@ -7808,6 +8052,8 @@ function handleOverlayClick(event) {
         if (!activeMode || !confirmModeRegeneration(activeMode)) return;
         return generateMode(activeMode, { background: false });
     }
+    if (action === 'refresh-ending-confessions') return void refreshEndingConfessionReplays();
+    if (action === 'refresh-image-provider') return refreshImageGenerationUi();
     if (action === 'album-prev') return albumPage(-1);
     if (action === 'album-next') return albumPage(1);
     if (action === 'show-hint') return showAlbumHint();
@@ -8030,7 +8276,7 @@ function mountSettings() {
           </div>
           <label class="checkbox_label rmt-settings-check"><input data-rmt-room-life-auto type="checkbox"> 每天首次打开房间时允许一次“今日生活”自动请求</label>
           <div class="rmt-api-note" data-rmt-api-status></div>
-          <div class="rmt-api-note">模型刷新只调用 SillyTavern 本地后端状态接口；插件保存 Connection Profile / Secret ID 引用，不保存 API Key 明文。</div>
+          <div class="rmt-api-note">模型刷新只调用 SillyTavern 本地后端状态接口；插件保存 Connection Profile / Secret ID 引用，不保存 API Key 明文。若酒馆当前自定义 Chat Completion 配置包含 custom headers，刷新模型时会按 SillyTavern 原生方式把它们提交给同源后端处理，不会写入心跳回忆缓存或 Prompt。</div>
         </div>
         <div class="rmt-settings-archive-actions">
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
@@ -8281,6 +8527,11 @@ export function destroyMemoryTheater() {
             const liveScope = cacheScopeFromContext(liveContext);
             const liveCache = runtimeSessionCache.get(liveScope);
             if (liveCache && typeof liveCache === 'object' && Object.values(MODE).some(mode => liveCache?.[mode]?.kind === mode)) {
+                let rawChars = 0;
+                try { rawChars = JSON.stringify(liveCache).length; } catch {}
+                if (rawChars > 2_000_000) {
+                    console.warn('[HeartbeatMemories] preserving a large raw theater-cache fallback during extension shutdown', { chars: rawChars });
+                }
                 liveContext.chatMetadata[CACHE_KEY] = liveCache;
                 liveContext.saveMetadataDebounced?.();
             }
@@ -8326,6 +8577,8 @@ export function destroyMemoryTheater() {
         busy = false;
         activeMode = null;
         activeSession = null;
+        activeArchiveSnapshot = null;
+        activeArchiveReadOnly = true;
         console.log('[HeartbeatMemories] destroyed');
     } catch (error) {
         console.warn('[HeartbeatMemories] destroy failed', error);
