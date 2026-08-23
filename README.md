@@ -1,5 +1,14 @@
-# 心跳回忆 0.8.10 r27
+# 心跳回忆 0.8.10 r28
 
+
+
+## r28：生成时降低网络占用
+
+- 模型请求进行中不再反复把整个剧场缓存写回 chat metadata；手机 App、Drama Voice/Scenario、ADV 等局部成功会先保存在同一聊天的 runtime cache，等 provider 请求队列空闲后再合并 gzip 并持久化一次。
+- 支持 `CompressionStream` 的现代浏览器不再执行“先保存未压缩大缓存 → 再保存压缩缓存”的双写；只有不支持本地 gzip 的旧浏览器才保留未压缩 fallback。
+- provider 并发上限仍为 2，r27 的未来/春/夏/秋/冬独立排队、Voice/Scenario 分段与局部成功保存逻辑不变。
+- 这项优化只改变派生缓存的持久化时机，不改变正式档案、证据锚点、跨聊天/revision fence；如果页面在生成尚未结束时被强制关闭，尚未完成 idle flush 的最新派生片段可能只存在于本次运行内存中。
+- “未来 / 后日谈”是单段 Voice，不再错误显示 `1/2`。
 
 ## r27：春夏秋冬可同时排队 / 单季 Voice 与 Scenario 再拆分
 

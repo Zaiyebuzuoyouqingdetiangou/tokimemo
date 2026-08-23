@@ -1,3 +1,10 @@
+## 0.8.10 network-idle-cache-r28
+
+- **生成期间不再反复上传整份剧场缓存**：手机逐 App、HEART Voice/Scenario、ADV 等局部结果仍即时写入当前 runtime cache，但 gzip/chat metadata 持久化会在 provider 请求仍在执行或排队时继续合并等待，等网络请求空闲后再一次写回，减少家庭上行带宽尖峰和 bufferbloat。
+- **移除现代浏览器的未压缩缓存双写**：支持 `CompressionStream` 时不再先把完整未压缩 theater cache 塞入 metadata 再紧接着写压缩版；只在无法本地 gzip 的浏览器保留旧 fallback。
+- **不降低数据隔离**：延迟持久化仍经过原有 chat scope、archiveRevision 与 current archive 校验；切聊天/改档案后的迟到压缩结果不会写回错误窗口。Provider 并发仍保持最多 2。
+- **修正未来/后日谈假 `1/2`**：未来只有 Voice Drama，不存在 Scenario 半段；未生成时显示“未生成”，成功后直接显示“已生成”。
+
 ## 0.8.10 concurrent-drama-r27
 
 - **修复五季按钮仍共用同一 HEART 锁**：未来/后日谈、春、夏、秋、冬改用独立 `heart-season:<scope>:<season>` 逻辑任务键，可以同时点击。最多 5 个用户逻辑任务可排队，真正发往 Connection Manager 的请求仍最多 2 个同时执行，避免重新引入 r23 的 429/断连问题。
