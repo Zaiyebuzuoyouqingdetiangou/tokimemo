@@ -1,0 +1,41 @@
+心跳回忆有限个人使用许可证
+Version 1.1 — 2026
+
+Copyright © 2026 Toto / Zaiyebuzuoyouqingdetiangou. All rights reserved.
+
+本软件的源代码公开可见，但本软件不是开源软件（Source Available — Not Open Source）。除本许可证明确授予的权利外，作者保留全部权利。
+
+一、允许
+1. 下载并安装未经修改的“心跳回忆”；
+2. 在 SillyTavern 中用于个人、非商业用途；
+3. 为同一使用者的个人安装、备份或设备迁移保留未经修改的副本。
+
+二、未经作者事先书面许可，禁止
+1. 修改、改编、翻译、反编译、拆分或制作衍生版本；
+2. 提取、复制或移植全部或部分源代码、Prompt、规则、母本、数据结构、UI 实现、素材或实现逻辑用于其他项目；
+3. 转载、重新打包、重新发布、提供镜像下载、转售或以其他方式向第三方分发；
+4. 将全部或部分内容整合到其他插件、软件、服务、模型提示词库、数据集或商业产品；
+5. 将本软件用于收费服务、商业服务、广告、转售或其他营利活动；
+6. 删除、隐藏或修改作者署名、版权声明或许可证说明；
+7. 使用“心跳回忆”“Tokimemo”名称、标识或近似名称使他人误认为衍生项目获得作者认可；
+8. 将本项目的 GitHub／仓库链接、源代码、源码压缩包、Prompt、规则、母本、数据结构、UI 实现、素材或实现逻辑提交、上传、粘贴、转发或以其他方式提供给生成式人工智能、代码生成／分析模型、AI Agent 或类似服务，用于复刻、重做、改编、生成替代版或初始版本、提取实现逻辑、制作衍生项目或继续开发；
+9. 通过“先让 AI 根据仓库链接或项目表现生成初始版本，再在后续开发阶段导入本项目源码、源码压缩包、Prompt、规则、母本或实现逻辑”等方式规避前项限制。无论上述内容在项目初始阶段还是后续开发阶段被使用，均不因此取得修改、衍生或移植授权；
+10. 以评价本项目难用、难看、需要重做或类似理由，将本项目内容作为 AI 或第三方仿制、替代、移植或派生实现的输入或参照。对本项目进行批评、评论或提出改进意见本身不受本条限制。
+
+三、公开仓库与平台功能
+公开查看、下载、通过 Git clone / ZIP / SillyTavern 第三方扩展安装等代码托管或软件平台技术功能取得副本，不构成对修改、再分发、整合、二次开发、AI 使用或商业使用的授权。任何超出第一条范围的使用均须取得作者书面许可。
+
+四、第三方组件与服务
+本许可证仅适用于作者拥有权利的原创内容。SillyTavern、第三方 API、记忆插件、外部服务以及其他第三方名称、软件、素材和知识产权仍分别受其自身许可证、服务条款及权利约束。本项目不主张对第三方内容的所有权。
+
+五、终止
+违反本许可证时，所授予的有限使用权自动终止。终止后应停止使用并删除未经许可制作或分发的副本，但法律要求保留的情形除外。
+
+六、免责声明
+本软件按“现状”提供，不作任何明示或默示保证。作者不对因安装、使用、兼容性问题、第三方服务、数据丢失或其他原因造成的损失承担责任，但法律另有强制规定的除外。
+
+七、其他授权
+本许可证未明确授予的权利均由作者保留。任何额外使用、合作、商业授权或二次开发授权均须事先取得作者书面许可。
+
+English summary (the Chinese terms above control in case of inconsistency):
+Heartbeat Memories / Tokimemo is source-available but not open-source. Personal, non-commercial installation and use of unmodified copies are permitted. Modification, derivative works, code/prompt/UI/data-structure extraction, redistribution, repackaging, integration into other projects, commercial use, and supplying the repository link or protected project materials to generative-AI/code-generation systems for imitation, replacement, derivative development, or continued development are prohibited without prior written permission.
