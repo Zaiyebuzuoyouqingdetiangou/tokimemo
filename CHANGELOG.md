@@ -1,3 +1,9 @@
+## 0.8.10 ending-album-image-r22
+
+- **ENDING 改为分段生成**：先单独判断当前关系与 5～7 条路线目录，再单独扫描“已发生告白回看”，最后只对 `available=true` 的路线逐条生成长篇终章 / confession / 后日谈；不再把关系判定、告白回看、所有长结局一次塞进同一个 JSON 请求。每条已解锁路线失败会在短 prompt 下最多重试 1 次；仍失败则整次 ENDING 不覆盖旧缓存。告白扫描单独失败时保留旧告白回看缓存（没有旧缓存则为空），不再拖垮全部 ENDING。
+- **共同回忆回归“一起翻相册”**：回忆相簿 `comments` 明确改为“现在的角色对着现在的用户，看过去这张 CG 时说的话”，禁止写成 ADV 式过去内心独白或从头复述事件；界面增加 `NOW · 一起翻相册 / 现在的角色 → 现在的你` 标识。旧相簿缓存仍可读，重新生成相簿后会获得新语义内容。
+- **Image Generation 检测与手动兜底**：自动检测从只认 `/imagine` 扩展为 `/imagine`、`/sd`、`/img` callback；设置中新增“手动确认 Image Generation 已启用”。只有用户显式勾选后、自动检测仍失败时，才会通过 SillyTavern 公开 `executeSlashCommandsWithOptions` 调用 `/sd quiet=true`。进入 STscript 的视觉 prompt 会去掉宏花括号、折叠换行并转义管道，避免模型生成文本被解释成额外脚本。
+
 ## 0.8.10 archive-room-r21
 
 - 档案室角色分组不再只依赖 avatar：新写入/重新扫描的索引会记录当前角色卡内容指纹（avatar + 名称 + description/personality/scenario/first_mes/mes_example），优先据此区分 `char` 与同头像/同名的 `char 2.0`；旧索引没有指纹时退回 avatar + 角色名并可手动拆分。

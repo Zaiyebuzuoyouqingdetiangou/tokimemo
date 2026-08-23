@@ -1,7 +1,7 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.10-archive-room-r21",
+  "js": "index.js?heartbeat=0.8.10-ending-album-image-r22",
   "author": "Toto",
   "version": "0.8.10",
   "auto_update": false,
@@ -10,5 +10,5 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "独立的 SillyTavern 心跳回忆插件：每聊天窗口独立档案、五入口并行、增量档案更新、跨档案安全只读、ENDING/告白回看/HEART/Voice Drama/日常一格、CG 实图；记忆/摘要可显式导入记忆世界书；结构化生成最高 30,000 tokens；档案室支持角色卡版本分组、自动分类/手动移动、选择 SillyTavern char 新建组与安全删除/移除索引；默认禁用派生文本“老子”；房间按空间类型使用不同代码布局与陈设；Source Available，非开源。"
+  "description": "独立的 SillyTavern 心跳回忆插件：每聊天窗口独立档案、五入口并行、增量档案更新、跨档案安全只读、ENDING/告白回看/HEART/Voice Drama/日常一格、CG 实图；记忆/摘要可显式导入记忆世界书；结构化生成最高 30,000 tokens；档案室支持角色卡版本分组、自动分类/手动移动、选择 SillyTavern char 新建组与安全删除/移除索引；默认禁用派生文本“老子”；房间按空间类型使用不同代码布局与陈设；ENDING 分段生成；共同回忆改为当下陪看相册；生图支持 /sd 兼容检测与手动兜底；Source Available，非开源。"
 }

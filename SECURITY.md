@@ -203,3 +203,13 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - 运行中任务 origin/chat scope 必须能够区分共享 avatar 的不同角色卡，防止并发任务、延迟响应或 deferred commit 在角色版本之间串写。
 - “生成禁用词”只适用于模型新生成的派生文本。不得改写聊天正文、正式 archive memory、世界书/外部记忆原文或任何 evidence anchor；命中禁用词时结果必须失败关闭、不得保存、不得自动重试。
 - 房间视觉差异只能把归一化的 `spaceType/label` 映射到代码内固定 scene class 与布局变体；模型不得返回 CSS、HTML、URL、坐标脚本或任意样式值。房间布局变化不得扩大证据读取范围或触发额外模型/网络请求。
+
+### 0.8.10 ENDING / album / Image Generation r22 additional invariants
+
+- ENDING 分段只缩小每个模型请求的职责与输入范围，不降低证据边界：关系阶段和每条路线目录仍必须通过完整当前档案的 `sourceMemoryIds + sourceMemoryAnchor` 本地校验；未来路线正文仍是派生模拟，不写回 `MEMORY_KEY`。
+- 分段 ENDING 的任一可用路线连续失败时，本轮不得覆盖旧 ENDING session；“已发生告白回看”分段失败可以保留上一份已归一化缓存或为空，但不得把失败/半成品当成新告白证据。
+- 回忆相簿 `comments` 只是当下角色陪当下用户观看既有 CG 的派生对白；它不能创建新的过去事实，CG 的既往事件仍由相簿条目的现有记忆引用与锚点约束。
+- CG 实图自动检测只允许检查 SillyTavern 已暴露的 `/imagine`、`/sd`、`/img` Slash Command callback；不得遍历任意第三方扩展对象或调用私有 provider API。
+- 自动检测到 callback 时继续直接调用 callback，不把视觉 prompt 交给通用 STscript 解析器。只有用户显式打开 `imageGenerationManualEnabled` 且 callback 自动检测失败时，才允许使用 SillyTavern 公开 `executeSlashCommandsWithOptions('/sd quiet=true ...')` 兜底。
+- 手动 `/sd` 兜底的视觉 prompt 在进入 STscript 前必须再次中和脚本语法：删除 `{}` 宏花括号、折叠换行、转义反斜杠和管道；不得让模型生成的视觉文字变成额外 Slash Command、宏或管道阶段。
+- r12 的其它 CG 边界继续成立：生图只能由用户显式点击触发；只发送单张 CG 的有界纯视觉描述；不发送聊天/档案/世界书/记忆原文或凭据；返回路径仍必须通过同源图片 URL 归一化；写回仍受 `characterKey + chatId + archiveRevision` 与 lifecycle epoch 保护。

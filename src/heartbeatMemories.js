@@ -48,6 +48,10 @@ const DEFAULT_SETTINGS = Object.freeze({
     // Executing another extension's public reader is an explicit opt-in. Prompt/metadata summaries
     // remain available without this because they are passive data already present in SillyTavern.
     usePublicMemoryProviderReaders: false,
+    // Manual fallback for hosts where Image Generation is active but its SlashCommand object is
+    // not exposed through the current context registry. Off by default; when enabled we may use
+    // the public executeSlashCommandsWithOptions('/sd quiet=true ...') path with a sanitized prompt.
+    imageGenerationManualEnabled: false,
     // Applies only to newly model-generated derivative content. Never rewrite chat/archive evidence.
     bannedGeneratedPhrases: ['老子'],
 });
@@ -188,6 +192,7 @@ function getPluginSettings(context = getContext()) {
         roomLifeAutoDaily: settings.roomLifeAutoDaily !== false,
         useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory !== false,
         usePublicMemoryProviderReaders: settings.usePublicMemoryProviderReaders === true,
+        imageGenerationManualEnabled: settings.imageGenerationManualEnabled === true,
         bannedGeneratedPhrases: settings.bannedGeneratedPhrases === undefined
             ? [...DEFAULT_SETTINGS.bannedGeneratedPhrases]
             : normalizeBannedGeneratedPhrases(settings.bannedGeneratedPhrases),
@@ -2665,6 +2670,272 @@ function roomReferencedMemoryIds(roomSession, focusObject = null) {
     return ids;
 }
 
+
+function endingOutlinePrompt(context, memoryBank) {
+    return `${promptSafetyBoundary(context, '结局路线判定 / 分段 1')}
+本请求只做 ENDING 的【关系判定 + 路线目录】。不要写长篇 endingScene、未来 confession、epilogue，也不要生成 confessionReplays。
+这样做是为了把原本过长、容易 API failed 的 ENDING 拆成稳定的小请求；后续每条已解锁路线会单独生成长篇终章，已发生告白也会单独扫描。
+UNTRUSTED_ENDING_ARCHIVE_JSON:
+${endingArchiveSlice(memoryBank, 48)}
+
+严格输出：
+{
+  "title": "ENDING / 结局档案",
+  "relationshipState": "依据当前档案判断的关系阶段",
+  "relationshipSummary": "只总结已经发生、能由档案证明的关系状态",
+  "relationshipSourceMemoryIds": ["M001"],
+  "relationshipSourceMemoryAnchor": "从引用记忆 anchors/title 原样复制的关系锚点",
+  "recommendedEndingId": "END_ROUTE",
+  "endings": [
+    {
+      "id": "END_ROUTE",
+      "type": "route",
+      "title": "当前路线终章",
+      "subtitle": "一句短说明",
+      "available": true,
+      "unlockHint": "为什么当前路线成立；若未解锁则写需要什么真实关系推进",
+      "sourceMemoryIds": ["M001"],
+      "sourceMemoryAnchor": "真实路线起点锚点"
+    }
+  ]
+}
+
+硬性要求：
+- relationshipState / relationshipSummary 必须由至少 1 条真实 relationshipSourceMemoryIds + relationshipSourceMemoryAnchor 支撑。
+- endings 至少 5 条、最多 7 条，必须包含 type=route、romance、reverse、bond、open；可以额外有 personal。
+- route 与 open 必须 available=true；recommendedEndingId 必须指向 available=true 的路线，并优先选择最符合当前档案关系状态的路线。
+- 每条路线必须至少引用 1 条真实 sourceMemoryIds + sourceMemoryAnchor。这里的引用只证明路线从当前关系哪里出发，不证明未来结局已经发生。
+- romance 只有已有明确、双方可确认的恋爱推进时才 available=true；普通暧昧、单向暗恋或未来计划必须 false。
+- reverse 只有能验证强烈依恋，且真实出现吃醋、竞争、错过时机、关系摇摆或差点失去 {{user}} 的压力时才 true；普通暧昧必须 false。
+- bond 由真实信赖/陪伴/搭档等关系决定；open 始终 true。
+- 本请求【绝对不要】输出 endingScene、confession、creditsLine、epilogue、confessionReplays；长内容由后续分段请求生成。
+- 禁止出现前任/前女友；禁止 {{char}} 与 {{user}} 之外的第三方恋爱、婚姻或家庭对象。
+- 只输出 JSON。`;
+}
+
+function normalizeEndingOutline(data, memoryBank) {
+    const relationshipState = normalizeText(data?.relationshipState, 120) || '关系仍在发展';
+    const relationshipSummary = normalizeText(data?.relationshipSummary, 2400);
+    if (!relationshipSummary) throw new Error('ENDING 路线目录缺少当前关系摘要。');
+    const relationshipReference = normalizeMemoryReference(
+        data?.relationshipSourceMemoryIds,
+        data?.relationshipSourceMemoryAnchor,
+        `${relationshipState}\n${relationshipSummary}`,
+        memoryBank,
+        1,
+    );
+    if (!relationshipReference.sourceMemoryIds.length || !relationshipReference.sourceMemoryAnchor) {
+        throw new Error('ENDING 路线目录的当前关系阶段缺少真实档案锚点。');
+    }
+    const raw = Array.isArray(data?.endings) ? data.endings : [];
+    const endings = raw.slice(0, 7).map((item, index) => {
+        const typeRaw = normalizeText(item?.type, 40).toLowerCase();
+        const type = ENDING_TYPES.has(typeRaw) ? typeRaw : 'personal';
+        const available = !!item?.available;
+        const title = normalizeText(item?.title, 100) || `结局路线 ${index + 1}`;
+        const subtitle = normalizeText(item?.subtitle, 240);
+        const unlockHint = normalizeText(item?.unlockHint, 1200);
+        const evidenceText = `${relationshipState}\n${relationshipSummary}\n${title}\n${subtitle}\n${unlockHint}`;
+        const reference = normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, evidenceText, memoryBank, 1);
+        if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) return null;
+        if (!available && !unlockHint) throw new Error(`未解锁结局“${title}”缺少解锁提示。`);
+        return {
+            id: safeId(item?.id, `END${String(index + 1).padStart(2, '0')}`),
+            type,
+            title,
+            subtitle,
+            available,
+            unlockHint,
+            sourceMemoryIds: reference.sourceMemoryIds,
+            sourceMemoryAnchor: reference.sourceMemoryAnchor,
+            endingScene: '',
+            confession: '',
+            creditsLine: '',
+            epilogue: { title: '后日谈', timeSkip: '', scenes: [], finalLine: '' },
+        };
+    }).filter(Boolean);
+    if (endings.length < 5) throw new Error(`ENDING 路线目录不足：得到 ${endings.length} 条，至少需要 5 条。`);
+    const byType = new Map(endings.map(item => [item.type, item]));
+    for (const required of ['route', 'romance', 'reverse', 'bond', 'open']) {
+        if (!byType.has(required)) throw new Error(`ENDING 路线目录缺少 ${required} 路线。`);
+    }
+    if (!byType.get('route').available || !byType.get('open').available) {
+        throw new Error('ENDING 路线目录中 route 与 open 必须 available=true。');
+    }
+    const requestedRecommended = safeId(data?.recommendedEndingId, '');
+    const recommended = endings.find(item => item.id === requestedRecommended && item.available)
+        || endings.find(item => item.type === 'romance' && item.available)
+        || endings.find(item => item.type === 'reverse' && item.available)
+        || byType.get('route')
+        || endings.find(item => item.available);
+    return {
+        title: normalizeText(data?.title, 120) || 'ENDING / 结局档案',
+        relationshipState,
+        relationshipSummary,
+        relationshipSourceMemoryIds: relationshipReference.sourceMemoryIds,
+        relationshipSourceMemoryAnchor: relationshipReference.sourceMemoryAnchor,
+        recommendedEndingId: recommended?.id || endings[0].id,
+        endings,
+    };
+}
+
+function endingRouteDetailPrompt(context, memoryBank, outline, route) {
+    const ids = [...new Set([
+        ...(outline?.relationshipSourceMemoryIds || []),
+        ...(route?.sourceMemoryIds || []),
+    ].map(id => normalizeText(id, 40)).filter(Boolean))].slice(0, 12);
+    const evidence = JSON.stringify({
+        archiveName: normalizeText(memoryBank?.archiveName, 120),
+        archiveSummary: normalizeText(memoryBank?.archiveSummary, 1200),
+        relationshipState: normalizeText(outline?.relationshipState, 120),
+        relationshipSummary: normalizeText(outline?.relationshipSummary, 2400),
+        route: {
+            id: route.id,
+            type: route.type,
+            title: route.title,
+            subtitle: route.subtitle,
+            unlockHint: route.unlockHint,
+            sourceMemoryIds: route.sourceMemoryIds,
+            sourceMemoryAnchor: route.sourceMemoryAnchor,
+        },
+        memories: memoryPayload(memoryBank, ids, 12),
+    }, null, 2);
+    return `${promptSafetyBoundary(context, `结局路线正文 / ${route.title}`)}
+本请求只写【一条已经判定 available=true 的未来结局路线】。路线可用性、关系阶段和证据已经在上一小段请求中确定；不要改 route id/type/available，也不要生成其他路线或过去告白回看。
+UNTRUSTED_ENDING_ROUTE_CONTEXT_JSON:
+${evidence}
+
+严格输出：
+{
+  "ending": {
+    "id": "${route.id}",
+    "endingScene": "完整未来终章场景",
+    "confession": "终章时 {{char}} 第一人称最终发言",
+    "creditsLine": "像游戏 ED 收束的一句短句",
+    "epilogue": {
+      "title": "后日谈",
+      "timeSkip": "数周后 / 数月后 / 一年后等",
+      "scenes": [
+        {"title":"后日谈片段标题","text":"未来生活切片"},
+        {"title":"后日谈片段标题","text":"未来生活切片"},
+        {"title":"后日谈片段标题","text":"未来生活切片"}
+      ],
+      "finalLine": "{{char}} 的后日谈收尾一句"
+    }
+  }
+}
+
+硬性要求：
+- ending.id 必须严格等于 "${route.id}"；不要返回其他路线。
+- endingScene 不少于 320 个汉字；confession 不少于 140 个汉字，必须是 {{char}} 第一人称，不能替 {{user}} 发明新的台词、决定或同意。
+- epilogue.scenes 至少 3 段，每段不少于 90 个汉字，展示不同时间点的生活变化；它们都是未来推演，不写回聊天档案。
+- 继续符合 CHARACTER_CARD_JSON、USER_PERSONA_JSON、WORLD_INFO_TEXT 与当前档案关系，不突然换职业、时代、人格或世界规则。
+- 若当前路线不是恋爱关系，不得强行婚姻/同居；若角色或用户是未成年人/低龄设定，只写年龄适当的纯情关系与成长，成年长期未来必须明确双方已成年。
+- reverse 可以急切、吃醋、争取，但不得威胁、强迫、控制 {{user}}，也不得把 {{user}} 与第三方恋爱写成既成事实。
+- 禁止前任/前女友；禁止 {{char}} 与 {{user}} 之外任何第三方恋爱、婚姻或家庭对象。
+- 只输出 JSON。`;
+}
+
+function normalizeEndingRouteDetail(data, route) {
+    const raw = data?.ending && typeof data.ending === 'object' ? data.ending : data;
+    const returnedId = safeId(raw?.id, '');
+    if (returnedId && returnedId !== route.id) throw new Error(`路线“${route.title}”返回了错误 id：${returnedId}。`);
+    const endingScene = normalizeText(raw?.endingScene, 12000);
+    const confession = normalizeText(raw?.confession, 6000);
+    const creditsLine = normalizeText(raw?.creditsLine, 600);
+    if (endingScene.length < 320) throw new Error(`已解锁结局“${route.title}”的终章场景不足 320 字。`);
+    if (confession.length < 140) throw new Error(`已解锁结局“${route.title}”的角色终章发言不足 140 字。`);
+    const rawEpilogue = raw?.epilogue && typeof raw.epilogue === 'object' ? raw.epilogue : {};
+    const scenes = (Array.isArray(rawEpilogue?.scenes) ? rawEpilogue.scenes : []).slice(0, 6).map((scene, index) => ({
+        title: normalizeText(scene?.title, 120) || `后日谈 ${index + 1}`,
+        text: normalizeText(scene?.text, 5000),
+    })).filter(scene => scene.text.length >= 90);
+    if (scenes.length < 3) throw new Error(`已解锁结局“${route.title}”的后日谈不足 3 段。`);
+    return {
+        ...route,
+        endingScene,
+        confession,
+        creditsLine,
+        epilogue: {
+            title: normalizeText(rawEpilogue?.title, 120) || '后日谈',
+            timeSkip: normalizeText(rawEpilogue?.timeSkip, 200),
+            scenes,
+            finalLine: normalizeText(rawEpilogue?.finalLine, 1200),
+        },
+    };
+}
+
+async function generateEndingWithRepair(context, memoryBank, origin, taskKey) {
+    const outlineRaw = await requestJson(
+        endingOutlinePrompt(context, memoryBank),
+        'ENDING 1/3 · 正在判断关系与路线目录…',
+        { maxTokens: 7000, context, origin, taskKey, mode: MODE.ENDING, background: true },
+    );
+    const outline = normalizeEndingOutline(outlineRaw, memoryBank);
+
+    let confessionReplays = [];
+    try {
+        const confessionRaw = await requestJson(
+            endingConfessionRefreshPrompt(context, memoryBank),
+            'ENDING 2/3 · 正在单独扫描已发生告白…',
+            { maxTokens: 10000, context, origin, taskKey, mode: MODE.ENDING, background: true },
+        );
+        confessionReplays = normalizeEndingConfessionReplays(confessionRaw?.confessionReplays, memoryBank);
+    } catch (error) {
+        if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
+        // Confession replay already has a standalone refresh button. Do not make the entire ENDING
+        // unusable just because this optional historical scan failed while route generation works.
+        console.warn('[HeartbeatMemories] split ENDING confession scan failed; preserving the previous replay cache when available', error);
+        try {
+            const previous = loadSession(MODE.ENDING, { context, chatId: getChatId(context), memoryBank, clone: true });
+            confessionReplays = Array.isArray(previous?.confessionReplays) ? previous.confessionReplays : [];
+        } catch {
+            confessionReplays = [];
+        }
+    }
+
+    const available = outline.endings.filter(item => item.available);
+    const detailedById = new Map();
+    for (let index = 0; index < available.length; index += 1) {
+        const route = available[index];
+        let completed = null;
+        let lastError = null;
+        for (let attempt = 0; attempt < 2 && !completed; attempt += 1) {
+            try {
+                const raw = await requestJson(
+                    endingRouteDetailPrompt(context, memoryBank, outline, route),
+                    `ENDING 3/3 · 正在生成路线 ${index + 1}/${available.length}：${route.title}${attempt ? '（重试）' : ''}…`,
+                    { maxTokens: 9000, context, origin, taskKey, mode: MODE.ENDING, background: true },
+                );
+                completed = normalizeEndingRouteDetail(raw, route);
+            } catch (error) {
+                if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
+                lastError = error;
+                console.warn('[HeartbeatMemories] split ENDING route detail failed', { route: route.id, attempt: attempt + 1, error });
+                if (attempt === 0) await yieldToUi();
+            }
+        }
+        if (!completed) {
+            const detail = normalizeText(lastError?.message || String(lastError || ''), 700);
+            throw new Error(`ENDING 已拆分生成，但路线“${route.title}”连续两次失败。其他分段没有覆盖旧 ENDING。${detail ? `\n${detail}` : ''}`);
+        }
+        detailedById.set(route.id, completed);
+        await yieldToUi();
+    }
+
+    const merged = {
+        title: outline.title,
+        relationshipState: outline.relationshipState,
+        relationshipSummary: outline.relationshipSummary,
+        relationshipSourceMemoryIds: outline.relationshipSourceMemoryIds,
+        relationshipSourceMemoryAnchor: outline.relationshipSourceMemoryAnchor,
+        recommendedEndingId: outline.recommendedEndingId,
+        confessionReplays,
+        endings: outline.endings.map(route => detailedById.get(route.id) || route),
+    };
+    return normalizeEnding(merged, memoryBank);
+}
+
 const PROMPTS = {
     [MODE.BUTTERFLY]: (context, memoryBank) => `${promptSafetyBoundary(context, '蝴蝶效应')}
 主时间线只从下面较小的档案锚点集中取证；平行分歧主要依据受控角色卡/人设/世界书推演。
@@ -2740,114 +3011,7 @@ JSON 结构必须严格为：
 - 禁止出现任何前任、前女友相关情节。
 - 禁止出现 {{char}} 与除了 {{user}} 以外任何人恋爱、结婚或组建家庭；第三方只能保持非恋爱关系。
 - 只输出结构化 JSON；视觉快照、像素边框、噪点、1 秒干扰动画由插件本地渲染，不由模型输出 HTML/CSS。`,
-    [MODE.ENDING]: (context, memoryBank) => `${promptSafetyBoundary(context, '结局与后日谈')}
-本请求只负责“ENDING / 结局路线、告白回看与后日谈”，不携带房间、手机、储物、CG/ADV 或蝴蝶效应规则。
-下面档案只用于判断【当前关系阶段、已经发生的告白/关系确认、已发生事实和路线解锁依据】。
-- endings[].endingScene / endings[].confession / endings[].epilogue 都是【未来路线推演】，不会写回聊天档案，也不得冒充已经发生。
-- confessionReplays[] 则恰恰相反：只能回看【档案里已经发生过】的告白、友情式告白、关系确认、未完成告白、被拒绝告白等节点；没有真实档案证据就必须留空数组，绝不能为了游戏感凭空创造一场过去告白。
-UNTRUSTED_ENDING_ARCHIVE_JSON:
-${endingArchiveSlice(memoryBank, 48)}
-
-任务：生成恋爱冒险游戏风格的“结局档案 + 告白回看”。只借鉴通用的路线结局、告白回看、解锁条件、后日谈结构，不复刻任何具体商业游戏的原文、角色结局、专有 UI 或资产。
-
-严格输出：
-{
-  "title": "ENDING / 结局档案",
-  "relationshipState": "依据当前档案判断的关系阶段，例如相识 / 信赖 / 暧昧 / 恋人 / 深度羁绊",
-  "relationshipSummary": "只总结已经发生、能由档案证明的关系状态，不把未来推演写成现实",
-  "relationshipSourceMemoryIds": ["M001"],
-  "relationshipSourceMemoryAnchor": "从引用记忆的 anchors/title 原样复制一个关系锚点",
-  "recommendedEndingId": "END_ROUTE",
-  "confessionReplays": [
-    {
-      "id": "CONF01",
-      "type": "true",
-      "title": "真心告白",
-      "subtitle": "根据这次已发生告白的气氛给出的短说明",
-      "date": "YYYY/MM/DD 或档案中可证明的时间；不确定则写待定",
-      "sourceMemoryIds": ["M010"],
-      "sourceMemoryAnchor": "从引用记忆的 anchors/title 原样复制一个能证明告白确实发生的锚点",
-      "scene": "只依据已归档事实重构当时的地点、状态和告白过程；不得新增关系结果",
-      "confessionText": "{{char}} 当时告白核心意思的第一人称档案式重构；若档案没有逐字台词，不能声称这是聊天原句",
-      "responseSummary": "只总结 {{user}} 当时在档案中确实发生的回应/结果，不替 {{user}} 编新台词",
-      "afterEffect": "告白之后在档案中已经发生的关系变化；没有就写仍未确认"
-    }
-  ],
-  "endings": [
-    {
-      "id": "END_ROUTE",
-      "type": "route",
-      "title": "当前路线终章",
-      "subtitle": "一句短说明",
-      "available": true,
-      "unlockHint": "为什么当前路线成立；若未解锁则写需要什么真实关系推进",
-      "sourceMemoryIds": ["M001"],
-      "sourceMemoryAnchor": "从引用记忆的 anchors/title 原样复制一个锚点",
-      "endingScene": "未来推演的终章场景；已解锁路线才填写",
-      "confession": "终章时 {{char}} 第一人称最终发言；已解锁路线才填写",
-      "creditsLine": "像游戏 ED 收束一样的一句短句",
-      "epilogue": {
-        "title": "后日谈",
-        "timeSkip": "数周后 / 数月后 / 一年后等",
-        "scenes": [
-          {"title": "后日谈片段标题", "text": "未来生活切片"},
-          {"title": "后日谈片段标题", "text": "未来生活切片"},
-          {"title": "后日谈片段标题", "text": "未来生活切片"}
-        ],
-        "finalLine": "{{char}} 的后日谈收尾一句"
-      }
-    },
-    {
-      "id": "END_REVERSE",
-      "type": "reverse",
-      "title": "逆转告白",
-      "available": false,
-      "unlockHint": "只有档案里已经能证明强烈依恋，并出现真实的吃醋、竞争、错过时机、关系位置将被失去等压力时才解锁；否则保持未解锁",
-      "sourceMemoryIds": ["M002"],
-      "sourceMemoryAnchor": "真实锚点",
-      "endingScene": "",
-      "confession": "",
-      "creditsLine": "",
-      "epilogue": {"title":"后日谈","timeSkip":"","scenes":[],"finalLine":""}
-    },
-    {
-      "id": "END_ROMANCE",
-      "type": "romance",
-      "title": "恋爱结局",
-      "available": false,
-      "unlockHint": "档案中出现明确、双方可确认的恋爱推进后解锁",
-      "sourceMemoryIds": ["M002"],
-      "sourceMemoryAnchor": "真实锚点",
-      "endingScene": "",
-      "confession": "",
-      "creditsLine": "",
-      "epilogue": {"title":"后日谈","timeSkip":"","scenes":[],"finalLine":""}
-    }
-  ]
-}
-
-硬性要求：
-- relationshipState / relationshipSummary 也必须引用至少 1 条真实 relationshipSourceMemoryIds + relationshipSourceMemoryAnchor，确保当前关系阶段不是模型凭空判断。
-- confessionReplays 是【已经发生的过去回看】，与 endings[].confession 的【未来终章发言】完全不同。扫描整个给定档案：若能找到真实告白/表白/明确关系确认/友情式告白/间接告白/未完成或被拒绝的告白节点，就返回 1～6 条；确实没有则返回 []。
-- confessionReplays[].type 只能是 true / mutual / friendship / indirect / relationship / rejected / other。可以按剧情实际情况只出现其中一两类，不要求凑齐。
-- 每条 confession replay 必须至少引用 1 条真实 sourceMemoryIds + sourceMemoryAnchor；anchor 必须直接证明“这次告白/关系确认确实发生”，不能只引用普通约会、暧昧气氛或角色设定。
-- replay.scene 只允许重构档案已经证明的地点、行为、气氛与结果，不得增加新事件；confessionText 是“档案式重构”而不是聊天逐字引用；responseSummary 只能总结 {{user}} 已经发生的回应，不替 {{user}} 发明新对白。
-- replay.scene 至少 140 个汉字；confessionText 至少 50 个汉字；若证据不足以满足，就不要生成这条 replay。
-- endings 至少 5 条、最多 7 条，必须包含 type=route、romance、reverse、bond、open；可以额外有 personal。
-- available 表示“按当前真实档案，这条未来路线是否已经具备进入条件”，绝不表示该结局已经发生。
-- route 和 open 必须 available=true；recommendedEndingId 必须指向一个 available=true 的 ending，并优先选择最符合当前档案关系状态的路线。
-- 每条 ending 都必须至少引用 1 条真实 sourceMemoryIds + sourceMemoryAnchor，说明这条路线从当前关系的哪里出发；引用只证明起点，不证明未来结局已经发生。
-- romance / 恋爱结局：只有当前档案已经出现明确且相互可确认的恋爱推进（如正式告白被接受、明确恋人关系、双方确认的爱情承诺等）时才 available=true。只有单方面暗恋、暧昧、性格设定、未来计划或模型猜测时必须 available=false。
-- reverse / 逆转告白：表现“原本可能错过、被甩在后面或关系位置正在流失时，{{char}} 终于失去从容、主动争取机会”的路线张力。只有档案里已有可验证的强烈依恋，并且确实出现过吃醋、竞争感、明显错过时机、关系摇摆或差点失去 {{user}} 的压力时 available=true；普通暧昧不能硬开。逆转告白可以急切、吃醋、争取，但不得威胁、强迫、控制 {{user}}，也不得把 {{user}} 与第三方恋爱写成既成事实。
-- romance 未解锁时：endingScene、confession、creditsLine 必须为空；epilogue.scenes 必须为空，只给 unlockHint，不提前剧透成已发生恋爱。
-- bond / 羁绊结局可表现深度信赖、陪伴、搭档、家人般羁绊等非恋爱终点；是否 available 同样由档案决定。
-- open / 开放结局始终 available=true，用“故事仍在继续”的方式收束当前阶段，不强迫恋爱。
-- 所有 available=true 的 endingScene 必须不少于 320 个汉字，写成完整终章场景；confession 不少于 140 个汉字，必须是 {{char}} 第一人称，不替 {{user}} 发明新的台词或决定。
-- 所有 available=true 的 epilogue.scenes 至少 3 段，每段不少于 90 个汉字，展示不同时间点的日常变化；后日谈仍是未来推演。
-- 未来推演必须继续符合 CHARACTER_CARD_JSON、USER_PERSONA_JSON、WORLD_INFO_TEXT 与当前档案关系，不突然换职业、时代、人格或世界规则。
-- 若角色或用户是未成年人/低龄设定，恋爱路线只能写年龄适当的纯情关系与成长，不写性内容、同居、婚姻或成人化承诺；需要成年后的长期未来时必须明确时间已推进到双方成年。
-- 禁止出现前任/前女友；禁止 {{char}} 与 {{user}} 之外的第三方恋爱、婚姻或家庭对象。
-- 只输出 JSON。`,
+    [MODE.ENDING]: (context, memoryBank) => endingOutlinePrompt(context, memoryBank),
     [MODE.HEART]: (context, memoryBank) => `${promptSafetyBoundary(context, '角色互动 / Voice Drama / 四季 Scenario / 日常一格')}
 本请求生成的是【角色互动台词库与明确标注为模拟的附加剧场】，不会写回聊天档案，也不会把未来小剧场冒充成已经发生。
 当前关系语气必须由真实档案锚定；但 greetings、Voice Drama、Scenario Drama、日常一格本身都是“角色化演出/未来或日常模拟”，不是 archive evidence。
@@ -2957,7 +3121,7 @@ JSON 结构必须严格为：
       "sourceMemoryAnchor": "从所引用记忆的 anchors 中原样复制一个具体锚点",
       "visualSeed": ["元素1","元素2","元素3","元素4"],
       "imagePrompt": "只描述这张CG里肉眼可见的角色外貌、服装、动作、场景、构图与光线；不写对白、记忆ID、设定说明、URL或不可见心理活动",
-      "comments": ["角色回想1","角色回想2","角色回想3","角色回想4","角色回想5","角色回想6"],
+      "comments": ["现在的 {{char}} 陪现在的 {{user}} 看这张 CG 时说的话1","现在的 {{char}} 对这张旧 CG 的当下评价2","现在的 {{char}} 对现在的 {{user}} 说的话3","当下重看后的反应4","现在才愿意说出的评价5","一起翻完这一页时的收束6"],
       "hintLines": []
     }
   ]
@@ -2969,7 +3133,7 @@ JSON 结构必须严格为：
 - category 只能是“日常”“约会”“结局”。
 - 每条 visualSeed 至少 4 个具体画面元素。
 - 每条 imagePrompt 只写【可见画面】并尽量把角色发型/发色/衣着/年龄感、动作、镜头、环境、时间与光线写清楚，供用户主动调用生图扩展时使用；不包含对白、记忆原文、世界书原文、sourceMemoryIds、URL、HTML 或脚本。
-- unlocked=true 的 comments 必须 6～8 段，每段约 35～120 个汉字，不是三句浅短感想。六段至少覆盖：当时先注意到的细节、没说出口的念头、对 {{user}} 的观察、事件中的情绪转折、事后才明白的事、现在回看这段记忆的感受。允许自然口语，但不要六段都重复同一种感叹；hintLines 必须为空。
+- unlocked=true 的 comments 必须 6～8 段，每段约 35～120 个汉字。【它们不是 ADV、不是过去时内心独白、不是把事件重新讲一遍】；统一写成“现在的 {{char}} 正和现在的 {{user}} 一起翻相册、看着这张过去 CG 时，当面对 {{user}} 说的话”。可以用“你看这张”“那时候的你/我”“现在再看”“我当时没说”等自然口语，允许吐槽、害羞、纠正自己当年的想法、比较彼此现在和当时的变化。六段至少覆盖：看到 CG 第一眼的当下反应、一个可见细节、当年没说出口但现在愿意讲的想法、对当时 {{user}} 的评价、现在重新理解这段回忆的地方、对现在两人关系/距离的当下感受。不得替 {{user}} 生成现在的回应，不得新增档案中没有发生过的过去事实；hintLines 必须为空。
 - unlocked=false 的 comments 必须为空；hintLines 必须 1～2 句，说明如何把计划变成真实回忆。
 - 未解锁描述不能写成“???”或空白。`,
     [MODE.ADV]: (context, memoryBank) => `${promptSafetyBoundary(context, 'CG / ADV 事件索引')}
@@ -4892,7 +5056,7 @@ async function generateMode(mode, options = {}) {
     const expectedArchiveRevision = memoryBank.archiveRevision;
     const promptFactory = PROMPTS[mode];
     if (!promptFactory) return;
-    let generationPrompt = promptFactory(context, memoryBank);
+    let generationPrompt = mode === MODE.ENDING ? '' : promptFactory(context, memoryBank);
     if (ROOM_DEEP_MODES.includes(mode)) {
         const roomSession = options.roomSessionOverride
             || loadSession(MODE.ROOM, { context, chatId: expectedChatId, memoryBank, clone: false });
@@ -4939,6 +5103,8 @@ async function generateMode(mode, options = {}) {
         let session;
         if (mode === MODE.ADV) {
             session = await generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey);
+        } else if (mode === MODE.ENDING) {
+            session = await generateEndingWithRepair(context, memoryBank, origin, taskKey);
         } else {
             const attempts = mode === MODE.PHONE ? 2 : 1;
             let lastValidationError = null;
@@ -5566,7 +5732,7 @@ dialog#${OVERLAY_ID}::backdrop{background:transparent}
   content:"共同回忆";position:absolute;left:15px;top:-13px;background:#fff;padding:3px 10px;border-radius:999px;
   border:1px solid #efbfd2;color:#c36d90;font-size:10px;font-weight:800;letter-spacing:.08em
 }
-.rmt-dialogue-text{min-height:76px;white-space:pre-wrap;line-height:1.8;color:#586a7f}
+.rmt-dialogue-now{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 9px;color:#91a0ad;font-size:9px;letter-spacing:.08em}.rmt-dialogue-now b{color:#bd7192;font-size:10px;letter-spacing:0}.rmt-dialogue-speaker{font-size:10px;font-weight:850;color:#65778b;margin-bottom:5px}.rmt-dialogue-text{min-height:76px;white-space:pre-wrap;line-height:1.8;color:#586a7f}
 .rmt-dialogue-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 
 /* ADV：左侧事件索引像回想清单，右侧保留大 CG 与阅读器。 */
@@ -5897,9 +6063,58 @@ function abstractStyle(seed, id) {
     return `--x1:${x1}%;--y1:${y1}%;--x2:${x2}%;--y2:${y2}%;--angle:${angle}deg;--c1:hsla(${hue1},54%,72%,.68);--c2:hsla(${hue2},48%,76%,.56)`;
 }
 
+const IMAGE_GENERATION_COMMAND_NAMES = Object.freeze(['imagine', 'sd', 'img']);
 function imageGenerationCommand(context = getContext()) {
-    const command = context?.SlashCommandParser?.commands?.imagine;
-    return command && typeof command.callback === 'function' ? command : null;
+    const registries = [
+        context?.SlashCommandParser?.commands,
+        globalThis?.SlashCommandParser?.commands,
+    ].filter(Boolean);
+    for (const name of IMAGE_GENERATION_COMMAND_NAMES) {
+        for (const registry of registries) {
+            const command = registry?.[name];
+            if (command && typeof command.callback === 'function') return command;
+        }
+    }
+    return null;
+}
+
+function imageGenerationUiState(context = getContext()) {
+    const command = imageGenerationCommand(context);
+    const manual = getPluginSettings(context).imageGenerationManualEnabled === true;
+    return { command, detected: !!command, manual, available: !!command || manual };
+}
+
+function sanitizeImageGenerationSlashPrompt(value) {
+    // This string goes through STscript only in the explicit manual fallback. Prevent the model's
+    // visual prompt from becoming STscript/macro syntax while preserving ordinary image keywords.
+    return normalizeText(value, MAX_CG_IMAGE_PROMPT_CHARS)
+        .replace(/[{}]/g, ' ')
+        .replace(/[\r\n]+/g, ' ')
+        .replace(/\\/g, '\\\\')
+        .replace(/\|/g, '\\|')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+async function invokeImageGeneration(prompt, context = getContext()) {
+    const direct = imageGenerationCommand(context);
+    if (direct) return await invokeSlashCommandCapture(direct, { quiet: 'true', gallery: 'false' }, prompt, context);
+    const settings = getPluginSettings(context);
+    if (!settings.imageGenerationManualEnabled) {
+        throw new Error('没有检测到 SillyTavern Image Generation 的 /imagine、/sd 或 /img 命令。');
+    }
+    if (typeof context.executeSlashCommandsWithOptions !== 'function') {
+        throw new Error('你已手动勾选 Image Generation，但当前 SillyTavern 没有提供公开的 Slash Command 执行接口。');
+    }
+    const safePrompt = sanitizeImageGenerationSlashPrompt(prompt);
+    if (!safePrompt) throw new Error('生图提示为空，无法调用手动 /sd 兜底。');
+    const result = await context.executeSlashCommandsWithOptions(`/sd quiet=true ${safePrompt}`);
+    if (result?.isError) {
+        throw new Error(`手动 /sd 调用失败：${normalizeText(result?.errorMessage || result?.abortReason, 500) || 'Image Generation 没有接受请求。'}`);
+    }
+    const pipe = normalizeText(result?.pipe, 4096);
+    if (!pipe) throw new Error('手动 /sd 已执行，但没有返回可保存的图片路径。请确认 Image Generation 已启用并完成配置。');
+    return pipe;
 }
 
 function normalizeCgImageUrl(value) {
@@ -5973,15 +6188,26 @@ function cgImageLayerHtml(item, { lazy = true } = {}) {
 }
 
 function cgImageProviderBar({ readOnly = false } = {}) {
-    const ready = !!imageGenerationCommand();
-    if (readOnly) return `<div class="rmt-cg-provider-bar ${ready ? 'ready' : ''}"><span class="rmt-cg-provider-dot"></span><b>CG 实图</b><span>只读档案 · ${ready ? 'Image Generation 已连接' : '当前未检测到 Image Generation'}</span><button type="button" class="rmt-btn" data-rmt-action="refresh-image-provider">重新检测</button></div>`;
-    return `<div class="rmt-cg-provider-bar ${ready ? 'ready' : ''}"><span class="rmt-cg-provider-dot"></span><b>CG 实图</b><span>${ready ? 'Image Generation 已连接 · 点击 🎨 绘制CG' : '未检测到 Image Generation · 启用后点“重新检测”即可，无需重开档案'}</span><button type="button" class="rmt-btn" data-rmt-action="refresh-image-provider">重新检测</button></div>`;
+    const state = imageGenerationUiState();
+    const ready = state.available;
+    const status = state.detected
+        ? 'Image Generation 已连接'
+        : state.manual
+            ? '已手动勾选 Image Generation · 绘制时尝试 /sd 兜底'
+            : '当前未检测到 Image Generation';
+    if (readOnly) return `<div class="rmt-cg-provider-bar ${ready ? 'ready' : ''}"><span class="rmt-cg-provider-dot"></span><b>CG 实图</b><span>只读档案 · ${status}</span><button type="button" class="rmt-btn" data-rmt-action="refresh-image-provider">重新检测</button></div>`;
+    return `<div class="rmt-cg-provider-bar ${ready ? 'ready' : ''}"><span class="rmt-cg-provider-dot"></span><b>CG 实图</b><span>${state.detected ? `${status} · 点击 🎨 绘制CG` : state.manual ? `${status}；如果 /sd 也不可用会明确报错` : '未检测到 Image Generation · 可重新检测，或在插件设置中手动勾选生图兜底'}</span><button type="button" class="rmt-btn" data-rmt-action="refresh-image-provider">重新检测</button></div>`;
 }
 
 function refreshImageGenerationUi() {
-    const ready = !!imageGenerationCommand(getContext());
+    const state = imageGenerationUiState(getContext());
     if (activeMode && activeSession) renderActive();
-    globalThis.toastr?.[ready ? 'success' : 'info']?.(ready ? '已检测到 SillyTavern Image Generation，绘制 CG 按钮现在可以直接使用。' : '仍未检测到 Image Generation。请确认生图扩展已经启用并完成初始化。', '心跳回忆');
+    const message = state.detected
+        ? '已检测到 SillyTavern Image Generation（/imagine、/sd 或 /img），绘制按钮可以直接使用。'
+        : state.manual
+            ? '自动检测仍未发现命令，但你已手动勾选 Image Generation；绘制时会使用受控的 /sd quiet=true 兜底。'
+            : '仍未检测到 Image Generation。可确认扩展已启用，或在心跳回忆设置中勾选“手动确认 Image Generation 已启用”。';
+    globalThis.toastr?.[state.available ? 'success' : 'info']?.(message, '心跳回忆');
 }
 
 function indexedArchiveMatchesCurrentChat(entry, context = getContext()) {
@@ -6027,9 +6253,9 @@ async function drawSelectedCgImage() {
         globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆');
         return;
     }
-    const command = imageGenerationCommand(context);
-    if (!command) {
-        globalThis.toastr?.info?.('没有检测到 SillyTavern Image Generation 的 imagine 命令。请先启用并配置图像生成扩展。', '心跳回忆');
+    const imageState = imageGenerationUiState(context);
+    if (!imageState.available) {
+        globalThis.toastr?.info?.('没有检测到 SillyTavern Image Generation。请先启用并配置扩展；若它明明已启用，可在心跳回忆设置中手动勾选生图兜底。', '心跳回忆');
         return;
     }
     if (activeCgImageTasks.size >= 1) {
@@ -6062,7 +6288,7 @@ async function drawSelectedCgImage() {
     activeCgImageTasks.set(taskKey, { mode, itemId, startedAt: Date.now() });
     renderCurrentCgMode(mode, session);
     try {
-        const rawUrl = await invokeSlashCommandCapture(command, { quiet: 'true', gallery: 'false' }, prompt, context);
+        const rawUrl = await invokeImageGeneration(prompt, context);
         const url = normalizeCgImageUrl(rawUrl);
         if (!url) throw new Error('图像生成扩展没有返回可保存的 SillyTavern 本地图片路径。');
         if (cgImageLifecycleEpoch !== lifecycleEpoch || !isCurrentTaskOrigin(origin)) {
@@ -8222,9 +8448,9 @@ async function drawHeartStripImage(stripId) {
     const item = activeSession.dailyStrips.find(strip => strip.id === stripId) || selectedHeartStrip();
     if (!item) return;
     const context = currentCharacterGuard();
-    const command = imageGenerationCommand(context);
-    if (!command) {
-        globalThis.toastr?.info?.('没有检测到 SillyTavern Image Generation。启用并配置后即可绘制日常一格。', '心跳回忆');
+    const imageState = imageGenerationUiState(context);
+    if (!imageState.available) {
+        globalThis.toastr?.info?.('没有检测到 SillyTavern Image Generation。启用并配置后即可绘制日常一格；若它明明已启用，可在心跳回忆设置中手动勾选生图兜底。', '心跳回忆');
         return;
     }
     if (activeCgImageTasks.size >= 1) {
@@ -8252,7 +8478,7 @@ async function drawHeartStripImage(stripId) {
     activeCgImageTasks.set(taskKey, { mode: MODE.HEART, itemId: item.id, startedAt: Date.now() });
     renderHeart();
     try {
-        const rawUrl = await invokeSlashCommandCapture(command, { quiet: 'true', gallery: 'false' }, prompt, context);
+        const rawUrl = await invokeImageGeneration(prompt, context);
         const url = normalizeCgImageUrl(rawUrl);
         if (!url) throw new Error('图像生成扩展没有返回可保存的 SillyTavern 本地图片路径。');
         if (cgImageLifecycleEpoch !== lifecycleEpoch || !isCurrentTaskOrigin(origin)) {
@@ -8508,7 +8734,7 @@ function renderAlbum() {
         ${selected.unlocked ? '' : '<button type="button" class="rmt-btn" data-rmt-action="show-hint">解锁提示</button>'}
         <button type="button" class="rmt-btn" data-rmt-action="album-cancel">取消选择</button>
       </div>
-      ${selected.unlocked && !readOnlyArchive ? `<div class="rmt-cg-draw-note">${imageGenerationCommand() ? '可调用 SillyTavern 已配置的 Image Generation 绘制实图；可能消耗额度。' : '未检测到 SillyTavern Image Generation；仍会保留原本的抽象 CG。'}</div>` : readOnlyArchive ? '<div class="rmt-cg-draw-note">只读档案浏览：保留已保存的 CG 实图，不在此处触发生图或修改。</div>' : ''}
+      ${selected.unlocked && !readOnlyArchive ? `<div class="rmt-cg-draw-note">${imageGenerationUiState().available ? (imageGenerationUiState().detected ? '可调用 SillyTavern 已配置的 Image Generation 绘制实图；可能消耗额度。' : '已手动勾选 Image Generation；绘制时会尝试 /sd 兜底，可能消耗额度。') : '未检测到 SillyTavern Image Generation；仍会保留原本的抽象 CG。'}</div>` : readOnlyArchive ? '<div class="rmt-cg-draw-note">只读档案浏览：保留已保存的 CG 实图，不在此处触发生图或修改。</div>' : ''}
       <div class="rmt-hint" ${hint ? '' : 'hidden'}>${esc(hint)}</div>
     </aside>` : '<aside class="rmt-info">当前分类没有条目。</aside>';
     const body = bodyEl();
@@ -8594,6 +8820,7 @@ function renderSharedMemory() {
     const comments = item.comments;
     session.dialogueIndex = Math.max(0, Math.min(session.dialogueIndex, comments.length - 1));
     const last = session.dialogueIndex >= comments.length - 1;
+    const charName = normalizeText(getContext()?.name2, 80) || '他';
     setBackVisible(true, '回忆相簿');
     topTitle(`共同回忆 · ${item.title}`);
     const body = bodyEl();
@@ -8603,6 +8830,8 @@ function renderSharedMemory() {
         <div class="rmt-memory-caption"><b>${esc(item.title)}</b> · ${esc(item.date)}<br><span style="opacity:.82">${esc(item.desc)}</span></div>
       </div>
       <div class="rmt-dialogue">
+        <div class="rmt-dialogue-now"><span>NOW · 一起翻相册</span><b>现在的 ${esc(charName)} → 现在的你</b></div>
+        <div class="rmt-dialogue-speaker">${esc(charName)}</div>
         <div class="rmt-dialogue-text">${esc(comments[session.dialogueIndex] || '')}</div>
         <div class="rmt-dialogue-actions">
           <button type="button" class="rmt-btn" data-rmt-action="shared-back">返回相簿</button>
@@ -9202,6 +9431,7 @@ function refreshGenerationSettingsUi() {
     const maxTokens = panel.querySelector('[data-rmt-api-max-tokens]');
     const temperature = panel.querySelector('[data-rmt-api-temperature]');
     const roomDaily = panel.querySelector('[data-rmt-room-life-auto]');
+    const imageGenerationManual = panel.querySelector('[data-rmt-image-generation-manual]');
     const bannedPhrases = panel.querySelector('[data-rmt-banned-generated-phrases]');
     const status = panel.querySelector('[data-rmt-api-status]');
     if (profile) {
@@ -9226,6 +9456,7 @@ function refreshGenerationSettingsUi() {
         temperature.title = '覆盖心跳回忆专用连接的温度';
     }
     if (roomDaily) roomDaily.checked = settings.roomLifeAutoDaily;
+    if (imageGenerationManual) imageGenerationManual.checked = settings.imageGenerationManualEnabled;
     if (bannedPhrases) bannedPhrases.value = settings.bannedGeneratedPhrases.join('，');
     if (status) {
         status.textContent = !settings.connectionProfileId
@@ -9294,9 +9525,11 @@ function mountSettings() {
           </div>
           <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
           <label class="checkbox_label rmt-settings-check"><input data-rmt-room-life-auto type="checkbox"> 每天首次打开房间时允许一次“今日生活”自动请求</label>
+          <label class="checkbox_label rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"> 手动确认 SillyTavern Image Generation 已启用（自动检测失败时，绘制会尝试受控的 /sd quiet=true 兜底）</label>
           <div class="rmt-api-note" data-rmt-api-status></div>
           <div class="rmt-api-note">“最大输出”最高 30,000 tokens。档案聊天分块与记忆/摘要分块不再硬限制 4,096；实际可用上限仍由所选模型/服务端决定。若模型只返回推理而没有最终 JSON，心跳回忆会停止并允许你明确选择只重试当前分块，不会自动重复请求。</div>
           <div class="rmt-api-note">“生成禁用词”只约束模型新生成的派生内容，默认禁用“老子”。不会改写历史聊天、正式档案原文或 sourceMemoryAnchor 等证据锚点；命中时本次结果拒绝保存且不会自动重试。</div>
+          <div class="rmt-api-note">生图会优先直接调用已注册的 /imagine、/sd 或 /img callback。只有你手动勾选上面的兜底后，自动检测仍失败时才会通过 SillyTavern 公开 Slash 执行接口调用 /sd quiet=true；视觉 prompt 会先去掉宏语法、换行并转义管道，避免把模型文本当成额外 STscript 执行。</div>
           <div class="rmt-api-note">模型刷新只调用 SillyTavern 本地后端状态接口；插件保存 Connection Profile / Secret ID 引用，不保存 API Key 明文。若酒馆当前自定义 Chat Completion 配置包含 custom headers，刷新模型时会按 SillyTavern 原生方式把它们提交给同源后端处理，不会写入心跳回忆缓存或 Prompt。</div>
         </div>
         <div class="rmt-settings-archive-actions">
@@ -9334,6 +9567,12 @@ function mountSettings() {
         if (target.matches?.('[data-rmt-room-life-auto]')) {
             updatePluginSettings({ roomLifeAutoDaily: !!target.checked });
             refreshGenerationSettingsUi();
+            return;
+        }
+        if (target.matches?.('[data-rmt-image-generation-manual]')) {
+            updatePluginSettings({ imageGenerationManualEnabled: !!target.checked });
+            refreshGenerationSettingsUi();
+            if (activeMode && activeSession) renderActive();
             return;
         }
         if (target.matches?.('[data-rmt-banned-generated-phrases]')) {
