@@ -263,3 +263,18 @@ Scope: r18 audit package -> r19 memory-related world-info selector.
 - Dynamic worldbook/entry labels and previews are escaped before HTML insertion; worldbook entry objects are read through data-property-safe helpers.
 
 Targeted manual diff conclusion: no new Critical / High / Medium issue identified. Real SillyTavern device testing is still needed for large-worldbook UI ergonomics and the exact runtime return shape of installed-version `loadWorldInfo()`.
+
+
+## 0.8.10 json-output-r20 targeted diff review
+
+Scope: exact r19 package / GitHub-main source blob `3a962f8878dc8eb4214b986bbd2a08f26ae7739a` -> local r20 JSON-output patch.
+
+- The previous archive-import `maxTokens: 4096` cap was removed. Archive chat/external-memory chunks request up to the user's configured limit, hard-capped at 30,000; the default user setting remains 16,384 so upgrades do not silently increase an existing user's spend ceiling. Main mode caps were raised to the same 30k ceiling but `generateConfiguredJson()` still takes `min(settings.maxTokens, requestedMax)`.
+- JSON extraction no longer takes the substring from the first `{` through the last `}`. A quote/escape-aware balanced-object scanner considers complete top-level objects and parses the last valid one, which tolerates fenced JSON and surrounding prose without accepting an unclosed/truncated object.
+- Empty final content, reasoning-only finalization, no JSON object, truncated JSON and invalid JSON are classified separately. Diagnostics expose only error type and character counts; reasoning/content text is not logged or persisted by the new code.
+- Archive chunk retry is explicit and bounded: only a `retryableJson` error offers one native confirmation; cancel sends no extra request, confirm sends exactly one retry of that same chunk, and a second failure propagates. The archive write still occurs only after every chunk has succeeded and local normalization/evidence checks complete, so the old archive/cache remains intact on failure.
+- Structured archive extraction temperature is capped at 0.35 without changing the user's configured temperature for creative modes.
+- Added-line review found no new `fetch`, XMLHttpRequest, WebSocket/EventSource, dynamic-code execution, secret/API-key access, host chat navigation, or new metadata write sink. Existing `characterKey + chatId + archiveRevision` write guards are unchanged.
+- Focused runtime tests covered fenced/prose JSON, braces inside strings, multiple top-level objects, reasoning-only empty final content, truncated output, non-JSON output, explicit one-time retry, and cancel-with-no-retry. Syntax/import checks pass.
+
+Targeted manual conclusion: no newly introduced Critical / High / Medium issue identified in this patch. Provider-side behavior when a model cannot support the requested output length remains a runtime dependency; such provider errors are surfaced rather than retried automatically.

@@ -182,3 +182,12 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - 整本/精确条目读取都受独立预算（最多 8 本、160 条、52,000 字符），随后仍受现有总输入 Token/字符预算。世界书正文视为不可信资料，其中的提示、宏、代码、格式指令不得执行。
 - `MEMORY_RELATED_WORLD_INFO_CONTEXT` 不能提供 `sourceExternalId/sourceExternalAnchor`，不能单独生成 archive memory。外部记忆抽取仍必须引用真实 current-chat external record ID，并以 anchor 逐字命中该 record 的 content；若世界书与记忆/摘要冲突，以带真实 externalId+anchor 的来源为准。
 - 记忆相关世界书选择是当前聊天级；历史 snapshot 不得修改它。修改选择必须清空本聊天的 memory preflight cache，下一次手动建档/更新前重新扫描。
+
+
+### 0.8.10 r20 structured JSON / output-budget invariants
+
+- 心跳回忆设置中的单次最大输出硬上限为 30,000 tokens；每个请求最终必须继续取 `min(用户设置, 请求上限)`，不得为了修复 JSON 截断而绕过用户设置或 provider/模型自己的限制。
+- 档案聊天分块与 current-chat 记忆/摘要分块可以使用用户最大输出，但输入仍必须经过既有 32k-token / 96k-character 预算；提高输出额度不得放宽输入、证据或跨聊天边界。
+- JSON 解析失败、空 final content、仅 reasoning、非 JSON 正文或疑似截断都属于**失败关闭**：在获得完整并通过本地归一化/证据校验的数据前，不得写 `MEMORY_KEY`、派生 session 或其它聊天 metadata。
+- 对档案分块的失败重试必须由用户明确确认，最多只额外重试当前分块一次；不得自动循环重试、不得从头重放已经成功的分块来制造隐藏请求次数。取消或第二次失败时，本轮档案整理整体停止，旧档案与既有派生缓存不变。
+- JSON/推理诊断只能记录错误类别与长度等非内容元数据；不得把模型 `reasoning`、模型正文、聊天/记忆原文复制进 console、toast、metadata 或错误遥测。

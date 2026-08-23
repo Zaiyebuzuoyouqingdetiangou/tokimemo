@@ -21,6 +21,7 @@ const IMPORT_CHUNK_CHARS = 30000;
 const MAX_MEMORY_ITEMS = 240;
 const MAX_MEMORY_PROMPT_ITEMS = 64;
 const MAX_GENERATION_INPUT_TOKENS = 32000;
+const MAX_GENERATION_OUTPUT_TOKENS = 30000;
 const MAX_GENERATION_INPUT_CHARS = 96000;
 const MAX_EXTERNAL_MEMORY_ITEMS = 256;
 const MAX_EXTERNAL_MEMORY_CHARS = 240000;
@@ -69,14 +70,14 @@ const MODE_LABEL = Object.freeze({
 });
 
 const MODE_TOKEN_CAPS = Object.freeze({
-    [MODE.BUTTERFLY]: 12288,
-    [MODE.ALBUM]: 16000,
-    [MODE.ADV]: 8192,
-    [MODE.ROOM]: 10000,
-    [MODE.ITEMS]: 10000,
-    [MODE.PHONE]: 16000,
-    [MODE.ENDING]: 18000,
-    [MODE.HEART]: 20000,
+    [MODE.BUTTERFLY]: MAX_GENERATION_OUTPUT_TOKENS,
+    [MODE.ALBUM]: MAX_GENERATION_OUTPUT_TOKENS,
+    [MODE.ADV]: MAX_GENERATION_OUTPUT_TOKENS,
+    [MODE.ROOM]: MAX_GENERATION_OUTPUT_TOKENS,
+    [MODE.ITEMS]: MAX_GENERATION_OUTPUT_TOKENS,
+    [MODE.PHONE]: MAX_GENERATION_OUTPUT_TOKENS,
+    [MODE.ENDING]: MAX_GENERATION_OUTPUT_TOKENS,
+    [MODE.HEART]: MAX_GENERATION_OUTPUT_TOKENS,
 });
 const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.ENDING, MODE.BUTTERFLY]);
 const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS, MODE.PHONE]);
@@ -170,7 +171,7 @@ function getPluginSettings(context = getContext()) {
     const normalized = {
         connectionProfileId: normalizeText(settings.connectionProfileId, 160),
         modelOverride: normalizeText(settings.modelOverride, 240),
-        maxTokens: Math.max(1024, Math.min(32000, Number(settings.maxTokens) || DEFAULT_SETTINGS.maxTokens)),
+        maxTokens: Math.max(1024, Math.min(MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || DEFAULT_SETTINGS.maxTokens)),
         temperature: Math.max(0, Math.min(2, Number.isFinite(Number(settings.temperature)) ? Number(settings.temperature) : DEFAULT_SETTINGS.temperature)),
         roomLifeAutoDaily: settings.roomLifeAutoDaily !== false,
         useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory !== false,
@@ -2883,18 +2884,91 @@ ${JSON.stringify(memoryPool, null, 2)}
 - 输出尽量紧凑，不重复输入资料。`;
 }
 
-function extractJson(raw) {
-    let text = normalizeText(raw, 200000);
-    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-    const first = text.indexOf('{');
-    const last = text.lastIndexOf('}');
-    if (first < 0 || last <= first) throw new Error('模型没有返回可解析的 JSON。');
-    text = text.slice(first, last + 1);
-    try {
-        return JSON.parse(text);
-    } catch (error) {
-        throw new Error(`JSON 解析失败：${error?.message || error}`);
+function jsonOutputError(code, message, details = {}) {
+    const error = new Error(message);
+    error.name = 'JsonOutputError';
+    error.code = code;
+    error.retryableJson = true;
+    error.details = details;
+    return error;
+}
+
+function extractBalancedJsonObjects(text) {
+    const candidates = [];
+    let start = -1;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = 0; i < text.length; i += 1) {
+        const char = text[i];
+        if (inString) {
+            if (escaped) escaped = false;
+            else if (char === '\\') escaped = true;
+            else if (char === '"') inString = false;
+            continue;
+        }
+        if (char === '"') {
+            if (depth > 0) inString = true;
+            continue;
+        }
+        if (char === '{') {
+            if (depth === 0) start = i;
+            depth += 1;
+            continue;
+        }
+        if (char === '}' && depth > 0) {
+            depth -= 1;
+            if (depth === 0 && start >= 0) {
+                candidates.push(text.slice(start, i + 1));
+                start = -1;
+            }
+        }
     }
+    return { candidates, hasUnclosedObject: depth > 0 && start >= 0 };
+}
+
+function extractJson(raw, { reasoning = '' } = {}) {
+    let text = normalizeText(raw, 240000).replace(/^\uFEFF/, '').trim();
+    const reasoningChars = normalizeText(reasoning, 240000).length;
+    if (!text) {
+        throw jsonOutputError(
+            reasoningChars ? 'RMT_JSON_EMPTY_FINAL_WITH_REASONING' : 'RMT_JSON_EMPTY_FINAL',
+            reasoningChars
+                ? `模型本轮产生了推理内容，但没有返回最终正文 JSON。可能是推理预算耗尽或模型没有进入最终回答阶段。当前最大输出可设到 ${MAX_GENERATION_OUTPUT_TOKENS.toLocaleString()} tokens；可只重试这一项，或改用结构化输出更稳定的模型。`
+                : `模型返回了空的最终正文，没有 JSON 可解析。当前最大输出可设到 ${MAX_GENERATION_OUTPUT_TOKENS.toLocaleString()} tokens；可只重试这一项，或检查所选模型/连接是否正常。`,
+            { contentChars: 0, reasoningChars },
+        );
+    }
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const { candidates, hasUnclosedObject } = extractBalancedJsonObjects(text);
+    let lastParseError = null;
+    for (let i = candidates.length - 1; i >= 0; i -= 1) {
+        try {
+            const parsed = JSON.parse(candidates[i]);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+        } catch (error) {
+            lastParseError = error;
+        }
+    }
+    if (hasUnclosedObject) {
+        throw jsonOutputError(
+            'RMT_JSON_TRUNCATED',
+            `模型返回的 JSON 疑似被截断：已经出现“{”，但没有完整闭合。请提高“最大输出”（最高 ${MAX_GENERATION_OUTPUT_TOKENS.toLocaleString()}）后只重试这一项，或换用输出更稳定的模型。`,
+            { contentChars: text.length, reasoningChars },
+        );
+    }
+    if (!candidates.length) {
+        throw jsonOutputError(
+            'RMT_JSON_NOT_FOUND',
+            `模型返回了最终正文（约 ${text.length.toLocaleString()} 字符），但其中没有完整 JSON 对象。插件没有保存或覆盖任何旧数据；可只重试这一项。`,
+            { contentChars: text.length, reasoningChars },
+        );
+    }
+    throw jsonOutputError(
+        'RMT_JSON_INVALID',
+        `模型返回了 JSON 外形，但格式无法解析${lastParseError?.message ? `：${normalizeText(lastParseError.message, 240)}` : ''}。插件没有保存或覆盖任何旧数据；可只重试这一项。`,
+        { contentChars: text.length, reasoningChars },
+    );
 }
 
 function normalizeButterfly(data, memoryBank) {
@@ -4018,7 +4092,7 @@ async function generateConfiguredJson(prompt, options = {}) {
     const controlledPrompt = `${contextEnvelope}
 ${expanded}`;
     await assertPromptBudget(context, controlledPrompt, { skipTokenCount: options.skipTokenCount === true });
-    const requestedMax = Math.max(1024, Math.min(32000, Number(options.maxTokens) || settings.maxTokens));
+    const requestedMax = Math.max(1024, Math.min(MAX_GENERATION_OUTPUT_TOKENS, Number(options.maxTokens) || settings.maxTokens));
     const responseLength = Math.min(settings.maxTokens, requestedMax);
     if (!settings.connectionProfileId) {
         throw new Error('心跳回忆还没有专用连接。请在插件设置中点击“从酒馆当前连接一键导入”，或手动选择一个 Connection Manager 配置。');
@@ -4039,7 +4113,7 @@ ${expanded}`;
         { stream: false, extractData: true, includePreset: true, includeInstruct: true, signal: options.signal || null },
         overridePayload,
     );
-    return extractJson(result?.content ?? result);
+    return extractJson(result?.content ?? result, { reasoning: result?.reasoning || '' });
 }
 
 async function requestJson(prompt, statusText = '正在根据当前聊天档案生成…', options = {}) {
@@ -4067,6 +4141,21 @@ async function requestJson(prompt, statusText = '正在根据当前聊天档案�
         const current = activeGenerationTasks.get(taskKey);
         if (current?.controller === controller) activeGenerationTasks.delete(taskKey);
         refreshConcurrentTaskUi(normalizeText(options.mode, 80), origin);
+    }
+}
+
+async function generateArchiveChunkJson(prompt, options, label) {
+    try {
+        return await generateConfiguredJson(prompt, options);
+    } catch (error) {
+        if (error?.name === 'AbortError' || !error?.retryableJson) throw error;
+        const retry = confirmExplicitAction(
+            `模型没有返回完整 JSON · ${label}`,
+            `${normalizeText(error?.message || String(error), 900)}\n\n是否只重试这一块？重试会额外消耗 1 次模型请求；取消则停止本次档案整理，旧档案、旧 CG / ADV / ENDING 等内容都不会被覆盖。`,
+            { destructive: false },
+        );
+        if (!retry) throw error;
+        return await generateConfiguredJson(prompt, options);
     }
 }
 
@@ -4136,14 +4225,14 @@ ${error.message}` : ''}`);
             activeTaskLabel = `正在${actionLabel}新增聊天 · ${i + 1} / ${chunks.length}`;
             updateBackgroundTaskLabel(activeTaskLabel);
             await yieldToUi();
-            const raw = await generateConfiguredJson(memoryImportPrompt(context, chunks[i], i, chunks.length), { maxTokens: 4096, contextEnvelope, signal: importController.signal, skipTokenCount: true, context });
+            const raw = await generateArchiveChunkJson(memoryImportPrompt(context, chunks[i], i, chunks.length), { maxTokens: MAX_GENERATION_OUTPUT_TOKENS, temperature: Math.min(settings.temperature, 0.35), contextEnvelope, signal: importController.signal, skipTokenCount: true, context }, `聊天分块 ${i + 1} / ${chunks.length}`);
             fresh.push(...normalizeImportedChunk(raw, chunks[i]).map(item => ({ ...item, sourceKind: 'chat' })));
         }
         for (let i = 0; i < externalChunks.length; i += 1) {
             activeTaskLabel = `正在${actionLabel}记忆 / 摘要资料 · ${i + 1} / ${externalChunks.length}`;
             updateBackgroundTaskLabel(activeTaskLabel);
             await yieldToUi();
-            const externalRaw = await generateConfiguredJson(externalMemoryImportPrompt(context, externalChunks[i], external.worldInfo), { maxTokens: 4096, contextEnvelope, signal: importController.signal, skipTokenCount: true, context });
+            const externalRaw = await generateArchiveChunkJson(externalMemoryImportPrompt(context, externalChunks[i], external.worldInfo), { maxTokens: MAX_GENERATION_OUTPUT_TOKENS, temperature: Math.min(settings.temperature, 0.35), contextEnvelope, signal: importController.signal, skipTokenCount: true, context }, `记忆 / 摘要分块 ${i + 1} / ${externalChunks.length}`);
             fresh.push(...normalizeExternalImportedMemories(externalRaw, externalChunks[i]));
         }
 
@@ -4165,7 +4254,7 @@ ${error.message}` : ''}`);
         await yieldToUi();
         let profile;
         try {
-            const rawProfile = await generateConfiguredJson(archiveProfilePrompt(context, memories), { maxTokens: 2048, contextEnvelope, signal: importController.signal, context });
+            const rawProfile = await generateConfiguredJson(archiveProfilePrompt(context, memories), { maxTokens: 8192, temperature: Math.min(settings.temperature, 0.35), contextEnvelope, signal: importController.signal, context });
             profile = normalizeArchiveProfile(rawProfile, memories);
         } catch (error) {
             console.warn('[HeartbeatMemories] archive profile generation failed; using existing/local fallback', error);
@@ -4456,7 +4545,7 @@ async function generateAllAdvForSession() {
                 advBatchPrompt(context, pending, memoryBank),
                 `正在一次请求生成 ${pending.length} 篇 ADV…`,
                 {
-                    maxTokens: 32000,
+                    maxTokens: MAX_GENERATION_OUTPUT_TOKENS,
                     context,
                     origin,
                     taskKey: bulkTaskKey,
@@ -4553,7 +4642,7 @@ async function repairFailedAdvForSession() {
                     advPrompt(context, event, memoryBank),
                     `正在补 ADV：${event.title}`,
                     {
-                        maxTokens: 8192,
+                        maxTokens: MODE_TOKEN_CAPS[MODE.ADV],
                         context,
                         origin,
                         taskKey: `adv-user-repair:${scope}:${safeId(event.id, String(i + 1))}`,
@@ -4619,7 +4708,7 @@ async function generateAdvForSelected() {
     }
     setInnerLoading(true, `正在为「${event.title}」生成长篇 ADV…`);
     try {
-        const raw = await requestJson(advPrompt(context, event, memoryBank), `正在根据当前聊天档案生成「${event.title}」ADV…`, { maxTokens: 8192, context, origin, taskKey, mode: MODE.ADV, background: true });
+        const raw = await requestJson(advPrompt(context, event, memoryBank), `正在根据当前聊天档案生成「${event.title}」ADV…`, { maxTokens: MODE_TOKEN_CAPS[MODE.ADV], context, origin, taskKey, mode: MODE.ADV, background: true });
         const wasBackgrounded = !isCurrentTaskOrigin(origin) || document.getElementById(OVERLAY_ID)?.hidden || activeSession !== session;
         const liveEvent = session.events.find(item => item.id === eventId);
         if (!liveEvent) return;
@@ -8504,11 +8593,12 @@ function mountSettings() {
             <button type="button" class="menu_button rmt-model-refresh" data-rmt-api-model-refresh>刷新模型</button>
           </div>
           <div class="rmt-api-grid">
-            <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1024" max="32000" step="256"></label>
+            <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1024" max="30000" step="1"></label>
             <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
           </div>
           <label class="checkbox_label rmt-settings-check"><input data-rmt-room-life-auto type="checkbox"> 每天首次打开房间时允许一次“今日生活”自动请求</label>
           <div class="rmt-api-note" data-rmt-api-status></div>
+          <div class="rmt-api-note">“最大输出”最高 30,000 tokens。档案聊天分块与记忆/摘要分块不再硬限制 4,096；实际可用上限仍由所选模型/服务端决定。若模型只返回推理而没有最终 JSON，心跳回忆会停止并允许你明确选择只重试当前分块，不会自动重复请求。</div>
           <div class="rmt-api-note">模型刷新只调用 SillyTavern 本地后端状态接口；插件保存 Connection Profile / Secret ID 引用，不保存 API Key 明文。若酒馆当前自定义 Chat Completion 配置包含 custom headers，刷新模型时会按 SillyTavern 原生方式把它们提交给同源后端处理，不会写入心跳回忆缓存或 Prompt。</div>
         </div>
         <div class="rmt-settings-archive-actions">
@@ -8534,7 +8624,7 @@ function mountSettings() {
             return;
         }
         if (target.matches?.('[data-rmt-api-max-tokens]')) {
-            updatePluginSettings({ maxTokens: Math.max(1024, Math.min(32000, Number(target.value) || DEFAULT_SETTINGS.maxTokens)) });
+            updatePluginSettings({ maxTokens: Math.max(1024, Math.min(MAX_GENERATION_OUTPUT_TOKENS, Number(target.value) || DEFAULT_SETTINGS.maxTokens)) });
             refreshGenerationSettingsUi();
             return;
         }
