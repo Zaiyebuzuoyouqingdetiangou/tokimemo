@@ -1,3 +1,18 @@
+## r21 targeted diff review — archive grouping / banned phrases / room layouts
+
+- Scope: local r20 → r21 only. Reviewed archive-index grouping/migration, ambiguous legacy same-avatar handling, manual classification UI/actions, archive delete/index-remove actions, live-origin matching, task scope identity, generated-phrase enforcement, and room rendering/prompt changes.
+- New/current archive index rows persist only a non-reversible local card fingerprint hash in addition to existing lightweight metadata. Automatic grouping prefers that fingerprint, so two cards with the same displayed name/avatar can remain separate when their card content differs; legacy rows without a fingerprint fall back to avatar+name and can be manually split.
+- Archive classification writes only `heartbeatMemoriesArchiveIndexV1` plus lightweight `heartbeatMemoriesArchiveGroupsV1` metadata. It does not move, rename, delete, or rewrite SillyTavern chat files and does not mutate `MEMORY_KEY`/derived caches or grant write authority.
+- Manual “new group” requires a user-selected SillyTavern character; manual move locks the row against later automatic reassignment. No host character/chat navigation was added.
+- Legacy scans fetch each unique avatar once. If an old row has no fingerprint and multiple same-avatar/same-name cards are plausible, the scanner does not guess: it assigns a per-archive “待手动分类” presentation group until the user explicitly moves it.
+- Actual archive deletion is live-current-chat only, double-confirmed, and rechecks runtime character identity + chatId before deleting Heartbeat metadata. It removes only Heartbeat archive/cache/runtime state and the lightweight index row; it never deletes/clears host chat messages. Non-live historical rows can only be removed from the library index.
+- Cache compression persistence now revalidates the live archive and matching chatId/archiveRevision immediately before writing, so an in-flight gzip cannot resurrect CACHE_KEY after an explicit archive delete or revision change.
+- Default banned generated phrase is `老子`. The Prompt asks the model not to use it; parsed derivative JSON is checked locally before normalization/save. Evidence-anchor fields are exempt so archived verbatim evidence remains byte-for-byte unchanged. Violations fail closed and do not auto-retry.
+- Room diversity maps normalized room type/label to a fixed code-owned scene class plus one of three deterministic layout variants, and adds code-owned room-type props (e.g. studio monitors, bookshelves, bath fixtures, dining chairs, plants). Model output still cannot supply CSS/HTML/script/URL or arbitrary positioning.
+- Focused smoke tests cover same-name/same-avatar cards with different fingerprints, ambiguous legacy rows, manual group creation/move, archive deletion metadata-only behavior, banned-phrase rejection with evidence-anchor exemption, and distinct room scene/layout mapping.
+- No formal hosted Codex Security scan was available in this environment; this is a targeted manual diff review following Codex Security diff-review invariants.
+
+
 ## r18 targeted manual diff review — r17 audit follow-up
 
 Scope: local r17 package SHA-256 `60f7926aee15223cecf8c88a7eb67ee1a0cab2b6735a2b549e7661ae773e352e` -> local r18 patch. This is a targeted Codex-Security-style manual diff review in this host, not a formal hosted Codex Security scan.

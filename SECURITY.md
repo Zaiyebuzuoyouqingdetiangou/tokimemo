@@ -191,3 +191,15 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - JSON 解析失败、空 final content、仅 reasoning、非 JSON 正文或疑似截断都属于**失败关闭**：在获得完整并通过本地归一化/证据校验的数据前，不得写 `MEMORY_KEY`、派生 session 或其它聊天 metadata。
 - 对档案分块的失败重试必须由用户明确确认，最多只额外重试当前分块一次；不得自动循环重试、不得从头重放已经成功的分块来制造隐藏请求次数。取消或第二次失败时，本轮档案整理整体停止，旧档案与既有派生缓存不变。
 - JSON/推理诊断只能记录错误类别与长度等非内容元数据；不得把模型 `reasoning`、模型正文、聊天/记忆原文复制进 console、toast、metadata 或错误遥测。
+
+
+### 0.8.10 r21 archive-group / generated-language invariants
+
+- 档案角色组是 extension-settings 中的**展示索引元数据**。自动分类、手动移动、新建角色组不得修改源 `chatId`、源 `characterKey/avatar`、`MEMORY_KEY`、theater cache 或 SillyTavern 聊天文件；不得调用宿主角色/聊天切换接口。
+- 自动分类只能使用本地已知的角色名/avatar/角色卡内容指纹与当前 `context.characters` 做匹配；新索引可持久化非内容型 hash 指纹，旧索引缺失指纹时退回 avatar+名称并允许用户手动拆分。手动移动必须由用户直接操作，且手动归类标记必须阻止后续自动分类覆盖。无法唯一判断时宁可保留/要求手动处理，不得猜测后改写聊天。
+- 角色组归属与 `characterFingerprint` 只属于展示/分类元数据，不得授予或撤销写权限。角色卡日常编辑可以改变分类指纹，但不得因此误删/误写档案。历史 snapshot 的生成/CG/更新仍必须由 live 当前聊天通过宿主角色 locator/name + `chatId` + 当前 `MEMORY_KEY` 校验；同 avatar 但不同角色名不得被当成同一 live 角色。
+- 删除真实 Heartbeat 档案只允许针对当前已打开的 live 聊天：必须无后台任务、连续两次显式破坏性确认，并在实际删除前重新校验当前角色 runtime key 与 `chatId`。只能移除 Heartbeat 自己的 `MEMORY_KEY`/`CACHE_KEY`/运行缓存和对应轻量索引，不得调用宿主聊天删除/清空/切换接口，不得修改 `context.chat`。非当前历史档案只允许删除档案室轻量索引。
+- 压缩缓存异步落盘在写入前必须重新验证 live `MEMORY_KEY` 仍存在且 `chatId/archiveRevision` 与待落盘缓存一致；显式删除档案或 revision 已变化后，迟到的 gzip 结果不得把旧 `CACHE_KEY` 重新写回。
+- 运行中任务 origin/chat scope 必须能够区分共享 avatar 的不同角色卡，防止并发任务、延迟响应或 deferred commit 在角色版本之间串写。
+- “生成禁用词”只适用于模型新生成的派生文本。不得改写聊天正文、正式 archive memory、世界书/外部记忆原文或任何 evidence anchor；命中禁用词时结果必须失败关闭、不得保存、不得自动重试。
+- 房间视觉差异只能把归一化的 `spaceType/label` 映射到代码内固定 scene class 与布局变体；模型不得返回 CSS、HTML、URL、坐标脚本或任意样式值。房间布局变化不得扩大证据读取范围或触发额外模型/网络请求。

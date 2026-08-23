@@ -29,8 +29,11 @@ const EXTERNAL_MEMORY_CHUNK_CHARS = 26000;
 const EXTERNAL_MEMORY_FETCH_LIMIT = 200;
 const ARCHIVE_INDEX_SETTINGS_KEY = 'heartbeatMemoriesArchiveIndexV1';
 const ARCHIVE_INDEX_MAX = 1200;
+const ARCHIVE_GROUPS_SETTINGS_KEY = 'heartbeatMemoriesArchiveGroupsV1';
+const ARCHIVE_GROUPS_MAX = 240;
 const EXTENSION_SETTINGS_KEY = 'heartbeatMemories';
 const AVATAR_VISIT_SETTINGS_KEY = 'heartbeatMemoriesAvatarVisitsV1';
+const MAX_BANNED_GENERATED_PHRASES = 24;
 const MEMORY_WORLD_INFO_SETTINGS_KEY = 'heartbeatMemoriesMemoryWorldInfoV1';
 const MAX_MEMORY_WORLD_INFO_BOOKS = 8;
 const MAX_MEMORY_WORLD_INFO_ENTRIES = 160;
@@ -45,6 +48,8 @@ const DEFAULT_SETTINGS = Object.freeze({
     // Executing another extension's public reader is an explicit opt-in. Prompt/metadata summaries
     // remain available without this because they are passive data already present in SillyTavern.
     usePublicMemoryProviderReaders: false,
+    // Applies only to newly model-generated derivative content. Never rewrite chat/archive evidence.
+    bannedGeneratedPhrases: ['老子'],
 });
 
 const MODE = Object.freeze({
@@ -164,6 +169,13 @@ function getContext() {
 }
 
 
+
+function normalizeBannedGeneratedPhrases(value) {
+    const source = Array.isArray(value) ? value : String(value ?? '').split(/[\n,，]+/g);
+    return [...new Set(source.map(item => normalizeText(item, 40).trim()).filter(Boolean))]
+        .slice(0, MAX_BANNED_GENERATED_PHRASES);
+}
+
 function getPluginSettings(context = getContext()) {
     if (!context.extensionSettings || typeof context.extensionSettings !== 'object') return { ...DEFAULT_SETTINGS };
     const raw = context.extensionSettings[EXTENSION_SETTINGS_KEY];
@@ -176,6 +188,9 @@ function getPluginSettings(context = getContext()) {
         roomLifeAutoDaily: settings.roomLifeAutoDaily !== false,
         useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory !== false,
         usePublicMemoryProviderReaders: settings.usePublicMemoryProviderReaders === true,
+        bannedGeneratedPhrases: settings.bannedGeneratedPhrases === undefined
+            ? [...DEFAULT_SETTINGS.bannedGeneratedPhrases]
+            : normalizeBannedGeneratedPhrases(settings.bannedGeneratedPhrases),
     };
     if (!raw || JSON.stringify(raw) !== JSON.stringify(normalized)) {
         context.extensionSettings[EXTENSION_SETTINGS_KEY] = normalized;
@@ -812,18 +827,81 @@ function archiveCanonicalCharacterKey(entry, context = getContext()) {
     return archiveEntryAvatarName(entry, context) || normalizeText(entry?.characterKey, 300);
 }
 
+function stableArchiveHash(value) {
+    const text = String(value ?? '');
+    let hash = 2166136261;
+    for (let i = 0; i < text.length; i += 1) {
+        hash ^= text.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+}
+
+function archiveStoredAvatar(entry) {
+    const avatar = normalizeText(entry?.avatar, 300);
+    if (avatar) return avatar;
+    const key = normalizeText(entry?.characterKey, 300);
+    return key && !key.startsWith('character:') ? key : '';
+}
+
+function archiveSourceIdentityKey(entry) {
+    const fingerprint = normalizeText(entry?.characterFingerprint, 160);
+    if (fingerprint) return `fingerprint:${fingerprint}`;
+    const avatar = archiveStoredAvatar(entry);
+    const name = normalizeText(entry?.characterName, 120).toLocaleLowerCase();
+    const fallback = normalizeText(entry?.characterKey, 300);
+    return `${avatar || fallback}\u001f${name}`;
+}
+
+function archiveAutoGroupId(entry) {
+    return `auto:${stableArchiveHash(archiveSourceIdentityKey(entry))}`;
+}
+
+function archiveLegacyScanKey(entry) {
+    const avatar = archiveStoredAvatar(entry) || normalizeText(entry?.characterKey, 300);
+    const name = normalizeText(entry?.characterName, 120).toLocaleLowerCase();
+    return `${avatar}\u001f${name}\u001f${comparableChatId(entry?.chatId)}`;
+}
+
+function archiveIndexEntryId(entry) {
+    const existing = normalizeText(entry?.entryId, 120);
+    if (existing) return existing;
+    return `AE:${stableArchiveHash(`${archiveSourceIdentityKey(entry)}\u001f${comparableChatId(entry?.chatId)}`)}`;
+}
+
+function archiveEntryMatchesContextCharacter(entry, context = getContext()) {
+    if (!entry || !context) return false;
+    const entryName = normalizeText(entry?.characterName, 120);
+    const descriptor = characterDescriptor(context, Number(context?.characterId));
+    const currentName = normalizeText(context?.name2 || descriptor?.name, 120);
+    const entryAvatar = archiveStoredAvatar(entry);
+    const currentAvatar = normalizeText(context?.characters?.[context?.characterId]?.avatar || context?.characters?.[context?.characterId]?.data?.avatar, 300);
+    // characterFingerprint is presentation/classification metadata only. It must never grant or
+    // revoke write authority because ordinary card edits can legitimately change the fingerprint.
+    // Live write authority remains the actual host character locator/name + chatId + live MEMORY_KEY.
+    if (entryName && entryName !== '未命名角色' && currentName && entryName !== currentName) return false;
+    if (entryAvatar && currentAvatar && entryAvatar !== currentAvatar) return false;
+    if (entryName || entryAvatar) return true;
+    return normalizeText(entry?.characterKey, 300) === `character:${String(context?.characterId ?? '')}`;
+}
+
 function currentCharacterKey(context = currentCharacterGuard()) {
     const avatar = normalizeText(context.characters?.[context.characterId]?.avatar || context.characters?.[context.characterId]?.data?.avatar, 300);
     return avatar || `character:${String(context.characterId ?? '')}`;
 }
 
+function currentCharacterRuntimeKey(context = currentCharacterGuard()) {
+    const descriptor = characterDescriptor(context, Number(context.characterId));
+    return descriptor?.fingerprint || `${currentCharacterKey(context)}\u001f${normalizeText(context.name2, 120)}`;
+}
+
 function chatScopeKey(context = currentCharacterGuard(), chatId = getChatId(context)) {
-    return `${currentCharacterKey(context)}|${comparableChatId(chatId)}`;
+    return `${currentCharacterRuntimeKey(context)}|${comparableChatId(chatId)}`;
 }
 
 function captureTaskOrigin(context = currentCharacterGuard(), archiveRevision = '') {
     return {
-        characterKey: currentCharacterKey(context),
+        characterKey: currentCharacterRuntimeKey(context),
         characterName: normalizeText(context.name2, 120),
         chatId: comparableChatId(getChatId(context)),
         archiveRevision: normalizeText(archiveRevision, 240),
@@ -832,7 +910,7 @@ function captureTaskOrigin(context = currentCharacterGuard(), archiveRevision = 
 
 function isCurrentTaskOrigin(origin, context = getContext()) {
     try {
-        return !!origin && currentCharacterKey(context) === origin.characterKey && comparableChatId(getChatId(context)) === origin.chatId;
+        return !!origin && currentCharacterRuntimeKey(context) === origin.characterKey && comparableChatId(getChatId(context)) === origin.chatId;
     } catch {
         return false;
     }
@@ -1132,26 +1210,374 @@ async function expandMemoryWorldInfoBook(button) {
     }
 }
 
+function normalizeArchiveGroup(item) {
+    const id = normalizeText(item?.id, 120);
+    if (!id) return null;
+    return {
+        id,
+        label: normalizeText(item?.label, 120) || '角色档案',
+        characterName: normalizeText(item?.characterName, 120),
+        avatar: normalizeText(item?.avatar, 300),
+        characterFingerprint: normalizeText(item?.characterFingerprint, 160),
+        manual: item?.manual === true,
+        characterIndexHint: Number.isInteger(Number(item?.characterIndexHint)) ? Number(item.characterIndexHint) : -1,
+        createdAt: Math.max(0, Number(item?.createdAt) || 0),
+        updatedAt: Math.max(0, Number(item?.updatedAt) || 0),
+    };
+}
+
+function getArchiveGroups(context = getContext()) {
+    const raw = context.extensionSettings?.[ARCHIVE_GROUPS_SETTINGS_KEY];
+    if (!Array.isArray(raw)) return [];
+    return raw.slice(0, ARCHIVE_GROUPS_MAX).map(normalizeArchiveGroup).filter(Boolean);
+}
+
+function setArchiveGroups(context, groups) {
+    if (!context.extensionSettings || typeof context.extensionSettings !== 'object') return;
+    context.extensionSettings[ARCHIVE_GROUPS_SETTINGS_KEY] = (Array.isArray(groups) ? groups : [])
+        .map(normalizeArchiveGroup).filter(Boolean).slice(0, ARCHIVE_GROUPS_MAX);
+    context.saveSettingsDebounced?.();
+}
+
 function getArchiveIndex(context = getContext()) {
     const raw = context.extensionSettings?.[ARCHIVE_INDEX_SETTINGS_KEY];
     if (!Array.isArray(raw)) return [];
-    return raw.slice(0, ARCHIVE_INDEX_MAX).map(item => ({
-        characterKey: normalizeText(item?.characterKey, 300),
-        avatar: normalizeText(item?.avatar, 300),
-        characterName: normalizeText(item?.characterName, 120) || '未命名角色',
-        chatId: comparableChatId(item?.chatId),
-        archiveName: normalizeText(item?.archiveName, 160) || '未命名档案',
-        memoryCount: Math.max(0, Number(item?.memoryCount) || 0),
-        updatedAt: Math.max(0, Number(item?.updatedAt) || 0),
-    })).filter(item => item.characterKey && item.chatId);
+    return raw.slice(0, ARCHIVE_INDEX_MAX).map(item => {
+        const normalized = {
+            entryId: normalizeText(item?.entryId, 120),
+            characterKey: normalizeText(item?.characterKey, 300),
+            avatar: normalizeText(item?.avatar, 300),
+            characterName: normalizeText(item?.characterName, 120) || '未命名角色',
+            characterFingerprint: normalizeText(item?.characterFingerprint, 160),
+            chatId: comparableChatId(item?.chatId),
+            archiveName: normalizeText(item?.archiveName, 160) || '未命名档案',
+            memoryCount: Math.max(0, Number(item?.memoryCount) || 0),
+            updatedAt: Math.max(0, Number(item?.updatedAt) || 0),
+            archiveGroupId: normalizeText(item?.archiveGroupId, 120),
+            archiveGroupManual: item?.archiveGroupManual === true,
+            };
+        normalized.entryId = normalized.entryId || archiveIndexEntryId(normalized);
+        return normalized;
+    }).filter(item => item.characterKey && item.chatId);
 }
 
 function setArchiveIndex(context, items) {
     if (!context.extensionSettings || typeof context.extensionSettings !== 'object') return;
-    const normalized = Array.isArray(items) ? items.slice(0, ARCHIVE_INDEX_MAX) : [];
+    const normalized = Array.isArray(items) ? items.slice(0, ARCHIVE_INDEX_MAX).map(item => ({
+        ...item,
+        entryId: archiveIndexEntryId(item),
+        archiveGroupId: normalizeText(item?.archiveGroupId, 120),
+        archiveGroupManual: item?.archiveGroupManual === true,
+    })) : [];
     context.extensionSettings[ARCHIVE_INDEX_SETTINGS_KEY] = normalized;
     context.saveSettingsDebounced?.();
 }
+
+function archiveGroupKeyForEntry(entry) {
+    return normalizeText(entry?.archiveGroupId, 120) || archiveAutoGroupId(entry);
+}
+
+function archiveGroupMap(context = getContext()) {
+    return new Map(getArchiveGroups(context).map(group => [group.id, group]));
+}
+
+function archiveGroupMeta(groupId, entries, context = getContext()) {
+    const list = Array.isArray(entries) ? entries : [];
+    const registered = archiveGroupMap(context).get(groupId);
+    const first = list[0] || null;
+    return registered || {
+        id: groupId,
+        label: normalizeText(first?.characterName, 120) || '角色档案',
+        characterName: normalizeText(first?.characterName, 120),
+        avatar: archiveStoredAvatar(first),
+        manual: false,
+        characterIndexHint: -1,
+        createdAt: 0,
+        updatedAt: Math.max(0, ...list.map(item => Number(item?.updatedAt) || 0)),
+    };
+}
+
+function characterDescriptor(context, index) {
+    const character = context?.characters?.[index];
+    if (!character) return null;
+    const data = character?.data && typeof character.data === 'object' ? character.data : character;
+    const name = normalizeText(character?.name || data?.name, 120) || `角色 ${Number(index) + 1}`;
+    const avatar = normalizeText(character?.avatar || data?.avatar, 300);
+    const fingerprintSource = [
+        avatar, name,
+        normalizeText(data?.description || character?.description, 5000),
+        normalizeText(data?.personality || character?.personality, 5000),
+        normalizeText(data?.scenario || character?.scenario, 5000),
+        normalizeText(data?.first_mes || character?.first_mes, 5000),
+        normalizeText(data?.mes_example || character?.mes_example, 5000),
+    ].join('\u001f');
+    const fingerprint = `card:${stableArchiveHash(fingerprintSource)}`;
+    return { index: Number(index), name, avatar, fingerprint };
+}
+
+function matchArchiveEntryToCharacter(entry, context = getContext()) {
+    const characters = Array.isArray(context?.characters) ? context.characters : [];
+    const rawName = normalizeText(entry?.characterName, 120);
+    const targetName = rawName && rawName !== '未命名角色' ? rawName : '';
+    const targetAvatar = archiveStoredAvatar(entry);
+    const targetFingerprint = normalizeText(entry?.characterFingerprint, 160);
+    const candidates = characters.map((_, index) => characterDescriptor(context, index)).filter(Boolean);
+    if (targetFingerprint) {
+        const byFingerprint = candidates.filter(item => item.fingerprint === targetFingerprint);
+        if (byFingerprint.length === 1) return byFingerprint[0];
+        return null;
+    }
+    if (targetName) {
+        const exact = candidates.filter(item => item.name === targetName && (!targetAvatar || item.avatar === targetAvatar));
+        if (exact.length === 1) return exact[0];
+        const byName = candidates.filter(item => item.name === targetName);
+        if (byName.length === 1) return byName[0];
+        // Never map a known source name to another card just because both cards share an avatar.
+        return null;
+    }
+    const byAvatar = targetAvatar ? candidates.filter(item => item.avatar === targetAvatar) : [];
+    if (byAvatar.length === 1) return byAvatar[0];
+    return null;
+}
+
+function archiveCharacterCandidates(entry, context = getContext()) {
+    const characters = Array.isArray(context?.characters) ? context.characters : [];
+    const targetName = normalizeText(entry?.characterName, 120);
+    const targetAvatar = archiveStoredAvatar(entry);
+    return characters.map((_, index) => characterDescriptor(context, index)).filter(Boolean).filter(item => {
+        if (targetAvatar && item.avatar !== targetAvatar) return false;
+        if (targetName && targetName !== '未命名角色' && item.name !== targetName) return false;
+        return true;
+    });
+}
+
+function archiveEntryNeedsManualClassification(entry, context = getContext()) {
+    if (normalizeText(entry?.characterFingerprint, 160)) return false;
+    return archiveCharacterCandidates(entry, context).length > 1;
+}
+
+function ensureArchiveUnresolvedGroup(groups, entry) {
+    const entryId = archiveIndexEntryId(entry);
+    const id = `review:${stableArchiveHash(entryId)}`;
+    let group = groups.find(item => item.id === id);
+    if (!group) {
+        const name = normalizeText(entry?.characterName, 120) || '角色档案';
+        group = normalizeArchiveGroup({
+            id,
+            label: `${name} · 待手动分类`,
+            characterName: name,
+            avatar: archiveStoredAvatar(entry),
+            characterFingerprint: '',
+            manual: false,
+            characterIndexHint: -1,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+        });
+        groups.push(group);
+    }
+    return group;
+}
+
+function ensureArchiveAutoGroup(groups, descriptor, fallbackEntry = null) {
+    const identity = descriptor
+        ? { avatar: descriptor.avatar, characterKey: descriptor.avatar || `character:${descriptor.index}`, characterName: descriptor.name, characterFingerprint: descriptor.fingerprint }
+        : fallbackEntry;
+    const id = archiveAutoGroupId(identity);
+    let group = groups.find(item => item.id === id);
+    if (!group) {
+        group = normalizeArchiveGroup({
+            id,
+            label: normalizeText(descriptor?.name || fallbackEntry?.characterName, 120) || '角色档案',
+            characterName: normalizeText(descriptor?.name || fallbackEntry?.characterName, 120),
+            avatar: normalizeText(descriptor?.avatar || archiveStoredAvatar(fallbackEntry), 300),
+            characterFingerprint: normalizeText(descriptor?.fingerprint || fallbackEntry?.characterFingerprint, 160),
+            manual: false,
+            characterIndexHint: descriptor?.index ?? -1,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+        });
+        groups.push(group);
+    } else {
+        group.label = normalizeText(descriptor?.name || group.label, 120) || group.label;
+        group.characterName = normalizeText(descriptor?.name || group.characterName, 120);
+        group.avatar = normalizeText(descriptor?.avatar || group.avatar, 300);
+        group.characterFingerprint = normalizeText(descriptor?.fingerprint || group.characterFingerprint, 160);
+        if (descriptor) group.characterIndexHint = descriptor.index;
+        group.updatedAt = Date.now();
+    }
+    return group;
+}
+
+function autoClassifyArchiveIndex(context = getContext(), { confirm = true } = {}) {
+    const items = getArchiveIndex(context);
+    if (!items.length) return 0;
+    if (confirm && !confirmExplicitAction('自动分类档案？', '只会重排心跳回忆“档案室”的索引归属，不会移动、重命名、删除 SillyTavern 的任何聊天文件，也不会切换当前聊天。手动移动过的档案不会被自动分类覆盖。', { destructive: false })) return 0;
+    const groups = getArchiveGroups(context);
+    let changed = 0;
+    for (const item of items) {
+        if (item.archiveGroupManual) continue;
+        const descriptor = matchArchiveEntryToCharacter(item, context);
+        if (descriptor && !item.characterFingerprint) item.characterFingerprint = descriptor.fingerprint;
+        const group = !descriptor && archiveEntryNeedsManualClassification(item, context)
+            ? ensureArchiveUnresolvedGroup(groups, item)
+            : ensureArchiveAutoGroup(groups, descriptor, item);
+        if (item.archiveGroupId !== group.id || item.archiveGroupManual) changed += 1;
+        item.archiveGroupId = group.id;
+        item.archiveGroupManual = false;
+    }
+    setArchiveGroups(context, groups);
+    setArchiveIndex(context, items);
+    return changed;
+}
+
+function createArchiveGroupForCharacter(context, characterIndex) {
+    const descriptor = characterDescriptor(context, Number(characterIndex));
+    if (!descriptor) throw new Error('没有找到你选择的 SillyTavern 角色。');
+    const groups = getArchiveGroups(context);
+    const id = `manual:${stableArchiveHash(`${descriptor.avatar}\u001f${descriptor.name}\u001f${Date.now()}\u001f${Math.random()}`)}`;
+    groups.unshift(normalizeArchiveGroup({
+        id,
+        label: descriptor.name,
+        characterName: descriptor.name,
+        avatar: descriptor.avatar,
+        characterFingerprint: descriptor.fingerprint,
+        manual: true,
+        characterIndexHint: descriptor.index,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+    }));
+    setArchiveGroups(context, groups);
+    return id;
+}
+
+function moveArchiveIndexEntryToGroup(context, entryId, groupId) {
+    const id = normalizeText(entryId, 120);
+    const target = normalizeText(groupId, 120);
+    const items = getArchiveIndex(context);
+    const item = items.find(entry => archiveIndexEntryId(entry) === id);
+    if (!item) throw new Error('没有找到要移动的档案索引。');
+    if (target === '__AUTO__' || !target) {
+        item.archiveGroupId = '';
+        item.archiveGroupManual = false;
+        const descriptor = matchArchiveEntryToCharacter(item, context);
+        if (descriptor && !item.characterFingerprint) item.characterFingerprint = descriptor.fingerprint;
+        const groups = getArchiveGroups(context);
+        const group = !descriptor && archiveEntryNeedsManualClassification(item, context)
+            ? ensureArchiveUnresolvedGroup(groups, item)
+            : ensureArchiveAutoGroup(groups, descriptor, item);
+        item.archiveGroupId = group.id;
+        setArchiveGroups(context, groups);
+    } else {
+        const groups = getArchiveGroups(context);
+        if (!groups.some(group => group.id === target)) throw new Error('目标角色档案组已经不存在。');
+        item.archiveGroupId = target;
+        item.archiveGroupManual = true;
+    }
+    setArchiveIndex(context, items);
+}
+
+function removeArchiveIndexEntry(context, entryId) {
+    const id = normalizeText(entryId, 120);
+    if (!id) return false;
+    const before = getArchiveIndex(context);
+    const removed = before.find(item => archiveIndexEntryId(item) === id) || null;
+    const after = before.filter(item => archiveIndexEntryId(item) !== id);
+    if (after.length === before.length) return false;
+    setArchiveIndex(context, after);
+    if (removed) archiveSnapshotCache.delete(archiveSnapshotCacheKey(removed));
+    return true;
+}
+
+async function deleteCurrentHeartbeatArchive(entryId = '') {
+    if (hasAnyTask()) throw new Error('当前还有后台任务。为避免删除时与生成写回竞态，请等任务完成后再操作。');
+    const context = currentCharacterGuard();
+    const memory = getImportedMemory(context);
+    if (!memory) throw new Error('当前真实聊天没有可删除的心跳回忆档案。');
+    const expectedChatId = comparableChatId(getChatId(context));
+    const expectedCharacterKey = currentCharacterRuntimeKey(context);
+    const indexed = getArchiveIndex(context).find(item => {
+        if (entryId && archiveIndexEntryId(item) === normalizeText(entryId, 120)) return true;
+        return item.chatId === expectedChatId && archiveEntryMatchesContextCharacter(item, context);
+    });
+    if (indexed && !indexedArchiveMatchesCurrentChat(indexed, context)) {
+        throw new Error('目标档案与当前真实聊天身份不一致。请先手动打开正确聊天后再删除。');
+    }
+    const archiveName = normalizeText(memory.archiveName, 160) || fallbackArchiveName(memory.memories);
+    if (!confirmExplicitAction(
+        `删除当前聊天的心跳回忆档案「${archiveName}」？`,
+        '只删除心跳回忆自己的 MEMORY_KEY 与已生成派生缓存（相簿 / CG / ADV / 房间 / ENDING / HEART 等），不会删除、清空或改写 SillyTavern 聊天正文。删除后如需恢复心跳回忆内容，需要重新建档/生成。',
+        { destructive: true },
+    )) return false;
+    if (!confirmExplicitAction(
+        '最后确认：永久删除这份心跳回忆档案？',
+        '请确认你已经选对当前聊天。聊天正文会保留，但心跳回忆档案及其派生缓存会从当前聊天 metadata 中移除。',
+        { destructive: true },
+    )) return false;
+
+    // No await is allowed before the destructive mutation and save call. Re-check the live scope
+    // immediately so a manually changed chat/card cannot turn this action into a cross-chat delete.
+    const live = currentCharacterGuard();
+    if (comparableChatId(getChatId(live)) !== expectedChatId || currentCharacterRuntimeKey(live) !== expectedCharacterKey) {
+        throw new Error('确认期间当前角色或聊天已经变化，本次删除已取消。');
+    }
+    const scope = cacheScopeFromContext(live);
+    const timer = cachePersistTimers.get(scope);
+    if (timer) clearTimeout(timer);
+    cachePersistTimers.delete(scope);
+    pendingCompressedCacheWrites.delete(scope);
+    runtimeSessionCache.delete(scope);
+    cacheHydrationPromises.delete(scope);
+    cacheHydrationErrors.delete(scope);
+    memoryPreflightCache.delete(scope);
+    usableMessageCountCache.delete(scope);
+    delete live.chatMetadata[MEMORY_KEY];
+    delete live.chatMetadata[CACHE_KEY];
+    rememberCurrentArchiveForOverview(live);
+    syncArchiveOverviewCurrentRow(live);
+    const row = indexed || getArchiveIndex(live).find(item => item.chatId === expectedChatId && archiveEntryMatchesContextCharacter(item, live));
+    if (row) removeArchiveIndexEntry(live, archiveIndexEntryId(row));
+    // Direct save is preferred for this explicit destructive action so a later same-character
+    // chat switch cannot retarget a debounced metadata write.
+    if (typeof live.saveMetadata === 'function') await live.saveMetadata();
+    else live.saveMetadataDebounced?.();
+    activeArchiveSnapshot = null;
+    activeArchiveReadOnly = true;
+    activeMode = null;
+    activeSession = null;
+    return true;
+}
+
+function removeIndexedArchiveFromLibrary(entryId) {
+    const context = getContext();
+    const id = normalizeText(entryId, 120);
+    const item = getArchiveIndex(context).find(entry => archiveIndexEntryId(entry) === id);
+    if (!item) throw new Error('没有找到这个档案索引。');
+    if (!confirmExplicitAction(
+        `从档案室移除「${item.archiveName}」？`,
+        '这里只删除心跳回忆 extension settings 里的轻量索引，不会删除聊天文件，也不会删除聊天 metadata 中真正的心跳回忆档案。以后手动“扫描旧版本已有档案”时它可能重新出现。',
+        { destructive: true },
+    )) return false;
+    return removeArchiveIndexEntry(context, id);
+}
+
+function archiveGroupEntries(groupId, context = getContext()) {
+    const id = normalizeText(groupId, 120);
+    return getArchiveIndex(context).filter(item => archiveGroupKeyForEntry(item) === id);
+}
+
+function archiveGroupAvatarUrl(meta, fallbackEntry = null, context = getContext()) {
+    const avatar = normalizeText(meta?.avatar, 300) || archiveStoredAvatar(fallbackEntry);
+    if (avatar) {
+        try { return context.getThumbnailUrl?.('avatar', avatar) || ''; } catch {}
+    }
+    return fallbackEntry ? archiveCharacterAvatar(fallbackEntry, context) : '';
+}
+
+function currentArchiveGroupKey(context = getContext()) {
+    const entry = getArchiveIndex(context).find(item => indexedArchiveMatchesCurrentChat(item, context));
+    return entry ? archiveGroupKeyForEntry(entry) : '';
+}
+
 
 function getAvatarVisitState(context = getContext()) {
     const raw = context.extensionSettings?.[AVATAR_VISIT_SETTINGS_KEY];
@@ -1193,34 +1619,45 @@ function upsertArchiveIndex(context, memoryBank) {
     if (!chatId) return;
     const characterName = normalizeText(memoryBank.characterName || context.name2, 120) || '未命名角色';
     const existingIndex = getArchiveIndex(context);
-    const rawCharacterKey = currentCharacterKey(context);
-    const existing = existingIndex.find(old => old.chatId === chatId && (
-        old.characterKey === rawCharacterKey
-        || normalizeText(old.characterName, 120) === characterName
-    ));
+    const descriptor = characterDescriptor(context, Number(context.characterId));
+    const existing = existingIndex.find(old => old.chatId === chatId
+        && !!descriptor?.fingerprint
+        && normalizeText(old?.characterFingerprint, 160) === descriptor.fingerprint)
+        || existingIndex.find(old => old.chatId === chatId
+            && !normalizeText(old?.characterFingerprint, 160)
+            && archiveEntryMatchesContextCharacter(old, context));
     // Some mobile/cloud contexts briefly expose the character without an avatar while the
     // drawer/chat UI is remounting. Never replace a previously valid archive avatar with ''.
     const avatar = normalizeText(context.characters?.[context.characterId]?.avatar || context.characters?.[context.characterId]?.data?.avatar, 300)
-        || archiveEntryAvatarName(existing, context)
+        || archiveStoredAvatar(existing)
         || contextCharacterAvatar(context, characterName);
-    const characterKey = avatar || normalizeText(existing?.characterKey, 300) || rawCharacterKey;
+    const characterKey = avatar || normalizeText(existing?.characterKey, 300) || currentCharacterKey(context);
     if (!characterKey) return;
     const item = {
+        entryId: normalizeText(existing?.entryId, 120),
         characterKey, avatar,
         characterName,
+        characterFingerprint: normalizeText(descriptor?.fingerprint || existing?.characterFingerprint, 160),
         chatId,
         archiveName: normalizeText(memoryBank.archiveName, 160) || fallbackArchiveName(memoryBank.memories),
         memoryCount: memoryBank.memories.length,
         updatedAt: Number(memoryBank.updatedAt || memoryBank.createdAt) || Date.now(),
+        archiveGroupId: normalizeText(existing?.archiveGroupId, 120),
+        archiveGroupManual: existing?.archiveGroupManual === true,
     };
-    const canonicalKey = archiveCanonicalCharacterKey(item, context);
-    const index = existingIndex.filter(old => !(
-        old.chatId === chatId && archiveCanonicalCharacterKey(old, context) === canonicalKey
-    ));
+    item.entryId = item.entryId || archiveIndexEntryId(item);
+    if (!item.archiveGroupManual) {
+        const groups = getArchiveGroups(context);
+        const group = ensureArchiveAutoGroup(groups, descriptor, item);
+        item.archiveGroupId = group.id;
+        setArchiveGroups(context, groups);
+    }
+    const index = existingIndex.filter(old => archiveIndexEntryId(old) !== item.entryId);
     index.unshift(item);
     index.sort((a,b) => b.updatedAt - a.updatedAt);
     setArchiveIndex(context, index);
 }
+
 
 
 function mergeImportedMemories(items, limit = MAX_MEMORY_ITEMS) {
@@ -1521,7 +1958,7 @@ function extractChatMetadataSummaryText(value, depth = 0) {
 function currentChatMetadataSummaryMemoryRecords(context = getContext()) {
     const metadata = context.chatMetadata;
     if (!metadata || typeof metadata !== 'object') return [];
-    const excludedKeys = new Set([MEMORY_KEY, CACHE_KEY, MEMORY_WORLD_INFO_SETTINGS_KEY, ARCHIVE_INDEX_SETTINGS_KEY, EXTENSION_SETTINGS_KEY, 'st_evermind']);
+    const excludedKeys = new Set([MEMORY_KEY, CACHE_KEY, MEMORY_WORLD_INFO_SETTINGS_KEY, ARCHIVE_INDEX_SETTINGS_KEY, ARCHIVE_GROUPS_SETTINGS_KEY, EXTENSION_SETTINGS_KEY, 'st_evermind']);
     const records = [];
     for (const [key, raw] of safeOwnDataEntries(metadata)) {
         if (excludedKeys.has(key) || SETTING_ONLY_SOURCE_RE.test(key)) continue;
@@ -2586,7 +3023,7 @@ JSON 结构必须严格为：
     {
       "id": "SP01",
       "label": "卧室",
-      "spaceType": "卧室/客厅/厨房/书房/工作室/阳台/营帐/船舱/实验室/其他",
+      "spaceType": "卧室/客厅/厨房/书房/音乐工作室/录音室/工作室/实验室/餐厅/浴室/衣帽间/练习室/阳台/庭院/营帐/船舱/办公室/其他",
       "atmosphere": "1到3句描述这个空间的光线、陈设、使用痕迹和生活气息",
       "objects": [
         {
@@ -2614,7 +3051,7 @@ JSON 结构必须严格为：
 
 硬性要求：
 - spaces 通常 5～8 个；若角色客观居住条件很简单，也应尽量给出 3～4 个真实会长期使用的生活区域。最多 10 个，仍不得为了“丰富”凭空给普通角色豪宅。
-- 每个空间 objects 3～6 个；空间间的物件必须有区别，不能把同一套床/桌/书架换名重复。
+- 每个空间 objects 3～6 个；空间间的物件必须有区别，不能把同一套床/桌/书架换名重复。不同 spaceType 的主陈设结构也必须明显不同：卧室以床/床头为核心，客厅以沙发/茶几为核心，书房以书架/书桌为核心，音乐/录音工作室以乐器/控制台/监听或吸音结构为核心，实验室以工作台/设备为核心，餐厅以餐桌为核心，浴室以浴缸/淋浴/洗漱为核心。
 - zone 只能是“左上/右上/左下/右下/中央/近景”。
 - spaceType 必须符合角色时代与生活条件。不要强行现代化；“他的房间”只是功能名，不代表一定是现代卧室。
 - basis 只能是“设定”或“记忆”。
@@ -3779,12 +4216,23 @@ function cacheManifestModes(context = getContext()) {
     return isCompressedCacheRecord(stored) && Array.isArray(stored.modes) ? stored.modes : [];
 }
 
+function cacheStillMatchesLiveArchive(cache, context, expectedScope) {
+    if (!cache || !context || cacheScopeFromContext(context) !== expectedScope) return false;
+    const memory = getImportedMemory(context);
+    if (!memory) return false;
+    const cacheChatId = comparableChatId(cache?.chatId);
+    const cacheRevision = normalizeText(cache?.archiveRevision, 240);
+    if (cacheChatId && cacheChatId !== comparableChatId(memory.chatId)) return false;
+    if (cacheRevision && cacheRevision !== normalizeText(memory.archiveRevision, 240)) return false;
+    return true;
+}
+
 async function persistCompressedCacheNow(context, cache, expectedScope = cacheScopeFromContext(context)) {
     if (!cache || typeof cache !== 'object') return false;
     if (typeof CompressionStream !== 'function') {
         let latest;
         try { latest = currentCharacterGuard(); } catch { return false; }
-        if (cacheScopeFromContext(latest) !== expectedScope) return false;
+        if (!cacheStillMatchesLiveArchive(cache, latest, expectedScope)) return false;
         latest.chatMetadata[CACHE_KEY] = cache;
         latest.saveMetadataDebounced?.();
         return true;
@@ -3797,6 +4245,12 @@ async function persistCompressedCacheNow(context, cache, expectedScope = cacheSc
     try { latest = currentCharacterGuard(); } catch { latest = null; }
     if (!latest || cacheScopeFromContext(latest) !== expectedScope) {
         pendingCompressedCacheWrites.set(expectedScope, record);
+        return false;
+    }
+    // Compression can finish after an explicit archive delete/full revision change. Never let
+    // a stale in-flight gzip resurrect a removed/older Heartbeat cache into live metadata.
+    if (!cacheStillMatchesLiveArchive(cache, latest, expectedScope)) {
+        pendingCompressedCacheWrites.delete(expectedScope);
         return false;
     }
     latest.chatMetadata[CACHE_KEY] = record;
@@ -4082,6 +4536,45 @@ async function assertPromptBudget(context, prompt, { skipTokenCount = false } = 
     }
 }
 
+const GENERATED_PHRASE_EVIDENCE_KEYS = new Set([
+    'sourceMemoryAnchor', 'relationshipSourceMemoryAnchor', 'sourceExternalAnchor',
+]);
+
+function generatedPhrasePolicyText(settings) {
+    const banned = normalizeBannedGeneratedPhrases(settings?.bannedGeneratedPhrases);
+    if (!banned.length) return '';
+    return `\n\n【新生成文本禁用词】除 sourceMemoryAnchor / relationshipSourceMemoryAnchor / sourceExternalAnchor 等证据锚点必须忠实引用原档案外，任何新生成的标题、叙述、角色台词、模拟用户台词、摘要、场景文本中都禁止出现以下词语：${banned.map(item => `「${item}」`).join('、')}。不要解释这条规则，只需改用符合人设且不含禁用词的表达。`;
+}
+
+function findBannedGeneratedPhrase(value, banned, key = '') {
+    if (GENERATED_PHRASE_EVIDENCE_KEYS.has(key)) return '';
+    if (typeof value === 'string') return banned.find(phrase => phrase && value.includes(phrase)) || '';
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            const found = findBannedGeneratedPhrase(item, banned, key);
+            if (found) return found;
+        }
+        return '';
+    }
+    if (value && typeof value === 'object') {
+        for (const [childKey, childValue] of Object.entries(value)) {
+            const found = findBannedGeneratedPhrase(childValue, banned, childKey);
+            if (found) return found;
+        }
+    }
+    return '';
+}
+
+function assertNoBannedGeneratedPhrase(value, settings) {
+    const banned = normalizeBannedGeneratedPhrases(settings?.bannedGeneratedPhrases);
+    if (!banned.length) return;
+    const found = findBannedGeneratedPhrase(value, banned);
+    if (!found) return;
+    const error = new Error(`模型新生成内容命中禁用词「${found}」。本次结果没有保存，也不会自动重试；请手动重试，或在插件设置里调整“生成禁用词”。历史聊天原文和证据锚点不会被改写。`);
+    error.code = 'RMT_BANNED_GENERATED_PHRASE';
+    throw error;
+}
+
 async function generateConfiguredJson(prompt, options = {}) {
     const context = options.context || currentCharacterGuard();
     const settings = getPluginSettings(context);
@@ -4089,8 +4582,9 @@ async function generateConfiguredJson(prompt, options = {}) {
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
         : await buildControlledContextEnvelope(context);
+    const phrasePolicy = options.enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(settings) : '';
     const controlledPrompt = `${contextEnvelope}
-${expanded}`;
+${expanded}${phrasePolicy}`;
     await assertPromptBudget(context, controlledPrompt, { skipTokenCount: options.skipTokenCount === true });
     const requestedMax = Math.max(1024, Math.min(MAX_GENERATION_OUTPUT_TOKENS, Number(options.maxTokens) || settings.maxTokens));
     const responseLength = Math.min(settings.maxTokens, requestedMax);
@@ -4113,7 +4607,9 @@ ${expanded}`;
         { stream: false, extractData: true, includePreset: true, includeInstruct: true, signal: options.signal || null },
         overridePayload,
     );
-    return extractJson(result?.content ?? result, { reasoning: result?.reasoning || '' });
+    const parsed = extractJson(result?.content ?? result, { reasoning: result?.reasoning || '' });
+    if (options.enforceGeneratedPhrasePolicy === true) assertNoBannedGeneratedPhrase(parsed, settings);
+    return parsed;
 }
 
 async function requestJson(prompt, statusText = '正在根据当前聊天档案生成…', options = {}) {
@@ -4136,7 +4632,7 @@ async function requestJson(prompt, statusText = '正在根据当前聊天档案�
     });
     refreshConcurrentTaskUi(normalizeText(options.mode, 80), origin);
     try {
-        return await generateConfiguredJson(prompt, { ...options, signal: controller.signal });
+        return await generateConfiguredJson(prompt, { ...options, signal: controller.signal, enforceGeneratedPhrasePolicy: options.enforceGeneratedPhrasePolicy !== false });
     } finally {
         const current = activeGenerationTasks.get(taskKey);
         if (current?.controller === controller) activeGenerationTasks.delete(taskKey);
@@ -4335,7 +4831,7 @@ async function generateAdvIndexWithRepair(context, memoryBank, origin, expectedC
         );
         events = normalizeEventList(raw, memoryBank, { allowPartial: true }).events;
     } catch (error) {
-        if (error?.name === 'AbortError') throw error;
+        if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
         console.warn('[HeartbeatMemories] bulk CG index request failed; falling back to individual repair', error);
     }
 
@@ -4373,7 +4869,7 @@ async function generateAdvIndexWithRepair(context, memoryBank, origin, expectedC
             seen.add(key);
             events.push(candidate);
         } catch (error) {
-            if (error?.name === 'AbortError') throw error;
+            if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
             console.warn('[HeartbeatMemories] single CG index repair failed', { attempt, error });
         }
     }
@@ -5162,6 +5658,59 @@ dialog#${OVERLAY_ID}::backdrop{background:transparent}
 .rmt-room-scene-traditional:before{background:repeating-linear-gradient(90deg,#fbf8ef 0 54px,#c9b992 55px 57px);border-color:#d0c19e}.rmt-room-scene-traditional .rmt-room-window{background:repeating-linear-gradient(90deg,#fffdf5 0 24px,#d6c8aa 25px 26px);border-color:#d0c19e}.rmt-room-scene-traditional .rmt-room-furniture{height:10%;background:#9e7f5e;box-shadow:0 6px 0 #7f6449}
 .rmt-room-scene-office{background:linear-gradient(180deg,#eef4f7 0 61%,#c6d1d6 61% 64%,#aebcc3 64% 100%)}
 .rmt-room-scene-office .rmt-room-furniture{width:46%;height:14%;background:#b8c7ce;box-shadow:0 8px 0 #8fa3ad}.rmt-room-scene-office .rmt-room-furniture:after{background:#d5e0e5;box-shadow:0 6px 0 #afc0c8}
+/* r21：房间类型拥有不同的代码场景骨架；模型不能提供 CSS/坐标。 */
+.rmt-room-scene-studio{background:linear-gradient(180deg,#eef0f6 0 61%,#b4aeb8 61% 64%,#77717c 64% 100%)}
+.rmt-room-scene-studio:before{left:5%;right:5%;top:7%;height:51%;background:repeating-linear-gradient(90deg,#d8d4df 0 34px,#aaa4b2 35px 39px,#eeeaf2 40px 72px);border-color:#aaa5b2;box-shadow:inset 0 -38px rgba(78,72,88,.08)}
+.rmt-room-scene-studio .rmt-room-window{left:9%;right:auto;top:15%;width:15%;height:20%;border-radius:4px;background:linear-gradient(180deg,#b8d5e3,#e7d9e4);filter:saturate(.7)}
+.rmt-room-scene-studio .rmt-room-furniture{left:28%;bottom:16%;width:48%;height:13%;border-radius:5px;background:linear-gradient(180deg,#677382,#505864);box-shadow:0 8px 0 #363d47,0 16px 24px rgba(30,32,38,.22)}
+.rmt-room-scene-studio .rmt-room-furniture:after{right:-28%;bottom:-4px;width:22%;height:150%;border-radius:8px;background:repeating-linear-gradient(180deg,#2e333b 0 12px,#778999 13px 15px);box-shadow:0 6px 0 #20252b}
+.rmt-room-scene-studio .rmt-room-furniture:before{left:18%;top:-30px;content:"◉  ▥  ◉";font-size:18px;color:#d7e5ee;letter-spacing:.28em}
+.rmt-room-scene-study{background:linear-gradient(180deg,#f4f0e8 0 61%,#b79f85 61% 64%,#8f755e 64% 100%)}
+.rmt-room-scene-study:before{left:5%;right:auto;top:7%;width:31%;height:52%;border-radius:4px;background:repeating-linear-gradient(180deg,#6f5745 0 8px,#d5c09f 9px 26px,#7e624c 27px 32px);border-color:#745d4a;box-shadow:none}
+.rmt-room-scene-study .rmt-room-window{right:8%;top:11%;width:21%;height:25%}
+.rmt-room-scene-study .rmt-room-furniture{left:40%;bottom:16%;width:39%;height:12%;border-radius:3px;background:#987a60;box-shadow:0 8px 0 #725841}
+.rmt-room-scene-study .rmt-room-furniture:after{right:-31%;bottom:-1px;width:20%;height:118%;background:#876c56;box-shadow:0 5px 0 #65503f}
+.rmt-room-scene-lab{background:linear-gradient(180deg,#edf7f7 0 61%,#bccdce 61% 64%,#8fa4a6 64% 100%)}
+.rmt-room-scene-lab:before{left:4%;right:4%;top:8%;height:48%;border-radius:5px;background:repeating-linear-gradient(90deg,#f8ffff 0 55px,#c7dedf 56px 58px);border-color:#abc7c8;box-shadow:inset 0 -28px rgba(55,123,127,.07)}
+.rmt-room-scene-lab .rmt-room-window{right:6%;top:13%;width:15%;height:22%;background:linear-gradient(180deg,#c9f0f0,#efffff);border-color:#a9cfd0}
+.rmt-room-scene-lab .rmt-room-furniture{left:8%;bottom:15%;width:64%;height:13%;border-radius:4px;background:#d8e6e6;box-shadow:0 8px 0 #a6babc}
+.rmt-room-scene-lab .rmt-room-furniture:after{right:-31%;bottom:-1px;width:22%;height:145%;border-radius:4px;background:repeating-linear-gradient(180deg,#bed2d3 0 18px,#8ba7a9 19px 21px);box-shadow:0 6px 0 #779496}
+.rmt-room-scene-bath{background:linear-gradient(180deg,#eef9fb 0 61%,#d7ecef 61% 64%,#b9d4d9 64% 100%)}
+.rmt-room-scene-bath:before{left:4%;right:4%;top:7%;height:52%;border-radius:6px;background:repeating-linear-gradient(0deg,#f9ffff 0 38px,#d9ecef 39px 40px),repeating-linear-gradient(90deg,transparent 0 49px,#d9ecef 50px 51px);border-color:#c5dfe3}
+.rmt-room-scene-bath .rmt-room-window{right:9%;top:11%;width:18%;height:19%;background:#e9fbff}
+.rmt-room-scene-bath .rmt-room-furniture{left:12%;bottom:13%;width:46%;height:18%;border-radius:8px 8px 28px 28px;background:#f5fbfc;box-shadow:0 7px 0 #a9cbd1}
+.rmt-room-scene-bath .rmt-room-furniture:after{right:-63%;bottom:28%;width:29%;height:125%;border-radius:10px;background:#d8e9ec;box-shadow:0 5px 0 #a7c1c6}
+.rmt-room-scene-dining{background:linear-gradient(180deg,#f9f4ed 0 61%,#d6c1a9 61% 64%,#b79a7d 64% 100%)}
+.rmt-room-scene-dining:before{left:7%;right:7%;top:9%;height:46%;background:linear-gradient(180deg,#fffaf4,#f3e7d8);border-color:#ddc9b3}
+.rmt-room-scene-dining .rmt-room-furniture{left:27%;bottom:18%;width:46%;height:11%;border-radius:50% / 24%;background:#b88d6a;box-shadow:0 8px 0 #8b684e}
+.rmt-room-scene-dining .rmt-room-furniture:after{right:-25%;bottom:-30%;width:18%;height:115%;background:#a98264;box-shadow:0 5px 0 #7d604b}
+.rmt-room-scene-dining .rmt-room-furniture:before{left:35%;top:-35px;content:"◒  ◇";font-size:18px;color:#b58b72}
+/* 同类空间仍保留稳定的三种构图，避免每间卧室/书房都只换标题。 */
+.rmt-room-scene[data-rmt-layout="2"] .rmt-room-window{right:auto;left:9%}
+.rmt-room-scene[data-rmt-layout="2"] .rmt-room-furniture{left:auto;right:9%;transform:scaleX(.96)}
+.rmt-room-scene[data-rmt-layout="3"] .rmt-room-window{right:38%;top:10%;width:20%}
+.rmt-room-scene[data-rmt-layout="3"] .rmt-room-furniture{left:17%;width:49%}
+.rmt-room-scene-studio[data-rmt-layout="2"] .rmt-room-window{left:auto;right:8%}.rmt-room-scene-studio[data-rmt-layout="2"] .rmt-room-furniture{right:auto;left:12%;width:52%}
+.rmt-room-scene-study[data-rmt-layout="2"]:before{left:auto;right:5%}.rmt-room-scene-study[data-rmt-layout="2"] .rmt-room-furniture{left:11%}
+.rmt-room-scene-lab[data-rmt-layout="3"] .rmt-room-furniture{left:18%;width:66%}
+.rmt-room-decor,.rmt-room-decor span{position:absolute;inset:0;pointer-events:none}.rmt-room-decor{z-index:2}.rmt-room-decor span:before,.rmt-room-decor span:after{content:"";position:absolute;display:block;box-sizing:border-box}
+/* Each room class owns a different fixed prop silhouette. These are code enums, never model CSS. */
+.rmt-room-scene-bedroom .rmt-room-prop-a:before{right:8%;bottom:14%;width:18%;height:42%;border-radius:5px;background:linear-gradient(90deg,#d8c5bd,#bca59c);box-shadow:inset -7px 0 rgba(255,255,255,.16),0 7px 0 #a88f85}.rmt-room-scene-bedroom .rmt-room-prop-b:before{left:10%;bottom:12%;width:18%;height:6%;border-radius:50%;background:#cbbbc2}.rmt-room-scene-bedroom .rmt-room-prop-c:before{left:39%;bottom:34%;width:11%;height:8%;border-radius:6px;background:#e7d7dc;box-shadow:0 4px 0 #cdbbc1}
+.rmt-room-scene-lounge .rmt-room-prop-a:before{right:8%;bottom:24%;width:24%;height:23%;border:7px solid #8396a0;border-radius:5px;background:#c9e2ec;box-shadow:0 7px 0 #6f818a}.rmt-room-scene-lounge .rmt-room-prop-b:before{left:39%;bottom:12%;width:25%;height:7%;border-radius:50%;background:#aa8f7d;box-shadow:0 5px 0 #8f7462}.rmt-room-scene-lounge .rmt-room-prop-c:before{right:4%;bottom:12%;width:9%;height:15%;border-radius:50% 50% 30% 30%;background:#9bb59e;box-shadow:0 6px 0 #7f9a84}
+.rmt-room-scene-kitchen .rmt-room-prop-a:before{right:7%;bottom:13%;width:18%;height:44%;border-radius:5px;background:#d6e0df;box-shadow:inset 0 -18px #c4d1cf,0 7px 0 #9fb2ae}.rmt-room-scene-kitchen .rmt-room-prop-b:before{left:24%;bottom:35%;width:20%;height:16%;border-radius:50% 50% 4px 4px;background:#aebfba}.rmt-room-scene-kitchen .rmt-room-prop-c:before{left:44%;bottom:11%;width:32%;height:8%;border-radius:5px;background:#d5c1a9;box-shadow:0 6px 0 #b49a7f}
+.rmt-room-scene-studio .rmt-room-prop-a:before{left:8%;bottom:12%;width:14%;height:31%;border-radius:6px;background:repeating-linear-gradient(180deg,#252b33 0 17px,#718797 18px 20px);box-shadow:0 7px 0 #1c2127}.rmt-room-scene-studio .rmt-room-prop-b:before{right:9%;bottom:12%;width:15%;height:32%;border-radius:6px;background:repeating-linear-gradient(180deg,#252b33 0 17px,#718797 18px 20px);box-shadow:0 7px 0 #1c2127}.rmt-room-scene-studio .rmt-room-prop-c:before{left:48%;bottom:29%;width:2px;height:30%;background:#59636e;box-shadow:10px -8px 0 2px #7e8995}
+.rmt-room-scene-study .rmt-room-prop-a:before{right:8%;bottom:12%;width:20%;height:43%;background:repeating-linear-gradient(180deg,#715744 0 7px,#cfb995 8px 23px,#7b6049 24px 29px);border-radius:3px}.rmt-room-scene-study .rmt-room-prop-b:before{left:48%;bottom:29%;width:8%;height:8%;border-radius:50%;background:#e9cf87;box-shadow:0 6px 0 -2px #95785d}.rmt-room-scene-study .rmt-room-prop-c:before{left:32%;bottom:12%;width:18%;height:5%;background:#c7b093;border-radius:2px}
+.rmt-room-scene-lab .rmt-room-prop-a:before{left:10%;bottom:30%;width:11%;height:17%;border:2px solid #6da3a5;border-radius:4px;background:linear-gradient(180deg,#d9ffff,#99d5d5)}.rmt-room-scene-lab .rmt-room-prop-b:before{left:25%;bottom:29%;width:8%;height:13%;border:2px solid #7e9ea0;border-radius:50% 50% 8px 8px;background:#d8eeee}.rmt-room-scene-lab .rmt-room-prop-c:before{right:9%;bottom:15%;width:15%;height:36%;background:repeating-linear-gradient(180deg,#b9cccd 0 14px,#879fa1 15px 17px);border-radius:3px}
+.rmt-room-scene-bath .rmt-room-prop-a:before{right:9%;bottom:17%;width:17%;height:25%;border-radius:50% 50% 6px 6px;background:#d8ecef;box-shadow:0 6px 0 #a7c7cc}.rmt-room-scene-bath .rmt-room-prop-b:before{right:8%;top:14%;width:21%;height:21%;border-radius:50%;border:5px solid #e8f6f8;background:#c7e9ef}.rmt-room-scene-bath .rmt-room-prop-c:before{left:9%;bottom:12%;width:16%;height:5%;background:#a8d2d7;border-radius:50%}
+.rmt-room-scene-dining .rmt-room-prop-a:before{left:17%;bottom:15%;width:9%;height:22%;border-radius:12px 12px 3px 3px;background:#9f795d}.rmt-room-scene-dining .rmt-room-prop-b:before{right:17%;bottom:15%;width:9%;height:22%;border-radius:12px 12px 3px 3px;background:#9f795d}.rmt-room-scene-dining .rmt-room-prop-c:before{left:48%;bottom:28%;width:8%;height:8%;border-radius:50%;background:#d7aa7c}
+.rmt-room-scene-balcony .rmt-room-prop-a:before{left:8%;bottom:10%;width:12%;height:24%;border-radius:50% 50% 12% 12%;background:#8cac91;box-shadow:0 7px 0 #6e8c74}.rmt-room-scene-balcony .rmt-room-prop-b:before{right:8%;bottom:10%;width:13%;height:28%;border-radius:50% 50% 12% 12%;background:#9fba91;box-shadow:0 7px 0 #78956f}.rmt-room-scene-balcony .rmt-room-prop-c:before{left:32%;bottom:12%;width:36%;height:4%;background:#81979a;border-radius:4px}
+.rmt-room-scene-workshop .rmt-room-prop-a:before{right:7%;bottom:13%;width:20%;height:42%;background:repeating-linear-gradient(180deg,#919da2 0 15px,#c9d1d4 16px 29px,#808c91 30px 33px);border-radius:3px}.rmt-room-scene-workshop .rmt-room-prop-b:before{left:17%;bottom:30%;width:10%;height:10%;border:4px solid #77858b;border-radius:50%}.rmt-room-scene-workshop .rmt-room-prop-c:before{left:31%;bottom:13%;width:21%;height:5%;background:#6f7b80;transform:rotate(-8deg)}
+.rmt-room-scene-office .rmt-room-prop-a:before{left:31%;bottom:34%;width:22%;height:17%;border:6px solid #8197a2;background:#d5e7ef;border-radius:4px}.rmt-room-scene-office .rmt-room-prop-b:before{right:8%;bottom:12%;width:18%;height:39%;background:repeating-linear-gradient(180deg,#afc0c7 0 14px,#dce6ea 15px 29px,#9eb0b8 30px 32px);border-radius:3px}.rmt-room-scene-office .rmt-room-prop-c:before{left:48%;bottom:10%;width:10%;height:16%;border-radius:50% 50% 6px 6px;background:#8da1aa}
+.rmt-room-scene-traditional .rmt-room-prop-a:before{left:16%;bottom:14%;width:18%;height:7%;border-radius:50%;background:#b98f69}.rmt-room-scene-traditional .rmt-room-prop-b:before{right:19%;bottom:14%;width:18%;height:7%;border-radius:50%;background:#b98f69}.rmt-room-scene-traditional .rmt-room-prop-c:before{left:38%;bottom:12%;width:24%;height:7%;background:#8e6e51;border-radius:2px}
+.rmt-room-scene-tent .rmt-room-prop-a:before{right:16%;bottom:18%;width:8%;height:17%;border-radius:50% 50% 8px 8px;background:#d9a85f;box-shadow:0 0 14px rgba(217,168,95,.35)}.rmt-room-scene-tent .rmt-room-prop-b:before{left:12%;bottom:11%;width:20%;height:12%;background:#9d7858;border-radius:4px;box-shadow:0 6px 0 #7e5e45}.rmt-room-scene-tent .rmt-room-prop-c:before{right:10%;bottom:10%;width:18%;height:10%;background:#8c6e55;border-radius:3px}
+.rmt-room-scene-cabin .rmt-room-prop-a:before{left:8%;top:15%;width:15%;height:14%;border-radius:50%;border:5px solid #697f89;background:#b9e2f0}.rmt-room-scene-cabin .rmt-room-prop-b:before{right:7%;bottom:15%;width:25%;height:20%;border-radius:4px;background:repeating-linear-gradient(90deg,#728893 0 17px,#a9bdc5 18px 20px);box-shadow:0 7px 0 #526873}.rmt-room-scene-cabin .rmt-room-prop-c:before{left:46%;bottom:34%;width:15%;height:10%;border-radius:4px;background:#7e949e}
+.rmt-room-scene-modern .rmt-room-prop-a:before{right:9%;bottom:13%;width:18%;height:30%;border-radius:5px;background:#d6e3e8;box-shadow:0 7px 0 #afc3cb}.rmt-room-scene-modern .rmt-room-prop-b:before{left:43%;bottom:13%;width:22%;height:6%;border-radius:50%;background:#c8b4a4}.rmt-room-scene-modern .rmt-room-prop-c:before{left:11%;top:18%;width:13%;height:18%;border:4px solid #c7dce5;background:#eff9fc}
+.rmt-room-scene[data-rmt-layout="2"] .rmt-room-decor{transform:scaleX(-1)}.rmt-room-scene[data-rmt-layout="3"] .rmt-room-decor{transform:translateX(3%) scale(.94)}
 .rmt-room-person{position:absolute;z-index:5;left:48%;bottom:14%;width:94px;height:164px;border:0;background:transparent;cursor:pointer;color:#5c6f83;padding:0;animation:rmtRoomIdle 4.8s ease-in-out infinite}
 .rmt-room-person:hover .rmt-room-head{transform:translateY(-2px)}
 @keyframes rmtRoomIdle{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
@@ -5237,7 +5786,7 @@ dialog#${OVERLAY_ID}::backdrop{background:transparent}
 .rmt-archive-portal.empty .rmt-portal-status{color:#9aa4ad}
 .rmt-archive-generate-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 13px;border:1px dashed #c7dce6;border-radius:14px;background:rgba(249,252,253,.82)}
 .rmt-archive-generate{min-width:220px}.rmt-archive-generate-row small{font-size:10px;line-height:1.55;color:#7d8b99}
-.rmt-external-memory-row{display:grid;gap:5px;margin:10px 0 2px;padding:10px 12px;border:1px solid #dbe7ec;border-radius:13px;background:rgba(250,253,254,.84);color:#66798a}.rmt-external-memory-toggle{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:750}.rmt-external-memory-row small{font-size:10px;line-height:1.55;color:#8794a0}.rmt-memory-wi-picker{position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(242,248,251,.88);backdrop-filter:blur(7px)}.rmt-memory-wi-picker-card{width:min(780px,96vw);max-height:min(78vh,780px);overflow:auto;padding:16px;border:1px solid #d6e4ea;border-radius:18px;background:#fff;box-shadow:0 18px 50px rgba(55,78,92,.18)}.rmt-memory-wi-picker-head,.rmt-memory-wi-book-row{display:flex;align-items:center;justify-content:space-between;gap:10px}.rmt-memory-wi-picker-head small{display:block;margin-top:3px;color:#8795a1}.rmt-memory-wi-picker-note{margin:10px 0;padding:9px 11px;border-radius:11px;background:#f6fafc;color:#71818d;font-size:11px;line-height:1.55}.rmt-memory-wi-books{display:grid;gap:8px}.rmt-memory-wi-book{padding:10px;border:1px solid #e0e9ed;border-radius:13px;background:#fbfdfe}.rmt-memory-wi-book-row label{font-size:12px}.rmt-memory-wi-entry-list{display:grid;gap:7px;margin-top:9px}.rmt-memory-wi-entry{display:flex;gap:8px;align-items:flex-start;padding:8px;border-radius:10px;background:#fff;border:1px solid #e8eef1}.rmt-memory-wi-entry span{display:grid;gap:2px;min-width:0}.rmt-memory-wi-entry small{font-size:10px;color:#8b98a2}.rmt-memory-wi-entry em{font-style:normal;font-size:10px;line-height:1.45;color:#65747f}.rmt-memory-wi-empty{padding:18px;text-align:center;color:#8b98a2}
+.rmt-external-memory-row{display:grid;gap:5px;margin:10px 0 2px;padding:10px 12px;border:1px solid #dbe7ec;border-radius:13px;background:rgba(250,253,254,.84);color:#66798a}.rmt-external-memory-toggle{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:750}.rmt-external-memory-row small{font-size:10px;line-height:1.55;color:#8794a0}.rmt-memory-wi-picker{position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(242,248,251,.88);backdrop-filter:blur(7px)}.rmt-memory-wi-picker-card{width:min(780px,96vw);max-height:min(78vh,780px);overflow:auto;padding:16px;border:1px solid #d6e4ea;border-radius:18px;background:#fff;box-shadow:0 18px 50px rgba(55,78,92,.18)}.rmt-memory-wi-picker-head,.rmt-memory-wi-book-row{display:flex;align-items:center;justify-content:space-between;gap:10px}.rmt-memory-wi-picker-head small{display:block;margin-top:3px;color:#8795a1}.rmt-memory-wi-picker-note{margin:10px 0;padding:9px 11px;border-radius:11px;background:#f6fafc;color:#71818d;font-size:11px;line-height:1.55}.rmt-memory-wi-books{display:grid;gap:8px}.rmt-memory-wi-book{padding:10px;border:1px solid #e0e9ed;border-radius:13px;background:#fbfdfe}.rmt-memory-wi-book-row label{font-size:12px}.rmt-memory-wi-entry-list{display:grid;gap:7px;margin-top:9px}.rmt-memory-wi-entry{display:flex;gap:8px;align-items:flex-start;padding:8px;border-radius:10px;background:#fff;border:1px solid #e8eef1}.rmt-memory-wi-entry span{display:grid;gap:2px;min-width:0}.rmt-memory-wi-entry small{font-size:10px;color:#8b98a2}.rmt-memory-wi-entry em{font-style:normal;font-size:10px;line-height:1.45;color:#65747f}.rmt-memory-wi-empty{padding:18px;text-align:center;color:#8b98a2}.rmt-archive-group-manager{position:absolute;inset:0;z-index:61;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(242,248,251,.9);backdrop-filter:blur(7px)}.rmt-archive-group-create{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;margin:10px 0}.rmt-archive-group-entries{display:grid;gap:8px}.rmt-archive-group-entry{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.8fr);gap:10px;align-items:center;padding:10px;border:1px solid #e0e9ed;border-radius:13px;background:#fbfdfe}.rmt-archive-group-entry b{display:block;color:#5c7083}.rmt-archive-group-entry small{display:block;margin-top:3px;color:#8a98a4;font-size:9px}.rmt-archive-group-entry-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}@media(max-width:720px){.rmt-archive-group-create,.rmt-archive-group-entry{grid-template-columns:1fr}.rmt-archive-group-entry-actions{grid-template-columns:1fr auto}}
 #${SETTINGS_ID} .rmt-open-archive-room{width:100%!important;min-height:48px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;background:linear-gradient(90deg,#fff6fa,#f2faff)!important;border:1px solid #d4e2e9!important;color:#566a80!important;font-weight:850!important}
 #${SETTINGS_ID} .rmt-settings-archive-actions{display:grid;gap:8px;margin-top:10px}.rmt-current-archive-card{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.rmt-current-archive-card>div:first-child{display:grid;gap:4px}.rmt-current-archive-card small{font-size:10px;color:#8794a0}.rmt-current-archive-actions{display:flex;gap:8px;flex-wrap:wrap}
 .rmt-archive-portal-items .rmt-portal-avatar{background:linear-gradient(145deg,#ddb991,#b99168)}
@@ -5440,9 +5989,7 @@ function indexedArchiveMatchesCurrentChat(entry, context = getContext()) {
         if (!entry) return false;
         const wantedChatId = comparableChatId(entry.chatId);
         if (!wantedChatId || comparableChatId(getChatId(context)) !== wantedChatId) return false;
-        const currentKey = currentCharacterKey(context);
-        const entryKey = archiveCanonicalCharacterKey(entry, context);
-        if (!currentKey || !entryKey || currentKey !== entryKey) return false;
+        if (!archiveEntryMatchesContextCharacter(entry, context)) return false;
         const memory = getImportedMemory(context);
         if (!memory || comparableChatId(memory.chatId) !== wantedChatId) return false;
         return true;
@@ -5903,18 +6450,28 @@ function roomClockText(date = new Date()) {
 }
 
 
-function roomSceneClass(spaceType) {
-    const text = normalizeText(spaceType, 80).toLowerCase();
+function roomSceneClass(spaceType, label = '') {
+    const text = `${normalizeText(spaceType, 80)} ${normalizeText(label, 100)}`.toLowerCase();
+    if (/音乐|录音|琴房|排练|music|record|studio/.test(text)) return 'studio';
+    if (/实验|研究|化验|lab|laboratory/.test(text)) return 'lab';
+    if (/浴室|浴房|洗浴|盥洗|bath|shower/.test(text)) return 'bath';
+    if (/餐厅|饭厅|餐室|dining/.test(text)) return 'dining';
+    if (/书房|藏书|阅读室|study|library/.test(text)) return 'study';
     if (/营帐|帐篷|tent/.test(text)) return 'tent';
     if (/船|舱|舰|cabin|ship/.test(text)) return 'cabin';
     if (/厨房|料理|kitchen/.test(text)) return 'kitchen';
-    if (/阳台|露台|庭院|balcony|terrace|garden/.test(text)) return 'balcony';
+    if (/阳台|露台|庭院|花园|balcony|terrace|garden/.test(text)) return 'balcony';
     if (/卧室|寝室|睡眠|bedroom/.test(text)) return 'bedroom';
     if (/客厅|起居|会客|living|lounge/.test(text)) return 'lounge';
-    if (/工作室|实验室|工坊|驾驶|atelier|lab|workshop/.test(text)) return 'workshop';
-    if (/和室|传统|古风|书房|茶室|study/.test(text)) return 'traditional';
+    if (/工坊|工作间|手作|驾驶|atelier|workshop/.test(text)) return 'workshop';
+    if (/和室|传统|古风|茶室/.test(text)) return 'traditional';
     if (/办公室|office/.test(text)) return 'office';
     return 'modern';
+}
+
+function roomLayoutVariant(space) {
+    const h = hashString(`${normalizeText(space?.id, 80)}|${normalizeText(space?.label, 100)}|${normalizeText(space?.spaceType, 80)}|${normalizeText(space?.atmosphere, 240)}`);
+    return (h % 3) + 1;
 }
 
 function roomObjectPlacement(item, index) {
@@ -6110,6 +6667,8 @@ function renderRoom() {
     const sceneTitle = normalizeText(selectedSpace.label, 100) === normalizeText(selectedSpace.spaceType, 100)
         ? selectedSpace.label
         : `${selectedSpace.label} · ${selectedSpace.spaceType}`;
+    const sceneKind = roomSceneClass(selectedSpace.spaceType, selectedSpace.label);
+    const sceneLayout = roomLayoutVariant(selectedSpace);
     const tempLine = temporaryObjects.length ? `<div class="rmt-room-temp-line">此刻临时物件：${temporaryObjects.map(item => esc(item)).join(' · ')}</div>` : '';
     const body = bodyEl();
     body.innerHTML = `<div class="rmt-room-view">
@@ -6126,9 +6685,10 @@ function renderRoom() {
 
         <section class="rmt-room-stage">
           <div class="rmt-room-stage-head"><b>${esc(sceneTitle)}</b><span class="rmt-room-clock" data-rmt-room-clock>${esc(daypart.label)} · ${esc(roomClockText(now))}</span></div>
-          <div class="rmt-room-scene rmt-room-scene-${roomSceneClass(selectedSpace.spaceType)}" data-rmt-room-beat="${esc(String(slot?.id || `${daypart.key}:${slot?.spaceId || ''}:${slot?.activity || ''}`))}" data-rmt-room-daypart="${esc(daypart.key)}" data-rmt-lighting="${esc(visualState.lighting)}" data-rmt-window="${esc(visualState.window)}" data-rmt-order="${esc(visualState.order)}" data-rmt-surface="${esc(visualState.surface)}">
+          <div class="rmt-room-scene rmt-room-scene-${sceneKind}" data-rmt-layout="${sceneLayout}" data-rmt-room-beat="${esc(String(slot?.id || `${daypart.key}:${slot?.spaceId || ''}:${slot?.activity || ''}`))}" data-rmt-room-daypart="${esc(daypart.key)}" data-rmt-lighting="${esc(visualState.lighting)}" data-rmt-window="${esc(visualState.window)}" data-rmt-order="${esc(visualState.order)}" data-rmt-surface="${esc(visualState.surface)}">
             <div class="rmt-room-window" aria-hidden="true"></div>
             <div class="rmt-room-furniture" aria-hidden="true"></div>
+            <div class="rmt-room-decor" aria-hidden="true"><span class="rmt-room-prop-a"></span><span class="rmt-room-prop-b"></span><span class="rmt-room-prop-c"></span></div>
             ${hotspots}
             ${personIsHere ? `<button type="button" class="rmt-room-person" data-rmt-action="room-presence" aria-label="看看他现在在做什么"><span class="rmt-room-head"></span><span class="rmt-room-body-figure"></span><span class="rmt-room-person-label">♥</span></button>` : ''}
           </div>
@@ -6298,14 +6858,14 @@ function navigateBack() {
     }
     if (activeMode) return activeArchiveSnapshot ? showIndexedArchiveSnapshot(activeArchiveSnapshot) : showChooser();
     if (archiveViewLevel === 'snapshot' && activeArchiveSnapshot) {
-        const key = activeArchiveSnapshot.characterKey;
+        const key = normalizeText(activeArchiveSnapshot.archiveGroupId, 120) || (() => { const entry = getArchiveIndex(getContext()).find(item => archiveIndexEntryId(item) === normalizeText(activeArchiveSnapshot.entryId, 120)); return entry ? archiveGroupKeyForEntry(entry) : ''; })();
         activeArchiveSnapshot = null;
         activeArchiveReadOnly = true;
         return key ? showArchiveCharacter(key) : showArchiveLibrary();
     }
     if (archiveViewLevel === 'chooser') {
         try {
-            const key = currentCharacterKey(currentCharacterGuard());
+            const key = currentArchiveGroupKey(currentCharacterGuard());
             if (key) return showArchiveCharacter(key);
         } catch {}
         return showArchiveLibrary();
@@ -6598,13 +7158,12 @@ async function openArchiveSnapshotFromOverview(chatId) {
     if (!id || !archiveOverviewAllowedChats.has(id)) return;
     const context = currentCharacterGuard();
     if (comparableChatId(getChatId(context)) === id) return showChooser();
-    const key = currentCharacterKey(context);
-    const entry = getArchiveIndex(getContext()).find(item => archiveCanonicalCharacterKey(item, getContext()) === key && item.chatId === id);
+    const entry = getArchiveIndex(getContext()).find(item => item.chatId === id && archiveEntryMatchesContextCharacter(item, context));
     if (!entry) {
         globalThis.toastr?.info?.('这个聊天还没有被索引为心跳回忆档案；不会为了查看而自动切换聊天。', '心跳回忆');
         return;
     }
-    return openIndexedArchive(entry.characterKey, id);
+    return openIndexedArchive(entry.characterKey, id, archiveIndexEntryId(entry));
 }
 
 function modePortalMeta(mode) {
@@ -6761,7 +7320,7 @@ async function showAvatarDialogueForCharacter(characterKey) {
     const requestEpoch = ++avatarDialogueRequestEpoch;
     const context = getContext();
     const entries = getArchiveIndex(context)
-        .filter(item => archiveCanonicalCharacterKey(item, context) === key)
+        .filter(item => archiveGroupKeyForEntry(item) === key)
         .sort((a, b) => b.updatedAt - a.updatedAt);
     // Prefer the already-open live chat for this character when it has an archive.
     // Otherwise fall back to the newest indexed archive as a read-only snapshot.
@@ -6835,16 +7394,18 @@ function showArchiveLibrary() {
     const index = getArchiveIndex(archiveContext);
     const groups = new Map();
     for (const item of index) {
-        const characterKey = archiveCanonicalCharacterKey(item, archiveContext);
-        if (!characterKey) continue;
-        const avatar = archiveEntryAvatarName(item, archiveContext);
-        const group = groups.get(characterKey) || { characterKey, avatar, characterName:item.characterName, entries:[] };
-        if (!group.avatar && avatar) group.avatar = avatar;
-        group.entries.push(item); groups.set(characterKey, group);
+        const groupId = archiveGroupKeyForEntry(item);
+        if (!groupId) continue;
+        const current = groups.get(groupId) || { groupId, entries: [] };
+        current.entries.push(item);
+        groups.set(groupId, current);
     }
     const cards = [...groups.values()].sort((a,b) => Math.max(...b.entries.map(x=>x.updatedAt)) - Math.max(...a.entries.map(x=>x.updatedAt))).map(group => {
-        const src = archiveCharacterAvatar(group);
-        return `<button type="button" class="rmt-archive-portal ready" data-rmt-archive-character="${esc(group.characterKey)}"><span class="rmt-portal-avatar" data-rmt-avatar-talk="${esc(group.characterKey)}" title="点头像听他说一句">${src ? `<img src="${esc(src)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : '<i class="fa-solid fa-user"></i>'}<i class="fa-solid fa-comment-dots rmt-avatar-talk-mark"></i></span><span class="rmt-portal-title">${esc(group.characterName)}</span><span class="rmt-portal-subtitle">${group.entries.length} 个聊天档案</span><span class="rmt-portal-status">点击查看这个角色的不同窗口档案</span></button>`;
+        const meta = archiveGroupMeta(group.groupId, group.entries, archiveContext);
+        const src = archiveGroupAvatarUrl(meta, group.entries[0], archiveContext);
+        const name = normalizeText(meta.label || meta.characterName || group.entries[0]?.characterName, 120) || '角色档案';
+        const charHint = Number(meta.characterIndexHint) >= 0 ? ` · char #${Number(meta.characterIndexHint) + 1}` : '';
+        return `<button type="button" class="rmt-archive-portal ready" data-rmt-archive-character="${esc(group.groupId)}"><span class="rmt-portal-avatar" data-rmt-avatar-talk="${esc(group.groupId)}" title="点头像听他说一句">${src ? `<img src="${esc(src)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : '<i class="fa-solid fa-user"></i>'}<i class="fa-solid fa-comment-dots rmt-avatar-talk-mark"></i></span><span class="rmt-portal-title">${esc(name)}</span><span class="rmt-portal-subtitle">${group.entries.length} 个聊天档案${esc(charHint)}</span><span class="rmt-portal-status">${meta.manual ? '手动角色组' : '自动分类'} · 点击查看</span></button>`;
     }).join('');
     let currentQuick = '';
     try {
@@ -6852,31 +7413,65 @@ function showArchiveLibrary() {
         const mem = getImportedMemory(ctx);
         if (mem) {
             const name = normalizeText(mem.archiveName, 120) || fallbackArchiveName(mem.memories);
-            currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前窗口档案</b><small>${esc(name)} · ${mem.memories.length} 条记忆</small></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive">打开当前窗口档案</button><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">增量更新当前窗口档案</button></div></section>`;
+            currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前窗口档案</b><small>${esc(name)} · ${mem.memories.length} 条记忆</small></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive">打开当前窗口档案</button><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">增量更新当前窗口档案</button><button type="button" class="rmt-btn" data-rmt-action="current-archive-delete">删除当前档案</button></div></section>`;
         } else {
             currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前聊天还没有档案</b><small>每个聊天窗口拥有自己的独立档案。</small></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">生成当前窗口档案</button></div></section>`;
         }
     } catch {}
-    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">MEMORY ARCHIVE LIBRARY</div><strong class="rmt-archive-title">档案室一览</strong><div class="rmt-archive-summary">这里只显示已经建立过心跳回忆档案的角色。点进角色后，再选择这个角色不同聊天窗口各自的档案名称。</div><div style="margin-top:10px"><button type="button" class="rmt-btn" data-rmt-action="rebuild-archive-index">扫描旧版本已有档案</button></div></section>${cards ? `<section class="rmt-archive-portals rmt-character-portals">${cards}</section>` : '<div class="rmt-archive-overview-empty">还没有已索引的档案。当前版本创建/更新档案后会自动加入这里；旧版本档案可点上方按钮手动扫描一次。</div>'}${currentQuick}</div>`;
+    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">MEMORY ARCHIVE LIBRARY</div><strong class="rmt-archive-title">档案室一览</strong><div class="rmt-archive-summary">角色分类不再只看头像；新索引会优先按角色卡指纹分开同名/同头像的不同版本。分类管理只改心跳回忆索引，不移动酒馆聊天文件；真实档案删除只允许当前聊天，并明确保留聊天正文。</div><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类</button><button type="button" class="rmt-btn" data-rmt-action="rebuild-archive-index">扫描旧版本已有档案</button></div></section>${cards ? `<section class="rmt-archive-portals rmt-character-portals">${cards}</section>` : '<div class="rmt-archive-overview-empty">还没有已索引的档案。当前版本创建/更新档案后会自动加入这里；旧版本档案可点上方按钮手动扫描一次。</div>'}${currentQuick}</div>`;
 }
 
-function showArchiveCharacter(characterKey) {
+function showArchiveCharacter(groupId) {
     activeArchiveSnapshot = null;
     activeArchiveReadOnly = true;
-    const key = normalizeText(characterKey, 300); archiveLibraryCharacterKey = key; archiveViewLevel = 'character';
+    const key = normalizeText(groupId, 120); archiveLibraryCharacterKey = key; archiveViewLevel = 'character';
     openOverlay(); setRegenerateVisible(false); setBackVisible(true, '所有角色');
     const context = getContext();
-    const entries = getArchiveIndex(context).filter(item => archiveCanonicalCharacterKey(item, context) === key).sort((a,b)=>b.updatedAt-a.updatedAt);
-    const name = entries[0]?.characterName || '角色档案'; topTitle(`心跳回忆 · ${name}`);
+    const entries = archiveGroupEntries(key, context).sort((a,b)=>b.updatedAt-a.updatedAt);
+    const meta = archiveGroupMeta(key, entries, context);
+    const name = normalizeText(meta.label || meta.characterName || entries[0]?.characterName, 120) || '角色档案'; topTitle(`心跳回忆 · ${name}`);
     const body = bodyEl(); if (!body) return;
-    const charAvatar = entries[0] ? archiveCharacterAvatar(entries[0], context) : '';
-    const rows = entries.map(item => `<button type="button" class="rmt-archive-overview-item" data-rmt-indexed-chat="${esc(item.chatId)}" data-rmt-indexed-character="${esc(item.characterKey)}"><span class="rmt-overview-dot">●</span><span><b>${esc(item.archiveName)}</b><small>${esc(item.chatId)} · ${item.memoryCount} 条记忆 · ${esc(formatArchiveTime(item.updatedAt))}</small></span><i class="fa-solid fa-chevron-right"></i></button>`).join('');
-    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-character-heart-head"><button type="button" class="rmt-character-heart-avatar" data-rmt-avatar-talk="${esc(key)}" aria-label="和角色说话">${charAvatar ? `<img src="${esc(charAvatar)}" alt="">` : '<i class="fa-solid fa-user"></i>'}<span><i class="fa-solid fa-comment-dots"></i></span></button><div><div class="rmt-archive-kicker">CHARACTER ARCHIVES</div><strong class="rmt-archive-title">${esc(name)}</strong><div class="rmt-archive-summary">点头像会按现实时间、周末、生日和久未访问状态弹出角色台词；不会自动切换聊天或调用模型。</div></div></div><div class="rmt-archive-overview-list" style="max-height:none">${rows || '<div class="rmt-archive-overview-empty">这个角色还没有已索引档案。</div>'}</div></section></div>`;
+    const charAvatar = archiveGroupAvatarUrl(meta, entries[0] || null, context);
+    const rows = entries.map(item => `<button type="button" class="rmt-archive-overview-item" data-rmt-indexed-chat="${esc(item.chatId)}" data-rmt-indexed-character="${esc(item.characterKey)}" data-rmt-indexed-entry="${esc(archiveIndexEntryId(item))}"><span class="rmt-overview-dot">●</span><span><b>${esc(item.archiveName)}</b><small>${esc(item.characterName)} · ${esc(item.chatId)} · ${item.memoryCount} 条记忆 · ${esc(formatArchiveTime(item.updatedAt))}</small></span><i class="fa-solid fa-chevron-right"></i></button>`).join('');
+    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-character-heart-head"><button type="button" class="rmt-character-heart-avatar" data-rmt-avatar-talk="${esc(key)}" aria-label="和角色说话">${charAvatar ? `<img src="${esc(charAvatar)}" alt="">` : '<i class="fa-solid fa-user"></i>'}<span><i class="fa-solid fa-comment-dots"></i></span></button><div><div class="rmt-archive-kicker">CHARACTER ARCHIVES</div><strong class="rmt-archive-title">${esc(name)}</strong><div class="rmt-archive-summary">${meta.manual ? '这是手动分类组。' : '这是自动分类组。'} 点头像只读取已保存角色互动，不会自动切换聊天或调用模型。</div></div></div><div style="margin:10px 0"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button></div><div class="rmt-archive-overview-list" style="max-height:none">${rows || '<div class="rmt-archive-overview-empty">这个角色组还没有已索引档案。</div>'}</div></section></div>`;
+}
+
+function showArchiveGroupManager() {
+    const context = getContext();
+    const overlay = document.getElementById(OVERLAY_ID);
+    if (!overlay) return;
+    overlay.querySelector('.rmt-archive-group-manager')?.remove();
+    const items = getArchiveIndex(context).sort((a,b) => b.updatedAt - a.updatedAt);
+    const registered = getArchiveGroups(context);
+    const groupMap = new Map(registered.map(group => [group.id, group]));
+    for (const item of items) {
+        const id = archiveGroupKeyForEntry(item);
+        if (!groupMap.has(id)) groupMap.set(id, archiveGroupMeta(id, [item], context));
+    }
+    const groups = [...groupMap.values()].sort((a,b) => String(a.label).localeCompare(String(b.label), 'zh-CN'));
+    const groupOptions = groups.map(group => `<option value="${esc(group.id)}">${esc(group.label)}${group.manual ? ' · 手动' : ' · 自动'}</option>`).join('');
+    const characterOptions = (Array.isArray(context.characters) ? context.characters : []).map((_, index) => characterDescriptor(context, index)).filter(Boolean).map(item => `<option value="${item.index}">${esc(item.name)} · #${item.index + 1}${item.avatar ? ` · ${esc(item.avatar)}` : ''}</option>`).join('');
+    const rows = items.map(item => {
+        const entryId = archiveIndexEntryId(item);
+        const ambiguous = archiveEntryNeedsManualClassification(item, context);
+        const live = (() => { try { return indexedArchiveMatchesCurrentChat(item, context); } catch { return false; } })();
+        const status = item.archiveGroupManual ? '手动归类' : ambiguous ? '待手动分类' : '自动归类';
+        return `<article class="rmt-archive-group-entry"><div><b>${esc(item.archiveName)}</b><small>${esc(item.characterName)} · ${esc(item.chatId)} · ${status}${item.characterFingerprint ? ' · 已绑定角色卡指纹' : ''}</small></div><div class="rmt-archive-group-entry-actions"><select class="text_pole" data-rmt-archive-move-select="${esc(entryId)}"><option value="__AUTO__">恢复自动分类</option>${groupOptions}</select><button type="button" class="rmt-btn" data-rmt-action="archive-group-move" data-rmt-archive-entry-id="${esc(entryId)}">移动</button><button type="button" class="rmt-btn" data-rmt-action="${live ? 'archive-delete-live' : 'archive-remove-index'}" data-rmt-archive-entry-id="${esc(entryId)}">${live ? '删除心跳回忆档案' : '从档案室移除'}</button></div></article>`;
+    }).join('');
+    const modal = document.createElement('div');
+    modal.className = 'rmt-archive-group-manager';
+    modal.innerHTML = `<div class="rmt-memory-wi-picker-card"><div class="rmt-memory-wi-picker-head"><div><b>角色档案分类</b><small>自动分类 / 手动移动 / 绑定 SillyTavern 角色新建组</small></div><button type="button" class="rmt-btn" data-rmt-action="archive-group-close">完成</button></div><div class="rmt-memory-wi-picker-note">这里移动的是心跳回忆的轻量档案索引。不会移动、重命名、删除聊天文件，不会切换宿主角色/聊天，也不会改 MEMORY_KEY / CG / ADV 缓存。自动分类优先按角色卡指纹区分（即使同名/同头像）；旧索引没有指纹且同头像/同名无法唯一判断时会拆成“待手动分类”，不会猜着合并。手动移动后自动分类不会覆盖。删除真实心跳回忆档案只允许当前真实聊天；历史档案只能先从列表移除。</div><div class="rmt-archive-group-create"><select class="text_pole" data-rmt-archive-new-character><option value="">选择一个 SillyTavern char…</option>${characterOptions}</select><button type="button" class="rmt-btn" data-rmt-action="archive-group-create">按所选 char 新建组</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类未锁定档案</button></div><div class="rmt-archive-group-entries">${rows || '<div class="rmt-memory-wi-empty">还没有档案可以分类。</div>'}</div></div>`;
+    overlay.appendChild(modal);
+    for (const select of modal.querySelectorAll('[data-rmt-archive-move-select]')) {
+        const item = items.find(entry => archiveIndexEntryId(entry) === select.dataset.rmtArchiveMoveSelect);
+        if (item) select.value = item.archiveGroupManual ? archiveGroupKeyForEntry(item) : '__AUTO__';
+    }
 }
 
 
 function archiveSnapshotCacheKey(entry) {
-    return `${normalizeText(entry?.characterKey, 300)}|${comparableChatId(entry?.chatId)}`;
+    const entryId = normalizeText(entry?.entryId, 120) || archiveIndexEntryId(entry);
+    return `${entryId}|${comparableChatId(entry?.chatId)}`;
 }
 
 function rememberArchiveSnapshot(snapshot) {
@@ -6910,6 +7505,9 @@ async function fetchIndexedArchiveSnapshot(entry, context = getContext()) {
     const metadata = row?.chat_metadata && typeof row.chat_metadata === 'object' ? row.chat_metadata : {};
     const memory = migrateArchiveInMemory(metadata[MEMORY_KEY]);
     if (!memory || comparableChatId(memory.chatId) !== wantedChatId) throw new Error('这个聊天文件里没有可读取的心跳回忆档案。');
+    const indexedName = normalizeText(entry?.characterName, 120);
+    const memoryName = normalizeText(memory?.characterName, 120);
+    if (indexedName && memoryName && indexedName !== memoryName) throw new Error('同头像下检测到不同角色身份；为避免读错聊天，已拒绝打开。请在“管理角色分类”里手动归类后再试。');
     let cache = {};
     const stored = metadata[CACHE_KEY];
     if (isCompressedCacheRecord(stored)) {
@@ -6924,6 +7522,8 @@ async function fetchIndexedArchiveSnapshot(entry, context = getContext()) {
         else if (normalizeText(cache.archiveRevision, 240) && cache.archiveRevision !== memory.archiveRevision) cache = {};
     }
     return rememberArchiveSnapshot({
+        entryId: archiveIndexEntryId(entry),
+        archiveGroupId: archiveGroupKeyForEntry(entry),
         characterKey: normalizeText(entry.characterKey, 300),
         avatar,
         characterName: normalizeText(entry.characterName || memory.characterName, 120) || '未命名角色',
@@ -7048,13 +7648,15 @@ function showIndexedArchiveSnapshot(snapshot = activeArchiveSnapshot) {
     </div>`;
 }
 
-async function openIndexedArchive(characterKey, chatId) {
+async function openIndexedArchive(characterKey, chatId, entryId = '') {
     if (busy) activeTaskBackgrounded = true;
     const context = getContext();
     const index = getArchiveIndex(context);
     const wantedChatId = comparableChatId(chatId);
-    const entry = index.find(item => item.characterKey === characterKey && item.chatId === wantedChatId)
-        || index.find(item => archiveCanonicalCharacterKey(item, context) === characterKey && item.chatId === wantedChatId);
+    const wantedEntryId = normalizeText(entryId, 120);
+    const entry = (wantedEntryId ? index.find(item => archiveIndexEntryId(item) === wantedEntryId) : null)
+        || index.find(item => item.characterKey === characterKey && item.chatId === wantedChatId && (!wantedEntryId || archiveIndexEntryId(item) === wantedEntryId))
+        || index.find(item => archiveCanonicalCharacterKey(item, context) === characterKey && item.chatId === wantedChatId && (!wantedEntryId || archiveIndexEntryId(item) === wantedEntryId));
     if (!entry) return;
     // If the indexed row is exactly the chat that SillyTavern already has open, use the live
     // context instead of a read-only metadata snapshot. This keeps write actions such as CG
@@ -7080,25 +7682,68 @@ async function openIndexedArchive(characterKey, chatId) {
 async function rebuildArchiveIndexFromExisting() {
     if (hasAnyTask()) { globalThis.toastr?.info?.('后台任务进行中，暂不扫描旧档案。', '心跳回忆'); return; }
     const context = getContext();
-    const chars = (context.characters || []).map((ch,index)=>({ch,index,avatar:normalizeText(ch?.avatar,300),name:normalizeText(ch?.name || ch?.data?.name,120)})).filter(x=>x.avatar);
-    const found = getArchiveIndex(context);
-    const byKey = new Map(found.map(item => [`${item.characterKey}|${item.chatId}`, item]));
-    openOverlay(); const body=bodyEl(); topTitle('心跳回忆 · 扫描旧档案');
-    for (let i=0;i<chars.length;i++) {
-        const c=chars[i]; if (body) body.innerHTML=`<div class="rmt-loading"><div class="rmt-loading-card"><b>正在扫描旧档案 ${i+1} / ${chars.length}</b><div class="rmt-loading-note">只在你手动点击时执行；不会在平时切聊天时扫描所有文件。</div></div></div>`;
+    const descriptors = (context.characters || []).map((_, index) => characterDescriptor(context, index)).filter(item => item?.avatar);
+    const byAvatar = new Map();
+    for (const descriptor of descriptors) {
+        const list = byAvatar.get(descriptor.avatar) || [];
+        list.push(descriptor);
+        byAvatar.set(descriptor.avatar, list);
+    }
+    const existing = getArchiveIndex(context);
+    const existingByChatFile = new Map(existing.map(item => [`${archiveStoredAvatar(item)}\u001f${item.chatId}`, item]));
+    const found = [];
+    openOverlay(); const body = bodyEl(); topTitle('心跳回忆 · 扫描旧档案');
+    const avatarEntries = [...byAvatar.entries()];
+    for (let i = 0; i < avatarEntries.length; i += 1) {
+        const [avatar, avatarDescriptors] = avatarEntries[i];
+        if (body) body.innerHTML = `<div class="rmt-loading"><div class="rmt-loading-card"><b>正在扫描旧档案 ${i + 1} / ${avatarEntries.length}</b><div class="rmt-loading-note">同头像只读取一次聊天列表；能唯一匹配角色卡时记录本地指纹，无法唯一判断时保持待手动分类。不会切换宿主聊天。</div></div></div>`;
         try {
-            const response = await fetch('/api/characters/chats',{method:'POST',headers:context.getRequestHeaders(),cache:'no-cache',body:JSON.stringify({avatar_url:c.avatar,metadata:true})});
-            if (!response.ok) continue; const rows=await response.json();
-            for (const row of Array.isArray(rows)?rows:[]) {
-                const mem=migrateArchiveInMemory(row?.chat_metadata?.[MEMORY_KEY]); if (!mem) continue;
-                const charKey=c.avatar; const chatId=comparableChatId(row.file_id||row.file_name); if(!chatId) continue;
-                byKey.set(`${charKey}|${chatId}`,{characterKey:charKey,avatar:c.avatar,characterName:normalizeText(mem.characterName||c.name,120)||'未命名角色',chatId,archiveName:normalizeText(mem.archiveName,160)||fallbackArchiveName(mem.memories),memoryCount:mem.memories.length,updatedAt:Number(mem.updatedAt||mem.createdAt)||0});
+            const response = await fetch('/api/characters/chats', { method:'POST', headers:context.getRequestHeaders(), cache:'no-cache', body:JSON.stringify({ avatar_url:avatar, metadata:true }) });
+            if (!response.ok) continue;
+            const rows = await response.json();
+            for (const row of Array.isArray(rows) ? rows : []) {
+                const mem = migrateArchiveInMemory(row?.chat_metadata?.[MEMORY_KEY]);
+                if (!mem) continue;
+                const chatId = comparableChatId(row.file_id || row.file_name);
+                if (!chatId) continue;
+                const memoryCharacterName = normalizeText(mem.characterName, 120);
+                const candidates = memoryCharacterName
+                    ? avatarDescriptors.filter(item => item.name === memoryCharacterName)
+                    : avatarDescriptors;
+                const unique = candidates.length === 1 ? candidates[0] : null;
+                const previous = existingByChatFile.get(`${avatar}\u001f${chatId}`) || null;
+                const candidate = {
+                    entryId: normalizeText(previous?.entryId, 120),
+                    characterKey: avatar,
+                    avatar,
+                    characterName: normalizeText(memoryCharacterName || unique?.name || previous?.characterName, 120) || '未命名角色',
+                    characterFingerprint: normalizeText(previous?.characterFingerprint || unique?.fingerprint, 160),
+                    chatId,
+                    archiveName: normalizeText(mem.archiveName, 160) || fallbackArchiveName(mem.memories),
+                    memoryCount: mem.memories.length,
+                    updatedAt: Number(mem.updatedAt || mem.createdAt) || 0,
+                    archiveGroupId: normalizeText(previous?.archiveGroupId, 120),
+                    archiveGroupManual: previous?.archiveGroupManual === true,
+                };
+                candidate.entryId = candidate.entryId || archiveIndexEntryId(candidate);
+                found.push(candidate);
             }
-        } catch (error) { console.warn('[HeartbeatMemories] legacy archive index scan skipped character', c.name, error); }
+        } catch (error) {
+            console.warn('[HeartbeatMemories] legacy archive index scan skipped avatar', avatar, error);
+        }
         await yieldToUi();
     }
-    setArchiveIndex(context,[...byKey.values()].sort((a,b)=>b.updatedAt-a.updatedAt));
-    globalThis.toastr?.success?.(`旧档案扫描完成：发现 ${byKey.size} 个聊天档案。`, '心跳回忆'); showArchiveLibrary();
+    // Keep previously indexed rows whose avatar could not be scanned this time; an intermittent
+    // server/listing failure must never silently erase the user's library index.
+    const seen = new Set(found.map(item => `${archiveStoredAvatar(item)}\u001f${item.chatId}`));
+    for (const item of existing) {
+        const key = `${archiveStoredAvatar(item)}\u001f${item.chatId}`;
+        if (!seen.has(key)) found.push(item);
+    }
+    setArchiveIndex(context, found.sort((a,b) => b.updatedAt - a.updatedAt));
+    autoClassifyArchiveIndex(context, { confirm: false });
+    globalThis.toastr?.success?.(`旧档案扫描完成：索引 ${found.length} 个聊天档案。无法唯一判断的同头像/同名旧档案已单独列为“待手动分类”。`, '心跳回忆');
+    showArchiveLibrary();
 }
 
 function showChooser() {
@@ -7219,7 +7864,7 @@ function showChooser() {
           </div>
           <div class="rmt-current-archive-actions">
             <button class="rmt-btn rmt-archive-update" type="button" data-rmt-action="import-memory" ${busy || hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>${esc(requirePreflight ? '先扫描记忆 / 摘要' : (ready ? '增量更新当前窗口档案' : importLabel))}</button>
-            ${ready ? `<button class="rmt-btn" type="button" data-rmt-action="full-rebuild-memory" ${busy || hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>完全重建档案</button>` : ''}
+            ${ready ? `<button class="rmt-btn" type="button" data-rmt-action="full-rebuild-memory" ${busy || hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>完全重建档案</button><button class="rmt-btn" type="button" data-rmt-action="current-archive-delete" ${busy || hasGenerationTasks() ? 'disabled' : ''}>删除当前档案</button>` : ''}
           </div>
         </section>
         ${externalMemoryControls}
@@ -7699,7 +8344,7 @@ function renderHeart() {
 
     if (view === 'greetings') {
         let currentKey = '';
-        try { currentKey = activeArchiveSnapshot?.characterKey || currentCharacterKey(getContext()); } catch {}
+        try { currentKey = activeArchiveSnapshot?.archiveGroupId || currentArchiveGroupKey(getContext()) || currentCharacterRuntimeKey(getContext()); } catch {}
         const current = selectHeartGreeting(session, currentKey || 'heart-preview');
         const labels = {
             morning: '早晨', noon: '白天', evening: '傍晚', night: '夜晚', weekend: '周末', birthday: '角色生日', userBirthday: '你的生日', holiday: '节假日',
@@ -8252,7 +8897,7 @@ function handleOverlayClick(event) {
     const archiveCharacter = event.target.closest?.('[data-rmt-archive-character]');
     if (archiveCharacter) return showArchiveCharacter(archiveCharacter.dataset.rmtArchiveCharacter);
     const indexedChat = event.target.closest?.('[data-rmt-indexed-chat]');
-    if (indexedChat) return void openIndexedArchive(indexedChat.dataset.rmtIndexedCharacter, indexedChat.dataset.rmtIndexedChat);
+    if (indexedChat) return void openIndexedArchive(indexedChat.dataset.rmtIndexedCharacter, indexedChat.dataset.rmtIndexedChat, indexedChat.dataset.rmtIndexedEntry || '');
 
     const externalToggle = event.target.closest?.('[data-rmt-external-memory-toggle]');
     if (externalToggle) {
@@ -8290,10 +8935,10 @@ function handleOverlayClick(event) {
         if (busy) activeTaskBackgrounded = true;
         return showArchiveLibrary();
     }
-    if (action === 'archive-character-back') return showArchiveCharacter(currentCharacterKey(currentCharacterGuard()));
+    if (action === 'archive-character-back') return archiveLibraryCharacterKey ? showArchiveCharacter(archiveLibraryCharacterKey) : showArchiveLibrary();
     if (action === 'open-heart') return openHeartMode();
     if (action === 'heart-avatar-talk') {
-        const key = activeArchiveSnapshot?.characterKey || (() => { try { return currentCharacterKey(getContext()); } catch { return ''; } })();
+        const key = activeArchiveSnapshot?.archiveGroupId || (() => { try { return currentArchiveGroupKey(getContext()); } catch { return ''; } })();
         return void showAvatarDialogueForCharacter(key);
     }
     if (action === 'avatar-talk-again') return renderAvatarDialoguePopup(activeAvatarDialogue, { repeat: true });
@@ -8314,7 +8959,7 @@ function handleOverlayClick(event) {
         bodyEl()?.querySelector('.rmt-avatar-dialog-pop')?.remove();
         activeAvatarDialogue = null;
         if (state?.snapshot) return showIndexedArchiveSnapshot(state.snapshot);
-        if (state?.entry) return void openIndexedArchive(state.entry.characterKey, state.entry.chatId);
+        if (state?.entry) return void openIndexedArchive(state.entry.characterKey, state.entry.chatId, archiveIndexEntryId(state.entry));
         return showArchiveLibrary();
     }
     if (action === 'avatar-dialog-close') {
@@ -8324,10 +8969,59 @@ function handleOverlayClick(event) {
     }
     if (action === 'current-archive') return showChooser();
     if (action === 'current-archive-import') return requestCurrentArchiveImport();
+    if (action === 'current-archive-delete') {
+        void deleteCurrentHeartbeatArchive('').then(deleted => {
+            if (!deleted) return;
+            globalThis.toastr?.success?.('当前聊天的心跳回忆档案已删除；聊天正文没有删除。', '心跳回忆');
+            showArchiveLibrary();
+        }).catch(error => globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆'));
+        return;
+    }
     if (action === 'read-memory-plugins') return void readCurrentChatMemoryPlugins().catch(error => globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆'));
     if (action === 'memory-worldinfo-picker') return void showMemoryWorldInfoPicker();
     if (action === 'memory-worldinfo-close') { document.querySelector(`#${OVERLAY_ID} .rmt-memory-wi-picker`)?.remove(); return showChooser(); }
     if (action === 'memory-worldinfo-expand') return void expandMemoryWorldInfoBook(actionEl);
+    if (action === 'archive-group-manager') return showArchiveGroupManager();
+    if (action === 'archive-group-close') { document.querySelector(`#${OVERLAY_ID} .rmt-archive-group-manager`)?.remove(); return showArchiveLibrary(); }
+    if (action === 'archive-auto-classify') {
+        const changed = autoClassifyArchiveIndex(getContext(), { confirm: true });
+        if (changed) globalThis.toastr?.success?.(`已自动分类 ${changed} 个档案索引。聊天文件没有移动。`, '心跳回忆');
+        const manager = document.querySelector(`#${OVERLAY_ID} .rmt-archive-group-manager`);
+        return manager ? showArchiveGroupManager() : showArchiveLibrary();
+    }
+    if (action === 'archive-group-create') {
+        const select = document.querySelector(`#${OVERLAY_ID} [data-rmt-archive-new-character]`);
+        if (!select?.value) return globalThis.toastr?.info?.('先选择一个 SillyTavern char。', '心跳回忆');
+        try { createArchiveGroupForCharacter(getContext(), Number(select.value)); globalThis.toastr?.success?.('已新建角色档案组。现在可以把档案移动进去。', '心跳回忆'); showArchiveGroupManager(); }
+        catch (error) { globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆'); }
+        return;
+    }
+    if (action === 'archive-group-move') {
+        const entryId = normalizeText(actionEl.dataset.rmtArchiveEntryId, 120);
+        const select = [...document.querySelectorAll(`#${OVERLAY_ID} [data-rmt-archive-move-select]`)].find(node => node.dataset.rmtArchiveMoveSelect === entryId);
+        try { moveArchiveIndexEntryToGroup(getContext(), entryId, select?.value || '__AUTO__'); globalThis.toastr?.success?.('档案分类已更新；聊天文件没有移动。', '心跳回忆'); showArchiveGroupManager(); }
+        catch (error) { globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆'); }
+        return;
+    }
+    if (action === 'archive-remove-index') {
+        const entryId = normalizeText(actionEl.dataset.rmtArchiveEntryId, 120);
+        try {
+            if (removeIndexedArchiveFromLibrary(entryId)) {
+                globalThis.toastr?.success?.('已从档案室移除索引；聊天文件和真实档案未删除。', '心跳回忆');
+                showArchiveGroupManager();
+            }
+        } catch (error) { globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆'); }
+        return;
+    }
+    if (action === 'archive-delete-live') {
+        const entryId = normalizeText(actionEl.dataset.rmtArchiveEntryId, 120);
+        void deleteCurrentHeartbeatArchive(entryId).then(deleted => {
+            if (!deleted) return;
+            globalThis.toastr?.success?.('当前聊天的心跳回忆档案已删除；聊天正文没有删除。', '心跳回忆');
+            showArchiveLibrary();
+        }).catch(error => globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆'));
+        return;
+    }
     if (action === 'rebuild-archive-index') return void rebuildArchiveIndexFromExisting();
     if (action === 'import-memory') return requestCurrentArchiveImport();
     if (action === 'full-rebuild-memory') return requestCurrentArchiveFullRebuild();
@@ -8508,6 +9202,7 @@ function refreshGenerationSettingsUi() {
     const maxTokens = panel.querySelector('[data-rmt-api-max-tokens]');
     const temperature = panel.querySelector('[data-rmt-api-temperature]');
     const roomDaily = panel.querySelector('[data-rmt-room-life-auto]');
+    const bannedPhrases = panel.querySelector('[data-rmt-banned-generated-phrases]');
     const status = panel.querySelector('[data-rmt-api-status]');
     if (profile) {
         const profiles = supportedConnectionProfiles();
@@ -8531,6 +9226,7 @@ function refreshGenerationSettingsUi() {
         temperature.title = '覆盖心跳回忆专用连接的温度';
     }
     if (roomDaily) roomDaily.checked = settings.roomLifeAutoDaily;
+    if (bannedPhrases) bannedPhrases.value = settings.bannedGeneratedPhrases.join('，');
     if (status) {
         status.textContent = !settings.connectionProfileId
             ? '尚未选择心跳回忆专用连接。可一键读取酒馆当前已保存的连接；API Key 不会被显示或复制，只引用 SillyTavern 保存的 Secret ID。'
@@ -8596,9 +9292,11 @@ function mountSettings() {
             <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1024" max="30000" step="1"></label>
             <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
           </div>
+          <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
           <label class="checkbox_label rmt-settings-check"><input data-rmt-room-life-auto type="checkbox"> 每天首次打开房间时允许一次“今日生活”自动请求</label>
           <div class="rmt-api-note" data-rmt-api-status></div>
           <div class="rmt-api-note">“最大输出”最高 30,000 tokens。档案聊天分块与记忆/摘要分块不再硬限制 4,096；实际可用上限仍由所选模型/服务端决定。若模型只返回推理而没有最终 JSON，心跳回忆会停止并允许你明确选择只重试当前分块，不会自动重复请求。</div>
+          <div class="rmt-api-note">“生成禁用词”只约束模型新生成的派生内容，默认禁用“老子”。不会改写历史聊天、正式档案原文或 sourceMemoryAnchor 等证据锚点；命中时本次结果拒绝保存且不会自动重试。</div>
           <div class="rmt-api-note">模型刷新只调用 SillyTavern 本地后端状态接口；插件保存 Connection Profile / Secret ID 引用，不保存 API Key 明文。若酒馆当前自定义 Chat Completion 配置包含 custom headers，刷新模型时会按 SillyTavern 原生方式把它们提交给同源后端处理，不会写入心跳回忆缓存或 Prompt。</div>
         </div>
         <div class="rmt-settings-archive-actions">
@@ -8635,6 +9333,11 @@ function mountSettings() {
         }
         if (target.matches?.('[data-rmt-room-life-auto]')) {
             updatePluginSettings({ roomLifeAutoDaily: !!target.checked });
+            refreshGenerationSettingsUi();
+            return;
+        }
+        if (target.matches?.('[data-rmt-banned-generated-phrases]')) {
+            updatePluginSettings({ bannedGeneratedPhrases: normalizeBannedGeneratedPhrases(target.value) });
             refreshGenerationSettingsUi();
         }
     });
