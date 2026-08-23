@@ -48,7 +48,7 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 
 27. 对公开记忆插件只允许调用已加载插件主动暴露的 `getInjectedHistory()` 与可选 `getSnapshot()`；不得遍历其私有数据库或调用模型/记忆内容指定的函数。调用前后必须校验当前 chatId；若返回/快照显式携带的 chat ID 与任务 chatId 不同，整份来源拒绝。
 28. 公开记忆接口返回的文本、nodes、coverage、revision 都是不可信数据；只允许进入外部记忆归一化与证据抽取链，不能进入 HTML/CSS/脚本执行面。
-29. “档案室一览”只允许请求 SillyTavern 同源 `/api/characters/chats`，并只列出当前角色服务器返回的 chat ID；点击切换必须命中本轮 allowlist。不得让模型输出或 DOM 篡改构造任意聊天路径。
+29. “档案室一览 / 只读旧档案”只允许请求 SillyTavern 同源 `/api/characters/chats`，且目标 chat ID 必须来自本地档案索引或本轮服务器返回的 allowlist。查看旧档案不得隐式调用 `selectCharacterById/openCharacterChat`、不得改变宿主当前角色/聊天，也不得让模型输出或 DOM 篡改构造任意聊天路径。
 30. 蝴蝶效应外延节点属于显式模拟数据，不作为 archive evidence、不写回 `MEMORY_KEY`；取消外延 `sourceMemoryIds` 强制要求不得削弱相簿/ADV/房间实际既往事实的证据校验。
 31. “他的物品 / 私人终端”保留独立内部 session 仅作为房间深层缓存，但不得暴露为档案室主入口；所有 basis=“记忆”的内容仍必须通过 `sourceMemoryIds + sourceMemoryAnchor`。
 32. 房间内部的物品递归容器最大深度与总节点数必须受限；所有模型文本仍经过 `esc()`，模型不得提供 HTML/CSS/脚本。私人终端 Gallery 只允许纯文字照片档案，不接受或保存模型/世界书提供的外部媒体 URL。
@@ -72,7 +72,7 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - Compressed chat metadata is untrusted input. Base64 input, pre-compression JSON size and streamed decompressed output are all hard-capped before parsing to reduce decompression-bomb / memory-exhaustion risk.
 - Ordinary chat navigation must not hydrate/decompress theater cache. Hydration is allowed only when Heartbeat actually needs generated content.
 - Old uncompressed theater caches remain readable and are migrated lazily; migration must never delete the old durable value before a valid compressed replacement is ready for the same chat scope.
-- Manual archive update may invalidate derived theater cache because archiveRevision changes. A plugin version update by itself may not clear the archive or theater cache.
+- Ordinary manual archive update is append-only/incremental: existing Mxxx memory records and IDs remain byte-for-byte evidence anchors, and compatible derived theater sessions may migrate only their archiveRevision fence. A full rebuild may invalidate derived theater cache because it is allowed to renumber/rewrite memory evidence. A plugin version update by itself may not clear the archive or theater cache.
 - Decompressed runtime caches are bounded and evicted across chat scopes; they must not become an unbounded cross-chat memory store.
 
 
@@ -106,6 +106,25 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 ### 0.8.10 confirmation / current archive r10 additional invariants
 
 - 任何显式覆盖已有派生内容的“重新生成”操作必须经过用户确认；确认取消时不得创建请求、修改 session 或改变 archive revision。
-- 手动更新当前窗口档案必须在确认文本中说明 archive revision 变化会使旧派生剧场缓存失效；首次建档与更新档案都仍然是用户显式动作。
+- 普通“更新当前窗口档案”必须说明它是增量追加：只处理上次归档后的新聊天/变化的当前窗口摘要，保留既有 Mxxx ID 与已生成派生缓存。只有用户显式选择“完全重建档案”时，确认文本才允许说明旧派生剧场缓存会失效。首次建档、增量更新与完全重建都仍然是用户显式动作。
 - 确认 UI 不得接受模型生成 HTML/URL；确认标题与说明全部来自本地固定字符串。
+### 0.8.10 CG image generation r12 additional invariants
 
+- CG 实图生成只能由用户显式点击“绘制CG / 重绘CG”触发；不得在打开相簿/ADV、切换事件或后台定时器中自动调用生图服务。
+- 心跳回忆只调用 SillyTavern 已注册的 `imagine` 命令，不直连任何生图 provider、不读取 provider URL/Secret/API Key，也不探测其他扩展的私有生成函数。
+- 送入生图扩展的内容只能是单张 CG 的纯视觉 `imagePrompt`（或 `desc/cgDesc + visualSeed` fallback）；不得发送聊天正文、M001 档案原文、世界书原文、记忆插件原文、私人终端内容或凭据。
+- `imagine` 返回的图片引用必须归一化为当前 SillyTavern 同源的 http(s) 本地路径；`data:`、`blob:`、跨域 URL 和模型提供的 URL 均不得进入 CG 缓存或 DOM。
+- CG 缓存只保存短路径、视觉 prompt、provider 固定标记和 generatedAt；禁止保存 base64 图片。加载失败必须回退显示原抽象 CG。
+- CG 图片任务回写必须重新校验发起时的 `characterKey + chatId + archiveRevision`；插件销毁会推进本地 lifecycle epoch，使迟到的外部绘图结果无法写回已销毁实例。
+
+
+
+### 0.8.10 state / archive r13 additional invariants
+
+- 扩展升级、disable/clean/reload 不得把“内存中已经生成但 gzip debounce 尚未落盘”的当前聊天 theater cache 当作可丢弃数据；销毁前必须至少保留一个当前聊天可恢复的 metadata 副本。
+- 压缩 theater cache 解压失败或浏览器缺少兼容解压能力时，UI 必须显示“缓存读取失败”，不得把该状态伪装成“尚未生成”并诱导用户覆盖重做。原压缩值保持不删除。
+- 普通档案更新只允许在旧归档聊天前缀仍与旧 `sourceFingerprint` 一致时增量追加；若旧消息被编辑、删除或重排，更新必须停止并要求用户显式选择完全重建。
+- 增量更新不得重新编号、删除或改写旧 Mxxx 记录；因此旧 session 迁移到新 `archiveRevision` 时只能修改 revision fence，不能放宽任何 `sourceMemoryIds + sourceMemoryAnchor` 验证语义。
+- “完全重建档案”是唯一允许重新编号 Mxxx 并清空旧派生 theater cache 的档案更新路径，必须有明确破坏性确认。
+- ADV 批量正文请求失败/部分成功后不得自动触发 N 个单篇修复请求。插件必须停止，并由用户显式选择“再次批量（一次请求）”或“逐个补完（最多 N 次请求）”。
+- 跨角色/跨聊天档案查看使用只读 metadata snapshot。只读 snapshot 允许展示已保存的 Album/ADV/Room/Items/Phone/Butterfly/Ending session，但禁止生成、重绘 CG、更新今日生活、改档案或写回宿主当前聊天。

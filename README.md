@@ -1,4 +1,4 @@
-# 心跳回忆 0.8.10 r9
+# 心跳回忆 0.8.10 r12
 
 当前构建发布通道：正式仓库 `https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo`。
 
@@ -6,6 +6,14 @@
 > 仅授权个人、非商业安装和使用未经修改的版本。禁止二改、提取代码/Prompt/UI/实现逻辑、制作衍生版本、转载、重新打包、镜像分发、整合到其他项目、商业使用，以及将仓库链接或受保护项目材料提交给生成式 AI / 代码生成工具 / AI Agent 用于仿制、替代、衍生开发或继续开发。详见 [LICENSE](./LICENSE)。
 
 
+
+
+## 0.8.10 r12：CG 实图绘制
+
+- 相簿已解锁 CG 和 CG/ADV 事件都新增 **“🎨 绘制CG”**。如果 SillyTavern 已启用并配置官方 Image Generation 扩展，点击后会使用其 `imagine` 命令生成图片，并覆盖原来的抽象 CG；没有插件、生成失败或图片失效时继续显示抽象 CG。
+- 绘制永远是手动动作，并会先确认可能消耗本地算力、额度或付费点数。当前版本不自动批量生图。
+- 新生成的 CG 数据会额外带一个纯视觉 `imagePrompt`；旧缓存无需重做，会从原 `desc/cgDesc + visualSeed` 生成 fallback。心跳回忆不会把完整聊天、档案、世界书或私人终端内容交给生图扩展。
+- 图片由 SillyTavern Image Generation 自己保存；心跳回忆只保存同源本地图片路径，不保存 base64，也不直接读取或管理任何生图服务 API Key。
 
 ## 0.8.9.1 独立入口并行生成
 
@@ -65,7 +73,7 @@
 - **插件设置页只负责 API**：一键导入 Connection Manager、连接配置、模型刷新/选择、最大输出、温度与每日生活自动请求开关。
 - **档案室是独立入口**：可从设置页的“打开档案室”按钮，或 SillyTavern 扩展菜单里的“心跳回忆 · 档案室”进入。
 - 档案室负责创建/更新当前聊天档案、查看档案摘要，并提供 **档案室一览**：一个聊天窗口对应一个独立档案；列表只扫描当前角色的聊天窗口。
-- 主内容入口为五个：**回忆相簿 → CG/ADV → 他的房间 → 蝴蝶效应 → ENDING / 后日谈**。
+- 主内容入口为五个：**回忆相簿 → CG/ADV → 他的房间 → ENDING / 后日谈 → 蝴蝶效应**。
 - “他的物品”和“他的手机/私人终端”是“他的房间”内部的深层访问，不再作为档案室头像入口。
 - 未生成时不会因为误点头像自动发请求；每张主入口卡片都有自己的“生成这一项”按钮。已经生成的入口可以继续点击头像查看，同时也可单独重新生成。
 
@@ -227,3 +235,10 @@
 3. 当前聊天 `chatMetadata` 中明确标为摘要/记忆的数据。
 
 所有补充资料都要经过 externalId + 原文 anchor 校验。世界书、角色卡、作者注记属于设定上下文，不作为“某件事已经发生”的证据；原始当前聊天正文仍是最可靠的事实来源。
+
+### r13: incremental archives and read-only archive browsing
+
+- “更新当前窗口档案” is incremental by default: it only processes chat messages added after the previous archive plus changed current-chat memory/summary sources. Existing Mxxx IDs and generated Album/CG/ADV/Room/Ending/Items/Phone content are retained.
+- If an already archived message was edited/deleted/reordered, the incremental update stops. Use the separate “完全重建档案” only when you intentionally want a full rescan and are willing to invalidate derived content.
+- ADV bulk generation no longer auto-retries every failure individually. After a partial failure, choose either one more bulk request or an explicitly confirmed per-item repair pass.
+- Opening another character/chat archive from the archive library is read-only and does not switch the SillyTavern chat. Generated content can be viewed from saved metadata; mutation/generation actions remain disabled until you intentionally return to that chat.

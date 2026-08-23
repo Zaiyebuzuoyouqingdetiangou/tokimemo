@@ -1,3 +1,13 @@
+## 0.8.10 r12 — CG Image Generation 适配
+
+- 回忆相簿与 CG/ADV 事件新增显式“绘制CG / 重绘CG / 恢复抽象CG”。没有实图时继续使用原有抽象 CG；绘制成功后同位置用实图覆盖。
+- 只复用 SillyTavern 已注册的官方 `imagine` 图像生成命令；不直连 Stable Diffusion / ComfyUI / NovelAI / OpenAI 等 provider，也不读取任何生图 API Key。
+- 绘制前始终提示可能消耗算力/额度/付费点数；默认不会自动批量绘制。`quiet=true`，因此心跳回忆绘图不会向聊天正文额外发送图片消息；`gallery=false` 避免强制写入角色 Gallery。
+- CG/ADV JSON 新增纯视觉 `imagePrompt`，只允许角色可见外貌、服装、动作、场景、构图、时间与光线；旧 r11 缓存没有 `imagePrompt` 时会从已有 `desc/cgDesc + visualSeed` 本地构造，不要求重新生成档案。
+- 生图插件返回值只接受 SillyTavern 当前同源的本地图片路径；拒绝 `data:` / `blob:` / 外站 URL。缓存只保存短 URL、视觉 prompt、provider 标记与时间，不保存 base64 图片。
+- 图片加载失败时自动露出下方原抽象 CG；更新档案/重新生成相簿或 CG/ADV 时，旧实图引用随派生缓存一起失效，但不会主动删除 SillyTavern 已保存的图片文件。
+- CG 图片生成完成前后继续校验原 `chatId + archiveRevision`；切换聊天或销毁插件后，迟到图片不会写入别的档案。
+
 ## 0.8.10 r11 — 多来源记忆 / 摘要适配
 
 - 档案室将“蝴蝶效应”固定放在主入口最下方；桌面端也单独占最后一行。
@@ -196,3 +206,12 @@
 - 私人终端恢复丰富 App 规格：社交、深度聊天、相册、备忘、日历、购物、浏览、联系人、定位与人设专属功能；列表→详情双层导航。
 - 现代手机对核心 App 数量做本地硬校验（动态5/聊天5/相册8/备忘15/日历8/购物8/浏览5/联系人5/定位3/人设专属3），并要求至少 1 个联系人详情含 3 项字段；3 个聊天必须至少 12 轮。首轮缩水会自动完整重做一次；手表/通讯器仍要求至少 8 个入口与 48 个可读条目。
 - 相册外部图床只在用户点击后加载；URL 必须逐字命中本轮已激活世界书中预先抽取的 http/https allowlist，并使用 no-referrer，模型编造的 URL 会被本地丢弃。
+
+## 0.8.10 state-r13
+
+- Fixed derived theater content appearing ungenerated after extension reload/login: the current runtime cache is preserved before destroy, compressed-cache read errors are surfaced instead of silently becoming an empty cache, and save compression debounce is shortened.
+- Changed current-window archive update to append-only incremental update. Existing Mxxx IDs and previously generated Album/CG/ADV/Room/Ending/Items/Phone content are retained when the archived chat prefix is unchanged.
+- Added explicit “完全重建档案” for the destructive full rescan/renumber path. Edited/deleted/reordered old chat messages cause incremental update to stop instead of silently rebuilding.
+- Changed ADV bulk recovery: one bulk request runs first. Partial/failed results stop and present two explicit choices: retry failed items in one batch (1 request) or repair failed items individually (up to N requests). No automatic N-request fallback.
+- Changed archive-library browsing to read-only metadata snapshots. Opening A/B archives no longer calls SillyTavern character/chat switching APIs, so browsing archives cannot trigger the host “chat is being saved” switch guard.
+- Added read-only viewing of already saved derived sessions from indexed archives; generation/mutation actions are blocked in snapshot mode.

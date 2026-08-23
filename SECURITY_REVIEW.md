@@ -157,3 +157,33 @@ Result: no new High/Medium security finding identified in this focused diff. Res
 - Chat metadata extraction traverses only summary/memory-labelled top-level keys and a fixed allowlist of content fields.
 - World info, character cards, personas, and author-setting material remain setting-only context and are explicitly excluded from external-memory import evidence.
 - External imported memories still require an existing externalId and an exact sourceExternalAnchor contained in the cited source content.
+
+## r12 CG image-generation targeted diff review
+
+Scope: exact GitHub r11 baseline (`src/heartbeatMemories.js` blob `576fc7e234eda448a2f9aa7ee2e0c25740edf61f`) to local r12 CG-image patch.
+
+- No direct image-provider endpoint, credential read, or provider-specific API client was added. Heartbeat calls only the already-registered SillyTavern `imagine` slash-command callback with `quiet=true` / `gallery=false`.
+- CG drawing is an explicit user action with a cost/credit warning. It is never started by opening an album/ADV, selecting a card, a timer, or background archive generation.
+- The outgoing prompt is capped and sanitized. URL-like content, `{{...}}` macro syntax, source-memory field names, world/memory envelope labels, and HTML-like tags are stripped before the visual prompt reaches Image Generation. The full chat, archive records, world-book text, external-memory records, phone contents, and secrets are never passed to the image command.
+- The returned image reference is accepted only when it resolves to the current SillyTavern origin using http(s). `data:`, `blob:`, and cross-origin URLs are rejected. The DOM receives only an escaped same-origin path with `referrerpolicy=no-referrer`.
+- The cache stores only `{url,prompt,provider,generatedAt}`; no base64 image bytes are stored in `chatMetadata`. Invalid/broken image loads fall back to the existing abstract CG layer.
+- A CG draw captures `characterKey + chatId + archiveRevision`, rejects stale completion, uses the latest cached session before merging the image field, and blocks whole-mode regeneration while that mode has an image task. This avoids stale image completion overwriting a newer ADV/session snapshot.
+- Plugin destruction increments a lifecycle epoch and clears local image-task state; a late external image result cannot write into the destroyed instance. Archive create/update and memory preflight treat an active CG draw as an active generation task.
+- Added-line scan found no new `fetch`, `XMLHttpRequest`, WebSocket, EventSource, `eval`, `new Function`, Authorization header, API-key read, or direct `/api/` destination.
+
+Targeted diff conclusion: no new Critical / High / Medium issue identified in the r12 change set. Residual runtime dependency: compatibility and billing behavior depend on the user's installed SillyTavern Image Generation configuration; the first build intentionally supports the registered `imagine` capability rather than probing arbitrary third-party plugin internals.
+
+
+## 0.8.10 state-r13 targeted diff review
+
+Scope: r12 CG-image package -> r13 state/archive patch. Changed source: `src/heartbeatMemories.js`; packaging/docs: `manifest.json`, `index.js`, `README.md`, `CHANGELOG.md`, `SECURITY.md`, `SECURITY_REVIEW.md`.
+
+Security-sensitive changes reviewed:
+- Incremental archive updates preserve old Mxxx records verbatim and only migrate derived-session `archiveRevision` fences when the old archived chat prefix still hashes to the previous chat fingerprint. If old messages changed, incremental update fails closed and requires explicit full rebuild.
+- Full rebuild remains destructive and clears derived content; it now has a separate explicit confirmation path.
+- Cross-archive viewing no longer invokes host character/chat switching. It reads only the indexed character's same-origin `/api/characters/chats` metadata on explicit user selection and renders a read-only snapshot. Snapshot mode blocks generation, CG redraw/clear, archive updates and room-life regeneration.
+- Compressed cache read failures no longer degrade to an empty “not generated” state. The compressed metadata is left intact and the UI surfaces a recovery error.
+- ADV partial batch generation no longer automatically fans out into multiple model requests. Individual repair requires an additional explicit confirmation with the maximum request count.
+- No new arbitrary network destination, WebSocket/EventSource, eval/new Function, secret storage, or model-controlled fetch target was introduced. The only new runtime fetch reuses the pre-existing same-origin `/api/characters/chats` archive-metadata endpoint with a locally indexed avatar/chat target.
+
+Result: no newly introduced Critical/High/Medium security finding identified in the targeted manual diff review. Runtime compatibility of server-returned chat metadata fields and browser compression APIs still requires real SillyTavern device testing.
