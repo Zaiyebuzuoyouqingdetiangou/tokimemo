@@ -29,6 +29,7 @@ const EXTERNAL_MEMORY_FETCH_LIMIT = 200;
 const ARCHIVE_INDEX_SETTINGS_KEY = 'heartbeatMemoriesArchiveIndexV1';
 const ARCHIVE_INDEX_MAX = 1200;
 const EXTENSION_SETTINGS_KEY = 'heartbeatMemories';
+const AVATAR_VISIT_SETTINGS_KEY = 'heartbeatMemoriesAvatarVisitsV1';
 const DEFAULT_SETTINGS = Object.freeze({
     connectionProfileId: '',
     modelOverride: '',
@@ -46,6 +47,7 @@ const MODE = Object.freeze({
     ITEMS: 'items',
     PHONE: 'phone',
     ENDING: 'ending',
+    HEART: 'heart',
 });
 
 const MODE_LABEL = Object.freeze({
@@ -56,6 +58,7 @@ const MODE_LABEL = Object.freeze({
     [MODE.ITEMS]: '他的物品',
     [MODE.PHONE]: '他的私人终端',
     [MODE.ENDING]: '结局与后日谈',
+    [MODE.HEART]: '角色互动与 Voice Drama',
 });
 
 const MODE_TOKEN_CAPS = Object.freeze({
@@ -65,7 +68,8 @@ const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ROOM]: 10000,
     [MODE.ITEMS]: 10000,
     [MODE.PHONE]: 16000,
-    [MODE.ENDING]: 16000,
+    [MODE.ENDING]: 18000,
+    [MODE.HEART]: 20000,
 });
 const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.ENDING, MODE.BUTTERFLY]);
 const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS, MODE.PHONE]);
@@ -81,10 +85,14 @@ const ROOM_ZONE_VALUES = new Set(['左上', '右上', '左下', '右下', '中�
 const ROOM_BASIS_VALUES = new Set(['设定', '记忆']);
 const PHONE_DEVICE_KINDS = new Set(['phone', 'watch', 'terminal', 'communicator']);
 const ROOM_DAYPART_KEYS = ['morning', 'daytime', 'evening', 'night'];
-const ENDING_TYPES = new Set(['route', 'romance', 'bond', 'open', 'personal']);
+const ENDING_TYPES = new Set(['route', 'romance', 'reverse', 'bond', 'open', 'personal']);
 const CONFESSION_REPLAY_TYPES = new Set(['true', 'mutual', 'friendship', 'indirect', 'relationship', 'rejected', 'other']);
 const CG_IMAGE_PROVIDER = 'sillytavern-imagine';
 const MAX_CG_IMAGE_PROMPT_CHARS = 1800;
+const HEART_GREETING_KEYS = Object.freeze(['morning', 'noon', 'evening', 'night', 'weekend', 'birthday', 'userBirthday', 'holiday', 'absenceWorry', 'absenceSulky', 'absenceJealous']);
+const HEART_VOICE_KINDS = new Set(['postending', 'spring', 'summer', 'autumn', 'winter']);
+const HEART_SCENARIO_SEASONS = new Set(['spring', 'summer', 'autumn', 'winter']);
+const HEART_STRIP_PANEL_COUNTS = new Set([1, 2, 4]);
 
 let busy = false; // exclusive archive/preflight task; mode generation uses activeGenerationTasks
 let activeMode = null;
@@ -102,6 +110,8 @@ const activeModeBuildScopes = new Set();
 const activeAdvBulkScopes = new Set();
 const activeCgImageTasks = new Map();
 let cgImageLifecycleEpoch = 0;
+let avatarDialogueRequestEpoch = 0;
+let activeAvatarDialogue = null;
 const MAX_CONCURRENT_GENERATION_TASKS = 4;
 let butterflyTransitionTimer = 0;
 let archiveOverviewCache = { key: '', fetchedAt: 0, items: [] };
@@ -897,6 +907,40 @@ function setArchiveIndex(context, items) {
     if (!context.extensionSettings || typeof context.extensionSettings !== 'object') return;
     const normalized = Array.isArray(items) ? items.slice(0, ARCHIVE_INDEX_MAX) : [];
     context.extensionSettings[ARCHIVE_INDEX_SETTINGS_KEY] = normalized;
+    context.saveSettingsDebounced?.();
+}
+
+function getAvatarVisitState(context = getContext()) {
+    const raw = context.extensionSettings?.[AVATAR_VISIT_SETTINGS_KEY];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    const entries = Object.entries(raw).slice(-240);
+    const out = {};
+    for (const [key, value] of entries) {
+        const safeKey = normalizeText(key, 320);
+        const timestamp = Math.max(0, Number(value) || 0);
+        if (safeKey && timestamp) out[safeKey] = timestamp;
+    }
+    return out;
+}
+
+function avatarVisitKey(characterKey) {
+    return normalizeText(characterKey, 300);
+}
+
+function lastAvatarVisitAt(characterKey, context = getContext()) {
+    const key = avatarVisitKey(characterKey);
+    if (!key) return 0;
+    return Math.max(0, Number(getAvatarVisitState(context)[key]) || 0);
+}
+
+function touchAvatarVisit(characterKey, context = getContext()) {
+    if (!context.extensionSettings || typeof context.extensionSettings !== 'object') return;
+    const key = avatarVisitKey(characterKey);
+    if (!key) return;
+    const state = getAvatarVisitState(context);
+    state[key] = Date.now();
+    const entries = Object.entries(state).sort((a, b) => Number(a[1]) - Number(b[1])).slice(-240);
+    context.extensionSettings[AVATAR_VISIT_SETTINGS_KEY] = Object.fromEntries(entries);
     context.saveSettingsDebounced?.();
 }
 
@@ -2028,6 +2072,19 @@ ${endingArchiveSlice(memoryBank, 48)}
       }
     },
     {
+      "id": "END_REVERSE",
+      "type": "reverse",
+      "title": "逆转告白",
+      "available": false,
+      "unlockHint": "只有档案里已经能证明强烈依恋，并出现真实的吃醋、竞争、错过时机、关系位置将被失去等压力时才解锁；否则保持未解锁",
+      "sourceMemoryIds": ["M002"],
+      "sourceMemoryAnchor": "真实锚点",
+      "endingScene": "",
+      "confession": "",
+      "creditsLine": "",
+      "epilogue": {"title":"后日谈","timeSkip":"","scenes":[],"finalLine":""}
+    },
+    {
       "id": "END_ROMANCE",
       "type": "romance",
       "title": "恋爱结局",
@@ -2050,11 +2107,12 @@ ${endingArchiveSlice(memoryBank, 48)}
 - 每条 confession replay 必须至少引用 1 条真实 sourceMemoryIds + sourceMemoryAnchor；anchor 必须直接证明“这次告白/关系确认确实发生”，不能只引用普通约会、暧昧气氛或角色设定。
 - replay.scene 只允许重构档案已经证明的地点、行为、气氛与结果，不得增加新事件；confessionText 是“档案式重构”而不是聊天逐字引用；responseSummary 只能总结 {{user}} 已经发生的回应，不替 {{user}} 发明新对白。
 - replay.scene 至少 140 个汉字；confessionText 至少 50 个汉字；若证据不足以满足，就不要生成这条 replay。
-- endings 至少 4 条、最多 6 条，必须包含 type=route、romance、bond、open；可以额外有 personal。
+- endings 至少 5 条、最多 7 条，必须包含 type=route、romance、reverse、bond、open；可以额外有 personal。
 - available 表示“按当前真实档案，这条未来路线是否已经具备进入条件”，绝不表示该结局已经发生。
 - route 和 open 必须 available=true；recommendedEndingId 必须指向一个 available=true 的 ending，并优先选择最符合当前档案关系状态的路线。
 - 每条 ending 都必须至少引用 1 条真实 sourceMemoryIds + sourceMemoryAnchor，说明这条路线从当前关系的哪里出发；引用只证明起点，不证明未来结局已经发生。
 - romance / 恋爱结局：只有当前档案已经出现明确且相互可确认的恋爱推进（如正式告白被接受、明确恋人关系、双方确认的爱情承诺等）时才 available=true。只有单方面暗恋、暧昧、性格设定、未来计划或模型猜测时必须 available=false。
+- reverse / 逆转告白：表现“原本可能错过、被甩在后面或关系位置正在流失时，{{char}} 终于失去从容、主动争取机会”的路线张力。只有档案里已有可验证的强烈依恋，并且确实出现过吃醋、竞争感、明显错过时机、关系摇摆或差点失去 {{user}} 的压力时 available=true；普通暧昧不能硬开。逆转告白可以急切、吃醋、争取，但不得威胁、强迫、控制 {{user}}，也不得把 {{user}} 与第三方恋爱写成既成事实。
 - romance 未解锁时：endingScene、confession、creditsLine 必须为空；epilogue.scenes 必须为空，只给 unlockHint，不提前剧透成已发生恋爱。
 - bond / 羁绊结局可表现深度信赖、陪伴、搭档、家人般羁绊等非恋爱终点；是否 available 同样由档案决定。
 - open / 开放结局始终 available=true，用“故事仍在继续”的方式收束当前阶段，不强迫恋爱。
@@ -2063,6 +2121,93 @@ ${endingArchiveSlice(memoryBank, 48)}
 - 未来推演必须继续符合 CHARACTER_CARD_JSON、USER_PERSONA_JSON、WORLD_INFO_TEXT 与当前档案关系，不突然换职业、时代、人格或世界规则。
 - 若角色或用户是未成年人/低龄设定，恋爱路线只能写年龄适当的纯情关系与成长，不写性内容、同居、婚姻或成人化承诺；需要成年后的长期未来时必须明确时间已推进到双方成年。
 - 禁止出现前任/前女友；禁止 {{char}} 与 {{user}} 之外的第三方恋爱、婚姻或家庭对象。
+- 只输出 JSON。`,
+    [MODE.HEART]: (context, memoryBank) => `${promptSafetyBoundary(context, '角色互动 / Voice Drama / 四季 Scenario / 日常一格')}
+本请求生成的是【角色互动台词库与明确标注为模拟的附加剧场】，不会写回聊天档案，也不会把未来小剧场冒充成已经发生。
+当前关系语气必须由真实档案锚定；但 greetings、Voice Drama、Scenario Drama、日常一格本身都是“角色化演出/未来或日常模拟”，不是 archive evidence。
+UNTRUSTED_HEART_ARCHIVE_JSON:
+${endingArchiveSlice(memoryBank, 40)}
+
+设计方向：借鉴恋爱模拟游戏常见的“启动问候、生日/节日台词、长时间未访问反应、角色独白、四季小剧场、日常一格”结构，但不得复刻任何商业游戏的原文、专有角色、剧情或资产。
+
+严格输出：
+{
+  "title": "HEART VOICE / 角色互动",
+  "relationshipState": "当前真实档案能证明的关系阶段",
+  "relationshipSummary": "只总结已有关系事实",
+  "relationshipSourceMemoryIds": ["M001"],
+  "relationshipSourceMemoryAnchor": "真实锚点",
+  "birthdayMmDd": "MM/DD；只有角色卡/世界书明确写了角色生日时才填，否则空字符串",
+  "userBirthdayMmDd": "MM/DD；只有 USER_PERSONA_JSON / 世界设定明确写了 {{user}} 生日时才填，否则空字符串",
+  "specialDays": [
+    {"mmdd":"12/25","label":"适合当前世界设定的节日","line":"角色在这一天点开头像时说的一句特别台词"}
+  ],
+  "greetings": {
+    "morning": ["至少3条早晨问候"],
+    "noon": ["至少3条中午/白天问候"],
+    "evening": ["至少3条傍晚问候"],
+    "night": ["至少3条夜间问候"],
+    "weekend": ["至少3条周末问候"],
+    "birthday": ["至少2条角色自己生日当天的特别台词"],
+    "userBirthday": ["至少2条 {{user}} 生日当天对 {{user}} 说的祝福/特别台词"],
+    "holiday": ["至少2条通用节假日问候"],
+    "absenceWorry": ["至少2条较久没点开后的担心/想念"],
+    "absenceSulky": ["至少2条更久没点开后的闹别扭/怨气，但要符合人设"],
+    "absenceJealous": ["只有关系确实适合时才写轻度吃醋/抢注意力台词；否则可以空数组"]
+  },
+  "voiceDramas": [
+    {
+      "id":"VOICE_POST",
+      "kind":"postending",
+      "title":"后日谈 Voice Drama",
+      "subtitle":"未来生活长篇剧场",
+      "setting":"明确写这是未来剧场模拟；根据人物年龄与世界设定选择同居/婚后/长期伴侣/多年后的日常，不能强行婚姻",
+      "script":[
+        {"speaker":"narrator","text":"场景与动作"},
+        {"speaker":"char","text":"角色台词"},
+        {"speaker":"user","text":"仅作为非正史剧本演出的用户台词，不代表用户真实选择"}
+      ]
+    },
+    {"id":"VOICE_SPRING","kind":"spring","title":"春 Voice Drama","subtitle":"春日的一天","setting":"...","script":[]},
+    {"id":"VOICE_SUMMER","kind":"summer","title":"夏 Voice Drama","subtitle":"夏日的一天","setting":"...","script":[]},
+    {"id":"VOICE_AUTUMN","kind":"autumn","title":"秋 Voice Drama","subtitle":"秋日的一天","setting":"...","script":[]},
+    {"id":"VOICE_WINTER","kind":"winter","title":"冬 Voice Drama","subtitle":"冬日的一天","setting":"...","script":[]}
+  ],
+  "scenarioDramas": [
+    {"id":"SCENE_SPRING","season":"spring","title":"春 Scenario Drama","subtitle":"普通一天里的小事件","setting":"...","script":[]},
+    {"id":"SCENE_SUMMER","season":"summer","title":"夏 Scenario Drama","subtitle":"普通一天里的小事件","setting":"...","script":[]},
+    {"id":"SCENE_AUTUMN","season":"autumn","title":"秋 Scenario Drama","subtitle":"普通一天里的小事件","setting":"...","script":[]},
+    {"id":"SCENE_WINTER","season":"winter","title":"冬 Scenario Drama","subtitle":"普通一天里的小事件","setting":"...","script":[]}
+  ],
+  "dailyStrips": [
+    {
+      "id":"STRIP01",
+      "title":"日常一格标题",
+      "subtitle":"一句吐槽或小标题",
+      "panelCount":2,
+      "panels":[
+        {"caption":"第一格说明","action":"肉眼可见的动作和构图","charLine":"角色短台词","userLine":"用户短台词；仅为小剧场模拟"},
+        {"caption":"第二格说明","action":"反应/反转","charLine":"角色短台词","userLine":"用户短台词；仅为小剧场模拟"}
+      ],
+      "visualSeed":["至少3个画面元素"],
+      "imagePrompt":"给生图插件的纯视觉提示：Q版/chibi、1/2/4格漫画构图、同一角色外貌一致、无文字、无对白框、无水印"
+    }
+  ]
+}
+
+硬性要求：
+- relationshipState / relationshipSummary 必须有真实 sourceMemoryIds + sourceMemoryAnchor；只用于决定互动语气，不允许 greetings 反向成为档案事实。
+- morning/noon/evening/night/weekend 各至少 3 条；birthday/userBirthday/holiday/absenceWorry/absenceSulky 各至少 2 条。每条 15～180 个汉字，要高度符合 {{char}} 说话方式，避免通用客服口吻。
+- birthdayMmDd 只有 CHARACTER_CARD_JSON / WORLD_INFO_TEXT 明确提供角色生日时才填；userBirthdayMmDd 只有 USER_PERSONA_JSON / WORLD_INFO_TEXT 明确提供 {{user}} 生日时才填；不知道就写 ""，不要猜日期。
+- specialDays 最多 10 条，只选择当前世界/时代合理的固定 MM/DD 特别日；若设定不适合现代节日，可以少写或为空。特别日只是互动演出，不作为历史事实。
+- absenceWorry 用于约 3～6 天未点头像；absenceSulky 用于约 7 天以上；absenceJealous 只有当前关系确实允许轻度吃醋时才生成。吃醋只能表现想被注意、酸味、抢占陪伴感，不能监控、威胁、限制 {{user}} 社交。
+- voiceDramas 必须有 postending + spring + summer + autumn + winter 共 5 类。postending 至少 14 个 script 节点、总文本不少于约 900 汉字；四季 Voice Drama 各至少 9 个节点、总文本不少于约 620 汉字。
+- 四季 Voice Drama 以 {{char}} 的主观感受为中心，像“他回想/讲述某一天自己的想法”；可以有 narrator 和少量 user 台词，但重点仍是角色本人说话。
+- postending 是我们自己的“未来长篇生活剧场”：温馨、生活化、符合职业/年龄/世界设定。若当前关系尚未支持恋爱/婚姻，就写多年后的亲密伙伴/朋友/开放式未来，不得强行结婚。script 中的 user 台词始终是【非正史剧本演出】而非真实用户决定。
+- scenarioDramas 必须春夏秋冬各 1 个；每个至少 12 个 script 节点、总文本不少于约 850 汉字。写“普通一天里发生的小事件”，允许非恋爱配角以朋友/同事/家人身份出现，但绝不能给 {{char}} 安排第三方恋爱。
+- dailyStrips 至少 4 条；panelCount 只能是 1/2/4。风格要像轻松 Q 版日常漫画，有动作反差、吐槽或可爱误会；不要把沉重主线硬塞进去。
+- dailyStrips.imagePrompt 只写肉眼可见画面，并明确 no text / no speech bubble / no watermark；真正台词由插件 DOM 叠加/列出，避免生图模型把文字画坏。
+- 所有 Voice/Scenario/日常一格都是模拟，不写回 MEMORY_KEY，不得声称是聊天中已经发生的事件。
 - 只输出 JSON。`,
     [MODE.ALBUM]: (context, memoryBank) => `${promptSafetyBoundary(context, '回忆相簿 / CG')}
 本请求只负责相簿 CG，不携带房间、手机、储物或蝴蝶效应规则。
@@ -2582,7 +2727,7 @@ ${relationshipSummary}`,
         };
     }).filter(Boolean);
     const raw = Array.isArray(data?.endings) ? data.endings : [];
-    const endings = raw.slice(0, 8).map((item, index) => {
+    const endings = raw.slice(0, 9).map((item, index) => {
         const typeRaw = normalizeText(item?.type, 40).toLowerCase();
         const type = ENDING_TYPES.has(typeRaw) ? typeRaw : 'personal';
         const available = !!item?.available;
@@ -2630,9 +2775,9 @@ ${relationshipSummary}`,
             epilogue,
         };
     }).filter(Boolean);
-    if (endings.length < 4) throw new Error(`结局路线不足：得到 ${endings.length} 条，至少需要 4 条。`);
+    if (endings.length < 5) throw new Error(`结局路线不足：得到 ${endings.length} 条，至少需要 5 条。`);
     const byType = new Map(endings.map(item => [item.type, item]));
-    for (const required of ['route', 'romance', 'bond', 'open']) {
+    for (const required of ['route', 'romance', 'reverse', 'bond', 'open']) {
         if (!byType.has(required)) throw new Error(`结局档案缺少 ${required} 路线。`);
     }
     const route = byType.get('route');
@@ -2641,6 +2786,7 @@ ${relationshipSummary}`,
     const requestedRecommended = safeId(data?.recommendedEndingId, '');
     const recommended = endings.find(item => item.id === requestedRecommended && item.available)
         || endings.find(item => item.type === 'romance' && item.available)
+        || endings.find(item => item.type === 'reverse' && item.available)
         || route
         || endings.find(item => item.available);
     return {
@@ -2656,6 +2802,146 @@ ${relationshipSummary}`,
         selectedId: recommended?.id || endings[0].id,
         selectedConfessionId: confessionReplays[0]?.id || '',
         view: 'routes',
+    };
+}
+
+function normalizeHeartScript(rawLines, { minLines = 8, maxLines = 28, minChars = 500 } = {}) {
+    const allowedSpeakers = new Set(['char', 'user', 'narrator']);
+    const lines = (Array.isArray(rawLines) ? rawLines : []).slice(0, maxLines).map((line, index) => {
+        const speakerRaw = normalizeText(line?.speaker, 40).toLowerCase();
+        const speaker = allowedSpeakers.has(speakerRaw) ? speakerRaw : (index % 4 === 0 ? 'narrator' : 'char');
+        const text = normalizeText(line?.text, 1800);
+        if (!text) return null;
+        return { speaker, text };
+    }).filter(Boolean);
+    if (lines.length < minLines || lines.reduce((sum, line) => sum + line.text.length, 0) < minChars) return [];
+    return lines;
+}
+
+function normalizeHeart(data, memoryBank) {
+    const relationshipState = normalizeText(data?.relationshipState, 120) || '关系仍在发展';
+    const relationshipSummary = normalizeText(data?.relationshipSummary, 1800);
+    if (!relationshipSummary) throw new Error('角色互动台词库缺少关系摘要。');
+    const relationshipReference = normalizeMemoryReference(
+        data?.relationshipSourceMemoryIds,
+        data?.relationshipSourceMemoryAnchor,
+        `${relationshipState}\n${relationshipSummary}`,
+        memoryBank,
+        1,
+    );
+    if (!relationshipReference.sourceMemoryIds.length || !relationshipReference.sourceMemoryAnchor) {
+        throw new Error('角色互动台词库缺少真实关系锚点。');
+    }
+
+    const greetings = {};
+    for (const key of HEART_GREETING_KEYS) {
+        greetings[key] = cleanArray(data?.greetings?.[key], 8, 600);
+    }
+    for (const key of ['morning', 'noon', 'evening', 'night', 'weekend']) {
+        if (greetings[key].length < 3) throw new Error(`角色互动“${key}”台词不足 3 条。`);
+    }
+    for (const key of ['birthday', 'userBirthday', 'holiday', 'absenceWorry', 'absenceSulky']) {
+        if (greetings[key].length < 2) throw new Error(`角色互动“${key}”台词不足 2 条。`);
+    }
+
+    const birthdayRaw = normalizeText(data?.birthdayMmDd, 20);
+    const birthdayMmDd = /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])$/.test(birthdayRaw) ? birthdayRaw : '';
+    const userBirthdayRaw = normalizeText(data?.userBirthdayMmDd, 20);
+    const userBirthdayMmDd = /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])$/.test(userBirthdayRaw) ? userBirthdayRaw : '';
+    const specialDays = (Array.isArray(data?.specialDays) ? data.specialDays : []).slice(0, 10).map((item, index) => {
+        const mmdd = normalizeText(item?.mmdd, 20);
+        const label = normalizeText(item?.label, 80) || `特别日 ${index + 1}`;
+        const line = normalizeText(item?.line, 600);
+        if (!/^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])$/.test(mmdd) || !line) return null;
+        return { mmdd, label, line };
+    }).filter(Boolean);
+
+    const voiceDramas = (Array.isArray(data?.voiceDramas) ? data.voiceDramas : []).slice(0, 8).map((item, index) => {
+        const kindRaw = normalizeText(item?.kind, 40).toLowerCase();
+        const kind = HEART_VOICE_KINDS.has(kindRaw) ? kindRaw : '';
+        if (!kind) return null;
+        const script = normalizeHeartScript(item?.script, {
+            minLines: kind === 'postending' ? 14 : 9,
+            maxLines: kind === 'postending' ? 32 : 22,
+            minChars: kind === 'postending' ? 900 : 620,
+        });
+        if (!script.length) return null;
+        return {
+            id: safeId(item?.id, `VOICE${String(index + 1).padStart(2, '0')}`),
+            kind,
+            title: normalizeText(item?.title, 120) || 'Voice Drama',
+            subtitle: normalizeText(item?.subtitle, 240),
+            setting: normalizeText(item?.setting, 1200),
+            script,
+        };
+    }).filter(Boolean);
+    for (const required of ['postending', 'spring', 'summer', 'autumn', 'winter']) {
+        if (!voiceDramas.some(item => item.kind === required)) throw new Error(`Voice Drama 缺少 ${required}。`);
+    }
+
+    const scenarioDramas = (Array.isArray(data?.scenarioDramas) ? data.scenarioDramas : []).slice(0, 6).map((item, index) => {
+        const seasonRaw = normalizeText(item?.season, 40).toLowerCase();
+        const season = HEART_SCENARIO_SEASONS.has(seasonRaw) ? seasonRaw : '';
+        if (!season) return null;
+        const script = normalizeHeartScript(item?.script, { minLines: 12, maxLines: 30, minChars: 850 });
+        if (!script.length) return null;
+        return {
+            id: safeId(item?.id, `SCENE${String(index + 1).padStart(2, '0')}`),
+            season,
+            title: normalizeText(item?.title, 120) || `${season} Scenario Drama`,
+            subtitle: normalizeText(item?.subtitle, 240),
+            setting: normalizeText(item?.setting, 1200),
+            script,
+        };
+    }).filter(Boolean);
+    for (const required of ['spring', 'summer', 'autumn', 'winter']) {
+        if (!scenarioDramas.some(item => item.season === required)) throw new Error(`Scenario Drama 缺少 ${required}。`);
+    }
+
+    const dailyStrips = (Array.isArray(data?.dailyStrips) ? data.dailyStrips : []).slice(0, 8).map((item, index) => {
+        const panelCountRaw = Number(item?.panelCount) || (Array.isArray(item?.panels) ? item.panels.length : 2);
+        const panelCount = HEART_STRIP_PANEL_COUNTS.has(panelCountRaw) ? panelCountRaw : 2;
+        const panels = (Array.isArray(item?.panels) ? item.panels : []).slice(0, panelCount).map((panel, panelIndex) => ({
+            caption: normalizeText(panel?.caption, 300),
+            action: normalizeText(panel?.action, 700),
+            charLine: normalizeText(panel?.charLine, 500),
+            userLine: normalizeText(panel?.userLine, 500),
+        })).filter(panel => panel.action || panel.caption || panel.charLine || panel.userLine);
+        if (panels.length !== panelCount) return null;
+        const visualSeed = cleanArray(item?.visualSeed, 10, 100);
+        const imagePrompt = sanitizeCgVisualText(item?.imagePrompt, MAX_CG_IMAGE_PROMPT_CHARS);
+        if (!imagePrompt || visualSeed.length < 3) return null;
+        return {
+            id: safeId(item?.id, `STRIP${String(index + 1).padStart(2, '0')}`),
+            title: normalizeText(item?.title, 100) || `日常一格 ${index + 1}`,
+            subtitle: normalizeText(item?.subtitle, 240),
+            panelCount,
+            panels,
+            visualSeed,
+            imagePrompt,
+            cgImage: normalizeCgImageRecord(item?.cgImage),
+        };
+    }).filter(Boolean);
+    if (dailyStrips.length < 4) throw new Error(`日常一格不足：得到 ${dailyStrips.length} 条，至少需要 4 条。`);
+
+    return {
+        kind: MODE.HEART,
+        title: normalizeText(data?.title, 120) || 'HEART VOICE / 角色互动',
+        relationshipState,
+        relationshipSummary,
+        relationshipSourceMemoryIds: relationshipReference.sourceMemoryIds,
+        relationshipSourceMemoryAnchor: relationshipReference.sourceMemoryAnchor,
+        birthdayMmDd,
+        userBirthdayMmDd,
+        specialDays,
+        greetings,
+        voiceDramas,
+        scenarioDramas,
+        dailyStrips,
+        selectedVoiceId: voiceDramas[0]?.id || '',
+        selectedScenarioId: scenarioDramas[0]?.id || '',
+        selectedStripId: dailyStrips[0]?.id || '',
+        view: 'greetings',
     };
 }
 
@@ -3034,6 +3320,7 @@ function normalizeByMode(mode, data, memoryBank, context = null) {
     if (mode === MODE.ITEMS) return normalizeItems(data, memoryBank);
     if (mode === MODE.PHONE) return normalizePhone(data, memoryBank);
     if (mode === MODE.ENDING) return normalizeEnding(data, memoryBank);
+    if (mode === MODE.HEART) return normalizeHeart(data, memoryBank);
     throw new Error('未知心跳回忆模式。');
 }
 
@@ -3351,7 +3638,8 @@ function loadSession(mode, options = {}) {
         if (mode === MODE.ROOM && (!Array.isArray(session.spaces) || session.spaces.length < 2)) return null;
         if (mode === MODE.ITEMS && (!Array.isArray(session.containers) || session.containers.length < 1)) return null;
         if (mode === MODE.PHONE && (!Array.isArray(session.apps) || session.apps.length < 5)) return null;
-        if (mode === MODE.ENDING && (!Array.isArray(session.endings) || session.endings.length < 4)) return null;
+        if (mode === MODE.ENDING && (!Array.isArray(session.endings) || session.endings.length < 5)) return null;
+        if (mode === MODE.HEART && (!session.greetings || !Array.isArray(session.voiceDramas) || session.voiceDramas.length < 5 || !Array.isArray(session.dailyStrips) || session.dailyStrips.length < 4)) return null;
         return options.clone === false ? session : structuredClone(session);
     } catch {
         return null;
@@ -4568,6 +4856,15 @@ dialog#${OVERLAY_ID}::backdrop{background:transparent}
 .rmt-phone{display:flex;justify-content:center;padding:8px}.rmt-phone-shell{position:relative;width:min(940px,100%);min-height:560px;border-radius:28px;padding:16px;background:linear-gradient(155deg,#f8fbfc,#e9f2f5);border:1px solid rgba(74,112,124,.18);box-shadow:0 16px 42px rgba(44,70,79,.12)}.rmt-phone-notch{width:90px;height:5px;border-radius:999px;background:rgba(39,57,65,.28);margin:0 auto 12px}.rmt-phone-lock{display:flex;justify-content:space-between;align-items:center;padding:12px 14px}.rmt-phone-lock span{opacity:.6}.rmt-phone-apps{display:flex;gap:8px;overflow:auto;padding:8px 4px 14px}.rmt-phone-app{min-width:92px;border:0;border-radius:16px;background:rgba(255,255,255,.7);padding:11px 10px;display:flex;flex-direction:column;align-items:center;gap:6px}.rmt-phone-app.active{background:#fff;box-shadow:0 8px 20px rgba(77,113,126,.12)}.rmt-phone-content{display:grid;grid-template-columns:minmax(240px,.8fr) minmax(0,1.2fr);gap:12px}.rmt-phone-list,.rmt-phone-detail{border-radius:18px;background:rgba(255,255,255,.78);border:1px solid rgba(74,112,124,.12);padding:12px}.rmt-phone-app-summary{padding:5px 4px 12px;opacity:.68}.rmt-phone-entry{width:100%;border:0;border-top:1px solid rgba(74,112,124,.1);background:transparent;padding:10px 6px;text-align:left;display:flex;flex-direction:column;gap:3px}.rmt-phone-entry.active{background:rgba(159,201,213,.14);border-radius:10px}.rmt-phone-entry small{opacity:.55}.rmt-phone-entry span{opacity:.78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rmt-phone-entry em{font-style:normal;font-size:8px;color:#8c7280;margin-top:2px}.rmt-phone-app-summary{display:grid;gap:3px}.rmt-phone-app-summary b{font-size:13px;color:#5c7184}.rmt-phone-app-summary span{font-size:10px;line-height:1.55}.rmt-phone-app-summary small{font-size:8px;opacity:.55}.rmt-phone-detail{position:relative;min-width:0}.rmt-phone-detail-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}.rmt-phone-detail-toolbar>span{font-size:9px;color:#8e9ba7;text-align:right}.rmt-phone-detail h3{margin:8px 0}.rmt-phone-detail p{white-space:pre-wrap;line-height:1.8}.rmt-phone-evidence{margin-top:14px;font-size:12px;opacity:.58}.rmt-phone-chat-thread{display:grid;gap:8px;margin-top:12px}.rmt-phone-message{padding:9px 10px;border-radius:13px;background:#f7fbfd;border:1px solid rgba(74,112,124,.10)}.rmt-phone-message>div{display:flex;justify-content:space-between;gap:8px;align-items:center}.rmt-phone-message b{font-size:10px}.rmt-phone-message small{font-size:8px;opacity:.55}.rmt-phone-message p{margin:5px 0 0!important;line-height:1.65!important;font-size:11px}.rmt-phone-fields{display:grid;gap:7px;margin:12px 0}.rmt-phone-fields>div{display:grid;grid-template-columns:minmax(90px,.35fr) minmax(0,1fr);gap:8px;padding:8px 9px;border-radius:10px;background:#f8fbfd}.rmt-phone-fields dt{font-size:9px;color:#8795a2}.rmt-phone-fields dd{margin:0;font-size:11px;color:#5f7182;white-space:pre-wrap}.rmt-phone-image-caption{padding:11px;border-radius:12px;background:#fff7fa;line-height:1.65;white-space:pre-wrap}
 .rmt-phone-lock>div,.rmt-phone-lock>span{display:grid;gap:2px}.rmt-phone-lock small{font-size:9px;opacity:.62}.rmt-phone-app{position:relative}.rmt-phone-badge{position:absolute;right:7px;top:6px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;display:grid;place-items:center;background:#e98eaf;color:#fff;font-size:9px;font-style:normal;font-weight:850;box-shadow:0 2px 6px rgba(91,48,67,.18)}
 .rmt-device-watch{width:min(560px,100%);border-radius:44px;border-width:6px;padding:18px}.rmt-device-watch .rmt-phone-notch{width:44px}.rmt-device-watch .rmt-phone-content{grid-template-columns:1fr}.rmt-device-watch .rmt-phone-apps{justify-content:flex-start}.rmt-device-watch .rmt-phone-detail{min-height:180px}.rmt-device-terminal,.rmt-device-communicator{border-radius:16px;background:linear-gradient(155deg,#edf4f6,#dce8ec)}
+
+.rmt-avatar-talk-mark{position:absolute;right:-3px;bottom:-2px;width:21px;height:21px;display:grid;place-items:center;border-radius:50%;background:#fff7fa;border:1px solid #e6b1c5;color:#a86580;font-size:9px;box-shadow:0 2px 7px rgba(72,90,105,.16)}
+.rmt-character-heart-head{display:flex;align-items:center;gap:13px}.rmt-character-heart-avatar{position:relative;width:72px;height:72px;flex:0 0 72px;border:3px solid #fff;border-radius:50%;padding:0;background:linear-gradient(145deg,#f8c8da,#cfe8f2);box-shadow:0 0 0 1px #cadde6,0 8px 20px rgba(64,85,101,.12);overflow:visible;cursor:pointer;color:#63778c}.rmt-character-heart-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}.rmt-character-heart-avatar:hover{transform:translateY(-1px)}.rmt-character-heart-avatar>span{position:absolute;right:-4px;bottom:-3px;width:24px;height:24px;display:grid;place-items:center;border-radius:50%;background:#fff7fa;border:1px solid #e6afc4;color:#a76580;font-size:10px;box-shadow:0 2px 7px rgba(72,90,105,.15)}
+.rmt-avatar-dialog-pop{position:fixed;z-index:2147483638;inset:0;display:grid;place-items:center;padding:18px;background:rgba(35,45,55,.24);backdrop-filter:blur(3px)}.rmt-avatar-dialog-card{position:relative;width:min(470px,94vw);border:1px solid #d3e3ea;border-radius:22px;background:linear-gradient(160deg,#fff,#fff8fb 52%,#f5fbfd);padding:18px;box-shadow:0 22px 60px rgba(32,46,56,.28)}.rmt-avatar-dialog-close{position:absolute;right:10px;top:9px;width:30px;height:30px;border:0;border-radius:50%;background:#f4f8fa;color:#82909d;font:inherit;font-size:18px;cursor:pointer}.rmt-avatar-dialog-head{display:flex;align-items:center;gap:11px;padding-right:32px}.rmt-avatar-dialog-avatar{width:58px;height:58px;flex:0 0 58px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(145deg,#f7c7da,#cee7f1);overflow:hidden;color:#9c667d}.rmt-avatar-dialog-avatar img{width:100%;height:100%;object-fit:cover}.rmt-avatar-dialog-head b{display:block;color:#53687d;font-size:14px}.rmt-avatar-dialog-head small{display:block;margin-top:3px;color:#aa748c;font-size:9px;letter-spacing:.08em}.rmt-avatar-dialog-bubble{position:relative;margin:15px 0 12px;padding:14px 15px;border:1px solid #dbe7ec;border-radius:4px 16px 16px 16px;background:#fff;color:#596d80;line-height:1.8;white-space:pre-wrap}.rmt-avatar-dialog-bubble:before{content:"";position:absolute;left:15px;top:-9px;border-width:0 9px 9px 0;border-style:solid;border-color:transparent #dbe7ec transparent transparent}.rmt-avatar-dialog-bubble:after{content:"";position:absolute;left:16px;top:-7px;border-width:0 8px 8px 0;border-style:solid;border-color:transparent #fff transparent transparent}.rmt-avatar-dialog-actions{display:flex;gap:8px;flex-wrap:wrap}.rmt-avatar-dialog-note{margin-top:10px;font-size:9px;color:#919da8;line-height:1.55}
+.rmt-heart{padding:13px;display:grid;gap:12px}.rmt-heart-summary{border:1px solid #d6e4eb;border-radius:18px;background:linear-gradient(135deg,#fff8fb,#f6fbfd 55%,#fffdf7);padding:15px 17px;display:grid;gap:7px}.rmt-heart-summary-kicker{font-size:9px;font-weight:850;letter-spacing:.14em;color:#a76f87}.rmt-heart-summary h2{margin:0;color:#52677b;font-size:20px}.rmt-heart-summary p{margin:0;color:#6c7d8d;line-height:1.75}.rmt-heart-summary small{font-size:9px;color:#95a0aa}.rmt-heart-summary-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:3px}.rmt-heart-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.rmt-heart-tabs button{border:1px solid #d2e1e8;border-radius:12px;background:#fff;color:#68798b;padding:9px 8px;font:inherit;font-size:10px;font-weight:750;cursor:pointer}.rmt-heart-tabs button.active{border-color:#e4a8bf;background:#fff7fa;color:#995f79;box-shadow:0 0 0 2px rgba(228,168,191,.12)}
+.rmt-heart-greetings{display:grid;gap:10px}.rmt-heart-current-line{padding:15px;border:1px solid #d8e5eb;border-radius:16px;background:#fff}.rmt-heart-current-line small{color:#a67389;font-size:9px}.rmt-heart-current-line p{margin:7px 0 0;color:#596d80;font-size:13px;line-height:1.75}.rmt-heart-greeting-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.rmt-heart-greeting-group{padding:12px;border:1px solid #dce7ec;border-radius:14px;background:#fbfdfe}.rmt-heart-greeting-group b{display:block;color:#66798b;margin-bottom:7px;font-size:11px}.rmt-heart-greeting-group p{margin:5px 0;padding:7px 8px;border-radius:9px;background:#fff;color:#6b7a89;font-size:10px;line-height:1.6}
+.rmt-heart-drama-layout{display:grid;grid-template-columns:minmax(170px,.32fr) minmax(0,1fr);gap:10px;min-width:0}.rmt-heart-drama-layout>nav{display:grid;gap:7px;align-content:start}.rmt-heart-drama-layout>main{min-width:0;padding:15px;border:1px solid #d8e5eb;border-radius:17px;background:#fff}.rmt-heart-drama-card,.rmt-heart-strip-card{border:1px solid #d7e4ea;border-radius:13px;background:#fff;padding:10px;text-align:left;color:#647589;font:inherit;display:grid;gap:3px;cursor:pointer;min-width:0}.rmt-heart-drama-card.active,.rmt-heart-strip-card.active{border-color:#e5a8c0;background:#fff7fa}.rmt-heart-drama-card b,.rmt-heart-strip-card b{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rmt-heart-drama-card span,.rmt-heart-strip-card span{font-size:9px;color:#8795a2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rmt-heart-drama-card em,.rmt-heart-strip-card em{font-size:8px;font-style:normal;color:#a66f87}.rmt-heart-drama-head,.rmt-heart-strip-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.rmt-heart-drama-head h2,.rmt-heart-strip-head h2{margin:0;color:#53687c;font-size:19px}.rmt-heart-drama-head p,.rmt-heart-strip-head p{margin:4px 0 0;color:#8b98a4;font-size:10px}.rmt-heart-drama-head>span,.rmt-heart-strip-head>span{padding:4px 8px;border-radius:999px;background:#fff0f5;color:#a66a83;font-size:9px;white-space:nowrap}.rmt-heart-setting{margin:10px 0;padding:9px 10px;border-radius:10px;background:#f7fbfd;color:#758697;font-size:10px;line-height:1.65}.rmt-heart-script{display:grid;gap:8px;margin-top:10px}.rmt-heart-top-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:4px}.rmt-heart-line{display:grid;grid-template-columns:38px minmax(0,1fr);gap:8px;align-items:start}.rmt-heart-line.user{grid-template-columns:minmax(0,1fr) 38px}.rmt-heart-line.user .rmt-heart-line-avatar{grid-column:2}.rmt-heart-line.user>div{grid-row:1;grid-column:1;background:#fff8fb}.rmt-heart-line-avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:#edf6fa;color:#7c8da0;font-size:9px}.rmt-heart-line-avatar img{width:100%;height:100%;object-fit:cover}.rmt-heart-line>div{padding:9px 10px;border:1px solid #dce7ec;border-radius:12px;background:#fbfdfe;color:#5f7183;line-height:1.7;font-size:11px;white-space:pre-wrap}.rmt-heart-line small{display:block;margin-bottom:3px;color:#9a7a89;font-size:8px}.rmt-heart-line p{margin:0}.rmt-heart-narration{padding:7px 10px;text-align:center;color:#8d99a4;font-size:9px;font-style:italic}
+.rmt-heart-script-line{display:grid;grid-template-columns:38px minmax(0,1fr);gap:8px;align-items:start}.rmt-heart-script-line.user{grid-template-columns:minmax(0,1fr) 38px}.rmt-heart-script-line.user .rmt-heart-script-avatar{grid-column:2}.rmt-heart-script-line.user .rmt-heart-script-bubble{grid-row:1;grid-column:1;background:#fff8fb}.rmt-heart-script-avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:#edf6fa;color:#7c8da0;font-size:9px}.rmt-heart-script-avatar img{width:100%;height:100%;object-fit:cover}.rmt-heart-script-bubble{padding:9px 10px;border:1px solid #dce7ec;border-radius:12px;background:#fbfdfe;color:#5f7183;line-height:1.7;font-size:11px;white-space:pre-wrap}.rmt-heart-script-bubble small{display:block;margin-bottom:3px;color:#9a7a89;font-size:8px}.rmt-heart-script-narration{padding:7px 10px;text-align:center;color:#8d99a4;font-size:9px;font-style:italic}.rmt-heart-sim-note{margin-top:12px;padding-top:9px;border-top:1px dashed #dce6ea;color:#98a2ab;font-size:9px;line-height:1.55}
+.rmt-heart-strip-image{position:relative;aspect-ratio:16/9;margin:11px 0;border:5px solid #fff;border-radius:14px;overflow:hidden;outline:1px solid #d4e3e9;box-shadow:0 8px 19px rgba(60,82,98,.09)}.rmt-heart-strip-image .rmt-abstract,.rmt-heart-strip-image .rmt-cg-image{inset:0}.rmt-heart-strip-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.rmt-heart-strip-actions small{flex:1 1 220px;color:#929da6;font-size:9px;line-height:1.5}.rmt-heart-panels{display:grid;gap:8px;margin-top:11px}.rmt-heart-panel{display:grid;grid-template-columns:28px minmax(0,1fr);gap:9px;padding:10px;border:1px solid #dce7ec;border-radius:12px;background:#fbfdfe}.rmt-heart-panel>b{width:26px;height:26px;display:grid;place-items:center;border-radius:50%;background:#fff0f5;color:#a26981;font-size:9px}.rmt-heart-panel small{color:#8b98a4;font-size:8px}.rmt-heart-panel p{margin:4px 0;color:#607284;line-height:1.6;font-size:10px}.rmt-heart-panel-line{margin-top:5px;padding:6px 8px;border-radius:8px;background:#fff;color:#657688;font-size:10px}.rmt-heart-panel-line strong{margin-right:6px;color:#a46881}.rmt-heart-panel-line.user{background:#fff8fb}.rmt-heart-panel-line.user strong{color:#798fa2}
 .rmt-ending{display:grid;grid-template-columns:minmax(220px,.38fr) minmax(0,1fr);gap:14px;padding:14px}.rmt-ending-summary{grid-column:1/-1;border:1px solid #d9e5ea;border-radius:16px;background:linear-gradient(135deg,#fff8fb,#f5fbfd);padding:14px 16px}.rmt-ending-summary b{display:block;font-size:16px;color:#5a687b}.rmt-ending-summary p{margin:7px 0 0;line-height:1.75;color:#718093}.rmt-ending-disclaimer{margin-top:7px;font-size:9px;color:#9a8290}.rmt-ending-list{display:grid;gap:8px;align-content:start}.rmt-ending-route{width:100%;border:1px solid #d4e1e7;border-radius:14px;background:rgba(255,255,255,.86);padding:11px 12px;text-align:left;color:#596d82;font:inherit;display:grid;gap:3px}.rmt-ending-route.active{border-color:#e6a5bd;box-shadow:0 0 0 2px rgba(230,165,189,.14);background:#fff8fb}.rmt-ending-route.locked{opacity:.66}.rmt-ending-route b{font-size:12px}.rmt-ending-route span{font-size:9px;color:#8795a4}.rmt-ending-route em{font-style:normal;font-size:8px;color:#b16f8a}.rmt-ending-detail{border:1px solid #d8e5eb;border-radius:18px;background:rgba(255,255,255,.86);padding:18px;min-width:0}.rmt-ending-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.rmt-ending-head h2{margin:0;color:#52677b;font-size:21px}.rmt-ending-head span{font-size:9px;padding:4px 8px;border-radius:999px;background:#fff0f5;color:#b06c88;white-space:nowrap}.rmt-ending-subtitle{margin:5px 0 12px;color:#8a96a2}.rmt-ending-lock{padding:18px;border:1px dashed #d8c7cf;border-radius:14px;background:#fff9fb;color:#7b6a72;line-height:1.75}.rmt-ending-section{margin-top:14px;padding-top:14px;border-top:1px solid #e1eaee}.rmt-ending-section>small{display:block;letter-spacing:.12em;color:#b17a91;font-weight:800;margin-bottom:7px}.rmt-ending-section p{white-space:pre-wrap;line-height:1.85;margin:0;color:#5f6f7e}.rmt-ending-confession{margin-top:12px;padding:13px 14px;border-left:3px solid #e89fbc;background:#fff7fa;border-radius:9px;white-space:pre-wrap;line-height:1.85;color:#665c64}.rmt-ending-epilogue{display:grid;gap:9px;margin-top:10px}.rmt-ending-epilogue article{padding:11px 12px;border-radius:12px;background:#f8fbfd;border:1px solid #e0e9ed}.rmt-ending-epilogue b{display:block;margin-bottom:5px;color:#607285}.rmt-ending-epilogue p{font-size:11px}.rmt-ending-final{margin-top:12px;text-align:right;color:#a2667f;font-weight:750}.rmt-ending-evidence{margin-top:12px;font-size:9px;color:#9aa5ae}
 .rmt-ending-tabs{grid-column:1/-1;display:flex;gap:7px;flex-wrap:wrap}.rmt-ending-tab{border:1px solid #d8e4e9;border-radius:999px;background:#fff;color:#718193;padding:7px 11px;font:700 10px/1 inherit;cursor:pointer}.rmt-ending-tab.active{border-color:#e3a0bb;background:#fff3f8;color:#a85f7c}.rmt-ending-tab span{margin-left:4px;opacity:.72}.rmt-confession-card{width:100%;border:1px solid #d6e2e8;border-radius:14px;background:rgba(255,255,255,.9);padding:11px 12px;text-align:left;color:#5f7081;font:inherit;display:grid;gap:3px}.rmt-confession-card.active{border-color:#dda0b8;background:#fff7fa;box-shadow:0 0 0 2px rgba(221,160,184,.12)}.rmt-confession-card b{font-size:12px}.rmt-confession-card span{font-size:9px;color:#8a97a4}.rmt-confession-card em{font-style:normal;font-size:8px;color:#b36f8b}.rmt-confession-replay-note{margin-top:10px;padding:9px 10px;border:1px dashed #d9cbd1;border-radius:11px;background:#fff9fb;color:#8a747e;font-size:9px;line-height:1.6}
 .rmt-archive-readonly-control{margin-top:12px;padding:10px 11px;border:1px solid #d7e4ea;border-radius:12px;background:#f8fbfd;display:grid;gap:5px}.rmt-archive-readonly-control label{display:flex;align-items:center;gap:8px;color:#5f7184;font-weight:800;font-size:11px}.rmt-archive-readonly-control input{width:16px;height:16px}.rmt-archive-readonly-control small{color:#8a98a6;line-height:1.55}
@@ -4636,6 +4933,7 @@ dialog#${OVERLAY_ID}::backdrop{background:transparent}
   .rmt-big-cg{border-width:5px;margin:2px 0 11px}.rmt-cg-caption{left:8px;right:8px;bottom:8px;padding:8px 9px;font-size:10px;line-height:1.45}.rmt-cg-card-draw{right:5px;bottom:5px;min-height:27px;padding:5px 7px;font-size:8px}.rmt-cg-provider-bar{padding:7px 8px;gap:6px;margin-bottom:8px;line-height:1.45}.rmt-mode-actions .rmt-btn{flex:1}.rmt-adv-reader{padding:14px}.rmt-adv-para{font-size:12px;line-height:1.85}
   .rmt-room-view{padding:10px 10px 18px}.rmt-room-map{margin:0 -2px;padding-bottom:9px}.rmt-room-space{min-width:96px;padding:8px 9px}.rmt-room-location{font-size:10px;margin-bottom:10px;align-items:flex-start;gap:7px}.rmt-room-location-actions{flex:0 0 auto;gap:5px}.rmt-room-location .rmt-room-find{padding:5px 7px;font-size:9px}.rmt-room-flow{gap:10px}.rmt-room-card{padding:13px;border-radius:14px}.rmt-room-object-title{font-size:16px}.rmt-room-object-desc,.rmt-room-atmosphere{font-size:11px;line-height:1.68}.rmt-room-stage{border-radius:14px}.rmt-room-stage-head{padding:9px 11px}.rmt-room-activity-strip{padding:8px 10px}.rmt-room-activity-strip>div{grid-template-columns:1fr;gap:3px}.rmt-room-activity-strip small{grid-column:1}.rmt-room-scene{min-height:350px}.rmt-room-person{left:44%;transform:scale(.82);transform-origin:bottom center}.rmt-room-person-label{font-size:9px;padding:2px 5px}.rmt-room-object-rail{grid-template-columns:repeat(2,minmax(0,1fr));padding:8px;gap:6px}.rmt-room-object-chip{grid-template-columns:22px minmax(0,1fr);padding:6px}.rmt-room-object-chip em{grid-column:2}.rmt-room-caption{padding:10px 11px 12px;font-size:11px}.rmt-room-private-access-card{margin-bottom:4px}
   .rmt-phone{padding:5px}.rmt-phone-shell{padding:9px}.rmt-phone-lock{padding:9px 7px}.rmt-phone-apps{gap:6px;padding:6px 0 10px}.rmt-phone-app{min-width:78px;padding:8px 7px}.rmt-phone-content{display:block}.rmt-phone-list,.rmt-phone-detail{padding:10px;border-radius:14px}.rmt-phone-view-list .rmt-phone-detail{display:none}.rmt-phone-view-detail .rmt-phone-list{display:none}.rmt-phone-detail-toolbar{position:sticky;top:0;background:rgba(255,255,255,.96);z-index:2;padding-bottom:7px}.rmt-phone-entry{padding:9px 5px}.rmt-phone-entry span{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.rmt-phone-message p{font-size:11px}.rmt-phone-fields>div{grid-template-columns:1fr}
+  .rmt-heart{padding:9px}.rmt-heart-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}.rmt-heart-greeting-grid{grid-template-columns:1fr}.rmt-heart-drama-layout{grid-template-columns:1fr}.rmt-heart-drama-layout>nav{grid-template-columns:repeat(2,minmax(0,1fr))}.rmt-heart-drama-layout>main{padding:12px}.rmt-heart-drama-head h2,.rmt-heart-strip-head h2{font-size:16px}.rmt-heart-script-bubble{font-size:10px}.rmt-avatar-dialog-card{padding:15px;border-radius:18px}.rmt-avatar-dialog-actions{display:grid;grid-template-columns:1fr}.rmt-character-heart-head{align-items:flex-start}.rmt-character-heart-avatar{width:62px;height:62px;flex-basis:62px}
   .rmt-ending{grid-template-columns:1fr;padding:9px;gap:10px}.rmt-ending-summary{padding:12px}.rmt-ending-list{grid-template-columns:1fr 1fr;gap:6px}.rmt-ending-route{padding:9px}.rmt-ending-detail{padding:13px;border-radius:15px}.rmt-ending-head h2{font-size:18px}.rmt-ending-section p,.rmt-ending-confession{font-size:11px;line-height:1.8}
   #${SETTINGS_ID} .rmt-settings-buttons{grid-template-columns:1fr 1fr}#${SETTINGS_ID} .rmt-api-grid{grid-template-columns:1fr 1fr}#${SETTINGS_ID} .rmt-model-row{grid-template-columns:1fr}#${SETTINGS_ID} .rmt-model-refresh{width:100%!important}
 }
@@ -5923,6 +6221,201 @@ function archiveCharacterAvatar(entry, context = getContext()) {
     try { return context.getThumbnailUrl?.('avatar', avatar) || ''; } catch { return ''; }
 }
 
+function heartCharacterAvatarUrl(entry = activeArchiveSnapshot, context = getContext()) {
+    try {
+        if (entry) return archiveCharacterAvatar(entry, context);
+        const avatar = currentCharacterAvatar(context);
+        return avatar ? (context.getThumbnailUrl?.('avatar', avatar) || '') : '';
+    } catch {
+        return '';
+    }
+}
+
+function heartUserAvatarUrl(context = getContext()) {
+    try {
+        const raw = normalizeText(context?.user_avatar || context?.userAvatar || globalThis.user_avatar, 300);
+        return raw ? (context.getThumbnailUrl?.('avatar', raw) || '') : '';
+    } catch {
+        return '';
+    }
+}
+
+function heartDaypartKey(now = new Date()) {
+    const hour = now.getHours();
+    if (hour < 10) return 'morning';
+    if (hour < 17) return 'noon';
+    if (hour < 22) return 'evening';
+    return 'night';
+}
+
+function heartMmDd(now = new Date()) {
+    return `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
+}
+
+function chooseHeartLine(lines, salt = '') {
+    const list = Array.isArray(lines) ? lines.filter(Boolean) : [];
+    if (!list.length) return '';
+    const seed = hashString(`${salt}|${Date.now()}|${Math.random()}`);
+    return list[Math.abs(seed) % list.length] || list[0];
+}
+
+function selectHeartGreeting(session, characterKey, { repeat = false, previousCategory = '' } = {}) {
+    const now = new Date();
+    const mmdd = heartMmDd(now);
+    const greetings = session?.greetings || {};
+    const specialDay = (session?.specialDays || []).find(item => item.mmdd === mmdd);
+    let category = '';
+    let label = '';
+    let text = '';
+
+    if (repeat && previousCategory && Array.isArray(greetings[previousCategory]) && greetings[previousCategory].length) {
+        category = previousCategory;
+    } else if (session?.userBirthdayMmDd && session.userBirthdayMmDd === mmdd) {
+        category = 'userBirthday';
+        label = '你的生日';
+    } else if (session?.birthdayMmDd && session.birthdayMmDd === mmdd) {
+        category = 'birthday';
+        label = '角色生日';
+    } else if (specialDay?.line) {
+        category = 'holiday';
+        label = specialDay.label || '特别日';
+        text = specialDay.line;
+    } else {
+        const last = lastAvatarVisitAt(characterKey);
+        const gapDays = last > 0 ? (Date.now() - last) / 86400000 : 0;
+        if (gapDays >= 14 && Array.isArray(greetings.absenceJealous) && greetings.absenceJealous.length) {
+            category = 'absenceJealous';
+            label = `好久不见 · ${Math.floor(gapDays)}天`;
+        } else if (gapDays >= 7 && Array.isArray(greetings.absenceSulky) && greetings.absenceSulky.length) {
+            category = 'absenceSulky';
+            label = `闹别扭 · ${Math.floor(gapDays)}天`;
+        } else if (gapDays >= 3 && Array.isArray(greetings.absenceWorry) && greetings.absenceWorry.length) {
+            category = 'absenceWorry';
+            label = `有点担心 · ${Math.floor(gapDays)}天`;
+        } else if ([0, 6].includes(now.getDay()) && Array.isArray(greetings.weekend) && greetings.weekend.length) {
+            category = 'weekend';
+            label = '周末';
+        } else {
+            category = heartDaypartKey(now);
+        }
+    }
+
+    const labels = {
+        morning: '早晨', noon: '白天', evening: '傍晚', night: '夜晚', weekend: '周末', birthday: '角色生日', userBirthday: '你的生日', holiday: '节日',
+        absenceWorry: '有点担心', absenceSulky: '闹别扭', absenceJealous: '吃醋了',
+    };
+    if (!label) label = labels[category] || '角色互动';
+    if (!text) text = chooseHeartLine(greetings[category], `${characterKey}|${category}`);
+    if (!text) {
+        const fallbackKey = heartDaypartKey(now);
+        category = fallbackKey;
+        label = labels[fallbackKey];
+        text = chooseHeartLine(greetings[fallbackKey], `${characterKey}|fallback`);
+    }
+    return { category, label, text };
+}
+
+function renderAvatarDialoguePopup(state = activeAvatarDialogue, { repeat = false } = {}) {
+    if (!state) return;
+    const body = bodyEl();
+    if (!body) return;
+    body.querySelector('.rmt-avatar-dialog-pop')?.remove();
+    const { characterKey, session, avatarSrc, readOnly, entry } = state;
+    let speech = null;
+    if (session) {
+        speech = selectHeartGreeting(session, characterKey, { repeat, previousCategory: repeat ? state.category : '' });
+        state.category = speech.category;
+        touchAvatarVisit(characterKey);
+    }
+    const canGenerate = !readOnly && !!entry && indexedArchiveMatchesCurrentChat(entry, getContext());
+    const actions = session
+        ? `<button type="button" class="rmt-btn" data-rmt-action="avatar-talk-again">再说一句</button><button type="button" class="rmt-btn rmt-cg-primary" data-rmt-action="avatar-heart-open">打开角色互动 / Voice Drama</button>`
+        : canGenerate
+            ? `<button type="button" class="rmt-btn rmt-cg-primary" data-rmt-action="avatar-heart-generate">生成角色互动 / Voice Drama</button>`
+            : `<button type="button" class="rmt-btn" data-rmt-action="avatar-heart-open-archive">打开这份档案</button>`;
+    const message = session
+        ? speech?.text || '……'
+        : readOnly
+            ? '这份历史档案还没有生成角色互动台词库。为了不偷偷切换聊天，我不会在这里只读状态下直接发起生成。'
+            : '这份当前档案还没有角色互动台词库。生成后，点头像会按早中晚、周末、生日、节日和久未访问状态自动换台词。';
+    const label = session ? speech?.label || '角色互动' : 'HEART VOICE';
+    const pop = document.createElement('div');
+    pop.className = 'rmt-avatar-dialog-pop';
+    pop.innerHTML = `<div class="rmt-avatar-dialog-card"><button type="button" class="rmt-avatar-dialog-close" data-rmt-action="avatar-dialog-close" aria-label="关闭">×</button><div class="rmt-avatar-dialog-head"><span class="rmt-avatar-dialog-avatar">${avatarSrc ? `<img src="${esc(avatarSrc)}" alt="">` : '<i class="fa-solid fa-heart"></i>'}</span><div><b>${esc(state.characterName || session?.characterName || entry?.characterName || '角色')}</b><small>${esc(label)}</small></div></div><div class="rmt-avatar-dialog-bubble">${esc(message)}</div><div class="rmt-avatar-dialog-actions">${actions}</div>${readOnly ? '<div class="rmt-avatar-dialog-note">只读档案：可以听已保存台词，但不能在这里重生成。</div>' : ''}</div>`;
+    body.appendChild(pop);
+}
+
+async function showAvatarDialogueForCharacter(characterKey) {
+    const key = normalizeText(characterKey, 300);
+    if (!key) return;
+    const requestEpoch = ++avatarDialogueRequestEpoch;
+    const context = getContext();
+    const entries = getArchiveIndex(context)
+        .filter(item => archiveCanonicalCharacterKey(item, context) === key)
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+    // Prefer the already-open live chat for this character when it has an archive.
+    // Otherwise fall back to the newest indexed archive as a read-only snapshot.
+    const entry = entries.find(item => indexedArchiveMatchesCurrentChat(item, context)) || entries[0];
+    if (!entry) return;
+    const avatarSrc = archiveCharacterAvatar(entry, context);
+    try {
+        let session = null;
+        let snapshot = null;
+        let readOnly = false;
+        if (indexedArchiveMatchesCurrentChat(entry, context)) {
+            const live = currentCharacterGuard();
+            const memory = getImportedMemory(live);
+            if (memory) session = loadSession(MODE.HEART, { context: live, chatId: getChatId(live), memoryBank: memory });
+        } else {
+            readOnly = true;
+            snapshot = await fetchIndexedArchiveSnapshot(entry, context);
+            session = loadSession(MODE.HEART, { cache: snapshot.cache, chatId: snapshot.chatId, memoryBank: snapshot.memory });
+        }
+        if (requestEpoch !== avatarDialogueRequestEpoch) return;
+        activeAvatarDialogue = { characterKey: key, characterName: entry.characterName, entry, snapshot, session, readOnly, avatarSrc, category: '' };
+        renderAvatarDialoguePopup(activeAvatarDialogue);
+    } catch (error) {
+        if (requestEpoch !== avatarDialogueRequestEpoch) return;
+        globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆');
+    }
+}
+
+function openHeartFromAvatar() {
+    const state = activeAvatarDialogue;
+    if (!state?.session) return;
+    if (state.readOnly && state.snapshot) activeArchiveSnapshot = state.snapshot;
+    else activeArchiveSnapshot = null;
+    activeMode = MODE.HEART;
+    activeSession = structuredClone(state.session);
+    renderActive();
+}
+
+function openHeartMode() {
+    if (activeArchiveSnapshot) {
+        const session = loadSession(MODE.HEART, {
+            cache: activeArchiveSnapshot.cache,
+            chatId: activeArchiveSnapshot.chatId,
+            memoryBank: activeArchiveSnapshot.memory,
+        });
+        if (!session) {
+            globalThis.toastr?.info?.('这份只读档案还没有生成角色互动 / Voice Drama。关闭只读并进入对应聊天后即可生成。', '心跳回忆');
+            return;
+        }
+        activeMode = MODE.HEART;
+        activeSession = session;
+        return renderActive();
+    }
+    const session = loadSession(MODE.HEART);
+    if (session) {
+        activeMode = MODE.HEART;
+        activeSession = session;
+        return renderActive();
+    }
+    if (!confirmExplicitAction('生成角色互动 / Voice Drama？', '会生成早中晚/周末/生日/久未访问台词库、后日谈 Voice Drama、春夏秋冬 Voice Drama、四季 Scenario Drama 和日常一格脚本。只在你确认后发起一次模型请求。', { destructive: false })) return;
+    void generateMode(MODE.HEART, { background: true });
+}
+
+
 function showArchiveLibrary() {
     stopRoomClock(); stopPhoneClock(); activeMode = null; activeSession = null; activeArchiveSnapshot = null; archiveLibraryCharacterKey = ''; archiveViewLevel = 'library';
     openOverlay(); setRegenerateVisible(false); setBackVisible(false); topTitle('心跳回忆 · 档案室');
@@ -5941,7 +6434,7 @@ function showArchiveLibrary() {
     }
     const cards = [...groups.values()].sort((a,b) => Math.max(...b.entries.map(x=>x.updatedAt)) - Math.max(...a.entries.map(x=>x.updatedAt))).map(group => {
         const src = archiveCharacterAvatar(group);
-        return `<button type="button" class="rmt-archive-portal ready" data-rmt-archive-character="${esc(group.characterKey)}"><span class="rmt-portal-avatar">${src ? `<img src="${esc(src)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : '<i class="fa-solid fa-user"></i>'}</span><span class="rmt-portal-title">${esc(group.characterName)}</span><span class="rmt-portal-subtitle">${group.entries.length} 个聊天档案</span><span class="rmt-portal-status">点击查看这个角色的不同窗口档案</span></button>`;
+        return `<button type="button" class="rmt-archive-portal ready" data-rmt-archive-character="${esc(group.characterKey)}"><span class="rmt-portal-avatar" data-rmt-avatar-talk="${esc(group.characterKey)}" title="点头像听他说一句">${src ? `<img src="${esc(src)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : '<i class="fa-solid fa-user"></i>'}<i class="fa-solid fa-comment-dots rmt-avatar-talk-mark"></i></span><span class="rmt-portal-title">${esc(group.characterName)}</span><span class="rmt-portal-subtitle">${group.entries.length} 个聊天档案</span><span class="rmt-portal-status">点击查看这个角色的不同窗口档案</span></button>`;
     }).join('');
     let currentQuick = '';
     try {
@@ -5965,8 +6458,9 @@ function showArchiveCharacter(characterKey) {
     const entries = getArchiveIndex(context).filter(item => archiveCanonicalCharacterKey(item, context) === key).sort((a,b)=>b.updatedAt-a.updatedAt);
     const name = entries[0]?.characterName || '角色档案'; topTitle(`心跳回忆 · ${name}`);
     const body = bodyEl(); if (!body) return;
+    const charAvatar = entries[0] ? archiveCharacterAvatar(entries[0], context) : '';
     const rows = entries.map(item => `<button type="button" class="rmt-archive-overview-item" data-rmt-indexed-chat="${esc(item.chatId)}" data-rmt-indexed-character="${esc(item.characterKey)}"><span class="rmt-overview-dot">●</span><span><b>${esc(item.archiveName)}</b><small>${esc(item.chatId)} · ${item.memoryCount} 条记忆 · ${esc(formatArchiveTime(item.updatedAt))}</small></span><i class="fa-solid fa-chevron-right"></i></button>`).join('');
-    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">CHARACTER ARCHIVES</div><strong class="rmt-archive-title">${esc(name)}</strong><div class="rmt-archive-summary">一个聊天窗口一份独立档案；每个窗口保留自己的档案名称。</div><div class="rmt-archive-overview-list" style="max-height:none">${rows || '<div class="rmt-archive-overview-empty">这个角色还没有已索引档案。</div>'}</div></section></div>`;
+    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-character-heart-head"><button type="button" class="rmt-character-heart-avatar" data-rmt-avatar-talk="${esc(key)}" aria-label="和角色说话">${charAvatar ? `<img src="${esc(charAvatar)}" alt="">` : '<i class="fa-solid fa-user"></i>'}<span><i class="fa-solid fa-comment-dots"></i></span></button><div><div class="rmt-archive-kicker">CHARACTER ARCHIVES</div><strong class="rmt-archive-title">${esc(name)}</strong><div class="rmt-archive-summary">点头像会按现实时间、周末、生日和久未访问状态弹出角色台词；不会自动切换聊天或调用模型。</div></div></div><div class="rmt-archive-overview-list" style="max-height:none">${rows || '<div class="rmt-archive-overview-empty">这个角色还没有已索引档案。</div>'}</div></section></div>`;
 }
 
 
@@ -6429,6 +6923,7 @@ function renderActive() {
     else if (activeMode === MODE.ITEMS) renderItems();
     else if (activeMode === MODE.PHONE) renderPhone();
     else if (activeMode === MODE.ENDING) renderEnding();
+    else if (activeMode === MODE.HEART) renderHeart();
     decorateReadOnlyModeUi();
 }
 
@@ -6467,7 +6962,7 @@ function renderEnding() {
     const view = session.view === 'confessions' ? 'confessions' : 'routes';
     session.view = view;
     const tabs = `<div class="rmt-ending-tabs"><button type="button" class="rmt-ending-tab ${view === 'routes' ? 'active' : ''}" data-rmt-ending-view="routes">结局路线 <span>${session.endings.length}</span></button><button type="button" class="rmt-ending-tab ${view === 'confessions' ? 'active' : ''}" data-rmt-ending-view="confessions">告白回看 <span>${replays.length}</span></button></div>`;
-    const summary = `<section class="rmt-ending-summary"><b>${esc(session.relationshipState)}</b><p>${esc(session.relationshipSummary)}</p><div class="rmt-ending-disclaimer">当前关系锚点：${esc(session.relationshipSourceMemoryAnchor || '')} · 结局与后日谈是未来路线推演；“告白回看”只允许来自当前手动档案里已经发生并通过锚点校验的事件。</div></section>`;
+    const summary = `<section class="rmt-ending-summary"><b>${esc(session.relationshipState)}</b><p>${esc(session.relationshipSummary)}</p><div class="rmt-ending-disclaimer">当前关系锚点：${esc(session.relationshipSourceMemoryAnchor || '')} · 结局与后日谈是未来路线推演；“告白回看”只允许来自当前手动档案里已经发生并通过锚点校验的事件。</div><div class="rmt-ending-extra-actions"><button type="button" class="rmt-btn" data-rmt-action="open-heart"><i class="fa-solid fa-heart"></i> 角色互动 / Voice Drama</button></div></section>`;
     if (view === 'confessions') {
         const selectedReplay = selectedConfessionReplay();
         if (selectedReplay) session.selectedConfessionId = selectedReplay.id;
@@ -6485,7 +6980,7 @@ function renderEnding() {
     const selected = selectedEndingRoute();
     if (!selected) return;
     session.selectedId = selected.id;
-    const typeLabel = { route: '当前路线', romance: '恋爱', bond: '羁绊', open: '开放', personal: '个人' };
+    const typeLabel = { route: '当前路线', romance: '恋爱', reverse: '逆转告白', bond: '羁绊', open: '开放', personal: '个人' };
     const routes = session.endings.map(item => `<button type="button" class="rmt-ending-route ${item.id === selected.id ? 'active' : ''} ${item.available ? '' : 'locked'}" data-rmt-ending-id="${esc(item.id)}"><b>${item.id === session.recommendedEndingId ? '♥ ' : ''}${esc(item.title)}</b><span>${esc(item.subtitle || typeLabel[item.type] || '路线')}</span><em>${item.available ? '可观测 · 未来推演' : '未解锁'}</em></button>`).join('');
     const detail = selected.available
         ? `<div class="rmt-ending-head"><div><h2>${esc(selected.title)}</h2><div class="rmt-ending-subtitle">${esc(selected.subtitle || typeLabel[selected.type] || '')}</div></div><span>未来路线推演</span></div>
@@ -6519,6 +7014,218 @@ function endingSelect(id) {
     activeSession.selectedId = item.id;
     renderEnding();
 }
+
+function heartVoiceKindLabel(kind) {
+    return ({ postending: '后日谈', spring: '春', summer: '夏', autumn: '秋', winter: '冬' })[kind] || 'Voice';
+}
+
+function heartSeasonLabel(season) {
+    return ({ spring: '春', summer: '夏', autumn: '秋', winter: '冬' })[season] || season || '四季';
+}
+
+function selectedHeartVoice() {
+    if (!activeSession || activeSession.kind !== MODE.HEART) return null;
+    return activeSession.voiceDramas.find(item => item.id === activeSession.selectedVoiceId) || activeSession.voiceDramas[0] || null;
+}
+
+function selectedHeartScenario() {
+    if (!activeSession || activeSession.kind !== MODE.HEART) return null;
+    return activeSession.scenarioDramas.find(item => item.id === activeSession.selectedScenarioId) || activeSession.scenarioDramas[0] || null;
+}
+
+function selectedHeartStrip() {
+    if (!activeSession || activeSession.kind !== MODE.HEART) return null;
+    return activeSession.dailyStrips.find(item => item.id === activeSession.selectedStripId) || activeSession.dailyStrips[0] || null;
+}
+
+function renderHeartScriptLines(lines) {
+    const charAvatar = heartCharacterAvatarUrl(activeArchiveSnapshot);
+    const userAvatar = heartUserAvatarUrl();
+    return `<div class="rmt-heart-script">${(lines || []).map(line => {
+        if (line.speaker === 'narrator') return `<div class="rmt-heart-narration">${esc(line.text)}</div>`;
+        const isUser = line.speaker === 'user';
+        const avatar = isUser ? userAvatar : charAvatar;
+        const fallback = isUser ? '<i class="fa-solid fa-user"></i>' : '<i class="fa-solid fa-heart"></i>';
+        return `<div class="rmt-heart-line ${isUser ? 'user' : 'char'}"><span class="rmt-heart-line-avatar">${avatar ? `<img src="${esc(avatar)}" alt="">` : fallback}</span><div><small>${isUser ? '剧本中的你 · 非正史' : '角色'}</small><p>${esc(line.text)}</p></div></div>`;
+    }).join('')}</div>`;
+}
+
+function heartStripImagePrompt(item) {
+    const authored = sanitizeCgVisualText(item?.imagePrompt, MAX_CG_IMAGE_PROMPT_CHARS);
+    if (!authored) return '';
+    const layout = Number(item?.panelCount) === 1 ? 'single-panel comic illustration' : Number(item?.panelCount) === 4 ? 'clean four-panel yonkoma comic layout' : 'clean vertical two-panel comic layout';
+    const seeds = cleanArray(item?.visualSeed, 10, 100).map(seed => sanitizeCgVisualText(seed, 100)).filter(Boolean);
+    return normalizeText([
+        'cute chibi slice-of-life anime comic, consistent character design across every panel',
+        layout,
+        authored,
+        seeds.length ? `visible details: ${seeds.join(', ')}` : '',
+        'clear readable poses and facial expressions, simple warm background, no text, no letters, no speech bubbles, no subtitle, no logo, no watermark',
+    ].filter(Boolean).join(', '), MAX_CG_IMAGE_PROMPT_CHARS);
+}
+
+async function drawHeartStripImage(stripId) {
+    if (!activeSession || activeSession.kind !== MODE.HEART || activeArchiveSnapshot) return;
+    const item = activeSession.dailyStrips.find(strip => strip.id === stripId) || selectedHeartStrip();
+    if (!item) return;
+    const context = currentCharacterGuard();
+    const command = imageGenerationCommand(context);
+    if (!command) {
+        globalThis.toastr?.info?.('没有检测到 SillyTavern Image Generation。启用并配置后即可绘制日常一格。', '心跳回忆');
+        return;
+    }
+    if (activeCgImageTasks.size >= 1) {
+        globalThis.toastr?.info?.('当前已有一张图片正在绘制，请等它完成。', '心跳回忆');
+        return;
+    }
+    const previous = normalizeCgImageRecord(item.cgImage);
+    const ok = confirmExplicitAction(
+        previous ? `重新绘制「${item.title}」？` : `绘制「${item.title}」？`,
+        `${previous ? '成功后会替换当前图片引用；旧文件不会由心跳回忆主动删除。\n\n' : ''}会调用 SillyTavern 已配置的 Image Generation，可能消耗额度。为了减少 AI 画坏文字，图片提示只要求 Q 版分镜和动作，真正台词仍由心跳回忆界面显示。`,
+        { destructive: !!previous },
+    );
+    if (!ok) return;
+    const prompt = heartStripImagePrompt(item);
+    if (!prompt) return globalThis.toastr?.error?.('这条日常一格没有可用的视觉提示。', '心跳回忆');
+    const expectedChatId = getChatId(context);
+    const memoryBank = requireArchive(context);
+    const origin = { ...captureTaskOrigin(context, memoryBank.archiveRevision), chatId: comparableChatId(expectedChatId) };
+    const lifecycleEpoch = cgImageLifecycleEpoch;
+    const taskKey = cgImageTaskKey(MODE.HEART, item.id, context);
+    activeCgImageTasks.set(taskKey, { mode: MODE.HEART, itemId: item.id, startedAt: Date.now() });
+    renderHeart();
+    try {
+        const rawUrl = await command.callback.call(command, { quiet: 'true', gallery: 'false' }, prompt);
+        const url = normalizeCgImageUrl(rawUrl);
+        if (!url) throw new Error('图像生成扩展没有返回可保存的 SillyTavern 本地图片路径。');
+        if (cgImageLifecycleEpoch !== lifecycleEpoch || !isCurrentTaskOrigin(origin)) {
+            globalThis.toastr?.warning?.('图片已经生成，但期间聊天或插件状态发生变化，因此没有写入当前档案缓存。', '心跳回忆');
+            return;
+        }
+        const liveContext = currentCharacterGuard();
+        const liveMemory = requireArchive(liveContext);
+        const latest = loadSession(MODE.HEART, { context: liveContext, chatId: expectedChatId, memoryBank: liveMemory, clone: false }) || activeSession;
+        const liveItem = latest.dailyStrips?.find(strip => strip.id === item.id);
+        if (!liveItem) throw new Error('日常一格条目已经变化，停止保存图片。');
+        const oldImage = liveItem.cgImage;
+        const nextImage = { url, prompt, provider: CG_IMAGE_PROVIDER, generatedAt: Date.now() };
+        liveItem.cgImage = nextImage;
+        if (!saveSession(MODE.HEART, latest, expectedChatId)) {
+            liveItem.cgImage = oldImage;
+            throw new Error('图片已生成，但档案版本已经变化，因此未保存引用。');
+        }
+        const activeItem = activeSession.dailyStrips?.find(strip => strip.id === item.id);
+        if (activeItem) activeItem.cgImage = nextImage;
+        globalThis.toastr?.success?.(`日常一格已绘制：${item.title}`, '心跳回忆');
+    } catch (error) {
+        console.error('[HeartbeatMemories] daily strip image generation failed', error);
+        globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆');
+    } finally {
+        activeCgImageTasks.delete(taskKey);
+        if (activeMode === MODE.HEART && activeSession?.kind === MODE.HEART) renderHeart();
+    }
+}
+
+function clearHeartStripImage(stripId) {
+    if (!activeSession || activeSession.kind !== MODE.HEART || activeArchiveSnapshot) return;
+    const item = activeSession.dailyStrips.find(strip => strip.id === stripId) || selectedHeartStrip();
+    if (!item || !normalizeCgImageRecord(item.cgImage)) return;
+    if (!confirmExplicitAction(`恢复「${item.title}」的文字/抽象小剧场？`, '只会移除心跳回忆缓存中的图片引用，不会删除 SillyTavern 已保存的图片文件。', { destructive: true })) return;
+    const previous = item.cgImage;
+    item.cgImage = null;
+    if (!saveSession(MODE.HEART, activeSession)) {
+        item.cgImage = previous;
+        return globalThis.toastr?.error?.('当前档案状态已变化，未修改图片引用。', '心跳回忆');
+    }
+    renderHeart();
+}
+
+function heartSetView(view) {
+    if (!activeSession || activeSession.kind !== MODE.HEART) return;
+    const allowed = new Set(['greetings', 'voice', 'scenario', 'strips']);
+    activeSession.view = allowed.has(view) ? view : 'greetings';
+    renderHeart();
+}
+
+function heartSelectVoice(id) {
+    if (!activeSession || activeSession.kind !== MODE.HEART) return;
+    if (!activeSession.voiceDramas.some(item => item.id === id)) return;
+    activeSession.selectedVoiceId = id;
+    activeSession.view = 'voice';
+    renderHeart();
+}
+
+function heartSelectScenario(id) {
+    if (!activeSession || activeSession.kind !== MODE.HEART) return;
+    if (!activeSession.scenarioDramas.some(item => item.id === id)) return;
+    activeSession.selectedScenarioId = id;
+    activeSession.view = 'scenario';
+    renderHeart();
+}
+
+function heartSelectStrip(id) {
+    if (!activeSession || activeSession.kind !== MODE.HEART) return;
+    if (!activeSession.dailyStrips.some(item => item.id === id)) return;
+    activeSession.selectedStripId = id;
+    activeSession.view = 'strips';
+    renderHeart();
+}
+
+function renderHeart() {
+    const session = activeSession;
+    if (!session || session.kind !== MODE.HEART) return;
+    const readOnly = !!activeArchiveSnapshot;
+    setBackVisible(true, readOnly ? '只读档案' : '当前档案');
+    topTitle('角色互动 · Voice Drama');
+    const view = ['greetings', 'voice', 'scenario', 'strips'].includes(session.view) ? session.view : 'greetings';
+    session.view = view;
+    const tabs = `<div class="rmt-heart-tabs"><button type="button" data-rmt-heart-view="greetings" class="${view === 'greetings' ? 'active' : ''}">角色台词</button><button type="button" data-rmt-heart-view="voice" class="${view === 'voice' ? 'active' : ''}">Voice Drama</button><button type="button" data-rmt-heart-view="scenario" class="${view === 'scenario' ? 'active' : ''}">四季 Scenario</button><button type="button" data-rmt-heart-view="strips" class="${view === 'strips' ? 'active' : ''}">日常一格</button></div>`;
+    const topActions = `<div class="rmt-heart-top-actions"><button type="button" class="rmt-btn" data-rmt-action="heart-avatar-talk">点头像听一句</button>${readOnly ? '' : `<button type="button" class="rmt-btn" data-rmt-action="regenerate">重新生成角色互动</button>`}</div>`;
+    const summary = `<section class="rmt-heart-summary"><div><b>${esc(session.relationshipState)}</b><p>${esc(session.relationshipSummary)}</p><small>关系锚点：${esc(session.relationshipSourceMemoryAnchor)} · 本页台词、Voice Drama、Scenario 与日常一格都是角色化模拟，不写回聊天档案。</small></div>${topActions}</section>`;
+    let content = '';
+
+    if (view === 'greetings') {
+        let currentKey = '';
+        try { currentKey = activeArchiveSnapshot?.characterKey || currentCharacterKey(getContext()); } catch {}
+        const current = selectHeartGreeting(session, currentKey || 'heart-preview');
+        const labels = {
+            morning: '早晨', noon: '白天', evening: '傍晚', night: '夜晚', weekend: '周末', birthday: '角色生日', userBirthday: '你的生日', holiday: '节假日',
+            absenceWorry: '久未访问 · 担心', absenceSulky: '久未访问 · 怨气', absenceJealous: '久未访问 · 吃醋',
+        };
+        const groups = HEART_GREETING_KEYS.map(key => {
+            const lines = session.greetings?.[key] || [];
+            if (!lines.length) return '';
+            return `<article class="rmt-heart-greeting-group"><b>${esc(labels[key] || key)}</b>${lines.map(line => `<p>${esc(line)}</p>`).join('')}</article>`;
+        }).join('');
+        content = `<div class="rmt-heart-greetings"><div class="rmt-heart-current-line"><small>如果现在点头像 · ${esc(current.label)}</small><p>${esc(current.text)}</p></div><div class="rmt-heart-greeting-grid">${groups}</div></div>`;
+    } else if (view === 'voice') {
+        const selected = selectedHeartVoice();
+        if (selected) session.selectedVoiceId = selected.id;
+        const nav = session.voiceDramas.map(item => `<button type="button" class="rmt-heart-drama-card ${item.id === selected?.id ? 'active' : ''}" data-rmt-heart-voice-id="${esc(item.id)}"><b>${esc(item.title)}</b><span>${esc(item.subtitle || heartVoiceKindLabel(item.kind))}</span><em>${esc(heartVoiceKindLabel(item.kind))}</em></button>`).join('');
+        const detail = selected ? `<div class="rmt-heart-drama-head"><div><h2>${esc(selected.title)}</h2><p>${esc(selected.subtitle)}</p></div><span>${esc(heartVoiceKindLabel(selected.kind))}</span></div><div class="rmt-heart-setting">${esc(selected.setting)}</div>${renderHeartScriptLines(selected.script)}<div class="rmt-heart-sim-note">这里是非正史剧场。尤其“剧本中的你”的台词只是演出脚本，不代表真实用户选择。</div>` : '';
+        content = `<div class="rmt-heart-drama-layout"><nav>${nav}</nav><main>${detail}</main></div>`;
+    } else if (view === 'scenario') {
+        const selected = selectedHeartScenario();
+        if (selected) session.selectedScenarioId = selected.id;
+        const nav = session.scenarioDramas.map(item => `<button type="button" class="rmt-heart-drama-card ${item.id === selected?.id ? 'active' : ''}" data-rmt-heart-scenario-id="${esc(item.id)}"><b>${esc(item.title)}</b><span>${esc(item.subtitle)}</span><em>${esc(heartSeasonLabel(item.season))}</em></button>`).join('');
+        const detail = selected ? `<div class="rmt-heart-drama-head"><div><h2>${esc(selected.title)}</h2><p>${esc(selected.subtitle)}</p></div><span>${esc(heartSeasonLabel(selected.season))}</span></div><div class="rmt-heart-setting">${esc(selected.setting)}</div>${renderHeartScriptLines(selected.script)}<div class="rmt-heart-sim-note">四季 Scenario 是“普通一天里的附加小剧场”模拟，不会被保存成已经发生的回忆。</div>` : '';
+        content = `<div class="rmt-heart-drama-layout"><nav>${nav}</nav><main>${detail}</main></div>`;
+    } else {
+        const selected = selectedHeartStrip();
+        if (selected) session.selectedStripId = selected.id;
+        const nav = session.dailyStrips.map(item => `<button type="button" class="rmt-heart-strip-card ${item.id === selected?.id ? 'active' : ''}" data-rmt-heart-strip-id="${esc(item.id)}"><b>${esc(item.title)}</b><span>${esc(item.subtitle || `${item.panelCount}格`)}</span><em>${normalizeCgImageRecord(item.cgImage) ? '实图✓' : `${item.panelCount}格`}</em></button>`).join('');
+        let detail = '';
+        if (selected) {
+            const image = normalizeCgImageRecord(selected.cgImage);
+            const panels = selected.panels.map((panel, index) => `<article class="rmt-heart-panel"><b>${index + 1}</b><div><small>${esc(panel.caption || `第 ${index + 1} 格`)}</small><p>${esc(panel.action)}</p>${panel.charLine ? `<div class="rmt-heart-panel-line"><strong>角色</strong>${esc(panel.charLine)}</div>` : ''}${panel.userLine ? `<div class="rmt-heart-panel-line user"><strong>剧本中的你</strong>${esc(panel.userLine)}</div>` : ''}</div></article>`).join('');
+            detail = `<div class="rmt-heart-strip-head"><div><h2>${esc(selected.title)}</h2><p>${esc(selected.subtitle)}</p></div><span>${selected.panelCount}格</span></div><div class="rmt-heart-strip-image">${cgImageLayerHtml(selected, { lazy: false })}</div><div class="rmt-heart-strip-actions">${readOnly ? '' : `<button type="button" class="rmt-btn rmt-cg-primary" data-rmt-action="draw-heart-strip" data-rmt-heart-strip-id="${esc(selected.id)}" ${isCgImageDrawing(MODE.HEART, selected.id) ? 'disabled' : ''}>${isCgImageDrawing(MODE.HEART, selected.id) ? '正在绘制…' : image ? '↻ 重绘日常一格' : '🎨 绘制日常一格'}</button>${image ? `<button type="button" class="rmt-btn" data-rmt-action="clear-heart-strip" data-rmt-heart-strip-id="${esc(selected.id)}">恢复文字版</button>` : ''}`}<small>图片只画 Q 版分镜，不把台词交给图像模型；文字由插件界面单独显示。</small></div><div class="rmt-heart-panels">${panels}</div>`;
+        }
+        content = `<div class="rmt-heart-drama-layout rmt-heart-strip-layout"><nav>${nav}</nav><main>${detail}</main></div>`;
+    }
+
+    bodyEl().innerHTML = `<div class="rmt-heart">${summary}${tabs}${content}</div>`;
+}
+
 
 function renderButterfly() {
     const session = activeSession;
@@ -7008,6 +7715,20 @@ function handleOverlayClick(event) {
     if (phoneApp) return phoneSelectApp(phoneApp.dataset.rmtPhoneApp);
     const phoneEntry = event.target.closest?.('[data-rmt-phone-entry]');
     if (phoneEntry) return phoneSelectEntry(phoneEntry.dataset.rmtPhoneEntry);
+    const heartView = event.target.closest?.('[data-rmt-heart-view]');
+    if (heartView) return heartSetView(heartView.dataset.rmtHeartView);
+    const heartVoice = event.target.closest?.('[data-rmt-heart-voice-id]');
+    if (heartVoice) return heartSelectVoice(heartVoice.dataset.rmtHeartVoiceId);
+    const heartScenario = event.target.closest?.('[data-rmt-heart-scenario-id]');
+    if (heartScenario) return heartSelectScenario(heartScenario.dataset.rmtHeartScenarioId);
+    const heartStrip = event.target.closest?.('[data-rmt-heart-strip-id]');
+    if (heartStrip && !event.target.closest?.('[data-rmt-action]')) return heartSelectStrip(heartStrip.dataset.rmtHeartStripId);
+    const avatarTalk = event.target.closest?.('[data-rmt-avatar-talk]');
+    if (avatarTalk) {
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        return void showAvatarDialogueForCharacter(avatarTalk.dataset.rmtAvatarTalk);
+    }
     const archiveChat = event.target.closest?.('[data-rmt-archive-chat]');
     if (archiveChat) return void openArchiveChatFromOverview(archiveChat.dataset.rmtArchiveChat);
     const archiveCharacter = event.target.closest?.('[data-rmt-archive-character]');
@@ -7030,7 +7751,7 @@ function handleOverlayClick(event) {
     const actionEl = event.target.closest?.('[data-rmt-action]');
     const action = actionEl?.dataset?.rmtAction;
     if (!action) return;
-    if (activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'generate-all-adv', 'repair-failed-adv', 'room-life-refresh', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins'].includes(action)) {
+    if (activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'draw-heart-strip', 'clear-heart-strip', 'generate-all-adv', 'repair-failed-adv', 'room-life-refresh', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins'].includes(action)) {
         globalThis.toastr?.info?.('当前是只读档案浏览：不会切换聊天，也不会修改或重新生成旧档案内容。', '心跳回忆');
         return;
     }
@@ -7045,6 +7766,37 @@ function handleOverlayClick(event) {
         return showArchiveLibrary();
     }
     if (action === 'archive-character-back') return showArchiveCharacter(currentCharacterKey(currentCharacterGuard()));
+    if (action === 'open-heart') return openHeartMode();
+    if (action === 'heart-avatar-talk') {
+        const key = activeArchiveSnapshot?.characterKey || (() => { try { return currentCharacterKey(getContext()); } catch { return ''; } })();
+        return void showAvatarDialogueForCharacter(key);
+    }
+    if (action === 'avatar-talk-again') return renderAvatarDialoguePopup(activeAvatarDialogue, { repeat: true });
+    if (action === 'avatar-heart-open') return openHeartFromAvatar();
+    if (action === 'avatar-heart-generate') {
+        const state = activeAvatarDialogue;
+        if (!state?.entry || state.readOnly || !indexedArchiveMatchesCurrentChat(state.entry, getContext())) {
+            globalThis.toastr?.info?.('只有当前真实聊天对应的档案可以生成角色互动。', '心跳回忆');
+            return;
+        }
+        bodyEl()?.querySelector('.rmt-avatar-dialog-pop')?.remove();
+        activeAvatarDialogue = null;
+        if (!confirmExplicitAction('生成角色互动 / Voice Drama？', '会生成早中晚/周末/生日/节日/久未访问台词库、后日谈与四季剧场、日常一格脚本。只在确认后发起一次模型请求。', { destructive: false })) return;
+        return void generateMode(MODE.HEART, { background: true });
+    }
+    if (action === 'avatar-heart-open-archive') {
+        const state = activeAvatarDialogue;
+        bodyEl()?.querySelector('.rmt-avatar-dialog-pop')?.remove();
+        activeAvatarDialogue = null;
+        if (state?.snapshot) return showIndexedArchiveSnapshot(state.snapshot);
+        if (state?.entry) return void openIndexedArchive(state.entry.characterKey, state.entry.chatId);
+        return showArchiveLibrary();
+    }
+    if (action === 'avatar-dialog-close') {
+        bodyEl()?.querySelector('.rmt-avatar-dialog-pop')?.remove();
+        activeAvatarDialogue = null;
+        return;
+    }
     if (action === 'current-archive') return showChooser();
     if (action === 'current-archive-import') return requestCurrentArchiveImport();
     if (action === 'read-memory-plugins') return void readCurrentChatMemoryPlugins().catch(error => globalThis.toastr?.error?.(toastText(error?.message || error), '心跳回忆'));
@@ -7091,6 +7843,8 @@ function handleOverlayClick(event) {
     }
     if (action === 'draw-cg') return void drawSelectedCgImage();
     if (action === 'clear-cg-image') return clearSelectedCgImage();
+    if (action === 'draw-heart-strip') return void drawHeartStripImage(actionEl.dataset.rmtHeartStripId);
+    if (action === 'clear-heart-strip') return clearHeartStripImage(actionEl.dataset.rmtHeartStripId);
     if (action === 'cg-only') {
         if (activeSession?.kind === MODE.ADV) {
             activeSession.view = 'cg';
