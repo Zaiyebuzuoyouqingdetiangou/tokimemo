@@ -1,7 +1,7 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.10-incremental-achievements-r25",
+  "js": "index.js?heartbeat=0.8.10-lean-resume-seasons-r26",
   "author": "Toto",
   "version": "0.8.10",
   "auto_update": false,
@@ -10,5 +10,5 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "独立的 SillyTavern 心跳回忆插件：每聊天窗口独立档案、增量记忆、重要节点相簿/ADV、告白回看、分组角色互动/Drama/日常一格、轻量私人终端、成就库与 CG 实图；档案室支持角色版本分组和跨档案安全只读；结构化请求使用限流分段、超时和原子提交；生图支持 /imagine /sd /img 检测与手动兜底；Source Available，非开源。"
+  "description": "独立的 SillyTavern 心跳回忆插件：每聊天窗口独立档案、增量记忆、重要节点相簿/ADV、告白回看、分组角色互动/Drama/日常一格、可续写私人终端、逐季 Drama、成就库与 CG 实图；档案室支持角色版本分组和跨档案安全只读；结构化请求使用限流分段、超时和原子提交；生图支持 /imagine /sd /img 检测与手动兜底；Source Available，非开源。"
 }

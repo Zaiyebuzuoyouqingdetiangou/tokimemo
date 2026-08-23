@@ -1,4 +1,4 @@
-import { initMemoryTheater, destroyMemoryTheater } from './src/heartbeatMemories.js?heartbeat=0.8.10-incremental-achievements-r25';
+import { initMemoryTheater, destroyMemoryTheater } from './src/heartbeatMemories.js?heartbeat=0.8.10-lean-resume-seasons-r26';
 
 const VERSION = '0.8.10';
 
