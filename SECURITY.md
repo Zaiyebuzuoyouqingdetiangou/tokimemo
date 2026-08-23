@@ -128,3 +128,8 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - “完全重建档案”是唯一允许重新编号 Mxxx 并清空旧派生 theater cache 的档案更新路径，必须有明确破坏性确认。
 - ADV 批量正文请求失败/部分成功后不得自动触发 N 个单篇修复请求。插件必须停止，并由用户显式选择“再次批量（一次请求）”或“逐个补完（最多 N 次请求）”。
 - 跨角色/跨聊天档案查看使用只读 metadata snapshot。只读 snapshot 允许展示已保存的 Album/ADV/Room/Items/Phone/Butterfly/Ending session，但禁止生成、重绘 CG、更新今日生活、改档案或写回宿主当前聊天。
+### 0.8.10 cg-ui-r14 additional invariants
+
+- 档案馆索引条目只有在 `characterKey` 与当前角色一致、`chatId` 与当前聊天一致、并且当前 context 内确实存在该聊天的心跳回忆档案时，才能从只读索引入口退化为 live 当前档案。这个判断不能调用 `selectCharacterById` / `openCharacterChat`，也不能为了获得写权限切换宿主聊天。
+- 相簿缩略图上的 CG 绘制快捷按钮只对 live 当前档案显示；历史 snapshot 继续禁止 `draw-cg` / `clear-cg-image`。快捷入口不得绕过原有用户确认、同源图片路径校验、`chatId + archiveRevision` origin 校验或单 CG 并发限制。
+

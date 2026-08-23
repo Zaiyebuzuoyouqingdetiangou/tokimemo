@@ -187,3 +187,13 @@ Security-sensitive changes reviewed:
 - No new arbitrary network destination, WebSocket/EventSource, eval/new Function, secret storage, or model-controlled fetch target was introduced. The only new runtime fetch reuses the pre-existing same-origin `/api/characters/chats` archive-metadata endpoint with a locally indexed avatar/chat target.
 
 Result: no newly introduced Critical/High/Medium security finding identified in the targeted manual diff review. Runtime compatibility of server-returned chat metadata fields and browser compression APIs still requires real SillyTavern device testing.
+## 0.8.10 cg-ui-r14 targeted diff review
+
+Scope: r13 state/archive package -> r14 CG discoverability patch. Changed source: `src/heartbeatMemories.js`; packaging/docs: `manifest.json`, `index.js`, `README.md`, `CHANGELOG.md`, `SECURITY.md`, `SECURITY_REVIEW.md`.
+
+The patch changes presentation and the classification of one indexed archive case. An indexed row is promoted to the live current archive only when its canonical character key and chat id both match the already-open SillyTavern context and that context already contains the corresponding Heartbeat Memories archive. No character/chat selection method is invoked. Other indexed archives remain snapshots and retain the existing write-action block.
+
+The new album-card paint shortcut reaches the same `drawSelectedCgImage()` path as the existing detail button. It therefore retains explicit billing confirmation, one-image concurrency, visual-prompt sanitization, same-origin local-image-path validation, and task-origin / archive-revision checks. No direct provider API, arbitrary URL load, secret read, or background image generation was added.
+
+Targeted diff conclusion: no new Critical / High / Medium issue identified in the r14 change set. Residual dependency remains the user's configured SillyTavern Image Generation provider and its billing/runtime behavior.
+
