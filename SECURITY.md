@@ -142,3 +142,13 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - 有后台任务时禁止从 snapshot 关闭只读并切换聊天，避免旧任务完成后写入新的当前聊天。
 - ENDING confessionReplays 仅表示已经发生的告白/关系确认回看，不是未来模拟；每条必须通过完整当前档案的 sourceMemoryIds + sourceMemoryAnchor 校验。无可验证告白时允许空数组，不得为了满足 UI 数量凭空制造过去事件。
 - confession replay 的 scene/confessionText 是基于已归档事实的演出式重构，不得宣称为聊天逐字原文；对 {{user}} 的回应只能摘要已有档案结果，不得生成新的用户台词。
+### 0.8.10 r16 HEART / reverse confession / daily-strip invariants
+
+- `MODE.HEART`（头像问候、Voice Drama、四季 Scenario、日常一格）是派生模拟 session，不得写入 `MEMORY_KEY`，不得作为“过去已经发生”的 archive evidence。其 relationshipState/relationshipSummary 仍必须由真实 `sourceMemoryIds + sourceMemoryAnchor` 锚定。
+- 点击档案室角色头像只允许读取已保存 HEART session；若目标不是当前聊天，只允许复用已允许的同源 archive metadata snapshot。头像点击不得自动切换角色/聊天、不得自动发起模型请求。缺少 HEART session 时只能展示显式“生成/打开档案”操作。
+- 头像访问状态只允许在 extension settings 的 `heartbeatMemoriesAvatarVisitsV1` 中保存有界的 `characterKey -> lastVisitedAt` 时间戳（最多 240 项）；不得保存聊天原文、记忆正文、世界书、Secrets 或模型输出。
+- 久未访问台词中的怨气/担心/吃醋属于模拟角色反应。吃醋不得演变成监控、威胁、限制 {{user}} 社交或宣称 {{user}} 与第三方已恋爱。
+- Voice/Scenario 中 `speaker=user` 的内容必须在 UI 标注为“剧本中的你 · 非正史”，不得当成用户真实选择、档案事实或后续证据。
+- “日常一格”生图只能由用户显式点击并确认后调用已注册的 SillyTavern `imagine` 能力；prompt 只包含经过清理的可见分镜，禁止聊天/档案/世界书全文、URL、宏和凭据。返回值继续只接受 SillyTavern 同源本地图片路径；不得接受外站 URL、data/blob URI 或把 base64 写入 chat metadata。只读 snapshot 不允许绘制/重绘。
+- `reverse / 逆转告白` 仍是 ENDING 的未来路线模拟。只有本地归一化后的真实档案能够锚定强烈依恋与竞争/吃醋/错失时机/关系流失压力时才能 `available=true`；不得借此推断用户同意、第三方恋爱事实或写出强迫控制。
+

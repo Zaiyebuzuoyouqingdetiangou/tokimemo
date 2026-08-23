@@ -1,7 +1,7 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.10-archive-ending-r15",
+  "js": "index.js?heartbeat=0.8.10-heart-drama-r16",
   "author": "Toto",
   "version": "0.8.10",
   "auto_update": false,
@@ -10,5 +10,5 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "独立的 SillyTavern 心跳回忆插件：每聊天窗口独立档案、全角色档案馆、CG/ADV 批量优先且批量失败后由用户选择再次批量或逐项补齐、更多私人空间、仅收纳物可翻找、私人终端按人设选择手机/手表/通讯器并随现实时间变化、ENDING 结局路线与后日谈、多来源当前窗口记忆/摘要适配、增量档案更新保留既有派生内容、只读跨档案浏览可显式关闭保护并进入对应聊天编辑、ENDING 支持真实告白回看、可调用 SillyTavern Image Generation 将抽象 CG 绘制为实图；Source Available，非开源。"
+  "description": "独立的 SillyTavern 心跳回忆插件：每聊天窗口独立档案、全角色档案馆、CG/ADV 批量优先且批量失败后由用户选择再次批量或逐项补齐、更多私人空间、仅收纳物可翻找、私人终端按人设选择手机/手表/通讯器并随现实时间变化、ENDING 结局路线与后日谈、多来源当前窗口记忆/摘要适配、增量档案更新保留既有派生内容、只读跨档案浏览可显式关闭保护并进入对应聊天编辑、ENDING 支持真实告白回看与逆转告白路线、角色头像按现实时间/生日/久未访问弹出台词、Voice Drama/四季 Scenario/日常一格、可调用 SillyTavern Image Generation 将抽象 CG 与日常一格绘制为实图；Source Available，非开源。"
 }

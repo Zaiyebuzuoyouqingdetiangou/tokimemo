@@ -1,3 +1,16 @@
+## r16 targeted manual diff review — HEART / seasonal drama / daily strip / reverse confession
+
+Scope: local r15 package -> local r16 patch. This is a targeted Codex-Security-style manual diff review in the current host, not a formal hosted Codex Security scan.
+
+- Added `MODE.HEART` only as a derived session. Relationship tone requires a validated archive anchor; generated greetings, Voice Drama, Scenario Drama, and daily-strip scripts remain non-canonical simulations and never write `MEMORY_KEY`.
+- Avatar clicks do not add a network destination or model call. For another character/history row they reuse the existing allowlisted same-origin archive snapshot loader, and they do not call `selectCharacterById/openCharacterChat`. Missing HEART content requires a separate explicit user generation action on the live current chat.
+- The only new persistent global state is a bounded map of character key -> last avatar-visit timestamp. It carries no archive text, prompt content, credentials, URLs, or model result.
+- Daily-strip drawing reuses the existing `imagine` provider path and same-origin image URL validator. The visual prompt is capped/sanitized and explicitly excludes text/speech bubbles; the stored image record remains path/prompt/provider/timestamp only.
+- Reverse-confession availability remains model-proposed but is constrained by required archive memory IDs/anchor and future-simulation semantics; the prompt prohibits coercion and ungrounded third-party romance facts.
+- No new direct provider API client, arbitrary fetch destination, WebSocket/EventSource, eval/new Function, Authorization/API-key read, or new secret storage was introduced by this patch.
+
+Targeted review conclusion: no new Critical / High / Medium finding identified in the r16 changed behavior. Residual compatibility risk remains in third-party Image Generation runtime/provider behavior and in model completeness for the larger HEART JSON; both fail without lowering the archive evidence boundary.
+
 ## r15 targeted diff review — read-only edit transition + confession replay
 
 Scope: r14 -> r15. The change adds an explicit user-controlled transition from read-only indexed archive snapshots into the corresponding real SillyTavern chat, and adds evidence-bound confession replay data/UI inside ENDING.

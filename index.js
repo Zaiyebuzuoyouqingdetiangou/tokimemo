@@ -1,4 +1,4 @@
-import { initMemoryTheater, destroyMemoryTheater } from './src/heartbeatMemories.js?heartbeat=0.8.10-archive-ending-r15';
+import { initMemoryTheater, destroyMemoryTheater } from './src/heartbeatMemories.js?heartbeat=0.8.10-heart-drama-r16';
 
 const VERSION = '0.8.10';
 
