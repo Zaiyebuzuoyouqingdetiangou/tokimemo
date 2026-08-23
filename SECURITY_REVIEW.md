@@ -1,3 +1,13 @@
+## r15 targeted diff review — read-only edit transition + confession replay
+
+Scope: r14 -> r15. The change adds an explicit user-controlled transition from read-only indexed archive snapshots into the corresponding real SillyTavern chat, and adds evidence-bound confession replay data/UI inside ENDING.
+
+- Read-only remains the default for cross-archive snapshots. Disabling it requires a local checkbox action plus a fixed confirmation dialog; no model/archive/worldbook text can trigger the transition.
+- Editing a historical snapshot never writes directly through the metadata snapshot. The plugin explicitly opens the indexed character/chat only after user confirmation, then verifies characterKey + chatId + current archive before exposing write actions.
+- Active background tasks block the transition. Regeneration remains separately confirmed and keeps existing chatId/archiveRevision origin checks.
+- Confession replays are normalized through normalizeMemoryReference and may be empty. They do not relax ENDING route evidence or turn future simulation into archive truth.
+- No new arbitrary network target, credential read, eval/new Function, WebSocket or EventSource path was introduced.
+
 ## 0.8.10 confirmation / current archive r10 focused diff review
 
 Scope: exact current GitHub `main` r9 blob `24312b4f9980c4d41fd318a6fe7eb830873b1e25` → local r10 candidate (`src/heartbeatMemories.js`, cache-key metadata, docs).

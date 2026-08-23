@@ -133,3 +133,12 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - 档案馆索引条目只有在 `characterKey` 与当前角色一致、`chatId` 与当前聊天一致、并且当前 context 内确实存在该聊天的心跳回忆档案时，才能从只读索引入口退化为 live 当前档案。这个判断不能调用 `selectCharacterById` / `openCharacterChat`，也不能为了获得写权限切换宿主聊天。
 - 相簿缩略图上的 CG 绘制快捷按钮只对 live 当前档案显示；历史 snapshot 继续禁止 `draw-cg` / `clear-cg-image`。快捷入口不得绕过原有用户确认、同源图片路径校验、`chatId + archiveRevision` origin 校验或单 CG 并发限制。
 
+
+### 0.8.10 r15 read-only edit transition / confession replay invariants
+
+- 历史档案 snapshot 默认只读。关闭“只读查看”只能由用户直接操作本地开关触发，并且必须再经过固定文本确认；模型输出、档案文本、世界书或 DOM 数据不得自动关闭只读。
+- 从只读 snapshot 进入编辑模式允许显式调用 SillyTavern 的角色/聊天切换接口，但目标角色必须由本地档案索引的 avatar/characterKey 映射，目标 chatId 必须等于已加载 snapshot.chatId；切换完成后必须再次验证 characterKey + chatId + 当前 MEMORY_KEY，验证失败继续只读且不得生成/写入。
+- 关闭只读只负责导航，不得自动调用模型。任何“重新生成”仍必须经过独立的覆盖确认，并继续使用原 chatId + archiveRevision task origin 防护。
+- 有后台任务时禁止从 snapshot 关闭只读并切换聊天，避免旧任务完成后写入新的当前聊天。
+- ENDING confessionReplays 仅表示已经发生的告白/关系确认回看，不是未来模拟；每条必须通过完整当前档案的 sourceMemoryIds + sourceMemoryAnchor 校验。无可验证告白时允许空数组，不得为了满足 UI 数量凭空制造过去事件。
+- confession replay 的 scene/confessionText 是基于已归档事实的演出式重构，不得宣称为聊天逐字原文；对 {{user}} 的回应只能摘要已有档案结果，不得生成新的用户台词。
