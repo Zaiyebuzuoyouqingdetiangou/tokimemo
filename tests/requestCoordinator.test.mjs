@@ -5,7 +5,7 @@ import test from 'node:test';
 const sourceUrl = new URL('../src/heartbeatMemories.js', import.meta.url);
 const source = await readFile(sourceUrl, 'utf8');
 const testingExports = `
-export const __r24Testing = {
+export const __r25Testing = {
   reset() {
     activeGenerationTasks.clear();
     activeModeBuildScopes.clear();
@@ -24,12 +24,24 @@ export const __r24Testing = {
   shouldRetrySegmentRequest,
   normalizeEndingConfessionLines,
   normalizeEndingRouteDetail,
+  normalizeEndingConfessionReplays,
+  normalizeAlbum,
+  normalizeEventList,
+  mergeAdvIncremental,
+  normalizePhonePlan,
+  normalizeHeart,
+  normalizeAchievements,
   SEGMENT_REQUEST_CONCURRENCY,
+  ADV_BULK_BATCH_SIZE,
 };`;
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(`${source}\n${testingExports}`).toString('base64')}`;
-const { __r24Testing: api } = await import(moduleUrl);
+const { __r25Testing: api } = await import(moduleUrl);
 
 test.afterEach(() => api.reset());
+
+test('ADV bulk requests are capped at six stories per click', () => {
+    assert.equal(api.ADV_BULK_BATCH_SIZE, 6);
+});
 
 test('segmented children fold into one parent logical task', () => {
     const parent = 'mode:char|chat:ending';
@@ -113,7 +125,7 @@ test('connection errors are classified without echoing provider secrets', () => 
     assert.equal(api.shouldRetrySegmentRequest({ code: 'RMT_REQUEST_TIMEOUT', retryable: false }), false);
 });
 
-test('new confession pages validate and legacy confession text splits locally', () => {
+test('confession avatar pages live in confession replay while routes no longer require them', () => {
     const lines = [
         '我很早以前就已经在意你，只是直到今天才终于敢把它说出口。',
         '那些一起走过的路，对我来说从来都不是可以随便忘掉的小事。',
@@ -125,12 +137,12 @@ test('new confession pages validate and legacy confession text splits locally', 
     const legacy = lines.join('');
     assert.equal(api.normalizeEndingConfessionLines(lines, '').length, 6);
     assert.ok(api.normalizeEndingConfessionLines([], legacy).length >= 6);
+
     const route = { id: 'END_ROUTE', title: '当前路线', available: true };
     const detail = api.normalizeEndingRouteDetail({
         ending: {
             id: 'END_ROUTE',
             endingScene: '终章场景。'.repeat(70),
-            confessionLines: lines,
             creditsLine: '在下一次心跳之前。',
             epilogue: {
                 title: '后日谈',
@@ -140,6 +152,188 @@ test('new confession pages validate and legacy confession text splits locally', 
             },
         },
     }, route);
-    assert.equal(detail.confessionLines.length, 6);
-    assert.equal(detail.confession, lines.join('\n'));
+    assert.deepEqual(detail.confessionLines, []);
+    assert.equal(detail.confession, '');
+
+    const memoryBank = {
+        memories: [{ id: 'M001', title: '那晚的告白', anchors: ['告白夜'], summary: '已经发生的告白。' }],
+    };
+    const replays = api.normalizeEndingConfessionReplays([{
+        id: 'CONF01',
+        type: 'mutual',
+        title: '那晚的告白',
+        date: '08/20',
+        scene: '告白夜里，两个人停下来把之前没有说出口的话讲清楚。'.repeat(12),
+        confessionText: legacy,
+        confessionLines: lines,
+        responseSummary: '当时得到了明确回应。',
+        afterEffect: '关系从那以后发生了变化。',
+        sourceMemoryIds: ['M001'],
+        sourceMemoryAnchor: '告白夜',
+    }], memoryBank);
+    assert.equal(replays.length, 1);
+    assert.equal(replays[0].confessionLines.length, 6);
+});
+
+const memoryBank = {
+    memories: [
+        { id: 'M001', title: '雨夜回家', anchors: ['站台雨伞'], summary: '两个人在雨夜一起回家。' },
+        { id: 'M002', title: '海边约定', anchors: ['海边夕阳'], summary: '两个人在海边留下重要约定。' },
+    ],
+};
+
+test('album and ADV accept a small set of important nodes instead of fixed 15/12', () => {
+    const album = api.normalizeAlbum({
+        title: '回忆相簿',
+        entries: [{
+            id: 'CG01',
+            title: '雨夜回家',
+            date: '08/01',
+            desc: '站台雨伞下并肩等车。',
+            category: '日常',
+            unlocked: true,
+            sourceMemoryIds: ['M001'],
+            sourceMemoryAnchor: '站台雨伞',
+            visualSeed: ['雨伞', '站台', '夜色', '两个人'],
+            imagePrompt: 'night station, umbrella, two people, soft light',
+            comments: ['你看，那把伞还偏在你那边。', '我那时其实比看起来紧张。', '现在回头看，最清楚的还是站台的雨声。', '这张我一直觉得值得留下。'],
+            hintLines: [],
+        }],
+    }, memoryBank);
+    assert.equal(album.entries.length, 1);
+
+    const adv = api.normalizeEventList({
+        title: '回想',
+        events: [{
+            id: 'EV01',
+            title: '海边约定',
+            date: '08/02',
+            cgDesc: '海边夕阳里，两个人停在浪线附近。',
+            sourceMemoryIds: ['M002'],
+            sourceMemoryAnchor: '海边夕阳',
+            visualSeed: ['夕阳', '海面', '浪线', '两个人'],
+            imagePrompt: 'sunset beach, two people, sea, warm backlight',
+        }],
+    }, memoryBank);
+    assert.equal(adv.events.length, 1);
+
+    const merged = api.mergeAdvIncremental({
+        kind: 'adv',
+        title: '旧回想',
+        events: [{
+            id: 'EV_OLD',
+            title: '已失效旧节点',
+            date: '07/01',
+            cgDesc: '旧档案里曾经存在、但当前档案已经无法验证的事件。',
+            sourceMemoryIds: ['M999'],
+            sourceMemoryAnchor: '已经消失的锚点',
+            visualSeed: ['旧', '节点', '画面', '人物'],
+            imagePrompt: 'old scene',
+            adv: { paragraphs: Array.from({ length: 18 }, (_, i) => `旧段落${i + 1}。这是足够长的旧 ADV 内容。`) },
+        }],
+    }, adv, memoryBank);
+    assert.equal(merged.events.length, 1);
+    assert.deepEqual(merged.events[0].sourceMemoryIds, ['M002']);
+});
+
+test('phone plan keeps many apps but accepts roughly thirty entries', () => {
+    const specs = [
+        ['MOMENTS', 'moments', 3],
+        ['CHAT', 'chat', 3],
+        ['GALLERY', 'gallery', 4],
+        ['NOTES', 'notes', 5],
+        ['SCHEDULE', 'schedule', 4],
+        ['STORE', 'store', 4],
+        ['BROWSER', 'browser', 3],
+        ['CONTACTS', 'contacts', 3],
+        ['LOCATION', 'location', 2],
+        ['MISC', 'misc', 2],
+    ];
+    const apps = specs.map(([id, kind, count]) => ({
+        id,
+        label: id,
+        kind,
+        summary: `${kind} summary`,
+        entries: Array.from({ length: count }, (_, index) => ({ id: `${id}${index + 1}`, title: `${kind}-${index + 1}`, meta: 'meta' })),
+    }));
+    const plan = api.normalizePhonePlan({
+        deviceName: '私人手机',
+        deviceKind: 'phone',
+        lockText: 'LOCK',
+        liveStates: { morning: {}, daytime: {}, evening: {}, night: {} },
+        apps,
+    });
+    assert.equal(plan.apps.length, 10);
+    assert.equal(plan.apps.reduce((sum, app) => sum + app.entries.length, 0), 33);
+});
+
+test('HEART can persist dialogue-only state before seasons and strips exist', () => {
+    const heart = api.normalizeHeart({
+        title: '角色互动',
+        relationshipState: '关系发展中',
+        relationshipSummary: '雨夜回家之后，两个人的距离更近了。',
+        relationshipSourceMemoryIds: ['M001'],
+        relationshipSourceMemoryAnchor: '站台雨伞',
+        birthdayMmDd: '',
+        userBirthdayMmDd: '',
+        specialDays: [],
+        greetings: {
+            morning: ['早。', '醒了吗？'],
+            noon: ['中午了。', '记得吃东西。'],
+            evening: ['今天回来得不算晚。', '外面天已经暗了。'],
+            night: ['还没睡？', '别熬太久。'],
+            weekend: ['今天不用赶时间。', '慢一点也没关系。'],
+            birthday: ['今天就陪我一会儿。'],
+            userBirthday: ['生日快乐。'],
+            holiday: ['今天也算个特别日子。'],
+            absenceWorry: ['最近没见到你。'],
+            absenceSulky: ['你是不是把这里忘了。'],
+            absenceJealous: [],
+        },
+        voiceDramas: [],
+        scenarioDramas: [],
+        dailyStrips: [],
+        generationParts: { dialogues: true, seasons: false, strips: false },
+        view: 'greetings',
+    }, memoryBank);
+    assert.equal(heart.voiceDramas.length, 0);
+    assert.equal(heart.scenarioDramas.length, 0);
+    assert.equal(heart.dailyStrips.length, 0);
+    assert.equal(heart.generationParts.dialogues, true);
+});
+
+test('achievement library separates evidence-backed unlocks from future locked goals', () => {
+    const achievements = api.normalizeAchievements({
+        title: '成就库',
+        entries: [
+            {
+                id: 'ACH01',
+                title: '同一把伞',
+                description: '第一次把这段雨夜真正留进共同记忆。',
+                category: '日常',
+                tier: 'bronze',
+                unlocked: true,
+                unlockedAt: '08/01',
+                sourceMemoryIds: ['M001'],
+                sourceMemoryAnchor: '站台雨伞',
+                hint: '',
+            },
+            {
+                id: 'ACH02',
+                title: '下一次远行',
+                description: '一起完成一次新的长途旅行。',
+                category: '特别',
+                tier: 'silver',
+                unlocked: false,
+                unlockedAt: '',
+                sourceMemoryIds: [],
+                sourceMemoryAnchor: '',
+                hint: '继续积累新的共同经历。',
+            },
+        ],
+    }, memoryBank);
+    assert.equal(achievements.entries.length, 2);
+    assert.equal(achievements.entries.filter(item => item.unlocked).length, 1);
+    assert.equal(achievements.entries.filter(item => !item.unlocked).length, 1);
+    assert.deepEqual(achievements.entries[1].sourceMemoryIds, []);
 });

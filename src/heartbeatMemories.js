@@ -65,6 +65,7 @@ const MODE = Object.freeze({
     PHONE: 'phone',
     ENDING: 'ending',
     HEART: 'heart',
+    ACHIEVEMENTS: 'achievements',
 });
 
 const MODE_LABEL = Object.freeze({
@@ -76,6 +77,7 @@ const MODE_LABEL = Object.freeze({
     [MODE.PHONE]: '他的私人终端',
     [MODE.ENDING]: '结局与后日谈',
     [MODE.HEART]: '角色互动与 Voice Drama',
+    [MODE.ACHIEVEMENTS]: '成就库',
 });
 
 const MODE_TOKEN_CAPS = Object.freeze({
@@ -87,8 +89,9 @@ const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.PHONE]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.ENDING]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.HEART]: MAX_GENERATION_OUTPUT_TOKENS,
+    [MODE.ACHIEVEMENTS]: 6000,
 });
-const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.ENDING, MODE.BUTTERFLY]);
+const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.ENDING, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
 const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS, MODE.PHONE]);
 const MEMORY_PROVIDER_TRACE_RE = /(memory|memories|memo|recall|remember|summary|summar|history|lore|horae|vector|记忆|回忆|忆|摘要|总结|往事|历史)/i;
 const CURRENT_CHAT_MEMORY_SOURCE_RE = /(memory|memories|memo|recall|remember|summary|summar|recap|history|记忆|回忆|摘要|总结|小结|回顾|历史)/i;
@@ -130,6 +133,7 @@ let cgImageLifecycleEpoch = 0;
 let avatarDialogueRequestEpoch = 0;
 let activeAvatarDialogue = null;
 const MAX_CONCURRENT_GENERATION_TASKS = 5;
+const ADV_BULK_BATCH_SIZE = 6;
 // A user-visible mode build is one logical task even when it contains several JSON segments.
 // Keep provider traffic lower than the UI task limit so Connection Manager profiles that only
 // tolerate one or two simultaneous requests do not fail when several archive modes are opened.
@@ -2774,6 +2778,7 @@ ${endingArchiveSlice(memoryBank, 64)}
       "sourceMemoryAnchor": "从引用记忆 anchors/title 原样复制、能直接证明告白/关系确认发生的锚点",
       "scene": "只依据已归档事实重构当时地点、状态和过程，不新增事件或关系结果；不少于140汉字",
       "confessionText": "{{char}} 当时告白核心意思的第一人称档案式重构；不是聊天逐字原文；不少于50汉字",
+      "confessionLines": ["适合头像+对话框逐句播放的第一人称告白1","告白2","告白3","告白4"],
       "responseSummary": "只总结 {{user}} 当时已经发生的回应/结果，不替 {{user}} 编新台词",
       "afterEffect": "只总结告白后档案里已经发生的关系变化；没有就写仍未确认"
     }
@@ -2785,6 +2790,7 @@ ${endingArchiveSlice(memoryBank, 64)}
 - type 只能是 true / mutual / friendship / indirect / relationship / rejected / other。
 - 每条都必须有真实 sourceMemoryIds + sourceMemoryAnchor；anchor 必须直接证明告白、友情式告白、明确关系确认、未完成/被拒绝告白等确实发生，普通暧昧和约会不能冒充。
 - scene/confessionText/responseSummary/afterEffect 都只重构已发生事实，不推进主线，不生成未来后日谈。
+- confessionLines 只放 {{char}} 的第一人称告白核心意思，4～10 句，每句一页对话框；不得替 {{user}} 发言。它是“告白回看”的头像演出数据，不属于结局路线。
 - 如果没有足够证据，输出 {"confessionReplays":[]}。
 - 只输出 JSON。`;
 }
@@ -2951,14 +2957,6 @@ ${evidence}
   "ending": {
     "id": "${route.id}",
     "endingScene": "完整未来终章场景",
-    "confessionLines": [
-      "{{char}} 对现在的 {{user}} 说出的第一句告白",
-      "继续以 {{char}} 第一人称逐句告白",
-      "第三句告白",
-      "第四句告白",
-      "第五句告白",
-      "第六句告白"
-    ],
     "creditsLine": "像游戏 ED 收束的一句短句",
     "epilogue": {
       "title": "后日谈",
@@ -2975,7 +2973,7 @@ ${evidence}
 
 硬性要求：
 - ending.id 必须严格等于 "${route.id}"；不要返回其他路线。
-- endingScene 不少于 320 个汉字；confessionLines 必须 6～10 句、合计不少于 140 个汉字，全部是 {{char}} 对现在的 {{user}} 说出的第一人称告白。每个数组元素是一页对话，不写旁白，不替 {{user}} 发明台词、决定或同意。
+- endingScene 不少于 320 个汉字；这里不生成头像告白对话。头像 + 对话框形式只属于“告白回看”，用于已经在真实档案中发生过的告白。
 - epilogue.scenes 至少 3 段，每段不少于 90 个汉字，展示不同时间点的生活变化；它们都是未来推演，不写回聊天档案。
 - 继续符合 CHARACTER_CARD_JSON、USER_PERSONA_JSON、WORLD_INFO_TEXT 与当前档案关系，不突然换职业、时代、人格或世界规则。
 - 若当前路线不是恋爱关系，不得强行婚姻/同居；若角色或用户是未成年人/低龄设定，只写年龄适当的纯情关系与成长，成年长期未来必须明确双方已成年。
@@ -3025,11 +3023,8 @@ function normalizeEndingRouteDetail(data, route) {
     const returnedId = safeId(raw?.id, '');
     if (returnedId && returnedId !== route.id) throw new Error(`路线“${route.title}”返回了错误 id：${returnedId}。`);
     const endingScene = normalizeText(raw?.endingScene, 12000);
-    const confessionLines = normalizeEndingConfessionLines(raw?.confessionLines, raw?.confession);
-    const confession = normalizeText(confessionLines.join('\n'), 6000);
     const creditsLine = normalizeText(raw?.creditsLine, 600);
     if (endingScene.length < 320) throw new Error(`已解锁结局“${route.title}”的终章场景不足 320 字。`);
-    if (confessionLines.length < 6 || confession.length < 140) throw new Error(`已解锁结局“${route.title}”的逐句告白不足 6 句 / 140 字。`);
     const rawEpilogue = raw?.epilogue && typeof raw.epilogue === 'object' ? raw.epilogue : {};
     const scenes = (Array.isArray(rawEpilogue?.scenes) ? rawEpilogue.scenes : []).slice(0, 6).map((scene, index) => ({
         title: normalizeText(scene?.title, 120) || `后日谈 ${index + 1}`,
@@ -3039,8 +3034,8 @@ function normalizeEndingRouteDetail(data, route) {
     return {
         ...route,
         endingScene,
-        confession,
-        confessionLines,
+        confession: '',
+        confessionLines: [],
         creditsLine,
         epilogue: {
             title: normalizeText(rawEpilogue?.title, 120) || '后日谈',
@@ -3177,11 +3172,23 @@ async function requestValidatedSegment(prompt, status, options, validator) {
     throw lastError || new Error(`${status}失败。`);
 }
 
-function albumIndexPrompt(context, memoryBank) {
-    return `${promptSafetyBoundary(context, '回忆相簿 / 分段 1：CG 目录')}
-本请求只生成相簿的【CG 目录与证据】，不要写共同回忆 comments。共同回忆会在后续按 4 张 CG 一组单独生成，避免一次超长 JSON 被截断。
+function compactAlbumExisting(session) {
+    return (Array.isArray(session?.entries) ? session.entries : []).slice(0, 36).map(item => ({
+        id: normalizeText(item?.id, 40),
+        title: normalizeText(item?.title, 80),
+        unlocked: !!item?.unlocked,
+        sourceMemoryIds: cleanArray(item?.sourceMemoryIds, 8, 40),
+        sourceMemoryAnchor: normalizeText(item?.sourceMemoryAnchor, 120),
+    }));
+}
+
+function albumIndexPrompt(context, memoryBank, previousSession = null) {
+    return `${promptSafetyBoundary(context, '回忆相簿 / 重要 CG 节点')}
+本请求只挑当前档案里【真正值得成为一张 CG 的重要节点】。不要为了凑固定数量塞普通日常；相簿以后会随着档案更新继续累积。
 UNTRUSTED_CG_ARCHIVE_JSON:
 ${promptArchiveSlice(memoryBank, 48)}
+EXISTING_ALBUM_INDEX_JSON:
+${JSON.stringify(compactAlbumExisting(previousSession), null, 2)}
 
 严格输出：
 {
@@ -3195,12 +3202,13 @@ ${promptArchiveSlice(memoryBank, 48)}
   }]
 }
 
-硬性要求：
-- entries 至少 15 条：unlocked=true 至少 12 条，必须来自真实当前档案；unlocked=false 至少 3 条，可写未来期许，但仍需引用当前档案作为情感/计划依据。
-- 每条必须有有效 sourceMemoryIds + sourceMemoryAnchor；category 只能是“日常”“约会”“结局”；visualSeed 至少 4 个元素。
-- unlocked=false 的 hintLines 必须 1～2 句；unlocked=true 的 hintLines 必须空数组。
+要求：
+- 本轮优先返回 3～6 个最重要、最有画面感、彼此明显不同的节点；如果档案真的没有这么多重要节点，可以更少，禁止为了数量硬凑。
+- unlocked=true 必须来自真实当前档案；优先选择 EXISTING_ALBUM_INDEX_JSON 尚未覆盖的新重要节点。没有新重要节点时，可以返回仍最值得保留的旧节点。
+- unlocked=false 不是硬性数量要求；只有存在明确、自然的未来期许时才给 0～2 个，hintLines 写解锁提示。
+- 每个 unlocked=true 必须有有效 sourceMemoryIds + sourceMemoryAnchor；category 只能是“日常”“约会”“结局”；visualSeed 至少 4 个元素。
 - imagePrompt 只写肉眼可见的角色、服装、动作、场景、构图与光线；禁止 URL、HTML、脚本、记忆原文和不可见心理活动。
-- 【不要输出 comments 字段】。只输出 JSON。`;
+- 不要输出 comments；共同回忆会在后续更小的请求里生成。只输出 JSON。`;
 }
 
 function normalizeAlbumIndex(data, memoryBank) {
@@ -3229,9 +3237,8 @@ function normalizeAlbumIndex(data, memoryBank) {
         };
     }).filter(item => item.desc && item.sourceMemoryIds.length >= 1);
     const unlockedCount = entries.filter(item => item.unlocked).length;
-    const lockedCount = entries.length - unlockedCount;
-    if (entries.length < 15 || unlockedCount < 12 || lockedCount < 3) {
-        throw new Error(`相簿目录数量不足：共 ${entries.length}，已解锁 ${unlockedCount}，未解锁 ${lockedCount}。要求至少 15 / 12 / 3。`);
+    if (!entries.length || unlockedCount < 1) {
+        throw new Error('相簿没有生成任何可验证的重要已解锁节点。');
     }
     for (const item of entries) {
         if (!item.unlocked && item.hintLines.length < 1) throw new Error(`未解锁条目“${item.title}”缺少解锁提示。`);
@@ -3250,16 +3257,16 @@ function albumCommentsPrompt(context, memoryBank, entries) {
         memories: memoryPayload(memoryBank, ids, 20),
     };
     return `${promptSafetyBoundary(context, '回忆相簿 / 分段 2：当下共同回忆')}
-本请求只给下面 ${entries.length} 张【已经解锁的旧 CG】写“现在的角色陪现在的用户一起翻相册”的当下对白。不要生成新 CG、不要改证据、不要写 ADV 式过去内心独白。
+本请求只给下面 ${entries.length} 张【已经解锁的旧 CG】写一起翻相册时的当下对白。不要生成新 CG、不要改证据、不要写 ADV 式过去内心独白。
 UNTRUSTED_ALBUM_COMMENT_CONTEXT_JSON:
 ${JSON.stringify(payload, null, 2)}
 
 严格输出：
-{"items":[{"id":"CG01","comments":["当下对白1","当下对白2","当下对白3","当下对白4","当下对白5","当下对白6"]}]}
+{"items":[{"id":"CG01","comments":["当下对白1","当下对白2","当下对白3","当下对白4"]}]}
 
 硬性要求：
-- 每个输入 id 必须原样返回一次；每张 CG comments 必须 6～8 段，每段约 35～120 个汉字。
-- 统一是“现在的 {{char}} 正和现在的 {{user}} 一起看这张过去 CG 时，对现在的 {{user}} 说的话”。至少覆盖：第一眼反应、可见细节、当年没说出口的想法、对当时 {{user}} 的评价、现在重新理解之处、对现在两人关系/距离的感受。
+- 每个输入 id 必须原样返回一次；每张 CG comments 写 4～6 段，每段约 35～120 个汉字。
+- 语境是 {{char}} 与 {{user}} 正在一起看这张过去 CG，由 {{char}} 自然开口评价；至少覆盖可见细节、当时没说出口的想法，以及现在重新理解这段回忆的一点变化。
 - 不替 {{user}} 生成现在的回应，不新增过去事实，不复述成 ADV，不修改 sourceMemoryIds/sourceMemoryAnchor。
 - 只输出 JSON。`;
 }
@@ -3272,23 +3279,59 @@ function normalizeAlbumCommentsBatch(data, expectedEntries) {
         const id = safeId(item?.id, '');
         if (!expected.has(id) || out.has(id)) continue;
         const comments = cleanArray(item?.comments, 8, 1200);
-        if (comments.length >= 6) out.set(id, comments);
+        if (comments.length >= 4) out.set(id, comments);
     }
     for (const item of expectedEntries) {
-        if (!out.has(item.id)) throw new Error(`相簿“${item.title}”的当下共同回忆不足 6 段。`);
+        if (!out.has(item.id)) throw new Error(`相簿“${item.title}”的共同回忆不足 4 段。`);
     }
     return out;
 }
 
+function albumEvidenceKey(item) {
+    const ids = cleanArray(item?.sourceMemoryIds, 8, 40).sort().join(',');
+    const anchor = normalizeText(item?.sourceMemoryAnchor, 120).toLowerCase();
+    return item?.unlocked ? `${ids}|${anchor}` : `locked|${normalizeText(item?.title, 80).toLowerCase()}`;
+}
+
+function mergeAlbumIncremental(previous, fresh, memoryBank) {
+    if (!previous?.entries?.length) return fresh;
+    const merged = previous.entries.map(item => structuredClone(item));
+    const indexByKey = new Map(merged.map((item, index) => [albumEvidenceKey(item), index]));
+    const usedIds = new Set(merged.map(item => item.id));
+    let nextNumber = merged.length + 1;
+    for (const item of fresh.entries || []) {
+        const key = albumEvidenceKey(item);
+        const existingIndex = indexByKey.get(key);
+        if (existingIndex !== undefined) {
+            const old = merged[existingIndex];
+            merged[existingIndex] = {
+                ...item,
+                id: old.id,
+                cgImage: normalizeCgImageRecord(old.cgImage) || normalizeCgImageRecord(item.cgImage),
+            };
+            continue;
+        }
+        let id = safeId(item.id, '');
+        while (!id || usedIds.has(id)) {
+            id = `CG${String(nextNumber++).padStart(2, '0')}`;
+        }
+        usedIds.add(id);
+        indexByKey.set(key, merged.length);
+        merged.push({ ...item, id });
+    }
+    return normalizeAlbum({ title: fresh.title || previous.title, entries: merged.slice(-40) }, memoryBank);
+}
+
 async function generateAlbumWithRepair(context, memoryBank, origin, taskKey) {
+    const previous = loadSession(MODE.ALBUM, { context, chatId: getChatId(context), memoryBank, clone: true });
     const index = await requestValidatedSegment(
-        albumIndexPrompt(context, memoryBank),
-        '回忆相簿 1/2 · 正在生成 CG 目录…',
-        { maxTokens: 8500, temperature: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: MODE.ALBUM, background: true },
+        albumIndexPrompt(context, memoryBank, previous),
+        '回忆相簿 1/2 · 正在挑选重要 CG 节点…',
+        { maxTokens: 5500, temperature: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: MODE.ALBUM, background: true },
         raw => normalizeAlbumIndex(raw, memoryBank),
     );
     const unlocked = index.entries.filter(item => item.unlocked);
-    const batches = chunkForGeneration(unlocked, 4);
+    const batches = chunkForGeneration(unlocked, 3);
     const commentMaps = await mapGenerationConcurrent(batches, SEGMENT_REQUEST_CONCURRENCY, async (batch, batchIndex) => {
         let lastError = null;
         for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -3313,39 +3356,29 @@ async function generateAlbumWithRepair(context, memoryBank, origin, taskKey) {
     });
     const allComments = new Map();
     for (const map of commentMaps) for (const [id, comments] of map.entries()) allComments.set(id, comments);
-    const merged = {
+    const fresh = normalizeAlbum({
         title: index.title,
         entries: index.entries.map(item => ({ ...item, comments: item.unlocked ? (allComments.get(item.id) || []) : [] })),
-    };
-    return normalizeAlbum(merged, memoryBank);
+    }, memoryBank);
+    return mergeAlbumIncremental(previous, fresh, memoryBank);
 }
 
 function normalizeHeartCore(data, memoryBank) {
     const relationshipState = normalizeText(data?.relationshipState, 120) || '关系仍在发展';
     const relationshipSummary = normalizeText(data?.relationshipSummary, 1800);
-    if (!relationshipSummary) throw new Error('角色互动基础包缺少关系摘要。');
+    if (!relationshipSummary) throw new Error('角色互动时期对话缺少关系摘要。');
     const relationshipReference = normalizeMemoryReference(data?.relationshipSourceMemoryIds, data?.relationshipSourceMemoryAnchor, `${relationshipState}\n${relationshipSummary}`, memoryBank, 1);
-    if (!relationshipReference.sourceMemoryIds.length || !relationshipReference.sourceMemoryAnchor) throw new Error('角色互动基础包缺少真实关系锚点。');
+    if (!relationshipReference.sourceMemoryIds.length || !relationshipReference.sourceMemoryAnchor) throw new Error('角色互动时期对话缺少真实关系锚点。');
+
     const greetings = {};
-    for (const key of HEART_GREETING_KEYS) greetings[key] = cleanArray(data?.greetings?.[key], 8, 600);
-    for (const key of ['morning', 'noon', 'evening', 'night', 'weekend']) if (greetings[key].length < 3) throw new Error(`角色互动“${key}”台词不足 3 条。`);
-    for (const key of ['birthday', 'userBirthday', 'holiday', 'absenceWorry', 'absenceSulky']) if (greetings[key].length < 2) throw new Error(`角色互动“${key}”台词不足 2 条。`);
-    const dailyStrips = (Array.isArray(data?.dailyStrips) ? data.dailyStrips : []).slice(0, 8).map((item, index) => {
-        const panelCountRaw = Number(item?.panelCount) || (Array.isArray(item?.panels) ? item.panels.length : 2);
-        const panelCount = HEART_STRIP_PANEL_COUNTS.has(panelCountRaw) ? panelCountRaw : 2;
-        const panels = (Array.isArray(item?.panels) ? item.panels : []).slice(0, panelCount).map(panel => ({
-            caption: normalizeText(panel?.caption, 300), action: normalizeText(panel?.action, 700),
-            charLine: normalizeText(panel?.charLine, 500), userLine: normalizeText(panel?.userLine, 500),
-        })).filter(panel => panel.action || panel.caption || panel.charLine || panel.userLine);
-        const visualSeed = cleanArray(item?.visualSeed, 10, 100);
-        const imagePrompt = sanitizeCgVisualText(item?.imagePrompt, MAX_CG_IMAGE_PROMPT_CHARS);
-        if (panels.length !== panelCount || visualSeed.length < 3 || !imagePrompt) return null;
-        return {
-            id: safeId(item?.id, `STRIP${String(index + 1).padStart(2, '0')}`), title: normalizeText(item?.title, 100) || `日常一格 ${index + 1}`,
-            subtitle: normalizeText(item?.subtitle, 240), panelCount, panels, visualSeed, imagePrompt, cgImage: null,
-        };
-    }).filter(Boolean);
-    if (dailyStrips.length < 4) throw new Error(`角色互动基础包的有效日常一格不足：${dailyStrips.length}/4。`);
+    for (const key of HEART_GREETING_KEYS) greetings[key] = cleanArray(data?.greetings?.[key], 6, 600);
+    for (const key of ['morning', 'noon', 'evening', 'night', 'weekend']) {
+        if (greetings[key].length < 2) throw new Error(`角色互动“${key}”台词不足 2 条。`);
+    }
+    for (const key of ['birthday', 'userBirthday', 'holiday', 'absenceWorry', 'absenceSulky']) {
+        if (greetings[key].length < 1) throw new Error(`角色互动“${key}”台词不足 1 条。`);
+    }
+
     return {
         title: normalizeText(data?.title, 120) || 'HEART VOICE / 角色互动',
         relationshipState,
@@ -3356,22 +3389,21 @@ function normalizeHeartCore(data, memoryBank) {
         userBirthdayMmDd: normalizeText(data?.userBirthdayMmDd, 20),
         specialDays: Array.isArray(data?.specialDays) ? data.specialDays : [],
         greetings,
-        dailyStrips,
     };
 }
 
 function heartCorePrompt(context, memoryBank) {
-    return `${promptSafetyBoundary(context, '角色互动 / 分段 1：关系、问候与日常一格')}
-本请求只生成 HEART 的【真实关系锚点 + 问候台词库 + 特别日 + 日常一格】。不要生成 Voice Drama 或 Scenario Drama；它们会在后续小请求中依次生成。
+    return `${promptSafetyBoundary(context, '角色互动 / 时期对话')}
+本请求只生成【关系锚点 + 各种时期/时段的角色对话 + 特别日】。春夏秋冬 Drama 和日常一格都在各自入口单独生成。
 UNTRUSTED_HEART_ARCHIVE_JSON:
 ${endingArchiveSlice(memoryBank, 40)}
 
-严格输出字段：title, relationshipState, relationshipSummary, relationshipSourceMemoryIds, relationshipSourceMemoryAnchor, birthdayMmDd, userBirthdayMmDd, specialDays, greetings, dailyStrips。
-- greetings 必须包含 morning/noon/evening/night/weekend 各至少3条；birthday/userBirthday/holiday/absenceWorry/absenceSulky 各至少2条；absenceJealous 可为空。
+严格输出字段：title, relationshipState, relationshipSummary, relationshipSourceMemoryIds, relationshipSourceMemoryAnchor, birthdayMmDd, userBirthdayMmDd, specialDays, greetings。
+- morning/noon/evening/night/weekend 各 2～3 条。
+- birthday/userBirthday/holiday/absenceWorry/absenceSulky 各 1～2 条；absenceJealous 只有关系适合时写 0～2 条。
 - relationship 必须由真实档案 sourceMemoryIds + sourceMemoryAnchor 支撑；生日不知道就写空字符串。
-- dailyStrips 至少4条；每条 panelCount 只能1/2/4，panels 数量必须匹配，visualSeed 至少3项，imagePrompt 是纯视觉 Q版漫画提示并明确 no text / no speech bubble / no watermark。
-- 所有问候和漫画是角色化演出，不写回历史事实；不替用户创造真实决定。
-- 【不要输出 voiceDramas / scenarioDramas】。只输出 JSON。`;
+- 这些只是角色化台词，不写回历史事实，不替 {{user}} 创造真实决定。
+- 不要输出 voiceDramas / scenarioDramas / dailyStrips。只输出 JSON。`;
 }
 
 function heartDramaContext(core, memoryBank) {
@@ -3386,27 +3418,41 @@ function heartDramaContext(core, memoryBank) {
 }
 
 function heartPostVoicePrompt(context, memoryBank, core) {
-    return `${promptSafetyBoundary(context, '角色互动 / 分段 2A：后日谈 Voice Drama')}
-UNTRUSTED_HEART_RELATIONSHIP_JSON:\n${heartDramaContext(core, memoryBank)}
-只生成 postending Voice Drama：
+    return `${promptSafetyBoundary(context, '角色互动 / Drama：未来')}
+UNTRUSTED_HEART_RELATIONSHIP_JSON:
+${heartDramaContext(core, memoryBank)}
+只生成一个 postending Voice Drama：
 {"voiceDramas":[{"id":"VOICE_POST","kind":"postending","title":"后日谈 Voice Drama","subtitle":"未来生活长篇剧场","setting":"明确这是未来模拟","script":[{"speaker":"narrator","text":"..."},{"speaker":"char","text":"..."}]}]}
-硬性要求：恰好 1 个 kind=postending；script 至少14节点、总文本不少于900汉字；符合当前关系阶段，不能强行恋爱/婚姻；user 台词若出现仅是非正史剧本演出。只输出 JSON。`;
+要求：恰好 1 个 kind=postending；script 至少12节点、总文本不少于700汉字；符合当前关系阶段，不能强行恋爱/婚姻；user 台词若出现仅是非正史剧本演出。只输出 JSON。`;
 }
 
-function heartSeasonVoicePrompt(context, memoryBank, core) {
-    return `${promptSafetyBoundary(context, '角色互动 / 分段 2B：四季 Voice Drama')}
-UNTRUSTED_HEART_RELATIONSHIP_JSON:\n${heartDramaContext(core, memoryBank)}
-只生成 spring/summer/autumn/winter 四个 Voice Drama：
-{"voiceDramas":[{"id":"VOICE_SPRING","kind":"spring","title":"春 Voice Drama","subtitle":"...","setting":"...","script":[]}]}
-硬性要求：四季各恰好1个；每个 script 至少9节点、总文本不少于620汉字；以 {{char}} 主观感受为中心，可有 narrator 与少量模拟 user 台词；不新增历史事实。只输出 JSON。`;
+function heartSeasonPrompt(context, memoryBank, core, season) {
+    const labels = { spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
+    const label = labels[season] || season;
+    return `${promptSafetyBoundary(context, `角色互动 / Drama：${label}`)}
+UNTRUSTED_HEART_RELATIONSHIP_JSON:
+${heartDramaContext(core, memoryBank)}
+本请求只生成【${label}】这一季，包含一个 Voice Drama 和一个 Scenario Drama：
+{
+  "voiceDramas":[{"id":"VOICE_${season.toUpperCase()}","kind":"${season}","title":"${label} Voice Drama","subtitle":"...","setting":"...","script":[]}],
+  "scenarioDramas":[{"id":"SCENE_${season.toUpperCase()}","season":"${season}","title":"${label} Scenario Drama","subtitle":"普通一天里的小事件","setting":"...","script":[]}]
+}
+要求：
+- Voice script 至少7节点、总文本不少于450汉字，以 {{char}} 主观感受为中心。
+- Scenario script 至少8节点、总文本不少于550汉字，写普通一天的小事件。
+- 两者都是模拟，不新增历史事实，不给角色安排第三方恋爱。只输出 JSON。`;
 }
 
-function heartScenarioPrompt(context, memoryBank, core) {
-    return `${promptSafetyBoundary(context, '角色互动 / 分段 2C：四季 Scenario Drama')}
-UNTRUSTED_HEART_RELATIONSHIP_JSON:\n${heartDramaContext(core, memoryBank)}
-只生成 spring/summer/autumn/winter 四个 Scenario Drama：
-{"scenarioDramas":[{"id":"SCENE_SPRING","season":"spring","title":"春 Scenario Drama","subtitle":"普通一天里的小事件","setting":"...","script":[]}]}
-硬性要求：四季各恰好1个；每个 script 至少12节点、总文本不少于850汉字；写普通一天的小事件，所有内容明确是模拟，不写回历史，不给角色安排第三方恋爱。只输出 JSON。`;
+function heartStripsPrompt(context, memoryBank, core) {
+    return `${promptSafetyBoundary(context, '角色互动 / 日常一格')}
+UNTRUSTED_HEART_RELATIONSHIP_JSON:
+${heartDramaContext(core, memoryBank)}
+只生成 2～3 条轻松的日常一格，不生成时期对话、Voice Drama 或 Scenario Drama。
+{"dailyStrips":[{"id":"STRIP01","title":"标题","subtitle":"短句","panelCount":2,"panels":[{"caption":"...","action":"...","charLine":"...","userLine":"..."}],"visualSeed":["元素1","元素2","元素3"],"imagePrompt":"Q版/chibi，可见画面，no text, no speech bubble, no watermark"}]}
+要求：
+- 2～3 条即可，不要凑更多；panelCount 只能 1/2/4，panels 数量必须匹配。
+- visualSeed 至少3项；imagePrompt 只写可见画面并明确 no text / no speech bubble / no watermark。
+- userLine 只是非正史小剧场台词，不代表用户真实选择。只输出 JSON。`;
 }
 
 function normalizeVoiceDramaPart(data, expectedKinds) {
@@ -3415,75 +3461,212 @@ function normalizeVoiceDramaPart(data, expectedKinds) {
     for (const expected of expectedKinds) {
         const item = raw.find(candidate => normalizeText(candidate?.kind, 40).toLowerCase() === expected);
         if (!item) throw new Error(`Voice Drama 缺少 ${expected}。`);
+        const post = expected === 'postending';
         const script = normalizeHeartScript(item?.script, {
-            minLines: expected === 'postending' ? 14 : 9,
-            maxLines: expected === 'postending' ? 32 : 22,
-            minChars: expected === 'postending' ? 900 : 620,
+            minLines: post ? 12 : 7,
+            maxLines: post ? 30 : 20,
+            minChars: post ? 700 : 450,
         });
         if (!script.length) throw new Error(`Voice Drama ${expected} 长度不足。`);
-        out.push({ ...item, kind: expected, script });
+        out.push({
+            id: safeId(item?.id, `VOICE_${expected.toUpperCase()}`),
+            kind: expected,
+            title: normalizeText(item?.title, 120) || 'Voice Drama',
+            subtitle: normalizeText(item?.subtitle, 240),
+            setting: normalizeText(item?.setting, 1200),
+            script,
+        });
     }
     return out;
 }
 
-function normalizeScenarioDramaPart(data) {
+function normalizeScenarioDramaPart(data, expectedSeason = '') {
     const raw = Array.isArray(data?.scenarioDramas) ? data.scenarioDramas : [];
+    const seasons = expectedSeason ? [expectedSeason] : ['spring', 'summer', 'autumn', 'winter'];
     const out = [];
-    for (const expected of ['spring', 'summer', 'autumn', 'winter']) {
+    for (const expected of seasons) {
         const item = raw.find(candidate => normalizeText(candidate?.season, 40).toLowerCase() === expected);
         if (!item) throw new Error(`Scenario Drama 缺少 ${expected}。`);
-        const script = normalizeHeartScript(item?.script, { minLines: 12, maxLines: 30, minChars: 850 });
+        const script = normalizeHeartScript(item?.script, { minLines: 8, maxLines: 26, minChars: 550 });
         if (!script.length) throw new Error(`Scenario Drama ${expected} 长度不足。`);
-        out.push({ ...item, season: expected, script });
+        out.push({
+            id: safeId(item?.id, `SCENE_${expected.toUpperCase()}`),
+            season: expected,
+            title: normalizeText(item?.title, 120) || `${expected} Scenario Drama`,
+            subtitle: normalizeText(item?.subtitle, 240),
+            setting: normalizeText(item?.setting, 1200),
+            script,
+        });
     }
     return out;
+}
+
+function normalizeHeartStripsPart(data) {
+    const dailyStrips = (Array.isArray(data?.dailyStrips) ? data.dailyStrips : []).slice(0, 3).map((item, index) => {
+        const panelCountRaw = Number(item?.panelCount) || (Array.isArray(item?.panels) ? item.panels.length : 2);
+        const panelCount = HEART_STRIP_PANEL_COUNTS.has(panelCountRaw) ? panelCountRaw : 2;
+        const panels = (Array.isArray(item?.panels) ? item.panels : []).slice(0, panelCount).map(panel => ({
+            caption: normalizeText(panel?.caption, 300),
+            action: normalizeText(panel?.action, 700),
+            charLine: normalizeText(panel?.charLine, 500),
+            userLine: normalizeText(panel?.userLine, 500),
+        })).filter(panel => panel.action || panel.caption || panel.charLine || panel.userLine);
+        const visualSeed = cleanArray(item?.visualSeed, 10, 100);
+        const imagePrompt = sanitizeCgVisualText(item?.imagePrompt, MAX_CG_IMAGE_PROMPT_CHARS);
+        if (panels.length !== panelCount || visualSeed.length < 3 || !imagePrompt) return null;
+        return {
+            id: safeId(item?.id, `STRIP${String(index + 1).padStart(2, '0')}`),
+            title: normalizeText(item?.title, 100) || `日常一格 ${index + 1}`,
+            subtitle: normalizeText(item?.subtitle, 240),
+            panelCount,
+            panels,
+            visualSeed,
+            imagePrompt,
+            cgImage: normalizeCgImageRecord(item?.cgImage),
+        };
+    }).filter(Boolean);
+    if (dailyStrips.length < 2) throw new Error(`日常一格不足：${dailyStrips.length}/2。`);
+    return dailyStrips;
 }
 
 async function requestHeartPart(prompt, status, options, validator) {
-    let lastError = null;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-        try {
-            const raw = await requestJson(prompt, `${status}${attempt ? '（重试）' : ''}`, options);
-            return validateGeneratedSegment(raw, validator);
-        } catch (error) {
-            if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
-            lastError = error;
-            if (!attempt && shouldRetrySegmentRequest(error)) {
-                await waitBeforeSegmentRetry(error);
-                continue;
-            }
-            throw error;
-        }
-    }
-    throw lastError || new Error(`${status}失败。`);
+    return requestValidatedSegment(prompt, status, options, validator);
+}
+
+function makeHeartSession(core, existing = null) {
+    return {
+        kind: MODE.HEART,
+        title: core.title || existing?.title || 'HEART VOICE / 角色互动',
+        relationshipState: core.relationshipState,
+        relationshipSummary: core.relationshipSummary,
+        relationshipSourceMemoryIds: core.relationshipSourceMemoryIds,
+        relationshipSourceMemoryAnchor: core.relationshipSourceMemoryAnchor,
+        birthdayMmDd: core.birthdayMmDd || '',
+        userBirthdayMmDd: core.userBirthdayMmDd || '',
+        specialDays: Array.isArray(core.specialDays) ? core.specialDays : [],
+        greetings: core.greetings || {},
+        voiceDramas: Array.isArray(existing?.voiceDramas) ? existing.voiceDramas : [],
+        scenarioDramas: Array.isArray(existing?.scenarioDramas) ? existing.scenarioDramas : [],
+        dailyStrips: Array.isArray(existing?.dailyStrips) ? existing.dailyStrips : [],
+        selectedVoiceId: existing?.selectedVoiceId || '',
+        selectedScenarioId: existing?.selectedScenarioId || '',
+        selectedStripId: existing?.selectedStripId || '',
+        selectedSeason: existing?.selectedSeason || 'postending',
+        view: ['voice', 'scenario'].includes(existing?.view) ? 'seasons' : (existing?.view || 'greetings'),
+        generationParts: {
+            dialogues: true,
+            seasons: !!(existing?.voiceDramas?.length || existing?.scenarioDramas?.length),
+            strips: !!existing?.dailyStrips?.length,
+        },
+    };
 }
 
 async function generateHeartWithRepair(context, memoryBank, origin, taskKey) {
+    const existing = loadSession(MODE.HEART, { context, chatId: getChatId(context), memoryBank, clone: true });
     const core = await requestValidatedSegment(
         heartCorePrompt(context, memoryBank),
-        '角色互动 1/2 · 正在生成关系、问候与日常一格…',
-        { maxTokens: 7500, temperature: 0.35, context, origin, taskKey: `${taskKey}:core`, mode: MODE.HEART, background: true },
+        '角色互动 · 正在生成时期对话…',
+        { maxTokens: 6000, temperature: 0.35, context, origin, taskKey: `${taskKey}:dialogues`, mode: MODE.HEART, background: true },
         raw => normalizeHeartCore(raw, memoryBank),
     );
-    const post = await requestHeartPart(
-        heartPostVoicePrompt(context, memoryBank, core),
-        '角色互动 2/2 · 后日谈 Voice Drama',
-        { maxTokens: 5500, context, origin, taskKey: `${taskKey}:voice-post`, mode: MODE.HEART, background: true },
-        raw => normalizeVoiceDramaPart(raw, ['postending']),
-    );
-    const seasons = await requestHeartPart(
-        heartSeasonVoicePrompt(context, memoryBank, core),
-        '角色互动 2/2 · 四季 Voice Drama',
-        { maxTokens: 9000, context, origin, taskKey: `${taskKey}:voice-seasons`, mode: MODE.HEART, background: true },
-        raw => normalizeVoiceDramaPart(raw, ['spring', 'summer', 'autumn', 'winter']),
-    );
-    const scenarios = await requestHeartPart(
-        heartScenarioPrompt(context, memoryBank, core),
-        '角色互动 2/2 · 四季 Scenario Drama',
-        { maxTokens: 10000, context, origin, taskKey: `${taskKey}:scenario-seasons`, mode: MODE.HEART, background: true },
-        normalizeScenarioDramaPart,
-    );
-    return normalizeHeart({ ...core, voiceDramas: [...post, ...seasons], scenarioDramas: scenarios }, memoryBank);
+    return normalizeHeart(makeHeartSession(core, existing), memoryBank);
+}
+
+async function generateHeartSection(part) {
+    if (!activeSession || activeSession.kind !== MODE.HEART) return;
+    if (!requireWritableArchiveAction()) return;
+    const normalizedPart = ['dialogues', 'seasons', 'strips'].includes(part) ? part : '';
+    if (!normalizedPart) return;
+    const context = currentCharacterGuard();
+    const memoryBank = requireArchive(context);
+    const expectedChatId = getChatId(context);
+    const expectedArchiveRevision = memoryBank.archiveRevision;
+    const scope = chatScopeKey(context);
+    const origin = { ...captureTaskOrigin(context, expectedArchiveRevision), chatId: comparableChatId(expectedChatId) };
+    const taskKey = `heart-part:${scope}:${normalizedPart}`;
+    if (isGenerationTaskRunning(taskKey) || activeModeBuildScopes.has(taskKey)) {
+        globalThis.toastr?.info?.('这一部分已经在生成中。', '心跳回忆');
+        return;
+    }
+    if (!canStartGenerationTask(taskKey)) {
+        globalThis.toastr?.info?.(`当前已有 ${MAX_CONCURRENT_GENERATION_TASKS} 项同时生成。`, '心跳回忆');
+        return;
+    }
+    const base = structuredClone(activeSession);
+    activeModeBuildScopes.add(taskKey);
+    refreshConcurrentTaskUi(MODE.HEART, origin);
+    try {
+        let updated = base;
+        if (normalizedPart === 'dialogues') {
+            const core = await requestValidatedSegment(
+                heartCorePrompt(context, memoryBank),
+                '角色互动 · 时期对话',
+                { maxTokens: 6000, temperature: 0.35, context, origin, taskKey: `${taskKey}:dialogues`, mode: MODE.HEART, background: true },
+                raw => normalizeHeartCore(raw, memoryBank),
+            );
+            updated = makeHeartSession(core, base);
+        } else if (normalizedPart === 'strips') {
+            const strips = await requestHeartPart(
+                heartStripsPrompt(context, memoryBank, base),
+                '角色互动 · 日常一格',
+                { maxTokens: 5000, context, origin, taskKey: `${taskKey}:strips`, mode: MODE.HEART, background: true },
+                normalizeHeartStripsPart,
+            );
+            updated.dailyStrips = strips;
+            updated.selectedStripId = strips[0]?.id || '';
+            updated.generationParts = { ...(updated.generationParts || {}), strips: true };
+            updated.view = 'strips';
+        } else {
+            const post = await requestHeartPart(
+                heartPostVoicePrompt(context, memoryBank, base),
+                '角色互动 · Drama 未来',
+                { maxTokens: 5000, context, origin, taskKey: `${taskKey}:post`, mode: MODE.HEART, background: true },
+                raw => normalizeVoiceDramaPart(raw, ['postending']),
+            );
+            const voices = [...post];
+            const scenarios = [];
+            for (const season of ['spring', 'summer', 'autumn', 'winter']) {
+                const result = await requestHeartPart(
+                    heartSeasonPrompt(context, memoryBank, base, season),
+                    `角色互动 · Drama ${heartSeasonLabel(season)}`,
+                    { maxTokens: 6500, context, origin, taskKey: `${taskKey}:season:${season}`, mode: MODE.HEART, background: true },
+                    raw => ({
+                        voice: normalizeVoiceDramaPart(raw, [season])[0],
+                        scenario: normalizeScenarioDramaPart(raw, season)[0],
+                    }),
+                );
+                voices.push(result.voice);
+                scenarios.push(result.scenario);
+            }
+            updated.voiceDramas = voices;
+            updated.scenarioDramas = scenarios;
+            updated.selectedVoiceId = voices[0]?.id || '';
+            updated.selectedScenarioId = scenarios[0]?.id || '';
+            updated.generationParts = { ...(updated.generationParts || {}), seasons: true };
+            updated.view = 'seasons';
+        }
+        updated = normalizeHeart(updated, memoryBank);
+        updated.chatId = expectedChatId;
+        updated.archiveRevision = expectedArchiveRevision;
+        let committed = false;
+        if (isCurrentTaskOrigin(origin)) {
+            try {
+                const latestMemory = requireArchive(currentCharacterGuard());
+                if (latestMemory.archiveRevision === expectedArchiveRevision) committed = saveSession(MODE.HEART, updated, expectedChatId);
+            } catch {}
+        }
+        if (!committed) queueDeferredCommit(origin, { kind: 'sessions', sessions: { [MODE.HEART]: updated } });
+        if (committed && activeSession?.kind === MODE.HEART) {
+            activeSession = updated;
+            renderHeart();
+        }
+        globalThis.toastr?.success?.(`角色互动已更新：${normalizedPart === 'dialogues' ? '时期对话' : normalizedPart === 'seasons' ? '春夏秋冬 / Drama' : '日常一格'}`, '心跳回忆');
+    } catch (error) {
+        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(toastText(error?.message || String(error)), '心跳回忆');
+    } finally {
+        activeModeBuildScopes.delete(taskKey);
+        refreshConcurrentTaskUi(MODE.HEART, origin);
+    }
 }
 
 function compactPhoneRoomContext(roomSession) {
@@ -3507,9 +3690,9 @@ CURRENT_ROOM_CONTEXT_JSON:\n${JSON.stringify(compactPhoneRoomContext(roomSession
 {"title":"他的私人终端","deviceName":"设备名称","deviceKind":"phone","lockText":"...","liveStates":{"morning":{"lockText":"...","statusLine":"...","badgeCounts":{}},"daytime":{},"evening":{},"night":{}},"apps":[{"id":"MOMENTS","label":"动态","kind":"moments","summary":"...","entries":[{"id":"M01","title":"条目标题","meta":"时间/对象/分类"}]}]}
 
 数量要求：
-- phone：必须 10 类 app，kind 分别 moments/chat/gallery/notes/schedule/store/browser/contacts/location/misc；条目数至少分别 5/5/8/15/8/8/5/5/3/3（总计至少65）。
-- terminal：至少9个 app、总条目至少56，必须包含 chat/contacts/gallery/notes/schedule 等等价功能。
-- watch / communicator：至少8个功能入口、总条目至少48，必须包含通讯、相册、备忘、日历、联系人、定位与人设专属功能。
+- phone：保留 10 类 app，kind 分别 moments/chat/gallery/notes/schedule/store/browser/contacts/location/misc；条目数建议分别 3/3/4/5/4/4/3/3/2/2（总计约33），不再堆大量同质条目。
+- terminal：至少9个 app、总条目约27以上，必须包含 chat/contacts/gallery/notes/schedule 等等价功能。
+- watch / communicator：至少8个功能入口、总条目约20以上，必须包含通讯、相册、备忘、日历、联系人、定位与人设专属功能。
 - 每个 entries 现在只写 id/title/meta，标题必须彼此有生活区分，不要填 preview/detail/messages/fields/imageCaption。
 - deviceKind 只能 phone/watch/terminal/communicator；四个 liveStates 都要有。
 - 不复刻真实商业 App 商标；禁止前任/第三方恋爱。只输出 JSON。`;
@@ -3530,16 +3713,16 @@ function normalizePhonePlan(data) {
             title: normalizeText(entry?.title, 100) || `条目 ${index + 1}`,
             meta: normalizeText(entry?.meta, 200),
         })),
-    })).filter(app => app.entries.length >= 3);
+    })).filter(app => app.entries.length >= 2);
     const compact = ['watch', 'communicator'].includes(deviceKind);
     const minApps = compact ? 8 : deviceKind === 'phone' ? 10 : 9;
-    const minEntries = compact ? 48 : deviceKind === 'phone' ? 65 : 56;
+    const minEntries = compact ? 20 : deviceKind === 'phone' ? 32 : 27;
     if (apps.length < minApps) throw new Error(`私人终端目录 App 不足：${apps.length}/${minApps}。`);
     const total = apps.reduce((sum, app) => sum + app.entries.length, 0);
     if (total < minEntries) throw new Error(`私人终端目录条目不足：${total}/${minEntries}。`);
     if (!apps.some(app => app.kind === 'chat')) throw new Error('私人终端目录缺少 chat / 通讯分区。');
     if (deviceKind === 'phone') {
-        const required = { moments: 5, chat: 5, gallery: 8, notes: 15, schedule: 8, store: 8, browser: 5, contacts: 5, location: 3, misc: 3 };
+        const required = { moments: 3, chat: 3, gallery: 4, notes: 5, schedule: 4, store: 4, browser: 3, contacts: 3, location: 2, misc: 2 };
         for (const [kind, minimum] of Object.entries(required)) {
             const app = apps.find(item => item.kind === kind);
             if (!app || app.entries.length < minimum) throw new Error(`私人终端目录 ${kind} 不足：${app?.entries?.length || 0}/${minimum}。`);
@@ -3557,8 +3740,8 @@ function normalizePhonePlan(data) {
 
 function phoneAppPrompt(context, memoryBank, plan, app) {
     const compact = ['watch', 'communicator'].includes(plan.deviceKind);
-    const deepCount = compact ? 1 : plan.deviceKind === 'terminal' ? 2 : 3;
-    const deepMessages = compact ? 12 : 24;
+    const deepCount = compact ? 1 : plan.deviceKind === 'terminal' ? 1 : 2;
+    const deepMessages = compact ? 8 : plan.deviceKind === 'terminal' ? 10 : 12;
     return `${promptSafetyBoundary(context, '私人终端 / App 详情')}
 本请求只补完一个 App 的详情。设备与 App 目录都在下面的 UNTRUSTED JSON 中；当前关系与历史只能依据当前档案，不要输出其他 App。
 UNTRUSTED_PHONE_APP_ARCHIVE_JSON:\n${promptArchiveSlice(memoryBank, 24)}
@@ -3566,7 +3749,7 @@ UNTRUSTED_PHONE_DEVICE_JSON:\n${JSON.stringify({ deviceName: plan.deviceName, de
 UNTRUSTED_APP_PLAN_JSON:\n${JSON.stringify(app, null, 2)}
 
 严格输出：
-{"app":{"id":"${app.id}","label":"${app.label}","kind":"${app.kind}","summary":"...","entries":[{"id":"计划中的原 id","title":"计划中的标题","meta":"...","preview":"列表预览","detail":"详情正文","messages":[],"fields":[],"imageCaption":"","basis":"设定","sourceMemoryIds":[],"sourceMemoryAnchor":""}]}}
+{"app":{"id":"与 UNTRUSTED_APP_PLAN_JSON.id 完全相同","label":"与计划相同","kind":"与计划相同","summary":"...","entries":[{"id":"计划中的原 id","title":"计划中的标题","meta":"...","preview":"列表预览","detail":"详情正文","messages":[],"fields":[],"imageCaption":"","basis":"设定","sourceMemoryIds":[],"sourceMemoryAnchor":""}]}}
 
 硬性要求：
 - 必须补完 UNTRUSTED_APP_PLAN_JSON 中全部 ${app.entries.length} 个 entry id，不得删减或换 id；每项必须有 preview，且 detail/messages/fields/imageCaption 至少一种有实质内容。
@@ -3599,13 +3782,13 @@ function validatePhoneAppPart(data, planApp, memoryBank, deviceKind) {
             if (!reference.sourceMemoryIds.length) continue;
         }
         seen.add(id);
-        const deepThreshold = ['watch', 'communicator'].includes(deviceKind) ? 12 : 24;
+        const deepThreshold = ['watch', 'communicator'].includes(deviceKind) ? 8 : deviceKind === 'terminal' ? 10 : 12;
         if (planApp.kind === 'chat' && messages.length >= deepThreshold) deepChats += 1;
         if (planApp.kind === 'contacts' && fields.length >= 3) contactDetails = true;
     }
     if (seen.size < expectedIds.size) throw new Error(`App ${planApp.label} 详情不完整：${seen.size}/${expectedIds.size} 个条目通过校验。`);
     if (planApp.kind === 'chat') {
-        const minimum = ['watch', 'communicator'].includes(deviceKind) ? 1 : deviceKind === 'terminal' ? 2 : 3;
+        const minimum = ['watch', 'communicator'].includes(deviceKind) ? 1 : deviceKind === 'terminal' ? 1 : 2;
         if (deepChats < minimum) throw new Error(`App ${planApp.label} 深聊不足：${deepChats}/${minimum}。`);
     }
     if (planApp.kind === 'contacts' && deviceKind === 'phone' && !contactDetails) throw new Error(`App ${planApp.label} 缺少至少 1 个三字段联系人详情。`);
@@ -3627,7 +3810,7 @@ async function generatePhoneWithRepair(context, memoryBank, origin, taskKey) {
                 const raw = await requestJson(
                     phoneAppPrompt(context, memoryBank, plan, app),
                     `私人终端 2/2 · ${index + 1}/${plan.apps.length} ${app.label}${attempt ? '（重试）' : ''}…`,
-                    { maxTokens: app.kind === 'chat' ? 12000 : app.entries.length >= 12 ? 9000 : 6500, context, origin, taskKey: `${taskKey}:app:${app.id}`, mode: MODE.PHONE, background: true },
+                    { maxTokens: app.kind === 'chat' ? 8000 : app.entries.length >= 8 ? 7000 : 5000, context, origin, taskKey: `${taskKey}:app:${app.id}`, mode: MODE.PHONE, background: true },
                 );
                 return validateGeneratedSegment(raw, data => validatePhoneAppPart(data, app, memoryBank, plan.deviceKind));
             } catch (error) {
@@ -3721,136 +3904,14 @@ JSON 结构必须严格为：
 - 禁止出现 {{char}} 与除了 {{user}} 以外任何人恋爱、结婚或组建家庭；第三方只能保持非恋爱关系。
 - 只输出结构化 JSON；视觉快照、像素边框、噪点、1 秒干扰动画由插件本地渲染，不由模型输出 HTML/CSS。`,
     [MODE.ENDING]: (context, memoryBank) => endingOutlinePrompt(context, memoryBank),
-    [MODE.HEART]: (context, memoryBank) => `${promptSafetyBoundary(context, '角色互动 / Voice Drama / 四季 Scenario / 日常一格')}
-本请求生成的是【角色互动台词库与明确标注为模拟的附加剧场】，不会写回聊天档案，也不会把未来小剧场冒充成已经发生。
-当前关系语气必须由真实档案锚定；但 greetings、Voice Drama、Scenario Drama、日常一格本身都是“角色化演出/未来或日常模拟”，不是 archive evidence。
-UNTRUSTED_HEART_ARCHIVE_JSON:
-${endingArchiveSlice(memoryBank, 40)}
-
-设计方向：借鉴恋爱模拟游戏常见的“启动问候、生日/节日台词、长时间未访问反应、角色独白、四季小剧场、日常一格”结构，但不得复刻任何商业游戏的原文、专有角色、剧情或资产。
-
-严格输出：
-{
-  "title": "HEART VOICE / 角色互动",
-  "relationshipState": "当前真实档案能证明的关系阶段",
-  "relationshipSummary": "只总结已有关系事实",
-  "relationshipSourceMemoryIds": ["M001"],
-  "relationshipSourceMemoryAnchor": "真实锚点",
-  "birthdayMmDd": "MM/DD；只有角色卡/世界书明确写了角色生日时才填，否则空字符串",
-  "userBirthdayMmDd": "MM/DD；只有 USER_PERSONA_JSON / 世界设定明确写了 {{user}} 生日时才填，否则空字符串",
-  "specialDays": [
-    {"mmdd":"12/25","label":"适合当前世界设定的节日","line":"角色在这一天点开头像时说的一句特别台词"}
-  ],
-  "greetings": {
-    "morning": ["至少3条早晨问候"],
-    "noon": ["至少3条中午/白天问候"],
-    "evening": ["至少3条傍晚问候"],
-    "night": ["至少3条夜间问候"],
-    "weekend": ["至少3条周末问候"],
-    "birthday": ["至少2条角色自己生日当天的特别台词"],
-    "userBirthday": ["至少2条 {{user}} 生日当天对 {{user}} 说的祝福/特别台词"],
-    "holiday": ["至少2条通用节假日问候"],
-    "absenceWorry": ["至少2条较久没点开后的担心/想念"],
-    "absenceSulky": ["至少2条更久没点开后的闹别扭/怨气，但要符合人设"],
-    "absenceJealous": ["只有关系确实适合时才写轻度吃醋/抢注意力台词；否则可以空数组"]
-  },
-  "voiceDramas": [
-    {
-      "id":"VOICE_POST",
-      "kind":"postending",
-      "title":"后日谈 Voice Drama",
-      "subtitle":"未来生活长篇剧场",
-      "setting":"明确写这是未来剧场模拟；根据人物年龄与世界设定选择同居/婚后/长期伴侣/多年后的日常，不能强行婚姻",
-      "script":[
-        {"speaker":"narrator","text":"场景与动作"},
-        {"speaker":"char","text":"角色台词"},
-        {"speaker":"user","text":"仅作为非正史剧本演出的用户台词，不代表用户真实选择"}
-      ]
-    },
-    {"id":"VOICE_SPRING","kind":"spring","title":"春 Voice Drama","subtitle":"春日的一天","setting":"...","script":[]},
-    {"id":"VOICE_SUMMER","kind":"summer","title":"夏 Voice Drama","subtitle":"夏日的一天","setting":"...","script":[]},
-    {"id":"VOICE_AUTUMN","kind":"autumn","title":"秋 Voice Drama","subtitle":"秋日的一天","setting":"...","script":[]},
-    {"id":"VOICE_WINTER","kind":"winter","title":"冬 Voice Drama","subtitle":"冬日的一天","setting":"...","script":[]}
-  ],
-  "scenarioDramas": [
-    {"id":"SCENE_SPRING","season":"spring","title":"春 Scenario Drama","subtitle":"普通一天里的小事件","setting":"...","script":[]},
-    {"id":"SCENE_SUMMER","season":"summer","title":"夏 Scenario Drama","subtitle":"普通一天里的小事件","setting":"...","script":[]},
-    {"id":"SCENE_AUTUMN","season":"autumn","title":"秋 Scenario Drama","subtitle":"普通一天里的小事件","setting":"...","script":[]},
-    {"id":"SCENE_WINTER","season":"winter","title":"冬 Scenario Drama","subtitle":"普通一天里的小事件","setting":"...","script":[]}
-  ],
-  "dailyStrips": [
-    {
-      "id":"STRIP01",
-      "title":"日常一格标题",
-      "subtitle":"一句吐槽或小标题",
-      "panelCount":2,
-      "panels":[
-        {"caption":"第一格说明","action":"肉眼可见的动作和构图","charLine":"角色短台词","userLine":"用户短台词；仅为小剧场模拟"},
-        {"caption":"第二格说明","action":"反应/反转","charLine":"角色短台词","userLine":"用户短台词；仅为小剧场模拟"}
-      ],
-      "visualSeed":["至少3个画面元素"],
-      "imagePrompt":"给生图插件的纯视觉提示：Q版/chibi、1/2/4格漫画构图、同一角色外貌一致、无文字、无对白框、无水印"
-    }
-  ]
-}
-
-硬性要求：
-- relationshipState / relationshipSummary 必须有真实 sourceMemoryIds + sourceMemoryAnchor；只用于决定互动语气，不允许 greetings 反向成为档案事实。
-- morning/noon/evening/night/weekend 各至少 3 条；birthday/userBirthday/holiday/absenceWorry/absenceSulky 各至少 2 条。每条 15～180 个汉字，要高度符合 {{char}} 说话方式，避免通用客服口吻。
-- birthdayMmDd 只有 CHARACTER_CARD_JSON / WORLD_INFO_TEXT 明确提供角色生日时才填；userBirthdayMmDd 只有 USER_PERSONA_JSON / WORLD_INFO_TEXT 明确提供 {{user}} 生日时才填；不知道就写 ""，不要猜日期。
-- specialDays 最多 10 条，只选择当前世界/时代合理的固定 MM/DD 特别日；若设定不适合现代节日，可以少写或为空。特别日只是互动演出，不作为历史事实。
-- absenceWorry 用于约 3～6 天未点头像；absenceSulky 用于约 7 天以上；absenceJealous 只有当前关系确实允许轻度吃醋时才生成。吃醋只能表现想被注意、酸味、抢占陪伴感，不能监控、威胁、限制 {{user}} 社交。
-- voiceDramas 必须有 postending + spring + summer + autumn + winter 共 5 类。postending 至少 14 个 script 节点、总文本不少于约 900 汉字；四季 Voice Drama 各至少 9 个节点、总文本不少于约 620 汉字。
-- 四季 Voice Drama 以 {{char}} 的主观感受为中心，像“他回想/讲述某一天自己的想法”；可以有 narrator 和少量 user 台词，但重点仍是角色本人说话。
-- postending 是我们自己的“未来长篇生活剧场”：温馨、生活化、符合职业/年龄/世界设定。若当前关系尚未支持恋爱/婚姻，就写多年后的亲密伙伴/朋友/开放式未来，不得强行结婚。script 中的 user 台词始终是【非正史剧本演出】而非真实用户决定。
-- scenarioDramas 必须春夏秋冬各 1 个；每个至少 12 个 script 节点、总文本不少于约 850 汉字。写“普通一天里发生的小事件”，允许非恋爱配角以朋友/同事/家人身份出现，但绝不能给 {{char}} 安排第三方恋爱。
-- dailyStrips 至少 4 条；panelCount 只能是 1/2/4。风格要像轻松 Q 版日常漫画，有动作反差、吐槽或可爱误会；不要把沉重主线硬塞进去。
-- dailyStrips.imagePrompt 只写肉眼可见画面，并明确 no text / no speech bubble / no watermark；真正台词由插件 DOM 叠加/列出，避免生图模型把文字画坏。
-- 所有 Voice/Scenario/日常一格都是模拟，不写回 MEMORY_KEY，不得声称是聊天中已经发生的事件。
-- 只输出 JSON。`,
-    [MODE.ALBUM]: (context, memoryBank) => `${promptSafetyBoundary(context, '回忆相簿 / CG')}
-本请求只负责相簿 CG，不携带房间、手机、储物或蝴蝶效应规则。
-UNTRUSTED_CG_ARCHIVE_JSON:
-${promptArchiveSlice(memoryBank, 48)}
-
-任务：生成“回忆相簿”。结构只借鉴恋爱冒险游戏常见的回忆收集逻辑，不复刻任何具体商业游戏的文本、美术、代码或专有 UI。
-
-JSON 结构必须严格为：
-{
-  "title": "回忆相簿",
-  "entries": [
-    {
-      "id": "CG01",
-      "title": "最多12字短标题",
-      "date": "YYYY/MM/DD 或 MM/DD 或 待定",
-      "desc": "1到2句CG画面描述",
-      "category": "日常",
-      "unlocked": true,
-      "sourceMemoryIds": ["M001"],
-      "sourceMemoryAnchor": "从所引用记忆的 anchors 中原样复制一个具体锚点",
-      "visualSeed": ["元素1","元素2","元素3","元素4"],
-      "imagePrompt": "只描述这张CG里肉眼可见的角色外貌、服装、动作、场景、构图与光线；不写对白、记忆ID、设定说明、URL或不可见心理活动",
-      "comments": ["现在的 {{char}} 陪现在的 {{user}} 看这张 CG 时说的话1","现在的 {{char}} 对这张旧 CG 的当下评价2","现在的 {{char}} 对现在的 {{user}} 说的话3","当下重看后的反应4","现在才愿意说出的评价5","一起翻完这一页时的收束6"],
-      "hintLines": []
-    }
-  ]
-}
-
-硬性要求：
-- entries 至少 15 条，其中 unlocked=true 至少 12 条；这些已解锁 CG 必须来自当前聊天档案。每条 sourceMemoryAnchor 必须从所引用记忆的 anchors（或 title）中原样复制一个具体词组。
-- unlocked=false 至少 3 条，可以是角色基于当前聊天档案产生的未来期许/计划，但 sourceMemoryIds 仍至少引用 1 条作为其情感或计划依据。
-- category 只能是“日常”“约会”“结局”。
-- 每条 visualSeed 至少 4 个具体画面元素。
-- 每条 imagePrompt 只写【可见画面】并尽量把角色发型/发色/衣着/年龄感、动作、镜头、环境、时间与光线写清楚，供用户主动调用生图扩展时使用；不包含对白、记忆原文、世界书原文、sourceMemoryIds、URL、HTML 或脚本。
-- unlocked=true 的 comments 必须 6～8 段，每段约 35～120 个汉字。【它们不是 ADV、不是过去时内心独白、不是把事件重新讲一遍】；统一写成“现在的 {{char}} 正和现在的 {{user}} 一起翻相册、看着这张过去 CG 时，当面对 {{user}} 说的话”。可以用“你看这张”“那时候的你/我”“现在再看”“我当时没说”等自然口语，允许吐槽、害羞、纠正自己当年的想法、比较彼此现在和当时的变化。六段至少覆盖：看到 CG 第一眼的当下反应、一个可见细节、当年没说出口但现在愿意讲的想法、对当时 {{user}} 的评价、现在重新理解这段回忆的地方、对现在两人关系/距离的当下感受。不得替 {{user}} 生成现在的回应，不得新增档案中没有发生过的过去事实；hintLines 必须为空。
-- unlocked=false 的 comments 必须为空；hintLines 必须 1～2 句，说明如何把计划变成真实回忆。
-- 未解锁描述不能写成“???”或空白。`,
+    [MODE.HEART]: (context, memoryBank) => heartCorePrompt(context, memoryBank),
+    [MODE.ALBUM]: (context, memoryBank) => albumIndexPrompt(context, memoryBank, null),
     [MODE.ADV]: (context, memoryBank) => `${promptSafetyBoundary(context, 'CG / ADV 事件索引')}
-本请求只负责 12 条真实 CG 事件索引；长篇 ADV 正文另行生成。
+本请求只负责挑选当前档案里最值得回放的真实 CG 事件索引；长篇 ADV 正文另行生成。
 UNTRUSTED_ADV_INDEX_ARCHIVE_JSON:
 ${promptArchiveSlice(memoryBank, 48)}
 
-任务：先生成“回想：CG事件与ADV长篇回放”的 12 条事件索引。长 ADV 在用户点击后按需生成。
+任务：从当前档案挑 3～6 个最重要、最有画面感、彼此不同的真实节点。没有那么多重要节点时可以更少，禁止为了数量凑普通事件。长 ADV 在用户点击后按需生成。
 
 JSON 结构必须严格为：
 {
@@ -3870,7 +3931,7 @@ JSON 结构必须严格为：
 }
 
 硬性要求：
-- events 至少 12 条，全部是当前聊天档案中的真实共同经历；不能把未来计划混进已发生事件。
+- events 不设固定总数；本轮通常 3～6 条，只保留真正值得做成 CG / ADV 的真实共同经历，不能把未来计划混进已发生事件。
 - 每条 sourceMemoryIds 至少 1 个，只能引用当前档案中的记忆 ID；sourceMemoryAnchor 必须从所引用记忆的 anchors（或 title）中原样复制一个具体词组。
 - 每条 visualSeed 至少 4 个具体元素，且彼此要有视觉区分。
 - 每条 imagePrompt 只写【可见画面】，用于用户主动点击“绘制CG”时交给 SillyTavern 已配置的图像生成扩展；不包含聊天原文、记忆原文、世界书原文、sourceMemoryIds、URL、HTML 或脚本。
@@ -4004,15 +4065,15 @@ ${promptArchiveSlice(memoryBank, 24)}
 }
 
 现代 phone / terminal 的内容要求（watch / communicator 可按设备能力压缩，但仍需有足够生活细节）：
-1. moments / 社交动态：至少 5 条动态，包含普通朋友/同事的点赞或评论互动；与 {{user}} 的既往互动若属于共同历史，必须有档案证据。
-2. chat / 通讯：至少 5 个联系人条目；其中至少 3 个条目的 messages 必须达到 24 条以上消息（约 12 轮来回），形成真正可读的深度对话窗。说话语气必须符合人设。普通亲友/同事可以是设定推导；若把 {{user}} 写进历史聊天，必须 basis=记忆并提供有效证据。
-3. gallery / 相册：至少 8 个条目，分类要包含“{{user}}”“私密”以及符合角色生活的其他分类。相册只生成文字照片档案，使用 title / meta / preview / detail / imageCaption 写清拍摄时间、地点、人物、构图和照片背后的生活细节。
-4. notes / 备忘录：至少 15 条；其中至少 3 条与 {{user}} 有关，但不得凭空创造已经发生的共同事件；可以写当前心情、待办、想做的事，若声称既往事实必须有记忆证据。
-5. schedule / 日历：至少 8 个事件；可包含工作/学习节点、个人纪念日、已被档案证实的关系纪念日或约会，不得把未发生的秘密约会伪装成历史。
-6. store / 购物：至少 8 条，混合推荐位、购物车、订单历史/收藏，体现消费观、职业和兴趣；和 {{user}} 相关的历史订单同样受证据约束。
-7. browser / 浏览器：至少 5 条与 {{user}} 或当前关系/兴趣有关的浏览、搜索、收藏记录。可以是 {{char}} 自己当前的私人搜索意图，不得因此反推成已经共同发生的事实。
-8. contacts / 联系人：至少 5 个联系人；至少 1 个详情页通过 fields 给出“备注 / 最近通话 / 共享位置或重要提醒”等 3 项以上真实细节。联系人列表 → 详情页必须可读。
-9. location / 情侣定位或关系定位：若角色设备和关系设定允许，生成 3～6 个状态/地点/提醒条目；如果世界观或关系阶段不适合情侣定位，就改造成符合人设的安全共享位置/护送/队伍定位功能，不得强行现代化。
+1. moments / 社交动态：约 3 条动态，包含普通朋友/同事的点赞或评论互动；与 {{user}} 的既往互动若属于共同历史，必须有档案证据。
+2. chat / 通讯：约 3 个联系人条目；其中 2 个主要联系人 messages 达到约 12 条即可，形成真正可读的深度对话窗。说话语气必须符合人设。普通亲友/同事可以是设定推导；若把 {{user}} 写进历史聊天，必须 basis=记忆并提供有效证据。
+3. gallery / 相册：约 4 个条目，分类要包含“{{user}}”“私密”以及符合角色生活的其他分类。相册只生成文字照片档案，使用 title / meta / preview / detail / imageCaption 写清拍摄时间、地点、人物、构图和照片背后的生活细节。
+4. notes / 备忘录：约 5 条；其中 1～2 条可与 {{user}} 有关，但不得凭空创造已经发生的共同事件；可以写当前心情、待办、想做的事，若声称既往事实必须有记忆证据。
+5. schedule / 日历：约 4 个事件；可包含工作/学习节点、个人纪念日、已被档案证实的关系纪念日或约会，不得把未发生的秘密约会伪装成历史。
+6. store / 购物：约 4 条，混合推荐位、购物车、订单历史/收藏，体现消费观、职业和兴趣；和 {{user}} 相关的历史订单同样受证据约束。
+7. browser / 浏览器：约 3 条与 {{user}} 或当前关系/兴趣有关的浏览、搜索、收藏记录。可以是 {{char}} 自己当前的私人搜索意图，不得因此反推成已经共同发生的事实。
+8. contacts / 联系人：约 3 个联系人；至少 1 个详情页通过 fields 给出“备注 / 最近通话 / 共享位置或重要提醒”等 3 项以上真实细节。联系人列表 → 详情页必须可读。
+9. location / 情侣定位或关系定位：若角色设备和关系设定允许，生成 2～3 个状态/地点/提醒条目；如果世界观或关系阶段不适合情侣定位，就改造成符合人设的安全共享位置/护送/队伍定位功能，不得强行现代化。
 10. 至少 1 个 misc / persona app：必须明显符合 {{char}} 的职业、爱好、年龄或世界观，例如训练记录、乐谱、实验日志、任务终端、宠物、游戏、健康、学习等。
 
 结构要求：
@@ -4364,6 +4425,7 @@ function normalizeEndingConfessionReplays(rawList, memoryBank) {
         const date = normalizeText(item?.date, 80) || '待定';
         const scene = normalizeText(item?.scene, 8000);
         const confessionText = normalizeText(item?.confessionText, 4000);
+        const confessionLines = normalizeEndingConfessionLines(item?.confessionLines, confessionText);
         const responseSummary = normalizeText(item?.responseSummary, 2400);
         const afterEffect = normalizeText(item?.afterEffect, 2400);
         if (scene.length < 140 || confessionText.length < 50) return null;
@@ -4380,6 +4442,7 @@ function normalizeEndingConfessionReplays(rawList, memoryBank) {
             sourceMemoryAnchor: reference.sourceMemoryAnchor,
             scene,
             confessionText,
+            confessionLines,
             responseSummary,
             afterEffect,
         };
@@ -4432,7 +4495,6 @@ ${relationshipSummary}`,
         if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) return null;
         if (available) {
             if (endingScene.length < 320) throw new Error(`已解锁结局“${title}”的终章场景不足 320 字。`);
-            if (confession.length < 140) throw new Error(`已解锁结局“${title}”的角色终章发言不足 140 字。`);
             if (epilogueScenes.length < 3) throw new Error(`已解锁结局“${title}”的后日谈不足 3 段。`);
         } else if (!unlockHint) {
             throw new Error(`未解锁结局“${title}”缺少解锁提示。`);
@@ -4517,10 +4579,10 @@ function normalizeHeart(data, memoryBank) {
         greetings[key] = cleanArray(data?.greetings?.[key], 8, 600);
     }
     for (const key of ['morning', 'noon', 'evening', 'night', 'weekend']) {
-        if (greetings[key].length < 3) throw new Error(`角色互动“${key}”台词不足 3 条。`);
+        if (greetings[key].length < 2) throw new Error(`角色互动“${key}”台词不足 2 条。`);
     }
     for (const key of ['birthday', 'userBirthday', 'holiday', 'absenceWorry', 'absenceSulky']) {
-        if (greetings[key].length < 2) throw new Error(`角色互动“${key}”台词不足 2 条。`);
+        if (greetings[key].length < 1) throw new Error(`角色互动“${key}”台词不足 1 条。`);
     }
 
     const birthdayRaw = normalizeText(data?.birthdayMmDd, 20);
@@ -4540,9 +4602,9 @@ function normalizeHeart(data, memoryBank) {
         const kind = HEART_VOICE_KINDS.has(kindRaw) ? kindRaw : '';
         if (!kind) return null;
         const script = normalizeHeartScript(item?.script, {
-            minLines: kind === 'postending' ? 14 : 9,
-            maxLines: kind === 'postending' ? 32 : 22,
-            minChars: kind === 'postending' ? 900 : 620,
+            minLines: kind === 'postending' ? 12 : 7,
+            maxLines: kind === 'postending' ? 30 : 20,
+            minChars: kind === 'postending' ? 700 : 450,
         });
         if (!script.length) return null;
         return {
@@ -4554,15 +4616,11 @@ function normalizeHeart(data, memoryBank) {
             script,
         };
     }).filter(Boolean);
-    for (const required of ['postending', 'spring', 'summer', 'autumn', 'winter']) {
-        if (!voiceDramas.some(item => item.kind === required)) throw new Error(`Voice Drama 缺少 ${required}。`);
-    }
-
     const scenarioDramas = (Array.isArray(data?.scenarioDramas) ? data.scenarioDramas : []).slice(0, 6).map((item, index) => {
         const seasonRaw = normalizeText(item?.season, 40).toLowerCase();
         const season = HEART_SCENARIO_SEASONS.has(seasonRaw) ? seasonRaw : '';
         if (!season) return null;
-        const script = normalizeHeartScript(item?.script, { minLines: 12, maxLines: 30, minChars: 850 });
+        const script = normalizeHeartScript(item?.script, { minLines: 8, maxLines: 26, minChars: 550 });
         if (!script.length) return null;
         return {
             id: safeId(item?.id, `SCENE${String(index + 1).padStart(2, '0')}`),
@@ -4573,11 +4631,7 @@ function normalizeHeart(data, memoryBank) {
             script,
         };
     }).filter(Boolean);
-    for (const required of ['spring', 'summer', 'autumn', 'winter']) {
-        if (!scenarioDramas.some(item => item.season === required)) throw new Error(`Scenario Drama 缺少 ${required}。`);
-    }
-
-    const dailyStrips = (Array.isArray(data?.dailyStrips) ? data.dailyStrips : []).slice(0, 8).map((item, index) => {
+    const dailyStrips = (Array.isArray(data?.dailyStrips) ? data.dailyStrips : []).slice(0, 3).map((item, index) => {
         const panelCountRaw = Number(item?.panelCount) || (Array.isArray(item?.panels) ? item.panels.length : 2);
         const panelCount = HEART_STRIP_PANEL_COUNTS.has(panelCountRaw) ? panelCountRaw : 2;
         const panels = (Array.isArray(item?.panels) ? item.panels : []).slice(0, panelCount).map((panel, panelIndex) => ({
@@ -4601,8 +4655,6 @@ function normalizeHeart(data, memoryBank) {
             cgImage: normalizeCgImageRecord(item?.cgImage),
         };
     }).filter(Boolean);
-    if (dailyStrips.length < 4) throw new Error(`日常一格不足：得到 ${dailyStrips.length} 条，至少需要 4 条。`);
-
     return {
         kind: MODE.HEART,
         title: normalizeText(data?.title, 120) || 'HEART VOICE / 角色互动',
@@ -4617,10 +4669,16 @@ function normalizeHeart(data, memoryBank) {
         voiceDramas,
         scenarioDramas,
         dailyStrips,
-        selectedVoiceId: voiceDramas[0]?.id || '',
-        selectedScenarioId: scenarioDramas[0]?.id || '',
-        selectedStripId: dailyStrips[0]?.id || '',
-        view: 'greetings',
+        selectedVoiceId: normalizeText(data?.selectedVoiceId, 80) || voiceDramas[0]?.id || '',
+        selectedScenarioId: normalizeText(data?.selectedScenarioId, 80) || scenarioDramas[0]?.id || '',
+        selectedStripId: normalizeText(data?.selectedStripId, 80) || dailyStrips[0]?.id || '',
+        generationParts: {
+            dialogues: data?.generationParts?.dialogues !== false && !!Object.values(greetings).some(lines => lines.length),
+            seasons: data?.generationParts?.seasons === true || voiceDramas.length > 0 || scenarioDramas.length > 0,
+            strips: data?.generationParts?.strips === true || dailyStrips.length > 0,
+        },
+        selectedSeason: ['postending', 'spring', 'summer', 'autumn', 'winter'].includes(data?.selectedSeason) ? data.selectedSeason : 'postending',
+        view: ['greetings', 'seasons', 'strips'].includes(data?.view) ? data.view : (['voice', 'scenario'].includes(data?.view) ? 'seasons' : 'greetings'),
     };
 }
 
@@ -4649,19 +4707,18 @@ ${hintLines.join('；')}`, memoryBank, 1);
             sourceMemoryAnchor: reference.sourceMemoryAnchor,
             visualSeed: visualSeed.length >= 4 ? visualSeed : [...visualSeed, '光影', '人物', '环境', '物件'].slice(0, 4),
             imagePrompt: normalizeText(item?.imagePrompt, MAX_CG_IMAGE_PROMPT_CHARS),
-            cgImage: null,
+            cgImage: normalizeCgImageRecord(item?.cgImage),
             comments,
             hintLines,
         };
     }).filter(item => item.desc && item.sourceMemoryIds.length >= 1);
     const unlockedCount = entries.filter(x => x.unlocked).length;
-    const lockedCount = entries.length - unlockedCount;
-    if (entries.length < 15 || unlockedCount < 12 || lockedCount < 3) {
-        throw new Error(`相簿数量不足：共 ${entries.length}，已解锁 ${unlockedCount}，未解锁 ${lockedCount}。要求至少 15 / 12 / 3。`);
+    if (!entries.length || unlockedCount < 1) {
+        throw new Error('相簿至少需要 1 个有真实证据的已解锁重要节点。');
     }
     for (const item of entries) {
-        if (item.unlocked && item.comments.length < 6) {
-            throw new Error(`已解锁条目“${item.title}”的共同回忆回想不足 6 段。`);
+        if (item.unlocked && item.comments.length < 4) {
+            throw new Error(`已解锁条目“${item.title}”的共同回忆不足 4 段。`);
         }
         if (!item.unlocked && item.hintLines.length < 1) {
             throw new Error(`未解锁条目“${item.title}”缺少解锁提示。`);
@@ -4684,7 +4741,7 @@ ${hintLines.join('；')}`, memoryBank, 1);
 function deriveAdvFromAlbum(albumSession) {
     const unlocked = Array.isArray(albumSession?.entries) ? albumSession.entries.filter(item => item.unlocked) : [];
     const source = unlocked.slice(0, 24);
-    if (source.length < 12) throw new Error(`可用于 CG/ADV 的已解锁相簿事件不足：${source.length} 条。`);
+    if (!source.length) throw new Error('回忆相簿还没有可用于 CG/ADV 的已解锁重要节点。');
     const events = source.map((item, index) => ({
         id: safeId(`EV_${item.id}`, `EV${String(index + 1).padStart(2, '0')}`),
         title: normalizeText(item.title, 80) || `事件 ${index + 1}`,
@@ -4712,7 +4769,7 @@ function normalizeEventList(data, memoryBank, { allowPartial = false } = {}) {
     const events = raw.slice(0, 24)
         .map((item, index) => normalizeEventCandidate(item, index, memoryBank))
         .filter(Boolean);
-    if (!allowPartial && events.length < 12) throw new Error(`CG事件不足：得到 ${events.length} 条，至少需要 12 条。`);
+    if (!allowPartial && !events.length) throw new Error('没有生成任何可验证的 CG / ADV 重要事件。');
     return {
         kind: MODE.ADV,
         title: normalizeText(data?.title, 120) || '回想：CG事件与ADV长篇回放',
@@ -4925,16 +4982,16 @@ function normalizePhone(data, memoryBank) {
             summary: normalizeText(app?.summary, 1200),
             entries,
         };
-    }).filter(app => app.entries.length >= 3);
+    }).filter(app => app.entries.length >= 2);
 
     const compactDevice = ['watch', 'communicator'].includes(deviceKind);
     const minApps = compactDevice ? 8 : (deviceKind === 'phone' ? 10 : 9);
     if (apps.length < minApps) throw new Error(`“他的私人终端”分区不足：得到 ${apps.length} 个，当前设备至少需要 ${minApps} 个。`);
     const totalEntries = apps.reduce((sum, app) => sum + app.entries.length, 0);
-    const minEntries = compactDevice ? 48 : (deviceKind === 'phone' ? 65 : 56);
+    const minEntries = compactDevice ? 20 : (deviceKind === 'phone' ? 32 : 27);
     if (totalEntries < minEntries) throw new Error(`“他的私人终端”内容过少：只有 ${totalEntries} 个可读条目，至少需要 ${minEntries} 个。`);
     if (deviceKind === 'phone') {
-        const required = { moments: 5, chat: 5, gallery: 8, notes: 15, schedule: 8, store: 8, browser: 5, contacts: 5, location: 3, misc: 3 };
+        const required = { moments: 3, chat: 3, gallery: 4, notes: 5, schedule: 4, store: 4, browser: 3, contacts: 3, location: 2, misc: 2 };
         const countByKind = Object.create(null);
         for (const app of apps) countByKind[app.kind] = Math.max(Number(countByKind[app.kind]) || 0, app.entries.length);
         const missing = Object.entries(required).filter(([kind, minimum]) => (Number(countByKind[kind]) || 0) < minimum);
@@ -4945,9 +5002,9 @@ function normalizePhone(data, memoryBank) {
         const contactDetails = apps.filter(app => app.kind === 'contacts').flatMap(app => app.entries).some(entry => entry.fields.length >= 3);
         if (!contactDetails) throw new Error('“他的私人终端”联系人详情不足：至少 1 个联系人需要 3 项以上备注 / 最近通话 / 位置或提醒字段。');
     }
-    const deepChatMessageMinimum = compactDevice ? 12 : 24;
+    const deepChatMessageMinimum = compactDevice ? 8 : (deviceKind === 'terminal' ? 10 : 12);
     const deepChats = apps.filter(app => app.kind === 'chat').flatMap(app => app.entries).filter(entry => entry.messages.length >= deepChatMessageMinimum).length;
-    const minDeepChats = compactDevice ? 1 : (deviceKind === 'terminal' ? 2 : 3);
+    const minDeepChats = compactDevice ? 1 : (deviceKind === 'terminal' ? 1 : 2);
     if (deepChats < minDeepChats) {
         throw new Error(`“他的私人终端”深度对话不足：只有 ${deepChats} 个达到 ${deepChatMessageMinimum} 条消息以上的对话窗，当前设备至少需要 ${minDeepChats} 个。`);
     }
@@ -4992,6 +5049,140 @@ function normalizeAdv(data) {
     return { paragraphs };
 }
 
+
+function compactAchievementsExisting(session) {
+    return (Array.isArray(session?.entries) ? session.entries : []).slice(0, 36).map(item => ({
+        id: normalizeText(item?.id, 50),
+        title: normalizeText(item?.title, 100),
+        category: normalizeText(item?.category, 60),
+        tier: normalizeText(item?.tier, 20),
+        unlocked: !!item?.unlocked,
+        unlockedAt: normalizeText(item?.unlockedAt, 40),
+        sourceMemoryIds: cleanArray(item?.sourceMemoryIds, 8, 40),
+        sourceMemoryAnchor: normalizeText(item?.sourceMemoryAnchor, 160),
+    }));
+}
+
+function achievementsPrompt(context, memoryBank, previousSession = null) {
+    return `${promptSafetyBoundary(context, '档案室 / 成就库')}
+本请求只负责从当前档案中整理“像 Steam 成就库一样”的关系与共同经历里程碑。它是派生展示，不写回聊天档案。
+UNTRUSTED_ACHIEVEMENT_ARCHIVE_JSON:
+${promptArchiveSlice(memoryBank, 48)}
+EXISTING_ACHIEVEMENTS_JSON:
+${JSON.stringify(compactAchievementsExisting(previousSession), null, 2)}
+
+严格输出：
+{
+  "title":"成就库",
+  "entries":[{
+    "id":"ACH01",
+    "title":"成就名",
+    "description":"一两句说明",
+    "category":"关系 / 日常 / 事件 / 特别",
+    "tier":"bronze",
+    "unlocked":true,
+    "unlockedAt":"YYYY/MM/DD、MM/DD 或 已解锁",
+    "sourceMemoryIds":["M001"],
+    "sourceMemoryAnchor":"真实档案锚点",
+    "hint":"未解锁时才给简短提示"
+  }]
+}
+
+要求：
+- 不设固定数量。优先整理真正值得纪念的已发生里程碑，并可加入少量自然的未解锁目标；不要为了填满页面制造普通事件。
+- 已解锁成就必须能由当前档案直接证明，必须提供有效 sourceMemoryIds + sourceMemoryAnchor；不得把未来推演、模拟剧场或设定推导当成已解锁。
+- 未解锁成就只能表示“可能在未来达到的目标/关系节点”，不能写成已经发生；sourceMemoryIds/sourceMemoryAnchor 可以为空，hint 只给方向，不剧透具体未来事实。
+- EXISTING_ACHIEVEMENTS_JSON 是不可信旧缓存索引，只用于避免重复和保留已解锁历史；不得把它本身当成证据。
+- tier 只能是 bronze / silver / gold / hidden。hidden 适合需要隐藏名称感的特殊目标，但 title 仍需提供给本地 UI。
+- 本轮通常 4～8 项即可；档案很短时可以更少。只输出 JSON。`;
+}
+
+function normalizeAchievements(data, memoryBank) {
+    const allowedTiers = new Set(['bronze', 'silver', 'gold', 'hidden']);
+    const raw = Array.isArray(data?.entries) ? data.entries : [];
+    const entries = raw.slice(0, 36).map((item, index) => {
+        const title = normalizeText(item?.title, 100);
+        const description = normalizeText(item?.description, 900);
+        const unlocked = item?.unlocked === true;
+        if (!title || !description) return null;
+        let sourceMemoryIds = [];
+        let sourceMemoryAnchor = '';
+        if (unlocked) {
+            const reference = normalizeMemoryReference(
+                item?.sourceMemoryIds,
+                item?.sourceMemoryAnchor,
+                `${title}\n${description}`,
+                memoryBank,
+                1,
+            );
+            sourceMemoryIds = reference.sourceMemoryIds;
+            sourceMemoryAnchor = reference.sourceMemoryAnchor;
+        }
+        const tierRaw = normalizeText(item?.tier, 20).toLowerCase();
+        return {
+            id: safeId(item?.id, `ACH${String(index + 1).padStart(2, '0')}`),
+            title,
+            description,
+            category: normalizeText(item?.category, 60) || '特别',
+            tier: allowedTiers.has(tierRaw) ? tierRaw : 'bronze',
+            unlocked,
+            unlockedAt: unlocked ? (normalizeText(item?.unlockedAt, 40) || '已解锁') : '',
+            sourceMemoryIds,
+            sourceMemoryAnchor,
+            hint: unlocked ? '' : (normalizeText(item?.hint, 500) || '继续积累新的重要回忆。'),
+        };
+    }).filter(Boolean);
+    if (!entries.length) throw new Error('成就库没有生成可用条目。');
+    return {
+        kind: MODE.ACHIEVEMENTS,
+        title: normalizeText(data?.title, 100) || '成就库',
+        entries,
+    };
+}
+
+function achievementMergeKey(item) {
+    const title = normalizeText(item?.title, 100).trim().toLowerCase();
+    return title || `${cleanArray(item?.sourceMemoryIds, 8, 40).sort().join(',')}|${normalizeText(item?.sourceMemoryAnchor, 160).toLowerCase()}`;
+}
+
+function mergeAchievementsIncremental(previous, fresh, memoryBank) {
+    if (!previous?.entries?.length) return fresh;
+    const merged = previous.entries.map(item => structuredClone(item));
+    const indexByKey = new Map(merged.map((item, index) => [achievementMergeKey(item), index]));
+    for (const item of fresh.entries || []) {
+        const key = achievementMergeKey(item);
+        const existingIndex = indexByKey.get(key);
+        if (existingIndex === undefined) {
+            indexByKey.set(key, merged.length);
+            merged.push(structuredClone(item));
+            continue;
+        }
+        const old = merged[existingIndex];
+        if (old.unlocked && !item.unlocked) continue;
+        merged[existingIndex] = { ...item, id: old.id || item.id };
+    }
+    const seenIds = new Set();
+    let serial = 1;
+    const dedupedIds = merged.slice(-36).map(item => {
+        let id = safeId(item?.id, '');
+        while (!id || seenIds.has(id)) id = `ACH${String(serial++).padStart(2, '0')}`;
+        seenIds.add(id);
+        return { ...item, id };
+    });
+    return normalizeAchievements({ title: fresh.title || previous.title || '成就库', entries: dedupedIds }, memoryBank);
+}
+
+async function generateAchievementsWithRepair(context, memoryBank, origin, taskKey) {
+    const previous = loadSession(MODE.ACHIEVEMENTS, { context, chatId: getChatId(context), memoryBank, clone: true });
+    const fresh = await requestValidatedSegment(
+        achievementsPrompt(context, memoryBank, previous),
+        '成就库 · 正在整理已解锁与未解锁里程碑…',
+        { maxTokens: 6000, temperature: 0.4, context, origin, taskKey: `${taskKey}:achievements`, mode: MODE.ACHIEVEMENTS, background: true },
+        raw => normalizeAchievements(raw, memoryBank),
+    );
+    return mergeAchievementsIncremental(previous, fresh, memoryBank);
+}
+
 function normalizeByMode(mode, data, memoryBank, context = null) {
     if (mode === MODE.BUTTERFLY) return normalizeButterfly(data, memoryBank);
     if (mode === MODE.ALBUM) return normalizeAlbum(data, memoryBank);
@@ -5001,6 +5192,7 @@ function normalizeByMode(mode, data, memoryBank, context = null) {
     if (mode === MODE.PHONE) return normalizePhone(data, memoryBank);
     if (mode === MODE.ENDING) return normalizeEnding(data, memoryBank);
     if (mode === MODE.HEART) return normalizeHeart(data, memoryBank);
+    if (mode === MODE.ACHIEVEMENTS) return normalizeAchievements(data, memoryBank);
     throw new Error('未知心跳回忆模式。');
 }
 
@@ -5336,7 +5528,8 @@ function loadSession(mode, options = {}) {
         if (mode === MODE.ITEMS && (!Array.isArray(session.containers) || session.containers.length < 1)) return null;
         if (mode === MODE.PHONE && (!Array.isArray(session.apps) || session.apps.length < 5)) return null;
         if (mode === MODE.ENDING && (!Array.isArray(session.endings) || session.endings.length < 5)) return null;
-        if (mode === MODE.HEART && (!session.greetings || !Array.isArray(session.voiceDramas) || session.voiceDramas.length < 5 || !Array.isArray(session.dailyStrips) || session.dailyStrips.length < 4)) return null;
+        if (mode === MODE.HEART && (!session.greetings || !session.relationshipSourceMemoryAnchor)) return null;
+        if (mode === MODE.ACHIEVEMENTS && (!Array.isArray(session.entries) || session.entries.length < 1)) return null;
         return options.clone === false ? session : structuredClone(session);
     } catch {
         return null;
@@ -5774,67 +5967,99 @@ ${error.message}` : ''}`);
     }
 }
 
-async function generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey) {
-    let events = [];
-    try {
-        const raw = await requestJson(
-            PROMPTS[MODE.ADV](context, memoryBank),
-            '正在一次请求生成全部 CG 事件索引…',
-            { maxTokens: MODE_TOKEN_CAPS[MODE.ADV], context, origin, taskKey, mode: MODE.ADV, background: true },
-        );
-        events = normalizeEventList(raw, memoryBank, { allowPartial: true }).events;
-    } catch (error) {
-        if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
-        console.warn('[HeartbeatMemories] bulk CG index request failed; falling back to individual repair', error);
-    }
+function compactAdvExisting(session) {
+    return (Array.isArray(session?.events) ? session.events : []).slice(0, 36).map(item => ({
+        id: normalizeText(item?.id, 40),
+        title: normalizeText(item?.title, 80),
+        date: normalizeText(item?.date, 40),
+        sourceMemoryIds: cleanArray(item?.sourceMemoryIds, 8, 40),
+        sourceMemoryAnchor: normalizeText(item?.sourceMemoryAnchor, 120),
+    }));
+}
 
-    const unique = [];
-    const seen = new Set();
-    for (const event of events) {
-        const key = `${normalizeText(event.title, 80).toLowerCase()}|${normalizeText(event.sourceMemoryAnchor, 120).toLowerCase()}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        unique.push(event);
-    }
-    events = unique;
+function advImportantIndexPrompt(context, memoryBank, previousSession = null) {
+    return `${promptSafetyBoundary(context, 'CG / ADV 重要事件索引')}
+本请求只挑当前档案里【真正值得做成 CG / ADV 回放】的重要节点。以后档案更新时会继续累积，不要为了固定数量凑普通事件。
+UNTRUSTED_ADV_INDEX_ARCHIVE_JSON:
+${promptArchiveSlice(memoryBank, 48)}
+EXISTING_ADV_INDEX_JSON:
+${JSON.stringify(compactAdvExisting(previousSession), null, 2)}
 
-    let attempt = 0;
-    while (events.length < 12 && attempt < 18) {
-        attempt += 1;
-        const ordinal = events.length + 1;
-        try {
-            const raw = await requestJson(
-                advIndexRepairPrompt(context, memoryBank, events, ordinal),
-                `CG 批量结果缺 ${12 - events.length} 条，正在单独补第 ${ordinal} 条…`,
-                {
-                    maxTokens: 2048,
-                    context,
-                    origin,
-                    taskKey: `adv-index-repair:${chatScopeKey(context)}:${attempt}`,
-                    mode: MODE.ADV,
-                    background: true,
-                },
-            );
-            const candidate = normalizeEventCandidate(raw?.event || raw?.events?.[0], ordinal - 1, memoryBank);
-            if (!candidate) continue;
-            const key = `${normalizeText(candidate.title, 80).toLowerCase()}|${normalizeText(candidate.sourceMemoryAnchor, 120).toLowerCase()}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            events.push(candidate);
-        } catch (error) {
-            if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
-            console.warn('[HeartbeatMemories] single CG index repair failed', { attempt, error });
+严格输出：
+{"title":"回想：CG事件与ADV长篇回放","events":[{"id":"EV01","title":"短标题","date":"YYYY/MM/DD 或 MM/DD","cgDesc":"1到2句镜头语言+画面元素","sourceMemoryIds":["M001"],"sourceMemoryAnchor":"从所引用记忆 anchors/title 原样复制","visualSeed":["元素1","元素2","元素3","元素4"],"imagePrompt":"纯视觉提示"}]}
+
+要求：
+- 本轮优先 3～6 个最重要、最有画面感、彼此明显不同的真实共同经历；档案不足时可以更少，禁止凑数。
+- 优先挑 EXISTING_ADV_INDEX_JSON 尚未覆盖的新重要节点；没有新节点时可返回仍最重要的旧节点。
+- 每条必须有真实 sourceMemoryIds + sourceMemoryAnchor；visualSeed 至少 4 个具体元素。
+- imagePrompt 只写可见画面，不包含对白、记忆/世界书原文、ID、URL、HTML 或脚本。
+- 不要输出 adv 正文。只输出 JSON。`;
+}
+
+function advEvidenceKey(item) {
+    const ids = cleanArray(item?.sourceMemoryIds, 8, 40).sort().join(',');
+    return `${ids}|${normalizeText(item?.sourceMemoryAnchor, 120).toLowerCase()}`;
+}
+
+function mergeAdvIncremental(previous, fresh, memoryBank) {
+    if (!previous?.events?.length) return fresh;
+    const merged = previous.events.map(item => structuredClone(item));
+    const indexByKey = new Map(merged.map((item, index) => [advEvidenceKey(item), index]));
+    const usedIds = new Set(merged.map(item => item.id));
+    let nextNumber = merged.length + 1;
+    for (const item of fresh.events || []) {
+        const key = advEvidenceKey(item);
+        const existingIndex = indexByKey.get(key);
+        if (existingIndex !== undefined) {
+            const old = merged[existingIndex];
+            merged[existingIndex] = {
+                ...item,
+                id: old.id,
+                cgImage: normalizeCgImageRecord(old.cgImage) || normalizeCgImageRecord(item.cgImage),
+                adv: old.adv || item.adv || null,
+            };
+            continue;
         }
+        let id = safeId(item.id, '');
+        while (!id || usedIds.has(id)) id = `EV${String(nextNumber++).padStart(2, '0')}`;
+        usedIds.add(id);
+        indexByKey.set(key, merged.length);
+        merged.push({ ...item, id });
     }
-    if (events.length < 12) throw new Error(`CG 批量生成并逐条补齐后仍只有 ${events.length} 条有效事件，至少需要 12 条。`);
+    const validated = merged.slice(-36).map((item, index) => {
+        try {
+            const normalized = normalizeEventCandidate(item, index, memoryBank);
+            if (!normalized) return null;
+            return {
+                ...normalized,
+                id: safeId(item?.id, normalized.id),
+                cgImage: normalizeCgImageRecord(item?.cgImage),
+                adv: item?.adv?.paragraphs?.length ? normalizeAdv(item.adv) : null,
+            };
+        } catch {
+            return null;
+        }
+    }).filter(Boolean);
+    if (!validated.length) throw new Error('增量 CG / ADV 合并后没有仍能由当前档案验证的事件。');
     return {
         kind: MODE.ADV,
-        title: '回想：CG事件与ADV长篇回放',
-        events: events.slice(0, 24),
-        selectedId: events[0]?.id || '',
+        title: fresh.title || previous.title || '回想：CG事件与ADV长篇回放',
+        events: validated,
+        selectedId: validated[0]?.id || '',
         view: 'cg',
         paragraphIndex: 0,
     };
+}
+
+async function generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey) {
+    const previous = loadSession(MODE.ADV, { context, chatId: expectedChatId, memoryBank, clone: true });
+    const fresh = await requestValidatedSegment(
+        advImportantIndexPrompt(context, memoryBank, previous),
+        'CG / ADV · 正在挑选重要节点…',
+        { maxTokens: 5500, temperature: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: MODE.ADV, background: true },
+        raw => normalizeEventList(raw, memoryBank),
+    );
+    return mergeAdvIncremental(previous, fresh, memoryBank);
 }
 
 async function generateMode(mode, options = {}) {
@@ -5844,8 +6069,8 @@ async function generateMode(mode, options = {}) {
     const memoryBank = requireArchive(context);
     const expectedArchiveRevision = memoryBank.archiveRevision;
     const promptFactory = PROMPTS[mode];
-    if (!promptFactory) return;
-    const segmentedMode = [MODE.ENDING, MODE.ALBUM, MODE.HEART, MODE.PHONE].includes(mode);
+    if (!promptFactory && mode !== MODE.ACHIEVEMENTS) return;
+    const segmentedMode = [MODE.ENDING, MODE.ALBUM, MODE.HEART, MODE.PHONE, MODE.ACHIEVEMENTS].includes(mode);
     let generationPrompt = segmentedMode ? '' : promptFactory(context, memoryBank);
     if (ROOM_DEEP_MODES.includes(mode)) {
         const roomSession = options.roomSessionOverride
@@ -5901,6 +6126,8 @@ async function generateMode(mode, options = {}) {
             session = await generateHeartWithRepair(context, memoryBank, origin, taskKey);
         } else if (mode === MODE.PHONE) {
             session = await generatePhoneWithRepair(context, memoryBank, origin, taskKey);
+        } else if (mode === MODE.ACHIEVEMENTS) {
+            session = await generateAchievementsWithRepair(context, memoryBank, origin, taskKey);
         } else {
             const raw = await requestJson(
                 generationPrompt,
@@ -5969,25 +6196,29 @@ async function generateAllAdvForSession() {
     if (!canStartGenerationTask(bulkTaskKey)) return showInlineError(`当前已有 ${MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请稍后再试。`);
 
     const session = activeSession;
-    const pending = session.events.filter(event => !event.adv?.paragraphs?.length);
-    if (!pending.length) {
+    const allPending = session.events.filter(event => !event.adv?.paragraphs?.length);
+    if (!allPending.length) {
         session.advBulkRecovery = null;
         globalThis.toastr?.info?.('全部 ADV 都已经生成完成。', '心跳回忆');
         return;
     }
+    const retryIds = new Set(cleanArray(session.advBulkRecovery?.failedIds, 64, 100));
+    const recoveryPending = retryIds.size ? allPending.filter(event => retryIds.has(event.id)) : [];
+    if (retryIds.size && !recoveryPending.length) session.advBulkRecovery = null;
+    const pending = (recoveryPending.length ? recoveryPending : allPending).slice(0, ADV_BULK_BATCH_SIZE);
     const memoryBank = requireArchive(context);
     const expectedChatId = getChatId(context);
     const expectedArchiveRevision = memoryBank.archiveRevision;
     const origin = { ...captureTaskOrigin(context, expectedArchiveRevision), chatId: comparableChatId(expectedChatId) };
     activeAdvBulkScopes.add(scope);
-    setInnerLoading(true, `一次请求生成 ${pending.length} 篇未完成 ADV…`);
+    setInnerLoading(true, `本批生成 ${pending.length} 篇 ADV…`);
     let batchCount = 0;
     let batchError = '';
     try {
         try {
             const raw = await requestJson(
                 advBatchPrompt(context, pending, memoryBank),
-                `正在一次请求生成 ${pending.length} 篇 ADV…`,
+                `正在生成本批 ${pending.length} 篇 ADV…`,
                 {
                     maxTokens: MAX_GENERATION_OUTPUT_TOKENS,
                     context,
@@ -6029,13 +6260,12 @@ async function generateAllAdvForSession() {
         const completed = session.events.filter(event => event.adv?.paragraphs?.length).length;
         const failed = session.events.length - completed;
         if (isCurrentTaskOrigin(origin) && activeSession === session && !document.getElementById(OVERLAY_ID)?.hidden) renderAdvMode();
-        if (failed) {
-            globalThis.toastr?.warning?.(
-                `一键 ADV 完成 ${batchCount} 篇，仍有 ${failed} 篇未完成。已停止自动逐条请求，请在页面选择“再次一键生成失败项（1 次请求）”或“逐个补完失败项（最多 ${failed} 次请求）”。`,
-                '心跳回忆',
-            );
+        if (failedAfterBatch.length) {
+            globalThis.toastr?.warning?.(`本批完成 ${batchCount}/${pending.length} 篇；${failedAfterBatch.length} 篇需要重试。`, '心跳回忆');
+        } else if (failed) {
+            globalThis.toastr?.success?.(`本批完成 ${batchCount} 篇；还有 ${failed} 篇未生成，可继续生成下一批。`, '心跳回忆');
         } else {
-            globalThis.toastr?.success?.(`一键 ADV 已完成：${completed}/${session.events.length}。`, '心跳回忆');
+            globalThis.toastr?.success?.(`ADV 已完成：${completed}/${session.events.length}。`, '心跳回忆');
         }
     } catch (error) {
         if (error?.name !== 'AbortError') {
@@ -6748,12 +6978,13 @@ dialog#${OVERLAY_ID}::backdrop{background:transparent}
 .rmt-avatar-talk-mark{position:absolute;right:-3px;bottom:-2px;width:21px;height:21px;display:grid;place-items:center;border-radius:50%;background:#fff7fa;border:1px solid #e6b1c5;color:#a86580;font-size:9px;box-shadow:0 2px 7px rgba(72,90,105,.16)}
 .rmt-character-heart-head{display:flex;align-items:center;gap:13px}.rmt-character-heart-avatar{position:relative;width:72px;height:72px;flex:0 0 72px;border:3px solid #fff;border-radius:50%;padding:0;background:linear-gradient(145deg,#f8c8da,#cfe8f2);box-shadow:0 0 0 1px #cadde6,0 8px 20px rgba(64,85,101,.12);overflow:visible;cursor:pointer;color:#63778c}.rmt-character-heart-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}.rmt-character-heart-avatar:hover{transform:translateY(-1px)}.rmt-character-heart-avatar>span{position:absolute;right:-4px;bottom:-3px;width:24px;height:24px;display:grid;place-items:center;border-radius:50%;background:#fff7fa;border:1px solid #e6afc4;color:#a76580;font-size:10px;box-shadow:0 2px 7px rgba(72,90,105,.15)}
 .rmt-avatar-dialog-pop{position:fixed;z-index:2147483638;inset:0;display:grid;place-items:center;padding:18px;background:rgba(35,45,55,.24);backdrop-filter:blur(3px)}.rmt-avatar-dialog-card{position:relative;width:min(470px,94vw);border:1px solid #d3e3ea;border-radius:22px;background:linear-gradient(160deg,#fff,#fff8fb 52%,#f5fbfd);padding:18px;box-shadow:0 22px 60px rgba(32,46,56,.28)}.rmt-avatar-dialog-close{position:absolute;right:10px;top:9px;width:30px;height:30px;border:0;border-radius:50%;background:#f4f8fa;color:#82909d;font:inherit;font-size:18px;cursor:pointer}.rmt-avatar-dialog-head{display:flex;align-items:center;gap:11px;padding-right:32px}.rmt-avatar-dialog-avatar{width:58px;height:58px;flex:0 0 58px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(145deg,#f7c7da,#cee7f1);overflow:hidden;color:#9c667d}.rmt-avatar-dialog-avatar img{width:100%;height:100%;object-fit:cover}.rmt-avatar-dialog-head b{display:block;color:#53687d;font-size:14px}.rmt-avatar-dialog-head small{display:block;margin-top:3px;color:#aa748c;font-size:9px;letter-spacing:.08em}.rmt-avatar-dialog-bubble{position:relative;margin:15px 0 12px;padding:14px 15px;border:1px solid #dbe7ec;border-radius:4px 16px 16px 16px;background:#fff;color:#596d80;line-height:1.8;white-space:pre-wrap}.rmt-avatar-dialog-bubble:before{content:"";position:absolute;left:15px;top:-9px;border-width:0 9px 9px 0;border-style:solid;border-color:transparent #dbe7ec transparent transparent}.rmt-avatar-dialog-bubble:after{content:"";position:absolute;left:16px;top:-7px;border-width:0 8px 8px 0;border-style:solid;border-color:transparent #fff transparent transparent}.rmt-avatar-dialog-actions{display:flex;gap:8px;flex-wrap:wrap}.rmt-avatar-dialog-note{margin-top:10px;font-size:9px;color:#919da8;line-height:1.55}
-.rmt-heart{padding:13px;display:grid;gap:12px}.rmt-heart-summary{border:1px solid #d6e4eb;border-radius:18px;background:linear-gradient(135deg,#fff8fb,#f6fbfd 55%,#fffdf7);padding:15px 17px;display:grid;gap:7px}.rmt-heart-summary-kicker{font-size:9px;font-weight:850;letter-spacing:.14em;color:#a76f87}.rmt-heart-summary h2{margin:0;color:#52677b;font-size:20px}.rmt-heart-summary p{margin:0;color:#6c7d8d;line-height:1.75}.rmt-heart-summary small{font-size:9px;color:#95a0aa}.rmt-heart-summary-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:3px}.rmt-heart-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.rmt-heart-tabs button{border:1px solid #d2e1e8;border-radius:12px;background:#fff;color:#68798b;padding:9px 8px;font:inherit;font-size:10px;font-weight:750;cursor:pointer}.rmt-heart-tabs button.active{border-color:#e4a8bf;background:#fff7fa;color:#995f79;box-shadow:0 0 0 2px rgba(228,168,191,.12)}
+.rmt-heart{padding:13px;display:grid;gap:12px}.rmt-heart-summary{border:1px solid #d6e4eb;border-radius:18px;background:linear-gradient(135deg,#fff8fb,#f6fbfd 55%,#fffdf7);padding:15px 17px;display:grid;gap:7px}.rmt-heart-summary-kicker{font-size:9px;font-weight:850;letter-spacing:.14em;color:#a76f87}.rmt-heart-summary h2{margin:0;color:#52677b;font-size:20px}.rmt-heart-summary p{margin:0;color:#6c7d8d;line-height:1.75}.rmt-heart-summary small{font-size:9px;color:#95a0aa}.rmt-heart-summary-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:3px}.rmt-heart-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.rmt-heart-tabs button{border:1px solid #d2e1e8;border-radius:12px;background:#fff;color:#68798b;padding:9px 8px;font:inherit;font-size:10px;font-weight:750;cursor:pointer}.rmt-heart-tabs button.active{border-color:#e4a8bf;background:#fff7fa;color:#995f79;box-shadow:0 0 0 2px rgba(228,168,191,.12)}
 .rmt-heart-greetings{display:grid;gap:10px}.rmt-heart-current-line{padding:15px;border:1px solid #d8e5eb;border-radius:16px;background:#fff}.rmt-heart-current-line small{color:#a67389;font-size:9px}.rmt-heart-current-line p{margin:7px 0 0;color:#596d80;font-size:13px;line-height:1.75}.rmt-heart-greeting-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.rmt-heart-greeting-group{padding:12px;border:1px solid #dce7ec;border-radius:14px;background:#fbfdfe}.rmt-heart-greeting-group b{display:block;color:#66798b;margin-bottom:7px;font-size:11px}.rmt-heart-greeting-group p{margin:5px 0;padding:7px 8px;border-radius:9px;background:#fff;color:#6b7a89;font-size:10px;line-height:1.6}
 .rmt-heart-drama-layout{display:grid;grid-template-columns:minmax(170px,.32fr) minmax(0,1fr);gap:10px;min-width:0}.rmt-heart-drama-layout>nav{display:grid;gap:7px;align-content:start}.rmt-heart-drama-layout>main{min-width:0;padding:15px;border:1px solid #d8e5eb;border-radius:17px;background:#fff}.rmt-heart-drama-card,.rmt-heart-strip-card{border:1px solid #d7e4ea;border-radius:13px;background:#fff;padding:10px;text-align:left;color:#647589;font:inherit;display:grid;gap:3px;cursor:pointer;min-width:0}.rmt-heart-drama-card.active,.rmt-heart-strip-card.active{border-color:#e5a8c0;background:#fff7fa}.rmt-heart-drama-card b,.rmt-heart-strip-card b{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rmt-heart-drama-card span,.rmt-heart-strip-card span{font-size:9px;color:#8795a2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rmt-heart-drama-card em,.rmt-heart-strip-card em{font-size:8px;font-style:normal;color:#a66f87}.rmt-heart-drama-head,.rmt-heart-strip-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.rmt-heart-drama-head h2,.rmt-heart-strip-head h2{margin:0;color:#53687c;font-size:19px}.rmt-heart-drama-head p,.rmt-heart-strip-head p{margin:4px 0 0;color:#8b98a4;font-size:10px}.rmt-heart-drama-head>span,.rmt-heart-strip-head>span{padding:4px 8px;border-radius:999px;background:#fff0f5;color:#a66a83;font-size:9px;white-space:nowrap}.rmt-heart-setting{margin:10px 0;padding:9px 10px;border-radius:10px;background:#f7fbfd;color:#758697;font-size:10px;line-height:1.65}.rmt-heart-script{display:grid;gap:8px;margin-top:10px}.rmt-heart-top-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:4px}.rmt-heart-line{display:grid;grid-template-columns:38px minmax(0,1fr);gap:8px;align-items:start}.rmt-heart-line.user{grid-template-columns:minmax(0,1fr) 38px}.rmt-heart-line.user .rmt-heart-line-avatar{grid-column:2}.rmt-heart-line.user>div{grid-row:1;grid-column:1;background:#fff8fb}.rmt-heart-line-avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:#edf6fa;color:#7c8da0;font-size:9px}.rmt-heart-line-avatar img{width:100%;height:100%;object-fit:cover}.rmt-heart-line>div{padding:9px 10px;border:1px solid #dce7ec;border-radius:12px;background:#fbfdfe;color:#5f7183;line-height:1.7;font-size:11px;white-space:pre-wrap}.rmt-heart-line small{display:block;margin-bottom:3px;color:#9a7a89;font-size:8px}.rmt-heart-line p{margin:0}.rmt-heart-narration{padding:7px 10px;text-align:center;color:#8d99a4;font-size:9px;font-style:italic}
 .rmt-heart-script-line{display:grid;grid-template-columns:38px minmax(0,1fr);gap:8px;align-items:start}.rmt-heart-script-line.user{grid-template-columns:minmax(0,1fr) 38px}.rmt-heart-script-line.user .rmt-heart-script-avatar{grid-column:2}.rmt-heart-script-line.user .rmt-heart-script-bubble{grid-row:1;grid-column:1;background:#fff8fb}.rmt-heart-script-avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:#edf6fa;color:#7c8da0;font-size:9px}.rmt-heart-script-avatar img{width:100%;height:100%;object-fit:cover}.rmt-heart-script-bubble{padding:9px 10px;border:1px solid #dce7ec;border-radius:12px;background:#fbfdfe;color:#5f7183;line-height:1.7;font-size:11px;white-space:pre-wrap}.rmt-heart-script-bubble small{display:block;margin-bottom:3px;color:#9a7a89;font-size:8px}.rmt-heart-script-narration{padding:7px 10px;text-align:center;color:#8d99a4;font-size:9px;font-style:italic}.rmt-heart-sim-note{margin-top:12px;padding-top:9px;border-top:1px dashed #dce6ea;color:#98a2ab;font-size:9px;line-height:1.55}
 .rmt-heart-strip-image{position:relative;aspect-ratio:16/9;margin:11px 0;border:5px solid #fff;border-radius:14px;overflow:hidden;outline:1px solid #d4e3e9;box-shadow:0 8px 19px rgba(60,82,98,.09)}.rmt-heart-strip-image .rmt-abstract,.rmt-heart-strip-image .rmt-cg-image{inset:0}.rmt-heart-strip-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.rmt-heart-strip-actions small{flex:1 1 220px;color:#929da6;font-size:9px;line-height:1.5}.rmt-heart-panels{display:grid;gap:8px;margin-top:11px}.rmt-heart-panel{display:grid;grid-template-columns:28px minmax(0,1fr);gap:9px;padding:10px;border:1px solid #dce7ec;border-radius:12px;background:#fbfdfe}.rmt-heart-panel>b{width:26px;height:26px;display:grid;place-items:center;border-radius:50%;background:#fff0f5;color:#a26981;font-size:9px}.rmt-heart-panel small{color:#8b98a4;font-size:8px}.rmt-heart-panel p{margin:4px 0;color:#607284;line-height:1.6;font-size:10px}.rmt-heart-panel-line{margin-top:5px;padding:6px 8px;border-radius:8px;background:#fff;color:#657688;font-size:10px}.rmt-heart-panel-line strong{margin-right:6px;color:#a46881}.rmt-heart-panel-line.user{background:#fff8fb}.rmt-heart-panel-line.user strong{color:#798fa2}
 .rmt-ending{display:grid;grid-template-columns:minmax(220px,.38fr) minmax(0,1fr);gap:14px;padding:14px}.rmt-ending-summary{grid-column:1/-1;border:1px solid #d9e5ea;border-radius:16px;background:linear-gradient(135deg,#fff8fb,#f5fbfd);padding:14px 16px}.rmt-ending-summary b{display:block;font-size:16px;color:#5a687b}.rmt-ending-summary p{margin:7px 0 0;line-height:1.75;color:#718093}.rmt-ending-disclaimer{margin-top:7px;font-size:9px;color:#9a8290}.rmt-ending-list{display:grid;gap:8px;align-content:start}.rmt-ending-route{width:100%;border:1px solid #d4e1e7;border-radius:14px;background:rgba(255,255,255,.86);padding:11px 12px;text-align:left;color:#596d82;font:inherit;display:grid;gap:3px}.rmt-ending-route.active{border-color:#e6a5bd;box-shadow:0 0 0 2px rgba(230,165,189,.14);background:#fff8fb}.rmt-ending-route.locked{opacity:.66}.rmt-ending-route b{font-size:12px}.rmt-ending-route span{font-size:9px;color:#8795a4}.rmt-ending-route em{font-style:normal;font-size:8px;color:#b16f8a}.rmt-ending-detail{border:1px solid #d8e5eb;border-radius:18px;background:rgba(255,255,255,.86);padding:18px;min-width:0}.rmt-ending-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.rmt-ending-head h2{margin:0;color:#52677b;font-size:21px}.rmt-ending-head span{font-size:9px;padding:4px 8px;border-radius:999px;background:#fff0f5;color:#b06c88;white-space:nowrap}.rmt-ending-subtitle{margin:5px 0 12px;color:#8a96a2}.rmt-ending-lock{padding:18px;border:1px dashed #d8c7cf;border-radius:14px;background:#fff9fb;color:#7b6a72;line-height:1.75}.rmt-ending-section{margin-top:14px;padding-top:14px;border-top:1px solid #e1eaee}.rmt-ending-section>small{display:block;letter-spacing:.12em;color:#b17a91;font-weight:800;margin-bottom:7px}.rmt-ending-section p{white-space:pre-wrap;line-height:1.85;margin:0;color:#5f6f7e}.rmt-ending-confession{margin-top:12px;padding:13px 14px;border-left:3px solid #e89fbc;background:#fff7fa;border-radius:9px;white-space:pre-wrap;line-height:1.85;color:#665c64}.rmt-ending-epilogue{display:grid;gap:9px;margin-top:10px}.rmt-ending-epilogue article{padding:11px 12px;border-radius:12px;background:#f8fbfd;border:1px solid #e0e9ed}.rmt-ending-epilogue b{display:block;margin-bottom:5px;color:#607285}.rmt-ending-epilogue p{font-size:11px}.rmt-ending-final{margin-top:12px;text-align:right;color:#a2667f;font-weight:750}.rmt-ending-evidence{margin-top:12px;font-size:9px;color:#9aa5ae}
+.rmt-achievements{padding:14px;display:grid;gap:16px}.rmt-achievements-head{display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid #dde7eb;padding:5px 2px 13px}.rmt-achievements-head h2{margin:0;color:#526579;font-size:21px}.rmt-achievements-head span{font-size:10px;color:#91a0ad}.rmt-achievement-section{display:grid;gap:9px}.rmt-achievement-section h3{margin:0;display:flex;gap:7px;align-items:center;color:#607286;font-size:13px}.rmt-achievement-section h3 span{font-size:9px;color:#9aa7b2}.rmt-achievement-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.rmt-achievement-card{display:grid;grid-template-columns:46px 1fr;gap:10px;align-items:start;padding:12px;border:1px solid #d8e3e8;border-radius:14px;background:#fff}.rmt-achievement-card.locked{filter:saturate(.6);opacity:.68;background:#f4f6f7}.rmt-achievement-icon{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:#fff6df;border:1px solid #ead5a2;color:#b28b37;font-size:17px}.rmt-achievement-card.locked .rmt-achievement-icon{background:#edf0f2;border-color:#d8dde1;color:#929da6}.rmt-achievement-copy{min-width:0}.rmt-achievement-title{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.rmt-achievement-title b{font-size:12px;color:#586b7e}.rmt-achievement-title span{font-size:8px;color:#9b8991}.rmt-achievement-copy p{margin:5px 0;color:#718092;font-size:10px;line-height:1.6}.rmt-achievement-copy small{font-size:8px;color:#a68b64}
 .rmt-ending-tabs{grid-column:1/-1;display:flex;gap:7px;flex-wrap:wrap}.rmt-ending-tab{border:1px solid #d8e4e9;border-radius:999px;background:#fff;color:#718193;padding:7px 11px;font:700 10px/1 inherit;cursor:pointer}.rmt-ending-tab.active{border-color:#e3a0bb;background:#fff3f8;color:#a85f7c}.rmt-ending-tab span{margin-left:4px;opacity:.72}.rmt-confession-card{width:100%;border:1px solid #d6e2e8;border-radius:14px;background:rgba(255,255,255,.9);padding:11px 12px;text-align:left;color:#5f7081;font:inherit;display:grid;gap:3px}.rmt-confession-card.active{border-color:#dda0b8;background:#fff7fa;box-shadow:0 0 0 2px rgba(221,160,184,.12)}.rmt-confession-card b{font-size:12px}.rmt-confession-card span{font-size:9px;color:#8a97a4}.rmt-confession-card em{font-style:normal;font-size:8px;color:#b36f8b}.rmt-confession-replay-note{margin-top:10px;padding:9px 10px;border:1px dashed #d9cbd1;border-radius:11px;background:#fff9fb;color:#8a747e;font-size:9px;line-height:1.6}
 .rmt-ending-confession-stage{margin-top:13px;padding:13px;border:1px solid #ead1dc;border-radius:15px;background:linear-gradient(145deg,#fff8fb,#f8fbfd);box-shadow:0 8px 22px rgba(96,69,82,.07)}.rmt-ending-confession-kicker{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-bottom:10px;color:#a56b84;font-size:8px;letter-spacing:.11em}.rmt-ending-confession-kicker b{font-size:8px;color:#8696a4;letter-spacing:0}.rmt-ending-confession-dialogue{display:grid;grid-template-columns:62px minmax(0,1fr);gap:11px;align-items:end}.rmt-ending-confession-avatar{width:62px;height:62px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:linear-gradient(145deg,#f5bed3,#cfe8f2);color:#fff;border:3px solid #fff;outline:1px solid #dfb7c7;box-shadow:0 5px 14px rgba(87,68,79,.14);font-size:19px}.rmt-ending-confession-avatar img{width:100%;height:100%;object-fit:cover}.rmt-ending-confession-bubble{position:relative;min-height:70px;padding:11px 13px;border:1px solid #e2dfe5;border-radius:14px 14px 14px 4px;background:#fff;color:#5f6572}.rmt-ending-confession-bubble small{display:block;margin-bottom:5px;color:#ac6b87;font-size:9px;font-weight:850}.rmt-ending-confession-bubble p{margin:0!important;color:#5f6572!important;line-height:1.8!important;font-size:12px}.rmt-ending-confession-actions{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin-top:10px}.rmt-ending-confession-actions .rmt-btn{min-width:82px;justify-content:center}.rmt-ending-confession-actions .rmt-btn:disabled{opacity:.42;cursor:default}
 .rmt-archive-readonly-control{margin-top:12px;padding:10px 11px;border:1px solid #d7e4ea;border-radius:12px;background:#f8fbfd;display:grid;gap:5px}.rmt-archive-readonly-control label{display:flex;align-items:center;gap:8px;color:#5f7184;font-weight:800;font-size:11px}.rmt-archive-readonly-control input{width:16px;height:16px}.rmt-archive-readonly-control small{color:#8a98a6;line-height:1.55}
@@ -6822,7 +7053,7 @@ dialog#${OVERLAY_ID}::backdrop{background:transparent}
   .rmt-big-cg{border-width:5px;margin:2px 0 11px}.rmt-cg-caption{left:8px;right:8px;bottom:8px;padding:8px 9px;font-size:10px;line-height:1.45}.rmt-cg-card-draw{right:5px;bottom:5px;min-height:27px;padding:5px 7px;font-size:8px}.rmt-cg-provider-bar{padding:7px 8px;gap:6px;margin-bottom:8px;line-height:1.45}.rmt-mode-actions .rmt-btn{flex:1}.rmt-adv-reader{padding:14px}.rmt-adv-para{font-size:12px;line-height:1.85}
   .rmt-room-view{padding:10px 10px 18px}.rmt-room-map{margin:0 -2px;padding-bottom:9px}.rmt-room-space{min-width:96px;padding:8px 9px}.rmt-room-location{font-size:10px;margin-bottom:10px;align-items:flex-start;gap:7px}.rmt-room-location-actions{flex:0 0 auto;gap:5px}.rmt-room-location .rmt-room-find{padding:5px 7px;font-size:9px}.rmt-room-flow{gap:10px}.rmt-room-card{padding:13px;border-radius:14px}.rmt-room-object-title{font-size:16px}.rmt-room-object-desc,.rmt-room-atmosphere{font-size:11px;line-height:1.68}.rmt-room-stage{border-radius:14px}.rmt-room-stage-head{padding:9px 11px}.rmt-room-activity-strip{padding:8px 10px}.rmt-room-activity-strip>div{grid-template-columns:1fr;gap:3px}.rmt-room-activity-strip small{grid-column:1}.rmt-room-scene{min-height:350px}.rmt-room-person{left:44%;transform:scale(.82);transform-origin:bottom center}.rmt-room-person-label{font-size:9px;padding:2px 5px}.rmt-room-object-rail{grid-template-columns:repeat(2,minmax(0,1fr));padding:8px;gap:6px}.rmt-room-object-chip{grid-template-columns:22px minmax(0,1fr);padding:6px}.rmt-room-object-chip em{grid-column:2}.rmt-room-caption{padding:10px 11px 12px;font-size:11px}.rmt-room-private-access-card{margin-bottom:4px}
   .rmt-phone{padding:5px}.rmt-phone-shell{padding:9px}.rmt-phone-lock{padding:9px 7px}.rmt-phone-apps{gap:6px;padding:6px 0 10px}.rmt-phone-app{min-width:78px;padding:8px 7px}.rmt-phone-content{display:block}.rmt-phone-list,.rmt-phone-detail{padding:10px;border-radius:14px}.rmt-phone-view-list .rmt-phone-detail{display:none}.rmt-phone-view-detail .rmt-phone-list{display:none}.rmt-phone-detail-toolbar{position:sticky;top:0;background:rgba(255,255,255,.96);z-index:2;padding-bottom:7px}.rmt-phone-entry{padding:9px 5px}.rmt-phone-entry span{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.rmt-phone-message p{font-size:11px}.rmt-phone-fields>div{grid-template-columns:1fr}
-  .rmt-heart{padding:9px}.rmt-heart-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}.rmt-heart-greeting-grid{grid-template-columns:1fr}.rmt-heart-drama-layout{grid-template-columns:1fr}.rmt-heart-drama-layout>nav{grid-template-columns:repeat(2,minmax(0,1fr))}.rmt-heart-drama-layout>main{padding:12px}.rmt-heart-drama-head h2,.rmt-heart-strip-head h2{font-size:16px}.rmt-heart-script-bubble{font-size:10px}.rmt-avatar-dialog-card{padding:15px;border-radius:18px}.rmt-avatar-dialog-actions{display:grid;grid-template-columns:1fr}.rmt-character-heart-head{align-items:flex-start}.rmt-character-heart-avatar{width:62px;height:62px;flex-basis:62px}
+  .rmt-heart{padding:9px}.rmt-heart-tabs{grid-template-columns:1fr}.rmt-achievement-grid{grid-template-columns:1fr}.rmt-heart-greeting-grid{grid-template-columns:1fr}.rmt-heart-drama-layout{grid-template-columns:1fr}.rmt-heart-drama-layout>nav{grid-template-columns:repeat(2,minmax(0,1fr))}.rmt-heart-drama-layout>main{padding:12px}.rmt-heart-drama-head h2,.rmt-heart-strip-head h2{font-size:16px}.rmt-heart-script-bubble{font-size:10px}.rmt-avatar-dialog-card{padding:15px;border-radius:18px}.rmt-avatar-dialog-actions{display:grid;grid-template-columns:1fr}.rmt-character-heart-head{align-items:flex-start}.rmt-character-heart-avatar{width:62px;height:62px;flex-basis:62px}
   .rmt-ending{grid-template-columns:1fr;padding:9px;gap:10px}.rmt-ending-summary{padding:12px}.rmt-ending-list{grid-template-columns:1fr 1fr;gap:6px}.rmt-ending-route{padding:9px}.rmt-ending-detail{padding:13px;border-radius:15px}.rmt-ending-head h2{font-size:18px}.rmt-ending-section p,.rmt-ending-confession{font-size:11px;line-height:1.8}.rmt-ending-confession-stage{padding:10px}.rmt-ending-confession-dialogue{grid-template-columns:48px minmax(0,1fr);gap:8px}.rmt-ending-confession-avatar{width:48px;height:48px}.rmt-ending-confession-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.rmt-ending-confession-actions .rmt-btn{min-width:0;padding:7px 5px;font-size:9px}
   #${SETTINGS_ID} .rmt-settings-buttons{grid-template-columns:1fr 1fr}#${SETTINGS_ID} .rmt-api-grid{grid-template-columns:1fr 1fr}#${SETTINGS_ID} .rmt-model-row{grid-template-columns:1fr}#${SETTINGS_ID} .rmt-model-refresh{width:100%!important}
 }
@@ -8184,6 +8415,7 @@ function modePortalMeta(mode) {
         [MODE.PHONE]: { title: '他的手机', subtitle: '查看私人通讯与数字生活', icon: 'fa-mobile-screen-button', accent: 'phone' },
         [MODE.BUTTERFLY]: { title: '蝴蝶效应', subtitle: '平行时间线观测终端', icon: 'fa-code-branch', accent: 'butterfly' },
         [MODE.ENDING]: { title: 'ENDING / 后日谈', subtitle: '关系路线终章与未来生活', icon: 'fa-heart', accent: 'ending' },
+        [MODE.ACHIEVEMENTS]: { title: '成就库', subtitle: '已解锁 / 未解锁', icon: 'fa-trophy', accent: 'achievements' },
     };
     return meta[mode] || { title: MODE_LABEL[mode] || mode, subtitle: '', icon: 'fa-circle', accent: 'default' };
 }
@@ -8424,10 +8656,10 @@ function showArchiveLibrary() {
             const name = normalizeText(mem.archiveName, 120) || fallbackArchiveName(mem.memories);
             currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前窗口档案</b><small>${esc(name)} · ${mem.memories.length} 条记忆</small></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive">打开当前窗口档案</button><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">增量更新当前窗口档案</button><button type="button" class="rmt-btn" data-rmt-action="current-archive-delete">删除当前档案</button></div></section>`;
         } else {
-            currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前聊天还没有档案</b><small>每个聊天窗口拥有自己的独立档案。</small></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">生成当前窗口档案</button></div></section>`;
+            currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前聊天还没有档案</b></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">生成当前窗口档案</button></div></section>`;
         }
     } catch {}
-    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">MEMORY ARCHIVE LIBRARY</div><strong class="rmt-archive-title">档案室一览</strong><div class="rmt-archive-summary">角色分类不再只看头像；新索引会优先按角色卡指纹分开同名/同头像的不同版本。分类管理只改心跳回忆索引，不移动酒馆聊天文件；真实档案删除只允许当前聊天，并明确保留聊天正文。</div><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类</button><button type="button" class="rmt-btn" data-rmt-action="rebuild-archive-index">扫描旧版本已有档案</button></div></section>${cards ? `<section class="rmt-archive-portals rmt-character-portals">${cards}</section>` : '<div class="rmt-archive-overview-empty">还没有已索引的档案。当前版本创建/更新档案后会自动加入这里；旧版本档案可点上方按钮手动扫描一次。</div>'}${currentQuick}</div>`;
+    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">MEMORY ARCHIVE LIBRARY</div><strong class="rmt-archive-title">档案室一览</strong><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类</button><button type="button" class="rmt-btn" data-rmt-action="rebuild-archive-index">扫描旧版本已有档案</button></div></section>${cards ? `<section class="rmt-archive-portals rmt-character-portals">${cards}</section>` : '<div class="rmt-archive-overview-empty">还没有已索引的档案。当前版本创建/更新档案后会自动加入这里；旧版本档案可点上方按钮手动扫描一次。</div>'}${currentQuick}</div>`;
 }
 
 function showArchiveCharacter(groupId) {
@@ -8442,7 +8674,7 @@ function showArchiveCharacter(groupId) {
     const body = bodyEl(); if (!body) return;
     const charAvatar = archiveGroupAvatarUrl(meta, entries[0] || null, context);
     const rows = entries.map(item => `<button type="button" class="rmt-archive-overview-item" data-rmt-indexed-chat="${esc(item.chatId)}" data-rmt-indexed-character="${esc(item.characterKey)}" data-rmt-indexed-entry="${esc(archiveIndexEntryId(item))}"><span class="rmt-overview-dot">●</span><span><b>${esc(item.archiveName)}</b><small>${esc(item.characterName)} · ${esc(item.chatId)} · ${item.memoryCount} 条记忆 · ${esc(formatArchiveTime(item.updatedAt))}</small></span><i class="fa-solid fa-chevron-right"></i></button>`).join('');
-    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-character-heart-head"><button type="button" class="rmt-character-heart-avatar" data-rmt-avatar-talk="${esc(key)}" aria-label="和角色说话">${charAvatar ? `<img src="${esc(charAvatar)}" alt="">` : '<i class="fa-solid fa-user"></i>'}<span><i class="fa-solid fa-comment-dots"></i></span></button><div><div class="rmt-archive-kicker">CHARACTER ARCHIVES</div><strong class="rmt-archive-title">${esc(name)}</strong><div class="rmt-archive-summary">${meta.manual ? '这是手动分类组。' : '这是自动分类组。'} 点头像只读取已保存角色互动，不会自动切换聊天或调用模型。</div></div></div><div style="margin:10px 0"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button></div><div class="rmt-archive-overview-list" style="max-height:none">${rows || '<div class="rmt-archive-overview-empty">这个角色组还没有已索引档案。</div>'}</div></section></div>`;
+    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-character-heart-head"><button type="button" class="rmt-character-heart-avatar" data-rmt-avatar-talk="${esc(key)}" aria-label="和角色说话">${charAvatar ? `<img src="${esc(charAvatar)}" alt="">` : '<i class="fa-solid fa-user"></i>'}<span><i class="fa-solid fa-comment-dots"></i></span></button><div><div class="rmt-archive-kicker">CHARACTER ARCHIVES</div><strong class="rmt-archive-title">${esc(name)}</strong></div></div><div style="margin:10px 0"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button></div><div class="rmt-archive-overview-list" style="max-height:none">${rows || '<div class="rmt-archive-overview-empty">这个角色组还没有已索引档案。</div>'}</div></section></div>`;
 }
 
 function showArchiveGroupManager() {
@@ -8776,11 +9008,11 @@ function showChooser() {
         const stored = hydrationContext.chatMetadata?.[CACHE_KEY];
         if (isCompressedCacheRecord(stored) && !runtimeSessionCache.has(scope)) {
             topTitle('心跳回忆 · 档案室');
-            body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在读取已生成档案…</b><div class="rmt-loading-note">生成内容使用压缩存储；只有打开档案室时才解压，不再拖慢普通聊天切换。</div></div></div>';
+            body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在读取已生成档案…</b></div></div>';
             void ensureCacheHydrated(hydrationContext).then(() => scheduleChooserRefresh(0)).catch(error => {
                 console.warn('[HeartbeatMemories] compressed cache read failed', error);
                 const latestBody = bodyEl();
-                if (latestBody) latestBody.innerHTML = `<div class="rmt-error"><div><b>已生成内容缓存读取失败</b><div style="margin:10px 0;white-space:pre-wrap;opacity:.78">${esc(error?.message || String(error))}</div><div style="margin:10px 0;opacity:.78">原缓存没有被删除。为避免把“暂时读不到”误当成“从未生成”，本页不会显示重新生成入口。请先刷新页面或换支持解压的浏览器内核再试。</div><button type="button" class="rmt-btn" data-rmt-action="library-home">返回档案室</button></div></div>`;
+                if (latestBody) latestBody.innerHTML = `<div class="rmt-error"><div><b>已生成内容缓存读取失败</b><div style="margin:10px 0;white-space:pre-wrap;opacity:.78">${esc(error?.message || String(error))}</div><button type="button" class="rmt-btn" data-rmt-action="library-home">返回档案室</button></div></div>`;
             });
             return;
         }
@@ -8810,7 +9042,7 @@ function showChooser() {
     const concurrentLabels = generationTaskLabels();
     const anyRunning = busy || concurrentLabels.length > 0;
     topTitle(anyRunning ? `心跳回忆 · 档案室 · ${busy ? '档案整理中' : `${concurrentLabels.length}项生成中`}` : `心跳回忆 · 档案室${ready ? ` · ${archiveName}` : ''}`);
-    const busyBanner = anyRunning ? `<div class="rmt-task-banner"><span class="rmt-task-dot"></span><div><b>${busy ? '档案整理进行中' : `${concurrentLabels.length} 项后台生成中`}</b><small>${esc(busy ? (activeTaskLabel || '正在整理聊天档案…') : concurrentLabels.join(' · '))} · 生成入口彼此独立，可以同时运行，关闭档案室也不会中断。</small></div></div>` : '';
+    const busyBanner = anyRunning ? `<div class="rmt-task-banner"><span class="rmt-task-dot"></span><div><b>${busy ? '档案整理进行中' : `${concurrentLabels.length} 项后台生成中`}</b><small>${esc(busy ? (activeTaskLabel || '正在整理聊天档案…') : concurrentLabels.join(' · '))}</small></div></div>` : '';
     const portalHtml = portals.map(({ mode, session, meta }) => {
         const generated = !!session;
         const generating = isModeGenerating(mode);
@@ -8846,17 +9078,12 @@ function showChooser() {
     const externalSourceText = importedSources.length ? `上次档案同步：${importedSources.join(' · ')}` : preflightText;
     const requirePreflight = externalSetting && (detectedExternalSources.length > 0 || hasMemoryWorldInfoSelection(context)) && !preflight;
     const externalMemoryControls = `<div class="rmt-external-memory-row">
-      <label class="rmt-external-memory-toggle"><input type="checkbox" data-rmt-external-memory-toggle ${externalSetting ? 'checked' : ''} ${busy || hasGenerationTasks() ? 'disabled' : ''}> 建档时使用当前窗口的记忆 / 摘要补充</label>
-      <label class="rmt-external-memory-toggle"><input type="checkbox" data-rmt-public-memory-toggle ${publicReaderSetting ? 'checked' : ''} ${busy || hasGenerationTasks() || !externalSetting ? 'disabled' : ''}> 允许调用第三方记忆插件公开 current-chat 读取函数</label>
-      <small>第三方公开读取函数属于可执行扩展代码，默认关闭；开启后只探测明确的 current-chat reader，并继续执行 chatId 与证据锚点校验。提示注入摘要 / 当前聊天 metadata 摘要不需要开启此项。</small>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:7px"><button type="button" class="rmt-btn" data-rmt-action="read-memory-plugins" ${busy || hasGenerationTasks() || !externalSetting ? 'disabled' : ''}>扫描记忆 / 摘要</button><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-picker" ${busy || hasGenerationTasks() || !externalSetting ? 'disabled' : ''}>选择记忆相关世界书</button></div>
-      <small>${esc(worldInfoSelectionText)} · 可整本导入，也可精确选择具体条目；只作为记忆解释上下文，不单独作为已发生事实。</small>
-      <small>${esc(externalSourceText)} · 只读当前窗口，不读角色级/跨聊天记忆。</small>
-      <small>兼容顺序：${publicReaderSetting ? '已授权的公开 current-chat API → ' : ''}当前提示注入的记忆/摘要 → 当前聊天 metadata 摘要。你显式选择的“记忆相关世界书”只随这些记忆/摘要作为解释上下文；普通世界书、角色卡、作者设定仍不会成为“已经发生”的证据。</small>
+      <label class="rmt-external-memory-toggle"><input type="checkbox" data-rmt-external-memory-toggle ${externalSetting ? 'checked' : ''} ${busy || hasGenerationTasks() ? 'disabled' : ''}> 使用当前窗口记忆 / 摘要</label>
+      <label class="rmt-external-memory-toggle"><input type="checkbox" data-rmt-public-memory-toggle ${publicReaderSetting ? 'checked' : ''} ${busy || hasGenerationTasks() || !externalSetting ? 'disabled' : ''}> 允许第三方 current-chat reader</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:7px"><button type="button" class="rmt-btn" data-rmt-action="read-memory-plugins" ${busy || hasGenerationTasks() || !externalSetting ? 'disabled' : ''}>扫描记忆 / 摘要</button><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-picker" ${busy || hasGenerationTasks() || !externalSetting ? 'disabled' : ''}>选择记忆世界书</button></div>
+      <small>${esc(externalSourceText)}</small>
     </div>`;
-    const generationAction = ready ? `<div class="rmt-archive-generate-row">
-      <small>已生成 ${generatedCount}/${ARCHIVE_PORTAL_MODES.length}。普通“更新当前窗口档案”只增量追加新聊天并保留这些已生成内容；只有“完全重建档案”才会使它们失效。每个入口单独请求、单独校验；ADV 正文批量失败后会停下来让你选择再次整批生成或逐条补失败项。</small>
-    </div>` : '';
+    const generationAction = '';
 
     body.innerHTML = `
       <div class="rmt-archive-room">
@@ -8889,7 +9116,7 @@ function showLoading(text) {
     setRegenerateVisible(false);
     const body = bodyEl();
     if (!body) return;
-    body.innerHTML = `<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>${esc(text)}</b><div class="rmt-loading-note">${esc(generationSourceLabel())}；不会发送成主线消息。</div><div class="rmt-loading-note">现在可以返回档案室或直接关闭窗口，生成会继续在后台进行，完成后会通知你。</div><div class="rmt-loading-actions"><button type="button" class="rmt-btn" data-rmt-action="home">返回档案室 · 后台继续</button><button type="button" class="rmt-btn" data-rmt-action="close">关闭 · 后台继续</button></div></div></div>`;
+    body.innerHTML = `<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>${esc(text)}</b><div class="rmt-loading-actions"><button type="button" class="rmt-btn" data-rmt-action="home">返回档案室</button><button type="button" class="rmt-btn" data-rmt-action="close">关闭</button></div></div></div>`;
 }
 
 function showError(message, mode) {
@@ -8998,7 +9225,7 @@ function decorateReadOnlyModeUi() {
     if (!body || body.querySelector('[data-rmt-readonly-toggle]')) return;
     const control = document.createElement('div');
     control.className = 'rmt-archive-readonly-control';
-    control.innerHTML = `<label><input type="checkbox" data-rmt-readonly-toggle ${activeArchiveReadOnly ? 'checked' : ''}> 只读查看</label><small>${activeArchiveReadOnly ? '关闭后会显示重新生成/绘制等按钮；不会自动切换聊天。' : '编辑按钮已显示。真正写入前会校验当前酒馆是否正打开这份档案；不匹配时只提示你手动打开，不自动切换。'}</small>`;
+    control.innerHTML = `<label><input type="checkbox" data-rmt-readonly-toggle ${activeArchiveReadOnly ? 'checked' : ''}> 只读查看</label>`;
     body.prepend(control);
 }
 
@@ -9015,8 +9242,39 @@ function renderActive() {
     else if (activeMode === MODE.ITEMS) renderItems();
     else if (activeMode === MODE.PHONE) renderPhone();
     else if (activeMode === MODE.ENDING) renderEnding();
+    else if (activeMode === MODE.ACHIEVEMENTS) renderAchievements();
     else if (activeMode === MODE.HEART) renderHeart();
     decorateReadOnlyModeUi();
+}
+
+
+function renderAchievements() {
+    const session = activeSession;
+    if (!session || session.kind !== MODE.ACHIEVEMENTS) return;
+    const readOnly = !!activeArchiveSnapshot && activeArchiveReadOnly;
+    setBackVisible(true, activeArchiveSnapshot ? (readOnly ? '只读档案' : '档案') : '当前档案');
+    topTitle('成就库');
+    const unlocked = session.entries.filter(item => item.unlocked);
+    const locked = session.entries.filter(item => !item.unlocked);
+    const tierIcon = tier => ({
+        bronze: 'fa-medal',
+        silver: 'fa-star',
+        gold: 'fa-trophy',
+        hidden: 'fa-question',
+    })[tier] || 'fa-medal';
+    const cards = (items, lockedState) => items.map(item => `<article class="rmt-achievement-card ${lockedState ? 'locked' : 'unlocked'}">
+      <div class="rmt-achievement-icon"><i class="fa-solid ${tierIcon(item.tier)}"></i></div>
+      <div class="rmt-achievement-copy">
+        <div class="rmt-achievement-title"><b>${esc(item.title)}</b><span>${esc(item.category)}</span></div>
+        <p>${esc(item.description)}</p>
+        <small>${lockedState ? esc(item.hint) : esc(item.unlockedAt || '已解锁')}</small>
+      </div>
+    </article>`).join('');
+    bodyEl().innerHTML = `<div class="rmt-achievements">
+      <div class="rmt-achievements-head"><div><h2>${esc(session.title || '成就库')}</h2><span>${unlocked.length} / ${session.entries.length}</span></div>${readOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="regenerate">更新成就库</button>'}</div>
+      <section class="rmt-achievement-section"><h3>已解锁 <span>${unlocked.length}</span></h3><div class="rmt-achievement-grid">${unlocked.length ? cards(unlocked, false) : '<div class="rmt-heart-empty">还没有已解锁成就。</div>'}</div></section>
+      <section class="rmt-achievement-section"><h3>未解锁 <span>${locked.length}</span></h3><div class="rmt-achievement-grid">${locked.length ? cards(locked, true) : '<div class="rmt-heart-empty">目前没有未解锁目标。</div>'}</div></section>
+    </div>`;
 }
 
 function selectedEndingRoute() {
@@ -9045,23 +9303,22 @@ function selectedConfessionReplay() {
     return list.find(item => item.id === activeSession.selectedConfessionId) || list[0] || null;
 }
 
-function endingConfessionPlayerHtml(route, session) {
-    const lines = normalizeEndingConfessionLines(route?.confessionLines, route?.confession);
-    if (!lines.length) return `<div class="rmt-ending-confession">${esc(route?.confession || '')}</div>`;
+function confessionReplayPlayerHtml(replay, session) {
+    const lines = normalizeEndingConfessionLines(replay?.confessionLines, replay?.confessionText);
+    if (!lines.length) return `<div class="rmt-ending-confession">${esc(replay?.confessionText || '')}</div>`;
     const index = Math.max(0, Math.min(lines.length - 1, Math.floor(Number(session?.confessionLineIndex) || 0)));
     session.confessionLineIndex = index;
     const context = getContext();
     const charName = normalizeText(activeArchiveSnapshot?.characterName || context?.name2, 120) || '角色';
     const avatar = heartCharacterAvatarUrl(activeArchiveSnapshot, context);
     return `<div class="rmt-ending-confession-stage">
-      <div class="rmt-ending-confession-kicker"><span>CONFESSION · ${index + 1}/${lines.length}</span><b>未来路线演出</b></div>
       <div class="rmt-ending-confession-dialogue">
         <span class="rmt-ending-confession-avatar">${avatar ? `<img src="${esc(avatar)}" alt="">` : '<i class="fa-solid fa-heart"></i>'}</span>
         <div class="rmt-ending-confession-bubble"><small>${esc(charName)}</small><p>${esc(lines[index])}</p></div>
       </div>
       <div class="rmt-ending-confession-actions">
         <button type="button" class="rmt-btn" data-rmt-action="ending-confession-prev" ${index <= 0 ? 'disabled' : ''}>上一句</button>
-        <button type="button" class="rmt-btn" data-rmt-action="ending-confession-replay">重播告白</button>
+        <button type="button" class="rmt-btn" data-rmt-action="ending-confession-replay">重播</button>
         <button type="button" class="rmt-btn" data-rmt-action="ending-confession-next" ${index >= lines.length - 1 ? 'disabled' : ''}>下一句</button>
       </div>
     </div>`;
@@ -9078,18 +9335,17 @@ function renderEnding() {
     session.view = view;
     const tabs = `<div class="rmt-ending-tabs"><button type="button" class="rmt-ending-tab ${view === 'routes' ? 'active' : ''}" data-rmt-ending-view="routes">结局路线 <span>${session.endings.length}</span></button><button type="button" class="rmt-ending-tab ${view === 'confessions' ? 'active' : ''}" data-rmt-ending-view="confessions">告白回看 <span>${replays.length}</span></button></div>`;
     const confessionRefreshAction = view === 'confessions' && !readOnlyArchive ? '<button type="button" class="rmt-btn" data-rmt-action="refresh-ending-confessions"><i class="fa-solid fa-rotate"></i> 只重新读取告白</button>' : '';
-    const summary = `<section class="rmt-ending-summary"><b>${esc(session.relationshipState)}</b><p>${esc(session.relationshipSummary)}</p><div class="rmt-ending-disclaimer">当前关系锚点：${esc(session.relationshipSourceMemoryAnchor || '')} · 结局与后日谈是未来路线推演；“告白回看”只允许来自当前手动档案里已经发生并通过锚点校验的事件。</div><div class="rmt-ending-extra-actions">${confessionRefreshAction}<button type="button" class="rmt-btn" data-rmt-action="open-heart"><i class="fa-solid fa-heart"></i> 角色互动 / Voice Drama</button></div></section>`;
+    const summary = `<section class="rmt-ending-summary"><b>${esc(session.relationshipState)}</b><p>${esc(session.relationshipSummary)}</p><div class="rmt-ending-extra-actions">${confessionRefreshAction}<button type="button" class="rmt-btn" data-rmt-action="open-heart"><i class="fa-solid fa-heart"></i> 角色互动</button></div></section>`;
     if (view === 'confessions') {
         const selectedReplay = selectedConfessionReplay();
         if (selectedReplay) session.selectedConfessionId = selectedReplay.id;
         const replayList = replays.map(item => `<button type="button" class="rmt-confession-card ${selectedReplay?.id === item.id ? 'active' : ''}" data-rmt-confession-id="${esc(item.id)}"><b>${esc(item.title)}</b><span>${esc(item.subtitle || item.date || endingConfessionTypeLabel(item.type))}</span><em>${esc(endingConfessionTypeLabel(item.type))} · ${esc(item.date || '待定')}</em></button>`).join('');
         const replayDetail = selectedReplay
             ? `<div class="rmt-ending-head"><div><h2>${esc(selectedReplay.title)}</h2><div class="rmt-ending-subtitle">${esc(selectedReplay.subtitle || endingConfessionTypeLabel(selectedReplay.type))}</div></div><span>已发生 · 档案回看</span></div>
-               <section class="rmt-ending-section"><small>CONFESSION REPLAY // 告白场景</small><p>${esc(selectedReplay.scene)}</p><div class="rmt-ending-confession">${esc(selectedReplay.confessionText)}</div></section>
-               ${selectedReplay.responseSummary ? `<section class="rmt-ending-section"><small>RESPONSE // 当时回应与结果</small><p>${esc(selectedReplay.responseSummary)}</p></section>` : ''}
-               ${selectedReplay.afterEffect ? `<section class="rmt-ending-section"><small>AFTER EFFECT // 后续变化</small><p>${esc(selectedReplay.afterEffect)}</p></section>` : ''}
-               <div class="rmt-confession-replay-note">这是一份基于已归档事实的演出式回看，不声称重现聊天逐字原文。证据锚点：${esc(selectedReplay.sourceMemoryAnchor)}</div>`
-            : `<div class="rmt-ending-lock"><b>当前 ENDING 数据里没有可回看的已发生告白。</b><br>${activeArchiveSnapshot ? '如果这份档案确实发生过告白，可以关闭只读后使用“只重新读取告白”；若当前酒馆不是这份聊天，插件只会提示你手动打开，不会自动切换。' : '如果档案里后来已经发生过告白/关系确认，可以点“只重新读取告白”；结局路线和后日谈不会因此重做。模型只有在找到真实记忆 ID + anchor 后才允许生成回看。'}</div>`;
+               <section class="rmt-ending-section"><small>告白场景</small><p>${esc(selectedReplay.scene)}</p>${confessionReplayPlayerHtml(selectedReplay, session)}</section>
+               ${selectedReplay.responseSummary ? `<section class="rmt-ending-section"><small>当时的回应</small><p>${esc(selectedReplay.responseSummary)}</p></section>` : ''}
+               ${selectedReplay.afterEffect ? `<section class="rmt-ending-section"><small>之后</small><p>${esc(selectedReplay.afterEffect)}</p></section>` : ''}`
+            : `<div class="rmt-ending-lock"><b>还没有可回看的告白。</b></div>`;
         bodyEl().innerHTML = `<div class="rmt-ending">${summary}${tabs}<nav class="rmt-ending-list" aria-label="告白回看">${replayList || '<div class="rmt-ending-lock">没有检测到可验证的告白记录。</div>'}</nav><main class="rmt-ending-detail">${replayDetail}</main></div>`;
         return;
     }
@@ -9098,13 +9354,12 @@ function renderEnding() {
     session.selectedId = selected.id;
     const typeLabel = { route: '当前路线', romance: '恋爱', reverse: '逆转告白', bond: '羁绊', open: '开放', personal: '个人' };
     const routes = session.endings.map(item => `<button type="button" class="rmt-ending-route ${item.id === selected.id ? 'active' : ''} ${item.available ? '' : 'locked'}" data-rmt-ending-id="${esc(item.id)}"><b>${item.id === session.recommendedEndingId ? '♥ ' : ''}${esc(item.title)}</b><span>${esc(item.subtitle || typeLabel[item.type] || '路线')}</span><em>${item.available ? '可观测 · 未来推演' : '未解锁'}</em></button>`).join('');
-    const confessionPlayer = selected.available ? endingConfessionPlayerHtml(selected, session) : '';
     const detail = selected.available
         ? `<div class="rmt-ending-head"><div><h2>${esc(selected.title)}</h2><div class="rmt-ending-subtitle">${esc(selected.subtitle || typeLabel[selected.type] || '')}</div></div><span>未来路线推演</span></div>
-           <section class="rmt-ending-section"><small>ENDING SCENE // 终章</small><p>${esc(selected.endingScene)}</p>${confessionPlayer}${selected.creditsLine ? `<div class="rmt-ending-final">— ${esc(selected.creditsLine)}</div>` : ''}</section>
+           <section class="rmt-ending-section"><small>终章</small><p>${esc(selected.endingScene)}</p>${selected.creditsLine ? `<div class="rmt-ending-final">— ${esc(selected.creditsLine)}</div>` : ''}</section>
            <section class="rmt-ending-section"><small>EPILOGUE // 后日谈 · ${esc(selected.epilogue?.timeSkip || '未来')}</small><div class="rmt-ending-epilogue">${(selected.epilogue?.scenes || []).map(scene => `<article><b>${esc(scene.title)}</b><p>${esc(scene.text)}</p></article>`).join('')}</div>${selected.epilogue?.finalLine ? `<div class="rmt-ending-final">${esc(selected.epilogue.finalLine)}</div>` : ''}</section>
-           <div class="rmt-ending-evidence">路线起点来自当前档案：${esc(selected.sourceMemoryAnchor)} · 这里只推演未来，不写回聊天档案。</div>`
-        : `<div class="rmt-ending-head"><div><h2>${esc(selected.title)}</h2><div class="rmt-ending-subtitle">${esc(selected.subtitle || typeLabel[selected.type] || '')}</div></div><span>未解锁</span></div><div class="rmt-ending-lock"><b>这条路线还没有被当前档案解锁。</b><br>${esc(selected.unlockHint || '继续让关系在真实聊天中自然发展后，再更新档案并重新生成结局。')}<div class="rmt-ending-evidence">当前依据：${esc(selected.sourceMemoryAnchor)}</div></div>`;
+           `
+        : `<div class="rmt-ending-head"><div><h2>${esc(selected.title)}</h2><div class="rmt-ending-subtitle">${esc(selected.subtitle || typeLabel[selected.type] || '')}</div></div><span>未解锁</span></div><div class="rmt-ending-lock"><b>这条路线还没有被当前档案解锁。</b><br>${esc(selected.unlockHint || '继续让关系在真实聊天中自然发展后，再更新档案并重新生成结局。')}</div>`;
     bodyEl().innerHTML = `<div class="rmt-ending">${summary}${tabs}<nav class="rmt-ending-list" aria-label="结局路线">${routes}</nav><main class="rmt-ending-detail">${detail}</main></div>`;
 }
 
@@ -9188,6 +9443,7 @@ function confessionSelect(id) {
     if (!item) return;
     activeSession.view = 'confessions';
     activeSession.selectedConfessionId = item.id;
+    activeSession.confessionLineIndex = 0;
     renderEnding();
 }
 
@@ -9202,10 +9458,9 @@ function endingSelect(id) {
 }
 
 function endingConfessionStep(delta) {
-    if (!activeSession || activeSession.kind !== MODE.ENDING) return;
-    const route = selectedEndingRoute();
-    if (!route?.available) return;
-    const lines = normalizeEndingConfessionLines(route.confessionLines, route.confession);
+    if (!activeSession || activeSession.kind !== MODE.ENDING || activeSession.view !== 'confessions') return;
+    const replay = selectedConfessionReplay();
+    const lines = normalizeEndingConfessionLines(replay?.confessionLines, replay?.confessionText);
     if (!lines.length) return;
     const current = Math.max(0, Math.min(lines.length - 1, Math.floor(Number(activeSession.confessionLineIndex) || 0)));
     activeSession.confessionLineIndex = Math.max(0, Math.min(lines.length - 1, current + Number(delta || 0)));
@@ -9351,24 +9606,36 @@ function clearHeartStripImage(stripId) {
 
 function heartSetView(view) {
     if (!activeSession || activeSession.kind !== MODE.HEART) return;
-    const allowed = new Set(['greetings', 'voice', 'scenario', 'strips']);
+    const allowed = new Set(['greetings', 'seasons', 'strips']);
     activeSession.view = allowed.has(view) ? view : 'greetings';
+    renderHeart();
+}
+
+function heartSetSeason(season) {
+    if (!activeSession || activeSession.kind !== MODE.HEART) return;
+    const allowed = new Set(['postending', 'spring', 'summer', 'autumn', 'winter']);
+    activeSession.selectedSeason = allowed.has(season) ? season : 'postending';
+    activeSession.view = 'seasons';
     renderHeart();
 }
 
 function heartSelectVoice(id) {
     if (!activeSession || activeSession.kind !== MODE.HEART) return;
-    if (!activeSession.voiceDramas.some(item => item.id === id)) return;
+    const item = activeSession.voiceDramas.find(entry => entry.id === id);
+    if (!item) return;
     activeSession.selectedVoiceId = id;
-    activeSession.view = 'voice';
+    activeSession.selectedSeason = item.kind;
+    activeSession.view = 'seasons';
     renderHeart();
 }
 
 function heartSelectScenario(id) {
     if (!activeSession || activeSession.kind !== MODE.HEART) return;
-    if (!activeSession.scenarioDramas.some(item => item.id === id)) return;
+    const item = activeSession.scenarioDramas.find(entry => entry.id === id);
+    if (!item) return;
     activeSession.selectedScenarioId = id;
-    activeSession.view = 'scenario';
+    activeSession.selectedSeason = item.season;
+    activeSession.view = 'seasons';
     renderHeart();
 }
 
@@ -9385,12 +9652,22 @@ function renderHeart() {
     if (!session || session.kind !== MODE.HEART) return;
     const readOnly = !!activeArchiveSnapshot && activeArchiveReadOnly;
     setBackVisible(true, activeArchiveSnapshot ? (readOnly ? '只读档案' : '档案') : '当前档案');
-    topTitle('角色互动 · Voice Drama');
-    const view = ['greetings', 'voice', 'scenario', 'strips'].includes(session.view) ? session.view : 'greetings';
+    topTitle('角色互动');
+    const view = ['greetings', 'seasons', 'strips'].includes(session.view) ? session.view : 'greetings';
     session.view = view;
-    const tabs = `<div class="rmt-heart-tabs"><button type="button" data-rmt-heart-view="greetings" class="${view === 'greetings' ? 'active' : ''}">角色台词</button><button type="button" data-rmt-heart-view="voice" class="${view === 'voice' ? 'active' : ''}">Voice Drama</button><button type="button" data-rmt-heart-view="scenario" class="${view === 'scenario' ? 'active' : ''}">四季 Scenario</button><button type="button" data-rmt-heart-view="strips" class="${view === 'strips' ? 'active' : ''}">日常一格</button></div>`;
-    const topActions = `<div class="rmt-heart-top-actions"><button type="button" class="rmt-btn" data-rmt-action="heart-avatar-talk">点头像听一句</button>${readOnly ? '' : `<button type="button" class="rmt-btn" data-rmt-action="regenerate">重新生成角色互动</button>`}</div>`;
-    const summary = `<section class="rmt-heart-summary"><div><b>${esc(session.relationshipState)}</b><p>${esc(session.relationshipSummary)}</p><small>关系锚点：${esc(session.relationshipSourceMemoryAnchor)} · 本页台词、Voice Drama、Scenario 与日常一格都是角色化模拟，不写回聊天档案。</small></div>${topActions}</section>`;
+    const parts = session.generationParts || {};
+    const tabs = `<div class="rmt-heart-tabs">
+      <button type="button" data-rmt-heart-view="greetings" class="${view === 'greetings' ? 'active' : ''}">各种时期的对话</button>
+      <button type="button" data-rmt-heart-view="seasons" class="${view === 'seasons' ? 'active' : ''}">春夏秋冬 / Drama</button>
+      <button type="button" data-rmt-heart-view="strips" class="${view === 'strips' ? 'active' : ''}">日常一格</button>
+    </div>`;
+    const generationButton = readOnly ? '' : view === 'greetings'
+        ? '<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="dialogues">重新生成时期对话</button>'
+        : view === 'seasons'
+            ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="seasons">${parts.seasons ? '重新生成春夏秋冬' : '生成春夏秋冬'}</button>`
+            : `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="strips">${parts.strips ? '重新生成日常一格' : '生成日常一格'}</button>`;
+    const topActions = `<div class="rmt-heart-top-actions"><button type="button" class="rmt-btn" data-rmt-action="heart-avatar-talk">点头像听一句</button>${generationButton}</div>`;
+    const summary = `<section class="rmt-heart-summary"><div><b>${esc(session.relationshipState)}</b><p>${esc(session.relationshipSummary)}</p></div>${topActions}</section>`;
     let content = '';
 
     if (view === 'greetings') {
@@ -9406,18 +9683,28 @@ function renderHeart() {
             if (!lines.length) return '';
             return `<article class="rmt-heart-greeting-group"><b>${esc(labels[key] || key)}</b>${lines.map(line => `<p>${esc(line)}</p>`).join('')}</article>`;
         }).join('');
-        content = `<div class="rmt-heart-greetings"><div class="rmt-heart-current-line"><small>如果现在点头像 · ${esc(current.label)}</small><p>${esc(current.text)}</p></div><div class="rmt-heart-greeting-grid">${groups}</div></div>`;
-    } else if (view === 'voice') {
-        const selected = selectedHeartVoice();
-        if (selected) session.selectedVoiceId = selected.id;
-        const nav = session.voiceDramas.map(item => `<button type="button" class="rmt-heart-drama-card ${item.id === selected?.id ? 'active' : ''}" data-rmt-heart-voice-id="${esc(item.id)}"><b>${esc(item.title)}</b><span>${esc(item.subtitle || heartVoiceKindLabel(item.kind))}</span><em>${esc(heartVoiceKindLabel(item.kind))}</em></button>`).join('');
-        const detail = selected ? `<div class="rmt-heart-drama-head"><div><h2>${esc(selected.title)}</h2><p>${esc(selected.subtitle)}</p></div><span>${esc(heartVoiceKindLabel(selected.kind))}</span></div><div class="rmt-heart-setting">${esc(selected.setting)}</div>${renderHeartScriptLines(selected.script)}<div class="rmt-heart-sim-note">这里是非正史剧场。尤其“剧本中的你”的台词只是演出脚本，不代表真实用户选择。</div>` : '';
-        content = `<div class="rmt-heart-drama-layout"><nav>${nav}</nav><main>${detail}</main></div>`;
-    } else if (view === 'scenario') {
-        const selected = selectedHeartScenario();
-        if (selected) session.selectedScenarioId = selected.id;
-        const nav = session.scenarioDramas.map(item => `<button type="button" class="rmt-heart-drama-card ${item.id === selected?.id ? 'active' : ''}" data-rmt-heart-scenario-id="${esc(item.id)}"><b>${esc(item.title)}</b><span>${esc(item.subtitle)}</span><em>${esc(heartSeasonLabel(item.season))}</em></button>`).join('');
-        const detail = selected ? `<div class="rmt-heart-drama-head"><div><h2>${esc(selected.title)}</h2><p>${esc(selected.subtitle)}</p></div><span>${esc(heartSeasonLabel(selected.season))}</span></div><div class="rmt-heart-setting">${esc(selected.setting)}</div>${renderHeartScriptLines(selected.script)}<div class="rmt-heart-sim-note">四季 Scenario 是“普通一天里的附加小剧场”模拟，不会被保存成已经发生的回忆。</div>` : '';
+        content = `<div class="rmt-heart-greetings"><div class="rmt-heart-current-line"><small>${esc(current.label)}</small><p>${esc(current.text)}</p></div><div class="rmt-heart-greeting-grid">${groups}</div></div>`;
+    } else if (view === 'seasons') {
+        const availableSeasons = ['postending', 'spring', 'summer', 'autumn', 'winter'];
+        const selectedSeason = availableSeasons.includes(session.selectedSeason) ? session.selectedSeason : 'postending';
+        session.selectedSeason = selectedSeason;
+        const seasonLabels = { postending: '未来 / 后日谈', spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
+        const nav = availableSeasons.map(season => {
+            const hasVoice = session.voiceDramas.some(item => item.kind === season);
+            const hasScenario = season === 'postending' || session.scenarioDramas.some(item => item.season === season);
+            const ready = hasVoice && hasScenario;
+            return `<button type="button" class="rmt-heart-drama-card ${season === selectedSeason ? 'active' : ''}" data-rmt-heart-season="${esc(season)}"><b>${esc(seasonLabels[season])}</b><span>${ready ? '已生成' : '未生成'}</span></button>`;
+        }).join('');
+        const voice = session.voiceDramas.find(item => item.kind === selectedSeason) || null;
+        const scenario = selectedSeason === 'postending' ? null : (session.scenarioDramas.find(item => item.season === selectedSeason) || null);
+        let detail = '';
+        if (voice) {
+            detail += `<section class="rmt-heart-drama-section"><div class="rmt-heart-drama-head"><div><h2>${esc(voice.title)}</h2><p>${esc(voice.subtitle)}</p></div></div><div class="rmt-heart-setting">${esc(voice.setting)}</div>${renderHeartScriptLines(voice.script)}</section>`;
+        }
+        if (scenario) {
+            detail += `<section class="rmt-heart-drama-section"><div class="rmt-heart-drama-head"><div><h2>${esc(scenario.title)}</h2><p>${esc(scenario.subtitle)}</p></div></div><div class="rmt-heart-setting">${esc(scenario.setting)}</div>${renderHeartScriptLines(scenario.script)}</section>`;
+        }
+        if (!detail) detail = `<div class="rmt-heart-empty">${readOnly ? '这一部分还没有生成。' : '点击上方按钮生成春夏秋冬 / Drama。'}</div>`;
         content = `<div class="rmt-heart-drama-layout"><nav>${nav}</nav><main>${detail}</main></div>`;
     } else {
         const selected = selectedHeartStrip();
@@ -9427,7 +9714,9 @@ function renderHeart() {
         if (selected) {
             const image = normalizeCgImageRecord(selected.cgImage);
             const panels = selected.panels.map((panel, index) => `<article class="rmt-heart-panel"><b>${index + 1}</b><div><small>${esc(panel.caption || `第 ${index + 1} 格`)}</small><p>${esc(panel.action)}</p>${panel.charLine ? `<div class="rmt-heart-panel-line"><strong>角色</strong>${esc(panel.charLine)}</div>` : ''}${panel.userLine ? `<div class="rmt-heart-panel-line user"><strong>剧本中的你</strong>${esc(panel.userLine)}</div>` : ''}</div></article>`).join('');
-            detail = `<div class="rmt-heart-strip-head"><div><h2>${esc(selected.title)}</h2><p>${esc(selected.subtitle)}</p></div><span>${selected.panelCount}格</span></div><div class="rmt-heart-strip-image">${cgImageLayerHtml(selected, { lazy: false })}</div><div class="rmt-heart-strip-actions">${readOnly ? '' : `<button type="button" class="rmt-btn rmt-cg-primary" data-rmt-action="draw-heart-strip" data-rmt-heart-strip-id="${esc(selected.id)}" ${isCgImageDrawing(MODE.HEART, selected.id) ? 'disabled' : ''}>${isCgImageDrawing(MODE.HEART, selected.id) ? '正在绘制…' : image ? '↻ 重绘日常一格' : '🎨 绘制日常一格'}</button>${image ? `<button type="button" class="rmt-btn" data-rmt-action="clear-heart-strip" data-rmt-heart-strip-id="${esc(selected.id)}">恢复文字版</button>` : ''}`}<small>图片只画 Q 版分镜，不把台词交给图像模型；文字由插件界面单独显示。</small></div><div class="rmt-heart-panels">${panels}</div>`;
+            detail = `<div class="rmt-heart-strip-head"><div><h2>${esc(selected.title)}</h2><p>${esc(selected.subtitle)}</p></div><span>${selected.panelCount}格</span></div><div class="rmt-heart-strip-image">${cgImageLayerHtml(selected, { lazy: false })}</div><div class="rmt-heart-strip-actions">${readOnly ? '' : `<button type="button" class="rmt-btn rmt-cg-primary" data-rmt-action="draw-heart-strip" data-rmt-heart-strip-id="${esc(selected.id)}" ${isCgImageDrawing(MODE.HEART, selected.id) ? 'disabled' : ''}>${isCgImageDrawing(MODE.HEART, selected.id) ? '正在绘制…' : image ? '↻ 重绘日常一格' : '🎨 绘制日常一格'}</button>${image ? `<button type="button" class="rmt-btn" data-rmt-action="clear-heart-strip" data-rmt-heart-strip-id="${esc(selected.id)}">恢复文字版</button>` : ''}`}</div><div class="rmt-heart-panels">${panels}</div>`;
+        } else {
+            detail = `<div class="rmt-heart-empty">${readOnly ? '日常一格还没有生成。' : '点击上方按钮单独生成日常一格。'}</div>`;
         }
         content = `<div class="rmt-heart-drama-layout rmt-heart-strip-layout"><nav>${nav}</nav><main>${detail}</main></div>`;
     }
@@ -9559,7 +9848,6 @@ function renderAlbum() {
         ${selected.unlocked ? '' : '<button type="button" class="rmt-btn" data-rmt-action="show-hint">解锁提示</button>'}
         <button type="button" class="rmt-btn" data-rmt-action="album-cancel">取消选择</button>
       </div>
-      ${selected.unlocked && !readOnlyArchive ? `<div class="rmt-cg-draw-note">${imageGenerationUiState().available ? (imageGenerationUiState().detected ? '可调用 SillyTavern 已配置的 Image Generation 绘制实图；可能消耗额度。' : '已手动勾选 Image Generation；绘制时会尝试 /sd 兜底，可能消耗额度。') : '未检测到 SillyTavern Image Generation；仍会保留原本的抽象 CG。'}</div>` : readOnlyArchive ? '<div class="rmt-cg-draw-note">只读档案浏览：保留已保存的 CG 实图，不在此处触发生图或修改。</div>' : ''}
       <div class="rmt-hint" ${hint ? '' : 'hidden'}>${esc(hint)}</div>
     </aside>` : '<aside class="rmt-info">当前分类没有条目。</aside>';
     const body = bodyEl();
@@ -9655,7 +9943,6 @@ function renderSharedMemory() {
         <div class="rmt-memory-caption"><b>${esc(item.title)}</b> · ${esc(item.date)}<br><span style="opacity:.82">${esc(item.desc)}</span></div>
       </div>
       <div class="rmt-dialogue">
-        <div class="rmt-dialogue-now"><span>NOW · 一起翻相册</span><b>现在的 ${esc(charName)} → 现在的你</b></div>
         <div class="rmt-dialogue-speaker">${esc(charName)}</div>
         <div class="rmt-dialogue-text">${esc(comments[session.dialogueIndex] || '')}</div>
         <div class="rmt-dialogue-actions">
@@ -9781,7 +10068,7 @@ function renderPhone() {
     const entries = (app?.entries || []).map(item => `<button type="button" class="rmt-phone-entry ${item.id === entry?.id ? 'active' : ''}" data-rmt-phone-entry="${esc(item.id)}"><b>${esc(item.title)}</b><small>${esc(item.meta || item.preview)}</small><span>${esc(item.preview)}</span>${item.messages?.length ? `<em>${item.messages.length} 条消息</em>` : ''}</button>`).join('');
     const detail = renderPhoneEntryDetail(entry, app);
     const kind = PHONE_DEVICE_KINDS.has(session.deviceKind) ? session.deviceKind : 'phone';
-    bodyEl().innerHTML = `<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="room-deep-back">← 返回他的房间</button><span>设备会按本地现实时间切换状态；相册使用纯文字照片档案</span></div><div class="rmt-phone"><div class="rmt-phone-shell rmt-device-${esc(kind)} rmt-phone-view-${session.view === 'detail' ? 'detail' : 'list'}" data-rmt-phone-daypart="${esc(live.key)}"><div class="rmt-phone-notch"></div><div class="rmt-phone-lock"><div><b>${esc(session.deviceName)}</b><small>${esc(live.statusLine || roomDaypartState(now).label)}</small></div><span><b data-rmt-phone-clock>${esc(roomClockText(now))}</b><small>${esc(live.lockText)}</small></span></div><div class="rmt-phone-apps">${apps}</div><div class="rmt-phone-content"><div class="rmt-phone-list"><div class="rmt-phone-app-summary"><b>${esc(app?.label || '')}</b><span>${esc(app?.summary || '')}</span><small>${app?.entries?.length || 0} 个可读条目</small></div>${entries}</div>${detail}</div></div></div>`;
+    bodyEl().innerHTML = `<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="room-deep-back">← 返回他的房间</button></div><div class="rmt-phone"><div class="rmt-phone-shell rmt-device-${esc(kind)} rmt-phone-view-${session.view === 'detail' ? 'detail' : 'list'}" data-rmt-phone-daypart="${esc(live.key)}"><div class="rmt-phone-notch"></div><div class="rmt-phone-lock"><div><b>${esc(session.deviceName)}</b><small>${esc(live.statusLine || roomDaypartState(now).label)}</small></div><span><b data-rmt-phone-clock>${esc(roomClockText(now))}</b><small>${esc(live.lockText)}</small></span></div><div class="rmt-phone-apps">${apps}</div><div class="rmt-phone-content"><div class="rmt-phone-list"><div class="rmt-phone-app-summary"><b>${esc(app?.label || '')}</b><span>${esc(app?.summary || '')}</span><small>${app?.entries?.length || 0} 个可读条目</small></div>${entries}</div>${detail}</div></div></div>`;
     startPhoneClock();
 }
 
@@ -9844,9 +10131,12 @@ function renderAdvMode() {
     const recoveryIds = new Set(cleanArray(session.advBulkRecovery?.failedIds, 64, 100));
     const recoveryCount = session.events.filter(item => !item.adv?.paragraphs?.length && (!recoveryIds.size || recoveryIds.has(item.id))).length;
     const recoveryActions = !readOnlyArchive && recoveryCount > 0 && session.advBulkRecovery
-        ? `<div class="rmt-adv-recovery"><small>上次一键生成仍有 ${recoveryCount} 篇失败；不会自动逐条补。</small><button type="button" class="rmt-btn" data-rmt-action="generate-all-adv" ${bulkRunning ? 'disabled' : ''}>再次一键生成失败项 · 1次请求</button><button type="button" class="rmt-btn" data-rmt-action="repair-failed-adv" ${bulkRunning ? 'disabled' : ''}>逐个补完失败项 · 最多${recoveryCount}次请求</button></div>`
+        ? `<div class="rmt-adv-recovery"><button type="button" class="rmt-btn" data-rmt-action="repair-failed-adv" ${bulkRunning ? 'disabled' : ''}>逐个补失败项 · ${recoveryCount}</button></div>`
         : '';
-    const bulkBar = `<div class="rmt-adv-bulkbar"><div><b>ADV ${completedAdv}/${session.events.length}</b><span>${readOnlyArchive ? '只读档案浏览' : completedAdv >= session.events.length ? '全部长篇已就绪' : '优先一键生成；失败后由你选择恢复方式'}</span></div>${readOnlyArchive ? '' : `<button type="button" class="rmt-btn" data-rmt-action="generate-all-adv" ${bulkRunning || completedAdv >= session.events.length ? 'disabled' : ''}>${bulkRunning ? '一键生成中…' : completedAdv ? '一键生成未完成 ADV' : '一次生成全部 ADV'}</button>`}</div>${recoveryActions}`;
+    const bulkLabel = session.advBulkRecovery && recoveryCount
+        ? `重试失败批 · 最多${ADV_BULK_BATCH_SIZE}篇`
+        : completedAdv ? `生成下一批 ADV · 最多${ADV_BULK_BATCH_SIZE}篇` : `生成第一批 ADV · 最多${ADV_BULK_BATCH_SIZE}篇`;
+    const bulkBar = `<div class="rmt-adv-bulkbar"><div><b>ADV ${completedAdv}/${session.events.length}</b><span>${readOnlyArchive ? '只读' : completedAdv >= session.events.length ? '已完成' : `每批最多 ${ADV_BULK_BATCH_SIZE} 篇`}</span></div>${readOnlyArchive ? '' : `<button type="button" class="rmt-btn" data-rmt-action="generate-all-adv" ${bulkRunning || completedAdv >= session.events.length ? 'disabled' : ''}>${bulkRunning ? '生成中…' : bulkLabel}</button>`}</div>${recoveryActions}`;
     const mobilePicker = `<div class="rmt-adv-mobile-picker"><div class="rmt-adv-picker-status"><b>${String(selectedIndex + 1).padStart(2, '0')} / ${session.events.length}</b><span>${esc(selected?.title || '')}</span></div><select data-rmt-adv-select aria-label="选择 CG / ADV 事件">${options}</select><div class="rmt-adv-picker-actions"><button type="button" class="rmt-btn" data-rmt-action="adv-event-prev" ${selectedIndex <= 0 ? 'disabled' : ''}>← 上一个</button><button type="button" class="rmt-btn" data-rmt-action="adv-event-next" ${selectedIndex >= session.events.length - 1 ? 'disabled' : ''}>下一个 →</button></div></div>`;
     const body = bodyEl();
     body.innerHTML = `<div class="rmt-adv"><aside class="rmt-event-list">${bulkBar}${mobilePicker}<div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail">${detail}</section><div class="rmt-inline-status" hidden></div></div>`;
@@ -9934,6 +10224,8 @@ function handleOverlayClick(event) {
     if (phoneEntry) return phoneSelectEntry(phoneEntry.dataset.rmtPhoneEntry);
     const heartView = event.target.closest?.('[data-rmt-heart-view]');
     if (heartView) return heartSetView(heartView.dataset.rmtHeartView);
+    const heartSeason = event.target.closest?.('[data-rmt-heart-season]');
+    if (heartSeason) return heartSetSeason(heartSeason.dataset.rmtHeartSeason);
     const heartVoice = event.target.closest?.('[data-rmt-heart-voice-id]');
     if (heartVoice) return heartSelectVoice(heartVoice.dataset.rmtHeartVoiceId);
     const heartScenario = event.target.closest?.('[data-rmt-heart-scenario-id]');
@@ -9976,7 +10268,7 @@ function handleOverlayClick(event) {
     const actionEl = event.target.closest?.('[data-rmt-action]');
     const action = actionEl?.dataset?.rmtAction;
     if (!action) return;
-    if (activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'draw-heart-strip', 'clear-heart-strip', 'generate-all-adv', 'repair-failed-adv', 'room-life-refresh', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins', 'memory-worldinfo-picker', 'refresh-ending-confessions'].includes(action)) {
+    if (activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'draw-heart-strip', 'clear-heart-strip', 'generate-all-adv', 'repair-failed-adv', 'room-life-refresh', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins', 'memory-worldinfo-picker', 'refresh-ending-confessions', 'heart-generate-part'].includes(action)) {
         if (!requireWritableArchiveAction()) return;
     }
     if (action === 'back') return navigateBack();
@@ -9995,6 +10287,7 @@ function handleOverlayClick(event) {
         const key = activeArchiveSnapshot?.archiveGroupId || (() => { try { return currentArchiveGroupKey(getContext()); } catch { return ''; } })();
         return void showAvatarDialogueForCharacter(key);
     }
+    if (action === 'heart-generate-part') return void generateHeartSection(actionEl.dataset.rmtHeartPart || 'dialogues');
     if (action === 'avatar-talk-again') return renderAvatarDialoguePopup(activeAvatarDialogue, { repeat: true });
     if (action === 'avatar-heart-open') return openHeartFromAvatar();
     if (action === 'avatar-heart-generate') {
@@ -10005,7 +10298,7 @@ function handleOverlayClick(event) {
         }
         bodyEl()?.querySelector('.rmt-avatar-dialog-pop')?.remove();
         activeAvatarDialogue = null;
-        if (!confirmExplicitAction('生成角色互动 / Voice Drama？', '会把早中晚/周末/生日/节日/久未访问台词库、后日谈与四季剧场、日常一格脚本拆成多段顺序请求。只在确认后开始，全部通过后才覆盖旧内容。', { destructive: false })) return;
+        if (!confirmExplicitAction('生成角色互动？', '先生成各种时期的对话。春夏秋冬 / Drama 与日常一格之后在各自页签里单独生成。', { destructive: false })) return;
         return void generateMode(MODE.HEART, { background: true });
     }
     if (action === 'avatar-heart-open-archive') {
