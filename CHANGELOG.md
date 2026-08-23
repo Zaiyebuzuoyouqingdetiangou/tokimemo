@@ -1,3 +1,11 @@
+## 0.8.10 concurrent-drama-r27
+
+- **修复五季按钮仍共用同一 HEART 锁**：未来/后日谈、春、夏、秋、冬改用独立 `heart-season:<scope>:<season>` 逻辑任务键，可以同时点击。最多 5 个用户逻辑任务可排队，真正发往 Connection Manager 的请求仍最多 2 个同时执行，避免重新引入 r23 的 429/断连问题。
+- **单季再拆 Voice / Scenario**：春夏秋冬不再要求一个 JSON 同时装下 Voice + Scenario；每季按 Voice → Scenario 两个小请求生成，任一小段成功立即保存。只完成一半时 UI 显示 `1/2`，再次点击只补缺失部分；完整后再次点击才会整季重生成。
+- **降低 Drama 脆弱完整度门槛**：四季 Voice 调整为至少 5 节点 / 280 字，Scenario 至少 6 节点 / 360 字；未来/后日谈 Voice 调整为至少 8 节点 / 420 字。对应单段输出预算降到 3k～3.8k tokens，并使用较低的结构化创作温度，减少长 JSON 截断或格式漂移。
+- **并发写回改为 patch 合并**：每个季节/Voice/Scenario 只写自己的 patch，提交前重新读取当前 HEART session 合并；不同季节同时完成不会互相覆盖。切到别的聊天后完成的 patch 会按 origin + archiveRevision 延迟写回，并在回到原聊天时重新归一化。
+- **回归测试 18 项通过**：新增不同季节独立逻辑键、Provider 两并发上限、轻量 Voice/Scenario 校验和兄弟季节 patch 不互相覆盖测试。
+
 ## 0.8.10 lean-resume-seasons-r26
 
 - **设置页删除 API 说明长文**：连接/模型等控件仍保留，但删除手动生图勾选框下方从“专用连接：…”到“模型刷新只调用…”的整块说明，避免移动端设置页被大段文字撑长。

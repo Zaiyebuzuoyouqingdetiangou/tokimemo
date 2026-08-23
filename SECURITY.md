@@ -255,3 +255,12 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - Removing explanatory settings copy must not remove the actual connection/model controls, generation safety settings, write guards, origin/revision fences, retry policy, image-generation opt-in state, or destructive confirmations.
 - All independently triggered HEART section writes for the same scope must share one build guard so two seasons cannot commit stale cloned bases over each other. Per-season UI independence does not authorize concurrent same-session writers.
 - Phone draft plan `liveStates` must be reduced to the four known dayparts with bounded text and badge keys restricted to planned App IDs before draft persistence; arbitrary model-owned nested plan state must not enter metadata merely to support resume.
+
+
+### 0.8.10 r27 concurrent HEART Drama invariants
+
+- HEART season concurrency uses independent internal task keys only. The global provider permit remains capped at two simultaneous Connection Manager calls; queued season tasks must not bypass provider throttling or the global logical-task ceiling.
+- Seasonal Voice and Scenario are separate derivative payloads. Each payload must pass its local bounded normalizer before it can become a HEART patch; model output cannot select another season, patch key, destination mode, chat, archive revision, HTML, URL, or executable action.
+- A HEART partial patch may modify only dialogue-core fields, daily strips, or one fixed season's normalized Voice/Scenario entry. Commit code must reload the latest same-chat HEART session and merge the patch before `normalizeHeart` + `saveSession`, preventing stale concurrent snapshots from overwriting sibling season data.
+- Deferred HEART patches are keyed by the captured character/chat origin and may be flushed only when the live archive revision still equals the captured revision. They must be re-normalized against the current archive before writeback.
+- Reducing Drama node/character thresholds is a reliability change only. It does not turn Voice/Scenario into archive evidence, does not write `MEMORY_KEY`, and does not weaken the relationship memory-ID/anchor requirement carried by the parent HEART session.
