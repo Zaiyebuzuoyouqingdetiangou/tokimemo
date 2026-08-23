@@ -5,7 +5,7 @@ import test from 'node:test';
 const sourceUrl = new URL('../src/heartbeatMemories.js', import.meta.url);
 const source = await readFile(sourceUrl, 'utf8');
 const testingExports = `
-export const __r26Testing = {
+export const __r27Testing = {
   reset() {
     activeGenerationTasks.clear();
     activeModeBuildScopes.clear();
@@ -32,12 +32,15 @@ export const __r26Testing = {
   normalizePhoneDraftApp,
   PHONE_DRAFT_CACHE_KEY,
   normalizeHeart,
+  normalizeVoiceDramaPart,
+  normalizeScenarioDramaPart,
+  applyHeartPartialPatch,
   normalizeAchievements,
   SEGMENT_REQUEST_CONCURRENCY,
   ADV_BULK_BATCH_SIZE,
 };`;
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(`${source}\n${testingExports}`).toString('base64')}`;
-const { __r26Testing: api } = await import(moduleUrl);
+const { __r27Testing: api } = await import(moduleUrl);
 
 test.afterEach(() => api.reset());
 
@@ -350,12 +353,13 @@ test('settings copy is trimmed and HEART speakers render real names instead of g
     assert.doesNotMatch(source, /<strong>角色<\/strong>/);
     assert.match(source, /data-rmt-action="heart-generate-season"/);
     assert.match(source, /activeArchiveSnapshot\?\.memory\?\.userName \|\| getContext\(\)\.name1/);
-    assert.equal((source.match(/const taskKey = `heart-section:\$\{scope\}`;/g) || []).length, 2);
+    assert.doesNotMatch(source, /const taskKey = `heart-section:\$\{scope\}`;/);
+    assert.match(source, /const taskKey = `heart-season:\$\{scope\}:\$\{normalizedSeason\}`;/);
 });
 
 test('one season of Drama can be normalized and kept without generating the other seasons', () => {
-    const longVoice = '春天的风从窗边吹进来，我还记得那一刻自己为什么会想到你。'.repeat(12);
-    const longScenario = '那是一个很普通的春日，我们只是一起处理了一件小事，却留下了很具体的生活感。'.repeat(12);
+    const longVoice = '春天的风从窗边吹进来，我会想到那天我们一起走过的路。'.repeat(5);
+    const longScenario = '普通的春日里，我们一起处理了一件很小但很具体的生活琐事。'.repeat(6);
     const baseGreetings = {
         morning: ['早。', '醒了吗？'], noon: ['中午了。', '记得吃东西。'], evening: ['回来了。', '天已经暗了。'], night: ['还没睡？', '别熬太久。'], weekend: ['今天慢一点。', '不用赶时间。'],
         birthday: ['今天陪我。'], userBirthday: ['生日快乐。'], holiday: ['今天也算特别。'], absenceWorry: ['最近没见到你。'], absenceSulky: ['你是不是忘了这里。'], absenceJealous: [],
@@ -363,13 +367,54 @@ test('one season of Drama can be normalized and kept without generating the othe
     const heart = api.normalizeHeart({
         title: '角色互动', relationshipState: '关系发展中', relationshipSummary: '雨夜回家之后，两个人的距离更近了。',
         relationshipSourceMemoryIds: ['M001'], relationshipSourceMemoryAnchor: '站台雨伞', birthdayMmDd: '', userBirthdayMmDd: '', specialDays: [], greetings: baseGreetings,
-        voiceDramas: [{ id: 'VOICE_SPRING', kind: 'spring', title: '春 Voice Drama', subtitle: '春日', setting: '春日模拟', script: Array.from({ length: 7 }, (_, i) => ({ speaker: i % 3 === 0 ? 'narrator' : 'char', text: longVoice })) }],
-        scenarioDramas: [{ id: 'SCENE_SPRING', season: 'spring', title: '春 Scenario Drama', subtitle: '小事', setting: '春日模拟', script: Array.from({ length: 8 }, (_, i) => ({ speaker: i % 4 === 0 ? 'user' : 'char', text: longScenario })) }],
+        voiceDramas: [{ id: 'VOICE_SPRING', kind: 'spring', title: '春 Voice Drama', subtitle: '春日', setting: '春日模拟', script: Array.from({ length: 5 }, (_, i) => ({ speaker: i % 3 === 0 ? 'narrator' : 'char', text: longVoice })) }],
+        scenarioDramas: [{ id: 'SCENE_SPRING', season: 'spring', title: '春 Scenario Drama', subtitle: '小事', setting: '春日模拟', script: Array.from({ length: 6 }, (_, i) => ({ speaker: i % 4 === 0 ? 'user' : 'char', text: longScenario })) }],
         dailyStrips: [], generationParts: { dialogues: true, seasons: true, strips: false }, selectedSeason: 'spring', view: 'seasons',
     }, memoryBank);
     assert.deepEqual(heart.voiceDramas.map(item => item.kind), ['spring']);
     assert.deepEqual(heart.scenarioDramas.map(item => item.season), ['spring']);
     assert.equal(heart.selectedSeason, 'spring');
+});
+
+
+test('different HEART seasons reserve independent logical task keys while provider concurrency stays capped at two', () => {
+    const scope = 'char|chat';
+    api.addBuildScope(`heart-season:${scope}:spring`);
+    api.addBuildScope(`heart-season:${scope}:summer`);
+    assert.deepEqual(new Set(api.logicalKeys()), new Set([`heart-season:${scope}:spring`, `heart-season:${scope}:summer`]));
+    assert.match(source, /MAX_CONCURRENT_PROVIDER_REQUESTS = 2/);
+});
+
+test('season Voice and Scenario are independently valid at the lighter reliability thresholds', () => {
+    const voiceText = '春风从门口吹进来，我看见你时忽然觉得今天比平常更轻一点。'.repeat(5);
+    const scenarioText = '我们只是去买了一点日用品，中途因为一件小事停下来笑了很久。'.repeat(6);
+    const voice = api.normalizeVoiceDramaPart({ voiceDramas: [{
+        id: 'VOICE_SPRING', kind: 'spring', title: '春 Voice', subtitle: '春日', setting: '春日模拟',
+        script: Array.from({ length: 5 }, (_, i) => ({ speaker: i % 2 ? 'char' : 'narrator', text: voiceText })),
+    }] }, ['spring']);
+    const scenario = api.normalizeScenarioDramaPart({ scenarioDramas: [{
+        id: 'SCENE_SPRING', season: 'spring', title: '春 Scenario', subtitle: '小事', setting: '春日模拟',
+        script: Array.from({ length: 6 }, (_, i) => ({ speaker: i % 3 ? 'char' : 'user', text: scenarioText })),
+    }] }, 'spring');
+    assert.equal(voice.length, 1);
+    assert.equal(scenario.length, 1);
+});
+
+test('independent HEART season patches merge without overwriting sibling seasons', () => {
+    const baseGreetings = {
+        morning: ['早。', '醒了吗？'], noon: ['中午了。', '记得吃东西。'], evening: ['回来了。', '天暗了。'], night: ['还没睡？', '早点休息。'], weekend: ['今天慢一点。', '不用赶时间。'],
+        birthday: ['今天陪我。'], userBirthday: ['生日快乐。'], holiday: ['今天也算特别。'], absenceWorry: ['最近没见到你。'], absenceSulky: ['你是不是忘了这里。'], absenceJealous: [],
+    };
+    const base = api.normalizeHeart({
+        title: '角色互动', relationshipState: '关系发展中', relationshipSummary: '雨夜回家之后，两个人的距离更近了。',
+        relationshipSourceMemoryIds: ['M001'], relationshipSourceMemoryAnchor: '站台雨伞', birthdayMmDd: '', userBirthdayMmDd: '', specialDays: [], greetings: baseGreetings,
+        voiceDramas: [], scenarioDramas: [], dailyStrips: [], generationParts: { dialogues: true, seasons: false, strips: false }, view: 'seasons',
+    }, memoryBank);
+    const springVoice = api.normalizeVoiceDramaPart({ voiceDramas: [{ id: 'VS', kind: 'spring', title: '春', subtitle: '', setting: '', script: Array.from({ length: 5 }, () => ({ speaker: 'char', text: '春天里我还是会很自然地想到你和那段一起走过的路。'.repeat(6) })) }] }, ['spring'])[0];
+    const summerVoice = api.normalizeVoiceDramaPart({ voiceDramas: [{ id: 'VU', kind: 'summer', title: '夏', subtitle: '', setting: '', script: Array.from({ length: 5 }, () => ({ speaker: 'char', text: '夏天很热，但一起走回去的时候我反而觉得那段路没有那么长。'.repeat(6) })) }] }, ['summer'])[0];
+    let merged = api.applyHeartPartialPatch(base, { type: 'season', season: 'spring', voice: springVoice });
+    merged = api.applyHeartPartialPatch(merged, { type: 'season', season: 'summer', voice: summerVoice });
+    assert.deepEqual(new Set(merged.voiceDramas.map(item => item.kind)), new Set(['spring', 'summer']));
 });
 
 test('phone continuation draft keeps only bounded normalized App fields', () => {
