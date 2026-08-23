@@ -1,3 +1,10 @@
+## 0.8.10 memory-worldinfo-r19
+
+- Added “选择记忆相关世界书” next to the memory/summary preflight. A companion worldbook can be imported as a whole or narrowed to exact entry UIDs.
+- Memory-related worldbooks are context-only: they help interpret current-chat memory/summary records but cannot independently create happened-memory evidence or supply external anchors.
+- Selection is stored per chat as book names/mode/UIDs only and is read only during explicit preflight through SillyTavern public world-info APIs.
+- Added hard limits of 8 books / 160 entries / 52k world-info characters and invalidate the preflight cache whenever selection changes.
+
 ## 0.8.10 audit-r18
 
 - 根据 r17 独立安全审计报告收尾低风险回归：删除只读重绘残留的无效 `preserveMode` 实参，并将 `openArchiveChatFromOverview` 重命名为只读语义明确的 `openArchiveSnapshotFromOverview`，继续保证档案一览不会切换宿主聊天。

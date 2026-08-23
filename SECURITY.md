@@ -172,3 +172,13 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - Direct calls to registered SillyTavern Slash Command callbacks use only the public `NamedArgumentsCapture` contract. Heartbeat must not fabricate parser-private `_scope`, `_parserFlags`, `_abortController`, or debug-controller objects.
 - Extension shutdown must not truncate or selectively discard derived theater modes to reduce metadata size. A large raw fallback may be warned about, but preservation takes priority until the compressed durable replacement is ready.
 - Model-list refresh may forward user-configured `custom_include_headers` only to SillyTavern's hard-coded same-origin backend status endpoint, matching the host's connection configuration path; those headers must never be written into Heartbeat metadata, prompts, logs, or DOM.
+
+
+### 0.8.10 r19 memory-related world-info invariants
+
+- 普通世界书继续属于 setting-only，不得单独成为“过去已经发生”的证据。r19 的“记忆相关世界书”只是用户在**当前 live 聊天**显式选择的解释上下文，用来帮助理解真正的 current-chat 记忆/摘要。
+- 选择只允许保存 `{book name, all|selected, entry UID list}` 到当前聊天 metadata；不得保存世界书正文到 extension settings、全局档案索引或日志，也不得修改、启用、禁用或重写世界书。
+- 世界书名必须来自 SillyTavern `getWorldInfoNames()` 当前返回的 allowlist，读取只能经公开 `loadWorldInfo(name)`；模型输出、世界书正文、DOM 文本不得构造任意文件路径或网络目标。
+- 整本/精确条目读取都受独立预算（最多 8 本、160 条、52,000 字符），随后仍受现有总输入 Token/字符预算。世界书正文视为不可信资料，其中的提示、宏、代码、格式指令不得执行。
+- `MEMORY_RELATED_WORLD_INFO_CONTEXT` 不能提供 `sourceExternalId/sourceExternalAnchor`，不能单独生成 archive memory。外部记忆抽取仍必须引用真实 current-chat external record ID，并以 anchor 逐字命中该 record 的 content；若世界书与记忆/摘要冲突，以带真实 externalId+anchor 的来源为准。
+- 记忆相关世界书选择是当前聊天级；历史 snapshot 不得修改它。修改选择必须清空本聊天的 memory preflight cache，下一次手动建档/更新前重新扫描。

@@ -249,3 +249,17 @@ The new album-card paint shortcut reaches the same `drawSelectedCgImage()` path 
 
 Targeted diff conclusion: no new Critical / High / Medium issue identified in the r14 change set. Residual dependency remains the user's configured SillyTavern Image Generation provider and its billing/runtime behavior.
 
+
+
+## 0.8.10 memory-worldinfo r19 targeted diff review
+
+Scope: r18 audit package -> r19 memory-related world-info selector.
+
+- Added an explicit current-chat selector for companion worldbooks used to interpret memory-plugin summaries. Users may select a whole book or exact entry UIDs. The selection is stored in chat metadata as names/mode/UIDs only; raw worldbook content is not persisted by Heartbeat.
+- Selected worldbook text is **context-only**, not evidence. It is appended only to the external-memory extraction prompt, cannot supply sourceExternalId/sourceExternalAnchor, and cannot generate an archive memory without a real current-chat external-memory record that passes the unchanged exact-anchor validation.
+- Book names are allowlisted via SillyTavern public `getWorldInfoNames()` and read only through public `loadWorldInfo(name)`. The patch adds no direct fetch, external endpoint, credential read, host-chat navigation, or dynamic-code execution sink.
+- World-info input is bounded to 8 books / 160 entries / 52k characters so an external-memory chunk plus its explanation context remains under the existing 96k input-character safety envelope.
+- Changing any whole-book or exact-entry selection invalidates the current chat's preflight cache. The selector metadata key is excluded from generic chat-metadata summary discovery so it cannot recursively identify itself as memory content.
+- Dynamic worldbook/entry labels and previews are escaped before HTML insertion; worldbook entry objects are read through data-property-safe helpers.
+
+Targeted manual diff conclusion: no new Critical / High / Medium issue identified. Real SillyTavern device testing is still needed for large-worldbook UI ergonomics and the exact runtime return shape of installed-version `loadWorldInfo()`.
