@@ -5,7 +5,7 @@ import test from 'node:test';
 const sourceUrl = new URL('../src/heartbeatMemories.js', import.meta.url);
 const source = await readFile(sourceUrl, 'utf8');
 const testingExports = `
-export const __r27Testing = {
+export const __r28Testing = {
   reset() {
     activeGenerationTasks.clear();
     activeModeBuildScopes.clear();
@@ -19,6 +19,9 @@ export const __r27Testing = {
   logicalKeys() { return [...activeLogicalGenerationKeys()]; },
   acquireProviderRequestPermit,
   providerState() { return { active: activeProviderRequestCount, queued: providerRequestQueue.length }; },
+  shouldDeferCachePersistForProviderTraffic,
+  shouldWriteUncompressedCacheImmediately,
+  CACHE_PERSIST_IDLE_RETRY_MS,
   runGenerationRequestWithTimeout,
   normalizeConnectionManagerError,
   shouldRetrySegmentRequest,
@@ -40,7 +43,7 @@ export const __r27Testing = {
   ADV_BULK_BATCH_SIZE,
 };`;
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(`${source}\n${testingExports}`).toString('base64')}`;
-const { __r27Testing: api } = await import(moduleUrl);
+const { __r28Testing: api } = await import(moduleUrl);
 
 test.afterEach(() => api.reset());
 
@@ -437,4 +440,36 @@ test('phone continuation draft keeps only bounded normalized App fields', () => 
     assert.equal('unknownHtml' in normalized, false);
     assert.equal('unknown' in normalized.entries[0], false);
     assert.equal(normalized.entries[0].messages.length, 12);
+});
+
+
+test('cache persistence waits until provider traffic is idle', async () => {
+    assert.equal(api.CACHE_PERSIST_IDLE_RETRY_MS, 1200);
+    assert.equal(api.shouldDeferCachePersistForProviderTraffic(), false);
+    const a = new AbortController();
+    const b = new AbortController();
+    const c = new AbortController();
+    const releaseA = await api.acquireProviderRequestPermit(a.signal);
+    const releaseB = await api.acquireProviderRequestPermit(b.signal);
+    const pendingC = api.acquireProviderRequestPermit(c.signal);
+    assert.equal(api.shouldDeferCachePersistForProviderTraffic(), true);
+    releaseA();
+    const releaseC = await pendingC;
+    assert.equal(api.shouldDeferCachePersistForProviderTraffic(), true);
+    releaseB();
+    releaseC();
+    assert.equal(api.shouldDeferCachePersistForProviderTraffic(), false);
+});
+
+test('modern CompressionStream path does not immediately upload an uncompressed theater cache', () => {
+    if (typeof CompressionStream === 'function') {
+        assert.equal(api.shouldWriteUncompressedCacheImmediately(null), false);
+        assert.match(source, /if \(shouldWriteUncompressedCacheImmediately\(stored\)\)/);
+        assert.match(source, /if \(shouldDeferCachePersistForProviderTraffic\(\)\) \{\s*arm\(CACHE_PERSIST_IDLE_RETRY_MS\)/);
+    }
+});
+
+
+test('postending card is single-part and never renders a fake 1/2 state', () => {
+    assert.match(source, /const partial = season !== 'postending' && !ready && \(hasVoice \|\| hasScenario\)/);
 });
