@@ -5,7 +5,7 @@ import test from 'node:test';
 const sourceUrl = new URL('../src/heartbeatMemories.js', import.meta.url);
 const source = await readFile(sourceUrl, 'utf8');
 const testingExports = `
-export const __r28Testing = {
+export const __r30Testing = {
   reset() {
     activeGenerationTasks.clear();
     activeModeBuildScopes.clear();
@@ -28,22 +28,45 @@ export const __r28Testing = {
   normalizeEndingConfessionLines,
   normalizeEndingRouteDetail,
   normalizeEndingConfessionReplays,
+  normalizeEndingIncrementOutline,
+  normalizeAlbumIndex,
   normalizeAlbum,
+  mergeAlbumIncremental,
   normalizeEventList,
   mergeAdvIncremental,
   normalizePhonePlan,
+  normalizePhoneIncrementPlan,
   normalizePhoneDraftApp,
+  mergePhoneIncremental,
+  normalizePhone,
   PHONE_DRAFT_CACHE_KEY,
   normalizeHeart,
+  normalizeHeartCoreIncrement,
   normalizeVoiceDramaPart,
   normalizeScenarioDramaPart,
   applyHeartPartialPatch,
+  incrementalArchiveMemoryIds,
+  incrementalArchiveSlice,
+  stampIncrementalCoverage,
+  migrateDerivedCacheRevision,
+  mergeEndingConfessions,
+  mergeButterflyIncremental,
+  mergeRoomIncremental,
+  normalizeItems,
+  countItemNodes,
+  mergeItemsIncremental,
+  mergeAchievementsIncremental,
   normalizeAchievements,
   SEGMENT_REQUEST_CONCURRENCY,
   ADV_BULK_BATCH_SIZE,
+  getPluginSettings,
+  jsonOutputBudgetSummary,
+  extractJson,
+  MAX_GENERATION_OUTPUT_TOKENS,
+  MAX_GENERATION_OUTPUT_CHARS,
 };`;
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(`${source}\n${testingExports}`).toString('base64')}`;
-const { __r28Testing: api } = await import(moduleUrl);
+const { __r30Testing: api } = await import(moduleUrl);
 
 test.afterEach(() => api.reset());
 
@@ -190,6 +213,326 @@ const memoryBank = {
     ],
 };
 
+test('legacy r28/r29 caches migrate with the old archive as their exact incremental baseline', () => {
+    const oldBank = {
+        archiveRevision: 'rev-old',
+        memories: [
+            { id: 'M001', title: '旧一', anchors: ['旧一'], summary: '旧记忆一。' },
+            { id: 'M002', title: '旧二', anchors: ['旧二'], summary: '旧记忆二。' },
+        ],
+    };
+    const newBank = {
+        archiveRevision: 'rev-new',
+        memories: [...oldBank.memories, { id: 'M003', title: '新增', anchors: ['新增锚点'], summary: '本轮新增记忆。' }],
+    };
+    const cache = {
+        archiveRevision: 'rev-old',
+        album: { kind: 'album', archiveRevision: 'rev-old', entries: [{ id: 'CG01', title: '旧相簿' }] },
+        heart: {
+            kind: 'heart', archiveRevision: 'rev-old', greetings: {}, dailyStrips: [], scenarioDramas: [],
+            voiceDramas: [{ id: 'VS1', kind: 'spring', title: '第一篇春日' }],
+        },
+    };
+    api.migrateDerivedCacheRevision(cache, oldBank, newBank);
+    assert.deepEqual(cache.album.generationMeta.parts.mode.coveredMemoryIds, ['M001', 'M002']);
+    assert.deepEqual(api.incrementalArchiveMemoryIds(cache.album, newBank, 'mode'), ['M003']);
+    assert.deepEqual(cache.heart.generationMeta.parts['season:spring'].coveredMemoryIds, ['M001', 'M002']);
+    assert.deepEqual(api.incrementalArchiveMemoryIds(cache.heart, newBank, 'season:spring'), ['M003']);
+    assert.deepEqual(api.incrementalArchiveMemoryIds(cache.heart, newBank, 'season:summer'), ['M001', 'M002', 'M003']);
+    assert.equal(cache.album.archiveRevision, 'rev-new');
+});
+
+test('a legacy cache already on the current revision is never mistaken for wholly new material', () => {
+    const bank = { archiveRevision: 'same-revision', memories: memoryBank.memories };
+    const legacyAlbum = { kind: 'album', archiveRevision: 'same-revision', entries: [{ id: 'CG01', title: '旧内容', sourceMemoryIds: ['M001'] }] };
+    assert.deepEqual(api.incrementalArchiveMemoryIds(legacyAlbum, bank, 'mode'), []);
+});
+
+test('incremental cursors consume successful empty deltas and cap each batch at 64 memories', () => {
+    const manyBank = {
+        archiveRevision: 'rev-many',
+        memories: Array.from({ length: 70 }, (_, index) => ({ id: `M${String(index + 1).padStart(3, '0')}` })),
+    };
+    assert.equal(api.incrementalArchiveMemoryIds(null, manyBank, 'mode').length, 64);
+
+    const bank = { archiveRevision: 'rev-next', memories: memoryBank.memories };
+    const previous = {
+        kind: 'album',
+        generationMeta: { schemaVersion: 1, parts: { mode: { coveredMemoryIds: ['M001'], archiveRevision: 'rev-old', updatedAt: 1 } } },
+    };
+    const session = api.stampIncrementalCoverage(structuredClone(previous), previous, bank, 'mode', ['M002'], 0);
+    assert.deepEqual(api.incrementalArchiveMemoryIds(session, bank, 'mode'), []);
+    assert.equal(session.generationMeta.lastUpdate.added, 0);
+    assert.deepEqual(session.generationMeta.lastUpdate.consumedMemoryIds, ['M002']);
+});
+
+test('mutable relationship summaries must cite the current incremental batch', () => {
+    const heartDelta = {
+        relationshipState: '新阶段', relationshipSummary: '新增档案带来的关系变化。', relationshipSourceMemoryIds: ['M001'], relationshipSourceMemoryAnchor: '站台雨伞',
+        birthdayMmDd: '', userBirthdayMmDd: '', specialDays: [], greetings: { morning: ['新增的一句早安。'] },
+    };
+    assert.throws(() => api.normalizeHeartCoreIncrement(heartDelta, memoryBank, ['M002']), /本轮新增档案/);
+    const acceptedHeart = api.normalizeHeartCoreIncrement({ ...heartDelta, relationshipSourceMemoryIds: ['M002'], relationshipSourceMemoryAnchor: '海边夕阳' }, memoryBank, ['M002']);
+    assert.deepEqual(acceptedHeart.relationshipSourceMemoryIds, ['M002']);
+
+    const endingDelta = {
+        relationshipState: '新阶段', relationshipSummary: '关系摘要。', relationshipSourceMemoryIds: ['M001'], relationshipSourceMemoryAnchor: '站台雨伞', recommendedEndingId: '', endings: [],
+    };
+    assert.throws(() => api.normalizeEndingIncrementOutline(endingDelta, memoryBank, ['M002']), /本轮新增档案/);
+    const acceptedEnding = api.normalizeEndingIncrementOutline({ ...endingDelta, relationshipSourceMemoryIds: ['M002'], relationshipSourceMemoryAnchor: '海边夕阳' }, memoryBank, ['M002']);
+    assert.equal(acceptedEnding.endings.length, 0);
+});
+
+test('incremental factual deltas reject old archive evidence before merge', () => {
+    const oldAlbum = {
+        title: '回忆相簿',
+        entries: [{
+            id: 'CG_OLD', title: '旧雨夜换标题', date: '08/01', desc: '站台雨伞下的旧事件。', category: '日常', unlocked: true,
+            sourceMemoryIds: ['M001'], sourceMemoryAnchor: '站台雨伞', visualSeed: ['雨', '伞', '站台', '夜'], imagePrompt: 'rainy station', hintLines: [],
+        }],
+    };
+    assert.throws(() => api.normalizeAlbumIndex(oldAlbum, memoryBank, ['M002']), /没有生成任何可验证/);
+    assert.equal(api.normalizeAlbumIndex({ ...oldAlbum, entries: [{ ...oldAlbum.entries[0], id: 'CG_NEW', title: '海边新增', desc: '海边夕阳下的新事件。', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳' }] }, memoryBank, ['M002']).entries.length, 1);
+
+    const oldAdv = { events: [{ id: 'EV_OLD', title: '旧雨夜换标题', cgDesc: '站台雨伞下的旧画面。', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '站台雨伞', visualSeed: ['雨', '伞', '站台', '夜'] }] };
+    assert.equal(api.normalizeEventList(oldAdv, memoryBank, { allowPartial: true, sourceMemoryIds: ['M002'] }).events.length, 0);
+    assert.equal(api.normalizeEventList({ events: [{ ...oldAdv.events[0], id: 'EV_NEW', title: '海边新增', cgDesc: '海边夕阳下的新画面。', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳' }] }, memoryBank, { allowPartial: true, sourceMemoryIds: ['M002'] }).events.length, 1);
+
+    const achievements = api.normalizeAchievements({ entries: [
+        { id: 'ACH_OLD', title: '旧里程碑换名', description: '站台雨伞的旧事件。', unlocked: true, sourceMemoryIds: ['M001'], sourceMemoryAnchor: '站台雨伞' },
+        { id: 'ACH_LOCKED', title: '泛化新目标', description: '没有新增证据的未来目标。', unlocked: false },
+        { id: 'ACH_NEW', title: '海边里程碑', description: '海边夕阳的新事件。', unlocked: true, sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳' },
+    ] }, memoryBank, { allowPartial: true, sourceMemoryIds: ['M002'] });
+    assert.deepEqual(achievements.entries.map(item => item.id), ['ACH_NEW']);
+
+    const planApp = { id: 'NOTES', label: '备忘', kind: 'notes', incremental: true, summary: '新增备忘', entries: [{ id: 'N_NEW', title: '新增', meta: '' }] };
+    const rawEntry = {
+        id: 'N_NEW', title: '换标题的旧事件', preview: '站台雨伞旧事件。', detail: '仍然只是旧内容。', messages: [], fields: [], imageCaption: '',
+        basis: '记忆', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '站台雨伞',
+    };
+    assert.throws(() => api.normalizePhoneDraftApp({ app: { id: 'NOTES', entries: [rawEntry] } }, planApp, memoryBank, 'phone', ['M002']), /详情不完整/);
+    const acceptedPhone = api.normalizePhoneDraftApp({ app: { id: 'NOTES', entries: [{ ...rawEntry, title: '海边新增', preview: '海边夕阳的新事件。', detail: '这是本轮新增内容。', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳' }] } }, planApp, memoryBank, 'phone', ['M002']);
+    assert.deepEqual(acceptedPhone.entries[0].sourceMemoryIds, ['M002']);
+
+    const archiveSlice = JSON.parse(api.incrementalArchiveSlice({ archiveName: '档案', archiveSummary: '旧档案总摘要不能进入增量请求', archiveKeywords: ['旧关键词'], memories: memoryBank.memories }, ['M002']));
+    assert.equal('archiveSummary' in archiveSlice, false);
+    assert.equal('archiveKeywords' in archiveSlice, false);
+    assert.deepEqual(archiveSlice.memories.map(item => item.id), ['M002']);
+});
+
+test('album incremental merge preserves historical copy, image data, and current reader position', () => {
+    const oldEntry = {
+        id: 'CG01', title: '原来的雨夜', date: '08/01', desc: '旧描述绝不能被润色。', category: '日常', unlocked: true,
+        sourceMemoryIds: ['M001'], sourceMemoryAnchor: '站台雨伞', visualSeed: ['雨', '伞', '站台', '夜'], imagePrompt: 'old prompt',
+        cgImage: { provider: 'sillytavern-imagine', url: 'data:image/png;base64,AAAA' }, comments: ['旧一', '旧二', '旧三', '旧四'], hintLines: [],
+    };
+    const previous = { kind: 'album', title: '旧相簿', entries: [oldEntry], category: '日常', page: 3, pageSize: 6, selectedId: 'CG01', sharedMemory: true, dialogueIndex: 2, hintVisible: false };
+    const freshEntry = { ...structuredClone(oldEntry), id: 'CG02', title: '新增海边', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳', cgImage: null, comments: ['新一', '新二', '新三', '新四'] };
+    const merged = api.mergeAlbumIncremental(previous, { kind: 'album', title: '模型新标题', entries: [freshEntry] }, memoryBank);
+    assert.deepEqual(merged.entries[0], oldEntry);
+    assert.equal(merged.entries.length, 2);
+    assert.equal(merged.title, '旧相簿');
+    assert.equal(merged.page, 3);
+    assert.equal(merged.sharedMemory, true);
+    assert.equal(merged.dialogueIndex, 2);
+});
+
+test('album incremental merge upgrades a matching locked entry in place', () => {
+    const lockedEntry = {
+        id: 'CG_LOCKED', title: '海边的约定', date: '', desc: '', category: '特别', unlocked: false,
+        sourceMemoryIds: [], sourceMemoryAnchor: '', visualSeed: [], imagePrompt: '', cgImage: null,
+        comments: [], hintLines: ['继续记录与海边有关的回忆。'],
+    };
+    const unlockedEntry = {
+        id: 'CG_NEW', title: '海边的约定', date: '08/24', desc: '新增档案里的海边夕阳。', category: '特别', unlocked: true,
+        sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳', visualSeed: ['海边', '夕阳', '约定'], imagePrompt: 'sunset beach',
+        cgImage: null, comments: ['新一', '新二', '新三', '新四'], hintLines: [],
+    };
+    const previous = { kind: 'album', title: '旧相簿', entries: [lockedEntry], page: 2, selectedId: 'CG_LOCKED' };
+    const merged = api.mergeAlbumIncremental(previous, { kind: 'album', title: '模型新标题', entries: [unlockedEntry] }, memoryBank);
+    assert.equal(merged.entries.length, 1);
+    assert.equal(merged.entries[0].id, 'CG_LOCKED');
+    assert.equal(merged.entries[0].unlocked, true);
+    assert.deepEqual(merged.entries[0].sourceMemoryIds, ['M002']);
+    assert.equal(merged.page, 2);
+    assert.equal(merged.selectedId, 'CG_LOCKED');
+});
+
+test('room and item-tree deltas append only nodes grounded in the new archive batch', () => {
+    const oldObject = { id: 'O1', label: '旧相框', basis: '记忆', description: '旧描述。', line: '旧台词。', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '站台雨伞' };
+    const previousRoom = {
+        kind: 'room', title: '他的房间', spaces: [{ id: 'SP1', label: '卧室', spaceType: '卧室', atmosphere: '旧气氛。', objects: [oldObject] }],
+        dayparts: {}, presenceLines: ['旧问候'], selectedSpaceId: 'SP1', selectedObjectId: 'O1', presenceIndex: 0,
+    };
+    const freshRoom = {
+        spaces: [{ id: 'SP1', label: '卧室', spaceType: '卧室', objects: [
+            { ...oldObject, description: '模型试图改写旧描述。' },
+            { id: 'O2', label: '新车票', basis: '记忆', description: '新增物件。', line: '新增台词。', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳' },
+            { id: 'O3', label: '无关摆件', basis: '设定', description: '不应追加。', line: '不应追加。', sourceMemoryIds: [], sourceMemoryAnchor: '' },
+        ] }],
+        presenceLines: ['旧问候', '新增问候'],
+    };
+    const roomMerged = api.mergeRoomIncremental(previousRoom, freshRoom, ['M002']);
+    assert.deepEqual(roomMerged.session.spaces[0].objects[0], oldObject);
+    assert.deepEqual(roomMerged.session.spaces[0].objects.map(item => item.label), ['旧相框', '新车票']);
+    assert.deepEqual(roomMerged.session.presenceLines, ['旧问候', '新增问候']);
+
+    const newSpaceRoom = api.mergeRoomIncremental(previousRoom, { spaces: [{
+        id: 'SP2', label: '新工作室', spaceType: '工作室', atmosphere: '新增空间。', objects: [
+            { id: 'N1', label: '新票根', basis: '记忆', description: '新增。', line: '新增。', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳' },
+            { id: 'N2', label: '旧雨伞', basis: '记忆', description: '旧内容不应搭车进入。', line: '旧。', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '站台雨伞' },
+            { id: 'N3', label: '普通工作灯', basis: '设定', description: '新空间的普通陈设。', line: '灯在这里。', sourceMemoryIds: [], sourceMemoryAnchor: '' },
+        ],
+    }], presenceLines: [] }, ['M002']);
+    assert.deepEqual(newSpaceRoom.session.spaces[1].objects.map(item => item.label), ['新票根', '普通工作灯']);
+
+    const oldNode = { id: 'IT1', label: '旧物', kind: 'item', basis: '记忆', summary: '旧摘要。', line: '旧台词。', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '站台雨伞', children: [] };
+    const previousItems = { kind: 'items', title: '他的物品', containers: [{ id: 'BOX1', label: '抽屉', spaceLabel: '卧室', nodes: [oldNode] }], selectedContainerId: 'BOX1', viewPath: [], selectedNodeId: 'IT1' };
+    const freshItems = { containers: [{ id: 'BOX1', label: '抽屉', spaceLabel: '卧室', nodes: [
+        { ...oldNode, summary: '模型试图改写旧摘要。' },
+        { id: 'IT2', label: '新票根', kind: 'item', basis: '记忆', summary: '新增摘要。', line: '新增台词。', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳', children: [] },
+        { id: 'IT_OLD_PARENT', label: '旧证据父容器换名', kind: 'container', basis: '记忆', summary: '旧内容不应随子节点整棵搭车进入。', line: '旧台词。', sourceMemoryIds: ['M003'], sourceMemoryAnchor: '旧书签', children: [
+            { id: 'IT_CHILD', label: '嵌套的新票根', kind: 'item', basis: '记忆', summary: '新子节点。', line: '新台词。', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳', children: [] },
+        ] },
+    ] }] };
+    const itemMerged = api.mergeItemsIncremental(previousItems, freshItems, ['M002']);
+    assert.deepEqual(itemMerged.session.containers[0].nodes[0], oldNode);
+    assert.deepEqual(itemMerged.session.containers[0].nodes.map(item => item.label), ['旧物', '新票根']);
+
+    const nestedPatch = { containers: [{ id: 'BOX1', label: '抽屉', spaceLabel: '卧室', nodes: [{
+        ...oldNode,
+        summary: '模型仍不能改写旧父节点。',
+        children: [{ id: 'IT_NESTED', label: '旧物里的新夹层', kind: 'item', basis: '记忆', summary: '新增夹层。', line: '新增台词。', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳', children: [] }],
+    }] }] };
+    const nestedMerged = api.mergeItemsIncremental(previousItems, nestedPatch, ['M002']);
+    assert.equal(nestedMerged.session.containers[0].nodes[0].summary, '旧摘要。');
+    assert.deepEqual(nestedMerged.session.containers[0].nodes[0].children.map(item => item.label), ['旧物里的新夹层']);
+});
+
+test('item capacity counts actual nodes even when model IDs are duplicated', () => {
+    const oldNode = index => ({
+        id: 'DUPLICATE_NODE_ID', label: `旧物 ${index}`, kind: 'container', basis: '设定',
+        summary: `旧摘要 ${index}。`, line: `旧台词 ${index}。`, sourceMemoryIds: [], sourceMemoryAnchor: '',
+        children: [{
+            id: 'DUPLICATE_NODE_ID', label: `旧夹层 ${index}`, kind: 'item', basis: '设定',
+            summary: `旧夹层摘要 ${index}。`, line: `旧夹层台词 ${index}。`, sourceMemoryIds: [], sourceMemoryAnchor: '', children: [],
+        }],
+    });
+    const previous = api.normalizeItems({
+        title: '满额旧物品',
+        containers: Array.from({ length: 10 }, (_, boxIndex) => ({
+            id: `BOX${boxIndex}`, label: `旧容器 ${boxIndex}`, spaceLabel: `旧空间 ${boxIndex}`,
+            nodes: Array.from({ length: 12 }, (__, nodeIndex) => oldNode(`${boxIndex}-${nodeIndex}`)),
+        })),
+    }, memoryBank);
+    assert.equal(api.countItemNodes(previous.containers.flatMap(box => box.nodes)), 240);
+
+    const groundedNode = index => ({
+        id: 'DUPLICATE_FRESH_ID', label: `新增物件 ${index}`, kind: 'item', basis: '记忆',
+        summary: `海边夕阳后的新增物件 ${index}。`, line: `海边夕阳后的新增台词 ${index}。`,
+        sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳', children: [],
+    });
+    const fresh = api.normalizeItems({
+        title: '候选增量',
+        containers: [{
+            id: 'BOX0', label: '旧容器 0', spaceLabel: '旧空间 0',
+            nodes: [groundedNode(1), groundedNode(2), groundedNode(3), { ...groundedNode(4), children: [groundedNode('4-1')] }],
+        }],
+    }, memoryBank);
+    const merged = api.mergeItemsIncremental(previous, fresh, ['M002']);
+    assert.equal(merged.added, 0);
+    assert.equal(api.countItemNodes(merged.session.containers.flatMap(box => box.nodes)), 240);
+});
+
+test('phone delta appends entries while preserving every old App entry', () => {
+    const specs = [
+        ['MOMENTS', 'moments', 3], ['CHAT', 'chat', 3], ['GALLERY', 'gallery', 4], ['NOTES', 'notes', 5], ['SCHEDULE', 'schedule', 4],
+        ['STORE', 'store', 4], ['BROWSER', 'browser', 3], ['CONTACTS', 'contacts', 3], ['LOCATION', 'location', 2], ['MISC', 'misc', 2],
+    ];
+    const apps = specs.map(([id, kind, count]) => ({
+        id, label: id, kind, summary: `${kind} old summary`,
+        entries: Array.from({ length: count }, (_, index) => ({
+            id: `${id}${index + 1}`, title: `${kind}-${index + 1}`, meta: '旧 meta', preview: '旧预览', detail: '旧详情',
+            messages: kind === 'chat' && index < 2 ? Array.from({ length: 12 }, (__, i) => ({ speaker: i % 2 ? '角色' : '朋友', time: '21:00', text: `旧消息${i + 1}` })) : [],
+            fields: kind === 'contacts' && index === 0 ? [{ label: '备注', value: '旧备注' }, { label: '最近通话', value: '昨天' }, { label: '提醒', value: '生日' }] : [],
+            imageCaption: '', basis: '设定', sourceMemoryIds: [], sourceMemoryAnchor: '',
+        })),
+    }));
+    const raw = { title: '他的手机', deviceName: '私人手机', deviceKind: 'phone', lockText: 'LOCK', liveStates: { morning: {}, daytime: {}, evening: {}, night: {} }, apps };
+    const previous = api.normalizePhone(raw, memoryBank);
+    previous.selectedAppId = 'NOTES';
+    previous.selectedEntryId = 'NOTES1';
+    previous.view = 'detail';
+    const oldFirst = structuredClone(previous.apps[0].entries[0]);
+    const patch = [{ id: 'NOTES', kind: 'notes', entries: [{
+        id: 'NOTES_NEW', title: '海边之后', meta: '新增', preview: '新增预览', detail: '新增详情', messages: [], fields: [], imageCaption: '',
+        basis: '记忆', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳',
+    }] }];
+    const merged = api.mergePhoneIncremental(previous, patch, memoryBank).session;
+    assert.deepEqual(merged.apps[0].entries[0], oldFirst);
+    assert.equal(merged.apps.find(app => app.id === 'NOTES').entries.at(-1).title, '海边之后');
+    assert.equal(merged.selectedAppId, 'NOTES');
+    assert.equal(merged.selectedEntryId, 'NOTES1');
+    assert.equal(merged.view, 'detail');
+});
+
+test('phone accepts an explicit empty incremental plan without retry-shaped validation failure', () => {
+    const previous = {
+        title: '他的手机', deviceName: '私人手机', deviceKind: 'phone', lockText: 'LOCK',
+        liveStates: { morning: {}, daytime: {}, evening: {}, night: {} },
+        apps: [{ id: 'NOTES', label: '备忘', kind: 'notes', summary: '旧备忘', entries: [{ id: 'N1', title: '旧条目' }] }],
+    };
+    const empty = api.normalizePhoneIncrementPlan({ apps: [] }, previous);
+    assert.deepEqual(empty.apps, []);
+    assert.throws(() => api.normalizePhoneIncrementPlan({ apps: [{ id: 'UNKNOWN', kind: 'unknown', entries: [] }] }, previous), /没有可验证的新条目/);
+    assert.match(source, /if \(!plan\.apps\.length\) \{\s*return stampIncrementalCoverage\(structuredClone\(previous\)/);
+});
+
+test('achievement and confession deltas keep old records and reject duplicate evidence', () => {
+    const oldAchievement = { id: 'ACH01', title: '旧里程碑', description: '旧描述不能改。', category: '关系', tier: 'gold', unlocked: true, unlockedAt: '08/01', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '站台雨伞', hint: '' };
+    const previousAchievements = { kind: 'achievements', title: '旧成就库', entries: [oldAchievement] };
+    const freshAchievements = { kind: 'achievements', title: '模型标题', entries: [
+        { id: 'ACH_MODEL_REPEAT', title: '换标题复述旧里程碑', description: '不应追加。', category: '关系', tier: 'gold', unlocked: true, unlockedAt: '08/01', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '站台雨伞', hint: '' },
+        { id: 'ACH02', title: '海边约定', description: '新里程碑。', category: '事件', tier: 'silver', unlocked: true, unlockedAt: '08/02', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳', hint: '' },
+    ] };
+    const mergedAchievements = api.mergeAchievementsIncremental(previousAchievements, freshAchievements, memoryBank);
+    assert.deepEqual(mergedAchievements.entries[0], oldAchievement);
+    assert.equal(mergedAchievements.entries[1].title, '海边约定');
+
+    const oldConfession = { id: 'CONF01', type: 'mutual', title: '旧告白', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '站台雨伞', confessionText: '旧告白原文重构。' };
+    const duplicate = { ...oldConfession, id: 'MODEL_CHANGED', type: 'indirect', title: '换标题复述', confessionText: '模型试图重说。' };
+    const fresh = { id: 'CONF02', type: 'true', title: '新告白', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳', confessionText: '新增告白。' };
+    const mergedConfessions = api.mergeEndingConfessions([oldConfession], [duplicate, fresh]);
+    assert.deepEqual(mergedConfessions.items[0], oldConfession);
+    assert.equal(mergedConfessions.items.length, 2);
+    assert.equal(mergedConfessions.items[1].title, '新告白');
+});
+
+test('butterfly append keeps old nodes and refuses to evict them at capacity', () => {
+    const previous = {
+        kind: 'butterfly', title: '终端', subject: '角色', status: 'UNSTABLE', selected: 1,
+        nodes: [
+            { id: 'MAIN', label: '主线', monologue: '主线', intervention: '主线回应', systemNote: '主线结论' },
+            { id: 'EG01', label: '旧分歧', monologue: '旧独白', intervention: '旧回应', systemNote: '旧结论', trueEnding: false },
+            { id: 'OMEGA', label: '观测点 Ω：旧', monologue: '', intervention: '旧 Ω 发言', systemNote: '旧 Ω 结论', trueEnding: true },
+        ],
+    };
+    const part = {
+        branches: [{ id: 'EG02', label: '新分歧', monologue: '新独白', intervention: '新回应', systemNote: '新结论', trueEnding: false }],
+        omega: { id: 'OMEGA', label: '观测点 Ω：新', monologue: '', intervention: '新 Ω 发言', systemNote: '新 Ω 结论', trueEnding: true },
+    };
+    const merged = api.mergeButterflyIncremental(previous, part, ['M002']);
+    assert.deepEqual(merged.nodes[0], previous.nodes[0]);
+    assert.deepEqual(merged.nodes[1], previous.nodes[1]);
+    assert.ok(merged.nodes.some(item => item.intervention === '旧 Ω 发言'));
+    assert.equal(merged.nodes.at(-1).intervention, '新 Ω 发言');
+
+    const full = structuredClone(previous);
+    while (full.nodes.length < 239) full.nodes.splice(-1, 0, { id: `EG${full.nodes.length}`, label: `旧分歧${full.nodes.length}` });
+    const unchanged = api.mergeButterflyIncremental(full, part, ['M002']);
+    assert.deepEqual(unchanged, full);
+});
+
 test('album and ADV accept a small set of important nodes instead of fixed 15/12', () => {
     const album = api.normalizeAlbum({
         title: '回忆相簿',
@@ -240,8 +583,10 @@ test('album and ADV accept a small set of important nodes instead of fixed 15/12
             adv: { paragraphs: Array.from({ length: 18 }, (_, i) => `旧段落${i + 1}。这是足够长的旧 ADV 内容。`) },
         }],
     }, adv, memoryBank);
-    assert.equal(merged.events.length, 1);
-    assert.deepEqual(merged.events[0].sourceMemoryIds, ['M002']);
+    assert.equal(merged.events.length, 2);
+    assert.deepEqual(merged.events[0].sourceMemoryIds, ['M999']);
+    assert.equal(merged.events[0].adv.paragraphs[0], '旧段落1。这是足够长的旧 ADV 内容。');
+    assert.deepEqual(merged.events[1].sourceMemoryIds, ['M002']);
 });
 
 test('phone plan keeps many apps but accepts roughly thirty entries', () => {
@@ -340,12 +685,28 @@ test('achievement library separates evidence-backed unlocks from future locked g
                 sourceMemoryAnchor: '',
                 hint: '继续积累新的共同经历。',
             },
+            {
+                id: 'ACH_UNSUPPORTED',
+                title: '模型凭空解锁的里程碑',
+                description: '没有任何当前档案证据，不能进入已解锁区。',
+                category: '特别',
+                tier: 'gold',
+                unlocked: true,
+                unlockedAt: '已解锁',
+                sourceMemoryIds: ['M999'],
+                sourceMemoryAnchor: '不存在的锚点',
+                hint: '',
+            },
         ],
     }, memoryBank);
     assert.equal(achievements.entries.length, 2);
     assert.equal(achievements.entries.filter(item => item.unlocked).length, 1);
     assert.equal(achievements.entries.filter(item => !item.unlocked).length, 1);
     assert.deepEqual(achievements.entries[1].sourceMemoryIds, []);
+    assert.throws(() => api.normalizeAchievements({ entries: [{
+        id: 'ACH_ONLY_BAD', title: '虚构解锁', description: '没有证据。', unlocked: true,
+        sourceMemoryIds: ['M999'], sourceMemoryAnchor: '不存在的锚点',
+    }] }, memoryBank), /没有生成可用条目/);
 });
 
 
@@ -420,6 +781,27 @@ test('independent HEART season patches merge without overwriting sibling seasons
     assert.deepEqual(new Set(merged.voiceDramas.map(item => item.kind)), new Set(['spring', 'summer']));
 });
 
+test('HEART season coverage advances only after Voice and Scenario for the same batch exist', () => {
+    const coverage = {
+        coveragePart: 'season:spring',
+        sourceMemoryIds: ['M002'],
+        archiveMemoryIds: ['M001', 'M002'],
+        archiveRevision: 'rev-heart',
+    };
+    const base = {
+        kind: 'heart', voiceDramas: [], scenarioDramas: [], dailyStrips: [],
+        generationMeta: { schemaVersion: 1, parts: { 'season:spring': { coveredMemoryIds: ['M001'], archiveRevision: 'rev-old', updatedAt: 1 } } },
+    };
+    const voice = { id: 'VOICE_BATCH', kind: 'spring', title: '新春篇', setting: '春日', incrementBatchId: 'batch-m002', script: [] };
+    const scenario = { id: 'SCENE_BATCH', season: 'spring', title: '新春场景', setting: '春日', incrementBatchId: 'batch-m002', script: [] };
+    const voiceOnly = api.applyHeartPartialPatch(base, { type: 'season', season: 'spring', voice });
+    assert.deepEqual(api.incrementalArchiveMemoryIds(voiceOnly, { archiveRevision: 'rev-heart', memories: memoryBank.memories }, 'season:spring'), ['M002']);
+
+    const complete = api.applyHeartPartialPatch(voiceOnly, { type: 'season', season: 'spring', scenario, ...coverage });
+    assert.deepEqual(api.incrementalArchiveMemoryIds(complete, { archiveRevision: 'rev-heart', memories: memoryBank.memories }, 'season:spring'), []);
+    assert.equal(complete.voiceDramas[0].incrementBatchId, complete.scenarioDramas[0].incrementBatchId);
+});
+
 test('phone continuation draft keeps only bounded normalized App fields', () => {
     assert.equal(api.PHONE_DRAFT_CACHE_KEY, 'phoneGenerationDraftV1');
     const planApp = {
@@ -470,6 +852,63 @@ test('modern CompressionStream path does not immediately upload an uncompressed 
 });
 
 
-test('postending card is single-part and never renders a fake 1/2 state', () => {
-    assert.match(source, /const partial = season !== 'postending' && !ready && \(hasVoice \|\| hasScenario\)/);
+test('HEART keeps multiple stories in one season without overwriting sibling seasons', () => {
+    const longLine = text => text.repeat(6);
+    const springOne = api.normalizeVoiceDramaPart({ voiceDramas: [{
+        id: 'VS1', kind: 'spring', title: '第一场春雨', subtitle: '', setting: '', incrementBatchId: 'spring-one',
+        script: Array.from({ length: 5 }, () => ({ speaker: 'char', text: longLine('第一篇春日故事会一直保留在这里。') })),
+    }] }, ['spring'])[0];
+    const summer = api.normalizeVoiceDramaPart({ voiceDramas: [{
+        id: 'VU1', kind: 'summer', title: '第一场夏夜', subtitle: '', setting: '', incrementBatchId: 'summer-one',
+        script: Array.from({ length: 5 }, () => ({ speaker: 'char', text: longLine('夏日故事不应该被春日更新影响。') })),
+    }] }, ['summer'])[0];
+    const springTwo = api.normalizeVoiceDramaPart({ voiceDramas: [{
+        id: 'VS2', kind: 'spring', title: '第二场春风', subtitle: '', setting: '', incrementBatchId: 'spring-two',
+        script: Array.from({ length: 5 }, () => ({ speaker: 'char', text: longLine('新增档案只会再追加一篇春日故事。') })),
+    }] }, ['spring'])[0];
+    let merged = api.applyHeartPartialPatch({ kind: 'heart', voiceDramas: [], scenarioDramas: [], dailyStrips: [] }, { type: 'season', season: 'spring', voice: springOne });
+    merged = api.applyHeartPartialPatch(merged, { type: 'season', season: 'summer', voice: summer });
+    merged = api.applyHeartPartialPatch(merged, { type: 'season', season: 'spring', voice: springTwo });
+    assert.deepEqual(merged.voiceDramas.map(item => item.title), ['第一场春雨', '第一场夏夜', '第二场春风']);
+    assert.equal(merged.voiceDramas.filter(item => item.kind === 'spring').length, 2);
+    assert.equal(merged.voiceDramas.find(item => item.id === 'VS1').script[0].text, springOne.script[0].text);
+    assert.match(source, /Voice \$\{voiceCount\} \/ Scenario \$\{scenarioCount\}/);
+    assert.match(source, /旧篇保留；每次档案增量后可继续追加。/);
+});
+
+test('maximum output setting is 60k and UI no longer clamps to 30k', () => {
+    assert.equal(api.MAX_GENERATION_OUTPUT_TOKENS, 60000);
+    assert.equal(api.MAX_GENERATION_OUTPUT_CHARS, 600000);
+    assert.match(source, /data-rmt-api-max-tokens[^>]*max="60000"/);
+    assert.doesNotMatch(source, /MAX_GENERATION_OUTPUT_TOKENS = 30000/);
+    assert.doesNotMatch(source, /data-rmt-api-max-tokens[^>]*max="30000"/);
+    assert.match(source, /normalizeText\(raw, MAX_GENERATION_OUTPUT_CHARS\)/);
+    const saveCalls = [];
+    const context = {
+        extensionSettings: { heartbeatMemories: { maxTokens: 60000 } },
+        saveSettingsDebounced() { saveCalls.push(true); },
+    };
+    assert.equal(api.getPluginSettings(context).maxTokens, 60000);
+    context.extensionSettings.heartbeatMemories.maxTokens = 90000;
+    assert.equal(api.getPluginSettings(context).maxTokens, 60000);
+});
+
+test('JSON output errors report configured and actual per-segment output budgets', () => {
+    const summary = api.jsonOutputBudgetSummary({ requestMaxTokens: 3000, configuredMaxTokens: 60000 });
+    assert.match(summary, /3,000/);
+    assert.match(summary, /60,000/);
+    assert.match(summary, /较小的分段上限/);
+    assert.match(source, /requestMaxTokens: responseLength/);
+    assert.match(source, /configuredMaxTokens: settings\.maxTokens/);
+});
+
+test('invalid JSON diagnostics never echo model-body fragments', () => {
+    const secret = 'ARCHIVE_SECRET_SENTINEL';
+    assert.throws(
+        () => api.extractJson(`{"a":${secret}}`, { requestMaxTokens: 3000, configuredMaxTokens: 60000 }),
+        error => error?.code === 'RMT_JSON_INVALID'
+            && !error.message.includes(secret)
+            && !error.message.includes('ARCHIVE_SE')
+            && !error.message.includes('{"a"'),
+    );
 });
