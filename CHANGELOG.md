@@ -1,3 +1,8 @@
+## 0.8.14 calendar-visible-r38.1
+
+- **日历入口提升到档案首屏**：不再埋在第 5 张普通分类卡；当前档案与历史档案进入后都在摘要附近直接看到“两个人的日历”。
+- **日历不再重复出现在普通入口网格**：生成/刷新/查看继续使用原 Calendar mode 与相同 evidence / cache / revision 边界。
+
 ## 0.8.13 calendar-phone-r38
 
 - **Calendar 热更新可见性修复**：入口模块按 build 记录版本，并在版本变化时执行一次页面 reload 后动态加载运行时，避免浏览器继续复用 r35/r36 的旧 child-module graph 导致新入口缺失。

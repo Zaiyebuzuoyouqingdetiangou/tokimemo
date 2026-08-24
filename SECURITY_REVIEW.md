@@ -507,3 +507,16 @@ Scope: local r37 content-controls package -> r38 calendar-phone fixes. Runtime c
 - Existing write isolation remains: Phone incremental and regenerated entries still save through the shared theater-cache `saveSession()` path after chatId/archiveRevision validation. Calendar remains a derived mode and does not write the canonical archive.
 
 Targeted conclusion: no new Critical / High / Medium security issue identified in the r37 -> r38 diff. Residual compatibility note: the one-time release reload is intentionally a UI/runtime freshness measure; an environment that blocks localStorage simply falls back to ordinary module loading and may still require the user to manually refresh after updating.
+
+## 0.8.14 calendar-visible-r38.1 targeted diff review
+
+Scope: r38 -> r38.1 calendar discoverability-only UI change.
+
+- Calendar remains the same `MODE.CALENDAR` derived-cache object with the same evidence, archive revision and Connection Manager boundaries.
+- The generic portal grid no longer repeats Calendar; current and indexed archive views render a dedicated first-screen Calendar shortcut using fixed code-owned mode/action values.
+- New shortcut text is fixed or escaped; no new URL, network, command, dynamic execution, MEMORY_KEY write/delete, or arbitrary cache-key authority was added.
+- Capability count comparison is unchanged for fetch, innerHTML, Connection Manager sendRequest, slash-command execution, MEMORY_KEY references, eval and Function construction.
+- Existing read-only snapshot behavior remains: a missing Calendar cannot be generated while read-only; a generated Calendar can be opened.
+- Focused regression suite: 62/62 passed after the release-identity update.
+
+Result: no new Critical/High/Medium issue identified in this targeted diff review.

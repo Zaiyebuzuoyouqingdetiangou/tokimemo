@@ -1,15 +1,15 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.13-calendar-phone-r38",
+  "js": "index.js?heartbeat=0.8.14-calendar-visible-r38.1",
   "author": "Toto",
-  "version": "0.8.13",
+  "version": "0.8.14",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "修复更新后日历入口可能被旧模块缓存隐藏的问题；私人终端聊天强制区分设备主人/联系人并以左右消息显示；私人终端恢复顶栏“增量追加”。保留统一内容管理、固定名称、日历三类时间状态与现有档案/缓存兼容。",
+  "description": "把“两个人的日历”提升为档案首屏独立入口，不再埋在普通分类卡中；已有日历直接打开，未生成可直接生成。保留私人终端双向发言人、终端增量追加、统一内容管理和固定名称。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

@@ -1,5 +1,5 @@
-const VERSION = '0.8.13';
-const BUILD = '0.8.13-calendar-phone-r38';
+const VERSION = '0.8.14';
+const BUILD = '0.8.14-calendar-visible-r38.1';
 const BUILD_STORAGE_KEY = 'heartbeatMemoriesLoadedBuildV1';
 
 let runtimeModule = null;
