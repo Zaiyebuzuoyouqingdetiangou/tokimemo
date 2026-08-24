@@ -1,82 +1,37 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import test from 'node:test';
+import * as internals from './testingFacade.mjs';
+import * as constants from '../src/core/constants.js';
+import { state } from '../src/core/state.js';
 
-const sourceUrl = new URL('../src/heartbeatMemories.js', import.meta.url);
-const source = await readFile(sourceUrl, 'utf8');
-const testingExports = `
-export const __r33Testing = {
+const srcRoot = new URL('../src/', import.meta.url);
+const sourceFiles = (await readdir(srcRoot, { recursive: true })).filter(name => name.endsWith('.js')).sort();
+const sourceByFile = new Map();
+let source = '';
+for (const name of sourceFiles) {
+  const text = await readFile(new URL(name, srcRoot), 'utf8');
+  sourceByFile.set(name.replaceAll('\\', '/'), text);
+  source += `\n// FILE:${name}\n${text}`;
+}
+
+const api = {
+  ...internals,
+  ...constants,
   reset() {
-    activeGenerationTasks.clear();
-    activeModeBuildScopes.clear();
-    activeAdvBulkScopes.clear();
-    activeCgImageTasks.clear();
-    providerRequestQueue.splice(0);
-    activeProviderRequestCount = 0;
+    state.activeGenerationTasks.clear();
+    state.activeModeBuildScopes.clear();
+    state.activeAdvBulkScopes.clear();
+    state.activeCgImageTasks.clear();
+    state.providerRequestQueue.splice(0);
+    state.activeProviderRequestCount = 0;
   },
-  addCgImageTask(key, controller) { activeCgImageTasks.set(key, { controller }); },
-  abortActiveCgImageTasks,
-  addBuildScope(key) { activeModeBuildScopes.add(key); },
-  addRequest(key, parentTaskKey = '') { activeGenerationTasks.set(key, { parentTaskKey }); },
-  logicalKeys() { return [...activeLogicalGenerationKeys()]; },
-  acquireProviderRequestPermit,
-  providerState() { return { active: activeProviderRequestCount, queued: providerRequestQueue.length }; },
-  shouldDeferCachePersistForProviderTraffic,
-  shouldWriteUncompressedCacheImmediately,
-  CACHE_PERSIST_IDLE_RETRY_MS,
-  runGenerationRequestWithTimeout,
-  normalizeConnectionManagerError,
-  shouldRetrySegmentRequest,
-  normalizeEndingConfessionLines,
-  normalizeEndingRouteDetail,
-  normalizeEndingConfessionReplays,
-  normalizeEndingIncrementOutline,
-  normalizeAlbumIndex,
-  normalizeAlbum,
-  mergeAlbumIncremental,
-  normalizeEventList,
-  mergeAdvIncremental,
-  normalizePhonePlan,
-  normalizePhoneIncrementPlan,
-  normalizePhoneDraftApp,
-  mergePhoneIncremental,
-  normalizePhone,
-  PHONE_DRAFT_CACHE_KEY,
-  normalizeHeart,
-  normalizeHeartCoreIncrement,
-  normalizeVoiceDramaPart,
-  normalizeScenarioDramaPart,
-  applyHeartPartialPatch,
-  incrementalArchiveMemoryIds,
-  incrementalArchiveSlice,
-  stampIncrementalCoverage,
-  migrateDerivedCacheRevision,
-  mergeEndingConfessions,
-  mergeButterflyIncremental,
-  mergeRoomIncremental,
-  normalizeItems,
-  countItemNodes,
-  mergeItemsIncremental,
-  mergeAchievementsIncremental,
-  normalizeAchievements,
-  imageGenerationUiState,
-  invokeImageGeneration,
-  normalizeCgImageRecord,
-  normalizeCgImageUrl,
-  archiveMobileSafeTopFallback,
-  overlayCloseButtonFromEvent,
-  SEGMENT_REQUEST_CONCURRENCY,
-  ADV_BULK_BATCH_SIZE,
-  DEFAULT_SETTINGS,
-  getPluginSettings,
-  generateConfiguredJson,
-  jsonOutputBudgetSummary,
-  extractJson,
-  MAX_GENERATION_OUTPUT_TOKENS,
-  MAX_GENERATION_OUTPUT_CHARS,
-};`;
-const moduleUrl = `data:text/javascript;base64,${Buffer.from(`${source}\n${testingExports}`).toString('base64')}`;
-const { __r33Testing: api } = await import(moduleUrl);
+  addCgImageTask(key, controller) { state.activeCgImageTasks.set(key, { controller }); },
+  addBuildScope(key) { state.activeModeBuildScopes.add(key); },
+  addRequest(key, parentTaskKey = '') { state.activeGenerationTasks.set(key, { parentTaskKey }); },
+  logicalKeys() { return [...internals.activeLogicalGenerationKeys()]; },
+  providerState() { return { active: state.activeProviderRequestCount, queued: state.providerRequestQueue.length }; },
+};
 
 test.afterEach(() => api.reset());
 
@@ -88,7 +43,7 @@ test('TT display is opt-in while legacy mobile fullscreen remains the default', 
     assert.equal(api.archiveMobileSafeTopFallback({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)', platform: 'iPhone', maxTouchPoints: 5 }), 52);
     assert.match(source, /rmt-tt-display/);
     assert.match(source, /TT 显示模式/);
-    assert.match(source, /#\$\{OVERLAY_ID\}\{padding:0\}/);
+    assert.match(sourceByFile.get('ui/styles.js'), /#\$\{core_constants\.OVERLAY_ID\}\{padding:0\}/);
     assert.match(source, /max\(env\(safe-area-inset-top, 0px\),var\(--rmt-mobile-safe-top, 0px\)\)/);
 });
 
@@ -105,8 +60,8 @@ test('mobile overlay early-close fallback accepts only its code-owned topbar clo
 });
 
 test('role interaction is a standalone archive portal immediately before achievements', () => {
-    assert.match(source, /ARCHIVE_PORTAL_MODES = Object\.freeze\(\[MODE\.ALBUM, MODE\.ADV, MODE\.ROOM, MODE\.ENDING, MODE\.HEART, MODE\.ACHIEVEMENTS/);
-    assert.match(source, /\[MODE\.HEART\]: \{ title: '角色互动'/);
+    assert.match(sourceByFile.get('core/constants.js'), /ARCHIVE_PORTAL_MODES = Object\.freeze\(\[MODE\.ALBUM, MODE\.ADV, MODE\.ROOM, MODE\.ENDING, MODE\.HEART, MODE\.ACHIEVEMENTS/);
+    assert.match(sourceByFile.get('archive/snapshots.js'), /\[core_constants\.MODE\.HEART\]: \{ title: '角色互动'/);
 });
 
 test('secondary API forwards the user max output instead of a smaller feature hint', async () => {
@@ -541,7 +496,7 @@ test('phone accepts an explicit empty incremental plan without retry-shaped vali
     const empty = api.normalizePhoneIncrementPlan({ apps: [] }, previous);
     assert.deepEqual(empty.apps, []);
     assert.throws(() => api.normalizePhoneIncrementPlan({ apps: [{ id: 'UNKNOWN', kind: 'unknown', entries: [] }] }, previous), /没有可验证的新条目/);
-    assert.match(source, /if \(!plan\.apps\.length\) \{\s*return stampIncrementalCoverage\(structuredClone\(previous\)/);
+    assert.match(sourceByFile.get('modes/phone.js'), /if \(!plan\.apps\.length\) \{\s*return core_incremental\.stampIncrementalCoverage\(structuredClone\(previous\)/);
 });
 
 test('achievement and confession deltas keep old records and reject duplicate evidence', () => {
@@ -772,7 +727,7 @@ test('settings copy is trimmed and HEART speakers render real names instead of g
     assert.doesNotMatch(source, /剧本中的你/);
     assert.doesNotMatch(source, /<strong>角色<\/strong>/);
     assert.match(source, /data-rmt-action="heart-generate-season"/);
-    assert.match(source, /activeArchiveSnapshot\?\.memory\?\.userName \|\| getContext\(\)\.name1/);
+    assert.match(sourceByFile.get('ui/heartView.js'), /runtimeState\.activeArchiveSnapshot\?\.memory\?\.userName \|\| core_context\.getContext\(\)\.name1/);
     assert.doesNotMatch(source, /const taskKey = `heart-section:\$\{scope\}`;/);
     assert.match(source, /const taskKey = `heart-season:\$\{scope\}:\$\{normalizedSeason\}`;/);
 });
@@ -903,7 +858,7 @@ test('modern CompressionStream path does not immediately upload an uncompressed 
     if (typeof CompressionStream === 'function') {
         assert.equal(api.shouldWriteUncompressedCacheImmediately(null), false);
         assert.match(source, /if \(shouldWriteUncompressedCacheImmediately\(stored\)\)/);
-        assert.match(source, /if \(shouldDeferCachePersistForProviderTraffic\(\)\) \{\s*arm\(CACHE_PERSIST_IDLE_RETRY_MS\)/);
+        assert.match(sourceByFile.get('core/cache.js'), /if \(core_requestCoordinator\.shouldDeferCachePersistForProviderTraffic\(\)\) \{\s*arm\(core_constants\.CACHE_PERSIST_IDLE_RETRY_MS\)/);
     }
 });
 
@@ -920,7 +875,7 @@ test('HEART keeps multiple stories in one season without overwriting sibling sea
     }] }, ['summer'])[0];
     const springTwo = api.normalizeVoiceDramaPart({ voiceDramas: [{
         id: 'VS2', kind: 'spring', title: '第二场春风', subtitle: '', setting: '', incrementBatchId: 'spring-two',
-        script: Array.from({ length: 5 }, () => ({ speaker: 'char', text: longLine('新增档案只会再追加一篇春日故事。') })),
+        script: Array.from({ length: 5 }, () => ({ speaker: 'char', text: longLine('新的未来春日故事可以继续追加。') })),
     }] }, ['spring'])[0];
     let merged = api.applyHeartPartialPatch({ kind: 'heart', voiceDramas: [], scenarioDramas: [], dailyStrips: [] }, { type: 'season', season: 'spring', voice: springOne });
     merged = api.applyHeartPartialPatch(merged, { type: 'season', season: 'summer', voice: summer });
@@ -929,16 +884,61 @@ test('HEART keeps multiple stories in one season without overwriting sibling sea
     assert.equal(merged.voiceDramas.filter(item => item.kind === 'spring').length, 2);
     assert.equal(merged.voiceDramas.find(item => item.id === 'VS1').script[0].text, springOne.script[0].text);
     assert.match(source, /Voice \$\{voiceCount\} \/ Scenario \$\{scenarioCount\}/);
-    assert.match(source, /旧篇保留；每次档案增量后可继续追加。/);
+    assert.match(source, /旧篇保留；可以继续追加新的未来日常。/);
 });
 
+
+
+test('seasonal Drama uses archive only for relationship distance, not as a plot-material feed', () => {
+    assert.deepEqual(JSON.parse(api.heartDramaRelationshipOnlyContext({
+        relationshipState: '稳定交往中',
+        relationshipSummary: '档案里出现了不应被四季剧情反复复读的具体敏感物品。',
+        relationshipSourceMemoryIds: ['M001'],
+        relationshipSourceMemoryAnchor: '敏感锚点',
+    })), { relationshipState: '稳定交往中' });
+    const heartSource = sourceByFile.get('modes/heart.js');
+    const start = heartSource.indexOf('export async function generateHeartSeasonSection(season)');
+    const end = heartSource.indexOf('export function normalizeHeartScript', start);
+    const seasonalGenerator = heartSource.slice(start, end);
+    assert.doesNotMatch(seasonalGenerator, /incrementalArchiveMemoryIds/);
+    assert.doesNotMatch(seasonalGenerator, /sourceMemoryIds/);
+    assert.match(source, /这是【未来的\$\{label\}日常模拟】/);
+    assert.match(source, /和已知朋友家人同事一起活动/);
+    assert.match(source, /不得把历史中的具体物品、伤痛、性生活\/敏感细节/);
+    assert.doesNotMatch(source, /新篇必须由 incrementalMemoryIds 触发/);
+});
+
+test('seasonal Drama can append without a new archive batch and resumes a half-finished pair', () => {
+    const partial = {
+        voiceDramas: [{ kind: 'spring', incrementBatchId: 'spring-pending', generatedAt: 20 }],
+        scenarioDramas: [],
+    };
+    assert.equal(api.pendingHeartDramaBatchId(partial, 'spring'), 'spring-pending');
+    assert.equal(api.nextHeartDramaBatchId(partial, 'spring'), 'spring-pending');
+    const complete = {
+        voiceDramas: [{ kind: 'spring', incrementBatchId: 'spring-complete', generatedAt: 20 }],
+        scenarioDramas: [{ season: 'spring', incrementBatchId: 'spring-complete', generatedAt: 21 }],
+    };
+    assert.equal(api.pendingHeartDramaBatchId(complete, 'spring'), '');
+    assert.notEqual(api.nextHeartDramaBatchId(complete, 'spring'), 'spring-complete');
+});
+
+test('period dialogue library is hidden from HEART page and remains avatar-only', () => {
+    assert.doesNotMatch(source, /data-rmt-heart-view="greetings"/);
+    assert.match(source, /const view = \['seasons', 'strips'\]\.includes\(session\.view\) \? session\.view : 'seasons'/);
+    assert.match(source, /selectHeartGreeting\(session/);
+    assert.match(source, /data-rmt-action="avatar-talk-again"/);
+    const renderStart = source.indexOf('function renderHeart()');
+    const renderEnd = source.indexOf('function renderButterfly()', renderStart);
+    assert.doesNotMatch(source.slice(renderStart, renderEnd), /data-rmt-action="heart-avatar-talk"/);
+});
 test('maximum output setting is 60k and UI no longer clamps to 30k', () => {
     assert.equal(api.MAX_GENERATION_OUTPUT_TOKENS, 60000);
     assert.equal(api.MAX_GENERATION_OUTPUT_CHARS, 600000);
     assert.match(source, /data-rmt-api-max-tokens[^>]*max="60000"/);
     assert.doesNotMatch(source, /MAX_GENERATION_OUTPUT_TOKENS = 30000/);
     assert.doesNotMatch(source, /data-rmt-api-max-tokens[^>]*max="30000"/);
-    assert.match(source, /normalizeText\(raw, MAX_GENERATION_OUTPUT_CHARS\)/);
+    assert.match(sourceByFile.get('generation/jsonParser.js'), /core_text\.normalizeText\(raw, core_constants\.MAX_GENERATION_OUTPUT_CHARS\)/);
     const saveCalls = [];
     const context = {
         extensionSettings: { heartbeatMemories: { maxTokens: 60000 } },
@@ -966,4 +966,50 @@ test('invalid JSON diagnostics never echo model-body fragments', () => {
             && !error.message.includes('ARCHIVE_SE')
             && !error.message.includes('{"a"'),
     );
+});
+
+test('r35 modular architecture keeps the entrypoint thin and modes horizontally isolated', () => {
+    const entry = sourceByFile.get('heartbeatMemories.js');
+    assert.ok(entry.length < 12000, `entrypoint unexpectedly large: ${entry.length}`);
+    assert.deepEqual(
+        [...entry.matchAll(/export function ([A-Za-z0-9_]+)/g)].map(match => match[1]).sort(),
+        ['destroyMemoryTheater', 'initMemoryTheater'],
+    );
+    for (const [name, text] of sourceByFile) {
+        if (!name.startsWith('modes/') || name === 'modes/registry.js') continue;
+        assert.doesNotMatch(text, /from ['"]\.\/[^'"]+\.js['"]/, `${name} imports a sibling mode directly`);
+    }
+});
+
+test('r35 keeps security-sensitive boundaries single-owner after the split', () => {
+    const definitions = [
+        ['normalizeMemoryReference', 'core/evidence.js'],
+        ['acquireProviderRequestPermit', 'core/requestCoordinator.js'],
+        ['isCurrentTaskOrigin', 'core/context.js'],
+        ['saveSession', 'core/cache.js'],
+        ['requireWritableArchiveAction', 'archive/library.js'],
+        ['generateConfiguredJson', 'generation/client.js'],
+    ];
+    for (const [fn, file] of definitions) {
+        const count = [...source.matchAll(new RegExp(`export (?:async )?function ${fn}\\b`, 'g'))].length;
+        assert.equal(count, 1, `${fn} should have exactly one authoritative definition`);
+        assert.match(sourceByFile.get(file), new RegExp(`export (?:async )?function ${fn}\\b`));
+    }
+});
+
+test('ADV EVENT is a product rename while the legacy adv cache key stays compatible', () => {
+    const constantsSource = sourceByFile.get('core/constants.js');
+    assert.match(constantsSource, /ADV: 'adv'/);
+    assert.match(constantsSource, /\[MODE\.ADV\]: 'ADV EVENT'/);
+    assert.doesNotMatch(constantsSource, /ADV_EVENT: 'advEvent'/);
+    assert.match(sourceByFile.get('archive/snapshots.js'), /title: 'ADV EVENT'/);
+});
+
+test('r35 runtime state namespace cannot be shadowed by local state variables', () => {
+    for (const [name, text] of sourceByFile) {
+        if (name === 'core/state.js') continue;
+        assert.doesNotMatch(text, /import \{ state \} from .*core\/state\.js/);
+        assert.doesNotMatch(text, /\bstate\.(?:activeMode|activeSession|busy|runtimeSessionCache|providerRequestQueue|activeGenerationTasks)\b/);
+    }
+    assert.match(source, /import \{ state as runtimeState \} from/);
 });

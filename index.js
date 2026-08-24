@@ -1,11 +1,10 @@
-import { initMemoryTheater, destroyMemoryTheater } from './src/heartbeatMemories.js?heartbeat=0.8.10-clean-tt-r33';
+import { initMemoryTheater, destroyMemoryTheater } from './src/heartbeatMemories.js?heartbeat=0.8.10-modular-r35';
 
 const VERSION = '0.8.10';
 
-jQuery(() => {
+export function init() {
     initMemoryTheater();
-    console.log(`[HeartbeatMemories] ${VERSION} loaded`);
-});
+}
 
 export function onDisable() {
     destroyMemoryTheater();
@@ -14,3 +13,5 @@ export function onDisable() {
 export function onClean() {
     destroyMemoryTheater();
 }
+
+export { VERSION };

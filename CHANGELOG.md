@@ -1,3 +1,18 @@
+## 0.8.10 modular-runtime-r35
+
+- **拆除 79 万字符单文件运行时**：`heartbeatMemories.js` 仅保留 init / destroy，业务代码按 `core / archive / generation / modes / ui` 拆成独立 ES modules。
+- **业务模式横向隔离**：Album、ADV EVENT、Room、Items、Phone、ENDING、HEART、Achievements、Butterfly 之间不再直接 import；共享 evidence / cache / revision / request coordinator 由统一边界拥有。
+- **CG/ADV 更名为 ADV EVENT**：只改产品/UI/源码模块名称；持久化键仍为 legacy `adv`，无需迁移旧缓存。
+- **零 schema 迁移**：`MEMORY_KEY`、`CACHE_KEY`、archive schema v3、压缩缓存格式、incremental coverage 与历史派生数据保持兼容。
+- **回归/安全验证**：r34 原 45 项行为测试全部适配模块化后通过，并增加 entrypoint、mode 横向依赖、关键安全边界单一所有者与 legacy adv key 兼容测试。
+
+## 0.8.10 future-daily-drama-r34
+
+- **春夏秋冬 / 未来 Drama 改为真正的未来日常番外**：档案只用于已经校验过的关系阶段，不再把新增记忆、关系摘要、证据锚点或其中的具体物品当成剧情素材；无需等新 Mxxx 才能继续追加一篇。
+- **场景类型更接近恋爱模拟游戏的生活番外结构**：二人约会、居家相处、跑腿购物、短途出行、工作/学习后的碰面，以及角色卡/世界书明确存在的朋友、家人、同事群体互动会轮换出现；未知关系不凭空创建固定重要 NPC。
+- **时期对话改为头像专属**：角色互动页面不再展示“各种时期的对话”页签或“点头像听一句”按钮；已生成的早中晚、周末、生日、节日、久未访问台词继续保留，只在档案室点击角色头像时按状态显示。
+- **安全与写回边界不变**：四季/未来仍是派生模拟，不写正式 MEMORY_KEY；季节与 patch key 仍由代码 allowlist 决定，Provider 两并发、chat/revision fence 和脚本 HTML 转义继续保留。
+
 ## 0.8.10 clean-tt-r33
 
 - 干净构建：CG 实图仅保留 SillyTavern Image Generation 公共接口。

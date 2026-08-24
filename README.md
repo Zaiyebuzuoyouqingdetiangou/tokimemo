@@ -1,4 +1,19 @@
-# 心跳回忆 0.8.10 r32
+# 心跳回忆 0.8.10 r35
+
+
+## r35：模块化重构 / ADV EVENT
+
+- 运行时从单一约 79 万字符的 `src/heartbeatMemories.js` 拆成 `core / archive / generation / modes / ui` 五层；入口文件只保留 init / destroy。
+- 9 个业务 mode 之间禁止直接 import。共享的档案证据、revision fence、请求并发、缓存、文本净化与 Connection Manager 请求继续只有一套权威实现。
+- 原 **CG/ADV** 产品名称统一改为 **ADV EVENT**；历史缓存仍使用 `MODE.ADV = "adv"`，无需迁移，旧事件、CG 图片与 ADV 全文继续可读。
+- r35 是结构重构版本：除 ADV EVENT 展示名称外，不改变 r34 的 Prompt、生成数量、档案 schema、缓存 schema、TT/全屏行为、60k 最大输出、未来四季 Drama 或只读档案规则。
+
+## r34：四季未来日常 / 时期对话头像专属
+
+- 春、夏、秋、冬和未来/后日谈不再从档案新增 Mxxx 里挑关键词写故事。当前档案只负责确定关系阶段；四季正文是新的未来日常模拟，可随时继续追加。
+- 剧情方向会在二人约会、居家日常、购物跑腿、散步出行、工作学习后的碰面，以及角色卡/世界书明确存在的朋友、家人、同事互动之间轮换。没有明确设定时不会凭空创造固定家人或重要 NPC。
+- 角色互动页面只保留 **春夏秋冬 / Drama** 与 **日常一格**。早中晚、周末、生日、节日和久未访问等“各种时期的对话”继续存在，但只在档案室点击角色头像时按状态出现。
+- 节假日特别篇暂未加入 r34；现有头像节日台词保持原样，后续可单独设计为世界观日历驱动的节日番外。
 
 ## r33：干净构建 / TT 显示切换 / 生成上限修复 / 角色互动独立入口
 
@@ -21,7 +36,7 @@
 | 内容 | r30 的追加行为 |
 |---|---|
 | 回忆相簿 | 追加新 CG 节点和共同回忆；旧描述、评论与已绘制图片保持不变 |
-| CG / ADV | 追加新事件索引；旧 CG 图片和已完成 ADV 全文保持不变 |
+| ADV EVENT | 追加新事件索引；旧 CG 图片和已完成 ADV 全文保持不变 |
 | 他的房间 / 物品 | 向既有空间、容器追加新证据物件，必要时增加新空间/容器；旧文字不改 |
 | 私人终端 | 在既有 App 后追加新条目；旧聊天、照片文字档案、联系人等不重做 |
 | 蝴蝶效应 | 追加新平行分歧；上一轮 Ω 保存为历史观测，再生成新的 Ω |
@@ -69,7 +84,7 @@ r28/r29 的旧缓存可直接升级。第一次档案增量时，插件先把更
 ## r25：重要节点增量收藏 / 三分角色互动 / 成就库
 
 
-- **回忆相簿与 CG/ADV 不再凑固定数量**：每次只抓当前档案里约 3～6 个最重要、最适合做 CG 的节点，与旧收藏增量合并。共同回忆每张 4～6 段，界面不再显示“现在的他 → 现在的你”。
+- **回忆相簿与 ADV EVENT 不再凑固定数量**：每次只抓当前档案里约 3～6 个最重要、最适合做 CG 的节点，与旧收藏增量合并。共同回忆每张 4～6 段，界面不再显示“现在的他 → 现在的你”。
 - **ADV 一批最多 6 篇**：收藏可以一直累积，但每次批量正文只生成最多 6 篇，避免以后节点越来越多又把一个请求撑爆。
 - **告白回看才使用头像逐句对话**：只有已经发生、能通过档案证据校验的告白进入播放器；ENDING 未来路线不再放头像告白。
 - **角色互动分三块单独生成**：各种时期的对话 / 春夏秋冬·Drama / 日常一格。首次只做时期对话；四季再拆成后日谈与春夏秋冬小请求；日常一格独立生成。
@@ -103,7 +118,7 @@ r28/r29 的旧缓存可直接升级。第一次档案增量时，插件先把更
 - **char / char 2.0 不再因为共用头像自动挤进同一组**：新写入或手动重扫的档案索引会保存角色卡内容指纹并优先按指纹分类；没有指纹的旧索引仍可在“管理角色分类”里手动拆分。
 - **管理角色分类**：支持“一键自动分类未锁定档案”、把某个聊天档案移动到现有角色组，以及从 SillyTavern 当前角色列表里手动选择一个 char 新建角色组。这里只改心跳回忆的展示索引，不移动/重命名/删除酒馆聊天文件。
 - **旧版本歧义不乱猜**：旧档案若没有角色卡指纹，而 SillyTavern 里又存在多个同头像/同名候选，会显示成独立的“待手动分类”。你可以逐条移动到正确组；手动归类以后自动分类不会再覆盖。
-- **删除档案**：当前真实聊天提供“删除当前档案”，必须连续确认两次，只删除 Heartbeat 的 `MEMORY_KEY` 与相簿/CG/ADV/房间/ENDING/HEART 等派生缓存，聊天正文不动。其它历史档案提供“从档案室移除”，只删轻量索引，不会偷偷切聊天或删除酒馆聊天文件。
+- **删除档案**：当前真实聊天提供“删除当前档案”，必须连续确认两次，只删除 Heartbeat 的 `MEMORY_KEY` 与相簿/ADV EVENT/房间/ENDING/HEART 等派生缓存，聊天正文不动。其它历史档案提供“从档案室移除”，只删轻量索引，不会偷偷切聊天或删除酒馆聊天文件。
 - **生成禁用词**：默认禁用 `老子`。它只约束相簿 / ADV / 房间 / ENDING / HEART 等新生成派生文本；命中后本次结果失败关闭，不静默替换、不自动重试，历史聊天、正式档案和证据 anchor 原文都不改。
 - **房间终于不是一个模子**：卧室、客厅、厨房、书房、音乐/录音工作室、实验室、浴室、餐厅、阳台/庭院、工作间、办公室、营帐/船舱等都有不同固定场景骨架，同类房间再有 3 种稳定布局变体。旧房间缓存若已有明确类型/名称，也会直接使用新布局，无需重生成。
 
@@ -119,9 +134,9 @@ r28/r29 的旧缓存可直接升级。第一次档案增量时，插件先把更
 ## r17：档案状态修复、告白单独刷新与五入口并行
 
 - **告白回看单独更新**：在 ENDING → 告白回看中点击“只重新读取告白”，只扫描后来新增/更新到档案里的真实告白节点。原有结局路线、逆转告白和后日谈不变。
-- **五个主入口最多并行 5 项**：回忆相簿、CG/ADV、房间、ENDING、蝴蝶效应可以同时各跑一个主任务；仍禁止同一个入口重复启动。
+- **五个主入口最多并行 5 项**：回忆相簿、ADV EVENT、房间、ENDING、蝴蝶效应可以同时各跑一个主任务；仍禁止同一个入口重复启动。
 - **只读开关不再切聊天**：从全角色档案馆打开旧档案仍默认只读。关闭只读只让编辑按钮出现，不会自动切角色、聊天或刷新酒馆。真正写入时必须是用户已经手动打开的同角色/同 chatId live 聊天，否则只提示、不写入。
-- **CG 生图动态重检**：相簿和 CG/ADV 的状态条提供“重新检测”。先开档案、后启动 Image Generation 也可以立刻重新检测，不需要重开档案。
+- **CG 生图动态重检**：相簿和 ADV EVENT 的状态条提供“重新检测”。先开档案、后启动 Image Generation 也可以立刻重新检测，不需要重开档案。
 - **快照不能覆盖 live 缓存**：即使关闭只读，历史 snapshot 也只用于浏览；写入前必须重新取得 live session，缺失时 fail closed。
 
 ### r16：角色互动、Voice Drama、四季小剧场与日常一格
@@ -141,7 +156,7 @@ r28/r29 的旧缓存可直接升级。第一次档案增量时，插件先把更
 
 
 - 回忆相簿中每张已解锁 CG 的缩略图右下角直接提供 **“🎨 绘制 / ↻ 重绘”**，不必先进入详情。
-- CG/ADV 详情增加 **“CG 实图 · Image Generation 已连接 / 未检测到”** 状态条，绘制按钮固定放在操作区最前。
+- ADV EVENT 详情增加 **“CG 实图 · Image Generation 已连接 / 未检测到”** 状态条，绘制按钮固定放在操作区最前。
 - 如果从全角色档案馆点开的条目就是 SillyTavern 当前正在打开的同一角色、同一聊天档案，会自动回到可写的 live 档案；真正的其他历史档案仍只读，且不会为了绘图自动切聊天。
 
 ## 基本说明
@@ -156,16 +171,16 @@ r28/r29 的旧缓存可直接升级。第一次档案增量时，插件先把更
 
 ## 0.8.10 r12：CG 实图绘制
 
-- 相簿已解锁 CG 和 CG/ADV 事件都新增 **“🎨 绘制CG”**。如果 SillyTavern 已启用并配置官方 Image Generation 扩展，点击后会使用其 `imagine` 命令生成图片，并覆盖原来的抽象 CG；没有插件、生成失败或图片失效时继续显示抽象 CG。
+- 相簿已解锁 CG 和 ADV EVENT 事件都新增 **“🎨 绘制CG”**。如果 SillyTavern 已启用并配置官方 Image Generation 扩展，点击后会使用其 `imagine` 命令生成图片，并覆盖原来的抽象 CG；没有插件、生成失败或图片失效时继续显示抽象 CG。
 - 绘制永远是手动动作，并会先确认可能消耗本地算力、额度或付费点数。当前版本不自动批量生图。
 - 新生成的 CG 数据会额外带一个纯视觉 `imagePrompt`；旧缓存无需重做，会从原 `desc/cgDesc + visualSeed` 生成 fallback。心跳回忆不会把完整聊天、档案、世界书或私人终端内容交给生图扩展。
 - 图片由 SillyTavern Image Generation 自己保存；心跳回忆只保存同源本地图片路径，不保存 base64，也不直接读取或管理任何生图服务 API Key。
 
 ## 0.8.9.1 独立入口并行生成
 
-- 移除“生成整套档案室内容”一键基础包入口。回忆相簿、CG/ADV 事件索引、他的房间、蝴蝶效应、ENDING / 后日谈都采用**各自首次生成 / 增量追加**，每一项只承担自己的 Prompt、游标与 JSON 校验，避免整包过长导致一次失败全部失败。
+- 移除“生成整套档案室内容”一键基础包入口。回忆相簿、ADV EVENT 事件索引、他的房间、蝴蝶效应、ENDING / 后日谈都采用**各自首次生成 / 增量追加**，每一项只承担自己的 Prompt、游标与 JSON 校验，避免整包过长导致一次失败全部失败。
 - 五个主入口共用最多 **5 项并行生成** 的安全上限。每个任务使用独立 AbortController、原 chatId、characterKey 与 archiveRevision；同一聊天切走后继续后台运行，完成后只写回原窗口。
-- 同一入口禁止重复启动；不同入口可以同时请求。CG/ADV 的具体长篇正文仍按单个事件生成，同一个聊天同一时刻只允许一篇具体 ADV，避免并发覆盖事件缓存。
+- 同一入口禁止重复启动；不同入口可以同时请求。ADV EVENT 的具体长篇正文仍按单个事件生成，同一个聊天同一时刻只允许一篇具体 ADV，避免并发覆盖事件缓存。
 - “他的物品 / 私人终端”继续没有档案室独立入口。进入“他的房间”后，如果对应深层内容尚未生成，按钮会变成“生成并翻找 / 生成并查看”，可与其他主入口同时后台生成。
 - 并行任务完成时采用按 mode 合并的延迟写回，避免用户切到别的聊天后两个不同入口先后完成、后一个结果把前一个 deferred session 覆盖掉。
 - 创建/更新聊天档案、重新读取记忆插件仍属于档案级操作：有内容生成任务时会暂时禁止，以防 archiveRevision 在并行任务中途变化。
@@ -196,7 +211,7 @@ r28/r29 的旧缓存可直接升级。第一次档案增量时，插件先把更
 - 档案室新增 **“档案室一览”**：当前角色的每个聊天窗口各自对应一份独立心跳回忆档案，可查看有无建档、档案名、记忆数量与更新时间，并安全切换到对应聊天。
 - 当前窗口记忆桥接支持通用公开接口适配，但 r18 起**默认不执行第三方 reader**。用户显式开启后，可识别 `getInjectedHistory()` / `getCurrentChatMemories()` / `getCurrentChatMemory()` / `getCurrentChatSummary()` / `getCurrentSummary()` 与可选 `getSnapshot()`；调用前后都校验仍处于发起时的聊天窗口。
 - 蝴蝶效应恢复原始“时间分歧树”设计：主时间线由真实档案锚定；8+ 平行外延节点改由角色卡 + User Persona + 相关世界书推演，最后附 TRUE ENDING 彩蛋；平行世界明确是模拟，不会写回档案。
-- 0.8.9.1 起取消整套基础包请求：相簿、CG/ADV、房间、蝴蝶效应分别生成，可最多 5 项并行；长篇 ADV 正文继续按具体事件点开后单独生成。
+- 0.8.9.1 起取消整套基础包请求：相簿、ADV EVENT、房间、蝴蝶效应分别生成，可最多 5 项并行；长篇 ADV 正文继续按具体事件点开后单独生成。
 
 独立 SillyTavern 第三方扩展。与兔子镜无依赖、无共享运行时。
 
@@ -219,7 +234,7 @@ r28/r29 的旧缓存可直接升级。第一次档案增量时，插件先把更
 - **插件设置页只负责 API**：一键导入 Connection Manager、连接配置、模型刷新/选择、最大输出、温度与每日生活自动请求开关。
 - **档案室是独立入口**：可从设置页的“打开档案室”按钮，或 SillyTavern 扩展菜单里的“心跳回忆 · 档案室”进入。
 - 档案室负责创建/更新当前聊天档案、查看档案摘要，并提供 **档案室一览**：一个聊天窗口对应一个独立档案；列表只扫描当前角色的聊天窗口。
-- 主内容入口为五个：**回忆相簿 → CG/ADV → 他的房间 → ENDING / 后日谈 → 蝴蝶效应**。
+- 主内容入口为五个：**回忆相簿 → ADV EVENT → 他的房间 → ENDING / 后日谈 → 蝴蝶效应**。
 - “他的物品”和“他的手机/私人终端”是“他的房间”内部的深层访问，不再作为档案室头像入口。
 - 未生成时不会因为误点头像自动发请求；每张主入口卡片都有自己的“生成这一项”按钮。已经生成的入口可以继续点击头像查看；档案增加后再点“增量追加”，旧内容不会替换。
 
@@ -228,7 +243,7 @@ r28/r29 的旧缓存可直接升级。第一次档案增量时，插件先把更
 档案室五个主入口分别请求各自的数据：
 
 - 回忆相簿
-- CG / ADV 事件索引
+- ADV EVENT 事件索引
 - 他的房间
 - 蝴蝶效应
 - ENDING / 后日谈
@@ -298,7 +313,7 @@ r28/r29 的旧缓存可直接升级。第一次档案增量时，插件先把更
 - 第一次由用户手动“创建聊天档案”。
 - 后续聊天不会自动进入档案。
 - 只有用户主动点“更新档案”，新增聊天才会被重新整理。
-- 所有声称“已经发生过”的 CG / ADV / 回忆 / 与用户有关的房间痕迹，都必须引用真实 `sourceMemoryIds` 并通过 `sourceMemoryAnchor` 证据校验。
+- 所有声称“已经发生过”的 ADV EVENT / 回忆 / 与用户有关的房间痕迹，都必须引用真实 `sourceMemoryIds` 并通过 `sourceMemoryAnchor` 证据校验。
 
 ### 档案室一览
 
@@ -398,7 +413,7 @@ r20 起，创建/更新档案时聊天分块与记忆/摘要分块不再硬限�
 
 ### r13: incremental archives and read-only archive browsing
 
-- “更新当前窗口档案” is incremental by default: it only processes chat messages added after the previous archive plus changed current-chat memory/summary sources. Existing Mxxx IDs and generated Album/CG/ADV/Room/Ending/Items/Phone content are retained.
+- “更新当前窗口档案” is incremental by default: it only processes chat messages added after the previous archive plus changed current-chat memory/summary sources. Existing Mxxx IDs and generated Album/ADV EVENT/Room/Ending/Items/Phone content are retained.
 - If an already archived message was edited/deleted/reordered, the incremental update stops. Use the separate “完全重建档案” only when you intentionally want a full rescan and are willing to invalidate derived content.
 - ADV bulk generation no longer auto-retries every failure individually. After a partial failure, choose either one more bulk request or an explicitly confirmed per-item repair pass.
 - Opening another character/chat archive from the archive library is read-only and does not switch the SillyTavern chat. Generated content can be viewed from saved metadata; mutation/generation actions remain disabled until you intentionally return to that chat.

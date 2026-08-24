@@ -417,3 +417,33 @@ Scope: r32 mobile-close package -> r33 clean build. Runtime changes use the dire
 - Focused regression covers removed-provider identifier absence, TT default/fullscreen behavior, HEART-before-achievements ordering, user 60k max forwarding despite a 3.8k legacy hint, syntax, manifest and package integrity.
 
 Targeted conclusion: no new Critical / High / Medium security issue identified in the r33 changes.
+
+
+## r34 future-daily seasonal Drama / avatar-only dialogue targeted diff review
+
+Scope: r33 `clean-tt` -> r34 `future-daily-drama`. Runtime changes are limited to HEART seasonal prompt inputs/generation gating, internal seasonal batch pairing and HEART presentation.
+
+- The prior seasonal path treated each season as an incremental archive consumer: it supplied `incrementalArchiveSlice(...)`, required fresh Mxxx IDs before every new story, and instructed the model to let those IDs trigger the next plot. This made incidental archive details eligible to recur across every seasonal story. r34 removes that path from `generateHeartSeasonSection` and supplies seasonal prompts only a bounded `relationshipState`; raw memory rows, source anchors and relationship-summary prose are not seasonal plot inputs.
+- Seasonal output remains normalized plain-text Voice/Scenario data. A new episode can be generated without archive growth because it is explicitly future/non-canonical simulation. Existing `normalizeHeart`, current-chat/origin/archiveRevision checks, deferred-patch handling and `saveSession` boundaries are unchanged, and seasonal output still cannot enter `MEMORY_KEY`.
+- Partial Voice/Scenario retry now uses a code-generated internal batch ID. The season comes from the existing five-value allowlist; a pending internal batch can be resumed, but model output cannot choose the batch ID, season, patch destination, chat or revision.
+- Prompt review explicitly prevents archive-specific objects, trauma/intimate details or evidence anchors from being recycled into seasonal plots and asks scene variety to come from ordinary future life. Named friends/family/colleagues may be used only when already present in the controlled character/world context; otherwise the prompt directs the model not to invent stable named relationships.
+- The HEART page no longer renders the greetings tab or avatar-talk button. Existing greeting storage/normalization and archive-avatar popup selection remain escaped and read-only aware. This reduces presentation surface and does not add a new event, DOM sink, fetch/XHR, Slash Command, dynamic code execution, provider endpoint, credential access, world-info write, host-chat navigation or formal-memory write.
+- Focused verification covers 45 Node regressions, including no seasonal `incrementalArchiveMemoryIds`/`sourceMemoryIds` dependency, relationship-only prompt context, pending half-pair continuation, absence of the greetings tab in `renderHeart`, avatar dialogue selection preservation, user max-output forwarding and all prior r33 safety/regression checks. Syntax, manifest parsing and package integrity also pass.
+
+Targeted diff conclusion: no new Critical / High / Medium security issue identified. Residual model-quality uncertainty remains: worldbook/card content can influence supporting-cast choice as intended, but actual narrative variety depends on the selected model.
+
+
+## r35 modular runtime / ADV EVENT targeted architecture review
+
+Scope: local r34 `future-daily-drama` package -> local r35 `modular-runtime`. The change is primarily code movement plus the user-facing `ADV EVENT` rename; archive/cache schemas intentionally remain unchanged.
+
+- The former `src/heartbeatMemories.js` was 791,231 bytes and owned every trust boundary and feature in one lexical scope. r35 splits runtime code into core, archive, generation, modes and UI modules; the entrypoint now exports only `initMemoryTheater` / `destroyMemoryTheater`.
+- Mutable runtime state is centralized in `core/state.js`. Evidence validation, provider permits/timeouts, cache/revision persistence and writable-archive gating each retain one authoritative function definition. New architecture regressions assert those single-owner boundaries.
+- During static `checkJs` review, the first mechanical split exposed a real shadowing hazard: importing the shared object as `state` could collide with existing local variables named `state` and redirect `state.activeMode`-style accesses into a local object/TDZ. The final build aliases the shared object as `runtimeState` everywhere and adds a regression that forbids the ambiguous import/reference form.
+- Direct mode-to-mode imports were challenged after the mechanical split. Initial cross-links (`ENDING -> ROOM`, `HEART -> ENDING`, `ROOM -> PHONE`) were removed by relocating shared predicates/evidence helpers/draft access to common boundaries. The final `modes/*.js` set has no sibling-mode imports.
+- `ADV EVENT` changes only product/display/module naming. The persisted mode value remains `MODE.ADV = "adv"`, so r34 and older cached `cache.adv` objects are addressed through the same key without migration or fallback guessing.
+- Source-wide sink review found no new `eval`, `Function`, XMLHttpRequest, provider endpoint, credential/API-key read, world-info write or `MEMORY_KEY` write introduced by the split. Existing DOM insertion code was moved rather than expanded; generated strings remain under the same escaping/normalization functions.
+- The split does not change r34 seasonal Drama semantics, 60k user max-output forwarding, TT display toggle, cache-idle persistence, Image Generation command restrictions, origin/revision fences or read-only historical snapshots.
+- Focused verification: all JS files pass `node --check`; the ESM entrypoint imports successfully; manifest parses; the adapted r34 suite plus architecture checks passes 48/48. Additional checks verify no mode sibling imports, a thin entrypoint, one authoritative definition for evidence/request/cache/writeability boundaries, and legacy `adv` storage compatibility.
+
+Targeted conclusion: no new Critical / High / Medium security issue identified in the r35 structural change. Main residual risk is architectural rather than exploitability: several UI/controller modules still participate in circular ESM import graphs inherited from the monolith. Module evaluation succeeds and no top-level business action is invoked during the cycle, but future refactors should progressively move controller orchestration upward to reduce cycles rather than reintroducing mode-to-mode state access.

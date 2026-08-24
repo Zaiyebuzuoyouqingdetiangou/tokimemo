@@ -300,3 +300,23 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - `ttDisplayMode` 只改变档案室 overlay 的移动端布局 class 与安全区 padding，不得改变读写权限、任务 origin、archive revision、关闭按钮事件边界或生成逻辑。
 - 副 API 用户设置的 `maxTokens` 是实际提交给 Connection Manager 的输出上限，仍受代码硬上限 60,000 约束；功能内部旧 `options.maxTokens` 只能作为历史尺寸提示，不能降低用户明确配置。
 - 新增角色互动档案室入口只改变导航可达性和排序；只读档案、当前聊天可写检查、HEART 的证据锚点及派生内容边界保持不变。
+
+
+### 0.8.10 r34 future-daily Drama / avatar-only dialogue invariants
+
+- Seasonal/future HEART Drama is derivative simulation and no longer consumes or requires a per-season incremental-memory cursor. The already-normalized parent HEART relationship state remains the only archive-derived relationship boundary used for seasonal prompt tone; raw archive memories, relationship summary text, source anchors and incremental archive slices must not be supplied as seasonal plot material.
+- Generating another spring/summer/autumn/winter/postending episode without new Mxxx is allowed because the result is not historical evidence. It must not write `MEMORY_KEY`, alter the parent relationship evidence, or claim the simulated episode already happened.
+- Supporting friends/family/colleagues may use names/relations only when CHARACTER_CARD_JSON or WORLD_INFO_TEXT clearly supplies them. Otherwise the model must prefer the char/user pair or non-specific background people rather than inventing durable named relatives or close relationships. Third-party romance remains prohibited.
+- Seasonal batch IDs and target seasons are code-owned internal values. A half-finished Voice/Scenario pair may reuse its existing internal batch ID; model output cannot choose the destination chat, season, patch key, archive revision, URL, HTML or executable action.
+- Hiding the period-dialogue library from the HEART page is presentation-only. Greetings remain bounded escaped derivative text and may be selected only through the existing archive-avatar interaction; removing the visible tab must not bypass read-only archive handling or trigger background generation from an avatar click.
+
+
+## r35 modular architecture invariants
+
+- `src/heartbeatMemories.js` 只能承担 extension init / destroy / bootstrap；不得重新堆回 Album/Phone/HEART 等业务实现。
+- `src/modes/*` 之间不得直接 import。跨玩法共享信息必须通过 `core/*`、`archive/*` 或 `generation/*` 的受控接口取得。
+- `normalizeMemoryReference` 的证据校验由 `core/evidence.js` 单一拥有；不得在 mode 内复制弱化版 ID/anchor 校验。
+- Provider permit/timeout/task key 由 `core/requestCoordinator.js` 单一拥有；任何 mode 不得绕过队列直接新增第二套并发实现。
+- `saveSession` / compressed derived-cache persistence 由 `core/cache.js` 单一拥有，并继续检查 chatId + archiveRevision。
+- 历史只读档案的写入准入继续由唯一 `requireWritableArchiveAction` 边界控制；模块拆分不得因 UI 入口变化获得额外写权限。
+- `ADV EVENT` 是展示/模块名称；持久化值继续使用 `MODE.ADV === "adv"`。未经独立 schema migration 版本，不得静默改成 `advEvent` 导致旧缓存失联。
