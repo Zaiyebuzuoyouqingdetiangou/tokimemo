@@ -447,3 +447,12 @@ Scope: local r34 `future-daily-drama` package -> local r35 `modular-runtime`. Th
 - Focused verification: all JS files pass `node --check`; the ESM entrypoint imports successfully; manifest parses; the adapted r34 suite plus architecture checks passes 48/48. Additional checks verify no mode sibling imports, a thin entrypoint, one authoritative definition for evidence/request/cache/writeability boundaries, and legacy `adv` storage compatibility.
 
 Targeted conclusion: no new Critical / High / Medium security issue identified in the r35 structural change. Main residual risk is architectural rather than exploitability: several UI/controller modules still participate in circular ESM import graphs inherited from the monolith. Module evaluation succeeds and no top-level business action is invoked during the cycle, but future refactors should progressively move controller orchestration upward to reduce cycles rather than reintroducing mode-to-mode state access.
+
+
+## r35.1 startup-contract hotfix targeted diff review
+
+Scope: r35 modular runtime -> r35.1 startup hotfix. Runtime source change is limited to `index.js`: restore the long-standing DOM-ready call to `initMemoryTheater()` because the manifest declares no init hook. `manifest.json` changes only the cache-busting build query/description. No mode, archive, cache, evidence, provider, rendering, URL, credential, command, or persisted-data code changed.
+
+The regression was caused by replacing r34's self-starting entrypoint with an exported `init()` that SillyTavern did not invoke under the existing manifest. The hotfix restores the previous execution point without introducing model-controlled data, network authority, dynamic execution, or a new write path. Initialization remains inside `initMemoryTheater()` and its existing internal try/catch; disable/clean still call `destroyMemoryTheater()`. A new regression test requires the DOM-ready startup call and forbids returning to an unreferenced exported `init()` under this manifest.
+
+Focused verification: syntax check for every runtime module, manifest JSON parse, complete Node regression suite (50/50), ZIP CRC, and local diff whitespace check. Targeted conclusion: no new Critical / High / Medium security issue identified.

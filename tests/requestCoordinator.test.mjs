@@ -968,6 +968,12 @@ test('invalid JSON diagnostics never echo model-body fragments', () => {
     );
 });
 
+test('r35.1 entry module restores SillyTavern DOM-ready self-start', async () => {
+    const indexSource = await readFile(new URL('../index.js', import.meta.url), 'utf8');
+    assert.match(indexSource, /jQuery\(\(\) => \{\s*initMemoryTheater\(\);/);
+    assert.doesNotMatch(indexSource, /export function init\s*\(/);
+});
+
 test('r35 modular architecture keeps the entrypoint thin and modes horizontally isolated', () => {
     const entry = sourceByFile.get('heartbeatMemories.js');
     assert.ok(entry.length < 12000, `entrypoint unexpectedly large: ${entry.length}`);

@@ -67,3 +67,7 @@ ENDING ──────┤
 ```
 
 `MODE.ADV` deliberately remains the persisted value `adv`. `ADV EVENT` is the product/module/UI name only until a future explicit schema-migration release.
+
+## SillyTavern entrypoint contract
+
+`manifest.json` currently declares only the `disable` and `clean` hooks. Therefore `index.js` must keep the DOM-ready self-start path (`jQuery(() => initMemoryTheater())`). Merely exporting an `init()` function is not sufficient for this manifest and leaves an enabled extension unmounted. Any future switch to a host-managed init hook must change the manifest and entrypoint together and retain a regression test for startup.

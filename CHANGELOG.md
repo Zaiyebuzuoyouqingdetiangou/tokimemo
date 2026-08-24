@@ -1,3 +1,8 @@
+## 0.8.10 modular-runtime-r35.1 startup hotfix
+
+- **修复 r35 启动回归**：r35 将 `index.js` 从 DOM-ready 自启动误改成仅 `export function init()`，但 manifest 并未声明 init hook，SillyTavern 加载文件后不会调用该函数，导致插件虽安装/启用却没有挂载菜单和设置。r35.1 恢复 r34 及更早版本的 `jQuery(() => initMemoryTheater())` 启动契约。
+- **不改模块化架构和数据**：38 个 ES module、legacy `adv` 缓存键、archive/cache schema、Prompt、TT/全屏、60k、副 API、四季未来日常等均保持 r35 不变。
+
 ## 0.8.10 modular-runtime-r35
 
 - **拆除 79 万字符单文件运行时**：`heartbeatMemories.js` 仅保留 init / destroy，业务代码按 `core / archive / generation / modes / ui` 拆成独立 ES modules。

@@ -1,7 +1,7 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.10-modular-r35",
+  "js": "index.js?heartbeat=0.8.10-modular-r35.1-startup-hotfix",
   "author": "Toto",
   "version": "0.8.10",
   "auto_update": false,
@@ -10,5 +10,5 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "心跳回忆 0.8.10 r35：模块化运行时；档案、回忆相簿、ADV EVENT、房间、私人终端、ENDING、角色互动、成就与蝴蝶效应分模块维护，共享 evidence / cache / request coordinator / revision fence；兼容旧 adv 缓存键。"
+  "description": "心跳回忆 0.8.10 r35.1：修复 r35 模块化后入口只导出 init、但 SillyTavern 未调用导致插件未实际初始化的问题；恢复 DOM ready 自动启动，模块结构与 r35 数据/功能保持不变。"
 }
