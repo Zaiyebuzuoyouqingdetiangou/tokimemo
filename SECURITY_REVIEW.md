@@ -404,3 +404,16 @@ Scope: r28 `network-idle-cache` -> r29 `output-60k`. Runtime changes are limited
 - The change adds no new network endpoint, request concurrency, retry, fetch/XHR, Slash Command execution, dynamic code execution, HTML/CSS/URL sink, credential/API-key access, host-chat navigation, world-info write, or `MEMORY_KEY` write. Existing provider errors remain authoritative when the selected model/proxy rejects a requested output size.
 
 Targeted diff conclusion: no newly introduced Critical / High / Medium security issue identified. Residual operational risk is provider compatibility/cost: models or proxies may reject or bill for large output ceilings; the plugin remains bounded at 60,000 and retains smaller per-feature segment caps where defined.
+
+
+## r33 clean build / display toggle / output-budget targeted diff review
+
+Scope: r32 mobile-close package -> r33 clean build. Runtime changes use the direct SillyTavern Image Generation-only path, add a boolean TT layout toggle, restore user-selected secondary-API max output semantics, and expose HEART as a first-class archive portal before achievements.
+
+- Image generation remains limited to SillyTavern public commands. Same-origin image URL normalization, explicit user draw confirmation, manual `/sd` sanitization and current-chat/revision writeback fences remain.
+- TT mode controls only an internal CSS class and code-owned safe-area fallback; it does not accept model-controlled CSS, HTML, URL or script values.
+- User max output remains clamped to 60,000 and is forwarded to the already-authorized Connection Manager profile. This changes request sizing only; provider URL/credential ownership, two-request concurrency, timeout, JSON normalization and evidence checks remain unchanged.
+- HEART portal reordering does not create a new writer. Existing `requireWritableArchiveAction`, read-only snapshot behavior and HEART normalization are reused.
+- Focused regression covers removed-provider identifier absence, TT default/fullscreen behavior, HEART-before-achievements ordering, user 60k max forwarding despite a 3.8k legacy hint, syntax, manifest and package integrity.
+
+Targeted conclusion: no new Critical / High / Medium security issue identified in the r33 changes.

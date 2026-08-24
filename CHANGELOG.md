@@ -1,17 +1,16 @@
+## 0.8.10 clean-tt-r33
+
+- 干净构建：CG 实图仅保留 SillyTavern Image Generation 公共接口。
+- 新增 TT 显示模式开关：开启为 r32 顶部安全区 UI，关闭为传统全屏 UI；默认关闭。
+- 修复 r32 输出预算回归：用户在副 API 设置的最大输出就是实际发给 Connection Manager 的 maxTokens，最高 60,000。
+- 角色互动升级为档案室独立入口，并排列在成就库之前。
+- 保留 r32 的移动端关闭按钮触控加固、增量派生内容、请求协调、缓存 idle 持久化与跨聊天 revision fence。
+
 ## 0.8.10 mobile-close-r32
 
 - **修复 iPhone / 一键安装 WebView 顶栏被系统状态区覆盖**：移动全屏档案室使用四向 `safe-area-inset-*`；对把 iOS 顶部安全区错误报告为 0 的 WebView，额外使用 52px 代码兜底，确保关闭按钮落在可触摸区域。
 - **关闭按钮不再只依赖 click**：仅对代码自带的顶栏关闭按钮增加 capture 阶段 `pointerdown/touchstart` 关闭链路，并阻止该次触摸穿透；不恢复旧版的 document 全局手势拦截。
 - **移动触摸目标增至 44px**：返回、主页、增量追加、关闭四个顶栏按钮统一为 44×44；关闭仍只隐藏 UI，不取消或重定向后台生成任务。
-- **补充联动桥安装说明**：明确桥是柏宝绘独立兼容构建，没有单独设置页；NAI / ComfyUI 仍完全在柏宝绘内配置。
-
-## 0.8.10 baibai-image-interop-r31
-
-- **柏宝绘优先联动**：相簿、CG/ADV 与日常一格会检测固定的 `STBaiBaiImage API v1`。兼容接口就绪时绘制优先交给柏宝绘自己的 ComfyUI/NAI 渠道；未就绪时才使用原 SillyTavern Image Generation 路径。
-- **没有复制第三方生图实现**：心跳回忆不导入柏宝绘模块、不读取其 settings/API Key、不调用私有 DOM，也不把 `<bbi_image>` 写入聊天。配套桥只在柏宝绘侧复用其现有生成、队列、工作流与落盘模块，并公开有界的 prompt-in / local-path-out 接口。
-- **跨插件结果失败关闭**：请求带一次性关联 ID和 12 分钟本地等待上限；响应必须来自 `st-baibai-image`、匹配原请求 ID，并通过同源 URL 校验。只向桥发送可见画面 prompt、方向、来源标识与 AbortSignal，不发送档案/聊天/世界书/凭据。
-- **避免重复扣费**：柏宝绘已接受请求后若报错或超时，不会自动改调 `/sd` 再生成一张；只有调用前柏宝绘未就绪时才选择现有 Image Generation 备用路径。
-- **独立配套构建**：上游 `0.1.22` 尚无公开生图接口，本次配套 `0.1.22-heartbeat-interop.1` 桥接构建与补丁单独交付，柏宝绘功能没有并入心跳回忆 ZIP。
 
 ## 0.8.10 incremental-content-r30
 

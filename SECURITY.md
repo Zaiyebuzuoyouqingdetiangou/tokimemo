@@ -215,19 +215,9 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - ENDING 分段只缩小每个模型请求的职责与输入范围，不降低证据边界：关系阶段和每条路线目录仍必须通过完整当前档案的 `sourceMemoryIds + sourceMemoryAnchor` 本地校验；未来路线正文仍是派生模拟，不写回 `MEMORY_KEY`。
 - 分段 ENDING 的任一可用路线连续失败时，本轮不得覆盖旧 ENDING session；“已发生告白回看”分段失败可以保留上一份已归一化缓存或为空，但不得把失败/半成品当成新告白证据。
 - 回忆相簿 `comments` 只是当下角色陪当下用户观看既有 CG 的派生对白；它不能创建新的过去事实，CG 的既往事件仍由相簿条目的现有记忆引用与锚点约束。
-- CG 实图自动检测只允许检查 SillyTavern 已暴露的 `/imagine`、`/sd`、`/img` Slash Command callback，以及 r31 明确定义的固定全局 `STBaiBaiImage API v1`；不得遍历任意第三方扩展对象、点击私有 DOM、导入第三方私有模块或直接调用其 provider API。
+- CG 实图自动检测只允许检查 SillyTavern 已暴露的 `/imagine`、`/sd`、`/img` Slash Command callback；不得遍历任意第三方扩展对象、点击私有 DOM、导入第三方私有模块或直接调用其它 provider API。
 - 自动检测到 callback 时继续直接调用 callback，不把视觉 prompt 交给通用 STscript 解析器。只有用户显式打开 `imageGenerationManualEnabled` 且 callback 自动检测失败时，才允许使用 SillyTavern 公开 `executeSlashCommandsWithOptions('/sd quiet=true ...')` 兜底。
 - 手动 `/sd` 兜底的视觉 prompt 在进入 STscript 前必须再次中和脚本语法：删除 `{}` 宏花括号、折叠换行、转义反斜杠和管道；不得让模型生成的视觉文字变成额外 Slash Command、宏或管道阶段。
-
-### 0.8.10 r31 ST-BaiBai-Image interoperability invariants
-
-- 柏宝绘联动只信任精确的 `id=st-baibai-image`、`apiVersion=1`、三项固定 capability 和 `getStatus/generateImage` 函数形状。仅检测到 `#bbi-app-host` 只能显示“已安装”，不得授予调用能力。
-- 心跳回忆交给柏宝绘的请求仅允许包含：经现有 CG 视觉净化和 1,800 字符上限处理的 prompt、空的动态负面、代码确定的横/竖方向、固定来源字符串、一次性请求 ID 与 AbortSignal。不得包含聊天/档案/世界书/Persona/角色卡全文、私人终端、宿主 context、连接设置、URL、header、secret 或 API Key。
-- 柏宝绘响应必须同时匹配固定 provider 和本次随机 request ID。图片 URL 继续经过现有同源 `http/https` 归一化，只持久化相对路径；`data:`、`blob:`、跨源 URL、HTML 与任意对象字段全部拒绝。
-- 柏宝绘是优先 provider，但只有确认框显示前 `getStatus().ready=true` 才会被选择；确认框显示的 provider 必须固定到本次请求。若确认后其状态变化，本次失败关闭，不得改道另一 provider。只有确认框显示前柏宝绘就未就绪时，才可选择当时已存在的 SillyTavern Image Generation 备用路径；一旦柏宝绘请求已经发出，失败/超时不得自动发第二次 `/sd`，避免同意错位、重复计费和双图竞态。
-- 联动等待本地上限为 12 分钟并传递取消信号。跨插件状态/错误文字在展示前必须有界并遮蔽 URL、token/key/secret 形态；不得把第三方错误体、后端地址或凭据写入心跳回忆缓存。
-- 柏宝绘侧桥接继续独立拥有后端选择、工作流、NAI 并发队列、图片转换与 SillyTavern 文件上传。心跳回忆不得复制这些实现或读取柏宝绘 settings；桥接返回路径后仍必须经过当前聊天、角色、archiveRevision 与 lifecycle epoch 写回栅栏。
-- r12 的其它 CG 边界继续成立：生图只能由用户显式点击触发；只发送单张 CG 的有界纯视觉描述；不发送聊天/档案/世界书/记忆原文或凭据；返回路径仍必须通过同源图片 URL 归一化；写回仍受 `characterKey + chatId + archiveRevision` 与 lifecycle epoch 保护。
 
 ### 0.8.10 stable segmented generation r23 additional invariants
 
@@ -303,3 +293,10 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - Existing-content indexes included in prompts are untrusted, bounded de-duplication context. They confer no evidence or write authority. Fresh rows that claim happened facts must still satisfy the mode's local source-memory ID/anchor checks, and all model strings remain escaped at HTML sinks.
 - Derived collections retain old items first and are bounded to 240 items. Capacity exhaustion must reject further additions rather than evict historical rows. These limits do not enlarge `MEMORY_KEY`, input budgets, provider concurrency, fetch destinations, credential access, or cross-chat write scope.
 - Incremental commits remain fenced by captured character/chat/archiveRevision. Full archive rebuild continues to invalidate derived caches; r30 metadata must not be used to carry evidence-bound content across a rebuild that renumbers or rewrites Mxxx records.
+
+### 0.8.10 r33 clean / TT display / user output invariants
+
+- 图片生成只通过 SillyTavern Image Generation 公共路径，不探测其它生图 provider 的全局、DOM 或私有接口。
+- `ttDisplayMode` 只改变档案室 overlay 的移动端布局 class 与安全区 padding，不得改变读写权限、任务 origin、archive revision、关闭按钮事件边界或生成逻辑。
+- 副 API 用户设置的 `maxTokens` 是实际提交给 Connection Manager 的输出上限，仍受代码硬上限 60,000 约束；功能内部旧 `options.maxTokens` 只能作为历史尺寸提示，不能降低用户明确配置。
+- 新增角色互动档案室入口只改变导航可达性和排序；只读档案、当前聊天可写检查、HEART 的证据锚点及派生内容边界保持不变。
