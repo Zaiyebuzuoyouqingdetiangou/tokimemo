@@ -351,6 +351,27 @@ export function formatArchiveTime(value) {
     }
 }
 
+function calendarQuickAccessHtml({ ready = false, generated = false, generating = false, readOnly = false } = {}) {
+    const status = !ready
+        ? '先建立当前聊天档案后，就可以整理日历。'
+        : generating
+            ? (generated ? '正在刷新 · 旧日历仍可查看' : '正在整理日历…')
+            : generated
+                ? '已整理：已度过 / 已约定未发生 / 未来世界设定'
+                : (readOnly ? '这份档案还没有整理日历。' : '还没有整理。日历不会自动把未来设定写成已发生。');
+    const openButton = generated
+        ? `<button type="button" class="rmt-btn rmt-calendar-quick-primary" data-rmt-mode="${core_text.esc(core_constants.MODE.CALENDAR)}">打开日历</button>`
+        : '';
+    const generateButton = !readOnly
+        ? `<button type="button" class="rmt-btn" data-rmt-generate-mode="${core_text.esc(core_constants.MODE.CALENDAR)}" ${generated ? 'data-rmt-regenerate="true"' : ''} ${!ready || generating ? 'disabled' : ''}>${generating ? '生成中…' : generated ? '刷新日历' : '生成日历'}</button>`
+        : '';
+    return `<section class="rmt-calendar-quick ${generated ? 'ready' : 'empty'}">
+      <div class="rmt-calendar-quick-icon"><i class="fa-solid fa-calendar"></i></div>
+      <div class="rmt-calendar-quick-copy"><span>RELATIONSHIP CALENDAR</span><b>两个人的日历</b><small>${core_text.esc(status)}</small></div>
+      <div class="rmt-calendar-quick-actions">${openButton}${generateButton}</div>
+    </section>`;
+}
+
 export function showChooser() {
     runtimeState.activeArchiveSnapshot = null;
     runtimeState.activeArchiveReadOnly = true;
@@ -404,11 +425,15 @@ export function showChooser() {
     const cachedRead = ready ? { context, chatId: core_context.getChatId(context), memoryBank: memory, clone: false } : null;
     const portals = ready ? archive_snapshots.baseModeAvailability(cachedRead) : core_constants.ARCHIVE_PORTAL_MODES.map(mode => ({ mode, session: null, meta: archive_snapshots.modePortalMeta(mode) }));
     const generatedCount = portals.filter(item => !!item.session).length;
+    const calendarPortal = portals.find(item => item.mode === core_constants.MODE.CALENDAR) || { session: null };
+    const calendarGenerated = !!calendarPortal.session;
+    const calendarGenerating = core_requestCoordinator.isModeGenerating(core_constants.MODE.CALENDAR);
+    const calendarQuick = calendarQuickAccessHtml({ ready, generated: calendarGenerated, generating: calendarGenerating, readOnly: false });
     const concurrentLabels = core_requestCoordinator.generationTaskLabels();
     const anyRunning = runtimeState.busy || concurrentLabels.length > 0;
     topTitle(anyRunning ? `心跳回忆 · 档案室 · ${runtimeState.busy ? '档案整理中' : `${concurrentLabels.length}项生成中`}` : `心跳回忆 · 档案室${ready ? ` · ${archiveName}` : ''}`);
     const busyBanner = anyRunning ? `<div class="rmt-task-banner"><span class="rmt-task-dot"></span><div><b>${runtimeState.busy ? '档案整理进行中' : `${concurrentLabels.length} 项后台生成中`}</b><small>${core_text.esc(runtimeState.busy ? (runtimeState.activeTaskLabel || '正在整理聊天档案…') : concurrentLabels.join(' · '))}</small></div></div>` : '';
-    const portalHtml = portals.map(({ mode, session, meta }) => {
+    const portalHtml = portals.filter(item => item.mode !== core_constants.MODE.CALENDAR).map(({ mode, session, meta }) => {
         const generated = !!session;
         const generating = core_requestCoordinator.isModeGenerating(mode);
         const capacityReached = core_requestCoordinator.activeLogicalGenerationCount() >= core_constants.MAX_CONCURRENT_GENERATION_TASKS && !generating;
@@ -454,6 +479,7 @@ export function showChooser() {
     body.innerHTML = `
       <div class="rmt-archive-room">
         ${busyBanner}
+        ${calendarQuick}
         <section class="rmt-memory-gate rmt-archive-card">
           <div class="rmt-memory-gate-text">
             <div class="rmt-archive-kicker">PRIVATE MEMORY ARCHIVE</div>
