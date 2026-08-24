@@ -99,3 +99,8 @@ Whole-category deletion uses the shared `core/cache.js::deleteSessions()` derive
 `index.js` no longer statically imports the modular runtime. A release `BUILD` token is stored outside the theater/archive data; when a new build is detected, the page reloads once and then dynamically imports `src/heartbeatMemories.js?heartbeat=<BUILD>`. This prevents an in-place SillyTavern update from combining a new entrypoint with stale child modules.
 
 Phone/Terminal remains `MODE.PHONE` under Room, but its topbar increment action is now exposed because the mode already owns a safe incremental merge path. Chat entries may store `contactName`; messages may store `speakerRole` (`owner` or `contact`) in addition to the escaped display `speaker`. These are presentation fields only and do not change archive evidence or authority.
+
+
+## r39 runtime delivery
+
+`src/` remains the authoritative modular source tree. Release builds additionally contain `dist/heartbeatMemories.bundle.js`, generated from the reachable module graph. SillyTavern loads only that versioned bundle at runtime. This keeps source ownership boundaries reviewable while avoiding a deep multi-request ES-module waterfall on cloud-hosted installations.

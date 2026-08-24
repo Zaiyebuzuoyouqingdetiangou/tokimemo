@@ -1,37 +1,18 @@
-const VERSION = '0.8.14';
-const BUILD = '0.8.14-calendar-visible-r38.1';
-const BUILD_STORAGE_KEY = 'heartbeatMemoriesLoadedBuildV1';
+const VERSION = '0.8.16';
+const BUILD = '0.8.16-calendar-home-r39.1';
 
 let runtimeModule = null;
 let bootPromise = null;
 
-function shouldReloadForFreshModuleGraph() {
-    try {
-        const storage = globalThis.localStorage;
-        if (!storage) return false;
-        const previous = storage.getItem(BUILD_STORAGE_KEY) || '';
-        if (previous === BUILD) return false;
-        storage.setItem(BUILD_STORAGE_KEY, BUILD);
-        return typeof globalThis.location?.reload === 'function';
-    } catch {
-        return false;
-    }
-}
-
 async function bootHeartbeatMemories() {
-    // r35 modularization introduced many child ES modules. A SillyTavern in-place extension
-    // update can keep those query-less child module URLs in the browser module map even when
-    // index.js itself changed. One reload per release guarantees the complete module graph is
-    // read from the newly installed version, preventing new portals such as Calendar from being
-    // hidden by stale constants/snapshot modules.
-    if (shouldReloadForFreshModuleGraph()) {
-        globalThis.location.reload();
-        return;
-    }
-    runtimeModule = await import(`./src/heartbeatMemories.js?heartbeat=${BUILD}`);
+    const startedAt = globalThis.performance?.now?.() ?? Date.now();
+    // Runtime is bundled into one versioned file. Keep modular source for maintenance/tests,
+    // but do not make cloud-hosted SillyTavern fetch the 42-file dependency graph at startup.
+    runtimeModule = await import(`./dist/heartbeatMemories.bundle.js?heartbeat=${BUILD}`);
     runtimeModule.initMemoryTheater();
     globalThis.__heartbeatMemoriesBuild = BUILD;
-    console.log(`[HeartbeatMemories] ${VERSION} loaded (${BUILD})`);
+    const finishedAt = globalThis.performance?.now?.() ?? Date.now();
+    console.log(`[HeartbeatMemories] ${VERSION} loaded (${BUILD}) in ${Math.max(0, Math.round(finishedAt - startedAt))}ms`);
 }
 
 jQuery(() => {

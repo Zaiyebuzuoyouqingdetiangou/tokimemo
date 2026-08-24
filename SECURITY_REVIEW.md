@@ -1,3 +1,20 @@
+## r39.1 Calendar home-entry targeted review
+
+- Scope: `src/archive/library.js` plus release metadata/bundle rebuild.
+- The change only surfaces the existing Calendar action on the archive-library landing screen. It reuses the existing `data-rmt-mode` / `data-rmt-generate-mode` dispatch and existing writable-archive guard.
+- When no current formal archive exists, the generate button is disabled; no new MEMORY_KEY write, provider path, URL sink, command execution, or HTML trust boundary is introduced.
+
+## r39 targeted diff review — single runtime bundle / calendar visibility / Phone incremental UI
+
+- Scope: r38.1 (0.8.14) → r39 (0.8.15). Reviewed `index.js`, `src/ui/phoneView.js`, the generated `dist/heartbeatMemories.bundle.js`, and the dependency-free build script `tools/build-runtime-bundle.mjs`; documentation/test-only edits were also inspected.
+- Startup delivery changes from a 42-module, ~959 KB reachable ESM graph with a measured import depth of 22 to one versioned runtime bundle. The modular `src/` tree remains authoritative for review/tests; the release bundle embeds a SHA-256 fingerprint of all 42 reachable source modules and a test recomputes that fingerprint to prevent stale generated output.
+- The r38 one-time `localStorage` + `location.reload()` module-refresh mechanism is removed. `index.js` now imports only `dist/heartbeatMemories.bundle.js?heartbeat=<build>`, so release cache-busting no longer depends on query-less child modules and does not add a page-navigation side effect.
+- The new Phone toolbar button is code-owned static HTML. It invokes the existing `data-rmt-action="regenerate"` path, so the established writable-archive gate, incremental-memory check, provider coordinator, chatId/archiveRevision fence, and existing Phone normalizer remain authoritative. It adds no new cache/write authority. Read-only snapshots render a disabled button.
+- Runtime capability parity check (r38.1 modular source → r39 generated bundle): `eval` 0→0, `new Function` 0→0, `XMLHttpRequest` 0→0, `fetch()` 5→5, `innerHTML` sinks 38→38, Connection Manager `sendRequest` 1→1, SlashCommand execution 2→2, formal `MEMORY_KEY` write sites 1→1.
+- The build script reads only repository-local `src/**/*.js`, rejects external/unsupported import/export syntax, does not execute source code while building, and fails if a referenced local module is absent. It is not loaded by SillyTavern at runtime.
+- Focused verification: all source JS and generated bundle pass `node --check`; bundle imports successfully as ESM; source-fingerprint test passes; Calendar first-screen shortcut and explicit Phone incremental button are present in both source and generated bundle; the complete regression suite passes 63/63.
+- Conclusion: no new Critical / High / Medium issue identified in this diff. Remaining uncertainty is real-device/cloud-host timing; the code evidence proves request fan-out is removed, but only the user's cloud deployment can measure the exact wall-clock improvement.
+
 ## r21 targeted diff review — archive grouping / banned phrases / room layouts
 
 - Scope: local r20 → r21 only. Reviewed archive-index grouping/migration, ambiguous legacy same-avatar handling, manual classification UI/actions, archive delete/index-remove actions, live-origin matching, task scope identity, generated-phrase enforcement, and room rendering/prompt changes.
