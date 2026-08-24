@@ -392,3 +392,15 @@ Scope: r27 `concurrent-drama` -> r28 `network-idle-cache`. Runtime changes are l
 - The HEART season-card review also corrected a UI-only state bug: `postending` has no Scenario payload, so the card may never derive a synthetic `1/2` state from the placeholder `hasScenario=true`.
 
 Targeted diff conclusion: no new Critical / High / Medium security issue identified. Residual trade-off is availability/durability rather than security: if the page is force-closed before the provider queue becomes idle and the scheduled gzip flush runs, the newest derivative partial result can be lost from persistent metadata; the previous durable cache remains authoritative.
+
+## r29 60k output ceiling targeted diff review
+
+Scope: r28 `network-idle-cache` -> r29 `output-60k`. Runtime changes are limited to the bounded output ceiling, settings input maximum, and safe JSON-output budget diagnostics.
+
+- The prior 30k behavior was confirmed to be local: `MAX_GENERATION_OUTPUT_TOKENS = 30000`, settings normalization used `Math.min(MAX_GENERATION_OUTPUT_TOKENS, settings.maxTokens)`, and the settings number input declared `max="30000"`. r29 changes the single absolute ceiling and UI maximum to 60,000, so a user-selected 60,000 survives normalization.
+- The local JSON parser previously truncated both final content and reasoning at 240,000 characters. r29 raises that parser-only bound to 600,000 characters so a valid 60k-token response is not self-truncated before balanced-object parsing; the value remains bounded and does not affect prompt/input budgets.
+- `generateConfiguredJson` still computes `responseLength = min(user setting, explicit segment request)`. Therefore a feature requesting 3,000 tokens remains capped at 3,000 even when the global setting is 60,000. No feature-specific segment was silently expanded by this patch.
+- JSON empty/truncated diagnostics now receive only the already-computed numeric `responseLength` and normalized user setting. The new diagnostic text exposes numeric budgets only; it does not include the prompt, response body, reasoning body, credentials, headers, archive/world-info data, or provider secrets.
+- The change adds no new network endpoint, request concurrency, retry, fetch/XHR, Slash Command execution, dynamic code execution, HTML/CSS/URL sink, credential/API-key access, host-chat navigation, world-info write, or `MEMORY_KEY` write. Existing provider errors remain authoritative when the selected model/proxy rejects a requested output size.
+
+Targeted diff conclusion: no newly introduced Critical / High / Medium security issue identified. Residual operational risk is provider compatibility/cost: models or proxies may reject or bill for large output ceilings; the plugin remains bounded at 60,000 and retains smaller per-feature segment caps where defined.

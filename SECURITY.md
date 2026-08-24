@@ -105,7 +105,7 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 
 ### 0.8.10 confirmation / current archive r10 additional invariants
 
-- 任何显式覆盖已有派生内容的“重新生成”操作必须经过用户确认；确认取消时不得创建请求、修改 session 或改变 archive revision。
+- 任何显式覆盖已有状态的操作必须经过用户确认；确认取消时不得创建请求、修改 session 或改变 archive revision。r30 的普通内容按钮是非破坏性的增量追加，也必须由用户显式触发，并且不得借该入口覆盖旧集合。
 - 普通“更新当前窗口档案”必须说明它是增量追加：只处理上次归档后的新聊天/变化的当前窗口摘要，保留既有 Mxxx ID 与已生成派生缓存。只有用户显式选择“完全重建档案”时，确认文本才允许说明旧派生剧场缓存会失效。首次建档、增量更新与完全重建都仍然是用户显式动作。
 - 确认 UI 不得接受模型生成 HTML/URL；确认标题与说明全部来自本地固定字符串。
 ### 0.8.10 CG image generation r12 additional invariants
@@ -138,7 +138,7 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 
 - 历史档案 snapshot 默认只读。关闭“只读查看”只能由用户直接操作本地开关触发，并且必须再经过固定文本确认；模型输出、档案文本、世界书或 DOM 数据不得自动关闭只读。
 - 从只读 snapshot 进入编辑模式允许显式调用 SillyTavern 的角色/聊天切换接口，但目标角色必须由本地档案索引的 avatar/characterKey 映射，目标 chatId 必须等于已加载 snapshot.chatId；切换完成后必须再次验证 characterKey + chatId + 当前 MEMORY_KEY，验证失败继续只读且不得生成/写入。
-- 关闭只读只负责导航，不得自动调用模型。任何“重新生成”仍必须经过独立的覆盖确认，并继续使用原 chatId + archiveRevision task origin 防护。
+- 关闭只读只改变插件按钮可见性，不得导航宿主聊天或自动调用模型。任何“增量追加”仍必须经过独立确认，并继续使用原 chatId + archiveRevision task origin 防护。
 - 有后台任务时禁止从 snapshot 关闭只读并切换聊天，避免旧任务完成后写入新的当前聊天。
 - ENDING confessionReplays 仅表示已经发生的告白/关系确认回看，不是未来模拟；每条必须通过完整当前档案的 sourceMemoryIds + sourceMemoryAnchor 校验。无可验证告白时允许空数组，不得为了满足 UI 数量凭空制造过去事件。
 - confession replay 的 scene/confessionText 是基于已归档事实的演出式重构，不得宣称为聊天逐字原文；对 {{user}} 的回应只能摘要已有档案结果，不得生成新的用户台词。
@@ -157,7 +157,7 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 ### 0.8.10 r17 archive-edit / confession-refresh invariants
 
 - `activeArchiveReadOnly` is only a Heartbeat UI protection flag. Turning it off must never call `selectCharacterById`, `openCharacterChat`, or otherwise cause host chat navigation/refresh.
-- An indexed archive snapshot remains non-authoritative for writes even when the UI read-only switch is off. Before regeneration, CG drawing, ADV repair, room-life update, or isolated confession refresh, the current live SillyTavern context must already match the snapshot `characterKey + chatId` and contain the same `MEMORY_KEY` archive.
+- An indexed archive snapshot remains non-authoritative for writes even when the UI read-only switch is off. Before incremental generation, CG drawing, ADV repair, room-life update, or isolated confession refresh, the current live SillyTavern context must already match the snapshot `characterKey + chatId` and contain the same `MEMORY_KEY` archive.
 - Snapshot-derived sessions must never overwrite a missing/unhydrated live session. If the live derived cache for the selected mode is unavailable, the write fails closed and asks the user to open/hydrate the current-window archive first.
 - Isolated ENDING confession refresh may replace only `confessionReplays` and its selection/view fields. It must preserve `endings`, `relationshipState`, `relationshipSummary`, recommended ending, epilogues, and HEART data; every replay still passes full archive ID + anchor validation.
 - The global main-generation concurrency limit is 5 logical tasks. Admission counts both in-flight request tasks and mode-build scopes so rapid clicks cannot transiently exceed the limit.
@@ -186,7 +186,7 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 
 ### 0.8.10 r20 structured JSON / output-budget invariants
 
-- 心跳回忆设置中的单次最大输出硬上限为 30,000 tokens；每个请求最终必须继续取 `min(用户设置, 请求上限)`，不得为了修复 JSON 截断而绕过用户设置或 provider/模型自己的限制。
+- 心跳回忆设置中的单次最大输出硬上限为 60,000 tokens；每个请求最终必须继续取 `min(用户设置, 请求上限)`，不得为了修复 JSON 截断而绕过用户设置或 provider/模型自己的限制。
 - 档案聊天分块与 current-chat 记忆/摘要分块可以使用用户最大输出，但输入仍必须经过既有 32k-token / 96k-character 预算；提高输出额度不得放宽输入、证据或跨聊天边界。
 - JSON 解析失败、空 final content、仅 reasoning、非 JSON 正文或疑似截断都属于**失败关闭**：在获得完整并通过本地归一化/证据校验的数据前，不得写 `MEMORY_KEY`、派生 session 或其它聊天 metadata。
 - 对档案分块的失败重试必须由用户明确确认，最多只额外重试当前分块一次；不得自动循环重试、不得从头重放已经成功的分块来制造隐藏请求次数。取消或第二次失败时，本轮档案整理整体停止，旧档案与既有派生缓存不变。
@@ -235,7 +235,7 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 ### 0.8.10 r25 incremental collection / split interaction / achievement invariants
 
 - Album and CG/ADV may grow incrementally and no longer have a fixed 15/12 minimum. Reducing quantity must never reduce evidence requirements: every unlocked Album row and every ADV event still needs a current-archive `sourceMemoryIds + sourceMemoryAnchor` match before it can survive normalization or merge.
-- Incremental merge keys are de-duplication hints only. Prior cached Album/ADV rows must be revalidated against the current archive before a refreshed session is accepted; an old cache cannot keep a past event authoritative after its current archive evidence disappears. Existing generated images/ADV text may be preserved only on a row whose evidence still revalidates.
+- Incremental merge keys are de-duplication hints only. Ordinary archive updates are append-only, so prior validated Album/ADV rows, image records and ADV bodies remain immutable while their stable Mxxx evidence remains in the archive. A full archive rebuild may renumber evidence and therefore invalidates the whole derived cache instead of selectively carrying rows across.
 - Album present-day comments remain derivative display text attached to an already evidence-backed CG. They cannot create or update archive memory. The UI copy around those comments may be simplified without changing the evidence boundary.
 - Bulk ADV generation processes at most six unfinished events in one provider request. A smaller batch is a reliability limit only; it does not change per-event memory scoping, normalization, task-origin checks, or session write permissions.
 - Avatar + paged first-person confession playback belongs only to `confessionReplays`, which are historical rows validated by current archive IDs/anchors. Future ENDING route bodies no longer need or display avatar confession pages. Legacy route confession fields may remain readable for compatibility but are not evidence and are not a route-completion requirement.
@@ -270,3 +270,21 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - A delayed gzip result must still be discarded or parked as pending when the live chat/scope changed. Network-idle coalescing is a performance optimization only; it cannot authorize cross-chat persistence.
 - On browsers with `CompressionStream`, partial generation must not first persist the full uncompressed theater cache merely for durability. The uncompressed fallback is allowed only when local gzip is unavailable. Losing an unflushed newest derivative fragment on abrupt page termination is preferable to widening write scope or reintroducing large duplicate uploads.
 - Network throttling must not alter canonical `MEMORY_KEY` archive writes, evidence anchors, model prompt safety boundaries, provider credential handling, or user-visible task cancellation semantics.
+
+### 0.8.10 r29 60k output-limit invariants
+
+- The user-configurable generation-output ceiling may be raised to 60,000 tokens, but remains bounded by the code-defined `MAX_GENERATION_OUTPUT_TOKENS`. The local response-text parser is separately bounded at 600,000 characters; this larger bound exists only to avoid self-truncating a valid 60k-token response. Provider/model limits remain authoritative and may reject a smaller value.
+- Per-feature segment caps remain independent reliability limits. Raising the global setting must not silently raise a segment above its explicit `options.maxTokens` value.
+- JSON error diagnostics may expose only numeric configured/request ceilings and existing safe error categories. They must not include prompt text, model output bodies, reasoning text, credentials, headers, world-info content, archive evidence, or provider response bodies.
+- Increasing the ceiling must not change input-budget limits, provider concurrency, retry policy, archive evidence checks, origin/revision fences, cache persistence rules, or any write authority.
+
+### 0.8.10 r30 append-only derived-content invariants
+
+- Each derived mode owns an explicit `generationMeta.parts[part].coveredMemoryIds` cursor. HEART dialogue, strips, postending, spring, summer, autumn and winter are separate parts; ENDING routes and confession replay are separate parts. One part must never consume another part's pending archive IDs.
+- During append-only archive revision migration, a legacy session with existing content is stamped against the exact pre-update memory list before its revision fence moves. If no older snapshot exists, current-revision legacy content is conservatively treated as having consumed the current archive; this may defer output until the next archive increment but must not replay old material.
+- Old generated collection entries are immutable during incremental generation. Model output is normalized as a bounded candidate delta and merged locally; it cannot delete, reorder, retitle, rewrite, or replace prior prose, CG image records, ADV bodies, Drama scripts, terminal entries, ending scenes or epilogues. Explicit state transitions may unlock an old locked row while retaining its stable ID; replacing a current relationship summary must first archive the prior summary in bounded history.
+- A successful empty delta still consumes the supplied incremental IDs so repeated clicks do not repeatedly bill for the same evidence. No pending IDs means no provider call. At most 64 pending IDs enter one request batch, allowing a large archive increment to be consumed over multiple explicit clicks.
+- HEART seasonal Voice and Scenario use a deterministic batch ID. A locally validated half may be saved alone; coverage advances only when the required halves for that batch exist, and a retry may add only the missing half. Postending requires Voice only.
+- Existing-content indexes included in prompts are untrusted, bounded de-duplication context. They confer no evidence or write authority. Fresh rows that claim happened facts must still satisfy the mode's local source-memory ID/anchor checks, and all model strings remain escaped at HTML sinks.
+- Derived collections retain old items first and are bounded to 240 items. Capacity exhaustion must reject further additions rather than evict historical rows. These limits do not enlarge `MEMORY_KEY`, input budgets, provider concurrency, fetch destinations, credential access, or cross-chat write scope.
+- Incremental commits remain fenced by captured character/chat/archiveRevision. Full archive rebuild continues to invalidate derived caches; r30 metadata must not be used to carry evidence-bound content across a rebuild that renumbers or rewrites Mxxx records.

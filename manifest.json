@@ -1,7 +1,7 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.10-network-idle-cache-r28",
+  "js": "index.js?heartbeat=0.8.10-incremental-content-r30",
   "author": "Toto",
   "version": "0.8.10",
   "auto_update": false,
@@ -10,5 +10,5 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "独立的 SillyTavern 心跳回忆插件：每聊天窗口独立档案、增量记忆、重要节点相簿/ADV、告白回看、分组角色互动/Drama/日常一格、可续写私人终端、可并发逐季 Drama、成就库与 CG 实图；档案室支持角色版本分组和跨档案安全只读；结构化请求使用限流分段、超时和原子提交；生成期间合并缓存写入以降低网络上行占用；生图支持 /imagine /sd /img 检测与手动兜底；Source Available，非开源。"
+  "description": "独立的 SillyTavern 心跳回忆插件：档案与全部派生内容均支持按新增 Mxxx 独立游标追加；旧四季篇章、对话、相簿/CG/ADV、房间、物品、终端、结局/告白、蝴蝶效应与成就原样保留；结构化请求支持最高 60,000 tokens 设置，并使用限流分段、超时、断点补段、跨聊天 revision fence 与原子提交；Source Available，非开源。"
 }
