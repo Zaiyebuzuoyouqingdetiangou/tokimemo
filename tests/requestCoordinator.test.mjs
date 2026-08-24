@@ -65,19 +65,36 @@ test('role interaction is a standalone archive portal immediately before achieve
 });
 
 
-test('calendar portal survives in-place extension updates by refreshing the modular graph once per release', async () => {
+test('calendar and phone runtime ship through one versioned bundle instead of a stale child-module graph', async () => {
     assert.equal(api.ARCHIVE_PORTAL_MODES.includes(api.MODE.CALENDAR), true);
     assert.equal(api.modePortalMeta(api.MODE.CALENDAR).title, '两个人的日历');
     const currentIndexSource = await readFile(new URL('../index.js', import.meta.url), 'utf8');
-    assert.match(currentIndexSource, /BUILD_STORAGE_KEY = 'heartbeatMemoriesLoadedBuildV1'/);
-    assert.match(currentIndexSource, /location\.reload\(\)/);
-    assert.match(currentIndexSource, /import\(`\.\/src\/heartbeatMemories\.js\?heartbeat=\$\{BUILD\}`\)/);
-    assert.doesNotMatch(currentIndexSource, /^import\s+\{\s*initMemoryTheater/m);
+    const bundleSource = await readFile(new URL('../dist/heartbeatMemories.bundle.js', import.meta.url), 'utf8');
+    assert.match(currentIndexSource, /import\(`\.\/dist\/heartbeatMemories\.bundle\.js\?heartbeat=\$\{BUILD\}`\)/);
+    assert.doesNotMatch(currentIndexSource, /location\.reload\(\)/);
+    assert.doesNotMatch(bundleSource, /^import\s+/m);
+    assert.match(bundleSource, /两个人的日历/);
+    assert.match(bundleSource, /增量追加终端/);
 });
 
-test('private terminal exposes topbar incremental append even though it is a room deep mode', () => {
+
+test('relationship calendar is a first-screen dedicated shortcut instead of a buried generic portal card', () => {
     const overlaySource = sourceByFile.get('ui/overlay.js');
+    const librarySource = sourceByFile.get('archive/library.js');
+    assert.match(overlaySource, /calendarQuickAccessHtml/);
+    assert.match(overlaySource, /\$\{calendarQuick\}[\s\S]*?<section class="rmt-memory-gate/);
+    assert.match(overlaySource, /portals\.filter\(item => item\.mode !== core_constants\.MODE\.CALENDAR\)/);
+    assert.match(librarySource, /snapshotCalendarQuickAccessHtml/);
+    assert.match(librarySource, /\$\{calendarQuick\}[\s\S]*?<section class="rmt-archive-portals"/);
+    assert.match(sourceByFile.get('ui/styles.js'), /\.rmt-calendar-quick\{/);
+});
+
+test('private terminal exposes an explicit mobile-visible incremental button in addition to the topbar action', () => {
+    const overlaySource = sourceByFile.get('ui/overlay.js');
+    const phoneViewSource = sourceByFile.get('ui/phoneView.js');
     assert.match(overlaySource, /supportsTopbarIncrement = !core_constants\.ROOM_DEEP_MODES\.includes\(runtimeState\.activeMode\) \|\| runtimeState\.activeMode === core_constants\.MODE\.PHONE/);
+    assert.match(phoneViewSource, /增量追加终端/);
+    assert.match(phoneViewSource, /data-rmt-action=\"regenerate\"/);
     assert.match(sourceByFile.get('modes/phone.js'), /generatePhoneIncrementalWithRepair/);
 });
 
