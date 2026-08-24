@@ -113,6 +113,10 @@ const ROOM_DAYPART_KEYS = ['morning', 'daytime', 'evening', 'night'];
 const ENDING_TYPES = new Set(['route', 'romance', 'reverse', 'bond', 'open', 'personal']);
 const CONFESSION_REPLAY_TYPES = new Set(['true', 'mutual', 'friendship', 'indirect', 'relationship', 'rejected', 'other']);
 const CG_IMAGE_PROVIDER = 'sillytavern-imagine';
+const BAIBAI_IMAGE_PROVIDER = 'st-baibai-image';
+const BAIBAI_IMAGE_API_VERSION = 1;
+const BAIBAI_IMAGE_HOST_ID = 'bbi-app-host';
+const BAIBAI_IMAGE_TIMEOUT_MS = 720000;
 const MAX_CG_IMAGE_PROMPT_CHARS = 1800;
 const HEART_GREETING_KEYS = Object.freeze(['morning', 'noon', 'evening', 'night', 'weekend', 'birthday', 'userBirthday', 'holiday', 'absenceWorry', 'absenceSulky', 'absenceJealous']);
 const HEART_VOICE_KINDS = new Set(['postending', 'spring', 'summer', 'autumn', 'winter']);
@@ -8681,13 +8685,27 @@ dialog#${OVERLAY_ID}::backdrop{background:transparent}
   .rmt-character-portals .rmt-portal-subtitle{min-height:0;margin-top:4px}
   .rmt-character-portals .rmt-portal-status{padding-top:8px}
 
-  #${OVERLAY_ID}{padding:0}.rmt-shell{max-height:100vh;border-radius:0;border:0;outline:0}
-  dialog#${OVERLAY_ID}{padding:0!important}
+  #${OVERLAY_ID}{
+    padding:
+      max(env(safe-area-inset-top, 0px),var(--rmt-mobile-safe-top, 0px))
+      env(safe-area-inset-right, 0px)
+      env(safe-area-inset-bottom, 0px)
+      env(safe-area-inset-left, 0px);
+  }
+  .rmt-shell{max-height:100%;border-radius:0;border:0;outline:0}
+  dialog#${OVERLAY_ID}{
+    padding:
+      max(env(safe-area-inset-top, 0px),var(--rmt-mobile-safe-top, 0px))
+      env(safe-area-inset-right, 0px)
+      env(safe-area-inset-bottom, 0px)
+      env(safe-area-inset-left, 0px)!important;
+  }
   .rmt-shell:before{display:none}
   .rmt-topbar{min-height:48px;padding:6px 7px 6px 10px;gap:6px}.rmt-topbar-title{font-size:14px;letter-spacing:.025em}.rmt-topbar-title:after{display:none}
   .rmt-topbar button{padding:6px 8px;font-size:11px;min-width:0}
   .rmt-topbar-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .rmt-topbar button[data-rmt-action="back"],.rmt-topbar button[data-rmt-action="home"],.rmt-topbar button[data-rmt-action="regenerate"],.rmt-topbar button[data-rmt-action="close"]{font-size:0;width:34px;height:34px;padding:0;display:grid;place-items:center;flex:0 0 34px}
+  .rmt-topbar button[data-rmt-action="back"],.rmt-topbar button[data-rmt-action="home"],.rmt-topbar button[data-rmt-action="regenerate"],.rmt-topbar button[data-rmt-action="close"]{font-size:0;width:44px;height:44px;padding:0;display:grid;place-items:center;flex:0 0 44px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  .rmt-topbar button[data-rmt-action="close"]{position:relative;z-index:12;pointer-events:auto}
   .rmt-topbar button[data-rmt-action="back"]:before{content:"←";font-size:17px;line-height:1}
   .rmt-topbar button[data-rmt-action="home"]:before{content:"⌂";font-size:16px;line-height:1}
   .rmt-topbar button[data-rmt-action="regenerate"]:before{content:"↻";font-size:17px;line-height:1}
@@ -8743,10 +8761,86 @@ function imageGenerationCommand(context = getContext()) {
     return null;
 }
 
+function baiBaiImageApi() {
+    try {
+        const api = globalThis.STBaiBaiImage;
+        if (!api || typeof api !== 'object') return null;
+        if (api.id !== BAIBAI_IMAGE_PROVIDER || Number(api.apiVersion) !== BAIBAI_IMAGE_API_VERSION) return null;
+        if (api.capabilities?.generateImage !== true || api.capabilities?.sameOriginFileResult !== true || api.capabilities?.abortSignal !== true) return null;
+        if (typeof api.getStatus !== 'function' || typeof api.generateImage !== 'function') return null;
+        return api;
+    } catch {
+        return null;
+    }
+}
+
+function safeBaiBaiPluginVersion(value) {
+    return normalizeText(value, 80)
+        .replace(/[^0-9A-Za-z._+-]/g, '')
+        .slice(0, 80);
+}
+
+function baiBaiImageUiState() {
+    let rawDetected = false;
+    let hostDetected = false;
+    try { rawDetected = !!globalThis.STBaiBaiImage; } catch {}
+    try { hostDetected = !!globalThis.document?.getElementById?.(BAIBAI_IMAGE_HOST_ID); } catch {}
+    const api = baiBaiImageApi();
+    if (!api) {
+        return {
+            api: null,
+            detected: rawDetected || hostDetected,
+            compatible: false,
+            available: false,
+            enabled: false,
+            backend: '',
+            version: '',
+            reason: rawDetected || hostDetected ? '已安装，但当前构建没有兼容的公开联动接口' : '',
+        };
+    }
+    try {
+        const status = api.getStatus();
+        const backend = status?.backend === 'nai' || status?.backend === 'comfyui' ? status.backend : '';
+        const ready = status?.ready === true && status?.enabled !== false && !!backend;
+        return {
+            api,
+            detected: true,
+            compatible: true,
+            available: ready,
+            enabled: status?.enabled !== false,
+            backend,
+            version: safeBaiBaiPluginVersion(api.pluginVersion),
+            reason: ready ? '' : safeExternalImageError(status?.reason) || '柏宝绘尚未完成渠道配置',
+        };
+    } catch {
+        return {
+            api,
+            detected: true,
+            compatible: true,
+            available: false,
+            enabled: false,
+            backend: '',
+            version: safeBaiBaiPluginVersion(api.pluginVersion),
+            reason: '柏宝绘联动状态读取失败',
+        };
+    }
+}
+
 function imageGenerationUiState(context = getContext()) {
+    const baiBai = baiBaiImageUiState();
     const command = imageGenerationCommand(context);
     const manual = getPluginSettings(context).imageGenerationManualEnabled === true;
-    return { command, detected: !!command, manual, available: !!command || manual };
+    const hostAvailable = !!command || manual;
+    const provider = baiBai.available ? BAIBAI_IMAGE_PROVIDER : hostAvailable ? CG_IMAGE_PROVIDER : '';
+    return {
+        command,
+        detected: !!command,
+        manual,
+        baiBai,
+        provider,
+        providerLabel: provider === BAIBAI_IMAGE_PROVIDER ? '柏宝绘' : provider === CG_IMAGE_PROVIDER ? 'SillyTavern Image Generation' : '',
+        available: baiBai.available || hostAvailable,
+    };
 }
 
 function sanitizeImageGenerationSlashPrompt(value) {
@@ -8761,9 +8855,94 @@ function sanitizeImageGenerationSlashPrompt(value) {
         .trim();
 }
 
-async function invokeImageGeneration(prompt, context = getContext()) {
+function safeExternalImageError(value) {
+    return normalizeText(value, 360)
+        .replace(/[<>&]/g, ' ')
+        .replace(/https?:\/\/\S+/gi, '[地址已隐藏]')
+        .replace(/\b(?:authorization|api[-_ ]?key|token|secret)\b["'`\s]*[:=]\s*["'`]?[^\r\n,;}]{1,220}/gi, '[凭据已隐藏]')
+        .replace(/\b(?:bearer\s+)?(?:sk|nai|api)[-_][A-Za-z0-9._-]{8,}\b/gi, '[凭据已隐藏]')
+        .replace(/[A-Za-z0-9+/_=-]{40,}/g, '[敏感值已隐藏]');
+}
+
+function createBaiBaiRequestId() {
+    try {
+        const uuid = globalThis.crypto?.randomUUID?.();
+        if (typeof uuid === 'string' && uuid) return `hbm-${uuid}`;
+    } catch {}
+    return `hbm-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+async function invokeBaiBaiImageGeneration(prompt, state, { signal = null } = {}) {
+    const api = state?.api;
+    if (!api) throw new Error('柏宝绘公开联动接口不可用。');
+    const safePrompt = sanitizeCgVisualText(prompt, MAX_CG_IMAGE_PROMPT_CHARS);
+    if (!safePrompt) throw new Error('生图提示为空，无法调用柏宝绘。');
+    const controller = new AbortController();
+    const abortFromParent = () => {
+        try { controller.abort(signal?.reason); }
+        catch { try { controller.abort(); } catch {} }
+    };
+    if (signal?.aborted) abortFromParent();
+    else signal?.addEventListener?.('abort', abortFromParent, { once: true });
+    let timer = 0;
+    let timedOut = false;
+    const requestId = createBaiBaiRequestId();
+    const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+            timedOut = true;
+            try { controller.abort(new DOMException('柏宝绘联动超时', 'AbortError')); } catch { controller.abort(); }
+            reject(new Error('柏宝绘在 12 分钟内没有完成本次绘制，已停止等待。请到柏宝绘检查渠道队列或请求历史。'));
+        }, BAIBAI_IMAGE_TIMEOUT_MS);
+    });
+    try {
+        if (controller.signal.aborted) {
+            throw controller.signal.reason || Object.assign(new Error('柏宝绘已取消本次绘制。'), { name: 'AbortError' });
+        }
+        const result = await Promise.race([
+            Promise.resolve().then(() => api.generateImage({
+                prompt: safePrompt,
+                negativePrompt: '',
+                orientation: state.orientation === 'portrait' ? 'portrait' : 'landscape',
+                source: 'heartbeat-memories',
+                requestId,
+                signal: controller.signal,
+            })),
+            timeout,
+        ]);
+        if (!result || typeof result !== 'object' || result.provider !== BAIBAI_IMAGE_PROVIDER || result.requestId !== requestId) {
+            throw new Error('柏宝绘返回了不兼容的联动结果。');
+        }
+        return { url: normalizeText(result.url, 4096), provider: BAIBAI_IMAGE_PROVIDER };
+    } catch (error) {
+        if (timedOut) throw error;
+        if (error?.name === 'AbortError') throw new Error('柏宝绘已取消本次绘制。');
+        const message = safeExternalImageError(error?.message || error);
+        throw new Error(`柏宝绘没有完成本次绘制${message ? `：${message}` : '。请检查柏宝绘的渠道配置或请求历史。'}`);
+    } finally {
+        if (timer) clearTimeout(timer);
+        signal?.removeEventListener?.('abort', abortFromParent);
+    }
+}
+
+async function invokeImageGeneration(prompt, context = getContext(), { orientation = 'landscape', provider = '', signal = null } = {}) {
+    const imageState = imageGenerationUiState(context);
+    const selectedProvider = provider || imageState.provider;
+    if (selectedProvider === BAIBAI_IMAGE_PROVIDER) {
+        if (!imageState.baiBai.available) {
+            throw new Error('柏宝绘在确认后变为忙碌或未就绪，本次绘制已停止；不会自动改用另一家生图服务。');
+        }
+        return await invokeBaiBaiImageGeneration(prompt, { ...imageState.baiBai, orientation }, { signal });
+    }
+    if (selectedProvider && selectedProvider !== CG_IMAGE_PROVIDER) {
+        throw new Error('确认的生图服务已不再兼容，本次绘制已停止。');
+    }
     const direct = imageGenerationCommand(context);
-    if (direct) return await invokeSlashCommandCapture(direct, { quiet: 'true', gallery: 'false' }, prompt, context);
+    if (direct) {
+        return {
+            url: await invokeSlashCommandCapture(direct, { quiet: 'true', gallery: 'false' }, prompt, context),
+            provider: CG_IMAGE_PROVIDER,
+        };
+    }
     const settings = getPluginSettings(context);
     if (!settings.imageGenerationManualEnabled) {
         throw new Error('没有检测到 SillyTavern Image Generation 的 /imagine、/sd 或 /img 命令。');
@@ -8779,7 +8958,7 @@ async function invokeImageGeneration(prompt, context = getContext()) {
     }
     const pipe = normalizeText(result?.pipe, 4096);
     if (!pipe) throw new Error('手动 /sd 已执行，但没有返回可保存的图片路径。请确认 Image Generation 已启用并完成配置。');
-    return pipe;
+    return { url: pipe, provider: CG_IMAGE_PROVIDER };
 }
 
 function normalizeCgImageUrl(value) {
@@ -8806,7 +8985,7 @@ function normalizeCgImageRecord(value) {
     return {
         url,
         prompt: normalizeText(value.prompt, MAX_CG_IMAGE_PROMPT_CHARS),
-        provider: value.provider === CG_IMAGE_PROVIDER ? CG_IMAGE_PROVIDER : CG_IMAGE_PROVIDER,
+        provider: value.provider === BAIBAI_IMAGE_PROVIDER ? BAIBAI_IMAGE_PROVIDER : CG_IMAGE_PROVIDER,
         generatedAt: Math.max(0, Number(value.generatedAt) || 0),
     };
 }
@@ -8855,23 +9034,52 @@ function cgImageLayerHtml(item, { lazy = true } = {}) {
 function cgImageProviderBar({ readOnly = false } = {}) {
     const state = imageGenerationUiState();
     const ready = state.available;
-    const status = state.detected
-        ? 'Image Generation 已连接'
-        : state.manual
-            ? '已手动勾选 Image Generation · 绘制时尝试 /sd 兜底'
-            : '当前未检测到 Image Generation';
-    if (readOnly) return `<div class="rmt-cg-provider-bar ${ready ? 'ready' : ''}"><span class="rmt-cg-provider-dot"></span><b>CG 实图</b><span>只读档案 · ${status}</span><button type="button" class="rmt-btn" data-rmt-action="refresh-image-provider">重新检测</button></div>`;
-    return `<div class="rmt-cg-provider-bar ${ready ? 'ready' : ''}"><span class="rmt-cg-provider-dot"></span><b>CG 实图</b><span>${state.detected ? `${status} · 点击 🎨 绘制CG` : state.manual ? `${status}；如果 /sd 也不可用会明确报错` : '未检测到 Image Generation · 可重新检测，或在插件设置中手动勾选生图兜底'}</span><button type="button" class="rmt-btn" data-rmt-action="refresh-image-provider">重新检测</button></div>`;
+    const baiBai = state.baiBai;
+    const version = baiBai.version ? ` ${baiBai.version}` : '';
+    const backend = baiBai.backend === 'nai' ? 'NAI' : baiBai.backend === 'comfyui' ? 'ComfyUI' : '';
+    let status = '';
+    if (baiBai.available) {
+        status = `柏宝绘${version} 已连接${backend ? ` · ${backend}` : ''} · 绘制时优先使用柏宝绘`;
+    } else if (baiBai.detected && !baiBai.compatible) {
+        status = `已检测到柏宝绘，但当前构建没有公开联动接口${state.detected || state.manual ? '；本次会改用 SillyTavern Image Generation' : '；请安装配套桥接构建'}`;
+    } else if (baiBai.compatible) {
+        status = `柏宝绘联动未就绪：${baiBai.reason}${state.detected || state.manual ? '；本次会改用 SillyTavern Image Generation' : ''}`;
+    } else if (state.detected) {
+        status = 'SillyTavern Image Generation 已连接';
+    } else if (state.manual) {
+        status = '已手动勾选 Image Generation · 绘制时尝试 /sd 兜底';
+    } else {
+        status = '未检测到可用生图插件';
+    }
+    const detail = readOnly ? `只读档案 · ${status}` : `${status}${ready ? ' · 点击 🎨 绘制CG' : ''}`;
+    return `<div class="rmt-cg-provider-bar ${ready ? 'ready' : ''}"><span class="rmt-cg-provider-dot"></span><b>CG 实图</b><span>${esc(detail)}</span><button type="button" class="rmt-btn" data-rmt-action="refresh-image-provider">重新检测</button></div>`;
+}
+
+function imageGenerationUnavailableMessage(state) {
+    const baiBai = state?.baiBai;
+    if (baiBai?.detected && !baiBai.compatible) {
+        return '已检测到柏宝绘，但当前构建没有公开联动接口。请安装配套的柏宝绘 Heartbeat Interop 桥接构建；心跳回忆不会调用它的私有 DOM 或读取后端设置。';
+    }
+    if (baiBai?.compatible && !baiBai.available) {
+        return `柏宝绘已检测到，但尚不能绘制：${baiBai.reason || '请在柏宝绘中启用并配置出图渠道。'}`;
+    }
+    return '没有检测到可用的生图插件。可安装并配置柏宝绘桥接构建，或启用 SillyTavern Image Generation；后者自动检测失败时可在心跳回忆设置中手动勾选兜底。';
 }
 
 function refreshImageGenerationUi() {
     const state = imageGenerationUiState(getContext());
     if (activeMode && activeSession) renderActive();
-    const message = state.detected
-        ? '已检测到 SillyTavern Image Generation（/imagine、/sd 或 /img），绘制按钮可以直接使用。'
-        : state.manual
-            ? '自动检测仍未发现命令，但你已手动勾选 Image Generation；绘制时会使用受控的 /sd quiet=true 兜底。'
-            : '仍未检测到 Image Generation。可确认扩展已启用，或在心跳回忆设置中勾选“手动确认 Image Generation 已启用”。';
+    const message = state.baiBai.available
+        ? `已检测到柏宝绘${state.baiBai.version ? ` ${state.baiBai.version}` : ''}，CG 绘制会优先交给柏宝绘自己的 ${state.baiBai.backend === 'nai' ? 'NAI' : 'ComfyUI'} 渠道。`
+        : state.baiBai.detected && !state.baiBai.compatible
+            ? imageGenerationUnavailableMessage(state)
+            : state.baiBai.compatible && !state.baiBai.available && (state.detected || state.manual)
+                ? `柏宝绘暂未就绪（${state.baiBai.reason}）；当前会使用 SillyTavern Image Generation。`
+                : state.detected
+                    ? '已检测到 SillyTavern Image Generation（/imagine、/sd 或 /img），绘制按钮可以直接使用。'
+                    : state.manual
+                        ? '自动检测仍未发现命令，但你已手动勾选 Image Generation；绘制时会使用受控的 /sd quiet=true 兜底。'
+                        : imageGenerationUnavailableMessage(state);
     globalThis.toastr?.[state.available ? 'success' : 'info']?.(message, '心跳回忆');
 }
 
@@ -8907,6 +9115,12 @@ function renderCurrentCgMode(mode, session) {
     else if (mode === MODE.ADV) renderAdvMode();
 }
 
+function abortActiveCgImageTasks() {
+    for (const task of activeCgImageTasks.values()) {
+        try { task?.controller?.abort?.(); } catch {}
+    }
+}
+
 async function drawSelectedCgImage() {
     if (!requireWritableArchiveAction()) return;
     const target = selectedCgTarget();
@@ -8920,7 +9134,7 @@ async function drawSelectedCgImage() {
     }
     const imageState = imageGenerationUiState(context);
     if (!imageState.available) {
-        globalThis.toastr?.info?.('没有检测到 SillyTavern Image Generation。请先启用并配置扩展；若它明明已启用，可在心跳回忆设置中手动勾选生图兜底。', '心跳回忆');
+        globalThis.toastr?.info?.(imageGenerationUnavailableMessage(imageState), '心跳回忆');
         return;
     }
     if (activeCgImageTasks.size >= 1) {
@@ -8930,7 +9144,7 @@ async function drawSelectedCgImage() {
     const previous = normalizeCgImageRecord(item.cgImage);
     const confirmed = confirmExplicitAction(
         previous ? `重新绘制「${item.title}」CG？` : `绘制「${item.title}」CG？`,
-        `${previous ? '新的图片成功后会替换当前 CG 图片引用；旧图片文件不会由心跳回忆主动删除。\n\n' : ''}这会调用你在 SillyTavern 中已经配置的 Image Generation 服务，可能消耗本地算力、额度或付费点数。只会发送这张 CG 的可见画面提示，不发送聊天原文、档案原文、世界书原文或私人终端内容。`,
+        `${previous ? '新的图片成功后会替换当前 CG 图片引用；旧图片文件不会由心跳回忆主动删除。\n\n' : ''}这会调用${imageState.providerLabel || '已配置的生图插件'}，可能消耗本地算力、额度或付费点数。只会发送这张 CG 的可见画面提示，不发送聊天原文、档案原文、世界书原文、私人终端内容或任何 API 凭据。`,
         { destructive: !!previous },
     );
     if (!confirmed) return;
@@ -8950,12 +9164,13 @@ async function drawSelectedCgImage() {
         globalThis.toastr?.info?.(`当前已有 ${MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请等其中一项完成后再绘制 CG。`, '心跳回忆');
         return;
     }
-    activeCgImageTasks.set(taskKey, { mode, itemId, startedAt: Date.now() });
+    const controller = new AbortController();
+    activeCgImageTasks.set(taskKey, { mode, itemId, startedAt: Date.now(), controller });
     renderCurrentCgMode(mode, session);
     try {
-        const rawUrl = await invokeImageGeneration(prompt, context);
-        const url = normalizeCgImageUrl(rawUrl);
-        if (!url) throw new Error('图像生成扩展没有返回可保存的 SillyTavern 本地图片路径。');
+        const generated = await invokeImageGeneration(prompt, context, { provider: imageState.provider, signal: controller.signal });
+        const url = normalizeCgImageUrl(generated?.url);
+        if (!url) throw new Error('生图插件没有返回可保存的 SillyTavern 本地图片路径。');
         if (cgImageLifecycleEpoch !== lifecycleEpoch || !isCurrentTaskOrigin(origin)) {
             globalThis.toastr?.warning?.('CG 已由生图扩展完成，但期间聊天窗口或插件状态发生变化，因此没有把图片写入当前档案缓存。', '心跳回忆');
             return;
@@ -8971,7 +9186,7 @@ async function drawSelectedCgImage() {
         const nextImage = {
             url,
             prompt,
-            provider: CG_IMAGE_PROVIDER,
+            provider: generated?.provider === BAIBAI_IMAGE_PROVIDER ? BAIBAI_IMAGE_PROVIDER : CG_IMAGE_PROVIDER,
             generatedAt: Date.now(),
         };
         liveItem.cgImage = nextImage;
@@ -9669,6 +9884,61 @@ function isArchiveMobileViewport() {
     }
 }
 
+function archiveMobileSafeTopFallback(navigatorLike = globalThis.navigator) {
+    const userAgent = String(navigatorLike?.userAgent || '');
+    const platform = String(navigatorLike?.platform || '');
+    const maxTouchPoints = Number(navigatorLike?.maxTouchPoints || 0);
+    const iosDevice = /iP(?:hone|ad|od)/i.test(userAgent) || /iP(?:hone|ad|od)/i.test(platform);
+    const ipadDesktopMode = platform === 'MacIntel' && maxTouchPoints > 1;
+    // Some iOS one-click/WebView builds render edge-to-edge but expose every env(safe-area-*)
+    // value as zero. Keep the code-owned close control below the system status touch region.
+    return iosDevice || ipadDesktopMode ? 52 : 0;
+}
+
+function applyArchiveMobileSafeArea(overlay) {
+    if (!overlay?.style) return;
+    const fallback = isArchiveMobileViewport() ? archiveMobileSafeTopFallback() : 0;
+    overlay.style.setProperty('--rmt-mobile-safe-top', `${fallback}px`);
+}
+
+function overlayCloseButtonFromEvent(event, overlay) {
+    const selector = '.rmt-topbar > button[data-rmt-action="close"]';
+    const path = typeof event?.composedPath === 'function' ? event.composedPath() : [];
+    let button = path.find(node => node?.matches?.(selector)) || null;
+    if (!button) button = event?.target?.closest?.(selector) || null;
+    if (!button || (typeof overlay?.contains === 'function' && !overlay.contains(button))) return null;
+    return button;
+}
+
+function closeArchiveOverlayFromUser() {
+    const overlay = document.getElementById(OVERLAY_ID);
+    if (!overlay || overlay.hidden) return closeOverlay();
+    if (busy) activeTaskBackgrounded = true;
+    if (hasAnyTask()) globalThis.toastr?.info?.('当前任务会继续在后台运行，完成后会通知你。', '心跳回忆');
+    return closeOverlay();
+}
+
+function bindOverlayCloseFallback(overlay) {
+    if (!overlay || overlay.dataset.rmtEarlyCloseBound === 'true') return;
+    let lastCloseAt = 0;
+    const earlyHandler = event => {
+        const button = overlayCloseButtonFromEvent(event, overlay);
+        if (!button || overlay.hidden) return;
+        if (event.type === 'pointerdown' && (Number(event.button ?? 0) !== 0 || event.isPrimary === false)) return;
+        const now = Date.now();
+        if (now - lastCloseAt < 500) return;
+        lastCloseAt = now;
+        // Limit interception to the code-owned topbar close button. This prevents click-through
+        // without restoring the old document-wide mobile gesture blocker.
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        closeArchiveOverlayFromUser();
+    };
+    overlay.addEventListener('pointerdown', earlyHandler, true);
+    overlay.addEventListener('touchstart', earlyHandler, { capture: true, passive: false });
+    overlay.dataset.rmtEarlyCloseBound = 'true';
+}
+
 function revealArchiveOverlay(overlay) {
     if (!overlay) return;
     overlay.hidden = false;
@@ -9701,7 +9971,7 @@ function openOverlay() {
               <div class="rmt-topbar-title">心跳回忆</div>
               <button type="button" data-rmt-action="home">档案室</button>
               <button type="button" data-rmt-action="regenerate" hidden>增量追加</button>
-              <button type="button" data-rmt-action="close">关闭</button>
+              <button type="button" data-rmt-action="close" aria-label="关闭档案室">关闭</button>
             </div>
             <div class="rmt-body"></div>
           </div>`;
@@ -9716,6 +9986,8 @@ function openOverlay() {
             });
         }
     }
+    applyArchiveMobileSafeArea(overlay);
+    bindOverlayCloseFallback(overlay);
     revealArchiveOverlay(overlay);
     return overlay;
 }
@@ -11213,7 +11485,7 @@ async function drawHeartStripImage(stripId) {
     const context = currentCharacterGuard();
     const imageState = imageGenerationUiState(context);
     if (!imageState.available) {
-        globalThis.toastr?.info?.('没有检测到 SillyTavern Image Generation。启用并配置后即可绘制日常一格；若它明明已启用，可在心跳回忆设置中手动勾选生图兜底。', '心跳回忆');
+        globalThis.toastr?.info?.(imageGenerationUnavailableMessage(imageState), '心跳回忆');
         return;
     }
     if (activeCgImageTasks.size >= 1) {
@@ -11223,7 +11495,7 @@ async function drawHeartStripImage(stripId) {
     const previous = normalizeCgImageRecord(item.cgImage);
     const ok = confirmExplicitAction(
         previous ? `重新绘制「${item.title}」？` : `绘制「${item.title}」？`,
-        `${previous ? '成功后会替换当前图片引用；旧文件不会由心跳回忆主动删除。\n\n' : ''}会调用 SillyTavern 已配置的 Image Generation，可能消耗额度。为了减少 AI 画坏文字，图片提示只要求 Q 版分镜和动作，真正台词仍由心跳回忆界面显示。`,
+        `${previous ? '成功后会替换当前图片引用；旧文件不会由心跳回忆主动删除。\n\n' : ''}会调用${imageState.providerLabel || '已配置的生图插件'}，可能消耗额度。为了减少 AI 画坏文字，图片提示只要求 Q 版分镜和动作，真正台词仍由心跳回忆界面显示。`,
         { destructive: !!previous },
     );
     if (!ok) return;
@@ -11238,12 +11510,17 @@ async function drawHeartStripImage(stripId) {
         globalThis.toastr?.info?.(`当前已有 ${MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请等其中一项完成后再绘制日常一格。`, '心跳回忆');
         return;
     }
-    activeCgImageTasks.set(taskKey, { mode: MODE.HEART, itemId: item.id, startedAt: Date.now() });
+    const controller = new AbortController();
+    activeCgImageTasks.set(taskKey, { mode: MODE.HEART, itemId: item.id, startedAt: Date.now(), controller });
     renderHeart();
     try {
-        const rawUrl = await invokeImageGeneration(prompt, context);
-        const url = normalizeCgImageUrl(rawUrl);
-        if (!url) throw new Error('图像生成扩展没有返回可保存的 SillyTavern 本地图片路径。');
+        const generated = await invokeImageGeneration(prompt, context, {
+            orientation: Number(item.panelCount) === 1 ? 'landscape' : 'portrait',
+            provider: imageState.provider,
+            signal: controller.signal,
+        });
+        const url = normalizeCgImageUrl(generated?.url);
+        if (!url) throw new Error('生图插件没有返回可保存的 SillyTavern 本地图片路径。');
         if (cgImageLifecycleEpoch !== lifecycleEpoch || !isCurrentTaskOrigin(origin)) {
             globalThis.toastr?.warning?.('图片已经生成，但期间聊天或插件状态发生变化，因此没有写入当前档案缓存。', '心跳回忆');
             return;
@@ -11254,7 +11531,12 @@ async function drawHeartStripImage(stripId) {
         const liveItem = latest.dailyStrips?.find(strip => strip.id === item.id);
         if (!liveItem) throw new Error('日常一格条目已经变化，停止保存图片。');
         const oldImage = liveItem.cgImage;
-        const nextImage = { url, prompt, provider: CG_IMAGE_PROVIDER, generatedAt: Date.now() };
+        const nextImage = {
+            url,
+            prompt,
+            provider: generated?.provider === BAIBAI_IMAGE_PROVIDER ? BAIBAI_IMAGE_PROVIDER : CG_IMAGE_PROVIDER,
+            generatedAt: Date.now(),
+        };
         liveItem.cgImage = nextImage;
         if (!saveSession(MODE.HEART, latest, expectedChatId)) {
             liveItem.cgImage = oldImage;
@@ -11989,11 +12271,7 @@ function handleOverlayClick(event) {
         if (!requireWritableArchiveAction()) return;
     }
     if (action === 'back') return navigateBack();
-    if (action === 'close') {
-        if (busy) activeTaskBackgrounded = true;
-        if (hasAnyTask()) globalThis.toastr?.info?.('当前任务会继续在后台运行，完成后会通知你。', '心跳回忆');
-        return closeOverlay();
-    }
+    if (action === 'close') return closeArchiveOverlayFromUser();
     if (action === 'home' || action === 'library-home') {
         if (busy) activeTaskBackgrounded = true;
         return showArchiveLibrary();
@@ -12367,7 +12645,7 @@ function mountSettings() {
           </div>
           <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
           <label class="checkbox_label rmt-settings-check"><input data-rmt-room-life-auto type="checkbox"> 每天首次打开房间时允许一次“今日生活”自动请求</label>
-          <label class="checkbox_label rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"> 手动确认 SillyTavern Image Generation 已启用（自动检测失败时，绘制会尝试受控的 /sd quiet=true 兜底）</label>
+          <label class="checkbox_label rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"> 手动确认 SillyTavern Image Generation 已启用（只用于官方 /sd 兜底；柏宝绘由公开联动接口自动检测）</label>
         </div>
         <div class="rmt-settings-archive-actions">
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
@@ -12656,6 +12934,7 @@ export function destroyMemoryTheater() {
         for (const task of activeGenerationTasks.values()) {
             try { task.controller?.abort?.(); } catch {}
         }
+        abortActiveCgImageTasks();
         while (providerRequestQueue.length) {
             const waiter = providerRequestQueue.shift();
             try { waiter?.signal?.removeEventListener?.('abort', waiter.onAbort); } catch {}
