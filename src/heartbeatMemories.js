@@ -57,6 +57,8 @@ const DEFAULT_SETTINGS = Object.freeze({
     // not exposed through the current context registry. Off by default; when enabled we may use
     // the public executeSlashCommandsWithOptions('/sd quiet=true ...') path with a sanitized prompt.
     imageGenerationManualEnabled: false,
+    // Optional r32-style mobile safe-area presentation. Off keeps the long-standing edge-to-edge fullscreen UI.
+    ttDisplayMode: false,
     // Applies only to newly model-generated derivative content. Never rewrite chat/archive evidence.
     bannedGeneratedPhrases: ['老子'],
 });
@@ -96,7 +98,7 @@ const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.HEART]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.ACHIEVEMENTS]: 6000,
 });
-const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.ENDING, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
+const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.ENDING, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
 const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS, MODE.PHONE]);
 const MEMORY_PROVIDER_TRACE_RE = /(memory|memories|memo|recall|remember|summary|summar|history|lore|horae|vector|记忆|回忆|忆|摘要|总结|往事|历史)/i;
 const CURRENT_CHAT_MEMORY_SOURCE_RE = /(memory|memories|memo|recall|remember|summary|summar|recap|history|记忆|回忆|摘要|总结|小结|回顾|历史)/i;
@@ -113,10 +115,6 @@ const ROOM_DAYPART_KEYS = ['morning', 'daytime', 'evening', 'night'];
 const ENDING_TYPES = new Set(['route', 'romance', 'reverse', 'bond', 'open', 'personal']);
 const CONFESSION_REPLAY_TYPES = new Set(['true', 'mutual', 'friendship', 'indirect', 'relationship', 'rejected', 'other']);
 const CG_IMAGE_PROVIDER = 'sillytavern-imagine';
-const BAIBAI_IMAGE_PROVIDER = 'st-baibai-image';
-const BAIBAI_IMAGE_API_VERSION = 1;
-const BAIBAI_IMAGE_HOST_ID = 'bbi-app-host';
-const BAIBAI_IMAGE_TIMEOUT_MS = 720000;
 const MAX_CG_IMAGE_PROMPT_CHARS = 1800;
 const HEART_GREETING_KEYS = Object.freeze(['morning', 'noon', 'evening', 'night', 'weekend', 'birthday', 'userBirthday', 'holiday', 'absenceWorry', 'absenceSulky', 'absenceJealous']);
 const HEART_VOICE_KINDS = new Set(['postending', 'spring', 'summer', 'autumn', 'winter']);
@@ -219,6 +217,7 @@ function getPluginSettings(context = getContext()) {
         useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory !== false,
         usePublicMemoryProviderReaders: settings.usePublicMemoryProviderReaders === true,
         imageGenerationManualEnabled: settings.imageGenerationManualEnabled === true,
+        ttDisplayMode: settings.ttDisplayMode === true,
         bannedGeneratedPhrases: settings.bannedGeneratedPhrases === undefined
             ? [...DEFAULT_SETTINGS.bannedGeneratedPhrases]
             : normalizeBannedGeneratedPhrases(settings.bannedGeneratedPhrases),
@@ -7339,8 +7338,9 @@ async function generateConfiguredJson(prompt, options = {}) {
     const controlledPrompt = `${contextEnvelope}
 ${expanded}${phrasePolicy}`;
     await assertPromptBudget(context, controlledPrompt, { skipTokenCount: options.skipTokenCount === true });
-    const requestedMax = Math.max(1024, Math.min(MAX_GENERATION_OUTPUT_TOKENS, Number(options.maxTokens) || settings.maxTokens));
-    const responseLength = Math.min(settings.maxTokens, requestedMax);
+    // The value configured in the dedicated secondary-API UI is the actual provider max output.
+    // Per-feature options.maxTokens values are legacy sizing hints only and must not silently lower it.
+    const responseLength = Math.max(1024, Math.min(MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || DEFAULT_SETTINGS.maxTokens));
     if (!settings.connectionProfileId) {
         throw new Error('心跳回忆还没有专用连接。请在插件设置中点击“从酒馆当前连接一键导入”，或手动选择一个 Connection Manager 配置。');
     }
@@ -8611,6 +8611,7 @@ dialog#${OVERLAY_ID}::backdrop{background:transparent}
 .rmt-archive-portal-butterfly .rmt-portal-avatar{background:linear-gradient(145deg,#708aa9,#4f6585)}
 @media(min-width:761px){.rmt-archive-portals>.rmt-archive-portal-butterfly{grid-column:1/-1;min-height:170px}}
 .rmt-archive-portal-ending .rmt-portal-avatar{background:linear-gradient(145deg,#efa9bf,#c86e91)}
+.rmt-archive-portal-heart .rmt-portal-avatar{background:linear-gradient(145deg,#f0a7b8,#db7895)}
 .rmt-portal-ready-dot,.rmt-portal-lock{position:absolute;right:-2px;bottom:2px;width:25px;height:25px;border-radius:50%;display:grid;place-items:center;background:#fff;color:#cf7599;border:1px solid #edbdd0;font-size:12px;font-weight:900;box-shadow:0 3px 8px rgba(61,79,95,.12)}
 .rmt-portal-lock{color:#94a0ab;border-color:#d6dfe4;font-size:10px}
 .rmt-portal-title{font-size:16px;font-weight:850;color:#53667c;line-height:1.35}
@@ -8685,15 +8686,18 @@ dialog#${OVERLAY_ID}::backdrop{background:transparent}
   .rmt-character-portals .rmt-portal-subtitle{min-height:0;margin-top:4px}
   .rmt-character-portals .rmt-portal-status{padding-top:8px}
 
-  #${OVERLAY_ID}{
+  #${OVERLAY_ID}{padding:0}
+  #${OVERLAY_ID} .rmt-shell{max-height:100vh;border-radius:0;border:0;outline:0}
+  dialog#${OVERLAY_ID}{padding:0!important}
+  #${OVERLAY_ID}.rmt-tt-display{
     padding:
       max(env(safe-area-inset-top, 0px),var(--rmt-mobile-safe-top, 0px))
       env(safe-area-inset-right, 0px)
       env(safe-area-inset-bottom, 0px)
       env(safe-area-inset-left, 0px);
   }
-  .rmt-shell{max-height:100%;border-radius:0;border:0;outline:0}
-  dialog#${OVERLAY_ID}{
+  #${OVERLAY_ID}.rmt-tt-display .rmt-shell{max-height:100%}
+  dialog#${OVERLAY_ID}.rmt-tt-display{
     padding:
       max(env(safe-area-inset-top, 0px),var(--rmt-mobile-safe-top, 0px))
       env(safe-area-inset-right, 0px)
@@ -8748,10 +8752,7 @@ function abstractStyle(seed, id) {
 
 const IMAGE_GENERATION_COMMAND_NAMES = Object.freeze(['imagine', 'sd', 'img']);
 function imageGenerationCommand(context = getContext()) {
-    const registries = [
-        context?.SlashCommandParser?.commands,
-        globalThis?.SlashCommandParser?.commands,
-    ].filter(Boolean);
+    const registries = [context?.SlashCommandParser?.commands, globalThis?.SlashCommandParser?.commands].filter(Boolean);
     for (const name of IMAGE_GENERATION_COMMAND_NAMES) {
         for (const registry of registries) {
             const command = registry?.[name];
@@ -8761,91 +8762,20 @@ function imageGenerationCommand(context = getContext()) {
     return null;
 }
 
-function baiBaiImageApi() {
-    try {
-        const api = globalThis.STBaiBaiImage;
-        if (!api || typeof api !== 'object') return null;
-        if (api.id !== BAIBAI_IMAGE_PROVIDER || Number(api.apiVersion) !== BAIBAI_IMAGE_API_VERSION) return null;
-        if (api.capabilities?.generateImage !== true || api.capabilities?.sameOriginFileResult !== true || api.capabilities?.abortSignal !== true) return null;
-        if (typeof api.getStatus !== 'function' || typeof api.generateImage !== 'function') return null;
-        return api;
-    } catch {
-        return null;
-    }
-}
-
-function safeBaiBaiPluginVersion(value) {
-    return normalizeText(value, 80)
-        .replace(/[^0-9A-Za-z._+-]/g, '')
-        .slice(0, 80);
-}
-
-function baiBaiImageUiState() {
-    let rawDetected = false;
-    let hostDetected = false;
-    try { rawDetected = !!globalThis.STBaiBaiImage; } catch {}
-    try { hostDetected = !!globalThis.document?.getElementById?.(BAIBAI_IMAGE_HOST_ID); } catch {}
-    const api = baiBaiImageApi();
-    if (!api) {
-        return {
-            api: null,
-            detected: rawDetected || hostDetected,
-            compatible: false,
-            available: false,
-            enabled: false,
-            backend: '',
-            version: '',
-            reason: rawDetected || hostDetected ? '已安装，但当前构建没有兼容的公开联动接口' : '',
-        };
-    }
-    try {
-        const status = api.getStatus();
-        const backend = status?.backend === 'nai' || status?.backend === 'comfyui' ? status.backend : '';
-        const ready = status?.ready === true && status?.enabled !== false && !!backend;
-        return {
-            api,
-            detected: true,
-            compatible: true,
-            available: ready,
-            enabled: status?.enabled !== false,
-            backend,
-            version: safeBaiBaiPluginVersion(api.pluginVersion),
-            reason: ready ? '' : safeExternalImageError(status?.reason) || '柏宝绘尚未完成渠道配置',
-        };
-    } catch {
-        return {
-            api,
-            detected: true,
-            compatible: true,
-            available: false,
-            enabled: false,
-            backend: '',
-            version: safeBaiBaiPluginVersion(api.pluginVersion),
-            reason: '柏宝绘联动状态读取失败',
-        };
-    }
-}
-
 function imageGenerationUiState(context = getContext()) {
-    const baiBai = baiBaiImageUiState();
     const command = imageGenerationCommand(context);
     const manual = getPluginSettings(context).imageGenerationManualEnabled === true;
-    const hostAvailable = !!command || manual;
-    const provider = baiBai.available ? BAIBAI_IMAGE_PROVIDER : hostAvailable ? CG_IMAGE_PROVIDER : '';
     return {
         command,
         detected: !!command,
         manual,
-        baiBai,
-        provider,
-        providerLabel: provider === BAIBAI_IMAGE_PROVIDER ? '柏宝绘' : provider === CG_IMAGE_PROVIDER ? 'SillyTavern Image Generation' : '',
-        available: baiBai.available || hostAvailable,
+        provider: CG_IMAGE_PROVIDER,
+        providerLabel: 'SillyTavern Image Generation',
+        available: !!command || manual,
     };
 }
 
 function sanitizeImageGenerationSlashPrompt(value) {
-    // This string goes through STscript only in the explicit manual fallback. Prevent the model's
-    // visual prompt from becoming STscript/macro syntax while preserving ordinary image keywords.
     return normalizeText(value, MAX_CG_IMAGE_PROMPT_CHARS)
         .replace(/[{}]/g, ' ')
         .replace(/[\r\n]+/g, ' ')
@@ -8855,93 +8785,13 @@ function sanitizeImageGenerationSlashPrompt(value) {
         .trim();
 }
 
-function safeExternalImageError(value) {
-    return normalizeText(value, 360)
-        .replace(/[<>&]/g, ' ')
-        .replace(/https?:\/\/\S+/gi, '[地址已隐藏]')
-        .replace(/\b(?:authorization|api[-_ ]?key|token|secret)\b["'`\s]*[:=]\s*["'`]?[^\r\n,;}]{1,220}/gi, '[凭据已隐藏]')
-        .replace(/\b(?:bearer\s+)?(?:sk|nai|api)[-_][A-Za-z0-9._-]{8,}\b/gi, '[凭据已隐藏]')
-        .replace(/[A-Za-z0-9+/_=-]{40,}/g, '[敏感值已隐藏]');
-}
-
-function createBaiBaiRequestId() {
-    try {
-        const uuid = globalThis.crypto?.randomUUID?.();
-        if (typeof uuid === 'string' && uuid) return `hbm-${uuid}`;
-    } catch {}
-    return `hbm-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-async function invokeBaiBaiImageGeneration(prompt, state, { signal = null } = {}) {
-    const api = state?.api;
-    if (!api) throw new Error('柏宝绘公开联动接口不可用。');
-    const safePrompt = sanitizeCgVisualText(prompt, MAX_CG_IMAGE_PROMPT_CHARS);
-    if (!safePrompt) throw new Error('生图提示为空，无法调用柏宝绘。');
-    const controller = new AbortController();
-    const abortFromParent = () => {
-        try { controller.abort(signal?.reason); }
-        catch { try { controller.abort(); } catch {} }
-    };
-    if (signal?.aborted) abortFromParent();
-    else signal?.addEventListener?.('abort', abortFromParent, { once: true });
-    let timer = 0;
-    let timedOut = false;
-    const requestId = createBaiBaiRequestId();
-    const timeout = new Promise((_, reject) => {
-        timer = setTimeout(() => {
-            timedOut = true;
-            try { controller.abort(new DOMException('柏宝绘联动超时', 'AbortError')); } catch { controller.abort(); }
-            reject(new Error('柏宝绘在 12 分钟内没有完成本次绘制，已停止等待。请到柏宝绘检查渠道队列或请求历史。'));
-        }, BAIBAI_IMAGE_TIMEOUT_MS);
-    });
-    try {
-        if (controller.signal.aborted) {
-            throw controller.signal.reason || Object.assign(new Error('柏宝绘已取消本次绘制。'), { name: 'AbortError' });
-        }
-        const result = await Promise.race([
-            Promise.resolve().then(() => api.generateImage({
-                prompt: safePrompt,
-                negativePrompt: '',
-                orientation: state.orientation === 'portrait' ? 'portrait' : 'landscape',
-                source: 'heartbeat-memories',
-                requestId,
-                signal: controller.signal,
-            })),
-            timeout,
-        ]);
-        if (!result || typeof result !== 'object' || result.provider !== BAIBAI_IMAGE_PROVIDER || result.requestId !== requestId) {
-            throw new Error('柏宝绘返回了不兼容的联动结果。');
-        }
-        return { url: normalizeText(result.url, 4096), provider: BAIBAI_IMAGE_PROVIDER };
-    } catch (error) {
-        if (timedOut) throw error;
-        if (error?.name === 'AbortError') throw new Error('柏宝绘已取消本次绘制。');
-        const message = safeExternalImageError(error?.message || error);
-        throw new Error(`柏宝绘没有完成本次绘制${message ? `：${message}` : '。请检查柏宝绘的渠道配置或请求历史。'}`);
-    } finally {
-        if (timer) clearTimeout(timer);
-        signal?.removeEventListener?.('abort', abortFromParent);
-    }
-}
-
-async function invokeImageGeneration(prompt, context = getContext(), { orientation = 'landscape', provider = '', signal = null } = {}) {
-    const imageState = imageGenerationUiState(context);
-    const selectedProvider = provider || imageState.provider;
-    if (selectedProvider === BAIBAI_IMAGE_PROVIDER) {
-        if (!imageState.baiBai.available) {
-            throw new Error('柏宝绘在确认后变为忙碌或未就绪，本次绘制已停止；不会自动改用另一家生图服务。');
-        }
-        return await invokeBaiBaiImageGeneration(prompt, { ...imageState.baiBai, orientation }, { signal });
-    }
-    if (selectedProvider && selectedProvider !== CG_IMAGE_PROVIDER) {
-        throw new Error('确认的生图服务已不再兼容，本次绘制已停止。');
-    }
+async function invokeImageGeneration(prompt, context = getContext(), { signal = null } = {}) {
+    if (signal?.aborted) throw signal.reason || Object.assign(new Error('生图请求已取消。'), { name: 'AbortError' });
     const direct = imageGenerationCommand(context);
     if (direct) {
-        return {
-            url: await invokeSlashCommandCapture(direct, { quiet: 'true', gallery: 'false' }, prompt, context),
-            provider: CG_IMAGE_PROVIDER,
-        };
+        const url = await invokeSlashCommandCapture(direct, { quiet: 'true', gallery: 'false' }, prompt, context);
+        if (signal?.aborted) throw signal.reason || Object.assign(new Error('生图请求已取消。'), { name: 'AbortError' });
+        return { url, provider: CG_IMAGE_PROVIDER };
     }
     const settings = getPluginSettings(context);
     if (!settings.imageGenerationManualEnabled) {
@@ -8953,6 +8803,7 @@ async function invokeImageGeneration(prompt, context = getContext(), { orientati
     const safePrompt = sanitizeImageGenerationSlashPrompt(prompt);
     if (!safePrompt) throw new Error('生图提示为空，无法调用手动 /sd 兜底。');
     const result = await context.executeSlashCommandsWithOptions(`/sd quiet=true ${safePrompt}`);
+    if (signal?.aborted) throw signal.reason || Object.assign(new Error('生图请求已取消。'), { name: 'AbortError' });
     if (result?.isError) {
         throw new Error(`手动 /sd 调用失败：${normalizeText(result?.errorMessage || result?.abortReason, 500) || 'Image Generation 没有接受请求。'}`);
     }
@@ -8970,8 +8821,6 @@ function normalizeCgImageUrl(value) {
         if (!['http:', 'https:'].includes(parsed.protocol)) return '';
         const currentOrigin = globalThis.location?.origin;
         if (currentOrigin && parsed.origin !== currentOrigin) return '';
-        // SillyTavern's image-generation extension saves provider output as a local user image.
-        // Persist only the same-origin path, never base64/data/blob/external provider URLs.
         return `${parsed.pathname}${parsed.search}${parsed.hash}`.slice(0, 4096);
     } catch {
         return '';
@@ -8985,7 +8834,7 @@ function normalizeCgImageRecord(value) {
     return {
         url,
         prompt: normalizeText(value.prompt, MAX_CG_IMAGE_PROMPT_CHARS),
-        provider: value.provider === BAIBAI_IMAGE_PROVIDER ? BAIBAI_IMAGE_PROVIDER : CG_IMAGE_PROVIDER,
+        provider: CG_IMAGE_PROVIDER,
         generatedAt: Math.max(0, Number(value.generatedAt) || 0),
     };
 }
@@ -9033,53 +8882,27 @@ function cgImageLayerHtml(item, { lazy = true } = {}) {
 
 function cgImageProviderBar({ readOnly = false } = {}) {
     const state = imageGenerationUiState();
-    const ready = state.available;
-    const baiBai = state.baiBai;
-    const version = baiBai.version ? ` ${baiBai.version}` : '';
-    const backend = baiBai.backend === 'nai' ? 'NAI' : baiBai.backend === 'comfyui' ? 'ComfyUI' : '';
-    let status = '';
-    if (baiBai.available) {
-        status = `柏宝绘${version} 已连接${backend ? ` · ${backend}` : ''} · 绘制时优先使用柏宝绘`;
-    } else if (baiBai.detected && !baiBai.compatible) {
-        status = `已检测到柏宝绘，但当前构建没有公开联动接口${state.detected || state.manual ? '；本次会改用 SillyTavern Image Generation' : '；请安装配套桥接构建'}`;
-    } else if (baiBai.compatible) {
-        status = `柏宝绘联动未就绪：${baiBai.reason}${state.detected || state.manual ? '；本次会改用 SillyTavern Image Generation' : ''}`;
-    } else if (state.detected) {
-        status = 'SillyTavern Image Generation 已连接';
-    } else if (state.manual) {
-        status = '已手动勾选 Image Generation · 绘制时尝试 /sd 兜底';
-    } else {
-        status = '未检测到可用生图插件';
-    }
-    const detail = readOnly ? `只读档案 · ${status}` : `${status}${ready ? ' · 点击 🎨 绘制CG' : ''}`;
-    return `<div class="rmt-cg-provider-bar ${ready ? 'ready' : ''}"><span class="rmt-cg-provider-dot"></span><b>CG 实图</b><span>${esc(detail)}</span><button type="button" class="rmt-btn" data-rmt-action="refresh-image-provider">重新检测</button></div>`;
+    const status = state.detected
+        ? 'Image Generation 已连接'
+        : state.manual
+            ? '已手动勾选 Image Generation · 绘制时尝试 /sd 兜底'
+            : '当前未检测到 Image Generation';
+    const detail = readOnly ? `只读档案 · ${status}` : `${status}${state.available ? ' · 点击 🎨 绘制CG' : ''}`;
+    return `<div class="rmt-cg-provider-bar ${state.available ? 'ready' : ''}"><span class="rmt-cg-provider-dot"></span><b>CG 实图</b><span>${esc(detail)}</span><button type="button" class="rmt-btn" data-rmt-action="refresh-image-provider">重新检测</button></div>`;
 }
 
-function imageGenerationUnavailableMessage(state) {
-    const baiBai = state?.baiBai;
-    if (baiBai?.detected && !baiBai.compatible) {
-        return '已检测到柏宝绘，但当前构建没有公开联动接口。请安装配套的柏宝绘 Heartbeat Interop 桥接构建；心跳回忆不会调用它的私有 DOM 或读取后端设置。';
-    }
-    if (baiBai?.compatible && !baiBai.available) {
-        return `柏宝绘已检测到，但尚不能绘制：${baiBai.reason || '请在柏宝绘中启用并配置出图渠道。'}`;
-    }
-    return '没有检测到可用的生图插件。可安装并配置柏宝绘桥接构建，或启用 SillyTavern Image Generation；后者自动检测失败时可在心跳回忆设置中手动勾选兜底。';
+function imageGenerationUnavailableMessage() {
+    return '没有检测到 SillyTavern Image Generation。请先启用并配置扩展；自动检测失败时可在心跳回忆设置中手动勾选 /sd 兜底。';
 }
 
 function refreshImageGenerationUi() {
     const state = imageGenerationUiState(getContext());
     if (activeMode && activeSession) renderActive();
-    const message = state.baiBai.available
-        ? `已检测到柏宝绘${state.baiBai.version ? ` ${state.baiBai.version}` : ''}，CG 绘制会优先交给柏宝绘自己的 ${state.baiBai.backend === 'nai' ? 'NAI' : 'ComfyUI'} 渠道。`
-        : state.baiBai.detected && !state.baiBai.compatible
-            ? imageGenerationUnavailableMessage(state)
-            : state.baiBai.compatible && !state.baiBai.available && (state.detected || state.manual)
-                ? `柏宝绘暂未就绪（${state.baiBai.reason}）；当前会使用 SillyTavern Image Generation。`
-                : state.detected
-                    ? '已检测到 SillyTavern Image Generation（/imagine、/sd 或 /img），绘制按钮可以直接使用。'
-                    : state.manual
-                        ? '自动检测仍未发现命令，但你已手动勾选 Image Generation；绘制时会使用受控的 /sd quiet=true 兜底。'
-                        : imageGenerationUnavailableMessage(state);
+    const message = state.detected
+        ? '已检测到 SillyTavern Image Generation（/imagine、/sd 或 /img），绘制按钮可以直接使用。'
+        : state.manual
+            ? '自动检测仍未发现命令，但你已手动勾选 Image Generation；绘制时会使用受控的 /sd quiet=true 兜底。'
+            : imageGenerationUnavailableMessage(state);
     globalThis.toastr?.[state.available ? 'success' : 'info']?.(message, '心跳回忆');
 }
 
@@ -9186,7 +9009,7 @@ async function drawSelectedCgImage() {
         const nextImage = {
             url,
             prompt,
-            provider: generated?.provider === BAIBAI_IMAGE_PROVIDER ? BAIBAI_IMAGE_PROVIDER : CG_IMAGE_PROVIDER,
+            provider: CG_IMAGE_PROVIDER,
             generatedAt: Date.now(),
         };
         liveItem.cgImage = nextImage;
@@ -9897,7 +9720,10 @@ function archiveMobileSafeTopFallback(navigatorLike = globalThis.navigator) {
 
 function applyArchiveMobileSafeArea(overlay) {
     if (!overlay?.style) return;
-    const fallback = isArchiveMobileViewport() ? archiveMobileSafeTopFallback() : 0;
+    let ttEnabled = false;
+    try { ttEnabled = getPluginSettings(getContext()).ttDisplayMode === true; } catch {}
+    overlay.classList?.toggle?.('rmt-tt-display', ttEnabled);
+    const fallback = ttEnabled && isArchiveMobileViewport() ? archiveMobileSafeTopFallback() : 0;
     overlay.style.setProperty('--rmt-mobile-safe-top', `${fallback}px`);
 }
 
@@ -10358,6 +10184,7 @@ function modePortalMeta(mode) {
         [MODE.PHONE]: { title: '他的手机', subtitle: '查看私人通讯与数字生活', icon: 'fa-mobile-screen-button', accent: 'phone' },
         [MODE.BUTTERFLY]: { title: '蝴蝶效应', subtitle: '平行时间线观测终端', icon: 'fa-code-branch', accent: 'butterfly' },
         [MODE.ENDING]: { title: 'ENDING / 后日谈', subtitle: '关系路线终章与未来生活', icon: 'fa-heart', accent: 'ending' },
+        [MODE.HEART]: { title: '角色互动', subtitle: '时期对话 / Drama / 日常一格', icon: 'fa-comments', accent: 'heart' },
         [MODE.ACHIEVEMENTS]: { title: '成就库', subtitle: '已解锁 / 未解锁', icon: 'fa-trophy', accent: 'achievements' },
     };
     return meta[mode] || { title: MODE_LABEL[mode] || mode, subtitle: '', icon: 'fa-circle', accent: 'default' };
@@ -11534,7 +11361,7 @@ async function drawHeartStripImage(stripId) {
         const nextImage = {
             url,
             prompt,
-            provider: generated?.provider === BAIBAI_IMAGE_PROVIDER ? BAIBAI_IMAGE_PROVIDER : CG_IMAGE_PROVIDER,
+            provider: CG_IMAGE_PROVIDER,
             generatedAt: Date.now(),
         };
         liveItem.cgImage = nextImage;
@@ -12552,6 +12379,7 @@ function refreshGenerationSettingsUi() {
     const temperature = panel.querySelector('[data-rmt-api-temperature]');
     const roomDaily = panel.querySelector('[data-rmt-room-life-auto]');
     const imageGenerationManual = panel.querySelector('[data-rmt-image-generation-manual]');
+    const ttDisplay = panel.querySelector('[data-rmt-tt-display]');
     const bannedPhrases = panel.querySelector('[data-rmt-banned-generated-phrases]');
     const status = panel.querySelector('[data-rmt-api-status]');
     if (profile) {
@@ -12577,6 +12405,7 @@ function refreshGenerationSettingsUi() {
     }
     if (roomDaily) roomDaily.checked = settings.roomLifeAutoDaily;
     if (imageGenerationManual) imageGenerationManual.checked = settings.imageGenerationManualEnabled;
+    if (ttDisplay) ttDisplay.checked = settings.ttDisplayMode;
     if (bannedPhrases) bannedPhrases.value = settings.bannedGeneratedPhrases.join('，');
     if (status) {
         status.textContent = !settings.connectionProfileId
@@ -12645,7 +12474,8 @@ function mountSettings() {
           </div>
           <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
           <label class="checkbox_label rmt-settings-check"><input data-rmt-room-life-auto type="checkbox"> 每天首次打开房间时允许一次“今日生活”自动请求</label>
-          <label class="checkbox_label rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"> 手动确认 SillyTavern Image Generation 已启用（只用于官方 /sd 兜底；柏宝绘由公开联动接口自动检测）</label>
+          <label class="checkbox_label rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"> 手动确认 SillyTavern Image Generation 已启用（自动检测失败时使用 /sd 兜底）</label>
+          <label class="checkbox_label rmt-settings-check"><input data-rmt-tt-display type="checkbox"> TT 显示模式（勾选＝r32 顶部安全区；不勾选＝全屏）</label>
         </div>
         <div class="rmt-settings-archive-actions">
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
@@ -12688,6 +12518,13 @@ function mountSettings() {
             updatePluginSettings({ imageGenerationManualEnabled: !!target.checked });
             refreshGenerationSettingsUi();
             if (activeMode && activeSession) renderActive();
+            return;
+        }
+        if (target.matches?.('[data-rmt-tt-display]')) {
+            updatePluginSettings({ ttDisplayMode: !!target.checked });
+            const overlay = document.getElementById(OVERLAY_ID);
+            if (overlay) applyArchiveMobileSafeArea(overlay);
+            refreshGenerationSettingsUi();
             return;
         }
         if (target.matches?.('[data-rmt-banned-generated-phrases]')) {
