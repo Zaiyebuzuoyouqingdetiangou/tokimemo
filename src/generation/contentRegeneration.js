@@ -1,0 +1,318 @@
+// Targeted regeneration for user-managed derived content.
+// Targets are selected only from the currently normalized session; model output never chooses a cache path.
+import * as core_constants from '../core/constants.js';
+import * as core_evidence from '../core/evidence.js';
+import * as core_text from '../core/text.js';
+import * as modes_achievements from '../modes/achievements.js';
+import * as modes_advEvent from '../modes/advEvent.js';
+import * as modes_album from '../modes/album.js';
+import * as modes_calendar from '../modes/calendar.js';
+import * as modes_ending from '../modes/ending.js';
+import * as modes_heart from '../modes/heart.js';
+import * as modes_phone from '../modes/phone.js';
+import * as generation_client from './client.js';
+import * as generation_prompts from './prompts.js';
+
+function taskOptions(mode, context, origin, taskKey, maxTokens = 6000, temperature = 0.45) {
+    return { maxTokens, temperature, context, origin, taskKey, mode, background: true };
+}
+
+function sameEvidence(candidate, current) {
+    const wanted = new Set(core_text.cleanArray(current?.sourceMemoryIds, 16, 40));
+    const got = new Set(core_text.cleanArray(candidate?.sourceMemoryIds, 16, 40));
+    const intersects = !wanted.size || [...wanted].some(id => got.has(id));
+    const anchor = core_text.normalizeText(current?.sourceMemoryAnchor, 240);
+    return intersects && (!anchor || core_text.normalizeText(candidate?.sourceMemoryAnchor, 240) === anchor);
+}
+
+async function regenerateAlbumEntry(session, item, context, memoryBank, origin, taskKey) {
+    const evidence = core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 12);
+    const prompt = `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 单项重新生成')}
+只重新生成下面这一张相簿卡的【表现文本和视觉提示】，它仍然必须描述同一个真实档案事件。不得把它改成别的事件，不得改变 sourceMemoryIds/sourceMemoryAnchor，也不要输出实图 URL。
+CURRENT_ITEM_JSON:\n${JSON.stringify({ ...item, cgImage: undefined, comments: undefined }, null, 2)}
+TRUSTED_EVENT_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
+严格输出：{"entries":[{"id":"${core_text.esc(item.id)}","title":"...","date":"...","desc":"...","category":${JSON.stringify(item.category || '日常')},"unlocked":${item.unlocked ? 'true' : 'false'},"sourceMemoryIds":${JSON.stringify(item.sourceMemoryIds)},"sourceMemoryAnchor":${JSON.stringify(item.sourceMemoryAnchor)},"visualSeed":["..."],"imagePrompt":"...","hintLines":${item.unlocked ? '[]' : '["重新生成解锁提示"]'}}]}
+只输出 JSON。`;
+    const normalized = await generation_client.requestValidatedSegment(
+        prompt, `重新生成相簿「${item.title}」…`, taskOptions(core_constants.MODE.ALBUM, context, origin, `${taskKey}:album`, 6000),
+        raw => modes_album.normalizeAlbumIndex(raw, memoryBank),
+    );
+    const candidate = normalized.entries[0];
+    if (!candidate || !sameEvidence(candidate, item)) throw new Error('重新生成的相簿条目没有保持原档案证据。');
+    let comments = [];
+    if (item.unlocked) {
+        const rawComments = await generation_client.requestValidatedSegment(
+            modes_album.albumCommentsPrompt(context, memoryBank, [{ ...candidate, id: item.id }]),
+            `重新生成「${item.title}」共同回忆…`, taskOptions(core_constants.MODE.ALBUM, context, origin, `${taskKey}:comments`, 5000),
+            raw => modes_album.normalizeAlbumCommentsBatch(raw, [{ ...candidate, id: item.id }]),
+        );
+        comments = rawComments.get(item.id) || [];
+    }
+    return { ...candidate, id: item.id, sourceMemoryIds: [...item.sourceMemoryIds], sourceMemoryAnchor: item.sourceMemoryAnchor, comments, cgImage: null };
+}
+
+async function regenerateAdvEvent(session, item, context, memoryBank, origin, taskKey) {
+    const evidence = core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 12);
+    const prompt = `${generation_prompts.promptSafetyBoundary(context, 'ADV EVENT / 单个事件重新生成')}
+只重新生成这个 ADV EVENT 的事件卡、CG 描述和视觉提示。必须仍然是同一个档案事件；sourceMemoryIds/sourceMemoryAnchor 原样返回。ADV 正文会另行生成，不要在这里写正文，不要输出图片 URL。
+CURRENT_EVENT_JSON:\n${JSON.stringify({ ...item, adv: undefined, cgImage: undefined }, null, 2)}
+TRUSTED_EVENT_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
+严格输出：{"events":[{"id":"${core_text.esc(item.id)}","title":"...","date":"...","cgDesc":"...","sourceMemoryIds":${JSON.stringify(item.sourceMemoryIds)},"sourceMemoryAnchor":${JSON.stringify(item.sourceMemoryAnchor)},"visualSeed":["..."],"imagePrompt":"..."}]}
+只输出 JSON。`;
+    const raw = await generation_client.requestValidatedSegment(
+        prompt, `重新生成 ADV EVENT「${item.title}」…`, taskOptions(core_constants.MODE.ADV, context, origin, `${taskKey}:event`, 6000),
+        data => modes_advEvent.normalizeEventList(data, memoryBank, { allowPartial: false }),
+    );
+    const candidate = raw.events[0];
+    if (!candidate || !sameEvidence(candidate, item)) throw new Error('重新生成的 ADV EVENT 没有保持原档案证据。');
+    return { ...candidate, id: item.id, sourceMemoryIds: [...item.sourceMemoryIds], sourceMemoryAnchor: item.sourceMemoryAnchor, adv: null, cgImage: null };
+}
+
+async function regenerateAdvText(item, context, memoryBank, origin, taskKey) {
+    const raw = await generation_client.requestValidatedSegment(
+        modes_advEvent.advPrompt(context, item, memoryBank),
+        `重新生成「${item.title}」ADV 正文…`, taskOptions(core_constants.MODE.ADV, context, origin, `${taskKey}:text`, 12000, 0.55),
+        modes_advEvent.normalizeAdv,
+    );
+    return raw;
+}
+
+async function regenerateHeartVoice(session, item, context, memoryBank, origin, taskKey) {
+    const kind = core_text.normalizeText(item.kind, 40).toLowerCase();
+    const prompt = kind === 'postending'
+        ? modes_heart.heartPostVoicePrompt(context, memoryBank, session, null, null)
+        : modes_heart.heartSeasonVoicePrompt(context, memoryBank, session, kind, null, null);
+    const list = await modes_heart.requestHeartPart(
+        prompt, `重新生成 ${item.title}…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:voice`, 8000, 0.65),
+        raw => modes_heart.normalizeVoiceDramaPart(raw, [kind]),
+    );
+    return { ...list[0], id: item.id, incrementBatchId: item.incrementBatchId || '', sourceArchiveMemoryIds: item.sourceArchiveMemoryIds || [], generatedAt: Date.now() };
+}
+
+async function regenerateHeartScenario(session, item, context, memoryBank, origin, taskKey) {
+    const season = core_text.normalizeText(item.season, 40).toLowerCase();
+    const list = await modes_heart.requestHeartPart(
+        modes_heart.heartSeasonScenarioPrompt(context, memoryBank, session, season, null, null),
+        `重新生成 ${item.title}…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:scenario`, 9000, 0.7),
+        raw => modes_heart.normalizeScenarioDramaPart(raw, season),
+    );
+    return { ...list[0], id: item.id, incrementBatchId: item.incrementBatchId || '', sourceArchiveMemoryIds: item.sourceArchiveMemoryIds || [], generatedAt: Date.now() };
+}
+
+async function regenerateHeartStrip(session, item, context, memoryBank, origin, taskKey) {
+    const list = await modes_heart.requestHeartPart(
+        modes_heart.heartStripsPrompt(context, memoryBank, session, null, null),
+        `重新生成日常一格「${item.title}」…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:strip`, 7000, 0.7),
+        modes_heart.normalizeHeartStripsPart,
+    );
+    const candidate = list[0];
+    if (!candidate) throw new Error('日常一格重新生成没有返回可用内容。');
+    return { ...candidate, id: item.id, incrementBatchId: item.incrementBatchId || '', sourceArchiveMemoryIds: item.sourceArchiveMemoryIds || [], cgImage: null, generatedAt: Date.now() };
+}
+
+function phonePlanFromSession(session, app) {
+    return {
+        title: session.title,
+        deviceName: session.deviceName,
+        deviceKind: session.deviceKind,
+        lockText: session.lockText,
+        liveStates: session.liveStates,
+        apps: [app],
+    };
+}
+
+async function regeneratePhoneApp(session, app, context, memoryBank, origin, taskKey) {
+    const planApp = {
+        id: app.id, label: app.label, kind: app.kind, summary: app.summary,
+        incremental: true,
+        entries: (app.entries || []).map(entry => ({ id: entry.id, title: entry.title, meta: entry.meta })),
+    };
+    const plan = phonePlanFromSession(session, planApp);
+    const raw = await generation_client.requestValidatedSegment(
+        modes_phone.phoneAppPrompt(context, memoryBank, plan, planApp),
+        `重新生成 App「${app.label}」…`, taskOptions(core_constants.MODE.PHONE, context, origin, `${taskKey}:app`, app.kind === 'chat' ? 12000 : 9000, 0.55),
+        data => modes_phone.normalizePhoneDraftApp(data, planApp, memoryBank, session.deviceKind),
+    );
+    return raw;
+}
+
+async function regeneratePhoneEntry(session, app, entry, context, memoryBank, origin, taskKey) {
+    const planApp = { id: app.id, label: app.label, kind: app.kind, summary: app.summary, incremental: true, entries: [{ id: entry.id, title: entry.title, meta: entry.meta }] };
+    const plan = phonePlanFromSession(session, planApp);
+    const raw = await generation_client.requestValidatedSegment(
+        modes_phone.phoneAppPrompt(context, memoryBank, plan, planApp),
+        `重新生成「${entry.title}」…`, taskOptions(core_constants.MODE.PHONE, context, origin, `${taskKey}:entry`, 8000, 0.6),
+        data => modes_phone.normalizePhoneDraftApp(data, planApp, memoryBank, session.deviceKind),
+    );
+    return raw.entries[0];
+}
+
+async function regenerateEndingRoute(session, item, context, memoryBank, origin, taskKey) {
+    if (item.available) {
+        return generation_client.requestValidatedSegment(
+            modes_ending.endingRouteDetailPrompt(context, memoryBank, session, item),
+            `重新生成结局路线「${item.title}」…`, taskOptions(core_constants.MODE.ENDING, context, origin, `${taskKey}:route`, 14000, 0.65),
+            raw => modes_ending.normalizeEndingRouteDetail(raw, item),
+        );
+    }
+    const evidence = core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 10);
+    const prompt = `${generation_prompts.promptSafetyBoundary(context, 'ENDING / 未解锁路线单项重新生成')}
+只重新生成这条【尚未解锁】路线的标题、副标题和解锁提示。type、available=false、sourceMemoryIds/sourceMemoryAnchor 必须原样保持，不得提前写终章或后日谈。
+CURRENT_ROUTE_JSON:\n${JSON.stringify(item, null, 2)}
+TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
+严格输出：{"ending":{"title":"...","subtitle":"...","unlockHint":"..."}}。只输出 JSON。`;
+    const raw = await generation_client.requestValidatedSegment(
+        prompt, `重新生成未解锁路线「${item.title}」…`, taskOptions(core_constants.MODE.ENDING, context, origin, `${taskKey}:locked-route`, 4000, 0.5),
+        data => {
+            const route = data?.ending || {};
+            const title = core_text.normalizeText(route.title, 100);
+            const subtitle = core_text.normalizeText(route.subtitle, 240);
+            const unlockHint = core_text.normalizeText(route.unlockHint, 1200);
+            if (!title || !unlockHint) throw new Error('未解锁路线重新生成结果不完整。');
+            return { title, subtitle, unlockHint };
+        },
+    );
+    return { ...item, ...raw, available: false, endingScene: '', confession: '', confessionLines: [], creditsLine: '', epilogue: { title: '后日谈', timeSkip: '', scenes: [], finalLine: '' } };
+}
+
+async function regenerateEndingConfession(item, context, memoryBank, origin, taskKey) {
+    const evidence = core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 12);
+    const prompt = `${generation_prompts.promptSafetyBoundary(context, 'ENDING / 单个告白回看重新生成')}
+只重写下面这个【已经发生并有证据的告白回看】的播放器文本。不得改变发生与否、参与者、sourceMemoryIds/sourceMemoryAnchor，也不得发明新的告白。
+CURRENT_REPLAY_JSON:\n${JSON.stringify(item, null, 2)}
+TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
+严格输出：{"confessionReplays":[{"id":"${core_text.esc(item.id)}","title":"...","subtitle":"...","type":"${core_text.esc(item.type || 'other')}","date":"${core_text.esc(item.date || '')}","sourceMemoryIds":${JSON.stringify(item.sourceMemoryIds || [])},"sourceMemoryAnchor":${JSON.stringify(item.sourceMemoryAnchor || '')},"scene":"至少140字的已发生场景回看","confessionText":"至少50字的告白核心文本","confessionLines":[{"speaker":"char","text":"..."}],"responseSummary":"...","afterEffect":"..."}]}
+只输出 JSON。`;
+    const list = await generation_client.requestValidatedSegment(
+        prompt, `重新生成告白回看「${item.title || item.id}」…`, taskOptions(core_constants.MODE.ENDING, context, origin, `${taskKey}:confession`, 7000, 0.55),
+        raw => modes_ending.normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank),
+    );
+    const candidate = list[0];
+    if (!candidate || !sameEvidence(candidate, item)) throw new Error('重新生成的告白回看没有保持原档案证据。');
+    return { ...candidate, id: item.id, sourceMemoryIds: [...(item.sourceMemoryIds || [])], sourceMemoryAnchor: item.sourceMemoryAnchor || '' };
+}
+
+async function regenerateAchievement(item, context, memoryBank, origin, taskKey) {
+    const evidence = item.unlocked ? core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 10) : [];
+    const prompt = `${generation_prompts.promptSafetyBoundary(context, '成就库 / 单项重新生成')}
+只重新生成下面这一项成就的标题、说明、等级和提示。解锁状态以及已解锁成就的档案证据不得改变。
+CURRENT_ACHIEVEMENT_JSON:\n${JSON.stringify(item, null, 2)}
+${item.unlocked ? `TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}` : ''}
+严格输出：{"entries":[{"id":"${core_text.esc(item.id)}","title":"...","description":"...","category":"...","tier":"bronze","unlocked":${item.unlocked ? 'true' : 'false'},"unlockedAt":${JSON.stringify(item.unlockedAt || '')},"sourceMemoryIds":${JSON.stringify(item.sourceMemoryIds || [])},"sourceMemoryAnchor":${JSON.stringify(item.sourceMemoryAnchor || '')},"hint":"..."}]}
+只输出 JSON。`;
+    const normalized = await generation_client.requestValidatedSegment(
+        prompt, `重新生成成就「${item.title}」…`, taskOptions(core_constants.MODE.ACHIEVEMENTS, context, origin, `${taskKey}:achievement`, 5000, 0.6),
+        raw => modes_achievements.normalizeAchievements(raw, memoryBank, { allowPartial: false }),
+    );
+    const candidate = normalized.entries[0];
+    if (!candidate) throw new Error('成就重新生成没有返回可用条目。');
+    if (item.unlocked && !sameEvidence(candidate, item)) throw new Error('重新生成的成就没有保持原档案证据。');
+    return { ...candidate, id: item.id, unlocked: item.unlocked, unlockedAt: item.unlockedAt, sourceMemoryIds: [...(item.sourceMemoryIds || [])], sourceMemoryAnchor: item.sourceMemoryAnchor || '' };
+}
+
+async function regenerateCalendarEntry(item, context, memoryBank, origin, taskKey) {
+    const evidence = item.status === 'future' ? [] : core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 10);
+    const prompt = `${generation_prompts.promptSafetyBoundary(context, '两个人的日历 / 单项重新整理')}
+只重新整理这一条日历卡的【标题与摘要措辞】。日期、状态、来源类别和证据身份必须保持完全相同；future 仍然只是世界设定，不得写成已经发生或已经约定。
+CURRENT_CALENDAR_ENTRY_JSON:\n${JSON.stringify(item, null, 2)}
+${evidence.length ? `TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}` : ''}
+严格输出：{"entry":{"title":"...","summary":"..."}}。只输出 JSON。`;
+    const raw = await generation_client.requestValidatedSegment(
+        prompt, `重新整理日历「${item.title}」…`, taskOptions(core_constants.MODE.CALENDAR, context, origin, `${taskKey}:calendar`, 4000, 0.45),
+        data => {
+            const title = core_text.normalizeText(data?.entry?.title, 120);
+            const summary = core_text.normalizeText(data?.entry?.summary, 1000);
+            if (!title || !summary) throw new Error('日历单项重新整理结果不完整。');
+            return { title, summary };
+        },
+    );
+    return { ...item, ...raw };
+}
+
+async function regenerateButterflyNode(item, context, memoryBank, origin, taskKey) {
+    const evidence = item.sourceMemoryIds?.length ? core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 10) : [];
+    const prompt = `${generation_prompts.promptSafetyBoundary(context, '蝴蝶效应 / 单个观测节点重新生成')}
+只重新生成下面这个${item.trueEnding ? '观测点 Ω' : '平行分歧'}的模拟内容，保持节点身份不变。它是派生模拟，不得修改正式档案。
+CURRENT_NODE_JSON:\n${JSON.stringify(item, null, 2)}
+${evidence.length ? `TRUSTED_MAIN_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}` : ''}
+严格输出：{"node":{"label":"...","monologue":"...","intervention":"...","systemNote":"..."}}。${item.trueEnding ? 'Ω 的 monologue 可为空，intervention 不少于160字。' : '普通分歧 monologue 不少于100字，并提供 intervention/systemNote。'}只输出 JSON。`;
+    const raw = await generation_client.requestValidatedSegment(
+        prompt, `重新生成「${item.label}」…`, taskOptions(core_constants.MODE.BUTTERFLY, context, origin, `${taskKey}:butterfly`, 9000, 0.7),
+        data => {
+            const node = data?.node || {};
+            const label = core_text.normalizeText(node.label, 120);
+            const monologue = core_text.normalizeText(node.monologue, 12000);
+            const intervention = core_text.normalizeText(node.intervention, 12000);
+            const systemNote = core_text.normalizeText(node.systemNote, 5000);
+            if (!label || !intervention || !systemNote || (!item.trueEnding && monologue.length < 100) || (item.trueEnding && intervention.length < 160)) throw new Error('蝴蝶效应单节点重新生成内容不足。');
+            return { label, monologue: item.trueEnding ? '' : monologue, intervention, systemNote };
+        },
+    );
+    return { ...item, ...raw };
+}
+
+export async function regenerateManagedTarget(session, type, id, parentId, options) {
+    const context = options.context;
+    const memoryBank = options.memoryBank;
+    const origin = options.origin;
+    const taskKey = options.taskKey;
+    const updated = structuredClone(session);
+    if (type === 'album-entry') {
+        const index = updated.entries?.findIndex(item => item.id === id) ?? -1;
+        if (index < 0) throw new Error('找不到这张相簿卡。');
+        updated.entries[index] = await regenerateAlbumEntry(updated, updated.entries[index], context, memoryBank, origin, taskKey);
+    } else if (type === 'adv-event') {
+        const index = updated.events?.findIndex(item => item.id === id) ?? -1;
+        if (index < 0) throw new Error('找不到这个 ADV EVENT。');
+        updated.events[index] = await regenerateAdvEvent(updated, updated.events[index], context, memoryBank, origin, taskKey);
+    } else if (type === 'adv-text') {
+        const item = updated.events?.find(item => item.id === id);
+        if (!item) throw new Error('找不到这个 ADV EVENT。');
+        item.adv = await regenerateAdvText(item, context, memoryBank, origin, taskKey);
+    } else if (type === 'heart-voice') {
+        const index = updated.voiceDramas?.findIndex(item => item.id === id) ?? -1;
+        if (index < 0) throw new Error('找不到这篇 Voice Drama。');
+        updated.voiceDramas[index] = await regenerateHeartVoice(updated, updated.voiceDramas[index], context, memoryBank, origin, taskKey);
+    } else if (type === 'heart-scenario') {
+        const index = updated.scenarioDramas?.findIndex(item => item.id === id) ?? -1;
+        if (index < 0) throw new Error('找不到这篇 Scenario Drama。');
+        updated.scenarioDramas[index] = await regenerateHeartScenario(updated, updated.scenarioDramas[index], context, memoryBank, origin, taskKey);
+    } else if (type === 'heart-strip') {
+        const index = updated.dailyStrips?.findIndex(item => item.id === id) ?? -1;
+        if (index < 0) throw new Error('找不到这个日常一格。');
+        updated.dailyStrips[index] = await regenerateHeartStrip(updated, updated.dailyStrips[index], context, memoryBank, origin, taskKey);
+    } else if (type === 'phone-app') {
+        const index = updated.apps?.findIndex(app => app.id === id) ?? -1;
+        if (index < 0) throw new Error('找不到这个 App。');
+        updated.apps[index] = await regeneratePhoneApp(updated, updated.apps[index], context, memoryBank, origin, taskKey);
+    } else if (type === 'phone-entry') {
+        const app = updated.apps?.find(candidate => candidate.id === parentId);
+        const index = app?.entries?.findIndex(entry => entry.id === id) ?? -1;
+        if (!app || index < 0) throw new Error('找不到这条终端内容。');
+        app.entries[index] = await regeneratePhoneEntry(updated, app, app.entries[index], context, memoryBank, origin, taskKey);
+    } else if (type === 'ending-route') {
+        const index = updated.endings?.findIndex(item => item.id === id) ?? -1;
+        if (index < 0) throw new Error('找不到这条结局路线。');
+        updated.endings[index] = await regenerateEndingRoute(updated, updated.endings[index], context, memoryBank, origin, taskKey);
+    } else if (type === 'ending-confession') {
+        const index = updated.confessionReplays?.findIndex(item => item.id === id) ?? -1;
+        if (index < 0) throw new Error('找不到这条告白回看。');
+        updated.confessionReplays[index] = await regenerateEndingConfession(updated.confessionReplays[index], context, memoryBank, origin, taskKey);
+    } else if (type === 'achievement') {
+        const index = updated.entries?.findIndex(item => item.id === id) ?? -1;
+        if (index < 0) throw new Error('找不到这项成就。');
+        updated.entries[index] = await regenerateAchievement(updated.entries[index], context, memoryBank, origin, taskKey);
+    } else if (type === 'calendar-entry') {
+        const index = updated.entries?.findIndex(item => item.id === id) ?? -1;
+        if (index < 0) throw new Error('找不到这条日历项。');
+        updated.entries[index] = await regenerateCalendarEntry(updated.entries[index], context, memoryBank, origin, taskKey);
+    } else if (type === 'butterfly-node') {
+        const index = updated.nodes?.findIndex(item => item.id === id) ?? -1;
+        if (index <= 0) throw new Error('主时间线不能作为单项重新生成目标。');
+        updated.nodes[index] = await regenerateButterflyNode(updated.nodes[index], context, memoryBank, origin, taskKey);
+    } else {
+        throw new Error('这一类内容目前不支持单项模型重新生成。');
+    }
+    updated.userManaged = true;
+    return updated;
+}

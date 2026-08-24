@@ -301,6 +301,7 @@ export async function generateArchiveChunkJson(prompt, options, label) {
 
 export async function generateMode(mode, options = {}) {
     const background = options.background === true;
+    const replaceExisting = options.replaceExisting === true;
     const context = core_context.currentCharacterGuard();
     const expectedChatId = core_context.getChatId(context);
     const memoryBank = archive_repository.requireArchive(context);
@@ -329,7 +330,7 @@ export async function generateMode(mode, options = {}) {
         }
         if (mode !== core_constants.MODE.PHONE) generationPrompt = generation_prompts.roomDeepGenerationPrompt(mode, context, memoryBank, roomSession, focusObject);
     }
-    const previousSession = core_cache.loadSession(mode, { context, chatId: expectedChatId, memoryBank, clone: true });
+    const previousSession = replaceExisting ? null : core_cache.loadSession(mode, { context, chatId: expectedChatId, memoryBank, clone: true });
     const incrementalPart = mode === core_constants.MODE.HEART ? 'dialogues' : 'mode';
     const refreshableCalendar = mode === core_constants.MODE.CALENDAR;
     if (previousSession && !refreshableCalendar && !(mode === core_constants.MODE.PHONE && options.continueDraft === true)) {
@@ -361,12 +362,12 @@ export async function generateMode(mode, options = {}) {
     core_requestCoordinator.refreshConcurrentTaskUi(mode, origin);
     if (!background) {
         ui_overlay.openOverlay();
-        ui_overlay.setInnerLoading(true, refreshableCalendar && previousSession ? '正在刷新「两个人的日历」…' : previousSession ? `正在从新增档案追加「${core_constants.MODE_LABEL[mode]}」…` : `正在生成「${core_constants.MODE_LABEL[mode]}」…`);
+        ui_overlay.setInnerLoading(true, replaceExisting ? `正在重新生成「${core_constants.MODE_LABEL[mode]}」…` : refreshableCalendar && previousSession ? '正在刷新「两个人的日历」…' : previousSession ? `正在从新增档案追加「${core_constants.MODE_LABEL[mode]}」…` : `正在生成「${core_constants.MODE_LABEL[mode]}」…`);
     }
     try {
         let session;
         if (mode === core_constants.MODE.ADV) {
-            session = await modes_advEvent.generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey);
+            session = await modes_advEvent.generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.BUTTERFLY && previousSession) {
             session = await modes_butterfly.generateButterflyIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession);
         } else if (mode === core_constants.MODE.ROOM && previousSession) {
@@ -374,17 +375,17 @@ export async function generateMode(mode, options = {}) {
         } else if (mode === core_constants.MODE.ITEMS && previousSession) {
             session = await modes_items.generateItemsIncrementalWithRepair(context, memoryBank, roomSession, focusObject, origin, taskKey, previousSession);
         } else if (mode === core_constants.MODE.ENDING) {
-            session = await modes_ending.generateEndingWithRepair(context, memoryBank, origin, taskKey);
+            session = await modes_ending.generateEndingWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.ALBUM) {
-            session = await modes_album.generateAlbumWithRepair(context, memoryBank, origin, taskKey);
+            session = await modes_album.generateAlbumWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.HEART) {
-            session = await modes_heart.generateHeartWithRepair(context, memoryBank, origin, taskKey);
+            session = await modes_heart.generateHeartWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.PHONE) {
             session = previousSession && options.continueDraft !== true
                 ? await modes_phone.generatePhoneIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession)
                 : await modes_phone.generatePhoneWithRepair(context, memoryBank, origin, taskKey, { continueDraft: options.continueDraft === true });
         } else if (mode === core_constants.MODE.ACHIEVEMENTS) {
-            session = await modes_achievements.generateAchievementsWithRepair(context, memoryBank, origin, taskKey);
+            session = await modes_achievements.generateAchievementsWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else {
             const contextEnvelope = mode === core_constants.MODE.CALENDAR
                 ? await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: ['节日', '日历', '生日', '纪念日', '祭典', '庆典', 'festival', 'holiday', 'calendar', 'birthday', 'anniversary'] })
@@ -422,18 +423,19 @@ export async function generateMode(mode, options = {}) {
                 runtimeState.activeSession = core_cache.loadSession(core_constants.MODE.ROOM) || runtimeState.activeSession;
                 modes_room.renderRoom();
             }
-            globalThis.toastr?.success?.(`${refreshableCalendar && previousSession ? '后台刷新完成' : previousSession ? '后台增量追加完成' : '后台生成完成'}：${core_constants.MODE_LABEL[mode]}${committed ? '' : '（回到原窗口自动写入）'}`, '心跳回忆');
-            return;
+            globalThis.toastr?.success?.(`${replaceExisting ? '后台重新生成完成' : refreshableCalendar && previousSession ? '后台刷新完成' : previousSession ? '后台增量追加完成' : '后台生成完成'}：${core_constants.MODE_LABEL[mode]}${committed ? '' : '（回到原窗口自动写入）'}`, '心跳回忆');
+            return session;
         }
         runtimeState.activeMode = mode;
         runtimeState.activeSession = session;
         ui_overlay.renderActive();
         if (mode === core_constants.MODE.ROOM) void modes_room.ensureRoomLifePlan({ force: true });
-        globalThis.toastr?.success?.(`${refreshableCalendar && previousSession ? '已刷新' : previousSession ? '已增量追加' : '已生成'}：${core_constants.MODE_LABEL[mode]}${previousSession && !refreshableCalendar ? '；旧内容保持不变' : ''}`, '心跳回忆');
+        globalThis.toastr?.success?.(`${replaceExisting ? '已重新生成' : refreshableCalendar && previousSession ? '已刷新' : previousSession ? '已增量追加' : '已生成'}：${core_constants.MODE_LABEL[mode]}${previousSession && !refreshableCalendar && !replaceExisting ? '；旧内容保持不变' : ''}`, '心跳回忆');
+        return session;
     } catch (error) {
         if (error?.name === 'AbortError') {
             console.warn('[HeartbeatMemories] generation aborted by extension/task cancellation', { mode });
-            return;
+            return null;
         }
         console.error('[HeartbeatMemories] generation failed', { mode, error });
         if (mode === core_constants.MODE.PHONE && error?.code === 'RMT_PHONE_DRAFT_AVAILABLE' && runtimeState.activeMode === core_constants.MODE.ROOM && runtimeState.activeSession?.kind === core_constants.MODE.ROOM) {
@@ -441,10 +443,11 @@ export async function generateMode(mode, options = {}) {
         }
         if (background || document.getElementById(core_constants.OVERLAY_ID)?.hidden || runtimeState.activeMode !== mode) {
             globalThis.toastr?.error?.(core_text.toastText(error?.message || String(error)), `心跳回忆 · ${core_constants.MODE_LABEL[mode]}生成失败`);
-            return;
+            return null;
         }
         ui_overlay.showInlineError(error?.message || String(error));
         globalThis.toastr?.error?.(core_text.toastText(error?.message || String(error)), '心跳回忆');
+        return null;
     } finally {
         runtimeState.activeModeBuildScopes.delete(taskKey);
         core_requestCoordinator.refreshConcurrentTaskUi(mode, origin);

@@ -10,6 +10,90 @@ import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
 
+
+const PHONE_MESSAGE_ROLES = new Set(['owner', 'contact']);
+const PHONE_GENERIC_OWNER_LABELS = new Set(['我', '本人', '自己', '设备主人', '主人', '{{char}}', 'char', 'owner']);
+const PHONE_GENERIC_CONTACT_LABELS = new Set(['对方', '联系人', '对面', '对方用户', 'contact', 'other']);
+
+export function phoneConversationOwnerName(memoryBank) {
+    return core_text.normalizeText(memoryBank?.characterName, 100) || '角色';
+}
+
+function normalizedSpeakerKey(value) {
+    return core_text.normalizeText(value, 100).trim().toLocaleLowerCase();
+}
+
+function isGenericOwnerLabel(value) {
+    return PHONE_GENERIC_OWNER_LABELS.has(normalizedSpeakerKey(value));
+}
+
+function isGenericContactLabel(value) {
+    return PHONE_GENERIC_CONTACT_LABELS.has(normalizedSpeakerKey(value));
+}
+
+export function inferPhoneContactName(entry, memoryBank) {
+    const ownerName = phoneConversationOwnerName(memoryBank);
+    const explicit = core_text.normalizeText(entry?.contactName, 100).trim();
+    if (explicit && explicit !== ownerName && !isGenericOwnerLabel(explicit) && !isGenericContactLabel(explicit)) return explicit;
+
+    const userName = core_text.normalizeText(memoryBank?.userName, 100).trim();
+    const title = core_text.normalizeText(entry?.title, 100).trim();
+    const meta = core_text.normalizeText(entry?.meta, 200).trim();
+    if (userName && userName !== ownerName && `${title} ${meta}`.includes(userName)) return userName;
+
+    for (const message of Array.isArray(entry?.messages) ? entry.messages : []) {
+        const speaker = core_text.normalizeText(message?.speaker, 100).trim();
+        if (!speaker || speaker === ownerName || isGenericOwnerLabel(speaker) || isGenericContactLabel(speaker)) continue;
+        return speaker;
+    }
+
+    const patterns = [
+        /^(?:与|和|跟)\s*(.+?)(?:的)?(?:聊天|对话|消息|通讯|私信)?$/u,
+        /^(.+?)(?:聊天|对话|消息|通讯|私信)$/u,
+    ];
+    for (const pattern of patterns) {
+        const match = title.match(pattern);
+        const candidate = core_text.normalizeText(match?.[1], 100).trim();
+        if (candidate && candidate !== ownerName && !isGenericOwnerLabel(candidate) && !isGenericContactLabel(candidate)) return candidate;
+    }
+    if (title && title !== ownerName && !/^(?:聊天|对话|消息|通讯|私信|群聊)$/u.test(title)) return title;
+    return '联系人';
+}
+
+export function normalizePhoneConversationMessages(entry, memoryBank, { strict = false } = {}) {
+    const ownerName = phoneConversationOwnerName(memoryBank);
+    const contactName = inferPhoneContactName(entry, memoryBank);
+    const messages = [];
+    for (let index = 0; index < (Array.isArray(entry?.messages) ? entry.messages.length : 0) && messages.length < 48; index += 1) {
+        const message = entry.messages[index];
+        const text = core_text.normalizeText(message?.text, 1200);
+        if (!text) continue;
+        const rawSpeaker = core_text.normalizeText(message?.speaker, 100).trim();
+        let speakerRole = core_text.normalizeText(message?.speakerRole, 20).trim().toLowerCase();
+        if (!PHONE_MESSAGE_ROLES.has(speakerRole)) {
+            if (rawSpeaker === ownerName || isGenericOwnerLabel(rawSpeaker)) speakerRole = 'owner';
+            else if (rawSpeaker && !isGenericContactLabel(rawSpeaker)) speakerRole = 'contact';
+            else if (isGenericContactLabel(rawSpeaker)) speakerRole = 'contact';
+            else speakerRole = '';
+        }
+        if (strict && !PHONE_MESSAGE_ROLES.has(speakerRole)) {
+            throw new Error('私人终端聊天消息缺少可区分的 speakerRole（owner/contact）。');
+        }
+        const speaker = speakerRole === 'owner'
+            ? ownerName
+            : speakerRole === 'contact'
+                ? (rawSpeaker && !isGenericOwnerLabel(rawSpeaker) && !isGenericContactLabel(rawSpeaker) ? rawSpeaker : contactName)
+                : (rawSpeaker || contactName);
+        messages.push({
+            speakerRole,
+            speaker: core_text.normalizeText(speaker, 100) || (speakerRole === 'owner' ? ownerName : contactName),
+            time: core_text.normalizeText(message?.time, 40),
+            text,
+        });
+    }
+    return { ownerName, contactName, messages };
+}
+
 export function compactPhoneRoomContext(roomSession) {
     if (!roomSession) return null;
     return {
@@ -111,12 +195,14 @@ UNTRUSTED_PHONE_DEVICE_JSON:\n${JSON.stringify({ deviceName: plan.deviceName, de
 UNTRUSTED_APP_PLAN_JSON:\n${JSON.stringify(app, null, 2)}
 
 严格输出：
-{"app":{"id":"与 UNTRUSTED_APP_PLAN_JSON.id 完全相同","label":"与计划相同","kind":"与计划相同","summary":"...","entries":[{"id":"计划中的原 id","title":"计划中的标题","meta":"...","preview":"列表预览","detail":"详情正文","messages":[],"fields":[],"imageCaption":"","basis":"设定","sourceMemoryIds":[],"sourceMemoryAnchor":""}]}}
+{"app":{"id":"与 UNTRUSTED_APP_PLAN_JSON.id 完全相同","label":"与计划相同","kind":"与计划相同","summary":"...","entries":[{"id":"计划中的原 id","title":"计划中的标题","meta":"...","preview":"列表预览","detail":"详情正文","contactName":"聊天对象实际显示名；非 chat 可空","messages":[{"speakerRole":"owner|contact","speaker":"实际姓名","time":"...","text":"..."}],"fields":[],"imageCaption":"","basis":"设定","sourceMemoryIds":[],"sourceMemoryAnchor":""}]}}
 
 硬性要求：
 - 必须补完 UNTRUSTED_APP_PLAN_JSON 中全部 ${app.entries.length} 个 entry id，不得删减或换 id；每项必须有 preview，且 detail/messages/fields/imageCaption 至少一种有实质内容。
 - basis=记忆 时必须提供当前档案中有效 sourceMemoryIds + sourceMemoryAnchor${sourceMemoryIds ? '，并至少引用一个 incrementalMemoryIds' : ''}；basis=设定 只能写角色正常生活/兴趣/工作/普通社交，不能冒充与 {{user}} 已发生的共同历史。
-- kind=chat 时至少 ${deepCount} 个联系人达到 ${deepMessages} 条 messages；普通亲友/同事可为非恋爱设定推导。kind=contacts 时至少1项 fields 达3个以上。gallery 用 imageCaption 写纯文字照片说明。
+- kind=chat 时至少 ${deepCount} 个联系人达到 ${deepMessages} 条 messages；普通亲友/同事可为非恋爱设定推导。每个有 messages 的聊天条目必须提供 contactName；每条消息必须用 speakerRole=owner 或 contact 明确区分设备主人和聊天对象，且同一段对话中 owner/contact 两边都必须实际出现。speaker 必须写实际显示名，禁止用“对方”“我”“本人”作为偷懒标签。群聊里 contact 消息可保留各自真实姓名，但 owner 仍表示设备主人。
+- 设备主人是 ${core_text.normalizeText(context?.name2 || memoryBank?.characterName, 100) || '当前角色'}；当前用户是 ${core_text.normalizeText(context?.name1 || memoryBank?.userName, 100) || '当前用户'}。如果聊天对象就是当前用户，contactName/speaker 使用当前用户实际名字。
+- kind=contacts 时至少1项 fields 达3个以上。gallery 用 imageCaption 写纯文字照片说明。
 - 禁止前任/前女友；禁止 {{char}} 与 {{user}} 之外的恋爱/婚姻对象。不输出 URL、HTML 或脚本。只输出 JSON。`;
 }
 
@@ -134,7 +220,8 @@ export function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sour
         if (!expectedIds.has(id) || seen.has(id)) continue;
         const preview = core_text.normalizeText(entry?.preview, 1200);
         const detail = core_text.normalizeText(entry?.detail, 5000);
-        const messages = Array.isArray(entry?.messages) ? entry.messages.filter(message => core_text.normalizeText(message?.text, 1200)).slice(0, 48) : [];
+        const conversation = normalizePhoneConversationMessages(entry, memoryBank, { strict: planApp.kind === 'chat' });
+        const messages = conversation.messages;
         const fields = Array.isArray(entry?.fields) ? entry.fields.filter(field => core_text.normalizeText(field?.label, 100) && core_text.normalizeText(field?.value, 1000)).slice(0, 16) : [];
         const imageCaption = core_text.normalizeText(entry?.imageCaption, 1800);
         if (!preview || (!detail && !messages.length && !fields.length && !imageCaption)) continue;
@@ -146,7 +233,13 @@ export function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sour
         }
         seen.add(id);
         const deepThreshold = ['watch', 'communicator'].includes(deviceKind) ? 8 : deviceKind === 'terminal' ? 10 : 12;
-        if (planApp.kind === 'chat' && messages.length >= deepThreshold) deepChats += 1;
+        if (planApp.kind === 'chat' && messages.length) {
+            const roles = new Set(messages.map(message => message.speakerRole).filter(Boolean));
+            if (!roles.has('owner') || !roles.has('contact')) {
+                throw new Error(`App ${planApp.label} 的聊天「${core_text.normalizeText(entry?.title, 100) || id}」没有同时出现设备主人和聊天对象。`);
+            }
+            if (messages.length >= deepThreshold) deepChats += 1;
+        }
         if (planApp.kind === 'contacts' && fields.length >= 3) contactDetails = true;
     }
     if (seen.size < expectedIds.size) throw new Error(`App ${planApp.label} 详情不完整：${seen.size}/${expectedIds.size} 个条目通过校验。`);
@@ -168,11 +261,8 @@ export function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, so
         const title = core_text.normalizeText(entry?.title, 100) || planApp.entries.find(item => item.id === id)?.title || `条目 ${index + 1}`;
         const preview = core_text.normalizeText(entry?.preview, 1200);
         const detail = core_text.normalizeText(entry?.detail, 5000);
-        const messages = (Array.isArray(entry?.messages) ? entry.messages : []).slice(0, 48).map(message => ({
-            speaker: core_text.normalizeText(message?.speaker, 100) || '对方',
-            time: core_text.normalizeText(message?.time, 40),
-            text: core_text.normalizeText(message?.text, 1200),
-        })).filter(message => message.text);
+        const conversation = normalizePhoneConversationMessages(entry, memoryBank, { strict: planApp.kind === 'chat' });
+        const messages = conversation.messages;
         const fields = (Array.isArray(entry?.fields) ? entry.fields : []).slice(0, 16).map(field => ({
             label: core_text.normalizeText(field?.label, 100),
             value: core_text.normalizeText(field?.value, 1000),
@@ -189,6 +279,7 @@ export function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, so
             meta: core_text.normalizeText(entry?.meta, 200),
             preview,
             detail,
+            contactName: planApp.kind === 'chat' ? conversation.contactName : '',
             messages,
             fields,
             imageCaption,
@@ -412,11 +503,8 @@ export function normalizePhone(data, memoryBank) {
             const title = core_text.normalizeText(entry?.title, 100) || `条目 ${index + 1}`;
             const preview = core_text.normalizeText(entry?.preview, 1200);
             const detail = core_text.normalizeText(entry?.detail, 5000);
-            const messages = (Array.isArray(entry?.messages) ? entry.messages : []).slice(0, 48).map(message => ({
-                speaker: core_text.normalizeText(message?.speaker, 100) || '对方',
-                time: core_text.normalizeText(message?.time, 40),
-                text: core_text.normalizeText(message?.text, 1200),
-            })).filter(message => message.text);
+            const conversation = normalizePhoneConversationMessages(entry, memoryBank, { strict: false });
+            const messages = conversation.messages;
             const fields = (Array.isArray(entry?.fields) ? entry.fields : []).slice(0, 16).map(field => ({
                 label: core_text.normalizeText(field?.label, 100),
                 value: core_text.normalizeText(field?.value, 1000),
@@ -431,6 +519,7 @@ export function normalizePhone(data, memoryBank) {
                 meta: core_text.normalizeText(entry?.meta, 200),
                 preview,
                 detail,
+                contactName: app?.kind === 'chat' ? conversation.contactName : '',
                 messages,
                 fields,
                 imageCaption,
@@ -493,6 +582,7 @@ export function normalizePhone(data, memoryBank) {
     return {
         kind: core_constants.MODE.PHONE,
         title: core_text.normalizeText(data?.title, 100) || '他的私人终端',
+        ownerName: phoneConversationOwnerName(memoryBank),
         deviceName: requestedDeviceName,
         deviceKind,
         lockText: core_text.normalizeText(data?.lockText, 400),

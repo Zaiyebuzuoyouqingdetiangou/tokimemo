@@ -4,6 +4,7 @@ export const state = {
   busy: false,
   activeMode: null,
   activeSession: null,
+  contentManagerOpen: false,
   roomClockTimer: 0,
   phoneClockTimer: 0,
   archiveViewLevel: 'library',

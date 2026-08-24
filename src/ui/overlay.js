@@ -12,16 +12,23 @@ import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
+import * as generation_contentRegeneration from '../generation/contentRegeneration.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as modes_achievements from '../modes/achievements.js';
+import * as modes_album from '../modes/album.js';
+import * as modes_butterfly from '../modes/butterfly.js';
+import * as modes_calendar from '../modes/calendar.js';
+import * as modes_ending from '../modes/ending.js';
 import * as modes_advEvent from '../modes/advEvent.js';
 import * as modes_heart from '../modes/heart.js';
 import * as modes_items from '../modes/items.js';
+import * as modes_phone from '../modes/phone.js';
 import * as modes_room from '../modes/room.js';
 import * as ui_advEventView from './advEventView.js';
 import * as ui_albumView from './albumView.js';
 import * as ui_butterflyView from './butterflyView.js';
 import * as ui_calendarView from './calendarView.js';
+import * as ui_contentManager from './contentManager.js';
 import * as ui_endingView from './endingView.js';
 import * as ui_heartView from './heartView.js';
 import * as ui_phoneView from './phoneView.js';
@@ -126,6 +133,7 @@ export function openOverlay() {
               <div class="rmt-topbar-title">心跳回忆</div>
               <button type="button" data-rmt-action="home">档案室</button>
               <button type="button" data-rmt-action="regenerate" hidden>增量追加</button>
+              <button type="button" data-rmt-action="manage" hidden>管理</button>
               <button type="button" data-rmt-action="close" aria-label="关闭档案室">关闭</button>
             </div>
             <div class="rmt-body"></div>
@@ -161,6 +169,7 @@ export function closeOverlay() {
     }
     runtimeState.activeMode = null;
     runtimeState.activeSession = null;
+    runtimeState.contentManagerOpen = false;
 }
 
 export function bodyEl() {
@@ -181,6 +190,10 @@ export function setBackVisible(visible, label = '返回上级') {
 }
 
 export function navigateBack() {
+    if (runtimeState.contentManagerOpen) {
+        runtimeState.contentManagerOpen = false;
+        return renderActive();
+    }
     if (runtimeState.activeMode === core_constants.MODE.ITEMS || runtimeState.activeMode === core_constants.MODE.PHONE) return modes_room.returnToRoomFromDeep();
     if (runtimeState.activeMode === core_constants.MODE.ADV && runtimeState.activeSession?.kind === core_constants.MODE.ADV && runtimeState.activeSession.view === 'adv') {
         runtimeState.activeSession.view = 'cg';
@@ -209,6 +222,11 @@ export function navigateBack() {
     return archive_library.showArchiveLibrary();
 }
 
+export function setManageVisible(visible) {
+    const button = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-action="manage"]`);
+    if (button) button.hidden = !visible;
+}
+
 export function setRegenerateVisible(visible) {
     const button = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-action="regenerate"]`);
     if (button) {
@@ -229,6 +247,19 @@ export function confirmExplicitAction(title, detail, { destructive = false } = {
     return false;
 }
 
+export function confirmExplicitActionTwice(title, detail, { destructive = false } = {}) {
+    const safeTitle = core_text.normalizeText(title, 160);
+    const safeDetail = core_text.normalizeText(detail, 1200);
+    if (!confirmExplicitAction(`第一次确认 · ${safeTitle}`, safeDetail, { destructive })) return false;
+    return confirmExplicitAction(
+        `第二次确认 · ${safeTitle}`,
+        `这是最后确认。${safeDetail}
+
+确认后立即执行，不能通过“取消”恢复已经完成的删除或替换。`,
+        { destructive },
+    );
+}
+
 export function confirmModeRegeneration(mode) {
     const label = core_constants.MODE_LABEL[mode] || mode || '当前内容';
     if (mode === core_constants.MODE.CALENDAR) {
@@ -246,7 +277,7 @@ export function confirmModeRegeneration(mode) {
 }
 
 export function confirmRoomLifeRefresh() {
-    return confirmExplicitAction(
+    return confirmExplicitActionTwice(
         '更新今日生活？',
         '这会重新生成今天的房间生活状态并替换当前“今日生活”缓存；聊天档案和房间主体不会被修改。',
         { destructive: true },
@@ -295,7 +326,7 @@ export function requestCurrentArchiveFullRebuild() {
         globalThis.toastr?.info?.('完全重建前请先扫描当前窗口记忆 / 摘要，确认读取范围。', '心跳回忆');
         return false;
     }
-    if (!confirmExplicitAction(
+    if (!confirmExplicitActionTwice(
         '完全重建当前窗口档案？',
         '这会重新读取整个当前聊天并重新编号 Mxxx 记忆，因此旧档案版本对应的回忆相簿、CG、ADV、房间、蝴蝶效应、ENDING、储物和私人终端缓存都会失效。只有当你明确需要从头整理（例如旧消息被大量编辑/删除）时才建议使用。',
         { destructive: true },
@@ -330,6 +361,7 @@ export function showChooser() {
     runtimeState.archiveViewLevel = 'chooser';
     openOverlay();
     setRegenerateVisible(false);
+    setManageVisible(false);
     setBackVisible(true, '角色档案');
     const body = bodyEl();
     if (!body) return;
@@ -447,6 +479,7 @@ export function showChooser() {
 export function showLoading(text) {
     topTitle('心跳回忆');
     setRegenerateVisible(false);
+    setManageVisible(false);
     const body = bodyEl();
     if (!body) return;
     body.innerHTML = `<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>${core_text.esc(text)}</b><div class="rmt-loading-actions"><button type="button" class="rmt-btn" data-rmt-action="home">返回档案室</button><button type="button" class="rmt-btn" data-rmt-action="close">关闭</button></div></div></div>`;
@@ -464,6 +497,7 @@ export function showError(message, mode) {
 export function showMemoryImportError(message) {
     topTitle('心跳回忆 · 档案整理失败');
     setRegenerateVisible(false);
+    setManageVisible(false);
     const body = bodyEl();
     if (!body) return;
     body.innerHTML = `<div class="rmt-error"><div><b>当前聊天档案整理失败</b><div style="margin:10px 0;white-space:pre-wrap;opacity:.78">${core_text.esc(message)}</div><button type="button" class="rmt-btn" data-rmt-action="import-memory">重新整理档案</button><button type="button" class="rmt-btn" data-rmt-action="home" style="margin-left:8px">返回</button></div></div>`;
@@ -482,6 +516,8 @@ export function setBusyUi(isBusy, text = '') {
         '[data-rmt-action="import-memory"]',
         '[data-rmt-action="full-rebuild-memory"]',
         '[data-rmt-action="regenerate"]',
+        '[data-rmt-action="manage"]',
+        '[data-rmt-action^="manage-"]',
         '[data-rmt-action="read-adv"]',
         '[data-rmt-action="room-life-refresh"]',
         '[data-rmt-generate-mode]',
@@ -563,8 +599,11 @@ export function decorateReadOnlyModeUi() {
 }
 
 export function renderActive() {
+    runtimeState.contentManagerOpen = false;
     if (!runtimeState.activeSession || !runtimeState.activeMode) return runtimeState.activeArchiveSnapshot ? archive_library.showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot) : showChooser();
-    setRegenerateVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && !core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode));
+    const supportsTopbarIncrement = !core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) || runtimeState.activeMode === core_constants.MODE.PHONE;
+    setRegenerateVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && supportsTopbarIncrement);
+    setManageVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly));
     setBackVisible(true, runtimeState.activeArchiveSnapshot ? (runtimeState.activeArchiveReadOnly ? '只读档案' : '档案') : core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) ? '他的房间' : '当前档案');
     if (runtimeState.activeMode !== core_constants.MODE.ROOM) modes_room.stopRoomClock();
     if (runtimeState.activeMode !== core_constants.MODE.PHONE) ui_phoneView.stopPhoneClock();
@@ -579,6 +618,204 @@ export function renderActive() {
     else if (runtimeState.activeMode === core_constants.MODE.ACHIEVEMENTS) modes_achievements.renderAchievements();
     else if (runtimeState.activeMode === core_constants.MODE.HEART) ui_heartView.renderHeart();
     decorateReadOnlyModeUi();
+}
+
+
+function managedTargetRecord(type, id, parentId = '') {
+    return ui_contentManager.managementTargetsForSession(runtimeState.activeSession).find(item =>
+        item.type === core_text.normalizeText(type, 60)
+        && item.id === core_text.normalizeText(id, 120)
+        && item.parentId === core_text.normalizeText(parentId, 120)
+    ) || null;
+}
+
+function markUserManaged(session) {
+    if (session && typeof session === 'object') session.userManaged = true;
+    return session;
+}
+
+function deleteManagedTargetFromSession(session, type, id, parentId = '') {
+    const updated = structuredClone(session);
+    const removeById = (list, wanted) => (Array.isArray(list) ? list : []).filter(item => item?.id !== wanted);
+    if (type === 'album-entry') {
+        updated.entries = removeById(updated.entries, id);
+        if (updated.selectedId === id) updated.selectedId = updated.entries[0]?.id || '';
+    } else if (type === 'album-image') {
+        const item = updated.entries?.find(entry => entry.id === id); if (!item) throw new Error('找不到这张相簿 CG。'); item.cgImage = null;
+    } else if (type === 'adv-event') {
+        updated.events = removeById(updated.events, id);
+        if (updated.selectedId === id) updated.selectedId = updated.events[0]?.id || '';
+    } else if (type === 'adv-text') {
+        const item = updated.events?.find(entry => entry.id === id); if (!item) throw new Error('找不到这个 ADV EVENT。'); item.adv = null;
+    } else if (type === 'adv-image') {
+        const item = updated.events?.find(entry => entry.id === id); if (!item) throw new Error('找不到这张 ADV EVENT CG。'); item.cgImage = null;
+    } else if (type === 'room-life') {
+        delete updated.lifePlan; delete updated.lifePlanAttempt;
+    } else if (type === 'phone-app') {
+        updated.apps = removeById(updated.apps, id);
+        if (updated.selectedAppId === id) { updated.selectedAppId = updated.apps[0]?.id || ''; updated.selectedEntryId = ''; updated.view = 'list'; }
+    } else if (type === 'phone-entry') {
+        const app = updated.apps?.find(candidate => candidate.id === parentId); if (!app) throw new Error('找不到这个 App。');
+        app.entries = removeById(app.entries, id);
+        if (updated.selectedEntryId === id) { updated.selectedEntryId = ''; updated.view = 'list'; }
+    } else if (type === 'ending-route') {
+        updated.endings = removeById(updated.endings, id);
+        if (updated.selectedId === id) updated.selectedId = updated.endings[0]?.id || '';
+    } else if (type === 'ending-confession') {
+        updated.confessionReplays = removeById(updated.confessionReplays, id);
+        if (updated.selectedConfessionId === id) updated.selectedConfessionId = updated.confessionReplays[0]?.id || '';
+    } else if (type === 'heart-voice') {
+        updated.voiceDramas = removeById(updated.voiceDramas, id);
+        if (updated.selectedVoiceId === id) updated.selectedVoiceId = '';
+    } else if (type === 'heart-scenario') {
+        updated.scenarioDramas = removeById(updated.scenarioDramas, id);
+        if (updated.selectedScenarioId === id) updated.selectedScenarioId = '';
+    } else if (type === 'heart-strip') {
+        updated.dailyStrips = removeById(updated.dailyStrips, id);
+        if (updated.selectedStripId === id) updated.selectedStripId = updated.dailyStrips[0]?.id || '';
+    } else if (type === 'heart-strip-image') {
+        const item = updated.dailyStrips?.find(entry => entry.id === id); if (!item) throw new Error('找不到这个日常一格。'); item.cgImage = null;
+    } else if (type === 'achievement') {
+        updated.entries = removeById(updated.entries, id);
+    } else if (type === 'calendar-entry') {
+        updated.entries = removeById(updated.entries, id);
+    } else if (type === 'butterfly-node') {
+        const node = updated.nodes?.find(entry => entry.id === id);
+        if (!node || node.trueEnding || node.id === 'MAIN') throw new Error('主时间线和观测点 Ω 不能单独删除。');
+        updated.nodes = removeById(updated.nodes, id);
+        updated.selected = Math.max(1, Math.min(Number(updated.selected) || 1, Math.max(1, updated.nodes.length - 1)));
+    } else {
+        throw new Error('未知或不允许的单项删除目标。');
+    }
+    return markUserManaged(updated);
+}
+
+async function commitManagedSession(updated, expectedChatId, expectedArchiveRevision, origin) {
+    if (!core_context.isCurrentTaskOrigin(origin)) throw new Error('操作期间聊天窗口已经变化，本次修改没有写入。');
+    const context = core_context.currentCharacterGuard();
+    const memoryBank = archive_repository.requireArchive(context);
+    if (memoryBank.archiveRevision !== expectedArchiveRevision) throw new Error('操作期间正式档案已经更新，本次修改没有写入。');
+    updated.chatId = expectedChatId;
+    updated.archiveRevision = expectedArchiveRevision;
+    if (!core_cache.saveSession(runtimeState.activeMode, updated, expectedChatId)) throw new Error('当前派生缓存版本已经变化，本次修改没有写入。');
+    runtimeState.activeSession = updated;
+    return true;
+}
+
+async function deleteManagedTarget(type, id, parentId = '') {
+    if (!archive_library.requireWritableArchiveAction()) return;
+    const record = managedTargetRecord(type, id, parentId);
+    if (!record || !ui_contentManager.isManageableTargetType(type) || record.canDelete === false) return;
+    if (!confirmExplicitActionTwice(
+        `删除「${record.label}」？`,
+        '只删除当前心跳回忆派生缓存中的这一项；正式聊天档案 Mxxx、SillyTavern 聊天正文和世界书都不会修改。删除后如想恢复，需要重新生成。',
+        { destructive: true },
+    )) return;
+    try {
+        const context = core_context.currentCharacterGuard();
+        const expectedChatId = core_context.getChatId(context);
+        const memoryBank = archive_repository.requireArchive(context);
+        const origin = { ...core_context.captureTaskOrigin(context, memoryBank.archiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
+        const base = core_cache.loadSession(runtimeState.activeMode, { context, chatId: expectedChatId, memoryBank, clone: true });
+        if (!base) throw new Error('当前分类缓存已经变化，请返回后重新打开再操作。');
+        const updated = deleteManagedTargetFromSession(base, type, id, parentId);
+        await commitManagedSession(updated, expectedChatId, memoryBank.archiveRevision, origin);
+        globalThis.toastr?.success?.(`已删除：${record.label}`, '心跳回忆');
+        ui_contentManager.renderContentManager();
+    } catch (error) {
+        globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+    }
+}
+
+async function regenerateManagedTarget(type, id, parentId = '') {
+    if (!archive_library.requireWritableArchiveAction()) return;
+    const record = managedTargetRecord(type, id, parentId);
+    if (!record || !ui_contentManager.isManageableTargetType(type) || record.canRegenerate === false) return;
+    // Image and daily-life regeneration already own their exact two confirmations.
+    if (type === 'album-image' || type === 'adv-image') {
+        runtimeState.activeSession.selectedId = id;
+        runtimeState.contentManagerOpen = false;
+        return generation_imageGeneration.drawSelectedCgImage();
+    }
+    if (type === 'heart-strip-image') {
+        runtimeState.contentManagerOpen = false;
+        return ui_heartView.drawHeartStripImage(id);
+    }
+    if (type === 'room-life') {
+        if (!confirmRoomLifeRefresh()) return;
+        runtimeState.contentManagerOpen = false;
+        return modes_room.ensureRoomLifePlan({ force: true });
+    }
+    if (!confirmExplicitActionTwice(
+        `重新生成「${record.label}」？`,
+        '模型成功返回并通过校验后，才会用新内容替换这一项；如果生成失败、聊天切换或档案 revision 变化，旧内容会原样保留。正式档案 Mxxx 不会被修改。',
+        { destructive: true },
+    )) return;
+    const mode = runtimeState.activeMode;
+    try {
+        const context = core_context.currentCharacterGuard();
+        const expectedChatId = core_context.getChatId(context);
+        const memoryBank = archive_repository.requireArchive(context);
+        const expectedArchiveRevision = memoryBank.archiveRevision;
+        const origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
+        const base = core_cache.loadSession(mode, { context, chatId: expectedChatId, memoryBank, clone: true });
+        if (!base) throw new Error('当前分类缓存已经变化，请返回后重新打开再操作。');
+        const taskKey = `manage:${core_context.chatScopeKey(context)}:${core_text.normalizeText(type, 60)}:${core_text.normalizeText(id, 120)}`;
+        setInnerLoading(true, `正在重新生成「${record.label}」…`);
+        const updated = await generation_contentRegeneration.regenerateManagedTarget(base, type, id, parentId, { context, memoryBank, origin, taskKey });
+        await commitManagedSession(updated, expectedChatId, expectedArchiveRevision, origin);
+        globalThis.toastr?.success?.(`已重新生成：${record.label}`, '心跳回忆');
+        ui_contentManager.renderContentManager();
+    } catch (error) {
+        globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+    } finally {
+        setInnerLoading(false);
+    }
+}
+
+async function deleteManagedCategory() {
+    if (!runtimeState.activeMode || !archive_library.requireWritableArchiveAction()) return;
+    const mode = runtimeState.activeMode;
+    const label = core_constants.MODE_LABEL[mode] || mode;
+    const cascade = mode === core_constants.MODE.ROOM ? [core_constants.MODE.ROOM, core_constants.MODE.ITEMS, core_constants.MODE.PHONE] : [mode];
+    if (!confirmExplicitActionTwice(
+        `删除整个「${label}」？`,
+        `${mode === core_constants.MODE.ROOM ? '“他的物品”和“私人终端”依赖房间结构，也会一起清除。' : ''}只删除这些派生缓存，不删除正式档案 Mxxx 或聊天正文。`,
+        { destructive: true },
+    )) return;
+    try {
+        const context = core_context.currentCharacterGuard();
+        const expectedChatId = core_context.getChatId(context);
+        await core_cache.deleteSessions(cascade, expectedChatId);
+        runtimeState.activeMode = null;
+        runtimeState.activeSession = null;
+        runtimeState.contentManagerOpen = false;
+        globalThis.toastr?.success?.(`已删除整个分类：${label}`, '心跳回忆');
+        showChooser();
+    } catch (error) {
+        globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+    }
+}
+
+async function regenerateManagedCategory() {
+    if (!runtimeState.activeMode || !archive_library.requireWritableArchiveAction()) return;
+    const mode = runtimeState.activeMode;
+    const label = core_constants.MODE_LABEL[mode] || mode;
+    if (!confirmExplicitActionTwice(
+        `重新生成整个「${label}」？`,
+        `成功后会用全新的分类基础内容替换当前分类；旧内容在新结果成功写入之前会一直保留。${mode === core_constants.MODE.ROOM ? '房间成功替换后，会清除依赖旧结构的“他的物品”和“私人终端”，需要重新生成。' : ''} 实图/可选长正文等独立子内容可继续使用各自的单项重新生成按钮。正式档案不会修改。`,
+        { destructive: true },
+    )) return;
+    runtimeState.contentManagerOpen = false;
+    const fresh = await generation_client.generateMode(mode, { background: false, replaceExisting: true });
+    if (fresh && mode === core_constants.MODE.ROOM) {
+        try {
+            const context = core_context.currentCharacterGuard();
+            await core_cache.deleteSessions([core_constants.MODE.ITEMS, core_constants.MODE.PHONE], core_context.getChatId(context));
+        } catch (error) {
+            console.warn('[HeartbeatMemories] room dependent cache invalidation after replacement failed', error);
+        }
+    }
 }
 
 export function handleOverlayClick(event) {
@@ -774,6 +1011,14 @@ export function handleOverlayClick(event) {
         }).catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'));
         return;
     }
+    if (action === 'manage') {
+        if (!runtimeState.activeMode || !runtimeState.activeSession || !archive_library.requireWritableArchiveAction()) return;
+        return ui_contentManager.renderContentManager();
+    }
+    if (action === 'manage-regenerate-category') return void regenerateManagedCategory();
+    if (action === 'manage-delete-category') return void deleteManagedCategory();
+    if (action === 'manage-regenerate-target') return void regenerateManagedTarget(actionEl.dataset.rmtManageType, actionEl.dataset.rmtManageId, actionEl.dataset.rmtManageParent);
+    if (action === 'manage-delete-target') return void deleteManagedTarget(actionEl.dataset.rmtManageType, actionEl.dataset.rmtManageId, actionEl.dataset.rmtManageParent);
     if (action === 'rebuild-archive-index') return void archive_library.rebuildArchiveIndexFromExisting();
     if (action === 'import-memory') return requestCurrentArchiveImport();
     if (action === 'full-rebuild-memory') return requestCurrentArchiveFullRebuild();

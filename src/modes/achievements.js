@@ -150,8 +150,8 @@ export function mergeAchievementsIncremental(previous, fresh, memoryBank) {
     return normalizeAchievements({ title: fresh.title || previous.title || '成就库', entries: dedupedIds }, memoryBank);
 }
 
-export async function generateAchievementsWithRepair(context, memoryBank, origin, taskKey) {
-    const previous = core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
+export async function generateAchievementsWithRepair(context, memoryBank, origin, taskKey, options = {}) {
+    const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ACHIEVEMENTS, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
     const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
     const fresh = await generation_client.requestValidatedSegment(
         achievementsPrompt(context, memoryBank, previous, sourceMemoryIds),

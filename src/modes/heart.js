@@ -372,8 +372,8 @@ export function makeHeartSession(core, existing = null) {
     };
 }
 
-export async function generateHeartWithRepair(context, memoryBank, origin, taskKey) {
-    const existing = core_cache.loadSession(core_constants.MODE.HEART, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
+export async function generateHeartWithRepair(context, memoryBank, origin, taskKey, options = {}) {
+    const existing = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.HEART, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
     const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(existing, memoryBank, 'dialogues');
     if (existing) {
         const core = await generation_client.requestValidatedSegment(

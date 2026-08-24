@@ -1,4 +1,4 @@
-# Heartbeat Memories r35–r36 Architecture
+# Heartbeat Memories r35–r38 Architecture
 
 r35 is a zero-schema modularization of the r34 runtime. r36 adds Calendar as the first post-modularization feature without changing the canonical archive schema. The persisted archive and derived-cache contracts remain compatible.
 
@@ -85,3 +85,17 @@ Calendar is a standalone business mode (`MODE.CALENDAR = "calendar"`) and follow
 - `future`: non-canonical setting reference derived from bounded character/persona/world-info context; it carries no archive evidence and the UI explicitly labels it as setting-only.
 
 Calendar refreshes use the existing Connection Manager request coordinator and save through the same chatId/archiveRevision-bound derived-cache path. Calendar-specific World Info scan terms only broaden which already-configured setting entries may be included in the bounded context; they do not create archive facts, bypass evidence, or write World Info.
+
+
+## r37 Content control boundary
+
+`ui/contentManager.js` only renders allowlisted targets from the already-normalized active session. `ui/overlay.js` owns destructive orchestration and the live writable-archive gate. Targeted model replacements are implemented in `generation/contentRegeneration.js`; model output never selects a cache key, mode, object path, or target ID. A replacement is committed only after current-chat and archive-revision checks pass.
+
+Whole-category deletion uses the shared `core/cache.js::deleteSessions()` derived-cache boundary. It never writes or deletes the canonical `MEMORY_KEY`. Deleting/replacing Room invalidates Items and Phone because those modes depend on the room structure.
+
+
+## r38 runtime freshness and Phone chat roles
+
+`index.js` no longer statically imports the modular runtime. A release `BUILD` token is stored outside the theater/archive data; when a new build is detected, the page reloads once and then dynamically imports `src/heartbeatMemories.js?heartbeat=<BUILD>`. This prevents an in-place SillyTavern update from combining a new entrypoint with stale child modules.
+
+Phone/Terminal remains `MODE.PHONE` under Room, but its topbar increment action is now exposed because the mode already owns a safe incremental merge path. Chat entries may store `contactName`; messages may store `speakerRole` (`owner` or `contact`) in addition to the escaped display `speaker`. These are presentation fields only and do not change archive evidence or authority.

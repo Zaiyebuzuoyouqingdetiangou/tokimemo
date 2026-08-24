@@ -64,6 +64,59 @@ test('role interaction is a standalone archive portal immediately before achieve
     assert.match(sourceByFile.get('archive/snapshots.js'), /\[core_constants\.MODE\.HEART\]: \{ title: '角色互动'/);
 });
 
+
+test('calendar portal survives in-place extension updates by refreshing the modular graph once per release', async () => {
+    assert.equal(api.ARCHIVE_PORTAL_MODES.includes(api.MODE.CALENDAR), true);
+    assert.equal(api.modePortalMeta(api.MODE.CALENDAR).title, '两个人的日历');
+    const currentIndexSource = await readFile(new URL('../index.js', import.meta.url), 'utf8');
+    assert.match(currentIndexSource, /BUILD_STORAGE_KEY = 'heartbeatMemoriesLoadedBuildV1'/);
+    assert.match(currentIndexSource, /location\.reload\(\)/);
+    assert.match(currentIndexSource, /import\(`\.\/src\/heartbeatMemories\.js\?heartbeat=\$\{BUILD\}`\)/);
+    assert.doesNotMatch(currentIndexSource, /^import\s+\{\s*initMemoryTheater/m);
+});
+
+test('private terminal exposes topbar incremental append even though it is a room deep mode', () => {
+    const overlaySource = sourceByFile.get('ui/overlay.js');
+    assert.match(overlaySource, /supportsTopbarIncrement = !core_constants\.ROOM_DEEP_MODES\.includes\(runtimeState\.activeMode\) \|\| runtimeState\.activeMode === core_constants\.MODE\.PHONE/);
+    assert.match(sourceByFile.get('modes/phone.js'), /generatePhoneIncrementalWithRepair/);
+});
+
+test('private terminal chat requires distinguishable owner/contact speakers and renders opposite sides', () => {
+    const chatBank = { ...memoryBank, characterName: '佐伯', userName: '小月' };
+    const planApp = {
+        id: 'CHAT', label: '通讯', kind: 'chat', incremental: true, summary: '聊天',
+        entries: [{ id: 'C1', title: '与小月聊天', meta: '夜里' }],
+    };
+    const allOther = {
+        app: {
+            id: 'CHAT', entries: [{
+                id: 'C1', title: '与小月聊天', meta: '夜里', preview: '晚上的消息', detail: '', contactName: '小月',
+                messages: Array.from({ length: 12 }, (_, i) => ({ speaker: '对方', time: `21:${String(i).padStart(2, '0')}`, text: `消息${i + 1}` })),
+                fields: [], imageCaption: '', basis: '设定', sourceMemoryIds: [], sourceMemoryAnchor: '',
+            }],
+        },
+    };
+    assert.throws(() => api.normalizePhoneDraftApp(allOther, planApp, chatBank, 'phone'), /没有同时出现设备主人和聊天对象/);
+
+    const twoSided = structuredClone(allOther);
+    twoSided.app.entries[0].messages = Array.from({ length: 12 }, (_, i) => ({
+        speakerRole: i % 2 ? 'owner' : 'contact',
+        speaker: i % 2 ? '我' : '小月',
+        time: `21:${String(i).padStart(2, '0')}`,
+        text: `双向消息${i + 1}`,
+    }));
+    const accepted = api.normalizePhoneDraftApp(twoSided, planApp, chatBank, 'phone');
+    assert.equal(accepted.entries[0].contactName, '小月');
+    assert.equal(accepted.entries[0].messages[0].speaker, '小月');
+    assert.equal(accepted.entries[0].messages[1].speaker, '佐伯');
+    assert.deepEqual(new Set(accepted.entries[0].messages.map(item => item.speakerRole)), new Set(['owner', 'contact']));
+    const html = api.renderPhoneEntryDetail(accepted.entries[0], { kind: 'chat', label: '通讯' }, { ownerName: '佐伯' });
+    assert.match(html, /rmt-phone-message-contact/);
+    assert.match(html, /rmt-phone-message-owner/);
+    assert.doesNotMatch(html, />对方</);
+    assert.match(sourceByFile.get('modes/phone.js'), /speakerRole=owner 或 contact/);
+});
+
 test('secondary API forwards the user max output instead of a smaller feature hint', async () => {
     let sentMax = 0;
     const context = {
@@ -1020,9 +1073,10 @@ test('r36 calendar is an independent archive portal before HEART and does not ad
     assert.doesNotMatch(view, /draw-cg|read-adv|generate.*story|特别篇/i);
 });
 
-test('r35.1 entry module restores SillyTavern DOM-ready self-start', async () => {
+test('entry module keeps DOM-ready self-start while r38 boots the fresh modular graph dynamically', async () => {
     const indexSource = await readFile(new URL('../index.js', import.meta.url), 'utf8');
-    assert.match(indexSource, /jQuery\(\(\) => \{\s*initMemoryTheater\(\);/);
+    assert.match(indexSource, /jQuery\(\(\) => \{\s*bootPromise = bootHeartbeatMemories\(\)/);
+    assert.match(indexSource, /runtimeModule\.initMemoryTheater\(\)/);
     assert.doesNotMatch(indexSource, /export function init\s*\(/);
 });
 
@@ -1070,4 +1124,58 @@ test('r35 runtime state namespace cannot be shadowed by local state variables', 
         assert.doesNotMatch(text, /\bstate\.(?:activeMode|activeSession|busy|runtimeSessionCache|providerRequestQueue|activeGenerationTasks)\b/);
     }
     assert.match(source, /import \{ state as runtimeState \} from/);
+});
+
+test('r37 delete and regenerate controls require two explicit confirmations', () => {
+    const previous = globalThis.confirm;
+    const seen = [];
+    globalThis.confirm = message => { seen.push(String(message)); return true; };
+    try {
+        assert.equal(api.confirmExplicitActionTwice('重新生成测试', '将替换派生内容。', { destructive: true }), true);
+        assert.equal(seen.length, 2);
+        assert.match(seen[0], /第一次确认/);
+        assert.match(seen[1], /第二次确认/);
+        seen.length = 0;
+        globalThis.confirm = message => { seen.push(String(message)); return seen.length < 2; };
+        assert.equal(api.confirmExplicitActionTwice('删除测试', '只删派生缓存。', { destructive: true }), false);
+        assert.equal(seen.length, 2);
+    } finally {
+        if (previous === undefined) delete globalThis.confirm;
+        else globalThis.confirm = previous;
+    }
+});
+
+test('r37 content manager exposes category and granular CG / ADV / Drama / phone / calendar controls', () => {
+    const managerSource = sourceByFile.get('ui/contentManager.js');
+    const overlaySource = sourceByFile.get('ui/overlay.js');
+    for (const target of ['album-entry', 'album-image', 'adv-event', 'adv-text', 'adv-image', 'heart-voice', 'heart-scenario', 'heart-strip', 'heart-strip-image', 'phone-app', 'phone-entry', 'ending-route', 'ending-confession', 'achievement', 'calendar-entry']) {
+        assert.match(managerSource, new RegExp(`['\"]${target}['\"]`));
+    }
+    assert.match(overlaySource, /manage-regenerate-category/);
+    assert.match(overlaySource, /manage-delete-category/);
+    assert.match(overlaySource, /confirmExplicitActionTwice/);
+    assert.match(overlaySource, /MODE\.ROOM \? \[core_constants\.MODE\.ROOM, core_constants\.MODE\.ITEMS, core_constants\.MODE\.PHONE\]/);
+});
+
+test('r37 individual deletion is derived-cache only and user-pruned sessions remain loadable', () => {
+    const cacheSource = sourceByFile.get('core/cache.js');
+    const overlaySource = sourceByFile.get('ui/overlay.js');
+    assert.match(cacheSource, /export async function deleteSessions/);
+    assert.doesNotMatch(cacheSource.slice(cacheSource.indexOf('export async function deleteSessions'), cacheSource.indexOf('export function saveSession')), /MEMORY_KEY/);
+    assert.match(overlaySource, /updated\.userManaged = true|session\.userManaged = true/);
+    assert.match(cacheSource, /MODE\.PHONE[^\n]+!userManaged/);
+    assert.match(cacheSource, /MODE\.ENDING[^\n]+!userManaged/);
+    assert.match(cacheSource, /MODE\.ACHIEVEMENTS[^\n]+!userManaged/);
+});
+
+test('r37 granular regeneration targets are allowlisted and replace only after a validated candidate returns', () => {
+    const managerSource = sourceByFile.get('ui/contentManager.js');
+    const regenSource = sourceByFile.get('generation/contentRegeneration.js');
+    const overlaySource = sourceByFile.get('ui/overlay.js');
+    assert.match(managerSource, /MANAGEABLE_TARGET_TYPES = new Set/);
+    assert.match(regenSource, /export async function regenerateManagedTarget/);
+    assert.match(regenSource, /throw new Error\('这一类内容目前不支持单项模型重新生成。'\)/);
+    assert.match(overlaySource, /const updated = await generation_contentRegeneration\.regenerateManagedTarget/);
+    assert.match(overlaySource, /await commitManagedSession\(updated/);
+    assert.match(overlaySource, /如果生成失败、聊天切换或档案 revision 变化，旧内容会原样保留/);
 });

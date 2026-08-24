@@ -478,3 +478,32 @@ Targeted diff conclusion: no newly introduced Critical / High / Medium security 
 ## r36.1 stable identity targeted review
 
 Only release identity metadata and entry cache-buster changed: display name remains fixed to `心跳回忆`, version metadata moves to `0.8.11`, homePage is the existing GitHub repository, and auto-update is enabled. No archive, prompt, network request, credential, DOM sink, execution, or evidence/revision boundary changed. No new Critical / High / Medium issue identified.
+
+
+## r37 content controls targeted diff review
+
+Scope: r36.1 stable-identity -> r37 content-controls. The change adds a derived-content manager, an allowlisted targeted-regeneration layer, derived-cache deletion helpers, double-confirmation UX, and replacement-mode support in the existing generator.
+
+- Destructive scope remains derived data: `deleteSessions()` removes only selected keys from the existing theater cache and never references `MEMORY_KEY`. Existing full archive deletion remains a separate workflow.
+- Target IDs come from the currently normalized session plus a fixed target-type allowlist. Neither DOM dataset values nor model output are used as arbitrary property paths, cache keys, URLs, commands, or file paths.
+- Individual replacement is generate-then-commit: the old normalized session remains authoritative while the candidate is produced. Commit requires current task origin, matching live chat, matching archive revision, and the existing `saveSession()` fence.
+- Evidence-backed Album / ADV / Ending / Achievement replacements retain or revalidate their original memory evidence. HEART seasonal Drama continues to use relationship distance rather than raw archive plot material. Calendar future rows stay setting-only.
+- Existing-image redraw and image-reference deletion now use the same two-confirmation rule for replacement/destructive operations. Initial drawing of a previously empty image slot retains the ordinary provider-cost confirmation rather than being mislabeled as regeneration.
+- Room category deletion/replacement invalidates Items and Phone only after the Room operation, preventing deep-mode cache from being silently attached to a different room structure.
+- No new network destination, credential source, arbitrary HTML/script execution, canonical archive writer, or cross-chat authority was introduced. Provider requests still flow through the existing Connection Manager coordinator and concurrency cap.
+
+Targeted diff conclusion: no newly introduced Critical / High / Medium security issue identified. Residual UX limitation: category-level regeneration rebuilds the category's base generated structure; optional nested artifacts such as already-rendered real images remain independently managed rather than being automatically re-billed/regenerated as part of the category operation.
+
+
+## r38 calendar / phone regression-fix targeted review
+
+Scope: local r37 content-controls package -> r38 calendar-phone fixes. Runtime changes are limited to the extension boot contract, Phone chat normalization/prompt validation, Phone UI rendering, and the topbar increment visibility rule. No canonical archive schema change is introduced.
+
+- Calendar visibility: r35 modularization left child ES-module URLs stable across in-place updates. A browser module map can therefore retain an older `core/constants.js` / `archive/snapshots.js` while a newer `index.js` is loaded. r38 removes the static runtime import from `index.js`; a release build token in localStorage triggers one page reload when the build changes, then the runtime is dynamically imported with the current build query. The reload itself performs no archive/cache write and prevents mixed-version execution rather than expanding authority.
+- Phone increment: the existing `generatePhoneIncrementalWithRepair()` path already used incremental Mxxx coverage and the shared request/chat/revision fences. r38 changes only `renderActive()` visibility so Phone, unlike other Room deep modes, exposes the existing topbar increment action. Items remains hidden because it depends on a selected searchable room object.
+- Phone speakers: new chat output may carry `contactName` and `speakerRole=owner|contact`. These fields are normalized to bounded strings and never used as property paths, cache keys, URLs, commands, profile IDs, evidence IDs, or authorization state. A generated chat with messages must contain both owner and contact roles; generic single-sided `对方` output is rejected by the existing segment validation/retry path.
+- Phone UI: owner/contact classes only affect presentation. Speaker names, times and message text still pass through the shared HTML escaping helper before `innerHTML`. Legacy cached chats without reliable roles are not silently rewritten; the UI shows an escaped static repair notice and lets the user use the existing double-confirmed single-entry regeneration flow.
+- Capability comparison: no new `fetch`, XMLHttpRequest, `eval`, `new Function`, Slash Command, Connection Manager sendRequest, credential/secret read, `MEMORY_KEY` writer, World Info writer, arbitrary navigation, or model-controlled URL is introduced by this diff.
+- Existing write isolation remains: Phone incremental and regenerated entries still save through the shared theater-cache `saveSession()` path after chatId/archiveRevision validation. Calendar remains a derived mode and does not write the canonical archive.
+
+Targeted conclusion: no new Critical / High / Medium security issue identified in the r37 -> r38 diff. Residual compatibility note: the one-time release reload is intentionally a UI/runtime freshness measure; an environment that blocks localStorage simply falls back to ordinary module loading and may still require the user to manually refresh after updating.

@@ -464,8 +464,8 @@ export function normalizeEndingRouteDetail(data, route) {
     };
 }
 
-export async function generateEndingWithRepair(context, memoryBank, origin, taskKey) {
-    const previous = core_cache.loadSession(core_constants.MODE.ENDING, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
+export async function generateEndingWithRepair(context, memoryBank, origin, taskKey, options = {}) {
+    const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ENDING, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
     const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
     if (previous) {
         const outline = await generation_client.requestValidatedSegment(

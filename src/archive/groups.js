@@ -354,7 +354,7 @@ export function removeIndexedArchiveFromLibrary(entryId) {
     const id = core_text.normalizeText(entryId, 120);
     const item = getArchiveIndex(context).find(entry => core_context.archiveIndexEntryId(entry) === id);
     if (!item) throw new Error('没有找到这个档案索引。');
-    if (!ui_overlay.confirmExplicitAction(
+    if (!ui_overlay.confirmExplicitActionTwice(
         `从档案室移除「${item.archiveName}」？`,
         '这里只删除心跳回忆 extension settings 里的轻量索引，不会删除聊天文件，也不会删除聊天 metadata 中真正的心跳回忆档案。以后手动“扫描旧版本已有档案”时它可能重新出现。',
         { destructive: true },

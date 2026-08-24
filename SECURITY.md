@@ -30,6 +30,9 @@
 35. 各玩法 prompt 可以只携带与本模式相关的档案子集以控制输入长度，但这只是“减少模型可见证据”，不得降低本地 `normalizeMemoryReference` 对完整当前档案的 ID + anchor 校验；单篇/批量 ADV 只允许使用对应 CG 已经引用的 sourceMemories。
 36. 储物深层 prompt 只允许收到房间中 `searchable=true` 的收纳对象及其关联记忆；不得为了缩短 prompt 而重新允许普通床、桌面、灯、照片等成为可翻找容器。
 
+37. 私人终端 chat 的 `speakerRole` / `speaker` / `contactName` 都属于模型生成展示数据，不得控制身份、权限、缓存键、URL、命令或档案证据。新生成的 chat 必须可区分 `owner` 与 `contact` 两侧；UI 只用转义后的名字和文本渲染。
+38. 模块化扩展更新必须避免同一运行实例混用不同发布版本的 ES module graph。r38 通过 build token 在版本变化时执行一次页面刷新后再动态导入运行时；该刷新不得修改聊天、档案或派生缓存。
+
 ## Credentials
 
 API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只保存 Connection Manager Profile ID、可选模型覆盖 ID、输出上限、温度和功能开关。
@@ -332,3 +335,12 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - Calendar refreshes must reuse the shared provider permit/timeout/error policy and the existing chatId + archiveRevision save fence. Switching chat/archive revision while a refresh is in flight must not allow the result to land in another archive.
 - Calendar rendering must escape every model/setting-derived title, summary, date label, source label and anchor before HTML insertion. No calendar item may supply HTML, URL, CSS, command, navigation target or executable action.
 - r36 deliberately has no automatic holiday/story-generation action. Adding a future-special/holiday-story action later is a separate capability review and must not silently convert `future` setting rows into canonical facts.
+
+
+## r37 destructive / replacement controls
+
+- Every user-facing delete or true replacement/regeneration action must require two explicit confirmations. This is a UX safety invariant, not an authorization boundary.
+- Content management may mutate only the current live chat's derived theater cache. Formal archive `MEMORY_KEY` / Mxxx evidence is out of scope except the separately named full-archive rebuild/delete workflows.
+- A management target must be resolved from an allowlisted target type and looked up in the current normalized session. Dataset/model-controlled strings must never become arbitrary object paths or cache keys.
+- Targeted regeneration must keep the old item until the new candidate passes the existing validator/evidence rules and the final current-chat + archive-revision fence. Failed regeneration must not first delete the old item.
+- Historical snapshots remain read-only. Whole-room replacement/deletion must invalidate Items and Phone derived caches after the room operation succeeds.

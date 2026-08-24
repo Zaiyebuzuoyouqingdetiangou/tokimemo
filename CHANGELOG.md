@@ -1,3 +1,20 @@
+## 0.8.13 calendar-phone-r38
+
+- **Calendar 热更新可见性修复**：入口模块按 build 记录版本，并在版本变化时执行一次页面 reload 后动态加载运行时，避免浏览器继续复用 r35/r36 的旧 child-module graph 导致新入口缺失。
+- **Phone/Terminal 双向聊天 schema**：chat message 增加 `speakerRole=owner|contact` 与 entry `contactName`；深聊必须同时包含 owner/contact，两边以实际名字渲染，拒绝整段只有“对方”的生成结果。
+- **Legacy 对话保守兼容**：旧缓存不自动伪造 speaker attribution；若缺可靠双向角色，UI 提示用 r37 的单项重新生成修复。
+- **Phone/Terminal 增量按钮恢复**：顶栏对 Phone 例外显示“增量追加”，调用现有增量生成链，不改变 Items 的结构型限制。
+- **发布身份**：固定名“心跳回忆”，版本独立提升至 `0.8.13`。
+
+## 0.8.12 content-controls-r37
+
+- **统一内容管理入口**：所有已生成 mode 增加“管理”，支持整分类删除 / 重新生成，并对相簿、ADV EVENT、HEART、Phone、ENDING、Achievements、Calendar、Butterfly 等暴露经过 allowlist 的单项管理目标。
+- **二次确认硬规则**：新增 `confirmExplicitActionTwice()`；所有新删除 / 重新生成按钮、已存在 CG 重绘 / 清图、日常一格重绘 / 清图、今日生活重新生成、完全重建正式档案、档案室索引移除都执行两次确认。
+- **派生内容边界**：分类/单项删除只更新 theater cache；正式 `MEMORY_KEY` 不在删除路径中。用户主动删减后的 Phone / ENDING / Achievements 等 session 使用 `userManaged` 标记继续可读，不因低于初次生成数量门槛而被误判损坏。
+- **单项原子替换**：单项重新生成在内存中完成并通过原 validator/evidence 约束后，再经过当前 chat + archive revision fence 保存；失败时旧项不变。
+- **Room 依赖失效**：整房间删除/替换时同时清除 Items / Phone 派生缓存。
+- **公开身份保持不变**：扩展继续固定名“心跳回忆”，版本独立提升至 `0.8.12`，ZIP 仍固定发布为 `心跳回忆.zip`。
+
 ## 0.8.11 stable-identity-r36.1
 
 - **固定扩展名称**：`manifest.display_name` 永远为“心跳回忆”，README 主标题和公开安装包名称不再拼接版本号。

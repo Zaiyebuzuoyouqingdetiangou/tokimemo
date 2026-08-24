@@ -186,8 +186,8 @@ export function mergeAlbumIncremental(previous, fresh, memoryBank) {
     };
 }
 
-export async function generateAlbumWithRepair(context, memoryBank, origin, taskKey) {
-    const previous = core_cache.loadSession(core_constants.MODE.ALBUM, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
+export async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, options = {}) {
+    const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ALBUM, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
     const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
     const index = await generation_client.requestValidatedSegment(
         albumIndexPrompt(context, memoryBank, previous, sourceMemoryIds),

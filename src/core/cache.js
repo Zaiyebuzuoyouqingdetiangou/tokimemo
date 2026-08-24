@@ -385,6 +385,53 @@ export function saveImportedMemory(context, memoryBank, expectedChatId = memoryB
     context.saveMetadataDebounced?.();
 }
 
+export async function deleteSessions(modes, expectedChatId = '') {
+    const requested = [...new Set((Array.isArray(modes) ? modes : [modes])
+        .map(mode => core_text.normalizeText(mode, 80))
+        .filter(Boolean))];
+    if (!requested.length) return false;
+    const context = core_context.currentCharacterGuard();
+    const currentChatId = core_context.getChatId(context);
+    const wantedChatId = core_text.normalizeText(expectedChatId, 240) || currentChatId;
+    if (!wantedChatId || currentChatId !== wantedChatId) {
+        throw new Error('删除派生内容期间聊天窗口已经变化，本次操作已取消。');
+    }
+    const memoryBank = archive_repository.requireArchive(context);
+    if (!context.chatMetadata || typeof context.chatMetadata !== 'object') {
+        throw new Error('当前聊天无法保存 metadata，不能删除派生内容。');
+    }
+    try { await ensureCacheHydrated(context); } catch {}
+    const scope = cacheScopeFromContext(context);
+    const cache = getCache(context);
+    let changed = false;
+    for (const mode of requested) {
+        if (Object.prototype.hasOwnProperty.call(cache, mode)) {
+            delete cache[mode];
+            changed = true;
+        }
+        if (mode === core_constants.MODE.PHONE && Object.prototype.hasOwnProperty.call(cache, core_constants.PHONE_DRAFT_CACHE_KEY)) {
+            delete cache[core_constants.PHONE_DRAFT_CACHE_KEY];
+            changed = true;
+        }
+    }
+    if (!changed) return false;
+    cache.chatId = wantedChatId;
+    cache.archiveRevision = memoryBank.archiveRevision;
+    cache.updatedAt = Date.now();
+    rememberRuntimeSessionCache(scope, cache);
+    const stored = context.chatMetadata?.[core_constants.CACHE_KEY];
+    if (shouldWriteUncompressedCacheImmediately(stored)) {
+        context.chatMetadata[core_constants.CACHE_KEY] = cache;
+        context.saveMetadataDebounced?.();
+    }
+    scheduleCompressedCachePersist(context, cache, 80);
+    return true;
+}
+
+export async function deleteSession(mode, expectedChatId = '') {
+    return deleteSessions([mode], expectedChatId);
+}
+
 export function saveSession(mode, session, expectedChatId = core_text.normalizeText(session?.chatId, 240)) {
     try {
         const context = core_context.currentCharacterGuard();
@@ -440,13 +487,14 @@ export function loadSession(mode, options = {}) {
         if (core_text.normalizeText(session.chatId, 240) !== chatId) return null;
         if (cache.archiveRevision !== memoryBank.archiveRevision) return null;
         if (session.archiveRevision !== memoryBank.archiveRevision) return null;
-        if (mode === core_constants.MODE.ROOM && (!Array.isArray(session.spaces) || session.spaces.length < 2)) return null;
-        if (mode === core_constants.MODE.ITEMS && (!Array.isArray(session.containers) || session.containers.length < 1)) return null;
-        if (mode === core_constants.MODE.PHONE && (!Array.isArray(session.apps) || session.apps.length < 5)) return null;
-        if (mode === core_constants.MODE.ENDING && (!Array.isArray(session.endings) || session.endings.length < 5)) return null;
+        const userManaged = session.userManaged === true;
+        if (mode === core_constants.MODE.ROOM && (!Array.isArray(session.spaces) || (!userManaged && session.spaces.length < 2))) return null;
+        if (mode === core_constants.MODE.ITEMS && (!Array.isArray(session.containers) || (!userManaged && session.containers.length < 1))) return null;
+        if (mode === core_constants.MODE.PHONE && (!Array.isArray(session.apps) || (!userManaged && session.apps.length < 5))) return null;
+        if (mode === core_constants.MODE.ENDING && (!Array.isArray(session.endings) || (!userManaged && session.endings.length < 5))) return null;
         if (mode === core_constants.MODE.CALENDAR && !Array.isArray(session.entries)) return null;
         if (mode === core_constants.MODE.HEART && (!session.greetings || !session.relationshipSourceMemoryAnchor)) return null;
-        if (mode === core_constants.MODE.ACHIEVEMENTS && (!Array.isArray(session.entries) || session.entries.length < 1)) return null;
+        if (mode === core_constants.MODE.ACHIEVEMENTS && (!Array.isArray(session.entries) || (!userManaged && session.entries.length < 1))) return null;
         return options.clone === false ? session : structuredClone(session);
     } catch {
         return null;

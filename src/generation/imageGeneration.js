@@ -230,7 +230,8 @@ export async function drawSelectedCgImage() {
         return;
     }
     const previous = normalizeCgImageRecord(item.cgImage);
-    const confirmed = ui_overlay.confirmExplicitAction(
+    const confirmDraw = previous ? ui_overlay.confirmExplicitActionTwice : ui_overlay.confirmExplicitAction;
+    const confirmed = confirmDraw(
         previous ? `重新绘制「${item.title}」CG？` : `绘制「${item.title}」CG？`,
         `${previous ? '新的图片成功后会替换当前 CG 图片引用；旧图片文件不会由心跳回忆主动删除。\n\n' : ''}这会调用${imageState.providerLabel || '已配置的生图插件'}，可能消耗本地算力、额度或付费点数。只会发送这张 CG 的可见画面提示，不发送聊天原文、档案原文、世界书原文、私人终端内容或任何 API 凭据。`,
         { destructive: !!previous },
@@ -306,7 +307,7 @@ export function clearSelectedCgImage() {
     const { mode, session, item } = target;
     const image = normalizeCgImageRecord(item.cgImage);
     if (!image) return;
-    if (!ui_overlay.confirmExplicitAction(
+    if (!ui_overlay.confirmExplicitActionTwice(
         `恢复「${item.title}」的抽象 CG？`,
         '只会从心跳回忆缓存中移除这张图片的引用，不会删除 SillyTavern 已保存的图片文件。',
         { destructive: false },

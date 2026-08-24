@@ -275,7 +275,8 @@ export async function drawHeartStripImage(stripId) {
         return;
     }
     const previous = generation_imageGeneration.normalizeCgImageRecord(item.cgImage);
-    const ok = ui_overlay.confirmExplicitAction(
+    const confirmDraw = previous ? ui_overlay.confirmExplicitActionTwice : ui_overlay.confirmExplicitAction;
+    const ok = confirmDraw(
         previous ? `重新绘制「${item.title}」？` : `绘制「${item.title}」？`,
         `${previous ? '成功后会替换当前图片引用；旧文件不会由心跳回忆主动删除。\n\n' : ''}会调用${imageState.providerLabel || '已配置的生图插件'}，可能消耗额度。为了减少 AI 画坏文字，图片提示只要求 Q 版分镜和动作，真正台词仍由心跳回忆界面显示。`,
         { destructive: !!previous },
@@ -341,7 +342,7 @@ export function clearHeartStripImage(stripId) {
     if (!archive_library.requireWritableArchiveAction()) return;
     const item = runtimeState.activeSession.dailyStrips.find(strip => strip.id === stripId) || selectedHeartStrip();
     if (!item || !generation_imageGeneration.normalizeCgImageRecord(item.cgImage)) return;
-    if (!ui_overlay.confirmExplicitAction(`恢复「${item.title}」的文字/抽象小剧场？`, '只会移除心跳回忆缓存中的图片引用，不会删除 SillyTavern 已保存的图片文件。', { destructive: true })) return;
+    if (!ui_overlay.confirmExplicitActionTwice(`恢复「${item.title}」的文字/抽象小剧场？`, '只会移除心跳回忆缓存中的图片引用，不会删除 SillyTavern 已保存的图片文件。', { destructive: true })) return;
     const previous = item.cgImage;
     item.cgImage = null;
     if (!core_cache.saveSession(core_constants.MODE.HEART, runtimeState.activeSession)) {

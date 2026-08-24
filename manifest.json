@@ -1,15 +1,15 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.11-calendar-r36.1",
+  "js": "index.js?heartbeat=0.8.13-calendar-phone-r38",
   "author": "Toto",
-  "version": "0.8.11",
+  "version": "0.8.13",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "新增独立“两个人的日历”，按已度过、已约定未发生、未来世界设定三类整理日期；过去必须来自档案事实，约定必须有档案证据，未来只来自明确世界设定日期且不视为已发生；暂不自动生成节日剧情。",
+  "description": "修复更新后日历入口可能被旧模块缓存隐藏的问题；私人终端聊天强制区分设备主人/联系人并以左右消息显示；私人终端恢复顶栏“增量追加”。保留统一内容管理、固定名称、日历三类时间状态与现有档案/缓存兼容。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

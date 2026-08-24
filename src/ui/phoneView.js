@@ -44,12 +44,39 @@ export function startPhoneClock() {
     }, 30000);
 }
 
-export function renderPhoneEntryDetail(entry, app) {
+function phoneRenderedSpeakerRole(message, session) {
+    const role = core_text.normalizeText(message?.speakerRole, 20).toLowerCase();
+    if (role === 'owner' || role === 'contact') return role;
+    const speaker = core_text.normalizeText(message?.speaker, 100);
+    const ownerName = core_text.normalizeText(session?.ownerName, 100);
+    if (speaker && ownerName && speaker === ownerName) return 'owner';
+    if (/^(?:我|本人|自己|设备主人|主人|char|owner)$/iu.test(speaker)) return 'owner';
+    return 'contact';
+}
+
+function phoneConversationNeedsSpeakerRepair(entry, session) {
+    const messages = Array.isArray(entry?.messages) ? entry.messages : [];
+    if (messages.length < 2) return false;
+    const roles = new Set(messages.map(message => phoneRenderedSpeakerRole(message, session)));
+    const hasExplicitRole = messages.some(message => ['owner', 'contact'].includes(core_text.normalizeText(message?.speakerRole, 20).toLowerCase()));
+    return !hasExplicitRole || !roles.has('owner') || !roles.has('contact');
+}
+
+export function renderPhoneEntryDetail(entry, app, session = runtimeState.activeSession) {
     if (!entry) return '<div class="rmt-phone-detail rmt-phone-detail-empty">选择一条记录查看详情。</div>';
-    const messages = entry.messages?.length ? `<div class="rmt-phone-chat-thread">${entry.messages.map(message => `<div class="rmt-phone-message"><div><b>${core_text.esc(message.speaker)}</b>${message.time ? `<small>${core_text.esc(message.time)}</small>` : ''}</div><p>${core_text.esc(message.text)}</p></div>`).join('')}</div>` : '';
+    const messages = entry.messages?.length ? `<div class="rmt-phone-chat-thread">${entry.messages.map(message => {
+        const role = phoneRenderedSpeakerRole(message, session);
+        const speaker = role === 'owner'
+            ? (core_text.normalizeText(session?.ownerName, 100) || core_text.normalizeText(message?.speaker, 100) || '设备主人')
+            : (core_text.normalizeText(message?.speaker, 100) || core_text.normalizeText(entry?.contactName, 100) || '联系人');
+        return `<div class="rmt-phone-message rmt-phone-message-${role}"><div><b>${core_text.esc(speaker)}</b>${message.time ? `<small>${core_text.esc(message.time)}</small>` : ''}</div><p>${core_text.esc(message.text)}</p></div>`;
+    }).join('')}</div>` : '';
+    const speakerRepair = app?.kind === 'chat' && phoneConversationNeedsSpeakerRepair(entry, session)
+        ? '<div class="rmt-phone-speaker-warning">这条是旧版聊天缓存，缺少可靠的双向发言人标记。可在“管理”里重新生成这一条，修复为设备主人 / 联系人分开的对话。</div>'
+        : '';
     const fields = entry.fields?.length ? `<dl class="rmt-phone-fields">${entry.fields.map(field => `<div><dt>${core_text.esc(field.label)}</dt><dd>${core_text.esc(field.value)}</dd></div>`).join('')}</dl>` : '';
     const gallery = entry.imageCaption ? `<div class="rmt-phone-image-caption">${core_text.esc(entry.imageCaption)}</div>` : '';
-    return `<div class="rmt-phone-detail"><div class="rmt-phone-detail-toolbar"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回${core_text.esc(app?.label || '列表')}</button><span>${core_text.esc(entry.meta || app?.label || '')}</span></div><h3>${core_text.esc(entry.title)}</h3>${gallery}${entry.detail ? `<p>${core_text.esc(entry.detail)}</p>` : ''}${fields}${messages}${entry.basis === '记忆' ? `<div class="rmt-phone-evidence">档案痕迹：${core_text.esc(entry.sourceMemoryAnchor)}</div>` : ''}</div>`;
+    return `<div class="rmt-phone-detail"><div class="rmt-phone-detail-toolbar"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回${core_text.esc(app?.label || '列表')}</button><span>${core_text.esc(entry.meta || app?.label || '')}</span></div><h3>${core_text.esc(entry.title)}</h3>${gallery}${entry.detail ? `<p>${core_text.esc(entry.detail)}</p>` : ''}${fields}${speakerRepair}${messages}${entry.basis === '记忆' ? `<div class="rmt-phone-evidence">档案痕迹：${core_text.esc(entry.sourceMemoryAnchor)}</div>` : ''}</div>`;
 }
 
 export function renderPhone() {

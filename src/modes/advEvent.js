@@ -281,8 +281,8 @@ export function mergeAdvIncremental(previous, fresh, memoryBank) {
     };
 }
 
-export async function generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey) {
-    const previous = core_cache.loadSession(core_constants.MODE.ADV, { context, chatId: expectedChatId, memoryBank, clone: true });
+export async function generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, options = {}) {
+    const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ADV, { context, chatId: expectedChatId, memoryBank, clone: true });
     const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
     const fresh = await generation_client.requestValidatedSegment(
         advImportantIndexPrompt(context, memoryBank, previous, sourceMemoryIds),
