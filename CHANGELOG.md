@@ -1,3 +1,19 @@
+## 0.8.11 stable-identity-r36.1
+
+- **固定扩展名称**：`manifest.display_name` 永远为“心跳回忆”，README 主标题和公开安装包名称不再拼接版本号。
+- **版本号与名称分离**：发布版本从长期停留的 `0.8.10` 提升为 `0.8.11`；后续版本只更新 `manifest.version`，不改变扩展名称。
+- **稳定更新来源**：manifest 增加固定 GitHub `homePage`，并启用 `auto_update`；从同一 Git 仓库安装的用户继续在原扩展上更新，不创建“心跳回忆0.x”副本。
+- **稳定安装包名**：面向用户的 ZIP 固定发布为 `心跳回忆.zip`；版本号继续记录在 manifest / CHANGELOG / 内部 cache-buster 中。
+
+## 0.8.10 relationship-calendar-r36
+
+- **新增独立「两个人的日历」**：档案室在 ENDING 与角色互动之间增加 Calendar 入口，按「已经度过 / 已约定 · 未发生 / 未来 · 世界设定」三种时间状态整理；支持按状态与月份筛选。
+- **过去事实不交给模型改写**：带明确日期的 Mxxx 由本地直接映射为「已经度过」，保留真实 memory ID + anchor；模型不能创建或修改 past 条目。
+- **未兑现约定必须有证据**：模型只负责识别档案中明确双方约好但尚未兑现/取消的安排，结果必须通过现有 memory ID + anchor 校验；没有明确日期可标记「待定」，但没有可靠证据就不会进入日历。
+- **未来仅为世界设定**：角色卡 / Persona / 世界书里存在明确 MM/DD 或 YYYY/MM/DD 的生日、节庆、纪念日等可整理为 future；没有精确日期时宁可为空，不猜日期，也不把世界设定误写成两个人已经约好或一定会发生的剧情。
+- **先做日历，不自动续写节日剧情**：r36 不提供 Future Special / 节日特别篇按钮。未来日期只是设定参考；真正经历过以后再由正式档案进入「已经度过」。
+- **保持模块边界**：新增 `modes/calendar.js` 与 `ui/calendarView.js`，不嵌入 HEART；Calendar 仍使用共享 Connection Manager、evidence、cache 与 chat/revision fence，不新增正式 MEMORY_KEY 写入。
+
 ## 0.8.10 modular-runtime-r35.1 startup hotfix
 
 - **修复 r35 启动回归**：r35 将 `index.js` 从 DOM-ready 自启动误改成仅 `export function init()`，但 manifest 并未声明 init hook，SillyTavern 加载文件后不会调用该函数，导致插件虽安装/启用却没有挂载菜单和设置。r35.1 恢复 r34 及更早版本的 `jQuery(() => initMemoryTheater())` 启动契约。

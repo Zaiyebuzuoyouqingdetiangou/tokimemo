@@ -21,6 +21,7 @@ import * as modes_room from '../modes/room.js';
 import * as ui_advEventView from './advEventView.js';
 import * as ui_albumView from './albumView.js';
 import * as ui_butterflyView from './butterflyView.js';
+import * as ui_calendarView from './calendarView.js';
 import * as ui_endingView from './endingView.js';
 import * as ui_heartView from './heartView.js';
 import * as ui_phoneView from './phoneView.js';
@@ -230,6 +231,13 @@ export function confirmExplicitAction(title, detail, { destructive = false } = {
 
 export function confirmModeRegeneration(mode) {
     const label = core_constants.MODE_LABEL[mode] || mode || '当前内容';
+    if (mode === core_constants.MODE.CALENDAR) {
+        return confirmExplicitAction(
+            '刷新「两个人的日历」？',
+            '这会重新整理“已约定 · 未发生”和“未来 · 世界设定”，并重新从当前档案生成“已经度过”的日期索引。它不会新增剧情、不会把未来设定写成已发生事实，也不会修改聊天档案。',
+            { destructive: false },
+        );
+    }
     return confirmExplicitAction(
         `从新增档案追加「${label}」？`,
         `这次只消费这一项尚未使用的新档案记忆，并在现有内容后追加；旧篇章、旧台词、旧 ADV EVENT、旧图片引用和当前选择都保持不变。若没有新增记忆，不会调用模型。当前聊天档案本身不会被修改。`,
@@ -372,10 +380,11 @@ export function showChooser() {
         const generated = !!session;
         const generating = core_requestCoordinator.isModeGenerating(mode);
         const capacityReached = core_requestCoordinator.activeLogicalGenerationCount() >= core_constants.MAX_CONCURRENT_GENERATION_TASKS && !generating;
+        const isCalendar = mode === core_constants.MODE.CALENDAR;
         const statusText = generating
-            ? (generated ? '增量追加中 · 旧内容仍可查看' : '后台生成中 · 可继续启动其他入口')
-            : generated ? '已生成 · 点击头像查看' : '尚未生成';
-        const actionText = generating ? '生成中…' : generated ? '增量追加' : '生成这一项';
+            ? (generated ? (isCalendar ? '刷新中 · 旧日历仍可查看' : '增量追加中 · 旧内容仍可查看') : '后台生成中 · 可继续启动其他入口')
+            : generated ? (isCalendar ? '已整理 · 点击查看日历' : '已生成 · 点击头像查看') : '尚未生成';
+        const actionText = generating ? '生成中…' : generated ? (isCalendar ? '刷新日历' : '增量追加') : (isCalendar ? '生成日历' : '生成这一项');
         return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} ${generating ? 'generating' : ''} rmt-archive-portal-${core_text.esc(meta.accent)}">
           <button type="button" class="rmt-portal-open" ${generated ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
             <span class="rmt-portal-avatar"><i class="fa-solid ${core_text.esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
@@ -566,6 +575,7 @@ export function renderActive() {
     else if (runtimeState.activeMode === core_constants.MODE.ITEMS) modes_items.renderItems();
     else if (runtimeState.activeMode === core_constants.MODE.PHONE) ui_phoneView.renderPhone();
     else if (runtimeState.activeMode === core_constants.MODE.ENDING) ui_endingView.renderEnding();
+    else if (runtimeState.activeMode === core_constants.MODE.CALENDAR) ui_calendarView.renderCalendar();
     else if (runtimeState.activeMode === core_constants.MODE.ACHIEVEMENTS) modes_achievements.renderAchievements();
     else if (runtimeState.activeMode === core_constants.MODE.HEART) ui_heartView.renderHeart();
     decorateReadOnlyModeUi();
@@ -585,6 +595,10 @@ export function handleOverlayClick(event) {
         openCachedOrGenerate(modeButton.dataset.rmtMode);
         return;
     }
+    const calendarStatus = event.target.closest?.('[data-rmt-calendar-status]');
+    if (calendarStatus) return ui_calendarView.setCalendarStatus(calendarStatus.dataset.rmtCalendarStatus);
+    const calendarMonth = event.target.closest?.('[data-rmt-calendar-month]');
+    if (calendarMonth) return ui_calendarView.setCalendarMonth(calendarMonth.dataset.rmtCalendarMonth);
     const node = event.target.closest?.('[data-rmt-node]');
     if (node) return ui_butterflyView.selectButterflyNode(node.dataset.rmtNode);
     const endingView = event.target.closest?.('[data-rmt-ending-view]');

@@ -331,7 +331,8 @@ export async function generateMode(mode, options = {}) {
     }
     const previousSession = core_cache.loadSession(mode, { context, chatId: expectedChatId, memoryBank, clone: true });
     const incrementalPart = mode === core_constants.MODE.HEART ? 'dialogues' : 'mode';
-    if (previousSession && !(mode === core_constants.MODE.PHONE && options.continueDraft === true)) {
+    const refreshableCalendar = mode === core_constants.MODE.CALENDAR;
+    if (previousSession && !refreshableCalendar && !(mode === core_constants.MODE.PHONE && options.continueDraft === true)) {
         const pendingMemoryIds = core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank, incrementalPart);
         if (!pendingMemoryIds.length) {
             globalThis.toastr?.info?.(`「${core_constants.MODE_LABEL[mode]}」已经覆盖当前档案。请先增量更新档案；下次只会追加新内容，旧内容不会重写。`, '心跳回忆');
@@ -360,7 +361,7 @@ export async function generateMode(mode, options = {}) {
     core_requestCoordinator.refreshConcurrentTaskUi(mode, origin);
     if (!background) {
         ui_overlay.openOverlay();
-        ui_overlay.setInnerLoading(true, previousSession ? `正在从新增档案追加「${core_constants.MODE_LABEL[mode]}」…` : `正在生成「${core_constants.MODE_LABEL[mode]}」…`);
+        ui_overlay.setInnerLoading(true, refreshableCalendar && previousSession ? '正在刷新「两个人的日历」…' : previousSession ? `正在从新增档案追加「${core_constants.MODE_LABEL[mode]}」…` : `正在生成「${core_constants.MODE_LABEL[mode]}」…`);
     }
     try {
         let session;
@@ -385,10 +386,13 @@ export async function generateMode(mode, options = {}) {
         } else if (mode === core_constants.MODE.ACHIEVEMENTS) {
             session = await modes_achievements.generateAchievementsWithRepair(context, memoryBank, origin, taskKey);
         } else {
+            const contextEnvelope = mode === core_constants.MODE.CALENDAR
+                ? await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: ['节日', '日历', '生日', '纪念日', '祭典', '庆典', 'festival', 'holiday', 'calendar', 'birthday', 'anniversary'] })
+                : undefined;
             const raw = await requestJson(
                 generationPrompt,
                 `正在根据当前聊天档案生成「${core_constants.MODE_LABEL[mode]}」…`,
-                { maxTokens: core_constants.MODE_TOKEN_CAPS[mode] || 6144, context, origin, taskKey, mode, background: true },
+                { maxTokens: core_constants.MODE_TOKEN_CAPS[mode] || 6144, context, contextEnvelope, origin, taskKey, mode, background: true },
             );
             session = generation_normalizers.normalizeByMode(mode, raw, memoryBank, context);
         }
@@ -418,14 +422,14 @@ export async function generateMode(mode, options = {}) {
                 runtimeState.activeSession = core_cache.loadSession(core_constants.MODE.ROOM) || runtimeState.activeSession;
                 modes_room.renderRoom();
             }
-            globalThis.toastr?.success?.(`${previousSession ? '后台增量追加完成' : '后台生成完成'}：${core_constants.MODE_LABEL[mode]}${committed ? '' : '（回到原窗口自动写入）'}`, '心跳回忆');
+            globalThis.toastr?.success?.(`${refreshableCalendar && previousSession ? '后台刷新完成' : previousSession ? '后台增量追加完成' : '后台生成完成'}：${core_constants.MODE_LABEL[mode]}${committed ? '' : '（回到原窗口自动写入）'}`, '心跳回忆');
             return;
         }
         runtimeState.activeMode = mode;
         runtimeState.activeSession = session;
         ui_overlay.renderActive();
         if (mode === core_constants.MODE.ROOM) void modes_room.ensureRoomLifePlan({ force: true });
-        globalThis.toastr?.success?.(`${previousSession ? '已增量追加' : '已生成'}：${core_constants.MODE_LABEL[mode]}${previousSession ? '；旧内容保持不变' : ''}`, '心跳回忆');
+        globalThis.toastr?.success?.(`${refreshableCalendar && previousSession ? '已刷新' : previousSession ? '已增量追加' : '已生成'}：${core_constants.MODE_LABEL[mode]}${previousSession && !refreshableCalendar ? '；旧内容保持不变' : ''}`, '心跳回忆');
     } catch (error) {
         if (error?.name === 'AbortError') {
             console.warn('[HeartbeatMemories] generation aborted by extension/task cancellation', { mode });

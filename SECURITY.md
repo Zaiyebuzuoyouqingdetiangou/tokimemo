@@ -320,3 +320,15 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - `saveSession` / compressed derived-cache persistence 由 `core/cache.js` 单一拥有，并继续检查 chatId + archiveRevision。
 - 历史只读档案的写入准入继续由唯一 `requireWritableArchiveAction` 边界控制；模块拆分不得因 UI 入口变化获得额外写权限。
 - `ADV EVENT` 是展示/模块名称；持久化值继续使用 `MODE.ADV === "adv"`。未经独立 schema migration 版本，不得静默改成 `advEvent` 导致旧缓存失联。
+
+
+### 0.8.10 r36 relationship calendar invariants
+
+- Calendar is a derived organizer only. `MODE.CALENDAR` may be cached under the existing derived `CACHE_KEY`, but no calendar generation/refresh path may write, mutate, renumber, or promote data into canonical `MEMORY_KEY`.
+- `past` calendar entries must be built locally from canonical archive memories that already contain an explicit valid date. Model output must never be accepted as a source of past facts. Their memory ID and anchor remain attached for provenance.
+- `promised` entries are allowed only for an explicit still-pending arrangement and must pass the existing canonical memory-reference validator against the current archive. Model-supplied IDs/anchors are untrusted hints; a missing/invalid ID or anchor must drop the entry rather than downgrade it into an unverified promise.
+- `future` entries are non-canonical setting references only. They may be derived from bounded character-card/persona/world-info context only when an explicit calendar date exists. They carry no archive memory IDs and must never be presented as something the couple promised, experienced, or will certainly do.
+- Calendar-specific World Info scan terms may only influence the existing bounded/dry-run setting retrieval. They must not write World Info, fetch arbitrary external data, obtain credentials, or bypass prompt/data-size limits. Other modes must retain the default empty extra-term set.
+- Calendar refreshes must reuse the shared provider permit/timeout/error policy and the existing chatId + archiveRevision save fence. Switching chat/archive revision while a refresh is in flight must not allow the result to land in another archive.
+- Calendar rendering must escape every model/setting-derived title, summary, date label, source label and anchor before HTML insertion. No calendar item may supply HTML, URL, CSS, command, navigation target or executable action.
+- r36 deliberately has no automatic holiday/story-generation action. Adding a future-special/holiday-story action later is a separate capability review and must not silently convert `future` setting rows into canonical facts.

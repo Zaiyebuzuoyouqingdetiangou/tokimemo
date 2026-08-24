@@ -61,7 +61,58 @@ export function endingArchiveSlice(memoryBank, limit = 48) {
     }, null, 2);
 }
 
+
+export function calendarPrompt(context, memoryBank) {
+    return `${promptSafetyBoundary(context, '两个人的日历')}
+UNTRUSTED_CALENDAR_ARCHIVE_JSON:
+${promptArchiveSlice(memoryBank, 64)}
+
+任务：只为“日历”整理【尚未发生的约定】与【世界设定中的未来日期】。已经发生且有明确日期的档案记忆会由插件本地直接放入“已经度过”，你不要重复输出过去事件。
+
+严格输出：
+{
+  "title": "两个人的日历",
+  "promised": [
+    {
+      "id": "CAL_PROMISE_01",
+      "date": "YYYY/MM/DD、MM/DD 或 待定",
+      "title": "约定标题",
+      "summary": "已经明确约好、但当前完整档案尚未记录兑现或取消的事情",
+      "sourceMemoryIds": ["M001"],
+      "sourceMemoryAnchor": "必须从所引用记忆 anchors/title 原样复制"
+    }
+  ],
+  "future": [
+    {
+      "id": "CAL_FUTURE_01",
+      "date": "MM/DD 或 YYYY/MM/DD",
+      "title": "节日 / 生日 / 世界观固定日",
+      "summary": "只说明这个日期在设定中是什么，不写 {{char}} 与 {{user}} 将会做什么",
+      "sourceLabel": "简短设定来源名称",
+      "recurring": true
+    }
+  ]
+}
+
+【promised：已约定 · 未发生】
+- 只能来自 UNTRUSTED_CALENDAR_ARCHIVE_JSON 中已经发生的对话/事件所留下的【明确约定、预约、说好以后一起做的事】。
+- 必须结合整个档案判断：如果后续记忆已经显示它兑现、取消、改期到另一个已完成事件，就不要再列为未发生。
+- 不能把单方面愿望、暧昧暗示、角色内心想法、一般性“以后有机会”、未来模拟、世界书设定当成双方已经约定。
+- 每项必须给真实 sourceMemoryIds，并从对应记忆 anchors/title 原样复制 sourceMemoryAnchor；插件会校验，校验失败会丢弃。
+- 确切日期不知道时写“待定”，绝对不要自己猜日期。
+
+【future：未来 · 世界设定】
+- 只允许使用本请求受控上下文中 CHARACTER_CARD_JSON / USER_PERSONA_JSON / WORLD_INFO_TEXT 明确存在的【生日、节庆、纪念日、固定校历/世界观日】。
+- 必须有明确 MM/DD 或 YYYY/MM/DD；只有“春季祭典”“每年冬天”但没有具体日期时不要硬塞进日历。
+- future 不是剧情事实，也不是两个人的约定。summary 只解释“这是什么日子”，禁止写成“他们会去约会/会收到礼物/一定会发生某事”。
+- 如果设定里没有明确可用日期，就返回空数组；禁止为了填满日历发明节日、生日或日期。
+- recurring=true 只用于每年重复的固定日期；一次性世界事件写 false。
+
+只输出 JSON。`;
+}
+
 export const PROMPTS = {
+    [core_constants.MODE.CALENDAR]: (context, memoryBank) => calendarPrompt(context, memoryBank),
     [core_constants.MODE.BUTTERFLY]: (context, memoryBank) => `${promptSafetyBoundary(context, '蝴蝶效应')}
 主时间线只从下面较小的档案锚点集中取证；平行分歧主要依据受控角色卡/人设/世界书推演。
 UNTRUSTED_TIMELINE_ANCHORS_JSON:

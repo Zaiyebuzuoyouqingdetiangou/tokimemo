@@ -60,7 +60,7 @@ test('mobile overlay early-close fallback accepts only its code-owned topbar clo
 });
 
 test('role interaction is a standalone archive portal immediately before achievements', () => {
-    assert.match(sourceByFile.get('core/constants.js'), /ARCHIVE_PORTAL_MODES = Object\.freeze\(\[MODE\.ALBUM, MODE\.ADV, MODE\.ROOM, MODE\.ENDING, MODE\.HEART, MODE\.ACHIEVEMENTS/);
+    assert.match(sourceByFile.get('core/constants.js'), /ARCHIVE_PORTAL_MODES = Object\.freeze\(\[MODE\.ALBUM, MODE\.ADV, MODE\.ROOM, MODE\.ENDING, MODE\.CALENDAR, MODE\.HEART, MODE\.ACHIEVEMENTS/);
     assert.match(sourceByFile.get('archive/snapshots.js'), /\[core_constants\.MODE\.HEART\]: \{ title: '角色互动'/);
 });
 
@@ -966,6 +966,58 @@ test('invalid JSON diagnostics never echo model-body fragments', () => {
             && !error.message.includes('ARCHIVE_SE')
             && !error.message.includes('{"a"'),
     );
+});
+
+
+
+test('r36 calendar keeps past facts, pending promises, and future setting dates in separate trust classes', () => {
+    const bank = {
+        memories: [
+            { id: 'M001', date: '2026/08/14', title: '一起看烟火', summary: '两个人已经一起看完烟火。', anchors: ['河边烟火'] },
+            { id: 'M002', date: '08/20', title: '约好去水族馆', summary: '两个人明确说好下次一起去水族馆，但档案里还没有发生。', anchors: ['水族馆约定'] },
+            { id: 'M003', date: '未标注', title: '没有日期', summary: '这条不应该自动塞进过去日历。', anchors: ['无日期'] },
+        ],
+    };
+    const calendar = api.normalizeCalendar({
+        title: '两个人的日历',
+        promised: [
+            { id: 'P1', date: '09/02', title: '去水族馆', summary: '已经约好但尚未兑现。', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '水族馆约定' },
+            { id: 'P_BAD', date: '09/03', title: '凭空约定', summary: '没有真实档案证据。', sourceMemoryIds: ['M999'], sourceMemoryAnchor: '不存在' },
+        ],
+        future: [
+            { id: 'F1', date: '12/25', title: '冬星祭', summary: '世界设定中的固定节日。', sourceLabel: '世界书', recurring: true },
+            { id: 'F_BAD', date: '冬季', title: '没有明确日期', summary: '不能硬塞进日历。', sourceLabel: '世界书', recurring: true },
+        ],
+    }, bank);
+    assert.equal(calendar.kind, api.MODE.CALENDAR);
+    assert.deepEqual(calendar.entries.filter(item => item.status === 'past').map(item => item.sourceMemoryIds[0]), ['M001', 'M002']);
+    assert.equal(calendar.entries.filter(item => item.status === 'promised').length, 1);
+    assert.equal(calendar.entries.find(item => item.status === 'promised').sourceMemoryAnchor, '水族馆约定');
+    assert.equal(calendar.entries.filter(item => item.status === 'future').length, 1);
+    assert.deepEqual(calendar.entries.find(item => item.status === 'future').sourceMemoryIds, []);
+    assert.equal(calendar.entries.some(item => item.title === '凭空约定'), false);
+    assert.equal(calendar.entries.some(item => item.title === '没有明确日期'), false);
+});
+
+test('r36 calendar prompt never asks the model to rewrite past events or turn setting dates into promises', () => {
+    const promptSource = sourceByFile.get('generation/prompts.js');
+    assert.match(promptSource, /已经发生且有明确日期的档案记忆会由插件本地直接放入“已经度过”/);
+    assert.match(promptSource, /future 不是剧情事实，也不是两个人的约定/);
+    assert.match(promptSource, /必须给真实 sourceMemoryIds/);
+    assert.match(promptSource, /禁止为了填满日历发明节日、生日或日期/);
+    assert.match(sourceByFile.get('generation/client.js'), /const refreshableCalendar = mode === core_constants\.MODE\.CALENDAR/);
+    assert.match(sourceByFile.get('generation/client.js'), /worldInfoScanTerms: \['节日', '日历', '生日', '纪念日'/);
+    assert.match(sourceByFile.get('core/cache.js'), /const worldInfoScan = \[\.\.\.archiveScan, \.\.\.extraWorldInfoScanTerms\]/);
+});
+
+test('r36 calendar is an independent archive portal before HEART and does not add a story-generation action', () => {
+    const constantsSource = sourceByFile.get('core/constants.js');
+    assert.match(constantsSource, /MODE\.ENDING, MODE\.CALENDAR, MODE\.HEART, MODE\.ACHIEVEMENTS/);
+    assert.match(sourceByFile.get('archive/snapshots.js'), /\[core_constants\.MODE\.CALENDAR\]: \{ title: '两个人的日历'/);
+    const view = sourceByFile.get('ui/calendarView.js');
+    assert.match(view, /已约定 · 未发生/);
+    assert.match(view, /未来 · 世界设定/);
+    assert.doesNotMatch(view, /draw-cg|read-adv|generate.*story|特别篇/i);
 });
 
 test('r35.1 entry module restores SillyTavern DOM-ready self-start', async () => {

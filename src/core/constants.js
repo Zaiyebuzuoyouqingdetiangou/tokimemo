@@ -114,6 +114,7 @@ export const MODE = Object.freeze({
     ITEMS: 'items',
     PHONE: 'phone',
     ENDING: 'ending',
+    CALENDAR: 'calendar',
     HEART: 'heart',
     ACHIEVEMENTS: 'achievements',
 });
@@ -126,6 +127,7 @@ export const MODE_LABEL = Object.freeze({
     [MODE.ITEMS]: '他的物品',
     [MODE.PHONE]: '他的私人终端',
     [MODE.ENDING]: '结局与后日谈',
+    [MODE.CALENDAR]: '两个人的日历',
     [MODE.HEART]: '角色互动与 Voice Drama',
     [MODE.ACHIEVEMENTS]: '成就库',
 });
@@ -138,11 +140,12 @@ export const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ITEMS]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.PHONE]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.ENDING]: MAX_GENERATION_OUTPUT_TOKENS,
+    [MODE.CALENDAR]: 6000,
     [MODE.HEART]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.ACHIEVEMENTS]: 6000,
 });
 
-export const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.ENDING, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
+export const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.ENDING, MODE.CALENDAR, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
 
 export const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS, MODE.PHONE]);
 

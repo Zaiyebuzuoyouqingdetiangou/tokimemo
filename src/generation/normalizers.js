@@ -5,6 +5,7 @@ import * as modes_achievements from '../modes/achievements.js';
 import * as modes_advEvent from '../modes/advEvent.js';
 import * as modes_album from '../modes/album.js';
 import * as modes_butterfly from '../modes/butterfly.js';
+import * as modes_calendar from '../modes/calendar.js';
 import * as modes_ending from '../modes/ending.js';
 import * as modes_heart from '../modes/heart.js';
 import * as modes_items from '../modes/items.js';
@@ -12,6 +13,7 @@ import * as modes_phone from '../modes/phone.js';
 import * as modes_room from '../modes/room.js';
 
 export function normalizeByMode(mode, data, memoryBank, context = null) {
+    if (mode === core_constants.MODE.CALENDAR) return modes_calendar.normalizeCalendar(data, memoryBank);
     if (mode === core_constants.MODE.BUTTERFLY) return modes_butterfly.normalizeButterfly(data, memoryBank);
     if (mode === core_constants.MODE.ALBUM) return modes_album.normalizeAlbum(data, memoryBank);
     if (mode === core_constants.MODE.ADV) return modes_advEvent.normalizeEventList(data, memoryBank);

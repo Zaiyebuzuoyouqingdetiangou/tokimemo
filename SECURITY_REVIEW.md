@@ -456,3 +456,25 @@ Scope: r35 modular runtime -> r35.1 startup hotfix. Runtime source change is lim
 The regression was caused by replacing r34's self-starting entrypoint with an exported `init()` that SillyTavern did not invoke under the existing manifest. The hotfix restores the previous execution point without introducing model-controlled data, network authority, dynamic execution, or a new write path. Initialization remains inside `initMemoryTheater()` and its existing internal try/catch; disable/clean still call `destroyMemoryTheater()`. A new regression test requires the DOM-ready startup call and forbids returning to an unreferenced exported `init()` under this manifest.
 
 Focused verification: syntax check for every runtime module, manifest JSON parse, complete Node regression suite (50/50), ZIP CRC, and local diff whitespace check. Targeted conclusion: no new Critical / High / Medium security issue identified.
+
+
+## r36 relationship calendar targeted diff review
+
+Scope: local r35.1 startup-hotfix package -> local r36 relationship-calendar. Runtime changes add one standalone Calendar mode/view, portal wiring, a calendar prompt/normalizer, calendar-specific bounded World Info scan terms, and refresh support in the existing generic generation path. No canonical archive schema migration is performed.
+
+- `past` rows are derived locally from dated canonical Mxxx records in `modes/calendar.js`; the Calendar prompt explicitly excludes past output. Therefore provider text cannot manufacture a past event through this mode.
+- `promised` rows remain untrusted until `core/evidence.js` validates the returned memory ID + anchor against the current archive. Invalid or invented IDs are discarded. A missing date may remain `待定`, but missing evidence cannot be downgraded into an accepted promise.
+- `future` rows deliberately do not use archive evidence because they are not facts. They are accepted only with an explicit valid date and are tagged `world-setting`; UI copy identifies them as setting-only and not already happened/promised. The remaining uncertainty is model factuality when summarizing character/persona/world-info content, so these rows are intentionally non-canonical and never promoted into `MEMORY_KEY`.
+- Calendar-specific `worldInfoScanTerms` extend only the already-bounded `buildControlledContextEnvelope` dry-run query. Default behavior for other modes is unchanged. The extra terms do not create a new network endpoint, credential source, World Info writer, or authority path.
+- Calendar refresh uses the existing Connection Manager request coordinator, timeout/error policy, task-origin capture and derived-cache `saveSession` chat/revision fence. Calendar does not directly import sibling business modes.
+- Calendar UI inserts generated/setting text only through the shared escaping helper. It exposes status/month filters and refresh only; no CG/ADV, future-special, URL, command or navigation action is introduced. The source-wide `innerHTML` assignment count increases from 36 to 37 solely for this new escaped calendar renderer.
+- Targeted sink comparison (r35.1 → r36) keeps `fetch` at 5, XMLHttpRequest at 0, `eval` at 0, `new Function` at 0, Connection Manager `sendRequest` at 1, Slash-command references at 3 and canonical `MEMORY_KEY` writes at 1. No new credential/API-key access, arbitrary provider endpoint or World Info write was introduced.
+
+Focused verification covers explicit date parsing, deterministic past projection, rejection of hallucinated promise evidence, separation of future setting rows, prompt trust-class rules, Calendar portal ordering, absence of story-generation actions, all prior r35.1 regressions, per-file syntax, ESM import, manifest parse and ZIP integrity.
+
+Targeted diff conclusion: no newly introduced Critical / High / Medium security issue identified. Residual limitation: a model can mis-summarize an explicit setting date into a `future` row; that row remains visibly non-canonical, evidence-free and isolated from the formal archive by design.
+
+
+## r36.1 stable identity targeted review
+
+Only release identity metadata and entry cache-buster changed: display name remains fixed to `心跳回忆`, version metadata moves to `0.8.11`, homePage is the existing GitHub repository, and auto-update is enabled. No archive, prompt, network request, credential, DOM sink, execution, or evidence/revision boundary changed. No new Critical / High / Medium issue identified.

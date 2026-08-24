@@ -1,14 +1,15 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.10-modular-r35.1-startup-hotfix",
+  "js": "index.js?heartbeat=0.8.11-calendar-r36.1",
   "author": "Toto",
-  "version": "0.8.10",
-  "auto_update": false,
+  "version": "0.8.11",
+  "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "心跳回忆 0.8.10 r35.1：修复 r35 模块化后入口只导出 init、但 SillyTavern 未调用导致插件未实际初始化的问题；恢复 DOM ready 自动启动，模块结构与 r35 数据/功能保持不变。"
+  "description": "新增独立“两个人的日历”，按已度过、已约定未发生、未来世界设定三类整理日期；过去必须来自档案事实，约定必须有档案证据，未来只来自明确世界设定日期且不视为已发生；暂不自动生成节日剧情。",
+  "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

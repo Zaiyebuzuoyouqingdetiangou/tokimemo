@@ -444,6 +444,7 @@ export function loadSession(mode, options = {}) {
         if (mode === core_constants.MODE.ITEMS && (!Array.isArray(session.containers) || session.containers.length < 1)) return null;
         if (mode === core_constants.MODE.PHONE && (!Array.isArray(session.apps) || session.apps.length < 5)) return null;
         if (mode === core_constants.MODE.ENDING && (!Array.isArray(session.endings) || session.endings.length < 5)) return null;
+        if (mode === core_constants.MODE.CALENDAR && !Array.isArray(session.entries)) return null;
         if (mode === core_constants.MODE.HEART && (!session.greetings || !session.relationshipSourceMemoryAnchor)) return null;
         if (mode === core_constants.MODE.ACHIEVEMENTS && (!Array.isArray(session.entries) || session.entries.length < 1)) return null;
         return options.clone === false ? session : structuredClone(session);
@@ -452,7 +453,7 @@ export function loadSession(mode, options = {}) {
     }
 }
 
-export async function buildControlledContextEnvelope(context) {
+export async function buildControlledContextEnvelope(context, options = {}) {
     const card = (() => {
         try { return context.getCharacterCardFields?.() || {}; } catch { return {}; }
     })();
@@ -483,6 +484,8 @@ export async function buildControlledContextEnvelope(context) {
             core_text.normalizeText(item?.summary, 1200),
             core_text.cleanArray(item?.anchors, 12, 120).join('；'),
         ].filter(Boolean).join('：')).filter(Boolean);
+        const extraWorldInfoScanTerms = core_text.cleanArray(options?.worldInfoScanTerms, 24, 80);
+        const worldInfoScan = [...archiveScan, ...extraWorldInfoScanTerms];
         const globalScanData = {
             trigger: 'normal',
             personaDescription: userData.personaDescription,
@@ -493,7 +496,7 @@ export async function buildControlledContextEnvelope(context) {
             creatorNotes: characterData.creatorNotes,
         };
         if (typeof context.getWorldInfoPrompt === 'function') {
-            const result = await context.getWorldInfoPrompt(archiveScan, Math.max(2048, Math.min(32768, Number(context.maxContext) || 8192)), true, globalScanData);
+            const result = await context.getWorldInfoPrompt(worldInfoScan, Math.max(2048, Math.min(32768, Number(context.maxContext) || 8192)), true, globalScanData);
             worldInfo = core_text.normalizeText(result?.worldInfoString || [result?.worldInfoBefore, result?.worldInfoAfter].filter(Boolean).join('\n'), 12000);
         }
     } catch (error) {

@@ -209,6 +209,7 @@ export function modePortalMeta(mode) {
         [core_constants.MODE.PHONE]: { title: '他的手机', subtitle: '查看私人通讯与数字生活', icon: 'fa-mobile-screen-button', accent: 'phone' },
         [core_constants.MODE.BUTTERFLY]: { title: '蝴蝶效应', subtitle: '平行时间线观测终端', icon: 'fa-code-branch', accent: 'butterfly' },
         [core_constants.MODE.ENDING]: { title: 'ENDING / 后日谈', subtitle: '关系路线终章与未来生活', icon: 'fa-heart', accent: 'ending' },
+        [core_constants.MODE.CALENDAR]: { title: '两个人的日历', subtitle: '已度过 / 已约定 / 未来', icon: 'fa-calendar-days', accent: 'calendar' },
         [core_constants.MODE.HEART]: { title: '角色互动', subtitle: '时期对话 / Drama / 日常一格', icon: 'fa-comments', accent: 'heart' },
         [core_constants.MODE.ACHIEVEMENTS]: { title: '成就库', subtitle: '已解锁 / 未解锁', icon: 'fa-trophy', accent: 'achievements' },
     };
