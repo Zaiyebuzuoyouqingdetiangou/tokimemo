@@ -228,6 +228,23 @@ export function requireWritableArchiveAction() {
     return promoteSnapshotToLiveIfCurrent();
 }
 
+function snapshotCalendarQuickAccessHtml({ generated = false, readOnly = true } = {}) {
+    const status = generated
+        ? '已整理：已度过 / 已约定未发生 / 未来世界设定'
+        : (readOnly ? '这份档案还没有整理日历。' : '还没有整理日历。');
+    const openButton = generated
+        ? `<button type="button" class="rmt-btn rmt-calendar-quick-primary" data-rmt-mode="${core_text.esc(core_constants.MODE.CALENDAR)}">查看日历</button>`
+        : '';
+    const generateButton = !readOnly
+        ? `<button type="button" class="rmt-btn" data-rmt-generate-mode="${core_text.esc(core_constants.MODE.CALENDAR)}" ${generated ? 'data-rmt-regenerate="true"' : ''}>${generated ? '刷新日历' : '生成日历'}</button>`
+        : '';
+    return `<section class="rmt-calendar-quick ${generated ? 'ready' : 'empty'}">
+      <div class="rmt-calendar-quick-icon"><i class="fa-solid fa-calendar"></i></div>
+      <div class="rmt-calendar-quick-copy"><span>RELATIONSHIP CALENDAR</span><b>两个人的日历</b><small>${core_text.esc(status)}</small></div>
+      <div class="rmt-calendar-quick-actions">${openButton}${generateButton}</div>
+    </section>`;
+}
+
 export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchiveSnapshot) {
     if (!snapshot?.memory) return showArchiveLibrary();
     const isNewSnapshot = runtimeState.activeArchiveSnapshot !== snapshot;
@@ -245,7 +262,9 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
     const memory = snapshot.memory;
     const portals = archive_snapshots.baseModeAvailability({ chatId: snapshot.chatId, memoryBank: memory, cache: snapshot.cache, clone: false });
     const generatedCount = portals.filter(item => !!item.session).length;
-    const portalHtml = portals.map(({ mode, session, meta }) => {
+    const calendarPortal = portals.find(item => item.mode === core_constants.MODE.CALENDAR) || { session: null };
+    const calendarQuick = snapshotCalendarQuickAccessHtml({ generated: !!calendarPortal.session, readOnly: runtimeState.activeArchiveReadOnly });
+    const portalHtml = portals.filter(item => item.mode !== core_constants.MODE.CALENDAR).map(({ mode, session, meta }) => {
         const generated = !!session;
         const editAction = runtimeState.activeArchiveReadOnly ? '' : `<button type="button" class="rmt-btn rmt-portal-generate" data-rmt-generate-mode="${core_text.esc(mode)}" ${generated ? 'data-rmt-regenerate="true"' : ''}>${generated ? '增量追加' : '生成这一项'}</button>`;
         return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} rmt-archive-portal-${core_text.esc(meta.accent)}">
@@ -272,6 +291,7 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
           </div>
         </div>
       </section>
+      ${calendarQuick}
       <section class="rmt-archive-portals" aria-label="只读档案内容入口">${portalHtml}</section>
     </div>`;
 }
