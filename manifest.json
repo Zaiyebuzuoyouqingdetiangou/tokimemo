@@ -1,7 +1,7 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.10-incremental-content-r30",
+  "js": "index.js?heartbeat=0.8.10-mobile-close-r32",
   "author": "Toto",
   "version": "0.8.10",
   "auto_update": false,
@@ -10,5 +10,5 @@
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "独立的 SillyTavern 心跳回忆插件：档案与全部派生内容均支持按新增 Mxxx 独立游标追加；旧四季篇章、对话、相簿/CG/ADV、房间、物品、终端、结局/告白、蝴蝶效应与成就原样保留；结构化请求支持最高 60,000 tokens 设置，并使用限流分段、超时、断点补段、跨聊天 revision fence 与原子提交；Source Available，非开源。"
+  "description": "独立的 SillyTavern 心跳回忆插件：全部派生内容按新增 Mxxx 独立游标追加并保留旧内容；CG/ADV、相簿与日常一格支持优先联动独立安装的柏宝绘公开 API，不复制其生图实现；结构化请求支持最高 60,000 tokens，并使用限流分段、超时、断点补段、跨聊天 revision fence 与原子提交；Source Available，非开源。"
 }
