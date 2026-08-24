@@ -14,6 +14,8 @@ export const __r30Testing = {
     providerRequestQueue.splice(0);
     activeProviderRequestCount = 0;
   },
+  addCgImageTask(key, controller) { activeCgImageTasks.set(key, { controller }); },
+  abortActiveCgImageTasks,
   addBuildScope(key) { activeModeBuildScopes.add(key); },
   addRequest(key, parentTaskKey = '') { activeGenerationTasks.set(key, { parentTaskKey }); },
   logicalKeys() { return [...activeLogicalGenerationKeys()]; },
@@ -57,6 +59,18 @@ export const __r30Testing = {
   mergeItemsIncremental,
   mergeAchievementsIncremental,
   normalizeAchievements,
+  baiBaiImageApi,
+  baiBaiImageUiState,
+  imageGenerationUiState,
+  invokeBaiBaiImageGeneration,
+  invokeImageGeneration,
+  normalizeCgImageRecord,
+  normalizeCgImageUrl,
+  safeExternalImageError,
+  archiveMobileSafeTopFallback,
+  overlayCloseButtonFromEvent,
+  BAIBAI_IMAGE_PROVIDER,
+  BAIBAI_IMAGE_API_VERSION,
   SEGMENT_REQUEST_CONCURRENCY,
   ADV_BULK_BATCH_SIZE,
   getPluginSettings,
@@ -69,6 +83,181 @@ const moduleUrl = `data:text/javascript;base64,${Buffer.from(`${source}\n${testi
 const { __r30Testing: api } = await import(moduleUrl);
 
 test.afterEach(() => api.reset());
+
+test.afterEach(() => {
+    delete globalThis.STBaiBaiImage;
+});
+
+test('mobile overlay keeps iOS controls below WebView status chrome', () => {
+    assert.equal(api.archiveMobileSafeTopFallback({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)', platform: 'iPhone', maxTouchPoints: 5 }), 52);
+    assert.equal(api.archiveMobileSafeTopFallback({ userAgent: 'Mozilla/5.0', platform: 'MacIntel', maxTouchPoints: 5 }), 52);
+    assert.equal(api.archiveMobileSafeTopFallback({ userAgent: 'Mozilla/5.0 (Linux; Android 15)', platform: 'Linux armv8l', maxTouchPoints: 5 }), 0);
+    assert.match(source, /max\(env\(safe-area-inset-top, 0px\),var\(--rmt-mobile-safe-top, 0px\)\)/);
+    assert.match(source, /data-rmt-action="close"[^}]+width:44px;height:44px/);
+});
+
+test('mobile overlay early-close fallback accepts only its code-owned topbar close button', () => {
+    const selector = '.rmt-topbar > button[data-rmt-action="close"]';
+    const closeButton = { matches: candidate => candidate === selector };
+    const contentButton = { matches: () => false };
+    const overlay = { contains: node => node === closeButton };
+    assert.equal(api.overlayCloseButtonFromEvent({ composedPath: () => [closeButton] }, overlay), closeButton);
+    assert.equal(api.overlayCloseButtonFromEvent({ composedPath: () => [contentButton] }, overlay), null);
+    assert.equal(api.overlayCloseButtonFromEvent({ composedPath: () => [closeButton] }, { contains: () => false }), null);
+    assert.match(source, /overlay\.addEventListener\('touchstart', earlyHandler, \{ capture: true, passive: false \}\)/);
+    assert.match(source, /event\.preventDefault\?\.\(\);\s*event\.stopPropagation\?\.\(\);\s*closeArchiveOverlayFromUser\(\)/);
+});
+
+test('BaiBai Image detection requires the explicit versioned public capability contract', () => {
+    globalThis.STBaiBaiImage = {
+        id: api.BAIBAI_IMAGE_PROVIDER,
+        apiVersion: api.BAIBAI_IMAGE_API_VERSION,
+        generateImage() {},
+    };
+    assert.equal(api.baiBaiImageApi(), null);
+    const rejected = api.baiBaiImageUiState();
+    assert.equal(rejected.detected, true);
+    assert.equal(rejected.compatible, false);
+    assert.equal(rejected.available, false);
+
+    globalThis.STBaiBaiImage = {
+        id: api.BAIBAI_IMAGE_PROVIDER,
+        apiVersion: api.BAIBAI_IMAGE_API_VERSION,
+        pluginVersion: '0.1.22-heartbeat-interop.1<script>',
+        capabilities: { generateImage: true, sameOriginFileResult: true, abortSignal: true },
+        getStatus: () => ({ ready: true, enabled: true, backend: 'comfyui', reason: '' }),
+        generateImage: async () => ({}),
+    };
+    const accepted = api.baiBaiImageUiState();
+    assert.equal(accepted.compatible, true);
+    assert.equal(accepted.available, true);
+    assert.equal(accepted.backend, 'comfyui');
+    assert.equal(accepted.version, '0.1.22-heartbeat-interop.1script');
+    assert.equal(api.imageGenerationUiState({}).provider, api.BAIBAI_IMAGE_PROVIDER);
+    const safeError = api.safeExternalImageError('<img src=x> {"apiKey":"short-secret"} Bearer sk-test123456');
+    assert.equal(safeError.includes('<'), false);
+    assert.equal(safeError.includes('short-secret'), false);
+    assert.equal(safeError.includes('sk-test123456'), false);
+});
+
+test('BaiBai Image interop sends only a bounded visual request and accepts its correlated local-path result', async () => {
+    let captured;
+    globalThis.STBaiBaiImage = {
+        id: api.BAIBAI_IMAGE_PROVIDER,
+        apiVersion: api.BAIBAI_IMAGE_API_VERSION,
+        pluginVersion: '0.1.22-heartbeat-interop.1',
+        capabilities: { generateImage: true, sameOriginFileResult: true, abortSignal: true },
+        getStatus: () => ({ ready: true, enabled: true, backend: 'nai', reason: '' }),
+        generateImage: async request => {
+            captured = request;
+            return {
+                url: '/user/files/heartbeat-cg.png',
+                provider: api.BAIBAI_IMAGE_PROVIDER,
+                requestId: request.requestId,
+            };
+        },
+    };
+    const state = api.baiBaiImageUiState();
+    const output = await api.invokeBaiBaiImageGeneration('visible rainy station scene', {
+        ...state,
+        orientation: 'landscape',
+    });
+    assert.deepEqual(output, { url: '/user/files/heartbeat-cg.png', provider: api.BAIBAI_IMAGE_PROVIDER });
+    assert.deepEqual(Object.keys(captured).sort(), [
+        'negativePrompt', 'orientation', 'prompt', 'requestId', 'signal', 'source',
+    ]);
+    assert.equal(captured.prompt, 'visible rainy station scene');
+    assert.equal(captured.orientation, 'landscape');
+    assert.equal(captured.source, 'heartbeat-memories');
+    assert.equal(captured.signal instanceof AbortSignal, true);
+    assert.equal('archive' in captured, false);
+    assert.equal('context' in captured, false);
+
+    let providerSignal;
+    globalThis.STBaiBaiImage.generateImage = request => new Promise((_, reject) => {
+        providerSignal = request.signal;
+        request.signal.addEventListener('abort', () => reject(request.signal.reason), { once: true });
+    });
+    const taskController = new AbortController();
+    api.addCgImageTask('cg-image:test', taskController);
+    const cancelled = api.invokeBaiBaiImageGeneration('visible cancellable scene', {
+        ...state,
+        orientation: 'portrait',
+    }, { signal: taskController.signal });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    api.abortActiveCgImageTasks();
+    await assert.rejects(cancelled, /已取消本次绘制/);
+    assert.equal(taskController.signal.aborted, true);
+    assert.equal(providerSignal.aborted, true);
+    assert.match(source, /abortActiveCgImageTasks\(\);\s*while \(providerRequestQueue\.length\)/);
+});
+
+test('BaiBai Image results are correlated and persisted only as same-origin local references', async () => {
+    const previousLocation = globalThis.location;
+    globalThis.location = new URL('http://localhost/chat');
+    globalThis.STBaiBaiImage = {
+        id: api.BAIBAI_IMAGE_PROVIDER,
+        apiVersion: api.BAIBAI_IMAGE_API_VERSION,
+        pluginVersion: '0.1.22-heartbeat-interop.1',
+        capabilities: { generateImage: true, sameOriginFileResult: true, abortSignal: true },
+        getStatus: () => ({ ready: true, enabled: true, backend: 'comfyui', reason: '' }),
+        generateImage: async () => ({
+            url: '/user/files/uncorrelated.png',
+            provider: api.BAIBAI_IMAGE_PROVIDER,
+            requestId: 'somebody-elses-request',
+        }),
+    };
+    try {
+        const state = api.baiBaiImageUiState();
+        await assert.rejects(
+            api.invokeBaiBaiImageGeneration('visible scene', { ...state, orientation: 'portrait' }),
+            /不兼容的联动结果/,
+        );
+        assert.equal(api.normalizeCgImageUrl('https://images.example/remote.png'), '');
+        assert.equal(api.normalizeCgImageRecord({
+            url: '/user/files/heartbeat-cg.png',
+            prompt: 'visible scene',
+            provider: api.BAIBAI_IMAGE_PROVIDER,
+            generatedAt: 123,
+        }).provider, api.BAIBAI_IMAGE_PROVIDER);
+    } finally {
+        if (previousLocation === undefined) delete globalThis.location;
+        else globalThis.location = previousLocation;
+    }
+});
+
+test('a dispatched BaiBai Image failure never falls through to a second billable provider', async () => {
+    let fallbackCalls = 0;
+    let ready = true;
+    globalThis.STBaiBaiImage = {
+        id: api.BAIBAI_IMAGE_PROVIDER,
+        apiVersion: api.BAIBAI_IMAGE_API_VERSION,
+        pluginVersion: '0.1.22-heartbeat-interop.1',
+        capabilities: { generateImage: true, sameOriginFileResult: true, abortSignal: true },
+        getStatus: () => ({ ready, enabled: true, backend: 'nai', reason: ready ? '' : 'busy' }),
+        generateImage: async () => { throw new Error('backend rejected the request'); },
+    };
+    const context = {
+        extensionSettings: { heartbeatMemories: { imageGenerationManualEnabled: true } },
+        saveSettingsDebounced() {},
+        async executeSlashCommandsWithOptions() {
+            fallbackCalls += 1;
+            return { pipe: '/user/files/fallback.png' };
+        },
+    };
+    await assert.rejects(
+        api.invokeImageGeneration('visible scene', context, { provider: api.BAIBAI_IMAGE_PROVIDER }),
+        /柏宝绘没有完成本次绘制/,
+    );
+    assert.equal(fallbackCalls, 0);
+
+    ready = false;
+    await assert.rejects(
+        api.invokeImageGeneration('second visible scene', context, { provider: api.BAIBAI_IMAGE_PROVIDER }),
+        /不会自动改用另一家生图服务/,
+    );
+    assert.equal(fallbackCalls, 0);
+});
 
 test('ADV bulk requests are capped at six stories per click', () => {
     assert.equal(api.ADV_BULK_BATCH_SIZE, 6);
