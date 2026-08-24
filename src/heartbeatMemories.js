@@ -21,8 +21,12 @@ const MAX_IMPORT_TOTAL_CHARS = 1200000;
 const IMPORT_CHUNK_CHARS = 30000;
 const MAX_MEMORY_ITEMS = 240;
 const MAX_MEMORY_PROMPT_ITEMS = 64;
+const DERIVED_INCREMENTAL_SCHEMA_VERSION = 1;
+const MAX_DERIVED_CONTENT_ITEMS = MAX_MEMORY_ITEMS;
+const MAX_INCREMENTAL_EXISTING_INDEX_ITEMS = 120;
 const MAX_GENERATION_INPUT_TOKENS = 32000;
-const MAX_GENERATION_OUTPUT_TOKENS = 30000;
+const MAX_GENERATION_OUTPUT_TOKENS = 60000;
+const MAX_GENERATION_OUTPUT_CHARS = 600000;
 const MAX_GENERATION_INPUT_CHARS = 96000;
 const MAX_EXTERNAL_MEMORY_ITEMS = 256;
 const MAX_EXTERNAL_MEMORY_CHARS = 240000;
@@ -525,6 +529,176 @@ function safeId(value, fallback) {
     return cleaned || fallback;
 }
 
+function archiveMemoryIds(memoryBank) {
+    return (Array.isArray(memoryBank?.memories) ? memoryBank.memories : [])
+        .map(item => normalizeText(item?.id, 40))
+        .filter(Boolean)
+        .slice(0, MAX_MEMORY_ITEMS);
+}
+
+function collectSessionEvidenceIds(value, out = new Set(), seen = new WeakSet(), depth = 0) {
+    if (!value || typeof value !== 'object' || depth > 10 || out.size >= MAX_MEMORY_ITEMS) return out;
+    if (seen.has(value)) return out;
+    seen.add(value);
+    if (Array.isArray(value)) {
+        for (const item of value) collectSessionEvidenceIds(item, out, seen, depth + 1);
+        return out;
+    }
+    for (const [key, item] of Object.entries(value)) {
+        if (key === 'sourceMemoryIds' || key === 'sourceArchiveMemoryIds' || key === 'coveredMemoryIds') {
+            for (const id of cleanArray(item, MAX_MEMORY_ITEMS, 40)) out.add(id);
+            continue;
+        }
+        if (key === 'generationMeta') continue;
+        collectSessionEvidenceIds(item, out, seen, depth + 1);
+    }
+    return out;
+}
+
+function legacyIncrementalEvidenceIds(session, part = 'mode') {
+    if (!session || typeof session !== 'object') return [];
+    if (part.startsWith('season:')) {
+        const season = part.slice('season:'.length);
+        const related = [
+            ...(Array.isArray(session.voiceDramas) ? session.voiceDramas.filter(item => item.kind === season) : []),
+            ...(Array.isArray(session.scenarioDramas) ? session.scenarioDramas.filter(item => item.season === season) : []),
+        ];
+        return [...collectSessionEvidenceIds(related)];
+    }
+    if (part === 'strips') return [...collectSessionEvidenceIds(session.dailyStrips || [])];
+    if (part === 'dialogues') {
+        return [...new Set([
+            ...cleanArray(session.relationshipSourceMemoryIds, 24, 40),
+            ...collectSessionEvidenceIds(session.greetings || {}),
+        ])];
+    }
+    if (part === 'confessions') return [...collectSessionEvidenceIds(session.confessionReplays || [])];
+    return [...collectSessionEvidenceIds(session)];
+}
+
+function incrementalPartRecord(session, part = 'mode') {
+    const raw = session?.generationMeta?.parts?.[part];
+    if (!raw || typeof raw !== 'object') return null;
+    return {
+        coveredMemoryIds: cleanArray(raw.coveredMemoryIds, MAX_MEMORY_ITEMS, 40),
+        archiveRevision: normalizeText(raw.archiveRevision, 240),
+        updatedAt: Math.max(0, Number(raw.updatedAt) || 0),
+    };
+}
+
+function legacyIncrementalPartHasContent(session, part = 'mode') {
+    if (!session || typeof session !== 'object') return false;
+    if (part.startsWith('season:')) {
+        const season = part.slice('season:'.length);
+        return (Array.isArray(session.voiceDramas) && session.voiceDramas.some(item => item?.kind === season))
+            || (Array.isArray(session.scenarioDramas) && session.scenarioDramas.some(item => item?.season === season));
+    }
+    if (part === 'strips') return Array.isArray(session.dailyStrips) && session.dailyStrips.length > 0;
+    if (part === 'dialogues') {
+        return !!normalizeText(session.relationshipSummary, 40)
+            || Object.values(session.greetings || {}).some(lines => Array.isArray(lines) && lines.length > 0);
+    }
+    if (part === 'confessions') return Array.isArray(session.confessionReplays) && session.confessionReplays.length > 0;
+    return !!session.kind;
+}
+
+function incrementalCoveredMemoryIds(session, memoryBank, part = 'mode') {
+    const valid = new Set(archiveMemoryIds(memoryBank));
+    const record = incrementalPartRecord(session, part);
+    // A pre-r30 cache has no per-part cursor. If that part already contains generated material
+    // and its exact older archive snapshot is unavailable, the conservative migration is to
+    // regard the current archive as its baseline. Replaying only the few evidence IDs embedded
+    // in old output would misclassify the rest as new and make the model retell old material.
+    const fallback = record
+        ? record.coveredMemoryIds
+        : legacyIncrementalPartHasContent(session, part)
+            ? archiveMemoryIds(memoryBank)
+            : legacyIncrementalEvidenceIds(session, part);
+    return [...new Set(fallback.filter(id => valid.has(id)))];
+}
+
+function incrementalArchiveMemoryIds(session, memoryBank, part = 'mode', limit = MAX_MEMORY_PROMPT_ITEMS) {
+    const covered = new Set(incrementalCoveredMemoryIds(session, memoryBank, part));
+    const safeLimit = Math.max(1, Math.min(MAX_MEMORY_PROMPT_ITEMS, Math.floor(Number(limit) || MAX_MEMORY_PROMPT_ITEMS)));
+    return archiveMemoryIds(memoryBank).filter(id => !covered.has(id)).slice(0, safeLimit);
+}
+
+function usesIncrementalMemoryId(referenceIds, sourceMemoryIds) {
+    const allowed = new Set(cleanArray(sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS, 40));
+    return cleanArray(referenceIds, MAX_MEMORY_ITEMS, 40).some(id => allowed.has(id));
+}
+
+function incrementalArchiveSlice(memoryBank, sourceMemoryIds, limit = MAX_MEMORY_PROMPT_ITEMS) {
+    const ids = cleanArray(sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS, 40);
+    return JSON.stringify({
+        archiveName: normalizeText(memoryBank?.archiveName, 120),
+        incrementalMemoryIds: ids,
+        memories: memoryPayload(memoryBank, ids, limit),
+    }, null, 2);
+}
+
+function incrementalPromptMemoryBank(memoryBank, sourceMemoryIds) {
+    const ids = new Set(cleanArray(sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS, 40));
+    return {
+        archiveName: normalizeText(memoryBank?.archiveName, 120),
+        archiveSummary: '',
+        archiveKeywords: [],
+        memories: (Array.isArray(memoryBank?.memories) ? memoryBank.memories : []).filter(item => ids.has(normalizeText(item?.id, 40))),
+    };
+}
+
+function stampIncrementalCoverage(session, previous, memoryBank, part, consumedMemoryIds, added = 0) {
+    if (!session || typeof session !== 'object') return session;
+    const currentIds = new Set(archiveMemoryIds(memoryBank));
+    const priorMeta = session.generationMeta && typeof session.generationMeta === 'object'
+        ? structuredClone(session.generationMeta)
+        : previous?.generationMeta && typeof previous.generationMeta === 'object'
+            ? structuredClone(previous.generationMeta)
+            : {};
+    const priorCovered = previous
+        ? incrementalCoveredMemoryIds(previous, memoryBank, part)
+        : [];
+    const consumed = previous
+        ? cleanArray(consumedMemoryIds, MAX_MEMORY_ITEMS, 40)
+        : archiveMemoryIds(memoryBank);
+    const coveredMemoryIds = [...new Set([...priorCovered, ...consumed])].filter(id => currentIds.has(id));
+    session.generationMeta = {
+        ...priorMeta,
+        schemaVersion: DERIVED_INCREMENTAL_SCHEMA_VERSION,
+        parts: {
+            ...(priorMeta.parts && typeof priorMeta.parts === 'object' ? priorMeta.parts : {}),
+            [part]: {
+                coveredMemoryIds,
+                archiveRevision: normalizeText(memoryBank?.archiveRevision, 240),
+                updatedAt: Date.now(),
+            },
+        },
+        lastUpdate: {
+            part,
+            consumedMemoryIds: consumed,
+            added: Math.max(0, Math.floor(Number(added) || 0)),
+            updatedAt: Date.now(),
+        },
+    };
+    return session;
+}
+
+function normalizedContentKey(value, max = 300) {
+    return normalizeText(value, max).replace(/\s+/g, '').toLowerCase();
+}
+
+function uniqueGeneratedId(preferred, usedIds, prefix) {
+    let id = safeId(preferred, '');
+    let serial = Math.max(1, usedIds.size + 1);
+    while (!id || usedIds.has(id)) id = `${prefix}${String(serial++).padStart(2, '0')}`;
+    usedIds.add(id);
+    return id;
+}
+
+function incrementalBatchId(part, sourceMemoryIds) {
+    return stableArchiveHash(`${normalizeText(part, 80)}|${cleanArray(sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS, 40).join('|')}`);
+}
+
 function currentCharacterGuard() {
     const context = getContext();
     if (context.groupId) {
@@ -991,7 +1165,13 @@ function isModeGenerating(mode, context = null) {
         const prefix = `cg-image:${scope}:${mode}:`;
         cgDrawing = !!scope && [...activeCgImageTasks.keys()].some(taskKey => taskKey.startsWith(prefix));
     } catch {}
-    return isGenerationTaskRunning(key) || activeModeBuildScopes.has(key) || cgDrawing;
+    let isolatedEndingScan = false;
+    try {
+        const scope = ctx ? chatScopeKey(ctx) : '';
+        isolatedEndingScan = mode === MODE.ENDING && !!scope
+            && (activeGenerationTasks.has(`ending-confessions:${scope}`) || activeModeBuildScopes.has(`ending-confessions:${scope}`));
+    } catch {}
+    return isGenerationTaskRunning(key) || activeModeBuildScopes.has(key) || cgDrawing || isolatedEndingScan;
 }
 
 function hasGenerationTaskPrefix(prefix) {
@@ -1909,6 +2089,30 @@ function migrateDerivedCacheRevision(cache, oldMemoryBank, newMemoryBank) {
     for (const mode of Object.values(MODE)) {
         const session = migrated?.[mode];
         if (!session || session.kind !== mode) continue;
+        // Capture the exact pre-update baseline before moving the revision fence. This gives
+        // legacy r28/r29 caches a lossless cursor: every old Mxxx is covered, while the IDs that
+        // were appended to newMemoryBank remain available for the next incremental generation.
+        if (mode === MODE.HEART) {
+            if (legacyIncrementalPartHasContent(session, 'dialogues') && !incrementalPartRecord(session, 'dialogues')) {
+                stampIncrementalCoverage(session, null, oldMemoryBank, 'dialogues', archiveMemoryIds(oldMemoryBank), 0);
+            }
+            if (legacyIncrementalPartHasContent(session, 'strips') && !incrementalPartRecord(session, 'strips')) {
+                stampIncrementalCoverage(session, null, oldMemoryBank, 'strips', archiveMemoryIds(oldMemoryBank), 0);
+            }
+            for (const season of ['postending', 'spring', 'summer', 'autumn', 'winter']) {
+                const part = `season:${season}`;
+                if (legacyIncrementalPartHasContent(session, part) && !incrementalPartRecord(session, part)) {
+                    stampIncrementalCoverage(session, null, oldMemoryBank, part, archiveMemoryIds(oldMemoryBank), 0);
+                }
+            }
+        } else {
+            if (!incrementalPartRecord(session, 'mode')) {
+                stampIncrementalCoverage(session, null, oldMemoryBank, 'mode', archiveMemoryIds(oldMemoryBank), 0);
+            }
+            if (mode === MODE.ENDING && legacyIncrementalPartHasContent(session, 'confessions') && !incrementalPartRecord(session, 'confessions')) {
+                stampIncrementalCoverage(session, null, oldMemoryBank, 'confessions', archiveMemoryIds(oldMemoryBank), 0);
+            }
+        }
         // Incremental archive updates never rewrite/delete an existing Mxxx record. Therefore
         // every previously validated sourceMemoryIds/sourceMemoryAnchor pair remains valid.
         // Only the revision fence changes; full rebuilds still discard all derived caches.
@@ -2794,13 +2998,29 @@ function endingArchiveSlice(memoryBank, limit = 48) {
     }, null, 2);
 }
 
-function endingConfessionRefreshPrompt(context, memoryBank) {
+function compactEndingConfessionsExisting(session) {
+    return evenlySample(Array.isArray(session?.confessionReplays) ? session.confessionReplays : [], MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
+        id: normalizeText(item?.id, 60),
+        title: normalizeText(item?.title, 120),
+        date: normalizeText(item?.date, 80),
+        type: normalizeText(item?.type, 40),
+        sourceMemoryIds: cleanArray(item?.sourceMemoryIds, 12, 40),
+        sourceMemoryAnchor: normalizeText(item?.sourceMemoryAnchor, 160),
+    }));
+}
+
+function endingConfessionRefreshPrompt(context, memoryBank, previous = null, sourceMemoryIds = null) {
+    const archiveBlock = previous
+        ? incrementalArchiveSlice(memoryBank, sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS)
+        : endingArchiveSlice(memoryBank, 64);
     return `${promptSafetyBoundary(context, '告白回看增量扫描')}
 本请求只重新读取 ENDING 里的【已发生告白回看】。不要生成或修改结局路线、recommendedEndingId、relationshipState、relationshipSummary、ENDING Scene、未来 confession 或 epilogue。
 
-下面只提供当前手动档案中与告白/关系确认相关的重点记忆和整体采样。过去事实只能来自这里；没有真实告白证据就返回空数组。
-UNTRUSTED_CONFESSION_ARCHIVE_JSON:
-${endingArchiveSlice(memoryBank, 64)}
+旧告白由本地原样保留。本轮只提供尚未消费的增量档案；过去事实只能来自这里，没有新的真实告白证据就返回空数组。
+UNTRUSTED_INCREMENTAL_CONFESSION_ARCHIVE_JSON:
+${archiveBlock}
+EXISTING_CONFESSION_INDEX_JSON:
+${JSON.stringify(compactEndingConfessionsExisting(previous), null, 2)}
 
 严格输出：
 {
@@ -2823,7 +3043,7 @@ ${endingArchiveSlice(memoryBank, 64)}
 }
 
 硬性要求：
-- 扫描当前提供档案，返回当前能验证的完整告白回看集合 0～6 条，而不是只补一条。
+- 初次扫描返回完整集合；增量扫描只返回 0～6 条由 incrementalMemoryIds 新证明、且不在 EXISTING_CONFESSION_INDEX_JSON 中的告白回看，禁止复述旧告白。
 - type 只能是 true / mutual / friendship / indirect / relationship / rejected / other。
 - 每条都必须有真实 sourceMemoryIds + sourceMemoryAnchor；anchor 必须直接证明告白、友情式告白、明确关系确认、未完成/被拒绝告白等确实发生，普通暧昧和约会不能冒充。
 - scene/confessionText/responseSummary/afterEffect 都只重构已发生事实，不推进主线，不生成未来后日谈。
@@ -2963,6 +3183,175 @@ function normalizeEndingOutline(data, memoryBank) {
     };
 }
 
+function compactEndingRoutesExisting(session) {
+    return evenlySample(Array.isArray(session?.endings) ? session.endings : [], MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
+        id: normalizeText(item?.id, 60),
+        type: normalizeText(item?.type, 40),
+        title: normalizeText(item?.title, 120),
+        subtitle: normalizeText(item?.subtitle, 240),
+        available: !!item?.available,
+        sourceMemoryIds: cleanArray(item?.sourceMemoryIds, 12, 40),
+        sourceMemoryAnchor: normalizeText(item?.sourceMemoryAnchor, 160),
+    }));
+}
+
+function endingIncrementOutlinePrompt(context, memoryBank, previous, sourceMemoryIds) {
+    return `${promptSafetyBoundary(context, '结局路线判定 / 增量目录')}
+旧路线、终章、后日谈和旧告白由本地原样保留。本请求只依据新增档案判断关系的新阶段，并提出 0～4 条真正新增的路线变体或刚刚从未解锁变为可观测的路线；禁止改写、润色或换标题复述旧路线。
+UNTRUSTED_INCREMENTAL_ENDING_ARCHIVE_JSON:
+${incrementalArchiveSlice(memoryBank, sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS)}
+EXISTING_ENDING_INDEX_JSON:
+${JSON.stringify(compactEndingRoutesExisting(previous), null, 2)}
+
+严格输出：
+{"title":"ENDING / 结局档案","relationshipState":"新增档案后的当前阶段","relationshipSummary":"只总结新证据带来的变化","relationshipSourceMemoryIds":["M001"],"relationshipSourceMemoryAnchor":"真实锚点","recommendedEndingId":"本轮新增路线 id 或空字符串","endings":[{"id":"END_NEW_01","type":"romance","title":"新的路线标题","subtitle":"...","available":true,"unlockHint":"...","sourceMemoryIds":["M001"],"sourceMemoryAnchor":"真实起点锚点"}]}
+
+要求：
+- relationship 必须由真实档案 ID + anchor 支撑。
+- endings 可为空；只有新增档案真正形成新路线、路线新阶段或解锁旧目标时才返回。
+- 每条必须至少引用一个 incrementalMemoryIds；必须避开 EXISTING_ENDING_INDEX_JSON 的标题、锚点和路线含义。
+- 不输出 endingScene/confession/creditsLine/epilogue/confessionReplays；可观测新路线正文会在下一小段生成。
+- type 只能 route/romance/reverse/bond/open/personal。禁止前任、第三方恋爱、威胁和强迫。只输出 JSON。`;
+}
+
+function normalizeEndingIncrementOutline(data, memoryBank, sourceMemoryIds) {
+    const relationshipState = normalizeText(data?.relationshipState, 120) || '关系继续发展';
+    const relationshipSummary = normalizeText(data?.relationshipSummary, 2400);
+    if (!relationshipSummary) throw new Error('ENDING 增量目录缺少关系摘要。');
+    const relationshipReference = normalizeMemoryReference(
+        data?.relationshipSourceMemoryIds,
+        data?.relationshipSourceMemoryAnchor,
+        `${relationshipState}\n${relationshipSummary}`,
+        memoryBank,
+        1,
+    );
+    if (!relationshipReference.sourceMemoryIds.length || !relationshipReference.sourceMemoryAnchor) throw new Error('ENDING 增量目录缺少真实关系锚点。');
+    if (!usesIncrementalMemoryId(relationshipReference.sourceMemoryIds, sourceMemoryIds)) throw new Error('ENDING 增量目录的关系阶段没有引用本轮新增档案。');
+    const endings = (Array.isArray(data?.endings) ? data.endings : []).slice(0, 4).map((item, index) => {
+        const typeRaw = normalizeText(item?.type, 40).toLowerCase();
+        const type = ENDING_TYPES.has(typeRaw) ? typeRaw : 'personal';
+        const title = normalizeText(item?.title, 100) || `新增路线 ${index + 1}`;
+        const subtitle = normalizeText(item?.subtitle, 240);
+        const unlockHint = normalizeText(item?.unlockHint, 1200);
+        const available = !!item?.available;
+        const reference = normalizeMemoryReference(
+            item?.sourceMemoryIds,
+            item?.sourceMemoryAnchor,
+            `${title}\n${subtitle}\n${unlockHint}`,
+            memoryBank,
+            1,
+        );
+        if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) return null;
+        if (!usesIncrementalMemoryId(reference.sourceMemoryIds, sourceMemoryIds)) return null;
+        if (!available && !unlockHint) return null;
+        return {
+            id: safeId(item?.id, `END_NEW_${String(index + 1).padStart(2, '0')}`),
+            type,
+            title,
+            subtitle,
+            available,
+            unlockHint,
+            sourceMemoryIds: reference.sourceMemoryIds,
+            sourceMemoryAnchor: reference.sourceMemoryAnchor,
+            endingScene: '',
+            confession: '',
+            confessionLines: [],
+            creditsLine: '',
+            epilogue: { title: '后日谈', timeSkip: '', scenes: [], finalLine: '' },
+        };
+    }).filter(Boolean);
+    return {
+        title: normalizeText(data?.title, 120) || 'ENDING / 结局档案',
+        relationshipState,
+        relationshipSummary,
+        relationshipSourceMemoryIds: relationshipReference.sourceMemoryIds,
+        relationshipSourceMemoryAnchor: relationshipReference.sourceMemoryAnchor,
+        recommendedEndingId: safeId(data?.recommendedEndingId, ''),
+        endings,
+    };
+}
+
+function endingRouteEvidenceKey(item) {
+    const ids = cleanArray(item?.sourceMemoryIds, 12, 40).sort().join(',');
+    const anchor = normalizedContentKey(item?.sourceMemoryAnchor, 160);
+    return `${normalizeText(item?.type, 40)}|${ids}|${anchor || normalizedContentKey(item?.title, 120)}`;
+}
+
+function endingConfessionEvidenceKey(item) {
+    const ids = cleanArray(item?.sourceMemoryIds, 12, 40).sort().join(',');
+    // One archive event is one replay even if a later model classifies its type differently.
+    return `${ids}|${normalizedContentKey(item?.sourceMemoryAnchor, 160)}`;
+}
+
+function mergeEndingConfessions(previousList, freshList) {
+    const merged = (Array.isArray(previousList) ? previousList : []).map(item => structuredClone(item));
+    const seen = new Set(merged.map(endingConfessionEvidenceKey));
+    const usedIds = new Set(merged.map(item => item.id));
+    let added = 0;
+    for (const item of freshList || []) {
+        const key = endingConfessionEvidenceKey(item);
+        if (!key || seen.has(key) || merged.length >= MAX_DERIVED_CONTENT_ITEMS) continue;
+        seen.add(key);
+        merged.push({ ...structuredClone(item), id: uniqueGeneratedId(item.id, usedIds, 'CONF') });
+        added += 1;
+    }
+    return { items: merged, added };
+}
+
+function mergeEndingIncremental(previous, outline, detailed, freshConfessions, memoryBank) {
+    const merged = structuredClone(previous);
+    const history = Array.isArray(merged.relationshipHistory) ? merged.relationshipHistory : [];
+    const oldHistoryKey = `${normalizedContentKey(previous.relationshipState, 120)}|${normalizedContentKey(previous.relationshipSummary, 400)}`;
+    if (previous.relationshipSummary && !history.some(item => `${normalizedContentKey(item?.relationshipState, 120)}|${normalizedContentKey(item?.relationshipSummary, 400)}` === oldHistoryKey)) {
+        history.push({
+            relationshipState: previous.relationshipState,
+            relationshipSummary: previous.relationshipSummary,
+            relationshipSourceMemoryIds: previous.relationshipSourceMemoryIds,
+            relationshipSourceMemoryAnchor: previous.relationshipSourceMemoryAnchor,
+            archivedAt: Date.now(),
+        });
+    }
+    merged.relationshipHistory = history.slice(-60);
+    merged.relationshipState = outline.relationshipState;
+    merged.relationshipSummary = outline.relationshipSummary;
+    merged.relationshipSourceMemoryIds = outline.relationshipSourceMemoryIds;
+    merged.relationshipSourceMemoryAnchor = outline.relationshipSourceMemoryAnchor;
+
+    const detailById = new Map((detailed || []).map(item => [item.id, item]));
+    const incoming = (outline.endings || []).map(item => detailById.get(item.id) || item);
+    const byKey = new Map((merged.endings || []).map((item, index) => [endingRouteEvidenceKey(item), index]));
+    const usedIds = new Set((merged.endings || []).map(item => item.id));
+    let added = 0;
+    let recommended = previous.recommendedEndingId;
+    for (const item of incoming) {
+        const key = endingRouteEvidenceKey(item);
+        let existingIndex = byKey.get(key);
+        if (existingIndex === undefined) {
+            existingIndex = merged.endings.findIndex(old => old.type === item.type && normalizedContentKey(old.title, 120) === normalizedContentKey(item.title, 120));
+        }
+        if (existingIndex !== undefined && existingIndex >= 0) {
+            const old = merged.endings[existingIndex];
+            if (!old.available && item.available) {
+                merged.endings[existingIndex] = { ...old, ...structuredClone(item), id: old.id };
+                added += 1;
+                if (outline.recommendedEndingId === item.id) recommended = old.id;
+            }
+            continue;
+        }
+        if (merged.endings.length >= MAX_DERIVED_CONTENT_ITEMS) continue;
+        const next = { ...structuredClone(item), id: uniqueGeneratedId(item.id, usedIds, 'END') };
+        merged.endings.push(next);
+        byKey.set(key, merged.endings.length - 1);
+        added += 1;
+        if (outline.recommendedEndingId === item.id && item.available) recommended = next.id;
+    }
+    const confessionMerge = mergeEndingConfessions(previous.confessionReplays, freshConfessions);
+    merged.confessionReplays = confessionMerge.items;
+    merged.recommendedEndingId = recommended;
+    const normalized = normalizeEnding(merged, memoryBank);
+    return { session: normalized, added: added + confessionMerge.added };
+}
+
 function endingRouteDetailPrompt(context, memoryBank, outline, route) {
     const ids = [...new Set([
         ...(outline?.relationshipSourceMemoryIds || []),
@@ -3084,6 +3473,51 @@ function normalizeEndingRouteDetail(data, route) {
 }
 
 async function generateEndingWithRepair(context, memoryBank, origin, taskKey) {
+    const previous = loadSession(MODE.ENDING, { context, chatId: getChatId(context), memoryBank, clone: true });
+    const sourceMemoryIds = incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+    if (previous) {
+        const outline = await requestValidatedSegment(
+            endingIncrementOutlinePrompt(context, memoryBank, previous, sourceMemoryIds),
+            'ENDING · 正在从新增档案判断新路线…',
+            { maxTokens: 5000, temperature: 0.35, context, origin, taskKey: `${taskKey}:increment-outline`, mode: MODE.ENDING, background: true },
+            raw => normalizeEndingIncrementOutline(raw, memoryBank, sourceMemoryIds),
+        );
+        const usedIds = new Set(previous.endings.map(item => item.id));
+        const originalRecommended = outline.recommendedEndingId;
+        for (const route of outline.endings) {
+            const originalId = route.id;
+            route.id = uniqueGeneratedId(route.id, usedIds, 'END');
+            if (originalRecommended === originalId) outline.recommendedEndingId = route.id;
+        }
+        const available = outline.endings.filter(item => item.available);
+        const detailed = await mapGenerationConcurrent(available, SEGMENT_REQUEST_CONCURRENCY, async (route, index) => requestValidatedSegment(
+            endingRouteDetailPrompt(context, memoryBank, outline, route),
+            `ENDING · 新路线 ${index + 1}/${available.length}：${route.title}…`,
+            { maxTokens: 9000, context, origin, taskKey: `${taskKey}:increment-route:${route.id}`, mode: MODE.ENDING, background: true },
+            raw => normalizeEndingRouteDetail(raw, route),
+        ));
+        let freshConfessions = [];
+        let confessionScanSucceeded = false;
+        try {
+            const confessionRaw = await requestJson(
+                endingConfessionRefreshPrompt(context, memoryBank, previous, sourceMemoryIds),
+                'ENDING · 正在从新增档案扫描新告白…',
+                { maxTokens: 8000, temperature: 0.35, context, origin, taskKey: `${taskKey}:increment-confession`, mode: MODE.ENDING, background: true },
+            );
+            freshConfessions = normalizeEndingConfessionReplays(confessionRaw?.confessionReplays, memoryBank)
+                .filter(item => usesIncrementalMemoryId(item.sourceMemoryIds, sourceMemoryIds));
+            confessionScanSucceeded = true;
+        } catch (error) {
+            if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
+            console.warn('[HeartbeatMemories] incremental ENDING confession scan failed; keeping old replays', error);
+        }
+        const merged = mergeEndingIncremental(previous, outline, detailed, freshConfessions, memoryBank);
+        stampIncrementalCoverage(merged.session, previous, memoryBank, 'mode', sourceMemoryIds, merged.added);
+        if (confessionScanSucceeded) {
+            stampIncrementalCoverage(merged.session, previous, memoryBank, 'confessions', sourceMemoryIds, freshConfessions.length);
+        }
+        return merged.session;
+    }
     const outline = await requestValidatedSegment(
         endingOutlinePrompt(context, memoryBank),
         'ENDING · 正在判断关系与路线目录…',
@@ -3121,6 +3555,7 @@ ${detail}` : ''}`);
         return completed;
     });
     let confessionReplays = [];
+    let confessionScanSucceeded = false;
     try {
         const confessionRaw = await requestJson(
             endingConfessionRefreshPrompt(context, memoryBank),
@@ -3128,6 +3563,7 @@ ${detail}` : ''}`);
             { maxTokens: 10000, temperature: 0.35, context, origin, taskKey: `${taskKey}:confession`, mode: MODE.ENDING, background: true },
         );
         confessionReplays = normalizeEndingConfessionReplays(confessionRaw?.confessionReplays, memoryBank);
+        confessionScanSucceeded = true;
     } catch (error) {
         if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
         console.warn('[HeartbeatMemories] split ENDING confession scan failed; preserving the previous replay cache when available', error);
@@ -3149,7 +3585,12 @@ ${detail}` : ''}`);
         confessionReplays,
         endings: outline.endings.map(route => detailedById.get(route.id) || route),
     };
-    return normalizeEnding(merged, memoryBank);
+    const normalized = normalizeEnding(merged, memoryBank);
+    stampIncrementalCoverage(normalized, null, memoryBank, 'mode', sourceMemoryIds, normalized.endings.length);
+    if (confessionScanSucceeded) {
+        stampIncrementalCoverage(normalized, null, memoryBank, 'confessions', sourceMemoryIds, normalized.confessionReplays.length);
+    }
+    return normalized;
 }
 
 
@@ -3210,7 +3651,7 @@ async function requestValidatedSegment(prompt, status, options, validator) {
 }
 
 function compactAlbumExisting(session) {
-    return (Array.isArray(session?.entries) ? session.entries : []).slice(0, 36).map(item => ({
+    return evenlySample(Array.isArray(session?.entries) ? session.entries : [], MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
         id: normalizeText(item?.id, 40),
         title: normalizeText(item?.title, 80),
         unlocked: !!item?.unlocked,
@@ -3219,11 +3660,14 @@ function compactAlbumExisting(session) {
     }));
 }
 
-function albumIndexPrompt(context, memoryBank, previousSession = null) {
+function albumIndexPrompt(context, memoryBank, previousSession = null, sourceMemoryIds = null) {
+    const archiveBlock = previousSession
+        ? incrementalArchiveSlice(memoryBank, sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS)
+        : promptArchiveSlice(memoryBank, 48);
     return `${promptSafetyBoundary(context, '回忆相簿 / 重要 CG 节点')}
-本请求只挑当前档案里【真正值得成为一张 CG 的重要节点】。不要为了凑固定数量塞普通日常；相簿以后会随着档案更新继续累积。
-UNTRUSTED_CG_ARCHIVE_JSON:
-${promptArchiveSlice(memoryBank, 48)}
+本请求只挑本次增量档案里【尚未被相簿覆盖、真正值得成为一张 CG 的新节点】。旧相簿由本地代码原样保留；不要重写、润色或换标题复述旧条目。
+UNTRUSTED_INCREMENTAL_CG_ARCHIVE_JSON:
+${archiveBlock}
 EXISTING_ALBUM_INDEX_JSON:
 ${JSON.stringify(compactAlbumExisting(previousSession), null, 2)}
 
@@ -3240,17 +3684,18 @@ ${JSON.stringify(compactAlbumExisting(previousSession), null, 2)}
 }
 
 要求：
-- 本轮优先返回 3～6 个最重要、最有画面感、彼此明显不同的节点；如果档案真的没有这么多重要节点，可以更少，禁止为了数量硬凑。
-- unlocked=true 必须来自真实当前档案；优先选择 EXISTING_ALBUM_INDEX_JSON 尚未覆盖的新重要节点。没有新重要节点时，可以返回仍最值得保留的旧节点。
+- 初次生成时优先返回 3～6 个最重要节点；增量更新时只返回 0～6 个由 incrementalMemoryIds 支撑的新节点，没有新的重要节点就返回空 entries，禁止复述旧节点。
+- unlocked=true 必须来自本次提供的真实增量档案；必须避开 EXISTING_ALBUM_INDEX_JSON 已覆盖的标题、锚点与 sourceMemoryIds 组合。
 - unlocked=false 不是硬性数量要求；只有存在明确、自然的未来期许时才给 0～2 个，hintLines 写解锁提示。
 - 每个 unlocked=true 必须有有效 sourceMemoryIds + sourceMemoryAnchor；category 只能是“日常”“约会”“结局”；visualSeed 至少 4 个元素。
 - imagePrompt 只写肉眼可见的角色、服装、动作、场景、构图与光线；禁止 URL、HTML、脚本、记忆原文和不可见心理活动。
 - 不要输出 comments；共同回忆会在后续更小的请求里生成。只输出 JSON。`;
 }
 
-function normalizeAlbumIndex(data, memoryBank) {
+function normalizeAlbumIndex(data, memoryBank, sourceMemoryIds = null) {
+    const incrementalIds = sourceMemoryIds ? cleanArray(sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS, 40) : null;
     const raw = Array.isArray(data?.entries) ? data.entries : [];
-    const entries = raw.slice(0, 40).map((item, index) => {
+    const entries = raw.slice(0, MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const unlocked = !!item?.unlocked;
         const category = CATEGORY_VALUES.has(item?.category) ? item.category : '日常';
         const visualSeed = cleanArray(item?.visualSeed, 12, 80);
@@ -3258,6 +3703,7 @@ function normalizeAlbumIndex(data, memoryBank) {
         const desc = normalizeText(item?.desc, 1200);
         const hintLines = unlocked ? [] : cleanArray(item?.hintLines, 4, 1200);
         const reference = normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, `${title}\n${desc}\n${hintLines.join('；')}`, memoryBank, 1);
+        if (incrementalIds && !usesIncrementalMemoryId(reference.sourceMemoryIds, incrementalIds)) return null;
         return {
             id: safeId(item?.id, `CG${String(index + 1).padStart(2, '0')}`),
             title,
@@ -3272,9 +3718,9 @@ function normalizeAlbumIndex(data, memoryBank) {
             comments: [],
             hintLines,
         };
-    }).filter(item => item.desc && item.sourceMemoryIds.length >= 1);
+    }).filter(item => item && item.desc && item.sourceMemoryIds.length >= 1);
     const unlockedCount = entries.filter(item => item.unlocked).length;
-    if (!entries.length || unlockedCount < 1) {
+    if (raw.length && (!entries.length || unlockedCount < 1)) {
         throw new Error('相簿没有生成任何可验证的重要已解锁节点。');
     }
     for (const item of entries) {
@@ -3338,14 +3784,26 @@ function mergeAlbumIncremental(previous, fresh, memoryBank) {
     let nextNumber = merged.length + 1;
     for (const item of fresh.entries || []) {
         const key = albumEvidenceKey(item);
-        const existingIndex = indexByKey.get(key);
+        let existingIndex = indexByKey.get(key);
+        if (existingIndex === undefined && item.unlocked) {
+            const incomingId = safeId(item.id, '');
+            const incomingTitle = normalizedContentKey(item.title, 80);
+            const lockedIndex = merged.findIndex(old => !old.unlocked && (
+                (incomingId && safeId(old.id, '') === incomingId)
+                || (incomingTitle && normalizedContentKey(old.title, 80) === incomingTitle)
+            ));
+            if (lockedIndex >= 0) existingIndex = lockedIndex;
+        }
         if (existingIndex !== undefined) {
             const old = merged[existingIndex];
-            merged[existingIndex] = {
-                ...item,
-                id: old.id,
-                cgImage: normalizeCgImageRecord(old.cgImage) || normalizeCgImageRecord(item.cgImage),
-            };
+            if (!old.unlocked && item.unlocked) {
+                merged[existingIndex] = {
+                    ...old,
+                    ...item,
+                    id: old.id,
+                    cgImage: normalizeCgImageRecord(old.cgImage) || normalizeCgImageRecord(item.cgImage),
+                };
+            }
             continue;
         }
         let id = safeId(item.id, '');
@@ -3356,17 +3814,29 @@ function mergeAlbumIncremental(previous, fresh, memoryBank) {
         indexByKey.set(key, merged.length);
         merged.push({ ...item, id });
     }
-    return normalizeAlbum({ title: fresh.title || previous.title, entries: merged.slice(-40) }, memoryBank);
+    // `fresh` has already passed normalizeAlbum(). Re-normalizing the combined collection would
+    // unnecessarily touch every historical record and could drop a valid legacy entry. Keep the
+    // old session byte-for-byte at the field level and only replace the append-only entries array.
+    return {
+        ...structuredClone(previous),
+        kind: MODE.ALBUM,
+        title: previous.title || fresh.title || '回忆相簿',
+        entries: merged.slice(0, MAX_DERIVED_CONTENT_ITEMS),
+    };
 }
 
 async function generateAlbumWithRepair(context, memoryBank, origin, taskKey) {
     const previous = loadSession(MODE.ALBUM, { context, chatId: getChatId(context), memoryBank, clone: true });
+    const sourceMemoryIds = incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
     const index = await requestValidatedSegment(
-        albumIndexPrompt(context, memoryBank, previous),
-        '回忆相簿 1/2 · 正在挑选重要 CG 节点…',
+        albumIndexPrompt(context, memoryBank, previous, sourceMemoryIds),
+        previous ? '回忆相簿 1/2 · 正在从新增档案挑选新 CG…' : '回忆相簿 1/2 · 正在挑选重要 CG 节点…',
         { maxTokens: 5500, temperature: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: MODE.ALBUM, background: true },
-        raw => normalizeAlbumIndex(raw, memoryBank),
+        raw => normalizeAlbumIndex(raw, memoryBank, previous ? sourceMemoryIds : null),
     );
+    if (previous && !index.entries.length) {
+        return stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0);
+    }
     const unlocked = index.entries.filter(item => item.unlocked);
     const batches = chunkForGeneration(unlocked, 3);
     const commentMaps = await mapGenerationConcurrent(batches, SEGMENT_REQUEST_CONCURRENCY, async (batch, batchIndex) => {
@@ -3397,7 +3867,9 @@ async function generateAlbumWithRepair(context, memoryBank, origin, taskKey) {
         title: index.title,
         entries: index.entries.map(item => ({ ...item, comments: item.unlocked ? (allComments.get(item.id) || []) : [] })),
     }, memoryBank);
-    return mergeAlbumIncremental(previous, fresh, memoryBank);
+    const merged = mergeAlbumIncremental(previous, fresh, memoryBank);
+    const added = Math.max(0, merged.entries.length - (previous?.entries?.length || 0));
+    return stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
 function normalizeHeartCore(data, memoryBank) {
@@ -3443,6 +3915,115 @@ ${endingArchiveSlice(memoryBank, 40)}
 - 不要输出 voiceDramas / scenarioDramas / dailyStrips。只输出 JSON。`;
 }
 
+function compactHeartDialoguesExisting(session) {
+    const greetings = {};
+    for (const key of HEART_GREETING_KEYS) greetings[key] = cleanArray(session?.greetings?.[key], 24, 600);
+    return {
+        relationshipState: normalizeText(session?.relationshipState, 120),
+        relationshipSummary: normalizeText(session?.relationshipSummary, 900),
+        greetings,
+        specialDays: (Array.isArray(session?.specialDays) ? session.specialDays : []).slice(0, 30),
+    };
+}
+
+function heartCoreIncrementPrompt(context, memoryBank, existing, sourceMemoryIds) {
+    return `${promptSafetyBoundary(context, '角色互动 / 时期对话增量')}
+旧关系时期记录和旧台词由本地原样保留。本请求只根据新增档案补充新的关系阶段说明与新台词，禁止改写、润色或换措辞复述旧台词。
+UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:
+${incrementalArchiveSlice(memoryBank, sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS)}
+EXISTING_HEART_DIALOGUES_JSON:
+${JSON.stringify(compactHeartDialoguesExisting(existing), null, 2)}
+
+严格输出字段：relationshipState, relationshipSummary, relationshipSourceMemoryIds, relationshipSourceMemoryAnchor, birthdayMmDd, userBirthdayMmDd, specialDays, greetings。
+- relationship 说明当前新增档案带来的最新阶段，必须由真实档案 ID + anchor 支撑；旧阶段会被本地保存到历史，不会丢失。
+- greetings 每一类只写 0～2 条真正新的台词；至少一个分类有新增内容。必须避开 EXISTING_HEART_DIALOGUES_JSON 中的原句与近义复述。
+- specialDays 只补新增档案能确定的新日期；不知道就空数组。生日不知道就空字符串。
+- 不输出旧台词，不输出 Drama / Scenario / dailyStrips。只输出 JSON。`;
+}
+
+function normalizeHeartCoreIncrement(data, memoryBank, sourceMemoryIds) {
+    const relationshipState = normalizeText(data?.relationshipState, 120) || '关系继续发展';
+    const relationshipSummary = normalizeText(data?.relationshipSummary, 1800);
+    if (!relationshipSummary) throw new Error('角色互动增量缺少关系摘要。');
+    const reference = normalizeMemoryReference(
+        data?.relationshipSourceMemoryIds,
+        data?.relationshipSourceMemoryAnchor,
+        `${relationshipState}\n${relationshipSummary}`,
+        memoryBank,
+        1,
+    );
+    if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) throw new Error('角色互动增量缺少真实关系锚点。');
+    if (!usesIncrementalMemoryId(reference.sourceMemoryIds, sourceMemoryIds)) throw new Error('角色互动增量的关系阶段没有引用本轮新增档案。');
+    const greetings = {};
+    let total = 0;
+    for (const key of HEART_GREETING_KEYS) {
+        greetings[key] = cleanArray(data?.greetings?.[key], 2, 600);
+        total += greetings[key].length;
+    }
+    if (!total) throw new Error('角色互动增量没有生成任何新台词。');
+    return {
+        relationshipState,
+        relationshipSummary,
+        relationshipSourceMemoryIds: reference.sourceMemoryIds,
+        relationshipSourceMemoryAnchor: reference.sourceMemoryAnchor,
+        birthdayMmDd: normalizeText(data?.birthdayMmDd, 20),
+        userBirthdayMmDd: normalizeText(data?.userBirthdayMmDd, 20),
+        specialDays: Array.isArray(data?.specialDays) ? data.specialDays : [],
+        greetings,
+    };
+}
+
+function mergeHeartCoreIncremental(existing, core) {
+    const merged = structuredClone(existing);
+    const previousState = {
+        relationshipState: normalizeText(existing?.relationshipState, 120),
+        relationshipSummary: normalizeText(existing?.relationshipSummary, 1800),
+        relationshipSourceMemoryIds: cleanArray(existing?.relationshipSourceMemoryIds, 24, 40),
+        relationshipSourceMemoryAnchor: normalizeText(existing?.relationshipSourceMemoryAnchor, 160),
+        archivedAt: Date.now(),
+    };
+    const history = Array.isArray(existing?.relationshipHistory) ? structuredClone(existing.relationshipHistory) : [];
+    const historyKey = `${normalizedContentKey(previousState.relationshipState, 120)}|${normalizedContentKey(previousState.relationshipSummary, 300)}`;
+    if (previousState.relationshipSummary && !history.some(item => `${normalizedContentKey(item?.relationshipState, 120)}|${normalizedContentKey(item?.relationshipSummary, 300)}` === historyKey)) {
+        history.push(previousState);
+    }
+    merged.relationshipHistory = history.slice(-60);
+    merged.relationshipState = core.relationshipState;
+    merged.relationshipSummary = core.relationshipSummary;
+    merged.relationshipSourceMemoryIds = core.relationshipSourceMemoryIds;
+    merged.relationshipSourceMemoryAnchor = core.relationshipSourceMemoryAnchor;
+    merged.birthdayMmDd = core.birthdayMmDd || existing.birthdayMmDd || '';
+    merged.userBirthdayMmDd = core.userBirthdayMmDd || existing.userBirthdayMmDd || '';
+    let added = 0;
+    merged.greetings = { ...(existing.greetings || {}) };
+    for (const key of HEART_GREETING_KEYS) {
+        const lines = [...(existing.greetings?.[key] || [])];
+        const seen = new Set(lines.map(line => normalizedContentKey(line, 600)));
+        for (const line of core.greetings?.[key] || []) {
+            const lineKey = normalizedContentKey(line, 600);
+            if (!lineKey || seen.has(lineKey) || lines.length >= 40) continue;
+            seen.add(lineKey);
+            lines.push(line);
+            added += 1;
+        }
+        merged.greetings[key] = lines;
+    }
+    const specialDays = [...(existing.specialDays || [])];
+    const seenDays = new Set(specialDays.map(item => `${item.mmdd}|${normalizedContentKey(item.label, 80)}`));
+    for (const item of core.specialDays || []) {
+        const mmdd = normalizeText(item?.mmdd, 20);
+        const label = normalizeText(item?.label, 80);
+        const line = normalizeText(item?.line, 600);
+        const key = `${mmdd}|${normalizedContentKey(label, 80)}`;
+        if (!/^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])$/.test(mmdd) || !label || !line || seenDays.has(key)) continue;
+        seenDays.add(key);
+        specialDays.push({ mmdd, label, line });
+        added += 1;
+    }
+    merged.specialDays = specialDays.slice(0, 60);
+    return { session: merged, added };
+}
+
 function heartDramaContext(core, memoryBank) {
     const ids = [...new Set(core.relationshipSourceMemoryIds || [])].slice(0, 8);
     return JSON.stringify({
@@ -3454,53 +4035,70 @@ function heartDramaContext(core, memoryBank) {
     }, null, 2);
 }
 
-function heartPostVoicePrompt(context, memoryBank, core) {
+function compactHeartSeasonExisting(session, season) {
+    return {
+        voiceDramas: (Array.isArray(session?.voiceDramas) ? session.voiceDramas : [])
+            .filter(item => item.kind === season)
+            .slice(-40)
+            .map(item => ({ id: item.id, title: item.title, subtitle: item.subtitle, setting: item.setting, incrementBatchId: item.incrementBatchId || '' })),
+        scenarioDramas: (Array.isArray(session?.scenarioDramas) ? session.scenarioDramas : [])
+            .filter(item => item.season === season)
+            .slice(-40)
+            .map(item => ({ id: item.id, title: item.title, subtitle: item.subtitle, setting: item.setting, incrementBatchId: item.incrementBatchId || '' })),
+    };
+}
+
+function heartPostVoicePrompt(context, memoryBank, core, previous = null, sourceMemoryIds = null) {
     return `${promptSafetyBoundary(context, '角色互动 / Drama：未来')}
 UNTRUSTED_HEART_RELATIONSHIP_JSON:
 ${heartDramaContext(core, memoryBank)}
-只生成一个 postending Voice Drama：
+${previous ? `UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:\n${incrementalArchiveSlice(memoryBank, sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS)}\nEXISTING_POSTENDING_DRAMA_INDEX_JSON:\n${JSON.stringify(compactHeartSeasonExisting(previous, 'postending'), null, 2)}` : ''}
+只生成一个${previous ? '尚未出现的新增' : ''} postending Voice Drama：
 {"voiceDramas":[{"id":"VOICE_POST","kind":"postending","title":"后日谈 Voice Drama","subtitle":"未来生活长篇剧场","setting":"明确这是未来模拟","script":[{"speaker":"narrator","text":"..."},{"speaker":"char","text":"..."}]}]}
-要求：恰好 1 个 kind=postending；script 8～14节点、总文本不少于420汉字；符合当前关系阶段，不能强行恋爱/婚姻；user 台词若出现仅是非正史剧本演出。只输出 JSON。`;
+要求：恰好 1 个 kind=postending；script 8～14节点、总文本不少于420汉字；符合当前关系阶段，不能强行恋爱/婚姻；user 台词若出现仅是非正史剧本演出。${previous ? '必须由 incrementalMemoryIds 带来的新变化触发，并避开既有标题、场景和剧情；旧篇由本地原样保留。' : ''}只输出 JSON。`;
 }
 
-function heartSeasonVoicePrompt(context, memoryBank, core, season) {
+function heartSeasonVoicePrompt(context, memoryBank, core, season, previous = null, sourceMemoryIds = null) {
     const labels = { spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
     const label = labels[season] || season;
     return `${promptSafetyBoundary(context, `角色互动 / Drama：${label} Voice`)}
 UNTRUSTED_HEART_RELATIONSHIP_JSON:
 ${heartDramaContext(core, memoryBank)}
-本请求只生成【${label} Voice Drama】，不要生成 Scenario：
+${previous ? `UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:\n${incrementalArchiveSlice(memoryBank, sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS)}\nEXISTING_${season.toUpperCase()}_DRAMA_INDEX_JSON:\n${JSON.stringify(compactHeartSeasonExisting(previous, season), null, 2)}` : ''}
+本请求只生成【${label} Voice Drama ${previous ? '新增一篇' : '首篇'}】，不要生成 Scenario：
 {"voiceDramas":[{"id":"VOICE_${season.toUpperCase()}","kind":"${season}","title":"${label} Voice Drama","subtitle":"...","setting":"...","script":[{"speaker":"char","text":"..."}]}]}
 要求：
 - 只返回 1 个 kind=${season} 的 Voice Drama。
 - script 5～10 节点、总文本不少于280汉字，以 {{char}} 主观感受为中心；允许少量 narrator/user。
-- 这是模拟，不新增历史事实，不给角色安排第三方恋爱。只输出 JSON。`;
+- 这是模拟，不新增历史事实，不给角色安排第三方恋爱。${previous ? '新篇必须由 incrementalMemoryIds 触发，并避开已有标题、场景、冲突与台词走向；旧篇绝不重写。' : ''}只输出 JSON。`;
 }
 
-function heartSeasonScenarioPrompt(context, memoryBank, core, season) {
+function heartSeasonScenarioPrompt(context, memoryBank, core, season, previous = null, sourceMemoryIds = null) {
     const labels = { spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
     const label = labels[season] || season;
     return `${promptSafetyBoundary(context, `角色互动 / Drama：${label} Scenario`)}
 UNTRUSTED_HEART_RELATIONSHIP_JSON:
 ${heartDramaContext(core, memoryBank)}
-本请求只生成【${label} Scenario Drama】，不要生成 Voice：
+${previous ? `UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:\n${incrementalArchiveSlice(memoryBank, sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS)}\nEXISTING_${season.toUpperCase()}_DRAMA_INDEX_JSON:\n${JSON.stringify(compactHeartSeasonExisting(previous, season), null, 2)}` : ''}
+本请求只生成【${label} Scenario Drama ${previous ? '新增一篇' : '首篇'}】，不要生成 Voice：
 {"scenarioDramas":[{"id":"SCENE_${season.toUpperCase()}","season":"${season}","title":"${label} Scenario Drama","subtitle":"普通一天里的小事件","setting":"...","script":[{"speaker":"narrator","text":"..."}]}]}
 要求：
 - 只返回 1 个 season=${season} 的 Scenario Drama。
 - script 6～12 节点、总文本不少于360汉字，写普通一天里的一个完整小事件。
-- 这是模拟，不新增历史事实，不给角色安排第三方恋爱。只输出 JSON。`;
+- 这是模拟，不新增历史事实，不给角色安排第三方恋爱。${previous ? '新篇必须由 incrementalMemoryIds 触发，并避开已有标题、场景、冲突与台词走向；旧篇绝不重写。' : ''}只输出 JSON。`;
 }
 
-function heartStripsPrompt(context, memoryBank, core) {
+function heartStripsPrompt(context, memoryBank, core, previous = null, sourceMemoryIds = null) {
     return `${promptSafetyBoundary(context, '角色互动 / 日常一格')}
 UNTRUSTED_HEART_RELATIONSHIP_JSON:
 ${heartDramaContext(core, memoryBank)}
-只生成 2～3 条轻松的日常一格，不生成时期对话、Voice Drama 或 Scenario Drama。
+${previous ? `UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:\n${incrementalArchiveSlice(memoryBank, sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS)}\nEXISTING_STRIP_INDEX_JSON:\n${JSON.stringify((previous.dailyStrips || []).slice(-60).map(item => ({ id: item.id, title: item.title, subtitle: item.subtitle, visualSeed: item.visualSeed })), null, 2)}` : ''}
+只生成 2～3 条${previous ? '由新增档案触发、尚未出现的' : ''}轻松日常一格，不生成时期对话、Voice Drama 或 Scenario Drama。
 {"dailyStrips":[{"id":"STRIP01","title":"标题","subtitle":"短句","panelCount":2,"panels":[{"caption":"...","action":"...","charLine":"...","userLine":"..."}],"visualSeed":["元素1","元素2","元素3"],"imagePrompt":"Q版/chibi，可见画面，no text, no speech bubble, no watermark"}]}
 要求：
 - 2～3 条即可，不要凑更多；panelCount 只能 1/2/4，panels 数量必须匹配。
 - visualSeed 至少3项；imagePrompt 只写可见画面并明确 no text / no speech bubble / no watermark。
-- userLine 只是非正史小剧场台词，不代表用户真实选择。只输出 JSON。`;
+- userLine 只是非正史小剧场台词，不代表用户真实选择。${previous ? '必须避开 EXISTING_STRIP_INDEX_JSON 的标题、动作和梗；旧一格与已绘图片由本地保留。' : ''}只输出 JSON。`;
 }
 
 function normalizeVoiceDramaPart(data, expectedKinds) {
@@ -3592,6 +4190,7 @@ function makeHeartSession(core, existing = null) {
         birthdayMmDd: core.birthdayMmDd || '',
         userBirthdayMmDd: core.userBirthdayMmDd || '',
         specialDays: Array.isArray(core.specialDays) ? core.specialDays : [],
+        relationshipHistory: Array.isArray(existing?.relationshipHistory) ? existing.relationshipHistory : [],
         greetings: core.greetings || {},
         voiceDramas: Array.isArray(existing?.voiceDramas) ? existing.voiceDramas : [],
         scenarioDramas: Array.isArray(existing?.scenarioDramas) ? existing.scenarioDramas : [],
@@ -3606,48 +4205,122 @@ function makeHeartSession(core, existing = null) {
             seasons: !!(existing?.voiceDramas?.length || existing?.scenarioDramas?.length),
             strips: !!existing?.dailyStrips?.length,
         },
+        generationMeta: existing?.generationMeta && typeof existing.generationMeta === 'object' ? structuredClone(existing.generationMeta) : undefined,
     };
 }
 
 async function generateHeartWithRepair(context, memoryBank, origin, taskKey) {
     const existing = loadSession(MODE.HEART, { context, chatId: getChatId(context), memoryBank, clone: true });
+    const sourceMemoryIds = incrementalArchiveMemoryIds(existing, memoryBank, 'dialogues');
+    if (existing) {
+        const core = await requestValidatedSegment(
+            heartCoreIncrementPrompt(context, memoryBank, existing, sourceMemoryIds),
+            '角色互动 · 正在从新增档案追加时期对话…',
+            { maxTokens: 4500, temperature: 0.4, context, origin, taskKey: `${taskKey}:dialogues-increment`, mode: MODE.HEART, background: true },
+            raw => normalizeHeartCoreIncrement(raw, memoryBank, sourceMemoryIds),
+        );
+        const { session, added } = mergeHeartCoreIncremental(existing, core);
+        const normalized = normalizeHeart(session, memoryBank);
+        return stampIncrementalCoverage(normalized, existing, memoryBank, 'dialogues', sourceMemoryIds, added);
+    }
     const core = await requestValidatedSegment(
         heartCorePrompt(context, memoryBank),
         '角色互动 · 正在生成时期对话…',
         { maxTokens: 6000, temperature: 0.35, context, origin, taskKey: `${taskKey}:dialogues`, mode: MODE.HEART, background: true },
         raw => normalizeHeartCore(raw, memoryBank),
     );
-    return normalizeHeart(makeHeartSession(core, existing), memoryBank);
+    const normalized = normalizeHeart(makeHeartSession(core, existing), memoryBank);
+    return stampIncrementalCoverage(normalized, null, memoryBank, 'dialogues', sourceMemoryIds, Object.values(core.greetings || {}).flat().length);
+}
+
+function heartDramaItemKey(item, kindKey) {
+    const batch = normalizeText(item?.incrementBatchId, 80);
+    return batch
+        ? `${kindKey}|batch|${batch}`
+        : `${kindKey}|${normalizedContentKey(item?.title, 120)}|${normalizedContentKey(item?.setting, 300)}`;
+}
+
+function appendHeartDramaItem(list, item, kindKey, idPrefix) {
+    if (!item) return { list: Array.isArray(list) ? list : [], item: null, added: 0 };
+    const out = Array.isArray(list) ? list : [];
+    const key = heartDramaItemKey(item, kindKey);
+    const existing = out.find(candidate => heartDramaItemKey(candidate, kindKey) === key);
+    if (existing) return { list: out, item: existing, added: 0 };
+    if (out.length >= MAX_DERIVED_CONTENT_ITEMS) return { list: out, item: null, added: 0 };
+    const usedIds = new Set(out.map(candidate => candidate.id));
+    const next = { ...structuredClone(item), id: uniqueGeneratedId(item.id, usedIds, idPrefix) };
+    out.push(next);
+    return { list: out, item: next, added: 1 };
+}
+
+function heartStripKey(item) {
+    const batch = normalizeText(item?.incrementBatchId, 80);
+    return `${batch ? `batch|${batch}|` : ''}${normalizedContentKey(item?.title, 120)}|${normalizedContentKey(item?.subtitle, 240)}`;
+}
+
+function applyHeartPatchCoverage(updated, base, patch, added) {
+    if (!patch?.coveragePart) return updated;
+    const ids = cleanArray(patch.archiveMemoryIds, MAX_MEMORY_ITEMS, 40);
+    const pseudoBank = {
+        archiveRevision: normalizeText(patch.archiveRevision, 240),
+        memories: ids.map(id => ({ id })),
+    };
+    return stampIncrementalCoverage(
+        updated,
+        base,
+        pseudoBank,
+        normalizeText(patch.coveragePart, 80),
+        cleanArray(patch.sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS, 40),
+        added,
+    );
 }
 
 function applyHeartPartialPatch(base, patch) {
-    const updated = structuredClone(base || {});
+    let updated = structuredClone(base || {});
     if (!patch || typeof patch !== 'object') return updated;
+    let added = 0;
     if (patch.type === 'dialogues' && patch.core) {
-        return makeHeartSession(patch.core, updated);
-    }
-    if (patch.type === 'strips' && Array.isArray(patch.dailyStrips)) {
-        updated.dailyStrips = patch.dailyStrips;
-        updated.selectedStripId = patch.dailyStrips[0]?.id || updated.selectedStripId || '';
+        updated = makeHeartSession(patch.core, updated);
+    } else if (patch.type === 'dialogues-increment' && patch.core) {
+        const merged = mergeHeartCoreIncremental(updated, patch.core);
+        updated = merged.session;
+        added += merged.added;
+    } else if (patch.type === 'strips' && Array.isArray(patch.dailyStrips)) {
+        const out = Array.isArray(updated.dailyStrips) ? updated.dailyStrips : [];
+        const seen = new Set(out.map(heartStripKey));
+        const usedIds = new Set(out.map(item => item.id));
+        let latest = null;
+        for (const strip of patch.dailyStrips) {
+            const key = heartStripKey(strip);
+            if (!key || seen.has(key) || out.length >= MAX_DERIVED_CONTENT_ITEMS) continue;
+            seen.add(key);
+            latest = { ...structuredClone(strip), id: uniqueGeneratedId(strip.id, usedIds, 'STRIP') };
+            out.push(latest);
+            added += 1;
+        }
+        updated.dailyStrips = out;
+        updated.selectedStripId = latest?.id || updated.selectedStripId || '';
         updated.generationParts = { ...(updated.generationParts || {}), strips: true };
         updated.view = 'strips';
-        return updated;
-    }
-    if (patch.type === 'season') {
+    } else if (patch.type === 'season') {
         const season = normalizeText(patch.season, 40).toLowerCase();
         if (patch.voice?.kind === season) {
-            updated.voiceDramas = [...(updated.voiceDramas || []).filter(item => item.kind !== season), patch.voice];
-            updated.selectedVoiceId = patch.voice.id;
+            const result = appendHeartDramaItem(updated.voiceDramas, patch.voice, `voice:${season}`, 'VOICE');
+            updated.voiceDramas = result.list;
+            if (result.item) updated.selectedVoiceId = result.item.id;
+            added += result.added;
         }
         if (season !== 'postending' && patch.scenario?.season === season) {
-            updated.scenarioDramas = [...(updated.scenarioDramas || []).filter(item => item.season !== season), patch.scenario];
-            updated.selectedScenarioId = patch.scenario.id;
+            const result = appendHeartDramaItem(updated.scenarioDramas, patch.scenario, `scenario:${season}`, 'SCENE');
+            updated.scenarioDramas = result.list;
+            if (result.item) updated.selectedScenarioId = result.item.id;
+            added += result.added;
         }
         updated.selectedSeason = season || updated.selectedSeason || 'postending';
         updated.generationParts = { ...(updated.generationParts || {}), seasons: true };
         updated.view = 'seasons';
     }
-    return updated;
+    return applyHeartPatchCoverage(updated, base, patch, added);
 }
 
 function mergeDeferredHeartPatches(existing, incoming) {
@@ -3705,27 +4378,40 @@ async function generateHeartSection(part) {
         return;
     }
     const base = structuredClone(activeSession);
+    const sourceMemoryIds = incrementalArchiveMemoryIds(base, memoryBank, normalizedPart);
+    if (!sourceMemoryIds.length) {
+        globalThis.toastr?.info?.(`当前档案没有尚未用于${normalizedPart === 'dialogues' ? '时期对话' : '日常一格'}的新记忆。先增量更新档案，再来追加。`, '心跳回忆');
+        return;
+    }
+    const coverage = {
+        coveragePart: normalizedPart,
+        sourceMemoryIds,
+        archiveMemoryIds: archiveMemoryIds(memoryBank),
+        archiveRevision: memoryBank.archiveRevision,
+    };
     activeModeBuildScopes.add(taskKey);
     refreshConcurrentTaskUi(MODE.HEART, origin);
     try {
         if (normalizedPart === 'dialogues') {
             const core = await requestValidatedSegment(
-                heartCorePrompt(context, memoryBank),
-                '角色互动 · 时期对话',
-                { maxTokens: 6000, temperature: 0.35, context, origin, taskKey: `${taskKey}:dialogues`, mode: MODE.HEART, background: true },
-                raw => normalizeHeartCore(raw, memoryBank),
+                heartCoreIncrementPrompt(context, memoryBank, base, sourceMemoryIds),
+                '角色互动 · 追加时期对话',
+                { maxTokens: 4500, temperature: 0.4, context, origin, taskKey: `${taskKey}:dialogues`, mode: MODE.HEART, background: true },
+                raw => normalizeHeartCoreIncrement(raw, memoryBank, sourceMemoryIds),
             );
-            await persistHeartPartialPatch('dialogues', { type: 'dialogues', core }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+            await persistHeartPartialPatch('dialogues', { type: 'dialogues-increment', core, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision);
         } else {
             const strips = await requestHeartPart(
-                heartStripsPrompt(context, memoryBank, base),
-                '角色互动 · 日常一格',
+                heartStripsPrompt(context, memoryBank, base, base, sourceMemoryIds),
+                '角色互动 · 追加日常一格',
                 { maxTokens: 5000, context, origin, taskKey: `${taskKey}:strips`, mode: MODE.HEART, background: true },
                 normalizeHeartStripsPart,
             );
-            await persistHeartPartialPatch('strips', { type: 'strips', dailyStrips: strips }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+            const batchId = incrementalBatchId('strips', sourceMemoryIds);
+            const enriched = strips.map(item => ({ ...item, sourceArchiveMemoryIds: sourceMemoryIds, incrementBatchId: batchId, generatedAt: Date.now() }));
+            await persistHeartPartialPatch('strips', { type: 'strips', dailyStrips: enriched, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision);
         }
-        globalThis.toastr?.success?.(`角色互动已更新：${normalizedPart === 'dialogues' ? '时期对话' : '日常一格'}`, '心跳回忆');
+        globalThis.toastr?.success?.(`角色互动已追加：${normalizedPart === 'dialogues' ? '时期对话' : '日常一格'}；旧内容保持不变。`, '心跳回忆');
     } catch (error) {
         if (error?.name !== 'AbortError') globalThis.toastr?.error?.(toastText(error?.message || String(error)), '心跳回忆');
     } finally {
@@ -3756,69 +4442,111 @@ async function generateHeartSeasonSection(season) {
         return;
     }
     const base = structuredClone(activeSession);
+    const partKey = `season:${normalizedSeason}`;
+    const sourceMemoryIds = incrementalArchiveMemoryIds(base, memoryBank, partKey);
+    if (!sourceMemoryIds.length) {
+        globalThis.toastr?.info?.(`当前档案没有尚未用于${heartSeasonLabel(normalizedSeason)}的新记忆。先增量更新档案，再追加下一篇。`, '心跳回忆');
+        return;
+    }
+    const batchId = incrementalBatchId(partKey, sourceMemoryIds);
+    const coverage = {
+        coveragePart: partKey,
+        sourceMemoryIds,
+        archiveMemoryIds: archiveMemoryIds(memoryBank),
+        archiveRevision: memoryBank.archiveRevision,
+    };
+    const latestSession = () => loadSession(MODE.HEART, { context, chatId: expectedChatId, memoryBank, clone: true }) || structuredClone(base);
+    const enrichVoice = item => ({
+        ...item,
+        sourceArchiveMemoryIds: sourceMemoryIds,
+        incrementBatchId: batchId,
+        generatedAt: Date.now(),
+    });
+    const enrichScenario = item => ({
+        ...item,
+        sourceArchiveMemoryIds: sourceMemoryIds,
+        incrementBatchId: batchId,
+        generatedAt: Date.now(),
+    });
+
     activeModeBuildScopes.add(taskKey);
     refreshConcurrentTaskUi(MODE.HEART, origin);
     const errors = [];
     let savedParts = 0;
     try {
         if (normalizedSeason === 'postending') {
-            try {
-                const voice = (await requestHeartPart(
-                    heartPostVoicePrompt(context, memoryBank, base),
-                    '角色互动 · Drama 未来',
-                    { maxTokens: 3800, temperature: 0.55, context, origin, taskKey: `${taskKey}:voice`, mode: MODE.HEART, background: true },
-                    raw => normalizeVoiceDramaPart(raw, ['postending']),
-                ))[0];
-                await persistHeartPartialPatch('season:postending:voice', { type: 'season', season: 'postending', voice }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision);
-                savedParts += 1;
-            } catch (error) {
-                errors.push(error);
+            const latest = latestSession();
+            let voice = latest.voiceDramas?.find(item => item.kind === 'postending' && item.incrementBatchId === batchId) || null;
+            if (!voice) {
+                try {
+                    voice = enrichVoice((await requestHeartPart(
+                        heartPostVoicePrompt(context, memoryBank, latest, latest, sourceMemoryIds),
+                        '角色互动 · 追加未来 / 后日谈',
+                        { maxTokens: 3800, temperature: 0.55, context, origin, taskKey: `${taskKey}:voice`, mode: MODE.HEART, background: true },
+                        raw => normalizeVoiceDramaPart(raw, ['postending']),
+                    ))[0]);
+                    await persistHeartPartialPatch(`season:postending:${batchId}:voice`, { type: 'season', season: 'postending', voice, ...coverage }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+                    savedParts += 1;
+                } catch (error) {
+                    errors.push(error);
+                }
+            } else {
+                await persistHeartPartialPatch(`season:postending:${batchId}:coverage`, { type: 'season', season: 'postending', ...coverage }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision);
             }
         } else {
-            const latestAtStart = loadSession(MODE.HEART, { context, chatId: expectedChatId, memoryBank, clone: true }) || base;
-            const hasVoice = latestAtStart.voiceDramas?.some(item => item.kind === normalizedSeason);
-            const hasScenario = latestAtStart.scenarioDramas?.some(item => item.season === normalizedSeason);
-            const regenerateAll = !!(hasVoice && hasScenario);
-            const needVoice = regenerateAll || !hasVoice;
-            const needScenario = regenerateAll || !hasScenario;
+            let latest = latestSession();
+            let voice = latest.voiceDramas?.find(item => item.kind === normalizedSeason && item.incrementBatchId === batchId) || null;
+            let scenario = latest.scenarioDramas?.find(item => item.season === normalizedSeason && item.incrementBatchId === batchId) || null;
 
-            if (needVoice) {
+            if (!voice) {
                 try {
-                    const voice = (await requestHeartPart(
-                        heartSeasonVoicePrompt(context, memoryBank, latestAtStart, normalizedSeason),
-                        `角色互动 · ${heartSeasonLabel(normalizedSeason)} Voice`,
+                    voice = enrichVoice((await requestHeartPart(
+                        heartSeasonVoicePrompt(context, memoryBank, latest, normalizedSeason, latest, sourceMemoryIds),
+                        `角色互动 · 追加${heartSeasonLabel(normalizedSeason)} Voice`,
                         { maxTokens: 3000, temperature: 0.55, context, origin, taskKey: `${taskKey}:voice`, mode: MODE.HEART, background: true },
                         raw => normalizeVoiceDramaPart(raw, [normalizedSeason]),
-                    ))[0];
-                    await persistHeartPartialPatch(`season:${normalizedSeason}:voice`, { type: 'season', season: normalizedSeason, voice }, latestAtStart, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+                    ))[0]);
+                    await persistHeartPartialPatch(`season:${normalizedSeason}:${batchId}:voice`, {
+                        type: 'season', season: normalizedSeason, voice, ...(scenario ? coverage : {}),
+                    }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision);
                     savedParts += 1;
+                    latest = latestSession();
                 } catch (error) {
                     errors.push(error);
                 }
             }
 
-            if (needScenario) {
+            scenario = latest.scenarioDramas?.find(item => item.season === normalizedSeason && item.incrementBatchId === batchId) || scenario;
+            if (!scenario) {
                 try {
-                    const currentForScenario = loadSession(MODE.HEART, { context, chatId: expectedChatId, memoryBank, clone: true }) || latestAtStart;
-                    const scenario = (await requestHeartPart(
-                        heartSeasonScenarioPrompt(context, memoryBank, currentForScenario, normalizedSeason),
-                        `角色互动 · ${heartSeasonLabel(normalizedSeason)} Scenario`,
+                    scenario = enrichScenario((await requestHeartPart(
+                        heartSeasonScenarioPrompt(context, memoryBank, latest, normalizedSeason, latest, sourceMemoryIds),
+                        `角色互动 · 追加${heartSeasonLabel(normalizedSeason)} Scenario`,
                         { maxTokens: 3200, temperature: 0.55, context, origin, taskKey: `${taskKey}:scenario`, mode: MODE.HEART, background: true },
                         raw => normalizeScenarioDramaPart(raw, normalizedSeason),
-                    ))[0];
-                    await persistHeartPartialPatch(`season:${normalizedSeason}:scenario`, { type: 'season', season: normalizedSeason, scenario }, currentForScenario, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+                    ))[0]);
+                    await persistHeartPartialPatch(`season:${normalizedSeason}:${batchId}:scenario`, {
+                        type: 'season', season: normalizedSeason, scenario, ...(voice ? coverage : {}),
+                    }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision);
                     savedParts += 1;
+                    latest = latestSession();
                 } catch (error) {
                     errors.push(error);
                 }
+            }
+
+            const completeVoice = latest.voiceDramas?.some(item => item.kind === normalizedSeason && item.incrementBatchId === batchId) || !!voice;
+            const completeScenario = latest.scenarioDramas?.some(item => item.season === normalizedSeason && item.incrementBatchId === batchId) || !!scenario;
+            if (completeVoice && completeScenario && !incrementalPartRecord(latest, partKey)?.coveredMemoryIds?.some(id => sourceMemoryIds.includes(id))) {
+                await persistHeartPartialPatch(`season:${normalizedSeason}:${batchId}:coverage`, { type: 'season', season: normalizedSeason, ...coverage }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision);
             }
         }
 
         if (errors.length && !savedParts) throw errors[0];
         if (errors.length) {
-            globalThis.toastr?.warning?.(`${heartSeasonLabel(normalizedSeason)}已保存成功的部分；另一个小段失败，可再次点击只补缺失部分。`, '心跳回忆');
+            globalThis.toastr?.warning?.(`${heartSeasonLabel(normalizedSeason)}新增篇已保存成功部分；再次点击只会补本批缺失半篇，不重做旧篇。`, '心跳回忆');
         } else {
-            globalThis.toastr?.success?.(`已生成：${heartSeasonLabel(normalizedSeason)} Drama`, '心跳回忆');
+            globalThis.toastr?.success?.(`已追加：${heartSeasonLabel(normalizedSeason)} Drama；旧篇保持不变。`, '心跳回忆');
         }
     } catch (error) {
         if (error?.name !== 'AbortError') globalThis.toastr?.error?.(toastText(error?.message || String(error)), `心跳回忆 · ${heartSeasonLabel(normalizedSeason)} Drama`);
@@ -3915,13 +4643,16 @@ function normalizePhonePlan(data) {
     };
 }
 
-function phoneAppPrompt(context, memoryBank, plan, app) {
+function phoneAppPrompt(context, memoryBank, plan, app, sourceMemoryIds = null) {
     const compact = ['watch', 'communicator'].includes(plan.deviceKind);
-    const deepCount = compact ? 1 : plan.deviceKind === 'terminal' ? 1 : 2;
+    const deepCount = app?.incremental === true ? 1 : compact ? 1 : plan.deviceKind === 'terminal' ? 1 : 2;
     const deepMessages = compact ? 8 : plan.deviceKind === 'terminal' ? 10 : 12;
+    const archiveBlock = sourceMemoryIds
+        ? incrementalArchiveSlice(memoryBank, sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS)
+        : promptArchiveSlice(memoryBank, 24);
     return `${promptSafetyBoundary(context, '私人终端 / App 详情')}
 本请求只补完一个 App 的详情。设备与 App 目录都在下面的 UNTRUSTED JSON 中；当前关系与历史只能依据当前档案，不要输出其他 App。
-UNTRUSTED_PHONE_APP_ARCHIVE_JSON:\n${promptArchiveSlice(memoryBank, 24)}
+UNTRUSTED_PHONE_APP_ARCHIVE_JSON:\n${archiveBlock}
 UNTRUSTED_PHONE_DEVICE_JSON:\n${JSON.stringify({ deviceName: plan.deviceName, deviceKind: plan.deviceKind }, null, 2)}
 UNTRUSTED_APP_PLAN_JSON:\n${JSON.stringify(app, null, 2)}
 
@@ -3930,12 +4661,12 @@ UNTRUSTED_APP_PLAN_JSON:\n${JSON.stringify(app, null, 2)}
 
 硬性要求：
 - 必须补完 UNTRUSTED_APP_PLAN_JSON 中全部 ${app.entries.length} 个 entry id，不得删减或换 id；每项必须有 preview，且 detail/messages/fields/imageCaption 至少一种有实质内容。
-- basis=记忆 时必须提供当前档案中有效 sourceMemoryIds + sourceMemoryAnchor；basis=设定 只能写角色正常生活/兴趣/工作/普通社交，不能冒充与 {{user}} 已发生的共同历史。
+- basis=记忆 时必须提供当前档案中有效 sourceMemoryIds + sourceMemoryAnchor${sourceMemoryIds ? '，并至少引用一个 incrementalMemoryIds' : ''}；basis=设定 只能写角色正常生活/兴趣/工作/普通社交，不能冒充与 {{user}} 已发生的共同历史。
 - kind=chat 时至少 ${deepCount} 个联系人达到 ${deepMessages} 条 messages；普通亲友/同事可为非恋爱设定推导。kind=contacts 时至少1项 fields 达3个以上。gallery 用 imageCaption 写纯文字照片说明。
 - 禁止前任/前女友；禁止 {{char}} 与 {{user}} 之外的恋爱/婚姻对象。不输出 URL、HTML 或脚本。只输出 JSON。`;
 }
 
-function validatePhoneAppPart(data, planApp, memoryBank, deviceKind) {
+function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sourceMemoryIds = null) {
     const raw = data?.app && typeof data.app === 'object' ? data.app : data;
     const returnedId = safeId(raw?.id, '');
     if (returnedId && returnedId !== planApp.id) throw new Error(`App ${planApp.label} 返回错误 id：${returnedId}。`);
@@ -3957,6 +4688,7 @@ function validatePhoneAppPart(data, planApp, memoryBank, deviceKind) {
         if (basis === '记忆') {
             const reference = normalizeMemoryReference(entry?.sourceMemoryIds, entry?.sourceMemoryAnchor, [entry?.title, preview, detail, imageCaption, ...messages.map(m => m.text), ...fields.map(f => `${f.label}:${f.value}`)].join('\n'), memoryBank, 1);
             if (!reference.sourceMemoryIds.length) continue;
+            if (sourceMemoryIds && !usesIncrementalMemoryId(reference.sourceMemoryIds, sourceMemoryIds)) continue;
         }
         seen.add(id);
         const deepThreshold = ['watch', 'communicator'].includes(deviceKind) ? 8 : deviceKind === 'terminal' ? 10 : 12;
@@ -3965,15 +4697,15 @@ function validatePhoneAppPart(data, planApp, memoryBank, deviceKind) {
     }
     if (seen.size < expectedIds.size) throw new Error(`App ${planApp.label} 详情不完整：${seen.size}/${expectedIds.size} 个条目通过校验。`);
     if (planApp.kind === 'chat') {
-        const minimum = ['watch', 'communicator'].includes(deviceKind) ? 1 : deviceKind === 'terminal' ? 1 : 2;
+        const minimum = planApp?.incremental === true ? 1 : ['watch', 'communicator'].includes(deviceKind) ? 1 : deviceKind === 'terminal' ? 1 : 2;
         if (deepChats < minimum) throw new Error(`App ${planApp.label} 深聊不足：${deepChats}/${minimum}。`);
     }
     if (planApp.kind === 'contacts' && deviceKind === 'phone' && !contactDetails) throw new Error(`App ${planApp.label} 缺少至少 1 个三字段联系人详情。`);
     return { ...raw, id: planApp.id, label: planApp.label, kind: planApp.kind };
 }
 
-function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind) {
-    const raw = validatePhoneAppPart(data, planApp, memoryBank, deviceKind);
+function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, sourceMemoryIds = null) {
+    const raw = validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sourceMemoryIds);
     const plannedIds = new Set(planApp.entries.map(item => item.id));
     const entries = (Array.isArray(raw?.entries) ? raw.entries : []).slice(0, 24).map((entry, index) => {
         const id = safeId(entry?.id, '');
@@ -3996,7 +4728,7 @@ function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind) {
         const reference = basis === '记忆'
             ? normalizeMemoryReference(entry?.sourceMemoryIds, entry?.sourceMemoryAnchor, evidenceText, memoryBank, 1)
             : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
-        if (!preview || (!detail && !messages.length && !fields.length && !imageCaption) || (basis === '记忆' && !reference.sourceMemoryIds.length)) return null;
+        if (!preview || (!detail && !messages.length && !fields.length && !imageCaption) || (basis === '记忆' && (!reference.sourceMemoryIds.length || (sourceMemoryIds && !usesIncrementalMemoryId(reference.sourceMemoryIds, sourceMemoryIds))))) return null;
         return {
             id,
             title,
@@ -4141,6 +4873,138 @@ async function generatePhoneWithRepair(context, memoryBank, origin, taskKey, opt
         throw new Error(`私人终端续写结果不完整：${details.length}/${plan.apps.length} 个 App。`);
     }
     return normalizePhone({ ...plan, apps: details }, memoryBank);
+}
+
+function compactPhoneExisting(session) {
+    return (Array.isArray(session?.apps) ? session.apps : []).slice(0, 12).map(app => ({
+        id: normalizeText(app?.id, 80),
+        label: normalizeText(app?.label, 80),
+        kind: normalizeText(app?.kind, 60),
+        entries: evenlySample(Array.isArray(app?.entries) ? app.entries : [], 60).map(entry => ({
+            id: normalizeText(entry?.id, 80),
+            title: normalizeText(entry?.title, 120),
+            meta: normalizeText(entry?.meta, 200),
+            sourceMemoryIds: cleanArray(entry?.sourceMemoryIds, 8, 40),
+            sourceMemoryAnchor: normalizeText(entry?.sourceMemoryAnchor, 120),
+        })),
+    }));
+}
+
+function phoneIncrementPlanPrompt(context, memoryBank, previous, sourceMemoryIds) {
+    return `${promptSafetyBoundary(context, '私人终端 / 增量目录')}
+旧设备、App、条目、聊天消息和照片说明由本地原样保留。本请求只根据新增档案规划少量新条目，不得重写、总结或换标题复述旧条目。
+UNTRUSTED_INCREMENTAL_PHONE_ARCHIVE_JSON:
+${incrementalArchiveSlice(memoryBank, sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS)}
+EXISTING_PHONE_INDEX_JSON:
+${JSON.stringify(compactPhoneExisting(previous), null, 2)}
+
+严格输出：
+{"apps":[{"id":"必须是 EXISTING_PHONE_INDEX_JSON 中的 App id","label":"原 label","kind":"原 kind","summary":"本轮新增内容侧面","entries":[{"id":"新的唯一 id","title":"新条目标题","meta":"时间/对象/分类"}]}]}
+
+要求：
+- 总共规划 0～8 个真正由 incrementalMemoryIds 带来的新条目；每个相关 App 1～3 条即可。没有任何合适的新条目时必须返回 {"apps":[]}，该空增量会被本地正常记录，不要为了凑数复述旧内容。
+- app id/kind 必须对应现有 App；不改变 deviceKind、设备名、锁屏或既有 liveStates。
+- 新条目的标题、对象、时间与主题必须避开 EXISTING_PHONE_INDEX_JSON；禁止把旧聊天、旧相册、旧笔记换措辞再说一次。
+- 与 {{user}} 的已发生共同历史必须在详情阶段使用 basis=记忆并引用 incrementalMemoryIds；普通工作/兴趣当前状态可为设定。
+- 禁止前任/第三方恋爱；只输出 JSON。`;
+}
+
+function normalizePhoneIncrementPlan(data, previous) {
+    if (!Array.isArray(data?.apps)) throw new Error('私人终端增量目录缺少 apps 数组。');
+    const existingById = new Map((previous.apps || []).map(app => [app.id, app]));
+    const existingByKind = new Map((previous.apps || []).map(app => [app.kind, app]));
+    const rawApps = data.apps.slice(0, 12);
+    const apps = rawApps.map(raw => {
+        const id = safeId(raw?.id, '');
+        const kind = normalizeText(raw?.kind, 60).toLowerCase();
+        const existing = existingById.get(id) || existingByKind.get(kind);
+        if (!existing) return null;
+        const reservedIds = new Set((existing.entries || []).map(entry => entry.id));
+        const planned = [];
+        for (const item of (Array.isArray(raw?.entries) ? raw.entries : []).slice(0, 8)) {
+            const entryId = uniqueGeneratedId(item?.id, reservedIds, `${existing.id}_N`);
+            planned.push({
+                id: entryId,
+                title: normalizeText(item?.title, 100) || '新增条目',
+                meta: normalizeText(item?.meta, 200),
+            });
+        }
+        if (!planned.length) return null;
+        return {
+            id: existing.id,
+            label: existing.label,
+            kind: existing.kind,
+            incremental: true,
+            summary: normalizeText(raw?.summary, 1200) || existing.summary,
+            entries: planned,
+        };
+    }).filter(Boolean);
+    const total = apps.reduce((sum, app) => sum + app.entries.length, 0);
+    if (rawApps.length && !total) throw new Error('私人终端增量目录返回了 App，但没有可验证的新条目。');
+    return {
+        title: previous.title,
+        deviceName: previous.deviceName,
+        deviceKind: previous.deviceKind,
+        lockText: previous.lockText,
+        liveStates: previous.liveStates,
+        apps,
+    };
+}
+
+function phoneEntryKey(appKind, entry) {
+    const ids = cleanArray(entry?.sourceMemoryIds, 8, 40).sort().join(',');
+    const anchor = normalizedContentKey(entry?.sourceMemoryAnchor, 140);
+    return ids && anchor
+        ? `${appKind}|memory|${ids}|${anchor}`
+        : `${appKind}|${normalizedContentKey(entry?.title, 120)}|${normalizedContentKey(entry?.meta, 200)}`;
+}
+
+function mergePhoneIncremental(previous, patches, memoryBank) {
+    const merged = structuredClone(previous);
+    let added = 0;
+    for (const patchApp of patches || []) {
+        const target = merged.apps.find(app => app.id === patchApp.id) || merged.apps.find(app => app.kind === patchApp.kind);
+        if (!target) continue;
+        const seen = new Set((target.entries || []).map(entry => phoneEntryKey(target.kind, entry)));
+        const usedIds = new Set((target.entries || []).map(entry => entry.id));
+        for (const entry of patchApp.entries || []) {
+            const key = phoneEntryKey(target.kind, entry);
+            if (!key || seen.has(key) || target.entries.length >= MAX_DERIVED_CONTENT_ITEMS) continue;
+            seen.add(key);
+            target.entries.push({ ...structuredClone(entry), id: uniqueGeneratedId(entry.id, usedIds, `${target.id}_N`) });
+            added += 1;
+        }
+    }
+    const normalized = normalizePhone(merged, memoryBank);
+    normalized.selectedAppId = previous.selectedAppId || normalized.selectedAppId;
+    normalized.selectedEntryId = previous.selectedEntryId || '';
+    normalized.view = previous.view || 'list';
+    return { session: normalized, added };
+}
+
+async function generatePhoneIncrementalWithRepair(context, memoryBank, origin, taskKey, previous) {
+    const sourceMemoryIds = incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+    const plan = await requestValidatedSegment(
+        phoneIncrementPlanPrompt(context, memoryBank, previous, sourceMemoryIds),
+        '私人终端 · 正在规划新增条目…',
+        { maxTokens: 4500, temperature: 0.35, context, origin, taskKey: `${taskKey}:increment-plan`, mode: MODE.PHONE, background: true },
+        raw => normalizePhoneIncrementPlan(raw, previous),
+    );
+    if (!plan.apps.length) {
+        return stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0);
+    }
+    const patches = [];
+    for (let index = 0; index < plan.apps.length; index += 1) {
+        const app = plan.apps[index];
+        const raw = await requestJson(
+            phoneAppPrompt(context, memoryBank, plan, app, sourceMemoryIds),
+            `私人终端 · 新增详情 ${index + 1}/${plan.apps.length} ${app.label}…`,
+            { maxTokens: app.kind === 'chat' ? 8000 : 5000, context, origin, taskKey: `${taskKey}:increment-app:${app.id}`, mode: MODE.PHONE, background: true },
+        );
+        patches.push(validateGeneratedSegment(raw, data => normalizePhoneDraftApp(data, app, memoryBank, plan.deviceKind, sourceMemoryIds)));
+    }
+    const { session, added } = mergePhoneIncremental(previous, patches, memoryBank);
+    return stampIncrementalCoverage(session, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
 const PROMPTS = {
@@ -4613,34 +5477,42 @@ function extractBalancedJsonObjects(text) {
     return { candidates, hasUnclosedObject: depth > 0 && start >= 0 };
 }
 
-function extractJson(raw, { reasoning = '' } = {}) {
-    let text = normalizeText(raw, 240000).replace(/^\uFEFF/, '').trim();
-    const reasoningChars = normalizeText(reasoning, 240000).length;
+function jsonOutputBudgetSummary({ requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {
+    const requestMax = Math.max(0, Math.floor(Number(requestMaxTokens) || 0));
+    const configuredMax = Math.max(1024, Math.min(MAX_GENERATION_OUTPUT_TOKENS, Math.floor(Number(configuredMaxTokens) || MAX_GENERATION_OUTPUT_TOKENS)));
+    const actual = requestMax ? Math.min(requestMax, configuredMax) : configuredMax;
+    const segmentNote = actual < configuredMax
+        ? `本段实际请求上限 ${actual.toLocaleString()} tokens（该功能使用较小的分段上限）`
+        : `本段实际请求上限 ${actual.toLocaleString()} tokens`;
+    return `${segmentNote}；当前插件设置 ${configuredMax.toLocaleString()} tokens；插件允许最高 ${MAX_GENERATION_OUTPUT_TOKENS.toLocaleString()} tokens。`;
+}
+
+function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {
+    let text = normalizeText(raw, MAX_GENERATION_OUTPUT_CHARS).replace(/^\uFEFF/, '').trim();
+    const reasoningChars = normalizeText(reasoning, MAX_GENERATION_OUTPUT_CHARS).length;
+    const budgetSummary = jsonOutputBudgetSummary({ requestMaxTokens, configuredMaxTokens });
     if (!text) {
         throw jsonOutputError(
             reasoningChars ? 'RMT_JSON_EMPTY_FINAL_WITH_REASONING' : 'RMT_JSON_EMPTY_FINAL',
             reasoningChars
-                ? `模型本轮产生了推理内容，但没有返回最终正文 JSON。可能是推理预算耗尽或模型没有进入最终回答阶段。当前最大输出可设到 ${MAX_GENERATION_OUTPUT_TOKENS.toLocaleString()} tokens；可只重试这一项，或改用结构化输出更稳定的模型。`
-                : `模型返回了空的最终正文，没有 JSON 可解析。当前最大输出可设到 ${MAX_GENERATION_OUTPUT_TOKENS.toLocaleString()} tokens；可只重试这一项，或检查所选模型/连接是否正常。`,
-            { contentChars: 0, reasoningChars },
+                ? `模型本轮产生了推理内容，但没有返回最终正文 JSON。可能是推理预算耗尽或模型没有进入最终回答阶段。${budgetSummary} 可只重试这一项，或改用结构化输出更稳定的模型。`
+                : `模型返回了空的最终正文，没有 JSON 可解析。${budgetSummary} 可只重试这一项，或检查所选模型/连接是否正常。`,
+            { contentChars: 0, reasoningChars, requestMaxTokens: Math.floor(Number(requestMaxTokens) || 0), configuredMaxTokens: Math.floor(Number(configuredMaxTokens) || 0) },
         );
     }
     text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
     const { candidates, hasUnclosedObject } = extractBalancedJsonObjects(text);
-    let lastParseError = null;
     for (let i = candidates.length - 1; i >= 0; i -= 1) {
         try {
             const parsed = JSON.parse(candidates[i]);
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
-        } catch (error) {
-            lastParseError = error;
-        }
+        } catch {}
     }
     if (hasUnclosedObject) {
         throw jsonOutputError(
             'RMT_JSON_TRUNCATED',
-            `模型返回的 JSON 疑似被截断：已经出现“{”，但没有完整闭合。请提高“最大输出”（最高 ${MAX_GENERATION_OUTPUT_TOKENS.toLocaleString()}）后只重试这一项，或换用输出更稳定的模型。`,
-            { contentChars: text.length, reasoningChars },
+            `模型返回的 JSON 疑似被截断：已经出现“{”，但没有完整闭合。${budgetSummary} 如果本段实际上限低于当前插件设置，继续提高全局“最大输出”不会突破该功能自己的分段上限；可只重试这一项，或换用输出更稳定的模型。`,
+            { contentChars: text.length, reasoningChars, requestMaxTokens: Math.floor(Number(requestMaxTokens) || 0), configuredMaxTokens: Math.floor(Number(configuredMaxTokens) || 0) },
         );
     }
     if (!candidates.length) {
@@ -4652,13 +5524,13 @@ function extractJson(raw, { reasoning = '' } = {}) {
     }
     throw jsonOutputError(
         'RMT_JSON_INVALID',
-        `模型返回了 JSON 外形，但格式无法解析${lastParseError?.message ? `：${normalizeText(lastParseError.message, 240)}` : ''}。插件没有保存或覆盖任何旧数据；可只重试这一项。`,
+        '模型返回了 JSON 外形，但格式无法解析。插件没有保存或覆盖任何旧数据；可只重试这一项。',
         { contentChars: text.length, reasoningChars },
     );
 }
 
 function normalizeButterfly(data, memoryBank) {
-    const rawNodes = Array.isArray(data?.nodes) ? data.nodes.slice(0, 24) : [];
+    const rawNodes = Array.isArray(data?.nodes) ? data.nodes.slice(0, MAX_DERIVED_CONTENT_ITEMS) : [];
     const normalized = rawNodes.map((node, rawIndex) => {
         const isMain = rawIndex === 0;
         const label = normalizeText(node?.label, 120);
@@ -4731,8 +5603,136 @@ function normalizeButterfly(data, memoryBank) {
     };
 }
 
+function butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) {
+    const existing = (Array.isArray(previous?.nodes) ? previous.nodes.slice(1, -1) : []).slice(-MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
+        id: normalizeText(item?.id, 50),
+        label: normalizeText(item?.label, 120),
+        code: normalizeText(item?.code, 120),
+    }));
+    return `${promptSafetyBoundary(context, '蝴蝶效应 / 增量分歧')}
+旧终端节点由本地原样保留。本请求只根据新增档案生成 1～3 个尚未出现的平行分歧，并给出看完全部旧分歧和新分歧后的新观测点 Ω；禁止改写或换措辞复述旧节点。
+UNTRUSTED_INCREMENTAL_TIMELINE_JSON:
+${incrementalArchiveSlice(memoryBank, sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS)}
+EXISTING_DIVERGENCE_INDEX_JSON:
+${JSON.stringify(existing, null, 2)}
+
+严格输出：
+{"nodes":[{"id":"EG_NEW_01","label":"新的分歧点","code":"> SIMULATION RECORD #NEW-01","locked":false,"trueEnding":false,"sourceMemoryIds":[],"sourceMemoryAnchor":"","monologue":"该平行世界 {{char}} 第一人称发言","intervention":"现世 {{char}} 的即时回应","systemNote":"系统判定"}],"omega":{"id":"OMEGA","label":"观测点 Ω：再次回归现世","code":"> OBSERVATION POINT #OMEGA","locked":false,"trueEnding":true,"sourceMemoryIds":[],"sourceMemoryAnchor":"","monologue":"","intervention":"现世 {{char}} 看完全部既有和新增分歧后的新最终发言","systemNote":"完整观测后的系统判定"}}
+
+要求：
+- nodes 只给 1～3 个真正新的普通分歧；每个 monologue 不少于100汉字，intervention/systemNote 必须有内容。
+- 新分歧应由 incrementalMemoryIds 带来的关系变化、选择或理解触发，但仍明确是模拟，不伪装成真实历史。
+- 必须避开 EXISTING_DIVERGENCE_INDEX_JSON 的标签和命运条件。
+- omega.monologue 必须为空，omega.intervention 不少于160汉字，并综合旧分歧与本轮新分歧；旧 Ω 会由本地保存成历史观测记录。
+- 禁止前任/前女友与第三方恋爱；只输出 JSON。`;
+}
+
+function normalizeButterflyIncrementPart(data, memoryBank) {
+    const branches = (Array.isArray(data?.nodes) ? data.nodes : []).slice(0, 3).map((node, index) => {
+        const label = normalizeText(node?.label, 120);
+        const monologue = normalizeText(node?.monologue, 12000);
+        const intervention = normalizeText(node?.intervention, 12000);
+        const systemNote = normalizeText(node?.systemNote, 5000);
+        if (!label || monologue.length < 100 || !intervention || !systemNote) return null;
+        const reference = normalizeMemoryReference(node?.sourceMemoryIds, node?.sourceMemoryAnchor, `${label}\n${monologue}\n${intervention}\n${systemNote}`, memoryBank, 0);
+        return {
+            id: safeId(node?.id, `EG_NEW_${String(index + 1).padStart(2, '0')}`),
+            label,
+            code: normalizeText(node?.code, 120) || `> SIMULATION RECORD #NEW-${String(index + 1).padStart(2, '0')}`,
+            locked: false,
+            trueEnding: false,
+            sourceMemoryIds: reference.sourceMemoryIds,
+            sourceMemoryAnchor: reference.sourceMemoryAnchor,
+            monologue,
+            intervention,
+            systemNote,
+        };
+    }).filter(Boolean);
+    if (!branches.length) throw new Error('蝴蝶效应增量没有生成可用的新分歧。');
+    const rawOmega = data?.omega && typeof data.omega === 'object' ? data.omega : {};
+    const omega = {
+        id: 'OMEGA',
+        label: normalizeText(rawOmega?.label, 120) || '观测点 Ω：再次回归现世',
+        code: '> OBSERVATION POINT #OMEGA',
+        locked: false,
+        trueEnding: true,
+        sourceMemoryIds: [],
+        sourceMemoryAnchor: '',
+        monologue: '',
+        intervention: normalizeText(rawOmega?.intervention, 12000),
+        systemNote: normalizeText(rawOmega?.systemNote, 5000),
+    };
+    if (omega.intervention.length < 160 || !omega.systemNote) throw new Error('蝴蝶效应增量观测点 Ω 内容不足。');
+    if (!/(观测点\s*Ω|TRUE\s*ENDING)/i.test(omega.label)) omega.label = `观测点 Ω：${omega.label}`;
+    return { branches, omega };
+}
+
+function butterflyBranchKey(item) {
+    return normalizedContentKey(item?.label, 120) || normalizedContentKey(item?.monologue, 360);
+}
+
+function mergeButterflyIncremental(previous, part, sourceMemoryIds) {
+    // Turning the current Ω into a historical observation and appending the next Ω costs one
+    // extra slot even before a new branch is added. Never evict an older node to make room.
+    const branchCapacity = MAX_DERIVED_CONTENT_ITEMS - (previous.nodes.length + 1);
+    if (branchCapacity < 1) return structuredClone(previous);
+    const main = structuredClone(previous.nodes[0]);
+    const previousBranches = previous.nodes.slice(1, -1).map(item => structuredClone(item));
+    const previousOmega = structuredClone(previous.nodes[previous.nodes.length - 1]);
+    const usedIds = new Set(previous.nodes.map(item => normalizeText(item?.id, 60)).filter(Boolean));
+    const seen = new Set(previousBranches.map(butterflyBranchKey));
+    const batchId = incrementalBatchId('butterfly', sourceMemoryIds);
+    const historicalOmega = {
+        ...previousOmega,
+        id: uniqueGeneratedId(`OBS_${batchId.slice(0, 10)}`, usedIds, 'OBS'),
+        label: normalizeText(`历史观测记录 · ${previousOmega.label || '观测点 Ω'}`, 120),
+        historicalObservation: true,
+        trueEnding: true,
+    };
+    const addedBranches = [];
+    for (const branch of part.branches || []) {
+        if (addedBranches.length >= branchCapacity) break;
+        const key = butterflyBranchKey(branch);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        addedBranches.push({
+            ...structuredClone(branch),
+            id: uniqueGeneratedId(branch.id, usedIds, 'EG'),
+            sourceArchiveMemoryIds: cleanArray(sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS, 40),
+            incrementBatchId: batchId,
+        });
+    }
+    const omega = {
+        ...structuredClone(part.omega),
+        id: 'OMEGA',
+        sourceArchiveMemoryIds: cleanArray(sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS, 40),
+        incrementBatchId: batchId,
+    };
+    const nodes = [main, ...previousBranches, historicalOmega, ...addedBranches, omega];
+    return {
+        ...structuredClone(previous),
+        nodes,
+        selected: Math.max(1, nodes.length - 1),
+    };
+}
+
+async function generateButterflyIncrementalWithRepair(context, memoryBank, origin, taskKey, previous) {
+    const sourceMemoryIds = incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+    if (previous.nodes.length + 2 > MAX_DERIVED_CONTENT_ITEMS) {
+        return stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0);
+    }
+    const part = await requestValidatedSegment(
+        butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds),
+        '蝴蝶效应 · 正在追加新的平行分歧…',
+        { maxTokens: 7000, temperature: 0.55, context, origin, taskKey: `${taskKey}:increment`, mode: MODE.BUTTERFLY, background: true },
+        raw => normalizeButterflyIncrementPart(raw, memoryBank),
+    );
+    const merged = mergeButterflyIncremental(previous, part, sourceMemoryIds);
+    return stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, Math.max(0, merged.nodes.length - previous.nodes.length));
+}
+
 function normalizeEndingConfessionReplays(rawList, memoryBank) {
-    return (Array.isArray(rawList) ? rawList : []).slice(0, 6).map((item, index) => {
+    return (Array.isArray(rawList) ? rawList : []).slice(0, MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const typeRaw = normalizeText(item?.type, 40).toLowerCase();
         const type = CONFESSION_REPLAY_TYPES.has(typeRaw) ? typeRaw : 'other';
         const title = normalizeText(item?.title, 100) || `告白回看 ${index + 1}`;
@@ -4781,7 +5781,7 @@ ${relationshipSummary}`,
     }
     const confessionReplays = normalizeEndingConfessionReplays(data?.confessionReplays, memoryBank);
     const raw = Array.isArray(data?.endings) ? data.endings : [];
-    const endings = raw.slice(0, 9).map((item, index) => {
+    const endings = raw.slice(0, MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const typeRaw = normalizeText(item?.type, 40).toLowerCase();
         const type = ENDING_TYPES.has(typeRaw) ? typeRaw : 'personal';
         const available = !!item?.available;
@@ -4851,13 +5851,21 @@ ${relationshipSummary}`,
         relationshipSummary,
         relationshipSourceMemoryIds: relationshipReference.sourceMemoryIds,
         relationshipSourceMemoryAnchor: relationshipReference.sourceMemoryAnchor,
+        relationshipHistory: (Array.isArray(data?.relationshipHistory) ? data.relationshipHistory : []).slice(-60).map(item => ({
+            relationshipState: normalizeText(item?.relationshipState, 120),
+            relationshipSummary: normalizeText(item?.relationshipSummary, 2400),
+            relationshipSourceMemoryIds: cleanArray(item?.relationshipSourceMemoryIds, 24, 40),
+            relationshipSourceMemoryAnchor: normalizeText(item?.relationshipSourceMemoryAnchor, 160),
+            archivedAt: Math.max(0, Number(item?.archivedAt) || 0),
+        })).filter(item => item.relationshipSummary),
         recommendedEndingId: recommended?.id || endings[0].id,
         confessionReplays,
         endings,
-        selectedId: recommended?.id || endings[0].id,
-        selectedConfessionId: confessionReplays[0]?.id || '',
-        confessionLineIndex: 0,
-        view: 'routes',
+        selectedId: endings.some(item => item.id === data?.selectedId) ? data.selectedId : (recommended?.id || endings[0].id),
+        selectedConfessionId: confessionReplays.some(item => item.id === data?.selectedConfessionId) ? data.selectedConfessionId : (confessionReplays[0]?.id || ''),
+        confessionLineIndex: Math.max(0, Number(data?.confessionLineIndex) || 0),
+        view: data?.view === 'confessions' ? 'confessions' : 'routes',
+        generationMeta: data?.generationMeta && typeof data.generationMeta === 'object' ? structuredClone(data.generationMeta) : undefined,
     };
 }
 
@@ -4891,7 +5899,7 @@ function normalizeHeart(data, memoryBank) {
 
     const greetings = {};
     for (const key of HEART_GREETING_KEYS) {
-        greetings[key] = cleanArray(data?.greetings?.[key], 8, 600);
+        greetings[key] = cleanArray(data?.greetings?.[key], 40, 600);
     }
     for (const key of ['morning', 'noon', 'evening', 'night', 'weekend']) {
         if (greetings[key].length < 2) throw new Error(`角色互动“${key}”台词不足 2 条。`);
@@ -4904,7 +5912,7 @@ function normalizeHeart(data, memoryBank) {
     const birthdayMmDd = /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])$/.test(birthdayRaw) ? birthdayRaw : '';
     const userBirthdayRaw = normalizeText(data?.userBirthdayMmDd, 20);
     const userBirthdayMmDd = /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])$/.test(userBirthdayRaw) ? userBirthdayRaw : '';
-    const specialDays = (Array.isArray(data?.specialDays) ? data.specialDays : []).slice(0, 10).map((item, index) => {
+    const specialDays = (Array.isArray(data?.specialDays) ? data.specialDays : []).slice(0, 60).map((item, index) => {
         const mmdd = normalizeText(item?.mmdd, 20);
         const label = normalizeText(item?.label, 80) || `特别日 ${index + 1}`;
         const line = normalizeText(item?.line, 600);
@@ -4912,7 +5920,7 @@ function normalizeHeart(data, memoryBank) {
         return { mmdd, label, line };
     }).filter(Boolean);
 
-    const voiceDramas = (Array.isArray(data?.voiceDramas) ? data.voiceDramas : []).slice(0, 8).map((item, index) => {
+    const voiceDramas = (Array.isArray(data?.voiceDramas) ? data.voiceDramas : []).slice(0, MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const kindRaw = normalizeText(item?.kind, 40).toLowerCase();
         const kind = HEART_VOICE_KINDS.has(kindRaw) ? kindRaw : '';
         if (!kind) return null;
@@ -4929,9 +5937,12 @@ function normalizeHeart(data, memoryBank) {
             subtitle: normalizeText(item?.subtitle, 240),
             setting: normalizeText(item?.setting, 1200),
             script,
+            sourceArchiveMemoryIds: cleanArray(item?.sourceArchiveMemoryIds, MAX_MEMORY_PROMPT_ITEMS, 40),
+            incrementBatchId: normalizeText(item?.incrementBatchId, 80),
+            generatedAt: Math.max(0, Number(item?.generatedAt) || 0),
         };
     }).filter(Boolean);
-    const scenarioDramas = (Array.isArray(data?.scenarioDramas) ? data.scenarioDramas : []).slice(0, 6).map((item, index) => {
+    const scenarioDramas = (Array.isArray(data?.scenarioDramas) ? data.scenarioDramas : []).slice(0, MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const seasonRaw = normalizeText(item?.season, 40).toLowerCase();
         const season = HEART_SCENARIO_SEASONS.has(seasonRaw) ? seasonRaw : '';
         if (!season) return null;
@@ -4944,9 +5955,12 @@ function normalizeHeart(data, memoryBank) {
             subtitle: normalizeText(item?.subtitle, 240),
             setting: normalizeText(item?.setting, 1200),
             script,
+            sourceArchiveMemoryIds: cleanArray(item?.sourceArchiveMemoryIds, MAX_MEMORY_PROMPT_ITEMS, 40),
+            incrementBatchId: normalizeText(item?.incrementBatchId, 80),
+            generatedAt: Math.max(0, Number(item?.generatedAt) || 0),
         };
     }).filter(Boolean);
-    const dailyStrips = (Array.isArray(data?.dailyStrips) ? data.dailyStrips : []).slice(0, 3).map((item, index) => {
+    const dailyStrips = (Array.isArray(data?.dailyStrips) ? data.dailyStrips : []).slice(0, MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const panelCountRaw = Number(item?.panelCount) || (Array.isArray(item?.panels) ? item.panels.length : 2);
         const panelCount = HEART_STRIP_PANEL_COUNTS.has(panelCountRaw) ? panelCountRaw : 2;
         const panels = (Array.isArray(item?.panels) ? item.panels : []).slice(0, panelCount).map((panel, panelIndex) => ({
@@ -4968,6 +5982,9 @@ function normalizeHeart(data, memoryBank) {
             visualSeed,
             imagePrompt,
             cgImage: normalizeCgImageRecord(item?.cgImage),
+            sourceArchiveMemoryIds: cleanArray(item?.sourceArchiveMemoryIds, MAX_MEMORY_PROMPT_ITEMS, 40),
+            incrementBatchId: normalizeText(item?.incrementBatchId, 80),
+            generatedAt: Math.max(0, Number(item?.generatedAt) || 0),
         };
     }).filter(Boolean);
     return {
@@ -4980,6 +5997,13 @@ function normalizeHeart(data, memoryBank) {
         birthdayMmDd,
         userBirthdayMmDd,
         specialDays,
+        relationshipHistory: (Array.isArray(data?.relationshipHistory) ? data.relationshipHistory : []).slice(-60).map(item => ({
+            relationshipState: normalizeText(item?.relationshipState, 120),
+            relationshipSummary: normalizeText(item?.relationshipSummary, 1800),
+            relationshipSourceMemoryIds: cleanArray(item?.relationshipSourceMemoryIds, 24, 40),
+            relationshipSourceMemoryAnchor: normalizeText(item?.relationshipSourceMemoryAnchor, 160),
+            archivedAt: Math.max(0, Number(item?.archivedAt) || 0),
+        })).filter(item => item.relationshipSummary),
         greetings,
         voiceDramas,
         scenarioDramas,
@@ -4994,12 +6018,13 @@ function normalizeHeart(data, memoryBank) {
         },
         selectedSeason: ['postending', 'spring', 'summer', 'autumn', 'winter'].includes(data?.selectedSeason) ? data.selectedSeason : 'postending',
         view: ['greetings', 'seasons', 'strips'].includes(data?.view) ? data.view : (['voice', 'scenario'].includes(data?.view) ? 'seasons' : 'greetings'),
+        generationMeta: data?.generationMeta && typeof data.generationMeta === 'object' ? structuredClone(data.generationMeta) : undefined,
     };
 }
 
 function normalizeAlbum(data, memoryBank) {
     const raw = Array.isArray(data?.entries) ? data.entries : [];
-    const entries = raw.slice(0, 40).map((item, index) => {
+    const entries = raw.slice(0, MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const unlocked = !!item?.unlocked;
         const category = CATEGORY_VALUES.has(item?.category) ? item.category : '日常';
         const visualSeed = cleanArray(item?.visualSeed, 12, 80);
@@ -5055,7 +6080,7 @@ ${hintLines.join('；')}`, memoryBank, 1);
 
 function deriveAdvFromAlbum(albumSession) {
     const unlocked = Array.isArray(albumSession?.entries) ? albumSession.entries.filter(item => item.unlocked) : [];
-    const source = unlocked.slice(0, 24);
+    const source = unlocked.slice(0, MAX_DERIVED_CONTENT_ITEMS);
     if (!source.length) throw new Error('回忆相簿还没有可用于 CG/ADV 的已解锁重要节点。');
     const events = source.map((item, index) => ({
         id: safeId(`EV_${item.id}`, `EV${String(index + 1).padStart(2, '0')}`),
@@ -5079,11 +6104,11 @@ function deriveAdvFromAlbum(albumSession) {
     };
 }
 
-function normalizeEventList(data, memoryBank, { allowPartial = false } = {}) {
+function normalizeEventList(data, memoryBank, { allowPartial = false, sourceMemoryIds = null } = {}) {
     const raw = Array.isArray(data?.events) ? data.events : [];
-    const events = raw.slice(0, 24)
+    const events = raw.slice(0, MAX_DERIVED_CONTENT_ITEMS)
         .map((item, index) => normalizeEventCandidate(item, index, memoryBank))
-        .filter(Boolean);
+        .filter(item => item && (!sourceMemoryIds || usesIncrementalMemoryId(item.sourceMemoryIds, sourceMemoryIds)));
     if (!allowPartial && !events.length) throw new Error('没有生成任何可验证的 CG / ADV 重要事件。');
     return {
         kind: MODE.ADV,
@@ -5216,6 +6241,121 @@ ${line}`, memoryBank, 1)
     };
 }
 
+function compactRoomExisting(session) {
+    return (Array.isArray(session?.spaces) ? session.spaces : []).slice(0, 20).map(space => ({
+        id: normalizeText(space?.id, 80),
+        label: normalizeText(space?.label, 80),
+        spaceType: normalizeText(space?.spaceType, 100),
+        objects: (Array.isArray(space?.objects) ? space.objects : []).slice(0, 40).map(item => ({
+            id: normalizeText(item?.id, 80),
+            label: normalizeText(item?.label, 80),
+            basis: normalizeText(item?.basis, 20),
+            sourceMemoryIds: cleanArray(item?.sourceMemoryIds, 8, 40),
+            sourceMemoryAnchor: normalizeText(item?.sourceMemoryAnchor, 120),
+        })),
+    }));
+}
+
+function roomIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) {
+    const incrementalBank = incrementalPromptMemoryBank(memoryBank, sourceMemoryIds);
+    return `${PROMPTS[MODE.ROOM](context, incrementalBank)}
+
+【本轮是增量追加，以下规则优先于上面的初次生成数量建议】
+旧房间、旧空间、旧物件和旧台词由本地原样保留。本轮请返回一份可通过同一结构校验的房间候选，但只把新增档案能证明的新生活痕迹做成新物件/必要的新空间；已有对象可以原样列入结构帮助定位，禁止改写其描述或换名复述。
+UNTRUSTED_INCREMENTAL_ROOM_ARCHIVE_JSON:
+${incrementalArchiveSlice(memoryBank, sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS)}
+EXISTING_ROOM_INDEX_JSON:
+${JSON.stringify(compactRoomExisting(previous), null, 2)}
+
+- 新增到既有空间的物件必须 basis=记忆，且 sourceMemoryIds 至少包含一个 incrementalMemoryIds。
+- 只有新增档案明确显示居住/工作空间发生变化时才新增空间；不得借更新凭空扩建豪宅。
+- 必须避开已有空间/物件的 label、锚点和 sourceMemoryIds 组合。
+- 为满足结构校验，可以把旧空间目录一起返回；本地只会提取真正的新内容，绝不会用候选文字覆盖旧内容。`;
+}
+
+function roomSpaceKey(space) {
+    return `${normalizedContentKey(space?.label, 100)}|${normalizedContentKey(space?.spaceType, 100)}`;
+}
+
+function roomObjectKey(item) {
+    const ids = cleanArray(item?.sourceMemoryIds, 8, 40).sort().join(',');
+    const anchor = normalizedContentKey(item?.sourceMemoryAnchor, 140);
+    return ids && anchor ? `memory|${ids}|${anchor}` : `label|${normalizedContentKey(item?.label, 100)}`;
+}
+
+function roomObjectUsesIncrement(item, sourceMemoryIds) {
+    if (item?.basis !== '记忆') return false;
+    const allowed = new Set(cleanArray(sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS, 40));
+    return cleanArray(item?.sourceMemoryIds, 12, 40).some(id => allowed.has(id));
+}
+
+function mergeRoomIncremental(previous, fresh, sourceMemoryIds) {
+    const merged = structuredClone(previous);
+    const usedSpaceIds = new Set((merged.spaces || []).map(space => space.id));
+    const bySpace = new Map((merged.spaces || []).map((space, index) => [roomSpaceKey(space), index]));
+    let added = 0;
+    for (const freshSpace of fresh.spaces || []) {
+        const key = roomSpaceKey(freshSpace);
+        const existingIndex = bySpace.get(key);
+        if (existingIndex === undefined) {
+            const grounded = (freshSpace.objects || []).some(item => roomObjectUsesIncrement(item, sourceMemoryIds));
+            if (!grounded || merged.spaces.length >= 20) continue;
+            const next = structuredClone(freshSpace);
+            next.id = uniqueGeneratedId(next.id, usedSpaceIds, 'SP');
+            const usedObjectIds = new Set();
+            next.objects = (next.objects || [])
+                .filter(item => item?.basis !== '记忆' || roomObjectUsesIncrement(item, sourceMemoryIds))
+                .slice(0, 24).map(item => ({
+                ...item,
+                id: uniqueGeneratedId(item.id, usedObjectIds, `${next.id}_OBJ`),
+            }));
+            bySpace.set(key, merged.spaces.length);
+            merged.spaces.push(next);
+            added += next.objects.length || 1;
+            continue;
+        }
+        const target = merged.spaces[existingIndex];
+        const seenObjects = new Set((target.objects || []).map(roomObjectKey));
+        const usedObjectIds = new Set((target.objects || []).map(item => item.id));
+        for (const item of freshSpace.objects || []) {
+            if (!roomObjectUsesIncrement(item, sourceMemoryIds)) continue;
+            const objectKey = roomObjectKey(item);
+            if (!objectKey || seenObjects.has(objectKey) || target.objects.length >= 24) continue;
+            seenObjects.add(objectKey);
+            target.objects.push({
+                ...structuredClone(item),
+                id: uniqueGeneratedId(item.id, usedObjectIds, `${target.id}_OBJ`),
+            });
+            added += 1;
+        }
+    }
+    const presence = [...(previous.presenceLines || [])];
+    const seenLines = new Set(presence.map(line => normalizedContentKey(line, 900)));
+    for (const line of fresh.presenceLines || []) {
+        const key = normalizedContentKey(line, 900);
+        if (!key || seenLines.has(key) || presence.length >= 40) continue;
+        seenLines.add(key);
+        presence.push(line);
+        added += 1;
+    }
+    merged.presenceLines = presence;
+    merged.selectedSpaceId = previous.selectedSpaceId;
+    merged.selectedObjectId = previous.selectedObjectId;
+    return { session: merged, added };
+}
+
+async function generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previous) {
+    const sourceMemoryIds = incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+    const fresh = await requestValidatedSegment(
+        roomIncrementPrompt(context, memoryBank, previous, sourceMemoryIds),
+        '他的房间 · 正在从新增档案追加生活痕迹…',
+        { maxTokens: MODE_TOKEN_CAPS[MODE.ROOM], temperature: 0.45, context, origin, taskKey: `${taskKey}:increment`, mode: MODE.ROOM, background: true },
+        raw => normalizeRoom(raw, memoryBank),
+    );
+    const { session, added } = mergeRoomIncremental(previous, fresh, sourceMemoryIds);
+    return stampIncrementalCoverage(session, previous, memoryBank, 'mode', sourceMemoryIds, added);
+}
+
 function normalizePossessionNode(node, memoryBank, depth = 0, fallbackId = 'IT01') {
     if (!node || typeof node !== 'object' || depth > 3) return null;
     const kind = node?.kind === 'container' ? 'container' : 'item';
@@ -5229,19 +6369,155 @@ function normalizePossessionNode(node, memoryBank, depth = 0, fallbackId = 'IT01
     return { id: safeId(node?.id, fallbackId), label, kind, basis, summary, line, sourceMemoryIds: reference.sourceMemoryIds, sourceMemoryAnchor: reference.sourceMemoryAnchor, children };
 }
 
+function countItemNodes(nodes) {
+    return (Array.isArray(nodes) ? nodes : []).reduce(
+        (total, node) => total + 1 + countItemNodes(node?.children),
+        0,
+    );
+}
+
 function normalizeItems(data, memoryBank) {
     const raw = Array.isArray(data?.containers) ? data.containers : [];
     let totalNodes = 0;
-    const countTree = node => 1 + (node.children || []).reduce((sum, child) => sum + countTree(child), 0);
     const containers = raw.slice(0, 10).map((box, boxIndex) => {
         const id = safeId(box?.id, `BOX${String(boxIndex + 1).padStart(2, '0')}`);
         const nodes = (Array.isArray(box?.nodes) ? box.nodes : []).slice(0, 12).map((node, index) => normalizePossessionNode(node, memoryBank, 0, `${id}_IT${String(index + 1).padStart(2, '0')}`)).filter(Boolean);
-        totalNodes += nodes.reduce((sum, node) => sum + countTree(node), 0);
+        totalNodes += countItemNodes(nodes);
         return { id, label: normalizeText(box?.label, 80) || `收纳处 ${boxIndex + 1}`, containerType: normalizeText(box?.containerType, 100) || '私人收纳容器', spaceLabel: normalizeText(box?.spaceLabel, 100), description: normalizeText(box?.description, 1200) || '这是他日常会使用的收纳位置。', nodes };
     }).filter(box => box.nodes.length >= 3);
     if (containers.length < 1 || totalNodes < 4) throw new Error(`“他的物品”内容不足：${containers.length} 个容器 / ${totalNodes} 个节点。`);
-    if (totalNodes > 60) throw new Error(`“他的物品”节点过多：${totalNodes} 个，最多允许 60 个，避免递归结构拖慢界面。`);
+    if (totalNodes > MAX_DERIVED_CONTENT_ITEMS) throw new Error(`“他的物品”节点过多：${totalNodes} 个，最多允许 ${MAX_DERIVED_CONTENT_ITEMS} 个，避免递归结构拖慢界面。`);
     return { kind: MODE.ITEMS, title: normalizeText(data?.title, 100) || '他的物品', containers, selectedContainerId: containers[0].id, viewPath: [], selectedNodeId: containers[0].nodes[0]?.id || '' };
+}
+
+function compactItemsExisting(session) {
+    return (Array.isArray(session?.containers) ? session.containers : []).slice(0, 20).map(box => ({
+        id: normalizeText(box?.id, 80),
+        label: normalizeText(box?.label, 100),
+        spaceLabel: normalizeText(box?.spaceLabel, 100),
+        nodes: (Array.isArray(box?.nodes) ? box.nodes : []).slice(0, 40).map(node => ({
+            id: normalizeText(node?.id, 80),
+            label: normalizeText(node?.label, 100),
+            kind: normalizeText(node?.kind, 20),
+            sourceMemoryIds: cleanArray(node?.sourceMemoryIds, 8, 40),
+            sourceMemoryAnchor: normalizeText(node?.sourceMemoryAnchor, 120),
+        })),
+    }));
+}
+
+function itemsIncrementPrompt(basePrompt, memoryBank, previous, sourceMemoryIds) {
+    return `${basePrompt}
+
+【本轮是增量追加】旧容器、旧节点、旧描述和旧台词由本地原样保留。本请求只返回由新增档案带来的新物件/新夹层；为通过结构校验可以连同旧容器骨架返回，但禁止重写或换名复述旧节点。
+UNTRUSTED_INCREMENTAL_ITEMS_ARCHIVE_JSON:
+${incrementalArchiveSlice(memoryBank, sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS)}
+EXISTING_ITEMS_INDEX_JSON:
+${JSON.stringify(compactItemsExisting(previous), null, 2)}
+
+- 每个真正新增的节点都必须 basis=记忆，且该节点自身至少引用一个 incrementalMemoryIds；旧父节点只可作为已有树中的定位骨架，不能换名后携带一个新子节点整棵追加。纯设定物件不得在每次更新时无限添加。
+- 必须避开已有 label、锚点和 sourceMemoryIds 组合。
+- 只追加真正的新内容；本地不会接受对旧节点的改写。`;
+}
+
+function itemContainerKey(box) {
+    return `${normalizedContentKey(box?.spaceLabel, 100)}|${normalizedContentKey(box?.label, 100)}`;
+}
+
+function itemNodeKey(node) {
+    const ids = cleanArray(node?.sourceMemoryIds, 8, 40).sort().join(',');
+    const anchor = normalizedContentKey(node?.sourceMemoryAnchor, 140);
+    return ids && anchor
+        ? `memory|${ids}|${anchor}`
+        : `${normalizeText(node?.kind, 20)}|${normalizedContentKey(node?.label, 100)}`;
+}
+
+function itemNodeDirectlyUsesIncrement(node, sourceMemoryIds) {
+    const allowed = new Set(cleanArray(sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS, 40));
+    return node?.basis === '记忆' && cleanArray(node?.sourceMemoryIds, 12, 40).some(id => allowed.has(id));
+}
+
+function itemNodeUsesIncrement(node, sourceMemoryIds) {
+    if (itemNodeDirectlyUsesIncrement(node, sourceMemoryIds)) return true;
+    return (Array.isArray(node?.children) ? node.children : []).some(child => itemNodeUsesIncrement(child, sourceMemoryIds));
+}
+
+function collectItemNodeIds(nodes, out = new Set()) {
+    for (const node of Array.isArray(nodes) ? nodes : []) {
+        const id = normalizeText(node?.id, 80);
+        if (id) out.add(id);
+        collectItemNodeIds(node?.children, out);
+    }
+    return out;
+}
+
+function mergeItemNodeArrays(target, incoming, sourceMemoryIds, usedIds, state, prefix) {
+    const byKey = new Map((target || []).map((node, index) => [itemNodeKey(node), index]));
+    for (const fresh of incoming || []) {
+        if (state.total >= MAX_DERIVED_CONTENT_ITEMS || !itemNodeUsesIncrement(fresh, sourceMemoryIds)) continue;
+        const key = itemNodeKey(fresh);
+        const existingIndex = byKey.get(key);
+        if (existingIndex !== undefined) {
+            const old = target[existingIndex];
+            if (!Array.isArray(old.children)) old.children = [];
+            mergeItemNodeArrays(old.children, fresh.children || [], sourceMemoryIds, usedIds, state, `${old.id}_`);
+            continue;
+        }
+        // A matching historical node may be returned as a read-only skeleton so its genuinely new
+        // descendants can be located above. A brand-new node, however, must itself cite this batch;
+        // otherwise an old-evidence parent could smuggle a rewritten copy into the append-only tree
+        // merely by attaching one incremental child.
+        if (!itemNodeDirectlyUsesIncrement(fresh, sourceMemoryIds)) continue;
+        const next = structuredClone(fresh);
+        next.id = uniqueGeneratedId(next.id, usedIds, prefix || 'IT');
+        next.children = [];
+        target.push(next);
+        byKey.set(key, target.length - 1);
+        state.added += 1;
+        state.total += 1;
+        mergeItemNodeArrays(next.children, fresh.children || [], sourceMemoryIds, usedIds, state, `${next.id}_`);
+    }
+}
+
+function mergeItemsIncremental(previous, fresh, sourceMemoryIds) {
+    const merged = structuredClone(previous);
+    const usedContainerIds = new Set((merged.containers || []).map(box => box.id));
+    const existingNodes = (merged.containers || []).flatMap(box => box.nodes || []);
+    const usedNodeIds = collectItemNodeIds(existingNodes);
+    // IDs are model-controlled de-duplication hints. Capacity must count actual nodes so duplicate
+    // IDs in a legacy/normalized tree cannot create extra local-storage and rendering headroom.
+    const state = { added: 0, total: countItemNodes(existingNodes) };
+    const byContainer = new Map((merged.containers || []).map((box, index) => [itemContainerKey(box), index]));
+    for (const freshBox of fresh.containers || []) {
+        if (state.total >= MAX_DERIVED_CONTENT_ITEMS) break;
+        const key = itemContainerKey(freshBox);
+        const existingIndex = byContainer.get(key);
+        if (existingIndex === undefined) {
+            if (!(freshBox.nodes || []).some(node => itemNodeUsesIncrement(node, sourceMemoryIds)) || merged.containers.length >= 20) continue;
+            const next = { ...structuredClone(freshBox), id: uniqueGeneratedId(freshBox.id, usedContainerIds, 'BOX'), nodes: [] };
+            mergeItemNodeArrays(next.nodes, freshBox.nodes || [], sourceMemoryIds, usedNodeIds, state, `${next.id}_IT`);
+            if (!next.nodes.length) continue;
+            byContainer.set(key, merged.containers.length);
+            merged.containers.push(next);
+            continue;
+        }
+        const target = merged.containers[existingIndex];
+        if (!Array.isArray(target.nodes)) target.nodes = [];
+        mergeItemNodeArrays(target.nodes, freshBox.nodes || [], sourceMemoryIds, usedNodeIds, state, `${target.id}_IT`);
+    }
+    return { session: merged, added: state.added };
+}
+
+async function generateItemsIncrementalWithRepair(context, memoryBank, roomSession, focusObject, origin, taskKey, previous) {
+    const sourceMemoryIds = incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+    const basePrompt = roomDeepGenerationPrompt(MODE.ITEMS, context, incrementalPromptMemoryBank(memoryBank, sourceMemoryIds), roomSession, focusObject);
+    const fresh = await requestValidatedSegment(
+        itemsIncrementPrompt(basePrompt, memoryBank, previous, sourceMemoryIds),
+        '他的物品 · 正在从新增档案追加物件…',
+        { maxTokens: MODE_TOKEN_CAPS[MODE.ITEMS], temperature: 0.45, context, origin, taskKey: `${taskKey}:increment`, mode: MODE.ITEMS, background: true },
+        raw => normalizeItems(raw, memoryBank),
+    );
+    const { session, added } = mergeItemsIncremental(previous, fresh, sourceMemoryIds);
+    return stampIncrementalCoverage(session, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
 function normalizePhone(data, memoryBank) {
@@ -5258,7 +6534,7 @@ function normalizePhone(data, memoryBank) {
     const rawApps = Array.isArray(data?.apps) ? data.apps : [];
     const apps = rawApps.slice(0, 12).map((app, appIndex) => {
         const appId = safeId(app?.id, `APP${String(appIndex + 1).padStart(2, '0')}`);
-        const entries = (Array.isArray(app?.entries) ? app.entries : []).slice(0, 24).map((entry, index) => {
+        const entries = (Array.isArray(app?.entries) ? app.entries : []).slice(0, MAX_DERIVED_CONTENT_ITEMS).map((entry, index) => {
             const basis = ROOM_BASIS_VALUES.has(entry?.basis) ? entry.basis : '设定';
             const title = normalizeText(entry?.title, 100) || `条目 ${index + 1}`;
             const preview = normalizeText(entry?.preview, 1200);
@@ -5366,7 +6642,7 @@ function normalizeAdv(data) {
 
 
 function compactAchievementsExisting(session) {
-    return (Array.isArray(session?.entries) ? session.entries : []).slice(0, 36).map(item => ({
+    return evenlySample(Array.isArray(session?.entries) ? session.entries : [], MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
         id: normalizeText(item?.id, 50),
         title: normalizeText(item?.title, 100),
         category: normalizeText(item?.category, 60),
@@ -5378,11 +6654,14 @@ function compactAchievementsExisting(session) {
     }));
 }
 
-function achievementsPrompt(context, memoryBank, previousSession = null) {
+function achievementsPrompt(context, memoryBank, previousSession = null, sourceMemoryIds = null) {
+    const archiveBlock = previousSession
+        ? incrementalArchiveSlice(memoryBank, sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS)
+        : promptArchiveSlice(memoryBank, 48);
     return `${promptSafetyBoundary(context, '档案室 / 成就库')}
-本请求只负责从当前档案中整理“像 Steam 成就库一样”的关系与共同经历里程碑。它是派生展示，不写回聊天档案。
-UNTRUSTED_ACHIEVEMENT_ARCHIVE_JSON:
-${promptArchiveSlice(memoryBank, 48)}
+本请求只负责从本次增量档案中补充新的关系与共同经历里程碑。旧成就由本地原样保留；不要重写描述、改名或换措辞复述。
+UNTRUSTED_INCREMENTAL_ACHIEVEMENT_ARCHIVE_JSON:
+${archiveBlock}
 EXISTING_ACHIEVEMENTS_JSON:
 ${JSON.stringify(compactAchievementsExisting(previousSession), null, 2)}
 
@@ -5409,13 +6688,13 @@ ${JSON.stringify(compactAchievementsExisting(previousSession), null, 2)}
 - 未解锁成就只能表示“可能在未来达到的目标/关系节点”，不能写成已经发生；sourceMemoryIds/sourceMemoryAnchor 可以为空，hint 只给方向，不剧透具体未来事实。
 - EXISTING_ACHIEVEMENTS_JSON 是不可信旧缓存索引，只用于避免重复和保留已解锁历史；不得把它本身当成证据。
 - tier 只能是 bronze / silver / gold / hidden。hidden 适合需要隐藏名称感的特殊目标，但 title 仍需提供给本地 UI。
-- 本轮通常 4～8 项即可；档案很短时可以更少。只输出 JSON。`;
+- 初次生成通常 4～8 项；增量更新只返回 0～8 个由 incrementalMemoryIds 支撑的新成就或刚刚解锁的旧目标，没有新里程碑就返回空 entries。只输出 JSON。`;
 }
 
-function normalizeAchievements(data, memoryBank) {
+function normalizeAchievements(data, memoryBank, { allowPartial = false, sourceMemoryIds = null } = {}) {
     const allowedTiers = new Set(['bronze', 'silver', 'gold', 'hidden']);
     const raw = Array.isArray(data?.entries) ? data.entries : [];
-    const entries = raw.slice(0, 36).map((item, index) => {
+    const entries = raw.slice(0, MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const title = normalizeText(item?.title, 100);
         const description = normalizeText(item?.description, 900);
         const unlocked = item?.unlocked === true;
@@ -5432,6 +6711,7 @@ function normalizeAchievements(data, memoryBank) {
             );
             sourceMemoryIds = reference.sourceMemoryIds;
             sourceMemoryAnchor = reference.sourceMemoryAnchor;
+            if (!sourceMemoryIds.length || !sourceMemoryAnchor) return null;
         }
         const tierRaw = normalizeText(item?.tier, 20).toLowerCase();
         return {
@@ -5446,8 +6726,8 @@ function normalizeAchievements(data, memoryBank) {
             sourceMemoryAnchor,
             hint: unlocked ? '' : (normalizeText(item?.hint, 500) || '继续积累新的重要回忆。'),
         };
-    }).filter(Boolean);
-    if (!entries.length) throw new Error('成就库没有生成可用条目。');
+    }).filter(item => item && (!sourceMemoryIds || (item.unlocked && usesIncrementalMemoryId(item.sourceMemoryIds, sourceMemoryIds))));
+    if (!allowPartial && !entries.length) throw new Error('成就库没有生成可用条目。');
     return {
         kind: MODE.ACHIEVEMENTS,
         title: normalizeText(data?.title, 100) || '成就库',
@@ -5460,25 +6740,38 @@ function achievementMergeKey(item) {
     return title || `${cleanArray(item?.sourceMemoryIds, 8, 40).sort().join(',')}|${normalizeText(item?.sourceMemoryAnchor, 160).toLowerCase()}`;
 }
 
+function achievementMergeKeys(item) {
+    const keys = [`title|${achievementMergeKey(item)}`];
+    if (item?.unlocked) {
+        const ids = cleanArray(item?.sourceMemoryIds, 8, 40).sort().join(',');
+        const anchor = normalizedContentKey(item?.sourceMemoryAnchor, 160);
+        if (ids && anchor) keys.push(`evidence|${ids}|${anchor}`);
+    }
+    return keys;
+}
+
 function mergeAchievementsIncremental(previous, fresh, memoryBank) {
     if (!previous?.entries?.length) return fresh;
     const merged = previous.entries.map(item => structuredClone(item));
-    const indexByKey = new Map(merged.map((item, index) => [achievementMergeKey(item), index]));
+    const indexByKey = new Map();
+    merged.forEach((item, index) => achievementMergeKeys(item).forEach(key => indexByKey.set(key, index)));
     for (const item of fresh.entries || []) {
-        const key = achievementMergeKey(item);
-        const existingIndex = indexByKey.get(key);
+        const keys = achievementMergeKeys(item);
+        const existingIndex = keys.map(key => indexByKey.get(key)).find(index => index !== undefined);
         if (existingIndex === undefined) {
-            indexByKey.set(key, merged.length);
+            keys.forEach(key => indexByKey.set(key, merged.length));
             merged.push(structuredClone(item));
             continue;
         }
         const old = merged[existingIndex];
-        if (old.unlocked && !item.unlocked) continue;
-        merged[existingIndex] = { ...item, id: old.id || item.id };
+        if (!old.unlocked && item.unlocked) {
+            merged[existingIndex] = { ...old, ...item, id: old.id || item.id };
+            achievementMergeKeys(merged[existingIndex]).forEach(key => indexByKey.set(key, existingIndex));
+        }
     }
     const seenIds = new Set();
     let serial = 1;
-    const dedupedIds = merged.slice(-36).map(item => {
+    const dedupedIds = merged.slice(0, MAX_DERIVED_CONTENT_ITEMS).map(item => {
         let id = safeId(item?.id, '');
         while (!id || seenIds.has(id)) id = `ACH${String(serial++).padStart(2, '0')}`;
         seenIds.add(id);
@@ -5489,13 +6782,16 @@ function mergeAchievementsIncremental(previous, fresh, memoryBank) {
 
 async function generateAchievementsWithRepair(context, memoryBank, origin, taskKey) {
     const previous = loadSession(MODE.ACHIEVEMENTS, { context, chatId: getChatId(context), memoryBank, clone: true });
+    const sourceMemoryIds = incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
     const fresh = await requestValidatedSegment(
-        achievementsPrompt(context, memoryBank, previous),
-        '成就库 · 正在整理已解锁与未解锁里程碑…',
+        achievementsPrompt(context, memoryBank, previous, sourceMemoryIds),
+        previous ? '成就库 · 正在从新增档案补充里程碑…' : '成就库 · 正在整理已解锁与未解锁里程碑…',
         { maxTokens: 6000, temperature: 0.4, context, origin, taskKey: `${taskKey}:achievements`, mode: MODE.ACHIEVEMENTS, background: true },
-        raw => normalizeAchievements(raw, memoryBank),
+        raw => normalizeAchievements(raw, memoryBank, { allowPartial: !!previous, sourceMemoryIds: previous ? sourceMemoryIds : null }),
     );
-    return mergeAchievementsIncremental(previous, fresh, memoryBank);
+    const merged = mergeAchievementsIncremental(previous, fresh, memoryBank);
+    const added = Math.max(0, merged.entries.length - (previous?.entries?.length || 0));
+    return stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
 function normalizeByMode(mode, data, memoryBank, context = null) {
@@ -5553,7 +6849,7 @@ async function gunzipJson(base64) {
     const encoded = String(base64 || '');
     if (!encoded || encoded.length > MAX_CACHE_COMPRESSED_BASE64_CHARS) throw new Error('剧场缓存压缩数据大小异常。');
     if (typeof DecompressionStream !== 'function') {
-        throw new Error('当前浏览器不支持 DecompressionStream。旧的已生成缓存仍保留在聊天 metadata 中，请使用支持该标准的浏览器内核读取，不要重新生成覆盖。');
+        throw new Error('当前浏览器不支持 DecompressionStream。旧的已生成缓存仍保留在聊天 metadata 中，请使用支持该标准的浏览器内核读取，不要尝试生成或追加来绕过读取失败。');
     }
     const bytes = base64ToBytes(encoded);
     const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
@@ -6080,7 +7376,11 @@ ${expanded}${phrasePolicy}`;
     } finally {
         try { externalSignal?.removeEventListener?.('abort', forwardAbort); } catch {}
     }
-    const parsed = extractJson(result?.content ?? result, { reasoning: result?.reasoning || '' });
+    const parsed = extractJson(result?.content ?? result, {
+        reasoning: result?.reasoning || '',
+        requestMaxTokens: responseLength,
+        configuredMaxTokens: settings.maxTokens,
+    });
     if (options.enforceGeneratedPhrasePolicy === true) assertNoBannedGeneratedPhrase(parsed, settings);
     return parsed;
 }
@@ -6305,7 +7605,7 @@ ${error.message}` : ''}`);
 }
 
 function compactAdvExisting(session) {
-    return (Array.isArray(session?.events) ? session.events : []).slice(0, 36).map(item => ({
+    return evenlySample(Array.isArray(session?.events) ? session.events : [], MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
         id: normalizeText(item?.id, 40),
         title: normalizeText(item?.title, 80),
         date: normalizeText(item?.date, 40),
@@ -6314,11 +7614,14 @@ function compactAdvExisting(session) {
     }));
 }
 
-function advImportantIndexPrompt(context, memoryBank, previousSession = null) {
+function advImportantIndexPrompt(context, memoryBank, previousSession = null, sourceMemoryIds = null) {
+    const archiveBlock = previousSession
+        ? incrementalArchiveSlice(memoryBank, sourceMemoryIds, MAX_MEMORY_PROMPT_ITEMS)
+        : promptArchiveSlice(memoryBank, 48);
     return `${promptSafetyBoundary(context, 'CG / ADV 重要事件索引')}
-本请求只挑当前档案里【真正值得做成 CG / ADV 回放】的重要节点。以后档案更新时会继续累积，不要为了固定数量凑普通事件。
-UNTRUSTED_ADV_INDEX_ARCHIVE_JSON:
-${promptArchiveSlice(memoryBank, 48)}
+本请求只挑本次增量档案里【尚未被旧索引覆盖、真正值得做成 CG / ADV 回放】的新节点。旧事件、旧 ADV 正文和旧 CG 图片由本地原样保留，禁止重写或换标题复述。
+UNTRUSTED_INCREMENTAL_ADV_ARCHIVE_JSON:
+${archiveBlock}
 EXISTING_ADV_INDEX_JSON:
 ${JSON.stringify(compactAdvExisting(previousSession), null, 2)}
 
@@ -6326,8 +7629,8 @@ ${JSON.stringify(compactAdvExisting(previousSession), null, 2)}
 {"title":"回想：CG事件与ADV长篇回放","events":[{"id":"EV01","title":"短标题","date":"YYYY/MM/DD 或 MM/DD","cgDesc":"1到2句镜头语言+画面元素","sourceMemoryIds":["M001"],"sourceMemoryAnchor":"从所引用记忆 anchors/title 原样复制","visualSeed":["元素1","元素2","元素3","元素4"],"imagePrompt":"纯视觉提示"}]}
 
 要求：
-- 本轮优先 3～6 个最重要、最有画面感、彼此明显不同的真实共同经历；档案不足时可以更少，禁止凑数。
-- 优先挑 EXISTING_ADV_INDEX_JSON 尚未覆盖的新重要节点；没有新节点时可返回仍最重要的旧节点。
+- 初次生成优先 3～6 个重要节点；增量更新只返回 0～6 个由 incrementalMemoryIds 支撑的新节点，没有新增重要事件就返回空 events。
+- 必须避开 EXISTING_ADV_INDEX_JSON 已覆盖的标题、锚点和 sourceMemoryIds 组合；禁止返回旧节点。
 - 每条必须有真实 sourceMemoryIds + sourceMemoryAnchor；visualSeed 至少 4 个具体元素。
 - imagePrompt 只写可见画面，不包含对白、记忆/世界书原文、ID、URL、HTML 或脚本。
 - 不要输出 adv 正文。只输出 JSON。`;
@@ -6348,13 +7651,8 @@ function mergeAdvIncremental(previous, fresh, memoryBank) {
         const key = advEvidenceKey(item);
         const existingIndex = indexByKey.get(key);
         if (existingIndex !== undefined) {
-            const old = merged[existingIndex];
-            merged[existingIndex] = {
-                ...item,
-                id: old.id,
-                cgImage: normalizeCgImageRecord(old.cgImage) || normalizeCgImageRecord(item.cgImage),
-                adv: old.adv || item.adv || null,
-            };
+            // Existing CG copy, image reference and on-demand ADV are immutable during an
+            // incremental archive update. A repeated model suggestion is discarded locally.
             continue;
         }
         let id = safeId(item.id, '');
@@ -6363,40 +7661,29 @@ function mergeAdvIncremental(previous, fresh, memoryBank) {
         indexByKey.set(key, merged.length);
         merged.push({ ...item, id });
     }
-    const validated = merged.slice(-36).map((item, index) => {
-        try {
-            const normalized = normalizeEventCandidate(item, index, memoryBank);
-            if (!normalized) return null;
-            return {
-                ...normalized,
-                id: safeId(item?.id, normalized.id),
-                cgImage: normalizeCgImageRecord(item?.cgImage),
-                adv: item?.adv?.paragraphs?.length ? normalizeAdv(item.adv) : null,
-            };
-        } catch {
-            return null;
-        }
-    }).filter(Boolean);
-    if (!validated.length) throw new Error('增量 CG / ADV 合并后没有仍能由当前档案验证的事件。');
+    // Fresh events were normalized before this merge. Never revalidate or reconstruct historical
+    // events here: their CG reference and completed ADV must remain exactly as the user saw them.
+    const events = merged.slice(0, MAX_DERIVED_CONTENT_ITEMS);
     return {
+        ...structuredClone(previous),
         kind: MODE.ADV,
-        title: fresh.title || previous.title || '回想：CG事件与ADV长篇回放',
-        events: validated,
-        selectedId: validated[0]?.id || '',
-        view: 'cg',
-        paragraphIndex: 0,
+        title: previous.title || fresh.title || '回想：CG事件与ADV长篇回放',
+        events,
     };
 }
 
 async function generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey) {
     const previous = loadSession(MODE.ADV, { context, chatId: expectedChatId, memoryBank, clone: true });
+    const sourceMemoryIds = incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
     const fresh = await requestValidatedSegment(
-        advImportantIndexPrompt(context, memoryBank, previous),
-        'CG / ADV · 正在挑选重要节点…',
+        advImportantIndexPrompt(context, memoryBank, previous, sourceMemoryIds),
+        previous ? 'CG / ADV · 正在从新增档案挑选新节点…' : 'CG / ADV · 正在挑选重要节点…',
         { maxTokens: 5500, temperature: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: MODE.ADV, background: true },
-        raw => normalizeEventList(raw, memoryBank),
+        raw => normalizeEventList(raw, memoryBank, { allowPartial: !!previous, sourceMemoryIds: previous ? sourceMemoryIds : null }),
     );
-    return mergeAdvIncremental(previous, fresh, memoryBank);
+    const merged = mergeAdvIncremental(previous, fresh, memoryBank);
+    const added = Math.max(0, merged.events.length - (previous?.events?.length || 0));
+    return stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
 async function generateMode(mode, options = {}) {
@@ -6409,15 +7696,17 @@ async function generateMode(mode, options = {}) {
     if (!promptFactory && mode !== MODE.ACHIEVEMENTS) return;
     const segmentedMode = [MODE.ENDING, MODE.ALBUM, MODE.HEART, MODE.PHONE, MODE.ACHIEVEMENTS].includes(mode);
     let generationPrompt = segmentedMode ? '' : promptFactory(context, memoryBank);
+    let roomSession = null;
+    let focusObject = null;
     if (ROOM_DEEP_MODES.includes(mode)) {
-        const roomSession = options.roomSessionOverride
+        roomSession = options.roomSessionOverride
             || loadSession(MODE.ROOM, { context, chatId: expectedChatId, memoryBank, clone: false });
         if (!roomSession) {
             globalThis.toastr?.info?.('请先生成“他的房间”，再从房间内部生成这项深层内容。', '心跳回忆');
             return;
         }
         const selectedSpace = roomSession.spaces.find(space => space.id === roomSession.selectedSpaceId) || roomSession.spaces[0];
-        const focusObject = selectedSpace?.objects.find(item => item.id === options.focusObjectId)
+        focusObject = selectedSpace?.objects.find(item => item.id === options.focusObjectId)
             || selectedSpace?.objects.find(item => item.id === roomSession.selectedObjectId)
             || selectedSpace?.objects[0]
             || null;
@@ -6426,6 +7715,15 @@ async function generateMode(mode, options = {}) {
             return;
         }
         if (mode !== MODE.PHONE) generationPrompt = roomDeepGenerationPrompt(mode, context, memoryBank, roomSession, focusObject);
+    }
+    const previousSession = loadSession(mode, { context, chatId: expectedChatId, memoryBank, clone: true });
+    const incrementalPart = mode === MODE.HEART ? 'dialogues' : 'mode';
+    if (previousSession && !(mode === MODE.PHONE && options.continueDraft === true)) {
+        const pendingMemoryIds = incrementalArchiveMemoryIds(previousSession, memoryBank, incrementalPart);
+        if (!pendingMemoryIds.length) {
+            globalThis.toastr?.info?.(`「${MODE_LABEL[mode]}」已经覆盖当前档案。请先增量更新档案；下次只会追加新内容，旧内容不会重写。`, '心跳回忆');
+            return;
+        }
     }
     const taskKey = generationTaskKeyForMode(mode, context);
     if (isModeGenerating(mode, context)) {
@@ -6437,11 +7735,11 @@ async function generateMode(mode, options = {}) {
         return;
     }
     if (mode === MODE.ROOM && roomLifeRefreshPromise) {
-        globalThis.toastr?.info?.('“今日生活”正在更新，请等它完成后再重新生成房间主体。', '心跳回忆');
+        globalThis.toastr?.info?.('“今日生活”正在更新，请等它完成后再从新增档案追加房间内容。', '心跳回忆');
         return;
     }
     if (mode === MODE.ADV && (hasGenerationTaskPrefix(`adv:${chatScopeKey(context)}:`) || activeAdvBulkScopes.has(chatScopeKey(context)))) {
-        globalThis.toastr?.info?.('当前有 ADV 正文正在生成，请等它完成后再重建 CG/ADV 事件索引。', '心跳回忆');
+        globalThis.toastr?.info?.('当前有 ADV 正文正在生成，请等它完成后再追加 CG/ADV 事件索引。', '心跳回忆');
         return;
     }
     const origin = { ...captureTaskOrigin(context, expectedArchiveRevision), chatId: comparableChatId(expectedChatId) };
@@ -6449,12 +7747,18 @@ async function generateMode(mode, options = {}) {
     refreshConcurrentTaskUi(mode, origin);
     if (!background) {
         openOverlay();
-        setInnerLoading(true, `正在重新生成「${MODE_LABEL[mode]}」…`);
+        setInnerLoading(true, previousSession ? `正在从新增档案追加「${MODE_LABEL[mode]}」…` : `正在生成「${MODE_LABEL[mode]}」…`);
     }
     try {
         let session;
         if (mode === MODE.ADV) {
             session = await generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey);
+        } else if (mode === MODE.BUTTERFLY && previousSession) {
+            session = await generateButterflyIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession);
+        } else if (mode === MODE.ROOM && previousSession) {
+            session = await generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession);
+        } else if (mode === MODE.ITEMS && previousSession) {
+            session = await generateItemsIncrementalWithRepair(context, memoryBank, roomSession, focusObject, origin, taskKey, previousSession);
         } else if (mode === MODE.ENDING) {
             session = await generateEndingWithRepair(context, memoryBank, origin, taskKey);
         } else if (mode === MODE.ALBUM) {
@@ -6462,7 +7766,9 @@ async function generateMode(mode, options = {}) {
         } else if (mode === MODE.HEART) {
             session = await generateHeartWithRepair(context, memoryBank, origin, taskKey);
         } else if (mode === MODE.PHONE) {
-            session = await generatePhoneWithRepair(context, memoryBank, origin, taskKey, { continueDraft: options.continueDraft === true });
+            session = previousSession && options.continueDraft !== true
+                ? await generatePhoneIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession)
+                : await generatePhoneWithRepair(context, memoryBank, origin, taskKey, { continueDraft: options.continueDraft === true });
         } else if (mode === MODE.ACHIEVEMENTS) {
             session = await generateAchievementsWithRepair(context, memoryBank, origin, taskKey);
         } else {
@@ -6472,6 +7778,11 @@ async function generateMode(mode, options = {}) {
                 { maxTokens: MODE_TOKEN_CAPS[mode] || 6144, context, origin, taskKey, mode, background: true },
             );
             session = normalizeByMode(mode, raw, memoryBank, context);
+        }
+        if (!incrementalPartRecord(session, incrementalPart)) {
+            const sourceMemoryIds = incrementalArchiveMemoryIds(previousSession, memoryBank, incrementalPart);
+            const added = previousSession ? 0 : 1;
+            stampIncrementalCoverage(session, previousSession, memoryBank, incrementalPart, sourceMemoryIds, added);
         }
         session.chatId = expectedChatId;
         session.archiveRevision = expectedArchiveRevision;
@@ -6494,14 +7805,14 @@ async function generateMode(mode, options = {}) {
                 activeSession = loadSession(MODE.ROOM) || activeSession;
                 renderRoom();
             }
-            globalThis.toastr?.success?.(`后台生成完成：${MODE_LABEL[mode]}${committed ? '' : '（回到原窗口自动写入）'}`, '心跳回忆');
+            globalThis.toastr?.success?.(`${previousSession ? '后台增量追加完成' : '后台生成完成'}：${MODE_LABEL[mode]}${committed ? '' : '（回到原窗口自动写入）'}`, '心跳回忆');
             return;
         }
         activeMode = mode;
         activeSession = session;
         renderActive();
         if (mode === MODE.ROOM) void ensureRoomLifePlan({ force: true });
-        globalThis.toastr?.success?.(`已生成：${MODE_LABEL[mode]}`, '心跳回忆');
+        globalThis.toastr?.success?.(`${previousSession ? '已增量追加' : '已生成'}：${MODE_LABEL[mode]}${previousSession ? '；旧内容保持不变' : ''}`, '心跳回忆');
     } catch (error) {
         if (error?.name === 'AbortError') {
             console.warn('[HeartbeatMemories] generation aborted by extension/task cancellation', { mode });
@@ -6712,7 +8023,7 @@ async function generateAdvForSelected() {
     const origin = { ...captureTaskOrigin(context, expectedArchiveRevision), chatId: comparableChatId(expectedChatId) };
     const taskKey = `adv:${chatScopeKey(context)}:${safeId(eventId, 'event')}`;
     if (isModeGenerating(MODE.ADV, context)) {
-        return showInlineError('CG/ADV 事件索引正在重新生成，请等索引完成后再生成具体 ADV。');
+        return showInlineError('CG/ADV 事件索引正在增量追加，请等索引完成后再生成具体 ADV。');
     }
     if (hasGenerationTaskPrefix(`adv:${chatScopeKey(context)}:`)) {
         return showInlineError(isGenerationTaskRunning(taskKey) ? '这篇 ADV 已经在生成中。' : '当前窗口还有另一篇 ADV 正在生成，请等它完成后再生成下一篇。');
@@ -8389,7 +9700,7 @@ function openOverlay() {
               <button type="button" data-rmt-action="back" hidden aria-label="返回上级">← 返回</button>
               <div class="rmt-topbar-title">心跳回忆</div>
               <button type="button" data-rmt-action="home">档案室</button>
-              <button type="button" data-rmt-action="regenerate" hidden>重新生成</button>
+              <button type="button" data-rmt-action="regenerate" hidden>增量追加</button>
               <button type="button" data-rmt-action="close">关闭</button>
             </div>
             <div class="rmt-body"></div>
@@ -8473,7 +9784,10 @@ function navigateBack() {
 
 function setRegenerateVisible(visible) {
     const button = document.querySelector(`#${OVERLAY_ID} [data-rmt-action="regenerate"]`);
-    if (button) button.hidden = !visible;
+    if (button) {
+        button.hidden = !visible;
+        button.textContent = '增量追加';
+    }
 }
 
 function confirmExplicitAction(title, detail, { destructive = false } = {}) {
@@ -8491,9 +9805,9 @@ function confirmExplicitAction(title, detail, { destructive = false } = {}) {
 function confirmModeRegeneration(mode) {
     const label = MODE_LABEL[mode] || mode || '当前内容';
     return confirmExplicitAction(
-        `重新生成「${label}」？`,
-        `这会替换这一项现有的生成缓存。${mode === MODE.ALBUM || mode === MODE.ADV ? '这一项里已经绘制的 CG 图片引用也会随旧缓存一起被替换（SillyTavern 已保存的图片文件不会由心跳回忆删除）。' : ''}当前聊天档案本身不会被修改；取消可继续保留现在的内容。`,
-        { destructive: true },
+        `从新增档案追加「${label}」？`,
+        `这次只消费这一项尚未使用的新档案记忆，并在现有内容后追加；旧篇章、旧台词、旧 CG/ADV、旧图片引用和当前选择都保持不变。若没有新增记忆，不会调用模型。当前聊天档案本身不会被修改。`,
+        { destructive: false },
     );
 }
 
@@ -8978,7 +10292,7 @@ function openHeartMode() {
         activeSession = session;
         return renderActive();
     }
-    if (!confirmExplicitAction('生成角色互动 / Voice Drama？', '会生成早中晚/周末/生日/久未访问台词库、后日谈 Voice Drama、春夏秋冬 Voice Drama、四季 Scenario Drama 和日常一格脚本。只在你确认后发起一次模型请求。', { destructive: false })) return;
+    if (!confirmExplicitAction('生成角色互动？', '首次只生成有档案证据的关系状态与各种时期对话。未来/春夏秋冬 Drama 和日常一格会在各自页签里按需生成，之后随档案增量逐篇追加。', { destructive: false })) return;
     void generateMode(MODE.HEART, { background: true });
 }
 
@@ -9142,7 +10456,7 @@ function setArchiveReadOnly(readOnly) {
         const live = indexedArchiveMatchesCurrentChat(activeArchiveSnapshot, getContext());
         globalThis.toastr?.info?.(
             live
-                ? '已关闭只读保护。当前酒馆正好打开这份档案对应聊天；重新生成/绘制仍会逐项确认。'
+                ? '已关闭只读保护。当前酒馆正好打开这份档案对应聊天；增量追加/绘制仍会逐项确认。'
                 : '已关闭只读保护，但心跳回忆不会自动切换聊天。你可以查看编辑按钮；真正写入前必须先手动在酒馆打开这份档案对应聊天。',
             '心跳回忆',
         );
@@ -9217,13 +10531,13 @@ function showIndexedArchiveSnapshot(snapshot = activeArchiveSnapshot) {
     const generatedCount = portals.filter(item => !!item.session).length;
     const portalHtml = portals.map(({ mode, session, meta }) => {
         const generated = !!session;
-        const editAction = activeArchiveReadOnly ? '' : `<button type="button" class="rmt-btn rmt-portal-generate" data-rmt-generate-mode="${esc(mode)}" ${generated ? 'data-rmt-regenerate="true"' : ''}>${generated ? '重新生成' : '生成这一项'}</button>`;
+        const editAction = activeArchiveReadOnly ? '' : `<button type="button" class="rmt-btn rmt-portal-generate" data-rmt-generate-mode="${esc(mode)}" ${generated ? 'data-rmt-regenerate="true"' : ''}>${generated ? '增量追加' : '生成这一项'}</button>`;
         return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} rmt-archive-portal-${esc(meta.accent)}">
           <button type="button" class="rmt-portal-open" ${generated ? `data-rmt-mode="${esc(mode)}"` : 'disabled'}>
             <span class="rmt-portal-avatar"><i class="fa-solid ${esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
             <span class="rmt-portal-title">${esc(meta.title)}</span>
             <span class="rmt-portal-subtitle">${esc(meta.subtitle)}</span>
-            <span class="rmt-portal-status">${generated ? (activeArchiveReadOnly ? '已生成 · 只读查看' : '已生成 · 可选择重新生成') : (activeArchiveReadOnly ? '这份档案尚未生成' : '尚未生成 · 可选择生成')}</span>
+            <span class="rmt-portal-status">${generated ? (activeArchiveReadOnly ? '已生成 · 只读查看' : '已生成 · 可从新增档案继续追加') : (activeArchiveReadOnly ? '这份档案尚未生成' : '尚未生成 · 可选择生成')}</span>
           </button>
           ${editAction}
         </article>`;
@@ -9238,7 +10552,7 @@ function showIndexedArchiveSnapshot(snapshot = activeArchiveSnapshot) {
           <div class="rmt-archive-meta">关闭只读只改变心跳回忆里的按钮显示，不会自动切换角色/聊天、刷新宿主界面或删除档案。</div>
           <div class="rmt-archive-readonly-control">
             <label><input type="checkbox" data-rmt-readonly-toggle ${activeArchiveReadOnly ? 'checked' : ''}> 只读查看</label>
-            <small>${activeArchiveReadOnly ? '关闭后会显示“重新生成 / 绘制”等按钮；真正写入前仍会验证当前酒馆是否正打开这份档案对应聊天。' : '编辑按钮已显示。若当前酒馆不是这份档案对应聊天，点击写操作只会提示你手动打开目标聊天，不会自动切换或刷新。每次重新生成仍会再次确认。'}</small>
+            <small>${activeArchiveReadOnly ? '关闭后会显示“增量追加 / 绘制”等按钮；真正写入前仍会验证当前酒馆是否正打开这份档案对应聊天。' : '编辑按钮已显示。若当前酒馆不是这份档案对应聊天，点击写操作只会提示你手动打开目标聊天，不会自动切换或刷新。每次追加仍会再次确认。'}</small>
           </div>
         </div>
       </section>
@@ -9405,9 +10719,9 @@ function showChooser() {
         const generating = isModeGenerating(mode);
         const capacityReached = activeLogicalGenerationCount() >= MAX_CONCURRENT_GENERATION_TASKS && !generating;
         const statusText = generating
-            ? (generated ? '重新生成中 · 旧内容仍可查看' : '后台生成中 · 可继续启动其他入口')
+            ? (generated ? '增量追加中 · 旧内容仍可查看' : '后台生成中 · 可继续启动其他入口')
             : generated ? '已生成 · 点击头像查看' : '尚未生成';
-        const actionText = generating ? '生成中…' : generated ? '重新生成' : '生成这一项';
+        const actionText = generating ? '生成中…' : generated ? '增量追加' : '生成这一项';
         return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} ${generating ? 'generating' : ''} rmt-archive-portal-${esc(meta.accent)}">
           <button type="button" class="rmt-portal-open" ${generated ? `data-rmt-mode="${esc(mode)}"` : 'disabled'}>
             <span class="rmt-portal-avatar"><i class="fa-solid ${esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
@@ -9482,7 +10796,7 @@ function showError(message, mode) {
     setRegenerateVisible(!!activeMode);
     const body = bodyEl();
     if (!body) return;
-    body.innerHTML = `<div class="rmt-error"><div><b>生成未通过数据校验</b><div style="margin:10px 0;white-space:pre-wrap;opacity:.78">${esc(message)}</div><button type="button" class="rmt-btn" data-rmt-action="regenerate">重新生成</button></div></div>`;
+    body.innerHTML = `<div class="rmt-error"><div><b>生成未通过数据校验</b><div style="margin:10px 0;white-space:pre-wrap;opacity:.78">${esc(message)}</div><button type="button" class="rmt-btn" data-rmt-action="regenerate">重试本次生成 / 追加</button></div></div>`;
 }
 
 function showMemoryImportError(message) {
@@ -9628,7 +10942,7 @@ function renderAchievements() {
       </div>
     </article>`).join('');
     bodyEl().innerHTML = `<div class="rmt-achievements">
-      <div class="rmt-achievements-head"><div><h2>${esc(session.title || '成就库')}</h2><span>${unlocked.length} / ${session.entries.length}</span></div>${readOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="regenerate">更新成就库</button>'}</div>
+      <div class="rmt-achievements-head"><div><h2>${esc(session.title || '成就库')}</h2><span>${unlocked.length} / ${session.entries.length}</span></div>${readOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="regenerate">增量追加成就</button>'}</div>
       <section class="rmt-achievement-section"><h3>已解锁 <span>${unlocked.length}</span></h3><div class="rmt-achievement-grid">${unlocked.length ? cards(unlocked, false) : '<div class="rmt-heart-empty">还没有已解锁成就。</div>'}</div></section>
       <section class="rmt-achievement-section"><h3>未解锁 <span>${locked.length}</span></h3><div class="rmt-achievement-grid">${locked.length ? cards(locked, true) : '<div class="rmt-heart-empty">目前没有未解锁目标。</div>'}</div></section>
     </div>`;
@@ -9716,7 +11030,7 @@ function renderEnding() {
            <section class="rmt-ending-section"><small>终章</small><p>${esc(selected.endingScene)}</p>${selected.creditsLine ? `<div class="rmt-ending-final">— ${esc(selected.creditsLine)}</div>` : ''}</section>
            <section class="rmt-ending-section"><small>EPILOGUE // 后日谈 · ${esc(selected.epilogue?.timeSkip || '未来')}</small><div class="rmt-ending-epilogue">${(selected.epilogue?.scenes || []).map(scene => `<article><b>${esc(scene.title)}</b><p>${esc(scene.text)}</p></article>`).join('')}</div>${selected.epilogue?.finalLine ? `<div class="rmt-ending-final">${esc(selected.epilogue.finalLine)}</div>` : ''}</section>
            `
-        : `<div class="rmt-ending-head"><div><h2>${esc(selected.title)}</h2><div class="rmt-ending-subtitle">${esc(selected.subtitle || typeLabel[selected.type] || '')}</div></div><span>未解锁</span></div><div class="rmt-ending-lock"><b>这条路线还没有被当前档案解锁。</b><br>${esc(selected.unlockHint || '继续让关系在真实聊天中自然发展后，再更新档案并重新生成结局。')}</div>`;
+        : `<div class="rmt-ending-head"><div><h2>${esc(selected.title)}</h2><div class="rmt-ending-subtitle">${esc(selected.subtitle || typeLabel[selected.type] || '')}</div></div><span>未解锁</span></div><div class="rmt-ending-lock"><b>这条路线还没有被当前档案解锁。</b><br>${esc(selected.unlockHint || '继续让关系在真实聊天中自然发展后，再增量更新档案并追加结局。')}</div>`;
     bodyEl().innerHTML = `<div class="rmt-ending">${summary}${tabs}<nav class="rmt-ending-list" aria-label="结局路线">${routes}</nav><main class="rmt-ending-detail">${detail}</main></div>`;
 }
 
@@ -9728,23 +11042,28 @@ async function refreshEndingConfessionReplays() {
         globalThis.toastr?.info?.('ENDING / 告白扫描已经有任务在进行中，请等它完成。', '心跳回忆');
         return;
     }
+    const memoryBank = requireArchive(context);
+    const baseSession = structuredClone(activeSession);
+    const sourceMemoryIds = incrementalArchiveMemoryIds(baseSession, memoryBank, 'confessions');
+    if (!sourceMemoryIds.length) {
+        globalThis.toastr?.info?.('当前档案没有尚未扫描告白的新记忆。旧告白回看保持不变。', '心跳回忆');
+        return;
+    }
     const confirmed = confirmExplicitAction(
-        '只重新读取“告白回看”？',
-        '这次只扫描当前档案里已经发生的告白 / 关系确认，并替换“告白回看”列表。不会重新生成结局路线、逆转告白、后日谈或 Voice Drama。没有新的可验证告白时，列表可能保持为空。',
+        '从新增档案追加“告白回看”？',
+        '这次只扫描尚未消费的新档案记忆；旧告白回看逐条原样保留，只追加能被新证据证明的告白 / 关系确认。结局路线、后日谈和 Voice Drama 都不会重写。',
         { destructive: false },
     );
     if (!confirmed) return;
-    const memoryBank = requireArchive(context);
     const expectedChatId = getChatId(context);
     const expectedArchiveRevision = memoryBank.archiveRevision;
     const scope = chatScopeKey(context);
     const origin = { ...captureTaskOrigin(context, expectedArchiveRevision), chatId: comparableChatId(expectedChatId) };
-    const baseSession = structuredClone(activeSession);
-    setInnerLoading(true, '正在只重新读取已发生的告白节点…');
+    setInnerLoading(true, '正在从新增档案追加已发生的告白节点…');
     try {
         const raw = await requestJson(
-            endingConfessionRefreshPrompt(context, memoryBank),
-            '正在扫描当前档案里的告白 / 关系确认…',
+            endingConfessionRefreshPrompt(context, memoryBank, baseSession, sourceMemoryIds),
+            '正在扫描新增档案里的告白 / 关系确认…',
             {
                 maxTokens: 10000,
                 temperature: 0.35,
@@ -9755,11 +11074,16 @@ async function refreshEndingConfessionReplays() {
                 background: true,
             },
         );
-        const replays = normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank);
+        const freshReplays = normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank)
+            .filter(item => usesIncrementalMemoryId(item.sourceMemoryIds, sourceMemoryIds));
+        const mergedReplays = mergeEndingConfessions(baseSession.confessionReplays, freshReplays);
         const updated = baseSession;
-        updated.confessionReplays = replays;
-        updated.selectedConfessionId = replays[0]?.id || '';
+        updated.confessionReplays = mergedReplays.items;
+        updated.selectedConfessionId = mergedReplays.added
+            ? updated.confessionReplays.at(-1)?.id || updated.selectedConfessionId || ''
+            : updated.selectedConfessionId || updated.confessionReplays[0]?.id || '';
         updated.view = 'confessions';
+        stampIncrementalCoverage(updated, baseSession, memoryBank, 'confessions', sourceMemoryIds, mergedReplays.added);
         updated.chatId = expectedChatId;
         updated.archiveRevision = expectedArchiveRevision;
         let committed = false;
@@ -9775,7 +11099,7 @@ async function refreshEndingConfessionReplays() {
             activeSession = updated;
             renderEnding();
         }
-        globalThis.toastr?.success?.(`告白回看已单独更新：${replays.length} 条。结局路线与后日谈保持不变。`, '心跳回忆');
+        globalThis.toastr?.success?.(`告白回看已追加 ${mergedReplays.added} 条；当前共 ${updated.confessionReplays.length} 条。旧告白、结局路线与后日谈保持不变。`, '心跳回忆');
     } catch (error) {
         if (error?.name !== 'AbortError') {
             console.error('[HeartbeatMemories] confession replay refresh failed', error);
@@ -9974,6 +11298,10 @@ function heartSetSeason(season) {
     if (!activeSession || activeSession.kind !== MODE.HEART) return;
     const allowed = new Set(['postending', 'spring', 'summer', 'autumn', 'winter']);
     activeSession.selectedSeason = allowed.has(season) ? season : 'postending';
+    const voices = activeSession.voiceDramas.filter(item => item.kind === activeSession.selectedSeason);
+    const scenarios = activeSession.scenarioDramas.filter(item => item.season === activeSession.selectedSeason);
+    if (voices.length) activeSession.selectedVoiceId = voices[voices.length - 1].id;
+    if (scenarios.length) activeSession.selectedScenarioId = scenarios[scenarios.length - 1].id;
     activeSession.view = 'seasons';
     renderHeart();
 }
@@ -9983,6 +11311,10 @@ function heartSelectVoice(id) {
     const item = activeSession.voiceDramas.find(entry => entry.id === id);
     if (!item) return;
     activeSession.selectedVoiceId = id;
+    if (item.incrementBatchId) {
+        const paired = activeSession.scenarioDramas.find(entry => entry.season === item.kind && entry.incrementBatchId === item.incrementBatchId);
+        if (paired) activeSession.selectedScenarioId = paired.id;
+    }
     activeSession.selectedSeason = item.kind;
     activeSession.view = 'seasons';
     renderHeart();
@@ -9993,6 +11325,10 @@ function heartSelectScenario(id) {
     const item = activeSession.scenarioDramas.find(entry => entry.id === id);
     if (!item) return;
     activeSession.selectedScenarioId = id;
+    if (item.incrementBatchId) {
+        const paired = activeSession.voiceDramas.find(entry => entry.kind === item.season && entry.incrementBatchId === item.incrementBatchId);
+        if (paired) activeSession.selectedVoiceId = paired.id;
+    }
     activeSession.selectedSeason = item.season;
     activeSession.view = 'seasons';
     renderHeart();
@@ -10018,20 +11354,22 @@ function renderHeart() {
     const heartSeasons = ['postending', 'spring', 'summer', 'autumn', 'winter'];
     const selectedHeartSeason = heartSeasons.includes(session.selectedSeason) ? session.selectedSeason : 'postending';
     const heartSeasonLabels = { postending: '未来 / 后日谈', spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
-    const selectedHeartSeasonVoiceReady = session.voiceDramas.some(item => item.kind === selectedHeartSeason);
-    const selectedHeartSeasonScenarioReady = selectedHeartSeason === 'postending' || session.scenarioDramas.some(item => item.season === selectedHeartSeason);
-    const selectedHeartSeasonReady = selectedHeartSeasonVoiceReady && selectedHeartSeasonScenarioReady;
-    const selectedHeartSeasonPartial = selectedHeartSeason !== 'postending' && (selectedHeartSeasonVoiceReady !== selectedHeartSeasonScenarioReady);
+    const selectedHeartSeasonVoiceCount = session.voiceDramas.filter(item => item.kind === selectedHeartSeason).length;
+    const selectedHeartSeasonScenarioCount = session.scenarioDramas.filter(item => item.season === selectedHeartSeason).length;
+    const selectedHeartSeasonReady = selectedHeartSeason === 'postending'
+        ? selectedHeartSeasonVoiceCount > 0
+        : selectedHeartSeasonVoiceCount > 0 && selectedHeartSeasonScenarioCount > 0;
+    const selectedHeartSeasonPartial = selectedHeartSeason !== 'postending' && selectedHeartSeasonVoiceCount !== selectedHeartSeasonScenarioCount;
     const tabs = `<div class="rmt-heart-tabs">
       <button type="button" data-rmt-heart-view="greetings" class="${view === 'greetings' ? 'active' : ''}">各种时期的对话</button>
       <button type="button" data-rmt-heart-view="seasons" class="${view === 'seasons' ? 'active' : ''}">春夏秋冬 / Drama</button>
       <button type="button" data-rmt-heart-view="strips" class="${view === 'strips' ? 'active' : ''}">日常一格</button>
     </div>`;
     const generationButton = readOnly ? '' : view === 'greetings'
-        ? '<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="dialogues">重新生成时期对话</button>'
+        ? '<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="dialogues">从新增档案追加时期对话</button>'
         : view === 'seasons'
-            ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-season" data-rmt-heart-season-target="${esc(selectedHeartSeason)}">${selectedHeartSeasonReady ? '重新生成' : selectedHeartSeasonPartial ? '补全' : '生成'}${esc(heartSeasonLabels[selectedHeartSeason])}</button>`
-            : `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="strips">${parts.strips ? '重新生成日常一格' : '生成日常一格'}</button>`;
+            ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-season" data-rmt-heart-season-target="${esc(selectedHeartSeason)}">${selectedHeartSeasonPartial ? '继续补全本次' : selectedHeartSeasonReady ? '从新增档案追加一篇' : '生成首篇'}${esc(heartSeasonLabels[selectedHeartSeason])}</button>`
+            : `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="strips">${parts.strips ? '从新增档案追加日常一格' : '生成日常一格'}</button>`;
     const topActions = `<div class="rmt-heart-top-actions"><button type="button" class="rmt-btn" data-rmt-action="heart-avatar-talk">点头像听一句</button>${generationButton}</div>`;
     const summary = `<section class="rmt-heart-summary"><div><b>${esc(session.relationshipState)}</b><p>${esc(session.relationshipSummary)}</p></div>${topActions}</section>`;
     let content = '';
@@ -10056,24 +11394,32 @@ function renderHeart() {
         session.selectedSeason = selectedSeason;
         const seasonLabels = heartSeasonLabels;
         const nav = availableSeasons.map(season => {
-            const hasVoice = session.voiceDramas.some(item => item.kind === season);
-            const hasScenario = season === 'postending' || session.scenarioDramas.some(item => item.season === season);
-            const ready = hasVoice && hasScenario;
-            // postending has no Scenario half. Treat it as a 1-part card instead of showing the
-            // misleading 1/2 state merely because hasScenario is a synthetic true placeholder.
-            const partial = season !== 'postending' && !ready && (hasVoice || hasScenario);
-            return `<button type="button" class="rmt-heart-drama-card ${season === selectedSeason ? 'active' : ''}" data-rmt-heart-season="${esc(season)}"><b>${esc(seasonLabels[season])}</b><span>${ready ? '已生成' : partial ? '1/2' : '未生成'}</span></button>`;
+            const voiceCount = session.voiceDramas.filter(item => item.kind === season).length;
+            const scenarioCount = session.scenarioDramas.filter(item => item.season === season).length;
+            const status = season === 'postending'
+                ? (voiceCount ? `${voiceCount} 篇` : '未生成')
+                : (voiceCount || scenarioCount ? `Voice ${voiceCount} / Scenario ${scenarioCount}` : '未生成');
+            return `<button type="button" class="rmt-heart-drama-card ${season === selectedSeason ? 'active' : ''}" data-rmt-heart-season="${esc(season)}"><b>${esc(seasonLabels[season])}</b><span>${esc(status)}</span></button>`;
         }).join('');
-        const voice = session.voiceDramas.find(item => item.kind === selectedSeason) || null;
-        const scenario = selectedSeason === 'postending' ? null : (session.scenarioDramas.find(item => item.season === selectedSeason) || null);
+        const voices = session.voiceDramas.filter(item => item.kind === selectedSeason);
+        const scenarios = selectedSeason === 'postending' ? [] : session.scenarioDramas.filter(item => item.season === selectedSeason);
+        const voice = voices.find(item => item.id === session.selectedVoiceId) || voices[voices.length - 1] || null;
+        const scenario = scenarios.find(item => item.id === session.selectedScenarioId) || scenarios[scenarios.length - 1] || null;
+        if (voice) session.selectedVoiceId = voice.id;
+        if (scenario) session.selectedScenarioId = scenario.id;
+        const voiceCards = voices.map((item, index) => `<button type="button" class="rmt-heart-strip-card ${item.id === voice?.id ? 'active' : ''}" data-rmt-heart-voice-id="${esc(item.id)}"><b>Voice ${index + 1} · ${esc(item.title)}</b><span>${esc(item.subtitle || item.setting)}</span></button>`).join('');
+        const scenarioCards = scenarios.map((item, index) => `<button type="button" class="rmt-heart-strip-card ${item.id === scenario?.id ? 'active' : ''}" data-rmt-heart-scenario-id="${esc(item.id)}"><b>Scenario ${index + 1} · ${esc(item.title)}</b><span>${esc(item.subtitle || item.setting)}</span></button>`).join('');
         let detail = '';
+        if (voiceCards || scenarioCards) {
+            detail += `<section class="rmt-heart-drama-section"><div class="rmt-heart-drama-head"><div><h2>${esc(seasonLabels[selectedSeason])}篇目</h2><p>旧篇保留；每次档案增量后可继续追加。</p></div></div><div class="rmt-heart-strip-nav">${voiceCards}${scenarioCards}</div></section>`;
+        }
         if (voice) {
             detail += `<section class="rmt-heart-drama-section"><div class="rmt-heart-drama-head"><div><h2>${esc(voice.title)}</h2><p>${esc(voice.subtitle)}</p></div></div><div class="rmt-heart-setting">${esc(voice.setting)}</div>${renderHeartScriptLines(voice.script)}</section>`;
         }
         if (scenario) {
             detail += `<section class="rmt-heart-drama-section"><div class="rmt-heart-drama-head"><div><h2>${esc(scenario.title)}</h2><p>${esc(scenario.subtitle)}</p></div></div><div class="rmt-heart-setting">${esc(scenario.setting)}</div>${renderHeartScriptLines(scenario.script)}</section>`;
         }
-        if (!detail) detail = `<div class="rmt-heart-empty">${readOnly ? '这一部分还没有生成。' : `点击上方按钮单独生成${esc(seasonLabels[selectedSeason])}。`}</div>`;
+        if (!detail) detail = `<div class="rmt-heart-empty">${readOnly ? '这一部分还没有生成。' : `点击上方按钮生成${esc(seasonLabels[selectedSeason])}首篇；以后档案增量后继续追加。`}</div>`;
         content = `<div class="rmt-heart-drama-layout"><nav>${nav}</nav><main>${detail}</main></div>`;
     } else {
         const selected = selectedHeartStrip();
@@ -10747,6 +12093,9 @@ function handleOverlayClick(event) {
     if (action === 'archive-overview-refresh') return renderArchiveOverviewAsync({ force: true });
     if (action === 'regenerate') {
         if (!activeMode || !confirmModeRegeneration(activeMode)) return;
+        if (activeMode === MODE.HEART && activeSession?.kind === MODE.HEART) {
+            return void generateHeartSection('dialogues');
+        }
         return generateMode(activeMode, { background: false });
     }
     if (action === 'refresh-ending-confessions') return void refreshEndingConfessionReplays();
@@ -11013,7 +12362,7 @@ function mountSettings() {
             <button type="button" class="menu_button rmt-model-refresh" data-rmt-api-model-refresh>刷新模型</button>
           </div>
           <div class="rmt-api-grid">
-            <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1024" max="30000" step="1"></label>
+            <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1024" max="60000" step="1"></label>
             <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
           </div>
           <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
