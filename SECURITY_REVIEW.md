@@ -610,3 +610,26 @@ Scope: r40.3 -> r41 HEART firefly habitat and paged seasonal Drama.
 - Firefly content remains noncanonical derived HEART state. Granular deletion/regeneration reuses the existing double-confirmation manager and does not mutate archive memories.
 - Targeted review found no newly introduced Critical, High, or Medium severity issue.
 - Worldline discoveries: r41.4 adds chat-scoped profile discoveries to the existing RELATIONS session. Each field is allowlisted, must cite a valid Mxxx ID + anchor, and its literal value must also be present in the cited memory title/summary/anchors. Discoveries are rendered separately and never promoted into the shared Character Profile, preventing one chat window from contaminating another.
+## 0.8.28 / r41.7 Firefly dialogue + Drama pager targeted diff review
+
+Scope: local r41.6真机故障修复候选 -> r41.7 HEART firefly-dialogue and Drama pager fix.
+
+- Drama selection is now represented by a local `selectedDramaKey` pointing only to normalized Voice/Scenario items already present in the current HEART session. Legacy `selectedVoiceId` / `selectedScenarioId` remain read-only compatibility fallbacks. The new key grants no cache, archive, URL, object-path or write authority.
+- New firefly output changes from one short `line` to bounded structured `title + thoughts[2..4]`; the compatibility `line` is derived from those paragraphs. Every model string remains normalized and HTML-escaped before rendering. No arbitrary HTML, CSS, class, URL or coordinates are accepted.
+- New generation is bounded to 18–22 initial topics and 8–12 incremental topics. Incremental prompts carry at most 80 compressed existing-topic excerpts for duplicate avoidance, so the permanent firefly library cannot make request size grow without bound. Runtime rendering still caps the animated page at 18 nodes.
+- Legacy one-line fireflies may be upgraded only after an explicit user action. The upgrade validator requires an exact existing id and unchanged allowlisted color; commit preserves source-memory IDs, archive/batch provenance and original generation metadata. It changes only derived HEART text and does not write `MEMORY_KEY`, renumber Mxxx records, or consume the incremental archive-coverage cursor.
+- No new global `fetch` wrapper, network destination, credential reader, `eval`, `new Function`, `MutationObserver`, `requestAnimationFrame`, WebSocket/XHR or recurring timer was introduced.
+- Focused regressions cover authoritative Scenario selection when a stale Voice ID exists, rich firefly validation, legacy one-line compatibility, exact id/color preservation during upgrade, provenance preservation, 8-item incremental minimum, and the existing 18-node page/performance guards.
+
+Verification: 91/91 tests pass after rebuilding the single runtime bundle. Final source/bundle syntax and ZIP integrity are rechecked at packaging time. Targeted diff conclusion: no newly introduced Critical / High / Medium security issue identified.
+
+
+
+## 0.8.29 / r41.8 Firefly small-batch targeted diff review
+
+Scope: local r41.7 candidate -> r41.8 firefly batch/page-size reduction only.
+
+- Preserves r41.5/r41.6 startup and ordinary-chat performance closures.
+- Firefly generation and legacy-upgrade batches are bounded to 5-6 / 6 items respectively; page DOM is bounded to 6 glow nodes.
+- No new network target, timer, requestAnimationFrame, MutationObserver, model-controlled CSS/URL/coordinates, or write authority was introduced.
+- Existing firefly IDs, colors, provenance and Mxxx coverage boundaries remain unchanged.

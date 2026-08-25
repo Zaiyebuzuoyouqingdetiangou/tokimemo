@@ -235,7 +235,7 @@ export function promoteSnapshotToLiveIfCurrent() {
     runtimeState.activeArchiveReadOnly = true;
     if (live) {
         // Preserve only harmless view/selection state from the read-only clone.
-        for (const key of ['selectedId', 'selectedConfessionId', 'selectedVoiceId', 'selectedScenarioId', 'selectedStripId', 'selectedSpaceId', 'selectedObjectId', 'view', 'page', 'paragraphIndex', 'dialogueIndex', 'confessionLineIndex']) {
+        for (const key of ['selectedId', 'selectedConfessionId', 'selectedVoiceId', 'selectedScenarioId', 'selectedDramaKey', 'selectedStripId', 'selectedSpaceId', 'selectedObjectId', 'view', 'page', 'paragraphIndex', 'dialogueIndex', 'confessionLineIndex']) {
             if (oldSession && Object.hasOwn(oldSession, key)) live[key] = oldSession[key];
         }
         runtimeState.activeSession = live;

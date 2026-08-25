@@ -108,6 +108,15 @@ export function refreshGenerationSettingsUi() {
     void refreshModelOptions();
 }
 
+export function hydrateSettingsPanel() {
+    const panel = document.getElementById(core_constants.SETTINGS_ID);
+    if (!panel) return false;
+    refreshSettingsMemoryStatus({ lightweight: true });
+    refreshGenerationSettingsUi();
+    panel.dataset.rmtHydrated = '1';
+    return true;
+}
+
 export function refreshSettingsMemoryStatus({ lightweight = false } = {}) {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
     if (!panel) return;
@@ -140,8 +149,8 @@ export function mountSettings() {
     ui_styles.ensureSettingsStyles();
     const existing = document.getElementById(core_constants.SETTINGS_ID);
     if (existing) {
-        refreshSettingsMemoryStatus();
-        refreshGenerationSettingsUi();
+        refreshSettingsMemoryStatus({ lightweight: true });
+        if (existing.dataset.rmtHydrated === '1') refreshGenerationSettingsUi();
         return true;
     }
     const mount = document.querySelector('#extensions_settings2');
@@ -228,6 +237,7 @@ export function mountSettings() {
         }
     });
     panel.addEventListener('click', event => {
+        if (event.target.closest?.('.rmt-settings-header')) hydrateSettingsPanel();
         const modelRefreshButton = event.target.closest?.('[data-rmt-api-model-refresh]');
         if (modelRefreshButton) {
             modelRefreshButton.disabled = true;
@@ -256,7 +266,9 @@ export function mountSettings() {
             return;
         }
     });
-    refreshSettingsMemoryStatus();
-    refreshGenerationSettingsUi();
+    panel.addEventListener('focusin', event => {
+        if (event.target.matches?.('input,select,button,textarea')) hydrateSettingsPanel();
+    });
+    refreshSettingsMemoryStatus({ lightweight: true });
     return true;
 }

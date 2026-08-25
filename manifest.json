@@ -1,15 +1,15 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.26-performance-closure-r41.5",
+  "js": "index.js?heartbeat=0.8.29-firefly-small-batches-r41.8",
   "author": "Toto",
-  "version": "0.8.26",
+  "version": "0.8.29",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r41.5 性能收口：删除角色墓碑改为一次 Set 索引，萤火虫单页降至18颗；普通消息事件不再为设置状态遍历整段聊天，完整 UI CSS 延迟到首次打开档案室。保留统一角色主档案、人际庭园、Character Profile 与安全删除。",
+  "description": "r41.8 在 r41.7 完整心声与 Drama 翻页修复基础上，将萤火虫首次/增量/旧光升级统一收敛为每批 5～6 颗，单页最多 6 颗；保留 r41.6/r41.5 的启动减负与普通聊天性能收口。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

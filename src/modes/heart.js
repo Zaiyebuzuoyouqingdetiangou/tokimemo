@@ -254,16 +254,23 @@ ${JSON.stringify(compactHeartSeasonExisting(previous, season), null, 2)}` : ''}
 }
 
 export function heartFireflyPrompt(context, memoryBank, core, previous = null, sourceMemoryIds = null) {
-    const existing = (Array.isArray(previous?.fireflyVoices) ? previous.fireflyVoices : []).slice(-120).map(item => ({ color: item.color, line: item.line }));
+    const existing = (Array.isArray(previous?.fireflyVoices) ? previous.fireflyVoices : []).slice(-80).map(item => ({
+        color: item.color,
+        title: item.title || '',
+        excerpt: core_text.normalizeText((Array.isArray(item.thoughts) ? item.thoughts : [item.line].filter(Boolean)).join(' '), 220),
+    }));
     const incremental = existing.length > 0;
     return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 萤火虫栖息地')}
 RELATIONSHIP_TONE_ONLY_JSON:
 ${heartDramaRelationshipOnlyContext(core)}
-${incremental ? `UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:\n${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}\nEXISTING_FIREFLY_LINES_JSON:\n${JSON.stringify(existing, null, 2)}` : ''}
-这是类似“萤火虫栖息地”的【心声解锁库】，不是新发生的剧情。每个光点只有一句 {{char}} 没有说出口的短心声。
-${incremental ? '旧光点由本地永久保留。本请求只根据本轮新增档案带来的关系变化，解锁尚未出现的新心声；绝对不要改写、覆盖或复述旧光点。' : '这是首次点亮，请一次建立一片内容丰富的初始栖息地。'}
+${incremental ? `UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:
+${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}
+EXISTING_FIREFLY_TOPICS_JSON:
+${JSON.stringify(existing, null, 2)}` : ''}
+这是类似“萤火虫栖息地”的【心声解锁库】，不是新发生的剧情。一个光点不是一句格言，而是一个完整的“心声主题”：像恋爱游戏里偶然听见 {{char}} 没说出口的一小段内心展开，有起念、迟疑/联想和收束。
+${incremental ? '旧光点由本地永久保留。本请求只根据本轮新增档案带来的关系变化，解锁尚未出现的新主题；绝对不要改写、覆盖或复述旧光点。' : '这是首次点亮，请建立一片内容丰富但不过度拥挤的初始栖息地。'}
 严格输出：
-{"fireflyVoices":[{"id":"F01","color":"pink|blue|yellow|white|desire","line":"一句短心声"}]}
+{"fireflyVoices":[{"id":"F01","color":"pink|blue|yellow|white|desire","title":"4～18字心声主题","thoughts":["第一段内心","第二段内心","可选第三段内心"]}]}
 
 五种光点：
 - pink 💗：对 {{user}} 的喜欢、在意、依恋、恋爱感。
@@ -272,23 +279,33 @@ ${incremental ? '旧光点由本地永久保留。本请求只根据本轮新增
 - white 🤍：脆弱、秘密、羞于承认的小心思、孤独或软弱的一面；不要凭空新增重大创伤或背景事实。
 - desire ♥️：对 {{user}} 直白的渴望。允许明确写“想抱住你 / 想亲你 / 想把你留在身边 / 想让你只看我”这一类身体亲近与占有欲，但不要写露骨性行为、身体部位细节或色情过程。
 
+内容结构：
+- 每颗光点必须有 2～4 段 thoughts；每段 20～100 个汉字，整颗约 90～280 个汉字。不能只输出一句短句。
+- 2～4 段要属于同一个主题并自然递进，不要拆成互不相关的句子，也不要写成摘要/标签/金句合集。
+- 只写 {{char}} 的内心。可以在心里称呼或想到 {{user}}，但不要替 {{user}} 说话、决定、回应。
+- 不把心声当成历史事实，不写“已经发生了某件新事”。新增档案只用于判断关系/情绪是否变化，不得把具体敏感经历原样搬进心声。
+
 数量和分布：
-- ${incremental ? '本轮只新增 6～10 个真正新的光点；不要求五色平均，按当前关系与人设自然分布。若关系阶段适合，允许新增 ♥️，但不要为了凑数强塞。' : '首次总数 24～30 个；五种颜色每种至少 4 个，desire 至少 4 个。'}
-- 每条 12～90 个汉字，彼此内容明显不同，不能只是换同义词。
-- 只写 {{char}} 的内心，不替 {{user}} 说话、决定或回应。
-- 不把心声当成历史事实，不写“已经发生了某件新事”。新增档案只用于判断关系/情绪是否发生变化，不得把具体敏感经历原样搬进心声。
-- ${incremental ? '必须避开 EXISTING_FIREFLY_LINES_JSON 里已有的原句和近义重复。' : ''}
+- ${incremental ? '本轮新增 5～6 个真正新的心声主题；不要求五色平均，按当前关系与人设自然分布。若关系阶段适合，允许新增 ♥️，但不要为了凑数强塞。' : '首次总数 5～6 个；至少覆盖 3 种颜色，按人物与关系自然分配。♥️ 只在关系阶段与人设适合时出现，不为凑五色强塞。'}
+- 主题彼此必须明显不同，不能只是换同义词或把同一占有欲拆成多个光点。
+- ${incremental ? '必须避开 EXISTING_FIREFLY_TOPICS_JSON 里已有主题、原句和近义重复。' : ''}
 只输出 JSON。`;
 }
 
 export function normalizeFireflyVoice(item, index = 0) {
     const color = core_text.normalizeText(item?.color, 20).toLowerCase();
     if (!core_constants.HEART_FIREFLY_COLORS.has(color)) return null;
-    const line = core_text.normalizeText(item?.line, 220);
-    if (line.length < 8) return null;
+    const legacyLine = core_text.normalizeText(item?.line, 360);
+    const thoughts = core_text.cleanArray(item?.thoughts ?? item?.lines, 4, 360).filter(text => text.length >= 8);
+    if (!thoughts.length && legacyLine.length >= 8) thoughts.push(legacyLine);
+    if (!thoughts.length) return null;
+    const title = core_text.normalizeText(item?.title, 80) || core_text.normalizeText(thoughts[0], 18) || `心声 ${index + 1}`;
+    const line = thoughts.join(' ');
     return {
         id: core_text.safeId(item?.id, `FIREFLY${String(index + 1).padStart(2, '0')}`),
         color,
+        title,
+        thoughts,
         line,
         sourceArchiveMemoryIds: core_text.cleanArray(item?.sourceArchiveMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40),
         incrementBatchId: core_text.normalizeText(item?.incrementBatchId, 80),
@@ -297,21 +314,63 @@ export function normalizeFireflyVoice(item, index = 0) {
 }
 
 export function fireflyVoiceKey(item) {
-    return core_incremental.normalizedContentKey(item?.line, 220);
+    const text = Array.isArray(item?.thoughts) && item.thoughts.length ? item.thoughts.join(' ') : item?.line;
+    return core_incremental.normalizedContentKey(`${item?.title || ''} ${text || ''}`, 1200);
 }
 
-export function normalizeFireflyVoicesPart(data, { minTotal = 20, requireDistribution = true } = {}) {
-    const out = (Array.isArray(data?.fireflyVoices) ? data.fireflyVoices : []).slice(0, 36).map(normalizeFireflyVoice).filter(Boolean);
+export function normalizeFireflyVoicesPart(data, { minTotal = 5, requireDistribution = true, requireRich = true } = {}) {
+    const out = (Array.isArray(data?.fireflyVoices) ? data.fireflyVoices : []).slice(0, 6).map(normalizeFireflyVoice).filter(Boolean);
     if (out.length < minTotal) throw new Error(`萤火虫心声不足：${out.length}/${minTotal}。`);
+    if (requireRich) {
+        const short = out.find(item => !Array.isArray(item.thoughts) || item.thoughts.length < 2 || item.thoughts.join('').length < 70);
+        if (short) throw new Error(`萤火虫「${short.title || short.id}」仍然过短；每颗必须是至少 2 段的完整心声主题。`);
+    }
     if (requireDistribution) {
-        const counts = Object.fromEntries([...core_constants.HEART_FIREFLY_COLORS].map(color => [color, 0]));
-        for (const item of out) counts[item.color] = (counts[item.color] || 0) + 1;
-        for (const color of core_constants.HEART_FIREFLY_COLORS) {
-            if ((counts[color] || 0) < 3) throw new Error(`萤火虫「${color}」光点不足 3 条。`);
-        }
-        if ((counts.desire || 0) < 4) throw new Error('萤火虫 ♥️ 渴望光点不足 4 条。');
+        const represented = new Set(out.map(item => item.color));
+        if (represented.size < 3) throw new Error(`萤火虫颜色分布过窄：${represented.size}/3。首次至少覆盖 3 种颜色。`);
     }
     return out;
+}
+
+export function legacyFireflyVoices(session) {
+    return (Array.isArray(session?.fireflyVoices) ? session.fireflyVoices : []).filter(item => !Array.isArray(item?.thoughts) || item.thoughts.length < 2);
+}
+
+export function heartFireflyUpgradePrompt(context, core, items) {
+    const batch = (Array.isArray(items) ? items : []).slice(0, 6).map(item => ({
+        id: core_text.normalizeText(item?.id, 80),
+        color: core_text.normalizeText(item?.color, 20),
+        legacyLine: core_text.normalizeText(item?.line, 360),
+    }));
+    return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 旧版萤火虫心声升级')}
+RELATIONSHIP_TONE_ONLY_JSON:
+${heartDramaRelationshipOnlyContext(core)}
+LEGACY_FIREFLY_BATCH_JSON:
+${JSON.stringify(batch, null, 2)}
+
+任务：把这些旧版“一句心声”升级成完整的萤火虫心声主题。必须逐项保持原 id 和 color，不得新增、删除、合并或交换颜色。
+严格输出：
+{"fireflyVoices":[{"id":"原ID","color":"原颜色","title":"4～18字主题","thoughts":["第一段内心","第二段内心","可选第三/第四段"]}]}
+要求：
+- 每项 2～4 段 thoughts，每段 20～100 个汉字，总体约 90～280 个汉字。
+- 以 legacyLine 的核心情绪为起点自然展开，但不要机械重复原句；要像一次真正被听见的内心活动，有前后递进和收束。
+- 不新增历史事实，不把档案里的敏感具体经历重新复述，不替 {{user}} 说话或做决定。
+- id / color 必须与输入逐项一致。只输出 JSON。`;
+}
+
+export function normalizeFireflyUpgradePart(data, expectedItems) {
+    const expected = (Array.isArray(expectedItems) ? expectedItems : []).slice(0, 6);
+    if (!expected.length) return [];
+    const out = normalizeFireflyVoicesPart(data, { minTotal: expected.length, requireDistribution: false, requireRich: true });
+    const byId = new Map(out.map(item => [item.id, item]));
+    return expected.map(item => {
+        const id = core_text.normalizeText(item?.id, 80);
+        const color = core_text.normalizeText(item?.color, 20).toLowerCase();
+        const candidate = byId.get(id);
+        if (!candidate) throw new Error(`旧版萤火虫升级缺少 ${id}。`);
+        if (candidate.color !== color) throw new Error(`旧版萤火虫 ${id} 升级时改变了颜色。`);
+        return candidate;
+    });
 }
 
 export function heartStripsPrompt(context, memoryBank, core, previous = null, sourceMemoryIds = null) {
@@ -408,8 +467,6 @@ export async function requestHeartPart(prompt, status, options, validator) {
 }
 
 export function makeHeartSession(core, existing = null) {
-    const fireflyVoices = (Array.isArray(data?.fireflyVoices) ? data.fireflyVoices : []).slice(0, core_constants.HEART_FIREFLY_MAX_ITEMS).map(normalizeFireflyVoice).filter(Boolean);
-
     return {
         kind: core_constants.MODE.HEART,
         title: core.title || existing?.title || 'HEART VOICE / 角色互动',
@@ -429,6 +486,7 @@ export function makeHeartSession(core, existing = null) {
         selectedFireflyId: existing?.selectedFireflyId || '',
         selectedVoiceId: existing?.selectedVoiceId || '',
         selectedScenarioId: existing?.selectedScenarioId || '',
+        selectedDramaKey: core_text.normalizeText(existing?.selectedDramaKey, 180),
         selectedStripId: existing?.selectedStripId || '',
         selectedSeason: existing?.selectedSeason || 'postending',
         view: ['seasons', 'strips', 'fireflies'].includes(existing?.view) ? existing.view : 'seasons',
@@ -552,18 +610,43 @@ export function applyHeartPartialPatch(base, patch) {
         updated.selectedFireflyId = latest?.id || updated.selectedFireflyId || out[0]?.id || '';
         updated.generationParts = { ...(updated.generationParts || {}), fireflies: out.length > 0 };
         updated.view = 'fireflies';
+    } else if (patch.type === 'firefly-upgrade' && Array.isArray(patch.fireflyVoices)) {
+        const replacements = new Map(patch.fireflyVoices.map(item => [core_text.normalizeText(item?.id, 80), item]));
+        const out = (Array.isArray(updated.fireflyVoices) ? updated.fireflyVoices : []).map(item => {
+            const next = replacements.get(core_text.normalizeText(item?.id, 80));
+            if (!next || next.color !== item.color) return item;
+            added += 1;
+            return {
+                ...structuredClone(item),
+                title: next.title,
+                thoughts: structuredClone(next.thoughts),
+                line: next.line,
+                upgradedAt: Date.now(),
+            };
+        });
+        updated.fireflyVoices = out;
+        const lastUpgraded = [...patch.fireflyVoices].reverse().find(item => out.some(existing => existing.id === item.id));
+        if (lastUpgraded) updated.selectedFireflyId = lastUpgraded.id;
+        updated.generationParts = { ...(updated.generationParts || {}), fireflies: out.length > 0 };
+        updated.view = 'fireflies';
     } else if (patch.type === 'season') {
         const season = core_text.normalizeText(patch.season, 40).toLowerCase();
         if (patch.voice?.kind === season) {
             const result = appendHeartDramaItem(updated.voiceDramas, patch.voice, `voice:${season}`, 'VOICE');
             updated.voiceDramas = result.list;
-            if (result.item) updated.selectedVoiceId = result.item.id;
+            if (result.item) {
+                updated.selectedVoiceId = result.item.id;
+                updated.selectedDramaKey = `voice:${result.item.id}`;
+            }
             added += result.added;
         }
         if (season !== 'postending' && patch.scenario?.season === season) {
             const result = appendHeartDramaItem(updated.scenarioDramas, patch.scenario, `scenario:${season}`, 'SCENE');
             updated.scenarioDramas = result.list;
-            if (result.item) updated.selectedScenarioId = result.item.id;
+            if (result.item) {
+                updated.selectedScenarioId = result.item.id;
+                updated.selectedDramaKey = `scenario:${result.item.id}`;
+            }
             added += result.added;
         }
         updated.selectedSeason = season || updated.selectedSeason || 'postending';
@@ -691,6 +774,28 @@ export async function generateHeartFirefliesSection() {
     }
     const base = structuredClone(runtimeState.activeSession);
     const hasExisting = Array.isArray(base.fireflyVoices) && base.fireflyVoices.length > 0;
+    const legacyBatch = legacyFireflyVoices(base).slice(0, 6);
+    if (legacyBatch.length) {
+        runtimeState.activeModeBuildScopes.add(taskKey);
+        core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
+        try {
+            const upgraded = await requestHeartPart(
+                heartFireflyUpgradePrompt(context, base, legacyBatch),
+                '角色互动 · 正在把旧版萤火虫升级为完整心声…',
+                { maxTokens: 5200, temperature: 0.72, context, origin, taskKey: `${taskKey}:upgrade`, mode: core_constants.MODE.HEART, background: true },
+                raw => normalizeFireflyUpgradePart(raw, legacyBatch),
+            );
+            const result = await persistHeartPartialPatch('firefly-upgrade', { type: 'firefly-upgrade', fireflyVoices: upgraded }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+            const remain = legacyFireflyVoices(result.updated || base).length;
+            globalThis.toastr?.success?.(`已升级 ${upgraded.length} 个旧光点为完整心声${remain ? `，还剩 ${remain} 个可继续升级` : '，旧版短句已全部升级'}.`, '心跳回忆');
+        } catch (error) {
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(error?.message || String(error)), '心跳回忆');
+        } finally {
+            runtimeState.activeModeBuildScopes.delete(taskKey);
+            core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
+        }
+        return;
+    }
     if (hasExisting && base.fireflyVoices.length >= core_constants.HEART_FIREFLY_MAX_ITEMS) {
         globalThis.toastr?.info?.(`萤火虫栖息地已经收集到 ${core_constants.HEART_FIREFLY_MAX_ITEMS} 个心声光点；旧光点不会自动删除。`, '心跳回忆');
         return;
@@ -725,8 +830,8 @@ export async function generateHeartFirefliesSection() {
         const voices = await requestHeartPart(
             heartFireflyPrompt(context, memoryBank, base, hasExisting ? base : null, sourceMemoryIds),
             hasExisting ? '角色互动 · 正在解锁新的萤火虫心声…' : '角色互动 · 正在点亮萤火虫栖息地…',
-            { maxTokens: hasExisting ? 3600 : 7000, temperature: 0.8, context, origin, taskKey, mode: core_constants.MODE.HEART, background: true },
-            raw => normalizeFireflyVoicesPart(raw, { minTotal: hasExisting ? 5 : 20, requireDistribution: !hasExisting }),
+            { maxTokens: 5200, temperature: 0.8, context, origin, taskKey, mode: core_constants.MODE.HEART, background: true },
+            raw => normalizeFireflyVoicesPart(raw, { minTotal: 5, requireDistribution: !hasExisting, requireRich: true }),
         );
         const batchId = core_incremental.incrementalBatchId('fireflies', sourceMemoryIds);
         const enriched = voices.map(item => ({
@@ -1023,6 +1128,7 @@ export function normalizeHeart(data, memoryBank) {
         selectedFireflyId: core_text.normalizeText(data?.selectedFireflyId, 80) || fireflyVoices[0]?.id || '',
         selectedVoiceId: core_text.normalizeText(data?.selectedVoiceId, 80) || voiceDramas[0]?.id || '',
         selectedScenarioId: core_text.normalizeText(data?.selectedScenarioId, 80) || scenarioDramas[0]?.id || '',
+        selectedDramaKey: core_text.normalizeText(data?.selectedDramaKey, 180),
         selectedStripId: core_text.normalizeText(data?.selectedStripId, 80) || dailyStrips[0]?.id || '',
         generationParts: {
             dialogues: data?.generationParts?.dialogues !== false && !!Object.values(greetings).some(lines => lines.length),

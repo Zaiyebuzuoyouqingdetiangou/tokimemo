@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 43
-// Source SHA-256: c781b4b098a5dba8d21afe5e0934242fde36b5b04eed1247826a7f609288a895
+// Source SHA-256: 66aa3ca98bf5f6ecaae8376c8948cc28e72fd62cc5f5cbf911400f9247da7c9a
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_groups_js = Object.create(null);
@@ -258,7 +258,7 @@ const HEART_DRAMA_VISUAL_TONES = new Set(['soft', 'clear', 'muted', 'deep']);
 
 const HEART_FIREFLY_COLORS = new Set(['pink', 'blue', 'yellow', 'white', 'desire']);
 const HEART_FIREFLY_MAX_ITEMS = MAX_DERIVED_CONTENT_ITEMS;
-const HEART_FIREFLY_PAGE_SIZE = 18;
+const HEART_FIREFLY_PAGE_SIZE = 6;
 
 const HEART_STRIP_PANEL_COUNTS = new Set([1, 2, 4]);
 
@@ -1210,7 +1210,7 @@ function bindChatStateEvents() {
         if (runtimeState.busy) runtimeState.activeTaskBackgrounded = true;
         runtimeState.activeMode = null;
         runtimeState.activeSession = null;
-        ui_settingsPanel.refreshSettingsMemoryStatus();
+        ui_settingsPanel.refreshSettingsMemoryStatus({ lightweight: true });
         const overlay = document.getElementById(core_constants.OVERLAY_ID);
         try {
             const latest = core_context.currentCharacterGuard();
@@ -2026,7 +2026,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 @media(max-width:720px){.rmt-calendar-selected-strip{grid-template-columns:1fr;gap:6px}.rmt-calendar-notebook-board{grid-template-columns:1fr}.rmt-calendar-sticky-panel,.rmt-calendar-master-todo,.rmt-calendar-special-notes,.rmt-calendar-mood-section{padding:11px;border-radius:15px}.rmt-calendar-sticky-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.rmt-calendar-sticky{min-height:110px;padding:12px 10px 9px}.rmt-calendar-sticky h3{font-size:11px}.rmt-calendar-sticky p{font-size:9px;line-height:1.6}.rmt-calendar-special-notes>div{grid-template-columns:1fr}.rmt-calendar-special-notes .rmt-calendar-sticky{min-height:0}.rmt-calendar-mood-grid{grid-template-columns:1fr}.rmt-calendar-mood-note{min-height:0}.rmt-calendar-master-todo-row{grid-template-columns:24px minmax(0,1fr);padding:8px 6px}.rmt-calendar-master-check{width:21px;height:21px}}
 /* r41 HEART: one-drama seasonal pager + firefly habitat */
 .rmt-heart-single-drama>main{padding:0;background:transparent;border:0}.rmt-heart-season-stage{--heart-season-a:#fff8fb;--heart-season-b:#f5fbfd;--heart-season-accent:#d99ab4;padding:16px;border:1px solid color-mix(in srgb,var(--heart-season-accent) 34%,#d8e5eb);border-radius:20px;background:linear-gradient(145deg,var(--heart-season-a),var(--heart-season-b));box-shadow:0 10px 26px rgba(65,83,99,.08);min-height:420px}.rmt-heart-season-stage.season-spring{--heart-season-a:#fff3f8;--heart-season-b:#f1faee;--heart-season-accent:#df9ab4}.rmt-heart-season-stage.season-summer{--heart-season-a:#eefbff;--heart-season-b:#f6fff2;--heart-season-accent:#76b8cf}.rmt-heart-season-stage.season-autumn{--heart-season-a:#fff7ec;--heart-season-b:#fbf0e7;--heart-season-accent:#c58b65}.rmt-heart-season-stage.season-winter{--heart-season-a:#f2f7ff;--heart-season-b:#f7f4fb;--heart-season-accent:#8aa4c7}.rmt-heart-season-stage.season-postending{--heart-season-a:#fff5f8;--heart-season-b:#f4f6ff;--heart-season-accent:#bc88a8}.rmt-heart-season-stage.tone-clear{filter:saturate(1.08) brightness(1.015)}.rmt-heart-season-stage.tone-muted{filter:saturate(.76)}.rmt-heart-season-stage.tone-deep{--heart-season-a:color-mix(in srgb,var(--heart-season-accent) 16%,#f7f7fb);--heart-season-b:color-mix(in srgb,var(--heart-season-accent) 8%,#eef3f7);box-shadow:0 12px 30px rgba(55,64,78,.12)}.rmt-heart-drama-pager{display:grid;grid-template-columns:38px 1fr 38px;align-items:center;gap:8px;margin-bottom:9px}.rmt-heart-drama-pager>button{width:38px;height:38px;border:1px solid color-mix(in srgb,var(--heart-season-accent) 35%,#d7e4ea);border-radius:50%;background:rgba(255,255,255,.78);color:#6d7d8c;font-size:25px;line-height:1;cursor:pointer}.rmt-heart-drama-pager>div{text-align:center;display:grid;gap:1px}.rmt-heart-drama-pager small{font-size:8px;letter-spacing:.14em;color:#8c98a4}.rmt-heart-drama-pager b{font-size:10px;color:#647587}.rmt-heart-drama-dots{display:flex;justify-content:center;gap:5px;flex-wrap:wrap;margin:0 0 12px}.rmt-heart-drama-dot{width:7px;height:7px;border:0;border-radius:50%;background:rgba(106,124,141,.25);padding:0;cursor:pointer}.rmt-heart-drama-dot.active{background:var(--heart-season-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--heart-season-accent) 18%,transparent)}
-.rmt-firefly-shell{display:grid;gap:10px}.rmt-firefly-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:13px 15px;border-radius:18px;background:linear-gradient(145deg,#17212a,#101820);color:#edf6f7}.rmt-firefly-head small{font-size:8px;letter-spacing:.18em;color:#8ea6ae}.rmt-firefly-head h2{margin:3px 0 4px;font-size:21px}.rmt-firefly-head p{margin:0;color:#b8c7cc;font-size:10px;line-height:1.65}.rmt-firefly-head>span{white-space:nowrap;padding:5px 8px;border:1px solid rgba(255,255,255,.15);border-radius:999px;color:#bdcbd0;font-size:8px}.rmt-firefly-field{position:relative;height:390px;overflow:hidden;border-radius:22px;background:radial-gradient(circle at 50% 80%,rgba(49,83,70,.26),transparent 38%),radial-gradient(circle at 20% 20%,rgba(44,66,92,.32),transparent 34%),linear-gradient(180deg,#0b1118,#101b20 55%,#14251e);box-shadow:inset 0 0 60px rgba(0,0,0,.4)}.rmt-firefly-field:before{content:"";position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,.12) 0 1px,transparent 1.3px);background-size:37px 41px;opacity:.45}.rmt-firefly-point{position:absolute;left:var(--fx);top:var(--fy);width:calc(var(--fs) + 12px);height:calc(var(--fs) + 12px);transform:translate(-50%,-50%);border:0;background:transparent;padding:6px;border-radius:50%;cursor:pointer;z-index:2}.rmt-firefly-point span{display:block;width:var(--fs);height:var(--fs);border-radius:50%;animation:rmt-firefly-pulse 2.4s ease-in-out infinite;animation-delay:var(--fd);background:#fff;box-shadow:0 0 7px 2px currentColor,0 0 18px 6px currentColor}.rmt-firefly-point.pink{color:#ff86b2}.rmt-firefly-point.blue{color:#6ab9ff}.rmt-firefly-point.yellow{color:#ffd95e}.rmt-firefly-point.white{color:#f6fbff}.rmt-firefly-point.desire{color:#ff455b}.rmt-firefly-point.active span{transform:scale(1.4);box-shadow:0 0 8px 3px currentColor,0 0 28px 10px currentColor}.rmt-firefly-empty-stars{position:absolute;inset:0;display:grid;place-items:center;color:rgba(230,248,239,.4);font-size:24px;letter-spacing:12px}.rmt-firefly-pager{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}.rmt-firefly-pager span{font-size:9px;color:#7d8d99;min-width:92px;text-align:center}.rmt-firefly-legend{display:flex;gap:7px;flex-wrap:wrap}.rmt-firefly-legend span{padding:5px 8px;border-radius:999px;background:#f6f9fa;color:#758695;font-size:9px}.rmt-firefly-whisper{padding:15px 16px;border:1px solid #dce7ec;border-radius:17px;background:#fff;box-shadow:0 7px 18px rgba(55,76,91,.06)}.rmt-firefly-whisper small{font-size:9px;color:#8a98a5}.rmt-firefly-whisper p{margin:7px 0 0;color:#596d7e;font-size:13px;line-height:1.8;white-space:pre-wrap}.rmt-firefly-whisper.desire{border-color:#f3b4bd;background:#fff7f8}.rmt-firefly-whisper.desire small{color:#c44d62}@keyframes rmt-firefly-pulse{0%,100%{opacity:.45;transform:scale(.72)}45%{opacity:1;transform:scale(1.05)}70%{opacity:.7;transform:scale(.9)}}
+.rmt-firefly-shell{display:grid;gap:10px}.rmt-firefly-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:13px 15px;border-radius:18px;background:linear-gradient(145deg,#17212a,#101820);color:#edf6f7}.rmt-firefly-head small{font-size:8px;letter-spacing:.18em;color:#8ea6ae}.rmt-firefly-head h2{margin:3px 0 4px;font-size:21px}.rmt-firefly-head p{margin:0;color:#b8c7cc;font-size:10px;line-height:1.65}.rmt-firefly-head>span{white-space:nowrap;padding:5px 8px;border:1px solid rgba(255,255,255,.15);border-radius:999px;color:#bdcbd0;font-size:8px}.rmt-firefly-field{position:relative;height:390px;overflow:hidden;border-radius:22px;background:radial-gradient(circle at 50% 80%,rgba(49,83,70,.26),transparent 38%),radial-gradient(circle at 20% 20%,rgba(44,66,92,.32),transparent 34%),linear-gradient(180deg,#0b1118,#101b20 55%,#14251e);box-shadow:inset 0 0 60px rgba(0,0,0,.4)}.rmt-firefly-field:before{content:"";position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,.12) 0 1px,transparent 1.3px);background-size:37px 41px;opacity:.45}.rmt-firefly-point{position:absolute;left:var(--fx);top:var(--fy);width:calc(var(--fs) + 12px);height:calc(var(--fs) + 12px);transform:translate(-50%,-50%);border:0;background:transparent;padding:6px;border-radius:50%;cursor:pointer;z-index:2}.rmt-firefly-point span{display:block;width:var(--fs);height:var(--fs);border-radius:50%;animation:rmt-firefly-pulse 2.4s ease-in-out infinite;animation-delay:var(--fd);background:#fff;box-shadow:0 0 7px 2px currentColor,0 0 18px 6px currentColor}.rmt-firefly-point.pink{color:#ff86b2}.rmt-firefly-point.blue{color:#6ab9ff}.rmt-firefly-point.yellow{color:#ffd95e}.rmt-firefly-point.white{color:#f6fbff}.rmt-firefly-point.desire{color:#ff455b}.rmt-firefly-point.active span{transform:scale(1.4);box-shadow:0 0 8px 3px currentColor,0 0 28px 10px currentColor}.rmt-firefly-empty-stars{position:absolute;inset:0;display:grid;place-items:center;color:rgba(230,248,239,.4);font-size:24px;letter-spacing:12px}.rmt-firefly-pager{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}.rmt-firefly-pager span{font-size:9px;color:#7d8d99;min-width:92px;text-align:center}.rmt-firefly-legend{display:flex;gap:7px;flex-wrap:wrap}.rmt-firefly-legend span{padding:5px 8px;border-radius:999px;background:#f6f9fa;color:#758695;font-size:9px}.rmt-firefly-whisper{padding:15px 16px;border:1px solid #dce7ec;border-radius:17px;background:#fff;box-shadow:0 7px 18px rgba(55,76,91,.06)}.rmt-firefly-whisper small{font-size:9px;color:#8a98a5}.rmt-firefly-whisper p{margin:7px 0 0;color:#596d7e;font-size:13px;line-height:1.8;white-space:pre-wrap}.rmt-firefly-whisper h3{margin:8px 0 5px;color:#4f6577;font-size:15px;line-height:1.45}.rmt-firefly-thoughts{display:grid;gap:8px}.rmt-firefly-thoughts p{margin:0;padding-top:8px;border-top:1px solid rgba(120,145,160,.12)}.rmt-firefly-thoughts p:first-child{padding-top:2px;border-top:0}.rmt-firefly-whisper.desire{border-color:#f3b4bd;background:#fff7f8}.rmt-firefly-whisper.desire small{color:#c44d62}@keyframes rmt-firefly-pulse{0%,100%{opacity:.45;transform:scale(.72)}45%{opacity:1;transform:scale(1.05)}70%{opacity:.7;transform:scale(.9)}}
 @media(max-width:700px){.rmt-heart-season-stage{padding:13px;min-height:360px}.rmt-heart-single-drama>nav{grid-template-columns:repeat(2,minmax(0,1fr))}.rmt-firefly-field{height:330px}.rmt-firefly-head{padding:12px}.rmt-firefly-head h2{font-size:18px}.rmt-firefly-whisper p{font-size:12px}}
 
 /* r42 Character Profile + Relation Garden */
@@ -2179,6 +2179,15 @@ function refreshGenerationSettingsUi() {
     void refreshModelOptions();
 }
 
+function hydrateSettingsPanel() {
+    const panel = document.getElementById(core_constants.SETTINGS_ID);
+    if (!panel) return false;
+    refreshSettingsMemoryStatus({ lightweight: true });
+    refreshGenerationSettingsUi();
+    panel.dataset.rmtHydrated = '1';
+    return true;
+}
+
 function refreshSettingsMemoryStatus({ lightweight = false } = {}) {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
     if (!panel) return;
@@ -2211,8 +2220,8 @@ function mountSettings() {
     ui_styles.ensureSettingsStyles();
     const existing = document.getElementById(core_constants.SETTINGS_ID);
     if (existing) {
-        refreshSettingsMemoryStatus();
-        refreshGenerationSettingsUi();
+        refreshSettingsMemoryStatus({ lightweight: true });
+        if (existing.dataset.rmtHydrated === '1') refreshGenerationSettingsUi();
         return true;
     }
     const mount = document.querySelector('#extensions_settings2');
@@ -2299,6 +2308,7 @@ function mountSettings() {
         }
     });
     panel.addEventListener('click', event => {
+        if (event.target.closest?.('.rmt-settings-header')) hydrateSettingsPanel();
         const modelRefreshButton = event.target.closest?.('[data-rmt-api-model-refresh]');
         if (modelRefreshButton) {
             modelRefreshButton.disabled = true;
@@ -2327,13 +2337,16 @@ function mountSettings() {
             return;
         }
     });
-    refreshSettingsMemoryStatus();
-    refreshGenerationSettingsUi();
+    panel.addEventListener('focusin', event => {
+        if (event.target.matches?.('input,select,button,textarea')) hydrateSettingsPanel();
+    });
+    refreshSettingsMemoryStatus({ lightweight: true });
     return true;
 }
 
 __m_ui_settingsPanel_js.refreshModelOptions = refreshModelOptions;
 __m_ui_settingsPanel_js.refreshGenerationSettingsUi = refreshGenerationSettingsUi;
+__m_ui_settingsPanel_js.hydrateSettingsPanel = hydrateSettingsPanel;
 __m_ui_settingsPanel_js.refreshSettingsMemoryStatus = refreshSettingsMemoryStatus;
 __m_ui_settingsPanel_js.mountSettings = mountSettings;
 }
@@ -4852,10 +4865,11 @@ function heartSetSeason(season) {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
     const allowed = new Set(['postending', 'spring', 'summer', 'autumn', 'winter']);
     runtimeState.activeSession.selectedSeason = allowed.has(season) ? season : 'postending';
-    const voices = runtimeState.activeSession.voiceDramas.filter(item => item.kind === runtimeState.activeSession.selectedSeason);
-    const scenarios = runtimeState.activeSession.scenarioDramas.filter(item => item.season === runtimeState.activeSession.selectedSeason);
-    if (voices.length) runtimeState.activeSession.selectedVoiceId = voices[voices.length - 1].id;
-    if (scenarios.length) runtimeState.activeSession.selectedScenarioId = scenarios[scenarios.length - 1].id;
+    const items = heartSeasonDramaItems(runtimeState.activeSession, runtimeState.activeSession.selectedSeason);
+    const latest = items[items.length - 1] || null;
+    if (latest?.type === 'voice') runtimeState.activeSession.selectedVoiceId = latest.item.id;
+    if (latest?.type === 'scenario') runtimeState.activeSession.selectedScenarioId = latest.item.id;
+    runtimeState.activeSession.selectedDramaKey = latest ? `${latest.type}:${latest.item.id}` : '';
     runtimeState.activeSession.view = 'seasons';
     renderHeart();
 }
@@ -4865,10 +4879,7 @@ function heartSelectVoice(id) {
     const item = runtimeState.activeSession.voiceDramas.find(entry => entry.id === id);
     if (!item) return;
     runtimeState.activeSession.selectedVoiceId = id;
-    if (item.incrementBatchId) {
-        const paired = runtimeState.activeSession.scenarioDramas.find(entry => entry.season === item.kind && entry.incrementBatchId === item.incrementBatchId);
-        if (paired) runtimeState.activeSession.selectedScenarioId = paired.id;
-    }
+    runtimeState.activeSession.selectedDramaKey = `voice:${id}`;
     runtimeState.activeSession.selectedSeason = item.kind;
     runtimeState.activeSession.view = 'seasons';
     renderHeart();
@@ -4879,10 +4890,7 @@ function heartSelectScenario(id) {
     const item = runtimeState.activeSession.scenarioDramas.find(entry => entry.id === id);
     if (!item) return;
     runtimeState.activeSession.selectedScenarioId = id;
-    if (item.incrementBatchId) {
-        const paired = runtimeState.activeSession.voiceDramas.find(entry => entry.kind === item.season && entry.incrementBatchId === item.incrementBatchId);
-        if (paired) runtimeState.activeSession.selectedVoiceId = paired.id;
-    }
+    runtimeState.activeSession.selectedDramaKey = `scenario:${id}`;
     runtimeState.activeSession.selectedSeason = item.season;
     runtimeState.activeSession.view = 'seasons';
     renderHeart();
@@ -4911,7 +4919,10 @@ function heartSeasonDramaItems(session, season) {
 function heartCurrentDrama(session, season) {
     const items = heartSeasonDramaItems(session, season);
     if (!items.length) return { items, index: -1, current: null };
-    let index = items.findIndex(entry => entry.type === 'voice' && entry.item.id === session.selectedVoiceId);
+    const selectedDramaKey = core_text.normalizeText(session?.selectedDramaKey, 180);
+    let index = selectedDramaKey ? items.findIndex(entry => `${entry.type}:${entry.item.id}` === selectedDramaKey) : -1;
+    // Backward compatibility for caches created before r41.7.
+    if (index < 0) index = items.findIndex(entry => entry.type === 'voice' && entry.item.id === session.selectedVoiceId);
     if (index < 0) index = items.findIndex(entry => entry.type === 'scenario' && entry.item.id === session.selectedScenarioId);
     if (index < 0) index = items.length - 1;
     return { items, index, current: items[index] };
@@ -4926,6 +4937,7 @@ function heartStepDrama(delta) {
     const next = state.items[nextIndex];
     if (next.type === 'voice') runtimeState.activeSession.selectedVoiceId = next.item.id;
     else runtimeState.activeSession.selectedScenarioId = next.item.id;
+    runtimeState.activeSession.selectedDramaKey = `${next.type}:${next.item.id}`;
     renderHeart();
 }
 
@@ -5001,7 +5013,11 @@ function renderHeart() {
     const generationButton = readOnly ? '' : view === 'seasons'
         ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-season" data-rmt-heart-season-target="${core_text.esc(selectedHeartSeason)}">${selectedHeartSeasonPartial ? '继续补全本次' : selectedHeartSeasonReady ? '追加一篇' : '生成首篇'}${core_text.esc(heartSeasonLabels[selectedHeartSeason])}</button>`
         : view === 'fireflies'
-            ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="fireflies">${session.fireflyVoices?.length ? '解锁新的萤火虫' : '点亮萤火虫栖息地'}</button>`
+            ? (() => {
+                const legacyCount = (Array.isArray(session.fireflyVoices) ? session.fireflyVoices : []).filter(item => !Array.isArray(item?.thoughts) || item.thoughts.length < 2).length;
+                const label = legacyCount ? `升级旧版萤火虫（${legacyCount}）` : session.fireflyVoices?.length ? '解锁新的萤火虫' : '点亮萤火虫栖息地';
+                return `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="fireflies">${core_text.esc(label)}</button>`;
+            })()
             : `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="strips">${parts.strips ? '从新增档案追加日常一格' : '生成日常一格'}</button>`;
     const topActions = `<div class="rmt-heart-top-actions">${generationButton}</div>`;
     const summary = `<section class="rmt-heart-summary"><div><b>${core_text.esc(session.relationshipState)}</b><p>${core_text.esc(session.relationshipSummary)}</p></div>${topActions}</section>`;
@@ -5023,6 +5039,7 @@ function renderHeart() {
             const item = current.item;
             if (current.type === 'voice') session.selectedVoiceId = item.id;
             else session.selectedScenarioId = item.id;
+            session.selectedDramaKey = `${current.type}:${item.id}`;
             const seasonClass = `season-${core_text.esc(selectedHeartSeason)}`;
             const tone = ['soft', 'clear', 'muted', 'deep'].includes(item.visualTone) ? item.visualTone : 'soft';
             const dots = state.items.map((entry, index) => `<button type="button" class="rmt-heart-drama-dot ${index === state.index ? 'active' : ''}" ${entry.type === 'voice' ? `data-rmt-heart-voice-id="${core_text.esc(entry.item.id)}"` : `data-rmt-heart-scenario-id="${core_text.esc(entry.item.id)}"`} aria-label="${core_text.esc(entry.item.title)}"></button>`).join('');
@@ -5050,8 +5067,12 @@ function renderHeart() {
         const points = visibleVoices.map((item, index) => `<button type="button" class="rmt-firefly-point ${core_text.esc(item.color)} ${item.id === selected?.id ? 'active' : ''}" style="${fireflyPointStyle(item.id, pageStart + index)}" data-rmt-heart-firefly-id="${core_text.esc(item.id)}" aria-label="${core_text.esc(fireflyMeta(item.color).label)}"><span></span></button>`).join('');
         const legend = ['pink', 'blue', 'yellow', 'white', 'desire'].map(color => { const meta = fireflyMeta(color); return `<span class="${color}">${meta.icon} ${core_text.esc(meta.label)}</span>`; }).join('');
         const pager = voices.length > pageSize ? `<div class="rmt-firefly-pager"><button type="button" class="rmt-btn" data-rmt-action="heart-firefly-prev" ${pageIndex <= 0 ? 'disabled' : ''}>‹ 较早的光</button><span>${pageIndex + 1} / ${pageCount} · 本页 ${visibleVoices.length} 颗</span><button type="button" class="rmt-btn" data-rmt-action="heart-firefly-next" ${pageIndex >= pageCount - 1 ? 'disabled' : ''}>更新的光 ›</button></div>` : '';
-        const whisper = selected ? `<div class="rmt-firefly-whisper ${core_text.esc(selected.color)}"><small>${fireflyMeta(selected.color).icon} ${core_text.esc(fireflyMeta(selected.color).label)}</small><p>${core_text.esc(selected.line)}</p></div>` : `<div class="rmt-heart-empty">${readOnly ? '这份档案还没有保存萤火虫心声。' : '点亮以后，这里会出现很多不同颜色的心声光点。'}</div>`;
-        content = `<section class="rmt-firefly-shell"><div class="rmt-firefly-head"><div><small>FIREFLY HABITAT</small><h2>萤火虫栖息地</h2><p>旧光点永久留在这片栖息地。剧情继续后，只会解锁新的心声；每页最多点亮 ${pageSize} 颗，避免手机长期使用后越来越卡。</p></div><span>${voices.length} LIGHTS</span></div><div class="rmt-firefly-field">${points || '<div class="rmt-firefly-empty-stars">✦　·　✧　·　✦</div>'}</div>${pager}<div class="rmt-firefly-legend">${legend}</div>${whisper}</section>`;
+        const whisper = selected ? (() => {
+            const thoughts = Array.isArray(selected.thoughts) && selected.thoughts.length ? selected.thoughts : [selected.line].filter(Boolean);
+            const paragraphs = thoughts.map(text => `<p>${core_text.esc(text)}</p>`).join('');
+            return `<div class="rmt-firefly-whisper ${core_text.esc(selected.color)}"><small>${fireflyMeta(selected.color).icon} ${core_text.esc(fireflyMeta(selected.color).label)}</small><h3>${core_text.esc(selected.title || '没有说出口的心声')}</h3><div class="rmt-firefly-thoughts">${paragraphs}</div></div>`;
+        })() : `<div class="rmt-heart-empty">${readOnly ? '这份档案还没有保存萤火虫心声。' : '点亮以后，这里会出现很多不同颜色的心声光点。'}</div>`;
+        content = `<section class="rmt-firefly-shell"><div class="rmt-firefly-head"><div><small>FIREFLY HABITAT</small><h2>萤火虫栖息地</h2><p>每一颗光都是一段没有说出口的完整心声。旧光永久留在这里；剧情继续后只会解锁新的主题，每页最多点亮 ${pageSize} 颗。</p></div><span>${voices.length} LIGHTS</span></div><div class="rmt-firefly-field">${points || '<div class="rmt-firefly-empty-stars">✦　·　✧　·　✦</div>'}</div>${pager}<div class="rmt-firefly-legend">${legend}</div>${whisper}</section>`;
     } else {
         const selected = selectedHeartStrip();
         if (selected) session.selectedStripId = selected.id;
@@ -5370,16 +5391,23 @@ ${JSON.stringify(compactHeartSeasonExisting(previous, season), null, 2)}` : ''}
 }
 
 function heartFireflyPrompt(context, memoryBank, core, previous = null, sourceMemoryIds = null) {
-    const existing = (Array.isArray(previous?.fireflyVoices) ? previous.fireflyVoices : []).slice(-120).map(item => ({ color: item.color, line: item.line }));
+    const existing = (Array.isArray(previous?.fireflyVoices) ? previous.fireflyVoices : []).slice(-80).map(item => ({
+        color: item.color,
+        title: item.title || '',
+        excerpt: core_text.normalizeText((Array.isArray(item.thoughts) ? item.thoughts : [item.line].filter(Boolean)).join(' '), 220),
+    }));
     const incremental = existing.length > 0;
     return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 萤火虫栖息地')}
 RELATIONSHIP_TONE_ONLY_JSON:
 ${heartDramaRelationshipOnlyContext(core)}
-${incremental ? `UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:\n${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}\nEXISTING_FIREFLY_LINES_JSON:\n${JSON.stringify(existing, null, 2)}` : ''}
-这是类似“萤火虫栖息地”的【心声解锁库】，不是新发生的剧情。每个光点只有一句 {{char}} 没有说出口的短心声。
-${incremental ? '旧光点由本地永久保留。本请求只根据本轮新增档案带来的关系变化，解锁尚未出现的新心声；绝对不要改写、覆盖或复述旧光点。' : '这是首次点亮，请一次建立一片内容丰富的初始栖息地。'}
+${incremental ? `UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:
+${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}
+EXISTING_FIREFLY_TOPICS_JSON:
+${JSON.stringify(existing, null, 2)}` : ''}
+这是类似“萤火虫栖息地”的【心声解锁库】，不是新发生的剧情。一个光点不是一句格言，而是一个完整的“心声主题”：像恋爱游戏里偶然听见 {{char}} 没说出口的一小段内心展开，有起念、迟疑/联想和收束。
+${incremental ? '旧光点由本地永久保留。本请求只根据本轮新增档案带来的关系变化，解锁尚未出现的新主题；绝对不要改写、覆盖或复述旧光点。' : '这是首次点亮，请建立一片内容丰富但不过度拥挤的初始栖息地。'}
 严格输出：
-{"fireflyVoices":[{"id":"F01","color":"pink|blue|yellow|white|desire","line":"一句短心声"}]}
+{"fireflyVoices":[{"id":"F01","color":"pink|blue|yellow|white|desire","title":"4～18字心声主题","thoughts":["第一段内心","第二段内心","可选第三段内心"]}]}
 
 五种光点：
 - pink 💗：对 {{user}} 的喜欢、在意、依恋、恋爱感。
@@ -5388,23 +5416,33 @@ ${incremental ? '旧光点由本地永久保留。本请求只根据本轮新增
 - white 🤍：脆弱、秘密、羞于承认的小心思、孤独或软弱的一面；不要凭空新增重大创伤或背景事实。
 - desire ♥️：对 {{user}} 直白的渴望。允许明确写“想抱住你 / 想亲你 / 想把你留在身边 / 想让你只看我”这一类身体亲近与占有欲，但不要写露骨性行为、身体部位细节或色情过程。
 
+内容结构：
+- 每颗光点必须有 2～4 段 thoughts；每段 20～100 个汉字，整颗约 90～280 个汉字。不能只输出一句短句。
+- 2～4 段要属于同一个主题并自然递进，不要拆成互不相关的句子，也不要写成摘要/标签/金句合集。
+- 只写 {{char}} 的内心。可以在心里称呼或想到 {{user}}，但不要替 {{user}} 说话、决定、回应。
+- 不把心声当成历史事实，不写“已经发生了某件新事”。新增档案只用于判断关系/情绪是否变化，不得把具体敏感经历原样搬进心声。
+
 数量和分布：
-- ${incremental ? '本轮只新增 6～10 个真正新的光点；不要求五色平均，按当前关系与人设自然分布。若关系阶段适合，允许新增 ♥️，但不要为了凑数强塞。' : '首次总数 24～30 个；五种颜色每种至少 4 个，desire 至少 4 个。'}
-- 每条 12～90 个汉字，彼此内容明显不同，不能只是换同义词。
-- 只写 {{char}} 的内心，不替 {{user}} 说话、决定或回应。
-- 不把心声当成历史事实，不写“已经发生了某件新事”。新增档案只用于判断关系/情绪是否发生变化，不得把具体敏感经历原样搬进心声。
-- ${incremental ? '必须避开 EXISTING_FIREFLY_LINES_JSON 里已有的原句和近义重复。' : ''}
+- ${incremental ? '本轮新增 5～6 个真正新的心声主题；不要求五色平均，按当前关系与人设自然分布。若关系阶段适合，允许新增 ♥️，但不要为了凑数强塞。' : '首次总数 5～6 个；至少覆盖 3 种颜色，按人物与关系自然分配。♥️ 只在关系阶段与人设适合时出现，不为凑五色强塞。'}
+- 主题彼此必须明显不同，不能只是换同义词或把同一占有欲拆成多个光点。
+- ${incremental ? '必须避开 EXISTING_FIREFLY_TOPICS_JSON 里已有主题、原句和近义重复。' : ''}
 只输出 JSON。`;
 }
 
 function normalizeFireflyVoice(item, index = 0) {
     const color = core_text.normalizeText(item?.color, 20).toLowerCase();
     if (!core_constants.HEART_FIREFLY_COLORS.has(color)) return null;
-    const line = core_text.normalizeText(item?.line, 220);
-    if (line.length < 8) return null;
+    const legacyLine = core_text.normalizeText(item?.line, 360);
+    const thoughts = core_text.cleanArray(item?.thoughts ?? item?.lines, 4, 360).filter(text => text.length >= 8);
+    if (!thoughts.length && legacyLine.length >= 8) thoughts.push(legacyLine);
+    if (!thoughts.length) return null;
+    const title = core_text.normalizeText(item?.title, 80) || core_text.normalizeText(thoughts[0], 18) || `心声 ${index + 1}`;
+    const line = thoughts.join(' ');
     return {
         id: core_text.safeId(item?.id, `FIREFLY${String(index + 1).padStart(2, '0')}`),
         color,
+        title,
+        thoughts,
         line,
         sourceArchiveMemoryIds: core_text.cleanArray(item?.sourceArchiveMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40),
         incrementBatchId: core_text.normalizeText(item?.incrementBatchId, 80),
@@ -5413,21 +5451,63 @@ function normalizeFireflyVoice(item, index = 0) {
 }
 
 function fireflyVoiceKey(item) {
-    return core_incremental.normalizedContentKey(item?.line, 220);
+    const text = Array.isArray(item?.thoughts) && item.thoughts.length ? item.thoughts.join(' ') : item?.line;
+    return core_incremental.normalizedContentKey(`${item?.title || ''} ${text || ''}`, 1200);
 }
 
-function normalizeFireflyVoicesPart(data, { minTotal = 20, requireDistribution = true } = {}) {
-    const out = (Array.isArray(data?.fireflyVoices) ? data.fireflyVoices : []).slice(0, 36).map(normalizeFireflyVoice).filter(Boolean);
+function normalizeFireflyVoicesPart(data, { minTotal = 5, requireDistribution = true, requireRich = true } = {}) {
+    const out = (Array.isArray(data?.fireflyVoices) ? data.fireflyVoices : []).slice(0, 6).map(normalizeFireflyVoice).filter(Boolean);
     if (out.length < minTotal) throw new Error(`萤火虫心声不足：${out.length}/${minTotal}。`);
+    if (requireRich) {
+        const short = out.find(item => !Array.isArray(item.thoughts) || item.thoughts.length < 2 || item.thoughts.join('').length < 70);
+        if (short) throw new Error(`萤火虫「${short.title || short.id}」仍然过短；每颗必须是至少 2 段的完整心声主题。`);
+    }
     if (requireDistribution) {
-        const counts = Object.fromEntries([...core_constants.HEART_FIREFLY_COLORS].map(color => [color, 0]));
-        for (const item of out) counts[item.color] = (counts[item.color] || 0) + 1;
-        for (const color of core_constants.HEART_FIREFLY_COLORS) {
-            if ((counts[color] || 0) < 3) throw new Error(`萤火虫「${color}」光点不足 3 条。`);
-        }
-        if ((counts.desire || 0) < 4) throw new Error('萤火虫 ♥️ 渴望光点不足 4 条。');
+        const represented = new Set(out.map(item => item.color));
+        if (represented.size < 3) throw new Error(`萤火虫颜色分布过窄：${represented.size}/3。首次至少覆盖 3 种颜色。`);
     }
     return out;
+}
+
+function legacyFireflyVoices(session) {
+    return (Array.isArray(session?.fireflyVoices) ? session.fireflyVoices : []).filter(item => !Array.isArray(item?.thoughts) || item.thoughts.length < 2);
+}
+
+function heartFireflyUpgradePrompt(context, core, items) {
+    const batch = (Array.isArray(items) ? items : []).slice(0, 6).map(item => ({
+        id: core_text.normalizeText(item?.id, 80),
+        color: core_text.normalizeText(item?.color, 20),
+        legacyLine: core_text.normalizeText(item?.line, 360),
+    }));
+    return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 旧版萤火虫心声升级')}
+RELATIONSHIP_TONE_ONLY_JSON:
+${heartDramaRelationshipOnlyContext(core)}
+LEGACY_FIREFLY_BATCH_JSON:
+${JSON.stringify(batch, null, 2)}
+
+任务：把这些旧版“一句心声”升级成完整的萤火虫心声主题。必须逐项保持原 id 和 color，不得新增、删除、合并或交换颜色。
+严格输出：
+{"fireflyVoices":[{"id":"原ID","color":"原颜色","title":"4～18字主题","thoughts":["第一段内心","第二段内心","可选第三/第四段"]}]}
+要求：
+- 每项 2～4 段 thoughts，每段 20～100 个汉字，总体约 90～280 个汉字。
+- 以 legacyLine 的核心情绪为起点自然展开，但不要机械重复原句；要像一次真正被听见的内心活动，有前后递进和收束。
+- 不新增历史事实，不把档案里的敏感具体经历重新复述，不替 {{user}} 说话或做决定。
+- id / color 必须与输入逐项一致。只输出 JSON。`;
+}
+
+function normalizeFireflyUpgradePart(data, expectedItems) {
+    const expected = (Array.isArray(expectedItems) ? expectedItems : []).slice(0, 6);
+    if (!expected.length) return [];
+    const out = normalizeFireflyVoicesPart(data, { minTotal: expected.length, requireDistribution: false, requireRich: true });
+    const byId = new Map(out.map(item => [item.id, item]));
+    return expected.map(item => {
+        const id = core_text.normalizeText(item?.id, 80);
+        const color = core_text.normalizeText(item?.color, 20).toLowerCase();
+        const candidate = byId.get(id);
+        if (!candidate) throw new Error(`旧版萤火虫升级缺少 ${id}。`);
+        if (candidate.color !== color) throw new Error(`旧版萤火虫 ${id} 升级时改变了颜色。`);
+        return candidate;
+    });
 }
 
 function heartStripsPrompt(context, memoryBank, core, previous = null, sourceMemoryIds = null) {
@@ -5524,8 +5604,6 @@ async function requestHeartPart(prompt, status, options, validator) {
 }
 
 function makeHeartSession(core, existing = null) {
-    const fireflyVoices = (Array.isArray(data?.fireflyVoices) ? data.fireflyVoices : []).slice(0, core_constants.HEART_FIREFLY_MAX_ITEMS).map(normalizeFireflyVoice).filter(Boolean);
-
     return {
         kind: core_constants.MODE.HEART,
         title: core.title || existing?.title || 'HEART VOICE / 角色互动',
@@ -5545,6 +5623,7 @@ function makeHeartSession(core, existing = null) {
         selectedFireflyId: existing?.selectedFireflyId || '',
         selectedVoiceId: existing?.selectedVoiceId || '',
         selectedScenarioId: existing?.selectedScenarioId || '',
+        selectedDramaKey: core_text.normalizeText(existing?.selectedDramaKey, 180),
         selectedStripId: existing?.selectedStripId || '',
         selectedSeason: existing?.selectedSeason || 'postending',
         view: ['seasons', 'strips', 'fireflies'].includes(existing?.view) ? existing.view : 'seasons',
@@ -5668,18 +5747,43 @@ function applyHeartPartialPatch(base, patch) {
         updated.selectedFireflyId = latest?.id || updated.selectedFireflyId || out[0]?.id || '';
         updated.generationParts = { ...(updated.generationParts || {}), fireflies: out.length > 0 };
         updated.view = 'fireflies';
+    } else if (patch.type === 'firefly-upgrade' && Array.isArray(patch.fireflyVoices)) {
+        const replacements = new Map(patch.fireflyVoices.map(item => [core_text.normalizeText(item?.id, 80), item]));
+        const out = (Array.isArray(updated.fireflyVoices) ? updated.fireflyVoices : []).map(item => {
+            const next = replacements.get(core_text.normalizeText(item?.id, 80));
+            if (!next || next.color !== item.color) return item;
+            added += 1;
+            return {
+                ...structuredClone(item),
+                title: next.title,
+                thoughts: structuredClone(next.thoughts),
+                line: next.line,
+                upgradedAt: Date.now(),
+            };
+        });
+        updated.fireflyVoices = out;
+        const lastUpgraded = [...patch.fireflyVoices].reverse().find(item => out.some(existing => existing.id === item.id));
+        if (lastUpgraded) updated.selectedFireflyId = lastUpgraded.id;
+        updated.generationParts = { ...(updated.generationParts || {}), fireflies: out.length > 0 };
+        updated.view = 'fireflies';
     } else if (patch.type === 'season') {
         const season = core_text.normalizeText(patch.season, 40).toLowerCase();
         if (patch.voice?.kind === season) {
             const result = appendHeartDramaItem(updated.voiceDramas, patch.voice, `voice:${season}`, 'VOICE');
             updated.voiceDramas = result.list;
-            if (result.item) updated.selectedVoiceId = result.item.id;
+            if (result.item) {
+                updated.selectedVoiceId = result.item.id;
+                updated.selectedDramaKey = `voice:${result.item.id}`;
+            }
             added += result.added;
         }
         if (season !== 'postending' && patch.scenario?.season === season) {
             const result = appendHeartDramaItem(updated.scenarioDramas, patch.scenario, `scenario:${season}`, 'SCENE');
             updated.scenarioDramas = result.list;
-            if (result.item) updated.selectedScenarioId = result.item.id;
+            if (result.item) {
+                updated.selectedScenarioId = result.item.id;
+                updated.selectedDramaKey = `scenario:${result.item.id}`;
+            }
             added += result.added;
         }
         updated.selectedSeason = season || updated.selectedSeason || 'postending';
@@ -5807,6 +5911,28 @@ async function generateHeartFirefliesSection() {
     }
     const base = structuredClone(runtimeState.activeSession);
     const hasExisting = Array.isArray(base.fireflyVoices) && base.fireflyVoices.length > 0;
+    const legacyBatch = legacyFireflyVoices(base).slice(0, 6);
+    if (legacyBatch.length) {
+        runtimeState.activeModeBuildScopes.add(taskKey);
+        core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
+        try {
+            const upgraded = await requestHeartPart(
+                heartFireflyUpgradePrompt(context, base, legacyBatch),
+                '角色互动 · 正在把旧版萤火虫升级为完整心声…',
+                { maxTokens: 5200, temperature: 0.72, context, origin, taskKey: `${taskKey}:upgrade`, mode: core_constants.MODE.HEART, background: true },
+                raw => normalizeFireflyUpgradePart(raw, legacyBatch),
+            );
+            const result = await persistHeartPartialPatch('firefly-upgrade', { type: 'firefly-upgrade', fireflyVoices: upgraded }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+            const remain = legacyFireflyVoices(result.updated || base).length;
+            globalThis.toastr?.success?.(`已升级 ${upgraded.length} 个旧光点为完整心声${remain ? `，还剩 ${remain} 个可继续升级` : '，旧版短句已全部升级'}.`, '心跳回忆');
+        } catch (error) {
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(error?.message || String(error)), '心跳回忆');
+        } finally {
+            runtimeState.activeModeBuildScopes.delete(taskKey);
+            core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
+        }
+        return;
+    }
     if (hasExisting && base.fireflyVoices.length >= core_constants.HEART_FIREFLY_MAX_ITEMS) {
         globalThis.toastr?.info?.(`萤火虫栖息地已经收集到 ${core_constants.HEART_FIREFLY_MAX_ITEMS} 个心声光点；旧光点不会自动删除。`, '心跳回忆');
         return;
@@ -5841,8 +5967,8 @@ async function generateHeartFirefliesSection() {
         const voices = await requestHeartPart(
             heartFireflyPrompt(context, memoryBank, base, hasExisting ? base : null, sourceMemoryIds),
             hasExisting ? '角色互动 · 正在解锁新的萤火虫心声…' : '角色互动 · 正在点亮萤火虫栖息地…',
-            { maxTokens: hasExisting ? 3600 : 7000, temperature: 0.8, context, origin, taskKey, mode: core_constants.MODE.HEART, background: true },
-            raw => normalizeFireflyVoicesPart(raw, { minTotal: hasExisting ? 5 : 20, requireDistribution: !hasExisting }),
+            { maxTokens: 5200, temperature: 0.8, context, origin, taskKey, mode: core_constants.MODE.HEART, background: true },
+            raw => normalizeFireflyVoicesPart(raw, { minTotal: 5, requireDistribution: !hasExisting, requireRich: true }),
         );
         const batchId = core_incremental.incrementalBatchId('fireflies', sourceMemoryIds);
         const enriched = voices.map(item => ({
@@ -6139,6 +6265,7 @@ function normalizeHeart(data, memoryBank) {
         selectedFireflyId: core_text.normalizeText(data?.selectedFireflyId, 80) || fireflyVoices[0]?.id || '',
         selectedVoiceId: core_text.normalizeText(data?.selectedVoiceId, 80) || voiceDramas[0]?.id || '',
         selectedScenarioId: core_text.normalizeText(data?.selectedScenarioId, 80) || scenarioDramas[0]?.id || '',
+        selectedDramaKey: core_text.normalizeText(data?.selectedDramaKey, 180),
         selectedStripId: core_text.normalizeText(data?.selectedStripId, 80) || dailyStrips[0]?.id || '',
         generationParts: {
             dialogues: data?.generationParts?.dialogues !== false && !!Object.values(greetings).some(lines => lines.length),
@@ -6174,6 +6301,9 @@ __m_modes_heart_js.heartFireflyPrompt = heartFireflyPrompt;
 __m_modes_heart_js.normalizeFireflyVoice = normalizeFireflyVoice;
 __m_modes_heart_js.fireflyVoiceKey = fireflyVoiceKey;
 __m_modes_heart_js.normalizeFireflyVoicesPart = normalizeFireflyVoicesPart;
+__m_modes_heart_js.legacyFireflyVoices = legacyFireflyVoices;
+__m_modes_heart_js.heartFireflyUpgradePrompt = heartFireflyUpgradePrompt;
+__m_modes_heart_js.normalizeFireflyUpgradePart = normalizeFireflyUpgradePart;
 __m_modes_heart_js.heartStripsPrompt = heartStripsPrompt;
 __m_modes_heart_js.normalizeVoiceDramaPart = normalizeVoiceDramaPart;
 __m_modes_heart_js.normalizeScenarioDramaPart = normalizeScenarioDramaPart;
@@ -11260,14 +11390,15 @@ async function regenerateHeartFirefly(session, item, context, memoryBank, origin
     const prompt = `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 单个萤火虫心声重新生成')}
 RELATIONSHIP_TONE_ONLY_JSON:\n${modes_heart.heartDramaRelationshipOnlyContext(session)}
 当前光点颜色固定为 ${color}，含义：${meta}。
-只重新生成这一句心声，不得改变颜色；不要写成已经发生的新剧情，不替 {{user}} 说话或做决定。
+只重新生成这一颗光点对应的完整心声主题，不得改变颜色；不要写成已经发生的新剧情，不替 {{user}} 说话或做决定。
+必须包含 2～4 段自然递进的 thoughts，总体约 90～280 个汉字，不能退化成一句格言式短句。
 CURRENT_FIREFLY_JSON:\n${JSON.stringify(item, null, 2)}
-严格输出：{"fireflyVoices":[{"id":"${core_text.esc(item.id)}","color":"${core_text.esc(color)}","line":"一句新的短心声"}]}。只输出 JSON。`;
+严格输出：{"fireflyVoices":[{"id":"${core_text.esc(item.id)}","color":"${core_text.esc(color)}","title":"4～18字主题","thoughts":["第一段内心","第二段内心"]}]}。只输出 JSON。`;
     const list = await modes_heart.requestHeartPart(
         prompt,
         '重新生成萤火虫心声…',
-        taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:firefly`, 2200, 0.8),
-        raw => modes_heart.normalizeFireflyVoicesPart(raw, { minTotal: 1 }),
+        taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:firefly`, 3200, 0.8),
+        raw => modes_heart.normalizeFireflyVoicesPart(raw, { minTotal: 1, requireDistribution: false, requireRich: true }),
     );
     const candidate = list[0];
     if (!candidate || candidate.color !== color) throw new Error('重新生成的萤火虫心声没有保持原颜色。');
@@ -12013,7 +12144,7 @@ function managementTargetsForSession(session) {
         return [
             ...(session.voiceDramas || []).map(item => target('heart-voice', item.id, `Voice Drama · ${item.title}`, item.kind || '')),
             ...(session.scenarioDramas || []).map(item => target('heart-scenario', item.id, `Scenario Drama · ${item.title}`, item.season || '')),
-            ...(session.fireflyVoices || []).map(item => target('heart-firefly', item.id, `萤火虫心声 · ${item.line}`, item.color || '')),
+            ...(session.fireflyVoices || []).map(item => target('heart-firefly', item.id, `萤火虫心声 · ${item.title || item.line}`, item.color || '')),
             ...(session.dailyStrips || []).flatMap(item => [
                 target('heart-strip', item.id, `日常一格 · ${item.title}`, item.subtitle || ''),
                 ...(item.cgImage ? [target('heart-strip-image', item.id, `${item.title} · 小剧场图片`, '只处理这张实图，文字小剧场保留。')] : []),
@@ -13184,9 +13315,11 @@ function deleteManagedTargetFromSession(session, type, id, parentId = '') {
     } else if (type === 'heart-voice') {
         updated.voiceDramas = removeById(updated.voiceDramas, id);
         if (updated.selectedVoiceId === id) updated.selectedVoiceId = '';
+        if (updated.selectedDramaKey === `voice:${id}`) updated.selectedDramaKey = '';
     } else if (type === 'heart-scenario') {
         updated.scenarioDramas = removeById(updated.scenarioDramas, id);
         if (updated.selectedScenarioId === id) updated.selectedScenarioId = '';
+        if (updated.selectedDramaKey === `scenario:${id}`) updated.selectedDramaKey = '';
     } else if (type === 'heart-strip') {
         updated.dailyStrips = removeById(updated.dailyStrips, id);
         if (updated.selectedStripId === id) updated.selectedStripId = updated.dailyStrips[0]?.id || '';
@@ -16027,7 +16160,7 @@ function promoteSnapshotToLiveIfCurrent() {
     runtimeState.activeArchiveReadOnly = true;
     if (live) {
         // Preserve only harmless view/selection state from the read-only clone.
-        for (const key of ['selectedId', 'selectedConfessionId', 'selectedVoiceId', 'selectedScenarioId', 'selectedStripId', 'selectedSpaceId', 'selectedObjectId', 'view', 'page', 'paragraphIndex', 'dialogueIndex', 'confessionLineIndex']) {
+        for (const key of ['selectedId', 'selectedConfessionId', 'selectedVoiceId', 'selectedScenarioId', 'selectedDramaKey', 'selectedStripId', 'selectedSpaceId', 'selectedObjectId', 'view', 'page', 'paragraphIndex', 'dialogueIndex', 'confessionLineIndex']) {
             if (oldSession && Object.hasOwn(oldSession, key)) live[key] = oldSession[key];
         }
         runtimeState.activeSession = live;
@@ -17550,7 +17683,6 @@ const runtimeState = __m_core_state_js.state;
 
 function initMemoryTheater() {
     try {
-        ui_styles.ensureSettingsStyles();
         const settingsMounted = ui_settingsPanel.mountSettings();
         const menuMounted = ui_archivePortal.mountMenuItem();
         ui_archivePortal.bindChatStateEvents();

@@ -14,7 +14,6 @@ import * as ui_styles from './ui/styles.js';
 
 export function initMemoryTheater() {
     try {
-        ui_styles.ensureSettingsStyles();
         const settingsMounted = ui_settingsPanel.mountSettings();
         const menuMounted = ui_archivePortal.mountMenuItem();
         ui_archivePortal.bindChatStateEvents();

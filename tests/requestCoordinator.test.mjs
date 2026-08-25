@@ -1265,17 +1265,27 @@ test('r37 granular regeneration targets are allowlisted and replace only after a
     assert.match(overlaySource, /如果生成失败、聊天切换或档案 revision 变化，旧内容会原样保留/);
 });
 
-test('r41 firefly habitat generates many five-color inner-voice points including direct desire', () => {
-    const colors = ['pink', 'blue', 'yellow', 'white', 'desire'];
-    const rows = [];
-    for (let i = 0; i < 25; i += 1) rows.push({ id: `F${i + 1}`, color: colors[i % colors.length], line: `这是第${i + 1}条没有说出口的心声，内容彼此不同。` });
+test('r41.8 firefly habitat generates 5-6 rich inner-voice topics without forcing every color', () => {
+    const rows = [
+        ['F1', 'pink'], ['F2', 'blue'], ['F3', 'yellow'], ['F4', 'white'], ['F5', 'desire'], ['F6', 'pink'],
+    ].map(([id, color], index) => ({
+        id, color, title: `心声主题${index + 1}`,
+        thoughts: [
+            `这是第${index + 1}颗光点的第一段内心。我并不是忽然想到这一件事，只是每次安静下来时，这个念头都会慢慢浮上来，让我没办法像平常那样装作毫不在意。`,
+            `这是第${index + 1}颗光点的第二段内心。真要把它说出口大概会显得太认真，所以还是先留在心里，可我自己知道，这份心情已经不是一句玩笑就能带过去的。`,
+        ],
+    }));
     const normalized = api.normalizeFireflyVoicesPart({ fireflyVoices: rows });
-    assert.equal(normalized.length, 25);
-    for (const color of colors) assert.ok(normalized.filter(item => item.color === color).length >= 5);
+    assert.equal(normalized.length, 6);
+    assert.equal(normalized[0].thoughts.length, 2);
+    assert.ok(normalized[0].line.length > 70);
+    assert.ok(new Set(normalized.map(item => item.color)).size >= 3);
     const promptSource = sourceByFile.get('modes/heart.js');
     assert.match(promptSource, /desire ♥️/);
     assert.match(promptSource, /想抱住你 \/ 想亲你 \/ 想把你留在身边/);
-    assert.match(promptSource, /不要写露骨性行为、身体部位细节或色情过程/);
+    assert.match(promptSource, /每颗光点必须有 2～4 段 thoughts/);
+    assert.match(promptSource, /本轮新增 5～6 个真正新的心声主题/);
+    assert.match(promptSource, /首次总数 5～6 个/);
 });
 
 test('r41 HEART UI exposes firefly habitat as a third independent interaction tab', () => {
@@ -1288,20 +1298,23 @@ test('r41 HEART UI exposes firefly habitat as a third independent interaction ta
     assert.match(sourceByFile.get('ui/overlay.js'), /type === 'heart-firefly'/);
 });
 
-test('r41 seasonal drama is paged one item at a time instead of stacking Voice and Scenario bodies', () => {
+test('r41.7 seasonal drama pager keeps one authoritative Voice/Scenario selection', () => {
     const session = {
-        selectedVoiceId: 'V1', selectedScenarioId: '',
+        selectedVoiceId: 'V1', selectedScenarioId: 'S1', selectedDramaKey: 'scenario:S1',
         voiceDramas: [{ id: 'V1', kind: 'spring', generatedAt: 1 }, { id: 'V2', kind: 'spring', generatedAt: 3 }],
         scenarioDramas: [{ id: 'S1', season: 'spring', generatedAt: 2 }],
     };
     const state = api.heartCurrentDrama(session, 'spring');
     assert.equal(state.items.length, 3);
-    assert.equal(state.current.item.id, 'V1');
+    assert.equal(state.current.type, 'scenario');
+    assert.equal(state.current.item.id, 'S1');
+    const legacy = api.heartCurrentDrama({ ...session, selectedDramaKey: '', selectedScenarioId: '' }, 'spring');
+    assert.equal(legacy.current.item.id, 'V1');
     const view = sourceByFile.get('ui/heartView.js');
     assert.match(view, /heart-drama-prev/);
     assert.match(view, /heart-drama-next/);
+    assert.match(view, /selectedDramaKey = `\$\{next\.type\}:\$\{next\.item\.id\}`/);
     assert.match(view, /单篇翻阅/);
-    assert.doesNotMatch(view, /if \(voice\).*if \(scenario\)/s);
 });
 
 test('r41 seasonal drama visual tone is constrained and used only as an allowlisted class', () => {
@@ -1430,12 +1443,55 @@ test('r41.1 firefly incremental cursor waits for new archive memories and then e
     assert.deepEqual(api.incrementalArchiveMemoryIds(legacy, bank, 'fireflies'), []);
 });
 
-test('r41.5 firefly library keeps the archive large but renders only one 18-light page', () => {
+test('r41.7 legacy one-line fireflies remain readable and can be upgraded in place', () => {
+    const legacy = api.normalizeFireflyVoice({ id: 'OLD1', color: 'pink', line: '我总是下意识先去看你有没有在附近。' });
+    assert.equal(legacy.thoughts.length, 1);
+    assert.equal(legacy.line, '我总是下意识先去看你有没有在附近。');
+    const heartSource = sourceByFile.get('modes/heart.js');
+    const viewSource = sourceByFile.get('ui/heartView.js');
+    assert.match(heartSource, /patch\.type === 'firefly-upgrade'/);
+    assert.match(heartSource, /legacyFireflyVoices\(base\)\.slice\(0, 6\)/);
+    assert.match(viewSource, /升级旧版萤火虫/);
+});
+
+test('r41.7 legacy firefly upgrade preserves ids, colors, and original provenance while replacing only derived text', () => {
+    const base = {
+        kind: 'heart',
+        fireflyVoices: [{ id: 'OLD1', color: 'blue', line: '我有点怕你哪天忽然不再回头看我。', sourceArchiveMemoryIds: ['M014'], incrementBatchId: 'B1', generatedAt: 10 }],
+        selectedFireflyId: 'OLD1', generationParts: { fireflies: true }, view: 'fireflies',
+    };
+    const upgraded = api.applyHeartPartialPatch(base, {
+        type: 'firefly-upgrade',
+        fireflyVoices: [{ id: 'OLD1', color: 'blue', title: '不敢问出口', thoughts: ['我知道这种不安说出来可能显得很孩子气，可越是在意你，越会怕自己有一天突然跟不上你的脚步。', '所以我总装作没事，甚至故意把话题岔开。只是如果你真的回头看我一眼，我大概还是会立刻安心下来。'], line: '新内容' }],
+    });
+    assert.equal(upgraded.fireflyVoices.length, 1);
+    assert.equal(upgraded.fireflyVoices[0].id, 'OLD1');
+    assert.equal(upgraded.fireflyVoices[0].color, 'blue');
+    assert.deepEqual(upgraded.fireflyVoices[0].sourceArchiveMemoryIds, ['M014']);
+    assert.equal(upgraded.fireflyVoices[0].incrementBatchId, 'B1');
+    assert.equal(upgraded.fireflyVoices[0].generatedAt, 10);
+    assert.equal(upgraded.fireflyVoices[0].thoughts.length, 2);
+});
+
+test('r41.7 legacy firefly upgrade validator refuses id/color drift', () => {
+    const expected = [{ id: 'OLD1', color: 'pink' }];
+    const rich = { id: 'OLD1', color: 'blue', title: '错色', thoughts: ['第一段心声足够长，描述角色自己慢慢浮起的念头，而不是一句孤立的短句。越想假装不在意，反而越能感觉到那份情绪一直停在心里。', '第二段继续沿着同一个主题展开，并给这份没有说出口的情绪一个自然的收束。就算最后还是没有说出口，他也已经很清楚自己真正害怕和在乎的是什么。'] };
+    assert.throws(() => api.normalizeFireflyUpgradePart({ fireflyVoices: [rich] }, expected), /改变了颜色/);
+});
+
+test('r41.8 firefly generation requires a small 5-6 item batch', () => {
+    const heartSource = sourceByFile.get('modes/heart.js');
+    assert.match(heartSource, /minTotal: 5/);
+    assert.match(heartSource, /slice\(0, 6\)/);
+    assert.doesNotMatch(heartSource, /minTotal: hasExisting \? 8 : 18/);
+});
+
+test('r41.8 firefly library keeps the archive large but renders only one 6-light page', () => {
     const constants = sourceByFile.get('core/constants.js');
     const view = sourceByFile.get('ui/heartView.js');
     const heart = sourceByFile.get('modes/heart.js');
     assert.match(constants, /HEART_FIREFLY_MAX_ITEMS = MAX_DERIVED_CONTENT_ITEMS/);
-    assert.match(constants, /HEART_FIREFLY_PAGE_SIZE = 18/);
+    assert.match(constants, /HEART_FIREFLY_PAGE_SIZE = 6/);
     assert.match(view, /visibleVoices = voices\.slice\(pageStart, pageStart \+ pageSize\)/);
     assert.match(view, /heart-firefly-prev/);
     assert.match(view, /heart-firefly-next/);
@@ -1478,7 +1534,7 @@ test('r41.5 startup injects only compact settings CSS and defers the full UI sty
     const settings = sourceByFile.get('ui/settingsPanel.js');
     const overlay = sourceByFile.get('ui/overlay.js');
     const styles = sourceByFile.get('ui/styles.js');
-    assert.match(heartbeat, /ui_styles\.ensureSettingsStyles\(\)/);
+    assert.doesNotMatch(heartbeat, /initMemoryTheater\(\)[\s\S]*ui_styles\.ensureSettingsStyles\(\)/);
     assert.doesNotMatch(heartbeat, /initMemoryTheater\(\)[\s\S]*ui_styles\.ensureStyles\(\)/);
     assert.match(settings, /export function mountSettings\(\) \{\s*ui_styles\.ensureSettingsStyles\(\)/);
     assert.match(overlay, /export function openOverlay\(\) \{\s*ui_styles\.ensureStyles\(\)/);
@@ -1592,4 +1648,33 @@ test('r41.4 same character keeps one shared profile group after ordinary card te
     assert.equal(group.id, 'auto:old');
     assert.equal(group.characterFingerprint, 'card:new');
     assert.equal(groups.length, 1);
+});
+
+
+test('fresh HEART session assembly does not depend on an out-of-scope data variable', () => {
+    const core = {
+        title: 'HEART VOICE / 角色互动',
+        relationshipState: '关系稳定',
+        relationshipSummary: '两个人已经建立稳定关系。',
+        relationshipSourceMemoryIds: ['M001'],
+        relationshipSourceMemoryAnchor: '关系锚点',
+        birthdayMmDd: '',
+        userBirthdayMmDd: '',
+        specialDays: [],
+        greetings: { morning: ['早。'] },
+    };
+    const session = api.makeHeartSession(core, null);
+    assert.equal(session.kind, api.MODE.HEART);
+    assert.deepEqual(session.fireflyVoices, []);
+    assert.equal(session.generationParts.dialogues, true);
+});
+
+test('startup settings and chat navigation stay on lightweight paths', async () => {
+    const settings = await readFile(new URL('../src/ui/settingsPanel.js', import.meta.url), 'utf8');
+    const portal = await readFile(new URL('../src/ui/archivePortal.js', import.meta.url), 'utf8');
+    const heartbeat = await readFile(new URL('../src/heartbeatMemories.js', import.meta.url), 'utf8');
+    assert.match(settings, /hydrateSettingsPanel/);
+    assert.match(settings, /refreshSettingsMemoryStatus\(\{ lightweight: true \}\)/);
+    assert.match(portal, /chatHandler[\s\S]*refreshSettingsMemoryStatus\(\{ lightweight: true \}\)/);
+    assert.doesNotMatch(heartbeat, /ensureSettingsStyles\(\);\s*const settingsMounted/);
 });

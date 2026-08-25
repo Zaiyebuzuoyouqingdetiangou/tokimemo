@@ -600,7 +600,7 @@ export { heartSeasonDramaItems } from '../src/ui/heartView.js';
 export { heartCurrentDrama } from '../src/ui/heartView.js';
 export { heartStepDrama } from '../src/ui/heartView.js';
 export { heartSelectFirefly } from '../src/ui/heartView.js';
-export { heartFireflyPrompt, normalizeFireflyVoice, normalizeFireflyVoicesPart } from '../src/modes/heart.js';
+export { heartFireflyPrompt, normalizeFireflyVoice, normalizeFireflyVoicesPart, legacyFireflyVoices, normalizeFireflyUpgradePart } from '../src/modes/heart.js';
 export { renderButterfly } from '../src/ui/butterflyView.js';
 export { selectButterflyNode } from '../src/ui/butterflyView.js';
 export { filteredAlbumEntries } from '../src/ui/albumView.js';

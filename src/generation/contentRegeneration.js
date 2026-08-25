@@ -112,14 +112,15 @@ async function regenerateHeartFirefly(session, item, context, memoryBank, origin
     const prompt = `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 单个萤火虫心声重新生成')}
 RELATIONSHIP_TONE_ONLY_JSON:\n${modes_heart.heartDramaRelationshipOnlyContext(session)}
 当前光点颜色固定为 ${color}，含义：${meta}。
-只重新生成这一句心声，不得改变颜色；不要写成已经发生的新剧情，不替 {{user}} 说话或做决定。
+只重新生成这一颗光点对应的完整心声主题，不得改变颜色；不要写成已经发生的新剧情，不替 {{user}} 说话或做决定。
+必须包含 2～4 段自然递进的 thoughts，总体约 90～280 个汉字，不能退化成一句格言式短句。
 CURRENT_FIREFLY_JSON:\n${JSON.stringify(item, null, 2)}
-严格输出：{"fireflyVoices":[{"id":"${core_text.esc(item.id)}","color":"${core_text.esc(color)}","line":"一句新的短心声"}]}。只输出 JSON。`;
+严格输出：{"fireflyVoices":[{"id":"${core_text.esc(item.id)}","color":"${core_text.esc(color)}","title":"4～18字主题","thoughts":["第一段内心","第二段内心"]}]}。只输出 JSON。`;
     const list = await modes_heart.requestHeartPart(
         prompt,
         '重新生成萤火虫心声…',
-        taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:firefly`, 2200, 0.8),
-        raw => modes_heart.normalizeFireflyVoicesPart(raw, { minTotal: 1 }),
+        taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:firefly`, 3200, 0.8),
+        raw => modes_heart.normalizeFireflyVoicesPart(raw, { minTotal: 1, requireDistribution: false, requireRich: true }),
     );
     const candidate = list[0];
     if (!candidate || candidate.color !== color) throw new Error('重新生成的萤火虫心声没有保持原颜色。');

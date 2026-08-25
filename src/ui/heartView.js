@@ -363,10 +363,11 @@ export function heartSetSeason(season) {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
     const allowed = new Set(['postending', 'spring', 'summer', 'autumn', 'winter']);
     runtimeState.activeSession.selectedSeason = allowed.has(season) ? season : 'postending';
-    const voices = runtimeState.activeSession.voiceDramas.filter(item => item.kind === runtimeState.activeSession.selectedSeason);
-    const scenarios = runtimeState.activeSession.scenarioDramas.filter(item => item.season === runtimeState.activeSession.selectedSeason);
-    if (voices.length) runtimeState.activeSession.selectedVoiceId = voices[voices.length - 1].id;
-    if (scenarios.length) runtimeState.activeSession.selectedScenarioId = scenarios[scenarios.length - 1].id;
+    const items = heartSeasonDramaItems(runtimeState.activeSession, runtimeState.activeSession.selectedSeason);
+    const latest = items[items.length - 1] || null;
+    if (latest?.type === 'voice') runtimeState.activeSession.selectedVoiceId = latest.item.id;
+    if (latest?.type === 'scenario') runtimeState.activeSession.selectedScenarioId = latest.item.id;
+    runtimeState.activeSession.selectedDramaKey = latest ? `${latest.type}:${latest.item.id}` : '';
     runtimeState.activeSession.view = 'seasons';
     renderHeart();
 }
@@ -376,10 +377,7 @@ export function heartSelectVoice(id) {
     const item = runtimeState.activeSession.voiceDramas.find(entry => entry.id === id);
     if (!item) return;
     runtimeState.activeSession.selectedVoiceId = id;
-    if (item.incrementBatchId) {
-        const paired = runtimeState.activeSession.scenarioDramas.find(entry => entry.season === item.kind && entry.incrementBatchId === item.incrementBatchId);
-        if (paired) runtimeState.activeSession.selectedScenarioId = paired.id;
-    }
+    runtimeState.activeSession.selectedDramaKey = `voice:${id}`;
     runtimeState.activeSession.selectedSeason = item.kind;
     runtimeState.activeSession.view = 'seasons';
     renderHeart();
@@ -390,10 +388,7 @@ export function heartSelectScenario(id) {
     const item = runtimeState.activeSession.scenarioDramas.find(entry => entry.id === id);
     if (!item) return;
     runtimeState.activeSession.selectedScenarioId = id;
-    if (item.incrementBatchId) {
-        const paired = runtimeState.activeSession.voiceDramas.find(entry => entry.kind === item.season && entry.incrementBatchId === item.incrementBatchId);
-        if (paired) runtimeState.activeSession.selectedVoiceId = paired.id;
-    }
+    runtimeState.activeSession.selectedDramaKey = `scenario:${id}`;
     runtimeState.activeSession.selectedSeason = item.season;
     runtimeState.activeSession.view = 'seasons';
     renderHeart();
@@ -422,7 +417,10 @@ export function heartSeasonDramaItems(session, season) {
 export function heartCurrentDrama(session, season) {
     const items = heartSeasonDramaItems(session, season);
     if (!items.length) return { items, index: -1, current: null };
-    let index = items.findIndex(entry => entry.type === 'voice' && entry.item.id === session.selectedVoiceId);
+    const selectedDramaKey = core_text.normalizeText(session?.selectedDramaKey, 180);
+    let index = selectedDramaKey ? items.findIndex(entry => `${entry.type}:${entry.item.id}` === selectedDramaKey) : -1;
+    // Backward compatibility for caches created before r41.7.
+    if (index < 0) index = items.findIndex(entry => entry.type === 'voice' && entry.item.id === session.selectedVoiceId);
     if (index < 0) index = items.findIndex(entry => entry.type === 'scenario' && entry.item.id === session.selectedScenarioId);
     if (index < 0) index = items.length - 1;
     return { items, index, current: items[index] };
@@ -437,6 +435,7 @@ export function heartStepDrama(delta) {
     const next = state.items[nextIndex];
     if (next.type === 'voice') runtimeState.activeSession.selectedVoiceId = next.item.id;
     else runtimeState.activeSession.selectedScenarioId = next.item.id;
+    runtimeState.activeSession.selectedDramaKey = `${next.type}:${next.item.id}`;
     renderHeart();
 }
 
@@ -512,7 +511,11 @@ export function renderHeart() {
     const generationButton = readOnly ? '' : view === 'seasons'
         ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-season" data-rmt-heart-season-target="${core_text.esc(selectedHeartSeason)}">${selectedHeartSeasonPartial ? '继续补全本次' : selectedHeartSeasonReady ? '追加一篇' : '生成首篇'}${core_text.esc(heartSeasonLabels[selectedHeartSeason])}</button>`
         : view === 'fireflies'
-            ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="fireflies">${session.fireflyVoices?.length ? '解锁新的萤火虫' : '点亮萤火虫栖息地'}</button>`
+            ? (() => {
+                const legacyCount = (Array.isArray(session.fireflyVoices) ? session.fireflyVoices : []).filter(item => !Array.isArray(item?.thoughts) || item.thoughts.length < 2).length;
+                const label = legacyCount ? `升级旧版萤火虫（${legacyCount}）` : session.fireflyVoices?.length ? '解锁新的萤火虫' : '点亮萤火虫栖息地';
+                return `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="fireflies">${core_text.esc(label)}</button>`;
+            })()
             : `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="strips">${parts.strips ? '从新增档案追加日常一格' : '生成日常一格'}</button>`;
     const topActions = `<div class="rmt-heart-top-actions">${generationButton}</div>`;
     const summary = `<section class="rmt-heart-summary"><div><b>${core_text.esc(session.relationshipState)}</b><p>${core_text.esc(session.relationshipSummary)}</p></div>${topActions}</section>`;
@@ -534,6 +537,7 @@ export function renderHeart() {
             const item = current.item;
             if (current.type === 'voice') session.selectedVoiceId = item.id;
             else session.selectedScenarioId = item.id;
+            session.selectedDramaKey = `${current.type}:${item.id}`;
             const seasonClass = `season-${core_text.esc(selectedHeartSeason)}`;
             const tone = ['soft', 'clear', 'muted', 'deep'].includes(item.visualTone) ? item.visualTone : 'soft';
             const dots = state.items.map((entry, index) => `<button type="button" class="rmt-heart-drama-dot ${index === state.index ? 'active' : ''}" ${entry.type === 'voice' ? `data-rmt-heart-voice-id="${core_text.esc(entry.item.id)}"` : `data-rmt-heart-scenario-id="${core_text.esc(entry.item.id)}"`} aria-label="${core_text.esc(entry.item.title)}"></button>`).join('');
@@ -561,8 +565,12 @@ export function renderHeart() {
         const points = visibleVoices.map((item, index) => `<button type="button" class="rmt-firefly-point ${core_text.esc(item.color)} ${item.id === selected?.id ? 'active' : ''}" style="${fireflyPointStyle(item.id, pageStart + index)}" data-rmt-heart-firefly-id="${core_text.esc(item.id)}" aria-label="${core_text.esc(fireflyMeta(item.color).label)}"><span></span></button>`).join('');
         const legend = ['pink', 'blue', 'yellow', 'white', 'desire'].map(color => { const meta = fireflyMeta(color); return `<span class="${color}">${meta.icon} ${core_text.esc(meta.label)}</span>`; }).join('');
         const pager = voices.length > pageSize ? `<div class="rmt-firefly-pager"><button type="button" class="rmt-btn" data-rmt-action="heart-firefly-prev" ${pageIndex <= 0 ? 'disabled' : ''}>‹ 较早的光</button><span>${pageIndex + 1} / ${pageCount} · 本页 ${visibleVoices.length} 颗</span><button type="button" class="rmt-btn" data-rmt-action="heart-firefly-next" ${pageIndex >= pageCount - 1 ? 'disabled' : ''}>更新的光 ›</button></div>` : '';
-        const whisper = selected ? `<div class="rmt-firefly-whisper ${core_text.esc(selected.color)}"><small>${fireflyMeta(selected.color).icon} ${core_text.esc(fireflyMeta(selected.color).label)}</small><p>${core_text.esc(selected.line)}</p></div>` : `<div class="rmt-heart-empty">${readOnly ? '这份档案还没有保存萤火虫心声。' : '点亮以后，这里会出现很多不同颜色的心声光点。'}</div>`;
-        content = `<section class="rmt-firefly-shell"><div class="rmt-firefly-head"><div><small>FIREFLY HABITAT</small><h2>萤火虫栖息地</h2><p>旧光点永久留在这片栖息地。剧情继续后，只会解锁新的心声；每页最多点亮 ${pageSize} 颗，避免手机长期使用后越来越卡。</p></div><span>${voices.length} LIGHTS</span></div><div class="rmt-firefly-field">${points || '<div class="rmt-firefly-empty-stars">✦　·　✧　·　✦</div>'}</div>${pager}<div class="rmt-firefly-legend">${legend}</div>${whisper}</section>`;
+        const whisper = selected ? (() => {
+            const thoughts = Array.isArray(selected.thoughts) && selected.thoughts.length ? selected.thoughts : [selected.line].filter(Boolean);
+            const paragraphs = thoughts.map(text => `<p>${core_text.esc(text)}</p>`).join('');
+            return `<div class="rmt-firefly-whisper ${core_text.esc(selected.color)}"><small>${fireflyMeta(selected.color).icon} ${core_text.esc(fireflyMeta(selected.color).label)}</small><h3>${core_text.esc(selected.title || '没有说出口的心声')}</h3><div class="rmt-firefly-thoughts">${paragraphs}</div></div>`;
+        })() : `<div class="rmt-heart-empty">${readOnly ? '这份档案还没有保存萤火虫心声。' : '点亮以后，这里会出现很多不同颜色的心声光点。'}</div>`;
+        content = `<section class="rmt-firefly-shell"><div class="rmt-firefly-head"><div><small>FIREFLY HABITAT</small><h2>萤火虫栖息地</h2><p>每一颗光都是一段没有说出口的完整心声。旧光永久留在这里；剧情继续后只会解锁新的主题，每页最多点亮 ${pageSize} 颗。</p></div><span>${voices.length} LIGHTS</span></div><div class="rmt-firefly-field">${points || '<div class="rmt-firefly-empty-stars">✦　·　✧　·　✦</div>'}</div>${pager}<div class="rmt-firefly-legend">${legend}</div>${whisper}</section>`;
     } else {
         const selected = selectedHeartStrip();
         if (selected) session.selectedStripId = selected.id;

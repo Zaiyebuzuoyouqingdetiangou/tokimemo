@@ -66,7 +66,7 @@ export function managementTargetsForSession(session) {
         return [
             ...(session.voiceDramas || []).map(item => target('heart-voice', item.id, `Voice Drama · ${item.title}`, item.kind || '')),
             ...(session.scenarioDramas || []).map(item => target('heart-scenario', item.id, `Scenario Drama · ${item.title}`, item.season || '')),
-            ...(session.fireflyVoices || []).map(item => target('heart-firefly', item.id, `萤火虫心声 · ${item.line}`, item.color || '')),
+            ...(session.fireflyVoices || []).map(item => target('heart-firefly', item.id, `萤火虫心声 · ${item.title || item.line}`, item.color || '')),
             ...(session.dailyStrips || []).flatMap(item => [
                 target('heart-strip', item.id, `日常一格 · ${item.title}`, item.subtitle || ''),
                 ...(item.cgImage ? [target('heart-strip-image', item.id, `${item.title} · 小剧场图片`, '只处理这张实图，文字小剧场保留。')] : []),

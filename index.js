@@ -1,5 +1,5 @@
-const VERSION = '0.8.26';
-const BUILD = '0.8.26-performance-closure-r41.5';
+const VERSION = '0.8.29';
+const BUILD = '0.8.29-firefly-small-batches-r41.8';
 
 let runtimeModule = null;
 let bootPromise = null;

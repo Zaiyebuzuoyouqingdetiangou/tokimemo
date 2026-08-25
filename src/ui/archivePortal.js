@@ -98,7 +98,7 @@ export function bindChatStateEvents() {
         if (runtimeState.busy) runtimeState.activeTaskBackgrounded = true;
         runtimeState.activeMode = null;
         runtimeState.activeSession = null;
-        ui_settingsPanel.refreshSettingsMemoryStatus();
+        ui_settingsPanel.refreshSettingsMemoryStatus({ lightweight: true });
         const overlay = document.getElementById(core_constants.OVERLAY_ID);
         try {
             const latest = core_context.currentCharacterGuard();

@@ -206,7 +206,7 @@ export const HEART_DRAMA_VISUAL_TONES = new Set(['soft', 'clear', 'muted', 'deep
 
 export const HEART_FIREFLY_COLORS = new Set(['pink', 'blue', 'yellow', 'white', 'desire']);
 export const HEART_FIREFLY_MAX_ITEMS = MAX_DERIVED_CONTENT_ITEMS;
-export const HEART_FIREFLY_PAGE_SIZE = 18;
+export const HEART_FIREFLY_PAGE_SIZE = 6;
 
 export const HEART_STRIP_PANEL_COUNTS = new Set([1, 2, 4]);
 

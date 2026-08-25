@@ -695,9 +695,11 @@ function deleteManagedTargetFromSession(session, type, id, parentId = '') {
     } else if (type === 'heart-voice') {
         updated.voiceDramas = removeById(updated.voiceDramas, id);
         if (updated.selectedVoiceId === id) updated.selectedVoiceId = '';
+        if (updated.selectedDramaKey === `voice:${id}`) updated.selectedDramaKey = '';
     } else if (type === 'heart-scenario') {
         updated.scenarioDramas = removeById(updated.scenarioDramas, id);
         if (updated.selectedScenarioId === id) updated.selectedScenarioId = '';
+        if (updated.selectedDramaKey === `scenario:${id}`) updated.selectedDramaKey = '';
     } else if (type === 'heart-strip') {
         updated.dailyStrips = removeById(updated.dailyStrips, id);
         if (updated.selectedStripId === id) updated.selectedStripId = updated.dailyStrips[0]?.id || '';
