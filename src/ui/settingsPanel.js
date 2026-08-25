@@ -108,7 +108,7 @@ export function refreshGenerationSettingsUi() {
     void refreshModelOptions();
 }
 
-export function refreshSettingsMemoryStatus() {
+export function refreshSettingsMemoryStatus({ lightweight = false } = {}) {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
     if (!panel) return;
     const openButton = panel.querySelector('[data-rmt-settings-open-archive]');
@@ -124,7 +124,9 @@ export function refreshSettingsMemoryStatus() {
         try {
             const context = core_context.currentCharacterGuard();
             actionable = !!core_context.getChatId(context);
-            ready = archive_repository.getMemoryState(context).status === 'ready';
+            ready = lightweight
+                ? !!archive_repository.getImportedMemory(context)
+                : archive_repository.getMemoryState(context).status === 'ready';
         } catch {}
         archiveButton.disabled = runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !actionable;
         archiveButton.textContent = !actionable
@@ -135,7 +137,7 @@ export function refreshSettingsMemoryStatus() {
 }
 
 export function mountSettings() {
-    ui_styles.ensureStyles();
+    ui_styles.ensureSettingsStyles();
     const existing = document.getElementById(core_constants.SETTINGS_ID);
     if (existing) {
         refreshSettingsMemoryStatus();

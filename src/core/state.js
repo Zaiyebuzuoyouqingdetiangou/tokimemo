@@ -34,6 +34,8 @@ export const state = {
   memoryPreflightCache: new Map(),
   deferredChatCommits: new Map(),
   archiveLibraryCharacterKey: '',
+  archiveCharacterRelationSelection: '',
+  relationSelectedKey: '',
   activeArchiveSnapshot: null,
   activeArchiveReadOnly: true,
   archiveSnapshotCache: new Map(),

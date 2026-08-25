@@ -99,6 +99,33 @@ async function regenerateHeartScenario(session, item, context, memoryBank, origi
     return { ...list[0], id: item.id, incrementBatchId: item.incrementBatchId || '', sourceArchiveMemoryIds: item.sourceArchiveMemoryIds || [], generatedAt: Date.now() };
 }
 
+
+async function regenerateHeartFirefly(session, item, context, memoryBank, origin, taskKey) {
+    const color = core_text.normalizeText(item?.color, 20).toLowerCase();
+    const meta = {
+        pink: '对 {{user}} 的喜欢、在意、依恋、恋爱感',
+        blue: '关系里的犹豫、不安、吃醋、害怕失去、说不出口的顾虑',
+        yellow: '关于 {{char}} 自己的生活、自省与价值观；不得新增重大背景事实',
+        white: '脆弱、秘密、羞于承认的小心思；不得凭空新增重大创伤',
+        desire: '对 {{user}} 直白的渴望；允许想抱住、亲吻、靠近、占有欲，但禁止露骨性行为或色情细节',
+    }[color] || '心声';
+    const prompt = `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 单个萤火虫心声重新生成')}
+RELATIONSHIP_TONE_ONLY_JSON:\n${modes_heart.heartDramaRelationshipOnlyContext(session)}
+当前光点颜色固定为 ${color}，含义：${meta}。
+只重新生成这一句心声，不得改变颜色；不要写成已经发生的新剧情，不替 {{user}} 说话或做决定。
+CURRENT_FIREFLY_JSON:\n${JSON.stringify(item, null, 2)}
+严格输出：{"fireflyVoices":[{"id":"${core_text.esc(item.id)}","color":"${core_text.esc(color)}","line":"一句新的短心声"}]}。只输出 JSON。`;
+    const list = await modes_heart.requestHeartPart(
+        prompt,
+        '重新生成萤火虫心声…',
+        taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:firefly`, 2200, 0.8),
+        raw => modes_heart.normalizeFireflyVoicesPart(raw, { minTotal: 1 }),
+    );
+    const candidate = list[0];
+    if (!candidate || candidate.color !== color) throw new Error('重新生成的萤火虫心声没有保持原颜色。');
+    return { ...candidate, id: item.id, color, generatedAt: Date.now() };
+}
+
 async function regenerateHeartStrip(session, item, context, memoryBank, origin, taskKey) {
     const list = await modes_heart.requestHeartPart(
         modes_heart.heartStripsPrompt(context, memoryBank, session, null, null),
@@ -212,18 +239,66 @@ ${item.unlocked ? `TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}`
 
 async function regenerateCalendarEntry(item, context, memoryBank, origin, taskKey) {
     const evidence = item.status === 'future' ? [] : core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 10);
+    const instruction = item.status === 'past'
+        ? '只重新整理这条已完成日历事项的短标题和语义标签。不得改日期、发生与否或档案事实，不要生成感想、独白或剧情摘要。'
+        : item.status === 'promised'
+            ? '只重新整理这条未来待办的短标题和语义标签。不得写成已经兑现，也不得改日期或证据。'
+            : '只重新整理这个世界设定提醒的短标题和语义标签。不得写成两个人已经约好或已经发生。';
     const prompt = `${generation_prompts.promptSafetyBoundary(context, '两个人的日历 / 单项重新整理')}
-只重新整理这一条日历卡的【标题与摘要措辞】。日期、状态、来源类别和证据身份必须保持完全相同；future 仍然只是世界设定，不得写成已经发生或已经约定。
+${instruction}
+允许标签仅限：["约会","接送","出行","见面","生日","纪念日","约定","活动","重要日","设定日"]，最多 3 个。
 CURRENT_CALENDAR_ENTRY_JSON:\n${JSON.stringify(item, null, 2)}
 ${evidence.length ? `TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}` : ''}
-严格输出：{"entry":{"title":"...","summary":"..."}}。只输出 JSON。`;
+严格输出：{"entry":{"title":"...","tags":["..."]}}。只输出 JSON。`;
     const raw = await generation_client.requestValidatedSegment(
-        prompt, `重新整理日历「${item.title}」…`, taskOptions(core_constants.MODE.CALENDAR, context, origin, `${taskKey}:calendar`, 4000, 0.45),
+        prompt, `重新整理日历「${item.title}」…`, taskOptions(core_constants.MODE.CALENDAR, context, origin, `${taskKey}:calendar`, 2500, 0.35),
         data => {
-            const title = core_text.normalizeText(data?.entry?.title, 120);
-            const summary = core_text.normalizeText(data?.entry?.summary, 1000);
-            if (!title || !summary) throw new Error('日历单项重新整理结果不完整。');
-            return { title, summary };
+            const entry = data?.entry || {};
+            const title = core_text.normalizeText(entry.title, 48);
+            if (!title) throw new Error('日历单项重新整理结果缺少标题。');
+            const fallback = item.status === 'promised' ? '约定' : item.status === 'future' ? '设定日' : '';
+            const tags = modes_calendar.normalizeCalendarTags(entry.tags, fallback);
+            return { title, tags };
+        },
+    );
+    return { ...item, ...raw };
+}
+
+async function regenerateCalendarNote(item, context, memoryBank, origin, taskKey) {
+    const evidence = item.sourceType === 'archive' ? core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 8) : [];
+    const prompt = `${generation_prompts.promptSafetyBoundary(context, '两个人的日历 / 单张便签重新生成')}
+只重新写这张私人日历便签的【短标题 + 便签正文】。保持 kind、sourceType、sourceLabel、sourceMemoryIds/sourceMemoryAnchor 全部不变；不得新增剧情事实、不得替 {{user}} 做决定。
+${item.sourceType === 'setting' ? '这是一张设定来源便签，只能改写当前便签已经表达的稳定设定，不能扩展新的共同经历。' : '这是一张档案来源便签，只能根据下方真实档案证据改写。'}
+CURRENT_NOTE_JSON:\n${JSON.stringify(item, null, 2)}
+${evidence.length ? `TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}` : ''}
+严格输出：{"note":{"title":"不超过12个汉字","text":"一两句便利贴式短句"}}。只输出 JSON。`;
+    const raw = await generation_client.requestValidatedSegment(
+        prompt, `重新生成便签「${item.title || item.id}」…`, taskOptions(core_constants.MODE.CALENDAR, context, origin, `${taskKey}:calendar-note`, 2200, 0.4),
+        data => {
+            const note = data?.note || {};
+            const title = core_text.normalizeText(note.title, 24) || item.title || (item.kind === 'special' ? '特别备注' : '便签');
+            const text = core_text.normalizeText(note.text, 180);
+            if (!text) throw new Error('便签重新生成结果缺少正文。');
+            return { title, text };
+        },
+    );
+    return { ...item, ...raw };
+}
+
+async function regenerateCalendarMood(item, context, memoryBank, origin, taskKey) {
+    const evidence = core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 8);
+    if (!evidence.length) throw new Error('这条页角随笔缺少可复核档案证据。');
+    const prompt = `${generation_prompts.promptSafetyBoundary(context, '两个人的日历 / 页角随笔重新生成')}
+只重新写下面这条【角色第一人称的很短心情随笔】。保持 sourceMemoryIds/sourceMemoryAnchor 不变，不得新增共同事件，不得替 {{user}} 补行动或心理；一两句即可，不要长篇独白。
+CURRENT_MOOD_NOTE_JSON:\n${JSON.stringify(item, null, 2)}
+TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
+严格输出：{"mood":{"text":"一两句、简短、第一人称"}}。只输出 JSON。`;
+    const raw = await generation_client.requestValidatedSegment(
+        prompt, '重新生成一条页角随笔…', taskOptions(core_constants.MODE.CALENDAR, context, origin, `${taskKey}:calendar-mood`, 2200, 0.45),
+        data => {
+            const text = core_text.normalizeText(data?.mood?.text, 220);
+            if (!text || text.length < 8) throw new Error('页角随笔重新生成内容不足。');
+            return { text };
         },
     );
     return { ...item, ...raw };
@@ -281,6 +356,10 @@ export async function regenerateManagedTarget(session, type, id, parentId, optio
         const index = updated.dailyStrips?.findIndex(item => item.id === id) ?? -1;
         if (index < 0) throw new Error('找不到这个日常一格。');
         updated.dailyStrips[index] = await regenerateHeartStrip(updated, updated.dailyStrips[index], context, memoryBank, origin, taskKey);
+    } else if (type === 'heart-firefly') {
+        const index = updated.fireflyVoices?.findIndex(item => item.id === id) ?? -1;
+        if (index < 0) throw new Error('找不到这个萤火虫心声。');
+        updated.fireflyVoices[index] = await regenerateHeartFirefly(updated, updated.fireflyVoices[index], context, memoryBank, origin, taskKey);
     } else if (type === 'phone-app') {
         const index = updated.apps?.findIndex(app => app.id === id) ?? -1;
         if (index < 0) throw new Error('找不到这个 App。');
@@ -306,6 +385,14 @@ export async function regenerateManagedTarget(session, type, id, parentId, optio
         const index = updated.entries?.findIndex(item => item.id === id) ?? -1;
         if (index < 0) throw new Error('找不到这条日历项。');
         updated.entries[index] = await regenerateCalendarEntry(updated.entries[index], context, memoryBank, origin, taskKey);
+    } else if (type === 'calendar-note') {
+        const index = updated.stickyNotes?.findIndex(item => item.id === id) ?? -1;
+        if (index < 0) throw new Error('找不到这张日历便签。');
+        updated.stickyNotes[index] = await regenerateCalendarNote(updated.stickyNotes[index], context, memoryBank, origin, taskKey);
+    } else if (type === 'calendar-mood') {
+        const index = updated.moodNotes?.findIndex(item => item.id === id) ?? -1;
+        if (index < 0) throw new Error('找不到这条页角随笔。');
+        updated.moodNotes[index] = await regenerateCalendarMood(updated.moodNotes[index], context, memoryBank, origin, taskKey);
     } else if (type === 'butterfly-node') {
         const index = updated.nodes?.findIndex(item => item.id === id) ?? -1;
         if (index <= 0) throw new Error('主时间线不能作为单项重新生成目标。');

@@ -24,6 +24,7 @@ import * as modes_heart from '../modes/heart.js';
 import * as modes_items from '../modes/items.js';
 import * as modes_phone from '../modes/phone.js';
 import * as modes_room from '../modes/room.js';
+import * as modes_relations from '../modes/relations.js';
 import * as ui_advEventView from './advEventView.js';
 import * as ui_albumView from './albumView.js';
 import * as ui_butterflyView from './butterflyView.js';
@@ -629,7 +630,7 @@ export function renderActive() {
     if (!runtimeState.activeSession || !runtimeState.activeMode) return runtimeState.activeArchiveSnapshot ? archive_library.showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot) : showChooser();
     const supportsTopbarIncrement = !core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) || runtimeState.activeMode === core_constants.MODE.PHONE;
     setRegenerateVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && supportsTopbarIncrement);
-    setManageVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly));
+    setManageVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && runtimeState.activeMode !== core_constants.MODE.RELATIONS);
     setBackVisible(true, runtimeState.activeArchiveSnapshot ? (runtimeState.activeArchiveReadOnly ? '只读档案' : '档案') : core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) ? '他的房间' : '当前档案');
     if (runtimeState.activeMode !== core_constants.MODE.ROOM) modes_room.stopRoomClock();
     if (runtimeState.activeMode !== core_constants.MODE.PHONE) ui_phoneView.stopPhoneClock();
@@ -641,6 +642,7 @@ export function renderActive() {
     else if (runtimeState.activeMode === core_constants.MODE.PHONE) ui_phoneView.renderPhone();
     else if (runtimeState.activeMode === core_constants.MODE.ENDING) ui_endingView.renderEnding();
     else if (runtimeState.activeMode === core_constants.MODE.CALENDAR) ui_calendarView.renderCalendar();
+    else if (runtimeState.activeMode === core_constants.MODE.RELATIONS) modes_relations.renderRelations();
     else if (runtimeState.activeMode === core_constants.MODE.ACHIEVEMENTS) modes_achievements.renderAchievements();
     else if (runtimeState.activeMode === core_constants.MODE.HEART) ui_heartView.renderHeart();
     decorateReadOnlyModeUi();
@@ -699,12 +701,19 @@ function deleteManagedTargetFromSession(session, type, id, parentId = '') {
     } else if (type === 'heart-strip') {
         updated.dailyStrips = removeById(updated.dailyStrips, id);
         if (updated.selectedStripId === id) updated.selectedStripId = updated.dailyStrips[0]?.id || '';
+    } else if (type === 'heart-firefly') {
+        updated.fireflyVoices = removeById(updated.fireflyVoices, id);
+        if (updated.selectedFireflyId === id) updated.selectedFireflyId = updated.fireflyVoices[0]?.id || '';
     } else if (type === 'heart-strip-image') {
         const item = updated.dailyStrips?.find(entry => entry.id === id); if (!item) throw new Error('找不到这个日常一格。'); item.cgImage = null;
     } else if (type === 'achievement') {
         updated.entries = removeById(updated.entries, id);
     } else if (type === 'calendar-entry') {
         updated.entries = removeById(updated.entries, id);
+    } else if (type === 'calendar-note') {
+        updated.stickyNotes = removeById(updated.stickyNotes, id);
+    } else if (type === 'calendar-mood') {
+        updated.moodNotes = removeById(updated.moodNotes, id);
     } else if (type === 'butterfly-node') {
         const node = updated.nodes?.find(entry => entry.id === id);
         if (!node || node.trueEnding || node.id === 'MAIN') throw new Error('主时间线和观测点 Ω 不能单独删除。');
@@ -858,8 +867,12 @@ export function handleOverlayClick(event) {
         openCachedOrGenerate(modeButton.dataset.rmtMode);
         return;
     }
-    const calendarStatus = event.target.closest?.('[data-rmt-calendar-status]');
-    if (calendarStatus) return ui_calendarView.setCalendarStatus(calendarStatus.dataset.rmtCalendarStatus);
+    const calendarShift = event.target.closest?.('[data-rmt-calendar-shift]');
+    if (calendarShift) return ui_calendarView.shiftCalendarMonth(calendarShift.dataset.rmtCalendarShift);
+    const calendarDate = event.target.closest?.('[data-rmt-calendar-date]');
+    if (calendarDate) return ui_calendarView.selectCalendarDate(calendarDate.dataset.rmtCalendarDate);
+    const calendarPending = event.target.closest?.('[data-rmt-calendar-pending]');
+    if (calendarPending) return ui_calendarView.selectCalendarPending(calendarPending.dataset.rmtCalendarPending);
     const calendarMonth = event.target.closest?.('[data-rmt-calendar-month]');
     if (calendarMonth) return ui_calendarView.setCalendarMonth(calendarMonth.dataset.rmtCalendarMonth);
     const node = event.target.closest?.('[data-rmt-node]');
@@ -903,6 +916,8 @@ export function handleOverlayClick(event) {
     if (heartScenario) return ui_heartView.heartSelectScenario(heartScenario.dataset.rmtHeartScenarioId);
     const heartStrip = event.target.closest?.('[data-rmt-heart-strip-id]');
     if (heartStrip && !event.target.closest?.('[data-rmt-action]')) return ui_heartView.heartSelectStrip(heartStrip.dataset.rmtHeartStripId);
+    const heartFirefly = event.target.closest?.('[data-rmt-heart-firefly-id]');
+    if (heartFirefly) return ui_heartView.heartSelectFirefly(heartFirefly.dataset.rmtHeartFireflyId);
     const avatarTalk = event.target.closest?.('[data-rmt-avatar-talk]');
     if (avatarTalk) {
         event.preventDefault?.();
@@ -956,6 +971,10 @@ export function handleOverlayClick(event) {
     }
     if (action === 'heart-generate-part') return void modes_heart.generateHeartSection(actionEl.dataset.rmtHeartPart || 'dialogues');
     if (action === 'heart-generate-season') return void modes_heart.generateHeartSeasonSection(actionEl.dataset.rmtHeartSeasonTarget || 'postending');
+    if (action === 'heart-drama-prev') return ui_heartView.heartStepDrama(-1);
+    if (action === 'heart-drama-next') return ui_heartView.heartStepDrama(1);
+    if (action === 'heart-firefly-prev') return ui_heartView.heartStepFireflyPage(-1);
+    if (action === 'heart-firefly-next') return ui_heartView.heartStepFireflyPage(1);
     if (action === 'avatar-talk-again') return ui_heartView.renderAvatarDialoguePopup(runtimeState.activeAvatarDialogue, { repeat: true });
     if (action === 'avatar-heart-open') return ui_heartView.openHeartFromAvatar();
     if (action === 'avatar-heart-generate') {
@@ -998,6 +1017,38 @@ export function handleOverlayClick(event) {
     if (action === 'memory-worldinfo-expand') return void archive_repository.expandMemoryWorldInfoBook(actionEl);
     if (action === 'archive-group-manager') return archive_library.showArchiveGroupManager();
     if (action === 'archive-group-close') { document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-archive-group-manager`)?.remove(); return archive_library.showArchiveLibrary(); }
+    if (action === 'archive-character-delete') {
+        const groupId = core_text.normalizeText(actionEl.dataset.rmtArchiveGroupId, 120);
+        try {
+            const deleted = archive_groups.deleteArchiveCharacterFromLibrary(groupId);
+            if (!deleted) return;
+            globalThis.toastr?.success?.(`已从档案室删除“${deleted.name}”及其 ${deleted.count} 个聊天档案索引；SillyTavern 正文聊天窗口没有删除。`, '心跳回忆');
+            archive_library.showArchiveLibrary();
+        } catch (error) { globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'); }
+        return;
+    }
+    if (action === 'character-profile-generate') {
+        const groupId = core_text.normalizeText(runtimeState.archiveLibraryCharacterKey, 120);
+        if (!groupId) return globalThis.toastr?.info?.('请先打开一个角色档案。', '心跳回忆');
+        if (!confirmExplicitAction('读取角色固定设定并生成 Character Profile？', '只会读取该角色卡、当前 User Persona 与本轮激活到的相关世界书，整理全窗口共用的客观资料和故事开始前已经明确成立的人际关系。不会读取聊天正文，也不会把某个聊天窗口的发展写进公共角色档案。', { destructive: false })) return;
+        void modes_relations.generateCharacterProfileForGroup(groupId).then(() => {
+            globalThis.toastr?.success?.('角色档案与固有人际已更新。', '心跳回忆');
+            archive_library.showArchiveCharacter(groupId);
+        }).catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆 · Character Profile'));
+        return;
+    }
+    if (action === 'relation-select') {
+        const key = core_text.normalizeText(actionEl.dataset.rmtRelationKey, 160);
+        if (runtimeState.activeMode === core_constants.MODE.RELATIONS) {
+            runtimeState.relationSelectedKey = key;
+            return modes_relations.renderRelations();
+        }
+        if (runtimeState.archiveViewLevel === 'character' && runtimeState.archiveLibraryCharacterKey) {
+            runtimeState.archiveCharacterRelationSelection = key;
+            return archive_library.showArchiveCharacter(runtimeState.archiveLibraryCharacterKey);
+        }
+        return;
+    }
     if (action === 'archive-auto-classify') {
         const changed = archive_groups.autoClassifyArchiveIndex(core_context.getContext(), { confirm: true });
         if (changed) globalThis.toastr?.success?.(`已自动分类 ${changed} 个档案索引。聊天文件没有移动。`, '心跳回忆');

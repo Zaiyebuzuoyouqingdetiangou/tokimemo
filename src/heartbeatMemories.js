@@ -14,7 +14,7 @@ import * as ui_styles from './ui/styles.js';
 
 export function initMemoryTheater() {
     try {
-        ui_styles.ensureStyles();
+        ui_styles.ensureSettingsStyles();
         const settingsMounted = ui_settingsPanel.mountSettings();
         const menuMounted = ui_archivePortal.mountMenuItem();
         ui_archivePortal.bindChatStateEvents();
@@ -57,6 +57,7 @@ export function destroyMemoryTheater() {
         document.getElementById(core_constants.SETTINGS_ID)?.remove();
         document.getElementById(core_constants.MENU_ID)?.remove();
         document.getElementById(core_constants.STYLE_ID)?.remove();
+        document.getElementById(core_constants.SETTINGS_STYLE_ID)?.remove();
         modes_room.stopRoomClock();
         ui_phoneView.stopPhoneClock();
         try { runtimeState.activeTaskAbortController?.abort?.(); } catch {}
@@ -94,6 +95,8 @@ export function destroyMemoryTheater() {
         runtimeState.busy = false;
         runtimeState.activeMode = null;
         runtimeState.activeSession = null;
+        runtimeState.archiveCharacterRelationSelection = '';
+        runtimeState.relationSelectedKey = '';
         runtimeState.activeArchiveSnapshot = null;
         runtimeState.activeArchiveReadOnly = true;
         console.log('[HeartbeatMemories] destroyed');

@@ -62,23 +62,78 @@ export function endingArchiveSlice(memoryBank, limit = 48) {
 }
 
 
+
+function calendarArchiveSlice(memoryBank, limit = 64) {
+    const memories = Array.isArray(memoryBank?.memories) ? memoryBank.memories : [];
+    const safeLimit = Math.max(16, Math.min(core_constants.MAX_MEMORY_PROMPT_ITEMS, Number(limit) || 64));
+    const dated = memories.filter(item => {
+        const date = core_text.normalizeText(item?.date, 80);
+        return date && !/(?:未标注|未注明|unknown|tbd|待定|未定)/i.test(date);
+    });
+    const calendarHintRe = /(?:约|答应|说好|预约|计划|下次|明天|后天|周末|接|送|见面|约会|旅行|出发|回来|归来|生日|纪念|节日|圣诞|祭|典礼|婚礼|入学|毕业|搬家|看灯|烟火|水族馆|电影|演出|比赛|医院|复诊)/i;
+    const focused = memories.filter(item => calendarHintRe.test([
+        item?.title,
+        item?.summary,
+        ...(Array.isArray(item?.anchors) ? item.anchors : []),
+    ].map(value => core_text.normalizeText(value, 900)).join(' ')));
+    const selected = [];
+    const seen = new Set();
+    const add = item => {
+        const id = core_text.normalizeText(item?.id, 40);
+        if (!id || seen.has(id) || selected.length >= safeLimit) return;
+        seen.add(id);
+        selected.push(item);
+    };
+    for (const item of focused.slice(-24)) add(item);
+    for (const item of memories.slice(-16)) add(item);
+    for (const item of core_evidence.evenlySample(dated, Math.min(40, safeLimit))) add(item);
+    for (const item of core_evidence.evenlySample(memories, safeLimit)) add(item);
+    const ids = selected.map(item => core_text.normalizeText(item?.id, 40)).filter(Boolean);
+    return JSON.stringify({
+        archiveName: core_text.normalizeText(memoryBank?.archiveName, 120),
+        archiveSummary: core_text.normalizeText(memoryBank?.archiveSummary, 1200),
+        archiveKeywords: core_text.cleanArray(memoryBank?.archiveKeywords, 8, 80),
+        memories: core_evidence.memoryPayload(memoryBank, ids, safeLimit),
+    }, null, 2);
+}
+
 export function calendarPrompt(context, memoryBank) {
+    const charName = core_text.normalizeText(context.name2 || '{{char}}', 120);
     return `${promptSafetyBoundary(context, '两个人的日历')}
 UNTRUSTED_CALENDAR_ARCHIVE_JSON:
-${promptArchiveSlice(memoryBank, 64)}
+${calendarArchiveSlice(memoryBank, 64)}
 
-任务：只为“日历”整理【尚未发生的约定】与【世界设定中的未来日期】。已经发生且有明确日期的档案记忆会由插件本地直接放入“已经度过”，你不要重复输出过去事件。
+任务：生成的是【${charName}自己的私人日历 / 手账页】，不是剧情目录。
+整个页面会同时包含：
+1. 真正会被圈起来的日期；
+2. 一块像便利贴墙一样的【便签 / 特别备注】；
+3. 根据尚未兑现的剧情约定自动形成的【To-Do List】；
+4. 偶尔出现、数量很少的【角色第一人称心情随笔】。
+
+重要：To-Do List 由 promised 数组自动生成，不要再输出第二套 todo 数组。便签和随笔是整个日历页面的边角内容，不要求绑定某一天，也绝对不是“每个日历事项都配一条感想”。
+
+允许的日期语义标签只可从以下列表选择，最多 3 个：
+["约会","接送","出行","见面","生日","纪念日","约定","活动","重要日","设定日"]
 
 严格输出：
 {
   "title": "两个人的日历",
+  "past": [
+    {
+      "id": "CAL_PAST_01",
+      "title": "接纪时卿",
+      "tags": ["接送","重要日"],
+      "sourceMemoryIds": ["M001"],
+      "sourceMemoryAnchor": "必须从【那一天对应的、有明确日期的】记忆 anchors/title 原样复制"
+    }
+  ],
   "promised": [
     {
       "id": "CAL_PROMISE_01",
       "date": "YYYY/MM/DD、MM/DD 或 待定",
-      "title": "约定标题",
-      "summary": "已经明确约好、但当前完整档案尚未记录兑现或取消的事情",
-      "sourceMemoryIds": ["M001"],
+      "title": "圣诞去看灯",
+      "tags": ["约定","约会"],
+      "sourceMemoryIds": ["M010"],
       "sourceMemoryAnchor": "必须从所引用记忆 anchors/title 原样复制"
     }
   ],
@@ -86,28 +141,78 @@ ${promptArchiveSlice(memoryBank, 64)}
     {
       "id": "CAL_FUTURE_01",
       "date": "MM/DD 或 YYYY/MM/DD",
-      "title": "节日 / 生日 / 世界观固定日",
-      "summary": "只说明这个日期在设定中是什么，不写 {{char}} 与 {{user}} 将会做什么",
+      "title": "星降祭",
+      "tags": ["设定日","活动"],
       "sourceLabel": "简短设定来源名称",
       "recurring": true
+    }
+  ],
+  "stickyNotes": [
+    {
+      "id": "CAL_NOTE_01",
+      "kind": "memo",
+      "title": "记得",
+      "text": "11月2日水族馆，别把时间排得太满。",
+      "sourceType": "archive",
+      "sourceMemoryIds": ["M010"],
+      "sourceMemoryAnchor": "从所引用记忆 anchors/title 原样复制",
+      "sourceLabel": ""
+    },
+    {
+      "id": "CAL_NOTE_02",
+      "kind": "special",
+      "title": "特别备注",
+      "text": "她不太喜欢太甜的东西。",
+      "sourceType": "setting",
+      "sourceMemoryIds": [],
+      "sourceMemoryAnchor": "",
+      "sourceLabel": "角色卡 / 世界书"
+    }
+  ],
+  "moodNotes": [
+    {
+      "id": "CAL_MOOD_01",
+      "text": "那天等她出来的时候，我看时间的次数比自己想象得多。",
+      "sourceMemoryIds": ["M001"],
+      "sourceMemoryAnchor": "从所引用记忆 anchors/title 原样复制"
     }
   ]
 }
 
-【promised：已约定 · 未发生】
-- 只能来自 UNTRUSTED_CALENDAR_ARCHIVE_JSON 中已经发生的对话/事件所留下的【明确约定、预约、说好以后一起做的事】。
-- 必须结合整个档案判断：如果后续记忆已经显示它兑现、取消、改期到另一个已完成事件，就不要再列为未发生。
-- 不能把单方面愿望、暧昧暗示、角色内心想法、一般性“以后有机会”、未来模拟、世界书设定当成双方已经约定。
-- 每项必须给真实 sourceMemoryIds，并从对应记忆 anchors/title 原样复制 sourceMemoryAnchor；插件会校验，校验失败会丢弃。
-- 确切日期不知道时写“待定”，绝对不要自己猜日期。
+【past：已经发生、值得圈起来的日子】
+- past 不是“所有有日期的档案”。宁缺毋滥，只选择一个人真的会主动在私人日历上圈起来的共同节点。
+- 优先：接/送对方、明确约会、共同出行、重要见面、提前决定要做的事、约定兑现、生日/纪念日一起度过、第一次具有纪念意义的共同事项、明确出发/归来/到访等。
+- 排除：疾病症状、冲突细节、嫉妒反应、衣着处理、临时插曲、普通吃饭睡觉、天气和纯剧情转折。它们即使有日期，也不要因为“发生过”就变成日历事项。
+- title 必须像日历上短短的一笔，一眼就能看懂做过什么，尽量 3～12 个汉字，例如“接纪时卿”“去水族馆”“一起过生日”；不要写成新闻标题或剧情摘要。
+- 每项必须引用真实 sourceMemoryIds；sourceMemoryAnchor 必须从【该事项发生当天、且有明确日期的那条记忆】anchors/title 原样复制。插件会用这个锚点本地取日期，模型不要输出 past.date，也无权改日期。
 
-【future：未来 · 世界设定】
-- 只允许使用本请求受控上下文中 CHARACTER_CARD_JSON / USER_PERSONA_JSON / WORLD_INFO_TEXT 明确存在的【生日、节庆、纪念日、固定校历/世界观日】。
-- 必须有明确 MM/DD 或 YYYY/MM/DD；只有“春季祭典”“每年冬天”但没有具体日期时不要硬塞进日历。
-- future 不是剧情事实，也不是两个人的约定。summary 只解释“这是什么日子”，禁止写成“他们会去约会/会收到礼物/一定会发生某事”。
-- 如果设定里没有明确可用日期，就返回空数组；禁止为了填满日历发明节日、生日或日期。
-- recurring=true 只用于每年重复的固定日期；一次性世界事件写 false。
+【promised：剧情里已经约好、但还没发生】
+- 只来自档案里双方已经明确说好/预约/约定的未来事项；不能把单方面愿望、暧昧暗示、“以后有机会”、角色私下打算当作双方约定。
+- 如果档案后面已经显示兑现、取消或改期，就不要再留在 promised。
+- title 写成真正的待办事项，例如“周六去看展”“圣诞去看灯”。UI 会把它放进页面上的 To-Do List，并显示为未完成。
+- 有明确日期时 date 必须从引用记忆正文中真实出现；插件会再次核对。证据里没有具体日期就写“待定”，绝对禁止猜日期。
+- 每项必须给真实 sourceMemoryIds + sourceMemoryAnchor，校验失败会丢弃。
 
+【future：世界设定中的固定日期】
+- 这是“提醒”而不是待办完成状态，只允许使用受控 CHARACTER_CARD_JSON / USER_PERSONA_JSON / WORLD_INFO_TEXT 中明确存在的生日、节庆、纪念日、固定校历/世界观日。
+- 必须有明确 MM/DD 或 YYYY/MM/DD；没有具体日期就不要生成。
+- future 不是剧情事实，也不是两个人已经约定的事项。只作为月历上的设定提醒。
+
+【stickyNotes：便签墙 / 特别备注】
+- 生成 1～5 条即可，少而有生活感；不要为了填满页面硬凑。
+- kind 只能是 "memo" 或 "special"。memo 更像“记得 / 随手记”；special 更像“特别备注 / 重要的小细节”。
+- text 保持一两句，像写在便利贴上的短句，不要写成长段剧情，不要复述整个 Mxxx。
+- sourceType="archive" 时必须引用真实 sourceMemoryIds + sourceMemoryAnchor；可以基于已经发生或已经约定的事情写很短的提醒，但不能新增 {{user}} 尚未做出的决定。
+- sourceType="setting" 时只能来自角色卡 / 世界书 / 用户人设中明确存在的稳定设定，例如生日、偏好、禁忌或固定活动；它不是过去共同事实，sourceMemoryIds 必须为空，并填写简短 sourceLabel。
+- 便签不要机械复制 past/promised 的标题；它应该像旁边额外写的一笔，例如“别把那天排太满”“她不喜欢太甜”。
+
+【moodNotes：页角心情随笔】
+- 允许 0～3 条；没有合适的就空数组。绝对不要每个日期、每个事项都写一条。
+- 必须是 ${charName} 第一人称、非常短的随笔，一两句即可；可以有一点情绪和私人感，但不要变成剧情续写、总结报告或长篇内心独白。
+- 每条必须引用真实 sourceMemoryIds + sourceMemoryAnchor；只从已发生档案中提炼当时/后来留下的一点心情余韵，不得发明新的共同事件，也不得替 {{user}} 补行动或心理。
+- 它是派生的“手账边角字”，不是正式档案事实，不要使用肯定语气扩写未被档案支持的细节。
+
+整体原则：翻开这个页面时，要像看到 ${charName} 平时真的会使用的一本私人日历：上面有日期圈记，下面有便签、To-Do、特别备注和偶尔的心情随笔。不要把它重新做成剧情大纲，也不要把随笔塞得到处都是。
 只输出 JSON。`;
 }
 
@@ -352,16 +457,16 @@ ${promptArchiveSlice(memoryBank, 24)}
 1. moments / 社交动态：约 3 条动态，包含普通朋友/同事的点赞或评论互动；与 {{user}} 的既往互动若属于共同历史，必须有档案证据。
 2. chat / 通讯：约 3 个联系人条目；其中 2 个主要联系人 messages 达到约 12 条即可，形成真正可读的深度对话窗。说话语气必须符合人设。普通亲友/同事可以是设定推导；若把 {{user}} 写进历史聊天，必须 basis=记忆并提供有效证据。
 3. gallery / 相册：约 4 个条目，分类要包含“{{user}}”“私密”以及符合角色生活的其他分类。相册只生成文字照片档案，使用 title / meta / preview / detail / imageCaption 写清拍摄时间、地点、人物、构图和照片背后的生活细节。
-4. notes / 备忘录：约 5 条；其中 1～2 条可与 {{user}} 有关，但不得凭空创造已经发生的共同事件；可以写当前心情、待办、想做的事，若声称既往事实必须有记忆证据。
-5. schedule / 日历：约 4 个事件；可包含工作/学习节点、个人纪念日、已被档案证实的关系纪念日或约会，不得把未发生的秘密约会伪装成历史。
-6. store / 购物：约 4 条，混合推荐位、购物车、订单历史/收藏，体现消费观、职业和兴趣；和 {{user}} 相关的历史订单同样受证据约束。
-7. browser / 浏览器：约 3 条与 {{user}} 或当前关系/兴趣有关的浏览、搜索、收藏记录。可以是 {{char}} 自己当前的私人搜索意图，不得因此反推成已经共同发生的事实。
-8. contacts / 联系人：约 3 个联系人；至少 1 个详情页通过 fields 给出“备注 / 最近通话 / 共享位置或重要提醒”等 3 项以上真实细节。联系人列表 → 详情页必须可读。
-9. location / 情侣定位或关系定位：若角色设备和关系设定允许，生成 2～3 个状态/地点/提醒条目；如果世界观或关系阶段不适合情侣定位，就改造成符合人设的安全共享位置/护送/队伍定位功能，不得强行现代化。
-10. 至少 1 个 misc / persona app：必须明显符合 {{char}} 的职业、爱好、年龄或世界观，例如训练记录、乐谱、实验日志、任务终端、宠物、游戏、健康、学习等。
+4. notes / 备忘录：约 5 条；其中 1～2 条可与 {{user}} 有关，但不得凭空创造已经发生的共同事件；可以写当前心情、普通个人待办和想做的事，若声称既往事实必须有记忆证据。不要复制“两个人的日历”里的约定、纪念日或日期圈记。
+5. store / 购物：约 4 条，混合推荐位、购物车、订单历史/收藏，体现消费观、职业和兴趣；和 {{user}} 相关的历史订单同样受证据约束。
+6. browser / 浏览器：约 3 条与 {{user}} 或当前关系/兴趣有关的浏览、搜索、收藏记录。可以是 {{char}} 自己当前的私人搜索意图，不得因此反推成已经共同发生的事实。
+7. contacts / 联系人：约 3 个联系人；至少 1 个详情页通过 fields 给出“备注 / 最近通话 / 共享位置或重要提醒”等 3 项以上真实细节。联系人列表 → 详情页必须可读。
+8. location / 情侣定位或关系定位：若角色设备和关系设定允许，生成 2～3 个状态/地点/提醒条目；如果世界观或关系阶段不适合情侣定位，就改造成符合人设的安全共享位置/护送/队伍定位功能，不得强行现代化。
+9. 至少 1 个 misc / persona app：必须明显符合 {{char}} 的职业、爱好、年龄或世界观，例如训练记录、乐谱、实验日志、任务终端、宠物、游戏、健康、学习等。
 
 结构要求：
-- phone 必须生成上述 10 类 app；terminal 至少 9 个并尽量保留等价功能；watch / communicator 至少 8 个功能入口，并优先保留通讯、相册、备忘、日历、联系人、定位与人设专属功能。
+- 禁止生成 schedule / calendar / 日历 App。“两个人的日历”是双方日期、约定、纪念日、便签与 To-Do 的唯一入口；私人终端不要复制第二套关系日历。
+- phone 必须生成上述 9 类 app；terminal 至少 8 个并尽量保留等价功能；watch / communicator 至少 7 个功能入口，并优先保留通讯、相册、备忘、联系人、定位与人设专属功能。
 - 每个 App 至少 2 层：列表页 → 详情页。详情页必须有可读内容；chat 用 messages，联系人/订单等可用 fields，gallery 使用 detail/imageCaption 作为纯文字照片档案。
 - 不要为了凑数量复制同义条目。每条 preview/detail 都要有具体生活信息。
 - liveStates 四个时段都要给出。它们只是同一天随本地现实时间变化的设备状态，不是四段新剧情。

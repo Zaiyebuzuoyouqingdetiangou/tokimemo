@@ -42,6 +42,7 @@ export function legacyIncrementalEvidenceIds(session, part = 'mode') {
         return [...collectSessionEvidenceIds(related)];
     }
     if (part === 'strips') return [...collectSessionEvidenceIds(session.dailyStrips || [])];
+    if (part === 'fireflies') return [...collectSessionEvidenceIds(session.fireflyVoices || [])];
     if (part === 'dialogues') {
         return [...new Set([
             ...core_text.cleanArray(session.relationshipSourceMemoryIds, 24, 40),
@@ -70,6 +71,7 @@ export function legacyIncrementalPartHasContent(session, part = 'mode') {
             || (Array.isArray(session.scenarioDramas) && session.scenarioDramas.some(item => item?.season === season));
     }
     if (part === 'strips') return Array.isArray(session.dailyStrips) && session.dailyStrips.length > 0;
+    if (part === 'fireflies') return Array.isArray(session.fireflyVoices) && session.fireflyVoices.length > 0;
     if (part === 'dialogues') {
         return !!core_text.normalizeText(session.relationshipSummary, 40)
             || Object.values(session.greetings || {}).some(lines => Array.isArray(lines) && lines.length > 0);

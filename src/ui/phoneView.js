@@ -8,7 +8,8 @@ import * as ui_overlay from './overlay.js';
 
 export function selectedPhoneApp() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.PHONE) return null;
-    return runtimeState.activeSession.apps.find(app => app.id === runtimeState.activeSession.selectedAppId) || runtimeState.activeSession.apps[0] || null;
+    const apps = runtimeState.activeSession.apps.filter(app => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(core_text.normalizeText(app?.kind, 60).toLowerCase()));
+    return apps.find(app => app.id === runtimeState.activeSession.selectedAppId) || apps[0] || null;
 }
 
 export function phoneLiveState(session = runtimeState.activeSession, date = new Date()) {
@@ -89,7 +90,8 @@ export function renderPhone() {
     const app = selectedPhoneApp();
     const entry = app?.entries.find(item => item.id === session.selectedEntryId) || null;
     if (session.view === 'detail' && !entry) session.view = 'list';
-    const apps = session.apps.map(item => {
+    const visibleApps = session.apps.filter(item => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(core_text.normalizeText(item?.kind, 60).toLowerCase()));
+    const apps = visibleApps.map(item => {
         const badge = Math.max(0, Number(live.badgeCounts?.[item.id]) || 0);
         return `<button type="button" class="rmt-phone-app ${item.id === app?.id ? 'active' : ''}" data-rmt-phone-app="${core_text.esc(item.id)}"><i class="fa-solid fa-square"></i><span>${core_text.esc(item.label)}</span>${badge ? `<em class="rmt-phone-badge">${badge}</em>` : ''}</button>`;
     }).join('');
@@ -106,7 +108,7 @@ export function renderPhone() {
 
 export function phoneSelectApp(id) {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.PHONE) return;
-    const app = runtimeState.activeSession.apps.find(item => item.id === id);
+    const app = runtimeState.activeSession.apps.find(item => item.id === id && !core_constants.PHONE_EXCLUDED_APP_KINDS.has(core_text.normalizeText(item?.kind, 60).toLowerCase()));
     if (!app) return;
     runtimeState.activeSession.selectedAppId = app.id;
     runtimeState.activeSession.selectedEntryId = '';

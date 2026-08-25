@@ -11,9 +11,11 @@ import * as modes_heart from '../modes/heart.js';
 import * as modes_items from '../modes/items.js';
 import * as modes_phone from '../modes/phone.js';
 import * as modes_room from '../modes/room.js';
+import * as modes_relations from '../modes/relations.js';
 
 export function normalizeByMode(mode, data, memoryBank, context = null) {
     if (mode === core_constants.MODE.CALENDAR) return modes_calendar.normalizeCalendar(data, memoryBank);
+    if (mode === core_constants.MODE.RELATIONS) return modes_relations.normalizeRelations(data, memoryBank, context);
     if (mode === core_constants.MODE.BUTTERFLY) return modes_butterfly.normalizeButterfly(data, memoryBank);
     if (mode === core_constants.MODE.ALBUM) return modes_album.normalizeAlbum(data, memoryBank);
     if (mode === core_constants.MODE.ADV) return modes_advEvent.normalizeEventList(data, memoryBank);

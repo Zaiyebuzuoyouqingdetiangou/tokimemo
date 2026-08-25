@@ -127,7 +127,7 @@ export function bindChatStateEvents() {
             archive_repository.clearMemoryPreflight(latest);
             runtimeState.usableMessageCountCache.delete(core_context.chatScopeKey(latest));
         } catch {}
-        ui_settingsPanel.refreshSettingsMemoryStatus();
+        ui_settingsPanel.refreshSettingsMemoryStatus({ lightweight: true });
         const overlay = document.getElementById(core_constants.OVERLAY_ID);
         if (overlay && !overlay.hidden && !runtimeState.activeMode && !runtimeState.busy) archive_snapshots.scheduleChooserRefresh(80);
     };

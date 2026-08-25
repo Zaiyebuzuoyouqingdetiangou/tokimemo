@@ -491,8 +491,19 @@ export function loadSession(mode, options = {}) {
         if (mode === core_constants.MODE.ROOM && (!Array.isArray(session.spaces) || (!userManaged && session.spaces.length < 2))) return null;
         if (mode === core_constants.MODE.ITEMS && (!Array.isArray(session.containers) || (!userManaged && session.containers.length < 1))) return null;
         if (mode === core_constants.MODE.PHONE && (!Array.isArray(session.apps) || (!userManaged && session.apps.length < 5))) return null;
+        if (mode === core_constants.MODE.PHONE && session.apps.some(app => core_constants.PHONE_EXCLUDED_APP_KINDS.has(core_text.normalizeText(app?.kind, 60).toLowerCase()))) {
+            const migrated = structuredClone(session);
+            migrated.apps = migrated.apps.filter(app => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(core_text.normalizeText(app?.kind, 60).toLowerCase()));
+            if (!migrated.apps.length) return null;
+            if (!migrated.apps.some(app => app.id === migrated.selectedAppId)) {
+                migrated.selectedAppId = migrated.apps[0].id;
+                migrated.selectedEntryId = '';
+                migrated.view = 'list';
+            }
+            return migrated;
+        }
         if (mode === core_constants.MODE.ENDING && (!Array.isArray(session.endings) || (!userManaged && session.endings.length < 5))) return null;
-        if (mode === core_constants.MODE.CALENDAR && !Array.isArray(session.entries)) return null;
+        if (mode === core_constants.MODE.CALENDAR && (!Array.isArray(session.entries) || !Array.isArray(session.stickyNotes) || !Array.isArray(session.moodNotes) || session.calendarVersion !== core_constants.CALENDAR_SESSION_VERSION)) return null;
         if (mode === core_constants.MODE.HEART && (!session.greetings || !session.relationshipSourceMemoryAnchor)) return null;
         if (mode === core_constants.MODE.ACHIEVEMENTS && (!Array.isArray(session.entries) || (!userManaged && session.entries.length < 1))) return null;
         return options.clone === false ? session : structuredClone(session);

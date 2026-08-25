@@ -115,9 +115,10 @@ CURRENT_ROOM_CONTEXT_JSON:\n${JSON.stringify(compactPhoneRoomContext(roomSession
 {"title":"他的私人终端","deviceName":"设备名称","deviceKind":"phone","lockText":"...","liveStates":{"morning":{"lockText":"...","statusLine":"...","badgeCounts":{}},"daytime":{},"evening":{},"night":{}},"apps":[{"id":"MOMENTS","label":"动态","kind":"moments","summary":"...","entries":[{"id":"M01","title":"条目标题","meta":"时间/对象/分类"}]}]}
 
 数量要求：
-- phone：保留 10 类 app，kind 分别 moments/chat/gallery/notes/schedule/store/browser/contacts/location/misc；条目数建议分别 3/3/4/5/4/4/3/3/2/2（总计约33），不再堆大量同质条目。
-- terminal：至少9个 app、总条目约27以上，必须包含 chat/contacts/gallery/notes/schedule 等等价功能。
-- watch / communicator：至少8个功能入口、总条目约20以上，必须包含通讯、相册、备忘、日历、联系人、定位与人设专属功能。
+- phone：保留 9 类 app，kind 分别 moments/chat/gallery/notes/store/browser/contacts/location/misc；条目数建议分别 3/3/4/5/4/3/3/2/2（总计约29），不再堆大量同质条目。
+- terminal：至少8个 app、总条目约24以上，必须包含 chat/contacts/gallery/notes 等等价功能。
+- watch / communicator：至少7个功能入口、总条目约18以上，优先保留通讯、相册、备忘、联系人、定位与人设专属功能。
+- 禁止生成 kind=schedule / calendar 或名为“日历”的 App；两个人之间的约定、纪念日、日期圈记统一由独立「两个人的日历」承担。私人终端 notes 可以有普通个人待办，但不要复制关系日历。
 - 每个 entries 现在只写 id/title/meta，标题必须彼此有生活区分，不要填 preview/detail/messages/fields/imageCaption。
 - deviceKind 只能 phone/watch/terminal/communicator；四个 liveStates 都要有。
 - 不复刻真实商业 App 商标；禁止前任/第三方恋爱。只输出 JSON。`;
@@ -138,16 +139,16 @@ export function normalizePhonePlan(data) {
             title: core_text.normalizeText(entry?.title, 100) || `条目 ${index + 1}`,
             meta: core_text.normalizeText(entry?.meta, 200),
         })),
-    })).filter(app => app.entries.length >= 2);
+    })).filter(app => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(app.kind) && app.entries.length >= 2);
     const compact = ['watch', 'communicator'].includes(deviceKind);
-    const minApps = compact ? 8 : deviceKind === 'phone' ? 10 : 9;
-    const minEntries = compact ? 20 : deviceKind === 'phone' ? 32 : 27;
+    const minApps = compact ? 7 : deviceKind === 'phone' ? 9 : 8;
+    const minEntries = compact ? 18 : deviceKind === 'phone' ? 29 : 24;
     if (apps.length < minApps) throw new Error(`私人终端目录 App 不足：${apps.length}/${minApps}。`);
     const total = apps.reduce((sum, app) => sum + app.entries.length, 0);
     if (total < minEntries) throw new Error(`私人终端目录条目不足：${total}/${minEntries}。`);
     if (!apps.some(app => app.kind === 'chat')) throw new Error('私人终端目录缺少 chat / 通讯分区。');
     if (deviceKind === 'phone') {
-        const required = { moments: 3, chat: 3, gallery: 4, notes: 5, schedule: 4, store: 4, browser: 3, contacts: 3, location: 2, misc: 2 };
+        const required = { moments: 3, chat: 3, gallery: 4, notes: 5, store: 4, browser: 3, contacts: 3, location: 2, misc: 2 };
         for (const [kind, minimum] of Object.entries(required)) {
             const app = apps.find(item => item.kind === kind);
             if (!app || app.entries.length < minimum) throw new Error(`私人终端目录 ${kind} 不足：${app?.entries?.length || 0}/${minimum}。`);
@@ -353,7 +354,7 @@ export async function generatePhoneWithRepair(context, memoryBank, origin, taskK
 }
 
 export function compactPhoneExisting(session) {
-    return (Array.isArray(session?.apps) ? session.apps : []).slice(0, 12).map(app => ({
+    return (Array.isArray(session?.apps) ? session.apps : []).filter(app => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(core_text.normalizeText(app?.kind, 60).toLowerCase())).slice(0, 12).map(app => ({
         id: core_text.normalizeText(app?.id, 80),
         label: core_text.normalizeText(app?.label, 80),
         kind: core_text.normalizeText(app?.kind, 60),
@@ -380,7 +381,7 @@ ${JSON.stringify(compactPhoneExisting(previous), null, 2)}
 
 要求：
 - 总共规划 0～8 个真正由 incrementalMemoryIds 带来的新条目；每个相关 App 1～3 条即可。没有任何合适的新条目时必须返回 {"apps":[]}，该空增量会被本地正常记录，不要为了凑数复述旧内容。
-- app id/kind 必须对应现有 App；不改变 deviceKind、设备名、锁屏或既有 liveStates。
+- app id/kind 必须对应现有 App；不得向 schedule / calendar / 日历追加内容；不改变 deviceKind、设备名、锁屏或既有 liveStates。
 - 新条目的标题、对象、时间与主题必须避开 EXISTING_PHONE_INDEX_JSON；禁止把旧聊天、旧相册、旧笔记换措辞再说一次。
 - 与 {{user}} 的已发生共同历史必须在详情阶段使用 basis=记忆并引用 incrementalMemoryIds；普通工作/兴趣当前状态可为设定。
 - 禁止前任/第三方恋爱；只输出 JSON。`;
@@ -388,8 +389,9 @@ ${JSON.stringify(compactPhoneExisting(previous), null, 2)}
 
 export function normalizePhoneIncrementPlan(data, previous) {
     if (!Array.isArray(data?.apps)) throw new Error('私人终端增量目录缺少 apps 数组。');
-    const existingById = new Map((previous.apps || []).map(app => [app.id, app]));
-    const existingByKind = new Map((previous.apps || []).map(app => [app.kind, app]));
+    const eligibleApps = (previous.apps || []).filter(app => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(core_text.normalizeText(app?.kind, 60).toLowerCase()));
+    const existingById = new Map(eligibleApps.map(app => [app.id, app]));
+    const existingByKind = new Map(eligibleApps.map(app => [app.kind, app]));
     const rawApps = data.apps.slice(0, 12);
     const apps = rawApps.map(raw => {
         const id = core_text.safeId(raw?.id, '');
@@ -535,16 +537,16 @@ export function normalizePhone(data, memoryBank) {
             summary: core_text.normalizeText(app?.summary, 1200),
             entries,
         };
-    }).filter(app => app.entries.length >= 2);
+    }).filter(app => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(app.kind) && app.entries.length >= 2);
 
     const compactDevice = ['watch', 'communicator'].includes(deviceKind);
-    const minApps = compactDevice ? 8 : (deviceKind === 'phone' ? 10 : 9);
+    const minApps = compactDevice ? 7 : (deviceKind === 'phone' ? 9 : 8);
     if (apps.length < minApps) throw new Error(`“他的私人终端”分区不足：得到 ${apps.length} 个，当前设备至少需要 ${minApps} 个。`);
     const totalEntries = apps.reduce((sum, app) => sum + app.entries.length, 0);
-    const minEntries = compactDevice ? 20 : (deviceKind === 'phone' ? 32 : 27);
+    const minEntries = compactDevice ? 18 : (deviceKind === 'phone' ? 29 : 24);
     if (totalEntries < minEntries) throw new Error(`“他的私人终端”内容过少：只有 ${totalEntries} 个可读条目，至少需要 ${minEntries} 个。`);
     if (deviceKind === 'phone') {
-        const required = { moments: 3, chat: 3, gallery: 4, notes: 5, schedule: 4, store: 4, browser: 3, contacts: 3, location: 2, misc: 2 };
+        const required = { moments: 3, chat: 3, gallery: 4, notes: 5, store: 4, browser: 3, contacts: 3, location: 2, misc: 2 };
         const countByKind = Object.create(null);
         for (const app of apps) countByKind[app.kind] = Math.max(Number(countByKind[app.kind]) || 0, app.entries.length);
         const missing = Object.entries(required).filter(([kind, minimum]) => (Number(countByKind[kind]) || 0) < minimum);

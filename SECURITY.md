@@ -33,6 +33,8 @@
 37. 私人终端 chat 的 `speakerRole` / `speaker` / `contactName` 都属于模型生成展示数据，不得控制身份、权限、缓存键、URL、命令或档案证据。新生成的 chat 必须可区分 `owner` 与 `contact` 两侧；UI 只用转义后的名字和文本渲染。
 38. 模块化扩展更新必须避免同一运行实例混用不同发布版本的 ES module graph。r38 通过 build token 在版本变化时执行一次页面刷新后再动态导入运行时；该刷新不得修改聊天、档案或派生缓存。
 
+39. 萤火虫栖息地属于派生心声库：旧光点只能由用户显式管理/重建删除，增量生成不得覆盖既有光点；新批次只在当前档案存在尚未消费的 Mxxx 时生成。模型不得控制光点坐标、CSS、URL 或动画。为避免长期累积造成移动端渲染退化，缓存最多 240 条且 UI 每页最多渲染 30 个发光节点，达到上限后停止追加而不是淘汰旧内容。
+
 ## Credentials
 
 API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只保存 Connection Manager Profile ID、可选模型覆盖 ID、输出上限、温度和功能开关。
@@ -334,6 +336,25 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - Calendar-specific World Info scan terms may only influence the existing bounded/dry-run setting retrieval. They must not write World Info, fetch arbitrary external data, obtain credentials, or bypass prompt/data-size limits. Other modes must retain the default empty extra-term set.
 - Calendar refreshes must reuse the shared provider permit/timeout/error policy and the existing chatId + archiveRevision save fence. Switching chat/archive revision while a refresh is in flight must not allow the result to land in another archive.
 - Calendar rendering must escape every model/setting-derived title, summary, date label, source label and anchor before HTML insertion. No calendar item may supply HTML, URL, CSS, command, navigation target or executable action.
+
+### r40.2 Calendar notebook invariants
+
+- `stickyNotes` and `moodNotes` remain derived-cache display data. They must never write to canonical `MEMORY_KEY` or alter promise completion state.
+- Archive-backed sticky notes and every mood note require a real memory ID + exact anchor accepted by `normalizeMemoryReference`; invalid references are discarded. Setting-backed sticky notes carry no memory IDs and must remain visibly non-canonical.
+- The visible To-Do list is computed from validated `promised` Calendar entries. A UI checkbox is presentation only; no manual click may manufacture fulfillment or mutate Mxxx.
+- Calendar note/mood single-item regeneration may rewrite only short display text and must preserve source type/evidence. Delete/regenerate actions stay behind the existing allowlist, writable-archive gate, double confirmation and chatId/archiveRevision fence.
+- Every note, mood string, title, source label and anchor is escaped before the existing Calendar `innerHTML` render sink. No note may introduce URL, HTML, CSS, command or navigation authority.
+- `CALENDAR_SESSION_VERSION=4` invalidates only stale Calendar derived cache. It must not migrate or delete formal archive data.
+
+### r40 / r40.1 personal Calendar invariants
+
+- Calendar remains derived-cache only and must never write to canonical `MEMORY_KEY`.
+- A visible `past` calendar mark may only survive normalization when `sourceMemoryIds` are valid and `sourceMemoryAnchor` exactly resolves to a cited memory that itself has a parseable date; the model does not control the stored past date.
+- A concrete `promised` date must be textually present in the cited archive evidence. If the evidence has no concrete date, only `待定` is accepted.
+- Calendar detail content is intentionally limited to code-owned completion state plus a short title and semantic tags. It must not manufacture `decisionFeeling`, `afterthought`, `anticipation`, plot continuation, or canonical consequences.
+- Calendar semantic tags are restricted to the code-owned allowlist and at most three values. Model-provided HTML/CSS/URL/command-like tag strings are discarded before rendering; surviving titles/tags/source labels/anchors are still HTML-escaped at insertion.
+- `CALENDAR_SESSION_VERSION` may invalidate only the Calendar derived session; it must not migrate, delete, or rewrite the archive.
+
 - r36 deliberately has no automatic holiday/story-generation action. Adding a future-special/holiday-story action later is a separate capability review and must not silently convert `future` setting rows into canonical facts.
 
 
@@ -344,3 +365,38 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - A management target must be resolved from an allowlisted target type and looked up in the current normalized session. Dataset/model-controlled strings must never become arbitrary object paths or cache keys.
 - Targeted regeneration must keep the old item until the new candidate passes the existing validator/evidence rules and the final current-chat + archive-revision fence. Failed regeneration must not first delete the old item.
 - Historical snapshots remain read-only. Whole-room replacement/deletion must invalidate Items and Phone derived caches after the room operation succeeds.
+
+### Calendar ownership invariant (r40.3+)
+
+The standalone `MODE.CALENDAR` is the only derived feature allowed to organize shared dates, promises, anniversaries and relationship To-Do items. `MODE.PHONE` excludes `schedule` / `calendar` apps and must not duplicate that authority. Removing a legacy Phone calendar affects derivative cache only and never deletes or edits canonical `MEMORY_KEY` archive evidence.
+
+## r41 HEART 萤火虫 / 四季 Drama 安全边界
+
+- 「萤火虫栖息地」只生成 HEART 派生心声，不写入 `MEMORY_KEY`，不得把心声反向晋升为已发生剧情事实。
+- 五类光点颜色只能来自 `pink / blue / yellow / white / desire` allowlist；`desire` 仅允许非露骨的亲密与渴望表达，禁止露骨性行为、身体部位细节或色情过程。
+- 光点位置、大小与动画延时只由插件对本地 `id + index` 做确定性数值计算；模型不能提供 CSS、style、坐标或 URL。
+- 四季 Drama 的 `visualTone` 只能来自 `soft / clear / muted / deep` allowlist；实际背景仍由本地季节样式 + allowlist class 决定，模型不能注入任意 class/CSS。
+- 萤火虫单项删除/重新生成仍走统一内容管理的二次确认；删除只修改派生缓存。
+
+
+## r41.4 Character Profile / Relation Garden 安全边界
+
+- Character Profile 是角色组级、全聊天窗口共用的派生设定资料。生成上下文只允许目标角色卡、当前 User Persona 与代码触发的受控 World Info dry-run；不得读取聊天正文、Mxxx、archiveSummary 或任意历史快照来制造第一层“固有关系”。
+- 客观 profile fact 必须携带 allowlisted `sourceType` 与逐字存在于该来源的 `sourceEvidence`，且显示 value 必须能从 evidence 直接核对；“很高”不得换算成厘米，未写血型/生日不得猜。第三方固定关系的人名/稳定称呼必须出现在 sourceEvidence；{{user}} 固有特殊关系只能在角色卡/世界书/Persona 明确写出时成立。
+- `MODE.RELATIONS` 是 chat-scoped 派生 session，继续绑定 `chatId + archiveRevision`。每个第二层动态关系必须通过真实 `sourceMemoryIds + sourceMemoryAnchor` 校验；非 user 的人物名还必须在所引用 Mxxx 的 title/summary/anchors/participants 中出现。第一层资料不能为第二层“已发生事实”授予证据。
+- 第一层与第二层只在 UI 本地 merge；不能互相写回、升级或跨窗口复制。某窗口的恋爱、冲突、同居、和解等状态不得写入全局 Character Profile。
+- Relation Garden 的节点坐标、类别样式与中心头像 URL 由代码控制；模型不能输出 HTML、CSS、URL、坐标、命令或可执行动作。所有模型/设定文本在 `innerHTML` sink 前必须经过 `core_text.esc`。
+- 同 char 在普通角色卡编辑后允许复用唯一的姓名 + avatar auto group；如果候选不唯一则 fail closed，不能靠新 fingerprint 猜合并。删除角色档案必须同时删除该 group 的共享 Profile，但不得删除、清空、重命名或改写 SillyTavern 正文聊天。
+
+### r41.4 世界线人物资料解锁
+- `MODE.RELATIONS.discoveries` 与第二层人际关系一样属于 chat-scoped 派生数据，绑定当前 `chatId + archiveRevision`；不得写入角色组级 Character Profile。
+- 可解锁字段使用固定 label allowlist；每项必须有真实 `sourceMemoryIds + sourceMemoryAnchor`，且 `value` 必须能在所引用 Mxxx 的 title / summary / anchors 中逐字核对。不能根据“很高”“经常做某事”等模糊叙述换算身高、血型、生日或长期喜好。
+- UI 只显示转义后的结构化文字；资料卡不能提供 HTML、CSS、URL、头像或布局坐标。
+
+
+## r41.5 性能收口与安全边界
+
+- 普通消息事件只允许读取当前聊天是否存在 `MEMORY_KEY`，不得在 `MESSAGE_SENT / RECEIVED / EDITED / UPDATED / DELETED` 中新增全聊天扫描、世界书 dry-run、派生缓存 hydrate/compress 或网络请求。
+- 删除角色墓碑可建立本地只读 `Set` 索引用于一次 UI/扫描操作；索引只来源于已经规范化的 Heartbeat 删除记录，不扩大删除权限，也不写正文聊天。
+- 完整档案室 CSS 延迟到 `openOverlay()` 注入；启动阶段只允许设置面板必要样式。延迟样式不能改变模型输出的 HTML/CSS/URL 安全边界。
+- 萤火虫页面永久库与当前 DOM 数量分离；单页最多 18 个发光节点，关闭/切页后不保留后台动画节点。

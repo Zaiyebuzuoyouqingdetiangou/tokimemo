@@ -11,8 +11,8 @@ const MANAGEABLE_TARGET_TYPES = new Set([
     'room-life',
     'phone-app', 'phone-entry',
     'ending-route', 'ending-confession',
-    'heart-voice', 'heart-scenario', 'heart-strip', 'heart-strip-image',
-    'achievement', 'calendar-entry', 'butterfly-node',
+    'heart-voice', 'heart-scenario', 'heart-strip', 'heart-strip-image', 'heart-firefly',
+    'achievement', 'calendar-entry', 'calendar-note', 'calendar-mood', 'butterfly-node',
 ]);
 
 export function isManageableTargetType(value) {
@@ -66,6 +66,7 @@ export function managementTargetsForSession(session) {
         return [
             ...(session.voiceDramas || []).map(item => target('heart-voice', item.id, `Voice Drama · ${item.title}`, item.kind || '')),
             ...(session.scenarioDramas || []).map(item => target('heart-scenario', item.id, `Scenario Drama · ${item.title}`, item.season || '')),
+            ...(session.fireflyVoices || []).map(item => target('heart-firefly', item.id, `萤火虫心声 · ${item.line}`, item.color || '')),
             ...(session.dailyStrips || []).flatMap(item => [
                 target('heart-strip', item.id, `日常一格 · ${item.title}`, item.subtitle || ''),
                 ...(item.cgImage ? [target('heart-strip-image', item.id, `${item.title} · 小剧场图片`, '只处理这张实图，文字小剧场保留。')] : []),
@@ -76,7 +77,11 @@ export function managementTargetsForSession(session) {
         return (session.entries || []).map(item => target('achievement', item.id, item.title, item.unlocked ? '已解锁' : '未解锁'));
     }
     if (mode === core_constants.MODE.CALENDAR) {
-        return (session.entries || []).map(item => target('calendar-entry', item.id, item.title, `${item.date || '待定'} · ${item.status || ''}`));
+        return [
+            ...(session.entries || []).map(item => target('calendar-entry', item.id, `日期 · ${item.title}`, `${item.date || '待定'} · ${item.status || ''}`)),
+            ...(session.stickyNotes || []).map(item => target('calendar-note', item.id, `${item.kind === 'special' ? '特别备注' : '便签'} · ${item.title || item.id}`, item.text || '')),
+            ...(session.moodNotes || []).map(item => target('calendar-mood', item.id, '页角随笔', item.text || '')),
+        ];
     }
     if (mode === core_constants.MODE.BUTTERFLY) {
         const nodes = Array.isArray(session.nodes) ? session.nodes : [];

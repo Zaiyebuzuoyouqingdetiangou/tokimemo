@@ -1,3 +1,44 @@
+## r41.5 Performance hardening targeted review
+
+Scope: r41.4 -> r41.5 performance-only changes.
+
+- Tombstone filtering now builds one operation-local Set index and reuses it across archive rows. The index contains only normalized Heartbeat group/source identity keys; it does not widen deletion authority or touch SillyTavern chat files.
+- Ordinary message-event UI refresh uses `getImportedMemory()` instead of `getMemoryState()`, removing the O(chat length) count pass from MESSAGE_SENT/RECEIVED/EDITED/DELETED/UPDATED. No network call, world-info evaluation, cache hydration, or generation was added.
+- Startup injects only compact settings CSS. Full archive/theater CSS remains code-owned and is inserted by `openOverlay()` only; no model-controlled CSS/URL is introduced.
+- Firefly page size is 18 while the persistent library limit is unchanged; this reduces simultaneous animated DOM nodes without changing stored content.
+- No new `fetch` wrapper, `eval`, `new Function`, `MutationObserver`, `requestAnimationFrame`, or recurring timer was introduced.
+- Local Node benchmark (environmental, not an iPhone measurement): filtering 1200 archive rows against 240 tombstones dropped from roughly 615 ms median with per-row re-normalization to roughly 0.65 ms median with one operation-local Set index.
+
+## r41.4 Character Profile / Relation Garden targeted review
+
+- Scope: new `src/modes/relations.js`, role-group/profile persistence, archive grouping identity changes, relation mode generation/normalization, archive/Profile UI, deletion integration, release metadata and rebuilt runtime bundle. This was a changed-behavior review, not a repeat full-repository scan.
+- Shared layer boundary: Character Profile generation receives only the target character card, current User Persona and a bounded World Info dry-run. It is explicitly forbidden from reading chat messages/Mxxx. Objective facts require allowlisted `sourceType`, exact sourceEvidence presence and a locally checkable value; explicit predefined {{user}} relationships in Persona/World Info are accepted as first-layer setting facts, while ordinary Persona biography alone does not create a relationship.
+- Per-chat layer boundary: `MODE.RELATIONS` uses the current archive only. Every dynamic relation needs a valid Mxxx ID + anchor; non-user third-party names must additionally occur in the cited memory title/summary/anchors/participants. The shared layer is merged only for display and cannot grant archive evidence or write itself into another chat.
+- Identity/deletion: an ordinary card text edit may reuse exactly one unambiguous auto group with the same name + avatar so different windows keep one Character Profile. Ambiguous matches fail closed. Deleting a character archive also removes its shared Profile but still does not call a chat deletion API or mutate chat正文.
+- Rendering/network: relation node coordinates and SVG edges are code-owned finite numbers. Model/setting strings are escaped before HTML insertion. The new relation module adds no `fetch`, `eval`, `new Function`, `requestAnimationFrame`, `setInterval`, arbitrary URL or model-controlled CSS path; the profile avatar is resolved through SillyTavern's local thumbnail helper.
+- Verification: generated bundle fingerprint matches 43 reachable source modules; 43 source JS files, entry and bundle pass syntax checks; regression suite passes 80/80.
+
+Targeted conclusion: no new Critical / High / Medium security finding identified in r41.2 → r42 changed behavior.
+
+## r40.2 Calendar notebook targeted review
+
+- Scope: Calendar normalizer/prompt/UI, Calendar note/mood granular management, Calendar derived-session version gate, release metadata and rebuilt runtime bundle.
+- New display data: `stickyNotes` and `moodNotes` are derived cache only. Archive-backed notes/moods are rejected unless their memory ID + anchor resolves against the current formal archive; setting-backed sticky notes contain no memory IDs and remain labeled as setting reminders.
+- To-Do authority is unchanged: open tasks are rendered from existing validated `promised` Calendar rows, so the new notebook UI does not add a second completion state or a path to mark promises fulfilled manually.
+- Granular management reuses the existing allowlist, two confirmations, writable current-archive gate, model validation and chatId/archiveRevision save fence. Note/mood regeneration preserves evidence/source identity and only replaces bounded text fields.
+- Canonical/network boundary unchanged: no new `MEMORY_KEY` write, provider transport, credential read, arbitrary URL, command execution, `eval`, `new Function`, XMLHttpRequest, WebSocket or EventSource path.
+- Rendering: all model/setting-derived note/mood/title/source strings are escaped before the existing Calendar `innerHTML` sink.
+
+Targeted conclusion: no new Critical / High / Medium security finding identified in the r40.1 → r40.2 changed behavior.
+
+## r40 targeted Calendar redesign review
+
+- Scope: Calendar normalization/prompt/UI, Calendar single-item regeneration, Calendar derived-session version gate, release metadata and generated runtime bundle.
+- Trust change: removes automatic promotion of every dated archive memory into visible Calendar. `past` rows now require model nomination plus existing memory-ID/anchor validation, and the date is taken locally from the anchored dated memory.
+- Promise hardening: concrete future dates are accepted only when the cited archive evidence contains the same date representation; otherwise only `待定` is allowed.
+- Canonical boundary unchanged: no new `MEMORY_KEY` write, no new network transport, no credential handling, no URL-bearing Calendar field.
+- Rendering: all model/setting/reflection strings are escaped before the Calendar `innerHTML` sink.
+
 ## r39.1 Calendar home-entry targeted review
 
 - Scope: `src/archive/library.js` plus release metadata/bundle rebuild.
@@ -537,3 +578,35 @@ Scope: r38 -> r38.1 calendar discoverability-only UI change.
 - Focused regression suite: 62/62 passed after the release-identity update.
 
 Result: no new Critical/High/Medium issue identified in this targeted diff review.
+
+## 0.8.18 r40.1 Calendar To-Do targeted diff review
+
+Scope: local r40 personal-calendar candidate -> r40.1 Calendar To-Do. The change removes generated reflection prose from Calendar entries and replaces the clicked-date detail with code-owned completion state plus allowlisted semantic tags. No new provider endpoint, archive writer, navigation target, command surface, or execution primitive is introduced.
+
+- `past` and `promised` evidence/date gates are unchanged: past dates still come from the exact cited dated Mxxx anchor, and a concrete promised date must still occur in cited archive evidence.
+- Calendar tags are filtered through a fixed ten-value allowlist and capped at three. Unknown strings are discarded; UI output remains escaped even after allowlisting.
+- Past completion (`✓`), promised pending (`□`) and future reminder (`◌`) states are computed locally from the normalized status. Model output cannot mark a promise completed or turn a setting reminder into an occurred event.
+- Individual Calendar regeneration now requests only title + tags and still preserves the original date/status/evidence fields by merging onto the current normalized item after validation.
+- `CALENDAR_SESSION_VERSION` moves from 2 to 3 only to invalidate the previous reflection-shaped derived Calendar session. It does not modify or delete `MEMORY_KEY` / Mxxx archive data.
+- Targeted sink comparison r40 -> r40.1: `fetch(` 5 -> 5, `innerHTML` assignments 38 -> 38, Connection Manager `.sendRequest(` 1 -> 1, Slash-command references 3 -> 3, `MEMORY_KEY` references 10 -> 10, and `eval` / `new Function` / `XMLHttpRequest` remain 0.
+
+Focused regression suite: 64/64 passes after rebuilding the 42-module single runtime bundle. No new Critical / High / Medium security issue identified.
+
+## r40.3 targeted review — single calendar authority
+
+- Private-terminal `schedule` / `calendar` apps are removed from new generation and filtered from legacy runtime sessions; relationship dates and promises remain owned by the standalone Calendar mode.
+- The migration is derived-cache-only. It does not write, delete, or reinterpret `MEMORY_KEY` archive evidence.
+- No new network, command execution, dynamic-code, or DOM sink was introduced. The r40.2 → r40.3 sink counts remain unchanged (`fetch` 5, Connection Manager `sendRequest` 1, `innerHTML` 38, `MEMORY_KEY` references 10, `eval`/`new Function`/XHR 0).
+- Legacy Phone calendar removal happens on a structured clone before rendering. Other Phone apps and entries are preserved; if the removed app was selected, selection safely falls back to the first remaining app.
+- Targeted conclusion: no new Critical / High / Medium security issue identified.
+
+## 0.8.21 / r41 targeted diff review
+
+Scope: r40.3 -> r41 HEART firefly habitat and paged seasonal Drama.
+
+- No new `fetch`, Connection Manager `sendRequest`, slash-command execution, `MEMORY_KEY` authority, WebSocket/XHR, `eval`, or `new Function` capability was introduced.
+- Firefly model strings are normalized and rendered through HTML escaping. Color is allowlisted; glow geometry is locally derived numeric style only.
+- Seasonal `visualTone` is allowlisted before becoming a CSS class. The model cannot emit arbitrary CSS or class names into the seasonal stage.
+- Firefly content remains noncanonical derived HEART state. Granular deletion/regeneration reuses the existing double-confirmation manager and does not mutate archive memories.
+- Targeted review found no newly introduced Critical, High, or Medium severity issue.
+- Worldline discoveries: r41.4 adds chat-scoped profile discoveries to the existing RELATIONS session. Each field is allowlisted, must cite a valid Mxxx ID + anchor, and its literal value must also be present in the cited memory title/summary/anchors. Discoveries are rendered separately and never promoted into the shared Character Profile, preventing one chat window from contaminating another.

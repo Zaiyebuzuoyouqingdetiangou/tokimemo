@@ -76,7 +76,7 @@ Calendar ────┤
 `manifest.json` currently declares only the `disable` and `clean` hooks. Therefore `index.js` must keep the DOM-ready self-start path (`jQuery(() => initMemoryTheater())`). Merely exporting an `init()` function is not sufficient for this manifest and leaves an enabled extension unmounted. Any future switch to a host-managed init hook must change the manifest and entrypoint together and retain a regression test for startup.
 
 
-## r36 Calendar boundary
+## r36-r40 Calendar boundary
 
 Calendar is a standalone business mode (`MODE.CALENDAR = "calendar"`) and follows the same no-sibling-mode-import rule. It does not modify `MEMORY_KEY`. Its three classes intentionally carry different trust semantics:
 
@@ -85,6 +85,13 @@ Calendar is a standalone business mode (`MODE.CALENDAR = "calendar"`) and follow
 - `future`: non-canonical setting reference derived from bounded character/persona/world-info context; it carries no archive evidence and the UI explicitly labels it as setting-only.
 
 Calendar refreshes use the existing Connection Manager request coordinator and save through the same chatId/archiveRevision-bound derived-cache path. Calendar-specific World Info scan terms only broaden which already-configured setting entries may be included in the bounded context; they do not create archive facts, bypass evidence, or write World Info.
+
+### r40 personal-calendar projection
+
+Calendar is now a curated projection rather than a one-row-per-dated-memory projection. Model output can nominate `past` marks, but the normalizer only accepts a mark when its evidence anchor resolves to a dated canonical memory; that canonical memory supplies the visible date. `promised` rows retain evidence references and concrete dates are additionally checked against the cited evidence text.
+
+r40.2 extends the derived Calendar session with two notebook-only arrays: `stickyNotes` and `moodNotes`. Archive-backed sticky notes and all mood notes must pass the same memory ID + anchor evidence normalization; setting-backed sticky notes carry no memory IDs and remain explicitly non-canonical setting reminders. The global To-Do list is rendered from validated `promised` rows rather than a second model-owned task list. `CALENDAR_SESSION_VERSION=4` invalidates only stale derived Calendar sessions.
+
 
 
 ## r37 Content control boundary
@@ -104,3 +111,12 @@ Phone/Terminal remains `MODE.PHONE` under Room, but its topbar increment action 
 ## r39 runtime delivery
 
 `src/` remains the authoritative modular source tree. Release builds additionally contain `dist/heartbeatMemories.bundle.js`, generated from the reachable module graph. SillyTavern loads only that versioned bundle at runtime. This keeps source ownership boundaries reviewable while avoiding a deep multi-request ES-module waterfall on cloud-hosted installations.
+
+
+## r41.5 performance contract
+
+- Runtime delivery remains one versioned `dist/heartbeatMemories.bundle.js`.
+- Startup mounts the settings/menu shell with `ensureSettingsStyles()` only. The full archive/theater stylesheet is inserted by `openOverlay()` on first use, so unopened Heartbeat views do not enter the CSSOM.
+- Ordinary message events must use the lightweight settings-status path. They may clear tiny bookkeeping caches, but must not scan `context.chat`, hydrate/compress theater caches, scan World Info, rebuild Character Profile/relations, or call a provider.
+- Deleted-character filtering builds one operation-local Set index and reuses it for all archive rows during library render / legacy scan.
+- Firefly persistence is independent from active DOM size: the library may keep up to the normal derived-content cap, while one page renders at most 18 animated lights.

@@ -60,7 +60,7 @@ test('mobile overlay early-close fallback accepts only its code-owned topbar clo
 });
 
 test('role interaction is a standalone archive portal immediately before achievements', () => {
-    assert.match(sourceByFile.get('core/constants.js'), /ARCHIVE_PORTAL_MODES = Object\.freeze\(\[MODE\.ALBUM, MODE\.ADV, MODE\.ROOM, MODE\.ENDING, MODE\.CALENDAR, MODE\.HEART, MODE\.ACHIEVEMENTS/);
+    assert.match(sourceByFile.get('core/constants.js'), /ARCHIVE_PORTAL_MODES = Object\.freeze\(\[MODE\.ALBUM, MODE\.ADV, MODE\.ROOM, MODE\.ENDING, MODE\.CALENDAR, MODE\.RELATIONS, MODE\.HEART, MODE\.ACHIEVEMENTS/);
     assert.match(sourceByFile.get('archive/snapshots.js'), /\[core_constants\.MODE\.HEART\]: \{ title: '角色互动'/);
 });
 
@@ -555,6 +555,31 @@ test('phone delta appends entries while preserving every old App entry', () => {
     assert.equal(merged.selectedAppId, 'NOTES');
     assert.equal(merged.selectedEntryId, 'NOTES1');
     assert.equal(merged.view, 'detail');
+    assert.equal(merged.apps.some(app => ['schedule', 'calendar'].includes(app.kind)), false);
+});
+
+test('phone calendar is retired in favor of the standalone relationship notebook and legacy cache is migrated', () => {
+    assert.deepEqual([...api.PHONE_EXCLUDED_APP_KINDS].sort(), ['calendar', 'schedule']);
+    const promptSource = sourceByFile.get('generation/prompts.js');
+    const phoneSource = sourceByFile.get('modes/phone.js');
+    const cacheSource = sourceByFile.get('core/cache.js');
+    assert.match(promptSource, /禁止生成 schedule \/ calendar \/ 日历 App/);
+    assert.match(phoneSource, /禁止生成 kind=schedule \/ calendar 或名为“日历”的 App/);
+    assert.match(cacheSource, /PHONE_EXCLUDED_APP_KINDS/);
+
+    const legacyApps = [
+        ['CHAT', 'chat', 3], ['GALLERY', 'gallery', 4], ['NOTES', 'notes', 5], ['SCHEDULE', 'schedule', 4],
+        ['MOMENTS', 'moments', 3], ['STORE', 'store', 4], ['BROWSER', 'browser', 3], ['CONTACTS', 'contacts', 3], ['LOCATION', 'location', 2], ['MISC', 'misc', 2],
+    ].map(([id, kind, count]) => ({ id, label: id, kind, entries: Array.from({ length: count }, (_, i) => ({ id: `${id}${i}`, title: `${kind}${i}` })) }));
+    const chatId = 'chat-phone-calendar-migration';
+    const bank = { ...memoryBank, archiveRevision: 77 };
+    const cache = { chatId, archiveRevision: 77, phone: { kind: 'phone', chatId, archiveRevision: 77, apps: legacyApps, selectedAppId: 'SCHEDULE', selectedEntryId: 'SCHEDULE0', view: 'detail' } };
+    const migrated = api.loadSession(api.MODE.PHONE, { cache, chatId, memoryBank: bank, clone: true });
+    assert.ok(migrated);
+    assert.equal(migrated.apps.some(app => app.kind === 'schedule'), false);
+    assert.equal(migrated.selectedAppId, 'CHAT');
+    assert.equal(migrated.selectedEntryId, '');
+    assert.equal(migrated.view, 'list');
 });
 
 test('phone accepts an explicit empty incremental plan without retry-shaped validation failure', () => {
@@ -670,7 +695,7 @@ test('album and ADV accept a small set of important nodes instead of fixed 15/12
     assert.deepEqual(merged.events[1].sourceMemoryIds, ['M002']);
 });
 
-test('phone plan keeps many apps but accepts roughly thirty entries', () => {
+test('phone plan keeps roughly thirty entries without duplicating the standalone calendar', () => {
     const specs = [
         ['MOMENTS', 'moments', 3],
         ['CHAT', 'chat', 3],
@@ -697,8 +722,9 @@ test('phone plan keeps many apps but accepts roughly thirty entries', () => {
         liveStates: { morning: { lockText: '早', statusLine: '醒了', badgeCounts: { CHAT: 2, EVIL: 999 }, unknown: '<script>' }, daytime: {}, evening: {}, night: {} },
         apps,
     });
-    assert.equal(plan.apps.length, 10);
-    assert.equal(plan.apps.reduce((sum, app) => sum + app.entries.length, 0), 33);
+    assert.equal(plan.apps.length, 9);
+    assert.equal(plan.apps.reduce((sum, app) => sum + app.entries.length, 0), 29);
+    assert.equal(plan.apps.some(app => ['schedule', 'calendar'].includes(app.kind)), false);
     assert.deepEqual({ ...plan.liveStates.morning.badgeCounts }, { CHAT: 2 });
     assert.equal('unknown' in plan.liveStates.morning, false);
 });
@@ -953,8 +979,8 @@ test('HEART keeps multiple stories in one season without overwriting sibling sea
     assert.deepEqual(merged.voiceDramas.map(item => item.title), ['第一场春雨', '第一场夏夜', '第二场春风']);
     assert.equal(merged.voiceDramas.filter(item => item.kind === 'spring').length, 2);
     assert.equal(merged.voiceDramas.find(item => item.id === 'VS1').script[0].text, springOne.script[0].text);
-    assert.match(source, /Voice \$\{voiceCount\} \/ Scenario \$\{scenarioCount\}/);
-    assert.match(source, /旧篇保留；可以继续追加新的未来日常。/);
+    assert.match(source, /单篇翻阅/);
+    assert.match(sourceByFile.get('ui/heartView.js'), /heartCurrentDrama/);
 });
 
 
@@ -995,7 +1021,7 @@ test('seasonal Drama can append without a new archive batch and resumes a half-f
 
 test('period dialogue library is hidden from HEART page and remains avatar-only', () => {
     assert.doesNotMatch(source, /data-rmt-heart-view="greetings"/);
-    assert.match(source, /const view = \['seasons', 'strips'\]\.includes\(session\.view\) \? session\.view : 'seasons'/);
+    assert.match(source, /const view = \['seasons', 'strips', 'fireflies'\]\.includes\(session\.view\) \? session\.view : 'seasons'/);
     assert.match(source, /selectHeartGreeting\(session/);
     assert.match(source, /data-rmt-action="avatar-talk-again"/);
     const renderStart = source.indexOf('function renderHeart()');
@@ -1040,54 +1066,92 @@ test('invalid JSON diagnostics never echo model-body fragments', () => {
 
 
 
-test('r36 calendar keeps past facts, pending promises, and future setting dates in separate trust classes', () => {
+test('r40.2 calendar keeps evidence-backed dates while adding sparse sticky and mood notebook content', () => {
     const bank = {
         memories: [
-            { id: 'M001', date: '2026/08/14', title: '一起看烟火', summary: '两个人已经一起看完烟火。', anchors: ['河边烟火'] },
-            { id: 'M002', date: '08/20', title: '约好去水族馆', summary: '两个人明确说好下次一起去水族馆，但档案里还没有发生。', anchors: ['水族馆约定'] },
-            { id: 'M003', date: '未标注', title: '没有日期', summary: '这条不应该自动塞进过去日历。', anchors: ['无日期'] },
+            { id: 'M001', date: '2026/10/24', title: '去接纪时卿', summary: '他决定在10月24日去接纪时卿。', anchors: ['接纪时卿'] },
+            { id: 'M002', date: '2026/10/24', title: '发烧插曲', summary: '当天出现发烧，但这只是剧情经过。', anchors: ['39.2℃'] },
+            { id: 'M003', date: '2026/10/25', title: '水族馆约定', summary: '两个人明确说好11月2日一起去水族馆，目前尚未发生。', anchors: ['11月2日水族馆'] },
+            { id: 'M004', date: '未标注', title: '没有日期', summary: '这条不能作为已发生日期锚点。', anchors: ['无日期'] },
         ],
     };
     const calendar = api.normalizeCalendar({
         title: '两个人的日历',
+        past: [
+            { id: 'P1', title: '接纪时卿', tags: ['接送', '<img src=x onerror=1>', '重要日'], sourceMemoryIds: ['M001'], sourceMemoryAnchor: '接纪时卿' },
+            { id: 'P_BAD', title: '无日期事件', tags: ['重要日'], sourceMemoryIds: ['M004'], sourceMemoryAnchor: '无日期' },
+        ],
         promised: [
-            { id: 'P1', date: '09/02', title: '去水族馆', summary: '已经约好但尚未兑现。', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '水族馆约定' },
-            { id: 'P_BAD', date: '09/03', title: '凭空约定', summary: '没有真实档案证据。', sourceMemoryIds: ['M999'], sourceMemoryAnchor: '不存在' },
+            { id: 'F1', date: '11/02', title: '去水族馆', tags: ['约定', '约会'], sourceMemoryIds: ['M003'], sourceMemoryAnchor: '11月2日水族馆' },
+            { id: 'F_BAD_DATE', date: '11/03', title: '凭空改日期', tags: ['约定'], sourceMemoryIds: ['M003'], sourceMemoryAnchor: '11月2日水族馆' },
         ],
         future: [
-            { id: 'F1', date: '12/25', title: '冬星祭', summary: '世界设定中的固定节日。', sourceLabel: '世界书', recurring: true },
-            { id: 'F_BAD', date: '冬季', title: '没有明确日期', summary: '不能硬塞进日历。', sourceLabel: '世界书', recurring: true },
+            { id: 'W1', date: '12/25', title: '冬星祭', tags: ['设定日', '活动'], sourceLabel: '世界书', recurring: true },
+        ],
+        stickyNotes: [
+            { id: 'N1', kind: 'memo', title: '记得', text: '11月2日别把时间排得太满。', sourceType: 'archive', sourceMemoryIds: ['M003'], sourceMemoryAnchor: '11月2日水族馆' },
+            { id: 'N2', kind: 'special', title: '特别备注', text: '她不太喜欢太甜的东西。', sourceType: 'setting', sourceLabel: '角色卡' },
+            { id: 'N_BAD', kind: 'memo', title: '坏便签', text: '没有证据。', sourceType: 'archive', sourceMemoryIds: ['M999'], sourceMemoryAnchor: '不存在' },
+        ],
+        moodNotes: [
+            { id: 'J1', text: '那天等她出来的时候，我看时间的次数比自己想象得多。', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '接纪时卿' },
+            { id: 'J_BAD', text: '凭空出现的情绪。', sourceMemoryIds: ['M999'], sourceMemoryAnchor: '不存在' },
         ],
     }, bank);
     assert.equal(calendar.kind, api.MODE.CALENDAR);
-    assert.deepEqual(calendar.entries.filter(item => item.status === 'past').map(item => item.sourceMemoryIds[0]), ['M001', 'M002']);
+    assert.equal(calendar.calendarVersion, 4);
+    assert.deepEqual(calendar.entries.filter(item => item.status === 'past').map(item => item.title), ['接纪时卿']);
+    assert.equal(calendar.entries.some(item => item.title === '发烧插曲'), false);
+    assert.equal(calendar.entries.some(item => item.title === '无日期事件'), false);
     assert.equal(calendar.entries.filter(item => item.status === 'promised').length, 1);
-    assert.equal(calendar.entries.find(item => item.status === 'promised').sourceMemoryAnchor, '水族馆约定');
-    assert.equal(calendar.entries.filter(item => item.status === 'future').length, 1);
-    assert.deepEqual(calendar.entries.find(item => item.status === 'future').sourceMemoryIds, []);
-    assert.equal(calendar.entries.some(item => item.title === '凭空约定'), false);
-    assert.equal(calendar.entries.some(item => item.title === '没有明确日期'), false);
+    assert.equal(calendar.entries.find(item => item.status === 'promised').date, '11/02');
+    assert.equal(calendar.entries.some(item => item.title === '凭空改日期'), false);
+    assert.deepEqual(calendar.entries.find(item => item.status === 'past').tags, ['接送', '重要日']);
+    assert.equal(calendar.stickyNotes.length, 2);
+    assert.equal(calendar.stickyNotes.find(item => item.kind === 'special').sourceType, 'setting');
+    assert.deepEqual(calendar.stickyNotes.find(item => item.sourceType === 'setting').sourceMemoryIds, []);
+    assert.equal(calendar.moodNotes.length, 1);
+    assert.equal(calendar.moodNotes[0].date, '2026/10/24');
+    assert.deepEqual(calendar.moodNotes[0].sourceMemoryIds, ['M001']);
 });
 
-test('r36 calendar prompt never asks the model to rewrite past events or turn setting dates into promises', () => {
+test('r40.2 calendar prompt describes a whole notebook page, not per-date reflection cards', () => {
     const promptSource = sourceByFile.get('generation/prompts.js');
-    assert.match(promptSource, /已经发生且有明确日期的档案记忆会由插件本地直接放入“已经度过”/);
-    assert.match(promptSource, /future 不是剧情事实，也不是两个人的约定/);
-    assert.match(promptSource, /必须给真实 sourceMemoryIds/);
-    assert.match(promptSource, /禁止为了填满日历发明节日、生日或日期/);
+    assert.match(promptSource, /私人日历 \/ 手账页/);
+    assert.match(promptSource, /便签 \/ 特别备注/);
+    assert.match(promptSource, /To-Do List 由 promised 数组自动生成/);
+    assert.match(promptSource, /stickyNotes/);
+    assert.match(promptSource, /moodNotes/);
+    assert.match(promptSource, /绝对不要每个日期、每个事项都写一条/);
+    assert.match(promptSource, /sourceType=\"archive\"/);
+    assert.match(promptSource, /sourceType=\"setting\"/);
+    assert.match(promptSource, /证据里没有具体日期就写“待定”/);
+    assert.match(promptSource, /future 不是剧情事实，也不是两个人已经约定的事项/);
     assert.match(sourceByFile.get('generation/client.js'), /const refreshableCalendar = mode === core_constants\.MODE\.CALENDAR/);
-    assert.match(sourceByFile.get('generation/client.js'), /worldInfoScanTerms: \['节日', '日历', '生日', '纪念日'/);
-    assert.match(sourceByFile.get('core/cache.js'), /const worldInfoScan = \[\.\.\.archiveScan, \.\.\.extraWorldInfoScanTerms\]/);
+    assert.match(sourceByFile.get('core/cache.js'), /Array\.isArray\(session\.stickyNotes\)/);
+    assert.match(sourceByFile.get('core/cache.js'), /Array\.isArray\(session\.moodNotes\)/);
 });
 
-test('r36 calendar is an independent archive portal before HEART and does not add a story-generation action', () => {
+test('r40.2 calendar renders month grid plus sticky board, global todo, special notes and sparse mood snippets', () => {
     const constantsSource = sourceByFile.get('core/constants.js');
-    assert.match(constantsSource, /MODE\.ENDING, MODE\.CALENDAR, MODE\.HEART, MODE\.ACHIEVEMENTS/);
-    assert.match(sourceByFile.get('archive/snapshots.js'), /\[core_constants\.MODE\.CALENDAR\]: \{ title: '两个人的日历'/);
+    assert.match(constantsSource, /CALENDAR_SESSION_VERSION = 4/);
     const view = sourceByFile.get('ui/calendarView.js');
-    assert.match(view, /已约定 · 未发生/);
-    assert.match(view, /未来 · 世界设定/);
+    assert.match(view, /rmt-calendar-grid/);
+    assert.match(view, /rmt-calendar-notebook-board/);
+    assert.match(view, /rmt-calendar-sticky-panel/);
+    assert.match(view, /rmt-calendar-master-todo/);
+    assert.match(view, /rmt-calendar-special-notes/);
+    assert.match(view, /rmt-calendar-mood-section/);
+    assert.match(view, /便签夹/);
+    assert.match(view, /还要做的事/);
+    assert.match(view, /页角随笔/);
+    assert.match(view, /promised\.map\(item => calendarTodoRow\(item\)\)/);
+    assert.doesNotMatch(view, /后来回想|做这个决定的时候|把这件事约下来的时候/);
     assert.doesNotMatch(view, /draw-cg|read-adv|generate.*story|特别篇/i);
+    const styles = sourceByFile.get('ui/styles.js');
+    assert.match(styles, /\.rmt-calendar-sticky\{/);
+    assert.match(styles, /\.rmt-calendar-master-todo/);
+    assert.match(styles, /\.rmt-calendar-mood-note\{/);
 });
 
 test('entry module keeps DOM-ready self-start while r38 boots the fresh modular graph dynamically', async () => {
@@ -1165,11 +1229,13 @@ test('r37 delete and regenerate controls require two explicit confirmations', ()
 test('r37 content manager exposes category and granular CG / ADV / Drama / phone / calendar controls', () => {
     const managerSource = sourceByFile.get('ui/contentManager.js');
     const overlaySource = sourceByFile.get('ui/overlay.js');
-    for (const target of ['album-entry', 'album-image', 'adv-event', 'adv-text', 'adv-image', 'heart-voice', 'heart-scenario', 'heart-strip', 'heart-strip-image', 'phone-app', 'phone-entry', 'ending-route', 'ending-confession', 'achievement', 'calendar-entry']) {
+    for (const target of ['album-entry', 'album-image', 'adv-event', 'adv-text', 'adv-image', 'heart-voice', 'heart-scenario', 'heart-strip', 'heart-strip-image', 'phone-app', 'phone-entry', 'ending-route', 'ending-confession', 'achievement', 'calendar-entry', 'calendar-note', 'calendar-mood']) {
         assert.match(managerSource, new RegExp(`['\"]${target}['\"]`));
     }
     assert.match(overlaySource, /manage-regenerate-category/);
     assert.match(overlaySource, /manage-delete-category/);
+    assert.match(overlaySource, /type === 'calendar-note'/);
+    assert.match(overlaySource, /type === 'calendar-mood'/);
     assert.match(overlaySource, /confirmExplicitActionTwice/);
     assert.match(overlaySource, /MODE\.ROOM \? \[core_constants\.MODE\.ROOM, core_constants\.MODE\.ITEMS, core_constants\.MODE\.PHONE\]/);
 });
@@ -1191,8 +1257,339 @@ test('r37 granular regeneration targets are allowlisted and replace only after a
     const overlaySource = sourceByFile.get('ui/overlay.js');
     assert.match(managerSource, /MANAGEABLE_TARGET_TYPES = new Set/);
     assert.match(regenSource, /export async function regenerateManagedTarget/);
+    assert.match(regenSource, /type === 'calendar-note'/);
+    assert.match(regenSource, /type === 'calendar-mood'/);
     assert.match(regenSource, /throw new Error\('这一类内容目前不支持单项模型重新生成。'\)/);
     assert.match(overlaySource, /const updated = await generation_contentRegeneration\.regenerateManagedTarget/);
     assert.match(overlaySource, /await commitManagedSession\(updated/);
     assert.match(overlaySource, /如果生成失败、聊天切换或档案 revision 变化，旧内容会原样保留/);
+});
+
+test('r41 firefly habitat generates many five-color inner-voice points including direct desire', () => {
+    const colors = ['pink', 'blue', 'yellow', 'white', 'desire'];
+    const rows = [];
+    for (let i = 0; i < 25; i += 1) rows.push({ id: `F${i + 1}`, color: colors[i % colors.length], line: `这是第${i + 1}条没有说出口的心声，内容彼此不同。` });
+    const normalized = api.normalizeFireflyVoicesPart({ fireflyVoices: rows });
+    assert.equal(normalized.length, 25);
+    for (const color of colors) assert.ok(normalized.filter(item => item.color === color).length >= 5);
+    const promptSource = sourceByFile.get('modes/heart.js');
+    assert.match(promptSource, /desire ♥️/);
+    assert.match(promptSource, /想抱住你 \/ 想亲你 \/ 想把你留在身边/);
+    assert.match(promptSource, /不要写露骨性行为、身体部位细节或色情过程/);
+});
+
+test('r41 HEART UI exposes firefly habitat as a third independent interaction tab', () => {
+    const view = sourceByFile.get('ui/heartView.js');
+    assert.match(view, /data-rmt-heart-view="fireflies"/);
+    assert.match(view, /萤火虫栖息地/);
+    assert.match(view, /rmt-firefly-point/);
+    assert.match(view, /data-rmt-heart-firefly-id/);
+    assert.match(sourceByFile.get('ui/contentManager.js'), /heart-firefly/);
+    assert.match(sourceByFile.get('ui/overlay.js'), /type === 'heart-firefly'/);
+});
+
+test('r41 seasonal drama is paged one item at a time instead of stacking Voice and Scenario bodies', () => {
+    const session = {
+        selectedVoiceId: 'V1', selectedScenarioId: '',
+        voiceDramas: [{ id: 'V1', kind: 'spring', generatedAt: 1 }, { id: 'V2', kind: 'spring', generatedAt: 3 }],
+        scenarioDramas: [{ id: 'S1', season: 'spring', generatedAt: 2 }],
+    };
+    const state = api.heartCurrentDrama(session, 'spring');
+    assert.equal(state.items.length, 3);
+    assert.equal(state.current.item.id, 'V1');
+    const view = sourceByFile.get('ui/heartView.js');
+    assert.match(view, /heart-drama-prev/);
+    assert.match(view, /heart-drama-next/);
+    assert.match(view, /单篇翻阅/);
+    assert.doesNotMatch(view, /if \(voice\).*if \(scenario\)/s);
+});
+
+test('r41 seasonal drama visual tone is constrained and used only as an allowlisted class', () => {
+    const heartSource = sourceByFile.get('modes/heart.js');
+    const viewSource = sourceByFile.get('ui/heartView.js');
+    const styles = sourceByFile.get('ui/styles.js');
+    assert.match(heartSource, /HEART_DRAMA_VISUAL_TONES/);
+    assert.match(heartSource, /visualTone 只能是 soft \/ clear \/ muted \/ deep/);
+    assert.match(viewSource, /\['soft', 'clear', 'muted', 'deep'\]\.includes\(item\.visualTone\)/);
+    assert.match(styles, /season-spring/);
+    assert.match(styles, /season-summer/);
+    assert.match(styles, /season-autumn/);
+    assert.match(styles, /season-winter/);
+    assert.match(styles, /tone-deep/);
+});
+
+test('r41.2 character archive deletion tombstone blocks the same character from being re-indexed by avatar or source identity', () => {
+    const deleted = api.normalizeDeletedArchiveCharacter({
+        groupId: 'auto:abc', characterName: '佐伯', avatars: ['saeki.png'], characterKeys: ['saeki.png'],
+        sourceIdentityKeys: ['fingerprint:card:old'], deletedAt: 123,
+    });
+    assert.equal(api.archiveEntryMatchesDeletedCharacter({ archiveGroupId: 'auto:abc', characterKey: 'other.png', avatar: 'other.png', characterName: '其他', chatId: 'A' }, deleted), true);
+    assert.equal(api.archiveEntryMatchesDeletedCharacter({ characterKey: 'saeki.png', avatar: 'saeki.png', characterName: '佐伯', chatId: 'B', characterFingerprint: 'card:new' }, deleted), false);
+    const stableDeleted = api.normalizeDeletedArchiveCharacter({ ...deleted, sourceIdentityKeys: [...deleted.sourceIdentityKeys, 'fallback:saeki.png\u001f佐伯'] });
+    assert.equal(api.archiveEntryMatchesDeletedCharacter({ characterKey: 'saeki.png', avatar: 'saeki.png', characterName: '佐伯', chatId: 'B', characterFingerprint: 'card:new' }, stableDeleted), true);
+    assert.equal(api.archiveEntryMatchesDeletedCharacter({ characterKey: 'saeki.png', avatar: 'saeki.png', characterName: '其他', chatId: 'C', characterFingerprint: 'card:other' }, stableDeleted), false);
+    assert.equal(api.archiveEntryMatchesDeletedCharacter({ characterKey: 'other.png', avatar: 'other.png', characterName: '佐伯', chatId: 'D', characterFingerprint: 'card:other' }, stableDeleted), false);
+});
+
+test('r41.2 character archive delete mutates only Heartbeat library settings while preserving chat metadata', () => {
+    const previousSt = globalThis.SillyTavern;
+    const previousConfirm = globalThis.confirm;
+    const confirmations = [];
+    const context = {
+        extensionSettings: {},
+        chatMetadata: { untouched: {正文: '保留'} },
+        characters: [{ name: '佐伯', avatar: 'saeki.png', data: { name: '佐伯', avatar: 'saeki.png', description: '角色设定' } }],
+        characterId: 0,
+        name2: '佐伯',
+        getCurrentChatId: () => 'chat-a',
+        saveSettingsDebounced() {},
+    };
+    api.setArchiveGroups(context, [{ id: 'auto:saeki', label: '佐伯', characterName: '佐伯', avatar: 'saeki.png', characterFingerprint: 'card:old' }]);
+    api.setArchiveIndex(context, [{
+        entryId: 'AE:test', archiveGroupId: 'auto:saeki', characterKey: 'saeki.png', avatar: 'saeki.png', characterName: '佐伯',
+        characterFingerprint: 'card:old', chatId: 'chat-a', archiveName: '高中篇', memoryCount: 10, updatedAt: 1,
+    }]);
+    api.setCharacterProfile(context, { key: 'group:auto:saeki', characterName: '佐伯', facts: [], relationships: [] });
+    globalThis.SillyTavern = { getContext: () => context };
+    globalThis.confirm = message => { confirmations.push(String(message)); return true; };
+    try {
+        const beforeMetadata = structuredClone(context.chatMetadata);
+        const deleted = api.deleteArchiveCharacterFromLibrary('auto:saeki');
+        assert.equal(deleted.name, '佐伯');
+        assert.equal(deleted.count, 1);
+        assert.equal(confirmations.length, 2);
+        assert.deepEqual(context.chatMetadata, beforeMetadata);
+        assert.equal(api.getArchiveGroups(context).length, 0);
+        assert.equal(api.getArchiveIndex(context).length, 0);
+        assert.equal(api.getDeletedArchiveCharacters(context).length, 1);
+        assert.equal(api.getCharacterProfile(context, 'group:auto:saeki'), null);
+        assert.equal(api.isArchiveEntryDeletedFromLibrary({ characterKey: 'saeki.png', avatar: 'saeki.png', characterName: '佐伯', chatId: 'chat-b' }, context), true);
+    } finally {
+        if (previousSt === undefined) delete globalThis.SillyTavern; else globalThis.SillyTavern = previousSt;
+        if (previousConfirm === undefined) delete globalThis.confirm; else globalThis.confirm = previousConfirm;
+    }
+});
+
+test('r41.2 deleting a character archive removes only Heartbeat library records and keeps chat deletion APIs out of the path', () => {
+    const groupsSource = sourceByFile.get('archive/groups.js');
+    const librarySource = sourceByFile.get('archive/library.js');
+    const overlaySource = sourceByFile.get('ui/overlay.js');
+    assert.match(librarySource, /data-rmt-action="archive-character-delete"/);
+    assert.match(groupsSource, /confirmExplicitActionTwice\(/);
+    assert.match(groupsSource, /不会删除、清空、重命名或改写任何 SillyTavern 正文聊天窗口/);
+    assert.match(groupsSource, /ARCHIVE_DELETED_CHARACTERS_SETTINGS_KEY/);
+    assert.match(librarySource, /isArchiveEntryDeletedFromLibrary\(candidate, context, deletedIndex\)/);
+    assert.match(overlaySource, /archive-character-delete/);
+    assert.doesNotMatch(groupsSource, /\/api\/chats\/delete|deleteChat|removeChat|\.chat\s*=\s*\[\]/);
+});
+
+test('r41.2 deleted current character hides current quick archive and calendar surfaces instead of resurrecting from live metadata', () => {
+    const librarySource = sourceByFile.get('archive/library.js');
+    assert.match(librarySource, /const deletedFromLibrary = archive_groups\.isCurrentCharacterDeletedFromLibrary\(ctx, mem\)/);
+    assert.match(librarySource, /if \(deletedFromLibrary\) \{\s*currentQuick = '';\s*calendarQuick = '';/);
+    assert.match(sourceByFile.get('archive/groups.js'), /if \(isCurrentCharacterDeletedFromLibrary\(context, memoryBank\)\) return;/);
+});
+
+test('r41.1 firefly unlocks append without overwriting or auto-evicting old lights', () => {
+    const base = {
+        kind: 'heart',
+        fireflyVoices: [
+            { id: 'F01', color: 'pink', line: '我还是会下意识先去找你在哪里。', generatedAt: 1 },
+            { id: 'F02', color: 'blue', line: '有时候太在意你，反而不知道该怎么开口。', generatedAt: 2 },
+        ],
+        selectedFireflyId: 'F01',
+        generationParts: { fireflies: true },
+        view: 'fireflies',
+    };
+    const updated = api.applyHeartPartialPatch(base, {
+        type: 'fireflies',
+        fireflyVoices: [
+            { id: 'F01', color: 'pink', line: '我还是会下意识先去找你在哪里。', generatedAt: 3 },
+            { id: 'F02', color: 'desire', line: '现在比以前更想把你拉近一点，不想只隔着距离看你。', generatedAt: 4 },
+        ],
+    });
+    assert.equal(updated.fireflyVoices.length, 3);
+    assert.equal(updated.fireflyVoices[0].line, base.fireflyVoices[0].line);
+    assert.equal(updated.fireflyVoices[1].line, base.fireflyVoices[1].line);
+    assert.equal(updated.fireflyVoices.filter(item => item.line === base.fireflyVoices[0].line).length, 1);
+    assert.equal(updated.fireflyVoices[2].color, 'desire');
+    assert.notEqual(updated.fireflyVoices[2].id, 'F02');
+    assert.equal(updated.selectedFireflyId, updated.fireflyVoices[2].id);
+});
+
+test('r41.1 firefly incremental cursor waits for new archive memories and then exposes only the delta', () => {
+    const bank = { memories: [{ id: 'M001' }, { id: 'M002' }, { id: 'M003' }] };
+    const modern = {
+        kind: 'heart',
+        fireflyVoices: [{ id: 'F01', color: 'pink', line: '这是一条已经保存的萤火虫心声。' }],
+        generationMeta: { parts: { fireflies: { coveredMemoryIds: ['M001', 'M002'], archiveRevision: 'R2', updatedAt: 1 } } },
+    };
+    assert.deepEqual(api.incrementalArchiveMemoryIds(modern, bank, 'fireflies'), ['M003']);
+
+    const legacy = { kind: 'heart', fireflyVoices: modern.fireflyVoices };
+    assert.deepEqual(api.incrementalArchiveMemoryIds(legacy, bank, 'fireflies'), []);
+});
+
+test('r41.5 firefly library keeps the archive large but renders only one 18-light page', () => {
+    const constants = sourceByFile.get('core/constants.js');
+    const view = sourceByFile.get('ui/heartView.js');
+    const heart = sourceByFile.get('modes/heart.js');
+    assert.match(constants, /HEART_FIREFLY_MAX_ITEMS = MAX_DERIVED_CONTENT_ITEMS/);
+    assert.match(constants, /HEART_FIREFLY_PAGE_SIZE = 18/);
+    assert.match(view, /visibleVoices = voices\.slice\(pageStart, pageStart \+ pageSize\)/);
+    assert.match(view, /heart-firefly-prev/);
+    assert.match(view, /heart-firefly-next/);
+    assert.match(heart, /out\.length >= core_constants\.HEART_FIREFLY_MAX_ITEMS/);
+    assert.doesNotMatch(heart, /updated\.fireflyVoices = patch\.fireflyVoices\.slice\(0, 36\)/);
+});
+
+
+test('r41.5 deleted-character filtering builds one indexed Set for archive-library and legacy-scan passes', () => {
+    const context = {
+        extensionSettings: {
+            heartbeatMemoriesDeletedCharactersV1: [
+                { groupId: 'auto:a', characterName: 'A', sourceIdentityKeys: ['fingerprint:card:a', 'fallback:a.png\u001fa'], deletedAt: 1 },
+                { groupId: 'auto:b', characterName: 'B', sourceIdentityKeys: ['fingerprint:card:b'], deletedAt: 2 },
+            ],
+        },
+    };
+    const index = api.buildDeletedArchiveCharacterIndex(context);
+    assert.equal(index.groupIds.has('auto:a'), true);
+    assert.equal(index.groupIds.has('auto:b'), true);
+    assert.equal(index.sourceIdentityKeys.has('fingerprint:card:a'), true);
+    assert.equal(api.archiveEntryMatchesDeletedCharacterIndex({ archiveGroupId: 'auto:a', characterKey: 'x', characterName: 'x', chatId: '1' }, index), true);
+    const librarySource = sourceByFile.get('archive/library.js');
+    assert.match(librarySource, /const deletedIndex = archive_groups\.buildDeletedArchiveCharacterIndex\(archiveContext\)/);
+    assert.match(librarySource, /isArchiveEntryDeletedFromLibrary\(item, archiveContext, deletedIndex\)/);
+    assert.match(librarySource, /const deletedIndex = archive_groups\.buildDeletedArchiveCharacterIndex\(context\)/);
+    assert.match(librarySource, /isArchiveEntryDeletedFromLibrary\(candidate, context, deletedIndex\)/);
+});
+
+test('r41.5 ordinary message events use lightweight archive-status refresh and do not rescan the whole chat', () => {
+    const portal = sourceByFile.get('ui/archivePortal.js');
+    const settings = sourceByFile.get('ui/settingsPanel.js');
+    assert.match(portal, /messageHandler[\s\S]*refreshSettingsMemoryStatus\(\{ lightweight: true \}\)/);
+    assert.match(settings, /refreshSettingsMemoryStatus\(\{ lightweight = false \} = \{\}\)/);
+    assert.match(settings, /lightweight\s*\?\s*!!archive_repository\.getImportedMemory\(context\)\s*:\s*archive_repository\.getMemoryState\(context\)\.status === 'ready'/);
+});
+
+test('r41.5 startup injects only compact settings CSS and defers the full UI stylesheet until overlay open', () => {
+    const heartbeat = sourceByFile.get('heartbeatMemories.js');
+    const settings = sourceByFile.get('ui/settingsPanel.js');
+    const overlay = sourceByFile.get('ui/overlay.js');
+    const styles = sourceByFile.get('ui/styles.js');
+    assert.match(heartbeat, /ui_styles\.ensureSettingsStyles\(\)/);
+    assert.doesNotMatch(heartbeat, /initMemoryTheater\(\)[\s\S]*ui_styles\.ensureStyles\(\)/);
+    assert.match(settings, /export function mountSettings\(\) \{\s*ui_styles\.ensureSettingsStyles\(\)/);
+    assert.match(overlay, /export function openOverlay\(\) \{\s*ui_styles\.ensureStyles\(\)/);
+    assert.match(styles, /export function ensureSettingsStyles\(\)/);
+    assert.match(styles, /export function ensureStyles\(\) \{\s*ensureSettingsStyles\(\)/);
+    assert.match(heartbeat, /SETTINGS_STYLE_ID/);
+});
+
+test('r41.4 shared Character Profile accepts explicit user special-setting evidence but rejects guessed facts', () => {
+    const sources = {
+        characterData: { name: '佐伯', avatar: 'saeki.png', description: '佐伯的生日是9月9日。血型A型。姐姐叫美奈。' },
+        userData: { name: '小月', personaDescription: '小月和佐伯从小一起长大，是青梅竹马。' },
+        worldInfo: '佐伯在学校里最信任的朋友是志波。',
+    };
+    const profile = api.normalizeCharacterProfile({
+        title: 'CHARACTER PROFILE',
+        introduction: '安静而认真。',
+        facts: [
+            { label: '生日', value: '9月9日', sourceType: 'character_card', sourceEvidence: '生日是9月9日' },
+            { label: '血型', value: 'O型', sourceType: 'character_card', sourceEvidence: '血型A型' },
+            { label: '身高', value: '187cm', sourceType: 'character_card', sourceEvidence: '身高187cm' },
+        ],
+        relationships: [
+            { id: 'U', name: '小月', relation: '青梅竹马', category: 'close', state: '亲密', sentiments: ['信赖'], summary: '从小一起长大。', isUser: true, sourceType: 'user_persona', sourceEvidence: '和佐伯从小一起长大，是青梅竹马' },
+            { id: 'F', name: '凭空朋友', relation: '好友', category: 'friend', state: '友好', sentiments: [], summary: '不存在。', isUser: false, sourceType: 'world_info', sourceEvidence: '凭空朋友' },
+        ],
+    }, sources, 'group:auto:test', '佐伯', 'saeki.png');
+    assert.deepEqual(profile.facts.map(item => item.label), ['生日']);
+    assert.equal(profile.relationships.length, 1);
+    assert.equal(profile.relationships[0].isUser, true);
+    assert.equal(profile.relationships[0].relation, '青梅竹马');
+
+    const worldSources = { ...sources, worldInfo: '固定设定：小月是佐伯的未婚妻。' };
+    const worldProfile = api.normalizeCharacterProfile({
+        title: 'CHARACTER PROFILE', introduction: '', facts: [],
+        relationships: [{ id: 'WU', name: '小月', relation: '未婚妻', category: 'special', state: '伴侣', sentiments: ['重视'], summary: '故事开始前就存在的婚约。', isUser: true, sourceType: 'world_info', sourceEvidence: '小月是佐伯的未婚妻' }],
+    }, worldSources, 'group:auto:test2', '佐伯', 'saeki.png');
+    assert.equal(worldProfile.relationships.length, 1);
+    assert.equal(worldProfile.relationships[0].relation, '未婚妻');
+});
+
+test('r41.4 per-chat relation layer requires real Mxxx evidence and merges with the shared user node without cross-window overwrite', () => {
+    const dynamic = api.normalizeRelations({
+        title: '本世界线人际关系',
+        summary: '关系推进。',
+        relationships: [
+            { id: 'D1', name: '小月', relation: '恋人', category: 'special', state: '恋爱', sentiments: ['依赖'], summary: '海边约定后两人确认了恋爱关系。', isUser: true, sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边约定' },
+            { id: 'D2', name: '不存在的人', relation: '同事', category: 'work', state: '普通', sentiments: [], summary: '没有证据。', isUser: false, sourceMemoryIds: ['M999'], sourceMemoryAnchor: '不存在' },
+            { id: 'D3', name: '凭空同事', relation: '同事', category: 'work', state: '普通', sentiments: [], summary: '错误地借用真实记忆。', isUser: false, sourceMemoryIds: ['M001'], sourceMemoryAnchor: '站台雨伞' },
+        ],
+    }, memoryBank, { name1: '小月' });
+    assert.equal(dynamic.relationships.length, 1);
+    const merged = api.mergeRelationLayers([
+        { id: 'B1', name: '小月', relation: '青梅竹马', category: 'close', state: '亲密', isUser: true },
+    ], dynamic.relationships);
+    assert.equal(merged.length, 1);
+    assert.equal(merged[0].base.relation, '青梅竹马');
+    assert.equal(merged[0].dynamic.relation, '恋人');
+});
+
+test('r41.4 worldline profile discoveries require literal Mxxx evidence and stay inside the chat-scoped relations session', () => {
+    const bank = { memories: [
+        { id: 'M010', title: '生日的话题', anchors: ['生日是10月14日'], summary: '他明确说自己的生日是10月14日，也提到兴趣是摄影。' },
+        { id: 'M011', title: '普通散步', anchors: ['走过河边'], summary: '两个人散步，没有谈身高。' },
+    ] };
+    const session = api.normalizeRelations({
+        title: '本世界线人际关系', summary: '',
+        discoveries: [
+            { id: 'D1', label: '生日', value: '10月14日', summary: '后来在聊天里得知。', sourceMemoryIds: ['M010'], sourceMemoryAnchor: '生日是10月14日' },
+            { id: 'D2', label: '兴趣', value: '摄影', summary: '明确提到。', sourceMemoryIds: ['M010'], sourceMemoryAnchor: '生日是10月14日' },
+            { id: 'D3', label: '身高', value: '187cm', summary: '不能从散步猜。', sourceMemoryIds: ['M011'], sourceMemoryAnchor: '走过河边' },
+            { id: 'D4', label: '血型', value: 'A型', summary: '无证据。', sourceMemoryIds: ['M999'], sourceMemoryAnchor: '不存在' },
+        ],
+        relationships: [],
+    }, bank, { name1: '小月' });
+    assert.deepEqual(session.discoveries.map(item => [item.label, item.value]), [['生日', '10月14日'], ['兴趣', '摄影']]);
+    assert.equal(session.relationships.length, 0);
+    const relationSource = sourceByFile.get('modes/relations.js');
+    assert.match(relationSource, /discoveries 永远属于当前聊天世界线/);
+    assert.match(relationSource, /worldlineDiscoveriesHtml\(session\.discoveries/);
+    assert.doesNotMatch(relationSource, /setCharacterProfile\([^)]*discoveries/);
+});
+
+test('r41.4 GS profile keeps standard rows visible as unknown instead of hiding missing blood type or height', () => {
+    const relationSource = sourceByFile.get('modes/relations.js');
+    assert.match(relationSource, /PROFILE_FACT_ORDER = Object\.freeze\(\['生日', '年龄 \/ 年级', '身高', '血型'/);
+    assert.match(relationSource, /item \? core_text\.esc\(item\.value\) : '？？？'/);
+    assert.match(sourceByFile.get('ui/styles.js'), /rmt-profile-fact\.unknown/);
+});
+
+test('r41.4 relation garden is code-laid-out and profile generation is setting-only, not chat-derived', () => {
+    const relationSource = sourceByFile.get('modes/relations.js');
+    const positions = api.relationGardenPositions(99);
+    assert.equal(positions.length, 18);
+    assert.match(relationSource, /本请求【禁止读取\/利用任何聊天窗口正文或 Mxxx 档案】/);
+    assert.match(relationSource, /sourceEvidence 必须逐字来自对应来源/);
+    assert.doesNotMatch(relationSource, /requestAnimationFrame|setInterval\(/);
+    assert.doesNotMatch(relationSource, /fetch\(/);
+    assert.match(relationSource, /style="left:\$\{pos\.x\.toFixed/);
+    assert.match(relationSource, /<svg class="rmt-relation-edges"/);
+    assert.match(relationSource, /<line class=\"rmt-relation-edge base\"/);
+});
+
+
+test('r41.4 same character keeps one shared profile group after ordinary card text edits', () => {
+    const groups = [api.normalizeArchiveGroup({
+        id: 'auto:old', label: '佐伯', characterName: '佐伯', avatar: 'saeki.png',
+        characterFingerprint: 'card:old', manual: false, characterIndexHint: 0,
+    })];
+    const group = api.ensureArchiveAutoGroup(groups, { index: 0, name: '佐伯', avatar: 'saeki.png', fingerprint: 'card:new' });
+    assert.equal(group.id, 'auto:old');
+    assert.equal(group.characterFingerprint, 'card:new');
+    assert.equal(groups.length, 1);
 });

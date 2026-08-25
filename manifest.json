@@ -1,15 +1,15 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.16-calendar-home-r39.1",
+  "js": "index.js?heartbeat=0.8.26-performance-closure-r41.5",
   "author": "Toto",
-  "version": "0.8.16",
+  "version": "0.8.26",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "修复“两个人的日历”入口层级：日历现在直接显示在心跳回忆档案室首页，不再要求先进入当前窗口档案；保留单文件运行时、私人终端增量与双向发言人、统一内容管理。",
+  "description": "r41.5 性能收口：删除角色墓碑改为一次 Set 索引，萤火虫单页降至18颗；普通消息事件不再为设置状态遍历整段聊天，完整 UI CSS 延迟到首次打开档案室。保留统一角色主档案、人际庭园、Character Profile 与安全删除。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

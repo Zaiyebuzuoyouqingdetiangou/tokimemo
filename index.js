@@ -1,5 +1,5 @@
-const VERSION = '0.8.16';
-const BUILD = '0.8.16-calendar-home-r39.1';
+const VERSION = '0.8.26';
+const BUILD = '0.8.26-performance-closure-r41.5';
 
 let runtimeModule = null;
 let bootPromise = null;
@@ -7,7 +7,7 @@ let bootPromise = null;
 async function bootHeartbeatMemories() {
     const startedAt = globalThis.performance?.now?.() ?? Date.now();
     // Runtime is bundled into one versioned file. Keep modular source for maintenance/tests,
-    // but do not make cloud-hosted SillyTavern fetch the 42-file dependency graph at startup.
+    // but do not make cloud-hosted SillyTavern fetch the modular dependency graph at startup.
     runtimeModule = await import(`./dist/heartbeatMemories.bundle.js?heartbeat=${BUILD}`);
     runtimeModule.initMemoryTheater();
     globalThis.__heartbeatMemoriesBuild = BUILD;

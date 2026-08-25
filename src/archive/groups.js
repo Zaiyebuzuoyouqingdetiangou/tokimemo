@@ -41,6 +41,122 @@ export function setArchiveGroups(context, groups) {
     context.saveSettingsDebounced?.();
 }
 
+function normalizeDeletedIdentityList(values, limit = 24, maxChars = 320) {
+    const out = [];
+    const seen = new Set();
+    for (const value of Array.isArray(values) ? values : []) {
+        const normalized = core_text.normalizeText(value, maxChars);
+        if (!normalized || seen.has(normalized)) continue;
+        seen.add(normalized);
+        out.push(normalized);
+        if (out.length >= limit) break;
+    }
+    return out;
+}
+
+export function normalizeDeletedArchiveCharacter(item) {
+    const groupId = core_text.normalizeText(item?.groupId, 120);
+    const avatars = normalizeDeletedIdentityList(item?.avatars, 24, 300);
+    const characterKeys = normalizeDeletedIdentityList(item?.characterKeys, 24, 300);
+    const sourceIdentityKeys = normalizeDeletedIdentityList(item?.sourceIdentityKeys, 24, 360);
+    const characterName = core_text.normalizeText(item?.characterName, 120);
+    const id = core_text.normalizeText(item?.id, 160)
+        || `deleted:${core_context.stableArchiveHash(`${groupId}${avatars.join('|')}${characterKeys.join('|')}${sourceIdentityKeys.join('|')}${characterName}`)}`;
+    if (!groupId && !avatars.length && !characterKeys.length && !sourceIdentityKeys.length) return null;
+    return {
+        id,
+        groupId,
+        characterName,
+        avatars,
+        characterKeys,
+        sourceIdentityKeys,
+        deletedAt: Math.max(0, Number(item?.deletedAt) || Date.now()),
+    };
+}
+
+export function getDeletedArchiveCharacters(context = core_context.getContext()) {
+    const raw = context.extensionSettings?.[core_constants.ARCHIVE_DELETED_CHARACTERS_SETTINGS_KEY];
+    if (!Array.isArray(raw)) return [];
+    return raw.slice(-core_constants.ARCHIVE_DELETED_CHARACTERS_MAX).map(normalizeDeletedArchiveCharacter).filter(Boolean);
+}
+
+export function setDeletedArchiveCharacters(context, items) {
+    if (!context.extensionSettings || typeof context.extensionSettings !== 'object') return;
+    const normalized = (Array.isArray(items) ? items : []).map(normalizeDeletedArchiveCharacter).filter(Boolean);
+    const deduped = [];
+    const seen = new Set();
+    for (const item of normalized.reverse()) {
+        if (seen.has(item.id)) continue;
+        seen.add(item.id);
+        deduped.unshift(item);
+        if (deduped.length >= core_constants.ARCHIVE_DELETED_CHARACTERS_MAX) break;
+    }
+    context.extensionSettings[core_constants.ARCHIVE_DELETED_CHARACTERS_SETTINGS_KEY] = deduped;
+    context.saveSettingsDebounced?.();
+}
+
+function deletedArchiveFallbackIdentityKey(entry) {
+    const stableKey = core_context.archiveStoredAvatar(entry) || core_text.normalizeText(entry?.characterKey, 300);
+    const name = core_text.normalizeText(entry?.characterName, 120).toLocaleLowerCase();
+    return stableKey && name ? `fallback:${stableKey}${name}` : '';
+}
+
+export function archiveEntryMatchesDeletedCharacter(entry, deleted) {
+    if (!entry || !deleted) return false;
+    const groupId = archiveGroupKeyForEntry(entry);
+    if (deleted.groupId && groupId === deleted.groupId) return true;
+    const sourceIdentityKey = core_context.archiveSourceIdentityKey(entry);
+    if (sourceIdentityKey && deleted.sourceIdentityKeys?.includes?.(sourceIdentityKey)) return true;
+    const fallbackIdentityKey = deletedArchiveFallbackIdentityKey(entry);
+    if (fallbackIdentityKey && deleted.sourceIdentityKeys?.includes?.(fallbackIdentityKey)) return true;
+    return false;
+}
+
+export function buildDeletedArchiveCharacterIndex(context = core_context.getContext()) {
+    const groupIds = new Set();
+    const sourceIdentityKeys = new Set();
+    for (const deleted of getDeletedArchiveCharacters(context)) {
+        if (deleted.groupId) groupIds.add(deleted.groupId);
+        for (const key of Array.isArray(deleted.sourceIdentityKeys) ? deleted.sourceIdentityKeys : []) {
+            if (key) sourceIdentityKeys.add(key);
+        }
+    }
+    return { groupIds, sourceIdentityKeys };
+}
+
+export function archiveEntryMatchesDeletedCharacterIndex(entry, index) {
+    if (!entry || !index) return false;
+    const groupId = archiveGroupKeyForEntry(entry);
+    if (groupId && index.groupIds?.has?.(groupId)) return true;
+    const sourceIdentityKey = core_context.archiveSourceIdentityKey(entry);
+    if (sourceIdentityKey && index.sourceIdentityKeys?.has?.(sourceIdentityKey)) return true;
+    const fallbackIdentityKey = deletedArchiveFallbackIdentityKey(entry);
+    return !!(fallbackIdentityKey && index.sourceIdentityKeys?.has?.(fallbackIdentityKey));
+}
+
+export function isArchiveEntryDeletedFromLibrary(entry, context = core_context.getContext(), deletedIndex = null) {
+    const index = deletedIndex || buildDeletedArchiveCharacterIndex(context);
+    return archiveEntryMatchesDeletedCharacterIndex(entry, index);
+}
+
+export function currentCharacterArchiveProbe(context = core_context.getContext(), memoryBank = null) {
+    const descriptor = characterDescriptor(context, Number(context?.characterId));
+    const characterName = core_text.normalizeText(memoryBank?.characterName || context?.name2 || descriptor?.name, 120) || '未命名角色';
+    const avatar = core_text.normalizeText(descriptor?.avatar || core_context.contextCharacterAvatar(context, characterName), 300);
+    return {
+        characterKey: avatar || core_context.currentCharacterKey(context),
+        avatar,
+        characterName,
+        characterFingerprint: core_text.normalizeText(descriptor?.fingerprint, 160),
+        chatId: core_context.comparableChatId(memoryBank?.chatId || core_context.getChatId(context)) || 'current',
+    };
+}
+
+export function isCurrentCharacterDeletedFromLibrary(context = core_context.getContext(), memoryBank = null) {
+    try { return isArchiveEntryDeletedFromLibrary(currentCharacterArchiveProbe(context, memoryBank), context); }
+    catch { return false; }
+}
+
 export function getArchiveIndex(context = core_context.getContext()) {
     const raw = context.extensionSettings?.[core_constants.ARCHIVE_INDEX_SETTINGS_KEY];
     if (!Array.isArray(raw)) return [];
@@ -186,6 +302,17 @@ export function ensureArchiveAutoGroup(groups, descriptor, fallbackEntry = null)
         : fallbackEntry;
     const id = core_context.archiveAutoGroupId(identity);
     let group = groups.find(item => item.id === id);
+    if (!group && descriptor) {
+        const stableName = core_text.normalizeText(descriptor.name, 120);
+        const stableAvatar = core_text.normalizeText(descriptor.avatar, 300);
+        const stableCandidates = groups.filter(item => item?.manual !== true
+            && core_text.normalizeText(item?.characterName || item?.label, 120) === stableName
+            && (!stableAvatar || core_text.normalizeText(item?.avatar, 300) === stableAvatar));
+        // Ordinary role-card edits change the content fingerprint but not the person. Reuse the
+        // one unambiguous auto group so all chat windows continue sharing one Character Profile.
+        // If multiple candidates already exist, fail closed by creating/using the exact fingerprint id.
+        if (stableCandidates.length === 1) group = stableCandidates[0];
+    }
     if (!group) {
         group = normalizeArchiveGroup({
             id,
@@ -276,6 +403,69 @@ export function moveArchiveIndexEntryToGroup(context, entryId, groupId) {
         item.archiveGroupManual = true;
     }
     setArchiveIndex(context, items);
+}
+
+export function deleteArchiveCharacterFromLibrary(groupId) {
+    if (core_requestCoordinator.hasAnyTask()) throw new Error('当前还有后台任务。为避免删除时与生成写回竞态，请等任务完成后再操作。');
+    const context = core_context.getContext();
+    const id = core_text.normalizeText(groupId, 120);
+    if (!id) throw new Error('没有找到要删除的角色档案。');
+    const groups = getArchiveGroups(context);
+    const group = groups.find(item => item.id === id) || null;
+    const entries = archiveGroupEntries(id, context);
+    if (!group && !entries.length) throw new Error('这个角色档案已经不存在。');
+    const meta = archiveGroupMeta(id, entries, context);
+    const name = core_text.normalizeText(meta?.label || meta?.characterName || entries[0]?.characterName, 120) || '未命名角色';
+    const count = entries.length;
+    if (!ui_overlay.confirmExplicitActionTwice(
+        `删除角色档案「${name}」？`,
+        `将从“心跳回忆 · 档案室”移除这个角色的头像、角色档案入口，以及其下 ${count} 个聊天档案索引。不会删除、清空、重命名或改写任何 SillyTavern 正文聊天窗口；聊天正文会完整保留。删除后，“扫描旧版本已有档案”也不会自动把这个角色重新加入档案室。`,
+        { destructive: true },
+    )) return null;
+
+    const avatars = [meta?.avatar, ...entries.map(item => core_context.archiveStoredAvatar(item))].filter(Boolean);
+    const characterKeys = entries.map(item => item.characterKey).filter(Boolean);
+    const sourceIdentityKeys = entries.flatMap(item => [core_context.archiveSourceIdentityKey(item), deletedArchiveFallbackIdentityKey(item)]).filter(Boolean);
+    if (meta?.characterFingerprint) sourceIdentityKeys.push(`fingerprint:${core_text.normalizeText(meta.characterFingerprint, 160)}`);
+    const metaFallbackIdentity = deletedArchiveFallbackIdentityKey({ avatar: meta?.avatar, characterKey: meta?.avatar, characterName: meta?.characterName || name });
+    if (metaFallbackIdentity) sourceIdentityKeys.push(metaFallbackIdentity);
+    const tombstone = normalizeDeletedArchiveCharacter({
+        groupId: id,
+        characterName: name,
+        avatars,
+        characterKeys,
+        sourceIdentityKeys,
+        deletedAt: Date.now(),
+    });
+
+    for (const entry of entries) runtimeState.archiveSnapshotCache.delete(archive_library.archiveSnapshotCacheKey(entry));
+    setArchiveIndex(context, getArchiveIndex(context).filter(item => archiveGroupKeyForEntry(item) !== id));
+    setArchiveGroups(context, groups.filter(item => item.id !== id));
+    const profileKey = `group:${id}`;
+    if (context.extensionSettings && typeof context.extensionSettings === 'object') {
+        const rawProfiles = Array.isArray(context.extensionSettings?.[core_constants.ARCHIVE_CHARACTER_PROFILES_SETTINGS_KEY])
+            ? context.extensionSettings[core_constants.ARCHIVE_CHARACTER_PROFILES_SETTINGS_KEY]
+            : [];
+        context.extensionSettings[core_constants.ARCHIVE_CHARACTER_PROFILES_SETTINGS_KEY] = rawProfiles.filter(item => core_text.normalizeText(item?.key, 160) !== profileKey);
+    }
+    if (tombstone) setDeletedArchiveCharacters(context, [...getDeletedArchiveCharacters(context), tombstone]);
+
+    const visitState = getAvatarVisitState(context);
+    for (const key of [id, ...characterKeys, ...avatars]) {
+        const normalized = avatarVisitKey(key);
+        if (normalized) delete visitState[normalized];
+    }
+    context.extensionSettings[core_constants.AVATAR_VISIT_SETTINGS_KEY] = visitState;
+    context.saveSettingsDebounced?.();
+
+    runtimeState.avatarDialogueRequestEpoch += 1;
+    runtimeState.activeAvatarDialogue = null;
+    if (runtimeState.archiveLibraryCharacterKey === id) runtimeState.archiveLibraryCharacterKey = '';
+    if (runtimeState.activeArchiveSnapshot && archiveGroupKeyForEntry(runtimeState.activeArchiveSnapshot) === id) runtimeState.activeArchiveSnapshot = null;
+    runtimeState.activeArchiveReadOnly = true;
+    runtimeState.activeMode = null;
+    runtimeState.activeSession = null;
+    return { groupId: id, name, count };
 }
 
 export function removeArchiveIndexEntry(context, entryId) {
@@ -416,17 +606,14 @@ export function touchAvatarVisit(characterKey, context = core_context.getContext
 
 export function upsertArchiveIndex(context, memoryBank) {
     if (!archive_repository.isCompatibleArchive(memoryBank)) return;
+    if (isCurrentCharacterDeletedFromLibrary(context, memoryBank)) return;
     const chatId = core_context.comparableChatId(memoryBank.chatId || core_context.getChatId(context));
     if (!chatId) return;
     const characterName = core_text.normalizeText(memoryBank.characterName || context.name2, 120) || '未命名角色';
     const existingIndex = getArchiveIndex(context);
     const descriptor = characterDescriptor(context, Number(context.characterId));
     const existing = existingIndex.find(old => old.chatId === chatId
-        && !!descriptor?.fingerprint
-        && core_text.normalizeText(old?.characterFingerprint, 160) === descriptor.fingerprint)
-        || existingIndex.find(old => old.chatId === chatId
-            && !core_text.normalizeText(old?.characterFingerprint, 160)
-            && core_context.archiveEntryMatchesContextCharacter(old, context));
+        && core_context.archiveEntryMatchesContextCharacter(old, context));
     // Some mobile/cloud contexts briefly expose the character without an avatar while the
     // drawer/chat UI is remounting. Never replace a previously valid archive avatar with ''.
     const avatar = core_text.normalizeText(context.characters?.[context.characterId]?.avatar || context.characters?.[context.characterId]?.data?.avatar, 300)
@@ -447,6 +634,7 @@ export function upsertArchiveIndex(context, memoryBank) {
         archiveGroupManual: existing?.archiveGroupManual === true,
     };
     item.entryId = item.entryId || core_context.archiveIndexEntryId(item);
+    if (isArchiveEntryDeletedFromLibrary(item, context)) return;
     if (!item.archiveGroupManual) {
         const groups = getArchiveGroups(context);
         const group = ensureArchiveAutoGroup(groups, descriptor, item);

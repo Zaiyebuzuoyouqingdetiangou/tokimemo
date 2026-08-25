@@ -1,5 +1,6 @@
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+import * as archive_groups from '../archive/groups.js';
 import * as archive_repository from '../archive/repository.js';
 import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_cache from '../core/cache.js';
@@ -23,6 +24,7 @@ import * as modes_heart from '../modes/heart.js';
 import * as modes_items from '../modes/items.js';
 import * as modes_phone from '../modes/phone.js';
 import * as modes_room from '../modes/room.js';
+import * as modes_relations from '../modes/relations.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as ui_settingsPanel from '../ui/settingsPanel.js';
 
@@ -307,9 +309,9 @@ export async function generateMode(mode, options = {}) {
     const memoryBank = archive_repository.requireArchive(context);
     const expectedArchiveRevision = memoryBank.archiveRevision;
     const promptFactory = generation_prompts.PROMPTS[mode];
-    if (!promptFactory && mode !== core_constants.MODE.ACHIEVEMENTS) return;
+    if (!promptFactory && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS].includes(mode)) return;
     const segmentedMode = [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS].includes(mode);
-    let generationPrompt = segmentedMode ? '' : promptFactory(context, memoryBank);
+    let generationPrompt = segmentedMode || mode === core_constants.MODE.RELATIONS ? '' : promptFactory(context, memoryBank);
     let roomSession = null;
     let focusObject = null;
     if (core_constants.ROOM_DEEP_MODES.includes(mode)) {
@@ -333,7 +335,8 @@ export async function generateMode(mode, options = {}) {
     const previousSession = replaceExisting ? null : core_cache.loadSession(mode, { context, chatId: expectedChatId, memoryBank, clone: true });
     const incrementalPart = mode === core_constants.MODE.HEART ? 'dialogues' : 'mode';
     const refreshableCalendar = mode === core_constants.MODE.CALENDAR;
-    if (previousSession && !refreshableCalendar && !(mode === core_constants.MODE.PHONE && options.continueDraft === true)) {
+    const refreshableRelations = mode === core_constants.MODE.RELATIONS;
+    if (previousSession && !refreshableCalendar && !refreshableRelations && !(mode === core_constants.MODE.PHONE && options.continueDraft === true)) {
         const pendingMemoryIds = core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank, incrementalPart);
         if (!pendingMemoryIds.length) {
             globalThis.toastr?.info?.(`「${core_constants.MODE_LABEL[mode]}」已经覆盖当前档案。请先增量更新档案；下次只会追加新内容，旧内容不会重写。`, '心跳回忆');
@@ -362,7 +365,7 @@ export async function generateMode(mode, options = {}) {
     core_requestCoordinator.refreshConcurrentTaskUi(mode, origin);
     if (!background) {
         ui_overlay.openOverlay();
-        ui_overlay.setInnerLoading(true, replaceExisting ? `正在重新生成「${core_constants.MODE_LABEL[mode]}」…` : refreshableCalendar && previousSession ? '正在刷新「两个人的日历」…' : previousSession ? `正在从新增档案追加「${core_constants.MODE_LABEL[mode]}」…` : `正在生成「${core_constants.MODE_LABEL[mode]}」…`);
+        ui_overlay.setInnerLoading(true, replaceExisting ? `正在重新生成「${core_constants.MODE_LABEL[mode]}」…` : refreshableCalendar && previousSession ? '正在刷新「两个人的日历」…' : refreshableRelations && previousSession ? '正在刷新「本世界线人际关系」…' : previousSession ? `正在从新增档案追加「${core_constants.MODE_LABEL[mode]}」…` : `正在生成「${core_constants.MODE_LABEL[mode]}」…`);
     }
     try {
         let session;
@@ -384,6 +387,21 @@ export async function generateMode(mode, options = {}) {
             session = previousSession && options.continueDraft !== true
                 ? await modes_phone.generatePhoneIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession)
                 : await modes_phone.generatePhoneWithRepair(context, memoryBank, origin, taskKey, { continueDraft: options.continueDraft === true });
+        } else if (mode === core_constants.MODE.RELATIONS) {
+            const raw = await requestJson(
+                modes_relations.relationsPrompt(context, memoryBank),
+                '正在整理当前世界线的人际关系…',
+                { maxTokens: core_constants.MODE_TOKEN_CAPS[mode] || 7000, temperature: 0.3, context, origin, taskKey: `${taskKey}:relations`, mode, background: true },
+            );
+            session = modes_relations.normalizeRelations(raw, memoryBank, context);
+            const relationGroupId = archive_groups.currentArchiveGroupKey(context, memoryBank);
+            if (relationGroupId) {
+                const relationEntries = archive_groups.archiveGroupEntries(relationGroupId, context);
+                const relationMeta = archive_groups.archiveGroupMeta(relationGroupId, relationEntries, context);
+                session.profileKey = modes_relations.archiveCharacterProfileKey(relationGroupId, relationMeta, relationEntries);
+            }
+            session.characterName = core_text.normalizeText(context.name2, 120);
+            session.characterAvatar = core_context.contextCharacterAvatar(context, context.name2);
         } else if (mode === core_constants.MODE.ACHIEVEMENTS) {
             session = await modes_achievements.generateAchievementsWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else {
@@ -423,14 +441,14 @@ export async function generateMode(mode, options = {}) {
                 runtimeState.activeSession = core_cache.loadSession(core_constants.MODE.ROOM) || runtimeState.activeSession;
                 modes_room.renderRoom();
             }
-            globalThis.toastr?.success?.(`${replaceExisting ? '后台重新生成完成' : refreshableCalendar && previousSession ? '后台刷新完成' : previousSession ? '后台增量追加完成' : '后台生成完成'}：${core_constants.MODE_LABEL[mode]}${committed ? '' : '（回到原窗口自动写入）'}`, '心跳回忆');
+            globalThis.toastr?.success?.(`${replaceExisting ? '后台重新生成完成' : refreshableCalendar && previousSession ? '后台刷新完成' : refreshableRelations && previousSession ? '后台刷新完成' : previousSession ? '后台增量追加完成' : '后台生成完成'}：${core_constants.MODE_LABEL[mode]}${committed ? '' : '（回到原窗口自动写入）'}`, '心跳回忆');
             return session;
         }
         runtimeState.activeMode = mode;
         runtimeState.activeSession = session;
         ui_overlay.renderActive();
         if (mode === core_constants.MODE.ROOM) void modes_room.ensureRoomLifePlan({ force: true });
-        globalThis.toastr?.success?.(`${replaceExisting ? '已重新生成' : refreshableCalendar && previousSession ? '已刷新' : previousSession ? '已增量追加' : '已生成'}：${core_constants.MODE_LABEL[mode]}${previousSession && !refreshableCalendar && !replaceExisting ? '；旧内容保持不变' : ''}`, '心跳回忆');
+        globalThis.toastr?.success?.(`${replaceExisting ? '已重新生成' : refreshableCalendar && previousSession ? '已刷新' : refreshableRelations && previousSession ? '已刷新' : previousSession ? '已增量追加' : '已生成'}：${core_constants.MODE_LABEL[mode]}${previousSession && !refreshableCalendar && !refreshableRelations && !replaceExisting ? '；旧内容保持不变' : ''}`, '心跳回忆');
         return session;
     } catch (error) {
         if (error?.name === 'AbortError') {

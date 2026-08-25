@@ -11,6 +11,7 @@ import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as modes_room from '../modes/room.js';
+import * as modes_relations from '../modes/relations.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as ui_phoneView from '../ui/phoneView.js';
 
@@ -21,8 +22,10 @@ export function showArchiveLibrary() {
     try { const ctx = core_context.currentCharacterGuard(); const mem = archive_repository.getImportedMemory(ctx); if (mem) archive_groups.upsertArchiveIndex(ctx, mem); } catch {}
     const archiveContext = core_context.getContext();
     const index = archive_groups.getArchiveIndex(archiveContext);
+    const deletedIndex = archive_groups.buildDeletedArchiveCharacterIndex(archiveContext);
     const groups = new Map();
     for (const item of index) {
+        if (archive_groups.isArchiveEntryDeletedFromLibrary(item, archiveContext, deletedIndex)) continue;
         const groupId = archive_groups.archiveGroupKeyForEntry(item);
         if (!groupId) continue;
         const current = groups.get(groupId) || { groupId, entries: [] };
@@ -34,14 +37,18 @@ export function showArchiveLibrary() {
         const src = archive_groups.archiveGroupAvatarUrl(meta, group.entries[0], archiveContext);
         const name = core_text.normalizeText(meta.label || meta.characterName || group.entries[0]?.characterName, 120) || '角色档案';
         const charHint = Number(meta.characterIndexHint) >= 0 ? ` · char #${Number(meta.characterIndexHint) + 1}` : '';
-        return `<button type="button" class="rmt-archive-portal ready" data-rmt-archive-character="${core_text.esc(group.groupId)}"><span class="rmt-portal-avatar" data-rmt-avatar-talk="${core_text.esc(group.groupId)}" title="点头像听他说一句">${src ? `<img src="${core_text.esc(src)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : '<i class="fa-solid fa-user"></i>'}<i class="fa-solid fa-comment-dots rmt-avatar-talk-mark"></i></span><span class="rmt-portal-title">${core_text.esc(name)}</span><span class="rmt-portal-subtitle">${group.entries.length} 个聊天档案${core_text.esc(charHint)}</span><span class="rmt-portal-status">${meta.manual ? '手动角色组' : '自动分类'} · 点击查看</span></button>`;
+        return `<article class="rmt-archive-portal ready rmt-character-archive-card"><button type="button" class="rmt-portal-open rmt-character-portal-open" data-rmt-archive-character="${core_text.esc(group.groupId)}"><span class="rmt-portal-avatar" data-rmt-avatar-talk="${core_text.esc(group.groupId)}" title="点头像听他说一句">${src ? `<img src="${core_text.esc(src)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : '<i class="fa-solid fa-user"></i>'}<i class="fa-solid fa-comment-dots rmt-avatar-talk-mark"></i></span><span class="rmt-portal-title">${core_text.esc(name)}</span><span class="rmt-portal-subtitle">${group.entries.length} 个聊天档案${core_text.esc(charHint)}</span><span class="rmt-portal-status">${meta.manual ? '手动角色组' : '自动分类'} · 点击查看</span></button><button type="button" class="rmt-character-archive-delete" data-rmt-action="archive-character-delete" data-rmt-archive-group-id="${core_text.esc(group.groupId)}"><i class="fa-solid fa-trash-can"></i><span>删除角色档案</span></button></article>`;
     }).join('');
     let currentQuick = '';
     let calendarQuick = snapshotCalendarQuickAccessHtml({ ready: false, generated: false, readOnly: false, generating: false });
     try {
         const ctx = core_context.currentCharacterGuard();
         const mem = archive_repository.getImportedMemory(ctx);
-        if (mem) {
+        const deletedFromLibrary = archive_groups.isCurrentCharacterDeletedFromLibrary(ctx, mem);
+        if (deletedFromLibrary) {
+            currentQuick = '';
+            calendarQuick = '';
+        } else if (mem) {
             const name = core_text.normalizeText(mem.archiveName, 120) || archive_repository.fallbackArchiveName(mem.memories);
             currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前窗口档案</b><small>${core_text.esc(name)} · ${mem.memories.length} 条记忆</small></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive">打开当前窗口档案</button><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">增量更新当前窗口档案</button><button type="button" class="rmt-btn" data-rmt-action="current-archive-delete">删除当前档案</button></div></section>`;
             const calendarPortal = archive_snapshots.baseModeAvailability({ context: ctx, chatId: core_context.getChatId(ctx), memoryBank: mem, clone: false })
@@ -62,7 +69,7 @@ export function showArchiveLibrary() {
 export function showArchiveCharacter(groupId) {
     runtimeState.activeArchiveSnapshot = null;
     runtimeState.activeArchiveReadOnly = true;
-    const key = core_text.normalizeText(groupId, 120); runtimeState.archiveLibraryCharacterKey = key; runtimeState.archiveViewLevel = 'character';
+    const key = core_text.normalizeText(groupId, 120); if (runtimeState.archiveLibraryCharacterKey !== key) runtimeState.archiveCharacterRelationSelection = ''; runtimeState.archiveLibraryCharacterKey = key; runtimeState.archiveViewLevel = 'character';
     ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setBackVisible(true, '所有角色');
     const context = core_context.getContext();
     const entries = archive_groups.archiveGroupEntries(key, context).sort((a,b)=>b.updatedAt-a.updatedAt);
@@ -70,8 +77,12 @@ export function showArchiveCharacter(groupId) {
     const name = core_text.normalizeText(meta.label || meta.characterName || entries[0]?.characterName, 120) || '角色档案'; ui_overlay.topTitle(`心跳回忆 · ${name}`);
     const body = ui_overlay.bodyEl(); if (!body) return;
     const charAvatar = archive_groups.archiveGroupAvatarUrl(meta, entries[0] || null, context);
+    const profileKey = modes_relations.archiveCharacterProfileKey(key, meta, entries);
+    const profile = modes_relations.getCharacterProfile(context, profileKey);
+    const canGenerateProfile = Number(meta.characterIndexHint) >= 0 || entries.some(item => !!archive_groups.matchArchiveEntryToCharacter(item, context));
+    const profileHtml = modes_relations.characterProfileHtml({ profile, profileKey, characterName: name, avatarUrl: charAvatar, selectedKey: runtimeState.archiveCharacterRelationSelection, canGenerate: canGenerateProfile });
     const rows = entries.map(item => `<button type="button" class="rmt-archive-overview-item" data-rmt-indexed-chat="${core_text.esc(item.chatId)}" data-rmt-indexed-character="${core_text.esc(item.characterKey)}" data-rmt-indexed-entry="${core_text.esc(core_context.archiveIndexEntryId(item))}"><span class="rmt-overview-dot">●</span><span><b>${core_text.esc(item.archiveName)}</b><small>${core_text.esc(item.characterName)} · ${core_text.esc(item.chatId)} · ${item.memoryCount} 条记忆 · ${core_text.esc(ui_overlay.formatArchiveTime(item.updatedAt))}</small></span><i class="fa-solid fa-chevron-right"></i></button>`).join('');
-    body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-character-heart-head"><button type="button" class="rmt-character-heart-avatar" data-rmt-avatar-talk="${core_text.esc(key)}" aria-label="和角色说话">${charAvatar ? `<img src="${core_text.esc(charAvatar)}" alt="">` : '<i class="fa-solid fa-user"></i>'}<span><i class="fa-solid fa-comment-dots"></i></span></button><div><div class="rmt-archive-kicker">CHARACTER ARCHIVES</div><strong class="rmt-archive-title">${core_text.esc(name)}</strong></div></div><div style="margin:10px 0"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button></div><div class="rmt-archive-overview-list" style="max-height:none">${rows || '<div class="rmt-archive-overview-empty">这个角色组还没有已索引档案。</div>'}</div></section></div>`;
+    body.innerHTML = `<div class="rmt-archive-room">${profileHtml}<section class="rmt-archive-card rmt-character-chat-archives"><div class="rmt-character-heart-head"><button type="button" class="rmt-character-heart-avatar" data-rmt-avatar-talk="${core_text.esc(key)}" aria-label="和角色说话">${charAvatar ? `<img src="${core_text.esc(charAvatar)}" alt="">` : '<i class="fa-solid fa-user"></i>'}<span><i class="fa-solid fa-comment-dots"></i></span></button><div><div class="rmt-archive-kicker">CHAT ARCHIVES</div><strong class="rmt-archive-title">${core_text.esc(name)} · 不同聊天世界线</strong></div></div><div style="margin:10px 0"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button></div><div class="rmt-archive-overview-list" style="max-height:none">${rows || '<div class="rmt-archive-overview-empty">这个角色组还没有已索引档案。</div>'}</div></section></div>`;
 }
 
 export function showArchiveGroupManager() {
@@ -351,6 +362,7 @@ export async function rebuildArchiveIndexFromExisting() {
         byAvatar.set(descriptor.avatar, list);
     }
     const existing = archive_groups.getArchiveIndex(context);
+    const deletedIndex = archive_groups.buildDeletedArchiveCharacterIndex(context);
     const existingByChatFile = new Map(existing.map(item => [`${core_context.archiveStoredAvatar(item)}\u001f${item.chatId}`, item]));
     const found = [];
     ui_overlay.openOverlay(); const body = ui_overlay.bodyEl(); ui_overlay.topTitle('心跳回忆 · 扫描旧档案');
@@ -387,7 +399,7 @@ export async function rebuildArchiveIndexFromExisting() {
                     archiveGroupManual: previous?.archiveGroupManual === true,
                 };
                 candidate.entryId = candidate.entryId || core_context.archiveIndexEntryId(candidate);
-                found.push(candidate);
+                if (!archive_groups.isArchiveEntryDeletedFromLibrary(candidate, context, deletedIndex)) found.push(candidate);
             }
         } catch (error) {
             console.warn('[HeartbeatMemories] legacy archive index scan skipped avatar', avatar, error);
@@ -398,8 +410,8 @@ export async function rebuildArchiveIndexFromExisting() {
     // server/listing failure must never silently erase the user's library index.
     const seen = new Set(found.map(item => `${core_context.archiveStoredAvatar(item)}\u001f${item.chatId}`));
     for (const item of existing) {
-        const key = `${core_context.archiveStoredAvatar(item)}\u001f${item.chatId}`;
-        if (!seen.has(key)) found.push(item);
+        const key = `${core_context.archiveStoredAvatar(item)}${item.chatId}`;
+        if (!seen.has(key) && !archive_groups.isArchiveEntryDeletedFromLibrary(item, context, deletedIndex)) found.push(item);
     }
     archive_groups.setArchiveIndex(context, found.sort((a,b) => b.updatedAt - a.updatedAt));
     archive_groups.autoClassifyArchiveIndex(context, { confirm: false });

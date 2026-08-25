@@ -354,7 +354,7 @@ export function clearHeartStripImage(stripId) {
 
 export function heartSetView(view) {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
-    const allowed = new Set(['seasons', 'strips']);
+    const allowed = new Set(['seasons', 'strips', 'fireflies']);
     runtimeState.activeSession.view = allowed.has(view) ? view : 'seasons';
     renderHeart();
 }
@@ -407,13 +407,92 @@ export function heartSelectStrip(id) {
     renderHeart();
 }
 
+export function heartSeasonDramaItems(session, season) {
+    const voices = (Array.isArray(session?.voiceDramas) ? session.voiceDramas : []).filter(item => item.kind === season).map(item => ({ type: 'voice', item }));
+    const scenarios = season === 'postending' ? [] : (Array.isArray(session?.scenarioDramas) ? session.scenarioDramas : []).filter(item => item.season === season).map(item => ({ type: 'scenario', item }));
+    return [...voices, ...scenarios].sort((a, b) => {
+        const ta = Number(a.item?.generatedAt) || 0;
+        const tb = Number(b.item?.generatedAt) || 0;
+        if (ta !== tb) return ta - tb;
+        if (a.type !== b.type) return a.type === 'voice' ? -1 : 1;
+        return String(a.item?.id || '').localeCompare(String(b.item?.id || ''));
+    });
+}
+
+export function heartCurrentDrama(session, season) {
+    const items = heartSeasonDramaItems(session, season);
+    if (!items.length) return { items, index: -1, current: null };
+    let index = items.findIndex(entry => entry.type === 'voice' && entry.item.id === session.selectedVoiceId);
+    if (index < 0) index = items.findIndex(entry => entry.type === 'scenario' && entry.item.id === session.selectedScenarioId);
+    if (index < 0) index = items.length - 1;
+    return { items, index, current: items[index] };
+}
+
+export function heartStepDrama(delta) {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
+    const season = runtimeState.activeSession.selectedSeason || 'postending';
+    const state = heartCurrentDrama(runtimeState.activeSession, season);
+    if (!state.items.length) return;
+    const nextIndex = (state.index + Number(delta || 0) + state.items.length) % state.items.length;
+    const next = state.items[nextIndex];
+    if (next.type === 'voice') runtimeState.activeSession.selectedVoiceId = next.item.id;
+    else runtimeState.activeSession.selectedScenarioId = next.item.id;
+    renderHeart();
+}
+
+export function heartSelectFirefly(id) {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
+    const item = runtimeState.activeSession.fireflyVoices?.find(entry => entry.id === id);
+    if (!item) return;
+    runtimeState.activeSession.selectedFireflyId = id;
+    runtimeState.activeSession.view = 'fireflies';
+    renderHeart();
+}
+
+export function heartStepFireflyPage(direction) {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
+    const voices = Array.isArray(runtimeState.activeSession.fireflyVoices) ? runtimeState.activeSession.fireflyVoices : [];
+    if (!voices.length) return;
+    const selectedIndex = Math.max(0, voices.findIndex(item => item.id === runtimeState.activeSession.selectedFireflyId));
+    const pageSize = core_constants.HEART_FIREFLY_PAGE_SIZE;
+    const pageCount = Math.max(1, Math.ceil(voices.length / pageSize));
+    const currentPage = Math.min(pageCount - 1, Math.floor(selectedIndex / pageSize));
+    const nextPage = Math.max(0, Math.min(pageCount - 1, currentPage + (Number(direction) < 0 ? -1 : 1)));
+    if (nextPage === currentPage) return;
+    const next = voices[nextPage * pageSize];
+    if (next) runtimeState.activeSession.selectedFireflyId = next.id;
+    runtimeState.activeSession.view = 'fireflies';
+    renderHeart();
+}
+
+function fireflyPointStyle(id, index) {
+    const text = `${id}|${index}`;
+    let hash = 2166136261;
+    for (let i = 0; i < text.length; i += 1) hash = Math.imul(hash ^ text.charCodeAt(i), 16777619) >>> 0;
+    const x = 7 + (hash % 87);
+    const y = 8 + ((hash >>> 8) % 78);
+    const size = 8 + ((hash >>> 16) % 9);
+    const delay = ((hash >>> 20) % 18) / 10;
+    return `--fx:${x}%;--fy:${y}%;--fs:${size}px;--fd:${delay}s`;
+}
+
+function fireflyMeta(color) {
+    return ({
+        pink: { icon: '💗', label: '喜欢与在意' },
+        blue: { icon: '💙', label: '关系里的不安' },
+        yellow: { icon: '💛', label: '关于他自己' },
+        white: { icon: '🤍', label: '脆弱与秘密' },
+        desire: { icon: '♥️', label: '对你的直白渴望' },
+    })[color] || { icon: '✦', label: '心声' };
+}
+
 export function renderHeart() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.HEART) return;
     const readOnly = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
     ui_overlay.setBackVisible(true, runtimeState.activeArchiveSnapshot ? (readOnly ? '只读档案' : '档案') : '当前档案');
     ui_overlay.topTitle('角色互动');
-    const view = ['seasons', 'strips'].includes(session.view) ? session.view : 'seasons';
+    const view = ['seasons', 'strips', 'fireflies'].includes(session.view) ? session.view : 'seasons';
     session.view = view;
     const parts = session.generationParts || {};
     const heartSeasons = ['postending', 'spring', 'summer', 'autumn', 'winter'];
@@ -427,48 +506,63 @@ export function renderHeart() {
     const selectedHeartSeasonPartial = selectedHeartSeason !== 'postending' && selectedHeartSeasonVoiceCount !== selectedHeartSeasonScenarioCount;
     const tabs = `<div class="rmt-heart-tabs">
       <button type="button" data-rmt-heart-view="seasons" class="${view === 'seasons' ? 'active' : ''}">春夏秋冬 / Drama</button>
+      <button type="button" data-rmt-heart-view="fireflies" class="${view === 'fireflies' ? 'active' : ''}">萤火虫栖息地</button>
       <button type="button" data-rmt-heart-view="strips" class="${view === 'strips' ? 'active' : ''}">日常一格</button>
     </div>`;
     const generationButton = readOnly ? '' : view === 'seasons'
         ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-season" data-rmt-heart-season-target="${core_text.esc(selectedHeartSeason)}">${selectedHeartSeasonPartial ? '继续补全本次' : selectedHeartSeasonReady ? '追加一篇' : '生成首篇'}${core_text.esc(heartSeasonLabels[selectedHeartSeason])}</button>`
-        : `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="strips">${parts.strips ? '从新增档案追加日常一格' : '生成日常一格'}</button>`;
+        : view === 'fireflies'
+            ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="fireflies">${session.fireflyVoices?.length ? '解锁新的萤火虫' : '点亮萤火虫栖息地'}</button>`
+            : `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="strips">${parts.strips ? '从新增档案追加日常一格' : '生成日常一格'}</button>`;
     const topActions = `<div class="rmt-heart-top-actions">${generationButton}</div>`;
     const summary = `<section class="rmt-heart-summary"><div><b>${core_text.esc(session.relationshipState)}</b><p>${core_text.esc(session.relationshipSummary)}</p></div>${topActions}</section>`;
     let content = '';
 
     if (view === 'seasons') {
-        const availableSeasons = heartSeasons;
-        const selectedSeason = selectedHeartSeason;
-        session.selectedSeason = selectedSeason;
-        const seasonLabels = heartSeasonLabels;
-        const nav = availableSeasons.map(season => {
+        session.selectedSeason = selectedHeartSeason;
+        const nav = heartSeasons.map(season => {
             const voiceCount = session.voiceDramas.filter(item => item.kind === season).length;
             const scenarioCount = session.scenarioDramas.filter(item => item.season === season).length;
-            const status = season === 'postending'
-                ? (voiceCount ? `${voiceCount} 篇` : '未生成')
-                : (voiceCount || scenarioCount ? `Voice ${voiceCount} / Scenario ${scenarioCount}` : '未生成');
-            return `<button type="button" class="rmt-heart-drama-card ${season === selectedSeason ? 'active' : ''}" data-rmt-heart-season="${core_text.esc(season)}"><b>${core_text.esc(seasonLabels[season])}</b><span>${core_text.esc(status)}</span></button>`;
+            const total = voiceCount + (season === 'postending' ? 0 : scenarioCount);
+            const status = total ? `${total} 篇 · 单篇翻阅` : '未生成';
+            return `<button type="button" class="rmt-heart-drama-card ${season === selectedHeartSeason ? 'active' : ''}" data-rmt-heart-season="${core_text.esc(season)}"><b>${core_text.esc(heartSeasonLabels[season])}</b><span>${core_text.esc(status)}</span></button>`;
         }).join('');
-        const voices = session.voiceDramas.filter(item => item.kind === selectedSeason);
-        const scenarios = selectedSeason === 'postending' ? [] : session.scenarioDramas.filter(item => item.season === selectedSeason);
-        const voice = voices.find(item => item.id === session.selectedVoiceId) || voices[voices.length - 1] || null;
-        const scenario = scenarios.find(item => item.id === session.selectedScenarioId) || scenarios[scenarios.length - 1] || null;
-        if (voice) session.selectedVoiceId = voice.id;
-        if (scenario) session.selectedScenarioId = scenario.id;
-        const voiceCards = voices.map((item, index) => `<button type="button" class="rmt-heart-strip-card ${item.id === voice?.id ? 'active' : ''}" data-rmt-heart-voice-id="${core_text.esc(item.id)}"><b>Voice ${index + 1} · ${core_text.esc(item.title)}</b><span>${core_text.esc(item.subtitle || item.setting)}</span></button>`).join('');
-        const scenarioCards = scenarios.map((item, index) => `<button type="button" class="rmt-heart-strip-card ${item.id === scenario?.id ? 'active' : ''}" data-rmt-heart-scenario-id="${core_text.esc(item.id)}"><b>Scenario ${index + 1} · ${core_text.esc(item.title)}</b><span>${core_text.esc(item.subtitle || item.setting)}</span></button>`).join('');
+        const state = heartCurrentDrama(session, selectedHeartSeason);
+        const current = state.current;
         let detail = '';
-        if (voiceCards || scenarioCards) {
-            detail += `<section class="rmt-heart-drama-section"><div class="rmt-heart-drama-head"><div><h2>${core_text.esc(seasonLabels[selectedSeason])}篇目</h2><p>旧篇保留；可以继续追加新的未来日常。</p></div></div><div class="rmt-heart-strip-nav">${voiceCards}${scenarioCards}</div></section>`;
+        if (current) {
+            const item = current.item;
+            if (current.type === 'voice') session.selectedVoiceId = item.id;
+            else session.selectedScenarioId = item.id;
+            const seasonClass = `season-${core_text.esc(selectedHeartSeason)}`;
+            const tone = ['soft', 'clear', 'muted', 'deep'].includes(item.visualTone) ? item.visualTone : 'soft';
+            const dots = state.items.map((entry, index) => `<button type="button" class="rmt-heart-drama-dot ${index === state.index ? 'active' : ''}" ${entry.type === 'voice' ? `data-rmt-heart-voice-id="${core_text.esc(entry.item.id)}"` : `data-rmt-heart-scenario-id="${core_text.esc(entry.item.id)}"`} aria-label="${core_text.esc(entry.item.title)}"></button>`).join('');
+            detail = `<section class="rmt-heart-season-stage ${seasonClass} tone-${core_text.esc(tone)}">
+              <div class="rmt-heart-drama-pager"><button type="button" data-rmt-action="heart-drama-prev" aria-label="上一篇">‹</button><div><small>${current.type === 'voice' ? 'VOICE DRAMA' : 'SCENARIO DRAMA'}</small><b>${state.index + 1} / ${state.items.length}</b></div><button type="button" data-rmt-action="heart-drama-next" aria-label="下一篇">›</button></div>
+              <div class="rmt-heart-drama-dots">${dots}</div>
+              <div class="rmt-heart-drama-head"><div><h2>${core_text.esc(item.title)}</h2><p>${core_text.esc(item.subtitle)}</p></div><span>${core_text.esc(heartSeasonLabels[selectedHeartSeason])}</span></div>
+              <div class="rmt-heart-setting">${core_text.esc(item.setting)}</div>
+              ${renderHeartScriptLines(item.script)}
+            </section>`;
+        } else {
+            detail = `<div class="rmt-heart-empty">${readOnly ? '这一季还没有 Drama。' : `点击上方按钮生成${core_text.esc(heartSeasonLabels[selectedHeartSeason])}首篇；之后每次只新增并翻阅一篇。`}</div>`;
         }
-        if (voice) {
-            detail += `<section class="rmt-heart-drama-section"><div class="rmt-heart-drama-head"><div><h2>${core_text.esc(voice.title)}</h2><p>${core_text.esc(voice.subtitle)}</p></div></div><div class="rmt-heart-setting">${core_text.esc(voice.setting)}</div>${renderHeartScriptLines(voice.script)}</section>`;
-        }
-        if (scenario) {
-            detail += `<section class="rmt-heart-drama-section"><div class="rmt-heart-drama-head"><div><h2>${core_text.esc(scenario.title)}</h2><p>${core_text.esc(scenario.subtitle)}</p></div></div><div class="rmt-heart-setting">${core_text.esc(scenario.setting)}</div>${renderHeartScriptLines(scenario.script)}</section>`;
-        }
-        if (!detail) detail = `<div class="rmt-heart-empty">${readOnly ? '这一部分还没有生成。' : `点击上方按钮生成${core_text.esc(seasonLabels[selectedSeason])}首篇；之后可继续追加新的未来日常。`}</div>`;
-        content = `<div class="rmt-heart-drama-layout"><nav>${nav}</nav><main>${detail}</main></div>`;
+        content = `<div class="rmt-heart-drama-layout rmt-heart-single-drama"><nav>${nav}</nav><main>${detail}</main></div>`;
+    } else if (view === 'fireflies') {
+        const voices = Array.isArray(session.fireflyVoices) ? session.fireflyVoices : [];
+        const selected = voices.find(item => item.id === session.selectedFireflyId) || voices[voices.length - 1] || voices[0] || null;
+        if (selected) session.selectedFireflyId = selected.id;
+        const pageSize = core_constants.HEART_FIREFLY_PAGE_SIZE;
+        const selectedIndex = Math.max(0, selected ? voices.findIndex(item => item.id === selected.id) : 0);
+        const pageCount = Math.max(1, Math.ceil(voices.length / pageSize));
+        const pageIndex = Math.min(pageCount - 1, Math.floor(selectedIndex / pageSize));
+        const pageStart = pageIndex * pageSize;
+        const visibleVoices = voices.slice(pageStart, pageStart + pageSize);
+        const points = visibleVoices.map((item, index) => `<button type="button" class="rmt-firefly-point ${core_text.esc(item.color)} ${item.id === selected?.id ? 'active' : ''}" style="${fireflyPointStyle(item.id, pageStart + index)}" data-rmt-heart-firefly-id="${core_text.esc(item.id)}" aria-label="${core_text.esc(fireflyMeta(item.color).label)}"><span></span></button>`).join('');
+        const legend = ['pink', 'blue', 'yellow', 'white', 'desire'].map(color => { const meta = fireflyMeta(color); return `<span class="${color}">${meta.icon} ${core_text.esc(meta.label)}</span>`; }).join('');
+        const pager = voices.length > pageSize ? `<div class="rmt-firefly-pager"><button type="button" class="rmt-btn" data-rmt-action="heart-firefly-prev" ${pageIndex <= 0 ? 'disabled' : ''}>‹ 较早的光</button><span>${pageIndex + 1} / ${pageCount} · 本页 ${visibleVoices.length} 颗</span><button type="button" class="rmt-btn" data-rmt-action="heart-firefly-next" ${pageIndex >= pageCount - 1 ? 'disabled' : ''}>更新的光 ›</button></div>` : '';
+        const whisper = selected ? `<div class="rmt-firefly-whisper ${core_text.esc(selected.color)}"><small>${fireflyMeta(selected.color).icon} ${core_text.esc(fireflyMeta(selected.color).label)}</small><p>${core_text.esc(selected.line)}</p></div>` : `<div class="rmt-heart-empty">${readOnly ? '这份档案还没有保存萤火虫心声。' : '点亮以后，这里会出现很多不同颜色的心声光点。'}</div>`;
+        content = `<section class="rmt-firefly-shell"><div class="rmt-firefly-head"><div><small>FIREFLY HABITAT</small><h2>萤火虫栖息地</h2><p>旧光点永久留在这片栖息地。剧情继续后，只会解锁新的心声；每页最多点亮 ${pageSize} 颗，避免手机长期使用后越来越卡。</p></div><span>${voices.length} LIGHTS</span></div><div class="rmt-firefly-field">${points || '<div class="rmt-firefly-empty-stars">✦　·　✧　·　✦</div>'}</div>${pager}<div class="rmt-firefly-legend">${legend}</div>${whisper}</section>`;
     } else {
         const selected = selectedHeartStrip();
         if (selected) session.selectedStripId = selected.id;
