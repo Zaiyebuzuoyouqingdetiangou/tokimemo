@@ -158,6 +158,25 @@ export function isCurrentCharacterDeletedFromLibrary(context = core_context.getC
     catch { return false; }
 }
 
+export function restoreCurrentCharacterArchiveVisibility(context = core_context.getContext(), memoryBank = null, options = {}) {
+    if (!memoryBank || !archive_repository.isCompatibleArchive(memoryBank)) return false;
+    const probe = currentCharacterArchiveProbe(context, memoryBank);
+    const createdAt = Math.max(0, Number(memoryBank.createdAt) || 0);
+    const explicitCreate = options.explicitCreate === true;
+    const before = getDeletedArchiveCharacters(context);
+    const after = before.filter(deleted => {
+        if (!archiveEntryMatchesDeletedCharacter(probe, deleted)) return true;
+        // A character tombstone must keep blocking old metadata and legacy scans. It may be
+        // removed only by a newly committed explicit create, or by migrating the r42.5 bug where
+        // the new archive was demonstrably created after that tombstone.
+        if (explicitCreate) return false;
+        return !(createdAt > 0 && createdAt > Math.max(0, Number(deleted.deletedAt) || 0));
+    });
+    if (after.length === before.length) return false;
+    setDeletedArchiveCharacters(context, after);
+    return true;
+}
+
 export function getArchiveIndex(context = core_context.getContext()) {
     const raw = context.extensionSettings?.[core_constants.ARCHIVE_INDEX_SETTINGS_KEY];
     if (!Array.isArray(raw)) return [];

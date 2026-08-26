@@ -488,6 +488,12 @@ export async function saveImportedMemory(context, memoryBank, expectedChatId = m
         runtimeState.runtimeSessionCache.delete(scope);
     }
 
+    if (expectedState.present === false) {
+        // A successful, explicit new archive is intentional recreation, not an old archive
+        // resurfacing through a scan. Clear only this character's library tombstone after the
+        // backup and canonical chat copy have both committed.
+        archive_groups.restoreCurrentCharacterArchiveVisibility(currentContext, stagedMemory, { explicitCreate: true });
+    }
     archive_snapshots.rememberCurrentArchiveForOverview(currentContext);
     archive_snapshots.syncArchiveOverviewCurrentRow(currentContext);
     archive_groups.upsertArchiveIndex(currentContext, stagedMemory);

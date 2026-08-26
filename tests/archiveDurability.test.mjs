@@ -16,8 +16,11 @@ import {
     deleteArchiveBackup,
     fetchIndexedArchiveSnapshot,
     flushDeferredCommitsForCurrentChat,
+    getArchiveIndex,
     getCache,
+    getDeletedArchiveCharacters,
     hasMatchingArchiveDeletionFence,
+    isCurrentCharacterDeletedFromLibrary,
     prepareBoundedRawCache,
     promoteSnapshotToLiveIfCurrent,
     queueDeferredCommit,
@@ -27,6 +30,9 @@ import {
     seedArchiveBackup,
     setArchiveIndex,
     setArchiveBackupBackendForTests,
+    setDeletedArchiveCharacters,
+    restoreCurrentCharacterArchiveVisibility,
+    upsertArchiveIndex,
     updateArchiveBackupCache,
 } from './testingFacade.mjs';
 
@@ -152,6 +158,62 @@ test('r42.5 canonical archive commits persist an independent backup and reject s
         runtimeState.runtimeSessionCache.clear();
         globalThis.SillyTavern = originalSillyTavern;
     }
+});
+
+test('r42.6 explicit recreation clears the matching character tombstone and immediately restores the index', async () => {
+    const originalSillyTavern = globalThis.SillyTavern;
+    const backend = makeBackupBackend();
+    const context = makeContext('recreated-chat');
+    const deletedAt = Date.now() - 1000;
+    setDeletedArchiveCharacters(context, [{
+        groupId: 'auto:old-role',
+        characterName: '角色',
+        avatars: ['role.png'],
+        characterKeys: ['role.png'],
+        sourceIdentityKeys: [`fallback:role.png\u001f角色`],
+        deletedAt,
+    }]);
+    globalThis.SillyTavern = { getContext: () => context };
+    setArchiveBackupBackendForTests(backend);
+    try {
+        assert.equal(isCurrentCharacterDeletedFromLibrary(context), true);
+        const recreated = { ...memory('recreated-chat', 'recreated-revision', '重新建立的档案'), createdAt: Date.now() };
+        await saveImportedMemory(context, recreated, 'recreated-chat', {
+            expectedPreviousArchiveState: { present: false, revision: '' },
+        });
+        assert.equal(getDeletedArchiveCharacters(context).length, 0);
+        assert.equal(isCurrentCharacterDeletedFromLibrary(context, recreated), false);
+        assert.equal(getArchiveIndex(context).length, 1);
+        assert.equal(getArchiveIndex(context)[0].archiveName, '重新建立的档案');
+    } finally {
+        setArchiveBackupBackendForTests(null);
+        runtimeState.runtimeSessionCache.clear();
+        globalThis.SillyTavern = originalSillyTavern;
+    }
+});
+
+test('r42.6 opening the library repairs r42.5 fresh archives but keeps pre-deletion metadata hidden', () => {
+    const context = makeContext('r42-5-repair-chat');
+    const tombstone = {
+        groupId: 'auto:old-role',
+        characterName: '角色',
+        avatars: ['role.png'],
+        characterKeys: ['role.png'],
+        sourceIdentityKeys: [`fallback:role.png\u001f角色`],
+        deletedAt: 200,
+    };
+    setDeletedArchiveCharacters(context, [tombstone]);
+    const oldMemory = { ...memory('r42-5-repair-chat', 'old-revision', '删除前旧档案'), createdAt: 100, updatedAt: 100 };
+    assert.equal(restoreCurrentCharacterArchiveVisibility(context, oldMemory), false);
+    upsertArchiveIndex(context, oldMemory);
+    assert.equal(getArchiveIndex(context).length, 0, '删除前的旧 metadata 仍必须被墓碑拦截');
+
+    const recreated = { ...memory('r42-5-repair-chat', 'r42.5-revision', 'r42.5 新档案'), createdAt: 300, updatedAt: 300 };
+    assert.equal(restoreCurrentCharacterArchiveVisibility(context, recreated), true);
+    upsertArchiveIndex(context, recreated);
+    assert.equal(getDeletedArchiveCharacters(context).length, 0);
+    assert.equal(getArchiveIndex(context).length, 1);
+    assert.equal(getArchiveIndex(context)[0].archiveName, 'r42.5 新档案');
 });
 
 test('r42.5 a deleted source chat recovers from the independent backup as backup-only', async () => {

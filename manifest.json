@@ -1,15 +1,15 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.36-archive-durability-r42.5",
+  "js": "index.js?heartbeat=0.8.37-archive-index-recreate-r42.6",
   "author": "Toto",
-  "version": "0.8.36",
+  "version": "0.8.37",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r42.5 增加独立本机档案备份、12 MB 全写入路径保护与 archiveRevision CAS，源聊天丢失后可从备份永久只读恢复；继续保持轻量按需启动。",
+  "description": "r42.6 修复明确重新建档后仍被旧删除墓碑隐藏的索引回归；自动修复 r42.5 已成功新建但档案室空白的本机状态。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

@@ -20,7 +20,17 @@ export function showArchiveLibrary() {
     modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock(); runtimeState.activeMode = null; runtimeState.activeSession = null; runtimeState.activeArchiveSnapshot = null; runtimeState.activeArchiveReadOnly = true; runtimeState.archiveLibraryCharacterKey = ''; runtimeState.archiveViewLevel = 'library';
     ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setBackVisible(false); ui_overlay.topTitle('心跳回忆 · 档案室');
     const body = ui_overlay.bodyEl(); if (!body) return;
-    try { const ctx = core_context.currentCharacterGuard(); const mem = archive_repository.getImportedMemory(ctx); if (mem) archive_groups.upsertArchiveIndex(ctx, mem); } catch {}
+    try {
+        const ctx = core_context.currentCharacterGuard();
+        const mem = archive_repository.getImportedMemory(ctx);
+        if (mem) {
+            // r42.5 could commit an explicit fresh archive while leaving an older character-level
+            // library tombstone behind. Repair only when createdAt proves this archive was created
+            // after the tombstone; genuinely old source metadata stays hidden.
+            archive_groups.restoreCurrentCharacterArchiveVisibility(ctx, mem);
+            archive_groups.upsertArchiveIndex(ctx, mem);
+        }
+    } catch {}
     const archiveContext = core_context.getContext();
     const index = archive_groups.getArchiveIndex(archiveContext);
     const deletedIndex = archive_groups.buildDeletedArchiveCharacterIndex(archiveContext);

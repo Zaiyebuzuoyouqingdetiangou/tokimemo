@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 44
-// Source SHA-256: ba1ddd8fb288c7c230f7bcaa8037aa92e5f63632dfda425f1df9124f90a67183
+// Source SHA-256: 80aea58c8261f9f839b63eed373cf7edc0aee4e53f262af36dd791df9a02bd12
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -16601,7 +16601,17 @@ function showArchiveLibrary() {
     modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock(); runtimeState.activeMode = null; runtimeState.activeSession = null; runtimeState.activeArchiveSnapshot = null; runtimeState.activeArchiveReadOnly = true; runtimeState.archiveLibraryCharacterKey = ''; runtimeState.archiveViewLevel = 'library';
     ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setBackVisible(false); ui_overlay.topTitle('心跳回忆 · 档案室');
     const body = ui_overlay.bodyEl(); if (!body) return;
-    try { const ctx = core_context.currentCharacterGuard(); const mem = archive_repository.getImportedMemory(ctx); if (mem) archive_groups.upsertArchiveIndex(ctx, mem); } catch {}
+    try {
+        const ctx = core_context.currentCharacterGuard();
+        const mem = archive_repository.getImportedMemory(ctx);
+        if (mem) {
+            // r42.5 could commit an explicit fresh archive while leaving an older character-level
+            // library tombstone behind. Repair only when createdAt proves this archive was created
+            // after the tombstone; genuinely old source metadata stays hidden.
+            archive_groups.restoreCurrentCharacterArchiveVisibility(ctx, mem);
+            archive_groups.upsertArchiveIndex(ctx, mem);
+        }
+    } catch {}
     const archiveContext = core_context.getContext();
     const index = archive_groups.getArchiveIndex(archiveContext);
     const deletedIndex = archive_groups.buildDeletedArchiveCharacterIndex(archiveContext);
@@ -17270,6 +17280,25 @@ function isCurrentCharacterDeletedFromLibrary(context = core_context.getContext(
     catch { return false; }
 }
 
+function restoreCurrentCharacterArchiveVisibility(context = core_context.getContext(), memoryBank = null, options = {}) {
+    if (!memoryBank || !archive_repository.isCompatibleArchive(memoryBank)) return false;
+    const probe = currentCharacterArchiveProbe(context, memoryBank);
+    const createdAt = Math.max(0, Number(memoryBank.createdAt) || 0);
+    const explicitCreate = options.explicitCreate === true;
+    const before = getDeletedArchiveCharacters(context);
+    const after = before.filter(deleted => {
+        if (!archiveEntryMatchesDeletedCharacter(probe, deleted)) return true;
+        // A character tombstone must keep blocking old metadata and legacy scans. It may be
+        // removed only by a newly committed explicit create, or by migrating the r42.5 bug where
+        // the new archive was demonstrably created after that tombstone.
+        if (explicitCreate) return false;
+        return !(createdAt > 0 && createdAt > Math.max(0, Number(deleted.deletedAt) || 0));
+    });
+    if (after.length === before.length) return false;
+    setDeletedArchiveCharacters(context, after);
+    return true;
+}
+
 function getArchiveIndex(context = core_context.getContext()) {
     const raw = context.extensionSettings?.[core_constants.ARCHIVE_INDEX_SETTINGS_KEY];
     if (!Array.isArray(raw)) return [];
@@ -17785,6 +17814,7 @@ __m_archive_groups_js.archiveEntryMatchesDeletedCharacterIndex = archiveEntryMat
 __m_archive_groups_js.isArchiveEntryDeletedFromLibrary = isArchiveEntryDeletedFromLibrary;
 __m_archive_groups_js.currentCharacterArchiveProbe = currentCharacterArchiveProbe;
 __m_archive_groups_js.isCurrentCharacterDeletedFromLibrary = isCurrentCharacterDeletedFromLibrary;
+__m_archive_groups_js.restoreCurrentCharacterArchiveVisibility = restoreCurrentCharacterArchiveVisibility;
 __m_archive_groups_js.getArchiveIndex = getArchiveIndex;
 __m_archive_groups_js.setArchiveIndex = setArchiveIndex;
 __m_archive_groups_js.archiveGroupKeyForEntry = archiveGroupKeyForEntry;
@@ -18311,6 +18341,12 @@ async function saveImportedMemory(context, memoryBank, expectedChatId = memoryBa
         runtimeState.runtimeSessionCache.delete(scope);
     }
 
+    if (expectedState.present === false) {
+        // A successful, explicit new archive is intentional recreation, not an old archive
+        // resurfacing through a scan. Clear only this character's library tombstone after the
+        // backup and canonical chat copy have both committed.
+        archive_groups.restoreCurrentCharacterArchiveVisibility(currentContext, stagedMemory, { explicitCreate: true });
+    }
     archive_snapshots.rememberCurrentArchiveForOverview(currentContext);
     archive_snapshots.syncArchiveOverviewCurrentRow(currentContext);
     archive_groups.upsertArchiveIndex(currentContext, stagedMemory);

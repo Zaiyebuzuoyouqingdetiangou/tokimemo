@@ -207,6 +207,7 @@ export { archiveEntryMatchesDeletedCharacterIndex } from '../src/archive/groups.
 export { isArchiveEntryDeletedFromLibrary } from '../src/archive/groups.js';
 export { currentCharacterArchiveProbe } from '../src/archive/groups.js';
 export { isCurrentCharacterDeletedFromLibrary } from '../src/archive/groups.js';
+export { restoreCurrentCharacterArchiveVisibility } from '../src/archive/groups.js';
 export { getArchiveIndex } from '../src/archive/groups.js';
 export { setArchiveIndex } from '../src/archive/groups.js';
 export { archiveGroupKeyForEntry } from '../src/archive/groups.js';

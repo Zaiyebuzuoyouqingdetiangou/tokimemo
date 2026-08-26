@@ -1,5 +1,5 @@
-const VERSION = '0.8.36';
-const BUILD = '0.8.36-archive-durability-r42.5';
+const VERSION = '0.8.37';
+const BUILD = '0.8.37-archive-index-recreate-r42.6';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
