@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 43
-// Source SHA-256: b309988d87a31a7596e698b48da58b5b0fe60381e16c24ae82d42e25154eb187
+// Source SHA-256: fdc8a2c0cb7e0f424f1cc6ceb92d1fcad6ed6c2d2bde1865429a496564881a7d
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_groups_js = Object.create(null);
@@ -82,11 +82,15 @@ const CACHE_STORAGE_VERSION = 1;
 
 const CALENDAR_SESSION_VERSION = 4;
 
-const MAX_CACHE_SOURCE_CHARS = 12000000;
-
 const MAX_CACHE_COMPRESSED_BASE64_CHARS = 4000000;
 
 const MAX_CACHE_DECOMPRESSED_BYTES = 12000000;
+
+const MAX_CACHE_SOURCE_BYTES = MAX_CACHE_DECOMPRESSED_BYTES;
+
+// Compatibility alias for test/tooling consumers from r42.2 and earlier. The cache writer no
+// longer compares this budget with String.length; UTF-8 bytes are the authoritative unit.
+const MAX_CACHE_SOURCE_CHARS = MAX_CACHE_SOURCE_BYTES;
 
 const MAX_IMPORT_MESSAGES = 4000;
 
@@ -297,9 +301,10 @@ __m_core_constants_js.MEMORY_VERSION = MEMORY_VERSION;
 __m_core_constants_js.CACHE_STORAGE_FORMAT = CACHE_STORAGE_FORMAT;
 __m_core_constants_js.CACHE_STORAGE_VERSION = CACHE_STORAGE_VERSION;
 __m_core_constants_js.CALENDAR_SESSION_VERSION = CALENDAR_SESSION_VERSION;
-__m_core_constants_js.MAX_CACHE_SOURCE_CHARS = MAX_CACHE_SOURCE_CHARS;
 __m_core_constants_js.MAX_CACHE_COMPRESSED_BASE64_CHARS = MAX_CACHE_COMPRESSED_BASE64_CHARS;
 __m_core_constants_js.MAX_CACHE_DECOMPRESSED_BYTES = MAX_CACHE_DECOMPRESSED_BYTES;
+__m_core_constants_js.MAX_CACHE_SOURCE_BYTES = MAX_CACHE_SOURCE_BYTES;
+__m_core_constants_js.MAX_CACHE_SOURCE_CHARS = MAX_CACHE_SOURCE_CHARS;
 __m_core_constants_js.MAX_IMPORT_MESSAGES = MAX_IMPORT_MESSAGES;
 __m_core_constants_js.MAX_IMPORT_TOTAL_CHARS = MAX_IMPORT_TOTAL_CHARS;
 __m_core_constants_js.IMPORT_CHUNK_CHARS = IMPORT_CHUNK_CHARS;
@@ -575,12 +580,70 @@ __m_core_evidence_js.roomReferencedMemoryIds = roomReferencedMemoryIds;
 __m_core_evidence_js.isSearchableRoomObject = isSearchableRoomObject;
 }
 
+function __init_core_state_js() {
+// MODULE: core/state.js
+
+// Heartbeat Memories r35 modular runtime.
+// Extracted from r34 without changing archive/cache storage contracts.
+const state = {
+  runtimeLifecycleEpoch: 0,
+  busy: false,
+  activeMode: null,
+  activeSession: null,
+  contentManagerOpen: false,
+  roomClockTimer: 0,
+  phoneClockTimer: 0,
+  archiveViewLevel: 'library',
+  roomLifeRefreshPromise: null,
+  activeTaskAbortController: null,
+  activeTaskLabel: '',
+  activeTaskBackgrounded: false,
+  activeTaskOrigin: null,
+  activeGenerationTasks: new Map(),
+  activeModeBuildScopes: new Set(),
+  activeAdvBulkScopes: new Set(),
+  activeCgImageTasks: new Map(),
+  cgImageLifecycleEpoch: 0,
+  avatarDialogueRequestEpoch: 0,
+  activeAvatarDialogue: null,
+  activeProviderRequestCount: 0,
+  providerRequestQueue: [],
+  butterflyTransitionTimer: 0,
+  archiveOverviewCache: { key: '', fetchedAt: 0, items: [] },
+  archiveOverviewPromise: null,
+  archiveOverviewPromiseKey: '',
+  archiveOverviewAllowedChats: new Set(),
+  archiveOverviewKnownArchives: new Map(),
+  archiveOverviewLastKey: '',
+  chooserRefreshTimer: 0,
+  memoryProviderDiscoveryCache: { signature: '', scannedAt: 0, items: [] },
+  memoryPreflightCache: new Map(),
+  deferredChatCommits: new Map(),
+  archiveLibraryCharacterKey: '',
+  archiveCharacterRelationSelection: '',
+  relationSelectedKey: '',
+  activeArchiveSnapshot: null,
+  activeArchiveReadOnly: true,
+  archiveSnapshotCache: new Map(),
+  connectionModelCache: new Map(),
+  runtimeSessionCache: new Map(),
+  cacheHydrationPromises: new Map(),
+  cacheHydrationErrors: new Map(),
+  cachePersistTimers: new Map(),
+  pendingCompressedCacheWrites: new Map(),
+  usableMessageCountCache: new Map(),
+};
+
+__m_core_state_js.state = state;
+}
+
 function __init_core_context_js() {
 // MODULE: core/context.js
 const archive_groups = __m_archive_groups_js;
 const core_constants = __m_core_constants_js;
 const core_evidence = __m_core_evidence_js;
 const core_text = __m_core_text_js;
+const runtimeState = __m_core_state_js.state;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 
@@ -808,6 +871,7 @@ function chatScopeKey(context = currentCharacterGuard(), chatId = getChatId(cont
 
 function captureTaskOrigin(context = currentCharacterGuard(), archiveRevision = '') {
     return {
+        lifecycleEpoch: runtimeState.runtimeLifecycleEpoch,
         characterKey: currentCharacterRuntimeKey(context),
         characterName: core_text.normalizeText(context.name2, 120),
         chatId: comparableChatId(getChatId(context)),
@@ -817,7 +881,10 @@ function captureTaskOrigin(context = currentCharacterGuard(), archiveRevision = 
 
 function isCurrentTaskOrigin(origin, context = getContext()) {
     try {
-        return !!origin && currentCharacterRuntimeKey(context) === origin.characterKey && comparableChatId(getChatId(context)) === origin.chatId;
+        return !!origin
+            && Number(origin.lifecycleEpoch) === runtimeState.runtimeLifecycleEpoch
+            && currentCharacterRuntimeKey(context) === origin.characterKey
+            && comparableChatId(getChatId(context)) === origin.chatId;
     } catch {
         return false;
     }
@@ -1044,62 +1111,6 @@ __m_core_incremental_js.stampIncrementalCoverage = stampIncrementalCoverage;
 __m_core_incremental_js.normalizedContentKey = normalizedContentKey;
 __m_core_incremental_js.uniqueGeneratedId = uniqueGeneratedId;
 __m_core_incremental_js.incrementalBatchId = incrementalBatchId;
-}
-
-function __init_core_state_js() {
-// MODULE: core/state.js
-
-// Heartbeat Memories r35 modular runtime.
-// Extracted from r34 without changing archive/cache storage contracts.
-const state = {
-  busy: false,
-  activeMode: null,
-  activeSession: null,
-  contentManagerOpen: false,
-  roomClockTimer: 0,
-  phoneClockTimer: 0,
-  archiveViewLevel: 'library',
-  roomLifeRefreshPromise: null,
-  activeTaskAbortController: null,
-  activeTaskLabel: '',
-  activeTaskBackgrounded: false,
-  activeTaskOrigin: null,
-  activeGenerationTasks: new Map(),
-  activeModeBuildScopes: new Set(),
-  activeAdvBulkScopes: new Set(),
-  activeCgImageTasks: new Map(),
-  cgImageLifecycleEpoch: 0,
-  avatarDialogueRequestEpoch: 0,
-  activeAvatarDialogue: null,
-  activeProviderRequestCount: 0,
-  providerRequestQueue: [],
-  butterflyTransitionTimer: 0,
-  archiveOverviewCache: { key: '', fetchedAt: 0, items: [] },
-  archiveOverviewPromise: null,
-  archiveOverviewPromiseKey: '',
-  archiveOverviewAllowedChats: new Set(),
-  archiveOverviewKnownArchives: new Map(),
-  archiveOverviewLastKey: '',
-  chooserRefreshTimer: 0,
-  memoryProviderDiscoveryCache: { signature: '', scannedAt: 0, items: [] },
-  memoryPreflightCache: new Map(),
-  deferredChatCommits: new Map(),
-  archiveLibraryCharacterKey: '',
-  archiveCharacterRelationSelection: '',
-  relationSelectedKey: '',
-  activeArchiveSnapshot: null,
-  activeArchiveReadOnly: true,
-  archiveSnapshotCache: new Map(),
-  connectionModelCache: new Map(),
-  runtimeSessionCache: new Map(),
-  cacheHydrationPromises: new Map(),
-  cacheHydrationErrors: new Map(),
-  cachePersistTimers: new Map(),
-  pendingCompressedCacheWrites: new Map(),
-  usableMessageCountCache: new Map(),
-};
-
-__m_core_state_js.state = state;
 }
 
 function __init_ui_archivePortal_js() {
@@ -2027,7 +2038,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 @media(max-width:720px){.rmt-calendar-selected-strip{grid-template-columns:1fr;gap:6px}.rmt-calendar-notebook-board{grid-template-columns:1fr}.rmt-calendar-sticky-panel,.rmt-calendar-master-todo,.rmt-calendar-special-notes,.rmt-calendar-mood-section{padding:11px;border-radius:15px}.rmt-calendar-sticky-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.rmt-calendar-sticky{min-height:110px;padding:12px 10px 9px}.rmt-calendar-sticky h3{font-size:11px}.rmt-calendar-sticky p{font-size:9px;line-height:1.6}.rmt-calendar-special-notes>div{grid-template-columns:1fr}.rmt-calendar-special-notes .rmt-calendar-sticky{min-height:0}.rmt-calendar-mood-grid{grid-template-columns:1fr}.rmt-calendar-mood-note{min-height:0}.rmt-calendar-master-todo-row{grid-template-columns:24px minmax(0,1fr);padding:8px 6px}.rmt-calendar-master-check{width:21px;height:21px}}
 /* r41 HEART: one-drama seasonal pager + firefly habitat */
 .rmt-heart-single-drama>main{padding:0;background:transparent;border:0}.rmt-heart-season-stage{--heart-season-a:#fff8fb;--heart-season-b:#f5fbfd;--heart-season-accent:#d99ab4;padding:16px;border:1px solid color-mix(in srgb,var(--heart-season-accent) 34%,#d8e5eb);border-radius:20px;background:linear-gradient(145deg,var(--heart-season-a),var(--heart-season-b));box-shadow:0 10px 26px rgba(65,83,99,.08);min-height:420px}.rmt-heart-season-stage.season-spring{--heart-season-a:#fff3f8;--heart-season-b:#f1faee;--heart-season-accent:#df9ab4}.rmt-heart-season-stage.season-summer{--heart-season-a:#eefbff;--heart-season-b:#f6fff2;--heart-season-accent:#76b8cf}.rmt-heart-season-stage.season-autumn{--heart-season-a:#fff7ec;--heart-season-b:#fbf0e7;--heart-season-accent:#c58b65}.rmt-heart-season-stage.season-winter{--heart-season-a:#f2f7ff;--heart-season-b:#f7f4fb;--heart-season-accent:#8aa4c7}.rmt-heart-season-stage.season-postending{--heart-season-a:#fff5f8;--heart-season-b:#f4f6ff;--heart-season-accent:#bc88a8}.rmt-heart-season-stage.tone-clear{filter:saturate(1.08) brightness(1.015)}.rmt-heart-season-stage.tone-muted{filter:saturate(.76)}.rmt-heart-season-stage.tone-deep{--heart-season-a:color-mix(in srgb,var(--heart-season-accent) 16%,#f7f7fb);--heart-season-b:color-mix(in srgb,var(--heart-season-accent) 8%,#eef3f7);box-shadow:0 12px 30px rgba(55,64,78,.12)}.rmt-heart-drama-pager{display:grid;grid-template-columns:38px 1fr 38px;align-items:center;gap:8px;margin-bottom:9px}.rmt-heart-drama-pager>button{width:38px;height:38px;border:1px solid color-mix(in srgb,var(--heart-season-accent) 35%,#d7e4ea);border-radius:50%;background:rgba(255,255,255,.78);color:#6d7d8c;font-size:25px;line-height:1;cursor:pointer}.rmt-heart-drama-pager>div{text-align:center;display:grid;gap:1px}.rmt-heart-drama-pager small{font-size:8px;letter-spacing:.14em;color:#8c98a4}.rmt-heart-drama-pager b{font-size:10px;color:#647587}.rmt-heart-drama-dots{display:flex;justify-content:center;gap:5px;flex-wrap:wrap;margin:0 0 12px}.rmt-heart-drama-dot{width:7px;height:7px;border:0;border-radius:50%;background:rgba(106,124,141,.25);padding:0;cursor:pointer}.rmt-heart-drama-dot.active{background:var(--heart-season-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--heart-season-accent) 18%,transparent)}
-.rmt-firefly-shell{display:grid;gap:10px}.rmt-firefly-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:13px 15px;border-radius:18px;background:linear-gradient(145deg,#17212a,#101820);color:#edf6f7}.rmt-firefly-head small{font-size:8px;letter-spacing:.18em;color:#8ea6ae}.rmt-firefly-head h2{margin:3px 0 4px;font-size:21px}.rmt-firefly-head p{margin:0;color:#b8c7cc;font-size:10px;line-height:1.65}.rmt-firefly-head>span{white-space:nowrap;padding:5px 8px;border:1px solid rgba(255,255,255,.15);border-radius:999px;color:#bdcbd0;font-size:8px}.rmt-firefly-field{position:relative;height:390px;overflow:hidden;border-radius:22px;background:radial-gradient(circle at 50% 80%,rgba(49,83,70,.26),transparent 38%),radial-gradient(circle at 20% 20%,rgba(44,66,92,.32),transparent 34%),linear-gradient(180deg,#0b1118,#101b20 55%,#14251e);box-shadow:inset 0 0 60px rgba(0,0,0,.4)}.rmt-firefly-field:before{content:"";position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,.12) 0 1px,transparent 1.3px);background-size:37px 41px;opacity:.45}.rmt-firefly-point{position:absolute;left:var(--fx);top:var(--fy);width:calc(var(--fs) + 12px);height:calc(var(--fs) + 12px);transform:translate(-50%,-50%);border:0;background:transparent;padding:6px;border-radius:50%;cursor:pointer;z-index:2}.rmt-firefly-point span{display:block;width:var(--fs);height:var(--fs);border-radius:50%;animation:rmt-firefly-pulse 2.4s ease-in-out infinite;animation-delay:var(--fd);background:#fff;box-shadow:0 0 7px 2px currentColor,0 0 18px 6px currentColor}.rmt-firefly-point.pink{color:#ff86b2}.rmt-firefly-point.blue{color:#6ab9ff}.rmt-firefly-point.yellow{color:#ffd95e}.rmt-firefly-point.white{color:#f6fbff}.rmt-firefly-point.desire{color:#ff455b}.rmt-firefly-point.active span{transform:scale(1.4);box-shadow:0 0 8px 3px currentColor,0 0 28px 10px currentColor}.rmt-firefly-empty-stars{position:absolute;inset:0;display:grid;place-items:center;color:rgba(230,248,239,.4);font-size:24px;letter-spacing:12px}.rmt-firefly-pager{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}.rmt-firefly-pager span{font-size:9px;color:#7d8d99;min-width:92px;text-align:center}.rmt-firefly-legend{display:flex;gap:7px;flex-wrap:wrap}.rmt-firefly-legend span{padding:5px 8px;border-radius:999px;background:#f6f9fa;color:#758695;font-size:9px}.rmt-firefly-whisper{padding:15px 16px;border:1px solid #dce7ec;border-radius:17px;background:#fff;box-shadow:0 7px 18px rgba(55,76,91,.06)}.rmt-firefly-whisper small{font-size:9px;color:#8a98a5}.rmt-firefly-whisper p{margin:7px 0 0;color:#596d7e;font-size:13px;line-height:1.8;white-space:pre-wrap}.rmt-firefly-whisper h3{margin:8px 0 5px;color:#4f6577;font-size:15px;line-height:1.45}.rmt-firefly-thoughts{display:grid;gap:8px}.rmt-firefly-thoughts p{margin:0;padding-top:8px;border-top:1px solid rgba(120,145,160,.12)}.rmt-firefly-thoughts p:first-child{padding-top:2px;border-top:0}.rmt-firefly-whisper.desire{border-color:#f3b4bd;background:#fff7f8}.rmt-firefly-whisper.desire small{color:#c44d62}@keyframes rmt-firefly-pulse{0%,100%{opacity:.45;transform:scale(.72)}45%{opacity:1;transform:scale(1.05)}70%{opacity:.7;transform:scale(.9)}}
+.rmt-firefly-shell{display:grid;gap:10px}.rmt-firefly-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:13px 15px;border-radius:18px;background:linear-gradient(145deg,#17212a,#101820);color:#edf6f7}.rmt-firefly-head small{font-size:8px;letter-spacing:.18em;color:#8ea6ae}.rmt-firefly-head h2{margin:3px 0 4px;font-size:21px}.rmt-firefly-head p{margin:0;color:#b8c7cc;font-size:10px;line-height:1.65}.rmt-firefly-head>span{white-space:nowrap;padding:5px 8px;border:1px solid rgba(255,255,255,.15);border-radius:999px;color:#bdcbd0;font-size:8px}.rmt-firefly-field{position:relative;height:390px;overflow:hidden;border-radius:22px;background:radial-gradient(circle at 50% 80%,rgba(49,83,70,.26),transparent 38%),radial-gradient(circle at 20% 20%,rgba(44,66,92,.32),transparent 34%),linear-gradient(180deg,#0b1118,#101b20 55%,#14251e);box-shadow:inset 0 0 60px rgba(0,0,0,.4)}.rmt-firefly-field:before{content:"";position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,.12) 0 1px,transparent 1.3px);background-size:37px 41px;opacity:.45}.rmt-firefly-point{position:absolute;left:var(--fx);top:var(--fy);width:calc(var(--fs) + 12px);height:calc(var(--fs) + 12px);transform:translate(-50%,-50%);border:0;background:transparent;padding:6px;border-radius:50%;cursor:pointer;z-index:2}.rmt-firefly-point span{display:block;width:var(--fs);height:var(--fs);border-radius:50%;animation:rmt-firefly-pulse 2.4s ease-in-out infinite;animation-delay:var(--fd);background:#fff;box-shadow:0 0 7px 2px currentColor,0 0 18px 6px currentColor}.rmt-firefly-point.pink{color:#ff86b2}.rmt-firefly-point.blue{color:#6ab9ff}.rmt-firefly-point.yellow{color:#ffd95e}.rmt-firefly-point.white{color:#f6fbff}.rmt-firefly-point.desire{color:#ff455b}.rmt-firefly-point.active span{transform:scale(1.4);box-shadow:0 0 8px 3px currentColor,0 0 28px 10px currentColor}.rmt-firefly-empty-stars{position:absolute;inset:0;display:grid;place-items:center;color:rgba(230,248,239,.4);font-size:24px;letter-spacing:12px}.rmt-firefly-pager{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}.rmt-firefly-pager span{font-size:9px;color:#7d8d99;min-width:92px;text-align:center}.rmt-firefly-legend{display:flex;gap:7px;flex-wrap:wrap}.rmt-firefly-legend span{padding:5px 8px;border-radius:999px;background:#f6f9fa;color:#758695;font-size:9px}.rmt-firefly-whisper{padding:15px 16px;border:1px solid #dce7ec;border-radius:17px;background:#fff;box-shadow:0 7px 18px rgba(55,76,91,.06)}.rmt-firefly-whisper small{font-size:9px;color:#8a98a5}.rmt-firefly-whisper p{margin:7px 0 0;color:#596d7e;font-size:13px;line-height:1.8;white-space:pre-wrap}.rmt-firefly-whisper h3{margin:8px 0 5px;color:#4f6577;font-size:15px;line-height:1.45}.rmt-firefly-thoughts{display:grid;gap:8px}.rmt-firefly-thoughts p{margin:0;padding-top:8px;border-top:1px solid rgba(120,145,160,.12)}.rmt-firefly-thoughts p:first-child{padding-top:2px;border-top:0}.rmt-firefly-whisper.desire{border-color:#f3b4bd;background:#fff7f8}.rmt-firefly-whisper.desire small{color:#c44d62}.rmt-firefly-conversation .rmt-heart-script{margin-top:10px}.rmt-firefly-legacy-note{margin:8px 0 10px;padding:8px 10px;border-radius:10px;background:#f7f4ef;color:#8a7764;font-size:10px;line-height:1.6}@keyframes rmt-firefly-pulse{0%,100%{opacity:.45;transform:scale(.72)}45%{opacity:1;transform:scale(1.05)}70%{opacity:.7;transform:scale(.9)}}
 @media(max-width:700px){.rmt-heart-season-stage{padding:13px;min-height:360px}.rmt-heart-single-drama>nav{grid-template-columns:repeat(2,minmax(0,1fr))}.rmt-firefly-field{height:330px}.rmt-firefly-head{padding:12px}.rmt-firefly-head h2{font-size:18px}.rmt-firefly-whisper p{font-size:12px}}
 
 /* r42 Character Profile + Relation Garden */
@@ -2491,6 +2502,7 @@ async function fetchModelsForConnection(profileId, { force = false } = {}) {
     if (!id) return [];
     if (!force && runtimeState.connectionModelCache.has(id)) return runtimeState.connectionModelCache.get(id);
     const context = core_context.getContext();
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     const profile = rawConnectionProfile(id, context);
     if (!profile) throw new Error('找不到当前选择的 Connection Manager 配置。');
     const fallback = savedModelsForProfile(id, context);
@@ -2514,6 +2526,7 @@ async function fetchModelsForConnection(profileId, { force = false } = {}) {
             console.warn('[HeartbeatMemories] remote model list failed; using saved profile models', error);
         }
     }
+    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
     runtimeState.connectionModelCache.set(id, models);
     return models;
 }
@@ -4990,12 +5003,12 @@ function fireflyPointStyle(id, index) {
 
 function fireflyMeta(color) {
     return ({
-        pink: { icon: '💗', label: '喜欢与在意' },
-        blue: { icon: '💙', label: '关系里的不安' },
-        yellow: { icon: '💛', label: '关于他自己' },
-        white: { icon: '🤍', label: '脆弱与秘密' },
-        desire: { icon: '♥️', label: '对你的直白渴望' },
-    })[color] || { icon: '✦', label: '心声' };
+        pink: { icon: '💗', label: '恋爱' },
+        blue: { icon: '💙', label: '恋爱的烦恼' },
+        yellow: { icon: '💛', label: '朋友' },
+        white: { icon: '🤍', label: 'お楽しみ / 个性话题' },
+        desire: { icon: '♥️', label: '扩展 · 直白渴望' },
+    })[color] || { icon: '✦', label: '话题' };
 }
 
 function renderHeart() {
@@ -5025,7 +5038,7 @@ function renderHeart() {
         ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-season" data-rmt-heart-season-target="${core_text.esc(selectedHeartSeason)}">${selectedHeartSeasonPartial ? '继续补全本次' : selectedHeartSeasonReady ? '追加一篇' : '生成首篇'}${core_text.esc(heartSeasonLabels[selectedHeartSeason])}</button>`
         : view === 'fireflies'
             ? (() => {
-                const legacyCount = (Array.isArray(session.fireflyVoices) ? session.fireflyVoices : []).filter(item => !Array.isArray(item?.thoughts) || item.thoughts.length < 2).length;
+                const legacyCount = (Array.isArray(session.fireflyVoices) ? session.fireflyVoices : []).filter(item => !Array.isArray(item?.script) || item.script.length < 5).length;
                 const label = legacyCount ? `升级旧版萤火虫（${legacyCount}）` : session.fireflyVoices?.length ? '解锁新的萤火虫' : '点亮萤火虫栖息地';
                 return `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="fireflies">${core_text.esc(label)}</button>`;
             })()
@@ -5079,11 +5092,18 @@ function renderHeart() {
         const legend = ['pink', 'blue', 'yellow', 'white', 'desire'].map(color => { const meta = fireflyMeta(color); return `<span class="${color}">${meta.icon} ${core_text.esc(meta.label)}</span>`; }).join('');
         const pager = voices.length > pageSize ? `<div class="rmt-firefly-pager"><button type="button" class="rmt-btn" data-rmt-action="heart-firefly-prev" ${pageIndex <= 0 ? 'disabled' : ''}>‹ 较早的光</button><span>${pageIndex + 1} / ${pageCount} · 本页 ${visibleVoices.length} 颗</span><button type="button" class="rmt-btn" data-rmt-action="heart-firefly-next" ${pageIndex >= pageCount - 1 ? 'disabled' : ''}>更新的光 ›</button></div>` : '';
         const whisper = selected ? (() => {
+            const script = Array.isArray(selected.script) ? selected.script : [];
+            if (script.length >= 5) {
+                const lines = script.map(node => node.speaker === 'user_thought'
+                    ? { speaker: 'narrator', text: `（${core_text.normalizeText(node.text, 700)}）` }
+                    : node);
+                return `<div class="rmt-firefly-whisper ${core_text.esc(selected.color)}"><small>${fireflyMeta(selected.color).icon} ${core_text.esc(fireflyMeta(selected.color).label)}</small><h3>${core_text.esc(selected.title || '萤火虫话题')}</h3><div class="rmt-firefly-conversation">${renderHeartScriptLines(lines)}</div></div>`;
+            }
             const thoughts = Array.isArray(selected.thoughts) && selected.thoughts.length ? selected.thoughts : [selected.line].filter(Boolean);
             const paragraphs = thoughts.map(text => `<p>${core_text.esc(text)}</p>`).join('');
-            return `<div class="rmt-firefly-whisper ${core_text.esc(selected.color)}"><small>${fireflyMeta(selected.color).icon} ${core_text.esc(fireflyMeta(selected.color).label)}</small><h3>${core_text.esc(selected.title || '没有说出口的心声')}</h3><div class="rmt-firefly-thoughts">${paragraphs}</div></div>`;
-        })() : `<div class="rmt-heart-empty">${readOnly ? '这份档案还没有保存萤火虫心声。' : '点亮以后，这里会出现很多不同颜色的心声光点。'}</div>`;
-        content = `<section class="rmt-firefly-shell"><div class="rmt-firefly-head"><div><small>FIREFLY HABITAT</small><h2>萤火虫栖息地</h2><p>每一颗光都是一段没有说出口的完整心声。旧光永久留在这里；剧情继续后只会解锁新的主题，每页最多点亮 ${pageSize} 颗。</p></div><span>${voices.length} LIGHTS</span></div><div class="rmt-firefly-field">${points || '<div class="rmt-firefly-empty-stars">✦　·　✧　·　✦</div>'}</div>${pager}<div class="rmt-firefly-legend">${legend}</div>${whisper}</section>`;
+            return `<div class="rmt-firefly-whisper ${core_text.esc(selected.color)}"><small>${fireflyMeta(selected.color).icon} ${core_text.esc(fireflyMeta(selected.color).label)}</small><h3>${core_text.esc(selected.title || '旧版心声')}</h3><div class="rmt-firefly-legacy-note">这是一颗旧版独白光点；点击上方“升级旧版萤火虫”可改成 GS4 式追加约会会话。</div><div class="rmt-firefly-thoughts">${paragraphs}</div></div>`;
+        })() : `<div class="rmt-heart-empty">${readOnly ? '这份档案还没有保存萤火虫话题。' : '点亮以后，这里会出现不同颜色的追加约会话题。'}</div>`;
+        content = `<section class="rmt-firefly-shell"><div class="rmt-firefly-head"><div><small>FIREFLY HABITAT</small><h2>萤火虫栖息地</h2><p>像 GS4 一样，颜色代表不同话题。点一颗光，会展开一段两个人当场发生的追加约会会话；“心声”从对话里不小心漏出来，而不是整页独白。旧光永久保留，每页最多点亮 ${pageSize} 颗。</p></div><span>${voices.length} LIGHTS</span></div><div class="rmt-firefly-field">${points || '<div class="rmt-firefly-empty-stars">✦　·　✧　·　✦</div>'}</div>${pager}<div class="rmt-firefly-legend">${legend}</div>${whisper}</section>`;
     } else {
         const selected = selectedHeartStrip();
         if (selected) session.selectedStripId = selected.id;
@@ -5405,7 +5425,12 @@ function heartFireflyPrompt(context, memoryBank, core, previous = null, sourceMe
     const existing = (Array.isArray(previous?.fireflyVoices) ? previous.fireflyVoices : []).slice(-80).map(item => ({
         color: item.color,
         title: item.title || '',
-        excerpt: core_text.normalizeText((Array.isArray(item.thoughts) ? item.thoughts : [item.line].filter(Boolean)).join(' '), 220),
+        excerpt: core_text.normalizeText(
+            (Array.isArray(item?.script) && item.script.length
+                ? item.script.map(node => node?.text).join(' ')
+                : (Array.isArray(item?.thoughts) ? item.thoughts : [item?.line].filter(Boolean)).join(' ')),
+            260,
+        ),
     }));
     const incremental = existing.length > 0;
     return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 萤火虫栖息地')}
@@ -5415,44 +5440,67 @@ ${incremental ? `UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:
 ${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}
 EXISTING_FIREFLY_TOPICS_JSON:
 ${JSON.stringify(existing, null, 2)}` : ''}
-这是类似“萤火虫栖息地”的【心声解锁库】，不是新发生的剧情。一个光点不是一句格言，而是一个完整的“心声主题”：像恋爱游戏里偶然听见 {{char}} 没说出口的一小段内心展开，有起念、迟疑/联想和收束。
-${incremental ? '旧光点由本地永久保留。本请求只根据本轮新增档案带来的关系变化，解锁尚未出现的新主题；绝对不要改写、覆盖或复述旧光点。' : '这是首次点亮，请建立一片内容丰富但不过度拥挤的初始栖息地。'}
+这里要模拟的是 GS4「ホタルの住処」那种【追加约会会话】，不是把“心の声”误解成一整页 {{char}} 的内心独白。
+一个光点 = 一个当场展开的话题。{{char}} 会因为这里“能听见心声”的气氛，不小心把本音、烦恼、朋友话题或很有个人特色的想法说出口；{{user}} 会有极短的即时回应，话题继续推进，最后可以用一条 user_thought 表示“刚才那句难道是他的心声？”之类的即时感受。
+${incremental ? '旧光点由本地永久保留。本请求只根据本轮新增档案带来的关系变化，解锁尚未出现的新话题；绝对不要改写、覆盖或近义复述旧话题。' : '这是首次点亮，请生成少量但彼此明显不同的追加约会话题。'}
+
 严格输出：
-{"fireflyVoices":[{"id":"F01","color":"pink|blue|yellow|white|desire","title":"4～18字心声主题","thoughts":["第一段内心","第二段内心","可选第三段内心"]}]}
+{"fireflyVoices":[{"id":"F01","color":"pink|blue|yellow|white|desire","title":"4～18字话题标题","script":[{"speaker":"char","text":"..."},{"speaker":"user","text":"..."},{"speaker":"char","text":"..."},{"speaker":"user_thought","text":"..."}]}]}
 
-五种光点：
-- pink 💗：对 {{user}} 的喜欢、在意、依恋、恋爱感。
-- blue 💙：关系里的犹豫、不安、吃醋、害怕失去、说不出口的顾虑。
-- yellow 💛：关于 {{char}} 自己的生活、习惯、工作学习、家人朋友、价值观；只能基于受控角色卡/世界设定或不涉及新事实的自省。
-- white 🤍：脆弱、秘密、羞于承认的小心思、孤独或软弱的一面；不要凭空新增重大创伤或背景事实。
-- desire ♥️：对 {{user}} 直白的渴望。允许明确写“想抱住你 / 想亲你 / 想把你留在身边 / 想让你只看我”这一类身体亲近与占有欲，但不要写露骨性行为、身体部位细节或色情过程。
+颜色含义要按 GS4 的分类来写：
+- pink 💗【恋爱】：{{char}} 对 {{user}} 的恋爱情绪、喜欢、特别感、想更靠近等。
+- blue 💙【恋爱的烦恼】：吃醋、没有把握、担心关系、竞争意识、怕失去、想确认 {{user}} 的心情等。
+- yellow 💛【朋友】：{{char}} 的朋友、同学、同事、朋友圈/小团体、他怎么看身边的人；只有角色卡、世界书或当前档案明确存在的人物才能点名，不能凭空编固定朋友。
+- white 🤍【お楽しみ / 个性话题】：最能体现这个角色自己的有趣话题，例如梦想、兴趣、喜欢的食物、工作/学习习惯、日常怪癖、童年小事、宠物、价值观等；涉及具体事实时必须来自受控角色卡/世界书，不要把它写成“脆弱与秘密”专栏。
+- desire ♥️【本插件扩展，不是 GS4 原四色】：对 {{user}} 更直接的渴望或身体亲近愿望。仍然写成现场对话，不写色情过程或露骨身体细节。
 
-内容结构：
-- 每颗光点必须有 2～4 段 thoughts；每段 20～100 个汉字，整颗约 90～280 个汉字。不能只输出一句短句。
-- 2～4 段要属于同一个主题并自然递进，不要拆成互不相关的句子，也不要写成摘要/标签/金句合集。
-- 只写 {{char}} 的内心。可以在心里称呼或想到 {{user}}，但不要替 {{user}} 说话、决定、回应。
-- 不把心声当成历史事实，不写“已经发生了某件新事”。新增档案只用于判断关系/情绪是否变化，不得把具体敏感经历原样搬进心声。
+会话结构：
+- 每颗必须是 5～10 个 script 节点，总文本约 140～420 个汉字；至少 3 条 char 台词，至少 1 条 user 台词。
+- speaker 只允许 char / user / user_thought。user_thought 最多 1 条，只能放在最后，表示即时感受或“刚才是不是心声”的疑问。
+- user 台词只是【非正史的中性即时反应】（例如疑问、确认、轻笑、短回应），不得替 {{user}} 新增偏好、承诺、重大决定、行动或历史事实。
+- 重点是两个人【当场说话】。不要连续写“她怎么怎样 / 她又怎样 / 她让我怎样”这种第三人称总结；{{char}} 应直接面对 {{user}} 说话或自然谈论当前话题。
+- 不要把全部话题都写成爱情。yellow 和 white 必须真正承担“朋友 / 个性话题”的内容，使 {{char}} 像一个有自己生活和人际的人，而不是所有句子都围着 {{user}} 转。
+- 话题可以让“心声”以不小心说漏嘴、突然坦白、自己也困惑为什么说出来等方式泄露；不要求每句都是内心旁白。
+- 不把会话当成当前聊天已经发生的历史事实。新增档案只用于决定可解锁的话题和关系阶段，不得逐字搬运敏感经历。
 
 数量和分布：
-- ${incremental ? '本轮新增 5～6 个真正新的心声主题；不要求五色平均，按当前关系与人设自然分布。若关系阶段适合，允许新增 ♥️，但不要为了凑数强塞。' : '首次总数 5～6 个；至少覆盖 3 种颜色，按人物与关系自然分配。♥️ 只在关系阶段与人设适合时出现，不为凑五色强塞。'}
-- 主题彼此必须明显不同，不能只是换同义词或把同一占有欲拆成多个光点。
-- ${incremental ? '必须避开 EXISTING_FIREFLY_TOPICS_JSON 里已有主题、原句和近义重复。' : ''}
+- ${incremental ? '本轮新增 5～6 个真正新的话题；不要求五色平均。优先让不同颜色承担不同主题，♥️ 只在关系与人设适合时出现。' : '首次总数 5～6 个；至少覆盖 3 种颜色。优先覆盖 pink / blue / yellow / white 中适合当前角色的类别，♥️ 不是必出项。'}
+- 主题彼此必须明显不同，不能把同一占有欲、同一不安或同一回忆换措辞拆成多个光点。
+- ${incremental ? '必须避开 EXISTING_FIREFLY_TOPICS_JSON 中已有标题、情节核心和近义重复。' : ''}
 只输出 JSON。`;
+}
+
+function normalizeFireflyScript(rawScript) {
+    const allowed = new Set(['char', 'user', 'user_thought']);
+    const script = (Array.isArray(rawScript) ? rawScript : []).slice(0, 10).map(node => {
+        const speaker = core_text.normalizeText(node?.speaker, 40).toLowerCase();
+        const text = core_text.normalizeText(node?.text, 700);
+        if (!allowed.has(speaker) || !text) return null;
+        return { speaker, text };
+    }).filter(Boolean);
+    if (!script.length) return [];
+    const thoughts = script.filter(node => node.speaker === 'user_thought');
+    if (thoughts.length > 1) return [];
+    if (thoughts.length === 1 && script[script.length - 1]?.speaker !== 'user_thought') return [];
+    return script;
 }
 
 function normalizeFireflyVoice(item, index = 0) {
     const color = core_text.normalizeText(item?.color, 20).toLowerCase();
     if (!core_constants.HEART_FIREFLY_COLORS.has(color)) return null;
-    const legacyLine = core_text.normalizeText(item?.line, 360);
+    const script = normalizeFireflyScript(item?.script);
+    const legacyLine = core_text.normalizeText(item?.line, 520);
     const thoughts = core_text.cleanArray(item?.thoughts ?? item?.lines, 4, 360).filter(text => text.length >= 8);
-    if (!thoughts.length && legacyLine.length >= 8) thoughts.push(legacyLine);
-    if (!thoughts.length) return null;
-    const title = core_text.normalizeText(item?.title, 80) || core_text.normalizeText(thoughts[0], 18) || `心声 ${index + 1}`;
-    const line = thoughts.join(' ');
+    if (!script.length && !thoughts.length && legacyLine.length >= 8) thoughts.push(legacyLine);
+    if (!script.length && !thoughts.length) return null;
+    const seedText = script[0]?.text || thoughts[0] || legacyLine;
+    const title = core_text.normalizeText(item?.title, 80) || core_text.normalizeText(seedText, 18) || `话题 ${index + 1}`;
+    const line = script.length ? script.map(node => node.text).join(' ') : thoughts.join(' ');
     return {
         id: core_text.safeId(item?.id, `FIREFLY${String(index + 1).padStart(2, '0')}`),
         color,
         title,
+        script,
         thoughts,
         line,
         sourceArchiveMemoryIds: core_text.cleanArray(item?.sourceArchiveMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40),
@@ -5462,48 +5510,69 @@ function normalizeFireflyVoice(item, index = 0) {
 }
 
 function fireflyVoiceKey(item) {
-    const text = Array.isArray(item?.thoughts) && item.thoughts.length ? item.thoughts.join(' ') : item?.line;
-    return core_incremental.normalizedContentKey(`${item?.title || ''} ${text || ''}`, 1200);
+    const text = Array.isArray(item?.script) && item.script.length
+        ? item.script.map(node => node?.text).join(' ')
+        : (Array.isArray(item?.thoughts) && item.thoughts.length ? item.thoughts.join(' ') : item?.line);
+    return core_incremental.normalizedContentKey(`${item?.title || ''} ${text || ''}`, 1600);
 }
 
 function normalizeFireflyVoicesPart(data, { minTotal = 5, requireDistribution = true, requireRich = true } = {}) {
     const out = (Array.isArray(data?.fireflyVoices) ? data.fireflyVoices : []).slice(0, 6).map(normalizeFireflyVoice).filter(Boolean);
-    if (out.length < minTotal) throw new Error(`萤火虫心声不足：${out.length}/${minTotal}。`);
+    if (out.length < minTotal) throw new Error(`萤火虫会话不足：${out.length}/${minTotal}。`);
     if (requireRich) {
-        const short = out.find(item => !Array.isArray(item.thoughts) || item.thoughts.length < 2 || item.thoughts.join('').length < 70);
-        if (short) throw new Error(`萤火虫「${short.title || short.id}」仍然过短；每颗必须是至少 2 段的完整心声主题。`);
+        const invalid = out.find(item => {
+            const script = Array.isArray(item?.script) ? item.script : [];
+            const chars = script.filter(node => node.speaker === 'char').length;
+            const users = script.filter(node => node.speaker === 'user').length;
+            const totalChars = script.reduce((sum, node) => sum + String(node?.text || '').length, 0);
+            return script.length < 5 || chars < 3 || users < 1 || totalChars < 120;
+        });
+        if (invalid) throw new Error(`萤火虫「${invalid.title || invalid.id}」不是完整的追加约会会话；至少需要 5 个节点、3 条角色台词和 1 条用户即时回应。`);
     }
     if (requireDistribution) {
         const represented = new Set(out.map(item => item.color));
         if (represented.size < 3) throw new Error(`萤火虫颜色分布过窄：${represented.size}/3。首次至少覆盖 3 种颜色。`);
+        if (![...represented].some(color => color === 'yellow' || color === 'white')) {
+            throw new Error('首次萤火虫不能全部围绕恋爱/渴望；至少需要 1 个 yellow「朋友」或 white「お楽しみ/个性话题」。');
+        }
     }
     return out;
 }
 
 function legacyFireflyVoices(session) {
-    return (Array.isArray(session?.fireflyVoices) ? session.fireflyVoices : []).filter(item => !Array.isArray(item?.thoughts) || item.thoughts.length < 2);
+    return (Array.isArray(session?.fireflyVoices) ? session.fireflyVoices : []).filter(item => {
+        const script = Array.isArray(item?.script) ? item.script : [];
+        return script.length < 5;
+    });
 }
 
 function heartFireflyUpgradePrompt(context, core, items) {
     const batch = (Array.isArray(items) ? items : []).slice(0, 6).map(item => ({
         id: core_text.normalizeText(item?.id, 80),
         color: core_text.normalizeText(item?.color, 20),
-        legacyLine: core_text.normalizeText(item?.line, 360),
+        legacyText: core_text.normalizeText(
+            (Array.isArray(item?.script) && item.script.length
+                ? item.script.map(node => node?.text).join(' ')
+                : (Array.isArray(item?.thoughts) && item.thoughts.length ? item.thoughts.join(' ') : item?.line)),
+            700,
+        ),
     }));
-    return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 旧版萤火虫心声升级')}
+    return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 旧版萤火虫升级为 GS4 式会话')}
 RELATIONSHIP_TONE_ONLY_JSON:
 ${heartDramaRelationshipOnlyContext(core)}
 LEGACY_FIREFLY_BATCH_JSON:
 ${JSON.stringify(batch, null, 2)}
 
-任务：把这些旧版“一句心声”升级成完整的萤火虫心声主题。必须逐项保持原 id 和 color，不得新增、删除、合并或交换颜色。
+任务：把旧版“独白/短心声”升级成 GS4「ホタルの住処」风格的【追加约会会话】。必须逐项保持原 id 和 color，不得新增、删除、合并或交换颜色。
 严格输出：
-{"fireflyVoices":[{"id":"原ID","color":"原颜色","title":"4～18字主题","thoughts":["第一段内心","第二段内心","可选第三/第四段"]}]}
+{"fireflyVoices":[{"id":"原ID","color":"原颜色","title":"4～18字话题标题","script":[{"speaker":"char","text":"..."},{"speaker":"user","text":"..."},{"speaker":"char","text":"..."},{"speaker":"user_thought","text":"..."}]}]}
 要求：
-- 每项 2～4 段 thoughts，每段 20～100 个汉字，总体约 90～280 个汉字。
-- 以 legacyLine 的核心情绪为起点自然展开，但不要机械重复原句；要像一次真正被听见的内心活动，有前后递进和收束。
-- 不新增历史事实，不把档案里的敏感具体经历重新复述，不替 {{user}} 说话或做决定。
-- id / color 必须与输入逐项一致。只输出 JSON。`;
+- 每项 5～10 个节点，至少 3 条 char、1 条 user；总文本约 140～420 个汉字。
+- user 只能是非正史、中性、极短的即时回应；不得替用户新增决定、承诺、偏好或历史事实。
+- user_thought 最多 1 条且只能放结尾，用来表现“刚才是不是他的心声？”一类即时感受。
+- 以 legacyText 的核心主题为起点改成【两个人当场对话】，不要继续扩写成长篇内心独白。
+- 颜色语义必须遵守：pink=恋爱，blue=恋爱的烦恼，yellow=朋友，white=お楽しみ/角色个性话题，desire=本插件扩展的直白渴望。
+- 不新增历史事实，不机械复述档案敏感细节；id / color 必须逐项一致。只输出 JSON。`;
 }
 
 function normalizeFireflyUpgradePart(data, expectedItems) {
@@ -5767,7 +5836,8 @@ function applyHeartPartialPatch(base, patch) {
             return {
                 ...structuredClone(item),
                 title: next.title,
-                thoughts: structuredClone(next.thoughts),
+                script: structuredClone(next.script),
+                thoughts: [],
                 line: next.line,
                 upgradedAt: Date.now(),
             };
@@ -5929,13 +5999,13 @@ async function generateHeartFirefliesSection() {
         try {
             const upgraded = await requestHeartPart(
                 heartFireflyUpgradePrompt(context, base, legacyBatch),
-                '角色互动 · 正在把旧版萤火虫升级为完整心声…',
+                '角色互动 · 正在把旧版萤火虫升级为 GS4 式追加约会会话…',
                 { maxTokens: 5200, temperature: 0.72, context, origin, taskKey: `${taskKey}:upgrade`, mode: core_constants.MODE.HEART, background: true },
                 raw => normalizeFireflyUpgradePart(raw, legacyBatch),
             );
             const result = await persistHeartPartialPatch('firefly-upgrade', { type: 'firefly-upgrade', fireflyVoices: upgraded }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision);
             const remain = legacyFireflyVoices(result.updated || base).length;
-            globalThis.toastr?.success?.(`已升级 ${upgraded.length} 个旧光点为完整心声${remain ? `，还剩 ${remain} 个可继续升级` : '，旧版短句已全部升级'}.`, '心跳回忆');
+            globalThis.toastr?.success?.(`已升级 ${upgraded.length} 个旧光点为追加约会会话${remain ? `，还剩 ${remain} 个可继续升级` : '，旧版独白光点已全部升级'}.`, '心跳回忆');
         } catch (error) {
             if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(error?.message || String(error)), '心跳回忆');
         } finally {
@@ -6309,6 +6379,7 @@ __m_modes_heart_js.heartPostVoicePrompt = heartPostVoicePrompt;
 __m_modes_heart_js.heartSeasonVoicePrompt = heartSeasonVoicePrompt;
 __m_modes_heart_js.heartSeasonScenarioPrompt = heartSeasonScenarioPrompt;
 __m_modes_heart_js.heartFireflyPrompt = heartFireflyPrompt;
+__m_modes_heart_js.normalizeFireflyScript = normalizeFireflyScript;
 __m_modes_heart_js.normalizeFireflyVoice = normalizeFireflyVoice;
 __m_modes_heart_js.fireflyVoiceKey = fireflyVoiceKey;
 __m_modes_heart_js.normalizeFireflyVoicesPart = normalizeFireflyVoicesPart;
@@ -11533,27 +11604,29 @@ async function regenerateHeartScenario(session, item, context, memoryBank, origi
 async function regenerateHeartFirefly(session, item, context, memoryBank, origin, taskKey) {
     const color = core_text.normalizeText(item?.color, 20).toLowerCase();
     const meta = {
-        pink: '对 {{user}} 的喜欢、在意、依恋、恋爱感',
-        blue: '关系里的犹豫、不安、吃醋、害怕失去、说不出口的顾虑',
-        yellow: '关于 {{char}} 自己的生活、自省与价值观；不得新增重大背景事实',
-        white: '脆弱、秘密、羞于承认的小心思；不得凭空新增重大创伤',
-        desire: '对 {{user}} 直白的渴望；允许想抱住、亲吻、靠近、占有欲，但禁止露骨性行为或色情细节',
-    }[color] || '心声';
-    const prompt = `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 单个萤火虫心声重新生成')}
-RELATIONSHIP_TONE_ONLY_JSON:\n${modes_heart.heartDramaRelationshipOnlyContext(session)}
+        pink: 'GS4 分类：恋爱。围绕喜欢、特别感、想更靠近等恋爱情绪',
+        blue: 'GS4 分类：恋爱的烦恼。围绕吃醋、不安、竞争意识、怕失去或想确认关系',
+        yellow: 'GS4 分类：朋友。围绕明确存在的朋友、同学、同事或朋友圈关系；不得凭空编固定人物',
+        white: 'GS4 分类：お楽しみ / 个性话题。围绕角色自己的梦想、兴趣、食物、习惯、工作学习、宠物、价值观等；具体事实必须来自受控设定',
+        desire: '本插件扩展：对 {{user}} 更直白的渴望或身体亲近愿望；禁止露骨性行为或色情细节',
+    }[color] || '追加约会话题';
+    const prompt = `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 单个萤火虫追加约会会话重新生成')}
+RELATIONSHIP_TONE_ONLY_JSON:
+${modes_heart.heartDramaRelationshipOnlyContext(session)}
 当前光点颜色固定为 ${color}，含义：${meta}。
-只重新生成这一颗光点对应的完整心声主题，不得改变颜色；不要写成已经发生的新剧情，不替 {{user}} 说话或做决定。
-必须包含 2～4 段自然递进的 thoughts，总体约 90～280 个汉字，不能退化成一句格言式短句。
-CURRENT_FIREFLY_JSON:\n${JSON.stringify(item, null, 2)}
-严格输出：{"fireflyVoices":[{"id":"${core_text.esc(item.id)}","color":"${core_text.esc(color)}","title":"4～18字主题","thoughts":["第一段内心","第二段内心"]}]}。只输出 JSON。`;
+只重新生成这一颗光点对应的【现场追加约会会话】，不得改变颜色。GS4 的“心の声”在表现上是角色在特殊气氛里把本音不小心说出口、主人公回应、话题继续推进，而不是连续的第三人称内心独白。
+CURRENT_FIREFLY_JSON:
+${JSON.stringify(item, null, 2)}
+严格输出：{"fireflyVoices":[{"id":"${core_text.esc(item.id)}","color":"${core_text.esc(color)}","title":"4～18字话题标题","script":[{"speaker":"char","text":"..."},{"speaker":"user","text":"..."},{"speaker":"char","text":"..."},{"speaker":"user_thought","text":"..."}]}]}。
+要求：5～10 个节点，至少3条 char、1条 user，总文本约140～420字；user 只能是非正史的中性即时回应，user_thought 最多1条且只能放最后。不要连续写“她怎么怎样”式总结。只输出 JSON。`;
     const list = await modes_heart.requestHeartPart(
         prompt,
-        '重新生成萤火虫心声…',
-        taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:firefly`, 3200, 0.8),
+        '重新生成萤火虫追加约会会话…',
+        taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:firefly`, 4200, 0.75),
         raw => modes_heart.normalizeFireflyVoicesPart(raw, { minTotal: 1, requireDistribution: false, requireRich: true }),
     );
     const candidate = list[0];
-    if (!candidate || candidate.color !== color) throw new Error('重新生成的萤火虫心声没有保持原颜色。');
+    if (!candidate || candidate.color !== color) throw new Error('重新生成的萤火虫会话没有保持原颜色。');
     return { ...candidate, id: item.id, color, generatedAt: Date.now() };
 }
 
@@ -14147,6 +14220,7 @@ function archiveOverviewEntryFromChat(chat, currentChatId) {
 
 async function refreshArchiveOverview({ force = false } = {}) {
     const context = core_context.currentCharacterGuard();
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     resetArchiveOverviewForCharacter(context);
     rememberCurrentArchiveForOverview(context);
     const key = archiveOverviewKey(context);
@@ -14170,6 +14244,7 @@ async function refreshArchiveOverview({ force = false } = {}) {
         });
         if (!response.ok) throw new Error(`档案室一览读取失败：HTTP ${response.status}`);
         const rows = await response.json();
+        if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
         const latest = core_context.currentCharacterGuard();
         if (latest.characterId !== expectedCharacterId) throw new DOMException('Character changed', 'AbortError');
         rememberCurrentArchiveForOverview(latest);
@@ -14299,6 +14374,7 @@ const runtimeState = __m_core_state_js.state;
 
 function queueDeferredCommit(origin, commit) {
     if (!origin?.characterKey || !origin?.chatId || !commit?.kind) return;
+    if (Number(origin.lifecycleEpoch) !== runtimeState.runtimeLifecycleEpoch) return;
     const key = `${origin.characterKey}|${origin.chatId}`;
     const list = runtimeState.deferredChatCommits.get(key) || [];
     if (commit.kind === 'heartPatches') {
@@ -15455,7 +15531,10 @@ async function fetchEverMindCurrentChatRecords(context, expectedChatId, signal) 
         console.warn('[HeartbeatMemories] EverMind current-chat source has an invalid API URL');
         return [];
     }
-    if (!['http:', 'https:'].includes(base.protocol)) return [];
+    if (!isAllowedEverMindApiBaseUrl(base)) {
+        console.warn('[HeartbeatMemories] EverMind current-chat source requires HTTPS unless it uses a loopback host');
+        return [];
+    }
     const endpoint = new URL('/api/v0/memories', base);
     endpoint.searchParams.set('user_id', core_text.normalizeText(settings.user_id, 200) || 'st_user');
     endpoint.searchParams.set('group_id', groupId);
@@ -15479,6 +15558,17 @@ async function fetchEverMindCurrentChatRecords(context, expectedChatId, signal) 
     const data = await response.json();
     const flattened = flattenExternalMemoryPayload(data?.result?.memories ?? data?.memories ?? data, 'EverMind');
     return normalizeExternalMemoryRecords(flattened.map((item, index) => ({ ...item, externalId: `EVERMIND-${String(index + 1).padStart(3, '0')}` })));
+}
+
+function isAllowedEverMindApiBaseUrl(value) {
+    let url;
+    try { url = value instanceof URL ? value : new URL(core_text.normalizeText(value, 2000)); }
+    catch { return false; }
+    if (url.protocol === 'https:') return true;
+    if (url.protocol !== 'http:') return false;
+    const hostname = String(url.hostname || '').toLowerCase();
+    if (hostname === 'localhost' || hostname === '[::1]') return true;
+    return /^127(?:\.\d{1,3}){3}$/.test(hostname);
 }
 
 async function collectCurrentChatExternalMemory(context, expectedChatId, signal) {
@@ -15551,6 +15641,7 @@ async function collectCurrentChatExternalMemory(context, expectedChatId, signal)
 
 async function readCurrentChatMemoryPlugins() {
     const context = core_context.currentCharacterGuard();
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) throw new Error('当前还有内容生成任务在进行，请等生成结束后再扫描记忆 / 摘要。');
     const chatId = core_context.getChatId(context);
     if (!chatId) throw new Error('无法识别当前聊天窗口。');
@@ -15566,6 +15657,7 @@ async function readCurrentChatMemoryPlugins() {
         ? String(core_text.hashString(`${result.fingerprint}|WI:${worldInfo.fingerprint}`))
         : result.fingerprint;
     const preflight = { ...result, fingerprint: combinedFingerprint, chatId, readAt: Date.now(), totalChars, recordChars, worldInfo };
+    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
     runtimeState.memoryPreflightCache.set(core_context.chatScopeKey(context), preflight);
     if (!result.records.length && !worldInfo.entries.length) {
         globalThis.toastr?.info?.('当前窗口没有检测到可读取的记忆 / 摘要，也没有选择记忆相关世界书；建档仍会使用聊天正文。', '心跳回忆');
@@ -16047,6 +16139,7 @@ __m_archive_repository_js.externalMemorySourceSummary = externalMemorySourceSumm
 __m_archive_repository_js.normalizeExternalMemoryRecords = normalizeExternalMemoryRecords;
 __m_archive_repository_js.flattenExternalMemoryPayload = flattenExternalMemoryPayload;
 __m_archive_repository_js.currentChatSummaryMemoryRecords = currentChatSummaryMemoryRecords;
+__m_archive_repository_js.isAllowedEverMindApiBaseUrl = isAllowedEverMindApiBaseUrl;
 __m_archive_repository_js.externalMemoryImportPrompt = externalMemoryImportPrompt;
 __m_archive_repository_js.normalizeExternalImportedMemories = normalizeExternalImportedMemories;
 __m_archive_repository_js.getCurrentUsableMessageCount = getCurrentUsableMessageCount;
@@ -16219,20 +16312,22 @@ async function fetchIndexedArchiveSnapshot(entry, context = core_context.getCont
     const key = archiveSnapshotCacheKey(entry);
     const cached = runtimeState.archiveSnapshotCache.get(key);
     if (cached && Date.now() - Number(cached.loadedAt || 0) < 120000) return cached;
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     const avatar = core_context.archiveEntryAvatarName(entry, context);
     if (!avatar || typeof context.getRequestHeaders !== 'function') throw new Error('无法定位这个角色的聊天档案文件。');
-    const response = await fetch('/api/characters/chats', {
+    const wantedChatId = core_context.comparableChatId(entry.chatId);
+    if (!wantedChatId) throw new Error('无法识别这个历史聊天的文件 ID。');
+    const response = await fetch('/api/chats/get', {
         method: 'POST',
         headers: context.getRequestHeaders(),
         cache: 'no-cache',
-        body: JSON.stringify({ avatar_url: avatar, metadata: true }),
+        body: JSON.stringify({ avatar_url: avatar, file_name: wantedChatId }),
     });
     if (!response.ok) throw new Error(`读取档案失败：HTTP ${response.status}`);
-    const rows = await response.json();
-    const wantedChatId = core_context.comparableChatId(entry.chatId);
-    const row = (Array.isArray(rows) ? rows : []).find(item => core_context.comparableChatId(item?.file_id || item?.file_name) === wantedChatId);
-    if (!row) throw new Error('没有在这个角色的聊天文件中找到对应档案。');
-    const metadata = row?.chat_metadata && typeof row.chat_metadata === 'object' ? row.chat_metadata : {};
+    const chat = await response.json();
+    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
+    const header = Array.isArray(chat) ? chat[0] : chat;
+    const metadata = header?.chat_metadata && typeof header.chat_metadata === 'object' ? header.chat_metadata : {};
     const memory = archive_repository.migrateArchiveInMemory(metadata[core_constants.MEMORY_KEY]);
     if (!memory || core_context.comparableChatId(memory.chatId) !== wantedChatId) throw new Error('这个聊天文件里没有可读取的心跳回忆档案。');
     const indexedName = core_text.normalizeText(entry?.characterName, 120);
@@ -16242,6 +16337,7 @@ async function fetchIndexedArchiveSnapshot(entry, context = core_context.getCont
     const stored = metadata[core_constants.CACHE_KEY];
     if (core_cache.isCompressedCacheRecord(stored)) {
         const hydrated = await core_cache.gunzipJson(stored.data);
+        if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
         if (!hydrated || typeof hydrated !== 'object') throw new Error('这个档案的已生成内容缓存无法解压。');
         cache = hydrated;
     } else if (stored && typeof stored === 'object') {
@@ -16423,7 +16519,7 @@ async function openIndexedArchive(characterKey, chatId, entryId = '') {
     ui_overlay.openOverlay();
     ui_overlay.topTitle('心跳回忆 · 正在读取只读档案…');
     const body = ui_overlay.bodyEl();
-    if (body) body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在读取这个聊天的档案与已生成内容…</b><div class="rmt-loading-note">只读取 metadata，不切换当前角色或聊天。</div></div></div>';
+    if (body) body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在读取这个聊天的档案与已生成内容…</b><div class="rmt-loading-note">只请求这一条目标聊天，不扫描同角色的其他聊天；不会切换当前角色或聊天。</div></div></div>';
     try {
         const snapshot = await fetchIndexedArchiveSnapshot(entry, context);
         showIndexedArchiveSnapshot(snapshot);
@@ -17346,12 +17442,14 @@ function base64ToBytes(value) {
 async function gzipJson(value) {
     if (typeof CompressionStream !== 'function') return null;
     const json = JSON.stringify(value ?? {});
-    if (json.length > core_constants.MAX_CACHE_SOURCE_CHARS) throw new Error('剧场缓存过大，已停止压缩保存。');
-    const stream = new Blob([json], { type: 'application/json' }).stream().pipeThrough(new CompressionStream('gzip'));
+    const source = new Blob([json], { type: 'application/json' });
+    const sourceBytes = source.size;
+    if (sourceBytes > core_constants.MAX_CACHE_SOURCE_BYTES) throw new Error('剧场缓存的 UTF-8 数据过大，已停止压缩保存。');
+    const stream = source.stream().pipeThrough(new CompressionStream('gzip'));
     const buffer = await new Response(stream).arrayBuffer();
     const data = bytesToBase64(new Uint8Array(buffer));
     if (data.length > core_constants.MAX_CACHE_COMPRESSED_BASE64_CHARS) throw new Error('压缩后的剧场缓存仍然过大，已停止保存。');
-    return { data, sourceChars: json.length };
+    return { data, sourceChars: json.length, sourceBytes };
 }
 
 async function gunzipJson(base64) {
@@ -17396,6 +17494,7 @@ function compressedCacheManifest(cache, packed) {
         updatedAt: Number(cache?.updatedAt) || Date.now(),
         modes,
         sourceChars: Number(packed?.sourceChars) || 0,
+        sourceBytes: Number(packed?.sourceBytes) || 0,
         data: packed?.data || '',
     };
 }
@@ -17418,6 +17517,7 @@ function cacheStillMatchesLiveArchive(cache, context, expectedScope) {
 
 async function persistCompressedCacheNow(context, cache, expectedScope = cacheScopeFromContext(context)) {
     if (!cache || typeof cache !== 'object') return false;
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     if (typeof CompressionStream !== 'function') {
         let latest;
         try { latest = core_context.currentCharacterGuard(); } catch { return false; }
@@ -17427,7 +17527,9 @@ async function persistCompressedCacheNow(context, cache, expectedScope = cacheSc
         return true;
     }
     await core_context.yieldToUi();
+    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) return false;
     const packed = await gzipJson(cache);
+    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) return false;
     if (!packed?.data) return false;
     const record = compressedCacheManifest(cache, packed);
     let latest;
@@ -17502,9 +17604,12 @@ async function ensureCacheHydrated(context = core_context.currentCharacterGuard(
         rememberRuntimeSessionCache(scope, stored);
         return stored;
     }
-    const promise = (async () => {
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    let promise;
+    const operation = (async () => {
         try {
             const cache = await gunzipJson(stored.data);
+            if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
             if (!cache || typeof cache !== 'object') {
                 const empty = {};
                 rememberRuntimeSessionCache(scope, empty);
@@ -17519,13 +17624,17 @@ async function ensureCacheHydrated(context = core_context.currentCharacterGuard(
             rememberRuntimeSessionCache(scope, cache);
             return cache;
         } catch (error) {
+            if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw error;
             // A damaged/imported compressed cache must not create an endless hydrate →
             // chooser refresh loop. Keep the canonical archive readable and treat only the
             // derived theater cache as unavailable for this runtime session.
             runtimeState.cacheHydrationErrors.set(scope, core_text.normalizeText(error?.message || String(error), 1600));
             throw error;
         }
-    })().finally(() => runtimeState.cacheHydrationPromises.delete(scope));
+    })();
+    promise = operation.finally(() => {
+        if (runtimeState.cacheHydrationPromises.get(scope) === promise) runtimeState.cacheHydrationPromises.delete(scope);
+    });
     runtimeState.cacheHydrationPromises.set(scope, promise);
     return promise;
 }
@@ -17875,6 +17984,9 @@ function destroyMemoryTheater() {
                 liveContext.saveMetadataDebounced?.();
             }
         } catch {}
+        // Invalidate every asynchronous state writer before clearing containers. Results that
+        // started in the old runtime lifetime must not refill caches after disable/clean.
+        runtimeState.runtimeLifecycleEpoch += 1;
         const timer = globalThis.__heartbeatMemoriesMountTimer;
         if (timer) clearInterval(timer);
         globalThis.__heartbeatMemoriesMountTimer = null;
@@ -17906,14 +18018,24 @@ function destroyMemoryTheater() {
         runtimeState.activeAdvBulkScopes.clear();
         runtimeState.cgImageLifecycleEpoch += 1;
         runtimeState.activeCgImageTasks.clear();
+        runtimeState.avatarDialogueRequestEpoch += 1;
+        runtimeState.activeAvatarDialogue = null;
         runtimeState.roomLifeRefreshPromise = null;
+        if (runtimeState.butterflyTransitionTimer) clearTimeout(runtimeState.butterflyTransitionTimer);
+        runtimeState.butterflyTransitionTimer = 0;
         if (runtimeState.chooserRefreshTimer) clearTimeout(runtimeState.chooserRefreshTimer);
         runtimeState.chooserRefreshTimer = 0;
         runtimeState.archiveOverviewPromise = null;
         runtimeState.archiveOverviewPromiseKey = '';
+        runtimeState.archiveOverviewCache = { key: '', fetchedAt: 0, items: [] };
         runtimeState.archiveOverviewAllowedChats.clear();
         runtimeState.archiveOverviewKnownArchives.clear();
+        runtimeState.archiveOverviewLastKey = '';
         runtimeState.memoryProviderDiscoveryCache = { signature: '', scannedAt: 0, items: [] };
+        runtimeState.memoryPreflightCache.clear();
+        runtimeState.deferredChatCommits.clear();
+        runtimeState.archiveSnapshotCache.clear();
+        runtimeState.connectionModelCache.clear();
         for (const timer of runtimeState.cachePersistTimers.values()) clearTimeout(timer);
         runtimeState.cachePersistTimers.clear();
         runtimeState.cacheHydrationPromises.clear();
@@ -17922,8 +18044,14 @@ function destroyMemoryTheater() {
         runtimeState.pendingCompressedCacheWrites.clear();
         runtimeState.usableMessageCountCache.clear();
         runtimeState.busy = false;
+        runtimeState.contentManagerOpen = false;
         runtimeState.activeMode = null;
         runtimeState.activeSession = null;
+        runtimeState.activeTaskLabel = '';
+        runtimeState.activeTaskBackgrounded = false;
+        runtimeState.activeTaskOrigin = null;
+        runtimeState.archiveViewLevel = 'library';
+        runtimeState.archiveLibraryCharacterKey = '';
         runtimeState.archiveCharacterRelationSelection = '';
         runtimeState.relationSelectedKey = '';
         runtimeState.activeArchiveSnapshot = null;
@@ -17942,9 +18070,9 @@ __m_heartbeatMemories_js.destroyMemoryTheater = destroyMemoryTheater;
 __init_core_constants_js();
 __init_core_text_js();
 __init_core_evidence_js();
+__init_core_state_js();
 __init_core_context_js();
 __init_core_incremental_js();
-__init_core_state_js();
 __init_ui_archivePortal_js();
 __init_ui_styles_js();
 __init_ui_settingsPanel_js();

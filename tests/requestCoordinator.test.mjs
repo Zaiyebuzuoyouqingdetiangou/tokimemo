@@ -1268,27 +1268,48 @@ test('r37 granular regeneration targets are allowlisted and replace only after a
     assert.match(overlaySource, /如果生成失败、聊天切换或档案 revision 变化，旧内容会原样保留/);
 });
 
-test('r41.8 firefly habitat generates 5-6 rich inner-voice topics without forcing every color', () => {
+test('r42.1 firefly habitat generates 5-6 GS4-style additional-date conversations', () => {
     const rows = [
         ['F1', 'pink'], ['F2', 'blue'], ['F3', 'yellow'], ['F4', 'white'], ['F5', 'desire'], ['F6', 'pink'],
     ].map(([id, color], index) => ({
-        id, color, title: `心声主题${index + 1}`,
-        thoughts: [
-            `这是第${index + 1}颗光点的第一段内心。我并不是忽然想到这一件事，只是每次安静下来时，这个念头都会慢慢浮上来，让我没办法像平常那样装作毫不在意。`,
-            `这是第${index + 1}颗光点的第二段内心。真要把它说出口大概会显得太认真，所以还是先留在心里，可我自己知道，这份心情已经不是一句玩笑就能带过去的。`,
+        id, color, title: `萤火虫话题${index + 1}`,
+        script: [
+            { speaker: 'char', text: `第${index + 1}个话题从眼前的萤火虫说起。我本来只是随口想说点什么，可站在这里以后，好像平常会藏住的话也更容易跑出来。` },
+            { speaker: 'user', text: '你今天好像比平时坦率一点。' },
+            { speaker: 'char', text: '大概是这里的传闻害的吧。不过既然已经说到这里，我也不想再装作完全不在意。' },
+            { speaker: 'char', text: '有些事情直接说出口确实有点难，可如果只是借着这些光，我好像又能再多说一点。' },
+            { speaker: 'user_thought', text: '刚才那句话……难道真的是他的心声吗？' },
         ],
     }));
     const normalized = api.normalizeFireflyVoicesPart({ fireflyVoices: rows });
     assert.equal(normalized.length, 6);
-    assert.equal(normalized[0].thoughts.length, 2);
-    assert.ok(normalized[0].line.length > 70);
+    assert.equal(normalized[0].script.length, 5);
+    assert.equal(normalized[0].script.at(-1).speaker, 'user_thought');
+    assert.ok(normalized[0].line.length > 120);
     assert.ok(new Set(normalized.map(item => item.color)).size >= 3);
     const promptSource = sourceByFile.get('modes/heart.js');
-    assert.match(promptSource, /desire ♥️/);
-    assert.match(promptSource, /想抱住你 \/ 想亲你 \/ 想把你留在身边/);
-    assert.match(promptSource, /每颗光点必须有 2～4 段 thoughts/);
-    assert.match(promptSource, /本轮新增 5～6 个真正新的心声主题/);
+    assert.match(promptSource, /GS4「ホタルの住処」/);
+    assert.match(promptSource, /pink 💗【恋爱】/);
+    assert.match(promptSource, /blue 💙【恋爱的烦恼】/);
+    assert.match(promptSource, /yellow 💛【朋友】/);
+    assert.match(promptSource, /white 🤍【お楽しみ \/ 个性话题】/);
+    assert.match(promptSource, /desire ♥️【本插件扩展，不是 GS4 原四色】/);
+    assert.match(promptSource, /每颗必须是 5～10 个 script 节点/);
+    assert.match(promptSource, /不要连续写“她怎么怎样/);
+    assert.match(promptSource, /本轮新增 5～6 个真正新的话题/);
     assert.match(promptSource, /首次总数 5～6 个/);
+});
+
+test('r42.1 first firefly batch must include at least one friend or character-specific topic', () => {
+    const mk = (id, color) => ({ id, color, title: id, script: [
+        { speaker: 'char', text: '站在这些光里，平常会绕开的话题好像也变得容易开口一点。我本来以为自己能装得和平时一样。' },
+        { speaker: 'user', text: '那你现在想说什么？' },
+        { speaker: 'char', text: '就是有些事情其实一直放在心上，只是直接说出来会显得太认真，所以我才总想换个轻松点的说法。' },
+        { speaker: 'char', text: '不过这里不是传说会让人说出心声吗？那我今天偶尔坦率一点，也可以怪到这些萤火虫头上。' },
+        { speaker: 'user_thought', text: '他今天真的和平时有点不一样……' },
+    ] });
+    const romanceOnly = [mk('A','pink'), mk('B','blue'), mk('C','desire'), mk('D','pink'), mk('E','blue')];
+    assert.throws(() => api.normalizeFireflyVoicesPart({ fireflyVoices: romanceOnly }), /至少需要 1 个 yellow/);
 });
 
 test('r41 HEART UI exposes firefly habitat as a third independent interaction tab', () => {
@@ -1446,26 +1467,36 @@ test('r41.1 firefly incremental cursor waits for new archive memories and then e
     assert.deepEqual(api.incrementalArchiveMemoryIds(legacy, bank, 'fireflies'), []);
 });
 
-test('r41.7 legacy one-line fireflies remain readable and can be upgraded in place', () => {
+test('r42.1 legacy monologue fireflies remain readable and are marked for GS4-style conversation upgrade', () => {
     const legacy = api.normalizeFireflyVoice({ id: 'OLD1', color: 'pink', line: '我总是下意识先去看你有没有在附近。' });
     assert.equal(legacy.thoughts.length, 1);
+    assert.equal(legacy.script.length, 0);
     assert.equal(legacy.line, '我总是下意识先去看你有没有在附近。');
+    assert.equal(api.legacyFireflyVoices({ fireflyVoices: [legacy] }).length, 1);
     const heartSource = sourceByFile.get('modes/heart.js');
     const viewSource = sourceByFile.get('ui/heartView.js');
     assert.match(heartSource, /patch\.type === 'firefly-upgrade'/);
+    assert.match(heartSource, /升级为 GS4 式会话/);
     assert.match(heartSource, /legacyFireflyVoices\(base\)\.slice\(0, 6\)/);
-    assert.match(viewSource, /升级旧版萤火虫/);
+    assert.match(viewSource, /旧版独白光点/);
 });
 
-test('r41.7 legacy firefly upgrade preserves ids, colors, and original provenance while replacing only derived text', () => {
+test('r42.1 legacy firefly upgrade preserves ids, colors, and provenance while replacing only derived presentation with a conversation', () => {
     const base = {
         kind: 'heart',
         fireflyVoices: [{ id: 'OLD1', color: 'blue', line: '我有点怕你哪天忽然不再回头看我。', sourceArchiveMemoryIds: ['M014'], incrementBatchId: 'B1', generatedAt: 10 }],
         selectedFireflyId: 'OLD1', generationParts: { fireflies: true }, view: 'fireflies',
     };
+    const script = [
+        { speaker: 'char', text: '这里这么安静，我反而有点不知道该不该把话说得太明白。平时总觉得自己还能装得若无其事。' },
+        { speaker: 'user', text: '你是在担心什么吗？' },
+        { speaker: 'char', text: '大概吧。越是认真，就越怕有一天发现自己其实并没有站在最靠近你的地方。' },
+        { speaker: 'char', text: '我知道这样想有点难看，可这里不是传说会让人把心里话说出来吗？那就当我今天只是中了这个传闻的招。' },
+        { speaker: 'user_thought', text: '他刚才那句话……难道真的是一直没说出口的心声吗？' },
+    ];
     const upgraded = api.applyHeartPartialPatch(base, {
         type: 'firefly-upgrade',
-        fireflyVoices: [{ id: 'OLD1', color: 'blue', title: '不敢问出口', thoughts: ['我知道这种不安说出来可能显得很孩子气，可越是在意你，越会怕自己有一天突然跟不上你的脚步。', '所以我总装作没事，甚至故意把话题岔开。只是如果你真的回头看我一眼，我大概还是会立刻安心下来。'], line: '新内容' }],
+        fireflyVoices: [{ id: 'OLD1', color: 'blue', title: '不敢问出口', script }],
     });
     assert.equal(upgraded.fireflyVoices.length, 1);
     assert.equal(upgraded.fireflyVoices[0].id, 'OLD1');
@@ -1473,12 +1504,18 @@ test('r41.7 legacy firefly upgrade preserves ids, colors, and original provenanc
     assert.deepEqual(upgraded.fireflyVoices[0].sourceArchiveMemoryIds, ['M014']);
     assert.equal(upgraded.fireflyVoices[0].incrementBatchId, 'B1');
     assert.equal(upgraded.fireflyVoices[0].generatedAt, 10);
-    assert.equal(upgraded.fireflyVoices[0].thoughts.length, 2);
+    assert.equal(upgraded.fireflyVoices[0].script.length, 5);
 });
 
-test('r41.7 legacy firefly upgrade validator refuses id/color drift', () => {
+test('r42.1 legacy firefly upgrade validator refuses id/color drift', () => {
     const expected = [{ id: 'OLD1', color: 'pink' }];
-    const rich = { id: 'OLD1', color: 'blue', title: '错色', thoughts: ['第一段心声足够长，描述角色自己慢慢浮起的念头，而不是一句孤立的短句。越想假装不在意，反而越能感觉到那份情绪一直停在心里。', '第二段继续沿着同一个主题展开，并给这份没有说出口的情绪一个自然的收束。就算最后还是没有说出口，他也已经很清楚自己真正害怕和在乎的是什么。'] };
+    const rich = { id: 'OLD1', color: 'blue', title: '错色', script: [
+        { speaker: 'char', text: '这里的光一闪一闪的，看久了好像连平常不想承认的事都容易说出口。我本来还想装作只是随便看看风景。' },
+        { speaker: 'user', text: '比如什么？你从刚才开始就有点奇怪。' },
+        { speaker: 'char', text: '比如我其实会在意你是不是把别人看得比我更重要。说出来挺幼稚的吧，可我越想装得不在乎，反而越容易注意这些事。' },
+        { speaker: 'char', text: '算了，就当是这里的传闻害我多嘴。平时我可不会这么坦白。今晚说过的话，至少别马上拿来笑我。' },
+        { speaker: 'user_thought', text: '他是在吃醋吗……？刚才那种坦率的语气，和平时真的不太一样。' },
+    ] };
     assert.throws(() => api.normalizeFireflyUpgradePart({ fireflyVoices: [rich] }, expected), /改变了颜色/);
 });
 

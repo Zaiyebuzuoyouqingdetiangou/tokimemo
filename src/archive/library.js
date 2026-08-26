@@ -146,20 +146,22 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
     const key = archiveSnapshotCacheKey(entry);
     const cached = runtimeState.archiveSnapshotCache.get(key);
     if (cached && Date.now() - Number(cached.loadedAt || 0) < 120000) return cached;
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     const avatar = core_context.archiveEntryAvatarName(entry, context);
     if (!avatar || typeof context.getRequestHeaders !== 'function') throw new Error('无法定位这个角色的聊天档案文件。');
-    const response = await fetch('/api/characters/chats', {
+    const wantedChatId = core_context.comparableChatId(entry.chatId);
+    if (!wantedChatId) throw new Error('无法识别这个历史聊天的文件 ID。');
+    const response = await fetch('/api/chats/get', {
         method: 'POST',
         headers: context.getRequestHeaders(),
         cache: 'no-cache',
-        body: JSON.stringify({ avatar_url: avatar, metadata: true }),
+        body: JSON.stringify({ avatar_url: avatar, file_name: wantedChatId }),
     });
     if (!response.ok) throw new Error(`读取档案失败：HTTP ${response.status}`);
-    const rows = await response.json();
-    const wantedChatId = core_context.comparableChatId(entry.chatId);
-    const row = (Array.isArray(rows) ? rows : []).find(item => core_context.comparableChatId(item?.file_id || item?.file_name) === wantedChatId);
-    if (!row) throw new Error('没有在这个角色的聊天文件中找到对应档案。');
-    const metadata = row?.chat_metadata && typeof row.chat_metadata === 'object' ? row.chat_metadata : {};
+    const chat = await response.json();
+    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
+    const header = Array.isArray(chat) ? chat[0] : chat;
+    const metadata = header?.chat_metadata && typeof header.chat_metadata === 'object' ? header.chat_metadata : {};
     const memory = archive_repository.migrateArchiveInMemory(metadata[core_constants.MEMORY_KEY]);
     if (!memory || core_context.comparableChatId(memory.chatId) !== wantedChatId) throw new Error('这个聊天文件里没有可读取的心跳回忆档案。');
     const indexedName = core_text.normalizeText(entry?.characterName, 120);
@@ -169,6 +171,7 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
     const stored = metadata[core_constants.CACHE_KEY];
     if (core_cache.isCompressedCacheRecord(stored)) {
         const hydrated = await core_cache.gunzipJson(stored.data);
+        if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
         if (!hydrated || typeof hydrated !== 'object') throw new Error('这个档案的已生成内容缓存无法解压。');
         cache = hydrated;
     } else if (stored && typeof stored === 'object') {
@@ -350,7 +353,7 @@ export async function openIndexedArchive(characterKey, chatId, entryId = '') {
     ui_overlay.openOverlay();
     ui_overlay.topTitle('心跳回忆 · 正在读取只读档案…');
     const body = ui_overlay.bodyEl();
-    if (body) body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在读取这个聊天的档案与已生成内容…</b><div class="rmt-loading-note">只读取 metadata，不切换当前角色或聊天。</div></div></div>';
+    if (body) body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在读取这个聊天的档案与已生成内容…</b><div class="rmt-loading-note">只请求这一条目标聊天，不扫描同角色的其他聊天；不会切换当前角色或聊天。</div></div></div>';
     try {
         const snapshot = await fetchIndexedArchiveSnapshot(entry, context);
         showIndexedArchiveSnapshot(snapshot);

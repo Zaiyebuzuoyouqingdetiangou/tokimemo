@@ -1,3 +1,13 @@
+## r42.1 GS4-style Firefly Habitat targeted review
+
+- Scope: firefly prompt/schema/normalization, single-item regeneration, legacy-upgrade path, Heart UI labels/rendering, release metadata and rebuilt runtime bundle. This is a changed-behavior review, not a repeat full-repository scan.
+- Semantics corrected to the original GS4 topic model: pink=恋爱, blue=恋爱的烦恼, yellow=朋友, white=お楽しみ/character-specific topic; `desire` remains an explicit Heartbeat-only extension and is not represented as an original GS4 color.
+- New firefly output is bounded structured `script[]`, not arbitrary HTML or free-form DOM. Speaker values are allowlisted to `char/user/user_thought`; user lines are non-canonical neutral reactions only, and `user_thought` is limited to one final node. All rendered text continues through escaping / existing text rendering.
+- Legacy `line/thoughts` entries remain readable and are treated as upgrade candidates. Upgrade preserves id, color, source Mxxx list, generation batch and timestamp; it changes only derived presentation fields and does not mutate `MEMORY_KEY` or advance incremental coverage.
+- Yellow/white topic prompts require known setting/evidence for named third parties or concrete biographical facts, reducing accidental fabricated social history. No model-controlled URL, CSS, coordinates, fetch target, command, `eval`, `new Function`, MutationObserver or requestAnimationFrame path was added.
+
+Targeted conclusion: no new Critical / High / Medium security finding identified in r42.0 → r42.1 firefly changes.
+
 ## r41.5 Performance hardening targeted review
 
 Scope: r41.4 -> r41.5 performance-only changes.
@@ -661,3 +671,15 @@ Scope: local r41.9 candidate -> r42.0 startup/runtime delivery and diagnostic ch
 - Focused regression suite: 96/96 passes after rebuilding the 43-module runtime bundle.
 
 Targeted conclusion: no newly introduced Critical / High / Medium security issue identified.
+
+## 0.8.34 / r42.3 targeted remediation review
+
+Scope: r42.2 -> r42.3 EverMind transport, cache byte budget, runtime lifecycle cleanup and single-history-chat loading only.
+
+- EverMind rejects non-loopback HTTP before creating the transient Authorization header or calling SillyTavern `/proxy`; normal HTTPS and strict local loopback development remain available.
+- Cache compression input and streamed decompression output now share one 12 MB UTF-8 byte limit. `sourceBytes` is recorded once during explicit compression and read by the lightweight diagnostic without encoding, decoding, decompression or cache serialization.
+- Runtime destruction advances a lifecycle epoch before clearing transient state. Async preflight, archive overview/snapshot, model-list, gzip persist and gunzip hydrate writers compare the captured epoch before cache/UI/metadata writeback; generation origins carry the same epoch so stale deferred commits are rejected after disable/clean. Hydration Promise cleanup is identity-guarded so an old `finally` cannot delete a new-lifecycle task for the same scope.
+- Opening one indexed historical archive uses a fixed same-origin `/api/chats/get` request for that indexed chat ID and discards returned message rows after reading the header metadata. The explicit legacy discovery scan retains `metadata:true` because it must discover archives across all files.
+- The lazy bootstrap import path, deletion authority, archive evidence rules, incremental content and ordinary chat event paths are unchanged.
+
+Targeted conclusion: the reported remote plaintext credential path is closed; no new Critical / High / Medium issue was identified in this remediation scope.

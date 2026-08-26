@@ -30,11 +30,15 @@ export const CACHE_STORAGE_VERSION = 1;
 
 export const CALENDAR_SESSION_VERSION = 4;
 
-export const MAX_CACHE_SOURCE_CHARS = 12000000;
-
 export const MAX_CACHE_COMPRESSED_BASE64_CHARS = 4000000;
 
 export const MAX_CACHE_DECOMPRESSED_BYTES = 12000000;
+
+export const MAX_CACHE_SOURCE_BYTES = MAX_CACHE_DECOMPRESSED_BYTES;
+
+// Compatibility alias for test/tooling consumers from r42.2 and earlier. The cache writer no
+// longer compares this budget with String.length; UTF-8 bytes are the authoritative unit.
+export const MAX_CACHE_SOURCE_CHARS = MAX_CACHE_SOURCE_BYTES;
 
 export const MAX_IMPORT_MESSAGES = 4000;
 

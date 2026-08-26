@@ -1,10 +1,32 @@
 # 心跳回忆
 
+## r42.3：安全边界与长期状态收口
+
+- EverMind 仅允许 HTTPS；HTTP 只对 URL 解析后确认的 loopback（`localhost`、`127.0.0.0/8`、`::1`）开放，不再把 Bearer API Key 发往远程明文地址。
+- 剧场缓存写入和读取统一使用 12 MB UTF-8 字节上限；新 manifest 同时记录 `sourceChars` 与 `sourceBytes`。旧 manifest 继续兼容，零解压诊断只做 O(1) 标量读取和保守估算。
+- disable / clean 会清空 preflight、deferred commit、历史 snapshot、模型列表和档案一览缓存，并用 runtime lifecycle epoch 阻止旧异步结果、正在 gzip 落盘或 gunzip hydrate 的 Promise 在销毁后回填。
+- 打开单篇历史档案改为只请求目标聊天，不再用 `metadata:true` 拉取同角色全部聊天 metadata。SillyTavern 当前接口仍会返回该目标聊天全文，但不会再按同角色档案数量放大。
+- r42.2 移动端 bootstrap 排版与 r42.0 按需加载边界保持不变：启动和“性能诊断”都不会加载完整 runtime。
+
+## r42.2：移动端轻量 bootstrap 排版修复
+
+- iPhone / SillyTavern 窄屏设置页中的“加载完整设置”和“性能诊断（不解压缓存）”改为上下排列、接近容器全宽，中文保持水平且不逐字换行。
+- 按钮触摸高度至少 46px；到 768px 以上才切换为双列，并对宿主 `.menu_button` 的收缩宽度样式做局部覆盖。
+- 普通启动仍只执行轻量 `index.js`；性能诊断仍然不解压缓存、不加载完整 runtime，完整 Heartbeat CSS 也不会提前注入。
+
+## r42.1：萤火虫改为 GS4 式追加约会会话
+
+- 重新按 GS4「ホタルの住処」实际表现修正。现在一颗光不是一整段 {{char}} 内心独白，而是一段两个人当场展开的追加约会会话：{{char}} 会因为“能听见心声”的特殊气氛不小心把本音说出口，{{user}} 只有极短、非正史的中性即时回应，最后可出现一条“刚才是不是他的心声”的即时想法。
+- 原四色恢复为：💗恋爱 / 💙恋爱的烦恼 / 💛朋友 / 🤍お楽しみ・角色个性话题；♥️ 仍保留，但明确属于本插件扩展的“直白渴望”。
+- 首次和后续仍每批只生成 **5～6 颗**，单页最多 **6 颗**，永久库机制不变。旧版一句话或 2～4 段独白光点会继续显示，并可原地批量升级成会话，不要求删库重来。
+- yellow/white 不再被误写成“关于他自己 / 脆弱与秘密”两类固定独白；朋友、工作学习、兴趣、梦想、食物、宠物、价值观等会真正承担角色自己的生活与人际内容，减少所有光点都在说 user 的问题。
+- r42.0 的轻量 bootstrap 与零解压性能诊断全部保留。
+
 ## r42.0：酒馆零 runtime 启动 / 零解压缓存诊断
 
 - 酒馆普通启动只执行轻量 `index.js` bootstrap，不再立即下载/解析约 1.17 MB 的 Heartbeat runtime bundle。第一次点“心跳回忆 · 档案室”或“加载完整设置”时才加载完整功能。
 - 启动时仍会挂一个很小的档案室菜单和设置占位，因此插件入口不会消失；完整 runtime 加载后由正式菜单/设置接管。
-- 轻量设置里可直接点 **性能诊断（不解压缓存）**。它只读取已经由 SillyTavern 放入内存的 metadata manifest：Mxxx 数量、派生 mode、`sourceChars`、压缩 Base64 长度和估算 gzip 大小。
+- 轻量设置里可直接点 **性能诊断（不解压缓存）**。它只读取已经由 SillyTavern 放入内存的 metadata manifest：Mxxx 数量、派生 mode、`sourceChars`、可用时的 `sourceBytes`、压缩 Base64 长度和估算 gzip 大小。
 - 诊断不 `atob`、不解压、不序列化整个 theater cache，也不遍历聊天正文；点诊断不会触发完整 runtime。
 - r41.5～r41.9 的普通聊天性能收口、设置/API 懒填充、Drama/萤火虫、Character Profile 与单一人际庭园全部继续保留。
 
@@ -108,7 +130,7 @@
 “两个人的日历”现在是档案首屏独立入口，不再需要在普通分类卡里向下寻找。已有日历可直接打开，未生成时可直接生成；历史只读档案也会明确显示是否已经有日历。
 
 
-当前版本：**0.8.31（r42.0）**
+当前版本：**0.8.34（r42.3）**
 
 
 ## r38：日历显示修复 / 终端双向对话 / 终端增量
@@ -469,7 +491,7 @@ r28/r29 的旧缓存可直接升级。第一次档案增量时，插件先把更
 
 ### 档案室一览
 
-档案室通过 SillyTavern 同源的 `/api/characters/chats` 以 `simple:true` 只读取**当前角色**的 chat ID / 文件名目录，不再自动扫描所有聊天 metadata。当前聊天自己的档案摘要直接读取当前窗口 metadata；其他聊天在实际进入后再记住轻量摘要。列表按角色缓存约 60 秒，也可手动刷新。点击非当前条目时，只允许打开本轮 SillyTavern 返回的 chat ID；后台生成期间禁止切换聊天，避免异步回写串档。
+档案室通过 SillyTavern 同源的 `/api/characters/chats` 以 `simple:true` 只读取**当前角色**的 chat ID / 文件名目录，不再自动扫描所有聊天 metadata。当前聊天自己的档案摘要直接读取当前窗口 metadata；点击一篇非当前历史档案时，使用 `/api/chats/get` 只请求该目标聊天并从 header 提取 Heartbeat metadata，不再读取同角色全部聊天 metadata。SillyTavern 当前没有单篇 metadata-only 接口，因此目标聊天本身仍会完整传输/解析，但不会切换宿主聊天，也不会把正文写进 Heartbeat snapshot、Prompt 或 DOM。列表按角色缓存约 60 秒，也可手动刷新；后台生成期间禁止切换聊天，避免异步回写串档。
 
 ## 他的房间：现实时间流动
 

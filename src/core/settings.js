@@ -123,6 +123,7 @@ export async function fetchModelsForConnection(profileId, { force = false } = {}
     if (!id) return [];
     if (!force && runtimeState.connectionModelCache.has(id)) return runtimeState.connectionModelCache.get(id);
     const context = core_context.getContext();
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     const profile = rawConnectionProfile(id, context);
     if (!profile) throw new Error('找不到当前选择的 Connection Manager 配置。');
     const fallback = savedModelsForProfile(id, context);
@@ -146,6 +147,7 @@ export async function fetchModelsForConnection(profileId, { force = false } = {}
             console.warn('[HeartbeatMemories] remote model list failed; using saved profile models', error);
         }
     }
+    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
     runtimeState.connectionModelCache.set(id, models);
     return models;
 }

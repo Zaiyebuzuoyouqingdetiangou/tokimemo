@@ -111,6 +111,7 @@ export function archiveOverviewEntryFromChat(chat, currentChatId) {
 
 export async function refreshArchiveOverview({ force = false } = {}) {
     const context = core_context.currentCharacterGuard();
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     resetArchiveOverviewForCharacter(context);
     rememberCurrentArchiveForOverview(context);
     const key = archiveOverviewKey(context);
@@ -134,6 +135,7 @@ export async function refreshArchiveOverview({ force = false } = {}) {
         });
         if (!response.ok) throw new Error(`档案室一览读取失败：HTTP ${response.status}`);
         const rows = await response.json();
+        if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
         const latest = core_context.currentCharacterGuard();
         if (latest.characterId !== expectedCharacterId) throw new DOMException('Character changed', 'AbortError');
         rememberCurrentArchiveForOverview(latest);

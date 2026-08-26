@@ -1,3 +1,29 @@
+# 0.8.34 / r42.3 — 安全边界与长期状态收口
+
+- EverMind 远程读取强制 HTTPS；HTTP 只允许 URL 解析后的严格 loopback。远程明文地址会在创建 Authorization header 和发起 fetch 前被拒绝。
+- 修复缓存写入 12M 字符、读取 12M UTF-8 字节的单位不一致：写入前按 Blob UTF-8 byte size 检查，新 manifest 增加 `sourceBytes`，同时保留旧 `sourceChars` 兼容字段。
+- 零解压性能诊断优先读取 `sourceBytes`；旧 manifest 用 `sourceChars × 3` 做保守上界估算，不执行 TextEncoder、Base64 解码、gzip 解压或大对象序列化。
+- `destroyMemoryTheater()` 完整清理 preflight、deferred commit、snapshot、model、overview 与邻近 UI/task 状态；runtime lifecycle epoch 阻止旧网络 Promise、in-flight gzip 落盘和 gunzip hydrate 在 disable / clean 后回填。旧 hydration 的 `finally` 只按 Promise 身份删除，不能误删新生命周期任务。
+- 单篇历史档案从“同角色全部聊天 `metadata:true`”改为 `/api/chats/get` 定点读取目标聊天；手动旧档案扫描仍保留原有全角色 discovery 语义。
+- README 当前版本已同步；发布 ZIP 不再包含空 `artifacts/` 目录。GitHub `main` 继续只读，不在本地候选包修复中改写。
+
+# 0.8.33 / r42.2 — 移动端轻量 bootstrap 排版修复
+
+- 修复 iPhone / SillyTavern 扩展设置页中 bootstrap 操作按钮继承宿主 `min-content` / `fit-content` 宽度后被压成中文逐字纵排的问题。
+- bootstrap 操作区改为 mobile-first：小于 768px 上下排列并占满容器，桌面端双列；按钮固定为水平书写、不拆分中文，触摸高度至少 46px。
+- 卡片、操作区、按钮、说明与诊断输出增加有界宽度和 `min-width: 0`，防止横向溢出；卡片高度继续只由真实内容决定。
+- 保持 r42.0 的轻量启动边界：DOM ready 不加载 runtime；性能诊断不解压缓存且不触发 bundle；完整 CSS 仍不在 bootstrap 阶段注入。
+- 新增 bootstrap 布局与懒加载契约测试、零依赖五视口几何基准，以及可在装有 Chromium 的环境执行的真实浏览器验证工具。
+
+# 0.8.32 / r42.1 — GS4 式萤火虫追加约会会话修正
+
+- 重新按 GS4「ホタルの住処」实际表现修正：萤火虫不再是“{{char}} 连续内心独白卡”，而是点亮一个颜色话题后展开一段当场追加约会会话，角色本音会在对话中不小心泄露，用户仅有非正史的中性即时回应，结尾可出现一条“刚才是不是心声”的即时想法。
+- 恢复 GS4 原四色实际分类：💗 pink=恋爱、💙 blue=恋爱的烦恼、💛 yellow=朋友、🤍 white=お楽しみ/角色个性话题。♥️ desire 明确标记为本插件扩展，不再混同原作四色。
+- 新萤火虫仍保持首次/增量每批 5～6 颗、单页最多 6 颗、旧光永久保留；每颗会话要求 5～10 个 script 节点、至少 3 条 char 与 1 条中性 user 即时回应。
+- r41.7～r42.0 期间生成的旧 `line/thoughts` 独白光点不会丢失；会被识别为 legacy，可分批原地升级为 GS4 式会话，同时保留原 id、颜色、来源 Mxxx、批次与生成时间。
+- 明确禁止萤火虫内容退化为连续“她怎么怎样”的第三人称总结；yellow/white 必须承担朋友与角色自身个性话题，避免所有内容都围绕 user 恋爱化。
+- 完整继承 r42.0 轻量 bootstrap / 零解压性能诊断，以及 r41.5～r41.9 的普通聊天性能、Profile、人际庭园、安全删除、Drama 翻页等修复。
+
 # 0.8.31 / r42.0 — 轻量 bootstrap / 零解压性能诊断
 
 - 酒馆启动不再立即 import/解析完整 `dist/heartbeatMemories.bundle.js`。`index.js` 只挂载轻量“档案室”菜单、轻量设置入口与性能诊断；第一次显式打开档案室或加载完整设置时才动态加载 runtime。

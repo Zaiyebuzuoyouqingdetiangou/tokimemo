@@ -477,12 +477,12 @@ function fireflyPointStyle(id, index) {
 
 function fireflyMeta(color) {
     return ({
-        pink: { icon: '💗', label: '喜欢与在意' },
-        blue: { icon: '💙', label: '关系里的不安' },
-        yellow: { icon: '💛', label: '关于他自己' },
-        white: { icon: '🤍', label: '脆弱与秘密' },
-        desire: { icon: '♥️', label: '对你的直白渴望' },
-    })[color] || { icon: '✦', label: '心声' };
+        pink: { icon: '💗', label: '恋爱' },
+        blue: { icon: '💙', label: '恋爱的烦恼' },
+        yellow: { icon: '💛', label: '朋友' },
+        white: { icon: '🤍', label: 'お楽しみ / 个性话题' },
+        desire: { icon: '♥️', label: '扩展 · 直白渴望' },
+    })[color] || { icon: '✦', label: '话题' };
 }
 
 export function renderHeart() {
@@ -512,7 +512,7 @@ export function renderHeart() {
         ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-season" data-rmt-heart-season-target="${core_text.esc(selectedHeartSeason)}">${selectedHeartSeasonPartial ? '继续补全本次' : selectedHeartSeasonReady ? '追加一篇' : '生成首篇'}${core_text.esc(heartSeasonLabels[selectedHeartSeason])}</button>`
         : view === 'fireflies'
             ? (() => {
-                const legacyCount = (Array.isArray(session.fireflyVoices) ? session.fireflyVoices : []).filter(item => !Array.isArray(item?.thoughts) || item.thoughts.length < 2).length;
+                const legacyCount = (Array.isArray(session.fireflyVoices) ? session.fireflyVoices : []).filter(item => !Array.isArray(item?.script) || item.script.length < 5).length;
                 const label = legacyCount ? `升级旧版萤火虫（${legacyCount}）` : session.fireflyVoices?.length ? '解锁新的萤火虫' : '点亮萤火虫栖息地';
                 return `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="fireflies">${core_text.esc(label)}</button>`;
             })()
@@ -566,11 +566,18 @@ export function renderHeart() {
         const legend = ['pink', 'blue', 'yellow', 'white', 'desire'].map(color => { const meta = fireflyMeta(color); return `<span class="${color}">${meta.icon} ${core_text.esc(meta.label)}</span>`; }).join('');
         const pager = voices.length > pageSize ? `<div class="rmt-firefly-pager"><button type="button" class="rmt-btn" data-rmt-action="heart-firefly-prev" ${pageIndex <= 0 ? 'disabled' : ''}>‹ 较早的光</button><span>${pageIndex + 1} / ${pageCount} · 本页 ${visibleVoices.length} 颗</span><button type="button" class="rmt-btn" data-rmt-action="heart-firefly-next" ${pageIndex >= pageCount - 1 ? 'disabled' : ''}>更新的光 ›</button></div>` : '';
         const whisper = selected ? (() => {
+            const script = Array.isArray(selected.script) ? selected.script : [];
+            if (script.length >= 5) {
+                const lines = script.map(node => node.speaker === 'user_thought'
+                    ? { speaker: 'narrator', text: `（${core_text.normalizeText(node.text, 700)}）` }
+                    : node);
+                return `<div class="rmt-firefly-whisper ${core_text.esc(selected.color)}"><small>${fireflyMeta(selected.color).icon} ${core_text.esc(fireflyMeta(selected.color).label)}</small><h3>${core_text.esc(selected.title || '萤火虫话题')}</h3><div class="rmt-firefly-conversation">${renderHeartScriptLines(lines)}</div></div>`;
+            }
             const thoughts = Array.isArray(selected.thoughts) && selected.thoughts.length ? selected.thoughts : [selected.line].filter(Boolean);
             const paragraphs = thoughts.map(text => `<p>${core_text.esc(text)}</p>`).join('');
-            return `<div class="rmt-firefly-whisper ${core_text.esc(selected.color)}"><small>${fireflyMeta(selected.color).icon} ${core_text.esc(fireflyMeta(selected.color).label)}</small><h3>${core_text.esc(selected.title || '没有说出口的心声')}</h3><div class="rmt-firefly-thoughts">${paragraphs}</div></div>`;
-        })() : `<div class="rmt-heart-empty">${readOnly ? '这份档案还没有保存萤火虫心声。' : '点亮以后，这里会出现很多不同颜色的心声光点。'}</div>`;
-        content = `<section class="rmt-firefly-shell"><div class="rmt-firefly-head"><div><small>FIREFLY HABITAT</small><h2>萤火虫栖息地</h2><p>每一颗光都是一段没有说出口的完整心声。旧光永久留在这里；剧情继续后只会解锁新的主题，每页最多点亮 ${pageSize} 颗。</p></div><span>${voices.length} LIGHTS</span></div><div class="rmt-firefly-field">${points || '<div class="rmt-firefly-empty-stars">✦　·　✧　·　✦</div>'}</div>${pager}<div class="rmt-firefly-legend">${legend}</div>${whisper}</section>`;
+            return `<div class="rmt-firefly-whisper ${core_text.esc(selected.color)}"><small>${fireflyMeta(selected.color).icon} ${core_text.esc(fireflyMeta(selected.color).label)}</small><h3>${core_text.esc(selected.title || '旧版心声')}</h3><div class="rmt-firefly-legacy-note">这是一颗旧版独白光点；点击上方“升级旧版萤火虫”可改成 GS4 式追加约会会话。</div><div class="rmt-firefly-thoughts">${paragraphs}</div></div>`;
+        })() : `<div class="rmt-heart-empty">${readOnly ? '这份档案还没有保存萤火虫话题。' : '点亮以后，这里会出现不同颜色的追加约会话题。'}</div>`;
+        content = `<section class="rmt-firefly-shell"><div class="rmt-firefly-head"><div><small>FIREFLY HABITAT</small><h2>萤火虫栖息地</h2><p>像 GS4 一样，颜色代表不同话题。点一颗光，会展开一段两个人当场发生的追加约会会话；“心声”从对话里不小心漏出来，而不是整页独白。旧光永久保留，每页最多点亮 ${pageSize} 颗。</p></div><span>${voices.length} LIGHTS</span></div><div class="rmt-firefly-field">${points || '<div class="rmt-firefly-empty-stars">✦　·　✧　·　✦</div>'}</div>${pager}<div class="rmt-firefly-legend">${legend}</div>${whisper}</section>`;
     } else {
         const selected = selectedHeartStrip();
         if (selected) session.selectedStripId = selected.id;

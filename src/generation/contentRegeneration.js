@@ -103,27 +103,29 @@ async function regenerateHeartScenario(session, item, context, memoryBank, origi
 async function regenerateHeartFirefly(session, item, context, memoryBank, origin, taskKey) {
     const color = core_text.normalizeText(item?.color, 20).toLowerCase();
     const meta = {
-        pink: '对 {{user}} 的喜欢、在意、依恋、恋爱感',
-        blue: '关系里的犹豫、不安、吃醋、害怕失去、说不出口的顾虑',
-        yellow: '关于 {{char}} 自己的生活、自省与价值观；不得新增重大背景事实',
-        white: '脆弱、秘密、羞于承认的小心思；不得凭空新增重大创伤',
-        desire: '对 {{user}} 直白的渴望；允许想抱住、亲吻、靠近、占有欲，但禁止露骨性行为或色情细节',
-    }[color] || '心声';
-    const prompt = `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 单个萤火虫心声重新生成')}
-RELATIONSHIP_TONE_ONLY_JSON:\n${modes_heart.heartDramaRelationshipOnlyContext(session)}
+        pink: 'GS4 分类：恋爱。围绕喜欢、特别感、想更靠近等恋爱情绪',
+        blue: 'GS4 分类：恋爱的烦恼。围绕吃醋、不安、竞争意识、怕失去或想确认关系',
+        yellow: 'GS4 分类：朋友。围绕明确存在的朋友、同学、同事或朋友圈关系；不得凭空编固定人物',
+        white: 'GS4 分类：お楽しみ / 个性话题。围绕角色自己的梦想、兴趣、食物、习惯、工作学习、宠物、价值观等；具体事实必须来自受控设定',
+        desire: '本插件扩展：对 {{user}} 更直白的渴望或身体亲近愿望；禁止露骨性行为或色情细节',
+    }[color] || '追加约会话题';
+    const prompt = `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 单个萤火虫追加约会会话重新生成')}
+RELATIONSHIP_TONE_ONLY_JSON:
+${modes_heart.heartDramaRelationshipOnlyContext(session)}
 当前光点颜色固定为 ${color}，含义：${meta}。
-只重新生成这一颗光点对应的完整心声主题，不得改变颜色；不要写成已经发生的新剧情，不替 {{user}} 说话或做决定。
-必须包含 2～4 段自然递进的 thoughts，总体约 90～280 个汉字，不能退化成一句格言式短句。
-CURRENT_FIREFLY_JSON:\n${JSON.stringify(item, null, 2)}
-严格输出：{"fireflyVoices":[{"id":"${core_text.esc(item.id)}","color":"${core_text.esc(color)}","title":"4～18字主题","thoughts":["第一段内心","第二段内心"]}]}。只输出 JSON。`;
+只重新生成这一颗光点对应的【现场追加约会会话】，不得改变颜色。GS4 的“心の声”在表现上是角色在特殊气氛里把本音不小心说出口、主人公回应、话题继续推进，而不是连续的第三人称内心独白。
+CURRENT_FIREFLY_JSON:
+${JSON.stringify(item, null, 2)}
+严格输出：{"fireflyVoices":[{"id":"${core_text.esc(item.id)}","color":"${core_text.esc(color)}","title":"4～18字话题标题","script":[{"speaker":"char","text":"..."},{"speaker":"user","text":"..."},{"speaker":"char","text":"..."},{"speaker":"user_thought","text":"..."}]}]}。
+要求：5～10 个节点，至少3条 char、1条 user，总文本约140～420字；user 只能是非正史的中性即时回应，user_thought 最多1条且只能放最后。不要连续写“她怎么怎样”式总结。只输出 JSON。`;
     const list = await modes_heart.requestHeartPart(
         prompt,
-        '重新生成萤火虫心声…',
-        taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:firefly`, 3200, 0.8),
+        '重新生成萤火虫追加约会会话…',
+        taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:firefly`, 4200, 0.75),
         raw => modes_heart.normalizeFireflyVoicesPart(raw, { minTotal: 1, requireDistribution: false, requireRich: true }),
     );
     const candidate = list[0];
-    if (!candidate || candidate.color !== color) throw new Error('重新生成的萤火虫心声没有保持原颜色。');
+    if (!candidate || candidate.color !== color) throw new Error('重新生成的萤火虫会话没有保持原颜色。');
     return { ...candidate, id: item.id, color, generatedAt: Date.now() };
 }
 

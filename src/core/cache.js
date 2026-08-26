@@ -120,12 +120,14 @@ export function base64ToBytes(value) {
 export async function gzipJson(value) {
     if (typeof CompressionStream !== 'function') return null;
     const json = JSON.stringify(value ?? {});
-    if (json.length > core_constants.MAX_CACHE_SOURCE_CHARS) throw new Error('剧场缓存过大，已停止压缩保存。');
-    const stream = new Blob([json], { type: 'application/json' }).stream().pipeThrough(new CompressionStream('gzip'));
+    const source = new Blob([json], { type: 'application/json' });
+    const sourceBytes = source.size;
+    if (sourceBytes > core_constants.MAX_CACHE_SOURCE_BYTES) throw new Error('剧场缓存的 UTF-8 数据过大，已停止压缩保存。');
+    const stream = source.stream().pipeThrough(new CompressionStream('gzip'));
     const buffer = await new Response(stream).arrayBuffer();
     const data = bytesToBase64(new Uint8Array(buffer));
     if (data.length > core_constants.MAX_CACHE_COMPRESSED_BASE64_CHARS) throw new Error('压缩后的剧场缓存仍然过大，已停止保存。');
-    return { data, sourceChars: json.length };
+    return { data, sourceChars: json.length, sourceBytes };
 }
 
 export async function gunzipJson(base64) {
@@ -170,6 +172,7 @@ export function compressedCacheManifest(cache, packed) {
         updatedAt: Number(cache?.updatedAt) || Date.now(),
         modes,
         sourceChars: Number(packed?.sourceChars) || 0,
+        sourceBytes: Number(packed?.sourceBytes) || 0,
         data: packed?.data || '',
     };
 }
@@ -192,6 +195,7 @@ export function cacheStillMatchesLiveArchive(cache, context, expectedScope) {
 
 export async function persistCompressedCacheNow(context, cache, expectedScope = cacheScopeFromContext(context)) {
     if (!cache || typeof cache !== 'object') return false;
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     if (typeof CompressionStream !== 'function') {
         let latest;
         try { latest = core_context.currentCharacterGuard(); } catch { return false; }
@@ -201,7 +205,9 @@ export async function persistCompressedCacheNow(context, cache, expectedScope = 
         return true;
     }
     await core_context.yieldToUi();
+    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) return false;
     const packed = await gzipJson(cache);
+    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) return false;
     if (!packed?.data) return false;
     const record = compressedCacheManifest(cache, packed);
     let latest;
@@ -276,9 +282,12 @@ export async function ensureCacheHydrated(context = core_context.currentCharacte
         rememberRuntimeSessionCache(scope, stored);
         return stored;
     }
-    const promise = (async () => {
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    let promise;
+    const operation = (async () => {
         try {
             const cache = await gunzipJson(stored.data);
+            if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
             if (!cache || typeof cache !== 'object') {
                 const empty = {};
                 rememberRuntimeSessionCache(scope, empty);
@@ -293,13 +302,17 @@ export async function ensureCacheHydrated(context = core_context.currentCharacte
             rememberRuntimeSessionCache(scope, cache);
             return cache;
         } catch (error) {
+            if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw error;
             // A damaged/imported compressed cache must not create an endless hydrate →
             // chooser refresh loop. Keep the canonical archive readable and treat only the
             // derived theater cache as unavailable for this runtime session.
             runtimeState.cacheHydrationErrors.set(scope, core_text.normalizeText(error?.message || String(error), 1600));
             throw error;
         }
-    })().finally(() => runtimeState.cacheHydrationPromises.delete(scope));
+    })();
+    promise = operation.finally(() => {
+        if (runtimeState.cacheHydrationPromises.get(scope) === promise) runtimeState.cacheHydrationPromises.delete(scope);
+    });
     runtimeState.cacheHydrationPromises.set(scope, promise);
     return promise;
 }

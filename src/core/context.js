@@ -3,6 +3,7 @@
 import * as archive_groups from '../archive/groups.js';
 import * as core_constants from './constants.js';
 import * as core_evidence from './evidence.js';
+import { state as runtimeState } from './state.js';
 import * as core_text from './text.js';
 
 export function getContext() {
@@ -226,6 +227,7 @@ export function chatScopeKey(context = currentCharacterGuard(), chatId = getChat
 
 export function captureTaskOrigin(context = currentCharacterGuard(), archiveRevision = '') {
     return {
+        lifecycleEpoch: runtimeState.runtimeLifecycleEpoch,
         characterKey: currentCharacterRuntimeKey(context),
         characterName: core_text.normalizeText(context.name2, 120),
         chatId: comparableChatId(getChatId(context)),
@@ -235,7 +237,10 @@ export function captureTaskOrigin(context = currentCharacterGuard(), archiveRevi
 
 export function isCurrentTaskOrigin(origin, context = getContext()) {
     try {
-        return !!origin && currentCharacterRuntimeKey(context) === origin.characterKey && comparableChatId(getChatId(context)) === origin.chatId;
+        return !!origin
+            && Number(origin.lifecycleEpoch) === runtimeState.runtimeLifecycleEpoch
+            && currentCharacterRuntimeKey(context) === origin.characterKey
+            && comparableChatId(getChatId(context)) === origin.chatId;
     } catch {
         return false;
     }

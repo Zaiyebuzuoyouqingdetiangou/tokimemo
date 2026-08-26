@@ -1,5 +1,5 @@
-const VERSION = '0.8.31';
-const BUILD = '0.8.31-lazy-bootstrap-diagnostics-r42.0';
+const VERSION = '0.8.34';
+const BUILD = '0.8.34-security-lifecycle-cache-r42.3';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -36,12 +36,12 @@ function approximateBase64Bytes(value) {
     return Math.max(0, Math.floor((text.length * 3) / 4) - padding);
 }
 
-function diagnosticRisk(base64Chars, sourceChars, legacyRaw) {
+function diagnosticRisk(base64Chars, sourceBytes, legacyRaw) {
     if (legacyRaw) return { level: '注意', detail: '检测到旧版未压缩派生缓存；为避免诊断本身制造卡顿，本次不序列化测量它。' };
     const compressed = Math.max(0, Number(base64Chars) || 0);
-    const source = Math.max(0, Number(sourceChars) || 0);
-    if (compressed >= 1_500_000 || source >= 8_000_000) return { level: '高', detail: '当前聊天的 Heartbeat 派生缓存较大，宿主读取聊天 metadata 时可能出现明显等待。' };
-    if (compressed >= 500_000 || source >= 3_000_000) return { level: '中', detail: '当前聊天已有较大的 Heartbeat 派生缓存；若真机进入该聊天变慢，建议继续观察。' };
+    const source = Math.max(0, Number(sourceBytes) || 0);
+    if (compressed >= 1_500_000 || source >= 10_000_000) return { level: '高', detail: '当前聊天的 Heartbeat 派生缓存已接近读取上限，宿主读取聊天 metadata 时可能出现明显等待。' };
+    if (compressed >= 500_000 || source >= 6_000_000) return { level: '中', detail: '当前聊天已有较大的 Heartbeat 派生缓存；若真机进入该聊天变慢，建议继续观察。' };
     return { level: '低', detail: '从 Heartbeat metadata 尺寸看，没有发现明显的大缓存压力。' };
 }
 
@@ -70,10 +70,15 @@ function getHeartbeatPerformanceDiagnostic() {
     const base64Chars = compressed ? stored.data.length : 0;
     const compressedBytesApprox = compressed ? approximateBase64Bytes(stored.data) : 0;
     const sourceChars = compressed ? Math.max(0, Number(stored.sourceChars) || 0) : 0;
+    const storedSourceBytes = compressed ? Math.max(0, Number(stored.sourceBytes) || 0) : 0;
+    const sourceBytesExact = storedSourceBytes > 0;
+    // r42.2 manifests only recorded UTF-16 characters. Three UTF-8 bytes per code unit is a
+    // conservative upper bound that keeps this diagnostic zero-decompression and O(1).
+    const sourceBytes = sourceBytesExact ? storedSourceBytes : Math.min(Number.MAX_SAFE_INTEGER, sourceChars * 3);
     const modes = compressed && Array.isArray(stored.modes)
         ? stored.modes.map(value => String(value || '')).filter(Boolean).slice(0, 32)
         : legacyRaw ? Object.keys(stored).filter(key => !['chatId', 'archiveRevision', 'updatedAt'].includes(key)).slice(0, 32) : [];
-    const risk = diagnosticRisk(base64Chars, sourceChars, legacyRaw);
+    const risk = diagnosticRisk(base64Chars, sourceBytes, legacyRaw);
     const storage = compressed ? CACHE_STORAGE_FORMAT : legacyRaw ? 'legacy-uncompressed' : 'none';
 
     const rows = [
@@ -88,6 +93,7 @@ function getHeartbeatPerformanceDiagnostic() {
     if (compressed) {
         rows.push(
             `派生缓存原始字符：${sourceChars.toLocaleString()}（${humanChars(sourceChars)}）`,
+            `派生缓存 UTF-8：${sourceBytesExact ? humanSize(sourceBytes) : `不超过 ${humanSize(sourceBytes)}（旧清单保守估算）`}`,
             `metadata Base64：${base64Chars.toLocaleString()} 字符`,
             `估算 gzip 数据：${humanSize(compressedBytesApprox)}`,
         );
@@ -112,6 +118,8 @@ function getHeartbeatPerformanceDiagnostic() {
             storage,
             modes,
             sourceChars,
+            sourceBytes,
+            sourceBytesExact,
             base64Chars,
             compressedBytesApprox,
             risk: risk.level,
@@ -140,15 +148,16 @@ function ensureBootstrapStyle() {
     const style = document.createElement('style');
     style.id = BOOTSTRAP_STYLE_ID;
     style.textContent = `
-#${SETTINGS_ID}[data-rmt-bootstrap="1"]{margin-top:10px;padding:10px;border:1px solid rgba(142,191,213,.52);border-radius:12px;background:linear-gradient(135deg,rgba(255,248,251,.92),rgba(244,251,255,.92));color:#596b80;display:grid;gap:8px}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-head small{opacity:.68;font-size:9px;letter-spacing:.08em}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] button{min-height:36px;border-radius:9px}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-note{font-size:9px;line-height:1.5;opacity:.7}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] pre{margin:0;padding:8px;max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:9px;line-height:1.45;border-radius:8px;background:rgba(38,49,63,.07)}
+#${SETTINGS_ID}[data-rmt-bootstrap="1"]{box-sizing:border-box;width:100%;max-width:100%;min-width:0;height:auto!important;min-height:0;margin-top:10px;padding:10px;border:1px solid rgba(142,191,213,.52);border-radius:12px;background:linear-gradient(135deg,rgba(255,248,251,.92),rgba(244,251,255,.92));color:#596b80;display:grid;align-self:start;align-content:start;flex:0 0 auto!important;gap:8px}
+#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;min-width:0;gap:6px 8px;writing-mode:horizontal-tb}
+#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-head b{min-width:0}
+#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-head small{opacity:.68;font-size:9px;letter-spacing:.08em;white-space:nowrap;word-break:keep-all;writing-mode:horizontal-tb}
+#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-actions{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr);width:100%;min-width:0;gap:7px}
+#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-actions>button.menu_button{box-sizing:border-box;display:flex!important;align-items:center;justify-content:center;width:100%!important;max-width:100%!important;min-width:0!important;min-height:46px!important;height:auto!important;margin:0!important;padding:9px 12px!important;border-radius:9px;font-size:clamp(14px,4vw,16px);line-height:1.25;text-align:center;white-space:nowrap!important;word-break:keep-all!important;overflow-wrap:normal!important;writing-mode:horizontal-tb!important;text-orientation:mixed!important;touch-action:manipulation}
+#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-note{min-width:0;max-width:100%;font-size:9px;line-height:1.5;opacity:.7;white-space:normal;word-break:normal;overflow-wrap:anywhere;writing-mode:horizontal-tb}
+#${SETTINGS_ID}[data-rmt-bootstrap="1"] pre{box-sizing:border-box;min-width:0;max-width:100%;margin:0;padding:8px;max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:9px;line-height:1.45;border-radius:8px;background:rgba(38,49,63,.07);writing-mode:horizontal-tb}
 #${MENU_ID}[data-rmt-bootstrap="1"]{cursor:pointer}
-@media(max-width:760px){#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-actions{grid-template-columns:1fr}}
+@media(min-width:768px){#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
 `;
     document.head.appendChild(style);
 }

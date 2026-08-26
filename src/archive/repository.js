@@ -863,7 +863,10 @@ export async function fetchEverMindCurrentChatRecords(context, expectedChatId, s
         console.warn('[HeartbeatMemories] EverMind current-chat source has an invalid API URL');
         return [];
     }
-    if (!['http:', 'https:'].includes(base.protocol)) return [];
+    if (!isAllowedEverMindApiBaseUrl(base)) {
+        console.warn('[HeartbeatMemories] EverMind current-chat source requires HTTPS unless it uses a loopback host');
+        return [];
+    }
     const endpoint = new URL('/api/v0/memories', base);
     endpoint.searchParams.set('user_id', core_text.normalizeText(settings.user_id, 200) || 'st_user');
     endpoint.searchParams.set('group_id', groupId);
@@ -887,6 +890,17 @@ export async function fetchEverMindCurrentChatRecords(context, expectedChatId, s
     const data = await response.json();
     const flattened = flattenExternalMemoryPayload(data?.result?.memories ?? data?.memories ?? data, 'EverMind');
     return normalizeExternalMemoryRecords(flattened.map((item, index) => ({ ...item, externalId: `EVERMIND-${String(index + 1).padStart(3, '0')}` })));
+}
+
+export function isAllowedEverMindApiBaseUrl(value) {
+    let url;
+    try { url = value instanceof URL ? value : new URL(core_text.normalizeText(value, 2000)); }
+    catch { return false; }
+    if (url.protocol === 'https:') return true;
+    if (url.protocol !== 'http:') return false;
+    const hostname = String(url.hostname || '').toLowerCase();
+    if (hostname === 'localhost' || hostname === '[::1]') return true;
+    return /^127(?:\.\d{1,3}){3}$/.test(hostname);
 }
 
 export async function collectCurrentChatExternalMemory(context, expectedChatId, signal) {
@@ -959,6 +973,7 @@ export async function collectCurrentChatExternalMemory(context, expectedChatId, 
 
 export async function readCurrentChatMemoryPlugins() {
     const context = core_context.currentCharacterGuard();
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) throw new Error('当前还有内容生成任务在进行，请等生成结束后再扫描记忆 / 摘要。');
     const chatId = core_context.getChatId(context);
     if (!chatId) throw new Error('无法识别当前聊天窗口。');
@@ -974,6 +989,7 @@ export async function readCurrentChatMemoryPlugins() {
         ? String(core_text.hashString(`${result.fingerprint}|WI:${worldInfo.fingerprint}`))
         : result.fingerprint;
     const preflight = { ...result, fingerprint: combinedFingerprint, chatId, readAt: Date.now(), totalChars, recordChars, worldInfo };
+    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
     runtimeState.memoryPreflightCache.set(core_context.chatScopeKey(context), preflight);
     if (!result.records.length && !worldInfo.entries.length) {
         globalThis.toastr?.info?.('当前窗口没有检测到可读取的记忆 / 摘要，也没有选择记忆相关世界书；建档仍会使用聊天正文。', '心跳回忆');

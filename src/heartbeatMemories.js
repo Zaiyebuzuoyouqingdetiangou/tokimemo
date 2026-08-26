@@ -49,6 +49,9 @@ export function destroyMemoryTheater() {
                 liveContext.saveMetadataDebounced?.();
             }
         } catch {}
+        // Invalidate every asynchronous state writer before clearing containers. Results that
+        // started in the old runtime lifetime must not refill caches after disable/clean.
+        runtimeState.runtimeLifecycleEpoch += 1;
         const timer = globalThis.__heartbeatMemoriesMountTimer;
         if (timer) clearInterval(timer);
         globalThis.__heartbeatMemoriesMountTimer = null;
@@ -80,14 +83,24 @@ export function destroyMemoryTheater() {
         runtimeState.activeAdvBulkScopes.clear();
         runtimeState.cgImageLifecycleEpoch += 1;
         runtimeState.activeCgImageTasks.clear();
+        runtimeState.avatarDialogueRequestEpoch += 1;
+        runtimeState.activeAvatarDialogue = null;
         runtimeState.roomLifeRefreshPromise = null;
+        if (runtimeState.butterflyTransitionTimer) clearTimeout(runtimeState.butterflyTransitionTimer);
+        runtimeState.butterflyTransitionTimer = 0;
         if (runtimeState.chooserRefreshTimer) clearTimeout(runtimeState.chooserRefreshTimer);
         runtimeState.chooserRefreshTimer = 0;
         runtimeState.archiveOverviewPromise = null;
         runtimeState.archiveOverviewPromiseKey = '';
+        runtimeState.archiveOverviewCache = { key: '', fetchedAt: 0, items: [] };
         runtimeState.archiveOverviewAllowedChats.clear();
         runtimeState.archiveOverviewKnownArchives.clear();
+        runtimeState.archiveOverviewLastKey = '';
         runtimeState.memoryProviderDiscoveryCache = { signature: '', scannedAt: 0, items: [] };
+        runtimeState.memoryPreflightCache.clear();
+        runtimeState.deferredChatCommits.clear();
+        runtimeState.archiveSnapshotCache.clear();
+        runtimeState.connectionModelCache.clear();
         for (const timer of runtimeState.cachePersistTimers.values()) clearTimeout(timer);
         runtimeState.cachePersistTimers.clear();
         runtimeState.cacheHydrationPromises.clear();
@@ -96,8 +109,14 @@ export function destroyMemoryTheater() {
         runtimeState.pendingCompressedCacheWrites.clear();
         runtimeState.usableMessageCountCache.clear();
         runtimeState.busy = false;
+        runtimeState.contentManagerOpen = false;
         runtimeState.activeMode = null;
         runtimeState.activeSession = null;
+        runtimeState.activeTaskLabel = '';
+        runtimeState.activeTaskBackgrounded = false;
+        runtimeState.activeTaskOrigin = null;
+        runtimeState.archiveViewLevel = 'library';
+        runtimeState.archiveLibraryCharacterKey = '';
         runtimeState.archiveCharacterRelationSelection = '';
         runtimeState.relationSelectedKey = '';
         runtimeState.activeArchiveSnapshot = null;

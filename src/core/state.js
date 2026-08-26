@@ -1,6 +1,7 @@
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 export const state = {
+  runtimeLifecycleEpoch: 0,
   busy: false,
   activeMode: null,
   activeSession: null,

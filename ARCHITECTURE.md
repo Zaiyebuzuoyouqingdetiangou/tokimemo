@@ -117,7 +117,7 @@ Phone/Terminal remains `MODE.PHONE` under Room, but its topbar increment action 
 
 - Ordinary SillyTavern startup may parse only the small `index.js` bootstrap. It must not import `dist/heartbeatMemories.bundle.js` until the user explicitly opens the archive or requests the full settings UI.
 - Bootstrap owns only fixed local menu/settings markup, a bounded mount retry, and two mobile-safe early gesture listeners. It must not bind chat events, scan `context.chat`, enumerate Connection Manager profiles, read World Info, hydrate/compress theater cache, or call providers.
-- The bootstrap performance diagnostic reads only already-parsed metadata fields and string lengths. For compressed cache it may read `format/storageVersion/modes/sourceChars/data.length`; it must never Base64-decode, decompress, stringify the cache, or iterate chat message bodies.
+- The bootstrap performance diagnostic reads only already-parsed metadata fields and string lengths. For compressed cache it may read `format/storageVersion/modes/sourceChars/sourceBytes/data.length`; it must never Base64-decode, decompress, encode/stringify the cache, or iterate chat message bodies. New cache writes use one 12 MB UTF-8 byte budget for both compression input and streamed decompression output.
 - Runtime handoff removes bootstrap shells before `initMemoryTheater()` mounts the authoritative settings/menu. The runtime remains a single generated bundle and keeps the existing cleanup/security boundaries.
 
 ## r41.5 performance contract

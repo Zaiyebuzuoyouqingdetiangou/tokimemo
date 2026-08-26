@@ -257,7 +257,12 @@ export function heartFireflyPrompt(context, memoryBank, core, previous = null, s
     const existing = (Array.isArray(previous?.fireflyVoices) ? previous.fireflyVoices : []).slice(-80).map(item => ({
         color: item.color,
         title: item.title || '',
-        excerpt: core_text.normalizeText((Array.isArray(item.thoughts) ? item.thoughts : [item.line].filter(Boolean)).join(' '), 220),
+        excerpt: core_text.normalizeText(
+            (Array.isArray(item?.script) && item.script.length
+                ? item.script.map(node => node?.text).join(' ')
+                : (Array.isArray(item?.thoughts) ? item.thoughts : [item?.line].filter(Boolean)).join(' ')),
+            260,
+        ),
     }));
     const incremental = existing.length > 0;
     return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 萤火虫栖息地')}
@@ -267,44 +272,67 @@ ${incremental ? `UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:
 ${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}
 EXISTING_FIREFLY_TOPICS_JSON:
 ${JSON.stringify(existing, null, 2)}` : ''}
-这是类似“萤火虫栖息地”的【心声解锁库】，不是新发生的剧情。一个光点不是一句格言，而是一个完整的“心声主题”：像恋爱游戏里偶然听见 {{char}} 没说出口的一小段内心展开，有起念、迟疑/联想和收束。
-${incremental ? '旧光点由本地永久保留。本请求只根据本轮新增档案带来的关系变化，解锁尚未出现的新主题；绝对不要改写、覆盖或复述旧光点。' : '这是首次点亮，请建立一片内容丰富但不过度拥挤的初始栖息地。'}
+这里要模拟的是 GS4「ホタルの住処」那种【追加约会会话】，不是把“心の声”误解成一整页 {{char}} 的内心独白。
+一个光点 = 一个当场展开的话题。{{char}} 会因为这里“能听见心声”的气氛，不小心把本音、烦恼、朋友话题或很有个人特色的想法说出口；{{user}} 会有极短的即时回应，话题继续推进，最后可以用一条 user_thought 表示“刚才那句难道是他的心声？”之类的即时感受。
+${incremental ? '旧光点由本地永久保留。本请求只根据本轮新增档案带来的关系变化，解锁尚未出现的新话题；绝对不要改写、覆盖或近义复述旧话题。' : '这是首次点亮，请生成少量但彼此明显不同的追加约会话题。'}
+
 严格输出：
-{"fireflyVoices":[{"id":"F01","color":"pink|blue|yellow|white|desire","title":"4～18字心声主题","thoughts":["第一段内心","第二段内心","可选第三段内心"]}]}
+{"fireflyVoices":[{"id":"F01","color":"pink|blue|yellow|white|desire","title":"4～18字话题标题","script":[{"speaker":"char","text":"..."},{"speaker":"user","text":"..."},{"speaker":"char","text":"..."},{"speaker":"user_thought","text":"..."}]}]}
 
-五种光点：
-- pink 💗：对 {{user}} 的喜欢、在意、依恋、恋爱感。
-- blue 💙：关系里的犹豫、不安、吃醋、害怕失去、说不出口的顾虑。
-- yellow 💛：关于 {{char}} 自己的生活、习惯、工作学习、家人朋友、价值观；只能基于受控角色卡/世界设定或不涉及新事实的自省。
-- white 🤍：脆弱、秘密、羞于承认的小心思、孤独或软弱的一面；不要凭空新增重大创伤或背景事实。
-- desire ♥️：对 {{user}} 直白的渴望。允许明确写“想抱住你 / 想亲你 / 想把你留在身边 / 想让你只看我”这一类身体亲近与占有欲，但不要写露骨性行为、身体部位细节或色情过程。
+颜色含义要按 GS4 的分类来写：
+- pink 💗【恋爱】：{{char}} 对 {{user}} 的恋爱情绪、喜欢、特别感、想更靠近等。
+- blue 💙【恋爱的烦恼】：吃醋、没有把握、担心关系、竞争意识、怕失去、想确认 {{user}} 的心情等。
+- yellow 💛【朋友】：{{char}} 的朋友、同学、同事、朋友圈/小团体、他怎么看身边的人；只有角色卡、世界书或当前档案明确存在的人物才能点名，不能凭空编固定朋友。
+- white 🤍【お楽しみ / 个性话题】：最能体现这个角色自己的有趣话题，例如梦想、兴趣、喜欢的食物、工作/学习习惯、日常怪癖、童年小事、宠物、价值观等；涉及具体事实时必须来自受控角色卡/世界书，不要把它写成“脆弱与秘密”专栏。
+- desire ♥️【本插件扩展，不是 GS4 原四色】：对 {{user}} 更直接的渴望或身体亲近愿望。仍然写成现场对话，不写色情过程或露骨身体细节。
 
-内容结构：
-- 每颗光点必须有 2～4 段 thoughts；每段 20～100 个汉字，整颗约 90～280 个汉字。不能只输出一句短句。
-- 2～4 段要属于同一个主题并自然递进，不要拆成互不相关的句子，也不要写成摘要/标签/金句合集。
-- 只写 {{char}} 的内心。可以在心里称呼或想到 {{user}}，但不要替 {{user}} 说话、决定、回应。
-- 不把心声当成历史事实，不写“已经发生了某件新事”。新增档案只用于判断关系/情绪是否变化，不得把具体敏感经历原样搬进心声。
+会话结构：
+- 每颗必须是 5～10 个 script 节点，总文本约 140～420 个汉字；至少 3 条 char 台词，至少 1 条 user 台词。
+- speaker 只允许 char / user / user_thought。user_thought 最多 1 条，只能放在最后，表示即时感受或“刚才是不是心声”的疑问。
+- user 台词只是【非正史的中性即时反应】（例如疑问、确认、轻笑、短回应），不得替 {{user}} 新增偏好、承诺、重大决定、行动或历史事实。
+- 重点是两个人【当场说话】。不要连续写“她怎么怎样 / 她又怎样 / 她让我怎样”这种第三人称总结；{{char}} 应直接面对 {{user}} 说话或自然谈论当前话题。
+- 不要把全部话题都写成爱情。yellow 和 white 必须真正承担“朋友 / 个性话题”的内容，使 {{char}} 像一个有自己生活和人际的人，而不是所有句子都围着 {{user}} 转。
+- 话题可以让“心声”以不小心说漏嘴、突然坦白、自己也困惑为什么说出来等方式泄露；不要求每句都是内心旁白。
+- 不把会话当成当前聊天已经发生的历史事实。新增档案只用于决定可解锁的话题和关系阶段，不得逐字搬运敏感经历。
 
 数量和分布：
-- ${incremental ? '本轮新增 5～6 个真正新的心声主题；不要求五色平均，按当前关系与人设自然分布。若关系阶段适合，允许新增 ♥️，但不要为了凑数强塞。' : '首次总数 5～6 个；至少覆盖 3 种颜色，按人物与关系自然分配。♥️ 只在关系阶段与人设适合时出现，不为凑五色强塞。'}
-- 主题彼此必须明显不同，不能只是换同义词或把同一占有欲拆成多个光点。
-- ${incremental ? '必须避开 EXISTING_FIREFLY_TOPICS_JSON 里已有主题、原句和近义重复。' : ''}
+- ${incremental ? '本轮新增 5～6 个真正新的话题；不要求五色平均。优先让不同颜色承担不同主题，♥️ 只在关系与人设适合时出现。' : '首次总数 5～6 个；至少覆盖 3 种颜色。优先覆盖 pink / blue / yellow / white 中适合当前角色的类别，♥️ 不是必出项。'}
+- 主题彼此必须明显不同，不能把同一占有欲、同一不安或同一回忆换措辞拆成多个光点。
+- ${incremental ? '必须避开 EXISTING_FIREFLY_TOPICS_JSON 中已有标题、情节核心和近义重复。' : ''}
 只输出 JSON。`;
+}
+
+export function normalizeFireflyScript(rawScript) {
+    const allowed = new Set(['char', 'user', 'user_thought']);
+    const script = (Array.isArray(rawScript) ? rawScript : []).slice(0, 10).map(node => {
+        const speaker = core_text.normalizeText(node?.speaker, 40).toLowerCase();
+        const text = core_text.normalizeText(node?.text, 700);
+        if (!allowed.has(speaker) || !text) return null;
+        return { speaker, text };
+    }).filter(Boolean);
+    if (!script.length) return [];
+    const thoughts = script.filter(node => node.speaker === 'user_thought');
+    if (thoughts.length > 1) return [];
+    if (thoughts.length === 1 && script[script.length - 1]?.speaker !== 'user_thought') return [];
+    return script;
 }
 
 export function normalizeFireflyVoice(item, index = 0) {
     const color = core_text.normalizeText(item?.color, 20).toLowerCase();
     if (!core_constants.HEART_FIREFLY_COLORS.has(color)) return null;
-    const legacyLine = core_text.normalizeText(item?.line, 360);
+    const script = normalizeFireflyScript(item?.script);
+    const legacyLine = core_text.normalizeText(item?.line, 520);
     const thoughts = core_text.cleanArray(item?.thoughts ?? item?.lines, 4, 360).filter(text => text.length >= 8);
-    if (!thoughts.length && legacyLine.length >= 8) thoughts.push(legacyLine);
-    if (!thoughts.length) return null;
-    const title = core_text.normalizeText(item?.title, 80) || core_text.normalizeText(thoughts[0], 18) || `心声 ${index + 1}`;
-    const line = thoughts.join(' ');
+    if (!script.length && !thoughts.length && legacyLine.length >= 8) thoughts.push(legacyLine);
+    if (!script.length && !thoughts.length) return null;
+    const seedText = script[0]?.text || thoughts[0] || legacyLine;
+    const title = core_text.normalizeText(item?.title, 80) || core_text.normalizeText(seedText, 18) || `话题 ${index + 1}`;
+    const line = script.length ? script.map(node => node.text).join(' ') : thoughts.join(' ');
     return {
         id: core_text.safeId(item?.id, `FIREFLY${String(index + 1).padStart(2, '0')}`),
         color,
         title,
+        script,
         thoughts,
         line,
         sourceArchiveMemoryIds: core_text.cleanArray(item?.sourceArchiveMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40),
@@ -314,48 +342,69 @@ export function normalizeFireflyVoice(item, index = 0) {
 }
 
 export function fireflyVoiceKey(item) {
-    const text = Array.isArray(item?.thoughts) && item.thoughts.length ? item.thoughts.join(' ') : item?.line;
-    return core_incremental.normalizedContentKey(`${item?.title || ''} ${text || ''}`, 1200);
+    const text = Array.isArray(item?.script) && item.script.length
+        ? item.script.map(node => node?.text).join(' ')
+        : (Array.isArray(item?.thoughts) && item.thoughts.length ? item.thoughts.join(' ') : item?.line);
+    return core_incremental.normalizedContentKey(`${item?.title || ''} ${text || ''}`, 1600);
 }
 
 export function normalizeFireflyVoicesPart(data, { minTotal = 5, requireDistribution = true, requireRich = true } = {}) {
     const out = (Array.isArray(data?.fireflyVoices) ? data.fireflyVoices : []).slice(0, 6).map(normalizeFireflyVoice).filter(Boolean);
-    if (out.length < minTotal) throw new Error(`萤火虫心声不足：${out.length}/${minTotal}。`);
+    if (out.length < minTotal) throw new Error(`萤火虫会话不足：${out.length}/${minTotal}。`);
     if (requireRich) {
-        const short = out.find(item => !Array.isArray(item.thoughts) || item.thoughts.length < 2 || item.thoughts.join('').length < 70);
-        if (short) throw new Error(`萤火虫「${short.title || short.id}」仍然过短；每颗必须是至少 2 段的完整心声主题。`);
+        const invalid = out.find(item => {
+            const script = Array.isArray(item?.script) ? item.script : [];
+            const chars = script.filter(node => node.speaker === 'char').length;
+            const users = script.filter(node => node.speaker === 'user').length;
+            const totalChars = script.reduce((sum, node) => sum + String(node?.text || '').length, 0);
+            return script.length < 5 || chars < 3 || users < 1 || totalChars < 120;
+        });
+        if (invalid) throw new Error(`萤火虫「${invalid.title || invalid.id}」不是完整的追加约会会话；至少需要 5 个节点、3 条角色台词和 1 条用户即时回应。`);
     }
     if (requireDistribution) {
         const represented = new Set(out.map(item => item.color));
         if (represented.size < 3) throw new Error(`萤火虫颜色分布过窄：${represented.size}/3。首次至少覆盖 3 种颜色。`);
+        if (![...represented].some(color => color === 'yellow' || color === 'white')) {
+            throw new Error('首次萤火虫不能全部围绕恋爱/渴望；至少需要 1 个 yellow「朋友」或 white「お楽しみ/个性话题」。');
+        }
     }
     return out;
 }
 
 export function legacyFireflyVoices(session) {
-    return (Array.isArray(session?.fireflyVoices) ? session.fireflyVoices : []).filter(item => !Array.isArray(item?.thoughts) || item.thoughts.length < 2);
+    return (Array.isArray(session?.fireflyVoices) ? session.fireflyVoices : []).filter(item => {
+        const script = Array.isArray(item?.script) ? item.script : [];
+        return script.length < 5;
+    });
 }
 
 export function heartFireflyUpgradePrompt(context, core, items) {
     const batch = (Array.isArray(items) ? items : []).slice(0, 6).map(item => ({
         id: core_text.normalizeText(item?.id, 80),
         color: core_text.normalizeText(item?.color, 20),
-        legacyLine: core_text.normalizeText(item?.line, 360),
+        legacyText: core_text.normalizeText(
+            (Array.isArray(item?.script) && item.script.length
+                ? item.script.map(node => node?.text).join(' ')
+                : (Array.isArray(item?.thoughts) && item.thoughts.length ? item.thoughts.join(' ') : item?.line)),
+            700,
+        ),
     }));
-    return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 旧版萤火虫心声升级')}
+    return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 旧版萤火虫升级为 GS4 式会话')}
 RELATIONSHIP_TONE_ONLY_JSON:
 ${heartDramaRelationshipOnlyContext(core)}
 LEGACY_FIREFLY_BATCH_JSON:
 ${JSON.stringify(batch, null, 2)}
 
-任务：把这些旧版“一句心声”升级成完整的萤火虫心声主题。必须逐项保持原 id 和 color，不得新增、删除、合并或交换颜色。
+任务：把旧版“独白/短心声”升级成 GS4「ホタルの住処」风格的【追加约会会话】。必须逐项保持原 id 和 color，不得新增、删除、合并或交换颜色。
 严格输出：
-{"fireflyVoices":[{"id":"原ID","color":"原颜色","title":"4～18字主题","thoughts":["第一段内心","第二段内心","可选第三/第四段"]}]}
+{"fireflyVoices":[{"id":"原ID","color":"原颜色","title":"4～18字话题标题","script":[{"speaker":"char","text":"..."},{"speaker":"user","text":"..."},{"speaker":"char","text":"..."},{"speaker":"user_thought","text":"..."}]}]}
 要求：
-- 每项 2～4 段 thoughts，每段 20～100 个汉字，总体约 90～280 个汉字。
-- 以 legacyLine 的核心情绪为起点自然展开，但不要机械重复原句；要像一次真正被听见的内心活动，有前后递进和收束。
-- 不新增历史事实，不把档案里的敏感具体经历重新复述，不替 {{user}} 说话或做决定。
-- id / color 必须与输入逐项一致。只输出 JSON。`;
+- 每项 5～10 个节点，至少 3 条 char、1 条 user；总文本约 140～420 个汉字。
+- user 只能是非正史、中性、极短的即时回应；不得替用户新增决定、承诺、偏好或历史事实。
+- user_thought 最多 1 条且只能放结尾，用来表现“刚才是不是他的心声？”一类即时感受。
+- 以 legacyText 的核心主题为起点改成【两个人当场对话】，不要继续扩写成长篇内心独白。
+- 颜色语义必须遵守：pink=恋爱，blue=恋爱的烦恼，yellow=朋友，white=お楽しみ/角色个性话题，desire=本插件扩展的直白渴望。
+- 不新增历史事实，不机械复述档案敏感细节；id / color 必须逐项一致。只输出 JSON。`;
 }
 
 export function normalizeFireflyUpgradePart(data, expectedItems) {
@@ -619,7 +668,8 @@ export function applyHeartPartialPatch(base, patch) {
             return {
                 ...structuredClone(item),
                 title: next.title,
-                thoughts: structuredClone(next.thoughts),
+                script: structuredClone(next.script),
+                thoughts: [],
                 line: next.line,
                 upgradedAt: Date.now(),
             };
@@ -781,13 +831,13 @@ export async function generateHeartFirefliesSection() {
         try {
             const upgraded = await requestHeartPart(
                 heartFireflyUpgradePrompt(context, base, legacyBatch),
-                '角色互动 · 正在把旧版萤火虫升级为完整心声…',
+                '角色互动 · 正在把旧版萤火虫升级为 GS4 式追加约会会话…',
                 { maxTokens: 5200, temperature: 0.72, context, origin, taskKey: `${taskKey}:upgrade`, mode: core_constants.MODE.HEART, background: true },
                 raw => normalizeFireflyUpgradePart(raw, legacyBatch),
             );
             const result = await persistHeartPartialPatch('firefly-upgrade', { type: 'firefly-upgrade', fireflyVoices: upgraded }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision);
             const remain = legacyFireflyVoices(result.updated || base).length;
-            globalThis.toastr?.success?.(`已升级 ${upgraded.length} 个旧光点为完整心声${remain ? `，还剩 ${remain} 个可继续升级` : '，旧版短句已全部升级'}.`, '心跳回忆');
+            globalThis.toastr?.success?.(`已升级 ${upgraded.length} 个旧光点为追加约会会话${remain ? `，还剩 ${remain} 个可继续升级` : '，旧版独白光点已全部升级'}.`, '心跳回忆');
         } catch (error) {
             if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(error?.message || String(error)), '心跳回忆');
         } finally {

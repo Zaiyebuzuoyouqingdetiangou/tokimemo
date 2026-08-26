@@ -11,6 +11,7 @@ import * as ui_settingsPanel from '../ui/settingsPanel.js';
 
 export function queueDeferredCommit(origin, commit) {
     if (!origin?.characterKey || !origin?.chatId || !commit?.kind) return;
+    if (Number(origin.lifecycleEpoch) !== runtimeState.runtimeLifecycleEpoch) return;
     const key = `${origin.characterKey}|${origin.chatId}`;
     const list = runtimeState.deferredChatCommits.get(key) || [];
     if (commit.kind === 'heartPatches') {
