@@ -1,5 +1,5 @@
-const VERSION = '0.8.34';
-const BUILD = '0.8.34-security-lifecycle-cache-r42.3';
+const VERSION = '0.8.35';
+const BUILD = '0.8.35-diagnostic-toggle-r42.4';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -143,6 +143,37 @@ function renderDiagnostic(output = null) {
 
 globalThis.__heartbeatMemoriesRenderPerformanceDiagnostic = renderDiagnostic;
 
+function diagnosticPanelFor(output) {
+    return output?.closest?.('[data-rmt-diagnostic-panel]') || output || null;
+}
+
+function syncDiagnosticTrigger(trigger, expanded) {
+    if (!trigger) return;
+    trigger.setAttribute?.('aria-expanded', expanded ? 'true' : 'false');
+    const label = trigger.querySelector?.('[data-rmt-diagnostic-label]');
+    if (label) label.textContent = expanded ? '关闭性能诊断' : '性能诊断（不解压缓存）';
+}
+
+function hideDiagnostic(output = null, trigger = null) {
+    const diagnosticPanel = diagnosticPanelFor(output);
+    if (diagnosticPanel) diagnosticPanel.hidden = true;
+    syncDiagnosticTrigger(trigger, false);
+    return false;
+}
+
+function toggleDiagnostic(output = null, trigger = null) {
+    const diagnosticPanel = diagnosticPanelFor(output);
+    const expanded = diagnosticPanel ? !diagnosticPanel.hidden : !!output && !output.hidden;
+    if (expanded) return hideDiagnostic(output, trigger);
+    renderDiagnostic(output);
+    if (diagnosticPanel) diagnosticPanel.hidden = false;
+    syncDiagnosticTrigger(trigger, true);
+    return true;
+}
+
+globalThis.__heartbeatMemoriesHidePerformanceDiagnostic = hideDiagnostic;
+globalThis.__heartbeatMemoriesTogglePerformanceDiagnostic = toggleDiagnostic;
+
 function ensureBootstrapStyle() {
     if (document.getElementById(BOOTSTRAP_STYLE_ID)) return;
     const style = document.createElement('style');
@@ -155,6 +186,10 @@ function ensureBootstrapStyle() {
 #${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-actions{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr);width:100%;min-width:0;gap:7px}
 #${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-actions>button.menu_button{box-sizing:border-box;display:flex!important;align-items:center;justify-content:center;width:100%!important;max-width:100%!important;min-width:0!important;min-height:46px!important;height:auto!important;margin:0!important;padding:9px 12px!important;border-radius:9px;font-size:clamp(14px,4vw,16px);line-height:1.25;text-align:center;white-space:nowrap!important;word-break:keep-all!important;overflow-wrap:normal!important;writing-mode:horizontal-tb!important;text-orientation:mixed!important;touch-action:manipulation}
 #${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-note{min-width:0;max-width:100%;font-size:9px;line-height:1.5;opacity:.7;white-space:normal;word-break:normal;overflow-wrap:anywhere;writing-mode:horizontal-tb}
+#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-diagnostic{box-sizing:border-box;display:grid;min-width:0;max-width:100%;gap:6px}
+#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-diagnostic[hidden]{display:none!important}
+#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-diagnostic-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;font-size:10px;writing-mode:horizontal-tb}
+#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-diagnostic-close{box-sizing:border-box;min-width:88px!important;min-height:40px!important;height:auto!important;margin:0!important;padding:7px 10px!important;white-space:nowrap!important;word-break:keep-all!important;writing-mode:horizontal-tb!important;touch-action:manipulation}
 #${SETTINGS_ID}[data-rmt-bootstrap="1"] pre{box-sizing:border-box;min-width:0;max-width:100%;margin:0;padding:8px;max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:9px;line-height:1.45;border-radius:8px;background:rgba(38,49,63,.07);writing-mode:horizontal-tb}
 #${MENU_ID}[data-rmt-bootstrap="1"]{cursor:pointer}
 @media(min-width:768px){#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -194,14 +229,24 @@ function mountBootstrapSettings() {
       <div class="rmt-bootstrap-head"><b>心跳回忆</b><small>LAZY BOOTSTRAP</small></div>
       <div class="rmt-bootstrap-actions">
         <button type="button" class="menu_button" data-rmt-bootstrap-load-settings>加载完整设置</button>
-        <button type="button" class="menu_button" data-rmt-bootstrap-diagnostic>性能诊断（不解压缓存）</button>
+        <button type="button" class="menu_button" data-rmt-bootstrap-diagnostic aria-expanded="false" aria-controls="heartbeat_memories_bootstrap_diagnostic"><span data-rmt-diagnostic-label>性能诊断（不解压缓存）</span></button>
       </div>
       <div class="rmt-bootstrap-note">普通酒馆启动不会解析 Heartbeat 完整 runtime。只有第一次打开档案室或加载完整设置时才加载。</div>
-      <pre data-rmt-bootstrap-diagnostic-output hidden></pre>`;
+      <div class="rmt-bootstrap-diagnostic" id="heartbeat_memories_bootstrap_diagnostic" data-rmt-diagnostic-panel hidden>
+        <div class="rmt-bootstrap-diagnostic-head"><b>诊断结果</b><button type="button" class="menu_button rmt-bootstrap-diagnostic-close" data-rmt-bootstrap-diagnostic-close>关闭诊断</button></div>
+        <pre data-rmt-bootstrap-diagnostic-output></pre>
+      </div>`;
     panel.addEventListener('click', event => {
+        if (event.target.closest?.('[data-rmt-bootstrap-diagnostic-close]')) {
+            hideDiagnostic(
+                panel.querySelector('[data-rmt-bootstrap-diagnostic-output]'),
+                panel.querySelector('[data-rmt-bootstrap-diagnostic]'),
+            );
+            return;
+        }
         const diag = event.target.closest?.('[data-rmt-bootstrap-diagnostic]');
         if (diag) {
-            renderDiagnostic(panel.querySelector('[data-rmt-bootstrap-diagnostic-output]'));
+            toggleDiagnostic(panel.querySelector('[data-rmt-bootstrap-diagnostic-output]'), diag);
             return;
         }
         if (event.target.closest?.('[data-rmt-bootstrap-load-settings]')) {

@@ -184,8 +184,11 @@ export function mountSettings() {
         <div class="rmt-settings-archive-actions">
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
-          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-performance-diagnostic><i class="fa-solid fa-gauge-high"></i><span>性能诊断（不解压缓存）</span></button>
-          <pre class="rmt-performance-diagnostic-output" data-rmt-performance-diagnostic-output hidden></pre>
+          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-performance-diagnostic aria-expanded="false" aria-controls="heartbeat_memories_performance_diagnostic"><i class="fa-solid fa-gauge-high"></i><span data-rmt-diagnostic-label>性能诊断（不解压缓存）</span></button>
+          <div class="rmt-performance-diagnostic-panel" id="heartbeat_memories_performance_diagnostic" data-rmt-diagnostic-panel hidden>
+            <div class="rmt-performance-diagnostic-head"><b>诊断结果</b><button type="button" class="menu_button rmt-performance-diagnostic-close" data-rmt-performance-diagnostic-close>关闭诊断</button></div>
+            <pre class="rmt-performance-diagnostic-output" data-rmt-performance-diagnostic-output></pre>
+          </div>
           <div class="rmt-api-note">当前聊天窗口一份独立档案。普通更新只追加上次归档后的新内容并保留已生成 ADV EVENT / 房间 / ENDING；需要从头重整时请进入档案后明确选择“完全重建档案”。性能诊断只读取缓存 manifest/字符串长度，不会解压缓存或遍历聊天正文。</div>
         </div>
       </div>`;
@@ -257,12 +260,35 @@ export function mountSettings() {
             });
             return;
         }
+        const diagnosticCloseButton = event.target.closest?.('[data-rmt-performance-diagnostic-close]');
+        if (diagnosticCloseButton) {
+            const output = panel.querySelector('[data-rmt-performance-diagnostic-output]');
+            const trigger = panel.querySelector('[data-rmt-performance-diagnostic]');
+            const hide = globalThis.__heartbeatMemoriesHidePerformanceDiagnostic;
+            if (typeof hide === 'function') hide(output, trigger);
+            else {
+                const diagnosticPanel = output?.closest?.('[data-rmt-diagnostic-panel]') || output;
+                if (diagnosticPanel) diagnosticPanel.hidden = true;
+                trigger?.setAttribute?.('aria-expanded', 'false');
+                const label = trigger?.querySelector?.('[data-rmt-diagnostic-label]');
+                if (label) label.textContent = '性能诊断（不解压缓存）';
+            }
+            return;
+        }
         const diagnosticButton = event.target.closest?.('[data-rmt-performance-diagnostic]');
         if (diagnosticButton) {
             const output = panel.querySelector('[data-rmt-performance-diagnostic-output]');
-            const render = globalThis.__heartbeatMemoriesRenderPerformanceDiagnostic;
-            if (typeof render === 'function') render(output);
-            else if (output) { output.textContent = '性能诊断器尚未就绪。'; output.hidden = false; }
+            const toggle = globalThis.__heartbeatMemoriesTogglePerformanceDiagnostic;
+            if (typeof toggle === 'function') toggle(output, diagnosticButton);
+            else if (output) {
+                const diagnosticPanel = output.closest?.('[data-rmt-diagnostic-panel]') || output;
+                const expanded = !diagnosticPanel.hidden;
+                diagnosticPanel.hidden = expanded;
+                diagnosticButton.setAttribute?.('aria-expanded', expanded ? 'false' : 'true');
+                const label = diagnosticButton.querySelector?.('[data-rmt-diagnostic-label]');
+                if (label) label.textContent = expanded ? '性能诊断（不解压缓存）' : '关闭性能诊断';
+                if (!expanded) output.textContent = '性能诊断器尚未就绪。';
+            }
             return;
         }
         const currentArchiveButton = event.target.closest?.('[data-rmt-settings-current-archive]');

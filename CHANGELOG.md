@@ -1,3 +1,10 @@
+# 0.8.35 / r42.4 — 性能诊断关闭交互修复
+
+- 轻量 bootstrap 诊断结果增加明确的“关闭诊断”按钮；再次点击原诊断按钮也会收起，并同步恢复按钮标签与 `aria-expanded=false`。
+- 完整 runtime 设置面板采用相同的可逆交互，修复诊断结果打开后只能随设置抽屉一起关闭的问题。
+- 关闭与再次打开只切换现有 DOM 状态；诊断仍不执行 Base64 解码、gzip 解压、正文遍历或网络请求，bootstrap 分支仍不导入 runtime。
+- 新增真实状态切换与两套关闭入口的回归测试。
+
 # 0.8.34 / r42.3 — 安全边界与长期状态收口
 
 - EverMind 远程读取强制 HTTPS；HTTP 只允许 URL 解析后的严格 loopback。远程明文地址会在创建 Authorization header 和发起 fetch 前被拒绝。

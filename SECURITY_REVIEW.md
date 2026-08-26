@@ -683,3 +683,13 @@ Scope: r42.2 -> r42.3 EverMind transport, cache byte budget, runtime lifecycle c
 - The lazy bootstrap import path, deletion authority, archive evidence rules, incremental content and ordinary chat event paths are unchanged.
 
 Targeted conclusion: the reported remote plaintext credential path is closed; no new Critical / High / Medium issue was identified in this remediation scope.
+
+## 0.8.35 / r42.4 diagnostic-toggle targeted diff review
+
+Scope: r42.3 -> r42.4 lightweight bootstrap and full settings diagnostic visibility controls, release metadata, tests and generated runtime bundle only.
+
+- Both settings surfaces now use an explicit code-owned close control and a reversible trigger state. The controls update only local `hidden`, `aria-expanded` and fixed label text.
+- Diagnostic report content continues to be assigned with `textContent`; this change adds no HTML interpretation, model-controlled URL/CSS, network target, credential path, storage mutation or deletion authority.
+- The lightweight close/open branches do not call `ensureRuntime()` or dynamic import. The existing diagnostic implementation remains O(1), zero-decompression and observational.
+
+Targeted conclusion: no newly introduced Critical / High / Medium security issue identified.

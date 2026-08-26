@@ -1,15 +1,15 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.34-security-lifecycle-cache-r42.3",
+  "js": "index.js?heartbeat=0.8.35-diagnostic-toggle-r42.4",
   "author": "Toto",
-  "version": "0.8.34",
+  "version": "0.8.35",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r42.3 修复 EverMind 明文远程凭据边界、缓存 UTF-8 字节上限、runtime 销毁残留与历史档案全角色 metadata 放大；保留轻量 bootstrap 和按需加载 runtime。",
+  "description": "r42.4 修复轻量与完整设置中的性能诊断只能打开、不能收起；保留 r42.3 安全/生命周期修复、零解压诊断与按需加载 runtime。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

@@ -29,6 +29,10 @@ export function ensureSettingsStyles() {
 #${core_constants.SETTINGS_ID} .rmt-api-note{font-size:9px;line-height:1.55;opacity:.72;color:#758493}
 #${core_constants.SETTINGS_ID} .rmt-open-archive-room{width:100%!important;min-height:48px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;background:linear-gradient(90deg,#fff6fa,#f2faff)!important;border:1px solid #d4e2e9!important;color:#566a80!important;font-weight:850!important}
 #${core_constants.SETTINGS_ID} .rmt-settings-archive-actions{display:grid;gap:8px;margin-top:10px}
+#${core_constants.SETTINGS_ID} .rmt-performance-diagnostic-panel{display:grid;gap:6px;min-width:0;max-width:100%}
+#${core_constants.SETTINGS_ID} .rmt-performance-diagnostic-panel[hidden]{display:none!important}
+#${core_constants.SETTINGS_ID} .rmt-performance-diagnostic-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;color:var(--rmt-s-ink);font-size:10px;writing-mode:horizontal-tb}
+#${core_constants.SETTINGS_ID} .rmt-performance-diagnostic-close{min-width:88px!important;min-height:40px!important;white-space:nowrap!important;word-break:keep-all!important;writing-mode:horizontal-tb!important;touch-action:manipulation}
 #${core_constants.SETTINGS_ID} .rmt-performance-diagnostic-output{margin:0;padding:9px;max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:9px;line-height:1.5;border-radius:9px;background:rgba(38,49,63,.07);color:#5f6f80}
 #${core_constants.MENU_ID}{cursor:pointer}
 @media(max-width:760px){

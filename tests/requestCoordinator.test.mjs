@@ -1732,14 +1732,15 @@ test('r42 zero-decompression diagnostic reads only cache manifest/string length 
     assert.doesNotMatch(indexSource, /JSON\.stringify\(stored|JSON\.stringify\(metadata/);
     assert.match(indexSource, /未执行 Base64 解码、gzip 解压、缓存序列化/);
     assert.match(settings, /data-rmt-performance-diagnostic/);
-    assert.match(settings, /__heartbeatMemoriesRenderPerformanceDiagnostic/);
+    assert.match(settings, /__heartbeatMemoriesTogglePerformanceDiagnostic/);
+    assert.match(settings, /__heartbeatMemoriesHidePerformanceDiagnostic/);
 });
 
 test('r42 bootstrap diagnostic does not load the full runtime when the diagnostic button is used', async () => {
     const indexSource = await readFile(new URL('../index.js', import.meta.url), 'utf8');
     const bootstrapMount = indexSource.match(/function mountBootstrapSettings\(\)[\s\S]*?\n}\n\nfunction removeBootstrapShells/)?.[0] || '';
     assert.match(bootstrapMount, /data-rmt-bootstrap-diagnostic/);
-    assert.match(bootstrapMount, /renderDiagnostic\(/);
+    assert.match(bootstrapMount, /toggleDiagnostic\(/);
     const diagnosticBranch = bootstrapMount.match(/if \(diag\) \{[\s\S]*?return;\n        \}/)?.[0] || '';
     assert.doesNotMatch(diagnosticBranch, /ensureRuntime|import\(/);
 });

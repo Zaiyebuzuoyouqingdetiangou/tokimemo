@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 43
-// Source SHA-256: fdc8a2c0cb7e0f424f1cc6ceb92d1fcad6ed6c2d2bde1865429a496564881a7d
+// Source SHA-256: 60c587dfeb0a61cc6923694b9beda06e52c630ea5c696ebadbaa69c71c0bc29a
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_groups_js = Object.create(null);
@@ -1328,6 +1328,10 @@ function ensureSettingsStyles() {
 #${core_constants.SETTINGS_ID} .rmt-api-note{font-size:9px;line-height:1.55;opacity:.72;color:#758493}
 #${core_constants.SETTINGS_ID} .rmt-open-archive-room{width:100%!important;min-height:48px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;background:linear-gradient(90deg,#fff6fa,#f2faff)!important;border:1px solid #d4e2e9!important;color:#566a80!important;font-weight:850!important}
 #${core_constants.SETTINGS_ID} .rmt-settings-archive-actions{display:grid;gap:8px;margin-top:10px}
+#${core_constants.SETTINGS_ID} .rmt-performance-diagnostic-panel{display:grid;gap:6px;min-width:0;max-width:100%}
+#${core_constants.SETTINGS_ID} .rmt-performance-diagnostic-panel[hidden]{display:none!important}
+#${core_constants.SETTINGS_ID} .rmt-performance-diagnostic-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;color:var(--rmt-s-ink);font-size:10px;writing-mode:horizontal-tb}
+#${core_constants.SETTINGS_ID} .rmt-performance-diagnostic-close{min-width:88px!important;min-height:40px!important;white-space:nowrap!important;word-break:keep-all!important;writing-mode:horizontal-tb!important;touch-action:manipulation}
 #${core_constants.SETTINGS_ID} .rmt-performance-diagnostic-output{margin:0;padding:9px;max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:9px;line-height:1.5;border-radius:9px;background:rgba(38,49,63,.07);color:#5f6f80}
 #${core_constants.MENU_ID}{cursor:pointer}
 @media(max-width:760px){
@@ -2267,8 +2271,11 @@ function mountSettings() {
         <div class="rmt-settings-archive-actions">
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
-          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-performance-diagnostic><i class="fa-solid fa-gauge-high"></i><span>性能诊断（不解压缓存）</span></button>
-          <pre class="rmt-performance-diagnostic-output" data-rmt-performance-diagnostic-output hidden></pre>
+          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-performance-diagnostic aria-expanded="false" aria-controls="heartbeat_memories_performance_diagnostic"><i class="fa-solid fa-gauge-high"></i><span data-rmt-diagnostic-label>性能诊断（不解压缓存）</span></button>
+          <div class="rmt-performance-diagnostic-panel" id="heartbeat_memories_performance_diagnostic" data-rmt-diagnostic-panel hidden>
+            <div class="rmt-performance-diagnostic-head"><b>诊断结果</b><button type="button" class="menu_button rmt-performance-diagnostic-close" data-rmt-performance-diagnostic-close>关闭诊断</button></div>
+            <pre class="rmt-performance-diagnostic-output" data-rmt-performance-diagnostic-output></pre>
+          </div>
           <div class="rmt-api-note">当前聊天窗口一份独立档案。普通更新只追加上次归档后的新内容并保留已生成 ADV EVENT / 房间 / ENDING；需要从头重整时请进入档案后明确选择“完全重建档案”。性能诊断只读取缓存 manifest/字符串长度，不会解压缓存或遍历聊天正文。</div>
         </div>
       </div>`;
@@ -2340,12 +2347,35 @@ function mountSettings() {
             });
             return;
         }
+        const diagnosticCloseButton = event.target.closest?.('[data-rmt-performance-diagnostic-close]');
+        if (diagnosticCloseButton) {
+            const output = panel.querySelector('[data-rmt-performance-diagnostic-output]');
+            const trigger = panel.querySelector('[data-rmt-performance-diagnostic]');
+            const hide = globalThis.__heartbeatMemoriesHidePerformanceDiagnostic;
+            if (typeof hide === 'function') hide(output, trigger);
+            else {
+                const diagnosticPanel = output?.closest?.('[data-rmt-diagnostic-panel]') || output;
+                if (diagnosticPanel) diagnosticPanel.hidden = true;
+                trigger?.setAttribute?.('aria-expanded', 'false');
+                const label = trigger?.querySelector?.('[data-rmt-diagnostic-label]');
+                if (label) label.textContent = '性能诊断（不解压缓存）';
+            }
+            return;
+        }
         const diagnosticButton = event.target.closest?.('[data-rmt-performance-diagnostic]');
         if (diagnosticButton) {
             const output = panel.querySelector('[data-rmt-performance-diagnostic-output]');
-            const render = globalThis.__heartbeatMemoriesRenderPerformanceDiagnostic;
-            if (typeof render === 'function') render(output);
-            else if (output) { output.textContent = '性能诊断器尚未就绪。'; output.hidden = false; }
+            const toggle = globalThis.__heartbeatMemoriesTogglePerformanceDiagnostic;
+            if (typeof toggle === 'function') toggle(output, diagnosticButton);
+            else if (output) {
+                const diagnosticPanel = output.closest?.('[data-rmt-diagnostic-panel]') || output;
+                const expanded = !diagnosticPanel.hidden;
+                diagnosticPanel.hidden = expanded;
+                diagnosticButton.setAttribute?.('aria-expanded', expanded ? 'false' : 'true');
+                const label = diagnosticButton.querySelector?.('[data-rmt-diagnostic-label]');
+                if (label) label.textContent = expanded ? '性能诊断（不解压缓存）' : '关闭性能诊断';
+                if (!expanded) output.textContent = '性能诊断器尚未就绪。';
+            }
             return;
         }
         const currentArchiveButton = event.target.closest?.('[data-rmt-settings-current-archive]');
