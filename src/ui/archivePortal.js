@@ -114,7 +114,9 @@ export function bindChatStateEvents() {
         // synchronously rebuild the whole archive UI inside its awaited event path.
         if (overlay && !overlay.hidden) archive_snapshots.scheduleChooserRefresh(80);
         setTimeout(() => {
-            void core_cache.flushPendingCompressedCacheForCurrentChat();
+            void core_cache.flushPendingCompressedCacheForCurrentChat().catch(error => {
+                console.warn('[HeartbeatMemories] pending compressed cache flush failed', error);
+            });
             void archive_repository.flushDeferredCommitsForCurrentChat();
         }, 160);
     };

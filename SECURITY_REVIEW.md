@@ -672,6 +672,21 @@ Scope: local r41.9 candidate -> r42.0 startup/runtime delivery and diagnostic ch
 
 Targeted conclusion: no newly introduced Critical / High / Medium security issue identified.
 
+## 0.8.36 / r42.5 archive-durability targeted fix review
+
+Scope: r42.4 -> r42.5 independent archive persistence, raw-cache cap enforcement, canonical archive compare-and-set, source-loss recovery, explicit deletion semantics and focused regressions. GitHub was used read-only; no repository write or hosted security scan was performed for this targeted remediation.
+
+- The new IndexedDB store is reachable only from the full runtime module graph. `index.js` remains a lightweight bootstrap and its performance diagnostic does not import the bundle, open IndexedDB, decode/decompress cache data, traverse chat text or perform a backup scan.
+- Backup records are code-owned structured clones bound to a local archive entry identity, character identity, chat ID and exact `archiveRevision`. Formal memory and raw cache JSON are capped at 12 MB UTF-8 bytes; compressed records retain the existing Base64 and source-byte limits. No HTML, URL, executable code, provider credential or chat message body is introduced into the backup format.
+- `saveImportedMemory()` now requires explicit previous-presence/revision state and performs compare-and-set before staging, after cache preparation, after the awaited backup transaction and immediately before live metadata mutation. Foreground and deferred archive results share this boundary, so an old same-chat result cannot overwrite a newer revision.
+- Source-chat fetch remains fixed same-origin `/api/chats/get`. Only a source failure enables the backup fallback; identity/schema/revision validation is fail-closed. A recovered backup is permanently read-only and cannot gain write authority or be rebound to another current chat.
+- Raw legacy metadata is detached before runtime mutation, and every raw sink—including destroy fallback—uses the UTF-8 cap. An oversized or unserializable candidate leaves the previous durable value intact.
+- Explicit current/archive-character deletion removes matching local backup content after the existing confirmations and atomically leaves a content-free per-entry deletion fence. Ordinary seed/cache transactions reject that fence, including writers that began before deletion but acquire the store transaction afterward; only a later explicit canonical first-create may replace it. Index-only removal preserves both source content and backup. No SillyTavern chat-delete/clear API is added.
+
+The independent post-patch review initially identified one Medium deletion-vs-late-writer race, then found a legacy-entry-ID alias of that race during follow-up. The deletion fence is therefore enforced across every matching `chatId + character identity` alias in one IndexedDB transaction, and the seed path revalidates the live archive after asynchronous cache preparation. Focused interleaving regressions cover delayed seed, delayed derived-cache persistence and a legacy ID changing to a newly computed ID. The reviewer confirmed the Medium closed; no Critical / High / Medium security finding remains in this remediation scope.
+
+Release verification: 118/118 tests passed; all source, test, tool, entrypoint and generated-bundle JS/MJS syntax checks passed. Two consecutive 44-module builds were byte-identical. Source fingerprint: `ba1ddd8fb288c7c230f7bcaa8037aa92e5f63632dfda425f1df9124f90a67183`; generated bundle SHA-256: `a4a2a819e4ac4b8712e91c4ba4da7ef7edf727fb50e1fbb77957d95539e341d4`. The CSS geometry benchmark passed at 320/375/390/430/768 px; a real Chromium screenshot run was unavailable in this environment because the browser executable was not installed. ZIP CRC and release SHA-256 are reported alongside the packaged artifact.
+
 ## 0.8.34 / r42.3 targeted remediation review
 
 Scope: r42.2 -> r42.3 EverMind transport, cache byte budget, runtime lifecycle cleanup and single-history-chat loading only.

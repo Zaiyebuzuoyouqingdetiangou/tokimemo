@@ -17,6 +17,7 @@ src/
 │  └─ text.js                  escaping / bounded text helpers
 ├─ archive/
 │  ├─ repository.js            canonical archive and memory-source processing
+│  ├─ backupStore.js            full-runtime-only browser-local IndexedDB backup
 │  ├─ groups.js                character grouping/index metadata
 │  ├─ snapshots.js             historical snapshot lookup
 │  └─ library.js               archive-library behavior and writeability gate
@@ -119,6 +120,14 @@ Phone/Terminal remains `MODE.PHONE` under Room, but its topbar increment action 
 - Bootstrap owns only fixed local menu/settings markup, a bounded mount retry, and two mobile-safe early gesture listeners. It must not bind chat events, scan `context.chat`, enumerate Connection Manager profiles, read World Info, hydrate/compress theater cache, or call providers.
 - The bootstrap performance diagnostic reads only already-parsed metadata fields and string lengths. For compressed cache it may read `format/storageVersion/modes/sourceChars/sourceBytes/data.length`; it must never Base64-decode, decompress, encode/stringify the cache, or iterate chat message bodies. New cache writes use one 12 MB UTF-8 byte budget for both compression input and streamed decompression output.
 - Runtime handoff removes bootstrap shells before `initMemoryTheater()` mounts the authoritative settings/menu. The runtime remains a single generated bundle and keeps the existing cleanup/security boundaries.
+
+## r42.5 archive durability contract
+
+- Canonical `MEMORY_KEY` remains the live-chat copy, but every explicit canonical commit first stores a bounded, identity-bound copy in `archive/backupStore.js`. That module is reachable only from the full runtime bundle; bootstrap startup and its zero-decompression diagnostic never import it or open IndexedDB.
+- Canonical commits require an explicit previous state: either `{present:false}` for first creation or `{present:true, revision:<exact>}` for an update/rebuild. The same compare-and-set is rechecked after asynchronous backup persistence and before live metadata mutation.
+- A source-chat read failure may fall back to the matching local backup only after entry ID, character identity, chat ID, schema and archive revision validation. Recovered snapshots are permanently read-only and cannot be rebound to another chat.
+- Every raw derived-cache sink uses the same 12 MB UTF-8 byte cap. Runtime writers detach legacy raw metadata before mutation, and an oversized destroy-time candidate leaves the previous durable value untouched.
+- The backup is browser-local durability, not cross-device sync: clearing site data or using another browser/device removes access to it. Explicit Heartbeat archive deletion replaces matching content with a tiny content-free deletion fence so delayed seed/cache transactions cannot recreate it; only a later explicit canonical first-create may clear that fence. Index-only removal does not delete the backup.
 
 ## r41.5 performance contract
 

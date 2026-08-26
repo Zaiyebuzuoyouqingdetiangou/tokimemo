@@ -1,6 +1,7 @@
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_groups from './groups.js';
+import * as archive_backupStore from './backupStore.js';
 import * as archive_repository from './repository.js';
 import * as archive_snapshots from './snapshots.js';
 import * as core_cache from '../core/cache.js';
@@ -142,33 +143,8 @@ export function rememberArchiveSnapshot(snapshot) {
     return snapshot;
 }
 
-export async function fetchIndexedArchiveSnapshot(entry, context = core_context.getContext()) {
-    const key = archiveSnapshotCacheKey(entry);
-    const cached = runtimeState.archiveSnapshotCache.get(key);
-    if (cached && Date.now() - Number(cached.loadedAt || 0) < 120000) return cached;
-    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
-    const avatar = core_context.archiveEntryAvatarName(entry, context);
-    if (!avatar || typeof context.getRequestHeaders !== 'function') throw new Error('无法定位这个角色的聊天档案文件。');
-    const wantedChatId = core_context.comparableChatId(entry.chatId);
-    if (!wantedChatId) throw new Error('无法识别这个历史聊天的文件 ID。');
-    const response = await fetch('/api/chats/get', {
-        method: 'POST',
-        headers: context.getRequestHeaders(),
-        cache: 'no-cache',
-        body: JSON.stringify({ avatar_url: avatar, file_name: wantedChatId }),
-    });
-    if (!response.ok) throw new Error(`读取档案失败：HTTP ${response.status}`);
-    const chat = await response.json();
-    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
-    const header = Array.isArray(chat) ? chat[0] : chat;
-    const metadata = header?.chat_metadata && typeof header.chat_metadata === 'object' ? header.chat_metadata : {};
-    const memory = archive_repository.migrateArchiveInMemory(metadata[core_constants.MEMORY_KEY]);
-    if (!memory || core_context.comparableChatId(memory.chatId) !== wantedChatId) throw new Error('这个聊天文件里没有可读取的心跳回忆档案。');
-    const indexedName = core_text.normalizeText(entry?.characterName, 120);
-    const memoryName = core_text.normalizeText(memory?.characterName, 120);
-    if (indexedName && memoryName && indexedName !== memoryName) throw new Error('同头像下检测到不同角色身份；为避免读错聊天，已拒绝打开。请在“管理角色分类”里手动归类后再试。');
+async function hydrateSnapshotCache(stored, memory, wantedChatId, lifecycleEpoch) {
     let cache = {};
-    const stored = metadata[core_constants.CACHE_KEY];
     if (core_cache.isCompressedCacheRecord(stored)) {
         const hydrated = await core_cache.gunzipJson(stored.data);
         if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
@@ -178,10 +154,82 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
         cache = stored;
     }
     if (Object.keys(cache).length) {
-        if (core_text.normalizeText(cache.chatId, 240) && core_context.comparableChatId(cache.chatId) !== wantedChatId) cache = {};
-        else if (core_text.normalizeText(cache.archiveRevision, 240) && cache.archiveRevision !== memory.archiveRevision) cache = {};
+        if (core_text.normalizeText(cache.chatId, 240) && core_context.comparableChatId(cache.chatId) !== wantedChatId) return {};
+        if (core_text.normalizeText(cache.archiveRevision, 240) && cache.archiveRevision !== memory.archiveRevision) return {};
     }
-    return rememberArchiveSnapshot({
+    return cache;
+}
+
+export async function fetchIndexedArchiveSnapshot(entry, context = core_context.getContext()) {
+    const key = archiveSnapshotCacheKey(entry);
+    const cached = runtimeState.archiveSnapshotCache.get(key);
+    if (cached && Date.now() - Number(cached.loadedAt || 0) < 120000) return cached;
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const avatar = core_context.archiveEntryAvatarName(entry, context);
+    const wantedChatId = core_context.comparableChatId(entry.chatId);
+    if (!wantedChatId) throw new Error('无法识别这个历史聊天的文件 ID。');
+    let sourceError = null;
+    let memory = null;
+    let stored = null;
+    let backupRecord = null;
+    try {
+        if (!avatar || typeof context.getRequestHeaders !== 'function') throw new Error('无法定位这个角色的聊天档案文件。');
+        const response = await fetch('/api/chats/get', {
+            method: 'POST',
+            headers: context.getRequestHeaders(),
+            cache: 'no-cache',
+            body: JSON.stringify({ avatar_url: avatar, file_name: wantedChatId }),
+        });
+        if (!response.ok) throw new Error(`读取源聊天失败：HTTP ${response.status}`);
+        const chat = await response.json();
+        if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
+        const header = Array.isArray(chat) ? chat[0] : chat;
+        const metadata = header?.chat_metadata && typeof header.chat_metadata === 'object' ? header.chat_metadata : {};
+        memory = archive_repository.migrateArchiveInMemory(metadata[core_constants.MEMORY_KEY]);
+        if (!memory || core_context.comparableChatId(memory.chatId) !== wantedChatId) throw new Error('源聊天里已没有可读取的心跳回忆档案。');
+        stored = metadata[core_constants.CACHE_KEY];
+    } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        sourceError = error;
+        try { backupRecord = await archive_backupStore.readArchiveBackup(entry); }
+        catch (backupError) {
+            console.warn('[HeartbeatMemories] independent archive backup read failed', backupError);
+        }
+        if (!backupRecord?.memory) {
+            throw new Error(`源聊天无法读取，且本机没有可用的独立档案备份。\n${error?.message || error}\n如果这份档案从未在 r42.5 或更高版本中打开/保存过，将无法从本机备份恢复。`);
+        }
+        memory = archive_repository.migrateArchiveInMemory(backupRecord.memory);
+        stored = backupRecord.cache;
+        if (!memory || core_context.comparableChatId(memory.chatId) !== wantedChatId) throw new Error('独立档案备份的身份校验失败，已拒绝恢复。');
+    }
+    const indexedName = core_text.normalizeText(entry?.characterName, 120);
+    const memoryName = core_text.normalizeText(memory?.characterName, 120);
+    if (indexedName && memoryName && indexedName !== memoryName) throw new Error('同头像下检测到不同角色身份；为避免读错聊天，已拒绝打开。请在“管理角色分类”里手动归类后再试。');
+    let cache = {};
+    let sourceCacheError = null;
+    try { cache = await hydrateSnapshotCache(stored, memory, wantedChatId, lifecycleEpoch); }
+    catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        sourceCacheError = error;
+    }
+    if (!sourceError && (!Object.keys(cache).length || sourceCacheError)) {
+        try { backupRecord = backupRecord || await archive_backupStore.readArchiveBackup(entry); }
+        catch (backupError) { console.warn('[HeartbeatMemories] independent derived-cache backup read failed', backupError); }
+        if (backupRecord?.cache && backupRecord.archiveRevision === memory.archiveRevision) {
+            try {
+                const recoveredCache = await hydrateSnapshotCache(backupRecord.cache, memory, wantedChatId, lifecycleEpoch);
+                if (Object.keys(recoveredCache).length) {
+                    cache = recoveredCache;
+                    stored = backupRecord.cache;
+                    sourceCacheError = null;
+                }
+            } catch (backupCacheError) {
+                console.warn('[HeartbeatMemories] independent derived-cache backup hydrate failed', backupCacheError);
+            }
+        }
+    }
+    if (sourceCacheError) throw sourceCacheError;
+    const snapshot = {
         entryId: core_context.archiveIndexEntryId(entry),
         archiveGroupId: archive_groups.archiveGroupKeyForEntry(entry),
         characterKey: core_text.normalizeText(entry.characterKey, 300),
@@ -191,12 +239,28 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
         archiveName: core_text.normalizeText(memory.archiveName, 160) || archive_repository.fallbackArchiveName(memory.memories),
         memory,
         cache,
+        backupOnly: !!sourceError,
+        sourceError: sourceError ? core_text.normalizeText(sourceError?.message || String(sourceError), 1200) : '',
         loadedAt: Date.now(),
-    });
+    };
+    if (!sourceError) {
+        // A successfully opened historical archive is an explicit full-runtime action, so this is
+        // the safe migration point for old chat-only archives. Backup failures never hide the source.
+        void archive_backupStore.seedArchiveBackup(entry, memory, stored).catch(error => {
+            console.warn('[HeartbeatMemories] independent archive backup seed failed', error);
+            globalThis.toastr?.warning?.(core_text.toastText(`档案已打开，但独立备份没有更新：${error?.message || error}`), '心跳回忆');
+        });
+    }
+    return rememberArchiveSnapshot(snapshot);
 }
 
 export function setArchiveReadOnly(readOnly) {
     if (!runtimeState.activeArchiveSnapshot) return;
+    if (runtimeState.activeArchiveSnapshot.backupOnly && readOnly === false) {
+        runtimeState.activeArchiveReadOnly = true;
+        globalThis.toastr?.info?.('源聊天已丢失或无法读取；独立备份只能永久只读查看，不能重新绑定到其他聊天。', '心跳回忆');
+        return showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot);
+    }
     runtimeState.activeArchiveReadOnly = readOnly !== false;
     if (runtimeState.activeMode && runtimeState.activeSession) ui_overlay.renderActive();
     else showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot);
@@ -212,7 +276,9 @@ export function setArchiveReadOnly(readOnly) {
 }
 
 export function archiveSnapshotEditableUi() {
-    return !!runtimeState.activeArchiveSnapshot && !runtimeState.activeArchiveReadOnly;
+    return !!runtimeState.activeArchiveSnapshot
+        && runtimeState.activeArchiveSnapshot.backupOnly !== true
+        && !runtimeState.activeArchiveReadOnly;
 }
 
 export function snapshotWriteBlockMessage() {
@@ -223,6 +289,11 @@ export function snapshotWriteBlockMessage() {
 
 export function promoteSnapshotToLiveIfCurrent() {
     if (!runtimeState.activeArchiveSnapshot) return true;
+    if (runtimeState.activeArchiveSnapshot.backupOnly) {
+        runtimeState.activeArchiveReadOnly = true;
+        globalThis.toastr?.warning?.('独立备份是永久只读快照，不能重新绑定或写入当前聊天。', '心跳回忆');
+        return false;
+    }
     if (runtimeState.activeArchiveReadOnly) {
         globalThis.toastr?.info?.('当前仍是只读查看。请先关闭“只读查看”开关。', '心跳回忆');
         return false;
@@ -285,14 +356,14 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
     if (!snapshot?.memory) return showArchiveLibrary();
     const isNewSnapshot = runtimeState.activeArchiveSnapshot !== snapshot;
     runtimeState.activeArchiveSnapshot = snapshot;
-    if (isNewSnapshot) runtimeState.activeArchiveReadOnly = true;
+    if (isNewSnapshot || snapshot.backupOnly) runtimeState.activeArchiveReadOnly = true;
     runtimeState.activeMode = null;
     runtimeState.activeSession = null;
     runtimeState.archiveViewLevel = 'snapshot';
     ui_overlay.openOverlay();
     ui_overlay.setRegenerateVisible(false);
     ui_overlay.setBackVisible(true, '角色档案');
-    ui_overlay.topTitle(`心跳回忆 · ${snapshot.characterName} · ${runtimeState.activeArchiveReadOnly ? '只读档案' : '编辑待命'}`);
+    ui_overlay.topTitle(`心跳回忆 · ${snapshot.characterName} · ${snapshot.backupOnly ? '独立备份' : runtimeState.activeArchiveReadOnly ? '只读档案' : '编辑待命'}`);
     const body = ui_overlay.bodyEl();
     if (!body) return;
     const memory = snapshot.memory;
@@ -316,14 +387,14 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
     body.innerHTML = `<div class="rmt-archive-room">
       <section class="rmt-memory-gate rmt-archive-card">
         <div class="rmt-memory-gate-text">
-          <div class="rmt-archive-kicker">READ-ONLY ARCHIVE</div>
+          <div class="rmt-archive-kicker">${snapshot.backupOnly ? 'RECOVERED LOCAL BACKUP' : 'READ-ONLY ARCHIVE'}</div>
           <strong class="rmt-archive-title">${core_text.esc(snapshot.archiveName)}</strong>
           <div class="rmt-archive-summary">${core_text.esc(memory.archiveSummary || archive_repository.fallbackArchiveSummary(memory.memories))}</div>
-          <div class="rmt-memory-status ready">${runtimeState.activeArchiveReadOnly ? '只读查看' : '编辑待命'} · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${core_constants.ARCHIVE_PORTAL_MODES.length}</div>
-          <div class="rmt-archive-meta">关闭只读只改变心跳回忆里的按钮显示，不会自动切换角色/聊天、刷新宿主界面或删除档案。</div>
+          <div class="rmt-memory-status ready">${snapshot.backupOnly ? '源聊天不可用 · 已从独立备份恢复 · 永久只读' : runtimeState.activeArchiveReadOnly ? '只读查看' : '编辑待命'} · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${core_constants.ARCHIVE_PORTAL_MODES.length}</div>
+          <div class="rmt-archive-meta">${snapshot.backupOnly ? `这份内容来自当前浏览器的本机备份；源聊天错误：${core_text.esc(snapshot.sourceError || '无法读取')}。不会把它重新绑定或写入其他聊天。` : '关闭只读只改变心跳回忆里的按钮显示，不会自动切换角色/聊天、刷新宿主界面或删除档案。'}</div>
           <div class="rmt-archive-readonly-control">
-            <label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''}> 只读查看</label>
-            <small>${runtimeState.activeArchiveReadOnly ? '关闭后会显示“增量追加 / 绘制”等按钮；真正写入前仍会验证当前酒馆是否正打开这份档案对应聊天。' : '编辑按钮已显示。若当前酒馆不是这份档案对应聊天，点击写操作只会提示你手动打开目标聊天，不会自动切换或刷新。每次追加仍会再次确认。'}</small>
+            <label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''} ${snapshot.backupOnly ? 'disabled' : ''}> 只读查看</label>
+            <small>${snapshot.backupOnly ? '源聊天删除后仍可查看已备份的档案与派生内容，但不能在备份快照上继续生成、编辑或覆盖。' : runtimeState.activeArchiveReadOnly ? '关闭后会显示“增量追加 / 绘制”等按钮；真正写入前仍会验证当前酒馆是否正打开这份档案对应聊天。' : '编辑按钮已显示。若当前酒馆不是这份档案对应聊天，点击写操作只会提示你手动打开目标聊天，不会自动切换或刷新。每次追加仍会再次确认。'}</small>
           </div>
         </div>
       </section>
@@ -357,6 +428,7 @@ export async function openIndexedArchive(characterKey, chatId, entryId = '') {
     try {
         const snapshot = await fetchIndexedArchiveSnapshot(entry, context);
         showIndexedArchiveSnapshot(snapshot);
+        if (snapshot.backupOnly) globalThis.toastr?.warning?.('源聊天无法读取，已从当前浏览器的独立备份恢复为永久只读档案。', '心跳回忆');
     } catch (error) {
         console.warn('[HeartbeatMemories] indexed archive read-only load failed', error);
         if (ui_overlay.bodyEl()) ui_overlay.bodyEl().innerHTML = `<div class="rmt-error"><div><b>档案读取失败</b><div style="margin-top:10px;white-space:pre-wrap;opacity:.78">${core_text.esc(error?.message || String(error))}</div><button type="button" class="rmt-btn" data-rmt-action="library-home">返回档案室</button></div></div>`;

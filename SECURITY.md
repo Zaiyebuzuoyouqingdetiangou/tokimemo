@@ -132,7 +132,7 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 
 ### 0.8.10 state / archive r13 additional invariants
 
-- 扩展升级、disable/clean/reload 不得把“内存中已经生成但 gzip debounce 尚未落盘”的当前聊天 theater cache 当作可丢弃数据；销毁前必须至少保留一个当前聊天可恢复的 metadata 副本。
+- 扩展升级、disable/clean/reload 不得用超过 12 MB UTF-8 上限或无法序列化的 raw theater cache 覆盖最后一份有效 metadata。销毁路径只能写入通过统一上限检查的 detached 副本；否则保留原有效压缩/原始缓存和已落盘独立备份。
 - 压缩 theater cache 解压失败或浏览器缺少兼容解压能力时，UI 必须显示“缓存读取失败”，不得把该状态伪装成“尚未生成”并诱导用户覆盖重做。原压缩值保持不删除。
 - 普通档案更新只允许在旧归档聊天前缀仍与旧 `sourceFingerprint` 一致时增量追加；若旧消息被编辑、删除或重排，更新必须停止并要求用户显式选择完全重建。
 - 增量更新不得重新编号、删除或改写旧 Mxxx 记录；因此旧 session 迁移到新 `archiveRevision` 时只能修改 revision fence，不能放宽任何 `sourceMemoryIds + sourceMemoryAnchor` 验证语义。
@@ -181,7 +181,7 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - Third-party public memory reader execution is opt-in and defaults off. Passive current-chat prompt summaries / metadata summaries do not require this permission.
 - The five-task admission limit counts ADV bulk recovery and CG/daily-strip image tasks in addition to ordinary model requests; request send remains a second fail-closed capacity gate.
 - Direct calls to registered SillyTavern Slash Command callbacks use only the public `NamedArgumentsCapture` contract. Heartbeat must not fabricate parser-private `_scope`, `_parserFlags`, `_abortController`, or debug-controller objects.
-- Extension shutdown must not truncate or selectively discard derived theater modes to reduce metadata size. A large raw fallback may be warned about, but preservation takes priority until the compressed durable replacement is ready.
+- Extension shutdown must not truncate or selectively discard derived theater modes. It also must not bypass the 12 MB UTF-8 cap: an oversized raw candidate is rejected and the previous valid metadata/independent backup remains authoritative.
 - Model-list refresh may forward user-configured `custom_include_headers` only to SillyTavern's hard-coded same-origin backend status endpoint, matching the host's connection configuration path; those headers must never be written into Heartbeat metadata, prompts, logs, or DOM.
 
 
@@ -209,7 +209,7 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - 档案角色组是 extension-settings 中的**展示索引元数据**。自动分类、手动移动、新建角色组不得修改源 `chatId`、源 `characterKey/avatar`、`MEMORY_KEY`、theater cache 或 SillyTavern 聊天文件；不得调用宿主角色/聊天切换接口。
 - 自动分类只能使用本地已知的角色名/avatar/角色卡内容指纹与当前 `context.characters` 做匹配；新索引可持久化非内容型 hash 指纹，旧索引缺失指纹时退回 avatar+名称并允许用户手动拆分。手动移动必须由用户直接操作，且手动归类标记必须阻止后续自动分类覆盖。无法唯一判断时宁可保留/要求手动处理，不得猜测后改写聊天。
 - 角色组归属与 `characterFingerprint` 只属于展示/分类元数据，不得授予或撤销写权限。角色卡日常编辑可以改变分类指纹，但不得因此误删/误写档案。历史 snapshot 的生成/CG/更新仍必须由 live 当前聊天通过宿主角色 locator/name + `chatId` + 当前 `MEMORY_KEY` 校验；同 avatar 但不同角色名不得被当成同一 live 角色。
-- 删除真实 Heartbeat 档案只允许针对当前已打开的 live 聊天：必须无后台任务、连续两次显式破坏性确认，并在实际删除前重新校验当前角色 runtime key 与 `chatId`。只能移除 Heartbeat 自己的 `MEMORY_KEY`/`CACHE_KEY`/运行缓存和对应轻量索引，不得调用宿主聊天删除/清空/切换接口，不得修改 `context.chat`。非当前历史档案只允许删除档案室轻量索引。
+- 删除真实 Heartbeat 档案只允许针对当前已打开的 live 聊天：必须无后台任务、连续两次显式破坏性确认，并在实际删除前重新校验当前角色 runtime key 与 `chatId`。只能移除 Heartbeat 自己的 `MEMORY_KEY`/`CACHE_KEY`/运行缓存、对应轻量索引和身份匹配的本机独立备份，不得调用宿主聊天删除/清空/切换接口，不得修改 `context.chat`。非当前历史档案只允许删除档案室轻量索引；该索引操作不得删除备份。
 - 压缩缓存异步落盘在写入前必须重新验证 live `MEMORY_KEY` 仍存在且 `chatId/archiveRevision` 与待落盘缓存一致；显式删除档案或 revision 已变化后，迟到的 gzip 结果不得把旧 `CACHE_KEY` 重新写回。
 - 运行中任务 origin/chat scope 必须能够区分共享 avatar 的不同角色卡，防止并发任务、延迟响应或 deferred commit 在角色版本之间串写。
 - “生成禁用词”只适用于模型新生成的派生文本。不得改写聊天正文、正式 archive memory、世界书/外部记忆原文或任何 evidence anchor；命中禁用词时结果必须失败关闭、不得保存、不得自动重试。
@@ -274,6 +274,14 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - A HEART partial patch may modify only dialogue-core fields, daily strips, or one fixed season's normalized Voice/Scenario entry. Commit code must reload the latest same-chat HEART session and merge the patch before `normalizeHeart` + `saveSession`, preventing stale concurrent snapshots from overwriting sibling season data.
 - Deferred HEART patches are keyed by the captured character/chat origin and may be flushed only when the live archive revision still equals the captured revision. They must be re-normalized against the current archive before writeback.
 - Reducing Drama node/character thresholds is a reliability change only. It does not turn Voice/Scenario into archive evidence, does not write `MEMORY_KEY`, and does not weaken the relationship memory-ID/anchor requirement carried by the parent HEART session.
+
+### 0.8.36 r42.5 archive durability invariants
+
+- 正式 Mxxx 档案提交必须由 `core/cache.js::saveImportedMemory()` 单一拥有，并携带显式的旧状态：首次创建为 `{present:false}`，更新/完全重建为 `{present:true, revision:<exact archiveRevision>}`。备份写入前、任何 await 后及 live metadata 赋值前都必须重新校验；版本变化时旧结果失败关闭。
+- 独立备份只允许存放在完整 runtime 才能访问的浏览器本机 IndexedDB。轻量 `index.js`、DOM ready 和零解压诊断不得导入备份模块、打开数据库、扫描备份或因此加载 bundle。
+- 备份记录必须绑定 code-owned `entryId + character identity + chatId + archiveRevision`，并对正式 memory、raw cache、压缩 manifest 执行 schema/大小验证。源聊天失败后只允许恢复身份完全匹配的记录，且恢复快照永久只读，不得自动重绑或写入其他聊天。
+- 正式档案保存必须先成功持久化独立备份，再替换 live `MEMORY_KEY`；派生缓存更新必须拒绝覆盖不同 archiveRevision 的备份。legacy raw metadata 在进入 runtime 前必须 detached/copy-on-write，候选失败不得修改最后一份持久值。
+- 双确认删除当前档案或整个角色档案时，确认文案必须明确 Heartbeat 本机独立备份内容也会删除；备份存储必须原子留下不含 memory/cache 的身份删除栅栏，普通 seed/cache writer 不得越过该栅栏复活内容，只有之后由用户明确创建的新正式档案可清除它。备份删除失败时不得报告删除成功。仅移除轻量索引不删除备份。独立备份不承诺跨浏览器、跨设备或清除站点数据后的可用性。
 ### 0.8.10 r28 network-idle cache persistence invariants
 
 - Derived theater cache persistence may be delayed while provider requests are active/queued, but the in-memory cache remains scoped by the existing character/chat/archiveRevision key. Delaying a write must never relax `cacheStillMatchesLiveArchive`, pending-write scope checks, or final `saveSession` origin/revision validation.

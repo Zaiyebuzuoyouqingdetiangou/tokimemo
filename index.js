@@ -1,5 +1,5 @@
-const VERSION = '0.8.35';
-const BUILD = '0.8.35-diagnostic-toggle-r42.4';
+const VERSION = '0.8.36';
+const BUILD = '0.8.36-archive-durability-r42.5';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

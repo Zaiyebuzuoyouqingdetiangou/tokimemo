@@ -953,7 +953,8 @@ test('cache persistence waits until provider traffic is idle', async () => {
 test('modern CompressionStream path does not immediately upload an uncompressed theater cache', () => {
     if (typeof CompressionStream === 'function') {
         assert.equal(api.shouldWriteUncompressedCacheImmediately(null), false);
-        assert.match(source, /if \(shouldWriteUncompressedCacheImmediately\(stored\)\)/);
+        assert.match(sourceByFile.get('core/cache.js'), /scheduleCompressedCachePersist\(context, cache, shouldWriteUncompressedCacheImmediately\(stored\) \? 0 : 250\)/);
+        assert.doesNotMatch(sourceByFile.get('core/cache.js'), /chatMetadata\[core_constants\.CACHE_KEY\] = cache/);
         assert.match(sourceByFile.get('core/cache.js'), /if \(core_requestCoordinator\.shouldDeferCachePersistForProviderTraffic\(\)\) \{\s*arm\(core_constants\.CACHE_PERSIST_IDLE_RETRY_MS\)/);
     }
 });
@@ -1368,7 +1369,7 @@ test('r41.2 character archive deletion tombstone blocks the same character from 
     assert.equal(api.archiveEntryMatchesDeletedCharacter({ characterKey: 'other.png', avatar: 'other.png', characterName: '佐伯', chatId: 'D', characterFingerprint: 'card:other' }, stableDeleted), false);
 });
 
-test('r41.2 character archive delete mutates only Heartbeat library settings while preserving chat metadata', () => {
+test('r41.2 character archive delete mutates only Heartbeat library settings while preserving chat metadata', async () => {
     const previousSt = globalThis.SillyTavern;
     const previousConfirm = globalThis.confirm;
     const confirmations = [];
@@ -1389,9 +1390,10 @@ test('r41.2 character archive delete mutates only Heartbeat library settings whi
     api.setCharacterProfile(context, { key: 'group:auto:saeki', characterName: '佐伯', facts: [], relationships: [] });
     globalThis.SillyTavern = { getContext: () => context };
     globalThis.confirm = message => { confirmations.push(String(message)); return true; };
+    api.setArchiveBackupBackendForTests({ delete: async () => true });
     try {
         const beforeMetadata = structuredClone(context.chatMetadata);
-        const deleted = api.deleteArchiveCharacterFromLibrary('auto:saeki');
+        const deleted = await api.deleteArchiveCharacterFromLibrary('auto:saeki');
         assert.equal(deleted.name, '佐伯');
         assert.equal(deleted.count, 1);
         assert.equal(confirmations.length, 2);
@@ -1402,6 +1404,7 @@ test('r41.2 character archive delete mutates only Heartbeat library settings whi
         assert.equal(api.getCharacterProfile(context, 'group:auto:saeki'), null);
         assert.equal(api.isArchiveEntryDeletedFromLibrary({ characterKey: 'saeki.png', avatar: 'saeki.png', characterName: '佐伯', chatId: 'chat-b' }, context), true);
     } finally {
+        api.setArchiveBackupBackendForTests(null);
         if (previousSt === undefined) delete globalThis.SillyTavern; else globalThis.SillyTavern = previousSt;
         if (previousConfirm === undefined) delete globalThis.confirm; else globalThis.confirm = previousConfirm;
     }

@@ -1,6 +1,7 @@
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_groups from '../archive/groups.js';
+import * as archive_backupStore from '../archive/backupStore.js';
 import * as archive_repository from '../archive/repository.js';
 import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_constants from './constants.js';
@@ -10,6 +11,36 @@ import * as core_requestCoordinator from './requestCoordinator.js';
 import { state as runtimeState } from './state.js';
 import * as core_text from './text.js';
 import * as modes_phone from '../modes/phone.js';
+
+function cloneCacheValue(value) {
+    if (!value || typeof value !== 'object') return {};
+    if (typeof structuredClone === 'function') return structuredClone(value);
+    return JSON.parse(JSON.stringify(value));
+}
+
+export function prepareBoundedRawCache(cache) {
+    let json;
+    try { json = JSON.stringify(cache ?? {}); }
+    catch { throw new Error('剧场缓存无法序列化，已保留上一份有效缓存。'); }
+    const sourceBytes = new Blob([json], { type: 'application/json' }).size;
+    if (sourceBytes > core_constants.MAX_CACHE_SOURCE_BYTES) {
+        throw new Error('剧场缓存超过 12 MB UTF-8 安全上限，已保留上一份有效缓存。');
+    }
+    return { value: cloneCacheValue(cache), sourceChars: json.length, sourceBytes };
+}
+
+export function archiveBackupEntryForContext(context, memoryBank) {
+    const probe = archive_groups.currentCharacterArchiveProbe(context, memoryBank);
+    const existing = archive_groups.getArchiveIndex(context).find(item => item.chatId === probe.chatId
+        && core_context.archiveEntryMatchesContextCharacter(item, context));
+    return {
+        ...probe,
+        // Preserve a legacy/index-assigned entry ID. Re-hashing a fingerprinted probe here could
+        // create a second invisible backup that the existing library row would never find.
+        entryId: existing ? core_context.archiveIndexEntryId(existing) : core_context.archiveIndexEntryId(probe),
+        archiveName: core_text.normalizeText(memoryBank?.archiveName, 160),
+    };
+}
 
 export function rememberRuntimeSessionCache(scope, cache) {
     if (!scope || !cache || typeof cache !== 'object') return cache;
@@ -67,7 +98,7 @@ export async function savePhoneGenerationDraft(context, memoryBank, plan, comple
     if (!live.chatMetadata || typeof live.chatMetadata !== 'object') return false;
     const scope = cacheScopeFromContext(live);
     const stored = live.chatMetadata?.[core_constants.CACHE_KEY];
-    const cache = getCache(live);
+    const cache = cloneCacheValue(getCache(live));
     cache[core_constants.PHONE_DRAFT_CACHE_KEY] = {
         kind: 'phone-draft',
         chatId: core_context.getChatId(live),
@@ -82,11 +113,7 @@ export async function savePhoneGenerationDraft(context, memoryBank, plan, comple
     cache.archiveRevision = latestMemory.archiveRevision;
     cache.updatedAt = Date.now();
     rememberRuntimeSessionCache(scope, cache);
-    if (shouldWriteUncompressedCacheImmediately(stored)) {
-        live.chatMetadata[core_constants.CACHE_KEY] = cache;
-        live.saveMetadataDebounced?.();
-    }
-    scheduleCompressedCachePersist(live, cache, 120);
+    scheduleCompressedCachePersist(live, cache, shouldWriteUncompressedCacheImmediately(stored) ? 0 : 120);
     return true;
 }
 
@@ -197,10 +224,16 @@ export async function persistCompressedCacheNow(context, cache, expectedScope = 
     if (!cache || typeof cache !== 'object') return false;
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     if (typeof CompressionStream !== 'function') {
+        const prepared = prepareBoundedRawCache(cache);
         let latest;
         try { latest = core_context.currentCharacterGuard(); } catch { return false; }
         if (!cacheStillMatchesLiveArchive(cache, latest, expectedScope)) return false;
-        latest.chatMetadata[core_constants.CACHE_KEY] = cache;
+        const memory = archive_repository.getImportedMemory(latest);
+        await archive_backupStore.updateArchiveBackupCache(archiveBackupEntryForContext(latest, memory), memory, prepared.value);
+        if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) return false;
+        try { latest = core_context.currentCharacterGuard(); } catch { return false; }
+        if (!cacheStillMatchesLiveArchive(cache, latest, expectedScope)) return false;
+        latest.chatMetadata[core_constants.CACHE_KEY] = prepared.value;
         latest.saveMetadataDebounced?.();
         return true;
     }
@@ -218,6 +251,14 @@ export async function persistCompressedCacheNow(context, cache, expectedScope = 
     }
     // Compression can finish after an explicit archive delete/full revision change. Never let
     // a stale in-flight gzip resurrect a removed/older Heartbeat cache into live metadata.
+    if (!cacheStillMatchesLiveArchive(cache, latest, expectedScope)) {
+        runtimeState.pendingCompressedCacheWrites.delete(expectedScope);
+        return false;
+    }
+    const memory = archive_repository.getImportedMemory(latest);
+    await archive_backupStore.updateArchiveBackupCache(archiveBackupEntryForContext(latest, memory), memory, record);
+    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) return false;
+    try { latest = core_context.currentCharacterGuard(); } catch { return false; }
     if (!cacheStillMatchesLiveArchive(cache, latest, expectedScope)) {
         runtimeState.pendingCompressedCacheWrites.delete(expectedScope);
         return false;
@@ -254,6 +295,7 @@ export function scheduleCompressedCachePersist(context, cache, delay = 1800) {
             runtimeState.cachePersistTimers.delete(scope);
             void persistCompressedCacheNow(context, cache, scope).catch(error => {
                 console.warn('[HeartbeatMemories] compressed cache persist failed', error);
+                globalThis.toastr?.warning?.(core_text.toastText(`${error?.message || error} 上一份有效缓存和独立备份均未覆盖。`), '心跳回忆');
             });
         }, Math.max(0, Number(waitMs) || 0));
         runtimeState.cachePersistTimers.set(scope, timer);
@@ -279,8 +321,9 @@ export async function ensureCacheHydrated(context = core_context.currentCharacte
         // spike CPU/RAM during SillyTavern startup, especially on mobile. A future explicit
         // maintenance action may migrate them, but ordinary chat navigation must stay idle.
         runtimeState.cacheHydrationErrors.delete(scope);
-        rememberRuntimeSessionCache(scope, stored);
-        return stored;
+        const detached = cloneCacheValue(stored);
+        rememberRuntimeSessionCache(scope, detached);
+        return detached;
     }
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     let promise;
@@ -329,8 +372,13 @@ export async function flushPendingCompressedCacheForCurrentChat() {
     const scope = cacheScopeFromContext(context);
     const record = runtimeState.pendingCompressedCacheWrites.get(scope);
     if (!record) return;
+    if (!cacheStillMatchesLiveArchive(record, context, scope)) {
+        runtimeState.pendingCompressedCacheWrites.delete(scope);
+        return;
+    }
     const memory = archive_repository.getImportedMemory(context);
-    if (memory && record.archiveRevision && record.archiveRevision !== memory.archiveRevision) {
+    await archive_backupStore.updateArchiveBackupCache(archiveBackupEntryForContext(context, memory), memory, record);
+    if (!cacheStillMatchesLiveArchive(record, context, scope)) {
         runtimeState.pendingCompressedCacheWrites.delete(scope);
         return;
     }
@@ -345,14 +393,47 @@ export function getCache(context) {
     const stored = context.chatMetadata?.[core_constants.CACHE_KEY];
     if (isCompressedCacheRecord(stored)) return {};
     if (stored && typeof stored === 'object') {
-        rememberRuntimeSessionCache(scope, stored);
-        return stored;
+        // Detach legacy raw metadata before any runtime writer can mutate the last durable copy.
+        const detached = cloneCacheValue(stored);
+        rememberRuntimeSessionCache(scope, detached);
+        return detached;
     }
     return {};
 }
 
-export function saveImportedMemory(context, memoryBank, expectedChatId = memoryBank?.chatId, options = {}) {
-    const currentContext = core_context.currentCharacterGuard();
+export async function prepareCacheBackupValue(cache) {
+    if (!cache || typeof cache !== 'object') return null;
+    if (isCompressedCacheRecord(cache)) {
+        if (!cache.data || cache.data.length > core_constants.MAX_CACHE_COMPRESSED_BASE64_CHARS) throw new Error('压缩派生缓存大小异常，独立备份没有覆盖。');
+        if (Number(cache.sourceBytes) > core_constants.MAX_CACHE_SOURCE_BYTES) throw new Error('压缩派生缓存来源超过 12 MB，独立备份没有覆盖。');
+        return cloneCacheValue(cache);
+    }
+    const prepared = prepareBoundedRawCache(cache);
+    if (typeof CompressionStream !== 'function') return prepared.value;
+    const packed = await gzipJson(prepared.value);
+    return compressedCacheManifest(prepared.value, packed);
+}
+
+function archiveCommitStateMatches(context, expectedState) {
+    if (!context?.chatMetadata || typeof context.chatMetadata !== 'object') return false;
+    const hasMemory = Object.prototype.hasOwnProperty.call(context.chatMetadata, core_constants.MEMORY_KEY);
+    if (expectedState?.present === false) return !hasMemory;
+    if (expectedState?.present !== true || !hasMemory) return false;
+    return core_text.normalizeText(context.chatMetadata[core_constants.MEMORY_KEY]?.archiveRevision, 240)
+        === core_text.normalizeText(expectedState.revision, 240);
+}
+
+function assertArchiveCommitState(context, expectedState) {
+    if (!expectedState || typeof expectedState.present !== 'boolean') {
+        throw new Error('档案保存缺少旧版本校验，本次结果已安全丢弃。');
+    }
+    if (!archiveCommitStateMatches(context, expectedState)) {
+        throw new Error('档案生成期间原档案版本已经变化，本次旧结果没有覆盖较新的档案。请重新更新。');
+    }
+}
+
+export async function saveImportedMemory(context, memoryBank, expectedChatId = memoryBank?.chatId, options = {}) {
+    let currentContext = core_context.currentCharacterGuard();
     const currentChatId = core_context.getChatId(currentContext);
     if (!expectedChatId || currentChatId !== expectedChatId || core_context.getChatId(context) !== expectedChatId) {
         throw new Error('档案整理期间聊天窗口已经切换，本次结果已安全丢弃；请回到原聊天后重新更新档案。');
@@ -360,42 +441,75 @@ export function saveImportedMemory(context, memoryBank, expectedChatId = memoryB
     if (!context.chatMetadata || typeof context.chatMetadata !== 'object') {
         throw new Error('当前聊天无法保存 metadata，不能创建或更新档案。');
     }
+    const expectedState = options.expectedPreviousArchiveState;
+    assertArchiveCommitState(context, expectedState);
     const previousMemory = archive_repository.getImportedMemory(context);
     const preserveDerivedCache = !!options.preserveDerivedCache && !!previousMemory;
-    const scope = cacheScopeFromContext(context);
+    const stagedMemory = cloneCacheValue(memoryBank);
+    stagedMemory.version = core_constants.ARCHIVE_SCHEMA_VERSION;
     let preservedCache = null;
     if (preserveDerivedCache) {
         const candidate = getCache(context);
         if (candidate && typeof candidate === 'object' && Object.values(core_constants.MODE).some(mode => candidate?.[mode]?.kind === mode)) {
-            preservedCache = candidate;
+            preservedCache = cloneCacheValue(candidate);
+            archive_repository.migrateDerivedCacheRevision(preservedCache, previousMemory, stagedMemory);
         }
     }
 
-    memoryBank.version = core_constants.ARCHIVE_SCHEMA_VERSION;
-    context.chatMetadata[core_constants.MEMORY_KEY] = memoryBank;
+    const storedCache = preservedCache ? await prepareCacheBackupValue(preservedCache) : null;
+    currentContext = core_context.currentCharacterGuard();
+    if (core_context.getChatId(currentContext) !== expectedChatId) throw new Error('档案整理期间聊天窗口已经切换，本次结果已安全丢弃。');
+    assertArchiveCommitState(currentContext, expectedState);
+    const backupEntry = archiveBackupEntryForContext(currentContext, stagedMemory);
+    await archive_backupStore.replaceArchiveBackup(backupEntry, stagedMemory, storedCache, expectedState, {
+        allowMissingPrevious: expectedState.present === true,
+        // Only a new canonical archive created by an explicit user action may clear a prior
+        // deletion fence. Background seed/cache writers never receive this capability.
+        allowDeletedRecreate: expectedState.present === false,
+    });
+
+    // Backup persistence is awaited before replacing the chat copy. Recheck after that await so
+    // an old foreground/deferred result cannot win a same-chat revision race.
+    currentContext = core_context.currentCharacterGuard();
+    if (core_context.getChatId(currentContext) !== expectedChatId) throw new Error('档案整理期间聊天窗口已经切换，本次结果已安全丢弃。');
+    assertArchiveCommitState(currentContext, expectedState);
+    const scope = cacheScopeFromContext(currentContext);
+    currentContext.chatMetadata[core_constants.MEMORY_KEY] = stagedMemory;
     runtimeState.pendingCompressedCacheWrites.delete(scope);
     const timer = runtimeState.cachePersistTimers.get(scope);
     if (timer) clearTimeout(timer);
     runtimeState.cachePersistTimers.delete(scope);
 
-    if (preservedCache) {
-        archive_repository.migrateDerivedCacheRevision(preservedCache, previousMemory, memoryBank);
+    if (preservedCache && storedCache) {
         rememberRuntimeSessionCache(scope, preservedCache);
-        // Keep a durable uncompressed copy until gzip finishes. This is an explicit archive
-        // update path, so a short one-off metadata write is preferable to losing every ADV EVENT
-        // if the extension reloads before the compression timer fires.
-        context.chatMetadata[core_constants.CACHE_KEY] = preservedCache;
-        context.saveMetadataDebounced?.();
-        scheduleCompressedCachePersist(context, preservedCache, 80);
+        currentContext.chatMetadata[core_constants.CACHE_KEY] = storedCache;
     } else {
-        delete context.chatMetadata[core_constants.CACHE_KEY];
+        delete currentContext.chatMetadata[core_constants.CACHE_KEY];
         runtimeState.runtimeSessionCache.delete(scope);
     }
 
-    archive_snapshots.rememberCurrentArchiveForOverview(context);
-    archive_snapshots.syncArchiveOverviewCurrentRow(context);
-    archive_groups.upsertArchiveIndex(context, memoryBank);
-    context.saveMetadataDebounced?.();
+    archive_snapshots.rememberCurrentArchiveForOverview(currentContext);
+    archive_snapshots.syncArchiveOverviewCurrentRow(currentContext);
+    archive_groups.upsertArchiveIndex(currentContext, stagedMemory);
+    currentContext.saveMetadataDebounced?.();
+    return stagedMemory;
+}
+
+export async function ensureCurrentArchiveBackup(context = core_context.currentCharacterGuard()) {
+    const memory = archive_repository.getImportedMemory(context);
+    if (!memory) return false;
+    if (archive_groups.isCurrentCharacterDeletedFromLibrary(context, memory)) return false;
+    const expectedChatId = core_context.getChatId(context);
+    const expectedRevision = core_text.normalizeText(memory.archiveRevision, 240);
+    const backupEntry = archiveBackupEntryForContext(context, memory);
+    const cache = await prepareCacheBackupValue(context.chatMetadata?.[core_constants.CACHE_KEY]);
+    const currentContext = core_context.currentCharacterGuard();
+    const currentMemory = archive_repository.getImportedMemory(currentContext);
+    if (core_context.getChatId(currentContext) !== expectedChatId
+        || core_text.normalizeText(currentMemory?.archiveRevision, 240) !== expectedRevision
+        || archive_groups.isCurrentCharacterDeletedFromLibrary(currentContext, currentMemory)) return false;
+    await archive_backupStore.seedArchiveBackup(backupEntry, currentMemory, cache);
+    return true;
 }
 
 export async function deleteSessions(modes, expectedChatId = '') {
@@ -415,7 +529,7 @@ export async function deleteSessions(modes, expectedChatId = '') {
     }
     try { await ensureCacheHydrated(context); } catch {}
     const scope = cacheScopeFromContext(context);
-    const cache = getCache(context);
+    const cache = cloneCacheValue(getCache(context));
     let changed = false;
     for (const mode of requested) {
         if (Object.prototype.hasOwnProperty.call(cache, mode)) {
@@ -433,11 +547,7 @@ export async function deleteSessions(modes, expectedChatId = '') {
     cache.updatedAt = Date.now();
     rememberRuntimeSessionCache(scope, cache);
     const stored = context.chatMetadata?.[core_constants.CACHE_KEY];
-    if (shouldWriteUncompressedCacheImmediately(stored)) {
-        context.chatMetadata[core_constants.CACHE_KEY] = cache;
-        context.saveMetadataDebounced?.();
-    }
-    scheduleCompressedCachePersist(context, cache, 80);
+    scheduleCompressedCachePersist(context, cache, shouldWriteUncompressedCacheImmediately(stored) ? 0 : 80);
     return true;
 }
 
@@ -463,22 +573,17 @@ export function saveSession(mode, session, expectedChatId = core_text.normalizeT
             void ensureCacheHydrated(context).then(() => archive_snapshots.scheduleChooserRefresh(0)).catch(() => {});
             return false;
         }
-        const cache = getCache(context);
-        session.chatId = expectedChatId;
-        session.archiveRevision = memoryBank.archiveRevision;
-        cache[mode] = session;
+        const cache = cloneCacheValue(getCache(context));
+        const stagedSession = cloneCacheValue(session);
+        stagedSession.chatId = expectedChatId;
+        stagedSession.archiveRevision = memoryBank.archiveRevision;
+        cache[mode] = stagedSession;
         if (mode === core_constants.MODE.PHONE) delete cache[core_constants.PHONE_DRAFT_CACHE_KEY];
         cache.chatId = expectedChatId;
         cache.archiveRevision = memoryBank.archiveRevision;
         cache.updatedAt = Date.now();
         rememberRuntimeSessionCache(scope, cache);
-        if (shouldWriteUncompressedCacheImmediately(stored)) {
-            // Fallback only for browsers without CompressionStream. Modern browsers avoid the
-            // expensive raw-cache metadata upload and persist the gzip record after network idle.
-            context.chatMetadata[core_constants.CACHE_KEY] = cache;
-            context.saveMetadataDebounced?.();
-        }
-        scheduleCompressedCachePersist(context, cache, 250);
+        scheduleCompressedCachePersist(context, cache, shouldWriteUncompressedCacheImmediately(stored) ? 0 : 250);
         return true;
     } catch (error) {
         console.warn('[HeartbeatMemories] cache save failed', error);

@@ -36,6 +36,12 @@ export const MAX_CACHE_DECOMPRESSED_BYTES = 12000000;
 
 export const MAX_CACHE_SOURCE_BYTES = MAX_CACHE_DECOMPRESSED_BYTES;
 
+export const ARCHIVE_BACKUP_DB_NAME = 'heartbeatMemoriesArchiveBackupsV1';
+
+export const ARCHIVE_BACKUP_STORE_NAME = 'archives';
+
+export const ARCHIVE_BACKUP_STORAGE_VERSION = 1;
+
 // Compatibility alias for test/tooling consumers from r42.2 and earlier. The cache writer no
 // longer compares this budget with String.length; UTF-8 bytes are the authoritative unit.
 export const MAX_CACHE_SOURCE_CHARS = MAX_CACHE_SOURCE_BYTES;

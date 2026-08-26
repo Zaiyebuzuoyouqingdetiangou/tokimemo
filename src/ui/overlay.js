@@ -1021,12 +1021,11 @@ export function handleOverlayClick(event) {
     if (action === 'archive-group-close') { document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-archive-group-manager`)?.remove(); return archive_library.showArchiveLibrary(); }
     if (action === 'archive-character-delete') {
         const groupId = core_text.normalizeText(actionEl.dataset.rmtArchiveGroupId, 120);
-        try {
-            const deleted = archive_groups.deleteArchiveCharacterFromLibrary(groupId);
+        void archive_groups.deleteArchiveCharacterFromLibrary(groupId).then(deleted => {
             if (!deleted) return;
-            globalThis.toastr?.success?.(`已从档案室删除“${deleted.name}”及其 ${deleted.count} 个聊天档案索引；SillyTavern 正文聊天窗口没有删除。`, '心跳回忆');
+            globalThis.toastr?.success?.(`已从档案室删除“${deleted.name}”、其 ${deleted.count} 个聊天档案索引及独立备份；SillyTavern 正文聊天窗口没有删除。`, '心跳回忆');
             archive_library.showArchiveLibrary();
-        } catch (error) { globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'); }
+        }).catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'));
         return;
     }
     if (action === 'character-profile-generate') {

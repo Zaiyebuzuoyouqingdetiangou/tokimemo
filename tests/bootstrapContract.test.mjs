@@ -43,6 +43,7 @@ test('DOM ready stays bootstrap-only and the diagnostic branch cannot import the
     const requestArchiveStart = indexSource.indexOf('\nfunction requestArchiveOpen(', ensureRuntimeStart);
     assert.ok(ensureRuntimeStart >= 0 && runtimeImport > ensureRuntimeStart && runtimeImport < requestArchiveStart);
     assert.equal(indexSource.match(/\bimport\s*\(/g)?.length, 1);
+    assert.doesNotMatch(indexSource, /\bindexedDB\b|backupStore|ArchiveBackup/);
 
     const startup = functionBlock('startBootstrap', 'onDisable');
     assert.doesNotMatch(startup, /ensureRuntime\s*\(|\bimport\s*\(/);

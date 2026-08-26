@@ -23,6 +23,12 @@ export function initMemoryTheater() {
         ui_archivePortal.bindChatStateEvents();
         ui_archivePortal.bindRobustArchiveOpenHandlers();
         ui_archivePortal.scheduleMounts(settingsMounted, menuMounted);
+        // This runs only after the user explicitly loaded the full runtime. It lazily migrates the
+        // current chat's existing archive into the independent local backup without touching startup.
+        void core_cache.ensureCurrentArchiveBackup().catch(error => {
+            console.warn('[HeartbeatMemories] current archive backup seed failed', error);
+            globalThis.toastr?.warning?.(`当前档案可正常使用，但独立备份没有更新：${error?.message || error}`, '心跳回忆');
+        });
         console.log('[HeartbeatMemories] initialized');
     } catch (error) {
         console.error('[HeartbeatMemories] init failed', error);
@@ -32,23 +38,24 @@ export function initMemoryTheater() {
 export function destroyMemoryTheater() {
     try {
         // Extension updates/reloads can destroy the module before the short gzip debounce fires.
-        // Persist the current in-memory theater cache as a raw compatibility copy first; the next
-        // explicit open/save will compress it again. This prevents a version update from making
-        // already generated Album/ADV EVENT/etc. appear missing after login.
+        // A destroy path cannot await gzip. Persist a detached raw compatibility copy only when it
+        // satisfies the same UTF-8 byte cap as every other sink; otherwise preserve the previous
+        // valid compressed/raw metadata instead of replacing it with an unreadable oversized value.
         try {
             const liveContext = core_context.currentCharacterGuard();
             const liveScope = core_cache.cacheScopeFromContext(liveContext);
             const liveCache = runtimeState.runtimeSessionCache.get(liveScope);
-            if (liveCache && typeof liveCache === 'object' && Object.values(core_constants.MODE).some(mode => liveCache?.[mode]?.kind === mode)) {
-                let rawChars = 0;
-                try { rawChars = JSON.stringify(liveCache).length; } catch {}
-                if (rawChars > 2_000_000) {
-                    console.warn('[HeartbeatMemories] preserving a large raw theater-cache fallback during extension shutdown', { chars: rawChars });
-                }
-                liveContext.chatMetadata[core_constants.CACHE_KEY] = liveCache;
+            if (liveCache && typeof liveCache === 'object'
+                && core_cache.cacheStillMatchesLiveArchive(liveCache, liveContext, liveScope)
+                && Object.values(core_constants.MODE).some(mode => liveCache?.[mode]?.kind === mode)) {
+                const prepared = core_cache.prepareBoundedRawCache(liveCache);
+                liveContext.chatMetadata[core_constants.CACHE_KEY] = prepared.value;
                 liveContext.saveMetadataDebounced?.();
             }
-        } catch {}
+        } catch (error) {
+            console.warn('[HeartbeatMemories] destroy-time cache preservation skipped', error);
+            globalThis.toastr?.warning?.(`${error?.message || error} 销毁流程没有覆盖上一份有效缓存。`, '心跳回忆');
+        }
         // Invalidate every asynchronous state writer before clearing containers. Results that
         // started in the old runtime lifetime must not refill caches after disable/clean.
         runtimeState.runtimeLifecycleEpoch += 1;

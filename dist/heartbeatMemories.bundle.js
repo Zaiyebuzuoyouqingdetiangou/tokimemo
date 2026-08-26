@@ -1,8 +1,9 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 43
-// Source SHA-256: 60c587dfeb0a61cc6923694b9beda06e52c630ea5c696ebadbaa69c71c0bc29a
+// Source modules: 44
+// Source SHA-256: ba1ddd8fb288c7c230f7bcaa8037aa92e5f63632dfda425f1df9124f90a67183
 // Build: node tools/build-runtime-bundle.mjs
 
+const __m_archive_backupStore_js = Object.create(null);
 const __m_archive_groups_js = Object.create(null);
 const __m_archive_library_js = Object.create(null);
 const __m_archive_repository_js = Object.create(null);
@@ -87,6 +88,12 @@ const MAX_CACHE_COMPRESSED_BASE64_CHARS = 4000000;
 const MAX_CACHE_DECOMPRESSED_BYTES = 12000000;
 
 const MAX_CACHE_SOURCE_BYTES = MAX_CACHE_DECOMPRESSED_BYTES;
+
+const ARCHIVE_BACKUP_DB_NAME = 'heartbeatMemoriesArchiveBackupsV1';
+
+const ARCHIVE_BACKUP_STORE_NAME = 'archives';
+
+const ARCHIVE_BACKUP_STORAGE_VERSION = 1;
 
 // Compatibility alias for test/tooling consumers from r42.2 and earlier. The cache writer no
 // longer compares this budget with String.length; UTF-8 bytes are the authoritative unit.
@@ -304,6 +311,9 @@ __m_core_constants_js.CALENDAR_SESSION_VERSION = CALENDAR_SESSION_VERSION;
 __m_core_constants_js.MAX_CACHE_COMPRESSED_BASE64_CHARS = MAX_CACHE_COMPRESSED_BASE64_CHARS;
 __m_core_constants_js.MAX_CACHE_DECOMPRESSED_BYTES = MAX_CACHE_DECOMPRESSED_BYTES;
 __m_core_constants_js.MAX_CACHE_SOURCE_BYTES = MAX_CACHE_SOURCE_BYTES;
+__m_core_constants_js.ARCHIVE_BACKUP_DB_NAME = ARCHIVE_BACKUP_DB_NAME;
+__m_core_constants_js.ARCHIVE_BACKUP_STORE_NAME = ARCHIVE_BACKUP_STORE_NAME;
+__m_core_constants_js.ARCHIVE_BACKUP_STORAGE_VERSION = ARCHIVE_BACKUP_STORAGE_VERSION;
 __m_core_constants_js.MAX_CACHE_SOURCE_CHARS = MAX_CACHE_SOURCE_CHARS;
 __m_core_constants_js.MAX_IMPORT_MESSAGES = MAX_IMPORT_MESSAGES;
 __m_core_constants_js.MAX_IMPORT_TOTAL_CHARS = MAX_IMPORT_TOTAL_CHARS;
@@ -913,6 +923,364 @@ __m_core_context_js.captureTaskOrigin = captureTaskOrigin;
 __m_core_context_js.isCurrentTaskOrigin = isCurrentTaskOrigin;
 }
 
+function __init_archive_backupStore_js() {
+// MODULE: archive/backupStore.js
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_text = __m_core_text_js;
+// Heartbeat's independent, browser-local archive content store.
+// This module is reachable only from the full runtime bundle; index.js/bootstrap never imports it.
+
+
+
+let databasePromise = null;
+let testBackend = null;
+
+function cloneValue(value) {
+    if (value == null) return value;
+    if (typeof structuredClone === 'function') return structuredClone(value);
+    return JSON.parse(JSON.stringify(value));
+}
+
+function utf8JsonSize(value, label) {
+    let json;
+    try { json = JSON.stringify(value); }
+    catch { throw new Error(`${label}无法序列化，独立备份没有写入。`); }
+    const bytes = new Blob([json], { type: 'application/json' }).size;
+    if (bytes > core_constants.MAX_CACHE_SOURCE_BYTES) {
+        throw new Error(`${label}超过 12 MB UTF-8 安全上限，独立备份没有写入。`);
+    }
+    return bytes;
+}
+
+function normalizedIdentity(entry, memory = null) {
+    const chatId = core_context.comparableChatId(memory?.chatId || entry?.chatId);
+    const characterName = core_text.normalizeText(entry?.characterName || memory?.characterName, 120) || '未命名角色';
+    const avatar = core_text.normalizeText(core_context.archiveStoredAvatar(entry), 300);
+    const characterKey = core_text.normalizeText(entry?.characterKey, 300) || avatar;
+    const characterFingerprint = core_text.normalizeText(entry?.characterFingerprint, 160);
+    const identity = { ...entry, characterKey, avatar, characterName, characterFingerprint, chatId };
+    return {
+        entryId: core_context.archiveIndexEntryId(identity),
+        characterKey,
+        avatar,
+        characterName,
+        characterFingerprint,
+        chatId,
+    };
+}
+
+function identityMatches(record, entry) {
+    const wanted = normalizedIdentity(entry);
+    if (!record || !wanted.chatId || core_context.comparableChatId(record.chatId) !== wanted.chatId) return false;
+    const recordName = core_text.normalizeText(record.characterName, 120);
+    const recordAvatar = core_text.normalizeText(record.avatar, 300);
+    const recordKey = core_text.normalizeText(record.characterKey, 300);
+    if (wanted.characterName && wanted.characterName !== '未命名角色' && recordName && recordName !== wanted.characterName) return false;
+    if (wanted.avatar && recordAvatar && recordAvatar !== wanted.avatar) return false;
+    if (wanted.characterKey && recordKey && recordKey !== wanted.characterKey) return false;
+    return true;
+}
+
+function hasMatchingArchiveDeletionFence(records, entry) {
+    return (Array.isArray(records) ? records : [])
+        .some(record => record?.deleted === true && identityMatches(record, entry));
+}
+
+function compatibleCacheValue(cache, memory) {
+    if (!cache || typeof cache !== 'object') return null;
+    const chatId = core_context.comparableChatId(memory?.chatId);
+    const archiveRevision = core_text.normalizeText(memory?.archiveRevision, 240);
+    const cacheChatId = core_context.comparableChatId(cache?.chatId);
+    const cacheRevision = core_text.normalizeText(cache?.archiveRevision, 240);
+    if (cacheChatId && cacheChatId !== chatId) return null;
+    if (cacheRevision && cacheRevision !== archiveRevision) return null;
+    if (cache.format === core_constants.CACHE_STORAGE_FORMAT) {
+        if (Number(cache.storageVersion) !== core_constants.CACHE_STORAGE_VERSION) return null;
+        if (typeof cache.data !== 'string' || !cache.data || cache.data.length > core_constants.MAX_CACHE_COMPRESSED_BASE64_CHARS) return null;
+        if (Number(cache.sourceBytes) > core_constants.MAX_CACHE_SOURCE_BYTES) return null;
+        return cloneValue(cache);
+    }
+    utf8JsonSize(cache, '未压缩派生缓存');
+    return cloneValue(cache);
+}
+
+function normalizeRecord(raw, entry = null) {
+    if (!raw || typeof raw !== 'object' || Number(raw.storageVersion) !== core_constants.ARCHIVE_BACKUP_STORAGE_VERSION) return null;
+    if (entry && !identityMatches(raw, entry)) return null;
+    const memory = cloneValue(raw.memory);
+    if (!memory || typeof memory !== 'object' || !Array.isArray(memory.memories)) return null;
+    const identity = normalizedIdentity(raw, memory);
+    if (!identity.entryId || !identity.chatId || identity.chatId !== core_context.comparableChatId(memory.chatId)) return null;
+    const revision = core_text.normalizeText(memory.archiveRevision, 240);
+    if (!revision || revision !== core_text.normalizeText(raw.archiveRevision, 240)) return null;
+    utf8JsonSize(memory, '正式 Mxxx 档案');
+    const cache = compatibleCacheValue(raw.cache, memory);
+    return {
+        storageVersion: core_constants.ARCHIVE_BACKUP_STORAGE_VERSION,
+        ...identity,
+        archiveName: core_text.normalizeText(raw.archiveName || memory.archiveName, 160) || '未命名档案',
+        archiveRevision: revision,
+        memory,
+        cache,
+        createdAt: Math.max(0, Number(raw.createdAt) || Number(memory.createdAt) || Date.now()),
+        updatedAt: Math.max(0, Number(raw.updatedAt) || Number(memory.updatedAt) || Date.now()),
+    };
+}
+
+function buildRecord(entry, memory, cache = null) {
+    const identity = normalizedIdentity(entry, memory);
+    if (!identity.entryId || !identity.chatId) throw new Error('无法建立独立档案备份身份。');
+    const safeMemory = cloneValue(memory);
+    if (!safeMemory || !Array.isArray(safeMemory.memories)) throw new Error('正式 Mxxx 档案格式无效，独立备份没有写入。');
+    safeMemory.chatId = identity.chatId;
+    const archiveRevision = core_text.normalizeText(safeMemory.archiveRevision, 240);
+    if (!archiveRevision) throw new Error('正式档案缺少 archiveRevision，独立备份没有写入。');
+    utf8JsonSize(safeMemory, '正式 Mxxx 档案');
+    return {
+        storageVersion: core_constants.ARCHIVE_BACKUP_STORAGE_VERSION,
+        ...identity,
+        archiveName: core_text.normalizeText(safeMemory.archiveName, 160) || '未命名档案',
+        archiveRevision,
+        memory: safeMemory,
+        cache: compatibleCacheValue(cache, safeMemory),
+        createdAt: Math.max(0, Number(safeMemory.createdAt) || Date.now()),
+        updatedAt: Math.max(0, Number(safeMemory.updatedAt) || Date.now()),
+    };
+}
+
+function requestValue(request) {
+    return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error('IndexedDB 请求失败。'));
+    });
+}
+
+function openDatabase() {
+    if (databasePromise) return databasePromise;
+    if (!globalThis.indexedDB?.open) return Promise.reject(new Error('当前浏览器没有可用的 IndexedDB，无法建立独立档案备份。'));
+    databasePromise = new Promise((resolve, reject) => {
+        const request = globalThis.indexedDB.open(core_constants.ARCHIVE_BACKUP_DB_NAME, core_constants.ARCHIVE_BACKUP_STORAGE_VERSION);
+        request.onupgradeneeded = () => {
+            const db = request.result;
+            const store = db.objectStoreNames.contains(core_constants.ARCHIVE_BACKUP_STORE_NAME)
+                ? request.transaction.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME)
+                : db.createObjectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME, { keyPath: 'entryId' });
+            if (!store.indexNames.contains('chatId')) store.createIndex('chatId', 'chatId', { unique: false });
+            if (!store.indexNames.contains('updatedAt')) store.createIndex('updatedAt', 'updatedAt', { unique: false });
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => { databasePromise = null; reject(request.error || new Error('无法打开独立档案备份数据库。')); };
+        request.onblocked = () => { databasePromise = null; reject(new Error('独立档案备份数据库正在被旧页面占用，请关闭其他酒馆页面后重试。')); };
+    });
+    return databasePromise;
+}
+
+async function idbRead(entry) {
+    const db = await openDatabase();
+    const identity = normalizedIdentity(entry);
+    const transaction = db.transaction(core_constants.ARCHIVE_BACKUP_STORE_NAME, 'readonly');
+    const store = transaction.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME);
+    const exact = await requestValue(store.get(identity.entryId));
+    if (exact) return exact;
+    const matches = await requestValue(store.index('chatId').getAll(identity.chatId));
+    const compatible = (Array.isArray(matches) ? matches : []).filter(item => identityMatches(item, entry));
+    // A legacy entry ID may differ from the newer fingerprint-derived ID. Recover only when the
+    // chat + stable display identity resolve to exactly one record; ambiguity stays fail-closed.
+    return compatible.length === 1 ? compatible[0] : null;
+}
+
+async function idbPut(record, expected = null, options = {}) {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(core_constants.ARCHIVE_BACKUP_STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME);
+        let outcome = false;
+        let finalized = false;
+        let exactRaw = null;
+        let chatRecords = [];
+        let exactDone = false;
+        let matchesDone = false;
+        const finalize = () => {
+            if (finalized || !exactDone || !matchesDone) return;
+            finalized = true;
+            const aliases = new Map();
+            for (const candidate of [exactRaw, ...chatRecords]) {
+                const id = core_text.normalizeText(candidate?.entryId, 120);
+                if (id && identityMatches(candidate, record)) aliases.set(id, candidate);
+            }
+            const matching = [...aliases.values()];
+            if (hasMatchingArchiveDeletionFence(matching, record) && options.allowDeletedRecreate !== true) {
+                transaction.abort();
+                return;
+            }
+            const liveAliases = matching.map(candidate => normalizeRecord(candidate)).filter(Boolean);
+            if (liveAliases.length > 1) {
+                transaction.abort();
+                return;
+            }
+            let previous = normalizeRecord(exactRaw);
+            if (!previous && liveAliases.length === 1) {
+                previous = liveAliases[0];
+                // Preserve a legacy/index-assigned durable key instead of creating a second
+                // record under a newly fingerprinted ID.
+                record = { ...record, entryId: previous.entryId };
+            }
+            const previousRevision = core_text.normalizeText(previous?.archiveRevision, 240);
+            if (previous && !identityMatches(previous, record)) return transaction.abort();
+            if (expected?.present === false && previous) return transaction.abort();
+            if (expected?.present === true && previous && previousRevision !== core_text.normalizeText(expected.revision, 240)) return transaction.abort();
+            if (expected?.present === true && !previous && options.allowMissingPrevious !== true) return transaction.abort();
+            if (options.allowDeletedRecreate === true) {
+                // A deliberate new canonical archive may replace an earlier deletion. Clear
+                // every matching tombstone alias in this transaction so future seed/cache
+                // updates are not blocked by an older entry ID.
+                for (const [id, candidate] of aliases) {
+                    if (candidate?.deleted === true && id !== record.entryId) store.delete(id);
+                }
+            }
+            if (options.seed === true && previous && previousRevision === record.archiveRevision) {
+                const previousCacheTime = Math.max(0, Number(previous.cache?.updatedAt) || 0);
+                const incomingCacheTime = Math.max(0, Number(record.cache?.updatedAt) || 0);
+                if (previous.cache && (!record.cache || previousCacheTime > incomingCacheTime)) {
+                    // Opening a source whose CACHE_KEY is absent/older must never erase the last
+                    // same-revision independent cache that could recover generated content.
+                    record = { ...record, cache: cloneValue(previous.cache) };
+                }
+            }
+            if (options.seed === true && previous && previousRevision !== record.archiveRevision && Number(previous.updatedAt) > Number(record.updatedAt)) {
+                outcome = true;
+                return;
+            }
+            store.put(record);
+            outcome = true;
+        };
+        const getRequest = store.get(record.entryId);
+        getRequest.onerror = () => transaction.abort();
+        getRequest.onsuccess = () => {
+            exactRaw = getRequest.result || null;
+            exactDone = true;
+            finalize();
+        };
+        const matchesRequest = store.index('chatId').getAll(record.chatId);
+        matchesRequest.onerror = () => transaction.abort();
+        matchesRequest.onsuccess = () => {
+            chatRecords = Array.isArray(matchesRequest.result) ? matchesRequest.result : [];
+            matchesDone = true;
+            finalize();
+        };
+        transaction.oncomplete = () => resolve(outcome);
+        transaction.onabort = () => reject(new Error('独立档案备份版本已经变化，本次旧结果没有覆盖备份。'));
+        transaction.onerror = () => reject(transaction.error || new Error('独立档案备份写入失败。'));
+    });
+}
+
+async function idbDeleteOne(db, entry) {
+    const identity = normalizedIdentity(entry);
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(core_constants.ARCHIVE_BACKUP_STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME);
+        const ids = new Set();
+        const records = new Map();
+        let exactDone = false;
+        let matchesDone = false;
+        const finalize = () => {
+            if (!exactDone || !matchesDone) return;
+            for (const record of records.values()) {
+                if (identityMatches(record, entry)) ids.add(core_text.normalizeText(record.entryId, 120));
+            }
+            const exact = records.get(identity.entryId);
+            if (!exact || identityMatches(exact, entry)) ids.add(identity.entryId);
+            for (const id of ids) {
+                if (!id) continue;
+                const source = records.get(id) || entry;
+                store.put({
+                    storageVersion: core_constants.ARCHIVE_BACKUP_STORAGE_VERSION,
+                    ...normalizedIdentity(source),
+                    entryId: id,
+                    deleted: true,
+                    deletedAt: Date.now(),
+                    memory: null,
+                    cache: null,
+                    archiveRevision: '',
+                    archiveName: '',
+                    createdAt: 0,
+                    updatedAt: Date.now(),
+                });
+            }
+        };
+        const exactRequest = store.get(identity.entryId);
+        exactRequest.onerror = () => transaction.abort();
+        exactRequest.onsuccess = () => {
+            if (exactRequest.result) records.set(identity.entryId, exactRequest.result);
+            exactDone = true;
+            finalize();
+        };
+        const matchesRequest = store.index('chatId').getAll(identity.chatId);
+        matchesRequest.onerror = () => transaction.abort();
+        matchesRequest.onsuccess = () => {
+            for (const record of Array.isArray(matchesRequest.result) ? matchesRequest.result : []) {
+                const id = core_text.normalizeText(record?.entryId, 120);
+                if (id) records.set(id, record);
+            }
+            matchesDone = true;
+            finalize();
+        };
+        transaction.oncomplete = () => resolve(true);
+        transaction.onabort = () => reject(transaction.error || new Error('独立档案备份删除失败。'));
+        transaction.onerror = () => reject(transaction.error || new Error('独立档案备份删除失败。'));
+    });
+}
+
+async function idbDelete(entries) {
+    const db = await openDatabase();
+    for (const entry of Array.isArray(entries) ? entries : [entries]) await idbDeleteOne(db, entry);
+    return true;
+}
+
+function backend() {
+    return testBackend || { read: idbRead, put: idbPut, delete: idbDelete };
+}
+
+function setArchiveBackupBackendForTests(value = null) {
+    testBackend = value;
+}
+
+async function readArchiveBackup(entry) {
+    const raw = await backend().read(entry);
+    return normalizeRecord(raw, entry);
+}
+
+async function replaceArchiveBackup(entry, memory, cache, expectedState, options = {}) {
+    const record = buildRecord(entry, memory, cache);
+    const saved = await backend().put(record, expectedState, options);
+    if (!saved) throw new Error('独立档案备份没有写入。');
+    return cloneValue(record);
+}
+
+async function seedArchiveBackup(entry, memory, cache = null) {
+    const record = buildRecord(entry, memory, cache);
+    const saved = await backend().put(record, null, { seed: true, allowMissingPrevious: true });
+    return saved ? cloneValue(record) : null;
+}
+
+async function updateArchiveBackupCache(entry, memory, cache) {
+    return replaceArchiveBackup(entry, memory, cache, { present: true, revision: core_text.normalizeText(memory?.archiveRevision, 240) }, { allowMissingPrevious: true });
+}
+
+async function deleteArchiveBackup(entries) {
+    return backend().delete(entries);
+}
+
+__m_archive_backupStore_js.readArchiveBackup = readArchiveBackup;
+__m_archive_backupStore_js.replaceArchiveBackup = replaceArchiveBackup;
+__m_archive_backupStore_js.seedArchiveBackup = seedArchiveBackup;
+__m_archive_backupStore_js.updateArchiveBackupCache = updateArchiveBackupCache;
+__m_archive_backupStore_js.deleteArchiveBackup = deleteArchiveBackup;
+__m_archive_backupStore_js.hasMatchingArchiveDeletionFence = hasMatchingArchiveDeletionFence;
+__m_archive_backupStore_js.setArchiveBackupBackendForTests = setArchiveBackupBackendForTests;
+}
+
 function __init_core_incremental_js() {
 // MODULE: core/incremental.js
 const core_constants = __m_core_constants_js;
@@ -1237,7 +1605,9 @@ function bindChatStateEvents() {
         // synchronously rebuild the whole archive UI inside its awaited event path.
         if (overlay && !overlay.hidden) archive_snapshots.scheduleChooserRefresh(80);
         setTimeout(() => {
-            void core_cache.flushPendingCompressedCacheForCurrentChat();
+            void core_cache.flushPendingCompressedCacheForCurrentChat().catch(error => {
+                console.warn('[HeartbeatMemories] pending compressed cache flush failed', error);
+            });
             void archive_repository.flushDeferredCommitsForCurrentChat();
         }, 160);
     };
@@ -13896,12 +14266,11 @@ function handleOverlayClick(event) {
     if (action === 'archive-group-close') { document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-archive-group-manager`)?.remove(); return archive_library.showArchiveLibrary(); }
     if (action === 'archive-character-delete') {
         const groupId = core_text.normalizeText(actionEl.dataset.rmtArchiveGroupId, 120);
-        try {
-            const deleted = archive_groups.deleteArchiveCharacterFromLibrary(groupId);
+        void archive_groups.deleteArchiveCharacterFromLibrary(groupId).then(deleted => {
             if (!deleted) return;
-            globalThis.toastr?.success?.(`已从档案室删除“${deleted.name}”及其 ${deleted.count} 个聊天档案索引；SillyTavern 正文聊天窗口没有删除。`, '心跳回忆');
+            globalThis.toastr?.success?.(`已从档案室删除“${deleted.name}”、其 ${deleted.count} 个聊天档案索引及独立备份；SillyTavern 正文聊天窗口没有删除。`, '心跳回忆');
             archive_library.showArchiveLibrary();
-        } catch (error) { globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'); }
+        }).catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'));
         return;
     }
     if (action === 'character-profile-generate') {
@@ -15248,7 +15617,13 @@ async function flushDeferredCommitsForCurrentChat() {
                         continue;
                     }
                 }
-                core_cache.saveImportedMemory(context, bank, item.origin.chatId, { preserveDerivedCache: !!item.preserveDerivedCache });
+                await core_cache.saveImportedMemory(context, bank, item.origin.chatId, {
+                    preserveDerivedCache: !!item.preserveDerivedCache,
+                    expectedPreviousArchiveState: {
+                        present: item.origin.archivePresent === true,
+                        revision: item.origin.archiveRevision,
+                    },
+                });
                 clearMemoryPreflight(context);
                 globalThis.toastr?.success?.(`后台档案已写回：${bank.archiveName}`, '心跳回忆');
             } else if (item.kind === 'heartPatches') {
@@ -15996,7 +16371,10 @@ ${error.message}` : ''}`);
     }
     const chunks = splitSnapshotIntoChunks({ messages: chatInput });
     const externalChunks = externalChanged ? splitExternalMemoryIntoChunks(external.records) : [];
-    const origin = core_context.captureTaskOrigin(context, existing?.archiveRevision || '');
+    const origin = {
+        ...core_context.captureTaskOrigin(context, existing?.archiveRevision || ''),
+        archivePresent: !!existing,
+    };
 
     const importController = new AbortController();
     runtimeState.activeTaskAbortController = importController;
@@ -16081,7 +16459,13 @@ ${error.message}` : ''}`);
         };
         const wasBackgrounded = runtimeState.activeTaskBackgrounded || !core_context.isCurrentTaskOrigin(origin);
         if (core_context.isCurrentTaskOrigin(origin)) {
-            core_cache.saveImportedMemory(core_context.currentCharacterGuard(), memoryBank, snapshot.chatId, { preserveDerivedCache: incrementalUpdate });
+            await core_cache.saveImportedMemory(core_context.currentCharacterGuard(), memoryBank, snapshot.chatId, {
+                preserveDerivedCache: incrementalUpdate,
+                expectedPreviousArchiveState: {
+                    present: origin.archivePresent === true,
+                    revision: origin.archiveRevision,
+                },
+            });
             clearMemoryPreflight(core_context.currentCharacterGuard());
         } else {
             core_requestCoordinator.queueDeferredCommit(origin, { kind: 'archive', memoryBank, preserveDerivedCache: incrementalUpdate });
@@ -16188,6 +16572,7 @@ __m_archive_repository_js.CHAT_METADATA_SUMMARY_CONTENT_KEYS = CHAT_METADATA_SUM
 function __init_archive_library_js() {
 // MODULE: archive/library.js
 const archive_groups = __m_archive_groups_js;
+const archive_backupStore = __m_archive_backupStore_js;
 const archive_repository = __m_archive_repository_js;
 const archive_snapshots = __m_archive_snapshots_js;
 const core_cache = __m_core_cache_js;
@@ -16203,6 +16588,7 @@ const ui_phoneView = __m_ui_phoneView_js;
 const runtimeState = __m_core_state_js.state;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
 
 
 
@@ -16338,33 +16724,8 @@ function rememberArchiveSnapshot(snapshot) {
     return snapshot;
 }
 
-async function fetchIndexedArchiveSnapshot(entry, context = core_context.getContext()) {
-    const key = archiveSnapshotCacheKey(entry);
-    const cached = runtimeState.archiveSnapshotCache.get(key);
-    if (cached && Date.now() - Number(cached.loadedAt || 0) < 120000) return cached;
-    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
-    const avatar = core_context.archiveEntryAvatarName(entry, context);
-    if (!avatar || typeof context.getRequestHeaders !== 'function') throw new Error('无法定位这个角色的聊天档案文件。');
-    const wantedChatId = core_context.comparableChatId(entry.chatId);
-    if (!wantedChatId) throw new Error('无法识别这个历史聊天的文件 ID。');
-    const response = await fetch('/api/chats/get', {
-        method: 'POST',
-        headers: context.getRequestHeaders(),
-        cache: 'no-cache',
-        body: JSON.stringify({ avatar_url: avatar, file_name: wantedChatId }),
-    });
-    if (!response.ok) throw new Error(`读取档案失败：HTTP ${response.status}`);
-    const chat = await response.json();
-    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
-    const header = Array.isArray(chat) ? chat[0] : chat;
-    const metadata = header?.chat_metadata && typeof header.chat_metadata === 'object' ? header.chat_metadata : {};
-    const memory = archive_repository.migrateArchiveInMemory(metadata[core_constants.MEMORY_KEY]);
-    if (!memory || core_context.comparableChatId(memory.chatId) !== wantedChatId) throw new Error('这个聊天文件里没有可读取的心跳回忆档案。');
-    const indexedName = core_text.normalizeText(entry?.characterName, 120);
-    const memoryName = core_text.normalizeText(memory?.characterName, 120);
-    if (indexedName && memoryName && indexedName !== memoryName) throw new Error('同头像下检测到不同角色身份；为避免读错聊天，已拒绝打开。请在“管理角色分类”里手动归类后再试。');
+async function hydrateSnapshotCache(stored, memory, wantedChatId, lifecycleEpoch) {
     let cache = {};
-    const stored = metadata[core_constants.CACHE_KEY];
     if (core_cache.isCompressedCacheRecord(stored)) {
         const hydrated = await core_cache.gunzipJson(stored.data);
         if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
@@ -16374,10 +16735,82 @@ async function fetchIndexedArchiveSnapshot(entry, context = core_context.getCont
         cache = stored;
     }
     if (Object.keys(cache).length) {
-        if (core_text.normalizeText(cache.chatId, 240) && core_context.comparableChatId(cache.chatId) !== wantedChatId) cache = {};
-        else if (core_text.normalizeText(cache.archiveRevision, 240) && cache.archiveRevision !== memory.archiveRevision) cache = {};
+        if (core_text.normalizeText(cache.chatId, 240) && core_context.comparableChatId(cache.chatId) !== wantedChatId) return {};
+        if (core_text.normalizeText(cache.archiveRevision, 240) && cache.archiveRevision !== memory.archiveRevision) return {};
     }
-    return rememberArchiveSnapshot({
+    return cache;
+}
+
+async function fetchIndexedArchiveSnapshot(entry, context = core_context.getContext()) {
+    const key = archiveSnapshotCacheKey(entry);
+    const cached = runtimeState.archiveSnapshotCache.get(key);
+    if (cached && Date.now() - Number(cached.loadedAt || 0) < 120000) return cached;
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const avatar = core_context.archiveEntryAvatarName(entry, context);
+    const wantedChatId = core_context.comparableChatId(entry.chatId);
+    if (!wantedChatId) throw new Error('无法识别这个历史聊天的文件 ID。');
+    let sourceError = null;
+    let memory = null;
+    let stored = null;
+    let backupRecord = null;
+    try {
+        if (!avatar || typeof context.getRequestHeaders !== 'function') throw new Error('无法定位这个角色的聊天档案文件。');
+        const response = await fetch('/api/chats/get', {
+            method: 'POST',
+            headers: context.getRequestHeaders(),
+            cache: 'no-cache',
+            body: JSON.stringify({ avatar_url: avatar, file_name: wantedChatId }),
+        });
+        if (!response.ok) throw new Error(`读取源聊天失败：HTTP ${response.status}`);
+        const chat = await response.json();
+        if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
+        const header = Array.isArray(chat) ? chat[0] : chat;
+        const metadata = header?.chat_metadata && typeof header.chat_metadata === 'object' ? header.chat_metadata : {};
+        memory = archive_repository.migrateArchiveInMemory(metadata[core_constants.MEMORY_KEY]);
+        if (!memory || core_context.comparableChatId(memory.chatId) !== wantedChatId) throw new Error('源聊天里已没有可读取的心跳回忆档案。');
+        stored = metadata[core_constants.CACHE_KEY];
+    } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        sourceError = error;
+        try { backupRecord = await archive_backupStore.readArchiveBackup(entry); }
+        catch (backupError) {
+            console.warn('[HeartbeatMemories] independent archive backup read failed', backupError);
+        }
+        if (!backupRecord?.memory) {
+            throw new Error(`源聊天无法读取，且本机没有可用的独立档案备份。\n${error?.message || error}\n如果这份档案从未在 r42.5 或更高版本中打开/保存过，将无法从本机备份恢复。`);
+        }
+        memory = archive_repository.migrateArchiveInMemory(backupRecord.memory);
+        stored = backupRecord.cache;
+        if (!memory || core_context.comparableChatId(memory.chatId) !== wantedChatId) throw new Error('独立档案备份的身份校验失败，已拒绝恢复。');
+    }
+    const indexedName = core_text.normalizeText(entry?.characterName, 120);
+    const memoryName = core_text.normalizeText(memory?.characterName, 120);
+    if (indexedName && memoryName && indexedName !== memoryName) throw new Error('同头像下检测到不同角色身份；为避免读错聊天，已拒绝打开。请在“管理角色分类”里手动归类后再试。');
+    let cache = {};
+    let sourceCacheError = null;
+    try { cache = await hydrateSnapshotCache(stored, memory, wantedChatId, lifecycleEpoch); }
+    catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        sourceCacheError = error;
+    }
+    if (!sourceError && (!Object.keys(cache).length || sourceCacheError)) {
+        try { backupRecord = backupRecord || await archive_backupStore.readArchiveBackup(entry); }
+        catch (backupError) { console.warn('[HeartbeatMemories] independent derived-cache backup read failed', backupError); }
+        if (backupRecord?.cache && backupRecord.archiveRevision === memory.archiveRevision) {
+            try {
+                const recoveredCache = await hydrateSnapshotCache(backupRecord.cache, memory, wantedChatId, lifecycleEpoch);
+                if (Object.keys(recoveredCache).length) {
+                    cache = recoveredCache;
+                    stored = backupRecord.cache;
+                    sourceCacheError = null;
+                }
+            } catch (backupCacheError) {
+                console.warn('[HeartbeatMemories] independent derived-cache backup hydrate failed', backupCacheError);
+            }
+        }
+    }
+    if (sourceCacheError) throw sourceCacheError;
+    const snapshot = {
         entryId: core_context.archiveIndexEntryId(entry),
         archiveGroupId: archive_groups.archiveGroupKeyForEntry(entry),
         characterKey: core_text.normalizeText(entry.characterKey, 300),
@@ -16387,12 +16820,28 @@ async function fetchIndexedArchiveSnapshot(entry, context = core_context.getCont
         archiveName: core_text.normalizeText(memory.archiveName, 160) || archive_repository.fallbackArchiveName(memory.memories),
         memory,
         cache,
+        backupOnly: !!sourceError,
+        sourceError: sourceError ? core_text.normalizeText(sourceError?.message || String(sourceError), 1200) : '',
         loadedAt: Date.now(),
-    });
+    };
+    if (!sourceError) {
+        // A successfully opened historical archive is an explicit full-runtime action, so this is
+        // the safe migration point for old chat-only archives. Backup failures never hide the source.
+        void archive_backupStore.seedArchiveBackup(entry, memory, stored).catch(error => {
+            console.warn('[HeartbeatMemories] independent archive backup seed failed', error);
+            globalThis.toastr?.warning?.(core_text.toastText(`档案已打开，但独立备份没有更新：${error?.message || error}`), '心跳回忆');
+        });
+    }
+    return rememberArchiveSnapshot(snapshot);
 }
 
 function setArchiveReadOnly(readOnly) {
     if (!runtimeState.activeArchiveSnapshot) return;
+    if (runtimeState.activeArchiveSnapshot.backupOnly && readOnly === false) {
+        runtimeState.activeArchiveReadOnly = true;
+        globalThis.toastr?.info?.('源聊天已丢失或无法读取；独立备份只能永久只读查看，不能重新绑定到其他聊天。', '心跳回忆');
+        return showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot);
+    }
     runtimeState.activeArchiveReadOnly = readOnly !== false;
     if (runtimeState.activeMode && runtimeState.activeSession) ui_overlay.renderActive();
     else showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot);
@@ -16408,7 +16857,9 @@ function setArchiveReadOnly(readOnly) {
 }
 
 function archiveSnapshotEditableUi() {
-    return !!runtimeState.activeArchiveSnapshot && !runtimeState.activeArchiveReadOnly;
+    return !!runtimeState.activeArchiveSnapshot
+        && runtimeState.activeArchiveSnapshot.backupOnly !== true
+        && !runtimeState.activeArchiveReadOnly;
 }
 
 function snapshotWriteBlockMessage() {
@@ -16419,6 +16870,11 @@ function snapshotWriteBlockMessage() {
 
 function promoteSnapshotToLiveIfCurrent() {
     if (!runtimeState.activeArchiveSnapshot) return true;
+    if (runtimeState.activeArchiveSnapshot.backupOnly) {
+        runtimeState.activeArchiveReadOnly = true;
+        globalThis.toastr?.warning?.('独立备份是永久只读快照，不能重新绑定或写入当前聊天。', '心跳回忆');
+        return false;
+    }
     if (runtimeState.activeArchiveReadOnly) {
         globalThis.toastr?.info?.('当前仍是只读查看。请先关闭“只读查看”开关。', '心跳回忆');
         return false;
@@ -16481,14 +16937,14 @@ function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchiveSnapsho
     if (!snapshot?.memory) return showArchiveLibrary();
     const isNewSnapshot = runtimeState.activeArchiveSnapshot !== snapshot;
     runtimeState.activeArchiveSnapshot = snapshot;
-    if (isNewSnapshot) runtimeState.activeArchiveReadOnly = true;
+    if (isNewSnapshot || snapshot.backupOnly) runtimeState.activeArchiveReadOnly = true;
     runtimeState.activeMode = null;
     runtimeState.activeSession = null;
     runtimeState.archiveViewLevel = 'snapshot';
     ui_overlay.openOverlay();
     ui_overlay.setRegenerateVisible(false);
     ui_overlay.setBackVisible(true, '角色档案');
-    ui_overlay.topTitle(`心跳回忆 · ${snapshot.characterName} · ${runtimeState.activeArchiveReadOnly ? '只读档案' : '编辑待命'}`);
+    ui_overlay.topTitle(`心跳回忆 · ${snapshot.characterName} · ${snapshot.backupOnly ? '独立备份' : runtimeState.activeArchiveReadOnly ? '只读档案' : '编辑待命'}`);
     const body = ui_overlay.bodyEl();
     if (!body) return;
     const memory = snapshot.memory;
@@ -16512,14 +16968,14 @@ function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchiveSnapsho
     body.innerHTML = `<div class="rmt-archive-room">
       <section class="rmt-memory-gate rmt-archive-card">
         <div class="rmt-memory-gate-text">
-          <div class="rmt-archive-kicker">READ-ONLY ARCHIVE</div>
+          <div class="rmt-archive-kicker">${snapshot.backupOnly ? 'RECOVERED LOCAL BACKUP' : 'READ-ONLY ARCHIVE'}</div>
           <strong class="rmt-archive-title">${core_text.esc(snapshot.archiveName)}</strong>
           <div class="rmt-archive-summary">${core_text.esc(memory.archiveSummary || archive_repository.fallbackArchiveSummary(memory.memories))}</div>
-          <div class="rmt-memory-status ready">${runtimeState.activeArchiveReadOnly ? '只读查看' : '编辑待命'} · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${core_constants.ARCHIVE_PORTAL_MODES.length}</div>
-          <div class="rmt-archive-meta">关闭只读只改变心跳回忆里的按钮显示，不会自动切换角色/聊天、刷新宿主界面或删除档案。</div>
+          <div class="rmt-memory-status ready">${snapshot.backupOnly ? '源聊天不可用 · 已从独立备份恢复 · 永久只读' : runtimeState.activeArchiveReadOnly ? '只读查看' : '编辑待命'} · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${core_constants.ARCHIVE_PORTAL_MODES.length}</div>
+          <div class="rmt-archive-meta">${snapshot.backupOnly ? `这份内容来自当前浏览器的本机备份；源聊天错误：${core_text.esc(snapshot.sourceError || '无法读取')}。不会把它重新绑定或写入其他聊天。` : '关闭只读只改变心跳回忆里的按钮显示，不会自动切换角色/聊天、刷新宿主界面或删除档案。'}</div>
           <div class="rmt-archive-readonly-control">
-            <label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''}> 只读查看</label>
-            <small>${runtimeState.activeArchiveReadOnly ? '关闭后会显示“增量追加 / 绘制”等按钮；真正写入前仍会验证当前酒馆是否正打开这份档案对应聊天。' : '编辑按钮已显示。若当前酒馆不是这份档案对应聊天，点击写操作只会提示你手动打开目标聊天，不会自动切换或刷新。每次追加仍会再次确认。'}</small>
+            <label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''} ${snapshot.backupOnly ? 'disabled' : ''}> 只读查看</label>
+            <small>${snapshot.backupOnly ? '源聊天删除后仍可查看已备份的档案与派生内容，但不能在备份快照上继续生成、编辑或覆盖。' : runtimeState.activeArchiveReadOnly ? '关闭后会显示“增量追加 / 绘制”等按钮；真正写入前仍会验证当前酒馆是否正打开这份档案对应聊天。' : '编辑按钮已显示。若当前酒馆不是这份档案对应聊天，点击写操作只会提示你手动打开目标聊天，不会自动切换或刷新。每次追加仍会再次确认。'}</small>
           </div>
         </div>
       </section>
@@ -16553,6 +17009,7 @@ async function openIndexedArchive(characterKey, chatId, entryId = '') {
     try {
         const snapshot = await fetchIndexedArchiveSnapshot(entry, context);
         showIndexedArchiveSnapshot(snapshot);
+        if (snapshot.backupOnly) globalThis.toastr?.warning?.('源聊天无法读取，已从当前浏览器的独立备份恢复为永久只读档案。', '心跳回忆');
     } catch (error) {
         console.warn('[HeartbeatMemories] indexed archive read-only load failed', error);
         if (ui_overlay.bodyEl()) ui_overlay.bodyEl().innerHTML = `<div class="rmt-error"><div><b>档案读取失败</b><div style="margin-top:10px;white-space:pre-wrap;opacity:.78">${core_text.esc(error?.message || String(error))}</div><button type="button" class="rmt-btn" data-rmt-action="library-home">返回档案室</button></div></div>`;
@@ -16646,6 +17103,7 @@ __m_archive_library_js.showIndexedArchiveSnapshot = showIndexedArchiveSnapshot;
 function __init_archive_groups_js() {
 // MODULE: archive/groups.js
 const archive_library = __m_archive_library_js;
+const archive_backupStore = __m_archive_backupStore_js;
 const archive_repository = __m_archive_repository_js;
 const archive_snapshots = __m_archive_snapshots_js;
 const core_cache = __m_core_cache_js;
@@ -16658,6 +17116,7 @@ const ui_overlay = __m_ui_overlay_js;
 const runtimeState = __m_core_state_js.state;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
 
 
 
@@ -17059,7 +17518,7 @@ function moveArchiveIndexEntryToGroup(context, entryId, groupId) {
     setArchiveIndex(context, items);
 }
 
-function deleteArchiveCharacterFromLibrary(groupId) {
+async function deleteArchiveCharacterFromLibrary(groupId) {
     if (core_requestCoordinator.hasAnyTask()) throw new Error('当前还有后台任务。为避免删除时与生成写回竞态，请等任务完成后再操作。');
     const context = core_context.getContext();
     const id = core_text.normalizeText(groupId, 120);
@@ -17073,7 +17532,7 @@ function deleteArchiveCharacterFromLibrary(groupId) {
     const count = entries.length;
     if (!ui_overlay.confirmExplicitActionTwice(
         `删除角色档案「${name}」？`,
-        `将从“心跳回忆 · 档案室”移除这个角色的头像、角色档案入口，以及其下 ${count} 个聊天档案索引。不会删除、清空、重命名或改写任何 SillyTavern 正文聊天窗口；聊天正文会完整保留。删除后，“扫描旧版本已有档案”也不会自动把这个角色重新加入档案室。`,
+        `将从“心跳回忆 · 档案室”移除这个角色的头像、角色档案入口、其下 ${count} 个聊天档案索引及相应的 Heartbeat 本机独立备份。不会删除、清空、重命名或改写任何 SillyTavern 正文聊天窗口；聊天正文会完整保留。删除后，“扫描旧版本已有档案”也不会自动把这个角色重新加入档案室。`,
         { destructive: true },
     )) return null;
 
@@ -17091,6 +17550,11 @@ function deleteArchiveCharacterFromLibrary(groupId) {
         sourceIdentityKeys,
         deletedAt: Date.now(),
     });
+
+    // This is an explicit double-confirmed Heartbeat deletion, so a supposedly deleted archive
+    // must not remain recoverable from the independent store. Abort before changing the index if
+    // the backup transaction cannot complete.
+    if (entries.length) await archive_backupStore.deleteArchiveBackup(entries);
 
     for (const entry of entries) runtimeState.archiveSnapshotCache.delete(archive_library.archiveSnapshotCacheKey(entry));
     setArchiveIndex(context, getArchiveIndex(context).filter(item => archiveGroupKeyForEntry(item) !== id));
@@ -17151,20 +17615,26 @@ async function deleteCurrentHeartbeatArchive(entryId = '') {
     const archiveName = core_text.normalizeText(memory.archiveName, 160) || archive_repository.fallbackArchiveName(memory.memories);
     if (!ui_overlay.confirmExplicitAction(
         `删除当前聊天的心跳回忆档案「${archiveName}」？`,
-        '只删除心跳回忆自己的 MEMORY_KEY 与已生成派生缓存（相簿 / ADV EVENT / 房间 / ENDING / HEART 等），不会删除、清空或改写 SillyTavern 聊天正文。删除后如需恢复心跳回忆内容，需要重新建档/生成。',
+        '删除心跳回忆自己的 MEMORY_KEY、已生成派生缓存（相簿 / ADV EVENT / 房间 / ENDING / HEART 等）和对应的本机独立备份；不会删除、清空或改写 SillyTavern 聊天正文。删除后如需恢复心跳回忆内容，需要重新建档/生成。',
         { destructive: true },
     )) return false;
     if (!ui_overlay.confirmExplicitAction(
         '最后确认：永久删除这份心跳回忆档案？',
-        '请确认你已经选对当前聊天。聊天正文会保留，但心跳回忆档案及其派生缓存会从当前聊天 metadata 中移除。',
+        '请确认你已经选对当前聊天。聊天正文会保留，但心跳回忆档案、派生缓存及 Heartbeat 本机独立备份会被移除。',
         { destructive: true },
     )) return false;
 
-    // No await is allowed before the destructive mutation and save call. Re-check the live scope
-    // immediately so a manually changed chat/card cannot turn this action into a cross-chat delete.
-    const live = core_context.currentCharacterGuard();
+    let live = core_context.currentCharacterGuard();
     if (core_context.comparableChatId(core_context.getChatId(live)) !== expectedChatId || core_context.currentCharacterRuntimeKey(live) !== expectedCharacterKey) {
         throw new Error('确认期间当前角色或聊天已经变化，本次删除已取消。');
+    }
+    const backupEntry = indexed || core_cache.archiveBackupEntryForContext(live, memory);
+    await archive_backupStore.deleteArchiveBackup(backupEntry);
+    // IndexedDB is asynchronous. Re-acquire and recheck the exact live scope before touching chat
+    // metadata so a user navigation during the transaction cannot retarget the deletion.
+    live = core_context.currentCharacterGuard();
+    if (core_context.comparableChatId(core_context.getChatId(live)) !== expectedChatId || core_context.currentCharacterRuntimeKey(live) !== expectedCharacterKey) {
+        throw new Error('删除独立备份期间当前角色或聊天已经变化；源聊天 metadata 未修改。');
     }
     const scope = core_cache.cacheScopeFromContext(live);
     const timer = runtimeState.cachePersistTimers.get(scope);
@@ -17301,6 +17771,7 @@ function upsertArchiveIndex(context, memoryBank) {
     setArchiveIndex(context, index);
 }
 
+__m_archive_groups_js.deleteArchiveCharacterFromLibrary = deleteArchiveCharacterFromLibrary;
 __m_archive_groups_js.deleteCurrentHeartbeatArchive = deleteCurrentHeartbeatArchive;
 __m_archive_groups_js.normalizeArchiveGroup = normalizeArchiveGroup;
 __m_archive_groups_js.getArchiveGroups = getArchiveGroups;
@@ -17328,7 +17799,6 @@ __m_archive_groups_js.ensureArchiveAutoGroup = ensureArchiveAutoGroup;
 __m_archive_groups_js.autoClassifyArchiveIndex = autoClassifyArchiveIndex;
 __m_archive_groups_js.createArchiveGroupForCharacter = createArchiveGroupForCharacter;
 __m_archive_groups_js.moveArchiveIndexEntryToGroup = moveArchiveIndexEntryToGroup;
-__m_archive_groups_js.deleteArchiveCharacterFromLibrary = deleteArchiveCharacterFromLibrary;
 __m_archive_groups_js.removeArchiveIndexEntry = removeArchiveIndexEntry;
 __m_archive_groups_js.removeIndexedArchiveFromLibrary = removeIndexedArchiveFromLibrary;
 __m_archive_groups_js.archiveGroupEntries = archiveGroupEntries;
@@ -17344,6 +17814,7 @@ __m_archive_groups_js.upsertArchiveIndex = upsertArchiveIndex;
 function __init_core_cache_js() {
 // MODULE: core/cache.js
 const archive_groups = __m_archive_groups_js;
+const archive_backupStore = __m_archive_backupStore_js;
 const archive_repository = __m_archive_repository_js;
 const archive_snapshots = __m_archive_snapshots_js;
 const core_constants = __m_core_constants_js;
@@ -17362,6 +17833,37 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+
+
+function cloneCacheValue(value) {
+    if (!value || typeof value !== 'object') return {};
+    if (typeof structuredClone === 'function') return structuredClone(value);
+    return JSON.parse(JSON.stringify(value));
+}
+
+function prepareBoundedRawCache(cache) {
+    let json;
+    try { json = JSON.stringify(cache ?? {}); }
+    catch { throw new Error('剧场缓存无法序列化，已保留上一份有效缓存。'); }
+    const sourceBytes = new Blob([json], { type: 'application/json' }).size;
+    if (sourceBytes > core_constants.MAX_CACHE_SOURCE_BYTES) {
+        throw new Error('剧场缓存超过 12 MB UTF-8 安全上限，已保留上一份有效缓存。');
+    }
+    return { value: cloneCacheValue(cache), sourceChars: json.length, sourceBytes };
+}
+
+function archiveBackupEntryForContext(context, memoryBank) {
+    const probe = archive_groups.currentCharacterArchiveProbe(context, memoryBank);
+    const existing = archive_groups.getArchiveIndex(context).find(item => item.chatId === probe.chatId
+        && core_context.archiveEntryMatchesContextCharacter(item, context));
+    return {
+        ...probe,
+        // Preserve a legacy/index-assigned entry ID. Re-hashing a fingerprinted probe here could
+        // create a second invisible backup that the existing library row would never find.
+        entryId: existing ? core_context.archiveIndexEntryId(existing) : core_context.archiveIndexEntryId(probe),
+        archiveName: core_text.normalizeText(memoryBank?.archiveName, 160),
+    };
+}
 
 function rememberRuntimeSessionCache(scope, cache) {
     if (!scope || !cache || typeof cache !== 'object') return cache;
@@ -17419,7 +17921,7 @@ async function savePhoneGenerationDraft(context, memoryBank, plan, completedApps
     if (!live.chatMetadata || typeof live.chatMetadata !== 'object') return false;
     const scope = cacheScopeFromContext(live);
     const stored = live.chatMetadata?.[core_constants.CACHE_KEY];
-    const cache = getCache(live);
+    const cache = cloneCacheValue(getCache(live));
     cache[core_constants.PHONE_DRAFT_CACHE_KEY] = {
         kind: 'phone-draft',
         chatId: core_context.getChatId(live),
@@ -17434,11 +17936,7 @@ async function savePhoneGenerationDraft(context, memoryBank, plan, completedApps
     cache.archiveRevision = latestMemory.archiveRevision;
     cache.updatedAt = Date.now();
     rememberRuntimeSessionCache(scope, cache);
-    if (shouldWriteUncompressedCacheImmediately(stored)) {
-        live.chatMetadata[core_constants.CACHE_KEY] = cache;
-        live.saveMetadataDebounced?.();
-    }
-    scheduleCompressedCachePersist(live, cache, 120);
+    scheduleCompressedCachePersist(live, cache, shouldWriteUncompressedCacheImmediately(stored) ? 0 : 120);
     return true;
 }
 
@@ -17549,10 +18047,16 @@ async function persistCompressedCacheNow(context, cache, expectedScope = cacheSc
     if (!cache || typeof cache !== 'object') return false;
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     if (typeof CompressionStream !== 'function') {
+        const prepared = prepareBoundedRawCache(cache);
         let latest;
         try { latest = core_context.currentCharacterGuard(); } catch { return false; }
         if (!cacheStillMatchesLiveArchive(cache, latest, expectedScope)) return false;
-        latest.chatMetadata[core_constants.CACHE_KEY] = cache;
+        const memory = archive_repository.getImportedMemory(latest);
+        await archive_backupStore.updateArchiveBackupCache(archiveBackupEntryForContext(latest, memory), memory, prepared.value);
+        if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) return false;
+        try { latest = core_context.currentCharacterGuard(); } catch { return false; }
+        if (!cacheStillMatchesLiveArchive(cache, latest, expectedScope)) return false;
+        latest.chatMetadata[core_constants.CACHE_KEY] = prepared.value;
         latest.saveMetadataDebounced?.();
         return true;
     }
@@ -17570,6 +18074,14 @@ async function persistCompressedCacheNow(context, cache, expectedScope = cacheSc
     }
     // Compression can finish after an explicit archive delete/full revision change. Never let
     // a stale in-flight gzip resurrect a removed/older Heartbeat cache into live metadata.
+    if (!cacheStillMatchesLiveArchive(cache, latest, expectedScope)) {
+        runtimeState.pendingCompressedCacheWrites.delete(expectedScope);
+        return false;
+    }
+    const memory = archive_repository.getImportedMemory(latest);
+    await archive_backupStore.updateArchiveBackupCache(archiveBackupEntryForContext(latest, memory), memory, record);
+    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) return false;
+    try { latest = core_context.currentCharacterGuard(); } catch { return false; }
     if (!cacheStillMatchesLiveArchive(cache, latest, expectedScope)) {
         runtimeState.pendingCompressedCacheWrites.delete(expectedScope);
         return false;
@@ -17606,6 +18118,7 @@ function scheduleCompressedCachePersist(context, cache, delay = 1800) {
             runtimeState.cachePersistTimers.delete(scope);
             void persistCompressedCacheNow(context, cache, scope).catch(error => {
                 console.warn('[HeartbeatMemories] compressed cache persist failed', error);
+                globalThis.toastr?.warning?.(core_text.toastText(`${error?.message || error} 上一份有效缓存和独立备份均未覆盖。`), '心跳回忆');
             });
         }, Math.max(0, Number(waitMs) || 0));
         runtimeState.cachePersistTimers.set(scope, timer);
@@ -17631,8 +18144,9 @@ async function ensureCacheHydrated(context = core_context.currentCharacterGuard(
         // spike CPU/RAM during SillyTavern startup, especially on mobile. A future explicit
         // maintenance action may migrate them, but ordinary chat navigation must stay idle.
         runtimeState.cacheHydrationErrors.delete(scope);
-        rememberRuntimeSessionCache(scope, stored);
-        return stored;
+        const detached = cloneCacheValue(stored);
+        rememberRuntimeSessionCache(scope, detached);
+        return detached;
     }
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     let promise;
@@ -17681,8 +18195,13 @@ async function flushPendingCompressedCacheForCurrentChat() {
     const scope = cacheScopeFromContext(context);
     const record = runtimeState.pendingCompressedCacheWrites.get(scope);
     if (!record) return;
+    if (!cacheStillMatchesLiveArchive(record, context, scope)) {
+        runtimeState.pendingCompressedCacheWrites.delete(scope);
+        return;
+    }
     const memory = archive_repository.getImportedMemory(context);
-    if (memory && record.archiveRevision && record.archiveRevision !== memory.archiveRevision) {
+    await archive_backupStore.updateArchiveBackupCache(archiveBackupEntryForContext(context, memory), memory, record);
+    if (!cacheStillMatchesLiveArchive(record, context, scope)) {
         runtimeState.pendingCompressedCacheWrites.delete(scope);
         return;
     }
@@ -17697,14 +18216,47 @@ function getCache(context) {
     const stored = context.chatMetadata?.[core_constants.CACHE_KEY];
     if (isCompressedCacheRecord(stored)) return {};
     if (stored && typeof stored === 'object') {
-        rememberRuntimeSessionCache(scope, stored);
-        return stored;
+        // Detach legacy raw metadata before any runtime writer can mutate the last durable copy.
+        const detached = cloneCacheValue(stored);
+        rememberRuntimeSessionCache(scope, detached);
+        return detached;
     }
     return {};
 }
 
-function saveImportedMemory(context, memoryBank, expectedChatId = memoryBank?.chatId, options = {}) {
-    const currentContext = core_context.currentCharacterGuard();
+async function prepareCacheBackupValue(cache) {
+    if (!cache || typeof cache !== 'object') return null;
+    if (isCompressedCacheRecord(cache)) {
+        if (!cache.data || cache.data.length > core_constants.MAX_CACHE_COMPRESSED_BASE64_CHARS) throw new Error('压缩派生缓存大小异常，独立备份没有覆盖。');
+        if (Number(cache.sourceBytes) > core_constants.MAX_CACHE_SOURCE_BYTES) throw new Error('压缩派生缓存来源超过 12 MB，独立备份没有覆盖。');
+        return cloneCacheValue(cache);
+    }
+    const prepared = prepareBoundedRawCache(cache);
+    if (typeof CompressionStream !== 'function') return prepared.value;
+    const packed = await gzipJson(prepared.value);
+    return compressedCacheManifest(prepared.value, packed);
+}
+
+function archiveCommitStateMatches(context, expectedState) {
+    if (!context?.chatMetadata || typeof context.chatMetadata !== 'object') return false;
+    const hasMemory = Object.prototype.hasOwnProperty.call(context.chatMetadata, core_constants.MEMORY_KEY);
+    if (expectedState?.present === false) return !hasMemory;
+    if (expectedState?.present !== true || !hasMemory) return false;
+    return core_text.normalizeText(context.chatMetadata[core_constants.MEMORY_KEY]?.archiveRevision, 240)
+        === core_text.normalizeText(expectedState.revision, 240);
+}
+
+function assertArchiveCommitState(context, expectedState) {
+    if (!expectedState || typeof expectedState.present !== 'boolean') {
+        throw new Error('档案保存缺少旧版本校验，本次结果已安全丢弃。');
+    }
+    if (!archiveCommitStateMatches(context, expectedState)) {
+        throw new Error('档案生成期间原档案版本已经变化，本次旧结果没有覆盖较新的档案。请重新更新。');
+    }
+}
+
+async function saveImportedMemory(context, memoryBank, expectedChatId = memoryBank?.chatId, options = {}) {
+    let currentContext = core_context.currentCharacterGuard();
     const currentChatId = core_context.getChatId(currentContext);
     if (!expectedChatId || currentChatId !== expectedChatId || core_context.getChatId(context) !== expectedChatId) {
         throw new Error('档案整理期间聊天窗口已经切换，本次结果已安全丢弃；请回到原聊天后重新更新档案。');
@@ -17712,42 +18264,75 @@ function saveImportedMemory(context, memoryBank, expectedChatId = memoryBank?.ch
     if (!context.chatMetadata || typeof context.chatMetadata !== 'object') {
         throw new Error('当前聊天无法保存 metadata，不能创建或更新档案。');
     }
+    const expectedState = options.expectedPreviousArchiveState;
+    assertArchiveCommitState(context, expectedState);
     const previousMemory = archive_repository.getImportedMemory(context);
     const preserveDerivedCache = !!options.preserveDerivedCache && !!previousMemory;
-    const scope = cacheScopeFromContext(context);
+    const stagedMemory = cloneCacheValue(memoryBank);
+    stagedMemory.version = core_constants.ARCHIVE_SCHEMA_VERSION;
     let preservedCache = null;
     if (preserveDerivedCache) {
         const candidate = getCache(context);
         if (candidate && typeof candidate === 'object' && Object.values(core_constants.MODE).some(mode => candidate?.[mode]?.kind === mode)) {
-            preservedCache = candidate;
+            preservedCache = cloneCacheValue(candidate);
+            archive_repository.migrateDerivedCacheRevision(preservedCache, previousMemory, stagedMemory);
         }
     }
 
-    memoryBank.version = core_constants.ARCHIVE_SCHEMA_VERSION;
-    context.chatMetadata[core_constants.MEMORY_KEY] = memoryBank;
+    const storedCache = preservedCache ? await prepareCacheBackupValue(preservedCache) : null;
+    currentContext = core_context.currentCharacterGuard();
+    if (core_context.getChatId(currentContext) !== expectedChatId) throw new Error('档案整理期间聊天窗口已经切换，本次结果已安全丢弃。');
+    assertArchiveCommitState(currentContext, expectedState);
+    const backupEntry = archiveBackupEntryForContext(currentContext, stagedMemory);
+    await archive_backupStore.replaceArchiveBackup(backupEntry, stagedMemory, storedCache, expectedState, {
+        allowMissingPrevious: expectedState.present === true,
+        // Only a new canonical archive created by an explicit user action may clear a prior
+        // deletion fence. Background seed/cache writers never receive this capability.
+        allowDeletedRecreate: expectedState.present === false,
+    });
+
+    // Backup persistence is awaited before replacing the chat copy. Recheck after that await so
+    // an old foreground/deferred result cannot win a same-chat revision race.
+    currentContext = core_context.currentCharacterGuard();
+    if (core_context.getChatId(currentContext) !== expectedChatId) throw new Error('档案整理期间聊天窗口已经切换，本次结果已安全丢弃。');
+    assertArchiveCommitState(currentContext, expectedState);
+    const scope = cacheScopeFromContext(currentContext);
+    currentContext.chatMetadata[core_constants.MEMORY_KEY] = stagedMemory;
     runtimeState.pendingCompressedCacheWrites.delete(scope);
     const timer = runtimeState.cachePersistTimers.get(scope);
     if (timer) clearTimeout(timer);
     runtimeState.cachePersistTimers.delete(scope);
 
-    if (preservedCache) {
-        archive_repository.migrateDerivedCacheRevision(preservedCache, previousMemory, memoryBank);
+    if (preservedCache && storedCache) {
         rememberRuntimeSessionCache(scope, preservedCache);
-        // Keep a durable uncompressed copy until gzip finishes. This is an explicit archive
-        // update path, so a short one-off metadata write is preferable to losing every ADV EVENT
-        // if the extension reloads before the compression timer fires.
-        context.chatMetadata[core_constants.CACHE_KEY] = preservedCache;
-        context.saveMetadataDebounced?.();
-        scheduleCompressedCachePersist(context, preservedCache, 80);
+        currentContext.chatMetadata[core_constants.CACHE_KEY] = storedCache;
     } else {
-        delete context.chatMetadata[core_constants.CACHE_KEY];
+        delete currentContext.chatMetadata[core_constants.CACHE_KEY];
         runtimeState.runtimeSessionCache.delete(scope);
     }
 
-    archive_snapshots.rememberCurrentArchiveForOverview(context);
-    archive_snapshots.syncArchiveOverviewCurrentRow(context);
-    archive_groups.upsertArchiveIndex(context, memoryBank);
-    context.saveMetadataDebounced?.();
+    archive_snapshots.rememberCurrentArchiveForOverview(currentContext);
+    archive_snapshots.syncArchiveOverviewCurrentRow(currentContext);
+    archive_groups.upsertArchiveIndex(currentContext, stagedMemory);
+    currentContext.saveMetadataDebounced?.();
+    return stagedMemory;
+}
+
+async function ensureCurrentArchiveBackup(context = core_context.currentCharacterGuard()) {
+    const memory = archive_repository.getImportedMemory(context);
+    if (!memory) return false;
+    if (archive_groups.isCurrentCharacterDeletedFromLibrary(context, memory)) return false;
+    const expectedChatId = core_context.getChatId(context);
+    const expectedRevision = core_text.normalizeText(memory.archiveRevision, 240);
+    const backupEntry = archiveBackupEntryForContext(context, memory);
+    const cache = await prepareCacheBackupValue(context.chatMetadata?.[core_constants.CACHE_KEY]);
+    const currentContext = core_context.currentCharacterGuard();
+    const currentMemory = archive_repository.getImportedMemory(currentContext);
+    if (core_context.getChatId(currentContext) !== expectedChatId
+        || core_text.normalizeText(currentMemory?.archiveRevision, 240) !== expectedRevision
+        || archive_groups.isCurrentCharacterDeletedFromLibrary(currentContext, currentMemory)) return false;
+    await archive_backupStore.seedArchiveBackup(backupEntry, currentMemory, cache);
+    return true;
 }
 
 async function deleteSessions(modes, expectedChatId = '') {
@@ -17767,7 +18352,7 @@ async function deleteSessions(modes, expectedChatId = '') {
     }
     try { await ensureCacheHydrated(context); } catch {}
     const scope = cacheScopeFromContext(context);
-    const cache = getCache(context);
+    const cache = cloneCacheValue(getCache(context));
     let changed = false;
     for (const mode of requested) {
         if (Object.prototype.hasOwnProperty.call(cache, mode)) {
@@ -17785,11 +18370,7 @@ async function deleteSessions(modes, expectedChatId = '') {
     cache.updatedAt = Date.now();
     rememberRuntimeSessionCache(scope, cache);
     const stored = context.chatMetadata?.[core_constants.CACHE_KEY];
-    if (shouldWriteUncompressedCacheImmediately(stored)) {
-        context.chatMetadata[core_constants.CACHE_KEY] = cache;
-        context.saveMetadataDebounced?.();
-    }
-    scheduleCompressedCachePersist(context, cache, 80);
+    scheduleCompressedCachePersist(context, cache, shouldWriteUncompressedCacheImmediately(stored) ? 0 : 80);
     return true;
 }
 
@@ -17815,22 +18396,17 @@ function saveSession(mode, session, expectedChatId = core_text.normalizeText(ses
             void ensureCacheHydrated(context).then(() => archive_snapshots.scheduleChooserRefresh(0)).catch(() => {});
             return false;
         }
-        const cache = getCache(context);
-        session.chatId = expectedChatId;
-        session.archiveRevision = memoryBank.archiveRevision;
-        cache[mode] = session;
+        const cache = cloneCacheValue(getCache(context));
+        const stagedSession = cloneCacheValue(session);
+        stagedSession.chatId = expectedChatId;
+        stagedSession.archiveRevision = memoryBank.archiveRevision;
+        cache[mode] = stagedSession;
         if (mode === core_constants.MODE.PHONE) delete cache[core_constants.PHONE_DRAFT_CACHE_KEY];
         cache.chatId = expectedChatId;
         cache.archiveRevision = memoryBank.archiveRevision;
         cache.updatedAt = Date.now();
         rememberRuntimeSessionCache(scope, cache);
-        if (shouldWriteUncompressedCacheImmediately(stored)) {
-            // Fallback only for browsers without CompressionStream. Modern browsers avoid the
-            // expensive raw-cache metadata upload and persist the gzip record after network idle.
-            context.chatMetadata[core_constants.CACHE_KEY] = cache;
-            context.saveMetadataDebounced?.();
-        }
-        scheduleCompressedCachePersist(context, cache, 250);
+        scheduleCompressedCachePersist(context, cache, shouldWriteUncompressedCacheImmediately(stored) ? 0 : 250);
         return true;
     } catch (error) {
         console.warn('[HeartbeatMemories] cache save failed', error);
@@ -17936,9 +18512,14 @@ __m_core_cache_js.gunzipJson = gunzipJson;
 __m_core_cache_js.persistCompressedCacheNow = persistCompressedCacheNow;
 __m_core_cache_js.ensureCacheHydrated = ensureCacheHydrated;
 __m_core_cache_js.flushPendingCompressedCacheForCurrentChat = flushPendingCompressedCacheForCurrentChat;
+__m_core_cache_js.prepareCacheBackupValue = prepareCacheBackupValue;
+__m_core_cache_js.saveImportedMemory = saveImportedMemory;
+__m_core_cache_js.ensureCurrentArchiveBackup = ensureCurrentArchiveBackup;
 __m_core_cache_js.deleteSessions = deleteSessions;
 __m_core_cache_js.deleteSession = deleteSession;
 __m_core_cache_js.buildControlledContextEnvelope = buildControlledContextEnvelope;
+__m_core_cache_js.prepareBoundedRawCache = prepareBoundedRawCache;
+__m_core_cache_js.archiveBackupEntryForContext = archiveBackupEntryForContext;
 __m_core_cache_js.rememberRuntimeSessionCache = rememberRuntimeSessionCache;
 __m_core_cache_js.loadPhoneGenerationDraft = loadPhoneGenerationDraft;
 __m_core_cache_js.isCompressedCacheRecord = isCompressedCacheRecord;
@@ -17952,7 +18533,6 @@ __m_core_cache_js.shouldWriteUncompressedCacheImmediately = shouldWriteUncompres
 __m_core_cache_js.scheduleCompressedCachePersist = scheduleCompressedCachePersist;
 __m_core_cache_js.scheduleLegacyCacheCompressionIdle = scheduleLegacyCacheCompressionIdle;
 __m_core_cache_js.getCache = getCache;
-__m_core_cache_js.saveImportedMemory = saveImportedMemory;
 __m_core_cache_js.saveSession = saveSession;
 __m_core_cache_js.loadSession = loadSession;
 }
@@ -17988,6 +18568,12 @@ function initMemoryTheater() {
         ui_archivePortal.bindChatStateEvents();
         ui_archivePortal.bindRobustArchiveOpenHandlers();
         ui_archivePortal.scheduleMounts(settingsMounted, menuMounted);
+        // This runs only after the user explicitly loaded the full runtime. It lazily migrates the
+        // current chat's existing archive into the independent local backup without touching startup.
+        void core_cache.ensureCurrentArchiveBackup().catch(error => {
+            console.warn('[HeartbeatMemories] current archive backup seed failed', error);
+            globalThis.toastr?.warning?.(`当前档案可正常使用，但独立备份没有更新：${error?.message || error}`, '心跳回忆');
+        });
         console.log('[HeartbeatMemories] initialized');
     } catch (error) {
         console.error('[HeartbeatMemories] init failed', error);
@@ -17997,23 +18583,24 @@ function initMemoryTheater() {
 function destroyMemoryTheater() {
     try {
         // Extension updates/reloads can destroy the module before the short gzip debounce fires.
-        // Persist the current in-memory theater cache as a raw compatibility copy first; the next
-        // explicit open/save will compress it again. This prevents a version update from making
-        // already generated Album/ADV EVENT/etc. appear missing after login.
+        // A destroy path cannot await gzip. Persist a detached raw compatibility copy only when it
+        // satisfies the same UTF-8 byte cap as every other sink; otherwise preserve the previous
+        // valid compressed/raw metadata instead of replacing it with an unreadable oversized value.
         try {
             const liveContext = core_context.currentCharacterGuard();
             const liveScope = core_cache.cacheScopeFromContext(liveContext);
             const liveCache = runtimeState.runtimeSessionCache.get(liveScope);
-            if (liveCache && typeof liveCache === 'object' && Object.values(core_constants.MODE).some(mode => liveCache?.[mode]?.kind === mode)) {
-                let rawChars = 0;
-                try { rawChars = JSON.stringify(liveCache).length; } catch {}
-                if (rawChars > 2_000_000) {
-                    console.warn('[HeartbeatMemories] preserving a large raw theater-cache fallback during extension shutdown', { chars: rawChars });
-                }
-                liveContext.chatMetadata[core_constants.CACHE_KEY] = liveCache;
+            if (liveCache && typeof liveCache === 'object'
+                && core_cache.cacheStillMatchesLiveArchive(liveCache, liveContext, liveScope)
+                && Object.values(core_constants.MODE).some(mode => liveCache?.[mode]?.kind === mode)) {
+                const prepared = core_cache.prepareBoundedRawCache(liveCache);
+                liveContext.chatMetadata[core_constants.CACHE_KEY] = prepared.value;
                 liveContext.saveMetadataDebounced?.();
             }
-        } catch {}
+        } catch (error) {
+            console.warn('[HeartbeatMemories] destroy-time cache preservation skipped', error);
+            globalThis.toastr?.warning?.(`${error?.message || error} 销毁流程没有覆盖上一份有效缓存。`, '心跳回忆');
+        }
         // Invalidate every asynchronous state writer before clearing containers. Results that
         // started in the old runtime lifetime must not refill caches after disable/clean.
         runtimeState.runtimeLifecycleEpoch += 1;
@@ -18102,6 +18689,7 @@ __init_core_text_js();
 __init_core_evidence_js();
 __init_core_state_js();
 __init_core_context_js();
+__init_archive_backupStore_js();
 __init_core_incremental_js();
 __init_ui_archivePortal_js();
 __init_ui_styles_js();

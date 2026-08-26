@@ -1,6 +1,7 @@
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_library from './library.js';
+import * as archive_backupStore from './backupStore.js';
 import * as archive_repository from './repository.js';
 import * as archive_snapshots from './snapshots.js';
 import * as core_cache from '../core/cache.js';
@@ -405,7 +406,7 @@ export function moveArchiveIndexEntryToGroup(context, entryId, groupId) {
     setArchiveIndex(context, items);
 }
 
-export function deleteArchiveCharacterFromLibrary(groupId) {
+export async function deleteArchiveCharacterFromLibrary(groupId) {
     if (core_requestCoordinator.hasAnyTask()) throw new Error('当前还有后台任务。为避免删除时与生成写回竞态，请等任务完成后再操作。');
     const context = core_context.getContext();
     const id = core_text.normalizeText(groupId, 120);
@@ -419,7 +420,7 @@ export function deleteArchiveCharacterFromLibrary(groupId) {
     const count = entries.length;
     if (!ui_overlay.confirmExplicitActionTwice(
         `删除角色档案「${name}」？`,
-        `将从“心跳回忆 · 档案室”移除这个角色的头像、角色档案入口，以及其下 ${count} 个聊天档案索引。不会删除、清空、重命名或改写任何 SillyTavern 正文聊天窗口；聊天正文会完整保留。删除后，“扫描旧版本已有档案”也不会自动把这个角色重新加入档案室。`,
+        `将从“心跳回忆 · 档案室”移除这个角色的头像、角色档案入口、其下 ${count} 个聊天档案索引及相应的 Heartbeat 本机独立备份。不会删除、清空、重命名或改写任何 SillyTavern 正文聊天窗口；聊天正文会完整保留。删除后，“扫描旧版本已有档案”也不会自动把这个角色重新加入档案室。`,
         { destructive: true },
     )) return null;
 
@@ -437,6 +438,11 @@ export function deleteArchiveCharacterFromLibrary(groupId) {
         sourceIdentityKeys,
         deletedAt: Date.now(),
     });
+
+    // This is an explicit double-confirmed Heartbeat deletion, so a supposedly deleted archive
+    // must not remain recoverable from the independent store. Abort before changing the index if
+    // the backup transaction cannot complete.
+    if (entries.length) await archive_backupStore.deleteArchiveBackup(entries);
 
     for (const entry of entries) runtimeState.archiveSnapshotCache.delete(archive_library.archiveSnapshotCacheKey(entry));
     setArchiveIndex(context, getArchiveIndex(context).filter(item => archiveGroupKeyForEntry(item) !== id));
@@ -497,20 +503,26 @@ export async function deleteCurrentHeartbeatArchive(entryId = '') {
     const archiveName = core_text.normalizeText(memory.archiveName, 160) || archive_repository.fallbackArchiveName(memory.memories);
     if (!ui_overlay.confirmExplicitAction(
         `删除当前聊天的心跳回忆档案「${archiveName}」？`,
-        '只删除心跳回忆自己的 MEMORY_KEY 与已生成派生缓存（相簿 / ADV EVENT / 房间 / ENDING / HEART 等），不会删除、清空或改写 SillyTavern 聊天正文。删除后如需恢复心跳回忆内容，需要重新建档/生成。',
+        '删除心跳回忆自己的 MEMORY_KEY、已生成派生缓存（相簿 / ADV EVENT / 房间 / ENDING / HEART 等）和对应的本机独立备份；不会删除、清空或改写 SillyTavern 聊天正文。删除后如需恢复心跳回忆内容，需要重新建档/生成。',
         { destructive: true },
     )) return false;
     if (!ui_overlay.confirmExplicitAction(
         '最后确认：永久删除这份心跳回忆档案？',
-        '请确认你已经选对当前聊天。聊天正文会保留，但心跳回忆档案及其派生缓存会从当前聊天 metadata 中移除。',
+        '请确认你已经选对当前聊天。聊天正文会保留，但心跳回忆档案、派生缓存及 Heartbeat 本机独立备份会被移除。',
         { destructive: true },
     )) return false;
 
-    // No await is allowed before the destructive mutation and save call. Re-check the live scope
-    // immediately so a manually changed chat/card cannot turn this action into a cross-chat delete.
-    const live = core_context.currentCharacterGuard();
+    let live = core_context.currentCharacterGuard();
     if (core_context.comparableChatId(core_context.getChatId(live)) !== expectedChatId || core_context.currentCharacterRuntimeKey(live) !== expectedCharacterKey) {
         throw new Error('确认期间当前角色或聊天已经变化，本次删除已取消。');
+    }
+    const backupEntry = indexed || core_cache.archiveBackupEntryForContext(live, memory);
+    await archive_backupStore.deleteArchiveBackup(backupEntry);
+    // IndexedDB is asynchronous. Re-acquire and recheck the exact live scope before touching chat
+    // metadata so a user navigation during the transaction cannot retarget the deletion.
+    live = core_context.currentCharacterGuard();
+    if (core_context.comparableChatId(core_context.getChatId(live)) !== expectedChatId || core_context.currentCharacterRuntimeKey(live) !== expectedCharacterKey) {
+        throw new Error('删除独立备份期间当前角色或聊天已经变化；源聊天 metadata 未修改。');
     }
     const scope = core_cache.cacheScopeFromContext(live);
     const timer = runtimeState.cachePersistTimers.get(scope);

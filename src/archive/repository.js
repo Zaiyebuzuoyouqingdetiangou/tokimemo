@@ -550,7 +550,13 @@ export async function flushDeferredCommitsForCurrentChat() {
                         continue;
                     }
                 }
-                core_cache.saveImportedMemory(context, bank, item.origin.chatId, { preserveDerivedCache: !!item.preserveDerivedCache });
+                await core_cache.saveImportedMemory(context, bank, item.origin.chatId, {
+                    preserveDerivedCache: !!item.preserveDerivedCache,
+                    expectedPreviousArchiveState: {
+                        present: item.origin.archivePresent === true,
+                        revision: item.origin.archiveRevision,
+                    },
+                });
                 clearMemoryPreflight(context);
                 globalThis.toastr?.success?.(`后台档案已写回：${bank.archiveName}`, '心跳回忆');
             } else if (item.kind === 'heartPatches') {
@@ -1298,7 +1304,10 @@ ${error.message}` : ''}`);
     }
     const chunks = splitSnapshotIntoChunks({ messages: chatInput });
     const externalChunks = externalChanged ? splitExternalMemoryIntoChunks(external.records) : [];
-    const origin = core_context.captureTaskOrigin(context, existing?.archiveRevision || '');
+    const origin = {
+        ...core_context.captureTaskOrigin(context, existing?.archiveRevision || ''),
+        archivePresent: !!existing,
+    };
 
     const importController = new AbortController();
     runtimeState.activeTaskAbortController = importController;
@@ -1383,7 +1392,13 @@ ${error.message}` : ''}`);
         };
         const wasBackgrounded = runtimeState.activeTaskBackgrounded || !core_context.isCurrentTaskOrigin(origin);
         if (core_context.isCurrentTaskOrigin(origin)) {
-            core_cache.saveImportedMemory(core_context.currentCharacterGuard(), memoryBank, snapshot.chatId, { preserveDerivedCache: incrementalUpdate });
+            await core_cache.saveImportedMemory(core_context.currentCharacterGuard(), memoryBank, snapshot.chatId, {
+                preserveDerivedCache: incrementalUpdate,
+                expectedPreviousArchiveState: {
+                    present: origin.archivePresent === true,
+                    revision: origin.archiveRevision,
+                },
+            });
             clearMemoryPreflight(core_context.currentCharacterGuard());
         } else {
             core_requestCoordinator.queueDeferredCommit(origin, { kind: 'archive', memoryBank, preserveDerivedCache: incrementalUpdate });
