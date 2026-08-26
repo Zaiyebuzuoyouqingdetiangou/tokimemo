@@ -653,4 +653,4 @@ export { calendarEntryKey } from '../src/modes/calendar.js';
 export { normalizeCalendar } from '../src/modes/calendar.js';
 export { calendarPrompt } from '../src/generation/prompts.js';
 
-export { normalizeCharacterProfile, normalizeRelations, mergeRelationLayers, relationGardenPositions, archiveCharacterProfileKey, getCharacterProfile, setCharacterProfile, deleteCharacterProfile } from '../src/modes/relations.js';
+export { normalizeCharacterProfile, normalizeRelations, mergeRelationLayers, relationGardenPositions, archiveCharacterProfileKey, getCharacterProfile, setCharacterProfile, deleteCharacterProfile, extractLiteralCharacterFacts, patchCharacterProfileFromCard, characterProfileHtml } from '../src/modes/relations.js';

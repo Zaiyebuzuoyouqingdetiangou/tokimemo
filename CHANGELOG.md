@@ -1,3 +1,20 @@
+# 0.8.31 / r42.0 — 轻量 bootstrap / 零解压性能诊断
+
+- 酒馆启动不再立即 import/解析完整 `dist/heartbeatMemories.bundle.js`。`index.js` 只挂载轻量“档案室”菜单、轻量设置入口与性能诊断；第一次显式打开档案室或加载完整设置时才动态加载 runtime。
+- 完整 runtime 一旦加载，继续使用原来的单 bundle 模式，并接管设置、菜单、聊天事件与档案 UI；不恢复 43 个源码模块的网络瀑布。
+- 新增“性能诊断（不解压缓存）”：只读取当前 `chatMetadata` 中 Heartbeat MEMORY/CACHE manifest 的计数和字符串长度，显示 Mxxx 数量、派生模式、`sourceChars`、压缩 Base64 字符数与估算 gzip 大小。
+- 诊断不会执行 Base64 解码、gzip 解压、缓存 JSON 序列化，也不会遍历聊天正文；在 runtime 尚未加载时也能使用，并且不会因为点击诊断而加载 bundle。
+- 保留 r41.5～r41.9 的墓碑 Set、普通聊天 O(1) 状态、延迟完整 CSS、设置连接懒填充、HEART/Drama/萤火虫/Profile/单一人际庭园修复。
+
+# 0.8.30 / r41.9 — 角色档案漏读修复 / 折叠 Profile / 单一人际庭园
+
+- 修复 Character Profile “简介已经读到年龄/职业，但固定资料格仍显示？？？”：对角色卡结构化字段与 description/creator notes/scenario/depth prompt 中的明确生日、年龄、身高、血型、职业等增加本地保守抽取兜底；AI facts 同时兼容“年龄/职业/学校”等常见 label 别名。
+- Profile 的客观 fact 不再接受 User Persona 作为人物事实来源，避免把 {{user}} 的年龄/职业误写到 {{char}}；Persona 仍可作为故事开始前明确特殊关系的证据。
+- 已存在的旧 Character Profile 在打开角色页时会对安全匹配到的角色卡做一次 O(角色卡长度) 的本地补读；例如人设明确写“30岁、网文作家/编剧/讲师”，升级后无需重新调用 API 即可补进固定格。
+- Character Profile 改为原生 `<details>` 可折叠卡片，默认收起；摘要只显示头像、姓名与“已读取 N/9 项”，展开后才显示大图、简介和全部资料格。
+- 删除角色总页重复的“人际庭园 · 固有设定”。固定关系仍保存在角色主档案中，但只在进入具体聊天后的唯一一张「人际庭园」里与本世界线变化合并显示。
+- 完整继承 r41.5 性能收口、r41.6 启动减负/HEART 修复、r41.7 Drama/完整心声与 r41.8 萤火虫 5～6 颗小批次。
+
 # 0.8.29 / r41.8 — 萤火虫小批次点亮
 
 - 完整继承 r41.5 性能收口、r41.6 真机故障修复/启动减负与 r41.7 Drama 翻页 + 2～4 段完整心声结构。

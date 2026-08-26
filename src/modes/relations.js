@@ -22,6 +22,18 @@ const PROFILE_DISCOVERY_LABELS = new Set([...PROFILE_FACT_LABELS, '习惯', '擅
 const RELATION_LAYERS = new Set(['family', 'close', 'friend', 'work', 'school', 'rival', 'acquaintance', 'special']);
 const RELATION_STATES = new Set(['亲密', '友好', '普通', '疏远', '紧张', '敌对', '竞争', '复杂', '恋爱', '暧昧', '伴侣', '家人', '同事', '同学', '师生', '主从', '特殊']);
 const SOURCE_TYPES = new Set(['character_card', 'user_persona', 'world_info']);
+const PROFILE_FACT_SOURCE_TYPES = new Set(['character_card', 'world_info']);
+const PROFILE_FACT_LABEL_ALIASES = new Map([
+    ['生日', '生日'], ['出生日期', '生日'], ['出生年月日', '生日'], ['誕生日', '生日'],
+    ['年龄', '年龄 / 年级'], ['年齡', '年龄 / 年级'], ['年龄/年级', '年龄 / 年级'], ['年级', '年龄 / 年级'], ['年齢', '年龄 / 年级'], ['学年', '年龄 / 年级'],
+    ['身高', '身高'], ['身長', '身高'],
+    ['血型', '血型'], ['血液型', '血型'],
+    ['职业', '职业 / 学校'], ['職業', '职业 / 学校'], ['职业/学校', '职业 / 学校'], ['学校', '职业 / 学校'], ['身份', '职业 / 学校'],
+    ['社团', '社团 / 工作'], ['社團', '社团 / 工作'], ['社团/工作', '社团 / 工作'], ['工作', '社团 / 工作'], ['部活', '社团 / 工作'], ['所属', '社团 / 工作'],
+    ['兴趣', '兴趣'], ['興趣', '兴趣'], ['爱好', '兴趣'], ['愛好', '兴趣'], ['趣味', '兴趣'],
+    ['喜欢的东西', '喜欢的东西'], ['喜歡的東西', '喜欢的东西'], ['喜欢', '喜欢的东西'], ['喜好', '喜欢的东西'], ['好物', '喜欢的东西'],
+    ['不喜欢的东西', '不喜欢的东西'], ['不喜歡的東西', '不喜欢的东西'], ['不喜欢', '不喜欢的东西'], ['讨厌', '不喜欢的东西'], ['討厭', '不喜欢的东西'],
+]);
 
 function foldEvidence(value) {
     return core_text.normalizeText(value, 12000).replace(/\s+/g, '').toLocaleLowerCase();
@@ -79,7 +91,116 @@ function targetCharacterRawData(context, index) {
         creatorNotes: pick('creator_notes', 'creatorNotes'),
         firstMessage: pick('first_mes', 'firstMessage'),
         exampleMessages: pick('mes_example', 'exampleMessages'),
+        birthday: pick('birthday', 'birth_date', 'date_of_birth', 'dob'),
+        age: pick('age', 'character_age'),
+        height: pick('height'),
+        bloodType: pick('blood_type', 'bloodType'),
+        occupation: pick('occupation', 'profession', 'job'),
+        school: pick('school', 'academy'),
+        club: pick('club', 'club_activity', 'department'),
+        interests: pick('interests', 'hobbies', 'hobby'),
+        likes: pick('likes', 'favorites', 'favourites'),
+        dislikes: pick('dislikes'),
     };
+}
+
+
+function normalizeProfileFactLabel(value) {
+    const raw = core_text.normalizeText(value, 40);
+    if (!raw) return '';
+    const compact = raw.replace(/\s+/g, '');
+    return PROFILE_FACT_LABEL_ALIASES.get(raw) || PROFILE_FACT_LABEL_ALIASES.get(compact) || '';
+}
+
+function profileFactRecord(label, value, sourceEvidence, sourceType = 'character_card') {
+    const canonicalLabel = normalizeProfileFactLabel(label);
+    const cleanValue = core_text.normalizeText(value, 160);
+    const evidence = core_text.normalizeText(sourceEvidence, 240);
+    if (!canonicalLabel || !cleanValue || !evidence) return null;
+    return { label: canonicalLabel, value: cleanValue, sourceType, sourceEvidence: evidence };
+}
+
+function firstPatternFact(text, label, patterns) {
+    const source = String(text || '');
+    for (const pattern of patterns) {
+        const match = source.match(pattern);
+        if (!match) continue;
+        const value = core_text.normalizeText(match[1] || match[0], 160);
+        const evidence = core_text.normalizeText(match[0], 240);
+        if (value && evidence) return profileFactRecord(label, value, evidence);
+    }
+    return null;
+}
+
+function labeledTextFact(text, label, labels) {
+    const names = labels.map(item => String(item).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    const re = new RegExp(`(?:${names})\\s*[:：]\\s*([^\\n。；;]{1,120})`, 'iu');
+    return firstPatternFact(text, label, [re]);
+}
+
+const OCCUPATION_HINT_RE = /(?:作家|作者|编剧|編劇|讲师|講師|教师|教師|教授|医生|醫生|律师|律師|警察|侦探|偵探|演员|演員|歌手|模特|研究员|研究員|工程师|工程師|设计师|設計師|画家|畫家|摄影师|攝影師|记者|記者|编辑|編輯|厨师|廚師|社长|社長|总裁|總裁|CEO|军人|軍人|骑士|騎士|魔法师|魔法師|猎人|獵人|主播|程序员|程式設計師|学生|學生)/u;
+const OCCUPATION_CONTEXT_EXCLUDE_RE = /(?:父亲|父親|母亲|母親|爸爸|妈妈|哥哥|姐姐|弟弟|妹妹|朋友|好友|同事|上司|下属|下屬|妻子|丈夫|伴侣|伴侶|喜欢|喜歡|讨厌|討厭|崇拜|认识|認識|\{\{user\}\}|用户|用戶)/u;
+
+function occupationFactFromText(text) {
+    const source = String(text || '');
+    const explicit = labeledTextFact(source, '职业 / 学校', ['职业', '職業', '身份', '职业 / 学校', '职业/学校', 'Occupation', 'Profession']);
+    if (explicit) return explicit;
+    const fragments = source.split(/[，,。；;\n]/u).map(item => item.trim()).filter(Boolean);
+    const occupations = fragments.filter(item => item.length <= 60 && OCCUPATION_HINT_RE.test(item) && !OCCUPATION_CONTEXT_EXCLUDE_RE.test(item)).slice(0, 4);
+    if (!occupations.length) return null;
+    return profileFactRecord('职业 / 学校', occupations.join('、'), occupations.join('，'));
+}
+
+export function extractLiteralCharacterFacts(sources) {
+    const data = sources?.characterData || {};
+    // Deterministic extraction stays on identity/setup fields. First/example messages can mention
+    // {{user}} or third parties and are therefore too ambiguous for literal profile facts.
+    const description = String(data.description || '');
+    const leadText = description.split(/[。\n]/u)[0].slice(0, 360);
+    const text = [description, data.creatorNotes, data.scenario, data.depthPrompt].filter(Boolean).join('\n');
+    const direct = [
+        ['生日', data.birthday], ['年龄 / 年级', data.age], ['身高', data.height], ['血型', data.bloodType],
+        ['职业 / 学校', data.occupation || data.school], ['社团 / 工作', data.club], ['兴趣', data.interests],
+        ['喜欢的东西', data.likes], ['不喜欢的东西', data.dislikes],
+    ];
+    const byLabel = new Map();
+    for (const [label, value] of direct) {
+        const clean = core_text.normalizeText(value, 160);
+        if (clean) byLabel.set(label, profileFactRecord(label, clean, clean));
+    }
+    const candidates = [
+        firstPatternFact(text, '生日', [
+            /(?:生日|誕生日|出生日期|出生年月日)\s*[:：]?\s*((?:\d{4}\s*[年./-]\s*)?\d{1,2}\s*(?:月|[./-])\s*\d{1,2}\s*(?:日)?)/iu,
+        ]),
+        firstPatternFact(text, '年龄 / 年级', [
+            /(?:年龄|年齡|年齢)\s*[:：]?\s*(\d{1,3}\s*(?:岁|歳|才)?)/iu,
+            /(?:年级|年級|学年)\s*[:：]?\s*([^，,。；;\n]{1,24})/iu,
+        ]) || firstPatternFact(leadText, '年龄 / 年级', [
+            /(?:^|[，,；;\s])(\d{1,3}\s*(?:岁|歳|才))(?=$|[，,；;\s])/iu,
+        ]),
+        firstPatternFact(text, '身高', [
+            /(?:身高|身長)\s*[:：]?\s*(\d{2,3}(?:\.\d+)?\s*(?:cm|厘米|公分|センチ))/iu,
+            /(?:^|[，,。；;\s])((?:1\d{2}|2[0-2]\d)(?:\.\d+)?\s*cm)(?=$|[，,。；;\s])/iu,
+        ]),
+        firstPatternFact(text, '血型', [/(?:血型|血液型)\s*[:：]?\s*((?:AB|A|B|O)\s*型?)/iu]),
+        labeledTextFact(text, '职业 / 学校', ['职业', '職業', '身份', '职业 / 学校', '职业/学校', 'Occupation', 'Profession']) || occupationFactFromText(leadText),
+        labeledTextFact(text, '社团 / 工作', ['社团', '社團', '部活', '所属', '工作单位', '任职', '任職', '就职', '就職']),
+        labeledTextFact(text, '兴趣', ['兴趣', '興趣', '爱好', '愛好', '趣味']),
+        labeledTextFact(text, '喜欢的东西', ['喜欢的东西', '喜歡的東西', '喜欢', '喜歡', '喜好', '好物']),
+        labeledTextFact(text, '不喜欢的东西', ['不喜欢的东西', '不喜歡的東西', '不喜欢', '不喜歡', '讨厌', '討厭']),
+    ];
+    for (const fact of candidates) {
+        if (fact && !byLabel.has(fact.label)) byLabel.set(fact.label, fact);
+    }
+    return PROFILE_FACT_ORDER.map(label => byLabel.get(label)).filter(Boolean);
+}
+
+function mergeProfileFacts(aiFacts = [], literalFacts = []) {
+    const byLabel = new Map();
+    for (const fact of aiFacts || []) if (fact?.label) byLabel.set(fact.label, fact);
+    // Deterministic card extraction wins for the same field because it is literal and locally verified.
+    for (const fact of literalFacts || []) if (fact?.label) byLabel.set(fact.label, fact);
+    return PROFILE_FACT_ORDER.map(label => byLabel.get(label)).filter(Boolean);
 }
 
 export async function collectCharacterProfileSources(context, characterIndex) {
@@ -134,7 +255,7 @@ ${sources.worldInfo || '[没有激活到相关世界书条目]'}
 export function characterProfilePrompt(sources) {
     const charName = core_text.normalizeText(sources?.characterData?.name, 120) || '{{char}}';
     const userName = core_text.normalizeText(sources?.userData?.name, 120) || '{{user}}';
-    return `你正在为“心跳回忆”生成【GS 风格 Character Profile + 固有人际庭园】。
+    return `你正在为“心跳回忆”生成【GS 风格 Character Profile + 固有关系资料】。
 角色：${charName}
 用户：${userName}
 
@@ -162,8 +283,8 @@ export function characterProfilePrompt(sources) {
 }
 
 硬性要求：
-- facts 只允许这些 label：生日、年龄 / 年级、身高、血型、职业 / 学校、社团 / 工作、兴趣、喜欢的东西、不喜欢的东西。没有明确值就不要输出该 fact，禁止补全或推测。
-- relationships 只收【故事开始前设定里已经明确成立】的人际关系。角色卡、世界书或 User Persona 若一开始明确写了 ${userName} 与 ${charName} 的特殊身份/关系（例如青梅竹马、未婚约、主从、同事、亲属式身份、宿敌等），必须作为第一层关系输出，并 isUser=true。
+- facts 必须尽量穷举角色设定里明确存在的资料；label 只允许：生日、年龄 / 年级、身高、血型、职业 / 学校、社团 / 工作、兴趣、喜欢的东西、不喜欢的东西。没有明确值就不要输出，禁止补全或推测。facts 的 sourceType 只能 character_card / world_info；User Persona 只用于关系，不得把 {{user}} 自己的年龄、职业、生日误写成 {{char}} 的资料。
+- relationships 只收【故事开始前设定里已经明确成立】的人际关系。角色卡、世界书或 User Persona 若一开始明确写了 ${userName} 与 ${charName} 的特殊身份/关系（例如青梅竹马、未婚约、主从、同事、亲属式身份、宿敌等），必须作为角色固有关系输出，并 isUser=true。
 - 若 ${userName} 只是在 Persona 中描述自己的性格、外貌、职业，但没有明确写与 ${charName} 的关系，不得因为当前聊天对象就是 ${charName} 而擅自建立特殊关系。
 - 任何聊天窗口后来才发生的恋爱、告白、同居、争执、和解等都不属于这里，绝对不要输出。
 - 第三方人物必须在角色卡/世界书/Persona 中有明确姓名或稳定称呼与关系证据；禁止凭空造朋友、前任、亲属、同事。
@@ -180,15 +301,16 @@ export function normalizeCharacterProfile(data, sources, profileKey, characterNa
         user_persona: JSON.stringify(sources?.userData || {}),
         world_info: core_text.normalizeText(sources?.worldInfo || '', 20000),
     };
-    const facts = (Array.isArray(data?.facts) ? data.facts : []).slice(0, 16).map(item => {
-        const label = core_text.normalizeText(item?.label, 40);
+    const aiFacts = (Array.isArray(data?.facts) ? data.facts : []).slice(0, 16).map(item => {
+        const label = normalizeProfileFactLabel(item?.label);
         const value = core_text.normalizeText(item?.value, 160);
         const sourceType = core_text.normalizeText(item?.sourceType, 30).toLowerCase();
         const sourceEvidence = core_text.normalizeText(item?.sourceEvidence, 240);
-        if (!PROFILE_FACT_LABELS.has(label) || !value || !SOURCE_TYPES.has(sourceType) || !sourceHasEvidence(sourceMap[sourceType], sourceEvidence)) return null;
+        if (!PROFILE_FACT_LABELS.has(label) || !value || !PROFILE_FACT_SOURCE_TYPES.has(sourceType) || !sourceHasEvidence(sourceMap[sourceType], sourceEvidence)) return null;
         if (!factValueBackedByEvidence(value, sourceEvidence)) return null;
         return { label, value, sourceType, sourceEvidence };
     }).filter(Boolean);
+    const facts = mergeProfileFacts(aiFacts, extractLiteralCharacterFacts(sources));
     const seen = new Set();
     const relationships = (Array.isArray(data?.relationships) ? data.relationships : []).slice(0, MAX_SHARED_RELATIONS).map((item, index) => {
         const name = core_text.normalizeText(item?.name, 120);
@@ -232,6 +354,21 @@ export function normalizeCharacterProfile(data, sources, profileKey, characterNa
         sourceFingerprint: core_context.stableArchiveHash(JSON.stringify(sources || {})),
         generatedAt: Date.now(),
     };
+}
+
+export function patchCharacterProfileFromCard(context, profile, characterIndex) {
+    if (!profile || !context?.characters?.[Number(characterIndex)]) return profile;
+    const characterData = targetCharacterRawData(context, Number(characterIndex));
+    if (!characterData) return profile;
+    const literalFacts = extractLiteralCharacterFacts({ characterData, userData: {}, worldInfo: '' });
+    if (!literalFacts.length) return profile;
+    const merged = mergeProfileFacts(Array.isArray(profile.facts) ? profile.facts : [], literalFacts);
+    const before = JSON.stringify((profile.facts || []).map(item => [item?.label, item?.value, item?.sourceType, item?.sourceEvidence]));
+    const after = JSON.stringify(merged.map(item => [item?.label, item?.value, item?.sourceType, item?.sourceEvidence]));
+    if (before === after) return profile;
+    const updated = { ...profile, facts: merged, literalFactsPatchedAt: Date.now() };
+    setCharacterProfile(context, updated);
+    return updated;
 }
 
 export function getCharacterProfiles(context = core_context.getContext()) {
@@ -302,7 +439,7 @@ export async function generateCharacterProfileForGroup(groupId) {
     const taskKey = `character-profile:${profileKey}`;
     const raw = await generation_client.requestValidatedSegment(
         characterProfilePrompt(sources),
-        `正在整理「${sources.characterData.name}」的角色档案与固有人际…`,
+        `正在整理「${sources.characterData.name}」的角色档案与固定关系资料…`,
         { context: targetContext, contextEnvelope: characterProfileContextEnvelope(sources), maxTokens: 7000, temperature: 0.25, taskKey, mode: 'character-profile', background: true },
         value => normalizeCharacterProfile(value, sources, profileKey, sources.characterData.name, sources.characterData.avatar),
     );
@@ -318,7 +455,7 @@ ${generation_prompts.promptArchiveSlice(memoryBank, 64)}
 任务：整理【当前这个聊天窗口 / 世界线】里两类内容：
 1. {{char}} 与 {{user}} 以及其他已经实际出现人物的当前人际关系；
 2. 这个聊天窗口里后来明确了解到的 {{char}} 人物资料（例如生日、血型、兴趣、习惯、喜欢/害怕的东西）。
-两类内容都只能使用当前 Mxxx 档案直接证明的事实。角色卡/世界书中的固有资料与固有关系由插件第一层单独展示，不要在这里重复冒充“后来解锁”。
+两类内容都只能使用当前 Mxxx 档案直接证明的事实。角色卡/世界书中的固定资料与固有关系会由插件在同一张人际图中合并显示；不要把它们重复冒充成“后来解锁”的聊天事实。
 
 严格输出：
 {
@@ -351,7 +488,7 @@ ${generation_prompts.promptArchiveSlice(memoryBank, 64)}
 - discoveries 必须是这个聊天窗口里【后来明确得知】的资料，并且 value 必须能在引用的 Mxxx 标题/摘要/anchor 中直接核对；“看起来很高”不能换算成身高，“经常喝咖啡一次”不能自动写成长期喜好。没有明确值就不要输出。
 - discoveries 永远属于当前聊天世界线，不得因为某个窗口得知了生日/喜好，就写进其它窗口的公共 Character Profile。
 - 只收当前聊天档案里真正出现/被明确提到的人。禁止凭空补朋友、家人、前任、同事或竞争者。
-- {{user}} 可以出现，但当前“恋人/暧昧/伴侣/冲突/同居”等状态必须由当前 Mxxx 直接证明；不能因为 User Persona 或世界书一开始有特殊设定就把后续发展当成已发生。固有设定会由第一层叠加显示。
+- {{user}} 可以出现，但当前“恋人/暧昧/伴侣/冲突/同居”等状态必须由当前 Mxxx 直接证明；不能因为 User Persona 或世界书一开始有特殊设定就把后续发展当成已发生。固有设定会由插件在同一张人际图中合并显示。
 - discoveries 与 relationships 每项都必须至少 1 个有效 sourceMemoryIds + sourceMemoryAnchor，插件会本地校验；没有证据就丢弃。
 - 第三方与 {{char}} 的关系只能写非恋爱关系；禁止前任/前女友及第三方恋爱。
 - sentiments 最多 4 个，只描述 {{char}} 当前对该人的感受/态度，禁止声称对方内心秘密。
@@ -539,24 +676,26 @@ export function relationGardenHtml({ characterName, avatarUrl = '', sharedRelati
     </section>`;
 }
 
-export function characterProfileHtml({ profile, profileKey = '', characterName = '', avatarUrl = '', selectedKey = '', canGenerate = true } = {}) {
-    const action = profile ? '重新读取固定设定' : '生成角色档案与固有人际';
+export function characterProfileHtml({ profile, profileKey = '', characterName = '', avatarUrl = '', canGenerate = true } = {}) {
+    const action = profile ? '重新读取固定设定' : '生成角色档案';
+    const name = core_text.normalizeText(profile?.characterName || characterName, 120) || '角色档案';
+    const knownCount = Array.isArray(profile?.facts) ? profile.facts.length : 0;
+    const summaryAvatar = avatarUrl ? `<img src="${core_text.esc(avatarUrl)}" alt="">` : '<i class="fa-solid fa-user"></i>';
     if (!profile) {
-        return `<section class="rmt-character-profile rmt-archive-card">
-          <div class="rmt-character-profile-empty"><div class="rmt-profile-photo">${avatarUrl ? `<img src="${core_text.esc(avatarUrl)}" alt="">` : '<i class="fa-solid fa-user"></i>'}</div><div><div class="rmt-archive-kicker">CHARACTER PROFILE</div><h2>${core_text.esc(characterName || '角色档案')}</h2><p>这里会整理全聊天窗口共用的客观资料与“故事开始前已经明确存在”的固有人际。身高、血型、生日、亲属与特殊关系没有明确设定就保持未知，不会让 AI 猜。</p>${canGenerate ? `<button type="button" class="rmt-btn" data-rmt-action="character-profile-generate" data-rmt-profile-key="${core_text.esc(profileKey)}">${action}</button>` : '<small>请先在角色分类里绑定正确的 SillyTavern char。</small>'}</div></div>
-        </section>`;
+        return `<details class="rmt-character-profile rmt-archive-card">
+          <summary class="rmt-profile-collapse-summary"><span class="rmt-profile-collapse-avatar">${summaryAvatar}</span><span><small>CHARACTER PROFILE</small><b>${core_text.esc(name)}</b><em>尚未生成 · 点击展开</em></span><i class="fa-solid fa-chevron-down"></i></summary>
+          <div class="rmt-profile-collapse-body"><div class="rmt-character-profile-empty"><div class="rmt-profile-photo">${summaryAvatar}</div><div><h2>${core_text.esc(name)}</h2><p>这里整理所有聊天窗口共用的角色固定资料。生日、年龄、身高、血型、职业等只读取角色卡 / 世界书中明确写出的内容；没有设定就保持未知，不会让 AI 猜。固有人际会保存在角色主档案中，并只在具体聊天的人际庭园里与该世界线变化合并显示，不再在这里重复画一张图。</p>${canGenerate ? `<button type="button" class="rmt-btn" data-rmt-action="character-profile-generate" data-rmt-profile-key="${core_text.esc(profileKey)}">${action}</button>` : '<small>请先在角色分类里绑定正确的 SillyTavern char。</small>'}</div></div></div>
+        </details>`;
     }
-    const factMap = new Map((profile.facts || []).map(item => [core_text.normalizeText(item?.label, 40), item]));
+    const factMap = new Map((profile.facts || []).map(item => [normalizeProfileFactLabel(item?.label) || core_text.normalizeText(item?.label, 40), item]));
     const facts = PROFILE_FACT_ORDER.map(label => {
         const item = factMap.get(label);
         return `<div class="rmt-profile-fact${item ? '' : ' unknown'}"><small>${core_text.esc(label)}</small><b>${item ? core_text.esc(item.value) : '？？？'}</b></div>`;
     }).join('');
-    return `<section class="rmt-character-profile rmt-archive-card">
-      <div class="rmt-profile-hero"><div class="rmt-profile-photo">${avatarUrl ? `<img src="${core_text.esc(avatarUrl)}" alt="">` : '<i class="fa-solid fa-user"></i>'}</div><div class="rmt-profile-copy"><div class="rmt-archive-kicker">CHARACTER PROFILE</div><h2>${core_text.esc(profile.characterName || characterName || '角色档案')}</h2>${profile.introduction ? `<p>${core_text.esc(profile.introduction)}</p>` : ''}<div class="rmt-profile-facts">${facts}</div><button type="button" class="rmt-btn" data-rmt-action="character-profile-generate" data-rmt-profile-key="${core_text.esc(profileKey)}">${action}</button></div></div>
-      <div class="rmt-profile-section-head"><div><b>人际庭园 · 固有设定</b><small>角色卡 / 世界书 / User Persona 中一开始已经成立的关系，全窗口共用。</small></div><span>${profile.relationships?.length || 0}</span></div>
-      ${relationGardenHtml({ characterName: profile.characterName || characterName, avatarUrl, sharedRelations: profile.relationships || [], dynamicRelations: [], selectedKey })}
-      <div class="rmt-profile-worldline-note"><b>逐渐了解</b><small>进入下方某个聊天档案的「人际庭园」，可以查看只在那个世界线后来解锁的生日、喜好、习惯等人物资料；它们不会污染其它聊天窗口。</small></div>
-    </section>`;
+    return `<details class="rmt-character-profile rmt-archive-card">
+      <summary class="rmt-profile-collapse-summary"><span class="rmt-profile-collapse-avatar">${summaryAvatar}</span><span><small>CHARACTER PROFILE</small><b>${core_text.esc(name)}</b><em>已读取 ${knownCount} / ${PROFILE_FACT_ORDER.length} 项固定资料 · 点击展开</em></span><i class="fa-solid fa-chevron-down"></i></summary>
+      <div class="rmt-profile-collapse-body"><div class="rmt-profile-hero"><div class="rmt-profile-photo">${summaryAvatar}</div><div class="rmt-profile-copy"><h2>${core_text.esc(name)}</h2>${profile.introduction ? `<p>${core_text.esc(profile.introduction)}</p>` : ''}<div class="rmt-profile-facts">${facts}</div><button type="button" class="rmt-btn" data-rmt-action="character-profile-generate" data-rmt-profile-key="${core_text.esc(profileKey)}">${action}</button><small class="rmt-profile-merge-note">角色固有人际不会在这里重复显示；进入下方任一聊天档案的「人际庭园」即可在一张图里同时看到固定关系与本世界线变化。</small></div></div></div>
+    </details>`;
 }
 
 export function worldlineDiscoveriesHtml(discoveries = []) {
@@ -581,7 +720,7 @@ export function renderRelations() {
     ui_overlay.setBackVisible(true, runtimeState.activeArchiveSnapshot ? (runtimeState.activeArchiveReadOnly ? '只读档案' : '档案') : '当前档案');
     ui_overlay.topTitle('人际庭园');
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-relations-mode">
-      <section class="rmt-archive-card rmt-relations-head"><div><div class="rmt-archive-kicker">RELATION GARDEN</div><h2>人际庭园</h2><p>实线信息来自角色卡 / 世界书 / User Persona 的固有设定；本世界线变化与后来了解到的人物资料都必须有当前聊天档案 Mxxx 证据。没有数值好感度，也不会跨窗口串关系。</p></div>${runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="regenerate">刷新本世界线关系 / 资料</button>'}</section>
+      <section class="rmt-archive-card rmt-relations-head"><div><div class="rmt-archive-kicker">RELATION GARDEN</div><h2>人际庭园</h2><p>这里只有一张人际图：角色卡 / 世界书 / User Persona 的固有关系与当前聊天世界线的变化会合并在同一人物节点上；后来了解到的人物资料仍必须有当前 Mxxx 证据。没有数值好感度，也不会跨窗口串关系。</p></div>${runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="regenerate">刷新本世界线关系 / 资料</button>'}</section>
       ${worldlineDiscoveriesHtml(session.discoveries || [])}
       ${relationGardenHtml({ characterName, avatarUrl, sharedRelations: profile?.relationships || [], dynamicRelations: session.relationships || [], selectedKey })}
     </div>`;

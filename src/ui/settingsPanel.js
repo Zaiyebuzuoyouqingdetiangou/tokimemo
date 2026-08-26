@@ -184,7 +184,9 @@ export function mountSettings() {
         <div class="rmt-settings-archive-actions">
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
-          <div class="rmt-api-note">当前聊天窗口一份独立档案。普通更新只追加上次归档后的新内容并保留已生成 ADV EVENT / 房间 / ENDING；需要从头重整时请进入档案后明确选择“完全重建档案”。</div>
+          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-performance-diagnostic><i class="fa-solid fa-gauge-high"></i><span>性能诊断（不解压缓存）</span></button>
+          <pre class="rmt-performance-diagnostic-output" data-rmt-performance-diagnostic-output hidden></pre>
+          <div class="rmt-api-note">当前聊天窗口一份独立档案。普通更新只追加上次归档后的新内容并保留已生成 ADV EVENT / 房间 / ENDING；需要从头重整时请进入档案后明确选择“完全重建档案”。性能诊断只读取缓存 manifest/字符串长度，不会解压缓存或遍历聊天正文。</div>
         </div>
       </div>`;
     mount.appendChild(panel);
@@ -253,6 +255,14 @@ export function mountSettings() {
                 console.error('[HeartbeatMemories] import current connection failed', error);
                 globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
             });
+            return;
+        }
+        const diagnosticButton = event.target.closest?.('[data-rmt-performance-diagnostic]');
+        if (diagnosticButton) {
+            const output = panel.querySelector('[data-rmt-performance-diagnostic-output]');
+            const render = globalThis.__heartbeatMemoriesRenderPerformanceDiagnostic;
+            if (typeof render === 'function') render(output);
+            else if (output) { output.textContent = '性能诊断器尚未就绪。'; output.hidden = false; }
             return;
         }
         const currentArchiveButton = event.target.closest?.('[data-rmt-settings-current-archive]');

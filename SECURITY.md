@@ -396,18 +396,27 @@ The standalone `MODE.CALENDAR` is the only derived feature allowed to organize s
 
 ## r41.4 Character Profile / Relation Garden 安全边界
 
-- Character Profile 是角色组级、全聊天窗口共用的派生设定资料。生成上下文只允许目标角色卡、当前 User Persona 与代码触发的受控 World Info dry-run；不得读取聊天正文、Mxxx、archiveSummary 或任意历史快照来制造第一层“固有关系”。
+- Character Profile 是角色组级、全聊天窗口共用的派生设定资料。生成上下文只允许目标角色卡、当前 User Persona 与代码触发的受控 World Info dry-run；不得读取聊天正文、Mxxx、archiveSummary 或任意历史快照来制造角色级“固有关系”。
 - 客观 profile fact 必须携带 allowlisted `sourceType` 与逐字存在于该来源的 `sourceEvidence`，且显示 value 必须能从 evidence 直接核对；“很高”不得换算成厘米，未写血型/生日不得猜。第三方固定关系的人名/稳定称呼必须出现在 sourceEvidence；{{user}} 固有特殊关系只能在角色卡/世界书/Persona 明确写出时成立。
-- `MODE.RELATIONS` 是 chat-scoped 派生 session，继续绑定 `chatId + archiveRevision`。每个第二层动态关系必须通过真实 `sourceMemoryIds + sourceMemoryAnchor` 校验；非 user 的人物名还必须在所引用 Mxxx 的 title/summary/anchors/participants 中出现。第一层资料不能为第二层“已发生事实”授予证据。
-- 第一层与第二层只在 UI 本地 merge；不能互相写回、升级或跨窗口复制。某窗口的恋爱、冲突、同居、和解等状态不得写入全局 Character Profile。
+- `MODE.RELATIONS` 是 chat-scoped 派生 session，继续绑定 `chatId + archiveRevision`。每个 chat-scoped 动态关系必须通过真实 `sourceMemoryIds + sourceMemoryAnchor` 校验；非 user 的人物名还必须在所引用 Mxxx 的 title/summary/anchors/participants 中出现。角色级固有资料不能为聊天中的“已发生事实”授予证据。
+- 角色级固定关系与 chat-scoped 动态关系只在 UI 本地 merge；不能互相写回、升级或跨窗口复制。r41.9 起 UI 只显示一张合并人际图，但某窗口的恋爱、冲突、同居、和解等状态仍不得写入全局 Character Profile。
 - Relation Garden 的节点坐标、类别样式与中心头像 URL 由代码控制；模型不能输出 HTML、CSS、URL、坐标、命令或可执行动作。所有模型/设定文本在 `innerHTML` sink 前必须经过 `core_text.esc`。
 - 同 char 在普通角色卡编辑后允许复用唯一的姓名 + avatar auto group；如果候选不唯一则 fail closed，不能靠新 fingerprint 猜合并。删除角色档案必须同时删除该 group 的共享 Profile，但不得删除、清空、重命名或改写 SillyTavern 正文聊天。
 
 ### r41.4 世界线人物资料解锁
-- `MODE.RELATIONS.discoveries` 与第二层人际关系一样属于 chat-scoped 派生数据，绑定当前 `chatId + archiveRevision`；不得写入角色组级 Character Profile。
+- `MODE.RELATIONS.discoveries` 与 chat-scoped 动态人际关系一样属于派生数据，绑定当前 `chatId + archiveRevision`；不得写入角色组级 Character Profile。
 - 可解锁字段使用固定 label allowlist；每项必须有真实 `sourceMemoryIds + sourceMemoryAnchor`，且 `value` 必须能在所引用 Mxxx 的 title / summary / anchors 中逐字核对。不能根据“很高”“经常做某事”等模糊叙述换算身高、血型、生日或长期喜好。
 - UI 只显示转义后的结构化文字；资料卡不能提供 HTML、CSS、URL、头像或布局坐标。
 
+
+## r41.9 Character Profile literal fallback / single-garden UI boundary
+
+- Character Profile objective facts about `{{char}}` may be locally extracted only from the safely matched target character card's explicit structured fields or bounded identity/setup text (`description / creator notes / scenario / depth prompt`). First/example messages are excluded from deterministic extraction because they can mention `{{user}}` or third parties.
+- Deterministic extraction is literal-only: no conversion of vague descriptions into dates, heights, blood types, ages or occupations. Common label aliases may normalize into the fixed GS fields, but values must remain source text/structured-field values.
+- `user_persona` is not an allowed source for `{{char}}` objective profile facts. It remains permitted only for an explicit story-start relationship between `{{user}}` and `{{char}}`, preventing the user's own age/job/birthday from contaminating the character profile.
+- Existing shared profiles may be patched from the character card only when the archive group can safely resolve the same SillyTavern character by the existing name/avatar matching rules. This patch happens only while opening that character archive page, never on ordinary chat startup/message events, and does not read chat text or Mxxx.
+- r41.9 removes the duplicate base-only Relation Garden from the character overview. Shared fixed relations remain stored in the role-level profile because the single chat-scoped `MODE.RELATIONS` graph merges them with evidence-gated worldline relations for display. Removing the duplicate UI does not merge write authority: shared settings data and chat-scoped Mxxx-derived data remain separate.
+- Character Profile collapse uses code-owned native `<details>/<summary>` markup. Model text remains escaped and cannot control open state, HTML, CSS, URL, coordinates or event handlers.
 
 ## r41.5 性能收口与安全边界
 
@@ -415,3 +424,12 @@ The standalone `MODE.CALENDAR` is the only derived feature allowed to organize s
 - 删除角色墓碑可建立本地只读 `Set` 索引用于一次 UI/扫描操作；索引只来源于已经规范化的 Heartbeat 删除记录，不扩大删除权限，也不写正文聊天。
 - 完整档案室 CSS 延迟到 `openOverlay()` 注入；启动阶段只允许设置面板必要样式。延迟样式不能改变模型输出的 HTML/CSS/URL 安全边界。
 - 萤火虫页面永久库与当前 DOM 数量分离；单页最多 6 个发光节点，关闭/切页后不保留后台动画节点。
+
+## r42.0 lazy bootstrap / zero-decompression diagnostic boundary
+
+- `index.js` bootstrap may create only code-owned fixed DOM. It cannot render model/chat/world-book strings with `innerHTML`; the diagnostic output is rendered with `textContent`.
+- The full runtime import path is a fixed same-extension relative URL using the code-owned BUILD token. Chat metadata, model output, World Info, Persona, URL parameters and settings cannot select the imported module or network origin.
+- Before first explicit Heartbeat use the bootstrap must not bind ordinary chat/message event handlers or execute archive/cache/world-info/provider work. The only repeated startup work is the existing bounded mount retry for missing SillyTavern menu/settings containers.
+- The performance diagnostic is observational only. It may read `chat.length`, `MEMORY_KEY.memories.length` and compressed cache manifest/string-length fields already parsed by SillyTavern. It must not Base64-decode, decompress, JSON-stringify the theater cache, mutate metadata, save settings, scan message text, or start network/provider requests.
+- A legacy uncompressed cache is reported as present but intentionally not sized, because serializing it merely for diagnostics would recreate the performance problem being investigated.
+- Exposed diagnostic/bootstrap helpers do not grant archive write/delete authority; destructive operations remain inside the runtime's existing current-chat/revision/confirmation gates.

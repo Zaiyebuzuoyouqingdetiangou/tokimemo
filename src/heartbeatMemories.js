@@ -12,6 +12,10 @@ import * as ui_phoneView from './ui/phoneView.js';
 import * as ui_settingsPanel from './ui/settingsPanel.js';
 import * as ui_styles from './ui/styles.js';
 
+export function openArchiveLibrary(source = 'runtime-api') {
+    return ui_archivePortal.safeShowArchiveLibrary(source);
+}
+
 export function initMemoryTheater() {
     try {
         const settingsMounted = ui_settingsPanel.mountSettings();

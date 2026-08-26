@@ -633,3 +633,31 @@ Scope: local r41.7 candidate -> r41.8 firefly batch/page-size reduction only.
 - Firefly generation and legacy-upgrade batches are bounded to 5-6 / 6 items respectively; page DOM is bounded to 6 glow nodes.
 - No new network target, timer, requestAnimationFrame, MutationObserver, model-controlled CSS/URL/coordinates, or write authority was introduced.
 - Existing firefly IDs, colors, provenance and Mxxx coverage boundaries remain unchanged.
+
+
+## 0.8.30 / r41.9 Character Profile read/fold + single-garden targeted diff review
+
+Scope: r41.8 -> r41.9 Character Profile literal fallback, collapsible overview, and duplicate base-only Relation Garden removal.
+
+- Objective Profile fallback reads only the safely matched target character card's bounded identity/setup fields. It does not inspect chat messages, other characters, arbitrary files, external URLs, or Mxxx. First/example messages are intentionally excluded from the deterministic extractor.
+- Fact label aliases normalize only into the existing fixed allowlist. `user_persona` is rejected as an objective `{{char}}` fact source; Persona remains accepted for explicit pre-story `{{user}}` relationship evidence. Literal extraction adds no inference authority and never converts vague prose into invented numerical facts.
+- Existing Profile auto-patching runs only when opening one character archive page and only after existing name/avatar-safe character resolution. It updates Heartbeat's shared Profile settings only; it does not touch SillyTavern chat bodies or canonical `MEMORY_KEY`.
+- The role overview's base-only garden is removed. Shared relationships are still retained as separate role-level data and merged only for rendering inside the single chat-scoped Relation Garden. Chat/worldline relationship evidence and cache ownership are unchanged.
+- Collapsing Profile uses native code-owned `<details>` markup. No new model-controlled HTML/CSS/URL/coordinate/event sink is introduced.
+- No new global `fetch` wrapper, network target, `eval`, `new Function`, `MutationObserver`, `requestAnimationFrame`, recurring timer, chat deletion API or arbitrary settings key is introduced.
+
+Targeted conclusion: no newly introduced Critical / High / Medium security issue identified. Focused regression results and bundle/ZIP integrity are recorded at packaging time.
+
+## 0.8.31 / r42.0 lazy bootstrap + zero-decompression diagnostic targeted diff review
+
+Scope: local r41.9 candidate -> r42.0 startup/runtime delivery and diagnostic changes.
+
+- Ordinary DOM-ready startup no longer imports or initializes the full runtime. Bootstrap only mounts fixed local entry UI and bounded mobile-safe gesture/mount handlers; it does not bind chat events, scan chat text, hydrate/compress cache, enumerate Connection Manager profiles, scan World Info, or call a provider.
+- The runtime import remains a code-owned relative `./dist/heartbeatMemories.bundle.js?heartbeat=${BUILD}` path. No untrusted value controls the module path or origin.
+- Runtime handoff removes the bootstrap shells before `initMemoryTheater()` and exposes only a narrow `openArchiveLibrary()` UI entry; existing archive write/delete authority is unchanged.
+- Diagnostic reads compressed cache `data.length`, `sourceChars`, `modes`, Mxxx array length and chat array length only. It does not decode/decompress the cache, stringify large metadata, traverse message bodies, or write/save anything. Legacy raw cache size is deliberately left unmeasured.
+- Diagnostic output uses `textContent`; the bootstrap `innerHTML` strings are fixed code-owned markup with no model/chat/world-book interpolation.
+- No new global fetch wrapper, arbitrary network target, eval/new Function, WebSocket/XHR, MutationObserver, requestAnimationFrame, chat deletion API, or model-controlled HTML/CSS/URL/coordinate authority was introduced.
+- Focused regression suite: 96/96 passes after rebuilding the 43-module runtime bundle.
+
+Targeted conclusion: no newly introduced Critical / High / Medium security issue identified.

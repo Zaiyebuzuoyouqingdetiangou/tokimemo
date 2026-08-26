@@ -11,13 +11,13 @@ test('public extension identity stays fixed while version is separate', async ()
   const index = await readFile(new URL('index.js', root), 'utf8');
 
   assert.equal(manifest.display_name, '心跳回忆');
-  assert.equal(manifest.version, '0.8.29');
+  assert.equal(manifest.version, '0.8.31');
   assert.equal(manifest.auto_update, true);
   assert.equal(manifest.homePage, 'https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo');
   assert.doesNotMatch(manifest.display_name, /\d+\.\d+/);
   assert.match(readme, /^# 心跳回忆\s*$/m);
   assert.doesNotMatch(readme.split('\n')[0], /\d+\.\d+/);
-  assert.match(index, /const VERSION = '0\.8\.29'/);
+  assert.match(index, /const VERSION = '0\.8\.31'/);
 });
 
 

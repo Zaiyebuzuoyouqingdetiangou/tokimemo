@@ -73,7 +73,7 @@ Calendar ────┤
 
 ## SillyTavern entrypoint contract
 
-`manifest.json` currently declares only the `disable` and `clean` hooks. Therefore `index.js` must keep the DOM-ready self-start path (`jQuery(() => initMemoryTheater())`). Merely exporting an `init()` function is not sufficient for this manifest and leaves an enabled extension unmounted. Any future switch to a host-managed init hook must change the manifest and entrypoint together and retain a regression test for startup.
+`manifest.json` declares only the `disable` and `clean` hooks, so `index.js` still owns DOM-ready self-start. Since r42.0 that self-start is intentionally **bootstrap-only**: it mounts a tiny archive menu/settings placeholder plus the zero-decompression diagnostic, but it must not import the full runtime. The first explicit Heartbeat action calls `ensureRuntime()`, removes the bootstrap shells, dynamically imports the single versioned bundle, then runs `initMemoryTheater()`. Regression tests must keep the full bundle out of ordinary SillyTavern startup.
 
 
 ## r36-r40 Calendar boundary
@@ -110,13 +110,20 @@ Phone/Terminal remains `MODE.PHONE` under Room, but its topbar increment action 
 
 ## r39 runtime delivery
 
-`src/` remains the authoritative modular source tree. Release builds additionally contain `dist/heartbeatMemories.bundle.js`, generated from the reachable module graph. SillyTavern loads only that versioned bundle at runtime. This keeps source ownership boundaries reviewable while avoiding a deep multi-request ES-module waterfall on cloud-hosted installations.
+`src/` remains the authoritative modular source tree. Release builds additionally contain `dist/heartbeatMemories.bundle.js`, generated from the reachable module graph. Once Heartbeat is explicitly opened, SillyTavern loads only that one versioned bundle. This keeps source ownership boundaries reviewable while avoiding a deep multi-request ES-module waterfall on cloud-hosted installations. r42.0 further defers that one bundle until first use.
 
+
+## r42.0 lazy-bootstrap / diagnostic contract
+
+- Ordinary SillyTavern startup may parse only the small `index.js` bootstrap. It must not import `dist/heartbeatMemories.bundle.js` until the user explicitly opens the archive or requests the full settings UI.
+- Bootstrap owns only fixed local menu/settings markup, a bounded mount retry, and two mobile-safe early gesture listeners. It must not bind chat events, scan `context.chat`, enumerate Connection Manager profiles, read World Info, hydrate/compress theater cache, or call providers.
+- The bootstrap performance diagnostic reads only already-parsed metadata fields and string lengths. For compressed cache it may read `format/storageVersion/modes/sourceChars/data.length`; it must never Base64-decode, decompress, stringify the cache, or iterate chat message bodies.
+- Runtime handoff removes bootstrap shells before `initMemoryTheater()` mounts the authoritative settings/menu. The runtime remains a single generated bundle and keeps the existing cleanup/security boundaries.
 
 ## r41.5 performance contract
 
 - Runtime delivery remains one versioned `dist/heartbeatMemories.bundle.js`.
-- Startup mounts the settings/menu shell with `ensureSettingsStyles()` only. The full archive/theater stylesheet is inserted by `openOverlay()` on first use, so unopened Heartbeat views do not enter the CSSOM.
+- Before r42 the runtime mounted the settings/menu shell with `ensureSettingsStyles()` only. Since r42 ordinary startup is even smaller: bootstrap CSS only; after first explicit Heartbeat use, runtime settings CSS is mounted and the full archive/theater stylesheet is still deferred to `openOverlay()`.
 - Ordinary message events must use the lightweight settings-status path. They may clear tiny bookkeeping caches, but must not scan `context.chat`, hydrate/compress theater caches, scan World Info, rebuild Character Profile/relations, or call a provider.
 - Deleted-character filtering builds one operation-local Set index and reuses it for all archive rows during library render / legacy scan.
 - Firefly persistence is independent from active DOM size: the library may keep up to the normal derived-content cap, while one page renders at most 18 animated lights.

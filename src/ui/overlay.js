@@ -1032,9 +1032,9 @@ export function handleOverlayClick(event) {
     if (action === 'character-profile-generate') {
         const groupId = core_text.normalizeText(runtimeState.archiveLibraryCharacterKey, 120);
         if (!groupId) return globalThis.toastr?.info?.('请先打开一个角色档案。', '心跳回忆');
-        if (!confirmExplicitAction('读取角色固定设定并生成 Character Profile？', '只会读取该角色卡、当前 User Persona 与本轮激活到的相关世界书，整理全窗口共用的客观资料和故事开始前已经明确成立的人际关系。不会读取聊天正文，也不会把某个聊天窗口的发展写进公共角色档案。', { destructive: false })) return;
+        if (!confirmExplicitAction('读取角色固定设定并更新 Character Profile？', '只会读取该角色卡、当前 User Persona 与本轮激活到的相关世界书，整理全窗口共用的客观资料，并保存故事开始前已经明确成立的固定关系供各聊天的人际庭园合并显示。不会读取聊天正文，也不会把某个聊天窗口的发展写进公共角色档案。', { destructive: false })) return;
         void modes_relations.generateCharacterProfileForGroup(groupId).then(() => {
-            globalThis.toastr?.success?.('角色档案与固有人际已更新。', '心跳回忆');
+            globalThis.toastr?.success?.('角色固定资料已更新；固定关系会在各聊天的人际庭园中合并显示。', '心跳回忆');
             archive_library.showArchiveCharacter(groupId);
         }).catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆 · Character Profile'));
         return;
@@ -1044,10 +1044,6 @@ export function handleOverlayClick(event) {
         if (runtimeState.activeMode === core_constants.MODE.RELATIONS) {
             runtimeState.relationSelectedKey = key;
             return modes_relations.renderRelations();
-        }
-        if (runtimeState.archiveViewLevel === 'character' && runtimeState.archiveLibraryCharacterKey) {
-            runtimeState.archiveCharacterRelationSelection = key;
-            return archive_library.showArchiveCharacter(runtimeState.archiveLibraryCharacterKey);
         }
         return;
     }

@@ -1154,11 +1154,14 @@ test('r40.2 calendar renders month grid plus sticky board, global todo, special 
     assert.match(styles, /\.rmt-calendar-mood-note\{/);
 });
 
-test('entry module keeps DOM-ready self-start while r38 boots the fresh modular graph dynamically', async () => {
+test('r42 entry module mounts a lightweight bootstrap and defers the full runtime until explicit Heartbeat use', async () => {
     const indexSource = await readFile(new URL('../index.js', import.meta.url), 'utf8');
-    assert.match(indexSource, /jQuery\(\(\) => \{\s*bootPromise = bootHeartbeatMemories\(\)/);
-    assert.match(indexSource, /runtimeModule\.initMemoryTheater\(\)/);
-    assert.doesNotMatch(indexSource, /export function init\s*\(/);
+    assert.match(indexSource, /lightweight bootstrap ready; full runtime deferred/);
+    assert.match(indexSource, /async function ensureRuntime\(reason = 'unknown'\)/);
+    assert.match(indexSource, /await import\(`\.\/dist\/heartbeatMemories\.bundle\.js\?heartbeat=\$\{BUILD\}`\)/);
+    assert.match(indexSource, /requestArchiveOpen[\s\S]*ensureRuntime\('archive'\)/);
+    assert.doesNotMatch(indexSource, /jQuery\(\(\) => \{[\s\S]{0,240}import\(/);
+    assert.doesNotMatch(indexSource, /bootHeartbeatMemories\(\)/);
 });
 
 test('r35 modular architecture keeps the entrypoint thin and modes horizontally isolated', () => {
@@ -1166,7 +1169,7 @@ test('r35 modular architecture keeps the entrypoint thin and modes horizontally 
     assert.ok(entry.length < 12000, `entrypoint unexpectedly large: ${entry.length}`);
     assert.deepEqual(
         [...entry.matchAll(/export function ([A-Za-z0-9_]+)/g)].map(match => match[1]).sort(),
-        ['destroyMemoryTheater', 'initMemoryTheater'],
+        ['destroyMemoryTheater', 'initMemoryTheater', 'openArchiveLibrary'],
     );
     for (const [name, text] of sourceByFile) {
         if (!name.startsWith('modes/') || name === 'modes/registry.js') continue;
@@ -1562,7 +1565,9 @@ test('r41.4 shared Character Profile accepts explicit user special-setting evide
             { id: 'F', name: '凭空朋友', relation: '好友', category: 'friend', state: '友好', sentiments: [], summary: '不存在。', isUser: false, sourceType: 'world_info', sourceEvidence: '凭空朋友' },
         ],
     }, sources, 'group:auto:test', '佐伯', 'saeki.png');
-    assert.deepEqual(profile.facts.map(item => item.label), ['生日']);
+    assert.deepEqual(profile.facts.map(item => item.label), ['生日', '血型']);
+    assert.equal(profile.facts.find(item => item.label === '血型')?.value, 'A型');
+    assert.equal(profile.facts.some(item => item.value === 'O型' || item.label === '身高'), false);
     assert.equal(profile.relationships.length, 1);
     assert.equal(profile.relationships[0].isUser, true);
     assert.equal(profile.relationships[0].relation, '青梅竹马');
@@ -1677,4 +1682,73 @@ test('startup settings and chat navigation stay on lightweight paths', async () 
     assert.match(settings, /refreshSettingsMemoryStatus\(\{ lightweight: true \}\)/);
     assert.match(portal, /chatHandler[\s\S]*refreshSettingsMemoryStatus\(\{ lightweight: true \}\)/);
     assert.doesNotMatch(heartbeat, /ensureSettingsStyles\(\);\s*const settingsMounted/);
+});
+
+test('r42 zero-decompression diagnostic reads only cache manifest/string length and never expands the cache', async () => {
+    const indexSource = await readFile(new URL('../index.js', import.meta.url), 'utf8');
+    const settings = await readFile(new URL('../src/ui/settingsPanel.js', import.meta.url), 'utf8');
+    assert.match(indexSource, /heartbeatMemoriesTheaterV3/);
+    assert.match(indexSource, /stored\.data\.length/);
+    assert.match(indexSource, /stored\.sourceChars/);
+    assert.match(indexSource, /Array\.isArray\(memory\?\.memories\) \? memory\.memories\.length/);
+    assert.doesNotMatch(indexSource, /\batob\s*\(|new\s+DecompressionStream\s*\(|pako\.|fflate\./);
+    assert.doesNotMatch(indexSource, /JSON\.stringify\(stored|JSON\.stringify\(metadata/);
+    assert.match(indexSource, /未执行 Base64 解码、gzip 解压、缓存序列化/);
+    assert.match(settings, /data-rmt-performance-diagnostic/);
+    assert.match(settings, /__heartbeatMemoriesRenderPerformanceDiagnostic/);
+});
+
+test('r42 bootstrap diagnostic does not load the full runtime when the diagnostic button is used', async () => {
+    const indexSource = await readFile(new URL('../index.js', import.meta.url), 'utf8');
+    const bootstrapMount = indexSource.match(/function mountBootstrapSettings\(\)[\s\S]*?\n}\n\nfunction removeBootstrapShells/)?.[0] || '';
+    assert.match(bootstrapMount, /data-rmt-bootstrap-diagnostic/);
+    assert.match(bootstrapMount, /renderDiagnostic\(/);
+    const diagnosticBranch = bootstrapMount.match(/if \(diag\) \{[\s\S]*?return;\n        \}/)?.[0] || '';
+    assert.doesNotMatch(diagnosticBranch, /ensureRuntime|import\(/);
+});
+
+
+test('r41.9 Character Profile deterministically reads literal age and occupation from the character card', () => {
+    const sources = {
+        characterData: {
+            name: '文不通',
+            description: '文不通，本名沈清源，30岁，知名网文作家、影视编剧，前历史系讲师。姐姐25岁，是医生。性格清醒而痛苦。',
+        },
+        userData: { name: 'User', personaDescription: '24岁，设计师。' },
+        worldInfo: '',
+    };
+    const profile = api.normalizeCharacterProfile({ title: 'CHARACTER PROFILE', introduction: '简介', facts: [], relationships: [] }, sources, 'group:test', '文不通', '');
+    const facts = new Map(profile.facts.map(item => [item.label, item.value]));
+    assert.equal(facts.get('年龄 / 年级'), '30岁');
+    assert.equal(facts.get('职业 / 学校'), '知名网文作家、影视编剧、前历史系讲师');
+    assert.doesNotMatch(facts.get('职业 / 学校'), /医生/);
+    assert.notEqual(facts.get('年龄 / 年级'), '24岁');
+});
+
+test('r41.9 Character Profile accepts common fact-label aliases without guessing values', () => {
+    const sources = {
+        characterData: { name: '角色', description: '角色年龄：30岁。职业：编剧。' },
+        userData: { name: 'User', personaDescription: '' },
+        worldInfo: '',
+    };
+    const profile = api.normalizeCharacterProfile({
+        facts: [
+            { label: '年龄', value: '30岁', sourceType: 'character_card', sourceEvidence: '年龄：30岁' },
+            { label: '职业', value: '编剧', sourceType: 'character_card', sourceEvidence: '职业：编剧' },
+        ],
+        relationships: [],
+    }, sources, 'group:test', '角色', '');
+    assert.equal(profile.facts.some(item => item.label === '年龄 / 年级' && item.value === '30岁'), true);
+    assert.equal(profile.facts.some(item => item.label === '职业 / 学校' && /编剧/.test(item.value)), true);
+});
+
+test('r41.9 role page uses one collapsible Character Profile and no duplicate base-only relation garden', () => {
+    const relationsSource = sourceByFile.get('modes/relations.js');
+    const librarySource = sourceByFile.get('archive/library.js');
+    assert.match(relationsSource, /<details class="rmt-character-profile rmt-archive-card">/);
+    assert.match(relationsSource, /已读取 \$\{knownCount\} \/ \$\{PROFILE_FACT_ORDER\.length\} 项固定资料 · 点击展开/);
+    assert.doesNotMatch(relationsSource, /人际庭园 · 固有设定/);
+    assert.doesNotMatch(relationsSource, /characterProfileHtml[\s\S]*?relationGardenHtml\(\{ characterName: profile\.characterName/);
+    assert.match(relationsSource, /relationGardenHtml\(\{ characterName, avatarUrl, sharedRelations: profile\?\.relationships \|\| \[\], dynamicRelations: session\.relationships \|\| \[\], selectedKey \}\)/);
+    assert.match(librarySource, /patchCharacterProfileFromCard\(context, profile, matchedDescriptor\.index\)/);
 });

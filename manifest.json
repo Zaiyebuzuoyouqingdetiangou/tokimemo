@@ -1,15 +1,15 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.29-firefly-small-batches-r41.8",
+  "js": "index.js?heartbeat=0.8.31-lazy-bootstrap-diagnostics-r42.0",
   "author": "Toto",
-  "version": "0.8.29",
+  "version": "0.8.31",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r41.8 在 r41.7 完整心声与 Drama 翻页修复基础上，将萤火虫首次/增量/旧光升级统一收敛为每批 5～6 颗，单页最多 6 颗；保留 r41.6/r41.5 的启动减负与普通聊天性能收口。",
+  "description": "r42.0 启动架构减负：酒馆启动只挂轻量 bootstrap，不解析完整 Heartbeat runtime；首次打开档案室或加载完整设置时才动态加载。新增完全不解压缓存的性能诊断，直接查看 Mxxx 数量、派生模式、sourceChars 与压缩 metadata 尺寸。保留 r41.5～r41.9 的性能、HEART、Profile 与人际庭园修复。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

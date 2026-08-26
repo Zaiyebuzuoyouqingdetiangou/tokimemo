@@ -78,9 +78,18 @@ export function showArchiveCharacter(groupId) {
     const body = ui_overlay.bodyEl(); if (!body) return;
     const charAvatar = archive_groups.archiveGroupAvatarUrl(meta, entries[0] || null, context);
     const profileKey = modes_relations.archiveCharacterProfileKey(key, meta, entries);
-    const profile = modes_relations.getCharacterProfile(context, profileKey);
-    const canGenerateProfile = Number(meta.characterIndexHint) >= 0 || entries.some(item => !!archive_groups.matchArchiveEntryToCharacter(item, context));
-    const profileHtml = modes_relations.characterProfileHtml({ profile, profileKey, characterName: name, avatarUrl: charAvatar, selectedKey: runtimeState.archiveCharacterRelationSelection, canGenerate: canGenerateProfile });
+    let profile = modes_relations.getCharacterProfile(context, profileKey);
+    const expectedProfileName = core_text.normalizeText(meta?.characterName || name, 120);
+    const expectedProfileAvatar = core_text.normalizeText(meta?.avatar || core_context.archiveStoredAvatar(entries[0]), 300);
+    const hintedDescriptor = Number(meta.characterIndexHint) >= 0 ? archive_groups.characterDescriptor(context, Number(meta.characterIndexHint)) : null;
+    const safeHintedDescriptor = hintedDescriptor
+        && (!expectedProfileName || hintedDescriptor.name === expectedProfileName)
+        && (!expectedProfileAvatar || hintedDescriptor.avatar === expectedProfileAvatar)
+        ? hintedDescriptor : null;
+    const matchedDescriptor = entries.map(item => archive_groups.matchArchiveEntryToCharacter(item, context)).find(Boolean) || safeHintedDescriptor;
+    if (profile && matchedDescriptor) profile = modes_relations.patchCharacterProfileFromCard(context, profile, matchedDescriptor.index);
+    const canGenerateProfile = !!matchedDescriptor;
+    const profileHtml = modes_relations.characterProfileHtml({ profile, profileKey, characterName: name, avatarUrl: charAvatar, canGenerate: canGenerateProfile });
     const rows = entries.map(item => `<button type="button" class="rmt-archive-overview-item" data-rmt-indexed-chat="${core_text.esc(item.chatId)}" data-rmt-indexed-character="${core_text.esc(item.characterKey)}" data-rmt-indexed-entry="${core_text.esc(core_context.archiveIndexEntryId(item))}"><span class="rmt-overview-dot">●</span><span><b>${core_text.esc(item.archiveName)}</b><small>${core_text.esc(item.characterName)} · ${core_text.esc(item.chatId)} · ${item.memoryCount} 条记忆 · ${core_text.esc(ui_overlay.formatArchiveTime(item.updatedAt))}</small></span><i class="fa-solid fa-chevron-right"></i></button>`).join('');
     body.innerHTML = `<div class="rmt-archive-room">${profileHtml}<section class="rmt-archive-card rmt-character-chat-archives"><div class="rmt-character-heart-head"><button type="button" class="rmt-character-heart-avatar" data-rmt-avatar-talk="${core_text.esc(key)}" aria-label="和角色说话">${charAvatar ? `<img src="${core_text.esc(charAvatar)}" alt="">` : '<i class="fa-solid fa-user"></i>'}<span><i class="fa-solid fa-comment-dots"></i></span></button><div><div class="rmt-archive-kicker">CHAT ARCHIVES</div><strong class="rmt-archive-title">${core_text.esc(name)} · 不同聊天世界线</strong></div></div><div style="margin:10px 0"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button></div><div class="rmt-archive-overview-list" style="max-height:none">${rows || '<div class="rmt-archive-overview-empty">这个角色组还没有已索引档案。</div>'}</div></section></div>`;
 }

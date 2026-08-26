@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 43
-// Source SHA-256: 66aa3ca98bf5f6ecaae8376c8948cc28e72fd62cc5f5cbf911400f9247da7c9a
+// Source SHA-256: b309988d87a31a7596e698b48da58b5b0fe60381e16c24ae82d42e25154eb187
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_groups_js = Object.create(null);
@@ -1317,6 +1317,7 @@ function ensureSettingsStyles() {
 #${core_constants.SETTINGS_ID} .rmt-api-note{font-size:9px;line-height:1.55;opacity:.72;color:#758493}
 #${core_constants.SETTINGS_ID} .rmt-open-archive-room{width:100%!important;min-height:48px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;background:linear-gradient(90deg,#fff6fa,#f2faff)!important;border:1px solid #d4e2e9!important;color:#566a80!important;font-weight:850!important}
 #${core_constants.SETTINGS_ID} .rmt-settings-archive-actions{display:grid;gap:8px;margin-top:10px}
+#${core_constants.SETTINGS_ID} .rmt-performance-diagnostic-output{margin:0;padding:9px;max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:9px;line-height:1.5;border-radius:9px;background:rgba(38,49,63,.07);color:#5f6f80}
 #${core_constants.MENU_ID}{cursor:pointer}
 @media(max-width:760px){
   #${core_constants.SETTINGS_ID} .rmt-api-grid{grid-template-columns:1fr 1fr}
@@ -2031,9 +2032,9 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 
 /* r42 Character Profile + Relation Garden */
 .rmt-archive-portal-relations .rmt-portal-avatar{background:linear-gradient(145deg,#c4bfdc,#8f86b7)}
-.rmt-character-profile{display:grid;gap:16px}.rmt-profile-hero,.rmt-character-profile-empty{display:grid;grid-template-columns:minmax(150px,210px) 1fr;gap:18px;align-items:start}.rmt-profile-photo{aspect-ratio:4/5;min-height:190px;border-radius:18px;overflow:hidden;display:grid;place-items:center;background:linear-gradient(145deg,#f3d4df,#d8e8ef);border:1px solid #d4e2e8;color:#71869a;font-size:42px;box-shadow:0 9px 24px rgba(62,82,99,.09)}.rmt-profile-photo img{width:100%;height:100%;object-fit:cover;display:block}.rmt-profile-copy{display:grid;gap:10px}.rmt-profile-copy h2,.rmt-character-profile-empty h2,.rmt-relations-head h2{margin:0;color:#53697f;font-size:22px;line-height:1.15}.rmt-profile-copy p,.rmt-character-profile-empty p,.rmt-relations-head p{margin:0;color:#7d8b99;font-size:11px;line-height:1.75}.rmt-profile-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.rmt-profile-fact{display:grid;gap:3px;padding:9px 10px;border:1px solid #dbe7ec;border-radius:11px;background:rgba(255,255,255,.78)}.rmt-profile-fact small{font-size:8px;color:#9aa6b1;letter-spacing:.08em}.rmt-profile-fact b{font-size:11px;color:#617489}.rmt-profile-fact.unknown{background:rgba(249,251,252,.72);border-style:dashed}.rmt-profile-fact.unknown b{color:#b0bac2;font-weight:650}.rmt-profile-section-head{display:flex;align-items:end;justify-content:space-between;gap:10px;border-top:1px solid #e4edf1;padding-top:13px}.rmt-profile-section-head>div{display:grid;gap:3px}.rmt-profile-section-head b{font-size:13px;color:#5f7184}.rmt-profile-section-head small{font-size:9px;color:#98a5af}.rmt-profile-section-head>span{font-size:11px;color:#a86f87;background:#fff4f7;border:1px solid #ebccda;border-radius:999px;padding:3px 8px}
+.rmt-character-profile{display:grid;gap:0;overflow:hidden}.rmt-character-profile>summary{list-style:none}.rmt-character-profile>summary::-webkit-details-marker{display:none}.rmt-profile-collapse-summary{display:grid;grid-template-columns:52px minmax(0,1fr) 20px;gap:10px;align-items:center;cursor:pointer;padding:2px 0;color:#5d7185}.rmt-profile-collapse-summary>span:nth-child(2){display:grid;gap:2px;min-width:0}.rmt-profile-collapse-summary small{font-size:7px;letter-spacing:.14em;color:#9aa7b2}.rmt-profile-collapse-summary b{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rmt-profile-collapse-summary em{font-size:8px;color:#9aa5ae;font-style:normal}.rmt-profile-collapse-summary>i{justify-self:end;color:#9babb7;transition:transform .18s ease}.rmt-character-profile[open] .rmt-profile-collapse-summary>i{transform:rotate(180deg)}.rmt-profile-collapse-avatar{width:48px;height:48px;border-radius:13px;overflow:hidden;display:grid;place-items:center;background:linear-gradient(145deg,#f3d4df,#d8e8ef);border:1px solid #d4e2e8;color:#71869a}.rmt-profile-collapse-avatar img{width:100%;height:100%;object-fit:cover;display:block}.rmt-profile-collapse-body{padding-top:14px;margin-top:12px;border-top:1px solid #e4edf1}.rmt-profile-merge-note{display:block;font-size:8px;line-height:1.6;color:#98a6b0}.rmt-profile-hero,.rmt-character-profile-empty{display:grid;grid-template-columns:minmax(150px,210px) 1fr;gap:18px;align-items:start}.rmt-profile-photo{aspect-ratio:4/5;min-height:190px;border-radius:18px;overflow:hidden;display:grid;place-items:center;background:linear-gradient(145deg,#f3d4df,#d8e8ef);border:1px solid #d4e2e8;color:#71869a;font-size:42px;box-shadow:0 9px 24px rgba(62,82,99,.09)}.rmt-profile-photo img{width:100%;height:100%;object-fit:cover;display:block}.rmt-profile-copy{display:grid;gap:10px}.rmt-profile-copy h2,.rmt-character-profile-empty h2,.rmt-relations-head h2{margin:0;color:#53697f;font-size:22px;line-height:1.15}.rmt-profile-copy p,.rmt-character-profile-empty p,.rmt-relations-head p{margin:0;color:#7d8b99;font-size:11px;line-height:1.75}.rmt-profile-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.rmt-profile-fact{display:grid;gap:3px;padding:9px 10px;border:1px solid #dbe7ec;border-radius:11px;background:rgba(255,255,255,.78)}.rmt-profile-fact small{font-size:8px;color:#9aa6b1;letter-spacing:.08em}.rmt-profile-fact b{font-size:11px;color:#617489}.rmt-profile-fact.unknown{background:rgba(249,251,252,.72);border-style:dashed}.rmt-profile-fact.unknown b{color:#b0bac2;font-weight:650}.rmt-profile-section-head{display:flex;align-items:end;justify-content:space-between;gap:10px;border-top:1px solid #e4edf1;padding-top:13px}.rmt-profile-section-head>div{display:grid;gap:3px}.rmt-profile-section-head b{font-size:13px;color:#5f7184}.rmt-profile-section-head small{font-size:9px;color:#98a5af}.rmt-profile-section-head>span{font-size:11px;color:#a86f87;background:#fff4f7;border:1px solid #ebccda;border-radius:999px;padding:3px 8px}
 .rmt-relation-garden-wrap{display:grid;gap:10px}.rmt-relation-legend{display:flex;gap:12px;align-items:center;justify-content:flex-end;font-size:8px;color:#8c9aa6}.rmt-relation-legend span{display:flex;align-items:center;gap:4px}.rmt-relation-legend i{width:14px;height:2px;border-radius:4px;display:block}.rmt-relation-legend i.base{background:#c5a5b7}.rmt-relation-legend i.dynamic{background:#849eb6;border-top:1px dashed #849eb6;height:1px}.rmt-relation-garden{position:relative;min-height:430px;aspect-ratio:16/9;border:1px solid #dce8ed;border-radius:20px;overflow:hidden;background:radial-gradient(circle at 50% 50%,rgba(255,246,250,.95) 0 16%,rgba(247,252,254,.9) 42%,rgba(239,247,250,.9) 100%);box-shadow:inset 0 0 36px rgba(123,153,170,.08)}.rmt-relation-edges{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none}.rmt-relation-edge{fill:none;vector-effect:non-scaling-stroke;stroke-width:1.4}.rmt-relation-edge.base{stroke:rgba(197,165,183,.72)}.rmt-relation-edge.dynamic{stroke:rgba(116,145,169,.78);stroke-dasharray:4 4;stroke-width:1.6}.rmt-relation-garden:before,.rmt-relation-garden:after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border:1px solid rgba(156,181,194,.18);border-radius:50%;pointer-events:none}.rmt-relation-garden:before{width:63%;height:58%}.rmt-relation-garden:after{width:87%;height:82%;border-style:dashed}.rmt-relation-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;width:92px;display:grid;justify-items:center;gap:5px;text-align:center}.rmt-relation-center>img,.rmt-relation-center>i{width:66px;height:66px;border-radius:50%;display:grid;place-items:center;object-fit:cover;background:linear-gradient(145deg,#f2c4d5,#cce4ee);border:4px solid #fff;box-shadow:0 0 0 1px #cfdee5,0 8px 18px rgba(71,92,109,.14);color:#667b90;font-size:22px}.rmt-relation-center b{max-width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:#596d81}.rmt-relation-node{position:absolute;transform:translate(-50%,-50%);z-index:4;width:88px;min-height:74px;padding:6px 5px;border:1px solid #d3e1e7;border-radius:14px;background:rgba(255,255,255,.94);box-shadow:0 5px 15px rgba(69,89,105,.08);display:grid;justify-items:center;align-content:center;gap:2px;color:#617486;font:inherit;cursor:pointer}.rmt-relation-node:hover,.rmt-relation-node.selected{border-color:#dba4ba;box-shadow:0 0 0 3px rgba(225,169,191,.12),0 7px 17px rgba(69,89,105,.1)}.rmt-relation-node.user{background:linear-gradient(180deg,#fff7fa,#fff);border-color:#e8bfd0}.rmt-relation-node.has-dynamic{border-style:dashed}.rmt-relation-node.has-base.has-dynamic{border-style:solid;box-shadow:0 0 0 2px rgba(133,160,182,.1),0 5px 15px rgba(69,89,105,.08)}.rmt-relation-node-avatar{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#eef5f8;color:#8299aa;font-size:10px}.rmt-relation-node.user .rmt-relation-node-avatar{background:#fff0f5;color:#c17795}.rmt-relation-node b{max-width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px}.rmt-relation-node small{max-width:78px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:7px;color:#9aa6af}.rmt-relation-detail{display:grid;gap:7px;border:1px solid #dbe7ec;border-radius:14px;background:rgba(255,255,255,.88);padding:11px 12px}.rmt-relation-detail-head{display:flex;align-items:center;gap:7px}.rmt-relation-detail-head b{font-size:12px;color:#5e7185}.rmt-relation-detail-head span{font-size:7px;color:#b66c8a;border:1px solid #ecc8d6;background:#fff4f8;border-radius:999px;padding:2px 6px}.rmt-relation-layer-row{display:grid;grid-template-columns:70px 1fr;gap:3px 8px;padding-top:7px;border-top:1px dashed #e1e9ed}.rmt-relation-layer-row strong{grid-row:1/5;font-size:8px;color:#a67a8d}.rmt-relation-layer-row.dynamic strong{color:#708da4}.rmt-relation-layer-row span{font-size:10px;color:#64788b}.rmt-relation-layer-row small{font-size:8px;line-height:1.55;color:#8c99a4}.rmt-relation-layer-row em{font-size:8px;color:#9d7486;font-style:normal}.rmt-relation-layer-row i{font-size:7px;color:#a9b3bc;font-style:normal}.rmt-relations-mode{display:grid;gap:12px}.rmt-relations-head{display:flex;align-items:end;justify-content:space-between;gap:14px}.rmt-relations-head>div{display:grid;gap:6px;max-width:720px}.rmt-character-chat-archives{margin-top:14px}
-@media(max-width:760px){.rmt-profile-hero,.rmt-character-profile-empty{grid-template-columns:104px 1fr;gap:12px}.rmt-profile-photo{min-height:140px;border-radius:14px}.rmt-profile-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.rmt-profile-copy h2,.rmt-character-profile-empty h2,.rmt-relations-head h2{font-size:17px}.rmt-relation-garden{min-height:360px;aspect-ratio:auto}.rmt-relation-center{width:72px}.rmt-relation-center>img,.rmt-relation-center>i{width:52px;height:52px}.rmt-relation-node{width:72px;min-height:64px;padding:5px 4px;border-radius:12px}.rmt-relation-node-avatar{width:23px;height:23px}.rmt-relation-node b{max-width:64px;font-size:8px}.rmt-relation-node small{max-width:64px;font-size:6px}.rmt-relations-head{display:grid}.rmt-relation-layer-row{grid-template-columns:58px 1fr}}
+@media(max-width:760px){.rmt-profile-collapse-summary{grid-template-columns:44px minmax(0,1fr) 18px;gap:9px}.rmt-profile-collapse-avatar{width:42px;height:42px;border-radius:11px}.rmt-profile-collapse-summary b{font-size:12px}.rmt-profile-collapse-summary em{font-size:7px}.rmt-profile-hero,.rmt-character-profile-empty{grid-template-columns:104px 1fr;gap:12px}.rmt-profile-photo{min-height:140px;border-radius:14px}.rmt-profile-facts{grid-template-columns:repeat(2,minmax(0,1fr))}.rmt-profile-copy h2,.rmt-character-profile-empty h2,.rmt-relations-head h2{font-size:17px}.rmt-relation-garden{min-height:360px;aspect-ratio:auto}.rmt-relation-center{width:72px}.rmt-relation-center>img,.rmt-relation-center>i{width:52px;height:52px}.rmt-relation-node{width:72px;min-height:64px;padding:5px 4px;border-radius:12px}.rmt-relation-node-avatar{width:23px;height:23px}.rmt-relation-node b{max-width:64px;font-size:8px}.rmt-relation-node small{max-width:64px;font-size:6px}.rmt-relations-head{display:grid}.rmt-relation-layer-row{grid-template-columns:58px 1fr}}
 
 .rmt-profile-worldline-note{display:grid;gap:3px;padding:10px 12px;border:1px dashed #d9e5ea;border-radius:12px;background:rgba(246,251,253,.78)}.rmt-profile-worldline-note b{font-size:10px;color:#6a7e91}.rmt-profile-worldline-note small{font-size:8px;line-height:1.6;color:#97a5af}.rmt-profile-discoveries{display:grid;gap:10px}.rmt-profile-discovery-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.rmt-profile-discovery{display:grid;gap:5px;padding:10px 11px;border:1px solid #dce7ec;border-radius:12px;background:rgba(255,255,255,.88)}.rmt-profile-discovery>div{display:grid;gap:2px}.rmt-profile-discovery small{font-size:8px;color:#99a6b0}.rmt-profile-discovery b{font-size:11px;color:#60758a}.rmt-profile-discovery p{margin:0;font-size:8px;line-height:1.55;color:#8796a2}.rmt-profile-discovery i{font-size:7px;line-height:1.45;color:#a3aeb7;font-style:normal}.rmt-profile-discovery-empty{font-size:9px;color:#98a4ae;line-height:1.65;padding:8px 2px}
 @media(max-width:760px){.rmt-profile-discovery-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -2255,7 +2256,9 @@ function mountSettings() {
         <div class="rmt-settings-archive-actions">
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
-          <div class="rmt-api-note">当前聊天窗口一份独立档案。普通更新只追加上次归档后的新内容并保留已生成 ADV EVENT / 房间 / ENDING；需要从头重整时请进入档案后明确选择“完全重建档案”。</div>
+          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-performance-diagnostic><i class="fa-solid fa-gauge-high"></i><span>性能诊断（不解压缓存）</span></button>
+          <pre class="rmt-performance-diagnostic-output" data-rmt-performance-diagnostic-output hidden></pre>
+          <div class="rmt-api-note">当前聊天窗口一份独立档案。普通更新只追加上次归档后的新内容并保留已生成 ADV EVENT / 房间 / ENDING；需要从头重整时请进入档案后明确选择“完全重建档案”。性能诊断只读取缓存 manifest/字符串长度，不会解压缓存或遍历聊天正文。</div>
         </div>
       </div>`;
     mount.appendChild(panel);
@@ -2324,6 +2327,14 @@ function mountSettings() {
                 console.error('[HeartbeatMemories] import current connection failed', error);
                 globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
             });
+            return;
+        }
+        const diagnosticButton = event.target.closest?.('[data-rmt-performance-diagnostic]');
+        if (diagnosticButton) {
+            const output = panel.querySelector('[data-rmt-performance-diagnostic-output]');
+            const render = globalThis.__heartbeatMemoriesRenderPerformanceDiagnostic;
+            if (typeof render === 'function') render(output);
+            else if (output) { output.textContent = '性能诊断器尚未就绪。'; output.hidden = false; }
             return;
         }
         const currentArchiveButton = event.target.closest?.('[data-rmt-settings-current-archive]');
@@ -10130,6 +10141,18 @@ const PROFILE_DISCOVERY_LABELS = new Set([...PROFILE_FACT_LABELS, '习惯', '擅
 const RELATION_LAYERS = new Set(['family', 'close', 'friend', 'work', 'school', 'rival', 'acquaintance', 'special']);
 const RELATION_STATES = new Set(['亲密', '友好', '普通', '疏远', '紧张', '敌对', '竞争', '复杂', '恋爱', '暧昧', '伴侣', '家人', '同事', '同学', '师生', '主从', '特殊']);
 const SOURCE_TYPES = new Set(['character_card', 'user_persona', 'world_info']);
+const PROFILE_FACT_SOURCE_TYPES = new Set(['character_card', 'world_info']);
+const PROFILE_FACT_LABEL_ALIASES = new Map([
+    ['生日', '生日'], ['出生日期', '生日'], ['出生年月日', '生日'], ['誕生日', '生日'],
+    ['年龄', '年龄 / 年级'], ['年齡', '年龄 / 年级'], ['年龄/年级', '年龄 / 年级'], ['年级', '年龄 / 年级'], ['年齢', '年龄 / 年级'], ['学年', '年龄 / 年级'],
+    ['身高', '身高'], ['身長', '身高'],
+    ['血型', '血型'], ['血液型', '血型'],
+    ['职业', '职业 / 学校'], ['職業', '职业 / 学校'], ['职业/学校', '职业 / 学校'], ['学校', '职业 / 学校'], ['身份', '职业 / 学校'],
+    ['社团', '社团 / 工作'], ['社團', '社团 / 工作'], ['社团/工作', '社团 / 工作'], ['工作', '社团 / 工作'], ['部活', '社团 / 工作'], ['所属', '社团 / 工作'],
+    ['兴趣', '兴趣'], ['興趣', '兴趣'], ['爱好', '兴趣'], ['愛好', '兴趣'], ['趣味', '兴趣'],
+    ['喜欢的东西', '喜欢的东西'], ['喜歡的東西', '喜欢的东西'], ['喜欢', '喜欢的东西'], ['喜好', '喜欢的东西'], ['好物', '喜欢的东西'],
+    ['不喜欢的东西', '不喜欢的东西'], ['不喜歡的東西', '不喜欢的东西'], ['不喜欢', '不喜欢的东西'], ['讨厌', '不喜欢的东西'], ['討厭', '不喜欢的东西'],
+]);
 
 function foldEvidence(value) {
     return core_text.normalizeText(value, 12000).replace(/\s+/g, '').toLocaleLowerCase();
@@ -10187,7 +10210,116 @@ function targetCharacterRawData(context, index) {
         creatorNotes: pick('creator_notes', 'creatorNotes'),
         firstMessage: pick('first_mes', 'firstMessage'),
         exampleMessages: pick('mes_example', 'exampleMessages'),
+        birthday: pick('birthday', 'birth_date', 'date_of_birth', 'dob'),
+        age: pick('age', 'character_age'),
+        height: pick('height'),
+        bloodType: pick('blood_type', 'bloodType'),
+        occupation: pick('occupation', 'profession', 'job'),
+        school: pick('school', 'academy'),
+        club: pick('club', 'club_activity', 'department'),
+        interests: pick('interests', 'hobbies', 'hobby'),
+        likes: pick('likes', 'favorites', 'favourites'),
+        dislikes: pick('dislikes'),
     };
+}
+
+
+function normalizeProfileFactLabel(value) {
+    const raw = core_text.normalizeText(value, 40);
+    if (!raw) return '';
+    const compact = raw.replace(/\s+/g, '');
+    return PROFILE_FACT_LABEL_ALIASES.get(raw) || PROFILE_FACT_LABEL_ALIASES.get(compact) || '';
+}
+
+function profileFactRecord(label, value, sourceEvidence, sourceType = 'character_card') {
+    const canonicalLabel = normalizeProfileFactLabel(label);
+    const cleanValue = core_text.normalizeText(value, 160);
+    const evidence = core_text.normalizeText(sourceEvidence, 240);
+    if (!canonicalLabel || !cleanValue || !evidence) return null;
+    return { label: canonicalLabel, value: cleanValue, sourceType, sourceEvidence: evidence };
+}
+
+function firstPatternFact(text, label, patterns) {
+    const source = String(text || '');
+    for (const pattern of patterns) {
+        const match = source.match(pattern);
+        if (!match) continue;
+        const value = core_text.normalizeText(match[1] || match[0], 160);
+        const evidence = core_text.normalizeText(match[0], 240);
+        if (value && evidence) return profileFactRecord(label, value, evidence);
+    }
+    return null;
+}
+
+function labeledTextFact(text, label, labels) {
+    const names = labels.map(item => String(item).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    const re = new RegExp(`(?:${names})\\s*[:：]\\s*([^\\n。；;]{1,120})`, 'iu');
+    return firstPatternFact(text, label, [re]);
+}
+
+const OCCUPATION_HINT_RE = /(?:作家|作者|编剧|編劇|讲师|講師|教师|教師|教授|医生|醫生|律师|律師|警察|侦探|偵探|演员|演員|歌手|模特|研究员|研究員|工程师|工程師|设计师|設計師|画家|畫家|摄影师|攝影師|记者|記者|编辑|編輯|厨师|廚師|社长|社長|总裁|總裁|CEO|军人|軍人|骑士|騎士|魔法师|魔法師|猎人|獵人|主播|程序员|程式設計師|学生|學生)/u;
+const OCCUPATION_CONTEXT_EXCLUDE_RE = /(?:父亲|父親|母亲|母親|爸爸|妈妈|哥哥|姐姐|弟弟|妹妹|朋友|好友|同事|上司|下属|下屬|妻子|丈夫|伴侣|伴侶|喜欢|喜歡|讨厌|討厭|崇拜|认识|認識|\{\{user\}\}|用户|用戶)/u;
+
+function occupationFactFromText(text) {
+    const source = String(text || '');
+    const explicit = labeledTextFact(source, '职业 / 学校', ['职业', '職業', '身份', '职业 / 学校', '职业/学校', 'Occupation', 'Profession']);
+    if (explicit) return explicit;
+    const fragments = source.split(/[，,。；;\n]/u).map(item => item.trim()).filter(Boolean);
+    const occupations = fragments.filter(item => item.length <= 60 && OCCUPATION_HINT_RE.test(item) && !OCCUPATION_CONTEXT_EXCLUDE_RE.test(item)).slice(0, 4);
+    if (!occupations.length) return null;
+    return profileFactRecord('职业 / 学校', occupations.join('、'), occupations.join('，'));
+}
+
+function extractLiteralCharacterFacts(sources) {
+    const data = sources?.characterData || {};
+    // Deterministic extraction stays on identity/setup fields. First/example messages can mention
+    // {{user}} or third parties and are therefore too ambiguous for literal profile facts.
+    const description = String(data.description || '');
+    const leadText = description.split(/[。\n]/u)[0].slice(0, 360);
+    const text = [description, data.creatorNotes, data.scenario, data.depthPrompt].filter(Boolean).join('\n');
+    const direct = [
+        ['生日', data.birthday], ['年龄 / 年级', data.age], ['身高', data.height], ['血型', data.bloodType],
+        ['职业 / 学校', data.occupation || data.school], ['社团 / 工作', data.club], ['兴趣', data.interests],
+        ['喜欢的东西', data.likes], ['不喜欢的东西', data.dislikes],
+    ];
+    const byLabel = new Map();
+    for (const [label, value] of direct) {
+        const clean = core_text.normalizeText(value, 160);
+        if (clean) byLabel.set(label, profileFactRecord(label, clean, clean));
+    }
+    const candidates = [
+        firstPatternFact(text, '生日', [
+            /(?:生日|誕生日|出生日期|出生年月日)\s*[:：]?\s*((?:\d{4}\s*[年./-]\s*)?\d{1,2}\s*(?:月|[./-])\s*\d{1,2}\s*(?:日)?)/iu,
+        ]),
+        firstPatternFact(text, '年龄 / 年级', [
+            /(?:年龄|年齡|年齢)\s*[:：]?\s*(\d{1,3}\s*(?:岁|歳|才)?)/iu,
+            /(?:年级|年級|学年)\s*[:：]?\s*([^，,。；;\n]{1,24})/iu,
+        ]) || firstPatternFact(leadText, '年龄 / 年级', [
+            /(?:^|[，,；;\s])(\d{1,3}\s*(?:岁|歳|才))(?=$|[，,；;\s])/iu,
+        ]),
+        firstPatternFact(text, '身高', [
+            /(?:身高|身長)\s*[:：]?\s*(\d{2,3}(?:\.\d+)?\s*(?:cm|厘米|公分|センチ))/iu,
+            /(?:^|[，,。；;\s])((?:1\d{2}|2[0-2]\d)(?:\.\d+)?\s*cm)(?=$|[，,。；;\s])/iu,
+        ]),
+        firstPatternFact(text, '血型', [/(?:血型|血液型)\s*[:：]?\s*((?:AB|A|B|O)\s*型?)/iu]),
+        labeledTextFact(text, '职业 / 学校', ['职业', '職業', '身份', '职业 / 学校', '职业/学校', 'Occupation', 'Profession']) || occupationFactFromText(leadText),
+        labeledTextFact(text, '社团 / 工作', ['社团', '社團', '部活', '所属', '工作单位', '任职', '任職', '就职', '就職']),
+        labeledTextFact(text, '兴趣', ['兴趣', '興趣', '爱好', '愛好', '趣味']),
+        labeledTextFact(text, '喜欢的东西', ['喜欢的东西', '喜歡的東西', '喜欢', '喜歡', '喜好', '好物']),
+        labeledTextFact(text, '不喜欢的东西', ['不喜欢的东西', '不喜歡的東西', '不喜欢', '不喜歡', '讨厌', '討厭']),
+    ];
+    for (const fact of candidates) {
+        if (fact && !byLabel.has(fact.label)) byLabel.set(fact.label, fact);
+    }
+    return PROFILE_FACT_ORDER.map(label => byLabel.get(label)).filter(Boolean);
+}
+
+function mergeProfileFacts(aiFacts = [], literalFacts = []) {
+    const byLabel = new Map();
+    for (const fact of aiFacts || []) if (fact?.label) byLabel.set(fact.label, fact);
+    // Deterministic card extraction wins for the same field because it is literal and locally verified.
+    for (const fact of literalFacts || []) if (fact?.label) byLabel.set(fact.label, fact);
+    return PROFILE_FACT_ORDER.map(label => byLabel.get(label)).filter(Boolean);
 }
 
 async function collectCharacterProfileSources(context, characterIndex) {
@@ -10242,7 +10374,7 @@ ${sources.worldInfo || '[没有激活到相关世界书条目]'}
 function characterProfilePrompt(sources) {
     const charName = core_text.normalizeText(sources?.characterData?.name, 120) || '{{char}}';
     const userName = core_text.normalizeText(sources?.userData?.name, 120) || '{{user}}';
-    return `你正在为“心跳回忆”生成【GS 风格 Character Profile + 固有人际庭园】。
+    return `你正在为“心跳回忆”生成【GS 风格 Character Profile + 固有关系资料】。
 角色：${charName}
 用户：${userName}
 
@@ -10270,8 +10402,8 @@ function characterProfilePrompt(sources) {
 }
 
 硬性要求：
-- facts 只允许这些 label：生日、年龄 / 年级、身高、血型、职业 / 学校、社团 / 工作、兴趣、喜欢的东西、不喜欢的东西。没有明确值就不要输出该 fact，禁止补全或推测。
-- relationships 只收【故事开始前设定里已经明确成立】的人际关系。角色卡、世界书或 User Persona 若一开始明确写了 ${userName} 与 ${charName} 的特殊身份/关系（例如青梅竹马、未婚约、主从、同事、亲属式身份、宿敌等），必须作为第一层关系输出，并 isUser=true。
+- facts 必须尽量穷举角色设定里明确存在的资料；label 只允许：生日、年龄 / 年级、身高、血型、职业 / 学校、社团 / 工作、兴趣、喜欢的东西、不喜欢的东西。没有明确值就不要输出，禁止补全或推测。facts 的 sourceType 只能 character_card / world_info；User Persona 只用于关系，不得把 {{user}} 自己的年龄、职业、生日误写成 {{char}} 的资料。
+- relationships 只收【故事开始前设定里已经明确成立】的人际关系。角色卡、世界书或 User Persona 若一开始明确写了 ${userName} 与 ${charName} 的特殊身份/关系（例如青梅竹马、未婚约、主从、同事、亲属式身份、宿敌等），必须作为角色固有关系输出，并 isUser=true。
 - 若 ${userName} 只是在 Persona 中描述自己的性格、外貌、职业，但没有明确写与 ${charName} 的关系，不得因为当前聊天对象就是 ${charName} 而擅自建立特殊关系。
 - 任何聊天窗口后来才发生的恋爱、告白、同居、争执、和解等都不属于这里，绝对不要输出。
 - 第三方人物必须在角色卡/世界书/Persona 中有明确姓名或稳定称呼与关系证据；禁止凭空造朋友、前任、亲属、同事。
@@ -10288,15 +10420,16 @@ function normalizeCharacterProfile(data, sources, profileKey, characterName, ava
         user_persona: JSON.stringify(sources?.userData || {}),
         world_info: core_text.normalizeText(sources?.worldInfo || '', 20000),
     };
-    const facts = (Array.isArray(data?.facts) ? data.facts : []).slice(0, 16).map(item => {
-        const label = core_text.normalizeText(item?.label, 40);
+    const aiFacts = (Array.isArray(data?.facts) ? data.facts : []).slice(0, 16).map(item => {
+        const label = normalizeProfileFactLabel(item?.label);
         const value = core_text.normalizeText(item?.value, 160);
         const sourceType = core_text.normalizeText(item?.sourceType, 30).toLowerCase();
         const sourceEvidence = core_text.normalizeText(item?.sourceEvidence, 240);
-        if (!PROFILE_FACT_LABELS.has(label) || !value || !SOURCE_TYPES.has(sourceType) || !sourceHasEvidence(sourceMap[sourceType], sourceEvidence)) return null;
+        if (!PROFILE_FACT_LABELS.has(label) || !value || !PROFILE_FACT_SOURCE_TYPES.has(sourceType) || !sourceHasEvidence(sourceMap[sourceType], sourceEvidence)) return null;
         if (!factValueBackedByEvidence(value, sourceEvidence)) return null;
         return { label, value, sourceType, sourceEvidence };
     }).filter(Boolean);
+    const facts = mergeProfileFacts(aiFacts, extractLiteralCharacterFacts(sources));
     const seen = new Set();
     const relationships = (Array.isArray(data?.relationships) ? data.relationships : []).slice(0, MAX_SHARED_RELATIONS).map((item, index) => {
         const name = core_text.normalizeText(item?.name, 120);
@@ -10340,6 +10473,21 @@ function normalizeCharacterProfile(data, sources, profileKey, characterName, ava
         sourceFingerprint: core_context.stableArchiveHash(JSON.stringify(sources || {})),
         generatedAt: Date.now(),
     };
+}
+
+function patchCharacterProfileFromCard(context, profile, characterIndex) {
+    if (!profile || !context?.characters?.[Number(characterIndex)]) return profile;
+    const characterData = targetCharacterRawData(context, Number(characterIndex));
+    if (!characterData) return profile;
+    const literalFacts = extractLiteralCharacterFacts({ characterData, userData: {}, worldInfo: '' });
+    if (!literalFacts.length) return profile;
+    const merged = mergeProfileFacts(Array.isArray(profile.facts) ? profile.facts : [], literalFacts);
+    const before = JSON.stringify((profile.facts || []).map(item => [item?.label, item?.value, item?.sourceType, item?.sourceEvidence]));
+    const after = JSON.stringify(merged.map(item => [item?.label, item?.value, item?.sourceType, item?.sourceEvidence]));
+    if (before === after) return profile;
+    const updated = { ...profile, facts: merged, literalFactsPatchedAt: Date.now() };
+    setCharacterProfile(context, updated);
+    return updated;
 }
 
 function getCharacterProfiles(context = core_context.getContext()) {
@@ -10410,7 +10558,7 @@ async function generateCharacterProfileForGroup(groupId) {
     const taskKey = `character-profile:${profileKey}`;
     const raw = await generation_client.requestValidatedSegment(
         characterProfilePrompt(sources),
-        `正在整理「${sources.characterData.name}」的角色档案与固有人际…`,
+        `正在整理「${sources.characterData.name}」的角色档案与固定关系资料…`,
         { context: targetContext, contextEnvelope: characterProfileContextEnvelope(sources), maxTokens: 7000, temperature: 0.25, taskKey, mode: 'character-profile', background: true },
         value => normalizeCharacterProfile(value, sources, profileKey, sources.characterData.name, sources.characterData.avatar),
     );
@@ -10426,7 +10574,7 @@ ${generation_prompts.promptArchiveSlice(memoryBank, 64)}
 任务：整理【当前这个聊天窗口 / 世界线】里两类内容：
 1. {{char}} 与 {{user}} 以及其他已经实际出现人物的当前人际关系；
 2. 这个聊天窗口里后来明确了解到的 {{char}} 人物资料（例如生日、血型、兴趣、习惯、喜欢/害怕的东西）。
-两类内容都只能使用当前 Mxxx 档案直接证明的事实。角色卡/世界书中的固有资料与固有关系由插件第一层单独展示，不要在这里重复冒充“后来解锁”。
+两类内容都只能使用当前 Mxxx 档案直接证明的事实。角色卡/世界书中的固定资料与固有关系会由插件在同一张人际图中合并显示；不要把它们重复冒充成“后来解锁”的聊天事实。
 
 严格输出：
 {
@@ -10459,7 +10607,7 @@ ${generation_prompts.promptArchiveSlice(memoryBank, 64)}
 - discoveries 必须是这个聊天窗口里【后来明确得知】的资料，并且 value 必须能在引用的 Mxxx 标题/摘要/anchor 中直接核对；“看起来很高”不能换算成身高，“经常喝咖啡一次”不能自动写成长期喜好。没有明确值就不要输出。
 - discoveries 永远属于当前聊天世界线，不得因为某个窗口得知了生日/喜好，就写进其它窗口的公共 Character Profile。
 - 只收当前聊天档案里真正出现/被明确提到的人。禁止凭空补朋友、家人、前任、同事或竞争者。
-- {{user}} 可以出现，但当前“恋人/暧昧/伴侣/冲突/同居”等状态必须由当前 Mxxx 直接证明；不能因为 User Persona 或世界书一开始有特殊设定就把后续发展当成已发生。固有设定会由第一层叠加显示。
+- {{user}} 可以出现，但当前“恋人/暧昧/伴侣/冲突/同居”等状态必须由当前 Mxxx 直接证明；不能因为 User Persona 或世界书一开始有特殊设定就把后续发展当成已发生。固有设定会由插件在同一张人际图中合并显示。
 - discoveries 与 relationships 每项都必须至少 1 个有效 sourceMemoryIds + sourceMemoryAnchor，插件会本地校验；没有证据就丢弃。
 - 第三方与 {{char}} 的关系只能写非恋爱关系；禁止前任/前女友及第三方恋爱。
 - sentiments 最多 4 个，只描述 {{char}} 当前对该人的感受/态度，禁止声称对方内心秘密。
@@ -10647,24 +10795,26 @@ function relationGardenHtml({ characterName, avatarUrl = '', sharedRelations = [
     </section>`;
 }
 
-function characterProfileHtml({ profile, profileKey = '', characterName = '', avatarUrl = '', selectedKey = '', canGenerate = true } = {}) {
-    const action = profile ? '重新读取固定设定' : '生成角色档案与固有人际';
+function characterProfileHtml({ profile, profileKey = '', characterName = '', avatarUrl = '', canGenerate = true } = {}) {
+    const action = profile ? '重新读取固定设定' : '生成角色档案';
+    const name = core_text.normalizeText(profile?.characterName || characterName, 120) || '角色档案';
+    const knownCount = Array.isArray(profile?.facts) ? profile.facts.length : 0;
+    const summaryAvatar = avatarUrl ? `<img src="${core_text.esc(avatarUrl)}" alt="">` : '<i class="fa-solid fa-user"></i>';
     if (!profile) {
-        return `<section class="rmt-character-profile rmt-archive-card">
-          <div class="rmt-character-profile-empty"><div class="rmt-profile-photo">${avatarUrl ? `<img src="${core_text.esc(avatarUrl)}" alt="">` : '<i class="fa-solid fa-user"></i>'}</div><div><div class="rmt-archive-kicker">CHARACTER PROFILE</div><h2>${core_text.esc(characterName || '角色档案')}</h2><p>这里会整理全聊天窗口共用的客观资料与“故事开始前已经明确存在”的固有人际。身高、血型、生日、亲属与特殊关系没有明确设定就保持未知，不会让 AI 猜。</p>${canGenerate ? `<button type="button" class="rmt-btn" data-rmt-action="character-profile-generate" data-rmt-profile-key="${core_text.esc(profileKey)}">${action}</button>` : '<small>请先在角色分类里绑定正确的 SillyTavern char。</small>'}</div></div>
-        </section>`;
+        return `<details class="rmt-character-profile rmt-archive-card">
+          <summary class="rmt-profile-collapse-summary"><span class="rmt-profile-collapse-avatar">${summaryAvatar}</span><span><small>CHARACTER PROFILE</small><b>${core_text.esc(name)}</b><em>尚未生成 · 点击展开</em></span><i class="fa-solid fa-chevron-down"></i></summary>
+          <div class="rmt-profile-collapse-body"><div class="rmt-character-profile-empty"><div class="rmt-profile-photo">${summaryAvatar}</div><div><h2>${core_text.esc(name)}</h2><p>这里整理所有聊天窗口共用的角色固定资料。生日、年龄、身高、血型、职业等只读取角色卡 / 世界书中明确写出的内容；没有设定就保持未知，不会让 AI 猜。固有人际会保存在角色主档案中，并只在具体聊天的人际庭园里与该世界线变化合并显示，不再在这里重复画一张图。</p>${canGenerate ? `<button type="button" class="rmt-btn" data-rmt-action="character-profile-generate" data-rmt-profile-key="${core_text.esc(profileKey)}">${action}</button>` : '<small>请先在角色分类里绑定正确的 SillyTavern char。</small>'}</div></div></div>
+        </details>`;
     }
-    const factMap = new Map((profile.facts || []).map(item => [core_text.normalizeText(item?.label, 40), item]));
+    const factMap = new Map((profile.facts || []).map(item => [normalizeProfileFactLabel(item?.label) || core_text.normalizeText(item?.label, 40), item]));
     const facts = PROFILE_FACT_ORDER.map(label => {
         const item = factMap.get(label);
         return `<div class="rmt-profile-fact${item ? '' : ' unknown'}"><small>${core_text.esc(label)}</small><b>${item ? core_text.esc(item.value) : '？？？'}</b></div>`;
     }).join('');
-    return `<section class="rmt-character-profile rmt-archive-card">
-      <div class="rmt-profile-hero"><div class="rmt-profile-photo">${avatarUrl ? `<img src="${core_text.esc(avatarUrl)}" alt="">` : '<i class="fa-solid fa-user"></i>'}</div><div class="rmt-profile-copy"><div class="rmt-archive-kicker">CHARACTER PROFILE</div><h2>${core_text.esc(profile.characterName || characterName || '角色档案')}</h2>${profile.introduction ? `<p>${core_text.esc(profile.introduction)}</p>` : ''}<div class="rmt-profile-facts">${facts}</div><button type="button" class="rmt-btn" data-rmt-action="character-profile-generate" data-rmt-profile-key="${core_text.esc(profileKey)}">${action}</button></div></div>
-      <div class="rmt-profile-section-head"><div><b>人际庭园 · 固有设定</b><small>角色卡 / 世界书 / User Persona 中一开始已经成立的关系，全窗口共用。</small></div><span>${profile.relationships?.length || 0}</span></div>
-      ${relationGardenHtml({ characterName: profile.characterName || characterName, avatarUrl, sharedRelations: profile.relationships || [], dynamicRelations: [], selectedKey })}
-      <div class="rmt-profile-worldline-note"><b>逐渐了解</b><small>进入下方某个聊天档案的「人际庭园」，可以查看只在那个世界线后来解锁的生日、喜好、习惯等人物资料；它们不会污染其它聊天窗口。</small></div>
-    </section>`;
+    return `<details class="rmt-character-profile rmt-archive-card">
+      <summary class="rmt-profile-collapse-summary"><span class="rmt-profile-collapse-avatar">${summaryAvatar}</span><span><small>CHARACTER PROFILE</small><b>${core_text.esc(name)}</b><em>已读取 ${knownCount} / ${PROFILE_FACT_ORDER.length} 项固定资料 · 点击展开</em></span><i class="fa-solid fa-chevron-down"></i></summary>
+      <div class="rmt-profile-collapse-body"><div class="rmt-profile-hero"><div class="rmt-profile-photo">${summaryAvatar}</div><div class="rmt-profile-copy"><h2>${core_text.esc(name)}</h2>${profile.introduction ? `<p>${core_text.esc(profile.introduction)}</p>` : ''}<div class="rmt-profile-facts">${facts}</div><button type="button" class="rmt-btn" data-rmt-action="character-profile-generate" data-rmt-profile-key="${core_text.esc(profileKey)}">${action}</button><small class="rmt-profile-merge-note">角色固有人际不会在这里重复显示；进入下方任一聊天档案的「人际庭园」即可在一张图里同时看到固定关系与本世界线变化。</small></div></div></div>
+    </details>`;
 }
 
 function worldlineDiscoveriesHtml(discoveries = []) {
@@ -10689,7 +10839,7 @@ function renderRelations() {
     ui_overlay.setBackVisible(true, runtimeState.activeArchiveSnapshot ? (runtimeState.activeArchiveReadOnly ? '只读档案' : '档案') : '当前档案');
     ui_overlay.topTitle('人际庭园');
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-relations-mode">
-      <section class="rmt-archive-card rmt-relations-head"><div><div class="rmt-archive-kicker">RELATION GARDEN</div><h2>人际庭园</h2><p>实线信息来自角色卡 / 世界书 / User Persona 的固有设定；本世界线变化与后来了解到的人物资料都必须有当前聊天档案 Mxxx 证据。没有数值好感度，也不会跨窗口串关系。</p></div>${runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="regenerate">刷新本世界线关系 / 资料</button>'}</section>
+      <section class="rmt-archive-card rmt-relations-head"><div><div class="rmt-archive-kicker">RELATION GARDEN</div><h2>人际庭园</h2><p>这里只有一张人际图：角色卡 / 世界书 / User Persona 的固有关系与当前聊天世界线的变化会合并在同一人物节点上；后来了解到的人物资料仍必须有当前 Mxxx 证据。没有数值好感度，也不会跨窗口串关系。</p></div>${runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="regenerate">刷新本世界线关系 / 资料</button>'}</section>
       ${worldlineDiscoveriesHtml(session.discoveries || [])}
       ${relationGardenHtml({ characterName, avatarUrl, sharedRelations: profile?.relationships || [], dynamicRelations: session.relationships || [], selectedKey })}
     </div>`;
@@ -10697,9 +10847,11 @@ function renderRelations() {
 
 __m_modes_relations_js.collectCharacterProfileSources = collectCharacterProfileSources;
 __m_modes_relations_js.generateCharacterProfileForGroup = generateCharacterProfileForGroup;
+__m_modes_relations_js.extractLiteralCharacterFacts = extractLiteralCharacterFacts;
 __m_modes_relations_js.characterProfileContextEnvelope = characterProfileContextEnvelope;
 __m_modes_relations_js.characterProfilePrompt = characterProfilePrompt;
 __m_modes_relations_js.normalizeCharacterProfile = normalizeCharacterProfile;
+__m_modes_relations_js.patchCharacterProfileFromCard = patchCharacterProfileFromCard;
 __m_modes_relations_js.getCharacterProfiles = getCharacterProfiles;
 __m_modes_relations_js.getCharacterProfile = getCharacterProfile;
 __m_modes_relations_js.setCharacterProfile = setCharacterProfile;
@@ -13652,9 +13804,9 @@ function handleOverlayClick(event) {
     if (action === 'character-profile-generate') {
         const groupId = core_text.normalizeText(runtimeState.archiveLibraryCharacterKey, 120);
         if (!groupId) return globalThis.toastr?.info?.('请先打开一个角色档案。', '心跳回忆');
-        if (!confirmExplicitAction('读取角色固定设定并生成 Character Profile？', '只会读取该角色卡、当前 User Persona 与本轮激活到的相关世界书，整理全窗口共用的客观资料和故事开始前已经明确成立的人际关系。不会读取聊天正文，也不会把某个聊天窗口的发展写进公共角色档案。', { destructive: false })) return;
+        if (!confirmExplicitAction('读取角色固定设定并更新 Character Profile？', '只会读取该角色卡、当前 User Persona 与本轮激活到的相关世界书，整理全窗口共用的客观资料，并保存故事开始前已经明确成立的固定关系供各聊天的人际庭园合并显示。不会读取聊天正文，也不会把某个聊天窗口的发展写进公共角色档案。', { destructive: false })) return;
         void modes_relations.generateCharacterProfileForGroup(groupId).then(() => {
-            globalThis.toastr?.success?.('角色档案与固有人际已更新。', '心跳回忆');
+            globalThis.toastr?.success?.('角色固定资料已更新；固定关系会在各聊天的人际庭园中合并显示。', '心跳回忆');
             archive_library.showArchiveCharacter(groupId);
         }).catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆 · Character Profile'));
         return;
@@ -13664,10 +13816,6 @@ function handleOverlayClick(event) {
         if (runtimeState.activeMode === core_constants.MODE.RELATIONS) {
             runtimeState.relationSelectedKey = key;
             return modes_relations.renderRelations();
-        }
-        if (runtimeState.archiveViewLevel === 'character' && runtimeState.archiveLibraryCharacterKey) {
-            runtimeState.archiveCharacterRelationSelection = key;
-            return archive_library.showArchiveCharacter(runtimeState.archiveLibraryCharacterKey);
         }
         return;
     }
@@ -14098,7 +14246,7 @@ function modePortalMeta(mode) {
         [core_constants.MODE.BUTTERFLY]: { title: '蝴蝶效应', subtitle: '平行时间线观测终端', icon: 'fa-code-branch', accent: 'butterfly' },
         [core_constants.MODE.ENDING]: { title: 'ENDING / 后日谈', subtitle: '关系路线终章与未来生活', icon: 'fa-heart', accent: 'ending' },
         [core_constants.MODE.CALENDAR]: { title: '两个人的日历', subtitle: '已度过 / 已约定 / 未来', icon: 'fa-calendar-days', accent: 'calendar' },
-        [core_constants.MODE.RELATIONS]: { title: '人际庭园', subtitle: '固有设定 + 本世界线关系', icon: 'fa-diagram-project', accent: 'relations' },
+        [core_constants.MODE.RELATIONS]: { title: '人际庭园', subtitle: '固定关系与本世界线变化 · 一张图', icon: 'fa-diagram-project', accent: 'relations' },
         [core_constants.MODE.HEART]: { title: '角色互动', subtitle: '时期对话 / Drama / 日常一格', icon: 'fa-comments', accent: 'heart' },
         [core_constants.MODE.ACHIEVEMENTS]: { title: '成就库', subtitle: '已解锁 / 未解锁', icon: 'fa-trophy', accent: 'achievements' },
     };
@@ -16003,9 +16151,18 @@ function showArchiveCharacter(groupId) {
     const body = ui_overlay.bodyEl(); if (!body) return;
     const charAvatar = archive_groups.archiveGroupAvatarUrl(meta, entries[0] || null, context);
     const profileKey = modes_relations.archiveCharacterProfileKey(key, meta, entries);
-    const profile = modes_relations.getCharacterProfile(context, profileKey);
-    const canGenerateProfile = Number(meta.characterIndexHint) >= 0 || entries.some(item => !!archive_groups.matchArchiveEntryToCharacter(item, context));
-    const profileHtml = modes_relations.characterProfileHtml({ profile, profileKey, characterName: name, avatarUrl: charAvatar, selectedKey: runtimeState.archiveCharacterRelationSelection, canGenerate: canGenerateProfile });
+    let profile = modes_relations.getCharacterProfile(context, profileKey);
+    const expectedProfileName = core_text.normalizeText(meta?.characterName || name, 120);
+    const expectedProfileAvatar = core_text.normalizeText(meta?.avatar || core_context.archiveStoredAvatar(entries[0]), 300);
+    const hintedDescriptor = Number(meta.characterIndexHint) >= 0 ? archive_groups.characterDescriptor(context, Number(meta.characterIndexHint)) : null;
+    const safeHintedDescriptor = hintedDescriptor
+        && (!expectedProfileName || hintedDescriptor.name === expectedProfileName)
+        && (!expectedProfileAvatar || hintedDescriptor.avatar === expectedProfileAvatar)
+        ? hintedDescriptor : null;
+    const matchedDescriptor = entries.map(item => archive_groups.matchArchiveEntryToCharacter(item, context)).find(Boolean) || safeHintedDescriptor;
+    if (profile && matchedDescriptor) profile = modes_relations.patchCharacterProfileFromCard(context, profile, matchedDescriptor.index);
+    const canGenerateProfile = !!matchedDescriptor;
+    const profileHtml = modes_relations.characterProfileHtml({ profile, profileKey, characterName: name, avatarUrl: charAvatar, canGenerate: canGenerateProfile });
     const rows = entries.map(item => `<button type="button" class="rmt-archive-overview-item" data-rmt-indexed-chat="${core_text.esc(item.chatId)}" data-rmt-indexed-character="${core_text.esc(item.characterKey)}" data-rmt-indexed-entry="${core_text.esc(core_context.archiveIndexEntryId(item))}"><span class="rmt-overview-dot">●</span><span><b>${core_text.esc(item.archiveName)}</b><small>${core_text.esc(item.characterName)} · ${core_text.esc(item.chatId)} · ${item.memoryCount} 条记忆 · ${core_text.esc(ui_overlay.formatArchiveTime(item.updatedAt))}</small></span><i class="fa-solid fa-chevron-right"></i></button>`).join('');
     body.innerHTML = `<div class="rmt-archive-room">${profileHtml}<section class="rmt-archive-card rmt-character-chat-archives"><div class="rmt-character-heart-head"><button type="button" class="rmt-character-heart-avatar" data-rmt-avatar-talk="${core_text.esc(key)}" aria-label="和角色说话">${charAvatar ? `<img src="${core_text.esc(charAvatar)}" alt="">` : '<i class="fa-solid fa-user"></i>'}<span><i class="fa-solid fa-comment-dots"></i></span></button><div><div class="rmt-archive-kicker">CHAT ARCHIVES</div><strong class="rmt-archive-title">${core_text.esc(name)} · 不同聊天世界线</strong></div></div><div style="margin:10px 0"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button></div><div class="rmt-archive-overview-list" style="max-height:none">${rows || '<div class="rmt-archive-overview-empty">这个角色组还没有已索引档案。</div>'}</div></section></div>`;
 }
@@ -17681,6 +17838,10 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+function openArchiveLibrary(source = 'runtime-api') {
+    return ui_archivePortal.safeShowArchiveLibrary(source);
+}
+
 function initMemoryTheater() {
     try {
         const settingsMounted = ui_settingsPanel.mountSettings();
@@ -17773,6 +17934,7 @@ function destroyMemoryTheater() {
     }
 }
 
+__m_heartbeatMemories_js.openArchiveLibrary = openArchiveLibrary;
 __m_heartbeatMemories_js.initMemoryTheater = initMemoryTheater;
 __m_heartbeatMemories_js.destroyMemoryTheater = destroyMemoryTheater;
 }
@@ -17821,5 +17983,6 @@ __init_archive_groups_js();
 __init_core_cache_js();
 __init_heartbeatMemories_js();
 
+export const openArchiveLibrary = __m_heartbeatMemories_js.openArchiveLibrary;
 export const initMemoryTheater = __m_heartbeatMemories_js.initMemoryTheater;
 export const destroyMemoryTheater = __m_heartbeatMemories_js.destroyMemoryTheater;
