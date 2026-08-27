@@ -16,12 +16,12 @@ import * as modes_relations from '../modes/relations.js';
 export function normalizeByMode(mode, data, memoryBank, context = null) {
     if (mode === core_constants.MODE.CALENDAR) return modes_calendar.normalizeCalendar(data, memoryBank);
     if (mode === core_constants.MODE.RELATIONS) return modes_relations.normalizeRelations(data, memoryBank, context);
-    if (mode === core_constants.MODE.BUTTERFLY) return modes_butterfly.normalizeButterfly(data, memoryBank);
+    if (mode === core_constants.MODE.BUTTERFLY) return modes_butterfly.normalizeButterfly(data, memoryBank, context);
     if (mode === core_constants.MODE.ALBUM) return modes_album.normalizeAlbum(data, memoryBank);
     if (mode === core_constants.MODE.ADV) return modes_advEvent.normalizeEventList(data, memoryBank);
-    if (mode === core_constants.MODE.ROOM) return modes_room.normalizeRoom(data, memoryBank);
+    if (mode === core_constants.MODE.ROOM) return modes_room.normalizeRoom(data, memoryBank, context);
     if (mode === core_constants.MODE.ITEMS) return modes_items.normalizeItems(data, memoryBank);
-    if (mode === core_constants.MODE.PHONE) return modes_phone.normalizePhone(data, memoryBank);
+    if (mode === core_constants.MODE.PHONE) return modes_phone.normalizePhone(data, memoryBank, context);
     if (mode === core_constants.MODE.ENDING) return modes_ending.normalizeEnding(data, memoryBank);
     if (mode === core_constants.MODE.HEART) return modes_heart.normalizeHeart(data, memoryBank);
     if (mode === core_constants.MODE.ACHIEVEMENTS) return modes_achievements.normalizeAchievements(data, memoryBank);

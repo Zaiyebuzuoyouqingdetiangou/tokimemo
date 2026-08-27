@@ -26,6 +26,58 @@ export const CALENDAR_NOTE_SOURCE = Object.freeze({
     SETTING: 'setting',
 });
 
+export const CALENDAR_LEGACY_PAGE_KEY = 'legacy:unassigned';
+
+const CALENDAR_PAGE_KEY_RE = /^(?:date:\d{4}\/\d{2}\/\d{2}|annual:\d{2}\/\d{2}|pending:[A-Za-z0-9_-]{1,120}|legacy:unassigned)$/;
+
+function pageMetaForKey(key) {
+    const safeKey = core_text.normalizeText(key, 160);
+    if (!CALENDAR_PAGE_KEY_RE.test(safeKey)) return null;
+    if (safeKey === CALENDAR_LEGACY_PAGE_KEY) return { key: safeKey, kind: 'legacy', date: '' };
+    if (safeKey.startsWith('pending:')) return { key: safeKey, kind: 'pending', date: '待定' };
+    if (safeKey.startsWith('annual:')) return { key: safeKey, kind: 'annual', date: safeKey.slice(7) };
+    return { key: safeKey, kind: 'date', date: safeKey.slice(5) };
+}
+
+export function calendarPageKeyForDate(value, { pendingId = '' } = {}) {
+    const parsed = normalizeCalendarDate(value, { allowPending: true });
+    if (!parsed) return '';
+    if (parsed.date === '待定') {
+        const id = core_text.safeId(pendingId, 'UNASSIGNED');
+        return `pending:${id}`;
+    }
+    return parsed.hasYear ? `date:${parsed.date}` : `annual:${parsed.date}`;
+}
+
+export function calendarEntryPageKey(item) {
+    return calendarPageKeyForDate(item?.date, { pendingId: item?.id });
+}
+
+export function createCalendarDayPage(key) {
+    const meta = pageMetaForKey(key);
+    if (!meta) return null;
+    return {
+        ...meta,
+        entryIds: [],
+        drafts: [],
+        stickyNotes: [],
+        moodNotes: [],
+        manualTodos: [],
+    };
+}
+
+function ensureCalendarDayPage(pages, key) {
+    if (!key) return null;
+    if (!pages[key]) pages[key] = createCalendarDayPage(key);
+    return pages[key] || null;
+}
+
+export function calendarDayPage(session, key) {
+    const safeKey = core_text.normalizeText(key, 160);
+    if (!CALENDAR_PAGE_KEY_RE.test(safeKey)) return null;
+    return session?.dayPages && typeof session.dayPages === 'object' ? session.dayPages[safeKey] || null : null;
+}
+
 export function normalizeCalendarTags(value, fallback = '') {
     const allowed = new Set(CALENDAR_TAG_ALLOWLIST);
     const tags = core_text.cleanArray(value, 6, 24).filter(tag => allowed.has(tag));
@@ -78,6 +130,66 @@ function memoryAnchorTerms(memory) {
 
 function folded(value) {
     return core_text.normalizeText(value, 180).replace(/\s+/g, '').toLowerCase();
+}
+
+function uniqueCalendarId(baseValue, fallback, used) {
+    const base = core_text.safeId(baseValue, fallback);
+    let candidate = base;
+    let suffixNumber = 2;
+    while (used.has(candidate)) {
+        const suffix = `_${suffixNumber}`;
+        candidate = `${base.slice(0, Math.max(1, 40 - suffix.length))}${suffix}`;
+        suffixNumber += 1;
+    }
+    used.add(candidate);
+    return candidate;
+}
+
+function ensureUniqueCalendarEntryIds(value) {
+    const used = new Set();
+    return (Array.isArray(value) ? value : []).map((item, index) => {
+        const fallback = `CAL_ENTRY_${String(index + 1).padStart(2, '0')}`;
+        const currentId = core_text.safeId(item?.id, fallback);
+        const sourceId = core_text.safeId(item?.calendarEntrySourceId, currentId);
+        return {
+            ...structuredClone(item),
+            id: uniqueCalendarId(currentId, fallback, used),
+            // Keep the pre-uniquing identifier so a legacy calendarEntryId can be
+            // resolved only when that source identifier is genuinely unambiguous.
+            calendarEntrySourceId: sourceId,
+        };
+    });
+}
+
+function ensureUniqueCalendarPageItems(value, prefix, { semanticKey = null, dedupeSemantic = false } = {}) {
+    const usedIds = new Set();
+    const seenSemantic = new Set();
+    const out = [];
+    for (const item of Array.isArray(value) ? value : []) {
+        const semantic = semanticKey ? semanticKey(item) : '';
+        if (dedupeSemantic && semantic && seenSemantic.has(semantic)) continue;
+        if (semantic) seenSemantic.add(semantic);
+        const fallback = `${prefix}_${String(out.length + 1).padStart(2, '0')}`;
+        out.push({
+            ...structuredClone(item),
+            id: uniqueCalendarId(item?.id, fallback, usedIds),
+        });
+    }
+    return out;
+}
+
+function normalizeCalendarPageCollections(page) {
+    page.drafts = ensureUniqueCalendarPageItems(page.drafts, 'CAL_DRAFT');
+    page.manualTodos = ensureUniqueCalendarPageItems(page.manualTodos, 'CAL_TODO');
+    page.stickyNotes = ensureUniqueCalendarPageItems(page.stickyNotes, 'CAL_NOTE', {
+        semanticKey: item => `${item?.kind || CALENDAR_NOTE_KIND.MEMO}|${folded(item?.text)}`,
+        dedupeSemantic: true,
+    });
+    page.moodNotes = ensureUniqueCalendarPageItems(page.moodNotes, 'CAL_MOOD', {
+        semanticKey: item => folded(item?.text),
+        dedupeSemantic: true,
+    });
+    return page;
 }
 
 function resolveAnchoredMemory(memoryBank, sourceMemoryIds, sourceMemoryAnchor) {
@@ -263,15 +375,13 @@ function normalizeFutureEntries(value) {
 function normalizeStickyNotes(value, memoryBank) {
     const raw = Array.isArray(value) ? value : [];
     const out = [];
-    const seen = new Set();
     for (const item of raw.slice(0, 8)) {
         const kind = item?.kind === CALENDAR_NOTE_KIND.SPECIAL ? CALENDAR_NOTE_KIND.SPECIAL : CALENDAR_NOTE_KIND.MEMO;
         const sourceType = item?.sourceType === CALENDAR_NOTE_SOURCE.SETTING ? CALENDAR_NOTE_SOURCE.SETTING : CALENDAR_NOTE_SOURCE.ARCHIVE;
         const title = core_text.normalizeText(item?.title, 24) || (kind === CALENDAR_NOTE_KIND.SPECIAL ? '特别备注' : '便签');
         const text = core_text.normalizeText(item?.text, 180);
         if (!text) continue;
-        const textKey = folded(text);
-        if (!textKey || seen.has(textKey)) continue;
+        if (!folded(text)) continue;
         if (sourceType === CALENDAR_NOTE_SOURCE.ARCHIVE) {
             const ref = core_evidence.normalizeMemoryReference(
                 item?.sourceMemoryIds,
@@ -286,6 +396,8 @@ function normalizeStickyNotes(value, memoryBank) {
             out.push({
                 id: core_text.safeId(item?.id, `CAL_NOTE_${String(out.length + 1).padStart(2, '0')}`),
                 kind, sourceType, title, text,
+                date: core_text.normalizeText(item?.date, 40),
+                calendarEntryId: core_text.safeId(item?.calendarEntryId, ''),
                 sourceKind: 'archive-note',
                 sourceLabel: '剧情档案',
                 sourceMemoryIds: ref.sourceMemoryIds,
@@ -296,13 +408,14 @@ function normalizeStickyNotes(value, memoryBank) {
             out.push({
                 id: core_text.safeId(item?.id, `CAL_NOTE_${String(out.length + 1).padStart(2, '0')}`),
                 kind, sourceType, title, text,
+                date: normalizeCalendarDate(item?.date)?.date || '',
+                calendarEntryId: core_text.safeId(item?.calendarEntryId, ''),
                 sourceKind: 'world-setting-note',
                 sourceLabel,
                 sourceMemoryIds: [],
                 sourceMemoryAnchor: '',
             });
         }
-        seen.add(textKey);
         if (out.length >= 6) break;
     }
     return out;
@@ -311,7 +424,6 @@ function normalizeStickyNotes(value, memoryBank) {
 function normalizeMoodNotes(value, memoryBank) {
     const raw = Array.isArray(value) ? value : [];
     const out = [];
-    const seen = new Set();
     for (const item of raw.slice(0, 5)) {
         const text = core_text.normalizeText(item?.text, 220);
         if (!text || text.length < 8) continue;
@@ -325,19 +437,18 @@ function normalizeMoodNotes(value, memoryBank) {
         if (!ref.sourceMemoryIds.length || !ref.sourceMemoryAnchor) continue;
         const memory = resolveAnchoredMemory(memoryBank, ref.sourceMemoryIds, ref.sourceMemoryAnchor);
         if (!memory) continue;
-        const key = folded(text);
-        if (!key || seen.has(key)) continue;
+        if (!folded(text)) continue;
         const parsed = normalizeCalendarDate(memory?.date);
         out.push({
             id: core_text.safeId(item?.id, `CAL_MOOD_${String(out.length + 1).padStart(2, '0')}`),
             text,
             date: parsed?.date || '',
+            calendarEntryId: core_text.safeId(item?.calendarEntryId, ''),
             sourceKind: 'archive-mood',
             sourceLabel: '剧情档案 · 角色随笔',
             sourceMemoryIds: ref.sourceMemoryIds,
             sourceMemoryAnchor: ref.sourceMemoryAnchor,
         });
-        seen.add(key);
         if (out.length >= 3) break;
     }
     return out;
@@ -397,33 +508,226 @@ export function defaultCalendarMonth(entries) {
     return list.map(calendarMonthKey).find(Boolean) || '';
 }
 
+function calendarItemEvidenceMatches(entry, item) {
+    const entryIds = new Set(core_text.cleanArray(entry?.sourceMemoryIds, 16, 40));
+    const itemIds = core_text.cleanArray(item?.sourceMemoryIds, 16, 40);
+    if (!itemIds.length || !itemIds.some(id => entryIds.has(id))) return false;
+    const entryAnchor = folded(entry?.sourceMemoryAnchor);
+    const itemAnchor = folded(item?.sourceMemoryAnchor);
+    return !!entryAnchor && entryAnchor === itemAnchor;
+}
+
+function calendarSupplementPageKey(item, entries, memoryBank, { legacy = false } = {}) {
+    const explicitId = core_text.safeId(item?.calendarEntryId, '');
+    if (explicitId) {
+        const explicitMatches = entries.filter(entry => (
+            entry.id === explicitId
+            || core_text.safeId(entry?.calendarEntrySourceId, entry?.id) === explicitId
+        ));
+        if (explicitMatches.length === 1) return calendarEntryPageKey(explicitMatches[0]);
+    }
+
+    const evidenceMatches = entries.filter(entry => calendarItemEvidenceMatches(entry, item));
+    if (evidenceMatches.length === 1) return calendarEntryPageKey(evidenceMatches[0]);
+
+    if (item?.sourceType !== CALENDAR_NOTE_SOURCE.SETTING) {
+        const anchored = resolveAnchoredDatedMemory(memoryBank, item?.sourceMemoryIds, item?.sourceMemoryAnchor);
+        if (anchored) return calendarPageKeyForDate(anchored.parsed.date, { pendingId: item?.id });
+    } else {
+        const explicitDate = normalizeCalendarDate(item?.date, { allowPending: true });
+        if (explicitDate) return calendarPageKeyForDate(explicitDate.date, { pendingId: item?.id });
+    }
+    return legacy ? CALENDAR_LEGACY_PAGE_KEY : CALENDAR_LEGACY_PAGE_KEY;
+}
+
+function normalizeCalendarDrafts(value) {
+    return (Array.isArray(value) ? value : []).slice(0, 24).map((item, index) => {
+        const text = core_text.normalizeText(typeof item === 'string' ? item : item?.text, 1200);
+        if (!text) return null;
+        return {
+            id: core_text.safeId(typeof item === 'object' ? item?.id : '', `CAL_DRAFT_${String(index + 1).padStart(2, '0')}`),
+            text,
+            createdAt: Math.max(0, Number(typeof item === 'object' ? item?.createdAt : 0) || 0),
+        };
+    }).filter(Boolean);
+}
+
+function normalizeCalendarManualTodos(value) {
+    return (Array.isArray(value) ? value : []).slice(0, 32).map((item, index) => {
+        const title = core_text.normalizeText(item?.title, 120);
+        if (!title) return null;
+        return {
+            id: core_text.safeId(item?.id, `CAL_TODO_${String(index + 1).padStart(2, '0')}`),
+            title,
+            completed: item?.completed === true,
+            origin: 'user',
+        };
+    }).filter(Boolean);
+}
+
+function boundedLegacyStickyNotes(value) {
+    return (Array.isArray(value) ? value : []).slice(0, 24).map((item, index) => {
+        const text = core_text.normalizeText(item?.text, 180);
+        if (!text) return null;
+        const kind = item?.kind === CALENDAR_NOTE_KIND.SPECIAL ? CALENDAR_NOTE_KIND.SPECIAL : CALENDAR_NOTE_KIND.MEMO;
+        const sourceType = item?.sourceType === CALENDAR_NOTE_SOURCE.SETTING ? CALENDAR_NOTE_SOURCE.SETTING : CALENDAR_NOTE_SOURCE.ARCHIVE;
+        return {
+            id: core_text.safeId(item?.id, `CAL_NOTE_${String(index + 1).padStart(2, '0')}`),
+            kind,
+            sourceType,
+            title: core_text.normalizeText(item?.title, 24) || (kind === CALENDAR_NOTE_KIND.SPECIAL ? '特别备注' : '便签'),
+            text,
+            date: core_text.normalizeText(item?.date, 40),
+            calendarEntryId: core_text.safeId(item?.calendarEntryId, ''),
+            sourceKind: core_text.normalizeText(item?.sourceKind, 60),
+            sourceLabel: core_text.normalizeText(item?.sourceLabel, 120),
+            sourceMemoryIds: core_text.cleanArray(item?.sourceMemoryIds, 16, 40),
+            sourceMemoryAnchor: core_text.normalizeText(item?.sourceMemoryAnchor, 160),
+            legacyUnassigned: item?.legacyUnassigned === true,
+        };
+    }).filter(Boolean);
+}
+
+function boundedLegacyMoodNotes(value) {
+    return (Array.isArray(value) ? value : []).slice(0, 16).map((item, index) => {
+        const text = core_text.normalizeText(item?.text, 220);
+        if (!text) return null;
+        return {
+            id: core_text.safeId(item?.id, `CAL_MOOD_${String(index + 1).padStart(2, '0')}`),
+            text,
+            date: core_text.normalizeText(item?.date, 40),
+            calendarEntryId: core_text.safeId(item?.calendarEntryId, ''),
+            sourceKind: core_text.normalizeText(item?.sourceKind, 60),
+            sourceLabel: core_text.normalizeText(item?.sourceLabel, 120),
+            sourceMemoryIds: core_text.cleanArray(item?.sourceMemoryIds, 16, 40),
+            sourceMemoryAnchor: core_text.normalizeText(item?.sourceMemoryAnchor, 160),
+            legacyUnassigned: item?.legacyUnassigned === true,
+        };
+    }).filter(Boolean);
+}
+
+function buildCalendarDayPages(entries, stickyNotes, moodNotes, memoryBank, { legacy = false } = {}) {
+    const pages = Object.create(null);
+    for (const entry of entries) {
+        const page = ensureCalendarDayPage(pages, calendarEntryPageKey(entry));
+        if (page && !page.entryIds.includes(entry.id)) page.entryIds.push(entry.id);
+    }
+    for (const note of boundedLegacyStickyNotes(stickyNotes)) {
+        const key = calendarSupplementPageKey(note, entries, memoryBank, { legacy });
+        const page = ensureCalendarDayPage(pages, key);
+        if (!page) continue;
+        page.stickyNotes.push(key === CALENDAR_LEGACY_PAGE_KEY ? { ...note, legacyUnassigned: true } : note);
+    }
+    for (const note of boundedLegacyMoodNotes(moodNotes)) {
+        const key = calendarSupplementPageKey(note, entries, memoryBank, { legacy });
+        const page = ensureCalendarDayPage(pages, key);
+        if (!page) continue;
+        page.moodNotes.push(key === CALENDAR_LEGACY_PAGE_KEY ? { ...note, legacyUnassigned: true } : note);
+    }
+    for (const page of Object.values(pages)) normalizeCalendarPageCollections(page);
+    return pages;
+}
+
+function normalizeCalendarDayPages(value, entries, memoryBank) {
+    const pages = Object.create(null);
+    const validEntryIds = new Set(entries.map(item => item.id));
+    // Date pages contain user-owned drafts and To-Do rows, so never truncate the page map during
+    // normalization. The shared 12 MB cache boundary already limits persisted input size; silently
+    // slicing here would destroy the oldest/newest valid day once a long-running calendar grew.
+    for (const [rawKey, rawPage] of Object.entries(value && typeof value === 'object' ? value : {})) {
+        const meta = pageMetaForKey(rawKey);
+        if (!meta || !rawPage || typeof rawPage !== 'object') continue;
+        const page = createCalendarDayPage(meta.key);
+        page.entryIds = [...new Set(core_text.cleanArray(rawPage.entryIds, 64, 120).filter(id => validEntryIds.has(id)))];
+        page.drafts = normalizeCalendarDrafts(rawPage.drafts);
+        page.stickyNotes = boundedLegacyStickyNotes(rawPage.stickyNotes);
+        page.moodNotes = boundedLegacyMoodNotes(rawPage.moodNotes);
+        page.manualTodos = normalizeCalendarManualTodos(rawPage.manualTodos);
+        normalizeCalendarPageCollections(page);
+        pages[meta.key] = page;
+    }
+    for (const entry of entries) {
+        const page = ensureCalendarDayPage(pages, calendarEntryPageKey(entry));
+        if (page && !page.entryIds.includes(entry.id)) page.entryIds.push(entry.id);
+    }
+    return pages;
+}
+
+export function migrateCalendarSession(session, memoryBank) {
+    if (!session || session.kind !== core_constants.MODE.CALENDAR || !Array.isArray(session.entries)) return null;
+    const entries = ensureUniqueCalendarEntryIds(
+        structuredClone(session.entries).slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS),
+    );
+    const existingV5 = Number(session.calendarVersion) === core_constants.CALENDAR_SESSION_VERSION && session.dayPages && typeof session.dayPages === 'object';
+    const dayPages = existingV5
+        ? normalizeCalendarDayPages(session.dayPages, entries, memoryBank)
+        : buildCalendarDayPages(entries, session.stickyNotes, session.moodNotes, memoryBank, { legacy: true });
+    const selectedRaw = core_text.normalizeText(session.selectedDateKey, 160);
+    const selectedDateKey = pageMetaForKey(selectedRaw)?.key
+        || calendarPageKeyForDate(selectedRaw, { pendingId: selectedRaw.replace(/^pending:/, '') });
+    const migrated = {
+        ...structuredClone(session),
+        calendarVersion: core_constants.CALENDAR_SESSION_VERSION,
+        entries,
+        dayPages,
+        selectedDateKey: selectedDateKey && pageMetaForKey(selectedDateKey) ? selectedDateKey : '',
+    };
+    delete migrated.stickyNotes;
+    delete migrated.moodNotes;
+    return migrated;
+}
+
+function mergeCalendarItems(existing, incoming, prefix, semanticKey) {
+    return ensureUniqueCalendarPageItems(
+        [...(Array.isArray(existing) ? existing : []), ...(Array.isArray(incoming) ? incoming : [])],
+        prefix,
+        { semanticKey, dedupeSemantic: true },
+    );
+}
+
+export function mergeCalendarRefresh(previous, fresh, memoryBank) {
+    const oldSession = migrateCalendarSession(previous, memoryBank);
+    const next = migrateCalendarSession(fresh, memoryBank);
+    if (!oldSession) return next;
+    if (!next) return oldSession;
+    for (const [key, oldPage] of Object.entries(oldSession.dayPages || {})) {
+        const target = ensureCalendarDayPage(next.dayPages, key);
+        if (!target) continue;
+        target.drafts = mergeCalendarItems(oldPage.drafts, target.drafts, 'CAL_DRAFT', item => folded(item?.text)).slice(0, 24);
+        target.manualTodos = mergeCalendarItems(oldPage.manualTodos, target.manualTodos, 'CAL_TODO', item => folded(item?.title)).slice(0, 32);
+        target.stickyNotes = mergeCalendarItems(
+            oldPage.stickyNotes,
+            target.stickyNotes,
+            'CAL_NOTE',
+            item => `${item?.kind || CALENDAR_NOTE_KIND.MEMO}|${folded(item?.text)}`,
+        ).slice(0, 24);
+        target.moodNotes = mergeCalendarItems(oldPage.moodNotes, target.moodNotes, 'CAL_MOOD', item => folded(item?.text)).slice(0, 16);
+    }
+    if (oldSession.selectedMonth) next.selectedMonth = oldSession.selectedMonth;
+    if (oldSession.selectedDateKey && next.dayPages[oldSession.selectedDateKey]) next.selectedDateKey = oldSession.selectedDateKey;
+    return next;
+}
+
 export function normalizeCalendar(data, memoryBank) {
     const past = normalizePastMarkedEntries(data?.past, memoryBank);
     const promised = normalizePromisedEntries(data?.promised, memoryBank);
     const future = normalizeFutureEntries(data?.future);
     const stickyNotes = normalizeStickyNotes(data?.stickyNotes, memoryBank);
     const moodNotes = normalizeMoodNotes(data?.moodNotes, memoryBank);
-    const entries = [];
-    const seen = new Set();
-    for (const item of [...past, ...promised, ...future]) {
-        const key = calendarEntryKey(item);
-        if (!key || seen.has(key)) continue;
-        seen.add(key);
-        entries.push(item);
-    }
+    const entries = ensureUniqueCalendarEntryIds([...past, ...promised, ...future]);
     const statusRank = { past: 0, promised: 1, future: 2 };
     entries.sort((a, b) => {
         const da = normalizeCalendarDate(a.date, { allowPending: true })?.sortKey ?? 99999999;
         const db = normalizeCalendarDate(b.date, { allowPending: true })?.sortKey ?? 99999999;
         return da - db || (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9) || String(a.title).localeCompare(String(b.title), 'zh-CN');
     });
+    const dayPages = buildCalendarDayPages(entries, stickyNotes, moodNotes, memoryBank);
     return {
         kind: core_constants.MODE.CALENDAR,
         calendarVersion: core_constants.CALENDAR_SESSION_VERSION,
         title: core_text.normalizeText(data?.title, 120) || '两个人的日历',
         entries: entries.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS),
-        stickyNotes,
-        moodNotes,
+        dayPages,
         selectedMonth: defaultCalendarMonth(entries),
         selectedDateKey: '',
         generatedAt: Date.now(),

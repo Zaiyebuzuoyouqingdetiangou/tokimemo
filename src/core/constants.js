@@ -28,7 +28,9 @@ export const CACHE_STORAGE_FORMAT = 'gzip-base64-v1';
 
 export const CACHE_STORAGE_VERSION = 1;
 
-export const CALENDAR_SESSION_VERSION = 4;
+export const CALENDAR_SESSION_VERSION = 5;
+
+export const PHONE_SESSION_VERSION = 2;
 
 export const MAX_CACHE_COMPRESSED_BASE64_CHARS = 4000000;
 

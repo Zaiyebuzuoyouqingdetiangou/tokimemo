@@ -1,5 +1,5 @@
-const VERSION = '0.8.37';
-const BUILD = '0.8.37-archive-index-recreate-r42.6';
+const VERSION = '0.8.39';
+const BUILD = '0.8.39-persona-surfaces-dated-calendar-r43.0';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

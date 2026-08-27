@@ -9,6 +9,7 @@ import * as modes_album from '../modes/album.js';
 import * as modes_calendar from '../modes/calendar.js';
 import * as modes_ending from '../modes/ending.js';
 import * as modes_heart from '../modes/heart.js';
+import * as modes_butterfly from '../modes/butterfly.js';
 import * as modes_phone from '../modes/phone.js';
 import * as generation_client from './client.js';
 import * as generation_prompts from './prompts.js';
@@ -307,26 +308,59 @@ TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
     return { ...item, ...raw };
 }
 
+export function normalizeRegeneratedButterflyNode(item, rawNode, memoryBank, context = {}) {
+    if (!item || !rawNode || typeof rawNode !== 'object') throw new Error('蝴蝶效应单节点重新生成结果无效。');
+    const immutable = structuredClone(item);
+    const isOmega = item?.trueEnding === true || core_text.safeId(item?.id, '').toUpperCase() === 'OMEGA';
+    if (isOmega) {
+        const normalized = modes_butterfly.normalizeButterflyOmega({
+            ...structuredClone(rawNode),
+            monologue: '',
+        }, context);
+        return {
+            ...immutable,
+            label: normalized.label,
+            monologue: '',
+            intervention: normalized.intervention,
+            systemNote: normalized.systemNote,
+        };
+    }
+
+    const existingWorldSpec = item?.worldSpec && typeof item.worldSpec === 'object' ? structuredClone(item.worldSpec) : null;
+    const candidate = {
+        ...structuredClone(rawNode),
+        primaryAxis: existingWorldSpec ? (item?.primaryAxis || existingWorldSpec.primaryAxis) : rawNode?.primaryAxis,
+        worldSpec: existingWorldSpec || rawNode?.worldSpec,
+        sourceMemoryIds: core_text.cleanArray(item?.sourceMemoryIds, 16, 40),
+        sourceMemoryAnchor: core_text.normalizeText(item?.sourceMemoryAnchor, 160),
+    };
+    const normalized = modes_butterfly.normalizeButterflyBranch(candidate, 1, memoryBank, context, {
+        label: `单节点 ${core_text.normalizeText(item?.id, 60) || '平行分歧'}`,
+    });
+    return {
+        ...immutable,
+        label: normalized.label,
+        primaryAxis: normalized.primaryAxis,
+        worldSpec: normalized.worldSpec,
+        monologue: normalized.monologue,
+        intervention: normalized.intervention,
+        systemNote: normalized.systemNote,
+    };
+}
+
 async function regenerateButterflyNode(item, context, memoryBank, origin, taskKey) {
     const evidence = item.sourceMemoryIds?.length ? core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 10) : [];
     const prompt = `${generation_prompts.promptSafetyBoundary(context, '蝴蝶效应 / 单个观测节点重新生成')}
 只重新生成下面这个${item.trueEnding ? '观测点 Ω' : '平行分歧'}的模拟内容，保持节点身份不变。它是派生模拟，不得修改正式档案。
 CURRENT_NODE_JSON:\n${JSON.stringify(item, null, 2)}
 ${evidence.length ? `TRUSTED_MAIN_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}` : ''}
-严格输出：{"node":{"label":"...","monologue":"...","intervention":"...","systemNote":"..."}}。${item.trueEnding ? 'Ω 的 monologue 可为空，intervention 不少于160字。' : '普通分歧 monologue 不少于100字，并提供 intervention/systemNote。'}只输出 JSON。`;
+节点 id/code/locked/trueEnding、证据字段与已有 worldSpec 都由本地锁定，不接受模型改写。普通旧节点如果 CURRENT_NODE_JSON 缺少 worldSpec，则必须补全 primaryAxis 与 worldSpec 八个具体字段，并明确 thirdPartyRomance=false。
+严格输出：{"node":{"label":"...","primaryAxis":"era","worldSpec":{"primaryAxis":"era","era":"...","identity":"...","occupation":"...","location":"...","keyDecision":"...","encounterWithUser":"...","bondWithUser":"...","finalFate":"...","thirdPartyRomance":false},"monologue":"...","intervention":"...","systemNote":"..."}}。${item.trueEnding ? 'Ω 的 monologue 必须为空，intervention 不少于160个中文汉字，并明确命运/奇迹/唯一解。' : '普通分歧 monologue 不少于100个中文汉字且是第一人称；intervention 要由现世 {{char}} 对照“那个我”自省；systemNote 必须是冷酷中文算法判定。'}禁止前任，禁止 {{char}} 与 {{user}} 以外的任何人恋爱、结婚或成家。只输出 JSON。`;
     const raw = await generation_client.requestValidatedSegment(
         prompt, `重新生成「${item.label}」…`, taskOptions(core_constants.MODE.BUTTERFLY, context, origin, `${taskKey}:butterfly`, 9000, 0.7),
-        data => {
-            const node = data?.node || {};
-            const label = core_text.normalizeText(node.label, 120);
-            const monologue = core_text.normalizeText(node.monologue, 12000);
-            const intervention = core_text.normalizeText(node.intervention, 12000);
-            const systemNote = core_text.normalizeText(node.systemNote, 5000);
-            if (!label || !intervention || !systemNote || (!item.trueEnding && monologue.length < 100) || (item.trueEnding && intervention.length < 160)) throw new Error('蝴蝶效应单节点重新生成内容不足。');
-            return { label, monologue: item.trueEnding ? '' : monologue, intervention, systemNote };
-        },
+        data => normalizeRegeneratedButterflyNode(item, data?.node, memoryBank, context),
     );
-    return { ...item, ...raw };
+    return raw;
 }
 
 export async function regenerateManagedTarget(session, type, id, parentId, options) {
@@ -385,17 +419,20 @@ export async function regenerateManagedTarget(session, type, id, parentId, optio
         if (index < 0) throw new Error('找不到这项成就。');
         updated.entries[index] = await regenerateAchievement(updated.entries[index], context, memoryBank, origin, taskKey);
     } else if (type === 'calendar-entry') {
-        const index = updated.entries?.findIndex(item => item.id === id) ?? -1;
+        const pageKey = core_text.normalizeText(parentId, 160);
+        const index = updated.entries?.findIndex(item => item.id === id && modes_calendar.calendarEntryPageKey(item) === pageKey) ?? -1;
         if (index < 0) throw new Error('找不到这条日历项。');
         updated.entries[index] = await regenerateCalendarEntry(updated.entries[index], context, memoryBank, origin, taskKey);
     } else if (type === 'calendar-note') {
-        const index = updated.stickyNotes?.findIndex(item => item.id === id) ?? -1;
+        const page = modes_calendar.calendarDayPage(updated, core_text.normalizeText(parentId, 160));
+        const index = page?.stickyNotes?.findIndex(item => item.id === id) ?? -1;
         if (index < 0) throw new Error('找不到这张日历便签。');
-        updated.stickyNotes[index] = await regenerateCalendarNote(updated.stickyNotes[index], context, memoryBank, origin, taskKey);
+        page.stickyNotes[index] = await regenerateCalendarNote(page.stickyNotes[index], context, memoryBank, origin, taskKey);
     } else if (type === 'calendar-mood') {
-        const index = updated.moodNotes?.findIndex(item => item.id === id) ?? -1;
+        const page = modes_calendar.calendarDayPage(updated, core_text.normalizeText(parentId, 160));
+        const index = page?.moodNotes?.findIndex(item => item.id === id) ?? -1;
         if (index < 0) throw new Error('找不到这条页角随笔。');
-        updated.moodNotes[index] = await regenerateCalendarMood(updated.moodNotes[index], context, memoryBank, origin, taskKey);
+        page.moodNotes[index] = await regenerateCalendarMood(page.moodNotes[index], context, memoryBank, origin, taskKey);
     } else if (type === 'butterfly-node') {
         const index = updated.nodes?.findIndex(item => item.id === id) ?? -1;
         if (index <= 0) throw new Error('主时间线不能作为单项重新生成目标。');

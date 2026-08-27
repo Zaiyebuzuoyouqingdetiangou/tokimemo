@@ -684,7 +684,7 @@ export function characterProfileHtml({ profile, profileKey = '', characterName =
     if (!profile) {
         return `<details class="rmt-character-profile rmt-archive-card">
           <summary class="rmt-profile-collapse-summary"><span class="rmt-profile-collapse-avatar">${summaryAvatar}</span><span><small>CHARACTER PROFILE</small><b>${core_text.esc(name)}</b><em>尚未生成 · 点击展开</em></span><i class="fa-solid fa-chevron-down"></i></summary>
-          <div class="rmt-profile-collapse-body"><div class="rmt-character-profile-empty"><div class="rmt-profile-photo">${summaryAvatar}</div><div><h2>${core_text.esc(name)}</h2><p>这里整理所有聊天窗口共用的角色固定资料。生日、年龄、身高、血型、职业等只读取角色卡 / 世界书中明确写出的内容；没有设定就保持未知，不会让 AI 猜。固有人际会保存在角色主档案中，并只在具体聊天的人际庭园里与该世界线变化合并显示，不再在这里重复画一张图。</p>${canGenerate ? `<button type="button" class="rmt-btn" data-rmt-action="character-profile-generate" data-rmt-profile-key="${core_text.esc(profileKey)}">${action}</button>` : '<small>请先在角色分类里绑定正确的 SillyTavern char。</small>'}</div></div></div>
+          <div class="rmt-profile-collapse-body"><div class="rmt-character-profile-empty"><div class="rmt-profile-photo">${summaryAvatar}</div><div><h2>${core_text.esc(name)}</h2>${canGenerate ? `<button type="button" class="rmt-btn" data-rmt-action="character-profile-generate" data-rmt-profile-key="${core_text.esc(profileKey)}">${action}</button>` : '<small>请先在角色分类里绑定正确的 SillyTavern char。</small>'}</div></div></div>
         </details>`;
     }
     const factMap = new Map((profile.facts || []).map(item => [normalizeProfileFactLabel(item?.label) || core_text.normalizeText(item?.label, 40), item]));
@@ -694,7 +694,7 @@ export function characterProfileHtml({ profile, profileKey = '', characterName =
     }).join('');
     return `<details class="rmt-character-profile rmt-archive-card">
       <summary class="rmt-profile-collapse-summary"><span class="rmt-profile-collapse-avatar">${summaryAvatar}</span><span><small>CHARACTER PROFILE</small><b>${core_text.esc(name)}</b><em>已读取 ${knownCount} / ${PROFILE_FACT_ORDER.length} 项固定资料 · 点击展开</em></span><i class="fa-solid fa-chevron-down"></i></summary>
-      <div class="rmt-profile-collapse-body"><div class="rmt-profile-hero"><div class="rmt-profile-photo">${summaryAvatar}</div><div class="rmt-profile-copy"><h2>${core_text.esc(name)}</h2>${profile.introduction ? `<p>${core_text.esc(profile.introduction)}</p>` : ''}<div class="rmt-profile-facts">${facts}</div><button type="button" class="rmt-btn" data-rmt-action="character-profile-generate" data-rmt-profile-key="${core_text.esc(profileKey)}">${action}</button><small class="rmt-profile-merge-note">角色固有人际不会在这里重复显示；进入下方任一聊天档案的「人际庭园」即可在一张图里同时看到固定关系与本世界线变化。</small></div></div></div>
+      <div class="rmt-profile-collapse-body"><div class="rmt-profile-hero"><div class="rmt-profile-photo">${summaryAvatar}</div><div class="rmt-profile-copy"><h2>${core_text.esc(name)}</h2>${profile.introduction ? `<p>${core_text.esc(profile.introduction)}</p>` : ''}<div class="rmt-profile-facts">${facts}</div><button type="button" class="rmt-btn" data-rmt-action="character-profile-generate" data-rmt-profile-key="${core_text.esc(profileKey)}">${action}</button></div></div></div>
     </details>`;
 }
 

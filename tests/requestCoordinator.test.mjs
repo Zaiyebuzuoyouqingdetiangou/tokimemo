@@ -565,7 +565,7 @@ test('phone calendar is retired in favor of the standalone relationship notebook
     const cacheSource = sourceByFile.get('core/cache.js');
     assert.match(promptSource, /禁止生成 schedule \/ calendar \/ 日历 App/);
     assert.match(phoneSource, /禁止生成 kind=schedule \/ calendar 或名为“日历”的 App/);
-    assert.match(cacheSource, /PHONE_EXCLUDED_APP_KINDS/);
+    assert.match(cacheSource, /migrateLegacyPhoneSession/);
 
     const legacyApps = [
         ['CHAT', 'chat', 3], ['GALLERY', 'gallery', 4], ['NOTES', 'notes', 5], ['SCHEDULE', 'schedule', 4],
@@ -579,7 +579,19 @@ test('phone calendar is retired in favor of the standalone relationship notebook
     assert.equal(migrated.apps.some(app => app.kind === 'schedule'), false);
     assert.equal(migrated.selectedAppId, 'CHAT');
     assert.equal(migrated.selectedEntryId, '');
-    assert.equal(migrated.view, 'list');
+    assert.equal(migrated.view, 'home');
+    assert.equal(migrated.uiVersion, api.PHONE_SESSION_VERSION);
+
+    const fiveAppLegacy = legacyApps.slice(0, 5);
+    const smallCache = { chatId, archiveRevision: 77, phone: { kind: 'phone', chatId, archiveRevision: 77, apps: fiveAppLegacy, selectedAppId: 'SCHEDULE', selectedEntryId: 'SCHEDULE0', view: 'detail' } };
+    const smallMigrated = api.loadSession(api.MODE.PHONE, { cache: smallCache, chatId, memoryBank: bank, clone: true });
+    assert.ok(smallMigrated);
+    assert.equal(smallMigrated.apps.length, 4);
+    assert.equal(smallMigrated.apps.some(app => ['schedule', 'calendar'].includes(app.kind)), false);
+    const persistedSmallCache = { chatId, archiveRevision: 77, phone: { ...smallMigrated, chatId, archiveRevision: 77 } };
+    const reloadedSmall = api.loadSession(api.MODE.PHONE, { cache: persistedSmallCache, chatId, memoryBank: bank, clone: true });
+    assert.ok(reloadedSmall);
+    assert.equal(reloadedSmall.apps.length, 4);
 });
 
 test('phone accepts an explicit empty incremental plan without retry-shaped validation failure', () => {
@@ -630,13 +642,16 @@ test('butterfly append keeps old nodes and refuses to evict them at capacity', (
     const merged = api.mergeButterflyIncremental(previous, part, ['M002']);
     assert.deepEqual(merged.nodes[0], previous.nodes[0]);
     assert.deepEqual(merged.nodes[1], previous.nodes[1]);
-    assert.ok(merged.nodes.some(item => item.intervention === '旧 Ω 发言'));
+    assert.equal(merged.nodes.some(item => item.intervention === '旧 Ω 发言'), false);
+    assert.ok(merged.omegaHistory.some(item => item.intervention === '旧 Ω 发言'));
+    assert.equal(merged.nodes.filter(item => item.trueEnding).length, 1);
     assert.equal(merged.nodes.at(-1).intervention, '新 Ω 发言');
 
     const full = structuredClone(previous);
-    while (full.nodes.length < 239) full.nodes.splice(-1, 0, { id: `EG${full.nodes.length}`, label: `旧分歧${full.nodes.length}` });
+    while (full.nodes.length < 240) full.nodes.splice(-1, 0, { id: `EG${full.nodes.length}`, label: `旧分歧${full.nodes.length}` });
     const unchanged = api.mergeButterflyIncremental(full, part, ['M002']);
-    assert.deepEqual(unchanged, full);
+    assert.deepEqual(unchanged.nodes, full.nodes);
+    assert.deepEqual(unchanged.omegaHistory, []);
 });
 
 test('album and ADV accept a small set of important nodes instead of fixed 15/12', () => {
@@ -695,18 +710,15 @@ test('album and ADV accept a small set of important nodes instead of fixed 15/12
     assert.deepEqual(merged.events[1].sourceMemoryIds, ['M002']);
 });
 
-test('phone plan keeps roughly thirty entries without duplicating the standalone calendar', () => {
+test('phone plan preserves a persona-specific App set without fixed 9/29 padding or a duplicate calendar', () => {
     const specs = [
-        ['MOMENTS', 'moments', 3],
-        ['CHAT', 'chat', 3],
-        ['GALLERY', 'gallery', 4],
-        ['NOTES', 'notes', 5],
+        ['CHAT', 'chat', 4],
+        ['NOTES', 'notes', 3],
+        ['WORK', 'work', 3],
+        ['MUSIC', 'music', 3],
+        ['READING', 'reading', 3],
+        ['SECURITY', 'security', 3],
         ['SCHEDULE', 'schedule', 4],
-        ['STORE', 'store', 4],
-        ['BROWSER', 'browser', 3],
-        ['CONTACTS', 'contacts', 3],
-        ['LOCATION', 'location', 2],
-        ['MISC', 'misc', 2],
     ];
     const apps = specs.map(([id, kind, count]) => ({
         id,
@@ -722,11 +734,20 @@ test('phone plan keeps roughly thirty entries without duplicating the standalone
         liveStates: { morning: { lockText: '早', statusLine: '醒了', badgeCounts: { CHAT: 2, EVIL: 999 }, unknown: '<script>' }, daytime: {}, evening: {}, night: {} },
         apps,
     });
-    assert.equal(plan.apps.length, 9);
-    assert.equal(plan.apps.reduce((sum, app) => sum + app.entries.length, 0), 29);
+    assert.equal(plan.apps.length, 6);
+    assert.equal(plan.apps.reduce((sum, app) => sum + app.entries.length, 0), 19);
     assert.equal(plan.apps.some(app => ['schedule', 'calendar'].includes(app.kind)), false);
     assert.deepEqual({ ...plan.liveStates.morning.badgeCounts }, { CHAT: 2 });
     assert.equal('unknown' in plan.liveStates.morning, false);
+
+    const compact = api.normalizePhonePlan({
+        deviceName: '腕式终端', deviceKind: 'watch', lockText: 'READY',
+        liveStates: { morning: {}, daytime: {}, evening: {}, night: {} },
+        apps: [
+            ['CHAT', 'chat'], ['HEALTH', 'health'], ['TRAINING', 'training'], ['NOTES', 'notes'],
+        ].map(([id, kind]) => ({ id, label: id, kind, entries: [1, 2].map(i => ({ id: `${id}${i}`, title: `${kind}-${i}` })) })),
+    });
+    assert.equal(compact.apps.length, 4);
 });
 
 test('HEART can persist dialogue-only state before seasons and strips exist', () => {
@@ -1100,7 +1121,7 @@ test('r40.2 calendar keeps evidence-backed dates while adding sparse sticky and 
         ],
     }, bank);
     assert.equal(calendar.kind, api.MODE.CALENDAR);
-    assert.equal(calendar.calendarVersion, 4);
+    assert.equal(calendar.calendarVersion, api.CALENDAR_SESSION_VERSION);
     assert.deepEqual(calendar.entries.filter(item => item.status === 'past').map(item => item.title), ['接纪时卿']);
     assert.equal(calendar.entries.some(item => item.title === '发烧插曲'), false);
     assert.equal(calendar.entries.some(item => item.title === '无日期事件'), false);
@@ -1108,19 +1129,24 @@ test('r40.2 calendar keeps evidence-backed dates while adding sparse sticky and 
     assert.equal(calendar.entries.find(item => item.status === 'promised').date, '11/02');
     assert.equal(calendar.entries.some(item => item.title === '凭空改日期'), false);
     assert.deepEqual(calendar.entries.find(item => item.status === 'past').tags, ['接送', '重要日']);
-    assert.equal(calendar.stickyNotes.length, 2);
-    assert.equal(calendar.stickyNotes.find(item => item.kind === 'special').sourceType, 'setting');
-    assert.deepEqual(calendar.stickyNotes.find(item => item.sourceType === 'setting').sourceMemoryIds, []);
-    assert.equal(calendar.moodNotes.length, 1);
-    assert.equal(calendar.moodNotes[0].date, '2026/10/24');
-    assert.deepEqual(calendar.moodNotes[0].sourceMemoryIds, ['M001']);
+    assert.deepEqual(calendar.dayPages['annual:11/02'].stickyNotes.map(item => item.id), ['N1']);
+    assert.deepEqual(calendar.dayPages['legacy:unassigned'].stickyNotes.map(item => item.id), ['N2']);
+    assert.equal(calendar.dayPages['legacy:unassigned'].stickyNotes[0].sourceType, 'setting');
+    assert.deepEqual(calendar.dayPages['legacy:unassigned'].stickyNotes[0].sourceMemoryIds, []);
+    assert.deepEqual(calendar.dayPages['date:2026/10/24'].moodNotes.map(item => item.id), ['J1']);
+    assert.equal(calendar.dayPages['date:2026/10/24'].moodNotes[0].date, '2026/10/24');
+    assert.equal('stickyNotes' in calendar, false);
+    assert.equal('moodNotes' in calendar, false);
 });
 
-test('r40.2 calendar prompt describes a whole notebook page, not per-date reflection cards', () => {
+test('r43 calendar prompt assigns every generated notebook item to one date page', () => {
     const promptSource = sourceByFile.get('generation/prompts.js');
     assert.match(promptSource, /私人日历 \/ 手账页/);
     assert.match(promptSource, /便签 \/ 特别备注/);
-    assert.match(promptSource, /To-Do List 由 promised 数组自动生成/);
+    assert.match(promptSource, /每一个日期都是一张独立手账页/);
+    assert.match(promptSource, /To-Do List 由所选日期页的 promised 项自动生成/);
+    assert.match(promptSource, /calendarEntryId/);
+    assert.match(promptSource, /禁止生成全日历共用/);
     assert.match(promptSource, /stickyNotes/);
     assert.match(promptSource, /moodNotes/);
     assert.match(promptSource, /绝对不要每个日期、每个事项都写一条/);
@@ -1129,13 +1155,13 @@ test('r40.2 calendar prompt describes a whole notebook page, not per-date reflec
     assert.match(promptSource, /证据里没有具体日期就写“待定”/);
     assert.match(promptSource, /future 不是剧情事实，也不是两个人已经约定的事项/);
     assert.match(sourceByFile.get('generation/client.js'), /const refreshableCalendar = mode === core_constants\.MODE\.CALENDAR/);
-    assert.match(sourceByFile.get('core/cache.js'), /Array\.isArray\(session\.stickyNotes\)/);
-    assert.match(sourceByFile.get('core/cache.js'), /Array\.isArray\(session\.moodNotes\)/);
+    assert.match(sourceByFile.get('core/cache.js'), /migrateCalendarSession/);
+    assert.match(sourceByFile.get('core/cache.js'), /session\.dayPages/);
 });
 
-test('r40.2 calendar renders month grid plus sticky board, global todo, special notes and sparse mood snippets', () => {
+test('r43 calendar renders a selectable per-date notebook with local drafts and todo', () => {
     const constantsSource = sourceByFile.get('core/constants.js');
-    assert.match(constantsSource, /CALENDAR_SESSION_VERSION = 4/);
+    assert.match(constantsSource, /CALENDAR_SESSION_VERSION = 5/);
     const view = sourceByFile.get('ui/calendarView.js');
     assert.match(view, /rmt-calendar-grid/);
     assert.match(view, /rmt-calendar-notebook-board/);
@@ -1143,10 +1169,14 @@ test('r40.2 calendar renders month grid plus sticky board, global todo, special 
     assert.match(view, /rmt-calendar-master-todo/);
     assert.match(view, /rmt-calendar-special-notes/);
     assert.match(view, /rmt-calendar-mood-section/);
-    assert.match(view, /便签夹/);
-    assert.match(view, /还要做的事/);
+    assert.match(view, /草稿与便签/);
+    assert.match(view, /这一天的待办/);
     assert.match(view, /页角随笔/);
-    assert.match(view, /promised\.map\(item => calendarTodoRow\(item\)\)/);
+    assert.match(view, /const promised = selectedEntries\.filter/);
+    assert.match(view, /data-rmt-action="calendar-add-draft"/);
+    assert.match(view, /data-rmt-action="calendar-add-todo"/);
+    assert.match(view, /data-rmt-action="calendar-toggle-todo"/);
+    assert.match(view, /空白日期/);
     assert.doesNotMatch(view, /后来回想|做这个决定的时候|把这件事约下来的时候/);
     assert.doesNotMatch(view, /draw-cg|read-adv|generate.*story|特别篇/i);
     const styles = sourceByFile.get('ui/styles.js');
@@ -1250,7 +1280,7 @@ test('r37 individual deletion is derived-cache only and user-pruned sessions rem
     assert.match(cacheSource, /export async function deleteSessions/);
     assert.doesNotMatch(cacheSource.slice(cacheSource.indexOf('export async function deleteSessions'), cacheSource.indexOf('export function saveSession')), /MEMORY_KEY/);
     assert.match(overlaySource, /updated\.userManaged = true|session\.userManaged = true/);
-    assert.match(cacheSource, /MODE\.PHONE[^\n]+!userManaged/);
+    assert.match(cacheSource, /MODE\.PHONE[\s\S]{0,700}session\.apps\.length < 1/);
     assert.match(cacheSource, /MODE\.ENDING[^\n]+!userManaged/);
     assert.match(cacheSource, /MODE\.ACHIEVEMENTS[^\n]+!userManaged/);
 });
@@ -1470,7 +1500,7 @@ test('r41.1 firefly incremental cursor waits for new archive memories and then e
     assert.deepEqual(api.incrementalArchiveMemoryIds(legacy, bank, 'fireflies'), []);
 });
 
-test('r42.1 legacy monologue fireflies remain readable and are marked for GS4-style conversation upgrade', () => {
+test('r42.7 legacy monologue fireflies remain readable while the explanatory annotation stays removed', () => {
     const legacy = api.normalizeFireflyVoice({ id: 'OLD1', color: 'pink', line: '我总是下意识先去看你有没有在附近。' });
     assert.equal(legacy.thoughts.length, 1);
     assert.equal(legacy.script.length, 0);
@@ -1481,7 +1511,8 @@ test('r42.1 legacy monologue fireflies remain readable and are marked for GS4-st
     assert.match(heartSource, /patch\.type === 'firefly-upgrade'/);
     assert.match(heartSource, /升级为 GS4 式会话/);
     assert.match(heartSource, /legacyFireflyVoices\(base\)\.slice\(0, 6\)/);
-    assert.match(viewSource, /旧版独白光点/);
+    assert.match(viewSource, /rmt-firefly-thoughts/);
+    assert.doesNotMatch(viewSource, /旧版独白光点/);
 });
 
 test('r42.1 legacy firefly upgrade preserves ids, colors, and provenance while replacing only derived presentation with a conversation', () => {

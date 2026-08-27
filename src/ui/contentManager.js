@@ -3,6 +3,7 @@
 import * as core_constants from '../core/constants.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
+import * as modes_calendar from '../modes/calendar.js';
 import * as ui_overlay from './overlay.js';
 
 const MANAGEABLE_TARGET_TYPES = new Set([
@@ -12,7 +13,7 @@ const MANAGEABLE_TARGET_TYPES = new Set([
     'phone-app', 'phone-entry',
     'ending-route', 'ending-confession',
     'heart-voice', 'heart-scenario', 'heart-strip', 'heart-strip-image', 'heart-firefly',
-    'achievement', 'calendar-entry', 'calendar-note', 'calendar-mood', 'butterfly-node',
+    'achievement', 'calendar-entry', 'calendar-note', 'calendar-mood', 'calendar-draft', 'calendar-manual-todo', 'butterfly-node',
 ]);
 
 export function isManageableTargetType(value) {
@@ -23,12 +24,44 @@ function target(type, id, label, detail = '', parentId = '', options = {}) {
     return {
         type,
         id: core_text.normalizeText(id, 120),
-        parentId: core_text.normalizeText(parentId, 120),
+        parentId: core_text.normalizeText(parentId, 160),
         label: core_text.normalizeText(label, 180),
         detail: core_text.normalizeText(detail, 500),
         canDelete: options.canDelete !== false,
         canRegenerate: options.canRegenerate !== false,
     };
+}
+
+function calendarPageLabel(page, key) {
+    if (key === modes_calendar.CALENDAR_LEGACY_PAGE_KEY) return '旧版未归日期';
+    if (page?.kind === 'pending') return '日期待定';
+    if (page?.kind === 'annual') return `${page.date || key.slice(7)} · 每年`;
+    return page?.date || key.replace(/^date:/, '') || '未知日期';
+}
+
+function calendarManagementTargets(session) {
+    const targets = (session.entries || []).map(item => {
+        const pageKey = modes_calendar.calendarEntryPageKey(item);
+        return target('calendar-entry', item.id, `日期 · ${item.title}`, `${item.date || '待定'} · ${item.status || ''}`, pageKey);
+    });
+    for (const [pageKey, page] of Object.entries(session.dayPages && typeof session.dayPages === 'object' ? session.dayPages : {})) {
+        const safePage = modes_calendar.calendarDayPage(session, pageKey);
+        if (!safePage) continue;
+        const label = calendarPageLabel(safePage, pageKey);
+        for (const item of safePage.drafts || []) {
+            targets.push(target('calendar-draft', item.id, `草稿 · ${label}`, item.text || '', pageKey, { canRegenerate: false }));
+        }
+        for (const item of safePage.stickyNotes || []) {
+            targets.push(target('calendar-note', item.id, `${item.kind === 'special' ? '特别备注' : '便签'} · ${item.title || item.id}`, `${label} · ${item.text || ''}`, pageKey));
+        }
+        for (const item of safePage.moodNotes || []) {
+            targets.push(target('calendar-mood', item.id, `页角随笔 · ${label}`, item.text || '', pageKey));
+        }
+        for (const item of safePage.manualTodos || []) {
+            targets.push(target('calendar-manual-todo', item.id, `手动待办 · ${item.title}`, `${label} · ${item.completed ? '已完成' : '未完成'}`, pageKey, { canRegenerate: false }));
+        }
+    }
+    return targets;
 }
 
 export function managementTargetsForSession(session) {
@@ -77,11 +110,7 @@ export function managementTargetsForSession(session) {
         return (session.entries || []).map(item => target('achievement', item.id, item.title, item.unlocked ? '已解锁' : '未解锁'));
     }
     if (mode === core_constants.MODE.CALENDAR) {
-        return [
-            ...(session.entries || []).map(item => target('calendar-entry', item.id, `日期 · ${item.title}`, `${item.date || '待定'} · ${item.status || ''}`)),
-            ...(session.stickyNotes || []).map(item => target('calendar-note', item.id, `${item.kind === 'special' ? '特别备注' : '便签'} · ${item.title || item.id}`, item.text || '')),
-            ...(session.moodNotes || []).map(item => target('calendar-mood', item.id, '页角随笔', item.text || '')),
-        ];
+        return calendarManagementTargets(session);
     }
     if (mode === core_constants.MODE.BUTTERFLY) {
         const nodes = Array.isArray(session.nodes) ? session.nodes : [];

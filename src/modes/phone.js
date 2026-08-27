@@ -14,6 +14,205 @@ import * as generation_prompts from '../generation/prompts.js';
 const PHONE_MESSAGE_ROLES = new Set(['owner', 'contact']);
 const PHONE_GENERIC_OWNER_LABELS = new Set(['我', '本人', '自己', '设备主人', '主人', '{{char}}', 'char', 'owner']);
 const PHONE_GENERIC_CONTACT_LABELS = new Set(['对方', '联系人', '对面', '对方用户', 'contact', 'other']);
+const PHONE_RESERVED_APP_IDS = new Set(['__PHONE_HOME__']);
+const PHONE_VIEW_VALUES = new Set(['home', 'list', 'detail']);
+const PHONE_UI_TOKENS = Object.freeze({
+    palette: new Set(['noir-gold', 'ink-blue', 'frost', 'moss', 'ember', 'lilac', 'sky', 'sand']),
+    wallpaper: new Set(['smoke', 'rain', 'grid', 'starfield', 'library', 'aurora', 'minimal', 'paper']),
+    typography: new Set(['modern', 'serif', 'mono']),
+    iconStyle: new Set(['rounded', 'square', 'glyph', 'glass']),
+    density: new Set(['compact', 'cozy', 'roomy']),
+    shellTone: new Set(['graphite', 'silver', 'ivory', 'bronze', 'navy']),
+});
+const PHONE_UI_EXPLICIT_FIELDS = new Set(['palette', 'wallpaper', 'typography', 'iconStyle', 'density', 'shellTone']);
+const PHONE_PROFILE_ORDERS = Object.freeze({
+    palette: ['noir-gold', 'ink-blue', 'frost', 'moss', 'ember', 'lilac', 'sky', 'sand'],
+    wallpaper: ['smoke', 'rain', 'grid', 'starfield', 'library', 'aurora', 'minimal', 'paper'],
+    typography: ['modern', 'serif', 'mono'],
+    iconStyle: ['rounded', 'square', 'glyph', 'glass'],
+    density: ['compact', 'cozy', 'roomy'],
+    shellTone: ['graphite', 'silver', 'ivory', 'bronze', 'navy'],
+});
+const PHONE_APP_KIND_ALIASES = new Map([
+    ['moments', 'moments'], ['social', 'moments'], ['feed', 'moments'],
+    ['chat', 'chat'], ['message', 'chat'], ['messages', 'chat'], ['communication', 'chat'],
+    ['gallery', 'gallery'], ['photo', 'gallery'], ['photos', 'gallery'], ['album', 'gallery'],
+    ['camera', 'camera'],
+    ['notes', 'notes'], ['note', 'notes'], ['memo', 'notes'], ['tasks', 'notes'],
+    ['store', 'store'], ['shop', 'store'], ['shopping', 'store'],
+    ['browser', 'browser'], ['web', 'browser'], ['search', 'browser'],
+    ['contacts', 'contacts'], ['contact', 'contacts'], ['people', 'contacts'],
+    ['location', 'location'], ['map', 'location'], ['maps', 'location'], ['navigation', 'location'],
+    ['music', 'music'], ['audio', 'music'],
+    ['work', 'work'], ['office', 'work'], ['casework', 'work'],
+    ['study', 'study'], ['school', 'study'], ['learning', 'study'],
+    ['health', 'health'], ['medical', 'health'], ['fitness', 'fitness'], ['training', 'training'],
+    ['reading', 'reading'], ['library', 'reading'], ['books', 'books'], ['book', 'books'],
+    ['files', 'files'], ['file', 'files'], ['documents', 'files'],
+    ['research', 'research'], ['lab', 'research'],
+    ['games', 'games'], ['game', 'games'],
+    ['finance', 'finance'], ['wallet', 'finance'],
+    ['travel', 'travel'], ['transit', 'travel'],
+    ['security', 'security'], ['mission', 'security'],
+    ['creative', 'creative'], ['art', 'creative'], ['craft', 'creative'],
+    ['weather', 'weather'], ['tools', 'tools'], ['utility', 'tools'], ['misc', 'misc'], ['persona', 'misc'],
+]);
+const PHONE_APP_ICON_TOKENS = new Set([
+    'message', 'people', 'photo', 'camera', 'note', 'bag', 'globe', 'contact', 'pin', 'music',
+    'briefcase', 'book', 'heart', 'activity', 'game', 'wallet', 'plane', 'shield', 'palette',
+    'cloud', 'tool', 'spark', 'grid',
+]);
+const PHONE_KIND_ICON = Object.freeze({
+    moments: 'people', chat: 'message', gallery: 'photo', camera: 'camera', notes: 'note', store: 'bag',
+    browser: 'globe', contacts: 'contact', location: 'pin', music: 'music', work: 'briefcase', study: 'book',
+    health: 'heart', fitness: 'activity', training: 'activity', reading: 'book', books: 'book', files: 'briefcase', research: 'tool', games: 'game', finance: 'wallet', travel: 'plane',
+    security: 'shield', creative: 'palette', weather: 'cloud', tools: 'tool', misc: 'spark',
+});
+
+function phoneProfileSeed(data, memoryBank, deviceKind) {
+    return [
+        memoryBank?.characterName,
+        memoryBank?.archiveName,
+        ...(Array.isArray(memoryBank?.archiveKeywords) ? memoryBank.archiveKeywords.slice(0, 8) : []),
+        core_text.normalizeText(memoryBank?.archiveSummary, 600),
+        data?.deviceName,
+        data?.title,
+        ...(Array.isArray(data?.apps) ? data.apps.slice(0, 10).flatMap(app => [app?.label, app?.kind]) : []),
+        deviceKind,
+    ].map(value => core_text.normalizeText(value, 600)).filter(Boolean).join('|');
+}
+
+function inferredPhoneProfile(seed, deviceKind) {
+    const text = core_text.normalizeText(seed, 5000).toLowerCase();
+    let semantic = null;
+    if (/(?:赛博|科幻|星际|宇宙|实验|研究|代码|程序|工程|机械|ai|cyber|space|sci-fi)/i.test(text)) {
+        semantic = { palette: 'ink-blue', wallpaper: 'grid', typography: 'mono', iconStyle: 'glyph', density: 'compact', shellTone: 'graphite' };
+    } else if (/(?:侦探|律师|法庭|特工|军官|杀手|黑帮|吸血|哥特|夜色|冷峻|detective|lawyer|goth)/i.test(text)) {
+        semantic = { palette: 'noir-gold', wallpaper: 'smoke', typography: 'serif', iconStyle: 'square', density: 'compact', shellTone: 'graphite' };
+    } else if (/(?:森林|植物|自然|园艺|田园|精灵|草药|forest|nature|garden)/i.test(text)) {
+        semantic = { palette: 'moss', wallpaper: 'paper', typography: 'serif', iconStyle: 'rounded', density: 'cozy', shellTone: 'bronze' };
+    } else if (/(?:音乐|画家|艺术|舞蹈|作家|诗人|摄影|乐队|music|artist|writer)/i.test(text)) {
+        semantic = { palette: 'lilac', wallpaper: 'aurora', typography: 'serif', iconStyle: 'glass', density: 'cozy', shellTone: 'silver' };
+    } else if (/(?:海|雨|医生|治愈|安静|清冷|温柔|ocean|rain|doctor|healer)/i.test(text)) {
+        semantic = { palette: 'sky', wallpaper: 'rain', typography: 'modern', iconStyle: 'rounded', density: 'roomy', shellTone: 'silver' };
+    }
+    if (semantic) return semantic;
+    const hash = core_text.hashString(seed || deviceKind || 'private-device');
+    const pick = (field, shift) => {
+        const values = PHONE_PROFILE_ORDERS[field];
+        return values[(hash >>> shift) % values.length];
+    };
+    return {
+        palette: pick('palette', 0),
+        wallpaper: pick('wallpaper', 4),
+        typography: pick('typography', 8),
+        iconStyle: pick('iconStyle', 11),
+        density: pick('density', 14),
+        shellTone: pick('shellTone', 17),
+    };
+}
+
+function normalizedPhoneUiToken(field, value, fallback) {
+    const token = core_text.normalizeText(value, 40).toLowerCase().replace(/_/g, '-');
+    return PHONE_UI_TOKENS[field].has(token) ? token : fallback;
+}
+
+export function normalizePhoneUiProfile(value, options = {}) {
+    const source = value && typeof value === 'object' ? value : {};
+    const deviceKind = core_constants.PHONE_DEVICE_KINDS.has(options?.deviceKind) ? options.deviceKind : 'phone';
+    const seed = phoneProfileSeed(options?.data, options?.memoryBank, deviceKind);
+    const fallback = inferredPhoneProfile(seed, deviceKind);
+    const explicitFields = core_text.cleanArray(source?.explicitFields, PHONE_UI_EXPLICIT_FIELDS.size, 40)
+        .filter(field => PHONE_UI_EXPLICIT_FIELDS.has(field));
+    const explicit = new Set(explicitFields);
+    const choose = field => options?.bindPersona === true && !explicit.has(field)
+        ? fallback[field]
+        : normalizedPhoneUiToken(field, source[field], fallback[field]);
+    return {
+        identityKey: `phone-ui:${core_text.hashString(seed || deviceKind || 'private-device').toString(36)}`,
+        explicitFields,
+        palette: choose('palette'),
+        wallpaper: choose('wallpaper'),
+        typography: choose('typography'),
+        iconStyle: choose('iconStyle'),
+        density: choose('density'),
+        shellTone: choose('shellTone'),
+    };
+}
+
+export function normalizePhoneAppKind(value, label = '') {
+    const token = core_text.normalizeText(value, 60).toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    if (PHONE_APP_KIND_ALIASES.has(token)) return PHONE_APP_KIND_ALIASES.get(token);
+    const text = core_text.normalizeText(label, 100);
+    if (/(?:聊天|消息|通讯|私信|信箱)/u.test(text)) return 'chat';
+    if (/(?:相册|照片|图库|影像)/u.test(text)) return 'gallery';
+    if (/(?:相机|拍摄)/u.test(text)) return 'camera';
+    if (/(?:备忘|笔记|清单|待办)/u.test(text)) return 'notes';
+    if (/(?:联系人|通讯录)/u.test(text)) return 'contacts';
+    if (/(?:浏览|搜索|网络)/u.test(text)) return 'browser';
+    if (/(?:商店|购物|订单)/u.test(text)) return 'store';
+    if (/(?:位置|地图|导航|定位)/u.test(text)) return 'location';
+    if (/(?:音乐|音频|乐谱)/u.test(text)) return 'music';
+    if (/(?:工作|案件|任务|办公|值班)/u.test(text)) return 'work';
+    if (/(?:学习|课程|学校|训练)/u.test(text)) return 'study';
+    if (/(?:健康|医疗)/u.test(text)) return 'health';
+    if (/(?:运动|健身)/u.test(text)) return 'fitness';
+    if (/(?:阅读|书架|图书)/u.test(text)) return 'reading';
+    if (/(?:游戏)/u.test(text)) return 'games';
+    if (/(?:钱包|账单|财务)/u.test(text)) return 'finance';
+    if (/(?:旅行|行程|交通)/u.test(text)) return 'travel';
+    if (/(?:安全|警报|门禁)/u.test(text)) return 'security';
+    if (/(?:创作|绘画|设计|手作)/u.test(text)) return 'creative';
+    if (/(?:天气|气象)/u.test(text)) return 'weather';
+    if (/(?:动态|社交|朋友圈)/u.test(text)) return 'moments';
+    return 'misc';
+}
+
+export function normalizePhoneAppIcon(value, kind = 'misc', label = '') {
+    const token = core_text.normalizeText(value, 40).toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    if (PHONE_APP_ICON_TOKENS.has(token)) return token;
+    const normalizedKind = normalizePhoneAppKind(kind, label);
+    return PHONE_KIND_ICON[normalizedKind] || 'spark';
+}
+
+function isExcludedPhoneApp(app) {
+    const rawKind = core_text.normalizeText(app?.kind, 60).toLowerCase();
+    const label = core_text.normalizeText(app?.label, 60);
+    return core_constants.PHONE_EXCLUDED_APP_KINDS.has(rawKind) || /日历|calendar|schedule/i.test(label);
+}
+
+function phoneAppLimits(deviceKind) {
+    if (['watch', 'communicator'].includes(deviceKind)) return { minApps: 4, maxApps: 8, minEntries: 8 };
+    return { minApps: 5, maxApps: 10, minEntries: 12 };
+}
+
+export function migrateLegacyPhoneSession(session, memoryBank = null) {
+    if (!session || session.kind !== core_constants.MODE.PHONE) return session;
+    const migrated = structuredClone(session);
+    const deviceKind = core_constants.PHONE_DEVICE_KINDS.has(migrated.deviceKind) ? migrated.deviceKind : 'phone';
+    const wasLegacy = Number(migrated.uiVersion) !== core_constants.PHONE_SESSION_VERSION;
+    migrated.deviceKind = deviceKind;
+    migrated.uiVersion = core_constants.PHONE_SESSION_VERSION;
+    migrated.uiProfile = normalizePhoneUiProfile(migrated.uiProfile, { data: migrated, memoryBank, deviceKind });
+    migrated.apps = (Array.isArray(migrated.apps) ? migrated.apps : []).filter(app => !isExcludedPhoneApp(app) && !PHONE_RESERVED_APP_IDS.has(core_text.safeId(app?.id, ''))).map(app => {
+        const label = core_text.normalizeText(app?.label, 60) || '分区';
+        const kind = normalizePhoneAppKind(app?.kind, label);
+        return { ...app, label, kind, icon: normalizePhoneAppIcon(app?.icon, kind, label) };
+    });
+    if (!migrated.apps.some(app => app.id === migrated.selectedAppId)) migrated.selectedAppId = migrated.apps[0]?.id || '';
+    if (wasLegacy) {
+        migrated.view = 'home';
+        migrated.selectedEntryId = '';
+    } else {
+        migrated.view = PHONE_VIEW_VALUES.has(migrated.view) ? migrated.view : 'home';
+        const selected = migrated.apps.find(app => app.id === migrated.selectedAppId);
+        if (migrated.view === 'detail' && !selected?.entries?.some(entry => entry.id === migrated.selectedEntryId)) {
+            migrated.view = 'list';
+            migrated.selectedEntryId = '';
+        }
+    }
+    return migrated;
+}
 
 export function phoneConversationOwnerName(memoryBank) {
     return core_text.normalizeText(memoryBank?.characterName, 100) || '角色';
@@ -108,52 +307,67 @@ export function compactPhoneRoomContext(roomSession) {
 export function phonePlanPrompt(context, memoryBank, roomSession) {
     return `${generation_prompts.promptSafetyBoundary(context, '私人终端 / 分段 1：设备与 App 目录')}
 本请求只规划设备类型、四时段状态、App 与条目【目录】。不要写长正文、聊天 messages、联系人 fields 或照片长说明；这些会按 App 分开依次生成。
+先读取受控上下文中的世界书与角色卡：世界书若明确写了设备形态或角色审美，必须优先遵守；没有明确设定时，再按 {{char}} 的时代、身份、职业、性格、兴趣、经济条件与生活习惯推导。USER_PERSONA_JSON 描述的是用户，只能帮助识别与 {{user}} 有关的称呼或既有关系，不能拿来替代 {{char}} 的设备人设。不同角色不应得到同一套固定 App 或固定配色。
 UNTRUSTED_PHONE_ARCHIVE_JSON:\n${generation_prompts.promptArchiveSlice(memoryBank, 24)}
 CURRENT_ROOM_CONTEXT_JSON:\n${JSON.stringify(compactPhoneRoomContext(roomSession), null, 2)}
 
 严格输出：
-{"title":"他的私人终端","deviceName":"设备名称","deviceKind":"phone","lockText":"...","liveStates":{"morning":{"lockText":"...","statusLine":"...","badgeCounts":{}},"daytime":{},"evening":{},"night":{}},"apps":[{"id":"MOMENTS","label":"动态","kind":"moments","summary":"...","entries":[{"id":"M01","title":"条目标题","meta":"时间/对象/分类"}]}]}
+{"title":"他的私人终端","deviceName":"设备名称","deviceKind":"phone","lockText":"...","uiProfile":{"explicitFields":[],"palette":"PALETTE_TOKEN","wallpaper":"WALLPAPER_TOKEN","typography":"TYPOGRAPHY_TOKEN","iconStyle":"ICON_STYLE_TOKEN","density":"DENSITY_TOKEN","shellTone":"SHELL_TONE_TOKEN"},"liveStates":{"morning":{"lockText":"...","statusLine":"...","badgeCounts":{}},"daytime":{},"evening":{},"night":{}},"apps":[{"id":"CHAT","label":"通讯","kind":"chat","icon":"message","summary":"...","entries":[{"id":"C01","title":"条目标题","meta":"时间/对象/分类"}]}]}
 
 数量要求：
-- phone：保留 9 类 app，kind 分别 moments/chat/gallery/notes/store/browser/contacts/location/misc；条目数建议分别 3/3/4/5/4/3/3/2/2（总计约29），不再堆大量同质条目。
-- terminal：至少8个 app、总条目约24以上，必须包含 chat/contacts/gallery/notes 等等价功能。
-- watch / communicator：至少7个功能入口、总条目约18以上，优先保留通讯、相册、备忘、联系人、定位与人设专属功能。
+- phone / terminal 生成 5～10 个 App；watch / communicator 生成 4～8 个适合小屏或有限能力的功能入口。至少保留一个 chat / 通讯入口，其余 App 的名称、类型、数量和顺序都必须服从角色人设，不得照抄固定模板。
+- 至少 2 个 App 应明显来自角色职业、兴趣或世界观，例如案件库、训练记录、乐谱、实验日志、任务终端、宠物、阅读、健康或学习；不适合现代 App 的世界观应使用功能等价但符合时代的命名。
+- kind 只能选 moments/chat/gallery/camera/notes/store/browser/contacts/location/music/work/study/health/fitness/training/reading/books/files/research/games/finance/travel/security/creative/weather/tools/misc；icon 只能选 message/people/photo/camera/note/bag/globe/contact/pin/music/briefcase/book/heart/activity/game/wallet/plane/shield/palette/cloud/tool/spark/grid。
+- uiProfile 只能使用：palette=noir-gold/ink-blue/frost/moss/ember/lilac/sky/sand；wallpaper=smoke/rain/grid/starfield/library/aurora/minimal/paper；typography=modern/serif/mono；iconStyle=rounded/square/glyph/glass；density=compact/cozy/roomy；shellTone=graphite/silver/ivory/bronze/navy。上面的 *_TOKEN 只是占位符，必须换成某个允许值，不得原样照抄。这些是本地安全样式 token，不得输出颜色值、CSS、URL 或 class 名。
+- uiProfile.explicitFields 只允许 palette/wallpaper/typography/iconStyle/density/shellTone；只有世界书或角色卡对该项有明文时才列入。其余字段保持不在列表中，本地会依据 {{char}} 的人设、设备名和 App 组合稳定补全，防止不同角色照抄同一套合法模板。
 - 禁止生成 kind=schedule / calendar 或名为“日历”的 App；两个人之间的约定、纪念日、日期圈记统一由独立「两个人的日历」承担。私人终端 notes 可以有普通个人待办，但不要复制关系日历。
 - 每个 entries 现在只写 id/title/meta，标题必须彼此有生活区分，不要填 preview/detail/messages/fields/imageCaption。
 - deviceKind 只能 phone/watch/terminal/communicator；四个 liveStates 都要有。
 - 不复刻真实商业 App 商标；禁止前任/第三方恋爱。只输出 JSON。`;
 }
 
-export function normalizePhonePlan(data) {
+export function normalizePhonePlan(data, memoryBank = null) {
     const deviceName = core_text.normalizeText(data?.deviceName, 100) || '私人终端';
     const requestedKind = core_text.normalizeText(data?.deviceKind, 40).toLowerCase();
     const inferredKind = /(?:手表|腕表|watch)/i.test(deviceName) ? 'watch' : /(?:传讯|通讯器|communicator)/i.test(deviceName) ? 'communicator' : /(?:终端|terminal)/i.test(deviceName) ? 'terminal' : 'phone';
     const deviceKind = core_constants.PHONE_DEVICE_KINDS.has(requestedKind) ? requestedKind : inferredKind;
-    const apps = (Array.isArray(data?.apps) ? data.apps : []).slice(0, 12).map((app, appIndex) => ({
-        id: core_text.safeId(app?.id, `APP${String(appIndex + 1).padStart(2, '0')}`),
-        label: core_text.normalizeText(app?.label, 60) || `分区 ${appIndex + 1}`,
-        kind: core_text.normalizeText(app?.kind, 60).toLowerCase() || 'misc',
-        summary: core_text.normalizeText(app?.summary, 1200),
-        entries: (Array.isArray(app?.entries) ? app.entries : []).slice(0, 24).map((entry, index) => ({
-            id: core_text.safeId(entry?.id, `E${String(index + 1).padStart(2, '0')}`),
-            title: core_text.normalizeText(entry?.title, 100) || `条目 ${index + 1}`,
-            meta: core_text.normalizeText(entry?.meta, 200),
-        })),
-    })).filter(app => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(app.kind) && app.entries.length >= 2);
-    const compact = ['watch', 'communicator'].includes(deviceKind);
-    const minApps = compact ? 7 : deviceKind === 'phone' ? 9 : 8;
-    const minEntries = compact ? 18 : deviceKind === 'phone' ? 29 : 24;
+    const limits = phoneAppLimits(deviceKind);
+    const apps = [];
+    const usedAppIds = new Set();
+    for (const [appIndex, app] of (Array.isArray(data?.apps) ? data.apps : []).slice(0, limits.maxApps).entries()) {
+        if (isExcludedPhoneApp(app)) continue;
+        const label = core_text.normalizeText(app?.label, 60) || `分区 ${appIndex + 1}`;
+        const id = core_text.safeId(app?.id, `APP${String(appIndex + 1).padStart(2, '0')}`);
+        if (PHONE_RESERVED_APP_IDS.has(id) || usedAppIds.has(id)) continue;
+        usedAppIds.add(id);
+        const kind = normalizePhoneAppKind(app?.kind, label);
+        const entries = [];
+        const usedEntryIds = new Set();
+        for (const [index, entry] of (Array.isArray(app?.entries) ? app.entries : []).slice(0, 24).entries()) {
+            const entryId = core_text.safeId(entry?.id, `${id}_E${String(index + 1).padStart(2, '0')}`);
+            if (usedEntryIds.has(entryId)) continue;
+            usedEntryIds.add(entryId);
+            entries.push({
+                id: entryId,
+                title: core_text.normalizeText(entry?.title, 100) || `条目 ${index + 1}`,
+                meta: core_text.normalizeText(entry?.meta, 200),
+            });
+        }
+        if (!entries.length) continue;
+        apps.push({
+            id,
+            label,
+            kind,
+            icon: normalizePhoneAppIcon(app?.icon, kind, label),
+            summary: core_text.normalizeText(app?.summary, 1200),
+            entries,
+        });
+    }
+    const { minApps, minEntries } = limits;
     if (apps.length < minApps) throw new Error(`私人终端目录 App 不足：${apps.length}/${minApps}。`);
     const total = apps.reduce((sum, app) => sum + app.entries.length, 0);
     if (total < minEntries) throw new Error(`私人终端目录条目不足：${total}/${minEntries}。`);
     if (!apps.some(app => app.kind === 'chat')) throw new Error('私人终端目录缺少 chat / 通讯分区。');
-    if (deviceKind === 'phone') {
-        const required = { moments: 3, chat: 3, gallery: 4, notes: 5, store: 4, browser: 3, contacts: 3, location: 2, misc: 2 };
-        for (const [kind, minimum] of Object.entries(required)) {
-            const app = apps.find(item => item.kind === kind);
-            if (!app || app.entries.length < minimum) throw new Error(`私人终端目录 ${kind} 不足：${app?.entries?.length || 0}/${minimum}。`);
-        }
-    }
     const lockText = core_text.normalizeText(data?.lockText, 400);
     const appIds = new Set(apps.map(app => app.id));
     const liveStates = {};
@@ -176,6 +390,8 @@ export function normalizePhonePlan(data) {
         title: core_text.normalizeText(data?.title, 100) || '他的私人终端',
         deviceName,
         deviceKind,
+        uiVersion: core_constants.PHONE_SESSION_VERSION,
+        uiProfile: normalizePhoneUiProfile(data?.uiProfile, { data: { ...data, apps }, memoryBank, deviceKind, bindPersona: true }),
         lockText,
         liveStates,
         apps,
@@ -184,7 +400,7 @@ export function normalizePhonePlan(data) {
 
 export function phoneAppPrompt(context, memoryBank, plan, app, sourceMemoryIds = null) {
     const compact = ['watch', 'communicator'].includes(plan.deviceKind);
-    const deepCount = app?.incremental === true ? 1 : compact ? 1 : plan.deviceKind === 'terminal' ? 1 : 2;
+    const deepCount = 1;
     const deepMessages = compact ? 8 : plan.deviceKind === 'terminal' ? 10 : 12;
     const archiveBlock = sourceMemoryIds
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
@@ -245,7 +461,7 @@ export function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sour
     }
     if (seen.size < expectedIds.size) throw new Error(`App ${planApp.label} 详情不完整：${seen.size}/${expectedIds.size} 个条目通过校验。`);
     if (planApp.kind === 'chat') {
-        const minimum = planApp?.incremental === true ? 1 : ['watch', 'communicator'].includes(deviceKind) ? 1 : deviceKind === 'terminal' ? 1 : 2;
+        const minimum = 1;
         if (deepChats < minimum) throw new Error(`App ${planApp.label} 深聊不足：${deepChats}/${minimum}。`);
     }
     if (planApp.kind === 'contacts' && deviceKind === 'phone' && !contactDetails) throw new Error(`App ${planApp.label} 缺少至少 1 个三字段联系人详情。`);
@@ -294,6 +510,7 @@ export function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, so
         id: planApp.id,
         label: planApp.label,
         kind: planApp.kind,
+        icon: normalizePhoneAppIcon(planApp.icon, planApp.kind, planApp.label),
         summary: core_text.normalizeText(raw?.summary, 1200) || planApp.summary,
         entries,
     };
@@ -306,7 +523,7 @@ export async function generatePhoneWithRepair(context, memoryBank, origin, taskK
         phonePlanPrompt(context, memoryBank, roomSession),
         '私人终端 1/2 · 正在生成设备与 App 目录…',
         { maxTokens: 8000, temperature: 0.35, context, origin, taskKey: `${taskKey}:plan`, mode: core_constants.MODE.PHONE, background: true },
-        normalizePhonePlan,
+        raw => normalizePhonePlan(raw, memoryBank),
     );
     const completedById = new Map((resumeDraft?.completedApps || []).map(app => [app.id, app]));
     if (!resumeDraft) await core_cache.savePhoneGenerationDraft(context, memoryBank, plan, []);
@@ -354,10 +571,11 @@ export async function generatePhoneWithRepair(context, memoryBank, origin, taskK
 }
 
 export function compactPhoneExisting(session) {
-    return (Array.isArray(session?.apps) ? session.apps : []).filter(app => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(core_text.normalizeText(app?.kind, 60).toLowerCase())).slice(0, 12).map(app => ({
+    return (Array.isArray(session?.apps) ? session.apps : []).filter(app => !isExcludedPhoneApp(app)).slice(0, 10).map(app => ({
         id: core_text.normalizeText(app?.id, 80),
         label: core_text.normalizeText(app?.label, 80),
-        kind: core_text.normalizeText(app?.kind, 60),
+        kind: normalizePhoneAppKind(app?.kind, app?.label),
+        icon: normalizePhoneAppIcon(app?.icon, app?.kind, app?.label),
         entries: core_evidence.evenlySample(Array.isArray(app?.entries) ? app.entries : [], 60).map(entry => ({
             id: core_text.normalizeText(entry?.id, 80),
             title: core_text.normalizeText(entry?.title, 120),
@@ -389,13 +607,14 @@ ${JSON.stringify(compactPhoneExisting(previous), null, 2)}
 
 export function normalizePhoneIncrementPlan(data, previous) {
     if (!Array.isArray(data?.apps)) throw new Error('私人终端增量目录缺少 apps 数组。');
-    const eligibleApps = (previous.apps || []).filter(app => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(core_text.normalizeText(app?.kind, 60).toLowerCase()));
+    const safePrevious = migrateLegacyPhoneSession(previous);
+    const eligibleApps = (safePrevious.apps || []).filter(app => !isExcludedPhoneApp(app));
     const existingById = new Map(eligibleApps.map(app => [app.id, app]));
     const existingByKind = new Map(eligibleApps.map(app => [app.kind, app]));
-    const rawApps = data.apps.slice(0, 12);
+    const rawApps = data.apps.slice(0, 10);
     const apps = rawApps.map(raw => {
         const id = core_text.safeId(raw?.id, '');
-        const kind = core_text.normalizeText(raw?.kind, 60).toLowerCase();
+        const kind = normalizePhoneAppKind(raw?.kind, raw?.label);
         const existing = existingById.get(id) || existingByKind.get(kind);
         if (!existing) return null;
         const reservedIds = new Set((existing.entries || []).map(entry => entry.id));
@@ -413,6 +632,7 @@ export function normalizePhoneIncrementPlan(data, previous) {
             id: existing.id,
             label: existing.label,
             kind: existing.kind,
+            icon: normalizePhoneAppIcon(existing.icon, existing.kind, existing.label),
             incremental: true,
             summary: core_text.normalizeText(raw?.summary, 1200) || existing.summary,
             entries: planned,
@@ -421,11 +641,13 @@ export function normalizePhoneIncrementPlan(data, previous) {
     const total = apps.reduce((sum, app) => sum + app.entries.length, 0);
     if (rawApps.length && !total) throw new Error('私人终端增量目录返回了 App，但没有可验证的新条目。');
     return {
-        title: previous.title,
-        deviceName: previous.deviceName,
-        deviceKind: previous.deviceKind,
-        lockText: previous.lockText,
-        liveStates: previous.liveStates,
+        title: safePrevious.title,
+        deviceName: safePrevious.deviceName,
+        deviceKind: safePrevious.deviceKind,
+        uiVersion: core_constants.PHONE_SESSION_VERSION,
+        uiProfile: safePrevious.uiProfile,
+        lockText: safePrevious.lockText,
+        liveStates: safePrevious.liveStates,
         apps,
     };
 }
@@ -439,7 +661,8 @@ export function phoneEntryKey(appKind, entry) {
 }
 
 export function mergePhoneIncremental(previous, patches, memoryBank) {
-    const merged = structuredClone(previous);
+    const safePrevious = migrateLegacyPhoneSession(previous, memoryBank);
+    const merged = structuredClone(safePrevious);
     let added = 0;
     for (const patchApp of patches || []) {
         const target = merged.apps.find(app => app.id === patchApp.id) || merged.apps.find(app => app.kind === patchApp.kind);
@@ -455,9 +678,9 @@ export function mergePhoneIncremental(previous, patches, memoryBank) {
         }
     }
     const normalized = normalizePhone(merged, memoryBank);
-    normalized.selectedAppId = previous.selectedAppId || normalized.selectedAppId;
-    normalized.selectedEntryId = previous.selectedEntryId || '';
-    normalized.view = previous.view || 'list';
+    normalized.selectedAppId = safePrevious.selectedAppId || normalized.selectedAppId;
+    normalized.selectedEntryId = safePrevious.selectedEntryId || '';
+    normalized.view = PHONE_VIEW_VALUES.has(safePrevious.view) ? safePrevious.view : 'home';
     return { session: normalized, added };
 }
 
@@ -497,10 +720,21 @@ export function normalizePhone(data, memoryBank) {
                 ? 'terminal'
                 : 'phone';
     const deviceKind = core_constants.PHONE_DEVICE_KINDS.has(requestedKind) ? requestedKind : inferredKind;
+    const limits = phoneAppLimits(deviceKind);
     const rawApps = Array.isArray(data?.apps) ? data.apps : [];
-    const apps = rawApps.slice(0, 12).map((app, appIndex) => {
+    const usedAppIds = new Set();
+    const apps = rawApps.slice(0, limits.maxApps).map((app, appIndex) => {
+        if (isExcludedPhoneApp(app)) return null;
         const appId = core_text.safeId(app?.id, `APP${String(appIndex + 1).padStart(2, '0')}`);
+        if (PHONE_RESERVED_APP_IDS.has(appId) || usedAppIds.has(appId)) return null;
+        usedAppIds.add(appId);
+        const label = core_text.normalizeText(app?.label, 60) || `分区 ${appIndex + 1}`;
+        const kind = normalizePhoneAppKind(app?.kind, label);
+        const usedEntryIds = new Set();
         const entries = (Array.isArray(app?.entries) ? app.entries : []).slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS).map((entry, index) => {
+            const entryId = core_text.safeId(entry?.id, `${appId}_E${String(index + 1).padStart(2, '0')}`);
+            if (usedEntryIds.has(entryId)) return null;
+            usedEntryIds.add(entryId);
             const basis = core_constants.ROOM_BASIS_VALUES.has(entry?.basis) ? entry.basis : '设定';
             const title = core_text.normalizeText(entry?.title, 100) || `条目 ${index + 1}`;
             const preview = core_text.normalizeText(entry?.preview, 1200);
@@ -516,12 +750,12 @@ export function normalizePhone(data, memoryBank) {
             const reference = basis === '记忆' ? core_evidence.normalizeMemoryReference(entry?.sourceMemoryIds, entry?.sourceMemoryAnchor, evidenceText, memoryBank, 1) : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
             if (!preview || (!detail && !messages.length && !fields.length && !imageCaption) || (basis === '记忆' && !reference.sourceMemoryIds.length)) return null;
             return {
-                id: core_text.safeId(entry?.id, `${appId}_E${String(index + 1).padStart(2, '0')}`),
+                id: entryId,
                 title,
                 meta: core_text.normalizeText(entry?.meta, 200),
                 preview,
                 detail,
-                contactName: app?.kind === 'chat' ? conversation.contactName : '',
+                contactName: kind === 'chat' ? conversation.contactName : '',
                 messages,
                 fields,
                 imageCaption,
@@ -532,34 +766,26 @@ export function normalizePhone(data, memoryBank) {
         }).filter(Boolean);
         return {
             id: appId,
-            label: core_text.normalizeText(app?.label, 60) || `分区 ${appIndex + 1}`,
-            kind: core_text.normalizeText(app?.kind, 60).toLowerCase() || 'misc',
+            label,
+            kind,
+            icon: normalizePhoneAppIcon(app?.icon, kind, label),
             summary: core_text.normalizeText(app?.summary, 1200),
             entries,
         };
-    }).filter(app => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(app.kind) && app.entries.length >= 2);
+    }).filter(app => app && app.entries.length >= 1);
 
     const compactDevice = ['watch', 'communicator'].includes(deviceKind);
-    const minApps = compactDevice ? 7 : (deviceKind === 'phone' ? 9 : 8);
-    if (apps.length < minApps) throw new Error(`“他的私人终端”分区不足：得到 ${apps.length} 个，当前设备至少需要 ${minApps} 个。`);
+    if (apps.length < limits.minApps) throw new Error(`“他的私人终端”分区不足：得到 ${apps.length} 个，当前设备至少需要 ${limits.minApps} 个。`);
     const totalEntries = apps.reduce((sum, app) => sum + app.entries.length, 0);
-    const minEntries = compactDevice ? 18 : (deviceKind === 'phone' ? 29 : 24);
-    if (totalEntries < minEntries) throw new Error(`“他的私人终端”内容过少：只有 ${totalEntries} 个可读条目，至少需要 ${minEntries} 个。`);
-    if (deviceKind === 'phone') {
-        const required = { moments: 3, chat: 3, gallery: 4, notes: 5, store: 4, browser: 3, contacts: 3, location: 2, misc: 2 };
-        const countByKind = Object.create(null);
-        for (const app of apps) countByKind[app.kind] = Math.max(Number(countByKind[app.kind]) || 0, app.entries.length);
-        const missing = Object.entries(required).filter(([kind, minimum]) => (Number(countByKind[kind]) || 0) < minimum);
-        if (missing.length) {
-            const detail = missing.map(([kind, minimum]) => `${kind} ${Number(countByKind[kind]) || 0}/${minimum}`).join('、');
-            throw new Error(`“他的私人终端”核心 App 内容不足：${detail}。`);
-        }
+    if (totalEntries < limits.minEntries) throw new Error(`“他的私人终端”内容过少：只有 ${totalEntries} 个可读条目，至少需要 ${limits.minEntries} 个。`);
+    if (!apps.some(app => app.kind === 'chat')) throw new Error('“他的私人终端”缺少 chat / 通讯分区。');
+    if (deviceKind === 'phone' && apps.some(app => app.kind === 'contacts')) {
         const contactDetails = apps.filter(app => app.kind === 'contacts').flatMap(app => app.entries).some(entry => entry.fields.length >= 3);
         if (!contactDetails) throw new Error('“他的私人终端”联系人详情不足：至少 1 个联系人需要 3 项以上备注 / 最近通话 / 位置或提醒字段。');
     }
     const deepChatMessageMinimum = compactDevice ? 8 : (deviceKind === 'terminal' ? 10 : 12);
     const deepChats = apps.filter(app => app.kind === 'chat').flatMap(app => app.entries).filter(entry => entry.messages.length >= deepChatMessageMinimum).length;
-    const minDeepChats = compactDevice ? 1 : (deviceKind === 'terminal' ? 1 : 2);
+    const minDeepChats = 1;
     if (deepChats < minDeepChats) {
         throw new Error(`“他的私人终端”深度对话不足：只有 ${deepChats} 个达到 ${deepChatMessageMinimum} 条消息以上的对话窗，当前设备至少需要 ${minDeepChats} 个。`);
     }
@@ -587,11 +813,13 @@ export function normalizePhone(data, memoryBank) {
         ownerName: phoneConversationOwnerName(memoryBank),
         deviceName: requestedDeviceName,
         deviceKind,
+        uiVersion: core_constants.PHONE_SESSION_VERSION,
+        uiProfile: normalizePhoneUiProfile(data?.uiProfile, { data: { ...data, apps }, memoryBank, deviceKind, bindPersona: true }),
         lockText: core_text.normalizeText(data?.lockText, 400),
         liveStates,
         apps,
         selectedAppId: apps[0].id,
         selectedEntryId: '',
-        view: 'list',
+        view: 'home',
     };
 }

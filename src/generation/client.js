@@ -19,6 +19,7 @@ import * as modes_achievements from '../modes/achievements.js';
 import * as modes_advEvent from '../modes/advEvent.js';
 import * as modes_album from '../modes/album.js';
 import * as modes_butterfly from '../modes/butterfly.js';
+import * as modes_calendar from '../modes/calendar.js';
 import * as modes_ending from '../modes/ending.js';
 import * as modes_heart from '../modes/heart.js';
 import * as modes_items from '../modes/items.js';
@@ -27,6 +28,16 @@ import * as modes_room from '../modes/room.js';
 import * as modes_relations from '../modes/relations.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as ui_settingsPanel from '../ui/settingsPanel.js';
+
+export function generationWorldInfoScanTerms(mode, context = {}) {
+    const characterName = core_text.normalizeText(context?.name2, 120);
+    const common = characterName ? [characterName] : [];
+    if (mode === core_constants.MODE.ROOM) return [...common, '外貌', '发色', '发型', '穿着', '制服', '服饰', '种族', '住处', '房间', '居所', '时代', '职业', '阶层', '生活习惯', 'appearance', 'hair', 'outfit', 'species', 'residence', 'room', 'home'];
+    if (mode === core_constants.MODE.PHONE) return [...common, '通讯', '终端', '手机', '设备', '职业', '爱好', '生活习惯', '科技', '时代', '世界观', 'phone', 'device', 'terminal', 'communication', 'hobby', 'occupation'];
+    if (mode === core_constants.MODE.BUTTERFLY) return [...common, '身份', '职业', '时代', '地点', '关系', '选择', '命运', '相遇', '世界线', '平行世界', 'identity', 'occupation', 'era', 'location', 'fate', 'encounter'];
+    if (mode === core_constants.MODE.CALENDAR) return [...common, '节日', '日历', '生日', '纪念日', '祭典', '庆典', 'festival', 'holiday', 'calendar', 'birthday', 'anniversary'];
+    return common;
+}
 
 export function chunkForGeneration(items, size) {
     const safeSize = Math.max(1, Math.floor(Number(size) || 1));
@@ -192,7 +203,7 @@ export async function generateConfiguredJson(prompt, options = {}) {
     const expanded = core_text.expandSafeRoleMacros(prompt, context);
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
-        : await core_cache.buildControlledContextEnvelope(context);
+        : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context) });
     const phrasePolicy = options.enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(settings) : '';
     const controlledPrompt = `${contextEnvelope}
 ${expanded}${phrasePolicy}`;
@@ -371,8 +382,10 @@ export async function generateMode(mode, options = {}) {
         let session;
         if (mode === core_constants.MODE.ADV) {
             session = await modes_advEvent.generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, { replaceExisting });
-        } else if (mode === core_constants.MODE.BUTTERFLY && previousSession) {
-            session = await modes_butterfly.generateButterflyIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession);
+        } else if (mode === core_constants.MODE.BUTTERFLY) {
+            session = previousSession
+                ? await modes_butterfly.generateButterflyIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession)
+                : await modes_butterfly.generateButterflyWithRepair(context, memoryBank, origin, taskKey);
         } else if (mode === core_constants.MODE.ROOM && previousSession) {
             session = await modes_room.generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession);
         } else if (mode === core_constants.MODE.ITEMS && previousSession) {
@@ -406,7 +419,7 @@ export async function generateMode(mode, options = {}) {
             session = await modes_achievements.generateAchievementsWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else {
             const contextEnvelope = mode === core_constants.MODE.CALENDAR
-                ? await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: ['节日', '日历', '生日', '纪念日', '祭典', '庆典', 'festival', 'holiday', 'calendar', 'birthday', 'anniversary'] })
+                ? await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(mode, context) })
                 : undefined;
             const raw = await requestJson(
                 generationPrompt,
@@ -414,6 +427,9 @@ export async function generateMode(mode, options = {}) {
                 { maxTokens: core_constants.MODE_TOKEN_CAPS[mode] || 6144, context, contextEnvelope, origin, taskKey, mode, background: true },
             );
             session = generation_normalizers.normalizeByMode(mode, raw, memoryBank, context);
+            if (mode === core_constants.MODE.CALENDAR && previousSession && !replaceExisting) {
+                session = modes_calendar.mergeCalendarRefresh(previousSession, session, memoryBank);
+            }
         }
         if (!core_incremental.incrementalPartRecord(session, incrementalPart)) {
             const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank, incrementalPart);

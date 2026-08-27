@@ -653,7 +653,7 @@ function managedTargetRecord(type, id, parentId = '') {
     return ui_contentManager.managementTargetsForSession(runtimeState.activeSession).find(item =>
         item.type === core_text.normalizeText(type, 60)
         && item.id === core_text.normalizeText(id, 120)
-        && item.parentId === core_text.normalizeText(parentId, 120)
+        && item.parentId === core_text.normalizeText(parentId, 160)
     ) || null;
 }
 
@@ -711,11 +711,26 @@ function deleteManagedTargetFromSession(session, type, id, parentId = '') {
     } else if (type === 'achievement') {
         updated.entries = removeById(updated.entries, id);
     } else if (type === 'calendar-entry') {
-        updated.entries = removeById(updated.entries, id);
-    } else if (type === 'calendar-note') {
-        updated.stickyNotes = removeById(updated.stickyNotes, id);
-    } else if (type === 'calendar-mood') {
-        updated.moodNotes = removeById(updated.moodNotes, id);
+        const pageKey = core_text.normalizeText(parentId, 160);
+        const index = updated.entries?.findIndex(item => item?.id === id && modes_calendar.calendarEntryPageKey(item) === pageKey) ?? -1;
+        if (index < 0) throw new Error('找不到这条日历项。');
+        updated.entries.splice(index, 1);
+        const page = modes_calendar.calendarDayPage(updated, pageKey);
+        const sameIdStillOnPage = (updated.entries || []).some(item => item?.id === id && modes_calendar.calendarEntryPageKey(item) === pageKey);
+        if (page && !sameIdStillOnPage) page.entryIds = (Array.isArray(page.entryIds) ? page.entryIds : []).filter(entryId => entryId !== id);
+    } else if (type === 'calendar-note' || type === 'calendar-mood' || type === 'calendar-draft' || type === 'calendar-manual-todo') {
+        const page = modes_calendar.calendarDayPage(updated, core_text.normalizeText(parentId, 160));
+        if (!page) throw new Error('找不到这个日期页。');
+        const field = type === 'calendar-note'
+            ? 'stickyNotes'
+            : type === 'calendar-mood'
+                ? 'moodNotes'
+                : type === 'calendar-draft'
+                    ? 'drafts'
+                    : 'manualTodos';
+        const before = Array.isArray(page[field]) ? page[field].length : 0;
+        page[field] = removeById(page[field], id);
+        if (page[field].length === before) throw new Error('找不到这条日期页内容。');
     } else if (type === 'butterfly-node') {
         const node = updated.nodes?.find(entry => entry.id === id);
         if (!node || node.trueEnding || node.id === 'MAIN') throw new Error('主时间线和观测点 Ω 不能单独删除。');
@@ -737,6 +752,78 @@ async function commitManagedSession(updated, expectedChatId, expectedArchiveRevi
     if (!core_cache.saveSession(runtimeState.activeMode, updated, expectedChatId)) throw new Error('当前派生缓存版本已经变化，本次修改没有写入。');
     runtimeState.activeSession = updated;
     return true;
+}
+
+function uniqueCalendarManualId(items, prefix, pageKey, value) {
+    const used = new Set((Array.isArray(items) ? items : []).map(item => core_text.safeId(item?.id, '')).filter(Boolean));
+    const seed = core_text.hashString(`${pageKey}|${value}|${Date.now()}`).toString(36).toUpperCase();
+    let id = `${prefix}_${seed}`;
+    let serial = 2;
+    while (used.has(id)) id = `${prefix}_${seed}_${serial++}`;
+    return id;
+}
+
+async function mutateCalendarDayPage(pageKey, mutation, successMessage) {
+    if (!archive_library.requireWritableArchiveAction()) return false;
+    try {
+        const context = core_context.currentCharacterGuard();
+        const expectedChatId = core_context.getChatId(context);
+        const memoryBank = archive_repository.requireArchive(context);
+        const expectedArchiveRevision = memoryBank.archiveRevision;
+        const origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
+        const updated = core_cache.loadSession(core_constants.MODE.CALENDAR, { context, chatId: expectedChatId, memoryBank, clone: true });
+        if (!updated) throw new Error('当前日历缓存已经变化，请重新打开日历。');
+        const key = core_text.normalizeText(pageKey, 160);
+        if (!updated.dayPages || typeof updated.dayPages !== 'object') updated.dayPages = Object.create(null);
+        let page = modes_calendar.calendarDayPage(updated, key);
+        if (!page) {
+            page = modes_calendar.createCalendarDayPage(key);
+            if (!page) throw new Error('这个日期页无效，本次内容没有写入。');
+            updated.dayPages[key] = page;
+        }
+        mutation(page);
+        updated.selectedDateKey = key;
+        updated.userManaged = true;
+        await commitManagedSession(updated, expectedChatId, expectedArchiveRevision, origin);
+        if (successMessage) globalThis.toastr?.success?.(successMessage, '心跳回忆');
+        ui_calendarView.renderCalendar();
+        return true;
+    } catch (error) {
+        globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+        return false;
+    }
+}
+
+async function addCalendarDraft(pageKey, text) {
+    const value = core_text.normalizeText(text, 1200);
+    if (!value) return globalThis.toastr?.info?.('请先写下草稿内容。', '心跳回忆');
+    return mutateCalendarDayPage(pageKey, page => {
+        const drafts = Array.isArray(page.drafts) ? page.drafts : [];
+        if (drafts.length >= 24) throw new Error('这一天的草稿已达上限24条，请先在内容管理中删除旧草稿。');
+        drafts.push({ id: uniqueCalendarManualId(drafts, 'CAL_DRAFT', page.key, value), text: value, createdAt: Date.now() });
+        page.drafts = drafts;
+    }, '已保存到当前日期的独立草稿。');
+}
+
+async function addCalendarManualTodo(pageKey, title) {
+    const value = core_text.normalizeText(title, 120);
+    if (!value) return globalThis.toastr?.info?.('请先填写待办内容。', '心跳回忆');
+    return mutateCalendarDayPage(pageKey, page => {
+        const todos = Array.isArray(page.manualTodos) ? page.manualTodos : [];
+        if (todos.length >= 32) throw new Error('这一天的手动待办已达上限32条，请先删除旧待办。');
+        todos.push({ id: uniqueCalendarManualId(todos, 'CAL_TODO', page.key, value), title: value, completed: false, origin: 'user' });
+        page.manualTodos = todos;
+    }, '已添加到当前日期的独立 To-Do。');
+}
+
+async function toggleCalendarManualTodo(pageKey, todoId) {
+    const id = core_text.safeId(todoId, '');
+    if (!id) return false;
+    return mutateCalendarDayPage(pageKey, page => {
+        const item = (Array.isArray(page.manualTodos) ? page.manualTodos : []).find(todo => todo?.id === id);
+        if (!item) throw new Error('找不到这条手动待办。');
+        item.completed = item.completed !== true;
+    }, 'To-Do 状态已更新。');
 }
 
 async function deleteManagedTarget(type, id, parentId = '') {
@@ -797,7 +884,7 @@ async function regenerateManagedTarget(type, id, parentId = '') {
         const origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
         const base = core_cache.loadSession(mode, { context, chatId: expectedChatId, memoryBank, clone: true });
         if (!base) throw new Error('当前分类缓存已经变化，请返回后重新打开再操作。');
-        const taskKey = `manage:${core_context.chatScopeKey(context)}:${core_text.normalizeText(type, 60)}:${core_text.normalizeText(id, 120)}`;
+        const taskKey = `manage:${core_context.chatScopeKey(context)}:${core_text.normalizeText(type, 60)}:${core_text.normalizeText(parentId, 160)}:${core_text.normalizeText(id, 120)}`;
         setInnerLoading(true, `正在重新生成「${record.label}」…`);
         const updated = await generation_contentRegeneration.regenerateManagedTarget(base, type, id, parentId, { context, memoryBank, origin, taskKey });
         await commitManagedSession(updated, expectedChatId, expectedArchiveRevision, origin);
@@ -956,6 +1043,17 @@ export function handleOverlayClick(event) {
     const actionEl = event.target.closest?.('[data-rmt-action]');
     const action = actionEl?.dataset?.rmtAction;
     if (!action) return;
+    if (action === 'calendar-add-draft') {
+        const input = bodyEl()?.querySelector?.('[data-rmt-calendar-draft-input]');
+        return void addCalendarDraft(actionEl.dataset.rmtCalendarPage, input?.value);
+    }
+    if (action === 'calendar-add-todo') {
+        const input = bodyEl()?.querySelector?.('[data-rmt-calendar-todo-input]');
+        return void addCalendarManualTodo(actionEl.dataset.rmtCalendarPage, input?.value);
+    }
+    if (action === 'calendar-toggle-todo') {
+        return void toggleCalendarManualTodo(actionEl.dataset.rmtCalendarPage, actionEl.dataset.rmtCalendarTodo);
+    }
     if (runtimeState.activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'draw-heart-strip', 'clear-heart-strip', 'generate-all-adv', 'repair-failed-adv', 'room-life-refresh', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins', 'memory-worldinfo-picker', 'refresh-ending-confessions', 'heart-generate-part', 'heart-generate-season'].includes(action)) {
         if (!archive_library.requireWritableArchiveAction()) return;
     }

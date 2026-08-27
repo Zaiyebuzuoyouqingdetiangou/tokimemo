@@ -15,7 +15,119 @@ import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
 import * as ui_overlay from '../ui/overlay.js';
 
-export function normalizeRoom(data, memoryBank) {
+const ROOM_VISUAL_PROFILE_VERSION = 1;
+const ROOM_VISUAL_VALUES = Object.freeze({
+    worldStyle: Object.freeze(['contemporary', 'historical', 'fantasy', 'scifi', 'nomadic', 'maritime', 'institutional']),
+    palette: Object.freeze(['mist', 'warm', 'earth', 'forest', 'ocean', 'night', 'mono', 'jewel', 'violet']),
+    material: Object.freeze(['wood', 'stone', 'fabric', 'metal', 'glass', 'mixed']),
+    density: Object.freeze(['sparse', 'balanced', 'layered']),
+    build: Object.freeze(['slender', 'lean', 'average', 'broad', 'compact', 'soft']),
+    hairShape: Object.freeze(['cropped', 'short', 'medium', 'long', 'tied', 'curly', 'covered', 'nonhuman']),
+    hairTone: Object.freeze(['dark', 'brown', 'light', 'red', 'silver', 'fantasy_cool', 'fantasy_warm']),
+    outfit: Object.freeze(['casual', 'formal', 'uniform', 'academic', 'artisan', 'combat', 'ceremonial', 'technical', 'historical', 'fantasy']),
+    detail: Object.freeze(['none', 'glasses', 'headphones', 'scarf', 'headwear', 'pointed_ears', 'animal_ears', 'horns', 'visor']),
+    posture: Object.freeze(['reserved', 'relaxed', 'upright', 'active', 'studious', 'tired']),
+});
+const ROOM_VISUAL_ALLOWLISTS = Object.freeze(Object.fromEntries(
+    Object.entries(ROOM_VISUAL_VALUES).map(([key, values]) => [key, new Set(values)]),
+));
+const ROOM_VISUAL_EXPLICIT_FIELDS = new Set([
+    'worldStyle', 'palette', 'material', 'density',
+    'figure.build', 'figure.hairShape', 'figure.hairTone', 'figure.outfit', 'figure.detail', 'figure.posture',
+]);
+const ROOM_VISUAL_LEGACY_ALIASES = Object.freeze({
+    worldStyle: Object.freeze({ modern: 'contemporary' }),
+    hairTone: Object.freeze({ cool: 'fantasy_cool', warm: 'fantasy_warm' }),
+    detail: Object.freeze({ 'pointed-ears': 'pointed_ears', 'animal-ears': 'animal_ears' }),
+});
+const ROOM_VISUAL_PRESETS = Object.freeze([
+    Object.freeze({ worldStyle: 'contemporary', palette: 'mist', material: 'mixed', density: 'balanced', build: 'average', hairShape: 'short', hairTone: 'dark', outfit: 'casual', detail: 'none', posture: 'relaxed' }),
+    Object.freeze({ worldStyle: 'institutional', palette: 'ocean', material: 'glass', density: 'balanced', build: 'lean', hairShape: 'cropped', hairTone: 'brown', outfit: 'uniform', detail: 'glasses', posture: 'upright' }),
+    Object.freeze({ worldStyle: 'historical', palette: 'warm', material: 'wood', density: 'layered', build: 'slender', hairShape: 'tied', hairTone: 'dark', outfit: 'historical', detail: 'headwear', posture: 'reserved' }),
+    Object.freeze({ worldStyle: 'fantasy', palette: 'jewel', material: 'stone', density: 'layered', build: 'soft', hairShape: 'long', hairTone: 'silver', outfit: 'fantasy', detail: 'pointed_ears', posture: 'upright' }),
+    Object.freeze({ worldStyle: 'scifi', palette: 'night', material: 'metal', density: 'sparse', build: 'lean', hairShape: 'cropped', hairTone: 'fantasy_cool', outfit: 'technical', detail: 'visor', posture: 'active' }),
+    Object.freeze({ worldStyle: 'nomadic', palette: 'earth', material: 'fabric', density: 'layered', build: 'broad', hairShape: 'medium', hairTone: 'red', outfit: 'artisan', detail: 'scarf', posture: 'relaxed' }),
+    Object.freeze({ worldStyle: 'maritime', palette: 'ocean', material: 'wood', density: 'balanced', build: 'compact', hairShape: 'short', hairTone: 'brown', outfit: 'uniform', detail: 'headwear', posture: 'upright' }),
+    Object.freeze({ worldStyle: 'contemporary', palette: 'violet', material: 'fabric', density: 'layered', build: 'soft', hairShape: 'curly', hairTone: 'fantasy_warm', outfit: 'casual', detail: 'headphones', posture: 'active' }),
+    Object.freeze({ worldStyle: 'institutional', palette: 'mist', material: 'metal', density: 'sparse', build: 'slender', hairShape: 'medium', hairTone: 'dark', outfit: 'academic', detail: 'glasses', posture: 'studious' }),
+    Object.freeze({ worldStyle: 'fantasy', palette: 'forest', material: 'wood', density: 'layered', build: 'lean', hairShape: 'long', hairTone: 'fantasy_cool', outfit: 'fantasy', detail: 'animal_ears', posture: 'active' }),
+    Object.freeze({ worldStyle: 'historical', palette: 'earth', material: 'stone', density: 'balanced', build: 'broad', hairShape: 'covered', hairTone: 'dark', outfit: 'ceremonial', detail: 'scarf', posture: 'reserved' }),
+    Object.freeze({ worldStyle: 'scifi', palette: 'jewel', material: 'glass', density: 'balanced', build: 'compact', hairShape: 'nonhuman', hairTone: 'silver', outfit: 'combat', detail: 'horns', posture: 'upright' }),
+]);
+
+function roomVisualPreset(identitySeed) {
+    const seed = core_text.normalizeText(identitySeed, 12000).toLowerCase();
+    let pool = [0, 1, 7, 8];
+    if (/(?:赛博|科幻|星舰|飞船|宇宙|未来|机甲|机械|机器人|数据舱|驾驶舱|cyber|sci-?fi|spaceship|android)/i.test(seed)) pool = [4, 11];
+    else if (/(?:魔法|法师|精灵|龙族|神殿|异世界|妖|仙|灵力|fantasy|magic|elf|dragon)/i.test(seed)) pool = [3, 9];
+    else if (/(?:古代|王朝|宫殿|和室|茶室|武士|骑士|中世纪|historical|medieval|ancient)/i.test(seed)) pool = [2, 10];
+    else if (/(?:船舱|舰桥|港口|航海|海员|水手|maritime|ship|cabin|sailor)/i.test(seed)) pool = [6];
+    else if (/(?:营帐|帐篷|游牧|荒野|行军|露营|nomad|tent|camp)/i.test(seed)) pool = [5];
+    else if (/(?:宿舍|学校|学院|医院|军营|办公室|实验室|dorm|school|academy|hospital|office|laboratory)/i.test(seed)) pool = [1, 8];
+    return ROOM_VISUAL_PRESETS[pool[core_text.hashString(seed || 'heartbeat-room') % pool.length]];
+}
+
+function allowlistedRoomVisualValue(source, key, fallback) {
+    const rawValue = core_text.normalizeText(source?.[key], 40).toLowerCase();
+    const value = ROOM_VISUAL_LEGACY_ALIASES[key]?.[rawValue] || rawValue;
+    return ROOM_VISUAL_ALLOWLISTS[key].has(value) ? value : fallback;
+}
+
+export function normalizeRoomVisualProfile(value, { identitySeed = '', bindPersona = false } = {}) {
+    const input = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const figure = input.figure && typeof input.figure === 'object' && !Array.isArray(input.figure) ? input.figure : {};
+    const normalizedSeed = core_text.normalizeText(identitySeed, 12000) || 'heartbeat-room';
+    const fallback = roomVisualPreset(normalizedSeed);
+    const identityHash = core_text.hashString(normalizedSeed);
+    const explicitFields = core_text.cleanArray(input.explicitFields, ROOM_VISUAL_EXPLICIT_FIELDS.size, 40)
+        .filter(field => ROOM_VISUAL_EXPLICIT_FIELDS.has(field));
+    const explicit = new Set(explicitFields);
+    const choose = (source, key, fallbackValue, path = key) => bindPersona && !explicit.has(path)
+        ? fallbackValue
+        : allowlistedRoomVisualValue(source, key, fallbackValue);
+    return {
+        version: ROOM_VISUAL_PROFILE_VERSION,
+        identityKey: `room-visual:${identityHash.toString(36)}`,
+        explicitFields,
+        worldStyle: choose(input, 'worldStyle', fallback.worldStyle),
+        palette: choose(input, 'palette', fallback.palette),
+        material: choose(input, 'material', fallback.material),
+        density: choose(input, 'density', fallback.density),
+        figure: {
+            build: choose(figure, 'build', fallback.build, 'figure.build'),
+            hairShape: choose(figure, 'hairShape', fallback.hairShape, 'figure.hairShape'),
+            hairTone: choose(figure, 'hairTone', fallback.hairTone, 'figure.hairTone'),
+            outfit: choose(figure, 'outfit', fallback.outfit, 'figure.outfit'),
+            detail: choose(figure, 'detail', fallback.detail, 'figure.detail'),
+            posture: choose(figure, 'posture', fallback.posture, 'figure.posture'),
+            // These proportions are code-derived from the controlled character/room identity seed.
+            // The model cannot provide arbitrary geometry, CSS, URLs, or avatar data.
+            faceWidth: 40 + (identityHash % 9),
+            faceHeight: 46 + ((identityHash >>> 4) % 8),
+            eyeSpacing: 16 + ((identityHash >>> 8) % 8),
+            mouthWidth: 7 + ((identityHash >>> 12) % 6),
+        },
+    };
+}
+
+function roomVisualIdentitySeed(room, memoryBank = null, identityHint = '') {
+    const spaces = (Array.isArray(room?.spaces) ? room.spaces : []).slice(0, 10).map(space => [
+        core_text.normalizeText(space?.label, 80),
+        core_text.normalizeText(space?.spaceType, 100),
+        core_text.normalizeText(space?.atmosphere, 360),
+        (Array.isArray(space?.objects) ? space.objects : []).slice(0, 8).map(item => core_text.normalizeText(item?.label, 60)).join('、'),
+    ].filter(Boolean).join('：')).join('\n');
+    return [
+        core_text.normalizeText(identityHint, 360),
+        core_text.normalizeText(memoryBank?.characterName, 120),
+        core_text.normalizeText(memoryBank?.chatId || room?.chatId, 240),
+        core_text.normalizeText(room?.homeName, 120),
+        core_text.normalizeText(room?.homeSummary, 1000),
+        spaces,
+    ].filter(Boolean).join('\u001f');
+}
+
+export function normalizeRoom(data, memoryBank, { identityKey = '' } = {}) {
     const rawSpaces = Array.isArray(data?.spaces) ? data.spaces : [];
     const usedSpaceIds = new Set();
     const spaces = rawSpaces.slice(0, 10).map((space, spaceIndex) => {
@@ -80,11 +192,16 @@ ${line}`, memoryBank, 1)
     if (presenceLines.length < 4) throw new Error(`“他的房间”角色互动台词不足：${presenceLines.length} 句，至少需要 4 句。`);
     const initialDaypart = roomDaypartState();
     const initialSpace = spaceById.get(dayparts[initialDaypart.key]?.spaceId) || spaces[0];
+    const title = core_text.normalizeText(data?.title, 100) || '他的房间';
+    const homeName = core_text.normalizeText(data?.homeName, 100) || '私人生活空间';
+    const homeSummary = core_text.normalizeText(data?.homeSummary, 2200) || '这些空间拼成了他日常生活真正会经过的路线。';
+    const profileSeed = roomVisualIdentitySeed({ ...data, title, homeName, homeSummary, spaces }, memoryBank, identityKey);
     return {
         kind: core_constants.MODE.ROOM,
-        title: core_text.normalizeText(data?.title, 100) || '他的房间',
-        homeName: core_text.normalizeText(data?.homeName, 100) || '私人生活空间',
-        homeSummary: core_text.normalizeText(data?.homeSummary, 2200) || '这些空间拼成了他日常生活真正会经过的路线。',
+        title,
+        homeName,
+        homeSummary,
+        visualProfile: normalizeRoomVisualProfile(data?.visualProfile, { identitySeed: profileSeed, bindPersona: true }),
         spaces,
         dayparts,
         presenceLines,
@@ -144,6 +261,7 @@ export function roomObjectUsesIncrement(item, sourceMemoryIds) {
 
 export function mergeRoomIncremental(previous, fresh, sourceMemoryIds) {
     const merged = structuredClone(previous);
+    if (!previous?.visualProfile && fresh?.visualProfile) merged.visualProfile = structuredClone(fresh.visualProfile);
     const usedSpaceIds = new Set((merged.spaces || []).map(space => space.id));
     const bySpace = new Map((merged.spaces || []).map((space, index) => [roomSpaceKey(space), index]));
     let added = 0;
@@ -725,7 +843,14 @@ export function renderRoom() {
     const focusId = personIsHere ? (slot?.focusObjectId || '') : '';
     const visualState = normalizeRoomVisualState(slot?.visualState);
     const temporaryObjects = personIsHere ? normalizeTemporaryRoomObjects(slot?.temporaryObjects) : [];
+    const archiveIdentity = runtimeState.activeArchiveSnapshot
+        ? `${core_text.normalizeText(runtimeState.activeArchiveSnapshot.characterName, 120) || '{{char}}'}|${core_text.normalizeText(runtimeState.activeArchiveSnapshot.chatId, 240)}`
+        : `${core_text.normalizeText(core_context.getContext().name2, 120) || '{{char}}'}|${core_text.normalizeText(session.chatId, 240)}`;
     const charName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext().name2 || '{{char}}', 120);
+    const visualProfile = normalizeRoomVisualProfile(session.visualProfile, {
+        identitySeed: roomVisualIdentitySeed(session, runtimeState.activeArchiveSnapshot?.memory || null, archiveIdentity),
+    });
+    const figureProfile = visualProfile.figure;
     const hotspots = selectedSpace.objects.map((item, index) => `<button type="button" class="rmt-room-hotspot ${item.id === selected?.id ? 'active' : ''} ${item.id === focusId ? 'focus' : ''}" style="${roomObjectPlacement(item, index)}" data-rmt-room-id="${core_text.esc(item.id)}" aria-label="${core_text.esc(item.label)}">${index + 1}</button>`).join('');
     const objectRail = selectedSpace.objects.map((item, index) => `<button type="button" class="rmt-room-object-chip ${item.id === selected?.id ? 'active' : ''}" data-rmt-room-id="${core_text.esc(item.id)}"><span>${index + 1}</span><b>${core_text.esc(item.label)}</b>${item.searchable ? '<em>▣ 可翻找</em>' : ''}</button>`).join('');
     const map = session.spaces.map(space => {
@@ -759,7 +884,7 @@ export function renderRoom() {
     const sceneLayout = roomLayoutVariant(selectedSpace);
     const tempLine = temporaryObjects.length ? `<div class="rmt-room-temp-line">此刻临时物件：${temporaryObjects.map(item => core_text.esc(item)).join(' · ')}</div>` : '';
     const body = ui_overlay.bodyEl();
-    body.innerHTML = `<div class="rmt-room-view">
+    body.innerHTML = `<div class="rmt-room-view" data-rmt-room-world="${core_text.esc(visualProfile.worldStyle)}" data-rmt-room-palette="${core_text.esc(visualProfile.palette)}" data-rmt-room-material="${core_text.esc(visualProfile.material)}" data-rmt-room-density="${core_text.esc(visualProfile.density)}">
       <div class="rmt-room-map" aria-label="私人空间地图">${map}</div>
       <div class="rmt-room-location"><div><b>${core_text.esc(currentLocationText)}</b><small>${core_text.esc(session.homeName)} · ${session.spaces.length} 个可观察区域</small></div><div class="rmt-room-location-actions">${!personIsHere ? `<button type="button" class="rmt-room-find" data-rmt-action="room-find-presence">去看看他</button>` : ''}${readOnlyArchive ? '' : `<button type="button" class="rmt-room-find" data-rmt-action="room-life-refresh" ${runtimeState.busy ? 'disabled' : ''}>更新今日生活</button>`}</div></div>
 
@@ -778,7 +903,7 @@ export function renderRoom() {
             <div class="rmt-room-furniture" aria-hidden="true"></div>
             <div class="rmt-room-decor" aria-hidden="true"><span class="rmt-room-prop-a"></span><span class="rmt-room-prop-b"></span><span class="rmt-room-prop-c"></span></div>
             ${hotspots}
-            ${personIsHere ? `<button type="button" class="rmt-room-person" data-rmt-action="room-presence" aria-label="看看他现在在做什么"><span class="rmt-room-head"></span><span class="rmt-room-body-figure"></span><span class="rmt-room-person-label">♥</span></button>` : ''}
+            ${personIsHere ? `<button type="button" class="rmt-room-person" style="--rmt-head-width:${figureProfile.faceWidth}px;--rmt-head-height:${figureProfile.faceHeight}px;--rmt-eye-gap:${figureProfile.eyeSpacing}px;--rmt-mouth-width:${figureProfile.mouthWidth}px" data-rmt-action="room-presence" data-rmt-identity-key="${core_text.esc(visualProfile.identityKey)}" data-rmt-build="${core_text.esc(figureProfile.build)}" data-rmt-hair-shape="${core_text.esc(figureProfile.hairShape)}" data-rmt-hair-tone="${core_text.esc(figureProfile.hairTone)}" data-rmt-outfit="${core_text.esc(figureProfile.outfit)}" data-rmt-detail="${core_text.esc(figureProfile.detail)}" data-rmt-posture="${core_text.esc(figureProfile.posture)}" aria-label="看看${core_text.esc(charName)}现在在做什么"><span class="rmt-room-figure-shadow" aria-hidden="true"></span><span class="rmt-room-body-figure" aria-hidden="true"><span class="rmt-room-outfit-mark"></span></span><span class="rmt-room-head" aria-hidden="true"><span class="rmt-room-face"></span><span class="rmt-room-hair"></span><span class="rmt-room-figure-detail"></span></span><span class="rmt-room-person-label" aria-hidden="true">♥</span></button>` : ''}
           </div>
           <div class="rmt-room-object-rail" aria-label="房间物件">${objectRail}</div>
           <div class="rmt-room-activity-strip ${personIsHere ? '' : 'empty'}">

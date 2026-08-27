@@ -17,6 +17,10 @@ import * as ui_advEventView from '../ui/advEventView.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as ui_settingsPanel from '../ui/settingsPanel.js';
 
+const ADV_SECTION_TYPES = Object.freeze(['past', 'daily', 'during', 'after']);
+const ADV_SECTION_TYPE_SET = new Set(ADV_SECTION_TYPES);
+const ADV_FIRST_PERSON_SIGNAL_RE = /我/;
+
 export function advPrompt(context, event, memoryBank) {
     const sourceIds = core_evidence.normalizeSourceMemoryIds(event?.sourceMemoryIds, memoryBank, 1);
     const eventData = JSON.stringify({
@@ -39,13 +43,22 @@ ${eventData}
 
 严格只输出：
 {
-  "paragraphs": ["第一段","第二段"]
+  "narrator": "char_first_person",
+  "sections": [
+    {"type":"past","paragraphs":["第1段","第2段","第3段","第4段","第5段","第6段","第7段","第8段","第9段"]},
+    {"type":"during","paragraphs":["第10段","第11段","第12段","第13段","第14段","第15段","第16段","第17段","第18段"]}
+  ]
 }
 
 硬性要求：
-- paragraphs 至少 18 段，每段 1 到 3 句，避免超长大段。
-- 全文以 {{char}} 第一人称为主，不替 {{user}} 自动追加新的发言或决定。
-- 至少覆盖四类中的两类：过去的心结/习惯来源；事件前后的日常准备与掩饰；事件当下的迟疑/误会/后悔/庆幸；事件之后的后日谈与没说出口的话。
+- narrator 必须固定为 char_first_person；正文必须是 {{char}} 的“我”视角，重点补完他的性格、动机与情绪。禁止用旁观者口吻把 {{char}} 写成“他想…… / 他觉得…… / 他后来……”的第三人称总结。
+- sections 必须从下列 4 类中选择至少 2 个不同 type；每个选中的 type 至少 2 段、至少 80 字符，不能只挂标签：
+  1. past【过去】：与该事件相关的更早经历、心结、习惯来源；
+  2. daily【日常】：事件前后他怎样想、准备或掩饰；
+  3. during【共同经历时的当时心情】：事件当下的迟疑、误会、后悔或庆幸；
+  4. after【后日谈】：事后如何回味、没说出口的话与细小改变。
+- 所有 sections 合计至少 18 段、总文字至少 500 字符；每段 1 到 3 句，避免超长大段。至少三分之一段落要自然出现“我 / 我的”等明确第一人称信号。
+- 不替 {{user}} 自动追加新的发言、内心、决定或未发生行为。
 - 至少 2 次自然点到 CG 画面或视觉锚点，但不要反复复述。
 - 不得用“略”“省略”“后续同上”等方式偷懒。`;
 }
@@ -115,14 +128,23 @@ ${JSON.stringify(memoryPool, null, 2)}
 严格只输出：
 {
   "items": [
-    {"eventId": "EV01", "paragraphs": ["第一段","第二段"]}
+    {
+      "eventId": "EV01",
+      "narrator": "char_first_person",
+      "sections": [
+        {"type":"daily","paragraphs":["第1段","第2段","第3段","第4段","第5段","第6段"]},
+        {"type":"after","paragraphs":["第7段","第8段","第9段","第10段","第11段","第12段"]}
+      ]
+    }
   ]
 }
 
 硬性要求：
 - items 应覆盖输入中的每个 eventId，不得新增 eventId。
-- 每篇以 {{char}} 第一人称为主；事实只能来自 MEMORY_POOL_JSON 中且 id 被该事件 sourceMemoryIds 明确引用的记忆。
-- 每篇建议 12～18 段、总文字至少 500 字符；每段 1～3 句，避免一个超长大段。
+- 每篇 narrator 必须固定为 char_first_person；正文必须以 {{char}} 的“我”视角为主，重点补完他的性格、动机与情绪，禁止第三人称总结 {{char}}。
+- 每篇必须从 past【过去】、daily【日常】、during【共同经历时的当时心情】、after【后日谈】中选择至少 2 个不同 type；每个选中的 type 至少 2 段、至少 80 字符，不能只挂标签。
+- 每篇所有 sections 合计 12～18 段且至少 500 字符；每段 1～3 句。至少三分之一段落要自然出现“我 / 我的”等明确第一人称信号。
+- 事实只能来自 MEMORY_POOL_JSON 中且 id 被该事件 sourceMemoryIds 明确引用的记忆。
 - 不替 {{user}} 追加新决定或未发生的新对话；不得用“略”“同上”等省略。
 - 输出尽量紧凑，不重复输入资料。`;
 }
@@ -191,26 +213,49 @@ ${cgDesc}`, memoryBank, 1);
     };
 }
 
-export function normalizeAdvBatch(data, events) {
+export function normalizeAdvBatch(data, events, options = {}) {
     const allowed = new Map((events || []).map(event => [String(event.id), event]));
     const results = new Map();
     for (const raw of Array.isArray(data?.items) ? data.items : []) {
         const eventId = String(raw?.eventId || '');
         if (!allowed.has(eventId) || results.has(eventId)) continue;
         try {
-            results.set(eventId, normalizeAdv(raw));
+            results.set(eventId, normalizeAdv(raw, { ...options, minParagraphs: 12 }));
         } catch {}
     }
     return results;
 }
 
-export function normalizeAdv(data) {
-    const paragraphs = core_text.cleanArray(data?.paragraphs, 80, 4000);
-    const total = paragraphs.join('').length;
-    if (paragraphs.length < 18 && total < 500) {
-        throw new Error(`ADV 长度不足：${paragraphs.length} 段 / ${total} 字符。`);
+export function normalizeAdv(data, { minParagraphs = 18 } = {}) {
+    if (core_text.normalizeText(data?.narrator, 40) !== 'char_first_person') {
+        throw new Error('ADV 视角不合格：必须以角色第一人称生成。');
     }
-    return { paragraphs };
+    const sections = [];
+    const seenTypes = new Set();
+    for (const raw of Array.isArray(data?.sections) ? data.sections.slice(0, ADV_SECTION_TYPES.length) : []) {
+        const type = core_text.normalizeText(raw?.type, 20).toLowerCase();
+        if (!ADV_SECTION_TYPE_SET.has(type) || seenTypes.has(type)) continue;
+        const paragraphs = core_text.cleanArray(raw?.paragraphs, 32, 4000);
+        const sectionChars = paragraphs.join('').length;
+        if (paragraphs.length < 2 || sectionChars < 80) continue;
+        seenTypes.add(type);
+        sections.push({ type, paragraphs });
+    }
+    if (sections.length < 2) {
+        throw new Error(`ADV 内容范围不足：有效类别 ${sections.length}/2。`);
+    }
+    const paragraphs = sections.flatMap(section => section.paragraphs);
+    const total = paragraphs.join('').length;
+    const requiredParagraphs = Math.max(1, Math.min(40, Number(minParagraphs) || 18));
+    if (paragraphs.length < requiredParagraphs || total < 500) {
+        throw new Error(`ADV 长度不足：${paragraphs.length}/${requiredParagraphs} 段 / ${total}/500 字符。`);
+    }
+    const firstPersonParagraphs = paragraphs.filter(text => ADV_FIRST_PERSON_SIGNAL_RE.test(text)).length;
+    const requiredFirstPersonParagraphs = Math.max(4, Math.ceil(paragraphs.length / 3));
+    if (firstPersonParagraphs < requiredFirstPersonParagraphs) {
+        throw new Error(`ADV 第一人称密度不足：${firstPersonParagraphs}/${requiredFirstPersonParagraphs} 段。`);
+    }
+    return { paragraphs, coverageTypes: sections.map(section => section.type) };
 }
 
 export function compactAdvExisting(session) {
@@ -332,6 +377,7 @@ export async function generateAllAdvForSession() {
                 `正在生成本批 ${pending.length} 篇 ADV…`,
                 {
                     maxTokens: core_constants.MAX_GENERATION_OUTPUT_TOKENS,
+                    temperature: 0.55,
                     context,
                     origin,
                     taskKey: bulkTaskKey,
@@ -428,6 +474,7 @@ export async function repairFailedAdvForSession() {
                     `正在补 ADV：${event.title}`,
                     {
                         maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV],
+                        temperature: 0.55,
                         context,
                         origin,
                         taskKey: `adv-user-repair:${scope}:${core_text.safeId(event.id, String(i + 1))}`,
@@ -493,7 +540,7 @@ export async function generateAdvForSelected() {
     }
     ui_overlay.setInnerLoading(true, `正在为「${event.title}」生成长篇 ADV…`);
     try {
-        const raw = await generation_client.requestJson(advPrompt(context, event, memoryBank), `正在根据当前聊天档案生成「${event.title}」ADV…`, { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV], context, origin, taskKey, mode: core_constants.MODE.ADV, background: true });
+        const raw = await generation_client.requestJson(advPrompt(context, event, memoryBank), `正在根据当前聊天档案生成「${event.title}」ADV…`, { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV], temperature: 0.55, context, origin, taskKey, mode: core_constants.MODE.ADV, background: true });
         const wasBackgrounded = !core_context.isCurrentTaskOrigin(origin) || document.getElementById(core_constants.OVERLAY_ID)?.hidden || runtimeState.activeSession !== session;
         const liveEvent = session.events.find(item => item.id === eventId);
         if (!liveEvent) return;

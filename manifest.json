@@ -1,15 +1,15 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.37-archive-index-recreate-r42.6",
+  "js": "index.js?heartbeat=0.8.39-persona-surfaces-dated-calendar-r43.0",
   "author": "Toto",
-  "version": "0.8.37",
+  "version": "0.8.39",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r42.6 修复明确重新建档后仍被旧删除墓碑隐藏的索引回归；自动修复 r42.5 已成功新建但档案室空白的本机状态。",
+  "description": "r43.0 为房间与私人终端增加安全的人设化外观，升级 Calendar v5 逐日手账，并在冻结蝴蝶效应 UI 的前提下强化平行世界内容与本地校验。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

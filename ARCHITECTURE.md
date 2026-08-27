@@ -1,4 +1,4 @@
-# Heartbeat Memories r35–r38 Architecture
+# Heartbeat Memories r35–r43 Architecture
 
 r35 is a zero-schema modularization of the r34 runtime. r36 adds Calendar as the first post-modularization feature without changing the canonical archive schema. The persisted archive and derived-cache contracts remain compatible.
 
@@ -91,7 +91,13 @@ Calendar refreshes use the existing Connection Manager request coordinator and s
 
 Calendar is now a curated projection rather than a one-row-per-dated-memory projection. Model output can nominate `past` marks, but the normalizer only accepts a mark when its evidence anchor resolves to a dated canonical memory; that canonical memory supplies the visible date. `promised` rows retain evidence references and concrete dates are additionally checked against the cited evidence text.
 
-r40.2 extends the derived Calendar session with two notebook-only arrays: `stickyNotes` and `moodNotes`. Archive-backed sticky notes and all mood notes must pass the same memory ID + anchor evidence normalization; setting-backed sticky notes carry no memory IDs and remain explicitly non-canonical setting reminders. The global To-Do list is rendered from validated `promised` rows rather than a second model-owned task list. `CALENDAR_SESSION_VERSION=4` invalidates only stale derived Calendar sessions.
+r40.2 originally extended the derived Calendar session with root-level `stickyNotes` and `moodNotes`. Archive-backed sticky notes and all mood notes still pass the same memory ID + anchor evidence normalization; setting-backed sticky notes carry no memory IDs and remain explicitly non-canonical setting reminders.
+
+### r43 Calendar v5 dated-page boundary
+
+`CALENDAR_SESSION_VERSION=5` moves notebook content into `dayPages`, keyed only by code-normalized `date:YYYY/MM/DD`, `annual:MM/DD`, `pending:<entry-id>` or the single `legacy:unassigned` compatibility page. Each page owns its `drafts`, `stickyNotes`, `moodNotes` and `manualTodos`; entry-derived To-Do rows are selected only from that page's `entryIds`. Empty calendar cells may create an empty local page without a model request or archive mutation.
+
+The v4 migration is deliberately non-fanout. A root-level note is assigned only when its explicit date, linked Calendar entry or validated archive evidence resolves one page. Anything ambiguous is preserved once in `legacy:unassigned`; it is never cloned across dates and no date is guessed. Calendar refresh merges existing page-owned user content back by exact page key, while the canonical `MEMORY_KEY` archive remains untouched.
 
 
 
@@ -104,9 +110,17 @@ Whole-category deletion uses the shared `core/cache.js::deleteSessions()` derive
 
 ## r38 runtime freshness and Phone chat roles
 
-`index.js` no longer statically imports the modular runtime. A release `BUILD` token is stored outside the theater/archive data; when a new build is detected, the page reloads once and then dynamically imports `src/heartbeatMemories.js?heartbeat=<BUILD>`. This prevents an in-place SillyTavern update from combining a new entrypoint with stale child modules.
+`index.js` no longer statically imports the modular runtime. r38 temporarily used a one-time page reload to refresh a child-module graph; the current r39+ delivery removes that reload. On the user's first explicit Heartbeat action, the lightweight bootstrap dynamically imports the single generated `dist/heartbeatMemories.bundle.js?heartbeat=<BUILD>` artifact. The versioned one-file graph prevents a new entrypoint from mixing with stale child modules without adding a navigation side effect.
 
 Phone/Terminal remains `MODE.PHONE` under Room, but its topbar increment action is now exposed because the mode already owns a safe incremental merge path. Chat entries may store `contactName`; messages may store `speakerRole` (`owner` or `contact`) in addition to the escaped display `speaker`. These are presentation fields only and do not change archive evidence or authority.
+
+## r43 persona-surface architecture
+
+Room and Phone consume bounded character-card, Persona and relevant World Info context, then normalize it into code-owned visual descriptors. Explicit World Info/card fields are separated from inferred fields; missing fields are deterministically completed from the controlled character identity instead of accepting a copied generic profile. Room scene palette/material/density and the CSS person's hair/garment/silhouette/accessory values are allowlisted tokens, while face proportions are bounded code-derived numbers. No archive/profile avatar is used inside the room scene, and no model string can become CSS, HTML, a URL or a coordinate. The same normalized cues keep the room and figure coherent while still allowing separate chat/worldline identities.
+
+Phone remains a Room-owned derived mode, but its UI state is explicitly hierarchical: `home` shows the recognizable device and App icons, `app` shows one App's independent list, and `detail` shows one normalized entry. Device kind, theme, wallpaper treatment, icon style and App plan are persona-sensitive but reduce to fixed local enums and normalized structured data. View selection never grants a model-controlled cache key, object path, URL, device API or real-world messaging action.
+
+Butterfly r43 is a content-contract change only. `ui/butterflyView.js`, its divergence map, terminal palette, one-second SIGNAL transition and Ω placement remain the presentation contract. The mode prompt and normalizer require at least eight materially distinct ordinary simulations plus first-person monologue, current-world response, cold Chinese system assessment and one Ω/TRUE ENDING; local validation rejects undersized/duplicated content and banned third-party romance before derived-session commit. Simulations still do not become archive evidence.
 
 
 ## r39 runtime delivery

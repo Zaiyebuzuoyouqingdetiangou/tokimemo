@@ -31,7 +31,7 @@
 36. 储物深层 prompt 只允许收到房间中 `searchable=true` 的收纳对象及其关联记忆；不得为了缩短 prompt 而重新允许普通床、桌面、灯、照片等成为可翻找容器。
 
 37. 私人终端 chat 的 `speakerRole` / `speaker` / `contactName` 都属于模型生成展示数据，不得控制身份、权限、缓存键、URL、命令或档案证据。新生成的 chat 必须可区分 `owner` 与 `contact` 两侧；UI 只用转义后的名字和文本渲染。
-38. 模块化扩展更新必须避免同一运行实例混用不同发布版本的 ES module graph。r38 通过 build token 在版本变化时执行一次页面刷新后再动态导入运行时；该刷新不得修改聊天、档案或派生缓存。
+38. 模块化扩展更新必须避免同一运行实例混用不同发布版本的 ES module graph。当前入口只在用户首次显式打开心跳回忆时，按 build query 惰性导入单个生成的 `dist/heartbeatMemories.bundle.js`；不使用自动整页 reload，不得因版本刷新修改聊天、档案或派生缓存。
 
 39. 萤火虫栖息地属于派生追加约会会话库：旧光点只能由用户显式管理/重建删除，增量生成不得覆盖既有光点；新批次只在当前档案存在尚未消费的 Mxxx 时生成。模型不得控制光点坐标、CSS、URL 或动画。为避免长期累积造成移动端渲染退化，缓存最多 240 条且 UI 每页最多渲染 6 个发光节点，达到上限后停止追加而不是淘汰旧内容。新格式仅接受结构化 `title + script[]`，script speaker 白名单为 `char / user / user_thought`；`user` 只能表示非正史、中性、即时的展示性回应，不得创建用户偏好、承诺、决定、行动或历史事实，`user_thought` 最多一条且只能位于结尾。旧版 `line/thoughts` 光点只能在用户显式点击升级时改写其派生展示；升级必须保持原 id、颜色与来源/批次元数据，不消耗新的 Mxxx 覆盖游标，也不得写入或改写 `MEMORY_KEY`。
 
@@ -213,7 +213,7 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - 压缩缓存异步落盘在写入前必须重新验证 live `MEMORY_KEY` 仍存在且 `chatId/archiveRevision` 与待落盘缓存一致；显式删除档案或 revision 已变化后，迟到的 gzip 结果不得把旧 `CACHE_KEY` 重新写回。
 - 运行中任务 origin/chat scope 必须能够区分共享 avatar 的不同角色卡，防止并发任务、延迟响应或 deferred commit 在角色版本之间串写。
 - “生成禁用词”只适用于模型新生成的派生文本。不得改写聊天正文、正式 archive memory、世界书/外部记忆原文或任何 evidence anchor；命中禁用词时结果必须失败关闭、不得保存、不得自动重试。
-- 房间视觉差异只能把归一化的 `spaceType/label` 映射到代码内固定 scene class 与布局变体；模型不得返回 CSS、HTML、URL、坐标脚本或任意样式值。房间布局变化不得扩大证据读取范围或触发额外模型/网络请求。
+- 房间视觉差异只能把有界的人设/世界观描述归一化为代码内固定的 scene、palette、material、density、hair、garment、silhouette 与 accessory 枚举；脸部比例只能是代码由受控角色身份种子计算的有界数值。模型不得返回 CSS、HTML、URL、坐标脚本或任意样式值。房中 CSS 人物不得加载或复制档案/Profile 头像。房间布局与人物轮廓变化不得扩大证据读取范围或触发额外模型/网络请求。
 
 ### 0.8.10 ENDING / album / Image Generation r22 additional invariants
 
@@ -377,6 +377,17 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 ### Calendar ownership invariant (r40.3+)
 
 The standalone `MODE.CALENDAR` is the only derived feature allowed to organize shared dates, promises, anniversaries and relationship To-Do items. `MODE.PHONE` excludes `schedule` / `calendar` apps and must not duplicate that authority. Removing a legacy Phone calendar affects derivative cache only and never deletes or edits canonical `MEMORY_KEY` archive evidence.
+
+## r43 persona surfaces / Calendar v5 / Butterfly content invariants
+
+- Calendar v5 page keys are restricted to code-normalized `date:YYYY/MM/DD`, `annual:MM/DD`, `pending:<safe-id>` and `legacy:unassigned`. Untrusted/model text cannot select an arbitrary object path, prototype key, cache key or another chat's page.
+- `drafts`, `stickyNotes`, `moodNotes` and `manualTodos` belong to exactly one `dayPages[pageKey]`. Selecting or editing a date may mutate only that page inside the current derived Calendar session and must retain the existing writable-archive and `chatId + archiveRevision` save fence; it never writes `MEMORY_KEY`.
+- v4 root-level Calendar supplements may migrate to one page only when a linked normalized Calendar entry, validated Mxxx evidence, or a setting-owned explicit date resolves that page. Archive-owned model dates cannot outrank the anchored memory date. Ambiguous data is retained once under `legacy:unassigned`; migration must never guess a date, duplicate one item across pages, or discard it merely because it cannot be assigned. Normalization must preserve all valid existing user date pages rather than silently slicing the page map; the shared UTF-8 cache-size boundary is the storage cap.
+- An empty date page is local derived state. Opening it does not call the provider, manufacture an occurred event or weaken the evidence requirements for `past` and `promised` rows. A manual draft or To-Do is visibly user-owned display data, not archive evidence or promise completion authority.
+- Room and figure visual values are reduced to fixed local enums before reaching class names or CSS variables. Only setting-explicit fields may bypass persona fallback; bounded face proportions are computed locally from the controlled identity seed. Character card, Persona, World Info and model output remain untrusted text; none may provide CSS declarations, HTML, URLs, image sources, coordinates or event handlers. The room figure specifically does not use an archive/Profile avatar.
+- Phone navigation accepts only normalized App and entry IDs already present in the current session. `home → app → detail` changes local view state only; it cannot select a storage path or gain provider/device authority. Device kind, theme, wallpaper and icon styling are allowlisted and missing non-explicit fields are persona-bound; a copied legal template cannot become a universal default. Cache loading requires one structurally readable App so a legacy 5-App device remains readable after its retired Calendar App is removed and the migrated session is saved again. All displayed names/content remain escaped. No real App trademark, external media, device API, message sending or contact mutation is introduced.
+- Butterfly r43 changes generation and local validation only; its existing UI tree, palette, SIGNAL transition and Ω layout remain frozen. Ordinary simulations require bounded structured fields and at least eight materially distinct branches. Initial, incremental and single-node regeneration all check first-person length, current-world response, Chinese SYSTEM NOTE, Ω completion and bans on ex/third-party romance/marriage/family before commit; rejected output cannot replace a valid previous derived session.
+- Parallel-world text remains explicitly simulated and carries no new archive authority. Main-world evidence, task-origin checks, provider limits, content escaping and the prohibition on writing simulations into `MEMORY_KEY` remain unchanged.
 
 ## r41 HEART 萤火虫 / 四季 Drama 安全边界
 

@@ -10,6 +10,7 @@ import * as core_evidence from './evidence.js';
 import * as core_requestCoordinator from './requestCoordinator.js';
 import { state as runtimeState } from './state.js';
 import * as core_text from './text.js';
+import * as modes_calendar from '../modes/calendar.js';
 import * as modes_phone from '../modes/phone.js';
 
 function cloneCacheValue(value) {
@@ -605,7 +606,7 @@ export function loadSession(mode, options = {}) {
         const memoryBank = options.memoryBank || (context ? archive_repository.requireArchive(context) : null);
         if (!chatId || !memoryBank) return null;
         const cache = suppliedCache || getCache(context);
-        const session = cache?.[mode];
+        let session = cache?.[mode];
         if (!session || session.kind !== mode) return null;
         if (core_text.normalizeText(cache.chatId, 240) !== chatId) return null;
         if (core_text.normalizeText(session.chatId, 240) !== chatId) return null;
@@ -614,20 +615,18 @@ export function loadSession(mode, options = {}) {
         const userManaged = session.userManaged === true;
         if (mode === core_constants.MODE.ROOM && (!Array.isArray(session.spaces) || (!userManaged && session.spaces.length < 2))) return null;
         if (mode === core_constants.MODE.ITEMS && (!Array.isArray(session.containers) || (!userManaged && session.containers.length < 1))) return null;
-        if (mode === core_constants.MODE.PHONE && (!Array.isArray(session.apps) || (!userManaged && session.apps.length < 5))) return null;
-        if (mode === core_constants.MODE.PHONE && session.apps.some(app => core_constants.PHONE_EXCLUDED_APP_KINDS.has(core_text.normalizeText(app?.kind, 60).toLowerCase()))) {
-            const migrated = structuredClone(session);
-            migrated.apps = migrated.apps.filter(app => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(core_text.normalizeText(app?.kind, 60).toLowerCase()));
-            if (!migrated.apps.length) return null;
-            if (!migrated.apps.some(app => app.id === migrated.selectedAppId)) {
-                migrated.selectedAppId = migrated.apps[0].id;
-                migrated.selectedEntryId = '';
-                migrated.view = 'list';
-            }
-            return migrated;
+        if (mode === core_constants.MODE.PHONE) {
+            session = modes_phone.migrateLegacyPhoneSession(session, memoryBank);
+            // A legacy phone may legitimately fall below the new generated minimum when the retired
+            // calendar/schedule App is removed. Cache loading therefore checks structural readability
+            // only; fresh generation still enforces its device-specific 4/5-App minimum in phone.js.
+            if (!session || !Array.isArray(session.apps) || session.apps.length < 1) return null;
         }
         if (mode === core_constants.MODE.ENDING && (!Array.isArray(session.endings) || (!userManaged && session.endings.length < 5))) return null;
-        if (mode === core_constants.MODE.CALENDAR && (!Array.isArray(session.entries) || !Array.isArray(session.stickyNotes) || !Array.isArray(session.moodNotes) || session.calendarVersion !== core_constants.CALENDAR_SESSION_VERSION)) return null;
+        if (mode === core_constants.MODE.CALENDAR) {
+            session = modes_calendar.migrateCalendarSession(session, memoryBank);
+            if (!session || !Array.isArray(session.entries) || !session.dayPages || session.calendarVersion !== core_constants.CALENDAR_SESSION_VERSION) return null;
+        }
         if (mode === core_constants.MODE.HEART && (!session.greetings || !session.relationshipSourceMemoryAnchor)) return null;
         if (mode === core_constants.MODE.ACHIEVEMENTS && (!Array.isArray(session.entries) || (!userManaged && session.entries.length < 1))) return null;
         return options.clone === false ? session : structuredClone(session);

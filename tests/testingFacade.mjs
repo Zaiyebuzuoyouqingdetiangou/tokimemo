@@ -12,6 +12,8 @@ export { MIN_SUPPORTED_ARCHIVE_SCHEMA_VERSION } from '../src/core/constants.js';
 export { MEMORY_VERSION } from '../src/core/constants.js';
 export { CACHE_STORAGE_FORMAT } from '../src/core/constants.js';
 export { CACHE_STORAGE_VERSION } from '../src/core/constants.js';
+export { CALENDAR_SESSION_VERSION } from '../src/core/constants.js';
+export { PHONE_SESSION_VERSION } from '../src/core/constants.js';
 export { MAX_CACHE_SOURCE_CHARS } from '../src/core/constants.js';
 export { MAX_CACHE_SOURCE_BYTES } from '../src/core/constants.js';
 export { MAX_CACHE_COMPRESSED_BASE64_CHARS } from '../src/core/constants.js';
@@ -668,6 +670,7 @@ export { normalizeCalendarDate } from '../src/modes/calendar.js';
 export { derivePastCalendarEntries } from '../src/modes/calendar.js';
 export { calendarEntryKey } from '../src/modes/calendar.js';
 export { normalizeCalendar } from '../src/modes/calendar.js';
+export { calendarPageKeyForDate, calendarEntryPageKey, calendarDayPage, createCalendarDayPage, migrateCalendarSession, mergeCalendarRefresh } from '../src/modes/calendar.js';
 export { calendarPrompt } from '../src/generation/prompts.js';
 
 export { normalizeCharacterProfile, normalizeRelations, mergeRelationLayers, relationGardenPositions, archiveCharacterProfileKey, getCharacterProfile, setCharacterProfile, deleteCharacterProfile, extractLiteralCharacterFacts, patchCharacterProfileFromCard, characterProfileHtml } from '../src/modes/relations.js';

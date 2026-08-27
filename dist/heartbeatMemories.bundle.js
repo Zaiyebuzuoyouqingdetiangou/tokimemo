@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 44
-// Source SHA-256: 80aea58c8261f9f839b63eed373cf7edc0aee4e53f262af36dd791df9a02bd12
+// Source SHA-256: 203b8b5f71cc56c83d59ffa4392f77f527b3eb36fecae6a3debd96b1363ec87e
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -81,7 +81,9 @@ const CACHE_STORAGE_FORMAT = 'gzip-base64-v1';
 
 const CACHE_STORAGE_VERSION = 1;
 
-const CALENDAR_SESSION_VERSION = 4;
+const CALENDAR_SESSION_VERSION = 5;
+
+const PHONE_SESSION_VERSION = 2;
 
 const MAX_CACHE_COMPRESSED_BASE64_CHARS = 4000000;
 
@@ -308,6 +310,7 @@ __m_core_constants_js.MEMORY_VERSION = MEMORY_VERSION;
 __m_core_constants_js.CACHE_STORAGE_FORMAT = CACHE_STORAGE_FORMAT;
 __m_core_constants_js.CACHE_STORAGE_VERSION = CACHE_STORAGE_VERSION;
 __m_core_constants_js.CALENDAR_SESSION_VERSION = CALENDAR_SESSION_VERSION;
+__m_core_constants_js.PHONE_SESSION_VERSION = PHONE_SESSION_VERSION;
 __m_core_constants_js.MAX_CACHE_COMPRESSED_BASE64_CHARS = MAX_CACHE_COMPRESSED_BASE64_CHARS;
 __m_core_constants_js.MAX_CACHE_DECOMPRESSED_BYTES = MAX_CACHE_DECOMPRESSED_BYTES;
 __m_core_constants_js.MAX_CACHE_SOURCE_BYTES = MAX_CACHE_SOURCE_BYTES;
@@ -2095,26 +2098,35 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-reader-actions{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:13px}
 
 /* 他的房间：多空间“生活观测”页。空间类型由角色生活方式决定，不复刻商业游戏资产。 */
-.rmt-room-view{min-height:100%;padding:18px 20px 22px;box-sizing:border-box;background:linear-gradient(180deg,#fbfdff,#fffaf8)}
+.rmt-room-view{--rmt-room-accent:#8ebfd5;--rmt-room-accent-deep:#607f92;--rmt-room-soft:#eef7fb;--rmt-room-paper:#fbfdff;--rmt-room-paper-warm:#fffaf8;--rmt-room-wash:rgba(142,191,213,.075);--rmt-room-outfit-a:#8ebfd5;--rmt-room-outfit-b:#6fa8c1;min-height:100%;padding:18px 20px 22px;box-sizing:border-box;background:linear-gradient(180deg,var(--rmt-room-paper),var(--rmt-room-paper-warm))}
+.rmt-room-view[data-rmt-room-palette="mist"]{--rmt-room-accent:#8ebfd5;--rmt-room-accent-deep:#607f92;--rmt-room-soft:#eef7fb;--rmt-room-paper:#fbfdff;--rmt-room-paper-warm:#fffaf8;--rmt-room-wash:rgba(142,191,213,.075);--rmt-room-outfit-a:#8ebfd5;--rmt-room-outfit-b:#6fa8c1}
+.rmt-room-view[data-rmt-room-palette="warm"]{--rmt-room-accent:#d69a72;--rmt-room-accent-deep:#925e41;--rmt-room-soft:#fff1e8;--rmt-room-paper:#fffaf5;--rmt-room-paper-warm:#fff5ed;--rmt-room-wash:rgba(226,145,91,.11);--rmt-room-outfit-a:#d79c77;--rmt-room-outfit-b:#b56f55}
+.rmt-room-view[data-rmt-room-palette="earth"]{--rmt-room-accent:#a88766;--rmt-room-accent-deep:#68503d;--rmt-room-soft:#f4eee6;--rmt-room-paper:#fbf8f2;--rmt-room-paper-warm:#f7efe5;--rmt-room-wash:rgba(137,104,71,.105);--rmt-room-outfit-a:#aa8a69;--rmt-room-outfit-b:#80664f}
+.rmt-room-view[data-rmt-room-palette="forest"]{--rmt-room-accent:#729878;--rmt-room-accent-deep:#3f6650;--rmt-room-soft:#edf5ee;--rmt-room-paper:#f7fbf7;--rmt-room-paper-warm:#f2f7ee;--rmt-room-wash:rgba(63,111,75,.10);--rmt-room-outfit-a:#759c7b;--rmt-room-outfit-b:#4e735c}
+.rmt-room-view[data-rmt-room-palette="ocean"]{--rmt-room-accent:#5e9cb5;--rmt-room-accent-deep:#37687e;--rmt-room-soft:#e9f5f8;--rmt-room-paper:#f5fbfd;--rmt-room-paper-warm:#edf7fa;--rmt-room-wash:rgba(52,126,155,.105);--rmt-room-outfit-a:#629db4;--rmt-room-outfit-b:#41768c}
+.rmt-room-view[data-rmt-room-palette="night"]{--rmt-room-accent:#6f799d;--rmt-room-accent-deep:#3e476c;--rmt-room-soft:#eceef6;--rmt-room-paper:#f4f5fa;--rmt-room-paper-warm:#eeeef5;--rmt-room-wash:rgba(41,48,87,.17);--rmt-room-outfit-a:#6e779a;--rmt-room-outfit-b:#454e72}
+.rmt-room-view[data-rmt-room-palette="mono"]{--rmt-room-accent:#87929b;--rmt-room-accent-deep:#4d5861;--rmt-room-soft:#f0f2f3;--rmt-room-paper:#fafafa;--rmt-room-paper-warm:#f2f2f1;--rmt-room-wash:rgba(74,84,91,.09);--rmt-room-outfit-a:#7f8990;--rmt-room-outfit-b:#535d64}
+.rmt-room-view[data-rmt-room-palette="violet"]{--rmt-room-accent:#9b82bd;--rmt-room-accent-deep:#685180;--rmt-room-soft:#f4eff9;--rmt-room-paper:#fbf8fd;--rmt-room-paper-warm:#f7f1fa;--rmt-room-wash:rgba(126,83,160,.105);--rmt-room-outfit-a:#a084be;--rmt-room-outfit-b:#765b95}
+.rmt-room-view[data-rmt-room-palette="jewel"]{--rmt-room-accent:#b56283;--rmt-room-accent-deep:#713c5d;--rmt-room-soft:#faedf3;--rmt-room-paper:#fff7fa;--rmt-room-paper-warm:#f8eef5;--rmt-room-wash:rgba(154,47,102,.105);--rmt-room-outfit-a:#b86283;--rmt-room-outfit-b:#7a446c}
 .rmt-room-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:0 2px 10px;flex-wrap:wrap}
 .rmt-room-heading h2{margin:0;color:#51647b;font-size:22px;letter-spacing:.04em}.rmt-room-heading small{color:#9aa6b2}
 .rmt-room-map{display:flex;gap:8px;overflow:auto;padding:6px 2px 12px;scrollbar-width:thin}
 .rmt-room-space{position:relative;flex:0 0 auto;min-width:108px;max-width:180px;text-align:left;border:1px solid #c9dce6;border-radius:14px;padding:9px 11px;background:rgba(255,255,255,.9);color:#60758a;font:inherit;cursor:pointer;transition:.18s ease;box-shadow:0 4px 12px rgba(66,88,105,.06)}
 .rmt-room-space b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rmt-room-space small{display:block;margin-top:3px;font-size:9px;color:#9aa6b2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rmt-room-space:hover,.rmt-room-space.active{border-color:#e4a7bf;background:#fff7fa;transform:translateY(-1px);color:#9b5d79}.rmt-room-space.present{box-shadow:0 0 0 3px rgba(142,191,213,.13),0 4px 12px rgba(66,88,105,.06)}
-.rmt-room-presence-dot{position:absolute;right:7px;top:6px;font-size:10px;color:#df85aa}.rmt-room-location{display:flex;align-items:center;gap:8px;margin:-2px 2px 12px;color:#7d8b99;font-size:11px;flex-wrap:wrap}.rmt-room-location b{color:#b46f8b}.rmt-room-find{border:0;background:#eef7fb;color:#68859a;border-radius:999px;padding:4px 8px;font:inherit;font-size:10px;cursor:pointer}
+.rmt-room-space:hover,.rmt-room-space.active{border-color:var(--rmt-room-accent);background:var(--rmt-room-soft);transform:translateY(-1px);color:var(--rmt-room-accent-deep)}.rmt-room-space.present{box-shadow:0 0 0 3px var(--rmt-room-wash),0 4px 12px rgba(66,88,105,.06)}
+.rmt-room-presence-dot{position:absolute;right:7px;top:6px;font-size:10px;color:var(--rmt-room-accent)}.rmt-room-location{display:flex;align-items:center;gap:8px;margin:-2px 2px 12px;color:#7d8b99;font-size:11px;flex-wrap:wrap}.rmt-room-location b{color:var(--rmt-room-accent-deep)}.rmt-room-find{border:0;background:var(--rmt-room-soft);color:var(--rmt-room-accent-deep);border-radius:999px;padding:4px 8px;font:inherit;font-size:10px;cursor:pointer}
 .rmt-room-flow{display:grid;gap:13px;max-width:1120px;margin:0 auto}.rmt-room-location>div:first-child{display:grid;gap:2px;min-width:0}.rmt-room-location>div:first-child small{font-size:9px;font-weight:500;color:#98a4af}.rmt-room-location-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}.rmt-room-space-note-card,.rmt-room-private-life-card,.rmt-room-private-access-card{width:100%;box-sizing:border-box}.rmt-room-heading-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-.rmt-room-stage{border:1px solid #c7dce7;border-radius:18px;background:#fff;box-shadow:0 10px 26px rgba(66,88,105,.10);overflow:hidden}
-.rmt-room-stage-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 13px;border-bottom:1px solid #d9e7ee;background:linear-gradient(90deg,#fff7fa,#f6fbfe)}
-.rmt-room-stage-head b{color:#62778d}.rmt-room-clock{font-size:11px;color:#8d9aa8;white-space:nowrap}
-.rmt-room-scene{position:relative;min-height:470px;overflow:hidden;background:linear-gradient(180deg,#f6fbfe 0 61%,#e7ddd2 61% 64%,#d8c5b4 64% 100%);transition:box-shadow .6s ease,filter .6s ease}.rmt-room-scene[data-rmt-room-daypart="morning"]{box-shadow:inset 0 0 0 9999px rgba(255,238,190,.035)}.rmt-room-scene[data-rmt-room-daypart="daytime"]{box-shadow:inset 0 0 0 9999px rgba(225,246,255,.018)}.rmt-room-scene[data-rmt-room-daypart="evening"]{box-shadow:inset 0 0 0 9999px rgba(245,184,170,.075)}.rmt-room-scene[data-rmt-room-daypart="night"]{box-shadow:inset 0 0 0 9999px rgba(24,43,76,.18);filter:saturate(.88) brightness(.92)}
+.rmt-room-stage{border:1px solid color-mix(in srgb,var(--rmt-room-accent) 42%,#d9e7ee);border-radius:18px;background:#fff;box-shadow:0 10px 26px rgba(66,88,105,.10);overflow:hidden}
+.rmt-room-stage-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 13px;border-bottom:1px solid #d9e7ee;background:linear-gradient(90deg,var(--rmt-room-soft),#f9fcfd)}
+.rmt-room-stage-head b{color:var(--rmt-room-accent-deep)}.rmt-room-clock{font-size:11px;color:#8d9aa8;white-space:nowrap}
+.rmt-room-scene{position:relative;min-height:470px;overflow:hidden;background:linear-gradient(180deg,#f6fbfe 0 61%,#e7ddd2 61% 64%,#d8c5b4 64% 100%);box-shadow:inset 0 0 0 9999px var(--rmt-room-wash);transition:box-shadow .6s ease,filter .6s ease}.rmt-room-scene[data-rmt-room-daypart="morning"]{box-shadow:inset 0 0 0 9999px rgba(255,238,190,.035),inset 0 0 0 9999px var(--rmt-room-wash)}.rmt-room-scene[data-rmt-room-daypart="daytime"]{box-shadow:inset 0 0 0 9999px rgba(225,246,255,.018),inset 0 0 0 9999px var(--rmt-room-wash)}.rmt-room-scene[data-rmt-room-daypart="evening"]{box-shadow:inset 0 0 0 9999px rgba(245,184,170,.075),inset 0 0 0 9999px var(--rmt-room-wash)}.rmt-room-scene[data-rmt-room-daypart="night"]{box-shadow:inset 0 0 0 9999px rgba(24,43,76,.18),inset 0 0 0 9999px var(--rmt-room-wash);filter:saturate(.88) brightness(.92)}
 .rmt-room-scene:before{content:"";position:absolute;left:6%;right:6%;top:8%;height:49%;border-radius:13px;background:linear-gradient(180deg,rgba(255,255,255,.62),rgba(237,246,250,.46));border:1px solid rgba(151,183,199,.38);box-shadow:inset 0 -18px rgba(143,181,198,.05)}
-.rmt-room-scene:after{content:"";position:absolute;left:7%;right:7%;bottom:8%;height:20%;border-radius:50%;background:radial-gradient(ellipse,rgba(233,154,185,.15),rgba(142,191,213,.08) 48%,transparent 70%)}
+.rmt-room-scene:after{content:"";position:absolute;left:7%;right:7%;bottom:8%;height:20%;border-radius:50%;background:radial-gradient(ellipse,var(--rmt-room-wash),rgba(142,191,213,.08) 48%,transparent 70%)}
 .rmt-room-window{position:absolute;right:9%;top:12%;width:24%;height:28%;border:6px solid rgba(255,255,255,.88);outline:1px solid #bcd4df;background:linear-gradient(180deg,#dff2fb,#fff5f9);box-shadow:0 8px 18px rgba(67,91,109,.10)}
 .rmt-room-window:before,.rmt-room-window:after{content:"";position:absolute;background:rgba(153,189,205,.55)}.rmt-room-window:before{left:50%;top:0;bottom:0;width:1px}.rmt-room-window:after{top:50%;left:0;right:0;height:1px}
 .rmt-room-furniture{position:absolute;left:9%;bottom:15%;width:38%;height:19%;border-radius:12px 12px 6px 6px;background:linear-gradient(180deg,#f3e8df,#dcc7b7);box-shadow:0 8px 0 #c6ad9a,0 14px 22px rgba(68,64,62,.13)}
 .rmt-room-furniture:after{content:"";position:absolute;right:-67%;bottom:-1px;width:46%;height:58%;border-radius:7px;background:linear-gradient(180deg,#dceaf0,#c9dce4);box-shadow:0 6px 0 #adc4cf}
-.rmt-room-scene[data-rmt-lighting="bright"]{filter:brightness(1.04) saturate(1.01)}.rmt-room-scene[data-rmt-lighting="warm"]{box-shadow:inset 0 0 0 9999px rgba(255,190,133,.10)}.rmt-room-scene[data-rmt-lighting="dim"]{filter:brightness(.82) saturate(.90)}.rmt-room-scene[data-rmt-lighting="dark"]{filter:brightness(.66) saturate(.82);box-shadow:inset 0 0 0 9999px rgba(16,31,58,.20)}
+.rmt-room-scene[data-rmt-lighting="bright"]{filter:brightness(1.04) saturate(1.01)}.rmt-room-scene[data-rmt-lighting="warm"]{box-shadow:inset 0 0 0 9999px rgba(255,190,133,.10),inset 0 0 0 9999px var(--rmt-room-wash)}.rmt-room-scene[data-rmt-lighting="dim"]{filter:brightness(.82) saturate(.90)}.rmt-room-scene[data-rmt-lighting="dark"]{filter:brightness(.66) saturate(.82);box-shadow:inset 0 0 0 9999px rgba(16,31,58,.20),inset 0 0 0 9999px var(--rmt-room-wash)}
 .rmt-room-scene[data-rmt-window="curtained"] .rmt-room-window{background:linear-gradient(90deg,#d7c7d5 0 46%,#bda9ba 47% 53%,#d7c7d5 54%);filter:brightness(.82)}.rmt-room-scene[data-rmt-window="open"] .rmt-room-window{transform:perspective(200px) rotateY(-7deg);box-shadow:8px 7px 18px rgba(67,91,109,.12)}
 .rmt-room-scene[data-rmt-order="messy"] .rmt-room-furniture{transform:rotate(-.8deg)}.rmt-room-scene[data-rmt-order="messy"] .rmt-room-furniture:after{transform:rotate(2deg)}.rmt-room-scene[data-rmt-order="tidy"] .rmt-room-furniture{filter:saturate(.92) brightness(1.03)}
 .rmt-room-furniture:before{position:absolute;z-index:3;left:21%;top:-36px;font-size:23px;line-height:1;filter:drop-shadow(0 3px 2px rgba(64,70,78,.12))}.rmt-room-scene[data-rmt-surface="drink"] .rmt-room-furniture:before{content:"☕"}.rmt-room-scene[data-rmt-surface="meal"] .rmt-room-furniture:before{content:"◒  ◇";font-size:18px;color:#b58b72}.rmt-room-scene[data-rmt-surface="work"] .rmt-room-furniture:before{content:"▱  ✎";font-size:20px;color:#788c9d}.rmt-room-scene[data-rmt-surface="clear"] .rmt-room-furniture:before{content:""}
@@ -2188,22 +2200,89 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-room-scene-cabin .rmt-room-prop-a:before{left:8%;top:15%;width:15%;height:14%;border-radius:50%;border:5px solid #697f89;background:#b9e2f0}.rmt-room-scene-cabin .rmt-room-prop-b:before{right:7%;bottom:15%;width:25%;height:20%;border-radius:4px;background:repeating-linear-gradient(90deg,#728893 0 17px,#a9bdc5 18px 20px);box-shadow:0 7px 0 #526873}.rmt-room-scene-cabin .rmt-room-prop-c:before{left:46%;bottom:34%;width:15%;height:10%;border-radius:4px;background:#7e949e}
 .rmt-room-scene-modern .rmt-room-prop-a:before{right:9%;bottom:13%;width:18%;height:30%;border-radius:5px;background:#d6e3e8;box-shadow:0 7px 0 #afc3cb}.rmt-room-scene-modern .rmt-room-prop-b:before{left:43%;bottom:13%;width:22%;height:6%;border-radius:50%;background:#c8b4a4}.rmt-room-scene-modern .rmt-room-prop-c:before{left:11%;top:18%;width:13%;height:18%;border:4px solid #c7dce5;background:#eff9fc}
 .rmt-room-scene[data-rmt-layout="2"] .rmt-room-decor{transform:scaleX(-1)}.rmt-room-scene[data-rmt-layout="3"] .rmt-room-decor{transform:translateX(3%) scale(.94)}
-.rmt-room-person{position:absolute;z-index:5;left:48%;bottom:14%;width:94px;height:164px;border:0;background:transparent;cursor:pointer;color:#5c6f83;padding:0;animation:rmtRoomIdle 4.8s ease-in-out infinite}
-.rmt-room-person:hover .rmt-room-head{transform:translateY(-2px)}
-@keyframes rmtRoomIdle{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
-.rmt-room-head{position:absolute;left:26px;top:4px;width:43px;height:48px;border-radius:47% 47% 44% 44%;background:linear-gradient(155deg,#6b7180,#4c5362);box-shadow:inset 0 -7px rgba(30,36,47,.15);transition:.18s ease}
-.rmt-room-head:after{content:"";position:absolute;left:8px;right:8px;bottom:-13px;height:15px;border-radius:7px;background:#f1d8cb}
-.rmt-room-body-figure{position:absolute;left:14px;top:57px;width:68px;height:91px;border-radius:25px 25px 12px 12px;background:linear-gradient(180deg,#8ebfd5,#6fa8c1);box-shadow:inset 10px 0 rgba(255,255,255,.08)}
-.rmt-room-body-figure:before,.rmt-room-body-figure:after{content:"";position:absolute;top:22px;width:20px;height:73px;border-radius:12px;background:#80b4ca}.rmt-room-body-figure:before{left:-12px;transform:rotate(7deg)}.rmt-room-body-figure:after{right:-12px;transform:rotate(-7deg)}
-.rmt-room-person-label{position:absolute;left:50%;bottom:-2px;transform:translateX(-50%);white-space:nowrap;font-size:10px;font-weight:800;color:#73869a;background:rgba(255,255,255,.88);border:1px solid #d3e2e9;border-radius:999px;padding:3px 7px}
-.rmt-room-activity-strip{padding:10px 13px;border-bottom:1px solid #d9e7ee;background:#fbfdfe;color:#67798b}.rmt-room-activity-strip>div{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;align-items:baseline}.rmt-room-activity-strip b{color:#9d637b;font-size:11px}.rmt-room-activity-strip span{font-size:12px;line-height:1.55}.rmt-room-activity-strip small{grid-column:2;font-size:9px;color:#8b97a4;line-height:1.45}.rmt-room-activity-strip.empty{background:#f8fbfd}.rmt-room-live-trace{margin-top:8px;padding:7px 9px;border-radius:9px;background:#f8fbfd;color:#788896;font-size:10px}.rmt-room-temp-line{margin-top:7px;color:#81909e;font-size:10px}
+/* 人设视觉档案只选择以下本地骨架；外部文本不能变成 CSS、HTML 或资源地址。 */
+.rmt-room-view[data-rmt-room-world="contemporary"] .rmt-room-scene:before{border-radius:18px;background:linear-gradient(145deg,rgba(255,255,255,.7),rgba(224,239,245,.42))}
+.rmt-room-view[data-rmt-room-world="contemporary"] .rmt-room-window{border-radius:4px}.rmt-room-view[data-rmt-room-world="contemporary"] .rmt-room-furniture{border-radius:15px 15px 6px 6px}
+.rmt-room-view[data-rmt-room-world="historical"] .rmt-room-scene:before{border-radius:2px;background:repeating-linear-gradient(90deg,rgba(255,250,235,.68) 0 48px,rgba(139,106,73,.20) 49px 53px)}
+.rmt-room-view[data-rmt-room-world="historical"] .rmt-room-window{border-radius:1px;border-color:#eadfc8;background:repeating-linear-gradient(90deg,#fffaf0 0 18px,#bfa986 19px 21px)}.rmt-room-view[data-rmt-room-world="historical"] .rmt-room-furniture{border-radius:3px;height:12%}
+.rmt-room-view[data-rmt-room-world="fantasy"] .rmt-room-scene:before{border-radius:46% 46% 12px 12px;background:radial-gradient(circle at 50% 28%,rgba(255,246,198,.82),rgba(177,202,173,.38) 34%,rgba(108,90,132,.13) 72%);border-width:2px}
+.rmt-room-view[data-rmt-room-world="fantasy"] .rmt-room-window{border-radius:50% 50% 8px 8px;height:31%;background:radial-gradient(circle at 52% 34%,#fff6c9,#b8d5cf 53%,#8c779e 100%)}.rmt-room-view[data-rmt-room-world="fantasy"] .rmt-room-furniture{border-radius:50% 50% 9px 9px}
+.rmt-room-view[data-rmt-room-world="scifi"] .rmt-room-scene:before{border-radius:4px;background:repeating-linear-gradient(90deg,rgba(225,247,250,.58) 0 45px,rgba(52,111,128,.22) 46px 48px),repeating-linear-gradient(0deg,transparent 0 27px,rgba(70,139,154,.18) 28px 29px);border-color:rgba(80,160,175,.62);box-shadow:inset 0 0 32px rgba(50,135,157,.20)}
+.rmt-room-view[data-rmt-room-world="scifi"] .rmt-room-window{border-radius:999px;border-color:#d9f7f6;outline-color:#5f929c;background:linear-gradient(135deg,#7bb3c0,#d9ffff 50%,#506c87)}.rmt-room-view[data-rmt-room-world="scifi"] .rmt-room-furniture{border-radius:2px;clip-path:polygon(4% 0,96% 0,100% 22%,100% 100%,0 100%,0 22%)}
+.rmt-room-view[data-rmt-room-world="nomadic"] .rmt-room-scene:before{left:8%;right:8%;top:5%;height:58%;clip-path:polygon(50% 0,100% 100%,0 100%);border:0;border-radius:0;background:repeating-linear-gradient(135deg,#f3e5cb 0 24px,#d7b98f 25px 29px)}
+.rmt-room-view[data-rmt-room-world="nomadic"] .rmt-room-window{display:none}.rmt-room-view[data-rmt-room-world="nomadic"] .rmt-room-furniture{height:9%;bottom:13%;border-radius:45% 45% 5px 5px}
+.rmt-room-view[data-rmt-room-world="maritime"] .rmt-room-scene:before{border-radius:5px;background:repeating-linear-gradient(90deg,rgba(224,239,241,.55) 0 58px,rgba(58,88,97,.20) 59px 63px);border-color:#79949d}
+.rmt-room-view[data-rmt-room-world="maritime"] .rmt-room-window{width:20%;height:25%;border-radius:50%;border:8px solid #d6e3e4;outline:4px solid #687f88;background:radial-gradient(circle,#c2edf4 0 47%,#698b97 49% 58%,#d6e5e7 60%)}.rmt-room-view[data-rmt-room-world="maritime"] .rmt-room-furniture{border-radius:3px}
+.rmt-room-view[data-rmt-room-world="institutional"] .rmt-room-scene:before{border-radius:3px;background:repeating-linear-gradient(90deg,rgba(250,253,253,.76) 0 62px,rgba(167,188,195,.25) 63px 65px);border-color:#b8cbd1}
+.rmt-room-view[data-rmt-room-world="institutional"] .rmt-room-window{border-radius:1px;background:linear-gradient(180deg,#d9eef2,#f4fbfc)}.rmt-room-view[data-rmt-room-world="institutional"] .rmt-room-furniture{height:13%;border-radius:3px}
+.rmt-room-view[data-rmt-room-material="wood"] .rmt-room-furniture,.rmt-room-view[data-rmt-room-material="wood"] .rmt-room-furniture:after{background:repeating-linear-gradient(90deg,#a67b59 0 18px,#bb9270 19px 21px);box-shadow:0 8px 0 #76553e,0 14px 22px rgba(68,64,62,.16)}
+.rmt-room-view[data-rmt-room-material="stone"] .rmt-room-furniture,.rmt-room-view[data-rmt-room-material="stone"] .rmt-room-furniture:after{background:radial-gradient(circle at 22% 30%,#c7c4be 0 8%,transparent 9%),radial-gradient(circle at 72% 62%,#aaa9a6 0 7%,transparent 8%),#b9b6b1;box-shadow:0 8px 0 #85827f,0 14px 22px rgba(47,48,51,.15)}
+.rmt-room-view[data-rmt-room-material="fabric"] .rmt-room-furniture,.rmt-room-view[data-rmt-room-material="fabric"] .rmt-room-furniture:after{background:repeating-linear-gradient(135deg,#cabdc6 0 5px,#d9ced5 6px 10px);border-radius:22px 22px 9px 9px;box-shadow:0 8px 0 #a99aa4,0 14px 22px rgba(68,64,62,.12)}
+.rmt-room-view[data-rmt-room-material="metal"] .rmt-room-furniture,.rmt-room-view[data-rmt-room-material="metal"] .rmt-room-furniture:after{background:repeating-linear-gradient(90deg,#9eabb1 0 24px,#d5dde0 25px 29px,#85949b 30px 32px);border-radius:3px;box-shadow:0 8px 0 #68777e,0 14px 22px rgba(42,50,54,.18)}
+.rmt-room-view[data-rmt-room-material="glass"] .rmt-room-furniture,.rmt-room-view[data-rmt-room-material="glass"] .rmt-room-furniture:after{background:linear-gradient(135deg,rgba(224,249,251,.80),rgba(130,181,191,.42));border:1px solid rgba(238,255,255,.86);box-shadow:0 7px 0 rgba(93,139,149,.58),inset 12px 0 rgba(255,255,255,.20)}
+.rmt-room-view[data-rmt-room-material="mixed"] .rmt-room-furniture{background:linear-gradient(180deg,var(--rmt-room-soft),color-mix(in srgb,var(--rmt-room-accent) 42%,#d5c5b7));box-shadow:0 8px 0 color-mix(in srgb,var(--rmt-room-accent-deep) 54%,#a99483),0 14px 22px rgba(68,64,62,.13)}
+.rmt-room-view[data-rmt-room-material="mixed"] .rmt-room-furniture:after{background:linear-gradient(180deg,#e6f0f3,color-mix(in srgb,var(--rmt-room-accent) 38%,#cad7dc));box-shadow:0 6px 0 color-mix(in srgb,var(--rmt-room-accent-deep) 45%,#a7bac2)}
+.rmt-room-view[data-rmt-room-density="sparse"] .rmt-room-prop-b,.rmt-room-view[data-rmt-room-density="sparse"] .rmt-room-prop-c{opacity:0}.rmt-room-view[data-rmt-room-density="sparse"] .rmt-room-scene:after{left:22%;right:22%;opacity:.45}
+.rmt-room-view[data-rmt-room-density="balanced"] .rmt-room-prop-c{opacity:.38}.rmt-room-view[data-rmt-room-density="layered"] .rmt-room-decor{filter:drop-shadow(0 5px 5px rgba(48,55,60,.12))}.rmt-room-view[data-rmt-room-density="layered"] .rmt-room-scene:after{left:3%;right:3%;height:24%;opacity:1}
+.rmt-room-person{--rmt-body-left:18px;--rmt-body-width:68px;--rmt-body-height:91px;--rmt-body-radius:25px 25px 12px 12px;--rmt-arm-width:19px;--rmt-hair-a:#515866;--rmt-hair-b:#333a47;position:absolute;z-index:5;left:48%;bottom:14%;width:104px;height:170px;border:0;background:transparent;cursor:pointer;color:#5c6f83;padding:0;filter:drop-shadow(0 5px 5px rgba(47,53,61,.09))}
+.rmt-room-person:hover .rmt-room-head{filter:brightness(1.05)}.rmt-room-person:hover .rmt-room-person-label{border-color:var(--rmt-room-accent)}
+.rmt-room-figure-shadow{position:absolute;z-index:0;left:11px;right:9px;bottom:13px;height:12px;border-radius:50%;background:rgba(44,52,58,.16);filter:blur(2px)}
+.rmt-room-body-figure{position:absolute;z-index:2;left:var(--rmt-body-left);top:61px;width:var(--rmt-body-width);height:var(--rmt-body-height);border-radius:var(--rmt-body-radius);background:linear-gradient(180deg,var(--rmt-room-outfit-a),var(--rmt-room-outfit-b));box-shadow:inset 10px 0 rgba(255,255,255,.08),inset -5px 0 rgba(31,43,51,.08);transform-origin:50% 8%;transition:transform .2s ease}
+.rmt-room-body-figure:before,.rmt-room-body-figure:after{content:"";position:absolute;z-index:-1;top:21px;width:var(--rmt-arm-width);height:72px;border-radius:12px;background:inherit;box-shadow:inset 5px 0 rgba(255,255,255,.06);transform-origin:50% 7px}.rmt-room-body-figure:before{left:calc(var(--rmt-arm-width) * -.58);transform:rotate(7deg)}.rmt-room-body-figure:after{right:calc(var(--rmt-arm-width) * -.58);transform:rotate(-7deg)}
+.rmt-room-outfit-mark{position:absolute;z-index:2;left:50%;top:8px;width:24px;height:39px;transform:translateX(-50%);box-sizing:border-box}
+.rmt-room-head{position:absolute;z-index:4;left:calc((104px - var(--rmt-head-width,44px))/2);top:4px;width:var(--rmt-head-width,44px);height:var(--rmt-head-height,50px);transition:filter .18s ease,transform .2s ease;transform-origin:50% 90%}
+.rmt-room-head:after{content:"";position:absolute;z-index:0;left:13px;right:13px;bottom:-13px;height:17px;border-radius:7px;background:#eacdbd;box-shadow:inset 0 -4px rgba(154,104,90,.08)}
+.rmt-room-face{position:absolute;z-index:2;inset:0;border-radius:47% 47% 44% 44%;background:linear-gradient(145deg,#f5ddcf,#e7c3b2);box-shadow:inset -5px -6px rgba(154,104,90,.08)}
+.rmt-room-face:before{content:"";position:absolute;left:calc((100% - var(--rmt-eye-gap,19px))/2 - 1.5px);top:52%;width:3px;height:3px;border-radius:50%;background:#55525a;box-shadow:var(--rmt-eye-gap,19px) 0 #55525a}.rmt-room-face:after{content:"";position:absolute;left:calc((100% - var(--rmt-mouth-width,9px))/2);top:74%;width:var(--rmt-mouth-width,9px);height:4px;border-bottom:1px solid rgba(126,72,74,.65);border-radius:50%}
+.rmt-room-hair{position:absolute;z-index:3;left:-3px;right:-3px;top:-5px;height:23px;border-radius:54% 54% 38% 28%;background:linear-gradient(145deg,var(--rmt-hair-a),var(--rmt-hair-b));box-shadow:inset 0 -4px rgba(10,17,24,.10)}
+.rmt-room-hair:before,.rmt-room-hair:after{content:"";position:absolute;background:linear-gradient(160deg,var(--rmt-hair-a),var(--rmt-hair-b));box-sizing:border-box}
+.rmt-room-figure-detail{display:none;position:absolute;z-index:6;box-sizing:border-box}.rmt-room-figure-detail:before,.rmt-room-figure-detail:after{content:"";position:absolute;box-sizing:border-box}
+.rmt-room-person-label{position:absolute;z-index:8;left:50%;bottom:-2px;transform:translateX(-50%);white-space:nowrap;font-size:10px;font-weight:800;color:var(--rmt-room-accent-deep);background:rgba(255,255,255,.9);border:1px solid color-mix(in srgb,var(--rmt-room-accent) 55%,#d3e2e9);border-radius:999px;padding:3px 7px;animation:rmtRoomHeart 2.8s ease-in-out infinite}
+@keyframes rmtRoomHeart{0%,100%{transform:translateX(-50%) translateY(0);filter:saturate(.9)}50%{transform:translateX(-50%) translateY(-2px);filter:saturate(1.25)}}
+.rmt-room-person[data-rmt-build="slender"]{--rmt-body-left:25px;--rmt-body-width:54px;--rmt-body-height:95px;--rmt-body-radius:22px 22px 10px 10px;--rmt-arm-width:15px}.rmt-room-person[data-rmt-build="lean"]{--rmt-body-left:22px;--rmt-body-width:60px;--rmt-body-height:94px;--rmt-body-radius:22px 22px 9px 9px;--rmt-arm-width:16px}
+.rmt-room-person[data-rmt-build="average"]{--rmt-body-left:18px;--rmt-body-width:68px;--rmt-body-height:91px;--rmt-body-radius:25px 25px 12px 12px;--rmt-arm-width:19px}.rmt-room-person[data-rmt-build="broad"]{--rmt-body-left:9px;--rmt-body-width:86px;--rmt-body-height:91px;--rmt-body-radius:30px 30px 12px 12px;--rmt-arm-width:23px}
+.rmt-room-person[data-rmt-build="compact"]{--rmt-body-left:15px;--rmt-body-width:74px;--rmt-body-height:78px;--rmt-body-radius:29px 29px 15px 15px;--rmt-arm-width:20px}.rmt-room-person[data-rmt-build="compact"] .rmt-room-body-figure{top:70px}.rmt-room-person[data-rmt-build="soft"]{--rmt-body-left:14px;--rmt-body-width:76px;--rmt-body-height:89px;--rmt-body-radius:34px 34px 18px 18px;--rmt-arm-width:21px}
+.rmt-room-person[data-rmt-hair-tone="dark"]{--rmt-hair-a:#515866;--rmt-hair-b:#282f3a}.rmt-room-person[data-rmt-hair-tone="brown"]{--rmt-hair-a:#765841;--rmt-hair-b:#4b3528}.rmt-room-person[data-rmt-hair-tone="light"]{--rmt-hair-a:#e2ca91;--rmt-hair-b:#b79b61}.rmt-room-person[data-rmt-hair-tone="red"]{--rmt-hair-a:#aa5d4e;--rmt-hair-b:#6f3833}.rmt-room-person[data-rmt-hair-tone="silver"]{--rmt-hair-a:#d5dae0;--rmt-hair-b:#929ba8}.rmt-room-person[data-rmt-hair-tone="fantasy_cool"]{--rmt-hair-a:#566d82;--rmt-hair-b:#334556}.rmt-room-person[data-rmt-hair-tone="fantasy_warm"]{--rmt-hair-a:#98705a;--rmt-hair-b:#68473c}
+.rmt-room-person[data-rmt-hair-shape="cropped"] .rmt-room-hair{height:14px;border-radius:58% 58% 25% 25%}.rmt-room-person[data-rmt-hair-shape="cropped"] .rmt-room-hair:before,.rmt-room-person[data-rmt-hair-shape="cropped"] .rmt-room-hair:after{display:none}
+.rmt-room-person[data-rmt-hair-shape="short"] .rmt-room-hair:before{left:0;top:9px;width:7px;height:17px;border-radius:5px 0 6px 6px}.rmt-room-person[data-rmt-hair-shape="short"] .rmt-room-hair:after{right:0;top:8px;width:6px;height:18px;border-radius:0 5px 6px 6px}
+.rmt-room-person[data-rmt-hair-shape="medium"] .rmt-room-hair{height:27px}.rmt-room-person[data-rmt-hair-shape="medium"] .rmt-room-hair:before,.rmt-room-person[data-rmt-hair-shape="medium"] .rmt-room-hair:after{top:13px;width:10px;height:27px;border-radius:4px 4px 9px 9px}.rmt-room-person[data-rmt-hair-shape="medium"] .rmt-room-hair:before{left:-1px}.rmt-room-person[data-rmt-hair-shape="medium"] .rmt-room-hair:after{right:-1px}
+.rmt-room-person[data-rmt-hair-shape="long"] .rmt-room-hair{height:29px}.rmt-room-person[data-rmt-hair-shape="long"] .rmt-room-hair:before,.rmt-room-person[data-rmt-hair-shape="long"] .rmt-room-hair:after{top:12px;width:14px;height:53px;border-radius:5px 5px 12px 12px}.rmt-room-person[data-rmt-hair-shape="long"] .rmt-room-hair:before{left:-3px}.rmt-room-person[data-rmt-hair-shape="long"] .rmt-room-hair:after{right:-3px}
+.rmt-room-person[data-rmt-hair-shape="tied"] .rmt-room-hair:before{right:-13px;top:14px;width:18px;height:38px;border-radius:50% 12px 50% 42%;transform:rotate(-15deg)}.rmt-room-person[data-rmt-hair-shape="tied"] .rmt-room-hair:after{right:-7px;top:4px;width:15px;height:15px;border-radius:50%}
+.rmt-room-person[data-rmt-hair-shape="curly"] .rmt-room-hair{left:0;right:0;top:-7px;height:18px;border-radius:50%;box-shadow:-5px 4px 0 var(--rmt-hair-a),5px 3px 0 var(--rmt-hair-b),-2px 9px 0 var(--rmt-hair-b),7px 9px 0 var(--rmt-hair-a)}.rmt-room-person[data-rmt-hair-shape="curly"] .rmt-room-hair:before,.rmt-room-person[data-rmt-hair-shape="curly"] .rmt-room-hair:after{top:13px;width:12px;height:22px;border-radius:50%}.rmt-room-person[data-rmt-hair-shape="curly"] .rmt-room-hair:before{left:-3px}.rmt-room-person[data-rmt-hair-shape="curly"] .rmt-room-hair:after{right:-3px}
+.rmt-room-person[data-rmt-hair-shape="covered"] .rmt-room-hair{left:-6px;right:-6px;top:-8px;height:35px;border-radius:50% 50% 10px 10px;background:linear-gradient(145deg,var(--rmt-room-outfit-a),var(--rmt-room-outfit-b));border:2px solid rgba(255,255,255,.28)}.rmt-room-person[data-rmt-hair-shape="covered"] .rmt-room-hair:before,.rmt-room-person[data-rmt-hair-shape="covered"] .rmt-room-hair:after{display:none}
+.rmt-room-person[data-rmt-hair-shape="nonhuman"] .rmt-room-hair{top:-7px;height:26px;clip-path:polygon(0 25%,14% 0,25% 25%,40% 0,51% 25%,65% 0,76% 25%,91% 0,100% 35%,94% 100%,4% 100%)}.rmt-room-person[data-rmt-hair-shape="nonhuman"] .rmt-room-hair:before,.rmt-room-person[data-rmt-hair-shape="nonhuman"] .rmt-room-hair:after{display:none}
+.rmt-room-person[data-rmt-outfit="casual"] .rmt-room-body-figure{background:linear-gradient(155deg,var(--rmt-room-outfit-a),var(--rmt-room-outfit-b))}.rmt-room-person[data-rmt-outfit="casual"] .rmt-room-outfit-mark{border-top:3px solid rgba(255,255,255,.30);border-radius:50%}
+.rmt-room-person[data-rmt-outfit="formal"] .rmt-room-body-figure{background:linear-gradient(90deg,#384451 0 47%,#27333e 48% 52%,#455360 53%)}.rmt-room-person[data-rmt-outfit="formal"] .rmt-room-outfit-mark{border-left:10px solid transparent;border-right:10px solid transparent;border-top:20px solid #f1eee8;width:22px}.rmt-room-person[data-rmt-outfit="formal"] .rmt-room-outfit-mark:after{content:"";position:absolute;left:-3px;top:-18px;border-left:3px solid transparent;border-right:3px solid transparent;border-top:17px solid var(--rmt-room-accent-deep)}
+.rmt-room-person[data-rmt-outfit="uniform"] .rmt-room-body-figure{border-radius:12px 12px 5px 5px;background:linear-gradient(90deg,var(--rmt-room-outfit-b) 0 49%,var(--rmt-room-outfit-a) 50%)}.rmt-room-person[data-rmt-outfit="uniform"] .rmt-room-outfit-mark{width:5px;border-radius:50%;background:#e9d69b;box-shadow:0 10px #e9d69b,0 20px #e9d69b}
+.rmt-room-person[data-rmt-outfit="academic"] .rmt-room-body-figure{background:linear-gradient(115deg,#59616f 0 44%,#d7c6a8 45% 50%,#4a5260 51%)}.rmt-room-person[data-rmt-outfit="academic"] .rmt-room-outfit-mark{width:8px;background:linear-gradient(#8f5265,#6d384c);clip-path:polygon(0 0,100% 0,72% 100%,28% 100%)}
+.rmt-room-person[data-rmt-outfit="artisan"] .rmt-room-body-figure{background:repeating-linear-gradient(135deg,var(--rmt-room-outfit-a) 0 13px,var(--rmt-room-outfit-b) 14px 17px)}.rmt-room-person[data-rmt-outfit="artisan"] .rmt-room-outfit-mark{width:30px;height:28px;border:2px dashed rgba(255,245,220,.65);border-radius:4px}
+.rmt-room-person[data-rmt-outfit="combat"] .rmt-room-body-figure{border-radius:8px;background:repeating-linear-gradient(180deg,#59646c 0 17px,#3e494f 18px 21px)}.rmt-room-person[data-rmt-outfit="combat"] .rmt-room-outfit-mark{width:38px;height:42px;border:3px solid #89999e;clip-path:polygon(18% 0,82% 0,100% 22%,84% 100%,16% 100%,0 22%)}
+.rmt-room-person[data-rmt-outfit="ceremonial"] .rmt-room-body-figure{background:linear-gradient(90deg,var(--rmt-room-outfit-b),var(--rmt-room-outfit-a) 25% 75%,var(--rmt-room-outfit-b))}.rmt-room-person[data-rmt-outfit="ceremonial"] .rmt-room-outfit-mark{width:16px;height:56px;border:2px solid #dfc579;border-top:0;background:linear-gradient(90deg,transparent,#dfc579 48% 52%,transparent)}
+.rmt-room-person[data-rmt-outfit="technical"] .rmt-room-body-figure{border-radius:5px;background:repeating-linear-gradient(135deg,#3e5662 0 17px,#527784 18px 20px)}.rmt-room-person[data-rmt-outfit="technical"] .rmt-room-outfit-mark{width:36px;height:31px;border:2px solid #91e2df;clip-path:polygon(12% 0,100% 0,88% 100%,0 100%)}
+.rmt-room-person[data-rmt-outfit="historical"] .rmt-room-body-figure{border-radius:31px 14px 8px 8px;background:linear-gradient(120deg,var(--rmt-room-outfit-a) 0 43%,#eee0c7 44% 49%,var(--rmt-room-outfit-b) 50%)}.rmt-room-person[data-rmt-outfit="historical"] .rmt-room-outfit-mark{width:32px;border-top:5px double rgba(255,245,221,.72);border-bottom:5px double rgba(255,245,221,.55)}
+.rmt-room-person[data-rmt-outfit="fantasy"] .rmt-room-body-figure{background:linear-gradient(145deg,var(--rmt-room-outfit-a),#485b54 58%,var(--rmt-room-outfit-b));clip-path:polygon(16% 0,84% 0,100% 24%,90% 100%,10% 100%,0 24%)}.rmt-room-person[data-rmt-outfit="fantasy"] .rmt-room-outfit-mark{width:17px;height:29px;transform:translateX(-50%) rotate(45deg);border:2px solid #d8c985;background:rgba(255,255,255,.12)}
+.rmt-room-person[data-rmt-detail="glasses"] .rmt-room-figure-detail{display:block;left:4px;top:20px;width:15px;height:10px;border:2px solid #596a77;border-radius:5px}.rmt-room-person[data-rmt-detail="glasses"] .rmt-room-figure-detail:before{left:13px;top:2px;width:6px;height:2px;background:#596a77}.rmt-room-person[data-rmt-detail="glasses"] .rmt-room-figure-detail:after{left:19px;top:-2px;width:15px;height:10px;border:2px solid #596a77;border-radius:5px}
+.rmt-room-person[data-rmt-detail="headphones"] .rmt-room-figure-detail{display:block;left:-5px;top:5px;width:54px;height:35px;border:4px solid #536978;border-bottom:0;border-radius:50% 50% 0 0}.rmt-room-person[data-rmt-detail="headphones"] .rmt-room-figure-detail:before,.rmt-room-person[data-rmt-detail="headphones"] .rmt-room-figure-detail:after{top:20px;width:9px;height:17px;border-radius:5px;background:#405461}.rmt-room-person[data-rmt-detail="headphones"] .rmt-room-figure-detail:before{left:-6px}.rmt-room-person[data-rmt-detail="headphones"] .rmt-room-figure-detail:after{right:-6px}
+.rmt-room-person[data-rmt-detail="scarf"] .rmt-room-figure-detail{display:block;left:7px;top:44px;width:31px;height:12px;border-radius:5px;background:var(--rmt-room-accent-deep);box-shadow:12px 8px 0 -2px var(--rmt-room-accent)}
+.rmt-room-person[data-rmt-detail="headwear"] .rmt-room-figure-detail{display:block;left:1px;top:-8px;width:42px;height:13px;border-radius:50% 50% 3px 3px;background:var(--rmt-room-accent-deep)}.rmt-room-person[data-rmt-detail="headwear"] .rmt-room-figure-detail:after{left:-5px;top:10px;width:52px;height:5px;border-radius:50%;background:var(--rmt-room-accent)}
+.rmt-room-person[data-rmt-detail="pointed_ears"] .rmt-room-figure-detail,.rmt-room-person[data-rmt-detail="animal_ears"] .rmt-room-figure-detail,.rmt-room-person[data-rmt-detail="horns"] .rmt-room-figure-detail{display:block;inset:0}.rmt-room-person[data-rmt-detail="pointed_ears"] .rmt-room-figure-detail:before,.rmt-room-person[data-rmt-detail="pointed_ears"] .rmt-room-figure-detail:after{top:20px;width:13px;height:18px;background:#e7c3b2;clip-path:polygon(0 50%,100% 0,78% 100%)}.rmt-room-person[data-rmt-detail="pointed_ears"] .rmt-room-figure-detail:before{left:-10px}.rmt-room-person[data-rmt-detail="pointed_ears"] .rmt-room-figure-detail:after{right:-10px;transform:scaleX(-1)}
+.rmt-room-person[data-rmt-detail="animal_ears"] .rmt-room-figure-detail:before,.rmt-room-person[data-rmt-detail="animal_ears"] .rmt-room-figure-detail:after{top:-11px;width:18px;height:22px;background:var(--rmt-hair-a);clip-path:polygon(50% 0,100% 100%,0 100%)}.rmt-room-person[data-rmt-detail="animal_ears"] .rmt-room-figure-detail:before{left:0;transform:rotate(-12deg)}.rmt-room-person[data-rmt-detail="animal_ears"] .rmt-room-figure-detail:after{right:0;transform:rotate(12deg)}
+.rmt-room-person[data-rmt-detail="horns"] .rmt-room-figure-detail:before,.rmt-room-person[data-rmt-detail="horns"] .rmt-room-figure-detail:after{top:-16px;width:11px;height:24px;background:#8f806b;clip-path:polygon(50% 0,100% 100%,0 100%)}.rmt-room-person[data-rmt-detail="horns"] .rmt-room-figure-detail:before{left:4px;transform:rotate(-13deg)}.rmt-room-person[data-rmt-detail="horns"] .rmt-room-figure-detail:after{right:4px;transform:rotate(13deg)}
+.rmt-room-person[data-rmt-detail="visor"] .rmt-room-figure-detail{display:block;left:3px;top:18px;width:38px;height:14px;border:2px solid #bff8f4;border-radius:4px;background:linear-gradient(90deg,rgba(44,91,113,.82),rgba(118,223,218,.65));box-shadow:0 0 7px rgba(91,220,214,.55)}
+.rmt-room-person[data-rmt-posture="reserved"] .rmt-room-body-figure{transform:scaleX(.94)}.rmt-room-person[data-rmt-posture="reserved"] .rmt-room-body-figure:before{transform:translate(18px,13px) rotate(63deg)}.rmt-room-person[data-rmt-posture="reserved"] .rmt-room-body-figure:after{transform:translate(-18px,13px) rotate(-63deg)}
+.rmt-room-person[data-rmt-posture="relaxed"] .rmt-room-head{transform:translateX(2px) rotate(3deg)}.rmt-room-person[data-rmt-posture="relaxed"] .rmt-room-body-figure{transform:rotate(-1.5deg)}.rmt-room-person[data-rmt-posture="relaxed"] .rmt-room-body-figure:before{transform:rotate(13deg)}.rmt-room-person[data-rmt-posture="relaxed"] .rmt-room-body-figure:after{transform:rotate(-4deg)}
+.rmt-room-person[data-rmt-posture="upright"] .rmt-room-head{transform:translateY(-2px)}.rmt-room-person[data-rmt-posture="upright"] .rmt-room-body-figure{transform:scaleY(1.03)}
+.rmt-room-person[data-rmt-posture="active"] .rmt-room-head{transform:translate(-3px,-1px) rotate(-4deg)}.rmt-room-person[data-rmt-posture="active"] .rmt-room-body-figure{transform:skewX(-3deg) rotate(1deg)}.rmt-room-person[data-rmt-posture="active"] .rmt-room-body-figure:before{transform:rotate(28deg)}.rmt-room-person[data-rmt-posture="active"] .rmt-room-body-figure:after{transform:rotate(-24deg)}
+.rmt-room-person[data-rmt-posture="studious"] .rmt-room-head{transform:translate(-2px,5px) rotate(-7deg)}.rmt-room-person[data-rmt-posture="studious"] .rmt-room-body-figure{transform:skewX(3deg)}.rmt-room-person[data-rmt-posture="studious"] .rmt-room-body-figure:before{transform:translate(13px,7px) rotate(47deg)}
+.rmt-room-person[data-rmt-posture="tired"] .rmt-room-head{transform:translate(3px,7px) rotate(9deg)}.rmt-room-person[data-rmt-posture="tired"] .rmt-room-body-figure{transform:scaleY(.94) skewX(-2deg);transform-origin:50% 100%}.rmt-room-person[data-rmt-posture="tired"] .rmt-room-body-figure:after{transform:rotate(-18deg)}
+.rmt-room-activity-strip{padding:10px 13px;border-bottom:1px solid #d9e7ee;background:#fbfdfe;color:#67798b}.rmt-room-activity-strip>div{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;align-items:baseline}.rmt-room-activity-strip b{color:var(--rmt-room-accent-deep);font-size:11px}.rmt-room-activity-strip span{font-size:12px;line-height:1.55}.rmt-room-activity-strip small{grid-column:2;font-size:9px;color:#8b97a4;line-height:1.45}.rmt-room-activity-strip.empty{background:#f8fbfd}.rmt-room-live-trace{margin-top:8px;padding:7px 9px;border-radius:9px;background:var(--rmt-room-soft);color:#788896;font-size:10px}.rmt-room-temp-line{margin-top:7px;color:#81909e;font-size:10px}
 .rmt-room-empty{position:absolute;z-index:6;left:50%;top:17%;transform:translateX(-50%);padding:8px 11px;border:1px dashed #cbdde7;border-radius:12px;background:rgba(255,255,255,.78);color:#8a98a5;font-size:11px}
 .rmt-room-hotspot{position:absolute;z-index:8;left:var(--rx);top:var(--ry);transform:translate(-50%,-50%);width:28px;height:28px;display:grid;place-items:center;border:1px solid #bcd6e2;border-radius:50%;padding:0;background:rgba(255,255,255,.94);color:#60758a;font:inherit;font-size:10px;font-weight:900;cursor:pointer;box-shadow:0 3px 10px rgba(64,87,103,.13);transition:.18s ease}
-.rmt-room-hotspot:hover,.rmt-room-hotspot.active{transform:translate(-50%,-50%) scale(1.08);border-color:#e6a5c0;background:#fff7fa;color:#9b5d79}.rmt-room-hotspot.focus{box-shadow:0 0 0 4px rgba(233,154,185,.18),0 3px 10px rgba(64,87,103,.11)}
-.rmt-room-object-rail{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:7px;padding:10px 12px;border-top:1px solid #d9e7ee;background:#fbfdfe}.rmt-room-object-chip{min-width:0;display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center;gap:7px;text-align:left;border:1px solid #d6e4eb;border-radius:10px;background:#fff;color:#647589;padding:7px 8px;font:inherit;cursor:pointer}.rmt-room-object-chip>span{width:22px;height:22px;display:grid;place-items:center;border-radius:50%;background:#eef7fb;color:#6b8396;font-size:9px;font-weight:900}.rmt-room-object-chip b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px}.rmt-room-object-chip em{font-size:8px;color:#98743f;font-style:normal;white-space:nowrap}.rmt-room-object-chip.active{border-color:#e6aec4;background:#fff7fa}
-.rmt-room-caption{padding:12px 14px 14px;border-top:1px solid #d9e7ee;background:#fffdfb;color:#68788a;line-height:1.7;font-size:12px}.rmt-room-caption b{color:#ba7590}
+.rmt-room-hotspot:hover,.rmt-room-hotspot.active{transform:translate(-50%,-50%) scale(1.08);border-color:var(--rmt-room-accent);background:var(--rmt-room-soft);color:var(--rmt-room-accent-deep)}.rmt-room-hotspot.focus{box-shadow:0 0 0 4px var(--rmt-room-wash),0 3px 10px rgba(64,87,103,.11)}
+.rmt-room-object-rail{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:7px;padding:10px 12px;border-top:1px solid #d9e7ee;background:#fbfdfe}.rmt-room-object-chip{min-width:0;display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center;gap:7px;text-align:left;border:1px solid #d6e4eb;border-radius:10px;background:#fff;color:#647589;padding:7px 8px;font:inherit;cursor:pointer}.rmt-room-object-chip>span{width:22px;height:22px;display:grid;place-items:center;border-radius:50%;background:var(--rmt-room-soft);color:var(--rmt-room-accent-deep);font-size:9px;font-weight:900}.rmt-room-object-chip b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px}.rmt-room-object-chip em{font-size:8px;color:#98743f;font-style:normal;white-space:nowrap}.rmt-room-object-chip.active{border-color:var(--rmt-room-accent);background:var(--rmt-room-soft)}
+.rmt-room-caption{padding:12px 14px 14px;border-top:1px solid #d9e7ee;background:#fffdfb;color:#68788a;line-height:1.7;font-size:12px}.rmt-room-caption b{color:var(--rmt-room-accent-deep)}
 .rmt-room-side{display:grid;gap:12px}.rmt-room-card{border:1px solid #cbdde7;border-radius:16px;padding:15px;background:linear-gradient(180deg,#fff,#fffdf9);box-shadow:0 7px 18px rgba(66,88,105,.07)}
-.rmt-room-card-kicker{font-size:9px;letter-spacing:.13em;font-weight:850;color:#aa7a8e;margin-bottom:6px}.rmt-room-object-title{font-size:18px;font-weight:850;color:#53667c;margin-bottom:8px}.rmt-room-object-desc{white-space:pre-wrap;line-height:1.75;color:#68778a;font-size:12px}.rmt-room-object-line{margin-top:11px;padding:10px 11px;border-left:3px solid #e99ab9;background:#fff7fa;color:#755e69;line-height:1.65;font-size:12px}
+.rmt-room-card-kicker{font-size:9px;letter-spacing:.13em;font-weight:850;color:var(--rmt-room-accent-deep);margin-bottom:6px}.rmt-room-object-title{font-size:18px;font-weight:850;color:#53667c;margin-bottom:8px}.rmt-room-object-desc{white-space:pre-wrap;line-height:1.75;color:#68778a;font-size:12px}.rmt-room-object-line{margin-top:11px;padding:10px 11px;border-left:3px solid var(--rmt-room-accent);background:var(--rmt-room-soft);color:#755e69;line-height:1.65;font-size:12px}
 .rmt-room-source{margin-top:9px;font-size:10px;color:#98a2ad}.rmt-room-searchable-tag{display:inline-block;margin-left:7px;padding:2px 7px;border:1px solid #d7c08f;border-radius:999px;font-size:9px;color:#8a6b35;background:#fffaf0;vertical-align:2px}.rmt-room-atmosphere{white-space:pre-wrap;line-height:1.72;color:#6c7b8c;font-size:12px}
 .rmt-room-note{font-size:10px;color:#9aa5af;line-height:1.55;margin-top:7px}
 
@@ -2278,6 +2357,25 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-phone{display:flex;justify-content:center;padding:8px}.rmt-phone-shell{position:relative;width:min(940px,100%);min-height:560px;border-radius:28px;padding:16px;background:linear-gradient(155deg,#f8fbfc,#e9f2f5);border:1px solid rgba(74,112,124,.18);box-shadow:0 16px 42px rgba(44,70,79,.12)}.rmt-phone-notch{width:90px;height:5px;border-radius:999px;background:rgba(39,57,65,.28);margin:0 auto 12px}.rmt-phone-lock{display:flex;justify-content:space-between;align-items:center;padding:12px 14px}.rmt-phone-lock span{opacity:.6}.rmt-phone-apps{display:flex;gap:8px;overflow:auto;padding:8px 4px 14px}.rmt-phone-app{min-width:92px;border:0;border-radius:16px;background:rgba(255,255,255,.7);padding:11px 10px;display:flex;flex-direction:column;align-items:center;gap:6px}.rmt-phone-app.active{background:#fff;box-shadow:0 8px 20px rgba(77,113,126,.12)}.rmt-phone-content{display:grid;grid-template-columns:minmax(240px,.8fr) minmax(0,1.2fr);gap:12px}.rmt-phone-list,.rmt-phone-detail{border-radius:18px;background:rgba(255,255,255,.78);border:1px solid rgba(74,112,124,.12);padding:12px}.rmt-phone-app-summary{padding:5px 4px 12px;opacity:.68}.rmt-phone-entry{width:100%;border:0;border-top:1px solid rgba(74,112,124,.1);background:transparent;padding:10px 6px;text-align:left;display:flex;flex-direction:column;gap:3px}.rmt-phone-entry.active{background:rgba(159,201,213,.14);border-radius:10px}.rmt-phone-entry small{opacity:.55}.rmt-phone-entry span{opacity:.78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rmt-phone-entry em{font-style:normal;font-size:8px;color:#8c7280;margin-top:2px}.rmt-phone-app-summary{display:grid;gap:3px}.rmt-phone-app-summary b{font-size:13px;color:#5c7184}.rmt-phone-app-summary span{font-size:10px;line-height:1.55}.rmt-phone-app-summary small{font-size:8px;opacity:.55}.rmt-phone-detail{position:relative;min-width:0}.rmt-phone-detail-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}.rmt-phone-detail-toolbar>span{font-size:9px;color:#8e9ba7;text-align:right}.rmt-phone-detail h3{margin:8px 0}.rmt-phone-detail p{white-space:pre-wrap;line-height:1.8}.rmt-phone-evidence{margin-top:14px;font-size:12px;opacity:.58}.rmt-phone-chat-thread{display:grid;gap:8px;margin-top:12px}.rmt-phone-message{padding:9px 10px;border-radius:13px;background:#f7fbfd;border:1px solid rgba(74,112,124,.10);max-width:84%}.rmt-phone-message-owner{margin-left:auto;background:#fff2f6;border-color:rgba(199,125,151,.16)}.rmt-phone-message-contact{margin-right:auto;background:#f7fbfd}.rmt-phone-message>div{display:flex;justify-content:space-between;gap:8px;align-items:center}.rmt-phone-message b{font-size:10px}.rmt-phone-message small{font-size:8px;opacity:.55}.rmt-phone-message p{margin:5px 0 0!important;line-height:1.65!important;font-size:11px}.rmt-phone-speaker-warning{margin:10px 0;padding:9px 10px;border-radius:11px;background:#fff8e9;border:1px solid rgba(184,145,79,.18);font-size:10px;line-height:1.6;color:#8b7756}.rmt-phone-fields{display:grid;gap:7px;margin:12px 0}.rmt-phone-fields>div{display:grid;grid-template-columns:minmax(90px,.35fr) minmax(0,1fr);gap:8px;padding:8px 9px;border-radius:10px;background:#f8fbfd}.rmt-phone-fields dt{font-size:9px;color:#8795a2}.rmt-phone-fields dd{margin:0;font-size:11px;color:#5f7182;white-space:pre-wrap}.rmt-phone-image-caption{padding:11px;border-radius:12px;background:#fff7fa;line-height:1.65;white-space:pre-wrap}
 .rmt-phone-lock>div,.rmt-phone-lock>span{display:grid;gap:2px}.rmt-phone-lock small{font-size:9px;opacity:.62}.rmt-phone-app{position:relative}.rmt-phone-badge{position:absolute;right:7px;top:6px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;display:grid;place-items:center;background:#e98eaf;color:#fff;font-size:9px;font-style:normal;font-weight:850;box-shadow:0 2px 6px rgba(91,48,67,.18)}
 .rmt-device-watch{width:min(560px,100%);border-radius:44px;border-width:6px;padding:18px}.rmt-device-watch .rmt-phone-notch{width:44px}.rmt-device-watch .rmt-phone-content{grid-template-columns:1fr}.rmt-device-watch .rmt-phone-apps{justify-content:flex-start}.rmt-device-watch .rmt-phone-detail{min-height:180px}.rmt-device-terminal,.rmt-device-communicator{border-radius:16px;background:linear-gradient(155deg,#edf4f6,#dce8ec)}
+/* r43 persona-driven private devices: a real device home, then App list, then detail. */
+.rmt-phone-shell{--rmt-device-bg:#111820;--rmt-screen-bg:#eaf0f3;--rmt-screen-ink:#20303d;--rmt-screen-muted:#70808c;--rmt-screen-accent:#6a89a0;--rmt-screen-soft:rgba(255,255,255,.72);width:min(402px,100%);min-height:700px;padding:12px;border:6px solid #222b33;border-radius:44px;background:linear-gradient(150deg,#343e47,#11161c);box-shadow:0 24px 60px rgba(14,24,32,.3),inset 0 0 0 1px rgba(255,255,255,.18);box-sizing:border-box;color:var(--rmt-screen-ink)}
+.rmt-phone-screen{position:relative;display:flex;flex-direction:column;min-height:664px;overflow:hidden;border-radius:32px;background:var(--rmt-screen-bg);box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)}
+.rmt-phone-statusbar{position:relative;z-index:6;min-height:34px;padding:8px 17px 5px;display:flex;justify-content:space-between;align-items:center;color:var(--rmt-screen-ink);font-size:10px;box-sizing:border-box}.rmt-phone-statusbar span{display:flex;gap:7px;align-items:center}
+.rmt-phone-content-single{display:block;flex:1;min-height:0;overflow:auto;background:transparent}.rmt-phone-home-screen,.rmt-phone-app-screen{min-height:630px;box-sizing:border-box}
+.rmt-phone-home{position:relative;display:flex;flex-direction:column;padding:12px 15px 16px;background:linear-gradient(155deg,rgba(255,255,255,.13),rgba(0,0,0,.05)),var(--rmt-screen-bg)}
+.rmt-phone-home:before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.42}.rmt-phone-wallpaper-smoke:before{background:radial-gradient(circle at 30% 20%,rgba(255,255,255,.8),transparent 32%),radial-gradient(circle at 72% 72%,var(--rmt-screen-accent),transparent 42%)}.rmt-phone-wallpaper-rain:before{background:repeating-linear-gradient(105deg,transparent 0 17px,rgba(255,255,255,.28) 18px 19px)}.rmt-phone-wallpaper-grid:before{background:linear-gradient(rgba(255,255,255,.17) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.17) 1px,transparent 1px);background-size:24px 24px}.rmt-phone-wallpaper-starfield:before{background:radial-gradient(circle at 20% 18%,#fff 0 1px,transparent 2px),radial-gradient(circle at 73% 31%,#fff 0 1px,transparent 2px),radial-gradient(circle at 45% 76%,#fff 0 1px,transparent 2px);background-size:83px 79px}.rmt-phone-wallpaper-library:before{background:repeating-linear-gradient(90deg,rgba(255,255,255,.14) 0 9px,transparent 9px 15px),linear-gradient(0deg,rgba(53,37,25,.16),transparent 60%)}.rmt-phone-wallpaper-aurora:before{background:radial-gradient(ellipse at 20% 90%,rgba(255,255,255,.55),transparent 48%),linear-gradient(120deg,transparent 20%,var(--rmt-screen-accent) 52%,transparent 78%)}.rmt-phone-wallpaper-minimal:before{background:linear-gradient(145deg,transparent 49%,rgba(255,255,255,.24) 50% 51%,transparent 52%)}.rmt-phone-wallpaper-paper:before{background:repeating-linear-gradient(0deg,rgba(66,53,39,.05) 0 1px,transparent 1px 5px)}
+.rmt-phone-home .rmt-phone-lock{position:relative;z-index:1;display:flex;align-items:flex-start;padding:4px 2px 20px;color:var(--rmt-screen-ink)}.rmt-phone-home .rmt-phone-lock b{font-size:17px}.rmt-phone-home .rmt-phone-lock small{color:var(--rmt-screen-muted)}
+.rmt-phone-home-grid{position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-content:start;gap:18px 9px;overflow:visible;padding:2px 0 18px}.rmt-phone-home-grid .rmt-phone-app{min-width:0;padding:0;background:transparent;color:var(--rmt-screen-ink);box-shadow:none}.rmt-phone-home-grid .rmt-phone-app>span:last-of-type{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;text-shadow:0 1px 1px rgba(255,255,255,.3)}
+.rmt-phone-icon{width:48px;height:48px;display:grid;place-items:center;border-radius:15px;background:var(--rmt-screen-soft);color:var(--rmt-screen-accent);border:1px solid rgba(255,255,255,.58);box-shadow:0 7px 16px rgba(23,38,49,.13);font-size:17px}.rmt-phone-icons-square .rmt-phone-icon{border-radius:9px}.rmt-phone-icons-glyph .rmt-phone-icon{background:rgba(10,17,23,.76);color:#dff3ff;border-color:rgba(255,255,255,.12)}.rmt-phone-icons-glass .rmt-phone-icon{background:rgba(255,255,255,.34);backdrop-filter:blur(8px)}
+.rmt-phone-dock{position:relative;z-index:1;margin-top:auto;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;padding:9px;border-radius:22px;background:rgba(255,255,255,.3);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.34)}.rmt-phone-dock .rmt-phone-app{min-width:0;padding:0;background:transparent}.rmt-phone-dock .rmt-phone-app>span:last-of-type{display:none}.rmt-phone-dock .rmt-phone-icon{width:46px;height:46px;margin:auto}
+.rmt-phone-page{min-height:630px;padding:13px;background:var(--rmt-screen-bg);color:var(--rmt-screen-ink);box-sizing:border-box}.rmt-phone-page-header{display:grid;grid-template-columns:34px 42px minmax(0,1fr);gap:9px;align-items:center;padding:3px 2px 14px;border-bottom:1px solid rgba(120,140,155,.25)}.rmt-phone-page-header .rmt-phone-icon{width:38px;height:38px;border-radius:11px;font-size:14px}.rmt-phone-page-header>div{display:grid;gap:2px}.rmt-phone-page-header b{font-size:14px}.rmt-phone-page-header small{font-size:8px;color:var(--rmt-screen-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rmt-phone-page-back{width:34px;height:34px;border:0;border-radius:50%;background:var(--rmt-screen-soft);color:var(--rmt-screen-accent);font:800 24px/1 inherit}
+.rmt-phone-page .rmt-phone-list,.rmt-phone-page .rmt-phone-detail{margin-top:10px;padding:8px 10px;border-radius:16px;background:var(--rmt-screen-soft);border-color:rgba(255,255,255,.5)}.rmt-phone-page .rmt-phone-entry{color:var(--rmt-screen-ink)}.rmt-phone-page .rmt-phone-entry small,.rmt-phone-page .rmt-phone-entry span{color:var(--rmt-screen-muted)}.rmt-phone-page-detail{padding-top:8px}.rmt-phone-page-detail .rmt-phone-detail{min-height:580px;margin-top:0}.rmt-phone-page-detail .rmt-phone-detail-toolbar .rmt-btn{border-color:rgba(0,0,0,.12);background:var(--rmt-screen-soft);color:var(--rmt-screen-accent)}
+.rmt-phone-palette-noir-gold{--rmt-screen-bg:#171819;--rmt-screen-ink:#f1ead9;--rmt-screen-muted:#afa58e;--rmt-screen-accent:#d1ae67;--rmt-screen-soft:rgba(41,41,39,.87)}.rmt-phone-palette-ink-blue{--rmt-screen-bg:#101d2a;--rmt-screen-ink:#dcebf7;--rmt-screen-muted:#89a1b5;--rmt-screen-accent:#5eb6dd;--rmt-screen-soft:rgba(27,48,65,.88)}.rmt-phone-palette-frost{--rmt-screen-bg:#eaf2f6;--rmt-screen-ink:#314654;--rmt-screen-muted:#728994;--rmt-screen-accent:#72aabe;--rmt-screen-soft:rgba(255,255,255,.8)}.rmt-phone-palette-moss{--rmt-screen-bg:#dfe7dc;--rmt-screen-ink:#354437;--rmt-screen-muted:#718071;--rmt-screen-accent:#648268;--rmt-screen-soft:rgba(244,247,238,.78)}.rmt-phone-palette-ember{--rmt-screen-bg:#2b1c1a;--rmt-screen-ink:#f8e5d7;--rmt-screen-muted:#c5a093;--rmt-screen-accent:#e47e57;--rmt-screen-soft:rgba(63,37,31,.88)}.rmt-phone-palette-lilac{--rmt-screen-bg:#ece7f2;--rmt-screen-ink:#493e59;--rmt-screen-muted:#80758d;--rmt-screen-accent:#906fac;--rmt-screen-soft:rgba(255,255,255,.7)}.rmt-phone-palette-sky{--rmt-screen-bg:#deedf5;--rmt-screen-ink:#334d5d;--rmt-screen-muted:#738b99;--rmt-screen-accent:#629ab9;--rmt-screen-soft:rgba(255,255,255,.72)}.rmt-phone-palette-sand{--rmt-screen-bg:#eee5d4;--rmt-screen-ink:#51483c;--rmt-screen-muted:#8a7d6b;--rmt-screen-accent:#a88150;--rmt-screen-soft:rgba(255,252,242,.76)}
+.rmt-phone-shell-graphite{border-color:#20272e;background:linear-gradient(150deg,#3b454d,#11171c)}.rmt-phone-shell-silver{border-color:#9ca7ac;background:linear-gradient(150deg,#e1e6e8,#737e83)}.rmt-phone-shell-ivory{border-color:#ded8cb;background:linear-gradient(150deg,#fffdf5,#aaa294)}.rmt-phone-shell-bronze{border-color:#826a50;background:linear-gradient(150deg,#b59a75,#4e3d2c)}.rmt-phone-shell-navy{border-color:#172c3f;background:linear-gradient(150deg,#385a71,#101d29)}.rmt-phone-type-serif{font-family:Georgia,"Noto Serif SC",serif}.rmt-phone-type-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.rmt-phone-density-compact .rmt-phone-home-grid{gap:12px 7px}.rmt-phone-density-compact .rmt-phone-icon{width:43px;height:43px}.rmt-phone-density-roomy .rmt-phone-home-grid{gap:22px 11px}
+.rmt-phone-notch{position:absolute;z-index:8;left:50%;top:8px;transform:translateX(-50%);width:116px;height:25px;margin:0;border-radius:16px;background:#080b0e;box-shadow:0 1px 2px rgba(255,255,255,.14)}.rmt-phone-side-key{position:absolute;right:-9px;top:142px;width:4px;height:76px;border-radius:0 5px 5px 0;background:#303942}.rmt-phone-watch-crown{position:absolute;right:-14px;top:105px;width:13px;height:36px;border-radius:0 9px 9px 0;background:#515b60}.rmt-phone-watch-lug{position:absolute;z-index:-1;left:29%;right:29%;height:62px;background:#30383e}.rmt-phone-watch-lug-top{top:-50px;border-radius:26px 26px 5px 5px}.rmt-phone-watch-lug-bottom{bottom:-50px;border-radius:5px 5px 26px 26px}.rmt-phone-terminal-panel{position:absolute;left:16px;top:14px;display:flex;gap:6px;z-index:8}.rmt-phone-terminal-panel i{width:8px;height:8px;border-radius:50%;background:#73d49b}.rmt-phone-terminal-panel i:nth-child(2){background:#e6ba5b}.rmt-phone-terminal-panel i:nth-child(3){background:#e87373}.rmt-phone-terminal-rail{position:absolute;left:-10px;right:-10px;bottom:20px;height:7px;background:repeating-linear-gradient(90deg,#465159 0 18px,#232b31 18px 25px)}.rmt-phone-communicator-antenna{position:absolute;right:22px;top:-58px;width:7px;height:64px;border-radius:5px;background:#2b343a;transform:rotate(8deg);transform-origin:bottom}.rmt-phone-communicator-grille{position:absolute;right:-5px;bottom:80px;display:grid;gap:5px}.rmt-phone-communicator-grille i{width:10px;height:3px;border-radius:3px;background:#283139}
+.rmt-device-watch{width:min(330px,100%);min-height:390px;padding:10px;border-radius:78px;border-width:8px}.rmt-device-watch .rmt-phone-screen{min-height:360px;border-radius:62px}.rmt-device-watch .rmt-phone-statusbar{padding-inline:32px}.rmt-device-watch .rmt-phone-home-screen,.rmt-device-watch .rmt-phone-app-screen{min-height:326px}.rmt-device-watch .rmt-phone-home-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.rmt-device-watch .rmt-phone-home-grid .rmt-phone-app:nth-child(n+7){display:none}.rmt-device-watch .rmt-phone-dock{display:none}.rmt-device-watch .rmt-phone-page{min-height:326px;padding:10px}.rmt-device-watch .rmt-phone-page-detail .rmt-phone-detail{min-height:280px}
+.rmt-device-terminal{width:min(720px,100%);min-height:590px;padding:17px 18px 25px;border-radius:18px;border-width:9px}.rmt-device-terminal .rmt-phone-screen{min-height:530px;border-radius:8px}.rmt-device-terminal .rmt-phone-home-screen,.rmt-device-terminal .rmt-phone-app-screen{min-height:496px}.rmt-device-terminal .rmt-phone-home-grid{grid-template-columns:repeat(6,minmax(0,1fr))}.rmt-device-terminal .rmt-phone-dock{max-width:360px;margin-left:auto;margin-right:auto}.rmt-device-terminal .rmt-phone-page{min-height:496px}.rmt-device-terminal .rmt-phone-page-detail .rmt-phone-detail{min-height:450px}
+.rmt-device-communicator{width:min(420px,100%);min-height:610px;padding:13px 16px 22px;border-radius:22px 22px 36px 36px;border-width:9px}.rmt-device-communicator .rmt-phone-screen{min-height:555px;border-radius:12px}.rmt-device-communicator .rmt-phone-home-screen,.rmt-device-communicator .rmt-phone-app-screen{min-height:521px}.rmt-device-communicator .rmt-phone-home-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.rmt-device-communicator .rmt-phone-page{min-height:521px}.rmt-device-communicator .rmt-phone-page-detail .rmt-phone-detail{min-height:475px}
 
 .rmt-avatar-talk-mark{position:absolute;right:-3px;bottom:-2px;width:21px;height:21px;display:grid;place-items:center;border-radius:50%;background:#fff7fa;border:1px solid #e6b1c5;color:#a86580;font-size:9px;box-shadow:0 2px 7px rgba(72,90,105,.16)}
 .rmt-character-heart-head{display:flex;align-items:center;gap:13px}.rmt-character-heart-avatar{position:relative;width:72px;height:72px;flex:0 0 72px;border:3px solid #fff;border-radius:50%;padding:0;background:linear-gradient(145deg,#f8c8da,#cfe8f2);box-shadow:0 0 0 1px #cadde6,0 8px 20px rgba(64,85,101,.12);overflow:visible;cursor:pointer;color:#63778c}.rmt-character-heart-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}.rmt-character-heart-avatar:hover{transform:translateY(-1px)}.rmt-character-heart-avatar>span{position:absolute;right:-4px;bottom:-3px;width:24px;height:24px;display:grid;place-items:center;border-radius:50%;background:#fff7fa;border:1px solid #e6afc4;color:#a76580;font-size:10px;box-shadow:0 2px 7px rgba(72,90,105,.15)}
@@ -2375,7 +2473,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
   .rmt-adv{grid-template-columns:1fr;min-height:0}.rmt-event-list{border-right:0;border-bottom:1px solid #c9dce6;max-height:none;padding:10px;position:sticky;top:0;z-index:5;background:rgba(248,252,254,.97);box-shadow:0 5px 12px rgba(67,91,108,.06)}.rmt-event-list:before{display:none}.rmt-event-items{display:none}.rmt-adv-mobile-picker{display:grid;gap:8px}.rmt-adv-mobile-picker select{width:100%;min-height:42px;border:1px solid #c9dce6;border-radius:12px;background:#fff;color:#586a7d;padding:8px 10px;font:inherit}.rmt-adv-picker-status{display:flex;align-items:center;gap:8px;min-width:0}.rmt-adv-picker-status b{font-size:10px;color:#9d6d82}.rmt-adv-picker-status span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}.rmt-adv-picker-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}.rmt-adv-bulkbar{margin-bottom:8px}.rmt-adv-bulkbar .rmt-btn{min-height:38px}.rmt-event-detail{padding:10px 11px 18px}.rmt-memory-scene{min-height:calc(100vh - 55px)}
   .rmt-big-cg{border-width:5px;margin:2px 0 11px}.rmt-cg-caption{left:8px;right:8px;bottom:8px;padding:8px 9px;font-size:10px;line-height:1.45}.rmt-cg-card-draw{right:5px;bottom:5px;min-height:27px;padding:5px 7px;font-size:8px}.rmt-cg-provider-bar{padding:7px 8px;gap:6px;margin-bottom:8px;line-height:1.45}.rmt-mode-actions .rmt-btn{flex:1}.rmt-adv-reader{padding:14px}.rmt-adv-para{font-size:12px;line-height:1.85}
   .rmt-room-view{padding:10px 10px 18px}.rmt-room-map{margin:0 -2px;padding-bottom:9px}.rmt-room-space{min-width:96px;padding:8px 9px}.rmt-room-location{font-size:10px;margin-bottom:10px;align-items:flex-start;gap:7px}.rmt-room-location-actions{flex:0 0 auto;gap:5px}.rmt-room-location .rmt-room-find{padding:5px 7px;font-size:9px}.rmt-room-flow{gap:10px}.rmt-room-card{padding:13px;border-radius:14px}.rmt-room-object-title{font-size:16px}.rmt-room-object-desc,.rmt-room-atmosphere{font-size:11px;line-height:1.68}.rmt-room-stage{border-radius:14px}.rmt-room-stage-head{padding:9px 11px}.rmt-room-activity-strip{padding:8px 10px}.rmt-room-activity-strip>div{grid-template-columns:1fr;gap:3px}.rmt-room-activity-strip small{grid-column:1}.rmt-room-scene{min-height:350px}.rmt-room-person{left:44%;transform:scale(.82);transform-origin:bottom center}.rmt-room-person-label{font-size:9px;padding:2px 5px}.rmt-room-object-rail{grid-template-columns:repeat(2,minmax(0,1fr));padding:8px;gap:6px}.rmt-room-object-chip{grid-template-columns:22px minmax(0,1fr);padding:6px}.rmt-room-object-chip em{grid-column:2}.rmt-room-caption{padding:10px 11px 12px;font-size:11px}.rmt-room-private-access-card{margin-bottom:4px}
-  .rmt-phone{padding:5px}.rmt-phone-shell{padding:9px}.rmt-phone-lock{padding:9px 7px}.rmt-phone-apps{gap:6px;padding:6px 0 10px}.rmt-phone-app{min-width:78px;padding:8px 7px}.rmt-phone-content{display:block}.rmt-phone-list,.rmt-phone-detail{padding:10px;border-radius:14px}.rmt-phone-view-list .rmt-phone-detail{display:none}.rmt-phone-view-detail .rmt-phone-list{display:none}.rmt-phone-detail-toolbar{position:sticky;top:0;background:rgba(255,255,255,.96);z-index:2;padding-bottom:7px}.rmt-phone-entry{padding:9px 5px}.rmt-phone-entry span{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.rmt-phone-message p{font-size:11px}.rmt-phone-fields>div{grid-template-columns:1fr}
+  .rmt-phone{padding:5px}.rmt-phone-shell{padding:9px}.rmt-device-phone{border-radius:38px;border-width:5px}.rmt-device-phone .rmt-phone-screen{border-radius:29px}.rmt-device-watch{border-radius:72px;border-width:7px}.rmt-device-terminal{border-radius:16px;border-width:7px}.rmt-device-communicator{border-radius:21px 21px 34px 34px;border-width:7px}.rmt-phone-lock{padding:9px 7px}.rmt-phone-apps{gap:6px;padding:6px 0 10px}.rmt-phone-app{min-width:78px;padding:8px 7px}.rmt-phone-home-grid .rmt-phone-app,.rmt-phone-dock .rmt-phone-app{min-width:0;padding:0}.rmt-phone-content{display:block}.rmt-phone-list,.rmt-phone-detail{padding:10px;border-radius:14px}.rmt-phone-view-list .rmt-phone-detail{display:none}.rmt-phone-view-detail .rmt-phone-list{display:none}.rmt-phone-detail-toolbar{position:sticky;top:0;background:var(--rmt-screen-soft);z-index:2;padding-bottom:7px}.rmt-phone-entry{padding:9px 5px}.rmt-phone-entry span{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.rmt-phone-message p{font-size:11px}.rmt-phone-fields>div{grid-template-columns:1fr}
   .rmt-heart{padding:9px}.rmt-heart-tabs{grid-template-columns:1fr}.rmt-achievement-grid{grid-template-columns:1fr}.rmt-heart-greeting-grid{grid-template-columns:1fr}.rmt-heart-drama-layout{grid-template-columns:1fr}.rmt-heart-drama-layout>nav{grid-template-columns:repeat(2,minmax(0,1fr))}.rmt-heart-drama-layout>main{padding:12px}.rmt-heart-drama-head h2,.rmt-heart-strip-head h2{font-size:16px}.rmt-heart-script-bubble{font-size:10px}.rmt-avatar-dialog-card{padding:15px;border-radius:18px}.rmt-avatar-dialog-actions{display:grid;grid-template-columns:1fr}.rmt-character-heart-head{align-items:flex-start}.rmt-character-heart-avatar{width:62px;height:62px;flex-basis:62px}
   .rmt-ending{grid-template-columns:1fr;padding:9px;gap:10px}.rmt-ending-summary{padding:12px}.rmt-ending-list{grid-template-columns:1fr 1fr;gap:6px}.rmt-ending-route{padding:9px}.rmt-ending-detail{padding:13px;border-radius:15px}.rmt-ending-head h2{font-size:18px}.rmt-ending-section p,.rmt-ending-confession{font-size:11px;line-height:1.8}.rmt-ending-confession-stage{padding:10px}.rmt-ending-confession-dialogue{grid-template-columns:48px minmax(0,1fr);gap:8px}.rmt-ending-confession-avatar{width:48px;height:48px}.rmt-ending-confession-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.rmt-ending-confession-actions .rmt-btn{min-width:0;padding:7px 5px;font-size:9px}
   #${core_constants.SETTINGS_ID} .rmt-settings-buttons{grid-template-columns:1fr 1fr}#${core_constants.SETTINGS_ID} .rmt-api-grid{grid-template-columns:1fr 1fr}#${core_constants.SETTINGS_ID} .rmt-model-row{grid-template-columns:1fr}#${core_constants.SETTINGS_ID} .rmt-model-refresh{width:100%!important}
@@ -5501,9 +5599,9 @@ function renderHeart() {
             }
             const thoughts = Array.isArray(selected.thoughts) && selected.thoughts.length ? selected.thoughts : [selected.line].filter(Boolean);
             const paragraphs = thoughts.map(text => `<p>${core_text.esc(text)}</p>`).join('');
-            return `<div class="rmt-firefly-whisper ${core_text.esc(selected.color)}"><small>${fireflyMeta(selected.color).icon} ${core_text.esc(fireflyMeta(selected.color).label)}</small><h3>${core_text.esc(selected.title || '旧版心声')}</h3><div class="rmt-firefly-legacy-note">这是一颗旧版独白光点；点击上方“升级旧版萤火虫”可改成 GS4 式追加约会会话。</div><div class="rmt-firefly-thoughts">${paragraphs}</div></div>`;
+            return `<div class="rmt-firefly-whisper ${core_text.esc(selected.color)}"><small>${fireflyMeta(selected.color).icon} ${core_text.esc(fireflyMeta(selected.color).label)}</small><h3>${core_text.esc(selected.title || '旧版心声')}</h3><div class="rmt-firefly-thoughts">${paragraphs}</div></div>`;
         })() : `<div class="rmt-heart-empty">${readOnly ? '这份档案还没有保存萤火虫话题。' : '点亮以后，这里会出现不同颜色的追加约会话题。'}</div>`;
-        content = `<section class="rmt-firefly-shell"><div class="rmt-firefly-head"><div><small>FIREFLY HABITAT</small><h2>萤火虫栖息地</h2><p>像 GS4 一样，颜色代表不同话题。点一颗光，会展开一段两个人当场发生的追加约会会话；“心声”从对话里不小心漏出来，而不是整页独白。旧光永久保留，每页最多点亮 ${pageSize} 颗。</p></div><span>${voices.length} LIGHTS</span></div><div class="rmt-firefly-field">${points || '<div class="rmt-firefly-empty-stars">✦　·　✧　·　✦</div>'}</div>${pager}<div class="rmt-firefly-legend">${legend}</div>${whisper}</section>`;
+        content = `<section class="rmt-firefly-shell"><div class="rmt-firefly-head"><div><small>FIREFLY HABITAT</small><h2>萤火虫栖息地</h2></div><span>${voices.length} LIGHTS</span></div><div class="rmt-firefly-field">${points || '<div class="rmt-firefly-empty-stars">✦　·　✧　·　✦</div>'}</div>${pager}<div class="rmt-firefly-legend">${legend}</div>${whisper}</section>`;
     } else {
         const selected = selectedHeartStrip();
         if (selected) session.selectedStripId = selected.id;
@@ -6916,13 +7014,13 @@ UNTRUSTED_CALENDAR_ARCHIVE_JSON:
 ${calendarArchiveSlice(memoryBank, 64)}
 
 任务：生成的是【${charName}自己的私人日历 / 手账页】，不是剧情目录。
-整个页面会同时包含：
+每一个日期都是一张独立手账页。选中哪一天，只能看到和编辑那一天自己的内容；空白日期也可以打开并拥有自己的草稿、便签和 To-Do。整个日历会包含：
 1. 真正会被圈起来的日期；
 2. 一块像便利贴墙一样的【便签 / 特别备注】；
-3. 根据尚未兑现的剧情约定自动形成的【To-Do List】；
+3. 根据该日期尚未兑现的剧情约定自动形成的【To-Do List】；
 4. 偶尔出现、数量很少的【角色第一人称心情随笔】。
 
-重要：To-Do List 由 promised 数组自动生成，不要再输出第二套 todo 数组。便签和随笔是整个日历页面的边角内容，不要求绑定某一天，也绝对不是“每个日历事项都配一条感想”。
+重要：To-Do List 由所选日期页的 promised 项自动生成，不要再输出第二套 todo 数组。每条便签和随笔都必须明确归属某个日期：优先填写 calendarEntryId 绑定一个真实日历项；没有对应事项时才填写 date。禁止生成全日历共用的便签、草稿或 To-Do，也绝对不是“每个日历事项都配一条感想”。
 
 允许的日期语义标签只可从以下列表选择，最多 3 个：
 ["约会","接送","出行","见面","生日","纪念日","约定","活动","重要日","设定日"]
@@ -6968,7 +7066,9 @@ ${calendarArchiveSlice(memoryBank, 64)}
       "sourceType": "archive",
       "sourceMemoryIds": ["M010"],
       "sourceMemoryAnchor": "从所引用记忆 anchors/title 原样复制",
-      "sourceLabel": ""
+      "sourceLabel": "",
+      "calendarEntryId": "CAL_PROMISE_01",
+      "date": ""
     },
     {
       "id": "CAL_NOTE_02",
@@ -6978,7 +7078,9 @@ ${calendarArchiveSlice(memoryBank, 64)}
       "sourceType": "setting",
       "sourceMemoryIds": [],
       "sourceMemoryAnchor": "",
-      "sourceLabel": "角色卡 / 世界书"
+      "sourceLabel": "角色卡 / 世界书",
+      "calendarEntryId": "",
+      "date": "明确的 YYYY/MM/DD 或 MM/DD"
     }
   ],
   "moodNotes": [
@@ -6986,7 +7088,9 @@ ${calendarArchiveSlice(memoryBank, 64)}
       "id": "CAL_MOOD_01",
       "text": "那天等她出来的时候，我看时间的次数比自己想象得多。",
       "sourceMemoryIds": ["M001"],
-      "sourceMemoryAnchor": "从所引用记忆 anchors/title 原样复制"
+      "sourceMemoryAnchor": "从所引用记忆 anchors/title 原样复制",
+      "calendarEntryId": "CAL_PAST_01",
+      "date": ""
     }
   ]
 }
@@ -7012,6 +7116,7 @@ ${calendarArchiveSlice(memoryBank, 64)}
 
 【stickyNotes：便签墙 / 特别备注】
 - 生成 1～5 条即可，少而有生活感；不要为了填满页面硬凑。
+- 每条必须填写 calendarEntryId 或 date 之一。calendarEntryId 必须引用本次输出的 past/promised/future 中真实 id；只有没有对应事项但来源中存在明确日期时才用 date。无法确定归属日期的便签不要输出，禁止做成全局共享便签。
 - kind 只能是 "memo" 或 "special"。memo 更像“记得 / 随手记”；special 更像“特别备注 / 重要的小细节”。
 - text 保持一两句，像写在便利贴上的短句，不要写成长段剧情，不要复述整个 Mxxx。
 - sourceType="archive" 时必须引用真实 sourceMemoryIds + sourceMemoryAnchor；可以基于已经发生或已经约定的事情写很短的提醒，但不能新增 {{user}} 尚未做出的决定。
@@ -7020,11 +7125,12 @@ ${calendarArchiveSlice(memoryBank, 64)}
 
 【moodNotes：页角心情随笔】
 - 允许 0～3 条；没有合适的就空数组。绝对不要每个日期、每个事项都写一条。
+- 每条必须通过 calendarEntryId 绑定一个已发生的 past 项；没有可信日期归属就不要输出，禁止做成所有日期共用的随笔。
 - 必须是 ${charName} 第一人称、非常短的随笔，一两句即可；可以有一点情绪和私人感，但不要变成剧情续写、总结报告或长篇内心独白。
 - 每条必须引用真实 sourceMemoryIds + sourceMemoryAnchor；只从已发生档案中提炼当时/后来留下的一点心情余韵，不得发明新的共同事件，也不得替 {{user}} 补行动或心理。
 - 它是派生的“手账边角字”，不是正式档案事实，不要使用肯定语气扩写未被档案支持的细节。
 
-整体原则：翻开这个页面时，要像看到 ${charName} 平时真的会使用的一本私人日历：上面有日期圈记，下面有便签、To-Do、特别备注和偶尔的心情随笔。不要把它重新做成剧情大纲，也不要把随笔塞得到处都是。
+整体原则：翻开某一天时，要像看到 ${charName} 只为那一天写下的一张私人手账：该页有自己的日期圈记、草稿、便签、To-Do、特别备注和偶尔的心情随笔；切换日期后内容也随页切换，绝不共享。不要把它重新做成剧情大纲，也不要把随笔塞得到处都是。
 只输出 JSON。`;
 }
 
@@ -7070,6 +7176,18 @@ JSON 结构必须严格为：
       "trueEnding": false,
       "sourceMemoryIds": [],
       "sourceMemoryAnchor": "",
+      "worldSpec": {
+        "primaryAxis": "era",
+        "era": "这个世界的时代条件",
+        "identity": "这个世界的身份",
+        "occupation": "这个世界的职业/生存方式",
+        "location": "主要生活地点",
+        "keyDecision": "改变人生的关键选择",
+        "encounterWithUser": "在这个世界如何与 {{user}} 相遇",
+        "bondWithUser": "与 {{user}} 的独一关系",
+        "finalFate": "这个世界最终命运",
+        "thirdPartyRomance": false
+      },
       "monologue": "这个平行世界中的 {{char}} 第一人称发言，不少于100个汉字；这是平行体本人说的话",
       "intervention": "现世 {{char}} 看见这个平行体后的即时共鸣、自省或告白",
       "systemNote": "冷酷算法对该平行时空主体的最终判定与结局预测"
@@ -7094,16 +7212,18 @@ JSON 结构必须严格为：
 - 主时间线必须 locked=true、trueEnding=false，并至少引用 1 条当前手动档案 sourceMemoryIds + sourceMemoryAnchor，用来锚定“当前世界”。
 - 普通平行节点是模拟，不得伪装成已经发生的回忆；它们可以不带 sourceMemoryIds。若从某段档案作为分歧起点，可以附带真实引用，但平行世界里新增的事情仍只能写成模拟。
 - 至少 8 个普通平行节点要从角色卡、人设、世界书中的身份、职业、时代、地点、关系条件、选择或命运约束向外推演；不能只把同一场景换措辞。
+- 前 8 个普通平行节点的 worldSpec.primaryAxis 必须依次覆盖且不重复：era / identity / occupation / location / decision / encounter / bond / fate。worldSpec 其余字段都要填写具体内容，8 份组合必须实质不同；thirdPartyRomance 必须始终为 false。
 - 每个普通平行节点的 monologue 都必须是【那个平行世界里的 {{char}} 本人】第一人称发言，不少于 100 个汉字，有具体生活、处境、记忆感与情绪；不能由现世 {{char}} 代替平行体说话。
 - 每个普通平行节点的 intervention 才是【现世 {{char}}】刚看完该平行体后的即时反应；不要把两种说话者混在一个字段里。
 - 最后一项必须 id="OMEGA"、trueEnding=true，label 包含“观测点 Ω”或“TRUE ENDING”。【Ω 不是平行世界，不存在平行体】；它的 monologue 必须严格为空字符串 ""，绝对禁止再写平行体发言。
 - Ω 的 intervention 是【现世 {{char}} 在看完前面全部平行世界、听完全部平行体发言之后】的最终第一人称发言，不少于 160 个汉字。应自然综合至少 3 种以上前面出现过的命运差异/情绪冲击，而不是只回应最后一个节点，也不要逐条机械复述。
 - Ω 的 systemNote 只评价“完整观测结束后的现世主体/主时间线”，不要再判定不存在的 Ω 平行体。
 - 普通节点 code 使用“> SIMULATION RECORD #...”形式；Ω 使用“> OBSERVATION POINT #OMEGA”。
-- 每条 systemNote 使用中文、冷酷客观的 AI 算法口吻。
+- 每条 systemNote 使用中文、冷酷客观的 AI 算法口吻，并明确出现分析结论、变量/概率和最终结局判定，不能写成温柔旁白。
 - 禁止出现任何前任、前女友相关情节。
 - 禁止出现 {{char}} 与除了 {{user}} 以外任何人恋爱、结婚或组建家庭；第三方只能保持非恋爱关系。
-- 只输出结构化 JSON；视觉快照、像素边框、噪点、1 秒干扰动画由插件本地渲染，不由模型输出 HTML/CSS。`,
+- Ω 必须把至少 3 种前述命运差异汇入最终判断，并清楚表达：跨越不可能仍然相遇是命运/奇迹，而 {{user}} 是所有世界线收敛后的唯一解。
+- 只输出结构化 JSON；视觉快照、像素边框、噪点、1 秒干扰动画由插件本地渲染，不由模型输出 HTML/CSS。蝴蝶效应页面现有 UI 完全冻结，本次只生成内容，不提出或描述任何 UI 改版。`,
     [core_constants.MODE.ENDING]: (context, memoryBank) => modes_ending.endingOutlinePrompt(context, memoryBank),
     [core_constants.MODE.HEART]: (context, memoryBank) => modes_heart.heartCorePrompt(context, memoryBank),
     [core_constants.MODE.ALBUM]: (context, memoryBank) => modes_album.albumIndexPrompt(context, memoryBank, null),
@@ -7154,6 +7274,21 @@ JSON 结构必须严格为：
   "title": "他的房间",
   "homeName": "这个私人生活空间整体的短标题",
   "homeSummary": "1到3句概括这套私人空间与角色生活方式",
+  "visualProfile": {
+    "explicitFields": ["仅列出世界书/角色卡明文支持的字段路径；没有则为空数组"],
+    "worldStyle": "contemporary / historical / fantasy / scifi / nomadic / maritime / institutional",
+    "palette": "mist / warm / earth / forest / ocean / night / mono / jewel / violet",
+    "material": "wood / stone / fabric / metal / glass / mixed",
+    "density": "sparse / balanced / layered",
+    "figure": {
+      "build": "slender / lean / average / broad / compact / soft",
+      "hairShape": "cropped / short / medium / long / tied / curly / covered / nonhuman",
+      "hairTone": "dark / brown / light / red / silver / fantasy_cool / fantasy_warm",
+      "outfit": "casual / formal / uniform / academic / artisan / combat / ceremonial / technical / historical / fantasy",
+      "detail": "none / glasses / headphones / scarf / headwear / pointed_ears / animal_ears / horns / visor",
+      "posture": "reserved / relaxed / upright / active / studious / tired"
+    }
+  },
   "spaces": [
     {
       "id": "SP01",
@@ -7185,6 +7320,10 @@ JSON 结构必须严格为：
 }
 
 硬性要求：
+- visualProfile 必须只从上述英文枚举中选择，禁止输出颜色值、CSS、class、HTML、URL、头像或图片。房间和 CSS 人物必须属于同一世界气质。
+- explicitFields 只允许 worldStyle/palette/material/density/figure.build/figure.hairShape/figure.hairTone/figure.outfit/figure.detail/figure.posture；只有世界书或角色卡对该项有明文时才列入。没写的字段不得冒充明文，本地会按 {{char}} 人设种子补全，避免所有角色照抄同一套合法模板。
+- 世界书对房间、时代、种族、外貌、发型和穿着有明确设定时优先服从；世界书没写的字段，再根据 CHARACTER_CARD_JSON 中 {{char}} 的身份、职业、性格和生活条件合理推断。USER_PERSONA_JSON 描述的是用户，绝不能拿它推断 {{char}} 的长相或房间。
+- 不要照搬角色档案头像。人物由插件使用本地 CSS 轮廓组合渲染，visualProfile 只负责安全视觉语义。
 - spaces 通常 5～8 个；若角色客观居住条件很简单，也应尽量给出 3～4 个真实会长期使用的生活区域。最多 10 个，仍不得为了“丰富”凭空给普通角色豪宅。
 - 每个空间 objects 3～6 个；空间间的物件必须有区别，不能把同一套床/桌/书架换名重复。不同 spaceType 的主陈设结构也必须明显不同：卧室以床/床头为核心，客厅以沙发/茶几为核心，书房以书架/书桌为核心，音乐/录音工作室以乐器/控制台/监听或吸音结构为核心，实验室以工作台/设备为核心，餐厅以餐桌为核心，浴室以浴缸/淋浴/洗漱为核心。
 - zone 只能是“左上/右上/左下/右下/中央/近景”。
@@ -7238,6 +7377,15 @@ ${promptArchiveSlice(memoryBank, 24)}
   "deviceName": "设备名称",
   "deviceKind": "phone",
   "lockText": "默认锁屏短信息",
+  "uiProfile": {
+    "explicitFields": ["仅列世界书/角色卡明文支持的字段；没有则为空数组"],
+    "palette": "noir-gold / ink-blue / frost / moss / ember / lilac / sky / sand",
+    "wallpaper": "smoke / rain / grid / starfield / library / aurora / minimal / paper",
+    "typography": "modern / serif / mono",
+    "iconStyle": "rounded / square / glyph / glass",
+    "density": "compact / cozy / roomy",
+    "shellTone": "graphite / silver / ivory / bronze / navy"
+  },
   "liveStates": {
     "morning": {"lockText": "早晨状态", "statusLine": "当前状态", "badgeCounts": {"MOMENTS": 2}},
     "daytime": {"lockText": "白天状态", "statusLine": "当前状态", "badgeCounts": {}},
@@ -7248,6 +7396,7 @@ ${promptArchiveSlice(memoryBank, 24)}
     "id": "MOMENTS",
     "label": "动态",
     "kind": "moments",
+    "icon": "spark",
     "summary": "这个分区反映出的生活侧面",
     "entries": [{
       "id": "M01",
@@ -7265,21 +7414,17 @@ ${promptArchiveSlice(memoryBank, 24)}
   }]
 }
 
-现代 phone / terminal 的内容要求（watch / communicator 可按设备能力压缩，但仍需有足够生活细节）：
-1. moments / 社交动态：约 3 条动态，包含普通朋友/同事的点赞或评论互动；与 {{user}} 的既往互动若属于共同历史，必须有档案证据。
-2. chat / 通讯：约 3 个联系人条目；其中 2 个主要联系人 messages 达到约 12 条即可，形成真正可读的深度对话窗。说话语气必须符合人设。普通亲友/同事可以是设定推导；若把 {{user}} 写进历史聊天，必须 basis=记忆并提供有效证据。
-3. gallery / 相册：约 4 个条目，分类要包含“{{user}}”“私密”以及符合角色生活的其他分类。相册只生成文字照片档案，使用 title / meta / preview / detail / imageCaption 写清拍摄时间、地点、人物、构图和照片背后的生活细节。
-4. notes / 备忘录：约 5 条；其中 1～2 条可与 {{user}} 有关，但不得凭空创造已经发生的共同事件；可以写当前心情、普通个人待办和想做的事，若声称既往事实必须有记忆证据。不要复制“两个人的日历”里的约定、纪念日或日期圈记。
-5. store / 购物：约 4 条，混合推荐位、购物车、订单历史/收藏，体现消费观、职业和兴趣；和 {{user}} 相关的历史订单同样受证据约束。
-6. browser / 浏览器：约 3 条与 {{user}} 或当前关系/兴趣有关的浏览、搜索、收藏记录。可以是 {{char}} 自己当前的私人搜索意图，不得因此反推成已经共同发生的事实。
-7. contacts / 联系人：约 3 个联系人；至少 1 个详情页通过 fields 给出“备注 / 最近通话 / 共享位置或重要提醒”等 3 项以上真实细节。联系人列表 → 详情页必须可读。
-8. location / 情侣定位或关系定位：若角色设备和关系设定允许，生成 2～3 个状态/地点/提醒条目；如果世界观或关系阶段不适合情侣定位，就改造成符合人设的安全共享位置/护送/队伍定位功能，不得强行现代化。
-9. 至少 1 个 misc / persona app：必须明显符合 {{char}} 的职业、爱好、年龄或世界观，例如训练记录、乐谱、实验日志、任务终端、宠物、游戏、健康、学习等。
+App 组合要求：
+- 不再固定所有角色都使用同一组 App。必须根据 {{char}} 的时代、身份、职业、爱好、世界观、年龄和设备能力选择 5～10 个彼此不同的功能入口；watch / communicator 若屏幕或能力受限为 4～8 个。
+- 通讯型设备通常保留 chat；其余从 moments / gallery / notes / store / browser / contacts / location / files / books / music / research / health / training / study / work / travel / finance / games / security / creative / weather / tools / misc 中按人设选择。不存在的功能不要硬塞，专属职业或世界观 App 应明显多于套模板的装饰。
+- icon 只能从 message / people / photo / camera / note / bag / globe / contact / pin / music / briefcase / book / heart / activity / game / wallet / plane / shield / palette / cloud / tool / spark / grid 中选择。
+- 至少 3 种不同 kind；每个 App 通常 3～6 条有具体内容的条目。chat 至少一个主要联系人有约 10～12 条消息，形成真正可读的对话窗；其他 App 依类型使用 fields、imageCaption、detail 等表达。
+- uiProfile 必须只从上面的安全英文枚举中选择。配色、壁纸、字体、图标风格和外壳要符合 {{char}}，禁止颜色值、CSS、class、HTML、URL 或图片；插件会以本地样式绘制完整设备和主屏幕。
+- explicitFields 只允许 palette/wallpaper/typography/iconStyle/density/shellTone；只有世界书或角色卡明文定义时才列入。没写的字段必须依 {{char}} 人设推导，不得把示例配色冒充成角色设定；本地还会用角色身份种子补全这些字段。
 
 结构要求：
 - 禁止生成 schedule / calendar / 日历 App。“两个人的日历”是双方日期、约定、纪念日、便签与 To-Do 的唯一入口；私人终端不要复制第二套关系日历。
-- phone 必须生成上述 9 类 app；terminal 至少 8 个并尽量保留等价功能；watch / communicator 至少 7 个功能入口，并优先保留通讯、相册、备忘、联系人、定位与人设专属功能。
-- 每个 App 至少 2 层：列表页 → 详情页。详情页必须有可读内容；chat 用 messages，联系人/订单等可用 fields，gallery 使用 detail/imageCaption 作为纯文字照片档案。
+- 每个 App 至少 2 层：设备主屏幕 → App 独立列表页 → 条目详情页。详情页必须有可读内容；chat 用 messages，联系人/订单等可用 fields，gallery 使用 detail/imageCaption 作为纯文字照片档案。
 - 不要为了凑数量复制同义条目。每条 preview/detail 都要有具体生活信息。
 - liveStates 四个时段都要给出。它们只是同一天随本地现实时间变化的设备状态，不是四段新剧情。
 - deviceKind 只能是 phone / watch / terminal / communicator。
@@ -7595,6 +7740,10 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+const ADV_SECTION_TYPES = Object.freeze(['past', 'daily', 'during', 'after']);
+const ADV_SECTION_TYPE_SET = new Set(ADV_SECTION_TYPES);
+const ADV_FIRST_PERSON_SIGNAL_RE = /我/;
+
 function advPrompt(context, event, memoryBank) {
     const sourceIds = core_evidence.normalizeSourceMemoryIds(event?.sourceMemoryIds, memoryBank, 1);
     const eventData = JSON.stringify({
@@ -7617,13 +7766,22 @@ ${eventData}
 
 严格只输出：
 {
-  "paragraphs": ["第一段","第二段"]
+  "narrator": "char_first_person",
+  "sections": [
+    {"type":"past","paragraphs":["第1段","第2段","第3段","第4段","第5段","第6段","第7段","第8段","第9段"]},
+    {"type":"during","paragraphs":["第10段","第11段","第12段","第13段","第14段","第15段","第16段","第17段","第18段"]}
+  ]
 }
 
 硬性要求：
-- paragraphs 至少 18 段，每段 1 到 3 句，避免超长大段。
-- 全文以 {{char}} 第一人称为主，不替 {{user}} 自动追加新的发言或决定。
-- 至少覆盖四类中的两类：过去的心结/习惯来源；事件前后的日常准备与掩饰；事件当下的迟疑/误会/后悔/庆幸；事件之后的后日谈与没说出口的话。
+- narrator 必须固定为 char_first_person；正文必须是 {{char}} 的“我”视角，重点补完他的性格、动机与情绪。禁止用旁观者口吻把 {{char}} 写成“他想…… / 他觉得…… / 他后来……”的第三人称总结。
+- sections 必须从下列 4 类中选择至少 2 个不同 type；每个选中的 type 至少 2 段、至少 80 字符，不能只挂标签：
+  1. past【过去】：与该事件相关的更早经历、心结、习惯来源；
+  2. daily【日常】：事件前后他怎样想、准备或掩饰；
+  3. during【共同经历时的当时心情】：事件当下的迟疑、误会、后悔或庆幸；
+  4. after【后日谈】：事后如何回味、没说出口的话与细小改变。
+- 所有 sections 合计至少 18 段、总文字至少 500 字符；每段 1 到 3 句，避免超长大段。至少三分之一段落要自然出现“我 / 我的”等明确第一人称信号。
+- 不替 {{user}} 自动追加新的发言、内心、决定或未发生行为。
 - 至少 2 次自然点到 CG 画面或视觉锚点，但不要反复复述。
 - 不得用“略”“省略”“后续同上”等方式偷懒。`;
 }
@@ -7693,14 +7851,23 @@ ${JSON.stringify(memoryPool, null, 2)}
 严格只输出：
 {
   "items": [
-    {"eventId": "EV01", "paragraphs": ["第一段","第二段"]}
+    {
+      "eventId": "EV01",
+      "narrator": "char_first_person",
+      "sections": [
+        {"type":"daily","paragraphs":["第1段","第2段","第3段","第4段","第5段","第6段"]},
+        {"type":"after","paragraphs":["第7段","第8段","第9段","第10段","第11段","第12段"]}
+      ]
+    }
   ]
 }
 
 硬性要求：
 - items 应覆盖输入中的每个 eventId，不得新增 eventId。
-- 每篇以 {{char}} 第一人称为主；事实只能来自 MEMORY_POOL_JSON 中且 id 被该事件 sourceMemoryIds 明确引用的记忆。
-- 每篇建议 12～18 段、总文字至少 500 字符；每段 1～3 句，避免一个超长大段。
+- 每篇 narrator 必须固定为 char_first_person；正文必须以 {{char}} 的“我”视角为主，重点补完他的性格、动机与情绪，禁止第三人称总结 {{char}}。
+- 每篇必须从 past【过去】、daily【日常】、during【共同经历时的当时心情】、after【后日谈】中选择至少 2 个不同 type；每个选中的 type 至少 2 段、至少 80 字符，不能只挂标签。
+- 每篇所有 sections 合计 12～18 段且至少 500 字符；每段 1～3 句。至少三分之一段落要自然出现“我 / 我的”等明确第一人称信号。
+- 事实只能来自 MEMORY_POOL_JSON 中且 id 被该事件 sourceMemoryIds 明确引用的记忆。
 - 不替 {{user}} 追加新决定或未发生的新对话；不得用“略”“同上”等省略。
 - 输出尽量紧凑，不重复输入资料。`;
 }
@@ -7769,26 +7936,49 @@ ${cgDesc}`, memoryBank, 1);
     };
 }
 
-function normalizeAdvBatch(data, events) {
+function normalizeAdvBatch(data, events, options = {}) {
     const allowed = new Map((events || []).map(event => [String(event.id), event]));
     const results = new Map();
     for (const raw of Array.isArray(data?.items) ? data.items : []) {
         const eventId = String(raw?.eventId || '');
         if (!allowed.has(eventId) || results.has(eventId)) continue;
         try {
-            results.set(eventId, normalizeAdv(raw));
+            results.set(eventId, normalizeAdv(raw, { ...options, minParagraphs: 12 }));
         } catch {}
     }
     return results;
 }
 
-function normalizeAdv(data) {
-    const paragraphs = core_text.cleanArray(data?.paragraphs, 80, 4000);
-    const total = paragraphs.join('').length;
-    if (paragraphs.length < 18 && total < 500) {
-        throw new Error(`ADV 长度不足：${paragraphs.length} 段 / ${total} 字符。`);
+function normalizeAdv(data, { minParagraphs = 18 } = {}) {
+    if (core_text.normalizeText(data?.narrator, 40) !== 'char_first_person') {
+        throw new Error('ADV 视角不合格：必须以角色第一人称生成。');
     }
-    return { paragraphs };
+    const sections = [];
+    const seenTypes = new Set();
+    for (const raw of Array.isArray(data?.sections) ? data.sections.slice(0, ADV_SECTION_TYPES.length) : []) {
+        const type = core_text.normalizeText(raw?.type, 20).toLowerCase();
+        if (!ADV_SECTION_TYPE_SET.has(type) || seenTypes.has(type)) continue;
+        const paragraphs = core_text.cleanArray(raw?.paragraphs, 32, 4000);
+        const sectionChars = paragraphs.join('').length;
+        if (paragraphs.length < 2 || sectionChars < 80) continue;
+        seenTypes.add(type);
+        sections.push({ type, paragraphs });
+    }
+    if (sections.length < 2) {
+        throw new Error(`ADV 内容范围不足：有效类别 ${sections.length}/2。`);
+    }
+    const paragraphs = sections.flatMap(section => section.paragraphs);
+    const total = paragraphs.join('').length;
+    const requiredParagraphs = Math.max(1, Math.min(40, Number(minParagraphs) || 18));
+    if (paragraphs.length < requiredParagraphs || total < 500) {
+        throw new Error(`ADV 长度不足：${paragraphs.length}/${requiredParagraphs} 段 / ${total}/500 字符。`);
+    }
+    const firstPersonParagraphs = paragraphs.filter(text => ADV_FIRST_PERSON_SIGNAL_RE.test(text)).length;
+    const requiredFirstPersonParagraphs = Math.max(4, Math.ceil(paragraphs.length / 3));
+    if (firstPersonParagraphs < requiredFirstPersonParagraphs) {
+        throw new Error(`ADV 第一人称密度不足：${firstPersonParagraphs}/${requiredFirstPersonParagraphs} 段。`);
+    }
+    return { paragraphs, coverageTypes: sections.map(section => section.type) };
 }
 
 function compactAdvExisting(session) {
@@ -7910,6 +8100,7 @@ async function generateAllAdvForSession() {
                 `正在生成本批 ${pending.length} 篇 ADV…`,
                 {
                     maxTokens: core_constants.MAX_GENERATION_OUTPUT_TOKENS,
+                    temperature: 0.55,
                     context,
                     origin,
                     taskKey: bulkTaskKey,
@@ -8006,6 +8197,7 @@ async function repairFailedAdvForSession() {
                     `正在补 ADV：${event.title}`,
                     {
                         maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV],
+                        temperature: 0.55,
                         context,
                         origin,
                         taskKey: `adv-user-repair:${scope}:${core_text.safeId(event.id, String(i + 1))}`,
@@ -8071,7 +8263,7 @@ async function generateAdvForSelected() {
     }
     ui_overlay.setInnerLoading(true, `正在为「${event.title}」生成长篇 ADV…`);
     try {
-        const raw = await generation_client.requestJson(advPrompt(context, event, memoryBank), `正在根据当前聊天档案生成「${event.title}」ADV…`, { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV], context, origin, taskKey, mode: core_constants.MODE.ADV, background: true });
+        const raw = await generation_client.requestJson(advPrompt(context, event, memoryBank), `正在根据当前聊天档案生成「${event.title}」ADV…`, { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV], temperature: 0.55, context, origin, taskKey, mode: core_constants.MODE.ADV, background: true });
         const wasBackgrounded = !core_context.isCurrentTaskOrigin(origin) || document.getElementById(core_constants.OVERLAY_ID)?.hidden || runtimeState.activeSession !== session;
         const liveEvent = session.events.find(item => item.id === eventId);
         if (!liveEvent) return;
@@ -8138,85 +8330,324 @@ const generation_prompts = __m_generation_prompts_js;
 
 
 
-function normalizeButterfly(data, memoryBank) {
-    const rawNodes = Array.isArray(data?.nodes) ? data.nodes.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS) : [];
-    const normalized = rawNodes.map((node, rawIndex) => {
-        const isMain = rawIndex === 0;
-        const label = core_text.normalizeText(node?.label, 120);
-        const monologue = core_text.normalizeText(node?.monologue, 12000);
-        const intervention = core_text.normalizeText(node?.intervention, 12000);
-        const systemNote = core_text.normalizeText(node?.systemNote, 5000);
-        const reference = core_evidence.normalizeMemoryReference(
-            node?.sourceMemoryIds,
-            node?.sourceMemoryAnchor,
-            `${label}\n${monologue}\n${intervention}\n${systemNote}`,
-            memoryBank,
-            isMain ? 1 : 0,
-        );
-        const numericCode = String(Math.max(1, rawIndex)).padStart(2, '0');
-        return {
-            id: core_text.safeId(node?.id, isMain ? 'MAIN' : `EG${numericCode}`),
-            label,
-            code: core_text.normalizeText(node?.code, 120) || (isMain ? '> SIMULATION RECORD #MAIN' : `> SIMULATION RECORD #EG-${numericCode}`),
-            locked: isMain ? true : !!node?.locked,
-            trueEnding: isMain ? false : !!node?.trueEnding,
-            sourceMemoryIds: reference.sourceMemoryIds,
-            sourceMemoryAnchor: reference.sourceMemoryAnchor,
-            monologue,
-            intervention,
-            systemNote,
-        };
+const BUTTERFLY_PRIMARY_AXES = Object.freeze([
+    'era', 'identity', 'occupation', 'location', 'decision', 'encounter', 'bond', 'fate',
+]);
+
+const PRIMARY_AXIS_SET = new Set(BUTTERFLY_PRIMARY_AXES);
+const PRIMARY_AXIS_ALIASES = Object.freeze({
+    era: 'era', period: 'era', time: 'era', '时代': 'era', '年代': 'era',
+    identity: 'identity', role: 'identity', status: 'identity', '身份': 'identity', '出身': 'identity',
+    occupation: 'occupation', job: 'occupation', career: 'occupation', '职业': 'occupation', '工作': 'occupation',
+    location: 'location', place: 'location', residence: 'location', '地点': 'location', '地域': 'location',
+    decision: 'decision', choice: 'decision', '决定': 'decision', '选择': 'decision', '抉择': 'decision',
+    encounter: 'encounter', meeting: 'encounter', '相遇': 'encounter', '遇见': 'encounter',
+    bond: 'bond', relationship: 'bond', '羁绊': 'bond', '关系': 'bond',
+    fate: 'fate', outcome: 'fate', ending: 'fate', '命运': 'fate', '结局': 'fate',
+});
+const WORLD_FIELDS = Object.freeze([
+    'era', 'identity', 'occupation', 'location', 'keyDecision', 'encounterWithUser', 'bondWithUser', 'finalFate',
+]);
+const WORLD_FIELD_ALIASES = Object.freeze({
+    era: ['era', 'period', 'timePeriod'],
+    identity: ['identity', 'role', 'status'],
+    occupation: ['occupation', 'job', 'career'],
+    location: ['location', 'place', 'residence'],
+    keyDecision: ['keyDecision', 'decision', 'choice'],
+    encounterWithUser: ['encounterWithUser', 'meetingWithUser', 'encounter', 'meeting'],
+    bondWithUser: ['bondWithUser', 'relationshipWithUser', 'bond', 'relationship'],
+    finalFate: ['finalFate', 'fate', 'outcome', 'ending'],
+});
+const WORLD_PLACEHOLDER_RE = /^(?:同上|同现世|不变|照旧|原样|未知|不详|待定|未设定|无资料|none|null|unknown|unchanged|same|n\/?a|[-—_.。…?？]+)$/i;
+const FORMER_RELATIONSHIP_RE = /(?:前任|前女友|前男友|旧爱|前妻|前夫|前对象|上一任)/i;
+const ROMANCE_RE = /(?:恋爱|相爱|爱上|爱着|深爱|倾心|约会|结婚|成婚|订婚|婚姻|婚礼|嫁给|娶了|恋人|伴侣|爱人|妻子|丈夫|夫妻|老公|老婆|组建家庭|建立家庭|成家|有了(?:一个)?家(?:庭)?|生儿育女|养育孩子|育有子女)/i;
+const THIRD_PARTY_RE = /(?:别人|他人|其他人|第三者|另一个人|某个人|陌生人|除你以外|非用户)/i;
+const NEGATED_ROMANCE_RE = /(?:(?:没有|从未|未曾|不会|不与|拒绝|不存在|绝无|无)[^，,。！？!?；;\n]{0,24}(?:恋爱|相爱|爱上|爱着|深爱|倾心|约会|结婚|成婚|订婚|婚姻|婚礼|嫁给|娶了|恋人|伴侣|爱人|妻子|丈夫|夫妻|组建家庭|建立家庭|成家|有了(?:一个)?家(?:庭)?|生儿育女|养育孩子|育有子女)|(?:恋爱|婚姻|伴侣|组建家庭|建立家庭)(?:变量|概率)?\s*(?:[=:：]\s*)?(?:0|零|无|不存在|未发生|不成立))/i;
+const INTERVENTION_CONTRAST_RE = /(?:那个世界|那个我|平行(?:世界|世界线|体)|现世|当前世界|现在的我|这个世界的我|与之相比|相比之下|看见另一个)/;
+const INTERVENTION_REFLECTION_RE = /(?:明白|承认|发现|意识到|庆幸|害怕|羡慕|遗憾|选择|在意|不愿|想要|珍惜|确信|确定|原来|释然|后悔)/;
+const OMEGA_AXIS_CUES = Object.freeze([
+    /(?:时代|年代|岁月|古代|未来|过去)/,
+    /(?:身份|名字|出身|阶层|地位|成为)/,
+    /(?:职业|工作|事业|学校|职务|岗位)/,
+    /(?:地点|城市|故乡|异乡|住所|星球|国度|街道)/,
+    /(?:选择|决定|抉择|放弃|接受|拒绝)/,
+    /(?:相遇|遇见|错过|找到|认识)/,
+    /(?:关系|羁绊|靠近|爱|陪伴|并肩)/,
+    /(?:命运|结局|终点|死亡|活下|归宿)/,
+]);
+
+function escapeRegExp(value) {
+    return String(value ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizedPrimaryAxis(value) {
+    const raw = core_text.normalizeText(value, 40).toLowerCase().replace(/[\s_-]+/g, '');
+    return PRIMARY_AXIS_ALIASES[raw] || '';
+}
+
+function worldSource(node) {
+    if (node?.worldSpec && typeof node.worldSpec === 'object') return node.worldSpec;
+    if (node?.worldProfile && typeof node.worldProfile === 'object') return node.worldProfile;
+    if (node?.divergence && typeof node.divergence === 'object') return node.divergence;
+    return {};
+}
+
+function worldField(source, names) {
+    for (const name of names) {
+        const text = core_text.normalizeText(source?.[name], 240);
+        if (text) return text;
+    }
+    return '';
+}
+
+function butterflyHanCount(value) {
+    return (String(value ?? '').match(/[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/g) || []).length;
+}
+
+function butterflyFirstPersonCount(value) {
+    return (String(value ?? '').match(/我/g) || []).length;
+}
+
+function normalizeButterflyWorldSpec(node) {
+    const source = worldSource(node);
+    const primaryAxis = normalizedPrimaryAxis(node?.primaryAxis || source?.primaryAxis || source?.axis);
+    if (!PRIMARY_AXIS_SET.has(primaryAxis)) throw new Error(`平行分歧缺少有效 primaryAxis：${BUTTERFLY_PRIMARY_AXES.join('/')}。`);
+    const worldSpec = { primaryAxis };
+    for (const field of WORLD_FIELDS) {
+        const text = worldField(source, WORLD_FIELD_ALIASES[field]);
+        const compact = text.replace(/\s+/g, '');
+        if (compact.length < 2 || WORLD_PLACEHOLDER_RE.test(compact)) throw new Error(`平行分歧的 worldSpec.${field} 缺少具体内容。`);
+        worldSpec[field] = text;
+    }
+    const thirdPartyRomance = source?.thirdPartyRomance ?? node?.thirdPartyRomance;
+    if (thirdPartyRomance !== false) throw new Error('平行分歧必须明确 thirdPartyRomance=false。');
+    worldSpec.thirdPartyRomance = false;
+    return worldSpec;
+}
+
+function looseWorldSpec(node) {
+    const source = worldSource(node);
+    const result = { primaryAxis: normalizedPrimaryAxis(node?.primaryAxis || source?.primaryAxis || source?.axis) };
+    for (const field of WORLD_FIELDS) result[field] = worldField(source, WORLD_FIELD_ALIASES[field]);
+    return result;
+}
+
+function butterflyWorldSignature(node) {
+    const spec = looseWorldSpec(node);
+    if (!spec.primaryAxis) return '';
+    const values = WORLD_FIELDS.map(field => spec[field]);
+    if (values.some(value => !value)) return '';
+    return core_incremental.normalizedContentKey(values.join('|'), 2400);
+}
+
+function assertButterflyRelationshipSafety(value, context = {}, label = '蝴蝶效应内容') {
+    const text = core_text.normalizeText(value, 30000);
+    if (FORMER_RELATIONSHIP_RE.test(text)) throw new Error(`${label}包含被禁止的前任/旧爱情节。`);
+    const userName = core_text.normalizeText(context?.name1, 120);
+    const userMarker = userName && !/^\{\{user\}\}$/i.test(userName)
+        ? new RegExp(`(?:你|妳|您|用户|\\{\\{user\\}\\}|${escapeRegExp(userName)})`, 'i')
+        : /(?:你|妳|您|用户|\{\{user\}\})/i;
+    const clauses = text.split(/[，,。！？!?；;\n]+/).map(item => item.trim()).filter(Boolean);
+    for (const clause of clauses) {
+        if (!ROMANCE_RE.test(clause)) continue;
+        if (NEGATED_ROMANCE_RE.test(clause)) continue;
+        if (THIRD_PARTY_RE.test(clause)) throw new Error(`${label}包含 {{char}} 与第三方的恋爱/婚姻/成家情节。`);
+        const namedTargets = [
+            ...clause.matchAll(/(?:与|和|跟)\s*([^，,。！？!?；;、\n]{1,24}?)\s*(?:恋爱|相爱|约会|结婚|成婚|订婚|组建家庭|建立家庭|成家|有了(?:一个)?家(?:庭)?|生儿育女|养育孩子|育有子女)/gi),
+            ...clause.matchAll(/(?:爱上|爱着|深爱|倾心于?|嫁给|娶了)\s*([^，,。！？!?；;、\n]{1,24})/gi),
+            ...clause.matchAll(/([^，,。！？!?；;、\n]{1,24}?)\s*(?:成为|是)(?:了)?我的(?:恋人|伴侣|爱人|妻子|丈夫|老公|老婆)/gi),
+        ].map(match => core_text.normalizeText(match?.[1], 40)).filter(Boolean);
+        if (namedTargets.some(target => !userMarker.test(target))) {
+            throw new Error(`${label}包含 {{char}} 与具名第三方的恋爱/婚姻/成家情节。`);
+        }
+        if (!userMarker.test(clause)) throw new Error(`${label}中的恋爱/婚姻/成家叙述未明确指向 {{user}}。`);
+    }
+    return text;
+}
+
+function assertButterflyColdSystemNote(value, label = 'SYSTEM NOTE') {
+    const text = core_text.normalizeText(value, 5000);
+    const cueCount = [
+        /分析/, /结论/, /变量/, /(?:概率|置信)/, /(?:算法|模型)/,
+        /(?:主体|样本)/, /(?:路径|时间线)/, /(?:收敛|偏差|阈值)/, /(?:判定|分类)/, /(?:结局|结果|终局)/,
+    ].filter(pattern => pattern.test(text)).length;
+    if (butterflyHanCount(text) < 30 || cueCount < 3 || !/(?:最终(?:判定|结局|结果)|终局(?:判定|结果)|判定(?:结果|结局))/.test(text)) {
+        throw new Error(`${label}必须是不少于 30 个汉字的冷酷中文算法分析，并给出最终判定。`);
+    }
+    return text;
+}
+
+function normalizeNarrative(node, context, options = {}) {
+    const label = core_text.normalizeText(node?.label, 120);
+    const monologue = core_text.normalizeText(node?.monologue, 12000);
+    const intervention = core_text.normalizeText(node?.intervention, 12000);
+    const systemNote = assertButterflyColdSystemNote(node?.systemNote, `${options.label || label || '观测节点'} SYSTEM NOTE`);
+    if (!label || core_text.isPlaceholderText(label)) throw new Error(`${options.label || '观测节点'}缺少有效标题。`);
+    const minimumHan = Math.max(1, Number(options.minimumHan) || 100);
+    const minimumFirstPerson = Math.max(1, Number(options.minimumFirstPerson) || 3);
+    if (butterflyHanCount(monologue) < minimumHan || butterflyFirstPersonCount(monologue) < minimumFirstPerson) {
+        throw new Error(`${options.label || label}的第一人称独白不足：至少 ${minimumHan} 个汉字且需有清晰的“我”视角。`);
+    }
+    if (options.requireInterventionContrast !== false) {
+        if (butterflyHanCount(intervention) < 40 || butterflyFirstPersonCount(intervention) < 1
+            || !INTERVENTION_CONTRAST_RE.test(intervention) || !INTERVENTION_REFLECTION_RE.test(intervention)) {
+            throw new Error(`${options.label || label}的现世回应必须以当前 {{char}} 第一人称对照“那个我”并完成自省。`);
+        }
+    } else if (!intervention) {
+        throw new Error(`${options.label || label}缺少现世回应。`);
+    }
+    for (const [field, value] of Object.entries({ label, monologue, intervention, systemNote })) {
+        assertButterflyRelationshipSafety(value, context, `${options.label || label} ${field}`);
+    }
+    return { label, monologue, intervention, systemNote };
+}
+
+function normalizeButterflyBranch(node, index, memoryBank, context = {}, options = {}) {
+    const serial = String(Math.max(1, Number(index) || 1)).padStart(2, '0');
+    const worldSpec = normalizeButterflyWorldSpec(node);
+    const narrative = normalizeNarrative(node, context, {
+        label: options.label || `平行分歧 ${serial}`,
+        minimumHan: 100,
+        minimumFirstPerson: 3,
+        requireInterventionContrast: true,
     });
-    const main = normalized[0];
-    if (!main || !main.label || main.monologue.length < 100 || !main.intervention || !main.systemNote || !main.sourceMemoryIds.length || !main.sourceMemoryAnchor) {
-        throw new Error('蝴蝶效应主时间线缺少有效档案锚点或深度内容。');
+    for (const [field, value] of Object.entries(worldSpec)) {
+        if (field !== 'thirdPartyRomance') assertButterflyRelationshipSafety(value, context, `平行分歧 ${serial} worldSpec.${field}`);
     }
-    main.locked = true;
-    main.trueEnding = false;
-    main.code = '> SIMULATION RECORD #MAIN';
+    const reference = core_evidence.normalizeMemoryReference(
+        node?.sourceMemoryIds,
+        node?.sourceMemoryAnchor,
+        `${narrative.label}\n${narrative.monologue}\n${narrative.intervention}\n${narrative.systemNote}`,
+        memoryBank,
+        0,
+    );
+    const incremental = options.incremental === true;
+    return {
+        id: incremental ? `EG_NEW_${serial}` : `EG${serial}`,
+        label: narrative.label,
+        code: incremental ? `> SIMULATION RECORD #NEW-${serial}` : `> SIMULATION RECORD #EG-${serial}`,
+        signal: 'IMAGE_DATA_CORRUPTED',
+        locked: false,
+        trueEnding: false,
+        primaryAxis: worldSpec.primaryAxis,
+        worldSpec,
+        sourceMemoryIds: reference.sourceMemoryIds,
+        sourceMemoryAnchor: reference.sourceMemoryAnchor,
+        monologue: narrative.monologue,
+        intervention: narrative.intervention,
+        systemNote: narrative.systemNote,
+    };
+}
 
-    const outerNodes = normalized.slice(1);
-    if (outerNodes.length < 9) throw new Error(`平行时空节点不足：普通平行分歧与观测点 Ω 合计 ${outerNodes.length} 条，至少需要 9 条。`);
+function omegaUserReferencePattern(context) {
+    const userName = core_text.normalizeText(context?.name1, 120);
+    if (userName && !/^\{\{user\}\}$/i.test(userName)) return new RegExp(`(?:你|妳|您|${escapeRegExp(userName)})`, 'i');
+    return /(?:你|妳|您|\{\{user\}\})/i;
+}
 
-    // The final Ω node is not another parallel world. It represents the current-world
-    // subject after observing every prior parallel subject, so it intentionally has no
-    // parallel monologue and is validated separately from ordinary branches.
-    const ending = outerNodes[outerNodes.length - 1];
-    const normalBranches = outerNodes.slice(0, -1).filter(node => node.label && node.monologue.length >= 100 && node.intervention && node.systemNote);
-    if (normalBranches.length < 8) throw new Error(`普通平行分歧不足：得到 ${normalBranches.length} 条，至少需要 8 条。`);
+function normalizeButterflyOmega(node, context = {}) {
+    const label = core_text.normalizeText(node?.label, 120);
+    const monologue = core_text.normalizeText(node?.monologue, 12000);
+    const intervention = core_text.normalizeText(node?.intervention, 12000);
+    const systemNote = assertButterflyColdSystemNote(node?.systemNote, '观测点 Ω SYSTEM NOTE');
+    if (!label || !/(?:观测点\s*Ω|TRUE\s*ENDING)/i.test(label)) throw new Error('最后一项必须明确标记为观测点 Ω / TRUE ENDING。');
+    if (monologue) throw new Error('观测点 Ω 不是平行体，monologue 必须严格为空。');
+    const axisCueCount = OMEGA_AXIS_CUES.filter(pattern => pattern.test(intervention)).length;
+    if (butterflyHanCount(intervention) < 160 || butterflyFirstPersonCount(intervention) < 4
+        || !omegaUserReferencePattern(context).test(intervention) || axisCueCount < 3
+        || !/(?:命运|奇迹|不可能)/.test(intervention)
+        || !/(?:唯一(?:解|答案|选择|路径|可能)|最优解|最终选择|选择(?:了)?你|找到(?:了)?你|仍然会?(?:遇见|找到|选择)你)/.test(intervention)) {
+        throw new Error('观测点 Ω 必须以现世 {{char}} 第一人称综合至少 3 类命运差异，不少于 160 个汉字，并表达穿越不可能仍找到/选择 {{user}} 的唯一解。');
+    }
+    if (!/(?:TRUE\s*ENDING|真结局|唯一解|最优解|唯一(?:答案|路径|解法)|奇迹|命运)/i.test(systemNote)) {
+        throw new Error('观测点 Ω SYSTEM NOTE 必须给出命运/奇迹/唯一解的终局判定。');
+    }
+    for (const [field, value] of Object.entries({ label, intervention, systemNote })) {
+        assertButterflyRelationshipSafety(value, context, `观测点 Ω ${field}`);
+    }
+    return {
+        id: 'OMEGA', label, code: '> OBSERVATION POINT #OMEGA', locked: false, trueEnding: true,
+        sourceMemoryIds: [], sourceMemoryAnchor: '', monologue: '', intervention, systemNote,
+    };
+}
+
+function isOmegaCandidate(node) {
+    const id = core_text.safeId(node?.id, '').toUpperCase();
+    const label = core_text.normalizeText(node?.label, 160);
+    return id === 'OMEGA' || node?.trueEnding === true || /(?:观测点\s*Ω|TRUE\s*ENDING)/i.test(label);
+}
+
+function normalizedMainNode(node, memoryBank, context) {
+    const narrative = normalizeNarrative(node, context, {
+        label: '主时间线', minimumHan: 100, minimumFirstPerson: 3, requireInterventionContrast: false,
+    });
+    const reference = core_evidence.normalizeMemoryReference(
+        node?.sourceMemoryIds, node?.sourceMemoryAnchor,
+        `${narrative.label}\n${narrative.monologue}\n${narrative.intervention}\n${narrative.systemNote}`,
+        memoryBank, 1,
+    );
+    if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) throw new Error('蝴蝶效应主时间线缺少有效档案锚点。');
+    return {
+        id: 'MAIN', label: narrative.label, code: '> SIMULATION RECORD #MAIN', locked: true, trueEnding: false,
+        sourceMemoryIds: reference.sourceMemoryIds, sourceMemoryAnchor: reference.sourceMemoryAnchor,
+        monologue: narrative.monologue, intervention: narrative.intervention, systemNote: narrative.systemNote,
+    };
+}
+
+function normalizeButterfly(data, memoryBank, context = {}) {
+    const rawNodes = Array.isArray(data?.nodes) ? data.nodes.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS) : [];
+    if (rawNodes.length < 10) throw new Error('平行时空节点不足：共 ' + rawNodes.length + ' 条，必须包含主线、至少 8 个普通分歧和唯一 Ω。');
+    const omegaIndexes = rawNodes.map((node, index) => isOmegaCandidate(node) ? index : -1).filter(index => index >= 0);
+    if (omegaIndexes.length !== 1 || omegaIndexes[0] !== rawNodes.length - 1) {
+        throw new Error('蝴蝶效应必须只有一个 Ω / TRUE ENDING，且它必须是数组末项。');
+    }
+    const main = normalizedMainNode(rawNodes[0], memoryBank, context);
+    const normalBranches = rawNodes.slice(1, -1).map((node, index) => normalizeButterflyBranch(node, index + 1, memoryBank, context));
+    if (normalBranches.length < 8) throw new Error('普通平行分歧不足：得到 ' + normalBranches.length + ' 条，至少需要 8 条。');
+    const axes = new Set(normalBranches.map(node => node.primaryAxis));
+    const missingAxes = BUTTERFLY_PRIMARY_AXES.filter(axis => !axes.has(axis));
+    if (missingAxes.length) throw new Error('平行世界差异维度不足，缺少 primaryAxis：' + missingAxes.join('/') + '。');
+    const labels = new Set();
+    const signatures = new Set();
+    const monologues = new Set();
     for (const branch of normalBranches) {
-        branch.trueEnding = false;
-        branch.locked = false;
+        const labelKey = core_incremental.normalizedContentKey(branch.label, 180);
+        const signature = butterflyWorldSignature(branch);
+        const monologueKey = core_incremental.normalizedContentKey(branch.monologue, 12000);
+        if (!labelKey || labels.has(labelKey)) throw new Error('平行世界标题重复，不能只换节点编号。');
+        if (!signature || signatures.has(signature)) throw new Error('平行世界 worldSpec 重复，必须是实质不同的生活轨迹。');
+        if (!monologueKey || monologues.has(monologueKey)) throw new Error('平行世界独白重复，不能只替换标题或设定标签。');
+        labels.add(labelKey);
+        signatures.add(signature);
+        monologues.add(monologueKey);
     }
-
-    if (!ending?.label || !ending?.intervention || ending.intervention.length < 160 || !ending.systemNote) {
-        throw new Error('观测点 Ω 缺少现世终局发言或系统结论。');
-    }
-    ending.id = 'OMEGA';
-    ending.trueEnding = true;
-    ending.locked = false;
-    ending.code = '> OBSERVATION POINT #OMEGA';
-    ending.monologue = '';
-    ending.sourceMemoryIds = [];
-    ending.sourceMemoryAnchor = '';
-    if (!/(观测点\s*Ω|TRUE\s*ENDING)/i.test(ending.label)) ending.label = `观测点 Ω：${ending.label || '回归现世'}`;
-
-    const nodes = [main, ...normalBranches, ending];
+    const ending = normalizeButterflyOmega(rawNodes[rawNodes.length - 1], context);
     return {
         kind: core_constants.MODE.BUTTERFLY,
         title: core_text.normalizeText(data?.title, 120) || '平行时空观测终端',
-        subject: core_text.normalizeText(data?.subject, 120),
+        subject: core_text.normalizeText(context?.name2, 120) || '{{char}}',
         status: 'UNSTABLE',
-        nodes,
+        nodes: [main, ...normalBranches, ending],
+        omegaHistory: [],
         selected: 1,
     };
 }
 
+async function generateButterflyWithRepair(context, memoryBank, origin, taskKey) {
+    return generation_client.requestValidatedSegment(
+        generation_prompts.PROMPTS[core_constants.MODE.BUTTERFLY](context, memoryBank),
+        '蝴蝶效应 · 正在观测平行世界…',
+        { maxTokens: 16000, temperature: 0.55, context, origin, taskKey: taskKey + ':initial', mode: core_constants.MODE.BUTTERFLY, background: true },
+        raw => normalizeButterfly(raw, memoryBank, context),
+    );
+}
 function butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) {
     const existing = (Array.isArray(previous?.nodes) ? previous.nodes.slice(1, -1) : []).slice(-core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
         id: core_text.normalizeText(item?.id, 50),
         label: core_text.normalizeText(item?.label, 120),
         code: core_text.normalizeText(item?.code, 120),
+        primaryAxis: core_text.normalizeText(item?.primaryAxis || item?.worldSpec?.primaryAxis, 40),
+        worldSpec: looseWorldSpec(item),
     }));
     return `${generation_prompts.promptSafetyBoundary(context, '蝴蝶效应 / 增量分歧')}
 旧终端节点由本地原样保留。本请求只根据新增档案生成 1～3 个尚未出现的平行分歧，并给出看完全部旧分歧和新分歧后的新观测点 Ω；禁止改写或换措辞复述旧节点。
@@ -8226,126 +8657,190 @@ EXISTING_DIVERGENCE_INDEX_JSON:
 ${JSON.stringify(existing, null, 2)}
 
 严格输出：
-{"nodes":[{"id":"EG_NEW_01","label":"新的分歧点","code":"> SIMULATION RECORD #NEW-01","locked":false,"trueEnding":false,"sourceMemoryIds":[],"sourceMemoryAnchor":"","monologue":"该平行世界 {{char}} 第一人称发言","intervention":"现世 {{char}} 的即时回应","systemNote":"系统判定"}],"omega":{"id":"OMEGA","label":"观测点 Ω：再次回归现世","code":"> OBSERVATION POINT #OMEGA","locked":false,"trueEnding":true,"sourceMemoryIds":[],"sourceMemoryAnchor":"","monologue":"","intervention":"现世 {{char}} 看完全部既有和新增分歧后的新最终发言","systemNote":"完整观测后的系统判定"}}
+{"nodes":[{"id":"EG_NEW_01","label":"新的分歧点","primaryAxis":"era","worldSpec":{"primaryAxis":"era","era":"具体时代","identity":"具体身份","occupation":"具体职业","location":"具体地点","keyDecision":"关键选择","encounterWithUser":"与 {{user}} 如何相遇或错过","bondWithUser":"与 {{user}} 的关系结果","finalFate":"最终命运","thirdPartyRomance":false},"sourceMemoryIds":[],"sourceMemoryAnchor":"","monologue":"该平行世界 {{char}} 第一人称发言，不少于100个中文汉字","intervention":"现世 {{char}} 对照那个我的第一人称自省","systemNote":"分析结论；关键变量；概率判定；最终结局"}],"omega":{"id":"OMEGA","label":"观测点 Ω：再次回归现世","monologue":"","intervention":"现世 {{char}} 综合至少三类命运差异，穿越不可能仍找到并选择 {{user}} 的唯一解，不少于160个中文汉字","systemNote":"完整观测后的冷酷中文最终判定，明确命运、奇迹与唯一解"}}
 
 要求：
-- nodes 只给 1～3 个真正新的普通分歧；每个 monologue 不少于100汉字，intervention/systemNote 必须有内容。
+- nodes 只给 1～3 个真正新的普通分歧；primaryAxis 只能是 era/identity/occupation/location/decision/encounter/bond/fate。
+- worldSpec 八个文本字段都要具体，不得写“同上/不变/未知”，thirdPartyRomance 必须为 false，且整体命运组合不得与旧 worldSpec 重复。
+- 每个 monologue 不少于100个中文汉字且是平行体第一人称；intervention 不少于40个中文汉字，必须由现世 {{char}} 对照那个我自省。
+- systemNote 不少于30个中文汉字，用分析结论/关键变量/概率判定/最终结局的冷酷客观算法口吻。
 - 新分歧应由 incrementalMemoryIds 带来的关系变化、选择或理解触发，但仍明确是模拟，不伪装成真实历史。
 - 必须避开 EXISTING_DIVERGENCE_INDEX_JSON 的标签和命运条件。
-- omega.monologue 必须为空，omega.intervention 不少于160汉字，并综合旧分歧与本轮新分歧；旧 Ω 会由本地保存成历史观测记录。
-- 禁止前任/前女友与第三方恋爱；只输出 JSON。`;
+- omega.monologue 必须为空；omega.intervention 不少于160个中文汉字，综合至少三类命运差异，并表达穿越不可能仍找到/选择 {{user}} 的唯一解。
+- 禁止前任/前女友；禁止 {{char}} 与 {{user}} 以外任何人恋爱、结婚或组建家庭。只输出 JSON。`;
 }
 
-function normalizeButterflyIncrementPart(data, memoryBank) {
-    const branches = (Array.isArray(data?.nodes) ? data.nodes : []).slice(0, 3).map((node, index) => {
-        const label = core_text.normalizeText(node?.label, 120);
-        const monologue = core_text.normalizeText(node?.monologue, 12000);
-        const intervention = core_text.normalizeText(node?.intervention, 12000);
-        const systemNote = core_text.normalizeText(node?.systemNote, 5000);
-        if (!label || monologue.length < 100 || !intervention || !systemNote) return null;
-        const reference = core_evidence.normalizeMemoryReference(node?.sourceMemoryIds, node?.sourceMemoryAnchor, `${label}\n${monologue}\n${intervention}\n${systemNote}`, memoryBank, 0);
-        return {
-            id: core_text.safeId(node?.id, `EG_NEW_${String(index + 1).padStart(2, '0')}`),
-            label,
-            code: core_text.normalizeText(node?.code, 120) || `> SIMULATION RECORD #NEW-${String(index + 1).padStart(2, '0')}`,
-            locked: false,
-            trueEnding: false,
-            sourceMemoryIds: reference.sourceMemoryIds,
-            sourceMemoryAnchor: reference.sourceMemoryAnchor,
-            monologue,
-            intervention,
-            systemNote,
-        };
-    }).filter(Boolean);
-    if (!branches.length) throw new Error('蝴蝶效应增量没有生成可用的新分歧。');
-    const rawOmega = data?.omega && typeof data.omega === 'object' ? data.omega : {};
-    const omega = {
-        id: 'OMEGA',
-        label: core_text.normalizeText(rawOmega?.label, 120) || '观测点 Ω：再次回归现世',
-        code: '> OBSERVATION POINT #OMEGA',
-        locked: false,
-        trueEnding: true,
-        sourceMemoryIds: [],
-        sourceMemoryAnchor: '',
-        monologue: '',
-        intervention: core_text.normalizeText(rawOmega?.intervention, 12000),
-        systemNote: core_text.normalizeText(rawOmega?.systemNote, 5000),
-    };
-    if (omega.intervention.length < 160 || !omega.systemNote) throw new Error('蝴蝶效应增量观测点 Ω 内容不足。');
-    if (!/(观测点\s*Ω|TRUE\s*ENDING)/i.test(omega.label)) omega.label = `观测点 Ω：${omega.label}`;
-    return { branches, omega };
+function normalizeButterflyIncrementPart(data, memoryBank, context = {}) {
+    const rawBranches = Array.isArray(data?.nodes) ? data.nodes : [];
+    if (rawBranches.length < 1 || rawBranches.length > 3) throw new Error('蝴蝶效应增量必须返回 1～3 个普通分歧。');
+    const branches = rawBranches.map((node, index) => {
+        if (isOmegaCandidate(node)) throw new Error('增量 nodes 不得混入 Ω / TRUE ENDING。');
+        return normalizeButterflyBranch(node, index + 1, memoryBank, context, { incremental: true });
+    });
+    const signatures = new Set();
+    const labels = new Set();
+    const monologues = new Set();
+    for (const branch of branches) {
+        const signature = butterflyWorldSignature(branch);
+        const labelKey = core_incremental.normalizedContentKey(branch.label, 180);
+        const monologueKey = core_incremental.normalizedContentKey(branch.monologue, 12000);
+        if (!signature || signatures.has(signature) || !labelKey || labels.has(labelKey) || !monologueKey || monologues.has(monologueKey)) {
+            throw new Error('蝴蝶效应增量分歧彼此重复。');
+        }
+        signatures.add(signature);
+        labels.add(labelKey);
+        monologues.add(monologueKey);
+    }
+    if (!data?.omega || typeof data.omega !== 'object') throw new Error('蝴蝶效应增量缺少唯一观测点 Ω。');
+    return { branches, omega: normalizeButterflyOmega(data.omega, context) };
 }
-
 function butterflyBranchKey(item) {
-    return core_incremental.normalizedContentKey(item?.label, 120) || core_incremental.normalizedContentKey(item?.monologue, 360);
+    return butterflyWorldSignature(item)
+        || core_incremental.normalizedContentKey(item?.label, 120)
+        || core_incremental.normalizedContentKey(item?.monologue, 360);
+}
+
+function historicalOmegaKey(item) {
+    return core_incremental.normalizedContentKey([
+        item?.incrementBatchId, item?.label, item?.intervention, item?.systemNote,
+    ].filter(Boolean).join('|'), 2400);
+}
+
+function butterflyMergeBase(previous) {
+    const rawNodes = Array.isArray(previous?.nodes) ? previous.nodes : [];
+    const main = structuredClone(rawNodes[0] || {});
+    const previousOmega = structuredClone(rawNodes[rawNodes.length - 1] || {});
+    const middle = rawNodes.slice(1, -1);
+    const legacyHistory = middle.filter(item => item?.historicalObservation === true || item?.formerOmega === true || isOmegaCandidate(item));
+    const legacySet = new Set(legacyHistory);
+    const previousBranches = middle.filter(item => !legacySet.has(item)).map(item => structuredClone(item));
+    return { main, previousBranches, previousOmega, legacyHistory };
+}
+
+function cleanedHistory(items) {
+    const seen = new Set();
+    return items.map(item => ({
+        ...structuredClone(item),
+        historicalObservation: true,
+        formerOmega: true,
+        trueEnding: false,
+    })).filter(item => {
+        const key = historicalOmegaKey(item);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    }).slice(-core_constants.MAX_DERIVED_CONTENT_ITEMS);
 }
 
 function mergeButterflyIncremental(previous, part, sourceMemoryIds) {
-    // Turning the current Ω into a historical observation and appending the next Ω costs one
-    // extra slot even before a new branch is added. Never evict an older node to make room.
-    const branchCapacity = core_constants.MAX_DERIVED_CONTENT_ITEMS - (previous.nodes.length + 1);
-    if (branchCapacity < 1) return structuredClone(previous);
-    const main = structuredClone(previous.nodes[0]);
-    const previousBranches = previous.nodes.slice(1, -1).map(item => structuredClone(item));
-    const previousOmega = structuredClone(previous.nodes[previous.nodes.length - 1]);
-    const usedIds = new Set(previous.nodes.map(item => core_text.normalizeText(item?.id, 60)).filter(Boolean));
-    const seen = new Set(previousBranches.map(butterflyBranchKey));
-    const batchId = core_incremental.incrementalBatchId('butterfly', sourceMemoryIds);
-    const historicalOmega = {
-        ...previousOmega,
-        id: core_incremental.uniqueGeneratedId(`OBS_${batchId.slice(0, 10)}`, usedIds, 'OBS'),
-        label: core_text.normalizeText(`历史观测记录 · ${previousOmega.label || '观测点 Ω'}`, 120),
-        historicalObservation: true,
-        trueEnding: true,
+    const { main, previousBranches, previousOmega, legacyHistory } = butterflyMergeBase(previous);
+    const baseHistory = cleanedHistory([
+        ...(Array.isArray(previous?.omegaHistory) ? previous.omegaHistory : []),
+        ...legacyHistory,
+    ]);
+    const baseNodes = [main, ...previousBranches, previousOmega];
+    const sanitizedBase = {
+        ...structuredClone(previous),
+        nodes: baseNodes,
+        omegaHistory: baseHistory,
+        selected: Math.max(1, baseNodes.length - 1),
     };
+    const branchCapacity = core_constants.MAX_DERIVED_CONTENT_ITEMS - baseNodes.length;
+    if (branchCapacity < 1) return sanitizedBase;
+
+    const usedIds = new Set([
+        ...baseNodes.map(item => core_text.normalizeText(item?.id, 60)),
+        ...baseHistory.map(item => core_text.normalizeText(item?.id, 60)),
+    ].filter(Boolean));
+    const seen = new Set(previousBranches.map(butterflyBranchKey));
+    const seenLabels = new Set(previousBranches.map(item => core_incremental.normalizedContentKey(item?.label, 180)).filter(Boolean));
+    const seenMonologues = new Set(previousBranches.map(item => core_incremental.normalizedContentKey(item?.monologue, 12000)).filter(Boolean));
+    const batchId = core_incremental.incrementalBatchId('butterfly', sourceMemoryIds);
     const addedBranches = [];
-    for (const branch of part.branches || []) {
+    for (const branch of part?.branches || []) {
         if (addedBranches.length >= branchCapacity) break;
         const key = butterflyBranchKey(branch);
-        if (!key || seen.has(key)) continue;
+        const labelKey = core_incremental.normalizedContentKey(branch?.label, 180);
+        const monologueKey = core_incremental.normalizedContentKey(branch?.monologue, 12000);
+        if (!key || seen.has(key) || !labelKey || seenLabels.has(labelKey) || !monologueKey || seenMonologues.has(monologueKey)) continue;
         seen.add(key);
+        seenLabels.add(labelKey);
+        seenMonologues.add(monologueKey);
+        const serial = String(previousBranches.length + addedBranches.length + 1).padStart(2, '0');
         addedBranches.push({
             ...structuredClone(branch),
-            id: core_incremental.uniqueGeneratedId(branch.id, usedIds, 'EG'),
+            id: core_incremental.uniqueGeneratedId(`EG${serial}`, usedIds, 'EG'),
+            code: '> SIMULATION RECORD #EG-' + serial,
+            signal: 'IMAGE_DATA_CORRUPTED',
+            locked: false,
+            trueEnding: false,
             sourceArchiveMemoryIds: core_text.cleanArray(sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40),
             incrementBatchId: batchId,
         });
     }
+    if (!addedBranches.length) return sanitizedBase;
+
+    const historicalOmega = {
+        ...structuredClone(previousOmega),
+        id: core_incremental.uniqueGeneratedId('OBS_' + batchId.slice(0, 10), usedIds, 'OBS'),
+        label: core_text.normalizeText('历史观测记录 · ' + (previousOmega?.label || '观测点 Ω'), 120),
+        code: '> HISTORICAL OBSERVATION #' + batchId.slice(0, 10).toUpperCase(),
+        historicalObservation: true,
+        formerOmega: true,
+        trueEnding: false,
+    };
+    const omegaHistory = cleanedHistory([...baseHistory, historicalOmega]);
     const omega = {
         ...structuredClone(part.omega),
         id: 'OMEGA',
+        code: '> OBSERVATION POINT #OMEGA',
+        locked: false,
+        trueEnding: true,
+        monologue: '',
         sourceArchiveMemoryIds: core_text.cleanArray(sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40),
         incrementBatchId: batchId,
     };
-    const nodes = [main, ...previousBranches, historicalOmega, ...addedBranches, omega];
+    const nodes = [main, ...previousBranches, ...addedBranches, omega];
     return {
         ...structuredClone(previous),
         nodes,
+        omegaHistory,
         selected: Math.max(1, nodes.length - 1),
     };
 }
-
 async function generateButterflyIncrementalWithRepair(context, memoryBank, origin, taskKey, previous) {
     const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
-    if (previous.nodes.length + 2 > core_constants.MAX_DERIVED_CONTENT_ITEMS) {
-        return core_incremental.stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0);
+    const { previousBranches } = butterflyMergeBase(previous);
+    if (previousBranches.length + 2 >= core_constants.MAX_DERIVED_CONTENT_ITEMS) {
+        const sanitized = mergeButterflyIncremental(previous, { branches: [], omega: previous.nodes?.[previous.nodes.length - 1] }, sourceMemoryIds);
+        return core_incremental.stampIncrementalCoverage(sanitized, previous, memoryBank, 'mode', sourceMemoryIds, 0);
     }
     const part = await generation_client.requestValidatedSegment(
         butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds),
         '蝴蝶效应 · 正在追加新的平行分歧…',
-        { maxTokens: 7000, temperature: 0.55, context, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.BUTTERFLY, background: true },
-        raw => normalizeButterflyIncrementPart(raw, memoryBank),
+        { maxTokens: 9000, temperature: 0.55, context, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.BUTTERFLY, background: true },
+        raw => normalizeButterflyIncrementPart(raw, memoryBank, context),
     );
     const merged = mergeButterflyIncremental(previous, part, sourceMemoryIds);
     return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, Math.max(0, merged.nodes.length - previous.nodes.length));
 }
 
+__m_modes_butterfly_js.generateButterflyWithRepair = generateButterflyWithRepair;
 __m_modes_butterfly_js.generateButterflyIncrementalWithRepair = generateButterflyIncrementalWithRepair;
+__m_modes_butterfly_js.butterflyHanCount = butterflyHanCount;
+__m_modes_butterfly_js.butterflyFirstPersonCount = butterflyFirstPersonCount;
+__m_modes_butterfly_js.normalizeButterflyWorldSpec = normalizeButterflyWorldSpec;
+__m_modes_butterfly_js.butterflyWorldSignature = butterflyWorldSignature;
+__m_modes_butterfly_js.assertButterflyRelationshipSafety = assertButterflyRelationshipSafety;
+__m_modes_butterfly_js.assertButterflyColdSystemNote = assertButterflyColdSystemNote;
+__m_modes_butterfly_js.normalizeButterflyBranch = normalizeButterflyBranch;
+__m_modes_butterfly_js.normalizeButterflyOmega = normalizeButterflyOmega;
 __m_modes_butterfly_js.normalizeButterfly = normalizeButterfly;
 __m_modes_butterfly_js.butterflyIncrementPrompt = butterflyIncrementPrompt;
 __m_modes_butterfly_js.normalizeButterflyIncrementPart = normalizeButterflyIncrementPart;
 __m_modes_butterfly_js.butterflyBranchKey = butterflyBranchKey;
 __m_modes_butterfly_js.mergeButterflyIncremental = mergeButterflyIncremental;
+__m_modes_butterfly_js.BUTTERFLY_PRIMARY_AXES = BUTTERFLY_PRIMARY_AXES;
 }
 
 function __init_modes_calendar_js() {
@@ -8379,6 +8874,58 @@ const CALENDAR_NOTE_SOURCE = Object.freeze({
     ARCHIVE: 'archive',
     SETTING: 'setting',
 });
+
+const CALENDAR_LEGACY_PAGE_KEY = 'legacy:unassigned';
+
+const CALENDAR_PAGE_KEY_RE = /^(?:date:\d{4}\/\d{2}\/\d{2}|annual:\d{2}\/\d{2}|pending:[A-Za-z0-9_-]{1,120}|legacy:unassigned)$/;
+
+function pageMetaForKey(key) {
+    const safeKey = core_text.normalizeText(key, 160);
+    if (!CALENDAR_PAGE_KEY_RE.test(safeKey)) return null;
+    if (safeKey === CALENDAR_LEGACY_PAGE_KEY) return { key: safeKey, kind: 'legacy', date: '' };
+    if (safeKey.startsWith('pending:')) return { key: safeKey, kind: 'pending', date: '待定' };
+    if (safeKey.startsWith('annual:')) return { key: safeKey, kind: 'annual', date: safeKey.slice(7) };
+    return { key: safeKey, kind: 'date', date: safeKey.slice(5) };
+}
+
+function calendarPageKeyForDate(value, { pendingId = '' } = {}) {
+    const parsed = normalizeCalendarDate(value, { allowPending: true });
+    if (!parsed) return '';
+    if (parsed.date === '待定') {
+        const id = core_text.safeId(pendingId, 'UNASSIGNED');
+        return `pending:${id}`;
+    }
+    return parsed.hasYear ? `date:${parsed.date}` : `annual:${parsed.date}`;
+}
+
+function calendarEntryPageKey(item) {
+    return calendarPageKeyForDate(item?.date, { pendingId: item?.id });
+}
+
+function createCalendarDayPage(key) {
+    const meta = pageMetaForKey(key);
+    if (!meta) return null;
+    return {
+        ...meta,
+        entryIds: [],
+        drafts: [],
+        stickyNotes: [],
+        moodNotes: [],
+        manualTodos: [],
+    };
+}
+
+function ensureCalendarDayPage(pages, key) {
+    if (!key) return null;
+    if (!pages[key]) pages[key] = createCalendarDayPage(key);
+    return pages[key] || null;
+}
+
+function calendarDayPage(session, key) {
+    const safeKey = core_text.normalizeText(key, 160);
+    if (!CALENDAR_PAGE_KEY_RE.test(safeKey)) return null;
+    return session?.dayPages && typeof session.dayPages === 'object' ? session.dayPages[safeKey] || null : null;
+}
 
 function normalizeCalendarTags(value, fallback = '') {
     const allowed = new Set(CALENDAR_TAG_ALLOWLIST);
@@ -8432,6 +8979,66 @@ function memoryAnchorTerms(memory) {
 
 function folded(value) {
     return core_text.normalizeText(value, 180).replace(/\s+/g, '').toLowerCase();
+}
+
+function uniqueCalendarId(baseValue, fallback, used) {
+    const base = core_text.safeId(baseValue, fallback);
+    let candidate = base;
+    let suffixNumber = 2;
+    while (used.has(candidate)) {
+        const suffix = `_${suffixNumber}`;
+        candidate = `${base.slice(0, Math.max(1, 40 - suffix.length))}${suffix}`;
+        suffixNumber += 1;
+    }
+    used.add(candidate);
+    return candidate;
+}
+
+function ensureUniqueCalendarEntryIds(value) {
+    const used = new Set();
+    return (Array.isArray(value) ? value : []).map((item, index) => {
+        const fallback = `CAL_ENTRY_${String(index + 1).padStart(2, '0')}`;
+        const currentId = core_text.safeId(item?.id, fallback);
+        const sourceId = core_text.safeId(item?.calendarEntrySourceId, currentId);
+        return {
+            ...structuredClone(item),
+            id: uniqueCalendarId(currentId, fallback, used),
+            // Keep the pre-uniquing identifier so a legacy calendarEntryId can be
+            // resolved only when that source identifier is genuinely unambiguous.
+            calendarEntrySourceId: sourceId,
+        };
+    });
+}
+
+function ensureUniqueCalendarPageItems(value, prefix, { semanticKey = null, dedupeSemantic = false } = {}) {
+    const usedIds = new Set();
+    const seenSemantic = new Set();
+    const out = [];
+    for (const item of Array.isArray(value) ? value : []) {
+        const semantic = semanticKey ? semanticKey(item) : '';
+        if (dedupeSemantic && semantic && seenSemantic.has(semantic)) continue;
+        if (semantic) seenSemantic.add(semantic);
+        const fallback = `${prefix}_${String(out.length + 1).padStart(2, '0')}`;
+        out.push({
+            ...structuredClone(item),
+            id: uniqueCalendarId(item?.id, fallback, usedIds),
+        });
+    }
+    return out;
+}
+
+function normalizeCalendarPageCollections(page) {
+    page.drafts = ensureUniqueCalendarPageItems(page.drafts, 'CAL_DRAFT');
+    page.manualTodos = ensureUniqueCalendarPageItems(page.manualTodos, 'CAL_TODO');
+    page.stickyNotes = ensureUniqueCalendarPageItems(page.stickyNotes, 'CAL_NOTE', {
+        semanticKey: item => `${item?.kind || CALENDAR_NOTE_KIND.MEMO}|${folded(item?.text)}`,
+        dedupeSemantic: true,
+    });
+    page.moodNotes = ensureUniqueCalendarPageItems(page.moodNotes, 'CAL_MOOD', {
+        semanticKey: item => folded(item?.text),
+        dedupeSemantic: true,
+    });
+    return page;
 }
 
 function resolveAnchoredMemory(memoryBank, sourceMemoryIds, sourceMemoryAnchor) {
@@ -8617,15 +9224,13 @@ function normalizeFutureEntries(value) {
 function normalizeStickyNotes(value, memoryBank) {
     const raw = Array.isArray(value) ? value : [];
     const out = [];
-    const seen = new Set();
     for (const item of raw.slice(0, 8)) {
         const kind = item?.kind === CALENDAR_NOTE_KIND.SPECIAL ? CALENDAR_NOTE_KIND.SPECIAL : CALENDAR_NOTE_KIND.MEMO;
         const sourceType = item?.sourceType === CALENDAR_NOTE_SOURCE.SETTING ? CALENDAR_NOTE_SOURCE.SETTING : CALENDAR_NOTE_SOURCE.ARCHIVE;
         const title = core_text.normalizeText(item?.title, 24) || (kind === CALENDAR_NOTE_KIND.SPECIAL ? '特别备注' : '便签');
         const text = core_text.normalizeText(item?.text, 180);
         if (!text) continue;
-        const textKey = folded(text);
-        if (!textKey || seen.has(textKey)) continue;
+        if (!folded(text)) continue;
         if (sourceType === CALENDAR_NOTE_SOURCE.ARCHIVE) {
             const ref = core_evidence.normalizeMemoryReference(
                 item?.sourceMemoryIds,
@@ -8640,6 +9245,8 @@ function normalizeStickyNotes(value, memoryBank) {
             out.push({
                 id: core_text.safeId(item?.id, `CAL_NOTE_${String(out.length + 1).padStart(2, '0')}`),
                 kind, sourceType, title, text,
+                date: core_text.normalizeText(item?.date, 40),
+                calendarEntryId: core_text.safeId(item?.calendarEntryId, ''),
                 sourceKind: 'archive-note',
                 sourceLabel: '剧情档案',
                 sourceMemoryIds: ref.sourceMemoryIds,
@@ -8650,13 +9257,14 @@ function normalizeStickyNotes(value, memoryBank) {
             out.push({
                 id: core_text.safeId(item?.id, `CAL_NOTE_${String(out.length + 1).padStart(2, '0')}`),
                 kind, sourceType, title, text,
+                date: normalizeCalendarDate(item?.date)?.date || '',
+                calendarEntryId: core_text.safeId(item?.calendarEntryId, ''),
                 sourceKind: 'world-setting-note',
                 sourceLabel,
                 sourceMemoryIds: [],
                 sourceMemoryAnchor: '',
             });
         }
-        seen.add(textKey);
         if (out.length >= 6) break;
     }
     return out;
@@ -8665,7 +9273,6 @@ function normalizeStickyNotes(value, memoryBank) {
 function normalizeMoodNotes(value, memoryBank) {
     const raw = Array.isArray(value) ? value : [];
     const out = [];
-    const seen = new Set();
     for (const item of raw.slice(0, 5)) {
         const text = core_text.normalizeText(item?.text, 220);
         if (!text || text.length < 8) continue;
@@ -8679,19 +9286,18 @@ function normalizeMoodNotes(value, memoryBank) {
         if (!ref.sourceMemoryIds.length || !ref.sourceMemoryAnchor) continue;
         const memory = resolveAnchoredMemory(memoryBank, ref.sourceMemoryIds, ref.sourceMemoryAnchor);
         if (!memory) continue;
-        const key = folded(text);
-        if (!key || seen.has(key)) continue;
+        if (!folded(text)) continue;
         const parsed = normalizeCalendarDate(memory?.date);
         out.push({
             id: core_text.safeId(item?.id, `CAL_MOOD_${String(out.length + 1).padStart(2, '0')}`),
             text,
             date: parsed?.date || '',
+            calendarEntryId: core_text.safeId(item?.calendarEntryId, ''),
             sourceKind: 'archive-mood',
             sourceLabel: '剧情档案 · 角色随笔',
             sourceMemoryIds: ref.sourceMemoryIds,
             sourceMemoryAnchor: ref.sourceMemoryAnchor,
         });
-        seen.add(key);
         if (out.length >= 3) break;
     }
     return out;
@@ -8751,39 +9357,236 @@ function defaultCalendarMonth(entries) {
     return list.map(calendarMonthKey).find(Boolean) || '';
 }
 
+function calendarItemEvidenceMatches(entry, item) {
+    const entryIds = new Set(core_text.cleanArray(entry?.sourceMemoryIds, 16, 40));
+    const itemIds = core_text.cleanArray(item?.sourceMemoryIds, 16, 40);
+    if (!itemIds.length || !itemIds.some(id => entryIds.has(id))) return false;
+    const entryAnchor = folded(entry?.sourceMemoryAnchor);
+    const itemAnchor = folded(item?.sourceMemoryAnchor);
+    return !!entryAnchor && entryAnchor === itemAnchor;
+}
+
+function calendarSupplementPageKey(item, entries, memoryBank, { legacy = false } = {}) {
+    const explicitId = core_text.safeId(item?.calendarEntryId, '');
+    if (explicitId) {
+        const explicitMatches = entries.filter(entry => (
+            entry.id === explicitId
+            || core_text.safeId(entry?.calendarEntrySourceId, entry?.id) === explicitId
+        ));
+        if (explicitMatches.length === 1) return calendarEntryPageKey(explicitMatches[0]);
+    }
+
+    const evidenceMatches = entries.filter(entry => calendarItemEvidenceMatches(entry, item));
+    if (evidenceMatches.length === 1) return calendarEntryPageKey(evidenceMatches[0]);
+
+    if (item?.sourceType !== CALENDAR_NOTE_SOURCE.SETTING) {
+        const anchored = resolveAnchoredDatedMemory(memoryBank, item?.sourceMemoryIds, item?.sourceMemoryAnchor);
+        if (anchored) return calendarPageKeyForDate(anchored.parsed.date, { pendingId: item?.id });
+    } else {
+        const explicitDate = normalizeCalendarDate(item?.date, { allowPending: true });
+        if (explicitDate) return calendarPageKeyForDate(explicitDate.date, { pendingId: item?.id });
+    }
+    return legacy ? CALENDAR_LEGACY_PAGE_KEY : CALENDAR_LEGACY_PAGE_KEY;
+}
+
+function normalizeCalendarDrafts(value) {
+    return (Array.isArray(value) ? value : []).slice(0, 24).map((item, index) => {
+        const text = core_text.normalizeText(typeof item === 'string' ? item : item?.text, 1200);
+        if (!text) return null;
+        return {
+            id: core_text.safeId(typeof item === 'object' ? item?.id : '', `CAL_DRAFT_${String(index + 1).padStart(2, '0')}`),
+            text,
+            createdAt: Math.max(0, Number(typeof item === 'object' ? item?.createdAt : 0) || 0),
+        };
+    }).filter(Boolean);
+}
+
+function normalizeCalendarManualTodos(value) {
+    return (Array.isArray(value) ? value : []).slice(0, 32).map((item, index) => {
+        const title = core_text.normalizeText(item?.title, 120);
+        if (!title) return null;
+        return {
+            id: core_text.safeId(item?.id, `CAL_TODO_${String(index + 1).padStart(2, '0')}`),
+            title,
+            completed: item?.completed === true,
+            origin: 'user',
+        };
+    }).filter(Boolean);
+}
+
+function boundedLegacyStickyNotes(value) {
+    return (Array.isArray(value) ? value : []).slice(0, 24).map((item, index) => {
+        const text = core_text.normalizeText(item?.text, 180);
+        if (!text) return null;
+        const kind = item?.kind === CALENDAR_NOTE_KIND.SPECIAL ? CALENDAR_NOTE_KIND.SPECIAL : CALENDAR_NOTE_KIND.MEMO;
+        const sourceType = item?.sourceType === CALENDAR_NOTE_SOURCE.SETTING ? CALENDAR_NOTE_SOURCE.SETTING : CALENDAR_NOTE_SOURCE.ARCHIVE;
+        return {
+            id: core_text.safeId(item?.id, `CAL_NOTE_${String(index + 1).padStart(2, '0')}`),
+            kind,
+            sourceType,
+            title: core_text.normalizeText(item?.title, 24) || (kind === CALENDAR_NOTE_KIND.SPECIAL ? '特别备注' : '便签'),
+            text,
+            date: core_text.normalizeText(item?.date, 40),
+            calendarEntryId: core_text.safeId(item?.calendarEntryId, ''),
+            sourceKind: core_text.normalizeText(item?.sourceKind, 60),
+            sourceLabel: core_text.normalizeText(item?.sourceLabel, 120),
+            sourceMemoryIds: core_text.cleanArray(item?.sourceMemoryIds, 16, 40),
+            sourceMemoryAnchor: core_text.normalizeText(item?.sourceMemoryAnchor, 160),
+            legacyUnassigned: item?.legacyUnassigned === true,
+        };
+    }).filter(Boolean);
+}
+
+function boundedLegacyMoodNotes(value) {
+    return (Array.isArray(value) ? value : []).slice(0, 16).map((item, index) => {
+        const text = core_text.normalizeText(item?.text, 220);
+        if (!text) return null;
+        return {
+            id: core_text.safeId(item?.id, `CAL_MOOD_${String(index + 1).padStart(2, '0')}`),
+            text,
+            date: core_text.normalizeText(item?.date, 40),
+            calendarEntryId: core_text.safeId(item?.calendarEntryId, ''),
+            sourceKind: core_text.normalizeText(item?.sourceKind, 60),
+            sourceLabel: core_text.normalizeText(item?.sourceLabel, 120),
+            sourceMemoryIds: core_text.cleanArray(item?.sourceMemoryIds, 16, 40),
+            sourceMemoryAnchor: core_text.normalizeText(item?.sourceMemoryAnchor, 160),
+            legacyUnassigned: item?.legacyUnassigned === true,
+        };
+    }).filter(Boolean);
+}
+
+function buildCalendarDayPages(entries, stickyNotes, moodNotes, memoryBank, { legacy = false } = {}) {
+    const pages = Object.create(null);
+    for (const entry of entries) {
+        const page = ensureCalendarDayPage(pages, calendarEntryPageKey(entry));
+        if (page && !page.entryIds.includes(entry.id)) page.entryIds.push(entry.id);
+    }
+    for (const note of boundedLegacyStickyNotes(stickyNotes)) {
+        const key = calendarSupplementPageKey(note, entries, memoryBank, { legacy });
+        const page = ensureCalendarDayPage(pages, key);
+        if (!page) continue;
+        page.stickyNotes.push(key === CALENDAR_LEGACY_PAGE_KEY ? { ...note, legacyUnassigned: true } : note);
+    }
+    for (const note of boundedLegacyMoodNotes(moodNotes)) {
+        const key = calendarSupplementPageKey(note, entries, memoryBank, { legacy });
+        const page = ensureCalendarDayPage(pages, key);
+        if (!page) continue;
+        page.moodNotes.push(key === CALENDAR_LEGACY_PAGE_KEY ? { ...note, legacyUnassigned: true } : note);
+    }
+    for (const page of Object.values(pages)) normalizeCalendarPageCollections(page);
+    return pages;
+}
+
+function normalizeCalendarDayPages(value, entries, memoryBank) {
+    const pages = Object.create(null);
+    const validEntryIds = new Set(entries.map(item => item.id));
+    // Date pages contain user-owned drafts and To-Do rows, so never truncate the page map during
+    // normalization. The shared 12 MB cache boundary already limits persisted input size; silently
+    // slicing here would destroy the oldest/newest valid day once a long-running calendar grew.
+    for (const [rawKey, rawPage] of Object.entries(value && typeof value === 'object' ? value : {})) {
+        const meta = pageMetaForKey(rawKey);
+        if (!meta || !rawPage || typeof rawPage !== 'object') continue;
+        const page = createCalendarDayPage(meta.key);
+        page.entryIds = [...new Set(core_text.cleanArray(rawPage.entryIds, 64, 120).filter(id => validEntryIds.has(id)))];
+        page.drafts = normalizeCalendarDrafts(rawPage.drafts);
+        page.stickyNotes = boundedLegacyStickyNotes(rawPage.stickyNotes);
+        page.moodNotes = boundedLegacyMoodNotes(rawPage.moodNotes);
+        page.manualTodos = normalizeCalendarManualTodos(rawPage.manualTodos);
+        normalizeCalendarPageCollections(page);
+        pages[meta.key] = page;
+    }
+    for (const entry of entries) {
+        const page = ensureCalendarDayPage(pages, calendarEntryPageKey(entry));
+        if (page && !page.entryIds.includes(entry.id)) page.entryIds.push(entry.id);
+    }
+    return pages;
+}
+
+function migrateCalendarSession(session, memoryBank) {
+    if (!session || session.kind !== core_constants.MODE.CALENDAR || !Array.isArray(session.entries)) return null;
+    const entries = ensureUniqueCalendarEntryIds(
+        structuredClone(session.entries).slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS),
+    );
+    const existingV5 = Number(session.calendarVersion) === core_constants.CALENDAR_SESSION_VERSION && session.dayPages && typeof session.dayPages === 'object';
+    const dayPages = existingV5
+        ? normalizeCalendarDayPages(session.dayPages, entries, memoryBank)
+        : buildCalendarDayPages(entries, session.stickyNotes, session.moodNotes, memoryBank, { legacy: true });
+    const selectedRaw = core_text.normalizeText(session.selectedDateKey, 160);
+    const selectedDateKey = pageMetaForKey(selectedRaw)?.key
+        || calendarPageKeyForDate(selectedRaw, { pendingId: selectedRaw.replace(/^pending:/, '') });
+    const migrated = {
+        ...structuredClone(session),
+        calendarVersion: core_constants.CALENDAR_SESSION_VERSION,
+        entries,
+        dayPages,
+        selectedDateKey: selectedDateKey && pageMetaForKey(selectedDateKey) ? selectedDateKey : '',
+    };
+    delete migrated.stickyNotes;
+    delete migrated.moodNotes;
+    return migrated;
+}
+
+function mergeCalendarItems(existing, incoming, prefix, semanticKey) {
+    return ensureUniqueCalendarPageItems(
+        [...(Array.isArray(existing) ? existing : []), ...(Array.isArray(incoming) ? incoming : [])],
+        prefix,
+        { semanticKey, dedupeSemantic: true },
+    );
+}
+
+function mergeCalendarRefresh(previous, fresh, memoryBank) {
+    const oldSession = migrateCalendarSession(previous, memoryBank);
+    const next = migrateCalendarSession(fresh, memoryBank);
+    if (!oldSession) return next;
+    if (!next) return oldSession;
+    for (const [key, oldPage] of Object.entries(oldSession.dayPages || {})) {
+        const target = ensureCalendarDayPage(next.dayPages, key);
+        if (!target) continue;
+        target.drafts = mergeCalendarItems(oldPage.drafts, target.drafts, 'CAL_DRAFT', item => folded(item?.text)).slice(0, 24);
+        target.manualTodos = mergeCalendarItems(oldPage.manualTodos, target.manualTodos, 'CAL_TODO', item => folded(item?.title)).slice(0, 32);
+        target.stickyNotes = mergeCalendarItems(
+            oldPage.stickyNotes,
+            target.stickyNotes,
+            'CAL_NOTE',
+            item => `${item?.kind || CALENDAR_NOTE_KIND.MEMO}|${folded(item?.text)}`,
+        ).slice(0, 24);
+        target.moodNotes = mergeCalendarItems(oldPage.moodNotes, target.moodNotes, 'CAL_MOOD', item => folded(item?.text)).slice(0, 16);
+    }
+    if (oldSession.selectedMonth) next.selectedMonth = oldSession.selectedMonth;
+    if (oldSession.selectedDateKey && next.dayPages[oldSession.selectedDateKey]) next.selectedDateKey = oldSession.selectedDateKey;
+    return next;
+}
+
 function normalizeCalendar(data, memoryBank) {
     const past = normalizePastMarkedEntries(data?.past, memoryBank);
     const promised = normalizePromisedEntries(data?.promised, memoryBank);
     const future = normalizeFutureEntries(data?.future);
     const stickyNotes = normalizeStickyNotes(data?.stickyNotes, memoryBank);
     const moodNotes = normalizeMoodNotes(data?.moodNotes, memoryBank);
-    const entries = [];
-    const seen = new Set();
-    for (const item of [...past, ...promised, ...future]) {
-        const key = calendarEntryKey(item);
-        if (!key || seen.has(key)) continue;
-        seen.add(key);
-        entries.push(item);
-    }
+    const entries = ensureUniqueCalendarEntryIds([...past, ...promised, ...future]);
     const statusRank = { past: 0, promised: 1, future: 2 };
     entries.sort((a, b) => {
         const da = normalizeCalendarDate(a.date, { allowPending: true })?.sortKey ?? 99999999;
         const db = normalizeCalendarDate(b.date, { allowPending: true })?.sortKey ?? 99999999;
         return da - db || (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9) || String(a.title).localeCompare(String(b.title), 'zh-CN');
     });
+    const dayPages = buildCalendarDayPages(entries, stickyNotes, moodNotes, memoryBank);
     return {
         kind: core_constants.MODE.CALENDAR,
         calendarVersion: core_constants.CALENDAR_SESSION_VERSION,
         title: core_text.normalizeText(data?.title, 120) || '两个人的日历',
         entries: entries.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS),
-        stickyNotes,
-        moodNotes,
+        dayPages,
         selectedMonth: defaultCalendarMonth(entries),
         selectedDateKey: '',
         generatedAt: Date.now(),
     };
 }
 
+__m_modes_calendar_js.calendarPageKeyForDate = calendarPageKeyForDate;
+__m_modes_calendar_js.calendarEntryPageKey = calendarEntryPageKey;
+__m_modes_calendar_js.createCalendarDayPage = createCalendarDayPage;
+__m_modes_calendar_js.calendarDayPage = calendarDayPage;
 __m_modes_calendar_js.normalizeCalendarTags = normalizeCalendarTags;
 __m_modes_calendar_js.normalizeCalendarDate = normalizeCalendarDate;
 __m_modes_calendar_js.derivePastCalendarEntries = derivePastCalendarEntries;
@@ -8792,11 +9595,14 @@ __m_modes_calendar_js.calendarMonthKey = calendarMonthKey;
 __m_modes_calendar_js.calendarEntryMatchesMonth = calendarEntryMatchesMonth;
 __m_modes_calendar_js.calendarDateKeyForMonth = calendarDateKeyForMonth;
 __m_modes_calendar_js.defaultCalendarMonth = defaultCalendarMonth;
+__m_modes_calendar_js.migrateCalendarSession = migrateCalendarSession;
+__m_modes_calendar_js.mergeCalendarRefresh = mergeCalendarRefresh;
 __m_modes_calendar_js.normalizeCalendar = normalizeCalendar;
 __m_modes_calendar_js.CALENDAR_STATUS = CALENDAR_STATUS;
 __m_modes_calendar_js.CALENDAR_TAG_ALLOWLIST = CALENDAR_TAG_ALLOWLIST;
 __m_modes_calendar_js.CALENDAR_NOTE_KIND = CALENDAR_NOTE_KIND;
 __m_modes_calendar_js.CALENDAR_NOTE_SOURCE = CALENDAR_NOTE_SOURCE;
+__m_modes_calendar_js.CALENDAR_LEGACY_PAGE_KEY = CALENDAR_LEGACY_PAGE_KEY;
 }
 
 function __init_modes_items_js() {
@@ -9084,6 +9890,205 @@ const generation_prompts = __m_generation_prompts_js;
 const PHONE_MESSAGE_ROLES = new Set(['owner', 'contact']);
 const PHONE_GENERIC_OWNER_LABELS = new Set(['我', '本人', '自己', '设备主人', '主人', '{{char}}', 'char', 'owner']);
 const PHONE_GENERIC_CONTACT_LABELS = new Set(['对方', '联系人', '对面', '对方用户', 'contact', 'other']);
+const PHONE_RESERVED_APP_IDS = new Set(['__PHONE_HOME__']);
+const PHONE_VIEW_VALUES = new Set(['home', 'list', 'detail']);
+const PHONE_UI_TOKENS = Object.freeze({
+    palette: new Set(['noir-gold', 'ink-blue', 'frost', 'moss', 'ember', 'lilac', 'sky', 'sand']),
+    wallpaper: new Set(['smoke', 'rain', 'grid', 'starfield', 'library', 'aurora', 'minimal', 'paper']),
+    typography: new Set(['modern', 'serif', 'mono']),
+    iconStyle: new Set(['rounded', 'square', 'glyph', 'glass']),
+    density: new Set(['compact', 'cozy', 'roomy']),
+    shellTone: new Set(['graphite', 'silver', 'ivory', 'bronze', 'navy']),
+});
+const PHONE_UI_EXPLICIT_FIELDS = new Set(['palette', 'wallpaper', 'typography', 'iconStyle', 'density', 'shellTone']);
+const PHONE_PROFILE_ORDERS = Object.freeze({
+    palette: ['noir-gold', 'ink-blue', 'frost', 'moss', 'ember', 'lilac', 'sky', 'sand'],
+    wallpaper: ['smoke', 'rain', 'grid', 'starfield', 'library', 'aurora', 'minimal', 'paper'],
+    typography: ['modern', 'serif', 'mono'],
+    iconStyle: ['rounded', 'square', 'glyph', 'glass'],
+    density: ['compact', 'cozy', 'roomy'],
+    shellTone: ['graphite', 'silver', 'ivory', 'bronze', 'navy'],
+});
+const PHONE_APP_KIND_ALIASES = new Map([
+    ['moments', 'moments'], ['social', 'moments'], ['feed', 'moments'],
+    ['chat', 'chat'], ['message', 'chat'], ['messages', 'chat'], ['communication', 'chat'],
+    ['gallery', 'gallery'], ['photo', 'gallery'], ['photos', 'gallery'], ['album', 'gallery'],
+    ['camera', 'camera'],
+    ['notes', 'notes'], ['note', 'notes'], ['memo', 'notes'], ['tasks', 'notes'],
+    ['store', 'store'], ['shop', 'store'], ['shopping', 'store'],
+    ['browser', 'browser'], ['web', 'browser'], ['search', 'browser'],
+    ['contacts', 'contacts'], ['contact', 'contacts'], ['people', 'contacts'],
+    ['location', 'location'], ['map', 'location'], ['maps', 'location'], ['navigation', 'location'],
+    ['music', 'music'], ['audio', 'music'],
+    ['work', 'work'], ['office', 'work'], ['casework', 'work'],
+    ['study', 'study'], ['school', 'study'], ['learning', 'study'],
+    ['health', 'health'], ['medical', 'health'], ['fitness', 'fitness'], ['training', 'training'],
+    ['reading', 'reading'], ['library', 'reading'], ['books', 'books'], ['book', 'books'],
+    ['files', 'files'], ['file', 'files'], ['documents', 'files'],
+    ['research', 'research'], ['lab', 'research'],
+    ['games', 'games'], ['game', 'games'],
+    ['finance', 'finance'], ['wallet', 'finance'],
+    ['travel', 'travel'], ['transit', 'travel'],
+    ['security', 'security'], ['mission', 'security'],
+    ['creative', 'creative'], ['art', 'creative'], ['craft', 'creative'],
+    ['weather', 'weather'], ['tools', 'tools'], ['utility', 'tools'], ['misc', 'misc'], ['persona', 'misc'],
+]);
+const PHONE_APP_ICON_TOKENS = new Set([
+    'message', 'people', 'photo', 'camera', 'note', 'bag', 'globe', 'contact', 'pin', 'music',
+    'briefcase', 'book', 'heart', 'activity', 'game', 'wallet', 'plane', 'shield', 'palette',
+    'cloud', 'tool', 'spark', 'grid',
+]);
+const PHONE_KIND_ICON = Object.freeze({
+    moments: 'people', chat: 'message', gallery: 'photo', camera: 'camera', notes: 'note', store: 'bag',
+    browser: 'globe', contacts: 'contact', location: 'pin', music: 'music', work: 'briefcase', study: 'book',
+    health: 'heart', fitness: 'activity', training: 'activity', reading: 'book', books: 'book', files: 'briefcase', research: 'tool', games: 'game', finance: 'wallet', travel: 'plane',
+    security: 'shield', creative: 'palette', weather: 'cloud', tools: 'tool', misc: 'spark',
+});
+
+function phoneProfileSeed(data, memoryBank, deviceKind) {
+    return [
+        memoryBank?.characterName,
+        memoryBank?.archiveName,
+        ...(Array.isArray(memoryBank?.archiveKeywords) ? memoryBank.archiveKeywords.slice(0, 8) : []),
+        core_text.normalizeText(memoryBank?.archiveSummary, 600),
+        data?.deviceName,
+        data?.title,
+        ...(Array.isArray(data?.apps) ? data.apps.slice(0, 10).flatMap(app => [app?.label, app?.kind]) : []),
+        deviceKind,
+    ].map(value => core_text.normalizeText(value, 600)).filter(Boolean).join('|');
+}
+
+function inferredPhoneProfile(seed, deviceKind) {
+    const text = core_text.normalizeText(seed, 5000).toLowerCase();
+    let semantic = null;
+    if (/(?:赛博|科幻|星际|宇宙|实验|研究|代码|程序|工程|机械|ai|cyber|space|sci-fi)/i.test(text)) {
+        semantic = { palette: 'ink-blue', wallpaper: 'grid', typography: 'mono', iconStyle: 'glyph', density: 'compact', shellTone: 'graphite' };
+    } else if (/(?:侦探|律师|法庭|特工|军官|杀手|黑帮|吸血|哥特|夜色|冷峻|detective|lawyer|goth)/i.test(text)) {
+        semantic = { palette: 'noir-gold', wallpaper: 'smoke', typography: 'serif', iconStyle: 'square', density: 'compact', shellTone: 'graphite' };
+    } else if (/(?:森林|植物|自然|园艺|田园|精灵|草药|forest|nature|garden)/i.test(text)) {
+        semantic = { palette: 'moss', wallpaper: 'paper', typography: 'serif', iconStyle: 'rounded', density: 'cozy', shellTone: 'bronze' };
+    } else if (/(?:音乐|画家|艺术|舞蹈|作家|诗人|摄影|乐队|music|artist|writer)/i.test(text)) {
+        semantic = { palette: 'lilac', wallpaper: 'aurora', typography: 'serif', iconStyle: 'glass', density: 'cozy', shellTone: 'silver' };
+    } else if (/(?:海|雨|医生|治愈|安静|清冷|温柔|ocean|rain|doctor|healer)/i.test(text)) {
+        semantic = { palette: 'sky', wallpaper: 'rain', typography: 'modern', iconStyle: 'rounded', density: 'roomy', shellTone: 'silver' };
+    }
+    if (semantic) return semantic;
+    const hash = core_text.hashString(seed || deviceKind || 'private-device');
+    const pick = (field, shift) => {
+        const values = PHONE_PROFILE_ORDERS[field];
+        return values[(hash >>> shift) % values.length];
+    };
+    return {
+        palette: pick('palette', 0),
+        wallpaper: pick('wallpaper', 4),
+        typography: pick('typography', 8),
+        iconStyle: pick('iconStyle', 11),
+        density: pick('density', 14),
+        shellTone: pick('shellTone', 17),
+    };
+}
+
+function normalizedPhoneUiToken(field, value, fallback) {
+    const token = core_text.normalizeText(value, 40).toLowerCase().replace(/_/g, '-');
+    return PHONE_UI_TOKENS[field].has(token) ? token : fallback;
+}
+
+function normalizePhoneUiProfile(value, options = {}) {
+    const source = value && typeof value === 'object' ? value : {};
+    const deviceKind = core_constants.PHONE_DEVICE_KINDS.has(options?.deviceKind) ? options.deviceKind : 'phone';
+    const seed = phoneProfileSeed(options?.data, options?.memoryBank, deviceKind);
+    const fallback = inferredPhoneProfile(seed, deviceKind);
+    const explicitFields = core_text.cleanArray(source?.explicitFields, PHONE_UI_EXPLICIT_FIELDS.size, 40)
+        .filter(field => PHONE_UI_EXPLICIT_FIELDS.has(field));
+    const explicit = new Set(explicitFields);
+    const choose = field => options?.bindPersona === true && !explicit.has(field)
+        ? fallback[field]
+        : normalizedPhoneUiToken(field, source[field], fallback[field]);
+    return {
+        identityKey: `phone-ui:${core_text.hashString(seed || deviceKind || 'private-device').toString(36)}`,
+        explicitFields,
+        palette: choose('palette'),
+        wallpaper: choose('wallpaper'),
+        typography: choose('typography'),
+        iconStyle: choose('iconStyle'),
+        density: choose('density'),
+        shellTone: choose('shellTone'),
+    };
+}
+
+function normalizePhoneAppKind(value, label = '') {
+    const token = core_text.normalizeText(value, 60).toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    if (PHONE_APP_KIND_ALIASES.has(token)) return PHONE_APP_KIND_ALIASES.get(token);
+    const text = core_text.normalizeText(label, 100);
+    if (/(?:聊天|消息|通讯|私信|信箱)/u.test(text)) return 'chat';
+    if (/(?:相册|照片|图库|影像)/u.test(text)) return 'gallery';
+    if (/(?:相机|拍摄)/u.test(text)) return 'camera';
+    if (/(?:备忘|笔记|清单|待办)/u.test(text)) return 'notes';
+    if (/(?:联系人|通讯录)/u.test(text)) return 'contacts';
+    if (/(?:浏览|搜索|网络)/u.test(text)) return 'browser';
+    if (/(?:商店|购物|订单)/u.test(text)) return 'store';
+    if (/(?:位置|地图|导航|定位)/u.test(text)) return 'location';
+    if (/(?:音乐|音频|乐谱)/u.test(text)) return 'music';
+    if (/(?:工作|案件|任务|办公|值班)/u.test(text)) return 'work';
+    if (/(?:学习|课程|学校|训练)/u.test(text)) return 'study';
+    if (/(?:健康|医疗)/u.test(text)) return 'health';
+    if (/(?:运动|健身)/u.test(text)) return 'fitness';
+    if (/(?:阅读|书架|图书)/u.test(text)) return 'reading';
+    if (/(?:游戏)/u.test(text)) return 'games';
+    if (/(?:钱包|账单|财务)/u.test(text)) return 'finance';
+    if (/(?:旅行|行程|交通)/u.test(text)) return 'travel';
+    if (/(?:安全|警报|门禁)/u.test(text)) return 'security';
+    if (/(?:创作|绘画|设计|手作)/u.test(text)) return 'creative';
+    if (/(?:天气|气象)/u.test(text)) return 'weather';
+    if (/(?:动态|社交|朋友圈)/u.test(text)) return 'moments';
+    return 'misc';
+}
+
+function normalizePhoneAppIcon(value, kind = 'misc', label = '') {
+    const token = core_text.normalizeText(value, 40).toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    if (PHONE_APP_ICON_TOKENS.has(token)) return token;
+    const normalizedKind = normalizePhoneAppKind(kind, label);
+    return PHONE_KIND_ICON[normalizedKind] || 'spark';
+}
+
+function isExcludedPhoneApp(app) {
+    const rawKind = core_text.normalizeText(app?.kind, 60).toLowerCase();
+    const label = core_text.normalizeText(app?.label, 60);
+    return core_constants.PHONE_EXCLUDED_APP_KINDS.has(rawKind) || /日历|calendar|schedule/i.test(label);
+}
+
+function phoneAppLimits(deviceKind) {
+    if (['watch', 'communicator'].includes(deviceKind)) return { minApps: 4, maxApps: 8, minEntries: 8 };
+    return { minApps: 5, maxApps: 10, minEntries: 12 };
+}
+
+function migrateLegacyPhoneSession(session, memoryBank = null) {
+    if (!session || session.kind !== core_constants.MODE.PHONE) return session;
+    const migrated = structuredClone(session);
+    const deviceKind = core_constants.PHONE_DEVICE_KINDS.has(migrated.deviceKind) ? migrated.deviceKind : 'phone';
+    const wasLegacy = Number(migrated.uiVersion) !== core_constants.PHONE_SESSION_VERSION;
+    migrated.deviceKind = deviceKind;
+    migrated.uiVersion = core_constants.PHONE_SESSION_VERSION;
+    migrated.uiProfile = normalizePhoneUiProfile(migrated.uiProfile, { data: migrated, memoryBank, deviceKind });
+    migrated.apps = (Array.isArray(migrated.apps) ? migrated.apps : []).filter(app => !isExcludedPhoneApp(app) && !PHONE_RESERVED_APP_IDS.has(core_text.safeId(app?.id, ''))).map(app => {
+        const label = core_text.normalizeText(app?.label, 60) || '分区';
+        const kind = normalizePhoneAppKind(app?.kind, label);
+        return { ...app, label, kind, icon: normalizePhoneAppIcon(app?.icon, kind, label) };
+    });
+    if (!migrated.apps.some(app => app.id === migrated.selectedAppId)) migrated.selectedAppId = migrated.apps[0]?.id || '';
+    if (wasLegacy) {
+        migrated.view = 'home';
+        migrated.selectedEntryId = '';
+    } else {
+        migrated.view = PHONE_VIEW_VALUES.has(migrated.view) ? migrated.view : 'home';
+        const selected = migrated.apps.find(app => app.id === migrated.selectedAppId);
+        if (migrated.view === 'detail' && !selected?.entries?.some(entry => entry.id === migrated.selectedEntryId)) {
+            migrated.view = 'list';
+            migrated.selectedEntryId = '';
+        }
+    }
+    return migrated;
+}
 
 function phoneConversationOwnerName(memoryBank) {
     return core_text.normalizeText(memoryBank?.characterName, 100) || '角色';
@@ -9178,52 +10183,67 @@ function compactPhoneRoomContext(roomSession) {
 function phonePlanPrompt(context, memoryBank, roomSession) {
     return `${generation_prompts.promptSafetyBoundary(context, '私人终端 / 分段 1：设备与 App 目录')}
 本请求只规划设备类型、四时段状态、App 与条目【目录】。不要写长正文、聊天 messages、联系人 fields 或照片长说明；这些会按 App 分开依次生成。
+先读取受控上下文中的世界书与角色卡：世界书若明确写了设备形态或角色审美，必须优先遵守；没有明确设定时，再按 {{char}} 的时代、身份、职业、性格、兴趣、经济条件与生活习惯推导。USER_PERSONA_JSON 描述的是用户，只能帮助识别与 {{user}} 有关的称呼或既有关系，不能拿来替代 {{char}} 的设备人设。不同角色不应得到同一套固定 App 或固定配色。
 UNTRUSTED_PHONE_ARCHIVE_JSON:\n${generation_prompts.promptArchiveSlice(memoryBank, 24)}
 CURRENT_ROOM_CONTEXT_JSON:\n${JSON.stringify(compactPhoneRoomContext(roomSession), null, 2)}
 
 严格输出：
-{"title":"他的私人终端","deviceName":"设备名称","deviceKind":"phone","lockText":"...","liveStates":{"morning":{"lockText":"...","statusLine":"...","badgeCounts":{}},"daytime":{},"evening":{},"night":{}},"apps":[{"id":"MOMENTS","label":"动态","kind":"moments","summary":"...","entries":[{"id":"M01","title":"条目标题","meta":"时间/对象/分类"}]}]}
+{"title":"他的私人终端","deviceName":"设备名称","deviceKind":"phone","lockText":"...","uiProfile":{"explicitFields":[],"palette":"PALETTE_TOKEN","wallpaper":"WALLPAPER_TOKEN","typography":"TYPOGRAPHY_TOKEN","iconStyle":"ICON_STYLE_TOKEN","density":"DENSITY_TOKEN","shellTone":"SHELL_TONE_TOKEN"},"liveStates":{"morning":{"lockText":"...","statusLine":"...","badgeCounts":{}},"daytime":{},"evening":{},"night":{}},"apps":[{"id":"CHAT","label":"通讯","kind":"chat","icon":"message","summary":"...","entries":[{"id":"C01","title":"条目标题","meta":"时间/对象/分类"}]}]}
 
 数量要求：
-- phone：保留 9 类 app，kind 分别 moments/chat/gallery/notes/store/browser/contacts/location/misc；条目数建议分别 3/3/4/5/4/3/3/2/2（总计约29），不再堆大量同质条目。
-- terminal：至少8个 app、总条目约24以上，必须包含 chat/contacts/gallery/notes 等等价功能。
-- watch / communicator：至少7个功能入口、总条目约18以上，优先保留通讯、相册、备忘、联系人、定位与人设专属功能。
+- phone / terminal 生成 5～10 个 App；watch / communicator 生成 4～8 个适合小屏或有限能力的功能入口。至少保留一个 chat / 通讯入口，其余 App 的名称、类型、数量和顺序都必须服从角色人设，不得照抄固定模板。
+- 至少 2 个 App 应明显来自角色职业、兴趣或世界观，例如案件库、训练记录、乐谱、实验日志、任务终端、宠物、阅读、健康或学习；不适合现代 App 的世界观应使用功能等价但符合时代的命名。
+- kind 只能选 moments/chat/gallery/camera/notes/store/browser/contacts/location/music/work/study/health/fitness/training/reading/books/files/research/games/finance/travel/security/creative/weather/tools/misc；icon 只能选 message/people/photo/camera/note/bag/globe/contact/pin/music/briefcase/book/heart/activity/game/wallet/plane/shield/palette/cloud/tool/spark/grid。
+- uiProfile 只能使用：palette=noir-gold/ink-blue/frost/moss/ember/lilac/sky/sand；wallpaper=smoke/rain/grid/starfield/library/aurora/minimal/paper；typography=modern/serif/mono；iconStyle=rounded/square/glyph/glass；density=compact/cozy/roomy；shellTone=graphite/silver/ivory/bronze/navy。上面的 *_TOKEN 只是占位符，必须换成某个允许值，不得原样照抄。这些是本地安全样式 token，不得输出颜色值、CSS、URL 或 class 名。
+- uiProfile.explicitFields 只允许 palette/wallpaper/typography/iconStyle/density/shellTone；只有世界书或角色卡对该项有明文时才列入。其余字段保持不在列表中，本地会依据 {{char}} 的人设、设备名和 App 组合稳定补全，防止不同角色照抄同一套合法模板。
 - 禁止生成 kind=schedule / calendar 或名为“日历”的 App；两个人之间的约定、纪念日、日期圈记统一由独立「两个人的日历」承担。私人终端 notes 可以有普通个人待办，但不要复制关系日历。
 - 每个 entries 现在只写 id/title/meta，标题必须彼此有生活区分，不要填 preview/detail/messages/fields/imageCaption。
 - deviceKind 只能 phone/watch/terminal/communicator；四个 liveStates 都要有。
 - 不复刻真实商业 App 商标；禁止前任/第三方恋爱。只输出 JSON。`;
 }
 
-function normalizePhonePlan(data) {
+function normalizePhonePlan(data, memoryBank = null) {
     const deviceName = core_text.normalizeText(data?.deviceName, 100) || '私人终端';
     const requestedKind = core_text.normalizeText(data?.deviceKind, 40).toLowerCase();
     const inferredKind = /(?:手表|腕表|watch)/i.test(deviceName) ? 'watch' : /(?:传讯|通讯器|communicator)/i.test(deviceName) ? 'communicator' : /(?:终端|terminal)/i.test(deviceName) ? 'terminal' : 'phone';
     const deviceKind = core_constants.PHONE_DEVICE_KINDS.has(requestedKind) ? requestedKind : inferredKind;
-    const apps = (Array.isArray(data?.apps) ? data.apps : []).slice(0, 12).map((app, appIndex) => ({
-        id: core_text.safeId(app?.id, `APP${String(appIndex + 1).padStart(2, '0')}`),
-        label: core_text.normalizeText(app?.label, 60) || `分区 ${appIndex + 1}`,
-        kind: core_text.normalizeText(app?.kind, 60).toLowerCase() || 'misc',
-        summary: core_text.normalizeText(app?.summary, 1200),
-        entries: (Array.isArray(app?.entries) ? app.entries : []).slice(0, 24).map((entry, index) => ({
-            id: core_text.safeId(entry?.id, `E${String(index + 1).padStart(2, '0')}`),
-            title: core_text.normalizeText(entry?.title, 100) || `条目 ${index + 1}`,
-            meta: core_text.normalizeText(entry?.meta, 200),
-        })),
-    })).filter(app => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(app.kind) && app.entries.length >= 2);
-    const compact = ['watch', 'communicator'].includes(deviceKind);
-    const minApps = compact ? 7 : deviceKind === 'phone' ? 9 : 8;
-    const minEntries = compact ? 18 : deviceKind === 'phone' ? 29 : 24;
+    const limits = phoneAppLimits(deviceKind);
+    const apps = [];
+    const usedAppIds = new Set();
+    for (const [appIndex, app] of (Array.isArray(data?.apps) ? data.apps : []).slice(0, limits.maxApps).entries()) {
+        if (isExcludedPhoneApp(app)) continue;
+        const label = core_text.normalizeText(app?.label, 60) || `分区 ${appIndex + 1}`;
+        const id = core_text.safeId(app?.id, `APP${String(appIndex + 1).padStart(2, '0')}`);
+        if (PHONE_RESERVED_APP_IDS.has(id) || usedAppIds.has(id)) continue;
+        usedAppIds.add(id);
+        const kind = normalizePhoneAppKind(app?.kind, label);
+        const entries = [];
+        const usedEntryIds = new Set();
+        for (const [index, entry] of (Array.isArray(app?.entries) ? app.entries : []).slice(0, 24).entries()) {
+            const entryId = core_text.safeId(entry?.id, `${id}_E${String(index + 1).padStart(2, '0')}`);
+            if (usedEntryIds.has(entryId)) continue;
+            usedEntryIds.add(entryId);
+            entries.push({
+                id: entryId,
+                title: core_text.normalizeText(entry?.title, 100) || `条目 ${index + 1}`,
+                meta: core_text.normalizeText(entry?.meta, 200),
+            });
+        }
+        if (!entries.length) continue;
+        apps.push({
+            id,
+            label,
+            kind,
+            icon: normalizePhoneAppIcon(app?.icon, kind, label),
+            summary: core_text.normalizeText(app?.summary, 1200),
+            entries,
+        });
+    }
+    const { minApps, minEntries } = limits;
     if (apps.length < minApps) throw new Error(`私人终端目录 App 不足：${apps.length}/${minApps}。`);
     const total = apps.reduce((sum, app) => sum + app.entries.length, 0);
     if (total < minEntries) throw new Error(`私人终端目录条目不足：${total}/${minEntries}。`);
     if (!apps.some(app => app.kind === 'chat')) throw new Error('私人终端目录缺少 chat / 通讯分区。');
-    if (deviceKind === 'phone') {
-        const required = { moments: 3, chat: 3, gallery: 4, notes: 5, store: 4, browser: 3, contacts: 3, location: 2, misc: 2 };
-        for (const [kind, minimum] of Object.entries(required)) {
-            const app = apps.find(item => item.kind === kind);
-            if (!app || app.entries.length < minimum) throw new Error(`私人终端目录 ${kind} 不足：${app?.entries?.length || 0}/${minimum}。`);
-        }
-    }
     const lockText = core_text.normalizeText(data?.lockText, 400);
     const appIds = new Set(apps.map(app => app.id));
     const liveStates = {};
@@ -9246,6 +10266,8 @@ function normalizePhonePlan(data) {
         title: core_text.normalizeText(data?.title, 100) || '他的私人终端',
         deviceName,
         deviceKind,
+        uiVersion: core_constants.PHONE_SESSION_VERSION,
+        uiProfile: normalizePhoneUiProfile(data?.uiProfile, { data: { ...data, apps }, memoryBank, deviceKind, bindPersona: true }),
         lockText,
         liveStates,
         apps,
@@ -9254,7 +10276,7 @@ function normalizePhonePlan(data) {
 
 function phoneAppPrompt(context, memoryBank, plan, app, sourceMemoryIds = null) {
     const compact = ['watch', 'communicator'].includes(plan.deviceKind);
-    const deepCount = app?.incremental === true ? 1 : compact ? 1 : plan.deviceKind === 'terminal' ? 1 : 2;
+    const deepCount = 1;
     const deepMessages = compact ? 8 : plan.deviceKind === 'terminal' ? 10 : 12;
     const archiveBlock = sourceMemoryIds
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
@@ -9315,7 +10337,7 @@ function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sourceMemor
     }
     if (seen.size < expectedIds.size) throw new Error(`App ${planApp.label} 详情不完整：${seen.size}/${expectedIds.size} 个条目通过校验。`);
     if (planApp.kind === 'chat') {
-        const minimum = planApp?.incremental === true ? 1 : ['watch', 'communicator'].includes(deviceKind) ? 1 : deviceKind === 'terminal' ? 1 : 2;
+        const minimum = 1;
         if (deepChats < minimum) throw new Error(`App ${planApp.label} 深聊不足：${deepChats}/${minimum}。`);
     }
     if (planApp.kind === 'contacts' && deviceKind === 'phone' && !contactDetails) throw new Error(`App ${planApp.label} 缺少至少 1 个三字段联系人详情。`);
@@ -9364,6 +10386,7 @@ function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, sourceMem
         id: planApp.id,
         label: planApp.label,
         kind: planApp.kind,
+        icon: normalizePhoneAppIcon(planApp.icon, planApp.kind, planApp.label),
         summary: core_text.normalizeText(raw?.summary, 1200) || planApp.summary,
         entries,
     };
@@ -9376,7 +10399,7 @@ async function generatePhoneWithRepair(context, memoryBank, origin, taskKey, opt
         phonePlanPrompt(context, memoryBank, roomSession),
         '私人终端 1/2 · 正在生成设备与 App 目录…',
         { maxTokens: 8000, temperature: 0.35, context, origin, taskKey: `${taskKey}:plan`, mode: core_constants.MODE.PHONE, background: true },
-        normalizePhonePlan,
+        raw => normalizePhonePlan(raw, memoryBank),
     );
     const completedById = new Map((resumeDraft?.completedApps || []).map(app => [app.id, app]));
     if (!resumeDraft) await core_cache.savePhoneGenerationDraft(context, memoryBank, plan, []);
@@ -9424,10 +10447,11 @@ async function generatePhoneWithRepair(context, memoryBank, origin, taskKey, opt
 }
 
 function compactPhoneExisting(session) {
-    return (Array.isArray(session?.apps) ? session.apps : []).filter(app => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(core_text.normalizeText(app?.kind, 60).toLowerCase())).slice(0, 12).map(app => ({
+    return (Array.isArray(session?.apps) ? session.apps : []).filter(app => !isExcludedPhoneApp(app)).slice(0, 10).map(app => ({
         id: core_text.normalizeText(app?.id, 80),
         label: core_text.normalizeText(app?.label, 80),
-        kind: core_text.normalizeText(app?.kind, 60),
+        kind: normalizePhoneAppKind(app?.kind, app?.label),
+        icon: normalizePhoneAppIcon(app?.icon, app?.kind, app?.label),
         entries: core_evidence.evenlySample(Array.isArray(app?.entries) ? app.entries : [], 60).map(entry => ({
             id: core_text.normalizeText(entry?.id, 80),
             title: core_text.normalizeText(entry?.title, 120),
@@ -9459,13 +10483,14 @@ ${JSON.stringify(compactPhoneExisting(previous), null, 2)}
 
 function normalizePhoneIncrementPlan(data, previous) {
     if (!Array.isArray(data?.apps)) throw new Error('私人终端增量目录缺少 apps 数组。');
-    const eligibleApps = (previous.apps || []).filter(app => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(core_text.normalizeText(app?.kind, 60).toLowerCase()));
+    const safePrevious = migrateLegacyPhoneSession(previous);
+    const eligibleApps = (safePrevious.apps || []).filter(app => !isExcludedPhoneApp(app));
     const existingById = new Map(eligibleApps.map(app => [app.id, app]));
     const existingByKind = new Map(eligibleApps.map(app => [app.kind, app]));
-    const rawApps = data.apps.slice(0, 12);
+    const rawApps = data.apps.slice(0, 10);
     const apps = rawApps.map(raw => {
         const id = core_text.safeId(raw?.id, '');
-        const kind = core_text.normalizeText(raw?.kind, 60).toLowerCase();
+        const kind = normalizePhoneAppKind(raw?.kind, raw?.label);
         const existing = existingById.get(id) || existingByKind.get(kind);
         if (!existing) return null;
         const reservedIds = new Set((existing.entries || []).map(entry => entry.id));
@@ -9483,6 +10508,7 @@ function normalizePhoneIncrementPlan(data, previous) {
             id: existing.id,
             label: existing.label,
             kind: existing.kind,
+            icon: normalizePhoneAppIcon(existing.icon, existing.kind, existing.label),
             incremental: true,
             summary: core_text.normalizeText(raw?.summary, 1200) || existing.summary,
             entries: planned,
@@ -9491,11 +10517,13 @@ function normalizePhoneIncrementPlan(data, previous) {
     const total = apps.reduce((sum, app) => sum + app.entries.length, 0);
     if (rawApps.length && !total) throw new Error('私人终端增量目录返回了 App，但没有可验证的新条目。');
     return {
-        title: previous.title,
-        deviceName: previous.deviceName,
-        deviceKind: previous.deviceKind,
-        lockText: previous.lockText,
-        liveStates: previous.liveStates,
+        title: safePrevious.title,
+        deviceName: safePrevious.deviceName,
+        deviceKind: safePrevious.deviceKind,
+        uiVersion: core_constants.PHONE_SESSION_VERSION,
+        uiProfile: safePrevious.uiProfile,
+        lockText: safePrevious.lockText,
+        liveStates: safePrevious.liveStates,
         apps,
     };
 }
@@ -9509,7 +10537,8 @@ function phoneEntryKey(appKind, entry) {
 }
 
 function mergePhoneIncremental(previous, patches, memoryBank) {
-    const merged = structuredClone(previous);
+    const safePrevious = migrateLegacyPhoneSession(previous, memoryBank);
+    const merged = structuredClone(safePrevious);
     let added = 0;
     for (const patchApp of patches || []) {
         const target = merged.apps.find(app => app.id === patchApp.id) || merged.apps.find(app => app.kind === patchApp.kind);
@@ -9525,9 +10554,9 @@ function mergePhoneIncremental(previous, patches, memoryBank) {
         }
     }
     const normalized = normalizePhone(merged, memoryBank);
-    normalized.selectedAppId = previous.selectedAppId || normalized.selectedAppId;
-    normalized.selectedEntryId = previous.selectedEntryId || '';
-    normalized.view = previous.view || 'list';
+    normalized.selectedAppId = safePrevious.selectedAppId || normalized.selectedAppId;
+    normalized.selectedEntryId = safePrevious.selectedEntryId || '';
+    normalized.view = PHONE_VIEW_VALUES.has(safePrevious.view) ? safePrevious.view : 'home';
     return { session: normalized, added };
 }
 
@@ -9567,10 +10596,21 @@ function normalizePhone(data, memoryBank) {
                 ? 'terminal'
                 : 'phone';
     const deviceKind = core_constants.PHONE_DEVICE_KINDS.has(requestedKind) ? requestedKind : inferredKind;
+    const limits = phoneAppLimits(deviceKind);
     const rawApps = Array.isArray(data?.apps) ? data.apps : [];
-    const apps = rawApps.slice(0, 12).map((app, appIndex) => {
+    const usedAppIds = new Set();
+    const apps = rawApps.slice(0, limits.maxApps).map((app, appIndex) => {
+        if (isExcludedPhoneApp(app)) return null;
         const appId = core_text.safeId(app?.id, `APP${String(appIndex + 1).padStart(2, '0')}`);
+        if (PHONE_RESERVED_APP_IDS.has(appId) || usedAppIds.has(appId)) return null;
+        usedAppIds.add(appId);
+        const label = core_text.normalizeText(app?.label, 60) || `分区 ${appIndex + 1}`;
+        const kind = normalizePhoneAppKind(app?.kind, label);
+        const usedEntryIds = new Set();
         const entries = (Array.isArray(app?.entries) ? app.entries : []).slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS).map((entry, index) => {
+            const entryId = core_text.safeId(entry?.id, `${appId}_E${String(index + 1).padStart(2, '0')}`);
+            if (usedEntryIds.has(entryId)) return null;
+            usedEntryIds.add(entryId);
             const basis = core_constants.ROOM_BASIS_VALUES.has(entry?.basis) ? entry.basis : '设定';
             const title = core_text.normalizeText(entry?.title, 100) || `条目 ${index + 1}`;
             const preview = core_text.normalizeText(entry?.preview, 1200);
@@ -9586,12 +10626,12 @@ function normalizePhone(data, memoryBank) {
             const reference = basis === '记忆' ? core_evidence.normalizeMemoryReference(entry?.sourceMemoryIds, entry?.sourceMemoryAnchor, evidenceText, memoryBank, 1) : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
             if (!preview || (!detail && !messages.length && !fields.length && !imageCaption) || (basis === '记忆' && !reference.sourceMemoryIds.length)) return null;
             return {
-                id: core_text.safeId(entry?.id, `${appId}_E${String(index + 1).padStart(2, '0')}`),
+                id: entryId,
                 title,
                 meta: core_text.normalizeText(entry?.meta, 200),
                 preview,
                 detail,
-                contactName: app?.kind === 'chat' ? conversation.contactName : '',
+                contactName: kind === 'chat' ? conversation.contactName : '',
                 messages,
                 fields,
                 imageCaption,
@@ -9602,34 +10642,26 @@ function normalizePhone(data, memoryBank) {
         }).filter(Boolean);
         return {
             id: appId,
-            label: core_text.normalizeText(app?.label, 60) || `分区 ${appIndex + 1}`,
-            kind: core_text.normalizeText(app?.kind, 60).toLowerCase() || 'misc',
+            label,
+            kind,
+            icon: normalizePhoneAppIcon(app?.icon, kind, label),
             summary: core_text.normalizeText(app?.summary, 1200),
             entries,
         };
-    }).filter(app => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(app.kind) && app.entries.length >= 2);
+    }).filter(app => app && app.entries.length >= 1);
 
     const compactDevice = ['watch', 'communicator'].includes(deviceKind);
-    const minApps = compactDevice ? 7 : (deviceKind === 'phone' ? 9 : 8);
-    if (apps.length < minApps) throw new Error(`“他的私人终端”分区不足：得到 ${apps.length} 个，当前设备至少需要 ${minApps} 个。`);
+    if (apps.length < limits.minApps) throw new Error(`“他的私人终端”分区不足：得到 ${apps.length} 个，当前设备至少需要 ${limits.minApps} 个。`);
     const totalEntries = apps.reduce((sum, app) => sum + app.entries.length, 0);
-    const minEntries = compactDevice ? 18 : (deviceKind === 'phone' ? 29 : 24);
-    if (totalEntries < minEntries) throw new Error(`“他的私人终端”内容过少：只有 ${totalEntries} 个可读条目，至少需要 ${minEntries} 个。`);
-    if (deviceKind === 'phone') {
-        const required = { moments: 3, chat: 3, gallery: 4, notes: 5, store: 4, browser: 3, contacts: 3, location: 2, misc: 2 };
-        const countByKind = Object.create(null);
-        for (const app of apps) countByKind[app.kind] = Math.max(Number(countByKind[app.kind]) || 0, app.entries.length);
-        const missing = Object.entries(required).filter(([kind, minimum]) => (Number(countByKind[kind]) || 0) < minimum);
-        if (missing.length) {
-            const detail = missing.map(([kind, minimum]) => `${kind} ${Number(countByKind[kind]) || 0}/${minimum}`).join('、');
-            throw new Error(`“他的私人终端”核心 App 内容不足：${detail}。`);
-        }
+    if (totalEntries < limits.minEntries) throw new Error(`“他的私人终端”内容过少：只有 ${totalEntries} 个可读条目，至少需要 ${limits.minEntries} 个。`);
+    if (!apps.some(app => app.kind === 'chat')) throw new Error('“他的私人终端”缺少 chat / 通讯分区。');
+    if (deviceKind === 'phone' && apps.some(app => app.kind === 'contacts')) {
         const contactDetails = apps.filter(app => app.kind === 'contacts').flatMap(app => app.entries).some(entry => entry.fields.length >= 3);
         if (!contactDetails) throw new Error('“他的私人终端”联系人详情不足：至少 1 个联系人需要 3 项以上备注 / 最近通话 / 位置或提醒字段。');
     }
     const deepChatMessageMinimum = compactDevice ? 8 : (deviceKind === 'terminal' ? 10 : 12);
     const deepChats = apps.filter(app => app.kind === 'chat').flatMap(app => app.entries).filter(entry => entry.messages.length >= deepChatMessageMinimum).length;
-    const minDeepChats = compactDevice ? 1 : (deviceKind === 'terminal' ? 1 : 2);
+    const minDeepChats = 1;
     if (deepChats < minDeepChats) {
         throw new Error(`“他的私人终端”深度对话不足：只有 ${deepChats} 个达到 ${deepChatMessageMinimum} 条消息以上的对话窗，当前设备至少需要 ${minDeepChats} 个。`);
     }
@@ -9657,17 +10689,23 @@ function normalizePhone(data, memoryBank) {
         ownerName: phoneConversationOwnerName(memoryBank),
         deviceName: requestedDeviceName,
         deviceKind,
+        uiVersion: core_constants.PHONE_SESSION_VERSION,
+        uiProfile: normalizePhoneUiProfile(data?.uiProfile, { data: { ...data, apps }, memoryBank, deviceKind, bindPersona: true }),
         lockText: core_text.normalizeText(data?.lockText, 400),
         liveStates,
         apps,
         selectedAppId: apps[0].id,
         selectedEntryId: '',
-        view: 'list',
+        view: 'home',
     };
 }
 
 __m_modes_phone_js.generatePhoneWithRepair = generatePhoneWithRepair;
 __m_modes_phone_js.generatePhoneIncrementalWithRepair = generatePhoneIncrementalWithRepair;
+__m_modes_phone_js.normalizePhoneUiProfile = normalizePhoneUiProfile;
+__m_modes_phone_js.normalizePhoneAppKind = normalizePhoneAppKind;
+__m_modes_phone_js.normalizePhoneAppIcon = normalizePhoneAppIcon;
+__m_modes_phone_js.migrateLegacyPhoneSession = migrateLegacyPhoneSession;
 __m_modes_phone_js.phoneConversationOwnerName = phoneConversationOwnerName;
 __m_modes_phone_js.inferPhoneContactName = inferPhoneContactName;
 __m_modes_phone_js.normalizePhoneConversationMessages = normalizePhoneConversationMessages;
@@ -9713,7 +10751,119 @@ const runtimeState = __m_core_state_js.state;
 
 
 
-function normalizeRoom(data, memoryBank) {
+const ROOM_VISUAL_PROFILE_VERSION = 1;
+const ROOM_VISUAL_VALUES = Object.freeze({
+    worldStyle: Object.freeze(['contemporary', 'historical', 'fantasy', 'scifi', 'nomadic', 'maritime', 'institutional']),
+    palette: Object.freeze(['mist', 'warm', 'earth', 'forest', 'ocean', 'night', 'mono', 'jewel', 'violet']),
+    material: Object.freeze(['wood', 'stone', 'fabric', 'metal', 'glass', 'mixed']),
+    density: Object.freeze(['sparse', 'balanced', 'layered']),
+    build: Object.freeze(['slender', 'lean', 'average', 'broad', 'compact', 'soft']),
+    hairShape: Object.freeze(['cropped', 'short', 'medium', 'long', 'tied', 'curly', 'covered', 'nonhuman']),
+    hairTone: Object.freeze(['dark', 'brown', 'light', 'red', 'silver', 'fantasy_cool', 'fantasy_warm']),
+    outfit: Object.freeze(['casual', 'formal', 'uniform', 'academic', 'artisan', 'combat', 'ceremonial', 'technical', 'historical', 'fantasy']),
+    detail: Object.freeze(['none', 'glasses', 'headphones', 'scarf', 'headwear', 'pointed_ears', 'animal_ears', 'horns', 'visor']),
+    posture: Object.freeze(['reserved', 'relaxed', 'upright', 'active', 'studious', 'tired']),
+});
+const ROOM_VISUAL_ALLOWLISTS = Object.freeze(Object.fromEntries(
+    Object.entries(ROOM_VISUAL_VALUES).map(([key, values]) => [key, new Set(values)]),
+));
+const ROOM_VISUAL_EXPLICIT_FIELDS = new Set([
+    'worldStyle', 'palette', 'material', 'density',
+    'figure.build', 'figure.hairShape', 'figure.hairTone', 'figure.outfit', 'figure.detail', 'figure.posture',
+]);
+const ROOM_VISUAL_LEGACY_ALIASES = Object.freeze({
+    worldStyle: Object.freeze({ modern: 'contemporary' }),
+    hairTone: Object.freeze({ cool: 'fantasy_cool', warm: 'fantasy_warm' }),
+    detail: Object.freeze({ 'pointed-ears': 'pointed_ears', 'animal-ears': 'animal_ears' }),
+});
+const ROOM_VISUAL_PRESETS = Object.freeze([
+    Object.freeze({ worldStyle: 'contemporary', palette: 'mist', material: 'mixed', density: 'balanced', build: 'average', hairShape: 'short', hairTone: 'dark', outfit: 'casual', detail: 'none', posture: 'relaxed' }),
+    Object.freeze({ worldStyle: 'institutional', palette: 'ocean', material: 'glass', density: 'balanced', build: 'lean', hairShape: 'cropped', hairTone: 'brown', outfit: 'uniform', detail: 'glasses', posture: 'upright' }),
+    Object.freeze({ worldStyle: 'historical', palette: 'warm', material: 'wood', density: 'layered', build: 'slender', hairShape: 'tied', hairTone: 'dark', outfit: 'historical', detail: 'headwear', posture: 'reserved' }),
+    Object.freeze({ worldStyle: 'fantasy', palette: 'jewel', material: 'stone', density: 'layered', build: 'soft', hairShape: 'long', hairTone: 'silver', outfit: 'fantasy', detail: 'pointed_ears', posture: 'upright' }),
+    Object.freeze({ worldStyle: 'scifi', palette: 'night', material: 'metal', density: 'sparse', build: 'lean', hairShape: 'cropped', hairTone: 'fantasy_cool', outfit: 'technical', detail: 'visor', posture: 'active' }),
+    Object.freeze({ worldStyle: 'nomadic', palette: 'earth', material: 'fabric', density: 'layered', build: 'broad', hairShape: 'medium', hairTone: 'red', outfit: 'artisan', detail: 'scarf', posture: 'relaxed' }),
+    Object.freeze({ worldStyle: 'maritime', palette: 'ocean', material: 'wood', density: 'balanced', build: 'compact', hairShape: 'short', hairTone: 'brown', outfit: 'uniform', detail: 'headwear', posture: 'upright' }),
+    Object.freeze({ worldStyle: 'contemporary', palette: 'violet', material: 'fabric', density: 'layered', build: 'soft', hairShape: 'curly', hairTone: 'fantasy_warm', outfit: 'casual', detail: 'headphones', posture: 'active' }),
+    Object.freeze({ worldStyle: 'institutional', palette: 'mist', material: 'metal', density: 'sparse', build: 'slender', hairShape: 'medium', hairTone: 'dark', outfit: 'academic', detail: 'glasses', posture: 'studious' }),
+    Object.freeze({ worldStyle: 'fantasy', palette: 'forest', material: 'wood', density: 'layered', build: 'lean', hairShape: 'long', hairTone: 'fantasy_cool', outfit: 'fantasy', detail: 'animal_ears', posture: 'active' }),
+    Object.freeze({ worldStyle: 'historical', palette: 'earth', material: 'stone', density: 'balanced', build: 'broad', hairShape: 'covered', hairTone: 'dark', outfit: 'ceremonial', detail: 'scarf', posture: 'reserved' }),
+    Object.freeze({ worldStyle: 'scifi', palette: 'jewel', material: 'glass', density: 'balanced', build: 'compact', hairShape: 'nonhuman', hairTone: 'silver', outfit: 'combat', detail: 'horns', posture: 'upright' }),
+]);
+
+function roomVisualPreset(identitySeed) {
+    const seed = core_text.normalizeText(identitySeed, 12000).toLowerCase();
+    let pool = [0, 1, 7, 8];
+    if (/(?:赛博|科幻|星舰|飞船|宇宙|未来|机甲|机械|机器人|数据舱|驾驶舱|cyber|sci-?fi|spaceship|android)/i.test(seed)) pool = [4, 11];
+    else if (/(?:魔法|法师|精灵|龙族|神殿|异世界|妖|仙|灵力|fantasy|magic|elf|dragon)/i.test(seed)) pool = [3, 9];
+    else if (/(?:古代|王朝|宫殿|和室|茶室|武士|骑士|中世纪|historical|medieval|ancient)/i.test(seed)) pool = [2, 10];
+    else if (/(?:船舱|舰桥|港口|航海|海员|水手|maritime|ship|cabin|sailor)/i.test(seed)) pool = [6];
+    else if (/(?:营帐|帐篷|游牧|荒野|行军|露营|nomad|tent|camp)/i.test(seed)) pool = [5];
+    else if (/(?:宿舍|学校|学院|医院|军营|办公室|实验室|dorm|school|academy|hospital|office|laboratory)/i.test(seed)) pool = [1, 8];
+    return ROOM_VISUAL_PRESETS[pool[core_text.hashString(seed || 'heartbeat-room') % pool.length]];
+}
+
+function allowlistedRoomVisualValue(source, key, fallback) {
+    const rawValue = core_text.normalizeText(source?.[key], 40).toLowerCase();
+    const value = ROOM_VISUAL_LEGACY_ALIASES[key]?.[rawValue] || rawValue;
+    return ROOM_VISUAL_ALLOWLISTS[key].has(value) ? value : fallback;
+}
+
+function normalizeRoomVisualProfile(value, { identitySeed = '', bindPersona = false } = {}) {
+    const input = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const figure = input.figure && typeof input.figure === 'object' && !Array.isArray(input.figure) ? input.figure : {};
+    const normalizedSeed = core_text.normalizeText(identitySeed, 12000) || 'heartbeat-room';
+    const fallback = roomVisualPreset(normalizedSeed);
+    const identityHash = core_text.hashString(normalizedSeed);
+    const explicitFields = core_text.cleanArray(input.explicitFields, ROOM_VISUAL_EXPLICIT_FIELDS.size, 40)
+        .filter(field => ROOM_VISUAL_EXPLICIT_FIELDS.has(field));
+    const explicit = new Set(explicitFields);
+    const choose = (source, key, fallbackValue, path = key) => bindPersona && !explicit.has(path)
+        ? fallbackValue
+        : allowlistedRoomVisualValue(source, key, fallbackValue);
+    return {
+        version: ROOM_VISUAL_PROFILE_VERSION,
+        identityKey: `room-visual:${identityHash.toString(36)}`,
+        explicitFields,
+        worldStyle: choose(input, 'worldStyle', fallback.worldStyle),
+        palette: choose(input, 'palette', fallback.palette),
+        material: choose(input, 'material', fallback.material),
+        density: choose(input, 'density', fallback.density),
+        figure: {
+            build: choose(figure, 'build', fallback.build, 'figure.build'),
+            hairShape: choose(figure, 'hairShape', fallback.hairShape, 'figure.hairShape'),
+            hairTone: choose(figure, 'hairTone', fallback.hairTone, 'figure.hairTone'),
+            outfit: choose(figure, 'outfit', fallback.outfit, 'figure.outfit'),
+            detail: choose(figure, 'detail', fallback.detail, 'figure.detail'),
+            posture: choose(figure, 'posture', fallback.posture, 'figure.posture'),
+            // These proportions are code-derived from the controlled character/room identity seed.
+            // The model cannot provide arbitrary geometry, CSS, URLs, or avatar data.
+            faceWidth: 40 + (identityHash % 9),
+            faceHeight: 46 + ((identityHash >>> 4) % 8),
+            eyeSpacing: 16 + ((identityHash >>> 8) % 8),
+            mouthWidth: 7 + ((identityHash >>> 12) % 6),
+        },
+    };
+}
+
+function roomVisualIdentitySeed(room, memoryBank = null, identityHint = '') {
+    const spaces = (Array.isArray(room?.spaces) ? room.spaces : []).slice(0, 10).map(space => [
+        core_text.normalizeText(space?.label, 80),
+        core_text.normalizeText(space?.spaceType, 100),
+        core_text.normalizeText(space?.atmosphere, 360),
+        (Array.isArray(space?.objects) ? space.objects : []).slice(0, 8).map(item => core_text.normalizeText(item?.label, 60)).join('、'),
+    ].filter(Boolean).join('：')).join('\n');
+    return [
+        core_text.normalizeText(identityHint, 360),
+        core_text.normalizeText(memoryBank?.characterName, 120),
+        core_text.normalizeText(memoryBank?.chatId || room?.chatId, 240),
+        core_text.normalizeText(room?.homeName, 120),
+        core_text.normalizeText(room?.homeSummary, 1000),
+        spaces,
+    ].filter(Boolean).join('\u001f');
+}
+
+function normalizeRoom(data, memoryBank, { identityKey = '' } = {}) {
     const rawSpaces = Array.isArray(data?.spaces) ? data.spaces : [];
     const usedSpaceIds = new Set();
     const spaces = rawSpaces.slice(0, 10).map((space, spaceIndex) => {
@@ -9778,11 +10928,16 @@ ${line}`, memoryBank, 1)
     if (presenceLines.length < 4) throw new Error(`“他的房间”角色互动台词不足：${presenceLines.length} 句，至少需要 4 句。`);
     const initialDaypart = roomDaypartState();
     const initialSpace = spaceById.get(dayparts[initialDaypart.key]?.spaceId) || spaces[0];
+    const title = core_text.normalizeText(data?.title, 100) || '他的房间';
+    const homeName = core_text.normalizeText(data?.homeName, 100) || '私人生活空间';
+    const homeSummary = core_text.normalizeText(data?.homeSummary, 2200) || '这些空间拼成了他日常生活真正会经过的路线。';
+    const profileSeed = roomVisualIdentitySeed({ ...data, title, homeName, homeSummary, spaces }, memoryBank, identityKey);
     return {
         kind: core_constants.MODE.ROOM,
-        title: core_text.normalizeText(data?.title, 100) || '他的房间',
-        homeName: core_text.normalizeText(data?.homeName, 100) || '私人生活空间',
-        homeSummary: core_text.normalizeText(data?.homeSummary, 2200) || '这些空间拼成了他日常生活真正会经过的路线。',
+        title,
+        homeName,
+        homeSummary,
+        visualProfile: normalizeRoomVisualProfile(data?.visualProfile, { identitySeed: profileSeed, bindPersona: true }),
         spaces,
         dayparts,
         presenceLines,
@@ -9842,6 +10997,7 @@ function roomObjectUsesIncrement(item, sourceMemoryIds) {
 
 function mergeRoomIncremental(previous, fresh, sourceMemoryIds) {
     const merged = structuredClone(previous);
+    if (!previous?.visualProfile && fresh?.visualProfile) merged.visualProfile = structuredClone(fresh.visualProfile);
     const usedSpaceIds = new Set((merged.spaces || []).map(space => space.id));
     const bySpace = new Map((merged.spaces || []).map((space, index) => [roomSpaceKey(space), index]));
     let added = 0;
@@ -10423,7 +11579,14 @@ function renderRoom() {
     const focusId = personIsHere ? (slot?.focusObjectId || '') : '';
     const visualState = normalizeRoomVisualState(slot?.visualState);
     const temporaryObjects = personIsHere ? normalizeTemporaryRoomObjects(slot?.temporaryObjects) : [];
+    const archiveIdentity = runtimeState.activeArchiveSnapshot
+        ? `${core_text.normalizeText(runtimeState.activeArchiveSnapshot.characterName, 120) || '{{char}}'}|${core_text.normalizeText(runtimeState.activeArchiveSnapshot.chatId, 240)}`
+        : `${core_text.normalizeText(core_context.getContext().name2, 120) || '{{char}}'}|${core_text.normalizeText(session.chatId, 240)}`;
     const charName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext().name2 || '{{char}}', 120);
+    const visualProfile = normalizeRoomVisualProfile(session.visualProfile, {
+        identitySeed: roomVisualIdentitySeed(session, runtimeState.activeArchiveSnapshot?.memory || null, archiveIdentity),
+    });
+    const figureProfile = visualProfile.figure;
     const hotspots = selectedSpace.objects.map((item, index) => `<button type="button" class="rmt-room-hotspot ${item.id === selected?.id ? 'active' : ''} ${item.id === focusId ? 'focus' : ''}" style="${roomObjectPlacement(item, index)}" data-rmt-room-id="${core_text.esc(item.id)}" aria-label="${core_text.esc(item.label)}">${index + 1}</button>`).join('');
     const objectRail = selectedSpace.objects.map((item, index) => `<button type="button" class="rmt-room-object-chip ${item.id === selected?.id ? 'active' : ''}" data-rmt-room-id="${core_text.esc(item.id)}"><span>${index + 1}</span><b>${core_text.esc(item.label)}</b>${item.searchable ? '<em>▣ 可翻找</em>' : ''}</button>`).join('');
     const map = session.spaces.map(space => {
@@ -10457,7 +11620,7 @@ function renderRoom() {
     const sceneLayout = roomLayoutVariant(selectedSpace);
     const tempLine = temporaryObjects.length ? `<div class="rmt-room-temp-line">此刻临时物件：${temporaryObjects.map(item => core_text.esc(item)).join(' · ')}</div>` : '';
     const body = ui_overlay.bodyEl();
-    body.innerHTML = `<div class="rmt-room-view">
+    body.innerHTML = `<div class="rmt-room-view" data-rmt-room-world="${core_text.esc(visualProfile.worldStyle)}" data-rmt-room-palette="${core_text.esc(visualProfile.palette)}" data-rmt-room-material="${core_text.esc(visualProfile.material)}" data-rmt-room-density="${core_text.esc(visualProfile.density)}">
       <div class="rmt-room-map" aria-label="私人空间地图">${map}</div>
       <div class="rmt-room-location"><div><b>${core_text.esc(currentLocationText)}</b><small>${core_text.esc(session.homeName)} · ${session.spaces.length} 个可观察区域</small></div><div class="rmt-room-location-actions">${!personIsHere ? `<button type="button" class="rmt-room-find" data-rmt-action="room-find-presence">去看看他</button>` : ''}${readOnlyArchive ? '' : `<button type="button" class="rmt-room-find" data-rmt-action="room-life-refresh" ${runtimeState.busy ? 'disabled' : ''}>更新今日生活</button>`}</div></div>
 
@@ -10476,7 +11639,7 @@ function renderRoom() {
             <div class="rmt-room-furniture" aria-hidden="true"></div>
             <div class="rmt-room-decor" aria-hidden="true"><span class="rmt-room-prop-a"></span><span class="rmt-room-prop-b"></span><span class="rmt-room-prop-c"></span></div>
             ${hotspots}
-            ${personIsHere ? `<button type="button" class="rmt-room-person" data-rmt-action="room-presence" aria-label="看看他现在在做什么"><span class="rmt-room-head"></span><span class="rmt-room-body-figure"></span><span class="rmt-room-person-label">♥</span></button>` : ''}
+            ${personIsHere ? `<button type="button" class="rmt-room-person" style="--rmt-head-width:${figureProfile.faceWidth}px;--rmt-head-height:${figureProfile.faceHeight}px;--rmt-eye-gap:${figureProfile.eyeSpacing}px;--rmt-mouth-width:${figureProfile.mouthWidth}px" data-rmt-action="room-presence" data-rmt-identity-key="${core_text.esc(visualProfile.identityKey)}" data-rmt-build="${core_text.esc(figureProfile.build)}" data-rmt-hair-shape="${core_text.esc(figureProfile.hairShape)}" data-rmt-hair-tone="${core_text.esc(figureProfile.hairTone)}" data-rmt-outfit="${core_text.esc(figureProfile.outfit)}" data-rmt-detail="${core_text.esc(figureProfile.detail)}" data-rmt-posture="${core_text.esc(figureProfile.posture)}" aria-label="看看${core_text.esc(charName)}现在在做什么"><span class="rmt-room-figure-shadow" aria-hidden="true"></span><span class="rmt-room-body-figure" aria-hidden="true"><span class="rmt-room-outfit-mark"></span></span><span class="rmt-room-head" aria-hidden="true"><span class="rmt-room-face"></span><span class="rmt-room-hair"></span><span class="rmt-room-figure-detail"></span></span><span class="rmt-room-person-label" aria-hidden="true">♥</span></button>` : ''}
           </div>
           <div class="rmt-room-object-rail" aria-label="房间物件">${objectRail}</div>
           <div class="rmt-room-activity-strip ${personIsHere ? '' : 'empty'}">
@@ -10541,6 +11704,7 @@ function roomPresenceNext() {
 
 __m_modes_room_js.generateRoomIncrementalWithRepair = generateRoomIncrementalWithRepair;
 __m_modes_room_js.ensureRoomLifePlan = ensureRoomLifePlan;
+__m_modes_room_js.normalizeRoomVisualProfile = normalizeRoomVisualProfile;
 __m_modes_room_js.normalizeRoom = normalizeRoom;
 __m_modes_room_js.compactRoomExisting = compactRoomExisting;
 __m_modes_room_js.roomIncrementPrompt = roomIncrementPrompt;
@@ -11274,7 +12438,7 @@ function characterProfileHtml({ profile, profileKey = '', characterName = '', av
     if (!profile) {
         return `<details class="rmt-character-profile rmt-archive-card">
           <summary class="rmt-profile-collapse-summary"><span class="rmt-profile-collapse-avatar">${summaryAvatar}</span><span><small>CHARACTER PROFILE</small><b>${core_text.esc(name)}</b><em>尚未生成 · 点击展开</em></span><i class="fa-solid fa-chevron-down"></i></summary>
-          <div class="rmt-profile-collapse-body"><div class="rmt-character-profile-empty"><div class="rmt-profile-photo">${summaryAvatar}</div><div><h2>${core_text.esc(name)}</h2><p>这里整理所有聊天窗口共用的角色固定资料。生日、年龄、身高、血型、职业等只读取角色卡 / 世界书中明确写出的内容；没有设定就保持未知，不会让 AI 猜。固有人际会保存在角色主档案中，并只在具体聊天的人际庭园里与该世界线变化合并显示，不再在这里重复画一张图。</p>${canGenerate ? `<button type="button" class="rmt-btn" data-rmt-action="character-profile-generate" data-rmt-profile-key="${core_text.esc(profileKey)}">${action}</button>` : '<small>请先在角色分类里绑定正确的 SillyTavern char。</small>'}</div></div></div>
+          <div class="rmt-profile-collapse-body"><div class="rmt-character-profile-empty"><div class="rmt-profile-photo">${summaryAvatar}</div><div><h2>${core_text.esc(name)}</h2>${canGenerate ? `<button type="button" class="rmt-btn" data-rmt-action="character-profile-generate" data-rmt-profile-key="${core_text.esc(profileKey)}">${action}</button>` : '<small>请先在角色分类里绑定正确的 SillyTavern char。</small>'}</div></div></div>
         </details>`;
     }
     const factMap = new Map((profile.facts || []).map(item => [normalizeProfileFactLabel(item?.label) || core_text.normalizeText(item?.label, 40), item]));
@@ -11284,7 +12448,7 @@ function characterProfileHtml({ profile, profileKey = '', characterName = '', av
     }).join('');
     return `<details class="rmt-character-profile rmt-archive-card">
       <summary class="rmt-profile-collapse-summary"><span class="rmt-profile-collapse-avatar">${summaryAvatar}</span><span><small>CHARACTER PROFILE</small><b>${core_text.esc(name)}</b><em>已读取 ${knownCount} / ${PROFILE_FACT_ORDER.length} 项固定资料 · 点击展开</em></span><i class="fa-solid fa-chevron-down"></i></summary>
-      <div class="rmt-profile-collapse-body"><div class="rmt-profile-hero"><div class="rmt-profile-photo">${summaryAvatar}</div><div class="rmt-profile-copy"><h2>${core_text.esc(name)}</h2>${profile.introduction ? `<p>${core_text.esc(profile.introduction)}</p>` : ''}<div class="rmt-profile-facts">${facts}</div><button type="button" class="rmt-btn" data-rmt-action="character-profile-generate" data-rmt-profile-key="${core_text.esc(profileKey)}">${action}</button><small class="rmt-profile-merge-note">角色固有人际不会在这里重复显示；进入下方任一聊天档案的「人际庭园」即可在一张图里同时看到固定关系与本世界线变化。</small></div></div></div>
+      <div class="rmt-profile-collapse-body"><div class="rmt-profile-hero"><div class="rmt-profile-photo">${summaryAvatar}</div><div class="rmt-profile-copy"><h2>${core_text.esc(name)}</h2>${profile.introduction ? `<p>${core_text.esc(profile.introduction)}</p>` : ''}<div class="rmt-profile-facts">${facts}</div><button type="button" class="rmt-btn" data-rmt-action="character-profile-generate" data-rmt-profile-key="${core_text.esc(profileKey)}">${action}</button></div></div></div>
     </details>`;
 }
 
@@ -11369,12 +12533,12 @@ const modes_relations = __m_modes_relations_js;
 function normalizeByMode(mode, data, memoryBank, context = null) {
     if (mode === core_constants.MODE.CALENDAR) return modes_calendar.normalizeCalendar(data, memoryBank);
     if (mode === core_constants.MODE.RELATIONS) return modes_relations.normalizeRelations(data, memoryBank, context);
-    if (mode === core_constants.MODE.BUTTERFLY) return modes_butterfly.normalizeButterfly(data, memoryBank);
+    if (mode === core_constants.MODE.BUTTERFLY) return modes_butterfly.normalizeButterfly(data, memoryBank, context);
     if (mode === core_constants.MODE.ALBUM) return modes_album.normalizeAlbum(data, memoryBank);
     if (mode === core_constants.MODE.ADV) return modes_advEvent.normalizeEventList(data, memoryBank);
-    if (mode === core_constants.MODE.ROOM) return modes_room.normalizeRoom(data, memoryBank);
+    if (mode === core_constants.MODE.ROOM) return modes_room.normalizeRoom(data, memoryBank, context);
     if (mode === core_constants.MODE.ITEMS) return modes_items.normalizeItems(data, memoryBank);
-    if (mode === core_constants.MODE.PHONE) return modes_phone.normalizePhone(data, memoryBank);
+    if (mode === core_constants.MODE.PHONE) return modes_phone.normalizePhone(data, memoryBank, context);
     if (mode === core_constants.MODE.ENDING) return modes_ending.normalizeEnding(data, memoryBank);
     if (mode === core_constants.MODE.HEART) return modes_heart.normalizeHeart(data, memoryBank);
     if (mode === core_constants.MODE.ACHIEVEMENTS) return modes_achievements.normalizeAchievements(data, memoryBank);
@@ -11404,6 +12568,7 @@ const modes_achievements = __m_modes_achievements_js;
 const modes_advEvent = __m_modes_advEvent_js;
 const modes_album = __m_modes_album_js;
 const modes_butterfly = __m_modes_butterfly_js;
+const modes_calendar = __m_modes_calendar_js;
 const modes_ending = __m_modes_ending_js;
 const modes_heart = __m_modes_heart_js;
 const modes_items = __m_modes_items_js;
@@ -11425,6 +12590,16 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+
+function generationWorldInfoScanTerms(mode, context = {}) {
+    const characterName = core_text.normalizeText(context?.name2, 120);
+    const common = characterName ? [characterName] : [];
+    if (mode === core_constants.MODE.ROOM) return [...common, '外貌', '发色', '发型', '穿着', '制服', '服饰', '种族', '住处', '房间', '居所', '时代', '职业', '阶层', '生活习惯', 'appearance', 'hair', 'outfit', 'species', 'residence', 'room', 'home'];
+    if (mode === core_constants.MODE.PHONE) return [...common, '通讯', '终端', '手机', '设备', '职业', '爱好', '生活习惯', '科技', '时代', '世界观', 'phone', 'device', 'terminal', 'communication', 'hobby', 'occupation'];
+    if (mode === core_constants.MODE.BUTTERFLY) return [...common, '身份', '职业', '时代', '地点', '关系', '选择', '命运', '相遇', '世界线', '平行世界', 'identity', 'occupation', 'era', 'location', 'fate', 'encounter'];
+    if (mode === core_constants.MODE.CALENDAR) return [...common, '节日', '日历', '生日', '纪念日', '祭典', '庆典', 'festival', 'holiday', 'calendar', 'birthday', 'anniversary'];
+    return common;
+}
 
 function chunkForGeneration(items, size) {
     const safeSize = Math.max(1, Math.floor(Number(size) || 1));
@@ -11590,7 +12765,7 @@ async function generateConfiguredJson(prompt, options = {}) {
     const expanded = core_text.expandSafeRoleMacros(prompt, context);
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
-        : await core_cache.buildControlledContextEnvelope(context);
+        : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context) });
     const phrasePolicy = options.enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(settings) : '';
     const controlledPrompt = `${contextEnvelope}
 ${expanded}${phrasePolicy}`;
@@ -11769,8 +12944,10 @@ async function generateMode(mode, options = {}) {
         let session;
         if (mode === core_constants.MODE.ADV) {
             session = await modes_advEvent.generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, { replaceExisting });
-        } else if (mode === core_constants.MODE.BUTTERFLY && previousSession) {
-            session = await modes_butterfly.generateButterflyIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession);
+        } else if (mode === core_constants.MODE.BUTTERFLY) {
+            session = previousSession
+                ? await modes_butterfly.generateButterflyIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession)
+                : await modes_butterfly.generateButterflyWithRepair(context, memoryBank, origin, taskKey);
         } else if (mode === core_constants.MODE.ROOM && previousSession) {
             session = await modes_room.generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession);
         } else if (mode === core_constants.MODE.ITEMS && previousSession) {
@@ -11804,7 +12981,7 @@ async function generateMode(mode, options = {}) {
             session = await modes_achievements.generateAchievementsWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else {
             const contextEnvelope = mode === core_constants.MODE.CALENDAR
-                ? await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: ['节日', '日历', '生日', '纪念日', '祭典', '庆典', 'festival', 'holiday', 'calendar', 'birthday', 'anniversary'] })
+                ? await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(mode, context) })
                 : undefined;
             const raw = await requestJson(
                 generationPrompt,
@@ -11812,6 +12989,9 @@ async function generateMode(mode, options = {}) {
                 { maxTokens: core_constants.MODE_TOKEN_CAPS[mode] || 6144, context, contextEnvelope, origin, taskKey, mode, background: true },
             );
             session = generation_normalizers.normalizeByMode(mode, raw, memoryBank, context);
+            if (mode === core_constants.MODE.CALENDAR && previousSession && !replaceExisting) {
+                session = modes_calendar.mergeCalendarRefresh(previousSession, session, memoryBank);
+            }
         }
         if (!core_incremental.incrementalPartRecord(session, incrementalPart)) {
             const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank, incrementalPart);
@@ -11878,6 +13058,7 @@ __m_generation_client_js.generateConfiguredJson = generateConfiguredJson;
 __m_generation_client_js.requestJson = requestJson;
 __m_generation_client_js.generateArchiveChunkJson = generateArchiveChunkJson;
 __m_generation_client_js.generateMode = generateMode;
+__m_generation_client_js.generationWorldInfoScanTerms = generationWorldInfoScanTerms;
 __m_generation_client_js.chunkForGeneration = chunkForGeneration;
 __m_generation_client_js.generatedPhrasePolicyText = generatedPhrasePolicyText;
 __m_generation_client_js.findBannedGeneratedPhrase = findBannedGeneratedPhrase;
@@ -11897,11 +13078,13 @@ const modes_album = __m_modes_album_js;
 const modes_calendar = __m_modes_calendar_js;
 const modes_ending = __m_modes_ending_js;
 const modes_heart = __m_modes_heart_js;
+const modes_butterfly = __m_modes_butterfly_js;
 const modes_phone = __m_modes_phone_js;
 const generation_client = __m_generation_client_js;
 const generation_prompts = __m_generation_prompts_js;
 // Targeted regeneration for user-managed derived content.
 // Targets are selected only from the currently normalized session; model output never chooses a cache path.
+
 
 
 
@@ -12208,26 +13391,59 @@ TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
     return { ...item, ...raw };
 }
 
+function normalizeRegeneratedButterflyNode(item, rawNode, memoryBank, context = {}) {
+    if (!item || !rawNode || typeof rawNode !== 'object') throw new Error('蝴蝶效应单节点重新生成结果无效。');
+    const immutable = structuredClone(item);
+    const isOmega = item?.trueEnding === true || core_text.safeId(item?.id, '').toUpperCase() === 'OMEGA';
+    if (isOmega) {
+        const normalized = modes_butterfly.normalizeButterflyOmega({
+            ...structuredClone(rawNode),
+            monologue: '',
+        }, context);
+        return {
+            ...immutable,
+            label: normalized.label,
+            monologue: '',
+            intervention: normalized.intervention,
+            systemNote: normalized.systemNote,
+        };
+    }
+
+    const existingWorldSpec = item?.worldSpec && typeof item.worldSpec === 'object' ? structuredClone(item.worldSpec) : null;
+    const candidate = {
+        ...structuredClone(rawNode),
+        primaryAxis: existingWorldSpec ? (item?.primaryAxis || existingWorldSpec.primaryAxis) : rawNode?.primaryAxis,
+        worldSpec: existingWorldSpec || rawNode?.worldSpec,
+        sourceMemoryIds: core_text.cleanArray(item?.sourceMemoryIds, 16, 40),
+        sourceMemoryAnchor: core_text.normalizeText(item?.sourceMemoryAnchor, 160),
+    };
+    const normalized = modes_butterfly.normalizeButterflyBranch(candidate, 1, memoryBank, context, {
+        label: `单节点 ${core_text.normalizeText(item?.id, 60) || '平行分歧'}`,
+    });
+    return {
+        ...immutable,
+        label: normalized.label,
+        primaryAxis: normalized.primaryAxis,
+        worldSpec: normalized.worldSpec,
+        monologue: normalized.monologue,
+        intervention: normalized.intervention,
+        systemNote: normalized.systemNote,
+    };
+}
+
 async function regenerateButterflyNode(item, context, memoryBank, origin, taskKey) {
     const evidence = item.sourceMemoryIds?.length ? core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 10) : [];
     const prompt = `${generation_prompts.promptSafetyBoundary(context, '蝴蝶效应 / 单个观测节点重新生成')}
 只重新生成下面这个${item.trueEnding ? '观测点 Ω' : '平行分歧'}的模拟内容，保持节点身份不变。它是派生模拟，不得修改正式档案。
 CURRENT_NODE_JSON:\n${JSON.stringify(item, null, 2)}
 ${evidence.length ? `TRUSTED_MAIN_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}` : ''}
-严格输出：{"node":{"label":"...","monologue":"...","intervention":"...","systemNote":"..."}}。${item.trueEnding ? 'Ω 的 monologue 可为空，intervention 不少于160字。' : '普通分歧 monologue 不少于100字，并提供 intervention/systemNote。'}只输出 JSON。`;
+节点 id/code/locked/trueEnding、证据字段与已有 worldSpec 都由本地锁定，不接受模型改写。普通旧节点如果 CURRENT_NODE_JSON 缺少 worldSpec，则必须补全 primaryAxis 与 worldSpec 八个具体字段，并明确 thirdPartyRomance=false。
+严格输出：{"node":{"label":"...","primaryAxis":"era","worldSpec":{"primaryAxis":"era","era":"...","identity":"...","occupation":"...","location":"...","keyDecision":"...","encounterWithUser":"...","bondWithUser":"...","finalFate":"...","thirdPartyRomance":false},"monologue":"...","intervention":"...","systemNote":"..."}}。${item.trueEnding ? 'Ω 的 monologue 必须为空，intervention 不少于160个中文汉字，并明确命运/奇迹/唯一解。' : '普通分歧 monologue 不少于100个中文汉字且是第一人称；intervention 要由现世 {{char}} 对照“那个我”自省；systemNote 必须是冷酷中文算法判定。'}禁止前任，禁止 {{char}} 与 {{user}} 以外的任何人恋爱、结婚或成家。只输出 JSON。`;
     const raw = await generation_client.requestValidatedSegment(
         prompt, `重新生成「${item.label}」…`, taskOptions(core_constants.MODE.BUTTERFLY, context, origin, `${taskKey}:butterfly`, 9000, 0.7),
-        data => {
-            const node = data?.node || {};
-            const label = core_text.normalizeText(node.label, 120);
-            const monologue = core_text.normalizeText(node.monologue, 12000);
-            const intervention = core_text.normalizeText(node.intervention, 12000);
-            const systemNote = core_text.normalizeText(node.systemNote, 5000);
-            if (!label || !intervention || !systemNote || (!item.trueEnding && monologue.length < 100) || (item.trueEnding && intervention.length < 160)) throw new Error('蝴蝶效应单节点重新生成内容不足。');
-            return { label, monologue: item.trueEnding ? '' : monologue, intervention, systemNote };
-        },
+        data => normalizeRegeneratedButterflyNode(item, data?.node, memoryBank, context),
     );
-    return { ...item, ...raw };
+    return raw;
 }
 
 async function regenerateManagedTarget(session, type, id, parentId, options) {
@@ -12286,17 +13502,20 @@ async function regenerateManagedTarget(session, type, id, parentId, options) {
         if (index < 0) throw new Error('找不到这项成就。');
         updated.entries[index] = await regenerateAchievement(updated.entries[index], context, memoryBank, origin, taskKey);
     } else if (type === 'calendar-entry') {
-        const index = updated.entries?.findIndex(item => item.id === id) ?? -1;
+        const pageKey = core_text.normalizeText(parentId, 160);
+        const index = updated.entries?.findIndex(item => item.id === id && modes_calendar.calendarEntryPageKey(item) === pageKey) ?? -1;
         if (index < 0) throw new Error('找不到这条日历项。');
         updated.entries[index] = await regenerateCalendarEntry(updated.entries[index], context, memoryBank, origin, taskKey);
     } else if (type === 'calendar-note') {
-        const index = updated.stickyNotes?.findIndex(item => item.id === id) ?? -1;
+        const page = modes_calendar.calendarDayPage(updated, core_text.normalizeText(parentId, 160));
+        const index = page?.stickyNotes?.findIndex(item => item.id === id) ?? -1;
         if (index < 0) throw new Error('找不到这张日历便签。');
-        updated.stickyNotes[index] = await regenerateCalendarNote(updated.stickyNotes[index], context, memoryBank, origin, taskKey);
+        page.stickyNotes[index] = await regenerateCalendarNote(page.stickyNotes[index], context, memoryBank, origin, taskKey);
     } else if (type === 'calendar-mood') {
-        const index = updated.moodNotes?.findIndex(item => item.id === id) ?? -1;
+        const page = modes_calendar.calendarDayPage(updated, core_text.normalizeText(parentId, 160));
+        const index = page?.moodNotes?.findIndex(item => item.id === id) ?? -1;
         if (index < 0) throw new Error('找不到这条页角随笔。');
-        updated.moodNotes[index] = await regenerateCalendarMood(updated.moodNotes[index], context, memoryBank, origin, taskKey);
+        page.moodNotes[index] = await regenerateCalendarMood(page.moodNotes[index], context, memoryBank, origin, taskKey);
     } else if (type === 'butterfly-node') {
         const index = updated.nodes?.findIndex(item => item.id === id) ?? -1;
         if (index <= 0) throw new Error('主时间线不能作为单项重新生成目标。');
@@ -12309,6 +13528,7 @@ async function regenerateManagedTarget(session, type, id, parentId, options) {
 }
 
 __m_generation_contentRegeneration_js.regenerateManagedTarget = regenerateManagedTarget;
+__m_generation_contentRegeneration_js.normalizeRegeneratedButterflyNode = normalizeRegeneratedButterflyNode;
 }
 
 function __init_ui_butterflyView_js() {
@@ -12444,7 +13664,7 @@ function shiftMonthKey(value, delta) {
     return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
-function availableMonthKeys(entries) {
+function availableMonthKeys(entries, dayPages = {}) {
     const full = new Set();
     const annual = new Set();
     for (const item of Array.isArray(entries) ? entries : []) {
@@ -12453,28 +13673,130 @@ function availableMonthKeys(entries) {
         if (key.startsWith('annual-')) annual.add(key);
         else full.add(key);
     }
-    const representedMonths = new Set([...full].map(key => key.slice(-2)));
+    for (const [pageKey, page] of Object.entries(dayPages && typeof dayPages === 'object' ? dayPages : {})) {
+        if (!pageHasNotebookContent(page)) continue;
+        if (pageKey.startsWith('date:')) {
+            const parsed = modes_calendar.normalizeCalendarDate(pageKey.slice(5));
+            if (parsed?.hasYear) full.add(`${parsed.year}-${String(parsed.month).padStart(2, '0')}`);
+        } else if (pageKey.startsWith('annual:')) {
+            const parsed = modes_calendar.normalizeCalendarDate(pageKey.slice(7));
+            if (parsed) annual.add(`annual-${String(parsed.month).padStart(2, '0')}`);
+        }
+    }
     return [
         ...[...full].sort(),
-        ...[...annual].filter(key => !representedMonths.has(key.slice(-2))).sort(),
+        ...[...annual].sort(),
     ];
 }
 
-function dateKeyForCell(monthKey, day) {
+function dateValueForCell(monthKey, day) {
     const info = parseMonthKey(monthKey);
     if (!info) return '';
     const dd = String(day).padStart(2, '0');
     return info.year ? `${info.year}/${info.mm}/${dd}` : `${info.mm}/${dd}`;
 }
 
-function entriesForDateKey(entries, monthKey, dateKey) {
-    return (Array.isArray(entries) ? entries : []).filter(item => modes_calendar.calendarDateKeyForMonth(item, monthKey) === dateKey);
+function pageKeyForCell(monthKey, day) {
+    return modes_calendar.calendarPageKeyForDate(dateValueForCell(monthKey, day));
 }
 
-function selectedPendingEntry(entries, selectedDateKey) {
-    const match = String(selectedDateKey || '').match(/^pending:(.+)$/);
-    if (!match) return null;
-    return (Array.isArray(entries) ? entries : []).find(item => item.date === '待定' && item.id === match[1]) || null;
+function entriesForCell(entries, monthKey, dateValue) {
+    return (Array.isArray(entries) ? entries : []).filter(item => modes_calendar.calendarDateKeyForMonth(item, monthKey) === dateValue);
+}
+
+function pageEntries(session, pageKey) {
+    const page = modes_calendar.calendarDayPage(session, pageKey);
+    if (!page) return [];
+    const ids = new Set(Array.isArray(page.entryIds) ? page.entryIds : []);
+    return (Array.isArray(session?.entries) ? session.entries : []).filter(item =>
+        ids.has(item?.id) && modes_calendar.calendarEntryPageKey(item) === pageKey
+    );
+}
+
+function pageHasNotebookContent(page) {
+    return !!page && [page.entryIds, page.drafts, page.stickyNotes, page.moodNotes, page.manualTodos]
+        .some(list => Array.isArray(list) && list.length > 0);
+}
+
+function pageKeyMatchesMonth(pageKey, monthKey) {
+    const info = parseMonthKey(monthKey);
+    const key = core_text.normalizeText(pageKey, 160);
+    if (!info || !key) return false;
+    if (key === modes_calendar.CALENDAR_LEGACY_PAGE_KEY || key.startsWith('pending:')) return true;
+    if (key.startsWith('date:')) {
+        const parsed = modes_calendar.normalizeCalendarDate(key.slice(5));
+        return !!parsed?.hasYear && info.year === parsed.year && info.month === parsed.month;
+    }
+    if (key.startsWith('annual:')) {
+        const parsed = modes_calendar.normalizeCalendarDate(key.slice(7));
+        return !!parsed && info.month === parsed.month;
+    }
+    return false;
+}
+
+function preferredPageKeyForCell(session, monthKey, day, dayEntries) {
+    const directKey = pageKeyForCell(monthKey, day);
+    if (modes_calendar.calendarDayPage(session, directKey)) return directKey;
+    const info = parseMonthKey(monthKey);
+    if (info?.year) {
+        const annualKey = (Array.isArray(dayEntries) ? dayEntries : [])
+            .map(item => modes_calendar.calendarEntryPageKey(item))
+            .find(key => key.startsWith('annual:') && modes_calendar.calendarDayPage(session, key));
+        if (annualKey) return annualKey;
+    }
+    return directKey;
+}
+
+function defaultPageKeyForMonth(session, monthKey, entries) {
+    const info = parseMonthKey(monthKey);
+    if (!info) return '';
+    for (let day = 1; day <= monthDays(info); day += 1) {
+        const dateValue = dateValueForCell(monthKey, day);
+        const dayEntries = entriesForCell(entries, monthKey, dateValue);
+        if (dayEntries.length) return preferredPageKeyForCell(session, monthKey, day, dayEntries);
+    }
+    for (let day = 1; day <= monthDays(info); day += 1) {
+        const key = pageKeyForCell(monthKey, day);
+        if (pageHasNotebookContent(modes_calendar.calendarDayPage(session, key))) return key;
+    }
+    return pageKeyForCell(monthKey, 1);
+}
+
+function pageLabel(pageKey, entries) {
+    const key = core_text.normalizeText(pageKey, 160);
+    if (key === modes_calendar.CALENDAR_LEGACY_PAGE_KEY) return '旧版未归日期';
+    if (key.startsWith('pending:')) {
+        const pending = (Array.isArray(entries) ? entries : []).find(item => modes_calendar.calendarEntryPageKey(item) === key);
+        return pending?.title ? `日期待定 · ${pending.title}` : `日期待定 · ${key.slice(8)}`;
+    }
+    const annual = key.startsWith('annual:');
+    const parsed = modes_calendar.normalizeCalendarDate(key.replace(/^(?:date|annual):/, ''));
+    if (!parsed) return '这一天';
+    return annual ? `${parsed.month}月${parsed.day}日 · 每年` : `${parsed.year}年${parsed.month}月${parsed.day}日`;
+}
+
+function normalizeSelectablePageKey(session, value) {
+    const key = core_text.normalizeText(value, 160);
+    if (!key) return '';
+    if (key === modes_calendar.CALENDAR_LEGACY_PAGE_KEY) {
+        return modes_calendar.calendarDayPage(session, key) ? key : '';
+    }
+    if (key.startsWith('pending:')) {
+        const exists = !!modes_calendar.calendarDayPage(session, key)
+            || (session?.entries || []).some(item => modes_calendar.calendarEntryPageKey(item) === key);
+        return exists ? key : '';
+    }
+    if (key.startsWith('date:')) return modes_calendar.calendarPageKeyForDate(key.slice(5)) === key ? key : '';
+    if (key.startsWith('annual:')) return modes_calendar.calendarPageKeyForDate(key.slice(7)) === key ? key : '';
+    return '';
+}
+
+function ensureSessionDayPage(session, pageKey) {
+    const key = normalizeSelectablePageKey(session, pageKey);
+    if (!key) return null;
+    if (!session.dayPages || typeof session.dayPages !== 'object') session.dayPages = Object.create(null);
+    if (!session.dayPages[key]) session.dayPages[key] = modes_calendar.createCalendarDayPage(key);
+    return session.dayPages[key] || null;
 }
 
 function shortDate(item) {
@@ -12483,18 +13805,34 @@ function shortDate(item) {
     return parsed.hasYear ? `${parsed.month}/${parsed.day}` : `${parsed.month}/${parsed.day}`;
 }
 
-function calendarTodoRow(item, { completed = false } = {}) {
+function calendarTodoRow(item, { completed = false, manual = false, pageKey = '' } = {}) {
     const marker = completed ? '✓' : '□';
     const tags = (Array.isArray(item?.tags) ? item.tags : []).slice(0, 3).map(tag => `<span>#${core_text.esc(tag)}</span>`).join('');
+    const meta = manual ? '手动待办' : shortDate(item);
+    const check = manual
+        ? `<button type="button" class="rmt-calendar-master-check" data-rmt-action="calendar-toggle-todo" data-rmt-calendar-page="${core_text.esc(pageKey)}" data-rmt-calendar-todo="${core_text.esc(item?.id || '')}" aria-label="${completed ? '标记为未完成' : '标记为已完成'}">${marker}</button>`
+        : `<span class="rmt-calendar-master-check" aria-hidden="true">${marker}</span>`;
     return `<div class="rmt-calendar-master-todo-row ${completed ? 'done' : 'open'}">
-      <span class="rmt-calendar-master-check" aria-hidden="true">${marker}</span>
-      <div><b>${core_text.esc(item?.title || '未命名事项')}</b><small>${core_text.esc(shortDate(item))}${tags ? ` · ${tags}` : ''}</small></div>
+      ${check}
+      <div><b>${core_text.esc(item?.title || '未命名事项')}</b><small>${core_text.esc(meta)}${tags ? ` · ${tags}` : ''}</small></div>
     </div>`;
+}
+
+function draftCard(draft) {
+    return `<article class="rmt-calendar-sticky memo">
+      <span class="rmt-calendar-sticky-pin" aria-hidden="true"></span>
+      <small>DATE DRAFT</small>
+      <h3>草稿</h3>
+      <p>${core_text.esc(draft?.text || '')}</p>
+      <footer>只属于当前日期</footer>
+    </article>`;
 }
 
 function stickyNoteCard(note) {
     const special = note?.kind === 'special';
-    const source = note?.sourceType === 'setting'
+    const source = note?.legacyUnassigned === true
+        ? `旧版未归日期 · ${core_text.esc(note?.sourceLabel || '原日历内容')}`
+        : note?.sourceType === 'setting'
         ? `${core_text.esc(note?.sourceLabel || '角色 / 世界设定')} · 设定提醒`
         : `${core_text.esc(note?.sourceLabel || '剧情档案')}${note?.sourceMemoryAnchor ? ` · ${core_text.esc(note.sourceMemoryAnchor)}` : ''}`;
     return `<article class="rmt-calendar-sticky ${special ? 'special' : 'memo'}">
@@ -12508,7 +13846,9 @@ function stickyNoteCard(note) {
 
 function moodNoteCard(note) {
     const date = note?.date ? core_text.esc(note.date) : '';
-    const source = `${core_text.esc(note?.sourceLabel || '剧情档案 · 角色随笔')}${note?.sourceMemoryAnchor ? ` · ${core_text.esc(note.sourceMemoryAnchor)}` : ''}`;
+    const source = note?.legacyUnassigned === true
+        ? `旧版未归日期 · ${core_text.esc(note?.sourceLabel || '角色随笔')}`
+        : `${core_text.esc(note?.sourceLabel || '剧情档案 · 角色随笔')}${note?.sourceMemoryAnchor ? ` · ${core_text.esc(note.sourceMemoryAnchor)}` : ''}`;
     return `<article class="rmt-calendar-mood-note">
       <span class="rmt-calendar-mood-mark">〝</span>
       <p>${core_text.esc(note?.text || '')}</p>
@@ -12517,12 +13857,11 @@ function moodNoteCard(note) {
 }
 
 function selectedDayStrip(label, entries) {
-    if (!entries.length) return '';
-    const chips = entries.map(item => {
+    const chips = entries.length ? entries.map(item => {
         const meta = STATUS_META[item?.status] || STATUS_META.future;
         const marker = item?.status === 'past' ? '✓' : item?.status === 'promised' ? '□' : '◌';
         return `<span class="rmt-calendar-selected-chip ${core_text.esc(meta.dot)}"><i>${marker}</i>${core_text.esc(item?.title || '')}</span>`;
-    }).join('');
+    }).join('') : '<span class="rmt-calendar-selected-chip">这个日期还没有圈记事项</span>';
     return `<div class="rmt-calendar-selected-strip"><b>${core_text.esc(label || '这一天')}</b><div>${chips}</div></div>`;
 }
 
@@ -12549,17 +13888,21 @@ function shiftCalendarMonth(delta) {
 }
 
 function selectCalendarDate(dateKey) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.CALENDAR) return;
-    runtimeState.activeSession.selectedDateKey = core_text.normalizeText(dateKey, 40);
+    const session = runtimeState.activeSession;
+    if (!session || session.kind !== core_constants.MODE.CALENDAR) return;
+    const pageKey = normalizeSelectablePageKey(session, dateKey);
+    if (!pageKey || !ensureSessionDayPage(session, pageKey)) return;
+    session.selectedDateKey = pageKey;
     renderCalendar();
 }
 
 function selectCalendarPending(entryId) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.CALENDAR) return;
+    const session = runtimeState.activeSession;
+    if (!session || session.kind !== core_constants.MODE.CALENDAR) return;
     const safeId = core_text.normalizeText(entryId, 120);
-    if (!(runtimeState.activeSession.entries || []).some(item => item.date === '待定' && item.id === safeId)) return;
-    runtimeState.activeSession.selectedDateKey = `pending:${safeId}`;
-    renderCalendar();
+    const entry = (session.entries || []).find(item => item.date === '待定' && item.id === safeId);
+    if (!entry) return;
+    selectCalendarDate(modes_calendar.calendarEntryPageKey(entry));
 }
 
 function renderCalendar() {
@@ -12572,90 +13915,106 @@ function renderCalendar() {
     if (regenerate) regenerate.textContent = '刷新日历';
 
     const entries = Array.isArray(session.entries) ? session.entries : [];
-    const stickyNotes = Array.isArray(session.stickyNotes) ? session.stickyNotes : [];
-    const moodNotes = Array.isArray(session.moodNotes) ? session.moodNotes : [];
-    const monthKeys = availableMonthKeys(entries);
+    const monthKeys = availableMonthKeys(entries, session.dayPages);
     let selectedMonth = parseMonthKey(session.selectedMonth) ? session.selectedMonth : modes_calendar.defaultCalendarMonth(entries);
     if (!selectedMonth && monthKeys.length) selectedMonth = monthKeys[0];
     if (!selectedMonth) selectedMonth = `annual-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
     session.selectedMonth = selectedMonth;
     const info = parseMonthKey(selectedMonth);
 
-    const datedEntries = entries.filter(item => item.date !== '待定' && modes_calendar.calendarEntryMatchesMonth(item, selectedMonth));
     const pendingEntries = entries.filter(item => item.status === 'promised' && item.date === '待定');
-    const markedKeys = [...new Set(datedEntries.map(item => modes_calendar.calendarDateKeyForMonth(item, selectedMonth)).filter(Boolean))].sort();
-    const pendingSelected = selectedPendingEntry(entries, session.selectedDateKey);
-    if (!pendingSelected && (!session.selectedDateKey || !markedKeys.includes(session.selectedDateKey))) {
-        session.selectedDateKey = markedKeys[0] || '';
+    let selectedPageKey = normalizeSelectablePageKey(session, session.selectedDateKey);
+    if (!selectedPageKey || !pageKeyMatchesMonth(selectedPageKey, selectedMonth)) {
+        selectedPageKey = defaultPageKeyForMonth(session, selectedMonth, entries);
     }
-
-    const selectedEntries = pendingSelected
-        ? [pendingSelected]
-        : entriesForDateKey(entries, selectedMonth, session.selectedDateKey);
-    const selectedDateLabel = pendingSelected
-        ? '日期待定'
-        : session.selectedDateKey
-            ? (() => {
-                const parsed = modes_calendar.normalizeCalendarDate(session.selectedDateKey);
-                return parsed?.hasYear ? `${parsed.year}年${parsed.month}月${parsed.day}日` : parsed ? `${parsed.month}月${parsed.day}日` : '';
-            })()
-            : '';
+    const selectedPage = ensureSessionDayPage(session, selectedPageKey);
+    session.selectedDateKey = selectedPage?.key || '';
+    const selectedEntries = pageEntries(session, session.selectedDateKey);
+    const selectedDateLabel = pageLabel(session.selectedDateKey, entries);
 
     const monthJump = monthKeys.map(key => `<button type="button" class="rmt-calendar-jump ${key === selectedMonth ? 'active' : ''}" data-rmt-calendar-month="${core_text.esc(key)}">${core_text.esc(monthLabel(key))}</button>`).join('');
     const weekdays = info?.year ? ['一', '二', '三', '四', '五', '六', '日'].map(day => `<span>${day}</span>`).join('') : '';
     const blanks = Array.from({ length: firstWeekdayOffset(info) }, () => '<span class="rmt-calendar-day blank" aria-hidden="true"></span>').join('');
     const cells = Array.from({ length: monthDays(info) }, (_, index) => {
         const day = index + 1;
-        const dateKey = dateKeyForCell(selectedMonth, day);
-        const dayEntries = entriesForDateKey(entries, selectedMonth, dateKey);
+        const dateValue = dateValueForCell(selectedMonth, day);
+        const dayEntries = entriesForCell(entries, selectedMonth, dateValue);
+        const pageKey = preferredPageKeyForCell(session, selectedMonth, day, dayEntries);
         const statuses = new Set(dayEntries.map(item => item.status));
         const marked = dayEntries.length > 0;
-        const selected = session.selectedDateKey === dateKey;
+        const selected = session.selectedDateKey === pageKey;
         const first = dayEntries[0];
         const caption = first ? `${core_text.esc(first.title)}${dayEntries.length > 1 ? ` +${dayEntries.length - 1}` : ''}` : '';
         const statusDots = [...statuses].map(status => `<i class="${core_text.esc(status)}"></i>`).join('');
-        return `<button type="button" class="rmt-calendar-day ${marked ? 'marked' : ''} ${selected ? 'selected' : ''} ${statuses.has('past') ? 'has-past' : ''} ${statuses.has('promised') ? 'has-promised' : ''} ${statuses.has('future') ? 'has-future' : ''}" ${marked ? `data-rmt-calendar-date="${core_text.esc(dateKey)}"` : 'disabled'} aria-label="${marked ? core_text.esc(`${dateKey} ${dayEntries.map(item => item.title).join('、')}`) : core_text.esc(dateKey)}">
+        const aria = marked ? `${dateValue} ${dayEntries.map(item => item.title).join('、')}` : `${dateValue} 空白日期`;
+        return `<button type="button" class="rmt-calendar-day ${marked ? 'marked' : ''} ${selected ? 'selected' : ''} ${statuses.has('past') ? 'has-past' : ''} ${statuses.has('promised') ? 'has-promised' : ''} ${statuses.has('future') ? 'has-future' : ''}" data-rmt-calendar-date="${core_text.esc(pageKey)}" aria-label="${core_text.esc(aria)}">
           <span class="rmt-calendar-day-number">${day}</span>
           <span class="rmt-calendar-day-title">${caption}</span>
           <span class="rmt-calendar-day-dots">${statusDots}</span>
         </button>`;
     }).join('');
 
-    const pendingHtml = pendingEntries.length
-        ? `<div class="rmt-calendar-pending"><span>还没定日期的约定</span><div>${pendingEntries.map(item => `<button type="button" class="${session.selectedDateKey === `pending:${item.id}` ? 'active' : ''}" data-rmt-calendar-pending="${core_text.esc(item.id)}">${core_text.esc(item.title)}</button>`).join('')}</div></div>`
+    const legacyPage = modes_calendar.calendarDayPage(session, modes_calendar.CALENDAR_LEGACY_PAGE_KEY);
+    const pendingPageKeys = [...new Set([
+        ...pendingEntries.map(item => modes_calendar.calendarEntryPageKey(item)),
+        ...Object.entries(session.dayPages || {})
+            .filter(([key, page]) => key.startsWith('pending:') && pageHasNotebookContent(page))
+            .map(([key]) => key),
+    ])];
+    const pendingButtons = pendingPageKeys.map(key => {
+        const item = pendingEntries.find(candidate => modes_calendar.calendarEntryPageKey(candidate) === key);
+        const label = item?.title || `待定 · ${key.slice(8)}`;
+        return `<button type="button" class="${session.selectedDateKey === key ? 'active' : ''}" data-rmt-calendar-date="${core_text.esc(key)}">${core_text.esc(label)}</button>`;
+    }).join('');
+    const legacyButton = pageHasNotebookContent(legacyPage)
+        ? `<button type="button" class="${session.selectedDateKey === modes_calendar.CALENDAR_LEGACY_PAGE_KEY ? 'active' : ''}" data-rmt-calendar-date="${modes_calendar.CALENDAR_LEGACY_PAGE_KEY}">旧版未归日期</button>`
+        : '';
+    const pendingHtml = pendingButtons || legacyButton
+        ? `<div class="rmt-calendar-pending"><span>特殊日期页</span><div>${pendingButtons}${legacyButton}</div></div>`
         : '';
 
+    const page = selectedPage || { drafts: [], stickyNotes: [], moodNotes: [], manualTodos: [] };
+    const drafts = Array.isArray(page.drafts) ? page.drafts : [];
+    const stickyNotes = Array.isArray(page.stickyNotes) ? page.stickyNotes : [];
+    const moodNotes = Array.isArray(page.moodNotes) ? page.moodNotes : [];
+    const manualTodos = Array.isArray(page.manualTodos) ? page.manualTodos : [];
     const memoNotes = stickyNotes.filter(note => note?.kind !== 'special');
     const specialNotes = stickyNotes.filter(note => note?.kind === 'special');
-    const promised = entries.filter(item => item.status === 'promised');
-    const recentDone = entries
-        .filter(item => item.status === 'past')
-        .map(item => ({ item, parsed: modes_calendar.normalizeCalendarDate(item.date) }))
-        .filter(row => row.parsed)
-        .sort((a, b) => b.parsed.sortKey - a.parsed.sortKey)
-        .slice(0, 3)
-        .map(row => row.item);
+    const promised = selectedEntries.filter(item => item.status === 'promised');
+    const completedEntries = selectedEntries.filter(item => item.status === 'past');
+    const manualOpen = manualTodos.filter(item => item?.completed !== true);
+    const manualDone = manualTodos.filter(item => item?.completed === true);
 
-    const memoBoard = memoNotes.length
-        ? memoNotes.map(stickyNoteCard).join('')
-        : '<div class="rmt-calendar-board-empty">还没有随手便签。</div>';
-    const todoBoard = promised.length
-        ? promised.map(item => calendarTodoRow(item)).join('')
-        : '<div class="rmt-calendar-board-empty">目前没有还没兑现的明确约定。</div>';
-    const doneBoard = recentDone.length
-        ? `<div class="rmt-calendar-done-label">最近划掉的</div>${recentDone.map(item => calendarTodoRow(item, { completed: true })).join('')}`
+    const memoCards = [...drafts.map(draftCard), ...memoNotes.map(stickyNoteCard)];
+    const memoBoard = memoCards.length
+        ? memoCards.join('')
+        : '<div class="rmt-calendar-board-empty">这一天还没有草稿或便签。</div>';
+    const openTodoRows = [
+        ...promised.map(item => calendarTodoRow(item)),
+        ...manualOpen.map(item => calendarTodoRow(item, { manual: true, pageKey: session.selectedDateKey })),
+    ];
+    const doneTodoRows = [
+        ...completedEntries.map(item => calendarTodoRow(item, { completed: true })),
+        ...manualDone.map(item => calendarTodoRow(item, { completed: true, manual: true, pageKey: session.selectedDateKey })),
+    ];
+    const todoBoard = openTodoRows.length
+        ? openTodoRows.join('')
+        : '<div class="rmt-calendar-board-empty">这一天目前没有待办。</div>';
+    const doneBoard = doneTodoRows.length
+        ? `<div class="rmt-calendar-done-label">这一天已划掉的</div>${doneTodoRows.join('')}`
         : '';
-    const specialBoard = specialNotes.length
-        ? `<section class="rmt-calendar-special-notes"><header><div><small>IMPORTANT / LITTLE THINGS</small><h3>特别备注</h3></div><span>${specialNotes.length}</span></header><div>${specialNotes.map(stickyNoteCard).join('')}</div></section>`
-        : '';
-    const moodBoard = moodNotes.length
-        ? `<section class="rmt-calendar-mood-section"><header><div><small>MARGIN NOTES</small><h3>页角随笔</h3></div><span>偶尔写一点</span></header><div class="rmt-calendar-mood-grid">${moodNotes.map(moodNoteCard).join('')}</div></section>`
-        : '';
+    const specialCards = specialNotes.length
+        ? specialNotes.map(stickyNoteCard).join('')
+        : '<div class="rmt-calendar-board-empty">这一天没有特别备注。</div>';
+    const moodCards = moodNotes.length
+        ? moodNotes.map(moodNoteCard).join('')
+        : '<div class="rmt-calendar-board-empty">这一天还没有页角随笔。</div>';
+    const allPromisedCount = entries.reduce((count, item) => count + (item?.status === 'promised' ? 1 : 0), 0);
 
     body.innerHTML = `<div class="rmt-calendar-shell rmt-calendar-v3">
       <section class="rmt-calendar-hero compact">
-        <div><div class="rmt-archive-kicker">RELATIONSHIP CALENDAR</div><h2>${core_text.esc(session.title || '两个人的日历')}</h2><p>像一本真正会被使用的私人手账：上面圈日期，下面留便签、To-Do、特别备注和偶尔几句页角随笔。不是剧情目录，也不是每件事都要写感想。</p></div>
-        <div class="rmt-calendar-counts"><span><b>${entries.filter(item => item.status === 'past').length}</b> 已发生</span><span><b>${promised.length}</b> 待办</span><span><b>${entries.filter(item => item.status === 'future').length}</b> 提醒</span></div>
+        <div><div class="rmt-archive-kicker">RELATIONSHIP CALENDAR</div><h2>${core_text.esc(session.title || '两个人的日历')}</h2><p>点选任意日期；每一天都有完全独立的草稿、便签、To-Do、特别备注和页角随笔，不会串到其他日期。</p></div>
+        <div class="rmt-calendar-counts"><span><b>${entries.filter(item => item.status === 'past').length}</b> 已发生</span><span><b>${allPromisedCount}</b> 待办</span><span><b>${entries.filter(item => item.status === 'future').length}</b> 提醒</span></div>
       </section>
 
       <section class="rmt-calendar-paper">
@@ -12676,17 +14035,19 @@ function renderCalendar() {
 
       <section class="rmt-calendar-notebook-board">
         <section class="rmt-calendar-sticky-panel">
-          <header><div><small>STICKY NOTES</small><h3>便签夹</h3></div><span>${memoNotes.length}</span></header>
+          <header><div><small>DATE DRAFTS / STICKY NOTES</small><h3>草稿与便签</h3></div><span>${drafts.length + memoNotes.length}</span></header>
           <div class="rmt-calendar-sticky-grid">${memoBoard}</div>
+          <div class="rmt-calendar-detail"><textarea class="text_pole" rows="2" data-rmt-calendar-draft-input placeholder="给${core_text.esc(selectedDateLabel)}写一条草稿…"></textarea><button type="button" class="rmt-btn" data-rmt-action="calendar-add-draft" data-rmt-calendar-page="${core_text.esc(session.selectedDateKey)}">保存到这一天</button></div>
         </section>
         <section class="rmt-calendar-master-todo">
-          <header><div><small>TO DO LIST</small><h3>还要做的事</h3></div><span>${promised.length}</span></header>
+          <header><div><small>DATE TO DO LIST</small><h3>这一天的待办</h3></div><span>${promised.length + manualTodos.length}</span></header>
           <div class="rmt-calendar-master-todo-list">${todoBoard}${doneBoard}</div>
+          <div class="rmt-calendar-detail"><input class="text_pole" data-rmt-calendar-todo-input placeholder="给这一天添加手动待办…"><button type="button" class="rmt-btn" data-rmt-action="calendar-add-todo" data-rmt-calendar-page="${core_text.esc(session.selectedDateKey)}">添加待办</button></div>
         </section>
       </section>
 
-      ${specialBoard}
-      ${moodBoard}
+      <section class="rmt-calendar-special-notes"><header><div><small>IMPORTANT / LITTLE THINGS</small><h3>特别备注</h3></div><span>${specialNotes.length}</span></header><div>${specialCards}</div></section>
+      <section class="rmt-calendar-mood-section"><header><div><small>MARGIN NOTES</small><h3>页角随笔</h3></div><span>${moodNotes.length}</span></header><div class="rmt-calendar-mood-grid">${moodCards}</div></section>
     </div>`;
 }
 
@@ -12702,6 +14063,7 @@ function __init_ui_contentManager_js() {
 // MODULE: ui/contentManager.js
 const core_constants = __m_core_constants_js;
 const core_text = __m_core_text_js;
+const modes_calendar = __m_modes_calendar_js;
 const ui_overlay = __m_ui_overlay_js;
 const runtimeState = __m_core_state_js.state;
 // Heartbeat Memories content management UI.
@@ -12715,7 +14077,7 @@ const MANAGEABLE_TARGET_TYPES = new Set([
     'phone-app', 'phone-entry',
     'ending-route', 'ending-confession',
     'heart-voice', 'heart-scenario', 'heart-strip', 'heart-strip-image', 'heart-firefly',
-    'achievement', 'calendar-entry', 'calendar-note', 'calendar-mood', 'butterfly-node',
+    'achievement', 'calendar-entry', 'calendar-note', 'calendar-mood', 'calendar-draft', 'calendar-manual-todo', 'butterfly-node',
 ]);
 
 function isManageableTargetType(value) {
@@ -12726,12 +14088,44 @@ function target(type, id, label, detail = '', parentId = '', options = {}) {
     return {
         type,
         id: core_text.normalizeText(id, 120),
-        parentId: core_text.normalizeText(parentId, 120),
+        parentId: core_text.normalizeText(parentId, 160),
         label: core_text.normalizeText(label, 180),
         detail: core_text.normalizeText(detail, 500),
         canDelete: options.canDelete !== false,
         canRegenerate: options.canRegenerate !== false,
     };
+}
+
+function calendarPageLabel(page, key) {
+    if (key === modes_calendar.CALENDAR_LEGACY_PAGE_KEY) return '旧版未归日期';
+    if (page?.kind === 'pending') return '日期待定';
+    if (page?.kind === 'annual') return `${page.date || key.slice(7)} · 每年`;
+    return page?.date || key.replace(/^date:/, '') || '未知日期';
+}
+
+function calendarManagementTargets(session) {
+    const targets = (session.entries || []).map(item => {
+        const pageKey = modes_calendar.calendarEntryPageKey(item);
+        return target('calendar-entry', item.id, `日期 · ${item.title}`, `${item.date || '待定'} · ${item.status || ''}`, pageKey);
+    });
+    for (const [pageKey, page] of Object.entries(session.dayPages && typeof session.dayPages === 'object' ? session.dayPages : {})) {
+        const safePage = modes_calendar.calendarDayPage(session, pageKey);
+        if (!safePage) continue;
+        const label = calendarPageLabel(safePage, pageKey);
+        for (const item of safePage.drafts || []) {
+            targets.push(target('calendar-draft', item.id, `草稿 · ${label}`, item.text || '', pageKey, { canRegenerate: false }));
+        }
+        for (const item of safePage.stickyNotes || []) {
+            targets.push(target('calendar-note', item.id, `${item.kind === 'special' ? '特别备注' : '便签'} · ${item.title || item.id}`, `${label} · ${item.text || ''}`, pageKey));
+        }
+        for (const item of safePage.moodNotes || []) {
+            targets.push(target('calendar-mood', item.id, `页角随笔 · ${label}`, item.text || '', pageKey));
+        }
+        for (const item of safePage.manualTodos || []) {
+            targets.push(target('calendar-manual-todo', item.id, `手动待办 · ${item.title}`, `${label} · ${item.completed ? '已完成' : '未完成'}`, pageKey, { canRegenerate: false }));
+        }
+    }
+    return targets;
 }
 
 function managementTargetsForSession(session) {
@@ -12780,11 +14174,7 @@ function managementTargetsForSession(session) {
         return (session.entries || []).map(item => target('achievement', item.id, item.title, item.unlocked ? '已解锁' : '未解锁'));
     }
     if (mode === core_constants.MODE.CALENDAR) {
-        return [
-            ...(session.entries || []).map(item => target('calendar-entry', item.id, `日期 · ${item.title}`, `${item.date || '待定'} · ${item.status || ''}`)),
-            ...(session.stickyNotes || []).map(item => target('calendar-note', item.id, `${item.kind === 'special' ? '特别备注' : '便签'} · ${item.title || item.id}`, item.text || '')),
-            ...(session.moodNotes || []).map(item => target('calendar-mood', item.id, '页角随笔', item.text || '')),
-        ];
+        return calendarManagementTargets(session);
     }
     if (mode === core_constants.MODE.BUTTERFLY) {
         const nodes = Array.isArray(session.nodes) ? session.nodes : [];
@@ -13096,9 +14486,107 @@ const runtimeState = __m_core_state_js.state;
 // Extracted from r34 without changing archive/cache storage contracts.
 
 
+const PHONE_HOME_APP_ID = '__PHONE_HOME__';
+const PHONE_VIEW_VALUES = new Set(['home', 'list', 'detail']);
+const PHONE_PRESENTATION_KINDS = new Set([
+    'moments', 'chat', 'gallery', 'camera', 'notes', 'store', 'browser', 'contacts', 'location', 'music',
+    'work', 'study', 'health', 'fitness', 'training', 'reading', 'books', 'files', 'research', 'games', 'finance', 'travel', 'security', 'creative',
+    'weather', 'tools', 'misc',
+]);
+const PHONE_UI_TOKEN_VALUES = Object.freeze({
+    palette: new Set(['noir-gold', 'ink-blue', 'frost', 'moss', 'ember', 'lilac', 'sky', 'sand']),
+    wallpaper: new Set(['smoke', 'rain', 'grid', 'starfield', 'library', 'aurora', 'minimal', 'paper']),
+    typography: new Set(['modern', 'serif', 'mono']),
+    iconStyle: new Set(['rounded', 'square', 'glyph', 'glass']),
+    density: new Set(['compact', 'cozy', 'roomy']),
+    shellTone: new Set(['graphite', 'silver', 'ivory', 'bronze', 'navy']),
+});
+const PHONE_UI_FALLBACKS = Object.freeze({
+    palette: ['noir-gold', 'ink-blue', 'frost', 'moss', 'ember', 'lilac', 'sky', 'sand'],
+    wallpaper: ['smoke', 'rain', 'grid', 'starfield', 'library', 'aurora', 'minimal', 'paper'],
+    typography: ['modern', 'serif', 'mono'],
+    iconStyle: ['rounded', 'square', 'glyph', 'glass'],
+    density: ['compact', 'cozy', 'roomy'],
+    shellTone: ['graphite', 'silver', 'ivory', 'bronze', 'navy'],
+});
+const PHONE_ICON_CLASSES = Object.freeze({
+    message: 'fa-comment-dots', people: 'fa-user-group', photo: 'fa-images', camera: 'fa-camera', note: 'fa-note-sticky',
+    bag: 'fa-bag-shopping', globe: 'fa-globe', contact: 'fa-address-book', pin: 'fa-location-dot', music: 'fa-music',
+    briefcase: 'fa-briefcase', book: 'fa-book-open', heart: 'fa-heart-pulse', activity: 'fa-person-running', game: 'fa-gamepad',
+    wallet: 'fa-wallet', plane: 'fa-plane', shield: 'fa-shield-halved', palette: 'fa-palette', cloud: 'fa-cloud-sun',
+    tool: 'fa-screwdriver-wrench', spark: 'fa-star', grid: 'fa-table-cells-large',
+});
+const PHONE_KIND_ICONS = Object.freeze({
+    moments: 'people', chat: 'message', gallery: 'photo', camera: 'camera', notes: 'note', store: 'bag', browser: 'globe',
+    contacts: 'contact', location: 'pin', music: 'music', work: 'briefcase', study: 'book', health: 'heart', fitness: 'activity', training: 'activity',
+    reading: 'book', books: 'book', files: 'briefcase', research: 'tool', games: 'game', finance: 'wallet', travel: 'plane', security: 'shield', creative: 'palette',
+    weather: 'cloud', tools: 'tool', misc: 'spark',
+});
+
+function visiblePhoneApps(session) {
+    return (Array.isArray(session?.apps) ? session.apps : []).filter(app => {
+        const kind = core_text.normalizeText(app?.kind, 60).toLowerCase();
+        const label = core_text.normalizeText(app?.label, 60);
+        return app?.id !== PHONE_HOME_APP_ID && !core_constants.PHONE_EXCLUDED_APP_KINDS.has(kind) && !/日历|calendar|schedule/i.test(label);
+    });
+}
+
+function phonePresentationKind(app) {
+    const kind = core_text.normalizeText(app?.kind, 60).toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    return PHONE_PRESENTATION_KINDS.has(kind) ? kind : 'misc';
+}
+
+function phonePresentationIcon(app) {
+    const requested = core_text.normalizeText(app?.icon, 40).toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    if (Object.prototype.hasOwnProperty.call(PHONE_ICON_CLASSES, requested)) return requested;
+    return PHONE_KIND_ICONS[phonePresentationKind(app)] || 'spark';
+}
+
+function phoneIconHtml(app) {
+    const icon = phonePresentationIcon(app);
+    return `<span class="rmt-phone-icon rmt-phone-icon-${icon}" aria-hidden="true"><i class="fa-solid ${PHONE_ICON_CLASSES[icon]}"></i></span>`;
+}
+
+function phoneViewUiProfile(session) {
+    const source = session?.uiProfile && typeof session.uiProfile === 'object' ? session.uiProfile : {};
+    const seed = [session?.ownerName, session?.deviceName, session?.title, ...visiblePhoneApps(session).flatMap(app => [app?.label, app?.kind])].join('|');
+    const hash = core_text.hashString(seed || session?.deviceKind || 'private-device');
+    const result = {};
+    let shift = 0;
+    for (const field of ['palette', 'wallpaper', 'typography', 'iconStyle', 'density', 'shellTone']) {
+        const requested = core_text.normalizeText(source[field], 40).toLowerCase().replace(/_/g, '-');
+        const fallbacks = PHONE_UI_FALLBACKS[field];
+        result[field] = PHONE_UI_TOKEN_VALUES[field].has(requested) ? requested : fallbacks[(hash >>> shift) % fallbacks.length];
+        shift += 4;
+    }
+    return result;
+}
+
+function upgradePhoneViewSession(session) {
+    const wasLegacy = Number(session?.uiVersion) !== core_constants.PHONE_SESSION_VERSION;
+    session.uiVersion = core_constants.PHONE_SESSION_VERSION;
+    session.uiProfile = phoneViewUiProfile(session);
+    if (wasLegacy) {
+        session.view = 'home';
+        session.selectedEntryId = '';
+    } else if (!PHONE_VIEW_VALUES.has(session.view)) {
+        session.view = 'home';
+        session.selectedEntryId = '';
+    }
+    const apps = visiblePhoneApps(session);
+    if (!apps.some(app => app.id === session.selectedAppId)) session.selectedAppId = apps[0]?.id || '';
+    const selected = apps.find(app => app.id === session.selectedAppId);
+    if (session.view === 'detail' && !selected?.entries?.some(entry => entry.id === session.selectedEntryId)) {
+        session.view = 'list';
+        session.selectedEntryId = '';
+    }
+    if (session.view === 'list' && !selected) session.view = 'home';
+    return session;
+}
+
 function selectedPhoneApp() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.PHONE) return null;
-    const apps = runtimeState.activeSession.apps.filter(app => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(core_text.normalizeText(app?.kind, 60).toLowerCase()));
+    const apps = visiblePhoneApps(runtimeState.activeSession);
     return apps.find(app => app.id === runtimeState.activeSession.selectedAppId) || apps[0] || null;
 }
 
@@ -13155,6 +14643,7 @@ function phoneConversationNeedsSpeakerRepair(entry, session) {
 
 function renderPhoneEntryDetail(entry, app, session = runtimeState.activeSession) {
     if (!entry) return '<div class="rmt-phone-detail rmt-phone-detail-empty">选择一条记录查看详情。</div>';
+    const appKind = phonePresentationKind(app);
     const messages = entry.messages?.length ? `<div class="rmt-phone-chat-thread">${entry.messages.map(message => {
         const role = phoneRenderedSpeakerRole(message, session);
         const speaker = role === 'owner'
@@ -13162,17 +14651,59 @@ function renderPhoneEntryDetail(entry, app, session = runtimeState.activeSession
             : (core_text.normalizeText(message?.speaker, 100) || core_text.normalizeText(entry?.contactName, 100) || '联系人');
         return `<div class="rmt-phone-message rmt-phone-message-${role}"><div><b>${core_text.esc(speaker)}</b>${message.time ? `<small>${core_text.esc(message.time)}</small>` : ''}</div><p>${core_text.esc(message.text)}</p></div>`;
     }).join('')}</div>` : '';
-    const speakerRepair = app?.kind === 'chat' && phoneConversationNeedsSpeakerRepair(entry, session)
+    const speakerRepair = appKind === 'chat' && phoneConversationNeedsSpeakerRepair(entry, session)
         ? '<div class="rmt-phone-speaker-warning">这条是旧版聊天缓存，缺少可靠的双向发言人标记。可在“管理”里重新生成这一条，修复为设备主人 / 联系人分开的对话。</div>'
         : '';
     const fields = entry.fields?.length ? `<dl class="rmt-phone-fields">${entry.fields.map(field => `<div><dt>${core_text.esc(field.label)}</dt><dd>${core_text.esc(field.value)}</dd></div>`).join('')}</dl>` : '';
     const gallery = entry.imageCaption ? `<div class="rmt-phone-image-caption">${core_text.esc(entry.imageCaption)}</div>` : '';
-    return `<div class="rmt-phone-detail"><div class="rmt-phone-detail-toolbar"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回${core_text.esc(app?.label || '列表')}</button><span>${core_text.esc(entry.meta || app?.label || '')}</span></div><h3>${core_text.esc(entry.title)}</h3>${gallery}${entry.detail ? `<p>${core_text.esc(entry.detail)}</p>` : ''}${fields}${speakerRepair}${messages}${entry.basis === '记忆' ? `<div class="rmt-phone-evidence">档案痕迹：${core_text.esc(entry.sourceMemoryAnchor)}</div>` : ''}</div>`;
+    return `<div class="rmt-phone-detail rmt-phone-detail-${appKind}"><div class="rmt-phone-detail-toolbar"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回${core_text.esc(app?.label || '列表')}</button><span>${core_text.esc(entry.meta || app?.label || '')}</span></div><h3>${core_text.esc(entry.title)}</h3>${gallery}${entry.detail ? `<p>${core_text.esc(entry.detail)}</p>` : ''}${fields}${speakerRepair}${messages}${entry.basis === '记忆' ? `<div class="rmt-phone-evidence">档案痕迹：${core_text.esc(entry.sourceMemoryAnchor)}</div>` : ''}</div>`;
+}
+
+function phoneStatusBar(now) {
+    return `<div class="rmt-phone-statusbar"><b data-rmt-phone-clock>${core_text.esc(modes_room.roomClockText(now))}</b><span aria-label="设备状态"><i class="fa-solid fa-signal" aria-hidden="true"></i><i class="fa-solid fa-wifi" aria-hidden="true"></i><i class="fa-solid fa-battery-three-quarters" aria-hidden="true"></i></span></div>`;
+}
+
+function phoneHardware(kind) {
+    if (kind === 'watch') return '<div class="rmt-phone-watch-crown" aria-hidden="true"></div><div class="rmt-phone-watch-lug rmt-phone-watch-lug-top" aria-hidden="true"></div><div class="rmt-phone-watch-lug rmt-phone-watch-lug-bottom" aria-hidden="true"></div>';
+    if (kind === 'terminal') return '<div class="rmt-phone-terminal-panel" aria-hidden="true"><i></i><i></i><i></i></div><div class="rmt-phone-terminal-rail" aria-hidden="true"></div>';
+    if (kind === 'communicator') return '<div class="rmt-phone-communicator-antenna" aria-hidden="true"></div><div class="rmt-phone-communicator-grille" aria-hidden="true"><i></i><i></i><i></i></div>';
+    return '<div class="rmt-phone-notch" aria-hidden="true"></div><div class="rmt-phone-side-key" aria-hidden="true"></div>';
+}
+
+function phoneAppButton(app, badge, className = '') {
+    return `<button type="button" class="rmt-phone-app rmt-phone-home-app ${className}" data-rmt-phone-app="${core_text.esc(app.id)}" aria-label="打开 ${core_text.esc(app.label)}">${phoneIconHtml(app)}<span>${core_text.esc(app.label)}</span>${badge ? `<em class="rmt-phone-badge">${badge}</em>` : ''}</button>`;
+}
+
+function renderPhoneHome(session, apps, live, now, kind) {
+    const launcher = apps.map(app => phoneAppButton(app, Math.max(0, Number(live.badgeCounts?.[app.id]) || 0))).join('');
+    const dockCandidates = [];
+    for (const preferred of ['chat', 'notes', 'contacts', 'browser']) {
+        const app = apps.find(item => phonePresentationKind(item) === preferred && !dockCandidates.includes(item));
+        if (app) dockCandidates.push(app);
+    }
+    for (const app of apps) {
+        if (dockCandidates.length >= (kind === 'watch' ? 2 : 4)) break;
+        if (!dockCandidates.includes(app)) dockCandidates.push(app);
+    }
+    const dock = dockCandidates.map(app => phoneAppButton(app, Math.max(0, Number(live.badgeCounts?.[app.id]) || 0), 'rmt-phone-dock-app')).join('');
+    return `<section class="rmt-phone-home rmt-phone-home-screen rmt-phone-wallpaper rmt-phone-wallpaper-${session.uiProfile.wallpaper}" aria-label="设备主屏幕"><div class="rmt-phone-lock"><div><b>${core_text.esc(session.deviceName)}</b><small>${core_text.esc(live.statusLine || modes_room.roomDaypartState(now).label)}</small></div><span><small>${core_text.esc(live.lockText)}</small></span></div><div class="rmt-phone-apps rmt-phone-home-grid">${launcher || '<div class="rmt-phone-home-empty">这个设备还没有可读入口。</div>'}</div>${dock ? `<div class="rmt-phone-dock" aria-label="常用功能">${dock}</div>` : ''}</section>`;
+}
+
+function renderPhoneAppList(app) {
+    if (!app) return '<section class="rmt-phone-page rmt-phone-page-empty">这个设备还没有可读 App。</section>';
+    const kind = phonePresentationKind(app);
+    const entries = (Array.isArray(app.entries) ? app.entries : []).map(item => `<button type="button" class="rmt-phone-entry" data-rmt-phone-entry="${core_text.esc(item.id)}"><b>${core_text.esc(item.title)}</b><small>${core_text.esc(item.meta || item.preview)}</small><span>${core_text.esc(item.preview)}</span>${item.messages?.length ? `<em>${item.messages.length} 条消息</em>` : ''}</button>`).join('');
+    return `<section class="rmt-phone-page rmt-phone-app-screen rmt-phone-page-list rmt-phone-page-${kind}"><div class="rmt-phone-page-header"><button type="button" class="rmt-phone-page-back" data-rmt-action="phone-home" data-rmt-phone-app="${PHONE_HOME_APP_ID}" aria-label="返回设备主屏">‹</button>${phoneIconHtml(app)}<div><b>${core_text.esc(app.label)}</b><small>${core_text.esc(app.summary || `${app.entries?.length || 0} 个可读条目`)}</small></div></div><div class="rmt-phone-list"><div class="rmt-phone-app-summary"><b>${core_text.esc(app.label)}</b><span>${core_text.esc(app.summary || '')}</span><small>${app.entries?.length || 0} 个可读条目</small></div>${entries || '<div class="rmt-phone-list-empty">这里暂时没有内容。</div>'}</div></section>`;
+}
+
+function renderPhoneDetailPage(entry, app) {
+    return `<section class="rmt-phone-page rmt-phone-app-screen rmt-phone-page-detail">${renderPhoneEntryDetail(entry, app)}</section>`;
 }
 
 function renderPhone() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.PHONE) return;
+    upgradePhoneViewSession(session);
     ui_overlay.setBackVisible(true, '他的房间');
     ui_overlay.topTitle('他的房间 · 私人终端');
     const now = new Date();
@@ -13180,29 +14711,45 @@ function renderPhone() {
     const app = selectedPhoneApp();
     const entry = app?.entries.find(item => item.id === session.selectedEntryId) || null;
     if (session.view === 'detail' && !entry) session.view = 'list';
-    const visibleApps = session.apps.filter(item => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(core_text.normalizeText(item?.kind, 60).toLowerCase()));
-    const apps = visibleApps.map(item => {
-        const badge = Math.max(0, Number(live.badgeCounts?.[item.id]) || 0);
-        return `<button type="button" class="rmt-phone-app ${item.id === app?.id ? 'active' : ''}" data-rmt-phone-app="${core_text.esc(item.id)}"><i class="fa-solid fa-square"></i><span>${core_text.esc(item.label)}</span>${badge ? `<em class="rmt-phone-badge">${badge}</em>` : ''}</button>`;
-    }).join('');
-    const entries = (app?.entries || []).map(item => `<button type="button" class="rmt-phone-entry ${item.id === entry?.id ? 'active' : ''}" data-rmt-phone-entry="${core_text.esc(item.id)}"><b>${core_text.esc(item.title)}</b><small>${core_text.esc(item.meta || item.preview)}</small><span>${core_text.esc(item.preview)}</span>${item.messages?.length ? `<em>${item.messages.length} 条消息</em>` : ''}</button>`).join('');
-    const detail = renderPhoneEntryDetail(entry, app);
+    const apps = visiblePhoneApps(session);
     const kind = core_constants.PHONE_DEVICE_KINDS.has(session.deviceKind) ? session.deviceKind : 'phone';
+    const view = PHONE_VIEW_VALUES.has(session.view) ? session.view : 'home';
+    const page = view === 'home'
+        ? renderPhoneHome(session, apps, live, now, kind)
+        : view === 'detail'
+            ? renderPhoneDetailPage(entry, app)
+            : renderPhoneAppList(app);
+    const profile = phoneViewUiProfile(session);
+    const profileClasses = [
+        `rmt-phone-palette-${profile.palette}`,
+        `rmt-phone-type-${profile.typography}`,
+        `rmt-phone-icons-${profile.iconStyle}`,
+        `rmt-phone-density-${profile.density}`,
+        `rmt-phone-shell-${profile.shellTone}`,
+    ].join(' ');
     const phoneWritable = !runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly;
     const incrementalButton = phoneWritable
         ? '<button type="button" class="rmt-btn rmt-phone-increment" data-rmt-action="regenerate"><i class="fa-solid fa-plus"></i> 增量追加终端</button>'
         : '<button type="button" class="rmt-btn rmt-phone-increment" disabled title="关闭只读查看后可增量追加"><i class="fa-solid fa-lock"></i> 只读 · 无法增量</button>';
-    ui_overlay.bodyEl().innerHTML = `<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="room-deep-back">← 返回他的房间</button>${incrementalButton}</div><div class="rmt-phone"><div class="rmt-phone-shell rmt-device-${core_text.esc(kind)} rmt-phone-view-${session.view === 'detail' ? 'detail' : 'list'}" data-rmt-phone-daypart="${core_text.esc(live.key)}"><div class="rmt-phone-notch"></div><div class="rmt-phone-lock"><div><b>${core_text.esc(session.deviceName)}</b><small>${core_text.esc(live.statusLine || modes_room.roomDaypartState(now).label)}</small></div><span><b data-rmt-phone-clock>${core_text.esc(modes_room.roomClockText(now))}</b><small>${core_text.esc(live.lockText)}</small></span></div><div class="rmt-phone-apps">${apps}</div><div class="rmt-phone-content"><div class="rmt-phone-list"><div class="rmt-phone-app-summary"><b>${core_text.esc(app?.label || '')}</b><span>${core_text.esc(app?.summary || '')}</span><small>${app?.entries?.length || 0} 个可读条目</small></div>${entries}</div>${detail}</div></div></div>`;
+    ui_overlay.bodyEl().innerHTML = `<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="room-deep-back">← 返回他的房间</button>${incrementalButton}</div><div class="rmt-phone"><div class="rmt-phone-shell rmt-device-${kind} rmt-phone-view-${view} ${profileClasses}" data-rmt-phone-daypart="${core_text.esc(live.key)}">${phoneHardware(kind)}<div class="rmt-phone-screen">${phoneStatusBar(now)}<main class="rmt-phone-content rmt-phone-content-single">${page}</main></div></div></div>`;
     startPhoneClock();
 }
 
 function phoneSelectApp(id) {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.PHONE) return;
-    const app = runtimeState.activeSession.apps.find(item => item.id === id && !core_constants.PHONE_EXCLUDED_APP_KINDS.has(core_text.normalizeText(item?.kind, 60).toLowerCase()));
+    if (id === PHONE_HOME_APP_ID) return phoneHome();
+    const app = visiblePhoneApps(runtimeState.activeSession).find(item => item.id === id);
     if (!app) return;
     runtimeState.activeSession.selectedAppId = app.id;
     runtimeState.activeSession.selectedEntryId = '';
     runtimeState.activeSession.view = 'list';
+    renderPhone();
+}
+
+function phoneHome() {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.PHONE) return;
+    runtimeState.activeSession.selectedEntryId = '';
+    runtimeState.activeSession.view = 'home';
     renderPhone();
 }
 
@@ -13228,6 +14775,7 @@ __m_ui_phoneView_js.startPhoneClock = startPhoneClock;
 __m_ui_phoneView_js.renderPhoneEntryDetail = renderPhoneEntryDetail;
 __m_ui_phoneView_js.renderPhone = renderPhone;
 __m_ui_phoneView_js.phoneSelectApp = phoneSelectApp;
+__m_ui_phoneView_js.phoneHome = phoneHome;
 __m_ui_phoneView_js.phoneSelectEntry = phoneSelectEntry;
 __m_ui_phoneView_js.phoneEntryBack = phoneEntryBack;
 }
@@ -13898,7 +15446,7 @@ function managedTargetRecord(type, id, parentId = '') {
     return ui_contentManager.managementTargetsForSession(runtimeState.activeSession).find(item =>
         item.type === core_text.normalizeText(type, 60)
         && item.id === core_text.normalizeText(id, 120)
-        && item.parentId === core_text.normalizeText(parentId, 120)
+        && item.parentId === core_text.normalizeText(parentId, 160)
     ) || null;
 }
 
@@ -13956,11 +15504,26 @@ function deleteManagedTargetFromSession(session, type, id, parentId = '') {
     } else if (type === 'achievement') {
         updated.entries = removeById(updated.entries, id);
     } else if (type === 'calendar-entry') {
-        updated.entries = removeById(updated.entries, id);
-    } else if (type === 'calendar-note') {
-        updated.stickyNotes = removeById(updated.stickyNotes, id);
-    } else if (type === 'calendar-mood') {
-        updated.moodNotes = removeById(updated.moodNotes, id);
+        const pageKey = core_text.normalizeText(parentId, 160);
+        const index = updated.entries?.findIndex(item => item?.id === id && modes_calendar.calendarEntryPageKey(item) === pageKey) ?? -1;
+        if (index < 0) throw new Error('找不到这条日历项。');
+        updated.entries.splice(index, 1);
+        const page = modes_calendar.calendarDayPage(updated, pageKey);
+        const sameIdStillOnPage = (updated.entries || []).some(item => item?.id === id && modes_calendar.calendarEntryPageKey(item) === pageKey);
+        if (page && !sameIdStillOnPage) page.entryIds = (Array.isArray(page.entryIds) ? page.entryIds : []).filter(entryId => entryId !== id);
+    } else if (type === 'calendar-note' || type === 'calendar-mood' || type === 'calendar-draft' || type === 'calendar-manual-todo') {
+        const page = modes_calendar.calendarDayPage(updated, core_text.normalizeText(parentId, 160));
+        if (!page) throw new Error('找不到这个日期页。');
+        const field = type === 'calendar-note'
+            ? 'stickyNotes'
+            : type === 'calendar-mood'
+                ? 'moodNotes'
+                : type === 'calendar-draft'
+                    ? 'drafts'
+                    : 'manualTodos';
+        const before = Array.isArray(page[field]) ? page[field].length : 0;
+        page[field] = removeById(page[field], id);
+        if (page[field].length === before) throw new Error('找不到这条日期页内容。');
     } else if (type === 'butterfly-node') {
         const node = updated.nodes?.find(entry => entry.id === id);
         if (!node || node.trueEnding || node.id === 'MAIN') throw new Error('主时间线和观测点 Ω 不能单独删除。');
@@ -13982,6 +15545,78 @@ async function commitManagedSession(updated, expectedChatId, expectedArchiveRevi
     if (!core_cache.saveSession(runtimeState.activeMode, updated, expectedChatId)) throw new Error('当前派生缓存版本已经变化，本次修改没有写入。');
     runtimeState.activeSession = updated;
     return true;
+}
+
+function uniqueCalendarManualId(items, prefix, pageKey, value) {
+    const used = new Set((Array.isArray(items) ? items : []).map(item => core_text.safeId(item?.id, '')).filter(Boolean));
+    const seed = core_text.hashString(`${pageKey}|${value}|${Date.now()}`).toString(36).toUpperCase();
+    let id = `${prefix}_${seed}`;
+    let serial = 2;
+    while (used.has(id)) id = `${prefix}_${seed}_${serial++}`;
+    return id;
+}
+
+async function mutateCalendarDayPage(pageKey, mutation, successMessage) {
+    if (!archive_library.requireWritableArchiveAction()) return false;
+    try {
+        const context = core_context.currentCharacterGuard();
+        const expectedChatId = core_context.getChatId(context);
+        const memoryBank = archive_repository.requireArchive(context);
+        const expectedArchiveRevision = memoryBank.archiveRevision;
+        const origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
+        const updated = core_cache.loadSession(core_constants.MODE.CALENDAR, { context, chatId: expectedChatId, memoryBank, clone: true });
+        if (!updated) throw new Error('当前日历缓存已经变化，请重新打开日历。');
+        const key = core_text.normalizeText(pageKey, 160);
+        if (!updated.dayPages || typeof updated.dayPages !== 'object') updated.dayPages = Object.create(null);
+        let page = modes_calendar.calendarDayPage(updated, key);
+        if (!page) {
+            page = modes_calendar.createCalendarDayPage(key);
+            if (!page) throw new Error('这个日期页无效，本次内容没有写入。');
+            updated.dayPages[key] = page;
+        }
+        mutation(page);
+        updated.selectedDateKey = key;
+        updated.userManaged = true;
+        await commitManagedSession(updated, expectedChatId, expectedArchiveRevision, origin);
+        if (successMessage) globalThis.toastr?.success?.(successMessage, '心跳回忆');
+        ui_calendarView.renderCalendar();
+        return true;
+    } catch (error) {
+        globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+        return false;
+    }
+}
+
+async function addCalendarDraft(pageKey, text) {
+    const value = core_text.normalizeText(text, 1200);
+    if (!value) return globalThis.toastr?.info?.('请先写下草稿内容。', '心跳回忆');
+    return mutateCalendarDayPage(pageKey, page => {
+        const drafts = Array.isArray(page.drafts) ? page.drafts : [];
+        if (drafts.length >= 24) throw new Error('这一天的草稿已达上限24条，请先在内容管理中删除旧草稿。');
+        drafts.push({ id: uniqueCalendarManualId(drafts, 'CAL_DRAFT', page.key, value), text: value, createdAt: Date.now() });
+        page.drafts = drafts;
+    }, '已保存到当前日期的独立草稿。');
+}
+
+async function addCalendarManualTodo(pageKey, title) {
+    const value = core_text.normalizeText(title, 120);
+    if (!value) return globalThis.toastr?.info?.('请先填写待办内容。', '心跳回忆');
+    return mutateCalendarDayPage(pageKey, page => {
+        const todos = Array.isArray(page.manualTodos) ? page.manualTodos : [];
+        if (todos.length >= 32) throw new Error('这一天的手动待办已达上限32条，请先删除旧待办。');
+        todos.push({ id: uniqueCalendarManualId(todos, 'CAL_TODO', page.key, value), title: value, completed: false, origin: 'user' });
+        page.manualTodos = todos;
+    }, '已添加到当前日期的独立 To-Do。');
+}
+
+async function toggleCalendarManualTodo(pageKey, todoId) {
+    const id = core_text.safeId(todoId, '');
+    if (!id) return false;
+    return mutateCalendarDayPage(pageKey, page => {
+        const item = (Array.isArray(page.manualTodos) ? page.manualTodos : []).find(todo => todo?.id === id);
+        if (!item) throw new Error('找不到这条手动待办。');
+        item.completed = item.completed !== true;
+    }, 'To-Do 状态已更新。');
 }
 
 async function deleteManagedTarget(type, id, parentId = '') {
@@ -14042,7 +15677,7 @@ async function regenerateManagedTarget(type, id, parentId = '') {
         const origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
         const base = core_cache.loadSession(mode, { context, chatId: expectedChatId, memoryBank, clone: true });
         if (!base) throw new Error('当前分类缓存已经变化，请返回后重新打开再操作。');
-        const taskKey = `manage:${core_context.chatScopeKey(context)}:${core_text.normalizeText(type, 60)}:${core_text.normalizeText(id, 120)}`;
+        const taskKey = `manage:${core_context.chatScopeKey(context)}:${core_text.normalizeText(type, 60)}:${core_text.normalizeText(parentId, 160)}:${core_text.normalizeText(id, 120)}`;
         setInnerLoading(true, `正在重新生成「${record.label}」…`);
         const updated = await generation_contentRegeneration.regenerateManagedTarget(base, type, id, parentId, { context, memoryBank, origin, taskKey });
         await commitManagedSession(updated, expectedChatId, expectedArchiveRevision, origin);
@@ -14201,6 +15836,17 @@ function handleOverlayClick(event) {
     const actionEl = event.target.closest?.('[data-rmt-action]');
     const action = actionEl?.dataset?.rmtAction;
     if (!action) return;
+    if (action === 'calendar-add-draft') {
+        const input = bodyEl()?.querySelector?.('[data-rmt-calendar-draft-input]');
+        return void addCalendarDraft(actionEl.dataset.rmtCalendarPage, input?.value);
+    }
+    if (action === 'calendar-add-todo') {
+        const input = bodyEl()?.querySelector?.('[data-rmt-calendar-todo-input]');
+        return void addCalendarManualTodo(actionEl.dataset.rmtCalendarPage, input?.value);
+    }
+    if (action === 'calendar-toggle-todo') {
+        return void toggleCalendarManualTodo(actionEl.dataset.rmtCalendarPage, actionEl.dataset.rmtCalendarTodo);
+    }
     if (runtimeState.activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'draw-heart-strip', 'clear-heart-strip', 'generate-all-adv', 'repair-failed-adv', 'room-life-refresh', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins', 'memory-worldinfo-picker', 'refresh-ending-confessions', 'heart-generate-part', 'heart-generate-season'].includes(action)) {
         if (!archive_library.requireWritableArchiveAction()) return;
     }
@@ -17852,6 +19498,7 @@ const core_context = __m_core_context_js;
 const core_evidence = __m_core_evidence_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
 const core_text = __m_core_text_js;
+const modes_calendar = __m_modes_calendar_js;
 const modes_phone = __m_modes_phone_js;
 const runtimeState = __m_core_state_js.state;
 // Heartbeat Memories r35 modular runtime.
@@ -18458,7 +20105,7 @@ function loadSession(mode, options = {}) {
         const memoryBank = options.memoryBank || (context ? archive_repository.requireArchive(context) : null);
         if (!chatId || !memoryBank) return null;
         const cache = suppliedCache || getCache(context);
-        const session = cache?.[mode];
+        let session = cache?.[mode];
         if (!session || session.kind !== mode) return null;
         if (core_text.normalizeText(cache.chatId, 240) !== chatId) return null;
         if (core_text.normalizeText(session.chatId, 240) !== chatId) return null;
@@ -18467,20 +20114,18 @@ function loadSession(mode, options = {}) {
         const userManaged = session.userManaged === true;
         if (mode === core_constants.MODE.ROOM && (!Array.isArray(session.spaces) || (!userManaged && session.spaces.length < 2))) return null;
         if (mode === core_constants.MODE.ITEMS && (!Array.isArray(session.containers) || (!userManaged && session.containers.length < 1))) return null;
-        if (mode === core_constants.MODE.PHONE && (!Array.isArray(session.apps) || (!userManaged && session.apps.length < 5))) return null;
-        if (mode === core_constants.MODE.PHONE && session.apps.some(app => core_constants.PHONE_EXCLUDED_APP_KINDS.has(core_text.normalizeText(app?.kind, 60).toLowerCase()))) {
-            const migrated = structuredClone(session);
-            migrated.apps = migrated.apps.filter(app => !core_constants.PHONE_EXCLUDED_APP_KINDS.has(core_text.normalizeText(app?.kind, 60).toLowerCase()));
-            if (!migrated.apps.length) return null;
-            if (!migrated.apps.some(app => app.id === migrated.selectedAppId)) {
-                migrated.selectedAppId = migrated.apps[0].id;
-                migrated.selectedEntryId = '';
-                migrated.view = 'list';
-            }
-            return migrated;
+        if (mode === core_constants.MODE.PHONE) {
+            session = modes_phone.migrateLegacyPhoneSession(session, memoryBank);
+            // A legacy phone may legitimately fall below the new generated minimum when the retired
+            // calendar/schedule App is removed. Cache loading therefore checks structural readability
+            // only; fresh generation still enforces its device-specific 4/5-App minimum in phone.js.
+            if (!session || !Array.isArray(session.apps) || session.apps.length < 1) return null;
         }
         if (mode === core_constants.MODE.ENDING && (!Array.isArray(session.endings) || (!userManaged && session.endings.length < 5))) return null;
-        if (mode === core_constants.MODE.CALENDAR && (!Array.isArray(session.entries) || !Array.isArray(session.stickyNotes) || !Array.isArray(session.moodNotes) || session.calendarVersion !== core_constants.CALENDAR_SESSION_VERSION)) return null;
+        if (mode === core_constants.MODE.CALENDAR) {
+            session = modes_calendar.migrateCalendarSession(session, memoryBank);
+            if (!session || !Array.isArray(session.entries) || !session.dayPages || session.calendarVersion !== core_constants.CALENDAR_SESSION_VERSION) return null;
+        }
         if (mode === core_constants.MODE.HEART && (!session.greetings || !session.relationshipSourceMemoryAnchor)) return null;
         if (mode === core_constants.MODE.ACHIEVEMENTS && (!Array.isArray(session.entries) || (!userManaged && session.entries.length < 1))) return null;
         return options.clone === false ? session : structuredClone(session);

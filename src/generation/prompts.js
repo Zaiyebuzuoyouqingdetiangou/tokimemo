@@ -104,13 +104,13 @@ UNTRUSTED_CALENDAR_ARCHIVE_JSON:
 ${calendarArchiveSlice(memoryBank, 64)}
 
 任务：生成的是【${charName}自己的私人日历 / 手账页】，不是剧情目录。
-整个页面会同时包含：
+每一个日期都是一张独立手账页。选中哪一天，只能看到和编辑那一天自己的内容；空白日期也可以打开并拥有自己的草稿、便签和 To-Do。整个日历会包含：
 1. 真正会被圈起来的日期；
 2. 一块像便利贴墙一样的【便签 / 特别备注】；
-3. 根据尚未兑现的剧情约定自动形成的【To-Do List】；
+3. 根据该日期尚未兑现的剧情约定自动形成的【To-Do List】；
 4. 偶尔出现、数量很少的【角色第一人称心情随笔】。
 
-重要：To-Do List 由 promised 数组自动生成，不要再输出第二套 todo 数组。便签和随笔是整个日历页面的边角内容，不要求绑定某一天，也绝对不是“每个日历事项都配一条感想”。
+重要：To-Do List 由所选日期页的 promised 项自动生成，不要再输出第二套 todo 数组。每条便签和随笔都必须明确归属某个日期：优先填写 calendarEntryId 绑定一个真实日历项；没有对应事项时才填写 date。禁止生成全日历共用的便签、草稿或 To-Do，也绝对不是“每个日历事项都配一条感想”。
 
 允许的日期语义标签只可从以下列表选择，最多 3 个：
 ["约会","接送","出行","见面","生日","纪念日","约定","活动","重要日","设定日"]
@@ -156,7 +156,9 @@ ${calendarArchiveSlice(memoryBank, 64)}
       "sourceType": "archive",
       "sourceMemoryIds": ["M010"],
       "sourceMemoryAnchor": "从所引用记忆 anchors/title 原样复制",
-      "sourceLabel": ""
+      "sourceLabel": "",
+      "calendarEntryId": "CAL_PROMISE_01",
+      "date": ""
     },
     {
       "id": "CAL_NOTE_02",
@@ -166,7 +168,9 @@ ${calendarArchiveSlice(memoryBank, 64)}
       "sourceType": "setting",
       "sourceMemoryIds": [],
       "sourceMemoryAnchor": "",
-      "sourceLabel": "角色卡 / 世界书"
+      "sourceLabel": "角色卡 / 世界书",
+      "calendarEntryId": "",
+      "date": "明确的 YYYY/MM/DD 或 MM/DD"
     }
   ],
   "moodNotes": [
@@ -174,7 +178,9 @@ ${calendarArchiveSlice(memoryBank, 64)}
       "id": "CAL_MOOD_01",
       "text": "那天等她出来的时候，我看时间的次数比自己想象得多。",
       "sourceMemoryIds": ["M001"],
-      "sourceMemoryAnchor": "从所引用记忆 anchors/title 原样复制"
+      "sourceMemoryAnchor": "从所引用记忆 anchors/title 原样复制",
+      "calendarEntryId": "CAL_PAST_01",
+      "date": ""
     }
   ]
 }
@@ -200,6 +206,7 @@ ${calendarArchiveSlice(memoryBank, 64)}
 
 【stickyNotes：便签墙 / 特别备注】
 - 生成 1～5 条即可，少而有生活感；不要为了填满页面硬凑。
+- 每条必须填写 calendarEntryId 或 date 之一。calendarEntryId 必须引用本次输出的 past/promised/future 中真实 id；只有没有对应事项但来源中存在明确日期时才用 date。无法确定归属日期的便签不要输出，禁止做成全局共享便签。
 - kind 只能是 "memo" 或 "special"。memo 更像“记得 / 随手记”；special 更像“特别备注 / 重要的小细节”。
 - text 保持一两句，像写在便利贴上的短句，不要写成长段剧情，不要复述整个 Mxxx。
 - sourceType="archive" 时必须引用真实 sourceMemoryIds + sourceMemoryAnchor；可以基于已经发生或已经约定的事情写很短的提醒，但不能新增 {{user}} 尚未做出的决定。
@@ -208,11 +215,12 @@ ${calendarArchiveSlice(memoryBank, 64)}
 
 【moodNotes：页角心情随笔】
 - 允许 0～3 条；没有合适的就空数组。绝对不要每个日期、每个事项都写一条。
+- 每条必须通过 calendarEntryId 绑定一个已发生的 past 项；没有可信日期归属就不要输出，禁止做成所有日期共用的随笔。
 - 必须是 ${charName} 第一人称、非常短的随笔，一两句即可；可以有一点情绪和私人感，但不要变成剧情续写、总结报告或长篇内心独白。
 - 每条必须引用真实 sourceMemoryIds + sourceMemoryAnchor；只从已发生档案中提炼当时/后来留下的一点心情余韵，不得发明新的共同事件，也不得替 {{user}} 补行动或心理。
 - 它是派生的“手账边角字”，不是正式档案事实，不要使用肯定语气扩写未被档案支持的细节。
 
-整体原则：翻开这个页面时，要像看到 ${charName} 平时真的会使用的一本私人日历：上面有日期圈记，下面有便签、To-Do、特别备注和偶尔的心情随笔。不要把它重新做成剧情大纲，也不要把随笔塞得到处都是。
+整体原则：翻开某一天时，要像看到 ${charName} 只为那一天写下的一张私人手账：该页有自己的日期圈记、草稿、便签、To-Do、特别备注和偶尔的心情随笔；切换日期后内容也随页切换，绝不共享。不要把它重新做成剧情大纲，也不要把随笔塞得到处都是。
 只输出 JSON。`;
 }
 
@@ -258,6 +266,18 @@ JSON 结构必须严格为：
       "trueEnding": false,
       "sourceMemoryIds": [],
       "sourceMemoryAnchor": "",
+      "worldSpec": {
+        "primaryAxis": "era",
+        "era": "这个世界的时代条件",
+        "identity": "这个世界的身份",
+        "occupation": "这个世界的职业/生存方式",
+        "location": "主要生活地点",
+        "keyDecision": "改变人生的关键选择",
+        "encounterWithUser": "在这个世界如何与 {{user}} 相遇",
+        "bondWithUser": "与 {{user}} 的独一关系",
+        "finalFate": "这个世界最终命运",
+        "thirdPartyRomance": false
+      },
       "monologue": "这个平行世界中的 {{char}} 第一人称发言，不少于100个汉字；这是平行体本人说的话",
       "intervention": "现世 {{char}} 看见这个平行体后的即时共鸣、自省或告白",
       "systemNote": "冷酷算法对该平行时空主体的最终判定与结局预测"
@@ -282,16 +302,18 @@ JSON 结构必须严格为：
 - 主时间线必须 locked=true、trueEnding=false，并至少引用 1 条当前手动档案 sourceMemoryIds + sourceMemoryAnchor，用来锚定“当前世界”。
 - 普通平行节点是模拟，不得伪装成已经发生的回忆；它们可以不带 sourceMemoryIds。若从某段档案作为分歧起点，可以附带真实引用，但平行世界里新增的事情仍只能写成模拟。
 - 至少 8 个普通平行节点要从角色卡、人设、世界书中的身份、职业、时代、地点、关系条件、选择或命运约束向外推演；不能只把同一场景换措辞。
+- 前 8 个普通平行节点的 worldSpec.primaryAxis 必须依次覆盖且不重复：era / identity / occupation / location / decision / encounter / bond / fate。worldSpec 其余字段都要填写具体内容，8 份组合必须实质不同；thirdPartyRomance 必须始终为 false。
 - 每个普通平行节点的 monologue 都必须是【那个平行世界里的 {{char}} 本人】第一人称发言，不少于 100 个汉字，有具体生活、处境、记忆感与情绪；不能由现世 {{char}} 代替平行体说话。
 - 每个普通平行节点的 intervention 才是【现世 {{char}}】刚看完该平行体后的即时反应；不要把两种说话者混在一个字段里。
 - 最后一项必须 id="OMEGA"、trueEnding=true，label 包含“观测点 Ω”或“TRUE ENDING”。【Ω 不是平行世界，不存在平行体】；它的 monologue 必须严格为空字符串 ""，绝对禁止再写平行体发言。
 - Ω 的 intervention 是【现世 {{char}} 在看完前面全部平行世界、听完全部平行体发言之后】的最终第一人称发言，不少于 160 个汉字。应自然综合至少 3 种以上前面出现过的命运差异/情绪冲击，而不是只回应最后一个节点，也不要逐条机械复述。
 - Ω 的 systemNote 只评价“完整观测结束后的现世主体/主时间线”，不要再判定不存在的 Ω 平行体。
 - 普通节点 code 使用“> SIMULATION RECORD #...”形式；Ω 使用“> OBSERVATION POINT #OMEGA”。
-- 每条 systemNote 使用中文、冷酷客观的 AI 算法口吻。
+- 每条 systemNote 使用中文、冷酷客观的 AI 算法口吻，并明确出现分析结论、变量/概率和最终结局判定，不能写成温柔旁白。
 - 禁止出现任何前任、前女友相关情节。
 - 禁止出现 {{char}} 与除了 {{user}} 以外任何人恋爱、结婚或组建家庭；第三方只能保持非恋爱关系。
-- 只输出结构化 JSON；视觉快照、像素边框、噪点、1 秒干扰动画由插件本地渲染，不由模型输出 HTML/CSS。`,
+- Ω 必须把至少 3 种前述命运差异汇入最终判断，并清楚表达：跨越不可能仍然相遇是命运/奇迹，而 {{user}} 是所有世界线收敛后的唯一解。
+- 只输出结构化 JSON；视觉快照、像素边框、噪点、1 秒干扰动画由插件本地渲染，不由模型输出 HTML/CSS。蝴蝶效应页面现有 UI 完全冻结，本次只生成内容，不提出或描述任何 UI 改版。`,
     [core_constants.MODE.ENDING]: (context, memoryBank) => modes_ending.endingOutlinePrompt(context, memoryBank),
     [core_constants.MODE.HEART]: (context, memoryBank) => modes_heart.heartCorePrompt(context, memoryBank),
     [core_constants.MODE.ALBUM]: (context, memoryBank) => modes_album.albumIndexPrompt(context, memoryBank, null),
@@ -342,6 +364,21 @@ JSON 结构必须严格为：
   "title": "他的房间",
   "homeName": "这个私人生活空间整体的短标题",
   "homeSummary": "1到3句概括这套私人空间与角色生活方式",
+  "visualProfile": {
+    "explicitFields": ["仅列出世界书/角色卡明文支持的字段路径；没有则为空数组"],
+    "worldStyle": "contemporary / historical / fantasy / scifi / nomadic / maritime / institutional",
+    "palette": "mist / warm / earth / forest / ocean / night / mono / jewel / violet",
+    "material": "wood / stone / fabric / metal / glass / mixed",
+    "density": "sparse / balanced / layered",
+    "figure": {
+      "build": "slender / lean / average / broad / compact / soft",
+      "hairShape": "cropped / short / medium / long / tied / curly / covered / nonhuman",
+      "hairTone": "dark / brown / light / red / silver / fantasy_cool / fantasy_warm",
+      "outfit": "casual / formal / uniform / academic / artisan / combat / ceremonial / technical / historical / fantasy",
+      "detail": "none / glasses / headphones / scarf / headwear / pointed_ears / animal_ears / horns / visor",
+      "posture": "reserved / relaxed / upright / active / studious / tired"
+    }
+  },
   "spaces": [
     {
       "id": "SP01",
@@ -373,6 +410,10 @@ JSON 结构必须严格为：
 }
 
 硬性要求：
+- visualProfile 必须只从上述英文枚举中选择，禁止输出颜色值、CSS、class、HTML、URL、头像或图片。房间和 CSS 人物必须属于同一世界气质。
+- explicitFields 只允许 worldStyle/palette/material/density/figure.build/figure.hairShape/figure.hairTone/figure.outfit/figure.detail/figure.posture；只有世界书或角色卡对该项有明文时才列入。没写的字段不得冒充明文，本地会按 {{char}} 人设种子补全，避免所有角色照抄同一套合法模板。
+- 世界书对房间、时代、种族、外貌、发型和穿着有明确设定时优先服从；世界书没写的字段，再根据 CHARACTER_CARD_JSON 中 {{char}} 的身份、职业、性格和生活条件合理推断。USER_PERSONA_JSON 描述的是用户，绝不能拿它推断 {{char}} 的长相或房间。
+- 不要照搬角色档案头像。人物由插件使用本地 CSS 轮廓组合渲染，visualProfile 只负责安全视觉语义。
 - spaces 通常 5～8 个；若角色客观居住条件很简单，也应尽量给出 3～4 个真实会长期使用的生活区域。最多 10 个，仍不得为了“丰富”凭空给普通角色豪宅。
 - 每个空间 objects 3～6 个；空间间的物件必须有区别，不能把同一套床/桌/书架换名重复。不同 spaceType 的主陈设结构也必须明显不同：卧室以床/床头为核心，客厅以沙发/茶几为核心，书房以书架/书桌为核心，音乐/录音工作室以乐器/控制台/监听或吸音结构为核心，实验室以工作台/设备为核心，餐厅以餐桌为核心，浴室以浴缸/淋浴/洗漱为核心。
 - zone 只能是“左上/右上/左下/右下/中央/近景”。
@@ -426,6 +467,15 @@ ${promptArchiveSlice(memoryBank, 24)}
   "deviceName": "设备名称",
   "deviceKind": "phone",
   "lockText": "默认锁屏短信息",
+  "uiProfile": {
+    "explicitFields": ["仅列世界书/角色卡明文支持的字段；没有则为空数组"],
+    "palette": "noir-gold / ink-blue / frost / moss / ember / lilac / sky / sand",
+    "wallpaper": "smoke / rain / grid / starfield / library / aurora / minimal / paper",
+    "typography": "modern / serif / mono",
+    "iconStyle": "rounded / square / glyph / glass",
+    "density": "compact / cozy / roomy",
+    "shellTone": "graphite / silver / ivory / bronze / navy"
+  },
   "liveStates": {
     "morning": {"lockText": "早晨状态", "statusLine": "当前状态", "badgeCounts": {"MOMENTS": 2}},
     "daytime": {"lockText": "白天状态", "statusLine": "当前状态", "badgeCounts": {}},
@@ -436,6 +486,7 @@ ${promptArchiveSlice(memoryBank, 24)}
     "id": "MOMENTS",
     "label": "动态",
     "kind": "moments",
+    "icon": "spark",
     "summary": "这个分区反映出的生活侧面",
     "entries": [{
       "id": "M01",
@@ -453,21 +504,17 @@ ${promptArchiveSlice(memoryBank, 24)}
   }]
 }
 
-现代 phone / terminal 的内容要求（watch / communicator 可按设备能力压缩，但仍需有足够生活细节）：
-1. moments / 社交动态：约 3 条动态，包含普通朋友/同事的点赞或评论互动；与 {{user}} 的既往互动若属于共同历史，必须有档案证据。
-2. chat / 通讯：约 3 个联系人条目；其中 2 个主要联系人 messages 达到约 12 条即可，形成真正可读的深度对话窗。说话语气必须符合人设。普通亲友/同事可以是设定推导；若把 {{user}} 写进历史聊天，必须 basis=记忆并提供有效证据。
-3. gallery / 相册：约 4 个条目，分类要包含“{{user}}”“私密”以及符合角色生活的其他分类。相册只生成文字照片档案，使用 title / meta / preview / detail / imageCaption 写清拍摄时间、地点、人物、构图和照片背后的生活细节。
-4. notes / 备忘录：约 5 条；其中 1～2 条可与 {{user}} 有关，但不得凭空创造已经发生的共同事件；可以写当前心情、普通个人待办和想做的事，若声称既往事实必须有记忆证据。不要复制“两个人的日历”里的约定、纪念日或日期圈记。
-5. store / 购物：约 4 条，混合推荐位、购物车、订单历史/收藏，体现消费观、职业和兴趣；和 {{user}} 相关的历史订单同样受证据约束。
-6. browser / 浏览器：约 3 条与 {{user}} 或当前关系/兴趣有关的浏览、搜索、收藏记录。可以是 {{char}} 自己当前的私人搜索意图，不得因此反推成已经共同发生的事实。
-7. contacts / 联系人：约 3 个联系人；至少 1 个详情页通过 fields 给出“备注 / 最近通话 / 共享位置或重要提醒”等 3 项以上真实细节。联系人列表 → 详情页必须可读。
-8. location / 情侣定位或关系定位：若角色设备和关系设定允许，生成 2～3 个状态/地点/提醒条目；如果世界观或关系阶段不适合情侣定位，就改造成符合人设的安全共享位置/护送/队伍定位功能，不得强行现代化。
-9. 至少 1 个 misc / persona app：必须明显符合 {{char}} 的职业、爱好、年龄或世界观，例如训练记录、乐谱、实验日志、任务终端、宠物、游戏、健康、学习等。
+App 组合要求：
+- 不再固定所有角色都使用同一组 App。必须根据 {{char}} 的时代、身份、职业、爱好、世界观、年龄和设备能力选择 5～10 个彼此不同的功能入口；watch / communicator 若屏幕或能力受限为 4～8 个。
+- 通讯型设备通常保留 chat；其余从 moments / gallery / notes / store / browser / contacts / location / files / books / music / research / health / training / study / work / travel / finance / games / security / creative / weather / tools / misc 中按人设选择。不存在的功能不要硬塞，专属职业或世界观 App 应明显多于套模板的装饰。
+- icon 只能从 message / people / photo / camera / note / bag / globe / contact / pin / music / briefcase / book / heart / activity / game / wallet / plane / shield / palette / cloud / tool / spark / grid 中选择。
+- 至少 3 种不同 kind；每个 App 通常 3～6 条有具体内容的条目。chat 至少一个主要联系人有约 10～12 条消息，形成真正可读的对话窗；其他 App 依类型使用 fields、imageCaption、detail 等表达。
+- uiProfile 必须只从上面的安全英文枚举中选择。配色、壁纸、字体、图标风格和外壳要符合 {{char}}，禁止颜色值、CSS、class、HTML、URL 或图片；插件会以本地样式绘制完整设备和主屏幕。
+- explicitFields 只允许 palette/wallpaper/typography/iconStyle/density/shellTone；只有世界书或角色卡明文定义时才列入。没写的字段必须依 {{char}} 人设推导，不得把示例配色冒充成角色设定；本地还会用角色身份种子补全这些字段。
 
 结构要求：
 - 禁止生成 schedule / calendar / 日历 App。“两个人的日历”是双方日期、约定、纪念日、便签与 To-Do 的唯一入口；私人终端不要复制第二套关系日历。
-- phone 必须生成上述 9 类 app；terminal 至少 8 个并尽量保留等价功能；watch / communicator 至少 7 个功能入口，并优先保留通讯、相册、备忘、联系人、定位与人设专属功能。
-- 每个 App 至少 2 层：列表页 → 详情页。详情页必须有可读内容；chat 用 messages，联系人/订单等可用 fields，gallery 使用 detail/imageCaption 作为纯文字照片档案。
+- 每个 App 至少 2 层：设备主屏幕 → App 独立列表页 → 条目详情页。详情页必须有可读内容；chat 用 messages，联系人/订单等可用 fields，gallery 使用 detail/imageCaption 作为纯文字照片档案。
 - 不要为了凑数量复制同义条目。每条 preview/detail 都要有具体生活信息。
 - liveStates 四个时段都要给出。它们只是同一天随本地现实时间变化的设备状态，不是四段新剧情。
 - deviceKind 只能是 phone / watch / terminal / communicator。

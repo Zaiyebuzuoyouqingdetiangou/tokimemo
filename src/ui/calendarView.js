@@ -46,7 +46,7 @@ function shiftMonthKey(value, delta) {
     return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
-function availableMonthKeys(entries) {
+function availableMonthKeys(entries, dayPages = {}) {
     const full = new Set();
     const annual = new Set();
     for (const item of Array.isArray(entries) ? entries : []) {
@@ -55,28 +55,130 @@ function availableMonthKeys(entries) {
         if (key.startsWith('annual-')) annual.add(key);
         else full.add(key);
     }
-    const representedMonths = new Set([...full].map(key => key.slice(-2)));
+    for (const [pageKey, page] of Object.entries(dayPages && typeof dayPages === 'object' ? dayPages : {})) {
+        if (!pageHasNotebookContent(page)) continue;
+        if (pageKey.startsWith('date:')) {
+            const parsed = modes_calendar.normalizeCalendarDate(pageKey.slice(5));
+            if (parsed?.hasYear) full.add(`${parsed.year}-${String(parsed.month).padStart(2, '0')}`);
+        } else if (pageKey.startsWith('annual:')) {
+            const parsed = modes_calendar.normalizeCalendarDate(pageKey.slice(7));
+            if (parsed) annual.add(`annual-${String(parsed.month).padStart(2, '0')}`);
+        }
+    }
     return [
         ...[...full].sort(),
-        ...[...annual].filter(key => !representedMonths.has(key.slice(-2))).sort(),
+        ...[...annual].sort(),
     ];
 }
 
-function dateKeyForCell(monthKey, day) {
+function dateValueForCell(monthKey, day) {
     const info = parseMonthKey(monthKey);
     if (!info) return '';
     const dd = String(day).padStart(2, '0');
     return info.year ? `${info.year}/${info.mm}/${dd}` : `${info.mm}/${dd}`;
 }
 
-function entriesForDateKey(entries, monthKey, dateKey) {
-    return (Array.isArray(entries) ? entries : []).filter(item => modes_calendar.calendarDateKeyForMonth(item, monthKey) === dateKey);
+function pageKeyForCell(monthKey, day) {
+    return modes_calendar.calendarPageKeyForDate(dateValueForCell(monthKey, day));
 }
 
-function selectedPendingEntry(entries, selectedDateKey) {
-    const match = String(selectedDateKey || '').match(/^pending:(.+)$/);
-    if (!match) return null;
-    return (Array.isArray(entries) ? entries : []).find(item => item.date === '待定' && item.id === match[1]) || null;
+function entriesForCell(entries, monthKey, dateValue) {
+    return (Array.isArray(entries) ? entries : []).filter(item => modes_calendar.calendarDateKeyForMonth(item, monthKey) === dateValue);
+}
+
+function pageEntries(session, pageKey) {
+    const page = modes_calendar.calendarDayPage(session, pageKey);
+    if (!page) return [];
+    const ids = new Set(Array.isArray(page.entryIds) ? page.entryIds : []);
+    return (Array.isArray(session?.entries) ? session.entries : []).filter(item =>
+        ids.has(item?.id) && modes_calendar.calendarEntryPageKey(item) === pageKey
+    );
+}
+
+function pageHasNotebookContent(page) {
+    return !!page && [page.entryIds, page.drafts, page.stickyNotes, page.moodNotes, page.manualTodos]
+        .some(list => Array.isArray(list) && list.length > 0);
+}
+
+function pageKeyMatchesMonth(pageKey, monthKey) {
+    const info = parseMonthKey(monthKey);
+    const key = core_text.normalizeText(pageKey, 160);
+    if (!info || !key) return false;
+    if (key === modes_calendar.CALENDAR_LEGACY_PAGE_KEY || key.startsWith('pending:')) return true;
+    if (key.startsWith('date:')) {
+        const parsed = modes_calendar.normalizeCalendarDate(key.slice(5));
+        return !!parsed?.hasYear && info.year === parsed.year && info.month === parsed.month;
+    }
+    if (key.startsWith('annual:')) {
+        const parsed = modes_calendar.normalizeCalendarDate(key.slice(7));
+        return !!parsed && info.month === parsed.month;
+    }
+    return false;
+}
+
+function preferredPageKeyForCell(session, monthKey, day, dayEntries) {
+    const directKey = pageKeyForCell(monthKey, day);
+    if (modes_calendar.calendarDayPage(session, directKey)) return directKey;
+    const info = parseMonthKey(monthKey);
+    if (info?.year) {
+        const annualKey = (Array.isArray(dayEntries) ? dayEntries : [])
+            .map(item => modes_calendar.calendarEntryPageKey(item))
+            .find(key => key.startsWith('annual:') && modes_calendar.calendarDayPage(session, key));
+        if (annualKey) return annualKey;
+    }
+    return directKey;
+}
+
+function defaultPageKeyForMonth(session, monthKey, entries) {
+    const info = parseMonthKey(monthKey);
+    if (!info) return '';
+    for (let day = 1; day <= monthDays(info); day += 1) {
+        const dateValue = dateValueForCell(monthKey, day);
+        const dayEntries = entriesForCell(entries, monthKey, dateValue);
+        if (dayEntries.length) return preferredPageKeyForCell(session, monthKey, day, dayEntries);
+    }
+    for (let day = 1; day <= monthDays(info); day += 1) {
+        const key = pageKeyForCell(monthKey, day);
+        if (pageHasNotebookContent(modes_calendar.calendarDayPage(session, key))) return key;
+    }
+    return pageKeyForCell(monthKey, 1);
+}
+
+function pageLabel(pageKey, entries) {
+    const key = core_text.normalizeText(pageKey, 160);
+    if (key === modes_calendar.CALENDAR_LEGACY_PAGE_KEY) return '旧版未归日期';
+    if (key.startsWith('pending:')) {
+        const pending = (Array.isArray(entries) ? entries : []).find(item => modes_calendar.calendarEntryPageKey(item) === key);
+        return pending?.title ? `日期待定 · ${pending.title}` : `日期待定 · ${key.slice(8)}`;
+    }
+    const annual = key.startsWith('annual:');
+    const parsed = modes_calendar.normalizeCalendarDate(key.replace(/^(?:date|annual):/, ''));
+    if (!parsed) return '这一天';
+    return annual ? `${parsed.month}月${parsed.day}日 · 每年` : `${parsed.year}年${parsed.month}月${parsed.day}日`;
+}
+
+function normalizeSelectablePageKey(session, value) {
+    const key = core_text.normalizeText(value, 160);
+    if (!key) return '';
+    if (key === modes_calendar.CALENDAR_LEGACY_PAGE_KEY) {
+        return modes_calendar.calendarDayPage(session, key) ? key : '';
+    }
+    if (key.startsWith('pending:')) {
+        const exists = !!modes_calendar.calendarDayPage(session, key)
+            || (session?.entries || []).some(item => modes_calendar.calendarEntryPageKey(item) === key);
+        return exists ? key : '';
+    }
+    if (key.startsWith('date:')) return modes_calendar.calendarPageKeyForDate(key.slice(5)) === key ? key : '';
+    if (key.startsWith('annual:')) return modes_calendar.calendarPageKeyForDate(key.slice(7)) === key ? key : '';
+    return '';
+}
+
+function ensureSessionDayPage(session, pageKey) {
+    const key = normalizeSelectablePageKey(session, pageKey);
+    if (!key) return null;
+    if (!session.dayPages || typeof session.dayPages !== 'object') session.dayPages = Object.create(null);
+    if (!session.dayPages[key]) session.dayPages[key] = modes_calendar.createCalendarDayPage(key);
+    return session.dayPages[key] || null;
 }
 
 function shortDate(item) {
@@ -85,18 +187,34 @@ function shortDate(item) {
     return parsed.hasYear ? `${parsed.month}/${parsed.day}` : `${parsed.month}/${parsed.day}`;
 }
 
-function calendarTodoRow(item, { completed = false } = {}) {
+function calendarTodoRow(item, { completed = false, manual = false, pageKey = '' } = {}) {
     const marker = completed ? '✓' : '□';
     const tags = (Array.isArray(item?.tags) ? item.tags : []).slice(0, 3).map(tag => `<span>#${core_text.esc(tag)}</span>`).join('');
+    const meta = manual ? '手动待办' : shortDate(item);
+    const check = manual
+        ? `<button type="button" class="rmt-calendar-master-check" data-rmt-action="calendar-toggle-todo" data-rmt-calendar-page="${core_text.esc(pageKey)}" data-rmt-calendar-todo="${core_text.esc(item?.id || '')}" aria-label="${completed ? '标记为未完成' : '标记为已完成'}">${marker}</button>`
+        : `<span class="rmt-calendar-master-check" aria-hidden="true">${marker}</span>`;
     return `<div class="rmt-calendar-master-todo-row ${completed ? 'done' : 'open'}">
-      <span class="rmt-calendar-master-check" aria-hidden="true">${marker}</span>
-      <div><b>${core_text.esc(item?.title || '未命名事项')}</b><small>${core_text.esc(shortDate(item))}${tags ? ` · ${tags}` : ''}</small></div>
+      ${check}
+      <div><b>${core_text.esc(item?.title || '未命名事项')}</b><small>${core_text.esc(meta)}${tags ? ` · ${tags}` : ''}</small></div>
     </div>`;
+}
+
+function draftCard(draft) {
+    return `<article class="rmt-calendar-sticky memo">
+      <span class="rmt-calendar-sticky-pin" aria-hidden="true"></span>
+      <small>DATE DRAFT</small>
+      <h3>草稿</h3>
+      <p>${core_text.esc(draft?.text || '')}</p>
+      <footer>只属于当前日期</footer>
+    </article>`;
 }
 
 function stickyNoteCard(note) {
     const special = note?.kind === 'special';
-    const source = note?.sourceType === 'setting'
+    const source = note?.legacyUnassigned === true
+        ? `旧版未归日期 · ${core_text.esc(note?.sourceLabel || '原日历内容')}`
+        : note?.sourceType === 'setting'
         ? `${core_text.esc(note?.sourceLabel || '角色 / 世界设定')} · 设定提醒`
         : `${core_text.esc(note?.sourceLabel || '剧情档案')}${note?.sourceMemoryAnchor ? ` · ${core_text.esc(note.sourceMemoryAnchor)}` : ''}`;
     return `<article class="rmt-calendar-sticky ${special ? 'special' : 'memo'}">
@@ -110,7 +228,9 @@ function stickyNoteCard(note) {
 
 function moodNoteCard(note) {
     const date = note?.date ? core_text.esc(note.date) : '';
-    const source = `${core_text.esc(note?.sourceLabel || '剧情档案 · 角色随笔')}${note?.sourceMemoryAnchor ? ` · ${core_text.esc(note.sourceMemoryAnchor)}` : ''}`;
+    const source = note?.legacyUnassigned === true
+        ? `旧版未归日期 · ${core_text.esc(note?.sourceLabel || '角色随笔')}`
+        : `${core_text.esc(note?.sourceLabel || '剧情档案 · 角色随笔')}${note?.sourceMemoryAnchor ? ` · ${core_text.esc(note.sourceMemoryAnchor)}` : ''}`;
     return `<article class="rmt-calendar-mood-note">
       <span class="rmt-calendar-mood-mark">〝</span>
       <p>${core_text.esc(note?.text || '')}</p>
@@ -119,12 +239,11 @@ function moodNoteCard(note) {
 }
 
 function selectedDayStrip(label, entries) {
-    if (!entries.length) return '';
-    const chips = entries.map(item => {
+    const chips = entries.length ? entries.map(item => {
         const meta = STATUS_META[item?.status] || STATUS_META.future;
         const marker = item?.status === 'past' ? '✓' : item?.status === 'promised' ? '□' : '◌';
         return `<span class="rmt-calendar-selected-chip ${core_text.esc(meta.dot)}"><i>${marker}</i>${core_text.esc(item?.title || '')}</span>`;
-    }).join('');
+    }).join('') : '<span class="rmt-calendar-selected-chip">这个日期还没有圈记事项</span>';
     return `<div class="rmt-calendar-selected-strip"><b>${core_text.esc(label || '这一天')}</b><div>${chips}</div></div>`;
 }
 
@@ -151,17 +270,21 @@ export function shiftCalendarMonth(delta) {
 }
 
 export function selectCalendarDate(dateKey) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.CALENDAR) return;
-    runtimeState.activeSession.selectedDateKey = core_text.normalizeText(dateKey, 40);
+    const session = runtimeState.activeSession;
+    if (!session || session.kind !== core_constants.MODE.CALENDAR) return;
+    const pageKey = normalizeSelectablePageKey(session, dateKey);
+    if (!pageKey || !ensureSessionDayPage(session, pageKey)) return;
+    session.selectedDateKey = pageKey;
     renderCalendar();
 }
 
 export function selectCalendarPending(entryId) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.CALENDAR) return;
+    const session = runtimeState.activeSession;
+    if (!session || session.kind !== core_constants.MODE.CALENDAR) return;
     const safeId = core_text.normalizeText(entryId, 120);
-    if (!(runtimeState.activeSession.entries || []).some(item => item.date === '待定' && item.id === safeId)) return;
-    runtimeState.activeSession.selectedDateKey = `pending:${safeId}`;
-    renderCalendar();
+    const entry = (session.entries || []).find(item => item.date === '待定' && item.id === safeId);
+    if (!entry) return;
+    selectCalendarDate(modes_calendar.calendarEntryPageKey(entry));
 }
 
 export function renderCalendar() {
@@ -174,90 +297,106 @@ export function renderCalendar() {
     if (regenerate) regenerate.textContent = '刷新日历';
 
     const entries = Array.isArray(session.entries) ? session.entries : [];
-    const stickyNotes = Array.isArray(session.stickyNotes) ? session.stickyNotes : [];
-    const moodNotes = Array.isArray(session.moodNotes) ? session.moodNotes : [];
-    const monthKeys = availableMonthKeys(entries);
+    const monthKeys = availableMonthKeys(entries, session.dayPages);
     let selectedMonth = parseMonthKey(session.selectedMonth) ? session.selectedMonth : modes_calendar.defaultCalendarMonth(entries);
     if (!selectedMonth && monthKeys.length) selectedMonth = monthKeys[0];
     if (!selectedMonth) selectedMonth = `annual-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
     session.selectedMonth = selectedMonth;
     const info = parseMonthKey(selectedMonth);
 
-    const datedEntries = entries.filter(item => item.date !== '待定' && modes_calendar.calendarEntryMatchesMonth(item, selectedMonth));
     const pendingEntries = entries.filter(item => item.status === 'promised' && item.date === '待定');
-    const markedKeys = [...new Set(datedEntries.map(item => modes_calendar.calendarDateKeyForMonth(item, selectedMonth)).filter(Boolean))].sort();
-    const pendingSelected = selectedPendingEntry(entries, session.selectedDateKey);
-    if (!pendingSelected && (!session.selectedDateKey || !markedKeys.includes(session.selectedDateKey))) {
-        session.selectedDateKey = markedKeys[0] || '';
+    let selectedPageKey = normalizeSelectablePageKey(session, session.selectedDateKey);
+    if (!selectedPageKey || !pageKeyMatchesMonth(selectedPageKey, selectedMonth)) {
+        selectedPageKey = defaultPageKeyForMonth(session, selectedMonth, entries);
     }
-
-    const selectedEntries = pendingSelected
-        ? [pendingSelected]
-        : entriesForDateKey(entries, selectedMonth, session.selectedDateKey);
-    const selectedDateLabel = pendingSelected
-        ? '日期待定'
-        : session.selectedDateKey
-            ? (() => {
-                const parsed = modes_calendar.normalizeCalendarDate(session.selectedDateKey);
-                return parsed?.hasYear ? `${parsed.year}年${parsed.month}月${parsed.day}日` : parsed ? `${parsed.month}月${parsed.day}日` : '';
-            })()
-            : '';
+    const selectedPage = ensureSessionDayPage(session, selectedPageKey);
+    session.selectedDateKey = selectedPage?.key || '';
+    const selectedEntries = pageEntries(session, session.selectedDateKey);
+    const selectedDateLabel = pageLabel(session.selectedDateKey, entries);
 
     const monthJump = monthKeys.map(key => `<button type="button" class="rmt-calendar-jump ${key === selectedMonth ? 'active' : ''}" data-rmt-calendar-month="${core_text.esc(key)}">${core_text.esc(monthLabel(key))}</button>`).join('');
     const weekdays = info?.year ? ['一', '二', '三', '四', '五', '六', '日'].map(day => `<span>${day}</span>`).join('') : '';
     const blanks = Array.from({ length: firstWeekdayOffset(info) }, () => '<span class="rmt-calendar-day blank" aria-hidden="true"></span>').join('');
     const cells = Array.from({ length: monthDays(info) }, (_, index) => {
         const day = index + 1;
-        const dateKey = dateKeyForCell(selectedMonth, day);
-        const dayEntries = entriesForDateKey(entries, selectedMonth, dateKey);
+        const dateValue = dateValueForCell(selectedMonth, day);
+        const dayEntries = entriesForCell(entries, selectedMonth, dateValue);
+        const pageKey = preferredPageKeyForCell(session, selectedMonth, day, dayEntries);
         const statuses = new Set(dayEntries.map(item => item.status));
         const marked = dayEntries.length > 0;
-        const selected = session.selectedDateKey === dateKey;
+        const selected = session.selectedDateKey === pageKey;
         const first = dayEntries[0];
         const caption = first ? `${core_text.esc(first.title)}${dayEntries.length > 1 ? ` +${dayEntries.length - 1}` : ''}` : '';
         const statusDots = [...statuses].map(status => `<i class="${core_text.esc(status)}"></i>`).join('');
-        return `<button type="button" class="rmt-calendar-day ${marked ? 'marked' : ''} ${selected ? 'selected' : ''} ${statuses.has('past') ? 'has-past' : ''} ${statuses.has('promised') ? 'has-promised' : ''} ${statuses.has('future') ? 'has-future' : ''}" ${marked ? `data-rmt-calendar-date="${core_text.esc(dateKey)}"` : 'disabled'} aria-label="${marked ? core_text.esc(`${dateKey} ${dayEntries.map(item => item.title).join('、')}`) : core_text.esc(dateKey)}">
+        const aria = marked ? `${dateValue} ${dayEntries.map(item => item.title).join('、')}` : `${dateValue} 空白日期`;
+        return `<button type="button" class="rmt-calendar-day ${marked ? 'marked' : ''} ${selected ? 'selected' : ''} ${statuses.has('past') ? 'has-past' : ''} ${statuses.has('promised') ? 'has-promised' : ''} ${statuses.has('future') ? 'has-future' : ''}" data-rmt-calendar-date="${core_text.esc(pageKey)}" aria-label="${core_text.esc(aria)}">
           <span class="rmt-calendar-day-number">${day}</span>
           <span class="rmt-calendar-day-title">${caption}</span>
           <span class="rmt-calendar-day-dots">${statusDots}</span>
         </button>`;
     }).join('');
 
-    const pendingHtml = pendingEntries.length
-        ? `<div class="rmt-calendar-pending"><span>还没定日期的约定</span><div>${pendingEntries.map(item => `<button type="button" class="${session.selectedDateKey === `pending:${item.id}` ? 'active' : ''}" data-rmt-calendar-pending="${core_text.esc(item.id)}">${core_text.esc(item.title)}</button>`).join('')}</div></div>`
+    const legacyPage = modes_calendar.calendarDayPage(session, modes_calendar.CALENDAR_LEGACY_PAGE_KEY);
+    const pendingPageKeys = [...new Set([
+        ...pendingEntries.map(item => modes_calendar.calendarEntryPageKey(item)),
+        ...Object.entries(session.dayPages || {})
+            .filter(([key, page]) => key.startsWith('pending:') && pageHasNotebookContent(page))
+            .map(([key]) => key),
+    ])];
+    const pendingButtons = pendingPageKeys.map(key => {
+        const item = pendingEntries.find(candidate => modes_calendar.calendarEntryPageKey(candidate) === key);
+        const label = item?.title || `待定 · ${key.slice(8)}`;
+        return `<button type="button" class="${session.selectedDateKey === key ? 'active' : ''}" data-rmt-calendar-date="${core_text.esc(key)}">${core_text.esc(label)}</button>`;
+    }).join('');
+    const legacyButton = pageHasNotebookContent(legacyPage)
+        ? `<button type="button" class="${session.selectedDateKey === modes_calendar.CALENDAR_LEGACY_PAGE_KEY ? 'active' : ''}" data-rmt-calendar-date="${modes_calendar.CALENDAR_LEGACY_PAGE_KEY}">旧版未归日期</button>`
+        : '';
+    const pendingHtml = pendingButtons || legacyButton
+        ? `<div class="rmt-calendar-pending"><span>特殊日期页</span><div>${pendingButtons}${legacyButton}</div></div>`
         : '';
 
+    const page = selectedPage || { drafts: [], stickyNotes: [], moodNotes: [], manualTodos: [] };
+    const drafts = Array.isArray(page.drafts) ? page.drafts : [];
+    const stickyNotes = Array.isArray(page.stickyNotes) ? page.stickyNotes : [];
+    const moodNotes = Array.isArray(page.moodNotes) ? page.moodNotes : [];
+    const manualTodos = Array.isArray(page.manualTodos) ? page.manualTodos : [];
     const memoNotes = stickyNotes.filter(note => note?.kind !== 'special');
     const specialNotes = stickyNotes.filter(note => note?.kind === 'special');
-    const promised = entries.filter(item => item.status === 'promised');
-    const recentDone = entries
-        .filter(item => item.status === 'past')
-        .map(item => ({ item, parsed: modes_calendar.normalizeCalendarDate(item.date) }))
-        .filter(row => row.parsed)
-        .sort((a, b) => b.parsed.sortKey - a.parsed.sortKey)
-        .slice(0, 3)
-        .map(row => row.item);
+    const promised = selectedEntries.filter(item => item.status === 'promised');
+    const completedEntries = selectedEntries.filter(item => item.status === 'past');
+    const manualOpen = manualTodos.filter(item => item?.completed !== true);
+    const manualDone = manualTodos.filter(item => item?.completed === true);
 
-    const memoBoard = memoNotes.length
-        ? memoNotes.map(stickyNoteCard).join('')
-        : '<div class="rmt-calendar-board-empty">还没有随手便签。</div>';
-    const todoBoard = promised.length
-        ? promised.map(item => calendarTodoRow(item)).join('')
-        : '<div class="rmt-calendar-board-empty">目前没有还没兑现的明确约定。</div>';
-    const doneBoard = recentDone.length
-        ? `<div class="rmt-calendar-done-label">最近划掉的</div>${recentDone.map(item => calendarTodoRow(item, { completed: true })).join('')}`
+    const memoCards = [...drafts.map(draftCard), ...memoNotes.map(stickyNoteCard)];
+    const memoBoard = memoCards.length
+        ? memoCards.join('')
+        : '<div class="rmt-calendar-board-empty">这一天还没有草稿或便签。</div>';
+    const openTodoRows = [
+        ...promised.map(item => calendarTodoRow(item)),
+        ...manualOpen.map(item => calendarTodoRow(item, { manual: true, pageKey: session.selectedDateKey })),
+    ];
+    const doneTodoRows = [
+        ...completedEntries.map(item => calendarTodoRow(item, { completed: true })),
+        ...manualDone.map(item => calendarTodoRow(item, { completed: true, manual: true, pageKey: session.selectedDateKey })),
+    ];
+    const todoBoard = openTodoRows.length
+        ? openTodoRows.join('')
+        : '<div class="rmt-calendar-board-empty">这一天目前没有待办。</div>';
+    const doneBoard = doneTodoRows.length
+        ? `<div class="rmt-calendar-done-label">这一天已划掉的</div>${doneTodoRows.join('')}`
         : '';
-    const specialBoard = specialNotes.length
-        ? `<section class="rmt-calendar-special-notes"><header><div><small>IMPORTANT / LITTLE THINGS</small><h3>特别备注</h3></div><span>${specialNotes.length}</span></header><div>${specialNotes.map(stickyNoteCard).join('')}</div></section>`
-        : '';
-    const moodBoard = moodNotes.length
-        ? `<section class="rmt-calendar-mood-section"><header><div><small>MARGIN NOTES</small><h3>页角随笔</h3></div><span>偶尔写一点</span></header><div class="rmt-calendar-mood-grid">${moodNotes.map(moodNoteCard).join('')}</div></section>`
-        : '';
+    const specialCards = specialNotes.length
+        ? specialNotes.map(stickyNoteCard).join('')
+        : '<div class="rmt-calendar-board-empty">这一天没有特别备注。</div>';
+    const moodCards = moodNotes.length
+        ? moodNotes.map(moodNoteCard).join('')
+        : '<div class="rmt-calendar-board-empty">这一天还没有页角随笔。</div>';
+    const allPromisedCount = entries.reduce((count, item) => count + (item?.status === 'promised' ? 1 : 0), 0);
 
     body.innerHTML = `<div class="rmt-calendar-shell rmt-calendar-v3">
       <section class="rmt-calendar-hero compact">
-        <div><div class="rmt-archive-kicker">RELATIONSHIP CALENDAR</div><h2>${core_text.esc(session.title || '两个人的日历')}</h2><p>像一本真正会被使用的私人手账：上面圈日期，下面留便签、To-Do、特别备注和偶尔几句页角随笔。不是剧情目录，也不是每件事都要写感想。</p></div>
-        <div class="rmt-calendar-counts"><span><b>${entries.filter(item => item.status === 'past').length}</b> 已发生</span><span><b>${promised.length}</b> 待办</span><span><b>${entries.filter(item => item.status === 'future').length}</b> 提醒</span></div>
+        <div><div class="rmt-archive-kicker">RELATIONSHIP CALENDAR</div><h2>${core_text.esc(session.title || '两个人的日历')}</h2><p>点选任意日期；每一天都有完全独立的草稿、便签、To-Do、特别备注和页角随笔，不会串到其他日期。</p></div>
+        <div class="rmt-calendar-counts"><span><b>${entries.filter(item => item.status === 'past').length}</b> 已发生</span><span><b>${allPromisedCount}</b> 待办</span><span><b>${entries.filter(item => item.status === 'future').length}</b> 提醒</span></div>
       </section>
 
       <section class="rmt-calendar-paper">
@@ -278,16 +417,18 @@ export function renderCalendar() {
 
       <section class="rmt-calendar-notebook-board">
         <section class="rmt-calendar-sticky-panel">
-          <header><div><small>STICKY NOTES</small><h3>便签夹</h3></div><span>${memoNotes.length}</span></header>
+          <header><div><small>DATE DRAFTS / STICKY NOTES</small><h3>草稿与便签</h3></div><span>${drafts.length + memoNotes.length}</span></header>
           <div class="rmt-calendar-sticky-grid">${memoBoard}</div>
+          <div class="rmt-calendar-detail"><textarea class="text_pole" rows="2" data-rmt-calendar-draft-input placeholder="给${core_text.esc(selectedDateLabel)}写一条草稿…"></textarea><button type="button" class="rmt-btn" data-rmt-action="calendar-add-draft" data-rmt-calendar-page="${core_text.esc(session.selectedDateKey)}">保存到这一天</button></div>
         </section>
         <section class="rmt-calendar-master-todo">
-          <header><div><small>TO DO LIST</small><h3>还要做的事</h3></div><span>${promised.length}</span></header>
+          <header><div><small>DATE TO DO LIST</small><h3>这一天的待办</h3></div><span>${promised.length + manualTodos.length}</span></header>
           <div class="rmt-calendar-master-todo-list">${todoBoard}${doneBoard}</div>
+          <div class="rmt-calendar-detail"><input class="text_pole" data-rmt-calendar-todo-input placeholder="给这一天添加手动待办…"><button type="button" class="rmt-btn" data-rmt-action="calendar-add-todo" data-rmt-calendar-page="${core_text.esc(session.selectedDateKey)}">添加待办</button></div>
         </section>
       </section>
 
-      ${specialBoard}
-      ${moodBoard}
+      <section class="rmt-calendar-special-notes"><header><div><small>IMPORTANT / LITTLE THINGS</small><h3>特别备注</h3></div><span>${specialNotes.length}</span></header><div>${specialCards}</div></section>
+      <section class="rmt-calendar-mood-section"><header><div><small>MARGIN NOTES</small><h3>页角随笔</h3></div><span>${moodNotes.length}</span></header><div class="rmt-calendar-mood-grid">${moodCards}</div></section>
     </div>`;
 }
