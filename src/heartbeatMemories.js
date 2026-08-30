@@ -8,6 +8,7 @@ import { state as runtimeState } from './core/state.js';
 import * as generation_imageGeneration from './generation/imageGeneration.js';
 import * as modes_room from './modes/room.js';
 import * as ui_archivePortal from './ui/archivePortal.js';
+import * as ui_endingView from './ui/endingView.js';
 import * as ui_phoneView from './ui/phoneView.js';
 import * as ui_settingsPanel from './ui/settingsPanel.js';
 import * as ui_styles from './ui/styles.js';
@@ -59,6 +60,7 @@ export function destroyMemoryTheater() {
         // Invalidate every asynchronous state writer before clearing containers. Results that
         // started in the old runtime lifetime must not refill caches after disable/clean.
         runtimeState.runtimeLifecycleEpoch += 1;
+        runtimeState.apiConfigurationEpoch += 1;
         const timer = globalThis.__heartbeatMemoriesMountTimer;
         if (timer) clearInterval(timer);
         globalThis.__heartbeatMemoriesMountTimer = null;
@@ -73,6 +75,8 @@ export function destroyMemoryTheater() {
         document.getElementById(core_constants.SETTINGS_STYLE_ID)?.remove();
         modes_room.stopRoomClock();
         ui_phoneView.stopPhoneClock();
+        ui_endingView.stopEndingEasterEggTimer();
+        runtimeState.endingEasterEggRuntime = null;
         try { runtimeState.activeTaskAbortController?.abort?.(); } catch {}
         runtimeState.activeTaskAbortController = null;
         for (const task of runtimeState.activeGenerationTasks.values()) {
@@ -108,6 +112,7 @@ export function destroyMemoryTheater() {
         runtimeState.deferredChatCommits.clear();
         runtimeState.archiveSnapshotCache.clear();
         runtimeState.connectionModelCache.clear();
+        runtimeState.connectionModelRequestEpochs.clear();
         for (const timer of runtimeState.cachePersistTimers.values()) clearTimeout(timer);
         runtimeState.cachePersistTimers.clear();
         runtimeState.cacheHydrationPromises.clear();

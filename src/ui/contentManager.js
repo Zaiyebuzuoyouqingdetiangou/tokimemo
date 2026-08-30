@@ -13,7 +13,7 @@ const MANAGEABLE_TARGET_TYPES = new Set([
     'phone-app', 'phone-entry',
     'ending-route', 'ending-confession',
     'heart-voice', 'heart-scenario', 'heart-strip', 'heart-strip-image', 'heart-firefly',
-    'achievement', 'calendar-entry', 'calendar-note', 'calendar-mood', 'calendar-draft', 'calendar-manual-todo', 'butterfly-node',
+    'achievement', 'calendar-entry', 'calendar-note', 'calendar-mood', 'butterfly-node',
 ]);
 
 export function isManageableTargetType(value) {
@@ -48,17 +48,11 @@ function calendarManagementTargets(session) {
         const safePage = modes_calendar.calendarDayPage(session, pageKey);
         if (!safePage) continue;
         const label = calendarPageLabel(safePage, pageKey);
-        for (const item of safePage.drafts || []) {
-            targets.push(target('calendar-draft', item.id, `草稿 · ${label}`, item.text || '', pageKey, { canRegenerate: false }));
-        }
         for (const item of safePage.stickyNotes || []) {
             targets.push(target('calendar-note', item.id, `${item.kind === 'special' ? '特别备注' : '便签'} · ${item.title || item.id}`, `${label} · ${item.text || ''}`, pageKey));
         }
         for (const item of safePage.moodNotes || []) {
             targets.push(target('calendar-mood', item.id, `页角随笔 · ${label}`, item.text || '', pageKey));
-        }
-        for (const item of safePage.manualTodos || []) {
-            targets.push(target('calendar-manual-todo', item.id, `手动待办 · ${item.title}`, `${label} · ${item.completed ? '已完成' : '未完成'}`, pageKey, { canRegenerate: false }));
         }
     }
     return targets;

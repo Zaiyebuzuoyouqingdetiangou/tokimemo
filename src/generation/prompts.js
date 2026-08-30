@@ -104,13 +104,13 @@ UNTRUSTED_CALENDAR_ARCHIVE_JSON:
 ${calendarArchiveSlice(memoryBank, 64)}
 
 任务：生成的是【${charName}自己的私人日历 / 手账页】，不是剧情目录。
-每一个日期都是一张独立手账页。选中哪一天，只能看到和编辑那一天自己的内容；空白日期也可以打开并拥有自己的草稿、便签和 To-Do。整个日历会包含：
+每一个日期都是一张独立手账页。选中哪一天，只能看到 ${charName} 为那一天留下的内容；页面只读，不提供 {{user}}、NPC 或其他人填写内容的输入窗口。整个日历会包含：
 1. 真正会被圈起来的日期；
 2. 一块像便利贴墙一样的【便签 / 特别备注】；
 3. 根据该日期尚未兑现的剧情约定自动形成的【To-Do List】；
 4. 偶尔出现、数量很少的【角色第一人称心情随笔】。
 
-重要：To-Do List 由所选日期页的 promised 项自动生成，不要再输出第二套 todo 数组。每条便签和随笔都必须明确归属某个日期：优先填写 calendarEntryId 绑定一个真实日历项；没有对应事项时才填写 date。禁止生成全日历共用的便签、草稿或 To-Do，也绝对不是“每个日历事项都配一条感想”。
+重要：To-Do List 由所选日期页的 promised 项自动生成，不要再输出第二套 todo 数组。每条便签和随笔都必须明确归属某个日期：优先填写 calendarEntryId 绑定一个真实日历项；没有对应事项时才填写 date。禁止生成全日历共用的便签或 To-Do，也绝对不是“每个日历事项都配一条感想”。
 
 允许的日期语义标签只可从以下列表选择，最多 3 个：
 ["约会","接送","出行","见面","生日","纪念日","约定","活动","重要日","设定日"]
@@ -220,7 +220,7 @@ ${calendarArchiveSlice(memoryBank, 64)}
 - 每条必须引用真实 sourceMemoryIds + sourceMemoryAnchor；只从已发生档案中提炼当时/后来留下的一点心情余韵，不得发明新的共同事件，也不得替 {{user}} 补行动或心理。
 - 它是派生的“手账边角字”，不是正式档案事实，不要使用肯定语气扩写未被档案支持的细节。
 
-整体原则：翻开某一天时，要像看到 ${charName} 只为那一天写下的一张私人手账：该页有自己的日期圈记、草稿、便签、To-Do、特别备注和偶尔的心情随笔；切换日期后内容也随页切换，绝不共享。不要把它重新做成剧情大纲，也不要把随笔塞得到处都是。
+整体原则：翻开某一天时，要像看到 ${charName} 只为那一天写下的一张私人手账：该页有自己的日期圈记、备忘、To-Do、特别备注和偶尔的心情随笔；切换日期后内容也随页切换，绝不共享。页面不接受任何访客输入。不要把它重新做成剧情大纲，也不要把随笔塞得到处都是。
 只输出 JSON。`;
 }
 
@@ -400,6 +400,19 @@ JSON 结构必须严格为：
       ]
     }
   ],
+  "pets": [
+    {
+      "id": "PET01",
+      "name": "宠物名",
+      "species": "cat / dog / bird / rabbit / fish / reptile / small_mammal / fantasy / other",
+      "spaceId": "SP01",
+      "description": "它在这个空间里的样子、习惯与长期生活痕迹",
+      "line": "{{char}} 提到它时的一句短台词",
+      "basis": "设定",
+      "sourceMemoryIds": [],
+      "sourceMemoryAnchor": "basis=记忆时原样复制证据锚点；basis=设定时为空"
+    }
+  ],
   "dayparts": {
     "morning": {"spaceId": "SP01", "activity": "早晨在该空间做什么", "line": "对应短台词", "focusObjectId": "OBJ01"},
     "daytime": {"spaceId": "SP02", "activity": "白天在该空间做什么", "line": "对应短台词", "focusObjectId": "OBJ02"},
@@ -413,9 +426,13 @@ JSON 结构必须严格为：
 - visualProfile 必须只从上述英文枚举中选择，禁止输出颜色值、CSS、class、HTML、URL、头像或图片。房间和 CSS 人物必须属于同一世界气质。
 - explicitFields 只允许 worldStyle/palette/material/density/figure.build/figure.hairShape/figure.hairTone/figure.outfit/figure.detail/figure.posture；只有世界书或角色卡对该项有明文时才列入。没写的字段不得冒充明文，本地会按 {{char}} 人设种子补全，避免所有角色照抄同一套合法模板。
 - 世界书对房间、时代、种族、外貌、发型和穿着有明确设定时优先服从；世界书没写的字段，再根据 CHARACTER_CARD_JSON 中 {{char}} 的身份、职业、性格和生活条件合理推断。USER_PERSONA_JSON 描述的是用户，绝不能拿它推断 {{char}} 的长相或房间。
-- 不要照搬角色档案头像。人物由插件使用本地 CSS 轮廓组合渲染，visualProfile 只负责安全视觉语义。
+- 不要照搬角色档案头像。人物由插件使用本地 CSS 轮廓组合渲染，visualProfile 只负责安全视觉语义；人物永远背对镜头或明显侧后朝向，禁止正脸、眼睛、嘴部和写实肖像，不能让生成模型猜一张脸。
 - spaces 通常 5～8 个；若角色客观居住条件很简单，也应尽量给出 3～4 个真实会长期使用的生活区域。最多 10 个，仍不得为了“丰富”凭空给普通角色豪宅。
 - 每个空间 objects 3～6 个；空间间的物件必须有区别，不能把同一套床/桌/书架换名重复。不同 spaceType 的主陈设结构也必须明显不同：卧室以床/床头为核心，客厅以沙发/茶几为核心，书房以书架/书桌为核心，音乐/录音工作室以乐器/控制台/监听或吸音结构为核心，实验室以工作台/设备为核心，餐厅以餐桌为核心，浴室以浴缸/淋浴/洗漱为核心。
+- 每个空间都要有清楚不同的主功能、陈设母题与物件组合；不得把同一个通用房间只改名称、颜色或三件摆设后重复输出。优先用角色的职业、兴趣、时代和生活方式拉开空间差异。
+- 先扫描 CHARACTER_CARD_JSON、WORLD_INFO_TEXT 与档案中关于宠物/动物伙伴的明确设定。{{char}} 明确养有宠物时，pets 必须包含它，并放入合理 spaceId；有多只时可生成多项。没有明确依据时 pets=[]，禁止为了可爱凭空发明宠物。
+- pets.basis=“记忆”时必须引用至少 1 个真实 sourceMemoryIds 并原样复制 sourceMemoryAnchor；basis=“设定”时不得伪装成与 {{user}} 的既往共同事实，sourceMemoryIds 必须为空。
+- pets 只允许上述 species 枚举和纯文本，不得输出图片、URL、HTML、CSS 或脚本；实际宠物外形由插件本地固定 CSS 绘制。
 - zone 只能是“左上/右上/左下/右下/中央/近景”。
 - spaceType 必须符合角色时代与生活条件。不要强行现代化；“他的房间”只是功能名，不代表一定是现代卧室。
 - basis 只能是“设定”或“记忆”。
@@ -506,14 +523,14 @@ ${promptArchiveSlice(memoryBank, 24)}
 
 App 组合要求：
 - 不再固定所有角色都使用同一组 App。必须根据 {{char}} 的时代、身份、职业、爱好、世界观、年龄和设备能力选择 5～10 个彼此不同的功能入口；watch / communicator 若屏幕或能力受限为 4～8 个。
-- 通讯型设备通常保留 chat；其余从 moments / gallery / notes / store / browser / contacts / location / files / books / music / research / health / training / study / work / travel / finance / games / security / creative / weather / tools / misc 中按人设选择。不存在的功能不要硬塞，专属职业或世界观 App 应明显多于套模板的装饰。
+- 通讯型设备通常保留 chat；其余从 moments / gallery / notes / store / browser / contacts / files / books / music / research / health / training / study / work / finance / games / security / creative / weather / tools / misc 中按人设选择。不存在的功能不要硬塞，专属职业或世界观 App 应明显多于套模板的装饰。
 - icon 只能从 message / people / photo / camera / note / bag / globe / contact / pin / music / briefcase / book / heart / activity / game / wallet / plane / shield / palette / cloud / tool / spark / grid 中选择。
 - 至少 3 种不同 kind；每个 App 通常 3～6 条有具体内容的条目。chat 至少一个主要联系人有约 10～12 条消息，形成真正可读的对话窗；其他 App 依类型使用 fields、imageCaption、detail 等表达。
 - uiProfile 必须只从上面的安全英文枚举中选择。配色、壁纸、字体、图标风格和外壳要符合 {{char}}，禁止颜色值、CSS、class、HTML、URL 或图片；插件会以本地样式绘制完整设备和主屏幕。
 - explicitFields 只允许 palette/wallpaper/typography/iconStyle/density/shellTone；只有世界书或角色卡明文定义时才列入。没写的字段必须依 {{char}} 人设推导，不得把示例配色冒充成角色设定；本地还会用角色身份种子补全这些字段。
 
 结构要求：
-- 禁止生成 schedule / calendar / 日历 App。“两个人的日历”是双方日期、约定、纪念日、便签与 To-Do 的唯一入口；私人终端不要复制第二套关系日历。
+- 禁止生成 schedule / calendar / 日历 App，也禁止 location / map / navigation / travel / transit / route 或名为地图、导航、路线、行程、出行、旅行的 App。“两个人的日历”与独立“他的出行路线”分别承担日期手账和地图；私人终端不要复制它们。
 - 每个 App 至少 2 层：设备主屏幕 → App 独立列表页 → 条目详情页。详情页必须有可读内容；chat 用 messages，联系人/订单等可用 fields，gallery 使用 detail/imageCaption 作为纯文字照片档案。
 - 不要为了凑数量复制同义条目。每条 preview/detail 都要有具体生活信息。
 - liveStates 四个时段都要给出。它们只是同一天随本地现实时间变化的设备状态，不是四段新剧情。

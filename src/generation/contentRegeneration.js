@@ -18,12 +18,12 @@ function taskOptions(mode, context, origin, taskKey, maxTokens = 6000, temperatu
     return { maxTokens, temperature, context, origin, taskKey, mode, background: true };
 }
 
-function sameEvidence(candidate, current) {
-    const wanted = new Set(core_text.cleanArray(current?.sourceMemoryIds, 16, 40));
-    const got = new Set(core_text.cleanArray(candidate?.sourceMemoryIds, 16, 40));
-    const intersects = !wanted.size || [...wanted].some(id => got.has(id));
+export function sameEvidence(candidate, current) {
+    const wanted = [...new Set(core_text.cleanArray(current?.sourceMemoryIds, 16, 40))].sort();
+    const got = [...new Set(core_text.cleanArray(candidate?.sourceMemoryIds, 16, 40))].sort();
+    const sameIds = wanted.length === got.length && wanted.every((id, index) => id === got[index]);
     const anchor = core_text.normalizeText(current?.sourceMemoryAnchor, 240);
-    return intersects && (!anchor || core_text.normalizeText(candidate?.sourceMemoryAnchor, 240) === anchor);
+    return sameIds && (!anchor || core_text.normalizeText(candidate?.sourceMemoryAnchor, 240) === anchor);
 }
 
 async function regenerateAlbumEntry(session, item, context, memoryBank, origin, taskKey) {
@@ -41,15 +41,21 @@ TRUSTED_EVENT_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
     const candidate = normalized.entries[0];
     if (!candidate || !sameEvidence(candidate, item)) throw new Error('重新生成的相簿条目没有保持原档案证据。');
     let comments = [];
+    let relationshipSnapshot = null;
     if (item.unlocked) {
+        relationshipSnapshot = await generation_client.requestValidatedSegment(
+            modes_album.albumRelationshipScanPrompt(context, memoryBank),
+            `扫描「${item.title}」共同回忆前的双方感情状态…`, taskOptions(core_constants.MODE.ALBUM, context, origin, `${taskKey}:relationship`, 5000, 0.25),
+            raw => modes_album.normalizeAlbumRelationshipSnapshot(raw, memoryBank),
+        );
         const rawComments = await generation_client.requestValidatedSegment(
-            modes_album.albumCommentsPrompt(context, memoryBank, [{ ...candidate, id: item.id }]),
+            modes_album.albumCommentsPrompt(context, memoryBank, [{ ...candidate, id: item.id }], relationshipSnapshot),
             `重新生成「${item.title}」共同回忆…`, taskOptions(core_constants.MODE.ALBUM, context, origin, `${taskKey}:comments`, 5000),
             raw => modes_album.normalizeAlbumCommentsBatch(raw, [{ ...candidate, id: item.id }]),
         );
         comments = rawComments.get(item.id) || [];
     }
-    return { ...candidate, id: item.id, sourceMemoryIds: [...item.sourceMemoryIds], sourceMemoryAnchor: item.sourceMemoryAnchor, comments, cgImage: null };
+    return { ...candidate, id: item.id, sourceMemoryIds: [...item.sourceMemoryIds], sourceMemoryAnchor: item.sourceMemoryAnchor, comments, relationshipSnapshot, cgImage: null };
 }
 
 async function regenerateAdvEvent(session, item, context, memoryBank, origin, taskKey) {
@@ -212,7 +218,8 @@ async function regenerateEndingConfession(item, context, memoryBank, origin, tas
 只重写下面这个【已经发生并有证据的告白回看】的播放器文本。不得改变发生与否、参与者、sourceMemoryIds/sourceMemoryAnchor，也不得发明新的告白。
 CURRENT_REPLAY_JSON:\n${JSON.stringify(item, null, 2)}
 TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
-严格输出：{"confessionReplays":[{"id":"${core_text.esc(item.id)}","title":"...","subtitle":"...","type":"${core_text.esc(item.type || 'other')}","date":"${core_text.esc(item.date || '')}","sourceMemoryIds":${JSON.stringify(item.sourceMemoryIds || [])},"sourceMemoryAnchor":${JSON.stringify(item.sourceMemoryAnchor || '')},"scene":"至少140字的已发生场景回看","confessionText":"至少50字的告白核心文本","confessionLines":[{"speaker":"char","text":"..."}],"responseSummary":"...","afterEffect":"..."}]}
+严格输出：{"confessionReplays":[{"id":"${core_text.esc(item.id)}","title":"...","subtitle":"...","type":"${core_text.esc(item.type || 'other')}","date":"${core_text.esc(item.date || '')}","sourceMemoryIds":${JSON.stringify(item.sourceMemoryIds || [])},"sourceMemoryAnchor":${JSON.stringify(item.sourceMemoryAnchor || '')},"scene":"至少140字的已发生场景回看","confessionText":"至少50字的告白核心文本","confessionLines":["{{char}} 的第一人称告白句1","告白句2","告白句3","告白句4"],"responseSummary":"...","afterEffect":"...","easterEgg":{"moduleType":"heartbeat_console","title":"情感模块标题","statusLine":"此刻的情感状态","logs":["人类可读的情感运行日志1","日志2","日志3","日志4"],"monologue":["直白深情的内心独白1","内心独白2"],"poem":["逐渐浮现的短句1","短句2","短句3","短句4"],"feedback":{"pulse":"触碰心跳反馈","hover":"悬停反馈","reveal":"解锁短句反馈","stabilize":"稳定信号反馈","pause":"暂停日志反馈","resume":"恢复日志反馈"}}}]}
+easterEgg 只允许上述结构化文字和 moduleType 枚举，不得输出 JavaScript、HTML、CSS、URL、事件处理器或任何代码；所有互动均由插件本地固定代码执行。
 只输出 JSON。`;
     const list = await generation_client.requestValidatedSegment(
         prompt, `重新生成告白回看「${item.title || item.id}」…`, taskOptions(core_constants.MODE.ENDING, context, origin, `${taskKey}:confession`, 7000, 0.55),
@@ -226,10 +233,10 @@ TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
 async function regenerateAchievement(item, context, memoryBank, origin, taskKey) {
     const evidence = item.unlocked ? core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 10) : [];
     const prompt = `${generation_prompts.promptSafetyBoundary(context, '成就库 / 单项重新生成')}
-只重新生成下面这一项成就的标题、说明、等级和提示。解锁状态以及已解锁成就的档案证据不得改变。
+只重新生成下面这一项成就的标题、说明、等级和提示。已解锁时还必须写清具体解锁条件；解锁状态以及已解锁成就的档案证据不得改变。
 CURRENT_ACHIEVEMENT_JSON:\n${JSON.stringify(item, null, 2)}
 ${item.unlocked ? `TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}` : ''}
-严格输出：{"entries":[{"id":"${core_text.esc(item.id)}","title":"...","description":"...","category":"...","tier":"bronze","unlocked":${item.unlocked ? 'true' : 'false'},"unlockedAt":${JSON.stringify(item.unlockedAt || '')},"sourceMemoryIds":${JSON.stringify(item.sourceMemoryIds || [])},"sourceMemoryAnchor":${JSON.stringify(item.sourceMemoryAnchor || '')},"hint":"..."}]}
+严格输出：{"entries":[{"id":"${core_text.esc(item.id)}","title":"...","description":"...","category":"...","tier":"bronze","unlocked":${item.unlocked ? 'true' : 'false'},"unlockedAt":${JSON.stringify(item.unlockedAt || '')},"unlockCondition":${item.unlocked ? '"一句话说明做到或经历了什么才解锁，并受同一组证据支持"' : '""'},"sourceMemoryIds":${JSON.stringify(item.sourceMemoryIds || [])},"sourceMemoryAnchor":${JSON.stringify(item.sourceMemoryAnchor || '')},"hint":"..."}]}
 只输出 JSON。`;
     const normalized = await generation_client.requestValidatedSegment(
         prompt, `重新生成成就「${item.title}」…`, taskOptions(core_constants.MODE.ACHIEVEMENTS, context, origin, `${taskKey}:achievement`, 5000, 0.6),

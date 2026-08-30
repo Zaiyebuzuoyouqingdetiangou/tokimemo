@@ -270,7 +270,9 @@ test('r43 room visual profile is allowlisted, identity-bound and changes both ro
     const roomSource = await readFile(new URL('../src/modes/room.js', import.meta.url), 'utf8');
     assert.match(roomSource, /data-rmt-room-palette/);
     assert.match(roomSource, /data-rmt-hair-shape/);
-    assert.match(roomSource, /--rmt-head-width/);
+    assert.match(roomSource, /data-rmt-facing="away"/);
+    assert.match(roomSource, /class="rmt-room-pet"/);
+    assert.doesNotMatch(roomSource, /rmt-room-face|--rmt-head-width|--rmt-eye-gap|--rmt-mouth-width/);
     assert.doesNotMatch(roomSource, /rmt-room-person[^\n]+<img/);
 });
 

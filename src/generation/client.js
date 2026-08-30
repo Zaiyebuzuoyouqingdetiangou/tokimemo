@@ -8,6 +8,7 @@ import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
+import * as core_independentApi from '../core/independentApi.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
@@ -26,14 +27,16 @@ import * as modes_items from '../modes/items.js';
 import * as modes_phone from '../modes/phone.js';
 import * as modes_room from '../modes/room.js';
 import * as modes_relations from '../modes/relations.js';
+import * as modes_travel from '../modes/travel.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as ui_settingsPanel from '../ui/settingsPanel.js';
 
 export function generationWorldInfoScanTerms(mode, context = {}) {
     const characterName = core_text.normalizeText(context?.name2, 120);
     const common = characterName ? [characterName] : [];
-    if (mode === core_constants.MODE.ROOM) return [...common, '外貌', '发色', '发型', '穿着', '制服', '服饰', '种族', '住处', '房间', '居所', '时代', '职业', '阶层', '生活习惯', 'appearance', 'hair', 'outfit', 'species', 'residence', 'room', 'home'];
+    if (mode === core_constants.MODE.ROOM) return [...common, '外貌', '发色', '发型', '穿着', '制服', '服饰', '种族', '住处', '房间', '居所', '时代', '职业', '阶层', '生活习惯', '宠物', '猫', '狗', '鸟', '鹦鹉', '兔', '鱼', '爬宠', '仓鼠', '豚鼠', '灵兽', '使魔', '动物伙伴', 'appearance', 'hair', 'outfit', 'species', 'residence', 'room', 'home', 'pet', 'cat', 'dog', 'bird', 'parrot', 'rabbit', 'fish', 'reptile', 'hamster', 'familiar', 'animal companion'];
     if (mode === core_constants.MODE.PHONE) return [...common, '通讯', '终端', '手机', '设备', '职业', '爱好', '生活习惯', '科技', '时代', '世界观', 'phone', 'device', 'terminal', 'communication', 'hobby', 'occupation'];
+    if (mode === core_constants.MODE.TRAVEL) return [...common, '住处', '工作', '学校', '地点', '交通', '出行', '旅行', '路线', '世界观', 'residence', 'work', 'school', 'location', 'travel', 'route', 'transport'];
     if (mode === core_constants.MODE.BUTTERFLY) return [...common, '身份', '职业', '时代', '地点', '关系', '选择', '命运', '相遇', '世界线', '平行世界', 'identity', 'occupation', 'era', 'location', 'fate', 'encounter'];
     if (mode === core_constants.MODE.CALENDAR) return [...common, '节日', '日历', '生日', '纪念日', '祭典', '庆典', 'festival', 'holiday', 'calendar', 'birthday', 'anniversary'];
     return common;
@@ -152,32 +155,58 @@ export function assertNoBannedGeneratedPhrase(value, settings) {
 }
 
 export function normalizeConnectionManagerError(error) {
-    if (error?.name === 'AbortError' || error?.retryableJson === true || String(error?.code || '').startsWith('RMT_')) return error;
-    const rawStatus = error?.status ?? error?.statusCode ?? error?.response?.status ?? error?.cause?.status;
-    const rawCode = core_text.normalizeText(error?.code || error?.type || error?.cause?.code, 80);
-    const safeCode = /^[A-Z0-9_.-]{2,80}$/i.test(rawCode) ? rawCode : '';
-    const original = core_text.normalizeText(error?.message || String(error || ''), 700).toLowerCase();
+    if (error?.name === 'AbortError' || error?.retryableJson === true) return error;
+    const knownInternalCodes = new Set([
+        'RMT_API_CONFIG_CHANGED', 'RMT_API_CONFIGURATION_SUPERSEDED', 'RMT_API_MODEL_REQUEST_SUPERSEDED',
+        'RMT_BANNED_GENERATED_PHRASE', 'RMT_JSON_EMPTY_FINAL', 'RMT_JSON_EMPTY_FINAL_WITH_REASONING',
+        'RMT_JSON_INVALID', 'RMT_JSON_NOT_FOUND', 'RMT_JSON_TRUNCATED', 'RMT_MANUAL_API_TRANSPORT',
+        'RMT_MANUAL_API_URL', 'RMT_MANUAL_EMPTY', 'RMT_MANUAL_FETCH_UNAVAILABLE', 'RMT_MANUAL_INVALID_JSON',
+        'RMT_MANUAL_MESSAGES', 'RMT_MANUAL_MODEL', 'RMT_MANUAL_MODEL_TIMEOUT', 'RMT_MANUAL_MODELS_EMPTY',
+        'RMT_MANUAL_PROVIDER_ERROR', 'RMT_MANUAL_RESPONSE_TOO_LARGE', 'RMT_PHONE_DRAFT_AVAILABLE',
+        'RMT_PROFILE_CAPABILITY', 'RMT_REQUEST_TIMEOUT', 'RMT_SEGMENT_VALIDATION',
+    ]);
+    if (knownInternalCodes.has(String(error?.code || ''))) return error;
+    const evidence = [];
+    const seen = new Set();
+    let cursor = error;
+    let rawStatus = null;
+    let rawCode = '';
+    for (let depth = 0; cursor && depth < 4 && !seen.has(cursor); depth += 1) {
+        seen.add(cursor);
+        if (rawStatus == null) rawStatus = cursor?.status ?? cursor?.statusCode ?? cursor?.response?.status ?? null;
+        if (!rawCode) rawCode = core_text.normalizeText(cursor?.code || cursor?.type, 80);
+        for (const value of [cursor?.name, cursor?.message, cursor?.code, cursor?.status, cursor?.statusCode]) {
+            const part = core_text.normalizeText(value, 700);
+            if (part) evidence.push(part);
+        }
+        cursor = cursor?.cause;
+    }
+    const safeCode = /^(?:E[A-Z0-9_]{2,40}|ERR_[A-Z0-9_]{2,60})$/.test(rawCode) ? rawCode : '';
+    const original = evidence.join(' · ').toLowerCase();
     const messageStatus = original.match(/(?:http|status(?:\s+code)?|response)\s*[:=]?\s*(\d{3})/i)
         || original.match(/(?:api|request|response).{0,40}\b(400|401|403|404|408|413|422|429|500|502|503|504)\b/i);
-    const status = Number.isFinite(Number(rawStatus)) ? Number(rawStatus) : Number(messageStatus?.[1]) || 0;
+    const hasRawStatus = rawStatus !== null && rawStatus !== '' && Number.isFinite(Number(rawStatus));
+    const status = hasRawStatus ? Number(rawStatus) : Number(messageStatus?.[1]) || 0;
     const technical = status ? `（HTTP ${status}）` : safeCode ? `（${safeCode}）` : '';
+    const sourceName = error?.code === 'RMT_MANUAL_HTTP' ? '手动 API' : '专用连接';
     let code = 'RMT_CONNECTION_FAILED';
-    let message = `Connection Manager 请求失败${technical}。没有收到可解析的模型结果；请检查专用连接与 SillyTavern 控制台中的上游错误。`;
-    let retryable = true;
-    if (status === 401 || status === 403 || /(unauthori[sz]ed|forbidden|authentication|invalid api key|api key.*invalid)/i.test(original)) {
+    let message = `${sourceName}请求失败${technical}。没有收到可判断是否可重试的模型结果；请检查当前独立 API 设置与 SillyTavern 控制台中的上游错误，本段不会自动重试。`;
+    let retryable = false;
+    if (status === 401 || status === 403 || /(unauthori[sz]ed|forbidden|authentication|(?:invalid|incorrect|expired) api key|api key.*(?:invalid|incorrect|expired)|key.*(?:invalid|incorrect|expired))/i.test(original)) {
         code = 'RMT_CONNECTION_AUTH';
-        message = `专用连接认证失败${technical}。请检查 Connection Manager 配置、API Key 与账号权限；本段不会自动重试。`;
+        message = `${sourceName}认证失败${technical}。请检查当前配置、API Key 与账号权限；本段不会自动重试。`;
         retryable = false;
     } else if (status === 429 || /(too many requests|rate.?limit|quota exceeded|resource exhausted)/i.test(original)) {
         code = 'RMT_CONNECTION_RATE_LIMIT';
         message = `模型服务正在限流或额度不足${technical}。心跳回忆会降低并发并仅对本段等待后重试一次；若仍失败，请稍后再试。`;
+        retryable = true;
     } else if (status === 413 || /(context length|context window|too many tokens|maximum context|payload too large|request too large)/i.test(original)) {
         code = 'RMT_CONNECTION_CONTEXT_LIMIT';
         message = `本段输入超过模型或代理的上下文上限${technical}。请换用更大上下文模型，或减少导入的世界书/记忆资料；本段不会自动重试。`;
         retryable = false;
     } else if (status === 404 || /(model.*not found|profile.*not found|endpoint.*not found)/i.test(original)) {
         code = 'RMT_CONNECTION_CONFIG';
-        message = `专用连接、模型或上游端点不可用${technical}。请重新导入连接并确认模型名称；本段不会自动重试。`;
+        message = `${sourceName}、模型或上游端点不可用${technical}。请重新配置并确认模型名称；本段不会自动重试。`;
         retryable = false;
     } else if (status === 400 || status === 422 || /(invalid request|bad request|unprocessable)/i.test(original)) {
         code = 'RMT_CONNECTION_INVALID_REQUEST';
@@ -186,9 +215,11 @@ export function normalizeConnectionManagerError(error) {
     } else if (status === 408 || status === 504 || /(gateway timeout|request timeout|timed out|etimedout)/i.test(original)) {
         code = 'RMT_CONNECTION_SERVER';
         message = `模型服务或代理响应超时${technical}。本段会等待后重试一次；若再次失败，旧内容仍会保留。`;
+        retryable = true;
     } else if (status >= 500 || /(bad gateway|service unavailable|upstream.*(?:failed|error)|econnreset|econnrefused)/i.test(original)) {
         code = 'RMT_CONNECTION_SERVER';
         message = `模型服务或代理暂时不可用${technical}。本段会等待后重试一次；若再次失败，旧内容仍会保留。`;
+        retryable = true;
     }
     const normalized = new Error(message);
     normalized.code = code;
@@ -200,6 +231,7 @@ export function normalizeConnectionManagerError(error) {
 export async function generateConfiguredJson(prompt, options = {}) {
     const context = options.context || core_context.currentCharacterGuard();
     const settings = core_settings.getPluginSettings(context);
+    const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
     const expanded = core_text.expandSafeRoleMacros(prompt, context);
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
@@ -211,18 +243,29 @@ ${expanded}${phrasePolicy}`;
     // The value configured in the dedicated secondary-API UI is the actual provider max output.
     // Per-feature options.maxTokens values are legacy sizing hints only and must not silently lower it.
     const responseLength = Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens));
-    if (!settings.connectionProfileId) {
-        throw new Error('心跳回忆还没有专用连接。请在插件设置中点击“从酒馆当前连接一键导入”，或手动选择一个 Connection Manager 配置。');
-    }
+    const connectionMode = settings.apiConnectionMode === 'manual' ? 'manual' : 'profile';
     const service = context.ConnectionManagerRequestService;
-    if (!service?.sendRequest) {
-        throw new Error('当前 SillyTavern 未提供 Connection Manager Request Service，请启用官方 Connection Manager。');
-    }
+    let selectedProfileFingerprint = '';
     const overridePayload = {
         temperature: Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : settings.temperature,
     };
-    const modelOverride = core_text.normalizeText(options.model || settings.modelOverride, 240);
+    const modelOverride = core_text.normalizeText(options.model || (connectionMode === 'manual' ? settings.manualApiModel : settings.modelOverride), 240);
     if (modelOverride) overridePayload.model = modelOverride;
+    const messages = [{ role: 'user', content: controlledPrompt }];
+    if (connectionMode === 'manual') {
+        core_independentApi.normalizeManualApiBaseUrl(settings.manualApiBaseUrl, { required: true });
+        if (!modelOverride) throw new Error('手动 API 还没有模型 ID。请先在插件设置中完成手动配置。');
+    } else {
+        if (!settings.connectionProfileId) {
+            throw new Error(`心跳回忆还没有一键连接。请使用“${core_independentApi.PROFILE_ONE_CLICK_UI_VERSION} 一键配置”，或切换到手动配置。`);
+        }
+        core_independentApi.assertConnectionManagerProfileSupport(service);
+        const rawProfile = core_settings.rawConnectionProfile(settings.connectionProfileId, context);
+        if (!rawProfile) throw new Error('已保存的一键连接不存在，请重新配置。');
+        selectedProfileFingerprint = core_settings.profileFingerprint(rawProfile);
+        const apiMap = service.validateProfile(rawProfile);
+        if (apiMap?.selected !== 'openai' || !apiMap?.source) throw new Error('当前一键连接不是可复用的 Chat Completion 配置。');
+    }
     let result;
     const lifecycleController = new AbortController();
     const externalSignal = options.signal || null;
@@ -234,13 +277,19 @@ ${expanded}${phrasePolicy}`;
     else externalSignal?.addEventListener?.('abort', forwardAbort, { once: true });
     try {
         result = await core_requestCoordinator.runGenerationRequestWithTimeout(
-            () => service.sendRequest(
-                settings.connectionProfileId,
-                controlledPrompt,
-                responseLength,
-                { stream: false, extractData: true, includePreset: true, includeInstruct: true, signal: lifecycleController.signal },
-                overridePayload,
-            ),
+            () => connectionMode === 'manual'
+                ? core_independentApi.requestManualApiCompletion(settings, context, messages, responseLength, {
+                    signal: lifecycleController.signal,
+                    model: modelOverride,
+                    temperature: overridePayload.temperature,
+                })
+                : service.sendRequest(
+                    settings.connectionProfileId,
+                    messages,
+                    responseLength,
+                    { stream: false, extractData: true, includePreset: false, includeInstruct: false, signal: lifecycleController.signal },
+                    overridePayload,
+                ),
             lifecycleController,
             options.timeoutMs,
             options.statusText || '',
@@ -250,7 +299,20 @@ ${expanded}${phrasePolicy}`;
     } finally {
         try { externalSignal?.removeEventListener?.('abort', forwardAbort); } catch {}
     }
-    const parsed = generation_jsonParser.extractJson(result?.content ?? result, {
+    const latestSettings = core_settings.getPluginSettings(context);
+    let latestProfileFingerprint = '';
+    if (connectionMode === 'profile') {
+        try { latestProfileFingerprint = core_settings.profileFingerprint(core_settings.rawConnectionProfile(latestSettings.connectionProfileId, context)); }
+        catch { latestProfileFingerprint = 'missing'; }
+    }
+    if (core_independentApi.apiConfigurationFingerprint(latestSettings) !== configurationFingerprint
+        || (connectionMode === 'profile' && latestProfileFingerprint !== selectedProfileFingerprint)) {
+        const error = new Error('API 配置在生成期间发生变化，本次旧连接结果已丢弃。');
+        error.code = 'RMT_API_CONFIG_CHANGED';
+        error.retryable = false;
+        throw error;
+    }
+    const parsed = generation_jsonParser.extractJson(core_independentApi.extractIndependentResponseContent(result), {
         reasoning: result?.reasoning || '',
         requestMaxTokens: responseLength,
         configuredMaxTokens: settings.maxTokens,
@@ -320,8 +382,8 @@ export async function generateMode(mode, options = {}) {
     const memoryBank = archive_repository.requireArchive(context);
     const expectedArchiveRevision = memoryBank.archiveRevision;
     const promptFactory = generation_prompts.PROMPTS[mode];
-    if (!promptFactory && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS].includes(mode)) return;
-    const segmentedMode = [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS].includes(mode);
+    if (!promptFactory && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS, core_constants.MODE.TRAVEL].includes(mode)) return;
+    const segmentedMode = [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.TRAVEL].includes(mode);
     let generationPrompt = segmentedMode || mode === core_constants.MODE.RELATIONS ? '' : promptFactory(context, memoryBank);
     let roomSession = null;
     let focusObject = null;
@@ -347,9 +409,10 @@ export async function generateMode(mode, options = {}) {
     const incrementalPart = mode === core_constants.MODE.HEART ? 'dialogues' : 'mode';
     const refreshableCalendar = mode === core_constants.MODE.CALENDAR;
     const refreshableRelations = mode === core_constants.MODE.RELATIONS;
+    const roomSchemaUpgrade = mode === core_constants.MODE.ROOM && modes_room.roomNeedsSchemaUpgrade(previousSession);
     if (previousSession && !refreshableCalendar && !refreshableRelations && !(mode === core_constants.MODE.PHONE && options.continueDraft === true)) {
         const pendingMemoryIds = core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank, incrementalPart);
-        if (!pendingMemoryIds.length) {
+        if (!pendingMemoryIds.length && !roomSchemaUpgrade) {
             globalThis.toastr?.info?.(`「${core_constants.MODE_LABEL[mode]}」已经覆盖当前档案。请先增量更新档案；下次只会追加新内容，旧内容不会重写。`, '心跳回忆');
             return;
         }
@@ -376,7 +439,7 @@ export async function generateMode(mode, options = {}) {
     core_requestCoordinator.refreshConcurrentTaskUi(mode, origin);
     if (!background) {
         ui_overlay.openOverlay();
-        ui_overlay.setInnerLoading(true, replaceExisting ? `正在重新生成「${core_constants.MODE_LABEL[mode]}」…` : refreshableCalendar && previousSession ? '正在刷新「两个人的日历」…' : refreshableRelations && previousSession ? '正在刷新「本世界线人际关系」…' : previousSession ? `正在从新增档案追加「${core_constants.MODE_LABEL[mode]}」…` : `正在生成「${core_constants.MODE_LABEL[mode]}」…`);
+        ui_overlay.setInnerLoading(true, replaceExisting ? `正在重新生成「${core_constants.MODE_LABEL[mode]}」…` : roomSchemaUpgrade ? '正在为旧版房间补全宠物与视觉设定…' : refreshableCalendar && previousSession ? '正在刷新「两个人的日历」…' : refreshableRelations && previousSession ? '正在刷新「本世界线人际关系」…' : previousSession ? `正在从新增档案追加「${core_constants.MODE_LABEL[mode]}」…` : `正在生成「${core_constants.MODE_LABEL[mode]}」…`);
     }
     try {
         let session;
@@ -400,6 +463,8 @@ export async function generateMode(mode, options = {}) {
             session = previousSession && options.continueDraft !== true
                 ? await modes_phone.generatePhoneIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession)
                 : await modes_phone.generatePhoneWithRepair(context, memoryBank, origin, taskKey, { continueDraft: options.continueDraft === true });
+        } else if (mode === core_constants.MODE.TRAVEL) {
+            session = await modes_travel.generateTravelWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.RELATIONS) {
             const raw = await requestJson(
                 modes_relations.relationsPrompt(context, memoryBank),

@@ -276,6 +276,7 @@ export function characterProfilePrompt(sources) {
       "sentiments":["信赖"],
       "summary":"只说明设定中已明确存在的关系，不编造共同事件",
       "isUser":false,
+      "npcPerspective":"非 user NPC 从自己视角如何理解 ${charName} 与这段固有关系",
       "sourceType":"world_info",
       "sourceEvidence":"必须从对应来源原样复制的短证据"
     }
@@ -290,7 +291,8 @@ export function characterProfilePrompt(sources) {
 - 第三方人物必须在角色卡/世界书/Persona 中有明确姓名或稳定称呼与关系证据；禁止凭空造朋友、前任、亲属、同事。
 - sourceType 只能 character_card / user_persona / world_info；sourceEvidence 必须逐字来自对应来源。facts 的 value 也必须是 sourceEvidence 中能直接核对的原词/原值，不要把“很高”换算成厘米、不要猜日期或血型。插件会本地验证，不匹配就丢弃。
 - category 只能 family / close / friend / work / school / rival / acquaintance / special；state 使用简短关系状态。
-- sentiments 最多 4 个，只写 ${charName} 对该人的长期基础印象；不得反向声称对方的秘密感情。
+- sentiments 最多 4 个，只写 ${charName} 对该人的长期基础印象。
+- 每个非 user 第三方 NPC 必须写 npcPerspective；它是从该 NPC 视角对 ${charName} 和已明确固有关系的简短非正史演绎，只能使用 sourceEvidence 可支持的身份、事实和可见态度，不得发明秘密、事件或恋爱。isUser=true 时 npcPerspective 必须为空字符串。
 - 不得生成任何 URL、HTML、CSS、坐标、脚本。只输出 JSON。`;
 }
 
@@ -329,6 +331,8 @@ export function normalizeCharacterProfile(data, sources, profileKey, characterNa
         seen.add(identity);
         const categoryRaw = core_text.normalizeText(item?.category, 30).toLowerCase();
         const stateRaw = core_text.normalizeText(item?.state, 40);
+        const npcPerspective = isUser ? '' : core_text.normalizeText(item?.npcPerspective, 900);
+        if (!isUser && !npcPerspective) throw new Error(`角色档案中 NPC「${name}」缺少 npcPerspective。`);
         return {
             id: core_text.safeId(item?.id, `REL_BASE_${String(index + 1).padStart(2, '0')}`),
             name,
@@ -338,6 +342,7 @@ export function normalizeCharacterProfile(data, sources, profileKey, characterNa
             sentiments: core_text.cleanArray(item?.sentiments, 4, 40),
             summary: core_text.normalizeText(item?.summary, 600),
             isUser,
+            npcPerspective,
             sourceType,
             sourceEvidence,
         };
@@ -478,6 +483,7 @@ ${generation_prompts.promptArchiveSlice(memoryBank, 64)}
     "sentiments":["依赖","信赖"],
     "summary":"当前关系的简短说明",
     "isUser":true,
+    "npcPerspective":"非 user NPC 从自己视角对 {{char}} 和当前关系的简短看法；user 节点必须留空",
     "sourceMemoryIds":["M001"],
     "sourceMemoryAnchor":"必须从所引用记忆 anchors/title 原样复制"
   }]
@@ -491,7 +497,8 @@ ${generation_prompts.promptArchiveSlice(memoryBank, 64)}
 - {{user}} 可以出现，但当前“恋人/暧昧/伴侣/冲突/同居”等状态必须由当前 Mxxx 直接证明；不能因为 User Persona 或世界书一开始有特殊设定就把后续发展当成已发生。固有设定会由插件在同一张人际图中合并显示。
 - discoveries 与 relationships 每项都必须至少 1 个有效 sourceMemoryIds + sourceMemoryAnchor，插件会本地校验；没有证据就丢弃。
 - 第三方与 {{char}} 的关系只能写非恋爱关系；禁止前任/前女友及第三方恋爱。
-- sentiments 最多 4 个，只描述 {{char}} 当前对该人的感受/态度，禁止声称对方内心秘密。
+- sentiments 最多 4 个，只描述 {{char}} 当前对该人的感受/态度。
+- 每个非 user 第三方 NPC 必须写 npcPerspective：以该 NPC 第一人称或贴近其视角，只表达所引 Mxxx 能支持的可见态度和对 {{char}} 的理解。可以有有限的人设化演绎，但不能冒充已证实的秘密，不能新增事件、隐藏恋爱或对 {{user}} 的读心。isUser=true 时必须留空。
 - category 只能 family / close / friend / work / school / rival / acquaintance / special。
 - 不输出数值好感度，不生成 URL、HTML、CSS、坐标或脚本。只输出 JSON。`;
 }
@@ -554,6 +561,8 @@ export function normalizeRelations(data, memoryBank, context = null) {
         seen.add(identity);
         const categoryRaw = core_text.normalizeText(item?.category, 30).toLowerCase();
         const stateRaw = core_text.normalizeText(item?.state, 40);
+        const npcPerspective = isUser ? '' : core_text.normalizeText(item?.npcPerspective, 900);
+        if (!isUser && !npcPerspective) throw new Error(`本世界线 NPC「${name}」缺少 npcPerspective。`);
         return {
             id: core_text.safeId(item?.id, `REL_CHAT_${String(index + 1).padStart(2, '0')}`),
             name,
@@ -563,6 +572,7 @@ export function normalizeRelations(data, memoryBank, context = null) {
             sentiments: core_text.cleanArray(item?.sentiments, 4, 40),
             summary,
             isUser,
+            npcPerspective,
             sourceMemoryIds: reference.sourceMemoryIds,
             sourceMemoryAnchor: reference.sourceMemoryAnchor,
         };
@@ -587,6 +597,38 @@ function currentProfileForContext(context) {
     } catch {
         return null;
     }
+}
+
+export function relationsViewIdentity(session, snapshot = null, context = core_context.getContext()) {
+    let profile = null;
+    let authoritativeGroupId = '';
+    let groupMeta = null;
+    if (snapshot) {
+        const entryId = core_text.normalizeText(snapshot?.entryId, 120);
+        const currentEntry = entryId
+            ? archive_groups.getArchiveIndex(context).find(item => core_context.archiveIndexEntryId(item) === entryId)
+            : null;
+        authoritativeGroupId = currentEntry
+            ? archive_groups.archiveGroupKeyForEntry(currentEntry)
+            : core_text.normalizeText(snapshot?.archiveGroupId, 120);
+        if (authoritativeGroupId) {
+            const entries = archive_groups.archiveGroupEntries(authoritativeGroupId, context);
+            groupMeta = archive_groups.archiveGroupMeta(authoritativeGroupId, entries, context);
+            profile = getCharacterProfile(context, archiveCharacterProfileKey(authoritativeGroupId, groupMeta, entries));
+        }
+    } else {
+        profile = currentProfileForContext(context);
+        if (!profile && session?.profileKey) profile = getCharacterProfile(context, session.profileKey);
+    }
+    const characterName = core_text.normalizeText(
+        profile?.characterName || groupMeta?.characterName || snapshot?.characterName || session?.characterName || context?.name2,
+        120,
+    ) || '{{char}}';
+    const avatarName = core_text.normalizeText(
+        profile?.avatar || groupMeta?.avatar || snapshot?.avatar || session?.characterAvatar,
+        300,
+    );
+    return { profile, profileKey: core_text.normalizeText(profile?.key, 160), authoritativeGroupId, characterName, avatarName };
 }
 
 function relationDistanceRank(item) {
@@ -641,6 +683,7 @@ function relationCategoryLabel(category) {
 
 export function relationGardenHtml({ characterName, avatarUrl = '', sharedRelations = [], dynamicRelations = [], selectedKey = '' } = {}) {
     const merged = mergeRelationLayers(sharedRelations, dynamicRelations);
+    const selected = merged.find(item => item.key === selectedKey) || merged[0] || null;
     const positions = relationGardenPositions(merged.length);
     const edges = merged.map((item, index) => {
         const pos = positions[index];
@@ -653,17 +696,23 @@ export function relationGardenHtml({ characterName, avatarUrl = '', sharedRelati
         const pos = positions[index];
         const rel = item.dynamic || item.base || {};
         const key = item.key;
-        const classes = ['rmt-relation-node', item.isUser ? 'user' : '', item.base ? 'has-base' : '', item.dynamic ? 'has-dynamic' : '', key === selectedKey ? 'selected' : ''].filter(Boolean).join(' ');
+        const classes = ['rmt-relation-node', item.isUser ? 'user' : '', item.base ? 'has-base' : '', item.dynamic ? 'has-dynamic' : '', key === selected?.key ? 'selected' : ''].filter(Boolean).join(' ');
         const title = item.dynamic?.relation || item.base?.relation || relationCategoryLabel(rel.category);
         return `<button type="button" class="${classes}" data-rmt-action="relation-select" data-rmt-relation-key="${core_text.esc(key)}" style="left:${pos.x.toFixed(2)}%;top:${pos.y.toFixed(2)}%"><span class="rmt-relation-node-avatar">${item.isUser ? '<i class="fa-solid fa-heart"></i>' : '<i class="fa-solid fa-user"></i>'}</span><b>${core_text.esc(item.name || (item.isUser ? '{{user}}' : '人物'))}</b><small>${core_text.esc(title)}</small></button>`;
     }).join('');
-    const selected = merged.find(item => item.key === selectedKey) || merged[0] || null;
     const base = selected?.base;
     const dynamic = selected?.dynamic;
+    const npcPerspective = selected && !selected.isUser
+        ? core_text.normalizeText(dynamic?.npcPerspective || base?.npcPerspective, 900)
+        : '';
+    const npcPerspectiveDetail = selected && !selected.isUser
+        ? `<div class="rmt-relation-layer-row npc-perspective"><strong>NPC视角</strong><span>${npcPerspective ? core_text.esc(npcPerspective) : '尚未生成'}</span><small>${npcPerspective ? '动态世界线视角优先于固有设定；内容只是证据边界内的视角化演绎。' : '这是旧缓存条目；刷新本世界线关系或重新读取固定设定后可查看。'}</small></div>`
+        : '';
     const detail = selected ? `<article class="rmt-relation-detail">
       <div class="rmt-relation-detail-head"><b>${core_text.esc(selected.name || '{{user}}')}</b>${selected.isUser ? '<span>USER</span>' : ''}</div>
       ${base ? `<div class="rmt-relation-layer-row"><strong>固有设定</strong><span>${core_text.esc(base.relation)}${base.state ? ` · ${core_text.esc(base.state)}` : ''}</span><small>${core_text.esc(base.summary || '')}</small>${base.sentiments?.length ? `<em>${base.sentiments.map(core_text.esc).join(' · ')}</em>` : ''}</div>` : ''}
       ${dynamic ? `<div class="rmt-relation-layer-row dynamic"><strong>本世界线</strong><span>${core_text.esc(dynamic.relation)}${dynamic.state ? ` · ${core_text.esc(dynamic.state)}` : ''}</span><small>${core_text.esc(dynamic.summary || '')}</small>${dynamic.sentiments?.length ? `<em>${dynamic.sentiments.map(core_text.esc).join(' · ')}</em>` : ''}<i>${core_text.esc(dynamic.sourceMemoryAnchor || '')}</i></div>` : ''}
+      ${npcPerspectiveDetail}
     </article>` : '<div class="rmt-heart-empty">还没有可展示的人际关系。</div>';
     return `<section class="rmt-relation-garden-wrap">
       <div class="rmt-relation-legend"><span><i class="base"></i>固有设定</span><span><i class="dynamic"></i>本世界线</span></div>
@@ -711,9 +760,7 @@ export function renderRelations() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.RELATIONS) return;
     const context = core_context.getContext();
-    const profile = session.profileKey ? getCharacterProfile(context, session.profileKey) : currentProfileForContext(context);
-    const characterName = core_text.normalizeText(session.characterName || profile?.characterName || context.name2, 120) || '{{char}}';
-    const avatarName = core_text.normalizeText(session.characterAvatar || profile?.avatar, 300);
+    const { profile, characterName, avatarName } = relationsViewIdentity(session, runtimeState.activeArchiveSnapshot, context);
     let avatarUrl = '';
     try { avatarUrl = avatarName ? (context.getThumbnailUrl?.('avatar', avatarName) || '') : ''; } catch {}
     const selectedKey = core_text.normalizeText(runtimeState.relationSelectedKey, 160);

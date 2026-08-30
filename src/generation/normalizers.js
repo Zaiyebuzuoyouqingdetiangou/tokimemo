@@ -12,6 +12,7 @@ import * as modes_items from '../modes/items.js';
 import * as modes_phone from '../modes/phone.js';
 import * as modes_room from '../modes/room.js';
 import * as modes_relations from '../modes/relations.js';
+import * as modes_travel from '../modes/travel.js';
 
 export function normalizeByMode(mode, data, memoryBank, context = null) {
     if (mode === core_constants.MODE.CALENDAR) return modes_calendar.normalizeCalendar(data, memoryBank);
@@ -22,6 +23,7 @@ export function normalizeByMode(mode, data, memoryBank, context = null) {
     if (mode === core_constants.MODE.ROOM) return modes_room.normalizeRoom(data, memoryBank, context);
     if (mode === core_constants.MODE.ITEMS) return modes_items.normalizeItems(data, memoryBank);
     if (mode === core_constants.MODE.PHONE) return modes_phone.normalizePhone(data, memoryBank, context);
+    if (mode === core_constants.MODE.TRAVEL) return modes_travel.normalizeTravel(data, memoryBank);
     if (mode === core_constants.MODE.ENDING) return modes_ending.normalizeEnding(data, memoryBank);
     if (mode === core_constants.MODE.HEART) return modes_heart.normalizeHeart(data, memoryBank);
     if (mode === core_constants.MODE.ACHIEVEMENTS) return modes_achievements.normalizeAchievements(data, memoryBank);

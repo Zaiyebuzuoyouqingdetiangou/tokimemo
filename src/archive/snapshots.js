@@ -75,9 +75,12 @@ export function resetArchiveOverviewForCharacter(context = core_context.currentC
 }
 
 export function scheduleChooserRefresh(delay = 40) {
+    if (runtimeState.archiveViewLevel !== 'chooser') return;
     if (runtimeState.chooserRefreshTimer) clearTimeout(runtimeState.chooserRefreshTimer);
     runtimeState.chooserRefreshTimer = setTimeout(() => {
         runtimeState.chooserRefreshTimer = 0;
+        if (runtimeState.archiveViewLevel !== 'chooser') return;
+        if (runtimeState.activeMode || runtimeState.activeSession) return;
         if (runtimeState.activeArchiveSnapshot && runtimeState.archiveViewLevel === 'snapshot') return;
         const overlay = document.getElementById(core_constants.OVERLAY_ID);
         if (!overlay || overlay.hidden || runtimeState.busy) return;
@@ -85,6 +88,9 @@ export function scheduleChooserRefresh(delay = 40) {
         try { context = core_context.currentCharacterGuard(); } catch { ui_overlay.showChooser(); return; }
         const scope = core_cache.cacheScopeFromContext(context);
         void core_cache.ensureCacheHydrated(context).then(() => {
+            if (runtimeState.archiveViewLevel !== 'chooser') return;
+            if (runtimeState.activeMode || runtimeState.activeSession) return;
+            if (runtimeState.activeArchiveSnapshot && runtimeState.archiveViewLevel === 'snapshot') return;
             let latest;
             try { latest = core_context.currentCharacterGuard(); } catch { return; }
             if (core_cache.cacheScopeFromContext(latest) !== scope) return;
@@ -209,6 +215,7 @@ export function modePortalMeta(mode) {
         [core_constants.MODE.ROOM]: { title: '他的房间', subtitle: '随现实时间流动的私人空间', icon: 'fa-house', accent: 'room' },
         [core_constants.MODE.ITEMS]: { title: '他的物品', subtitle: '翻找各种收纳容器与私人物件', icon: 'fa-box-open', accent: 'items' },
         [core_constants.MODE.PHONE]: { title: '他的手机', subtitle: '查看私人通讯与数字生活', icon: 'fa-mobile-screen-button', accent: 'phone' },
+        [core_constants.MODE.TRAVEL]: { title: '他的出行路线', subtitle: '附近对话与远方文字明信片', icon: 'fa-map-location-dot', accent: 'travel' },
         [core_constants.MODE.BUTTERFLY]: { title: '蝴蝶效应', subtitle: '平行时间线观测终端', icon: 'fa-code-branch', accent: 'butterfly' },
         [core_constants.MODE.ENDING]: { title: 'ENDING / 后日谈', subtitle: '关系路线终章与未来生活', icon: 'fa-heart', accent: 'ending' },
         [core_constants.MODE.CALENDAR]: { title: '两个人的日历', subtitle: '已度过 / 已约定 / 未来', icon: 'fa-calendar-days', accent: 'calendar' },

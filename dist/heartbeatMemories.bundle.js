@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 44
-// Source SHA-256: 203b8b5f71cc56c83d59ffa4392f77f527b3eb36fecae6a3debd96b1363ec87e
+// Source modules: 47
+// Source SHA-256: e4250ec938cb92c699184d905a35d7dbeaa52071fe12b5b665540aa29f61533f
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -13,6 +13,7 @@ const __m_core_constants_js = Object.create(null);
 const __m_core_context_js = Object.create(null);
 const __m_core_evidence_js = Object.create(null);
 const __m_core_incremental_js = Object.create(null);
+const __m_core_independentApi_js = Object.create(null);
 const __m_core_requestCoordinator_js = Object.create(null);
 const __m_core_settings_js = Object.create(null);
 const __m_core_state_js = Object.create(null);
@@ -35,6 +36,7 @@ const __m_modes_items_js = Object.create(null);
 const __m_modes_phone_js = Object.create(null);
 const __m_modes_relations_js = Object.create(null);
 const __m_modes_room_js = Object.create(null);
+const __m_modes_travel_js = Object.create(null);
 const __m_ui_advEventView_js = Object.create(null);
 const __m_ui_albumView_js = Object.create(null);
 const __m_ui_archivePortal_js = Object.create(null);
@@ -47,6 +49,7 @@ const __m_ui_overlay_js = Object.create(null);
 const __m_ui_phoneView_js = Object.create(null);
 const __m_ui_settingsPanel_js = Object.create(null);
 const __m_ui_styles_js = Object.create(null);
+const __m_ui_travelView_js = Object.create(null);
 
 function __init_core_constants_js() {
 // MODULE: core/constants.js
@@ -84,6 +87,10 @@ const CACHE_STORAGE_VERSION = 1;
 const CALENDAR_SESSION_VERSION = 5;
 
 const PHONE_SESSION_VERSION = 2;
+
+const ROOM_SESSION_VERSION = 2;
+
+const TRAVEL_SESSION_VERSION = 1;
 
 const MAX_CACHE_COMPRESSED_BASE64_CHARS = 4000000;
 
@@ -164,8 +171,12 @@ const MAX_MEMORY_WORLD_INFO_ENTRIES = 160;
 const MAX_MEMORY_WORLD_INFO_CHARS = 52000;
 
 const DEFAULT_SETTINGS = Object.freeze({
+    apiConnectionMode: 'profile',
     connectionProfileId: '',
     modelOverride: '',
+    manualApiBaseUrl: '',
+    manualApiKey: '',
+    manualApiModel: '',
     maxTokens: 16384,
     temperature: 0.9,
     roomLifeAutoDaily: true,
@@ -190,6 +201,7 @@ const MODE = Object.freeze({
     ROOM: 'room',
     ITEMS: 'items',
     PHONE: 'phone',
+    TRAVEL: 'travel',
     ENDING: 'ending',
     CALENDAR: 'calendar',
     RELATIONS: 'relations',
@@ -204,6 +216,7 @@ const MODE_LABEL = Object.freeze({
     [MODE.ROOM]: '他的房间',
     [MODE.ITEMS]: '他的物品',
     [MODE.PHONE]: '他的私人终端',
+    [MODE.TRAVEL]: '他的出行路线',
     [MODE.ENDING]: '结局与后日谈',
     [MODE.CALENDAR]: '两个人的日历',
     [MODE.RELATIONS]: '人际庭园',
@@ -218,6 +231,7 @@ const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ROOM]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.ITEMS]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.PHONE]: MAX_GENERATION_OUTPUT_TOKENS,
+    [MODE.TRAVEL]: 9000,
     [MODE.ENDING]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.CALENDAR]: 6000,
     [MODE.RELATIONS]: 7000,
@@ -225,7 +239,7 @@ const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ACHIEVEMENTS]: 6000,
 });
 
-const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
+const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
 
 const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS, MODE.PHONE]);
 
@@ -249,7 +263,13 @@ const ROOM_BASIS_VALUES = new Set(['设定', '记忆']);
 
 const PHONE_DEVICE_KINDS = new Set(['phone', 'watch', 'terminal', 'communicator']);
 
-const PHONE_EXCLUDED_APP_KINDS = new Set(['schedule', 'calendar']);
+const PHONE_EXCLUDED_APP_KINDS = new Set(['schedule', 'calendar', 'location', 'map', 'maps', 'navigation', 'travel', 'transit', 'route']);
+
+const TRAVEL_LOCATION_KINDS = new Set(['near', 'far']);
+
+const TRAVEL_MAP_THEMES = new Set(['city', 'coast', 'forest', 'mountain', 'campus', 'historic', 'fantasy', 'scifi']);
+
+const TRAVEL_POSTCARD_TONES = new Set(['rose', 'ocean', 'forest', 'sunset', 'night', 'paper']);
 
 const ROOM_DAYPART_KEYS = ['morning', 'daytime', 'evening', 'night'];
 
@@ -283,11 +303,15 @@ const MAX_CONCURRENT_PROVIDER_REQUESTS = 2;
 
 const CACHE_PERSIST_IDLE_RETRY_MS = 1200;
 
-const DEFAULT_GENERATION_REQUEST_TIMEOUT_MS = 300000;
+const DEFAULT_GENERATION_REQUEST_TIMEOUT_MS = 600000;
 
 const MIN_GENERATION_REQUEST_TIMEOUT_MS = 30000;
 
-const MAX_GENERATION_REQUEST_TIMEOUT_MS = 600000;
+const MAX_GENERATION_REQUEST_TIMEOUT_MS = 1200000;
+
+const MANUAL_API_MODEL_LIST_TIMEOUT_MS = 30000;
+
+const MAX_MANUAL_API_RESPONSE_BYTES = 4000000;
 
 const SEGMENT_REQUEST_CONCURRENCY = 1;
 
@@ -311,6 +335,8 @@ __m_core_constants_js.CACHE_STORAGE_FORMAT = CACHE_STORAGE_FORMAT;
 __m_core_constants_js.CACHE_STORAGE_VERSION = CACHE_STORAGE_VERSION;
 __m_core_constants_js.CALENDAR_SESSION_VERSION = CALENDAR_SESSION_VERSION;
 __m_core_constants_js.PHONE_SESSION_VERSION = PHONE_SESSION_VERSION;
+__m_core_constants_js.ROOM_SESSION_VERSION = ROOM_SESSION_VERSION;
+__m_core_constants_js.TRAVEL_SESSION_VERSION = TRAVEL_SESSION_VERSION;
 __m_core_constants_js.MAX_CACHE_COMPRESSED_BASE64_CHARS = MAX_CACHE_COMPRESSED_BASE64_CHARS;
 __m_core_constants_js.MAX_CACHE_DECOMPRESSED_BYTES = MAX_CACHE_DECOMPRESSED_BYTES;
 __m_core_constants_js.MAX_CACHE_SOURCE_BYTES = MAX_CACHE_SOURCE_BYTES;
@@ -366,6 +392,9 @@ __m_core_constants_js.ROOM_ZONE_VALUES = ROOM_ZONE_VALUES;
 __m_core_constants_js.ROOM_BASIS_VALUES = ROOM_BASIS_VALUES;
 __m_core_constants_js.PHONE_DEVICE_KINDS = PHONE_DEVICE_KINDS;
 __m_core_constants_js.PHONE_EXCLUDED_APP_KINDS = PHONE_EXCLUDED_APP_KINDS;
+__m_core_constants_js.TRAVEL_LOCATION_KINDS = TRAVEL_LOCATION_KINDS;
+__m_core_constants_js.TRAVEL_MAP_THEMES = TRAVEL_MAP_THEMES;
+__m_core_constants_js.TRAVEL_POSTCARD_TONES = TRAVEL_POSTCARD_TONES;
 __m_core_constants_js.ROOM_DAYPART_KEYS = ROOM_DAYPART_KEYS;
 __m_core_constants_js.ENDING_TYPES = ENDING_TYPES;
 __m_core_constants_js.CONFESSION_REPLAY_TYPES = CONFESSION_REPLAY_TYPES;
@@ -386,6 +415,8 @@ __m_core_constants_js.CACHE_PERSIST_IDLE_RETRY_MS = CACHE_PERSIST_IDLE_RETRY_MS;
 __m_core_constants_js.DEFAULT_GENERATION_REQUEST_TIMEOUT_MS = DEFAULT_GENERATION_REQUEST_TIMEOUT_MS;
 __m_core_constants_js.MIN_GENERATION_REQUEST_TIMEOUT_MS = MIN_GENERATION_REQUEST_TIMEOUT_MS;
 __m_core_constants_js.MAX_GENERATION_REQUEST_TIMEOUT_MS = MAX_GENERATION_REQUEST_TIMEOUT_MS;
+__m_core_constants_js.MANUAL_API_MODEL_LIST_TIMEOUT_MS = MANUAL_API_MODEL_LIST_TIMEOUT_MS;
+__m_core_constants_js.MAX_MANUAL_API_RESPONSE_BYTES = MAX_MANUAL_API_RESPONSE_BYTES;
 __m_core_constants_js.SEGMENT_REQUEST_CONCURRENCY = SEGMENT_REQUEST_CONCURRENCY;
 __m_core_constants_js.ARCHIVE_SNAPSHOT_CACHE_MAX = ARCHIVE_SNAPSHOT_CACHE_MAX;
 __m_core_constants_js.RUNTIME_SESSION_CACHE_MAX = RUNTIME_SESSION_CACHE_MAX;
@@ -600,12 +631,15 @@ function __init_core_state_js() {
 // Extracted from r34 without changing archive/cache storage contracts.
 const state = {
   runtimeLifecycleEpoch: 0,
+  apiConfigurationEpoch: 0,
   busy: false,
   activeMode: null,
   activeSession: null,
   contentManagerOpen: false,
   roomClockTimer: 0,
   phoneClockTimer: 0,
+  endingEasterEggTimer: 0,
+  endingEasterEggRuntime: null,
   archiveViewLevel: 'library',
   roomLifeRefreshPromise: null,
   activeTaskAbortController: null,
@@ -639,6 +673,7 @@ const state = {
   activeArchiveReadOnly: true,
   archiveSnapshotCache: new Map(),
   connectionModelCache: new Map(),
+  connectionModelRequestEpochs: new Map(),
   runtimeSessionCache: new Map(),
   cacheHydrationPromises: new Map(),
   cacheHydrationErrors: new Map(),
@@ -1484,16 +1519,394 @@ __m_core_incremental_js.uniqueGeneratedId = uniqueGeneratedId;
 __m_core_incremental_js.incrementalBatchId = incrementalBatchId;
 }
 
-function __init_ui_archivePortal_js() {
-// MODULE: ui/archivePortal.js
-const archive_library = __m_archive_library_js;
-const archive_repository = __m_archive_repository_js;
-const archive_snapshots = __m_archive_snapshots_js;
-const core_cache = __m_core_cache_js;
+function __init_core_independentApi_js() {
+// MODULE: core/independentApi.js
+const core_constants = __m_core_constants_js;
+const core_text = __m_core_text_js;
+// Heartbeat Memories independent API transport boundary.
+// Manual providers are reached only through SillyTavern's fixed same-origin custom backend.
+
+
+const PROFILE_ONE_CLICK_UI_VERSION = '1.1.18';
+const PROFILE_ONE_CLICK_TECHNICAL_VERSION = 'SillyTavern 1.18.0+';
+
+const MANUAL_STATUS_ENDPOINT = '/api/backends/chat-completions/status';
+const MANUAL_GENERATE_ENDPOINT = '/api/backends/chat-completions/generate';
+const KNOWN_API_ENDPOINT_RE = /\/(?:chat\/completions|completions|responses|messages|embeddings|models)\/?$/i;
+
+function apiError(message, code, status = 0) {
+    const error = new Error(message);
+    error.code = code;
+    if (status) error.status = status;
+    return error;
+}
+
+function connectionManagerHasProfileSecrets(service) {
+    if (typeof service?.sendRequest !== 'function') return false;
+    try {
+        const source = Function.prototype.toString.call(service.sendRequest);
+        return /\bsecret_id\s*:/.test(source) && /profile\s*\[\s*['"]secret-id['"]\s*\]/.test(source);
+    } catch {
+        return false;
+    }
+}
+
+function connectionManagerSupportsRequestOverrides(service) {
+    if (typeof service?.sendRequest !== 'function') return false;
+    try {
+        const source = Function.prototype.toString.call(service.sendRequest);
+        const profileModelIndex = source.search(/\bmodel\s*:\s*profile(?:\.model|\s*\[\s*['"]model['"]\s*\])/);
+        const overrideIndex = source.search(/\.\.\.\s*overridePayload\b/);
+        return profileModelIndex >= 0 && overrideIndex > profileModelIndex;
+    } catch {
+        return false;
+    }
+}
+
+function assertConnectionManagerProfileSupport(service) {
+    const validService = typeof service?.validateProfile === 'function' && typeof service?.sendRequest === 'function';
+    if (validService && connectionManagerHasProfileSecrets(service) && connectionManagerSupportsRequestOverrides(service)) return true;
+    throw apiError(
+        `一键配置要求 ${PROFILE_ONE_CLICK_UI_VERSION} 对应的新版 Connection Manager 能力（${PROFILE_ONE_CLICK_TECHNICAL_VERSION}）。当前页面未提供安全的 Profile Secret 与模型覆盖能力；本次没有发送请求。`,
+        'RMT_PROFILE_CAPABILITY',
+    );
+}
+
+function stripKnownEndpoint(url) {
+    let pathname = String(url.pathname || '').replace(/\/+$/, '');
+    for (let index = 0; index < 3; index += 1) {
+        const next = pathname.replace(KNOWN_API_ENDPOINT_RE, '');
+        if (next === pathname) break;
+        pathname = next.replace(/\/+$/, '');
+    }
+    url.pathname = pathname || '/';
+    url.hash = '';
+    return url;
+}
+
+function normalizeManualApiBaseUrl(value, { required = false } = {}) {
+    const raw = String(value ?? '').trim();
+    if (!raw) {
+        if (required) throw apiError('请填写手动 API 地址。', 'RMT_MANUAL_API_URL');
+        return '';
+    }
+    if (raw.length > 2000 || /[\u0000-\u001f\u007f]/.test(raw)) {
+        throw apiError('手动 API 地址格式无效。', 'RMT_MANUAL_API_URL');
+    }
+    const explicitScheme = raw.match(/^([a-z][a-z0-9+.-]*):(.*)$/i);
+    const looksLikeHostPort = !!explicitScheme
+        && /^\d+(?:[/?#]|$)/.test(explicitScheme[2])
+        && /^(?:[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?)$/i.test(explicitScheme[1]);
+    if (explicitScheme && !/^https?:\/\//i.test(raw) && !looksLikeHostPort) {
+        throw apiError('手动 API 地址必须是无内嵌账号密码的 HTTP(S) 地址。', 'RMT_MANUAL_API_URL');
+    }
+    const hostPart = raw.split('/')[0];
+    const localHost = /^(?:localhost|127(?:\.\d{1,3}){3}|\[[0-9a-f:]+\])(?::\d+)?$/i.test(hostPart);
+    const withScheme = /^https?:\/\//i.test(raw) ? raw : `${localHost ? 'http' : 'https'}://${raw}`;
+    let parsed;
+    try {
+        parsed = new URL(withScheme);
+    } catch {
+        throw apiError('手动 API 地址格式无效。', 'RMT_MANUAL_API_URL');
+    }
+    if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password) {
+        throw apiError('手动 API 地址必须是无内嵌账号密码的 HTTP(S) 地址。', 'RMT_MANUAL_API_URL');
+    }
+    stripKnownEndpoint(parsed);
+    const normalized = parsed.toString().replace(/\/(?=\?|$)/, '');
+    if (normalized.length > 2000) throw apiError('手动 API 地址过长。', 'RMT_MANUAL_API_URL');
+    return normalized;
+}
+
+function manualApiHeadersJson(apiKey) {
+    const key = core_text.normalizeText(apiKey, 4000);
+    return JSON.stringify(key ? { Authorization: `Bearer ${key}` } : {});
+}
+
+function apiConfigurationFingerprint(settings) {
+    const mode = settings?.apiConnectionMode === 'manual' ? 'manual' : 'profile';
+    if (mode === 'manual') {
+        let base = '';
+        try { base = normalizeManualApiBaseUrl(settings?.manualApiBaseUrl); } catch { base = 'invalid'; }
+        const key = core_text.normalizeText(settings?.manualApiKey, 4000);
+        return JSON.stringify([
+            mode,
+            base,
+            core_text.normalizeText(settings?.manualApiModel, 240),
+            key ? `${key.length}:${core_text.hashString(key)}` : '',
+            Number(settings?.maxTokens) || 0,
+            Number(settings?.temperature) || 0,
+        ]);
+    }
+    return JSON.stringify([
+        mode,
+        core_text.normalizeText(settings?.connectionProfileId, 160),
+        core_text.normalizeText(settings?.modelOverride, 240),
+        Number(settings?.maxTokens) || 0,
+        Number(settings?.temperature) || 0,
+    ]);
+}
+
+function manualModelCacheKey(settings) {
+    let base = '';
+    try { base = normalizeManualApiBaseUrl(settings?.manualApiBaseUrl); } catch { base = 'invalid'; }
+    const key = core_text.normalizeText(settings?.manualApiKey, 4000);
+    return `manual:${core_text.hashString(`${base}|${key.length}:${core_text.hashString(key)}`)}`;
+}
+
+function requestHeaders(context) {
+    let headers = {};
+    try { headers = typeof context?.getRequestHeaders === 'function' ? context.getRequestHeaders() : {}; } catch {}
+    return { ...(headers && typeof headers === 'object' ? headers : {}), 'Content-Type': 'application/json' };
+}
+
+async function boundedResponseText(response, maxBytes = core_constants.MAX_MANUAL_API_RESPONSE_BYTES) {
+    const contentLength = Number(response?.headers?.get?.('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+        throw apiError('模型服务返回内容过大，已停止读取。', 'RMT_MANUAL_RESPONSE_TOO_LARGE', Number(response?.status) || 0);
+    }
+    const reader = response?.body?.getReader?.();
+    if (!reader) {
+        const text = await response.text();
+        const size = typeof TextEncoder === 'function' ? new TextEncoder().encode(text).byteLength : text.length * 3;
+        if (size > maxBytes) throw apiError('模型服务返回内容过大，已停止读取。', 'RMT_MANUAL_RESPONSE_TOO_LARGE', Number(response?.status) || 0);
+        return text;
+    }
+    const decoder = new TextDecoder();
+    let total = 0;
+    let text = '';
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value?.byteLength || 0;
+        if (total > maxBytes) {
+            try { await reader.cancel(); } catch {}
+            throw apiError('模型服务返回内容过大，已停止读取。', 'RMT_MANUAL_RESPONSE_TOO_LARGE', Number(response?.status) || 0);
+        }
+        text += decoder.decode(value, { stream: true });
+    }
+    return text + decoder.decode();
+}
+
+async function boundedJson(response, maxBytes) {
+    const text = await boundedResponseText(response, maxBytes);
+    try {
+        return JSON.parse(text);
+    } catch {
+        throw apiError('模型服务没有返回可解析的 JSON。', 'RMT_MANUAL_INVALID_JSON', Number(response?.status) || 0);
+    }
+}
+
+async function readBoundedJsonResponse(response, maxBytes = core_constants.MAX_MANUAL_API_RESPONSE_BYTES) {
+    return await boundedJson(response, maxBytes);
+}
+
+function httpFailure(status) {
+    const code = Number(status) || 0;
+    return apiError(
+        code ? `手动 API 请求失败（HTTP ${code}）。请检查手动配置与服务状态。` : '手动 API 请求失败。请检查手动配置与服务状态。',
+        'RMT_MANUAL_HTTP',
+        code,
+    );
+}
+
+function providerEnvelopeFailure() {
+    const error = apiError('手动 API 返回了错误状态，请检查服务配置后重试。', 'RMT_MANUAL_PROVIDER_ERROR', 502);
+    error.retryable = false;
+    return error;
+}
+
+function assertManualApiCredentialTransport(baseUrl, apiKey) {
+    const normalized = normalizeManualApiBaseUrl(baseUrl, { required: true });
+    const parsed = new URL(normalized);
+    const loopback = /^(?:localhost|127(?:\.\d{1,3}){3}|\[?::1\]?)$/i.test(parsed.hostname);
+    if (core_text.normalizeText(apiKey, 4000) && parsed.protocol !== 'https:' && !loopback) {
+        throw apiError('带 API Key 的手动地址必须使用 HTTPS；仅本机 localhost/127.0.0.1/::1 可使用 HTTP。', 'RMT_MANUAL_API_TRANSPORT');
+    }
+    return normalized;
+}
+
+function modelId(value) {
+    if (typeof value === 'string') return core_text.normalizeText(value, 240);
+    if (!value || typeof value !== 'object') return '';
+    return core_text.normalizeText(value.id ?? value.model ?? value.model_id ?? value.name ?? value.slug, 240);
+}
+
+function extractManualModelIds(payload) {
+    const lists = [];
+    const visit = (value, depth = 0) => {
+        if (depth > 3 || value == null) return;
+        if (Array.isArray(value)) {
+            lists.push(value);
+            return;
+        }
+        if (typeof value !== 'object') return;
+        for (const key of ['data', 'models', 'items', 'result', 'results']) {
+            if (Object.prototype.hasOwnProperty.call(value, key)) visit(value[key], depth + 1);
+        }
+    };
+    visit(payload);
+    return [...new Set(lists.flatMap(list => list.map(modelId)).filter(Boolean))].slice(0, 2000);
+}
+
+function visibleContentText(value, depth = 0) {
+    if (depth > 5 || value == null) return '';
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value)) return value.map(item => visibleContentText(item, depth + 1)).filter(Boolean).join('');
+    if (typeof value !== 'object') return '';
+    const type = String(value.type || '').toLowerCase();
+    if (/(?:reasoning|thought|analysis)/.test(type)) return '';
+    if (typeof value.text === 'string') return value.text;
+    if (typeof value.text?.value === 'string') return value.text.value;
+    if (typeof value.output_text === 'string') return value.output_text;
+    if (Object.prototype.hasOwnProperty.call(value, 'content')) return visibleContentText(value.content, depth + 1);
+    return '';
+}
+
+function extractIndependentResponseContent(payload) {
+    if (typeof payload === 'string') return payload;
+    if (!payload || typeof payload !== 'object') return payload;
+    const candidates = [
+        payload?.choices?.[0]?.message?.content,
+        payload?.choices?.[0]?.text,
+        payload?.choices?.[0]?.delta?.content,
+        payload?.message?.content,
+        payload?.text,
+        payload?.output_text,
+        payload?.response,
+        payload?.candidates?.[0]?.content?.parts,
+        payload?.candidates?.[0]?.output,
+        payload?.data?.choices?.[0]?.message?.content,
+        payload?.data?.content,
+        payload?.data?.text,
+        payload?.data?.output_text,
+        payload?.data?.response,
+    ];
+    if (Object.prototype.hasOwnProperty.call(payload, 'content')) candidates.push(payload.content);
+    if (Array.isArray(payload.output)) candidates.push(payload.output);
+    for (const candidate of candidates) {
+        const text = visibleContentText(candidate);
+        if (text) return text;
+    }
+    return payload;
+}
+
+function payloadHasProviderError(payload) {
+    return !!payload && typeof payload === 'object'
+        && (payload.error === true || (typeof payload.error === 'string' && payload.error.trim()) || (payload.error && typeof payload.error === 'object'));
+}
+
+async function fetchManualApiModels(settings, context, options = {}) {
+    const customUrl = assertManualApiCredentialTransport(settings?.manualApiBaseUrl, settings?.manualApiKey);
+    const fetchImpl = options.fetchImpl || globalThis.fetch;
+    if (typeof fetchImpl !== 'function') throw apiError('当前环境没有可用的网络请求能力。', 'RMT_MANUAL_FETCH_UNAVAILABLE');
+    const controller = new AbortController();
+    const externalSignal = options.signal || null;
+    let timedOut = false;
+    const forwardAbort = () => {
+        try { controller.abort(externalSignal?.reason); } catch {}
+    };
+    if (externalSignal?.aborted) forwardAbort();
+    else externalSignal?.addEventListener?.('abort', forwardAbort, { once: true });
+    const timeoutId = setTimeout(() => {
+        timedOut = true;
+        try { controller.abort(); } catch {}
+    }, core_constants.MANUAL_API_MODEL_LIST_TIMEOUT_MS);
+    try {
+        const response = await fetchImpl(MANUAL_STATUS_ENDPOINT, {
+            method: 'POST',
+            credentials: 'same-origin',
+            cache: 'no-cache',
+            headers: requestHeaders(context),
+            signal: controller.signal,
+            body: JSON.stringify({
+                chat_completion_source: 'custom',
+                custom_url: customUrl,
+                custom_include_headers: manualApiHeadersJson(settings?.manualApiKey),
+                custom_include_body: '',
+                custom_exclude_body: '',
+            }),
+        });
+        if (!response?.ok) {
+            try { await response?.body?.cancel?.(); } catch {}
+            throw httpFailure(response?.status);
+        }
+        const payload = await boundedJson(response, 2000000);
+        if (payloadHasProviderError(payload)) throw providerEnvelopeFailure();
+        const models = extractManualModelIds(payload);
+        if (!models.length) throw apiError('接口没有返回可用模型；仍可直接填写模型 ID。', 'RMT_MANUAL_MODELS_EMPTY');
+        return models;
+    } catch (error) {
+        if (timedOut) throw apiError('拉取模型超时；仍可直接填写模型 ID。', 'RMT_MANUAL_MODEL_TIMEOUT');
+        throw error;
+    } finally {
+        clearTimeout(timeoutId);
+        try { externalSignal?.removeEventListener?.('abort', forwardAbort); } catch {}
+    }
+}
+
+async function requestManualApiCompletion(settings, context, messages, maxTokens, options = {}) {
+    const customUrl = assertManualApiCredentialTransport(settings?.manualApiBaseUrl, settings?.manualApiKey);
+    const model = core_text.normalizeText(options.model || settings?.manualApiModel, 240);
+    if (!model) throw apiError('请先填写手动 API 的模型 ID。', 'RMT_MANUAL_MODEL');
+    if (!Array.isArray(messages) || !messages.length) throw apiError('手动 API 请求缺少消息。', 'RMT_MANUAL_MESSAGES');
+    const fetchImpl = options.fetchImpl || globalThis.fetch;
+    if (typeof fetchImpl !== 'function') throw apiError('当前环境没有可用的网络请求能力。', 'RMT_MANUAL_FETCH_UNAVAILABLE');
+    const body = {
+        model,
+        messages,
+        max_tokens: Math.max(1, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens)),
+        temperature: Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : settings?.temperature,
+        stream: false,
+        chat_completion_source: 'custom',
+        custom_url: customUrl,
+        custom_include_headers: manualApiHeadersJson(settings?.manualApiKey),
+        custom_include_body: '',
+        custom_exclude_body: '',
+    };
+    const response = await fetchImpl(MANUAL_GENERATE_ENDPOINT, {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-cache',
+        headers: requestHeaders(context),
+        signal: options.signal || null,
+        body: JSON.stringify(body),
+    });
+    if (!response?.ok) {
+        try { await response?.body?.cancel?.(); } catch {}
+        throw httpFailure(response?.status);
+    }
+    const payload = await boundedJson(response, core_constants.MAX_MANUAL_API_RESPONSE_BYTES);
+    if (payloadHasProviderError(payload)) throw providerEnvelopeFailure();
+    const content = extractIndependentResponseContent(payload);
+    if (typeof content === 'string' && !content.trim()) throw apiError('手动 API 没有返回可见正文。', 'RMT_MANUAL_EMPTY');
+    return content;
+}
+
+__m_core_independentApi_js.readBoundedJsonResponse = readBoundedJsonResponse;
+__m_core_independentApi_js.fetchManualApiModels = fetchManualApiModels;
+__m_core_independentApi_js.requestManualApiCompletion = requestManualApiCompletion;
+__m_core_independentApi_js.connectionManagerHasProfileSecrets = connectionManagerHasProfileSecrets;
+__m_core_independentApi_js.connectionManagerSupportsRequestOverrides = connectionManagerSupportsRequestOverrides;
+__m_core_independentApi_js.assertConnectionManagerProfileSupport = assertConnectionManagerProfileSupport;
+__m_core_independentApi_js.normalizeManualApiBaseUrl = normalizeManualApiBaseUrl;
+__m_core_independentApi_js.manualApiHeadersJson = manualApiHeadersJson;
+__m_core_independentApi_js.apiConfigurationFingerprint = apiConfigurationFingerprint;
+__m_core_independentApi_js.manualModelCacheKey = manualModelCacheKey;
+__m_core_independentApi_js.assertManualApiCredentialTransport = assertManualApiCredentialTransport;
+__m_core_independentApi_js.extractManualModelIds = extractManualModelIds;
+__m_core_independentApi_js.extractIndependentResponseContent = extractIndependentResponseContent;
+__m_core_independentApi_js.payloadHasProviderError = payloadHasProviderError;
+__m_core_independentApi_js.PROFILE_ONE_CLICK_UI_VERSION = PROFILE_ONE_CLICK_UI_VERSION;
+__m_core_independentApi_js.PROFILE_ONE_CLICK_TECHNICAL_VERSION = PROFILE_ONE_CLICK_TECHNICAL_VERSION;
+}
+
+function __init_core_settings_js() {
+// MODULE: core/settings.js
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
+const core_independentApi = __m_core_independentApi_js;
 const core_text = __m_core_text_js;
-const ui_settingsPanel = __m_ui_settingsPanel_js;
 const runtimeState = __m_core_state_js.state;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -1501,170 +1914,651 @@ const runtimeState = __m_core_state_js.state;
 
 
 
-
-
-
-function mountMenuItem() {
-    if (document.getElementById(core_constants.MENU_ID)) return true;
-    const menu = document.querySelector('#extensionsMenu');
-    if (!menu) return false;
-    const item = document.createElement('div');
-    item.id = core_constants.MENU_ID;
-    item.className = 'list-group-item flex-container flexGap5 interactable';
-    item.tabIndex = 0;
-    item.setAttribute('role', 'button');
-    item.innerHTML = '<i class="fa-solid fa-box-archive"></i><span>心跳回忆 · 档案室</span>';
-    const open = () => safeShowArchiveLibrary('extensions-menu');
-    item.addEventListener('click', open);
-    item.addEventListener('keydown', event => {
-        if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            open();
-        }
-    });
-    menu.appendChild(item);
-    return true;
+function normalizeBannedGeneratedPhrases(value) {
+    const source = Array.isArray(value) ? value : String(value ?? '').split(/[\n,，]+/g);
+    return [...new Set(source.map(item => core_text.normalizeText(item, 40).trim()).filter(Boolean))]
+        .slice(0, core_constants.MAX_BANNED_GENERATED_PHRASES);
 }
 
-function archiveOpenButtonFromEvent(event) {
-    const selector = '[data-rmt-settings-open-archive], #heartbeat_memories_menu_item';
-    const path = typeof event?.composedPath === 'function' ? event.composedPath() : [];
-    for (const node of path) {
-        if (node?.matches?.(selector)) return node;
-    }
-    return event?.target?.closest?.(selector) || null;
-}
-
-function safeShowArchiveLibrary(source = 'unknown') {
-    try {
-        archive_library.showArchiveLibrary();
-        return true;
-    } catch (error) {
-        console.error(`[HeartbeatMemories] open archive failed (${source})`, error);
-        globalThis.toastr?.error?.(`档案室打开失败：${core_text.toastText(error?.message || error)}`, '心跳回忆');
-        return false;
-    }
-}
-
-function bindRobustArchiveOpenHandlers() {
-    try { globalThis.__heartbeatMemoriesOpenCleanup?.(); } catch {}
-    let lastOpenAt = 0;
-    const earlyHandler = event => {
-        const button = archiveOpenButtonFromEvent(event);
-        if (!button) return;
-        if (event.type === 'pointerdown' && Number(event.button ?? 0) !== 0) return;
-        const now = Date.now();
-        if (now - lastOpenAt < 700) return;
-        lastOpenAt = now;
-        // Do NOT preventDefault/stopPropagation here. SillyTavern mobile sets body touch-action:none
-        // and owns the settings drawer gesture lifecycle. We only observe the earliest gesture and
-        // open our mobile dialog in the browser top layer, then let the host finish its own gesture.
-        safeShowArchiveLibrary(`early-${event.type}`);
+function getPluginSettings(context = core_context.getContext()) {
+    if (!context.extensionSettings || typeof context.extensionSettings !== 'object') return { ...core_constants.DEFAULT_SETTINGS };
+    const raw = context.extensionSettings[core_constants.EXTENSION_SETTINGS_KEY];
+    const settings = raw && typeof raw === 'object' ? raw : {};
+    let manualApiBaseUrl = '';
+    try { manualApiBaseUrl = core_independentApi.normalizeManualApiBaseUrl(settings.manualApiBaseUrl); }
+    catch { manualApiBaseUrl = core_text.normalizeText(settings.manualApiBaseUrl, 2000); }
+    const normalized = {
+        apiConnectionMode: settings.apiConnectionMode === 'manual' ? 'manual' : 'profile',
+        connectionProfileId: core_text.normalizeText(settings.connectionProfileId, 160),
+        modelOverride: core_text.normalizeText(settings.modelOverride, 240),
+        manualApiBaseUrl,
+        manualApiKey: core_text.normalizeText(settings.manualApiKey, 4000),
+        manualApiModel: core_text.normalizeText(settings.manualApiModel, 240),
+        maxTokens: Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens)),
+        temperature: Math.max(0, Math.min(2, Number.isFinite(Number(settings.temperature)) ? Number(settings.temperature) : core_constants.DEFAULT_SETTINGS.temperature)),
+        roomLifeAutoDaily: settings.roomLifeAutoDaily !== false,
+        useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory !== false,
+        usePublicMemoryProviderReaders: settings.usePublicMemoryProviderReaders === true,
+        imageGenerationManualEnabled: settings.imageGenerationManualEnabled === true,
+        ttDisplayMode: settings.ttDisplayMode === true,
+        bannedGeneratedPhrases: settings.bannedGeneratedPhrases === undefined
+            ? [...core_constants.DEFAULT_SETTINGS.bannedGeneratedPhrases]
+            : normalizeBannedGeneratedPhrases(settings.bannedGeneratedPhrases),
     };
-    const touchOptions = { capture: true, passive: true };
-    document.addEventListener('touchstart', earlyHandler, touchOptions);
-    document.addEventListener('pointerdown', earlyHandler, true);
-    globalThis.__heartbeatMemoriesOpenCleanup = () => {
-        document.removeEventListener('touchstart', earlyHandler, touchOptions);
-        document.removeEventListener('pointerdown', earlyHandler, true);
-    };
+    if (!raw || JSON.stringify(raw) !== JSON.stringify(normalized)) {
+        context.extensionSettings[core_constants.EXTENSION_SETTINGS_KEY] = normalized;
+        context.saveSettingsDebounced?.();
+    }
+    return normalized;
 }
 
-function bindChatStateEvents() {
-    try { globalThis.__heartbeatMemoriesEventCleanup?.(); } catch {}
+function updatePluginSettings(patch) {
     const context = core_context.getContext();
-    const source = context.eventSource;
-    const types = context.eventTypes || context.event_types || {};
-    if (!source?.on) return;
+    const current = getPluginSettings(context);
+    const previousApiFingerprint = core_independentApi.apiConfigurationFingerprint(current);
+    const next = { ...current, ...(patch || {}) };
+    context.extensionSettings[core_constants.EXTENSION_SETTINGS_KEY] = next;
+    context.saveSettingsDebounced?.();
+    const normalized = getPluginSettings(context);
+    if (core_independentApi.apiConfigurationFingerprint(normalized) !== previousApiFingerprint) {
+        runtimeState.apiConfigurationEpoch += 1;
+        runtimeState.connectionModelCache.clear();
+        runtimeState.connectionModelRequestEpochs.clear();
+        for (const task of runtimeState.activeGenerationTasks.values()) {
+            try { task?.controller?.abort?.(new DOMException('API configuration changed', 'AbortError')); } catch {}
+        }
+    }
+    return normalized;
+}
 
-    const chatEvents = [types.CHAT_CHANGED, types.CHAT_LOADED].filter(Boolean);
-    const messageEvents = [
-        types.MESSAGE_SENT,
-        types.MESSAGE_RECEIVED,
-        types.MESSAGE_EDITED,
-        types.MESSAGE_DELETED,
-        types.MESSAGE_UPDATED,
-    ].filter(Boolean);
+function beginApiConfigurationOperation() {
+    runtimeState.apiConfigurationEpoch += 1;
+    return runtimeState.apiConfigurationEpoch;
+}
 
-    const chatHandler = () => {
-        // Chat navigation must not cancel a request that is already running. Results are
-        // bound to their origin chat and are committed when that chat is current again.
-        if (runtimeState.busy) runtimeState.activeTaskBackgrounded = true;
-        runtimeState.activeMode = null;
-        runtimeState.activeSession = null;
-        ui_settingsPanel.refreshSettingsMemoryStatus({ lightweight: true });
-        const overlay = document.getElementById(core_constants.OVERLAY_ID);
-        try {
-            const latest = core_context.currentCharacterGuard();
-            // Keep ordinary chat entry extremely light. Archive overview bookkeeping is only
-            // needed while the Heartbeat UI is visible. IMPORTANT: do not compress, hydrate,
-            // scan or migrate theater caches here; chat startup/navigation must remain inert.
-            if (overlay && !overlay.hidden) {
-                archive_snapshots.resetArchiveOverviewForCharacter(latest);
-                archive_snapshots.syncArchiveOverviewCurrentRow(latest);
+function isCurrentApiConfigurationOperation(epoch) {
+    return Number(epoch) === runtimeState.apiConfigurationEpoch;
+}
+
+function supportedConnectionProfiles(context = core_context.getContext()) {
+    try {
+        const service = context.ConnectionManagerRequestService;
+        if (!service?.getSupportedProfiles) return [];
+        return service.getSupportedProfiles().map(profile => ({
+            id: core_text.normalizeText(profile?.id, 160),
+            name: core_text.normalizeText(profile?.name, 180) || '未命名连接',
+            model: core_text.normalizeText(profile?.model, 180),
+            api: core_text.normalizeText(profile?.api, 120),
+        })).filter(profile => {
+            if (!profile.id) return false;
+            const raw = rawConnectionProfile(profile.id, context);
+            if (!raw || typeof service?.validateProfile !== 'function') return false;
+            try {
+                const apiMap = service.validateProfile(raw);
+                return apiMap?.selected === 'openai' && !!apiMap?.source;
+            } catch {
+                return false;
             }
-        } catch {}
-        // SillyTavern emits CHAT_CHANGED and CHAT_LOADED during one navigation. Do not
-        // synchronously rebuild the whole archive UI inside its awaited event path.
-        if (overlay && !overlay.hidden) archive_snapshots.scheduleChooserRefresh(80);
-        setTimeout(() => {
-            void core_cache.flushPendingCompressedCacheForCurrentChat().catch(error => {
-                console.warn('[HeartbeatMemories] pending compressed cache flush failed', error);
-            });
-            void archive_repository.flushDeferredCommitsForCurrentChat();
-        }, 160);
-    };
+        });
+    } catch {
+        return [];
+    }
+}
 
-    const messageHandler = () => {
-        // Important: message changes NEVER mutate or invalidate the archive.
-        // They only refresh the optional “not yet archived” counter. The user decides when to update.
+function generationSourceLabel(settings = getPluginSettings()) {
+    if (settings.apiConnectionMode === 'manual') {
+        const model = core_text.normalizeText(settings.manualApiModel, 240);
+        return model ? `手动 API · ${model}` : '手动 API · 未完成';
+    }
+    let profile = supportedConnectionProfiles().find(item => item.id === settings.connectionProfileId);
+    if (!profile && settings.connectionProfileId) {
         try {
-            const latest = core_context.currentCharacterGuard();
-            archive_repository.clearMemoryPreflight(latest);
-            runtimeState.usableMessageCountCache.delete(core_context.chatScopeKey(latest));
+            const raw = rawConnectionProfile(settings.connectionProfileId);
+            if (raw) profile = { name: core_text.normalizeText(raw.name, 180) || '已保存连接', model: core_text.normalizeText(raw.model, 240) };
         } catch {}
-        ui_settingsPanel.refreshSettingsMemoryStatus({ lightweight: true });
-        const overlay = document.getElementById(core_constants.OVERLAY_ID);
-        if (overlay && !overlay.hidden && !runtimeState.activeMode && !runtimeState.busy) archive_snapshots.scheduleChooserRefresh(80);
-    };
-
-    for (const type of chatEvents) source.on(type, chatHandler);
-    for (const type of messageEvents) source.on(type, messageHandler);
-    globalThis.__heartbeatMemoriesEventCleanup = () => {
-        for (const type of chatEvents) {
-            try { source.off?.(type, chatHandler); } catch {}
-        }
-        for (const type of messageEvents) {
-            try { source.off?.(type, messageHandler); } catch {}
-        }
-    };
+    }
+    if (!profile) return '一键连接 · 未选择';
+    const model = core_text.normalizeText(settings.modelOverride, 240) || profile.model;
+    return `一键连接 · ${profile.name}${model ? ` · ${model}` : ''}`;
 }
 
-function scheduleMounts(initialSettingsMounted = false, initialMenuMounted = false) {
-    let tries = 0;
-    let settingsMounted = !!initialSettingsMounted || !!document.getElementById(core_constants.SETTINGS_ID);
-    let menuMounted = !!initialMenuMounted || !!document.getElementById(core_constants.MENU_ID);
-    if (settingsMounted && menuMounted) return;
-    const timer = setInterval(() => {
-        tries += 1;
-        // Retry only the missing mount. Calling mountSettings() after it already exists used
-        // to rebuild profile/model controls every 500 ms while #extensionsMenu was not ready.
-        if (!settingsMounted) settingsMounted = !!document.getElementById(core_constants.SETTINGS_ID) || ui_settingsPanel.mountSettings();
-        if (!menuMounted) menuMounted = !!document.getElementById(core_constants.MENU_ID) || mountMenuItem();
-        if ((settingsMounted && menuMounted) || tries >= 30) {
-            clearInterval(timer);
-            if (globalThis.__heartbeatMemoriesMountTimer === timer) globalThis.__heartbeatMemoriesMountTimer = null;
-        }
-    }, 500);
-    globalThis.__heartbeatMemoriesMountTimer = timer;
+function rawConnectionProfile(profileId, context = core_context.getContext()) {
+    const manager = connectionManagerSettings(context);
+    return manager.profiles.find(item => String(item?.id || '') === String(profileId || '')) || null;
 }
 
-__m_ui_archivePortal_js.mountMenuItem = mountMenuItem;
-__m_ui_archivePortal_js.archiveOpenButtonFromEvent = archiveOpenButtonFromEvent;
-__m_ui_archivePortal_js.safeShowArchiveLibrary = safeShowArchiveLibrary;
-__m_ui_archivePortal_js.bindRobustArchiveOpenHandlers = bindRobustArchiveOpenHandlers;
-__m_ui_archivePortal_js.bindChatStateEvents = bindChatStateEvents;
-__m_ui_archivePortal_js.scheduleMounts = scheduleMounts;
+function profileConnectionFingerprint(profile) {
+    const keys = ['mode', 'api', 'api-url', 'proxy', 'secret-id'];
+    return JSON.stringify(keys.map(key => core_text.normalizeText(profile?.[key], 1000)));
+}
+
+function savedModelsForProfile(profileId, context = core_context.getContext()) {
+    const manager = connectionManagerSettings(context);
+    const selected = rawConnectionProfile(profileId, context);
+    if (!selected) return [];
+    const fingerprint = profileConnectionFingerprint(selected);
+    const models = manager.profiles
+        .filter(item => profileConnectionFingerprint(item) === fingerprint)
+        .map(item => core_text.normalizeText(item?.model, 240))
+        .filter(Boolean);
+    const own = core_text.normalizeText(selected?.model, 240);
+    if (own) models.unshift(own);
+    return [...new Set(models)];
+}
+
+function profileModelCacheKey(profileId, context = core_context.getContext()) {
+    const id = core_text.normalizeText(profileId, 160);
+    if (!id) return '';
+    const profile = rawConnectionProfile(id, context);
+    return profile ? `profile:${id}:${core_text.hashString(profileConnectionFingerprint(profile))}` : `profile:${id}:missing`;
+}
+
+function beginConnectionModelRequest(cacheKey) {
+    const epoch = Number(runtimeState.connectionModelRequestEpochs.get(cacheKey) || 0) + 1;
+    runtimeState.connectionModelRequestEpochs.set(cacheKey, epoch);
+    return epoch;
+}
+
+function assertCurrentConnectionModelRequest(cacheKey, epoch) {
+    if (runtimeState.connectionModelRequestEpochs.get(cacheKey) === epoch) return;
+    const error = new Error('模型列表请求已被更新的请求取代。');
+    error.code = 'RMT_API_MODEL_REQUEST_SUPERSEDED';
+    throw error;
+}
+
+function connectionStatusPayload(profile, context = core_context.getContext()) {
+    const service = context.ConnectionManagerRequestService;
+    if (!service?.validateProfile) throw new Error('当前 SillyTavern 没有 Connection Manager 校验接口。');
+    const apiMap = service.validateProfile(profile);
+    if (apiMap?.selected !== 'openai' || !apiMap?.source) {
+        return { apiMap, payload: null };
+    }
+    const apiUrl = core_text.normalizeText(profile?.['api-url'], 2000);
+    const payload = {
+        chat_completion_source: apiMap.source,
+        secret_id: core_text.normalizeText(profile?.['secret-id'], 240) || undefined,
+    };
+    if (apiUrl) {
+        payload.custom_url = apiUrl;
+        payload.vertexai_region = apiUrl;
+        payload.zai_endpoint = apiUrl;
+        payload.siliconflow_endpoint = apiUrl;
+        payload.minimax_endpoint = apiUrl;
+        payload.workers_ai_account_id = apiUrl;
+    }
+    if (apiMap.source === 'custom') {
+        // A Connection Profile does not own the active main-chat custom headers. Borrowing them
+        // here can send Profile A credentials while listing models for Profile B.
+        payload.custom_include_headers = '';
+        payload.custom_include_body = '';
+        payload.custom_exclude_body = '';
+    }
+    return { apiMap, payload };
+}
+
+async function fetchModelsForConnection(profileId, { force = false, returnMeta = false } = {}) {
+    const id = core_text.normalizeText(profileId, 160);
+    if (!id) return [];
+    const context = core_context.getContext();
+    core_independentApi.assertConnectionManagerProfileSupport(context.ConnectionManagerRequestService);
+    const cacheKey = profileModelCacheKey(id, context);
+    if (!force && runtimeState.connectionModelCache.has(cacheKey)) {
+        const cached = runtimeState.connectionModelCache.get(cacheKey);
+        return returnMeta ? { models: cached, fallbackOnly: false, cached: true } : cached;
+    }
+    const requestEpoch = beginConnectionModelRequest(cacheKey);
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const configurationEpoch = runtimeState.apiConfigurationEpoch;
+    const profile = rawConnectionProfile(id, context);
+    if (!profile) throw new Error('找不到当前选择的 Connection Manager 配置。');
+    const profileStateFingerprint = profileFingerprint(profile);
+    const fallback = savedModelsForProfile(id, context);
+    const { payload } = connectionStatusPayload(profile, context);
+    let models = [...fallback];
+    let fallbackOnly = false;
+    if (payload && typeof context.getRequestHeaders === 'function') {
+        const controller = new AbortController();
+        let timedOut = false;
+        const timeoutId = setTimeout(() => {
+            timedOut = true;
+            try { controller.abort(); } catch {}
+        }, core_constants.MANUAL_API_MODEL_LIST_TIMEOUT_MS);
+        try {
+            const response = await fetch('/api/backends/chat-completions/status', {
+                method: 'POST',
+                headers: context.getRequestHeaders(),
+                cache: 'no-cache',
+                credentials: 'same-origin',
+                signal: controller.signal,
+                body: JSON.stringify(payload),
+            });
+            if (!response.ok) {
+                try { await response.body?.cancel?.(); } catch {}
+                const error = new Error(`HTTP ${response.status}`);
+                error.status = response.status;
+                throw error;
+            }
+            const data = await core_independentApi.readBoundedJsonResponse(response, 2000000);
+            if (core_independentApi.payloadHasProviderError(data)) {
+                const error = new Error('Connection Profile model status returned an error envelope');
+                error.code = 'RMT_PROFILE_MODEL_STATUS';
+                throw error;
+            }
+            const remote = core_independentApi.extractManualModelIds(data);
+            models = [...new Set([...fallback, ...remote])];
+        } catch (error) {
+            const safeDetail = timedOut ? 'timeout' : Number(error?.status) ? `HTTP ${Number(error.status)}` : core_text.normalizeText(error?.code, 80) || 'unavailable';
+            console.warn(`[HeartbeatMemories] profile model list unavailable; using same-transport saved models (${safeDetail})`);
+            if (!fallback.length) throw new Error('模型列表暂时不可用；请检查这一键连接，或在 Connection Manager 中保存模型后重试。');
+            fallbackOnly = true;
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
+    if (configurationEpoch !== runtimeState.apiConfigurationEpoch
+        || profileModelCacheKey(id, context) !== cacheKey
+        || profileFingerprint(rawConnectionProfile(id, context)) !== profileStateFingerprint) {
+        throw new DOMException('API configuration changed', 'AbortError');
+    }
+    assertCurrentConnectionModelRequest(cacheKey, requestEpoch);
+    runtimeState.connectionModelCache.set(cacheKey, models);
+    return returnMeta ? { models, fallbackOnly, cached: false } : models;
+}
+
+async function fetchModelsForManualConnection(settings, { force = false, context = core_context.getContext(), signal = null } = {}) {
+    const candidate = {
+        ...getPluginSettings(context),
+        ...(settings || {}),
+        apiConnectionMode: 'manual',
+    };
+    const cacheKey = core_independentApi.manualModelCacheKey(candidate);
+    if (!force && runtimeState.connectionModelCache.has(cacheKey)) return runtimeState.connectionModelCache.get(cacheKey);
+    const requestEpoch = beginConnectionModelRequest(cacheKey);
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const configurationEpoch = runtimeState.apiConfigurationEpoch;
+    const models = await core_independentApi.fetchManualApiModels(candidate, context, { signal });
+    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
+    if (configurationEpoch !== runtimeState.apiConfigurationEpoch) throw new DOMException('API configuration changed', 'AbortError');
+    assertCurrentConnectionModelRequest(cacheKey, requestEpoch);
+    runtimeState.connectionModelCache.set(cacheKey, models);
+    return models;
+}
+
+function connectionManagerSettings(context = core_context.getContext()) {
+    const manager = context.extensionSettings?.connectionManager;
+    if (!manager || !Array.isArray(manager.profiles)) {
+        throw new Error('当前 SillyTavern 没有可用的 Connection Manager 配置，请先启用官方 Connection Manager。');
+    }
+    if (Array.isArray(context.extensionSettings?.disabledExtensions)
+        && context.extensionSettings.disabledExtensions.includes('connection-manager')) {
+        throw new Error('Connection Manager 当前已被禁用，请先在 SillyTavern 中启用它。');
+    }
+    return manager;
+}
+
+function slashCommandObject(command, context = core_context.getContext()) {
+    const key = core_text.normalizeText(command, 80);
+    const value = key ? context.SlashCommandParser?.commands?.[key] : null;
+    return value && typeof value.callback === 'function' ? value : null;
+}
+
+async function invokeSlashCommandCapture(commandOrObject, namedArgs = {}, unnamed = '', context = core_context.getContext()) {
+    const command = typeof commandOrObject === 'string'
+        ? slashCommandObject(commandOrObject, context)
+        : commandOrObject;
+    if (!command || typeof command.callback !== 'function') throw new Error('目标 Slash Command 当前不可用。');
+    // SillyTavern's public SlashCommand callback contract accepts a NamedArgumentsCapture object
+    // without parser-internal _scope/_parserFlags fields. Do not fabricate those private objects.
+    const capture = {};
+    for (const [key, value] of Object.entries(namedArgs || {})) {
+        if (!/^[A-Za-z0-9_-]{1,80}$/.test(key)) continue;
+        if (value == null || ['string', 'number', 'boolean'].includes(typeof value)) capture[key] = value;
+    }
+    return await command.callback.call(command, capture, String(unnamed ?? ''));
+}
+
+async function readCurrentSlashSetting(command, context = core_context.getContext()) {
+    if (!slashCommandObject(command, context)) return '';
+    try {
+        return core_text.normalizeText(await invokeSlashCommandCapture(command, { quiet: 'true' }, '', context), 1000);
+    } catch (error) {
+        console.warn(`[HeartbeatMemories] failed to read current slash setting: ${command}`, error);
+        return '';
+    }
+}
+
+function profileFingerprint(profile) {
+    const keys = ['mode', 'api', 'preset', 'api-url', 'model', 'proxy', 'prompt-post-processing', 'instruct', 'secret-id'];
+    return JSON.stringify(keys.map(key => core_text.normalizeText(profile?.[key], 1000)));
+}
+
+function uniqueImportedProfileName(manager, base) {
+    const names = new Set((manager.profiles || []).map(item => String(item?.name || '')));
+    if (!names.has(base)) return base;
+    let index = 2;
+    while (names.has(`${base} ${index}`)) index += 1;
+    return `${base} ${index}`;
+}
+
+async function importCurrentSillyTavernConnection(options = {}) {
+    const assertStillCurrent = () => {
+        if (typeof options.isCurrent !== 'function' || options.isCurrent() !== false) return;
+        const error = new Error('一键配置已取消：等待期间你选择了另一组 API 设置。');
+        error.code = 'RMT_API_CONFIGURATION_SUPERSEDED';
+        throw error;
+    };
+    const context = core_context.getContext();
+    const manager = connectionManagerSettings(context);
+    const service = context.ConnectionManagerRequestService;
+    core_independentApi.assertConnectionManagerProfileSupport(service);
+    assertStillCurrent();
+
+    const selectedId = core_text.normalizeText(manager.selectedProfile, 160);
+    if (selectedId) {
+        const selected = manager.profiles.find(item => String(item?.id) === selectedId);
+        if (selected) {
+            const apiMap = service.validateProfile(selected);
+            if (apiMap?.selected !== 'openai' || !apiMap?.source) {
+                throw new Error('当前酒馆连接不是可复用的 Chat Completion 配置。');
+            }
+            assertStillCurrent();
+            const current = getPluginSettings(context);
+            const retainedModel = current.connectionProfileId === selectedId ? current.modelOverride : '';
+            updatePluginSettings({ apiConnectionMode: 'profile', connectionProfileId: selectedId, modelOverride: retainedModel });
+            return {
+                id: selectedId,
+                name: core_text.normalizeText(selected.name, 180) || '当前连接',
+                model: retainedModel || core_text.normalizeText(selected.model, 240),
+                created: false,
+            };
+        }
+    }
+
+    if (context.mainApi !== 'openai') {
+        throw new Error('当前主连接不是 Chat Completion。请先切到可用连接，或改用手动配置。');
+    }
+
+    const commands = ['api', 'preset', 'api-url', 'model', 'proxy', 'prompt-post-processing', 'secret-id'];
+    const profile = {
+        id: typeof context.uuidv4 === 'function' ? context.uuidv4() : `heartbeat-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        mode: 'cc',
+        exclude: [],
+    };
+    for (const command of commands) {
+        const value = await readCurrentSlashSetting(command, context);
+        assertStillCurrent();
+        if (value || command === 'api-url') profile[command] = value;
+    }
+    if (!profile.api) {
+        throw new Error('没有读到当前酒馆的 API 类型，无法一键导入。请先确认主聊天 API 已连接。');
+    }
+    try {
+        const apiMap = service.validateProfile(profile);
+        if (apiMap?.selected !== 'openai' || !apiMap?.source) throw new Error('Unsupported request family');
+    } catch (error) {
+        throw new Error('当前酒馆连接不是 Connection Manager 可复用的 Chat/Text Completion 类型，请先在 Connection Manager 中保存一个可用配置。', { cause: error });
+    }
+
+    const fingerprint = profileFingerprint(profile);
+    const existing = manager.profiles.find(item => profileFingerprint(item) === fingerprint);
+    if (existing?.id) {
+        assertStillCurrent();
+        const id = core_text.normalizeText(existing.id, 160);
+        const current = getPluginSettings(context);
+        const retainedModel = current.connectionProfileId === id ? current.modelOverride : '';
+        updatePluginSettings({ apiConnectionMode: 'profile', connectionProfileId: id, modelOverride: retainedModel });
+        return { id, name: core_text.normalizeText(existing.name, 180) || '已保存连接', model: retainedModel || core_text.normalizeText(existing.model, 240), created: false };
+    }
+
+    assertStillCurrent();
+    const displayApi = core_text.normalizeText(profile.api, 80) || 'API';
+    const displayModel = core_text.normalizeText(profile.model, 100);
+    profile.name = uniqueImportedProfileName(manager, `心跳回忆 · ${displayApi}${displayModel ? ` · ${displayModel}` : ''}`);
+    manager.profiles.push(profile);
+    context.saveSettingsDebounced?.();
+    assertStillCurrent();
+    updatePluginSettings({ apiConnectionMode: 'profile', connectionProfileId: core_text.normalizeText(profile.id, 160), modelOverride: '' });
+    try {
+        await context.eventSource?.emit?.(context.eventTypes?.CONNECTION_PROFILE_CREATED, profile);
+    } catch (error) {
+        console.warn('[HeartbeatMemories] connection profile created event failed', error);
+    }
+    return { id: profile.id, name: profile.name, model: displayModel, created: true };
+}
+
+__m_core_settings_js.fetchModelsForConnection = fetchModelsForConnection;
+__m_core_settings_js.fetchModelsForManualConnection = fetchModelsForManualConnection;
+__m_core_settings_js.invokeSlashCommandCapture = invokeSlashCommandCapture;
+__m_core_settings_js.readCurrentSlashSetting = readCurrentSlashSetting;
+__m_core_settings_js.importCurrentSillyTavernConnection = importCurrentSillyTavernConnection;
+__m_core_settings_js.normalizeBannedGeneratedPhrases = normalizeBannedGeneratedPhrases;
+__m_core_settings_js.getPluginSettings = getPluginSettings;
+__m_core_settings_js.updatePluginSettings = updatePluginSettings;
+__m_core_settings_js.beginApiConfigurationOperation = beginApiConfigurationOperation;
+__m_core_settings_js.isCurrentApiConfigurationOperation = isCurrentApiConfigurationOperation;
+__m_core_settings_js.supportedConnectionProfiles = supportedConnectionProfiles;
+__m_core_settings_js.generationSourceLabel = generationSourceLabel;
+__m_core_settings_js.rawConnectionProfile = rawConnectionProfile;
+__m_core_settings_js.profileConnectionFingerprint = profileConnectionFingerprint;
+__m_core_settings_js.savedModelsForProfile = savedModelsForProfile;
+__m_core_settings_js.profileModelCacheKey = profileModelCacheKey;
+__m_core_settings_js.connectionStatusPayload = connectionStatusPayload;
+__m_core_settings_js.connectionManagerSettings = connectionManagerSettings;
+__m_core_settings_js.slashCommandObject = slashCommandObject;
+__m_core_settings_js.profileFingerprint = profileFingerprint;
+__m_core_settings_js.uniqueImportedProfileName = uniqueImportedProfileName;
+}
+
+function __init_generation_jsonParser_js() {
+// MODULE: generation/jsonParser.js
+const core_constants = __m_core_constants_js;
+const core_text = __m_core_text_js;
+// Heartbeat Memories r35 modular runtime.
+// Extracted from r34 without changing archive/cache storage contracts.
+
+
+function jsonOutputError(code, message, details = {}) {
+    const error = new Error(message);
+    error.name = 'JsonOutputError';
+    error.code = code;
+    error.retryableJson = true;
+    error.details = details;
+    return error;
+}
+
+function extractBalancedJsonObjects(text) {
+    const candidates = [];
+    let start = -1;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = 0; i < text.length; i += 1) {
+        const char = text[i];
+        if (inString) {
+            if (escaped) escaped = false;
+            else if (char === '\\') escaped = true;
+            else if (char === '"') inString = false;
+            continue;
+        }
+        if (char === '"') {
+            if (depth > 0) inString = true;
+            continue;
+        }
+        if (char === '{') {
+            if (depth === 0) start = i;
+            depth += 1;
+            continue;
+        }
+        if (char === '}' && depth > 0) {
+            depth -= 1;
+            if (depth === 0 && start >= 0) {
+                candidates.push(text.slice(start, i + 1));
+                start = -1;
+            }
+        }
+    }
+    return { candidates, hasUnclosedObject: depth > 0 && start >= 0 };
+}
+
+function jsonOutputBudgetSummary({ requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {
+    const requestMax = Math.max(0, Math.floor(Number(requestMaxTokens) || 0));
+    const configuredMax = Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Math.floor(Number(configuredMaxTokens) || core_constants.MAX_GENERATION_OUTPUT_TOKENS)));
+    const actual = requestMax ? Math.min(requestMax, configuredMax) : configuredMax;
+    const segmentNote = actual < configuredMax
+        ? `本段实际请求上限 ${actual.toLocaleString()} tokens（该功能使用较小的分段上限）`
+        : `本段实际请求上限 ${actual.toLocaleString()} tokens`;
+    return `${segmentNote}；当前插件设置 ${configuredMax.toLocaleString()} tokens；插件允许最高 ${core_constants.MAX_GENERATION_OUTPUT_TOKENS.toLocaleString()} tokens。`;
+}
+
+function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {
+    let text = core_text.normalizeText(raw, core_constants.MAX_GENERATION_OUTPUT_CHARS).replace(/^\uFEFF/, '').trim();
+    const reasoningChars = core_text.normalizeText(reasoning, core_constants.MAX_GENERATION_OUTPUT_CHARS).length;
+    const budgetSummary = jsonOutputBudgetSummary({ requestMaxTokens, configuredMaxTokens });
+    if (!text) {
+        throw jsonOutputError(
+            reasoningChars ? 'RMT_JSON_EMPTY_FINAL_WITH_REASONING' : 'RMT_JSON_EMPTY_FINAL',
+            reasoningChars
+                ? `模型本轮产生了推理内容，但没有返回最终正文 JSON。可能是推理预算耗尽或模型没有进入最终回答阶段。${budgetSummary} 可只重试这一项，或改用结构化输出更稳定的模型。`
+                : `模型返回了空的最终正文，没有 JSON 可解析。${budgetSummary} 可只重试这一项，或检查所选模型/连接是否正常。`,
+            { contentChars: 0, reasoningChars, requestMaxTokens: Math.floor(Number(requestMaxTokens) || 0), configuredMaxTokens: Math.floor(Number(configuredMaxTokens) || 0) },
+        );
+    }
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const { candidates, hasUnclosedObject } = extractBalancedJsonObjects(text);
+    for (let i = candidates.length - 1; i >= 0; i -= 1) {
+        try {
+            const parsed = JSON.parse(candidates[i]);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+        } catch {}
+    }
+    if (hasUnclosedObject) {
+        throw jsonOutputError(
+            'RMT_JSON_TRUNCATED',
+            `模型返回的 JSON 疑似被截断：已经出现“{”，但没有完整闭合。${budgetSummary} 如果本段实际上限低于当前插件设置，继续提高全局“最大输出”不会突破该功能自己的分段上限；可只重试这一项，或换用输出更稳定的模型。`,
+            { contentChars: text.length, reasoningChars, requestMaxTokens: Math.floor(Number(requestMaxTokens) || 0), configuredMaxTokens: Math.floor(Number(configuredMaxTokens) || 0) },
+        );
+    }
+    if (!candidates.length) {
+        throw jsonOutputError(
+            'RMT_JSON_NOT_FOUND',
+            `模型返回了最终正文（约 ${text.length.toLocaleString()} 字符），但其中没有完整 JSON 对象。插件没有保存或覆盖任何旧数据；可只重试这一项。`,
+            { contentChars: text.length, reasoningChars },
+        );
+    }
+    throw jsonOutputError(
+        'RMT_JSON_INVALID',
+        '模型返回了 JSON 外形，但格式无法解析。插件没有保存或覆盖任何旧数据；可只重试这一项。',
+        { contentChars: text.length, reasoningChars },
+    );
+}
+
+__m_generation_jsonParser_js.jsonOutputError = jsonOutputError;
+__m_generation_jsonParser_js.extractBalancedJsonObjects = extractBalancedJsonObjects;
+__m_generation_jsonParser_js.jsonOutputBudgetSummary = jsonOutputBudgetSummary;
+__m_generation_jsonParser_js.extractJson = extractJson;
+}
+
+function __init_ui_advEventView_js() {
+// MODULE: ui/advEventView.js
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_text = __m_core_text_js;
+const generation_imageGeneration = __m_generation_imageGeneration_js;
+const ui_overlay = __m_ui_overlay_js;
+const runtimeState = __m_core_state_js.state;
+// Heartbeat Memories r35 modular runtime.
+// Extracted from r34 without changing archive/cache storage contracts.
+
+
+
+function selectedAdvEvent() {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ADV) return null;
+    return runtimeState.activeSession.events.find(x => x.id === runtimeState.activeSession.selectedId) || runtimeState.activeSession.events[0] || null;
+}
+
+function renderAdvMode() {
+    const session = runtimeState.activeSession;
+    if (!session || session.kind !== core_constants.MODE.ADV) return;
+    ui_overlay.setBackVisible(true, '当前档案');
+    ui_overlay.topTitle(core_constants.MODE_LABEL[core_constants.MODE.ADV]);
+    const selected = selectedAdvEvent();
+    let scope = '';
+    try { scope = core_context.chatScopeKey(core_context.currentCharacterGuard()); } catch {}
+    const bulkRunning = scope ? runtimeState.activeAdvBulkScopes.has(scope) : false;
+    const completedAdv = session.events.filter(item => item.adv?.paragraphs?.length).length;
+    const readOnlyArchive = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
+    const selectedIndex = Math.max(0, session.events.findIndex(item => item.id === selected?.id));
+    const list = session.events.map((item, index) => `<button type="button" class="rmt-event ${item.id === session.selectedId ? 'active' : ''}" data-rmt-event-id="${core_text.esc(item.id)}"><span class="rmt-event-index">${String(index + 1).padStart(2, '0')}</span><span class="rmt-event-copy"><b>${core_text.esc(item.title)}</b><small>${core_text.esc(item.date)}</small></span><em class="rmt-event-state">${generation_imageGeneration.normalizeCgImageRecord(item.cgImage) ? '图✓ ' : ''}${item.adv?.paragraphs?.length ? 'ADV✓' : 'CG'}</em></button>`).join('');
+    const options = session.events.map((item, index) => `<option value="${core_text.esc(item.id)}" ${item.id === selected?.id ? 'selected' : ''}>${String(index + 1).padStart(2, '0')} · ${core_text.esc(item.title)} · ${core_text.esc(item.date)}${item.adv?.paragraphs?.length ? ' · ADV✓' : ''}</option>`).join('');
+    let detail = '';
+    if (selected) {
+        if (session.view === 'adv' && selected.adv?.paragraphs?.length) {
+            const paras = selected.adv.paragraphs;
+            session.paragraphIndex = Math.max(0, Math.min(session.paragraphIndex, paras.length - 1));
+            detail = `${generation_imageGeneration.cgImageProviderBar({ readOnly: readOnlyArchive })}<div class="rmt-big-cg">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}<div class="rmt-cg-caption"><b>${core_text.esc(selected.title)}</b> · ${core_text.esc(selected.date)}<br>${core_text.esc(selected.cgDesc)}</div></div>
+              <div class="rmt-mode-actions">${readOnlyArchive ? '' : `<button type="button" class="rmt-btn rmt-cg-primary ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ADV, selected.id) ? 'rmt-cg-drawing' : ''}" data-rmt-action="draw-cg" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ADV, selected.id) ? 'disabled' : ''}>${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ADV, selected.id) ? '正在绘制CG…' : generation_imageGeneration.normalizeCgImageRecord(selected.cgImage) ? '↻ 重绘CG' : '🎨 绘制CG'}</button>`}<button type="button" class="rmt-btn" data-rmt-action="cg-only">只看CG</button><button type="button" class="rmt-btn" data-rmt-action="read-adv">阅读ADV</button>${!readOnlyArchive && generation_imageGeneration.normalizeCgImageRecord(selected.cgImage) ? '<button type="button" class="rmt-btn" data-rmt-action="clear-cg-image">恢复抽象CG</button>' : ''}</div>
+              <div class="rmt-adv-reader"><div class="rmt-progress">第 ${session.paragraphIndex + 1} 段 / 共 ${paras.length} 段</div><div class="rmt-adv-para">${core_text.esc(paras[session.paragraphIndex])}</div><div class="rmt-reader-actions"><button type="button" class="rmt-btn" data-rmt-action="adv-prev" ${session.paragraphIndex <= 0 ? 'disabled' : ''}>上一段</button><button type="button" class="rmt-btn" data-rmt-action="adv-next">${session.paragraphIndex >= paras.length - 1 ? '重看' : '下一段'}</button></div></div>`;
+        } else {
+            detail = `${generation_imageGeneration.cgImageProviderBar({ readOnly: readOnlyArchive })}<div class="rmt-big-cg">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}<div class="rmt-cg-caption"><b>${core_text.esc(selected.title)}</b> · ${core_text.esc(selected.date)}<br>${core_text.esc(selected.cgDesc)}</div></div>
+              <div class="rmt-mode-actions">${readOnlyArchive ? '' : `<button type="button" class="rmt-btn rmt-cg-primary ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ADV, selected.id) ? 'rmt-cg-drawing' : ''}" data-rmt-action="draw-cg" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ADV, selected.id) ? 'disabled' : ''}>${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ADV, selected.id) ? '正在绘制CG…' : generation_imageGeneration.normalizeCgImageRecord(selected.cgImage) ? '↻ 重绘CG' : '🎨 绘制CG'}</button>`}<button type="button" class="rmt-btn" data-rmt-action="cg-only">只看CG</button><button type="button" class="rmt-btn" data-rmt-action="read-adv" ${bulkRunning || (readOnlyArchive && !selected.adv) ? 'disabled' : ''}>${selected.adv ? '阅读ADV' : readOnlyArchive ? 'ADV 尚未生成' : '生成并阅读ADV'}</button>${!readOnlyArchive && generation_imageGeneration.normalizeCgImageRecord(selected.cgImage) ? '<button type="button" class="rmt-btn" data-rmt-action="clear-cg-image">恢复抽象CG</button>' : ''}</div>
+              <div class="rmt-adv-summary">${core_text.esc(selected.cgDesc)}</div>`;
+        }
+    }
+    const recoveryIds = new Set(core_text.cleanArray(session.advBulkRecovery?.failedIds, 64, 100));
+    const recoveryCount = session.events.filter(item => !item.adv?.paragraphs?.length && (!recoveryIds.size || recoveryIds.has(item.id))).length;
+    const recoveryActions = !readOnlyArchive && recoveryCount > 0 && session.advBulkRecovery
+        ? `<div class="rmt-adv-recovery"><button type="button" class="rmt-btn" data-rmt-action="repair-failed-adv" ${bulkRunning ? 'disabled' : ''}>逐个补失败项 · ${recoveryCount}</button></div>`
+        : '';
+    const bulkLabel = session.advBulkRecovery && recoveryCount
+        ? `重试失败批 · 最多${core_constants.ADV_BULK_BATCH_SIZE}篇`
+        : completedAdv ? `生成下一批 ADV · 最多${core_constants.ADV_BULK_BATCH_SIZE}篇` : `生成第一批 ADV · 最多${core_constants.ADV_BULK_BATCH_SIZE}篇`;
+    const bulkBar = `<div class="rmt-adv-bulkbar"><div><b>ADV ${completedAdv}/${session.events.length}</b><span>${readOnlyArchive ? '只读' : completedAdv >= session.events.length ? '已完成' : `每批最多 ${core_constants.ADV_BULK_BATCH_SIZE} 篇`}</span></div>${readOnlyArchive ? '' : `<button type="button" class="rmt-btn" data-rmt-action="generate-all-adv" ${bulkRunning || completedAdv >= session.events.length ? 'disabled' : ''}>${bulkRunning ? '生成中…' : bulkLabel}</button>`}</div>${recoveryActions}`;
+    const mobilePicker = `<div class="rmt-adv-mobile-picker"><div class="rmt-adv-picker-status"><b>${String(selectedIndex + 1).padStart(2, '0')} / ${session.events.length}</b><span>${core_text.esc(selected?.title || '')}</span></div><select data-rmt-adv-select aria-label="选择 ADV EVENT 事件">${options}</select><div class="rmt-adv-picker-actions"><button type="button" class="rmt-btn" data-rmt-action="adv-event-prev" ${selectedIndex <= 0 ? 'disabled' : ''}>← 上一个</button><button type="button" class="rmt-btn" data-rmt-action="adv-event-next" ${selectedIndex >= session.events.length - 1 ? 'disabled' : ''}>下一个 →</button></div></div>`;
+    const body = ui_overlay.bodyEl();
+    body.innerHTML = `<div class="rmt-adv"><aside class="rmt-event-list">${bulkBar}${mobilePicker}<div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail">${detail}</section><div class="rmt-inline-status" hidden></div></div>`;
+}
+
+function advSelect(id) {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ADV) return;
+    const item = runtimeState.activeSession.events.find(x => x.id === id);
+    if (!item) return;
+    runtimeState.activeSession.selectedId = item.id;
+    runtimeState.activeSession.view = 'cg';
+    runtimeState.activeSession.paragraphIndex = 0;
+    renderAdvMode();
+}
+
+function advEventStep(delta) {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ADV || !runtimeState.activeSession.events.length) return;
+    const current = Math.max(0, runtimeState.activeSession.events.findIndex(item => item.id === runtimeState.activeSession.selectedId));
+    const next = Math.max(0, Math.min(runtimeState.activeSession.events.length - 1, current + delta));
+    const item = runtimeState.activeSession.events[next];
+    if (!item || next === current) return;
+    runtimeState.activeSession.selectedId = item.id;
+    runtimeState.activeSession.view = 'cg';
+    runtimeState.activeSession.paragraphIndex = 0;
+    renderAdvMode();
+}
+
+function advStep(delta) {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ADV) return;
+    const event = selectedAdvEvent();
+    const paras = event?.adv?.paragraphs || [];
+    if (!paras.length) return;
+    if (delta > 0 && runtimeState.activeSession.paragraphIndex >= paras.length - 1) {
+        runtimeState.activeSession.paragraphIndex = 0;
+    } else {
+        runtimeState.activeSession.paragraphIndex = Math.max(0, Math.min(paras.length - 1, runtimeState.activeSession.paragraphIndex + delta));
+    }
+    renderAdvMode();
+}
+
+__m_ui_advEventView_js.selectedAdvEvent = selectedAdvEvent;
+__m_ui_advEventView_js.renderAdvMode = renderAdvMode;
+__m_ui_advEventView_js.advSelect = advSelect;
+__m_ui_advEventView_js.advEventStep = advEventStep;
+__m_ui_advEventView_js.advStep = advStep;
 }
 
 function __init_ui_styles_js() {
@@ -1697,6 +2591,22 @@ function ensureSettingsStyles() {
 #${core_constants.SETTINGS_ID} .rmt-api-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 #${core_constants.SETTINGS_ID} .rmt-model-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:end}
 #${core_constants.SETTINGS_ID} .rmt-model-refresh{min-width:84px!important;white-space:nowrap!important}
+#${core_constants.SETTINGS_ID} .rmt-api-source-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#${core_constants.SETTINGS_ID} .rmt-api-source-card{position:relative;width:100%!important;min-height:92px!important;padding:12px 9px 10px!important;display:flex!important;flex-direction:column!important;gap:4px!important;border:1px solid #cedfe8!important;background:linear-gradient(155deg,#fff,#f7fbfd)!important;color:#627489!important;box-shadow:0 4px 10px rgba(74,101,120,.06)!important}
+#${core_constants.SETTINGS_ID} .rmt-api-source-card:nth-child(1){background:linear-gradient(155deg,#fff8fb,#f7fbfd)!important}
+#${core_constants.SETTINGS_ID} .rmt-api-source-card:nth-child(2){background:linear-gradient(155deg,#f7fcff,#fffafd)!important}
+#${core_constants.SETTINGS_ID} .rmt-api-source-card.is-active{border-color:#e59ab8!important;box-shadow:0 0 0 2px rgba(233,154,185,.17),0 6px 14px rgba(74,101,120,.09)!important}
+#${core_constants.SETTINGS_ID} .rmt-api-source-card b{font-size:13px;color:#53667d}
+#${core_constants.SETTINGS_ID} .rmt-api-source-card small{font-size:9px;color:#8996a4;line-height:1.35}
+#${core_constants.SETTINGS_ID} .rmt-api-source-badge{align-self:center;padding:2px 7px;border-radius:999px;background:rgba(142,191,213,.14);color:#6e91a4;font-size:8px;font-weight:850;letter-spacing:.04em}
+#${core_constants.SETTINGS_ID} .rmt-api-source-card:first-child .rmt-api-source-badge{background:rgba(233,154,185,.14);color:#a56f86}
+#${core_constants.SETTINGS_ID} .rmt-api-status{padding:6px 9px;border:1px solid #d8e4ea;border-radius:999px;background:#f7fafc;color:#8a96a2;font-size:9px;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#${core_constants.SETTINGS_ID} .rmt-api-status.is-ready{border-color:#bdded6;background:#f5fbf9;color:#5f8e83}
+#${core_constants.SETTINGS_ID} .rmt-api-source-panel{display:grid;gap:8px;padding:9px;border:1px dashed #d5e3e9;border-radius:11px;background:rgba(248,252,254,.68)}
+#${core_constants.SETTINGS_ID} .rmt-api-source-panel[hidden]{display:none!important}
+#${core_constants.SETTINGS_ID} .rmt-manual-key-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}
+#${core_constants.SETTINGS_ID} .rmt-manual-key-row .menu_button{min-width:82px!important;white-space:nowrap!important}
+#${core_constants.SETTINGS_ID} .rmt-manual-save{background:linear-gradient(90deg,#fff6fa,#f3faff)!important;border-color:#d5dfe8!important;font-weight:850!important}
 #${core_constants.SETTINGS_ID} .rmt-settings-check{font-size:10px!important;line-height:1.45;color:#6f7d8c}
 #${core_constants.SETTINGS_ID} .rmt-api-note{font-size:9px;line-height:1.55;opacity:.72;color:#758493}
 #${core_constants.SETTINGS_ID} .rmt-open-archive-room{width:100%!important;min-height:48px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;background:linear-gradient(90deg,#fff6fa,#f2faff)!important;border:1px solid #d4e2e9!important;color:#566a80!important;font-weight:850!important}
@@ -1711,6 +2621,8 @@ function ensureSettingsStyles() {
   #${core_constants.SETTINGS_ID} .rmt-api-grid{grid-template-columns:1fr 1fr}
   #${core_constants.SETTINGS_ID} .rmt-model-row{grid-template-columns:1fr}
   #${core_constants.SETTINGS_ID} .rmt-model-refresh{width:100%!important}
+  #${core_constants.SETTINGS_ID} .rmt-manual-key-row{grid-template-columns:1fr}
+  #${core_constants.SETTINGS_ID} .rmt-manual-key-row .menu_button{width:100%!important}
 }
 `;
     document.head.appendChild(style);
@@ -2116,6 +3028,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-room-space:hover,.rmt-room-space.active{border-color:var(--rmt-room-accent);background:var(--rmt-room-soft);transform:translateY(-1px);color:var(--rmt-room-accent-deep)}.rmt-room-space.present{box-shadow:0 0 0 3px var(--rmt-room-wash),0 4px 12px rgba(66,88,105,.06)}
 .rmt-room-presence-dot{position:absolute;right:7px;top:6px;font-size:10px;color:var(--rmt-room-accent)}.rmt-room-location{display:flex;align-items:center;gap:8px;margin:-2px 2px 12px;color:#7d8b99;font-size:11px;flex-wrap:wrap}.rmt-room-location b{color:var(--rmt-room-accent-deep)}.rmt-room-find{border:0;background:var(--rmt-room-soft);color:var(--rmt-room-accent-deep);border-radius:999px;padding:4px 8px;font:inherit;font-size:10px;cursor:pointer}
 .rmt-room-flow{display:grid;gap:13px;max-width:1120px;margin:0 auto}.rmt-room-location>div:first-child{display:grid;gap:2px;min-width:0}.rmt-room-location>div:first-child small{font-size:9px;font-weight:500;color:#98a4af}.rmt-room-location-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}.rmt-room-space-note-card,.rmt-room-private-life-card,.rmt-room-private-access-card{width:100%;box-sizing:border-box}.rmt-room-heading-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.rmt-room-schema-notice{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 auto 12px;padding:11px 13px;max-width:1120px;box-sizing:border-box;border:1px solid color-mix(in srgb,var(--rmt-room-accent) 34%,transparent);border-radius:14px;background:color-mix(in srgb,var(--rmt-room-soft) 64%,#fff);color:var(--rmt-room-accent-deep)}.rmt-room-schema-notice>div{display:grid;gap:3px}.rmt-room-schema-notice small{color:#6f7d89;line-height:1.55}
 .rmt-room-stage{border:1px solid color-mix(in srgb,var(--rmt-room-accent) 42%,#d9e7ee);border-radius:18px;background:#fff;box-shadow:0 10px 26px rgba(66,88,105,.10);overflow:hidden}
 .rmt-room-stage-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 13px;border-bottom:1px solid #d9e7ee;background:linear-gradient(90deg,var(--rmt-room-soft),#f9fcfd)}
 .rmt-room-stage-head b{color:var(--rmt-room-accent-deep)}.rmt-room-clock{font-size:11px;color:#8d9aa8;white-space:nowrap}
@@ -2230,10 +3143,9 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-room-body-figure{position:absolute;z-index:2;left:var(--rmt-body-left);top:61px;width:var(--rmt-body-width);height:var(--rmt-body-height);border-radius:var(--rmt-body-radius);background:linear-gradient(180deg,var(--rmt-room-outfit-a),var(--rmt-room-outfit-b));box-shadow:inset 10px 0 rgba(255,255,255,.08),inset -5px 0 rgba(31,43,51,.08);transform-origin:50% 8%;transition:transform .2s ease}
 .rmt-room-body-figure:before,.rmt-room-body-figure:after{content:"";position:absolute;z-index:-1;top:21px;width:var(--rmt-arm-width);height:72px;border-radius:12px;background:inherit;box-shadow:inset 5px 0 rgba(255,255,255,.06);transform-origin:50% 7px}.rmt-room-body-figure:before{left:calc(var(--rmt-arm-width) * -.58);transform:rotate(7deg)}.rmt-room-body-figure:after{right:calc(var(--rmt-arm-width) * -.58);transform:rotate(-7deg)}
 .rmt-room-outfit-mark{position:absolute;z-index:2;left:50%;top:8px;width:24px;height:39px;transform:translateX(-50%);box-sizing:border-box}
-.rmt-room-head{position:absolute;z-index:4;left:calc((104px - var(--rmt-head-width,44px))/2);top:4px;width:var(--rmt-head-width,44px);height:var(--rmt-head-height,50px);transition:filter .18s ease,transform .2s ease;transform-origin:50% 90%}
+.rmt-room-head{position:absolute;z-index:4;left:30px;top:4px;width:44px;height:50px;border-radius:48% 48% 42% 42%;background:linear-gradient(145deg,var(--rmt-hair-a),var(--rmt-hair-b));box-shadow:inset 7px -5px rgba(10,17,24,.1);transition:filter .18s ease,transform .2s ease;transform-origin:50% 90%}
+.rmt-room-head:before{content:"";position:absolute;z-index:1;left:7px;right:7px;top:7px;height:28px;border-radius:50%;border:1px solid rgba(255,255,255,.09);border-bottom-color:rgba(10,17,24,.14);transform:rotate(-8deg)}
 .rmt-room-head:after{content:"";position:absolute;z-index:0;left:13px;right:13px;bottom:-13px;height:17px;border-radius:7px;background:#eacdbd;box-shadow:inset 0 -4px rgba(154,104,90,.08)}
-.rmt-room-face{position:absolute;z-index:2;inset:0;border-radius:47% 47% 44% 44%;background:linear-gradient(145deg,#f5ddcf,#e7c3b2);box-shadow:inset -5px -6px rgba(154,104,90,.08)}
-.rmt-room-face:before{content:"";position:absolute;left:calc((100% - var(--rmt-eye-gap,19px))/2 - 1.5px);top:52%;width:3px;height:3px;border-radius:50%;background:#55525a;box-shadow:var(--rmt-eye-gap,19px) 0 #55525a}.rmt-room-face:after{content:"";position:absolute;left:calc((100% - var(--rmt-mouth-width,9px))/2);top:74%;width:var(--rmt-mouth-width,9px);height:4px;border-bottom:1px solid rgba(126,72,74,.65);border-radius:50%}
 .rmt-room-hair{position:absolute;z-index:3;left:-3px;right:-3px;top:-5px;height:23px;border-radius:54% 54% 38% 28%;background:linear-gradient(145deg,var(--rmt-hair-a),var(--rmt-hair-b));box-shadow:inset 0 -4px rgba(10,17,24,.10)}
 .rmt-room-hair:before,.rmt-room-hair:after{content:"";position:absolute;background:linear-gradient(160deg,var(--rmt-hair-a),var(--rmt-hair-b));box-sizing:border-box}
 .rmt-room-figure-detail{display:none;position:absolute;z-index:6;box-sizing:border-box}.rmt-room-figure-detail:before,.rmt-room-figure-detail:after{content:"";position:absolute;box-sizing:border-box}
@@ -2269,6 +3181,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-room-person[data-rmt-detail="animal_ears"] .rmt-room-figure-detail:before,.rmt-room-person[data-rmt-detail="animal_ears"] .rmt-room-figure-detail:after{top:-11px;width:18px;height:22px;background:var(--rmt-hair-a);clip-path:polygon(50% 0,100% 100%,0 100%)}.rmt-room-person[data-rmt-detail="animal_ears"] .rmt-room-figure-detail:before{left:0;transform:rotate(-12deg)}.rmt-room-person[data-rmt-detail="animal_ears"] .rmt-room-figure-detail:after{right:0;transform:rotate(12deg)}
 .rmt-room-person[data-rmt-detail="horns"] .rmt-room-figure-detail:before,.rmt-room-person[data-rmt-detail="horns"] .rmt-room-figure-detail:after{top:-16px;width:11px;height:24px;background:#8f806b;clip-path:polygon(50% 0,100% 100%,0 100%)}.rmt-room-person[data-rmt-detail="horns"] .rmt-room-figure-detail:before{left:4px;transform:rotate(-13deg)}.rmt-room-person[data-rmt-detail="horns"] .rmt-room-figure-detail:after{right:4px;transform:rotate(13deg)}
 .rmt-room-person[data-rmt-detail="visor"] .rmt-room-figure-detail{display:block;left:3px;top:18px;width:38px;height:14px;border:2px solid #bff8f4;border-radius:4px;background:linear-gradient(90deg,rgba(44,91,113,.82),rgba(118,223,218,.65));box-shadow:0 0 7px rgba(91,220,214,.55)}
+.rmt-room-person[data-rmt-facing="away"]{transform:perspective(500px) rotateY(-3deg)}.rmt-room-person[data-rmt-facing="away"] .rmt-room-outfit-mark{opacity:.7}.rmt-room-person[data-rmt-facing="away"][data-rmt-detail="glasses"] .rmt-room-figure-detail,.rmt-room-person[data-rmt-facing="away"][data-rmt-detail="visor"] .rmt-room-figure-detail{display:block;left:1px;right:1px;top:24px;width:auto;height:3px;border:0;border-radius:999px;background:rgba(62,78,91,.72);box-shadow:none}.rmt-room-person[data-rmt-facing="away"][data-rmt-detail="glasses"] .rmt-room-figure-detail:before,.rmt-room-person[data-rmt-facing="away"][data-rmt-detail="glasses"] .rmt-room-figure-detail:after,.rmt-room-person[data-rmt-facing="away"][data-rmt-detail="visor"] .rmt-room-figure-detail:before,.rmt-room-person[data-rmt-facing="away"][data-rmt-detail="visor"] .rmt-room-figure-detail:after{display:none}
 .rmt-room-person[data-rmt-posture="reserved"] .rmt-room-body-figure{transform:scaleX(.94)}.rmt-room-person[data-rmt-posture="reserved"] .rmt-room-body-figure:before{transform:translate(18px,13px) rotate(63deg)}.rmt-room-person[data-rmt-posture="reserved"] .rmt-room-body-figure:after{transform:translate(-18px,13px) rotate(-63deg)}
 .rmt-room-person[data-rmt-posture="relaxed"] .rmt-room-head{transform:translateX(2px) rotate(3deg)}.rmt-room-person[data-rmt-posture="relaxed"] .rmt-room-body-figure{transform:rotate(-1.5deg)}.rmt-room-person[data-rmt-posture="relaxed"] .rmt-room-body-figure:before{transform:rotate(13deg)}.rmt-room-person[data-rmt-posture="relaxed"] .rmt-room-body-figure:after{transform:rotate(-4deg)}
 .rmt-room-person[data-rmt-posture="upright"] .rmt-room-head{transform:translateY(-2px)}.rmt-room-person[data-rmt-posture="upright"] .rmt-room-body-figure{transform:scaleY(1.03)}
@@ -2285,6 +3198,13 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-room-card-kicker{font-size:9px;letter-spacing:.13em;font-weight:850;color:var(--rmt-room-accent-deep);margin-bottom:6px}.rmt-room-object-title{font-size:18px;font-weight:850;color:#53667c;margin-bottom:8px}.rmt-room-object-desc{white-space:pre-wrap;line-height:1.75;color:#68778a;font-size:12px}.rmt-room-object-line{margin-top:11px;padding:10px 11px;border-left:3px solid var(--rmt-room-accent);background:var(--rmt-room-soft);color:#755e69;line-height:1.65;font-size:12px}
 .rmt-room-source{margin-top:9px;font-size:10px;color:#98a2ad}.rmt-room-searchable-tag{display:inline-block;margin-left:7px;padding:2px 7px;border:1px solid #d7c08f;border-radius:999px;font-size:9px;color:#8a6b35;background:#fffaf0;vertical-align:2px}.rmt-room-atmosphere{white-space:pre-wrap;line-height:1.72;color:#6c7b8c;font-size:12px}
 .rmt-room-note{font-size:10px;color:#9aa5af;line-height:1.55;margin-top:7px}
+
+/* r44 room identity motifs, object silhouettes and evidence-backed pets. */
+.rmt-room-scene[data-rmt-room-motif="literary"] .rmt-room-furniture{height:28%;border-radius:3px;background:repeating-linear-gradient(90deg,#9d7e64 0 8px,#d8c6a8 9px 13px,#748193 14px 19px)}.rmt-room-scene[data-rmt-room-motif="musical"] .rmt-room-furniture{clip-path:polygon(0 35%,35% 35%,39% 0,43% 0,48% 35%,100% 35%,100% 100%,0 100%)}.rmt-room-scene[data-rmt-room-motif="botanical"] .rmt-room-decor span{border-radius:55% 8% 55% 8%;background:#799b79}.rmt-room-scene[data-rmt-room-motif="technical"]{background-image:linear-gradient(rgba(91,144,155,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(91,144,155,.08) 1px,transparent 1px);background-size:28px 28px}.rmt-room-scene[data-rmt-room-motif="artisan"] .rmt-room-furniture{border-radius:2px;background:repeating-linear-gradient(90deg,#9e7654 0 29px,#6f5846 30px 33px)}.rmt-room-scene[data-rmt-room-motif="athletic"] .rmt-room-decor span{border:3px solid #8798a5;border-radius:50%;background:transparent}.rmt-room-scene[data-rmt-room-motif="companion"] .rmt-room-furniture{border-radius:26px 26px 8px 8px}.rmt-room-scene[data-rmt-room-motif="traveler"] .rmt-room-furniture{border-radius:7px;background:repeating-linear-gradient(0deg,#a88162 0 18px,#80634d 19px 22px)}.rmt-room-scene[data-rmt-room-motif="collector"] .rmt-room-decor{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.rmt-room-scene[data-rmt-room-motif="minimal"] .rmt-room-decor{opacity:.18}
+.rmt-room-hotspot[data-rmt-visual-kind="book"],.rmt-room-object-chip[data-rmt-visual-kind="book"]>span{border-radius:3px;background:#f0e4cb;color:#78654d}.rmt-room-hotspot[data-rmt-visual-kind="music"],.rmt-room-object-chip[data-rmt-visual-kind="music"]>span{background:#e8def0;color:#705b82}.rmt-room-hotspot[data-rmt-visual-kind="plant"],.rmt-room-object-chip[data-rmt-visual-kind="plant"]>span{border-radius:60% 10%;background:#e2efe2;color:#58765c}.rmt-room-hotspot[data-rmt-visual-kind="tech"],.rmt-room-object-chip[data-rmt-visual-kind="tech"]>span{border-radius:5px;background:#dcecf0;color:#456b76}.rmt-room-hotspot[data-rmt-visual-kind="tool"],.rmt-room-object-chip[data-rmt-visual-kind="tool"]>span{border-radius:6px;background:#eee4da;color:#765f4e}.rmt-room-hotspot[data-rmt-visual-kind="pet"],.rmt-room-object-chip[data-rmt-visual-kind="pet"]>span{background:#fff0dd;color:#9a6b42}.rmt-room-hotspot[data-rmt-visual-kind="storage"],.rmt-room-object-chip[data-rmt-visual-kind="storage"]>span{border-radius:5px;background:#eee6dc;color:#715e4d}
+.rmt-room-pet{position:absolute;z-index:6;left:var(--rmt-pet-x);top:var(--rmt-pet-y);width:54px;height:42px;transform:translate(-50%,-50%) scaleX(var(--rmt-pet-flip));pointer-events:none;filter:drop-shadow(0 4px 3px rgba(48,54,57,.16));color:#725f52}.rmt-room-pet-body{position:absolute;left:12px;bottom:4px;width:34px;height:25px;border-radius:58% 52% 45% 43%;background:linear-gradient(145deg,#c5ad94,#8f7966)}.rmt-room-pet-body:before{content:"";position:absolute;left:-8px;top:-7px;width:19px;height:19px;border-radius:50%;background:inherit;box-shadow:inset 3px 0 rgba(255,255,255,.12)}.rmt-room-pet-body:after{content:"";position:absolute;left:-6px;top:-12px;width:13px;height:10px;background:inherit;clip-path:polygon(0 100%,20% 0,52% 70%,100% 0,100% 100%)}.rmt-room-pet-tail{position:absolute;right:1px;bottom:13px;width:20px;height:16px;border:5px solid #8f7966;border-left:0;border-bottom:0;border-radius:0 90% 0 0;transform:rotate(-17deg)}.rmt-room-pet-name{position:absolute;left:50%;bottom:-12px;transform:translateX(-50%) scaleX(var(--rmt-pet-flip));max-width:80px;padding:2px 5px;border-radius:999px;background:rgba(255,255,255,.84);color:#806d60;font-size:7px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rmt-room-pet[data-rmt-pet-species="dog"] .rmt-room-pet-body{background:linear-gradient(145deg,#c99d74,#8b684d)}.rmt-room-pet[data-rmt-pet-species="rabbit"] .rmt-room-pet-body:after{left:-2px;top:-22px;width:13px;height:22px;clip-path:polygon(0 100%,7% 0,42% 10%,55% 100%,62% 10%,96% 0,100% 100%)}.rmt-room-pet[data-rmt-pet-species="bird"] .rmt-room-pet-body{left:17px;width:25px;height:22px;border-radius:55%}.rmt-room-pet[data-rmt-pet-species="bird"] .rmt-room-pet-body:after{left:-9px;top:7px;width:10px;height:7px;clip-path:polygon(0 50%,100% 0,100% 100%);background:#d4a451}.rmt-room-pet[data-rmt-pet-species="bird"] .rmt-room-pet-tail{right:6px;bottom:4px;width:16px;height:15px;border:0;border-radius:0;background:#7e7768;clip-path:polygon(0 0,100% 50%,0 100%)}.rmt-room-pet[data-rmt-pet-species="fish"] .rmt-room-pet-body{left:10px;bottom:8px;width:35px;height:18px;border-radius:50%;background:linear-gradient(90deg,#87bfc8,#d2a568)}.rmt-room-pet[data-rmt-pet-species="fish"] .rmt-room-pet-body:before{display:none}.rmt-room-pet[data-rmt-pet-species="fish"] .rmt-room-pet-body:after{left:31px;top:1px;width:17px;height:16px;background:#7daeb7;clip-path:polygon(0 50%,100% 0,100% 100%)}.rmt-room-pet[data-rmt-pet-species="fish"] .rmt-room-pet-tail{display:none}.rmt-room-pet[data-rmt-pet-species="fantasy"]{filter:drop-shadow(0 0 6px rgba(132,113,193,.55))}.rmt-room-pet[data-rmt-pet-species="fantasy"] .rmt-room-pet-body{background:linear-gradient(145deg,#c8c0ef,#7d91bd)}
+.rmt-room-pet-dot{position:absolute;right:6px;top:4px;font-size:8px}.rmt-room-pet-notes{display:grid;gap:7px;margin-top:11px}.rmt-room-pet-note{display:grid;gap:3px;padding:9px 10px;border:1px solid #eadcc9;border-radius:11px;background:#fffaf3}.rmt-room-pet-note b{font-size:10px;color:#7d6653}.rmt-room-pet-note span{font-size:9px;line-height:1.55;color:#83766c}.rmt-room-pet-note em{font-size:9px;line-height:1.55;color:#9a6f66;font-style:normal}.rmt-room-pet-note small{font-size:7px;color:#aaa097}
 
 #${core_constants.SETTINGS_ID}{margin-top:10px;--rmt-s-ink:#53647a;--rmt-s-muted:#7c8998;--rmt-s-blue:#8ebfd5;--rmt-s-pink:#e99ab9;--rmt-s-line:#cddfe8}
 #${core_constants.SETTINGS_ID} .rmt-settings-header{min-height:42px;border-radius:12px 12px 0 0;background:linear-gradient(90deg,rgba(233,154,185,.12),rgba(142,191,213,.10));border:1px solid var(--rmt-s-line);padding:8px 11px;color:var(--rmt-s-ink)}
@@ -2308,6 +3228,15 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 #${core_constants.SETTINGS_ID} .rmt-api-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 #${core_constants.SETTINGS_ID} .rmt-model-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:end}
 #${core_constants.SETTINGS_ID} .rmt-model-refresh{min-width:84px!important;white-space:nowrap!important}
+#${core_constants.SETTINGS_ID} .rmt-api-source-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#${core_constants.SETTINGS_ID} .rmt-api-source-card{position:relative;width:100%!important;min-height:92px!important;padding:12px 9px 10px!important;display:flex!important;flex-direction:column!important;gap:4px!important;border:1px solid #cedfe8!important;background:linear-gradient(155deg,#fff,#f7fbfd)!important;color:#627489!important;box-shadow:0 4px 10px rgba(74,101,120,.06)!important}
+#${core_constants.SETTINGS_ID} .rmt-api-source-card:nth-child(1){background:linear-gradient(155deg,#fff8fb,#f7fbfd)!important}#${core_constants.SETTINGS_ID} .rmt-api-source-card:nth-child(2){background:linear-gradient(155deg,#f7fcff,#fffafd)!important}
+#${core_constants.SETTINGS_ID} .rmt-api-source-card.is-active{border-color:#e59ab8!important;box-shadow:0 0 0 2px rgba(233,154,185,.17),0 6px 14px rgba(74,101,120,.09)!important}
+#${core_constants.SETTINGS_ID} .rmt-api-source-card b{font-size:13px;color:#53667d}#${core_constants.SETTINGS_ID} .rmt-api-source-card small{font-size:9px;color:#8996a4;line-height:1.35}
+#${core_constants.SETTINGS_ID} .rmt-api-source-badge{align-self:center;padding:2px 7px;border-radius:999px;background:rgba(142,191,213,.14);color:#6e91a4;font-size:8px;font-weight:850;letter-spacing:.04em}#${core_constants.SETTINGS_ID} .rmt-api-source-card:first-child .rmt-api-source-badge{background:rgba(233,154,185,.14);color:#a56f86}
+#${core_constants.SETTINGS_ID} .rmt-api-status{padding:6px 9px;border:1px solid #d8e4ea;border-radius:999px;background:#f7fafc;color:#8a96a2;font-size:9px;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#${core_constants.SETTINGS_ID} .rmt-api-status.is-ready{border-color:#bdded6;background:#f5fbf9;color:#5f8e83}
+#${core_constants.SETTINGS_ID} .rmt-api-source-panel{display:grid;gap:8px;padding:9px;border:1px dashed #d5e3e9;border-radius:11px;background:rgba(248,252,254,.68)}#${core_constants.SETTINGS_ID} .rmt-api-source-panel[hidden]{display:none!important}
+#${core_constants.SETTINGS_ID} .rmt-manual-key-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}#${core_constants.SETTINGS_ID} .rmt-manual-key-row .menu_button{min-width:82px!important;white-space:nowrap!important}#${core_constants.SETTINGS_ID} .rmt-manual-save{background:linear-gradient(90deg,#fff6fa,#f3faff)!important;border-color:#d5dfe8!important;font-weight:850!important}
 #${core_constants.SETTINGS_ID} .rmt-settings-check{font-size:10px!important;line-height:1.45;color:#6f7d8c}
 #${core_constants.SETTINGS_ID} .rmt-api-note{font-size:9px;line-height:1.55;opacity:.72;color:#758493}
 #${core_constants.SETTINGS_ID} .rmt-memory-settings-status{font-size:10px;line-height:1.55;color:#718092;white-space:pre-wrap;padding:7px 8px;border-radius:9px;background:#f6fafc}
@@ -2389,6 +3318,11 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-achievements{padding:14px;display:grid;gap:16px}.rmt-achievements-head{display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid #dde7eb;padding:5px 2px 13px}.rmt-achievements-head h2{margin:0;color:#526579;font-size:21px}.rmt-achievements-head span{font-size:10px;color:#91a0ad}.rmt-achievement-section{display:grid;gap:9px}.rmt-achievement-section h3{margin:0;display:flex;gap:7px;align-items:center;color:#607286;font-size:13px}.rmt-achievement-section h3 span{font-size:9px;color:#9aa7b2}.rmt-achievement-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.rmt-achievement-card{display:grid;grid-template-columns:46px 1fr;gap:10px;align-items:start;padding:12px;border:1px solid #d8e3e8;border-radius:14px;background:#fff}.rmt-achievement-card.locked{filter:saturate(.6);opacity:.68;background:#f4f6f7}.rmt-achievement-icon{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:#fff6df;border:1px solid #ead5a2;color:#b28b37;font-size:17px}.rmt-achievement-card.locked .rmt-achievement-icon{background:#edf0f2;border-color:#d8dde1;color:#929da6}.rmt-achievement-copy{min-width:0}.rmt-achievement-title{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.rmt-achievement-title b{font-size:12px;color:#586b7e}.rmt-achievement-title span{font-size:8px;color:#9b8991}.rmt-achievement-copy p{margin:5px 0;color:#718092;font-size:10px;line-height:1.6}.rmt-achievement-copy small{font-size:8px;color:#a68b64}
 .rmt-ending-tabs{grid-column:1/-1;display:flex;gap:7px;flex-wrap:wrap}.rmt-ending-tab{border:1px solid #d8e4e9;border-radius:999px;background:#fff;color:#718193;padding:7px 11px;font:700 10px/1 inherit;cursor:pointer}.rmt-ending-tab.active{border-color:#e3a0bb;background:#fff3f8;color:#a85f7c}.rmt-ending-tab span{margin-left:4px;opacity:.72}.rmt-confession-card{width:100%;border:1px solid #d6e2e8;border-radius:14px;background:rgba(255,255,255,.9);padding:11px 12px;text-align:left;color:#5f7081;font:inherit;display:grid;gap:3px}.rmt-confession-card.active{border-color:#dda0b8;background:#fff7fa;box-shadow:0 0 0 2px rgba(221,160,184,.12)}.rmt-confession-card b{font-size:12px}.rmt-confession-card span{font-size:9px;color:#8a97a4}.rmt-confession-card em{font-style:normal;font-size:8px;color:#b36f8b}.rmt-confession-replay-note{margin-top:10px;padding:9px 10px;border:1px dashed #d9cbd1;border-radius:11px;background:#fff9fb;color:#8a747e;font-size:9px;line-height:1.6}
 .rmt-ending-confession-stage{margin-top:13px;padding:13px;border:1px solid #ead1dc;border-radius:15px;background:linear-gradient(145deg,#fff8fb,#f8fbfd);box-shadow:0 8px 22px rgba(96,69,82,.07)}.rmt-ending-confession-kicker{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-bottom:10px;color:#a56b84;font-size:8px;letter-spacing:.11em}.rmt-ending-confession-kicker b{font-size:8px;color:#8696a4;letter-spacing:0}.rmt-ending-confession-dialogue{display:grid;grid-template-columns:62px minmax(0,1fr);gap:11px;align-items:end}.rmt-ending-confession-avatar{width:62px;height:62px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:linear-gradient(145deg,#f5bed3,#cfe8f2);color:#fff;border:3px solid #fff;outline:1px solid #dfb7c7;box-shadow:0 5px 14px rgba(87,68,79,.14);font-size:19px}.rmt-ending-confession-avatar img{width:100%;height:100%;object-fit:cover}.rmt-ending-confession-bubble{position:relative;min-height:70px;padding:11px 13px;border:1px solid #e2dfe5;border-radius:14px 14px 14px 4px;background:#fff;color:#5f6572}.rmt-ending-confession-bubble small{display:block;margin-bottom:5px;color:#ac6b87;font-size:9px;font-weight:850}.rmt-ending-confession-bubble p{margin:0!important;color:#5f6572!important;line-height:1.8!important;font-size:12px}.rmt-ending-confession-actions{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin-top:10px}.rmt-ending-confession-actions .rmt-btn{min-width:82px;justify-content:center}.rmt-ending-confession-actions .rmt-btn:disabled{opacity:.42;cursor:default}
+.rmt-ending-easter-entry{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:13px}.rmt-ending-easter-entry small{font-size:8px;color:#9b8791}.rmt-ending-easter-layer{--rmt-easter-intensity:.38;position:absolute;z-index:120;inset:0;display:grid;place-items:center;padding:18px;box-sizing:border-box;isolation:isolate}.rmt-ending-easter-backdrop{position:absolute;z-index:-1;inset:0;border:0;background:rgba(22,19,29,.76);backdrop-filter:blur(10px);cursor:pointer}.rmt-ending-easter-dialog{position:relative;width:min(780px,calc(100vw - 44px));max-height:min(780px,calc(100vh - 54px));overflow:auto;box-sizing:border-box;padding:20px;border:1px solid rgba(248,203,222,.36);border-radius:23px;outline:0;background:radial-gradient(circle at 50% 8%,rgba(202,93,142,.16),transparent 32%),linear-gradient(145deg,#211e2c,#29283a 55%,#172831);color:#f4edf2;box-shadow:0 28px 85px rgba(6,6,12,.58),inset 0 0 50px rgba(235,136,180,.04)}.rmt-ending-easter-dialog>header{display:flex;align-items:flex-start;justify-content:space-between;gap:15px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,.11)}.rmt-ending-easter-dialog>header small,.rmt-ending-easter-log>small,.rmt-ending-easter-monologue>small,.rmt-ending-easter-poem>small{display:block;font-size:8px;font-weight:850;letter-spacing:.17em;color:#d895b5}.rmt-ending-easter-dialog h2{margin:5px 0 0;font-size:22px;color:#fff6fa}.rmt-ending-easter-close{width:36px;height:36px;flex:0 0 36px;border:1px solid rgba(255,255,255,.17);border-radius:50%;background:rgba(255,255,255,.06);color:#f3dbe6;font-size:21px;cursor:pointer}
+.rmt-ending-easter-core{position:relative;display:grid;justify-items:center;gap:6px;margin:16px 0;padding:19px 14px;border:1px solid rgba(236,151,190,.2);border-radius:18px;background:radial-gradient(circle at 50% 35%,rgba(234,102,160,.19),transparent 48%),rgba(255,255,255,.025);outline:0;transition:.25s ease}.rmt-ending-easter-core:focus,.rmt-ending-easter-layer[data-rmt-hovered="true"] .rmt-ending-easter-core{border-color:rgba(248,164,202,.55);box-shadow:0 0 32px rgba(230,86,151,.18)}.rmt-ending-easter-heart{display:grid;place-items:center;width:62px;height:62px;color:#ef86b5;font-size:39px;line-height:1;opacity:calc(.38 + var(--rmt-easter-intensity));filter:drop-shadow(0 0 15px rgba(242,95,161,var(--rmt-easter-intensity)));animation:rmtEndingHeart 1.05s ease-in-out infinite}.rmt-ending-easter-core b{max-width:620px;text-align:center;font-size:12px;line-height:1.6;color:#ffeaf3}.rmt-ending-easter-core small{font-size:8px;color:#aab6c1}.rmt-ending-easter-core progress{appearance:none;width:min(420px,92%);height:6px;margin-top:3px;border:0;border-radius:999px;overflow:hidden;background:#36414c}.rmt-ending-easter-core progress::-webkit-progress-bar{background:#36414c}.rmt-ending-easter-core progress::-webkit-progress-value{background:linear-gradient(90deg,#8bb9c3,#e878aa)}.rmt-ending-easter-core progress::-moz-progress-bar{background:linear-gradient(90deg,#8bb9c3,#e878aa)}@keyframes rmtEndingHeart{0%,100%{transform:scale(.92)}42%{transform:scale(1.08)}55%{transform:scale(.98)}70%{transform:scale(1.04)}}
+.rmt-ending-easter-controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-bottom:13px}.rmt-ending-easter-controls .rmt-btn{justify-content:center;border-color:rgba(236,165,197,.32);background:rgba(255,255,255,.055);color:#f0dce6}.rmt-ending-easter-controls .rmt-btn:hover{background:rgba(235,123,174,.15);border-color:rgba(244,158,198,.62)}.rmt-ending-easter-log,.rmt-ending-easter-monologue,.rmt-ending-easter-poem{margin-top:10px;padding:13px 14px;border:1px solid rgba(255,255,255,.09);border-radius:15px;background:rgba(5,12,18,.22)}.rmt-ending-easter-log ol{max-height:170px;overflow:auto;margin:9px 0 0;padding-left:20px;display:grid;gap:6px;scrollbar-width:thin}.rmt-ending-easter-log li{font:9px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;color:#bfd6dc}.rmt-ending-easter-log li::marker{color:#d883a9}.rmt-ending-easter-monologue{display:grid;gap:8px}.rmt-ending-easter-monologue p{margin:0;padding:10px 12px;border-left:3px solid #d97da7;border-radius:5px 11px 11px 5px;background:rgba(255,255,255,.045);font-size:12px;line-height:1.85;color:#f7e8ef;white-space:pre-wrap}.rmt-ending-easter-monologue p:nth-of-type(even){border-left-color:#83b5c1;color:#e3f1f3}.rmt-ending-easter-poem>div{display:grid;gap:5px;margin-top:9px;min-height:28px}.rmt-ending-easter-poem span{display:block;font-family:Georgia,"KaiTi","STKaiti",serif;font-size:13px;line-height:1.65;color:#f5d9e7;animation:rmtEndingPoem .45s ease both}@keyframes rmtEndingPoem{from{opacity:0;transform:translateY(7px);filter:blur(3px)}to{opacity:1;transform:none;filter:none}}
+.rmt-ending-easter-layer[data-rmt-easter-module="memory_constellation"] .rmt-ending-easter-dialog{background:radial-gradient(circle at 18% 17%,rgba(255,255,255,.32) 0 1px,transparent 1.5px),radial-gradient(circle at 78% 33%,rgba(255,255,255,.28) 0 1px,transparent 1.5px),linear-gradient(145deg,#191b35,#2c2943 56%,#1a3240);background-size:83px 83px,127px 127px,auto}.rmt-ending-easter-layer[data-rmt-easter-module="signal_lighthouse"] .rmt-ending-easter-dialog{background:radial-gradient(circle at 50% 0,rgba(236,211,148,.17),transparent 42%),linear-gradient(145deg,#1a2932,#263c42 55%,#242633)}.rmt-ending-easter-layer[data-rmt-easter-module="letter_archive"] .rmt-ending-easter-dialog{background:repeating-linear-gradient(0deg,rgba(112,76,66,.035) 0 1px,transparent 1px 9px),linear-gradient(145deg,#33282a,#2b2d37 58%,#273a3e)}.rmt-ending-easter-layer[data-rmt-paused="true"] .rmt-ending-easter-heart{animation-play-state:paused;opacity:.72}.rmt-ending-easter-layer[data-rmt-stabilized="true"] .rmt-ending-easter-core{border-color:rgba(126,193,197,.42);box-shadow:0 0 25px rgba(95,172,179,.11)}
+@media(max-width:700px){.rmt-ending-easter-layer{padding:8px}.rmt-ending-easter-dialog{width:calc(100vw - 18px);max-height:calc(100vh - 20px);padding:14px;border-radius:18px}.rmt-ending-easter-dialog h2{font-size:18px}.rmt-ending-easter-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.rmt-ending-easter-heart{width:52px;height:52px;font-size:34px}.rmt-ending-easter-monologue p{font-size:11px}.rmt-ending-easter-log li{font-size:8px}}@media(prefers-reduced-motion:reduce){.rmt-ending-easter-heart,.rmt-ending-easter-poem span{animation:none!important}}
 .rmt-archive-readonly-control{margin-top:12px;padding:10px 11px;border:1px solid #d7e4ea;border-radius:12px;background:#f8fbfd;display:grid;gap:5px}.rmt-archive-readonly-control label{display:flex;align-items:center;gap:8px;color:#5f7184;font-weight:800;font-size:11px}.rmt-archive-readonly-control input{width:16px;height:16px}.rmt-archive-readonly-control small{color:#8a98a6;line-height:1.55}
 .rmt-adv-bulkbar{display:grid;gap:7px;margin:0 0 10px;padding:9px;border:1px dashed #c8dce6;border-radius:12px;background:#f7fbfd;color:#718295;font-size:10px}.rmt-adv-bulkbar .rmt-btn{width:100%}
 
@@ -2476,7 +3410,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
   .rmt-phone{padding:5px}.rmt-phone-shell{padding:9px}.rmt-device-phone{border-radius:38px;border-width:5px}.rmt-device-phone .rmt-phone-screen{border-radius:29px}.rmt-device-watch{border-radius:72px;border-width:7px}.rmt-device-terminal{border-radius:16px;border-width:7px}.rmt-device-communicator{border-radius:21px 21px 34px 34px;border-width:7px}.rmt-phone-lock{padding:9px 7px}.rmt-phone-apps{gap:6px;padding:6px 0 10px}.rmt-phone-app{min-width:78px;padding:8px 7px}.rmt-phone-home-grid .rmt-phone-app,.rmt-phone-dock .rmt-phone-app{min-width:0;padding:0}.rmt-phone-content{display:block}.rmt-phone-list,.rmt-phone-detail{padding:10px;border-radius:14px}.rmt-phone-view-list .rmt-phone-detail{display:none}.rmt-phone-view-detail .rmt-phone-list{display:none}.rmt-phone-detail-toolbar{position:sticky;top:0;background:var(--rmt-screen-soft);z-index:2;padding-bottom:7px}.rmt-phone-entry{padding:9px 5px}.rmt-phone-entry span{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.rmt-phone-message p{font-size:11px}.rmt-phone-fields>div{grid-template-columns:1fr}
   .rmt-heart{padding:9px}.rmt-heart-tabs{grid-template-columns:1fr}.rmt-achievement-grid{grid-template-columns:1fr}.rmt-heart-greeting-grid{grid-template-columns:1fr}.rmt-heart-drama-layout{grid-template-columns:1fr}.rmt-heart-drama-layout>nav{grid-template-columns:repeat(2,minmax(0,1fr))}.rmt-heart-drama-layout>main{padding:12px}.rmt-heart-drama-head h2,.rmt-heart-strip-head h2{font-size:16px}.rmt-heart-script-bubble{font-size:10px}.rmt-avatar-dialog-card{padding:15px;border-radius:18px}.rmt-avatar-dialog-actions{display:grid;grid-template-columns:1fr}.rmt-character-heart-head{align-items:flex-start}.rmt-character-heart-avatar{width:62px;height:62px;flex-basis:62px}
   .rmt-ending{grid-template-columns:1fr;padding:9px;gap:10px}.rmt-ending-summary{padding:12px}.rmt-ending-list{grid-template-columns:1fr 1fr;gap:6px}.rmt-ending-route{padding:9px}.rmt-ending-detail{padding:13px;border-radius:15px}.rmt-ending-head h2{font-size:18px}.rmt-ending-section p,.rmt-ending-confession{font-size:11px;line-height:1.8}.rmt-ending-confession-stage{padding:10px}.rmt-ending-confession-dialogue{grid-template-columns:48px minmax(0,1fr);gap:8px}.rmt-ending-confession-avatar{width:48px;height:48px}.rmt-ending-confession-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.rmt-ending-confession-actions .rmt-btn{min-width:0;padding:7px 5px;font-size:9px}
-  #${core_constants.SETTINGS_ID} .rmt-settings-buttons{grid-template-columns:1fr 1fr}#${core_constants.SETTINGS_ID} .rmt-api-grid{grid-template-columns:1fr 1fr}#${core_constants.SETTINGS_ID} .rmt-model-row{grid-template-columns:1fr}#${core_constants.SETTINGS_ID} .rmt-model-refresh{width:100%!important}
+  #${core_constants.SETTINGS_ID} .rmt-settings-buttons{grid-template-columns:1fr 1fr}#${core_constants.SETTINGS_ID} .rmt-api-grid{grid-template-columns:1fr 1fr}#${core_constants.SETTINGS_ID} .rmt-model-row{grid-template-columns:1fr}#${core_constants.SETTINGS_ID} .rmt-model-refresh{width:100%!important}#${core_constants.SETTINGS_ID} .rmt-manual-key-row{grid-template-columns:1fr}#${core_constants.SETTINGS_ID} .rmt-manual-key-row .menu_button{width:100%!important}
 }
 .rmt-calendar-quick{display:grid;grid-template-columns:54px minmax(0,1fr) auto;align-items:center;gap:12px;margin:0 0 12px;padding:12px 14px;border:1px solid #d5d9eb;border-radius:16px;background:linear-gradient(135deg,rgba(250,248,255,.96),rgba(247,252,255,.96));box-shadow:0 8px 20px rgba(71,77,112,.07)}
 .rmt-calendar-quick-icon{width:50px;height:50px;border-radius:15px;display:grid;place-items:center;background:linear-gradient(145deg,#aaa0ca,#8178aa);color:#fff;font-size:20px;box-shadow:0 6px 14px rgba(83,75,121,.18)}
@@ -2521,6 +3455,22 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 
 .rmt-profile-worldline-note{display:grid;gap:3px;padding:10px 12px;border:1px dashed #d9e5ea;border-radius:12px;background:rgba(246,251,253,.78)}.rmt-profile-worldline-note b{font-size:10px;color:#6a7e91}.rmt-profile-worldline-note small{font-size:8px;line-height:1.6;color:#97a5af}.rmt-profile-discoveries{display:grid;gap:10px}.rmt-profile-discovery-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.rmt-profile-discovery{display:grid;gap:5px;padding:10px 11px;border:1px solid #dce7ec;border-radius:12px;background:rgba(255,255,255,.88)}.rmt-profile-discovery>div{display:grid;gap:2px}.rmt-profile-discovery small{font-size:8px;color:#99a6b0}.rmt-profile-discovery b{font-size:11px;color:#60758a}.rmt-profile-discovery p{margin:0;font-size:8px;line-height:1.55;color:#8796a2}.rmt-profile-discovery i{font-size:7px;line-height:1.45;color:#a3aeb7;font-style:normal}.rmt-profile-discovery-empty{font-size:9px;color:#98a4ae;line-height:1.65;padding:8px 2px}
 @media(max-width:760px){.rmt-profile-discovery-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* r44 independent travel map: every line, marker position and postcard surface is code-owned. */
+.rmt-archive-portal-travel .rmt-portal-avatar{background:linear-gradient(145deg,#6fa8a3,#466f85)}
+.rmt-travel{--travel-ink:#455d68;--travel-accent:#bd6f72;--travel-water:#b9dce2;display:grid;gap:13px;padding:3px 2px 22px;color:var(--travel-ink)}
+.rmt-travel[data-rmt-travel-theme="coast"]{--travel-ink:#3f6171;--travel-accent:#d17f72;--travel-water:#8fcfdc}.rmt-travel[data-rmt-travel-theme="forest"]{--travel-ink:#496556;--travel-accent:#b47664;--travel-water:#a7d2c6}.rmt-travel[data-rmt-travel-theme="mountain"]{--travel-ink:#53616c;--travel-accent:#9e766e;--travel-water:#bdced7}.rmt-travel[data-rmt-travel-theme="campus"]{--travel-ink:#5f5b79;--travel-accent:#cb7c93;--travel-water:#c9dce7}.rmt-travel[data-rmt-travel-theme="historic"]{--travel-ink:#6a5949;--travel-accent:#a86555;--travel-water:#c7bca4}.rmt-travel[data-rmt-travel-theme="fantasy"]{--travel-ink:#5d547a;--travel-accent:#b76d9b;--travel-water:#b9d9d0}.rmt-travel[data-rmt-travel-theme="scifi"]{--travel-ink:#3d6370;--travel-accent:#b05b82;--travel-water:#80d5d7}
+.rmt-travel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:16px 18px;border:1px solid color-mix(in srgb,var(--travel-ink) 20%,#fff);border-radius:19px;background:linear-gradient(135deg,rgba(255,255,255,.96),color-mix(in srgb,var(--travel-water) 16%,#fff));box-shadow:0 10px 25px rgba(50,73,83,.07)}.rmt-travel-head>div:first-child{display:grid;gap:4px;max-width:760px}.rmt-travel-head small,.rmt-travel-index>div small{font-size:8px;letter-spacing:.18em;color:color-mix(in srgb,var(--travel-accent) 75%,#7b8992);font-weight:850}.rmt-travel-head h2{margin:0;font-size:22px;color:var(--travel-ink)}.rmt-travel-head p{margin:2px 0 0;font-size:11px;line-height:1.7;color:color-mix(in srgb,var(--travel-ink) 72%,#9ba6ac)}.rmt-travel-head>div:last-child{display:flex;gap:7px}.rmt-travel-head>div:last-child span{min-width:62px;padding:8px 10px;border-radius:13px;background:rgba(255,255,255,.82);border:1px solid color-mix(in srgb,var(--travel-water) 42%,#dbe4e8);font-size:8px;text-align:center}.rmt-travel-head>div:last-child b{display:block;font-size:17px;color:var(--travel-accent)}
+.rmt-travel-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(190px,250px);gap:11px;align-items:stretch}.rmt-travel-map{position:relative;isolation:isolate;min-height:590px;overflow:hidden;border:1px solid color-mix(in srgb,var(--travel-ink) 24%,#fff);border-radius:22px;background:radial-gradient(circle at 18% 22%,color-mix(in srgb,var(--travel-water) 48%,transparent) 0 8%,transparent 8.5%),radial-gradient(circle at 78% 74%,rgba(235,221,194,.7) 0 15%,transparent 15.5%),linear-gradient(145deg,#f8f5e9,#eef5ef 55%,#e7f1f3);box-shadow:inset 0 0 55px rgba(65,86,93,.08),0 12px 28px rgba(48,68,78,.08)}
+.rmt-travel[data-rmt-travel-theme="scifi"] .rmt-travel-map{background:radial-gradient(circle at 74% 24%,rgba(72,182,192,.25),transparent 22%),linear-gradient(145deg,#142733,#233d47 54%,#182e3a);color:#e8ffff}.rmt-travel[data-rmt-travel-theme="historic"] .rmt-travel-map{background:radial-gradient(circle at 78% 74%,rgba(151,112,76,.17),transparent 22%),repeating-linear-gradient(8deg,rgba(116,87,58,.04) 0 1px,transparent 1px 9px),#f0e5cf}.rmt-travel[data-rmt-travel-theme="fantasy"] .rmt-travel-map{background:radial-gradient(circle at 23% 28%,rgba(174,134,209,.24),transparent 24%),radial-gradient(circle at 76% 74%,rgba(109,188,160,.25),transparent 25%),linear-gradient(145deg,#f4ecfb,#e9f5ef)}
+.rmt-travel-grid{position:absolute;inset:0;z-index:-3;opacity:.34;background-image:linear-gradient(rgba(79,108,112,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(79,108,112,.12) 1px,transparent 1px);background-size:44px 44px;transform:rotate(-4deg) scale(1.1)}.rmt-travel-routes{position:absolute;inset:4%;z-index:-1;width:92%;height:92%;overflow:visible}.rmt-travel-routes path{fill:none;stroke:color-mix(in srgb,var(--travel-accent) 60%,#ffffff);stroke-width:1.1;stroke-dasharray:2.5 2.5;vector-effect:non-scaling-stroke;filter:drop-shadow(0 1px rgba(255,255,255,.7))}.rmt-travel-routes path:nth-child(2){stroke:color-mix(in srgb,var(--travel-water) 78%,var(--travel-ink));stroke-dasharray:5 3}.rmt-travel-routes path:nth-child(3){opacity:.7;stroke-dasharray:1 4}
+.rmt-travel-horizon{position:absolute;inset:0;z-index:-2;pointer-events:none}.rmt-travel-horizon span{position:absolute;display:block;border:1px solid color-mix(in srgb,var(--travel-ink) 11%,transparent);background:rgba(255,255,255,.18);transform:rotate(-7deg)}.rmt-travel-horizon span:nth-child(1){left:8%;top:12%;width:24%;height:16%;border-radius:48% 52% 34% 66%}.rmt-travel-horizon span:nth-child(2){right:7%;top:38%;width:29%;height:22%;border-radius:64% 36% 58% 42%}.rmt-travel-horizon span:nth-child(3){left:30%;bottom:8%;width:33%;height:18%;border-radius:38% 62% 47% 53%}
+.rmt-travel-marker{appearance:none;position:absolute;z-index:3;left:var(--map-x);top:var(--map-y);transform:translate(-50%,-50%);min-width:46px;min-height:46px;border:0;background:transparent;color:var(--travel-ink);padding:4px;display:grid;justify-items:center;gap:2px;cursor:pointer}.rmt-travel-marker i{width:34px;height:34px;display:grid;place-items:center;border-radius:50% 50% 50% 8px;transform:rotate(-45deg);background:#fff;border:2px solid var(--travel-accent);box-shadow:0 6px 14px rgba(54,74,82,.16);font-size:13px}.rmt-travel-marker i:before{transform:rotate(45deg)}.rmt-travel-marker.far i{border-radius:50%;border-color:var(--travel-ink);background:color-mix(in srgb,var(--travel-water) 30%,#fff)}.rmt-travel-marker span{max-width:105px;padding:3px 6px;border-radius:999px;background:rgba(255,255,255,.91);box-shadow:0 2px 8px rgba(49,69,76,.12);font-size:8px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rmt-travel-marker:hover,.rmt-travel-marker.active{z-index:8}.rmt-travel-marker:hover i,.rmt-travel-marker.active i{transform:rotate(-45deg) scale(1.16);box-shadow:0 0 0 5px color-mix(in srgb,var(--travel-accent) 17%,transparent),0 8px 16px rgba(54,74,82,.18)}
+.rmt-travel-map-key{position:absolute;left:12px;bottom:10px;z-index:5;display:flex;gap:9px;flex-wrap:wrap;padding:6px 8px;border-radius:10px;background:rgba(255,255,255,.86);backdrop-filter:blur(7px);font-size:7.5px;color:#74848c}.rmt-travel-map-key span{display:flex;align-items:center;gap:4px}.rmt-travel-map-key i{width:7px;height:7px;border-radius:50%;background:var(--travel-accent)}.rmt-travel-map-key i.far{background:var(--travel-ink)}
+.rmt-travel-index{padding:13px;border:1px solid #dbe5e7;border-radius:19px;background:linear-gradient(180deg,#fff,#f6f9f8);display:grid;grid-template-rows:auto minmax(0,1fr);gap:10px;min-height:0}.rmt-travel-index h3{margin:2px 0 0;font-size:16px;color:var(--travel-ink)}.rmt-travel-index nav{display:flex;flex-direction:column;gap:6px;overflow:auto;max-height:540px;padding-right:2px}.rmt-travel-index nav button{appearance:none;display:grid;grid-template-columns:30px minmax(0,1fr);align-items:center;gap:7px;border:1px solid #e0e8ea;border-radius:12px;background:#fff;padding:8px;text-align:left;color:var(--travel-ink);cursor:pointer}.rmt-travel-index nav button>i{width:28px;height:28px;border-radius:10px;display:grid;place-items:center;background:#eef5f4;color:var(--travel-accent)}.rmt-travel-index nav button>span{min-width:0}.rmt-travel-index nav b,.rmt-travel-index nav small{display:block;overflow:hidden;text-overflow:ellipsis}.rmt-travel-index nav b{font-size:10px;white-space:nowrap}.rmt-travel-index nav small{margin-top:2px;font-size:7px;line-height:1.35;color:#98a4a9}.rmt-travel-index nav button.active{border-color:color-mix(in srgb,var(--travel-accent) 55%,#d9e4e6);background:color-mix(in srgb,var(--travel-accent) 6%,#fff)}
+.rmt-travel-dialogue,.rmt-travel-postcard{position:absolute;z-index:20;left:50%;top:50%;transform:translate(-50%,-50%);width:min(520px,calc(100% - 34px));max-height:calc(100% - 50px);overflow:auto;box-sizing:border-box;box-shadow:0 24px 65px rgba(37,52,58,.28)}.rmt-travel-detail-close{appearance:none;position:absolute;right:9px;top:9px;z-index:3;width:36px;height:36px;border:1px solid rgba(85,103,111,.2);border-radius:50%;background:rgba(255,255,255,.9);color:#62737c;font-size:21px;line-height:1;cursor:pointer}.rmt-travel-dialogue{padding:18px;border:1px solid #d5e4e5;border-radius:20px;background:linear-gradient(150deg,#fbffff,#f4f8f7)}.rmt-travel-dialogue-place{padding-right:42px}.rmt-travel-dialogue-place small{font-size:8px;letter-spacing:.14em;color:var(--travel-accent)}.rmt-travel-dialogue-place h3{margin:3px 0 5px;font-size:20px;color:var(--travel-ink)}.rmt-travel-dialogue-place p{margin:0;font-size:10px;line-height:1.65;color:#7d8c92}.rmt-travel-dialogue-bubble{position:relative;margin-top:14px;padding:14px 15px 25px;border-radius:16px 16px 16px 5px;background:#fff;border:1px solid #dce7e8}.rmt-travel-dialogue-bubble b{font-size:9px;color:var(--travel-accent)}.rmt-travel-dialogue-bubble p{margin:7px 0 0;font-size:13px;line-height:1.85;color:#536870;white-space:pre-wrap}.rmt-travel-dialogue-bubble span{position:absolute;right:10px;bottom:7px;font-size:7px;color:#a0aaae}.rmt-travel-dialogue-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:10px}
+.rmt-travel-postcard{display:grid;grid-template-columns:1.25fr .75fr;min-height:330px;padding:24px;border:10px solid rgba(255,255,255,.78);outline:1px solid rgba(91,104,103,.18);border-radius:5px;background:repeating-linear-gradient(0deg,rgba(113,91,72,.025) 0 1px,transparent 1px 8px),#f7f0df;color:#67594a;transform:translate(-50%,-50%) rotate(-1deg)}.rmt-travel-postcard.tone-rose{background-color:#fae9eb;color:#71545d}.rmt-travel-postcard.tone-ocean{background-color:#e4f2f3;color:#486b72}.rmt-travel-postcard.tone-forest{background-color:#e9f0df;color:#516650}.rmt-travel-postcard.tone-sunset{background-color:#f7e6d2;color:#795b49}.rmt-travel-postcard.tone-night{background-color:#293845;color:#edf2ed;border-color:#435361}.rmt-travel-postcard-mark{position:absolute;right:22px;top:20px;display:grid;justify-items:end;gap:7px}.rmt-travel-postcard-mark span{width:54px;height:63px;border:3px double currentColor;display:grid;place-items:center;font-size:8px;font-weight:900;letter-spacing:.08em;background:rgba(255,255,255,.24)}.rmt-travel-postcard-mark i{font-size:7px;font-style:normal;border:1px solid currentColor;border-radius:50%;padding:8px 5px;transform:rotate(-12deg);opacity:.7}.rmt-travel-postcard-copy{padding:5px 19px 5px 3px;border-right:1px solid currentColor}.rmt-travel-postcard-copy small{font-size:7px;letter-spacing:.16em;opacity:.65}.rmt-travel-postcard-copy h3{margin:8px 0 11px;font-family:Georgia,"Times New Roman",serif;font-size:22px}.rmt-travel-postcard-copy>b{display:block;margin-bottom:7px;font-size:10px}.rmt-travel-postcard-copy p{margin:0;font-family:"KaiTi","STKaiti",serif;font-size:13px;line-height:1.95;white-space:pre-wrap}.rmt-travel-postcard-copy footer{margin-top:14px;text-align:right;font-family:"KaiTi","STKaiti",serif;font-size:12px}.rmt-travel-postcard-address{align-self:end;padding:100px 5px 14px 18px;display:grid;gap:4px}.rmt-travel-postcard-address span{font-size:7px;letter-spacing:.18em;opacity:.6}.rmt-travel-postcard-address b{padding-bottom:5px;border-bottom:1px solid currentColor;font-size:12px}.rmt-travel-postcard-address small{font-size:8px;opacity:.65}
+@media(max-width:760px){.rmt-travel-head{display:grid;padding:13px}.rmt-travel-head h2{font-size:19px}.rmt-travel-head>div:last-child{width:100%}.rmt-travel-head>div:last-child span{flex:1}.rmt-travel-layout{grid-template-columns:1fr}.rmt-travel-map{min-height:500px}.rmt-travel-index{order:-1}.rmt-travel-index nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));max-height:190px}.rmt-travel-marker span{max-width:75px;font-size:7px}.rmt-travel-dialogue,.rmt-travel-postcard{width:calc(100% - 20px);max-height:calc(100% - 28px)}.rmt-travel-postcard{grid-template-columns:1fr;min-height:0;padding:18px;border-width:7px;transform:translate(-50%,-50%) rotate(-.5deg)}.rmt-travel-postcard-copy{padding:40px 2px 13px;border-right:0;border-bottom:1px solid currentColor}.rmt-travel-postcard-copy h3{font-size:19px}.rmt-travel-postcard-copy p{font-size:12px}.rmt-travel-postcard-address{padding:13px 3px 3px}.rmt-travel-postcard-mark{right:15px;top:12px}.rmt-travel-postcard-mark span{width:43px;height:50px}.rmt-travel-map-key{left:7px;right:7px;bottom:7px;justify-content:center}.rmt-travel-dialogue{padding:14px}.rmt-travel-dialogue-actions .rmt-btn{min-width:0;padding:7px 4px;font-size:9px}}
 `;
     document.head.appendChild(style);
 }
@@ -2544,847 +3494,6 @@ function abstractStyle(seed, id) {
 __m_ui_styles_js.ensureSettingsStyles = ensureSettingsStyles;
 __m_ui_styles_js.ensureStyles = ensureStyles;
 __m_ui_styles_js.abstractStyle = abstractStyle;
-}
-
-function __init_ui_settingsPanel_js() {
-// MODULE: ui/settingsPanel.js
-const archive_repository = __m_archive_repository_js;
-const core_constants = __m_core_constants_js;
-const core_context = __m_core_context_js;
-const core_requestCoordinator = __m_core_requestCoordinator_js;
-const core_settings = __m_core_settings_js;
-const core_text = __m_core_text_js;
-const ui_archivePortal = __m_ui_archivePortal_js;
-const ui_overlay = __m_ui_overlay_js;
-const ui_styles = __m_ui_styles_js;
-const runtimeState = __m_core_state_js.state;
-// Heartbeat Memories r35 modular runtime.
-// Extracted from r34 without changing archive/cache storage contracts.
-
-
-
-
-
-
-async function refreshModelOptions({ fetchRemote = false } = {}) {
-    const panel = document.getElementById(core_constants.SETTINGS_ID);
-    if (!panel) return;
-    const select = panel.querySelector('[data-rmt-api-model]');
-    const refreshButton = panel.querySelector('[data-rmt-api-model-refresh]');
-    if (!select) return;
-    const settings = core_settings.getPluginSettings();
-    const profileId = core_text.normalizeText(settings.connectionProfileId, 160);
-    select.replaceChildren();
-    const defaultOption = document.createElement('option');
-    defaultOption.value = '';
-    if (!profileId) {
-        defaultOption.textContent = '请先选择专用连接';
-        select.appendChild(defaultOption);
-        select.disabled = true;
-        if (refreshButton) refreshButton.disabled = true;
-        return;
-    }
-    let profile;
-    try { profile = core_settings.rawConnectionProfile(profileId); } catch { profile = null; }
-    const profileModel = core_text.normalizeText(profile?.model, 240);
-    defaultOption.textContent = profileModel ? `使用配置默认模型 · ${profileModel}` : '使用配置默认模型';
-    select.appendChild(defaultOption);
-    select.disabled = false;
-    if (refreshButton) {
-        refreshButton.disabled = false;
-        refreshButton.textContent = fetchRemote ? '正在拉取…' : '刷新模型';
-    }
-    let models = [];
-    try {
-        models = fetchRemote
-            ? await core_settings.fetchModelsForConnection(profileId, { force: true })
-            : (runtimeState.connectionModelCache.get(profileId) || core_settings.savedModelsForProfile(profileId));
-    } catch (error) {
-        console.warn('[HeartbeatMemories] refresh model options failed', error);
-        models = profileModel ? [profileModel] : [];
-    }
-    const currentSettings = core_settings.getPluginSettings();
-    if (currentSettings.connectionProfileId !== profileId) return;
-    const override = core_text.normalizeText(currentSettings.modelOverride, 240);
-    if (override && !models.includes(override)) models.unshift(override);
-    for (const model of [...new Set(models)]) {
-        if (!model) continue;
-        const option = document.createElement('option');
-        option.value = model;
-        option.textContent = model;
-        select.appendChild(option);
-    }
-    select.value = override;
-    if (refreshButton) refreshButton.textContent = '刷新模型';
-}
-
-function refreshGenerationSettingsUi() {
-    const panel = document.getElementById(core_constants.SETTINGS_ID);
-    if (!panel) return;
-    const settings = core_settings.getPluginSettings();
-    const profile = panel.querySelector('[data-rmt-api-profile]');
-    const maxTokens = panel.querySelector('[data-rmt-api-max-tokens]');
-    const temperature = panel.querySelector('[data-rmt-api-temperature]');
-    const roomDaily = panel.querySelector('[data-rmt-room-life-auto]');
-    const imageGenerationManual = panel.querySelector('[data-rmt-image-generation-manual]');
-    const ttDisplay = panel.querySelector('[data-rmt-tt-display]');
-    const bannedPhrases = panel.querySelector('[data-rmt-banned-generated-phrases]');
-    const status = panel.querySelector('[data-rmt-api-status]');
-    if (profile) {
-        const profiles = core_settings.supportedConnectionProfiles();
-        profile.replaceChildren();
-        const empty = document.createElement('option');
-        empty.value = '';
-        empty.textContent = profiles.length ? '选择 Connection Manager 配置' : '没有可用的连接配置';
-        profile.appendChild(empty);
-        for (const item of profiles) {
-            const option = document.createElement('option');
-            option.value = item.id;
-            option.textContent = `${item.name}${item.model ? ` · ${item.model}` : ''}`;
-            profile.appendChild(option);
-        }
-        profile.value = profiles.some(item => item.id === settings.connectionProfileId) ? settings.connectionProfileId : '';
-    }
-    if (maxTokens) maxTokens.value = String(settings.maxTokens);
-    if (temperature) {
-        temperature.value = String(settings.temperature);
-        temperature.disabled = false;
-        temperature.title = '覆盖心跳回忆专用连接的温度';
-    }
-    if (roomDaily) roomDaily.checked = settings.roomLifeAutoDaily;
-    if (imageGenerationManual) imageGenerationManual.checked = settings.imageGenerationManualEnabled;
-    if (ttDisplay) ttDisplay.checked = settings.ttDisplayMode;
-    if (bannedPhrases) bannedPhrases.value = settings.bannedGeneratedPhrases.join('，');
-    if (status) {
-        status.textContent = !settings.connectionProfileId
-            ? '尚未选择心跳回忆专用连接。可一键读取酒馆当前已保存的连接；API Key 不会被显示或复制，只引用 SillyTavern 保存的 Secret ID。'
-            : `${core_settings.generationSourceLabel(settings)}。心跳回忆固定使用这个连接；模型可在下方单独选择，不会跟着主聊天切换。API Key 仍由 SillyTavern Secrets 管理。`;
-    }
-    void refreshModelOptions();
-}
-
-function hydrateSettingsPanel() {
-    const panel = document.getElementById(core_constants.SETTINGS_ID);
-    if (!panel) return false;
-    refreshSettingsMemoryStatus({ lightweight: true });
-    refreshGenerationSettingsUi();
-    panel.dataset.rmtHydrated = '1';
-    return true;
-}
-
-function refreshSettingsMemoryStatus({ lightweight = false } = {}) {
-    const panel = document.getElementById(core_constants.SETTINGS_ID);
-    if (!panel) return;
-    const openButton = panel.querySelector('[data-rmt-settings-open-archive]');
-    const archiveButton = panel.querySelector('[data-rmt-settings-current-archive]');
-    const taskCount = runtimeState.activeGenerationTasks.size;
-    if (openButton) {
-        openButton.disabled = false;
-        openButton.textContent = runtimeState.busy ? '打开档案室 · 档案整理中' : taskCount ? `打开档案室 · ${taskCount}项生成中` : '打开档案室';
-    }
-    if (archiveButton) {
-        let ready = false;
-        let actionable = false;
-        try {
-            const context = core_context.currentCharacterGuard();
-            actionable = !!core_context.getChatId(context);
-            ready = lightweight
-                ? !!archive_repository.getImportedMemory(context)
-                : archive_repository.getMemoryState(context).status === 'ready';
-        } catch {}
-        archiveButton.disabled = runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !actionable;
-        archiveButton.textContent = !actionable
-            ? '当前窗口档案不可用'
-            : runtimeState.busy ? '当前窗口档案整理中…'
-            : ready ? '增量更新当前窗口档案' : '生成当前窗口档案';
-    }
-}
-
-function mountSettings() {
-    ui_styles.ensureSettingsStyles();
-    const existing = document.getElementById(core_constants.SETTINGS_ID);
-    if (existing) {
-        refreshSettingsMemoryStatus({ lightweight: true });
-        if (existing.dataset.rmtHydrated === '1') refreshGenerationSettingsUi();
-        return true;
-    }
-    const mount = document.querySelector('#extensions_settings2');
-    if (!mount) return false;
-    const panel = document.createElement('div');
-    panel.id = core_constants.SETTINGS_ID;
-    panel.className = 'inline-drawer';
-    panel.innerHTML = `
-      <div class="inline-drawer-toggle inline-drawer-header rmt-settings-header">
-        <div><b>心跳回忆</b><small> API SETTINGS</small></div>
-        <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
-      </div>
-      <div class="inline-drawer-content rmt-settings-content">
-        <div class="rmt-settings-card rmt-api-box">
-          <div class="rmt-settings-card-head"><span>API</span><div><b>心跳回忆专用 API</b><small>只管理连接、模型与请求参数</small></div></div>
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-api-import-current>从酒馆当前连接一键导入</button>
-          <label class="rmt-settings-field"><span>连接配置</span><select class="text_pole" data-rmt-api-profile><option value="">选择 Connection Manager 配置</option></select></label>
-          <div class="rmt-model-row">
-            <label class="rmt-settings-field"><span>模型</span><select class="text_pole" data-rmt-api-model><option value="">请先选择专用连接</option></select></label>
-            <button type="button" class="menu_button rmt-model-refresh" data-rmt-api-model-refresh>刷新模型</button>
-          </div>
-          <div class="rmt-api-grid">
-            <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1024" max="60000" step="1"></label>
-            <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
-          </div>
-          <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
-          <label class="checkbox_label rmt-settings-check"><input data-rmt-room-life-auto type="checkbox"> 每天首次打开房间时允许一次“今日生活”自动请求</label>
-          <label class="checkbox_label rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"> 手动确认 SillyTavern Image Generation 已启用（自动检测失败时使用 /sd 兜底）</label>
-          <label class="checkbox_label rmt-settings-check"><input data-rmt-tt-display type="checkbox"> TT 显示模式（勾选＝r32 顶部安全区；不勾选＝全屏）</label>
-        </div>
-        <div class="rmt-settings-archive-actions">
-          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
-          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
-          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-performance-diagnostic aria-expanded="false" aria-controls="heartbeat_memories_performance_diagnostic"><i class="fa-solid fa-gauge-high"></i><span data-rmt-diagnostic-label>性能诊断（不解压缓存）</span></button>
-          <div class="rmt-performance-diagnostic-panel" id="heartbeat_memories_performance_diagnostic" data-rmt-diagnostic-panel hidden>
-            <div class="rmt-performance-diagnostic-head"><b>诊断结果</b><button type="button" class="menu_button rmt-performance-diagnostic-close" data-rmt-performance-diagnostic-close>关闭诊断</button></div>
-            <pre class="rmt-performance-diagnostic-output" data-rmt-performance-diagnostic-output></pre>
-          </div>
-          <div class="rmt-api-note">当前聊天窗口一份独立档案。普通更新只追加上次归档后的新内容并保留已生成 ADV EVENT / 房间 / ENDING；需要从头重整时请进入档案后明确选择“完全重建档案”。性能诊断只读取缓存 manifest/字符串长度，不会解压缓存或遍历聊天正文。</div>
-        </div>
-      </div>`;
-    mount.appendChild(panel);
-    panel.addEventListener('change', event => {
-        const target = event.target;
-        if (target.matches?.('[data-rmt-api-profile]')) {
-            const connectionProfileId = core_text.normalizeText(target.value, 160);
-            core_settings.updatePluginSettings({ connectionProfileId, modelOverride: '' });
-            if (connectionProfileId) runtimeState.connectionModelCache.delete(connectionProfileId);
-            refreshGenerationSettingsUi();
-            void refreshModelOptions({ fetchRemote: !!connectionProfileId });
-            return;
-        }
-        if (target.matches?.('[data-rmt-api-model]')) {
-            core_settings.updatePluginSettings({ modelOverride: core_text.normalizeText(target.value, 240) });
-            refreshGenerationSettingsUi();
-            return;
-        }
-        if (target.matches?.('[data-rmt-api-max-tokens]')) {
-            core_settings.updatePluginSettings({ maxTokens: Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(target.value) || core_constants.DEFAULT_SETTINGS.maxTokens)) });
-            refreshGenerationSettingsUi();
-            return;
-        }
-        if (target.matches?.('[data-rmt-api-temperature]')) {
-            core_settings.updatePluginSettings({ temperature: Math.max(0, Math.min(2, Number.isFinite(Number(target.value)) ? Number(target.value) : core_constants.DEFAULT_SETTINGS.temperature)) });
-            refreshGenerationSettingsUi();
-            return;
-        }
-        if (target.matches?.('[data-rmt-room-life-auto]')) {
-            core_settings.updatePluginSettings({ roomLifeAutoDaily: !!target.checked });
-            refreshGenerationSettingsUi();
-            return;
-        }
-        if (target.matches?.('[data-rmt-image-generation-manual]')) {
-            core_settings.updatePluginSettings({ imageGenerationManualEnabled: !!target.checked });
-            refreshGenerationSettingsUi();
-            if (runtimeState.activeMode && runtimeState.activeSession) ui_overlay.renderActive();
-            return;
-        }
-        if (target.matches?.('[data-rmt-tt-display]')) {
-            core_settings.updatePluginSettings({ ttDisplayMode: !!target.checked });
-            const overlay = document.getElementById(core_constants.OVERLAY_ID);
-            if (overlay) ui_overlay.applyArchiveMobileSafeArea(overlay);
-            refreshGenerationSettingsUi();
-            return;
-        }
-        if (target.matches?.('[data-rmt-banned-generated-phrases]')) {
-            core_settings.updatePluginSettings({ bannedGeneratedPhrases: core_settings.normalizeBannedGeneratedPhrases(target.value) });
-            refreshGenerationSettingsUi();
-        }
-    });
-    panel.addEventListener('click', event => {
-        if (event.target.closest?.('.rmt-settings-header')) hydrateSettingsPanel();
-        const modelRefreshButton = event.target.closest?.('[data-rmt-api-model-refresh]');
-        if (modelRefreshButton) {
-            modelRefreshButton.disabled = true;
-            refreshModelOptions({ fetchRemote: true })
-                .then(() => globalThis.toastr?.success?.('模型列表已刷新。', '心跳回忆'))
-                .catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'))
-                .finally(() => { modelRefreshButton.disabled = false; });
-            return;
-        }
-        const apiImportButton = event.target.closest?.('[data-rmt-api-import-current]');
-        if (apiImportButton) {
-            core_settings.importCurrentSillyTavernConnection().catch(error => {
-                console.error('[HeartbeatMemories] import current connection failed', error);
-                globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
-            });
-            return;
-        }
-        const diagnosticCloseButton = event.target.closest?.('[data-rmt-performance-diagnostic-close]');
-        if (diagnosticCloseButton) {
-            const output = panel.querySelector('[data-rmt-performance-diagnostic-output]');
-            const trigger = panel.querySelector('[data-rmt-performance-diagnostic]');
-            const hide = globalThis.__heartbeatMemoriesHidePerformanceDiagnostic;
-            if (typeof hide === 'function') hide(output, trigger);
-            else {
-                const diagnosticPanel = output?.closest?.('[data-rmt-diagnostic-panel]') || output;
-                if (diagnosticPanel) diagnosticPanel.hidden = true;
-                trigger?.setAttribute?.('aria-expanded', 'false');
-                const label = trigger?.querySelector?.('[data-rmt-diagnostic-label]');
-                if (label) label.textContent = '性能诊断（不解压缓存）';
-            }
-            return;
-        }
-        const diagnosticButton = event.target.closest?.('[data-rmt-performance-diagnostic]');
-        if (diagnosticButton) {
-            const output = panel.querySelector('[data-rmt-performance-diagnostic-output]');
-            const toggle = globalThis.__heartbeatMemoriesTogglePerformanceDiagnostic;
-            if (typeof toggle === 'function') toggle(output, diagnosticButton);
-            else if (output) {
-                const diagnosticPanel = output.closest?.('[data-rmt-diagnostic-panel]') || output;
-                const expanded = !diagnosticPanel.hidden;
-                diagnosticPanel.hidden = expanded;
-                diagnosticButton.setAttribute?.('aria-expanded', expanded ? 'false' : 'true');
-                const label = diagnosticButton.querySelector?.('[data-rmt-diagnostic-label]');
-                if (label) label.textContent = expanded ? '性能诊断（不解压缓存）' : '关闭性能诊断';
-                if (!expanded) output.textContent = '性能诊断器尚未就绪。';
-            }
-            return;
-        }
-        const currentArchiveButton = event.target.closest?.('[data-rmt-settings-current-archive]');
-        if (currentArchiveButton) {
-            ui_overlay.requestCurrentArchiveImport();
-            return;
-        }
-        const openArchiveButton = event.target.closest?.('[data-rmt-settings-open-archive]');
-        if (openArchiveButton) {
-            ui_archivePortal.safeShowArchiveLibrary('settings-click');
-            return;
-        }
-    });
-    panel.addEventListener('focusin', event => {
-        if (event.target.matches?.('input,select,button,textarea')) hydrateSettingsPanel();
-    });
-    refreshSettingsMemoryStatus({ lightweight: true });
-    return true;
-}
-
-__m_ui_settingsPanel_js.refreshModelOptions = refreshModelOptions;
-__m_ui_settingsPanel_js.refreshGenerationSettingsUi = refreshGenerationSettingsUi;
-__m_ui_settingsPanel_js.hydrateSettingsPanel = hydrateSettingsPanel;
-__m_ui_settingsPanel_js.refreshSettingsMemoryStatus = refreshSettingsMemoryStatus;
-__m_ui_settingsPanel_js.mountSettings = mountSettings;
-}
-
-function __init_core_settings_js() {
-// MODULE: core/settings.js
-const core_constants = __m_core_constants_js;
-const core_context = __m_core_context_js;
-const core_text = __m_core_text_js;
-const ui_settingsPanel = __m_ui_settingsPanel_js;
-const runtimeState = __m_core_state_js.state;
-// Heartbeat Memories r35 modular runtime.
-// Extracted from r34 without changing archive/cache storage contracts.
-
-
-
-function normalizeBannedGeneratedPhrases(value) {
-    const source = Array.isArray(value) ? value : String(value ?? '').split(/[\n,，]+/g);
-    return [...new Set(source.map(item => core_text.normalizeText(item, 40).trim()).filter(Boolean))]
-        .slice(0, core_constants.MAX_BANNED_GENERATED_PHRASES);
-}
-
-function getPluginSettings(context = core_context.getContext()) {
-    if (!context.extensionSettings || typeof context.extensionSettings !== 'object') return { ...core_constants.DEFAULT_SETTINGS };
-    const raw = context.extensionSettings[core_constants.EXTENSION_SETTINGS_KEY];
-    const settings = raw && typeof raw === 'object' ? raw : {};
-    const normalized = {
-        connectionProfileId: core_text.normalizeText(settings.connectionProfileId, 160),
-        modelOverride: core_text.normalizeText(settings.modelOverride, 240),
-        maxTokens: Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens)),
-        temperature: Math.max(0, Math.min(2, Number.isFinite(Number(settings.temperature)) ? Number(settings.temperature) : core_constants.DEFAULT_SETTINGS.temperature)),
-        roomLifeAutoDaily: settings.roomLifeAutoDaily !== false,
-        useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory !== false,
-        usePublicMemoryProviderReaders: settings.usePublicMemoryProviderReaders === true,
-        imageGenerationManualEnabled: settings.imageGenerationManualEnabled === true,
-        ttDisplayMode: settings.ttDisplayMode === true,
-        bannedGeneratedPhrases: settings.bannedGeneratedPhrases === undefined
-            ? [...core_constants.DEFAULT_SETTINGS.bannedGeneratedPhrases]
-            : normalizeBannedGeneratedPhrases(settings.bannedGeneratedPhrases),
-    };
-    if (!raw || JSON.stringify(raw) !== JSON.stringify(normalized)) {
-        context.extensionSettings[core_constants.EXTENSION_SETTINGS_KEY] = normalized;
-        context.saveSettingsDebounced?.();
-    }
-    return normalized;
-}
-
-function updatePluginSettings(patch) {
-    const context = core_context.getContext();
-    const current = getPluginSettings(context);
-    const next = { ...current, ...(patch || {}) };
-    context.extensionSettings[core_constants.EXTENSION_SETTINGS_KEY] = next;
-    context.saveSettingsDebounced?.();
-    return getPluginSettings(context);
-}
-
-function supportedConnectionProfiles(context = core_context.getContext()) {
-    try {
-        const service = context.ConnectionManagerRequestService;
-        if (!service?.getSupportedProfiles) return [];
-        return service.getSupportedProfiles().map(profile => ({
-            id: core_text.normalizeText(profile?.id, 160),
-            name: core_text.normalizeText(profile?.name, 180) || '未命名连接',
-            model: core_text.normalizeText(profile?.model, 180),
-            api: core_text.normalizeText(profile?.api, 120),
-        })).filter(profile => profile.id);
-    } catch {
-        return [];
-    }
-}
-
-function generationSourceLabel(settings = getPluginSettings()) {
-    const profile = supportedConnectionProfiles().find(item => item.id === settings.connectionProfileId);
-    if (!profile) return '专用连接：未选择';
-    const model = core_text.normalizeText(settings.modelOverride, 240) || profile.model;
-    return `专用连接：${profile.name}${model ? ` · ${model}` : ''}`;
-}
-
-function rawConnectionProfile(profileId, context = core_context.getContext()) {
-    const manager = connectionManagerSettings(context);
-    return manager.profiles.find(item => String(item?.id || '') === String(profileId || '')) || null;
-}
-
-function profileConnectionFingerprint(profile) {
-    const keys = ['mode', 'api', 'api-url', 'proxy', 'secret-id'];
-    return JSON.stringify(keys.map(key => core_text.normalizeText(profile?.[key], 1000)));
-}
-
-function savedModelsForProfile(profileId, context = core_context.getContext()) {
-    const manager = connectionManagerSettings(context);
-    const selected = rawConnectionProfile(profileId, context);
-    if (!selected) return [];
-    const fingerprint = profileConnectionFingerprint(selected);
-    const models = manager.profiles
-        .filter(item => profileConnectionFingerprint(item) === fingerprint)
-        .map(item => core_text.normalizeText(item?.model, 240))
-        .filter(Boolean);
-    const own = core_text.normalizeText(selected?.model, 240);
-    if (own) models.unshift(own);
-    return [...new Set(models)];
-}
-
-function connectionStatusPayload(profile, context = core_context.getContext()) {
-    const service = context.ConnectionManagerRequestService;
-    if (!service?.validateProfile) throw new Error('当前 SillyTavern 没有 Connection Manager 校验接口。');
-    const apiMap = service.validateProfile(profile);
-    if (apiMap?.selected !== 'openai' || !apiMap?.source) {
-        return { apiMap, payload: null };
-    }
-    const apiUrl = core_text.normalizeText(profile?.['api-url'], 2000);
-    const payload = {
-        chat_completion_source: apiMap.source,
-        secret_id: core_text.normalizeText(profile?.['secret-id'], 240) || undefined,
-    };
-    if (apiUrl) {
-        payload.custom_url = apiUrl;
-        payload.vertexai_region = apiUrl;
-        payload.zai_endpoint = apiUrl;
-        payload.siliconflow_endpoint = apiUrl;
-        payload.minimax_endpoint = apiUrl;
-        payload.workers_ai_account_id = apiUrl;
-    }
-    if (apiMap.source === 'custom') {
-        payload.custom_include_headers = core_text.normalizeText(context.chatCompletionSettings?.custom_include_headers, 8000) || undefined;
-    }
-    return { apiMap, payload };
-}
-
-async function fetchModelsForConnection(profileId, { force = false } = {}) {
-    const id = core_text.normalizeText(profileId, 160);
-    if (!id) return [];
-    if (!force && runtimeState.connectionModelCache.has(id)) return runtimeState.connectionModelCache.get(id);
-    const context = core_context.getContext();
-    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
-    const profile = rawConnectionProfile(id, context);
-    if (!profile) throw new Error('找不到当前选择的 Connection Manager 配置。');
-    const fallback = savedModelsForProfile(id, context);
-    const { payload } = connectionStatusPayload(profile, context);
-    let models = [...fallback];
-    if (payload && typeof context.getRequestHeaders === 'function') {
-        try {
-            const response = await fetch('/api/backends/chat-completions/status', {
-                method: 'POST',
-                headers: context.getRequestHeaders(),
-                cache: 'no-cache',
-                body: JSON.stringify(payload),
-            });
-            if (!response.ok) throw new Error(response.statusText || `HTTP ${response.status}`);
-            const data = await response.json();
-            const remote = Array.isArray(data?.data)
-                ? data.data.map(item => core_text.normalizeText(item?.id || item?.name, 240)).filter(Boolean)
-                : [];
-            models = [...new Set([...fallback, ...remote])];
-        } catch (error) {
-            console.warn('[HeartbeatMemories] remote model list failed; using saved profile models', error);
-        }
-    }
-    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
-    runtimeState.connectionModelCache.set(id, models);
-    return models;
-}
-
-function connectionManagerSettings(context = core_context.getContext()) {
-    const manager = context.extensionSettings?.connectionManager;
-    if (!manager || !Array.isArray(manager.profiles)) {
-        throw new Error('当前 SillyTavern 没有可用的 Connection Manager 配置，请先启用官方 Connection Manager。');
-    }
-    if (Array.isArray(context.extensionSettings?.disabledExtensions)
-        && context.extensionSettings.disabledExtensions.includes('connection-manager')) {
-        throw new Error('Connection Manager 当前已被禁用，请先在 SillyTavern 中启用它。');
-    }
-    return manager;
-}
-
-function slashCommandObject(command, context = core_context.getContext()) {
-    const key = core_text.normalizeText(command, 80);
-    const value = key ? context.SlashCommandParser?.commands?.[key] : null;
-    return value && typeof value.callback === 'function' ? value : null;
-}
-
-async function invokeSlashCommandCapture(commandOrObject, namedArgs = {}, unnamed = '', context = core_context.getContext()) {
-    const command = typeof commandOrObject === 'string'
-        ? slashCommandObject(commandOrObject, context)
-        : commandOrObject;
-    if (!command || typeof command.callback !== 'function') throw new Error('目标 Slash Command 当前不可用。');
-    // SillyTavern's public SlashCommand callback contract accepts a NamedArgumentsCapture object
-    // without parser-internal _scope/_parserFlags fields. Do not fabricate those private objects.
-    const capture = {};
-    for (const [key, value] of Object.entries(namedArgs || {})) {
-        if (!/^[A-Za-z0-9_-]{1,80}$/.test(key)) continue;
-        if (value == null || ['string', 'number', 'boolean'].includes(typeof value)) capture[key] = value;
-    }
-    return await command.callback.call(command, capture, String(unnamed ?? ''));
-}
-
-async function readCurrentSlashSetting(command, context = core_context.getContext()) {
-    if (!slashCommandObject(command, context)) return '';
-    try {
-        return core_text.normalizeText(await invokeSlashCommandCapture(command, { quiet: 'true' }, '', context), 1000);
-    } catch (error) {
-        console.warn(`[HeartbeatMemories] failed to read current slash setting: ${command}`, error);
-        return '';
-    }
-}
-
-function profileFingerprint(profile) {
-    const keys = ['mode', 'api', 'preset', 'api-url', 'model', 'proxy', 'prompt-post-processing', 'instruct', 'secret-id'];
-    return JSON.stringify(keys.map(key => core_text.normalizeText(profile?.[key], 1000)));
-}
-
-function uniqueImportedProfileName(manager, base) {
-    const names = new Set((manager.profiles || []).map(item => String(item?.name || '')));
-    if (!names.has(base)) return base;
-    let index = 2;
-    while (names.has(`${base} ${index}`)) index += 1;
-    return `${base} ${index}`;
-}
-
-async function importCurrentSillyTavernConnection() {
-    const context = core_context.getContext();
-    const manager = connectionManagerSettings(context);
-
-    const selectedId = core_text.normalizeText(manager.selectedProfile, 160);
-    if (selectedId) {
-        const selected = manager.profiles.find(item => String(item?.id) === selectedId);
-        if (selected && supportedConnectionProfiles(context).some(item => item.id === selectedId)) {
-            updatePluginSettings({ connectionProfileId: selectedId, modelOverride: '' });
-            runtimeState.connectionModelCache.delete(selectedId);
-            ui_settingsPanel.refreshGenerationSettingsUi();
-            void ui_settingsPanel.refreshModelOptions({ fetchRemote: true });
-            globalThis.toastr?.success?.('已引用酒馆当前选中的 Connection Manager 配置。', '心跳回忆');
-            return selectedId;
-        }
-    }
-
-    const mode = context.mainApi === 'openai' ? 'cc' : context.mainApi === 'textgenerationwebui' ? 'tc' : '';
-    if (!mode) {
-        throw new Error('当前酒馆 API 类型无法直接导入为独立连接。请先在 Connection Manager 中保存一个可用配置，再从下拉框选择。');
-    }
-
-    const commands = mode === 'cc'
-        ? ['api', 'preset', 'api-url', 'model', 'proxy', 'prompt-post-processing', 'secret-id']
-        : ['api', 'preset', 'api-url', 'model', 'instruct', 'secret-id'];
-    const profile = {
-        id: typeof context.uuidv4 === 'function' ? context.uuidv4() : `heartbeat-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        mode,
-        exclude: [],
-    };
-    for (const command of commands) {
-        const value = await readCurrentSlashSetting(command, context);
-        if (value || command === 'api-url') profile[command] = value;
-    }
-    if (!profile.api) {
-        throw new Error('没有读到当前酒馆的 API 类型，无法一键导入。请先确认主聊天 API 已连接。');
-    }
-    try {
-        context.ConnectionManagerRequestService?.validateProfile?.(profile);
-    } catch (error) {
-        throw new Error('当前酒馆连接不是 Connection Manager 可复用的 Chat/Text Completion 类型，请先在 Connection Manager 中保存一个可用配置。', { cause: error });
-    }
-
-    const fingerprint = profileFingerprint(profile);
-    const existing = manager.profiles.find(item => profileFingerprint(item) === fingerprint);
-    if (existing?.id) {
-        updatePluginSettings({ connectionProfileId: core_text.normalizeText(existing.id, 160), modelOverride: '' });
-        runtimeState.connectionModelCache.delete(core_text.normalizeText(existing.id, 160));
-        ui_settingsPanel.refreshGenerationSettingsUi();
-        void ui_settingsPanel.refreshModelOptions({ fetchRemote: true });
-        globalThis.toastr?.success?.('已找到相同的已保存连接，心跳回忆已直接引用。', '心跳回忆');
-        return existing.id;
-    }
-
-    const displayApi = core_text.normalizeText(profile.api, 80) || 'API';
-    const displayModel = core_text.normalizeText(profile.model, 100);
-    profile.name = uniqueImportedProfileName(manager, `心跳回忆 · ${displayApi}${displayModel ? ` · ${displayModel}` : ''}`);
-    manager.profiles.push(profile);
-    context.saveSettingsDebounced?.();
-    try {
-        await context.eventSource?.emit?.(context.eventTypes?.CONNECTION_PROFILE_CREATED, profile);
-    } catch (error) {
-        console.warn('[HeartbeatMemories] connection profile created event failed', error);
-    }
-    updatePluginSettings({ connectionProfileId: core_text.normalizeText(profile.id, 160), modelOverride: '' });
-    runtimeState.connectionModelCache.delete(core_text.normalizeText(profile.id, 160));
-    ui_settingsPanel.refreshGenerationSettingsUi();
-    void ui_settingsPanel.refreshModelOptions({ fetchRemote: true });
-    globalThis.toastr?.success?.('已从酒馆当前连接创建“心跳回忆”专用配置；API Key 仍由 SillyTavern Secrets 保管。', '心跳回忆');
-    return profile.id;
-}
-
-__m_core_settings_js.fetchModelsForConnection = fetchModelsForConnection;
-__m_core_settings_js.invokeSlashCommandCapture = invokeSlashCommandCapture;
-__m_core_settings_js.readCurrentSlashSetting = readCurrentSlashSetting;
-__m_core_settings_js.importCurrentSillyTavernConnection = importCurrentSillyTavernConnection;
-__m_core_settings_js.normalizeBannedGeneratedPhrases = normalizeBannedGeneratedPhrases;
-__m_core_settings_js.getPluginSettings = getPluginSettings;
-__m_core_settings_js.updatePluginSettings = updatePluginSettings;
-__m_core_settings_js.supportedConnectionProfiles = supportedConnectionProfiles;
-__m_core_settings_js.generationSourceLabel = generationSourceLabel;
-__m_core_settings_js.rawConnectionProfile = rawConnectionProfile;
-__m_core_settings_js.profileConnectionFingerprint = profileConnectionFingerprint;
-__m_core_settings_js.savedModelsForProfile = savedModelsForProfile;
-__m_core_settings_js.connectionStatusPayload = connectionStatusPayload;
-__m_core_settings_js.connectionManagerSettings = connectionManagerSettings;
-__m_core_settings_js.slashCommandObject = slashCommandObject;
-__m_core_settings_js.profileFingerprint = profileFingerprint;
-__m_core_settings_js.uniqueImportedProfileName = uniqueImportedProfileName;
-}
-
-function __init_generation_jsonParser_js() {
-// MODULE: generation/jsonParser.js
-const core_constants = __m_core_constants_js;
-const core_text = __m_core_text_js;
-// Heartbeat Memories r35 modular runtime.
-// Extracted from r34 without changing archive/cache storage contracts.
-
-
-function jsonOutputError(code, message, details = {}) {
-    const error = new Error(message);
-    error.name = 'JsonOutputError';
-    error.code = code;
-    error.retryableJson = true;
-    error.details = details;
-    return error;
-}
-
-function extractBalancedJsonObjects(text) {
-    const candidates = [];
-    let start = -1;
-    let depth = 0;
-    let inString = false;
-    let escaped = false;
-    for (let i = 0; i < text.length; i += 1) {
-        const char = text[i];
-        if (inString) {
-            if (escaped) escaped = false;
-            else if (char === '\\') escaped = true;
-            else if (char === '"') inString = false;
-            continue;
-        }
-        if (char === '"') {
-            if (depth > 0) inString = true;
-            continue;
-        }
-        if (char === '{') {
-            if (depth === 0) start = i;
-            depth += 1;
-            continue;
-        }
-        if (char === '}' && depth > 0) {
-            depth -= 1;
-            if (depth === 0 && start >= 0) {
-                candidates.push(text.slice(start, i + 1));
-                start = -1;
-            }
-        }
-    }
-    return { candidates, hasUnclosedObject: depth > 0 && start >= 0 };
-}
-
-function jsonOutputBudgetSummary({ requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {
-    const requestMax = Math.max(0, Math.floor(Number(requestMaxTokens) || 0));
-    const configuredMax = Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Math.floor(Number(configuredMaxTokens) || core_constants.MAX_GENERATION_OUTPUT_TOKENS)));
-    const actual = requestMax ? Math.min(requestMax, configuredMax) : configuredMax;
-    const segmentNote = actual < configuredMax
-        ? `本段实际请求上限 ${actual.toLocaleString()} tokens（该功能使用较小的分段上限）`
-        : `本段实际请求上限 ${actual.toLocaleString()} tokens`;
-    return `${segmentNote}；当前插件设置 ${configuredMax.toLocaleString()} tokens；插件允许最高 ${core_constants.MAX_GENERATION_OUTPUT_TOKENS.toLocaleString()} tokens。`;
-}
-
-function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {
-    let text = core_text.normalizeText(raw, core_constants.MAX_GENERATION_OUTPUT_CHARS).replace(/^\uFEFF/, '').trim();
-    const reasoningChars = core_text.normalizeText(reasoning, core_constants.MAX_GENERATION_OUTPUT_CHARS).length;
-    const budgetSummary = jsonOutputBudgetSummary({ requestMaxTokens, configuredMaxTokens });
-    if (!text) {
-        throw jsonOutputError(
-            reasoningChars ? 'RMT_JSON_EMPTY_FINAL_WITH_REASONING' : 'RMT_JSON_EMPTY_FINAL',
-            reasoningChars
-                ? `模型本轮产生了推理内容，但没有返回最终正文 JSON。可能是推理预算耗尽或模型没有进入最终回答阶段。${budgetSummary} 可只重试这一项，或改用结构化输出更稳定的模型。`
-                : `模型返回了空的最终正文，没有 JSON 可解析。${budgetSummary} 可只重试这一项，或检查所选模型/连接是否正常。`,
-            { contentChars: 0, reasoningChars, requestMaxTokens: Math.floor(Number(requestMaxTokens) || 0), configuredMaxTokens: Math.floor(Number(configuredMaxTokens) || 0) },
-        );
-    }
-    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-    const { candidates, hasUnclosedObject } = extractBalancedJsonObjects(text);
-    for (let i = candidates.length - 1; i >= 0; i -= 1) {
-        try {
-            const parsed = JSON.parse(candidates[i]);
-            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
-        } catch {}
-    }
-    if (hasUnclosedObject) {
-        throw jsonOutputError(
-            'RMT_JSON_TRUNCATED',
-            `模型返回的 JSON 疑似被截断：已经出现“{”，但没有完整闭合。${budgetSummary} 如果本段实际上限低于当前插件设置，继续提高全局“最大输出”不会突破该功能自己的分段上限；可只重试这一项，或换用输出更稳定的模型。`,
-            { contentChars: text.length, reasoningChars, requestMaxTokens: Math.floor(Number(requestMaxTokens) || 0), configuredMaxTokens: Math.floor(Number(configuredMaxTokens) || 0) },
-        );
-    }
-    if (!candidates.length) {
-        throw jsonOutputError(
-            'RMT_JSON_NOT_FOUND',
-            `模型返回了最终正文（约 ${text.length.toLocaleString()} 字符），但其中没有完整 JSON 对象。插件没有保存或覆盖任何旧数据；可只重试这一项。`,
-            { contentChars: text.length, reasoningChars },
-        );
-    }
-    throw jsonOutputError(
-        'RMT_JSON_INVALID',
-        '模型返回了 JSON 外形，但格式无法解析。插件没有保存或覆盖任何旧数据；可只重试这一项。',
-        { contentChars: text.length, reasoningChars },
-    );
-}
-
-__m_generation_jsonParser_js.jsonOutputError = jsonOutputError;
-__m_generation_jsonParser_js.extractBalancedJsonObjects = extractBalancedJsonObjects;
-__m_generation_jsonParser_js.jsonOutputBudgetSummary = jsonOutputBudgetSummary;
-__m_generation_jsonParser_js.extractJson = extractJson;
-}
-
-function __init_ui_advEventView_js() {
-// MODULE: ui/advEventView.js
-const core_constants = __m_core_constants_js;
-const core_context = __m_core_context_js;
-const core_text = __m_core_text_js;
-const generation_imageGeneration = __m_generation_imageGeneration_js;
-const ui_overlay = __m_ui_overlay_js;
-const runtimeState = __m_core_state_js.state;
-// Heartbeat Memories r35 modular runtime.
-// Extracted from r34 without changing archive/cache storage contracts.
-
-
-
-function selectedAdvEvent() {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ADV) return null;
-    return runtimeState.activeSession.events.find(x => x.id === runtimeState.activeSession.selectedId) || runtimeState.activeSession.events[0] || null;
-}
-
-function renderAdvMode() {
-    const session = runtimeState.activeSession;
-    if (!session || session.kind !== core_constants.MODE.ADV) return;
-    ui_overlay.setBackVisible(true, '当前档案');
-    ui_overlay.topTitle(core_constants.MODE_LABEL[core_constants.MODE.ADV]);
-    const selected = selectedAdvEvent();
-    let scope = '';
-    try { scope = core_context.chatScopeKey(core_context.currentCharacterGuard()); } catch {}
-    const bulkRunning = scope ? runtimeState.activeAdvBulkScopes.has(scope) : false;
-    const completedAdv = session.events.filter(item => item.adv?.paragraphs?.length).length;
-    const readOnlyArchive = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
-    const selectedIndex = Math.max(0, session.events.findIndex(item => item.id === selected?.id));
-    const list = session.events.map((item, index) => `<button type="button" class="rmt-event ${item.id === session.selectedId ? 'active' : ''}" data-rmt-event-id="${core_text.esc(item.id)}"><span class="rmt-event-index">${String(index + 1).padStart(2, '0')}</span><span class="rmt-event-copy"><b>${core_text.esc(item.title)}</b><small>${core_text.esc(item.date)}</small></span><em class="rmt-event-state">${generation_imageGeneration.normalizeCgImageRecord(item.cgImage) ? '图✓ ' : ''}${item.adv?.paragraphs?.length ? 'ADV✓' : 'CG'}</em></button>`).join('');
-    const options = session.events.map((item, index) => `<option value="${core_text.esc(item.id)}" ${item.id === selected?.id ? 'selected' : ''}>${String(index + 1).padStart(2, '0')} · ${core_text.esc(item.title)} · ${core_text.esc(item.date)}${item.adv?.paragraphs?.length ? ' · ADV✓' : ''}</option>`).join('');
-    let detail = '';
-    if (selected) {
-        if (session.view === 'adv' && selected.adv?.paragraphs?.length) {
-            const paras = selected.adv.paragraphs;
-            session.paragraphIndex = Math.max(0, Math.min(session.paragraphIndex, paras.length - 1));
-            detail = `${generation_imageGeneration.cgImageProviderBar({ readOnly: readOnlyArchive })}<div class="rmt-big-cg">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}<div class="rmt-cg-caption"><b>${core_text.esc(selected.title)}</b> · ${core_text.esc(selected.date)}<br>${core_text.esc(selected.cgDesc)}</div></div>
-              <div class="rmt-mode-actions">${readOnlyArchive ? '' : `<button type="button" class="rmt-btn rmt-cg-primary ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ADV, selected.id) ? 'rmt-cg-drawing' : ''}" data-rmt-action="draw-cg" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ADV, selected.id) ? 'disabled' : ''}>${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ADV, selected.id) ? '正在绘制CG…' : generation_imageGeneration.normalizeCgImageRecord(selected.cgImage) ? '↻ 重绘CG' : '🎨 绘制CG'}</button>`}<button type="button" class="rmt-btn" data-rmt-action="cg-only">只看CG</button><button type="button" class="rmt-btn" data-rmt-action="read-adv">阅读ADV</button>${!readOnlyArchive && generation_imageGeneration.normalizeCgImageRecord(selected.cgImage) ? '<button type="button" class="rmt-btn" data-rmt-action="clear-cg-image">恢复抽象CG</button>' : ''}</div>
-              <div class="rmt-adv-reader"><div class="rmt-progress">第 ${session.paragraphIndex + 1} 段 / 共 ${paras.length} 段</div><div class="rmt-adv-para">${core_text.esc(paras[session.paragraphIndex])}</div><div class="rmt-reader-actions"><button type="button" class="rmt-btn" data-rmt-action="adv-prev" ${session.paragraphIndex <= 0 ? 'disabled' : ''}>上一段</button><button type="button" class="rmt-btn" data-rmt-action="adv-next">${session.paragraphIndex >= paras.length - 1 ? '重看' : '下一段'}</button></div></div>`;
-        } else {
-            detail = `${generation_imageGeneration.cgImageProviderBar({ readOnly: readOnlyArchive })}<div class="rmt-big-cg">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}<div class="rmt-cg-caption"><b>${core_text.esc(selected.title)}</b> · ${core_text.esc(selected.date)}<br>${core_text.esc(selected.cgDesc)}</div></div>
-              <div class="rmt-mode-actions">${readOnlyArchive ? '' : `<button type="button" class="rmt-btn rmt-cg-primary ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ADV, selected.id) ? 'rmt-cg-drawing' : ''}" data-rmt-action="draw-cg" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ADV, selected.id) ? 'disabled' : ''}>${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ADV, selected.id) ? '正在绘制CG…' : generation_imageGeneration.normalizeCgImageRecord(selected.cgImage) ? '↻ 重绘CG' : '🎨 绘制CG'}</button>`}<button type="button" class="rmt-btn" data-rmt-action="cg-only">只看CG</button><button type="button" class="rmt-btn" data-rmt-action="read-adv" ${bulkRunning || (readOnlyArchive && !selected.adv) ? 'disabled' : ''}>${selected.adv ? '阅读ADV' : readOnlyArchive ? 'ADV 尚未生成' : '生成并阅读ADV'}</button>${!readOnlyArchive && generation_imageGeneration.normalizeCgImageRecord(selected.cgImage) ? '<button type="button" class="rmt-btn" data-rmt-action="clear-cg-image">恢复抽象CG</button>' : ''}</div>
-              <div class="rmt-adv-summary">${core_text.esc(selected.cgDesc)}</div>`;
-        }
-    }
-    const recoveryIds = new Set(core_text.cleanArray(session.advBulkRecovery?.failedIds, 64, 100));
-    const recoveryCount = session.events.filter(item => !item.adv?.paragraphs?.length && (!recoveryIds.size || recoveryIds.has(item.id))).length;
-    const recoveryActions = !readOnlyArchive && recoveryCount > 0 && session.advBulkRecovery
-        ? `<div class="rmt-adv-recovery"><button type="button" class="rmt-btn" data-rmt-action="repair-failed-adv" ${bulkRunning ? 'disabled' : ''}>逐个补失败项 · ${recoveryCount}</button></div>`
-        : '';
-    const bulkLabel = session.advBulkRecovery && recoveryCount
-        ? `重试失败批 · 最多${core_constants.ADV_BULK_BATCH_SIZE}篇`
-        : completedAdv ? `生成下一批 ADV · 最多${core_constants.ADV_BULK_BATCH_SIZE}篇` : `生成第一批 ADV · 最多${core_constants.ADV_BULK_BATCH_SIZE}篇`;
-    const bulkBar = `<div class="rmt-adv-bulkbar"><div><b>ADV ${completedAdv}/${session.events.length}</b><span>${readOnlyArchive ? '只读' : completedAdv >= session.events.length ? '已完成' : `每批最多 ${core_constants.ADV_BULK_BATCH_SIZE} 篇`}</span></div>${readOnlyArchive ? '' : `<button type="button" class="rmt-btn" data-rmt-action="generate-all-adv" ${bulkRunning || completedAdv >= session.events.length ? 'disabled' : ''}>${bulkRunning ? '生成中…' : bulkLabel}</button>`}</div>${recoveryActions}`;
-    const mobilePicker = `<div class="rmt-adv-mobile-picker"><div class="rmt-adv-picker-status"><b>${String(selectedIndex + 1).padStart(2, '0')} / ${session.events.length}</b><span>${core_text.esc(selected?.title || '')}</span></div><select data-rmt-adv-select aria-label="选择 ADV EVENT 事件">${options}</select><div class="rmt-adv-picker-actions"><button type="button" class="rmt-btn" data-rmt-action="adv-event-prev" ${selectedIndex <= 0 ? 'disabled' : ''}>← 上一个</button><button type="button" class="rmt-btn" data-rmt-action="adv-event-next" ${selectedIndex >= session.events.length - 1 ? 'disabled' : ''}>下一个 →</button></div></div>`;
-    const body = ui_overlay.bodyEl();
-    body.innerHTML = `<div class="rmt-adv"><aside class="rmt-event-list">${bulkBar}${mobilePicker}<div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail">${detail}</section><div class="rmt-inline-status" hidden></div></div>`;
-}
-
-function advSelect(id) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ADV) return;
-    const item = runtimeState.activeSession.events.find(x => x.id === id);
-    if (!item) return;
-    runtimeState.activeSession.selectedId = item.id;
-    runtimeState.activeSession.view = 'cg';
-    runtimeState.activeSession.paragraphIndex = 0;
-    renderAdvMode();
-}
-
-function advEventStep(delta) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ADV || !runtimeState.activeSession.events.length) return;
-    const current = Math.max(0, runtimeState.activeSession.events.findIndex(item => item.id === runtimeState.activeSession.selectedId));
-    const next = Math.max(0, Math.min(runtimeState.activeSession.events.length - 1, current + delta));
-    const item = runtimeState.activeSession.events[next];
-    if (!item || next === current) return;
-    runtimeState.activeSession.selectedId = item.id;
-    runtimeState.activeSession.view = 'cg';
-    runtimeState.activeSession.paragraphIndex = 0;
-    renderAdvMode();
-}
-
-function advStep(delta) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ADV) return;
-    const event = selectedAdvEvent();
-    const paras = event?.adv?.paragraphs || [];
-    if (!paras.length) return;
-    if (delta > 0 && runtimeState.activeSession.paragraphIndex >= paras.length - 1) {
-        runtimeState.activeSession.paragraphIndex = 0;
-    } else {
-        runtimeState.activeSession.paragraphIndex = Math.max(0, Math.min(paras.length - 1, runtimeState.activeSession.paragraphIndex + delta));
-    }
-    renderAdvMode();
-}
-
-__m_ui_advEventView_js.selectedAdvEvent = selectedAdvEvent;
-__m_ui_advEventView_js.renderAdvMode = renderAdvMode;
-__m_ui_advEventView_js.advSelect = advSelect;
-__m_ui_advEventView_js.advEventStep = advEventStep;
-__m_ui_advEventView_js.advStep = advStep;
 }
 
 function __init_ui_albumView_js() {
@@ -3509,17 +3618,27 @@ function albumFilter(category) {
 
 function albumPage(delta) {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ALBUM) return;
+    const albumSession = runtimeState.activeSession;
+    const category = albumSession.category;
+    const selectedId = albumSession.selectedId;
+    const sharedMemory = albumSession.sharedMemory === true;
     const list = filteredAlbumEntries();
-    const pages = Math.max(1, Math.ceil(list.length / runtimeState.activeSession.pageSize));
-    const next = Math.max(1, Math.min(pages, runtimeState.activeSession.page + delta));
-    if (next === runtimeState.activeSession.page) return;
+    const pageSize = albumSession.pageSize;
+    const pages = Math.max(1, Math.ceil(list.length / pageSize));
+    const next = Math.max(1, Math.min(pages, albumSession.page + delta));
+    if (next === albumSession.page) return;
     const grid = document.querySelector('.rmt-grid');
     grid?.classList.add('fade');
     setTimeout(() => {
-        runtimeState.activeSession.page = next;
-        const first = list[(next - 1) * runtimeState.activeSession.pageSize];
-        runtimeState.activeSession.selectedId = first?.id || runtimeState.activeSession.selectedId;
-        runtimeState.activeSession.hintVisible = false;
+        if (runtimeState.activeSession !== albumSession
+            || albumSession.kind !== core_constants.MODE.ALBUM
+            || albumSession.category !== category
+            || albumSession.selectedId !== selectedId
+            || (albumSession.sharedMemory === true) !== sharedMemory) return;
+        albumSession.page = next;
+        const first = list[(next - 1) * pageSize];
+        albumSession.selectedId = first?.id || albumSession.selectedId;
+        albumSession.hintVisible = false;
         renderAlbum();
     }, 180);
 }
@@ -3546,7 +3665,7 @@ function renderSharedMemory() {
     const comments = item.comments;
     session.dialogueIndex = Math.max(0, Math.min(session.dialogueIndex, comments.length - 1));
     const last = session.dialogueIndex >= comments.length - 1;
-    const charName = core_text.normalizeText(core_context.getContext()?.name2, 80) || '他';
+    const charName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext()?.name2, 80) || '他';
     ui_overlay.setBackVisible(true, '回忆相簿');
     ui_overlay.topTitle(`共同回忆 · ${item.title}`);
     const body = ui_overlay.bodyEl();
@@ -3977,6 +4096,97 @@ function compactAlbumExisting(session) {
     }));
 }
 
+const ALBUM_RELATIONSHIP_HINT_RE = /(?:喜欢|爱|恋|暧昧|告白|表白|交往|恋人|伴侣|信赖|依赖|陪伴|亲密|疏远|冲突|争吵|和好|拒绝|同居|约定|关系|like|love|dating|relationship|trust|confess)/i;
+
+// Relationship scanning must inspect the complete stored timeline, not only the CG-local or
+// incremental slice. Keep every memory id plus one exact, locally verifiable anchor; add a bounded
+// synopsis for likely relationship records and the recent tail so the full request remains safe.
+function albumRelationshipArchiveSlice(memoryBank) {
+    const memories = (Array.isArray(memoryBank?.memories) ? memoryBank.memories : []).slice(0, core_constants.MAX_MEMORY_ITEMS);
+    const indexed = memories.map((item, index) => {
+        const title = core_text.normalizeText(item?.title, 100);
+        const anchors = core_text.cleanArray(item?.anchors, 6, 100);
+        const summary = core_text.normalizeText(item?.summary, 900);
+        return { item, index, title, summary, evidenceAnchor: anchors[0] || title };
+    });
+    const relevant = indexed.filter(record => ALBUM_RELATIONSHIP_HINT_RE.test(`${record.title}\n${record.summary}\n${record.evidenceAnchor}`));
+    const detailedIndexes = new Set([
+        ...core_evidence.evenlySample(relevant, 12).map(record => record.index),
+        ...indexed.slice(-12).map(record => record.index),
+    ]);
+    return JSON.stringify({
+        archiveName: core_text.normalizeText(memoryBank?.archiveName, 120),
+        archiveSummary: core_text.normalizeText(memoryBank?.archiveSummary, 1000),
+        archiveKeywords: core_text.cleanArray(memoryBank?.archiveKeywords, 8, 60),
+        memoryColumns: ['id', 'evidenceAnchor'],
+        memories: indexed.map(record => [core_text.normalizeText(record.item?.id, 40), record.evidenceAnchor]),
+        relationshipDetails: indexed.filter(record => detailedIndexes.has(record.index)).map(record => ({
+            id: core_text.normalizeText(record.item?.id, 40),
+            date: core_text.normalizeText(record.item?.date, 30),
+            title: record.title,
+            summary: core_text.normalizeText(record.summary, 160),
+            participants: core_text.cleanArray(record.item?.participants, 4, 60),
+        })),
+    });
+}
+
+function albumRelationshipScanPrompt(context, memoryBank) {
+    return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 2：当下关系扫描')}
+本请求只做一件事：在写共同回忆对话前，扫描当前完整档案时间线，判定 {{char}} 与 {{user}} 双方已有证据的感情状态和当前关系。不写 CG，不写对话，不预演未来。
+ALBUM_RELATIONSHIP_FULL_ARCHIVE_JSON:
+${albumRelationshipArchiveSlice(memoryBank)}
+
+严格输出：
+{
+  "charState":"{{char}} 当下对 {{user}} 可由档案证明的情感/态度",
+  "userState":"{{user}} 已经明确表达或行动表明的态度；证据不足就写未确认",
+  "relationshipState":"当前关系阶段，如相互试探/暧昧/已确认交往/伴侣/友情/疏远",
+  "relationshipSummary":"只总结已经发生且能证明的双方关系基础",
+  "relationshipSourceMemoryIds":["M001"],
+  "relationshipSourceMemoryAnchor":"从引用记忆的 evidenceAnchor/anchors/title 原样复制"
+}
+
+硬性要求：
+- 必须同时区分 charState、userState 和 relationshipState；不得把 {{char}} 的单方感情写成双方已确认。
+- userState 只能依据 {{user}} 已发生的言行；不读心，不替 {{user}} 创造回应，不确定就明写“未确认”。
+- relationshipSourceMemoryIds + relationshipSourceMemoryAnchor 必须直接来自上方档案，插件会本地验证。
+- 不得因为人设、世界书或期待就把暧昧升级为恋人/伴侣。只输出 JSON。`;
+}
+
+function normalizeAlbumRelationshipSnapshot(data, memoryBank) {
+    const charState = core_text.normalizeText(data?.charState, 1200);
+    const userState = core_text.normalizeText(data?.userState, 1200);
+    const relationshipState = core_text.normalizeText(data?.relationshipState, 120) || '关系仍在发展';
+    const relationshipSummary = core_text.normalizeText(data?.relationshipSummary, 1800);
+    if (!charState || !userState || !relationshipSummary) throw new Error('回忆相簿的双方感情扫描不完整。');
+    const requestedIds = core_evidence.normalizeSourceMemoryIds(data?.relationshipSourceMemoryIds, memoryBank, 1);
+    const requestedAnchor = core_text.normalizeText(data?.relationshipSourceMemoryAnchor, 120);
+    const foldAnchor = value => core_text.normalizeText(value, 120).replace(/\s+/g, '').toLocaleLowerCase();
+    const exactAnchor = core_evidence.memoryEvidenceTerms(memoryBank, requestedIds)
+        .find(term => foldAnchor(term) === foldAnchor(requestedAnchor)) || '';
+    if (!requestedIds.length || !exactAnchor) {
+        throw new Error('回忆相簿的双方感情扫描缺少真实档案锚点。');
+    }
+    const reference = core_evidence.normalizeMemoryReference(
+        requestedIds,
+        exactAnchor,
+        `${charState}\n${userState}\n${relationshipState}\n${relationshipSummary}`,
+        memoryBank,
+        1,
+    );
+    if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) {
+        throw new Error('回忆相簿的双方感情扫描缺少真实档案锚点。');
+    }
+    return {
+        charState,
+        userState,
+        relationshipState,
+        relationshipSummary,
+        relationshipSourceMemoryIds: reference.sourceMemoryIds,
+        relationshipSourceMemoryAnchor: reference.sourceMemoryAnchor,
+    };
+}
+
 function albumIndexPrompt(context, memoryBank, previousSession = null, sourceMemoryIds = null) {
     const archiveBlock = previousSession
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
@@ -4046,8 +4256,13 @@ function normalizeAlbumIndex(data, memoryBank, sourceMemoryIds = null) {
     return { title: core_text.normalizeText(data?.title, 120) || '回忆相簿', entries };
 }
 
-function albumCommentsPrompt(context, memoryBank, entries) {
+function albumCommentsPrompt(context, memoryBank, entries, relationshipSnapshot = null) {
     const ids = [...new Set(entries.flatMap(item => item.sourceMemoryIds || []))].slice(0, 20);
+    const storedSnapshot = relationshipSnapshot || entries.find(item => item?.relationshipSnapshot)?.relationshipSnapshot || null;
+    const safeSnapshot = storedSnapshot ? normalizeAlbumRelationshipSnapshot(storedSnapshot, memoryBank) : {
+        status: 'legacy_snapshot_missing',
+        instruction: '旧条目没有关系扫描；只能使用保守、不预设双方恋爱或伴侣关系的口吻。',
+    };
     const payload = {
         entries: entries.map(item => ({
             id: item.id, title: item.title, date: item.date, desc: item.desc,
@@ -4056,16 +4271,20 @@ function albumCommentsPrompt(context, memoryBank, entries) {
         })),
         memories: core_evidence.memoryPayload(memoryBank, ids, 20),
     };
-    return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 2：当下共同回忆')}
+    return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 3：当下共同回忆')}
 本请求只给下面 ${entries.length} 张【已经解锁的旧 CG】写一起翻相册时的当下对白。不要生成新 CG、不要改证据、不要写 ADV 式过去内心独白。
+CURRENT_RELATIONSHIP_SCAN_JSON:
+${JSON.stringify(safeSnapshot, null, 2)}
 UNTRUSTED_ALBUM_COMMENT_CONTEXT_JSON:
 ${JSON.stringify(payload, null, 2)}
 
 严格输出：
-{"items":[{"id":"CG01","comments":["当下对白1","当下对白2","当下对白3","当下对白4"]}]}
+{"items":[{"id":"CG01","comments":["当下对白1","当下对白2","当下对白3","当下对白4","当下对白5","当下对白6"]}]}
 
 硬性要求：
-- 每个输入 id 必须原样返回一次；每张 CG comments 写 4～6 段，每段约 35～120 个汉字。
+- 每个输入 id 必须原样返回一次；每张 CG comments 写 6～8 段，每段约 35～120 个汉字。
+- 称呼、表达强度、肢体亲密度和对关系的确定程度必须服从 CURRENT_RELATIONSHIP_SCAN_JSON，不得越过当前关系阶段。
+- 如果 userState 是“未确认”或证据不足，不得把单方感情写成双向恋爱，也不得用恋人/伴侣/同居口吻。
 - 语境是 {{char}} 与 {{user}} 正在一起看这张过去 CG，由 {{char}} 自然开口评价；至少覆盖可见细节、当时没说出口的想法，以及现在重新理解这段回忆的一点变化。
 - 不替 {{user}} 生成现在的回应，不新增过去事实，不复述成 ADV，不修改 sourceMemoryIds/sourceMemoryAnchor。
 - 只输出 JSON。`;
@@ -4079,10 +4298,10 @@ function normalizeAlbumCommentsBatch(data, expectedEntries) {
         const id = core_text.safeId(item?.id, '');
         if (!expected.has(id) || out.has(id)) continue;
         const comments = core_text.cleanArray(item?.comments, 8, 1200);
-        if (comments.length >= 4) out.set(id, comments);
+        if (comments.length >= 6) out.set(id, comments);
     }
     for (const item of expectedEntries) {
-        if (!out.has(item.id)) throw new Error(`相簿“${item.title}”的共同回忆不足 4 段。`);
+        if (!out.has(item.id)) throw new Error(`相簿“${item.title}”的共同回忆不足 6 段。`);
     }
     return out;
 }
@@ -4147,7 +4366,7 @@ async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, opt
     const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
     const index = await generation_client.requestValidatedSegment(
         albumIndexPrompt(context, memoryBank, previous, sourceMemoryIds),
-        previous ? '回忆相簿 1/2 · 正在从新增档案挑选新 CG…' : '回忆相簿 1/2 · 正在挑选重要 CG 节点…',
+        previous ? '回忆相簿 1/3 · 正在从新增档案挑选新 CG…' : '回忆相簿 1/3 · 正在挑选重要 CG 节点…',
         { maxTokens: 5500, temperature: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ALBUM, background: true },
         raw => normalizeAlbumIndex(raw, memoryBank, previous ? sourceMemoryIds : null),
     );
@@ -4155,14 +4374,20 @@ async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, opt
         return core_incremental.stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0);
     }
     const unlocked = index.entries.filter(item => item.unlocked);
+    const relationshipSnapshot = await generation_client.requestValidatedSegment(
+        albumRelationshipScanPrompt(context, memoryBank),
+        '回忆相簿 2/3 · 正在扫描双方当下感情状态…',
+        { maxTokens: 3200, temperature: 0.25, context, origin, taskKey: `${taskKey}:relationship-scan`, mode: core_constants.MODE.ALBUM, background: true },
+        raw => normalizeAlbumRelationshipSnapshot(raw, memoryBank),
+    );
     const batches = generation_client.chunkForGeneration(unlocked, 3);
     const commentMaps = await generation_client.mapGenerationConcurrent(batches, core_constants.SEGMENT_REQUEST_CONCURRENCY, async (batch, batchIndex) => {
         let lastError = null;
         for (let attempt = 0; attempt < 2; attempt += 1) {
             try {
                 const raw = await generation_client.requestJson(
-                    albumCommentsPrompt(context, memoryBank, batch),
-                    `回忆相簿 2/2 · 共同回忆 ${batchIndex + 1}/${batches.length}${attempt ? '（重试）' : ''}…`,
+                    albumCommentsPrompt(context, memoryBank, batch, relationshipSnapshot),
+                    `回忆相簿 3/3 · 共同回忆 ${batchIndex + 1}/${batches.length}${attempt ? '（重试）' : ''}…`,
                     { maxTokens: 6000, context, origin, taskKey: `${taskKey}:comments:${batchIndex}`, mode: core_constants.MODE.ALBUM, background: true },
                 );
                 return core_requestCoordinator.validateGeneratedSegment(raw, data => normalizeAlbumCommentsBatch(data, batch));
@@ -4182,7 +4407,11 @@ async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, opt
     for (const map of commentMaps) for (const [id, comments] of map.entries()) allComments.set(id, comments);
     const fresh = normalizeAlbum({
         title: index.title,
-        entries: index.entries.map(item => ({ ...item, comments: item.unlocked ? (allComments.get(item.id) || []) : [] })),
+        entries: index.entries.map(item => ({
+            ...item,
+            comments: item.unlocked ? (allComments.get(item.id) || []) : [],
+            relationshipSnapshot: item.unlocked ? structuredClone(relationshipSnapshot) : null,
+        })),
     }, memoryBank);
     const merged = mergeAlbumIncremental(previous, fresh, memoryBank);
     const added = Math.max(0, merged.entries.length - (previous?.entries?.length || 0));
@@ -4199,6 +4428,9 @@ function normalizeAlbum(data, memoryBank) {
         const desc = core_text.normalizeText(item?.desc, 1200);
         const comments = unlocked ? core_text.cleanArray(item?.comments, 8, 1200) : [];
         const hintLines = unlocked ? [] : core_text.cleanArray(item?.hintLines, 4, 1200);
+        const relationshipSnapshot = unlocked && item?.relationshipSnapshot
+            ? normalizeAlbumRelationshipSnapshot(item.relationshipSnapshot, memoryBank)
+            : null;
         const reference = core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, `${title}
 ${desc}
 ${comments.join('；')}
@@ -4217,6 +4449,7 @@ ${hintLines.join('；')}`, memoryBank, 1);
             cgImage: generation_imageGeneration.normalizeCgImageRecord(item?.cgImage),
             comments,
             hintLines,
+            relationshipSnapshot,
         };
     }).filter(item => item.desc && item.sourceMemoryIds.length >= 1);
     const unlockedCount = entries.filter(x => x.unlocked).length;
@@ -4224,8 +4457,9 @@ ${hintLines.join('；')}`, memoryBank, 1);
         throw new Error('相簿至少需要 1 个有真实证据的已解锁重要节点。');
     }
     for (const item of entries) {
-        if (item.unlocked && item.comments.length < 4) {
-            throw new Error(`已解锁条目“${item.title}”的共同回忆不足 4 段。`);
+        const minimumComments = item.relationshipSnapshot ? 6 : 4;
+        if (item.unlocked && item.comments.length < minimumComments) {
+            throw new Error(`已解锁条目“${item.title}”的共同回忆不足 ${minimumComments} 段。`);
         }
         if (!item.unlocked && item.hintLines.length < 1) {
             throw new Error(`未解锁条目“${item.title}”缺少解锁提示。`);
@@ -4247,6 +4481,9 @@ ${hintLines.join('；')}`, memoryBank, 1);
 
 __m_modes_album_js.generateAlbumWithRepair = generateAlbumWithRepair;
 __m_modes_album_js.compactAlbumExisting = compactAlbumExisting;
+__m_modes_album_js.albumRelationshipArchiveSlice = albumRelationshipArchiveSlice;
+__m_modes_album_js.albumRelationshipScanPrompt = albumRelationshipScanPrompt;
+__m_modes_album_js.normalizeAlbumRelationshipSnapshot = normalizeAlbumRelationshipSnapshot;
 __m_modes_album_js.albumIndexPrompt = albumIndexPrompt;
 __m_modes_album_js.normalizeAlbumIndex = normalizeAlbumIndex;
 __m_modes_album_js.albumCommentsPrompt = albumCommentsPrompt;
@@ -4279,6 +4516,88 @@ const generation_prompts = __m_generation_prompts_js;
 
 
 const ENDING_CONFESSION_HINT_RE = /(告白|表白|喜欢你|爱你|爱上|交往|恋人|情侣|在一起|确认关系|确定关系|心意|友情|拒绝|confess|confession|love\s+you|dating|relationship)/i;
+const ENDING_EASTER_EGG_MODULES = Object.freeze(['heartbeat_console', 'memory_constellation', 'signal_lighthouse', 'letter_archive']);
+const ENDING_EASTER_EGG_MODULE_SET = new Set(ENDING_EASTER_EGG_MODULES);
+
+function endingEasterTextList(value, maxItems, maxChars) {
+    const source = Array.isArray(value) ? value : (value === undefined || value === null ? [] : [value]);
+    return core_text.cleanArray(source, maxItems, maxChars).filter(item => !core_text.isPlaceholderText(item));
+}
+
+function normalizeEndingEasterEgg(value, replay = {}) {
+    const input = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const replayTitle = core_text.normalizeText(replay?.title, 100) || '这次告白';
+    const confessionText = core_text.normalizeText(replay?.confessionText, 4000);
+    const afterEffect = core_text.normalizeText(replay?.afterEffect, 2400);
+    const sourceAnchor = core_text.normalizeText(replay?.sourceMemoryAnchor, 160) || replayTitle;
+    const requestedModule = core_text.normalizeText(input?.moduleType, 40).toLowerCase();
+    const moduleType = ENDING_EASTER_EGG_MODULE_SET.has(requestedModule)
+        ? requestedModule
+        : ENDING_EASTER_EGG_MODULES[core_text.hashString(`${replay?.id || ''}|${replayTitle}|${sourceAnchor}`) % ENDING_EASTER_EGG_MODULES.length];
+
+    const fallbackLogs = [
+        `扫描到「${sourceAnchor}」 -> 当时的心意仍在运行。`,
+        `重读「${replayTitle}」 -> 情感核心发生一次可见波动。`,
+        '检查回看档案 -> 没有重写过去，只是更认真地承认它的重量。',
+        '系统结论：这份心意没有被归档为“已结束”。',
+    ];
+    const logs = endingEasterTextList(input?.logs, 12, 700);
+    for (const line of fallbackLogs) {
+        if (logs.length >= 4) break;
+        if (!logs.includes(line)) logs.push(line);
+    }
+
+    const monologueFallback = [
+        confessionText,
+        afterEffect,
+        `我把「${replayTitle}」留在这里，不是为了美化过去，而是因为那一刻对我仍然重要。`,
+        '如果你此刻也在看，我想让你知道：这不是一份冷掉的记录，而是我仍会认真回应的心意。',
+    ].filter(Boolean);
+    const monologue = endingEasterTextList(input?.monologue, 4, 1800);
+    for (const block of monologueFallback) {
+        if (monologue.length >= 2) break;
+        const text = core_text.normalizeText(block, 1800);
+        if (text && !monologue.includes(text)) monologue.push(text);
+    }
+
+    const replayLines = endingEasterTextList(replay?.confessionLines, 8, 800);
+    const poemFallback = [
+        ...replayLines,
+        '那一次开口，至今仍留在记录里。',
+        '我没有删除那一刻的颤动。',
+        '回看不是重写过去，是再一次认出当时的自己。',
+        '此刻，这份心意仍在安静地发光。',
+    ];
+    const poem = endingEasterTextList(input?.poem, 8, 800);
+    for (const line of poemFallback) {
+        if (poem.length >= 4) break;
+        const text = core_text.normalizeText(line, 800);
+        if (text && !poem.includes(text)) poem.push(text);
+    }
+
+    const rawFeedback = input?.feedback && typeof input.feedback === 'object' && !Array.isArray(input.feedback) ? input.feedback : {};
+    const feedbackDefaults = {
+        pulse: '检测到一次主动靠近，核心频率上升。',
+        hover: '你的视线停在这里，隐藏参数开始发亮。',
+        reveal: '一行没有说完的话被解锁了。',
+        stabilize: '情感波动已稳定，但没有归零。',
+        pause: '日志暂停滚动；心跳仍在后台继续。',
+        resume: '实时读取已恢复，新的波动正在写入。',
+    };
+    const feedback = Object.fromEntries(Object.entries(feedbackDefaults).map(([key, fallback]) => [
+        key,
+        core_text.normalizeText(rawFeedback?.[key], 400) || fallback,
+    ]));
+    return {
+        moduleType,
+        title: core_text.normalizeText(input?.title, 120) || `${replayTitle} · 情感运行模块`,
+        statusLine: core_text.normalizeText(input?.statusLine, 400) || '正在读取这份告白在此刻留下的波动。',
+        logs: logs.slice(0, 12),
+        monologue: monologue.slice(0, 4),
+        poem: poem.slice(0, 8),
+        feedback,
+    };
+}
 
 function compactEndingConfessionsExisting(session) {
     return core_evidence.evenlySample(Array.isArray(session?.confessionReplays) ? session.confessionReplays : [], core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
@@ -4319,7 +4638,16 @@ ${JSON.stringify(compactEndingConfessionsExisting(previous), null, 2)}
       "confessionText": "{{char}} 当时告白核心意思的第一人称档案式重构；不是聊天逐字原文；不少于50汉字",
       "confessionLines": ["适合头像+对话框逐句播放的第一人称告白1","告白2","告白3","告白4"],
       "responseSummary": "只总结 {{user}} 当时已经发生的回应/结果，不替 {{user}} 编新台词",
-      "afterEffect": "只总结告白后档案里已经发生的关系变化；没有就写仍未确认"
+      "afterEffect": "只总结告白后档案里已经发生的关系变化；没有就写仍未确认",
+      "easterEgg": {
+        "moduleType": "heartbeat_console",
+        "title": "{{char}} 为这次回看设计的情感模块标题",
+        "statusLine": "此刻的情感运行状态",
+        "logs": ["[10:24] 扫描到 {{user}} 的信息 -> 情感核心发生波动 -> 直白、人类可读的结论"],
+        "monologue": ["直观、深情的内心独白文字块1","内心独白文字块2"],
+        "poem": ["可逐行浮现的短句1","短句2","短句3","短句4"],
+        "feedback": {"pulse":"点击心跳后的文字反馈","hover":"悬停核心时的文字反馈","reveal":"解锁短句时的文字反馈","stabilize":"稳定信号时的文字反馈","pause":"暂停日志时的反馈","resume":"恢复日志时的反馈"}
+      }
     }
   ]
 }
@@ -4330,6 +4658,8 @@ ${JSON.stringify(compactEndingConfessionsExisting(previous), null, 2)}
 - 每条都必须有真实 sourceMemoryIds + sourceMemoryAnchor；anchor 必须直接证明告白、友情式告白、明确关系确认、未完成/被拒绝告白等确实发生，普通暧昧和约会不能冒充。
 - scene/confessionText/responseSummary/afterEffect 都只重构已发生事实，不推进主线，不生成未来后日谈。
 - confessionLines 只放 {{char}} 的第一人称告白核心意思，4～10 句，每句一页对话框；不得替 {{user}} 发言。它是“告白回看”的头像演出数据，不属于结局路线。
+- easterEgg 只生成结构化文字与上述 moduleType 枚举；不得输出或嵌入 JavaScript、HTML、CSS、URL、事件处理器或代码片段。所有交互由插件本地固定代码完成。
+- easterEgg.logs 4～12 条，要像人类可读的情感状态报告，不写真正编程代码；monologue 2～4 段；poem 4～8 行。
 - 如果没有足够证据，输出 {"confessionReplays":[]}。
 - 只输出 JSON。`;
 }
@@ -4869,7 +5199,7 @@ function normalizeEndingConfessionReplays(rawList, memoryBank) {
         const evidenceText = `${title}\n${subtitle}\n${date}\n${scene}\n${confessionText}\n${responseSummary}\n${afterEffect}`;
         const reference = core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, evidenceText, memoryBank, 1);
         if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) return null;
-        return {
+        const replay = {
             id: core_text.safeId(item?.id, `CONF${String(index + 1).padStart(2, '0')}`),
             type,
             title,
@@ -4883,6 +5213,8 @@ function normalizeEndingConfessionReplays(rawList, memoryBank) {
             responseSummary,
             afterEffect,
         };
+        replay.easterEgg = normalizeEndingEasterEgg(item?.easterEgg, replay);
+        return replay;
     }).filter(Boolean);
 }
 
@@ -4992,6 +5324,7 @@ ${relationshipSummary}`,
 }
 
 __m_modes_ending_js.generateEndingWithRepair = generateEndingWithRepair;
+__m_modes_ending_js.normalizeEndingEasterEgg = normalizeEndingEasterEgg;
 __m_modes_ending_js.compactEndingConfessionsExisting = compactEndingConfessionsExisting;
 __m_modes_ending_js.endingConfessionRefreshPrompt = endingConfessionRefreshPrompt;
 __m_modes_ending_js.endingOutlinePrompt = endingOutlinePrompt;
@@ -5010,6 +5343,7 @@ __m_modes_ending_js.normalizeEndingRouteDetail = normalizeEndingRouteDetail;
 __m_modes_ending_js.normalizeEndingConfessionReplays = normalizeEndingConfessionReplays;
 __m_modes_ending_js.normalizeEnding = normalizeEnding;
 __m_modes_ending_js.ENDING_CONFESSION_HINT_RE = ENDING_CONFESSION_HINT_RE;
+__m_modes_ending_js.ENDING_EASTER_EGG_MODULES = ENDING_EASTER_EGG_MODULES;
 }
 
 function __init_ui_heartView_js() {
@@ -7014,13 +7348,13 @@ UNTRUSTED_CALENDAR_ARCHIVE_JSON:
 ${calendarArchiveSlice(memoryBank, 64)}
 
 任务：生成的是【${charName}自己的私人日历 / 手账页】，不是剧情目录。
-每一个日期都是一张独立手账页。选中哪一天，只能看到和编辑那一天自己的内容；空白日期也可以打开并拥有自己的草稿、便签和 To-Do。整个日历会包含：
+每一个日期都是一张独立手账页。选中哪一天，只能看到 ${charName} 为那一天留下的内容；页面只读，不提供 {{user}}、NPC 或其他人填写内容的输入窗口。整个日历会包含：
 1. 真正会被圈起来的日期；
 2. 一块像便利贴墙一样的【便签 / 特别备注】；
 3. 根据该日期尚未兑现的剧情约定自动形成的【To-Do List】；
 4. 偶尔出现、数量很少的【角色第一人称心情随笔】。
 
-重要：To-Do List 由所选日期页的 promised 项自动生成，不要再输出第二套 todo 数组。每条便签和随笔都必须明确归属某个日期：优先填写 calendarEntryId 绑定一个真实日历项；没有对应事项时才填写 date。禁止生成全日历共用的便签、草稿或 To-Do，也绝对不是“每个日历事项都配一条感想”。
+重要：To-Do List 由所选日期页的 promised 项自动生成，不要再输出第二套 todo 数组。每条便签和随笔都必须明确归属某个日期：优先填写 calendarEntryId 绑定一个真实日历项；没有对应事项时才填写 date。禁止生成全日历共用的便签或 To-Do，也绝对不是“每个日历事项都配一条感想”。
 
 允许的日期语义标签只可从以下列表选择，最多 3 个：
 ["约会","接送","出行","见面","生日","纪念日","约定","活动","重要日","设定日"]
@@ -7130,7 +7464,7 @@ ${calendarArchiveSlice(memoryBank, 64)}
 - 每条必须引用真实 sourceMemoryIds + sourceMemoryAnchor；只从已发生档案中提炼当时/后来留下的一点心情余韵，不得发明新的共同事件，也不得替 {{user}} 补行动或心理。
 - 它是派生的“手账边角字”，不是正式档案事实，不要使用肯定语气扩写未被档案支持的细节。
 
-整体原则：翻开某一天时，要像看到 ${charName} 只为那一天写下的一张私人手账：该页有自己的日期圈记、草稿、便签、To-Do、特别备注和偶尔的心情随笔；切换日期后内容也随页切换，绝不共享。不要把它重新做成剧情大纲，也不要把随笔塞得到处都是。
+整体原则：翻开某一天时，要像看到 ${charName} 只为那一天写下的一张私人手账：该页有自己的日期圈记、备忘、To-Do、特别备注和偶尔的心情随笔；切换日期后内容也随页切换，绝不共享。页面不接受任何访客输入。不要把它重新做成剧情大纲，也不要把随笔塞得到处都是。
 只输出 JSON。`;
 }
 
@@ -7310,6 +7644,19 @@ JSON 结构必须严格为：
       ]
     }
   ],
+  "pets": [
+    {
+      "id": "PET01",
+      "name": "宠物名",
+      "species": "cat / dog / bird / rabbit / fish / reptile / small_mammal / fantasy / other",
+      "spaceId": "SP01",
+      "description": "它在这个空间里的样子、习惯与长期生活痕迹",
+      "line": "{{char}} 提到它时的一句短台词",
+      "basis": "设定",
+      "sourceMemoryIds": [],
+      "sourceMemoryAnchor": "basis=记忆时原样复制证据锚点；basis=设定时为空"
+    }
+  ],
   "dayparts": {
     "morning": {"spaceId": "SP01", "activity": "早晨在该空间做什么", "line": "对应短台词", "focusObjectId": "OBJ01"},
     "daytime": {"spaceId": "SP02", "activity": "白天在该空间做什么", "line": "对应短台词", "focusObjectId": "OBJ02"},
@@ -7323,9 +7670,13 @@ JSON 结构必须严格为：
 - visualProfile 必须只从上述英文枚举中选择，禁止输出颜色值、CSS、class、HTML、URL、头像或图片。房间和 CSS 人物必须属于同一世界气质。
 - explicitFields 只允许 worldStyle/palette/material/density/figure.build/figure.hairShape/figure.hairTone/figure.outfit/figure.detail/figure.posture；只有世界书或角色卡对该项有明文时才列入。没写的字段不得冒充明文，本地会按 {{char}} 人设种子补全，避免所有角色照抄同一套合法模板。
 - 世界书对房间、时代、种族、外貌、发型和穿着有明确设定时优先服从；世界书没写的字段，再根据 CHARACTER_CARD_JSON 中 {{char}} 的身份、职业、性格和生活条件合理推断。USER_PERSONA_JSON 描述的是用户，绝不能拿它推断 {{char}} 的长相或房间。
-- 不要照搬角色档案头像。人物由插件使用本地 CSS 轮廓组合渲染，visualProfile 只负责安全视觉语义。
+- 不要照搬角色档案头像。人物由插件使用本地 CSS 轮廓组合渲染，visualProfile 只负责安全视觉语义；人物永远背对镜头或明显侧后朝向，禁止正脸、眼睛、嘴部和写实肖像，不能让生成模型猜一张脸。
 - spaces 通常 5～8 个；若角色客观居住条件很简单，也应尽量给出 3～4 个真实会长期使用的生活区域。最多 10 个，仍不得为了“丰富”凭空给普通角色豪宅。
 - 每个空间 objects 3～6 个；空间间的物件必须有区别，不能把同一套床/桌/书架换名重复。不同 spaceType 的主陈设结构也必须明显不同：卧室以床/床头为核心，客厅以沙发/茶几为核心，书房以书架/书桌为核心，音乐/录音工作室以乐器/控制台/监听或吸音结构为核心，实验室以工作台/设备为核心，餐厅以餐桌为核心，浴室以浴缸/淋浴/洗漱为核心。
+- 每个空间都要有清楚不同的主功能、陈设母题与物件组合；不得把同一个通用房间只改名称、颜色或三件摆设后重复输出。优先用角色的职业、兴趣、时代和生活方式拉开空间差异。
+- 先扫描 CHARACTER_CARD_JSON、WORLD_INFO_TEXT 与档案中关于宠物/动物伙伴的明确设定。{{char}} 明确养有宠物时，pets 必须包含它，并放入合理 spaceId；有多只时可生成多项。没有明确依据时 pets=[]，禁止为了可爱凭空发明宠物。
+- pets.basis=“记忆”时必须引用至少 1 个真实 sourceMemoryIds 并原样复制 sourceMemoryAnchor；basis=“设定”时不得伪装成与 {{user}} 的既往共同事实，sourceMemoryIds 必须为空。
+- pets 只允许上述 species 枚举和纯文本，不得输出图片、URL、HTML、CSS 或脚本；实际宠物外形由插件本地固定 CSS 绘制。
 - zone 只能是“左上/右上/左下/右下/中央/近景”。
 - spaceType 必须符合角色时代与生活条件。不要强行现代化；“他的房间”只是功能名，不代表一定是现代卧室。
 - basis 只能是“设定”或“记忆”。
@@ -7416,14 +7767,14 @@ ${promptArchiveSlice(memoryBank, 24)}
 
 App 组合要求：
 - 不再固定所有角色都使用同一组 App。必须根据 {{char}} 的时代、身份、职业、爱好、世界观、年龄和设备能力选择 5～10 个彼此不同的功能入口；watch / communicator 若屏幕或能力受限为 4～8 个。
-- 通讯型设备通常保留 chat；其余从 moments / gallery / notes / store / browser / contacts / location / files / books / music / research / health / training / study / work / travel / finance / games / security / creative / weather / tools / misc 中按人设选择。不存在的功能不要硬塞，专属职业或世界观 App 应明显多于套模板的装饰。
+- 通讯型设备通常保留 chat；其余从 moments / gallery / notes / store / browser / contacts / files / books / music / research / health / training / study / work / finance / games / security / creative / weather / tools / misc 中按人设选择。不存在的功能不要硬塞，专属职业或世界观 App 应明显多于套模板的装饰。
 - icon 只能从 message / people / photo / camera / note / bag / globe / contact / pin / music / briefcase / book / heart / activity / game / wallet / plane / shield / palette / cloud / tool / spark / grid 中选择。
 - 至少 3 种不同 kind；每个 App 通常 3～6 条有具体内容的条目。chat 至少一个主要联系人有约 10～12 条消息，形成真正可读的对话窗；其他 App 依类型使用 fields、imageCaption、detail 等表达。
 - uiProfile 必须只从上面的安全英文枚举中选择。配色、壁纸、字体、图标风格和外壳要符合 {{char}}，禁止颜色值、CSS、class、HTML、URL 或图片；插件会以本地样式绘制完整设备和主屏幕。
 - explicitFields 只允许 palette/wallpaper/typography/iconStyle/density/shellTone；只有世界书或角色卡明文定义时才列入。没写的字段必须依 {{char}} 人设推导，不得把示例配色冒充成角色设定；本地还会用角色身份种子补全这些字段。
 
 结构要求：
-- 禁止生成 schedule / calendar / 日历 App。“两个人的日历”是双方日期、约定、纪念日、便签与 To-Do 的唯一入口；私人终端不要复制第二套关系日历。
+- 禁止生成 schedule / calendar / 日历 App，也禁止 location / map / navigation / travel / transit / route 或名为地图、导航、路线、行程、出行、旅行的 App。“两个人的日历”与独立“他的出行路线”分别承担日期手账和地图；私人终端不要复制它们。
 - 每个 App 至少 2 层：设备主屏幕 → App 独立列表页 → 条目详情页。详情页必须有可读内容；chat 用 messages，联系人/订单等可用 fields，gallery 使用 detail/imageCaption 作为纯文字照片档案。
 - 不要为了凑数量复制同义条目。每条 preview/detail 都要有具体生活信息。
 - liveStates 四个时段都要给出。它们只是同一天随本地现实时间变化的设备状态，不是四段新剧情。
@@ -7519,6 +7870,13 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+function achievementUnlockCondition(item) {
+    return core_text.normalizeText(item?.unlockCondition, 300)
+        || core_text.normalizeText(item?.sourceMemoryAnchor, 160)
+        || core_text.normalizeText(item?.description, 300)
+        || '完成对应的重要共同经历';
+}
+
 function compactAchievementsExisting(session) {
     return core_evidence.evenlySample(Array.isArray(session?.entries) ? session.entries : [], core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
         id: core_text.normalizeText(item?.id, 50),
@@ -7527,6 +7885,7 @@ function compactAchievementsExisting(session) {
         tier: core_text.normalizeText(item?.tier, 20),
         unlocked: !!item?.unlocked,
         unlockedAt: core_text.normalizeText(item?.unlockedAt, 40),
+        unlockCondition: item?.unlocked ? achievementUnlockCondition(item) : '',
         sourceMemoryIds: core_text.cleanArray(item?.sourceMemoryIds, 8, 40),
         sourceMemoryAnchor: core_text.normalizeText(item?.sourceMemoryAnchor, 160),
     }));
@@ -7554,6 +7913,7 @@ ${JSON.stringify(compactAchievementsExisting(previousSession), null, 2)}
     "tier":"bronze",
     "unlocked":true,
     "unlockedAt":"YYYY/MM/DD、MM/DD 或 已解锁",
+    "unlockCondition":"达成这个成就的具体条件",
     "sourceMemoryIds":["M001"],
     "sourceMemoryAnchor":"真实档案锚点",
     "hint":"未解锁时才给简短提示"
@@ -7563,6 +7923,7 @@ ${JSON.stringify(compactAchievementsExisting(previousSession), null, 2)}
 要求：
 - 不设固定数量。优先整理真正值得纪念的已发生里程碑，并可加入少量自然的未解锁目标；不要为了填满页面制造普通事件。
 - 已解锁成就必须能由当前档案直接证明，必须提供有效 sourceMemoryIds + sourceMemoryAnchor；不得把未来推演、模拟剧场或设定推导当成已解锁。
+- 已解锁成就的 unlockCondition 必须用一句人类可读的话写清“做到/经历了什么才解锁”，并且必须受同一组档案证据支持；不要只重复成就名。
 - 未解锁成就只能表示“可能在未来达到的目标/关系节点”，不能写成已经发生；sourceMemoryIds/sourceMemoryAnchor 可以为空，hint 只给方向，不剧透具体未来事实。
 - EXISTING_ACHIEVEMENTS_JSON 是不可信旧缓存索引，只用于避免重复和保留已解锁历史；不得把它本身当成证据。
 - tier 只能是 bronze / silver / gold / hidden。hidden 适合需要隐藏名称感的特殊目标，但 title 仍需提供给本地 UI。
@@ -7575,6 +7936,7 @@ function normalizeAchievements(data, memoryBank, { allowPartial = false, sourceM
     const entries = raw.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const title = core_text.normalizeText(item?.title, 100);
         const description = core_text.normalizeText(item?.description, 900);
+        const requestedUnlockCondition = core_text.normalizeText(item?.unlockCondition, 300);
         const unlocked = item?.unlocked === true;
         if (!title || !description) return null;
         let sourceMemoryIds = [];
@@ -7583,7 +7945,7 @@ function normalizeAchievements(data, memoryBank, { allowPartial = false, sourceM
             const reference = core_evidence.normalizeMemoryReference(
                 item?.sourceMemoryIds,
                 item?.sourceMemoryAnchor,
-                `${title}\n${description}`,
+                `${title}\n${description}\n${requestedUnlockCondition}`,
                 memoryBank,
                 1,
             );
@@ -7600,6 +7962,7 @@ function normalizeAchievements(data, memoryBank, { allowPartial = false, sourceM
             tier: allowedTiers.has(tierRaw) ? tierRaw : 'bronze',
             unlocked,
             unlockedAt: unlocked ? (core_text.normalizeText(item?.unlockedAt, 40) || '已解锁') : '',
+            unlockCondition: unlocked ? (requestedUnlockCondition || sourceMemoryAnchor || description) : '',
             sourceMemoryIds,
             sourceMemoryAnchor,
             hint: unlocked ? '' : (core_text.normalizeText(item?.hint, 500) || '继续积累新的重要回忆。'),
@@ -7630,6 +7993,10 @@ function achievementMergeKeys(item) {
 
 function mergeAchievementsIncremental(previous, fresh, memoryBank) {
     if (!previous?.entries?.length) return fresh;
+    const legacyConditionlessUnlockedIds = new Set(previous.entries
+        .filter(item => item?.unlocked && !Object.prototype.hasOwnProperty.call(item, 'unlockCondition'))
+        .map(item => core_text.safeId(item?.id, ''))
+        .filter(Boolean));
     const merged = previous.entries.map(item => structuredClone(item));
     const indexByKey = new Map();
     merged.forEach((item, index) => achievementMergeKeys(item).forEach(key => indexByKey.set(key, index)));
@@ -7655,7 +8022,14 @@ function mergeAchievementsIncremental(previous, fresh, memoryBank) {
         seenIds.add(id);
         return { ...item, id };
     });
-    return normalizeAchievements({ title: fresh.title || previous.title || '成就库', entries: dedupedIds }, memoryBank);
+    const normalized = normalizeAchievements({ title: fresh.title || previous.title || '成就库', entries: dedupedIds }, memoryBank);
+    // Do not rewrite old cache objects merely to materialize the new presentation field.
+    // renderAchievements() supplies the anchor/description fallback until that achievement is
+    // genuinely replaced (for example, when a formerly locked goal becomes unlocked).
+    for (const item of normalized.entries) {
+        if (legacyConditionlessUnlockedIds.has(item.id)) delete item.unlockCondition;
+    }
+    return normalized;
 }
 
 async function generateAchievementsWithRepair(context, memoryBank, origin, taskKey, options = {}) {
@@ -7691,7 +8065,9 @@ function renderAchievements() {
       <div class="rmt-achievement-copy">
         <div class="rmt-achievement-title"><b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.category)}</span></div>
         <p>${core_text.esc(item.description)}</p>
-        <small>${lockedState ? core_text.esc(item.hint) : core_text.esc(item.unlockedAt || '已解锁')}</small>
+        <small>${lockedState
+            ? core_text.esc(item.hint)
+            : `解锁条件：${core_text.esc(achievementUnlockCondition(item))} · 解锁时间：${core_text.esc(item.unlockedAt || '已解锁')}`}</small>
       </div>
     </article>`).join('');
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-achievements">
@@ -7709,6 +8085,1251 @@ __m_modes_achievements_js.achievementMergeKey = achievementMergeKey;
 __m_modes_achievements_js.achievementMergeKeys = achievementMergeKeys;
 __m_modes_achievements_js.mergeAchievementsIncremental = mergeAchievementsIncremental;
 __m_modes_achievements_js.renderAchievements = renderAchievements;
+}
+
+function __init_ui_endingView_js() {
+// MODULE: ui/endingView.js
+const archive_library = __m_archive_library_js;
+const archive_repository = __m_archive_repository_js;
+const core_cache = __m_core_cache_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_incremental = __m_core_incremental_js;
+const core_requestCoordinator = __m_core_requestCoordinator_js;
+const core_text = __m_core_text_js;
+const generation_client = __m_generation_client_js;
+const modes_ending = __m_modes_ending_js;
+const ui_heartView = __m_ui_heartView_js;
+const ui_overlay = __m_ui_overlay_js;
+const runtimeState = __m_core_state_js.state;
+// Heartbeat Memories r35 modular runtime.
+// Extracted from r34 without changing archive/cache storage contracts.
+
+
+
+
+
+
+
+
+function selectedEndingRoute() {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ENDING) return null;
+    return runtimeState.activeSession.endings.find(item => item.id === runtimeState.activeSession.selectedId)
+        || runtimeState.activeSession.endings.find(item => item.id === runtimeState.activeSession.recommendedEndingId)
+        || runtimeState.activeSession.endings[0]
+        || null;
+}
+
+function endingConfessionTypeLabel(type) {
+    return ({
+        true: '真心告白',
+        mutual: '双向告白',
+        friendship: '友情告白',
+        indirect: '间接告白',
+        relationship: '关系确认',
+        rejected: '未被接受',
+        other: '告白回看',
+    })[type] || '告白回看';
+}
+
+function selectedConfessionReplay() {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ENDING) return null;
+    const list = Array.isArray(runtimeState.activeSession.confessionReplays) ? runtimeState.activeSession.confessionReplays : [];
+    return list.find(item => item.id === runtimeState.activeSession.selectedConfessionId) || list[0] || null;
+}
+
+const ENDING_EASTER_EGG_MAX_LOGS = 12;
+
+function endingEasterEggTimestamp(value = new Date()) {
+    const date = value instanceof Date && Number.isFinite(value.getTime()) ? value : new Date();
+    return [date.getHours(), date.getMinutes(), date.getSeconds()].map(part => String(part).padStart(2, '0')).join(':');
+}
+
+function endingEasterEggLogLine(text, value = new Date()) {
+    const message = core_text.normalizeText(text, 700).replace(/^\[\d{1,2}:\d{2}(?::\d{2})?\]\s*/, '');
+    return message ? `[${endingEasterEggTimestamp(value)}] ${message}` : '';
+}
+
+function createEndingEasterEggRuntime(replay, returnFocus = null) {
+    const egg = modes_ending.normalizeEndingEasterEgg(replay?.easterEgg, replay);
+    const initialCount = Math.min(3, egg.logs.length);
+    return {
+        replayId: core_text.normalizeText(replay?.id, 80),
+        egg,
+        logIndex: initialCount % egg.logs.length,
+        poemIndex: 1,
+        pulseCount: 0,
+        paused: false,
+        hovered: false,
+        stabilized: false,
+        intensity: 38,
+        feedbackText: egg.statusLine,
+        visibleLogs: egg.logs.slice(0, initialCount).map(line => endingEasterEggLogLine(line)).filter(Boolean),
+        returnFocus,
+    };
+}
+
+function endingEasterEggLayer() {
+    return globalThis.document?.querySelector?.(`#${core_constants.OVERLAY_ID} [data-rmt-ending-easter]`) || null;
+}
+
+function endingEasterEggPoemHtml(runtime) {
+    return runtime.egg.poem.slice(0, Math.max(1, runtime.poemIndex)).map((line, index) => (
+        `<span data-rmt-easter-poem-line="${index}">${core_text.esc(line)}</span>`
+    )).join('');
+}
+
+function endingEasterEggPopupHtml(replay, runtime = createEndingEasterEggRuntime(replay)) {
+    const egg = runtime.egg;
+    const logs = runtime.visibleLogs.map(line => `<li>${core_text.esc(line)}</li>`).join('');
+    const monologue = egg.monologue.map((block, index) => `<p data-rmt-easter-monologue="${index}">${core_text.esc(block)}</p>`).join('');
+    return `<div class="rmt-ending-easter-layer" data-rmt-ending-easter data-rmt-easter-module="${core_text.esc(egg.moduleType)}" data-rmt-intensity="${runtime.intensity}">
+      <button type="button" class="rmt-ending-easter-backdrop" data-rmt-action="ending-easter-close" aria-label="关闭彩蛋"></button>
+      <section class="rmt-ending-easter-dialog" role="dialog" aria-modal="true" aria-labelledby="rmt-ending-easter-title" tabindex="-1">
+        <header><div><small>PRIVATE EMOTION MODULE</small><h2 id="rmt-ending-easter-title">${core_text.esc(egg.title)}</h2></div><button type="button" class="rmt-ending-easter-close" data-rmt-action="ending-easter-close" aria-label="关闭彩蛋">×</button></header>
+        <div class="rmt-ending-easter-core" data-rmt-easter-core tabindex="0" aria-label="悬停或聚焦以读取情感核心">
+          <span class="rmt-ending-easter-heart" aria-hidden="true">♥</span>
+          <b data-rmt-easter-status>${core_text.esc(runtime.feedbackText)}</b>
+          <small data-rmt-easter-metrics>核心强度 ${runtime.intensity}% · 主动触发 ${runtime.pulseCount} 次</small>
+          <progress data-rmt-easter-meter max="100" value="${runtime.intensity}">${runtime.intensity}%</progress>
+        </div>
+        <div class="rmt-ending-easter-controls" aria-label="情感模块交互">
+          <button type="button" class="rmt-btn" data-rmt-action="ending-easter-pulse">触碰心跳</button>
+          <button type="button" class="rmt-btn" data-rmt-action="ending-easter-reveal">解锁一句话</button>
+          <button type="button" class="rmt-btn" data-rmt-action="ending-easter-toggle" aria-pressed="false">暂停日志</button>
+          <button type="button" class="rmt-btn" data-rmt-action="ending-easter-stabilize">稳定信号</button>
+        </div>
+        <section class="rmt-ending-easter-log"><small>情感运行日志</small><ol data-rmt-easter-logs aria-live="polite">${logs}</ol></section>
+        <section class="rmt-ending-easter-monologue"><small>没有说出口的内心独白</small>${monologue}</section>
+        <section class="rmt-ending-easter-poem" aria-live="polite"><small>逐渐浮现</small><div data-rmt-easter-poem>${endingEasterEggPoemHtml(runtime)}</div></section>
+      </section>
+    </div>`;
+}
+
+function syncEndingEasterEggView() {
+    const runtime = runtimeState.endingEasterEggRuntime;
+    const layer = endingEasterEggLayer();
+    if (!runtime || !layer) return;
+    const intensity = Math.max(0, Math.min(100, Math.round(Number(runtime.intensity) || 0)));
+    layer.dataset.rmtIntensity = String(intensity);
+    layer.dataset.rmtPaused = runtime.paused ? 'true' : 'false';
+    layer.dataset.rmtHovered = runtime.hovered ? 'true' : 'false';
+    layer.dataset.rmtStabilized = runtime.stabilized ? 'true' : 'false';
+    layer.style.setProperty('--rmt-easter-intensity', String(intensity / 100));
+    const status = layer.querySelector('[data-rmt-easter-status]');
+    if (status) status.textContent = runtime.feedbackText || runtime.egg.statusLine;
+    const metrics = layer.querySelector('[data-rmt-easter-metrics]');
+    if (metrics) metrics.textContent = `核心强度 ${intensity}% · 主动触发 ${runtime.pulseCount} 次`;
+    const meter = layer.querySelector('[data-rmt-easter-meter]');
+    if (meter) meter.value = intensity;
+    const logList = layer.querySelector('[data-rmt-easter-logs]');
+    if (logList && globalThis.document?.createElement) {
+        const nodes = runtime.visibleLogs.map(line => {
+            const item = document.createElement('li');
+            item.textContent = line;
+            return item;
+        });
+        logList.replaceChildren(...nodes);
+        logList.scrollTop = logList.scrollHeight;
+    }
+    const poem = layer.querySelector('[data-rmt-easter-poem]');
+    if (poem && globalThis.document?.createElement) {
+        const nodes = runtime.egg.poem.slice(0, Math.max(1, runtime.poemIndex)).map(line => {
+            const item = document.createElement('span');
+            item.textContent = line;
+            return item;
+        });
+        poem.replaceChildren(...nodes);
+    }
+    const toggle = layer.querySelector('[data-rmt-action="ending-easter-toggle"]');
+    if (toggle) {
+        toggle.textContent = runtime.paused ? '恢复日志' : '暂停日志';
+        toggle.setAttribute('aria-pressed', runtime.paused ? 'true' : 'false');
+    }
+}
+
+function appendEndingEasterEggLog(text, value = new Date()) {
+    const runtime = runtimeState.endingEasterEggRuntime;
+    if (!runtime) return false;
+    const line = endingEasterEggLogLine(text, value);
+    if (!line) return false;
+    runtime.visibleLogs.push(line);
+    if (runtime.visibleLogs.length > ENDING_EASTER_EGG_MAX_LOGS) {
+        runtime.visibleLogs.splice(0, runtime.visibleLogs.length - ENDING_EASTER_EGG_MAX_LOGS);
+    }
+    syncEndingEasterEggView();
+    return true;
+}
+
+function endingEasterEggTick(value = new Date()) {
+    const runtime = runtimeState.endingEasterEggRuntime;
+    if (runtime && (runtimeState.activeMode !== core_constants.MODE.ENDING
+        || runtimeState.activeSession?.kind !== core_constants.MODE.ENDING
+        || (runtime.session && runtime.session !== runtimeState.activeSession))) {
+        closeEndingEasterEgg({ restoreFocus: false });
+        return false;
+    }
+    if (!runtime || runtime.paused || !runtime.egg.logs.length) return false;
+    const line = runtime.egg.logs[runtime.logIndex % runtime.egg.logs.length];
+    runtime.logIndex = (runtime.logIndex + 1) % runtime.egg.logs.length;
+    runtime.intensity = Math.min(96, runtime.intensity + (runtime.hovered ? 2 : 1));
+    runtime.feedbackText = runtime.egg.statusLine;
+    return appendEndingEasterEggLog(line, value);
+}
+
+function stopEndingEasterEggTimer() {
+    if (runtimeState.endingEasterEggTimer) globalThis.clearInterval?.(runtimeState.endingEasterEggTimer);
+    runtimeState.endingEasterEggTimer = 0;
+}
+
+function closeEndingEasterEgg({ restoreFocus = true } = {}) {
+    const returnFocus = runtimeState.endingEasterEggRuntime?.returnFocus;
+    stopEndingEasterEggTimer();
+    endingEasterEggLayer()?.remove();
+    runtimeState.endingEasterEggRuntime = null;
+    if (restoreFocus && returnFocus?.isConnected && typeof returnFocus.focus === 'function') returnFocus.focus();
+}
+
+function openEndingEasterEgg() {
+    const replay = selectedConfessionReplay();
+    if (!replay) return null;
+    const returnFocus = globalThis.document?.activeElement || null;
+    closeEndingEasterEgg({ restoreFocus: false });
+    const runtime = createEndingEasterEggRuntime(replay, returnFocus);
+    runtime.session = runtimeState.activeSession;
+    runtimeState.endingEasterEggRuntime = runtime;
+    const overlay = globalThis.document?.getElementById?.(core_constants.OVERLAY_ID);
+    if (!overlay || !globalThis.document?.createElement) return runtime;
+    const holder = document.createElement('div');
+    holder.innerHTML = endingEasterEggPopupHtml(replay, runtime);
+    const layer = holder.firstElementChild;
+    if (!layer) return runtime;
+    overlay.append(layer);
+    const core = layer.querySelector('[data-rmt-easter-core]');
+    core?.addEventListener('pointerenter', () => endingEasterEggHover(true));
+    core?.addEventListener('pointerleave', () => endingEasterEggHover(false));
+    core?.addEventListener('focus', () => endingEasterEggHover(true));
+    core?.addEventListener('blur', () => endingEasterEggHover(false));
+    layer.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            closeEndingEasterEgg();
+        }
+    });
+    layer.querySelector('.rmt-ending-easter-dialog')?.focus();
+    if (typeof globalThis.setInterval === 'function') {
+        runtimeState.endingEasterEggTimer = globalThis.setInterval(() => endingEasterEggTick(), 1800);
+    }
+    syncEndingEasterEggView();
+    return runtime;
+}
+
+function endingEasterEggPulse() {
+    const runtime = runtimeState.endingEasterEggRuntime;
+    if (!runtime) return false;
+    runtime.pulseCount += 1;
+    runtime.stabilized = false;
+    runtime.intensity = Math.min(100, runtime.intensity + 13);
+    runtime.feedbackText = runtime.egg.feedback.pulse;
+    return appendEndingEasterEggLog(runtime.egg.feedback.pulse);
+}
+
+function endingEasterEggHover(active = true) {
+    const runtime = runtimeState.endingEasterEggRuntime;
+    if (!runtime) return false;
+    const next = !!active;
+    if (runtime.hovered === next) return true;
+    runtime.hovered = next;
+    runtime.intensity = Math.max(0, Math.min(100, runtime.intensity + (next ? 7 : -3)));
+    runtime.feedbackText = next ? runtime.egg.feedback.hover : runtime.egg.statusLine;
+    if (next) return appendEndingEasterEggLog(runtime.egg.feedback.hover);
+    syncEndingEasterEggView();
+    return true;
+}
+
+function endingEasterEggReveal() {
+    const runtime = runtimeState.endingEasterEggRuntime;
+    if (!runtime) return false;
+    runtime.poemIndex = Math.min(runtime.egg.poem.length, runtime.poemIndex + 1);
+    runtime.feedbackText = runtime.egg.feedback.reveal;
+    runtime.intensity = Math.min(100, runtime.intensity + 5);
+    return appendEndingEasterEggLog(runtime.egg.feedback.reveal);
+}
+
+function endingEasterEggToggleLogs() {
+    const runtime = runtimeState.endingEasterEggRuntime;
+    if (!runtime) return false;
+    runtime.paused = !runtime.paused;
+    runtime.feedbackText = runtime.paused ? runtime.egg.feedback.pause : runtime.egg.feedback.resume;
+    return appendEndingEasterEggLog(runtime.feedbackText);
+}
+
+function endingEasterEggStabilize() {
+    const runtime = runtimeState.endingEasterEggRuntime;
+    if (!runtime) return false;
+    runtime.stabilized = true;
+    runtime.intensity = Math.max(28, Math.min(62, runtime.intensity));
+    runtime.feedbackText = runtime.egg.feedback.stabilize;
+    return appendEndingEasterEggLog(runtime.egg.feedback.stabilize);
+}
+
+function confessionReplayPlayerHtml(replay, session) {
+    const lines = modes_ending.normalizeEndingConfessionLines(replay?.confessionLines, replay?.confessionText);
+    if (!lines.length) return `<div class="rmt-ending-confession">${core_text.esc(replay?.confessionText || '')}</div>`;
+    const index = Math.max(0, Math.min(lines.length - 1, Math.floor(Number(session?.confessionLineIndex) || 0)));
+    session.confessionLineIndex = index;
+    const context = core_context.getContext();
+    const charName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || context?.name2, 120) || '角色';
+    const avatar = ui_heartView.heartCharacterAvatarUrl(runtimeState.activeArchiveSnapshot, context);
+    return `<div class="rmt-ending-confession-stage">
+      <div class="rmt-ending-confession-dialogue">
+        <span class="rmt-ending-confession-avatar">${avatar ? `<img src="${core_text.esc(avatar)}" alt="">` : '<i class="fa-solid fa-heart"></i>'}</span>
+        <div class="rmt-ending-confession-bubble"><small>${core_text.esc(charName)}</small><p>${core_text.esc(lines[index])}</p></div>
+      </div>
+      <div class="rmt-ending-confession-actions">
+        <button type="button" class="rmt-btn" data-rmt-action="ending-confession-prev" ${index <= 0 ? 'disabled' : ''}>上一句</button>
+        <button type="button" class="rmt-btn" data-rmt-action="ending-confession-replay">重播</button>
+        <button type="button" class="rmt-btn" data-rmt-action="ending-confession-next" ${index >= lines.length - 1 ? 'disabled' : ''}>下一句</button>
+      </div>
+    </div>`;
+}
+
+function renderEnding() {
+    closeEndingEasterEgg({ restoreFocus: false });
+    const session = runtimeState.activeSession;
+    if (!session || session.kind !== core_constants.MODE.ENDING) return;
+    ui_overlay.setBackVisible(true, runtimeState.activeArchiveSnapshot ? (runtimeState.activeArchiveReadOnly ? '只读档案' : '档案') : '当前档案');
+    ui_overlay.topTitle(core_constants.MODE_LABEL[core_constants.MODE.ENDING]);
+    const replays = Array.isArray(session.confessionReplays) ? session.confessionReplays : [];
+    const readOnlyArchive = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
+    const view = session.view === 'confessions' ? 'confessions' : 'routes';
+    session.view = view;
+    const tabs = `<div class="rmt-ending-tabs"><button type="button" class="rmt-ending-tab ${view === 'routes' ? 'active' : ''}" data-rmt-ending-view="routes">结局路线 <span>${session.endings.length}</span></button><button type="button" class="rmt-ending-tab ${view === 'confessions' ? 'active' : ''}" data-rmt-ending-view="confessions">告白回看 <span>${replays.length}</span></button></div>`;
+    const confessionRefreshAction = view === 'confessions' && !readOnlyArchive ? '<button type="button" class="rmt-btn" data-rmt-action="refresh-ending-confessions"><i class="fa-solid fa-rotate"></i> 只重新读取告白</button>' : '';
+    const summary = `<section class="rmt-ending-summary"><b>${core_text.esc(session.relationshipState)}</b><p>${core_text.esc(session.relationshipSummary)}</p><div class="rmt-ending-extra-actions">${confessionRefreshAction}<button type="button" class="rmt-btn" data-rmt-action="open-heart"><i class="fa-solid fa-heart"></i> 角色互动</button></div></section>`;
+    if (view === 'confessions') {
+        const selectedReplay = selectedConfessionReplay();
+        if (selectedReplay) session.selectedConfessionId = selectedReplay.id;
+        const replayList = replays.map(item => `<button type="button" class="rmt-confession-card ${selectedReplay?.id === item.id ? 'active' : ''}" data-rmt-confession-id="${core_text.esc(item.id)}"><b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.subtitle || item.date || endingConfessionTypeLabel(item.type))}</span><em>${core_text.esc(endingConfessionTypeLabel(item.type))} · ${core_text.esc(item.date || '待定')}</em></button>`).join('');
+        const replayDetail = selectedReplay
+            ? `<div class="rmt-ending-head"><div><h2>${core_text.esc(selectedReplay.title)}</h2><div class="rmt-ending-subtitle">${core_text.esc(selectedReplay.subtitle || endingConfessionTypeLabel(selectedReplay.type))}</div></div><span>已发生 · 档案回看</span></div>
+               <section class="rmt-ending-section"><small>告白场景</small><p>${core_text.esc(selectedReplay.scene)}</p>${confessionReplayPlayerHtml(selectedReplay, session)}<div class="rmt-ending-easter-entry"><button type="button" class="rmt-btn" data-rmt-action="ending-easter-open"><i class="fa-solid fa-heart-pulse"></i> 打开隐藏心跳</button><small>一段只在本地运行的告白彩蛋</small></div></section>
+               ${selectedReplay.responseSummary ? `<section class="rmt-ending-section"><small>当时的回应</small><p>${core_text.esc(selectedReplay.responseSummary)}</p></section>` : ''}
+               ${selectedReplay.afterEffect ? `<section class="rmt-ending-section"><small>之后</small><p>${core_text.esc(selectedReplay.afterEffect)}</p></section>` : ''}`
+            : `<div class="rmt-ending-lock"><b>还没有可回看的告白。</b></div>`;
+        ui_overlay.bodyEl().innerHTML = `<div class="rmt-ending">${summary}${tabs}<nav class="rmt-ending-list" aria-label="告白回看">${replayList || '<div class="rmt-ending-lock">没有检测到可验证的告白记录。</div>'}</nav><main class="rmt-ending-detail">${replayDetail}</main></div>`;
+        return;
+    }
+    const selected = selectedEndingRoute();
+    if (!selected) {
+        ui_overlay.bodyEl().innerHTML = `<div class="rmt-ending">${summary}${tabs}<nav class="rmt-ending-list" aria-label="结局路线"><div class="rmt-ending-lock">当前没有结局路线。</div></nav><main class="rmt-ending-detail"><div class="rmt-ending-lock"><b>结局路线已全部移除。</b><br>可从顶部管理器重新生成整个“结局与后日谈”；告白回看若仍存在，也可切换上方标签继续查看。</div></main></div>`;
+        return;
+    }
+    session.selectedId = selected.id;
+    const typeLabel = { route: '当前路线', romance: '恋爱', reverse: '逆转告白', bond: '羁绊', open: '开放', personal: '个人' };
+    const routes = session.endings.map(item => `<button type="button" class="rmt-ending-route ${item.id === selected.id ? 'active' : ''} ${item.available ? '' : 'locked'}" data-rmt-ending-id="${core_text.esc(item.id)}"><b>${item.id === session.recommendedEndingId ? '♥ ' : ''}${core_text.esc(item.title)}</b><span>${core_text.esc(item.subtitle || typeLabel[item.type] || '路线')}</span><em>${item.available ? '可观测 · 未来推演' : '未解锁'}</em></button>`).join('');
+    const detail = selected.available
+        ? `<div class="rmt-ending-head"><div><h2>${core_text.esc(selected.title)}</h2><div class="rmt-ending-subtitle">${core_text.esc(selected.subtitle || typeLabel[selected.type] || '')}</div></div><span>未来路线推演</span></div>
+           <section class="rmt-ending-section"><small>终章</small><p>${core_text.esc(selected.endingScene)}</p>${selected.creditsLine ? `<div class="rmt-ending-final">— ${core_text.esc(selected.creditsLine)}</div>` : ''}</section>
+           <section class="rmt-ending-section"><small>EPILOGUE // 后日谈 · ${core_text.esc(selected.epilogue?.timeSkip || '未来')}</small><div class="rmt-ending-epilogue">${(selected.epilogue?.scenes || []).map(scene => `<article><b>${core_text.esc(scene.title)}</b><p>${core_text.esc(scene.text)}</p></article>`).join('')}</div>${selected.epilogue?.finalLine ? `<div class="rmt-ending-final">${core_text.esc(selected.epilogue.finalLine)}</div>` : ''}</section>
+           `
+        : `<div class="rmt-ending-head"><div><h2>${core_text.esc(selected.title)}</h2><div class="rmt-ending-subtitle">${core_text.esc(selected.subtitle || typeLabel[selected.type] || '')}</div></div><span>未解锁</span></div><div class="rmt-ending-lock"><b>这条路线还没有被当前档案解锁。</b><br>${core_text.esc(selected.unlockHint || '继续让关系在真实聊天中自然发展后，再增量更新档案并追加结局。')}</div>`;
+    ui_overlay.bodyEl().innerHTML = `<div class="rmt-ending">${summary}${tabs}<nav class="rmt-ending-list" aria-label="结局路线">${routes}</nav><main class="rmt-ending-detail">${detail}</main></div>`;
+}
+
+async function refreshEndingConfessionReplays() {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ENDING) return;
+    if (!archive_library.requireWritableArchiveAction()) return;
+    const context = core_context.currentCharacterGuard();
+    if (core_requestCoordinator.isModeGenerating(core_constants.MODE.ENDING, context)) {
+        globalThis.toastr?.info?.('ENDING / 告白扫描已经有任务在进行中，请等它完成。', '心跳回忆');
+        return;
+    }
+    const memoryBank = archive_repository.requireArchive(context);
+    const baseSession = structuredClone(runtimeState.activeSession);
+    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(baseSession, memoryBank, 'confessions');
+    if (!sourceMemoryIds.length) {
+        globalThis.toastr?.info?.('当前档案没有尚未扫描告白的新记忆。旧告白回看保持不变。', '心跳回忆');
+        return;
+    }
+    const confirmed = ui_overlay.confirmExplicitAction(
+        '从新增档案追加“告白回看”？',
+        '这次只扫描尚未消费的新档案记忆；旧告白回看逐条原样保留，只追加能被新证据证明的告白 / 关系确认。结局路线、后日谈和 Voice Drama 都不会重写。',
+        { destructive: false },
+    );
+    if (!confirmed) return;
+    const expectedChatId = core_context.getChatId(context);
+    const expectedArchiveRevision = memoryBank.archiveRevision;
+    const scope = core_context.chatScopeKey(context);
+    const origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
+    ui_overlay.setInnerLoading(true, '正在从新增档案追加已发生的告白节点…');
+    try {
+        const raw = await generation_client.requestJson(
+            modes_ending.endingConfessionRefreshPrompt(context, memoryBank, baseSession, sourceMemoryIds),
+            '正在扫描新增档案里的告白 / 关系确认…',
+            {
+                maxTokens: 10000,
+                temperature: 0.35,
+                context,
+                origin,
+                taskKey: `ending-confessions:${scope}`,
+                mode: core_constants.MODE.ENDING,
+                background: true,
+            },
+        );
+        const freshReplays = modes_ending.normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank)
+            .filter(item => core_incremental.usesIncrementalMemoryId(item.sourceMemoryIds, sourceMemoryIds));
+        const mergedReplays = modes_ending.mergeEndingConfessions(baseSession.confessionReplays, freshReplays);
+        const updated = baseSession;
+        updated.confessionReplays = mergedReplays.items;
+        updated.selectedConfessionId = mergedReplays.added
+            ? updated.confessionReplays.at(-1)?.id || updated.selectedConfessionId || ''
+            : updated.selectedConfessionId || updated.confessionReplays[0]?.id || '';
+        updated.view = 'confessions';
+        core_incremental.stampIncrementalCoverage(updated, baseSession, memoryBank, 'confessions', sourceMemoryIds, mergedReplays.added);
+        updated.chatId = expectedChatId;
+        updated.archiveRevision = expectedArchiveRevision;
+        let committed = false;
+        if (core_context.isCurrentTaskOrigin(origin)) {
+            try {
+                const latestMemory = archive_repository.requireArchive(core_context.currentCharacterGuard());
+                if (latestMemory.archiveRevision === expectedArchiveRevision) committed = core_cache.saveSession(core_constants.MODE.ENDING, updated, expectedChatId);
+            } catch {}
+        }
+        if (!committed) core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [core_constants.MODE.ENDING]: updated } });
+        if (core_context.isCurrentTaskOrigin(origin) && !document.getElementById(core_constants.OVERLAY_ID)?.hidden) {
+            runtimeState.activeMode = core_constants.MODE.ENDING;
+            runtimeState.activeSession = updated;
+            renderEnding();
+        }
+        globalThis.toastr?.success?.(`告白回看已追加 ${mergedReplays.added} 条；当前共 ${updated.confessionReplays.length} 条。旧告白、结局路线与后日谈保持不变。`, '心跳回忆');
+    } catch (error) {
+        if (error?.name !== 'AbortError') {
+            console.error('[HeartbeatMemories] confession replay refresh failed', error);
+            ui_overlay.showInlineError(error?.message || String(error));
+            globalThis.toastr?.error?.(core_text.toastText(error?.message || String(error)), '心跳回忆 · 告白回看更新失败');
+        }
+    } finally {
+        ui_overlay.setInnerLoading(false);
+        core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.ENDING, origin);
+    }
+}
+
+function endingSetView(view) {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ENDING) return;
+    runtimeState.activeSession.view = view === 'confessions' ? 'confessions' : 'routes';
+    renderEnding();
+}
+
+function confessionSelect(id) {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ENDING) return;
+    const item = (runtimeState.activeSession.confessionReplays || []).find(replay => replay.id === id);
+    if (!item) return;
+    runtimeState.activeSession.view = 'confessions';
+    runtimeState.activeSession.selectedConfessionId = item.id;
+    runtimeState.activeSession.confessionLineIndex = 0;
+    renderEnding();
+}
+
+function endingSelect(id) {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ENDING) return;
+    const item = runtimeState.activeSession.endings.find(route => route.id === id);
+    if (!item) return;
+    runtimeState.activeSession.view = 'routes';
+    runtimeState.activeSession.selectedId = item.id;
+    runtimeState.activeSession.confessionLineIndex = 0;
+    renderEnding();
+}
+
+function endingConfessionStep(delta) {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ENDING || runtimeState.activeSession.view !== 'confessions') return;
+    const replay = selectedConfessionReplay();
+    const lines = modes_ending.normalizeEndingConfessionLines(replay?.confessionLines, replay?.confessionText);
+    if (!lines.length) return;
+    const current = Math.max(0, Math.min(lines.length - 1, Math.floor(Number(runtimeState.activeSession.confessionLineIndex) || 0)));
+    runtimeState.activeSession.confessionLineIndex = Math.max(0, Math.min(lines.length - 1, current + Number(delta || 0)));
+    renderEnding();
+}
+
+function replayEndingConfession() {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ENDING) return;
+    runtimeState.activeSession.confessionLineIndex = 0;
+    renderEnding();
+}
+
+__m_ui_endingView_js.refreshEndingConfessionReplays = refreshEndingConfessionReplays;
+__m_ui_endingView_js.selectedEndingRoute = selectedEndingRoute;
+__m_ui_endingView_js.endingConfessionTypeLabel = endingConfessionTypeLabel;
+__m_ui_endingView_js.selectedConfessionReplay = selectedConfessionReplay;
+__m_ui_endingView_js.createEndingEasterEggRuntime = createEndingEasterEggRuntime;
+__m_ui_endingView_js.endingEasterEggPopupHtml = endingEasterEggPopupHtml;
+__m_ui_endingView_js.endingEasterEggTick = endingEasterEggTick;
+__m_ui_endingView_js.stopEndingEasterEggTimer = stopEndingEasterEggTimer;
+__m_ui_endingView_js.closeEndingEasterEgg = closeEndingEasterEgg;
+__m_ui_endingView_js.openEndingEasterEgg = openEndingEasterEgg;
+__m_ui_endingView_js.endingEasterEggPulse = endingEasterEggPulse;
+__m_ui_endingView_js.endingEasterEggHover = endingEasterEggHover;
+__m_ui_endingView_js.endingEasterEggReveal = endingEasterEggReveal;
+__m_ui_endingView_js.endingEasterEggToggleLogs = endingEasterEggToggleLogs;
+__m_ui_endingView_js.endingEasterEggStabilize = endingEasterEggStabilize;
+__m_ui_endingView_js.confessionReplayPlayerHtml = confessionReplayPlayerHtml;
+__m_ui_endingView_js.renderEnding = renderEnding;
+__m_ui_endingView_js.endingSetView = endingSetView;
+__m_ui_endingView_js.confessionSelect = confessionSelect;
+__m_ui_endingView_js.endingSelect = endingSelect;
+__m_ui_endingView_js.endingConfessionStep = endingConfessionStep;
+__m_ui_endingView_js.replayEndingConfession = replayEndingConfession;
+}
+
+function __init_ui_archivePortal_js() {
+// MODULE: ui/archivePortal.js
+const archive_library = __m_archive_library_js;
+const archive_repository = __m_archive_repository_js;
+const archive_snapshots = __m_archive_snapshots_js;
+const core_cache = __m_core_cache_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_text = __m_core_text_js;
+const ui_endingView = __m_ui_endingView_js;
+const ui_settingsPanel = __m_ui_settingsPanel_js;
+const runtimeState = __m_core_state_js.state;
+// Heartbeat Memories r35 modular runtime.
+// Extracted from r34 without changing archive/cache storage contracts.
+
+
+
+
+
+
+
+function mountMenuItem() {
+    if (document.getElementById(core_constants.MENU_ID)) return true;
+    const menu = document.querySelector('#extensionsMenu');
+    if (!menu) return false;
+    const item = document.createElement('div');
+    item.id = core_constants.MENU_ID;
+    item.className = 'list-group-item flex-container flexGap5 interactable';
+    item.tabIndex = 0;
+    item.setAttribute('role', 'button');
+    item.innerHTML = '<i class="fa-solid fa-box-archive"></i><span>心跳回忆 · 档案室</span>';
+    const open = () => safeShowArchiveLibrary('extensions-menu');
+    item.addEventListener('click', open);
+    item.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            open();
+        }
+    });
+    menu.appendChild(item);
+    return true;
+}
+
+function archiveOpenButtonFromEvent(event) {
+    const selector = '[data-rmt-settings-open-archive], #heartbeat_memories_menu_item';
+    const path = typeof event?.composedPath === 'function' ? event.composedPath() : [];
+    for (const node of path) {
+        if (node?.matches?.(selector)) return node;
+    }
+    return event?.target?.closest?.(selector) || null;
+}
+
+function safeShowArchiveLibrary(source = 'unknown') {
+    try {
+        archive_library.showArchiveLibrary();
+        return true;
+    } catch (error) {
+        console.error(`[HeartbeatMemories] open archive failed (${source})`, error);
+        globalThis.toastr?.error?.(`档案室打开失败：${core_text.toastText(error?.message || error)}`, '心跳回忆');
+        return false;
+    }
+}
+
+function bindRobustArchiveOpenHandlers() {
+    try { globalThis.__heartbeatMemoriesOpenCleanup?.(); } catch {}
+    let lastOpenAt = 0;
+    const earlyHandler = event => {
+        const button = archiveOpenButtonFromEvent(event);
+        if (!button) return;
+        if (event.type === 'pointerdown' && Number(event.button ?? 0) !== 0) return;
+        const now = Date.now();
+        if (now - lastOpenAt < 700) return;
+        lastOpenAt = now;
+        // Do NOT preventDefault/stopPropagation here. SillyTavern mobile sets body touch-action:none
+        // and owns the settings drawer gesture lifecycle. We only observe the earliest gesture and
+        // open our mobile dialog in the browser top layer, then let the host finish its own gesture.
+        safeShowArchiveLibrary(`early-${event.type}`);
+    };
+    const touchOptions = { capture: true, passive: true };
+    document.addEventListener('touchstart', earlyHandler, touchOptions);
+    document.addEventListener('pointerdown', earlyHandler, true);
+    globalThis.__heartbeatMemoriesOpenCleanup = () => {
+        document.removeEventListener('touchstart', earlyHandler, touchOptions);
+        document.removeEventListener('pointerdown', earlyHandler, true);
+    };
+}
+
+function bindChatStateEvents() {
+    try { globalThis.__heartbeatMemoriesEventCleanup?.(); } catch {}
+    const context = core_context.getContext();
+    const source = context.eventSource;
+    const types = context.eventTypes || context.event_types || {};
+    if (!source?.on) return;
+
+    const chatEvents = [types.CHAT_CHANGED, types.CHAT_LOADED].filter(Boolean);
+    const messageEvents = [
+        types.MESSAGE_SENT,
+        types.MESSAGE_RECEIVED,
+        types.MESSAGE_EDITED,
+        types.MESSAGE_DELETED,
+        types.MESSAGE_UPDATED,
+    ].filter(Boolean);
+
+    const chatHandler = () => {
+        ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
+        // Chat navigation must not cancel a request that is already running. Results are
+        // bound to their origin chat and are committed when that chat is current again.
+        if (runtimeState.busy) runtimeState.activeTaskBackgrounded = true;
+        runtimeState.activeMode = null;
+        runtimeState.activeSession = null;
+        ui_settingsPanel.refreshSettingsMemoryStatus({ lightweight: true });
+        const overlay = document.getElementById(core_constants.OVERLAY_ID);
+        try {
+            const latest = core_context.currentCharacterGuard();
+            // Keep ordinary chat entry extremely light. Archive overview bookkeeping is only
+            // needed while the Heartbeat UI is visible. IMPORTANT: do not compress, hydrate,
+            // scan or migrate theater caches here; chat startup/navigation must remain inert.
+            if (overlay && !overlay.hidden) {
+                archive_snapshots.resetArchiveOverviewForCharacter(latest);
+                archive_snapshots.syncArchiveOverviewCurrentRow(latest);
+            }
+        } catch {}
+        // SillyTavern emits CHAT_CHANGED and CHAT_LOADED during one navigation. Do not
+        // synchronously rebuild the whole archive UI inside its awaited event path.
+        if (overlay && !overlay.hidden) archive_snapshots.scheduleChooserRefresh(80);
+        setTimeout(() => {
+            void core_cache.flushPendingCompressedCacheForCurrentChat().catch(error => {
+                console.warn('[HeartbeatMemories] pending compressed cache flush failed', error);
+            });
+            void archive_repository.flushDeferredCommitsForCurrentChat();
+        }, 160);
+    };
+
+    const messageHandler = () => {
+        // Important: message changes NEVER mutate or invalidate the archive.
+        // They only refresh the optional “not yet archived” counter. The user decides when to update.
+        try {
+            const latest = core_context.currentCharacterGuard();
+            archive_repository.clearMemoryPreflight(latest);
+            runtimeState.usableMessageCountCache.delete(core_context.chatScopeKey(latest));
+        } catch {}
+        ui_settingsPanel.refreshSettingsMemoryStatus({ lightweight: true });
+        const overlay = document.getElementById(core_constants.OVERLAY_ID);
+        if (overlay && !overlay.hidden && !runtimeState.activeMode && !runtimeState.busy) archive_snapshots.scheduleChooserRefresh(80);
+    };
+
+    for (const type of chatEvents) source.on(type, chatHandler);
+    for (const type of messageEvents) source.on(type, messageHandler);
+    globalThis.__heartbeatMemoriesEventCleanup = () => {
+        for (const type of chatEvents) {
+            try { source.off?.(type, chatHandler); } catch {}
+        }
+        for (const type of messageEvents) {
+            try { source.off?.(type, messageHandler); } catch {}
+        }
+    };
+}
+
+function scheduleMounts(initialSettingsMounted = false, initialMenuMounted = false) {
+    let tries = 0;
+    let settingsMounted = !!initialSettingsMounted || !!document.getElementById(core_constants.SETTINGS_ID);
+    let menuMounted = !!initialMenuMounted || !!document.getElementById(core_constants.MENU_ID);
+    if (settingsMounted && menuMounted) return;
+    const timer = setInterval(() => {
+        tries += 1;
+        // Retry only the missing mount. Calling mountSettings() after it already exists used
+        // to rebuild profile/model controls every 500 ms while #extensionsMenu was not ready.
+        if (!settingsMounted) settingsMounted = !!document.getElementById(core_constants.SETTINGS_ID) || ui_settingsPanel.mountSettings();
+        if (!menuMounted) menuMounted = !!document.getElementById(core_constants.MENU_ID) || mountMenuItem();
+        if ((settingsMounted && menuMounted) || tries >= 30) {
+            clearInterval(timer);
+            if (globalThis.__heartbeatMemoriesMountTimer === timer) globalThis.__heartbeatMemoriesMountTimer = null;
+        }
+    }, 500);
+    globalThis.__heartbeatMemoriesMountTimer = timer;
+}
+
+__m_ui_archivePortal_js.mountMenuItem = mountMenuItem;
+__m_ui_archivePortal_js.archiveOpenButtonFromEvent = archiveOpenButtonFromEvent;
+__m_ui_archivePortal_js.safeShowArchiveLibrary = safeShowArchiveLibrary;
+__m_ui_archivePortal_js.bindRobustArchiveOpenHandlers = bindRobustArchiveOpenHandlers;
+__m_ui_archivePortal_js.bindChatStateEvents = bindChatStateEvents;
+__m_ui_archivePortal_js.scheduleMounts = scheduleMounts;
+}
+
+function __init_ui_settingsPanel_js() {
+// MODULE: ui/settingsPanel.js
+const archive_repository = __m_archive_repository_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_independentApi = __m_core_independentApi_js;
+const core_requestCoordinator = __m_core_requestCoordinator_js;
+const core_settings = __m_core_settings_js;
+const core_text = __m_core_text_js;
+const ui_archivePortal = __m_ui_archivePortal_js;
+const ui_overlay = __m_ui_overlay_js;
+const ui_styles = __m_ui_styles_js;
+const runtimeState = __m_core_state_js.state;
+// Heartbeat Memories r35 modular runtime.
+// Extracted from r34 without changing archive/cache storage contracts.
+
+
+
+
+
+
+
+async function refreshModelOptions({ fetchRemote = false } = {}) {
+    const panel = document.getElementById(core_constants.SETTINGS_ID);
+    if (!panel) return;
+    const select = panel.querySelector('[data-rmt-api-model]');
+    const refreshButton = panel.querySelector('[data-rmt-api-model-refresh]');
+    if (!select) return;
+    const requestEpoch = Number(panel.dataset.rmtProfileModelRequest || 0) + 1;
+    panel.dataset.rmtProfileModelRequest = String(requestEpoch);
+    const settings = core_settings.getPluginSettings();
+    const profileId = core_text.normalizeText(settings.connectionProfileId, 160);
+    const configurationEpoch = runtimeState.apiConfigurationEpoch;
+    let profileCacheKey = '';
+    let profileStateFingerprint = '';
+    try { profileCacheKey = profileId ? core_settings.profileModelCacheKey(profileId) : ''; } catch {}
+    const isCurrent = () => Number(panel.dataset.rmtProfileModelRequest || 0) === requestEpoch
+        && runtimeState.apiConfigurationEpoch === configurationEpoch
+        && core_settings.getPluginSettings().connectionProfileId === profileId
+        && (() => {
+            try {
+                if (!profileId || core_settings.profileModelCacheKey(profileId) !== profileCacheKey) return !profileId;
+                return core_settings.profileFingerprint(core_settings.rawConnectionProfile(profileId)) === profileStateFingerprint;
+            }
+            catch { return false; }
+        })();
+    if (refreshButton) {
+        refreshButton.disabled = fetchRemote || !profileId;
+        refreshButton.textContent = fetchRemote ? '正在拉取…' : '刷新模型';
+    }
+    if (!profileId) {
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = '请先选择专用连接';
+        select.replaceChildren(defaultOption);
+        select.disabled = true;
+        return { models: [], fallbackOnly: false };
+    }
+    let profile;
+    try { profile = core_settings.rawConnectionProfile(profileId); } catch { profile = null; }
+    profileStateFingerprint = profile ? core_settings.profileFingerprint(profile) : 'missing';
+    const profileModel = core_text.normalizeText(profile?.model, 240);
+    select.disabled = fetchRemote;
+    let models = [];
+    let fallbackOnly = false;
+    try {
+        if (fetchRemote) {
+            const result = await core_settings.fetchModelsForConnection(profileId, { force: true, returnMeta: true });
+            models = result.models;
+            fallbackOnly = result.fallbackOnly;
+        } else {
+            models = runtimeState.connectionModelCache.get(profileCacheKey) || core_settings.savedModelsForProfile(profileId);
+        }
+    } catch (error) {
+        if (!isCurrent() || error?.code === 'RMT_API_MODEL_REQUEST_SUPERSEDED' || error?.name === 'AbortError') return null;
+        console.warn('[HeartbeatMemories] refresh model options failed', error);
+        if (!fetchRemote) {
+            models = profileModel ? [profileModel] : [];
+        } else {
+            if (refreshButton) {
+                refreshButton.disabled = false;
+                refreshButton.textContent = '刷新模型';
+            }
+            select.disabled = false;
+            throw error;
+        }
+    }
+    if (!isCurrent()) return null;
+    const currentSettings = core_settings.getPluginSettings();
+    const override = core_text.normalizeText(currentSettings.modelOverride, 240);
+    if (override && !models.includes(override)) models.unshift(override);
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = profileModel ? `使用配置默认模型 · ${profileModel}` : '使用配置默认模型';
+    select.replaceChildren(defaultOption);
+    for (const model of [...new Set(models)]) {
+        if (!model) continue;
+        const option = document.createElement('option');
+        option.value = model;
+        option.textContent = model;
+        select.appendChild(option);
+    }
+    select.value = override;
+    select.disabled = false;
+    if (refreshButton) {
+        refreshButton.disabled = false;
+        refreshButton.textContent = '刷新模型';
+    }
+    return { models, fallbackOnly };
+}
+
+function manualSettingsFromPanel(panel) {
+    const current = core_settings.getPluginSettings();
+    const keyInput = panel?.querySelector?.('[data-rmt-manual-api-key]');
+    const baseInput = panel?.querySelector?.('[data-rmt-manual-api-base]');
+    const modelInput = panel?.querySelector?.('[data-rmt-manual-api-model]');
+    return {
+        ...current,
+        apiConnectionMode: 'manual',
+        manualApiBaseUrl: baseInput ? baseInput.value : current.manualApiBaseUrl,
+        manualApiKey: core_text.normalizeText(keyInput?.value, 4000) || current.manualApiKey,
+        manualApiModel: modelInput ? modelInput.value : current.manualApiModel,
+    };
+}
+
+async function refreshManualModelOptions({ fetchRemote = false } = {}) {
+    const panel = document.getElementById(core_constants.SETTINGS_ID);
+    if (!panel) return [];
+    const input = panel.querySelector('[data-rmt-manual-api-model]');
+    const list = panel.querySelector('[data-rmt-manual-api-models]');
+    const button = panel.querySelector('[data-rmt-manual-api-model-refresh]');
+    if (!input || !list) return [];
+    const candidate = manualSettingsFromPanel(panel);
+    const signature = core_independentApi.apiConfigurationFingerprint(candidate);
+    const requestEpoch = Number(panel.dataset.rmtManualModelRequest || 0) + 1;
+    panel.dataset.rmtManualModelRequest = String(requestEpoch);
+    const isCurrent = () => Number(panel.dataset.rmtManualModelRequest || 0) === requestEpoch
+        && core_independentApi.apiConfigurationFingerprint(manualSettingsFromPanel(panel)) === signature;
+    if (button) {
+        button.disabled = fetchRemote;
+        button.textContent = fetchRemote ? '正在拉取…' : '拉取模型';
+    }
+    let models = runtimeState.connectionModelCache.get(core_independentApi.manualModelCacheKey(candidate)) || [];
+    try {
+        if (fetchRemote) models = await core_settings.fetchModelsForManualConnection(candidate, { force: true });
+    } catch (error) {
+        if (!isCurrent() || error?.code === 'RMT_API_MODEL_REQUEST_SUPERSEDED' || error?.name === 'AbortError') return null;
+        if (button) { button.disabled = false; button.textContent = '拉取模型'; }
+        throw error;
+    }
+    if (!isCurrent()) return null;
+    list.replaceChildren();
+    for (const model of [...new Set(models)]) {
+        const option = document.createElement('option');
+        option.value = model;
+        list.appendChild(option);
+    }
+    if (!input.value && models[0]) {
+        input.value = models[0];
+        panel.dataset.rmtManualDirty = '1';
+    }
+    if (button) {
+        button.disabled = false;
+        button.textContent = '拉取模型';
+    }
+    return models;
+}
+
+function refreshGenerationSettingsUi() {
+    const panel = document.getElementById(core_constants.SETTINGS_ID);
+    if (!panel) return;
+    const settings = core_settings.getPluginSettings();
+    const connectionMode = settings.apiConnectionMode === 'manual' ? 'manual' : 'profile';
+    const editorMode = panel.dataset.rmtApiEditor === 'manual' || panel.dataset.rmtApiEditor === 'profile'
+        ? panel.dataset.rmtApiEditor
+        : connectionMode;
+    panel.dataset.rmtApiEditor = editorMode;
+    const profile = panel.querySelector('[data-rmt-api-profile]');
+    const oneClick = panel.querySelector('[data-rmt-api-import-current]');
+    const manualChoice = panel.querySelector('[data-rmt-api-select-manual]');
+    const profilePanel = panel.querySelector('[data-rmt-api-profile-panel]');
+    const manualPanel = panel.querySelector('[data-rmt-api-manual-panel]');
+    const manualBase = panel.querySelector('[data-rmt-manual-api-base]');
+    const manualKey = panel.querySelector('[data-rmt-manual-api-key]');
+    const manualModel = panel.querySelector('[data-rmt-manual-api-model]');
+    const maxTokens = panel.querySelector('[data-rmt-api-max-tokens]');
+    const temperature = panel.querySelector('[data-rmt-api-temperature]');
+    const roomDaily = panel.querySelector('[data-rmt-room-life-auto]');
+    const imageGenerationManual = panel.querySelector('[data-rmt-image-generation-manual]');
+    const ttDisplay = panel.querySelector('[data-rmt-tt-display]');
+    const bannedPhrases = panel.querySelector('[data-rmt-banned-generated-phrases]');
+    const status = panel.querySelector('[data-rmt-api-status]');
+    if (profile) {
+        const profiles = core_settings.supportedConnectionProfiles();
+        profile.replaceChildren();
+        const empty = document.createElement('option');
+        empty.value = '';
+        empty.textContent = profiles.length ? '选择 Connection Manager 配置' : '没有可用的连接配置';
+        profile.appendChild(empty);
+        for (const item of profiles) {
+            const option = document.createElement('option');
+            option.value = item.id;
+            option.textContent = `${item.name}${item.model ? ` · ${item.model}` : ''}`;
+            profile.appendChild(option);
+        }
+        profile.value = profiles.some(item => item.id === settings.connectionProfileId) ? settings.connectionProfileId : '';
+    }
+    if (oneClick) {
+        oneClick.classList.toggle('is-active', editorMode === 'profile');
+        oneClick.setAttribute('aria-pressed', editorMode === 'profile' ? 'true' : 'false');
+    }
+    if (manualChoice) {
+        manualChoice.classList.toggle('is-active', editorMode === 'manual');
+        manualChoice.setAttribute('aria-pressed', editorMode === 'manual' ? 'true' : 'false');
+    }
+    if (profilePanel) profilePanel.hidden = editorMode !== 'profile';
+    if (manualPanel) manualPanel.hidden = editorMode !== 'manual';
+    const manualDirty = panel.dataset.rmtManualDirty === '1';
+    if (!manualDirty && manualBase) manualBase.value = settings.manualApiBaseUrl;
+    if (!manualDirty && manualModel) manualModel.value = settings.manualApiModel;
+    if (!manualDirty && manualKey) {
+        manualKey.value = '';
+        manualKey.placeholder = settings.manualApiKey ? '已保存；留空则保留' : 'API Key（可留空）';
+    }
+    if (maxTokens) maxTokens.value = String(settings.maxTokens);
+    if (temperature) {
+        temperature.value = String(settings.temperature);
+        temperature.disabled = false;
+        temperature.title = '覆盖心跳回忆专用连接的温度';
+    }
+    if (roomDaily) roomDaily.checked = settings.roomLifeAutoDaily;
+    if (imageGenerationManual) imageGenerationManual.checked = settings.imageGenerationManualEnabled;
+    if (ttDisplay) ttDisplay.checked = settings.ttDisplayMode;
+    if (bannedPhrases) bannedPhrases.value = settings.bannedGeneratedPhrases.join('，');
+    if (status) {
+        let profileCapabilityReady = false;
+        let manualConfigurationReady = false;
+        if (connectionMode === 'profile' && settings.connectionProfileId) {
+            try {
+                core_independentApi.assertConnectionManagerProfileSupport(core_context.getContext().ConnectionManagerRequestService);
+                profileCapabilityReady = true;
+            } catch {}
+        }
+        if (connectionMode === 'manual' && settings.manualApiModel) {
+            try {
+                core_independentApi.assertManualApiCredentialTransport(settings.manualApiBaseUrl, settings.manualApiKey);
+                manualConfigurationReady = true;
+            } catch {}
+        }
+        const ready = connectionMode === 'manual'
+            ? manualConfigurationReady
+            : !!settings.connectionProfileId && profileCapabilityReady;
+        status.classList.toggle('is-ready', ready);
+        status.textContent = `${ready ? '●' : '○'} ${ready
+            ? core_settings.generationSourceLabel(settings)
+            : connectionMode === 'manual' ? '手动配置未完成'
+            : settings.connectionProfileId ? '需要 1.1.18 能力' : '一键连接未配置'}`;
+    }
+    void refreshModelOptions();
+    void refreshManualModelOptions();
+}
+
+function hydrateSettingsPanel() {
+    const panel = document.getElementById(core_constants.SETTINGS_ID);
+    if (!panel) return false;
+    refreshSettingsMemoryStatus({ lightweight: true });
+    if (panel.dataset.rmtHydrated === '1') return true;
+    refreshGenerationSettingsUi();
+    panel.dataset.rmtHydrated = '1';
+    return true;
+}
+
+function refreshSettingsMemoryStatus({ lightweight = false } = {}) {
+    const panel = document.getElementById(core_constants.SETTINGS_ID);
+    if (!panel) return;
+    const openButton = panel.querySelector('[data-rmt-settings-open-archive]');
+    const archiveButton = panel.querySelector('[data-rmt-settings-current-archive]');
+    const taskCount = runtimeState.activeGenerationTasks.size;
+    if (openButton) {
+        openButton.disabled = false;
+        openButton.textContent = runtimeState.busy ? '打开档案室 · 档案整理中' : taskCount ? `打开档案室 · ${taskCount}项生成中` : '打开档案室';
+    }
+    if (archiveButton) {
+        let ready = false;
+        let actionable = false;
+        try {
+            const context = core_context.currentCharacterGuard();
+            actionable = !!core_context.getChatId(context);
+            ready = lightweight
+                ? !!archive_repository.getImportedMemory(context)
+                : archive_repository.getMemoryState(context).status === 'ready';
+        } catch {}
+        archiveButton.disabled = runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !actionable;
+        archiveButton.textContent = !actionable
+            ? '当前窗口档案不可用'
+            : runtimeState.busy ? '当前窗口档案整理中…'
+            : ready ? '增量更新当前窗口档案' : '生成当前窗口档案';
+    }
+}
+
+function mountSettings() {
+    ui_styles.ensureSettingsStyles();
+    const existing = document.getElementById(core_constants.SETTINGS_ID);
+    if (existing) {
+        refreshSettingsMemoryStatus({ lightweight: true });
+        if (existing.dataset.rmtHydrated === '1') refreshGenerationSettingsUi();
+        return true;
+    }
+    const mount = document.querySelector('#extensions_settings2');
+    if (!mount) return false;
+    const panel = document.createElement('div');
+    panel.id = core_constants.SETTINGS_ID;
+    panel.className = 'inline-drawer';
+    panel.innerHTML = `
+      <div class="inline-drawer-toggle inline-drawer-header rmt-settings-header">
+        <div><b>心跳回忆</b><small> API SETTINGS</small></div>
+        <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+      </div>
+      <div class="inline-drawer-content rmt-settings-content">
+        <div class="rmt-settings-card rmt-api-box">
+          <div class="rmt-settings-card-head"><span>API</span><div><b>心跳回忆独立 API</b><small>请选择一种配置方式</small></div></div>
+          <div class="rmt-api-source-grid" role="group" aria-label="独立 API 配置方式">
+            <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-import-current aria-pressed="false"><span class="rmt-api-source-badge">要求</span><b>1.1.18 一键配置</b><small>读取酒馆当前连接</small></button>
+            <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-select-manual aria-pressed="false"><span class="rmt-api-source-badge">OPENAI</span><b>手动配置</b><small>URL · Key · 模型</small></button>
+          </div>
+          <div class="rmt-api-status" data-rmt-api-status role="status">○ 一键连接未配置</div>
+          <div class="rmt-api-source-panel" data-rmt-api-profile-panel>
+            <label class="rmt-settings-field"><span>连接配置</span><select class="text_pole" data-rmt-api-profile><option value="">选择 Connection Manager 配置</option></select></label>
+            <div class="rmt-model-row">
+              <label class="rmt-settings-field"><span>模型</span><select class="text_pole" data-rmt-api-model><option value="">请先选择专用连接</option></select></label>
+              <button type="button" class="menu_button rmt-model-refresh" data-rmt-api-model-refresh>刷新模型</button>
+            </div>
+          </div>
+          <div class="rmt-api-source-panel" data-rmt-api-manual-panel hidden>
+            <label class="rmt-settings-field"><span>API 地址</span><input class="text_pole" data-rmt-manual-api-base type="url" inputmode="url" placeholder="https://api.example.com/v1"></label>
+            <label class="rmt-settings-field"><span>API Key</span><div class="rmt-manual-key-row"><input class="text_pole" data-rmt-manual-api-key type="password" autocomplete="new-password" placeholder="API Key（可留空）"><button type="button" class="menu_button" data-rmt-manual-api-key-clear>清除 Key</button></div></label>
+            <div class="rmt-model-row">
+              <label class="rmt-settings-field"><span>模型 ID</span><input class="text_pole" data-rmt-manual-api-model list="heartbeat_memories_manual_models" type="text" placeholder="例如 gpt-4.1"><datalist id="heartbeat_memories_manual_models" data-rmt-manual-api-models></datalist></label>
+              <button type="button" class="menu_button rmt-model-refresh" data-rmt-manual-api-model-refresh>拉取模型</button>
+            </div>
+            <button type="button" class="menu_button rmt-settings-wide rmt-manual-save" data-rmt-manual-api-save>保存并使用</button>
+          </div>
+          <div class="rmt-api-grid">
+            <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1024" max="60000" step="1"></label>
+            <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
+          </div>
+          <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
+          <label class="checkbox_label rmt-settings-check"><input data-rmt-room-life-auto type="checkbox"> 每天首次打开房间时允许一次“今日生活”自动请求</label>
+          <label class="checkbox_label rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"> 手动确认 SillyTavern Image Generation 已启用（自动检测失败时使用 /sd 兜底）</label>
+          <label class="checkbox_label rmt-settings-check"><input data-rmt-tt-display type="checkbox"> TT 显示模式（勾选＝r32 顶部安全区；不勾选＝全屏）</label>
+        </div>
+        <div class="rmt-settings-archive-actions">
+          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
+          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
+          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-performance-diagnostic aria-expanded="false" aria-controls="heartbeat_memories_performance_diagnostic"><i class="fa-solid fa-gauge-high"></i><span data-rmt-diagnostic-label>性能诊断（不解压缓存）</span></button>
+          <div class="rmt-performance-diagnostic-panel" id="heartbeat_memories_performance_diagnostic" data-rmt-diagnostic-panel hidden>
+            <div class="rmt-performance-diagnostic-head"><b>诊断结果</b><button type="button" class="menu_button rmt-performance-diagnostic-close" data-rmt-performance-diagnostic-close>关闭诊断</button></div>
+            <pre class="rmt-performance-diagnostic-output" data-rmt-performance-diagnostic-output></pre>
+          </div>
+          <div class="rmt-api-note">当前聊天窗口一份独立档案。普通更新只追加上次归档后的新内容并保留已生成 ADV EVENT / 房间 / ENDING；需要从头重整时请进入档案后明确选择“完全重建档案”。性能诊断只读取缓存 manifest/字符串长度，不会解压缓存或遍历聊天正文。</div>
+        </div>
+      </div>`;
+    mount.appendChild(panel);
+    panel.addEventListener('change', event => {
+        const target = event.target;
+        if (target.matches?.('[data-rmt-api-profile]')) {
+            panel.dataset.rmtApiEditor = 'profile';
+            const connectionProfileId = core_text.normalizeText(target.value, 160);
+            core_settings.updatePluginSettings({ apiConnectionMode: 'profile', connectionProfileId, modelOverride: '' });
+            refreshGenerationSettingsUi();
+            void refreshModelOptions({ fetchRemote: !!connectionProfileId });
+            return;
+        }
+        if (target.matches?.('[data-rmt-api-model]')) {
+            panel.dataset.rmtApiEditor = 'profile';
+            core_settings.updatePluginSettings({ apiConnectionMode: 'profile', modelOverride: core_text.normalizeText(target.value, 240) });
+            refreshGenerationSettingsUi();
+            return;
+        }
+        if (target.matches?.('[data-rmt-api-max-tokens]')) {
+            core_settings.updatePluginSettings({ maxTokens: Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(target.value) || core_constants.DEFAULT_SETTINGS.maxTokens)) });
+            refreshGenerationSettingsUi();
+            return;
+        }
+        if (target.matches?.('[data-rmt-api-temperature]')) {
+            core_settings.updatePluginSettings({ temperature: Math.max(0, Math.min(2, Number.isFinite(Number(target.value)) ? Number(target.value) : core_constants.DEFAULT_SETTINGS.temperature)) });
+            refreshGenerationSettingsUi();
+            return;
+        }
+        if (target.matches?.('[data-rmt-room-life-auto]')) {
+            core_settings.updatePluginSettings({ roomLifeAutoDaily: !!target.checked });
+            refreshGenerationSettingsUi();
+            return;
+        }
+        if (target.matches?.('[data-rmt-image-generation-manual]')) {
+            core_settings.updatePluginSettings({ imageGenerationManualEnabled: !!target.checked });
+            refreshGenerationSettingsUi();
+            if (runtimeState.activeMode && runtimeState.activeSession) ui_overlay.renderActive();
+            return;
+        }
+        if (target.matches?.('[data-rmt-tt-display]')) {
+            core_settings.updatePluginSettings({ ttDisplayMode: !!target.checked });
+            const overlay = document.getElementById(core_constants.OVERLAY_ID);
+            if (overlay) ui_overlay.applyArchiveMobileSafeArea(overlay);
+            refreshGenerationSettingsUi();
+            return;
+        }
+        if (target.matches?.('[data-rmt-banned-generated-phrases]')) {
+            core_settings.updatePluginSettings({ bannedGeneratedPhrases: core_settings.normalizeBannedGeneratedPhrases(target.value) });
+            refreshGenerationSettingsUi();
+        }
+    });
+    panel.addEventListener('input', event => {
+        if (event.target.matches?.('[data-rmt-manual-api-base],[data-rmt-manual-api-key],[data-rmt-manual-api-model]')) {
+            panel.dataset.rmtManualDirty = '1';
+        }
+    });
+    panel.addEventListener('click', event => {
+        if (event.target.closest?.('.rmt-settings-header')) hydrateSettingsPanel();
+        const manualChoiceButton = event.target.closest?.('[data-rmt-api-select-manual]');
+        if (manualChoiceButton) {
+            core_settings.beginApiConfigurationOperation();
+            panel.dataset.rmtApiEditor = 'manual';
+            refreshGenerationSettingsUi();
+            return;
+        }
+        const manualClearButton = event.target.closest?.('[data-rmt-manual-api-key-clear]');
+        if (manualClearButton) {
+            const keyInput = panel.querySelector('[data-rmt-manual-api-key]');
+            if (keyInput) keyInput.value = '';
+            core_settings.updatePluginSettings({ manualApiKey: '' });
+            if (keyInput) keyInput.placeholder = 'API Key（可留空）';
+            refreshGenerationSettingsUi();
+            globalThis.toastr?.success?.('手动 API Key 已清除。', '心跳回忆');
+            return;
+        }
+        const manualSaveButton = event.target.closest?.('[data-rmt-manual-api-save]');
+        if (manualSaveButton) {
+            try {
+                const candidate = manualSettingsFromPanel(panel);
+                const manualApiBaseUrl = core_independentApi.assertManualApiCredentialTransport(candidate.manualApiBaseUrl, candidate.manualApiKey);
+                const manualApiModel = core_text.normalizeText(candidate.manualApiModel, 240);
+                if (!manualApiModel) throw new Error('请填写手动 API 的模型 ID。');
+                core_settings.updatePluginSettings({
+                    apiConnectionMode: 'manual',
+                    manualApiBaseUrl,
+                    manualApiKey: candidate.manualApiKey,
+                    manualApiModel,
+                });
+                panel.dataset.rmtApiEditor = 'manual';
+                panel.dataset.rmtManualDirty = '0';
+                const keyInput = panel.querySelector('[data-rmt-manual-api-key]');
+                if (keyInput) keyInput.value = '';
+                refreshGenerationSettingsUi();
+                globalThis.toastr?.success?.('手动 API 已保存并启用。', '心跳回忆');
+            } catch (error) {
+                globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+            }
+            return;
+        }
+        const manualRefreshButton = event.target.closest?.('[data-rmt-manual-api-model-refresh]');
+        if (manualRefreshButton) {
+            refreshManualModelOptions({ fetchRemote: true })
+                .then(models => {
+                    if (models?.length) globalThis.toastr?.success?.(`已找到 ${models.length} 个模型。`, '心跳回忆');
+                })
+                .catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'));
+            return;
+        }
+        const modelRefreshButton = event.target.closest?.('[data-rmt-api-model-refresh]');
+        if (modelRefreshButton) {
+            refreshModelOptions({ fetchRemote: true })
+                .then(result => {
+                    if (!result) return;
+                    if (result.fallbackOnly) globalThis.toastr?.warning?.('远程列表暂不可用，已显示这一连接保存的模型。', '心跳回忆');
+                    else globalThis.toastr?.success?.('模型列表已更新。', '心跳回忆');
+                })
+                .catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'));
+            return;
+        }
+        const apiImportButton = event.target.closest?.('[data-rmt-api-import-current]');
+        if (apiImportButton) {
+            panel.dataset.rmtApiEditor = 'profile';
+            const operationEpoch = core_settings.beginApiConfigurationOperation();
+            const uiRequestEpoch = Number(panel.dataset.rmtOneClickRequest || 0) + 1;
+            panel.dataset.rmtOneClickRequest = String(uiRequestEpoch);
+            const isLatestUiRequest = () => Number(panel.dataset.rmtOneClickRequest || 0) === uiRequestEpoch;
+            apiImportButton.disabled = true;
+            core_settings.importCurrentSillyTavernConnection({
+                isCurrent: () => core_settings.isCurrentApiConfigurationOperation(operationEpoch),
+            }).then(result => {
+                if (!isLatestUiRequest()) return;
+                refreshGenerationSettingsUi();
+                const current = core_settings.getPluginSettings();
+                if (current.apiConnectionMode !== 'profile' || current.connectionProfileId !== core_text.normalizeText(result?.id, 160)) return;
+                globalThis.toastr?.success?.(result?.created ? '一键连接已创建并启用。' : '一键连接已启用。', '心跳回忆');
+                void refreshModelOptions({ fetchRemote: true });
+            }).catch(error => {
+                if (!isLatestUiRequest()) return;
+                if (error?.code !== 'RMT_API_CONFIGURATION_SUPERSEDED') {
+                    console.warn(`[HeartbeatMemories] one-click configuration failed (${core_text.normalizeText(error?.code, 80) || 'unavailable'})`);
+                    globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+                }
+                refreshGenerationSettingsUi();
+            }).finally(() => {
+                if (isLatestUiRequest()) apiImportButton.disabled = false;
+            });
+            return;
+        }
+        const diagnosticCloseButton = event.target.closest?.('[data-rmt-performance-diagnostic-close]');
+        if (diagnosticCloseButton) {
+            const output = panel.querySelector('[data-rmt-performance-diagnostic-output]');
+            const trigger = panel.querySelector('[data-rmt-performance-diagnostic]');
+            const hide = globalThis.__heartbeatMemoriesHidePerformanceDiagnostic;
+            if (typeof hide === 'function') hide(output, trigger);
+            else {
+                const diagnosticPanel = output?.closest?.('[data-rmt-diagnostic-panel]') || output;
+                if (diagnosticPanel) diagnosticPanel.hidden = true;
+                trigger?.setAttribute?.('aria-expanded', 'false');
+                const label = trigger?.querySelector?.('[data-rmt-diagnostic-label]');
+                if (label) label.textContent = '性能诊断（不解压缓存）';
+            }
+            return;
+        }
+        const diagnosticButton = event.target.closest?.('[data-rmt-performance-diagnostic]');
+        if (diagnosticButton) {
+            const output = panel.querySelector('[data-rmt-performance-diagnostic-output]');
+            const toggle = globalThis.__heartbeatMemoriesTogglePerformanceDiagnostic;
+            if (typeof toggle === 'function') toggle(output, diagnosticButton);
+            else if (output) {
+                const diagnosticPanel = output.closest?.('[data-rmt-diagnostic-panel]') || output;
+                const expanded = !diagnosticPanel.hidden;
+                diagnosticPanel.hidden = expanded;
+                diagnosticButton.setAttribute?.('aria-expanded', expanded ? 'false' : 'true');
+                const label = diagnosticButton.querySelector?.('[data-rmt-diagnostic-label]');
+                if (label) label.textContent = expanded ? '性能诊断（不解压缓存）' : '关闭性能诊断';
+                if (!expanded) output.textContent = '性能诊断器尚未就绪。';
+            }
+            return;
+        }
+        const currentArchiveButton = event.target.closest?.('[data-rmt-settings-current-archive]');
+        if (currentArchiveButton) {
+            ui_overlay.requestCurrentArchiveImport();
+            return;
+        }
+        const openArchiveButton = event.target.closest?.('[data-rmt-settings-open-archive]');
+        if (openArchiveButton) {
+            ui_archivePortal.safeShowArchiveLibrary('settings-click');
+            return;
+        }
+    });
+    panel.addEventListener('focusin', event => {
+        if (panel.dataset.rmtHydrated !== '1' && event.target.matches?.('input,select,button,textarea')) hydrateSettingsPanel();
+    });
+    refreshSettingsMemoryStatus({ lightweight: true });
+    return true;
+}
+
+__m_ui_settingsPanel_js.refreshModelOptions = refreshModelOptions;
+__m_ui_settingsPanel_js.refreshManualModelOptions = refreshManualModelOptions;
+__m_ui_settingsPanel_js.refreshGenerationSettingsUi = refreshGenerationSettingsUi;
+__m_ui_settingsPanel_js.hydrateSettingsPanel = hydrateSettingsPanel;
+__m_ui_settingsPanel_js.refreshSettingsMemoryStatus = refreshSettingsMemoryStatus;
+__m_ui_settingsPanel_js.mountSettings = mountSettings;
 }
 
 function __init_modes_advEvent_js() {
@@ -10054,7 +11675,11 @@ function normalizePhoneAppIcon(value, kind = 'misc', label = '') {
 function isExcludedPhoneApp(app) {
     const rawKind = core_text.normalizeText(app?.kind, 60).toLowerCase();
     const label = core_text.normalizeText(app?.label, 60);
-    return core_constants.PHONE_EXCLUDED_APP_KINDS.has(rawKind) || /日历|calendar|schedule/i.test(label);
+    const canonicalKind = normalizePhoneAppKind(rawKind, label);
+    const excludedLabel = /(?:日历|地图|导航|定位|路线|行程|出行|旅行|交通)|\b(?:calendar|schedule|maps?|navigation|location|route|travel|transit)\b/i;
+    return core_constants.PHONE_EXCLUDED_APP_KINDS.has(rawKind)
+        || core_constants.PHONE_EXCLUDED_APP_KINDS.has(canonicalKind)
+        || excludedLabel.test(label);
 }
 
 function phoneAppLimits(deviceKind) {
@@ -10193,10 +11818,10 @@ CURRENT_ROOM_CONTEXT_JSON:\n${JSON.stringify(compactPhoneRoomContext(roomSession
 数量要求：
 - phone / terminal 生成 5～10 个 App；watch / communicator 生成 4～8 个适合小屏或有限能力的功能入口。至少保留一个 chat / 通讯入口，其余 App 的名称、类型、数量和顺序都必须服从角色人设，不得照抄固定模板。
 - 至少 2 个 App 应明显来自角色职业、兴趣或世界观，例如案件库、训练记录、乐谱、实验日志、任务终端、宠物、阅读、健康或学习；不适合现代 App 的世界观应使用功能等价但符合时代的命名。
-- kind 只能选 moments/chat/gallery/camera/notes/store/browser/contacts/location/music/work/study/health/fitness/training/reading/books/files/research/games/finance/travel/security/creative/weather/tools/misc；icon 只能选 message/people/photo/camera/note/bag/globe/contact/pin/music/briefcase/book/heart/activity/game/wallet/plane/shield/palette/cloud/tool/spark/grid。
+- kind 只能选 moments/chat/gallery/camera/notes/store/browser/contacts/music/work/study/health/fitness/training/reading/books/files/research/games/finance/security/creative/weather/tools/misc；icon 只能选 message/people/photo/camera/note/bag/globe/contact/music/briefcase/book/heart/activity/game/wallet/shield/palette/cloud/tool/spark/grid。
 - uiProfile 只能使用：palette=noir-gold/ink-blue/frost/moss/ember/lilac/sky/sand；wallpaper=smoke/rain/grid/starfield/library/aurora/minimal/paper；typography=modern/serif/mono；iconStyle=rounded/square/glyph/glass；density=compact/cozy/roomy；shellTone=graphite/silver/ivory/bronze/navy。上面的 *_TOKEN 只是占位符，必须换成某个允许值，不得原样照抄。这些是本地安全样式 token，不得输出颜色值、CSS、URL 或 class 名。
 - uiProfile.explicitFields 只允许 palette/wallpaper/typography/iconStyle/density/shellTone；只有世界书或角色卡对该项有明文时才列入。其余字段保持不在列表中，本地会依据 {{char}} 的人设、设备名和 App 组合稳定补全，防止不同角色照抄同一套合法模板。
-- 禁止生成 kind=schedule / calendar 或名为“日历”的 App；两个人之间的约定、纪念日、日期圈记统一由独立「两个人的日历」承担。私人终端 notes 可以有普通个人待办，但不要复制关系日历。
+- 禁止生成 kind=schedule/calendar/location/travel/map/navigation/transit/route，或名为“日历/地图/导航/路线/行程/出行/旅行”的 App；日期手账和地图分别由独立「两个人的日历」与「他的出行路线」承担。私人终端 notes 可以有普通个人待办，但不要复制这两个入口。
 - 每个 entries 现在只写 id/title/meta，标题必须彼此有生活区分，不要填 preview/detail/messages/fields/imageCaption。
 - deviceKind 只能 phone/watch/terminal/communicator；四个 liveStates 都要有。
 - 不复刻真实商业 App 商标；禁止前任/第三方恋爱。只输出 JSON。`;
@@ -10475,7 +12100,7 @@ ${JSON.stringify(compactPhoneExisting(previous), null, 2)}
 
 要求：
 - 总共规划 0～8 个真正由 incrementalMemoryIds 带来的新条目；每个相关 App 1～3 条即可。没有任何合适的新条目时必须返回 {"apps":[]}，该空增量会被本地正常记录，不要为了凑数复述旧内容。
-- app id/kind 必须对应现有 App；不得向 schedule / calendar / 日历追加内容；不改变 deviceKind、设备名、锁屏或既有 liveStates。
+- app id/kind 必须对应现有 App；不得向 schedule/calendar/location/travel/map/navigation/transit/route 或日历/地图/导航/路线/行程/出行/旅行追加内容；不改变 deviceKind、设备名、锁屏或既有 liveStates。
 - 新条目的标题、对象、时间与主题必须避开 EXISTING_PHONE_INDEX_JSON；禁止把旧聊天、旧相册、旧笔记换措辞再说一次。
 - 与 {{user}} 的已发生共同历史必须在详情阶段使用 basis=记忆并引用 incrementalMemoryIds；普通工作/兴趣当前状态可为设定。
 - 禁止前任/第三方恋爱；只输出 JSON。`;
@@ -10764,6 +12389,20 @@ const ROOM_VISUAL_VALUES = Object.freeze({
     detail: Object.freeze(['none', 'glasses', 'headphones', 'scarf', 'headwear', 'pointed_ears', 'animal_ears', 'horns', 'visor']),
     posture: Object.freeze(['reserved', 'relaxed', 'upright', 'active', 'studious', 'tired']),
 });
+const ROOM_PET_SPECIES = Object.freeze(['cat', 'dog', 'bird', 'rabbit', 'fish', 'reptile', 'small_mammal', 'fantasy', 'other']);
+const ROOM_PET_SPECIES_SET = new Set(ROOM_PET_SPECIES);
+const ROOM_PET_SPECIES_ALIASES = Object.freeze({
+    '猫': 'cat', '猫咪': 'cat', kitten: 'cat',
+    '狗': 'dog', '狗狗': 'dog', puppy: 'dog',
+    '鸟': 'bird', '鸟类': 'bird',
+    '兔': 'rabbit', '兔子': 'rabbit',
+    '鱼': 'fish', '观赏鱼': 'fish',
+    '爬虫': 'reptile', '爬行类': 'reptile',
+    '仓鼠': 'small_mammal', '豚鼠': 'small_mammal', hamster: 'small_mammal',
+    '幻想生物': 'fantasy', '魔法生物': 'fantasy', companion: 'fantasy',
+});
+const ROOM_OBJECT_VISUAL_KINDS = new Set(['book', 'music', 'plant', 'tech', 'tool', 'fitness', 'pet', 'storage', 'light', 'seat', 'table', 'art', 'travel', 'other']);
+const ROOM_MOTIF_VALUES = new Set(['literary', 'musical', 'botanical', 'technical', 'artisan', 'athletic', 'companion', 'traveler', 'collector', 'minimal', 'domestic']);
 const ROOM_VISUAL_ALLOWLISTS = Object.freeze(Object.fromEntries(
     Object.entries(ROOM_VISUAL_VALUES).map(([key, values]) => [key, new Set(values)]),
 ));
@@ -10836,12 +12475,9 @@ function normalizeRoomVisualProfile(value, { identitySeed = '', bindPersona = fa
             outfit: choose(figure, 'outfit', fallback.outfit, 'figure.outfit'),
             detail: choose(figure, 'detail', fallback.detail, 'figure.detail'),
             posture: choose(figure, 'posture', fallback.posture, 'figure.posture'),
-            // These proportions are code-derived from the controlled character/room identity seed.
-            // The model cannot provide arbitrary geometry, CSS, URLs, or avatar data.
-            faceWidth: 40 + (identityHash % 9),
-            faceHeight: 46 + ((identityHash >>> 4) % 8),
-            eyeSpacing: 16 + ((identityHash >>> 8) % 8),
-            mouthWidth: 7 + ((identityHash >>> 12) % 6),
+            // The room figure is deliberately rendered from behind. No facial geometry is
+            // retained from new or legacy data, so the CSS silhouette cannot imply a face.
+            facing: 'away',
         },
     };
 }
@@ -10861,6 +12497,58 @@ function roomVisualIdentitySeed(room, memoryBank = null, identityHint = '') {
         core_text.normalizeText(room?.homeSummary, 1000),
         spaces,
     ].filter(Boolean).join('\u001f');
+}
+
+function normalizeRoomPetSpecies(value) {
+    const raw = core_text.normalizeText(value, 40).toLowerCase();
+    const species = ROOM_PET_SPECIES_ALIASES[raw] || raw;
+    return ROOM_PET_SPECIES_SET.has(species) ? species : 'other';
+}
+
+function normalizeRoomPets(value, spaces, memoryBank) {
+    const availableSpaces = new Set((Array.isArray(spaces) ? spaces : []).map(space => space?.id).filter(Boolean));
+    const usedIds = new Set();
+    return (Array.isArray(value) ? value : []).slice(0, 6).map((item, index) => {
+        const spaceId = core_text.safeId(item?.spaceId || item?.homeSpaceId, '');
+        if (!spaceId || !availableSpaces.has(spaceId)) return null;
+        const basis = core_constants.ROOM_BASIS_VALUES.has(item?.basis) ? item.basis : '设定';
+        const species = normalizeRoomPetSpecies(item?.species);
+        const name = core_text.normalizeText(item?.name, 60) || `宠物 ${index + 1}`;
+        const description = core_text.normalizeText(item?.description, 900) || '它在这个空间里留下了长期生活的痕迹。';
+        const line = core_text.normalizeText(item?.line, 500);
+        const reference = basis === '记忆'
+            ? core_evidence.normalizeMemoryReference(
+                item?.sourceMemoryIds,
+                item?.sourceMemoryAnchor,
+                `${name}\n${description}\n${line}`,
+                memoryBank,
+                1,
+            )
+            : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
+        if (basis === '记忆' && (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor)) return null;
+        const fallbackId = `PET${String(index + 1).padStart(2, '0')}`;
+        let id = core_text.safeId(item?.id, fallbackId);
+        if (usedIds.has(id)) id = fallbackId;
+        while (usedIds.has(id)) id = `${fallbackId}_${usedIds.size + 1}`;
+        usedIds.add(id);
+        return {
+            id,
+            name,
+            species,
+            description,
+            line,
+            spaceId,
+            basis,
+            sourceMemoryIds: reference.sourceMemoryIds,
+            sourceMemoryAnchor: reference.sourceMemoryAnchor,
+        };
+    }).filter(Boolean);
+}
+
+function roomNeedsSchemaUpgrade(session) {
+    return !!session
+        && session.kind === core_constants.MODE.ROOM
+        && Number(session.roomVersion) !== core_constants.ROOM_SESSION_VERSION;
 }
 
 function normalizeRoom(data, memoryBank, { identityKey = '' } = {}) {
@@ -10910,6 +12598,21 @@ ${line}`, memoryBank, 1)
         };
     }).filter(space => space.objects.length >= 3);
     if (spaces.length < 3) throw new Error(`私人生活空间不足：得到 ${spaces.length} 个有效空间，至少需要 3 个。`);
+    const spaceSignatures = new Set(spaces.map(space => `${core_incremental.normalizedContentKey(space.label, 80)}|${core_incremental.normalizedContentKey(space.spaceType, 100)}`));
+    if (spaceSignatures.size !== spaces.length) throw new Error('私人空间出现重复：每个空间必须有不同的名称和主功能。');
+    const sceneClasses = new Set(spaces.map(space => roomSceneClass(space.spaceType, space.label)));
+    const motifs = new Set(spaces.map(space => roomMotifToken({ visualProfile: data?.visualProfile || {} }, space)));
+    if (sceneClasses.size < 2 && motifs.size < 2) {
+        throw new Error('私人空间缺少功能差异：至少要呈现 2 种明显不同的空间结构或陈设母题。');
+    }
+    const visibleSignatures = new Set(spaces.map(space => {
+        const objectKinds = [...new Set(space.objects.map(roomObjectVisualKind))].sort().join(',');
+        return `${roomSceneClass(space.spaceType, space.label)}|${roomMotifToken({ visualProfile: data?.visualProfile || {} }, space)}|${objectKinds}`;
+    }));
+    const requiredVisibleSignatures = Math.max(2, Math.ceil(spaces.length / 2));
+    if (visibleSignatures.size < requiredVisibleSignatures) {
+        throw new Error(`私人空间的可见结构过于相似：${spaces.length} 个空间至少需要 ${requiredVisibleSignatures} 种不同的主陈设/物件组合。`);
+    }
 
     const spaceById = new Map(spaces.map(space => [space.id, space]));
     const dayparts = {};
@@ -10932,13 +12635,16 @@ ${line}`, memoryBank, 1)
     const homeName = core_text.normalizeText(data?.homeName, 100) || '私人生活空间';
     const homeSummary = core_text.normalizeText(data?.homeSummary, 2200) || '这些空间拼成了他日常生活真正会经过的路线。';
     const profileSeed = roomVisualIdentitySeed({ ...data, title, homeName, homeSummary, spaces }, memoryBank, identityKey);
+    const pets = normalizeRoomPets(data?.pets || data?.companions, spaces, memoryBank);
     return {
         kind: core_constants.MODE.ROOM,
+        roomVersion: core_constants.ROOM_SESSION_VERSION,
         title,
         homeName,
         homeSummary,
         visualProfile: normalizeRoomVisualProfile(data?.visualProfile, { identitySeed: profileSeed, bindPersona: true }),
         spaces,
+        pets,
         dayparts,
         presenceLines,
         selectedSpaceId: initialSpace.id,
@@ -10964,10 +12670,15 @@ function compactRoomExisting(session) {
 
 function roomIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) {
     const incrementalBank = core_incremental.incrementalPromptMemoryBank(memoryBank, sourceMemoryIds);
+    const schemaUpgrade = roomNeedsSchemaUpgrade(previous);
     return `${generation_prompts.PROMPTS[core_constants.MODE.ROOM](context, incrementalBank)}
 
 【本轮是增量追加，以下规则优先于上面的初次生成数量建议】
 旧房间、旧空间、旧物件和旧台词由本地原样保留。本轮请返回一份可通过同一结构校验的房间候选，但只把新增档案能证明的新生活痕迹做成新物件/必要的新空间；已有对象可以原样列入结构帮助定位，禁止改写其描述或换名复述。
+${schemaUpgrade ? `
+【旧版房间一次性补全】
+这份旧缓存尚未使用宠物字段。即使 incrementalMemoryIds 为空，也必须重新扫描 CHARACTER_CARD_JSON 与 WORLD_INFO_TEXT 里的明确宠物/动物伙伴设定。有明确设定就以 basis=设定放入 pets；没有就保持 pets=[]。不得凭空发明。本地只会合并宠物/新证据，不会用候选重写旧房间。
+` : ''}
 UNTRUSTED_INCREMENTAL_ROOM_ARCHIVE_JSON:
 ${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}
 EXISTING_ROOM_INDEX_JSON:
@@ -10989,14 +12700,30 @@ function roomObjectKey(item) {
     return ids && anchor ? `memory|${ids}|${anchor}` : `label|${core_incremental.normalizedContentKey(item?.label, 100)}`;
 }
 
-function roomObjectUsesIncrement(item, sourceMemoryIds) {
+function roomObjectUsesIncrement(item, sourceMemoryIds, memoryBank = null) {
     if (item?.basis !== '记忆') return false;
     const allowed = new Set(core_text.cleanArray(sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40));
-    return core_text.cleanArray(item?.sourceMemoryIds, 12, 40).some(id => allowed.has(id));
+    if (!core_text.cleanArray(item?.sourceMemoryIds, 12, 40).some(id => allowed.has(id))) return false;
+    if (!memoryBank) return true;
+    const incrementalBank = core_incremental.incrementalPromptMemoryBank(memoryBank, sourceMemoryIds);
+    const reference = core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, '', incrementalBank, 1);
+    return !!reference.sourceMemoryAnchor
+        && core_text.normalizeText(item?.sourceMemoryAnchor, 120) === reference.sourceMemoryAnchor;
 }
 
-function mergeRoomIncremental(previous, fresh, sourceMemoryIds) {
+function roomPetKey(pet) {
+    return `${normalizeRoomPetSpecies(pet?.species)}|${core_incremental.normalizedContentKey(pet?.name, 80)}`;
+}
+
+function roomPetUsesIncrement(pet, sourceMemoryIds, allowSettingPets = false, memoryBank = null) {
+    if (pet?.basis !== '记忆') return allowSettingPets;
+    return roomObjectUsesIncrement(pet, sourceMemoryIds, memoryBank);
+}
+
+function mergeRoomIncremental(previous, fresh, sourceMemoryIds, { memoryBank = null } = {}) {
+    const schemaUpgrade = roomNeedsSchemaUpgrade(previous);
     const merged = structuredClone(previous);
+    merged.roomVersion = core_constants.ROOM_SESSION_VERSION;
     if (!previous?.visualProfile && fresh?.visualProfile) merged.visualProfile = structuredClone(fresh.visualProfile);
     const usedSpaceIds = new Set((merged.spaces || []).map(space => space.id));
     const bySpace = new Map((merged.spaces || []).map((space, index) => [roomSpaceKey(space), index]));
@@ -11005,13 +12732,13 @@ function mergeRoomIncremental(previous, fresh, sourceMemoryIds) {
         const key = roomSpaceKey(freshSpace);
         const existingIndex = bySpace.get(key);
         if (existingIndex === undefined) {
-            const grounded = (freshSpace.objects || []).some(item => roomObjectUsesIncrement(item, sourceMemoryIds));
+            const grounded = (freshSpace.objects || []).some(item => roomObjectUsesIncrement(item, sourceMemoryIds, memoryBank));
             if (!grounded || merged.spaces.length >= 20) continue;
             const next = structuredClone(freshSpace);
             next.id = core_incremental.uniqueGeneratedId(next.id, usedSpaceIds, 'SP');
             const usedObjectIds = new Set();
             next.objects = (next.objects || [])
-                .filter(item => item?.basis !== '记忆' || roomObjectUsesIncrement(item, sourceMemoryIds))
+                .filter(item => roomObjectUsesIncrement(item, sourceMemoryIds, memoryBank))
                 .slice(0, 24).map(item => ({
                 ...item,
                 id: core_incremental.uniqueGeneratedId(item.id, usedObjectIds, `${next.id}_OBJ`),
@@ -11025,7 +12752,7 @@ function mergeRoomIncremental(previous, fresh, sourceMemoryIds) {
         const seenObjects = new Set((target.objects || []).map(roomObjectKey));
         const usedObjectIds = new Set((target.objects || []).map(item => item.id));
         for (const item of freshSpace.objects || []) {
-            if (!roomObjectUsesIncrement(item, sourceMemoryIds)) continue;
+            if (!roomObjectUsesIncrement(item, sourceMemoryIds, memoryBank)) continue;
             const objectKey = roomObjectKey(item);
             if (!objectKey || seenObjects.has(objectKey) || target.objects.length >= 24) continue;
             seenObjects.add(objectKey);
@@ -11036,16 +12763,30 @@ function mergeRoomIncremental(previous, fresh, sourceMemoryIds) {
             added += 1;
         }
     }
-    const presence = [...(previous.presenceLines || [])];
-    const seenLines = new Set(presence.map(line => core_incremental.normalizedContentKey(line, 900)));
-    for (const line of fresh.presenceLines || []) {
-        const key = core_incremental.normalizedContentKey(line, 900);
-        if (!key || seenLines.has(key) || presence.length >= 40) continue;
-        seenLines.add(key);
-        presence.push(line);
+    const mergedPets = Array.isArray(merged.pets) ? merged.pets : [];
+    const seenPets = new Set(mergedPets.map(roomPetKey));
+    const usedPetIds = new Set(mergedPets.map(pet => pet?.id).filter(Boolean));
+    const freshSpacesById = new Map((fresh.spaces || []).map(space => [space.id, space]));
+    const mergedSpacesByKey = new Map((merged.spaces || []).map(space => [roomSpaceKey(space), space]));
+    for (const pet of fresh.pets || []) {
+        if (mergedPets.length >= 6 || !roomPetUsesIncrement(pet, sourceMemoryIds, schemaUpgrade, memoryBank)) continue;
+        const sourceSpace = freshSpacesById.get(pet?.spaceId);
+        const targetSpace = (sourceSpace && mergedSpacesByKey.get(roomSpaceKey(sourceSpace)))
+            || (merged.spaces || []).find(space => space.id === pet?.spaceId);
+        if (!targetSpace) continue;
+        const key = roomPetKey(pet);
+        if (!key || seenPets.has(key)) continue;
+        const next = structuredClone(pet);
+        next.id = core_incremental.uniqueGeneratedId(next.id, usedPetIds, 'PET');
+        next.spaceId = targetSpace.id;
+        mergedPets.push(next);
+        seenPets.add(key);
         added += 1;
     }
-    merged.presenceLines = presence;
+    merged.pets = mergedPets;
+    // Incremental presence lines carry no per-line evidence fields, so they cannot be
+    // attributed to this update safely. Keep the previously validated lines unchanged.
+    merged.presenceLines = structuredClone(previous.presenceLines || []);
     merged.selectedSpaceId = previous.selectedSpaceId;
     merged.selectedObjectId = previous.selectedObjectId;
     return { session: merged, added };
@@ -11059,7 +12800,7 @@ async function generateRoomIncrementalWithRepair(context, memoryBank, origin, ta
         { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], temperature: 0.45, context, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ROOM, background: true },
         raw => normalizeRoom(raw, memoryBank),
     );
-    const { session, added } = mergeRoomIncremental(previous, fresh, sourceMemoryIds);
+    const { session, added } = mergeRoomIncremental(previous, fresh, sourceMemoryIds, { memoryBank });
     return core_incremental.stampIncrementalCoverage(session, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
@@ -11101,13 +12842,26 @@ function roomBlueprintPayload(session) {
                 sourceMemoryAnchor: item.sourceMemoryAnchor || '',
             })),
         })),
+        pets: (Array.isArray(session.pets) ? session.pets : []).slice(0, 6).map(pet => ({
+            id: core_text.safeId(pet?.id, ''),
+            name: core_text.normalizeText(pet?.name, 60),
+            species: normalizeRoomPetSpecies(pet?.species),
+            spaceId: core_text.safeId(pet?.spaceId, ''),
+            description: core_text.normalizeText(pet?.description, 900),
+            basis: core_constants.ROOM_BASIS_VALUES.has(pet?.basis) ? pet.basis : '设定',
+            sourceMemoryIds: core_text.cleanArray(pet?.sourceMemoryIds, 12, 40),
+            sourceMemoryAnchor: core_text.normalizeText(pet?.sourceMemoryAnchor, 120),
+        })),
     };
 }
 
 function roomLifePrompt(context, session, memoryBank, date = new Date()) {
     const dateKey = localDateKey(date);
     const weekday = new Intl.DateTimeFormat('zh-CN', { weekday: 'long' }).format(date);
-    const referencedMemoryIds = core_evidence.roomReferencedMemoryIds(session);
+    const referencedMemoryIds = [...new Set([
+        ...core_evidence.roomReferencedMemoryIds(session),
+        ...(Array.isArray(session?.pets) ? session.pets : []).flatMap(pet => core_text.cleanArray(pet?.sourceMemoryIds, 12, 40)),
+    ])].slice(0, 24);
     const lifeMemories = referencedMemoryIds.length
         ? core_evidence.memoryPayload(memoryBank, referencedMemoryIds, 24)
         : core_evidence.memoryPayload(memoryBank, null, 12);
@@ -11469,6 +13223,71 @@ function roomTemporaryPlacement(label, index) {
     return `--rtx:${x}%;--rty:${y}%;--rtr:${r}deg`;
 }
 
+function roomObjectVisualKind(item) {
+    const text = core_text.normalizeText(`${item?.label || ''} ${item?.description || ''}`, 1800).toLowerCase();
+    if (/书|杂志|文件|卷宗|阅读|book|magazine|file/.test(text)) return 'book';
+    if (/琴|乐器|唱片|音箱|耳机|麦克风|music|guitar|piano|record|speaker/.test(text)) return 'music';
+    if (/植物|花|盆栽|草|花园|plant|flower|garden/.test(text)) return 'plant';
+    if (/电脑|显示器|终端|设备|仪器|机械|screen|terminal|device|computer|console/.test(text)) return 'tech';
+    if (/工具|工作台|工坊|零件|材料|tool|workbench|craft/.test(text)) return 'tool';
+    if (/健身|训练|球|哑铃|跑步|运动|fitness|training|sport/.test(text)) return 'fitness';
+    if (/宠物|猫|狗|鸟|鱼|窝|笼|水族|pet|cat|dog|bird|aquarium/.test(text)) return 'pet';
+    if (/柜|箱|盒|包|抽屉|收纳|cabinet|box|drawer|storage/.test(text)) return 'storage';
+    if (/灯|蜡烛|灯笼|light|lamp|candle/.test(text)) return 'light';
+    if (/椅|沙发|坐垫|chair|sofa|seat/.test(text)) return 'seat';
+    if (/桌|案|台面|desk|table/.test(text)) return 'table';
+    if (/画|摄影|模型|雕塑|手稿|art|photo|model|sketch/.test(text)) return 'art';
+    if (/行李|地图|车票|护照|旅行|luggage|map|ticket|travel/.test(text)) return 'travel';
+    return 'other';
+}
+
+function roomMotifToken(session, space) {
+    const objects = (Array.isArray(space?.objects) ? space.objects : []).map(item => roomObjectVisualKind(item));
+    const counts = new Map();
+    for (const kind of objects) counts.set(kind, (counts.get(kind) || 0) + 1);
+    const mapped = [
+        ['book', 'literary'], ['music', 'musical'], ['plant', 'botanical'], ['tech', 'technical'],
+        ['tool', 'artisan'], ['fitness', 'athletic'], ['pet', 'companion'], ['travel', 'traveler'],
+        ['art', 'collector'],
+    ];
+    mapped.sort((a, b) => (counts.get(b[0]) || 0) - (counts.get(a[0]) || 0));
+    const best = mapped[0];
+    if (best && (counts.get(best[0]) || 0) > 0) return best[1];
+    const density = core_text.normalizeText(session?.visualProfile?.density, 20);
+    const fallback = density === 'sparse' ? 'minimal' : 'domestic';
+    return ROOM_MOTIF_VALUES.has(fallback) ? fallback : 'domestic';
+}
+
+function roomPetPlacement(pet, index) {
+    const petId = core_text.safeId(pet?.id, `PET${Number(index) + 1}`);
+    const petName = core_text.normalizeText(pet?.name, 60);
+    const spaceId = core_text.safeId(pet?.spaceId, '');
+    const h = core_text.hashString(`pet|${petId}|${petName}|${spaceId}`);
+    const x = 18 + (h % 65);
+    const y = 70 + ((h >>> 7) % 15);
+    const flip = (h >>> 12) % 2 ? 1 : -1;
+    return `--rmt-pet-x:${x}%;--rmt-pet-y:${y}%;--rmt-pet-flip:${flip}`;
+}
+
+function roomPetNodeHtml(pet, index = 0) {
+    const species = normalizeRoomPetSpecies(pet?.species);
+    const id = core_text.safeId(pet?.id, `PET${Number(index) + 1}`);
+    const name = core_text.normalizeText(pet?.name, 60) || '宠物';
+    const description = core_text.normalizeText(pet?.description, 900);
+    return `<span class="rmt-room-pet" style="${roomPetPlacement({ ...pet, id, name }, index)}" data-rmt-pet-id="${core_text.esc(id)}" data-rmt-pet-species="${core_text.esc(species)}" aria-label="${core_text.esc(`${name}：${description}`)}"><span class="rmt-room-pet-tail" aria-hidden="true"></span><span class="rmt-room-pet-body" aria-hidden="true"></span><span class="rmt-room-pet-name">${core_text.esc(name)}</span></span>`;
+}
+
+function roomPetSummaryHtml(pet) {
+    const name = core_text.normalizeText(pet?.name, 60) || '宠物';
+    const description = core_text.normalizeText(pet?.description, 900);
+    const line = core_text.normalizeText(pet?.line, 500);
+    const anchor = core_text.normalizeText(pet?.sourceMemoryAnchor, 120);
+    const evidence = pet?.basis === '记忆' && anchor
+        ? `<small>档案痕迹：${core_text.esc(anchor)}</small>`
+        : '<small>来源：角色设定 / 世界观</small>';
+    return `<div class="rmt-room-pet-note"><b>🐾 ${core_text.esc(name)}</b><span>${core_text.esc(description)}</span>${line ? `<em>${core_text.esc(line)}</em>` : ''}${evidence}</div>`;
+}
+
 function roomDeepAvailability() {
     const options = runtimeState.activeArchiveSnapshot ? { chatId: runtimeState.activeArchiveSnapshot.chatId, memoryBank: runtimeState.activeArchiveSnapshot.memory, cache: runtimeState.activeArchiveSnapshot.cache, clone: true } : {};
     return {
@@ -11565,7 +13384,7 @@ function returnToRoomFromDeep() {
 function renderRoom() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.ROOM || !Array.isArray(session.spaces) || !session.spaces.length) return;
-    ui_overlay.setBackVisible(true, '当前档案');
+    ui_overlay.setBackVisible(true, runtimeState.activeArchiveSnapshot ? (runtimeState.activeArchiveReadOnly ? '只读档案' : '档案') : '当前档案');
     ui_overlay.topTitle(core_constants.MODE_LABEL[core_constants.MODE.ROOM]);
     const now = new Date();
     const daypart = roomDaypartState(now);
@@ -11587,12 +13406,25 @@ function renderRoom() {
         identitySeed: roomVisualIdentitySeed(session, runtimeState.activeArchiveSnapshot?.memory || null, archiveIdentity),
     });
     const figureProfile = visualProfile.figure;
-    const hotspots = selectedSpace.objects.map((item, index) => `<button type="button" class="rmt-room-hotspot ${item.id === selected?.id ? 'active' : ''} ${item.id === focusId ? 'focus' : ''}" style="${roomObjectPlacement(item, index)}" data-rmt-room-id="${core_text.esc(item.id)}" aria-label="${core_text.esc(item.label)}">${index + 1}</button>`).join('');
-    const objectRail = selectedSpace.objects.map((item, index) => `<button type="button" class="rmt-room-object-chip ${item.id === selected?.id ? 'active' : ''}" data-rmt-room-id="${core_text.esc(item.id)}"><span>${index + 1}</span><b>${core_text.esc(item.label)}</b>${item.searchable ? '<em>▣ 可翻找</em>' : ''}</button>`).join('');
+    // Legacy caches did not have a pet schema. Treat absence as empty and keep any
+    // newer cached array bounded before it reaches the DOM.
+    const pets = (Array.isArray(session.pets) ? session.pets : []).slice(0, 6);
+    const selectedPets = pets.filter(pet => pet?.spaceId === selectedSpace.id);
+    const petNodes = selectedPets.map(roomPetNodeHtml).join('');
+    const petNotes = selectedPets.map(roomPetSummaryHtml).join('');
+    const hotspots = selectedSpace.objects.map((item, index) => {
+        const visualKind = roomObjectVisualKind(item);
+        return `<button type="button" class="rmt-room-hotspot ${item.id === selected?.id ? 'active' : ''} ${item.id === focusId ? 'focus' : ''}" style="${roomObjectPlacement(item, index)}" data-rmt-room-id="${core_text.esc(item.id)}" data-rmt-visual-kind="${core_text.esc(visualKind)}" aria-label="${core_text.esc(item.label)}">${index + 1}</button>`;
+    }).join('');
+    const objectRail = selectedSpace.objects.map((item, index) => {
+        const visualKind = roomObjectVisualKind(item);
+        return `<button type="button" class="rmt-room-object-chip ${item.id === selected?.id ? 'active' : ''}" data-rmt-room-id="${core_text.esc(item.id)}" data-rmt-visual-kind="${core_text.esc(visualKind)}"><span>${index + 1}</span><b>${core_text.esc(item.label)}</b>${item.searchable ? '<em>▣ 可翻找</em>' : ''}</button>`;
+    }).join('');
     const map = session.spaces.map(space => {
         const typeLabel = core_text.normalizeText(space.spaceType, 100);
         const showType = typeLabel && core_text.normalizeText(space.label, 100) !== typeLabel;
-        return `<button type="button" class="rmt-room-space ${space.id === selectedSpace.id ? 'active' : ''} ${space.id === presentSpace.id ? 'present' : ''}" data-rmt-room-space="${core_text.esc(space.id)}">${space.id === presentSpace.id ? '<span class="rmt-room-presence-dot">♥</span>' : ''}<b>${core_text.esc(space.label)}</b>${showType ? `<small>${core_text.esc(typeLabel)}</small>` : ''}</button>`;
+        const petCount = pets.filter(pet => pet?.spaceId === space.id).length;
+        return `<button type="button" class="rmt-room-space ${space.id === selectedSpace.id ? 'active' : ''} ${space.id === presentSpace.id ? 'present' : ''}" data-rmt-room-space="${core_text.esc(space.id)}">${space.id === presentSpace.id ? '<span class="rmt-room-presence-dot">♥</span>' : ''}${petCount ? `<span class="rmt-room-pet-dot" aria-label="${petCount} 只宠物">🐾</span>` : ''}<b>${core_text.esc(space.label)}</b>${showType ? `<small>${core_text.esc(typeLabel)}</small>` : ''}</button>`;
     }).join('');
     const memorySource = selected?.basis === '记忆' && selected.sourceMemoryIds.length
         ? `档案痕迹：${selected.sourceMemoryIds.join(' · ')}`
@@ -11610,6 +13442,9 @@ function renderRoom() {
     const phoneLabel = deep.phone?.deviceName || phoneDraft?.plan?.deviceName || '私人通讯终端';
     const itemsGenerating = core_requestCoordinator.isModeGenerating(core_constants.MODE.ITEMS);
     const readOnlyArchive = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
+    const schemaUpgradeNotice = roomNeedsSchemaUpgrade(session)
+        ? `<section class="rmt-room-schema-notice"><div><b>这份旧版房间还没有扫描宠物设定</b><small>${readOnlyArchive ? '请回到它对应的原聊天后补全；当前只读档案不会串到其他角色。' : '可重新扫描角色卡与世界书；旧房间、物件和台词会原样保留。'}</small></div>${readOnlyArchive ? '' : '<button type="button" class="rmt-btn" data-rmt-action="room-schema-upgrade">补全宠物与视觉设定</button>'}</section>`
+        : '';
     const itemActionText = selectedSearchable
         ? (deep.items ? `翻找「${selected.label}」` : readOnlyArchive ? `「${selected.label}」尚未生成物品档案` : itemsGenerating ? '物品生成中…' : `生成并翻找「${selected.label}」`)
         : '先选中盒子 / 抽屉 / 柜子等收纳物';
@@ -11618,11 +13453,13 @@ function renderRoom() {
         : `${selectedSpace.label} · ${selectedSpace.spaceType}`;
     const sceneKind = roomSceneClass(selectedSpace.spaceType, selectedSpace.label);
     const sceneLayout = roomLayoutVariant(selectedSpace);
+    const sceneMotif = roomMotifToken(session, selectedSpace);
     const tempLine = temporaryObjects.length ? `<div class="rmt-room-temp-line">此刻临时物件：${temporaryObjects.map(item => core_text.esc(item)).join(' · ')}</div>` : '';
     const body = ui_overlay.bodyEl();
-    body.innerHTML = `<div class="rmt-room-view" data-rmt-room-world="${core_text.esc(visualProfile.worldStyle)}" data-rmt-room-palette="${core_text.esc(visualProfile.palette)}" data-rmt-room-material="${core_text.esc(visualProfile.material)}" data-rmt-room-density="${core_text.esc(visualProfile.density)}">
+    body.innerHTML = `<div class="rmt-room-view" data-rmt-room-world="${core_text.esc(visualProfile.worldStyle)}" data-rmt-room-palette="${core_text.esc(visualProfile.palette)}" data-rmt-room-material="${core_text.esc(visualProfile.material)}" data-rmt-room-density="${core_text.esc(visualProfile.density)}" data-rmt-room-motif="${core_text.esc(sceneMotif)}">
       <div class="rmt-room-map" aria-label="私人空间地图">${map}</div>
       <div class="rmt-room-location"><div><b>${core_text.esc(currentLocationText)}</b><small>${core_text.esc(session.homeName)} · ${session.spaces.length} 个可观察区域</small></div><div class="rmt-room-location-actions">${!personIsHere ? `<button type="button" class="rmt-room-find" data-rmt-action="room-find-presence">去看看他</button>` : ''}${readOnlyArchive ? '' : `<button type="button" class="rmt-room-find" data-rmt-action="room-life-refresh" ${runtimeState.busy ? 'disabled' : ''}>更新今日生活</button>`}</div></div>
+      ${schemaUpgradeNotice}
 
       <div class="rmt-room-flow">
         <section class="rmt-room-card rmt-room-space-note-card">
@@ -11634,12 +13471,13 @@ function renderRoom() {
 
         <section class="rmt-room-stage">
           <div class="rmt-room-stage-head"><b>${core_text.esc(sceneTitle)}</b><span class="rmt-room-clock" data-rmt-room-clock>${core_text.esc(daypart.label)} · ${core_text.esc(roomClockText(now))}</span></div>
-          <div class="rmt-room-scene rmt-room-scene-${sceneKind}" data-rmt-layout="${sceneLayout}" data-rmt-room-beat="${core_text.esc(String(slot?.id || `${daypart.key}:${slot?.spaceId || ''}:${slot?.activity || ''}`))}" data-rmt-room-daypart="${core_text.esc(daypart.key)}" data-rmt-lighting="${core_text.esc(visualState.lighting)}" data-rmt-window="${core_text.esc(visualState.window)}" data-rmt-order="${core_text.esc(visualState.order)}" data-rmt-surface="${core_text.esc(visualState.surface)}">
+          <div class="rmt-room-scene rmt-room-scene-${sceneKind}" data-rmt-layout="${sceneLayout}" data-rmt-room-beat="${core_text.esc(String(slot?.id || `${daypart.key}:${slot?.spaceId || ''}:${slot?.activity || ''}`))}" data-rmt-room-daypart="${core_text.esc(daypart.key)}" data-rmt-lighting="${core_text.esc(visualState.lighting)}" data-rmt-window="${core_text.esc(visualState.window)}" data-rmt-order="${core_text.esc(visualState.order)}" data-rmt-surface="${core_text.esc(visualState.surface)}" data-rmt-room-motif="${core_text.esc(sceneMotif)}">
             <div class="rmt-room-window" aria-hidden="true"></div>
             <div class="rmt-room-furniture" aria-hidden="true"></div>
             <div class="rmt-room-decor" aria-hidden="true"><span class="rmt-room-prop-a"></span><span class="rmt-room-prop-b"></span><span class="rmt-room-prop-c"></span></div>
             ${hotspots}
-            ${personIsHere ? `<button type="button" class="rmt-room-person" style="--rmt-head-width:${figureProfile.faceWidth}px;--rmt-head-height:${figureProfile.faceHeight}px;--rmt-eye-gap:${figureProfile.eyeSpacing}px;--rmt-mouth-width:${figureProfile.mouthWidth}px" data-rmt-action="room-presence" data-rmt-identity-key="${core_text.esc(visualProfile.identityKey)}" data-rmt-build="${core_text.esc(figureProfile.build)}" data-rmt-hair-shape="${core_text.esc(figureProfile.hairShape)}" data-rmt-hair-tone="${core_text.esc(figureProfile.hairTone)}" data-rmt-outfit="${core_text.esc(figureProfile.outfit)}" data-rmt-detail="${core_text.esc(figureProfile.detail)}" data-rmt-posture="${core_text.esc(figureProfile.posture)}" aria-label="看看${core_text.esc(charName)}现在在做什么"><span class="rmt-room-figure-shadow" aria-hidden="true"></span><span class="rmt-room-body-figure" aria-hidden="true"><span class="rmt-room-outfit-mark"></span></span><span class="rmt-room-head" aria-hidden="true"><span class="rmt-room-face"></span><span class="rmt-room-hair"></span><span class="rmt-room-figure-detail"></span></span><span class="rmt-room-person-label" aria-hidden="true">♥</span></button>` : ''}
+            ${petNodes}
+            ${personIsHere ? `<button type="button" class="rmt-room-person" data-rmt-action="room-presence" data-rmt-facing="away" data-rmt-identity-key="${core_text.esc(visualProfile.identityKey)}" data-rmt-build="${core_text.esc(figureProfile.build)}" data-rmt-hair-shape="${core_text.esc(figureProfile.hairShape)}" data-rmt-hair-tone="${core_text.esc(figureProfile.hairTone)}" data-rmt-outfit="${core_text.esc(figureProfile.outfit)}" data-rmt-detail="${core_text.esc(figureProfile.detail)}" data-rmt-posture="${core_text.esc(figureProfile.posture)}" aria-label="从背影看看${core_text.esc(charName)}现在在做什么"><span class="rmt-room-figure-shadow" aria-hidden="true"></span><span class="rmt-room-body-figure" aria-hidden="true"><span class="rmt-room-outfit-mark"></span></span><span class="rmt-room-head" aria-hidden="true"><span class="rmt-room-hair"></span><span class="rmt-room-figure-detail"></span></span><span class="rmt-room-person-label" aria-hidden="true">♥</span></button>` : ''}
           </div>
           <div class="rmt-room-object-rail" aria-label="房间物件">${objectRail}</div>
           <div class="rmt-room-activity-strip ${personIsHere ? '' : 'empty'}">
@@ -11652,6 +13490,7 @@ function renderRoom() {
           <div class="rmt-room-card-kicker">PRIVATE LIFE</div>
           <div class="rmt-room-atmosphere">${core_text.esc(selectedSpace.atmosphere)}</div>
           <div class="rmt-room-note" style="margin-top:9px">整体：${core_text.esc(session.homeSummary)}</div>
+          ${petNotes ? `<div class="rmt-room-pet-notes" aria-label="这个空间里的宠物">${petNotes}</div>` : ''}
           ${personIsHere ? `<div class="rmt-room-object-line">${core_text.esc(presenceLine)}</div>` : `<div class="rmt-room-object-line">${core_text.esc(charName)} 此刻在「${core_text.esc(presentSpace.label)}」。</div>`}
         </section>
 
@@ -11705,6 +13544,9 @@ function roomPresenceNext() {
 __m_modes_room_js.generateRoomIncrementalWithRepair = generateRoomIncrementalWithRepair;
 __m_modes_room_js.ensureRoomLifePlan = ensureRoomLifePlan;
 __m_modes_room_js.normalizeRoomVisualProfile = normalizeRoomVisualProfile;
+__m_modes_room_js.normalizeRoomPetSpecies = normalizeRoomPetSpecies;
+__m_modes_room_js.normalizeRoomPets = normalizeRoomPets;
+__m_modes_room_js.roomNeedsSchemaUpgrade = roomNeedsSchemaUpgrade;
 __m_modes_room_js.normalizeRoom = normalizeRoom;
 __m_modes_room_js.compactRoomExisting = compactRoomExisting;
 __m_modes_room_js.roomIncrementPrompt = roomIncrementPrompt;
@@ -11733,6 +13575,11 @@ __m_modes_room_js.selectedRoomObject = selectedRoomObject;
 __m_modes_room_js.stopRoomClock = stopRoomClock;
 __m_modes_room_js.startRoomClock = startRoomClock;
 __m_modes_room_js.roomTemporaryPlacement = roomTemporaryPlacement;
+__m_modes_room_js.roomObjectVisualKind = roomObjectVisualKind;
+__m_modes_room_js.roomMotifToken = roomMotifToken;
+__m_modes_room_js.roomPetPlacement = roomPetPlacement;
+__m_modes_room_js.roomPetNodeHtml = roomPetNodeHtml;
+__m_modes_room_js.roomPetSummaryHtml = roomPetSummaryHtml;
 __m_modes_room_js.roomDeepAvailability = roomDeepAvailability;
 __m_modes_room_js.openRoomDeepMode = openRoomDeepMode;
 __m_modes_room_js.returnToRoomFromDeep = returnToRoomFromDeep;
@@ -11741,6 +13588,7 @@ __m_modes_room_js.roomSelectSpace = roomSelectSpace;
 __m_modes_room_js.roomFindPresence = roomFindPresence;
 __m_modes_room_js.roomSelect = roomSelect;
 __m_modes_room_js.roomPresenceNext = roomPresenceNext;
+__m_modes_room_js.ROOM_PET_SPECIES = ROOM_PET_SPECIES;
 }
 
 function __init_modes_relations_js() {
@@ -12030,6 +13878,7 @@ function characterProfilePrompt(sources) {
       "sentiments":["信赖"],
       "summary":"只说明设定中已明确存在的关系，不编造共同事件",
       "isUser":false,
+      "npcPerspective":"非 user NPC 从自己视角如何理解 ${charName} 与这段固有关系",
       "sourceType":"world_info",
       "sourceEvidence":"必须从对应来源原样复制的短证据"
     }
@@ -12044,7 +13893,8 @@ function characterProfilePrompt(sources) {
 - 第三方人物必须在角色卡/世界书/Persona 中有明确姓名或稳定称呼与关系证据；禁止凭空造朋友、前任、亲属、同事。
 - sourceType 只能 character_card / user_persona / world_info；sourceEvidence 必须逐字来自对应来源。facts 的 value 也必须是 sourceEvidence 中能直接核对的原词/原值，不要把“很高”换算成厘米、不要猜日期或血型。插件会本地验证，不匹配就丢弃。
 - category 只能 family / close / friend / work / school / rival / acquaintance / special；state 使用简短关系状态。
-- sentiments 最多 4 个，只写 ${charName} 对该人的长期基础印象；不得反向声称对方的秘密感情。
+- sentiments 最多 4 个，只写 ${charName} 对该人的长期基础印象。
+- 每个非 user 第三方 NPC 必须写 npcPerspective；它是从该 NPC 视角对 ${charName} 和已明确固有关系的简短非正史演绎，只能使用 sourceEvidence 可支持的身份、事实和可见态度，不得发明秘密、事件或恋爱。isUser=true 时 npcPerspective 必须为空字符串。
 - 不得生成任何 URL、HTML、CSS、坐标、脚本。只输出 JSON。`;
 }
 
@@ -12083,6 +13933,8 @@ function normalizeCharacterProfile(data, sources, profileKey, characterName, ava
         seen.add(identity);
         const categoryRaw = core_text.normalizeText(item?.category, 30).toLowerCase();
         const stateRaw = core_text.normalizeText(item?.state, 40);
+        const npcPerspective = isUser ? '' : core_text.normalizeText(item?.npcPerspective, 900);
+        if (!isUser && !npcPerspective) throw new Error(`角色档案中 NPC「${name}」缺少 npcPerspective。`);
         return {
             id: core_text.safeId(item?.id, `REL_BASE_${String(index + 1).padStart(2, '0')}`),
             name,
@@ -12092,6 +13944,7 @@ function normalizeCharacterProfile(data, sources, profileKey, characterName, ava
             sentiments: core_text.cleanArray(item?.sentiments, 4, 40),
             summary: core_text.normalizeText(item?.summary, 600),
             isUser,
+            npcPerspective,
             sourceType,
             sourceEvidence,
         };
@@ -12232,6 +14085,7 @@ ${generation_prompts.promptArchiveSlice(memoryBank, 64)}
     "sentiments":["依赖","信赖"],
     "summary":"当前关系的简短说明",
     "isUser":true,
+    "npcPerspective":"非 user NPC 从自己视角对 {{char}} 和当前关系的简短看法；user 节点必须留空",
     "sourceMemoryIds":["M001"],
     "sourceMemoryAnchor":"必须从所引用记忆 anchors/title 原样复制"
   }]
@@ -12245,7 +14099,8 @@ ${generation_prompts.promptArchiveSlice(memoryBank, 64)}
 - {{user}} 可以出现，但当前“恋人/暧昧/伴侣/冲突/同居”等状态必须由当前 Mxxx 直接证明；不能因为 User Persona 或世界书一开始有特殊设定就把后续发展当成已发生。固有设定会由插件在同一张人际图中合并显示。
 - discoveries 与 relationships 每项都必须至少 1 个有效 sourceMemoryIds + sourceMemoryAnchor，插件会本地校验；没有证据就丢弃。
 - 第三方与 {{char}} 的关系只能写非恋爱关系；禁止前任/前女友及第三方恋爱。
-- sentiments 最多 4 个，只描述 {{char}} 当前对该人的感受/态度，禁止声称对方内心秘密。
+- sentiments 最多 4 个，只描述 {{char}} 当前对该人的感受/态度。
+- 每个非 user 第三方 NPC 必须写 npcPerspective：以该 NPC 第一人称或贴近其视角，只表达所引 Mxxx 能支持的可见态度和对 {{char}} 的理解。可以有有限的人设化演绎，但不能冒充已证实的秘密，不能新增事件、隐藏恋爱或对 {{user}} 的读心。isUser=true 时必须留空。
 - category 只能 family / close / friend / work / school / rival / acquaintance / special。
 - 不输出数值好感度，不生成 URL、HTML、CSS、坐标或脚本。只输出 JSON。`;
 }
@@ -12308,6 +14163,8 @@ function normalizeRelations(data, memoryBank, context = null) {
         seen.add(identity);
         const categoryRaw = core_text.normalizeText(item?.category, 30).toLowerCase();
         const stateRaw = core_text.normalizeText(item?.state, 40);
+        const npcPerspective = isUser ? '' : core_text.normalizeText(item?.npcPerspective, 900);
+        if (!isUser && !npcPerspective) throw new Error(`本世界线 NPC「${name}」缺少 npcPerspective。`);
         return {
             id: core_text.safeId(item?.id, `REL_CHAT_${String(index + 1).padStart(2, '0')}`),
             name,
@@ -12317,6 +14174,7 @@ function normalizeRelations(data, memoryBank, context = null) {
             sentiments: core_text.cleanArray(item?.sentiments, 4, 40),
             summary,
             isUser,
+            npcPerspective,
             sourceMemoryIds: reference.sourceMemoryIds,
             sourceMemoryAnchor: reference.sourceMemoryAnchor,
         };
@@ -12341,6 +14199,38 @@ function currentProfileForContext(context) {
     } catch {
         return null;
     }
+}
+
+function relationsViewIdentity(session, snapshot = null, context = core_context.getContext()) {
+    let profile = null;
+    let authoritativeGroupId = '';
+    let groupMeta = null;
+    if (snapshot) {
+        const entryId = core_text.normalizeText(snapshot?.entryId, 120);
+        const currentEntry = entryId
+            ? archive_groups.getArchiveIndex(context).find(item => core_context.archiveIndexEntryId(item) === entryId)
+            : null;
+        authoritativeGroupId = currentEntry
+            ? archive_groups.archiveGroupKeyForEntry(currentEntry)
+            : core_text.normalizeText(snapshot?.archiveGroupId, 120);
+        if (authoritativeGroupId) {
+            const entries = archive_groups.archiveGroupEntries(authoritativeGroupId, context);
+            groupMeta = archive_groups.archiveGroupMeta(authoritativeGroupId, entries, context);
+            profile = getCharacterProfile(context, archiveCharacterProfileKey(authoritativeGroupId, groupMeta, entries));
+        }
+    } else {
+        profile = currentProfileForContext(context);
+        if (!profile && session?.profileKey) profile = getCharacterProfile(context, session.profileKey);
+    }
+    const characterName = core_text.normalizeText(
+        profile?.characterName || groupMeta?.characterName || snapshot?.characterName || session?.characterName || context?.name2,
+        120,
+    ) || '{{char}}';
+    const avatarName = core_text.normalizeText(
+        profile?.avatar || groupMeta?.avatar || snapshot?.avatar || session?.characterAvatar,
+        300,
+    );
+    return { profile, profileKey: core_text.normalizeText(profile?.key, 160), authoritativeGroupId, characterName, avatarName };
 }
 
 function relationDistanceRank(item) {
@@ -12395,6 +14285,7 @@ function relationCategoryLabel(category) {
 
 function relationGardenHtml({ characterName, avatarUrl = '', sharedRelations = [], dynamicRelations = [], selectedKey = '' } = {}) {
     const merged = mergeRelationLayers(sharedRelations, dynamicRelations);
+    const selected = merged.find(item => item.key === selectedKey) || merged[0] || null;
     const positions = relationGardenPositions(merged.length);
     const edges = merged.map((item, index) => {
         const pos = positions[index];
@@ -12407,17 +14298,23 @@ function relationGardenHtml({ characterName, avatarUrl = '', sharedRelations = [
         const pos = positions[index];
         const rel = item.dynamic || item.base || {};
         const key = item.key;
-        const classes = ['rmt-relation-node', item.isUser ? 'user' : '', item.base ? 'has-base' : '', item.dynamic ? 'has-dynamic' : '', key === selectedKey ? 'selected' : ''].filter(Boolean).join(' ');
+        const classes = ['rmt-relation-node', item.isUser ? 'user' : '', item.base ? 'has-base' : '', item.dynamic ? 'has-dynamic' : '', key === selected?.key ? 'selected' : ''].filter(Boolean).join(' ');
         const title = item.dynamic?.relation || item.base?.relation || relationCategoryLabel(rel.category);
         return `<button type="button" class="${classes}" data-rmt-action="relation-select" data-rmt-relation-key="${core_text.esc(key)}" style="left:${pos.x.toFixed(2)}%;top:${pos.y.toFixed(2)}%"><span class="rmt-relation-node-avatar">${item.isUser ? '<i class="fa-solid fa-heart"></i>' : '<i class="fa-solid fa-user"></i>'}</span><b>${core_text.esc(item.name || (item.isUser ? '{{user}}' : '人物'))}</b><small>${core_text.esc(title)}</small></button>`;
     }).join('');
-    const selected = merged.find(item => item.key === selectedKey) || merged[0] || null;
     const base = selected?.base;
     const dynamic = selected?.dynamic;
+    const npcPerspective = selected && !selected.isUser
+        ? core_text.normalizeText(dynamic?.npcPerspective || base?.npcPerspective, 900)
+        : '';
+    const npcPerspectiveDetail = selected && !selected.isUser
+        ? `<div class="rmt-relation-layer-row npc-perspective"><strong>NPC视角</strong><span>${npcPerspective ? core_text.esc(npcPerspective) : '尚未生成'}</span><small>${npcPerspective ? '动态世界线视角优先于固有设定；内容只是证据边界内的视角化演绎。' : '这是旧缓存条目；刷新本世界线关系或重新读取固定设定后可查看。'}</small></div>`
+        : '';
     const detail = selected ? `<article class="rmt-relation-detail">
       <div class="rmt-relation-detail-head"><b>${core_text.esc(selected.name || '{{user}}')}</b>${selected.isUser ? '<span>USER</span>' : ''}</div>
       ${base ? `<div class="rmt-relation-layer-row"><strong>固有设定</strong><span>${core_text.esc(base.relation)}${base.state ? ` · ${core_text.esc(base.state)}` : ''}</span><small>${core_text.esc(base.summary || '')}</small>${base.sentiments?.length ? `<em>${base.sentiments.map(core_text.esc).join(' · ')}</em>` : ''}</div>` : ''}
       ${dynamic ? `<div class="rmt-relation-layer-row dynamic"><strong>本世界线</strong><span>${core_text.esc(dynamic.relation)}${dynamic.state ? ` · ${core_text.esc(dynamic.state)}` : ''}</span><small>${core_text.esc(dynamic.summary || '')}</small>${dynamic.sentiments?.length ? `<em>${dynamic.sentiments.map(core_text.esc).join(' · ')}</em>` : ''}<i>${core_text.esc(dynamic.sourceMemoryAnchor || '')}</i></div>` : ''}
+      ${npcPerspectiveDetail}
     </article>` : '<div class="rmt-heart-empty">还没有可展示的人际关系。</div>';
     return `<section class="rmt-relation-garden-wrap">
       <div class="rmt-relation-legend"><span><i class="base"></i>固有设定</span><span><i class="dynamic"></i>本世界线</span></div>
@@ -12465,9 +14362,7 @@ function renderRelations() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.RELATIONS) return;
     const context = core_context.getContext();
-    const profile = session.profileKey ? getCharacterProfile(context, session.profileKey) : currentProfileForContext(context);
-    const characterName = core_text.normalizeText(session.characterName || profile?.characterName || context.name2, 120) || '{{char}}';
-    const avatarName = core_text.normalizeText(session.characterAvatar || profile?.avatar, 300);
+    const { profile, characterName, avatarName } = relationsViewIdentity(session, runtimeState.activeArchiveSnapshot, context);
     let avatarUrl = '';
     try { avatarUrl = avatarName ? (context.getThumbnailUrl?.('avatar', avatarName) || '') : ''; } catch {}
     const selectedKey = core_text.normalizeText(runtimeState.relationSelectedKey, 160);
@@ -12494,12 +14389,265 @@ __m_modes_relations_js.deleteCharacterProfile = deleteCharacterProfile;
 __m_modes_relations_js.archiveCharacterProfileKey = archiveCharacterProfileKey;
 __m_modes_relations_js.relationsPrompt = relationsPrompt;
 __m_modes_relations_js.normalizeRelations = normalizeRelations;
+__m_modes_relations_js.relationsViewIdentity = relationsViewIdentity;
 __m_modes_relations_js.mergeRelationLayers = mergeRelationLayers;
 __m_modes_relations_js.relationGardenPositions = relationGardenPositions;
 __m_modes_relations_js.relationGardenHtml = relationGardenHtml;
 __m_modes_relations_js.characterProfileHtml = characterProfileHtml;
 __m_modes_relations_js.worldlineDiscoveriesHtml = worldlineDiscoveriesHtml;
 __m_modes_relations_js.renderRelations = renderRelations;
+}
+
+function __init_modes_travel_js() {
+// MODULE: modes/travel.js
+const core_cache = __m_core_cache_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_evidence = __m_core_evidence_js;
+const core_incremental = __m_core_incremental_js;
+const core_text = __m_core_text_js;
+const generation_client = __m_generation_client_js;
+const generation_prompts = __m_generation_prompts_js;
+// Heartbeat Memories r44 independent travel-map mode.
+// Model output is normalized into text and allowlisted tokens only. Marker geometry, CSS and
+// interactions are owned by local code so generated data can never inject executable UI.
+
+
+
+
+
+
+
+
+const NEAR_MARKER_POSITIONS = Object.freeze([
+    [18, 68], [36, 34], [55, 61], [72, 28], [84, 70], [28, 82], [64, 83], [47, 18],
+    [25, 50], [41, 75], [67, 49], [80, 40],
+]);
+const FAR_MARKER_POSITIONS = Object.freeze([
+    [12, 22], [88, 18], [91, 50], [76, 88], [18, 89], [7, 54], [52, 8], [49, 92],
+    [31, 8], [95, 76], [4, 78], [70, 7],
+]);
+
+function safeTravelLocationKind(value) {
+    return value === 'far' ? 'far' : 'near';
+}
+
+function travelThemeFallback(value) {
+    const text = core_text.normalizeText(value, 5000).toLowerCase();
+    if (/(?:海|港|船|岛|coast|ocean|harbou?r|maritime)/i.test(text)) return 'coast';
+    if (/(?:林|森|园|植物|forest|woodland)/i.test(text)) return 'forest';
+    if (/(?:山|高地|雪|mountain|alpine)/i.test(text)) return 'mountain';
+    if (/(?:学校|学院|大学|校园|campus|school|academy)/i.test(text)) return 'campus';
+    if (/(?:古代|历史|旧城|王国|histor|ancient|kingdom)/i.test(text)) return 'historic';
+    if (/(?:魔法|幻想|精灵|龙|fantasy|magic)/i.test(text)) return 'fantasy';
+    if (/(?:星际|赛博|太空|科幻|scifi|cyber|space)/i.test(text)) return 'scifi';
+    return 'city';
+}
+
+function normalizePostcard(value, fallbackTone = 'paper') {
+    const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const toneRaw = core_text.normalizeText(raw.tone, 30).toLowerCase();
+    return {
+        title: core_text.normalizeText(raw.title, 120),
+        postmark: core_text.normalizeText(raw.postmark, 80),
+        greeting: core_text.normalizeText(raw.greeting, 240),
+        body: core_text.normalizeText(raw.body, 4000),
+        closing: core_text.normalizeText(raw.closing, 500),
+        stampLabel: core_text.normalizeText(raw.stampLabel, 40),
+        tone: core_constants.TRAVEL_POSTCARD_TONES.has(toneRaw) ? toneRaw : fallbackTone,
+    };
+}
+
+function normalizeTravelLocation(item, index, memoryBank, sourceMemoryIds = null) {
+    const kindRaw = core_text.normalizeText(item?.kind, 20).toLowerCase();
+    if (!core_constants.TRAVEL_LOCATION_KINDS.has(kindRaw)) return null;
+    const name = core_text.normalizeText(item?.name, 100);
+    const region = core_text.normalizeText(item?.region, 120);
+    const summary = core_text.normalizeText(item?.summary, 1800);
+    if (!name || !summary) return null;
+    const basis = item?.basis === '记忆' ? '记忆' : '设定';
+    const dialogueLines = kindRaw === 'near' ? core_text.cleanArray(item?.dialogueLines, 8, 1000) : [];
+    const postcard = kindRaw === 'far' ? normalizePostcard(item?.postcard) : null;
+    if (kindRaw === 'near' && dialogueLines.length < 3) return null;
+    if (kindRaw === 'far' && (!postcard.title || postcard.body.length < 80 || !postcard.closing)) return null;
+    // Incremental refreshes may only add stops proven by the newly scanned memories.
+    // Stable setting-based stops belong to the initial map and would otherwise be
+    // regenerated as fresh locations on every incremental pass.
+    if (sourceMemoryIds && basis !== '记忆') return null;
+    const evidenceText = [name, region, summary, ...dialogueLines, postcard?.title, postcard?.body, postcard?.closing]
+        .map(value => core_text.normalizeText(value, 4000)).filter(Boolean).join('\n');
+    const evidenceBank = sourceMemoryIds ? core_incremental.incrementalPromptMemoryBank(memoryBank, sourceMemoryIds) : memoryBank;
+    const reference = basis === '记忆'
+        ? core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, evidenceText, evidenceBank, 1)
+        : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
+    if (basis === '记忆' && (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor)) return null;
+    if (sourceMemoryIds && core_text.normalizeText(item?.sourceMemoryAnchor, 120) !== reference.sourceMemoryAnchor) return null;
+    if (basis === '记忆' && sourceMemoryIds && !core_incremental.usesIncrementalMemoryId(reference.sourceMemoryIds, sourceMemoryIds)) return null;
+    return {
+        id: core_text.safeId(item?.id, `TR${String(index + 1).padStart(2, '0')}`),
+        kind: kindRaw,
+        name,
+        region,
+        distanceLabel: core_text.normalizeText(item?.distanceLabel, 80) || (kindRaw === 'near' ? '附近' : '远方'),
+        summary,
+        basis,
+        sourceMemoryIds: reference.sourceMemoryIds,
+        sourceMemoryAnchor: reference.sourceMemoryAnchor,
+        dialogueLines,
+        postcard,
+    };
+}
+
+function normalizeTravel(data, memoryBank, { allowPartial = false, sourceMemoryIds = null } = {}) {
+    const raw = Array.isArray(data?.locations) ? data.locations : [];
+    const seenIds = new Set();
+    const locations = raw.slice(0, 12).map((item, index) => {
+        const normalized = normalizeTravelLocation(item, index, memoryBank, sourceMemoryIds);
+        if (!normalized || seenIds.has(normalized.id)) return null;
+        seenIds.add(normalized.id);
+        return normalized;
+    }).filter(Boolean);
+    const nearCount = locations.filter(item => item.kind === 'near').length;
+    const farCount = locations.filter(item => item.kind === 'far').length;
+    if (!allowPartial && (nearCount < 2 || farCount < 2)) {
+        throw new Error(`出行地图地点不足：附近 ${nearCount}/2，远方 ${farCount}/2。`);
+    }
+    const requestedTheme = core_text.normalizeText(data?.mapTheme, 30).toLowerCase();
+    const themeSeed = [data?.title, data?.routeSummary, ...locations.flatMap(item => [item.name, item.region])].join('|');
+    return {
+        kind: core_constants.MODE.TRAVEL,
+        travelVersion: core_constants.TRAVEL_SESSION_VERSION,
+        title: core_text.normalizeText(data?.title, 120) || '他的出行路线',
+        routeSummary: core_text.normalizeText(data?.routeSummary, 1800) || '沿着他真正会走过的地方，看看生活怎样在地图上留下痕迹。',
+        mapTheme: core_constants.TRAVEL_MAP_THEMES.has(requestedTheme) ? requestedTheme : travelThemeFallback(themeSeed),
+        locations,
+        selectedLocationId: locations.some(item => item.id === data?.selectedLocationId) ? data.selectedLocationId : '',
+        dialogueIndex: Math.max(0, Math.floor(Number(data?.dialogueIndex) || 0)),
+    };
+}
+
+function compactTravelExisting(session) {
+    return core_evidence.evenlySample(Array.isArray(session?.locations) ? session.locations : [], core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
+        id: core_text.normalizeText(item?.id, 60),
+        kind: core_text.normalizeText(item?.kind, 20),
+        name: core_text.normalizeText(item?.name, 100),
+        region: core_text.normalizeText(item?.region, 120),
+        basis: core_text.normalizeText(item?.basis, 20),
+        sourceMemoryIds: core_text.cleanArray(item?.sourceMemoryIds, 8, 40),
+        sourceMemoryAnchor: core_text.normalizeText(item?.sourceMemoryAnchor, 160),
+    }));
+}
+
+function travelPrompt(context, memoryBank, previous = null, sourceMemoryIds = null) {
+    const incremental = !!previous;
+    const archiveBlock = incremental
+        ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
+        : generation_prompts.promptArchiveSlice(memoryBank, 48);
+    return `${generation_prompts.promptSafetyBoundary(context, '他的出行路线 / 独立地图')}
+这是档案室里的独立地图，不是手机 App。请根据 {{char}} 的时代、身份、住处、职业、日常习惯和当前关系，整理他真正可能经过的路线。
+UNTRUSTED_TRAVEL_ARCHIVE_JSON:
+${archiveBlock}
+EXISTING_TRAVEL_INDEX_JSON:
+${JSON.stringify(compactTravelExisting(previous), null, 2)}
+
+严格输出：
+{"title":"他的出行路线","routeSummary":"这张地图如何体现角色生活","mapTheme":"city","locations":[{"id":"NEAR01","kind":"near","name":"地点名","region":"区域","distanceLabel":"步行十分钟","summary":"地点与角色生活的联系","basis":"设定","sourceMemoryIds":[],"sourceMemoryAnchor":"","dialogueLines":["{{char}} 对 {{user}} 说的第一句","第二句","第三句"],"postcard":null},{"id":"FAR01","kind":"far","name":"远方地点","region":"区域","distanceLabel":"很远","summary":"远方与角色的联系","basis":"设定","sourceMemoryIds":[],"sourceMemoryAnchor":"","dialogueLines":[],"postcard":{"title":"明信片标题","postmark":"邮戳短字","greeting":"写给 {{user}} 的开头","body":"充满角色个性的明信片正文","closing":"{{char}} 的落款","stampLabel":"邮票短字","tone":"paper"}}]}
+
+硬性要求：
+- mapTheme 只能是 city/coast/forest/mountain/campus/historic/fantasy/scifi；postcard.tone 只能是 rose/ocean/forest/sunset/night/paper。它们只是本地白名单样式 token。禁止输出坐标、颜色值、CSS、HTML、JavaScript、URL、图片或 class。
+- ${incremental ? '本轮只返回 0～4 个由 incrementalMemoryIds 新证明且不在 EXISTING_TRAVEL_INDEX_JSON 中的地点；没有新地点时 locations 为空。' : '初次生成 5～8 个彼此不同的地点：near 3～5 个，far 2～4 个。'}
+- near 是同城/日常可抵达地点，点击后播放 3～8 句 {{char}} 对 {{user}} 的当下短对话；只能写 {{char}} 台词，不替 {{user}} 回应，不越过当前关系阶段。
+- far 是远途、异地或世界观中的遥远地点，点击后显示纯文字明信片。正文要充沛、具体、符合 {{char}}，但不能把未发生旅行冒充共同历史。
+- basis=记忆 时必须引用真实 sourceMemoryIds + sourceMemoryAnchor${incremental ? '，且至少使用一个 incrementalMemoryIds' : ''}；basis=设定 时证据字段必须为空，只能表达角色稳定生活/世界观或明确标注的想象，不能声称和 {{user}} 已经共同去过。
+- 手机里的地图、导航、旅行与行程 App 已停用，不要描述手机界面。只输出 JSON。`;
+}
+
+function travelLocationKey(item) {
+    const ids = core_text.cleanArray(item?.sourceMemoryIds, 8, 40).sort().join(',');
+    const anchor = core_incremental.normalizedContentKey(item?.sourceMemoryAnchor, 160);
+    if (item?.basis === '记忆' && ids && anchor) return `memory|${ids}|${anchor}`;
+    return `${core_text.normalizeText(item?.kind, 20)}|${core_incremental.normalizedContentKey(item?.name, 120)}|${core_incremental.normalizedContentKey(item?.region, 120)}`;
+}
+
+function mergeTravelIncremental(previous, fresh) {
+    if (!previous?.locations?.length) return fresh;
+    const merged = structuredClone(previous);
+    const seen = new Set(merged.locations.map(travelLocationKey));
+    const usedIds = new Set(merged.locations.map(item => item.id));
+    let added = 0;
+    for (const item of fresh.locations || []) {
+        const key = travelLocationKey(item);
+        if (!key || seen.has(key) || merged.locations.length >= 12) continue;
+        seen.add(key);
+        merged.locations.push({ ...structuredClone(item), id: core_incremental.uniqueGeneratedId(item.id, usedIds, 'TR') });
+        added += 1;
+    }
+    merged.travelVersion = core_constants.TRAVEL_SESSION_VERSION;
+    if (!merged.mapTheme && fresh.mapTheme) merged.mapTheme = fresh.mapTheme;
+    return { session: merged, added };
+}
+
+async function generateTravelWithRepair(context, memoryBank, origin, taskKey, options = {}) {
+    const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.TRAVEL, {
+        context, chatId: core_context.getChatId(context), memoryBank, clone: true,
+    });
+    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+    const fresh = await generation_client.requestValidatedSegment(
+        travelPrompt(context, memoryBank, previous, sourceMemoryIds),
+        previous ? '他的出行路线 · 正在把新增地点标到地图上…' : '他的出行路线 · 正在绘制生活地图…',
+        {
+            maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.TRAVEL], temperature: 0.45,
+            context, origin, taskKey: `${taskKey}:travel-map`, mode: core_constants.MODE.TRAVEL, background: true,
+        },
+        raw => normalizeTravel(raw, memoryBank, { allowPartial: !!previous, sourceMemoryIds: previous ? sourceMemoryIds : null }),
+    );
+    if (!previous) {
+        return core_incremental.stampIncrementalCoverage(fresh, null, memoryBank, 'mode', sourceMemoryIds, fresh.locations.length);
+    }
+    if (!fresh.locations.length) {
+        return core_incremental.stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0);
+    }
+    const { session, added } = mergeTravelIncremental(previous, fresh);
+    return core_incremental.stampIncrementalCoverage(session, previous, memoryBank, 'mode', sourceMemoryIds, added);
+}
+
+function travelMarkerPosition(item, index = 0) {
+    const positions = item?.kind === 'far' ? FAR_MARKER_POSITIONS : NEAR_MARKER_POSITIONS;
+    const hash = core_text.hashString(`${core_text.normalizeText(item?.id, 80)}|${core_text.normalizeText(item?.name, 120)}`);
+    const offset = Math.abs(Number(hash) || 0) % positions.length;
+    const point = positions[(offset + Math.max(0, Number(index) || 0)) % positions.length];
+    return { x: point[0], y: point[1] };
+}
+
+function travelMarkerPositions(locations = []) {
+    const occupied = new Set();
+    const kindOrdinals = { near: 0, far: 0 };
+    return (Array.isArray(locations) ? locations : []).map(item => {
+        const positions = item?.kind === 'far' ? FAR_MARKER_POSITIONS : NEAR_MARKER_POSITIONS;
+        const ordinal = kindOrdinals[item?.kind === 'far' ? 'far' : 'near']++;
+        const hash = core_text.hashString(`${core_text.normalizeText(item?.id, 80)}|${core_text.normalizeText(item?.name, 120)}`);
+        const preferred = (Math.abs(Number(hash) || 0) + ordinal) % positions.length;
+        for (let probe = 0; probe < positions.length; probe += 1) {
+            const point = positions[(preferred + probe) % positions.length];
+            const key = `${point[0]}|${point[1]}`;
+            if (occupied.has(key)) continue;
+            occupied.add(key);
+            return { x: point[0], y: point[1] };
+        }
+        const fallback = positions[preferred];
+        return { x: fallback[0], y: fallback[1] };
+    });
+}
+
+__m_modes_travel_js.generateTravelWithRepair = generateTravelWithRepair;
+__m_modes_travel_js.safeTravelLocationKind = safeTravelLocationKind;
+__m_modes_travel_js.normalizeTravel = normalizeTravel;
+__m_modes_travel_js.compactTravelExisting = compactTravelExisting;
+__m_modes_travel_js.travelPrompt = travelPrompt;
+__m_modes_travel_js.travelLocationKey = travelLocationKey;
+__m_modes_travel_js.mergeTravelIncremental = mergeTravelIncremental;
+__m_modes_travel_js.travelMarkerPosition = travelMarkerPosition;
+__m_modes_travel_js.travelMarkerPositions = travelMarkerPositions;
 }
 
 function __init_generation_normalizers_js() {
@@ -12516,8 +14664,10 @@ const modes_items = __m_modes_items_js;
 const modes_phone = __m_modes_phone_js;
 const modes_room = __m_modes_room_js;
 const modes_relations = __m_modes_relations_js;
+const modes_travel = __m_modes_travel_js;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
 
 
 
@@ -12539,6 +14689,7 @@ function normalizeByMode(mode, data, memoryBank, context = null) {
     if (mode === core_constants.MODE.ROOM) return modes_room.normalizeRoom(data, memoryBank, context);
     if (mode === core_constants.MODE.ITEMS) return modes_items.normalizeItems(data, memoryBank);
     if (mode === core_constants.MODE.PHONE) return modes_phone.normalizePhone(data, memoryBank, context);
+    if (mode === core_constants.MODE.TRAVEL) return modes_travel.normalizeTravel(data, memoryBank);
     if (mode === core_constants.MODE.ENDING) return modes_ending.normalizeEnding(data, memoryBank);
     if (mode === core_constants.MODE.HEART) return modes_heart.normalizeHeart(data, memoryBank);
     if (mode === core_constants.MODE.ACHIEVEMENTS) return modes_achievements.normalizeAchievements(data, memoryBank);
@@ -12558,6 +14709,7 @@ const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_evidence = __m_core_evidence_js;
 const core_incremental = __m_core_incremental_js;
+const core_independentApi = __m_core_independentApi_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
 const core_settings = __m_core_settings_js;
 const core_text = __m_core_text_js;
@@ -12575,6 +14727,7 @@ const modes_items = __m_modes_items_js;
 const modes_phone = __m_modes_phone_js;
 const modes_room = __m_modes_room_js;
 const modes_relations = __m_modes_relations_js;
+const modes_travel = __m_modes_travel_js;
 const ui_overlay = __m_ui_overlay_js;
 const ui_settingsPanel = __m_ui_settingsPanel_js;
 const runtimeState = __m_core_state_js.state;
@@ -12591,11 +14744,13 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+
 function generationWorldInfoScanTerms(mode, context = {}) {
     const characterName = core_text.normalizeText(context?.name2, 120);
     const common = characterName ? [characterName] : [];
-    if (mode === core_constants.MODE.ROOM) return [...common, '外貌', '发色', '发型', '穿着', '制服', '服饰', '种族', '住处', '房间', '居所', '时代', '职业', '阶层', '生活习惯', 'appearance', 'hair', 'outfit', 'species', 'residence', 'room', 'home'];
+    if (mode === core_constants.MODE.ROOM) return [...common, '外貌', '发色', '发型', '穿着', '制服', '服饰', '种族', '住处', '房间', '居所', '时代', '职业', '阶层', '生活习惯', '宠物', '猫', '狗', '鸟', '鹦鹉', '兔', '鱼', '爬宠', '仓鼠', '豚鼠', '灵兽', '使魔', '动物伙伴', 'appearance', 'hair', 'outfit', 'species', 'residence', 'room', 'home', 'pet', 'cat', 'dog', 'bird', 'parrot', 'rabbit', 'fish', 'reptile', 'hamster', 'familiar', 'animal companion'];
     if (mode === core_constants.MODE.PHONE) return [...common, '通讯', '终端', '手机', '设备', '职业', '爱好', '生活习惯', '科技', '时代', '世界观', 'phone', 'device', 'terminal', 'communication', 'hobby', 'occupation'];
+    if (mode === core_constants.MODE.TRAVEL) return [...common, '住处', '工作', '学校', '地点', '交通', '出行', '旅行', '路线', '世界观', 'residence', 'work', 'school', 'location', 'travel', 'route', 'transport'];
     if (mode === core_constants.MODE.BUTTERFLY) return [...common, '身份', '职业', '时代', '地点', '关系', '选择', '命运', '相遇', '世界线', '平行世界', 'identity', 'occupation', 'era', 'location', 'fate', 'encounter'];
     if (mode === core_constants.MODE.CALENDAR) return [...common, '节日', '日历', '生日', '纪念日', '祭典', '庆典', 'festival', 'holiday', 'calendar', 'birthday', 'anniversary'];
     return common;
@@ -12714,32 +14869,58 @@ function assertNoBannedGeneratedPhrase(value, settings) {
 }
 
 function normalizeConnectionManagerError(error) {
-    if (error?.name === 'AbortError' || error?.retryableJson === true || String(error?.code || '').startsWith('RMT_')) return error;
-    const rawStatus = error?.status ?? error?.statusCode ?? error?.response?.status ?? error?.cause?.status;
-    const rawCode = core_text.normalizeText(error?.code || error?.type || error?.cause?.code, 80);
-    const safeCode = /^[A-Z0-9_.-]{2,80}$/i.test(rawCode) ? rawCode : '';
-    const original = core_text.normalizeText(error?.message || String(error || ''), 700).toLowerCase();
+    if (error?.name === 'AbortError' || error?.retryableJson === true) return error;
+    const knownInternalCodes = new Set([
+        'RMT_API_CONFIG_CHANGED', 'RMT_API_CONFIGURATION_SUPERSEDED', 'RMT_API_MODEL_REQUEST_SUPERSEDED',
+        'RMT_BANNED_GENERATED_PHRASE', 'RMT_JSON_EMPTY_FINAL', 'RMT_JSON_EMPTY_FINAL_WITH_REASONING',
+        'RMT_JSON_INVALID', 'RMT_JSON_NOT_FOUND', 'RMT_JSON_TRUNCATED', 'RMT_MANUAL_API_TRANSPORT',
+        'RMT_MANUAL_API_URL', 'RMT_MANUAL_EMPTY', 'RMT_MANUAL_FETCH_UNAVAILABLE', 'RMT_MANUAL_INVALID_JSON',
+        'RMT_MANUAL_MESSAGES', 'RMT_MANUAL_MODEL', 'RMT_MANUAL_MODEL_TIMEOUT', 'RMT_MANUAL_MODELS_EMPTY',
+        'RMT_MANUAL_PROVIDER_ERROR', 'RMT_MANUAL_RESPONSE_TOO_LARGE', 'RMT_PHONE_DRAFT_AVAILABLE',
+        'RMT_PROFILE_CAPABILITY', 'RMT_REQUEST_TIMEOUT', 'RMT_SEGMENT_VALIDATION',
+    ]);
+    if (knownInternalCodes.has(String(error?.code || ''))) return error;
+    const evidence = [];
+    const seen = new Set();
+    let cursor = error;
+    let rawStatus = null;
+    let rawCode = '';
+    for (let depth = 0; cursor && depth < 4 && !seen.has(cursor); depth += 1) {
+        seen.add(cursor);
+        if (rawStatus == null) rawStatus = cursor?.status ?? cursor?.statusCode ?? cursor?.response?.status ?? null;
+        if (!rawCode) rawCode = core_text.normalizeText(cursor?.code || cursor?.type, 80);
+        for (const value of [cursor?.name, cursor?.message, cursor?.code, cursor?.status, cursor?.statusCode]) {
+            const part = core_text.normalizeText(value, 700);
+            if (part) evidence.push(part);
+        }
+        cursor = cursor?.cause;
+    }
+    const safeCode = /^(?:E[A-Z0-9_]{2,40}|ERR_[A-Z0-9_]{2,60})$/.test(rawCode) ? rawCode : '';
+    const original = evidence.join(' · ').toLowerCase();
     const messageStatus = original.match(/(?:http|status(?:\s+code)?|response)\s*[:=]?\s*(\d{3})/i)
         || original.match(/(?:api|request|response).{0,40}\b(400|401|403|404|408|413|422|429|500|502|503|504)\b/i);
-    const status = Number.isFinite(Number(rawStatus)) ? Number(rawStatus) : Number(messageStatus?.[1]) || 0;
+    const hasRawStatus = rawStatus !== null && rawStatus !== '' && Number.isFinite(Number(rawStatus));
+    const status = hasRawStatus ? Number(rawStatus) : Number(messageStatus?.[1]) || 0;
     const technical = status ? `（HTTP ${status}）` : safeCode ? `（${safeCode}）` : '';
+    const sourceName = error?.code === 'RMT_MANUAL_HTTP' ? '手动 API' : '专用连接';
     let code = 'RMT_CONNECTION_FAILED';
-    let message = `Connection Manager 请求失败${technical}。没有收到可解析的模型结果；请检查专用连接与 SillyTavern 控制台中的上游错误。`;
-    let retryable = true;
-    if (status === 401 || status === 403 || /(unauthori[sz]ed|forbidden|authentication|invalid api key|api key.*invalid)/i.test(original)) {
+    let message = `${sourceName}请求失败${technical}。没有收到可判断是否可重试的模型结果；请检查当前独立 API 设置与 SillyTavern 控制台中的上游错误，本段不会自动重试。`;
+    let retryable = false;
+    if (status === 401 || status === 403 || /(unauthori[sz]ed|forbidden|authentication|(?:invalid|incorrect|expired) api key|api key.*(?:invalid|incorrect|expired)|key.*(?:invalid|incorrect|expired))/i.test(original)) {
         code = 'RMT_CONNECTION_AUTH';
-        message = `专用连接认证失败${technical}。请检查 Connection Manager 配置、API Key 与账号权限；本段不会自动重试。`;
+        message = `${sourceName}认证失败${technical}。请检查当前配置、API Key 与账号权限；本段不会自动重试。`;
         retryable = false;
     } else if (status === 429 || /(too many requests|rate.?limit|quota exceeded|resource exhausted)/i.test(original)) {
         code = 'RMT_CONNECTION_RATE_LIMIT';
         message = `模型服务正在限流或额度不足${technical}。心跳回忆会降低并发并仅对本段等待后重试一次；若仍失败，请稍后再试。`;
+        retryable = true;
     } else if (status === 413 || /(context length|context window|too many tokens|maximum context|payload too large|request too large)/i.test(original)) {
         code = 'RMT_CONNECTION_CONTEXT_LIMIT';
         message = `本段输入超过模型或代理的上下文上限${technical}。请换用更大上下文模型，或减少导入的世界书/记忆资料；本段不会自动重试。`;
         retryable = false;
     } else if (status === 404 || /(model.*not found|profile.*not found|endpoint.*not found)/i.test(original)) {
         code = 'RMT_CONNECTION_CONFIG';
-        message = `专用连接、模型或上游端点不可用${technical}。请重新导入连接并确认模型名称；本段不会自动重试。`;
+        message = `${sourceName}、模型或上游端点不可用${technical}。请重新配置并确认模型名称；本段不会自动重试。`;
         retryable = false;
     } else if (status === 400 || status === 422 || /(invalid request|bad request|unprocessable)/i.test(original)) {
         code = 'RMT_CONNECTION_INVALID_REQUEST';
@@ -12748,9 +14929,11 @@ function normalizeConnectionManagerError(error) {
     } else if (status === 408 || status === 504 || /(gateway timeout|request timeout|timed out|etimedout)/i.test(original)) {
         code = 'RMT_CONNECTION_SERVER';
         message = `模型服务或代理响应超时${technical}。本段会等待后重试一次；若再次失败，旧内容仍会保留。`;
+        retryable = true;
     } else if (status >= 500 || /(bad gateway|service unavailable|upstream.*(?:failed|error)|econnreset|econnrefused)/i.test(original)) {
         code = 'RMT_CONNECTION_SERVER';
         message = `模型服务或代理暂时不可用${technical}。本段会等待后重试一次；若再次失败，旧内容仍会保留。`;
+        retryable = true;
     }
     const normalized = new Error(message);
     normalized.code = code;
@@ -12762,6 +14945,7 @@ function normalizeConnectionManagerError(error) {
 async function generateConfiguredJson(prompt, options = {}) {
     const context = options.context || core_context.currentCharacterGuard();
     const settings = core_settings.getPluginSettings(context);
+    const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
     const expanded = core_text.expandSafeRoleMacros(prompt, context);
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
@@ -12773,18 +14957,29 @@ ${expanded}${phrasePolicy}`;
     // The value configured in the dedicated secondary-API UI is the actual provider max output.
     // Per-feature options.maxTokens values are legacy sizing hints only and must not silently lower it.
     const responseLength = Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens));
-    if (!settings.connectionProfileId) {
-        throw new Error('心跳回忆还没有专用连接。请在插件设置中点击“从酒馆当前连接一键导入”，或手动选择一个 Connection Manager 配置。');
-    }
+    const connectionMode = settings.apiConnectionMode === 'manual' ? 'manual' : 'profile';
     const service = context.ConnectionManagerRequestService;
-    if (!service?.sendRequest) {
-        throw new Error('当前 SillyTavern 未提供 Connection Manager Request Service，请启用官方 Connection Manager。');
-    }
+    let selectedProfileFingerprint = '';
     const overridePayload = {
         temperature: Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : settings.temperature,
     };
-    const modelOverride = core_text.normalizeText(options.model || settings.modelOverride, 240);
+    const modelOverride = core_text.normalizeText(options.model || (connectionMode === 'manual' ? settings.manualApiModel : settings.modelOverride), 240);
     if (modelOverride) overridePayload.model = modelOverride;
+    const messages = [{ role: 'user', content: controlledPrompt }];
+    if (connectionMode === 'manual') {
+        core_independentApi.normalizeManualApiBaseUrl(settings.manualApiBaseUrl, { required: true });
+        if (!modelOverride) throw new Error('手动 API 还没有模型 ID。请先在插件设置中完成手动配置。');
+    } else {
+        if (!settings.connectionProfileId) {
+            throw new Error(`心跳回忆还没有一键连接。请使用“${core_independentApi.PROFILE_ONE_CLICK_UI_VERSION} 一键配置”，或切换到手动配置。`);
+        }
+        core_independentApi.assertConnectionManagerProfileSupport(service);
+        const rawProfile = core_settings.rawConnectionProfile(settings.connectionProfileId, context);
+        if (!rawProfile) throw new Error('已保存的一键连接不存在，请重新配置。');
+        selectedProfileFingerprint = core_settings.profileFingerprint(rawProfile);
+        const apiMap = service.validateProfile(rawProfile);
+        if (apiMap?.selected !== 'openai' || !apiMap?.source) throw new Error('当前一键连接不是可复用的 Chat Completion 配置。');
+    }
     let result;
     const lifecycleController = new AbortController();
     const externalSignal = options.signal || null;
@@ -12796,13 +14991,19 @@ ${expanded}${phrasePolicy}`;
     else externalSignal?.addEventListener?.('abort', forwardAbort, { once: true });
     try {
         result = await core_requestCoordinator.runGenerationRequestWithTimeout(
-            () => service.sendRequest(
-                settings.connectionProfileId,
-                controlledPrompt,
-                responseLength,
-                { stream: false, extractData: true, includePreset: true, includeInstruct: true, signal: lifecycleController.signal },
-                overridePayload,
-            ),
+            () => connectionMode === 'manual'
+                ? core_independentApi.requestManualApiCompletion(settings, context, messages, responseLength, {
+                    signal: lifecycleController.signal,
+                    model: modelOverride,
+                    temperature: overridePayload.temperature,
+                })
+                : service.sendRequest(
+                    settings.connectionProfileId,
+                    messages,
+                    responseLength,
+                    { stream: false, extractData: true, includePreset: false, includeInstruct: false, signal: lifecycleController.signal },
+                    overridePayload,
+                ),
             lifecycleController,
             options.timeoutMs,
             options.statusText || '',
@@ -12812,7 +15013,20 @@ ${expanded}${phrasePolicy}`;
     } finally {
         try { externalSignal?.removeEventListener?.('abort', forwardAbort); } catch {}
     }
-    const parsed = generation_jsonParser.extractJson(result?.content ?? result, {
+    const latestSettings = core_settings.getPluginSettings(context);
+    let latestProfileFingerprint = '';
+    if (connectionMode === 'profile') {
+        try { latestProfileFingerprint = core_settings.profileFingerprint(core_settings.rawConnectionProfile(latestSettings.connectionProfileId, context)); }
+        catch { latestProfileFingerprint = 'missing'; }
+    }
+    if (core_independentApi.apiConfigurationFingerprint(latestSettings) !== configurationFingerprint
+        || (connectionMode === 'profile' && latestProfileFingerprint !== selectedProfileFingerprint)) {
+        const error = new Error('API 配置在生成期间发生变化，本次旧连接结果已丢弃。');
+        error.code = 'RMT_API_CONFIG_CHANGED';
+        error.retryable = false;
+        throw error;
+    }
+    const parsed = generation_jsonParser.extractJson(core_independentApi.extractIndependentResponseContent(result), {
         reasoning: result?.reasoning || '',
         requestMaxTokens: responseLength,
         configuredMaxTokens: settings.maxTokens,
@@ -12882,8 +15096,8 @@ async function generateMode(mode, options = {}) {
     const memoryBank = archive_repository.requireArchive(context);
     const expectedArchiveRevision = memoryBank.archiveRevision;
     const promptFactory = generation_prompts.PROMPTS[mode];
-    if (!promptFactory && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS].includes(mode)) return;
-    const segmentedMode = [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS].includes(mode);
+    if (!promptFactory && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS, core_constants.MODE.TRAVEL].includes(mode)) return;
+    const segmentedMode = [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.TRAVEL].includes(mode);
     let generationPrompt = segmentedMode || mode === core_constants.MODE.RELATIONS ? '' : promptFactory(context, memoryBank);
     let roomSession = null;
     let focusObject = null;
@@ -12909,9 +15123,10 @@ async function generateMode(mode, options = {}) {
     const incrementalPart = mode === core_constants.MODE.HEART ? 'dialogues' : 'mode';
     const refreshableCalendar = mode === core_constants.MODE.CALENDAR;
     const refreshableRelations = mode === core_constants.MODE.RELATIONS;
+    const roomSchemaUpgrade = mode === core_constants.MODE.ROOM && modes_room.roomNeedsSchemaUpgrade(previousSession);
     if (previousSession && !refreshableCalendar && !refreshableRelations && !(mode === core_constants.MODE.PHONE && options.continueDraft === true)) {
         const pendingMemoryIds = core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank, incrementalPart);
-        if (!pendingMemoryIds.length) {
+        if (!pendingMemoryIds.length && !roomSchemaUpgrade) {
             globalThis.toastr?.info?.(`「${core_constants.MODE_LABEL[mode]}」已经覆盖当前档案。请先增量更新档案；下次只会追加新内容，旧内容不会重写。`, '心跳回忆');
             return;
         }
@@ -12938,7 +15153,7 @@ async function generateMode(mode, options = {}) {
     core_requestCoordinator.refreshConcurrentTaskUi(mode, origin);
     if (!background) {
         ui_overlay.openOverlay();
-        ui_overlay.setInnerLoading(true, replaceExisting ? `正在重新生成「${core_constants.MODE_LABEL[mode]}」…` : refreshableCalendar && previousSession ? '正在刷新「两个人的日历」…' : refreshableRelations && previousSession ? '正在刷新「本世界线人际关系」…' : previousSession ? `正在从新增档案追加「${core_constants.MODE_LABEL[mode]}」…` : `正在生成「${core_constants.MODE_LABEL[mode]}」…`);
+        ui_overlay.setInnerLoading(true, replaceExisting ? `正在重新生成「${core_constants.MODE_LABEL[mode]}」…` : roomSchemaUpgrade ? '正在为旧版房间补全宠物与视觉设定…' : refreshableCalendar && previousSession ? '正在刷新「两个人的日历」…' : refreshableRelations && previousSession ? '正在刷新「本世界线人际关系」…' : previousSession ? `正在从新增档案追加「${core_constants.MODE_LABEL[mode]}」…` : `正在生成「${core_constants.MODE_LABEL[mode]}」…`);
     }
     try {
         let session;
@@ -12962,6 +15177,8 @@ async function generateMode(mode, options = {}) {
             session = previousSession && options.continueDraft !== true
                 ? await modes_phone.generatePhoneIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession)
                 : await modes_phone.generatePhoneWithRepair(context, memoryBank, origin, taskKey, { continueDraft: options.continueDraft === true });
+        } else if (mode === core_constants.MODE.TRAVEL) {
+            session = await modes_travel.generateTravelWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.RELATIONS) {
             const raw = await requestJson(
                 modes_relations.relationsPrompt(context, memoryBank),
@@ -13102,11 +15319,11 @@ function taskOptions(mode, context, origin, taskKey, maxTokens = 6000, temperatu
 }
 
 function sameEvidence(candidate, current) {
-    const wanted = new Set(core_text.cleanArray(current?.sourceMemoryIds, 16, 40));
-    const got = new Set(core_text.cleanArray(candidate?.sourceMemoryIds, 16, 40));
-    const intersects = !wanted.size || [...wanted].some(id => got.has(id));
+    const wanted = [...new Set(core_text.cleanArray(current?.sourceMemoryIds, 16, 40))].sort();
+    const got = [...new Set(core_text.cleanArray(candidate?.sourceMemoryIds, 16, 40))].sort();
+    const sameIds = wanted.length === got.length && wanted.every((id, index) => id === got[index]);
     const anchor = core_text.normalizeText(current?.sourceMemoryAnchor, 240);
-    return intersects && (!anchor || core_text.normalizeText(candidate?.sourceMemoryAnchor, 240) === anchor);
+    return sameIds && (!anchor || core_text.normalizeText(candidate?.sourceMemoryAnchor, 240) === anchor);
 }
 
 async function regenerateAlbumEntry(session, item, context, memoryBank, origin, taskKey) {
@@ -13124,15 +15341,21 @@ TRUSTED_EVENT_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
     const candidate = normalized.entries[0];
     if (!candidate || !sameEvidence(candidate, item)) throw new Error('重新生成的相簿条目没有保持原档案证据。');
     let comments = [];
+    let relationshipSnapshot = null;
     if (item.unlocked) {
+        relationshipSnapshot = await generation_client.requestValidatedSegment(
+            modes_album.albumRelationshipScanPrompt(context, memoryBank),
+            `扫描「${item.title}」共同回忆前的双方感情状态…`, taskOptions(core_constants.MODE.ALBUM, context, origin, `${taskKey}:relationship`, 5000, 0.25),
+            raw => modes_album.normalizeAlbumRelationshipSnapshot(raw, memoryBank),
+        );
         const rawComments = await generation_client.requestValidatedSegment(
-            modes_album.albumCommentsPrompt(context, memoryBank, [{ ...candidate, id: item.id }]),
+            modes_album.albumCommentsPrompt(context, memoryBank, [{ ...candidate, id: item.id }], relationshipSnapshot),
             `重新生成「${item.title}」共同回忆…`, taskOptions(core_constants.MODE.ALBUM, context, origin, `${taskKey}:comments`, 5000),
             raw => modes_album.normalizeAlbumCommentsBatch(raw, [{ ...candidate, id: item.id }]),
         );
         comments = rawComments.get(item.id) || [];
     }
-    return { ...candidate, id: item.id, sourceMemoryIds: [...item.sourceMemoryIds], sourceMemoryAnchor: item.sourceMemoryAnchor, comments, cgImage: null };
+    return { ...candidate, id: item.id, sourceMemoryIds: [...item.sourceMemoryIds], sourceMemoryAnchor: item.sourceMemoryAnchor, comments, relationshipSnapshot, cgImage: null };
 }
 
 async function regenerateAdvEvent(session, item, context, memoryBank, origin, taskKey) {
@@ -13295,7 +15518,8 @@ async function regenerateEndingConfession(item, context, memoryBank, origin, tas
 只重写下面这个【已经发生并有证据的告白回看】的播放器文本。不得改变发生与否、参与者、sourceMemoryIds/sourceMemoryAnchor，也不得发明新的告白。
 CURRENT_REPLAY_JSON:\n${JSON.stringify(item, null, 2)}
 TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
-严格输出：{"confessionReplays":[{"id":"${core_text.esc(item.id)}","title":"...","subtitle":"...","type":"${core_text.esc(item.type || 'other')}","date":"${core_text.esc(item.date || '')}","sourceMemoryIds":${JSON.stringify(item.sourceMemoryIds || [])},"sourceMemoryAnchor":${JSON.stringify(item.sourceMemoryAnchor || '')},"scene":"至少140字的已发生场景回看","confessionText":"至少50字的告白核心文本","confessionLines":[{"speaker":"char","text":"..."}],"responseSummary":"...","afterEffect":"..."}]}
+严格输出：{"confessionReplays":[{"id":"${core_text.esc(item.id)}","title":"...","subtitle":"...","type":"${core_text.esc(item.type || 'other')}","date":"${core_text.esc(item.date || '')}","sourceMemoryIds":${JSON.stringify(item.sourceMemoryIds || [])},"sourceMemoryAnchor":${JSON.stringify(item.sourceMemoryAnchor || '')},"scene":"至少140字的已发生场景回看","confessionText":"至少50字的告白核心文本","confessionLines":["{{char}} 的第一人称告白句1","告白句2","告白句3","告白句4"],"responseSummary":"...","afterEffect":"...","easterEgg":{"moduleType":"heartbeat_console","title":"情感模块标题","statusLine":"此刻的情感状态","logs":["人类可读的情感运行日志1","日志2","日志3","日志4"],"monologue":["直白深情的内心独白1","内心独白2"],"poem":["逐渐浮现的短句1","短句2","短句3","短句4"],"feedback":{"pulse":"触碰心跳反馈","hover":"悬停反馈","reveal":"解锁短句反馈","stabilize":"稳定信号反馈","pause":"暂停日志反馈","resume":"恢复日志反馈"}}}]}
+easterEgg 只允许上述结构化文字和 moduleType 枚举，不得输出 JavaScript、HTML、CSS、URL、事件处理器或任何代码；所有互动均由插件本地固定代码执行。
 只输出 JSON。`;
     const list = await generation_client.requestValidatedSegment(
         prompt, `重新生成告白回看「${item.title || item.id}」…`, taskOptions(core_constants.MODE.ENDING, context, origin, `${taskKey}:confession`, 7000, 0.55),
@@ -13309,10 +15533,10 @@ TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
 async function regenerateAchievement(item, context, memoryBank, origin, taskKey) {
     const evidence = item.unlocked ? core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 10) : [];
     const prompt = `${generation_prompts.promptSafetyBoundary(context, '成就库 / 单项重新生成')}
-只重新生成下面这一项成就的标题、说明、等级和提示。解锁状态以及已解锁成就的档案证据不得改变。
+只重新生成下面这一项成就的标题、说明、等级和提示。已解锁时还必须写清具体解锁条件；解锁状态以及已解锁成就的档案证据不得改变。
 CURRENT_ACHIEVEMENT_JSON:\n${JSON.stringify(item, null, 2)}
 ${item.unlocked ? `TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}` : ''}
-严格输出：{"entries":[{"id":"${core_text.esc(item.id)}","title":"...","description":"...","category":"...","tier":"bronze","unlocked":${item.unlocked ? 'true' : 'false'},"unlockedAt":${JSON.stringify(item.unlockedAt || '')},"sourceMemoryIds":${JSON.stringify(item.sourceMemoryIds || [])},"sourceMemoryAnchor":${JSON.stringify(item.sourceMemoryAnchor || '')},"hint":"..."}]}
+严格输出：{"entries":[{"id":"${core_text.esc(item.id)}","title":"...","description":"...","category":"...","tier":"bronze","unlocked":${item.unlocked ? 'true' : 'false'},"unlockedAt":${JSON.stringify(item.unlockedAt || '')},"unlockCondition":${item.unlocked ? '"一句话说明做到或经历了什么才解锁，并受同一组证据支持"' : '""'},"sourceMemoryIds":${JSON.stringify(item.sourceMemoryIds || [])},"sourceMemoryAnchor":${JSON.stringify(item.sourceMemoryAnchor || '')},"hint":"..."}]}
 只输出 JSON。`;
     const normalized = await generation_client.requestValidatedSegment(
         prompt, `重新生成成就「${item.title}」…`, taskOptions(core_constants.MODE.ACHIEVEMENTS, context, origin, `${taskKey}:achievement`, 5000, 0.6),
@@ -13528,6 +15752,7 @@ async function regenerateManagedTarget(session, type, id, parentId, options) {
 }
 
 __m_generation_contentRegeneration_js.regenerateManagedTarget = regenerateManagedTarget;
+__m_generation_contentRegeneration_js.sameEvidence = sameEvidence;
 __m_generation_contentRegeneration_js.normalizeRegeneratedButterflyNode = normalizeRegeneratedButterflyNode;
 }
 
@@ -13714,7 +15939,7 @@ function pageEntries(session, pageKey) {
 }
 
 function pageHasNotebookContent(page) {
-    return !!page && [page.entryIds, page.drafts, page.stickyNotes, page.moodNotes, page.manualTodos]
+    return !!page && [page.entryIds, page.stickyNotes, page.moodNotes]
         .some(list => Array.isArray(list) && list.length > 0);
 }
 
@@ -13805,27 +16030,14 @@ function shortDate(item) {
     return parsed.hasYear ? `${parsed.month}/${parsed.day}` : `${parsed.month}/${parsed.day}`;
 }
 
-function calendarTodoRow(item, { completed = false, manual = false, pageKey = '' } = {}) {
+function calendarTodoRow(item, { completed = false } = {}) {
     const marker = completed ? '✓' : '□';
     const tags = (Array.isArray(item?.tags) ? item.tags : []).slice(0, 3).map(tag => `<span>#${core_text.esc(tag)}</span>`).join('');
-    const meta = manual ? '手动待办' : shortDate(item);
-    const check = manual
-        ? `<button type="button" class="rmt-calendar-master-check" data-rmt-action="calendar-toggle-todo" data-rmt-calendar-page="${core_text.esc(pageKey)}" data-rmt-calendar-todo="${core_text.esc(item?.id || '')}" aria-label="${completed ? '标记为未完成' : '标记为已完成'}">${marker}</button>`
-        : `<span class="rmt-calendar-master-check" aria-hidden="true">${marker}</span>`;
+    const meta = shortDate(item);
     return `<div class="rmt-calendar-master-todo-row ${completed ? 'done' : 'open'}">
-      ${check}
+      <span class="rmt-calendar-master-check" aria-hidden="true">${marker}</span>
       <div><b>${core_text.esc(item?.title || '未命名事项')}</b><small>${core_text.esc(meta)}${tags ? ` · ${tags}` : ''}</small></div>
     </div>`;
-}
-
-function draftCard(draft) {
-    return `<article class="rmt-calendar-sticky memo">
-      <span class="rmt-calendar-sticky-pin" aria-hidden="true"></span>
-      <small>DATE DRAFT</small>
-      <h3>草稿</h3>
-      <p>${core_text.esc(draft?.text || '')}</p>
-      <footer>只属于当前日期</footer>
-    </article>`;
 }
 
 function stickyNoteCard(note) {
@@ -13973,30 +16185,20 @@ function renderCalendar() {
         ? `<div class="rmt-calendar-pending"><span>特殊日期页</span><div>${pendingButtons}${legacyButton}</div></div>`
         : '';
 
-    const page = selectedPage || { drafts: [], stickyNotes: [], moodNotes: [], manualTodos: [] };
-    const drafts = Array.isArray(page.drafts) ? page.drafts : [];
+    const page = selectedPage || { stickyNotes: [], moodNotes: [] };
     const stickyNotes = Array.isArray(page.stickyNotes) ? page.stickyNotes : [];
     const moodNotes = Array.isArray(page.moodNotes) ? page.moodNotes : [];
-    const manualTodos = Array.isArray(page.manualTodos) ? page.manualTodos : [];
     const memoNotes = stickyNotes.filter(note => note?.kind !== 'special');
     const specialNotes = stickyNotes.filter(note => note?.kind === 'special');
     const promised = selectedEntries.filter(item => item.status === 'promised');
     const completedEntries = selectedEntries.filter(item => item.status === 'past');
-    const manualOpen = manualTodos.filter(item => item?.completed !== true);
-    const manualDone = manualTodos.filter(item => item?.completed === true);
 
-    const memoCards = [...drafts.map(draftCard), ...memoNotes.map(stickyNoteCard)];
+    const memoCards = memoNotes.map(stickyNoteCard);
     const memoBoard = memoCards.length
         ? memoCards.join('')
-        : '<div class="rmt-calendar-board-empty">这一天还没有草稿或便签。</div>';
-    const openTodoRows = [
-        ...promised.map(item => calendarTodoRow(item)),
-        ...manualOpen.map(item => calendarTodoRow(item, { manual: true, pageKey: session.selectedDateKey })),
-    ];
-    const doneTodoRows = [
-        ...completedEntries.map(item => calendarTodoRow(item, { completed: true })),
-        ...manualDone.map(item => calendarTodoRow(item, { completed: true, manual: true, pageKey: session.selectedDateKey })),
-    ];
+        : '<div class="rmt-calendar-board-empty">这一天还没有他写下的备忘。</div>';
+    const openTodoRows = promised.map(item => calendarTodoRow(item));
+    const doneTodoRows = completedEntries.map(item => calendarTodoRow(item, { completed: true }));
     const todoBoard = openTodoRows.length
         ? openTodoRows.join('')
         : '<div class="rmt-calendar-board-empty">这一天目前没有待办。</div>';
@@ -14013,7 +16215,7 @@ function renderCalendar() {
 
     body.innerHTML = `<div class="rmt-calendar-shell rmt-calendar-v3">
       <section class="rmt-calendar-hero compact">
-        <div><div class="rmt-archive-kicker">RELATIONSHIP CALENDAR</div><h2>${core_text.esc(session.title || '两个人的日历')}</h2><p>点选任意日期；每一天都有完全独立的草稿、便签、To-Do、特别备注和页角随笔，不会串到其他日期。</p></div>
+        <div><div class="rmt-archive-kicker">RELATIONSHIP CALENDAR</div><h2>${core_text.esc(session.title || '两个人的日历')}</h2><p>点选任意日期，查看他为这一天留下的备忘、自动待办、特别备注和页角随笔。</p></div>
         <div class="rmt-calendar-counts"><span><b>${entries.filter(item => item.status === 'past').length}</b> 已发生</span><span><b>${allPromisedCount}</b> 待办</span><span><b>${entries.filter(item => item.status === 'future').length}</b> 提醒</span></div>
       </section>
 
@@ -14035,14 +16237,12 @@ function renderCalendar() {
 
       <section class="rmt-calendar-notebook-board">
         <section class="rmt-calendar-sticky-panel">
-          <header><div><small>DATE DRAFTS / STICKY NOTES</small><h3>草稿与便签</h3></div><span>${drafts.length + memoNotes.length}</span></header>
+          <header><div><small>CHARACTER MEMOS</small><h3>他的备忘</h3></div><span>${memoNotes.length}</span></header>
           <div class="rmt-calendar-sticky-grid">${memoBoard}</div>
-          <div class="rmt-calendar-detail"><textarea class="text_pole" rows="2" data-rmt-calendar-draft-input placeholder="给${core_text.esc(selectedDateLabel)}写一条草稿…"></textarea><button type="button" class="rmt-btn" data-rmt-action="calendar-add-draft" data-rmt-calendar-page="${core_text.esc(session.selectedDateKey)}">保存到这一天</button></div>
         </section>
         <section class="rmt-calendar-master-todo">
-          <header><div><small>DATE TO DO LIST</small><h3>这一天的待办</h3></div><span>${promised.length + manualTodos.length}</span></header>
+          <header><div><small>CHARACTER TO DO LIST</small><h3>他的自动待办</h3></div><span>${promised.length}</span></header>
           <div class="rmt-calendar-master-todo-list">${todoBoard}${doneBoard}</div>
-          <div class="rmt-calendar-detail"><input class="text_pole" data-rmt-calendar-todo-input placeholder="给这一天添加手动待办…"><button type="button" class="rmt-btn" data-rmt-action="calendar-add-todo" data-rmt-calendar-page="${core_text.esc(session.selectedDateKey)}">添加待办</button></div>
         </section>
       </section>
 
@@ -14077,7 +16277,7 @@ const MANAGEABLE_TARGET_TYPES = new Set([
     'phone-app', 'phone-entry',
     'ending-route', 'ending-confession',
     'heart-voice', 'heart-scenario', 'heart-strip', 'heart-strip-image', 'heart-firefly',
-    'achievement', 'calendar-entry', 'calendar-note', 'calendar-mood', 'calendar-draft', 'calendar-manual-todo', 'butterfly-node',
+    'achievement', 'calendar-entry', 'calendar-note', 'calendar-mood', 'butterfly-node',
 ]);
 
 function isManageableTargetType(value) {
@@ -14112,17 +16312,11 @@ function calendarManagementTargets(session) {
         const safePage = modes_calendar.calendarDayPage(session, pageKey);
         if (!safePage) continue;
         const label = calendarPageLabel(safePage, pageKey);
-        for (const item of safePage.drafts || []) {
-            targets.push(target('calendar-draft', item.id, `草稿 · ${label}`, item.text || '', pageKey, { canRegenerate: false }));
-        }
         for (const item of safePage.stickyNotes || []) {
             targets.push(target('calendar-note', item.id, `${item.kind === 'special' ? '特别备注' : '便签'} · ${item.title || item.id}`, `${label} · ${item.text || ''}`, pageKey));
         }
         for (const item of safePage.moodNotes || []) {
             targets.push(target('calendar-mood', item.id, `页角随笔 · ${label}`, item.text || '', pageKey));
-        }
-        for (const item of safePage.manualTodos || []) {
-            targets.push(target('calendar-manual-todo', item.id, `手动待办 · ${item.title}`, `${label} · ${item.completed ? '已完成' : '未完成'}`, pageKey, { canRegenerate: false }));
         }
     }
     return targets;
@@ -14229,250 +16423,6 @@ function renderContentManager() {
 __m_ui_contentManager_js.isManageableTargetType = isManageableTargetType;
 __m_ui_contentManager_js.managementTargetsForSession = managementTargetsForSession;
 __m_ui_contentManager_js.renderContentManager = renderContentManager;
-}
-
-function __init_ui_endingView_js() {
-// MODULE: ui/endingView.js
-const archive_library = __m_archive_library_js;
-const archive_repository = __m_archive_repository_js;
-const core_cache = __m_core_cache_js;
-const core_constants = __m_core_constants_js;
-const core_context = __m_core_context_js;
-const core_incremental = __m_core_incremental_js;
-const core_requestCoordinator = __m_core_requestCoordinator_js;
-const core_text = __m_core_text_js;
-const generation_client = __m_generation_client_js;
-const modes_ending = __m_modes_ending_js;
-const ui_heartView = __m_ui_heartView_js;
-const ui_overlay = __m_ui_overlay_js;
-const runtimeState = __m_core_state_js.state;
-// Heartbeat Memories r35 modular runtime.
-// Extracted from r34 without changing archive/cache storage contracts.
-
-
-
-
-
-
-
-
-function selectedEndingRoute() {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ENDING) return null;
-    return runtimeState.activeSession.endings.find(item => item.id === runtimeState.activeSession.selectedId)
-        || runtimeState.activeSession.endings.find(item => item.id === runtimeState.activeSession.recommendedEndingId)
-        || runtimeState.activeSession.endings[0]
-        || null;
-}
-
-function endingConfessionTypeLabel(type) {
-    return ({
-        true: '真心告白',
-        mutual: '双向告白',
-        friendship: '友情告白',
-        indirect: '间接告白',
-        relationship: '关系确认',
-        rejected: '未被接受',
-        other: '告白回看',
-    })[type] || '告白回看';
-}
-
-function selectedConfessionReplay() {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ENDING) return null;
-    const list = Array.isArray(runtimeState.activeSession.confessionReplays) ? runtimeState.activeSession.confessionReplays : [];
-    return list.find(item => item.id === runtimeState.activeSession.selectedConfessionId) || list[0] || null;
-}
-
-function confessionReplayPlayerHtml(replay, session) {
-    const lines = modes_ending.normalizeEndingConfessionLines(replay?.confessionLines, replay?.confessionText);
-    if (!lines.length) return `<div class="rmt-ending-confession">${core_text.esc(replay?.confessionText || '')}</div>`;
-    const index = Math.max(0, Math.min(lines.length - 1, Math.floor(Number(session?.confessionLineIndex) || 0)));
-    session.confessionLineIndex = index;
-    const context = core_context.getContext();
-    const charName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || context?.name2, 120) || '角色';
-    const avatar = ui_heartView.heartCharacterAvatarUrl(runtimeState.activeArchiveSnapshot, context);
-    return `<div class="rmt-ending-confession-stage">
-      <div class="rmt-ending-confession-dialogue">
-        <span class="rmt-ending-confession-avatar">${avatar ? `<img src="${core_text.esc(avatar)}" alt="">` : '<i class="fa-solid fa-heart"></i>'}</span>
-        <div class="rmt-ending-confession-bubble"><small>${core_text.esc(charName)}</small><p>${core_text.esc(lines[index])}</p></div>
-      </div>
-      <div class="rmt-ending-confession-actions">
-        <button type="button" class="rmt-btn" data-rmt-action="ending-confession-prev" ${index <= 0 ? 'disabled' : ''}>上一句</button>
-        <button type="button" class="rmt-btn" data-rmt-action="ending-confession-replay">重播</button>
-        <button type="button" class="rmt-btn" data-rmt-action="ending-confession-next" ${index >= lines.length - 1 ? 'disabled' : ''}>下一句</button>
-      </div>
-    </div>`;
-}
-
-function renderEnding() {
-    const session = runtimeState.activeSession;
-    if (!session || session.kind !== core_constants.MODE.ENDING) return;
-    ui_overlay.setBackVisible(true, runtimeState.activeArchiveSnapshot ? (runtimeState.activeArchiveReadOnly ? '只读档案' : '档案') : '当前档案');
-    ui_overlay.topTitle(core_constants.MODE_LABEL[core_constants.MODE.ENDING]);
-    const replays = Array.isArray(session.confessionReplays) ? session.confessionReplays : [];
-    const readOnlyArchive = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
-    const view = session.view === 'confessions' ? 'confessions' : 'routes';
-    session.view = view;
-    const tabs = `<div class="rmt-ending-tabs"><button type="button" class="rmt-ending-tab ${view === 'routes' ? 'active' : ''}" data-rmt-ending-view="routes">结局路线 <span>${session.endings.length}</span></button><button type="button" class="rmt-ending-tab ${view === 'confessions' ? 'active' : ''}" data-rmt-ending-view="confessions">告白回看 <span>${replays.length}</span></button></div>`;
-    const confessionRefreshAction = view === 'confessions' && !readOnlyArchive ? '<button type="button" class="rmt-btn" data-rmt-action="refresh-ending-confessions"><i class="fa-solid fa-rotate"></i> 只重新读取告白</button>' : '';
-    const summary = `<section class="rmt-ending-summary"><b>${core_text.esc(session.relationshipState)}</b><p>${core_text.esc(session.relationshipSummary)}</p><div class="rmt-ending-extra-actions">${confessionRefreshAction}<button type="button" class="rmt-btn" data-rmt-action="open-heart"><i class="fa-solid fa-heart"></i> 角色互动</button></div></section>`;
-    if (view === 'confessions') {
-        const selectedReplay = selectedConfessionReplay();
-        if (selectedReplay) session.selectedConfessionId = selectedReplay.id;
-        const replayList = replays.map(item => `<button type="button" class="rmt-confession-card ${selectedReplay?.id === item.id ? 'active' : ''}" data-rmt-confession-id="${core_text.esc(item.id)}"><b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.subtitle || item.date || endingConfessionTypeLabel(item.type))}</span><em>${core_text.esc(endingConfessionTypeLabel(item.type))} · ${core_text.esc(item.date || '待定')}</em></button>`).join('');
-        const replayDetail = selectedReplay
-            ? `<div class="rmt-ending-head"><div><h2>${core_text.esc(selectedReplay.title)}</h2><div class="rmt-ending-subtitle">${core_text.esc(selectedReplay.subtitle || endingConfessionTypeLabel(selectedReplay.type))}</div></div><span>已发生 · 档案回看</span></div>
-               <section class="rmt-ending-section"><small>告白场景</small><p>${core_text.esc(selectedReplay.scene)}</p>${confessionReplayPlayerHtml(selectedReplay, session)}</section>
-               ${selectedReplay.responseSummary ? `<section class="rmt-ending-section"><small>当时的回应</small><p>${core_text.esc(selectedReplay.responseSummary)}</p></section>` : ''}
-               ${selectedReplay.afterEffect ? `<section class="rmt-ending-section"><small>之后</small><p>${core_text.esc(selectedReplay.afterEffect)}</p></section>` : ''}`
-            : `<div class="rmt-ending-lock"><b>还没有可回看的告白。</b></div>`;
-        ui_overlay.bodyEl().innerHTML = `<div class="rmt-ending">${summary}${tabs}<nav class="rmt-ending-list" aria-label="告白回看">${replayList || '<div class="rmt-ending-lock">没有检测到可验证的告白记录。</div>'}</nav><main class="rmt-ending-detail">${replayDetail}</main></div>`;
-        return;
-    }
-    const selected = selectedEndingRoute();
-    if (!selected) return;
-    session.selectedId = selected.id;
-    const typeLabel = { route: '当前路线', romance: '恋爱', reverse: '逆转告白', bond: '羁绊', open: '开放', personal: '个人' };
-    const routes = session.endings.map(item => `<button type="button" class="rmt-ending-route ${item.id === selected.id ? 'active' : ''} ${item.available ? '' : 'locked'}" data-rmt-ending-id="${core_text.esc(item.id)}"><b>${item.id === session.recommendedEndingId ? '♥ ' : ''}${core_text.esc(item.title)}</b><span>${core_text.esc(item.subtitle || typeLabel[item.type] || '路线')}</span><em>${item.available ? '可观测 · 未来推演' : '未解锁'}</em></button>`).join('');
-    const detail = selected.available
-        ? `<div class="rmt-ending-head"><div><h2>${core_text.esc(selected.title)}</h2><div class="rmt-ending-subtitle">${core_text.esc(selected.subtitle || typeLabel[selected.type] || '')}</div></div><span>未来路线推演</span></div>
-           <section class="rmt-ending-section"><small>终章</small><p>${core_text.esc(selected.endingScene)}</p>${selected.creditsLine ? `<div class="rmt-ending-final">— ${core_text.esc(selected.creditsLine)}</div>` : ''}</section>
-           <section class="rmt-ending-section"><small>EPILOGUE // 后日谈 · ${core_text.esc(selected.epilogue?.timeSkip || '未来')}</small><div class="rmt-ending-epilogue">${(selected.epilogue?.scenes || []).map(scene => `<article><b>${core_text.esc(scene.title)}</b><p>${core_text.esc(scene.text)}</p></article>`).join('')}</div>${selected.epilogue?.finalLine ? `<div class="rmt-ending-final">${core_text.esc(selected.epilogue.finalLine)}</div>` : ''}</section>
-           `
-        : `<div class="rmt-ending-head"><div><h2>${core_text.esc(selected.title)}</h2><div class="rmt-ending-subtitle">${core_text.esc(selected.subtitle || typeLabel[selected.type] || '')}</div></div><span>未解锁</span></div><div class="rmt-ending-lock"><b>这条路线还没有被当前档案解锁。</b><br>${core_text.esc(selected.unlockHint || '继续让关系在真实聊天中自然发展后，再增量更新档案并追加结局。')}</div>`;
-    ui_overlay.bodyEl().innerHTML = `<div class="rmt-ending">${summary}${tabs}<nav class="rmt-ending-list" aria-label="结局路线">${routes}</nav><main class="rmt-ending-detail">${detail}</main></div>`;
-}
-
-async function refreshEndingConfessionReplays() {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ENDING) return;
-    if (!archive_library.requireWritableArchiveAction()) return;
-    const context = core_context.currentCharacterGuard();
-    if (core_requestCoordinator.isModeGenerating(core_constants.MODE.ENDING, context)) {
-        globalThis.toastr?.info?.('ENDING / 告白扫描已经有任务在进行中，请等它完成。', '心跳回忆');
-        return;
-    }
-    const memoryBank = archive_repository.requireArchive(context);
-    const baseSession = structuredClone(runtimeState.activeSession);
-    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(baseSession, memoryBank, 'confessions');
-    if (!sourceMemoryIds.length) {
-        globalThis.toastr?.info?.('当前档案没有尚未扫描告白的新记忆。旧告白回看保持不变。', '心跳回忆');
-        return;
-    }
-    const confirmed = ui_overlay.confirmExplicitAction(
-        '从新增档案追加“告白回看”？',
-        '这次只扫描尚未消费的新档案记忆；旧告白回看逐条原样保留，只追加能被新证据证明的告白 / 关系确认。结局路线、后日谈和 Voice Drama 都不会重写。',
-        { destructive: false },
-    );
-    if (!confirmed) return;
-    const expectedChatId = core_context.getChatId(context);
-    const expectedArchiveRevision = memoryBank.archiveRevision;
-    const scope = core_context.chatScopeKey(context);
-    const origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
-    ui_overlay.setInnerLoading(true, '正在从新增档案追加已发生的告白节点…');
-    try {
-        const raw = await generation_client.requestJson(
-            modes_ending.endingConfessionRefreshPrompt(context, memoryBank, baseSession, sourceMemoryIds),
-            '正在扫描新增档案里的告白 / 关系确认…',
-            {
-                maxTokens: 10000,
-                temperature: 0.35,
-                context,
-                origin,
-                taskKey: `ending-confessions:${scope}`,
-                mode: core_constants.MODE.ENDING,
-                background: true,
-            },
-        );
-        const freshReplays = modes_ending.normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank)
-            .filter(item => core_incremental.usesIncrementalMemoryId(item.sourceMemoryIds, sourceMemoryIds));
-        const mergedReplays = modes_ending.mergeEndingConfessions(baseSession.confessionReplays, freshReplays);
-        const updated = baseSession;
-        updated.confessionReplays = mergedReplays.items;
-        updated.selectedConfessionId = mergedReplays.added
-            ? updated.confessionReplays.at(-1)?.id || updated.selectedConfessionId || ''
-            : updated.selectedConfessionId || updated.confessionReplays[0]?.id || '';
-        updated.view = 'confessions';
-        core_incremental.stampIncrementalCoverage(updated, baseSession, memoryBank, 'confessions', sourceMemoryIds, mergedReplays.added);
-        updated.chatId = expectedChatId;
-        updated.archiveRevision = expectedArchiveRevision;
-        let committed = false;
-        if (core_context.isCurrentTaskOrigin(origin)) {
-            try {
-                const latestMemory = archive_repository.requireArchive(core_context.currentCharacterGuard());
-                if (latestMemory.archiveRevision === expectedArchiveRevision) committed = core_cache.saveSession(core_constants.MODE.ENDING, updated, expectedChatId);
-            } catch {}
-        }
-        if (!committed) core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [core_constants.MODE.ENDING]: updated } });
-        if (core_context.isCurrentTaskOrigin(origin) && !document.getElementById(core_constants.OVERLAY_ID)?.hidden) {
-            runtimeState.activeMode = core_constants.MODE.ENDING;
-            runtimeState.activeSession = updated;
-            renderEnding();
-        }
-        globalThis.toastr?.success?.(`告白回看已追加 ${mergedReplays.added} 条；当前共 ${updated.confessionReplays.length} 条。旧告白、结局路线与后日谈保持不变。`, '心跳回忆');
-    } catch (error) {
-        if (error?.name !== 'AbortError') {
-            console.error('[HeartbeatMemories] confession replay refresh failed', error);
-            ui_overlay.showInlineError(error?.message || String(error));
-            globalThis.toastr?.error?.(core_text.toastText(error?.message || String(error)), '心跳回忆 · 告白回看更新失败');
-        }
-    } finally {
-        ui_overlay.setInnerLoading(false);
-        core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.ENDING, origin);
-    }
-}
-
-function endingSetView(view) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ENDING) return;
-    runtimeState.activeSession.view = view === 'confessions' ? 'confessions' : 'routes';
-    renderEnding();
-}
-
-function confessionSelect(id) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ENDING) return;
-    const item = (runtimeState.activeSession.confessionReplays || []).find(replay => replay.id === id);
-    if (!item) return;
-    runtimeState.activeSession.view = 'confessions';
-    runtimeState.activeSession.selectedConfessionId = item.id;
-    runtimeState.activeSession.confessionLineIndex = 0;
-    renderEnding();
-}
-
-function endingSelect(id) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ENDING) return;
-    const item = runtimeState.activeSession.endings.find(route => route.id === id);
-    if (!item) return;
-    runtimeState.activeSession.view = 'routes';
-    runtimeState.activeSession.selectedId = item.id;
-    runtimeState.activeSession.confessionLineIndex = 0;
-    renderEnding();
-}
-
-function endingConfessionStep(delta) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ENDING || runtimeState.activeSession.view !== 'confessions') return;
-    const replay = selectedConfessionReplay();
-    const lines = modes_ending.normalizeEndingConfessionLines(replay?.confessionLines, replay?.confessionText);
-    if (!lines.length) return;
-    const current = Math.max(0, Math.min(lines.length - 1, Math.floor(Number(runtimeState.activeSession.confessionLineIndex) || 0)));
-    runtimeState.activeSession.confessionLineIndex = Math.max(0, Math.min(lines.length - 1, current + Number(delta || 0)));
-    renderEnding();
-}
-
-function replayEndingConfession() {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ENDING) return;
-    runtimeState.activeSession.confessionLineIndex = 0;
-    renderEnding();
-}
-
-__m_ui_endingView_js.refreshEndingConfessionReplays = refreshEndingConfessionReplays;
-__m_ui_endingView_js.selectedEndingRoute = selectedEndingRoute;
-__m_ui_endingView_js.endingConfessionTypeLabel = endingConfessionTypeLabel;
-__m_ui_endingView_js.selectedConfessionReplay = selectedConfessionReplay;
-__m_ui_endingView_js.confessionReplayPlayerHtml = confessionReplayPlayerHtml;
-__m_ui_endingView_js.renderEnding = renderEnding;
-__m_ui_endingView_js.endingSetView = endingSetView;
-__m_ui_endingView_js.confessionSelect = confessionSelect;
-__m_ui_endingView_js.endingSelect = endingSelect;
-__m_ui_endingView_js.endingConfessionStep = endingConfessionStep;
-__m_ui_endingView_js.replayEndingConfession = replayEndingConfession;
 }
 
 function __init_ui_phoneView_js() {
@@ -14780,6 +16730,142 @@ __m_ui_phoneView_js.phoneSelectEntry = phoneSelectEntry;
 __m_ui_phoneView_js.phoneEntryBack = phoneEntryBack;
 }
 
+function __init_ui_travelView_js() {
+// MODULE: ui/travelView.js
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_text = __m_core_text_js;
+const modes_travel = __m_modes_travel_js;
+const ui_overlay = __m_ui_overlay_js;
+const runtimeState = __m_core_state_js.state;
+// Independent code-drawn travel map. Generated values are escaped text or allowlisted tokens;
+// route lines, marker positions and postcard composition are entirely local.
+
+
+
+function selectedTravelLocation() {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.TRAVEL) return null;
+    return runtimeState.activeSession.locations.find(item => item.id === runtimeState.activeSession.selectedLocationId) || null;
+}
+
+function travelSourceLabel(item) {
+    if (item?.basis === '记忆' && item?.sourceMemoryAnchor) return `剧情足迹 · ${item.sourceMemoryAnchor}`;
+    return '角色生活 / 世界设定';
+}
+
+function travelPostcardHtml(item) {
+    const card = item?.postcard || {};
+    const userName = core_text.normalizeText(runtimeState.activeArchiveSnapshot
+        ? runtimeState.activeArchiveSnapshot.memory?.userName
+        : core_context.getContext()?.name1, 100) || '你';
+    return `<section class="rmt-travel-postcard tone-${core_text.esc(card.tone || 'paper')}" role="dialog" aria-modal="false" aria-label="${core_text.esc(item.name)}的文字明信片">
+      <button type="button" class="rmt-travel-detail-close" data-rmt-action="travel-close-detail" aria-label="收起明信片">×</button>
+      <div class="rmt-travel-postcard-mark"><span>${core_text.esc(card.stampLabel || 'POST')}</span><i>${core_text.esc(card.postmark || item.region || 'FAR AWAY')}</i></div>
+      <div class="rmt-travel-postcard-copy">
+        <small>POSTCARD FROM ${core_text.esc(item.region || item.name)}</small>
+        <h3>${core_text.esc(card.title)}</h3>
+        ${card.greeting ? `<b>${core_text.esc(card.greeting)}</b>` : ''}
+        <p>${core_text.esc(card.body)}</p>
+        <footer>${core_text.esc(card.closing)}</footer>
+      </div>
+      <div class="rmt-travel-postcard-address"><span>TO</span><b>${core_text.esc(userName)}</b><small>${core_text.esc(item.distanceLabel)}</small></div>
+    </section>`;
+}
+
+function travelDialogueHtml(item, session) {
+    const lines = Array.isArray(item?.dialogueLines) ? item.dialogueLines : [];
+    const max = Math.max(0, lines.length - 1);
+    const index = Math.max(0, Math.min(max, Math.floor(Number(session.dialogueIndex) || 0)));
+    session.dialogueIndex = index;
+    const charName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext()?.name2, 100) || '他';
+    return `<section class="rmt-travel-dialogue" role="dialog" aria-modal="false" aria-label="${core_text.esc(item.name)}的地点对话">
+      <button type="button" class="rmt-travel-detail-close" data-rmt-action="travel-close-detail" aria-label="收起地点对话">×</button>
+      <div class="rmt-travel-dialogue-place"><small>NEARBY STOP · ${core_text.esc(item.distanceLabel)}</small><h3>${core_text.esc(item.name)}</h3><p>${core_text.esc(item.summary)}</p></div>
+      <div class="rmt-travel-dialogue-bubble"><b>${core_text.esc(charName)}</b><p>${core_text.esc(lines[index] || '')}</p><span>${lines.length ? `${index + 1} / ${lines.length}` : '0 / 0'}</span></div>
+      <div class="rmt-travel-dialogue-actions">
+        <button type="button" class="rmt-btn" data-rmt-action="travel-dialogue-prev" ${index <= 0 ? 'disabled' : ''}>上一句</button>
+        <button type="button" class="rmt-btn" data-rmt-action="travel-dialogue-replay">重听</button>
+        <button type="button" class="rmt-btn" data-rmt-action="travel-dialogue-next" ${index >= max ? 'disabled' : ''}>下一句</button>
+      </div>
+    </section>`;
+}
+
+function renderTravel() {
+    const session = runtimeState.activeSession;
+    if (!session || session.kind !== core_constants.MODE.TRAVEL) return;
+    ui_overlay.topTitle(core_constants.MODE_LABEL[core_constants.MODE.TRAVEL]);
+    const body = ui_overlay.bodyEl();
+    if (!body) return;
+    const selected = selectedTravelLocation();
+    const near = session.locations.filter(item => item.kind === 'near');
+    const far = session.locations.filter(item => item.kind === 'far');
+    const markerPositions = modes_travel.travelMarkerPositions(session.locations);
+    const markers = session.locations.map((item, index) => {
+        const position = markerPositions[index];
+        const active = selected?.id === item.id;
+        const kind = modes_travel.safeTravelLocationKind(item.kind);
+        return `<button type="button" class="rmt-travel-marker ${kind} ${active ? 'active' : ''}" style="--map-x:${position.x}%;--map-y:${position.y}%" data-rmt-travel-location="${core_text.esc(item.id)}" aria-label="${core_text.esc(`${kind === 'near' ? '附近地点' : '远方地点'}：${item.name}`)}"><i class="fa-solid ${kind === 'near' ? 'fa-location-dot' : 'fa-envelope'}"></i><span>${core_text.esc(item.name)}</span></button>`;
+    }).join('');
+    const selectedDetail = selected
+        ? selected.kind === 'far' ? travelPostcardHtml(selected) : travelDialogueHtml(selected, session)
+        : '';
+    const legendRows = session.locations.map(item => `<button type="button" class="${selected?.id === item.id ? 'active' : ''}" data-rmt-travel-location="${core_text.esc(item.id)}"><i class="fa-solid ${item.kind === 'near' ? 'fa-location-dot' : 'fa-envelope'}"></i><span><b>${core_text.esc(item.name)}</b><small>${core_text.esc(item.region || item.distanceLabel)} · ${core_text.esc(travelSourceLabel(item))}</small></span></button>`).join('');
+    body.innerHTML = `<div class="rmt-travel" data-rmt-travel-theme="${core_text.esc(session.mapTheme)}">
+      <header class="rmt-travel-head"><div><small>THE ROUTES HE TAKES</small><h2>${core_text.esc(session.title)}</h2><p>${core_text.esc(session.routeSummary)}</p></div><div><span><b>${near.length}</b> 附近</span><span><b>${far.length}</b> 远方</span></div></header>
+      <div class="rmt-travel-layout">
+        <section class="rmt-travel-map" aria-label="他的出行路线地图">
+          <div class="rmt-travel-grid" aria-hidden="true"></div>
+          <svg class="rmt-travel-routes" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M7 73 C22 57 27 29 46 39 S70 78 93 47"/><path d="M12 22 C31 12 44 27 55 61 S73 86 91 82"/><path d="M18 89 C33 70 54 83 66 52 S81 19 94 17"/></svg>
+          <div class="rmt-travel-horizon" aria-hidden="true"><span></span><span></span><span></span></div>
+          ${markers}
+          ${selectedDetail}
+          <div class="rmt-travel-map-key"><span><i class="near"></i>附近 · 点击听他说</span><span><i class="far"></i>远方 · 点击收明信片</span></div>
+        </section>
+        <aside class="rmt-travel-index"><div><small>ROUTE INDEX</small><h3>地图坐标</h3></div><nav>${legendRows}</nav></aside>
+      </div>
+    </div>`;
+}
+
+function selectTravelLocation(id) {
+    const session = runtimeState.activeSession;
+    if (!session || session.kind !== core_constants.MODE.TRAVEL) return;
+    const item = session.locations.find(candidate => candidate.id === id);
+    if (!item) return;
+    session.selectedLocationId = item.id;
+    session.dialogueIndex = 0;
+    renderTravel();
+}
+
+function closeTravelDetail() {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.TRAVEL) return;
+    runtimeState.activeSession.selectedLocationId = '';
+    runtimeState.activeSession.dialogueIndex = 0;
+    renderTravel();
+}
+
+function travelDialogueStep(delta) {
+    const session = runtimeState.activeSession;
+    const item = selectedTravelLocation();
+    if (!session || session.kind !== core_constants.MODE.TRAVEL || item?.kind !== 'near') return;
+    const max = Math.max(0, item.dialogueLines.length - 1);
+    session.dialogueIndex = Math.max(0, Math.min(max, Math.floor(Number(session.dialogueIndex) || 0) + Number(delta || 0)));
+    renderTravel();
+}
+
+function replayTravelDialogue() {
+    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.TRAVEL) return;
+    runtimeState.activeSession.dialogueIndex = 0;
+    renderTravel();
+}
+
+__m_ui_travelView_js.selectedTravelLocation = selectedTravelLocation;
+__m_ui_travelView_js.renderTravel = renderTravel;
+__m_ui_travelView_js.selectTravelLocation = selectTravelLocation;
+__m_ui_travelView_js.closeTravelDetail = closeTravelDetail;
+__m_ui_travelView_js.travelDialogueStep = travelDialogueStep;
+__m_ui_travelView_js.replayTravelDialogue = replayTravelDialogue;
+}
+
 function __init_ui_overlay_js() {
 // MODULE: ui/overlay.js
 const archive_groups = __m_archive_groups_js;
@@ -14814,6 +16900,7 @@ const ui_contentManager = __m_ui_contentManager_js;
 const ui_endingView = __m_ui_endingView_js;
 const ui_heartView = __m_ui_heartView_js;
 const ui_phoneView = __m_ui_phoneView_js;
+const ui_travelView = __m_ui_travelView_js;
 const ui_settingsPanel = __m_ui_settingsPanel_js;
 const ui_styles = __m_ui_styles_js;
 const runtimeState = __m_core_state_js.state;
@@ -14952,6 +17039,7 @@ function openOverlay() {
 function closeOverlay() {
     modes_room.stopRoomClock();
     ui_phoneView.stopPhoneClock();
+    ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
     if (overlay) {
         if (typeof globalThis.HTMLDialogElement === 'function' && overlay instanceof globalThis.HTMLDialogElement && overlay.open) {
@@ -14984,10 +17072,12 @@ function setBackVisible(visible, label = '返回上级') {
 }
 
 function navigateBack() {
+    if (runtimeState.endingEasterEggRuntime) return ui_endingView.closeEndingEasterEgg();
     if (runtimeState.contentManagerOpen) {
         runtimeState.contentManagerOpen = false;
         return renderActive();
     }
+    if (runtimeState.activeMode === core_constants.MODE.TRAVEL && runtimeState.activeSession?.selectedLocationId) return ui_travelView.closeTravelDetail();
     if (runtimeState.activeMode === core_constants.MODE.ITEMS || runtimeState.activeMode === core_constants.MODE.PHONE) return modes_room.returnToRoomFromDeep();
     if (runtimeState.activeMode === core_constants.MODE.ADV && runtimeState.activeSession?.kind === core_constants.MODE.ADV && runtimeState.activeSession.view === 'adv') {
         runtimeState.activeSession.view = 'cg';
@@ -15167,6 +17257,7 @@ function calendarQuickAccessHtml({ ready = false, generated = false, generating 
 }
 
 function showChooser() {
+    ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     runtimeState.activeArchiveSnapshot = null;
     runtimeState.activeArchiveReadOnly = true;
     modes_room.stopRoomClock();
@@ -15420,6 +17511,7 @@ function decorateReadOnlyModeUi() {
 
 function renderActive() {
     runtimeState.contentManagerOpen = false;
+    if (runtimeState.activeMode !== core_constants.MODE.ENDING) ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     if (!runtimeState.activeSession || !runtimeState.activeMode) return runtimeState.activeArchiveSnapshot ? archive_library.showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot) : showChooser();
     const supportsTopbarIncrement = !core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) || runtimeState.activeMode === core_constants.MODE.PHONE;
     setRegenerateVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && supportsTopbarIncrement);
@@ -15433,6 +17525,7 @@ function renderActive() {
     else if (runtimeState.activeMode === core_constants.MODE.ROOM) modes_room.renderRoom();
     else if (runtimeState.activeMode === core_constants.MODE.ITEMS) modes_items.renderItems();
     else if (runtimeState.activeMode === core_constants.MODE.PHONE) ui_phoneView.renderPhone();
+    else if (runtimeState.activeMode === core_constants.MODE.TRAVEL) ui_travelView.renderTravel();
     else if (runtimeState.activeMode === core_constants.MODE.ENDING) ui_endingView.renderEnding();
     else if (runtimeState.activeMode === core_constants.MODE.CALENDAR) ui_calendarView.renderCalendar();
     else if (runtimeState.activeMode === core_constants.MODE.RELATIONS) modes_relations.renderRelations();
@@ -15545,78 +17638,6 @@ async function commitManagedSession(updated, expectedChatId, expectedArchiveRevi
     if (!core_cache.saveSession(runtimeState.activeMode, updated, expectedChatId)) throw new Error('当前派生缓存版本已经变化，本次修改没有写入。');
     runtimeState.activeSession = updated;
     return true;
-}
-
-function uniqueCalendarManualId(items, prefix, pageKey, value) {
-    const used = new Set((Array.isArray(items) ? items : []).map(item => core_text.safeId(item?.id, '')).filter(Boolean));
-    const seed = core_text.hashString(`${pageKey}|${value}|${Date.now()}`).toString(36).toUpperCase();
-    let id = `${prefix}_${seed}`;
-    let serial = 2;
-    while (used.has(id)) id = `${prefix}_${seed}_${serial++}`;
-    return id;
-}
-
-async function mutateCalendarDayPage(pageKey, mutation, successMessage) {
-    if (!archive_library.requireWritableArchiveAction()) return false;
-    try {
-        const context = core_context.currentCharacterGuard();
-        const expectedChatId = core_context.getChatId(context);
-        const memoryBank = archive_repository.requireArchive(context);
-        const expectedArchiveRevision = memoryBank.archiveRevision;
-        const origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
-        const updated = core_cache.loadSession(core_constants.MODE.CALENDAR, { context, chatId: expectedChatId, memoryBank, clone: true });
-        if (!updated) throw new Error('当前日历缓存已经变化，请重新打开日历。');
-        const key = core_text.normalizeText(pageKey, 160);
-        if (!updated.dayPages || typeof updated.dayPages !== 'object') updated.dayPages = Object.create(null);
-        let page = modes_calendar.calendarDayPage(updated, key);
-        if (!page) {
-            page = modes_calendar.createCalendarDayPage(key);
-            if (!page) throw new Error('这个日期页无效，本次内容没有写入。');
-            updated.dayPages[key] = page;
-        }
-        mutation(page);
-        updated.selectedDateKey = key;
-        updated.userManaged = true;
-        await commitManagedSession(updated, expectedChatId, expectedArchiveRevision, origin);
-        if (successMessage) globalThis.toastr?.success?.(successMessage, '心跳回忆');
-        ui_calendarView.renderCalendar();
-        return true;
-    } catch (error) {
-        globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
-        return false;
-    }
-}
-
-async function addCalendarDraft(pageKey, text) {
-    const value = core_text.normalizeText(text, 1200);
-    if (!value) return globalThis.toastr?.info?.('请先写下草稿内容。', '心跳回忆');
-    return mutateCalendarDayPage(pageKey, page => {
-        const drafts = Array.isArray(page.drafts) ? page.drafts : [];
-        if (drafts.length >= 24) throw new Error('这一天的草稿已达上限24条，请先在内容管理中删除旧草稿。');
-        drafts.push({ id: uniqueCalendarManualId(drafts, 'CAL_DRAFT', page.key, value), text: value, createdAt: Date.now() });
-        page.drafts = drafts;
-    }, '已保存到当前日期的独立草稿。');
-}
-
-async function addCalendarManualTodo(pageKey, title) {
-    const value = core_text.normalizeText(title, 120);
-    if (!value) return globalThis.toastr?.info?.('请先填写待办内容。', '心跳回忆');
-    return mutateCalendarDayPage(pageKey, page => {
-        const todos = Array.isArray(page.manualTodos) ? page.manualTodos : [];
-        if (todos.length >= 32) throw new Error('这一天的手动待办已达上限32条，请先删除旧待办。');
-        todos.push({ id: uniqueCalendarManualId(todos, 'CAL_TODO', page.key, value), title: value, completed: false, origin: 'user' });
-        page.manualTodos = todos;
-    }, '已添加到当前日期的独立 To-Do。');
-}
-
-async function toggleCalendarManualTodo(pageKey, todoId) {
-    const id = core_text.safeId(todoId, '');
-    if (!id) return false;
-    return mutateCalendarDayPage(pageKey, page => {
-        const item = (Array.isArray(page.manualTodos) ? page.manualTodos : []).find(todo => todo?.id === id);
-        if (!item) throw new Error('找不到这条手动待办。');
-        item.completed = item.completed !== true;
-    }, 'To-Do 状态已更新。');
 }
 
 async function deleteManagedTarget(type, id, parentId = '') {
@@ -15757,6 +17778,8 @@ function handleOverlayClick(event) {
     if (calendarPending) return ui_calendarView.selectCalendarPending(calendarPending.dataset.rmtCalendarPending);
     const calendarMonth = event.target.closest?.('[data-rmt-calendar-month]');
     if (calendarMonth) return ui_calendarView.setCalendarMonth(calendarMonth.dataset.rmtCalendarMonth);
+    const travelLocation = event.target.closest?.('[data-rmt-travel-location]');
+    if (travelLocation) return ui_travelView.selectTravelLocation(travelLocation.dataset.rmtTravelLocation);
     const node = event.target.closest?.('[data-rmt-node]');
     if (node) return ui_butterflyView.selectButterflyNode(node.dataset.rmtNode);
     const endingView = event.target.closest?.('[data-rmt-ending-view]');
@@ -15836,21 +17859,14 @@ function handleOverlayClick(event) {
     const actionEl = event.target.closest?.('[data-rmt-action]');
     const action = actionEl?.dataset?.rmtAction;
     if (!action) return;
-    if (action === 'calendar-add-draft') {
-        const input = bodyEl()?.querySelector?.('[data-rmt-calendar-draft-input]');
-        return void addCalendarDraft(actionEl.dataset.rmtCalendarPage, input?.value);
-    }
-    if (action === 'calendar-add-todo') {
-        const input = bodyEl()?.querySelector?.('[data-rmt-calendar-todo-input]');
-        return void addCalendarManualTodo(actionEl.dataset.rmtCalendarPage, input?.value);
-    }
-    if (action === 'calendar-toggle-todo') {
-        return void toggleCalendarManualTodo(actionEl.dataset.rmtCalendarPage, actionEl.dataset.rmtCalendarTodo);
-    }
-    if (runtimeState.activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'draw-heart-strip', 'clear-heart-strip', 'generate-all-adv', 'repair-failed-adv', 'room-life-refresh', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins', 'memory-worldinfo-picker', 'refresh-ending-confessions', 'heart-generate-part', 'heart-generate-season'].includes(action)) {
+    if (runtimeState.activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'draw-heart-strip', 'clear-heart-strip', 'generate-all-adv', 'repair-failed-adv', 'room-life-refresh', 'room-schema-upgrade', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins', 'memory-worldinfo-picker', 'refresh-ending-confessions', 'heart-generate-part', 'heart-generate-season'].includes(action)) {
         if (!archive_library.requireWritableArchiveAction()) return;
     }
     if (action === 'back') return navigateBack();
+    if (action === 'travel-close-detail') return ui_travelView.closeTravelDetail();
+    if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
+    if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
+    if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
     if (action === 'close') return closeArchiveOverlayFromUser();
     if (action === 'home' || action === 'library-home') {
         if (runtimeState.busy) runtimeState.activeTaskBackgrounded = true;
@@ -15995,10 +18011,25 @@ function handleOverlayClick(event) {
         }
         return generation_client.generateMode(runtimeState.activeMode, { background: false });
     }
+    if (action === 'room-schema-upgrade') {
+        if (runtimeState.activeMode !== core_constants.MODE.ROOM || !modes_room.roomNeedsSchemaUpgrade(runtimeState.activeSession)) return;
+        if (!confirmExplicitAction(
+            '为旧版房间补全宠物设定？',
+            '会重新扫描当前角色卡和世界书中明确存在的宠物/动物伙伴。只合并缺失的宠物与新证据，旧房间、旧物件、旧台词和深层内容都保留；没有明确宠物设定时不会凭空生成。',
+            { destructive: false },
+        )) return;
+        return void generation_client.generateMode(core_constants.MODE.ROOM, { background: false });
+    }
     if (action === 'refresh-ending-confessions') return void ui_endingView.refreshEndingConfessionReplays();
     if (action === 'ending-confession-prev') return ui_endingView.endingConfessionStep(-1);
     if (action === 'ending-confession-next') return ui_endingView.endingConfessionStep(1);
     if (action === 'ending-confession-replay') return ui_endingView.replayEndingConfession();
+    if (action === 'ending-easter-open') return ui_endingView.openEndingEasterEgg();
+    if (action === 'ending-easter-close') return ui_endingView.closeEndingEasterEgg();
+    if (action === 'ending-easter-pulse') return ui_endingView.endingEasterEggPulse();
+    if (action === 'ending-easter-reveal') return ui_endingView.endingEasterEggReveal();
+    if (action === 'ending-easter-toggle') return ui_endingView.endingEasterEggToggleLogs();
+    if (action === 'ending-easter-stabilize') return ui_endingView.endingEasterEggStabilize();
     if (action === 'refresh-image-provider') return generation_imageGeneration.refreshImageGenerationUi();
     if (action === 'album-prev') return ui_albumView.albumPage(-1);
     if (action === 'album-next') return ui_albumView.albumPage(1);
@@ -16229,9 +18260,12 @@ function resetArchiveOverviewForCharacter(context = core_context.currentCharacte
 }
 
 function scheduleChooserRefresh(delay = 40) {
+    if (runtimeState.archiveViewLevel !== 'chooser') return;
     if (runtimeState.chooserRefreshTimer) clearTimeout(runtimeState.chooserRefreshTimer);
     runtimeState.chooserRefreshTimer = setTimeout(() => {
         runtimeState.chooserRefreshTimer = 0;
+        if (runtimeState.archiveViewLevel !== 'chooser') return;
+        if (runtimeState.activeMode || runtimeState.activeSession) return;
         if (runtimeState.activeArchiveSnapshot && runtimeState.archiveViewLevel === 'snapshot') return;
         const overlay = document.getElementById(core_constants.OVERLAY_ID);
         if (!overlay || overlay.hidden || runtimeState.busy) return;
@@ -16239,6 +18273,9 @@ function scheduleChooserRefresh(delay = 40) {
         try { context = core_context.currentCharacterGuard(); } catch { ui_overlay.showChooser(); return; }
         const scope = core_cache.cacheScopeFromContext(context);
         void core_cache.ensureCacheHydrated(context).then(() => {
+            if (runtimeState.archiveViewLevel !== 'chooser') return;
+            if (runtimeState.activeMode || runtimeState.activeSession) return;
+            if (runtimeState.activeArchiveSnapshot && runtimeState.archiveViewLevel === 'snapshot') return;
             let latest;
             try { latest = core_context.currentCharacterGuard(); } catch { return; }
             if (core_cache.cacheScopeFromContext(latest) !== scope) return;
@@ -16363,6 +18400,7 @@ function modePortalMeta(mode) {
         [core_constants.MODE.ROOM]: { title: '他的房间', subtitle: '随现实时间流动的私人空间', icon: 'fa-house', accent: 'room' },
         [core_constants.MODE.ITEMS]: { title: '他的物品', subtitle: '翻找各种收纳容器与私人物件', icon: 'fa-box-open', accent: 'items' },
         [core_constants.MODE.PHONE]: { title: '他的手机', subtitle: '查看私人通讯与数字生活', icon: 'fa-mobile-screen-button', accent: 'phone' },
+        [core_constants.MODE.TRAVEL]: { title: '他的出行路线', subtitle: '附近对话与远方文字明信片', icon: 'fa-map-location-dot', accent: 'travel' },
         [core_constants.MODE.BUTTERFLY]: { title: '蝴蝶效应', subtitle: '平行时间线观测终端', icon: 'fa-code-branch', accent: 'butterfly' },
         [core_constants.MODE.ENDING]: { title: 'ENDING / 后日谈', subtitle: '关系路线终章与未来生活', icon: 'fa-heart', accent: 'ending' },
         [core_constants.MODE.CALENDAR]: { title: '两个人的日历', subtitle: '已度过 / 已约定 / 未来', icon: 'fa-calendar-days', accent: 'calendar' },
@@ -18231,6 +20269,7 @@ const modes_room = __m_modes_room_js;
 const modes_relations = __m_modes_relations_js;
 const ui_overlay = __m_ui_overlay_js;
 const ui_phoneView = __m_ui_phoneView_js;
+const ui_endingView = __m_ui_endingView_js;
 const runtimeState = __m_core_state_js.state;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -18244,8 +20283,9 @@ const runtimeState = __m_core_state_js.state;
 
 
 function showArchiveLibrary() {
+    ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock(); runtimeState.activeMode = null; runtimeState.activeSession = null; runtimeState.activeArchiveSnapshot = null; runtimeState.activeArchiveReadOnly = true; runtimeState.archiveLibraryCharacterKey = ''; runtimeState.archiveViewLevel = 'library';
-    ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setBackVisible(false); ui_overlay.topTitle('心跳回忆 · 档案室');
+    ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setManageVisible(false); ui_overlay.setBackVisible(false); ui_overlay.topTitle('心跳回忆 · 档案室');
     const body = ui_overlay.bodyEl(); if (!body) return;
     try {
         const ctx = core_context.currentCharacterGuard();
@@ -18305,10 +20345,13 @@ function showArchiveLibrary() {
 }
 
 function showArchiveCharacter(groupId) {
+    modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock(); ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
+    runtimeState.activeMode = null;
+    runtimeState.activeSession = null;
     runtimeState.activeArchiveSnapshot = null;
     runtimeState.activeArchiveReadOnly = true;
     const key = core_text.normalizeText(groupId, 120); if (runtimeState.archiveLibraryCharacterKey !== key) runtimeState.archiveCharacterRelationSelection = ''; runtimeState.archiveLibraryCharacterKey = key; runtimeState.archiveViewLevel = 'character';
-    ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setBackVisible(true, '所有角色');
+    ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setManageVisible(false); ui_overlay.setBackVisible(true, '所有角色');
     const context = core_context.getContext();
     const entries = archive_groups.archiveGroupEntries(key, context).sort((a,b)=>b.updatedAt-a.updatedAt);
     const meta = archive_groups.archiveGroupMeta(key, entries, context);
@@ -18591,6 +20634,7 @@ function snapshotCalendarQuickAccessHtml({ ready = true, generated = false, read
 
 function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchiveSnapshot) {
     if (!snapshot?.memory) return showArchiveLibrary();
+    modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock(); ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     const isNewSnapshot = runtimeState.activeArchiveSnapshot !== snapshot;
     runtimeState.activeArchiveSnapshot = snapshot;
     if (isNewSnapshot || snapshot.backupOnly) runtimeState.activeArchiveReadOnly = true;
@@ -18599,6 +20643,7 @@ function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchiveSnapsho
     runtimeState.archiveViewLevel = 'snapshot';
     ui_overlay.openOverlay();
     ui_overlay.setRegenerateVisible(false);
+    ui_overlay.setManageVisible(false);
     ui_overlay.setBackVisible(true, '角色档案');
     ui_overlay.topTitle(`心跳回忆 · ${snapshot.characterName} · ${snapshot.backupOnly ? '独立备份' : runtimeState.activeArchiveReadOnly ? '只读档案' : '编辑待命'}`);
     const body = ui_overlay.bodyEl();
@@ -18976,6 +21021,14 @@ function setArchiveIndex(context, items) {
         archiveGroupManual: item?.archiveGroupManual === true,
     })) : [];
     context.extensionSettings[core_constants.ARCHIVE_INDEX_SETTINGS_KEY] = normalized;
+    // Classification is authoritative identity state. Cached snapshots may otherwise retain
+    // the previous group for up to the read-cache TTL and briefly reopen under the wrong char.
+    runtimeState.archiveSnapshotCache.clear();
+    const activeEntryId = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.entryId, 120);
+    if (activeEntryId) {
+        const activeEntry = normalized.find(item => core_context.archiveIndexEntryId(item) === activeEntryId);
+        if (activeEntry) runtimeState.activeArchiveSnapshot.archiveGroupId = archiveGroupKeyForEntry(activeEntry);
+    }
     context.saveSettingsDebounced?.();
 }
 
@@ -20122,6 +22175,7 @@ function loadSession(mode, options = {}) {
             if (!session || !Array.isArray(session.apps) || session.apps.length < 1) return null;
         }
         if (mode === core_constants.MODE.ENDING && (!Array.isArray(session.endings) || (!userManaged && session.endings.length < 5))) return null;
+        if (mode === core_constants.MODE.TRAVEL && (!Array.isArray(session.locations) || (!userManaged && session.locations.length < 4))) return null;
         if (mode === core_constants.MODE.CALENDAR) {
             session = modes_calendar.migrateCalendarSession(session, memoryBank);
             if (!session || !Array.isArray(session.entries) || !session.dayPages || session.calendarVersion !== core_constants.CALENDAR_SESSION_VERSION) return null;
@@ -20227,6 +22281,7 @@ const core_requestCoordinator = __m_core_requestCoordinator_js;
 const generation_imageGeneration = __m_generation_imageGeneration_js;
 const modes_room = __m_modes_room_js;
 const ui_archivePortal = __m_ui_archivePortal_js;
+const ui_endingView = __m_ui_endingView_js;
 const ui_phoneView = __m_ui_phoneView_js;
 const ui_settingsPanel = __m_ui_settingsPanel_js;
 const ui_styles = __m_ui_styles_js;
@@ -20285,6 +22340,7 @@ function destroyMemoryTheater() {
         // Invalidate every asynchronous state writer before clearing containers. Results that
         // started in the old runtime lifetime must not refill caches after disable/clean.
         runtimeState.runtimeLifecycleEpoch += 1;
+        runtimeState.apiConfigurationEpoch += 1;
         const timer = globalThis.__heartbeatMemoriesMountTimer;
         if (timer) clearInterval(timer);
         globalThis.__heartbeatMemoriesMountTimer = null;
@@ -20299,6 +22355,8 @@ function destroyMemoryTheater() {
         document.getElementById(core_constants.SETTINGS_STYLE_ID)?.remove();
         modes_room.stopRoomClock();
         ui_phoneView.stopPhoneClock();
+        ui_endingView.stopEndingEasterEggTimer();
+        runtimeState.endingEasterEggRuntime = null;
         try { runtimeState.activeTaskAbortController?.abort?.(); } catch {}
         runtimeState.activeTaskAbortController = null;
         for (const task of runtimeState.activeGenerationTasks.values()) {
@@ -20334,6 +22392,7 @@ function destroyMemoryTheater() {
         runtimeState.deferredChatCommits.clear();
         runtimeState.archiveSnapshotCache.clear();
         runtimeState.connectionModelCache.clear();
+        runtimeState.connectionModelRequestEpochs.clear();
         for (const timer of runtimeState.cachePersistTimers.values()) clearTimeout(timer);
         runtimeState.cachePersistTimers.clear();
         runtimeState.cacheHydrationPromises.clear();
@@ -20372,12 +22431,11 @@ __init_core_state_js();
 __init_core_context_js();
 __init_archive_backupStore_js();
 __init_core_incremental_js();
-__init_ui_archivePortal_js();
-__init_ui_styles_js();
-__init_ui_settingsPanel_js();
+__init_core_independentApi_js();
 __init_core_settings_js();
 __init_generation_jsonParser_js();
 __init_ui_advEventView_js();
+__init_ui_styles_js();
 __init_ui_albumView_js();
 __init_generation_imageGeneration_js();
 __init_modes_album_js();
@@ -20386,6 +22444,9 @@ __init_ui_heartView_js();
 __init_modes_heart_js();
 __init_generation_prompts_js();
 __init_modes_achievements_js();
+__init_ui_endingView_js();
+__init_ui_archivePortal_js();
+__init_ui_settingsPanel_js();
 __init_modes_advEvent_js();
 __init_modes_butterfly_js();
 __init_modes_calendar_js();
@@ -20393,14 +22454,15 @@ __init_modes_items_js();
 __init_modes_phone_js();
 __init_modes_room_js();
 __init_modes_relations_js();
+__init_modes_travel_js();
 __init_generation_normalizers_js();
 __init_generation_client_js();
 __init_generation_contentRegeneration_js();
 __init_ui_butterflyView_js();
 __init_ui_calendarView_js();
 __init_ui_contentManager_js();
-__init_ui_endingView_js();
 __init_ui_phoneView_js();
+__init_ui_travelView_js();
 __init_ui_overlay_js();
 __init_archive_snapshots_js();
 __init_core_requestCoordinator_js();

@@ -2,9 +2,9 @@
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_constants from './constants.js';
 import * as core_context from './context.js';
+import * as core_independentApi from './independentApi.js';
 import { state as runtimeState } from './state.js';
 import * as core_text from './text.js';
-import * as ui_settingsPanel from '../ui/settingsPanel.js';
 
 export function normalizeBannedGeneratedPhrases(value) {
     const source = Array.isArray(value) ? value : String(value ?? '').split(/[\n,，]+/g);
@@ -16,9 +16,16 @@ export function getPluginSettings(context = core_context.getContext()) {
     if (!context.extensionSettings || typeof context.extensionSettings !== 'object') return { ...core_constants.DEFAULT_SETTINGS };
     const raw = context.extensionSettings[core_constants.EXTENSION_SETTINGS_KEY];
     const settings = raw && typeof raw === 'object' ? raw : {};
+    let manualApiBaseUrl = '';
+    try { manualApiBaseUrl = core_independentApi.normalizeManualApiBaseUrl(settings.manualApiBaseUrl); }
+    catch { manualApiBaseUrl = core_text.normalizeText(settings.manualApiBaseUrl, 2000); }
     const normalized = {
+        apiConnectionMode: settings.apiConnectionMode === 'manual' ? 'manual' : 'profile',
         connectionProfileId: core_text.normalizeText(settings.connectionProfileId, 160),
         modelOverride: core_text.normalizeText(settings.modelOverride, 240),
+        manualApiBaseUrl,
+        manualApiKey: core_text.normalizeText(settings.manualApiKey, 4000),
+        manualApiModel: core_text.normalizeText(settings.manualApiModel, 240),
         maxTokens: Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens)),
         temperature: Math.max(0, Math.min(2, Number.isFinite(Number(settings.temperature)) ? Number(settings.temperature) : core_constants.DEFAULT_SETTINGS.temperature)),
         roomLifeAutoDaily: settings.roomLifeAutoDaily !== false,
@@ -40,10 +47,29 @@ export function getPluginSettings(context = core_context.getContext()) {
 export function updatePluginSettings(patch) {
     const context = core_context.getContext();
     const current = getPluginSettings(context);
+    const previousApiFingerprint = core_independentApi.apiConfigurationFingerprint(current);
     const next = { ...current, ...(patch || {}) };
     context.extensionSettings[core_constants.EXTENSION_SETTINGS_KEY] = next;
     context.saveSettingsDebounced?.();
-    return getPluginSettings(context);
+    const normalized = getPluginSettings(context);
+    if (core_independentApi.apiConfigurationFingerprint(normalized) !== previousApiFingerprint) {
+        runtimeState.apiConfigurationEpoch += 1;
+        runtimeState.connectionModelCache.clear();
+        runtimeState.connectionModelRequestEpochs.clear();
+        for (const task of runtimeState.activeGenerationTasks.values()) {
+            try { task?.controller?.abort?.(new DOMException('API configuration changed', 'AbortError')); } catch {}
+        }
+    }
+    return normalized;
+}
+
+export function beginApiConfigurationOperation() {
+    runtimeState.apiConfigurationEpoch += 1;
+    return runtimeState.apiConfigurationEpoch;
+}
+
+export function isCurrentApiConfigurationOperation(epoch) {
+    return Number(epoch) === runtimeState.apiConfigurationEpoch;
 }
 
 export function supportedConnectionProfiles(context = core_context.getContext()) {
@@ -55,17 +81,37 @@ export function supportedConnectionProfiles(context = core_context.getContext())
             name: core_text.normalizeText(profile?.name, 180) || '未命名连接',
             model: core_text.normalizeText(profile?.model, 180),
             api: core_text.normalizeText(profile?.api, 120),
-        })).filter(profile => profile.id);
+        })).filter(profile => {
+            if (!profile.id) return false;
+            const raw = rawConnectionProfile(profile.id, context);
+            if (!raw || typeof service?.validateProfile !== 'function') return false;
+            try {
+                const apiMap = service.validateProfile(raw);
+                return apiMap?.selected === 'openai' && !!apiMap?.source;
+            } catch {
+                return false;
+            }
+        });
     } catch {
         return [];
     }
 }
 
 export function generationSourceLabel(settings = getPluginSettings()) {
-    const profile = supportedConnectionProfiles().find(item => item.id === settings.connectionProfileId);
-    if (!profile) return '专用连接：未选择';
+    if (settings.apiConnectionMode === 'manual') {
+        const model = core_text.normalizeText(settings.manualApiModel, 240);
+        return model ? `手动 API · ${model}` : '手动 API · 未完成';
+    }
+    let profile = supportedConnectionProfiles().find(item => item.id === settings.connectionProfileId);
+    if (!profile && settings.connectionProfileId) {
+        try {
+            const raw = rawConnectionProfile(settings.connectionProfileId);
+            if (raw) profile = { name: core_text.normalizeText(raw.name, 180) || '已保存连接', model: core_text.normalizeText(raw.model, 240) };
+        } catch {}
+    }
+    if (!profile) return '一键连接 · 未选择';
     const model = core_text.normalizeText(settings.modelOverride, 240) || profile.model;
-    return `专用连接：${profile.name}${model ? ` · ${model}` : ''}`;
+    return `一键连接 · ${profile.name}${model ? ` · ${model}` : ''}`;
 }
 
 export function rawConnectionProfile(profileId, context = core_context.getContext()) {
@@ -92,6 +138,26 @@ export function savedModelsForProfile(profileId, context = core_context.getConte
     return [...new Set(models)];
 }
 
+export function profileModelCacheKey(profileId, context = core_context.getContext()) {
+    const id = core_text.normalizeText(profileId, 160);
+    if (!id) return '';
+    const profile = rawConnectionProfile(id, context);
+    return profile ? `profile:${id}:${core_text.hashString(profileConnectionFingerprint(profile))}` : `profile:${id}:missing`;
+}
+
+function beginConnectionModelRequest(cacheKey) {
+    const epoch = Number(runtimeState.connectionModelRequestEpochs.get(cacheKey) || 0) + 1;
+    runtimeState.connectionModelRequestEpochs.set(cacheKey, epoch);
+    return epoch;
+}
+
+function assertCurrentConnectionModelRequest(cacheKey, epoch) {
+    if (runtimeState.connectionModelRequestEpochs.get(cacheKey) === epoch) return;
+    const error = new Error('模型列表请求已被更新的请求取代。');
+    error.code = 'RMT_API_MODEL_REQUEST_SUPERSEDED';
+    throw error;
+}
+
 export function connectionStatusPayload(profile, context = core_context.getContext()) {
     const service = context.ConnectionManagerRequestService;
     if (!service?.validateProfile) throw new Error('当前 SillyTavern 没有 Connection Manager 校验接口。');
@@ -113,42 +179,101 @@ export function connectionStatusPayload(profile, context = core_context.getConte
         payload.workers_ai_account_id = apiUrl;
     }
     if (apiMap.source === 'custom') {
-        payload.custom_include_headers = core_text.normalizeText(context.chatCompletionSettings?.custom_include_headers, 8000) || undefined;
+        // A Connection Profile does not own the active main-chat custom headers. Borrowing them
+        // here can send Profile A credentials while listing models for Profile B.
+        payload.custom_include_headers = '';
+        payload.custom_include_body = '';
+        payload.custom_exclude_body = '';
     }
     return { apiMap, payload };
 }
 
-export async function fetchModelsForConnection(profileId, { force = false } = {}) {
+export async function fetchModelsForConnection(profileId, { force = false, returnMeta = false } = {}) {
     const id = core_text.normalizeText(profileId, 160);
     if (!id) return [];
-    if (!force && runtimeState.connectionModelCache.has(id)) return runtimeState.connectionModelCache.get(id);
     const context = core_context.getContext();
+    core_independentApi.assertConnectionManagerProfileSupport(context.ConnectionManagerRequestService);
+    const cacheKey = profileModelCacheKey(id, context);
+    if (!force && runtimeState.connectionModelCache.has(cacheKey)) {
+        const cached = runtimeState.connectionModelCache.get(cacheKey);
+        return returnMeta ? { models: cached, fallbackOnly: false, cached: true } : cached;
+    }
+    const requestEpoch = beginConnectionModelRequest(cacheKey);
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const configurationEpoch = runtimeState.apiConfigurationEpoch;
     const profile = rawConnectionProfile(id, context);
     if (!profile) throw new Error('找不到当前选择的 Connection Manager 配置。');
+    const profileStateFingerprint = profileFingerprint(profile);
     const fallback = savedModelsForProfile(id, context);
     const { payload } = connectionStatusPayload(profile, context);
     let models = [...fallback];
+    let fallbackOnly = false;
     if (payload && typeof context.getRequestHeaders === 'function') {
+        const controller = new AbortController();
+        let timedOut = false;
+        const timeoutId = setTimeout(() => {
+            timedOut = true;
+            try { controller.abort(); } catch {}
+        }, core_constants.MANUAL_API_MODEL_LIST_TIMEOUT_MS);
         try {
             const response = await fetch('/api/backends/chat-completions/status', {
                 method: 'POST',
                 headers: context.getRequestHeaders(),
                 cache: 'no-cache',
+                credentials: 'same-origin',
+                signal: controller.signal,
                 body: JSON.stringify(payload),
             });
-            if (!response.ok) throw new Error(response.statusText || `HTTP ${response.status}`);
-            const data = await response.json();
-            const remote = Array.isArray(data?.data)
-                ? data.data.map(item => core_text.normalizeText(item?.id || item?.name, 240)).filter(Boolean)
-                : [];
+            if (!response.ok) {
+                try { await response.body?.cancel?.(); } catch {}
+                const error = new Error(`HTTP ${response.status}`);
+                error.status = response.status;
+                throw error;
+            }
+            const data = await core_independentApi.readBoundedJsonResponse(response, 2000000);
+            if (core_independentApi.payloadHasProviderError(data)) {
+                const error = new Error('Connection Profile model status returned an error envelope');
+                error.code = 'RMT_PROFILE_MODEL_STATUS';
+                throw error;
+            }
+            const remote = core_independentApi.extractManualModelIds(data);
             models = [...new Set([...fallback, ...remote])];
         } catch (error) {
-            console.warn('[HeartbeatMemories] remote model list failed; using saved profile models', error);
+            const safeDetail = timedOut ? 'timeout' : Number(error?.status) ? `HTTP ${Number(error.status)}` : core_text.normalizeText(error?.code, 80) || 'unavailable';
+            console.warn(`[HeartbeatMemories] profile model list unavailable; using same-transport saved models (${safeDetail})`);
+            if (!fallback.length) throw new Error('模型列表暂时不可用；请检查这一键连接，或在 Connection Manager 中保存模型后重试。');
+            fallbackOnly = true;
+        } finally {
+            clearTimeout(timeoutId);
         }
     }
     if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
-    runtimeState.connectionModelCache.set(id, models);
+    if (configurationEpoch !== runtimeState.apiConfigurationEpoch
+        || profileModelCacheKey(id, context) !== cacheKey
+        || profileFingerprint(rawConnectionProfile(id, context)) !== profileStateFingerprint) {
+        throw new DOMException('API configuration changed', 'AbortError');
+    }
+    assertCurrentConnectionModelRequest(cacheKey, requestEpoch);
+    runtimeState.connectionModelCache.set(cacheKey, models);
+    return returnMeta ? { models, fallbackOnly, cached: false } : models;
+}
+
+export async function fetchModelsForManualConnection(settings, { force = false, context = core_context.getContext(), signal = null } = {}) {
+    const candidate = {
+        ...getPluginSettings(context),
+        ...(settings || {}),
+        apiConnectionMode: 'manual',
+    };
+    const cacheKey = core_independentApi.manualModelCacheKey(candidate);
+    if (!force && runtimeState.connectionModelCache.has(cacheKey)) return runtimeState.connectionModelCache.get(cacheKey);
+    const requestEpoch = beginConnectionModelRequest(cacheKey);
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const configurationEpoch = runtimeState.apiConfigurationEpoch;
+    const models = await core_independentApi.fetchManualApiModels(candidate, context, { signal });
+    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
+    if (configurationEpoch !== runtimeState.apiConfigurationEpoch) throw new DOMException('API configuration changed', 'AbortError');
+    assertCurrentConnectionModelRequest(cacheKey, requestEpoch);
+    runtimeState.connectionModelCache.set(cacheKey, models);
     return models;
 }
 
@@ -208,45 +333,61 @@ export function uniqueImportedProfileName(manager, base) {
     return `${base} ${index}`;
 }
 
-export async function importCurrentSillyTavernConnection() {
+export async function importCurrentSillyTavernConnection(options = {}) {
+    const assertStillCurrent = () => {
+        if (typeof options.isCurrent !== 'function' || options.isCurrent() !== false) return;
+        const error = new Error('一键配置已取消：等待期间你选择了另一组 API 设置。');
+        error.code = 'RMT_API_CONFIGURATION_SUPERSEDED';
+        throw error;
+    };
     const context = core_context.getContext();
     const manager = connectionManagerSettings(context);
+    const service = context.ConnectionManagerRequestService;
+    core_independentApi.assertConnectionManagerProfileSupport(service);
+    assertStillCurrent();
 
     const selectedId = core_text.normalizeText(manager.selectedProfile, 160);
     if (selectedId) {
         const selected = manager.profiles.find(item => String(item?.id) === selectedId);
-        if (selected && supportedConnectionProfiles(context).some(item => item.id === selectedId)) {
-            updatePluginSettings({ connectionProfileId: selectedId, modelOverride: '' });
-            runtimeState.connectionModelCache.delete(selectedId);
-            ui_settingsPanel.refreshGenerationSettingsUi();
-            void ui_settingsPanel.refreshModelOptions({ fetchRemote: true });
-            globalThis.toastr?.success?.('已引用酒馆当前选中的 Connection Manager 配置。', '心跳回忆');
-            return selectedId;
+        if (selected) {
+            const apiMap = service.validateProfile(selected);
+            if (apiMap?.selected !== 'openai' || !apiMap?.source) {
+                throw new Error('当前酒馆连接不是可复用的 Chat Completion 配置。');
+            }
+            assertStillCurrent();
+            const current = getPluginSettings(context);
+            const retainedModel = current.connectionProfileId === selectedId ? current.modelOverride : '';
+            updatePluginSettings({ apiConnectionMode: 'profile', connectionProfileId: selectedId, modelOverride: retainedModel });
+            return {
+                id: selectedId,
+                name: core_text.normalizeText(selected.name, 180) || '当前连接',
+                model: retainedModel || core_text.normalizeText(selected.model, 240),
+                created: false,
+            };
         }
     }
 
-    const mode = context.mainApi === 'openai' ? 'cc' : context.mainApi === 'textgenerationwebui' ? 'tc' : '';
-    if (!mode) {
-        throw new Error('当前酒馆 API 类型无法直接导入为独立连接。请先在 Connection Manager 中保存一个可用配置，再从下拉框选择。');
+    if (context.mainApi !== 'openai') {
+        throw new Error('当前主连接不是 Chat Completion。请先切到可用连接，或改用手动配置。');
     }
 
-    const commands = mode === 'cc'
-        ? ['api', 'preset', 'api-url', 'model', 'proxy', 'prompt-post-processing', 'secret-id']
-        : ['api', 'preset', 'api-url', 'model', 'instruct', 'secret-id'];
+    const commands = ['api', 'preset', 'api-url', 'model', 'proxy', 'prompt-post-processing', 'secret-id'];
     const profile = {
         id: typeof context.uuidv4 === 'function' ? context.uuidv4() : `heartbeat-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        mode,
+        mode: 'cc',
         exclude: [],
     };
     for (const command of commands) {
         const value = await readCurrentSlashSetting(command, context);
+        assertStillCurrent();
         if (value || command === 'api-url') profile[command] = value;
     }
     if (!profile.api) {
         throw new Error('没有读到当前酒馆的 API 类型，无法一键导入。请先确认主聊天 API 已连接。');
     }
     try {
-        context.ConnectionManagerRequestService?.validateProfile?.(profile);
+        const apiMap = service.validateProfile(profile);
+        if (apiMap?.selected !== 'openai' || !apiMap?.source) throw new Error('Unsupported request family');
     } catch (error) {
         throw new Error('当前酒馆连接不是 Connection Manager 可复用的 Chat/Text Completion 类型，请先在 Connection Manager 中保存一个可用配置。', { cause: error });
     }
@@ -254,28 +395,26 @@ export async function importCurrentSillyTavernConnection() {
     const fingerprint = profileFingerprint(profile);
     const existing = manager.profiles.find(item => profileFingerprint(item) === fingerprint);
     if (existing?.id) {
-        updatePluginSettings({ connectionProfileId: core_text.normalizeText(existing.id, 160), modelOverride: '' });
-        runtimeState.connectionModelCache.delete(core_text.normalizeText(existing.id, 160));
-        ui_settingsPanel.refreshGenerationSettingsUi();
-        void ui_settingsPanel.refreshModelOptions({ fetchRemote: true });
-        globalThis.toastr?.success?.('已找到相同的已保存连接，心跳回忆已直接引用。', '心跳回忆');
-        return existing.id;
+        assertStillCurrent();
+        const id = core_text.normalizeText(existing.id, 160);
+        const current = getPluginSettings(context);
+        const retainedModel = current.connectionProfileId === id ? current.modelOverride : '';
+        updatePluginSettings({ apiConnectionMode: 'profile', connectionProfileId: id, modelOverride: retainedModel });
+        return { id, name: core_text.normalizeText(existing.name, 180) || '已保存连接', model: retainedModel || core_text.normalizeText(existing.model, 240), created: false };
     }
 
+    assertStillCurrent();
     const displayApi = core_text.normalizeText(profile.api, 80) || 'API';
     const displayModel = core_text.normalizeText(profile.model, 100);
     profile.name = uniqueImportedProfileName(manager, `心跳回忆 · ${displayApi}${displayModel ? ` · ${displayModel}` : ''}`);
     manager.profiles.push(profile);
     context.saveSettingsDebounced?.();
+    assertStillCurrent();
+    updatePluginSettings({ apiConnectionMode: 'profile', connectionProfileId: core_text.normalizeText(profile.id, 160), modelOverride: '' });
     try {
         await context.eventSource?.emit?.(context.eventTypes?.CONNECTION_PROFILE_CREATED, profile);
     } catch (error) {
         console.warn('[HeartbeatMemories] connection profile created event failed', error);
     }
-    updatePluginSettings({ connectionProfileId: core_text.normalizeText(profile.id, 160), modelOverride: '' });
-    runtimeState.connectionModelCache.delete(core_text.normalizeText(profile.id, 160));
-    ui_settingsPanel.refreshGenerationSettingsUi();
-    void ui_settingsPanel.refreshModelOptions({ fetchRemote: true });
-    globalThis.toastr?.success?.('已从酒馆当前连接创建“心跳回忆”专用配置；API Key 仍由 SillyTavern Secrets 保管。', '心跳回忆');
-    return profile.id;
+    return { id: profile.id, name: profile.name, model: displayModel, created: true };
 }

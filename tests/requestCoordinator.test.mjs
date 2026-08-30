@@ -59,8 +59,8 @@ test('mobile overlay early-close fallback accepts only its code-owned topbar clo
     assert.match(source, /event\.preventDefault\?\.\(\);\s*event\.stopPropagation\?\.\(\);\s*closeArchiveOverlayFromUser\(\)/);
 });
 
-test('role interaction is a standalone archive portal immediately before achievements', () => {
-    assert.match(sourceByFile.get('core/constants.js'), /ARCHIVE_PORTAL_MODES = Object\.freeze\(\[MODE\.ALBUM, MODE\.ADV, MODE\.ROOM, MODE\.ENDING, MODE\.CALENDAR, MODE\.RELATIONS, MODE\.HEART, MODE\.ACHIEVEMENTS/);
+test('role interaction stays before achievements while travel is a standalone room-adjacent portal', () => {
+    assert.match(sourceByFile.get('core/constants.js'), /ARCHIVE_PORTAL_MODES = Object\.freeze\(\[MODE\.ALBUM, MODE\.ADV, MODE\.ROOM, MODE\.TRAVEL, MODE\.ENDING, MODE\.CALENDAR, MODE\.RELATIONS, MODE\.HEART, MODE\.ACHIEVEMENTS/);
     assert.match(sourceByFile.get('archive/snapshots.js'), /\[core_constants\.MODE\.HEART\]: \{ title: '角色互动'/);
 });
 
@@ -137,10 +137,20 @@ test('private terminal chat requires distinguishable owner/contact speakers and 
 test('secondary API forwards the user max output instead of a smaller feature hint', async () => {
     let sentMax = 0;
     const context = {
-        extensionSettings: { heartbeatMemories: { connectionProfileId: 'profile', maxTokens: 60000 } },
+        extensionSettings: {
+            heartbeatMemories: { connectionProfileId: 'profile', maxTokens: 60000 },
+            connectionManager: { profiles: [{ id: 'profile', mode: 'cc', api: 'openai', model: 'default', 'secret-id': 'secret-ref' }] },
+        },
         saveSettingsDebounced() {},
         ConnectionManagerRequestService: {
-            async sendRequest(_profile, _prompt, maxTokens) { sentMax = maxTokens; return { content: '{\"ok\":true}' }; },
+            validateProfile() { return { selected: 'openai', source: 'openai' }; },
+            async sendRequest(_profileId, _messages, maxTokens, _options, overridePayload) {
+                const profile = { model: 'default', 'secret-id': 'secret-ref' };
+                const payload = { secret_id: profile['secret-id'], model: profile.model, ...overridePayload };
+                sentMax = maxTokens;
+                assert.equal(payload.model, 'default');
+                return { content: '{\"ok\":true}' };
+            },
         },
     };
     const result = await api.generateConfiguredJson('return JSON', { context, contextEnvelope: '', skipTokenCount: true, maxTokens: 3800, timeoutMs: 30000 });
@@ -224,6 +234,14 @@ test('connection errors are classified without echoing provider secrets', () => 
     const auth = api.normalizeConnectionManagerError(new Error('status 401 secret-key-value'));
     assert.equal(auth.code, 'RMT_CONNECTION_AUTH');
     assert.equal(auth.retryable, false);
+    const messageOnlyAuth = api.normalizeConnectionManagerError(new Error('Incorrect API key provided'));
+    assert.equal(messageOnlyAuth.code, 'RMT_CONNECTION_AUTH');
+    assert.equal(messageOnlyAuth.retryable, false);
+    const codeSecret = api.normalizeConnectionManagerError({ code: 'sk-abcdefghijklmnopqrstuv', message: 'request failed' });
+    assert.equal(codeSecret.message.includes('sk-abcdefghijklmnopqrstuv'), false);
+    const opaqueFailure = api.normalizeConnectionManagerError(new Error('API request failed', { cause: new Error('Response not OK') }));
+    assert.equal(opaqueFailure.code, 'RMT_CONNECTION_FAILED');
+    assert.equal(opaqueFailure.retryable, false);
     assert.doesNotMatch(auth.message, /secret-key-value/);
     const rate = api.normalizeConnectionManagerError({ status: 429, message: 'quota exceeded' });
     assert.equal(rate.code, 'RMT_CONNECTION_RATE_LIMIT');
@@ -456,7 +474,7 @@ test('room and item-tree deltas append only nodes grounded in the new archive ba
     const roomMerged = api.mergeRoomIncremental(previousRoom, freshRoom, ['M002']);
     assert.deepEqual(roomMerged.session.spaces[0].objects[0], oldObject);
     assert.deepEqual(roomMerged.session.spaces[0].objects.map(item => item.label), ['旧相框', '新车票']);
-    assert.deepEqual(roomMerged.session.presenceLines, ['旧问候', '新增问候']);
+    assert.deepEqual(roomMerged.session.presenceLines, ['旧问候']);
 
     const newSpaceRoom = api.mergeRoomIncremental(previousRoom, { spaces: [{
         id: 'SP2', label: '新工作室', spaceType: '工作室', atmosphere: '新增空间。', objects: [
@@ -465,7 +483,7 @@ test('room and item-tree deltas append only nodes grounded in the new archive ba
             { id: 'N3', label: '普通工作灯', basis: '设定', description: '新空间的普通陈设。', line: '灯在这里。', sourceMemoryIds: [], sourceMemoryAnchor: '' },
         ],
     }], presenceLines: [] }, ['M002']);
-    assert.deepEqual(newSpaceRoom.session.spaces[1].objects.map(item => item.label), ['新票根', '普通工作灯']);
+    assert.deepEqual(newSpaceRoom.session.spaces[1].objects.map(item => item.label), ['新票根']);
 
     const oldNode = { id: 'IT1', label: '旧物', kind: 'item', basis: '记忆', summary: '旧摘要。', line: '旧台词。', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '站台雨伞', children: [] };
     const previousItems = { kind: 'items', title: '他的物品', containers: [{ id: 'BOX1', label: '抽屉', spaceLabel: '卧室', nodes: [oldNode] }], selectedContainerId: 'BOX1', viewPath: [], selectedNodeId: 'IT1' };
@@ -558,13 +576,13 @@ test('phone delta appends entries while preserving every old App entry', () => {
     assert.equal(merged.apps.some(app => ['schedule', 'calendar'].includes(app.kind)), false);
 });
 
-test('phone calendar is retired in favor of the standalone relationship notebook and legacy cache is migrated', () => {
-    assert.deepEqual([...api.PHONE_EXCLUDED_APP_KINDS].sort(), ['calendar', 'schedule']);
+test('phone calendar and route apps are retired in favor of standalone notebook and travel portals', () => {
+    assert.deepEqual([...api.PHONE_EXCLUDED_APP_KINDS].sort(), ['calendar', 'location', 'map', 'maps', 'navigation', 'route', 'schedule', 'transit', 'travel']);
     const promptSource = sourceByFile.get('generation/prompts.js');
     const phoneSource = sourceByFile.get('modes/phone.js');
     const cacheSource = sourceByFile.get('core/cache.js');
-    assert.match(promptSource, /禁止生成 schedule \/ calendar \/ 日历 App/);
-    assert.match(phoneSource, /禁止生成 kind=schedule \/ calendar 或名为“日历”的 App/);
+    assert.match(promptSource, /禁止生成 schedule \/ calendar \/ 日历 App，也禁止 location \/ map \/ navigation \/ travel \/ transit \/ route/);
+    assert.match(phoneSource, /禁止生成 kind=schedule\/calendar\/location\/travel\/map\/navigation\/transit\/route/);
     assert.match(cacheSource, /migrateLegacyPhoneSession/);
 
     const legacyApps = [
@@ -1159,7 +1177,7 @@ test('r43 calendar prompt assigns every generated notebook item to one date page
     assert.match(sourceByFile.get('core/cache.js'), /session\.dayPages/);
 });
 
-test('r43 calendar renders a selectable per-date notebook with local drafts and todo', () => {
+test('r44 calendar renders a selectable char-only notebook without visitor input windows', () => {
     const constantsSource = sourceByFile.get('core/constants.js');
     assert.match(constantsSource, /CALENDAR_SESSION_VERSION = 5/);
     const view = sourceByFile.get('ui/calendarView.js');
@@ -1169,13 +1187,11 @@ test('r43 calendar renders a selectable per-date notebook with local drafts and 
     assert.match(view, /rmt-calendar-master-todo/);
     assert.match(view, /rmt-calendar-special-notes/);
     assert.match(view, /rmt-calendar-mood-section/);
-    assert.match(view, /草稿与便签/);
-    assert.match(view, /这一天的待办/);
+    assert.match(view, /他的备忘/);
+    assert.match(view, /他的自动待办/);
     assert.match(view, /页角随笔/);
     assert.match(view, /const promised = selectedEntries\.filter/);
-    assert.match(view, /data-rmt-action="calendar-add-draft"/);
-    assert.match(view, /data-rmt-action="calendar-add-todo"/);
-    assert.match(view, /data-rmt-action="calendar-toggle-todo"/);
+    assert.doesNotMatch(view, /<input|<textarea|calendar-add-draft|calendar-add-todo|calendar-toggle-todo/);
     assert.match(view, /空白日期/);
     assert.doesNotMatch(view, /后来回想|做这个决定的时候|把这件事约下来的时候/);
     assert.doesNotMatch(view, /draw-cg|read-adv|generate.*story|特别篇/i);

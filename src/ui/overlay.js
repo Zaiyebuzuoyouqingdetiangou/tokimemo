@@ -33,6 +33,7 @@ import * as ui_contentManager from './contentManager.js';
 import * as ui_endingView from './endingView.js';
 import * as ui_heartView from './heartView.js';
 import * as ui_phoneView from './phoneView.js';
+import * as ui_travelView from './travelView.js';
 import * as ui_settingsPanel from './settingsPanel.js';
 import * as ui_styles from './styles.js';
 
@@ -159,6 +160,7 @@ export function openOverlay() {
 export function closeOverlay() {
     modes_room.stopRoomClock();
     ui_phoneView.stopPhoneClock();
+    ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
     if (overlay) {
         if (typeof globalThis.HTMLDialogElement === 'function' && overlay instanceof globalThis.HTMLDialogElement && overlay.open) {
@@ -191,10 +193,12 @@ export function setBackVisible(visible, label = '返回上级') {
 }
 
 export function navigateBack() {
+    if (runtimeState.endingEasterEggRuntime) return ui_endingView.closeEndingEasterEgg();
     if (runtimeState.contentManagerOpen) {
         runtimeState.contentManagerOpen = false;
         return renderActive();
     }
+    if (runtimeState.activeMode === core_constants.MODE.TRAVEL && runtimeState.activeSession?.selectedLocationId) return ui_travelView.closeTravelDetail();
     if (runtimeState.activeMode === core_constants.MODE.ITEMS || runtimeState.activeMode === core_constants.MODE.PHONE) return modes_room.returnToRoomFromDeep();
     if (runtimeState.activeMode === core_constants.MODE.ADV && runtimeState.activeSession?.kind === core_constants.MODE.ADV && runtimeState.activeSession.view === 'adv') {
         runtimeState.activeSession.view = 'cg';
@@ -374,6 +378,7 @@ function calendarQuickAccessHtml({ ready = false, generated = false, generating 
 }
 
 export function showChooser() {
+    ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     runtimeState.activeArchiveSnapshot = null;
     runtimeState.activeArchiveReadOnly = true;
     modes_room.stopRoomClock();
@@ -627,6 +632,7 @@ export function decorateReadOnlyModeUi() {
 
 export function renderActive() {
     runtimeState.contentManagerOpen = false;
+    if (runtimeState.activeMode !== core_constants.MODE.ENDING) ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     if (!runtimeState.activeSession || !runtimeState.activeMode) return runtimeState.activeArchiveSnapshot ? archive_library.showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot) : showChooser();
     const supportsTopbarIncrement = !core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) || runtimeState.activeMode === core_constants.MODE.PHONE;
     setRegenerateVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && supportsTopbarIncrement);
@@ -640,6 +646,7 @@ export function renderActive() {
     else if (runtimeState.activeMode === core_constants.MODE.ROOM) modes_room.renderRoom();
     else if (runtimeState.activeMode === core_constants.MODE.ITEMS) modes_items.renderItems();
     else if (runtimeState.activeMode === core_constants.MODE.PHONE) ui_phoneView.renderPhone();
+    else if (runtimeState.activeMode === core_constants.MODE.TRAVEL) ui_travelView.renderTravel();
     else if (runtimeState.activeMode === core_constants.MODE.ENDING) ui_endingView.renderEnding();
     else if (runtimeState.activeMode === core_constants.MODE.CALENDAR) ui_calendarView.renderCalendar();
     else if (runtimeState.activeMode === core_constants.MODE.RELATIONS) modes_relations.renderRelations();
@@ -752,78 +759,6 @@ async function commitManagedSession(updated, expectedChatId, expectedArchiveRevi
     if (!core_cache.saveSession(runtimeState.activeMode, updated, expectedChatId)) throw new Error('当前派生缓存版本已经变化，本次修改没有写入。');
     runtimeState.activeSession = updated;
     return true;
-}
-
-function uniqueCalendarManualId(items, prefix, pageKey, value) {
-    const used = new Set((Array.isArray(items) ? items : []).map(item => core_text.safeId(item?.id, '')).filter(Boolean));
-    const seed = core_text.hashString(`${pageKey}|${value}|${Date.now()}`).toString(36).toUpperCase();
-    let id = `${prefix}_${seed}`;
-    let serial = 2;
-    while (used.has(id)) id = `${prefix}_${seed}_${serial++}`;
-    return id;
-}
-
-async function mutateCalendarDayPage(pageKey, mutation, successMessage) {
-    if (!archive_library.requireWritableArchiveAction()) return false;
-    try {
-        const context = core_context.currentCharacterGuard();
-        const expectedChatId = core_context.getChatId(context);
-        const memoryBank = archive_repository.requireArchive(context);
-        const expectedArchiveRevision = memoryBank.archiveRevision;
-        const origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
-        const updated = core_cache.loadSession(core_constants.MODE.CALENDAR, { context, chatId: expectedChatId, memoryBank, clone: true });
-        if (!updated) throw new Error('当前日历缓存已经变化，请重新打开日历。');
-        const key = core_text.normalizeText(pageKey, 160);
-        if (!updated.dayPages || typeof updated.dayPages !== 'object') updated.dayPages = Object.create(null);
-        let page = modes_calendar.calendarDayPage(updated, key);
-        if (!page) {
-            page = modes_calendar.createCalendarDayPage(key);
-            if (!page) throw new Error('这个日期页无效，本次内容没有写入。');
-            updated.dayPages[key] = page;
-        }
-        mutation(page);
-        updated.selectedDateKey = key;
-        updated.userManaged = true;
-        await commitManagedSession(updated, expectedChatId, expectedArchiveRevision, origin);
-        if (successMessage) globalThis.toastr?.success?.(successMessage, '心跳回忆');
-        ui_calendarView.renderCalendar();
-        return true;
-    } catch (error) {
-        globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
-        return false;
-    }
-}
-
-async function addCalendarDraft(pageKey, text) {
-    const value = core_text.normalizeText(text, 1200);
-    if (!value) return globalThis.toastr?.info?.('请先写下草稿内容。', '心跳回忆');
-    return mutateCalendarDayPage(pageKey, page => {
-        const drafts = Array.isArray(page.drafts) ? page.drafts : [];
-        if (drafts.length >= 24) throw new Error('这一天的草稿已达上限24条，请先在内容管理中删除旧草稿。');
-        drafts.push({ id: uniqueCalendarManualId(drafts, 'CAL_DRAFT', page.key, value), text: value, createdAt: Date.now() });
-        page.drafts = drafts;
-    }, '已保存到当前日期的独立草稿。');
-}
-
-async function addCalendarManualTodo(pageKey, title) {
-    const value = core_text.normalizeText(title, 120);
-    if (!value) return globalThis.toastr?.info?.('请先填写待办内容。', '心跳回忆');
-    return mutateCalendarDayPage(pageKey, page => {
-        const todos = Array.isArray(page.manualTodos) ? page.manualTodos : [];
-        if (todos.length >= 32) throw new Error('这一天的手动待办已达上限32条，请先删除旧待办。');
-        todos.push({ id: uniqueCalendarManualId(todos, 'CAL_TODO', page.key, value), title: value, completed: false, origin: 'user' });
-        page.manualTodos = todos;
-    }, '已添加到当前日期的独立 To-Do。');
-}
-
-async function toggleCalendarManualTodo(pageKey, todoId) {
-    const id = core_text.safeId(todoId, '');
-    if (!id) return false;
-    return mutateCalendarDayPage(pageKey, page => {
-        const item = (Array.isArray(page.manualTodos) ? page.manualTodos : []).find(todo => todo?.id === id);
-        if (!item) throw new Error('找不到这条手动待办。');
-        item.completed = item.completed !== true;
-    }, 'To-Do 状态已更新。');
 }
 
 async function deleteManagedTarget(type, id, parentId = '') {
@@ -964,6 +899,8 @@ export function handleOverlayClick(event) {
     if (calendarPending) return ui_calendarView.selectCalendarPending(calendarPending.dataset.rmtCalendarPending);
     const calendarMonth = event.target.closest?.('[data-rmt-calendar-month]');
     if (calendarMonth) return ui_calendarView.setCalendarMonth(calendarMonth.dataset.rmtCalendarMonth);
+    const travelLocation = event.target.closest?.('[data-rmt-travel-location]');
+    if (travelLocation) return ui_travelView.selectTravelLocation(travelLocation.dataset.rmtTravelLocation);
     const node = event.target.closest?.('[data-rmt-node]');
     if (node) return ui_butterflyView.selectButterflyNode(node.dataset.rmtNode);
     const endingView = event.target.closest?.('[data-rmt-ending-view]');
@@ -1043,21 +980,14 @@ export function handleOverlayClick(event) {
     const actionEl = event.target.closest?.('[data-rmt-action]');
     const action = actionEl?.dataset?.rmtAction;
     if (!action) return;
-    if (action === 'calendar-add-draft') {
-        const input = bodyEl()?.querySelector?.('[data-rmt-calendar-draft-input]');
-        return void addCalendarDraft(actionEl.dataset.rmtCalendarPage, input?.value);
-    }
-    if (action === 'calendar-add-todo') {
-        const input = bodyEl()?.querySelector?.('[data-rmt-calendar-todo-input]');
-        return void addCalendarManualTodo(actionEl.dataset.rmtCalendarPage, input?.value);
-    }
-    if (action === 'calendar-toggle-todo') {
-        return void toggleCalendarManualTodo(actionEl.dataset.rmtCalendarPage, actionEl.dataset.rmtCalendarTodo);
-    }
-    if (runtimeState.activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'draw-heart-strip', 'clear-heart-strip', 'generate-all-adv', 'repair-failed-adv', 'room-life-refresh', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins', 'memory-worldinfo-picker', 'refresh-ending-confessions', 'heart-generate-part', 'heart-generate-season'].includes(action)) {
+    if (runtimeState.activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'draw-heart-strip', 'clear-heart-strip', 'generate-all-adv', 'repair-failed-adv', 'room-life-refresh', 'room-schema-upgrade', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins', 'memory-worldinfo-picker', 'refresh-ending-confessions', 'heart-generate-part', 'heart-generate-season'].includes(action)) {
         if (!archive_library.requireWritableArchiveAction()) return;
     }
     if (action === 'back') return navigateBack();
+    if (action === 'travel-close-detail') return ui_travelView.closeTravelDetail();
+    if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
+    if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
+    if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
     if (action === 'close') return closeArchiveOverlayFromUser();
     if (action === 'home' || action === 'library-home') {
         if (runtimeState.busy) runtimeState.activeTaskBackgrounded = true;
@@ -1202,10 +1132,25 @@ export function handleOverlayClick(event) {
         }
         return generation_client.generateMode(runtimeState.activeMode, { background: false });
     }
+    if (action === 'room-schema-upgrade') {
+        if (runtimeState.activeMode !== core_constants.MODE.ROOM || !modes_room.roomNeedsSchemaUpgrade(runtimeState.activeSession)) return;
+        if (!confirmExplicitAction(
+            '为旧版房间补全宠物设定？',
+            '会重新扫描当前角色卡和世界书中明确存在的宠物/动物伙伴。只合并缺失的宠物与新证据，旧房间、旧物件、旧台词和深层内容都保留；没有明确宠物设定时不会凭空生成。',
+            { destructive: false },
+        )) return;
+        return void generation_client.generateMode(core_constants.MODE.ROOM, { background: false });
+    }
     if (action === 'refresh-ending-confessions') return void ui_endingView.refreshEndingConfessionReplays();
     if (action === 'ending-confession-prev') return ui_endingView.endingConfessionStep(-1);
     if (action === 'ending-confession-next') return ui_endingView.endingConfessionStep(1);
     if (action === 'ending-confession-replay') return ui_endingView.replayEndingConfession();
+    if (action === 'ending-easter-open') return ui_endingView.openEndingEasterEgg();
+    if (action === 'ending-easter-close') return ui_endingView.closeEndingEasterEgg();
+    if (action === 'ending-easter-pulse') return ui_endingView.endingEasterEggPulse();
+    if (action === 'ending-easter-reveal') return ui_endingView.endingEasterEggReveal();
+    if (action === 'ending-easter-toggle') return ui_endingView.endingEasterEggToggleLogs();
+    if (action === 'ending-easter-stabilize') return ui_endingView.endingEasterEggStabilize();
     if (action === 'refresh-image-provider') return generation_imageGeneration.refreshImageGenerationUi();
     if (action === 'album-prev') return ui_albumView.albumPage(-1);
     if (action === 'album-next') return ui_albumView.albumPage(1);

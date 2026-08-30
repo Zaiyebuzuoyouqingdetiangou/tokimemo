@@ -8,6 +8,7 @@ import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
+import * as ui_endingView from './endingView.js';
 import * as ui_settingsPanel from './settingsPanel.js';
 
 export function mountMenuItem() {
@@ -93,6 +94,7 @@ export function bindChatStateEvents() {
     ].filter(Boolean);
 
     const chatHandler = () => {
+        ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
         // Chat navigation must not cancel a request that is already running. Results are
         // bound to their origin chat and are committed when that chat is current again.
         if (runtimeState.busy) runtimeState.activeTaskBackgrounded = true;

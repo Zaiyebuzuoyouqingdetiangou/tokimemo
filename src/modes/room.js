@@ -28,6 +28,20 @@ const ROOM_VISUAL_VALUES = Object.freeze({
     detail: Object.freeze(['none', 'glasses', 'headphones', 'scarf', 'headwear', 'pointed_ears', 'animal_ears', 'horns', 'visor']),
     posture: Object.freeze(['reserved', 'relaxed', 'upright', 'active', 'studious', 'tired']),
 });
+export const ROOM_PET_SPECIES = Object.freeze(['cat', 'dog', 'bird', 'rabbit', 'fish', 'reptile', 'small_mammal', 'fantasy', 'other']);
+const ROOM_PET_SPECIES_SET = new Set(ROOM_PET_SPECIES);
+const ROOM_PET_SPECIES_ALIASES = Object.freeze({
+    '猫': 'cat', '猫咪': 'cat', kitten: 'cat',
+    '狗': 'dog', '狗狗': 'dog', puppy: 'dog',
+    '鸟': 'bird', '鸟类': 'bird',
+    '兔': 'rabbit', '兔子': 'rabbit',
+    '鱼': 'fish', '观赏鱼': 'fish',
+    '爬虫': 'reptile', '爬行类': 'reptile',
+    '仓鼠': 'small_mammal', '豚鼠': 'small_mammal', hamster: 'small_mammal',
+    '幻想生物': 'fantasy', '魔法生物': 'fantasy', companion: 'fantasy',
+});
+const ROOM_OBJECT_VISUAL_KINDS = new Set(['book', 'music', 'plant', 'tech', 'tool', 'fitness', 'pet', 'storage', 'light', 'seat', 'table', 'art', 'travel', 'other']);
+const ROOM_MOTIF_VALUES = new Set(['literary', 'musical', 'botanical', 'technical', 'artisan', 'athletic', 'companion', 'traveler', 'collector', 'minimal', 'domestic']);
 const ROOM_VISUAL_ALLOWLISTS = Object.freeze(Object.fromEntries(
     Object.entries(ROOM_VISUAL_VALUES).map(([key, values]) => [key, new Set(values)]),
 ));
@@ -100,12 +114,9 @@ export function normalizeRoomVisualProfile(value, { identitySeed = '', bindPerso
             outfit: choose(figure, 'outfit', fallback.outfit, 'figure.outfit'),
             detail: choose(figure, 'detail', fallback.detail, 'figure.detail'),
             posture: choose(figure, 'posture', fallback.posture, 'figure.posture'),
-            // These proportions are code-derived from the controlled character/room identity seed.
-            // The model cannot provide arbitrary geometry, CSS, URLs, or avatar data.
-            faceWidth: 40 + (identityHash % 9),
-            faceHeight: 46 + ((identityHash >>> 4) % 8),
-            eyeSpacing: 16 + ((identityHash >>> 8) % 8),
-            mouthWidth: 7 + ((identityHash >>> 12) % 6),
+            // The room figure is deliberately rendered from behind. No facial geometry is
+            // retained from new or legacy data, so the CSS silhouette cannot imply a face.
+            facing: 'away',
         },
     };
 }
@@ -125,6 +136,58 @@ function roomVisualIdentitySeed(room, memoryBank = null, identityHint = '') {
         core_text.normalizeText(room?.homeSummary, 1000),
         spaces,
     ].filter(Boolean).join('\u001f');
+}
+
+export function normalizeRoomPetSpecies(value) {
+    const raw = core_text.normalizeText(value, 40).toLowerCase();
+    const species = ROOM_PET_SPECIES_ALIASES[raw] || raw;
+    return ROOM_PET_SPECIES_SET.has(species) ? species : 'other';
+}
+
+export function normalizeRoomPets(value, spaces, memoryBank) {
+    const availableSpaces = new Set((Array.isArray(spaces) ? spaces : []).map(space => space?.id).filter(Boolean));
+    const usedIds = new Set();
+    return (Array.isArray(value) ? value : []).slice(0, 6).map((item, index) => {
+        const spaceId = core_text.safeId(item?.spaceId || item?.homeSpaceId, '');
+        if (!spaceId || !availableSpaces.has(spaceId)) return null;
+        const basis = core_constants.ROOM_BASIS_VALUES.has(item?.basis) ? item.basis : '设定';
+        const species = normalizeRoomPetSpecies(item?.species);
+        const name = core_text.normalizeText(item?.name, 60) || `宠物 ${index + 1}`;
+        const description = core_text.normalizeText(item?.description, 900) || '它在这个空间里留下了长期生活的痕迹。';
+        const line = core_text.normalizeText(item?.line, 500);
+        const reference = basis === '记忆'
+            ? core_evidence.normalizeMemoryReference(
+                item?.sourceMemoryIds,
+                item?.sourceMemoryAnchor,
+                `${name}\n${description}\n${line}`,
+                memoryBank,
+                1,
+            )
+            : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
+        if (basis === '记忆' && (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor)) return null;
+        const fallbackId = `PET${String(index + 1).padStart(2, '0')}`;
+        let id = core_text.safeId(item?.id, fallbackId);
+        if (usedIds.has(id)) id = fallbackId;
+        while (usedIds.has(id)) id = `${fallbackId}_${usedIds.size + 1}`;
+        usedIds.add(id);
+        return {
+            id,
+            name,
+            species,
+            description,
+            line,
+            spaceId,
+            basis,
+            sourceMemoryIds: reference.sourceMemoryIds,
+            sourceMemoryAnchor: reference.sourceMemoryAnchor,
+        };
+    }).filter(Boolean);
+}
+
+export function roomNeedsSchemaUpgrade(session) {
+    return !!session
+        && session.kind === core_constants.MODE.ROOM
+        && Number(session.roomVersion) !== core_constants.ROOM_SESSION_VERSION;
 }
 
 export function normalizeRoom(data, memoryBank, { identityKey = '' } = {}) {
@@ -174,6 +237,21 @@ ${line}`, memoryBank, 1)
         };
     }).filter(space => space.objects.length >= 3);
     if (spaces.length < 3) throw new Error(`私人生活空间不足：得到 ${spaces.length} 个有效空间，至少需要 3 个。`);
+    const spaceSignatures = new Set(spaces.map(space => `${core_incremental.normalizedContentKey(space.label, 80)}|${core_incremental.normalizedContentKey(space.spaceType, 100)}`));
+    if (spaceSignatures.size !== spaces.length) throw new Error('私人空间出现重复：每个空间必须有不同的名称和主功能。');
+    const sceneClasses = new Set(spaces.map(space => roomSceneClass(space.spaceType, space.label)));
+    const motifs = new Set(spaces.map(space => roomMotifToken({ visualProfile: data?.visualProfile || {} }, space)));
+    if (sceneClasses.size < 2 && motifs.size < 2) {
+        throw new Error('私人空间缺少功能差异：至少要呈现 2 种明显不同的空间结构或陈设母题。');
+    }
+    const visibleSignatures = new Set(spaces.map(space => {
+        const objectKinds = [...new Set(space.objects.map(roomObjectVisualKind))].sort().join(',');
+        return `${roomSceneClass(space.spaceType, space.label)}|${roomMotifToken({ visualProfile: data?.visualProfile || {} }, space)}|${objectKinds}`;
+    }));
+    const requiredVisibleSignatures = Math.max(2, Math.ceil(spaces.length / 2));
+    if (visibleSignatures.size < requiredVisibleSignatures) {
+        throw new Error(`私人空间的可见结构过于相似：${spaces.length} 个空间至少需要 ${requiredVisibleSignatures} 种不同的主陈设/物件组合。`);
+    }
 
     const spaceById = new Map(spaces.map(space => [space.id, space]));
     const dayparts = {};
@@ -196,13 +274,16 @@ ${line}`, memoryBank, 1)
     const homeName = core_text.normalizeText(data?.homeName, 100) || '私人生活空间';
     const homeSummary = core_text.normalizeText(data?.homeSummary, 2200) || '这些空间拼成了他日常生活真正会经过的路线。';
     const profileSeed = roomVisualIdentitySeed({ ...data, title, homeName, homeSummary, spaces }, memoryBank, identityKey);
+    const pets = normalizeRoomPets(data?.pets || data?.companions, spaces, memoryBank);
     return {
         kind: core_constants.MODE.ROOM,
+        roomVersion: core_constants.ROOM_SESSION_VERSION,
         title,
         homeName,
         homeSummary,
         visualProfile: normalizeRoomVisualProfile(data?.visualProfile, { identitySeed: profileSeed, bindPersona: true }),
         spaces,
+        pets,
         dayparts,
         presenceLines,
         selectedSpaceId: initialSpace.id,
@@ -228,10 +309,15 @@ export function compactRoomExisting(session) {
 
 export function roomIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) {
     const incrementalBank = core_incremental.incrementalPromptMemoryBank(memoryBank, sourceMemoryIds);
+    const schemaUpgrade = roomNeedsSchemaUpgrade(previous);
     return `${generation_prompts.PROMPTS[core_constants.MODE.ROOM](context, incrementalBank)}
 
 【本轮是增量追加，以下规则优先于上面的初次生成数量建议】
 旧房间、旧空间、旧物件和旧台词由本地原样保留。本轮请返回一份可通过同一结构校验的房间候选，但只把新增档案能证明的新生活痕迹做成新物件/必要的新空间；已有对象可以原样列入结构帮助定位，禁止改写其描述或换名复述。
+${schemaUpgrade ? `
+【旧版房间一次性补全】
+这份旧缓存尚未使用宠物字段。即使 incrementalMemoryIds 为空，也必须重新扫描 CHARACTER_CARD_JSON 与 WORLD_INFO_TEXT 里的明确宠物/动物伙伴设定。有明确设定就以 basis=设定放入 pets；没有就保持 pets=[]。不得凭空发明。本地只会合并宠物/新证据，不会用候选重写旧房间。
+` : ''}
 UNTRUSTED_INCREMENTAL_ROOM_ARCHIVE_JSON:
 ${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}
 EXISTING_ROOM_INDEX_JSON:
@@ -253,14 +339,30 @@ export function roomObjectKey(item) {
     return ids && anchor ? `memory|${ids}|${anchor}` : `label|${core_incremental.normalizedContentKey(item?.label, 100)}`;
 }
 
-export function roomObjectUsesIncrement(item, sourceMemoryIds) {
+export function roomObjectUsesIncrement(item, sourceMemoryIds, memoryBank = null) {
     if (item?.basis !== '记忆') return false;
     const allowed = new Set(core_text.cleanArray(sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40));
-    return core_text.cleanArray(item?.sourceMemoryIds, 12, 40).some(id => allowed.has(id));
+    if (!core_text.cleanArray(item?.sourceMemoryIds, 12, 40).some(id => allowed.has(id))) return false;
+    if (!memoryBank) return true;
+    const incrementalBank = core_incremental.incrementalPromptMemoryBank(memoryBank, sourceMemoryIds);
+    const reference = core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, '', incrementalBank, 1);
+    return !!reference.sourceMemoryAnchor
+        && core_text.normalizeText(item?.sourceMemoryAnchor, 120) === reference.sourceMemoryAnchor;
 }
 
-export function mergeRoomIncremental(previous, fresh, sourceMemoryIds) {
+function roomPetKey(pet) {
+    return `${normalizeRoomPetSpecies(pet?.species)}|${core_incremental.normalizedContentKey(pet?.name, 80)}`;
+}
+
+function roomPetUsesIncrement(pet, sourceMemoryIds, allowSettingPets = false, memoryBank = null) {
+    if (pet?.basis !== '记忆') return allowSettingPets;
+    return roomObjectUsesIncrement(pet, sourceMemoryIds, memoryBank);
+}
+
+export function mergeRoomIncremental(previous, fresh, sourceMemoryIds, { memoryBank = null } = {}) {
+    const schemaUpgrade = roomNeedsSchemaUpgrade(previous);
     const merged = structuredClone(previous);
+    merged.roomVersion = core_constants.ROOM_SESSION_VERSION;
     if (!previous?.visualProfile && fresh?.visualProfile) merged.visualProfile = structuredClone(fresh.visualProfile);
     const usedSpaceIds = new Set((merged.spaces || []).map(space => space.id));
     const bySpace = new Map((merged.spaces || []).map((space, index) => [roomSpaceKey(space), index]));
@@ -269,13 +371,13 @@ export function mergeRoomIncremental(previous, fresh, sourceMemoryIds) {
         const key = roomSpaceKey(freshSpace);
         const existingIndex = bySpace.get(key);
         if (existingIndex === undefined) {
-            const grounded = (freshSpace.objects || []).some(item => roomObjectUsesIncrement(item, sourceMemoryIds));
+            const grounded = (freshSpace.objects || []).some(item => roomObjectUsesIncrement(item, sourceMemoryIds, memoryBank));
             if (!grounded || merged.spaces.length >= 20) continue;
             const next = structuredClone(freshSpace);
             next.id = core_incremental.uniqueGeneratedId(next.id, usedSpaceIds, 'SP');
             const usedObjectIds = new Set();
             next.objects = (next.objects || [])
-                .filter(item => item?.basis !== '记忆' || roomObjectUsesIncrement(item, sourceMemoryIds))
+                .filter(item => roomObjectUsesIncrement(item, sourceMemoryIds, memoryBank))
                 .slice(0, 24).map(item => ({
                 ...item,
                 id: core_incremental.uniqueGeneratedId(item.id, usedObjectIds, `${next.id}_OBJ`),
@@ -289,7 +391,7 @@ export function mergeRoomIncremental(previous, fresh, sourceMemoryIds) {
         const seenObjects = new Set((target.objects || []).map(roomObjectKey));
         const usedObjectIds = new Set((target.objects || []).map(item => item.id));
         for (const item of freshSpace.objects || []) {
-            if (!roomObjectUsesIncrement(item, sourceMemoryIds)) continue;
+            if (!roomObjectUsesIncrement(item, sourceMemoryIds, memoryBank)) continue;
             const objectKey = roomObjectKey(item);
             if (!objectKey || seenObjects.has(objectKey) || target.objects.length >= 24) continue;
             seenObjects.add(objectKey);
@@ -300,16 +402,30 @@ export function mergeRoomIncremental(previous, fresh, sourceMemoryIds) {
             added += 1;
         }
     }
-    const presence = [...(previous.presenceLines || [])];
-    const seenLines = new Set(presence.map(line => core_incremental.normalizedContentKey(line, 900)));
-    for (const line of fresh.presenceLines || []) {
-        const key = core_incremental.normalizedContentKey(line, 900);
-        if (!key || seenLines.has(key) || presence.length >= 40) continue;
-        seenLines.add(key);
-        presence.push(line);
+    const mergedPets = Array.isArray(merged.pets) ? merged.pets : [];
+    const seenPets = new Set(mergedPets.map(roomPetKey));
+    const usedPetIds = new Set(mergedPets.map(pet => pet?.id).filter(Boolean));
+    const freshSpacesById = new Map((fresh.spaces || []).map(space => [space.id, space]));
+    const mergedSpacesByKey = new Map((merged.spaces || []).map(space => [roomSpaceKey(space), space]));
+    for (const pet of fresh.pets || []) {
+        if (mergedPets.length >= 6 || !roomPetUsesIncrement(pet, sourceMemoryIds, schemaUpgrade, memoryBank)) continue;
+        const sourceSpace = freshSpacesById.get(pet?.spaceId);
+        const targetSpace = (sourceSpace && mergedSpacesByKey.get(roomSpaceKey(sourceSpace)))
+            || (merged.spaces || []).find(space => space.id === pet?.spaceId);
+        if (!targetSpace) continue;
+        const key = roomPetKey(pet);
+        if (!key || seenPets.has(key)) continue;
+        const next = structuredClone(pet);
+        next.id = core_incremental.uniqueGeneratedId(next.id, usedPetIds, 'PET');
+        next.spaceId = targetSpace.id;
+        mergedPets.push(next);
+        seenPets.add(key);
         added += 1;
     }
-    merged.presenceLines = presence;
+    merged.pets = mergedPets;
+    // Incremental presence lines carry no per-line evidence fields, so they cannot be
+    // attributed to this update safely. Keep the previously validated lines unchanged.
+    merged.presenceLines = structuredClone(previous.presenceLines || []);
     merged.selectedSpaceId = previous.selectedSpaceId;
     merged.selectedObjectId = previous.selectedObjectId;
     return { session: merged, added };
@@ -323,7 +439,7 @@ export async function generateRoomIncrementalWithRepair(context, memoryBank, ori
         { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], temperature: 0.45, context, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ROOM, background: true },
         raw => normalizeRoom(raw, memoryBank),
     );
-    const { session, added } = mergeRoomIncremental(previous, fresh, sourceMemoryIds);
+    const { session, added } = mergeRoomIncremental(previous, fresh, sourceMemoryIds, { memoryBank });
     return core_incremental.stampIncrementalCoverage(session, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
@@ -365,13 +481,26 @@ export function roomBlueprintPayload(session) {
                 sourceMemoryAnchor: item.sourceMemoryAnchor || '',
             })),
         })),
+        pets: (Array.isArray(session.pets) ? session.pets : []).slice(0, 6).map(pet => ({
+            id: core_text.safeId(pet?.id, ''),
+            name: core_text.normalizeText(pet?.name, 60),
+            species: normalizeRoomPetSpecies(pet?.species),
+            spaceId: core_text.safeId(pet?.spaceId, ''),
+            description: core_text.normalizeText(pet?.description, 900),
+            basis: core_constants.ROOM_BASIS_VALUES.has(pet?.basis) ? pet.basis : '设定',
+            sourceMemoryIds: core_text.cleanArray(pet?.sourceMemoryIds, 12, 40),
+            sourceMemoryAnchor: core_text.normalizeText(pet?.sourceMemoryAnchor, 120),
+        })),
     };
 }
 
 export function roomLifePrompt(context, session, memoryBank, date = new Date()) {
     const dateKey = localDateKey(date);
     const weekday = new Intl.DateTimeFormat('zh-CN', { weekday: 'long' }).format(date);
-    const referencedMemoryIds = core_evidence.roomReferencedMemoryIds(session);
+    const referencedMemoryIds = [...new Set([
+        ...core_evidence.roomReferencedMemoryIds(session),
+        ...(Array.isArray(session?.pets) ? session.pets : []).flatMap(pet => core_text.cleanArray(pet?.sourceMemoryIds, 12, 40)),
+    ])].slice(0, 24);
     const lifeMemories = referencedMemoryIds.length
         ? core_evidence.memoryPayload(memoryBank, referencedMemoryIds, 24)
         : core_evidence.memoryPayload(memoryBank, null, 12);
@@ -733,6 +862,71 @@ export function roomTemporaryPlacement(label, index) {
     return `--rtx:${x}%;--rty:${y}%;--rtr:${r}deg`;
 }
 
+export function roomObjectVisualKind(item) {
+    const text = core_text.normalizeText(`${item?.label || ''} ${item?.description || ''}`, 1800).toLowerCase();
+    if (/书|杂志|文件|卷宗|阅读|book|magazine|file/.test(text)) return 'book';
+    if (/琴|乐器|唱片|音箱|耳机|麦克风|music|guitar|piano|record|speaker/.test(text)) return 'music';
+    if (/植物|花|盆栽|草|花园|plant|flower|garden/.test(text)) return 'plant';
+    if (/电脑|显示器|终端|设备|仪器|机械|screen|terminal|device|computer|console/.test(text)) return 'tech';
+    if (/工具|工作台|工坊|零件|材料|tool|workbench|craft/.test(text)) return 'tool';
+    if (/健身|训练|球|哑铃|跑步|运动|fitness|training|sport/.test(text)) return 'fitness';
+    if (/宠物|猫|狗|鸟|鱼|窝|笼|水族|pet|cat|dog|bird|aquarium/.test(text)) return 'pet';
+    if (/柜|箱|盒|包|抽屉|收纳|cabinet|box|drawer|storage/.test(text)) return 'storage';
+    if (/灯|蜡烛|灯笼|light|lamp|candle/.test(text)) return 'light';
+    if (/椅|沙发|坐垫|chair|sofa|seat/.test(text)) return 'seat';
+    if (/桌|案|台面|desk|table/.test(text)) return 'table';
+    if (/画|摄影|模型|雕塑|手稿|art|photo|model|sketch/.test(text)) return 'art';
+    if (/行李|地图|车票|护照|旅行|luggage|map|ticket|travel/.test(text)) return 'travel';
+    return 'other';
+}
+
+export function roomMotifToken(session, space) {
+    const objects = (Array.isArray(space?.objects) ? space.objects : []).map(item => roomObjectVisualKind(item));
+    const counts = new Map();
+    for (const kind of objects) counts.set(kind, (counts.get(kind) || 0) + 1);
+    const mapped = [
+        ['book', 'literary'], ['music', 'musical'], ['plant', 'botanical'], ['tech', 'technical'],
+        ['tool', 'artisan'], ['fitness', 'athletic'], ['pet', 'companion'], ['travel', 'traveler'],
+        ['art', 'collector'],
+    ];
+    mapped.sort((a, b) => (counts.get(b[0]) || 0) - (counts.get(a[0]) || 0));
+    const best = mapped[0];
+    if (best && (counts.get(best[0]) || 0) > 0) return best[1];
+    const density = core_text.normalizeText(session?.visualProfile?.density, 20);
+    const fallback = density === 'sparse' ? 'minimal' : 'domestic';
+    return ROOM_MOTIF_VALUES.has(fallback) ? fallback : 'domestic';
+}
+
+export function roomPetPlacement(pet, index) {
+    const petId = core_text.safeId(pet?.id, `PET${Number(index) + 1}`);
+    const petName = core_text.normalizeText(pet?.name, 60);
+    const spaceId = core_text.safeId(pet?.spaceId, '');
+    const h = core_text.hashString(`pet|${petId}|${petName}|${spaceId}`);
+    const x = 18 + (h % 65);
+    const y = 70 + ((h >>> 7) % 15);
+    const flip = (h >>> 12) % 2 ? 1 : -1;
+    return `--rmt-pet-x:${x}%;--rmt-pet-y:${y}%;--rmt-pet-flip:${flip}`;
+}
+
+export function roomPetNodeHtml(pet, index = 0) {
+    const species = normalizeRoomPetSpecies(pet?.species);
+    const id = core_text.safeId(pet?.id, `PET${Number(index) + 1}`);
+    const name = core_text.normalizeText(pet?.name, 60) || '宠物';
+    const description = core_text.normalizeText(pet?.description, 900);
+    return `<span class="rmt-room-pet" style="${roomPetPlacement({ ...pet, id, name }, index)}" data-rmt-pet-id="${core_text.esc(id)}" data-rmt-pet-species="${core_text.esc(species)}" aria-label="${core_text.esc(`${name}：${description}`)}"><span class="rmt-room-pet-tail" aria-hidden="true"></span><span class="rmt-room-pet-body" aria-hidden="true"></span><span class="rmt-room-pet-name">${core_text.esc(name)}</span></span>`;
+}
+
+export function roomPetSummaryHtml(pet) {
+    const name = core_text.normalizeText(pet?.name, 60) || '宠物';
+    const description = core_text.normalizeText(pet?.description, 900);
+    const line = core_text.normalizeText(pet?.line, 500);
+    const anchor = core_text.normalizeText(pet?.sourceMemoryAnchor, 120);
+    const evidence = pet?.basis === '记忆' && anchor
+        ? `<small>档案痕迹：${core_text.esc(anchor)}</small>`
+        : '<small>来源：角色设定 / 世界观</small>';
+    return `<div class="rmt-room-pet-note"><b>🐾 ${core_text.esc(name)}</b><span>${core_text.esc(description)}</span>${line ? `<em>${core_text.esc(line)}</em>` : ''}${evidence}</div>`;
+}
+
 export function roomDeepAvailability() {
     const options = runtimeState.activeArchiveSnapshot ? { chatId: runtimeState.activeArchiveSnapshot.chatId, memoryBank: runtimeState.activeArchiveSnapshot.memory, cache: runtimeState.activeArchiveSnapshot.cache, clone: true } : {};
     return {
@@ -829,7 +1023,7 @@ export function returnToRoomFromDeep() {
 export function renderRoom() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.ROOM || !Array.isArray(session.spaces) || !session.spaces.length) return;
-    ui_overlay.setBackVisible(true, '当前档案');
+    ui_overlay.setBackVisible(true, runtimeState.activeArchiveSnapshot ? (runtimeState.activeArchiveReadOnly ? '只读档案' : '档案') : '当前档案');
     ui_overlay.topTitle(core_constants.MODE_LABEL[core_constants.MODE.ROOM]);
     const now = new Date();
     const daypart = roomDaypartState(now);
@@ -851,12 +1045,25 @@ export function renderRoom() {
         identitySeed: roomVisualIdentitySeed(session, runtimeState.activeArchiveSnapshot?.memory || null, archiveIdentity),
     });
     const figureProfile = visualProfile.figure;
-    const hotspots = selectedSpace.objects.map((item, index) => `<button type="button" class="rmt-room-hotspot ${item.id === selected?.id ? 'active' : ''} ${item.id === focusId ? 'focus' : ''}" style="${roomObjectPlacement(item, index)}" data-rmt-room-id="${core_text.esc(item.id)}" aria-label="${core_text.esc(item.label)}">${index + 1}</button>`).join('');
-    const objectRail = selectedSpace.objects.map((item, index) => `<button type="button" class="rmt-room-object-chip ${item.id === selected?.id ? 'active' : ''}" data-rmt-room-id="${core_text.esc(item.id)}"><span>${index + 1}</span><b>${core_text.esc(item.label)}</b>${item.searchable ? '<em>▣ 可翻找</em>' : ''}</button>`).join('');
+    // Legacy caches did not have a pet schema. Treat absence as empty and keep any
+    // newer cached array bounded before it reaches the DOM.
+    const pets = (Array.isArray(session.pets) ? session.pets : []).slice(0, 6);
+    const selectedPets = pets.filter(pet => pet?.spaceId === selectedSpace.id);
+    const petNodes = selectedPets.map(roomPetNodeHtml).join('');
+    const petNotes = selectedPets.map(roomPetSummaryHtml).join('');
+    const hotspots = selectedSpace.objects.map((item, index) => {
+        const visualKind = roomObjectVisualKind(item);
+        return `<button type="button" class="rmt-room-hotspot ${item.id === selected?.id ? 'active' : ''} ${item.id === focusId ? 'focus' : ''}" style="${roomObjectPlacement(item, index)}" data-rmt-room-id="${core_text.esc(item.id)}" data-rmt-visual-kind="${core_text.esc(visualKind)}" aria-label="${core_text.esc(item.label)}">${index + 1}</button>`;
+    }).join('');
+    const objectRail = selectedSpace.objects.map((item, index) => {
+        const visualKind = roomObjectVisualKind(item);
+        return `<button type="button" class="rmt-room-object-chip ${item.id === selected?.id ? 'active' : ''}" data-rmt-room-id="${core_text.esc(item.id)}" data-rmt-visual-kind="${core_text.esc(visualKind)}"><span>${index + 1}</span><b>${core_text.esc(item.label)}</b>${item.searchable ? '<em>▣ 可翻找</em>' : ''}</button>`;
+    }).join('');
     const map = session.spaces.map(space => {
         const typeLabel = core_text.normalizeText(space.spaceType, 100);
         const showType = typeLabel && core_text.normalizeText(space.label, 100) !== typeLabel;
-        return `<button type="button" class="rmt-room-space ${space.id === selectedSpace.id ? 'active' : ''} ${space.id === presentSpace.id ? 'present' : ''}" data-rmt-room-space="${core_text.esc(space.id)}">${space.id === presentSpace.id ? '<span class="rmt-room-presence-dot">♥</span>' : ''}<b>${core_text.esc(space.label)}</b>${showType ? `<small>${core_text.esc(typeLabel)}</small>` : ''}</button>`;
+        const petCount = pets.filter(pet => pet?.spaceId === space.id).length;
+        return `<button type="button" class="rmt-room-space ${space.id === selectedSpace.id ? 'active' : ''} ${space.id === presentSpace.id ? 'present' : ''}" data-rmt-room-space="${core_text.esc(space.id)}">${space.id === presentSpace.id ? '<span class="rmt-room-presence-dot">♥</span>' : ''}${petCount ? `<span class="rmt-room-pet-dot" aria-label="${petCount} 只宠物">🐾</span>` : ''}<b>${core_text.esc(space.label)}</b>${showType ? `<small>${core_text.esc(typeLabel)}</small>` : ''}</button>`;
     }).join('');
     const memorySource = selected?.basis === '记忆' && selected.sourceMemoryIds.length
         ? `档案痕迹：${selected.sourceMemoryIds.join(' · ')}`
@@ -874,6 +1081,9 @@ export function renderRoom() {
     const phoneLabel = deep.phone?.deviceName || phoneDraft?.plan?.deviceName || '私人通讯终端';
     const itemsGenerating = core_requestCoordinator.isModeGenerating(core_constants.MODE.ITEMS);
     const readOnlyArchive = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
+    const schemaUpgradeNotice = roomNeedsSchemaUpgrade(session)
+        ? `<section class="rmt-room-schema-notice"><div><b>这份旧版房间还没有扫描宠物设定</b><small>${readOnlyArchive ? '请回到它对应的原聊天后补全；当前只读档案不会串到其他角色。' : '可重新扫描角色卡与世界书；旧房间、物件和台词会原样保留。'}</small></div>${readOnlyArchive ? '' : '<button type="button" class="rmt-btn" data-rmt-action="room-schema-upgrade">补全宠物与视觉设定</button>'}</section>`
+        : '';
     const itemActionText = selectedSearchable
         ? (deep.items ? `翻找「${selected.label}」` : readOnlyArchive ? `「${selected.label}」尚未生成物品档案` : itemsGenerating ? '物品生成中…' : `生成并翻找「${selected.label}」`)
         : '先选中盒子 / 抽屉 / 柜子等收纳物';
@@ -882,11 +1092,13 @@ export function renderRoom() {
         : `${selectedSpace.label} · ${selectedSpace.spaceType}`;
     const sceneKind = roomSceneClass(selectedSpace.spaceType, selectedSpace.label);
     const sceneLayout = roomLayoutVariant(selectedSpace);
+    const sceneMotif = roomMotifToken(session, selectedSpace);
     const tempLine = temporaryObjects.length ? `<div class="rmt-room-temp-line">此刻临时物件：${temporaryObjects.map(item => core_text.esc(item)).join(' · ')}</div>` : '';
     const body = ui_overlay.bodyEl();
-    body.innerHTML = `<div class="rmt-room-view" data-rmt-room-world="${core_text.esc(visualProfile.worldStyle)}" data-rmt-room-palette="${core_text.esc(visualProfile.palette)}" data-rmt-room-material="${core_text.esc(visualProfile.material)}" data-rmt-room-density="${core_text.esc(visualProfile.density)}">
+    body.innerHTML = `<div class="rmt-room-view" data-rmt-room-world="${core_text.esc(visualProfile.worldStyle)}" data-rmt-room-palette="${core_text.esc(visualProfile.palette)}" data-rmt-room-material="${core_text.esc(visualProfile.material)}" data-rmt-room-density="${core_text.esc(visualProfile.density)}" data-rmt-room-motif="${core_text.esc(sceneMotif)}">
       <div class="rmt-room-map" aria-label="私人空间地图">${map}</div>
       <div class="rmt-room-location"><div><b>${core_text.esc(currentLocationText)}</b><small>${core_text.esc(session.homeName)} · ${session.spaces.length} 个可观察区域</small></div><div class="rmt-room-location-actions">${!personIsHere ? `<button type="button" class="rmt-room-find" data-rmt-action="room-find-presence">去看看他</button>` : ''}${readOnlyArchive ? '' : `<button type="button" class="rmt-room-find" data-rmt-action="room-life-refresh" ${runtimeState.busy ? 'disabled' : ''}>更新今日生活</button>`}</div></div>
+      ${schemaUpgradeNotice}
 
       <div class="rmt-room-flow">
         <section class="rmt-room-card rmt-room-space-note-card">
@@ -898,12 +1110,13 @@ export function renderRoom() {
 
         <section class="rmt-room-stage">
           <div class="rmt-room-stage-head"><b>${core_text.esc(sceneTitle)}</b><span class="rmt-room-clock" data-rmt-room-clock>${core_text.esc(daypart.label)} · ${core_text.esc(roomClockText(now))}</span></div>
-          <div class="rmt-room-scene rmt-room-scene-${sceneKind}" data-rmt-layout="${sceneLayout}" data-rmt-room-beat="${core_text.esc(String(slot?.id || `${daypart.key}:${slot?.spaceId || ''}:${slot?.activity || ''}`))}" data-rmt-room-daypart="${core_text.esc(daypart.key)}" data-rmt-lighting="${core_text.esc(visualState.lighting)}" data-rmt-window="${core_text.esc(visualState.window)}" data-rmt-order="${core_text.esc(visualState.order)}" data-rmt-surface="${core_text.esc(visualState.surface)}">
+          <div class="rmt-room-scene rmt-room-scene-${sceneKind}" data-rmt-layout="${sceneLayout}" data-rmt-room-beat="${core_text.esc(String(slot?.id || `${daypart.key}:${slot?.spaceId || ''}:${slot?.activity || ''}`))}" data-rmt-room-daypart="${core_text.esc(daypart.key)}" data-rmt-lighting="${core_text.esc(visualState.lighting)}" data-rmt-window="${core_text.esc(visualState.window)}" data-rmt-order="${core_text.esc(visualState.order)}" data-rmt-surface="${core_text.esc(visualState.surface)}" data-rmt-room-motif="${core_text.esc(sceneMotif)}">
             <div class="rmt-room-window" aria-hidden="true"></div>
             <div class="rmt-room-furniture" aria-hidden="true"></div>
             <div class="rmt-room-decor" aria-hidden="true"><span class="rmt-room-prop-a"></span><span class="rmt-room-prop-b"></span><span class="rmt-room-prop-c"></span></div>
             ${hotspots}
-            ${personIsHere ? `<button type="button" class="rmt-room-person" style="--rmt-head-width:${figureProfile.faceWidth}px;--rmt-head-height:${figureProfile.faceHeight}px;--rmt-eye-gap:${figureProfile.eyeSpacing}px;--rmt-mouth-width:${figureProfile.mouthWidth}px" data-rmt-action="room-presence" data-rmt-identity-key="${core_text.esc(visualProfile.identityKey)}" data-rmt-build="${core_text.esc(figureProfile.build)}" data-rmt-hair-shape="${core_text.esc(figureProfile.hairShape)}" data-rmt-hair-tone="${core_text.esc(figureProfile.hairTone)}" data-rmt-outfit="${core_text.esc(figureProfile.outfit)}" data-rmt-detail="${core_text.esc(figureProfile.detail)}" data-rmt-posture="${core_text.esc(figureProfile.posture)}" aria-label="看看${core_text.esc(charName)}现在在做什么"><span class="rmt-room-figure-shadow" aria-hidden="true"></span><span class="rmt-room-body-figure" aria-hidden="true"><span class="rmt-room-outfit-mark"></span></span><span class="rmt-room-head" aria-hidden="true"><span class="rmt-room-face"></span><span class="rmt-room-hair"></span><span class="rmt-room-figure-detail"></span></span><span class="rmt-room-person-label" aria-hidden="true">♥</span></button>` : ''}
+            ${petNodes}
+            ${personIsHere ? `<button type="button" class="rmt-room-person" data-rmt-action="room-presence" data-rmt-facing="away" data-rmt-identity-key="${core_text.esc(visualProfile.identityKey)}" data-rmt-build="${core_text.esc(figureProfile.build)}" data-rmt-hair-shape="${core_text.esc(figureProfile.hairShape)}" data-rmt-hair-tone="${core_text.esc(figureProfile.hairTone)}" data-rmt-outfit="${core_text.esc(figureProfile.outfit)}" data-rmt-detail="${core_text.esc(figureProfile.detail)}" data-rmt-posture="${core_text.esc(figureProfile.posture)}" aria-label="从背影看看${core_text.esc(charName)}现在在做什么"><span class="rmt-room-figure-shadow" aria-hidden="true"></span><span class="rmt-room-body-figure" aria-hidden="true"><span class="rmt-room-outfit-mark"></span></span><span class="rmt-room-head" aria-hidden="true"><span class="rmt-room-hair"></span><span class="rmt-room-figure-detail"></span></span><span class="rmt-room-person-label" aria-hidden="true">♥</span></button>` : ''}
           </div>
           <div class="rmt-room-object-rail" aria-label="房间物件">${objectRail}</div>
           <div class="rmt-room-activity-strip ${personIsHere ? '' : 'empty'}">
@@ -916,6 +1129,7 @@ export function renderRoom() {
           <div class="rmt-room-card-kicker">PRIVATE LIFE</div>
           <div class="rmt-room-atmosphere">${core_text.esc(selectedSpace.atmosphere)}</div>
           <div class="rmt-room-note" style="margin-top:9px">整体：${core_text.esc(session.homeSummary)}</div>
+          ${petNotes ? `<div class="rmt-room-pet-notes" aria-label="这个空间里的宠物">${petNotes}</div>` : ''}
           ${personIsHere ? `<div class="rmt-room-object-line">${core_text.esc(presenceLine)}</div>` : `<div class="rmt-room-object-line">${core_text.esc(charName)} 此刻在「${core_text.esc(presentSpace.label)}」。</div>`}
         </section>
 

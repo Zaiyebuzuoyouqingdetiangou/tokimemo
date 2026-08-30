@@ -1,4 +1,4 @@
-# Heartbeat Memories r35–r43 Architecture
+# Heartbeat Memories r35–r45 Architecture
 
 r35 is a zero-schema modularization of the r34 runtime. r36 adds Calendar as the first post-modularization feature without changing the canonical archive schema. The persisted archive and derived-cache contracts remain compatible.
 
@@ -9,6 +9,7 @@ src/
 │  ├─ constants.js             stable IDs, limits, MODE values
 │  ├─ state.js                 mutable runtime state
 │  ├─ settings.js              extension / Connection Manager settings
+│  ├─ independentApi.js        Profile capability gate + same-origin manual transport
 │  ├─ context.js               live chat / origin identity
 │  ├─ requestCoordinator.js    task keys, provider permits, timeout
 │  ├─ cache.js                 derived cache + revision-bound persistence
@@ -22,7 +23,7 @@ src/
 │  ├─ snapshots.js             historical snapshot lookup
 │  └─ library.js               archive-library behavior and writeability gate
 ├─ generation/
-│  ├─ client.js                Connection Manager JSON requests
+│  ├─ client.js                explicit Profile/manual JSON request dispatch
 │  ├─ prompts.js               shared prompt helpers/registry glue
 │  ├─ jsonParser.js            bounded JSON extraction
 │  ├─ normalizers.js           mode normalization dispatch glue
@@ -142,6 +143,13 @@ Butterfly r43 is a content-contract change only. `ui/butterflyView.js`, its dive
 - A source-chat read failure may fall back to the matching local backup only after entry ID, character identity, chat ID, schema and archive revision validation. Recovered snapshots are permanently read-only and cannot be rebound to another chat.
 - Every raw derived-cache sink uses the same 12 MB UTF-8 byte cap. Runtime writers detach legacy raw metadata before mutation, and an oversized destroy-time candidate leaves the previous durable value untouched.
 - The backup is browser-local durability, not cross-device sync: clearing site data or using another browser/device removes access to it. Explicit Heartbeat archive deletion replaces matching content with a tiny content-free deletion fence so delayed seed/cache transactions cannot recreate it; only a later explicit canonical first-create may clear that fence. Index-only removal does not delete the backup.
+
+## r45.0 independent API transport contract
+
+- `apiConnectionMode` selects exactly one transport. Legacy r44 settings migrate to `profile`; manual URL/Key/model stay in separate fields so switching views never conflates Profile credentials with a custom endpoint.
+- `core/independentApi.js` owns the 1.1.18-labelled one-click capability gate, manual URL normalization, fixed same-origin `/status` and `/generate` calls, bounded response reading, visible-content extraction and credential-free errors.
+- `generation/client.js` keeps the single provider permit/timeout/JSON-validation pipeline and dispatches through only the selected adapter. Profile requests use messages with preset/instruct disabled; manual requests never browser-fetch the third-party URL.
+- Settings changes advance an API epoch, clear model caches and cancel live tasks. Each completed generation additionally compares a credential-redacted configuration fingerprint before parsing or saving.
 
 ## r41.5 performance contract
 

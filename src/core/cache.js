@@ -623,6 +623,7 @@ export function loadSession(mode, options = {}) {
             if (!session || !Array.isArray(session.apps) || session.apps.length < 1) return null;
         }
         if (mode === core_constants.MODE.ENDING && (!Array.isArray(session.endings) || (!userManaged && session.endings.length < 5))) return null;
+        if (mode === core_constants.MODE.TRAVEL && (!Array.isArray(session.locations) || (!userManaged && session.locations.length < 4))) return null;
         if (mode === core_constants.MODE.CALENDAR) {
             session = modes_calendar.migrateCalendarSession(session, memoryBank);
             if (!session || !Array.isArray(session.entries) || !session.dayPages || session.calendarVersion !== core_constants.CALENDAR_SESSION_VERSION) return null;

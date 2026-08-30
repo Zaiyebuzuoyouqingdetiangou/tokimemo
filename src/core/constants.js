@@ -32,6 +32,10 @@ export const CALENDAR_SESSION_VERSION = 5;
 
 export const PHONE_SESSION_VERSION = 2;
 
+export const ROOM_SESSION_VERSION = 2;
+
+export const TRAVEL_SESSION_VERSION = 1;
+
 export const MAX_CACHE_COMPRESSED_BASE64_CHARS = 4000000;
 
 export const MAX_CACHE_DECOMPRESSED_BYTES = 12000000;
@@ -111,8 +115,12 @@ export const MAX_MEMORY_WORLD_INFO_ENTRIES = 160;
 export const MAX_MEMORY_WORLD_INFO_CHARS = 52000;
 
 export const DEFAULT_SETTINGS = Object.freeze({
+    apiConnectionMode: 'profile',
     connectionProfileId: '',
     modelOverride: '',
+    manualApiBaseUrl: '',
+    manualApiKey: '',
+    manualApiModel: '',
     maxTokens: 16384,
     temperature: 0.9,
     roomLifeAutoDaily: true,
@@ -137,6 +145,7 @@ export const MODE = Object.freeze({
     ROOM: 'room',
     ITEMS: 'items',
     PHONE: 'phone',
+    TRAVEL: 'travel',
     ENDING: 'ending',
     CALENDAR: 'calendar',
     RELATIONS: 'relations',
@@ -151,6 +160,7 @@ export const MODE_LABEL = Object.freeze({
     [MODE.ROOM]: '他的房间',
     [MODE.ITEMS]: '他的物品',
     [MODE.PHONE]: '他的私人终端',
+    [MODE.TRAVEL]: '他的出行路线',
     [MODE.ENDING]: '结局与后日谈',
     [MODE.CALENDAR]: '两个人的日历',
     [MODE.RELATIONS]: '人际庭园',
@@ -165,6 +175,7 @@ export const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ROOM]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.ITEMS]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.PHONE]: MAX_GENERATION_OUTPUT_TOKENS,
+    [MODE.TRAVEL]: 9000,
     [MODE.ENDING]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.CALENDAR]: 6000,
     [MODE.RELATIONS]: 7000,
@@ -172,7 +183,7 @@ export const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ACHIEVEMENTS]: 6000,
 });
 
-export const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
+export const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
 
 export const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS, MODE.PHONE]);
 
@@ -196,7 +207,13 @@ export const ROOM_BASIS_VALUES = new Set(['设定', '记忆']);
 
 export const PHONE_DEVICE_KINDS = new Set(['phone', 'watch', 'terminal', 'communicator']);
 
-export const PHONE_EXCLUDED_APP_KINDS = new Set(['schedule', 'calendar']);
+export const PHONE_EXCLUDED_APP_KINDS = new Set(['schedule', 'calendar', 'location', 'map', 'maps', 'navigation', 'travel', 'transit', 'route']);
+
+export const TRAVEL_LOCATION_KINDS = new Set(['near', 'far']);
+
+export const TRAVEL_MAP_THEMES = new Set(['city', 'coast', 'forest', 'mountain', 'campus', 'historic', 'fantasy', 'scifi']);
+
+export const TRAVEL_POSTCARD_TONES = new Set(['rose', 'ocean', 'forest', 'sunset', 'night', 'paper']);
 
 export const ROOM_DAYPART_KEYS = ['morning', 'daytime', 'evening', 'night'];
 
@@ -230,11 +247,15 @@ export const MAX_CONCURRENT_PROVIDER_REQUESTS = 2;
 
 export const CACHE_PERSIST_IDLE_RETRY_MS = 1200;
 
-export const DEFAULT_GENERATION_REQUEST_TIMEOUT_MS = 300000;
+export const DEFAULT_GENERATION_REQUEST_TIMEOUT_MS = 600000;
 
 export const MIN_GENERATION_REQUEST_TIMEOUT_MS = 30000;
 
-export const MAX_GENERATION_REQUEST_TIMEOUT_MS = 600000;
+export const MAX_GENERATION_REQUEST_TIMEOUT_MS = 1200000;
+
+export const MANUAL_API_MODEL_LIST_TIMEOUT_MS = 30000;
+
+export const MAX_MANUAL_API_RESPONSE_BYTES = 4000000;
 
 export const SEGMENT_REQUEST_CONCURRENCY = 1;
 

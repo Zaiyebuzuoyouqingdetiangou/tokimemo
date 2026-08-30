@@ -115,17 +115,27 @@ export function albumFilter(category) {
 
 export function albumPage(delta) {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ALBUM) return;
+    const albumSession = runtimeState.activeSession;
+    const category = albumSession.category;
+    const selectedId = albumSession.selectedId;
+    const sharedMemory = albumSession.sharedMemory === true;
     const list = filteredAlbumEntries();
-    const pages = Math.max(1, Math.ceil(list.length / runtimeState.activeSession.pageSize));
-    const next = Math.max(1, Math.min(pages, runtimeState.activeSession.page + delta));
-    if (next === runtimeState.activeSession.page) return;
+    const pageSize = albumSession.pageSize;
+    const pages = Math.max(1, Math.ceil(list.length / pageSize));
+    const next = Math.max(1, Math.min(pages, albumSession.page + delta));
+    if (next === albumSession.page) return;
     const grid = document.querySelector('.rmt-grid');
     grid?.classList.add('fade');
     setTimeout(() => {
-        runtimeState.activeSession.page = next;
-        const first = list[(next - 1) * runtimeState.activeSession.pageSize];
-        runtimeState.activeSession.selectedId = first?.id || runtimeState.activeSession.selectedId;
-        runtimeState.activeSession.hintVisible = false;
+        if (runtimeState.activeSession !== albumSession
+            || albumSession.kind !== core_constants.MODE.ALBUM
+            || albumSession.category !== category
+            || albumSession.selectedId !== selectedId
+            || (albumSession.sharedMemory === true) !== sharedMemory) return;
+        albumSession.page = next;
+        const first = list[(next - 1) * pageSize];
+        albumSession.selectedId = first?.id || albumSession.selectedId;
+        albumSession.hintVisible = false;
         renderAlbum();
     }, 180);
 }
@@ -152,7 +162,7 @@ export function renderSharedMemory() {
     const comments = item.comments;
     session.dialogueIndex = Math.max(0, Math.min(session.dialogueIndex, comments.length - 1));
     const last = session.dialogueIndex >= comments.length - 1;
-    const charName = core_text.normalizeText(core_context.getContext()?.name2, 80) || '他';
+    const charName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext()?.name2, 80) || '他';
     ui_overlay.setBackVisible(true, '回忆相簿');
     ui_overlay.topTitle(`共同回忆 · ${item.title}`);
     const body = ui_overlay.bodyEl();

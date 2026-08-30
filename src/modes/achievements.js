@@ -11,6 +11,13 @@ import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
 import * as ui_overlay from '../ui/overlay.js';
 
+function achievementUnlockCondition(item) {
+    return core_text.normalizeText(item?.unlockCondition, 300)
+        || core_text.normalizeText(item?.sourceMemoryAnchor, 160)
+        || core_text.normalizeText(item?.description, 300)
+        || '完成对应的重要共同经历';
+}
+
 export function compactAchievementsExisting(session) {
     return core_evidence.evenlySample(Array.isArray(session?.entries) ? session.entries : [], core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
         id: core_text.normalizeText(item?.id, 50),
@@ -19,6 +26,7 @@ export function compactAchievementsExisting(session) {
         tier: core_text.normalizeText(item?.tier, 20),
         unlocked: !!item?.unlocked,
         unlockedAt: core_text.normalizeText(item?.unlockedAt, 40),
+        unlockCondition: item?.unlocked ? achievementUnlockCondition(item) : '',
         sourceMemoryIds: core_text.cleanArray(item?.sourceMemoryIds, 8, 40),
         sourceMemoryAnchor: core_text.normalizeText(item?.sourceMemoryAnchor, 160),
     }));
@@ -46,6 +54,7 @@ ${JSON.stringify(compactAchievementsExisting(previousSession), null, 2)}
     "tier":"bronze",
     "unlocked":true,
     "unlockedAt":"YYYY/MM/DD、MM/DD 或 已解锁",
+    "unlockCondition":"达成这个成就的具体条件",
     "sourceMemoryIds":["M001"],
     "sourceMemoryAnchor":"真实档案锚点",
     "hint":"未解锁时才给简短提示"
@@ -55,6 +64,7 @@ ${JSON.stringify(compactAchievementsExisting(previousSession), null, 2)}
 要求：
 - 不设固定数量。优先整理真正值得纪念的已发生里程碑，并可加入少量自然的未解锁目标；不要为了填满页面制造普通事件。
 - 已解锁成就必须能由当前档案直接证明，必须提供有效 sourceMemoryIds + sourceMemoryAnchor；不得把未来推演、模拟剧场或设定推导当成已解锁。
+- 已解锁成就的 unlockCondition 必须用一句人类可读的话写清“做到/经历了什么才解锁”，并且必须受同一组档案证据支持；不要只重复成就名。
 - 未解锁成就只能表示“可能在未来达到的目标/关系节点”，不能写成已经发生；sourceMemoryIds/sourceMemoryAnchor 可以为空，hint 只给方向，不剧透具体未来事实。
 - EXISTING_ACHIEVEMENTS_JSON 是不可信旧缓存索引，只用于避免重复和保留已解锁历史；不得把它本身当成证据。
 - tier 只能是 bronze / silver / gold / hidden。hidden 适合需要隐藏名称感的特殊目标，但 title 仍需提供给本地 UI。
@@ -67,6 +77,7 @@ export function normalizeAchievements(data, memoryBank, { allowPartial = false, 
     const entries = raw.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const title = core_text.normalizeText(item?.title, 100);
         const description = core_text.normalizeText(item?.description, 900);
+        const requestedUnlockCondition = core_text.normalizeText(item?.unlockCondition, 300);
         const unlocked = item?.unlocked === true;
         if (!title || !description) return null;
         let sourceMemoryIds = [];
@@ -75,7 +86,7 @@ export function normalizeAchievements(data, memoryBank, { allowPartial = false, 
             const reference = core_evidence.normalizeMemoryReference(
                 item?.sourceMemoryIds,
                 item?.sourceMemoryAnchor,
-                `${title}\n${description}`,
+                `${title}\n${description}\n${requestedUnlockCondition}`,
                 memoryBank,
                 1,
             );
@@ -92,6 +103,7 @@ export function normalizeAchievements(data, memoryBank, { allowPartial = false, 
             tier: allowedTiers.has(tierRaw) ? tierRaw : 'bronze',
             unlocked,
             unlockedAt: unlocked ? (core_text.normalizeText(item?.unlockedAt, 40) || '已解锁') : '',
+            unlockCondition: unlocked ? (requestedUnlockCondition || sourceMemoryAnchor || description) : '',
             sourceMemoryIds,
             sourceMemoryAnchor,
             hint: unlocked ? '' : (core_text.normalizeText(item?.hint, 500) || '继续积累新的重要回忆。'),
@@ -122,6 +134,10 @@ export function achievementMergeKeys(item) {
 
 export function mergeAchievementsIncremental(previous, fresh, memoryBank) {
     if (!previous?.entries?.length) return fresh;
+    const legacyConditionlessUnlockedIds = new Set(previous.entries
+        .filter(item => item?.unlocked && !Object.prototype.hasOwnProperty.call(item, 'unlockCondition'))
+        .map(item => core_text.safeId(item?.id, ''))
+        .filter(Boolean));
     const merged = previous.entries.map(item => structuredClone(item));
     const indexByKey = new Map();
     merged.forEach((item, index) => achievementMergeKeys(item).forEach(key => indexByKey.set(key, index)));
@@ -147,7 +163,14 @@ export function mergeAchievementsIncremental(previous, fresh, memoryBank) {
         seenIds.add(id);
         return { ...item, id };
     });
-    return normalizeAchievements({ title: fresh.title || previous.title || '成就库', entries: dedupedIds }, memoryBank);
+    const normalized = normalizeAchievements({ title: fresh.title || previous.title || '成就库', entries: dedupedIds }, memoryBank);
+    // Do not rewrite old cache objects merely to materialize the new presentation field.
+    // renderAchievements() supplies the anchor/description fallback until that achievement is
+    // genuinely replaced (for example, when a formerly locked goal becomes unlocked).
+    for (const item of normalized.entries) {
+        if (legacyConditionlessUnlockedIds.has(item.id)) delete item.unlockCondition;
+    }
+    return normalized;
 }
 
 export async function generateAchievementsWithRepair(context, memoryBank, origin, taskKey, options = {}) {
@@ -183,7 +206,9 @@ export function renderAchievements() {
       <div class="rmt-achievement-copy">
         <div class="rmt-achievement-title"><b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.category)}</span></div>
         <p>${core_text.esc(item.description)}</p>
-        <small>${lockedState ? core_text.esc(item.hint) : core_text.esc(item.unlockedAt || '已解锁')}</small>
+        <small>${lockedState
+            ? core_text.esc(item.hint)
+            : `解锁条件：${core_text.esc(achievementUnlockCondition(item))} · 解锁时间：${core_text.esc(item.unlockedAt || '已解锁')}`}</small>
       </div>
     </article>`).join('');
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-achievements">

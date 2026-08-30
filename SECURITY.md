@@ -13,11 +13,11 @@
 5. 聊天新增、编辑、删除不会自动重写聊天档案；只有用户手动更新档案才改变档案版本。
 6. 房间可以按现实时间自动变化，但不得借此读取尚未归档的新聊天。
 7. 每日生活模型输出不得提供任意 CSS、URL 或脚本；视觉状态只能使用代码白名单枚举。
-8. 心跳回忆不得实现自己的 API Key 明文存储或 Secret value 读取。
-9. 一键导入酒馆连接只能读取配置字段和 Secret ID；不得把 Key 写入 extension settings、日志、DOM、Prompt 或错误信息。
-10. 心跳回忆固定使用显式选择的 Connection Manager Profile；可保存独立 `modelOverride`，但不得修改用户主聊天的模型来完成心跳回忆生成。
-11. 模型生成必须通过 SillyTavern 官方 Connection Manager Request Service。浏览器 `fetch` 只允许四个明确场景：硬编码同源 `/api/backends/chat-completions/status` 用于刷新模型；硬编码同源 `/api/characters/chats` 用于“档案室一览/手动旧档案扫描”；硬编码同源 `/api/chats/get` 用于读取用户点选的单篇历史档案；以及用户手动创建/更新档案时，经 SillyTavern `/proxy` 读取已启用记忆插件自己配置的当前聊天窗口记忆 API。任何模型输出都不得控制 fetch 目标 URL。
-12. 模型列表刷新只可把 Profile 的 Secret ID 引用交给 SillyTavern 后端，由后端读取 Secret；浏览器端不得读取 API Key 明文。
+8. Profile 一键配置不得读取或复制 Secret value，只保存 Secret ID 引用。用户显式选择“手动配置”时，可以把其主动输入的 OpenAI 兼容 API Key 保存到 extension settings；该值不得进入日志、toast、DOM 回显、Prompt、聊天 metadata、档案、缓存或错误正文。
+9. 一键导入酒馆连接只能读取配置字段和 Secret ID；在任何配置写入或付费请求前，必须验证新版 Profile Secret 转发与请求级模型覆盖能力。
+10. 心跳回忆只使用用户显式选择的 `profile` 或 `manual` transport，不得在失败时静默回退到另一 transport，也不得修改用户主聊天的 Profile 或模型。Profile 可保存独立 `modelOverride`；manual 单独保存 Base URL / Key / model。
+11. Profile 模型生成必须通过 SillyTavern 官方 Connection Manager Request Service；manual 模型生成只可经硬编码同源 `/api/backends/chat-completions/generate` 转交 SillyTavern custom backend，浏览器不得直连用户提供的远端 URL。浏览器 `fetch` 允许的其他场景仍只有硬编码同源 `/api/backends/chat-completions/status`、`/api/characters/chats`、`/api/chats/get`，以及用户明确建档时经 `/proxy` 读取已启用记忆插件的当前聊天记忆 API。任何模型输出都不得控制 fetch 目标 URL。
+12. Profile 模型列表只可提交该 Profile 的 Secret ID，且不得借用主聊天 Profile 的 custom headers。Manual 模型列表只可把用户保存的 Key 放进本次同源 `/status` 请求的 `custom_include_headers`，由 SillyTavern 后端转发；结果、日志与错误不得回显 Key。
 13. 所有生成 session 必须绑定创建时的 `chatId` 与 `archiveRevision`；await 返回后重新校验，跨聊天或跨档案响应不得持久化。
 14. 不对包含不可信档案/聊天正文的完整 Prompt 调用 SillyTavern 通用宏展开；仅允许本地展开 `{{char}}` / `{{user}}`，其余 `{{...}}` 必须中和。
 15. 自动房间生活生成失败必须熔断当天自动重试；不得由定时器形成无上限 API 请求。
@@ -37,9 +37,9 @@
 
 ## Credentials
 
-API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只保存 Connection Manager Profile ID、可选模型覆盖 ID、输出上限、温度和功能开关。
+Profile 凭据由 SillyTavern Secrets / Connection Manager 持有，插件只保存 Profile ID 与可选模型覆盖。只有用户明确选择 manual transport 时，插件设置才保存其主动输入的 Base URL / API Key / model；Key 的唯一网络出口是固定同源 SillyTavern custom backend 的一次请求头字段。
 
-模型列表刷新向 SillyTavern 的同源后端提交 `secret_id`，而不是 Secret value。Profile 中的第三方 API URL 只作为后端状态请求参数，不会成为浏览器 `fetch()` 的目标地址。
+模型列表刷新始终请求 SillyTavern 的固定同源后端。Profile 模式提交 `secret_id` 而不是 Secret value；manual 模式提交用户显式保存的 custom header。第三方 API URL 只作为后端请求参数，不会成为浏览器 `fetch()` 的目标地址。
 
 
 ## Current-chat external memory boundary
@@ -182,7 +182,7 @@ API 凭据由 SillyTavern Secrets / Connection Manager 持有。插件设置只�
 - The five-task admission limit counts ADV bulk recovery and CG/daily-strip image tasks in addition to ordinary model requests; request send remains a second fail-closed capacity gate.
 - Direct calls to registered SillyTavern Slash Command callbacks use only the public `NamedArgumentsCapture` contract. Heartbeat must not fabricate parser-private `_scope`, `_parserFlags`, `_abortController`, or debug-controller objects.
 - Extension shutdown must not truncate or selectively discard derived theater modes. It also must not bypass the 12 MB UTF-8 cap: an oversized raw candidate is rejected and the previous valid metadata/independent backup remains authoritative.
-- Model-list refresh may forward user-configured `custom_include_headers` only to SillyTavern's hard-coded same-origin backend status endpoint, matching the host's connection configuration path; those headers must never be written into Heartbeat metadata, prompts, logs, or DOM.
+- Model-list refresh may forward only headers explicitly entered for Heartbeat manual transport, and only to SillyTavern's hard-coded same-origin backend status endpoint. Profile refresh must use that Profile's `secret_id` and must not borrow the active main-chat `custom_include_headers`; no header may enter Heartbeat metadata, prompts, logs, or DOM.
 
 
 ### 0.8.10 r19 memory-related world-info invariants
@@ -452,3 +452,15 @@ The standalone `MODE.CALENDAR` is the only derived feature allowed to organize s
 - The performance diagnostic is observational only. It may read `chat.length`, `MEMORY_KEY.memories.length` and compressed cache manifest/string-length fields already parsed by SillyTavern. It must not Base64-decode, decompress, JSON-stringify the theater cache, mutate metadata, save settings, scan message text, or start network/provider requests.
 - A legacy uncompressed cache is reported as present but intentionally not sized, because serializing it merely for diagnostics would recreate the performance problem being investigated.
 - Exposed diagnostic/bootstrap helpers do not grant archive write/delete authority; destructive operations remain inside the runtime's existing current-chat/revision/confirmation gates.
+
+## r45.0 独立 API 双通道与稳定性边界
+
+- 设置中的 `apiConnectionMode` 是唯一 transport 选择；Profile 与 manual 即使同时残留完整字段，请求时也只能使用当前显式模式，禁止失败后跨账号静默回退。
+- 一键配置 UI 按产品要求标注 `1.1.18`；运行时不信任文字版本，而是在导入、模型刷新和生成前校验 Profile Secret 转发与第五参数模型覆盖能力。能力不足时必须在请求前失败关闭。
+- Connection Manager 请求使用结构化 messages，固定 `includePreset:false / includeInstruct:false`，避免主聊天预设污染受控 JSON 输出。用户选中的 Profile 与模型只能作为请求参数，不修改主聊天 `selectedProfile`。
+- Profile B 的 `/status` payload 不得复制主聊天 Profile A 的 `custom_include_headers`。模型缓存键必须包含 transport fingerprint；配置或 runtime epoch 改变后的迟到结果不得写缓存或 UI。
+- Manual Base URL 只接受无内嵌账号密码的 HTTP(S)，已粘贴的常见生成/模型端点会在本地剥离；带 Key 的远端地址必须是 HTTPS，仅本机 loopback 可使用 HTTP。地址只进入同源 custom backend body，浏览器 fetch 目标恒定为 `/status` 或 `/generate`。
+- Manual Key 在设置 UI 中使用 password 输入且不回填到 DOM；空输入保留旧 Key，只有显式“清除 Key”会删除。Key 不得出现在 model option、状态徽章、console、toast、错误或任何 Heartbeat 数据缓存中。
+- Manual 响应执行 Content-Length 与实际读取字节双重上限；非 2xx 响应不读取/回显 provider body。可见正文只从常见 response content 字段提取，reasoning/thought/analysis 不作为 JSON 成品。
+- API 配置改变会增加 epoch、取消当前生成并清除模型缓存；即使 provider 忽略取消，返回后仍必须比较去敏配置 fingerprint，旧连接结果不得解析或保存。
+- HTTP 200 的 provider/Profile 错误包络仍按失败处理。只有明确的限流、超时或服务端状态才允许一次有界重试；缺少状态的泛化失败默认不重试，避免认证/配置错误产生重复付费请求。

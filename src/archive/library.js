@@ -15,10 +15,12 @@ import * as modes_room from '../modes/room.js';
 import * as modes_relations from '../modes/relations.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as ui_phoneView from '../ui/phoneView.js';
+import * as ui_endingView from '../ui/endingView.js';
 
 export function showArchiveLibrary() {
+    ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock(); runtimeState.activeMode = null; runtimeState.activeSession = null; runtimeState.activeArchiveSnapshot = null; runtimeState.activeArchiveReadOnly = true; runtimeState.archiveLibraryCharacterKey = ''; runtimeState.archiveViewLevel = 'library';
-    ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setBackVisible(false); ui_overlay.topTitle('心跳回忆 · 档案室');
+    ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setManageVisible(false); ui_overlay.setBackVisible(false); ui_overlay.topTitle('心跳回忆 · 档案室');
     const body = ui_overlay.bodyEl(); if (!body) return;
     try {
         const ctx = core_context.currentCharacterGuard();
@@ -78,10 +80,13 @@ export function showArchiveLibrary() {
 }
 
 export function showArchiveCharacter(groupId) {
+    modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock(); ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
+    runtimeState.activeMode = null;
+    runtimeState.activeSession = null;
     runtimeState.activeArchiveSnapshot = null;
     runtimeState.activeArchiveReadOnly = true;
     const key = core_text.normalizeText(groupId, 120); if (runtimeState.archiveLibraryCharacterKey !== key) runtimeState.archiveCharacterRelationSelection = ''; runtimeState.archiveLibraryCharacterKey = key; runtimeState.archiveViewLevel = 'character';
-    ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setBackVisible(true, '所有角色');
+    ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setManageVisible(false); ui_overlay.setBackVisible(true, '所有角色');
     const context = core_context.getContext();
     const entries = archive_groups.archiveGroupEntries(key, context).sort((a,b)=>b.updatedAt-a.updatedAt);
     const meta = archive_groups.archiveGroupMeta(key, entries, context);
@@ -364,6 +369,7 @@ function snapshotCalendarQuickAccessHtml({ ready = true, generated = false, read
 
 export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchiveSnapshot) {
     if (!snapshot?.memory) return showArchiveLibrary();
+    modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock(); ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     const isNewSnapshot = runtimeState.activeArchiveSnapshot !== snapshot;
     runtimeState.activeArchiveSnapshot = snapshot;
     if (isNewSnapshot || snapshot.backupOnly) runtimeState.activeArchiveReadOnly = true;
@@ -372,6 +378,7 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
     runtimeState.archiveViewLevel = 'snapshot';
     ui_overlay.openOverlay();
     ui_overlay.setRegenerateVisible(false);
+    ui_overlay.setManageVisible(false);
     ui_overlay.setBackVisible(true, '角色档案');
     ui_overlay.topTitle(`心跳回忆 · ${snapshot.characterName} · ${snapshot.backupOnly ? '独立备份' : runtimeState.activeArchiveReadOnly ? '只读档案' : '编辑待命'}`);
     const body = ui_overlay.bodyEl();

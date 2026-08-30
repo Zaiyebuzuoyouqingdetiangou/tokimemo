@@ -178,7 +178,11 @@ export function normalizePhoneAppIcon(value, kind = 'misc', label = '') {
 function isExcludedPhoneApp(app) {
     const rawKind = core_text.normalizeText(app?.kind, 60).toLowerCase();
     const label = core_text.normalizeText(app?.label, 60);
-    return core_constants.PHONE_EXCLUDED_APP_KINDS.has(rawKind) || /日历|calendar|schedule/i.test(label);
+    const canonicalKind = normalizePhoneAppKind(rawKind, label);
+    const excludedLabel = /(?:日历|地图|导航|定位|路线|行程|出行|旅行|交通)|\b(?:calendar|schedule|maps?|navigation|location|route|travel|transit)\b/i;
+    return core_constants.PHONE_EXCLUDED_APP_KINDS.has(rawKind)
+        || core_constants.PHONE_EXCLUDED_APP_KINDS.has(canonicalKind)
+        || excludedLabel.test(label);
 }
 
 function phoneAppLimits(deviceKind) {
@@ -317,10 +321,10 @@ CURRENT_ROOM_CONTEXT_JSON:\n${JSON.stringify(compactPhoneRoomContext(roomSession
 数量要求：
 - phone / terminal 生成 5～10 个 App；watch / communicator 生成 4～8 个适合小屏或有限能力的功能入口。至少保留一个 chat / 通讯入口，其余 App 的名称、类型、数量和顺序都必须服从角色人设，不得照抄固定模板。
 - 至少 2 个 App 应明显来自角色职业、兴趣或世界观，例如案件库、训练记录、乐谱、实验日志、任务终端、宠物、阅读、健康或学习；不适合现代 App 的世界观应使用功能等价但符合时代的命名。
-- kind 只能选 moments/chat/gallery/camera/notes/store/browser/contacts/location/music/work/study/health/fitness/training/reading/books/files/research/games/finance/travel/security/creative/weather/tools/misc；icon 只能选 message/people/photo/camera/note/bag/globe/contact/pin/music/briefcase/book/heart/activity/game/wallet/plane/shield/palette/cloud/tool/spark/grid。
+- kind 只能选 moments/chat/gallery/camera/notes/store/browser/contacts/music/work/study/health/fitness/training/reading/books/files/research/games/finance/security/creative/weather/tools/misc；icon 只能选 message/people/photo/camera/note/bag/globe/contact/music/briefcase/book/heart/activity/game/wallet/shield/palette/cloud/tool/spark/grid。
 - uiProfile 只能使用：palette=noir-gold/ink-blue/frost/moss/ember/lilac/sky/sand；wallpaper=smoke/rain/grid/starfield/library/aurora/minimal/paper；typography=modern/serif/mono；iconStyle=rounded/square/glyph/glass；density=compact/cozy/roomy；shellTone=graphite/silver/ivory/bronze/navy。上面的 *_TOKEN 只是占位符，必须换成某个允许值，不得原样照抄。这些是本地安全样式 token，不得输出颜色值、CSS、URL 或 class 名。
 - uiProfile.explicitFields 只允许 palette/wallpaper/typography/iconStyle/density/shellTone；只有世界书或角色卡对该项有明文时才列入。其余字段保持不在列表中，本地会依据 {{char}} 的人设、设备名和 App 组合稳定补全，防止不同角色照抄同一套合法模板。
-- 禁止生成 kind=schedule / calendar 或名为“日历”的 App；两个人之间的约定、纪念日、日期圈记统一由独立「两个人的日历」承担。私人终端 notes 可以有普通个人待办，但不要复制关系日历。
+- 禁止生成 kind=schedule/calendar/location/travel/map/navigation/transit/route，或名为“日历/地图/导航/路线/行程/出行/旅行”的 App；日期手账和地图分别由独立「两个人的日历」与「他的出行路线」承担。私人终端 notes 可以有普通个人待办，但不要复制这两个入口。
 - 每个 entries 现在只写 id/title/meta，标题必须彼此有生活区分，不要填 preview/detail/messages/fields/imageCaption。
 - deviceKind 只能 phone/watch/terminal/communicator；四个 liveStates 都要有。
 - 不复刻真实商业 App 商标；禁止前任/第三方恋爱。只输出 JSON。`;
@@ -599,7 +603,7 @@ ${JSON.stringify(compactPhoneExisting(previous), null, 2)}
 
 要求：
 - 总共规划 0～8 个真正由 incrementalMemoryIds 带来的新条目；每个相关 App 1～3 条即可。没有任何合适的新条目时必须返回 {"apps":[]}，该空增量会被本地正常记录，不要为了凑数复述旧内容。
-- app id/kind 必须对应现有 App；不得向 schedule / calendar / 日历追加内容；不改变 deviceKind、设备名、锁屏或既有 liveStates。
+- app id/kind 必须对应现有 App；不得向 schedule/calendar/location/travel/map/navigation/transit/route 或日历/地图/导航/路线/行程/出行/旅行追加内容；不改变 deviceKind、设备名、锁屏或既有 liveStates。
 - 新条目的标题、对象、时间与主题必须避开 EXISTING_PHONE_INDEX_JSON；禁止把旧聊天、旧相册、旧笔记换措辞再说一次。
 - 与 {{user}} 的已发生共同历史必须在详情阶段使用 basis=记忆并引用 incrementalMemoryIds；普通工作/兴趣当前状态可为设定。
 - 禁止前任/第三方恋爱；只输出 JSON。`;

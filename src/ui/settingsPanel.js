@@ -3,6 +3,7 @@
 import * as archive_repository from '../archive/repository.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
+import * as core_independentApi from '../core/independentApi.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
@@ -17,41 +18,73 @@ export async function refreshModelOptions({ fetchRemote = false } = {}) {
     const select = panel.querySelector('[data-rmt-api-model]');
     const refreshButton = panel.querySelector('[data-rmt-api-model-refresh]');
     if (!select) return;
+    const requestEpoch = Number(panel.dataset.rmtProfileModelRequest || 0) + 1;
+    panel.dataset.rmtProfileModelRequest = String(requestEpoch);
     const settings = core_settings.getPluginSettings();
     const profileId = core_text.normalizeText(settings.connectionProfileId, 160);
-    select.replaceChildren();
-    const defaultOption = document.createElement('option');
-    defaultOption.value = '';
+    const configurationEpoch = runtimeState.apiConfigurationEpoch;
+    let profileCacheKey = '';
+    let profileStateFingerprint = '';
+    try { profileCacheKey = profileId ? core_settings.profileModelCacheKey(profileId) : ''; } catch {}
+    const isCurrent = () => Number(panel.dataset.rmtProfileModelRequest || 0) === requestEpoch
+        && runtimeState.apiConfigurationEpoch === configurationEpoch
+        && core_settings.getPluginSettings().connectionProfileId === profileId
+        && (() => {
+            try {
+                if (!profileId || core_settings.profileModelCacheKey(profileId) !== profileCacheKey) return !profileId;
+                return core_settings.profileFingerprint(core_settings.rawConnectionProfile(profileId)) === profileStateFingerprint;
+            }
+            catch { return false; }
+        })();
+    if (refreshButton) {
+        refreshButton.disabled = fetchRemote || !profileId;
+        refreshButton.textContent = fetchRemote ? '正在拉取…' : '刷新模型';
+    }
     if (!profileId) {
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
         defaultOption.textContent = '请先选择专用连接';
-        select.appendChild(defaultOption);
+        select.replaceChildren(defaultOption);
         select.disabled = true;
-        if (refreshButton) refreshButton.disabled = true;
-        return;
+        return { models: [], fallbackOnly: false };
     }
     let profile;
     try { profile = core_settings.rawConnectionProfile(profileId); } catch { profile = null; }
+    profileStateFingerprint = profile ? core_settings.profileFingerprint(profile) : 'missing';
     const profileModel = core_text.normalizeText(profile?.model, 240);
-    defaultOption.textContent = profileModel ? `使用配置默认模型 · ${profileModel}` : '使用配置默认模型';
-    select.appendChild(defaultOption);
-    select.disabled = false;
-    if (refreshButton) {
-        refreshButton.disabled = false;
-        refreshButton.textContent = fetchRemote ? '正在拉取…' : '刷新模型';
-    }
+    select.disabled = fetchRemote;
     let models = [];
+    let fallbackOnly = false;
     try {
-        models = fetchRemote
-            ? await core_settings.fetchModelsForConnection(profileId, { force: true })
-            : (runtimeState.connectionModelCache.get(profileId) || core_settings.savedModelsForProfile(profileId));
+        if (fetchRemote) {
+            const result = await core_settings.fetchModelsForConnection(profileId, { force: true, returnMeta: true });
+            models = result.models;
+            fallbackOnly = result.fallbackOnly;
+        } else {
+            models = runtimeState.connectionModelCache.get(profileCacheKey) || core_settings.savedModelsForProfile(profileId);
+        }
     } catch (error) {
+        if (!isCurrent() || error?.code === 'RMT_API_MODEL_REQUEST_SUPERSEDED' || error?.name === 'AbortError') return null;
         console.warn('[HeartbeatMemories] refresh model options failed', error);
-        models = profileModel ? [profileModel] : [];
+        if (!fetchRemote) {
+            models = profileModel ? [profileModel] : [];
+        } else {
+            if (refreshButton) {
+                refreshButton.disabled = false;
+                refreshButton.textContent = '刷新模型';
+            }
+            select.disabled = false;
+            throw error;
+        }
     }
+    if (!isCurrent()) return null;
     const currentSettings = core_settings.getPluginSettings();
-    if (currentSettings.connectionProfileId !== profileId) return;
     const override = core_text.normalizeText(currentSettings.modelOverride, 240);
     if (override && !models.includes(override)) models.unshift(override);
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = profileModel ? `使用配置默认模型 · ${profileModel}` : '使用配置默认模型';
+    select.replaceChildren(defaultOption);
     for (const model of [...new Set(models)]) {
         if (!model) continue;
         const option = document.createElement('option');
@@ -60,14 +93,88 @@ export async function refreshModelOptions({ fetchRemote = false } = {}) {
         select.appendChild(option);
     }
     select.value = override;
-    if (refreshButton) refreshButton.textContent = '刷新模型';
+    select.disabled = false;
+    if (refreshButton) {
+        refreshButton.disabled = false;
+        refreshButton.textContent = '刷新模型';
+    }
+    return { models, fallbackOnly };
+}
+
+function manualSettingsFromPanel(panel) {
+    const current = core_settings.getPluginSettings();
+    const keyInput = panel?.querySelector?.('[data-rmt-manual-api-key]');
+    const baseInput = panel?.querySelector?.('[data-rmt-manual-api-base]');
+    const modelInput = panel?.querySelector?.('[data-rmt-manual-api-model]');
+    return {
+        ...current,
+        apiConnectionMode: 'manual',
+        manualApiBaseUrl: baseInput ? baseInput.value : current.manualApiBaseUrl,
+        manualApiKey: core_text.normalizeText(keyInput?.value, 4000) || current.manualApiKey,
+        manualApiModel: modelInput ? modelInput.value : current.manualApiModel,
+    };
+}
+
+export async function refreshManualModelOptions({ fetchRemote = false } = {}) {
+    const panel = document.getElementById(core_constants.SETTINGS_ID);
+    if (!panel) return [];
+    const input = panel.querySelector('[data-rmt-manual-api-model]');
+    const list = panel.querySelector('[data-rmt-manual-api-models]');
+    const button = panel.querySelector('[data-rmt-manual-api-model-refresh]');
+    if (!input || !list) return [];
+    const candidate = manualSettingsFromPanel(panel);
+    const signature = core_independentApi.apiConfigurationFingerprint(candidate);
+    const requestEpoch = Number(panel.dataset.rmtManualModelRequest || 0) + 1;
+    panel.dataset.rmtManualModelRequest = String(requestEpoch);
+    const isCurrent = () => Number(panel.dataset.rmtManualModelRequest || 0) === requestEpoch
+        && core_independentApi.apiConfigurationFingerprint(manualSettingsFromPanel(panel)) === signature;
+    if (button) {
+        button.disabled = fetchRemote;
+        button.textContent = fetchRemote ? '正在拉取…' : '拉取模型';
+    }
+    let models = runtimeState.connectionModelCache.get(core_independentApi.manualModelCacheKey(candidate)) || [];
+    try {
+        if (fetchRemote) models = await core_settings.fetchModelsForManualConnection(candidate, { force: true });
+    } catch (error) {
+        if (!isCurrent() || error?.code === 'RMT_API_MODEL_REQUEST_SUPERSEDED' || error?.name === 'AbortError') return null;
+        if (button) { button.disabled = false; button.textContent = '拉取模型'; }
+        throw error;
+    }
+    if (!isCurrent()) return null;
+    list.replaceChildren();
+    for (const model of [...new Set(models)]) {
+        const option = document.createElement('option');
+        option.value = model;
+        list.appendChild(option);
+    }
+    if (!input.value && models[0]) {
+        input.value = models[0];
+        panel.dataset.rmtManualDirty = '1';
+    }
+    if (button) {
+        button.disabled = false;
+        button.textContent = '拉取模型';
+    }
+    return models;
 }
 
 export function refreshGenerationSettingsUi() {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
     if (!panel) return;
     const settings = core_settings.getPluginSettings();
+    const connectionMode = settings.apiConnectionMode === 'manual' ? 'manual' : 'profile';
+    const editorMode = panel.dataset.rmtApiEditor === 'manual' || panel.dataset.rmtApiEditor === 'profile'
+        ? panel.dataset.rmtApiEditor
+        : connectionMode;
+    panel.dataset.rmtApiEditor = editorMode;
     const profile = panel.querySelector('[data-rmt-api-profile]');
+    const oneClick = panel.querySelector('[data-rmt-api-import-current]');
+    const manualChoice = panel.querySelector('[data-rmt-api-select-manual]');
+    const profilePanel = panel.querySelector('[data-rmt-api-profile-panel]');
+    const manualPanel = panel.querySelector('[data-rmt-api-manual-panel]');
+    const manualBase = panel.querySelector('[data-rmt-manual-api-base]');
+    const manualKey = panel.querySelector('[data-rmt-manual-api-key]');
+    const manualModel = panel.querySelector('[data-rmt-manual-api-model]');
     const maxTokens = panel.querySelector('[data-rmt-api-max-tokens]');
     const temperature = panel.querySelector('[data-rmt-api-temperature]');
     const roomDaily = panel.querySelector('[data-rmt-room-life-auto]');
@@ -90,6 +197,23 @@ export function refreshGenerationSettingsUi() {
         }
         profile.value = profiles.some(item => item.id === settings.connectionProfileId) ? settings.connectionProfileId : '';
     }
+    if (oneClick) {
+        oneClick.classList.toggle('is-active', editorMode === 'profile');
+        oneClick.setAttribute('aria-pressed', editorMode === 'profile' ? 'true' : 'false');
+    }
+    if (manualChoice) {
+        manualChoice.classList.toggle('is-active', editorMode === 'manual');
+        manualChoice.setAttribute('aria-pressed', editorMode === 'manual' ? 'true' : 'false');
+    }
+    if (profilePanel) profilePanel.hidden = editorMode !== 'profile';
+    if (manualPanel) manualPanel.hidden = editorMode !== 'manual';
+    const manualDirty = panel.dataset.rmtManualDirty === '1';
+    if (!manualDirty && manualBase) manualBase.value = settings.manualApiBaseUrl;
+    if (!manualDirty && manualModel) manualModel.value = settings.manualApiModel;
+    if (!manualDirty && manualKey) {
+        manualKey.value = '';
+        manualKey.placeholder = settings.manualApiKey ? '已保存；留空则保留' : 'API Key（可留空）';
+    }
     if (maxTokens) maxTokens.value = String(settings.maxTokens);
     if (temperature) {
         temperature.value = String(settings.temperature);
@@ -101,17 +225,38 @@ export function refreshGenerationSettingsUi() {
     if (ttDisplay) ttDisplay.checked = settings.ttDisplayMode;
     if (bannedPhrases) bannedPhrases.value = settings.bannedGeneratedPhrases.join('，');
     if (status) {
-        status.textContent = !settings.connectionProfileId
-            ? '尚未选择心跳回忆专用连接。可一键读取酒馆当前已保存的连接；API Key 不会被显示或复制，只引用 SillyTavern 保存的 Secret ID。'
-            : `${core_settings.generationSourceLabel(settings)}。心跳回忆固定使用这个连接；模型可在下方单独选择，不会跟着主聊天切换。API Key 仍由 SillyTavern Secrets 管理。`;
+        let profileCapabilityReady = false;
+        let manualConfigurationReady = false;
+        if (connectionMode === 'profile' && settings.connectionProfileId) {
+            try {
+                core_independentApi.assertConnectionManagerProfileSupport(core_context.getContext().ConnectionManagerRequestService);
+                profileCapabilityReady = true;
+            } catch {}
+        }
+        if (connectionMode === 'manual' && settings.manualApiModel) {
+            try {
+                core_independentApi.assertManualApiCredentialTransport(settings.manualApiBaseUrl, settings.manualApiKey);
+                manualConfigurationReady = true;
+            } catch {}
+        }
+        const ready = connectionMode === 'manual'
+            ? manualConfigurationReady
+            : !!settings.connectionProfileId && profileCapabilityReady;
+        status.classList.toggle('is-ready', ready);
+        status.textContent = `${ready ? '●' : '○'} ${ready
+            ? core_settings.generationSourceLabel(settings)
+            : connectionMode === 'manual' ? '手动配置未完成'
+            : settings.connectionProfileId ? '需要 1.1.18 能力' : '一键连接未配置'}`;
     }
     void refreshModelOptions();
+    void refreshManualModelOptions();
 }
 
 export function hydrateSettingsPanel() {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
     if (!panel) return false;
     refreshSettingsMemoryStatus({ lightweight: true });
+    if (panel.dataset.rmtHydrated === '1') return true;
     refreshGenerationSettingsUi();
     panel.dataset.rmtHydrated = '1';
     return true;
@@ -165,12 +310,27 @@ export function mountSettings() {
       </div>
       <div class="inline-drawer-content rmt-settings-content">
         <div class="rmt-settings-card rmt-api-box">
-          <div class="rmt-settings-card-head"><span>API</span><div><b>心跳回忆专用 API</b><small>只管理连接、模型与请求参数</small></div></div>
-          <button type="button" class="menu_button rmt-settings-wide" data-rmt-api-import-current>从酒馆当前连接一键导入</button>
-          <label class="rmt-settings-field"><span>连接配置</span><select class="text_pole" data-rmt-api-profile><option value="">选择 Connection Manager 配置</option></select></label>
-          <div class="rmt-model-row">
-            <label class="rmt-settings-field"><span>模型</span><select class="text_pole" data-rmt-api-model><option value="">请先选择专用连接</option></select></label>
-            <button type="button" class="menu_button rmt-model-refresh" data-rmt-api-model-refresh>刷新模型</button>
+          <div class="rmt-settings-card-head"><span>API</span><div><b>心跳回忆独立 API</b><small>请选择一种配置方式</small></div></div>
+          <div class="rmt-api-source-grid" role="group" aria-label="独立 API 配置方式">
+            <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-import-current aria-pressed="false"><span class="rmt-api-source-badge">要求</span><b>1.1.18 一键配置</b><small>读取酒馆当前连接</small></button>
+            <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-select-manual aria-pressed="false"><span class="rmt-api-source-badge">OPENAI</span><b>手动配置</b><small>URL · Key · 模型</small></button>
+          </div>
+          <div class="rmt-api-status" data-rmt-api-status role="status">○ 一键连接未配置</div>
+          <div class="rmt-api-source-panel" data-rmt-api-profile-panel>
+            <label class="rmt-settings-field"><span>连接配置</span><select class="text_pole" data-rmt-api-profile><option value="">选择 Connection Manager 配置</option></select></label>
+            <div class="rmt-model-row">
+              <label class="rmt-settings-field"><span>模型</span><select class="text_pole" data-rmt-api-model><option value="">请先选择专用连接</option></select></label>
+              <button type="button" class="menu_button rmt-model-refresh" data-rmt-api-model-refresh>刷新模型</button>
+            </div>
+          </div>
+          <div class="rmt-api-source-panel" data-rmt-api-manual-panel hidden>
+            <label class="rmt-settings-field"><span>API 地址</span><input class="text_pole" data-rmt-manual-api-base type="url" inputmode="url" placeholder="https://api.example.com/v1"></label>
+            <label class="rmt-settings-field"><span>API Key</span><div class="rmt-manual-key-row"><input class="text_pole" data-rmt-manual-api-key type="password" autocomplete="new-password" placeholder="API Key（可留空）"><button type="button" class="menu_button" data-rmt-manual-api-key-clear>清除 Key</button></div></label>
+            <div class="rmt-model-row">
+              <label class="rmt-settings-field"><span>模型 ID</span><input class="text_pole" data-rmt-manual-api-model list="heartbeat_memories_manual_models" type="text" placeholder="例如 gpt-4.1"><datalist id="heartbeat_memories_manual_models" data-rmt-manual-api-models></datalist></label>
+              <button type="button" class="menu_button rmt-model-refresh" data-rmt-manual-api-model-refresh>拉取模型</button>
+            </div>
+            <button type="button" class="menu_button rmt-settings-wide rmt-manual-save" data-rmt-manual-api-save>保存并使用</button>
           </div>
           <div class="rmt-api-grid">
             <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1024" max="60000" step="1"></label>
@@ -196,15 +356,16 @@ export function mountSettings() {
     panel.addEventListener('change', event => {
         const target = event.target;
         if (target.matches?.('[data-rmt-api-profile]')) {
+            panel.dataset.rmtApiEditor = 'profile';
             const connectionProfileId = core_text.normalizeText(target.value, 160);
-            core_settings.updatePluginSettings({ connectionProfileId, modelOverride: '' });
-            if (connectionProfileId) runtimeState.connectionModelCache.delete(connectionProfileId);
+            core_settings.updatePluginSettings({ apiConnectionMode: 'profile', connectionProfileId, modelOverride: '' });
             refreshGenerationSettingsUi();
             void refreshModelOptions({ fetchRemote: !!connectionProfileId });
             return;
         }
         if (target.matches?.('[data-rmt-api-model]')) {
-            core_settings.updatePluginSettings({ modelOverride: core_text.normalizeText(target.value, 240) });
+            panel.dataset.rmtApiEditor = 'profile';
+            core_settings.updatePluginSettings({ apiConnectionMode: 'profile', modelOverride: core_text.normalizeText(target.value, 240) });
             refreshGenerationSettingsUi();
             return;
         }
@@ -241,22 +402,100 @@ export function mountSettings() {
             refreshGenerationSettingsUi();
         }
     });
+    panel.addEventListener('input', event => {
+        if (event.target.matches?.('[data-rmt-manual-api-base],[data-rmt-manual-api-key],[data-rmt-manual-api-model]')) {
+            panel.dataset.rmtManualDirty = '1';
+        }
+    });
     panel.addEventListener('click', event => {
         if (event.target.closest?.('.rmt-settings-header')) hydrateSettingsPanel();
+        const manualChoiceButton = event.target.closest?.('[data-rmt-api-select-manual]');
+        if (manualChoiceButton) {
+            core_settings.beginApiConfigurationOperation();
+            panel.dataset.rmtApiEditor = 'manual';
+            refreshGenerationSettingsUi();
+            return;
+        }
+        const manualClearButton = event.target.closest?.('[data-rmt-manual-api-key-clear]');
+        if (manualClearButton) {
+            const keyInput = panel.querySelector('[data-rmt-manual-api-key]');
+            if (keyInput) keyInput.value = '';
+            core_settings.updatePluginSettings({ manualApiKey: '' });
+            if (keyInput) keyInput.placeholder = 'API Key（可留空）';
+            refreshGenerationSettingsUi();
+            globalThis.toastr?.success?.('手动 API Key 已清除。', '心跳回忆');
+            return;
+        }
+        const manualSaveButton = event.target.closest?.('[data-rmt-manual-api-save]');
+        if (manualSaveButton) {
+            try {
+                const candidate = manualSettingsFromPanel(panel);
+                const manualApiBaseUrl = core_independentApi.assertManualApiCredentialTransport(candidate.manualApiBaseUrl, candidate.manualApiKey);
+                const manualApiModel = core_text.normalizeText(candidate.manualApiModel, 240);
+                if (!manualApiModel) throw new Error('请填写手动 API 的模型 ID。');
+                core_settings.updatePluginSettings({
+                    apiConnectionMode: 'manual',
+                    manualApiBaseUrl,
+                    manualApiKey: candidate.manualApiKey,
+                    manualApiModel,
+                });
+                panel.dataset.rmtApiEditor = 'manual';
+                panel.dataset.rmtManualDirty = '0';
+                const keyInput = panel.querySelector('[data-rmt-manual-api-key]');
+                if (keyInput) keyInput.value = '';
+                refreshGenerationSettingsUi();
+                globalThis.toastr?.success?.('手动 API 已保存并启用。', '心跳回忆');
+            } catch (error) {
+                globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+            }
+            return;
+        }
+        const manualRefreshButton = event.target.closest?.('[data-rmt-manual-api-model-refresh]');
+        if (manualRefreshButton) {
+            refreshManualModelOptions({ fetchRemote: true })
+                .then(models => {
+                    if (models?.length) globalThis.toastr?.success?.(`已找到 ${models.length} 个模型。`, '心跳回忆');
+                })
+                .catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'));
+            return;
+        }
         const modelRefreshButton = event.target.closest?.('[data-rmt-api-model-refresh]');
         if (modelRefreshButton) {
-            modelRefreshButton.disabled = true;
             refreshModelOptions({ fetchRemote: true })
-                .then(() => globalThis.toastr?.success?.('模型列表已刷新。', '心跳回忆'))
-                .catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'))
-                .finally(() => { modelRefreshButton.disabled = false; });
+                .then(result => {
+                    if (!result) return;
+                    if (result.fallbackOnly) globalThis.toastr?.warning?.('远程列表暂不可用，已显示这一连接保存的模型。', '心跳回忆');
+                    else globalThis.toastr?.success?.('模型列表已更新。', '心跳回忆');
+                })
+                .catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'));
             return;
         }
         const apiImportButton = event.target.closest?.('[data-rmt-api-import-current]');
         if (apiImportButton) {
-            core_settings.importCurrentSillyTavernConnection().catch(error => {
-                console.error('[HeartbeatMemories] import current connection failed', error);
-                globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+            panel.dataset.rmtApiEditor = 'profile';
+            const operationEpoch = core_settings.beginApiConfigurationOperation();
+            const uiRequestEpoch = Number(panel.dataset.rmtOneClickRequest || 0) + 1;
+            panel.dataset.rmtOneClickRequest = String(uiRequestEpoch);
+            const isLatestUiRequest = () => Number(panel.dataset.rmtOneClickRequest || 0) === uiRequestEpoch;
+            apiImportButton.disabled = true;
+            core_settings.importCurrentSillyTavernConnection({
+                isCurrent: () => core_settings.isCurrentApiConfigurationOperation(operationEpoch),
+            }).then(result => {
+                if (!isLatestUiRequest()) return;
+                refreshGenerationSettingsUi();
+                const current = core_settings.getPluginSettings();
+                if (current.apiConnectionMode !== 'profile' || current.connectionProfileId !== core_text.normalizeText(result?.id, 160)) return;
+                globalThis.toastr?.success?.(result?.created ? '一键连接已创建并启用。' : '一键连接已启用。', '心跳回忆');
+                void refreshModelOptions({ fetchRemote: true });
+            }).catch(error => {
+                if (!isLatestUiRequest()) return;
+                if (error?.code !== 'RMT_API_CONFIGURATION_SUPERSEDED') {
+                    console.warn(`[HeartbeatMemories] one-click configuration failed (${core_text.normalizeText(error?.code, 80) || 'unavailable'})`);
+                    globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+                }
+                refreshGenerationSettingsUi();
+            }).finally(() => {
+                if (isLatestUiRequest()) apiImportButton.disabled = false;
             });
             return;
         }
@@ -303,7 +542,7 @@ export function mountSettings() {
         }
     });
     panel.addEventListener('focusin', event => {
-        if (event.target.matches?.('input,select,button,textarea')) hydrateSettingsPanel();
+        if (panel.dataset.rmtHydrated !== '1' && event.target.matches?.('input,select,button,textarea')) hydrateSettingsPanel();
     });
     refreshSettingsMemoryStatus({ lightweight: true });
     return true;

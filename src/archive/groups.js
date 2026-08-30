@@ -208,6 +208,14 @@ export function setArchiveIndex(context, items) {
         archiveGroupManual: item?.archiveGroupManual === true,
     })) : [];
     context.extensionSettings[core_constants.ARCHIVE_INDEX_SETTINGS_KEY] = normalized;
+    // Classification is authoritative identity state. Cached snapshots may otherwise retain
+    // the previous group for up to the read-cache TTL and briefly reopen under the wrong char.
+    runtimeState.archiveSnapshotCache.clear();
+    const activeEntryId = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.entryId, 120);
+    if (activeEntryId) {
+        const activeEntry = normalized.find(item => core_context.archiveIndexEntryId(item) === activeEntryId);
+        if (activeEntry) runtimeState.activeArchiveSnapshot.archiveGroupId = archiveGroupKeyForEntry(activeEntry);
+    }
     context.saveSettingsDebounced?.();
 }
 

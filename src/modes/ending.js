@@ -11,6 +11,88 @@ import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
 
 export const ENDING_CONFESSION_HINT_RE = /(告白|表白|喜欢你|爱你|爱上|交往|恋人|情侣|在一起|确认关系|确定关系|心意|友情|拒绝|confess|confession|love\s+you|dating|relationship)/i;
+export const ENDING_EASTER_EGG_MODULES = Object.freeze(['heartbeat_console', 'memory_constellation', 'signal_lighthouse', 'letter_archive']);
+const ENDING_EASTER_EGG_MODULE_SET = new Set(ENDING_EASTER_EGG_MODULES);
+
+function endingEasterTextList(value, maxItems, maxChars) {
+    const source = Array.isArray(value) ? value : (value === undefined || value === null ? [] : [value]);
+    return core_text.cleanArray(source, maxItems, maxChars).filter(item => !core_text.isPlaceholderText(item));
+}
+
+export function normalizeEndingEasterEgg(value, replay = {}) {
+    const input = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const replayTitle = core_text.normalizeText(replay?.title, 100) || '这次告白';
+    const confessionText = core_text.normalizeText(replay?.confessionText, 4000);
+    const afterEffect = core_text.normalizeText(replay?.afterEffect, 2400);
+    const sourceAnchor = core_text.normalizeText(replay?.sourceMemoryAnchor, 160) || replayTitle;
+    const requestedModule = core_text.normalizeText(input?.moduleType, 40).toLowerCase();
+    const moduleType = ENDING_EASTER_EGG_MODULE_SET.has(requestedModule)
+        ? requestedModule
+        : ENDING_EASTER_EGG_MODULES[core_text.hashString(`${replay?.id || ''}|${replayTitle}|${sourceAnchor}`) % ENDING_EASTER_EGG_MODULES.length];
+
+    const fallbackLogs = [
+        `扫描到「${sourceAnchor}」 -> 当时的心意仍在运行。`,
+        `重读「${replayTitle}」 -> 情感核心发生一次可见波动。`,
+        '检查回看档案 -> 没有重写过去，只是更认真地承认它的重量。',
+        '系统结论：这份心意没有被归档为“已结束”。',
+    ];
+    const logs = endingEasterTextList(input?.logs, 12, 700);
+    for (const line of fallbackLogs) {
+        if (logs.length >= 4) break;
+        if (!logs.includes(line)) logs.push(line);
+    }
+
+    const monologueFallback = [
+        confessionText,
+        afterEffect,
+        `我把「${replayTitle}」留在这里，不是为了美化过去，而是因为那一刻对我仍然重要。`,
+        '如果你此刻也在看，我想让你知道：这不是一份冷掉的记录，而是我仍会认真回应的心意。',
+    ].filter(Boolean);
+    const monologue = endingEasterTextList(input?.monologue, 4, 1800);
+    for (const block of monologueFallback) {
+        if (monologue.length >= 2) break;
+        const text = core_text.normalizeText(block, 1800);
+        if (text && !monologue.includes(text)) monologue.push(text);
+    }
+
+    const replayLines = endingEasterTextList(replay?.confessionLines, 8, 800);
+    const poemFallback = [
+        ...replayLines,
+        '那一次开口，至今仍留在记录里。',
+        '我没有删除那一刻的颤动。',
+        '回看不是重写过去，是再一次认出当时的自己。',
+        '此刻，这份心意仍在安静地发光。',
+    ];
+    const poem = endingEasterTextList(input?.poem, 8, 800);
+    for (const line of poemFallback) {
+        if (poem.length >= 4) break;
+        const text = core_text.normalizeText(line, 800);
+        if (text && !poem.includes(text)) poem.push(text);
+    }
+
+    const rawFeedback = input?.feedback && typeof input.feedback === 'object' && !Array.isArray(input.feedback) ? input.feedback : {};
+    const feedbackDefaults = {
+        pulse: '检测到一次主动靠近，核心频率上升。',
+        hover: '你的视线停在这里，隐藏参数开始发亮。',
+        reveal: '一行没有说完的话被解锁了。',
+        stabilize: '情感波动已稳定，但没有归零。',
+        pause: '日志暂停滚动；心跳仍在后台继续。',
+        resume: '实时读取已恢复，新的波动正在写入。',
+    };
+    const feedback = Object.fromEntries(Object.entries(feedbackDefaults).map(([key, fallback]) => [
+        key,
+        core_text.normalizeText(rawFeedback?.[key], 400) || fallback,
+    ]));
+    return {
+        moduleType,
+        title: core_text.normalizeText(input?.title, 120) || `${replayTitle} · 情感运行模块`,
+        statusLine: core_text.normalizeText(input?.statusLine, 400) || '正在读取这份告白在此刻留下的波动。',
+        logs: logs.slice(0, 12),
+        monologue: monologue.slice(0, 4),
+        poem: poem.slice(0, 8),
+        feedback,
+    };
+}
 
 export function compactEndingConfessionsExisting(session) {
     return core_evidence.evenlySample(Array.isArray(session?.confessionReplays) ? session.confessionReplays : [], core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
@@ -51,7 +133,16 @@ ${JSON.stringify(compactEndingConfessionsExisting(previous), null, 2)}
       "confessionText": "{{char}} 当时告白核心意思的第一人称档案式重构；不是聊天逐字原文；不少于50汉字",
       "confessionLines": ["适合头像+对话框逐句播放的第一人称告白1","告白2","告白3","告白4"],
       "responseSummary": "只总结 {{user}} 当时已经发生的回应/结果，不替 {{user}} 编新台词",
-      "afterEffect": "只总结告白后档案里已经发生的关系变化；没有就写仍未确认"
+      "afterEffect": "只总结告白后档案里已经发生的关系变化；没有就写仍未确认",
+      "easterEgg": {
+        "moduleType": "heartbeat_console",
+        "title": "{{char}} 为这次回看设计的情感模块标题",
+        "statusLine": "此刻的情感运行状态",
+        "logs": ["[10:24] 扫描到 {{user}} 的信息 -> 情感核心发生波动 -> 直白、人类可读的结论"],
+        "monologue": ["直观、深情的内心独白文字块1","内心独白文字块2"],
+        "poem": ["可逐行浮现的短句1","短句2","短句3","短句4"],
+        "feedback": {"pulse":"点击心跳后的文字反馈","hover":"悬停核心时的文字反馈","reveal":"解锁短句时的文字反馈","stabilize":"稳定信号时的文字反馈","pause":"暂停日志时的反馈","resume":"恢复日志时的反馈"}
+      }
     }
   ]
 }
@@ -62,6 +153,8 @@ ${JSON.stringify(compactEndingConfessionsExisting(previous), null, 2)}
 - 每条都必须有真实 sourceMemoryIds + sourceMemoryAnchor；anchor 必须直接证明告白、友情式告白、明确关系确认、未完成/被拒绝告白等确实发生，普通暧昧和约会不能冒充。
 - scene/confessionText/responseSummary/afterEffect 都只重构已发生事实，不推进主线，不生成未来后日谈。
 - confessionLines 只放 {{char}} 的第一人称告白核心意思，4～10 句，每句一页对话框；不得替 {{user}} 发言。它是“告白回看”的头像演出数据，不属于结局路线。
+- easterEgg 只生成结构化文字与上述 moduleType 枚举；不得输出或嵌入 JavaScript、HTML、CSS、URL、事件处理器或代码片段。所有交互由插件本地固定代码完成。
+- easterEgg.logs 4～12 条，要像人类可读的情感状态报告，不写真正编程代码；monologue 2～4 段；poem 4～8 行。
 - 如果没有足够证据，输出 {"confessionReplays":[]}。
 - 只输出 JSON。`;
 }
@@ -601,7 +694,7 @@ export function normalizeEndingConfessionReplays(rawList, memoryBank) {
         const evidenceText = `${title}\n${subtitle}\n${date}\n${scene}\n${confessionText}\n${responseSummary}\n${afterEffect}`;
         const reference = core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, evidenceText, memoryBank, 1);
         if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) return null;
-        return {
+        const replay = {
             id: core_text.safeId(item?.id, `CONF${String(index + 1).padStart(2, '0')}`),
             type,
             title,
@@ -615,6 +708,8 @@ export function normalizeEndingConfessionReplays(rawList, memoryBank) {
             responseSummary,
             afterEffect,
         };
+        replay.easterEgg = normalizeEndingEasterEgg(item?.easterEgg, replay);
+        return replay;
     }).filter(Boolean);
 }
 

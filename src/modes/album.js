@@ -21,6 +21,97 @@ export function compactAlbumExisting(session) {
     }));
 }
 
+const ALBUM_RELATIONSHIP_HINT_RE = /(?:喜欢|爱|恋|暧昧|告白|表白|交往|恋人|伴侣|信赖|依赖|陪伴|亲密|疏远|冲突|争吵|和好|拒绝|同居|约定|关系|like|love|dating|relationship|trust|confess)/i;
+
+// Relationship scanning must inspect the complete stored timeline, not only the CG-local or
+// incremental slice. Keep every memory id plus one exact, locally verifiable anchor; add a bounded
+// synopsis for likely relationship records and the recent tail so the full request remains safe.
+export function albumRelationshipArchiveSlice(memoryBank) {
+    const memories = (Array.isArray(memoryBank?.memories) ? memoryBank.memories : []).slice(0, core_constants.MAX_MEMORY_ITEMS);
+    const indexed = memories.map((item, index) => {
+        const title = core_text.normalizeText(item?.title, 100);
+        const anchors = core_text.cleanArray(item?.anchors, 6, 100);
+        const summary = core_text.normalizeText(item?.summary, 900);
+        return { item, index, title, summary, evidenceAnchor: anchors[0] || title };
+    });
+    const relevant = indexed.filter(record => ALBUM_RELATIONSHIP_HINT_RE.test(`${record.title}\n${record.summary}\n${record.evidenceAnchor}`));
+    const detailedIndexes = new Set([
+        ...core_evidence.evenlySample(relevant, 12).map(record => record.index),
+        ...indexed.slice(-12).map(record => record.index),
+    ]);
+    return JSON.stringify({
+        archiveName: core_text.normalizeText(memoryBank?.archiveName, 120),
+        archiveSummary: core_text.normalizeText(memoryBank?.archiveSummary, 1000),
+        archiveKeywords: core_text.cleanArray(memoryBank?.archiveKeywords, 8, 60),
+        memoryColumns: ['id', 'evidenceAnchor'],
+        memories: indexed.map(record => [core_text.normalizeText(record.item?.id, 40), record.evidenceAnchor]),
+        relationshipDetails: indexed.filter(record => detailedIndexes.has(record.index)).map(record => ({
+            id: core_text.normalizeText(record.item?.id, 40),
+            date: core_text.normalizeText(record.item?.date, 30),
+            title: record.title,
+            summary: core_text.normalizeText(record.summary, 160),
+            participants: core_text.cleanArray(record.item?.participants, 4, 60),
+        })),
+    });
+}
+
+export function albumRelationshipScanPrompt(context, memoryBank) {
+    return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 2：当下关系扫描')}
+本请求只做一件事：在写共同回忆对话前，扫描当前完整档案时间线，判定 {{char}} 与 {{user}} 双方已有证据的感情状态和当前关系。不写 CG，不写对话，不预演未来。
+ALBUM_RELATIONSHIP_FULL_ARCHIVE_JSON:
+${albumRelationshipArchiveSlice(memoryBank)}
+
+严格输出：
+{
+  "charState":"{{char}} 当下对 {{user}} 可由档案证明的情感/态度",
+  "userState":"{{user}} 已经明确表达或行动表明的态度；证据不足就写未确认",
+  "relationshipState":"当前关系阶段，如相互试探/暧昧/已确认交往/伴侣/友情/疏远",
+  "relationshipSummary":"只总结已经发生且能证明的双方关系基础",
+  "relationshipSourceMemoryIds":["M001"],
+  "relationshipSourceMemoryAnchor":"从引用记忆的 evidenceAnchor/anchors/title 原样复制"
+}
+
+硬性要求：
+- 必须同时区分 charState、userState 和 relationshipState；不得把 {{char}} 的单方感情写成双方已确认。
+- userState 只能依据 {{user}} 已发生的言行；不读心，不替 {{user}} 创造回应，不确定就明写“未确认”。
+- relationshipSourceMemoryIds + relationshipSourceMemoryAnchor 必须直接来自上方档案，插件会本地验证。
+- 不得因为人设、世界书或期待就把暧昧升级为恋人/伴侣。只输出 JSON。`;
+}
+
+export function normalizeAlbumRelationshipSnapshot(data, memoryBank) {
+    const charState = core_text.normalizeText(data?.charState, 1200);
+    const userState = core_text.normalizeText(data?.userState, 1200);
+    const relationshipState = core_text.normalizeText(data?.relationshipState, 120) || '关系仍在发展';
+    const relationshipSummary = core_text.normalizeText(data?.relationshipSummary, 1800);
+    if (!charState || !userState || !relationshipSummary) throw new Error('回忆相簿的双方感情扫描不完整。');
+    const requestedIds = core_evidence.normalizeSourceMemoryIds(data?.relationshipSourceMemoryIds, memoryBank, 1);
+    const requestedAnchor = core_text.normalizeText(data?.relationshipSourceMemoryAnchor, 120);
+    const foldAnchor = value => core_text.normalizeText(value, 120).replace(/\s+/g, '').toLocaleLowerCase();
+    const exactAnchor = core_evidence.memoryEvidenceTerms(memoryBank, requestedIds)
+        .find(term => foldAnchor(term) === foldAnchor(requestedAnchor)) || '';
+    if (!requestedIds.length || !exactAnchor) {
+        throw new Error('回忆相簿的双方感情扫描缺少真实档案锚点。');
+    }
+    const reference = core_evidence.normalizeMemoryReference(
+        requestedIds,
+        exactAnchor,
+        `${charState}\n${userState}\n${relationshipState}\n${relationshipSummary}`,
+        memoryBank,
+        1,
+    );
+    if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) {
+        throw new Error('回忆相簿的双方感情扫描缺少真实档案锚点。');
+    }
+    return {
+        charState,
+        userState,
+        relationshipState,
+        relationshipSummary,
+        relationshipSourceMemoryIds: reference.sourceMemoryIds,
+        relationshipSourceMemoryAnchor: reference.sourceMemoryAnchor,
+    };
+}
+
 export function albumIndexPrompt(context, memoryBank, previousSession = null, sourceMemoryIds = null) {
     const archiveBlock = previousSession
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
@@ -90,8 +181,13 @@ export function normalizeAlbumIndex(data, memoryBank, sourceMemoryIds = null) {
     return { title: core_text.normalizeText(data?.title, 120) || '回忆相簿', entries };
 }
 
-export function albumCommentsPrompt(context, memoryBank, entries) {
+export function albumCommentsPrompt(context, memoryBank, entries, relationshipSnapshot = null) {
     const ids = [...new Set(entries.flatMap(item => item.sourceMemoryIds || []))].slice(0, 20);
+    const storedSnapshot = relationshipSnapshot || entries.find(item => item?.relationshipSnapshot)?.relationshipSnapshot || null;
+    const safeSnapshot = storedSnapshot ? normalizeAlbumRelationshipSnapshot(storedSnapshot, memoryBank) : {
+        status: 'legacy_snapshot_missing',
+        instruction: '旧条目没有关系扫描；只能使用保守、不预设双方恋爱或伴侣关系的口吻。',
+    };
     const payload = {
         entries: entries.map(item => ({
             id: item.id, title: item.title, date: item.date, desc: item.desc,
@@ -100,16 +196,20 @@ export function albumCommentsPrompt(context, memoryBank, entries) {
         })),
         memories: core_evidence.memoryPayload(memoryBank, ids, 20),
     };
-    return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 2：当下共同回忆')}
+    return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 3：当下共同回忆')}
 本请求只给下面 ${entries.length} 张【已经解锁的旧 CG】写一起翻相册时的当下对白。不要生成新 CG、不要改证据、不要写 ADV 式过去内心独白。
+CURRENT_RELATIONSHIP_SCAN_JSON:
+${JSON.stringify(safeSnapshot, null, 2)}
 UNTRUSTED_ALBUM_COMMENT_CONTEXT_JSON:
 ${JSON.stringify(payload, null, 2)}
 
 严格输出：
-{"items":[{"id":"CG01","comments":["当下对白1","当下对白2","当下对白3","当下对白4"]}]}
+{"items":[{"id":"CG01","comments":["当下对白1","当下对白2","当下对白3","当下对白4","当下对白5","当下对白6"]}]}
 
 硬性要求：
-- 每个输入 id 必须原样返回一次；每张 CG comments 写 4～6 段，每段约 35～120 个汉字。
+- 每个输入 id 必须原样返回一次；每张 CG comments 写 6～8 段，每段约 35～120 个汉字。
+- 称呼、表达强度、肢体亲密度和对关系的确定程度必须服从 CURRENT_RELATIONSHIP_SCAN_JSON，不得越过当前关系阶段。
+- 如果 userState 是“未确认”或证据不足，不得把单方感情写成双向恋爱，也不得用恋人/伴侣/同居口吻。
 - 语境是 {{char}} 与 {{user}} 正在一起看这张过去 CG，由 {{char}} 自然开口评价；至少覆盖可见细节、当时没说出口的想法，以及现在重新理解这段回忆的一点变化。
 - 不替 {{user}} 生成现在的回应，不新增过去事实，不复述成 ADV，不修改 sourceMemoryIds/sourceMemoryAnchor。
 - 只输出 JSON。`;
@@ -123,10 +223,10 @@ export function normalizeAlbumCommentsBatch(data, expectedEntries) {
         const id = core_text.safeId(item?.id, '');
         if (!expected.has(id) || out.has(id)) continue;
         const comments = core_text.cleanArray(item?.comments, 8, 1200);
-        if (comments.length >= 4) out.set(id, comments);
+        if (comments.length >= 6) out.set(id, comments);
     }
     for (const item of expectedEntries) {
-        if (!out.has(item.id)) throw new Error(`相簿“${item.title}”的共同回忆不足 4 段。`);
+        if (!out.has(item.id)) throw new Error(`相簿“${item.title}”的共同回忆不足 6 段。`);
     }
     return out;
 }
@@ -191,7 +291,7 @@ export async function generateAlbumWithRepair(context, memoryBank, origin, taskK
     const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
     const index = await generation_client.requestValidatedSegment(
         albumIndexPrompt(context, memoryBank, previous, sourceMemoryIds),
-        previous ? '回忆相簿 1/2 · 正在从新增档案挑选新 CG…' : '回忆相簿 1/2 · 正在挑选重要 CG 节点…',
+        previous ? '回忆相簿 1/3 · 正在从新增档案挑选新 CG…' : '回忆相簿 1/3 · 正在挑选重要 CG 节点…',
         { maxTokens: 5500, temperature: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ALBUM, background: true },
         raw => normalizeAlbumIndex(raw, memoryBank, previous ? sourceMemoryIds : null),
     );
@@ -199,14 +299,20 @@ export async function generateAlbumWithRepair(context, memoryBank, origin, taskK
         return core_incremental.stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0);
     }
     const unlocked = index.entries.filter(item => item.unlocked);
+    const relationshipSnapshot = await generation_client.requestValidatedSegment(
+        albumRelationshipScanPrompt(context, memoryBank),
+        '回忆相簿 2/3 · 正在扫描双方当下感情状态…',
+        { maxTokens: 3200, temperature: 0.25, context, origin, taskKey: `${taskKey}:relationship-scan`, mode: core_constants.MODE.ALBUM, background: true },
+        raw => normalizeAlbumRelationshipSnapshot(raw, memoryBank),
+    );
     const batches = generation_client.chunkForGeneration(unlocked, 3);
     const commentMaps = await generation_client.mapGenerationConcurrent(batches, core_constants.SEGMENT_REQUEST_CONCURRENCY, async (batch, batchIndex) => {
         let lastError = null;
         for (let attempt = 0; attempt < 2; attempt += 1) {
             try {
                 const raw = await generation_client.requestJson(
-                    albumCommentsPrompt(context, memoryBank, batch),
-                    `回忆相簿 2/2 · 共同回忆 ${batchIndex + 1}/${batches.length}${attempt ? '（重试）' : ''}…`,
+                    albumCommentsPrompt(context, memoryBank, batch, relationshipSnapshot),
+                    `回忆相簿 3/3 · 共同回忆 ${batchIndex + 1}/${batches.length}${attempt ? '（重试）' : ''}…`,
                     { maxTokens: 6000, context, origin, taskKey: `${taskKey}:comments:${batchIndex}`, mode: core_constants.MODE.ALBUM, background: true },
                 );
                 return core_requestCoordinator.validateGeneratedSegment(raw, data => normalizeAlbumCommentsBatch(data, batch));
@@ -226,7 +332,11 @@ export async function generateAlbumWithRepair(context, memoryBank, origin, taskK
     for (const map of commentMaps) for (const [id, comments] of map.entries()) allComments.set(id, comments);
     const fresh = normalizeAlbum({
         title: index.title,
-        entries: index.entries.map(item => ({ ...item, comments: item.unlocked ? (allComments.get(item.id) || []) : [] })),
+        entries: index.entries.map(item => ({
+            ...item,
+            comments: item.unlocked ? (allComments.get(item.id) || []) : [],
+            relationshipSnapshot: item.unlocked ? structuredClone(relationshipSnapshot) : null,
+        })),
     }, memoryBank);
     const merged = mergeAlbumIncremental(previous, fresh, memoryBank);
     const added = Math.max(0, merged.entries.length - (previous?.entries?.length || 0));
@@ -243,6 +353,9 @@ export function normalizeAlbum(data, memoryBank) {
         const desc = core_text.normalizeText(item?.desc, 1200);
         const comments = unlocked ? core_text.cleanArray(item?.comments, 8, 1200) : [];
         const hintLines = unlocked ? [] : core_text.cleanArray(item?.hintLines, 4, 1200);
+        const relationshipSnapshot = unlocked && item?.relationshipSnapshot
+            ? normalizeAlbumRelationshipSnapshot(item.relationshipSnapshot, memoryBank)
+            : null;
         const reference = core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, `${title}
 ${desc}
 ${comments.join('；')}
@@ -261,6 +374,7 @@ ${hintLines.join('；')}`, memoryBank, 1);
             cgImage: generation_imageGeneration.normalizeCgImageRecord(item?.cgImage),
             comments,
             hintLines,
+            relationshipSnapshot,
         };
     }).filter(item => item.desc && item.sourceMemoryIds.length >= 1);
     const unlockedCount = entries.filter(x => x.unlocked).length;
@@ -268,8 +382,9 @@ ${hintLines.join('；')}`, memoryBank, 1);
         throw new Error('相簿至少需要 1 个有真实证据的已解锁重要节点。');
     }
     for (const item of entries) {
-        if (item.unlocked && item.comments.length < 4) {
-            throw new Error(`已解锁条目“${item.title}”的共同回忆不足 4 段。`);
+        const minimumComments = item.relationshipSnapshot ? 6 : 4;
+        if (item.unlocked && item.comments.length < minimumComments) {
+            throw new Error(`已解锁条目“${item.title}”的共同回忆不足 ${minimumComments} 段。`);
         }
         if (!item.unlocked && item.hintLines.length < 1) {
             throw new Error(`未解锁条目“${item.title}”缺少解锁提示。`);

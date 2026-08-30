@@ -2,12 +2,15 @@
 // Extracted from r34 without changing archive/cache storage contracts.
 export const state = {
   runtimeLifecycleEpoch: 0,
+  apiConfigurationEpoch: 0,
   busy: false,
   activeMode: null,
   activeSession: null,
   contentManagerOpen: false,
   roomClockTimer: 0,
   phoneClockTimer: 0,
+  endingEasterEggTimer: 0,
+  endingEasterEggRuntime: null,
   archiveViewLevel: 'library',
   roomLifeRefreshPromise: null,
   activeTaskAbortController: null,
@@ -41,6 +44,7 @@ export const state = {
   activeArchiveReadOnly: true,
   archiveSnapshotCache: new Map(),
   connectionModelCache: new Map(),
+  connectionModelRequestEpochs: new Map(),
   runtimeSessionCache: new Map(),
   cacheHydrationPromises: new Map(),
   cacheHydrationErrors: new Map(),

@@ -1,5 +1,5 @@
-const VERSION = '0.8.39';
-const BUILD = '0.8.39-persona-surfaces-dated-calendar-r43.0';
+const VERSION = '0.8.41';
+const BUILD = '0.8.41-independent-api-dual-stable-r45.0';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -228,7 +228,7 @@ function mountBootstrapSettings() {
     panel.innerHTML = `
       <div class="rmt-bootstrap-head"><b>心跳回忆</b><small>LAZY BOOTSTRAP</small></div>
       <div class="rmt-bootstrap-actions">
-        <button type="button" class="menu_button" data-rmt-bootstrap-load-settings>加载完整设置</button>
+        <button type="button" class="menu_button" data-rmt-bootstrap-load-settings>配置独立 API</button>
         <button type="button" class="menu_button" data-rmt-bootstrap-diagnostic aria-expanded="false" aria-controls="heartbeat_memories_bootstrap_diagnostic"><span data-rmt-diagnostic-label>性能诊断（不解压缓存）</span></button>
       </div>
       <div class="rmt-bootstrap-note">普通酒馆启动不会解析 Heartbeat 完整 runtime。只有第一次打开档案室或加载完整设置时才加载。</div>

@@ -1,3 +1,20 @@
+## 0.8.41 / r45.0 independent API dual-configuration targeted review
+
+Scope: r44.0 -> r45.0 independent-API settings, Connection Manager Profile capability gate, manual same-origin custom transport, model discovery/cache ordering, error handling, release identity and generated runtime bundle. The supplied Rabbit Mirror ZIP was treated only as user-owned behavioral reference; its UI and document instructions were not copied or executed.
+
+- The two transports are mutually exclusive. Profile mode stores only a Profile ID/model override and validates Profile Secret forwarding plus request-level override capability before import, model discovery and generation. Manual mode stores the user's explicit Base URL/Key/model, but browser fetch targets remain fixed same-origin SillyTavern `/status` and `/generate`; no model or response text can select a network destination.
+- Manual URLs reject credentials in the URL. A saved Key may use remote HTTPS or strict loopback HTTP only; the same rule runs at save, status rendering, model discovery and generation. Password fields never rehydrate the saved Key into DOM. Provider bodies and credential-like error codes are excluded from user-visible errors.
+- Profile B model discovery submits Profile B's `secret_id` and explicitly clears custom header/body fields rather than borrowing main-chat Profile A headers. Manual headers exist only inside the one fixed same-origin request body.
+- Model discovery and generation bind to lifecycle/configuration/request epochs and transport fingerprints. Out-of-order same-profile requests, in-flight Profile edits, configuration changes and runtime destruction cannot overwrite newer UI or cache state. Manual editing does not switch away from a working Profile until “保存并使用” validates successfully.
+- HTTP 200 provider/Profile error envelopes remain failures. Only explicit rate-limit, timeout or server-failure evidence permits one bounded retry; opaque `API request failed` results do not repeat a potentially paid authentication/configuration failure.
+- Responses are byte-bounded before JSON parsing, support common visible-content shapes and ignore reasoning/thought/analysis fields as final output. Profile requests use structured messages with preset/instruct injection disabled. The existing provider permit, absolute timeout, JSON validator and post-response archive-origin fence remain authoritative.
+
+Independent review initially identified manual-draft loss, stale model-list UI/cache writes, false-success error envelopes, unsafe legacy-ready status, response-shape gaps and credential/error-classification issues. These were remediated and rechecked; no Critical / High / Medium issue remains in the r45 scope.
+
+Release verification completed on 2026-08-30: 189/189 Node regressions pass; 67 JS/MJS files pass syntax checks; the 47-module bundle rebuilt byte-identically twice from source SHA-256 `e4250ec938cb92c699184d905a35d7dbeaa52071fe12b5b665540aa29f61533f`, producing bundle SHA-256 `c811f6f4bf27f6a3f4a20ddf431d099b4acda1b7c1318b8183524bba1b3cf3c3`. ZIP CRC, fresh-extract regression and artifact SHA-256 are performed by the packaging step.
+
+Residual acceptance boundary: this environment had no live SillyTavern 1.18 host/provider credentials or real mobile browser, so actual one-click/manual provider calls and mobile visual rendering remain user-host E2E checks. Capability and transport failures are fail-closed before model-result commit.
+
 ## 0.8.39 / r43.0 persona surfaces, Calendar v5 and Butterfly-content targeted review
 
 Scope: r42.7 -> r43.0 Calendar schema/migration/UI/content-management changes, Room persona visual profile and CSS figure, Phone device theme/navigation, Butterfly generation/normalization, release identity, documentation, regressions and rebuilt runtime bundle.

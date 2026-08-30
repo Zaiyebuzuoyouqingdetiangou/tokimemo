@@ -96,7 +96,7 @@ function pageEntries(session, pageKey) {
 }
 
 function pageHasNotebookContent(page) {
-    return !!page && [page.entryIds, page.drafts, page.stickyNotes, page.moodNotes, page.manualTodos]
+    return !!page && [page.entryIds, page.stickyNotes, page.moodNotes]
         .some(list => Array.isArray(list) && list.length > 0);
 }
 
@@ -187,27 +187,14 @@ function shortDate(item) {
     return parsed.hasYear ? `${parsed.month}/${parsed.day}` : `${parsed.month}/${parsed.day}`;
 }
 
-function calendarTodoRow(item, { completed = false, manual = false, pageKey = '' } = {}) {
+function calendarTodoRow(item, { completed = false } = {}) {
     const marker = completed ? '✓' : '□';
     const tags = (Array.isArray(item?.tags) ? item.tags : []).slice(0, 3).map(tag => `<span>#${core_text.esc(tag)}</span>`).join('');
-    const meta = manual ? '手动待办' : shortDate(item);
-    const check = manual
-        ? `<button type="button" class="rmt-calendar-master-check" data-rmt-action="calendar-toggle-todo" data-rmt-calendar-page="${core_text.esc(pageKey)}" data-rmt-calendar-todo="${core_text.esc(item?.id || '')}" aria-label="${completed ? '标记为未完成' : '标记为已完成'}">${marker}</button>`
-        : `<span class="rmt-calendar-master-check" aria-hidden="true">${marker}</span>`;
+    const meta = shortDate(item);
     return `<div class="rmt-calendar-master-todo-row ${completed ? 'done' : 'open'}">
-      ${check}
+      <span class="rmt-calendar-master-check" aria-hidden="true">${marker}</span>
       <div><b>${core_text.esc(item?.title || '未命名事项')}</b><small>${core_text.esc(meta)}${tags ? ` · ${tags}` : ''}</small></div>
     </div>`;
-}
-
-function draftCard(draft) {
-    return `<article class="rmt-calendar-sticky memo">
-      <span class="rmt-calendar-sticky-pin" aria-hidden="true"></span>
-      <small>DATE DRAFT</small>
-      <h3>草稿</h3>
-      <p>${core_text.esc(draft?.text || '')}</p>
-      <footer>只属于当前日期</footer>
-    </article>`;
 }
 
 function stickyNoteCard(note) {
@@ -355,30 +342,20 @@ export function renderCalendar() {
         ? `<div class="rmt-calendar-pending"><span>特殊日期页</span><div>${pendingButtons}${legacyButton}</div></div>`
         : '';
 
-    const page = selectedPage || { drafts: [], stickyNotes: [], moodNotes: [], manualTodos: [] };
-    const drafts = Array.isArray(page.drafts) ? page.drafts : [];
+    const page = selectedPage || { stickyNotes: [], moodNotes: [] };
     const stickyNotes = Array.isArray(page.stickyNotes) ? page.stickyNotes : [];
     const moodNotes = Array.isArray(page.moodNotes) ? page.moodNotes : [];
-    const manualTodos = Array.isArray(page.manualTodos) ? page.manualTodos : [];
     const memoNotes = stickyNotes.filter(note => note?.kind !== 'special');
     const specialNotes = stickyNotes.filter(note => note?.kind === 'special');
     const promised = selectedEntries.filter(item => item.status === 'promised');
     const completedEntries = selectedEntries.filter(item => item.status === 'past');
-    const manualOpen = manualTodos.filter(item => item?.completed !== true);
-    const manualDone = manualTodos.filter(item => item?.completed === true);
 
-    const memoCards = [...drafts.map(draftCard), ...memoNotes.map(stickyNoteCard)];
+    const memoCards = memoNotes.map(stickyNoteCard);
     const memoBoard = memoCards.length
         ? memoCards.join('')
-        : '<div class="rmt-calendar-board-empty">这一天还没有草稿或便签。</div>';
-    const openTodoRows = [
-        ...promised.map(item => calendarTodoRow(item)),
-        ...manualOpen.map(item => calendarTodoRow(item, { manual: true, pageKey: session.selectedDateKey })),
-    ];
-    const doneTodoRows = [
-        ...completedEntries.map(item => calendarTodoRow(item, { completed: true })),
-        ...manualDone.map(item => calendarTodoRow(item, { completed: true, manual: true, pageKey: session.selectedDateKey })),
-    ];
+        : '<div class="rmt-calendar-board-empty">这一天还没有他写下的备忘。</div>';
+    const openTodoRows = promised.map(item => calendarTodoRow(item));
+    const doneTodoRows = completedEntries.map(item => calendarTodoRow(item, { completed: true }));
     const todoBoard = openTodoRows.length
         ? openTodoRows.join('')
         : '<div class="rmt-calendar-board-empty">这一天目前没有待办。</div>';
@@ -395,7 +372,7 @@ export function renderCalendar() {
 
     body.innerHTML = `<div class="rmt-calendar-shell rmt-calendar-v3">
       <section class="rmt-calendar-hero compact">
-        <div><div class="rmt-archive-kicker">RELATIONSHIP CALENDAR</div><h2>${core_text.esc(session.title || '两个人的日历')}</h2><p>点选任意日期；每一天都有完全独立的草稿、便签、To-Do、特别备注和页角随笔，不会串到其他日期。</p></div>
+        <div><div class="rmt-archive-kicker">RELATIONSHIP CALENDAR</div><h2>${core_text.esc(session.title || '两个人的日历')}</h2><p>点选任意日期，查看他为这一天留下的备忘、自动待办、特别备注和页角随笔。</p></div>
         <div class="rmt-calendar-counts"><span><b>${entries.filter(item => item.status === 'past').length}</b> 已发生</span><span><b>${allPromisedCount}</b> 待办</span><span><b>${entries.filter(item => item.status === 'future').length}</b> 提醒</span></div>
       </section>
 
@@ -417,14 +394,12 @@ export function renderCalendar() {
 
       <section class="rmt-calendar-notebook-board">
         <section class="rmt-calendar-sticky-panel">
-          <header><div><small>DATE DRAFTS / STICKY NOTES</small><h3>草稿与便签</h3></div><span>${drafts.length + memoNotes.length}</span></header>
+          <header><div><small>CHARACTER MEMOS</small><h3>他的备忘</h3></div><span>${memoNotes.length}</span></header>
           <div class="rmt-calendar-sticky-grid">${memoBoard}</div>
-          <div class="rmt-calendar-detail"><textarea class="text_pole" rows="2" data-rmt-calendar-draft-input placeholder="给${core_text.esc(selectedDateLabel)}写一条草稿…"></textarea><button type="button" class="rmt-btn" data-rmt-action="calendar-add-draft" data-rmt-calendar-page="${core_text.esc(session.selectedDateKey)}">保存到这一天</button></div>
         </section>
         <section class="rmt-calendar-master-todo">
-          <header><div><small>DATE TO DO LIST</small><h3>这一天的待办</h3></div><span>${promised.length + manualTodos.length}</span></header>
+          <header><div><small>CHARACTER TO DO LIST</small><h3>他的自动待办</h3></div><span>${promised.length}</span></header>
           <div class="rmt-calendar-master-todo-list">${todoBoard}${doneBoard}</div>
-          <div class="rmt-calendar-detail"><input class="text_pole" data-rmt-calendar-todo-input placeholder="给这一天添加手动待办…"><button type="button" class="rmt-btn" data-rmt-action="calendar-add-todo" data-rmt-calendar-page="${core_text.esc(session.selectedDateKey)}">添加待办</button></div>
         </section>
       </section>
 
