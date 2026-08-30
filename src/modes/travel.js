@@ -148,7 +148,7 @@ ${JSON.stringify(compactTravelExisting(previous), null, 2)}
 - mapTheme 只能是 city/coast/forest/mountain/campus/historic/fantasy/scifi；postcard.tone 只能是 rose/ocean/forest/sunset/night/paper。它们只是本地白名单样式 token。禁止输出坐标、颜色值、CSS、HTML、JavaScript、URL、图片或 class。
 - ${incremental ? '本轮只返回 0～4 个由 incrementalMemoryIds 新证明且不在 EXISTING_TRAVEL_INDEX_JSON 中的地点；没有新地点时 locations 为空。' : '初次生成 5～8 个彼此不同的地点：near 3～5 个，far 2～4 个。'}
 - near 是同城/日常可抵达地点，点击后播放 3～8 句 {{char}} 对 {{user}} 的当下短对话；只能写 {{char}} 台词，不替 {{user}} 回应，不越过当前关系阶段。
-- far 是远途、异地或世界观中的遥远地点，点击后显示纯文字明信片。正文要充沛、具体、符合 {{char}}，但不能把未发生旅行冒充共同历史。
+- far 是远途、异地或世界观中的遥远地点，点击后显示HTML/SVG/CSS+文字明信片。正文要充沛、具体、符合 {{char}}，但不能把未发生旅行冒充共同历史。
 - basis=记忆 时必须引用真实 sourceMemoryIds + sourceMemoryAnchor${incremental ? '，且至少使用一个 incrementalMemoryIds' : ''}；basis=设定 时证据字段必须为空，只能表达角色稳定生活/世界观或明确标注的想象，不能声称和 {{user}} 已经共同去过。
 - 手机里的地图、导航、旅行与行程 App 已停用，不要描述手机界面。只输出 JSON。`;
 }
