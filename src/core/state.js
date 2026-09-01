@@ -1,5 +1,7 @@
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+import * as core_deferredCommitStore from './deferredCommitStore.js';
+
 export const state = {
   runtimeLifecycleEpoch: 0,
   apiConfigurationEpoch: 0,
@@ -13,6 +15,7 @@ export const state = {
   endingEasterEggRuntime: null,
   archiveViewLevel: 'library',
   roomLifeRefreshPromise: null,
+  roomLifeRefreshOrigin: null,
   activeTaskAbortController: null,
   activeTaskLabel: '',
   activeTaskBackgrounded: false,
@@ -36,7 +39,7 @@ export const state = {
   chooserRefreshTimer: 0,
   memoryProviderDiscoveryCache: { signature: '', scannedAt: 0, items: [] },
   memoryPreflightCache: new Map(),
-  deferredChatCommits: new Map(),
+  deferredChatCommits: core_deferredCommitStore.createDurableDeferredCommitMap(),
   archiveLibraryCharacterKey: '',
   archiveCharacterRelationSelection: '',
   relationSelectedKey: '',

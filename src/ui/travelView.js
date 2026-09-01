@@ -17,22 +17,214 @@ function travelSourceLabel(item) {
     return '角色生活 / 世界设定';
 }
 
-function travelPostcardHtml(item) {
+// ---------------------------------------------------------------------------
+// Postcard picture side.
+//
+// Every number below is produced locally: either a literal, or a value derived
+// from a hash of the location id/name. The model only ever contributes three
+// allowlisted enum tokens (mapTheme, sceneTheme, postcard.tone) which are validated in
+// modes/travel.js before they reach here. No generated coordinate, colour, URL,
+// class name or markup can enter this SVG.
+// ---------------------------------------------------------------------------
+
+const POSTCARD_SCENE_WIDTH = 120;
+const POSTCARD_SCENE_HEIGHT = 60;
+const POSTCARD_SCENE_HORIZON = 52;
+
+// Deterministic small-integer generator so one location always draws the same
+// picture across reopens, devices and read-only snapshots.
+function sceneRandom(item) {
+    let seed = core_text.hashString(`${core_text.normalizeText(item?.id, 80)}|${core_text.normalizeText(item?.name, 120)}|postcard`) >>> 0;
+    return (min, max) => {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        const span = Math.max(0, Math.floor(max) - Math.floor(min));
+        return Math.floor(min) + (span ? seed % (span + 1) : 0);
+    };
+}
+
+function sceneSky(next) {
+    // A few drifting clouds / stars, placed above the horizon only.
+    const marks = [];
+    const count = next(3, 5);
+    for (let i = 0; i < count; i += 1) {
+        const x = next(6, 114);
+        const y = next(6, 29);
+        const r = next(2, 5);
+        marks.push(`<circle class="pc-speck" cx="${x}" cy="${y}" r="${r / 2}"/>`);
+        marks.push(`<circle class="pc-speck" cx="${x + r}" cy="${y + 1}" r="${r / 3}"/>`);
+    }
+    return marks.join('');
+}
+
+function sceneBirds(next) {
+    const marks = [];
+    for (let i = 0, count = next(2, 4); i < count; i += 1) {
+        const x = next(14, 104);
+        const y = next(10, 24);
+        const w = next(3, 5);
+        marks.push(`<path class="pc-bird" d="M${x} ${y} q${w / 2} -${w / 2} ${w} 0 q${w / 2} -${w / 2} ${w} 0"/>`);
+    }
+    return marks.join('');
+}
+
+function sceneSkyline(next) {
+    let out = '';
+    let x = 2;
+    while (x < POSTCARD_SCENE_WIDTH) {
+        const w = next(7, 15);
+        const h = next(14, 34);
+        out += `<rect class="pc-solid" x="${x}" y="${POSTCARD_SCENE_HORIZON - h}" width="${w}" height="${h}" rx="1"/>`;
+        for (let wy = POSTCARD_SCENE_HORIZON - h + 4; wy < POSTCARD_SCENE_HORIZON - 4; wy += 7) {
+            out += `<rect class="pc-window" x="${x + 2}" y="${wy}" width="2" height="3"/>`;
+            if (w > 10) out += `<rect class="pc-window" x="${x + 6}" y="${wy}" width="2" height="3"/>`;
+        }
+        x += w + next(1, 4);
+    }
+    return out;
+}
+
+function sceneTrees(next) {
+    let out = '';
+    for (let i = 0, count = next(7, 10); i < count; i += 1) {
+        const x = next(4, 116);
+        const h = next(12, 27);
+        out += `<path class="pc-solid" d="M${x} ${POSTCARD_SCENE_HORIZON} L${x - h / 3} ${POSTCARD_SCENE_HORIZON} L${x} ${POSTCARD_SCENE_HORIZON - h} L${x + h / 3} ${POSTCARD_SCENE_HORIZON} Z"/>`;
+        out += `<rect class="pc-solid" x="${x - 1}" y="${POSTCARD_SCENE_HORIZON - 2}" width="2" height="4"/>`;
+    }
+    return out;
+}
+
+function scenePeaks(next) {
+    let out = '';
+    let x = -6;
+    while (x < POSTCARD_SCENE_WIDTH + 6) {
+        const w = next(22, 34);
+        const h = next(20, 38);
+        out += `<path class="pc-solid" d="M${x} ${POSTCARD_SCENE_HORIZON} L${x + w / 2} ${POSTCARD_SCENE_HORIZON - h} L${x + w} ${POSTCARD_SCENE_HORIZON} Z"/>`;
+        out += `<path class="pc-snow" d="M${x + w / 2 - w / 9} ${POSTCARD_SCENE_HORIZON - h + w / 7} L${x + w / 2} ${POSTCARD_SCENE_HORIZON - h} L${x + w / 2 + w / 9} ${POSTCARD_SCENE_HORIZON - h + w / 7} Z"/>`;
+        x += w - next(5, 10);
+    }
+    return out;
+}
+
+function sceneWaves(next) {
+    let out = '<path class="pc-sea" d="M0 46 L120 46 L120 60 L0 60 Z"/>';
+    for (let i = 0, count = next(3, 4); i < count; i += 1) {
+        const y = 49 + i * 3;
+        const x = next(4, 35);
+        out += `<path class="pc-wave" d="M${x} ${y} q4 -2 8 0 t8 0 t8 0"/>`;
+        out += `<path class="pc-wave" d="M${x + 55} ${y + 1} q4 -2 8 0 t8 0"/>`;
+    }
+    const lx = next(78, 104);
+    const top = next(24, 30);
+    out += `<path class="pc-solid" d="M${lx - 4} 46 L${lx - 2} ${top} L${lx + 2} ${top} L${lx + 4} 46 Z"/>`;
+    out += `<circle class="pc-glow" cx="${lx}" cy="${top - 2}" r="3"/>`;
+    return out;
+}
+
+function sceneCampus(next) {
+    const cx = next(52, 68);
+    let out = `<rect class="pc-solid" x="${cx - 24}" y="39" width="48" height="13" rx="1"/>`;
+    out += `<path class="pc-solid" d="M${cx - 28} 39 L${cx} ${next(29, 34)} L${cx + 28} 39 Z"/>`;
+    out += `<rect class="pc-solid" x="${cx - 3}" y="${next(19, 24)}" width="6" height="12"/>`;
+    out += `<circle class="pc-window" cx="${cx}" cy="${next(22, 27)}" r="2"/>`;
+    for (let i = 0, count = next(3, 5); i < count; i += 1) {
+        const x = next(6, 114);
+        out += `<circle class="pc-solid" cx="${x}" cy="47" r="${next(4, 7)}"/>`;
+    }
+    return out;
+}
+
+function sceneHistoric(next) {
+    let out = '';
+    const base = next(12, 24);
+    for (let i = 0; i < 5; i += 1) {
+        const x = base + i * 19;
+        out += `<rect class="pc-solid" x="${x}" y="32" width="8" height="20"/>`;
+        out += `<path class="pc-arch" d="M${x} 32 q4 -8 8 0 Z"/>`;
+    }
+    out += `<rect class="pc-solid" x="${base - 4}" y="27" width="84" height="5" rx="1"/>`;
+    return out;
+}
+
+function sceneFantasy(next) {
+    let out = '';
+    for (let i = 0, count = next(3, 4); i < count; i += 1) {
+        const x = next(12, 108);
+        const h = next(22, 36);
+        out += `<rect class="pc-solid" x="${x - 3}" y="${POSTCARD_SCENE_HORIZON - h}" width="6" height="${h}"/>`;
+        out += `<path class="pc-arch" d="M${x - 6} ${POSTCARD_SCENE_HORIZON - h} L${x} ${POSTCARD_SCENE_HORIZON - h - next(7, 12)} L${x + 6} ${POSTCARD_SCENE_HORIZON - h} Z"/>`;
+        out += `<circle class="pc-glow" cx="${x}" cy="${POSTCARD_SCENE_HORIZON - h - 4}" r="1.6"/>`;
+    }
+    out += `<circle class="pc-glow" cx="${next(20, 100)}" cy="${next(10, 19)}" r="${next(5, 8)}"/>`;
+    return out;
+}
+
+function sceneScifi(next) {
+    let out = '';
+    for (let i = 0, count = next(4, 6); i < count; i += 1) {
+        const x = next(8, 112);
+        const h = next(18, 38);
+        out += `<rect class="pc-solid" x="${x - 4}" y="${POSTCARD_SCENE_HORIZON - h}" width="8" height="${h}" rx="3"/>`;
+        out += `<rect class="pc-glow" x="${x - 4}" y="${POSTCARD_SCENE_HORIZON - h + 3}" width="8" height="1.4"/>`;
+    }
+    for (let i = 0, count = next(2, 3); i < count; i += 1) {
+        const y = next(10, 27);
+        out += `<path class="pc-wave" d="M${next(4, 24)} ${y} L${next(72, 116)} ${y - next(2, 6)}"/>`;
+    }
+    out += `<circle class="pc-glow" cx="${next(18, 102)}" cy="${next(8, 18)}" r="${next(4, 7)}"/>`;
+    return out;
+}
+
+function travelPostcardScene(item, theme) {
+    const next = sceneRandom(item);
+    const safeTheme = modes_travel.resolveTravelSceneTheme({ sceneTheme: theme }, 'city');
+    const nightish = safeTheme === 'scifi' || safeTheme === 'fantasy';
+    const orb = safeTheme === 'coast' || safeTheme === 'campus'
+        ? `<circle class="pc-orb" cx="${next(78, 105)}" cy="${next(10, 18)}" r="${next(6, 9)}"/>`
+        : `<circle class="pc-orb" cx="${next(18, 102)}" cy="${next(9, 18)}" r="${next(5, 8)}"/>`;
+    const body = safeTheme === 'coast' ? sceneWaves(next)
+        : safeTheme === 'forest' ? sceneTrees(next)
+        : safeTheme === 'mountain' ? scenePeaks(next)
+        : safeTheme === 'campus' ? sceneCampus(next)
+        : safeTheme === 'historic' ? sceneHistoric(next)
+        : safeTheme === 'fantasy' ? sceneFantasy(next)
+        : safeTheme === 'scifi' ? sceneScifi(next)
+        : sceneSkyline(next);
+    return `<svg class="rmt-travel-postcard-scene" viewBox="0 0 ${POSTCARD_SCENE_WIDTH} ${POSTCARD_SCENE_HEIGHT}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${core_text.esc(`${item.name} 的明信片风景插画`)}">
+      <rect class="pc-sky" x="0" y="0" width="${POSTCARD_SCENE_WIDTH}" height="${POSTCARD_SCENE_HEIGHT}"/>
+      ${orb}
+      ${nightish ? sceneSky(next) : sceneBirds(next)}
+      ${sceneSky(next)}
+      ${body}
+      <path class="pc-ground" d="M0 ${POSTCARD_SCENE_HORIZON} L${POSTCARD_SCENE_WIDTH} ${POSTCARD_SCENE_HORIZON} L${POSTCARD_SCENE_WIDTH} ${POSTCARD_SCENE_HEIGHT} L0 ${POSTCARD_SCENE_HEIGHT} Z"/>
+      <path class="pc-path" d="M${next(24, 48)} ${POSTCARD_SCENE_HEIGHT} Q${next(54, 66)} ${next(54, 57)} ${next(70, 96)} ${POSTCARD_SCENE_HORIZON}"/>
+    </svg>`;
+}
+
+function travelPostcardHtml(item, session) {
     const card = item?.postcard || {};
     const userName = core_text.normalizeText(runtimeState.activeArchiveSnapshot
         ? runtimeState.activeArchiveSnapshot.memory?.userName
         : core_context.getContext()?.name1, 100) || '你';
-    return `<section class="rmt-travel-postcard tone-${core_text.esc(card.tone || 'paper')}" role="dialog" aria-modal="false" aria-label="${core_text.esc(item.name)}的文字明信片">
+    const theme = modes_travel.resolveTravelSceneTheme(item, session?.mapTheme);
+    return `<section class="rmt-travel-postcard tone-${core_text.esc(card.tone || 'paper')}" data-rmt-postcard-theme="${core_text.esc(theme)}" role="dialog" aria-modal="false" aria-label="${core_text.esc(item.name)}的明信片">
       <button type="button" class="rmt-travel-detail-close" data-rmt-action="travel-close-detail" aria-label="收起明信片">×</button>
-      <div class="rmt-travel-postcard-mark"><span>${core_text.esc(card.stampLabel || 'POST')}</span><i>${core_text.esc(card.postmark || item.region || 'FAR AWAY')}</i></div>
-      <div class="rmt-travel-postcard-copy">
-        <small>POSTCARD FROM ${core_text.esc(item.region || item.name)}</small>
-        <h3>${core_text.esc(card.title)}</h3>
-        ${card.greeting ? `<b>${core_text.esc(card.greeting)}</b>` : ''}
-        <p>${core_text.esc(card.body)}</p>
-        <footer>${core_text.esc(card.closing)}</footer>
+      <figure class="rmt-travel-postcard-face">
+        ${travelPostcardScene(item, theme)}
+        <figcaption><small>GREETINGS FROM</small><b>${core_text.esc(item.region || item.name)}</b></figcaption>
+      </figure>
+      <div class="rmt-travel-postcard-back">
+        <div class="rmt-travel-postcard-mark"><span>${core_text.esc(card.stampLabel || 'POST')}</span><i>${core_text.esc(card.postmark || item.region || 'FAR AWAY')}</i></div>
+        <div class="rmt-travel-postcard-copy">
+          <small>POSTCARD FROM ${core_text.esc(item.region || item.name)}</small>
+          <h3>${core_text.esc(card.title)}</h3>
+          ${card.greeting ? `<b>${core_text.esc(card.greeting)}</b>` : ''}
+          <p>${core_text.esc(card.body)}</p>
+          <footer>${core_text.esc(card.closing)}</footer>
+        </div>
+        <div class="rmt-travel-postcard-address"><span>TO</span><b>${core_text.esc(userName)}</b><small>${core_text.esc(item.distanceLabel)}</small></div>
       </div>
-      <div class="rmt-travel-postcard-address"><span>TO</span><b>${core_text.esc(userName)}</b><small>${core_text.esc(item.distanceLabel)}</small></div>
     </section>`;
 }
 
@@ -71,7 +263,7 @@ export function renderTravel() {
         return `<button type="button" class="rmt-travel-marker ${kind} ${active ? 'active' : ''}" style="--map-x:${position.x}%;--map-y:${position.y}%" data-rmt-travel-location="${core_text.esc(item.id)}" aria-label="${core_text.esc(`${kind === 'near' ? '附近地点' : '远方地点'}：${item.name}`)}"><i class="fa-solid ${kind === 'near' ? 'fa-location-dot' : 'fa-envelope'}"></i><span>${core_text.esc(item.name)}</span></button>`;
     }).join('');
     const selectedDetail = selected
-        ? selected.kind === 'far' ? travelPostcardHtml(selected) : travelDialogueHtml(selected, session)
+        ? selected.kind === 'far' ? travelPostcardHtml(selected, session) : travelDialogueHtml(selected, session)
         : '';
     const legendRows = session.locations.map(item => `<button type="button" class="${selected?.id === item.id ? 'active' : ''}" data-rmt-travel-location="${core_text.esc(item.id)}"><i class="fa-solid ${item.kind === 'near' ? 'fa-location-dot' : 'fa-envelope'}"></i><span><b>${core_text.esc(item.name)}</b><small>${core_text.esc(item.region || item.distanceLabel)} · ${core_text.esc(travelSourceLabel(item))}</small></span></button>`).join('');
     body.innerHTML = `<div class="rmt-travel" data-rmt-travel-theme="${core_text.esc(session.mapTheme)}">

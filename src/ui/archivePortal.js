@@ -6,9 +6,11 @@ import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
+import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as ui_endingView from './endingView.js';
+import * as ui_overlay from './overlay.js';
 import * as ui_settingsPanel from './settingsPanel.js';
 
 export function mountMenuItem() {
@@ -77,6 +79,79 @@ export function bindRobustArchiveOpenHandlers() {
     };
 }
 
+// SillyTavern controls that leave or destroy the chat the user is generating in.
+// Matching one of these while a chat-bound task is running raises a confirmation
+// instead of silently pushing the result into the deferred-commit queue.
+const HOST_CHAT_NAVIGATION_SELECTOR = [
+    '.character_select',
+    '.group_select',
+    '.select_chat_block',
+    '#rm_button_characters',
+    '#rm_button_group_chats',
+    '#option_select_chat',
+    '#option_start_new_chat',
+    '#option_close_chat',
+    '#option_delete_chat',
+    '#option_delete_mes',
+    '#your_name_button',
+    '.renew_chat_button',
+    '.delete_chat_button',
+].join(', ');
+
+export function hostChatNavigationTargetFromEvent(event) {
+    const target = event?.target;
+    if (!target?.closest) return null;
+    try { return target.closest(HOST_CHAT_NAVIGATION_SELECTOR); } catch { return null; }
+}
+
+export function bindGenerationNavigationGuards() {
+    try { globalThis.__heartbeatMemoriesNavigationGuardCleanup?.(); } catch {}
+    // A confirmed "yes, leave" opens a short window so the very next host click
+    // is not challenged twice (the same gesture can produce more than one event).
+    let bypassUntil = 0;
+
+    const navigationGuard = event => {
+        if (Date.now() < bypassUntil) return;
+        if (!hostChatNavigationTargetFromEvent(event)) return;
+        if (!core_requestCoordinator.hasCurrentChatBlockingTask()) return;
+        // confirm() is synchronous, so if the user chooses to continue we simply
+        // return and let the original host event proceed untouched. Nothing is
+        // ever re-dispatched, so a wrong selector can only cost one dialog —
+        // it can never break SillyTavern navigation.
+        if (ui_overlay.confirmLeaveDuringGeneration({
+            title: '生成还没结束，确定要切换/关闭聊天窗口吗？',
+            action: '离开',
+            // The host control itself is an explicit user request to switch/close.
+            // Some mobile WebViews do not expose native confirm(); fail open there
+            // so Heartbeat can never make the current chat impossible to leave.
+            allowUnavailable: true,
+        })) {
+            bypassUntil = Date.now() + 4000;
+            return;
+        }
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        event.stopImmediatePropagation?.();
+        globalThis.toastr?.info?.('已阻止本次切换。生成完成后即可自由切换聊天窗口。', '心跳回忆');
+    };
+
+    const unloadGuard = event => {
+        // A full-page unload affects every chat-bound task, not only the chat currently
+        // visible. It can also interrupt a completed result while it is awaiting writeback.
+        if (!core_requestCoordinator.hasUnloadRisk()) return;
+        event.preventDefault();
+        event.returnValue = '';
+        return '';
+    };
+
+    document.addEventListener('click', navigationGuard, true);
+    globalThis.addEventListener?.('beforeunload', unloadGuard);
+    globalThis.__heartbeatMemoriesNavigationGuardCleanup = () => {
+        document.removeEventListener('click', navigationGuard, true);
+        globalThis.removeEventListener?.('beforeunload', unloadGuard);
+    };
+}
+
 export function bindChatStateEvents() {
     try { globalThis.__heartbeatMemoriesEventCleanup?.(); } catch {}
     const context = core_context.getContext();
@@ -138,6 +213,11 @@ export function bindChatStateEvents() {
 
     for (const type of chatEvents) source.on(type, chatHandler);
     for (const type of messageEvents) source.on(type, messageHandler);
+    // The full runtime can load after SillyTavern's initial CHAT_LOADED event. Recover
+    // durable results for the already-open chat instead of waiting for another navigation.
+    void archive_repository.flushDeferredCommitsForCurrentChat().catch(error => {
+        console.warn('[HeartbeatMemories] initial deferred commit recovery failed', error);
+    });
     globalThis.__heartbeatMemoriesEventCleanup = () => {
         for (const type of chatEvents) {
             try { source.off?.(type, chatHandler); } catch {}

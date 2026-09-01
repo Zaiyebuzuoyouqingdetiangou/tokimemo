@@ -23,6 +23,7 @@ export function initMemoryTheater() {
         const menuMounted = ui_archivePortal.mountMenuItem();
         ui_archivePortal.bindChatStateEvents();
         ui_archivePortal.bindRobustArchiveOpenHandlers();
+        ui_archivePortal.bindGenerationNavigationGuards();
         ui_archivePortal.scheduleMounts(settingsMounted, menuMounted);
         // This runs only after the user explicitly loaded the full runtime. It lazily migrates the
         // current chat's existing archive into the independent local backup without touching startup.
@@ -68,6 +69,8 @@ export function destroyMemoryTheater() {
         globalThis.__heartbeatMemoriesEventCleanup = null;
         try { globalThis.__heartbeatMemoriesOpenCleanup?.(); } catch {}
         globalThis.__heartbeatMemoriesOpenCleanup = null;
+        try { globalThis.__heartbeatMemoriesNavigationGuardCleanup?.(); } catch {}
+        globalThis.__heartbeatMemoriesNavigationGuardCleanup = null;
         document.getElementById(core_constants.OVERLAY_ID)?.remove();
         document.getElementById(core_constants.SETTINGS_ID)?.remove();
         document.getElementById(core_constants.MENU_ID)?.remove();
@@ -97,6 +100,7 @@ export function destroyMemoryTheater() {
         runtimeState.avatarDialogueRequestEpoch += 1;
         runtimeState.activeAvatarDialogue = null;
         runtimeState.roomLifeRefreshPromise = null;
+        runtimeState.roomLifeRefreshOrigin = null;
         if (runtimeState.butterflyTransitionTimer) clearTimeout(runtimeState.butterflyTransitionTimer);
         runtimeState.butterflyTransitionTimer = 0;
         if (runtimeState.chooserRefreshTimer) clearTimeout(runtimeState.chooserRefreshTimer);
@@ -109,7 +113,9 @@ export function destroyMemoryTheater() {
         runtimeState.archiveOverviewLastKey = '';
         runtimeState.memoryProviderDiscoveryCache = { signature: '', scannedAt: 0, items: [] };
         runtimeState.memoryPreflightCache.clear();
-        runtimeState.deferredChatCommits.clear();
+        // Completed results waiting for their origin chat are intentionally durable.
+        // Disabling/reloading the runtime must not erase them; the next initialization
+        // will validate their chat/archive identity before attempting writeback.
         runtimeState.archiveSnapshotCache.clear();
         runtimeState.connectionModelCache.clear();
         runtimeState.connectionModelRequestEpochs.clear();

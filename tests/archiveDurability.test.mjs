@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { deferredCommitOriginMatchesContext } from '../src/core/context.js';
 
 import {
     CACHE_KEY,
@@ -10,6 +11,7 @@ import {
     archiveBackupEntryForContext,
     archiveIndexEntryId,
     archiveSnapshotEditableUi,
+    cacheScopeFromContext,
     captureTaskOrigin,
     chatScopeKey,
     destroyMemoryTheater,
@@ -94,11 +96,26 @@ function makeBackupBackend() {
                 }
             }
             const livePrevious = previous?.deleted === true ? null : previous;
+            if (livePrevious) {
+                const sameName = !livePrevious.characterName || !record.characterName || livePrevious.characterName === record.characterName;
+                const authorizedRename = options.allowCharacterRename === true
+                    && expected?.present === true
+                    && livePrevious.entryId === record.entryId
+                    && livePrevious.chatId === record.chatId
+                    && !!livePrevious.avatar && livePrevious.avatar === record.avatar
+                    && !!livePrevious.characterKey && livePrevious.characterKey === record.characterKey
+                    && livePrevious.archiveRevision === expected.revision;
+                if (!sameName && !authorizedRename) throw new Error('identity changed');
+            }
             if (expected?.present === false && livePrevious) throw new Error('stale create');
             if (expected?.present === true && !livePrevious && options.allowMissingPrevious !== true) throw new Error('missing previous');
-            if (expected?.present === true && livePrevious && livePrevious.archiveRevision !== expected.revision) throw new Error('stale update');
+            const idempotentRetry = options.allowIdempotentRetry === true && livePrevious
+                && livePrevious.archiveRevision === record.archiveRevision
+                && JSON.stringify(livePrevious.memory) === JSON.stringify(record.memory)
+                && JSON.stringify(livePrevious.cache ?? null) === JSON.stringify(record.cache ?? null);
+            if (expected?.present === true && livePrevious && livePrevious.archiveRevision !== expected.revision && !idempotentRetry) throw new Error('stale update');
             if (options.seed === true && livePrevious && livePrevious.archiveRevision !== record.archiveRevision && livePrevious.updatedAt > record.updatedAt) return true;
-            records.set(record.entryId, clone(record));
+            if (!idempotentRetry) records.set(record.entryId, clone(record));
             return true;
         },
         async delete(entries) {
@@ -309,6 +326,96 @@ test('r42.5 legacy archive entry IDs remain the durable backup key and explicit 
     }
 });
 
+test('r46 IndexedDB deletion tombstones the exact durable key after card metadata drift and keeps alias cleanup', async () => {
+    const originalIndexedDb = globalThis.indexedDB;
+    const entryId = 'AE:metadata-drift-exact';
+    const aliasId = 'AE:metadata-drift-alias';
+    const entry = {
+        entryId,
+        characterKey: 'same.png',
+        avatar: 'same.png',
+        characterName: '角色',
+        characterFingerprint: 'fingerprint-new',
+        characterIndexHint: 0,
+        chatId: 'metadata-drift-chat',
+    };
+    const bank = memory(entry.chatId, 'metadata-drift-revision');
+    const exactRecord = {
+        storageVersion: 1,
+        ...entry,
+        characterFingerprint: 'fingerprint-old',
+        archiveName: bank.archiveName,
+        archiveRevision: bank.archiveRevision,
+        memory: bank,
+        cache: null,
+        createdAt: 1,
+        updatedAt: 1,
+    };
+    const records = new Map([
+        [entryId, exactRecord],
+        [aliasId, { ...exactRecord, entryId: aliasId, characterFingerprint: entry.characterFingerprint }],
+    ]);
+    const request = value => {
+        const out = {};
+        queueMicrotask(() => {
+            out.result = value;
+            out.onsuccess?.();
+        });
+        return out;
+    };
+    const store = {
+        get(id) { return request(records.get(id)); },
+        index() {
+            return {
+                getAll(chatId) {
+                    return request([...records.values()].filter(record => record.chatId === chatId));
+                },
+            };
+        },
+        put(record) {
+            records.set(record.entryId, clone(record));
+        },
+    };
+    const db = {
+        transaction() {
+            let settled = false;
+            const transaction = {
+                objectStore() { return store; },
+                abort() {
+                    if (settled) return;
+                    settled = true;
+                    transaction.onabort?.();
+                },
+            };
+            setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                transaction.oncomplete?.();
+            }, 0);
+            return transaction;
+        },
+    };
+    globalThis.indexedDB = {
+        open() {
+            const out = { result: db };
+            queueMicrotask(() => out.onsuccess?.());
+            return out;
+        },
+    };
+
+    try {
+        const productionStore = await import('../src/archive/backupStore.js?idb-delete-metadata-drift');
+        assert.equal(await productionStore.deleteArchiveBackup(entry), true);
+        assert.equal(records.get(entryId)?.deleted, true, 'the explicit durable key must be tombstoned despite its old fingerprint');
+        assert.equal(records.get(entryId)?.characterFingerprint, 'fingerprint-old');
+        assert.equal(records.get(aliasId)?.deleted, true, 'matching legacy aliases must still be tombstoned');
+        assert.equal([...records.values()].some(record => record.deleted !== true), false);
+    } finally {
+        if (originalIndexedDb === undefined) delete globalThis.indexedDB;
+        else globalThis.indexedDB = originalIndexedDb;
+    }
+});
+
 test('r42.5 a deletion fence defeats seed/cache writers that started before deletion', async () => {
     const backend = makeBackupBackend();
     const context = makeContext('delete-race-chat');
@@ -465,6 +572,363 @@ test('r42.5 deferred archive commits cannot overwrite a newer same-chat revision
         assert.equal(context.chatMetadata[MEMORY_KEY].archiveRevision, 'revision-newer');
         assert.equal(context.chatMetadata[MEMORY_KEY].archiveName, '新档案');
         assert.equal((await readArchiveBackup(backupEntry(context, 'deferred-chat'))).archiveRevision, 'revision-old');
+        assert.equal(runtimeState.deferredChatCommits.size, 0, 'a permanently stale result is explicitly discarded');
+    } finally {
+        runtimeState.deferredChatCommits.clear();
+        runtimeState.runtimeSessionCache.clear();
+        setArchiveBackupBackendForTests(null);
+        globalThis.SillyTavern = originalSillyTavern;
+    }
+});
+
+test('r46 durable deferred archive writes back after a unique-avatar card edit and rename without duplicating the index', async () => {
+    const originalSillyTavern = globalThis.SillyTavern;
+    const backend = makeBackupBackend();
+    const context = makeContext('deferred-card-edit-chat');
+    const oldMemory = memory('deferred-card-edit-chat', 'revision-old', '旧档案');
+    context.characters[0].data.description = 'v1';
+    context.chatMetadata[MEMORY_KEY] = oldMemory;
+    globalThis.SillyTavern = { getContext: () => context };
+    setArchiveBackupBackendForTests(backend);
+    try {
+        upsertArchiveIndex(context, oldMemory);
+        const oldEntryId = getArchiveIndex(context)[0].entryId;
+        await seedArchiveBackup(backupEntry(context, 'deferred-card-edit-chat'), oldMemory, null);
+        const origin = { ...captureTaskOrigin(context, 'revision-old'), archivePresent: true };
+        queueDeferredCommit(origin, {
+            kind: 'archive',
+            memoryBank: { ...memory('deferred-card-edit-chat', 'revision-background', '后台新档案'), sourceMessageCount: 0 },
+            preserveDerivedCache: false,
+        });
+        context.name2 = '新角色名';
+        context.characters[0].name = '新角色名';
+        context.characters[0].data.name = '新角色名';
+        context.characters[0].data.description = 'v2';
+        await flushDeferredCommitsForCurrentChat();
+        assert.equal(context.chatMetadata[MEMORY_KEY].archiveRevision, 'revision-background');
+        assert.equal(context.chatMetadata[MEMORY_KEY].characterName, '新角色名');
+        assert.equal(runtimeState.deferredChatCommits.size, 0);
+        const index = getArchiveIndex(context);
+        assert.equal(index.length, 1);
+        assert.equal(index[0].entryId, oldEntryId);
+        assert.equal(index[0].characterName, '新角色名');
+    } finally {
+        runtimeState.deferredChatCommits.clear();
+        runtimeState.runtimeSessionCache.clear();
+        setArchiveBackupBackendForTests(null);
+        globalThis.SillyTavern = originalSillyTavern;
+    }
+});
+
+test('r46 same-avatar same-chat cards never reuse or overwrite each other archive index identity', () => {
+    const context = makeContext('same-chat');
+    context.characters = [
+        { name: 'A', avatar: 'same.png', data: { name: 'A', avatar: 'same.png', description: 'card-a' } },
+        { name: 'B', avatar: 'same.png', data: { name: 'B', avatar: 'same.png', description: 'card-b' } },
+    ];
+    context.characterId = 0;
+    context.name2 = 'A';
+    const bankA = { ...memory('same-chat', 'a-revision', 'A档案'), characterName: 'A' };
+    upsertArchiveIndex(context, bankA);
+    const entryA = getArchiveIndex(context)[0];
+
+    context.characterId = 1;
+    context.name2 = 'B';
+    const bankB = { ...memory('same-chat', 'b-revision', 'B档案'), characterName: 'B' };
+    const backupB = archiveBackupEntryForContext(context, bankB);
+    assert.notEqual(backupB.entryId, entryA.entryId);
+    assert.equal(backupB.allowCharacterRename, false);
+    upsertArchiveIndex(context, bankB);
+    const index = getArchiveIndex(context);
+    assert.equal(index.length, 2);
+    assert.deepEqual(index.map(item => item.characterName).sort(), ['A', 'B']);
+    assert.ok(index.some(item => item.entryId === entryA.entryId && item.characterName === 'A'));
+});
+
+test('r46 cloned cards with identical name avatar fingerprint and chat keep separate index and backup identities', async () => {
+    const backend = makeBackupBackend();
+    const context = makeContext('clone-chat');
+    context.name2 = 'Clone';
+    context.characters = [
+        { name: 'Clone', avatar: 'same.png', data: { name: 'Clone', avatar: 'same.png', description: 'identical' } },
+        { name: 'Clone', avatar: 'same.png', data: { name: 'Clone', avatar: 'same.png', description: 'identical' } },
+    ];
+    setArchiveBackupBackendForTests(backend);
+    try {
+        context.characterId = 0;
+        const bankA = { ...memory('clone-chat', 'clone-a', 'A档案'), characterName: 'Clone' };
+        upsertArchiveIndex(context, bankA);
+        const entryA = getArchiveIndex(context)[0];
+        const backupA = archiveBackupEntryForContext(context, bankA);
+        await seedArchiveBackup(backupA, bankA, null);
+        const rawA = clone(backend.records.get(backupA.entryId));
+
+        context.characterId = 1;
+        const bankB = { ...memory('clone-chat', 'clone-b', 'B档案'), characterName: 'Clone' };
+        const backupB = archiveBackupEntryForContext(context, bankB);
+        assert.notEqual(backupB.entryId, backupA.entryId);
+        assert.equal(backupB.allowCharacterRename, false);
+
+        const ordinaryRead = backend.read.bind(backend);
+        backend.read = async () => clone(rawA);
+        assert.equal(await readArchiveBackup(backupB), null, 'production identity validation must reject another clone record');
+        backend.read = ordinaryRead;
+
+        await seedArchiveBackup(backupB, bankB, null);
+        upsertArchiveIndex(context, bankB);
+        const index = getArchiveIndex(context);
+        assert.equal(index.length, 2);
+        assert.equal(new Set(index.map(item => item.entryId)).size, 2);
+        assert.equal(new Set(index.map(item => item.archiveGroupId)).size, 2);
+        assert.equal((await readArchiveBackup(backupA)).archiveRevision, 'clone-a');
+        assert.equal((await readArchiveBackup(backupB)).archiveRevision, 'clone-b');
+        assert.equal(entryA.characterIndexHint, 0);
+        assert.equal(index.find(item => item.entryId === backupB.entryId)?.characterIndexHint, 1);
+    } finally {
+        setArchiveBackupBackendForTests(null);
+        runtimeState.runtimeSessionCache.clear();
+    }
+});
+
+test('r46 cloned cards have distinct runtime scopes and deferred origins while same-slot edits remain writable', () => {
+    const characters = [
+        { name: 'Clone', avatar: 'same.png', data: { name: 'Clone', avatar: 'same.png', description: 'identical' } },
+        { name: 'Clone', avatar: 'same.png', data: { name: 'Clone', avatar: 'same.png', description: 'identical' } },
+    ];
+    const contextA = { ...makeContext('clone-runtime-chat'), characterId: 0, name2: 'Clone', characters };
+    const contextB = { ...makeContext('clone-runtime-chat'), characterId: 1, name2: 'Clone', characters };
+    contextA.chatMetadata[CACHE_KEY] = { chatId: 'clone-runtime-chat', archiveRevision: 'same', album: { kind: 'album', title: 'A-cache' } };
+    contextB.chatMetadata[CACHE_KEY] = { chatId: 'clone-runtime-chat', archiveRevision: 'same', album: { kind: 'album', title: 'B-cache' } };
+    const origin = captureTaskOrigin(contextA, 'same');
+    try {
+        assert.equal(deferredCommitOriginMatchesContext(origin, contextB), false);
+        assert.notEqual(chatScopeKey(contextA), chatScopeKey(contextB));
+        assert.equal(getCache(contextA).album.title, 'A-cache');
+        assert.equal(getCache(contextB).album.title, 'B-cache');
+        contextA.characters[0].data.description = 'edited in the same slot';
+        assert.equal(deferredCommitOriginMatchesContext(origin, contextA), true);
+    } finally {
+        runtimeState.runtimeSessionCache.clear();
+    }
+});
+
+test('r46 deferred archive rechecks character origin after backup await and retries idempotently on return', async () => {
+    const originalSillyTavern = globalThis.SillyTavern;
+    const backend = makeBackupBackend();
+    const contextA = makeContext('shared-chat');
+    contextA.name2 = 'A';
+    contextA.characters = [{ name: 'A', avatar: 'a.png', data: { name: 'A', avatar: 'a.png' } }];
+    const contextB = makeContext('shared-chat');
+    contextB.name2 = 'B';
+    contextB.characters = [{ name: 'B', avatar: 'b.png', data: { name: 'B', avatar: 'b.png' } }];
+    const oldA = { ...memory('shared-chat', 'old-rev', 'A-old'), characterName: 'A' };
+    const oldB = { ...memory('shared-chat', 'old-rev', 'B-old'), characterName: 'B' };
+    contextA.chatMetadata[MEMORY_KEY] = oldA;
+    contextB.chatMetadata[MEMORY_KEY] = oldB;
+    let liveContext = contextA;
+    globalThis.SillyTavern = { getContext: () => liveContext };
+    setArchiveBackupBackendForTests(backend);
+    try {
+        upsertArchiveIndex(contextA, oldA);
+        await seedArchiveBackup(archiveBackupEntryForContext(contextA, oldA), oldA, null);
+        const origin = { ...captureTaskOrigin(contextA, 'old-rev'), archivePresent: true };
+        queueDeferredCommit(origin, {
+            kind: 'archive',
+            memoryBank: { ...memory('shared-chat', 'new-rev', 'A-new'), characterName: 'A', sourceMessageCount: 0 },
+            preserveDerivedCache: false,
+        });
+        const originalPut = backend.put.bind(backend);
+        let switchOnce = true;
+        backend.put = async (...args) => {
+            const saved = await originalPut(...args);
+            if (switchOnce) {
+                switchOnce = false;
+                liveContext = contextB;
+            }
+            return saved;
+        };
+        await flushDeferredCommitsForCurrentChat();
+        assert.equal(contextA.chatMetadata[MEMORY_KEY].archiveRevision, 'old-rev');
+        assert.equal(contextB.chatMetadata[MEMORY_KEY].archiveRevision, 'old-rev');
+        assert.equal(contextB.chatMetadata[MEMORY_KEY].characterName, 'B');
+        assert.equal(runtimeState.deferredChatCommits.size, 1);
+
+        liveContext = contextA;
+        await flushDeferredCommitsForCurrentChat();
+        assert.equal(contextA.chatMetadata[MEMORY_KEY].archiveRevision, 'new-rev');
+        assert.equal(contextB.chatMetadata[MEMORY_KEY].archiveRevision, 'old-rev');
+        assert.equal(runtimeState.deferredChatCommits.size, 0);
+    } finally {
+        runtimeState.deferredChatCommits.clear();
+        runtimeState.runtimeSessionCache.clear();
+        setArchiveBackupBackendForTests(null);
+        globalThis.SillyTavern = originalSillyTavern;
+    }
+});
+
+test('r46 deferred incremental archive retry is idempotent after its migrated cache backup already committed', async () => {
+    const originalSillyTavern = globalThis.SillyTavern;
+    const originalDateNow = Date.now;
+    const backend = makeBackupBackend();
+    const contextA = makeContext('incremental-retry-chat');
+    contextA.name2 = 'A';
+    contextA.characters = [{ name: 'A', avatar: 'a.png', data: { name: 'A', avatar: 'a.png' } }];
+    const contextB = makeContext('incremental-retry-chat');
+    contextB.name2 = 'B';
+    contextB.characters = [{ name: 'B', avatar: 'b.png', data: { name: 'B', avatar: 'b.png' } }];
+    const oldA = { ...memory('incremental-retry-chat', 'old-rev', 'A-old'), characterName: 'A' };
+    const oldB = { ...memory('incremental-retry-chat', 'old-rev', 'B-old'), characterName: 'B' };
+    const newA = { ...memory('incremental-retry-chat', 'new-rev', 'A-new'), characterName: 'A', sourceMessageCount: 0 };
+    contextA.chatMetadata[MEMORY_KEY] = oldA;
+    contextA.chatMetadata[CACHE_KEY] = {
+        chatId: 'incremental-retry-chat', archiveRevision: 'old-rev', updatedAt: 1,
+        album: { kind: 'album', chatId: 'incremental-retry-chat', archiveRevision: 'old-rev', entries: [] },
+    };
+    contextB.chatMetadata[MEMORY_KEY] = oldB;
+    let liveContext = contextA;
+    let clock = 50_000;
+    globalThis.SillyTavern = { getContext: () => liveContext };
+    Date.now = () => clock++;
+    setArchiveBackupBackendForTests(backend);
+    try {
+        upsertArchiveIndex(contextA, oldA);
+        await seedArchiveBackup(archiveBackupEntryForContext(contextA, oldA), oldA, contextA.chatMetadata[CACHE_KEY]);
+        const origin = { ...captureTaskOrigin(contextA, 'old-rev'), archivePresent: true };
+        queueDeferredCommit(origin, { kind: 'archive', memoryBank: newA, preserveDerivedCache: true });
+        const originalPut = backend.put.bind(backend);
+        let switchOnce = true;
+        backend.put = async (...args) => {
+            const saved = await originalPut(...args);
+            if (switchOnce) {
+                switchOnce = false;
+                liveContext = contextB;
+            }
+            return saved;
+        };
+
+        await flushDeferredCommitsForCurrentChat();
+        assert.equal(contextA.chatMetadata[MEMORY_KEY].archiveRevision, 'old-rev');
+        assert.equal(contextB.chatMetadata[MEMORY_KEY].archiveRevision, 'old-rev');
+        assert.equal(runtimeState.deferredChatCommits.size, 1);
+
+        liveContext = contextA;
+        await flushDeferredCommitsForCurrentChat();
+        assert.equal(contextA.chatMetadata[MEMORY_KEY].archiveRevision, 'new-rev');
+        assert.equal(contextB.chatMetadata[MEMORY_KEY].archiveRevision, 'old-rev');
+        assert.equal(runtimeState.deferredChatCommits.size, 0);
+        assert.equal((await readArchiveBackup(archiveBackupEntryForContext(contextA, newA))).archiveRevision, 'new-rev');
+    } finally {
+        Date.now = originalDateNow;
+        for (const timer of runtimeState.cachePersistTimers.values()) clearTimeout(timer);
+        runtimeState.cachePersistTimers.clear();
+        runtimeState.deferredChatCommits.clear();
+        runtimeState.runtimeSessionCache.clear();
+        setArchiveBackupBackendForTests(null);
+        globalThis.SillyTavern = originalSillyTavern;
+    }
+});
+
+test('r46 deferred sessions recheck character origin after hydration before saving', async () => {
+    const originalSillyTavern = globalThis.SillyTavern;
+    const contextA = makeContext('session-shared-chat');
+    contextA.name2 = 'A';
+    contextA.characters = [{ name: 'A', avatar: 'a.png', data: { name: 'A', avatar: 'a.png' } }];
+    const contextB = makeContext('session-shared-chat');
+    contextB.name2 = 'B';
+    contextB.characters = [{ name: 'B', avatar: 'b.png', data: { name: 'B', avatar: 'b.png' } }];
+    const bankA = { ...memory('session-shared-chat', 'same-rev', 'A'), characterName: 'A' };
+    const bankB = { ...memory('session-shared-chat', 'same-rev', 'B'), characterName: 'B' };
+    contextA.chatMetadata[MEMORY_KEY] = bankA;
+    contextB.chatMetadata[MEMORY_KEY] = bankB;
+    let liveContext = contextA;
+    globalThis.SillyTavern = { getContext: () => liveContext };
+    const scopeA = cacheScopeFromContext(contextA);
+    const gate = Promise.withResolvers();
+    runtimeState.cacheHydrationPromises.set(scopeA, gate.promise);
+    try {
+        const origin = captureTaskOrigin(contextA, 'same-rev');
+        queueDeferredCommit(origin, { kind: 'sessions', sessions: { album: { kind: 'album', chatId: 'session-shared-chat', archiveRevision: 'same-rev', title: 'A-only' } } });
+        const flushing = flushDeferredCommitsForCurrentChat();
+        liveContext = contextB;
+        gate.resolve({});
+        await flushing;
+        assert.equal(runtimeState.deferredChatCommits.size, 1);
+        assert.equal(runtimeState.runtimeSessionCache.has(cacheScopeFromContext(contextB)), false);
+
+        runtimeState.cacheHydrationPromises.delete(scopeA);
+        liveContext = contextA;
+        await flushDeferredCommitsForCurrentChat();
+        assert.equal(runtimeState.deferredChatCommits.size, 0);
+        assert.equal(runtimeState.runtimeSessionCache.get(scopeA)?.album?.title, 'A-only');
+    } finally {
+        for (const timer of runtimeState.cachePersistTimers.values()) clearTimeout(timer);
+        runtimeState.cachePersistTimers.clear();
+        runtimeState.cacheHydrationPromises.clear();
+        runtimeState.deferredChatCommits.clear();
+        runtimeState.runtimeSessionCache.clear();
+        globalThis.SillyTavern = originalSillyTavern;
+    }
+});
+
+test('r46 a same-millisecond sessions result queued during hydration survives the older flush acknowledgement', async () => {
+    const originalSillyTavern = globalThis.SillyTavern;
+    const originalDateNow = Date.now;
+    const context = makeContext('same-ms-chat');
+    context.chatMetadata[MEMORY_KEY] = memory('same-ms-chat', 'same-rev', 'A');
+    globalThis.SillyTavern = { getContext: () => context };
+    Date.now = () => 123_456;
+    const scope = cacheScopeFromContext(context);
+    const gate = Promise.withResolvers();
+    runtimeState.cacheHydrationPromises.set(scope, gate.promise);
+    try {
+        const origin = captureTaskOrigin(context, 'same-rev');
+        queueDeferredCommit(origin, { kind: 'sessions', sessions: {
+            album: { kind: 'album', chatId: 'same-ms-chat', archiveRevision: 'same-rev', title: 'older' },
+        } });
+        const flushing = flushDeferredCommitsForCurrentChat();
+        queueDeferredCommit(origin, { kind: 'sessions', sessions: {
+            ending: { kind: 'ending', chatId: 'same-ms-chat', archiveRevision: 'same-rev', title: 'newer' },
+        } });
+        gate.resolve({});
+        await flushing;
+        assert.equal(runtimeState.runtimeSessionCache.get(scope)?.album?.title, 'older');
+        assert.equal(runtimeState.runtimeSessionCache.get(scope)?.ending, undefined);
+        assert.equal(runtimeState.deferredChatCommits.size, 1, 'the newer merged result must stay queued');
+
+        await flushDeferredCommitsForCurrentChat();
+        assert.equal(runtimeState.runtimeSessionCache.get(scope)?.ending?.title, 'newer');
+        assert.equal(runtimeState.deferredChatCommits.size, 0);
+    } finally {
+        Date.now = originalDateNow;
+        for (const timer of runtimeState.cachePersistTimers.values()) clearTimeout(timer);
+        runtimeState.cachePersistTimers.clear();
+        runtimeState.cacheHydrationPromises.clear();
+        runtimeState.deferredChatCommits.clear();
+        runtimeState.runtimeSessionCache.clear();
+        globalThis.SillyTavern = originalSillyTavern;
+    }
+});
+
+test('r46 transient deferred archive write failure keeps the durable result for retry', async () => {
+    const originalSillyTavern = globalThis.SillyTavern;
+    const backend = makeBackupBackend();
+    const context = makeContext('deferred-retry-chat');
+    const oldMemory = memory('deferred-retry-chat', 'revision-old', '旧档案');
+    context.chatMetadata[MEMORY_KEY] = oldMemory;
+    globalThis.SillyTavern = { getContext: () => context };
+    setArchiveBackupBackendForTests(backend);
+    try {
+        await seedArchiveBackup(backupEntry(context, 'deferred-retry-chat'), oldMemory, null);
+        const origin = { ...captureTaskOrigin(context, 'revision-old'), archivePresent: true };
+        queueDeferredCommit(origin, {
+            kind: 'archive',
+            memoryBank: { ...memory('deferred-retry-chat', 'revision-from-background', '后台结果'), sourceMessageCount: 0 },
+            preserveDerivedCache: false,
+        });
+        backend.put = async () => { throw new Error('temporary storage failure'); };
+        await flushDeferredCommitsForCurrentChat();
+        assert.equal(context.chatMetadata[MEMORY_KEY].archiveRevision, 'revision-old');
+        assert.equal(runtimeState.deferredChatCommits.size, 1, 'temporary failure must remain queued');
     } finally {
         runtimeState.deferredChatCommits.clear();
         runtimeState.runtimeSessionCache.clear();

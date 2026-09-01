@@ -172,7 +172,8 @@ export function archiveStoredAvatar(entry) {
 
 export function archiveSourceIdentityKey(entry) {
     const fingerprint = core_text.normalizeText(entry?.characterFingerprint, 160);
-    if (fingerprint) return `fingerprint:${fingerprint}`;
+    const characterIndexHint = Number.isInteger(Number(entry?.characterIndexHint)) ? Number(entry.characterIndexHint) : -1;
+    if (fingerprint) return `fingerprint:${fingerprint}${characterIndexHint >= 0 ? `\u001fcharacter:${characterIndexHint}` : ''}`;
     const avatar = archiveStoredAvatar(entry);
     const name = core_text.normalizeText(entry?.characterName, 120).toLocaleLowerCase();
     const fallback = core_text.normalizeText(entry?.characterKey, 300);
@@ -202,11 +203,20 @@ export function archiveEntryMatchesContextCharacter(entry, context = getContext(
     const currentName = core_text.normalizeText(context?.name2 || descriptor?.name, 120);
     const entryAvatar = archiveStoredAvatar(entry);
     const currentAvatar = core_text.normalizeText(context?.characters?.[context?.characterId]?.avatar || context?.characters?.[context?.characterId]?.data?.avatar, 300);
-    // characterFingerprint is presentation/classification metadata only. It must never grant or
-    // revoke write authority because ordinary card edits can legitimately change the fingerprint.
-    // Live write authority remains the actual host character locator/name + chatId + live MEMORY_KEY.
-    if (entryName && entryName !== '未命名角色' && currentName && entryName !== currentName) return false;
     if (entryAvatar && currentAvatar && entryAvatar !== currentAvatar) return false;
+    const entryHint = Number.isInteger(Number(entry?.characterIndexHint)) ? Number(entry.characterIndexHint) : -1;
+    const currentHint = Number.isInteger(Number(context?.characterId)) ? Number(context.characterId) : -1;
+    if (entryHint >= 0) return entryHint === currentHint;
+    if (entryName && entryName !== '未命名角色' && currentName && entryName !== currentName) return false;
+    const entryFingerprint = core_text.normalizeText(entry?.characterFingerprint, 160);
+    const currentFingerprint = core_text.normalizeText(descriptor?.fingerprint, 160);
+    if (entryFingerprint && currentFingerprint) {
+        if (entryFingerprint !== currentFingerprint) return false;
+        const sameFingerprint = (Array.isArray(context?.characters) ? context.characters : [])
+            .map((_, index) => archive_groups.characterDescriptor(context, index))
+            .filter(item => item?.fingerprint === entryFingerprint);
+        if (sameFingerprint.length !== 1) return false;
+    }
     if (entryName || entryAvatar) return true;
     return core_text.normalizeText(entry?.characterKey, 300) === `character:${String(context?.characterId ?? '')}`;
 }
@@ -216,9 +226,14 @@ export function currentCharacterKey(context = currentCharacterGuard()) {
     return avatar || `character:${String(context.characterId ?? '')}`;
 }
 
+export function currentCharacterAvatar(context = currentCharacterGuard()) {
+    return core_text.normalizeText(context.characters?.[context.characterId]?.avatar || context.characters?.[context.characterId]?.data?.avatar, 300);
+}
+
 export function currentCharacterRuntimeKey(context = currentCharacterGuard()) {
     const descriptor = archive_groups.characterDescriptor(context, Number(context.characterId));
-    return descriptor?.fingerprint || `${currentCharacterKey(context)}\u001f${core_text.normalizeText(context.name2, 120)}`;
+    const identity = descriptor?.fingerprint || `${currentCharacterKey(context)}\u001f${core_text.normalizeText(context.name2, 120)}`;
+    return `${identity}\u001fcharacter:${String(context.characterId ?? '')}`;
 }
 
 export function chatScopeKey(context = currentCharacterGuard(), chatId = getChatId(context)) {
@@ -229,10 +244,40 @@ export function captureTaskOrigin(context = currentCharacterGuard(), archiveRevi
     return {
         lifecycleEpoch: runtimeState.runtimeLifecycleEpoch,
         characterKey: currentCharacterRuntimeKey(context),
+        characterAvatar: currentCharacterAvatar(context),
+        characterId: String(context.characterId ?? ''),
         characterName: core_text.normalizeText(context.name2, 120),
         chatId: comparableChatId(getChatId(context)),
         archiveRevision: core_text.normalizeText(archiveRevision, 240),
     };
+}
+
+export function deferredCommitOriginMatchesContext(origin, context = getContext()) {
+    try {
+        if (!origin || comparableChatId(getChatId(context)) !== comparableChatId(origin.chatId)) return false;
+        const originCharacterId = core_text.normalizeText(origin.characterId, 40);
+        if (originCharacterId && originCharacterId !== String(context?.characterId ?? '')) return false;
+        if (currentCharacterRuntimeKey(context) === origin.characterKey) return true;
+        const originAvatar = core_text.normalizeText(origin.characterAvatar, 300);
+        const currentAvatar = currentCharacterAvatar(context);
+        if (!originAvatar || originAvatar !== currentAvatar) return false;
+        // Modern deferred rows capture the live SillyTavern card slot. Once that exact
+        // slot and its avatar still agree, ordinary edits/renames are safe even when a
+        // second card intentionally uses the same avatar. A different slot already
+        // failed above, so cloned cards can never inherit each other's completed work.
+        if (originCharacterId) return true;
+        const matches = (Array.isArray(context.characters) ? context.characters : []).filter((character, index) => {
+            const avatar = core_text.normalizeText(character?.avatar || character?.data?.avatar, 300);
+            return avatar === originAvatar && characterDescriptorExists(context, index);
+        });
+        return matches.length === 1;
+    } catch {
+        return false;
+    }
+}
+
+function characterDescriptorExists(context, index) {
+    return !!archive_groups.characterDescriptor(context, Number(index));
 }
 
 export function isCurrentTaskOrigin(origin, context = getContext()) {

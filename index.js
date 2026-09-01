@@ -1,5 +1,5 @@
-const VERSION = '0.8.41';
-const BUILD = '0.8.41-independent-api-dual-stable-r45.0';
+const VERSION = '0.8.42';
+const BUILD = '0.8.42-universal-memory-durable-r46.0';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

@@ -149,6 +149,7 @@ export function currentCharacterArchiveProbe(context = core_context.getContext()
         avatar,
         characterName,
         characterFingerprint: core_text.normalizeText(descriptor?.fingerprint, 160),
+        characterIndexHint: Number.isInteger(Number(descriptor?.index)) ? Number(descriptor.index) : -1,
         chatId: core_context.comparableChatId(memoryBank?.chatId || core_context.getChatId(context)) || 'current',
     };
 }
@@ -187,6 +188,7 @@ export function getArchiveIndex(context = core_context.getContext()) {
             avatar: core_text.normalizeText(item?.avatar, 300),
             characterName: core_text.normalizeText(item?.characterName, 120) || '未命名角色',
             characterFingerprint: core_text.normalizeText(item?.characterFingerprint, 160),
+            characterIndexHint: Number.isInteger(Number(item?.characterIndexHint)) ? Number(item.characterIndexHint) : -1,
             chatId: core_context.comparableChatId(item?.chatId),
             archiveName: core_text.normalizeText(item?.archiveName, 160) || '未命名档案',
             memoryCount: Math.max(0, Number(item?.memoryCount) || 0),
@@ -223,6 +225,26 @@ export function archiveGroupKeyForEntry(entry) {
     return core_text.normalizeText(entry?.archiveGroupId, 120) || core_context.archiveAutoGroupId(entry);
 }
 
+export function uniqueArchiveIndexEntryForCurrentAvatarChat(entries, context, chatId) {
+    const avatar = core_text.normalizeText(context?.characters?.[context?.characterId]?.avatar || context?.characters?.[context?.characterId]?.data?.avatar, 300);
+    const wantedChatId = core_context.comparableChatId(chatId);
+    if (!avatar || !wantedChatId) return null;
+    // An avatar filename is not a globally unique character locator. Two cards may
+    // intentionally share one image and even reuse the same chat filename. The
+    // rename/edit recovery path is therefore allowed only when this live character
+    // list contains exactly one real descriptor for the avatar.
+    const liveAvatarMatches = (Array.isArray(context?.characters) ? context.characters : [])
+        .map((character, index) => ({ character, descriptor: characterDescriptor(context, index) }))
+        .filter(({ character, descriptor }) => descriptor
+            && core_text.normalizeText(character?.avatar || character?.data?.avatar, 300) === avatar);
+    if (liveAvatarMatches.length !== 1) return null;
+    const matches = (Array.isArray(entries) ? entries : []).filter(item => (
+        core_context.comparableChatId(item?.chatId) === wantedChatId
+        && core_context.archiveStoredAvatar(item) === avatar
+    ));
+    return matches.length === 1 ? matches[0] : null;
+}
+
 export function archiveGroupMap(context = core_context.getContext()) {
     return new Map(getArchiveGroups(context).map(group => [group.id, group]));
 }
@@ -237,7 +259,7 @@ export function archiveGroupMeta(groupId, entries, context = core_context.getCon
         characterName: core_text.normalizeText(first?.characterName, 120),
         avatar: core_context.archiveStoredAvatar(first),
         manual: false,
-        characterIndexHint: -1,
+        characterIndexHint: Number.isInteger(Number(first?.characterIndexHint)) ? Number(first.characterIndexHint) : -1,
         createdAt: 0,
         updatedAt: Math.max(0, ...list.map(item => Number(item?.updatedAt) || 0)),
     };
@@ -268,6 +290,11 @@ export function matchArchiveEntryToCharacter(entry, context = core_context.getCo
     const targetAvatar = core_context.archiveStoredAvatar(entry);
     const targetFingerprint = core_text.normalizeText(entry?.characterFingerprint, 160);
     const candidates = characters.map((_, index) => characterDescriptor(context, index)).filter(Boolean);
+    const targetIndexHint = Number.isInteger(Number(entry?.characterIndexHint)) ? Number(entry.characterIndexHint) : -1;
+    if (targetIndexHint >= 0) {
+        const hinted = candidates.find(item => item.index === targetIndexHint);
+        if (hinted && (!targetAvatar || hinted.avatar === targetAvatar)) return hinted;
+    }
     if (targetFingerprint) {
         const byFingerprint = candidates.filter(item => item.fingerprint === targetFingerprint);
         if (byFingerprint.length === 1) return byFingerprint[0];
@@ -324,18 +351,23 @@ export function ensureArchiveUnresolvedGroup(groups, entry) {
     return group;
 }
 
-export function ensureArchiveAutoGroup(groups, descriptor, fallbackEntry = null) {
+export function ensureArchiveAutoGroup(groups, descriptor, fallbackEntry = null, context = null) {
     const identity = descriptor
-        ? { avatar: descriptor.avatar, characterKey: descriptor.avatar || `character:${descriptor.index}`, characterName: descriptor.name, characterFingerprint: descriptor.fingerprint }
+        ? { avatar: descriptor.avatar, characterKey: descriptor.avatar || `character:${descriptor.index}`, characterName: descriptor.name, characterFingerprint: descriptor.fingerprint, characterIndexHint: descriptor.index }
         : fallbackEntry;
     const id = core_context.archiveAutoGroupId(identity);
     let group = groups.find(item => item.id === id);
     if (!group && descriptor) {
         const stableName = core_text.normalizeText(descriptor.name, 120);
         const stableAvatar = core_text.normalizeText(descriptor.avatar, 300);
+        const liveStableMatches = (Array.isArray(context?.characters) ? context.characters : [])
+            .map((_, index) => characterDescriptor(context, index))
+            .filter(item => item && item.name === stableName && (!stableAvatar || item.avatar === stableAvatar));
         const stableCandidates = groups.filter(item => item?.manual !== true
             && core_text.normalizeText(item?.characterName || item?.label, 120) === stableName
-            && (!stableAvatar || core_text.normalizeText(item?.avatar, 300) === stableAvatar));
+            && (!stableAvatar || core_text.normalizeText(item?.avatar, 300) === stableAvatar)
+            && (Number(item?.characterIndexHint) === descriptor.index
+                || (Number(item?.characterIndexHint) < 0 && liveStableMatches.length === 1)));
         // Ordinary role-card edits change the content fingerprint but not the person. Reuse the
         // one unambiguous auto group so all chat windows continue sharing one Character Profile.
         // If multiple candidates already exist, fail closed by creating/using the exact fingerprint id.
@@ -377,7 +409,7 @@ export function autoClassifyArchiveIndex(context = core_context.getContext(), { 
         if (descriptor && !item.characterFingerprint) item.characterFingerprint = descriptor.fingerprint;
         const group = !descriptor && archiveEntryNeedsManualClassification(item, context)
             ? ensureArchiveUnresolvedGroup(groups, item)
-            : ensureArchiveAutoGroup(groups, descriptor, item);
+            : ensureArchiveAutoGroup(groups, descriptor, item, context);
         if (item.archiveGroupId !== group.id || item.archiveGroupManual) changed += 1;
         item.archiveGroupId = group.id;
         item.archiveGroupManual = false;
@@ -421,7 +453,7 @@ export function moveArchiveIndexEntryToGroup(context, entryId, groupId) {
         const groups = getArchiveGroups(context);
         const group = !descriptor && archiveEntryNeedsManualClassification(item, context)
             ? ensureArchiveUnresolvedGroup(groups, item)
-            : ensureArchiveAutoGroup(groups, descriptor, item);
+            : ensureArchiveAutoGroup(groups, descriptor, item, context);
         item.archiveGroupId = group.id;
         setArchiveGroups(context, groups);
     } else {
@@ -652,7 +684,8 @@ export function upsertArchiveIndex(context, memoryBank) {
     const existingIndex = getArchiveIndex(context);
     const descriptor = characterDescriptor(context, Number(context.characterId));
     const existing = existingIndex.find(old => old.chatId === chatId
-        && core_context.archiveEntryMatchesContextCharacter(old, context));
+        && core_context.archiveEntryMatchesContextCharacter(old, context))
+        || uniqueArchiveIndexEntryForCurrentAvatarChat(existingIndex, context, chatId);
     // Some mobile/cloud contexts briefly expose the character without an avatar while the
     // drawer/chat UI is remounting. Never replace a previously valid archive avatar with ''.
     const avatar = core_text.normalizeText(context.characters?.[context.characterId]?.avatar || context.characters?.[context.characterId]?.data?.avatar, 300)
@@ -665,6 +698,7 @@ export function upsertArchiveIndex(context, memoryBank) {
         characterKey, avatar,
         characterName,
         characterFingerprint: core_text.normalizeText(descriptor?.fingerprint || existing?.characterFingerprint, 160),
+        characterIndexHint: Number.isInteger(Number(descriptor?.index)) ? Number(descriptor.index) : -1,
         chatId,
         archiveName: core_text.normalizeText(memoryBank.archiveName, 160) || archive_repository.fallbackArchiveName(memoryBank.memories),
         memoryCount: memoryBank.memories.length,
@@ -676,7 +710,7 @@ export function upsertArchiveIndex(context, memoryBank) {
     if (isArchiveEntryDeletedFromLibrary(item, context)) return;
     if (!item.archiveGroupManual) {
         const groups = getArchiveGroups(context);
-        const group = ensureArchiveAutoGroup(groups, descriptor, item);
+        const group = ensureArchiveAutoGroup(groups, descriptor, item, context);
         item.archiveGroupId = group.id;
         setArchiveGroups(context, groups);
     }

@@ -9,9 +9,26 @@ import * as modes_heart from '../modes/heart.js';
 import * as modes_room from '../modes/room.js';
 import * as ui_settingsPanel from '../ui/settingsPanel.js';
 
+let deferredDurabilityWarningShown = false;
+
+function reportDeferredDurability() {
+    const status = runtimeState.deferredChatCommits.persistenceStatus?.() || { healthy: false, error: '本地待写回存储不可用。' };
+    if (status.healthy) {
+        deferredDurabilityWarningShown = false;
+        return true;
+    }
+    if (!deferredDurabilityWarningShown) {
+        deferredDurabilityWarningShown = true;
+        const detail = core_text.normalizeText(status.error, 400) || '浏览器没有保存待写回结果。';
+        console.error('[HeartbeatMemories] deferred commit is memory-only', detail);
+        globalThis.toastr?.error?.(`生成结果暂时只能保留在当前页面内：${detail} 请先回到原聊天完成写回，不要刷新页面。`, '心跳回忆');
+    }
+    return false;
+}
+
 export function queueDeferredCommit(origin, commit) {
-    if (!origin?.characterKey || !origin?.chatId || !commit?.kind) return;
-    if (Number(origin.lifecycleEpoch) !== runtimeState.runtimeLifecycleEpoch) return;
+    if (!origin?.characterKey || !origin?.chatId || !commit?.kind) return false;
+    if (Number(origin.lifecycleEpoch) !== runtimeState.runtimeLifecycleEpoch) return false;
     const key = `${origin.characterKey}|${origin.chatId}`;
     const list = runtimeState.deferredChatCommits.get(key) || [];
     if (commit.kind === 'heartPatches') {
@@ -20,7 +37,7 @@ export function queueDeferredCommit(origin, commit) {
         const filtered = list.filter(item => item.kind !== 'heartPatches');
         filtered.push({ kind: 'heartPatches', patches: mergedPatches, origin, queuedAt: Date.now() });
         runtimeState.deferredChatCommits.set(key, filtered);
-        return;
+        return reportDeferredDurability();
     }
     if (commit.kind === 'sessions') {
         const previous = list.find(item => item.kind === 'sessions');
@@ -28,11 +45,36 @@ export function queueDeferredCommit(origin, commit) {
         const filtered = list.filter(item => item.kind !== 'sessions');
         filtered.push({ kind: 'sessions', sessions: mergedSessions, origin, queuedAt: Date.now() });
         runtimeState.deferredChatCommits.set(key, filtered);
-        return;
+        return reportDeferredDurability();
     }
     const filtered = list.filter(item => item.kind !== commit.kind);
     filtered.push({ ...commit, origin, queuedAt: Date.now() });
     runtimeState.deferredChatCommits.set(key, filtered);
+    return reportDeferredDurability();
+}
+
+export function acknowledgeDeferredCommit(key, completedItem) {
+    const list = runtimeState.deferredChatCommits.get(key);
+    if (!Array.isArray(list) || !completedItem) return false;
+    // The flush loop receives the exact object stored in this Map. A same-kind result can
+    // arrive while that flush is awaiting hydration/storage and replaces it with a new
+    // object; timestamps are only millisecond-resolution and must never authorize deleting
+    // that newer merged result.
+    const remaining = list.filter(item => item !== completedItem);
+    if (remaining.length === list.length) return false;
+    if (remaining.length) runtimeState.deferredChatCommits.set(key, remaining);
+    else runtimeState.deferredChatCommits.delete(key);
+    reportDeferredDurability();
+    return true;
+}
+
+export function deferredCommitPersistenceStatus() {
+    return runtimeState.deferredChatCommits.persistenceStatus?.() || {
+        available: false,
+        healthy: false,
+        pendingItems: [...runtimeState.deferredChatCommits.values()].reduce((sum, list) => sum + (Array.isArray(list) ? list.length : 0), 0),
+        error: '本地待写回存储不可用。',
+    };
 }
 
 export function generationTaskKeyForMode(mode, context = null) {
@@ -47,6 +89,60 @@ export function hasGenerationTasks() {
 
 export function hasAnyTask() {
     return runtimeState.busy || hasGenerationTasks() || !!runtimeState.roomLifeRefreshPromise;
+}
+
+export function hasUnloadRisk() {
+    return hasAnyTask()
+        || runtimeState.deferredChatCommits.size > 0
+        || runtimeState.pendingCompressedCacheWrites.size > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Navigation lock support.
+//
+// A task is "chat-bound" when its captured origin still matches the chat the
+// user is looking at. Leaving that chat mid-flight is what the deferred-commit
+// machinery was built to survive, but users asked to be stopped at the door
+// instead of relying on the safety net, so these helpers let the UI ask
+// "is anything still tied to THIS chat right now?".
+// ---------------------------------------------------------------------------
+
+export function currentChatBlockingTasks(context = null) {
+    const labels = [];
+    const seen = new Set();
+    const push = label => {
+        const text = core_text.normalizeText(label, 120);
+        if (!text || seen.has(text)) return;
+        seen.add(text);
+        labels.push(text);
+    };
+    let liveContext = context;
+    if (!liveContext) {
+        try { liveContext = core_context.getContext(); } catch { liveContext = null; }
+    }
+    if (!liveContext) return labels;
+    // The archive import path owns the exclusive `busy` flag and always targets
+    // the chat it was started from.
+    if (runtimeState.busy && (!runtimeState.activeTaskOrigin || core_context.isCurrentTaskOrigin(runtimeState.activeTaskOrigin, liveContext))) {
+        push(runtimeState.activeTaskLabel || '正在整理聊天档案');
+    }
+    for (const task of runtimeState.activeGenerationTasks.values()) {
+        if (task?.origin && !core_context.isCurrentTaskOrigin(task.origin, liveContext)) continue;
+        push(task?.label || task?.mode || '内容生成');
+    }
+    for (const task of runtimeState.activeCgImageTasks.values()) {
+        if (task?.origin && !core_context.isCurrentTaskOrigin(task.origin, liveContext)) continue;
+        push(task?.label || 'CG 绘制');
+    }
+    if (runtimeState.roomLifeRefreshPromise
+        && (!runtimeState.roomLifeRefreshOrigin || core_context.isCurrentTaskOrigin(runtimeState.roomLifeRefreshOrigin, liveContext))) {
+        push('今日生活生成');
+    }
+    return labels;
+}
+
+export function hasCurrentChatBlockingTask(context = null) {
+    return currentChatBlockingTasks(context).length > 0;
 }
 
 export function isGenerationTaskRunning(key) {

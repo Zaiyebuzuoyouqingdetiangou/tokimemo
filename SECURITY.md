@@ -44,7 +44,7 @@ Profile 凭据由 SillyTavern Secrets / Connection Manager 持有，插件只保
 
 ## Current-chat external memory boundary
 
-21. 外部记忆桥接只允许在用户显式“扫描记忆 / 摘要”预检或“创建/更新档案”流程中运行；CG / ADV / 房间（含物品/私人终端深层视图）/ 蝴蝶效应 / ENDING / HEART 不得直接读取外部记忆服务。
+21. 外部记忆桥接只允许在用户显式“自动读取”、文件预览/确认，或“创建/更新档案”消费已经确认的当前聊天来源账本时运行；确认文件不得顺带授权第三方扫描。CG / ADV / 房间（含物品/私人终端深层视图）/ 蝴蝶效应 / ENDING / HEART 不得直接读取外部记忆服务。
 22. 每个 provider 必须绑定发起任务时的 `chatId`；任何 await 返回后如果当前 `chatId` 变化，数据必须丢弃/中止。
 23. EverMind 适配器只允许读取当前聊天 metadata 中的 `st_evermind.group_id`；禁止读取或搜索 `char_group_id` / 角色级跨聊天记忆。
 24. 外部 provider 凭据不得复制到心跳回忆 extension settings、chat metadata、日志、DOM、Prompt 或错误文本。对 EverMind 的现有明文 key 仅允许作为一次 `/proxy` 请求的瞬时 Authorization header；目标必须是 HTTPS，HTTP 只允许 URL 解析后的 `localhost`、`127.0.0.0/8` 或 `::1` loopback。
@@ -464,3 +464,13 @@ The standalone `MODE.CALENDAR` is the only derived feature allowed to organize s
 - Manual 响应执行 Content-Length 与实际读取字节双重上限；非 2xx 响应不读取/回显 provider body。可见正文只从常见 response content 字段提取，reasoning/thought/analysis 不作为 JSON 成品。
 - API 配置改变会增加 epoch、取消当前生成并清除模型缓存；即使 provider 忽略取消，返回后仍必须比较去敏配置 fingerprint，旧连接结果不得解析或保存。
 - HTTP 200 的 provider/Profile 错误包络仍按失败处理。只有明确的限流、超时或服务端状态才允许一次有界重试；缺少状态的泛化失败默认不重试，避免认证/配置错误产生重复付费请求。
+
+## r46.0 通用记忆、来源账本与待写回结果边界
+
+- 柏宝书注册适配只接受精确全局 `STBaiBaiBook` 与数字 `apiVersion === 1`。读取必须使用公开只读 DTO；完整历史优先，注入子集必须标为部分读取。history/snapshot 的 chat 与 revision 任一不一致时，允许稳定重读一次，仍不一致则整批拒绝。
+- 记忆文件扩展名只允许 JSON、JSONL、TXT、MD、MARKDOWN，大小、记录数与字符数均有硬上限。内容只以 inert text/data 解析；预览和提交两次校验当前角色/聊天 binding，DOM 仅用 `textContent` 显示样例。文件文字、宏、HTML、脚本、URL 或提示指令都不获得执行、网络或权限能力。
+- 来源账本按角色 key 与 chat ID 隔离，保存 provider、providerVersion、sourceId、revision、内容散列、原文分片和 complete/partial/truncated/failed coverage。用户可显式清除 Heartbeat 自己的当前聊天账本，但该操作不得删除聊天、正式 Mxxx 或第三方插件数据。
+- 账本读取错误、格式校验失败、容量超限或 IndexedDB transaction abort 必须失败关闭；不得把故障当成空账本后覆盖旧来源。模型 prompt 只获得有界、均匀抽样的副本，完整账本容量与生成上下文预算分离。
+- 未显式标记的世界书只能解释设定；只有用户标记为“历史摘要”的条目可以进入历史证据链，而且仍需结构化抽取、原始来源 ID 与逐字 anchor 校验，不能把纯设定/计划/假设变成过去事实。
+- durable deferred queue 只保存已完成、等待回到原角色/聊天写回的结构化结果，必须剔除 credential-shaped 字段并限制为最多 24 项、3.5 MB、7 天。每项保留 origin 与 archiveRevision；成功写入或永久冲突才 ACK，暂时持久化/备份/缓存写入失败不得丢弃。扩展销毁会阻止旧 lifecycle 继续入队，但不会删除已经持久化的待写回结果。
+- 明信片 sceneTheme 只接受代码白名单；模型不得提供 SVG/HTML/CSS/URL、颜色、坐标或 viewBox。固定 2:1 SVG 使用非裁切布局，地点文字只参与安全的旧缓存主题推断。

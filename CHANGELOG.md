@@ -1,3 +1,12 @@
+# 0.8.42 / r46.0 — 通用记忆接入 / 来源存档 / 生成结果保全
+
+- 新增带版本与覆盖信息的只读记忆适配器：精确支持柏宝书 `globalThis.STBaiBaiBook` API v1（完整 `getHistory()` 优先，注入口径只作部分回退），同时保留酒馆 `1_memory` 与 EverMind 当前聊天来源；任意全局 reader 仍默认关闭。
+- 新增 JSON/JSONL/TXT/Markdown 本地导入、内容与聊天归属预览、历史摘要世界书显式模式，以及独立 IndexedDB 来源账本。文件提交前必须明确确认“已发生历史/摘要，而非角色设定”；未知 JSON 的非元数据字符串叶会带路径进入预览，密钥、密码、Token 与连接配置会被安全排除并报告为部分读取。文件确认与第三方扫描分离，插件卸载或页面重载后，已确认来源仍可直接参与建档。
+- 修复外部记忆被长聊天全部挤掉、长摘要静默截断、provider 原始 ID 丢失与只有外部历史时无法建档的问题；provider、sourceId 和 revision 均按完整身份规范化，超长同前缀值不会碰撞。历史世界书改为逐书基线，旧版合并来源可原子迁移，精确取消 UID 在读取挂起或 partial/failed 时仍立即生效。未知 reader 继续作为默认关闭的实验能力。
+- 修复异聊 CG/今日生活误锁、后台任务和待写回结果的刷新漏报、CG 切聊后图片引用丢失，以及原生确认不可用时宿主聊天或档案室可能无法关闭的问题。待写回结果进入有角色/聊天/档案版本栅栏、容量与期限上限、敏感字段剔除的本地恢复队列；备份/缓存 await 后会再次核对角色，完全克隆卡也按角色槽位隔离，已先写入的备份可幂等重试，同毫秒新结果不会被旧 ACK 删除；临时写入失败不会确认删除。
+- 明信片改为按地点白名单场景选景，旧数据可安全推断风景类型；重做画框比例，避免海面与地面被 `slice` 裁掉。
+- 版本与 bootstrap/runtime 缓存标识同步升级，防止旧 bundle 被继续命中。
+
 # 0.8.41 / r45.0 — 独立 API 双配置与稳定性修复
 
 - 设置页新增同级醒目的“1.1.18 一键配置”和“手动配置”入口，沿用心跳回忆粉蓝纸张风格，仅保留短状态与必要字段。
@@ -67,7 +76,7 @@
 - EverMind 远程读取强制 HTTPS；HTTP 只允许 URL 解析后的严格 loopback。远程明文地址会在创建 Authorization header 和发起 fetch 前被拒绝。
 - 修复缓存写入 12M 字符、读取 12M UTF-8 字节的单位不一致：写入前按 Blob UTF-8 byte size 检查，新 manifest 增加 `sourceBytes`，同时保留旧 `sourceChars` 兼容字段。
 - 零解压性能诊断优先读取 `sourceBytes`；旧 manifest 用 `sourceChars × 3` 做保守上界估算，不执行 TextEncoder、Base64 解码、gzip 解压或大对象序列化。
-- `destroyMemoryTheater()` 完整清理 preflight、deferred commit、snapshot、model、overview 与邻近 UI/task 状态；runtime lifecycle epoch 阻止旧网络 Promise、in-flight gzip 落盘和 gunzip hydrate 在 disable / clean 后回填。旧 hydration 的 `finally` 只按 Promise 身份删除，不能误删新生命周期任务。
+- `destroyMemoryTheater()` 在当时版本会清理 preflight、deferred commit、snapshot、model、overview 与邻近 UI/task 状态；runtime lifecycle epoch 阻止旧网络 Promise、in-flight gzip 落盘和 gunzip hydrate 在 disable / clean 后回填。旧 hydration 的 `finally` 只按 Promise 身份删除，不能误删新生命周期任务。r46 起 deferred commit 已升级为有界持久恢复队列，因此不再随 destroy 清空。
 - 单篇历史档案从“同角色全部聊天 `metadata:true`”改为 `/api/chats/get` 定点读取目标聊天；手动旧档案扫描仍保留原有全角色 discovery 语义。
 - README 当前版本已同步；发布 ZIP 不再包含空 `artifacts/` 目录。GitHub `main` 继续只读，不在本地候选包修复中改写。
 

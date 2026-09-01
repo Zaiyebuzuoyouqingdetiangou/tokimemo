@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 import {
     normalizeTravel,
+    resolveTravelSceneTheme,
     safeTravelLocationKind,
     travelMarkerPosition,
     travelMarkerPositions,
@@ -47,6 +48,23 @@ test('r44 travel normalizer keeps safe text, real evidence and code-owned geomet
     assert.equal(safeTravelLocationKind('x\" onclick=\"alert(1)'), 'near');
 });
 
+test('far-place scene themes are allowlisted, explicit when valid, and inferred for old caches', () => {
+    assert.equal(resolveTravelSceneTheme({ sceneTheme: 'scifi', name: 'Ocean Port' }, 'coast'), 'scifi');
+    assert.equal(resolveTravelSceneTheme({ name: 'Ocean Port', region: 'North Shore' }, 'city'), 'coast');
+    assert.equal(resolveTravelSceneTheme({ name: '山间终点', summary: '雪峰下的高地。' }, 'coast'), 'mountain');
+    assert.equal(resolveTravelSceneTheme({ name: 'Cedar Grove', summary: 'A quiet woodland trail.' }, 'city'), 'forest');
+    assert.equal(resolveTravelSceneTheme({ name: 'Ordinary Workshop', summary: 'No visual landmark.' }, 'fantasy'), 'fantasy');
+    assert.equal(resolveTravelSceneTheme({ sceneTheme: 'url(evil)', name: 'Transport Hub', summary: 'A plain terminal.' }, 'historic'), 'historic');
+
+    const input = validLocations();
+    input[2] = { ...input[2], sceneTheme: 'scifi' };
+    input[3] = { ...input[3], sceneTheme: '"><svg onload=alert(1)>' };
+    const session = normalizeTravel({ mapTheme: 'coast', locations: input }, memoryBank);
+    assert.equal(session.locations[2].sceneTheme, 'scifi');
+    assert.equal(session.locations[3].sceneTheme, 'mountain');
+    assert.ok(session.locations.filter(item => item.kind === 'far').every(item => /^(?:city|coast|forest|mountain|campus|historic|fantasy|scifi)$/.test(item.sceneTheme)));
+});
+
 test('r44 travel rejects a memory stop without matching evidence and requires both map ranges', () => {
     const bad = validLocations();
     bad[0] = { ...bad[0], sourceMemoryIds: ['M404'], sourceMemoryAnchor: '不存在' };
@@ -68,6 +86,8 @@ test('r44 travel is an independent portal with nearby dialogue and CSS text post
     const prompt = travelPrompt({ name1: '阿澄', name2: '林砚' }, memoryBank);
     assert.match(prompt, /独立地图，不是手机 App/);
     assert.match(prompt, /禁止输出坐标、颜色值、CSS、HTML、JavaScript、URL/);
+    assert.match(prompt, /sceneTheme/);
+    assert.match(prompt, /city\/coast\/forest\/mountain\/campus\/historic\/fantasy\/scifi/);
     assert.match(prompt, /near 3～5 个，far 2～4 个/);
     const [constants, snapshots, overlay, view, styles] = await Promise.all([
         readFile(new URL('src/core/constants.js', root), 'utf8'),

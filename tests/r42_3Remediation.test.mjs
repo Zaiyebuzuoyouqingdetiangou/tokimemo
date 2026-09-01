@@ -194,7 +194,7 @@ test('r42.3 destroy clears transient state and stale async results cannot refill
     await assert.rejects(pendingSnapshot, error => error?.name === 'AbortError');
 
     assert.equal(runtimeState.memoryPreflightCache.size, 0);
-    assert.equal(runtimeState.deferredChatCommits.size, 0);
+    assert.equal(runtimeState.deferredChatCommits.size, 1, 'r46 preserves durable deferred results across runtime reload');
     assert.equal(runtimeState.archiveSnapshotCache.size, 0);
     assert.equal(runtimeState.connectionModelCache.size, 0);
     assert.equal(runtimeState.archiveOverviewCache.items.length, 0);
@@ -204,10 +204,10 @@ test('r42.3 destroy clears transient state and stale async results cannot refill
     assert.equal(runtimeState.activeAvatarDialogue, null);
 
     queueDeferredCommit(oldOrigin, { kind: 'sessions', sessions: { heart: { kind: 'heart' } } });
-    assert.equal(runtimeState.deferredChatCommits.size, 0, 'old-lifecycle result must not queue after destroy');
+    assert.equal(runtimeState.deferredChatCommits.size, 1, 'old-lifecycle result must not add to the preserved durable queue');
     const currentOrigin = captureTaskOrigin(context, 'current-revision');
     queueDeferredCommit(currentOrigin, { kind: 'sessions', sessions: { heart: { kind: 'heart' } } });
-    assert.equal(runtimeState.deferredChatCommits.size, 1, 'current lifecycle keeps normal deferred commits');
+    assert.equal(runtimeState.deferredChatCommits.size, 2, 'current lifecycle adds normal deferred commits beside preserved results');
     runtimeState.deferredChatCommits.clear();
 
     globalThis.document = originalDocument;

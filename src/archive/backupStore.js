@@ -24,19 +24,25 @@ function utf8JsonSize(value, label) {
     return bytes;
 }
 
+function normalizedCharacterIndexHint(value) {
+    return Number.isInteger(Number(value)) ? Number(value) : -1;
+}
+
 function normalizedIdentity(entry, memory = null) {
     const chatId = core_context.comparableChatId(memory?.chatId || entry?.chatId);
     const characterName = core_text.normalizeText(entry?.characterName || memory?.characterName, 120) || '未命名角色';
     const avatar = core_text.normalizeText(core_context.archiveStoredAvatar(entry), 300);
     const characterKey = core_text.normalizeText(entry?.characterKey, 300) || avatar;
     const characterFingerprint = core_text.normalizeText(entry?.characterFingerprint, 160);
-    const identity = { ...entry, characterKey, avatar, characterName, characterFingerprint, chatId };
+    const characterIndexHint = normalizedCharacterIndexHint(entry?.characterIndexHint);
+    const identity = { ...entry, characterKey, avatar, characterName, characterFingerprint, characterIndexHint, chatId };
     return {
         entryId: core_context.archiveIndexEntryId(identity),
         characterKey,
         avatar,
         characterName,
         characterFingerprint,
+        characterIndexHint,
         chatId,
     };
 }
@@ -47,15 +53,50 @@ function identityMatches(record, entry) {
     const recordName = core_text.normalizeText(record.characterName, 120);
     const recordAvatar = core_text.normalizeText(record.avatar, 300);
     const recordKey = core_text.normalizeText(record.characterKey, 300);
+    const recordFingerprint = core_text.normalizeText(record.characterFingerprint, 160);
+    const recordHint = normalizedCharacterIndexHint(record.characterIndexHint);
+    if ((wanted.characterIndexHint >= 0 || recordHint >= 0)
+        && (wanted.characterIndexHint < 0 || recordHint < 0 || wanted.characterIndexHint !== recordHint)) return false;
+    if (wanted.characterFingerprint && recordFingerprint && wanted.characterFingerprint !== recordFingerprint) return false;
     if (wanted.characterName && wanted.characterName !== '未命名角色' && recordName && recordName !== wanted.characterName) return false;
     if (wanted.avatar && recordAvatar && recordAvatar !== wanted.avatar) return false;
     if (wanted.characterKey && recordKey && recordKey !== wanted.characterKey) return false;
     return true;
 }
 
+function identityMatchesExceptName(record, entry) {
+    const wanted = normalizedIdentity(entry);
+    if (!record || !wanted.chatId || core_context.comparableChatId(record.chatId) !== wanted.chatId) return false;
+    const recordAvatar = core_text.normalizeText(record.avatar, 300);
+    const recordKey = core_text.normalizeText(record.characterKey, 300);
+    const recordHint = normalizedCharacterIndexHint(record.characterIndexHint);
+    // Exact-key card edits may adopt a newly introduced slot hint, but an existing
+    // non-matching hint is never transferable to another card.
+    if (recordHint >= 0 && wanted.characterIndexHint >= 0 && recordHint !== wanted.characterIndexHint) return false;
+    if (recordHint >= 0 && wanted.characterIndexHint < 0) return false;
+    // A rename capability is deliberately unavailable when either stable locator is
+    // absent. This keeps the exceptional path narrower than the ordinary matcher.
+    if (!wanted.avatar || !recordAvatar || wanted.avatar !== recordAvatar) return false;
+    if (!wanted.characterKey || !recordKey || wanted.characterKey !== recordKey) return false;
+    return true;
+}
+
+function backupRecordsEquivalent(previous, incoming) {
+    if (!previous || !incoming || previous.entryId !== incoming.entryId
+        || previous.archiveRevision !== incoming.archiveRevision) return false;
+    try {
+        return JSON.stringify(previous.memory) === JSON.stringify(incoming.memory)
+            && JSON.stringify(previous.cache ?? null) === JSON.stringify(incoming.cache ?? null);
+    } catch { return false; }
+}
+
 export function hasMatchingArchiveDeletionFence(records, entry) {
+    const entryId = core_context.archiveIndexEntryId(entry);
     return (Array.isArray(records) ? records : [])
-        .some(record => record?.deleted === true && identityMatches(record, entry));
+        .some(record => record?.deleted === true && (
+            core_text.normalizeText(record?.entryId, 120) === entryId
+            || identityMatches(record, entry)
+        ));
 }
 
 function compatibleCacheValue(cache, memory) {
@@ -78,7 +119,11 @@ function compatibleCacheValue(cache, memory) {
 
 function normalizeRecord(raw, entry = null) {
     if (!raw || typeof raw !== 'object' || Number(raw.storageVersion) !== core_constants.ARCHIVE_BACKUP_STORAGE_VERSION) return null;
-    if (entry && !identityMatches(raw, entry)) return null;
+    const exactEntryId = entry
+        && core_text.normalizeText(raw?.entryId, 120)
+        && core_text.normalizeText(raw.entryId, 120) === core_context.archiveIndexEntryId(entry);
+    if (entry && !exactEntryId && !identityMatches(raw, entry)
+        && !(entry?.allowCharacterRename === true && identityMatchesExceptName(raw, entry))) return null;
     const memory = cloneValue(raw.memory);
     if (!memory || typeof memory !== 'object' || !Array.isArray(memory.memories)) return null;
     const identity = normalizedIdentity(raw, memory);
@@ -178,7 +223,7 @@ async function idbPut(record, expected = null, options = {}) {
             const aliases = new Map();
             for (const candidate of [exactRaw, ...chatRecords]) {
                 const id = core_text.normalizeText(candidate?.entryId, 120);
-                if (id && identityMatches(candidate, record)) aliases.set(id, candidate);
+                if (id && (id === core_text.normalizeText(record.entryId, 120) || identityMatches(candidate, record))) aliases.set(id, candidate);
             }
             const matching = [...aliases.values()];
             if (hasMatchingArchiveDeletionFence(matching, record) && options.allowDeletedRecreate !== true) {
@@ -191,6 +236,7 @@ async function idbPut(record, expected = null, options = {}) {
                 return;
             }
             let previous = normalizeRecord(exactRaw);
+            const exactPrevious = previous;
             if (!previous && liveAliases.length === 1) {
                 previous = liveAliases[0];
                 // Preserve a legacy/index-assigned durable key instead of creating a second
@@ -198,9 +244,21 @@ async function idbPut(record, expected = null, options = {}) {
                 record = { ...record, entryId: previous.entryId };
             }
             const previousRevision = core_text.normalizeText(previous?.archiveRevision, 240);
-            if (previous && !identityMatches(previous, record)) return transaction.abort();
+            const expectedRevision = core_text.normalizeText(expected?.revision, 240);
+            const authorizedIdentityRefresh = options.allowCharacterRename === true
+                && exactPrevious === previous
+                && core_text.normalizeText(previous?.entryId, 120) === core_text.normalizeText(record.entryId, 120)
+                && identityMatchesExceptName(previous, record)
+                && ((expected?.present === true && previousRevision === expectedRevision)
+                    || (options.seed === true && previousRevision === record.archiveRevision));
+            if (previous && !identityMatches(previous, record) && !authorizedIdentityRefresh) return transaction.abort();
             if (expected?.present === false && previous) return transaction.abort();
-            if (expected?.present === true && previous && previousRevision !== core_text.normalizeText(expected.revision, 240)) return transaction.abort();
+            const idempotentRetry = options.allowIdempotentRetry === true
+                && expected?.present === true
+                && exactPrevious === previous
+                && identityMatches(previous, record)
+                && backupRecordsEquivalent(previous, record);
+            if (expected?.present === true && previous && previousRevision !== expectedRevision && !idempotentRetry) return transaction.abort();
             if (expected?.present === true && !previous && options.allowMissingPrevious !== true) return transaction.abort();
             if (options.allowDeletedRecreate === true) {
                 // A deliberate new canonical archive may replace an earlier deletion. Clear
@@ -223,7 +281,7 @@ async function idbPut(record, expected = null, options = {}) {
                 outcome = true;
                 return;
             }
-            store.put(record);
+            if (!idempotentRetry) store.put(record);
             outcome = true;
         };
         const getRequest = store.get(record.entryId);
@@ -260,8 +318,9 @@ async function idbDeleteOne(db, entry) {
             for (const record of records.values()) {
                 if (identityMatches(record, entry)) ids.add(core_text.normalizeText(record.entryId, 120));
             }
-            const exact = records.get(identity.entryId);
-            if (!exact || identityMatches(exact, entry)) ids.add(identity.entryId);
+            // The explicit durable key remains the deletion authority when card metadata drifts.
+            // Identity matching is only needed to discover legacy aliases under other keys.
+            if (identity.entryId) ids.add(identity.entryId);
             for (const id of ids) {
                 if (!id) continue;
                 const source = records.get(id) || entry;
@@ -331,12 +390,19 @@ export async function replaceArchiveBackup(entry, memory, cache, expectedState, 
 
 export async function seedArchiveBackup(entry, memory, cache = null) {
     const record = buildRecord(entry, memory, cache);
-    const saved = await backend().put(record, null, { seed: true, allowMissingPrevious: true });
+    const saved = await backend().put(record, null, {
+        seed: true,
+        allowMissingPrevious: true,
+        allowCharacterRename: entry?.allowCharacterRename === true,
+    });
     return saved ? cloneValue(record) : null;
 }
 
 export async function updateArchiveBackupCache(entry, memory, cache) {
-    return replaceArchiveBackup(entry, memory, cache, { present: true, revision: core_text.normalizeText(memory?.archiveRevision, 240) }, { allowMissingPrevious: true });
+    return replaceArchiveBackup(entry, memory, cache, { present: true, revision: core_text.normalizeText(memory?.archiveRevision, 240) }, {
+        allowMissingPrevious: true,
+        allowCharacterRename: entry?.allowCharacterRename === true,
+    });
 }
 
 export async function deleteArchiveBackup(entries) {

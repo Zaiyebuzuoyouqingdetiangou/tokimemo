@@ -12,6 +12,65 @@ import * as ui_archivePortal from './archivePortal.js';
 import * as ui_overlay from './overlay.js';
 import * as ui_styles from './styles.js';
 
+let pendingMemoryFilePreview = null;
+let memoryIngressRequestEpoch = 0;
+
+export async function refreshMemoryIngressUi() {
+    const requestEpoch = ++memoryIngressRequestEpoch;
+    const panel = document.getElementById(core_constants.SETTINGS_ID);
+    if (!panel) return;
+    const status = panel.querySelector('[data-rmt-memory-ingress-status]');
+    const details = panel.querySelector('[data-rmt-memory-source-list]');
+    const historyBooks = panel.querySelector('[data-rmt-memory-history-books]');
+    let capturedScopeKey = '';
+    const isCurrent = () => {
+        if (requestEpoch !== memoryIngressRequestEpoch || !capturedScopeKey) return false;
+        try {
+            const liveContext = core_context.currentCharacterGuard();
+            return archive_repository.memorySourceScopeForContext(liveContext).key === capturedScopeKey;
+        } catch { return false; }
+    };
+    try {
+        const context = core_context.currentCharacterGuard();
+        capturedScopeKey = archive_repository.memorySourceScopeForContext(context).key;
+        const summary = await archive_repository.currentMemorySourceLedgerSummary(context);
+        if (!isCurrent()) return;
+        const preflight = archive_repository.getMemoryPreflight(context);
+        const displayedSources = [...summary.sources];
+        for (const source of preflight?.sources || []) {
+            const latest = { provider: source.label || source.id, id: source.id, coverage: source.coverage, count: source.count };
+            const index = displayedSources.findIndex(item => (item.provider || item.id) === source.id);
+            if (index >= 0) displayedSources[index] = latest;
+            else displayedSources.push(latest);
+        }
+        if (status) status.textContent = summary.sources.length
+            ? `● 已保存 ${summary.sources.length} 个来源 · ${summary.recordCount} 条记录 · ${summary.totalChars.toLocaleString()} 字符`
+            : '○ 当前聊天还没有已保存来源';
+        if (details) {
+            details.replaceChildren();
+            for (const source of displayedSources) {
+                const row = document.createElement('div');
+                const coverage = source.coverage?.status || 'partial';
+                const labels = { complete: '完整', partial: '部分', truncated: '已截断', failed: '失败' };
+                row.textContent = `${labels[coverage] || '部分'} · ${source.label || source.provider || source.id}${source.coverage?.returned ? ` · ${source.coverage.returned} 条` : ''}${source.coverage?.reason ? ` · ${source.coverage.reason}` : ''}`;
+                details.appendChild(row);
+            }
+            if (!details.childElementCount) details.textContent = '暂无持久化来源。';
+        }
+        if (historyBooks) {
+            const selection = archive_repository.getMemoryWorldInfoSelection(context);
+            historyBooks.innerHTML = selection.books.length
+                ? selection.books.map(book => `<label class="checkbox_label rmt-settings-check"><input type="checkbox" data-rmt-memory-history-book="${core_text.esc(book.name)}" ${book.historySource ? 'checked' : ''}> ${core_text.esc(book.name)} · 作为历史摘要</label>`).join('')
+                : '<small>请先在档案室选择记忆相关世界书；默认仍只作设定解释。</small>';
+        }
+    } catch (error) {
+        if (capturedScopeKey && !isCurrent()) return;
+        if (status) status.textContent = `○ 来源账本不可用 · ${core_text.toastText(error?.message || error, 120)}`;
+        if (details) details.textContent = '无法读取当前聊天来源。';
+        if (historyBooks) historyBooks.textContent = '请先打开单角色聊天。';
+    }
+}
+
 export async function refreshModelOptions({ fetchRemote = false } = {}) {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
     if (!panel) return;
@@ -256,6 +315,7 @@ export function hydrateSettingsPanel() {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
     if (!panel) return false;
     refreshSettingsMemoryStatus({ lightweight: true });
+    void refreshMemoryIngressUi();
     if (panel.dataset.rmtHydrated === '1') return true;
     refreshGenerationSettingsUi();
     panel.dataset.rmtHydrated = '1';
@@ -341,6 +401,29 @@ export function mountSettings() {
           <label class="checkbox_label rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"> 手动确认 SillyTavern Image Generation 已启用（自动检测失败时使用 /sd 兜底）</label>
           <label class="checkbox_label rmt-settings-check"><input data-rmt-tt-display type="checkbox"> TT 显示模式（勾选＝r32 顶部安全区；不勾选＝全屏）</label>
         </div>
+        <div class="rmt-settings-card rmt-api-box">
+          <div class="rmt-settings-card-head"><span>MEM</span><div><b>记忆来源</b><small>当前角色 · 当前聊天</small></div></div>
+          <div class="rmt-api-source-grid" role="group" aria-label="记忆来源操作">
+            <button type="button" class="menu_button rmt-api-source-card" data-rmt-memory-auto-read><span class="rmt-api-source-badge">AUTO</span><b>自动读取</b><small>已注册的当前聊天来源</small></button>
+            <button type="button" class="menu_button rmt-api-source-card" data-rmt-memory-file-choose><span class="rmt-api-source-badge">FILE</span><b>导入记忆</b><small>JSON · JSONL · TXT · Markdown</small></button>
+          </div>
+          <input type="file" accept=".json,.jsonl,.txt,.md,.markdown,application/json,text/plain,text/markdown" data-rmt-memory-file-input hidden>
+          <div class="rmt-api-status" data-rmt-memory-ingress-status role="status">○ 正在读取来源状态…</div>
+          <div class="rmt-api-source-panel" data-rmt-memory-file-preview hidden>
+            <b data-rmt-memory-file-preview-title>待确认的记忆文件</b>
+            <small data-rmt-memory-file-preview-meta></small>
+            <small data-rmt-memory-file-preview-binding></small>
+            <div data-rmt-memory-file-preview-sample></div>
+            <label class="checkbox_label rmt-settings-check"><input type="checkbox" data-rmt-memory-file-history-confirm> 我确认这是已经发生的历史/摘要，不是角色设定</label>
+            <button type="button" class="menu_button rmt-settings-wide" data-rmt-memory-file-commit disabled>确认作为历史导入当前聊天</button>
+          </div>
+          <details class="rmt-api-source-panel"><summary>来源详情与世界书类型</summary>
+            <div data-rmt-memory-source-list>暂无持久化来源。</div>
+            <div data-rmt-memory-history-books></div>
+          </details>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-memory-source-clear>清除当前聊天已导入来源</button>
+          <small>只清除心跳回忆自己的来源账本；不会删除聊天、第三方记忆或正式 Mxxx。</small>
+        </div>
         <div class="rmt-settings-archive-actions">
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
@@ -353,8 +436,77 @@ export function mountSettings() {
         </div>
       </div>`;
     mount.appendChild(panel);
-    panel.addEventListener('change', event => {
+    panel.addEventListener('change', async event => {
         const target = event.target;
+        if (target.matches?.('[data-rmt-memory-file-input]')) {
+            const file = target.files?.[0];
+            pendingMemoryFilePreview = null;
+            if (!file) return;
+            const previewPanel = panel.querySelector('[data-rmt-memory-file-preview]');
+            const title = panel.querySelector('[data-rmt-memory-file-preview-title]');
+            const meta = panel.querySelector('[data-rmt-memory-file-preview-meta]');
+            const binding = panel.querySelector('[data-rmt-memory-file-preview-binding]');
+            const sample = panel.querySelector('[data-rmt-memory-file-preview-sample]');
+            const historyConfirm = panel.querySelector('[data-rmt-memory-file-history-confirm]');
+            const commitButton = panel.querySelector('[data-rmt-memory-file-commit]');
+            archive_repository.previewCurrentChatMemoryFile(file).then(preview => {
+                pendingMemoryFilePreview = preview;
+                if (title) title.textContent = preview.fileName;
+                if (meta) {
+                    const skipped = Number(preview.skippedSensitiveFields || 0) + Number(preview.skippedConfigFields || 0);
+                    meta.textContent = `${preview.records.length} 条 · ${preview.totalChars.toLocaleString()} 字符 · ${(preview.bytes / 1024).toFixed(1)} KB${skipped ? ` · 已排除敏感/配置字段 ${skipped} 个` : ''}`;
+                }
+                if (binding) binding.textContent = `归属：${preview.scope.characterName || '当前角色'} · ${preview.scope.chatId}`;
+                if (sample) {
+                    const excerpt = preview.records.slice(0, 3).map((item, index) => {
+                        const label = item.title ? `${item.title}：` : '';
+                        return `${index + 1}. ${label}${core_text.normalizeText(item.content, 220)}`;
+                    }).join('\n');
+                    sample.textContent = `内容预览\n${excerpt}`;
+                }
+                if (historyConfirm) historyConfirm.checked = false;
+                if (commitButton) commitButton.disabled = true;
+                if (previewPanel) previewPanel.hidden = false;
+            }).catch(error => {
+                if (previewPanel) previewPanel.hidden = true;
+                globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+            }).finally(() => { target.value = ''; });
+            return;
+        }
+        if (target.matches?.('[data-rmt-memory-file-history-confirm]')) {
+            const commitButton = panel.querySelector('[data-rmt-memory-file-commit]');
+            if (commitButton) commitButton.disabled = !target.checked || !pendingMemoryFilePreview;
+            return;
+        }
+        if (target.matches?.('[data-rmt-memory-history-book]')) {
+            let context = null;
+            let previousSelection = null;
+            let attemptedSelectionJson = '';
+            try {
+                context = core_context.currentCharacterGuard();
+                previousSelection = archive_repository.getMemoryWorldInfoSelection(context);
+                archive_repository.updateMemoryWorldInfoBookSelection(context, target.dataset.rmtMemoryHistoryBook, { historySource: !!target.checked });
+                attemptedSelectionJson = JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books);
+                const worldInfo = await archive_repository.syncSelectedWorldInfoHistoryLedger(context);
+                const bookResult = worldInfo.books?.find(book => book.name === target.dataset.rmtMemoryHistoryBook);
+                if (target.checked && bookResult?.coverageInfo?.status !== 'complete') {
+                    globalThis.toastr?.warning?.(`已标记，但本轮只完成部分同步：${bookResult?.coverageInfo?.reason || '请查看来源状态'}`, '心跳回忆');
+                } else {
+                    globalThis.toastr?.success?.(target.checked ? '已标记为历史摘要来源。' : '已恢复为设定解释来源。', '心跳回忆');
+                }
+                void refreshMemoryIngressUi();
+            } catch (error) {
+                if (!error?.worldHistoryPersisted && context && previousSelection
+                    && JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books) === attemptedSelectionJson) {
+                    archive_repository.setMemoryWorldInfoSelection(context, previousSelection);
+                    const previousBook = previousSelection.books.find(book => book.name === target.dataset.rmtMemoryHistoryBook);
+                    target.checked = previousBook?.historySource === true;
+                }
+                if (error?.name !== 'AbortError') globalThis.toastr?.error?.(`历史来源没有同步，已恢复原选择：${core_text.toastText(error?.message || error)}`, '心跳回忆');
+                void refreshMemoryIngressUi();
+            }
+            return;
+        }
         if (target.matches?.('[data-rmt-api-profile]')) {
             panel.dataset.rmtApiEditor = 'profile';
             const connectionProfileId = core_text.normalizeText(target.value, 160);
@@ -409,6 +561,60 @@ export function mountSettings() {
     });
     panel.addEventListener('click', event => {
         if (event.target.closest?.('.rmt-settings-header')) hydrateSettingsPanel();
+        const memoryAutoRead = event.target.closest?.('[data-rmt-memory-auto-read]');
+        if (memoryAutoRead) {
+            memoryAutoRead.disabled = true;
+            memoryAutoRead.querySelector('small')?.replaceChildren(document.createTextNode('正在读取…'));
+            archive_repository.readCurrentChatMemoryPlugins()
+                .then(() => refreshMemoryIngressUi())
+                .catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'))
+                .finally(() => { memoryAutoRead.disabled = false; const small = memoryAutoRead.querySelector('small'); if (small) small.textContent = '已注册的当前聊天来源'; });
+            return;
+        }
+        const memoryFileChoose = event.target.closest?.('[data-rmt-memory-file-choose]');
+        if (memoryFileChoose) {
+            panel.querySelector('[data-rmt-memory-file-input]')?.click?.();
+            return;
+        }
+        const memoryFileCommit = event.target.closest?.('[data-rmt-memory-file-commit]');
+        if (memoryFileCommit) {
+            if (!pendingMemoryFilePreview) {
+                globalThis.toastr?.warning?.('请先选择并预览记忆文件。', '心跳回忆');
+                return;
+            }
+            if (!panel.querySelector('[data-rmt-memory-file-history-confirm]')?.checked) {
+                globalThis.toastr?.warning?.('请先确认：文件内容是已经发生的历史/摘要，不是角色设定。', '心跳回忆');
+                return;
+            }
+            memoryFileCommit.disabled = true;
+            archive_repository.commitCurrentChatMemoryFilePreview(pendingMemoryFilePreview, core_context.currentCharacterGuard(), { confirmedHistory: true })
+                .then(async summary => {
+                    pendingMemoryFilePreview = null;
+                    const previewPanel = panel.querySelector('[data-rmt-memory-file-preview]');
+                    if (previewPanel) previewPanel.hidden = true;
+                    globalThis.toastr?.success?.(`已导入来源账本：${summary.recordCount} 条。`, '心跳回忆');
+                    await refreshMemoryIngressUi();
+                })
+                .catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'))
+                .finally(() => { memoryFileCommit.disabled = false; });
+            return;
+        }
+        const memorySourceClear = event.target.closest?.('[data-rmt-memory-source-clear]');
+        if (memorySourceClear) {
+            if (!globalThis.confirm?.('只清除当前角色、当前聊天在“心跳回忆”内保存的来源账本。正式 Mxxx、聊天和第三方记忆都不会删除。确定继续吗？')) return;
+            memorySourceClear.disabled = true;
+            archive_repository.clearCurrentChatImportedSources()
+                .then(async () => {
+                    pendingMemoryFilePreview = null;
+                    const previewPanel = panel.querySelector('[data-rmt-memory-file-preview]');
+                    if (previewPanel) previewPanel.hidden = true;
+                    await refreshMemoryIngressUi();
+                    globalThis.toastr?.success?.('当前聊天的心跳回忆来源账本已清除并验证。', '心跳回忆');
+                })
+                .catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'))
+                .finally(() => { memorySourceClear.disabled = false; });
+            return;
+        }
         const manualChoiceButton = event.target.closest?.('[data-rmt-api-select-manual]');
         if (manualChoiceButton) {
             core_settings.beginApiConfigurationOperation();
@@ -545,5 +751,6 @@ export function mountSettings() {
         if (panel.dataset.rmtHydrated !== '1' && event.target.matches?.('input,select,button,textarea')) hydrateSettingsPanel();
     });
     refreshSettingsMemoryStatus({ lightweight: true });
+    void refreshMemoryIngressUi();
     return true;
 }

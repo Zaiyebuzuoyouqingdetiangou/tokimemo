@@ -19,6 +19,37 @@ function cloneCacheValue(value) {
     return JSON.parse(JSON.stringify(value));
 }
 
+function archiveIdentityRefreshRequired(existing, probe) {
+    if (!existing || !probe) return false;
+    const existingHint = Number.isInteger(Number(existing?.characterIndexHint)) ? Number(existing.characterIndexHint) : -1;
+    const probeHint = Number.isInteger(Number(probe?.characterIndexHint)) ? Number(probe.characterIndexHint) : -1;
+    return core_text.normalizeText(existing?.characterName, 120) !== core_text.normalizeText(probe?.characterName, 120)
+        || core_text.normalizeText(existing?.characterFingerprint, 160) !== core_text.normalizeText(probe?.characterFingerprint, 160)
+        || existingHint !== probeHint;
+}
+
+function stabilizeDeferredMigrationTimestamps(cache, previousCache, memoryBank) {
+    if (!cache || typeof cache !== 'object') return cache;
+    const timestamp = Math.max(1, Math.floor(Number(memoryBank?.updatedAt) || Number(memoryBank?.createdAt) || 1));
+    cache.updatedAt = timestamp;
+    for (const mode of Object.values(core_constants.MODE)) {
+        const nextMeta = cache?.[mode]?.generationMeta;
+        if (!nextMeta || typeof nextMeta !== 'object') continue;
+        const previousParts = previousCache?.[mode]?.generationMeta?.parts;
+        const nextParts = nextMeta.parts && typeof nextMeta.parts === 'object' ? nextMeta.parts : {};
+        let stamped = false;
+        for (const [part, record] of Object.entries(nextParts)) {
+            if (Object.prototype.hasOwnProperty.call(previousParts || {}, part)) continue;
+            if (record && typeof record === 'object') record.updatedAt = timestamp;
+            stamped = true;
+        }
+        if (stamped && nextMeta.lastUpdate && typeof nextMeta.lastUpdate === 'object') {
+            nextMeta.lastUpdate.updatedAt = timestamp;
+        }
+    }
+    return cache;
+}
+
 export function prepareBoundedRawCache(cache) {
     let json;
     try { json = JSON.stringify(cache ?? {}); }
@@ -32,13 +63,20 @@ export function prepareBoundedRawCache(cache) {
 
 export function archiveBackupEntryForContext(context, memoryBank) {
     const probe = archive_groups.currentCharacterArchiveProbe(context, memoryBank);
-    const existing = archive_groups.getArchiveIndex(context).find(item => item.chatId === probe.chatId
+    const index = archive_groups.getArchiveIndex(context);
+    const exact = index.find(item => item.chatId === probe.chatId
         && core_context.archiveEntryMatchesContextCharacter(item, context));
+    const renameFallback = exact ? null : archive_groups.uniqueArchiveIndexEntryForCurrentAvatarChat(index, context, probe.chatId);
+    const existing = exact || renameFallback;
     return {
         ...probe,
         // Preserve a legacy/index-assigned entry ID. Re-hashing a fingerprinted probe here could
         // create a second invisible backup that the existing library row would never find.
         entryId: existing ? core_context.archiveIndexEntryId(existing) : core_context.archiveIndexEntryId(probe),
+        // This is only a capability hint. backupStore independently requires an exact
+        // durable key, same chat/avatar/key and the expected previous revision before
+        // allowing a display-name-only identity update.
+        allowCharacterRename: !!existing && (!!renameFallback || archiveIdentityRefreshRequired(existing, probe)),
         archiveName: core_text.normalizeText(memoryBank?.archiveName, 160),
     };
 }
@@ -433,12 +471,20 @@ function assertArchiveCommitState(context, expectedState) {
     }
 }
 
+function assertExpectedTaskOrigin(context, origin) {
+    if (!origin) return;
+    if (!core_context.deferredCommitOriginMatchesContext(origin, context)) {
+        throw new Error('后台档案对应的角色已经切换，本次结果没有写入其他角色；回到原角色后会继续重试。');
+    }
+}
+
 export async function saveImportedMemory(context, memoryBank, expectedChatId = memoryBank?.chatId, options = {}) {
     let currentContext = core_context.currentCharacterGuard();
     const currentChatId = core_context.getChatId(currentContext);
     if (!expectedChatId || currentChatId !== expectedChatId || core_context.getChatId(context) !== expectedChatId) {
         throw new Error('档案整理期间聊天窗口已经切换，本次结果已安全丢弃；请回到原聊天后重新更新档案。');
     }
+    assertExpectedTaskOrigin(currentContext, options.expectedTaskOrigin);
     if (!context.chatMetadata || typeof context.chatMetadata !== 'object') {
         throw new Error('当前聊天无法保存 metadata，不能创建或更新档案。');
     }
@@ -454,16 +500,20 @@ export async function saveImportedMemory(context, memoryBank, expectedChatId = m
         if (candidate && typeof candidate === 'object' && Object.values(core_constants.MODE).some(mode => candidate?.[mode]?.kind === mode)) {
             preservedCache = cloneCacheValue(candidate);
             archive_repository.migrateDerivedCacheRevision(preservedCache, previousMemory, stagedMemory);
+            if (options.expectedTaskOrigin) stabilizeDeferredMigrationTimestamps(preservedCache, candidate, stagedMemory);
         }
     }
 
     const storedCache = preservedCache ? await prepareCacheBackupValue(preservedCache) : null;
     currentContext = core_context.currentCharacterGuard();
     if (core_context.getChatId(currentContext) !== expectedChatId) throw new Error('档案整理期间聊天窗口已经切换，本次结果已安全丢弃。');
+    assertExpectedTaskOrigin(currentContext, options.expectedTaskOrigin);
     assertArchiveCommitState(currentContext, expectedState);
     const backupEntry = archiveBackupEntryForContext(currentContext, stagedMemory);
     await archive_backupStore.replaceArchiveBackup(backupEntry, stagedMemory, storedCache, expectedState, {
         allowMissingPrevious: expectedState.present === true,
+        allowCharacterRename: backupEntry.allowCharacterRename === true,
+        allowIdempotentRetry: !!options.expectedTaskOrigin,
         // Only a new canonical archive created by an explicit user action may clear a prior
         // deletion fence. Background seed/cache writers never receive this capability.
         allowDeletedRecreate: expectedState.present === false,
@@ -473,6 +523,7 @@ export async function saveImportedMemory(context, memoryBank, expectedChatId = m
     // an old foreground/deferred result cannot win a same-chat revision race.
     currentContext = core_context.currentCharacterGuard();
     if (core_context.getChatId(currentContext) !== expectedChatId) throw new Error('档案整理期间聊天窗口已经切换，本次结果已安全丢弃。');
+    assertExpectedTaskOrigin(currentContext, options.expectedTaskOrigin);
     assertArchiveCommitState(currentContext, expectedState);
     const scope = cacheScopeFromContext(currentContext);
     currentContext.chatMetadata[core_constants.MEMORY_KEY] = stagedMemory;
@@ -562,9 +613,13 @@ export async function deleteSession(mode, expectedChatId = '') {
     return deleteSessions([mode], expectedChatId);
 }
 
-export function saveSession(mode, session, expectedChatId = core_text.normalizeText(session?.chatId, 240)) {
+export function saveSession(mode, session, expectedChatId = core_text.normalizeText(session?.chatId, 240), expectedTaskOrigin = null) {
     try {
         const context = core_context.currentCharacterGuard();
+        if (expectedTaskOrigin && !core_context.deferredCommitOriginMatchesContext(expectedTaskOrigin, context)) {
+            console.warn('[HeartbeatMemories] discarded cache save for stale character origin', { mode, expectedChatId });
+            return false;
+        }
         const currentChatId = core_context.getChatId(context);
         if (!expectedChatId || currentChatId !== expectedChatId) {
             console.warn('[HeartbeatMemories] discarded cache save for stale chat', { mode, expectedChatId, currentChatId });

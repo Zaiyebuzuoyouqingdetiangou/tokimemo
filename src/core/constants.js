@@ -84,6 +84,29 @@ export const EXTERNAL_MEMORY_CHUNK_CHARS = 26000;
 
 export const EXTERNAL_MEMORY_FETCH_LIMIT = 200;
 
+// r46 universal-memory ingress keeps the durable source ledger independent from the
+// much smaller generation budget above.  Importing more source material must not make
+// every model request larger.
+export const MEMORY_PROVIDER_REGISTRY_VERSION = 1;
+
+export const MEMORY_SOURCE_LEDGER_DB_NAME = 'heartbeatMemoriesSourceLedgerV1';
+
+export const MEMORY_SOURCE_LEDGER_STORE_NAME = 'sourceLedgers';
+
+export const MEMORY_SOURCE_LEDGER_STORAGE_VERSION = 1;
+
+export const MAX_MEMORY_SOURCE_LEDGER_RECORDS = 8000;
+
+export const MAX_MEMORY_SOURCE_LEDGER_CHARS = 8000000;
+
+export const MAX_MEMORY_SOURCE_FRAGMENT_CHARS = 5200;
+
+export const MAX_MEMORY_FILE_BYTES = 4000000;
+
+export const MAX_MEMORY_FILE_RECORDS = 5000;
+
+export const MAX_MEMORY_FILE_CHARS = 4000000;
+
 export const ARCHIVE_INDEX_SETTINGS_KEY = 'heartbeatMemoriesArchiveIndexV1';
 
 export const ARCHIVE_INDEX_MAX = 1200;

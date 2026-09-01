@@ -1,15 +1,15 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.41-independent-api-dual-stable-r45.0",
+  "js": "index.js?heartbeat=0.8.42-universal-memory-durable-r46.0",
   "author": "Toto",
-  "version": "0.8.41",
+  "version": "0.8.42",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r45.0 将独立 API 拆成 1.1.18 一键配置与手动配置，并修复 Profile 串线、能力校验、预设污染及异步迟到结果。",
+  "description": "r46.0 新增通用只读记忆适配、文件导入与来源账本，并修复明信片选景、生成导航和待写回结果保全。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

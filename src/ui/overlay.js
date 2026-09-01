@@ -74,9 +74,33 @@ export function overlayCloseButtonFromEvent(event, overlay) {
     return button;
 }
 
+// While a generation task is still bound to this chat the archive overlay stays
+// modal on purpose: it covers SillyTavern, so keeping it open is what actually
+// prevents the user from switching or closing the chat mid-flight. The override
+// is always available so a stalled request can never trap anyone.
+export function confirmLeaveDuringGeneration({
+    title = '生成还没结束，确定要离开吗？',
+    action = '关闭档案室',
+    allowUnavailable = false,
+} = {}) {
+    const labels = core_requestCoordinator.currentChatBlockingTasks();
+    if (!labels.length) return true;
+    const list = labels.slice(0, 4).map(label => `· ${label}`).join('\n');
+    const more = labels.length > 4 ? `\n· 以及其它 ${labels.length - 4} 项` : '';
+    return confirmExplicitAction(
+        title,
+        `当前聊天窗口还有 ${labels.length} 项心跳回忆任务在进行：\n${list}${more}\n\n只${action}、继续留在当前网页时，任务会在页面内后台运行。切换聊天后，成功完成的结果会先在本机安全等待，回到原聊天再写回。刷新或关闭整个网页仍会中断尚未完成的模型/生图请求。`,
+        { destructive: true, unavailableFallback: allowUnavailable },
+    );
+}
+
 export function closeArchiveOverlayFromUser() {
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
     if (!overlay || overlay.hidden) return closeOverlay();
+    if (!confirmLeaveDuringGeneration({ allowUnavailable: true })) {
+        globalThis.toastr?.info?.('已为你保持档案室打开，避免生成期间误切聊天窗口。', '心跳回忆');
+        return overlay;
+    }
     if (runtimeState.busy) runtimeState.activeTaskBackgrounded = true;
     if (core_requestCoordinator.hasAnyTask()) globalThis.toastr?.info?.('当前任务会继续在后台运行，完成后会通知你。', '心跳回忆');
     return closeOverlay();
@@ -146,8 +170,9 @@ export function openOverlay() {
         overlay.addEventListener('error', generation_imageGeneration.handleOverlayMediaError, true);
         if (typeof globalThis.HTMLDialogElement === 'function' && overlay instanceof globalThis.HTMLDialogElement) {
             overlay.addEventListener('cancel', event => {
+                // ESC on desktop and the Android back gesture both land here.
                 event.preventDefault();
-                closeOverlay();
+                closeArchiveOverlayFromUser();
             });
         }
     }
@@ -240,13 +265,17 @@ export function setRegenerateVisible(visible) {
     }
 }
 
-export function confirmExplicitAction(title, detail, { destructive = false } = {}) {
+export function confirmExplicitAction(title, detail, { destructive = false, unavailableFallback = false } = {}) {
     const prefix = destructive ? '⚠️ ' : '';
     const message = `${prefix}${core_text.normalizeText(title, 160)}\n\n${core_text.normalizeText(detail, 1200)}\n\n确定继续吗？`;
     try {
         if (typeof globalThis.confirm === 'function') return globalThis.confirm(message);
     } catch (error) {
         console.warn('[HeartbeatMemories] native confirmation unavailable', error);
+    }
+    if (unavailableFallback) {
+        globalThis.toastr?.warning?.('当前环境无法显示系统确认框；已按你的关闭操作退出档案室。正在运行的任务仍留在当前网页后台，刷新网页会中断它。', '心跳回忆');
+        return true;
     }
     globalThis.toastr?.warning?.('当前环境无法显示确认提示。为避免误操作，本次操作已取消。', '心跳回忆');
     return false;
@@ -463,7 +492,12 @@ export function showChooser() {
     const publicReaderSetting = memorySettings.usePublicMemoryProviderReaders;
     const detectedExternalSources = archive_repository.externalMemorySourceSummary(context);
     const preflight = archive_repository.getMemoryPreflight(context);
-    const importedSources = ready ? core_text.cleanArray((memory.externalMemorySources || []).map(item => `${core_text.normalizeText(item?.label, 80)} ${Number(item?.count) || 0}条`), 8, 120) : [];
+    const importedSources = ready ? core_text.cleanArray((memory.externalMemorySources || []).map(item => {
+        const label = core_text.normalizeText(item?.label, 80);
+        const coverage = { complete: '完整', partial: '部分', truncated: '已截断', failed: '失败' }[item?.coverageStatus] || '部分';
+        const reason = core_text.normalizeText(item?.coverageReason, 80);
+        return `${coverage} · ${label} ${Number(item?.count) || 0}条${reason ? ` · ${reason}` : ''}`;
+    }), 8, 220) : [];
     const worldInfoSelectionText = archive_repository.memoryWorldInfoSelectionSummary(context);
     const preflightText = preflight
         ? `本次已扫描：记忆/摘要 ${preflight.sources.length} 个来源 · ${preflight.records.length} 条${preflight.worldInfo?.entries?.length ? ` · 世界书 ${preflight.worldInfo.entries.length} 条` : ''} · ${Number(preflight.totalChars || 0).toLocaleString()} 字符`
@@ -1217,12 +1251,28 @@ export function handleOverlayClick(event) {
     if (action === 'adv-next') return ui_advEventView.advStep(1);
 }
 
-export function handleOverlayChange(event) {
+function refreshMemoryWorldInfoBookControls(context, world, section, expectedScopeKey) {
+    try {
+        if (archive_repository.memorySourceScopeForContext(core_context.currentCharacterGuard()).key !== expectedScopeKey) return;
+    } catch { return; }
+    const book = archive_repository.getMemoryWorldInfoSelection(context).books.find(item => item.name === world);
+    const all = book?.all === true;
+    const selected = new Set(all ? [] : (book?.entryUids || []).map(String));
+    const allInput = section?.querySelector?.('[data-rmt-memory-wi-all]');
+    if (allInput) allInput.checked = all;
+    section?.querySelectorAll?.('[data-rmt-memory-wi-entry]').forEach(input => {
+        input.disabled = all;
+        input.checked = !all && selected.has(String(input.dataset.rmtMemoryWiUid || ''));
+    });
+}
+
+export async function handleOverlayChange(event) {
     const advSelectEl = event.target.closest?.('[data-rmt-adv-select]');
     if (advSelectEl) return ui_advEventView.advSelect(advSelectEl.value);
     const allToggle = event.target.closest?.('[data-rmt-memory-wi-all]');
     if (allToggle) {
         const context = core_context.currentCharacterGuard();
+        const expectedScopeKey = archive_repository.memorySourceScopeForContext(context).key;
         const world = core_text.normalizeText(allToggle.dataset.rmtMemoryWiAll, 240);
         const selection = archive_repository.getMemoryWorldInfoSelection(context);
         if (allToggle.checked && !selection.books.some(book => book.name === world) && selection.books.length >= core_constants.MAX_MEMORY_WORLD_INFO_BOOKS) {
@@ -1232,12 +1282,24 @@ export function handleOverlayChange(event) {
         }
         archive_repository.updateMemoryWorldInfoBookSelection(context, world, { all: !!allToggle.checked, entryUids: [] });
         const section = allToggle.closest?.('[data-rmt-memory-wi-book]');
-        section?.querySelectorAll?.('[data-rmt-memory-wi-entry]').forEach(input => { input.disabled = !!allToggle.checked; if (allToggle.checked) input.checked = false; });
+        const attemptedSelectionJson = JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books);
+        refreshMemoryWorldInfoBookControls(context, world, section, expectedScopeKey);
+        try { await archive_repository.syncSelectedWorldInfoHistoryLedger(context); }
+        catch (error) {
+            if (!error?.worldHistoryPersisted
+                && JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books) === attemptedSelectionJson) {
+                archive_repository.setMemoryWorldInfoSelection(context, selection);
+            }
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(`世界书选择没有同步，已恢复原选择：${core_text.toastText(error?.message || error)}`, '心跳回忆');
+        } finally {
+            refreshMemoryWorldInfoBookControls(context, world, section, expectedScopeKey);
+        }
         return;
     }
     const entryToggle = event.target.closest?.('[data-rmt-memory-wi-entry]');
     if (entryToggle) {
         const context = core_context.currentCharacterGuard();
+        const expectedScopeKey = archive_repository.memorySourceScopeForContext(context).key;
         const world = core_text.normalizeText(entryToggle.dataset.rmtMemoryWiEntry, 240);
         const uid = core_text.normalizeText(entryToggle.dataset.rmtMemoryWiUid, 120);
         const selection = archive_repository.getMemoryWorldInfoSelection(context);
@@ -1255,6 +1317,19 @@ export function handleOverlayChange(event) {
         }
         if (entryToggle.checked) set.add(uid); else set.delete(uid);
         archive_repository.updateMemoryWorldInfoBookSelection(context, world, { all: false, entryUids: [...set] });
+        const attemptedSelectionJson = JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books);
+        const section = entryToggle.closest?.('[data-rmt-memory-wi-book]');
+        refreshMemoryWorldInfoBookControls(context, world, section, expectedScopeKey);
+        try { await archive_repository.syncSelectedWorldInfoHistoryLedger(context); }
+        catch (error) {
+            if (!error?.worldHistoryPersisted
+                && JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books) === attemptedSelectionJson) {
+                archive_repository.setMemoryWorldInfoSelection(context, selection);
+            }
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(`世界书选择没有同步，已恢复原选择：${core_text.toastText(error?.message || error)}`, '心跳回忆');
+        } finally {
+            refreshMemoryWorldInfoBookControls(context, world, section, expectedScopeKey);
+        }
         return;
     }
 }

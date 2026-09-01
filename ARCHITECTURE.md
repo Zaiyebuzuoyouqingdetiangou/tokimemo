@@ -1,4 +1,4 @@
-# Heartbeat Memories r35–r45 Architecture
+# Heartbeat Memories r35–r46 Architecture
 
 r35 is a zero-schema modularization of the r34 runtime. r36 adds Calendar as the first post-modularization feature without changing the canonical archive schema. The persisted archive and derived-cache contracts remain compatible.
 
@@ -12,6 +12,7 @@ src/
 │  ├─ independentApi.js        Profile capability gate + same-origin manual transport
 │  ├─ context.js               live chat / origin identity
 │  ├─ requestCoordinator.js    task keys, provider permits, timeout
+│  ├─ deferredCommitStore.js   bounded local recovery queue for origin-bound results
 │  ├─ cache.js                 derived cache + revision-bound persistence
 │  ├─ evidence.js              memory ID + anchor validation
 │  ├─ incremental.js           per-part coverage cursors
@@ -19,6 +20,9 @@ src/
 ├─ archive/
 │  ├─ repository.js            canonical archive and memory-source processing
 │  ├─ backupStore.js            full-runtime-only browser-local IndexedDB backup
+│  ├─ memoryProviders.js        versioned current-chat read-only adapters
+│  ├─ memoryFileImport.js       inert JSON/JSONL/TXT/Markdown preview/import
+│  ├─ sourceLedger.js            role/chat-bound IndexedDB source ledger
 │  ├─ groups.js                character grouping/index metadata
 │  ├─ snapshots.js             historical snapshot lookup
 │  └─ library.js               archive-library behavior and writeability gate
@@ -150,6 +154,15 @@ Butterfly r43 is a content-contract change only. `ui/butterflyView.js`, its dive
 - `core/independentApi.js` owns the 1.1.18-labelled one-click capability gate, manual URL normalization, fixed same-origin `/status` and `/generate` calls, bounded response reading, visible-content extraction and credential-free errors.
 - `generation/client.js` keeps the single provider permit/timeout/JSON-validation pipeline and dispatches through only the selected adapter. Profile requests use messages with preset/instruct disabled; manual requests never browser-fetch the third-party URL.
 - Settings changes advance an API epoch, clear model caches and cancel live tasks. Each completed generation additionally compares a credential-redacted configuration fingerprint before parsing or saving.
+
+## r46.0 universal memory and deferred-result durability contract
+
+- Registered readers are explicit adapters. `STBaiBaiBook` is accepted only with numeric `apiVersion === 1`; `getHistory()` is preferred, `getInjectedHistory()` is a partial fallback, and history/snapshot must agree on current chat and revision. Unknown global readers remain a separate default-off compatibility path.
+- File import is a two-step, current-role/current-chat-bound operation: parse inert JSON/JSONL/TXT/Markdown into a visible preview, then require an explicit history/summary-not-character-setting confirmation and revalidate the binding. Unknown JSON string leaves are included with their data path unless they are recognized metadata; credential and connection-configuration fields are excluded and make coverage explicitly partial. Confirming one file does not authorize a third-party scan. Ordinary World Info remains setting context; only books explicitly marked as history summaries enter the source ledger as summary evidence.
+- `archive/sourceLedger.js` stores the confirmed provider/file text, full-identity-derived provider key, stable source ID, revision, provider version and coverage in a separate IndexedDB ledger. Long provider/source/revision identities are compacted with a hash of the complete value rather than a truncated prefix. Mutations for one role/chat are serialized and multi-book changes commit as one write. Complete revisions replace their baseline; partial revisions overlay it. Per-book UID allowlists implement immediate explicit revocation, including while a replacement read is still pending, and legacy combined World Info records migrate to per-book baselines before the legacy stream is tombstoned. Prompt sampling is bounded independently from full stored source text. A failed/corrupt ledger read aborts update rather than being interpreted as an empty ledger, and writes/deletes wait for transaction completion.
+- Archive creation first consumes an in-memory scan preview when present, otherwise it may load the already-confirmed bound ledger directly. This keeps prior sources usable after provider removal or page reload without granting a removed plugin new authority.
+- Completed work that cannot yet target its origin chat is stored by `core/deferredCommitStore.js` in a credential-scrubbed localStorage queue bounded to 24 items, 3.5 MB and seven days. Role origin is rechecked after backup/cache awaits and inside final session/archive commits, not only before the operation starts. Runtime scopes, archive indexes, groups and backups include a character-slot hint so even identical cloned cards stay separate; same-avatar edit/rename recovery remains revision-gated. A completed backup can be retried idempotently after a temporary navigation race. ACK removes only the exact object that was flushed, so a newer same-millisecond result cannot be deleted with the old one. ACK otherwise occurs only after a successful write or a permanent origin/revision conflict; transient failures remain queued. Runtime destruction clears live tasks and ephemeral caches but preserves this durable queue.
+- Travel postcard geometry remains code-owned. The model chooses only an allowlisted scene theme; SVG uses a fixed 2:1 viewBox with non-cropping layout, and legacy locations infer a safe theme from bounded text.
 
 ## r41.5 performance contract
 

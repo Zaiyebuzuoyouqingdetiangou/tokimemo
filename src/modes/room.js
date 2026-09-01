@@ -711,10 +711,11 @@ export async function ensureRoomLifePlan({ force = false, quiet = false } = {}) 
         if (!quiet && force) globalThis.toastr?.info?.('当前生成队列较忙，等房间主体/其他任务完成后再更新今日生活。', '心跳回忆');
         return current || fallbackRoomLifePlan(roomSession, today);
     }
+    const origin = { ...core_context.captureTaskOrigin(context, archiveRevision), chatId: core_context.comparableChatId(chatId) };
+    runtimeState.roomLifeRefreshOrigin = origin;
     runtimeState.roomLifeRefreshPromise = (async () => {
         try {
             if (!quiet) ui_overlay.setInnerLoading(true, `正在生成 ${dateKey} 的生活时间线…`);
-            const origin = { ...core_context.captureTaskOrigin(context, archiveRevision), chatId: core_context.comparableChatId(chatId) };
             const raw = await generation_client.requestJson(roomLifePrompt(context, roomSession, memoryBank, today), `正在让“他的房间”进入 ${dateKey} 的生活状态…`, { maxTokens: 6144, context, origin, taskKey, mode: core_constants.MODE.ROOM, background: true });
             const plan = normalizeRoomLifePlan(raw, roomSession, memoryBank, today);
             roomSession.lifePlan = plan;
@@ -747,6 +748,7 @@ export async function ensureRoomLifePlan({ force = false, quiet = false } = {}) 
         } finally {
             if (!quiet) ui_overlay.setInnerLoading(false);
             runtimeState.roomLifeRefreshPromise = null;
+            if (runtimeState.roomLifeRefreshOrigin === origin) runtimeState.roomLifeRefreshOrigin = null;
         }
     })();
     return runtimeState.roomLifeRefreshPromise;

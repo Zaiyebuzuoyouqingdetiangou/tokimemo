@@ -9,15 +9,27 @@ test('public extension identity stays fixed while version is separate', async ()
   const manifest = JSON.parse(await readFile(new URL('manifest.json', root), 'utf8'));
   const readme = await readFile(new URL('README.md', root), 'utf8');
   const index = await readFile(new URL('index.js', root), 'utf8');
+  const changelog = await readFile(new URL('CHANGELOG.md', root), 'utf8');
+  const architecture = await readFile(new URL('ARCHITECTURE.md', root), 'utf8');
+  const security = await readFile(new URL('SECURITY.md', root), 'utf8');
+  const securityReview = await readFile(new URL('SECURITY_REVIEW.md', root), 'utf8');
 
   assert.equal(manifest.display_name, '心跳回忆');
-  assert.equal(manifest.version, '0.8.41');
+  assert.equal(manifest.version, '0.8.42');
   assert.equal(manifest.auto_update, true);
   assert.equal(manifest.homePage, 'https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo');
   assert.doesNotMatch(manifest.display_name, /\d+\.\d+/);
   assert.match(readme, /^# 心跳回忆\s*$/m);
   assert.doesNotMatch(readme.split('\n')[0], /\d+\.\d+/);
-  assert.match(index, /const VERSION = '0\.8\.41'/);
+  assert.match(readme, /当前版本：\*\*0\.8\.42（r46\.0）\*\*/);
+  assert.match(changelog, /^# 0\.8\.42 \/ r46\.0/m);
+  assert.match(architecture, /^# Heartbeat Memories r35–r46 Architecture/m);
+  assert.match(architecture, /^## r46\.0 universal memory and deferred-result durability contract/m);
+  assert.match(security, /^## r46\.0 通用记忆、来源账本与待写回结果边界/m);
+  assert.match(securityReview, /^## 0\.8\.42 \/ r46\.0/m);
+  assert.match(index, /const VERSION = '0\.8\.42'/);
+  assert.match(index, /const BUILD = '0\.8\.42-universal-memory-durable-r46\.0'/);
+  assert.equal(manifest.js, 'index.js?heartbeat=0.8.42-universal-memory-durable-r46.0');
 });
 
 

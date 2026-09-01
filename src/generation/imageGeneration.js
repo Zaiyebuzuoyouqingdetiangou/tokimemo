@@ -203,6 +203,12 @@ export function renderCurrentCgMode(mode, session) {
     else if (mode === core_constants.MODE.ADV) ui_advEventView.renderAdvMode();
 }
 
+export function deferCgSessionIfOriginChanged(origin, mode, session) {
+    if (core_context.isCurrentTaskOrigin(origin)) return null;
+    const durable = core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [mode]: session } });
+    return { deferred: true, durable };
+}
+
 export function abortActiveCgImageTasks() {
     for (const task of runtimeState.activeCgImageTasks.values()) {
         try { task?.controller?.abort?.(); } catch {}
@@ -254,14 +260,38 @@ export async function drawSelectedCgImage() {
         return;
     }
     const controller = new AbortController();
-    runtimeState.activeCgImageTasks.set(taskKey, { mode, itemId, startedAt: Date.now(), controller });
+    runtimeState.activeCgImageTasks.set(taskKey, {
+        mode,
+        itemId,
+        origin,
+        label: mode === core_constants.MODE.ALBUM ? '相簿 CG 绘制' : 'ADV CG 绘制',
+        startedAt: Date.now(),
+        controller,
+    });
     renderCurrentCgMode(mode, session);
     try {
         const generated = await invokeImageGeneration(prompt, context, { provider: imageState.provider, signal: controller.signal });
         const url = normalizeCgImageUrl(generated?.url);
         if (!url) throw new Error('生图插件没有返回可保存的 SillyTavern 本地图片路径。');
-        if (runtimeState.cgImageLifecycleEpoch !== lifecycleEpoch || !core_context.isCurrentTaskOrigin(origin)) {
-            globalThis.toastr?.warning?.('CG 已由生图扩展完成，但期间聊天窗口或插件状态发生变化，因此没有把图片写入当前档案缓存。', '心跳回忆');
+        if (runtimeState.cgImageLifecycleEpoch !== lifecycleEpoch) {
+            globalThis.toastr?.warning?.('CG 已由生图扩展完成，但插件已重载/停用，因此没有接收旧运行实例的图片结果。', '心跳回忆');
+            return;
+        }
+        const nextImage = {
+            url,
+            prompt,
+            provider: core_constants.CG_IMAGE_PROVIDER,
+            generatedAt: Date.now(),
+        };
+        if (!core_context.isCurrentTaskOrigin(origin)) {
+            item.cgImage = nextImage;
+            const { durable } = deferCgSessionIfOriginChanged(origin, mode, session);
+            globalThis.toastr?.[durable ? 'success' : 'warning']?.(
+                durable
+                    ? `CG 已绘制并安全等待写回：${item.title}；回到原聊天后会自动保存引用。`
+                    : `CG 已绘制：${item.title}；结果暂存在当前页面，回到原聊天前不要刷新。`,
+                '心跳回忆',
+            );
             return;
         }
         const liveContext = core_context.currentCharacterGuard();
@@ -272,12 +302,6 @@ export async function drawSelectedCgImage() {
             : latestSession.events?.find(entry => entry.id === itemId);
         if (!liveItem) throw new Error('CG 事件已经变化，已停止保存图片引用。');
         const previousImage = liveItem.cgImage;
-        const nextImage = {
-            url,
-            prompt,
-            provider: core_constants.CG_IMAGE_PROVIDER,
-            generatedAt: Date.now(),
-        };
         liveItem.cgImage = nextImage;
         const committed = core_cache.saveSession(mode, latestSession, expectedChatId);
         if (!committed) {

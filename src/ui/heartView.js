@@ -262,7 +262,8 @@ export function heartStripImagePrompt(item) {
 export async function drawHeartStripImage(stripId) {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
     if (!archive_library.requireWritableArchiveAction()) return;
-    const item = runtimeState.activeSession.dailyStrips.find(strip => strip.id === stripId) || selectedHeartStrip();
+    const session = runtimeState.activeSession;
+    const item = session.dailyStrips.find(strip => strip.id === stripId) || selectedHeartStrip();
     if (!item) return;
     const context = core_context.currentCharacterGuard();
     const imageState = generation_imageGeneration.imageGenerationUiState(context);
@@ -294,7 +295,14 @@ export async function drawHeartStripImage(stripId) {
         return;
     }
     const controller = new AbortController();
-    runtimeState.activeCgImageTasks.set(taskKey, { mode: core_constants.MODE.HEART, itemId: item.id, startedAt: Date.now(), controller });
+    runtimeState.activeCgImageTasks.set(taskKey, {
+        mode: core_constants.MODE.HEART,
+        itemId: item.id,
+        origin,
+        label: '日常一格绘制',
+        startedAt: Date.now(),
+        controller,
+    });
     renderHeart();
     try {
         const generated = await generation_imageGeneration.invokeImageGeneration(prompt, context, {
@@ -304,8 +312,25 @@ export async function drawHeartStripImage(stripId) {
         });
         const url = generation_imageGeneration.normalizeCgImageUrl(generated?.url);
         if (!url) throw new Error('生图插件没有返回可保存的 SillyTavern 本地图片路径。');
-        if (runtimeState.cgImageLifecycleEpoch !== lifecycleEpoch || !core_context.isCurrentTaskOrigin(origin)) {
-            globalThis.toastr?.warning?.('图片已经生成，但期间聊天或插件状态发生变化，因此没有写入当前档案缓存。', '心跳回忆');
+        if (runtimeState.cgImageLifecycleEpoch !== lifecycleEpoch) {
+            globalThis.toastr?.warning?.('图片已经生成，但插件已重载/停用，因此没有接收旧运行实例的结果。', '心跳回忆');
+            return;
+        }
+        const nextImage = {
+            url,
+            prompt,
+            provider: core_constants.CG_IMAGE_PROVIDER,
+            generatedAt: Date.now(),
+        };
+        if (!core_context.isCurrentTaskOrigin(origin)) {
+            item.cgImage = nextImage;
+            const { durable } = generation_imageGeneration.deferCgSessionIfOriginChanged(origin, core_constants.MODE.HEART, session);
+            globalThis.toastr?.[durable ? 'success' : 'warning']?.(
+                durable
+                    ? `日常一格已绘制并安全等待写回：${item.title}；回到原聊天后会自动保存引用。`
+                    : `日常一格已绘制：${item.title}；结果暂存在当前页面，回到原聊天前不要刷新。`,
+                '心跳回忆',
+            );
             return;
         }
         const liveContext = core_context.currentCharacterGuard();
@@ -314,18 +339,12 @@ export async function drawHeartStripImage(stripId) {
         const liveItem = latest.dailyStrips?.find(strip => strip.id === item.id);
         if (!liveItem) throw new Error('日常一格条目已经变化，停止保存图片。');
         const oldImage = liveItem.cgImage;
-        const nextImage = {
-            url,
-            prompt,
-            provider: core_constants.CG_IMAGE_PROVIDER,
-            generatedAt: Date.now(),
-        };
         liveItem.cgImage = nextImage;
         if (!core_cache.saveSession(core_constants.MODE.HEART, latest, expectedChatId)) {
             liveItem.cgImage = oldImage;
             throw new Error('图片已生成，但档案版本已经变化，因此未保存引用。');
         }
-        const activeItem = runtimeState.activeSession.dailyStrips?.find(strip => strip.id === item.id);
+        const activeItem = runtimeState.activeSession?.dailyStrips?.find(strip => strip.id === item.id);
         if (activeItem) activeItem.cgImage = nextImage;
         globalThis.toastr?.success?.(`日常一格已绘制：${item.title}`, '心跳回忆');
     } catch (error) {

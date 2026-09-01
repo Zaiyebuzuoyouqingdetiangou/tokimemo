@@ -23,16 +23,37 @@ export function safeTravelLocationKind(value) {
     return value === 'far' ? 'far' : 'near';
 }
 
-function travelThemeFallback(value) {
+function safeTravelTheme(value, fallback = 'city') {
+    const normalized = core_text.normalizeText(value, 30).toLowerCase();
+    if (core_constants.TRAVEL_MAP_THEMES.has(normalized)) return normalized;
+    const safeFallback = core_text.normalizeText(fallback, 30).toLowerCase();
+    return core_constants.TRAVEL_MAP_THEMES.has(safeFallback) ? safeFallback : 'city';
+}
+
+function travelSceneThemeFromText(value) {
     const text = core_text.normalizeText(value, 5000).toLowerCase();
-    if (/(?:海|港|船|岛|coast|ocean|harbou?r|maritime)/i.test(text)) return 'coast';
-    if (/(?:林|森|园|植物|forest|woodland)/i.test(text)) return 'forest';
-    if (/(?:山|高地|雪|mountain|alpine)/i.test(text)) return 'mountain';
-    if (/(?:学校|学院|大学|校园|campus|school|academy)/i.test(text)) return 'campus';
-    if (/(?:古代|历史|旧城|王国|histor|ancient|kingdom)/i.test(text)) return 'historic';
-    if (/(?:魔法|幻想|精灵|龙|fantasy|magic)/i.test(text)) return 'fantasy';
-    if (/(?:星际|赛博|太空|科幻|scifi|cyber|space)/i.test(text)) return 'scifi';
-    return 'city';
+    if (/(?:星际|赛博|太空|宇宙|空间站|科幻|未来城|\b(?:sci[- ]?fi|cyber|space(?:port|station)?|futuristic)\b)/iu.test(text)) return 'scifi';
+    if (/(?:魔法|幻想|精灵|龙谷|仙境|秘境|\b(?:fantasy|magic|elven|dragon)\b)/iu.test(text)) return 'fantasy';
+    if (/(?:海|港|码头|灯塔|潮|沙滩|岛|滨|湖畔|河口|\b(?:coast|ocean|sea|harbou?r|port|maritime|island|beach|lighthouse)\b)/iu.test(text)) return 'coast';
+    if (/(?:山|峰|岭|高原|雪原|冰川|峡谷|\b(?:mountain|alpine|peak|highland|glacier|canyon)\b)/iu.test(text)) return 'mountain';
+    if (/(?:森林|林地|树林|雨林|竹林|植物园|\b(?:forest|woodland|grove|jungle|botanical)\b)/iu.test(text)) return 'forest';
+    if (/(?:学校|学院|大学|校园|校舍|\b(?:campus|school|academy|university|college)\b)/iu.test(text)) return 'campus';
+    if (/(?:古代|历史|旧城|古城|遗迹|王国|城堡|神殿|\b(?:history|historic|historical|ancient|kingdom|castle|ruins|temple)\b)/iu.test(text)) return 'historic';
+    if (/(?:城|都市|市中心|街区|车站|广场|天际线|\b(?:city|urban|downtown|metropolis|station|plaza|skyline)\b)/iu.test(text)) return 'city';
+    return '';
+}
+
+function travelThemeFallback(value) {
+    return travelSceneThemeFromText(value) || 'city';
+}
+
+// New sessions persist sceneTheme. Cached r44/r45 sessions can omit it, so the
+// renderer also calls this resolver and derives a safe scene from place semantics.
+export function resolveTravelSceneTheme(item, mapTheme = 'city') {
+    const explicit = core_text.normalizeText(item?.sceneTheme, 30).toLowerCase();
+    if (core_constants.TRAVEL_MAP_THEMES.has(explicit)) return explicit;
+    const inferred = travelSceneThemeFromText([item?.name, item?.region, item?.summary].join('\n'));
+    return inferred || safeTravelTheme(mapTheme);
 }
 
 function normalizePostcard(value, fallbackTone = 'paper') {
@@ -49,7 +70,7 @@ function normalizePostcard(value, fallbackTone = 'paper') {
     };
 }
 
-function normalizeTravelLocation(item, index, memoryBank, sourceMemoryIds = null) {
+function normalizeTravelLocation(item, index, memoryBank, mapTheme, sourceMemoryIds = null) {
     const kindRaw = core_text.normalizeText(item?.kind, 20).toLowerCase();
     if (!core_constants.TRAVEL_LOCATION_KINDS.has(kindRaw)) return null;
     const name = core_text.normalizeText(item?.name, 100);
@@ -86,14 +107,18 @@ function normalizeTravelLocation(item, index, memoryBank, sourceMemoryIds = null
         sourceMemoryAnchor: reference.sourceMemoryAnchor,
         dialogueLines,
         postcard,
+        sceneTheme: kindRaw === 'far' ? resolveTravelSceneTheme({ ...item, name, region, summary }, mapTheme) : '',
     };
 }
 
 export function normalizeTravel(data, memoryBank, { allowPartial = false, sourceMemoryIds = null } = {}) {
     const raw = Array.isArray(data?.locations) ? data.locations : [];
+    const requestedTheme = core_text.normalizeText(data?.mapTheme, 30).toLowerCase();
+    const themeSeed = [data?.title, data?.routeSummary, ...raw.flatMap(item => [item?.name, item?.region, item?.summary])].join('|');
+    const mapTheme = core_constants.TRAVEL_MAP_THEMES.has(requestedTheme) ? requestedTheme : travelThemeFallback(themeSeed);
     const seenIds = new Set();
     const locations = raw.slice(0, 12).map((item, index) => {
-        const normalized = normalizeTravelLocation(item, index, memoryBank, sourceMemoryIds);
+        const normalized = normalizeTravelLocation(item, index, memoryBank, mapTheme, sourceMemoryIds);
         if (!normalized || seenIds.has(normalized.id)) return null;
         seenIds.add(normalized.id);
         return normalized;
@@ -103,14 +128,12 @@ export function normalizeTravel(data, memoryBank, { allowPartial = false, source
     if (!allowPartial && (nearCount < 2 || farCount < 2)) {
         throw new Error(`出行地图地点不足：附近 ${nearCount}/2，远方 ${farCount}/2。`);
     }
-    const requestedTheme = core_text.normalizeText(data?.mapTheme, 30).toLowerCase();
-    const themeSeed = [data?.title, data?.routeSummary, ...locations.flatMap(item => [item.name, item.region])].join('|');
     return {
         kind: core_constants.MODE.TRAVEL,
         travelVersion: core_constants.TRAVEL_SESSION_VERSION,
         title: core_text.normalizeText(data?.title, 120) || '他的出行路线',
         routeSummary: core_text.normalizeText(data?.routeSummary, 1800) || '沿着他真正会走过的地方，看看生活怎样在地图上留下痕迹。',
-        mapTheme: core_constants.TRAVEL_MAP_THEMES.has(requestedTheme) ? requestedTheme : travelThemeFallback(themeSeed),
+        mapTheme,
         locations,
         selectedLocationId: locations.some(item => item.id === data?.selectedLocationId) ? data.selectedLocationId : '',
         dialogueIndex: Math.max(0, Math.floor(Number(data?.dialogueIndex) || 0)),
@@ -123,6 +146,7 @@ export function compactTravelExisting(session) {
         kind: core_text.normalizeText(item?.kind, 20),
         name: core_text.normalizeText(item?.name, 100),
         region: core_text.normalizeText(item?.region, 120),
+        sceneTheme: item?.kind === 'far' ? resolveTravelSceneTheme(item, session?.mapTheme) : '',
         basis: core_text.normalizeText(item?.basis, 20),
         sourceMemoryIds: core_text.cleanArray(item?.sourceMemoryIds, 8, 40),
         sourceMemoryAnchor: core_text.normalizeText(item?.sourceMemoryAnchor, 160),
@@ -142,10 +166,10 @@ EXISTING_TRAVEL_INDEX_JSON:
 ${JSON.stringify(compactTravelExisting(previous), null, 2)}
 
 严格输出：
-{"title":"他的出行路线","routeSummary":"这张地图如何体现角色生活","mapTheme":"city","locations":[{"id":"NEAR01","kind":"near","name":"地点名","region":"区域","distanceLabel":"步行十分钟","summary":"地点与角色生活的联系","basis":"设定","sourceMemoryIds":[],"sourceMemoryAnchor":"","dialogueLines":["{{char}} 对 {{user}} 说的第一句","第二句","第三句"],"postcard":null},{"id":"FAR01","kind":"far","name":"远方地点","region":"区域","distanceLabel":"很远","summary":"远方与角色的联系","basis":"设定","sourceMemoryIds":[],"sourceMemoryAnchor":"","dialogueLines":[],"postcard":{"title":"明信片标题","postmark":"邮戳短字","greeting":"写给 {{user}} 的开头","body":"充满角色个性的明信片正文","closing":"{{char}} 的落款","stampLabel":"邮票短字","tone":"paper"}}]}
+{"title":"他的出行路线","routeSummary":"这张地图如何体现角色生活","mapTheme":"city","locations":[{"id":"NEAR01","kind":"near","name":"地点名","region":"区域","distanceLabel":"步行十分钟","summary":"地点与角色生活的联系","basis":"设定","sourceMemoryIds":[],"sourceMemoryAnchor":"","dialogueLines":["{{char}} 对 {{user}} 说的第一句","第二句","第三句"],"sceneTheme":null,"postcard":null},{"id":"FAR01","kind":"far","name":"远方地点","region":"区域","distanceLabel":"很远","summary":"远方与角色的联系","basis":"设定","sourceMemoryIds":[],"sourceMemoryAnchor":"","dialogueLines":[],"sceneTheme":"city","postcard":{"title":"明信片标题","postmark":"邮戳短字","greeting":"写给 {{user}} 的开头","body":"充满角色个性的明信片正文","closing":"{{char}} 的落款","stampLabel":"邮票短字","tone":"paper"}}]}
 
 硬性要求：
-- mapTheme 只能是 city/coast/forest/mountain/campus/historic/fantasy/scifi；postcard.tone 只能是 rose/ocean/forest/sunset/night/paper。它们只是本地白名单样式 token。禁止输出坐标、颜色值、CSS、HTML、JavaScript、URL、图片或 class。
+- mapTheme 与每个 far 地点的 sceneTheme 只能是 city/coast/forest/mountain/campus/historic/fantasy/scifi；sceneTheme 要按该地点本身选择画面。postcard.tone 只能是 rose/ocean/forest/sunset/night/paper。它们只是本地白名单样式 token。禁止输出坐标、颜色值、CSS、HTML、JavaScript、URL、图片或 class。
 - ${incremental ? '本轮只返回 0～4 个由 incrementalMemoryIds 新证明且不在 EXISTING_TRAVEL_INDEX_JSON 中的地点；没有新地点时 locations 为空。' : '初次生成 5～8 个彼此不同的地点：near 3～5 个，far 2～4 个。'}
 - near 是同城/日常可抵达地点，点击后播放 3～8 句 {{char}} 对 {{user}} 的当下短对话；只能写 {{char}} 台词，不替 {{user}} 回应，不越过当前关系阶段。
 - far 是远途、异地或世界观中的遥远地点，点击后显示HTML/SVG/CSS+文字明信片。正文要充沛、具体、符合 {{char}}，但不能把未发生旅行冒充共同历史。
