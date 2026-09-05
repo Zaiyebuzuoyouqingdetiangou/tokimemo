@@ -6,10 +6,13 @@ import {
     normalizeTravel,
     resolveTravelSceneTheme,
     safeTravelLocationKind,
+    safeTravelTheme,
     travelMarkerPosition,
     travelMarkerPositions,
     travelPrompt,
 } from '../src/modes/travel.js';
+import { state as runtimeState } from '../src/core/state.js';
+import { travelPostcardHtml } from '../src/ui/travelView.js';
 
 const root = new URL('../', import.meta.url);
 const memoryBank = {
@@ -20,20 +23,33 @@ const memoryBank = {
     ],
 };
 
+const SETTING_EVIDENCE = '林砚常去夜间书店，也可能沿工作路线抵达北方海港和山间终点；这些地点位于旧街、北岸和西岭。';
+const presentActs = () => [
+    { time: 'today', wish: 'peace', gesture: 'walk', tone: 'quiet', register: 'plain', image: 'path', intensity: 'low', cadence: 'fragments' },
+    { time: 'now', emotion: 'grateful', wish: 'joy', tone: 'warm', register: 'restrained', image: 'light', intensity: 'medium', cadence: 'single' },
+    { time: 'tonight', wish: 'good-dreams', gesture: 'listen', tone: 'quiet', register: 'lyrical', image: 'stars', intensity: 'low', cadence: 'stacked' },
+];
+const keepsake = tone => ({ kind: 'postcard', tone, presentExpressions: presentActs() });
+
 function validLocations() {
     return [
-        { id: 'N1', kind: 'near', name: '旧河堤', region: '城南', distanceLabel: '步行十分钟', summary: '他偶尔绕路经过的河岸。', basis: '记忆', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '河边散步', dialogueLines: ['风比那天小。', '我记得我们从这里慢慢走回去。', '今天也陪我走一段吧。'], x: 'url(evil)', css: '<style>' },
-        { id: 'N2', kind: 'near', name: '夜间书店', region: '旧街', distanceLabel: '两站路', summary: '下班后会停留的安静去处。', basis: '设定', dialogueLines: ['这里关门很晚。', '我通常站在最里面那排。', '你想看的书，可以告诉我。'] },
-        { id: 'F1', kind: 'far', name: '北方海港', region: '北岸', distanceLabel: '夜车一程', summary: '工作路线可能抵达的远方港口。', basis: '设定', postcard: { title: '潮声寄来', postmark: 'NORTH', greeting: '阿澄：', body: '海风把纸页吹得一直翻动。我站在码头边想，如果你也在，这段等待大概不会显得这么长。等我回去，再把没有写进这张卡片里的细节慢慢告诉你。灯塔刚刚又亮了一次，潮水正在退，我却比刚到这里时更清楚自己想回到哪里。', closing: '林砚', stampLabel: '潮', tone: 'ocean' } },
-        { id: 'F2', kind: 'far', name: '山间终点', region: '西岭', distanceLabel: '很远', summary: '地图尽头的一处高地。', basis: '设定', postcard: { title: '山雾之后', postmark: 'WEST', greeting: '写给你：', body: '雾散开时能看到很远的灯。我本来只想确认路线，却在那一刻认真地想起你。这里安静得能听见自己的心跳，所以藏不住任何想念。等云再低一点，我会把这张卡片收好寄出；希望它先替我抵达你身边，也替我说出一路上反复想起却没能当面说的话。', closing: '等我回来', stampLabel: '岭', tone: 'forest' } },
+        { id: 'N1', kind: 'near', name: '河边散步', region: '城南', distanceToken: 'walk', summary: '模型简介会被忽略。', basis: '记忆', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '河边散步', dialogueActs: presentActs(), dialogueLines: ['旧自由台词必须被忽略。'], x: 'url(evil)', css: '<style>' },
+        { id: 'N2', kind: 'near', name: '夜间书店', region: '旧街', distanceToken: 'local', summary: '模型简介会被忽略。', basis: '设定', sourceSettingEvidence: SETTING_EVIDENCE, dialogueActs: presentActs() },
+        { id: 'F1', kind: 'far', name: '北方海港', region: '北岸', distanceToken: 'journey', summary: '模型简介会被忽略。', basis: '设定', sourceSettingEvidence: SETTING_EVIDENCE, keepsake: keepsake('ocean') },
+        { id: 'F2', kind: 'far', name: '山间终点', region: '西岭', distanceToken: 'distant', summary: '模型简介会被忽略。', basis: '设定', sourceSettingEvidence: SETTING_EVIDENCE, keepsake: keepsake('forest') },
     ];
 }
 
 test('r44 travel normalizer keeps safe text, real evidence and code-owned geometry', () => {
-    const session = normalizeTravel({ title: '他的出行路线', mapTheme: 'javascript:alert(1)', routeSummary: '他的日常路线。', locations: validLocations() }, memoryBank);
+    const session = normalizeTravel({ title: '伪造标题', mapTheme: 'javascript:alert(1)', routeSummary: '伪造共同历史。', locations: validLocations() }, memoryBank, { controlledEvidence: SETTING_EVIDENCE });
     assert.equal(session.kind, 'travel');
     assert.equal(session.locations.length, 4);
     assert.equal(session.locations[0].sourceMemoryAnchor, '河边散步');
+    assert.equal(session.locations[0].summary, '河边散步');
+    assert.equal(session.locations[1].summary, SETTING_EVIDENCE);
+    assert.doesNotMatch(session.locations[0].dialogueLines.join(' '), /旧自由台词/);
+    assert.equal(session.title, '他的出行路线');
+    assert.equal(session.routeSummary, '沿着他可能经过的坐标，看看生活怎样在地图上展开。');
     assert.equal('x' in session.locations[0], false);
     assert.equal('css' in session.locations[0], false);
     assert.notEqual(session.mapTheme, 'javascript:alert(1)');
@@ -48,8 +64,8 @@ test('r44 travel normalizer keeps safe text, real evidence and code-owned geomet
     assert.equal(safeTravelLocationKind('x\" onclick=\"alert(1)'), 'near');
 });
 
-test('far-place scene themes are allowlisted, explicit when valid, and inferred for old caches', () => {
-    assert.equal(resolveTravelSceneTheme({ sceneTheme: 'scifi', name: 'Ocean Port' }, 'coast'), 'scifi');
+test('far-place scene themes are allowlisted, place semantics outrank hints, and old caches infer safely', () => {
+    assert.equal(resolveTravelSceneTheme({ sceneTheme: 'scifi', name: 'Ocean Port' }, 'coast'), 'coast');
     assert.equal(resolveTravelSceneTheme({ name: 'Ocean Port', region: 'North Shore' }, 'city'), 'coast');
     assert.equal(resolveTravelSceneTheme({ name: '山间终点', summary: '雪峰下的高地。' }, 'coast'), 'mountain');
     assert.equal(resolveTravelSceneTheme({ name: 'Cedar Grove', summary: 'A quiet woodland trail.' }, 'city'), 'forest');
@@ -59,16 +75,35 @@ test('far-place scene themes are allowlisted, explicit when valid, and inferred 
     const input = validLocations();
     input[2] = { ...input[2], sceneTheme: 'scifi' };
     input[3] = { ...input[3], sceneTheme: '"><svg onload=alert(1)>' };
-    const session = normalizeTravel({ mapTheme: 'coast', locations: input }, memoryBank);
-    assert.equal(session.locations[2].sceneTheme, 'scifi');
+    const session = normalizeTravel({ mapTheme: 'coast', locations: input }, memoryBank, { controlledEvidence: SETTING_EVIDENCE });
+    assert.equal(session.locations[2].sceneTheme, 'coast');
     assert.equal(session.locations[3].sceneTheme, 'mountain');
     assert.ok(session.locations.filter(item => item.kind === 'far').every(item => /^(?:city|coast|forest|mountain|campus|historic|fantasy|scifi)$/.test(item.sceneTheme)));
+    assert.equal(safeTravelTheme('night injected-token'), 'neutral');
+});
+
+test('r49 travel revalidates cached class tokens at the final HTML sink', () => {
+    const previousSnapshot = runtimeState.activeArchiveSnapshot;
+    runtimeState.activeArchiveSnapshot = { memory: { userName: '阿澄' } };
+    try {
+        const html = travelPostcardHtml({
+            id: 'F-CACHE', kind: 'far', name: '远方', region: '北岸', distanceLabel: '需要远行',
+            postcard: {
+                tone: 'warm"><img src=x onerror=alert(1)><article class="',
+                title: '平安抵达', body: '这一刻只想和你说晚安。', closing: '林砚',
+            },
+        }, { mapTheme: 'night injected-token' });
+        assert.match(html, /class="rmt-travel-postcard tone-paper"/);
+        assert.doesNotMatch(html, /<img\s|onerror=|injected-token/i);
+    } finally {
+        runtimeState.activeArchiveSnapshot = previousSnapshot;
+    }
 });
 
 test('r44 travel rejects a memory stop without matching evidence and requires both map ranges', () => {
     const bad = validLocations();
     bad[0] = { ...bad[0], sourceMemoryIds: ['M404'], sourceMemoryAnchor: '不存在' };
-    assert.throws(() => normalizeTravel({ locations: bad }, memoryBank), /地点不足/);
+    assert.throws(() => normalizeTravel({ locations: bad }, memoryBank, { controlledEvidence: SETTING_EVIDENCE }), /地点不足/);
     const partial = normalizeTravel({ locations: [] }, memoryBank, { allowPartial: true, sourceMemoryIds: ['M002'] });
     assert.deepEqual(partial.locations, []);
     const settingOnlyIncrement = normalizeTravel({ locations: validLocations().filter(item => item.basis === '设定') }, memoryBank, {
@@ -87,7 +122,7 @@ test('r44 travel is an independent portal with nearby dialogue and CSS text post
     assert.match(prompt, /独立地图，不是手机 App/);
     assert.match(prompt, /禁止输出坐标、颜色值、CSS、HTML、JavaScript、URL/);
     assert.match(prompt, /sceneTheme/);
-    assert.match(prompt, /city\/coast\/forest\/mountain\/campus\/historic\/fantasy\/scifi/);
+    assert.match(prompt, /city\/coast\/mountain\/forest\/campus\/historic\/fantasy\/scifi\/neutral/);
     assert.match(prompt, /near 3～5 个，far 2～4 个/);
     const [constants, snapshots, overlay, view, styles] = await Promise.all([
         readFile(new URL('src/core/constants.js', root), 'utf8'),

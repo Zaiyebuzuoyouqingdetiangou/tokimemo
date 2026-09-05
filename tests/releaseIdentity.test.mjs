@@ -15,21 +15,23 @@ test('public extension identity stays fixed while version is separate', async ()
   const securityReview = await readFile(new URL('SECURITY_REVIEW.md', root), 'utf8');
 
   assert.equal(manifest.display_name, '心跳回忆');
-  assert.equal(manifest.version, '0.8.42');
+  assert.equal(manifest.version, '0.8.45');
   assert.equal(manifest.auto_update, true);
   assert.equal(manifest.homePage, 'https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo');
   assert.doesNotMatch(manifest.display_name, /\d+\.\d+/);
   assert.match(readme, /^# 心跳回忆\s*$/m);
   assert.doesNotMatch(readme.split('\n')[0], /\d+\.\d+/);
-  assert.match(readme, /当前版本：\*\*0\.8\.42（r46\.0）\*\*/);
-  assert.match(changelog, /^# 0\.8\.42 \/ r46\.0/m);
-  assert.match(architecture, /^# Heartbeat Memories r35–r46 Architecture/m);
-  assert.match(architecture, /^## r46\.0 universal memory and deferred-result durability contract/m);
-  assert.match(security, /^## r46\.0 通用记忆、来源账本与待写回结果边界/m);
-  assert.match(securityReview, /^## 0\.8\.42 \/ r46\.0/m);
-  assert.match(index, /const VERSION = '0\.8\.42'/);
-  assert.match(index, /const BUILD = '0\.8\.42-universal-memory-durable-r46\.0'/);
-  assert.equal(manifest.js, 'index.js?heartbeat=0.8.42-universal-memory-durable-r46.0');
+  assert.match(readme, /当前版本：\*\*0\.8\.45（r49\.0）\*\*/);
+  assert.match(changelog, /^# 0\.8\.45 \/ r49\.0/m);
+  assert.match(architecture, /^# Heartbeat Memories r35–r49 Architecture/m);
+  assert.match(architecture, /^## r49\.0 deep-review and ArchiveTarget contract/m);
+  assert.match(security, /^## r49\.0 跨档案、连接与表现层安全边界/m);
+  assert.match(securityReview, /^## 0\.8\.45 \/ r49\.0/m);
+  assert.match(index, /const VERSION = '0\.8\.45'/);
+  assert.match(index, /const BUILD = '0\.8\.45-deep-review-r49\.0'/);
+  assert.equal(manifest.js, 'index.js?heartbeat=0.8.45-deep-review-r49.0');
+  assert.match(index, /const CACHE_KEY = 'heartbeatMemoriesTheaterV3'/);
+  assert.match(index, /const MEMORY_KEY = 'heartbeatMemoriesArchiveV3'/);
 });
 
 
@@ -69,7 +71,7 @@ test('release runtime bundle is generated from the current modular source tree',
 test('relationship calendar is visible on the archive-library landing screen', async () => {
   const library = await readFile(new URL('../src/archive/library.js', import.meta.url), 'utf8');
   const styles = await readFile(new URL('../src/ui/styles.js', import.meta.url), 'utf8');
-  assert.match(library, /export function showArchiveLibrary\(\)[\s\S]*let calendarQuick = snapshotCalendarQuickAccessHtml/);
+  assert.match(library, /export async function showArchiveLibrary\(\)[\s\S]*let calendarQuick = snapshotCalendarQuickAccessHtml/);
   assert.match(library, /body\.innerHTML = `[\s\S]*\$\{calendarQuick\}[\s\S]*rmt-character-portals/);
   assert.match(library, /!ready \|\| generating \? 'disabled' : ''/);
   assert.match(styles, /\.rmt-calendar-quick\{display:grid/);

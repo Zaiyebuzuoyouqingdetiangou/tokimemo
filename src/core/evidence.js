@@ -49,6 +49,13 @@ export function normalizeMemoryReference(sourceIdsValue, evidenceValue, evidence
     return { sourceMemoryIds, sourceMemoryAnchor: matched };
 }
 
+// Use this at authority boundaries where the producer is required to submit an exact
+// title/anchor. Unlike normalizeMemoryReference(), it never discovers a different real anchor
+// inside model-authored prose, so a valid fragment cannot launder an invalid requested anchor.
+export function normalizeExactMemoryReference(sourceIdsValue, evidenceValue, memoryBank, minimum = 1) {
+    return normalizeMemoryReference(sourceIdsValue, evidenceValue, '', memoryBank, minimum);
+}
+
 export function evenlySample(items, limit) {
     if (!Array.isArray(items) || items.length <= limit) return Array.isArray(items) ? [...items] : [];
     if (limit <= 1) return [items[items.length - 1]];

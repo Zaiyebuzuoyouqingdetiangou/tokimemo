@@ -1,5 +1,5 @@
-const VERSION = '0.8.42';
-const BUILD = '0.8.42-universal-memory-durable-r46.0';
+const VERSION = '0.8.45';
+const BUILD = '0.8.45-deep-review-r49.0';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -14,6 +14,17 @@ let bootstrapTimer = 0;
 let bootstrapEarlyCleanup = null;
 let lastArchiveOpenAt = 0;
 let disabled = false;
+
+function safeBootstrapErrorDiagnostic(error) {
+    const diagnostic = {};
+    const name = String(error?.name || '');
+    const code = String(error?.code || '');
+    const status = Number(error?.status ?? error?.statusCode);
+    if (/^(?:Error|TypeError|RangeError|SyntaxError|AbortError|TimeoutError|DOMException)$/.test(name)) diagnostic.name = name;
+    if (/^[A-Z][A-Z0-9_]{1,79}$/.test(code)) diagnostic.code = code;
+    if (Number.isFinite(status) && status >= 100 && status <= 599) diagnostic.status = Math.floor(status);
+    return diagnostic;
+}
 
 function humanSize(bytes) {
     const value = Math.max(0, Number(bytes) || 0);
@@ -308,8 +319,8 @@ function unbindBootstrapEarlyOpen() {
 }
 
 function showBootError(error) {
-    console.error('[HeartbeatMemories] lazy runtime load failed', error);
-    const message = `心跳回忆加载失败：${String(error?.message || error || '未知错误')}`;
+    console.error('[HeartbeatMemories] lazy runtime load failed', safeBootstrapErrorDiagnostic(error));
+    const message = '心跳回忆加载失败。错误详情已隐藏，请刷新页面后重试；若仍失败，请检查插件文件是否完整。';
     try { globalThis.toastr?.error?.(message, '心跳回忆'); } catch {}
 }
 
@@ -376,7 +387,7 @@ export function onDisable() {
     disabled = true;
     stopBootstrapMountTimer();
     unbindBootstrapEarlyOpen();
-    try { runtimeModule?.destroyMemoryTheater?.(); } catch (error) { console.warn('[HeartbeatMemories] disable cleanup failed', error); }
+    try { runtimeModule?.destroyMemoryTheater?.(); } catch (error) { console.warn('[HeartbeatMemories] disable cleanup failed', safeBootstrapErrorDiagnostic(error)); }
     removeBootstrapShells();
 }
 
@@ -384,7 +395,7 @@ export function onClean() {
     disabled = true;
     stopBootstrapMountTimer();
     unbindBootstrapEarlyOpen();
-    try { runtimeModule?.destroyMemoryTheater?.(); } catch (error) { console.warn('[HeartbeatMemories] clean cleanup failed', error); }
+    try { runtimeModule?.destroyMemoryTheater?.(); } catch (error) { console.warn('[HeartbeatMemories] clean cleanup failed', safeBootstrapErrorDiagnostic(error)); }
     removeBootstrapShells();
 }
 

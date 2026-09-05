@@ -1,3 +1,41 @@
+# 0.8.45 / r49.0 — 深度修复 / ArchiveTarget / 世界观表现收口
+
+- 新增真正的 ArchiveTarget：从档案室选择已有 A 后冻结 A 的 archive identity、`archiveRevision`、来源快照与允许上下文；切换到 B 后任务继续，结果只在重新读取 A 并通过 CAS、revision、delete fence、发起时固定的 lifecycle 和同模式 latest-wins 校验后写回。扩展销毁后的迟到 hydration、claim、provider admission 和 durable write 全部失败关闭；B 的普通消息不会触发 A 的扫描、解压或请求。
+- 修复 TT 派生内容保全链中的迟到写入窗口：即时压缩写回现在绑定 runtime lifecycle；扩展销毁会清理运行中预留，迟到的 backup/cache/metadata 提交不能复活旧状态。相同 revision 下仅恢复更新且身份一致的备份，不同 revision、删除或重建保持 fail closed。
+- Connection Profile 与手动 API 模型发现继续使用各自配置。Profile B 不切换或借用正文 A；失败仅回退 B 已保存模型。手动请求只走固定同源代理端点，401/403 HTML/429/5xx/timeout/network/abort/invalid JSON 等错误只暴露安全分类。
+- 退役 EverMind 私有 settings / chat metadata / API Key 自动适配，以及按全局函数名、任意 `extensionPrompts` / `chatMetadata` 字段猜测插件的启发式 reader，不再以兼容为由读取或调用未登记第三方内部状态；已保存来源账本不删除，仍可通过显式 JSON/TXT/Markdown 导入迁移历史。柏宝书继续仅使用公开 API v1；公开 DTO 数组只读取自有 data descriptor，不执行索引 getter；矛盾的 complete/total/missing 信息统一降级为 partial，超大节点遍历与 fallback 受 8 MB 总预算约束。
+- 新增统一 World Presentation 权威链，供出行、房间、背影角色、宠物、私人终端与贺卡使用。媒体/虚构作用域与否定状态分开解析，关闭电影、书本、电视、VR、梦境、假想及否定句经 Profile 或档案共识放大的路径，同时允许明确的现实纠正。
+- 出行保存结构化近地点对白和符合世界观的远行纪念载体；房间按环境、职业与生活痕迹区分并只保留有证据宠物；Phone/Private Terminal 旧条目缺说话方时不再猜测；关系相簿在生成对白前扫描双方完整关系时间线。
+- 节日贺卡只接受当前日期、受控设定来源和精确节日证据；任意模型 HTML/CSS/JS/SVG/path/URL/class/DOM 字段全部丢弃，本地有界 SVG 使用稳定种子。Calendar v6 每日 memo/todo/备注/随笔继续按日期隔离。
+- Travel 明信片 tone、地图主题与 Calendar 状态圆点在最终 HTML sink 再走代码白名单；即使当前版本缓存被污染，也不能追加任意 class token。真实 Chromium tokenizer 复核确认转义实体不会逃逸属性边界，同时仍按最小权限原则关闭样式 token 注入。
+- Room 的长期蓝图、四时段与每日生活改用统一 present-only 权限：出现用户后，每个分句都必须分别证明是即时问候、当前进行、明确未来意图、直白情绪/问句、有限当前动作或当前环境状态；“今天/现在”不能替相邻或嵌套往事取得放行。共同往事必须绑定 exact Mxxx 与锚点，锚点还必须出现在可见叙事中；当前缓存渲染也会拒绝无证据历史节点。
+- 受控角色卡/世界书明确证明角色拥有某类宠物时，Room 候选必须含对应物种的有效宠物节点；模型漏掉宠物会在提交前失败并进入既有修复重试，不会靠本地猜名字或把别人的宠物归给当前角色。
+- 日历标签支持多选 OR、清除与当前会话状态保持；API 双配置入口、日历和档案页面继续去除大段玩法说明。
+- 修复主题“卡片透明度”只保存数值却没有视觉效果的问题：alpha 现在只用于卡片表面，不使用父级 `opacity`；文字按透明卡片与不透明底色的合成结果继续执行 4.5:1 对比度保护。插件 ID 范围内的关键背景、文字、按钮、输入框与横排布局会抵抗普通宿主/美化 CSS 污染。
+- 反查 `{{user}}` 私人终端因当前架构无法可靠区分允许自述与隐私推断而安全阻断，未生成联系人、地址、账户或浏览记录。
+- 发布身份更新为 `0.8.45`，runtime build/cache-bust token 为 `0.8.45-deep-review-r49.0`。为兼容旧档案，正式 archive/cache metadata key 仍为 V3，不做破坏性改名。
+
+# 0.8.44 / r48.0 — 两个人的日历 · 世界观节日贺卡
+
+- 日历固定设定日期新增 `occasionType`；只有角色卡 / 世界书 / Persona 中明确存在的节日、节令、祭典或庆典可生成贺卡，生日、纪念日和普通设定日不会被误当节日。
+- 贺卡不是固定模板库：模型只返回受限的表达方式、世界观载体、装饰意向与数值化 art direction；本地 renderer 使用受控 SVG primitive + HTML/CSS 重新构图。模型不能提供 HTML/CSS/JS/SVG/path/URL。
+- 文字、图画、书写、图文与极简表达同级；不强制每张卡拥有正文或落款。寡言角色可以只留画或题字，界面不额外补玩法解释。
+- 贺卡绑定对应 world-setting holiday 与当前 archive 快照，属于 Calendar Derived Content，不写回 Mxxx，也不把世界观节日自动扩写成过去共同经历。
+- Calendar session 升级到 v6；v5 的逐日草稿、待办、便签和随笔原样迁移，并新增日期自己的 `holidayCards` 集合。刷新时新卡覆盖同一节日旧卡；本次生成漏卡时仍保留同一有效节日的旧卡。
+- 日历日期格只增加一个低干扰 `✦` 贺卡标记；选中节日页后直接看到 SVG + HTML + CSS + 文字的成品，不新增教程式说明区。
+- 发布身份更新为 `0.8.44`，runtime build token 为 `0.8.44-calendar-holiday-cards-r48.0`。
+
+# 0.8.43 / r47.0 — TT 持久化增强 / 世界观表现 / Heartbeat 独立主题
+
+- 生成完成前新增派生缓存即时持久化；同档案、同 `archiveRevision` 的独立备份如果比 metadata 缓存更新，完整 runtime 会恢复较新的派生内容。普通启动仍保持 lazy bootstrap，不为恢复打开 IndexedDB。
+- Heartbeat 自己的 provider 错误显示加入统一脱敏：HTML/Cloudflare 响应正文、Authorization、Bearer/API Key/Token 形态不会原样进入 toast 或插件日志。
+- 远方出行由固定“明信片”扩为受控的世界观纪念载体，旧 postcard 数据继续兼容；私人终端增加低技术/特殊载体与按 App 类型区分的本地 UI；房间人物不再从时代/职业默认推导帽子。
+- 新建档案标题收敛为 4～14 汉字的简洁章节名，过长模型标题安全回退到证据标题；不批量改写旧档案。
+- 新增 Heartbeat 默认/跟随宿主/自定义主题模式、颜色选择、卡片透明度与对比度兜底；跟随模式只取标准计算样式，不读取第三方美化插件私有状态。
+- 继续移除重复玩法说明，保留必要状态、操作和安全确认。手动 API 拉模型失败只保留手动配置自己的已存模型，不借用正文连接。
+- 本版不删除 live-chat、CAS、`archiveRevision`、删除栅栏或任务 origin 校验；跨聊天 ArchiveTarget、反查终端、兔子镜标签过滤未在 r47.0 强行实现。
+- 发布身份更新为 `0.8.43`，runtime build token 为 `0.8.43-world-theme-durability-r47.0`。
+
 # 0.8.42 / r46.0 — 通用记忆接入 / 来源存档 / 生成结果保全
 
 - 新增带版本与覆盖信息的只读记忆适配器：精确支持柏宝书 `globalThis.STBaiBaiBook` API v1（完整 `getHistory()` 优先，注入口径只作部分回退），同时保留酒馆 `1_memory` 与 EverMind 当前聊天来源；任意全局 reader 仍默认关闭。

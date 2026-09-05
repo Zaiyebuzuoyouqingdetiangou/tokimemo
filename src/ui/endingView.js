@@ -395,7 +395,7 @@ export async function refreshEndingConfessionReplays() {
         if (core_context.isCurrentTaskOrigin(origin)) {
             try {
                 const latestMemory = archive_repository.requireArchive(core_context.currentCharacterGuard());
-                if (latestMemory.archiveRevision === expectedArchiveRevision) committed = core_cache.saveSession(core_constants.MODE.ENDING, updated, expectedChatId);
+                if (latestMemory.archiveRevision === expectedArchiveRevision) committed = await core_cache.commitSession(core_constants.MODE.ENDING, updated, expectedChatId, origin);
             } catch {}
         }
         if (!committed) core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [core_constants.MODE.ENDING]: updated } });
@@ -407,9 +407,9 @@ export async function refreshEndingConfessionReplays() {
         globalThis.toastr?.success?.(`告白回看已追加 ${mergedReplays.added} 条；当前共 ${updated.confessionReplays.length} 条。旧告白、结局路线与后日谈保持不变。`, '心跳回忆');
     } catch (error) {
         if (error?.name !== 'AbortError') {
-            console.error('[HeartbeatMemories] confession replay refresh failed', error);
-            ui_overlay.showInlineError(error?.message || String(error));
-            globalThis.toastr?.error?.(core_text.toastText(error?.message || String(error)), '心跳回忆 · 告白回看更新失败');
+            console.error('[HeartbeatMemories] confession replay refresh failed', core_text.safeErrorDiagnostic(error));
+            ui_overlay.showInlineError(core_text.safeErrorSummary(error));
+            globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆 · 告白回看更新失败');
         }
     } finally {
         ui_overlay.setInnerLoading(false);

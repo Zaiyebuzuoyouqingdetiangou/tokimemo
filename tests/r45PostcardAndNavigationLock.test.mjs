@@ -43,18 +43,28 @@ const memoryBank = {
     memories: [{ id: 'M001', date: '2026/08/01', title: '河边散步', summary: '两个人在河边散步。', anchors: ['河边散步'] }],
 };
 
-function travelSession(tone = 'ocean', mapTheme = 'coast', extraPostcard = {}, sceneTheme = undefined) {
+const SETTING_EVIDENCE = '林砚常去旧河堤和夜间书店，也可能抵达北方海港、山间终点与远方据点；地点位于城南、旧街、北岸、西岭和远方区域。';
+const presentActs = () => [
+    { time: 'today', wish: 'peace', gesture: 'walk', tone: 'quiet', register: 'plain', image: 'path', intensity: 'low', cadence: 'fragments' },
+    { time: 'now', emotion: 'grateful', wish: 'joy', tone: 'warm', register: 'restrained', image: 'light', intensity: 'medium', cadence: 'single' },
+    { time: 'tonight', wish: 'good-dreams', gesture: 'listen', tone: 'quiet', register: 'lyrical', image: 'stars', intensity: 'low', cadence: 'stacked' },
+];
+
+function travelSession(tone = 'ocean', mapTheme = 'coast', extraPostcard = {}, sceneTheme = undefined, neutralScene = false) {
+    const farName = neutralScene ? '远方据点' : '北方海港';
+    const farRegion = neutralScene ? '远方区域' : '北岸';
+    const farSummary = neutralScene ? '工作路线可能抵达的一处远方地点。' : '工作路线可能抵达的远方港口。';
     return normalizeTravel({
         title: '他的出行路线', mapTheme, routeSummary: '他的日常路线。',
         locations: [
-            { id: 'N1', kind: 'near', name: '旧河堤', region: '城南', distanceLabel: '步行十分钟', summary: '他偶尔绕路经过的河岸。', basis: '设定', dialogueLines: ['风比那天小。', '我记得我们慢慢走回去。', '今天也陪我走一段。'] },
-            { id: 'N2', kind: 'near', name: '夜间书店', region: '旧街', distanceLabel: '两站路', summary: '下班后会停留的去处。', basis: '设定', dialogueLines: ['这里关门很晚。', '我站在最里面那排。', '你想看的书告诉我。'] },
-            { id: 'F1', kind: 'far', name: '北方海港', region: '北岸', distanceLabel: '夜车一程', summary: '工作路线可能抵达的远方港口。', basis: '设定', sceneTheme,
-              postcard: { title: '潮声寄来', postmark: 'NORTH', greeting: '阿澄：', body: '海风把纸页吹得一直翻动。我站在码头边想，如果你也在，这段等待大概不会显得这么长。等我回去，再把没有写进这张卡片里的细节慢慢告诉你。灯塔刚刚又亮了一次，潮水正在退，我却比刚到这里时更清楚自己想回到哪里，也更清楚这段路终点该是谁。', closing: '林砚', stampLabel: '潮', tone, ...extraPostcard } },
+            { id: 'N1', kind: 'near', name: '旧河堤', region: '城南', distanceToken: 'walk', summary: '模型简介被忽略。', basis: '设定', sourceSettingEvidence: SETTING_EVIDENCE, dialogueActs: presentActs() },
+            { id: 'N2', kind: 'near', name: '夜间书店', region: '旧街', distanceToken: 'local', summary: '模型简介被忽略。', basis: '设定', sourceSettingEvidence: SETTING_EVIDENCE, dialogueActs: presentActs() },
+            { id: 'F1', kind: 'far', name: farName, region: farRegion, distanceLabel: '夜车一程', summary: farSummary, basis: '设定', sceneTheme,
+              distanceToken: 'journey', sourceSettingEvidence: SETTING_EVIDENCE, keepsake: { kind: 'postcard', tone, presentExpressions: presentActs(), ...extraPostcard } },
             { id: 'F2', kind: 'far', name: '山间终点', region: '西岭', distanceLabel: '很远', summary: '地图尽头的高地。', basis: '设定',
-              postcard: { title: '山雾之后', postmark: 'WEST', greeting: '写给你：', body: '雾散开时能看到很远的灯。我本来只想确认路线，却在那一刻认真地想起你。这里安静得能听见自己的心跳，所以藏不住任何想念。等云再低一点，我会把这张卡片收好寄出；希望它先替我抵达你身边，也替我说出一路上反复想起却没能当面说出口的那些话。', closing: '等我回来', stampLabel: '岭', tone: 'forest' } },
+              distanceToken: 'distant', sourceSettingEvidence: SETTING_EVIDENCE, keepsake: { kind: 'postcard', tone: 'forest', presentExpressions: presentActs() } },
         ],
-    }, memoryBank);
+    }, memoryBank, { controlledEvidence: SETTING_EVIDENCE });
 }
 
 async function renderPostcard(session, locationId = 'F1') {
@@ -80,7 +90,7 @@ test('far-away postcard renders an HTML/SVG/CSS picture side alongside the text'
     }
     // Written side survives intact.
     assert.match(html, /<div class="rmt-travel-postcard-back">/);
-    assert.match(html, /潮声寄来/);
+    assert.match(html, /北方海港 · 寄页/);
     assert.match(html, /林砚/);
     assert.match(html, /class="rmt-travel-postcard-mark"/);
     // Theme token reaches the CSS hook.
@@ -120,18 +130,18 @@ test('postcard illustration keeps its complete two-to-one scene at desktop and m
 test('each map theme draws its own scene and the drawing is deterministic', async () => {
     const seen = new Map();
     for (const theme of ['city', 'coast', 'forest', 'mountain', 'campus', 'historic', 'fantasy', 'scifi']) {
-        const html = await renderPostcard(travelSession('paper', theme, {}, theme));
+        const html = await renderPostcard(travelSession('paper', theme, {}, theme, true));
         const svg = html.match(/<svg class="rmt-travel-postcard-scene"[\s\S]*?<\/svg>/)[0];
         assert.ok(svg.length > 200, `${theme} scene is suspiciously small`);
         seen.set(theme, svg);
         // Same input renders byte-identical output on a second pass.
-        const again = await renderPostcard(travelSession('paper', theme, {}, theme));
+        const again = await renderPostcard(travelSession('paper', theme, {}, theme, true));
         assert.equal(again.match(/<svg class="rmt-travel-postcard-scene"[\s\S]*?<\/svg>/)[0], svg, `${theme} is not deterministic`);
     }
     assert.equal(new Set(seen.values()).size, 8, 'themes must not all draw the same picture');
 });
 
-test('the scene is code-owned: model text cannot inject geometry, colour or markup', async () => {
+test('the scene and prose are code-owned: model free text cannot inject geometry, colour or markup', async () => {
     const hostile = {
         tone: 'javascript:alert(1)',
         title: '<script>alert(1)</script>',
@@ -143,11 +153,11 @@ test('the scene is code-owned: model text cannot inject geometry, colour or mark
     const session = travelSession('night', 'scifi', hostile, '"><svg onload=alert(1)>');
     const html = await renderPostcard(session);
 
-    // The payload must survive only as inert escaped text, never as live markup.
+    // New-schema free-text fields are ignored altogether; only local structured prose renders.
     assert.ok(!html.includes('<script'), 'raw script tag leaked into the postcard');
-    assert.ok(html.includes('&lt;script&gt;'), 'script payload should appear escaped');
-    assert.ok(html.includes('&lt;svg onload'), 'svg payload should appear escaped');
-    assert.ok(html.includes('&lt;img src=x onerror'), 'img payload should appear escaped');
+    assert.ok(!html.includes('&lt;script&gt;'), 'ignored script payload leaked as text');
+    assert.ok(!html.includes('&lt;svg onload'), 'ignored svg payload leaked as text');
+    assert.ok(!html.includes('&lt;img src=x onerror'), 'ignored image payload leaked as text');
     // Inside the postcard, exactly one real <svg> exists: the scene this module draws.
     // (The map's own route <svg> lives elsewhere in the same body and is code-owned too.)
     const postcard = html.match(/<section class="rmt-travel-postcard[\s\S]*?<\/section>/)[0];

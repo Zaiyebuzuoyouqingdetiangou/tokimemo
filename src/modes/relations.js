@@ -232,7 +232,7 @@ export async function collectCharacterProfileSources(context, characterIndex) {
             worldInfo = core_text.normalizeText(result?.worldInfoString || [result?.worldInfoBefore, result?.worldInfoAfter].filter(Boolean).join('\n'), 16000);
         }
     } catch (error) {
-        console.warn('[HeartbeatMemories] character profile world-info dry run failed', error);
+        console.warn('[HeartbeatMemories] character profile world-info dry run failed', core_text.safeErrorDiagnostic(error));
     }
     return { characterData, userData, worldInfo };
 }

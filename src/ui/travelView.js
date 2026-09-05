@@ -13,6 +13,7 @@ export function selectedTravelLocation() {
 }
 
 function travelSourceLabel(item) {
+    if (item?.legacyEvidenceUnverified === true) return '旧版自由文字 · 证据未重新核验';
     if (item?.basis === '记忆' && item?.sourceMemoryAnchor) return `剧情足迹 · ${item.sourceMemoryAnchor}`;
     return '角色生活 / 世界设定';
 }
@@ -176,9 +177,18 @@ function sceneScifi(next) {
     return out;
 }
 
+function sceneNeutral(next) {
+    const left = next(18, 34);
+    const right = next(78, 104);
+    const middle = next(48, 70);
+    return `<path class="pc-solid" d="M0 ${POSTCARD_SCENE_HORIZON} Q${left} ${next(35, 45)} ${middle} ${POSTCARD_SCENE_HORIZON} T${POSTCARD_SCENE_WIDTH} ${POSTCARD_SCENE_HORIZON} Z"/>
+      <path class="pc-arch" d="M0 ${POSTCARD_SCENE_HORIZON + 5} Q${middle} ${next(40, 49)} ${POSTCARD_SCENE_WIDTH} ${POSTCARD_SCENE_HORIZON + 5} Z"/>
+      <circle class="pc-glow" cx="${right}" cy="${next(13, 23)}" r="${next(4, 7)}"/>`;
+}
+
 function travelPostcardScene(item, theme) {
     const next = sceneRandom(item);
-    const safeTheme = modes_travel.resolveTravelSceneTheme({ sceneTheme: theme }, 'city');
+    const safeTheme = modes_travel.resolveTravelSceneTheme({ sceneTheme: theme }, 'neutral');
     const nightish = safeTheme === 'scifi' || safeTheme === 'fantasy';
     const orb = safeTheme === 'coast' || safeTheme === 'campus'
         ? `<circle class="pc-orb" cx="${next(78, 105)}" cy="${next(10, 18)}" r="${next(6, 9)}"/>`
@@ -190,7 +200,8 @@ function travelPostcardScene(item, theme) {
         : safeTheme === 'historic' ? sceneHistoric(next)
         : safeTheme === 'fantasy' ? sceneFantasy(next)
         : safeTheme === 'scifi' ? sceneScifi(next)
-        : sceneSkyline(next);
+        : safeTheme === 'city' ? sceneSkyline(next)
+        : sceneNeutral(next);
     return `<svg class="rmt-travel-postcard-scene" viewBox="0 0 ${POSTCARD_SCENE_WIDTH} ${POSTCARD_SCENE_HEIGHT}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${core_text.esc(`${item.name} 的明信片风景插画`)}">
       <rect class="pc-sky" x="0" y="0" width="${POSTCARD_SCENE_WIDTH}" height="${POSTCARD_SCENE_HEIGHT}"/>
       ${orb}
@@ -202,19 +213,22 @@ function travelPostcardScene(item, theme) {
     </svg>`;
 }
 
-function travelPostcardHtml(item, session) {
+export function travelPostcardHtml(item, session) {
     const card = item?.postcard || {};
+    const rawTone = core_text.normalizeText(card.tone, 30).toLowerCase();
+    const tone = core_constants.TRAVEL_POSTCARD_TONES.has(rawTone) ? rawTone : 'paper';
     const userName = core_text.normalizeText(runtimeState.activeArchiveSnapshot
         ? runtimeState.activeArchiveSnapshot.memory?.userName
         : core_context.getContext()?.name1, 100) || '你';
     const theme = modes_travel.resolveTravelSceneTheme(item, session?.mapTheme);
-    return `<section class="rmt-travel-postcard tone-${core_text.esc(card.tone || 'paper')}" data-rmt-postcard-theme="${core_text.esc(theme)}" role="dialog" aria-modal="false" aria-label="${core_text.esc(item.name)}的明信片">
+    return `<section class="rmt-travel-postcard tone-${tone}" data-rmt-postcard-theme="${theme}" role="dialog" aria-modal="false" aria-label="${core_text.esc(item.name)}的明信片">
       <button type="button" class="rmt-travel-detail-close" data-rmt-action="travel-close-detail" aria-label="收起明信片">×</button>
       <figure class="rmt-travel-postcard-face">
         ${travelPostcardScene(item, theme)}
         <figcaption><small>GREETINGS FROM</small><b>${core_text.esc(item.region || item.name)}</b></figcaption>
       </figure>
       <div class="rmt-travel-postcard-back">
+        ${item?.legacyEvidenceUnverified === true || item?.keepsake?.legacyEvidenceUnverified === true ? '<div class="rmt-travel-legacy-warning">旧版自由文字 · 证据未重新核验</div>' : ''}
         <div class="rmt-travel-postcard-mark"><span>${core_text.esc(card.stampLabel || 'POST')}</span><i>${core_text.esc(card.postmark || item.region || 'FAR AWAY')}</i></div>
         <div class="rmt-travel-postcard-copy">
           <small>POSTCARD FROM ${core_text.esc(item.region || item.name)}</small>
@@ -228,6 +242,40 @@ function travelPostcardHtml(item, session) {
     </section>`;
 }
 
+function travelKeepsakeForView(item) {
+    const source = item?.keepsake && typeof item.keepsake === 'object' ? item.keepsake : null;
+    if (source) {
+        const requested = core_text.normalizeText(source.kind, 30).toLowerCase();
+        const kind = core_constants.TRAVEL_KEEPSAKE_KINDS.has(requested) ? requested : 'letter';
+        return {
+            kind, title: core_text.normalizeText(source.title, 120), mark: core_text.normalizeText(source.mark, 80),
+            greeting: core_text.normalizeText(source.greeting, 240), body: core_text.normalizeText(source.body, 4000),
+            closing: core_text.normalizeText(source.closing, 500), emblem: core_text.normalizeText(source.emblem, 40),
+            tone: core_constants.TRAVEL_POSTCARD_TONES.has(core_text.normalizeText(source.tone, 30).toLowerCase()) ? core_text.normalizeText(source.tone, 30).toLowerCase() : 'paper',
+        };
+    }
+    const card = item?.postcard && typeof item.postcard === 'object' ? item.postcard : null;
+    return card ? { kind: 'postcard', title: card.title, mark: card.postmark, greeting: card.greeting, body: card.body, closing: card.closing, emblem: card.stampLabel, tone: card.tone } : null;
+}
+
+function travelKeepsakeHtml(item, session) {
+    const keepsake = travelKeepsakeForView(item);
+    if (!keepsake || keepsake.kind === 'postcard') return travelPostcardHtml(item, session);
+    const labels = { letter: 'LETTER', journal: 'JOURNAL', scroll: 'SCROLL', fieldnote: 'FIELD NOTE', dossier: 'DOSSIER', datalog: 'DATA LOG', token: 'TOKEN' };
+    const label = labels[keepsake.kind] || 'KEEPSAKE';
+    const emblem = core_text.normalizeText(keepsake.emblem || label.slice(0, 4), 40);
+    const theme = modes_travel.resolveTravelSceneTheme(item, session?.mapTheme);
+    return `<section class="rmt-travel-artifact artifact-${keepsake.kind} tone-${core_text.esc(keepsake.tone || 'paper')}" data-rmt-artifact-kind="${keepsake.kind}" role="dialog" aria-modal="false" aria-label="${core_text.esc(item.name)}的出行纪念">
+      <button type="button" class="rmt-travel-detail-close" data-rmt-action="travel-close-detail" aria-label="收起出行纪念">×</button>
+      <header class="rmt-travel-artifact-head"><span>${label}</span><i>${core_text.esc(keepsake.mark || item.region || label)}</i></header>
+      ${item?.legacyEvidenceUnverified === true || item?.keepsake?.legacyEvidenceUnverified === true ? '<div class="rmt-travel-legacy-warning">旧版自由文字 · 证据未重新核验</div>' : ''}
+      <figure class="rmt-travel-artifact-figure" data-rmt-artifact-theme="${core_text.esc(theme)}">${travelPostcardScene(item, theme).replace('rmt-travel-postcard-scene', 'rmt-travel-artifact-scene').replaceAll('pc-', 'artifact-scene-').replace('明信片风景插画', '出行纪念风景插画')}<figcaption>${core_text.esc(item.region || item.name)}</figcaption></figure>
+      <div class="rmt-travel-artifact-emblem" aria-hidden="true">${core_text.esc(emblem)}</div>
+      <article class="rmt-travel-artifact-copy"><small>${core_text.esc(item.region || item.name)}</small><h3>${core_text.esc(keepsake.title)}</h3>${keepsake.greeting ? `<b>${core_text.esc(keepsake.greeting)}</b>` : ''}<p>${core_text.esc(keepsake.body)}</p><footer>${core_text.esc(keepsake.closing)}</footer></article>
+      <div class="rmt-travel-artifact-meta">${core_text.esc(item.distanceLabel)}</div>
+    </section>`;
+}
+
 function travelDialogueHtml(item, session) {
     const lines = Array.isArray(item?.dialogueLines) ? item.dialogueLines : [];
     const max = Math.max(0, lines.length - 1);
@@ -236,7 +284,7 @@ function travelDialogueHtml(item, session) {
     const charName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext()?.name2, 100) || '他';
     return `<section class="rmt-travel-dialogue" role="dialog" aria-modal="false" aria-label="${core_text.esc(item.name)}的地点对话">
       <button type="button" class="rmt-travel-detail-close" data-rmt-action="travel-close-detail" aria-label="收起地点对话">×</button>
-      <div class="rmt-travel-dialogue-place"><small>NEARBY STOP · ${core_text.esc(item.distanceLabel)}</small><h3>${core_text.esc(item.name)}</h3><p>${core_text.esc(item.summary)}</p></div>
+      <div class="rmt-travel-dialogue-place"><small>NEARBY STOP · ${core_text.esc(item.distanceLabel)}</small><h3>${core_text.esc(item.name)}</h3><p>${core_text.esc(item.summary)}</p>${item?.legacyEvidenceUnverified === true ? '<div class="rmt-travel-legacy-warning">旧版自由文字 · 证据未重新核验</div>' : ''}</div>
       <div class="rmt-travel-dialogue-bubble"><b>${core_text.esc(charName)}</b><p>${core_text.esc(lines[index] || '')}</p><span>${lines.length ? `${index + 1} / ${lines.length}` : '0 / 0'}</span></div>
       <div class="rmt-travel-dialogue-actions">
         <button type="button" class="rmt-btn" data-rmt-action="travel-dialogue-prev" ${index <= 0 ? 'disabled' : ''}>上一句</button>
@@ -263,10 +311,10 @@ export function renderTravel() {
         return `<button type="button" class="rmt-travel-marker ${kind} ${active ? 'active' : ''}" style="--map-x:${position.x}%;--map-y:${position.y}%" data-rmt-travel-location="${core_text.esc(item.id)}" aria-label="${core_text.esc(`${kind === 'near' ? '附近地点' : '远方地点'}：${item.name}`)}"><i class="fa-solid ${kind === 'near' ? 'fa-location-dot' : 'fa-envelope'}"></i><span>${core_text.esc(item.name)}</span></button>`;
     }).join('');
     const selectedDetail = selected
-        ? selected.kind === 'far' ? travelPostcardHtml(selected, session) : travelDialogueHtml(selected, session)
+        ? selected.kind === 'far' ? travelKeepsakeHtml(selected, session) : travelDialogueHtml(selected, session)
         : '';
     const legendRows = session.locations.map(item => `<button type="button" class="${selected?.id === item.id ? 'active' : ''}" data-rmt-travel-location="${core_text.esc(item.id)}"><i class="fa-solid ${item.kind === 'near' ? 'fa-location-dot' : 'fa-envelope'}"></i><span><b>${core_text.esc(item.name)}</b><small>${core_text.esc(item.region || item.distanceLabel)} · ${core_text.esc(travelSourceLabel(item))}</small></span></button>`).join('');
-    body.innerHTML = `<div class="rmt-travel" data-rmt-travel-theme="${core_text.esc(session.mapTheme)}">
+    body.innerHTML = `<div class="rmt-travel" data-rmt-travel-theme="${modes_travel.safeTravelTheme(session.mapTheme)}">
       <header class="rmt-travel-head"><div><small>THE ROUTES HE TAKES</small><h2>${core_text.esc(session.title)}</h2><p>${core_text.esc(session.routeSummary)}</p></div><div><span><b>${near.length}</b> 附近</span><span><b>${far.length}</b> 远方</span></div></header>
       <div class="rmt-travel-layout">
         <section class="rmt-travel-map" aria-label="他的出行路线地图">
@@ -275,7 +323,7 @@ export function renderTravel() {
           <div class="rmt-travel-horizon" aria-hidden="true"><span></span><span></span><span></span></div>
           ${markers}
           ${selectedDetail}
-          <div class="rmt-travel-map-key"><span><i class="near"></i>附近 · 点击听他说</span><span><i class="far"></i>远方 · 点击收明信片</span></div>
+          <div class="rmt-travel-map-key"><span><i class="near"></i>附近 · 点击听他说</span><span><i class="far"></i>远方 · 点击收下纪念</span></div>
         </section>
         <aside class="rmt-travel-index"><div><small>ROUTE INDEX</small><h3>地图坐标</h3></div><nav>${legendRows}</nav></aside>
       </div>

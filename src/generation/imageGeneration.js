@@ -223,7 +223,7 @@ export async function drawSelectedCgImage() {
     let context;
     try { context = core_context.currentCharacterGuard(); }
     catch (error) {
-        globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
         return;
     }
     const imageState = imageGenerationUiState(context);
@@ -303,7 +303,7 @@ export async function drawSelectedCgImage() {
         if (!liveItem) throw new Error('CG 事件已经变化，已停止保存图片引用。');
         const previousImage = liveItem.cgImage;
         liveItem.cgImage = nextImage;
-        const committed = core_cache.saveSession(mode, latestSession, expectedChatId);
+        const committed = await core_cache.commitSession(mode, latestSession, expectedChatId, origin);
         if (!committed) {
             liveItem.cgImage = previousImage;
             throw new Error('图片已生成，但当前档案版本已变化，未保存 CG 图片引用。');
@@ -316,15 +316,15 @@ export async function drawSelectedCgImage() {
         }
         globalThis.toastr?.success?.(`CG 已绘制：${item.title}`, '心跳回忆');
     } catch (error) {
-        console.error('[HeartbeatMemories] CG image generation failed', error);
-        globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+        console.error('[HeartbeatMemories] CG image generation failed', core_text.safeErrorDiagnostic(error));
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
     } finally {
         runtimeState.activeCgImageTasks.delete(taskKey);
         renderCurrentCgMode(mode, session);
     }
 }
 
-export function clearSelectedCgImage() {
+export async function clearSelectedCgImage() {
     if (!archive_library.requireWritableArchiveAction()) return;
     const target = selectedCgTarget();
     if (!target) return;
@@ -339,7 +339,10 @@ export function clearSelectedCgImage() {
     const previousImage = item.cgImage;
     item.cgImage = null;
     const expectedChatId = core_text.normalizeText(session.chatId, 240);
-    if (!core_cache.saveSession(mode, session, expectedChatId)) {
+    const context = core_context.currentCharacterGuard();
+    const memoryBank = archive_repository.requireArchive(context);
+    const origin = { ...core_context.captureTaskOrigin(context, memoryBank.archiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
+    if (!await core_cache.commitSession(mode, session, expectedChatId, origin)) {
         item.cgImage = previousImage;
         globalThis.toastr?.error?.('当前档案版本已经变化，未移除 CG 图片引用。', '心跳回忆');
         return;

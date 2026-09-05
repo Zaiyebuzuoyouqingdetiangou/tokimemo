@@ -15,14 +15,17 @@ export function selectedAdvEvent() {
 export function renderAdvMode() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.ADV) return;
-    ui_overlay.setBackVisible(true, '当前档案');
+    ui_overlay.setBackVisible(true, runtimeState.activeArchiveSnapshot ? '只读档案' : '当前档案');
     ui_overlay.topTitle(core_constants.MODE_LABEL[core_constants.MODE.ADV]);
     const selected = selectedAdvEvent();
-    let scope = '';
-    try { scope = core_context.chatScopeKey(core_context.currentCharacterGuard()); } catch {}
+    let scope = runtimeState.activeArchiveSnapshot
+        ? `archive-target:${core_context.archiveIndexEntryId(runtimeState.activeArchiveSnapshot)}`
+        : '';
+    if (!scope) try { scope = core_context.chatScopeKey(core_context.currentCharacterGuard()); } catch {}
     const bulkRunning = scope ? runtimeState.activeAdvBulkScopes.has(scope) : false;
     const completedAdv = session.events.filter(item => item.adv?.paragraphs?.length).length;
     const readOnlyArchive = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
+    const canGenerateDerived = !runtimeState.activeArchiveSnapshot || runtimeState.activeArchiveSnapshot.backupOnly !== true;
     const selectedIndex = Math.max(0, session.events.findIndex(item => item.id === selected?.id));
     const list = session.events.map((item, index) => `<button type="button" class="rmt-event ${item.id === session.selectedId ? 'active' : ''}" data-rmt-event-id="${core_text.esc(item.id)}"><span class="rmt-event-index">${String(index + 1).padStart(2, '0')}</span><span class="rmt-event-copy"><b>${core_text.esc(item.title)}</b><small>${core_text.esc(item.date)}</small></span><em class="rmt-event-state">${generation_imageGeneration.normalizeCgImageRecord(item.cgImage) ? '图✓ ' : ''}${item.adv?.paragraphs?.length ? 'ADV✓' : 'CG'}</em></button>`).join('');
     const options = session.events.map((item, index) => `<option value="${core_text.esc(item.id)}" ${item.id === selected?.id ? 'selected' : ''}>${String(index + 1).padStart(2, '0')} · ${core_text.esc(item.title)} · ${core_text.esc(item.date)}${item.adv?.paragraphs?.length ? ' · ADV✓' : ''}</option>`).join('');
@@ -36,19 +39,19 @@ export function renderAdvMode() {
               <div class="rmt-adv-reader"><div class="rmt-progress">第 ${session.paragraphIndex + 1} 段 / 共 ${paras.length} 段</div><div class="rmt-adv-para">${core_text.esc(paras[session.paragraphIndex])}</div><div class="rmt-reader-actions"><button type="button" class="rmt-btn" data-rmt-action="adv-prev" ${session.paragraphIndex <= 0 ? 'disabled' : ''}>上一段</button><button type="button" class="rmt-btn" data-rmt-action="adv-next">${session.paragraphIndex >= paras.length - 1 ? '重看' : '下一段'}</button></div></div>`;
         } else {
             detail = `${generation_imageGeneration.cgImageProviderBar({ readOnly: readOnlyArchive })}<div class="rmt-big-cg">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}<div class="rmt-cg-caption"><b>${core_text.esc(selected.title)}</b> · ${core_text.esc(selected.date)}<br>${core_text.esc(selected.cgDesc)}</div></div>
-              <div class="rmt-mode-actions">${readOnlyArchive ? '' : `<button type="button" class="rmt-btn rmt-cg-primary ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ADV, selected.id) ? 'rmt-cg-drawing' : ''}" data-rmt-action="draw-cg" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ADV, selected.id) ? 'disabled' : ''}>${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ADV, selected.id) ? '正在绘制CG…' : generation_imageGeneration.normalizeCgImageRecord(selected.cgImage) ? '↻ 重绘CG' : '🎨 绘制CG'}</button>`}<button type="button" class="rmt-btn" data-rmt-action="cg-only">只看CG</button><button type="button" class="rmt-btn" data-rmt-action="read-adv" ${bulkRunning || (readOnlyArchive && !selected.adv) ? 'disabled' : ''}>${selected.adv ? '阅读ADV' : readOnlyArchive ? 'ADV 尚未生成' : '生成并阅读ADV'}</button>${!readOnlyArchive && generation_imageGeneration.normalizeCgImageRecord(selected.cgImage) ? '<button type="button" class="rmt-btn" data-rmt-action="clear-cg-image">恢复抽象CG</button>' : ''}</div>
+              <div class="rmt-mode-actions">${readOnlyArchive ? '' : `<button type="button" class="rmt-btn rmt-cg-primary ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ADV, selected.id) ? 'rmt-cg-drawing' : ''}" data-rmt-action="draw-cg" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ADV, selected.id) ? 'disabled' : ''}>${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ADV, selected.id) ? '正在绘制CG…' : generation_imageGeneration.normalizeCgImageRecord(selected.cgImage) ? '↻ 重绘CG' : '🎨 绘制CG'}</button>`}<button type="button" class="rmt-btn" data-rmt-action="cg-only">只看CG</button><button type="button" class="rmt-btn" data-rmt-action="read-adv" ${bulkRunning || (!canGenerateDerived && !selected.adv) ? 'disabled' : ''}>${selected.adv ? '阅读ADV' : canGenerateDerived ? '生成并阅读ADV' : 'ADV 尚未生成'}</button>${!readOnlyArchive && generation_imageGeneration.normalizeCgImageRecord(selected.cgImage) ? '<button type="button" class="rmt-btn" data-rmt-action="clear-cg-image">恢复抽象CG</button>' : ''}</div>
               <div class="rmt-adv-summary">${core_text.esc(selected.cgDesc)}</div>`;
         }
     }
     const recoveryIds = new Set(core_text.cleanArray(session.advBulkRecovery?.failedIds, 64, 100));
     const recoveryCount = session.events.filter(item => !item.adv?.paragraphs?.length && (!recoveryIds.size || recoveryIds.has(item.id))).length;
-    const recoveryActions = !readOnlyArchive && recoveryCount > 0 && session.advBulkRecovery
+    const recoveryActions = canGenerateDerived && recoveryCount > 0 && session.advBulkRecovery
         ? `<div class="rmt-adv-recovery"><button type="button" class="rmt-btn" data-rmt-action="repair-failed-adv" ${bulkRunning ? 'disabled' : ''}>逐个补失败项 · ${recoveryCount}</button></div>`
         : '';
     const bulkLabel = session.advBulkRecovery && recoveryCount
         ? `重试失败批 · 最多${core_constants.ADV_BULK_BATCH_SIZE}篇`
         : completedAdv ? `生成下一批 ADV · 最多${core_constants.ADV_BULK_BATCH_SIZE}篇` : `生成第一批 ADV · 最多${core_constants.ADV_BULK_BATCH_SIZE}篇`;
-    const bulkBar = `<div class="rmt-adv-bulkbar"><div><b>ADV ${completedAdv}/${session.events.length}</b><span>${readOnlyArchive ? '只读' : completedAdv >= session.events.length ? '已完成' : `每批最多 ${core_constants.ADV_BULK_BATCH_SIZE} 篇`}</span></div>${readOnlyArchive ? '' : `<button type="button" class="rmt-btn" data-rmt-action="generate-all-adv" ${bulkRunning || completedAdv >= session.events.length ? 'disabled' : ''}>${bulkRunning ? '生成中…' : bulkLabel}</button>`}</div>${recoveryActions}`;
+    const bulkBar = `<div class="rmt-adv-bulkbar"><div><b>ADV ${completedAdv}/${session.events.length}</b><span>${!canGenerateDerived ? '永久只读备份' : completedAdv >= session.events.length ? '已完成' : `每批最多 ${core_constants.ADV_BULK_BATCH_SIZE} 篇`}</span></div>${!canGenerateDerived ? '' : `<button type="button" class="rmt-btn" data-rmt-action="generate-all-adv" ${bulkRunning || completedAdv >= session.events.length ? 'disabled' : ''}>${bulkRunning ? '生成中…' : bulkLabel}</button>`}</div>${recoveryActions}`;
     const mobilePicker = `<div class="rmt-adv-mobile-picker"><div class="rmt-adv-picker-status"><b>${String(selectedIndex + 1).padStart(2, '0')} / ${session.events.length}</b><span>${core_text.esc(selected?.title || '')}</span></div><select data-rmt-adv-select aria-label="选择 ADV EVENT 事件">${options}</select><div class="rmt-adv-picker-actions"><button type="button" class="rmt-btn" data-rmt-action="adv-event-prev" ${selectedIndex <= 0 ? 'disabled' : ''}>← 上一个</button><button type="button" class="rmt-btn" data-rmt-action="adv-event-next" ${selectedIndex >= session.events.length - 1 ? 'disabled' : ''}>下一个 →</button></div></div>`;
     const body = ui_overlay.bodyEl();
     body.innerHTML = `<div class="rmt-adv"><aside class="rmt-event-list">${bulkBar}${mobilePicker}<div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail">${detail}</section><div class="rmt-inline-status" hidden></div></div>`;

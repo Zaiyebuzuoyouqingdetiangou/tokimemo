@@ -49,8 +49,8 @@ export function safeShowArchiveLibrary(source = 'unknown') {
         archive_library.showArchiveLibrary();
         return true;
     } catch (error) {
-        console.error(`[HeartbeatMemories] open archive failed (${source})`, error);
-        globalThis.toastr?.error?.(`档案室打开失败：${core_text.toastText(error?.message || error)}`, '心跳回忆');
+        console.error(`[HeartbeatMemories] open archive failed (${core_text.normalizeText(source, 80)})`, core_text.safeErrorDiagnostic(error));
+        globalThis.toastr?.error?.(`档案室打开失败：${core_text.toastText(core_text.safeErrorSummary(error))}`, '心跳回忆');
         return false;
     }
 }
@@ -106,33 +106,13 @@ export function hostChatNavigationTargetFromEvent(event) {
 
 export function bindGenerationNavigationGuards() {
     try { globalThis.__heartbeatMemoriesNavigationGuardCleanup?.(); } catch {}
-    // A confirmed "yes, leave" opens a short window so the very next host click
-    // is not challenged twice (the same gesture can produce more than one event).
-    let bypassUntil = 0;
-
     const navigationGuard = event => {
-        if (Date.now() < bypassUntil) return;
         if (!hostChatNavigationTargetFromEvent(event)) return;
         if (!core_requestCoordinator.hasCurrentChatBlockingTask()) return;
-        // confirm() is synchronous, so if the user chooses to continue we simply
-        // return and let the original host event proceed untouched. Nothing is
-        // ever re-dispatched, so a wrong selector can only cost one dialog —
-        // it can never break SillyTavern navigation.
-        if (ui_overlay.confirmLeaveDuringGeneration({
-            title: '生成还没结束，确定要切换/关闭聊天窗口吗？',
-            action: '离开',
-            // The host control itself is an explicit user request to switch/close.
-            // Some mobile WebViews do not expose native confirm(); fail open there
-            // so Heartbeat can never make the current chat impossible to leave.
-            allowUnavailable: true,
-        })) {
-            bypassUntil = Date.now() + 4000;
-            return;
-        }
-        event.preventDefault?.();
-        event.stopPropagation?.();
-        event.stopImmediatePropagation?.();
-        globalThis.toastr?.info?.('已阻止本次切换。生成完成后即可自由切换聊天窗口。', '心跳回忆');
+        // Host chat navigation always remains available. Every generated result is now
+        // identity-bound and either commits durably before success or waits in the durable
+        // origin queue, so Heartbeat must never trap the user inside the current chat.
+        runtimeState.activeTaskBackgrounded = true;
     };
 
     const unloadGuard = event => {
@@ -192,7 +172,7 @@ export function bindChatStateEvents() {
         if (overlay && !overlay.hidden) archive_snapshots.scheduleChooserRefresh(80);
         setTimeout(() => {
             void core_cache.flushPendingCompressedCacheForCurrentChat().catch(error => {
-                console.warn('[HeartbeatMemories] pending compressed cache flush failed', error);
+                console.warn('[HeartbeatMemories] pending compressed cache flush failed', core_text.safeErrorDiagnostic(error));
             });
             void archive_repository.flushDeferredCommitsForCurrentChat();
         }, 160);
@@ -216,7 +196,7 @@ export function bindChatStateEvents() {
     // The full runtime can load after SillyTavern's initial CHAT_LOADED event. Recover
     // durable results for the already-open chat instead of waiting for another navigation.
     void archive_repository.flushDeferredCommitsForCurrentChat().catch(error => {
-        console.warn('[HeartbeatMemories] initial deferred commit recovery failed', error);
+        console.warn('[HeartbeatMemories] initial deferred commit recovery failed', core_text.safeErrorDiagnostic(error));
     });
     globalThis.__heartbeatMemoriesEventCleanup = () => {
         for (const type of chatEvents) {

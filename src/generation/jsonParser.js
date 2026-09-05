@@ -7,6 +7,8 @@ export function jsonOutputError(code, message, details = {}) {
     const error = new Error(message);
     error.name = 'JsonOutputError';
     error.code = code;
+    error.safeToDisplay = true;
+    error.safeUserMessage = message;
     error.retryableJson = true;
     error.details = details;
     return error;

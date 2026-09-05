@@ -8,6 +8,7 @@ import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
+import * as core_theme from '../core/theme.js';
 import * as ui_archivePortal from './archivePortal.js';
 import * as ui_overlay from './overlay.js';
 import * as ui_styles from './styles.js';
@@ -65,7 +66,7 @@ export async function refreshMemoryIngressUi() {
         }
     } catch (error) {
         if (capturedScopeKey && !isCurrent()) return;
-        if (status) status.textContent = `○ 来源账本不可用 · ${core_text.toastText(error?.message || error, 120)}`;
+        if (status) status.textContent = `○ 来源账本不可用 · ${core_text.toastText(core_text.safeErrorSummary(error), 120)}`;
         if (details) details.textContent = '无法读取当前聊天来源。';
         if (historyBooks) historyBooks.textContent = '请先打开单角色聊天。';
     }
@@ -84,13 +85,16 @@ export async function refreshModelOptions({ fetchRemote = false } = {}) {
     const configurationEpoch = runtimeState.apiConfigurationEpoch;
     let profileCacheKey = '';
     let profileStateFingerprint = '';
-    try { profileCacheKey = profileId ? core_settings.profileModelCacheKey(profileId) : ''; } catch {}
+    let profile;
+    try { profile = profileId ? core_settings.rawConnectionProfile(profileId) : null; } catch { profile = null; }
+    profileStateFingerprint = profile ? core_settings.profileFingerprint(profile) : 'missing';
+    try { profileCacheKey = profileId ? await core_settings.resolvedProfileModelCacheKey(profileId) : ''; } catch {}
     const isCurrent = () => Number(panel.dataset.rmtProfileModelRequest || 0) === requestEpoch
         && runtimeState.apiConfigurationEpoch === configurationEpoch
         && core_settings.getPluginSettings().connectionProfileId === profileId
         && (() => {
             try {
-                if (!profileId || core_settings.profileModelCacheKey(profileId) !== profileCacheKey) return !profileId;
+                if (!profileId) return true;
                 return core_settings.profileFingerprint(core_settings.rawConnectionProfile(profileId)) === profileStateFingerprint;
             }
             catch { return false; }
@@ -107,9 +111,6 @@ export async function refreshModelOptions({ fetchRemote = false } = {}) {
         select.disabled = true;
         return { models: [], fallbackOnly: false };
     }
-    let profile;
-    try { profile = core_settings.rawConnectionProfile(profileId); } catch { profile = null; }
-    profileStateFingerprint = profile ? core_settings.profileFingerprint(profile) : 'missing';
     const profileModel = core_text.normalizeText(profile?.model, 240);
     select.disabled = fetchRemote;
     let models = [];
@@ -124,7 +125,7 @@ export async function refreshModelOptions({ fetchRemote = false } = {}) {
         }
     } catch (error) {
         if (!isCurrent() || error?.code === 'RMT_API_MODEL_REQUEST_SUPERSEDED' || error?.name === 'AbortError') return null;
-        console.warn('[HeartbeatMemories] refresh model options failed', error);
+        console.warn('[HeartbeatMemories] refresh model options failed', core_text.safeErrorDiagnostic(error));
         if (!fetchRemote) {
             models = profileModel ? [profileModel] : [];
         } else {
@@ -192,12 +193,18 @@ export async function refreshManualModelOptions({ fetchRemote = false } = {}) {
         button.textContent = fetchRemote ? '正在拉取…' : '拉取模型';
     }
     let models = runtimeState.connectionModelCache.get(core_independentApi.manualModelCacheKey(candidate)) || [];
+    panel.dataset.rmtManualModelFallback = '0';
     try {
         if (fetchRemote) models = await core_settings.fetchModelsForManualConnection(candidate, { force: true });
     } catch (error) {
         if (!isCurrent() || error?.code === 'RMT_API_MODEL_REQUEST_SUPERSEDED' || error?.name === 'AbortError') return null;
-        if (button) { button.disabled = false; button.textContent = '拉取模型'; }
-        throw error;
+        const savedModel = core_text.normalizeText(candidate.manualApiModel, 240);
+        models = [...new Set([...(models || []), savedModel].filter(Boolean))];
+        if (!models.length) {
+            if (button) { button.disabled = false; button.textContent = '拉取模型'; }
+            throw error;
+        }
+        panel.dataset.rmtManualModelFallback = '1';
     }
     if (!isCurrent()) return null;
     list.replaceChildren();
@@ -239,6 +246,9 @@ export function refreshGenerationSettingsUi() {
     const roomDaily = panel.querySelector('[data-rmt-room-life-auto]');
     const imageGenerationManual = panel.querySelector('[data-rmt-image-generation-manual]');
     const ttDisplay = panel.querySelector('[data-rmt-tt-display]');
+    const themeMode = panel.querySelector('[data-rmt-theme-mode]');
+    const themeAlpha = panel.querySelector('[data-rmt-theme-alpha]');
+    const themeCustomPanel = panel.querySelector('[data-rmt-theme-custom-panel]');
     const bannedPhrases = panel.querySelector('[data-rmt-banned-generated-phrases]');
     const status = panel.querySelector('[data-rmt-api-status]');
     if (profile) {
@@ -271,7 +281,7 @@ export function refreshGenerationSettingsUi() {
     if (!manualDirty && manualModel) manualModel.value = settings.manualApiModel;
     if (!manualDirty && manualKey) {
         manualKey.value = '';
-        manualKey.placeholder = settings.manualApiKey ? '已保存；留空则保留' : 'API Key（可留空）';
+        manualKey.placeholder = settings.manualApiKey ? '本页已输入；刷新后需重填' : 'API Key（仅本页，不保存）';
     }
     if (maxTokens) maxTokens.value = String(settings.maxTokens);
     if (temperature) {
@@ -282,6 +292,13 @@ export function refreshGenerationSettingsUi() {
     if (roomDaily) roomDaily.checked = settings.roomLifeAutoDaily;
     if (imageGenerationManual) imageGenerationManual.checked = settings.imageGenerationManualEnabled;
     if (ttDisplay) ttDisplay.checked = settings.ttDisplayMode;
+    if (themeMode) themeMode.value = settings.themeMode;
+    if (themeAlpha) themeAlpha.value = String(settings.themeAlpha);
+    if (themeCustomPanel) themeCustomPanel.hidden = settings.themeMode !== 'custom';
+    for (const input of panel.querySelectorAll('[data-rmt-theme-color]')) {
+        const key = input.dataset.rmtThemeColor;
+        if (key && settings.themeCustom?.[key]) input.value = settings.themeCustom[key];
+    }
     if (bannedPhrases) bannedPhrases.value = settings.bannedGeneratedPhrases.join('，');
     if (status) {
         let profileCapabilityReady = false;
@@ -322,16 +339,39 @@ export function hydrateSettingsPanel() {
     return true;
 }
 
-export function refreshSettingsMemoryStatus({ lightweight = false } = {}) {
+export function refreshSettingsTaskStatus() {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
     if (!panel) return;
     const openButton = panel.querySelector('[data-rmt-settings-open-archive]');
-    const archiveButton = panel.querySelector('[data-rmt-settings-current-archive]');
-    const taskCount = runtimeState.activeGenerationTasks.size;
+    const taskRows = new Map();
+    for (const [key, task] of runtimeState.activeGenerationTasks.entries()) {
+        const logicalKey = core_text.normalizeText(task?.parentTaskKey, 240)
+            || core_requestCoordinator.activeModeBuildScopeForTask(key)
+            || key;
+        taskRows.set(logicalKey, task);
+    }
+    for (const [key, reservation] of runtimeState.activeArchiveTargetReservations.entries()) {
+        if (!taskRows.has(key)) taskRows.set(key, { ...reservation, origin: { archiveTargetEntryId: reservation.entryId } });
+    }
+    const taskCount = taskRows.size;
+    const targetTasks = [...taskRows.values()].filter(task => core_text.normalizeText(task?.origin?.archiveTargetEntryId || task?.entryId, 120));
+    const targetTaskLabel = core_text.normalizeText(targetTasks[0]?.label, 220);
     if (openButton) {
         openButton.disabled = false;
-        openButton.textContent = runtimeState.busy ? '打开档案室 · 档案整理中' : taskCount ? `打开档案室 · ${taskCount}项生成中` : '打开档案室';
+        openButton.textContent = runtimeState.busy
+            ? '打开档案室 · 档案整理中'
+            : targetTaskLabel
+                ? `${targetTaskLabel}${targetTasks.length > 1 ? ` · 另有${targetTasks.length - 1}项` : ''}`
+                : taskCount ? `打开档案室 · ${taskCount}项生成中` : '打开档案室';
+        openButton.title = targetTaskLabel ? targetTasks.map(task => core_text.normalizeText(task?.label, 300)).filter(Boolean).join('\n') : '';
     }
+}
+
+export function refreshSettingsMemoryStatus({ lightweight = false } = {}) {
+    const panel = document.getElementById(core_constants.SETTINGS_ID);
+    if (!panel) return;
+    refreshSettingsTaskStatus();
+    const archiveButton = panel.querySelector('[data-rmt-settings-current-archive]');
     if (archiveButton) {
         let ready = false;
         let actionable = false;
@@ -401,6 +441,21 @@ export function mountSettings() {
           <label class="checkbox_label rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"> 手动确认 SillyTavern Image Generation 已启用（自动检测失败时使用 /sd 兜底）</label>
           <label class="checkbox_label rmt-settings-check"><input data-rmt-tt-display type="checkbox"> TT 显示模式（勾选＝r32 顶部安全区；不勾选＝全屏）</label>
         </div>
+        <div class="rmt-settings-card rmt-theme-box">
+          <div class="rmt-settings-card-head"><span>UI</span><div><b>界面主题</b><small>默认 · 跟随酒馆 · 自定义</small></div></div>
+          <label class="rmt-settings-field"><span>主题</span><select class="text_pole" data-rmt-theme-mode><option value="default">心跳回忆默认</option><option value="host">跟随酒馆</option><option value="custom">自定义</option></select></label>
+          <label class="rmt-settings-field"><span>卡片透明度</span><input data-rmt-theme-alpha type="range" min="0.72" max="1" step="0.01"></label>
+          <div class="rmt-theme-custom-panel" data-rmt-theme-custom-panel>
+            <label><span>背景</span><input type="color" data-rmt-theme-color="background"></label>
+            <label><span>卡片</span><input type="color" data-rmt-theme-color="surface"></label>
+            <label><span>主文字</span><input type="color" data-rmt-theme-color="text"></label>
+            <label><span>次文字</span><input type="color" data-rmt-theme-color="muted"></label>
+            <label><span>强调</span><input type="color" data-rmt-theme-color="accent"></label>
+            <label><span>辅助</span><input type="color" data-rmt-theme-color="accentAlt"></label>
+            <label><span>边框</span><input type="color" data-rmt-theme-color="border"></label>
+          </div>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-theme-reset>恢复默认配色</button>
+        </div>
         <div class="rmt-settings-card rmt-api-box">
           <div class="rmt-settings-card-head"><span>MEM</span><div><b>记忆来源</b><small>当前角色 · 当前聊天</small></div></div>
           <div class="rmt-api-source-grid" role="group" aria-label="记忆来源操作">
@@ -469,7 +524,7 @@ export function mountSettings() {
                 if (previewPanel) previewPanel.hidden = false;
             }).catch(error => {
                 if (previewPanel) previewPanel.hidden = true;
-                globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+                globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
             }).finally(() => { target.value = ''; });
             return;
         }
@@ -502,7 +557,7 @@ export function mountSettings() {
                     const previousBook = previousSelection.books.find(book => book.name === target.dataset.rmtMemoryHistoryBook);
                     target.checked = previousBook?.historySource === true;
                 }
-                if (error?.name !== 'AbortError') globalThis.toastr?.error?.(`历史来源没有同步，已恢复原选择：${core_text.toastText(error?.message || error)}`, '心跳回忆');
+                if (error?.name !== 'AbortError') globalThis.toastr?.error?.(`历史来源没有同步，已恢复原选择：${core_text.toastText(core_text.safeErrorSummary(error))}`, '心跳回忆');
                 void refreshMemoryIngressUi();
             }
             return;
@@ -549,6 +604,30 @@ export function mountSettings() {
             refreshGenerationSettingsUi();
             return;
         }
+        if (target.matches?.('[data-rmt-theme-mode]')) {
+            core_settings.updatePluginSettings({ themeMode: core_constants.THEME_MODES.has(target.value) ? target.value : 'default' });
+            const overlay = document.getElementById(core_constants.OVERLAY_ID);
+            if (overlay) core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings());
+            refreshGenerationSettingsUi();
+            return;
+        }
+        if (target.matches?.('[data-rmt-theme-alpha]')) {
+            core_settings.updatePluginSettings({ themeAlpha: Math.max(0.72, Math.min(1, Number(target.value) || 0.96)) });
+            const overlay = document.getElementById(core_constants.OVERLAY_ID);
+            if (overlay) core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings());
+            return;
+        }
+        if (target.matches?.('[data-rmt-theme-color]')) {
+            const key = target.dataset.rmtThemeColor;
+            const settings = core_settings.getPluginSettings();
+            if (key && Object.prototype.hasOwnProperty.call(settings.themeCustom || {}, key)) {
+                core_settings.updatePluginSettings({ themeMode: 'custom', themeCustom: core_theme.normalizeThemeCustom({ ...settings.themeCustom, [key]: target.value }) });
+                const overlay = document.getElementById(core_constants.OVERLAY_ID);
+                if (overlay) core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings());
+                refreshGenerationSettingsUi();
+            }
+            return;
+        }
         if (target.matches?.('[data-rmt-banned-generated-phrases]')) {
             core_settings.updatePluginSettings({ bannedGeneratedPhrases: core_settings.normalizeBannedGeneratedPhrases(target.value) });
             refreshGenerationSettingsUi();
@@ -558,16 +637,30 @@ export function mountSettings() {
         if (event.target.matches?.('[data-rmt-manual-api-base],[data-rmt-manual-api-key],[data-rmt-manual-api-model]')) {
             panel.dataset.rmtManualDirty = '1';
         }
+        if (event.target.matches?.('[data-rmt-theme-alpha]')) {
+            core_settings.updatePluginSettings({ themeAlpha: Math.max(0.72, Math.min(1, Number(event.target.value) || 0.96)) });
+            const overlay = document.getElementById(core_constants.OVERLAY_ID);
+            if (overlay) core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings());
+        }
     });
     panel.addEventListener('click', event => {
         if (event.target.closest?.('.rmt-settings-header')) hydrateSettingsPanel();
+        const themeReset = event.target.closest?.('[data-rmt-theme-reset]');
+        if (themeReset) {
+            core_settings.updatePluginSettings({ themeMode: 'default', themeAlpha: core_constants.DEFAULT_SETTINGS.themeAlpha, themeCustom: { ...core_constants.DEFAULT_THEME_PALETTE } });
+            const overlay = document.getElementById(core_constants.OVERLAY_ID);
+            if (overlay) core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings());
+            refreshGenerationSettingsUi();
+            globalThis.toastr?.success?.('已恢复心跳回忆默认配色。', '心跳回忆');
+            return;
+        }
         const memoryAutoRead = event.target.closest?.('[data-rmt-memory-auto-read]');
         if (memoryAutoRead) {
             memoryAutoRead.disabled = true;
             memoryAutoRead.querySelector('small')?.replaceChildren(document.createTextNode('正在读取…'));
             archive_repository.readCurrentChatMemoryPlugins()
                 .then(() => refreshMemoryIngressUi())
-                .catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'))
+                .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆'))
                 .finally(() => { memoryAutoRead.disabled = false; const small = memoryAutoRead.querySelector('small'); if (small) small.textContent = '已注册的当前聊天来源'; });
             return;
         }
@@ -595,7 +688,7 @@ export function mountSettings() {
                     globalThis.toastr?.success?.(`已导入来源账本：${summary.recordCount} 条。`, '心跳回忆');
                     await refreshMemoryIngressUi();
                 })
-                .catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'))
+                .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆'))
                 .finally(() => { memoryFileCommit.disabled = false; });
             return;
         }
@@ -611,7 +704,7 @@ export function mountSettings() {
                     await refreshMemoryIngressUi();
                     globalThis.toastr?.success?.('当前聊天的心跳回忆来源账本已清除并验证。', '心跳回忆');
                 })
-                .catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'))
+                .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆'))
                 .finally(() => { memorySourceClear.disabled = false; });
             return;
         }
@@ -627,7 +720,7 @@ export function mountSettings() {
             const keyInput = panel.querySelector('[data-rmt-manual-api-key]');
             if (keyInput) keyInput.value = '';
             core_settings.updatePluginSettings({ manualApiKey: '' });
-            if (keyInput) keyInput.placeholder = 'API Key（可留空）';
+            if (keyInput) keyInput.placeholder = 'API Key（仅本页，不保存）';
             refreshGenerationSettingsUi();
             globalThis.toastr?.success?.('手动 API Key 已清除。', '心跳回忆');
             return;
@@ -638,7 +731,7 @@ export function mountSettings() {
                 const candidate = manualSettingsFromPanel(panel);
                 const manualApiBaseUrl = core_independentApi.assertManualApiCredentialTransport(candidate.manualApiBaseUrl, candidate.manualApiKey);
                 const manualApiModel = core_text.normalizeText(candidate.manualApiModel, 240);
-                if (!manualApiModel) throw new Error('请填写手动 API 的模型 ID。');
+                if (!manualApiModel) throw core_text.safeUserError('请填写手动 API 的模型 ID。', 'RMT_MANUAL_MODEL');
                 core_settings.updatePluginSettings({
                     apiConnectionMode: 'manual',
                     manualApiBaseUrl,
@@ -650,9 +743,9 @@ export function mountSettings() {
                 const keyInput = panel.querySelector('[data-rmt-manual-api-key]');
                 if (keyInput) keyInput.value = '';
                 refreshGenerationSettingsUi();
-                globalThis.toastr?.success?.('手动 API 已保存并启用。', '心跳回忆');
+                globalThis.toastr?.success?.('手动 API 已启用；Key 仅保留在本页，刷新后需重填。', '心跳回忆');
             } catch (error) {
-                globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+                globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
             }
             return;
         }
@@ -660,9 +753,11 @@ export function mountSettings() {
         if (manualRefreshButton) {
             refreshManualModelOptions({ fetchRemote: true })
                 .then(models => {
-                    if (models?.length) globalThis.toastr?.success?.(`已找到 ${models.length} 个模型。`, '心跳回忆');
+                    if (!models?.length) return;
+                    if (panel.dataset.rmtManualModelFallback === '1') globalThis.toastr?.warning?.('远程模型列表暂不可用，已保留手动 API 自己保存的模型。', '心跳回忆');
+                    else globalThis.toastr?.success?.(`已找到 ${models.length} 个模型。`, '心跳回忆');
                 })
-                .catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'));
+                .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆'));
             return;
         }
         const modelRefreshButton = event.target.closest?.('[data-rmt-api-model-refresh]');
@@ -673,7 +768,7 @@ export function mountSettings() {
                     if (result.fallbackOnly) globalThis.toastr?.warning?.('远程列表暂不可用，已显示这一连接保存的模型。', '心跳回忆');
                     else globalThis.toastr?.success?.('模型列表已更新。', '心跳回忆');
                 })
-                .catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'));
+                .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆'));
             return;
         }
         const apiImportButton = event.target.closest?.('[data-rmt-api-import-current]');
@@ -696,8 +791,8 @@ export function mountSettings() {
             }).catch(error => {
                 if (!isLatestUiRequest()) return;
                 if (error?.code !== 'RMT_API_CONFIGURATION_SUPERSEDED') {
-                    console.warn(`[HeartbeatMemories] one-click configuration failed (${core_text.normalizeText(error?.code, 80) || 'unavailable'})`);
-                    globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+                    console.warn('[HeartbeatMemories] one-click configuration failed', core_text.safeErrorDiagnostic(error));
+                    globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
                 }
                 refreshGenerationSettingsUi();
             }).finally(() => {

@@ -17,20 +17,52 @@ import * as ui_overlay from '../ui/overlay.js';
 import * as ui_phoneView from '../ui/phoneView.js';
 import * as ui_endingView from '../ui/endingView.js';
 
-export function showArchiveLibrary() {
+export async function showArchiveLibrary() {
     ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock(); runtimeState.activeMode = null; runtimeState.activeSession = null; runtimeState.activeArchiveSnapshot = null; runtimeState.activeArchiveReadOnly = true; runtimeState.archiveLibraryCharacterKey = ''; runtimeState.archiveViewLevel = 'library';
     ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setManageVisible(false); ui_overlay.setBackVisible(false); ui_overlay.topTitle('心跳回忆 · 档案室');
     const body = ui_overlay.bodyEl(); if (!body) return;
+    body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在核对档案室…</b><div class="rmt-loading-note">只读取心跳回忆自己的本机删除记录，不扫描或改写聊天正文。</div></div></div>';
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const indexedBefore = archive_groups.getArchiveIndex(core_context.getContext());
+    const deletedEntryIds = new Set();
+    await Promise.all(indexedBefore.map(async entry => {
+        try {
+            if (await archive_backupStore.hasArchiveBackupDeletionFence(entry)) {
+                deletedEntryIds.add(core_context.archiveIndexEntryId(entry));
+            }
+        } catch {}
+    }));
+    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) return;
+    if (deletedEntryIds.size) {
+        const liveContext = core_context.getContext();
+        const rawMemory = archive_repository.migrateArchiveInMemory(liveContext.chatMetadata?.[core_constants.MEMORY_KEY]);
+        for (const entry of indexedBefore) {
+            if (!deletedEntryIds.has(core_context.archiveIndexEntryId(entry))) continue;
+            if (rawMemory && core_context.comparableChatId(entry.chatId) === core_context.comparableChatId(rawMemory.chatId)
+                && Number(entry.characterIndexHint) === Number(liveContext.characterId)) {
+                runtimeState.archiveDeletionFences.add(archive_repository.archiveDeletionFenceKey(liveContext, rawMemory, core_context.archiveIndexEntryId(entry)));
+            }
+        }
+        archive_groups.setArchiveIndex(liveContext, indexedBefore.filter(entry => !deletedEntryIds.has(core_context.archiveIndexEntryId(entry))));
+    }
     try {
-        const ctx = core_context.currentCharacterGuard();
+        let ctx = core_context.currentCharacterGuard();
+        await core_cache.ensureCurrentArchiveBackup(ctx);
+        ctx = core_context.currentCharacterGuard();
         const mem = archive_repository.getImportedMemory(ctx);
         if (mem) {
             // r42.5 could commit an explicit fresh archive while leaving an older character-level
             // library tombstone behind. Repair only when createdAt proves this archive was created
             // after the tombstone; genuinely old source metadata stays hidden.
-            archive_groups.restoreCurrentCharacterArchiveVisibility(ctx, mem);
-            archive_groups.upsertArchiveIndex(ctx, mem);
+            const resolvedEntry = core_cache.archiveBackupEntryForContext(ctx, mem);
+            const backupState = await archive_backupStore.readArchiveBackupState(resolvedEntry);
+            if (backupState.deleted) {
+                runtimeState.archiveDeletionFences.add(archive_repository.archiveDeletionFenceKey(ctx, mem, resolvedEntry.entryId));
+            } else {
+                archive_groups.restoreCurrentCharacterArchiveVisibility(ctx, mem);
+                archive_groups.upsertArchiveIndex(ctx, mem, { existingEntryId: resolvedEntry.entryId });
+            }
         }
     } catch {}
     const archiveContext = core_context.getContext();
@@ -134,7 +166,7 @@ export function showArchiveGroupManager() {
     }).join('');
     const modal = document.createElement('div');
     modal.className = 'rmt-archive-group-manager';
-    modal.innerHTML = `<div class="rmt-memory-wi-picker-card"><div class="rmt-memory-wi-picker-head"><div><b>角色档案分类</b><small>自动分类 / 手动移动 / 绑定 SillyTavern 角色新建组</small></div><button type="button" class="rmt-btn" data-rmt-action="archive-group-close">完成</button></div><div class="rmt-memory-wi-picker-note">这里移动的是心跳回忆的轻量档案索引。不会移动、重命名、删除聊天文件，不会切换宿主角色/聊天，也不会改 MEMORY_KEY / ADV EVENT 缓存。自动分类优先按角色卡指纹区分（即使同名/同头像）；旧索引没有指纹且同头像/同名无法唯一判断时会拆成“待手动分类”，不会猜着合并。手动移动后自动分类不会覆盖。删除真实心跳回忆档案只允许当前真实聊天；历史档案只能先从列表移除。</div><div class="rmt-archive-group-create"><select class="text_pole" data-rmt-archive-new-character><option value="">选择一个 SillyTavern char…</option>${characterOptions}</select><button type="button" class="rmt-btn" data-rmt-action="archive-group-create">按所选 char 新建组</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类未锁定档案</button></div><div class="rmt-archive-group-entries">${rows || '<div class="rmt-memory-wi-empty">还没有档案可以分类。</div>'}</div></div>`;
+    modal.innerHTML = `<div class="rmt-memory-wi-picker-card"><div class="rmt-memory-wi-picker-head"><div><b>角色档案分类</b><small>自动分类 / 手动移动 / 绑定 SillyTavern 角色新建组</small></div><button type="button" class="rmt-btn" data-rmt-action="archive-group-close">完成</button></div><div class="rmt-memory-wi-picker-note">只整理心跳回忆的档案索引，不改酒馆聊天；无法可靠识别时保留为待手动分类。</div><div class="rmt-archive-group-create"><select class="text_pole" data-rmt-archive-new-character><option value="">选择一个 SillyTavern char…</option>${characterOptions}</select><button type="button" class="rmt-btn" data-rmt-action="archive-group-create">按所选 char 新建组</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类未锁定档案</button></div><div class="rmt-archive-group-entries">${rows || '<div class="rmt-memory-wi-empty">还没有档案可以分类。</div>'}</div></div>`;
     overlay.appendChild(modal);
     for (const select of modal.querySelectorAll('[data-rmt-archive-move-select]')) {
         const item = items.find(entry => core_context.archiveIndexEntryId(entry) === select.dataset.rmtArchiveMoveSelect);
@@ -159,34 +191,47 @@ export function rememberArchiveSnapshot(snapshot) {
 }
 
 async function hydrateSnapshotCache(stored, memory, wantedChatId, lifecycleEpoch) {
+    core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     let cache = {};
     if (core_cache.isCompressedCacheRecord(stored)) {
         const hydrated = await core_cache.gunzipJson(stored.data);
-        if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
+        core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
         if (!hydrated || typeof hydrated !== 'object') throw new Error('这个档案的已生成内容缓存无法解压。');
         cache = hydrated;
     } else if (stored && typeof stored === 'object') {
-        cache = stored;
+        cache = core_cache.prepareBoundedRawCache(stored).value;
     }
     if (Object.keys(cache).length) {
         if (core_text.normalizeText(cache.chatId, 240) && core_context.comparableChatId(cache.chatId) !== wantedChatId) return {};
         if (core_text.normalizeText(cache.archiveRevision, 240) && cache.archiveRevision !== memory.archiveRevision) return {};
     }
+    core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     return cache;
 }
 
-export async function fetchIndexedArchiveSnapshot(entry, context = core_context.getContext()) {
+export async function fetchIndexedArchiveSnapshot(entry, context = core_context.getContext(), options = {}) {
+    const lifecycleEpoch = Number.isFinite(Number(options.lifecycleEpoch))
+        ? Number(options.lifecycleEpoch)
+        : runtimeState.runtimeLifecycleEpoch;
+    core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     const key = archiveSnapshotCacheKey(entry);
     const cached = runtimeState.archiveSnapshotCache.get(key);
-    if (cached && Date.now() - Number(cached.loadedAt || 0) < 120000) return cached;
-    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    if (options.force !== true && cached && Date.now() - Number(cached.loadedAt || 0) < 120000) return cached;
     const avatar = core_context.archiveEntryAvatarName(entry, context);
     const wantedChatId = core_context.comparableChatId(entry.chatId);
     if (!wantedChatId) throw new Error('无法识别这个历史聊天的文件 ID。');
+    const initialBackupState = await archive_backupStore.readArchiveBackupState(entry);
+    core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
+    if (initialBackupState.deleted) {
+        const error = new Error('这份心跳回忆档案已被明确删除，旧聊天来源不会令它重新出现。');
+        error.code = 'RMT_ARCHIVE_DELETED_FENCE';
+        throw error;
+    }
     let sourceError = null;
+    let sourceMirrorLagging = false;
     let memory = null;
     let stored = null;
-    let backupRecord = null;
+    let backupRecord = initialBackupState.record || null;
     try {
         if (!avatar || typeof context.getRequestHeaders !== 'function') throw new Error('无法定位这个角色的聊天档案文件。');
         const response = await fetch('/api/chats/get', {
@@ -197,7 +242,7 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
         });
         if (!response.ok) throw new Error(`读取源聊天失败：HTTP ${response.status}`);
         const chat = await response.json();
-        if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
+        core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
         const header = Array.isArray(chat) ? chat[0] : chat;
         const metadata = header?.chat_metadata && typeof header.chat_metadata === 'object' ? header.chat_metadata : {};
         memory = archive_repository.migrateArchiveInMemory(metadata[core_constants.MEMORY_KEY]);
@@ -206,17 +251,42 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
     } catch (error) {
         if (error?.name === 'AbortError') throw error;
         sourceError = error;
-        try { backupRecord = await archive_backupStore.readArchiveBackup(entry); }
-        catch (backupError) {
-            console.warn('[HeartbeatMemories] independent archive backup read failed', backupError);
-        }
-        if (!backupRecord?.memory) {
-            throw new Error(`源聊天无法读取，且本机没有可用的独立档案备份。\n${error?.message || error}\n如果这份档案从未在 r42.5 或更高版本中打开/保存过，将无法从本机备份恢复。`);
-        }
-        memory = archive_repository.migrateArchiveInMemory(backupRecord.memory);
-        stored = backupRecord.cache;
-        if (!memory || core_context.comparableChatId(memory.chatId) !== wantedChatId) throw new Error('独立档案备份的身份校验失败，已拒绝恢复。');
     }
+    // Re-read after the network await. Deletion wins immediately, while a newer canonical
+    // IndexedDB memory wins over a stale source-chat metadata mirror left behind by a page
+    // closing before SillyTavern's debounced metadata save completed.
+    try {
+        const latestBackupState = await archive_backupStore.readArchiveBackupState(entry);
+        core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
+        if (latestBackupState.deleted) {
+            const deleted = new Error('这份心跳回忆档案已被明确删除，旧聊天来源不会令它重新出现。');
+            deleted.code = 'RMT_ARCHIVE_DELETED_FENCE';
+            throw deleted;
+        }
+        if (latestBackupState.record) backupRecord = latestBackupState.record;
+    } catch (backupError) {
+        if (backupError?.name === 'AbortError' || backupError?.code === 'RMT_ARCHIVE_DELETED_FENCE') throw backupError;
+        console.warn('[HeartbeatMemories] independent archive backup read failed', core_text.safeErrorDiagnostic(backupError));
+    }
+    const backupMemory = archive_repository.migrateArchiveInMemory(backupRecord?.memory);
+    if (sourceError) {
+        if (!backupMemory) {
+            const unavailable = new Error(`源聊天无法读取，且本机没有可用的独立档案备份。${core_text.safeErrorSummary(sourceError)} 如果这份档案从未建立过独立备份，将无法从本机恢复。`);
+            unavailable.safeToDisplay = true;
+            unavailable.safeUserMessage = unavailable.message;
+            throw unavailable;
+        }
+        memory = backupMemory;
+        stored = backupRecord.cache;
+    } else if (backupMemory
+        && backupRecord.archiveRevision !== core_text.normalizeText(memory?.archiveRevision, 240)) {
+        // IndexedDB is the canonical committed archive. The source chat metadata is only an
+        // asynchronous mirror, and equal/rolled-back clocks cannot establish newer ownership.
+        memory = backupMemory;
+        stored = backupRecord.cache;
+        sourceMirrorLagging = true;
+    }
+    if (!memory || core_context.comparableChatId(memory.chatId) !== wantedChatId) throw new Error('独立档案备份的身份校验失败，已拒绝恢复。');
     const indexedName = core_text.normalizeText(entry?.characterName, 120);
     const memoryName = core_text.normalizeText(memory?.characterName, 120);
     if (indexedName && memoryName && indexedName !== memoryName) throw new Error('同头像下检测到不同角色身份；为避免读错聊天，已拒绝打开。请在“管理角色分类”里手动归类后再试。');
@@ -227,27 +297,39 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
         if (error?.name === 'AbortError') throw error;
         sourceCacheError = error;
     }
-    if (!sourceError && (!Object.keys(cache).length || sourceCacheError)) {
-        try { backupRecord = backupRecord || await archive_backupStore.readArchiveBackup(entry); }
-        catch (backupError) { console.warn('[HeartbeatMemories] independent derived-cache backup read failed', backupError); }
+    if (!sourceError) {
+        try {
+            backupRecord = backupRecord || await archive_backupStore.readArchiveBackup(entry);
+            core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
+        }
+        catch (backupError) {
+            if (backupError?.name === 'AbortError') throw backupError;
+            console.warn('[HeartbeatMemories] independent derived-cache backup read failed', core_text.safeErrorDiagnostic(backupError));
+        }
         if (backupRecord?.cache && backupRecord.archiveRevision === memory.archiveRevision) {
             try {
                 const recoveredCache = await hydrateSnapshotCache(backupRecord.cache, memory, wantedChatId, lifecycleEpoch);
-                if (Object.keys(recoveredCache).length) {
+                const backupWins = Object.keys(recoveredCache).length
+                    && (!Object.keys(cache).length || sourceCacheError || core_cache.cacheOrderValue(backupRecord.cache) > core_cache.cacheOrderValue(stored));
+                if (backupWins) {
                     cache = recoveredCache;
                     stored = backupRecord.cache;
                     sourceCacheError = null;
                 }
             } catch (backupCacheError) {
-                console.warn('[HeartbeatMemories] independent derived-cache backup hydrate failed', backupCacheError);
+                if (backupCacheError?.name === 'AbortError') throw backupCacheError;
+                console.warn('[HeartbeatMemories] independent derived-cache backup hydrate failed', core_text.safeErrorDiagnostic(backupCacheError));
             }
         }
     }
     if (sourceCacheError) throw sourceCacheError;
+    core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     const snapshot = {
         entryId: core_context.archiveIndexEntryId(entry),
         archiveGroupId: archive_groups.archiveGroupKeyForEntry(entry),
         characterKey: core_text.normalizeText(entry.characterKey, 300),
+        characterFingerprint: core_text.normalizeText(entry.characterFingerprint, 160),
+        characterIndexHint: Number.isInteger(Number(entry.characterIndexHint)) ? Number(entry.characterIndexHint) : -1,
         avatar,
         characterName: core_text.normalizeText(entry.characterName || memory.characterName, 120) || '未命名角色',
         chatId: wantedChatId,
@@ -255,18 +337,256 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
         memory,
         cache,
         backupOnly: !!sourceError,
-        sourceError: sourceError ? core_text.normalizeText(sourceError?.message || String(sourceError), 1200) : '',
+        sourceMirrorLagging,
+        sourceError: sourceError ? core_text.safeErrorSummary(sourceError, 400) : '',
         loadedAt: Date.now(),
     };
-    if (!sourceError) {
+    if (!sourceError && !sourceMirrorLagging) {
         // A successfully opened historical archive is an explicit full-runtime action, so this is
         // the safe migration point for old chat-only archives. Backup failures never hide the source.
-        void archive_backupStore.seedArchiveBackup(entry, memory, stored).catch(error => {
-            console.warn('[HeartbeatMemories] independent archive backup seed failed', error);
-            globalThis.toastr?.warning?.(core_text.toastText(`档案已打开，但独立备份没有更新：${error?.message || error}`), '心跳回忆');
+        void archive_backupStore.seedArchiveBackup(entry, memory, stored, {
+            stillCurrent: () => core_context.runtimeLifecycleStillCurrent(lifecycleEpoch),
+        }).catch(error => {
+            console.warn('[HeartbeatMemories] independent archive backup seed failed', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.warning?.(core_text.toastText(`档案已打开，但独立备份没有更新：${core_text.safeErrorSummary(error)}`), '心跳回忆');
         });
     }
+    core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     return rememberArchiveSnapshot(snapshot);
+}
+
+function archiveTargetCardFields(context, descriptor) {
+    const character = context?.characters?.[descriptor?.index];
+    const data = character?.data && typeof character.data === 'object' ? character.data : (character || {});
+    const pick = (key, limit = 5000) => core_text.normalizeText(data?.[key] ?? character?.[key], limit);
+    return {
+        name: core_text.normalizeText(descriptor?.name || data?.name, 120),
+        description: pick('description'),
+        personality: pick('personality'),
+        scenario: pick('scenario'),
+        depth_prompt: pick('depth_prompt'),
+        creator_notes: pick('creator_notes'),
+        first_mes: pick('first_mes'),
+        mes_example: pick('mes_example'),
+        avatar: core_text.normalizeText(descriptor?.avatar || data?.avatar, 300),
+    };
+}
+
+export function freezeArchiveTarget(snapshot, hostContext = core_context.getContext()) {
+    if (!snapshot?.memory || snapshot.backupOnly) throw new Error('只有源聊天仍可读取的正式档案才能启动后台派生生成。');
+    const entryId = core_context.archiveIndexEntryId(snapshot);
+    const indexedMatches = archive_groups.getArchiveIndex(hostContext).filter(item =>
+        core_context.archiveIndexEntryId(item) === entryId
+        && core_context.comparableChatId(item?.chatId) === core_context.comparableChatId(snapshot?.chatId));
+    const indexed = indexedMatches.length === 1 ? indexedMatches[0] : null;
+    if (!indexed || archive_groups.isArchiveEntryDeletedFromLibrary(indexed, hostContext)) throw new Error('这份档案已经从档案室移除，不能启动生成。');
+    const descriptor = archive_groups.matchArchiveEntryToCharacter(indexed, hostContext);
+    if (!descriptor) throw new Error('无法把这份档案唯一对应到一张角色卡；请先在“管理角色分类”中完成归类。');
+    const memory = structuredClone(snapshot.memory);
+    const cache = structuredClone(snapshot.cache || {});
+    const cardFields = archiveTargetCardFields(hostContext, descriptor);
+    const sparseCharacters = new Array(Math.max(descriptor.index + 1, 1));
+    sparseCharacters[descriptor.index] = { name: descriptor.name, avatar: descriptor.avatar, data: structuredClone(cardFields) };
+    const target = {
+        entryId,
+        archiveGroupId: archive_groups.archiveGroupKeyForEntry(indexed),
+        characterKey: core_text.normalizeText(indexed.characterKey, 300),
+        avatar: core_context.archiveStoredAvatar(indexed),
+        characterName: core_text.normalizeText(snapshot.characterName || memory.characterName, 120),
+        characterFingerprint: core_text.normalizeText(indexed.characterFingerprint, 160),
+        characterIndexHint: descriptor.index,
+        chatId: core_context.comparableChatId(snapshot.chatId),
+        archiveName: core_text.normalizeText(snapshot.archiveName || memory.archiveName, 160),
+        archiveRevision: core_text.normalizeText(memory.archiveRevision, 240),
+        memory,
+        cache,
+        backupOnly: false,
+    };
+    let worldPresentationProfileBinding = null;
+    try {
+        const groupEntries = archive_groups.archiveGroupEntries(target.archiveGroupId, hostContext);
+        const groupMeta = archive_groups.archiveGroupMeta(target.archiveGroupId, groupEntries, hostContext);
+        const expectedProfileKey = modes_relations.archiveCharacterProfileKey(target.archiveGroupId, groupMeta, groupEntries);
+        const profile = modes_relations.getCharacterProfile(hostContext, expectedProfileKey);
+        if (profile) {
+            worldPresentationProfileBinding = {
+                profile: structuredClone(profile),
+                expectedProfileKey,
+                characterName: target.characterName,
+                avatar: core_text.normalizeText(descriptor.avatar, 300),
+            };
+        }
+    } catch {}
+    const context = Object.create(hostContext || null);
+    Object.assign(context, {
+        name1: core_text.normalizeText(memory.userName, 120) || '{{user}}',
+        name2: target.characterName || '{{char}}',
+        characterId: descriptor.index,
+        groupId: null,
+        chatId: target.chatId,
+        chat: [],
+        characters: sparseCharacters,
+        chatMetadata: { [core_constants.MEMORY_KEY]: memory, [core_constants.CACHE_KEY]: cache },
+        powerUserSettings: { ...(hostContext?.powerUserSettings || {}), persona_description: '' },
+        getCurrentChatId: () => target.chatId,
+        getCharacterCardFields: () => structuredClone(cardFields),
+        getWorldInfoPrompt: undefined,
+        // Always own this property, including the null case, so a frozen A task can never fall
+        // through to B's live Character Profile via the prototype context.
+        __rmtWorldPresentationProfileBinding: worldPresentationProfileBinding,
+        __rmtArchiveTargetEntryId: entryId,
+        __rmtArchiveTargetLabel: `${target.characterName || '角色'} · ${target.archiveName || '档案'}`,
+    });
+    if (typeof hostContext?.getRequestHeaders === 'function') context.getRequestHeaders = hostContext.getRequestHeaders.bind(hostContext);
+    if (typeof hostContext?.getTokenCountAsync === 'function') context.getTokenCountAsync = hostContext.getTokenCountAsync.bind(hostContext);
+    return { target: structuredClone(target), context };
+}
+
+export async function revalidateArchiveTarget(target, lifecycleEpoch = runtimeState.runtimeLifecycleEpoch) {
+    core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
+    const context = core_context.getContext();
+    const matches = archive_groups.getArchiveIndex(context).filter(item =>
+        core_context.archiveIndexEntryId(item) === core_text.normalizeText(target?.entryId, 120)
+        && core_context.comparableChatId(item?.chatId) === core_context.comparableChatId(target?.chatId));
+    const entry = matches.length === 1 ? matches[0] : null;
+    if (!entry || archive_groups.isArchiveEntryDeletedFromLibrary(entry, context)) throw new Error('目标档案已经被删除或移除，本次旧结果没有写入。');
+    const snapshot = await fetchIndexedArchiveSnapshot(entry, context, { force: true, lifecycleEpoch });
+    core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
+    if (snapshot.backupOnly) throw new Error('目标档案的源聊天已不可读取，本次结果没有写入只读备份。');
+    if (core_context.comparableChatId(snapshot.chatId) !== core_context.comparableChatId(target?.chatId)
+        || core_text.normalizeText(snapshot.memory?.archiveRevision, 240) !== core_text.normalizeText(target?.archiveRevision, 240)) {
+        throw new Error('目标档案在生成期间已更新或重建，本次旧结果没有覆盖新版本。');
+    }
+    return snapshot;
+}
+
+export async function commitArchiveTargetSession(target, mode, session, stillCurrent = null, expectedTaskOrigin = null) {
+    const committed = await core_cache.commitDetachedArchiveSession(target, mode, session, stillCurrent, expectedTaskOrigin);
+    const snapshot = rememberArchiveSnapshot({ ...target, cache: committed.cache, loadedAt: Date.now() });
+    if (runtimeState.activeArchiveSnapshot?.entryId === snapshot.entryId) runtimeState.activeArchiveSnapshot = snapshot;
+    return snapshot;
+}
+
+export async function commitArchiveTargetSessionMutation(target, mode, expectedTaskOrigin, mutateSession, fallbackSession = null, stillCurrent = null) {
+    const committed = await core_cache.commitDetachedArchiveSessionMutation(
+        target,
+        mode,
+        expectedTaskOrigin,
+        mutateSession,
+        fallbackSession,
+        stillCurrent,
+    );
+    const snapshot = rememberArchiveSnapshot({ ...target, cache: committed.cache, loadedAt: Date.now() });
+    if (runtimeState.activeArchiveSnapshot?.entryId === snapshot.entryId) runtimeState.activeArchiveSnapshot = snapshot;
+    return { snapshot, session: committed.session };
+}
+
+export async function claimArchiveTargetMode(target, mode, stillCurrent = null) {
+    return core_cache.claimDetachedModeGeneration(target, mode, stillCurrent);
+}
+
+export function archiveTargetGenerationOptions(snapshot = runtimeState.activeArchiveSnapshot, lifecycleEpoch = runtimeState.runtimeLifecycleEpoch) {
+    core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
+    const frozen = freezeArchiveTarget(snapshot, core_context.getContext());
+    return {
+        archiveTarget: frozen.target,
+        context: frozen.context,
+        revalidateArchiveTarget: (target, expectedLifecycleEpoch = lifecycleEpoch) => revalidateArchiveTarget(target, expectedLifecycleEpoch),
+        claimArchiveTarget: claimArchiveTargetMode,
+        commitArchiveTarget: commitArchiveTargetSession,
+        commitArchiveTargetMutation: commitArchiveTargetSessionMutation,
+    };
+}
+
+export async function prepareArchiveTargetSubtask(mode, taskPart, snapshot = runtimeState.activeArchiveSnapshot) {
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
+    if (!snapshot) return null;
+    if (snapshot.backupOnly) throw new Error('独立备份是永久只读快照，不能启动派生生成。');
+    const options = archiveTargetGenerationOptions(snapshot, lifecycleEpoch);
+    const latest = await options.revalidateArchiveTarget(options.archiveTarget, lifecycleEpoch);
+    core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
+    const archiveTarget = {
+        ...options.archiveTarget,
+        ...latest,
+        memory: structuredClone(latest.memory),
+        cache: structuredClone(latest.cache || {}),
+        archiveRevision: core_text.normalizeText(latest.memory?.archiveRevision, 240),
+    };
+    const context = options.context;
+    context.chatMetadata[core_constants.MEMORY_KEY] = structuredClone(archiveTarget.memory);
+    context.chatMetadata[core_constants.CACHE_KEY] = structuredClone(archiveTarget.cache);
+    const expectedChatId = core_context.comparableChatId(archiveTarget.chatId);
+    const expectedArchiveRevision = archiveTarget.archiveRevision;
+    const epochKey = `${archiveTarget.entryId}:${core_text.normalizeText(mode, 80)}:${core_text.normalizeText(taskPart, 120)}`;
+    const origin = {
+        ...core_context.captureTaskOrigin(context, expectedArchiveRevision),
+        chatId: expectedChatId,
+        archiveTargetEntryId: archiveTarget.entryId,
+    };
+    return {
+        archiveTarget,
+        context,
+        memoryBank: archiveTarget.memory,
+        expectedChatId,
+        expectedArchiveRevision,
+        scope: `archive-target:${archiveTarget.entryId}`,
+        mode: core_text.normalizeText(mode, 80),
+        origin,
+        stillCurrent: () => true,
+        epochKey,
+        epoch: 0,
+        begun: false,
+        lifecycleEpoch,
+        options,
+    };
+}
+
+export async function beginArchiveTargetSubtask(targetRuntime) {
+    if (!targetRuntime?.archiveTarget) return targetRuntime;
+    if (targetRuntime.begun) return targetRuntime;
+    core_context.assertRuntimeLifecycleCurrent(targetRuntime.lifecycleEpoch);
+    // The user may spend an arbitrary amount of time in a confirmation dialog after the
+    // read-only preflight. Revalidate once more at the actual admission boundary so a target
+    // deleted/rebuilt in the meantime is rejected before a provider request or durable claim.
+    const latest = await targetRuntime.options.revalidateArchiveTarget(targetRuntime.archiveTarget, targetRuntime.lifecycleEpoch);
+    core_context.assertRuntimeLifecycleCurrent(targetRuntime.lifecycleEpoch);
+    syncArchiveTargetSubtask(targetRuntime, latest);
+    const epoch = (Number(runtimeState.archiveTargetTaskEpochs.get(targetRuntime.epochKey)) || 0) + 1;
+    runtimeState.archiveTargetTaskEpochs.set(targetRuntime.epochKey, epoch);
+    targetRuntime.epoch = epoch;
+    targetRuntime.begun = true;
+    targetRuntime.stillCurrent = () => core_context.runtimeLifecycleStillCurrent(targetRuntime.lifecycleEpoch)
+        && runtimeState.archiveTargetTaskEpochs.get(targetRuntime.epochKey) === epoch;
+    const claimed = await targetRuntime.options.claimArchiveTarget(
+        targetRuntime.archiveTarget,
+        targetRuntime.mode,
+        targetRuntime.stillCurrent,
+    );
+    core_context.assertRuntimeLifecycleCurrent(targetRuntime.lifecycleEpoch);
+    if (!targetRuntime.stillCurrent()) throw new DOMException('Runtime destroyed', 'AbortError');
+    targetRuntime.archiveTarget.cache = structuredClone(claimed.cache);
+    targetRuntime.context.chatMetadata[core_constants.CACHE_KEY] = structuredClone(claimed.cache);
+    targetRuntime.origin = {
+        ...core_context.captureTaskOrigin(targetRuntime.context, targetRuntime.expectedArchiveRevision),
+        chatId: targetRuntime.expectedChatId,
+        archiveTargetEntryId: targetRuntime.archiveTarget.entryId,
+    };
+    return targetRuntime;
+}
+
+export function syncArchiveTargetSubtask(targetRuntime, snapshot) {
+    if (!targetRuntime?.archiveTarget || !snapshot?.memory) return;
+    targetRuntime.archiveTarget = {
+        ...targetRuntime.archiveTarget,
+        ...snapshot,
+        memory: structuredClone(snapshot.memory),
+        cache: structuredClone(snapshot.cache || {}),
+        archiveRevision: core_text.normalizeText(snapshot.memory.archiveRevision, 240),
+    };
+    targetRuntime.memoryBank = targetRuntime.archiveTarget.memory;
+    targetRuntime.context.chatMetadata[core_constants.MEMORY_KEY] = structuredClone(targetRuntime.archiveTarget.memory);
+    targetRuntime.context.chatMetadata[core_constants.CACHE_KEY] = structuredClone(targetRuntime.archiveTarget.cache);
 }
 
 export function setArchiveReadOnly(readOnly) {
@@ -346,7 +666,7 @@ export function requireWritableArchiveAction() {
     return promoteSnapshotToLiveIfCurrent();
 }
 
-function snapshotCalendarQuickAccessHtml({ ready = true, generated = false, readOnly = true, generating = false } = {}) {
+function snapshotCalendarQuickAccessHtml({ ready = true, generated = false, readOnly = true, generating = false, canGenerate = !readOnly } = {}) {
     const status = !ready
         ? '当前聊天还没有正式档案。先生成当前窗口档案后，就可以整理两个人的日历。'
         : generating
@@ -357,7 +677,7 @@ function snapshotCalendarQuickAccessHtml({ ready = true, generated = false, read
     const openButton = generated
         ? `<button type="button" class="rmt-btn rmt-calendar-quick-primary" data-rmt-mode="${core_text.esc(core_constants.MODE.CALENDAR)}">查看日历</button>`
         : '';
-    const generateButton = !readOnly
+    const generateButton = canGenerate
         ? `<button type="button" class="rmt-btn" data-rmt-generate-mode="${core_text.esc(core_constants.MODE.CALENDAR)}" ${generated ? 'data-rmt-regenerate="true"' : ''} ${!ready || generating ? 'disabled' : ''}>${generating ? '生成中…' : generated ? '刷新日历' : '生成日历'}</button>`
         : '';
     return `<section class="rmt-calendar-quick ${generated ? 'ready' : 'empty'}">
@@ -386,17 +706,20 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
     const memory = snapshot.memory;
     const portals = archive_snapshots.baseModeAvailability({ chatId: snapshot.chatId, memoryBank: memory, cache: snapshot.cache, clone: false });
     const generatedCount = portals.filter(item => !!item.session).length;
+    const canGenerateDerived = snapshot.backupOnly !== true;
     const calendarPortal = portals.find(item => item.mode === core_constants.MODE.CALENDAR) || { session: null };
-    const calendarQuick = snapshotCalendarQuickAccessHtml({ generated: !!calendarPortal.session, readOnly: runtimeState.activeArchiveReadOnly });
+    const calendarGenerating = core_requestCoordinator.isArchiveTargetModeGenerating(core_constants.MODE.CALENDAR, snapshot);
+    const calendarQuick = snapshotCalendarQuickAccessHtml({ generated: !!calendarPortal.session, readOnly: runtimeState.activeArchiveReadOnly, canGenerate: canGenerateDerived, generating: calendarGenerating });
     const portalHtml = portals.filter(item => item.mode !== core_constants.MODE.CALENDAR).map(({ mode, session, meta }) => {
         const generated = !!session;
-        const editAction = runtimeState.activeArchiveReadOnly ? '' : `<button type="button" class="rmt-btn rmt-portal-generate" data-rmt-generate-mode="${core_text.esc(mode)}" ${generated ? 'data-rmt-regenerate="true"' : ''}>${generated ? '增量追加' : '生成这一项'}</button>`;
+        const generating = core_requestCoordinator.isArchiveTargetModeGenerating(mode, snapshot);
+        const editAction = canGenerateDerived ? `<button type="button" class="rmt-btn rmt-portal-generate" data-rmt-generate-mode="${core_text.esc(mode)}" ${generated ? 'data-rmt-regenerate="true"' : ''} ${generating ? 'disabled' : ''}>${generating ? '生成中…' : generated ? '增量追加' : '生成这一项'}</button>` : '';
         return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} rmt-archive-portal-${core_text.esc(meta.accent)}">
           <button type="button" class="rmt-portal-open" ${generated ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
             <span class="rmt-portal-avatar"><i class="fa-solid ${core_text.esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
             <span class="rmt-portal-title">${core_text.esc(meta.title)}</span>
             <span class="rmt-portal-subtitle">${core_text.esc(meta.subtitle)}</span>
-            <span class="rmt-portal-status">${generated ? (runtimeState.activeArchiveReadOnly ? '已生成 · 只读查看' : '已生成 · 可从新增档案继续追加') : (runtimeState.activeArchiveReadOnly ? '这份档案尚未生成' : '尚未生成 · 可选择生成')}</span>
+            <span class="rmt-portal-status">${generating ? `正在为 ${core_text.esc(snapshot.characterName)} · ${core_text.esc(snapshot.archiveName)} 生成` : generated ? (runtimeState.activeArchiveReadOnly ? '已生成 · 安全写回本档案' : '已生成 · 可从新增档案继续追加') : (canGenerateDerived ? '尚未生成 · 可安全写回本档案' : '这份备份尚未生成')}</span>
           </button>
           ${editAction}
         </article>`;
@@ -408,10 +731,10 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
           <strong class="rmt-archive-title">${core_text.esc(snapshot.archiveName)}</strong>
           <div class="rmt-archive-summary">${core_text.esc(memory.archiveSummary || archive_repository.fallbackArchiveSummary(memory.memories))}</div>
           <div class="rmt-memory-status ready">${snapshot.backupOnly ? '源聊天不可用 · 已从独立备份恢复 · 永久只读' : runtimeState.activeArchiveReadOnly ? '只读查看' : '编辑待命'} · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${core_constants.ARCHIVE_PORTAL_MODES.length}</div>
-          <div class="rmt-archive-meta">${snapshot.backupOnly ? `这份内容来自当前浏览器的本机备份；源聊天错误：${core_text.esc(snapshot.sourceError || '无法读取')}。不会把它重新绑定或写入其他聊天。` : '关闭只读只改变心跳回忆里的按钮显示，不会自动切换角色/聊天、刷新宿主界面或删除档案。'}</div>
+          <div class="rmt-archive-meta">${snapshot.backupOnly ? `本机备份 · ${core_text.esc(snapshot.sourceError || '源聊天无法读取')}` : (runtimeState.activeArchiveReadOnly ? '当前为只读档案' : '写入前会再次验证目标聊天')}</div>
           <div class="rmt-archive-readonly-control">
             <label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''} ${snapshot.backupOnly ? 'disabled' : ''}> 只读查看</label>
-            <small>${snapshot.backupOnly ? '源聊天删除后仍可查看已备份的档案与派生内容，但不能在备份快照上继续生成、编辑或覆盖。' : runtimeState.activeArchiveReadOnly ? '关闭后会显示“增量追加 / 绘制”等按钮；真正写入前仍会验证当前酒馆是否正打开这份档案对应聊天。' : '编辑按钮已显示。若当前酒馆不是这份档案对应聊天，点击写操作只会提示你手动打开目标聊天，不会自动切换或刷新。每次追加仍会再次确认。'}</small>
+            <small>${snapshot.backupOnly ? '永久只读' : runtimeState.activeArchiveReadOnly ? '关闭只读后可显示编辑操作' : '编辑待命'}</small>
           </div>
         </div>
       </section>
@@ -447,8 +770,8 @@ export async function openIndexedArchive(characterKey, chatId, entryId = '') {
         showIndexedArchiveSnapshot(snapshot);
         if (snapshot.backupOnly) globalThis.toastr?.warning?.('源聊天无法读取，已从当前浏览器的独立备份恢复为永久只读档案。', '心跳回忆');
     } catch (error) {
-        console.warn('[HeartbeatMemories] indexed archive read-only load failed', error);
-        if (ui_overlay.bodyEl()) ui_overlay.bodyEl().innerHTML = `<div class="rmt-error"><div><b>档案读取失败</b><div style="margin-top:10px;white-space:pre-wrap;opacity:.78">${core_text.esc(error?.message || String(error))}</div><button type="button" class="rmt-btn" data-rmt-action="library-home">返回档案室</button></div></div>`;
+        console.warn('[HeartbeatMemories] indexed archive read-only load failed', core_text.safeErrorDiagnostic(error));
+        if (ui_overlay.bodyEl()) ui_overlay.bodyEl().innerHTML = `<div class="rmt-error"><div><b>档案读取失败</b><div style="margin-top:10px;white-space:pre-wrap;opacity:.78">${core_text.esc(core_text.safeErrorSummary(error))}</div><button type="button" class="rmt-btn" data-rmt-action="library-home">返回档案室</button></div></div>`;
     }
 }
 
@@ -492,6 +815,9 @@ export async function rebuildArchiveIndexFromExisting() {
                     avatar,
                     characterName: core_text.normalizeText(memoryCharacterName || unique?.name || previous?.characterName, 120) || '未命名角色',
                     characterFingerprint: core_text.normalizeText(previous?.characterFingerprint || unique?.fingerprint, 160),
+                    characterIndexHint: Number.isInteger(Number(previous?.characterIndexHint))
+                        ? Number(previous.characterIndexHint)
+                        : Number.isInteger(Number(unique?.index)) ? Number(unique.index) : -1,
                     chatId,
                     archiveName: core_text.normalizeText(mem.archiveName, 160) || archive_repository.fallbackArchiveName(mem.memories),
                     memoryCount: mem.memories.length,
@@ -500,10 +826,11 @@ export async function rebuildArchiveIndexFromExisting() {
                     archiveGroupManual: previous?.archiveGroupManual === true,
                 };
                 candidate.entryId = candidate.entryId || core_context.archiveIndexEntryId(candidate);
-                if (!archive_groups.isArchiveEntryDeletedFromLibrary(candidate, context, deletedIndex)) found.push(candidate);
+                if (!archive_groups.isArchiveEntryDeletedFromLibrary(candidate, context, deletedIndex)
+                    && !await archive_backupStore.hasArchiveBackupDeletionFence(candidate)) found.push(candidate);
             }
         } catch (error) {
-            console.warn('[HeartbeatMemories] legacy archive index scan skipped avatar', avatar, error);
+            console.warn('[HeartbeatMemories] legacy archive index scan skipped avatar', { avatar: core_text.normalizeText(avatar, 300), ...core_text.safeErrorDiagnostic(error) });
         }
         await core_context.yieldToUi();
     }
@@ -512,7 +839,8 @@ export async function rebuildArchiveIndexFromExisting() {
     const seen = new Set(found.map(item => `${core_context.archiveStoredAvatar(item)}\u001f${item.chatId}`));
     for (const item of existing) {
         const key = `${core_context.archiveStoredAvatar(item)}${item.chatId}`;
-        if (!seen.has(key) && !archive_groups.isArchiveEntryDeletedFromLibrary(item, context, deletedIndex)) found.push(item);
+        if (!seen.has(key) && !archive_groups.isArchiveEntryDeletedFromLibrary(item, context, deletedIndex)
+            && !await archive_backupStore.hasArchiveBackupDeletionFence(item)) found.push(item);
     }
     archive_groups.setArchiveIndex(context, found.sort((a,b) => b.updatedAt - a.updatedAt));
     archive_groups.autoClassifyArchiveIndex(context, { confirm: false });

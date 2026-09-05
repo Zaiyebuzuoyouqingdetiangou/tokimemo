@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-import { MAX_MEMORY_FILE_BYTES, MAX_MEMORY_WORLD_INFO_CHARS } from '../src/core/constants.js';
+import { MAX_MEMORY_FILE_BYTES, MAX_MEMORY_SOURCE_LEDGER_CHARS, MAX_MEMORY_WORLD_INFO_CHARS } from '../src/core/constants.js';
 import { chatScopeKey } from '../src/core/context.js';
 import { state as runtimeState } from '../src/core/state.js';
 import {
@@ -31,6 +31,7 @@ import {
     deleteMemorySourceLedger,
     ledgerCurrentRecords,
     memorySourceLedgerSummary,
+    normalizeMemorySourceCoverage,
     normalizeMemorySourceId,
     normalizeMemorySourceRevision,
     normalizeMemorySourceScope,
@@ -256,6 +257,140 @@ test('r46 BaiBai Book adapter rejects wrong chat and reads only official history
     assert.deepEqual(result.coverage.missingAiFloors, [3]);
     assert.deepEqual(result.records.map(item => item.sourceId), ['B-1', 'B-2']);
     assert.doesNotMatch(JSON.stringify(result.records), /不应进入历史/);
+});
+
+test('r49 contradictory complete coverage is fail-closed before it can replace a durable baseline', async () => {
+    const root = {
+        STBaiBaiBook: {
+            apiVersion: 1,
+            pluginVersion: '1.2.6',
+            getHistory() {
+                return {
+                    revision: 'contradictory-coverage',
+                    chat: { id: 'chat-r46' },
+                    coverage: { complete: true, total: 2, missingAiFloors: [9] },
+                    nodes: [{ id: 'only-one', text: '只返回一条' }],
+                };
+            },
+            getSnapshot() {
+                return { revision: 'contradictory-coverage', chat: { id: 'chat-r46' } };
+            },
+        },
+    };
+    const result = await readBaiBaiBookCurrentChat(findBaiBaiBookPublicApi(root), 'chat-r46');
+    assert.equal(result.coverage.status, 'partial');
+    assert.equal(result.coverage.returned, 1);
+    assert.equal(result.coverage.total, 2);
+    assert.deepEqual(result.coverage.missingAiFloors, [9]);
+    assert.match(result.coverage.reason, /1\/2|total/);
+    const centrallyNormalized = normalizeMemorySourceCoverage({
+        status: 'complete', returned: 1, total: 2, missingAiFloors: [9],
+    });
+    assert.equal(centrallyNormalized.status, 'partial');
+    assert.match(centrallyNormalized.reason, /1\/2|total/);
+
+    const store = memoryBackend();
+    setMemorySourceLedgerBackendForTests(store.backend);
+    try {
+        await upsertMemorySourceLedger(scope, {
+            provider: 'baibai-book-public-api', revision: 'baseline',
+            coverage: { status: 'complete', returned: 2, total: 2 },
+            records: [
+                { sourceId: 'old-one', content: '旧基线一' },
+                { sourceId: 'old-two', content: '旧基线二' },
+            ],
+        });
+        await upsertMemorySourceLedger(scope, result);
+        const ledger = await readMemorySourceLedger(scope);
+        assert.equal(memorySourceLedgerSummary(ledger).sources.find(item => item.provider === 'baibai-book-public-api').coverage.status, 'partial');
+        assert.deepEqual(new Set(ledgerCurrentRecords(ledger).map(item => item.sourceId)), new Set(['old-one', 'old-two', 'only-one']));
+    } finally {
+        setMemorySourceLedgerBackendForTests(null);
+    }
+});
+
+test('r49 BaiBai fallback cannot re-add an oversized history string after bounded traversal rejects it', async () => {
+    const oversized = '回'.repeat(MAX_MEMORY_SOURCE_LEDGER_CHARS + 1);
+    const root = {
+        STBaiBaiBook: {
+            apiVersion: 1,
+            getHistory() {
+                return { revision: 'oversized-fallback', chat: { id: 'chat-r46' }, coverage: { complete: true }, relativeText: oversized };
+            },
+            getSnapshot() {
+                return { revision: 'oversized-fallback', chat: { id: 'chat-r46' } };
+            },
+        },
+    };
+    const result = await readBaiBaiBookCurrentChat(findBaiBaiBookPublicApi(root), 'chat-r46');
+    assert.deepEqual(result.records, []);
+    assert.equal(result.coverage.status, 'truncated');
+    assert.match(result.coverage.reason, /8000000 字符本地来源上限/);
+});
+
+test('r49 registered memory adapters never execute accessor-backed DTO array entries', async () => {
+    let getterHits = 0;
+    const nodes = [];
+    Object.defineProperty(nodes, '0', {
+        configurable: true,
+        enumerable: true,
+        get() {
+            getterHits += 1;
+            return { id: 'getter-node', text: '不得读取' };
+        },
+    });
+    const root = {
+        STBaiBaiBook: {
+            apiVersion: 1,
+            getHistory() {
+                return {
+                    revision: 'accessor-dto',
+                    chat: { id: 'chat-r46' },
+                    coverage: { complete: true, total: 1, missingAiFloors: [] },
+                    nodes,
+                };
+            },
+            getSnapshot() {
+                return { revision: 'accessor-dto', chat: { id: 'chat-r46' } };
+            },
+        },
+    };
+    const result = await readBaiBaiBookCurrentChat(findBaiBaiBookPublicApi(root), 'chat-r46');
+    assert.equal(getterHits, 0);
+    assert.deepEqual(result.records, []);
+    assert.equal(result.coverage.status, 'truncated');
+    assert.match(result.coverage.reason, /访问器数组项已拒绝/);
+
+    const missingAiFloors = [];
+    Object.defineProperty(missingAiFloors, '0', {
+        configurable: true,
+        enumerable: true,
+        get() {
+            getterHits += 1;
+            return 9;
+        },
+    });
+    const coverageRoot = {
+        STBaiBaiBook: {
+            apiVersion: 1,
+            getHistory() {
+                return {
+                    revision: 'accessor-coverage',
+                    chat: { id: 'chat-r46' },
+                    coverage: { complete: true, total: 1, missingAiFloors },
+                    nodes: [{ id: 'plain-node', text: '正常数据节点' }],
+                };
+            },
+            getSnapshot() {
+                return { revision: 'accessor-coverage', chat: { id: 'chat-r46' } };
+            },
+        },
+    };
+    const coverageResult = await readBaiBaiBookCurrentChat(findBaiBaiBookPublicApi(coverageRoot), 'chat-r46');
+    assert.equal(getterHits, 0);
+    assert.deepEqual(coverageResult.records.map(item => item.sourceId), ['plain-node']);
+    assert.equal(coverageResult.coverage.status, 'truncated');
+    assert.match(coverageResult.coverage.reason, /coverage 访问器数组项已拒绝/);
 });
 
 test('r46 BaiBai Book injected fallback is partial and unstable revisions are rejected', async () => {

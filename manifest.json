@@ -1,15 +1,15 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.42-universal-memory-durable-r46.0",
+  "js": "index.js?heartbeat=0.8.45-deep-review-r49.0",
   "author": "Toto",
-  "version": "0.8.42",
+  "version": "0.8.45",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r46.0 新增通用只读记忆适配、文件导入与来源账本，并修复明信片选景、生成导航和待写回结果保全。",
+  "description": "r49.0 完成跨聊天 ArchiveTarget、持久化与 API 隔离修复，并统一世界观表现证据、安全日历与标签筛选。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

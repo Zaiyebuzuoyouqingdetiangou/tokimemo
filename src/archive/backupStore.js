@@ -6,6 +6,13 @@ import * as core_text from '../core/text.js';
 
 let databasePromise = null;
 let testBackend = null;
+const backupWriteChains = new Map();
+
+function assertBackupWriteCurrent(options = {}) {
+    if (typeof options.stillCurrent === 'function' && options.stillCurrent() === false) {
+        throw new Error('这份档案的写入任务已被撤销，旧结果没有写入。');
+    }
+}
 
 function cloneValue(value) {
     if (value == null) return value;
@@ -64,6 +71,42 @@ function identityMatches(record, entry) {
     return true;
 }
 
+// A deletion fence must survive ordinary character-card edits that change the card
+// fingerprint/derived key. Keep this exceptional matcher deliberately narrower than a
+// live-record matcher: same chat file, same non-empty avatar, and same slot.
+// This prevents a different clone from inheriting the fence while stopping stale source
+// metadata from resurrecting the deleted archive after a description edit.
+function deletionIdentityMatches(record, entry) {
+    const wanted = normalizedIdentity(entry);
+    if (!record?.deleted || !wanted.chatId || core_context.comparableChatId(record.chatId) !== wanted.chatId) return false;
+    if (core_text.normalizeText(record.entryId, 120) === core_context.archiveIndexEntryId(entry)) return true;
+    const recordAvatar = core_text.normalizeText(record.avatar, 300);
+    const recordHint = normalizedCharacterIndexHint(record.characterIndexHint);
+    return !!wanted.avatar && !!recordAvatar && wanted.avatar === recordAvatar
+        && wanted.characterIndexHint >= 0 && recordHint >= 0 && wanted.characterIndexHint === recordHint;
+}
+
+function exactIdentityCompatibleWithMissing(record, entry) {
+    const wanted = normalizedIdentity(entry);
+    if (!record || !wanted.chatId || core_context.comparableChatId(record.chatId) !== wanted.chatId) return false;
+    const comparableText = (left, right, limit, ignored = '') => {
+        const a = core_text.normalizeText(left, limit);
+        const b = core_text.normalizeText(right, limit);
+        if (!a || !b || (ignored && (a === ignored || b === ignored))) return true;
+        return a === b;
+    };
+    if (!comparableText(record.characterName, wanted.characterName, 120, '未命名角色')) return false;
+    if (!comparableText(core_context.archiveStoredAvatar(record), wanted.avatar, 300)) return false;
+    if (!comparableText(record.characterKey, wanted.characterKey, 300)) return false;
+    if (!comparableText(record.characterFingerprint, wanted.characterFingerprint, 160)) return false;
+    const recordHasHint = Object.prototype.hasOwnProperty.call(record, 'characterIndexHint')
+        && normalizedCharacterIndexHint(record.characterIndexHint) >= 0;
+    const wantedHasHint = normalizedCharacterIndexHint(wanted.characterIndexHint) >= 0;
+    if (recordHasHint && wantedHasHint
+        && normalizedCharacterIndexHint(record.characterIndexHint) !== normalizedCharacterIndexHint(wanted.characterIndexHint)) return false;
+    return true;
+}
+
 function identityMatchesExceptName(record, entry) {
     const wanted = normalizedIdentity(entry);
     if (!record || !wanted.chatId || core_context.comparableChatId(record.chatId) !== wanted.chatId) return false;
@@ -90,12 +133,32 @@ function backupRecordsEquivalent(previous, incoming) {
     } catch { return false; }
 }
 
+function cacheCommitOrder(value) {
+    const token = Math.floor(Number(value?.commitToken) || 0);
+    if (Number.isSafeInteger(token) && token > 0) return token;
+    return Math.min(Number.MAX_SAFE_INTEGER - 1, Math.max(0, Math.floor(Number(value?.updatedAt) || 0)) * 1000);
+}
+
+function cachesEquivalent(left, right) {
+    try { return JSON.stringify(left ?? null) === JSON.stringify(right ?? null); }
+    catch { return false; }
+}
+
+async function serializeBackupWrite(entry, operation) {
+    const key = core_context.archiveIndexEntryId(entry);
+    const previous = backupWriteChains.get(key) || Promise.resolve();
+    const current = previous.catch(() => {}).then(operation);
+    backupWriteChains.set(key, current);
+    try { return await current; }
+    finally { if (backupWriteChains.get(key) === current) backupWriteChains.delete(key); }
+}
+
 export function hasMatchingArchiveDeletionFence(records, entry) {
     const entryId = core_context.archiveIndexEntryId(entry);
     return (Array.isArray(records) ? records : [])
         .some(record => record?.deleted === true && (
             core_text.normalizeText(record?.entryId, 120) === entryId
-            || identityMatches(record, entry)
+            || deletionIdentityMatches(record, entry)
         ));
 }
 
@@ -122,8 +185,9 @@ function normalizeRecord(raw, entry = null) {
     const exactEntryId = entry
         && core_text.normalizeText(raw?.entryId, 120)
         && core_text.normalizeText(raw.entryId, 120) === core_context.archiveIndexEntryId(entry);
-    if (entry && !exactEntryId && !identityMatches(raw, entry)
-        && !(entry?.allowCharacterRename === true && identityMatchesExceptName(raw, entry))) return null;
+    if (entry && !identityMatches(raw, entry)
+        && !(exactEntryId && exactIdentityCompatibleWithMissing(raw, entry))
+        && !(entry?.allowCharacterRename === true && exactEntryId && identityMatchesExceptName(raw, entry))) return null;
     const memory = cloneValue(raw.memory);
     if (!memory || typeof memory !== 'object' || !Array.isArray(memory.memories)) return null;
     const identity = normalizedIdentity(raw, memory);
@@ -200,7 +264,9 @@ async function idbRead(entry) {
     const exact = await requestValue(store.get(identity.entryId));
     if (exact) return exact;
     const matches = await requestValue(store.index('chatId').getAll(identity.chatId));
-    const compatible = (Array.isArray(matches) ? matches : []).filter(item => identityMatches(item, entry));
+    const compatible = (Array.isArray(matches) ? matches : []).filter(item => item?.deleted === true
+        ? deletionIdentityMatches(item, entry)
+        : identityMatches(item, entry));
     // A legacy entry ID may differ from the newer fingerprint-derived ID. Recover only when the
     // chat + stable display identity resolve to exactly one record; ambiguity stays fail-closed.
     return compatible.length === 1 ? compatible[0] : null;
@@ -217,16 +283,38 @@ async function idbPut(record, expected = null, options = {}) {
         let chatRecords = [];
         let exactDone = false;
         let matchesDone = false;
+        let abortReason = null;
         const finalize = () => {
             if (finalized || !exactDone || !matchesDone) return;
             finalized = true;
+            try { assertBackupWriteCurrent(options); }
+            catch (error) {
+                abortReason = error;
+                transaction.abort();
+                return;
+            }
             const aliases = new Map();
             for (const candidate of [exactRaw, ...chatRecords]) {
                 const id = core_text.normalizeText(candidate?.entryId, 120);
-                if (id && (id === core_text.normalizeText(record.entryId, 120) || identityMatches(candidate, record))) aliases.set(id, candidate);
+                if (id && (id === core_text.normalizeText(record.entryId, 120)
+                    || identityMatches(candidate, record)
+                    || deletionIdentityMatches(candidate, record))) aliases.set(id, candidate);
             }
             const matching = [...aliases.values()];
-            if (hasMatchingArchiveDeletionFence(matching, record) && options.allowDeletedRecreate !== true) {
+            const matchingDeletionFences = matching.filter(candidate => candidate?.deleted === true && (
+                core_text.normalizeText(candidate?.entryId, 120) === core_context.archiveIndexEntryId(record)
+                || deletionIdentityMatches(candidate, record)
+            ));
+            const recreateStartedAt = Math.max(0, Number(options.recreateStartedAt) || 0);
+            const canRecreateDeleted = options.allowDeletedRecreate === true
+                && recreateStartedAt > 0
+                && matchingDeletionFences.every(candidate => {
+                    const deletedAt = Math.max(0, Number(candidate?.deletedAt) || 0);
+                    return deletedAt > 0 && deletedAt < recreateStartedAt;
+                });
+            if (matchingDeletionFences.length && !canRecreateDeleted) {
+                abortReason = new Error('这份档案已被明确删除，旧任务不能重新创建它。');
+                abortReason.code = 'RMT_ARCHIVE_DELETED_FENCE';
                 transaction.abort();
                 return;
             }
@@ -251,16 +339,37 @@ async function idbPut(record, expected = null, options = {}) {
                 && identityMatchesExceptName(previous, record)
                 && ((expected?.present === true && previousRevision === expectedRevision)
                     || (options.seed === true && previousRevision === record.archiveRevision));
-            if (previous && !identityMatches(previous, record) && !authorizedIdentityRefresh) return transaction.abort();
-            if (expected?.present === false && previous) return transaction.abort();
+            const authorizedMissingFieldEnrichment = exactPrevious === previous
+                && core_text.normalizeText(previous?.entryId, 120) === core_text.normalizeText(record.entryId, 120)
+                && exactIdentityCompatibleWithMissing(exactRaw, record)
+                && ((expected?.present === true && previousRevision === expectedRevision)
+                    || (options.seed === true && previousRevision === record.archiveRevision));
+            if (previous && !identityMatches(previous, record) && !authorizedIdentityRefresh && !authorizedMissingFieldEnrichment) return transaction.abort();
             const idempotentRetry = options.allowIdempotentRetry === true
-                && expected?.present === true
                 && exactPrevious === previous
-                && identityMatches(previous, record)
+                && (identityMatches(previous, record) || authorizedMissingFieldEnrichment)
                 && backupRecordsEquivalent(previous, record);
+            if (expected?.present === false && previous && !idempotentRetry) return transaction.abort();
             if (expected?.present === true && previous && previousRevision !== expectedRevision && !idempotentRetry) return transaction.abort();
             if (expected?.present === true && !previous && options.allowMissingPrevious !== true) return transaction.abort();
-            if (options.allowDeletedRecreate === true) {
+            const replacingProvenInvalidCache = options.seed === true && options.replaceInvalidCache === true;
+            if (Number.isFinite(Number(options.expectedCacheOrder))) {
+                const expectedCacheOrder = Math.max(0, Math.floor(Number(options.expectedCacheOrder) || 0));
+                const currentCacheOrder = previousRevision === record.archiveRevision ? cacheCommitOrder(previous?.cache) : 0;
+                if (currentCacheOrder !== expectedCacheOrder) {
+                    abortReason = new Error('独立档案备份的派生缓存已被另一个页面更新，本次将重新合并。');
+                    abortReason.code = 'RMT_CACHE_CAS_CONFLICT';
+                    transaction.abort();
+                    return;
+                }
+            }
+            if (!replacingProvenInvalidCache && previous && previousRevision === record.archiveRevision && previous.cache && record.cache) {
+                const previousCacheOrder = cacheCommitOrder(previous.cache);
+                const incomingCacheOrder = cacheCommitOrder(record.cache);
+                if (incomingCacheOrder < previousCacheOrder
+                    || (incomingCacheOrder === previousCacheOrder && !cachesEquivalent(previous.cache, record.cache))) return transaction.abort();
+            }
+            if (canRecreateDeleted) {
                 // A deliberate new canonical archive may replace an earlier deletion. Clear
                 // every matching tombstone alias in this transaction so future seed/cache
                 // updates are not blocked by an older entry ID.
@@ -268,7 +377,7 @@ async function idbPut(record, expected = null, options = {}) {
                     if (candidate?.deleted === true && id !== record.entryId) store.delete(id);
                 }
             }
-            if (options.seed === true && previous && previousRevision === record.archiveRevision) {
+            if (options.seed === true && !replacingProvenInvalidCache && previous && previousRevision === record.archiveRevision) {
                 const previousCacheTime = Math.max(0, Number(previous.cache?.updatedAt) || 0);
                 const incomingCacheTime = Math.max(0, Number(record.cache?.updatedAt) || 0);
                 if (previous.cache && (!record.cache || previousCacheTime > incomingCacheTime)) {
@@ -277,7 +386,9 @@ async function idbPut(record, expected = null, options = {}) {
                     record = { ...record, cache: cloneValue(previous.cache) };
                 }
             }
-            if (options.seed === true && previous && previousRevision !== record.archiveRevision && Number(previous.updatedAt) > Number(record.updatedAt)) {
+            if (options.seed === true && previous && previousRevision !== record.archiveRevision) {
+                // Seeding mirrors a source; it is never allowed to replace a canonical IDB
+                // revision. Revision IDs are opaque and wall clocks can tie or move backwards.
                 outcome = true;
                 return;
             }
@@ -299,7 +410,7 @@ async function idbPut(record, expected = null, options = {}) {
             finalize();
         };
         transaction.oncomplete = () => resolve(outcome);
-        transaction.onabort = () => reject(new Error('独立档案备份版本已经变化，本次旧结果没有覆盖备份。'));
+        transaction.onabort = () => reject(abortReason || new Error('独立档案备份版本已经变化，本次旧结果没有覆盖备份。'));
         transaction.onerror = () => reject(transaction.error || new Error('独立档案备份写入失败。'));
     });
 }
@@ -364,12 +475,84 @@ async function idbDeleteOne(db, entry) {
 
 async function idbDelete(entries) {
     const db = await openDatabase();
-    for (const entry of Array.isArray(entries) ? entries : [entries]) await idbDeleteOne(db, entry);
-    return true;
+    const targets = (Array.isArray(entries) ? entries : [entries]).filter(Boolean);
+    if (!targets.length) return true;
+    return new Promise((resolve, reject) => {
+        // A character group is one user-visible deletion. Resolve every exact/legacy alias and
+        // write all tombstones in one IndexedDB transaction so an Nth-record failure cannot
+        // leave the first N-1 backups silently deleted while the library index remains intact.
+        const transaction = db.transaction(core_constants.ARCHIVE_BACKUP_STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME);
+        const discovered = targets.map(() => ({ exact: null, chat: [] }));
+        let pending = targets.length * 2;
+        let finalized = false;
+        const abort = error => {
+            if (error) transaction.__rmtAbortReason = error;
+            try { transaction.abort(); } catch {}
+        };
+        const finishDiscovery = () => {
+            pending -= 1;
+            if (pending || finalized) return;
+            finalized = true;
+            const tombstones = new Map();
+            const deletedAt = Date.now();
+            for (let index = 0; index < targets.length; index += 1) {
+                const target = targets[index];
+                const identity = normalizedIdentity(target);
+                const records = new Map();
+                const exact = discovered[index].exact;
+                if (exact?.entryId) records.set(core_text.normalizeText(exact.entryId, 120), exact);
+                for (const record of discovered[index].chat) {
+                    const id = core_text.normalizeText(record?.entryId, 120);
+                    if (id) records.set(id, record);
+                }
+                const ids = new Set(identity.entryId ? [identity.entryId] : []);
+                for (const record of records.values()) {
+                    if (identityMatches(record, target)) ids.add(core_text.normalizeText(record.entryId, 120));
+                }
+                for (const id of ids) {
+                    if (!id) continue;
+                    const source = records.get(id) || target;
+                    tombstones.set(id, {
+                        storageVersion: core_constants.ARCHIVE_BACKUP_STORAGE_VERSION,
+                        ...normalizedIdentity(source),
+                        entryId: id,
+                        deleted: true,
+                        deletedAt,
+                        memory: null,
+                        cache: null,
+                        archiveRevision: '',
+                        archiveName: '',
+                        createdAt: 0,
+                        updatedAt: deletedAt,
+                    });
+                }
+            }
+            try {
+                for (const record of tombstones.values()) store.put(record);
+            } catch (error) { abort(error); }
+        };
+        targets.forEach((target, index) => {
+            const identity = normalizedIdentity(target);
+            const exactRequest = store.get(identity.entryId);
+            exactRequest.onerror = () => abort(exactRequest.error || new Error('独立档案备份删除失败。'));
+            exactRequest.onsuccess = () => { discovered[index].exact = exactRequest.result || null; finishDiscovery(); };
+            const matchesRequest = store.index('chatId').getAll(identity.chatId);
+            matchesRequest.onerror = () => abort(matchesRequest.error || new Error('独立档案备份删除失败。'));
+            matchesRequest.onsuccess = () => { discovered[index].chat = Array.isArray(matchesRequest.result) ? matchesRequest.result : []; finishDiscovery(); };
+        });
+        transaction.oncomplete = () => resolve(true);
+        transaction.onabort = () => reject(transaction.__rmtAbortReason || transaction.error || new Error('独立档案备份删除失败。'));
+        transaction.onerror = () => reject(transaction.error || new Error('独立档案备份删除失败。'));
+    });
 }
 
 function backend() {
-    return testBackend || { read: idbRead, put: idbPut, delete: idbDelete };
+    return testBackend || {
+        read: idbRead,
+        put: idbPut,
+        delete: idbDelete,
+    };
 }
 
 export function setArchiveBackupBackendForTests(value = null) {
@@ -381,27 +564,71 @@ export async function readArchiveBackup(entry) {
     return normalizeRecord(raw, entry);
 }
 
+export async function readArchiveBackupState(entry) {
+    const raw = await backend().read(entry);
+    const exactEntryId = core_text.normalizeText(raw?.entryId, 120) === core_context.archiveIndexEntryId(entry);
+    if (raw?.deleted === true && (exactEntryId || deletionIdentityMatches(raw, entry))) {
+        return { deleted: true, deletedAt: Math.max(0, Number(raw.deletedAt) || 0), record: null };
+    }
+    return { deleted: false, deletedAt: 0, record: normalizeRecord(raw, entry) };
+}
+
+export async function hasArchiveBackupDeletionFence(entry) {
+    return (await readArchiveBackupState(entry)).deleted === true;
+}
+
 export async function replaceArchiveBackup(entry, memory, cache, expectedState, options = {}) {
-    const record = buildRecord(entry, memory, cache);
-    const saved = await backend().put(record, expectedState, options);
-    if (!saved) throw new Error('独立档案备份没有写入。');
-    return cloneValue(record);
-}
-
-export async function seedArchiveBackup(entry, memory, cache = null) {
-    const record = buildRecord(entry, memory, cache);
-    const saved = await backend().put(record, null, {
-        seed: true,
-        allowMissingPrevious: true,
-        allowCharacterRename: entry?.allowCharacterRename === true,
+    return serializeBackupWrite(entry, async () => {
+        assertBackupWriteCurrent(options);
+        const record = buildRecord(entry, memory, cache);
+        if (expectedState?.present === true && options.allowMissingPrevious === true && record.cache) {
+            const previous = await readArchiveBackup(entry);
+            assertBackupWriteCurrent(options);
+            if (previous?.archiveRevision === record.archiveRevision && previous.cache) {
+                const previousOrder = cacheCommitOrder(previous.cache);
+                const incomingOrder = cacheCommitOrder(record.cache);
+                if (incomingOrder < previousOrder
+                    || (incomingOrder === previousOrder && !cachesEquivalent(previous.cache, record.cache))) {
+                    throw new Error('独立档案备份已有更新的派生缓存，本次旧结果没有覆盖备份。');
+                }
+            }
+        }
+        assertBackupWriteCurrent(options);
+        const saved = await backend().put(record, expectedState, options);
+        assertBackupWriteCurrent(options);
+        if (!saved) throw new Error('独立档案备份没有写入。');
+        return cloneValue(record);
     });
-    return saved ? cloneValue(record) : null;
 }
 
-export async function updateArchiveBackupCache(entry, memory, cache) {
+export async function seedArchiveBackup(entry, memory, cache = null, options = {}) {
+    return serializeBackupWrite(entry, async () => {
+        assertBackupWriteCurrent(options);
+        const record = buildRecord(entry, memory, cache);
+        const previous = await readArchiveBackup(entry);
+        assertBackupWriteCurrent(options);
+        if (options.replaceInvalidCache !== true && previous?.archiveRevision === record.archiveRevision && previous.cache
+            && (!record.cache || cacheCommitOrder(previous.cache) > cacheCommitOrder(record.cache))) {
+            record.cache = cloneValue(previous.cache);
+        }
+        const saved = await backend().put(record, null, {
+            seed: true,
+            allowMissingPrevious: true,
+            allowCharacterRename: entry?.allowCharacterRename === true,
+            replaceInvalidCache: options.replaceInvalidCache === true,
+            stillCurrent: options.stillCurrent,
+        });
+        assertBackupWriteCurrent(options);
+        return saved ? cloneValue(record) : null;
+    });
+}
+
+export async function updateArchiveBackupCache(entry, memory, cache, options = {}) {
     return replaceArchiveBackup(entry, memory, cache, { present: true, revision: core_text.normalizeText(memory?.archiveRevision, 240) }, {
         allowMissingPrevious: true,
         allowCharacterRename: entry?.allowCharacterRename === true,
+        expectedCacheOrder: options.expectedCacheOrder,
+        stillCurrent: options.stillCurrent,
     });
 }
 

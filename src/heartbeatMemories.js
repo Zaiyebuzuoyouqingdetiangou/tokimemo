@@ -4,7 +4,9 @@ import * as core_cache from './core/cache.js';
 import * as core_constants from './core/constants.js';
 import * as core_context from './core/context.js';
 import * as core_requestCoordinator from './core/requestCoordinator.js';
+import * as archive_snapshots from './archive/snapshots.js';
 import { state as runtimeState } from './core/state.js';
+import * as core_text from './core/text.js';
 import * as generation_imageGeneration from './generation/imageGeneration.js';
 import * as modes_room from './modes/room.js';
 import * as ui_archivePortal from './ui/archivePortal.js';
@@ -27,13 +29,15 @@ export function initMemoryTheater() {
         ui_archivePortal.scheduleMounts(settingsMounted, menuMounted);
         // This runs only after the user explicitly loaded the full runtime. It lazily migrates the
         // current chat's existing archive into the independent local backup without touching startup.
-        void core_cache.ensureCurrentArchiveBackup().catch(error => {
-            console.warn('[HeartbeatMemories] current archive backup seed failed', error);
-            globalThis.toastr?.warning?.(`当前档案可正常使用，但独立备份没有更新：${error?.message || error}`, '心跳回忆');
+        void core_cache.ensureCurrentArchiveBackup().then(reconciled => {
+            if (reconciled) archive_snapshots.scheduleChooserRefresh(0);
+        }).catch(error => {
+            console.warn('[HeartbeatMemories] current archive backup seed failed', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.warning?.(`当前档案可正常使用，但独立备份没有更新：${core_text.safeErrorSummary(error)}`, '心跳回忆');
         });
         console.log('[HeartbeatMemories] initialized');
     } catch (error) {
-        console.error('[HeartbeatMemories] init failed', error);
+        console.error('[HeartbeatMemories] init failed', core_text.safeErrorDiagnostic(error));
     }
 }
 
@@ -55,13 +59,14 @@ export function destroyMemoryTheater() {
                 liveContext.saveMetadataDebounced?.();
             }
         } catch (error) {
-            console.warn('[HeartbeatMemories] destroy-time cache preservation skipped', error);
-            globalThis.toastr?.warning?.(`${error?.message || error} 销毁流程没有覆盖上一份有效缓存。`, '心跳回忆');
+            console.warn('[HeartbeatMemories] destroy-time cache preservation skipped', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.warning?.(`${core_text.safeErrorSummary(error)} 销毁流程没有覆盖上一份有效缓存。`, '心跳回忆');
         }
         // Invalidate every asynchronous state writer before clearing containers. Results that
         // started in the old runtime lifetime must not refill caches after disable/clean.
         runtimeState.runtimeLifecycleEpoch += 1;
         runtimeState.apiConfigurationEpoch += 1;
+        runtimeState.manualApiKey = '';
         const timer = globalThis.__heartbeatMemoriesMountTimer;
         if (timer) clearInterval(timer);
         globalThis.__heartbeatMemoriesMountTimer = null;
@@ -82,6 +87,7 @@ export function destroyMemoryTheater() {
         runtimeState.endingEasterEggRuntime = null;
         try { runtimeState.activeTaskAbortController?.abort?.(); } catch {}
         runtimeState.activeTaskAbortController = null;
+        runtimeState.archivePreparationToken = null;
         for (const task of runtimeState.activeGenerationTasks.values()) {
             try { task.controller?.abort?.(); } catch {}
         }
@@ -95,6 +101,7 @@ export function destroyMemoryTheater() {
         runtimeState.activeGenerationTasks.clear();
         runtimeState.activeModeBuildScopes.clear();
         runtimeState.activeAdvBulkScopes.clear();
+        runtimeState.activeArchiveTargetReservations.clear();
         runtimeState.cgImageLifecycleEpoch += 1;
         runtimeState.activeCgImageTasks.clear();
         runtimeState.avatarDialogueRequestEpoch += 1;
@@ -111,7 +118,6 @@ export function destroyMemoryTheater() {
         runtimeState.archiveOverviewAllowedChats.clear();
         runtimeState.archiveOverviewKnownArchives.clear();
         runtimeState.archiveOverviewLastKey = '';
-        runtimeState.memoryProviderDiscoveryCache = { signature: '', scannedAt: 0, items: [] };
         runtimeState.memoryPreflightCache.clear();
         // Completed results waiting for their origin chat are intentionally durable.
         // Disabling/reloading the runtime must not erase them; the next initialization
@@ -121,10 +127,16 @@ export function destroyMemoryTheater() {
         runtimeState.connectionModelRequestEpochs.clear();
         for (const timer of runtimeState.cachePersistTimers.values()) clearTimeout(timer);
         runtimeState.cachePersistTimers.clear();
+        runtimeState.cachePersistChains.clear();
+        runtimeState.archiveCommitChains.clear();
+        runtimeState.archiveDeletionFences.clear();
+        runtimeState.cacheCommitSequences.clear();
         runtimeState.cacheHydrationPromises.clear();
         runtimeState.cacheHydrationErrors.clear();
         runtimeState.runtimeSessionCache.clear();
         runtimeState.pendingCompressedCacheWrites.clear();
+        runtimeState.archiveTargetTaskEpochs.clear();
+        runtimeState.calendarTagFilters.clear();
         runtimeState.usableMessageCountCache.clear();
         runtimeState.busy = false;
         runtimeState.contentManagerOpen = false;
@@ -141,6 +153,6 @@ export function destroyMemoryTheater() {
         runtimeState.activeArchiveReadOnly = true;
         console.log('[HeartbeatMemories] destroyed');
     } catch (error) {
-        console.warn('[HeartbeatMemories] destroy failed', error);
+        console.warn('[HeartbeatMemories] destroy failed', core_text.safeErrorDiagnostic(error));
     }
 }

@@ -16,6 +16,10 @@ export const CACHE_KEY = 'heartbeatMemoriesTheaterV3';
 
 export const PHONE_DRAFT_CACHE_KEY = 'phoneGenerationDraftV1';
 
+export const MODE_WRITE_FENCES_CACHE_KEY = 'modeWriteFencesV1';
+
+export const SESSION_MODE_WRITE_FENCE_KEY = '_rmtModeWriteFence';
+
 export const MEMORY_KEY = 'heartbeatMemoriesArchiveV3';
 
 export const ARCHIVE_SCHEMA_VERSION = 3;
@@ -28,13 +32,13 @@ export const CACHE_STORAGE_FORMAT = 'gzip-base64-v1';
 
 export const CACHE_STORAGE_VERSION = 1;
 
-export const CALENDAR_SESSION_VERSION = 5;
+export const CALENDAR_SESSION_VERSION = 6;
 
-export const PHONE_SESSION_VERSION = 2;
+export const PHONE_SESSION_VERSION = 4;
 
-export const ROOM_SESSION_VERSION = 2;
+export const ROOM_SESSION_VERSION = 3;
 
-export const TRAVEL_SESSION_VERSION = 1;
+export const TRAVEL_SESSION_VERSION = 4;
 
 export const MAX_CACHE_COMPRESSED_BASE64_CHARS = 4000000;
 
@@ -137,26 +141,37 @@ export const MAX_MEMORY_WORLD_INFO_ENTRIES = 160;
 
 export const MAX_MEMORY_WORLD_INFO_CHARS = 52000;
 
+export const THEME_MODES = new Set(['default', 'host', 'custom']);
+
+export const DEFAULT_THEME_PALETTE = Object.freeze({
+    background: '#f7fafc',
+    surface: '#ffffff',
+    text: '#526a80',
+    muted: '#657586',
+    accent: '#d58eaa',
+    accentAlt: '#83bdb9',
+    border: '#dce7ec',
+});
+
 export const DEFAULT_SETTINGS = Object.freeze({
     apiConnectionMode: 'profile',
     connectionProfileId: '',
     modelOverride: '',
     manualApiBaseUrl: '',
-    manualApiKey: '',
     manualApiModel: '',
     maxTokens: 16384,
     temperature: 0.9,
     roomLifeAutoDaily: true,
     useCurrentChatExternalMemory: true,
-    // Executing another extension's public reader is an explicit opt-in. Prompt/metadata summaries
-    // remain available without this because they are passive data already present in SillyTavern.
-    usePublicMemoryProviderReaders: false,
     // Manual fallback for hosts where Image Generation is active but its SlashCommand object is
     // not exposed through the current context registry. Off by default; when enabled we may use
     // the public executeSlashCommandsWithOptions('/sd quiet=true ...') path with a sanitized prompt.
     imageGenerationManualEnabled: false,
     // Optional r32-style mobile safe-area presentation. Off keeps the long-standing edge-to-edge fullscreen UI.
     ttDisplayMode: false,
+    themeMode: 'default',
+    themeAlpha: 0.96,
+    themeCustom: DEFAULT_THEME_PALETTE,
     // Applies only to newly model-generated derivative content. Never rewrite chat/archive evidence.
     bannedGeneratedPhrases: ['老子'],
 });
@@ -210,17 +225,7 @@ export const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.RO
 
 export const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS, MODE.PHONE]);
 
-export const MEMORY_PROVIDER_TRACE_RE = /(memory|memories|memo|recall|remember|summary|summar|history|lore|horae|vector|记忆|回忆|忆|摘要|总结|往事|历史)/i;
-
-export const CURRENT_CHAT_MEMORY_SOURCE_RE = /(memory|memories|memo|recall|remember|summary|summar|recap|history|记忆|回忆|摘要|总结|小结|回顾|历史)/i;
-
-export const SETTING_ONLY_SOURCE_RE = /(world(?:[_ -]?(?:info|book))?|lore(?:[_ -]?book)?|character|persona|author|scenario|世界书|世界观|设定|角色卡|人设|作者|场景)/i;
-
-export const PUBLIC_MEMORY_READER_NAMES = Object.freeze(['getInjectedHistory', 'getCurrentChatMemories', 'getCurrentChatMemory', 'getCurrentChatSummary', 'getCurrentSummary']);
-
 export const ARCHIVE_OVERVIEW_CACHE_MS = 60000;
-
-export const MEMORY_PROVIDER_DISCOVERY_CACHE_MS = 120000;
 
 export const CATEGORY_VALUES = new Set(['日常', '约会', '结局']);
 
@@ -228,15 +233,17 @@ export const ROOM_ZONE_VALUES = new Set(['左上', '右上', '左下', '右下',
 
 export const ROOM_BASIS_VALUES = new Set(['设定', '记忆']);
 
-export const PHONE_DEVICE_KINDS = new Set(['phone', 'watch', 'terminal', 'communicator']);
+export const PHONE_DEVICE_KINDS = new Set(['neutral', 'phone', 'watch', 'terminal', 'communicator', 'folio', 'relic']);
 
 export const PHONE_EXCLUDED_APP_KINDS = new Set(['schedule', 'calendar', 'location', 'map', 'maps', 'navigation', 'travel', 'transit', 'route']);
 
 export const TRAVEL_LOCATION_KINDS = new Set(['near', 'far']);
 
-export const TRAVEL_MAP_THEMES = new Set(['city', 'coast', 'forest', 'mountain', 'campus', 'historic', 'fantasy', 'scifi']);
+export const TRAVEL_MAP_THEMES = new Set(['neutral', 'city', 'coast', 'forest', 'mountain', 'campus', 'historic', 'fantasy', 'scifi']);
 
 export const TRAVEL_POSTCARD_TONES = new Set(['rose', 'ocean', 'forest', 'sunset', 'night', 'paper']);
+
+export const TRAVEL_KEEPSAKE_KINDS = new Set(['postcard', 'letter', 'journal', 'scroll', 'fieldnote', 'dossier', 'datalog', 'token']);
 
 export const ROOM_DAYPART_KEYS = ['morning', 'daytime', 'evening', 'night'];
 

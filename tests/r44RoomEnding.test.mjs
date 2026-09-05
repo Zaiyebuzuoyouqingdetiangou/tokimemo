@@ -7,12 +7,17 @@ import {
     ROOM_PET_SPECIES,
     mergeRoomIncremental,
     normalizeRoom,
+    normalizeRoomLifePlan,
     normalizeRoomVisualProfile,
+    roomCurrentSlot,
+    roomLifeBeat,
+    roomNarrativeClaimsSharedHistory,
     roomBlueprintPayload,
     roomMotifToken,
     roomNeedsSchemaUpgrade,
     roomObjectVisualKind,
     roomPetNodeHtml,
+    roomRequiredPetSpecies,
     roomPetSummaryHtml,
 } from '../src/modes/room.js';
 import {
@@ -39,7 +44,7 @@ const memoryBank = {
     characterName: '林砚',
     userName: '阿澄',
     memories: [
-        { id: 'M001', title: '小狗窝', summary: '他在书房给小狗准备了长期使用的小狗窝。', anchors: ['小狗窝'] },
+        { id: 'M001', title: '小狗窝', summary: '林砚在书房给小狗准备了长期使用的小狗窝。', anchors: ['小狗窝'] },
         { id: 'M002', title: '告白夜', summary: '两个人已经把心意讲清楚。', anchors: ['告白夜'] },
     ],
 };
@@ -99,6 +104,27 @@ function confessionFixture(easterEgg) {
     };
 }
 
+function roomLifeFixture(firstBeat = {}) {
+    const times = ['06:30', '09:10', '12:40', '16:20', '20:00', '23:10'];
+    return {
+        date: '2026-09-06',
+        beats: times.map((time, index) => ({
+            time,
+            spaceId: `SP${index % 3 + 1}`,
+            activity: '处理这一刻的日常。',
+            line: '这里很安静。',
+            focusObjectId: `SP${index % 3 + 1}O1`,
+            ambient: '光线随着时间缓慢移动。',
+            trace: '桌面留下半杯水。',
+            visualState: { lighting: 'soft', window: 'closed', order: 'used', surface: 'drink' },
+            temporaryObjects: ['半杯水'],
+            sourceMemoryIds: [],
+            sourceMemoryAnchor: '',
+            ...(index === 0 ? firstBeat : {}),
+        })),
+    };
+}
+
 test('r44 room fixes the character to a faceless rear silhouette and normalizes evidenced pets', async () => {
     const room = normalizeRoom(roomFixture(), memoryBank, { identityKey: '林砚-旧宅' });
     assert.equal(room.visualProfile.figure.facing, 'away');
@@ -145,6 +171,147 @@ test('r44 room emits escaped pet markup and stable code-owned visual tokens', ()
     assert.equal(roomObjectVisualKind({ label: '旧书与杂志', description: '' }), 'book');
     assert.equal(roomObjectVisualKind({ label: '<style>', description: 'url(javascript:1)' }), 'other');
     assert.equal(roomMotifToken({ visualProfile: { density: 'balanced' } }, roomFixture().spaces[0]), 'literary');
+});
+
+test('r49 room keeps present observation separate from archive-backed shared history', () => {
+    assert.equal(roomNarrativeClaimsSharedHistory('去年我替你选了这枚戒指。', '阿澄'), true);
+    assert.equal(roomNarrativeClaimsSharedHistory('这是你送我的戒指。', '阿澄'), true);
+    assert.equal(roomNarrativeClaimsSharedHistory('我们一起买的沙发还在这里。', '阿澄'), true);
+    const rewrittenHistory = [
+        '阿澄送我的戒指还在这里。',
+        '你挑中的戒指还在这里。',
+        '我亲手挑给你的这枚戒指很合适。',
+        '阿澄把戒指交到我手里，至今还放在盒中。',
+        '我收到阿澄的戒指，收在抽屉里。',
+        '我们拍完照后各自回家。',
+        '此戒乃阿澄所赠。',
+        '这枚戒指来自阿澄。',
+        '今天我想起你把戒指交到我手里。',
+        '现在我望着你，脑海里浮现初见的海边。',
+        '你知道吗，我又想到初见的那场雨。',
+        '今天见到你让我忆及旧日同游海边。',
+        '今天见到你，往日同游海边的画面又在眼前展开。',
+        '此刻见你，恍若重回昔年并肩看海之时。',
+        '现在看着你，旧日并肩看海的画面历历在目。',
+    ];
+    for (const line of rewrittenHistory) assert.equal(roomNarrativeClaimsSharedHistory(line, '阿澄'), true, line);
+    assert.equal(roomNarrativeClaimsSharedHistory('苏送我的戒指还在这里。', '苏'), true);
+    assert.equal(roomNarrativeClaimsSharedHistory('你来了。', '阿澄'), false);
+    assert.equal(roomNarrativeClaimsSharedHistory('现在我给你写信。', '阿澄'), false);
+    assert.equal(roomNarrativeClaimsSharedHistory('我打算给你选的戒指。', '阿澄'), false);
+    assert.equal(roomNarrativeClaimsSharedHistory('我正在给你写的信还差一页。', '阿澄'), false);
+    assert.equal(roomNarrativeClaimsSharedHistory('今天我给你买咖啡。', '阿澄'), false);
+    assert.equal(roomNarrativeClaimsSharedHistory('你吃过饭了吗？', '阿澄'), false);
+    assert.equal(roomNarrativeClaimsSharedHistory('我爱你。', '阿澄'), false);
+    assert.equal(roomNarrativeClaimsSharedHistory('今天我想起你。', '阿澄'), false);
+    assert.equal(roomNarrativeClaimsSharedHistory('现在看见你，我很开心。', '阿澄'), false);
+    assert.equal(roomNarrativeClaimsSharedHistory('现在我望着你，窗外的海很蓝。', '阿澄'), false);
+    assert.equal(roomNarrativeClaimsSharedHistory('你可算来了！', '阿澄'), false);
+    assert.equal(roomNarrativeClaimsSharedHistory('此刻窗外正下雨，我看着你，心里很安稳。', '阿澄'), false);
+    assert.equal(roomNarrativeClaimsSharedHistory('我真的很喜欢你。', '阿澄'), false);
+    assert.equal(roomNarrativeClaimsSharedHistory('阿澄，晚上好。', '阿澄'), false);
+    assert.equal(roomNarrativeClaimsSharedHistory('待会儿我给你泡杯茶。', '阿澄'), false);
+    assert.equal(roomNarrativeClaimsSharedHistory('一见到你，我就特别开心。', '阿澄'), false);
+    assert.equal(roomNarrativeClaimsSharedHistory('现在我坐在你身边。', '阿澄'), false);
+
+    const poisonedBlueprint = roomFixture();
+    poisonedBlueprint.spaces[0].objects.push({
+        id: 'FAKE_HISTORY', label: '戒指', zone: '近景', basis: '设定', searchable: false,
+        description: '去年我替你选了这枚戒指。', line: '这是我们共同买过的。',
+    });
+    const normalizedBlueprint = normalizeRoom(poisonedBlueprint, memoryBank);
+    assert.equal(normalizedBlueprint.spaces[0].objects.some(item => item.id === 'FAKE_HISTORY'), false);
+
+    const session = normalizeRoom(roomFixture(), memoryBank);
+    for (const [index, line] of rewrittenHistory.entries()) {
+        const rewrittenBlueprint = roomFixture();
+        rewrittenBlueprint.spaces[0].objects.push({
+            id: `REWRITE_${index}`, label: '戒指', zone: '近景', basis: '设定', searchable: false,
+            description: line, line: '只是摆在这里。',
+        });
+        const normalized = normalizeRoom(rewrittenBlueprint, memoryBank);
+        assert.equal(normalized.spaces[0].objects.some(item => item.id === `REWRITE_${index}`), false, line);
+        assert.throws(() => normalizeRoomLifePlan(
+            roomLifeFixture({ line }), session, memoryBank, new Date(2026, 8, 6),
+        ), /时间线不足/, line);
+    }
+    assert.throws(() => normalizeRoomLifePlan(
+        roomLifeFixture({ line: '去年我替你选了这枚戒指。' }),
+        session,
+        memoryBank,
+        new Date(2026, 8, 6),
+    ), /时间线不足/);
+
+    const evidenced = normalizeRoomLifePlan(roomLifeFixture({
+        line: '那天告白夜里，我们把心意讲清楚了。',
+        sourceMemoryIds: ['M002'],
+        sourceMemoryAnchor: '告白夜',
+    }), session, memoryBank, new Date(2026, 8, 6));
+    assert.equal(evidenced.beats.length, 6);
+    assert.deepEqual(evidenced.beats[0].sourceMemoryIds, ['M002']);
+    assert.equal(evidenced.beats[0].sourceMemoryAnchor, '告白夜');
+
+    assert.throws(() => normalizeRoomLifePlan(roomLifeFixture({
+        line: '去年我替你选了这枚戒指。',
+        sourceMemoryIds: ['M002'],
+        sourceMemoryAnchor: '告白夜',
+    }), session, memoryBank, new Date(2026, 8, 6)), /时间线不足/);
+
+    const previousSnapshot = runtimeState.activeArchiveSnapshot;
+    runtimeState.activeArchiveSnapshot = { memory: memoryBank };
+    try {
+        const cached = structuredClone(session);
+        cached.lifePlan = {
+            dateKey: '2026-09-06', archiveRevision: memoryBank.archiveRevision, generatedAt: 1,
+            beats: [{
+                id: 'POISONED', minute: 390, time: '06:30', spaceId: 'SP1', focusObjectId: 'SP1O1',
+                activity: '处理日常。', line: '去年我替你选了这枚戒指。', ambient: '很安静。', trace: '半杯水。',
+                visualState: {}, temporaryObjects: [], sourceMemoryIds: [], sourceMemoryAnchor: '',
+            }],
+        };
+        assert.equal(roomLifeBeat(cached, new Date(2026, 8, 6, 7, 0)), null);
+
+        delete cached.lifePlan;
+        cached.dayparts.morning.line = '去年我替你选了这枚戒指。';
+        const safeSlot = roomCurrentSlot(cached, new Date(2026, 8, 6, 7, 0));
+        assert.equal(safeSlot.line, '');
+    } finally {
+        runtimeState.activeArchiveSnapshot = previousSnapshot;
+    }
+});
+
+test('r49 explicit controlled pet ownership cannot normalize to an empty room pet list', () => {
+    const controlledEvidence = '角色卡：林砚养着一只猫。';
+    const characterEvidence = '林砚养着一只猫。';
+    assert.deepEqual(roomRequiredPetSpecies(memoryBank, { controlledEvidence, characterEvidence }), ['cat']);
+    assert.throws(() => normalizeRoom({ ...roomFixture(), pets: [] }, memoryBank, {
+        controlledEvidence,
+        characterEvidence,
+    }), /缺少有效宠物节点/);
+
+    const candidate = roomFixture();
+    candidate.pets = [{
+        id: 'CAT_EVIDENCED', name: '猫咪', species: 'cat', spaceId: 'SP1', basis: '设定',
+        description: '猫咪长期生活在这个空间。', sourceEvidence: '林砚养着一只猫。',
+    }];
+    const normalized = normalizeRoom(candidate, memoryBank, { controlledEvidence, characterEvidence });
+    assert.equal(normalized.pets.length, 1);
+    assert.equal(normalized.pets[0].species, 'cat');
+
+    const genericEvidence = '角色卡：林砚养着一只宠物。';
+    const generic = roomFixture();
+    generic.pets = [{
+        id: 'PET_OTHER', name: '宠物', species: 'other', spaceId: 'SP1', basis: '设定',
+        description: '宠物长期生活在这个空间。', sourceEvidence: '林砚养着一只宠物。',
+    }];
+    assert.deepEqual(roomRequiredPetSpecies(memoryBank, {
+        controlledEvidence: genericEvidence,
+        characterEvidence: '林砚养着一只宠物。',
+    }), ['other']);
+    assert.equal(normalizeRoom(generic, memoryBank, {
+        controlledEvidence: genericEvidence,
+        characterEvidence: '林砚养着一只宠物。',
+    }).pets[0].species, 'other');
 });
 
 test('r44 room rejects repetitive spaces and normal increments cannot add ungrounded pets or presence lines', () => {

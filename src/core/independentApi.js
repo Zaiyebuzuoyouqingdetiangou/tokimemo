@@ -4,7 +4,6 @@ import * as core_constants from './constants.js';
 import * as core_text from './text.js';
 
 export const PROFILE_ONE_CLICK_UI_VERSION = '1.1.18';
-export const PROFILE_ONE_CLICK_TECHNICAL_VERSION = 'SillyTavern 1.18.0+';
 
 const MANUAL_STATUS_ENDPOINT = '/api/backends/chat-completions/status';
 const MANUAL_GENERATE_ENDPOINT = '/api/backends/chat-completions/generate';
@@ -13,6 +12,8 @@ const KNOWN_API_ENDPOINT_RE = /\/(?:chat\/completions|completions|responses|mess
 function apiError(message, code, status = 0) {
     const error = new Error(message);
     error.code = code;
+    error.safeToDisplay = true;
+    error.safeUserMessage = message;
     if (status) error.status = status;
     return error;
 }
@@ -43,7 +44,7 @@ export function assertConnectionManagerProfileSupport(service) {
     const validService = typeof service?.validateProfile === 'function' && typeof service?.sendRequest === 'function';
     if (validService && connectionManagerHasProfileSecrets(service) && connectionManagerSupportsRequestOverrides(service)) return true;
     throw apiError(
-        `一键配置要求 ${PROFILE_ONE_CLICK_UI_VERSION} 对应的新版 Connection Manager 能力（${PROFILE_ONE_CLICK_TECHNICAL_VERSION}）。当前页面未提供安全的 Profile Secret 与模型覆盖能力；本次没有发送请求。`,
+        `一键配置要求 ${PROFILE_ONE_CLICK_UI_VERSION} 的 Connection Manager 能力。当前页面未提供安全的 Profile Secret 与模型覆盖能力；本次没有发送请求。`,
         'RMT_PROFILE_CAPABILITY',
     );
 }
@@ -87,6 +88,27 @@ export function normalizeManualApiBaseUrl(value, { required = false } = {}) {
     }
     if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password) {
         throw apiError('手动 API 地址必须是无内嵌账号密码的 HTTP(S) 地址。', 'RMT_MANUAL_API_URL');
+    }
+    const credentialQueryNames = new Set([
+        'apikey', 'key', 'token', 'accesstoken', 'refreshtoken', 'idtoken', 'sessiontoken',
+        'secret', 'clientsecret', 'apisecret', 'authorization', 'auth', 'xapikey', 'bearertoken',
+        'password', 'passwd', 'proxypassword', 'credential', 'credentials', 'signature', 'sig',
+        'accesskey', 'accesskeyid', 'secretkey', 'xamzcredential', 'xamzsecuritytoken', 'xamzsignature',
+        'apitoken', 'authtoken', 'oauthtoken', 'clientpassword', 'clientid', 'privatekey',
+        'subscriptionkey', 'awsaccesskeyid', 'googleaccessid', 'licensekey', 'servicekey',
+    ]);
+    for (const [name, value] of parsed.searchParams.entries()) {
+        const normalizedName = String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const credentialLike = credentialQueryNames.has(normalizedName)
+            || /(?:token|secret|password|passwd|credential|signature|authorization|bearer)/.test(normalizedName)
+            || /^(?:api|access|auth|client|private|public|secret|xamz).*(?:key|keyid)$/.test(normalizedName);
+        const normalizedValue = String(value || '').trim();
+        const credentialValue = /^(?:bearer\s+|(?:sk|rk|pk|key|token|secret)[-_])[a-z0-9._~+\/-]{6,}$/i.test(normalizedValue)
+            || /^eyJ[a-z0-9_-]{8,}\.[a-z0-9_-]{8,}(?:\.[a-z0-9_-]{8,})?$/i.test(normalizedValue)
+            || /^AKIA[A-Z0-9]{12,}$/i.test(normalizedValue);
+        if (credentialLike || credentialValue) {
+            throw apiError('手动 API 地址不能在查询参数中携带 Key、Token、Secret 或账号凭据；请使用独立的 API Key 输入框。', 'RMT_MANUAL_API_URL');
+        }
     }
     stripKnownEndpoint(parsed);
     const normalized = parsed.toString().replace(/\/(?=\?|$)/, '');
@@ -165,12 +187,30 @@ async function boundedResponseText(response, maxBytes = core_constants.MAX_MANUA
 }
 
 async function boundedJson(response, maxBytes) {
+    const contentType = String(response?.headers?.get?.('content-type') || '').toLowerCase();
+    if (contentType.includes('text/html')) {
+        try { await response?.body?.cancel?.(); } catch {}
+        throw apiError('模型服务返回了 HTML 页面，响应正文已隐藏。', 'RMT_RESPONSE_HTML', Number(response?.status) || 0);
+    }
     const text = await boundedResponseText(response, maxBytes);
+    if (looksLikeHtmlResponse(text)) {
+        throw apiError('模型服务返回了 HTML 页面，响应正文已隐藏。', 'RMT_RESPONSE_HTML', Number(response?.status) || 0);
+    }
     try {
         return JSON.parse(text);
     } catch {
         throw apiError('模型服务没有返回可解析的 JSON。', 'RMT_MANUAL_INVALID_JSON', Number(response?.status) || 0);
     }
+}
+
+export function looksLikeHtmlResponse(value) {
+    const body = String(value ?? '').replace(/^\uFEFF/, '').trimStart();
+    // Proxies commonly prepend comments/meta tags or wrap a JSON-looking fragment in an error
+    // page. Detect markup anywhere near the response head, before JSON extraction can mistake an
+    // embedded object for the provider payload. The body is never included in the public error.
+    return /<!--[\s\S]*?-->/i.test(body)
+        || /<\s*!doctype\b/i.test(body)
+        || /<\s*\/?\s*[a-z][a-z0-9:-]*(?:\s+[^<>]*?)?\s*\/?\s*>/i.test(body);
 }
 
 export async function readBoundedJsonResponse(response, maxBytes = core_constants.MAX_MANUAL_API_RESPONSE_BYTES) {
@@ -196,8 +236,8 @@ export function assertManualApiCredentialTransport(baseUrl, apiKey) {
     const normalized = normalizeManualApiBaseUrl(baseUrl, { required: true });
     const parsed = new URL(normalized);
     const loopback = /^(?:localhost|127(?:\.\d{1,3}){3}|\[?::1\]?)$/i.test(parsed.hostname);
-    if (core_text.normalizeText(apiKey, 4000) && parsed.protocol !== 'https:' && !loopback) {
-        throw apiError('带 API Key 的手动地址必须使用 HTTPS；仅本机 localhost/127.0.0.1/::1 可使用 HTTP。', 'RMT_MANUAL_API_TRANSPORT');
+    if (parsed.protocol !== 'https:' && !loopback) {
+        throw apiError('手动 API 地址必须使用 HTTPS；仅本机 localhost/127.0.0.1/::1 可使用 HTTP。', 'RMT_MANUAL_API_TRANSPORT');
     }
     return normalized;
 }
@@ -268,8 +308,42 @@ export function extractIndependentResponseContent(payload) {
 }
 
 export function payloadHasProviderError(payload) {
-    return !!payload && typeof payload === 'object'
-        && (payload.error === true || (typeof payload.error === 'string' && payload.error.trim()) || (payload.error && typeof payload.error === 'object'));
+    const seen = new Set();
+    const presentError = value => value === true
+        || (Number.isFinite(Number(value)) && Number(value) >= 400 && Number(value) <= 599)
+        || (typeof value === 'string' && !!value.trim())
+        || (Array.isArray(value) && value.length > 0)
+        || (!!value && typeof value === 'object');
+    const visit = (node, depth) => {
+        if (!node || typeof node !== 'object' || seen.has(node) || depth > 4) return false;
+        seen.add(node);
+        if (presentError(node.error) || presentError(node.errors) || node.ok === false || node.success === false) return true;
+        for (const value of [node.status, node.statusCode, node.code]) {
+            const numeric = Number(value);
+            if (Number.isFinite(numeric) && numeric >= 400 && numeric <= 599) return true;
+            const label = String(value || '').trim().toLowerCase();
+            if (['error', 'failed', 'failure', 'denied', 'unauthorized', 'forbidden'].includes(label)) return true;
+        }
+        const message = String(node.message || node.detail || '').trim();
+        if (message && /(?:unauthori[sz]ed|forbidden|authentication\s+failed|invalid\s+(?:api\s*)?key|access\s+denied|quota\s+exceeded)/i.test(message)) return true;
+        return ['data', 'result', 'response', 'body', 'details'].some(key => visit(node[key], depth + 1));
+    };
+    return visit(payload, 0);
+}
+
+export function assertIndependentResponsePayload(payload) {
+    if (payloadHasProviderError(payload)) {
+        const error = apiError('专用连接返回了错误状态；响应详情已隐藏，请检查连接与账号权限。', 'RMT_CONNECTION_FAILED');
+        error.retryable = false;
+        throw error;
+    }
+    const content = extractIndependentResponseContent(payload);
+    if (typeof content === 'string' && looksLikeHtmlResponse(content)) {
+        const error = apiError('专用连接返回了 HTML 页面；响应正文已隐藏。', 'RMT_RESPONSE_HTML');
+        error.retryable = false;
+        throw error;
+    }
+    return content;
 }
 
 export async function fetchManualApiModels(settings, context, options = {}) {
@@ -278,18 +352,21 @@ export async function fetchManualApiModels(settings, context, options = {}) {
     if (typeof fetchImpl !== 'function') throw apiError('当前环境没有可用的网络请求能力。', 'RMT_MANUAL_FETCH_UNAVAILABLE');
     const controller = new AbortController();
     const externalSignal = options.signal || null;
-    let timedOut = false;
+    let timeoutId = 0;
+    let rejectExternalAbort = null;
     const forwardAbort = () => {
-        try { controller.abort(externalSignal?.reason); } catch {}
+        const reason = externalSignal?.reason instanceof Error ? externalSignal.reason : new DOMException('Aborted', 'AbortError');
+        try { controller.abort(reason); } catch {}
+        rejectExternalAbort?.(reason);
     };
-    if (externalSignal?.aborted) forwardAbort();
-    else externalSignal?.addEventListener?.('abort', forwardAbort, { once: true });
-    const timeoutId = setTimeout(() => {
-        timedOut = true;
-        try { controller.abort(); } catch {}
-    }, core_constants.MANUAL_API_MODEL_LIST_TIMEOUT_MS);
+    if (externalSignal?.aborted) {
+        const reason = externalSignal.reason instanceof Error ? externalSignal.reason : new DOMException('Aborted', 'AbortError');
+        try { controller.abort(reason); } catch {}
+        throw reason;
+    }
+    externalSignal?.addEventListener?.('abort', forwardAbort, { once: true });
     try {
-        const response = await fetchImpl(MANUAL_STATUS_ENDPOINT, {
+        const fetchPromise = fetchImpl(MANUAL_STATUS_ENDPOINT, {
             method: 'POST',
             credentials: 'same-origin',
             cache: 'no-cache',
@@ -303,6 +380,15 @@ export async function fetchManualApiModels(settings, context, options = {}) {
                 custom_exclude_body: '',
             }),
         });
+        const timeoutPromise = new Promise((_, reject) => {
+            timeoutId = setTimeout(() => {
+                const error = apiError('拉取模型超时；仍可直接填写模型 ID。', 'RMT_MANUAL_MODEL_TIMEOUT');
+                try { controller.abort(error); } catch {}
+                reject(error);
+            }, core_constants.MANUAL_API_MODEL_LIST_TIMEOUT_MS);
+        });
+        const externalAbortPromise = new Promise((_, reject) => { rejectExternalAbort = reject; });
+        const response = await Promise.race([fetchPromise, timeoutPromise, externalAbortPromise]);
         if (!response?.ok) {
             try { await response?.body?.cancel?.(); } catch {}
             throw httpFailure(response?.status);
@@ -312,11 +398,9 @@ export async function fetchManualApiModels(settings, context, options = {}) {
         const models = extractManualModelIds(payload);
         if (!models.length) throw apiError('接口没有返回可用模型；仍可直接填写模型 ID。', 'RMT_MANUAL_MODELS_EMPTY');
         return models;
-    } catch (error) {
-        if (timedOut) throw apiError('拉取模型超时；仍可直接填写模型 ID。', 'RMT_MANUAL_MODEL_TIMEOUT');
-        throw error;
     } finally {
         clearTimeout(timeoutId);
+        rejectExternalAbort = null;
         try { externalSignal?.removeEventListener?.('abort', forwardAbort); } catch {}
     }
 }

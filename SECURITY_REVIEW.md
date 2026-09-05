@@ -1,3 +1,54 @@
+## 0.8.45 / r49.0 deep-review changed-surface security review
+
+Scope: r48.0 -> r49.0 persistence lifecycle, API/profile isolation, ArchiveTarget, world-presentation authority, room/travel/phone/calendar normalizers, local SVG/DOM rendering, theme/tag UI and release identity.
+
+- ArchiveTarget is explicit, origin-bound and compare-and-swap protected. Frozen A context excludes live B; completion cannot change target based on current UI state. Its initiating lifecycle is carried through hydration, revalidation, claim, provider admission and durable write, so destroy/restart cannot be adopted as a fresh epoch. Revision/rebuild/delete/mode fences invalidate stale work, while different modes may coexist.
+- Cache metadata, independent backup and deferred recovery preserve copy-on-write and fail closed after lifecycle changes. Ordinary bootstrap and message events do not gain IndexedDB/decompression/provider work.
+- Manual and named Profile routes use distinct settings and model fallbacks. Heartbeat-owned error paths return only bounded categories/status/origin and redact HTML bodies, prompt/history/world/archive content and credential-shaped text.
+- The former EverMind adapter read another extension's private settings, chat metadata and API key, while compatibility paths guessed unknown plugins from global method names or ambient prompt/metadata labels. r49 removes all of those paths from registration, UI, discovery and fetch; existing Heartbeat ledger data remains readable and inert file import remains available.
+- Coverage claims fail closed: missing floors or returned/total mismatches force partial status at both provider and ledger normalization, preserving any prior complete baseline. Provider traversal and fallback are bounded by the source-ledger character budget, and accessor-backed array elements are rejected without invoking their getters.
+- Presentation authority is centralized and provenance-scoped. Character Profile excerpts must be uniquely present in the current bound source; archive fallback requires two non-overlapping real-chat clusters. Media/fiction frames and negated assertions cannot become world/map evidence through punctuation, Profile or archive consensus.
+- Model-provided visual and textual records are rebuilt from allowlists. No reviewed sink grants model HTML/CSS/JS/SVG/path/URL/class/event/storage/target authority; local SVG complexity is bounded and deterministic.
+- A UI reviewer proposed that an escaped Travel tone could terminate the class attribute. A real Edge/Chromium tokenizer probe produced one section and zero injected images, so the claimed attribute-boundary XSS was falsified. The underlying lower-severity class-authority gap was still real: Travel tone/mapTheme and Calendar status dots now revalidate through local allowlists at their final HTML sinks, including current-version cached data.
+- Room no longer grants a whole prose block authority merely because one clause says “today” or “now”. After the user is mentioned, every clause must independently match a bounded present-only form; unknown, adjacent and nested episode paraphrases fail closed. Daily-life history requires an exact real Mxxx anchor that also occurs in the visible narrative, and the same gate rejects unsafe cached daily beats at presentation time. The bounded present grammar still accepts immediate greetings, explicit current-progress, future intent, direct feelings/questions and current environment state.
+- Positive controlled pet ownership is now an output invariant. If the character card/world setting proves that the current character owns a species, an empty or mismatched `pets` result fails normalization and enters the existing repair path; local code never invents a name or story to make the candidate pass.
+- Theme alpha is now consumed only by card-background tokens; the reading surface and text remain opaque, and readable colours are checked against both the solid and alpha-composited card surface. ID-scoped final rules protect the overlay, top bar, body, cards, buttons, form controls and horizontal layout from ordinary host/theme CSS. No theme plugin private state, model CSS or parent opacity gains authority.
+- Reverse user-terminal generation remains blocked because allowed user assertions cannot yet be distinguished from inferred private facts with sufficient reliability.
+
+Final severity and verification evidence are recorded in `RELEASE_VALIDATION-r49.md` after the immutable-diff review and final-package retest. No Critical / High / Medium finding may remain before candidate packaging.
+
+Pre-release independent review exposed eight material candidate families before packaging: the runtime bundle had not yet incorporated the lifecycle fix; ambient prompt/metadata heuristics could ingest an unregistered source; contradictory BaiBai coverage could replace a complete baseline; accessor-backed public-DTO array entries could execute getters during traversal; cached presentation enums could append arbitrary class tokens; Room's old phrase/current-time logic missed ordinary, nested and cross-clause rewrites of ungrounded shared history (then briefly overblocked clear present speech); explicit pet evidence could still normalize to an empty `pets` list; and the theme alpha slider stored a value without changing presentation while ordinary host CSS could fade or rotate critical ancestor surfaces. All eight were treated as blockers, repaired at their common authority boundaries and covered by final regressions; none is silently omitted from the release record.
+
+Final local verification on 2026-09-06: 310/310 Node regressions pass and 84/84 JS/MJS files pass syntax checks. The 54-module runtime rebuilt byte-identically twice from source SHA-256 `b444c86b00bc3e5d45c98b7aa6bea51e8f06a7276bdeb6ce91eaae954af7b5e3`, producing bundle SHA-256 `da4821f43997fd1756a39f5a8a0a02dd600b6966f3d4c99eb020c7bb131a809a`. Edge/Chromium passed the 320/375/390/430/768 px bootstrap geometry contract, startup/diagnostic runtime-request checks, real IndexedDB first write/read, fresh-page cold read, durable deletion-fence read and source-ledger cold deletion. A separate computed-style matrix passed Heartbeat default/custom, host light/dark, card alpha, contrast, ordinary hostile CSS and 320/375/390/430 px close/overflow checks. The final immutable r48-to-r49 scan contract and fresh-extract ZIP retest are recorded beside the release artifact.
+
+Post-fix local conclusion: no open Critical, High, Medium or Low finding in the reviewed r48-to-r49 changed surface. Independent connection, archive, room-language, product/test and final security reviewers closed their assigned candidates. The first UI security reviewer's final follow-up could not be obtained after its tool rejected the request; every concrete counterexample it had already supplied was nevertheless retained as a permanent test and independently rechecked. This does not substitute for a live SillyTavern/TT/iPhone acceptance run.
+
+## 0.8.44 / r48.0 local changed-surface security review
+
+Scope: r47.0 -> r48.0 Calendar v6 holiday-card schema, prompt, migration, local procedural renderer, CSS and release identity.
+
+- Holiday cards are accepted only for an unambiguous normalized `future` entry with `occasionType=holiday`; a birthday, anniversary, generic setting date or ambiguous duplicate source id cannot gain a card.
+- Persisted card objects are rebuilt from allowlisted fields. Arbitrary HTML/CSS/JS/SVG/path/URL fields are dropped; all numeric art parameters are bounded and all visible strings are normalized.
+- The SVG renderer constructs only code-owned primitives with code-owned attributes and local deterministic positions. It does not concatenate model-provided markup, paths, URLs, classes, selectors or event handlers. Visible card text is escaped before `innerHTML`.
+- Calendar v5 `dayPages` migrate to v6 without falling back to the legacy root-note rebuild path, preserving per-date user compatibility data. Refresh retains an older card only while its referenced holiday entry still exists; a fresh card for the same holiday replaces it.
+- No new request, credential, external-reader, IndexedDB-at-bootstrap, archive-write, CAS, delete-fence or cross-chat authority was introduced.
+
+Local conclusion: no Critical / High / Medium issue identified in the r48 changed surface. Independent Codex Security reviewer receipt was not obtained in this environment and must not be inferred from this local review.
+
+## 0.8.43 / r47.0 local changed-surface security review
+
+Scope: r46.0 -> r47.0 TT-derived-cache durability, same-revision backup reconciliation, provider error sanitization, theme settings, archive-title constraints, room headwear evidence, world-aware travel keepsakes and private-terminal presentation.
+
+- Persistence keeps chat/character/origin/revision/delete fences and only opens the independent backup from full-runtime paths. Deferred results remain queued when a durable write cannot be confirmed.
+- Heartbeat error summaries do not include provider HTML/response bodies or credential-shaped Authorization/Bearer/API-key/token values.
+- Theme colors are strict hex values plus bounded alpha; host-follow reads standard computed foreground/background only. No private theme-plugin settings or undocumented callable interface is used.
+- New travel/phone/room presentation values are allowlisted before they reach class/data attributes; model-provided text is escaped and no arbitrary model HTML/CSS/JS/URL/coordinates are executed.
+- No live-chat/CAS/archiveRevision/delete-fence protection is removed. Cross-chat ArchiveTarget and reverse-terminal privacy features are intentionally not implemented in this candidate.
+
+Verification for this candidate: targeted regression 87/87 passed; full regression 266/266 passed; 76 JS/MJS files passed syntax checks; the 52-module runtime bundle rebuilt twice identically (source SHA-256 `cbe904a473537e530340733134f0005612aa768d10177a1ff3e431ffff2f999b`, bundle SHA-256 `b1725d4fdd2704324614fc368be09020f6ad03d3c75e7db75fd309300ea122d8`). Local changed-surface review found no new High/Medium issue. TT/iPhone/WebView persistence and visual behavior remain real-device verification items.
+
+This section records the local changed-surface review. It is not an independent external reviewer attestation.
+
 ## 0.8.42 / r46.0 universal memory, durable-result and postcard targeted review
 
 Scope: r45.0 -> r46.0 registered memory adapters, local file import, World Info history classification, browser-local source ledger, external-history archive input, navigation/generation durability, CG image references, archive close behavior, travel postcard scene selection/cropping, release identity and generated runtime bundle.

@@ -11,6 +11,7 @@ import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
+import * as core_theme from '../core/theme.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_contentRegeneration from '../generation/contentRegeneration.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
@@ -177,6 +178,7 @@ export function openOverlay() {
         }
     }
     applyArchiveMobileSafeArea(overlay);
+    try { core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings(core_context.getContext())); } catch {}
     bindOverlayCloseFallback(overlay);
     revealArchiveOverlay(overlay);
     return overlay;
@@ -271,7 +273,7 @@ export function confirmExplicitAction(title, detail, { destructive = false, unav
     try {
         if (typeof globalThis.confirm === 'function') return globalThis.confirm(message);
     } catch (error) {
-        console.warn('[HeartbeatMemories] native confirmation unavailable', error);
+        console.warn('[HeartbeatMemories] native confirmation unavailable', core_text.safeErrorDiagnostic(error));
     }
     if (unavailableFallback) {
         globalThis.toastr?.warning?.('当前环境无法显示系统确认框；已按你的关闭操作退出档案室。正在运行的任务仍留在当前网页后台，刷新网页会中断它。', '心跳回忆');
@@ -322,7 +324,7 @@ export function requestCurrentArchiveImport() {
     let context;
     try { context = core_context.currentCharacterGuard(); }
     catch (error) {
-        globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
         return false;
     }
     const existing = archive_repository.getImportedMemory(context);
@@ -339,8 +341,8 @@ export function requestCurrentArchiveImport() {
         : '这会读取当前聊天窗口并建立一份只属于这个窗口的心跳回忆档案。聊天正文不会被修改；之后也只有你手动更新时档案才会变化。';
     if (!confirmExplicitAction(title, detail, { destructive: false })) return false;
     void archive_repository.importCurrentChatMemory({ fullRebuild: false }).catch(error => {
-        console.error('[HeartbeatMemories] current archive import action failed', error);
-        globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+        console.error('[HeartbeatMemories] current archive import action failed', core_text.safeErrorDiagnostic(error));
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
     });
     return true;
 }
@@ -349,7 +351,7 @@ export function requestCurrentArchiveFullRebuild() {
     let context;
     try { context = core_context.currentCharacterGuard(); }
     catch (error) {
-        globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
         return false;
     }
     if (!archive_repository.getImportedMemory(context)) return requestCurrentArchiveImport();
@@ -366,8 +368,8 @@ export function requestCurrentArchiveFullRebuild() {
         { destructive: true },
     )) return false;
     void archive_repository.importCurrentChatMemory({ fullRebuild: true }).catch(error => {
-        console.error('[HeartbeatMemories] full archive rebuild failed', error);
-        globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+        console.error('[HeartbeatMemories] full archive rebuild failed', core_text.safeErrorDiagnostic(error));
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
     });
     return true;
 }
@@ -431,9 +433,9 @@ export function showChooser() {
             topTitle('心跳回忆 · 档案室');
             body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在读取已生成档案…</b></div></div>';
             void core_cache.ensureCacheHydrated(hydrationContext).then(() => archive_snapshots.scheduleChooserRefresh(0)).catch(error => {
-                console.warn('[HeartbeatMemories] compressed cache read failed', error);
+                console.warn('[HeartbeatMemories] compressed cache read failed', core_text.safeErrorDiagnostic(error));
                 const latestBody = bodyEl();
-                if (latestBody) latestBody.innerHTML = `<div class="rmt-error"><div><b>已生成内容缓存读取失败</b><div style="margin:10px 0;white-space:pre-wrap;opacity:.78">${core_text.esc(error?.message || String(error))}</div><button type="button" class="rmt-btn" data-rmt-action="library-home">返回档案室</button></div></div>`;
+                if (latestBody) latestBody.innerHTML = `<div class="rmt-error"><div><b>已生成内容缓存读取失败</b><div style="margin:10px 0;white-space:pre-wrap;opacity:.78">${core_text.esc(core_text.safeErrorSummary(error))}</div><button type="button" class="rmt-btn" data-rmt-action="library-home">返回档案室</button></div></div>`;
             });
             return;
         }
@@ -446,7 +448,7 @@ export function showChooser() {
         state = archive_repository.getMemoryState(context);
     } catch (error) {
         topTitle('心跳回忆 · 档案室');
-        body.innerHTML = `<div class="rmt-error"><div><b>无法读取当前聊天</b><div style="margin-top:10px;white-space:pre-wrap;opacity:.75">${core_text.esc(error?.message || String(error))}</div></div></div>`;
+        body.innerHTML = `<div class="rmt-error"><div><b>无法读取当前聊天</b><div style="margin-top:10px;white-space:pre-wrap;opacity:.75">${core_text.esc(core_text.safeErrorSummary(error))}</div></div></div>`;
         return;
     }
     const ready = state.status === 'ready';
@@ -489,7 +491,6 @@ export function showChooser() {
     }).join('');
     const memorySettings = core_settings.getPluginSettings();
     const externalSetting = memorySettings.useCurrentChatExternalMemory;
-    const publicReaderSetting = memorySettings.usePublicMemoryProviderReaders;
     const detectedExternalSources = archive_repository.externalMemorySourceSummary(context);
     const preflight = archive_repository.getMemoryPreflight(context);
     const importedSources = ready ? core_text.cleanArray((memory.externalMemorySources || []).map(item => {
@@ -510,7 +511,6 @@ export function showChooser() {
     const requirePreflight = externalSetting && (detectedExternalSources.length > 0 || archive_repository.hasMemoryWorldInfoSelection(context)) && !preflight;
     const externalMemoryControls = `<div class="rmt-external-memory-row">
       <label class="rmt-external-memory-toggle"><input type="checkbox" data-rmt-external-memory-toggle ${externalSetting ? 'checked' : ''} ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}> 使用当前窗口记忆 / 摘要</label>
-      <label class="rmt-external-memory-toggle"><input type="checkbox" data-rmt-public-memory-toggle ${publicReaderSetting ? 'checked' : ''} ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !externalSetting ? 'disabled' : ''}> 允许第三方 current-chat reader</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:7px"><button type="button" class="rmt-btn" data-rmt-action="read-memory-plugins" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !externalSetting ? 'disabled' : ''}>扫描记忆 / 摘要</button><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-picker" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !externalSetting ? 'disabled' : ''}>选择记忆世界书</button></div>
       <small>${core_text.esc(externalSourceText)}</small>
     </div>`;
@@ -610,6 +610,16 @@ export function setInnerLoading(show, text = '') {
     layer.textContent = text;
 }
 
+export function refreshArchiveTargetSnapshotView(entryId = '') {
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    if (!snapshot || runtimeState.archiveViewLevel !== 'snapshot' || runtimeState.activeMode || runtimeState.activeSession) return false;
+    if (entryId && core_context.archiveIndexEntryId(snapshot) !== core_text.normalizeText(entryId, 120)) return false;
+    const overlay = document.getElementById(core_constants.OVERLAY_ID);
+    if (!overlay || overlay.hidden) return false;
+    archive_library.showIndexedArchiveSnapshot(snapshot);
+    return true;
+}
+
 export function showInlineError(message) {
     const detail = document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-event-detail`) || bodyEl();
     if (!detail) return;
@@ -639,7 +649,7 @@ export function openCachedOrGenerate(mode) {
         archive_repository.requireArchive(core_context.currentCharacterGuard());
     } catch (error) {
         showChooser();
-        globalThis.toastr?.warning?.(core_text.toastText(error?.message || String(error)), '心跳回忆');
+        globalThis.toastr?.warning?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
         return;
     }
     const cached = core_cache.loadSession(mode);
@@ -790,7 +800,7 @@ async function commitManagedSession(updated, expectedChatId, expectedArchiveRevi
     if (memoryBank.archiveRevision !== expectedArchiveRevision) throw new Error('操作期间正式档案已经更新，本次修改没有写入。');
     updated.chatId = expectedChatId;
     updated.archiveRevision = expectedArchiveRevision;
-    if (!core_cache.saveSession(runtimeState.activeMode, updated, expectedChatId)) throw new Error('当前派生缓存版本已经变化，本次修改没有写入。');
+    if (!await core_cache.commitSession(runtimeState.activeMode, updated, expectedChatId, origin)) throw new Error('当前派生缓存版本已经变化，本次修改没有写入。');
     runtimeState.activeSession = updated;
     return true;
 }
@@ -816,7 +826,7 @@ async function deleteManagedTarget(type, id, parentId = '') {
         globalThis.toastr?.success?.(`已删除：${record.label}`, '心跳回忆');
         ui_contentManager.renderContentManager();
     } catch (error) {
-        globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
     }
 }
 
@@ -860,7 +870,7 @@ async function regenerateManagedTarget(type, id, parentId = '') {
         globalThis.toastr?.success?.(`已重新生成：${record.label}`, '心跳回忆');
         ui_contentManager.renderContentManager();
     } catch (error) {
-        globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
     } finally {
         setInnerLoading(false);
     }
@@ -886,7 +896,7 @@ async function deleteManagedCategory() {
         globalThis.toastr?.success?.(`已删除整个分类：${label}`, '心跳回忆');
         showChooser();
     } catch (error) {
-        globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
     }
 }
 
@@ -906,7 +916,7 @@ async function regenerateManagedCategory() {
             const context = core_context.currentCharacterGuard();
             await core_cache.deleteSessions([core_constants.MODE.ITEMS, core_constants.MODE.PHONE], core_context.getChatId(context));
         } catch (error) {
-            console.warn('[HeartbeatMemories] room dependent cache invalidation after replacement failed', error);
+            console.warn('[HeartbeatMemories] room dependent cache invalidation after replacement failed', core_text.safeErrorDiagnostic(error));
         }
     }
 }
@@ -915,6 +925,23 @@ export function handleOverlayClick(event) {
     const generateModeButton = event.target.closest?.('[data-rmt-generate-mode]');
     if (generateModeButton) {
         const mode = generateModeButton.dataset.rmtGenerateMode;
+        if (runtimeState.activeArchiveSnapshot) {
+            if (runtimeState.activeArchiveSnapshot.backupOnly) {
+                globalThis.toastr?.warning?.('独立备份是永久只读快照，不能启动派生生成。', '心跳回忆');
+                return;
+            }
+            if (generateModeButton.dataset.rmtRegenerate === 'true' && !confirmModeRegeneration(mode)) return;
+            const snapshot = runtimeState.activeArchiveSnapshot;
+            void (async () => {
+                try {
+                    const targetOptions = archive_library.archiveTargetGenerationOptions(snapshot);
+                    await generation_client.generateMode(mode, { background: true, ...targetOptions });
+                } catch (error) {
+                    globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心跳回忆');
+                }
+            })();
+            return;
+        }
         if (!archive_library.requireWritableArchiveAction()) return;
         if (generateModeButton.dataset.rmtRegenerate === 'true' && !confirmModeRegeneration(mode)) return;
         void generation_client.generateMode(mode, { background: true });
@@ -927,6 +954,10 @@ export function handleOverlayClick(event) {
     }
     const calendarShift = event.target.closest?.('[data-rmt-calendar-shift]');
     if (calendarShift) return ui_calendarView.shiftCalendarMonth(calendarShift.dataset.rmtCalendarShift);
+    const calendarTag = event.target.closest?.('[data-rmt-calendar-tag]');
+    if (calendarTag) return ui_calendarView.toggleCalendarTag(calendarTag.dataset.rmtCalendarTag);
+    const calendarTagClear = event.target.closest?.('[data-rmt-calendar-tag-clear]');
+    if (calendarTagClear) return ui_calendarView.clearCalendarTags();
     const calendarDate = event.target.closest?.('[data-rmt-calendar-date]');
     if (calendarDate) return ui_calendarView.selectCalendarDate(calendarDate.dataset.rmtCalendarDate);
     const calendarPending = event.target.closest?.('[data-rmt-calendar-pending]');
@@ -998,13 +1029,6 @@ export function handleOverlayClick(event) {
         showChooser();
         return;
     }
-    const publicMemoryToggle = event.target.closest?.('[data-rmt-public-memory-toggle]');
-    if (publicMemoryToggle) {
-        core_settings.updatePluginSettings({ usePublicMemoryProviderReaders: !!publicMemoryToggle.checked });
-        try { archive_repository.clearMemoryPreflight(core_context.currentCharacterGuard()); } catch {}
-        showChooser();
-        return;
-    }
     const readOnlyToggle = event.target.closest?.('[data-rmt-readonly-toggle]');
     if (readOnlyToggle) {
         archive_library.setArchiveReadOnly(!!readOnlyToggle.checked);
@@ -1014,7 +1038,7 @@ export function handleOverlayClick(event) {
     const actionEl = event.target.closest?.('[data-rmt-action]');
     const action = actionEl?.dataset?.rmtAction;
     if (!action) return;
-    if (runtimeState.activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'draw-heart-strip', 'clear-heart-strip', 'generate-all-adv', 'repair-failed-adv', 'room-life-refresh', 'room-schema-upgrade', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins', 'memory-worldinfo-picker', 'refresh-ending-confessions', 'heart-generate-part', 'heart-generate-season'].includes(action)) {
+    if (runtimeState.activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'draw-heart-strip', 'clear-heart-strip', 'room-life-refresh', 'room-schema-upgrade', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins', 'memory-worldinfo-picker', 'refresh-ending-confessions'].includes(action)) {
         if (!archive_library.requireWritableArchiveAction()) return;
     }
     if (action === 'back') return navigateBack();
@@ -1072,10 +1096,10 @@ export function handleOverlayClick(event) {
             if (!deleted) return;
             globalThis.toastr?.success?.('当前聊天的心跳回忆档案已删除；聊天正文没有删除。', '心跳回忆');
             archive_library.showArchiveLibrary();
-        }).catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'));
+        }).catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆'));
         return;
     }
-    if (action === 'read-memory-plugins') return void archive_repository.readCurrentChatMemoryPlugins().catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'));
+    if (action === 'read-memory-plugins') return void archive_repository.readCurrentChatMemoryPlugins().catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆'));
     if (action === 'memory-worldinfo-picker') return void archive_repository.showMemoryWorldInfoPicker();
     if (action === 'memory-worldinfo-close') { document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-memory-wi-picker`)?.remove(); return showChooser(); }
     if (action === 'memory-worldinfo-expand') return void archive_repository.expandMemoryWorldInfoBook(actionEl);
@@ -1087,7 +1111,7 @@ export function handleOverlayClick(event) {
             if (!deleted) return;
             globalThis.toastr?.success?.(`已从档案室删除“${deleted.name}”、其 ${deleted.count} 个聊天档案索引及独立备份；SillyTavern 正文聊天窗口没有删除。`, '心跳回忆');
             archive_library.showArchiveLibrary();
-        }).catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'));
+        }).catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆'));
         return;
     }
     if (action === 'character-profile-generate') {
@@ -1097,7 +1121,7 @@ export function handleOverlayClick(event) {
         void modes_relations.generateCharacterProfileForGroup(groupId).then(() => {
             globalThis.toastr?.success?.('角色固定资料已更新；固定关系会在各聊天的人际庭园中合并显示。', '心跳回忆');
             archive_library.showArchiveCharacter(groupId);
-        }).catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆 · Character Profile'));
+        }).catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆 · Character Profile'));
         return;
     }
     if (action === 'relation-select') {
@@ -1118,14 +1142,14 @@ export function handleOverlayClick(event) {
         const select = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-archive-new-character]`);
         if (!select?.value) return globalThis.toastr?.info?.('先选择一个 SillyTavern char。', '心跳回忆');
         try { archive_groups.createArchiveGroupForCharacter(core_context.getContext(), Number(select.value)); globalThis.toastr?.success?.('已新建角色档案组。现在可以把档案移动进去。', '心跳回忆'); archive_library.showArchiveGroupManager(); }
-        catch (error) { globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'); }
+        catch (error) { globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆'); }
         return;
     }
     if (action === 'archive-group-move') {
         const entryId = core_text.normalizeText(actionEl.dataset.rmtArchiveEntryId, 120);
         const select = [...document.querySelectorAll(`#${core_constants.OVERLAY_ID} [data-rmt-archive-move-select]`)].find(node => node.dataset.rmtArchiveMoveSelect === entryId);
         try { archive_groups.moveArchiveIndexEntryToGroup(core_context.getContext(), entryId, select?.value || '__AUTO__'); globalThis.toastr?.success?.('档案分类已更新；聊天文件没有移动。', '心跳回忆'); archive_library.showArchiveGroupManager(); }
-        catch (error) { globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'); }
+        catch (error) { globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆'); }
         return;
     }
     if (action === 'archive-remove-index') {
@@ -1135,7 +1159,7 @@ export function handleOverlayClick(event) {
                 globalThis.toastr?.success?.('已从档案室移除索引；聊天文件和真实档案未删除。', '心跳回忆');
                 archive_library.showArchiveGroupManager();
             }
-        } catch (error) { globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'); }
+        } catch (error) { globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆'); }
         return;
     }
     if (action === 'archive-delete-live') {
@@ -1144,7 +1168,7 @@ export function handleOverlayClick(event) {
             if (!deleted) return;
             globalThis.toastr?.success?.('当前聊天的心跳回忆档案已删除；聊天正文没有删除。', '心跳回忆');
             archive_library.showArchiveLibrary();
-        }).catch(error => globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆'));
+        }).catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆'));
         return;
     }
     if (action === 'manage') {
@@ -1290,7 +1314,7 @@ export async function handleOverlayChange(event) {
                 && JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books) === attemptedSelectionJson) {
                 archive_repository.setMemoryWorldInfoSelection(context, selection);
             }
-            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(`世界书选择没有同步，已恢复原选择：${core_text.toastText(error?.message || error)}`, '心跳回忆');
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(`世界书选择没有同步，已恢复原选择：${core_text.toastText(core_text.safeErrorSummary(error))}`, '心跳回忆');
         } finally {
             refreshMemoryWorldInfoBookControls(context, world, section, expectedScopeKey);
         }
@@ -1326,7 +1350,7 @@ export async function handleOverlayChange(event) {
                 && JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books) === attemptedSelectionJson) {
                 archive_repository.setMemoryWorldInfoSelection(context, selection);
             }
-            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(`世界书选择没有同步，已恢复原选择：${core_text.toastText(error?.message || error)}`, '心跳回忆');
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(`世界书选择没有同步，已恢复原选择：${core_text.toastText(core_text.safeErrorSummary(error))}`, '心跳回忆');
         } finally {
             refreshMemoryWorldInfoBookControls(context, world, section, expectedScopeKey);
         }

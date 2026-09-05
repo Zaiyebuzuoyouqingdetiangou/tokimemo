@@ -1,5 +1,5 @@
-// Versioned, read-only memory provider registry.  Registered adapters are explicit;
-// heuristic global readers remain a separate opt-in compatibility path in repository.js.
+// Versioned, read-only memory provider registry. Registered adapters are explicit;
+// unregistered plugins have no executable discovery path and may use inert file import only.
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_text from '../core/text.js';
@@ -8,19 +8,46 @@ import * as archive_sourceLedger from './sourceLedger.js';
 export const MEMORY_PROVIDER_REGISTRY = Object.freeze([
     Object.freeze({ id: 'sillytavern-memory', adapterVersion: 1, label: 'SillyTavern Memory', mode: 'passive-current-chat' }),
     Object.freeze({ id: 'baibai-book-public-api', adapterVersion: 1, label: '柏宝书记忆', mode: 'public-current-chat-api-v1' }),
-    Object.freeze({ id: 'evermind-current-chat-api', adapterVersion: 1, label: 'EverMind', mode: 'authenticated-current-chat-api' }),
 ]);
 
 export function registeredMemoryProvider(id) {
     return MEMORY_PROVIDER_REGISTRY.find(item => item.id === id) || null;
 }
 
-function safeOwn(object, key) {
+function safeOwnDescriptor(object, key) {
     if (!object || (typeof object !== 'object' && typeof object !== 'function')) return undefined;
     try {
         const descriptor = Object.getOwnPropertyDescriptor(object, key);
-        return descriptor && Object.prototype.hasOwnProperty.call(descriptor, 'value') ? descriptor.value : undefined;
+        return descriptor && Object.prototype.hasOwnProperty.call(descriptor, 'value') ? descriptor : undefined;
     } catch { return undefined; }
+}
+
+function safeOwn(object, key) {
+    return safeOwnDescriptor(object, key)?.value;
+}
+
+function safeArrayDataValues(value, limit = 100000) {
+    if (!Array.isArray(value)) return { values: [], length: 0, rejectedAccessors: 0 };
+    const rawLength = safeOwn(value, 'length');
+    const length = Number.isSafeInteger(rawLength) && rawLength >= 0 ? rawLength : 0;
+    const admitted = Math.min(length, Math.max(0, Math.floor(Number(limit) || 0)));
+    const values = [];
+    let rejectedAccessors = 0;
+    for (let index = 0; index < admitted; index += 1) {
+        let descriptor;
+        try { descriptor = Object.getOwnPropertyDescriptor(value, String(index)); } catch { descriptor = undefined; }
+        if (!descriptor) {
+            values.push(undefined);
+            continue;
+        }
+        if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+            rejectedAccessors += 1;
+            values.push(undefined);
+            continue;
+        }
+        values.push(descriptor.value);
+    }
+    return { values, length, rejectedAccessors };
 }
 
 function safeMethod(object, key) {
@@ -84,8 +111,20 @@ function recordsFromContainer(value, provider, revision, out = []) {
     const stack = [value];
     const seenObjects = new WeakSet();
     let visited = 0;
+    let acceptedChars = out.reduce((sum, item) => sum + String(item?.content || '').length, 0);
     let truncated = false;
     const reasons = new Set();
+    const appendRecord = record => {
+        const contentChars = String(record?.content || '').length;
+        if (acceptedChars + contentChars > core_constants.MAX_MEMORY_SOURCE_LEDGER_CHARS) {
+            truncated = true;
+            reasons.add(`${core_constants.MAX_MEMORY_SOURCE_LEDGER_CHARS} 字符本地来源上限`);
+            return false;
+        }
+        out.push(record);
+        acceptedChars += contentChars;
+        return true;
+    };
     while (stack.length) {
         if (out.length >= core_constants.MAX_MEMORY_SOURCE_LEDGER_RECORDS) {
             truncated = true;
@@ -107,12 +146,22 @@ function recordsFromContainer(value, provider, revision, out = []) {
                 continue;
             }
             seenObjects.add(current);
-            for (let index = current.length - 1; index >= 0; index -= 1) stack.push(current[index]);
+            const remainingNodes = Math.max(0, 100000 - visited - stack.length);
+            const arrayData = safeArrayDataValues(current, remainingNodes);
+            if (arrayData.values.length < arrayData.length) {
+                truncated = true;
+                reasons.add('100000 个数据节点安全上限');
+            }
+            if (arrayData.rejectedAccessors) {
+                truncated = true;
+                reasons.add(`${arrayData.rejectedAccessors} 个访问器数组项已拒绝`);
+            }
+            for (let index = arrayData.values.length - 1; index >= 0; index -= 1) stack.push(arrayData.values[index]);
             continue;
         }
         if (typeof current === 'string') {
             const content = current.trim();
-            if (content) out.push({ provider, providerVersion: 'public-api-v1', revision, content });
+            if (content && !appendRecord({ provider, providerVersion: 'public-api-v1', revision, content })) break;
             continue;
         }
         if (typeof current !== 'object') continue;
@@ -129,7 +178,7 @@ function recordsFromContainer(value, provider, revision, out = []) {
         }
         const content = recordText(current);
         if (content && !children.length) {
-            out.push({
+            if (!appendRecord({
                 provider,
                 providerVersion: 'public-api-v1',
                 sourceId: archive_sourceLedger.normalizeMemorySourceId(safeOwn(current, 'sourceId') ?? safeOwn(current, 'id') ?? safeOwn(current, 'uid') ?? safeOwn(current, 'uuid') ?? safeOwn(current, 'nodeId')),
@@ -138,7 +187,7 @@ function recordsFromContainer(value, provider, revision, out = []) {
                 date: core_text.normalizeText(safeOwn(current, 'date') ?? safeOwn(current, 'timestamp') ?? safeOwn(current, 'createdAt'), 100),
                 title: core_text.normalizeText(safeOwn(current, 'title') ?? safeOwn(current, 'name'), 180),
                 content,
-            });
+            })) break;
         }
         for (let index = children.length - 1; index >= 0; index -= 1) stack.push(children[index]);
     }
@@ -153,20 +202,26 @@ function normalizeCoverage(value, returned) {
     const explicitlyIncomplete = safeOwn(coverage, 'complete') === false || safeOwn(value, 'complete') === false;
     const totalValue = safeOwn(coverage, 'total') ?? safeOwn(value, 'total');
     const total = Number.isFinite(Number(totalValue)) ? Math.max(0, Math.floor(Number(totalValue))) : null;
-    const status = truncated ? 'truncated'
-        : complete || (!explicitlyIncomplete && total != null && returned >= total) ? 'complete' : 'partial';
-    const missingAiFloors = Array.isArray(safeOwn(coverage, 'missingAiFloors'))
-        ? safeOwn(coverage, 'missingAiFloors').filter(item => Number.isInteger(Number(item)))
-        : [];
+    const missingFloorData = safeArrayDataValues(safeOwn(coverage, 'missingAiFloors'), 5000);
+    const missingAiFloors = missingFloorData.values.filter(item => Number.isInteger(Number(item))).map(Number);
+    const totalMismatch = total != null && returned !== total;
+    const rejectedCoverageArray = missingFloorData.rejectedAccessors > 0
+        || missingFloorData.values.length < missingFloorData.length;
+    const status = truncated || rejectedCoverageArray ? 'truncated'
+        : missingAiFloors.length || totalMismatch ? 'partial'
+            : complete || (!explicitlyIncomplete && total != null && returned === total) ? 'complete' : 'partial';
+    const reasons = [];
+    const providerReason = core_text.normalizeText(safeOwn(coverage, 'reason') ?? safeOwn(value, 'coverageReason'), 240);
+    if (providerReason) reasons.push(providerReason);
+    if (missingFloorData.rejectedAccessors) reasons.push(`${missingFloorData.rejectedAccessors} 个 coverage 访问器数组项已拒绝`);
+    if (missingFloorData.values.length < missingFloorData.length) reasons.push('missingAiFloors 超过 5000 项本地安全上限');
+    if (missingAiFloors.length) reasons.push(`缺少 ${missingAiFloors.length} 个应有摘要楼层`);
+    if (totalMismatch) reasons.push(`公开接口返回 ${returned}/${total} 条，与 total 不一致`);
     return {
         status,
         returned,
         total,
-        reason: core_text.normalizeText(
-            safeOwn(coverage, 'reason') ?? safeOwn(value, 'coverageReason')
-                ?? (missingAiFloors.length ? `缺少 ${missingAiFloors.length} 个应有摘要楼层` : ''),
-            240,
-        ),
+        reason: core_text.normalizeText([...new Set(reasons)].join('；'), 240),
         missingAiFloors,
     };
 }
@@ -205,16 +260,21 @@ export async function readBaiBaiBookCurrentChat(provider, expectedChatId, signal
     // comes only from getHistory/getInjectedHistory; snapshot state must not be
     // misrepresented as events that already happened.
     const localRead = recordsFromContainer(history, 'baibai-book-public-api', revision, records);
-    if (!records.length) {
+    if (!records.length && !localRead.truncated) {
         const content = recordText(history);
-        if (content) records.push({
-            provider: 'baibai-book-public-api',
-            providerVersion: pluginVersion,
-            sourceId: `baibai:history:${revision}`,
-            revision,
-            type: 'history',
-            content,
-        });
+        if (content.length > core_constants.MAX_MEMORY_SOURCE_LEDGER_CHARS) {
+            localRead.truncated = true;
+            localRead.reason = `${core_constants.MAX_MEMORY_SOURCE_LEDGER_CHARS} 字符本地来源上限`;
+        } else if (content) {
+            records.push({
+                provider: 'baibai-book-public-api',
+                providerVersion: pluginVersion,
+                sourceId: `baibai:history:${revision}`,
+                revision,
+                type: 'history',
+                content,
+            });
+        }
     }
     const deduped = [];
     const seen = new Set();
@@ -250,7 +310,7 @@ export async function readBaiBaiBookCurrentChat(provider, expectedChatId, signal
 export const readBaibaoCurrentChat = readBaiBaiBookCurrentChat;
 
 export function stMemoryCurrentChatBatch(context, expectedChatId) {
-    const content = String(context?.extensionPrompts?.['1_memory']?.value ?? '').replace(/\u0000/g, '').trim();
+    const content = String(safeOwn(safeOwn(safeOwn(context, 'extensionPrompts'), '1_memory'), 'value') ?? '').replace(/\u0000/g, '').trim();
     if (!content) return null;
     const chatId = comparable(core_context.getChatId(context));
     if (!chatId || chatId !== comparable(expectedChatId)) throw new Error('SillyTavern Memory 当前聊天身份已变化。');

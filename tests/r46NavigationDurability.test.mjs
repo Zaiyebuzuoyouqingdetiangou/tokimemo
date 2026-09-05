@@ -13,6 +13,7 @@ import {
     DEFERRED_COMMIT_STORE_MAX_BYTES,
     DEFERRED_COMMIT_STORE_MAX_ITEMS,
 } from '../src/core/deferredCommitStore.js';
+import { MEMORY_KEY } from '../src/core/constants.js';
 
 function contextFor(chatId) {
     return {
@@ -83,6 +84,7 @@ test('deferred commits survive a fresh map instance and redact credential-shaped
 test('deferred origin survives ordinary card edits only for one unambiguous avatar', () => {
     const context = contextFor('A');
     context.characters[0].data = { name: 'Char', avatar: 'char.png', description: 'v1' };
+    context.chatMetadata[MEMORY_KEY] = { chatId: 'A', archiveRevision: 'rev-A' };
     const origin = captureTaskOrigin(context, 'rev-A');
     context.characters[0].data.description = 'v2';
     assert.equal(deferredCommitOriginMatchesContext(origin, context), true);
@@ -126,7 +128,7 @@ test('durable queue exposes bounded capacity and reports storage failure instead
     const map = createDurableDeferredCommitMap({ storage, onError: error => errors.push(error.message) });
     map.set('character:char.png|A', [{ kind: 'sessions', queuedAt: 1, origin: { characterKey: 'character:char.png', chatId: 'A' }, sessions: {} }]);
     assert.equal(map.persistenceStatus().healthy, false);
-    assert.match(errors.join('\n'), /quota denied/i);
+    assert.match(errors.join('\n'), /没有保存待写回结果|存储不可用|空间不足/i);
 });
 
 test('a newer quota failure preserves the last successfully persisted recovery snapshot', () => {
@@ -175,7 +177,7 @@ test('full-page unload guard sees a task from another chat', async () => {
     resetRuntime();
 });
 
-test('an explicit host chat close fails open when native confirmation is unavailable', async () => {
+test('an explicit host chat close remains available without intercepting the host event', async () => {
     resetRuntime();
     const context = installContext('A');
     const origin = captureTaskOrigin(context, 'rev-A');
@@ -212,7 +214,7 @@ test('an explicit host chat close fails open when native confirmation is unavail
         });
         assert.equal(prevented, false, 'an explicit host close must remain usable without native confirm');
         assert.equal(stopped, false, 'the host must receive its original close event');
-        assert.match(warnings.join('\n'), /无法显示系统确认框/);
+        assert.deepEqual(warnings, []);
     } finally {
         globalThis.__heartbeatMemoriesNavigationGuardCleanup?.();
         delete globalThis.__heartbeatMemoriesNavigationGuardCleanup;

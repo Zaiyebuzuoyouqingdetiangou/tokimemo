@@ -169,7 +169,7 @@ export async function showAvatarDialogueForCharacter(characterKey) {
         renderAvatarDialoguePopup(runtimeState.activeAvatarDialogue);
     } catch (error) {
         if (requestEpoch !== runtimeState.avatarDialogueRequestEpoch) return;
-        globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
     }
 }
 
@@ -340,7 +340,7 @@ export async function drawHeartStripImage(stripId) {
         if (!liveItem) throw new Error('日常一格条目已经变化，停止保存图片。');
         const oldImage = liveItem.cgImage;
         liveItem.cgImage = nextImage;
-        if (!core_cache.saveSession(core_constants.MODE.HEART, latest, expectedChatId)) {
+        if (!await core_cache.commitSession(core_constants.MODE.HEART, latest, expectedChatId, origin)) {
             liveItem.cgImage = oldImage;
             throw new Error('图片已生成，但档案版本已经变化，因此未保存引用。');
         }
@@ -348,15 +348,15 @@ export async function drawHeartStripImage(stripId) {
         if (activeItem) activeItem.cgImage = nextImage;
         globalThis.toastr?.success?.(`日常一格已绘制：${item.title}`, '心跳回忆');
     } catch (error) {
-        console.error('[HeartbeatMemories] daily strip image generation failed', error);
-        globalThis.toastr?.error?.(core_text.toastText(error?.message || error), '心跳回忆');
+        console.error('[HeartbeatMemories] daily strip image generation failed', core_text.safeErrorDiagnostic(error));
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
     } finally {
         runtimeState.activeCgImageTasks.delete(taskKey);
         if (runtimeState.activeMode === core_constants.MODE.HEART && runtimeState.activeSession?.kind === core_constants.MODE.HEART) renderHeart();
     }
 }
 
-export function clearHeartStripImage(stripId) {
+export async function clearHeartStripImage(stripId) {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
     if (!archive_library.requireWritableArchiveAction()) return;
     const item = runtimeState.activeSession.dailyStrips.find(strip => strip.id === stripId) || selectedHeartStrip();
@@ -364,7 +364,11 @@ export function clearHeartStripImage(stripId) {
     if (!ui_overlay.confirmExplicitActionTwice(`恢复「${item.title}」的文字/抽象小剧场？`, '只会移除心跳回忆缓存中的图片引用，不会删除 SillyTavern 已保存的图片文件。', { destructive: true })) return;
     const previous = item.cgImage;
     item.cgImage = null;
-    if (!core_cache.saveSession(core_constants.MODE.HEART, runtimeState.activeSession)) {
+    const context = core_context.currentCharacterGuard();
+    const memoryBank = archive_repository.requireArchive(context);
+    const expectedChatId = core_context.getChatId(context);
+    const origin = { ...core_context.captureTaskOrigin(context, memoryBank.archiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
+    if (!await core_cache.commitSession(core_constants.MODE.HEART, runtimeState.activeSession, expectedChatId, origin)) {
         item.cgImage = previous;
         return globalThis.toastr?.error?.('当前档案状态已变化，未修改图片引用。', '心跳回忆');
     }
@@ -508,6 +512,7 @@ export function renderHeart() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.HEART) return;
     const readOnly = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
+    const canGenerateDerived = !runtimeState.activeArchiveSnapshot || runtimeState.activeArchiveSnapshot.backupOnly !== true;
     ui_overlay.setBackVisible(true, runtimeState.activeArchiveSnapshot ? (readOnly ? '只读档案' : '档案') : '当前档案');
     ui_overlay.topTitle('角色互动');
     const view = ['seasons', 'strips', 'fireflies'].includes(session.view) ? session.view : 'seasons';
@@ -527,7 +532,7 @@ export function renderHeart() {
       <button type="button" data-rmt-heart-view="fireflies" class="${view === 'fireflies' ? 'active' : ''}">萤火虫栖息地</button>
       <button type="button" data-rmt-heart-view="strips" class="${view === 'strips' ? 'active' : ''}">日常一格</button>
     </div>`;
-    const generationButton = readOnly ? '' : view === 'seasons'
+    const generationButton = !canGenerateDerived ? '' : view === 'seasons'
         ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-season" data-rmt-heart-season-target="${core_text.esc(selectedHeartSeason)}">${selectedHeartSeasonPartial ? '继续补全本次' : selectedHeartSeasonReady ? '追加一篇' : '生成首篇'}${core_text.esc(heartSeasonLabels[selectedHeartSeason])}</button>`
         : view === 'fireflies'
             ? (() => {

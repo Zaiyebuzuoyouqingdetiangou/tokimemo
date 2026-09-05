@@ -340,36 +340,194 @@ export async function generateAdvIndexWithRepair(context, memoryBank, origin, ex
     return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
+async function prepareAdvSubtaskRuntime(taskPart) {
+    const targetRuntime = await archive_library.prepareArchiveTargetSubtask(core_constants.MODE.ADV, taskPart);
+    if (targetRuntime) return targetRuntime;
+    if (!archive_library.requireWritableArchiveAction()) throw new Error('当前档案尚未处于可写的真实聊天上下文。');
+    const context = core_context.currentCharacterGuard();
+    const memoryBank = archive_repository.requireArchive(context);
+    const expectedChatId = core_context.getChatId(context);
+    const expectedArchiveRevision = memoryBank.archiveRevision;
+    const origin = {
+        ...core_context.captureTaskOrigin(context, expectedArchiveRevision),
+        chatId: core_context.comparableChatId(expectedChatId),
+    };
+    return {
+        archiveTarget: null,
+        context,
+        memoryBank,
+        expectedChatId,
+        expectedArchiveRevision,
+        scope: core_context.chatScopeKey(context),
+        origin,
+        stillCurrent: () => core_context.isCurrentTaskOrigin(origin),
+        options: null,
+    };
+}
+
+function latestAdvSessionForRuntime(targetRuntime, fallback = null) {
+    return core_cache.loadSession(core_constants.MODE.ADV, {
+        context: targetRuntime.context,
+        cache: targetRuntime.archiveTarget?.cache,
+        chatId: targetRuntime.expectedChatId,
+        memoryBank: targetRuntime.archiveTarget?.memory || targetRuntime.memoryBank,
+        clone: true,
+    }) || structuredClone(fallback);
+}
+
+function advTargetStatus(targetRuntime, message) {
+    return targetRuntime.archiveTarget
+        ? `正在为：${targetRuntime.archiveTarget.characterName} · ${targetRuntime.archiveTarget.archiveName} · ${message}`
+        : message;
+}
+
+async function persistAdvMutation(targetRuntime, mutateSession, fallbackSession) {
+    const { origin, expectedChatId } = targetRuntime;
+    if (targetRuntime.archiveTarget) {
+        if (!targetRuntime.stillCurrent()) throw new Error('这份档案已启动更新的同类任务，本次旧结果没有写入。');
+        const latest = await targetRuntime.options.revalidateArchiveTarget(targetRuntime.archiveTarget);
+        const target = { ...targetRuntime.archiveTarget, ...latest, memory: latest.memory, cache: latest.cache || {} };
+        const result = await targetRuntime.options.commitArchiveTargetMutation(
+            target,
+            core_constants.MODE.ADV,
+            origin,
+            mutateSession,
+            fallbackSession,
+            targetRuntime.stillCurrent,
+        );
+        archive_library.syncArchiveTargetSubtask(targetRuntime, result.snapshot);
+        return { session: result.session, committed: true };
+    }
+    const updated = await core_cache.commitSessionMutation(
+        core_constants.MODE.ADV,
+        expectedChatId,
+        origin,
+        mutateSession,
+        fallbackSession,
+    );
+    if (updated) return { session: updated, committed: true };
+    const staged = mutateSession(structuredClone(fallbackSession), targetRuntime.memoryBank);
+    if (staged) {
+        staged.chatId = expectedChatId;
+        staged.archiveRevision = targetRuntime.expectedArchiveRevision;
+        core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [core_constants.MODE.ADV]: staged } });
+    }
+    return { session: staged, committed: false };
+}
+
+function shouldRenderAdvTarget(targetRuntime) {
+    return !targetRuntime.archiveTarget
+        || runtimeState.activeArchiveSnapshot?.entryId === targetRuntime.archiveTarget.entryId;
+}
+
+function advTargetVisible(targetRuntime, origin = targetRuntime?.origin) {
+    const overlay = document.getElementById(core_constants.OVERLAY_ID);
+    if (!overlay || overlay.hidden || runtimeState.activeSession?.kind !== core_constants.MODE.ADV) return false;
+    return targetRuntime?.archiveTarget
+        ? runtimeState.activeArchiveSnapshot?.entryId === targetRuntime.archiveTarget.entryId
+        : (!origin || core_context.isCurrentTaskOrigin(origin));
+}
+
+function advTargetMessage(targetRuntime, message) {
+    const text = core_text.normalizeText(message, 1200);
+    return targetRuntime?.archiveTarget
+        ? `${targetRuntime.archiveTarget.characterName} · ${targetRuntime.archiveTarget.archiveName}：${text}`
+        : text;
+}
+
+function advPreparationTargetHint() {
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    if (snapshot?.entryId) {
+        return { archiveTarget: {
+            entryId: snapshot.entryId,
+            characterName: snapshot.characterName,
+            archiveName: snapshot.archiveName,
+        } };
+    }
+    try {
+        const context = core_context.getContext();
+        const memory = archive_repository.getImportedMemory(context);
+        return { origin: core_context.captureTaskOrigin(context, memory?.archiveRevision || '') };
+    } catch {
+        return { origin: { chatId: '__unavailable__' } };
+    }
+}
+
+function showAdvNotice(targetRuntime, message, type = 'info') {
+    const text = core_text.normalizeText(message, 1200);
+    if (advTargetVisible(targetRuntime)) ui_overlay.showInlineError(text);
+    else globalThis.toastr?.[type]?.(core_text.toastText(advTargetMessage(targetRuntime, text)), '心跳回忆 · ADV EVENT');
+}
+
+function showAdvFailure(targetRuntime, error) {
+    const message = core_text.safeErrorSummary(error);
+    if (advTargetVisible(targetRuntime)) ui_overlay.showInlineError(message);
+    else globalThis.toastr?.error?.(core_text.toastText(advTargetMessage(targetRuntime, message)), '心跳回忆 · ADV EVENT');
+}
+
+function refreshAdvArchiveTarget(targetRuntime) {
+    const entryId = core_text.normalizeText(targetRuntime?.archiveTarget?.entryId, 120);
+    if (entryId) queueMicrotask(() => ui_overlay.refreshArchiveTargetSnapshotView(entryId));
+}
+
+async function beginAdvSubtask(targetRuntime) {
+    try {
+        await archive_library.beginArchiveTargetSubtask(targetRuntime);
+        return true;
+    } catch (error) {
+        showAdvFailure(targetRuntime, error);
+        return false;
+    }
+}
+
 export async function generateAllAdvForSession() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ADV) return;
-    if (!archive_library.requireWritableArchiveAction()) return ui_overlay.showInlineError('当前档案尚未处于可写的真实聊天上下文。');
-    const context = core_context.currentCharacterGuard();
-    const scope = core_context.chatScopeKey(context);
+    const targetHint = advPreparationTargetHint();
+    let targetRuntime;
+    try { targetRuntime = await prepareAdvSubtaskRuntime('bulk'); }
+    catch (error) { showAdvFailure(targetHint, error); return; }
+    const { context, scope } = targetRuntime;
+    let origin = targetRuntime.origin;
     const bulkTaskKey = `adv-bulk:${scope}`;
-    if (runtimeState.activeAdvBulkScopes.has(scope)) return ui_overlay.showInlineError('ADV 批量任务已经在进行中。');
-    if (core_requestCoordinator.isModeGenerating(core_constants.MODE.ADV, context)) return ui_overlay.showInlineError('ADV EVENT 事件索引正在生成或补齐，请先等它完成。');
-    if (core_requestCoordinator.hasGenerationTaskPrefix(`adv:${scope}:`)) return ui_overlay.showInlineError('当前有单篇 ADV 正在生成，请等它完成后再批量生成。');
-    if (!core_requestCoordinator.canStartGenerationTask(bulkTaskKey)) return ui_overlay.showInlineError(`当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请稍后再试。`);
+    if (runtimeState.activeAdvBulkScopes.has(scope)) return showAdvNotice(targetRuntime, 'ADV 批量任务已经在进行中。');
+    if (core_requestCoordinator.isModeGenerating(core_constants.MODE.ADV, context)) return showAdvNotice(targetRuntime, 'ADV EVENT 事件索引正在生成或补齐，请先等它完成。');
+    if (core_requestCoordinator.hasGenerationTaskPrefix(`adv:${scope}:`)) return showAdvNotice(targetRuntime, '当前有单篇 ADV 正在生成，请等它完成后再批量生成。');
+    if (!core_requestCoordinator.canStartGenerationTask(bulkTaskKey)) return showAdvNotice(targetRuntime, `当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请稍后再试。`);
 
-    const session = runtimeState.activeSession;
+    // No-op checks belong before the durable latest-task claim. Clicking an already-complete
+    // archive must not advance the ADV fence and invalidate a real task in another tab.
+    let session = latestAdvSessionForRuntime(targetRuntime, runtimeState.activeSession);
+    if (!session?.events?.some(event => !event.adv?.paragraphs?.length)) {
+        globalThis.toastr?.info?.(advTargetMessage(targetRuntime, '全部 ADV 都已经生成完成。'), '心跳回忆');
+        return;
+    }
+    runtimeState.activeAdvBulkScopes.add(scope);
+    core_requestCoordinator.registerArchiveTargetReservation(bulkTaskKey, targetRuntime, core_constants.MODE.ADV,
+        advTargetMessage(targetRuntime, 'ADV 批量生成中'));
+    try {
+    if (!await beginAdvSubtask(targetRuntime)) {
+        runtimeState.activeAdvBulkScopes.delete(scope);
+        refreshAdvArchiveTarget(targetRuntime);
+        return;
+    }
+    origin = targetRuntime.origin;
+    session = latestAdvSessionForRuntime(targetRuntime, session);
     const allPending = session.events.filter(event => !event.adv?.paragraphs?.length);
     if (!allPending.length) {
-        session.advBulkRecovery = null;
-        globalThis.toastr?.info?.('全部 ADV 都已经生成完成。', '心跳回忆');
+        globalThis.toastr?.info?.(advTargetMessage(targetRuntime, '较新的任务已经补完全部 ADV，本次没有重复请求。'), '心跳回忆');
+        runtimeState.activeAdvBulkScopes.delete(scope);
+        refreshAdvArchiveTarget(targetRuntime);
         return;
     }
     const retryIds = new Set(core_text.cleanArray(session.advBulkRecovery?.failedIds, 64, 100));
     const recoveryPending = retryIds.size ? allPending.filter(event => retryIds.has(event.id)) : [];
     if (retryIds.size && !recoveryPending.length) session.advBulkRecovery = null;
     const pending = (recoveryPending.length ? recoveryPending : allPending).slice(0, core_constants.ADV_BULK_BATCH_SIZE);
-    const memoryBank = archive_repository.requireArchive(context);
-    const expectedChatId = core_context.getChatId(context);
-    const expectedArchiveRevision = memoryBank.archiveRevision;
-    const origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
-    runtimeState.activeAdvBulkScopes.add(scope);
-    ui_overlay.setInnerLoading(true, `本批生成 ${pending.length} 篇 ADV…`);
+    const memoryBank = targetRuntime.memoryBank;
+    if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(true, advTargetStatus(targetRuntime, `本批生成 ${pending.length} 篇 ADV…`));
     let batchCount = 0;
     let batchError = '';
+    const completedBatch = new Map();
     try {
         try {
             const raw = await generation_client.requestJson(
@@ -389,67 +547,94 @@ export async function generateAllAdvForSession() {
             for (const event of pending) {
                 const adv = batch.get(event.id);
                 if (!adv) continue;
-                event.adv = adv;
+                completedBatch.set(event.id, adv);
                 batchCount += 1;
             }
         } catch (error) {
             if (error?.name === 'AbortError') throw error;
-            batchError = core_text.normalizeText(error?.message || String(error), 1000);
-            console.warn('[HeartbeatMemories] bulk ADV request failed; waiting for user recovery choice', error);
+            batchError = core_text.safeErrorSummary(error, 1000);
+            console.warn('[HeartbeatMemories] bulk ADV request failed; waiting for user recovery choice', core_text.safeErrorDiagnostic(error));
         }
 
-        const failedAfterBatch = pending.filter(event => !event.adv?.paragraphs?.length);
-        session.advBulkRecovery = failedAfterBatch.length ? {
-            failedIds: failedAfterBatch.map(event => event.id),
-            attemptedAt: Date.now(),
-            batchSucceeded: batchCount,
-            error: batchError,
-        } : null;
-
-        let committed = false;
-        if (core_context.isCurrentTaskOrigin(origin)) {
-            try {
-                const latestMemory = archive_repository.requireArchive(core_context.currentCharacterGuard());
-                if (latestMemory.archiveRevision === expectedArchiveRevision) committed = core_cache.saveSession(core_constants.MODE.ADV, session, expectedChatId);
-            } catch {}
-        }
-        if (!committed) core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [core_constants.MODE.ADV]: session } });
+        const attemptedIds = new Set(pending.map(event => event.id));
+        const persisted = await persistAdvMutation(targetRuntime, latest => {
+            const next = structuredClone(latest || session);
+            for (const item of next.events || []) {
+                const adv = completedBatch.get(item.id);
+                // A result that was already committed by another valid task is never replaced by
+                // this older patch; independent event patches therefore compose under CAS.
+                if (adv && !item.adv?.paragraphs?.length) item.adv = adv;
+            }
+            const failedAttemptIds = (next.events || [])
+                .filter(item => attemptedIds.has(item.id) && !item.adv?.paragraphs?.length)
+                .map(item => item.id);
+            next.advBulkRecovery = failedAttemptIds.length ? {
+                failedIds: failedAttemptIds,
+                attemptedAt: Date.now(),
+                batchSucceeded: Math.max(0, attemptedIds.size - failedAttemptIds.length),
+                error: batchError,
+            } : null;
+            return next;
+        }, session);
+        session = persisted.session || session;
+        const failedAfterBatch = pending.filter(event => !session.events?.find(item => item.id === event.id)?.adv?.paragraphs?.length);
         const completed = session.events.filter(event => event.adv?.paragraphs?.length).length;
         const failed = session.events.length - completed;
-        if (core_context.isCurrentTaskOrigin(origin) && runtimeState.activeSession === session && !document.getElementById(core_constants.OVERLAY_ID)?.hidden) ui_advEventView.renderAdvMode();
+        const visible = shouldRenderAdvTarget(targetRuntime)
+            && (targetRuntime.archiveTarget || core_context.isCurrentTaskOrigin(origin))
+            && runtimeState.activeSession?.kind === core_constants.MODE.ADV
+            && !document.getElementById(core_constants.OVERLAY_ID)?.hidden;
+        if (visible) {
+            runtimeState.activeSession = session;
+            ui_advEventView.renderAdvMode();
+        }
         if (failedAfterBatch.length) {
-            globalThis.toastr?.warning?.(`本批完成 ${batchCount}/${pending.length} 篇；${failedAfterBatch.length} 篇需要重试。`, '心跳回忆');
+            globalThis.toastr?.warning?.(advTargetMessage(targetRuntime, `本批完成 ${batchCount}/${pending.length} 篇；${failedAfterBatch.length} 篇需要重试。`), '心跳回忆');
         } else if (failed) {
-            globalThis.toastr?.success?.(`本批完成 ${batchCount} 篇；还有 ${failed} 篇未生成，可继续生成下一批。`, '心跳回忆');
+            globalThis.toastr?.success?.(advTargetMessage(targetRuntime, `本批完成 ${batchCount} 篇；还有 ${failed} 篇未生成，可继续生成下一批。`), '心跳回忆');
         } else {
-            globalThis.toastr?.success?.(`ADV 已完成：${completed}/${session.events.length}。`, '心跳回忆');
+            globalThis.toastr?.success?.(advTargetMessage(targetRuntime, `ADV 已完成：${completed}/${session.events.length}。`), '心跳回忆');
         }
     } catch (error) {
         if (error?.name !== 'AbortError') {
-            console.error('[HeartbeatMemories] bulk ADV flow failed', error);
-            ui_overlay.showInlineError(error?.message || String(error));
+            console.error('[HeartbeatMemories] bulk ADV flow failed', core_text.safeErrorDiagnostic(error));
+            showAdvFailure(targetRuntime, error);
         }
     } finally {
         runtimeState.activeAdvBulkScopes.delete(scope);
-        ui_overlay.setInnerLoading(false);
+        core_requestCoordinator.unregisterArchiveTargetReservation(bulkTaskKey);
+        if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
         core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.ADV, origin);
+        refreshAdvArchiveTarget(targetRuntime);
+    }
+    } finally {
+        runtimeState.activeAdvBulkScopes.delete(scope);
+        core_requestCoordinator.unregisterArchiveTargetReservation(bulkTaskKey);
+        if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
+        refreshAdvArchiveTarget(targetRuntime);
     }
 }
 
 export async function repairFailedAdvForSession() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ADV) return;
-    if (!archive_library.requireWritableArchiveAction()) return ui_overlay.showInlineError('当前档案尚未处于可写的真实聊天上下文。');
-    const context = core_context.currentCharacterGuard();
-    const scope = core_context.chatScopeKey(context);
+    const targetHint = advPreparationTargetHint();
+    let targetRuntime;
+    try { targetRuntime = await prepareAdvSubtaskRuntime('repair'); }
+    catch (error) { showAdvFailure(targetHint, error); return; }
+    const { context, scope } = targetRuntime;
+    let origin = targetRuntime.origin;
     const bulkTaskKey = `adv-bulk:${scope}`;
-    if (runtimeState.activeAdvBulkScopes.has(scope) || core_requestCoordinator.hasGenerationTaskPrefix(`adv:${scope}:`)) return ui_overlay.showInlineError('当前已有 ADV 生成任务，请稍候。');
-    if (!core_requestCoordinator.canStartGenerationTask(bulkTaskKey)) return ui_overlay.showInlineError(`当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请稍后再试。`);
-    const session = runtimeState.activeSession;
-    const requestedIds = new Set(core_text.cleanArray(session.advBulkRecovery?.failedIds, 64, 100));
-    const failed = session.events.filter(event => !event.adv?.paragraphs?.length && (!requestedIds.size || requestedIds.has(event.id)));
+    if (runtimeState.activeAdvBulkScopes.has(scope) || core_requestCoordinator.hasGenerationTaskPrefix(`adv:${scope}:`)) return showAdvNotice(targetRuntime, '当前已有 ADV 生成任务，请稍候。');
+    if (!core_requestCoordinator.canStartGenerationTask(bulkTaskKey)) return showAdvNotice(targetRuntime, `当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请稍后再试。`);
+    let session = latestAdvSessionForRuntime(targetRuntime, runtimeState.activeSession);
+    let requestedIds = new Set(core_text.cleanArray(session.advBulkRecovery?.failedIds, 64, 100));
+    let failed = session.events.filter(event => !event.adv?.paragraphs?.length && (!requestedIds.size || requestedIds.has(event.id)));
     if (!failed.length) {
         session.advBulkRecovery = null;
-        ui_advEventView.renderAdvMode();
+        if (advTargetVisible(targetRuntime, origin)) {
+            runtimeState.activeSession = session;
+            ui_advEventView.renderAdvMode();
+        }
         return;
     }
     if (!ui_overlay.confirmExplicitAction(
@@ -458,16 +643,32 @@ export async function repairFailedAdvForSession() {
         { destructive: false },
     )) return;
 
-    const memoryBank = archive_repository.requireArchive(context);
-    const expectedChatId = core_context.getChatId(context);
-    const expectedArchiveRevision = memoryBank.archiveRevision;
-    const origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
+    const memoryBank = targetRuntime.memoryBank;
     runtimeState.activeAdvBulkScopes.add(scope);
+    core_requestCoordinator.registerArchiveTargetReservation(bulkTaskKey, targetRuntime, core_constants.MODE.ADV,
+        advTargetMessage(targetRuntime, 'ADV 失败项补完中'));
+    try {
+    if (!await beginAdvSubtask(targetRuntime)) {
+        runtimeState.activeAdvBulkScopes.delete(scope);
+        refreshAdvArchiveTarget(targetRuntime);
+        return;
+    }
+    origin = targetRuntime.origin;
+    session = latestAdvSessionForRuntime(targetRuntime, session);
+    requestedIds = new Set(core_text.cleanArray(session.advBulkRecovery?.failedIds, 64, 100));
+    failed = session.events.filter(event => !event.adv?.paragraphs?.length && (!requestedIds.size || requestedIds.has(event.id)));
+    if (!failed.length) {
+        globalThis.toastr?.info?.('较新的任务已经补完这些 ADV，本次没有重复请求。', '心跳回忆');
+        runtimeState.activeAdvBulkScopes.delete(scope);
+        refreshAdvArchiveTarget(targetRuntime);
+        return;
+    }
     let repaired = 0;
     try {
         for (let i = 0; i < failed.length; i += 1) {
             const event = failed[i];
-            ui_overlay.setInnerLoading(true, `逐个补完 ${i + 1} / ${failed.length}：${event.title}`);
+            if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(true, advTargetStatus(targetRuntime, `逐个补完 ${i + 1} / ${failed.length}：${event.title}`));
+            let adv;
             try {
                 const raw = await generation_client.requestJson(
                     advPrompt(context, event, memoryBank),
@@ -482,93 +683,158 @@ export async function repairFailedAdvForSession() {
                         background: true,
                     },
                 );
-                event.adv = normalizeAdv(raw);
-                repaired += 1;
-                if (core_context.isCurrentTaskOrigin(origin)) core_cache.saveSession(core_constants.MODE.ADV, session, expectedChatId);
+                adv = normalizeAdv(raw);
             } catch (error) {
                 if (error?.name === 'AbortError') throw error;
-                console.warn('[HeartbeatMemories] user-requested ADV repair failed', { eventId: event.id, error });
+                console.warn('[HeartbeatMemories] user-requested ADV repair failed', { eventId: core_text.normalizeText(event.id, 80), ...core_text.safeErrorDiagnostic(error) });
+                await core_context.yieldToUi();
+                continue;
             }
+            const persisted = await persistAdvMutation(targetRuntime, latest => {
+                const next = structuredClone(latest || session);
+                const item = next.events?.find(candidate => candidate.id === event.id);
+                if (item && !item.adv?.paragraphs?.length) item.adv = adv;
+                return next;
+            }, session);
+            session = persisted.session || session;
+            if (session.events?.find(item => item.id === event.id)?.adv?.paragraphs?.length) repaired += 1;
             await core_context.yieldToUi();
         }
+        const persisted = await persistAdvMutation(targetRuntime, latest => {
+            const next = structuredClone(latest || session);
+            const pendingIds = (next.events || []).filter(item => !item.adv?.paragraphs?.length).map(item => item.id);
+            next.advBulkRecovery = pendingIds.length ? { failedIds: pendingIds, attemptedAt: Date.now(), batchSucceeded: 0, error: '' } : null;
+            return next;
+        }, session);
+        session = persisted.session || session;
         const stillFailed = session.events.filter(event => !event.adv?.paragraphs?.length);
-        session.advBulkRecovery = stillFailed.length ? { failedIds: stillFailed.map(event => event.id), attemptedAt: Date.now(), batchSucceeded: 0, error: '' } : null;
-        if (core_context.isCurrentTaskOrigin(origin)) core_cache.saveSession(core_constants.MODE.ADV, session, expectedChatId);
-        if (runtimeState.activeSession === session && !document.getElementById(core_constants.OVERLAY_ID)?.hidden) ui_advEventView.renderAdvMode();
-        globalThis.toastr?.[stillFailed.length ? 'warning' : 'success']?.(`逐个补完完成：成功 ${repaired} 篇${stillFailed.length ? `，仍有 ${stillFailed.length} 篇失败` : '，全部 ADV 已就绪'}。`, '心跳回忆');
+        const visible = shouldRenderAdvTarget(targetRuntime)
+            && (targetRuntime.archiveTarget || core_context.isCurrentTaskOrigin(origin))
+            && runtimeState.activeSession?.kind === core_constants.MODE.ADV
+            && !document.getElementById(core_constants.OVERLAY_ID)?.hidden;
+        if (visible) {
+            runtimeState.activeSession = session;
+            ui_advEventView.renderAdvMode();
+        }
+        globalThis.toastr?.[stillFailed.length ? 'warning' : 'success']?.(advTargetMessage(targetRuntime, `逐个补完完成：成功 ${repaired} 篇${stillFailed.length ? `，仍有 ${stillFailed.length} 篇失败` : '，全部 ADV 已就绪'}。`), '心跳回忆');
+    } catch (error) {
+        if (error?.name !== 'AbortError') showAdvFailure(targetRuntime, error);
     } finally {
         runtimeState.activeAdvBulkScopes.delete(scope);
-        ui_overlay.setInnerLoading(false);
+        core_requestCoordinator.unregisterArchiveTargetReservation(bulkTaskKey);
+        if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
         core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.ADV, origin);
+        refreshAdvArchiveTarget(targetRuntime);
+    }
+    } finally {
+        runtimeState.activeAdvBulkScopes.delete(scope);
+        core_requestCoordinator.unregisterArchiveTargetReservation(bulkTaskKey);
+        if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
+        refreshAdvArchiveTarget(targetRuntime);
     }
 }
 
 export async function generateAdvForSelected() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ADV) return;
-    const event = runtimeState.activeSession.events.find(x => x.id === runtimeState.activeSession.selectedId);
+    const selectedId = runtimeState.activeSession.selectedId;
+    const targetHint = advPreparationTargetHint();
+    let targetRuntime;
+    try { targetRuntime = await prepareAdvSubtaskRuntime(`event:${core_text.safeId(selectedId, 'event')}`); }
+    catch (error) { showAdvFailure(targetHint, error); return; }
+    let session = latestAdvSessionForRuntime(targetRuntime, runtimeState.activeSession);
+    let event = session.events.find(x => x.id === selectedId);
     if (!event) return;
     if (event.adv?.paragraphs?.length) {
-        runtimeState.activeSession.view = 'adv';
-        runtimeState.activeSession.paragraphIndex = 0;
-        ui_advEventView.renderAdvMode();
+        if (shouldRenderAdvTarget(targetRuntime) && runtimeState.activeSession?.kind === core_constants.MODE.ADV) {
+            session.view = 'adv';
+            session.paragraphIndex = 0;
+            runtimeState.activeSession = session;
+            ui_advEventView.renderAdvMode();
+        }
         return;
     }
-    if (!archive_library.requireWritableArchiveAction()) return ui_overlay.showInlineError('当前档案尚未处于可写的真实聊天上下文。');
-    const context = core_context.currentCharacterGuard();
-    const expectedChatId = core_context.getChatId(context);
-    const scope = core_context.chatScopeKey(context);
-    if (runtimeState.activeAdvBulkScopes.has(scope)) return ui_overlay.showInlineError('全部 ADV 正在批量生成 / 补失败项，请稍后再单独打开。');
-    const session = runtimeState.activeSession;
+    const { context, scope } = targetRuntime;
+    let origin = targetRuntime.origin;
+    if (runtimeState.activeAdvBulkScopes.has(scope)) return showAdvNotice(targetRuntime, '全部 ADV 正在批量生成 / 补失败项，请稍后再单独打开。');
     const eventId = event.id;
-    let memoryBank;
-    try {
-        memoryBank = archive_repository.requireArchive(context);
-    } catch (error) {
-        return ui_overlay.showInlineError(error?.message || String(error));
-    }
-    const expectedArchiveRevision = memoryBank.archiveRevision;
-    const origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
-    const taskKey = `adv:${core_context.chatScopeKey(context)}:${core_text.safeId(eventId, 'event')}`;
+    const taskKey = `adv:${scope}:${core_text.safeId(eventId, 'event')}`;
     if (core_requestCoordinator.isModeGenerating(core_constants.MODE.ADV, context)) {
-        return ui_overlay.showInlineError('ADV EVENT 事件索引正在增量追加，请等索引完成后再生成具体 ADV。');
+        return showAdvNotice(targetRuntime, 'ADV EVENT 事件索引正在增量追加，请等索引完成后再生成具体 ADV。');
     }
-    if (core_requestCoordinator.hasGenerationTaskPrefix(`adv:${core_context.chatScopeKey(context)}:`)) {
-        return ui_overlay.showInlineError(core_requestCoordinator.isGenerationTaskRunning(taskKey) ? '这篇 ADV 已经在生成中。' : '当前窗口还有另一篇 ADV 正在生成，请等它完成后再生成下一篇。');
+    if (runtimeState.activeModeBuildScopes.has(taskKey) || core_requestCoordinator.hasGenerationTaskPrefix(`adv:${scope}:`)) {
+        return showAdvNotice(targetRuntime, core_requestCoordinator.isGenerationTaskRunning(taskKey) ? '这篇 ADV 已经在生成中。' : '当前窗口还有另一篇 ADV 正在生成，请等它完成后再生成下一篇。');
     }
     if (!core_requestCoordinator.canStartGenerationTask(taskKey)) {
-        return ui_overlay.showInlineError(`当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请稍后再试。`);
+        return showAdvNotice(targetRuntime, `当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请稍后再试。`);
     }
-    ui_overlay.setInnerLoading(true, `正在为「${event.title}」生成长篇 ADV…`);
+    runtimeState.activeModeBuildScopes.add(taskKey);
+    core_requestCoordinator.registerArchiveTargetReservation(taskKey, targetRuntime, core_constants.MODE.ADV,
+        advTargetMessage(targetRuntime, `ADV 正文生成中：${event.title}`));
+    try {
+    if (!await beginAdvSubtask(targetRuntime)) {
+        runtimeState.activeModeBuildScopes.delete(taskKey);
+        refreshAdvArchiveTarget(targetRuntime);
+        return;
+    }
+    origin = targetRuntime.origin;
+    session = latestAdvSessionForRuntime(targetRuntime, session);
+    event = session?.events?.find(item => item.id === eventId);
+    if (!event || event.adv?.paragraphs?.length) {
+        globalThis.toastr?.info?.(advTargetMessage(targetRuntime, event ? '较新的任务已经补完这篇 ADV，本次没有重复请求。' : '这条 ADV 事件已不在最新档案中，本次没有请求。'), '心跳回忆');
+        runtimeState.activeModeBuildScopes.delete(taskKey);
+        refreshAdvArchiveTarget(targetRuntime);
+        return;
+    }
+    const memoryBank = targetRuntime.memoryBank;
+    if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(true, advTargetStatus(targetRuntime, `正在为「${event.title}」生成长篇 ADV…`));
     try {
         const raw = await generation_client.requestJson(advPrompt(context, event, memoryBank), `正在根据当前聊天档案生成「${event.title}」ADV…`, { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV], temperature: 0.55, context, origin, taskKey, mode: core_constants.MODE.ADV, background: true });
-        const wasBackgrounded = !core_context.isCurrentTaskOrigin(origin) || document.getElementById(core_constants.OVERLAY_ID)?.hidden || runtimeState.activeSession !== session;
-        const liveEvent = session.events.find(item => item.id === eventId);
-        if (!liveEvent) return;
-        liveEvent.adv = normalizeAdv(raw);
-        session.view = 'adv';
-        session.paragraphIndex = 0;
-        let committed = false;
-        if (core_context.isCurrentTaskOrigin(origin)) {
-            try { const latestMemory = archive_repository.requireArchive(core_context.currentCharacterGuard()); if (latestMemory.archiveRevision === expectedArchiveRevision) committed = core_cache.saveSession(core_constants.MODE.ADV, session, expectedChatId); } catch {}
-        }
-        if (!committed) core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [core_constants.MODE.ADV]: session } });
-        if (wasBackgrounded || !committed || runtimeState.activeSession !== session) {
-            ui_settingsPanel.refreshSettingsMemoryStatus();
-            globalThis.toastr?.success?.(`ADV 后台生成完成：${event.title}`, '心跳回忆');
+        const generatedAdv = normalizeAdv(raw);
+        const persisted = await persistAdvMutation(targetRuntime, latest => {
+            const next = structuredClone(latest || session);
+            const item = next.events?.find(candidate => candidate.id === eventId);
+            if (!item) return null;
+            if (!item.adv?.paragraphs?.length) item.adv = generatedAdv;
+            next.selectedId = eventId;
+            next.view = 'adv';
+            next.paragraphIndex = 0;
+            return next;
+        }, session);
+        session = persisted.session || session;
+        const wasBackgrounded = !shouldRenderAdvTarget(targetRuntime)
+            || (!targetRuntime.archiveTarget && !core_context.isCurrentTaskOrigin(origin))
+            || document.getElementById(core_constants.OVERLAY_ID)?.hidden
+            || runtimeState.activeSession?.kind !== core_constants.MODE.ADV;
+        if (wasBackgrounded || !persisted.committed) {
+            if (targetRuntime.archiveTarget) ui_settingsPanel.refreshSettingsTaskStatus();
+            else ui_settingsPanel.refreshSettingsMemoryStatus();
+            globalThis.toastr?.success?.(advTargetMessage(targetRuntime, `ADV 后台生成完成：${event.title}`), '心跳回忆');
             return;
         }
+        runtimeState.activeSession = session;
         ui_advEventView.renderAdvMode();
-        globalThis.toastr?.success?.(`ADV 已生成：${event.title}`, '心跳回忆');
+        globalThis.toastr?.success?.(advTargetMessage(targetRuntime, `ADV 已生成：${event.title}`), '心跳回忆');
     } catch (error) {
         if (error?.name === 'AbortError') {
             console.warn('[HeartbeatMemories] ADV generation aborted after chat/extension change');
-            ui_overlay.setInnerLoading(false);
-            const overlay = document.getElementById(core_constants.OVERLAY_ID);
-            if (overlay && !overlay.hidden) ui_overlay.showChooser();
+            if (advTargetVisible(targetRuntime, origin)) {
+                ui_overlay.setInnerLoading(false);
+                ui_overlay.showChooser();
+            }
             return;
         }
-        console.error('[HeartbeatMemories] ADV generation failed', error);
-        ui_overlay.setInnerLoading(false);
-        ui_overlay.showInlineError(error?.message || String(error));
+        console.error('[HeartbeatMemories] ADV generation failed', core_text.safeErrorDiagnostic(error));
+        showAdvFailure(targetRuntime, error);
+    } finally {
+        runtimeState.activeModeBuildScopes.delete(taskKey);
+        core_requestCoordinator.unregisterArchiveTargetReservation(taskKey);
+        if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
+        refreshAdvArchiveTarget(targetRuntime);
+    }
+    } finally {
+        runtimeState.activeModeBuildScopes.delete(taskKey);
+        core_requestCoordinator.unregisterArchiveTargetReservation(taskKey);
+        if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
+        refreshAdvArchiveTarget(targetRuntime);
     }
 }

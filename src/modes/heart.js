@@ -710,29 +710,155 @@ export function mergeDeferredHeartPatches(existing, incoming) {
     return { ...(existing || {}), ...(incoming || {}) };
 }
 
-export async function persistHeartPartialPatch(patchKey, patch, fallbackBase, memoryBank, origin, expectedChatId, expectedArchiveRevision) {
+async function prepareHeartSubtaskRuntime(taskPart) {
+    const targetRuntime = await archive_library.prepareArchiveTargetSubtask(core_constants.MODE.HEART, taskPart);
+    if (targetRuntime) return targetRuntime;
+    if (!archive_library.requireWritableArchiveAction()) throw new Error('当前档案尚未处于可写的真实聊天上下文。');
+    const context = core_context.currentCharacterGuard();
+    const memoryBank = archive_repository.requireArchive(context);
+    const expectedChatId = core_context.getChatId(context);
+    const expectedArchiveRevision = memoryBank.archiveRevision;
+    const origin = {
+        ...core_context.captureTaskOrigin(context, expectedArchiveRevision),
+        chatId: core_context.comparableChatId(expectedChatId),
+    };
+    return {
+        archiveTarget: null,
+        context,
+        memoryBank,
+        expectedChatId,
+        expectedArchiveRevision,
+        scope: core_context.chatScopeKey(context),
+        origin,
+        stillCurrent: () => core_context.isCurrentTaskOrigin(origin),
+        options: null,
+    };
+}
+
+function latestHeartSessionForRuntime(targetRuntime, fallback = null) {
+    return core_cache.loadSession(core_constants.MODE.HEART, {
+        context: targetRuntime.context,
+        cache: targetRuntime.archiveTarget?.cache,
+        chatId: targetRuntime.expectedChatId,
+        memoryBank: targetRuntime.archiveTarget?.memory || targetRuntime.memoryBank,
+        clone: true,
+    }) || structuredClone(fallback);
+}
+
+async function beginHeartSubtask(targetRuntime) {
+    try {
+        await archive_library.beginArchiveTargetSubtask(targetRuntime);
+        return true;
+    } catch (error) {
+        globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心跳回忆');
+        return false;
+    }
+}
+
+function heartTargetMessage(targetRuntime, message) {
+    const text = core_text.normalizeText(message, 1200);
+    return targetRuntime?.archiveTarget
+        ? `${targetRuntime.archiveTarget.characterName} · ${targetRuntime.archiveTarget.archiveName}：${text}`
+        : text;
+}
+
+function heartPreparationTargetHint() {
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    return snapshot?.entryId ? { archiveTarget: {
+        entryId: snapshot.entryId,
+        characterName: snapshot.characterName,
+        archiveName: snapshot.archiveName,
+    } } : null;
+}
+
+function refreshHeartArchiveTarget(targetRuntime) {
+    const entryId = core_text.normalizeText(targetRuntime?.archiveTarget?.entryId, 120);
+    if (entryId) queueMicrotask(() => ui_overlay.refreshArchiveTargetSnapshotView(entryId));
+}
+
+async function persistHeartWholeSession(session, targetRuntime, origin) {
+    // This path only migrates the legacy firefly coverage cursor. Merge that cursor into the
+    // latest canonical HEART session instead of replacing sibling dialogue/season/strip writes.
+    const mutateCoverage = latestSession => {
+        const next = structuredClone(latestSession || session);
+        const desiredMeta = session?.generationMeta && typeof session.generationMeta === 'object' ? session.generationMeta : {};
+        const nextMeta = next?.generationMeta && typeof next.generationMeta === 'object' ? next.generationMeta : {};
+        const desiredRecord = desiredMeta?.parts?.fireflies;
+        if (!desiredRecord || typeof desiredRecord !== 'object') return next;
+        next.generationMeta = {
+            ...structuredClone(nextMeta),
+            schemaVersion: desiredMeta.schemaVersion || nextMeta.schemaVersion,
+            parts: {
+                ...(nextMeta.parts && typeof nextMeta.parts === 'object' ? structuredClone(nextMeta.parts) : {}),
+                fireflies: structuredClone(desiredRecord),
+            },
+            lastUpdate: structuredClone(desiredMeta.lastUpdate || nextMeta.lastUpdate || {}),
+        };
+        next.generationParts = { ...(next.generationParts || {}), fireflies: Array.isArray(next.fireflyVoices) && next.fireflyVoices.length > 0 };
+        return next;
+    };
+    if (!targetRuntime?.archiveTarget) {
+        return core_cache.commitSessionMutation(core_constants.MODE.HEART, targetRuntime.expectedChatId, origin, mutateCoverage, session);
+    }
+    if (!targetRuntime.stillCurrent()) throw new Error('这份档案已启动更新的同类任务，本次旧结果没有写入。');
+    const latest = await targetRuntime.options.revalidateArchiveTarget(targetRuntime.archiveTarget);
+    const target = { ...targetRuntime.archiveTarget, ...latest, memory: latest.memory, cache: latest.cache || {} };
+    const result = await targetRuntime.options.commitArchiveTargetMutation(
+        target,
+        core_constants.MODE.HEART,
+        origin,
+        mutateCoverage,
+        session,
+        targetRuntime.stillCurrent,
+    );
+    archive_library.syncArchiveTargetSubtask(targetRuntime, result.snapshot);
+    return result.session || null;
+}
+
+export async function persistHeartPartialPatch(patchKey, patch, fallbackBase, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime = null) {
     let committed = false;
     let updated = null;
-    if (core_context.isCurrentTaskOrigin(origin)) {
+    if (targetRuntime?.archiveTarget) {
+        if (!targetRuntime.stillCurrent()) throw new Error('这份档案已启动更新的同类任务，本次旧结果没有写入。');
+        const latest = await targetRuntime.options.revalidateArchiveTarget(targetRuntime.archiveTarget);
+        const target = { ...targetRuntime.archiveTarget, ...latest, memory: latest.memory, cache: latest.cache || {} };
+        const result = await targetRuntime.options.commitArchiveTargetMutation(
+            target,
+            core_constants.MODE.HEART,
+            origin,
+            (latestSession, liveMemory) => normalizeHeart(applyHeartPartialPatch(latestSession || fallbackBase, patch), liveMemory),
+            fallbackBase,
+            targetRuntime.stillCurrent,
+        );
+        updated = result.session;
+        committed = !!updated;
+        archive_library.syncArchiveTargetSubtask(targetRuntime, result.snapshot);
+    } else if (core_context.isCurrentTaskOrigin(origin)) {
         try {
             const context = core_context.currentCharacterGuard();
             const latestMemory = archive_repository.requireArchive(context);
             if (latestMemory.archiveRevision === expectedArchiveRevision) {
-                const latest = core_cache.loadSession(core_constants.MODE.HEART, { context, chatId: expectedChatId, memoryBank: latestMemory, clone: true }) || structuredClone(fallbackBase);
-                updated = normalizeHeart(applyHeartPartialPatch(latest, patch), latestMemory);
-                updated.chatId = expectedChatId;
-                updated.archiveRevision = expectedArchiveRevision;
-                committed = core_cache.saveSession(core_constants.MODE.HEART, updated, expectedChatId);
+                updated = await core_cache.commitSessionMutation(
+                    core_constants.MODE.HEART,
+                    expectedChatId,
+                    origin,
+                    (latest, liveMemory) => normalizeHeart(applyHeartPartialPatch(latest || fallbackBase, patch), liveMemory),
+                    fallbackBase,
+                );
+                committed = !!updated;
             }
         } catch {}
     }
-    if (!committed) {
+    if (!committed && !targetRuntime?.archiveTarget) {
         core_requestCoordinator.queueDeferredCommit(origin, { kind: 'heartPatches', patches: { [patchKey]: patch } });
         updated = normalizeHeart(applyHeartPartialPatch(fallbackBase, patch), memoryBank);
         updated.chatId = expectedChatId;
         updated.archiveRevision = expectedArchiveRevision;
     }
-    if (committed && runtimeState.activeSession?.kind === core_constants.MODE.HEART) {
+    const sameTargetVisible = targetRuntime?.archiveTarget
+        ? runtimeState.activeArchiveSnapshot?.entryId === targetRuntime.archiveTarget.entryId
+        : true;
+    if (committed && sameTargetVisible && runtimeState.activeSession?.kind === core_constants.MODE.HEART) {
         runtimeState.activeSession = updated;
         ui_heartView.renderHeart();
     }
@@ -741,30 +867,49 @@ export async function persistHeartPartialPatch(patchKey, patch, fallbackBase, me
 
 export async function generateHeartSection(part) {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
-    if (!archive_library.requireWritableArchiveAction()) return;
     if (part === 'seasons') return void generateHeartSeasonSection(runtimeState.activeSession.selectedSeason || 'postending');
     if (part === 'fireflies') return void generateHeartFirefliesSection();
     const normalizedPart = ['dialogues', 'strips'].includes(part) ? part : '';
     if (!normalizedPart) return;
-    const context = core_context.currentCharacterGuard();
-    const memoryBank = archive_repository.requireArchive(context);
-    const expectedChatId = core_context.getChatId(context);
-    const expectedArchiveRevision = memoryBank.archiveRevision;
-    const scope = core_context.chatScopeKey(context);
-    const origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
+    const targetHint = heartPreparationTargetHint();
+    let targetRuntime;
+    try { targetRuntime = await prepareHeartSubtaskRuntime(`part:${normalizedPart}`); }
+    catch (error) {
+        globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetHint, core_text.safeErrorSummary(error))), '心跳回忆');
+        return;
+    }
+    const { context, memoryBank, expectedChatId, expectedArchiveRevision, scope } = targetRuntime;
     const taskKey = `heart-part:${scope}:${normalizedPart}`;
     if (core_requestCoordinator.isGenerationTaskRunning(taskKey) || runtimeState.activeModeBuildScopes.has(taskKey)) {
-        globalThis.toastr?.info?.('这一项已经在生成中。', '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '这一项已经在生成中。'), '心跳回忆');
         return;
     }
     if (!core_requestCoordinator.canStartGenerationTask(taskKey)) {
-        globalThis.toastr?.info?.(`当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成。`, '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成。`), '心跳回忆');
         return;
     }
-    const base = structuredClone(runtimeState.activeSession);
-    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(base, memoryBank, normalizedPart);
+    let base = latestHeartSessionForRuntime(targetRuntime, runtimeState.activeSession);
+    let sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(base, memoryBank, normalizedPart);
     if (!sourceMemoryIds.length) {
-        globalThis.toastr?.info?.(`当前档案没有尚未用于${normalizedPart === 'dialogues' ? '时期对话' : '日常一格'}的新记忆。先增量更新档案，再来追加。`, '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前档案没有尚未用于${normalizedPart === 'dialogues' ? '时期对话' : '日常一格'}的新记忆。先增量更新档案，再来追加。`), '心跳回忆');
+        return;
+    }
+    let origin = targetRuntime.origin;
+    runtimeState.activeModeBuildScopes.add(taskKey);
+    core_requestCoordinator.registerArchiveTargetReservation(taskKey, targetRuntime, core_constants.MODE.HEART,
+        heartTargetMessage(targetRuntime, `角色互动生成中：${normalizedPart === 'dialogues' ? '时期对话' : '日常一格'}`));
+    try {
+    if (!await beginHeartSubtask(targetRuntime)) {
+        runtimeState.activeModeBuildScopes.delete(taskKey);
+        refreshHeartArchiveTarget(targetRuntime);
+        return;
+    }
+    base = latestHeartSessionForRuntime(targetRuntime, base);
+    sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(base, memoryBank, normalizedPart);
+    if (!sourceMemoryIds.length) {
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '另一项较新的任务已经覆盖这些新增记忆，本次没有重复生成。'), '心跳回忆');
+        runtimeState.activeModeBuildScopes.delete(taskKey);
+        refreshHeartArchiveTarget(targetRuntime);
         return;
     }
     const coverage = {
@@ -773,7 +918,7 @@ export async function generateHeartSection(part) {
         archiveMemoryIds: core_incremental.archiveMemoryIds(memoryBank),
         archiveRevision: memoryBank.archiveRevision,
     };
-    runtimeState.activeModeBuildScopes.add(taskKey);
+    origin = targetRuntime.origin;
     core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
     try {
         if (normalizedPart === 'dialogues') {
@@ -783,7 +928,7 @@ export async function generateHeartSection(part) {
                 { maxTokens: 4500, temperature: 0.4, context, origin, taskKey: `${taskKey}:dialogues`, mode: core_constants.MODE.HEART, background: true },
                 raw => normalizeHeartCoreIncrement(raw, memoryBank, sourceMemoryIds),
             );
-            await persistHeartPartialPatch('dialogues', { type: 'dialogues-increment', core, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+            await persistHeartPartialPatch('dialogues', { type: 'dialogues-increment', core, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
         } else {
             const strips = await requestHeartPart(
                 heartStripsPrompt(context, memoryBank, base, base, sourceMemoryIds),
@@ -793,40 +938,76 @@ export async function generateHeartSection(part) {
             );
             const batchId = core_incremental.incrementalBatchId('strips', sourceMemoryIds);
             const enriched = strips.map(item => ({ ...item, sourceArchiveMemoryIds: sourceMemoryIds, incrementBatchId: batchId, generatedAt: Date.now() }));
-            await persistHeartPartialPatch('strips', { type: 'strips', dailyStrips: enriched, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+            await persistHeartPartialPatch('strips', { type: 'strips', dailyStrips: enriched, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
         }
-        globalThis.toastr?.success?.(`角色互动已追加：${normalizedPart === 'dialogues' ? '时期对话' : '日常一格'}；旧内容保持不变。`, '心跳回忆');
+        globalThis.toastr?.success?.(heartTargetMessage(targetRuntime, `角色互动已追加：${normalizedPart === 'dialogues' ? '时期对话' : '日常一格'}；旧内容保持不变。`), '心跳回忆');
     } catch (error) {
-        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(error?.message || String(error)), '心跳回忆');
+        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心跳回忆');
     } finally {
         runtimeState.activeModeBuildScopes.delete(taskKey);
+        core_requestCoordinator.unregisterArchiveTargetReservation(taskKey);
         core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
+        refreshHeartArchiveTarget(targetRuntime);
+    }
+    } finally {
+        runtimeState.activeModeBuildScopes.delete(taskKey);
+        core_requestCoordinator.unregisterArchiveTargetReservation(taskKey);
+        core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
+        refreshHeartArchiveTarget(targetRuntime);
     }
 }
 
 export async function generateHeartFirefliesSection() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
-    if (!archive_library.requireWritableArchiveAction()) return;
-    const context = core_context.currentCharacterGuard();
-    const memoryBank = archive_repository.requireArchive(context);
-    const expectedChatId = core_context.getChatId(context);
-    const expectedArchiveRevision = memoryBank.archiveRevision;
-    const scope = core_context.chatScopeKey(context);
-    const origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
+    const targetHint = heartPreparationTargetHint();
+    let targetRuntime;
+    try { targetRuntime = await prepareHeartSubtaskRuntime('fireflies'); }
+    catch (error) {
+        globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetHint, core_text.safeErrorSummary(error))), '心跳回忆');
+        return;
+    }
+    const { context, expectedChatId, expectedArchiveRevision, scope } = targetRuntime;
+    let memoryBank = targetRuntime.memoryBank;
+    let origin = targetRuntime.origin;
     const taskKey = `heart-fireflies:${scope}`;
     if (core_requestCoordinator.isGenerationTaskRunning(taskKey) || runtimeState.activeModeBuildScopes.has(taskKey)) {
-        globalThis.toastr?.info?.('萤火虫栖息地正在点亮。', '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '萤火虫栖息地正在点亮。'), '心跳回忆');
         return;
     }
     if (!core_requestCoordinator.canStartGenerationTask(taskKey)) {
-        globalThis.toastr?.info?.(`当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成。`, '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成。`), '心跳回忆');
         return;
     }
-    const base = structuredClone(runtimeState.activeSession);
-    const hasExisting = Array.isArray(base.fireflyVoices) && base.fireflyVoices.length > 0;
-    const legacyBatch = legacyFireflyVoices(base).slice(0, 6);
+    // A pure no-op must not advance the persistent HEART write fence. Inspect the freshly
+    // revalidated preflight cache first, then repeat the decision after the real claim.
+    let base = latestHeartSessionForRuntime(targetRuntime, runtimeState.activeSession);
+    let hasExisting = Array.isArray(base?.fireflyVoices) && base.fireflyVoices.length > 0;
+    let legacyBatch = legacyFireflyVoices(base).slice(0, 6);
+    let existingFireflyCursor = core_incremental.incrementalPartRecord(base, 'fireflies');
+    let sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(base, memoryBank, 'fireflies');
+    if (!legacyBatch.length && hasExisting && base.fireflyVoices.length >= core_constants.HEART_FIREFLY_MAX_ITEMS) {
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `萤火虫栖息地已经收集到 ${core_constants.HEART_FIREFLY_MAX_ITEMS} 个心声光点；旧光点不会自动删除。`), '心跳回忆');
+        return;
+    }
+    if (!legacyBatch.length && hasExisting && existingFireflyCursor && !sourceMemoryIds.length) {
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '当前档案没有新的关系进展可用于解锁萤火虫。先增量更新档案，再来点亮新的光点。'), '心跳回忆');
+        return;
+    }
+    runtimeState.activeModeBuildScopes.add(taskKey);
+    core_requestCoordinator.registerArchiveTargetReservation(taskKey, targetRuntime, core_constants.MODE.HEART,
+        heartTargetMessage(targetRuntime, '角色互动生成中：萤火虫栖息地'));
+    try {
+    if (!await beginHeartSubtask(targetRuntime)) {
+        runtimeState.activeModeBuildScopes.delete(taskKey);
+        refreshHeartArchiveTarget(targetRuntime);
+        return;
+    }
+    origin = targetRuntime.origin;
+    memoryBank = targetRuntime.memoryBank;
+    base = latestHeartSessionForRuntime(targetRuntime, base);
+    hasExisting = Array.isArray(base?.fireflyVoices) && base.fireflyVoices.length > 0;
+    legacyBatch = legacyFireflyVoices(base).slice(0, 6);
     if (legacyBatch.length) {
-        runtimeState.activeModeBuildScopes.add(taskKey);
         core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
         try {
             const upgraded = await requestHeartPart(
@@ -835,36 +1016,49 @@ export async function generateHeartFirefliesSection() {
                 { maxTokens: 5200, temperature: 0.72, context, origin, taskKey: `${taskKey}:upgrade`, mode: core_constants.MODE.HEART, background: true },
                 raw => normalizeFireflyUpgradePart(raw, legacyBatch),
             );
-            const result = await persistHeartPartialPatch('firefly-upgrade', { type: 'firefly-upgrade', fireflyVoices: upgraded }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+            const result = await persistHeartPartialPatch('firefly-upgrade', { type: 'firefly-upgrade', fireflyVoices: upgraded }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
             const remain = legacyFireflyVoices(result.updated || base).length;
-            globalThis.toastr?.success?.(`已升级 ${upgraded.length} 个旧光点为追加约会会话${remain ? `，还剩 ${remain} 个可继续升级` : '，旧版独白光点已全部升级'}.`, '心跳回忆');
+            globalThis.toastr?.success?.(heartTargetMessage(targetRuntime, `已升级 ${upgraded.length} 个旧光点为追加约会会话${remain ? `，还剩 ${remain} 个可继续升级` : '，旧版独白光点已全部升级'}.`), '心跳回忆');
         } catch (error) {
-            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(error?.message || String(error)), '心跳回忆');
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心跳回忆');
         } finally {
             runtimeState.activeModeBuildScopes.delete(taskKey);
             core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
+            refreshHeartArchiveTarget(targetRuntime);
         }
         return;
     }
     if (hasExisting && base.fireflyVoices.length >= core_constants.HEART_FIREFLY_MAX_ITEMS) {
-        globalThis.toastr?.info?.(`萤火虫栖息地已经收集到 ${core_constants.HEART_FIREFLY_MAX_ITEMS} 个心声光点；旧光点不会自动删除。`, '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `萤火虫栖息地已经收集到 ${core_constants.HEART_FIREFLY_MAX_ITEMS} 个心声光点；旧光点不会自动删除。`), '心跳回忆');
+        runtimeState.activeModeBuildScopes.delete(taskKey);
+        refreshHeartArchiveTarget(targetRuntime);
         return;
     }
-    const existingFireflyCursor = core_incremental.incrementalPartRecord(base, 'fireflies');
+    existingFireflyCursor = core_incremental.incrementalPartRecord(base, 'fireflies');
     if (hasExisting && !existingFireflyCursor) {
         const migrated = core_incremental.stampIncrementalCoverage(structuredClone(base), base, memoryBank, 'fireflies', core_incremental.archiveMemoryIds(memoryBank), 0);
         migrated.chatId = expectedChatId;
         migrated.archiveRevision = expectedArchiveRevision;
-        if (core_cache.saveSession(core_constants.MODE.HEART, migrated, expectedChatId)) {
-            runtimeState.activeSession = migrated;
-            ui_heartView.renderHeart();
+        try {
+            const persisted = await persistHeartWholeSession(migrated, targetRuntime, origin);
+            const sameTargetVisible = !targetRuntime.archiveTarget
+                || runtimeState.activeArchiveSnapshot?.entryId === targetRuntime.archiveTarget.entryId;
+            if (persisted && sameTargetVisible && runtimeState.activeSession?.kind === core_constants.MODE.HEART) {
+                runtimeState.activeSession = persisted;
+                ui_heartView.renderHeart();
+            }
+            globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '已把旧版萤火虫保存为永久解锁基线。之后档案出现新的 Mxxx 时，只会继续追加新光点。'), '心跳回忆');
+        } finally {
+            runtimeState.activeModeBuildScopes.delete(taskKey);
+            refreshHeartArchiveTarget(targetRuntime);
         }
-        globalThis.toastr?.info?.('已把旧版萤火虫保存为永久解锁基线。之后档案出现新的 Mxxx 时，只会继续追加新光点。', '心跳回忆');
         return;
     }
-    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(base, memoryBank, 'fireflies');
+    sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(base, memoryBank, 'fireflies');
     if (hasExisting && !sourceMemoryIds.length) {
-        globalThis.toastr?.info?.('当前档案没有新的关系进展可用于解锁萤火虫。先增量更新当前窗口档案，再来点亮新的光点。', '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '较新的任务已经覆盖当前关系进展，本次没有重复请求。'), '心跳回忆');
+        runtimeState.activeModeBuildScopes.delete(taskKey);
+        refreshHeartArchiveTarget(targetRuntime);
         return;
     }
     const coverage = {
@@ -874,7 +1068,6 @@ export async function generateHeartFirefliesSection() {
         archiveMemoryIds: core_incremental.archiveMemoryIds(memoryBank),
         archiveRevision: memoryBank.archiveRevision,
     };
-    runtimeState.activeModeBuildScopes.add(taskKey);
     core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
     try {
         const voices = await requestHeartPart(
@@ -890,15 +1083,23 @@ export async function generateHeartFirefliesSection() {
             incrementBatchId: batchId,
             generatedAt: Date.now(),
         }));
-        const result = await persistHeartPartialPatch('fireflies', { type: 'fireflies', fireflyVoices: enriched, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+        const result = await persistHeartPartialPatch('fireflies', { type: 'fireflies', fireflyVoices: enriched, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
         const total = result.updated?.fireflyVoices?.length || base.fireflyVoices?.length || 0;
         const addedNow = Math.max(0, total - (base.fireflyVoices?.length || 0));
-        globalThis.toastr?.success?.(hasExisting ? `新增 ${addedNow} 个萤火虫心声；旧光点继续保留，共 ${total} 个。` : `萤火虫栖息地已点亮 ${total} 个心声光点。`, '心跳回忆');
+        globalThis.toastr?.success?.(heartTargetMessage(targetRuntime, hasExisting ? `新增 ${addedNow} 个萤火虫心声；旧光点继续保留，共 ${total} 个。` : `萤火虫栖息地已点亮 ${total} 个心声光点。`), '心跳回忆');
     } catch (error) {
-        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(error?.message || String(error)), '心跳回忆');
+        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心跳回忆');
     } finally {
         runtimeState.activeModeBuildScopes.delete(taskKey);
+        core_requestCoordinator.unregisterArchiveTargetReservation(taskKey);
         core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
+        refreshHeartArchiveTarget(targetRuntime);
+    }
+    } finally {
+        runtimeState.activeModeBuildScopes.delete(taskKey);
+        core_requestCoordinator.unregisterArchiveTargetReservation(taskKey);
+        core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
+        refreshHeartArchiveTarget(targetRuntime);
     }
 }
 
@@ -925,27 +1126,38 @@ export function nextHeartDramaBatchId(session, season) {
 
 export async function generateHeartSeasonSection(season) {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
-    if (!archive_library.requireWritableArchiveAction()) return;
     const allowed = new Set(['postending', 'spring', 'summer', 'autumn', 'winter']);
     const normalizedSeason = allowed.has(season) ? season : '';
     if (!normalizedSeason) return;
-    const context = core_context.currentCharacterGuard();
-    const memoryBank = archive_repository.requireArchive(context);
-    const expectedChatId = core_context.getChatId(context);
-    const expectedArchiveRevision = memoryBank.archiveRevision;
-    const scope = core_context.chatScopeKey(context);
-    const origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
+    const targetHint = heartPreparationTargetHint();
+    let targetRuntime;
+    try { targetRuntime = await prepareHeartSubtaskRuntime(`season:${normalizedSeason}`); }
+    catch (error) {
+        globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetHint, core_text.safeErrorSummary(error))), '心跳回忆');
+        return;
+    }
+    const { context, memoryBank, expectedChatId, expectedArchiveRevision, scope } = targetRuntime;
     const taskKey = `heart-season:${scope}:${normalizedSeason}`;
     if (core_requestCoordinator.isGenerationTaskRunning(taskKey) || runtimeState.activeModeBuildScopes.has(taskKey)) {
-        globalThis.toastr?.info?.(`${ui_heartView.heartSeasonLabel(normalizedSeason)}正在生成中。`, '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `${ui_heartView.heartSeasonLabel(normalizedSeason)}正在生成中。`), '心跳回忆');
         return;
     }
     if (!core_requestCoordinator.canStartGenerationTask(taskKey)) {
-        globalThis.toastr?.info?.(`当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成。`, '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成。`), '心跳回忆');
         return;
     }
-    const base = structuredClone(runtimeState.activeSession);
-    const latestSession = () => core_cache.loadSession(core_constants.MODE.HEART, { context, chatId: expectedChatId, memoryBank, clone: true }) || structuredClone(base);
+    let origin = targetRuntime.origin;
+    runtimeState.activeModeBuildScopes.add(taskKey);
+    core_requestCoordinator.registerArchiveTargetReservation(taskKey, targetRuntime, core_constants.MODE.HEART,
+        heartTargetMessage(targetRuntime, `角色互动生成中：${ui_heartView.heartSeasonLabel(normalizedSeason)} Drama`));
+    try {
+    if (!await beginHeartSubtask(targetRuntime)) {
+        runtimeState.activeModeBuildScopes.delete(taskKey);
+        refreshHeartArchiveTarget(targetRuntime);
+        return;
+    }
+    const base = latestHeartSessionForRuntime(targetRuntime, runtimeState.activeSession);
+    const latestSession = () => latestHeartSessionForRuntime(targetRuntime, base);
     const batchId = nextHeartDramaBatchId(base, normalizedSeason);
     const enrichVoice = item => ({
         ...item,
@@ -960,7 +1172,7 @@ export async function generateHeartSeasonSection(season) {
         generatedAt: Date.now(),
     });
 
-    runtimeState.activeModeBuildScopes.add(taskKey);
+    origin = targetRuntime.origin;
     core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
     const errors = [];
     let savedParts = 0;
@@ -974,7 +1186,7 @@ export async function generateHeartSeasonSection(season) {
                     { maxTokens: 3800, temperature: 0.65, context, origin, taskKey: `${taskKey}:voice`, mode: core_constants.MODE.HEART, background: true },
                     raw => normalizeVoiceDramaPart(raw, ['postending']),
                 ))[0]);
-                await persistHeartPartialPatch(`season:postending:${batchId}:voice`, { type: 'season', season: 'postending', voice }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+                await persistHeartPartialPatch(`season:postending:${batchId}:voice`, { type: 'season', season: 'postending', voice }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
                 savedParts += 1;
             } catch (error) {
                 errors.push(error);
@@ -992,7 +1204,7 @@ export async function generateHeartSeasonSection(season) {
                         { maxTokens: 3000, temperature: 0.65, context, origin, taskKey: `${taskKey}:voice`, mode: core_constants.MODE.HEART, background: true },
                         raw => normalizeVoiceDramaPart(raw, [normalizedSeason]),
                     ))[0]);
-                    await persistHeartPartialPatch(`season:${normalizedSeason}:${batchId}:voice`, { type: 'season', season: normalizedSeason, voice }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+                    await persistHeartPartialPatch(`season:${normalizedSeason}:${batchId}:voice`, { type: 'season', season: normalizedSeason, voice }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
                     savedParts += 1;
                     latest = latestSession();
                 } catch (error) {
@@ -1009,7 +1221,7 @@ export async function generateHeartSeasonSection(season) {
                         { maxTokens: 3200, temperature: 0.65, context, origin, taskKey: `${taskKey}:scenario`, mode: core_constants.MODE.HEART, background: true },
                         raw => normalizeScenarioDramaPart(raw, normalizedSeason),
                     ))[0]);
-                    await persistHeartPartialPatch(`season:${normalizedSeason}:${batchId}:scenario`, { type: 'season', season: normalizedSeason, scenario }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision);
+                    await persistHeartPartialPatch(`season:${normalizedSeason}:${batchId}:scenario`, { type: 'season', season: normalizedSeason, scenario }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
                     savedParts += 1;
                 } catch (error) {
                     errors.push(error);
@@ -1019,15 +1231,23 @@ export async function generateHeartSeasonSection(season) {
 
         if (errors.length && !savedParts) throw errors[0];
         if (errors.length) {
-            globalThis.toastr?.warning?.(`${ui_heartView.heartSeasonLabel(normalizedSeason)}已保存成功部分；再次点击会补完本次缺失部分。`, '心跳回忆');
+            globalThis.toastr?.warning?.(heartTargetMessage(targetRuntime, `${ui_heartView.heartSeasonLabel(normalizedSeason)}已保存成功部分；再次点击会补完本次缺失部分。`), '心跳回忆');
         } else {
-            globalThis.toastr?.success?.(`已追加：${ui_heartView.heartSeasonLabel(normalizedSeason)}未来日常 Drama。`, '心跳回忆');
+            globalThis.toastr?.success?.(heartTargetMessage(targetRuntime, `已追加：${ui_heartView.heartSeasonLabel(normalizedSeason)}未来日常 Drama。`), '心跳回忆');
         }
     } catch (error) {
-        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(error?.message || String(error)), `心跳回忆 · ${ui_heartView.heartSeasonLabel(normalizedSeason)} Drama`);
+        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), `心跳回忆 · ${ui_heartView.heartSeasonLabel(normalizedSeason)} Drama`);
     } finally {
         runtimeState.activeModeBuildScopes.delete(taskKey);
+        core_requestCoordinator.unregisterArchiveTargetReservation(taskKey);
         core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
+        refreshHeartArchiveTarget(targetRuntime);
+    }
+    } finally {
+        runtimeState.activeModeBuildScopes.delete(taskKey);
+        core_requestCoordinator.unregisterArchiveTargetReservation(taskKey);
+        core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
+        refreshHeartArchiveTarget(targetRuntime);
     }
 }
 

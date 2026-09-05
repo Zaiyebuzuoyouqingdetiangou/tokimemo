@@ -6,10 +6,10 @@
 
 必须保持以下不变量：
 
-1. 模型输出只作为结构化数据解析，不作为 HTML / CSS / JavaScript 执行。
-2. DOM 动态文本必须经过转义或使用 `textContent`。
+1. 模型输出只作为结构化数据解析，不作为 HTML / CSS / JavaScript 执行；用于 class/data 属性的枚举在最终 renderer sink 还必须重新经过代码白名单。
+2. DOM 动态文本必须经过转义或使用 `textContent`。HTML 实体转义不能代替 class token 白名单，两道边界必须同时存在。
 3. “过去已经发生”的内容必须来自用户最后一次手动创建/更新的聊天档案。
-4. 与 {{user}} 有关的既往物件、事件、CG、房间痕迹和每日生活旧痕迹必须有有效 `sourceMemoryIds`，并通过被引用记忆 `anchors/title` 的 `sourceMemoryAnchor` 证据校验。
+4. 与 {{user}} 有关的既往物件、事件、CG、房间痕迹和每日生活旧痕迹必须有有效 `sourceMemoryIds`，并通过被引用记忆 `anchors/title` 的 exact `sourceMemoryAnchor` 证据校验。Room 提及用户后的自由设定叙事必须逐分句证明为有限当前态；“今天/现在”不能替同句或相邻分句中的过去片段获得权限。Room 每日生活的锚点还必须原样出现在对应可见叙事中；只填无关 Mxxx 不得授权历史断言。
 5. 聊天新增、编辑、删除不会自动重写聊天档案；只有用户手动更新档案才改变档案版本。
 6. 房间可以按现实时间自动变化，但不得借此读取尚未归档的新聊天。
 7. 每日生活模型输出不得提供任意 CSS、URL 或脚本；视觉状态只能使用代码白名单枚举。
@@ -46,13 +46,13 @@ Profile 凭据由 SillyTavern Secrets / Connection Manager 持有，插件只保
 
 21. 外部记忆桥接只允许在用户显式“自动读取”、文件预览/确认，或“创建/更新档案”消费已经确认的当前聊天来源账本时运行；确认文件不得顺带授权第三方扫描。CG / ADV / 房间（含物品/私人终端深层视图）/ 蝴蝶效应 / ENDING / HEART 不得直接读取外部记忆服务。
 22. 每个 provider 必须绑定发起任务时的 `chatId`；任何 await 返回后如果当前 `chatId` 变化，数据必须丢弃/中止。
-23. EverMind 适配器只允许读取当前聊天 metadata 中的 `st_evermind.group_id`；禁止读取或搜索 `char_group_id` / 角色级跨聊天记忆。
-24. 外部 provider 凭据不得复制到心跳回忆 extension settings、chat metadata、日志、DOM、Prompt 或错误文本。对 EverMind 的现有明文 key 仅允许作为一次 `/proxy` 请求的瞬时 Authorization header；目标必须是 HTTPS，HTTP 只允许 URL 解析后的 `localhost`、`127.0.0.0/8` 或 `::1` loopback。
+23. 自动读取只允许两个已登记入口：当前聊天的精确 `1_memory` 数据，以及精确 `globalThis.STBaiBaiBook` Public API v1。不得读取 EverMind 私有 settings / metadata / API Key，也不得扫描任意 `extensionPrompts`、`chatMetadata`、脚本路径或全局对象后猜测记忆来源。
+24. 外部 provider 凭据不得复制到心跳回忆 extension settings、chat metadata、来源账本、日志、DOM、Prompt 或错误文本。未登记插件只能由用户显式选择惰性 JSON / JSONL / TXT / Markdown 文件导入；文件确认不得顺带授权插件扫描。
 25. 外部记忆内容与 API 响应均视为不可信数据；进入心跳回忆档案前必须经过结构化模型抽取、真实 provider record ID 白名单校验以及 `sourceExternalAnchor` 逐字证据校验。
 26. 外部记忆桥接必须有独立条数/字符预算，不得因为 provider 数据规模绕过主生成输入预算。
 
-27. 第三方公开记忆 reader 必须由用户显式 opt-in，默认关闭。启用后只允许调用已加载插件主动暴露的 `getInjectedHistory()` / `getCurrentChatMemories()` / `getCurrentChatMemory()` / `getCurrentChatSummary()` / `getCurrentSummary()` 与可选 `getSnapshot()`；不得遍历其私有数据库、执行访问器 getter 或调用模型/记忆内容指定的函数。调用前后必须校验当前 chatId；若返回/快照显式携带的 chat ID 与任务 chatId 不同，整份来源拒绝。
-28. 公开记忆接口返回的文本、nodes、coverage、revision 都是不可信数据；只允许进入外部记忆归一化与证据抽取链，不能进入 HTML/CSS/脚本执行面。
+27. 已登记公开 reader 的名称、API 版本与能力必须精确匹配；不得退化为“只要有相似方法名就调用”。公开 DTO 只能读取自有 data descriptor，访问器 getter 项必须拒绝且将覆盖状态降级；调用前后必须校验当前 chatId，返回/快照显式携带的 chat ID 与任务 chatId 不同时整份来源拒绝。
+28. 公开记忆接口返回的文本、nodes、coverage、revision 都是不可信数据；只允许进入外部记忆归一化与证据抽取链，不能进入 HTML/CSS/脚本执行面。`complete` 与缺失楼层或 returned/total 不一致时必须降级为 partial，不能覆盖旧完整基线；遍历、条数与字符总量全部有界。
 29. “档案室一览”只允许以 `simple:true` 请求 SillyTavern 同源 `/api/characters/chats`；“只读单篇旧档案”只允许请求同源 `/api/chats/get`。目标 chat ID 必须来自本地档案索引或本轮服务器返回的 allowlist。查看旧档案不得隐式调用 `selectCharacterById/openCharacterChat`、不得改变宿主当前角色/聊天，也不得把返回的正文复制到 Heartbeat snapshot、Prompt 或 DOM；手动旧档案 discovery 可继续按明确用户操作使用 `metadata:true`。
 30. 蝴蝶效应外延节点属于显式模拟数据，不作为 archive evidence、不写回 `MEMORY_KEY`；取消外延 `sourceMemoryIds` 强制要求不得削弱相簿/ADV/房间实际既往事实的证据校验。
 31. “他的物品 / 私人终端”保留独立内部 session 仅作为房间深层缓存，但不得暴露为档案室主入口；所有 basis=“记忆”的内容仍必须通过 `sourceMemoryIds + sourceMemoryAnchor`。
@@ -465,6 +465,14 @@ The standalone `MODE.CALENDAR` is the only derived feature allowed to organize s
 - API 配置改变会增加 epoch、取消当前生成并清除模型缓存；即使 provider 忽略取消，返回后仍必须比较去敏配置 fingerprint，旧连接结果不得解析或保存。
 - HTTP 200 的 provider/Profile 错误包络仍按失败处理。只有明确的限流、超时或服务端状态才允许一次有界重试；缺少状态的泛化失败默认不重试，避免认证/配置错误产生重复付费请求。
 
+## r47.0 持久化、错误脱敏与表现层边界
+
+- 派生缓存即时持久化和本机备份恢复都继续绑定当前角色、chatId、`archiveRevision`、runtime lifecycle 与删除栅栏；不会因为页面切换而把 A 的结果写入 B。普通 bootstrap 不打开 IndexedDB。
+- Heartbeat 错误显示不回显 provider response body；HTML/Cloudflare 页面与凭据形态只保留安全分类、状态码等摘要。宿主自身生成的错误 UI 不由插件伪装为已拦截。
+- 主题自定义只接受严格 `#RRGGBB` 和有界 alpha；跟随宿主只读取标准 computed style，不读取第三方主题插件私有 DOM、设置、数据库或密钥。alpha 只生成卡片背景 token，不得写父级 `opacity`；文字颜色必须同时通过固体 surface 与已知 Heartbeat 底色上的合成 surface 对比度检查。关键 overlay、卡片、按钮、输入框和横排结构使用 ID-scoped 最终规则抵抗普通宿主 CSS 污染。
+- 出行载体、房间人物和私人终端新增枚举全部由本地白名单决定；动态文本继续转义。模型不能提供任意 HTML、CSS、JS、URL、class、SVG 指令或坐标。
+- r47.0 未解除 live-chat/origin/CAS 校验，也未新增反查用户隐私或跨聊天 ArchiveTarget 写入。
+
 ## r46.0 通用记忆、来源账本与待写回结果边界
 
 - 柏宝书注册适配只接受精确全局 `STBaiBaiBook` 与数字 `apiVersion === 1`。读取必须使用公开只读 DTO；完整历史优先，注入子集必须标为部分读取。history/snapshot 的 chat 与 revision 任一不一致时，允许稳定重读一次，仍不一致则整批拒绝。
@@ -474,3 +482,23 @@ The standalone `MODE.CALENDAR` is the only derived feature allowed to organize s
 - 未显式标记的世界书只能解释设定；只有用户标记为“历史摘要”的条目可以进入历史证据链，而且仍需结构化抽取、原始来源 ID 与逐字 anchor 校验，不能把纯设定/计划/假设变成过去事实。
 - durable deferred queue 只保存已完成、等待回到原角色/聊天写回的结构化结果，必须剔除 credential-shaped 字段并限制为最多 24 项、3.5 MB、7 天。每项保留 origin 与 archiveRevision；成功写入或永久冲突才 ACK，暂时持久化/备份/缓存写入失败不得丢弃。扩展销毁会阻止旧 lifecycle 继续入队，但不会删除已经持久化的待写回结果。
 - 明信片 sceneTheme 只接受代码白名单；模型不得提供 SVG/HTML/CSS/URL、颜色、坐标或 viewBox。固定 2:1 SVG 使用非裁切布局，地点文字只参与安全的旧缓存主题推断。
+
+## r49.0 跨档案、连接与表现层安全边界
+
+- ArchiveTarget 只能由用户在档案室明确选择的已存档案建立。请求前冻结 A 的角色槽、chatId、档案内容、`archiveRevision`、mode fence 与删除状态；返回后必须重新解析 A 并通过 CAS、revision、lifecycle、delete fence 与同模式 latest-wins，不能因当前聊天已经变成 B 而改写目标。
+- A 的上下文只由冻结的 A archive、A cache、A 角色卡、A Persona 与 A 激活世界书构建。B 的正文、Persona、世界书、档案和新消息均不进入请求；B 的普通 message 事件不会读取或恢复 A。
+- 持久化的 metadata、IndexedDB backup 与 deferred commit 共享角色/聊天/revision/origin 身份。扩展销毁会增加生命周期并清除活动预留；任何 await 之后的旧生命周期提交失败关闭。删除、重建和 revision 变化不能被相同 revision 的旧 cache/backup 绕过。
+- Profile 与 manual transport 具有独立配置指纹、epoch 和模型缓存。Profile B 不能复制、切换或借用正文 A；手动通道不能读取 A。凭据不进入 DOM、缓存、toast、console 或错误字符串；非 2xx/HTML/无效 JSON 只保留状态码、类型和安全来源信息。
+- 第三方记忆自动适配必须注册公开只读接口。r49 不再读取 EverMind 私有 extension settings、chat metadata 或 API Key，不代发其请求，也不枚举全局对象后按函数名猜测和调用未知 reader；历史来源账本不会因此被删除。柏宝书适配继续要求精确 `STBaiBaiBook` public API v1。
+- World Presentation 仅决定展示媒介，不授予事实。受控角色卡/当前世界书优先，其次是精确身份绑定且逐字复核的 Character Profile，再次为至少两段不重叠正式聊天档案；冲突、媒体/梦境/虚构限定、否定状态或证据不足均保持中性。相同过滤同时约束 map geography，防止旁路放大。
+- Holiday Card、Travel、Room、Terminal 的模型数据在本地按白名单重建；任意 HTML、CSS、JS、SVG/path、URL、class、坐标、事件处理器、缓存键与目标身份字段都会被丢弃。可见文本统一规范化和转义，SVG 只使用有界代码 primitive 与稳定 seed。
+- Room 的宠物所有权只接受当前角色的受控设定原文或 exact Mxxx。若受控设定明确某物种而候选遗漏该宠物，规范化必须失败并触发修复重试；不得静默提交空 `pets`，也不得由本地补造名字或故事。
+- 反查用户私人终端没有安全 schema 能可靠证明联系人、地址、账户、搜索记录等私人事实，因此 r49 不实现该写路径；不得用“模拟”标签掩盖真实隐私推断。
+- `heartbeatMemoriesArchiveV3` 与 `heartbeatMemoriesTheaterV3` 保持不变以迁移旧档案；这不是跨版本复用旧 runtime，manifest/index 的 `0.8.45-deep-review-r49.0` query 负责 bundle cache bust。
+
+## r48.0 节日贺卡安全边界
+
+- 贺卡只绑定 `occasionType=holiday` 的设定日期；本地 normalizer 拒绝生日、纪念日、普通设定日、缺失/歧义引用和无可见内容的卡片。
+- 模型输出只保留允许的 expression、medium、palette、stroke、flow、motifs 与 0–100 数值参数；HTML、CSS、SVG、path、URL 等任意字段不会进入持久数据。
+- SVG 图形完全由本地固定 primitive 生成，随机布局使用本地稳定种子；模型不能提供 path、事件处理器、URL 或脚本。所有可见文字在写入 HTML 前统一转义。
+- 节日贺卡属于派生缓存，不写入正式 Mxxx，不改变 archive/CAS/删除栅栏/12 MB/请求并发或 lazy bootstrap 边界，也不新增后台模型调用。

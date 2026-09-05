@@ -96,15 +96,26 @@ export function splitMemorySourceText(value) {
 
 export function normalizeMemorySourceCoverage(value = {}, fallbackStatus = 'partial') {
     const allowed = new Set(['complete', 'partial', 'truncated', 'failed']);
-    const status = allowed.has(value?.status) ? value.status : fallbackStatus;
+    let status = allowed.has(value?.status) ? value.status : fallbackStatus;
+    const returned = Math.max(0, Math.floor(Number(value?.returned) || 0));
+    const total = Number.isFinite(Number(value?.total)) ? Math.max(0, Math.floor(Number(value.total))) : null;
+    const missingAiFloors = Array.isArray(value?.missingAiFloors)
+        ? value.missingAiFloors.filter(item => Number.isInteger(Number(item))).slice(0, 5000).map(Number)
+        : [];
+    const contradictoryComplete = status === 'complete'
+        && (missingAiFloors.length > 0 || (total != null && returned !== total));
+    if (contradictoryComplete) status = 'partial';
+    const reasons = [];
+    const suppliedReason = core_text.normalizeText(value?.reason, 240);
+    if (suppliedReason) reasons.push(suppliedReason);
+    if (missingAiFloors.length) reasons.push(`缺少 ${missingAiFloors.length} 个应有摘要楼层`);
+    if (total != null && returned !== total) reasons.push(`来源声明 ${returned}/${total} 条，与 total 不一致`);
     return {
         status,
-        returned: Math.max(0, Math.floor(Number(value?.returned) || 0)),
-        total: Number.isFinite(Number(value?.total)) ? Math.max(0, Math.floor(Number(value.total))) : null,
-        reason: core_text.normalizeText(value?.reason, 240),
-        missingAiFloors: Array.isArray(value?.missingAiFloors)
-            ? value.missingAiFloors.filter(item => Number.isInteger(Number(item))).slice(0, 5000).map(Number)
-            : [],
+        returned,
+        total,
+        reason: core_text.normalizeText([...new Set(reasons)].join('；'), 240),
+        missingAiFloors,
     };
 }
 

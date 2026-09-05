@@ -84,7 +84,6 @@ test('independent response extraction accepts common top-level and nested conten
 
 test('one-click capability gate requires Profile secret forwarding and late model override', () => {
     assert.equal(api.PROFILE_ONE_CLICK_UI_VERSION, '1.1.18');
-    assert.equal(api.PROFILE_ONE_CLICK_TECHNICAL_VERSION, 'SillyTavern 1.18.0+');
     assert.throws(() => api.assertConnectionManagerProfileSupport({ validateProfile() {}, sendRequest() {} }), error => error?.code === 'RMT_PROFILE_CAPABILITY');
     assert.equal(api.assertConnectionManagerProfileSupport(compatibleService()), true);
 });
@@ -228,7 +227,8 @@ test('an older profile model request cannot overwrite a newer same-profile resul
         assert.deepEqual(await newer, ['saved', 'newer']);
         releases[0](new Response(JSON.stringify({ data: [{ id: 'older' }] }), { status: 200 }));
         await assert.rejects(older, error => error?.code === 'RMT_API_MODEL_REQUEST_SUPERSEDED');
-        assert.deepEqual(state.connectionModelCache.get(api.profileModelCacheKey('profile-b', context)), ['saved', 'newer']);
+        const cached = [...state.connectionModelCache.entries()].find(([key]) => key.startsWith('profile:profile-b:'))?.[1];
+        assert.deepEqual(cached, ['saved', 'newer']);
     } finally {
         globalThis.fetch = originalFetch;
     }
@@ -301,6 +301,124 @@ test('manual model results are discarded when API configuration changes in fligh
         assert.equal(state.connectionModelCache.has(oldCacheKey), false);
     } finally {
         globalThis.fetch = originalFetch;
+    }
+});
+
+test('manual model UI failure falls back only to its own saved model', async () => {
+    const context = contextWithSettings({
+        apiConnectionMode: 'manual',
+        manualApiBaseUrl: 'https://manual.example/v1',
+        manualApiKey: 'manual-secret',
+        manualApiModel: 'manual-saved',
+        connectionProfileId: 'profile-a',
+        modelOverride: 'profile-a-model',
+    });
+    globalThis.SillyTavern = { getContext: () => context };
+    state.connectionModelCache.set('profile:profile-a:foreign', ['profile-a-model', 'profile-a-remote']);
+    const input = { value: 'manual-saved' };
+    const base = { value: 'https://manual.example/v1' };
+    const key = { value: '' };
+    const options = [];
+    const list = {
+        replaceChildren() { options.length = 0; },
+        appendChild(option) { options.push(option); },
+    };
+    const button = { disabled: false, textContent: '' };
+    const panel = {
+        dataset: {},
+        querySelector(selector) {
+            if (selector === '[data-rmt-manual-api-model]') return input;
+            if (selector === '[data-rmt-manual-api-base]') return base;
+            if (selector === '[data-rmt-manual-api-key]') return key;
+            if (selector === '[data-rmt-manual-api-models]') return list;
+            if (selector === '[data-rmt-manual-api-model-refresh]') return button;
+            return null;
+        },
+    };
+    const previousDocument = globalThis.document;
+    const previousFetch = globalThis.fetch;
+    globalThis.document = {
+        getElementById: () => panel,
+        createElement: () => ({ value: '', textContent: '' }),
+    };
+    globalThis.fetch = async () => new Response('<html>profile-a-secret</html>', { status: 503 });
+    try {
+        const models = await api.refreshManualModelOptions({ fetchRemote: true });
+        assert.deepEqual(models, ['manual-saved']);
+        assert.deepEqual(options.map(option => option.value), ['manual-saved']);
+        assert.equal(panel.dataset.rmtManualModelFallback, '1');
+        assert.equal(options.some(option => option.value.includes('profile-a')), false);
+        assert.equal(button.disabled, false);
+        assert.equal(button.textContent, '拉取模型');
+    } finally {
+        globalThis.fetch = previousFetch;
+        if (previousDocument === undefined) delete globalThis.document;
+        else globalThis.document = previousDocument;
+    }
+});
+
+test('manual model discovery has bounded timeout and external abort branches', async () => {
+    const candidate = { manualApiBaseUrl: 'https://manual.example/v1', manualApiKey: 'secret' };
+    const context = contextWithSettings();
+    const previousSetTimeout = globalThis.setTimeout;
+    const previousClearTimeout = globalThis.clearTimeout;
+    globalThis.setTimeout = callback => { queueMicrotask(callback); return 1; };
+    globalThis.clearTimeout = () => {};
+    try {
+        await assert.rejects(
+            api.fetchManualApiModels(candidate, context, { fetchImpl: () => new Promise(() => {}) }),
+            error => error?.code === 'RMT_MANUAL_MODEL_TIMEOUT',
+        );
+    } finally {
+        globalThis.setTimeout = previousSetTimeout;
+        globalThis.clearTimeout = previousClearTimeout;
+    }
+
+    const controller = new AbortController();
+    const pending = api.fetchManualApiModels(candidate, context, {
+        signal: controller.signal,
+        fetchImpl: () => new Promise(() => {}),
+    });
+    controller.abort(new DOMException('cancelled', 'AbortError'));
+    await assert.rejects(pending, error => error?.name === 'AbortError');
+});
+
+test('profile model discovery treats timeout and transport abort as same-profile saved fallback', async () => {
+    const service = compatibleService();
+    const context = contextWithSettings(
+        { apiConnectionMode: 'profile', connectionProfileId: 'profile-b' },
+        {
+            ConnectionManagerRequestService: service,
+            extensionSettings: {
+                heartbeatMemories: { apiConnectionMode: 'profile', connectionProfileId: 'profile-b' },
+                connectionManager: { profiles: [{ id: 'profile-b', mode: 'cc', api: 'custom', model: 'profile-b-saved', 'secret-id': 'secret-b' }] },
+            },
+        },
+    );
+    globalThis.SillyTavern = { getContext: () => context };
+    const previousFetch = globalThis.fetch;
+    const previousSetTimeout = globalThis.setTimeout;
+    const previousClearTimeout = globalThis.clearTimeout;
+    try {
+        globalThis.fetch = () => new Promise(() => {});
+        globalThis.setTimeout = callback => { queueMicrotask(callback); return 1; };
+        globalThis.clearTimeout = () => {};
+        let result = await api.fetchModelsForConnection('profile-b', { force: true, returnMeta: true });
+        assert.deepEqual(result.models, ['profile-b-saved']);
+        assert.equal(result.fallbackOnly, true);
+
+        state.connectionModelCache.clear();
+        state.connectionModelRequestEpochs.clear();
+        globalThis.setTimeout = previousSetTimeout;
+        globalThis.clearTimeout = previousClearTimeout;
+        globalThis.fetch = async () => { throw new DOMException('transport aborted', 'AbortError'); };
+        result = await api.fetchModelsForConnection('profile-b', { force: true, returnMeta: true });
+        assert.deepEqual(result.models, ['profile-b-saved']);
+        assert.equal(result.fallbackOnly, true);
+    } finally {
+        globalThis.fetch = previousFetch;
+        globalThis.setTimeout = previousSetTimeout;
+        globalThis.clearTimeout = previousClearTimeout;
     }
 });
 

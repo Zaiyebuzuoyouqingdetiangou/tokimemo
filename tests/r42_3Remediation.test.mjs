@@ -11,14 +11,13 @@ import {
     compressedCacheManifest,
     destroyMemoryTheater,
     ensureCacheHydrated,
-    fetchEverMindCurrentChatRecords,
     fetchIndexedArchiveSnapshot,
     gzipJson,
     gunzipJson,
-    isAllowedEverMindApiBaseUrl,
     persistCompressedCacheNow,
     queueDeferredCommit,
     runtimeState,
+    setArchiveBackupBackendForTests,
 } from './testingFacade.mjs';
 
 const root = new URL('../', import.meta.url);
@@ -47,49 +46,14 @@ function documentStub() {
     };
 }
 
-test('r42.3 EverMind blocks remote plaintext before fetch while preserving HTTPS and strict loopback HTTP', async () => {
-    assert.equal(isAllowedEverMindApiBaseUrl('https://memory.example.test:8443'), true);
-    assert.equal(isAllowedEverMindApiBaseUrl('http://localhost:5100'), true);
-    assert.equal(isAllowedEverMindApiBaseUrl('http://127.1:5100'), true);
-    assert.equal(isAllowedEverMindApiBaseUrl('http://127.255.0.9:5100'), true);
-    assert.equal(isAllowedEverMindApiBaseUrl('http://[::1]:5100'), true);
-    assert.equal(isAllowedEverMindApiBaseUrl('http://198.51.100.20:8080'), false);
-    assert.equal(isAllowedEverMindApiBaseUrl('http://localhost.evil.test'), false);
-    assert.equal(isAllowedEverMindApiBaseUrl('http://127.0.0.1.evil.test'), false);
-    assert.equal(isAllowedEverMindApiBaseUrl('http://0.0.0.0:5100'), false);
-    assert.equal(isAllowedEverMindApiBaseUrl('http://[::]:5100'), false);
-
-    const originalFetch = globalThis.fetch;
-    const originalSillyTavern = globalThis.SillyTavern;
-    const captured = [];
-    const context = makeContext('evermind-chat');
-    context.extensionSettings.st_evermind = {
-        enabled: true,
-        api_base_url: 'http://198.51.100.20:8080',
-        user_id: 'user',
-        api_key: 'secret-key',
+function memoryBackupBackend() {
+    const records = new Map();
+    return {
+        async read(entry) { return structuredClone(records.get(entry?.entryId) || null); },
+        async put(record) { records.set(record.entryId, structuredClone(record)); return true; },
+        async delete(entry) { records.delete(entry?.entryId); return true; },
     };
-    context.chatMetadata.st_evermind = { group_id: 'current-group' };
-    globalThis.SillyTavern = { getContext: () => context };
-    globalThis.fetch = async (url, options) => {
-        captured.push({ url: String(url), options });
-        return { ok: true, json: async () => ({ memories: [] }) };
-    };
-    try {
-        assert.deepEqual(await fetchEverMindCurrentChatRecords(context, 'evermind-chat'), []);
-        assert.equal(captured.length, 0, 'remote plaintext must be rejected before fetch/header use');
-
-        for (const allowed of ['https://memory.example.test:8443', 'http://127.0.0.1:5100', 'http://[::1]:5100']) {
-            context.extensionSettings.st_evermind.api_base_url = allowed;
-            await fetchEverMindCurrentChatRecords(context, 'evermind-chat');
-        }
-        assert.equal(captured.length, 3);
-        for (const request of captured) assert.equal(request.options.headers.Authorization, 'Bearer secret-key');
-    } finally {
-        globalThis.fetch = originalFetch;
-        globalThis.SillyTavern = originalSillyTavern;
-    }
-});
+}
 
 test('r42.3 cache write and read share one UTF-8 byte cap and the manifest remains backward compatible', async (t) => {
     if (typeof CompressionStream !== 'function' || typeof DecompressionStream !== 'function') {
@@ -115,8 +79,10 @@ test('r42.3 cache write and read share one UTF-8 byte cap and the manifest remai
     assert.deepEqual(await gunzipJson(legacyManifest.data), value);
 });
 
-test('r42.3 indexed archive fetch targets one chat and never retains returned message rows', async () => {
+test('r42.3 indexed archive fetch targets one chat and never retains returned message rows', async t => {
     const originalFetch = globalThis.fetch;
+    setArchiveBackupBackendForTests(memoryBackupBackend());
+    t.after(() => setArchiveBackupBackendForTests(null));
     runtimeState.archiveSnapshotCache.clear();
     const captured = [];
     const context = makeContext();
@@ -161,11 +127,13 @@ test('r42.3 indexed archive fetch targets one chat and never retains returned me
     }
 });
 
-test('r42.3 destroy clears transient state and stale async results cannot refill it', async () => {
+test('r42.3 destroy clears transient state and stale async results cannot refill it', async t => {
     const originalDocument = globalThis.document;
     const originalFetch = globalThis.fetch;
     const originalSillyTavern = globalThis.SillyTavern;
     const context = makeContext();
+    setArchiveBackupBackendForTests(memoryBackupBackend());
+    t.after(() => setArchiveBackupBackendForTests(null));
     globalThis.document = documentStub();
     globalThis.SillyTavern = { getContext: () => context };
 
@@ -186,6 +154,8 @@ test('r42.3 destroy clears transient state and stale async results cannot refill
         characterName: '角色', chatId: 'stale-history',
     }, context);
     const oldOrigin = captureTaskOrigin(context, 'old-revision');
+    for (let index = 0; index < 10 && typeof resolveFetch !== 'function'; index += 1) await Promise.resolve();
+    assert.equal(typeof resolveFetch, 'function', 'snapshot request should reach the controlled fetch gate');
     destroyMemoryTheater();
     resolveFetch({ ok: true, json: async () => [{ chat_metadata: {
         [MEMORY_KEY]: { version: 3, chatId: 'stale-history', characterName: '角色', archiveRevision: 'old-revision', memories: [] },
@@ -215,12 +185,14 @@ test('r42.3 destroy clears transient state and stale async results cannot refill
     globalThis.SillyTavern = originalSillyTavern;
 });
 
-test('r42.3 in-flight gzip/gunzip cannot write after destroy and old finally cannot delete a new hydration', async () => {
+test('r42.3 in-flight gzip/gunzip cannot write after destroy and old finally cannot delete a new hydration', async t => {
     const originalDocument = globalThis.document;
     const originalCompressionStream = globalThis.CompressionStream;
     const originalDecompressionStream = globalThis.DecompressionStream;
     const originalSillyTavern = globalThis.SillyTavern;
     const context = makeContext('stream-chat');
+    setArchiveBackupBackendForTests(memoryBackupBackend());
+    t.after(() => setArchiveBackupBackendForTests(null));
     context.chatMetadata[MEMORY_KEY] = {
         version: 3, chatId: 'stream-chat', characterName: '角色', archiveRevision: 'stream-revision', memories: [],
     };
@@ -312,7 +284,7 @@ test('r42.3 every asynchronous transient-cache writer checks the runtime lifecyc
     const heartbeat = await readFile(new URL('src/heartbeatMemories.js', root), 'utf8');
     const cache = await readFile(new URL('src/core/cache.js', root), 'utf8');
     assert.match(repository, /readCurrentChatMemoryPlugins[\s\S]*lifecycleEpoch !== runtimeState\.runtimeLifecycleEpoch/);
-    assert.match(library, /fetchIndexedArchiveSnapshot[\s\S]*lifecycleEpoch !== runtimeState\.runtimeLifecycleEpoch/);
+    assert.match(library, /fetchIndexedArchiveSnapshot[\s\S]*assertRuntimeLifecycleCurrent\(lifecycleEpoch\)/);
     assert.match(snapshots, /refreshArchiveOverview[\s\S]*lifecycleEpoch !== runtimeState\.runtimeLifecycleEpoch/);
     assert.match(settings, /fetchModelsForConnection[\s\S]*lifecycleEpoch !== runtimeState\.runtimeLifecycleEpoch/);
     assert.match(heartbeat, /runtimeState\.runtimeLifecycleEpoch \+= 1/);

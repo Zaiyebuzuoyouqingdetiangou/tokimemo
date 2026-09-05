@@ -99,7 +99,7 @@ class DurableDeferredCommitMap extends Map {
     }
 
     reportFailure(error) {
-        this.lastPersistError = error instanceof Error ? error : new Error(String(error || '待写回结果无法持久化。'));
+        this.lastPersistError = error instanceof Error ? error : new Error('待写回结果无法持久化。');
         // Keep the last successfully persisted snapshot intact. A quota or serialization
         // failure for a newer result must never erase older recoverable commits.
         try { this.onError?.(this.lastPersistError); } catch {}
@@ -114,7 +114,7 @@ class DurableDeferredCommitMap extends Map {
         }
         let raw;
         try { raw = safeSerializedPayload([...this.entries()]); }
-        catch (error) { return this.reportFailure(new Error(`待写回结果无法序列化：${error?.message || error}`)); }
+        catch { return this.reportFailure(new Error('待写回结果无法序列化。')); }
         const bytes = byteLength(raw);
         if (bytes > DEFERRED_COMMIT_STORE_MAX_BYTES) {
             return this.reportFailure(new Error(`待写回结果超过 ${Math.round(DEFERRED_COMMIT_STORE_MAX_BYTES / 1_000_000 * 10) / 10} MB 安全上限。`));
@@ -124,8 +124,8 @@ class DurableDeferredCommitMap extends Map {
             else this.storage.removeItem?.(DEFERRED_COMMIT_STORE_KEY);
             this.lastPersistError = null;
             return true;
-        } catch (error) {
-            return this.reportFailure(new Error(`浏览器没有保存待写回结果：${error?.message || error}`));
+        } catch {
+            return this.reportFailure(new Error('浏览器没有保存待写回结果；可能是浏览器存储不可用或空间不足。'));
         }
     }
 
@@ -135,10 +135,26 @@ class DurableDeferredCommitMap extends Map {
         return this;
     }
 
+    replaceDurably(key, value) {
+        const normalizedKey = String(key || '').slice(0, 700);
+        const hadPrevious = super.has(normalizedKey);
+        const previous = super.get(normalizedKey);
+        super.set(normalizedKey, value);
+        if (!this.storage?.setItem) return true;
+        if (this.persistNow()) return true;
+        if (hadPrevious) super.set(normalizedKey, previous);
+        else super.delete(normalizedKey);
+        return false;
+    }
+
     delete(key) {
-        const removed = super.delete(key);
-        if (removed) this.persistNow();
-        return removed;
+        if (!super.has(key)) return false;
+        const previous = super.get(key);
+        super.delete(key);
+        if (!this.storage?.setItem) return true;
+        if (this.persistNow()) return true;
+        super.set(key, previous);
+        return false;
     }
 
     clear() {

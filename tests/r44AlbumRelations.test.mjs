@@ -25,6 +25,8 @@ import { ARCHIVE_INDEX_SETTINGS_KEY, ARCHIVE_CHARACTER_PROFILES_SETTINGS_KEY } f
 const context = { name1: '小月', name2: '佐伯' };
 const memoryBank = {
     archiveName: '小月与佐伯',
+    characterName: '佐伯',
+    userName: '小月',
     archiveSummary: '从试探走到相互确认的当前关系。',
     archiveKeywords: ['关系', '信赖'],
     memories: [
@@ -80,9 +82,12 @@ test('album relationship scan covers every archive record and validates both-sid
     assert.equal(slice.memories.at(-1)[0], 'M090');
 
     const normalized = normalizeAlbumRelationshipSnapshot(relationshipSnapshotRaw, memoryBank);
-    assert.equal(normalized.charState, relationshipSnapshotRaw.charState);
-    assert.equal(normalized.userState, relationshipSnapshotRaw.userState);
-    assert.equal(normalized.relationshipState, '稳定交往中');
+    assert.match(normalized.charState, /已经建立明确的双向亲密关系/);
+    assert.match(normalized.userState, /不额外补写小月的内心/);
+    assert.equal(normalized.relationshipState, '已确认双向亲密关系');
+    assert.match(normalized.relationshipSummary, /完整档案当前关系：已确认双向亲密关系/);
+    assert.match(normalized.relationshipSummary, /审计锚点：海边约定/);
+    assert.equal(normalized.relationshipTier, 3);
     assert.deepEqual(normalized.relationshipSourceMemoryIds, ['M002']);
     assert.throws(
         () => normalizeAlbumRelationshipSnapshot({ ...relationshipSnapshotRaw, relationshipSourceMemoryIds: ['M999'] }, memoryBank),
@@ -98,7 +103,7 @@ test('album comments are conditioned on the normalized scan, require 6-8 segment
     const snapshot = normalizeAlbumRelationshipSnapshot(relationshipSnapshotRaw, memoryBank);
     const prompt = albumCommentsPrompt(context, memoryBank, [albumEntry()], snapshot);
     assert.match(prompt, /CURRENT_RELATIONSHIP_SCAN_JSON/);
-    assert.match(prompt, /稳定交往中/);
+    assert.match(prompt, /已确认双向亲密关系/);
     assert.match(prompt, /6～8 段/);
     assert.match(prompt, /不得越过当前关系阶段/);
 
@@ -129,11 +134,11 @@ test('album orchestration is index then relationship scan then comments, while i
         relationshipSnapshot: { ...relationshipSnapshotRaw, relationshipState: '相互试探', relationshipSourceMemoryIds: ['M001'], relationshipSourceMemoryAnchor: '站台雨伞' },
     });
     const previous = { kind: 'album', title: '旧相簿', entries: [oldEntry], selectedId: 'CG_OLD', dialogueIndex: 3 };
-    const fresh = { kind: 'album', title: '新相簿', entries: [albumEntry({ id: 'CG_NEW' })] };
+    const fresh = normalizeAlbum({ title: '新相簿', entries: [albumEntry({ id: 'CG_NEW' })] }, memoryBank);
     const before = structuredClone(previous.entries[0]);
     const merged = mergeAlbumIncremental(previous, fresh, memoryBank);
     assert.deepEqual(merged.entries[0], before);
-    assert.equal(merged.entries[1].relationshipSnapshot.relationshipState, '稳定交往中');
+    assert.equal(merged.entries[1].relationshipSnapshot.relationshipState, '已确认双向亲密关系');
     assert.equal(merged.selectedId, 'CG_OLD');
     assert.equal(merged.dialogueIndex, 3);
 });

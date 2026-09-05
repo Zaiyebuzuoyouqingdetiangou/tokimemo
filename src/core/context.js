@@ -36,6 +36,17 @@ export function yieldToUi() {
     return new Promise(resolve => setTimeout(resolve, 0));
 }
 
+export function runtimeLifecycleStillCurrent(lifecycleEpoch) {
+    return Number(lifecycleEpoch) === runtimeState.runtimeLifecycleEpoch;
+}
+
+export function assertRuntimeLifecycleCurrent(lifecycleEpoch) {
+    if (!runtimeLifecycleStillCurrent(lifecycleEpoch)) {
+        throw new DOMException('Runtime destroyed', 'AbortError');
+    }
+    return true;
+}
+
 export async function buildChatSnapshot(context = currentCharacterGuard(), options = {}) {
     const rawChat = Array.isArray(context.chat) ? context.chat : [];
     const usable = [];
@@ -50,7 +61,13 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
         }
         return next >>> 0;
     };
-    const chatId = getChatId(context);
+    const chatId = comparableChatId(options.expectedChatId) || comparableChatId(getChatId(context));
+    const assertStillCurrent = () => {
+        if (typeof options.stillCurrent === 'function' && options.stillCurrent() === false) {
+            throw new DOMException('Chat changed', 'AbortError');
+        }
+    };
+    assertStillCurrent();
     fingerprint = mix(fingerprint, chatId);
     prefixFingerprint = mix(prefixFingerprint, chatId);
     for (let index = 0; index < rawChat.length; index += 1) {
@@ -70,7 +87,10 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
             fingerprint = mix(fingerprint, signature);
             if (usable.length <= prefixCount) prefixFingerprint = mix(prefixFingerprint, signature);
         }
-        if (index && index % 60 === 0) await yieldToUi();
+        if (index && index % 60 === 0) {
+            await yieldToUi();
+            assertStillCurrent();
+        }
     }
     const totalMessages = usable.length;
     fingerprint = mix(fingerprint, String(totalMessages));
@@ -92,6 +112,7 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
     const full = capMessages(usable);
     const incrementalRaw = prefixCount > 0 && totalMessages >= prefixCount ? usable.slice(prefixCount) : usable;
     const incremental = capMessages(incrementalRaw);
+    assertStillCurrent();
     return {
         chatId,
         totalMessages,
@@ -206,7 +227,9 @@ export function archiveEntryMatchesContextCharacter(entry, context = getContext(
     if (entryAvatar && currentAvatar && entryAvatar !== currentAvatar) return false;
     const entryHint = Number.isInteger(Number(entry?.characterIndexHint)) ? Number(entry.characterIndexHint) : -1;
     const currentHint = Number.isInteger(Number(context?.characterId)) ? Number(context.characterId) : -1;
-    if (entryHint >= 0) return entryHint === currentHint;
+    // A character slot is only a locator, never a complete identity proof. SillyTavern can
+    // reuse the same slot (and even the same avatar/chat filename) for a different card.
+    if (entryHint >= 0 && currentHint >= 0 && entryHint !== currentHint) return false;
     if (entryName && entryName !== '未命名角色' && currentName && entryName !== currentName) return false;
     const entryFingerprint = core_text.normalizeText(entry?.characterFingerprint, 160);
     const currentFingerprint = core_text.normalizeText(descriptor?.fingerprint, 160);
@@ -217,7 +240,7 @@ export function archiveEntryMatchesContextCharacter(entry, context = getContext(
             .filter(item => item?.fingerprint === entryFingerprint);
         if (sameFingerprint.length !== 1) return false;
     }
-    if (entryName || entryAvatar) return true;
+    if (entryName || entryAvatar || entryHint >= 0) return true;
     return core_text.normalizeText(entry?.characterKey, 300) === `character:${String(context?.characterId ?? '')}`;
 }
 
@@ -241,7 +264,22 @@ export function chatScopeKey(context = currentCharacterGuard(), chatId = getChat
 }
 
 export function captureTaskOrigin(context = currentCharacterGuard(), archiveRevision = '') {
+    const rawCache = context?.__rmtArchiveTargetEntryId
+        ? context?.chatMetadata?.[core_constants.CACHE_KEY]
+        : runtimeState.runtimeSessionCache.get(chatScopeKey(context)) || context?.chatMetadata?.[core_constants.CACHE_KEY];
+    const rawFences = rawCache && typeof rawCache === 'object' && rawCache[core_constants.MODE_WRITE_FENCES_CACHE_KEY]
+        && typeof rawCache[core_constants.MODE_WRITE_FENCES_CACHE_KEY] === 'object'
+        ? rawCache[core_constants.MODE_WRITE_FENCES_CACHE_KEY]
+        : {};
+    const modeWriteFences = Object.create(null);
+    for (const mode of Object.values(core_constants.MODE)) {
+        const fence = rawFences[mode];
+        const generation = Math.max(0, Math.floor(Number(fence?.generation) || 0));
+        const token = core_text.normalizeText(fence?.token, 160);
+        if (generation > 0 && token) modeWriteFences[mode] = { generation, token };
+    }
     return {
+        startedAt: Date.now(),
         lifecycleEpoch: runtimeState.runtimeLifecycleEpoch,
         characterKey: currentCharacterRuntimeKey(context),
         characterAvatar: currentCharacterAvatar(context),
@@ -249,6 +287,8 @@ export function captureTaskOrigin(context = currentCharacterGuard(), archiveRevi
         characterName: core_text.normalizeText(context.name2, 120),
         chatId: comparableChatId(getChatId(context)),
         archiveRevision: core_text.normalizeText(archiveRevision, 240),
+        archivePresent: !!core_text.normalizeText(archiveRevision, 240),
+        modeWriteFences,
     };
 }
 
@@ -265,7 +305,16 @@ export function deferredCommitOriginMatchesContext(origin, context = getContext(
         // slot and its avatar still agree, ordinary edits/renames are safe even when a
         // second card intentionally uses the same avatar. A different slot already
         // failed above, so cloned cards can never inherit each other's completed work.
-        if (originCharacterId) return true;
+        if (originCharacterId) {
+            const expectedRevision = core_text.normalizeText(origin.archiveRevision, 240);
+            const liveMemory = context?.chatMetadata?.[core_constants.MEMORY_KEY];
+            const liveCache = runtimeState.runtimeSessionCache.get(chatScopeKey(context))
+                || context?.chatMetadata?.[core_constants.CACHE_KEY];
+            const liveRevision = core_text.normalizeText(liveMemory?.archiveRevision || liveCache?.archiveRevision, 240);
+            return !!expectedRevision
+                && liveRevision === expectedRevision
+                && comparableChatId(liveMemory?.chatId || liveCache?.chatId) === comparableChatId(origin.chatId);
+        }
         const matches = (Array.isArray(context.characters) ? context.characters : []).filter((character, index) => {
             const avatar = core_text.normalizeText(character?.avatar || character?.data?.avatar, 300);
             return avatar === originAvatar && characterDescriptorExists(context, index);

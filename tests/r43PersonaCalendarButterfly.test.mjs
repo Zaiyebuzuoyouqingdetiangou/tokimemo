@@ -43,17 +43,20 @@ test('r43 calendar owns notes and todo state by collision-free date page', () =>
         past: [{ id: 'P1', title: '接她回家', tags: ['接送'], sourceMemoryIds: ['M001'], sourceMemoryAnchor: '接她回家' }],
         promised: [{ id: 'T1', date: '11/02', title: '去水族馆', tags: ['约定'], sourceMemoryIds: ['M002'], sourceMemoryAnchor: '11月2日水族馆' }],
         future: [
-            { id: 'A1', date: '10/24', title: '每年纪念', tags: ['纪念日'], sourceLabel: '世界书', recurring: true },
-            { id: 'F1', date: '2027/10/24', title: '校历活动', tags: ['设定日'], sourceLabel: '世界书', recurring: false },
+            { id: 'A1', date: '10/24', title: '每年纪念', tags: ['纪念日'], sourceLabel: '世界书', sourceEvidence: '每年纪念为 10/24', recurring: true },
+            { id: 'F1', date: '2027/10/24', title: '校历活动', tags: ['设定日'], sourceLabel: '世界书', sourceEvidence: '校历活动为 2027/10/24', recurring: false },
         ],
         stickyNotes: [
             { id: 'N1', kind: 'memo', title: '别迟到', text: '11月2日提前十分钟出门。', sourceType: 'archive', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '11月2日水族馆', calendarEntryId: 'T1' },
-            { id: 'N2', kind: 'special', title: '旧设定', text: '没有可信日期的稳定设定。', sourceType: 'setting', sourceLabel: '角色卡' },
+            { id: 'N2', kind: 'special', title: '旧设定', text: '没有可信日期的稳定设定。', sourceType: 'setting', sourceLabel: '角色卡', sourceEvidence: '没有可信日期的稳定设定。' },
         ],
-        moodNotes: [{ id: 'J1', text: '那天我一路都在看时间。', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '接她回家', calendarEntryId: 'P1' }],
-    }, memoryBank);
+        moodNotes: [{ id: 'J1', textMode: 'evidence-excerpt', text: '接她回家', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '接她回家', calendarEntryId: 'P1' }],
+    }, memoryBank, {
+        currentDate: '2026/10/01',
+        futureEvidenceText: '星历写明：每年纪念为 10/24。校历活动为 2027/10/24。没有可信日期的稳定设定。',
+    });
 
-    assert.equal(calendar.calendarVersion, 5);
+    assert.equal(calendar.calendarVersion, 6);
     assert.equal(calendarPageKeyForDate('2026/10/24'), 'date:2026/10/24');
     assert.equal(calendarPageKeyForDate('10/24'), 'annual:10/24');
     assert.equal(calendarPageKeyForDate('待定', { pendingId: 'T1' }), 'pending:T1');
@@ -108,6 +111,14 @@ test('r43 calendar refresh preserves old drafts and unassigned legacy content wi
 test('r43 calendar keeps equal sticky and mood text when the notes belong to different dates', () => {
     const sameStickyText = '同一句提醒也可能分别属于两天。';
     const sameMoodText = '同一句随笔也必须留在各自的日期页面里。';
+    const equalTextBank = {
+        ...memoryBank,
+        memories: memoryBank.memories.map(memory => ({
+            ...memory,
+            summary: `${memory.summary}${sameStickyText}`,
+            anchors: [...memory.anchors, sameMoodText],
+        })),
+    };
     const calendar = normalizeCalendar({
         past: [
             { id: 'P1', title: '接她回家', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '接她回家' },
@@ -119,11 +130,11 @@ test('r43 calendar keeps equal sticky and mood text when the notes belong to dif
             { id: 'SAME_PAGE_COPY', text: sameStickyText, sourceType: 'archive', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '接她回家' },
         ],
         moodNotes: [
-            { id: 'MOOD', text: sameMoodText, sourceMemoryIds: ['M001'], sourceMemoryAnchor: '接她回家' },
-            { id: 'MOOD', text: sameMoodText, sourceMemoryIds: ['M002'], sourceMemoryAnchor: '11月2日水族馆' },
-            { id: 'MOOD_SAME_PAGE_COPY', text: sameMoodText, sourceMemoryIds: ['M001'], sourceMemoryAnchor: '接她回家' },
+            { id: 'MOOD', textMode: 'evidence-excerpt', text: sameMoodText, sourceMemoryIds: ['M001'], sourceMemoryAnchor: sameMoodText },
+            { id: 'MOOD', textMode: 'evidence-excerpt', text: sameMoodText, sourceMemoryIds: ['M002'], sourceMemoryAnchor: sameMoodText },
+            { id: 'MOOD_SAME_PAGE_COPY', textMode: 'evidence-excerpt', text: sameMoodText, sourceMemoryIds: ['M001'], sourceMemoryAnchor: sameMoodText },
         ],
-    }, memoryBank);
+    }, equalTextBank);
 
     assert.equal(calendar.dayPages['date:2026/10/24'].stickyNotes[0].text, sameStickyText);
     assert.equal(calendar.dayPages['date:2026/10/25'].stickyNotes[0].text, sameStickyText);
@@ -136,10 +147,10 @@ test('r43 calendar keeps equal sticky and mood text when the notes belong to dif
 test('r43 calendar deterministically uniques duplicate entry and same-page collection ids without dropping rows', () => {
     const generated = normalizeCalendar({
         future: [
-            { id: 'DUP', date: '2027/03/01', title: '第一件事' },
-            { id: 'DUP', date: '2027/03/02', title: '第二件事' },
+            { id: 'DUP', date: '2027/03/01', title: '第一件事', sourceEvidence: '第一件事定于 2027/03/01' },
+            { id: 'DUP', date: '2027/03/02', title: '第二件事', sourceEvidence: '第二件事定于 2027/03/02' },
         ],
-    }, memoryBank);
+    }, memoryBank, { futureEvidenceText: '第一件事定于 2027/03/01；第二件事定于 2027/03/02' });
     assert.deepEqual(generated.entries.map(item => item.id), ['DUP', 'DUP_2']);
     assert.deepEqual(generated.entries.map(item => item.calendarEntrySourceId), ['DUP', 'DUP']);
     assert.deepEqual(generated.dayPages['date:2027/03/01'].entryIds, ['DUP']);
@@ -190,10 +201,10 @@ test('r43 calendar archive anchor date outranks a model date while setting notes
             },
             {
                 id: 'SETTING_DATE', text: '设定来源可以明确指定这一天。', date: '2099/12/31',
-                sourceType: 'setting', sourceLabel: '世界书',
+                sourceType: 'setting', sourceLabel: '世界书', sourceEvidence: '设定来源可以明确指定这一天。',
             },
         ],
-    }, memoryBank);
+    }, memoryBank, { futureEvidenceText: '设定来源可以明确指定这一天。' });
     assert.equal(calendar.dayPages['date:2026/10/24'].stickyNotes[0].id, 'ARCHIVE_WRONG_DATE');
     assert.equal(calendar.dayPages['date:2099/12/31'].stickyNotes[0].id, 'SETTING_DATE');
 });
@@ -250,9 +261,10 @@ test('r43 room visual profile is allowlisted, identity-bound and changes both ro
     };
     const swordsman = normalizeRoomVisualProfile(copiedTemplate, { identitySeed: '古代剑客·长发·深色劲装·木质院落', bindPersona: true });
     const android = normalizeRoomVisualProfile(copiedTemplate, { identitySeed: '赛博机器人·银白机体·技术制服·金属驾驶舱', bindPersona: true });
-    assert.notDeepEqual(
+    assert.deepEqual(
         { worldStyle: swordsman.worldStyle, palette: swordsman.palette, material: swordsman.material, figure: swordsman.figure },
         { worldStyle: android.worldStyle, palette: android.palette, material: android.material, figure: android.figure },
+        '没有受控逐项证据时，不得由身份关键词推测人物外貌',
     );
 
     const rawRoom = {
@@ -306,9 +318,9 @@ test('r43 phone accepts persona-specific app sets and starts at a real home scre
             messages: app.kind === 'chat' && index === 0 ? Array.from({ length: 12 }, (_, i) => ({ speakerRole: i % 2 ? 'owner' : 'contact', speaker: i % 2 ? '林砚' : '阿澄', text: `消息${i + 1}` })) : [],
         })) })),
     };
-    const session = normalizePhone(detailed, memoryBank);
+    const session = normalizePhone(detailed, memoryBank, { trustedStored: true });
     assert.equal(session.view, 'home');
-    assert.equal(session.uiVersion, 2);
+    assert.equal(session.uiVersion, 4);
     const viewSource = await readFile(new URL('../src/ui/phoneView.js', import.meta.url), 'utf8');
     assert.match(viewSource, /rmt-phone-home-screen/);
     assert.match(viewSource, /data-rmt-action="phone-home"/);

@@ -5,6 +5,7 @@ import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
+import * as core_presentExpression from '../core/presentExpression.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
@@ -92,21 +93,43 @@ export function normalizeAlbumRelationshipSnapshot(data, memoryBank) {
     if (!requestedIds.length || !exactAnchor) {
         throw new Error('回忆相簿的双方感情扫描缺少真实档案锚点。');
     }
-    const reference = core_evidence.normalizeMemoryReference(
-        requestedIds,
-        exactAnchor,
-        `${charState}\n${userState}\n${relationshipState}\n${relationshipSummary}`,
-        memoryBank,
-        1,
-    );
+    const reference = core_evidence.normalizeExactMemoryReference(requestedIds, exactAnchor, memoryBank, 1);
     if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) {
         throw new Error('回忆相簿的双方感情扫描缺少真实档案锚点。');
     }
+    // The model-selected citation is an audit trail, not permission to hide a later breakup or
+    // cherry-pick an earlier relationship peak. Current state is derived locally from the full
+    // ordered archive; relationshipExpressionTier ignores unrelated third-party clauses.
+    const tier = core_presentExpression.relationshipExpressionTier(memoryBank);
+    const owner = core_text.normalizeText(memoryBank?.characterName, 80) || '{{char}}';
+    const reader = core_text.normalizeText(memoryBank?.userName, 80) || '{{user}}';
+    const localState = [
+        {
+            charState: `完整档案尚未确认${owner}对${reader}的特殊感情。`,
+            userState: `完整档案尚未确认${reader}对${owner}的特殊感情。`,
+            relationshipState: '关系未确认',
+        },
+        {
+            charState: `完整档案确认${owner}与${reader}已有友好关系，不补写未表达的感情。`,
+            userState: `完整档案只确认双方友好，不推断${reader}未表达的内心。`,
+            relationshipState: '友好或同伴关系',
+        },
+        {
+            charState: `完整档案确认${owner}与${reader}关系亲近，但不自动升级为恋爱。`,
+            userState: `完整档案只确认双方亲近，不替${reader}补写恋爱回应。`,
+            relationshipState: '亲近但未确认恋爱',
+        },
+        {
+            charState: `完整档案确认${owner}与${reader}已经建立明确的双向亲密关系。`,
+            userState: `完整档案确认双方关系已由明确言行建立，不额外补写${reader}的内心。`,
+            relationshipState: '已确认双向亲密关系',
+        },
+    ][tier];
     return {
-        charState,
-        userState,
-        relationshipState,
-        relationshipSummary,
+        ...localState,
+        relationshipSummary: `完整档案当前关系：${localState.relationshipState}。审计锚点：${reference.sourceMemoryAnchor}。`,
+        relationshipTier: tier,
+        evidenceMode: 'full-archive-derived',
         relationshipSourceMemoryIds: reference.sourceMemoryIds,
         relationshipSourceMemoryAnchor: reference.sourceMemoryAnchor,
     };

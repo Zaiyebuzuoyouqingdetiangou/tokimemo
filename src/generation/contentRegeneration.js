@@ -165,10 +165,11 @@ async function regeneratePhoneApp(session, app, context, memoryBank, origin, tas
         entries: (app.entries || []).map(entry => ({ id: entry.id, title: entry.title, meta: entry.meta })),
     };
     const plan = phonePlanFromSession(session, planApp);
+    const presentationContext = await generation_client.buildWorldPresentationContext(context, memoryBank, core_constants.MODE.PHONE);
     const raw = await generation_client.requestValidatedSegment(
         modes_phone.phoneAppPrompt(context, memoryBank, plan, planApp),
-        `重新生成 App「${app.label}」…`, taskOptions(core_constants.MODE.PHONE, context, origin, `${taskKey}:app`, app.kind === 'chat' ? 12000 : 9000, 0.55),
-        data => modes_phone.normalizePhoneDraftApp(data, planApp, memoryBank, session.deviceKind),
+        `重新生成 App「${app.label}」…`, { ...taskOptions(core_constants.MODE.PHONE, context, origin, `${taskKey}:app`, app.kind === 'chat' ? 12000 : 9000, 0.55), contextEnvelope: presentationContext.contextEnvelope },
+        data => modes_phone.normalizePhoneDraftApp(data, planApp, memoryBank, session.deviceKind, null, { controlledEvidence: presentationContext.settingEvidence }),
     );
     return raw;
 }
@@ -176,10 +177,11 @@ async function regeneratePhoneApp(session, app, context, memoryBank, origin, tas
 async function regeneratePhoneEntry(session, app, entry, context, memoryBank, origin, taskKey) {
     const planApp = { id: app.id, label: app.label, kind: app.kind, summary: app.summary, incremental: true, entries: [{ id: entry.id, title: entry.title, meta: entry.meta }] };
     const plan = phonePlanFromSession(session, planApp);
+    const presentationContext = await generation_client.buildWorldPresentationContext(context, memoryBank, core_constants.MODE.PHONE);
     const raw = await generation_client.requestValidatedSegment(
         modes_phone.phoneAppPrompt(context, memoryBank, plan, planApp),
-        `重新生成「${entry.title}」…`, taskOptions(core_constants.MODE.PHONE, context, origin, `${taskKey}:entry`, 8000, 0.6),
-        data => modes_phone.normalizePhoneDraftApp(data, planApp, memoryBank, session.deviceKind),
+        `重新生成「${entry.title}」…`, { ...taskOptions(core_constants.MODE.PHONE, context, origin, `${taskKey}:entry`, 8000, 0.6), contextEnvelope: presentationContext.contextEnvelope },
+        data => modes_phone.normalizePhoneDraftApp(data, planApp, memoryBank, session.deviceKind, null, { controlledEvidence: presentationContext.settingEvidence }),
     );
     return raw.entries[0];
 }

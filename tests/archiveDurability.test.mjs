@@ -195,8 +195,12 @@ test('r42.6 explicit recreation clears the matching character tombstone and imme
     try {
         assert.equal(isCurrentCharacterDeletedFromLibrary(context), true);
         const recreated = { ...memory('recreated-chat', 'recreated-revision', '重新建立的档案'), createdAt: Date.now() };
+        const explicitOrigin = captureTaskOrigin(context, '');
+        explicitOrigin.startedAt = deletedAt + 1;
         await saveImportedMemory(context, recreated, 'recreated-chat', {
             expectedPreviousArchiveState: { present: false, revision: '' },
+            expectedTaskOrigin: explicitOrigin,
+            explicitCreate: true,
         });
         assert.equal(getDeletedArchiveCharacters(context).length, 0);
         assert.equal(isCurrentCharacterDeletedFromLibrary(context, recreated), false);
@@ -315,8 +319,12 @@ test('r42.5 legacy archive entry IDs remain the durable backup key and explicit 
         }), /deleted fence/);
 
         const replacement = memory('legacy-entry-chat', 'explicit-new-revision', '用户明确重新建档');
+        const explicitOrigin = captureTaskOrigin(context, '');
+        explicitOrigin.startedAt = Math.max(Date.now(), Number(backend.records.get(legacyEntry.entryId)?.deletedAt) + 1);
         await saveImportedMemory(context, replacement, 'legacy-entry-chat', {
             expectedPreviousArchiveState: { present: false, revision: '' },
+            expectedTaskOrigin: explicitOrigin,
+            explicitCreate: true,
         });
         assert.equal((await readArchiveBackup(legacyEntry)).archiveRevision, 'explicit-new-revision');
     } finally {
@@ -830,6 +838,7 @@ test('r46 deferred incremental archive retry is idempotent after its migrated ca
 
 test('r46 deferred sessions recheck character origin after hydration before saving', async () => {
     const originalSillyTavern = globalThis.SillyTavern;
+    const backend = makeBackupBackend();
     const contextA = makeContext('session-shared-chat');
     contextA.name2 = 'A';
     contextA.characters = [{ name: 'A', avatar: 'a.png', data: { name: 'A', avatar: 'a.png' } }];
@@ -842,6 +851,7 @@ test('r46 deferred sessions recheck character origin after hydration before savi
     contextB.chatMetadata[MEMORY_KEY] = bankB;
     let liveContext = contextA;
     globalThis.SillyTavern = { getContext: () => liveContext };
+    setArchiveBackupBackendForTests(backend);
     const scopeA = cacheScopeFromContext(contextA);
     const gate = Promise.withResolvers();
     runtimeState.cacheHydrationPromises.set(scopeA, gate.promise);
@@ -866,16 +876,19 @@ test('r46 deferred sessions recheck character origin after hydration before savi
         runtimeState.cacheHydrationPromises.clear();
         runtimeState.deferredChatCommits.clear();
         runtimeState.runtimeSessionCache.clear();
+        setArchiveBackupBackendForTests(null);
         globalThis.SillyTavern = originalSillyTavern;
     }
 });
 
 test('r46 a same-millisecond sessions result queued during hydration survives the older flush acknowledgement', async () => {
     const originalSillyTavern = globalThis.SillyTavern;
+    const backend = makeBackupBackend();
     const originalDateNow = Date.now;
     const context = makeContext('same-ms-chat');
     context.chatMetadata[MEMORY_KEY] = memory('same-ms-chat', 'same-rev', 'A');
     globalThis.SillyTavern = { getContext: () => context };
+    setArchiveBackupBackendForTests(backend);
     Date.now = () => 123_456;
     const scope = cacheScopeFromContext(context);
     const gate = Promise.withResolvers();
@@ -905,6 +918,7 @@ test('r46 a same-millisecond sessions result queued during hydration survives th
         runtimeState.cacheHydrationPromises.clear();
         runtimeState.deferredChatCommits.clear();
         runtimeState.runtimeSessionCache.clear();
+        setArchiveBackupBackendForTests(null);
         globalThis.SillyTavern = originalSillyTavern;
     }
 });

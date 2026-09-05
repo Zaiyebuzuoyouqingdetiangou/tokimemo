@@ -99,7 +99,15 @@ test('private terminal exposes an explicit mobile-visible incremental button in 
 });
 
 test('private terminal chat requires distinguishable owner/contact speakers and renders opposite sides', () => {
-    const chatBank = { ...memoryBank, characterName: '佐伯', userName: '小月' };
+    const chatEvidence = [
+        '佐伯与小月的晚间聊天。',
+        ...Array.from({ length: 12 }, (_, i) => `消息${i + 1}`),
+        ...Array.from({ length: 12 }, (_, i) => `双向消息${i + 1}`),
+    ].join('；');
+    const chatBank = {
+        characterName: '佐伯', userName: '小月',
+        memories: [{ id: 'MCHAT', title: '晚间聊天', anchors: ['晚间聊天'], summary: chatEvidence }],
+    };
     const planApp = {
         id: 'CHAT', label: '通讯', kind: 'chat', incremental: true, summary: '聊天',
         entries: [{ id: 'C1', title: '与小月聊天', meta: '夜里' }],
@@ -108,8 +116,8 @@ test('private terminal chat requires distinguishable owner/contact speakers and 
         app: {
             id: 'CHAT', entries: [{
                 id: 'C1', title: '与小月聊天', meta: '夜里', preview: '晚上的消息', detail: '', contactName: '小月',
-                messages: Array.from({ length: 12 }, (_, i) => ({ speaker: '对方', time: `21:${String(i).padStart(2, '0')}`, text: `消息${i + 1}` })),
-                fields: [], imageCaption: '', basis: '设定', sourceMemoryIds: [], sourceMemoryAnchor: '',
+                messages: Array.from({ length: 12 }, (_, i) => ({ speakerRole: 'contact', speaker: '小月', time: `21:${String(i).padStart(2, '0')}`, text: `消息${i + 1}` })),
+                fields: [], imageCaption: '', basis: '记忆', sourceMemoryIds: ['MCHAT'], sourceMemoryAnchor: '晚间聊天', sourceMemoryEvidence: chatEvidence,
             }],
         },
     };
@@ -407,10 +415,10 @@ test('incremental factual deltas reject old archive evidence before merge', () =
     const planApp = { id: 'NOTES', label: '备忘', kind: 'notes', incremental: true, summary: '新增备忘', entries: [{ id: 'N_NEW', title: '新增', meta: '' }] };
     const rawEntry = {
         id: 'N_NEW', title: '换标题的旧事件', preview: '站台雨伞旧事件。', detail: '仍然只是旧内容。', messages: [], fields: [], imageCaption: '',
-        basis: '记忆', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '站台雨伞',
+        basis: '记忆', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '站台雨伞', sourceMemoryEvidence: '两个人在雨夜一起回家。',
     };
     assert.throws(() => api.normalizePhoneDraftApp({ app: { id: 'NOTES', entries: [rawEntry] } }, planApp, memoryBank, 'phone', ['M002']), /详情不完整/);
-    const acceptedPhone = api.normalizePhoneDraftApp({ app: { id: 'NOTES', entries: [{ ...rawEntry, title: '海边新增', preview: '海边夕阳的新事件。', detail: '这是本轮新增内容。', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳' }] } }, planApp, memoryBank, 'phone', ['M002']);
+    const acceptedPhone = api.normalizePhoneDraftApp({ app: { id: 'NOTES', entries: [{ ...rawEntry, title: '海边新增', preview: '两个人在海边留下重要约定。', detail: '两个人在海边留下重要约定。', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳', sourceMemoryEvidence: '两个人在海边留下重要约定。' }] } }, planApp, memoryBank, 'phone', ['M002']);
     assert.deepEqual(acceptedPhone.entries[0].sourceMemoryIds, ['M002']);
 
     const archiveSlice = JSON.parse(api.incrementalArchiveSlice({ archiveName: '档案', archiveSummary: '旧档案总摘要不能进入增量请求', archiveKeywords: ['旧关键词'], memories: memoryBank.memories }, ['M002']));
@@ -558,17 +566,22 @@ test('phone delta appends entries while preserving every old App entry', () => {
         })),
     }));
     const raw = { title: '他的手机', deviceName: '私人手机', deviceKind: 'phone', lockText: 'LOCK', liveStates: { morning: {}, daytime: {}, evening: {}, night: {} }, apps };
-    const previous = api.normalizePhone(raw, memoryBank);
+    const previous = api.normalizePhone(raw, memoryBank, { trustedStored: true });
     previous.selectedAppId = 'NOTES';
     previous.selectedEntryId = 'NOTES1';
     previous.view = 'detail';
     const oldFirst = structuredClone(previous.apps[0].entries[0]);
+    oldFirst.legacyEvidenceUnverified = true;
+    previous.apps[0].entries[0].legacyEvidenceUnverified = true;
+    previous.apps[0].legacyEvidenceUnverified = true;
+    previous.legacyEvidenceUnverifiedCount = 1;
     const patch = [{ id: 'NOTES', kind: 'notes', entries: [{
-        id: 'NOTES_NEW', title: '海边之后', meta: '新增', preview: '新增预览', detail: '新增详情', messages: [], fields: [], imageCaption: '',
-        basis: '记忆', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳',
+        id: 'NOTES_NEW', title: '海边之后', meta: '新增', preview: '两个人在海边留下重要约定。', detail: '两个人在海边留下重要约定。', messages: [], fields: [], imageCaption: '',
+        basis: '记忆', sourceMemoryIds: ['M002'], sourceMemoryAnchor: '海边夕阳', sourceMemoryEvidence: '两个人在海边留下重要约定。',
     }] }];
     const merged = api.mergePhoneIncremental(previous, patch, memoryBank).session;
     assert.deepEqual(merged.apps[0].entries[0], oldFirst);
+    assert.equal(merged.apps[0].entries[0].legacyEvidenceUnverified, true);
     assert.equal(merged.apps.find(app => app.id === 'NOTES').entries.at(-1).title, '海边之后');
     assert.equal(merged.selectedAppId, 'NOTES');
     assert.equal(merged.selectedEntryId, 'NOTES1');
@@ -954,14 +967,22 @@ test('phone continuation draft keeps only bounded normalized App fields', () => 
         id: 'CHAT', label: '通讯', kind: 'chat', summary: '联系人',
         entries: [{ id: 'C1', title: '甲', meta: '' }, { id: 'C2', title: '乙', meta: '' }, { id: 'C3', title: '丙', meta: '' }],
     };
-    const messages = Array.from({ length: 12 }, (_, i) => ({ speaker: i % 2 ? '角色' : '朋友', time: '21:00', text: `消息${i + 1}` }));
+    const draftEvidence = ['佐伯与小月的通讯记录。', ...Array.from({ length: 12 }, (_, i) => `消息${i + 1}`)].join('；');
+    const draftBank = {
+        characterName: '佐伯', userName: '小月',
+        memories: [{ id: 'MCHAT', title: '通讯记录', anchors: ['通讯记录'], summary: draftEvidence }],
+    };
+    const messages = Array.from({ length: 12 }, (_, i) => ({
+        speakerRole: i % 2 ? 'owner' : 'contact', speaker: i % 2 ? '佐伯' : '小月', time: '21:00', text: `消息${i + 1}`,
+    }));
     const raw = { app: {
         id: 'CHAT', label: '模型乱改的标签', kind: 'chat', summary: '通讯摘要', unknownHtml: '<script>alert(1)</script>',
         entries: planApp.entries.map((entry, index) => ({
-            ...entry, preview: `预览${index}`, detail: `详情${index}`, messages: index < 2 ? messages : [], fields: [], imageCaption: '', basis: '设定', sourceMemoryIds: [], sourceMemoryAnchor: '', unknown: { nested: true },
+            ...entry, preview: draftEvidence, detail: draftEvidence, messages, fields: [], imageCaption: '', basis: '记忆',
+            sourceMemoryIds: ['MCHAT'], sourceMemoryAnchor: '通讯记录', sourceMemoryEvidence: draftEvidence, unknown: { nested: true },
         })),
     } };
-    const normalized = api.normalizePhoneDraftApp(raw, planApp, memoryBank, 'phone');
+    const normalized = api.normalizePhoneDraftApp(raw, planApp, draftBank, 'phone');
     assert.equal(normalized.id, 'CHAT');
     assert.equal(normalized.label, '通讯');
     assert.equal(normalized.entries.length, 3);
@@ -1130,17 +1151,17 @@ test('r40.2 calendar keeps evidence-backed dates while adding sparse sticky and 
         ],
         stickyNotes: [
             { id: 'N1', kind: 'memo', title: '记得', text: '11月2日别把时间排得太满。', sourceType: 'archive', sourceMemoryIds: ['M003'], sourceMemoryAnchor: '11月2日水族馆' },
-            { id: 'N2', kind: 'special', title: '特别备注', text: '她不太喜欢太甜的东西。', sourceType: 'setting', sourceLabel: '角色卡' },
+            { id: 'N2', kind: 'special', title: '特别备注', text: '她不太喜欢太甜的东西。', sourceType: 'setting', sourceLabel: '角色卡', sourceEvidence: '她不太喜欢太甜的东西。' },
             { id: 'N_BAD', kind: 'memo', title: '坏便签', text: '没有证据。', sourceType: 'archive', sourceMemoryIds: ['M999'], sourceMemoryAnchor: '不存在' },
         ],
         moodNotes: [
-            { id: 'J1', text: '那天等她出来的时候，我看时间的次数比自己想象得多。', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '接纪时卿' },
+            { id: 'J1', textMode: 'evidence-excerpt', text: '接纪时卿', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '接纪时卿' },
             { id: 'J_BAD', text: '凭空出现的情绪。', sourceMemoryIds: ['M999'], sourceMemoryAnchor: '不存在' },
         ],
-    }, bank);
+    }, bank, { futureEvidenceText: '她不太喜欢太甜的东西。' });
     assert.equal(calendar.kind, api.MODE.CALENDAR);
     assert.equal(calendar.calendarVersion, api.CALENDAR_SESSION_VERSION);
-    assert.deepEqual(calendar.entries.filter(item => item.status === 'past').map(item => item.title), ['接纪时卿']);
+    assert.deepEqual(calendar.entries.filter(item => item.status === 'past').map(item => item.title), ['去接纪时卿']);
     assert.equal(calendar.entries.some(item => item.title === '发烧插曲'), false);
     assert.equal(calendar.entries.some(item => item.title === '无日期事件'), false);
     assert.equal(calendar.entries.filter(item => item.status === 'promised').length, 1);
@@ -1179,7 +1200,7 @@ test('r43 calendar prompt assigns every generated notebook item to one date page
 
 test('r44 calendar renders a selectable char-only notebook without visitor input windows', () => {
     const constantsSource = sourceByFile.get('core/constants.js');
-    assert.match(constantsSource, /CALENDAR_SESSION_VERSION = 5/);
+    assert.match(constantsSource, /CALENDAR_SESSION_VERSION = 6/);
     const view = sourceByFile.get('ui/calendarView.js');
     assert.match(view, /rmt-calendar-grid/);
     assert.match(view, /rmt-calendar-notebook-board/);

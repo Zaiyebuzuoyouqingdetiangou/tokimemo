@@ -159,6 +159,17 @@ export function isCurrentCharacterDeletedFromLibrary(context = core_context.getC
     catch { return false; }
 }
 
+export function currentCharacterArchiveDeletionFence(context = core_context.getContext(), memoryBank = null) {
+    try {
+        const probe = currentCharacterArchiveProbe(context, memoryBank);
+        return getDeletedArchiveCharacters(context)
+            .filter(deleted => archiveEntryMatchesDeletedCharacter(probe, deleted))
+            .sort((left, right) => Number(right?.deletedAt || 0) - Number(left?.deletedAt || 0))[0] || null;
+    } catch {
+        return null;
+    }
+}
+
 export function restoreCurrentCharacterArchiveVisibility(context = core_context.getContext(), memoryBank = null, options = {}) {
     if (!memoryBank || !archive_repository.isCompatibleArchive(memoryBank)) return false;
     const probe = currentCharacterArchiveProbe(context, memoryBank);
@@ -293,7 +304,11 @@ export function matchArchiveEntryToCharacter(entry, context = core_context.getCo
     const targetIndexHint = Number.isInteger(Number(entry?.characterIndexHint)) ? Number(entry.characterIndexHint) : -1;
     if (targetIndexHint >= 0) {
         const hinted = candidates.find(item => item.index === targetIndexHint);
-        if (hinted && (!targetAvatar || hinted.avatar === targetAvatar)) return hinted;
+        const hintMatches = !!hinted
+            && (!targetAvatar || hinted.avatar === targetAvatar)
+            && (!targetName || hinted.name === targetName)
+            && (!targetFingerprint || hinted.fingerprint === targetFingerprint);
+        if (hintMatches) return hinted;
     }
     if (targetFingerprint) {
         const byFingerprint = candidates.filter(item => item.fingerprint === targetFingerprint);
@@ -466,7 +481,7 @@ export function moveArchiveIndexEntryToGroup(context, entryId, groupId) {
 }
 
 export async function deleteArchiveCharacterFromLibrary(groupId) {
-    if (core_requestCoordinator.hasAnyTask()) throw new Error('当前还有后台任务。为避免删除时与生成写回竞态，请等任务完成后再操作。');
+    if (core_requestCoordinator.hasUnloadRisk()) throw new Error('当前还有生成或待写回内容。为避免删除时与落盘竞态，请先等待写回完成。');
     const context = core_context.getContext();
     const id = core_text.normalizeText(groupId, 120);
     if (!id) throw new Error('没有找到要删除的角色档案。');
@@ -546,9 +561,10 @@ export function removeArchiveIndexEntry(context, entryId) {
 }
 
 export async function deleteCurrentHeartbeatArchive(entryId = '') {
-    if (core_requestCoordinator.hasAnyTask()) throw new Error('当前还有后台任务。为避免删除时与生成写回竞态，请等任务完成后再操作。');
+    if (core_requestCoordinator.hasUnloadRisk()) throw new Error('当前还有生成或待写回内容。为避免删除时与落盘竞态，请先等待写回完成。');
     const context = core_context.currentCharacterGuard();
-    const memory = archive_repository.getImportedMemory(context);
+    const memory = archive_repository.getImportedMemory(context)
+        || archive_repository.migrateArchiveInMemory(context.chatMetadata?.[core_constants.MEMORY_KEY]);
     if (!memory) throw new Error('当前真实聊天没有可删除的心跳回忆档案。');
     const expectedChatId = core_context.comparableChatId(core_context.getChatId(context));
     const expectedCharacterKey = core_context.currentCharacterRuntimeKey(context);
@@ -576,38 +592,51 @@ export async function deleteCurrentHeartbeatArchive(entryId = '') {
         throw new Error('确认期间当前角色或聊天已经变化，本次删除已取消。');
     }
     const backupEntry = indexed || core_cache.archiveBackupEntryForContext(live, memory);
-    await archive_backupStore.deleteArchiveBackup(backupEntry);
-    // IndexedDB is asynchronous. Re-acquire and recheck the exact live scope before touching chat
-    // metadata so a user navigation during the transaction cannot retarget the deletion.
-    live = core_context.currentCharacterGuard();
-    if (core_context.comparableChatId(core_context.getChatId(live)) !== expectedChatId || core_context.currentCharacterRuntimeKey(live) !== expectedCharacterKey) {
-        throw new Error('删除独立备份期间当前角色或聊天已经变化；源聊天 metadata 未修改。');
-    }
-    const scope = core_cache.cacheScopeFromContext(live);
-    const timer = runtimeState.cachePersistTimers.get(scope);
-    if (timer) clearTimeout(timer);
-    runtimeState.cachePersistTimers.delete(scope);
-    runtimeState.pendingCompressedCacheWrites.delete(scope);
-    runtimeState.runtimeSessionCache.delete(scope);
-    runtimeState.cacheHydrationPromises.delete(scope);
-    runtimeState.cacheHydrationErrors.delete(scope);
-    runtimeState.memoryPreflightCache.delete(scope);
-    runtimeState.usableMessageCountCache.delete(scope);
-    delete live.chatMetadata[core_constants.MEMORY_KEY];
-    delete live.chatMetadata[core_constants.CACHE_KEY];
-    archive_snapshots.rememberCurrentArchiveForOverview(live);
-    archive_snapshots.syncArchiveOverviewCurrentRow(live);
-    const row = indexed || getArchiveIndex(live).find(item => item.chatId === expectedChatId && core_context.archiveEntryMatchesContextCharacter(item, live));
-    if (row) removeArchiveIndexEntry(live, core_context.archiveIndexEntryId(row));
-    // Direct save is preferred for this explicit destructive action so a later same-character
-    // chat switch cannot retarget a debounced metadata write.
-    if (typeof live.saveMetadata === 'function') await live.saveMetadata();
-    else live.saveMetadataDebounced?.();
-    runtimeState.activeArchiveSnapshot = null;
-    runtimeState.activeArchiveReadOnly = true;
-    runtimeState.activeMode = null;
-    runtimeState.activeSession = null;
-    return true;
+    return core_cache.serializeArchiveCommitOperation(backupEntry, memory, async () => {
+        live = core_context.currentCharacterGuard();
+        const liveRawMemory = archive_repository.migrateArchiveInMemory(live.chatMetadata?.[core_constants.MEMORY_KEY]);
+        if (core_context.comparableChatId(core_context.getChatId(live)) !== expectedChatId
+            || core_context.currentCharacterRuntimeKey(live) !== expectedCharacterKey
+            || core_text.normalizeText(liveRawMemory?.archiveRevision, 240) !== core_text.normalizeText(memory.archiveRevision, 240)) {
+            throw new Error('删除独立备份前当前角色、聊天或档案版本已经变化，本次删除已取消。');
+        }
+        await archive_backupStore.deleteArchiveBackup(backupEntry);
+        live = core_context.currentCharacterGuard();
+        if (core_context.comparableChatId(core_context.getChatId(live)) !== expectedChatId || core_context.currentCharacterRuntimeKey(live) !== expectedCharacterKey) {
+            throw new Error('删除独立备份期间当前角色或聊天已经变化；源聊天 metadata 未修改。');
+        }
+        const scope = core_cache.cacheScopeFromContext(live);
+        const fenceKey = archive_repository.archiveDeletionFenceKey(live, memory, backupEntry.entryId);
+        runtimeState.archiveDeletionFences.add(fenceKey);
+        const hadMemory = Object.prototype.hasOwnProperty.call(live.chatMetadata || {}, core_constants.MEMORY_KEY);
+        const hadCache = Object.prototype.hasOwnProperty.call(live.chatMetadata || {}, core_constants.CACHE_KEY);
+        const previousMemory = structuredClone(live.chatMetadata?.[core_constants.MEMORY_KEY]);
+        const previousCache = structuredClone(live.chatMetadata?.[core_constants.CACHE_KEY]);
+        delete live.chatMetadata[core_constants.MEMORY_KEY];
+        delete live.chatMetadata[core_constants.CACHE_KEY];
+        // The awaited local tombstone above is the deletion authority. Never call the host's
+        // direct saveMetadata here: on some SillyTavern builds it serializes the whole chat and
+        // can destroy messages when the current chat is only partially hydrated.
+        live.saveMetadataDebounced?.();
+        const timer = runtimeState.cachePersistTimers.get(scope);
+        if (timer) clearTimeout(timer);
+        runtimeState.cachePersistTimers.delete(scope);
+        runtimeState.pendingCompressedCacheWrites.delete(scope);
+        runtimeState.runtimeSessionCache.delete(scope);
+        runtimeState.cacheHydrationPromises.delete(scope);
+        runtimeState.cacheHydrationErrors.delete(scope);
+        runtimeState.memoryPreflightCache.delete(scope);
+        runtimeState.usableMessageCountCache.delete(scope);
+        archive_snapshots.rememberCurrentArchiveForOverview(live);
+        archive_snapshots.syncArchiveOverviewCurrentRow(live);
+        const row = indexed || getArchiveIndex(live).find(item => item.chatId === expectedChatId && core_context.archiveEntryMatchesContextCharacter(item, live));
+        if (row) removeArchiveIndexEntry(live, core_context.archiveIndexEntryId(row));
+        runtimeState.activeArchiveSnapshot = null;
+        runtimeState.activeArchiveReadOnly = true;
+        runtimeState.activeMode = null;
+        runtimeState.activeSession = null;
+        return true;
+    });
 }
 
 export function removeIndexedArchiveFromLibrary(entryId) {
@@ -675,7 +704,7 @@ export function touchAvatarVisit(characterKey, context = core_context.getContext
     context.saveSettingsDebounced?.();
 }
 
-export function upsertArchiveIndex(context, memoryBank) {
+export function upsertArchiveIndex(context, memoryBank, options = {}) {
     if (!archive_repository.isCompatibleArchive(memoryBank)) return;
     if (isCurrentCharacterDeletedFromLibrary(context, memoryBank)) return;
     const chatId = core_context.comparableChatId(memoryBank.chatId || core_context.getChatId(context));
@@ -683,9 +712,12 @@ export function upsertArchiveIndex(context, memoryBank) {
     const characterName = core_text.normalizeText(memoryBank.characterName || context.name2, 120) || '未命名角色';
     const existingIndex = getArchiveIndex(context);
     const descriptor = characterDescriptor(context, Number(context.characterId));
+    const authorizedEntryId = core_text.normalizeText(options.existingEntryId, 120);
+    const authorizedExisting = authorizedEntryId
+        ? existingIndex.find(old => core_context.archiveIndexEntryId(old) === authorizedEntryId && old.chatId === chatId)
+        : null;
     const existing = existingIndex.find(old => old.chatId === chatId
-        && core_context.archiveEntryMatchesContextCharacter(old, context))
-        || uniqueArchiveIndexEntryForCurrentAvatarChat(existingIndex, context, chatId);
+        && core_context.archiveEntryMatchesContextCharacter(old, context)) || authorizedExisting;
     // Some mobile/cloud contexts briefly expose the character without an avatar while the
     // drawer/chat UI is remounting. Never replace a previously valid archive avatar with ''.
     const avatar = core_text.normalizeText(context.characters?.[context.characterId]?.avatar || context.characters?.[context.characterId]?.data?.avatar, 300)

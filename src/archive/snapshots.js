@@ -96,7 +96,7 @@ export function scheduleChooserRefresh(delay = 40) {
             if (core_cache.cacheScopeFromContext(latest) !== scope) return;
             const currentOverlay = document.getElementById(core_constants.OVERLAY_ID);
             if (currentOverlay && !currentOverlay.hidden && !runtimeState.busy) ui_overlay.showChooser();
-        }).catch(error => console.warn('[HeartbeatMemories] cache hydration failed', error));
+        }).catch(error => console.warn('[HeartbeatMemories] cache hydration failed', core_text.safeErrorDiagnostic(error)));
     }, Math.max(0, Number(delay) || 0));
 }
 
@@ -191,7 +191,7 @@ export function renderArchiveOverviewAsync({ force = false } = {}) {
     }).catch(error => {
         if (error?.name === 'AbortError') return;
         const latestHost = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-archive-overview-list]`);
-        if (latestHost) latestHost.innerHTML = archiveOverviewHtml(cached, { error: error?.message || String(error) });
+        if (latestHost) latestHost.innerHTML = archiveOverviewHtml(cached, { error: core_text.safeErrorSummary(error) });
     });
 }
 

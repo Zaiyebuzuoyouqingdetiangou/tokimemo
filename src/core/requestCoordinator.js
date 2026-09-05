@@ -11,6 +11,13 @@ import * as ui_settingsPanel from '../ui/settingsPanel.js';
 
 let deferredDurabilityWarningShown = false;
 
+function sameDeferredOrigin(left, right) {
+    if (!left || !right) return false;
+    return ['startedAt', 'characterKey', 'characterAvatar', 'characterId', 'chatId', 'archiveRevision', 'archivePresent', 'sourceMessageCount']
+        .every(key => String(left?.[key] ?? '') === String(right?.[key] ?? ''))
+        && JSON.stringify(left?.modeWriteFences || {}) === JSON.stringify(right?.modeWriteFences || {});
+}
+
 function reportDeferredDurability() {
     const status = runtimeState.deferredChatCommits.persistenceStatus?.() || { healthy: false, error: '本地待写回存储不可用。' };
     if (status.healthy) {
@@ -26,31 +33,43 @@ function reportDeferredDurability() {
     return false;
 }
 
-export function queueDeferredCommit(origin, commit) {
-    if (!origin?.characterKey || !origin?.chatId || !commit?.kind) return false;
-    if (Number(origin.lifecycleEpoch) !== runtimeState.runtimeLifecycleEpoch) return false;
+export function queueDeferredCommitRecord(origin, commit) {
+    if (!origin?.characterKey || !origin?.chatId || !commit?.kind) return { durable: false, key: '', item: null };
+    if (commit.kind === 'archive'
+        && core_context.comparableChatId(commit?.memoryBank?.chatId) !== core_context.comparableChatId(origin.chatId)) {
+        return { durable: false, key: '', item: null };
+    }
+    if (Number(origin.lifecycleEpoch) !== runtimeState.runtimeLifecycleEpoch) return { durable: false, key: '', item: null };
     const key = `${origin.characterKey}|${origin.chatId}`;
     const list = runtimeState.deferredChatCommits.get(key) || [];
     if (commit.kind === 'heartPatches') {
-        const previous = list.find(item => item.kind === 'heartPatches');
+        const previous = list.find(item => item.kind === 'heartPatches' && sameDeferredOrigin(item.origin, origin));
         const mergedPatches = modes_heart.mergeDeferredHeartPatches(previous?.patches, commit.patches);
-        const filtered = list.filter(item => item.kind !== 'heartPatches');
-        filtered.push({ kind: 'heartPatches', patches: mergedPatches, origin, queuedAt: Date.now() });
+        const filtered = list.filter(item => item !== previous);
+        const item = { kind: 'heartPatches', patches: mergedPatches, origin, queuedAt: Date.now() };
+        filtered.push(item);
         runtimeState.deferredChatCommits.set(key, filtered);
-        return reportDeferredDurability();
+        return { durable: reportDeferredDurability(), key, item };
     }
     if (commit.kind === 'sessions') {
-        const previous = list.find(item => item.kind === 'sessions');
+        const previous = list.find(item => item.kind === 'sessions' && sameDeferredOrigin(item.origin, origin));
         const mergedSessions = { ...(previous?.sessions || {}), ...(commit.sessions || {}) };
-        const filtered = list.filter(item => item.kind !== 'sessions');
-        filtered.push({ kind: 'sessions', sessions: mergedSessions, origin, queuedAt: Date.now() });
+        const filtered = list.filter(item => item !== previous);
+        const item = { kind: 'sessions', sessions: mergedSessions, origin, queuedAt: Date.now() };
+        filtered.push(item);
         runtimeState.deferredChatCommits.set(key, filtered);
-        return reportDeferredDurability();
+        return { durable: reportDeferredDurability(), key, item };
     }
-    const filtered = list.filter(item => item.kind !== commit.kind);
-    filtered.push({ ...commit, origin, queuedAt: Date.now() });
+    const previous = list.find(item => item.kind === commit.kind && sameDeferredOrigin(item.origin, origin));
+    const filtered = list.filter(item => item !== previous);
+    const item = { ...commit, origin, queuedAt: Date.now() };
+    filtered.push(item);
     runtimeState.deferredChatCommits.set(key, filtered);
-    return reportDeferredDurability();
+    return { durable: reportDeferredDurability(), key, item };
+}
+
+export function queueDeferredCommit(origin, commit) {
+    return queueDeferredCommitRecord(origin, commit).durable;
 }
 
 export function acknowledgeDeferredCommit(key, completedItem) {
@@ -62,8 +81,11 @@ export function acknowledgeDeferredCommit(key, completedItem) {
     // that newer merged result.
     const remaining = list.filter(item => item !== completedItem);
     if (remaining.length === list.length) return false;
-    if (remaining.length) runtimeState.deferredChatCommits.set(key, remaining);
-    else runtimeState.deferredChatCommits.delete(key);
+    if (remaining.length) {
+        if (typeof runtimeState.deferredChatCommits.replaceDurably === 'function') {
+            if (!runtimeState.deferredChatCommits.replaceDurably(key, remaining)) return false;
+        } else runtimeState.deferredChatCommits.set(key, remaining);
+    } else if (!runtimeState.deferredChatCommits.delete(key)) return false;
     reportDeferredDurability();
     return true;
 }
@@ -79,12 +101,72 @@ export function deferredCommitPersistenceStatus() {
 
 export function generationTaskKeyForMode(mode, context = null) {
     let scope = '';
-    try { scope = core_context.chatScopeKey(context || core_context.currentCharacterGuard()); } catch {}
+    try {
+        const ctx = context || core_context.currentCharacterGuard();
+        const memory = ctx?.chatMetadata?.[core_constants.MEMORY_KEY];
+        const chatId = core_context.comparableChatId(memory?.chatId || core_context.getChatId(ctx));
+        const revision = core_text.normalizeText(memory?.archiveRevision, 240);
+        let entryId = core_text.normalizeText(ctx?.__rmtArchiveTargetEntryId, 120);
+        if (!entryId && chatId) {
+            const memoryName = core_text.normalizeText(memory?.characterName, 120);
+            const rows = Array.isArray(ctx?.extensionSettings?.[core_constants.ARCHIVE_INDEX_SETTINGS_KEY])
+                ? ctx.extensionSettings[core_constants.ARCHIVE_INDEX_SETTINGS_KEY]
+                : [];
+            const matches = rows.filter(item => core_context.comparableChatId(item?.chatId) === chatId
+                && (!memoryName || core_text.normalizeText(item?.characterName, 120) === memoryName));
+            if (matches.length === 1) entryId = core_context.archiveIndexEntryId(matches[0]);
+        }
+        // The canonical archive identity deliberately excludes the mutable card fingerprint.
+        // Editing a card while a generation is in flight must not create a second "latest" lane.
+        scope = `${entryId || `archive:${core_context.stableArchiveHash(`${chatId}\u001f${core_text.normalizeText(memory?.characterName, 120)}`)}`}|${chatId}|${revision}`;
+    } catch {}
     return `mode:${scope}:${core_text.normalizeText(mode, 80)}`;
 }
 
+export function generationTaskKeyForArchiveTarget(mode, target) {
+    const entryId = core_text.normalizeText(target?.entryId, 120);
+    const chatId = core_context.comparableChatId(target?.chatId || target?.memory?.chatId);
+    const revision = core_text.normalizeText(target?.archiveRevision || target?.memory?.archiveRevision, 240);
+    if (!entryId || !chatId || !revision) return '';
+    return `mode:${entryId}|${chatId}|${revision}:${core_text.normalizeText(mode, 80)}`;
+}
+
+export function registerArchiveTargetReservation(taskKey, targetRuntime, mode, label = '') {
+    const key = core_text.normalizeText(taskKey, 240);
+    const target = targetRuntime?.archiveTarget;
+    const entryId = core_text.normalizeText(target?.entryId, 120);
+    if (!key || !entryId) return;
+    const modeKey = core_text.normalizeText(mode, 80);
+    const characterName = core_text.normalizeText(target?.characterName, 120);
+    const archiveName = core_text.normalizeText(target?.archiveName, 160);
+    runtimeState.activeArchiveTargetReservations.set(key, {
+        key,
+        entryId,
+        mode: modeKey,
+        characterName,
+        archiveName,
+        label: core_text.normalizeText(label, 220) || `${characterName} · ${archiveName} · ${core_constants.MODE_LABEL?.[modeKey] || modeKey}生成中`,
+        startedAt: Date.now(),
+    });
+}
+
+export function unregisterArchiveTargetReservation(taskKey) {
+    runtimeState.activeArchiveTargetReservations.delete(core_text.normalizeText(taskKey, 240));
+}
+
+export function isArchiveTargetModeGenerating(mode, target) {
+    const key = generationTaskKeyForArchiveTarget(mode, target);
+    const entryId = core_text.normalizeText(target?.entryId, 120);
+    const activeSubtask = !!entryId && [...runtimeState.activeGenerationTasks.values()].some(task =>
+        core_text.normalizeText(task?.origin?.archiveTargetEntryId, 120) === entryId
+        && core_text.normalizeText(task?.mode, 80) === core_text.normalizeText(mode, 80));
+    const reservedSubtask = !!entryId && [...runtimeState.activeArchiveTargetReservations.values()].some(task =>
+        task.entryId === entryId && task.mode === core_text.normalizeText(mode, 80));
+    return (!!key && (runtimeState.activeGenerationTasks.has(key) || runtimeState.activeModeBuildScopes.has(key))) || activeSubtask || reservedSubtask;
+}
+
 export function hasGenerationTasks() {
-    return runtimeState.activeGenerationTasks.size > 0 || runtimeState.activeModeBuildScopes.size > 0 || runtimeState.activeAdvBulkScopes.size > 0 || runtimeState.activeCgImageTasks.size > 0;
+    return runtimeState.activeGenerationTasks.size > 0 || runtimeState.activeModeBuildScopes.size > 0 || runtimeState.activeAdvBulkScopes.size > 0 || runtimeState.activeArchiveTargetReservations.size > 0 || runtimeState.activeCgImageTasks.size > 0;
 }
 
 export function hasAnyTask() {
@@ -94,7 +176,10 @@ export function hasAnyTask() {
 export function hasUnloadRisk() {
     return hasAnyTask()
         || runtimeState.deferredChatCommits.size > 0
-        || runtimeState.pendingCompressedCacheWrites.size > 0;
+        || runtimeState.pendingCompressedCacheWrites.size > 0
+        || runtimeState.cachePersistTimers.size > 0
+        || runtimeState.cachePersistChains.size > 0
+        || runtimeState.archiveCommitChains.size > 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -127,6 +212,10 @@ export function currentChatBlockingTasks(context = null) {
         push(runtimeState.activeTaskLabel || '正在整理聊天档案');
     }
     for (const task of runtimeState.activeGenerationTasks.values()) {
+        // ArchiveTarget requests are detached from the host's currently open chat. They must
+        // remain an unload risk, but must never trigger the "do not leave this chat" navigation
+        // warning or imply that returning to A is required for the IndexedDB commit.
+        if (core_text.normalizeText(task?.origin?.archiveTargetEntryId, 120)) continue;
         if (task?.origin && !core_context.isCurrentTaskOrigin(task.origin, liveContext)) continue;
         push(task?.label || task?.mode || '内容生成');
     }
@@ -354,6 +443,13 @@ export async function waitBeforeSegmentRetry(error) {
 }
 
 export function refreshConcurrentTaskUi(taskMode = '', origin = null) {
+    // Detached ArchiveTarget work must never touch the currently open chat merely to refresh
+    // task chrome. The lightweight status path reads active task records only; it does not call
+    // currentCharacterGuard/getImportedMemory for unrelated chat B.
+    if (core_text.normalizeText(origin?.archiveTargetEntryId, 120)) {
+        ui_settingsPanel.refreshSettingsTaskStatus();
+        return;
+    }
     ui_settingsPanel.refreshSettingsMemoryStatus();
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
     if (!overlay || overlay.hidden) return;

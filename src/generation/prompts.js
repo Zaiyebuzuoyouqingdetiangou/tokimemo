@@ -97,18 +97,22 @@ function calendarArchiveSlice(memoryBank, limit = 64) {
     }, null, 2);
 }
 
-export function calendarPrompt(context, memoryBank) {
+export function calendarPrompt(context, memoryBank, options = {}) {
     const charName = core_text.normalizeText(context.name2 || '{{char}}', 120);
+    const currentDate = core_text.normalizeText(options.currentDate, 20) || '未提供';
     return `${promptSafetyBoundary(context, '两个人的日历')}
 UNTRUSTED_CALENDAR_ARCHIVE_JSON:
 ${calendarArchiveSlice(memoryBank, 64)}
+
+CURRENT_LOCAL_DATE: ${currentDate}
 
 任务：生成的是【${charName}自己的私人日历 / 手账页】，不是剧情目录。
 每一个日期都是一张独立手账页。选中哪一天，只能看到 ${charName} 为那一天留下的内容；页面只读，不提供 {{user}}、NPC 或其他人填写内容的输入窗口。整个日历会包含：
 1. 真正会被圈起来的日期；
 2. 一块像便利贴墙一样的【便签 / 特别备注】；
 3. 根据该日期尚未兑现的剧情约定自动形成的【To-Do List】；
-4. 偶尔出现、数量很少的【角色第一人称心情随笔】。
+4. 偶尔出现、数量很少的【角色第一人称心情随笔】；
+5. 仅在世界观中有明确节日/节庆日期时出现的【节日贺卡】。
 
 重要：To-Do List 由所选日期页的 promised 项自动生成，不要再输出第二套 todo 数组。每条便签和随笔都必须明确归属某个日期：优先填写 calendarEntryId 绑定一个真实日历项；没有对应事项时才填写 date。禁止生成全日历共用的便签或 To-Do，也绝对不是“每个日历事项都配一条感想”。
 
@@ -144,7 +148,35 @@ ${calendarArchiveSlice(memoryBank, 64)}
       "title": "星降祭",
       "tags": ["设定日","活动"],
       "sourceLabel": "简短设定来源名称",
-      "recurring": true
+      "sourceEvidence": "从受控角色卡或 WORLD_INFO_TEXT 原样复制、同时包含节日全名和完整日期的一小句",
+      "recurring": true,
+      "occasionType": "holiday"
+    }
+  ],
+  "holidayCards": [
+    {
+      "id": "CAL_CARD_01",
+      "calendarEntryId": "CAL_FUTURE_01",
+      "expression": "drawing|writing|mixed|text|minimal",
+      "textMode": "none|present-expression|evidence-excerpt",
+      "presentExpression": {"time":"none|now|today|tonight|from-now-on","emotion":"none|love|miss|cherish|care|calm|grateful|joy","wish":"none|peace|joy|health|freedom|warmth|good-dreams|success","gesture":"none|stay|meet|hold-hands|embrace|walk|listen","tone":"quiet|direct|warm|playful|ceremonial"},
+      "sign": false,
+      "message": "仅 evidence-excerpt 时可填，且必须逐字来自 sourceMemoryAnchor",
+      "calligraphy": "仅 evidence-excerpt 时可填，且必须逐字来自 sourceMemoryAnchor",
+      "signature": "留空；sign=true 时由本地使用角色名",
+      "sourceMemoryIds": [],
+      "sourceMemoryAnchor": "仅 evidence-excerpt 时，从所引用记忆 anchors/title 原样复制",
+      "motifs": ["celestial"],
+      "art": {
+        "medium": "card|paper|letter|scroll|folio|screen",
+        "palette": "paper|dawn|night|jade|rose|frost|festival",
+        "stroke": "fine|soft|bold|dry|round",
+        "flow": "horizontal|vertical",
+        "density": 40,
+        "whitespace": 60,
+        "asymmetry": 45,
+        "visualWeight": 55
+      }
     }
   ],
   "stickyNotes": [
@@ -157,6 +189,7 @@ ${calendarArchiveSlice(memoryBank, 64)}
       "sourceMemoryIds": ["M010"],
       "sourceMemoryAnchor": "从所引用记忆 anchors/title 原样复制",
       "sourceLabel": "",
+      "sourceEvidence": "",
       "calendarEntryId": "CAL_PROMISE_01",
       "date": ""
     },
@@ -169,6 +202,7 @@ ${calendarArchiveSlice(memoryBank, 64)}
       "sourceMemoryIds": [],
       "sourceMemoryAnchor": "",
       "sourceLabel": "角色卡 / 世界书",
+      "sourceEvidence": "从受控角色卡、用户人设或世界书逐字复制，且必须包含 text 的事实",
       "calendarEntryId": "",
       "date": "明确的 YYYY/MM/DD 或 MM/DD"
     }
@@ -176,7 +210,9 @@ ${calendarArchiveSlice(memoryBank, 64)}
   "moodNotes": [
     {
       "id": "CAL_MOOD_01",
-      "text": "那天等她出来的时候，我看时间的次数比自己想象得多。",
+      "textMode": "present-expression|evidence-excerpt",
+      "presentExpression": {"time":"now","emotion":"miss","wish":"none","gesture":"none","tone":"quiet","register":"restrained","image":"none","intensity":"low","cadence":"fragments"},
+      "text": "仅 evidence-excerpt 时填写 sourceMemoryAnchor 的逐字子串",
       "sourceMemoryIds": ["M001"],
       "sourceMemoryAnchor": "从所引用记忆 anchors/title 原样复制",
       "calendarEntryId": "CAL_PAST_01",
@@ -202,22 +238,33 @@ ${calendarArchiveSlice(memoryBank, 64)}
 【future：世界设定中的固定日期】
 - 这是“提醒”而不是待办完成状态，只允许使用受控 CHARACTER_CARD_JSON / USER_PERSONA_JSON / WORLD_INFO_TEXT 中明确存在的生日、节庆、纪念日、固定校历/世界观日。
 - 必须有明确 MM/DD 或 YYYY/MM/DD；没有具体日期就不要生成。
+- sourceEvidence 必须从受控角色卡、USER_PERSONA_JSON 或 WORLD_INFO_TEXT 原样复制一小句，而且这一句本身必须同时包含 title 的完整名称和 date 的明确日期。不要改写、拼接或凭 sourceLabel 猜测；插件会逐字核验，核验失败会丢弃。holiday 更严格：只能来自角色卡 / WORLD_INFO_TEXT，且 title 本身必须明确是节日、节令、祭典或庆典，不能把节日期间的一项普通活动标成 holiday。
 - future 不是剧情事实，也不是两个人已经约定的事项。只作为月历上的设定提醒。
+- occasionType 只能是 "holiday" / "birthday" / "anniversary" / "setting"；只有世界观中明确存在的节日、节令、祭典、庆典才标为 holiday。
+
+【holidayCards：节日贺卡】
+- 只允许引用本次 future 中 occasionType="holiday" 的真实 calendarEntryId；没有可靠节日设定就输出空数组，禁止为了出贺卡凭空造节日。
+- 只有 future 节日日期与 CURRENT_LOCAL_DATE 的月日相同（有年份时年份也必须相同）才允许本轮输出贺卡。不是今天的节日只保留为日历提醒，holidayCards 必须为空。
+- 它是当前 archive 关系状态下的 Calendar Derived Content，不写回 Mxxx。先扫描双方当前关系状态，再选择表达形态与强度，但不能越过现阶段。
+- textMode=none：纯视觉，不写 message/calligraphy/signature；textMode=present-expression：只选择 presentExpression 的受限语义 token，message/calligraphy/signature 留空，本地会组合当下心意；textMode=evidence-excerpt：只有确实要引用既有共同历史时使用，必须提交真实 sourceMemoryIds 和完全匹配的 sourceMemoryAnchor，message/calligraphy 的每个可见字都必须是该 anchor 的逐字子串。不能把真实 anchor 混进自由改写来洗白虚构细节。
+- sign 只是是否由本地落下 {{char}} 名字的布尔值，模型不得自由编写落款。自由散文、历史关键词猜测和未经锚点支持的回忆会被丢弃。
+- 表达可以是文字、图画、书写、图文结合或极简，地位相同；不强制标题、正文、落款齐全。寡言、克制或不擅表达的角色可以只留画、题字或很短的内容，不要补系统解释。
+- 不建立“某种性格=某种贺卡形式”的固定对应。同一角色应结合完整人设、节日、世界观和当前关系状态决定这一次怎样表达。
+- 不要选择模板编号。模型只给受限 art direction 与 presentExpression 语义 token；本地微语法只承担无历史来源的当下短句安全边界，不替所有贺卡补文字。medium 要跟随当前世界观选择合理载体。禁止输出 HTML、CSS、JavaScript、SVG、path、URL 或任意代码。
+- motifs 仅可从 ["celestial","botanical","light","ribbon","snow","wave","cloud","flame","petal","leaf","spark","geometric"] 选择，最多 4 个。本地 renderer 会用受控 SVG primitive 重新构图，不会直接执行模型图形代码。
 
 【stickyNotes：便签墙 / 特别备注】
 - 生成 1～5 条即可，少而有生活感；不要为了填满页面硬凑。
 - 每条必须填写 calendarEntryId 或 date 之一。calendarEntryId 必须引用本次输出的 past/promised/future 中真实 id；只有没有对应事项但来源中存在明确日期时才用 date。无法确定归属日期的便签不要输出，禁止做成全局共享便签。
 - kind 只能是 "memo" 或 "special"。memo 更像“记得 / 随手记”；special 更像“特别备注 / 重要的小细节”。
-- text 保持一两句，像写在便利贴上的短句，不要写成长段剧情，不要复述整个 Mxxx。
-- sourceType="archive" 时必须引用真实 sourceMemoryIds + sourceMemoryAnchor；可以基于已经发生或已经约定的事情写很短的提醒，但不能新增 {{user}} 尚未做出的决定。
-- sourceType="setting" 时只能来自角色卡 / 世界书 / 用户人设中明确存在的稳定设定，例如生日、偏好、禁忌或固定活动；它不是过去共同事实，sourceMemoryIds 必须为空，并填写简短 sourceLabel。
+- text 保持很短，但不再允许自由改写事实。sourceType="archive" 时必须引用真实 sourceMemoryIds + 完全匹配的 sourceMemoryAnchor，text 只能逐字摘自同一引用记忆；否则本地只显示该 anchor，不接受新增 {{user}} 决定或事件。
+- sourceType="setting" 时只能来自角色卡 / 世界书 / 用户人设中明确存在的稳定设定，例如生日、偏好、禁忌或固定活动；sourceMemoryIds 必须为空，并填写 sourceLabel 与逐字 sourceEvidence。sourceEvidence 必须属于受控设定，text 必须是它的逐字子串，不能只写“角色卡”三个字冒充证据。
 - 便签不要机械复制 past/promised 的标题；它应该像旁边额外写的一笔，例如“别把那天排太满”“她不喜欢太甜”。
 
 【moodNotes：页角心情随笔】
 - 允许 0～3 条；没有合适的就空数组。绝对不要每个日期、每个事项都写一条。
 - 每条必须通过 calendarEntryId 绑定一个已发生的 past 项；没有可信日期归属就不要输出，禁止做成所有日期共用的随笔。
-- 必须是 ${charName} 第一人称、非常短的随笔，一两句即可；可以有一点情绪和私人感，但不要变成剧情续写、总结报告或长篇内心独白。
-- 每条必须引用真实 sourceMemoryIds + sourceMemoryAnchor；只从已发生档案中提炼当时/后来留下的一点心情余韵，不得发明新的共同事件，也不得替 {{user}} 补行动或心理。
+- 每条必须引用真实 sourceMemoryIds + 完全匹配的 sourceMemoryAnchor。textMode=present-expression 时只选择与贺卡相同的受控语义 token，由本地生成 ${charName} 此刻的短心情；textMode=evidence-excerpt 时 text 只能是 anchor 的逐字子串。不得自由改写共同事件，也不得替 {{user}} 补行动或心理。
 - 它是派生的“手账边角字”，不是正式档案事实，不要使用肯定语气扩写未被档案支持的细节。
 
 整体原则：翻开某一天时，要像看到 ${charName} 只为那一天写下的一张私人手账：该页有自己的日期圈记、备忘、To-Do、特别备注和偶尔的心情随笔；切换日期后内容也随页切换，绝不共享。页面不接受任何访客输入。不要把它重新做成剧情大纲，也不要把随笔塞得到处都是。
@@ -366,15 +413,16 @@ JSON 结构必须严格为：
   "homeSummary": "1到3句概括这套私人空间与角色生活方式",
   "visualProfile": {
     "explicitFields": ["仅列出世界书/角色卡明文支持的字段路径；没有则为空数组"],
-    "worldStyle": "contemporary / historical / fantasy / scifi / nomadic / maritime / institutional",
+    "explicitEvidence": {"figure.hairShape":"列入 explicitFields 时必须逐项原样复制角色卡/世界书短句"},
+    "worldStyle": "neutral / contemporary / historical / fantasy / scifi / nomadic / maritime / institutional",
     "palette": "mist / warm / earth / forest / ocean / night / mono / jewel / violet",
     "material": "wood / stone / fabric / metal / glass / mixed",
     "density": "sparse / balanced / layered",
     "figure": {
-      "build": "slender / lean / average / broad / compact / soft",
-      "hairShape": "cropped / short / medium / long / tied / curly / covered / nonhuman",
-      "hairTone": "dark / brown / light / red / silver / fantasy_cool / fantasy_warm",
-      "outfit": "casual / formal / uniform / academic / artisan / combat / ceremonial / technical / historical / fantasy",
+      "build": "unspecified / slender / lean / average / broad / compact / soft",
+      "hairShape": "unspecified / cropped / short / medium / long / tied / curly / covered / nonhuman",
+      "hairTone": "unspecified / dark / brown / light / red / silver / fantasy_cool / fantasy_warm",
+      "outfit": "unspecified / casual / formal / uniform / academic / artisan / combat / ceremonial / technical / historical / fantasy",
       "detail": "none / glasses / headphones / scarf / headwear / pointed_ears / animal_ears / horns / visor",
       "posture": "reserved / relaxed / upright / active / studious / tired"
     }
@@ -409,6 +457,7 @@ JSON 结构必须严格为：
       "description": "它在这个空间里的样子、习惯与长期生活痕迹",
       "line": "{{char}} 提到它时的一句短台词",
       "basis": "设定",
+      "sourceEvidence": "basis=设定时，从角色卡/世界书原样复制含物种、以及设定中确有名字时同时含名字的短句；basis=记忆时为空",
       "sourceMemoryIds": [],
       "sourceMemoryAnchor": "basis=记忆时原样复制证据锚点；basis=设定时为空"
     }
@@ -424,14 +473,15 @@ JSON 结构必须严格为：
 
 硬性要求：
 - visualProfile 必须只从上述英文枚举中选择，禁止输出颜色值、CSS、class、HTML、URL、头像或图片。房间和 CSS 人物必须属于同一世界气质。
-- explicitFields 只允许 worldStyle/palette/material/density/figure.build/figure.hairShape/figure.hairTone/figure.outfit/figure.detail/figure.posture；只有世界书或角色卡对该项有明文时才列入。没写的字段不得冒充明文，本地会按 {{char}} 人设种子补全，避免所有角色照抄同一套合法模板。
+- explicitFields 只允许 worldStyle/palette/material/density/figure.build/figure.hairShape/figure.hairTone/figure.outfit/figure.detail/figure.posture；每一项必须在 explicitEvidence 同名键中逐字给出角色卡或世界书证据。没有证据就不列入，本地会采用不指认发长、配饰或长相的中性背影。
+- “covered / headwear”不是历史、航海、制服角色的默认装饰。只有角色卡或世界书明确写到帽子、头巾、兜帽、冠帽、头盔等遮盖物时，才允许把 figure.hairShape=covered 或 figure.detail=headwear 列为 explicitFields；仅凭时代/职业猜帽子一律用自然发型 + detail=none。
 - 世界书对房间、时代、种族、外貌、发型和穿着有明确设定时优先服从；世界书没写的字段，再根据 CHARACTER_CARD_JSON 中 {{char}} 的身份、职业、性格和生活条件合理推断。USER_PERSONA_JSON 描述的是用户，绝不能拿它推断 {{char}} 的长相或房间。
 - 不要照搬角色档案头像。人物由插件使用本地 CSS 轮廓组合渲染，visualProfile 只负责安全视觉语义；人物永远背对镜头或明显侧后朝向，禁止正脸、眼睛、嘴部和写实肖像，不能让生成模型猜一张脸。
 - spaces 通常 5～8 个；若角色客观居住条件很简单，也应尽量给出 3～4 个真实会长期使用的生活区域。最多 10 个，仍不得为了“丰富”凭空给普通角色豪宅。
 - 每个空间 objects 3～6 个；空间间的物件必须有区别，不能把同一套床/桌/书架换名重复。不同 spaceType 的主陈设结构也必须明显不同：卧室以床/床头为核心，客厅以沙发/茶几为核心，书房以书架/书桌为核心，音乐/录音工作室以乐器/控制台/监听或吸音结构为核心，实验室以工作台/设备为核心，餐厅以餐桌为核心，浴室以浴缸/淋浴/洗漱为核心。
 - 每个空间都要有清楚不同的主功能、陈设母题与物件组合；不得把同一个通用房间只改名称、颜色或三件摆设后重复输出。优先用角色的职业、兴趣、时代和生活方式拉开空间差异。
 - 先扫描 CHARACTER_CARD_JSON、WORLD_INFO_TEXT 与档案中关于宠物/动物伙伴的明确设定。{{char}} 明确养有宠物时，pets 必须包含它，并放入合理 spaceId；有多只时可生成多项。没有明确依据时 pets=[]，禁止为了可爱凭空发明宠物。
-- pets.basis=“记忆”时必须引用至少 1 个真实 sourceMemoryIds 并原样复制 sourceMemoryAnchor；basis=“设定”时不得伪装成与 {{user}} 的既往共同事实，sourceMemoryIds 必须为空。
+- pets.basis=“记忆”时必须引用至少 1 个真实 sourceMemoryIds 并原样复制 sourceMemoryAnchor；basis=“设定”时 sourceMemoryIds 必须为空，并必须用 sourceEvidence 原样复制角色卡/世界书中含物种的短句；若输出宠物名，原文也必须包含该名字，不能凭物种擅自起名。
 - pets 只允许上述 species 枚举和纯文本，不得输出图片、URL、HTML、CSS 或脚本；实际宠物外形由插件本地固定 CSS 绘制。
 - zone 只能是“左上/右上/左下/右下/中央/近景”。
 - spaceType 必须符合角色时代与生活条件。不要强行现代化；“他的房间”只是功能名，不代表一定是现代卧室。
@@ -441,6 +491,7 @@ JSON 结构必须严格为：
 - basis=“记忆”：必须至少引用 1 个真实 sourceMemoryIds，并填写 sourceMemoryAnchor（从所引用记忆的 anchors 或 title 中原样复制）；物件还必须确实能从对应档案记忆推出，例如收到过的礼物、留下的票根、共同选过的东西、某次事件留下的痕迹。
 - basis=“设定”：sourceMemoryIds 必须为空，只能依据角色卡/世界书/稳定人设推演；不得伪装成 {{user}} 已经做过的事。
 - 任何“{{user}} 来过这里 / 送过东西 / 留下私人物品 / 一起生活 / 一起买过某物”等既往事实，只有档案明确支持时才能写，而且必须 basis=“记忆”。
+- homeSummary、space.atmosphere、dayparts、presenceLines 与 basis=“设定”的物件都属于“当下生活/稳定设定”字段，禁止写“去年、上次、曾经、那天”等已完成的双方经历。需要回忆时只能放进 basis=“记忆”的物件，并绑定真实 sourceMemoryIds 与原样锚点。
 - 房间物件本身先做浅层观察，但【翻找物品】与【查看私人通讯终端】是“他的房间”内部的深层玩法，不是档案室独立入口。spaces/objects 中应自然出现可通往这些深层玩法的收纳位置或私人终端痕迹；时代不合适时不要强行生成现代手机。
 - dayparts 的 spaceId 必须引用 spaces 中真实存在的空间；focusObjectId 必须属于该时段所在空间。
 - dayparts 是当前时间下合理的生活切片，不是新增主线剧情。四个时段都必须填写。

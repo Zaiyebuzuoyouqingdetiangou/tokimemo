@@ -11,20 +11,21 @@ import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
+import * as core_worldPresentation from '../core/worldPresentation.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
 import * as ui_overlay from '../ui/overlay.js';
 
 const ROOM_VISUAL_PROFILE_VERSION = 1;
 const ROOM_VISUAL_VALUES = Object.freeze({
-    worldStyle: Object.freeze(['contemporary', 'historical', 'fantasy', 'scifi', 'nomadic', 'maritime', 'institutional']),
+    worldStyle: Object.freeze(['neutral', 'contemporary', 'historical', 'fantasy', 'scifi', 'nomadic', 'maritime', 'institutional']),
     palette: Object.freeze(['mist', 'warm', 'earth', 'forest', 'ocean', 'night', 'mono', 'jewel', 'violet']),
     material: Object.freeze(['wood', 'stone', 'fabric', 'metal', 'glass', 'mixed']),
     density: Object.freeze(['sparse', 'balanced', 'layered']),
-    build: Object.freeze(['slender', 'lean', 'average', 'broad', 'compact', 'soft']),
-    hairShape: Object.freeze(['cropped', 'short', 'medium', 'long', 'tied', 'curly', 'covered', 'nonhuman']),
-    hairTone: Object.freeze(['dark', 'brown', 'light', 'red', 'silver', 'fantasy_cool', 'fantasy_warm']),
-    outfit: Object.freeze(['casual', 'formal', 'uniform', 'academic', 'artisan', 'combat', 'ceremonial', 'technical', 'historical', 'fantasy']),
+    build: Object.freeze(['unspecified', 'slender', 'lean', 'average', 'broad', 'compact', 'soft']),
+    hairShape: Object.freeze(['unspecified', 'cropped', 'short', 'medium', 'long', 'tied', 'curly', 'covered', 'nonhuman']),
+    hairTone: Object.freeze(['unspecified', 'dark', 'brown', 'light', 'red', 'silver', 'fantasy_cool', 'fantasy_warm']),
+    outfit: Object.freeze(['unspecified', 'casual', 'formal', 'uniform', 'academic', 'artisan', 'combat', 'ceremonial', 'technical', 'historical', 'fantasy']),
     detail: Object.freeze(['none', 'glasses', 'headphones', 'scarf', 'headwear', 'pointed_ears', 'animal_ears', 'horns', 'visor']),
     posture: Object.freeze(['reserved', 'relaxed', 'upright', 'active', 'studious', 'tired']),
 });
@@ -54,31 +55,154 @@ const ROOM_VISUAL_LEGACY_ALIASES = Object.freeze({
     hairTone: Object.freeze({ cool: 'fantasy_cool', warm: 'fantasy_warm' }),
     detail: Object.freeze({ 'pointed-ears': 'pointed_ears', 'animal-ears': 'animal_ears' }),
 });
+// Room prose has two different authorities: present-tense observation may be generated freely,
+// while a completed event involving the user must be backed by a real archive reference.  Keep
+// the grammar compositional (participant + temporal/resultative signal) so ordinary rewrites do
+// not bypass a growing list of exact phrases.
+const ROOM_PAST_TIME_SIGNAL = /(?:去年|前年|往年|从前|以前|过去|当年|那年|那天|那晚|那次|上次|曾经|早先|先前|多年前|几年前|小时候|还记得|记得当初|回想起|想起当时|\b(?:yesterday|previously|formerly|once|used\s+to|last\s+(?:year|month|week|night|time)|\d+\s+(?:days?|weeks?|months?|years?)\s+ago|remember\s+when)\b)/iu;
+const ROOM_SHARED_PARTICIPANT_SIGNAL = /(?:\{\{user\}\}|你|我们|咱们|两个人|彼此|共同|一起|\b(?:you|your|yours|we|us|our|ours|together)\b)/iu;
+const ROOM_RESULTATIVE_SIGNAL = /(?:曾经|已经|过|了|的|挑中|选中|留下|留着|至今|一直|仍然|第一次|初次|\b(?:once|used\s+to|already|previously|before|kept|left|gave|sent|wrote|made|bought|picked|chose|went|visited|met|married|lived)\b)/iu;
+const ROOM_RELATIONAL_ACTION_SIGNAL = /(?:送|赠|寄|写|画|拍|做|织|缝|刻|买|选|挑|留|带|救|拥抱|亲吻|告白|约定|结婚|同居|旅行|见面|相识|相遇|结识|来过|去过|住过|\b(?:give|gave|send|sent|write|wrote|draw|drew|paint|painted|make|made|buy|bought|pick|picked|choose|chose|leave|left|keep|kept|visit|visited|meet|met|marry|married|live|lived|travel|traveled|travelled|kiss|kissed|hug|hugged|promise|promised)\b)/iu;
+const ROOM_SHARED_FACT_SIGNAL = /(?:来自.{0,16}(?:\{\{user\}\}|你)|属于(?:你|我|我们|咱们|两个人|彼此)|(?:\{\{user\}\}|你).{0,12}(?:给我的|留给我的|为我|替我)|给你的|留给你的|为你的|替你的|我们的|两个人的|共同拥有|共同选|共同挑|\b(?:from\s+you|belongs?\s+to\s+(?:you|us)|yours?|ours?|we\s+(?:met|knew|shared))\b)/iu;
+const ROOM_FUTURE_INTENT_SIGNAL = /(?:(?:准备|打算|计划|将要|将|会|想|要|愿意).{0,10}(?:送|赠|寄|写|画|拍|做|织|缝|刻|买|选|挑|留|带|见面|旅行)|以后|未来|接下来|从今|待会儿?|等会儿?|一会儿|过会儿|稍后|马上|希望|\b(?:plan|planning|intend|intending|going\s+to|will|shall|later|soon|hope|wish|want\s+to)\b)/iu;
+const ROOM_PRESENT_PROGRESS_SIGNAL = /(?:正在|正(?:在|给|替|为)|此刻.{0,12}(?:写|画|做|选|挑|买)|\b(?:am|is|are)\s+(?:writing|making|buying|choosing|picking|sending|giving)\b)/iu;
+const ROOM_PRESENT_SPEECH_SIGNAL = /(?:我(?:(?:真的|确实|特别|非常|很|仍然|一直)\s*){0,3}(?:爱|喜欢|想念|思念|在意|担心)你|谢谢|感谢|欢迎|辛苦|早安|晚上好|晚安|请|别|不要|小心|慢点|坐(?:吧|一会)|喝(?:点|一杯)|看看|听听|要不要|可以|愿意|需要|觉得|看起来|似乎|好吗|行吗|[吗么呢吧]$|\b(?:love|like|miss|care|worry|thank|welcome|please|good\s+(?:morning|evening|night)|sit|drink|look|listen|may|can|need|feel|seem|okay)\b)/iu;
+// A present-tense wrapper does not make the remembered episode itself present.  This pair is
+// deliberately text-wide so a comma cannot separate the participant ("我望着你") from the
+// recalled episode ("脑海里浮现初见...").  Recollection alone ("今天我想起你") remains a
+// present feeling; it is blocked only when an episode marker is also present.
+const ROOM_RECOLLECTION_FRAME_SIGNAL = /(?:(?:又|忽然|突然|总会|仍会|还会)?(?:想起(?!身)|想到|忆起|记起|回忆(?:起|着)?)|脑海(?:里|中)?.{0,12}(?:浮现|闪过)|\b(?:remember|recall|recalled|remembering)\b)/iu;
+const ROOM_RECOLLECTION_EPISODE_SIGNAL = /(?:初见|初遇|初识|往事|旧事|当初|当时|那(?:场|次|天|晚|夜|年|段|件|个)|把.{0,24}交到.{0,16}(?:手里|手中)|收到.{0,24}(?:礼物|信|戒指|照片)|拍完|说完|走过|去过|来过|住过|见过|认识(?:了|过)|相遇(?:了|过)|\b(?:first\s+(?:met|meeting)|that\s+(?:day|night|time|rain)|the\s+time\s+when|when\s+we)\b)/iu;
+const ROOM_SIMPLE_CURRENT_ACTION_SIGNAL = /^(?:(?:现在|此刻|当下|今天|今日|今夜|刚刚)(?:我)?(?:正在|正)?(?:看着?|望着?|听着?|等着?|陪着?|见到|看见)\{\{user\}\}(?:了|呢|呀|啊)?|(?:我)?(?:看|望|听|等|陪)着\{\{user\}\}(?:呢|呀|啊)?|(?:现在|此刻|当下|今天|今日|今夜|刚刚)(?:我)?(?:正在|正)?(?:给|替|为)\{\{user\}\}(?:买|写|画|做|选|挑|拿|递|倒|煮|准备)[^，,。！？!?；;：:\n]{0,16})$/u;
+const ROOM_SIMPLE_CURRENT_RECOLLECTION_SIGNAL = /^(?:现在|此刻|当下|今天|今日|今夜|刚刚)(?:我)?(?:又|忽然|突然)?(?:想起|想到|忆起|记起)(?:了)?\{\{user\}\}(?:了|呢|呀|啊)?$/u;
+const ROOM_SIMPLE_CURRENT_REACTION_SIGNAL = /^(?:一|每次|每当)?(?:见到|看到|看见)\{\{user\}\}$/u;
+const ROOM_SIMPLE_CURRENT_PROXIMITY_SIGNAL = /^(?:(?:现在|此刻|当下|今天|今日|今夜|刚刚)?我(?:正|正在)?(?:坐|站|待|留|陪)在\{\{user\}\}(?:身边|旁边|附近)|我就?在\{\{user\}\}(?:身边|旁边|附近))$/u;
+const ROOM_PRESENT_STATE_CLAUSE_SIGNAL = /(?:正在|仍然|依然|继续|还(?:在|是|有|亮|开|关|放|摆|靠)|很|真|格外|显得|看起来|似乎|亮着|暗着|开着|关着|放着|摆着|靠着|散着|下雨|起风|落雪|安静|温暖|暖和|寒冷|凉快|炎热|开心|高兴|平静|紧张|忙碌|空着|有人|无人|\b(?:currently|still|is|are|looks?|seems?|raining|snowing|quiet|warm|cold|happy|calm)\b)/iu;
+
+function roomTextMentionsUser(value, userName = '') {
+    const text = core_text.normalizeText(value, 6000);
+    const normalizedUserName = core_text.normalizeText(userName, 120);
+    return !!text && (ROOM_SHARED_PARTICIPANT_SIGNAL.test(text)
+        || (!!normalizedUserName && text.includes(normalizedUserName)));
+}
+
+function roomClauseIsImmediateGreeting(value, userName = '') {
+    const clause = core_text.normalizeText(value, 900).replace(/\s+/gu, '');
+    const actors = ['{{user}}', '你', core_text.normalizeText(userName, 120).replace(/\s+/gu, '')].filter(Boolean);
+    return actors.some(actor => {
+        if (!clause.startsWith(actor)) return false;
+        return /^(?:终于|刚刚|刚|也|可算|总算)?(?:来|到|回来)了(?:呀|啊|呢)?$/u.test(clause.slice(actor.length));
+    });
+}
+
+function roomClauseIsUserVocative(value, userName = '') {
+    const clause = core_text.normalizeText(value, 900).replace(/\s+/gu, '');
+    const normalizedUserName = core_text.normalizeText(userName, 120).replace(/\s+/gu, '');
+    return clause === '{{user}}' || clause === '你' || (!!normalizedUserName && clause === normalizedUserName);
+}
+
+function roomCanonicalUserText(value, userName = '') {
+    let text = core_text.normalizeText(value, 900).replace(/\s+/gu, '');
+    const normalizedUserName = core_text.normalizeText(userName, 120).replace(/\s+/gu, '');
+    if (normalizedUserName) text = text.split(normalizedUserName).join('{{user}}');
+    return text.replace(/你/gu, '{{user}}');
+}
+
+function roomClauseIsProvenPresentOnly(value, userName = '') {
+    const clause = core_text.normalizeText(value, 900);
+    if (!clause) return true;
+    if (roomClauseIsImmediateGreeting(clause, userName) || roomClauseIsUserVocative(clause, userName)) return true;
+    if (ROOM_FUTURE_INTENT_SIGNAL.test(clause)
+        || ROOM_PRESENT_PROGRESS_SIGNAL.test(clause)
+        || ROOM_PRESENT_SPEECH_SIGNAL.test(clause)) return true;
+    const canonical = roomCanonicalUserText(clause, userName);
+    if (ROOM_SIMPLE_CURRENT_ACTION_SIGNAL.test(canonical)
+        || ROOM_SIMPLE_CURRENT_RECOLLECTION_SIGNAL.test(canonical)
+        || ROOM_SIMPLE_CURRENT_REACTION_SIGNAL.test(canonical)
+        || ROOM_SIMPLE_CURRENT_PROXIMITY_SIGNAL.test(canonical)) return true;
+    return !roomTextMentionsUser(clause, userName) && ROOM_PRESENT_STATE_CLAUSE_SIGNAL.test(clause);
+}
+
+export function roomNarrativeClaimsSharedHistory(value, userName = '') {
+    const text = core_text.normalizeText(Array.isArray(value) ? value.join('\n') : value, 6000);
+    if (!text || !roomTextMentionsUser(text, userName)) return false;
+    if (ROOM_RECOLLECTION_FRAME_SIGNAL.test(text) && ROOM_RECOLLECTION_EPISODE_SIGNAL.test(text)) return true;
+    const clauses = text.split(/[，,。！？!?；;：:\n]+/u).map(item => item.trim()).filter(Boolean);
+    return clauses.some(clause => {
+        const mentionsUser = roomTextMentionsUser(clause, userName);
+        // Once a prose block mentions the user, every clause must independently prove that it is
+        // present-only.  A current-time word in one clause cannot authorize an adjacent or nested
+        // unclassified episode.  This is the structural boundary; the signals below catch known
+        // history early, while the final branch rejects unseen paraphrases by default.
+        if (ROOM_PAST_TIME_SIGNAL.test(clause)) return true;
+        if (!mentionsUser) return !roomClauseIsProvenPresentOnly(clause, userName);
+        const completed = ROOM_RESULTATIVE_SIGNAL.test(clause);
+        const futureIntent = ROOM_FUTURE_INTENT_SIGNAL.test(clause);
+        const presentProgress = ROOM_PRESENT_PROGRESS_SIGNAL.test(clause);
+        const relationalAction = ROOM_RELATIONAL_ACTION_SIGNAL.test(clause);
+        if (relationalAction && completed && !futureIntent && !presentProgress) return true;
+        if (ROOM_SHARED_FACT_SIGNAL.test(clause) && !futureIntent) return true;
+        // In Room, an aspectless interpersonal action is ambiguous unless the model explicitly
+        // scopes it to now or the future. Fail closed instead of guessing that it is present-tense.
+        if (relationalAction && !futureIntent && !presentProgress && !roomClauseIsProvenPresentOnly(clause, userName)) return true;
+        const collective = /(?:我们|咱们|两个人|彼此|共同|一起|\b(?:we|us|our|ours|together)\b)/iu.test(clause);
+        if (collective && completed && !futureIntent) return true;
+        return !roomClauseIsProvenPresentOnly(clause, userName);
+    });
+}
+
+function roomTextContainsAnchor(value, anchor) {
+    const fold = input => core_text.normalizeText(input, 6000).replace(/\s+/gu, '').toLowerCase();
+    const needle = fold(anchor);
+    return needle.length >= 2 && fold(value).includes(needle);
+}
 const ROOM_VISUAL_PRESETS = Object.freeze([
+    Object.freeze({ worldStyle: 'neutral', palette: 'mist', material: 'mixed', density: 'balanced', build: 'unspecified', hairShape: 'unspecified', hairTone: 'unspecified', outfit: 'unspecified', detail: 'none', posture: 'reserved' }),
     Object.freeze({ worldStyle: 'contemporary', palette: 'mist', material: 'mixed', density: 'balanced', build: 'average', hairShape: 'short', hairTone: 'dark', outfit: 'casual', detail: 'none', posture: 'relaxed' }),
     Object.freeze({ worldStyle: 'institutional', palette: 'ocean', material: 'glass', density: 'balanced', build: 'lean', hairShape: 'cropped', hairTone: 'brown', outfit: 'uniform', detail: 'glasses', posture: 'upright' }),
-    Object.freeze({ worldStyle: 'historical', palette: 'warm', material: 'wood', density: 'layered', build: 'slender', hairShape: 'tied', hairTone: 'dark', outfit: 'historical', detail: 'headwear', posture: 'reserved' }),
+    Object.freeze({ worldStyle: 'historical', palette: 'warm', material: 'wood', density: 'layered', build: 'slender', hairShape: 'tied', hairTone: 'dark', outfit: 'historical', detail: 'none', posture: 'reserved' }),
     Object.freeze({ worldStyle: 'fantasy', palette: 'jewel', material: 'stone', density: 'layered', build: 'soft', hairShape: 'long', hairTone: 'silver', outfit: 'fantasy', detail: 'pointed_ears', posture: 'upright' }),
     Object.freeze({ worldStyle: 'scifi', palette: 'night', material: 'metal', density: 'sparse', build: 'lean', hairShape: 'cropped', hairTone: 'fantasy_cool', outfit: 'technical', detail: 'visor', posture: 'active' }),
     Object.freeze({ worldStyle: 'nomadic', palette: 'earth', material: 'fabric', density: 'layered', build: 'broad', hairShape: 'medium', hairTone: 'red', outfit: 'artisan', detail: 'scarf', posture: 'relaxed' }),
-    Object.freeze({ worldStyle: 'maritime', palette: 'ocean', material: 'wood', density: 'balanced', build: 'compact', hairShape: 'short', hairTone: 'brown', outfit: 'uniform', detail: 'headwear', posture: 'upright' }),
+    Object.freeze({ worldStyle: 'maritime', palette: 'ocean', material: 'wood', density: 'balanced', build: 'compact', hairShape: 'short', hairTone: 'brown', outfit: 'uniform', detail: 'none', posture: 'upright' }),
     Object.freeze({ worldStyle: 'contemporary', palette: 'violet', material: 'fabric', density: 'layered', build: 'soft', hairShape: 'curly', hairTone: 'fantasy_warm', outfit: 'casual', detail: 'headphones', posture: 'active' }),
     Object.freeze({ worldStyle: 'institutional', palette: 'mist', material: 'metal', density: 'sparse', build: 'slender', hairShape: 'medium', hairTone: 'dark', outfit: 'academic', detail: 'glasses', posture: 'studious' }),
     Object.freeze({ worldStyle: 'fantasy', palette: 'forest', material: 'wood', density: 'layered', build: 'lean', hairShape: 'long', hairTone: 'fantasy_cool', outfit: 'fantasy', detail: 'animal_ears', posture: 'active' }),
-    Object.freeze({ worldStyle: 'historical', palette: 'earth', material: 'stone', density: 'balanced', build: 'broad', hairShape: 'covered', hairTone: 'dark', outfit: 'ceremonial', detail: 'scarf', posture: 'reserved' }),
+    Object.freeze({ worldStyle: 'historical', palette: 'earth', material: 'stone', density: 'balanced', build: 'broad', hairShape: 'medium', hairTone: 'dark', outfit: 'ceremonial', detail: 'scarf', posture: 'reserved' }),
     Object.freeze({ worldStyle: 'scifi', palette: 'jewel', material: 'glass', density: 'balanced', build: 'compact', hairShape: 'nonhuman', hairTone: 'silver', outfit: 'combat', detail: 'horns', posture: 'upright' }),
 ]);
 
 function roomVisualPreset(identitySeed) {
     const seed = core_text.normalizeText(identitySeed, 12000).toLowerCase();
-    let pool = [0, 1, 7, 8];
-    if (/(?:赛博|科幻|星舰|飞船|宇宙|未来|机甲|机械|机器人|数据舱|驾驶舱|cyber|sci-?fi|spaceship|android)/i.test(seed)) pool = [4, 11];
-    else if (/(?:魔法|法师|精灵|龙族|神殿|异世界|妖|仙|灵力|fantasy|magic|elf|dragon)/i.test(seed)) pool = [3, 9];
-    else if (/(?:古代|王朝|宫殿|和室|茶室|武士|骑士|中世纪|historical|medieval|ancient)/i.test(seed)) pool = [2, 10];
-    else if (/(?:船舱|舰桥|港口|航海|海员|水手|maritime|ship|cabin|sailor)/i.test(seed)) pool = [6];
-    else if (/(?:营帐|帐篷|游牧|荒野|行军|露营|nomad|tent|camp)/i.test(seed)) pool = [5];
-    else if (/(?:宿舍|学校|学院|医院|军营|办公室|实验室|dorm|school|academy|hospital|office|laboratory)/i.test(seed)) pool = [1, 8];
+    let pool = [1, 2, 8, 9];
+    if (/(?:赛博|科幻|星舰|飞船|宇宙|未来|机甲|机械|机器人|数据舱|驾驶舱|cyber|sci-?fi|spaceship|android)/i.test(seed)) pool = [5, 12];
+    else if (/(?:魔法|法师|精灵|龙族|神殿|异世界|妖|仙|灵力|fantasy|magic|elf|dragon)/i.test(seed)) pool = [4, 10];
+    else if (/(?:古代|王朝|宫殿|和室|茶室|武士|骑士|中世纪|historical|medieval|ancient)/i.test(seed)) pool = [3, 11];
+    else if (/(?:船舱|舰桥|港口|航海|海员|水手|maritime|ship|cabin|sailor)/i.test(seed)) pool = [7];
+    else if (/(?:营帐|帐篷|游牧|荒野|行军|露营|nomad|tent|camp)/i.test(seed)) pool = [6];
+    else if (/(?:宿舍|学校|学院|医院|军营|办公室|实验室|dorm|school|academy|hospital|office|laboratory)/i.test(seed)) pool = [2, 9];
     return ROOM_VISUAL_PRESETS[pool[core_text.hashString(seed || 'heartbeat-room') % pool.length]];
+}
+
+function roomVisualEvidenceSupports(path, value, excerpt) {
+    const text = core_text.normalizeText(excerpt, 800).toLowerCase();
+    const patterns = {
+        'figure.hairShape:long': /(?:长发|长头发|及腰|披肩发|long hair)/iu,
+        'figure.hairShape:short': /(?:短发|短头发|short hair)/iu,
+        'figure.hairShape:cropped': /(?:寸头|板寸|剃短|cropped|buzz cut)/iu,
+        'figure.hairShape:tied': /(?:束发|扎发|马尾|发髻|ponytail|tied hair)/iu,
+        'figure.hairShape:curly': /(?:卷发|卷曲头发|curly hair)/iu,
+        'figure.hairShape:covered': /(?:兜帽|头巾|面纱|头纱|hood|veil|headscarf)/iu,
+        'figure.hairShape:nonhuman': /(?:无毛|机械头部|非人头部|nonhuman|robotic head)/iu,
+        'figure.detail:headwear': /(?:帽|冠|头巾|兜帽|头盔|发饰|hat|cap|hood|helmet|crown)/iu,
+        'figure.detail:glasses': /(?:眼镜|镜片|glasses|spectacles)/iu,
+        'figure.detail:pointed_ears': /(?:尖耳|精灵耳|pointed ears|elven ears)/iu,
+        'figure.detail:animal_ears': /(?:兽耳|猫耳|犬耳|animal ears|cat ears)/iu,
+        'figure.detail:horns': /(?:角|犄角|horns?)/iu,
+        'figure.detail:visor': /(?:面罩|护目镜|visor|goggles)/iu,
+    };
+    const pattern = patterns[`${path}:${value}`];
+    return pattern ? pattern.test(text) : text.includes(String(value || '').replace(/_/g, ' '));
 }
 
 function allowlistedRoomVisualValue(source, key, fallback) {
@@ -87,35 +211,60 @@ function allowlistedRoomVisualValue(source, key, fallback) {
     return ROOM_VISUAL_ALLOWLISTS[key].has(value) ? value : fallback;
 }
 
-export function normalizeRoomVisualProfile(value, { identitySeed = '', bindPersona = false } = {}) {
+export function normalizeRoomVisualProfile(value, { identitySeed = '', bindPersona = false, worldPresentation = null, controlledEvidence = null } = {}) {
     const input = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     const figure = input.figure && typeof input.figure === 'object' && !Array.isArray(input.figure) ? input.figure : {};
     const normalizedSeed = core_text.normalizeText(identitySeed, 12000) || 'heartbeat-room';
-    const fallback = roomVisualPreset(normalizedSeed);
+    const neutralFigure = ROOM_VISUAL_PRESETS[0];
+    const controlledWorldStyle = core_text.normalizeText(worldPresentation?.worldStyle, 40).toLowerCase();
+    // World presentation may colour the environment, but it is not appearance evidence. A
+    // deterministic preset must never turn an unknown character into a short-haired soldier,
+    // elf or android. Figure fields stay explicitly unspecified unless their source excerpt is
+    // present in the controlled card/world envelope and independently matches the value.
+    const environmentFallback = ROOM_VISUAL_PRESETS.find(preset => preset.worldStyle === controlledWorldStyle)
+        || ROOM_VISUAL_PRESETS[0];
     const identityHash = core_text.hashString(normalizedSeed);
+    const evidenceMap = input.explicitEvidence && typeof input.explicitEvidence === 'object' && !Array.isArray(input.explicitEvidence)
+        ? input.explicitEvidence : {};
+    const explicitEvidence = {};
     const explicitFields = core_text.cleanArray(input.explicitFields, ROOM_VISUAL_EXPLICIT_FIELDS.size, 40)
-        .filter(field => ROOM_VISUAL_EXPLICIT_FIELDS.has(field));
+        .filter(field => ROOM_VISUAL_EXPLICIT_FIELDS.has(field))
+        .filter(field => {
+            if (controlledEvidence === null) return true;
+            const excerpt = core_text.normalizeText(evidenceMap[field], 800);
+            const [group, key] = field.includes('.') ? field.split('.') : ['', field];
+            const rawValue = group === 'figure' ? figure?.[key] : input?.[key];
+            const normalizedValue = ROOM_VISUAL_LEGACY_ALIASES[key]?.[core_text.normalizeText(rawValue, 40).toLowerCase()]
+                || core_text.normalizeText(rawValue, 40).toLowerCase();
+            if (!excerpt || !core_worldPresentation.controlledEvidenceContains(controlledEvidence, excerpt)
+                || !roomVisualEvidenceSupports(field, normalizedValue, excerpt)) return false;
+            explicitEvidence[field] = excerpt;
+            return true;
+        });
     const explicit = new Set(explicitFields);
     const choose = (source, key, fallbackValue, path = key) => bindPersona && !explicit.has(path)
         ? fallbackValue
         : allowlistedRoomVisualValue(source, key, fallbackValue);
+    let hairShape = choose(figure, 'hairShape', neutralFigure.hairShape, 'figure.hairShape');
+    let detail = choose(figure, 'detail', neutralFigure.detail, 'figure.detail');
+    if (bindPersona && hairShape === 'covered' && !explicit.has('figure.hairShape')) hairShape = neutralFigure.hairShape;
+    if (bindPersona && detail === 'headwear' && !explicit.has('figure.detail')) detail = 'none';
     return {
         version: ROOM_VISUAL_PROFILE_VERSION,
         identityKey: `room-visual:${identityHash.toString(36)}`,
         explicitFields,
-        worldStyle: choose(input, 'worldStyle', fallback.worldStyle),
-        palette: choose(input, 'palette', fallback.palette),
-        material: choose(input, 'material', fallback.material),
-        density: choose(input, 'density', fallback.density),
+        explicitEvidence,
+        worldStyle: worldPresentation?.worldStyle || choose(input, 'worldStyle', environmentFallback.worldStyle),
+        palette: choose(input, 'palette', environmentFallback.palette),
+        material: choose(input, 'material', environmentFallback.material),
+        density: choose(input, 'density', environmentFallback.density),
         figure: {
-            build: choose(figure, 'build', fallback.build, 'figure.build'),
-            hairShape: choose(figure, 'hairShape', fallback.hairShape, 'figure.hairShape'),
-            hairTone: choose(figure, 'hairTone', fallback.hairTone, 'figure.hairTone'),
-            outfit: choose(figure, 'outfit', fallback.outfit, 'figure.outfit'),
-            detail: choose(figure, 'detail', fallback.detail, 'figure.detail'),
-            posture: choose(figure, 'posture', fallback.posture, 'figure.posture'),
-            // The room figure is deliberately rendered from behind. No facial geometry is
-            // retained from new or legacy data, so the CSS silhouette cannot imply a face.
+            build: choose(figure, 'build', neutralFigure.build, 'figure.build'),
+            hairShape,
+            hairTone: choose(figure, 'hairTone', neutralFigure.hairTone, 'figure.hairTone'),
+            outfit: choose(figure, 'outfit', neutralFigure.outfit, 'figure.outfit'),
+            detail,
+            posture: choose(figure, 'posture', neutralFigure.posture, 'figure.posture'),
             facing: 'away',
         },
     };
@@ -144,7 +293,35 @@ export function normalizeRoomPetSpecies(value) {
     return ROOM_PET_SPECIES_SET.has(species) ? species : 'other';
 }
 
-export function normalizeRoomPets(value, spaces, memoryBank) {
+function roomPetSpeciesLabel(species, index) {
+    return ({ cat: '猫咪', dog: '小狗', bird: '鸟儿', rabbit: '兔子', fish: '鱼儿', reptile: '爬宠' })[species]
+        || `宠物 ${index + 1}`;
+}
+
+function roomPetOwnershipEvidence(evidence, characterName, speciesAliases, suppliedName = '', { allowCharacterProfileShorthand = false } = {}) {
+    const text = core_text.normalizeText(evidence, 1600).replace(/[ \t]+/g, ' ');
+    if (!text) return false;
+    const escapeRegExp = value => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const petTerms = [...new Set([
+        ...speciesAliases,
+        suppliedName,
+        '宠物', '伙伴动物', 'pet', 'companion animal',
+    ].map(value => core_text.normalizeText(value, 60)).filter(Boolean))];
+    if (!petTerms.length) return false;
+    const pet = `(?:${petTerms.map(escapeRegExp).join('|')})`;
+    const owner = escapeRegExp(core_text.normalizeText(characterName, 120));
+    const explicitProfile = new RegExp(`^(?:宠物|pet)\\s*[:：=]\\s*.{0,24}${pet}`, 'iu');
+    const firstPerson = new RegExp(`^(?:(?:我|我的|本人|I|my)\\s*.{0,16})?(?:养(?:着|了|有)?|饲养|收养|拥有|have|has|own|keep|adopt(?:ed)?)\\s*.{0,20}${pet}`, 'iu');
+    const profileLongTermCare = new RegExp(`(?:^|[\\n。！？.!?；;])\\s*(?:他|她|角色).{0,32}(?:给|为).{0,12}${pet}.{0,24}(?:准备|添置|购买|安置).{0,30}(?:长期|专用|固定|日常).{0,20}(?:窝|床|笼|食盆|水盆|饲料|用品|项圈|玩具|cat\\s*bed|dog\\s*bed|pet\\s*bed|food\\s*bowl|supplies)`, 'iu');
+    if (allowCharacterProfileShorthand && (explicitProfile.test(text) || firstPerson.test(text) || profileLongTermCare.test(text))) return true;
+    if (!owner) return false;
+    const ownerLongTermCare = new RegExp(`${owner}.{0,32}(?:给|为).{0,12}${pet}.{0,24}(?:准备|添置|购买|安置).{0,30}(?:长期|专用|固定|日常).{0,20}(?:窝|床|笼|食盆|水盆|饲料|用品|项圈|玩具|cat\\s*bed|dog\\s*bed|pet\\s*bed|food\\s*bowl|supplies)`, 'iu');
+    const ownerFirst = new RegExp(`${owner}.{0,24}(?:养(?:着|了|有)?|饲养|收养|拥有|的宠物|have|has|own|keep|adopt(?:ed)?).{0,24}${pet}`, 'iu');
+    const petFirst = new RegExp(`${pet}.{0,24}(?:是${owner}的|由${owner}(?:饲养|收养)|belongs? to ${owner}|owned by ${owner})`, 'iu');
+    return ownerLongTermCare.test(text) || ownerFirst.test(text) || petFirst.test(text);
+}
+
+export function normalizeRoomPets(value, spaces, memoryBank, { controlledEvidence = null, characterEvidence = null } = {}) {
     const availableSpaces = new Set((Array.isArray(spaces) ? spaces : []).map(space => space?.id).filter(Boolean));
     const usedIds = new Set();
     return (Array.isArray(value) ? value : []).slice(0, 6).map((item, index) => {
@@ -152,19 +329,47 @@ export function normalizeRoomPets(value, spaces, memoryBank) {
         if (!spaceId || !availableSpaces.has(spaceId)) return null;
         const basis = core_constants.ROOM_BASIS_VALUES.has(item?.basis) ? item.basis : '设定';
         const species = normalizeRoomPetSpecies(item?.species);
-        const name = core_text.normalizeText(item?.name, 60) || `宠物 ${index + 1}`;
-        const description = core_text.normalizeText(item?.description, 900) || '它在这个空间里留下了长期生活的痕迹。';
-        const line = core_text.normalizeText(item?.line, 500);
+        const suppliedName = core_text.normalizeText(item?.name, 60);
+        let name = suppliedName || roomPetSpeciesLabel(species, index);
+        let description = core_text.normalizeText(item?.description, 900);
+        let line = core_text.normalizeText(item?.line, 500);
+        const sourceEvidence = core_text.normalizeText(item?.sourceEvidence, 800);
         const reference = basis === '记忆'
-            ? core_evidence.normalizeMemoryReference(
+            ? core_evidence.normalizeExactMemoryReference(
                 item?.sourceMemoryIds,
                 item?.sourceMemoryAnchor,
-                `${name}\n${description}\n${line}`,
                 memoryBank,
                 1,
             )
             : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
         if (basis === '记忆' && (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor)) return null;
+        const speciesAliases = Object.entries(ROOM_PET_SPECIES_ALIASES)
+            .filter(([, normalized]) => normalized === species).map(([alias]) => alias);
+        speciesAliases.push(species);
+        if (species === 'other') speciesAliases.push('宠物', '伙伴动物', 'pet', 'companion animal');
+        if (basis === '设定' && controlledEvidence !== null) {
+            const evidenceLower = sourceEvidence.toLowerCase();
+            if (!sourceEvidence || !core_worldPresentation.controlledEvidenceContains(controlledEvidence, sourceEvidence)
+                || !speciesAliases.some(alias => alias && evidenceLower.includes(alias.toLowerCase()))
+                || !roomPetOwnershipEvidence(sourceEvidence, memoryBank?.characterName, speciesAliases, suppliedName, {
+                    allowCharacterProfileShorthand: characterEvidence !== null
+                        && core_worldPresentation.controlledEvidenceContains(characterEvidence, sourceEvidence),
+                })) return null;
+            if (suppliedName && !core_worldPresentation.controlledEvidenceContains(sourceEvidence, suppliedName)) name = roomPetSpeciesLabel(species, index);
+            if (!description || !core_worldPresentation.controlledEvidenceContains(sourceEvidence, description)) description = `${name}长期生活在这个空间。`;
+            if (line && !core_worldPresentation.controlledEvidenceContains(sourceEvidence, line)) line = '';
+        }
+        if (basis === '记忆') {
+            const referencedEvidence = reference.sourceMemoryIds.map(id => {
+                const memory = (Array.isArray(memoryBank?.memories) ? memoryBank.memories : []).find(entry => entry?.id === id);
+                return [memory?.title, memory?.summary, ...(Array.isArray(memory?.anchors) ? memory.anchors : [])].filter(Boolean).join('\n');
+            }).join('\n');
+            if (!roomPetOwnershipEvidence(referencedEvidence, memoryBank?.characterName, speciesAliases, core_text.normalizeText(item?.name, 60))) return null;
+            if (suppliedName && !core_worldPresentation.controlledEvidenceContains(referencedEvidence, suppliedName)) name = roomPetSpeciesLabel(species, index);
+            if (!description || !core_worldPresentation.controlledEvidenceContains(referencedEvidence, description)) description = `${name}长期生活在这个空间。`;
+            if (line && !core_worldPresentation.controlledEvidenceContains(referencedEvidence, line)) line = '';
+        }
+        if (!description) description = `${name}长期生活在这个空间。`;
         const fallbackId = `PET${String(index + 1).padStart(2, '0')}`;
         let id = core_text.safeId(item?.id, fallbackId);
         if (usedIds.has(id)) id = fallbackId;
@@ -180,8 +385,34 @@ export function normalizeRoomPets(value, spaces, memoryBank) {
             basis,
             sourceMemoryIds: reference.sourceMemoryIds,
             sourceMemoryAnchor: reference.sourceMemoryAnchor,
+            sourceEvidence: basis === '设定' ? sourceEvidence : '',
         };
     }).filter(Boolean);
+}
+
+export function roomRequiredPetSpecies(memoryBank, { controlledEvidence = null, characterEvidence = null } = {}) {
+    if (controlledEvidence === null && characterEvidence === null) return [];
+    const characterName = core_text.normalizeText(memoryBank?.characterName, 120);
+    const controlled = core_text.normalizeText(controlledEvidence, 16000);
+    const character = core_text.normalizeText(characterEvidence, 16000);
+    const required = [];
+    for (const species of ROOM_PET_SPECIES.filter(value => value !== 'other')) {
+        const aliases = Object.entries(ROOM_PET_SPECIES_ALIASES)
+            .filter(([, normalized]) => normalized === species).map(([alias]) => alias);
+        aliases.push(species);
+        const controlledMatch = aliases.some(alias => alias && controlled.toLowerCase().includes(alias.toLowerCase()))
+            && roomPetOwnershipEvidence(controlled, characterName, aliases);
+        const characterMatch = aliases.some(alias => alias && character.toLowerCase().includes(alias.toLowerCase()))
+            && roomPetOwnershipEvidence(character, characterName, aliases, '', { allowCharacterProfileShorthand: true });
+        if (controlledMatch || characterMatch) required.push(species);
+    }
+    if (required.length) return required;
+    const genericAliases = ['宠物', '伙伴动物', 'pet', 'companion animal'];
+    const genericControlled = genericAliases.some(alias => controlled.toLowerCase().includes(alias.toLowerCase()))
+        && roomPetOwnershipEvidence(controlled, characterName, genericAliases);
+    const genericCharacter = genericAliases.some(alias => character.toLowerCase().includes(alias.toLowerCase()))
+        && roomPetOwnershipEvidence(character, characterName, genericAliases, '', { allowCharacterProfileShorthand: true });
+    return genericControlled || genericCharacter ? ['other'] : [];
 }
 
 export function roomNeedsSchemaUpgrade(session) {
@@ -190,8 +421,9 @@ export function roomNeedsSchemaUpgrade(session) {
         && Number(session.roomVersion) !== core_constants.ROOM_SESSION_VERSION;
 }
 
-export function normalizeRoom(data, memoryBank, { identityKey = '' } = {}) {
+export function normalizeRoom(data, memoryBank, { identityKey = '', worldPresentation = null, controlledEvidence = null, characterEvidence = null } = {}) {
     const rawSpaces = Array.isArray(data?.spaces) ? data.spaces : [];
+    const userName = core_text.normalizeText(memoryBank?.userName, 120);
     const usedSpaceIds = new Set();
     const spaces = rawSpaces.slice(0, 10).map((space, spaceIndex) => {
         const fallbackSpaceId = `SP${String(spaceIndex + 1).padStart(2, '0')}`;
@@ -203,8 +435,10 @@ export function normalizeRoom(data, memoryBank, { identityKey = '' } = {}) {
         const usedObjectIds = new Set();
         const objects = rawObjects.slice(0, 8).map((item, objectIndex) => {
             const basis = core_constants.ROOM_BASIS_VALUES.has(item?.basis) ? item.basis : '设定';
+            const label = core_text.normalizeText(item?.label, 60) || `角落 ${objectIndex + 1}`;
             const description = core_text.normalizeText(item?.description, 1600);
             const line = core_text.normalizeText(item?.line, 800);
+            if (basis === '设定' && roomNarrativeClaimsSharedHistory([label, description, line], userName)) return null;
             const reference = basis === '记忆'
                 ? core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, `${item?.label || ''}
 ${description}
@@ -218,7 +452,7 @@ ${line}`, memoryBank, 1)
             usedObjectIds.add(objectId);
             return {
                 id: objectId,
-                label: core_text.normalizeText(item?.label, 60) || `角落 ${objectIndex + 1}`,
+                label,
                 zone: core_constants.ROOM_ZONE_VALUES.has(item?.zone) ? item.zone : ['左上', '右上', '左下', '右下', '中央', '近景'][objectIndex % 6],
                 basis,
                 searchable: core_evidence.isSearchableRoomObject(item),
@@ -227,12 +461,14 @@ ${line}`, memoryBank, 1)
                 sourceMemoryIds,
                 sourceMemoryAnchor: reference.sourceMemoryAnchor,
             };
-        }).filter(item => item.description && item.line && (item.basis !== '记忆' || (item.sourceMemoryIds.length >= 1 && item.sourceMemoryAnchor)));
+        }).filter(item => item && item.description && item.line && (item.basis !== '记忆' || (item.sourceMemoryIds.length >= 1 && item.sourceMemoryAnchor)));
+        const requestedAtmosphere = core_text.normalizeText(space?.atmosphere, 1800);
         return {
             id: spaceId,
             label: core_text.normalizeText(space?.label, 60) || `空间 ${spaceIndex + 1}`,
             spaceType: core_text.normalizeText(space?.spaceType, 80) || core_text.normalizeText(space?.label, 60) || '私人空间',
-            atmosphere: core_text.normalizeText(space?.atmosphere, 1800) || '这里保留着他长期生活留下的细小痕迹。',
+            atmosphere: requestedAtmosphere && !roomNarrativeClaimsSharedHistory(requestedAtmosphere, userName)
+                ? requestedAtmosphere : '这里保留着他长期生活留下的细小痕迹。',
             objects,
         };
     }).filter(space => space.objects.length >= 3);
@@ -264,24 +500,36 @@ ${line}`, memoryBank, 1)
         const objectIds = new Set(space.objects.map(item => item.id));
         const focusObjectId = objectIds.has(String(raw?.focusObjectId || '')) ? String(raw.focusObjectId) : space.objects[0].id;
         if (!activity || !line) throw new Error(`“他的房间”缺少 ${key} 时段的生活状态。`);
+        if (roomNarrativeClaimsSharedHistory([activity, line], userName)) {
+            throw new Error(`“他的房间”${key} 时段混入了没有档案证据的既往共同经历。`);
+        }
         dayparts[key] = { spaceId: space.id, activity, line, focusObjectId };
     }
-    const presenceLines = core_text.cleanArray(data?.presenceLines, 12, 900);
+    const presenceLines = core_text.cleanArray(data?.presenceLines, 12, 900)
+        .filter(line => !roomNarrativeClaimsSharedHistory(line, userName));
     if (presenceLines.length < 4) throw new Error(`“他的房间”角色互动台词不足：${presenceLines.length} 句，至少需要 4 句。`);
     const initialDaypart = roomDaypartState();
     const initialSpace = spaceById.get(dayparts[initialDaypart.key]?.spaceId) || spaces[0];
     const title = core_text.normalizeText(data?.title, 100) || '他的房间';
     const homeName = core_text.normalizeText(data?.homeName, 100) || '私人生活空间';
-    const homeSummary = core_text.normalizeText(data?.homeSummary, 2200) || '这些空间拼成了他日常生活真正会经过的路线。';
-    const profileSeed = roomVisualIdentitySeed({ ...data, title, homeName, homeSummary, spaces }, memoryBank, identityKey);
-    const pets = normalizeRoomPets(data?.pets || data?.companions, spaces, memoryBank);
+    const requestedHomeSummary = core_text.normalizeText(data?.homeSummary, 2200);
+    const homeSummary = requestedHomeSummary && !roomNarrativeClaimsSharedHistory(requestedHomeSummary, userName)
+        ? requestedHomeSummary : '这些空间拼成了他日常生活真正会经过的路线。';
+    const profileSeed = [identityKey, memoryBank?.characterName, memoryBank?.chatId, worldPresentation?.evidenceHash].filter(Boolean).join('|');
+    const pets = normalizeRoomPets(data?.pets || data?.companions, spaces, memoryBank, { controlledEvidence, characterEvidence });
+    const requiredPetSpecies = roomRequiredPetSpecies(memoryBank, { controlledEvidence, characterEvidence });
+    const missingPetSpecies = requiredPetSpecies.filter(species => !pets.some(pet => pet.species === species));
+    if (missingPetSpecies.length) {
+        throw new Error(`受控设定明确存在宠物，但房间缺少有效宠物节点：${missingPetSpecies.map(roomPetSpeciesLabel).join('、')}。`);
+    }
     return {
         kind: core_constants.MODE.ROOM,
         roomVersion: core_constants.ROOM_SESSION_VERSION,
         title,
         homeName,
         homeSummary,
-        visualProfile: normalizeRoomVisualProfile(data?.visualProfile, { identitySeed: profileSeed, bindPersona: true }),
+        worldPresentation: worldPresentation ? structuredClone(worldPresentation) : null,
+        visualProfile: normalizeRoomVisualProfile(data?.visualProfile, { identitySeed: profileSeed, bindPersona: true, worldPresentation, controlledEvidence }),
         spaces,
         pets,
         dayparts,
@@ -363,6 +611,7 @@ export function mergeRoomIncremental(previous, fresh, sourceMemoryIds, { memoryB
     const schemaUpgrade = roomNeedsSchemaUpgrade(previous);
     const merged = structuredClone(previous);
     merged.roomVersion = core_constants.ROOM_SESSION_VERSION;
+    if (!previous?.worldPresentation && fresh?.worldPresentation) merged.worldPresentation = structuredClone(fresh.worldPresentation);
     if (!previous?.visualProfile && fresh?.visualProfile) merged.visualProfile = structuredClone(fresh.visualProfile);
     const usedSpaceIds = new Set((merged.spaces || []).map(space => space.id));
     const bySpace = new Map((merged.spaces || []).map((space, index) => [roomSpaceKey(space), index]));
@@ -431,13 +680,21 @@ export function mergeRoomIncremental(previous, fresh, sourceMemoryIds, { memoryB
     return { session: merged, added };
 }
 
-export async function generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previous) {
+export async function generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previous, options = {}) {
     const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+    const presentationContext = options.presentationContext || {};
+    const worldPresentation = previous?.worldPresentation || presentationContext.profile
+        || core_worldPresentation.resolveWorldPresentation(presentationContext.contextEnvelope || '', memoryBank);
     const fresh = await generation_client.requestValidatedSegment(
-        roomIncrementPrompt(context, memoryBank, previous, sourceMemoryIds),
+        `${roomIncrementPrompt(context, memoryBank, previous, sourceMemoryIds)}\nCONTROLLED_WORLD_PRESENTATION_JSON:\n${JSON.stringify(worldPresentation, null, 2)}\nvisualProfile.explicitFields 的每一项都必须在 explicitEvidence 中给出角色卡/世界书的精确原文；basis=设定 的每只宠物必须给出 sourceEvidence 精确原文，且原文要同时包含物种与所用名字。`,
         '他的房间 · 正在从新增档案追加生活痕迹…',
-        { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], temperature: 0.45, context, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ROOM, background: true },
-        raw => normalizeRoom(raw, memoryBank),
+        { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], temperature: 0.45, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ROOM, background: true },
+        raw => normalizeRoom(raw, memoryBank, {
+            identityKey: core_context.currentCharacterRuntimeKey(context),
+            worldPresentation,
+            controlledEvidence: presentationContext.settingEvidence ?? '',
+            characterEvidence: presentationContext.characterEvidence ?? '',
+        }),
     );
     const { session, added } = mergeRoomIncremental(previous, fresh, sourceMemoryIds, { memoryBank });
     return core_incremental.stampIncrementalCoverage(session, previous, memoryBank, 'mode', sourceMemoryIds, added);
@@ -562,6 +819,7 @@ ${data}
 - temporaryObjects 最多 3 个，只写当天自然出现的临时生活物件，例如半杯水、刚脱下的外套、摊开的书；不得把长期物件重复塞进去。
 - activity / ambient / trace / temporaryObjects 默认只写 {{char}} 自己的当日生活，不得擅自把 {{user}} 写进当前房间或当前活动。
 - 如果某个节点确实引用档案中已经存在的“与 {{user}} 有关的旧痕迹”，sourceMemoryIds 必须至少填写 1 个真实档案 ID，同时 sourceMemoryAnchor 必须从所引用记忆的 anchors（或 title）中原样复制一个具体词组；否则两者都必须为空。line 可以作为当前观察模式下 {{char}} 对 {{user}} 说的一句即时短台词，但不能凭空声称新的既往事实。
+- 一旦 activity / line / ambient / trace / temporaryObjects 使用“去年、上次、曾经、那天”等过去时间，或声称双方已经送过、选过、买过、去过、一起做过某事，就必须绑定真实 Mxxx；sourceMemoryAnchor 还必须原样出现在这些可见字段之一。只填一个无关 ID 或把字段改写成近义句不能通过本地校验。
 - 同一天允许多次回到同一个空间，但不能整天只在一个空间，除非角色设定客观限制如此；即便受限，也要通过活动、光线和生活痕迹体现时间推进。`;
 }
 
@@ -580,6 +838,27 @@ export function normalizeTemporaryRoomObjects(value) {
     return core_text.cleanArray(value, 8, 90).filter(item => !core_text.isPlaceholderText(item)).slice(0, 3);
 }
 
+function roomLifeNarrativeEvidenceState(beat, memoryBank) {
+    const activity = core_text.normalizeText(beat?.activity, 1200);
+    const line = core_text.normalizeText(beat?.line, 900);
+    const ambient = core_text.normalizeText(beat?.ambient, 1200);
+    const trace = core_text.normalizeText(beat?.trace, 1200);
+    const temporaryObjects = normalizeTemporaryRoomObjects(beat?.temporaryObjects);
+    const historyProbe = `${activity}\n${ambient}\n${trace}\n${temporaryObjects.join('；')}`;
+    const submittedMemoryIds = core_text.cleanArray(beat?.sourceMemoryIds, 16, 40);
+    const reference = submittedMemoryIds.length
+        ? core_evidence.normalizeExactMemoryReference(beat?.sourceMemoryIds, beat?.sourceMemoryAnchor, memoryBank, 1)
+        : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
+    const userName = core_text.normalizeText(memoryBank?.userName, 120);
+    const referenceRequired = roomTextMentionsUser(historyProbe, userName)
+        || roomNarrativeClaimsSharedHistory(line, userName);
+    const combinedNarrative = `${historyProbe}\n${line}`;
+    const safe = !referenceRequired || (reference.sourceMemoryIds.length >= 1
+        && !!reference.sourceMemoryAnchor
+        && roomTextContainsAnchor(combinedNarrative, reference.sourceMemoryAnchor));
+    return { safe, reference, activity, line, ambient, trace, temporaryObjects };
+}
+
 export function normalizeRoomLifePlan(data, session, memoryBank, expectedDate) {
     const dateKey = localDateKey(expectedDate);
     const spaceById = new Map(session.spaces.map(space => [space.id, space]));
@@ -591,27 +870,12 @@ export function normalizeRoomLifePlan(data, session, memoryBank, expectedDate) {
         if (minute === null || !space || usedTimes.has(minute)) return null;
         const objectIds = new Set(space.objects.map(item => item.id));
         const focusObjectId = objectIds.has(String(beat?.focusObjectId || '')) ? String(beat.focusObjectId) : space.objects[0]?.id || '';
-        const activity = core_text.normalizeText(beat?.activity, 1200);
-        const line = core_text.normalizeText(beat?.line, 900);
-        const ambient = core_text.normalizeText(beat?.ambient, 1200);
-        const trace = core_text.normalizeText(beat?.trace, 1200);
+        const evidenceState = roomLifeNarrativeEvidenceState(beat, memoryBank);
+        const { activity, line, ambient, trace, temporaryObjects, reference } = evidenceState;
         if (!activity || !line || !ambient || !trace) return null;
         const visualState = normalizeRoomVisualState(beat?.visualState);
-        const temporaryObjects = normalizeTemporaryRoomObjects(beat?.temporaryObjects);
-        const historyProbe = `${activity}
-${ambient}
-${trace}
-${temporaryObjects.join('；')}`;
-        const reference = core_evidence.normalizeMemoryReference(beat?.sourceMemoryIds, beat?.sourceMemoryAnchor, `${historyProbe}
-${line}`, memoryBank, 0);
         const sourceMemoryIds = reference.sourceMemoryIds;
-        const userName = core_text.normalizeText(core_context.getContext().name1 || '', 120);
-        const lineHistoryMention = /(?:你们曾|与你一起|和你一起|你送|你留|你来过|我们一起|第一次和你|上次和你|那次和你)/.test(line);
-        const userHistoryMention = historyProbe.includes('{{user}}')
-            || (userName && historyProbe.includes(userName))
-            || /(?:你们|与你|和你|给你的|你送|你留|你的东西|你的照片|你的杯|你的衣|你来过|一起买|一起去|共同)/.test(historyProbe)
-            || lineHistoryMention;
-        if (userHistoryMention && sourceMemoryIds.length < 1) return null;
+        if (!evidenceState.safe) return null;
         usedTimes.add(minute);
         return {
             id: `LIFE_${String(index + 1).padStart(2, '0')}_${minute}`,
@@ -682,6 +946,11 @@ export function roomLifeBeat(session = runtimeState.activeSession, date = new Da
         if (beat.minute <= minute) current = beat;
         else break;
     }
+    let memoryBank = runtimeState.activeArchiveSnapshot?.memory || null;
+    if (!memoryBank) {
+        try { memoryBank = archive_repository.requireArchive(core_context.currentCharacterGuard()); } catch {}
+    }
+    if (!roomLifeNarrativeEvidenceState(current, memoryBank || { memories: [], userName: '' }).safe) return null;
     return current;
 }
 
@@ -722,14 +991,14 @@ export async function ensureRoomLifePlan({ force = false, quiet = false } = {}) 
             roomSession.lifePlanAttempt = { dateKey, count: 0, failedAt: 0 };
             let committed = false;
             if (core_context.isCurrentTaskOrigin(origin)) {
-                try { const latestMemory = archive_repository.requireArchive(core_context.currentCharacterGuard()); if (latestMemory.archiveRevision === archiveRevision) committed = core_cache.saveSession(core_constants.MODE.ROOM, roomSession, chatId); } catch {}
+                try { const latestMemory = archive_repository.requireArchive(core_context.currentCharacterGuard()); if (latestMemory.archiveRevision === archiveRevision) committed = await core_cache.commitSession(core_constants.MODE.ROOM, roomSession, chatId, origin); } catch {}
             }
             if (!committed) core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [core_constants.MODE.ROOM]: roomSession } });
             if (committed && runtimeState.activeMode === core_constants.MODE.ROOM && runtimeState.activeSession === roomSession && !document.getElementById(core_constants.OVERLAY_ID)?.hidden) renderRoom();
             else globalThis.toastr?.success?.(`今日生活后台生成完成：${dateKey}${committed ? '' : '（回到原窗口自动写入）'}`, '心跳回忆');
             return roomSession.lifePlan;
         } catch (error) {
-            console.warn('[HeartbeatMemories] room life plan failed, using one-day fallback without automatic retry', error);
+            console.warn('[HeartbeatMemories] room life plan failed, using one-day fallback without automatic retry', core_text.safeErrorDiagnostic(error));
             try {
                 const latestContext = core_context.currentCharacterGuard();
                 const latestMemory = archive_repository.requireArchive(latestContext);
@@ -737,13 +1006,13 @@ export async function ensureRoomLifePlan({ force = false, quiet = false } = {}) 
                     const previousCount = roomSession.lifePlanAttempt?.dateKey === dateKey ? Number(roomSession.lifePlanAttempt.count) || 0 : 0;
                     roomSession.lifePlanAttempt = { dateKey, count: previousCount + 1, failedAt: Date.now() };
                     roomSession.lifePlan = fallbackRoomLifePlan(roomSession, today);
-                    core_cache.saveSession(core_constants.MODE.ROOM, roomSession, chatId);
+                    await core_cache.commitSession(core_constants.MODE.ROOM, roomSession, chatId, origin);
                     if (runtimeState.activeMode === core_constants.MODE.ROOM && runtimeState.activeSession === roomSession && !document.getElementById(core_constants.OVERLAY_ID)?.hidden) renderRoom();
                 }
             } catch (guardError) {
                 console.warn('[HeartbeatMemories] skipped fallback save after chat/session change', guardError);
             }
-            if (!quiet) globalThis.toastr?.warning?.(core_text.toastText(`当天生活时间线生成失败，今日自动生成已停止；可稍后手动点击“更新今日生活”重试：${error?.message || error}`), '心跳回忆');
+            if (!quiet) globalThis.toastr?.warning?.(core_text.toastText(`当天生活时间线生成失败，今日自动生成已停止；可稍后手动点击“更新今日生活”重试：${core_text.safeErrorSummary(error)}`), '心跳回忆');
             return roomSession.lifePlan?.dateKey === dateKey ? roomSession.lifePlan : null;
         } finally {
             if (!quiet) ui_overlay.setInnerLoading(false);
@@ -786,7 +1055,7 @@ export function roomSceneClass(spaceType, label = '') {
     if (/工坊|工作间|手作|驾驶|atelier|workshop/.test(text)) return 'workshop';
     if (/和室|传统|古风|茶室/.test(text)) return 'traditional';
     if (/办公室|office/.test(text)) return 'office';
-    return 'modern';
+    return 'neutral';
 }
 
 export function roomLayoutVariant(space) {
@@ -811,7 +1080,16 @@ export function roomCurrentSlot(session = runtimeState.activeSession, date = new
     const live = roomLifeBeat(session, date);
     if (live) return live;
     const state = roomDaypartState(date);
-    return session.dayparts?.[state.key] || session.dayparts?.evening || null;
+    const stored = session.dayparts?.[state.key] || session.dayparts?.evening || null;
+    if (!stored) return null;
+    const userName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.memory?.userName
+        || core_context.getContext()?.name1, 120);
+    if (!roomNarrativeClaimsSharedHistory([stored.activity, stored.line], userName)) return stored;
+    return {
+        ...stored,
+        activity: '按自己的节奏处理此刻的日常。',
+        line: '',
+    };
 }
 
 export function selectedRoomSpace() {
@@ -929,6 +1207,21 @@ export function roomPetSummaryHtml(pet) {
     return `<div class="rmt-room-pet-note"><b>🐾 ${core_text.esc(name)}</b><span>${core_text.esc(description)}</span>${line ? `<em>${core_text.esc(line)}</em>` : ''}${evidence}</div>`;
 }
 
+function roomObjectSafeForPresentation(item, memoryBank, userName) {
+    const narrative = [item?.label, item?.description, item?.line];
+    if (!roomNarrativeClaimsSharedHistory(narrative, userName)) return true;
+    if (item?.basis !== '记忆') return false;
+    const reference = core_evidence.normalizeExactMemoryReference(
+        item?.sourceMemoryIds,
+        item?.sourceMemoryAnchor,
+        memoryBank || { memories: [] },
+        1,
+    );
+    return reference.sourceMemoryIds.length >= 1
+        && !!reference.sourceMemoryAnchor
+        && roomTextContainsAnchor(narrative.join('\n'), reference.sourceMemoryAnchor);
+}
+
 export function roomDeepAvailability() {
     const options = runtimeState.activeArchiveSnapshot ? { chatId: runtimeState.activeArchiveSnapshot.chatId, memoryBank: runtimeState.activeArchiveSnapshot.memory, cache: runtimeState.activeArchiveSnapshot.cache, clone: true } : {};
     return {
@@ -1031,7 +1324,19 @@ export function renderRoom() {
     const daypart = roomDaypartState(now);
     const slot = roomCurrentSlot(session, now);
     const presentSpace = session.spaces.find(space => space.id === slot?.spaceId) || session.spaces[0];
-    const selectedSpace = selectedRoomSpace() || presentSpace;
+    const roomMemoryBank = runtimeState.activeArchiveSnapshot?.memory || (() => {
+        try { return archive_repository.requireArchive(core_context.currentCharacterGuard()); } catch { return null; }
+    })();
+    const roomUserName = core_text.normalizeText(roomMemoryBank?.userName || core_context.getContext()?.name1, 120);
+    const selectedSpaceRaw = selectedRoomSpace() || presentSpace;
+    const selectedSpace = {
+        ...selectedSpaceRaw,
+        atmosphere: roomNarrativeClaimsSharedHistory(selectedSpaceRaw?.atmosphere, roomUserName)
+            ? '这里保留着他长期生活留下的细小痕迹。'
+            : core_text.normalizeText(selectedSpaceRaw?.atmosphere, 1800),
+        objects: (Array.isArray(selectedSpaceRaw?.objects) ? selectedSpaceRaw.objects : [])
+            .filter(item => roomObjectSafeForPresentation(item, roomMemoryBank, roomUserName)),
+    };
     if (!session.selectedSpaceId) session.selectedSpaceId = selectedSpace.id;
     const selected = selectedRoomObject(selectedSpace);
     const selectedSearchable = core_evidence.isSearchableRoomObject(selected);
@@ -1070,7 +1375,9 @@ export function renderRoom() {
     const memorySource = selected?.basis === '记忆' && selected.sourceMemoryIds.length
         ? `档案痕迹：${selected.sourceMemoryIds.join(' · ')}`
         : '来源：角色设定 / 世界观';
-    const presenceLine = session.presenceLines[Math.max(0, Number(session.presenceIndex) || 0) % session.presenceLines.length] || slot?.line || '';
+    const safePresenceLines = (Array.isArray(session.presenceLines) ? session.presenceLines : [])
+        .filter(line => !roomNarrativeClaimsSharedHistory(line, roomUserName));
+    const presenceLine = safePresenceLines[Math.max(0, Number(session.presenceIndex) || 0) % Math.max(1, safePresenceLines.length)] || slot?.line || '';
     const currentLocationText = `${daypart.label} · ${charName} 现在在「${presentSpace.label}」`;
     const deep = roomDeepAvailability();
     let phoneDraft = null;
@@ -1124,13 +1431,13 @@ export function renderRoom() {
           <div class="rmt-room-activity-strip ${personIsHere ? '' : 'empty'}">
             ${personIsHere ? `<div><b>${core_text.esc(daypart.label)} · ${core_text.esc(slot?.time || roomClockText(now))}</b><span>${core_text.esc(slot?.activity || '')}</span>${slot?.ambient ? `<small>${core_text.esc(slot.ambient)}</small>` : ''}</div>` : `<div><b>当前不在这里</b><span>${core_text.esc(slot?.trace || '这个空间仍保留着刚刚使用过的痕迹。')}</span></div>`}
           </div>
-          <div class="rmt-room-caption"><b>${core_text.esc(selectedSpace.label)}：</b>${core_text.esc(personIsHere ? (slot?.line || '') : selectedSpace.atmosphere)}${personIsHere && slot?.trace ? `<div class="rmt-room-live-trace">此刻留下的痕迹：${core_text.esc(slot.trace)}</div>` : ''}${tempLine}<div class="rmt-room-note">大图内只显示编号，完整物件名称放在图下方，避免手机文字互相遮挡。带 ▣ 的收纳物才允许翻找。</div></div>
+          <div class="rmt-room-caption"><b>${core_text.esc(selectedSpace.label)}：</b>${core_text.esc(personIsHere ? (slot?.line || '') : selectedSpace.atmosphere)}${personIsHere && slot?.trace ? `<div class="rmt-room-live-trace">此刻留下的痕迹：${core_text.esc(slot.trace)}</div>` : ''}${tempLine}</div>
         </section>
 
         <section class="rmt-room-card rmt-room-private-life-card">
           <div class="rmt-room-card-kicker">PRIVATE LIFE</div>
           <div class="rmt-room-atmosphere">${core_text.esc(selectedSpace.atmosphere)}</div>
-          <div class="rmt-room-note" style="margin-top:9px">整体：${core_text.esc(session.homeSummary)}</div>
+          <div class="rmt-room-summary" style="margin-top:9px">${core_text.esc(roomNarrativeClaimsSharedHistory(session.homeSummary, roomUserName) ? '这些空间拼成了他日常生活真正会经过的路线。' : session.homeSummary)}</div>
           ${petNotes ? `<div class="rmt-room-pet-notes" aria-label="这个空间里的宠物">${petNotes}</div>` : ''}
           ${personIsHere ? `<div class="rmt-room-object-line">${core_text.esc(presenceLine)}</div>` : `<div class="rmt-room-object-line">${core_text.esc(charName)} 此刻在「${core_text.esc(presentSpace.label)}」。</div>`}
         </section>
@@ -1141,7 +1448,7 @@ export function renderRoom() {
             <button type="button" class="rmt-btn" data-rmt-action="room-open-items" ${!selectedSearchable || itemsGenerating || (readOnlyArchive && !deep.items) ? 'disabled' : ''}><i class="fa-solid fa-box-open"></i> ${core_text.esc(itemActionText)}</button>
             <button type="button" class="rmt-btn" data-rmt-action="room-open-phone" ${core_requestCoordinator.isModeGenerating(core_constants.MODE.PHONE) || (readOnlyArchive && !deep.phone) ? 'disabled' : ''}><i class="fa-solid fa-mobile-screen"></i> ${deep.phone ? `查看${core_text.esc(phoneLabel)}` : readOnlyArchive ? `${core_text.esc(phoneLabel)}尚未生成` : core_requestCoordinator.isModeGenerating(core_constants.MODE.PHONE) ? '私人终端生成中…' : phoneDraft ? `继续生成${core_text.esc(phoneLabel)} · ${phoneDraft.completedApps.length}/${phoneDraft.plan.apps.length}` : `生成并查看${core_text.esc(phoneLabel)}`}</button>
           </div>
-          <div class="rmt-room-note">物品只能从真实收纳物进入；私人终端会根据人设选择手机、儿童电话手表或其他通讯器形态。</div>
+          
         </section>
       </div>
     </div>`;

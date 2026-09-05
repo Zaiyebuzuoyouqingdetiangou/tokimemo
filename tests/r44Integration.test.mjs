@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { sameEvidence } from '../src/generation/contentRegeneration.js';
+import { MODE } from '../src/core/constants.js';
+import { state as runtimeState } from '../src/core/state.js';
+import { handleOverlayClick } from '../src/ui/overlay.js';
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
@@ -54,4 +57,93 @@ test('r44 legacy room completion is explicitly wired and expands pet discovery a
     for (const alias of ['鹦鹉', '爬宠', '灵兽', '使魔', 'rabbit', 'fish', 'reptile', 'familiar']) assert.ok(client.includes(alias));
     assert.match(overlay, /action === 'room-schema-upgrade'/);
     assert.match(room, /旧版房间一次性补全/);
+});
+
+function routedEvent(selector, dataset) {
+    const element = { dataset };
+    return {
+        target: {
+            closest(query) {
+                return query === selector ? element : null;
+            },
+        },
+    };
+}
+
+test('r49 travel and NPC click routes render their interactive detail through the real overlay dispatcher', () => {
+    const previousDocument = globalThis.document;
+    const previousSillyTavern = globalThis.SillyTavern;
+    const previousState = {
+        activeMode: runtimeState.activeMode,
+        activeSession: runtimeState.activeSession,
+        activeArchiveSnapshot: runtimeState.activeArchiveSnapshot,
+        activeArchiveReadOnly: runtimeState.activeArchiveReadOnly,
+        relationSelectedKey: runtimeState.relationSelectedKey,
+    };
+    const body = { innerHTML: '' };
+    const title = { textContent: '' };
+    const back = { hidden: false, textContent: '', setAttribute() {} };
+    globalThis.document = {
+        querySelector(selector) {
+            if (selector.endsWith(' .rmt-body')) return body;
+            if (selector.endsWith(' .rmt-topbar-title')) return title;
+            if (selector.includes('[data-rmt-action="back"]')) return back;
+            return null;
+        },
+    };
+    globalThis.SillyTavern = {
+        getContext: () => ({ name1: '阿澄', name2: '林砚', extensionSettings: {}, getThumbnailUrl: () => '' }),
+    };
+    try {
+        runtimeState.activeMode = MODE.TRAVEL;
+        runtimeState.activeSession = {
+            kind: MODE.TRAVEL,
+            title: '出行路线',
+            routeSummary: '他常去的地方。',
+            mapTheme: 'neutral',
+            selectedLocationId: '',
+            dialogueIndex: 0,
+            locations: [{
+                id: 'N1', kind: 'near', name: '街角书店', region: '附近', distanceLabel: '步行十分钟',
+                summary: '熟悉的书店。', dialogueLines: ['要找哪一本？', '慢慢挑。'], basis: '设定',
+            }],
+        };
+
+        handleOverlayClick(routedEvent('[data-rmt-travel-location]', { rmtTravelLocation: 'N1' }));
+        assert.equal(runtimeState.activeSession.selectedLocationId, 'N1');
+        assert.equal(runtimeState.activeSession.dialogueIndex, 0);
+        assert.match(body.innerHTML, /rmt-travel-dialogue/);
+        assert.match(body.innerHTML, /要找哪一本？/);
+
+        handleOverlayClick(routedEvent('[data-rmt-action]', { rmtAction: 'travel-dialogue-next' }));
+        assert.equal(runtimeState.activeSession.dialogueIndex, 1);
+        assert.match(body.innerHTML, /慢慢挑。/);
+
+        handleOverlayClick(routedEvent('[data-rmt-action]', { rmtAction: 'travel-dialogue-replay' }));
+        assert.equal(runtimeState.activeSession.dialogueIndex, 0);
+        assert.match(body.innerHTML, /要找哪一本？/);
+
+        runtimeState.activeMode = MODE.RELATIONS;
+        runtimeState.activeArchiveSnapshot = null;
+        runtimeState.activeArchiveReadOnly = false;
+        runtimeState.relationSelectedKey = '';
+        runtimeState.activeSession = {
+            kind: MODE.RELATIONS,
+            discoveries: [],
+            relationships: [{
+                id: 'R1', name: '志波', relation: '朋友', category: 'friend', state: '信任',
+                sentiments: ['信赖'], summary: '长期朋友。', isUser: false, npcPerspective: '我信任他。',
+            }],
+        };
+        handleOverlayClick(routedEvent('[data-rmt-action]', { rmtAction: 'relation-select', rmtRelationKey: '志波' }));
+        assert.equal(runtimeState.relationSelectedKey, '志波');
+        assert.match(body.innerHTML, /NPC视角/);
+        assert.match(body.innerHTML, /我信任他。/);
+    } finally {
+        Object.assign(runtimeState, previousState);
+        if (previousDocument === undefined) delete globalThis.document;
+        else globalThis.document = previousDocument;
+        if (previousSillyTavern === undefined) delete globalThis.SillyTavern;
+        else globalThis.SillyTavern = previousSillyTavern;
+    }
 });

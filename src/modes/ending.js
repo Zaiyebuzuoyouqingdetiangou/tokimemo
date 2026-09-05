@@ -594,7 +594,7 @@ export async function generateEndingWithRepair(context, memoryBank, origin, task
             confessionScanSucceeded = true;
         } catch (error) {
             if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
-            console.warn('[HeartbeatMemories] incremental ENDING confession scan failed; keeping old replays', error);
+            console.warn('[HeartbeatMemories] incremental ENDING confession scan failed; keeping old replays', core_text.safeErrorDiagnostic(error));
         }
         const merged = mergeEndingIncremental(previous, outline, detailed, freshConfessions, memoryBank);
         core_incremental.stampIncrementalCoverage(merged.session, previous, memoryBank, 'mode', sourceMemoryIds, merged.added);
@@ -624,7 +624,7 @@ export async function generateEndingWithRepair(context, memoryBank, origin, task
             } catch (error) {
                 if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
                 lastError = error;
-                console.warn('[HeartbeatMemories] split ENDING route detail failed', { route: route.id, attempt: attempt + 1, error });
+                console.warn('[HeartbeatMemories] split ENDING route detail failed', { route: core_text.normalizeText(route.id, 80), attempt: attempt + 1, ...core_text.safeErrorDiagnostic(error) });
                 if (attempt === 0 && core_requestCoordinator.shouldRetrySegmentRequest(error)) {
                     await core_requestCoordinator.waitBeforeSegmentRetry(error);
                     continue;
@@ -651,7 +651,7 @@ ${detail}` : ''}`);
         confessionScanSucceeded = true;
     } catch (error) {
         if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
-        console.warn('[HeartbeatMemories] split ENDING confession scan failed; preserving the previous replay cache when available', error);
+        console.warn('[HeartbeatMemories] split ENDING confession scan failed; preserving the previous replay cache when available', core_text.safeErrorDiagnostic(error));
         try {
             const previous = core_cache.loadSession(core_constants.MODE.ENDING, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
             confessionReplays = Array.isArray(previous?.confessionReplays) ? previous.confessionReplays : [];
