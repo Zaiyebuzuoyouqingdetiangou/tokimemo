@@ -124,10 +124,23 @@ export function assertButterflyRelationshipSafety(value, context = {}, label = '
     const userMarker = userName && !/^\{\{user\}\}$/i.test(userName)
         ? new RegExp(`(?:你|妳|您|用户|\\{\\{user\\}\\}|${escapeRegExp(userName)})`, 'i')
         : /(?:你|妳|您|用户|\{\{user\}\})/i;
-    const clauses = text.split(/[，,。！？!?；;\n]+/).map(item => item.trim()).filter(Boolean);
-    for (const clause of clauses) {
+    let userAntecedent = false;
+    const clauses = text.match(/[^，,。！？!?；;\n]+[，,。！？!?；;\n]?/g) || [];
+    for (const fragment of clauses) {
+        const clause = fragment.replace(/[，,。！？!?；;\n]+$/, '').trim();
+        const refersToUser = userMarker.test(clause);
+        const inheritedUser = userAntecedent;
+        userAntecedent = /[，,]$/.test(fragment) && (refersToUser || inheritedUser);
         if (!ROMANCE_RE.test(clause)) continue;
-        if (NEGATED_ROMANCE_RE.test(clause)) continue;
+        const predicates = [...clause.matchAll(new RegExp(ROMANCE_RE.source, 'gi'))];
+        // Negation belongs to one predicate, never to the entire clause.
+        if (predicates.length && predicates.every(match => {
+            const prefix = clause.slice(0, match.index);
+            const suffix = clause.slice(match.index + match[0].length);
+            return /(?:并未|并没有|没有|从未|未曾|不会|拒绝|不存在|绝无)(?:曾经|真正|再|去)?$/.test(prefix)
+                || /(?:没有与|不会与|不与)[^而但却然后]{1,12}$/.test(prefix)
+                || /^(?:变量|概率)?\s*(?:[=:：]\s*)?(?:0|零|无|不存在|未发生|不成立)(?:$|\s)/.test(suffix);
+        })) continue;
         if (THIRD_PARTY_RE.test(clause)) throw new Error(`${label}包含 {{char}} 与第三方的恋爱/婚姻/成家情节。`);
         const namedTargets = [
             ...clause.matchAll(/(?:与|和|跟)\s*([^，,。！？!?；;、\n]{1,24}?)\s*(?:恋爱|相爱|约会|结婚|成婚|订婚|组建家庭|建立家庭|成家|有了(?:一个)?家(?:庭)?|生儿育女|养育孩子|育有子女)/gi),
@@ -137,7 +150,7 @@ export function assertButterflyRelationshipSafety(value, context = {}, label = '
         if (namedTargets.some(target => !userMarker.test(target))) {
             throw new Error(`${label}包含 {{char}} 与具名第三方的恋爱/婚姻/成家情节。`);
         }
-        if (!userMarker.test(clause)) throw new Error(`${label}中的恋爱/婚姻/成家叙述未明确指向 {{user}}。`);
+        if (!refersToUser && !inheritedUser) throw new Error(`${label}中的恋爱/婚姻/成家叙述未明确指向 {{user}}。`);
     }
     return text;
 }
@@ -311,12 +324,67 @@ export function normalizeButterfly(data, memoryBank, context = {}) {
 }
 
 export async function generateButterflyWithRepair(context, memoryBank, origin, taskKey) {
-    return generation_client.requestValidatedSegment(
-        generation_prompts.PROMPTS[core_constants.MODE.BUTTERFLY](context, memoryBank),
+    const prompt = generation_prompts.PROMPTS[core_constants.MODE.BUTTERFLY](context, memoryBank);
+    const options = { maxTokens: 16000, temperature: 0.55, context, origin, taskKey: taskKey + ':initial', mode: core_constants.MODE.BUTTERFLY, background: true };
+    const raw = await generation_client.requestValidatedSegment(
+        prompt,
         '蝴蝶效应 · 正在观测平行世界…',
-        { maxTokens: 16000, temperature: 0.55, context, origin, taskKey: taskKey + ':initial', mode: core_constants.MODE.BUTTERFLY, background: true },
-        raw => normalizeButterfly(raw, memoryBank, context),
+        options,
+        value => {
+            if (!Array.isArray(value?.nodes) || value.nodes.length < 10 || value.nodes.length > core_constants.MAX_DERIVED_CONTENT_ITEMS) throw new Error('需要十个完整节点。');
+            return value;
+        },
     );
+    try { return normalizeButterfly(raw, memoryBank, context); } catch {}
+    const slots = [];
+    const labels = new Set();
+    const signatures = new Set();
+    const axes = new Set();
+    const monologues = new Set();
+    const lastIndex = raw.nodes.length - 1;
+    const validAxes = [];
+    for (let index = 0; index <= lastIndex; index++) {
+        try {
+            const node = index === 0 ? normalizedMainNode(raw.nodes[index], memoryBank, context)
+                : index === lastIndex ? normalizeButterflyOmega(raw.nodes[index], context)
+                    : normalizeButterflyBranch(raw.nodes[index], index, memoryBank, context);
+            if (index > 0 && index < lastIndex) {
+                const signature = butterflyWorldSignature(node);
+                const label = core_incremental.normalizedContentKey(node.label, 180);
+                const monologue = core_incremental.normalizedContentKey(node.monologue, 12000);
+                if (labels.has(label) || signatures.has(signature) || monologues.has(monologue)) throw new Error('重复分歧');
+                labels.add(label); signatures.add(signature); monologues.add(monologue); axes.add(node.primaryAxis);
+                validAxes.push({ index, axis: node.primaryAxis });
+            }
+            if (index < lastIndex && isOmegaCandidate(raw.nodes[index])) throw new Error('位置错误');
+            if (index === lastIndex && !isOmegaCandidate(raw.nodes[index])) throw new Error('缺少 Ω');
+        } catch { slots.push({ index }); }
+    }
+    const missingAxes = BUTTERFLY_PRIMARY_AXES.filter(axis => !axes.has(axis));
+    const seenAxes = new Set();
+    for (const entry of validAxes) {
+        if (seenAxes.has(entry.axis) && slots.filter(slot => slot.index > 0 && slot.index < lastIndex).length < missingAxes.length) slots.push({ index: entry.index });
+        seenAxes.add(entry.axis);
+    }
+    for (const slot of slots) if (slot.index > 0 && slot.index < lastIndex) slot.primaryAxis = missingAxes.shift();
+    if (!slots.length) throw core_text.safeUserError('蝴蝶效应整体校验未通过，未找到可安全修复的节点；旧内容保留。', 'RMT_SEGMENT_VALIDATION');
+    const repair = await generation_client.requestValidatedSegment(
+        prompt + '\n本轮仅补齐以下不合格位置。其他已通过节点由本地保留，禁止返回它们。输出 {"repairs":[{"index":0,"node":{完整节点}}]}。节点内仍须满足原 schema、字数、第一人称和安全要求。\nREPAIR_SLOTS_JSON:' + JSON.stringify(slots)
+            + '\nEXISTING_VALID_WORLD_INDEX_JSON:' + JSON.stringify(raw.nodes.filter((_, i) => !slots.some(slot => slot.index === i)).map(node => ({ label: node.label, worldSpec: node.worldSpec }))),
+        '蝴蝶效应 · 仅补齐未通过的节点…',
+        { ...options, taskKey: taskKey + ':repair' },
+        value => {
+            if (!Array.isArray(value?.repairs) || value.repairs.length !== slots.length) throw new Error('修复节点不完整');
+            const merged = structuredClone(raw);
+            const seen = new Set();
+            for (const part of value.repairs) {
+                if (!slots.some(slot => slot.index === part.index) || seen.has(part.index)) throw new Error('修复位置不符');
+                seen.add(part.index); merged.nodes[part.index] = part.node;
+            }
+            return normalizeButterfly(merged, memoryBank, context);
+        },
+    );
+    return repair;
 }
 export function butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) {
     const existing = (Array.isArray(previous?.nodes) ? previous.nodes.slice(1, -1) : []).slice(-core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
@@ -486,14 +554,14 @@ export function mergeButterflyIncremental(previous, part, sourceMemoryIds) {
     };
 }
 export async function generateButterflyIncrementalWithRepair(context, memoryBank, origin, taskKey, previous) {
-    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+    const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
     const { previousBranches } = butterflyMergeBase(previous);
     if (previousBranches.length + 2 >= core_constants.MAX_DERIVED_CONTENT_ITEMS) {
         const sanitized = mergeButterflyIncremental(previous, { branches: [], omega: previous.nodes?.[previous.nodes.length - 1] }, sourceMemoryIds);
         return core_incremental.stampIncrementalCoverage(sanitized, previous, memoryBank, 'mode', sourceMemoryIds, 0);
     }
     const part = await generation_client.requestValidatedSegment(
-        butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds),
+        butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
         '蝴蝶效应 · 正在追加新的平行分歧…',
         { maxTokens: 9000, temperature: 0.55, context, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.BUTTERFLY, background: true },
         raw => normalizeButterflyIncrementPart(raw, memoryBank, context),

@@ -188,6 +188,75 @@ try {
         results.push({ case: `hostile-${width}`, close: probe.dimensions.close, overflow: probe.dimensions.documentScrollWidth - width });
         await page.close();
     }
+    // Exercise production renderers, not only palette tokens or a synthetic card.
+    for (const themeMode of ['default', 'night', 'host', 'custom']) {
+        const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+        await page.goto(baseUrl);
+        await page.evaluate(async themeMode => {
+            document.body.dataset.hostTheme = 'dark';
+            document.body.innerHTML = '<div id="extensions_settings2"></div>';
+            const host = document.createElement('style');
+            host.textContent = 'body button{background:black;color:white}body small{opacity:.3}.inline-drawer-content{display:block!important}';
+            document.head.appendChild(host);
+            const context = { characterId: 0, chatId: 'fixture-A', name1: '小雨', name2: '林舟', chat: [], chatMetadata: {},
+                characters: [{ name: '林舟', avatar: 'lin.png', description: '住在河边的木匠' }], extensionSettings: { heartbeatMemories: { themeMode, themeAlpha: 1, themeCustom: { background: '#1e293b', surface: '#273449', text: '#ffffff', muted: '#cbd5e1' } } }, saveSettingsDebounced() {} };
+            globalThis.SillyTavern = { getContext: () => context };
+            const styles = await import('/src/ui/styles.js');
+            styles.ensureStyles();
+            const settings = await import('/src/ui/settingsPanel.js');
+            settings.mountSettings();
+            globalThis.fixture = { context, state: (await import('/src/core/state.js')).state, overlay: await import('/src/ui/overlay.js') };
+        }, themeMode);
+        for (const view of ['settings', 'archive', 'adv', 'heart', 'avatar', 'cabinet', 'relations']) {
+            await page.evaluate(async view => {
+                const { overlay, state } = globalThis.fixture;
+                if (view === 'settings') return;
+                overlay.openOverlay();
+                if (view === 'archive') { overlay.showChooser(); return; }
+                if (view === 'adv') {
+                    state.activeSession = { kind: 'adv', events: [{ id: 'E1', title: '一起留下车票', date: '初秋', cgDesc: '河岸边，两人一起看着归程车票。', adv: { paragraphs: ['我把车票小心地收进盒子，想起你认真写下日期时的样子。'] } }], selectedId: 'E1', view: 'adv', paragraphIndex: 0 };
+                    (await import('/src/ui/advEventView.js')).renderAdvMode();
+                } else if (view === 'heart' || view === 'avatar') {
+                    state.activeSession = { kind: 'heart', characterName: '林舟', relationshipSummary: '从初识到愿意分享日常，两人慢慢认识彼此。', greetings: { morning: ['早上好，一起去河边走走吧。'] }, voiceDramas: [], scenarioDramas: [], dailyStrips: [], fireflyVoices: [], view: 'seasons' };
+                    const heart = await import('/src/ui/heartView.js');
+                    heart.renderHeart();
+                    if (view === 'avatar') heart.renderAvatarDialoguePopup({ characterKey: 'lin.png', characterName: '林舟', session: state.activeSession, readOnly: true });
+                } else if (view === 'cabinet') {
+                    overlay.bodyEl().innerHTML = (await import('/src/modes/cabinet.js')).cabinetHtml({ items: [{ id: 'K1', name: '回程车票', objectEvidence: '林舟和小雨一起把回程车票放进盒子。', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '一起留下车票' }] });
+                    overlay.bodyEl().querySelector('details').open = true;
+                } else if (view === 'relations') {
+                    state.activeSession = { kind: 'relations', characterName: '林舟', summary: '尚未在剧情中相遇的设定人物也可以在这里查看。', relationships: [], settingRelationships: [{ name: '阿南', relation: '设定人物', summary: '住在城中的木匠', settingOnly: true, npcPerspective: '我每天都在木工店工作。' }] };
+                    (await import('/src/modes/relations.js')).renderRelations();
+                }
+            }, view);
+            const inspection = await page.evaluate(view => {
+                const root = document.getElementById(view === 'settings' ? 'heartbeat_memories_settings' : 'heartbeat_memories_overlay');
+                const rgb = value => (value.match(/[\d.]+/g) || []).map(Number);
+                const blend = (a, b) => a.slice(0, 3).map((v, i) => v * (a[3] ?? 1) + b[i] * (1 - (a[3] ?? 1)));
+                const background = el => { if (!el) return [255,255,255]; const c = rgb(getComputedStyle(el).backgroundColor); return blend(c, c[3] === 1 ? [255,255,255] : background(el.parentElement)); };
+                const luminance = c => c.slice(0,3).map(n => { n /= 255; return n <= .04045 ? n/12.92 : ((n+.055)/1.055)**2.4; }).reduce((s,v,i) => s+v*[.2126,.7152,.0722][i],0);
+                const bad = [], samples = [];
+                for (const el of root.querySelectorAll('.rmt-api-source-card,.rmt-model-refresh,.rmt-heart-summary,.rmt-avatar-dialog-card')) {
+                    if (getComputedStyle(el).backgroundImage !== 'none') bad.push({ cls: el.className, error: 'uncontrolled gradient over theme surface' });
+                }
+                for (const el of root.querySelectorAll('p,b,small,label,.rmt-adv-para,.rmt-avatar-dialog-bubble')) {
+                    if (!el.textContent.trim() || !el.getClientRects().length || el.closest('[hidden]')) continue;
+                    const s = getComputedStyle(el), bg = background(el), ink = rgb(s.webkitTextFillColor === 'currentcolor' ? s.color : s.webkitTextFillColor);
+                    const a = luminance(ink), b = luminance(bg), contrast = (Math.max(a,b)+.05)/(Math.min(a,b)+.05);
+                    const sample = { text: el.textContent.trim().slice(0,32), cls: el.className, contrast: +contrast.toFixed(2), fontSize: s.fontSize };
+                    samples.push(sample);
+                    if (contrast < 4.45) bad.push(sample);
+                }
+                return { count: samples.length, bad, overflow: root.scrollWidth - root.clientWidth };
+            }, view);
+            assert.ok(inspection.count > 0, `${themeMode}/${view} did not render text`);
+            assert.deepEqual(inspection.bad, [], `${themeMode}/${view} unreadable production text: ${JSON.stringify(inspection.bad)}`);
+            assert.ok(inspection.overflow <= 1, `${themeMode}/${view} overflow ${inspection.overflow}`);
+            await page.screenshot({ path: path.join(outputDir, `production-${themeMode}-${view}.png`) });
+            results.push({ case: `production-${themeMode}-${view}`, ...inspection });
+        }
+        await page.close();
+    }
 } finally {
     await browser.close();
     await new Promise(resolve => server.close(resolve));

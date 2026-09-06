@@ -106,6 +106,21 @@ export function usesIncrementalMemoryId(referenceIds, sourceMemoryIds) {
     return core_text.cleanArray(referenceIds, core_constants.MAX_MEMORY_ITEMS, 40).some(id => allowed.has(id));
 }
 
+// Creative expansion is not an archive update. Reuse bounded, real evidence
+// when the cursor is exhausted, without resetting its coverage or modifying Mxxx.
+export function derivedExpansionMemoryIds(session, memoryBank, part = 'mode') {
+    const pending = incrementalArchiveMemoryIds(session, memoryBank, part);
+    if (pending.length || !session) return pending;
+    const ids = archiveMemoryIds(memoryBank);
+    const offset = (Number(session?.generationMeta?.expansionRound) || 0) * 12 % Math.max(1, ids.length);
+    return [...ids.slice(offset), ...ids.slice(0, offset)].slice(0, core_constants.MAX_MEMORY_PROMPT_ITEMS);
+}
+
+export function derivedExpansionDirective(session, memoryBank, part = 'mode') {
+    if (!session || incrementalArchiveMemoryIds(session, memoryBank, part).length) return '';
+    return '\n【本次生成意图：同一档案扩写】没有新历史、没有新关系进展。上文的“新增”仅指派生篇章：可以使用同一 Mxxx 的新镜头、内心侧面、日常模拟或假设后日谈；不要以旧锚点为由拒绝扩写。不能重复已有文本，不能编造过去事件；关系状态、双方态度和已解锁资格保持当前档案不变。所有新内容仍须符合原 schema 和证据校验。\n';
+}
+
 export function incrementalArchiveSlice(memoryBank, sourceMemoryIds, limit = core_constants.MAX_MEMORY_PROMPT_ITEMS) {
     const ids = core_text.cleanArray(sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40);
     return JSON.stringify({
@@ -142,6 +157,7 @@ export function stampIncrementalCoverage(session, previous, memoryBank, part, co
     const coveredMemoryIds = [...new Set([...priorCovered, ...consumed])].filter(id => currentIds.has(id));
     session.generationMeta = {
         ...priorMeta,
+        expansionRound: (Number(priorMeta.expansionRound) || 0) + (previous && !incrementalArchiveMemoryIds(previous, memoryBank, part).length && added > 0 ? 1 : 0),
         schemaVersion: core_constants.DERIVED_INCREMENTAL_SCHEMA_VERSION,
         parts: {
             ...(priorMeta.parts && typeof priorMeta.parts === 'object' ? priorMeta.parts : {}),
@@ -153,6 +169,7 @@ export function stampIncrementalCoverage(session, previous, memoryBank, part, co
         },
         lastUpdate: {
             part,
+            derivedExpansion: !!previous && !incrementalArchiveMemoryIds(previous, memoryBank, part).length,
             consumedMemoryIds: consumed,
             added: Math.max(0, Math.floor(Number(added) || 0)),
             updatedAt: Date.now(),

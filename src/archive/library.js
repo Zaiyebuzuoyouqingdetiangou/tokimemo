@@ -231,6 +231,7 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
     let sourceMirrorLagging = false;
     let memory = null;
     let stored = null;
+    let settingBookSelection = { books: [] };
     let backupRecord = initialBackupState.record || null;
     try {
         if (!avatar || typeof context.getRequestHeaders !== 'function') throw new Error('无法定位这个角色的聊天档案文件。');
@@ -248,6 +249,7 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
         memory = archive_repository.migrateArchiveInMemory(metadata[core_constants.MEMORY_KEY]);
         if (!memory || core_context.comparableChatId(memory.chatId) !== wantedChatId) throw new Error('源聊天里已没有可读取的心跳回忆档案。');
         stored = metadata[core_constants.CACHE_KEY];
+        settingBookSelection = archive_repository.getMemoryWorldInfoSelection({ chatMetadata: metadata });
     } catch (error) {
         if (error?.name === 'AbortError') throw error;
         sourceError = error;
@@ -337,6 +339,7 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
         memory,
         cache,
         backupOnly: !!sourceError,
+        settingBookSelection: sourceError ? { books: [] } : settingBookSelection,
         sourceMirrorLagging,
         sourceError: sourceError ? core_text.safeErrorSummary(sourceError, 400) : '',
         loadedAt: Date.now(),
@@ -426,7 +429,8 @@ export function freezeArchiveTarget(snapshot, hostContext = core_context.getCont
         chatId: target.chatId,
         chat: [],
         characters: sparseCharacters,
-        chatMetadata: { [core_constants.MEMORY_KEY]: memory, [core_constants.CACHE_KEY]: cache },
+        chatMetadata: { [core_constants.MEMORY_KEY]: memory, [core_constants.CACHE_KEY]: cache,
+            [core_constants.MEMORY_WORLD_INFO_SETTINGS_KEY]: structuredClone(snapshot.settingBookSelection || { books: [] }) },
         powerUserSettings: { ...(hostContext?.powerUserSettings || {}), persona_description: '' },
         getCurrentChatId: () => target.chatId,
         getCharacterCardFields: () => structuredClone(cardFields),

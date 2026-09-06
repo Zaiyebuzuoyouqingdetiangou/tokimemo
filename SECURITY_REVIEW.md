@@ -1,3 +1,15 @@
+## 0.8.46 / r50.0 changed-surface security review
+
+Main-agent source review plus independent read-only generation and source/product reviews. All production fixes were integrated by the main agent after checking the actual paths. This is not a claim of external penetration testing.
+
+- Preserved ArchiveTarget identity, revision/CAS/delete fences, V3 keys, input limits and provider concurrency 2. No new provider, third-party private reader or remote write path.
+- New setting NPCs require the target archive's explicit book selection and exact world/uid/evidence; character/user names excluded. Failed/partial reads stop before replacing the old garden. Abort is rethrown.
+- Cabinet validates exact Mxxx and literal pair-object evidence. Third-party gifts and invented objects rejected; model text escaped; illustrations are code-owned static SVG.
+- Filter operates on bounded input copies. Nested/encoded/unclosed selected tags are suppressed; unselected entities and JSON property names remain intact. Original history and coverage are not changed.
+- Review found a no-new-memory ENDING unlock escalation through same-type/title merging. Final merge now forbids upgrading locked routes during revisit, with regression coverage.
+- Review found mobile theme white-on-white gradients and icon-label overlap. Production-renderer browser checks and screenshot inspection caught and corrected both; arbitrary host CSS and WebView differences remain real-host acceptance work.
+- Independent review confirmed room validation retains source authority and butterfly repairs preserve strict safety. Known limitations: local semantic validators cannot guarantee every model response will pass, and no paid live-provider tests were performed.
+
 ## 0.8.45 / r49.0 deep-review changed-surface security review
 
 Scope: r48.0 -> r49.0 persistence lifecycle, API/profile isolation, ArchiveTarget, world-presentation authority, room/travel/phone/calendar normalizers, local SVG/DOM rendering, theme/tag UI and release identity.

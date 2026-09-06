@@ -10,6 +10,7 @@ import * as core_evidence from './evidence.js';
 import * as core_requestCoordinator from './requestCoordinator.js';
 import { state as runtimeState } from './state.js';
 import * as core_text from './text.js';
+import * as core_contextTags from './contextTags.js';
 import * as modes_calendar from '../modes/calendar.js';
 import * as modes_phone from '../modes/phone.js';
 
@@ -1568,6 +1569,7 @@ export function loadSession(mode, options = {}) {
         const userManaged = session.userManaged === true;
         if (mode === core_constants.MODE.ROOM && (!Array.isArray(session.spaces) || (!userManaged && session.spaces.length < 2))) return null;
         if (mode === core_constants.MODE.ITEMS && (!Array.isArray(session.containers) || (!userManaged && session.containers.length < 1))) return null;
+        if (mode === core_constants.MODE.CABINET && !Array.isArray(session.items)) return null;
         if (mode === core_constants.MODE.PHONE) {
             session = modes_phone.migrateLegacyPhoneSession(session, memoryBank);
             // A legacy phone may legitimately fall below the new generated minimum when the retired
@@ -1599,7 +1601,7 @@ export async function buildControlledContextEnvelope(context, options = {}) {
     const pick = (...keys) => {
         for (const key of keys) {
             const value = card?.[key];
-            if (value !== undefined && value !== null && String(value).trim()) return core_text.normalizeText(value, 5000);
+            if (value !== undefined && value !== null && String(value).trim()) return core_contextTags.stripExcludedTags(core_text.normalizeText(value, 5000), core_contextTags.excludedTagsForContext(context));
         }
         return '';
     };
@@ -1620,7 +1622,7 @@ export async function buildControlledContextEnvelope(context, options = {}) {
     };
     const userData = {
         name: core_text.normalizeText(context.name1 || '{{user}}', 120),
-        personaDescription: core_text.normalizeText(context.powerUserSettings?.persona_description || '', 7000),
+        personaDescription: core_contextTags.stripExcludedTags(core_text.normalizeText(context.powerUserSettings?.persona_description || '', 7000), core_contextTags.excludedTagsForContext(context)),
     };
     let worldInfo = '';
     try {
@@ -1643,7 +1645,7 @@ export async function buildControlledContextEnvelope(context, options = {}) {
         };
         if (typeof context.getWorldInfoPrompt === 'function') {
             const result = await context.getWorldInfoPrompt(worldInfoScan, Math.max(2048, Math.min(32768, Number(context.maxContext) || 8192)), true, globalScanData);
-            worldInfo = core_text.normalizeText(result?.worldInfoString || [result?.worldInfoBefore, result?.worldInfoAfter].filter(Boolean).join('\n'), 12000);
+            worldInfo = core_contextTags.stripExcludedTags(core_text.normalizeText(result?.worldInfoString || [result?.worldInfoBefore, result?.worldInfoAfter].filter(Boolean).join('\n'), 12000), core_contextTags.excludedTagsForContext(context));
         }
     } catch (error) {
         console.warn('[HeartbeatMemories] independent world-info dry run failed', core_text.safeErrorDiagnostic(error));

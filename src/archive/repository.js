@@ -343,6 +343,15 @@ export async function loadMemoryWorldInfoBook(context, worldName, signal = null)
 }
 
 export async function collectSelectedMemoryWorldInfo(context, expectedChatId, signal) {
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const assertSourceScope = () => {
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
+        // Detached archive tasks own a source-chat selection captured from that
+        // exact chat header; they must not consult the currently visible chat.
+        if (Object.hasOwn(context, '__rmtArchiveTargetEntryId') && context.__rmtArchiveTargetEntryId) return;
+        if (core_context.comparableChatId(core_context.getChatId(core_context.currentCharacterGuard())) !== core_context.comparableChatId(expectedChatId)) throw new DOMException('Chat changed', 'AbortError');
+    };
     const selection = getMemoryWorldInfoSelection(context);
     const emptyCoverage = { status: 'complete', returned: 0, total: 0, reason: '当前没有选择世界书条目' };
     if (!selection.books.length) return { entries: [], books: [], totalChars: 0, fingerprint: 'none', coverage: emptyCoverage, historyCoverage: { ...emptyCoverage, reason: '当前没有标记为历史摘要的世界书条目' } };
@@ -358,11 +367,12 @@ export async function collectSelectedMemoryWorldInfo(context, expectedChatId, si
     let historyTruncated = 0;
     let historyFailedBooks = 0;
     for (const book of selection.books.slice(0, core_constants.MAX_MEMORY_WORLD_INFO_BOOKS)) {
-        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-        if (core_context.comparableChatId(core_context.getChatId(core_context.currentCharacterGuard())) !== core_context.comparableChatId(expectedChatId)) throw new DOMException('Chat changed', 'AbortError');
+        assertSourceScope();
         let loaded;
         try { loaded = await loadMemoryWorldInfoBook(context, book.name, signal); }
         catch (error) {
+            if (error?.name === 'AbortError') throw error;
+            assertSourceScope();
             console.warn('[HeartbeatMemories] selected memory world info skipped', { world: core_text.normalizeText(book.name, 180), ...core_text.safeErrorDiagnostic(error) });
             failedBooks += 1;
             if (book.historySource === true) historyFailedBooks += 1;
@@ -378,6 +388,7 @@ export async function collectSelectedMemoryWorldInfo(context, expectedChatId, si
             });
             continue;
         }
+        assertSourceScope();
         const uidSet = new Set(book.entryUids.map(String));
         const chosen = book.all ? loaded : loaded.filter(entry => uidSet.has(String(entry.uid)));
         let imported = 0;

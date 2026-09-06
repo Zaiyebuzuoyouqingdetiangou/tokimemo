@@ -85,6 +85,14 @@ export function normalizeEndingEasterEgg(value, replay = {}) {
     ]));
     return {
         moduleType,
+        motif: core_text.normalizeText(input?.motif, 120) || sourceAnchor,
+        interactionLabels: [0, 1, 2, 3].map(index => core_text.normalizeText(input?.interactionLabels?.[index], 20)
+            || ({
+                heartbeat_console: ['触碰心跳', '读取波形', '暂停记录', '让心安定'],
+                memory_constellation: ['点亮星星', '连起回忆', '暂停星轨', '留下坐标'],
+                signal_lighthouse: ['向你发信', '接收回音', '暂停值守', '确认归航'],
+                letter_archive: ['按下封印', '拆开信封', '暂停整理', '把信收好'],
+            }[moduleType] || ['触碰心跳', '解锁一句话', '暂停日志', '稳定信号'])[index]),
         title: core_text.normalizeText(input?.title, 120) || `${replayTitle} · 情感运行模块`,
         statusLine: core_text.normalizeText(input?.statusLine, 400) || '正在读取这份告白在此刻留下的波动。',
         logs: logs.slice(0, 12),
@@ -135,7 +143,9 @@ ${JSON.stringify(compactEndingConfessionsExisting(previous), null, 2)}
       "responseSummary": "只总结 {{user}} 当时已经发生的回应/结果，不替 {{user}} 编新台词",
       "afterEffect": "只总结告白后档案里已经发生的关系变化；没有就写仍未确认",
       "easterEgg": {
-        "moduleType": "heartbeat_console",
+        "moduleType": "从 heartbeat_console / memory_constellation / signal_lighthouse / letter_archive 中按角色选择一个",
+        "motif": "此角色与这次告白独有的意象，不是通用心跳",
+        "interactionLabels": ["角色化触碰动作", "角色化揭示动作", "暂停动作", "安定动作"],
         "title": "{{char}} 为这次回看设计的情感模块标题",
         "statusLine": "此刻的情感运行状态",
         "logs": ["[10:24] 扫描到 {{user}} 的信息 -> 情感核心发生波动 -> 直白、人类可读的结论"],
@@ -359,7 +369,7 @@ export function normalizeEndingIncrementOutline(data, memoryBank, sourceMemoryId
 export function endingRouteEvidenceKey(item) {
     const ids = core_text.cleanArray(item?.sourceMemoryIds, 12, 40).sort().join(',');
     const anchor = core_incremental.normalizedContentKey(item?.sourceMemoryAnchor, 160);
-    return `${core_text.normalizeText(item?.type, 40)}|${ids}|${anchor || core_incremental.normalizedContentKey(item?.title, 120)}`;
+    return `${core_text.normalizeText(item?.type, 40)}|${ids}|${anchor || core_incremental.normalizedContentKey(item?.title, 120)}|${item?.expansionRound ? core_incremental.normalizedContentKey(item?.title, 120) : ''}`;
 }
 
 export function endingConfessionEvidenceKey(item) {
@@ -383,7 +393,9 @@ export function mergeEndingConfessions(previousList, freshList) {
     return { items: merged, added };
 }
 
-export function mergeEndingIncremental(previous, outline, detailed, freshConfessions, memoryBank) {
+export function mergeEndingIncremental(previous, outline, detailed, freshConfessions, memoryBank, revisit = false) {
+    if (revisit) outline = { ...outline, relationshipState: previous.relationshipState, relationshipSummary: previous.relationshipSummary,
+        relationshipSourceMemoryIds: previous.relationshipSourceMemoryIds, relationshipSourceMemoryAnchor: previous.relationshipSourceMemoryAnchor };
     const merged = structuredClone(previous);
     const history = Array.isArray(merged.relationshipHistory) ? merged.relationshipHistory : [];
     const oldHistoryKey = `${core_incremental.normalizedContentKey(previous.relationshipState, 120)}|${core_incremental.normalizedContentKey(previous.relationshipSummary, 400)}`;
@@ -403,7 +415,7 @@ export function mergeEndingIncremental(previous, outline, detailed, freshConfess
     merged.relationshipSourceMemoryAnchor = outline.relationshipSourceMemoryAnchor;
 
     const detailById = new Map((detailed || []).map(item => [item.id, item]));
-    const incoming = (outline.endings || []).map(item => detailById.get(item.id) || item);
+    const incoming = (outline.endings || []).map(item => detailById.get(item.id) || item).map(item => revisit ? { ...item, expansionRound: (Number(previous.generationMeta?.expansionRound) || 0) + 1 } : item);
     const byKey = new Map((merged.endings || []).map((item, index) => [endingRouteEvidenceKey(item), index]));
     const usedIds = new Set((merged.endings || []).map(item => item.id));
     let added = 0;
@@ -416,7 +428,7 @@ export function mergeEndingIncremental(previous, outline, detailed, freshConfess
         }
         if (existingIndex !== undefined && existingIndex >= 0) {
             const old = merged.endings[existingIndex];
-            if (!old.available && item.available) {
+            if (!revisit && !old.available && item.available) {
                 merged.endings[existingIndex] = { ...old, ...structuredClone(item), id: old.id };
                 added += 1;
                 if (outline.recommendedEndingId === item.id) recommended = old.id;
@@ -434,6 +446,9 @@ export function mergeEndingIncremental(previous, outline, detailed, freshConfess
     merged.confessionReplays = confessionMerge.items;
     merged.recommendedEndingId = recommended;
     const normalized = normalizeEnding(merged, memoryBank);
+    // Expansion identity is local metadata, never authority accepted from model output.
+    const localRounds = new Map(merged.endings.map(item => [item.id, item.expansionRound]));
+    normalized.endings.forEach(item => { if (localRounds.get(item.id)) item.expansionRound = localRounds.get(item.id); });
     return { session: normalized, added: added + confessionMerge.added };
 }
 
@@ -559,15 +574,24 @@ export function normalizeEndingRouteDetail(data, route) {
 
 export async function generateEndingWithRepair(context, memoryBank, origin, taskKey, options = {}) {
     const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ENDING, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
-    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+    const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
     if (previous) {
         const outline = await generation_client.requestValidatedSegment(
-            endingIncrementOutlinePrompt(context, memoryBank, previous, sourceMemoryIds),
+            endingIncrementOutlinePrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
             'ENDING · 正在从新增档案判断新路线…',
             { maxTokens: 5000, temperature: 0.35, context, origin, taskKey: `${taskKey}:increment-outline`, mode: core_constants.MODE.ENDING, background: true },
             raw => normalizeEndingIncrementOutline(raw, memoryBank, sourceMemoryIds),
         );
         const usedIds = new Set(previous.endings.map(item => item.id));
+        const revisit = !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
+        if (revisit) {
+            Object.assign(outline, { relationshipState: previous.relationshipState, relationshipSummary: previous.relationshipSummary,
+                relationshipSourceMemoryIds: previous.relationshipSourceMemoryIds, relationshipSourceMemoryAnchor: previous.relationshipSourceMemoryAnchor });
+            const allowedTypes = new Set(previous.endings.filter(item => item.available).map(item => item.type));
+            const lockedTitles = new Set(previous.endings.filter(item => !item.available).map(item => `${item.type}|${core_incremental.normalizedContentKey(item.title, 120)}`));
+            outline.endings = outline.endings.filter(item => item.available && allowedTypes.has(item.type)
+                && !lockedTitles.has(`${item.type}|${core_incremental.normalizedContentKey(item.title, 120)}`)).slice(0, 3);
+        }
         const originalRecommended = outline.recommendedEndingId;
         for (const route of outline.endings) {
             const originalId = route.id;
@@ -584,7 +608,7 @@ export async function generateEndingWithRepair(context, memoryBank, origin, task
         let freshConfessions = [];
         let confessionScanSucceeded = false;
         try {
-            const confessionRaw = await generation_client.requestJson(
+            const confessionRaw = revisit ? { confessionReplays: [] } : await generation_client.requestJson(
                 endingConfessionRefreshPrompt(context, memoryBank, previous, sourceMemoryIds),
                 'ENDING · 正在从新增档案扫描新告白…',
                 { maxTokens: 8000, temperature: 0.35, context, origin, taskKey: `${taskKey}:increment-confession`, mode: core_constants.MODE.ENDING, background: true },
@@ -596,7 +620,7 @@ export async function generateEndingWithRepair(context, memoryBank, origin, task
             if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
             console.warn('[HeartbeatMemories] incremental ENDING confession scan failed; keeping old replays', core_text.safeErrorDiagnostic(error));
         }
-        const merged = mergeEndingIncremental(previous, outline, detailed, freshConfessions, memoryBank);
+        const merged = mergeEndingIncremental(previous, outline, detailed, freshConfessions, memoryBank, revisit);
         core_incremental.stampIncrementalCoverage(merged.session, previous, memoryBank, 'mode', sourceMemoryIds, merged.added);
         if (confessionScanSucceeded) {
             core_incremental.stampIncrementalCoverage(merged.session, previous, memoryBank, 'confessions', sourceMemoryIds, freshConfessions.length);

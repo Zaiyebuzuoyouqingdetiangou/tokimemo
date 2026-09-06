@@ -210,6 +210,7 @@ export async function openArchiveSnapshotFromOverview(chatId) {
 
 export function modePortalMeta(mode) {
     const meta = {
+        [core_constants.MODE.CABINET]: { title: '两个人的陈列柜', subtitle: '真实记忆中的共同物件', icon: 'fa-gem', accent: 'items' },
         [core_constants.MODE.ALBUM]: { title: '回忆相簿', subtitle: '共同回忆与 CG 收藏', icon: 'fa-images', accent: 'album' },
         [core_constants.MODE.ADV]: { title: 'ADV EVENT', subtitle: '重要事件与长篇回放', icon: 'fa-book-open', accent: 'adv' },
         [core_constants.MODE.ROOM]: { title: '他的房间', subtitle: '随现实时间流动的私人空间', icon: 'fa-house', accent: 'room' },

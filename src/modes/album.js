@@ -257,7 +257,7 @@ export function normalizeAlbumCommentsBatch(data, expectedEntries) {
 export function albumEvidenceKey(item) {
     const ids = core_text.cleanArray(item?.sourceMemoryIds, 8, 40).sort().join(',');
     const anchor = core_text.normalizeText(item?.sourceMemoryAnchor, 120).toLowerCase();
-    return item?.unlocked ? `${ids}|${anchor}` : `locked|${core_text.normalizeText(item?.title, 80).toLowerCase()}`;
+    return item?.unlocked ? `${ids}|${anchor}|${item?.expansionRound ? core_incremental.normalizedContentKey(item.title + ' ' + item.desc, 600) : ''}` : `locked|${core_text.normalizeText(item?.title, 80).toLowerCase()}`;
 }
 
 export function mergeAlbumIncremental(previous, fresh, memoryBank) {
@@ -311,13 +311,18 @@ export function mergeAlbumIncremental(previous, fresh, memoryBank) {
 
 export async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, options = {}) {
     const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ALBUM, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
-    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+    const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
     const index = await generation_client.requestValidatedSegment(
-        albumIndexPrompt(context, memoryBank, previous, sourceMemoryIds),
+        albumIndexPrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
         previous ? '回忆相簿 1/3 · 正在从新增档案挑选新 CG…' : '回忆相簿 1/3 · 正在挑选重要 CG 节点…',
         { maxTokens: 5500, temperature: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ALBUM, background: true },
         raw => normalizeAlbumIndex(raw, memoryBank, previous ? sourceMemoryIds : null),
     );
+    const revisit = previous && !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
+    if (revisit) {
+        const titles = new Set(previous.entries.map(item => core_incremental.normalizedContentKey(item.title, 120)));
+        index.entries = index.entries.filter(item => item.unlocked && !titles.has(core_incremental.normalizedContentKey(item.title, 120)));
+    }
     if (previous && !index.entries.length) {
         return core_incremental.stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0);
     }
@@ -361,6 +366,7 @@ export async function generateAlbumWithRepair(context, memoryBank, origin, taskK
             relationshipSnapshot: item.unlocked ? structuredClone(relationshipSnapshot) : null,
         })),
     }, memoryBank);
+    if (revisit) fresh.entries = fresh.entries.map(item => ({ ...item, expansionRound: (Number(previous.generationMeta?.expansionRound) || 0) + 1 }));
     const merged = mergeAlbumIncremental(previous, fresh, memoryBank);
     const added = Math.max(0, merged.entries.length - (previous?.entries?.length || 0));
     return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);

@@ -85,21 +85,26 @@ export function endingEasterEggPopupHtml(replay, runtime = createEndingEasterEgg
     const egg = runtime.egg;
     const logs = runtime.visibleLogs.map(line => `<li>${core_text.esc(line)}</li>`).join('');
     const monologue = egg.monologue.map((block, index) => `<p data-rmt-easter-monologue="${index}">${core_text.esc(block)}</p>`).join('');
+    const trigger = (action, text, className = '') => '<button type="button" class="rmt-btn ' + className + '" data-rmt-action="ending-easter-' + action + '">' + core_text.esc(text) + '</button>';
+    const visuals = {
+        heartbeat_console: '<div class="rmt-easter-oscilloscope"><span aria-hidden="true">▁▁▂▅▇▃▁▁▂▆▃▁</span>' + trigger('pulse', egg.interactionLabels[0]) + trigger('reveal', egg.interactionLabels[1]) + '</div>',
+        memory_constellation: '<div class="rmt-easter-constellation"><i aria-hidden="true">✧ · ✦ · ✧</i>' + trigger('pulse', egg.interactionLabels[0], 'rmt-easter-star') + trigger('reveal', egg.interactionLabels[1], 'rmt-easter-star') + '</div>',
+        signal_lighthouse: '<div class="rmt-easter-lighthouse"><div class="rmt-easter-beam" aria-hidden="true"></div><span aria-hidden="true">♜</span>' + trigger('pulse', egg.interactionLabels[0]) + trigger('reveal', egg.interactionLabels[1]) + '</div>',
+        letter_archive: '<div class="rmt-easter-drawers">' + trigger('reveal', egg.interactionLabels[1], 'rmt-easter-envelope') + trigger('pulse', egg.interactionLabels[0], 'rmt-easter-seal') + '<small>' + core_text.esc(egg.motif) + '</small></div>',
+    };
     return `<div class="rmt-ending-easter-layer" data-rmt-ending-easter data-rmt-easter-module="${core_text.esc(egg.moduleType)}" data-rmt-intensity="${runtime.intensity}">
       <button type="button" class="rmt-ending-easter-backdrop" data-rmt-action="ending-easter-close" aria-label="关闭彩蛋"></button>
       <section class="rmt-ending-easter-dialog" role="dialog" aria-modal="true" aria-labelledby="rmt-ending-easter-title" tabindex="-1">
         <header><div><small>PRIVATE EMOTION MODULE</small><h2 id="rmt-ending-easter-title">${core_text.esc(egg.title)}</h2></div><button type="button" class="rmt-ending-easter-close" data-rmt-action="ending-easter-close" aria-label="关闭彩蛋">×</button></header>
         <div class="rmt-ending-easter-core" data-rmt-easter-core tabindex="0" aria-label="悬停或聚焦以读取情感核心">
-          <span class="rmt-ending-easter-heart" aria-hidden="true">♥</span>
+          ${visuals[egg.moduleType] || visuals.heartbeat_console}
           <b data-rmt-easter-status>${core_text.esc(runtime.feedbackText)}</b>
           <small data-rmt-easter-metrics>核心强度 ${runtime.intensity}% · 主动触发 ${runtime.pulseCount} 次</small>
           <progress data-rmt-easter-meter max="100" value="${runtime.intensity}">${runtime.intensity}%</progress>
         </div>
         <div class="rmt-ending-easter-controls" aria-label="情感模块交互">
-          <button type="button" class="rmt-btn" data-rmt-action="ending-easter-pulse">触碰心跳</button>
-          <button type="button" class="rmt-btn" data-rmt-action="ending-easter-reveal">解锁一句话</button>
           <button type="button" class="rmt-btn" data-rmt-action="ending-easter-toggle" aria-pressed="false">暂停日志</button>
-          <button type="button" class="rmt-btn" data-rmt-action="ending-easter-stabilize">稳定信号</button>
+          <button type="button" class="rmt-btn" data-rmt-action="ending-easter-stabilize">${core_text.esc(egg.interactionLabels[3])}</button>
         </div>
         <section class="rmt-ending-easter-log"><small>情感运行日志</small><ol data-rmt-easter-logs aria-live="polite">${logs}</ol></section>
         <section class="rmt-ending-easter-monologue"><small>没有说出口的内心独白</small>${monologue}</section>

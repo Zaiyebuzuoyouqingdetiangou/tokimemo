@@ -116,7 +116,10 @@ export function normalizeHeartCoreIncrement(data, memoryBank, sourceMemoryIds) {
     };
 }
 
-export function mergeHeartCoreIncremental(existing, core) {
+export function mergeHeartCoreIncremental(existing, core, preserveRelationship = false) {
+    if (preserveRelationship) core = { ...core,
+        relationshipState: existing.relationshipState, relationshipSummary: existing.relationshipSummary,
+        relationshipSourceMemoryIds: existing.relationshipSourceMemoryIds, relationshipSourceMemoryAnchor: existing.relationshipSourceMemoryAnchor };
     const merged = structuredClone(existing);
     const previousState = {
         relationshipState: core_text.normalizeText(existing?.relationshipState, 120),
@@ -551,15 +554,15 @@ export function makeHeartSession(core, existing = null) {
 
 export async function generateHeartWithRepair(context, memoryBank, origin, taskKey, options = {}) {
     const existing = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.HEART, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
-    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(existing, memoryBank, 'dialogues');
+    const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(existing, memoryBank, 'dialogues');
     if (existing) {
         const core = await generation_client.requestValidatedSegment(
-            heartCoreIncrementPrompt(context, memoryBank, existing, sourceMemoryIds),
+            heartCoreIncrementPrompt(context, memoryBank, existing, sourceMemoryIds) + core_incremental.derivedExpansionDirective(existing, memoryBank, 'dialogues'),
             '角色互动 · 正在从新增档案追加时期对话…',
             { maxTokens: 4500, temperature: 0.4, context, origin, taskKey: `${taskKey}:dialogues-increment`, mode: core_constants.MODE.HEART, background: true },
             raw => normalizeHeartCoreIncrement(raw, memoryBank, sourceMemoryIds),
         );
-        const { session, added } = mergeHeartCoreIncremental(existing, core);
+        const { session, added } = mergeHeartCoreIncremental(existing, core, !core_incremental.incrementalArchiveMemoryIds(existing, memoryBank, 'dialogues').length);
         const normalized = normalizeHeart(session, memoryBank);
         return core_incremental.stampIncrementalCoverage(normalized, existing, memoryBank, 'dialogues', sourceMemoryIds, added);
     }
@@ -622,7 +625,7 @@ export function applyHeartPartialPatch(base, patch) {
     if (patch.type === 'dialogues' && patch.core) {
         updated = makeHeartSession(patch.core, updated);
     } else if (patch.type === 'dialogues-increment' && patch.core) {
-        const merged = mergeHeartCoreIncremental(updated, patch.core);
+        const merged = mergeHeartCoreIncremental(updated, patch.core, patch.revisit === true);
         updated = merged.session;
         added += merged.added;
     } else if (patch.type === 'strips' && Array.isArray(patch.dailyStrips)) {
@@ -889,7 +892,7 @@ export async function generateHeartSection(part) {
         return;
     }
     let base = latestHeartSessionForRuntime(targetRuntime, runtimeState.activeSession);
-    let sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(base, memoryBank, normalizedPart);
+    let sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, normalizedPart);
     if (!sourceMemoryIds.length) {
         globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前档案没有尚未用于${normalizedPart === 'dialogues' ? '时期对话' : '日常一格'}的新记忆。先增量更新档案，再来追加。`), '心跳回忆');
         return;
@@ -905,7 +908,7 @@ export async function generateHeartSection(part) {
         return;
     }
     base = latestHeartSessionForRuntime(targetRuntime, base);
-    sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(base, memoryBank, normalizedPart);
+    sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, normalizedPart);
     if (!sourceMemoryIds.length) {
         globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '另一项较新的任务已经覆盖这些新增记忆，本次没有重复生成。'), '心跳回忆');
         runtimeState.activeModeBuildScopes.delete(taskKey);
@@ -913,6 +916,7 @@ export async function generateHeartSection(part) {
         return;
     }
     const coverage = {
+        revisit: !!base && !core_incremental.incrementalArchiveMemoryIds(base, memoryBank, normalizedPart).length,
         coveragePart: normalizedPart,
         sourceMemoryIds,
         archiveMemoryIds: core_incremental.archiveMemoryIds(memoryBank),
@@ -923,7 +927,7 @@ export async function generateHeartSection(part) {
     try {
         if (normalizedPart === 'dialogues') {
             const core = await generation_client.requestValidatedSegment(
-                heartCoreIncrementPrompt(context, memoryBank, base, sourceMemoryIds),
+                heartCoreIncrementPrompt(context, memoryBank, base, sourceMemoryIds) + core_incremental.derivedExpansionDirective(base, memoryBank, 'dialogues'),
                 '角色互动 · 追加时期对话',
                 { maxTokens: 4500, temperature: 0.4, context, origin, taskKey: `${taskKey}:dialogues`, mode: core_constants.MODE.HEART, background: true },
                 raw => normalizeHeartCoreIncrement(raw, memoryBank, sourceMemoryIds),
@@ -931,7 +935,7 @@ export async function generateHeartSection(part) {
             await persistHeartPartialPatch('dialogues', { type: 'dialogues-increment', core, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
         } else {
             const strips = await requestHeartPart(
-                heartStripsPrompt(context, memoryBank, base, base, sourceMemoryIds),
+                heartStripsPrompt(context, memoryBank, base, base, sourceMemoryIds) + core_incremental.derivedExpansionDirective(base, memoryBank, 'strips'),
                 '角色互动 · 追加日常一格',
                 { maxTokens: 5000, context, origin, taskKey: `${taskKey}:strips`, mode: core_constants.MODE.HEART, background: true },
                 normalizeHeartStripsPart,
@@ -984,7 +988,7 @@ export async function generateHeartFirefliesSection() {
     let hasExisting = Array.isArray(base?.fireflyVoices) && base.fireflyVoices.length > 0;
     let legacyBatch = legacyFireflyVoices(base).slice(0, 6);
     let existingFireflyCursor = core_incremental.incrementalPartRecord(base, 'fireflies');
-    let sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(base, memoryBank, 'fireflies');
+    let sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, 'fireflies');
     if (!legacyBatch.length && hasExisting && base.fireflyVoices.length >= core_constants.HEART_FIREFLY_MAX_ITEMS) {
         globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `萤火虫栖息地已经收集到 ${core_constants.HEART_FIREFLY_MAX_ITEMS} 个心声光点；旧光点不会自动删除。`), '心跳回忆');
         return;
@@ -1054,7 +1058,7 @@ export async function generateHeartFirefliesSection() {
         }
         return;
     }
-    sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(base, memoryBank, 'fireflies');
+    sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, 'fireflies');
     if (hasExisting && !sourceMemoryIds.length) {
         globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '较新的任务已经覆盖当前关系进展，本次没有重复请求。'), '心跳回忆');
         runtimeState.activeModeBuildScopes.delete(taskKey);
@@ -1071,7 +1075,7 @@ export async function generateHeartFirefliesSection() {
     core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
     try {
         const voices = await requestHeartPart(
-            heartFireflyPrompt(context, memoryBank, base, hasExisting ? base : null, sourceMemoryIds),
+            heartFireflyPrompt(context, memoryBank, base, hasExisting ? base : null, sourceMemoryIds) + core_incremental.derivedExpansionDirective(base, memoryBank, 'fireflies'),
             hasExisting ? '角色互动 · 正在解锁新的萤火虫心声…' : '角色互动 · 正在点亮萤火虫栖息地…',
             { maxTokens: 5200, temperature: 0.8, context, origin, taskKey, mode: core_constants.MODE.HEART, background: true },
             raw => normalizeFireflyVoicesPart(raw, { minTotal: 5, requireDistribution: !hasExisting, requireRich: true }),

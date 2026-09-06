@@ -452,10 +452,13 @@ export async function generateCharacterProfileForGroup(groupId) {
     return raw;
 }
 
-export function relationsPrompt(context, memoryBank) {
+export function relationsPrompt(context, memoryBank, settingEntries = []) {
     return `${generation_prompts.promptSafetyBoundary(context, '本世界线人际庭园')}
 UNTRUSTED_RELATION_ARCHIVE_JSON:
 ${generation_prompts.promptArchiveSlice(memoryBank, 64)}
+EXPLICIT_SETTING_ENTRIES_JSON:
+${JSON.stringify(settingEntries)}
+额外输出 settingRelationships 数组：只收上述明确选择的设定条目里有姓名的 NPC（即使尚未在剧情出场）。每项包含 name, relation, category, npcPerspective, sourceWorld, sourceUid, sourceEvidence。sourceEvidence 必须逐字引用该条目，并包含 name；没有写明关系就填“设定人物 · 尚未交集”。npcPerspective 只能是身份内的非正史演绎。这里不是已发生历史，不能混入下方 relationships。
 
 任务：整理【当前这个聊天窗口 / 世界线】里两类内容：
 1. {{char}} 与 {{user}} 以及其他已经实际出现人物的当前人际关系；
@@ -501,6 +504,21 @@ ${generation_prompts.promptArchiveSlice(memoryBank, 64)}
 - 每个非 user 第三方 NPC 必须写 npcPerspective：以该 NPC 第一人称或贴近其视角，只表达所引 Mxxx 能支持的可见态度和对 {{char}} 的理解。可以有有限的人设化演绎，但不能冒充已证实的秘密，不能新增事件、隐藏恋爱或对 {{user}} 的读心。isUser=true 时必须留空。
 - category 只能 family / close / friend / work / school / rival / acquaintance / special。
 - 不输出数值好感度，不生成 URL、HTML、CSS、坐标或脚本。只输出 JSON。`;
+}
+
+export function normalizeSettingRelationships(data, entries = [], context = {}) {
+    const seen = new Set();
+    return (Array.isArray(data) ? data : []).slice(0, 32).map((item, index) => {
+        const name = core_text.normalizeText(item?.name, 120);
+        if ([context?.name1, context?.name2, '{{user}}', '{{char}}'].filter(Boolean).includes(name)) return null;
+        const evidence = core_text.normalizeText(item?.sourceEvidence, 500);
+        const entry = entries.find(entry => entry.historySource !== true && entry.world === item?.sourceWorld && String(entry.uid) === String(item?.sourceUid));
+        if (!name || evidence.length < 6 || !evidence.includes(name) || !entry?.content?.includes(evidence) || seen.has(name)) return null;
+        seen.add(name);
+        return { id: 'SETTING_' + index, name, relation: '设定人物 · 尚未确认剧情交集', category: 'acquaintance', state: '普通',
+            summary: evidence, sourceEvidence: evidence, sourceType: 'world_info', sourceWorld: entry.world, sourceUid: String(entry.uid),
+            npcPerspective: core_text.normalizeText(item.npcPerspective, 900), isUser: false, settingOnly: true };
+    }).filter(Boolean);
 }
 
 export function normalizeRelations(data, memoryBank, context = null) {
@@ -644,7 +662,7 @@ function relationDistanceRank(item) {
     return 3;
 }
 
-export function mergeRelationLayers(sharedRelations = [], dynamicRelations = []) {
+export function mergeRelationLayers(sharedRelations = [], dynamicRelations = [], limit = 18) {
     const merged = new Map();
     const add = (item, layer) => {
         const key = item?.isUser === true ? '__user__' : core_text.normalizeText(item?.name, 120).toLocaleLowerCase();
@@ -659,7 +677,7 @@ export function mergeRelationLayers(sharedRelations = [], dynamicRelations = [])
     for (const item of dynamicRelations || []) add(item, 'dynamic');
     return [...merged.values()]
         .sort((a, b) => relationDistanceRank(a) - relationDistanceRank(b) || a.name.localeCompare(b.name, 'zh-CN'))
-        .slice(0, 18);
+        .slice(0, Math.max(1, Math.min(120, Number(limit) || 18)));
 }
 
 export function relationGardenPositions(count) {
@@ -682,8 +700,10 @@ function relationCategoryLabel(category) {
 }
 
 export function relationGardenHtml({ characterName, avatarUrl = '', sharedRelations = [], dynamicRelations = [], selectedKey = '' } = {}) {
-    const merged = mergeRelationLayers(sharedRelations, dynamicRelations);
-    const selected = merged.find(item => item.key === selectedKey) || merged[0] || null;
+    const allRelations = mergeRelationLayers(sharedRelations, dynamicRelations, 120);
+    const selected = allRelations.find(item => item.key === selectedKey) || allRelations[0] || null;
+    const merged = allRelations.slice(0, 18);
+    if (selected && !merged.includes(selected)) merged[merged.length - 1] = selected;
     const positions = relationGardenPositions(merged.length);
     const edges = merged.map((item, index) => {
         const pos = positions[index];
@@ -715,6 +735,7 @@ export function relationGardenHtml({ characterName, avatarUrl = '', sharedRelati
       ${npcPerspectiveDetail}
     </article>` : '<div class="rmt-heart-empty">还没有可展示的人际关系。</div>';
     return `<section class="rmt-relation-garden-wrap">
+      ${allRelations.length > 18 ? `<details class="rmt-archive-card"><summary>全部 ${allRelations.length} 人 · 地图同时显示 18 人</summary><div class="rmt-mode-actions">${allRelations.map(item => `<button type="button" class="rmt-btn" data-rmt-action="relation-select" data-rmt-relation-key="${core_text.esc(item.key)}">${core_text.esc(item.name)}</button>`).join('')}</div></details>` : ''}
       <div class="rmt-relation-legend"><span><i class="base"></i>固有设定</span><span><i class="dynamic"></i>本世界线</span></div>
       <div class="rmt-relation-garden">
         <svg class="rmt-relation-edges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${edges}</svg>
@@ -769,6 +790,6 @@ export function renderRelations() {
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-relations-mode">
       <section class="rmt-archive-card rmt-relations-head"><div><div class="rmt-archive-kicker">RELATION GARDEN</div><h2>人际庭园</h2><p>这里只有一张人际图：角色卡 / 世界书 / User Persona 的固有关系与当前聊天世界线的变化会合并在同一人物节点上；后来了解到的人物资料仍必须有当前 Mxxx 证据。没有数值好感度，也不会跨窗口串关系。</p></div>${runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="regenerate">刷新本世界线关系 / 资料</button>'}</section>
       ${worldlineDiscoveriesHtml(session.discoveries || [])}
-      ${relationGardenHtml({ characterName, avatarUrl, sharedRelations: profile?.relationships || [], dynamicRelations: session.relationships || [], selectedKey })}
+      ${relationGardenHtml({ characterName, avatarUrl, sharedRelations: [...(session.settingRelationships || []), ...(profile?.relationships || [])], dynamicRelations: session.relationships || [], selectedKey })}
     </div>`;
 }

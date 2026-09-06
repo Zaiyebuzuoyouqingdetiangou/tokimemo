@@ -60,7 +60,7 @@ test('mobile overlay early-close fallback accepts only its code-owned topbar clo
 });
 
 test('role interaction stays before achievements while travel is a standalone room-adjacent portal', () => {
-    assert.match(sourceByFile.get('core/constants.js'), /ARCHIVE_PORTAL_MODES = Object\.freeze\(\[MODE\.ALBUM, MODE\.ADV, MODE\.ROOM, MODE\.TRAVEL, MODE\.ENDING, MODE\.CALENDAR, MODE\.RELATIONS, MODE\.HEART, MODE\.ACHIEVEMENTS/);
+    assert.match(sourceByFile.get('core/constants.js'), /ARCHIVE_PORTAL_MODES = Object\.freeze\(\[MODE\.ALBUM, MODE\.ADV, MODE\.ROOM, MODE\.CABINET, MODE\.TRAVEL, MODE\.ENDING, MODE\.CALENDAR, MODE\.RELATIONS, MODE\.HEART, MODE\.ACHIEVEMENTS/);
     assert.match(sourceByFile.get('archive/snapshots.js'), /\[core_constants\.MODE\.HEART\]: \{ title: '角色互动'/);
 });
 
@@ -179,7 +179,7 @@ test('segmented children fold into one parent logical task', () => {
     api.addRequest(`${parent}:outline`, parent);
     api.addRequest(`${parent}:route:END_ROUTE`, parent);
     assert.deepEqual(api.logicalKeys(), [parent]);
-    assert.equal(api.SEGMENT_REQUEST_CONCURRENCY, 1);
+    assert.equal(api.SEGMENT_REQUEST_CONCURRENCY, 2);
 });
 
 test('provider queue never grants more than two permits and drains in order', async () => {
@@ -1858,6 +1858,6 @@ test('r41.9 role page uses one collapsible Character Profile and no duplicate ba
     assert.match(relationsSource, /已读取 \$\{knownCount\} \/ \$\{PROFILE_FACT_ORDER\.length\} 项固定资料 · 点击展开/);
     assert.doesNotMatch(relationsSource, /人际庭园 · 固有设定/);
     assert.doesNotMatch(relationsSource, /characterProfileHtml[\s\S]*?relationGardenHtml\(\{ characterName: profile\.characterName/);
-    assert.match(relationsSource, /relationGardenHtml\(\{ characterName, avatarUrl, sharedRelations: profile\?\.relationships \|\| \[\], dynamicRelations: session\.relationships \|\| \[\], selectedKey \}\)/);
+    assert.ok(relationsSource.includes('sharedRelations: [...(session.settingRelationships || []), ...(profile?.relationships || [])], dynamicRelations: session.relationships || [], selectedKey'));
     assert.match(librarySource, /patchCharacterProfileFromCard\(context, profile, matchedDescriptor\.index\)/);
 });

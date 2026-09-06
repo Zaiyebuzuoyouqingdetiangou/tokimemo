@@ -421,7 +421,18 @@ export function roomNeedsSchemaUpgrade(session) {
         && Number(session.roomVersion) !== core_constants.ROOM_SESSION_VERSION;
 }
 
-export function normalizeRoom(data, memoryBank, { identityKey = '', worldPresentation = null, controlledEvidence = null, characterEvidence = null } = {}) {
+export function normalizeRoom(data, memoryBank, options = {}) {
+    try { return normalizeRoomData(data, memoryBank, options); }
+    catch (error) {
+        const reason = String(error?.message || '');
+        const code = /宠物/.test(reason) ? 'RMT_ROOM_PETS' : /既往共同经历/.test(reason) ? 'RMT_ROOM_HISTORY' : 'RMT_ROOM_STRUCTURE';
+        error.code = code;
+        error.retryable = true;
+        throw error;
+    }
+}
+
+function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentation = null, controlledEvidence = null, characterEvidence = null } = {}) {
     const rawSpaces = Array.isArray(data?.spaces) ? data.spaces : [];
     const userName = core_text.normalizeText(memoryBank?.userName, 120);
     const usedSpaceIds = new Set();

@@ -1,4 +1,8 @@
-# Heartbeat Memories r35–r49 Architecture
+# Heartbeat Memories r35–r50 Architecture
+
+## r50 feedback additions
+
+Derived expansion reuses canonical evidence but never mutates it. Local expansion identity separates new viewpoints from old completed content. Setting NPC collection is archive-target-owned and separate from historical relationship normalization. Cabinet shares the existing mode/cache/persistence pipeline; its evidence validator and static art add no external authority. Input-tag processing runs on copied model inputs; theme surfaces share local CSS tokens. Segment workers may run two in parallel under the unchanged global provider coordinator.
 
 r35 is a zero-schema modularization of the r34 runtime. r36 adds Calendar as the first post-modularization feature without changing the canonical archive schema. The persisted archive and derived-cache contracts remain compatible.
 

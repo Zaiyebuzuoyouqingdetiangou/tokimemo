@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 54
-// Source SHA-256: b444c86b00bc3e5d45c98b7aa6bea51e8f06a7276bdeb6ce91eaae954af7b5e3
+// Source modules: 57
+// Source SHA-256: 67481e3b6e7fe05159d2baa1520e5967086987366d6120afdd14ca443a828ada
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -14,6 +14,7 @@ const __m_archive_sourceLedger_js = Object.create(null);
 const __m_core_cache_js = Object.create(null);
 const __m_core_constants_js = Object.create(null);
 const __m_core_context_js = Object.create(null);
+const __m_core_contextTags_js = Object.create(null);
 const __m_core_deferredCommitStore_js = Object.create(null);
 const __m_core_evidence_js = Object.create(null);
 const __m_core_incremental_js = Object.create(null);
@@ -36,6 +37,7 @@ const __m_modes_achievements_js = Object.create(null);
 const __m_modes_advEvent_js = Object.create(null);
 const __m_modes_album_js = Object.create(null);
 const __m_modes_butterfly_js = Object.create(null);
+const __m_modes_cabinet_js = Object.create(null);
 const __m_modes_calendar_js = Object.create(null);
 const __m_modes_ending_js = Object.create(null);
 const __m_modes_heart_js = Object.create(null);
@@ -56,6 +58,7 @@ const __m_ui_overlay_js = Object.create(null);
 const __m_ui_phoneView_js = Object.create(null);
 const __m_ui_settingsPanel_js = Object.create(null);
 const __m_ui_styles_js = Object.create(null);
+const __m_ui_themeSurfaces_js = Object.create(null);
 const __m_ui_travelView_js = Object.create(null);
 
 function __init_core_constants_js() {
@@ -204,7 +207,12 @@ const MAX_MEMORY_WORLD_INFO_ENTRIES = 160;
 
 const MAX_MEMORY_WORLD_INFO_CHARS = 52000;
 
-const THEME_MODES = new Set(['default', 'host', 'custom']);
+const THEME_MODES = new Set(['default', 'night', 'host', 'custom']);
+
+const NIGHT_THEME_PALETTE = Object.freeze({
+    background: '#171d28', surface: '#232c3a', text: '#edf1f8', muted: '#b8c5d6',
+    accent: '#d9a8c1', accentAlt: '#90c9c5', border: '#455269',
+});
 
 const DEFAULT_THEME_PALETTE = Object.freeze({
     background: '#f7fafc',
@@ -245,6 +253,7 @@ const MODE = Object.freeze({
     ADV: 'adv',
     ROOM: 'room',
     ITEMS: 'items',
+    CABINET: 'cabinet',
     PHONE: 'phone',
     TRAVEL: 'travel',
     ENDING: 'ending',
@@ -260,6 +269,7 @@ const MODE_LABEL = Object.freeze({
     [MODE.ADV]: 'ADV EVENT',
     [MODE.ROOM]: '他的房间',
     [MODE.ITEMS]: '他的物品',
+    [MODE.CABINET]: '两个人的陈列柜',
     [MODE.PHONE]: '他的私人终端',
     [MODE.TRAVEL]: '他的出行路线',
     [MODE.ENDING]: '结局与后日谈',
@@ -275,6 +285,7 @@ const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ADV]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.ROOM]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.ITEMS]: MAX_GENERATION_OUTPUT_TOKENS,
+    [MODE.CABINET]: 5500,
     [MODE.PHONE]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.TRAVEL]: 9000,
     [MODE.ENDING]: MAX_GENERATION_OUTPUT_TOKENS,
@@ -284,9 +295,10 @@ const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ACHIEVEMENTS]: 6000,
 });
 
-const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
+const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.CABINET, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
 
 const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS, MODE.PHONE]);
+const CREATIVE_EXPANSION_MODES = Object.freeze([MODE.ADV, MODE.BUTTERFLY, MODE.HEART, MODE.ENDING, MODE.ALBUM, MODE.TRAVEL]);
 
 const ARCHIVE_OVERVIEW_CACHE_MS = 60000;
 
@@ -350,7 +362,7 @@ const MANUAL_API_MODEL_LIST_TIMEOUT_MS = 30000;
 
 const MAX_MANUAL_API_RESPONSE_BYTES = 4000000;
 
-const SEGMENT_REQUEST_CONCURRENCY = 1;
+const SEGMENT_REQUEST_CONCURRENCY = 2;
 
 const ARCHIVE_SNAPSHOT_CACHE_MAX = 4;
 
@@ -425,6 +437,7 @@ __m_core_constants_js.MAX_MEMORY_WORLD_INFO_BOOKS = MAX_MEMORY_WORLD_INFO_BOOKS;
 __m_core_constants_js.MAX_MEMORY_WORLD_INFO_ENTRIES = MAX_MEMORY_WORLD_INFO_ENTRIES;
 __m_core_constants_js.MAX_MEMORY_WORLD_INFO_CHARS = MAX_MEMORY_WORLD_INFO_CHARS;
 __m_core_constants_js.THEME_MODES = THEME_MODES;
+__m_core_constants_js.NIGHT_THEME_PALETTE = NIGHT_THEME_PALETTE;
 __m_core_constants_js.DEFAULT_THEME_PALETTE = DEFAULT_THEME_PALETTE;
 __m_core_constants_js.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
 __m_core_constants_js.MODE = MODE;
@@ -432,6 +445,7 @@ __m_core_constants_js.MODE_LABEL = MODE_LABEL;
 __m_core_constants_js.MODE_TOKEN_CAPS = MODE_TOKEN_CAPS;
 __m_core_constants_js.ARCHIVE_PORTAL_MODES = ARCHIVE_PORTAL_MODES;
 __m_core_constants_js.ROOM_DEEP_MODES = ROOM_DEEP_MODES;
+__m_core_constants_js.CREATIVE_EXPANSION_MODES = CREATIVE_EXPANSION_MODES;
 __m_core_constants_js.ARCHIVE_OVERVIEW_CACHE_MS = ARCHIVE_OVERVIEW_CACHE_MS;
 __m_core_constants_js.CATEGORY_VALUES = CATEGORY_VALUES;
 __m_core_constants_js.ROOM_ZONE_VALUES = ROOM_ZONE_VALUES;
@@ -545,6 +559,10 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_CONNECTION_NETWORK: '无法连接模型服务；请检查地址、网络、代理与服务状态后重试。',
     RMT_REQUEST_TIMEOUT: '模型请求超时，已停止等待并释放任务位；请稍后重试。',
     RMT_SEGMENT_VALIDATION: '模型结果没有通过本地完整性校验；旧内容未被覆盖。',
+    RMT_ROOM_STRUCTURE: '房间的空间差异、四时段生活或互动台词不完整；已保留旧内容，可单独重试房间。',
+    RMT_ROOM_PETS: '人设有宠物，但模型漏写了有效宠物节点；请单独重试房间。',
+    RMT_ROOM_HISTORY: '房间台词把没有证据的共同经历当成了过去；本次未保存，可重试。',
+    RMT_LEDGER_UNAVAILABLE: '浏览器来源存储暂时不可用。请退出隐私模式或关闭旧页后重试；不要清除站点数据。',
     RMT_BANNED_GENERATED_PHRASE: '模型新生成内容命中了本地禁用词；本次结果没有保存。',
     RMT_JSON_EMPTY_FINAL: '模型没有返回最终正文 JSON；旧内容未被覆盖。',
     RMT_JSON_EMPTY_FINAL_WITH_REASONING: '模型产生了推理内容，但没有返回最终正文 JSON；旧内容未被覆盖。',
@@ -818,6 +836,115 @@ __m_core_evidence_js.roomReferencedMemoryIds = roomReferencedMemoryIds;
 __m_core_evidence_js.isSearchableRoomObject = isSearchableRoomObject;
 }
 
+function __init_core_contextTags_js() {
+// MODULE: core/contextTags.js
+
+const DEFAULT_EXCLUDED_TAGS = Object.freeze(['thinking', 'updatevariable', 'updatevarible']);
+function normalizeExcludedTags(value) {
+    const parts = Array.isArray(value) ? value : String(value || '').split(/[\s,，]+/);
+    return [...new Set(parts.map(item => String(item).trim().replace(/^<\/?|\/?\s*>$/g, '').toLowerCase())
+        .filter(item => /^[a-z][a-z0-9._:-]{0,63}$/.test(item)))].slice(0, 32);
+}
+function excludedTagsForContext(context) {
+    const source = context?.extensionSettings?.heartbeatMemories?.excludedContextTags;
+    return normalizeExcludedTags(source === undefined ? DEFAULT_EXCLUDED_TAGS : source);
+}
+function symbolAt(source, index) {
+    const entity = source.slice(index, index + 40).match(/^&(?:amp;){0,3}(lt;|gt;|#0*60;|#0*62;|#x0*3c;|#x0*3e;)/i);
+    if (!entity) return { char: source[index], length: 1 };
+    return { char: /^(lt;|#0*60;|#x0*3c;)$/i.test(entity[1]) ? '<' : '>', length: entity[0].length };
+}
+function tagAt(source, start) {
+    const opener = symbolAt(source, start);
+    if (opener.char !== '<') return null;
+    let index = start + opener.length;
+    while (/\s/.test(source[index] || '') && index < source.length) index++;
+    const closing = source[index] === '/';
+    if (closing) index++;
+    while (/\s/.test(source[index] || '') && index < source.length) index++;
+    const nameStart = index;
+    if (!/[a-z]/i.test(source[index] || '')) return null;
+    while (/[a-z0-9._:-]/i.test(source[index] || '') && index - nameStart < 65) index++;
+    const name = source.slice(nameStart, index).toLowerCase();
+    if (name.length > 64) return null;
+    const next = symbolAt(source, index).char;
+    if (next !== undefined && !/[\s/>]/.test(next)) return null;
+    let quote = '', previous = '';
+    for (; index < source.length;) {
+        const symbol = symbolAt(source, index);
+        const char = symbol.char;
+        if (quote) { if (char === quote) quote = ''; }
+        else if (char === '"' || char === "'") quote = char;
+        else if (char === '>') return { name, closing, selfClosing: previous === '/', end: index + symbol.length };
+        else if (char === '<') return { name, closing, incomplete: true, end: index };
+        if (!/\s/.test(char)) previous = char;
+        index += symbol.length;
+    }
+    return { name, closing, incomplete: true, end: source.length };
+}
+// Preserve original bytes outside selected blocks, including HTML entities.
+// Malformed/unclosed selected openers fail closed; nesting never releases early.
+function stripExcludedTags(value, tags) {
+    const source = String(value || ''), excluded = new Set(normalizeExcludedTags(tags));
+    if (!excluded.size) return source;
+    const stack = [];
+    let out = '', cursor = 0, index = 0;
+    while (index < source.length) {
+        if (source[index] !== '<' && source[index] !== '&') { index++; continue; }
+        const token = tagAt(source, index);
+        if (!token) { index++; continue; }
+        if (token.incomplete) {
+            if (stack.length || (excluded.has(token.name) && !token.closing)) return out + (stack.length ? '' : source.slice(cursor, index));
+            index = Math.max(index + 1, token.end);
+            continue;
+        }
+        if (!stack.length) out += source.slice(cursor, index);
+        if (stack.length) {
+            if (token.closing && stack[stack.length - 1] === token.name) stack.pop();
+            else if (!token.closing && !token.selfClosing) stack.push(token.name);
+        } else if (excluded.has(token.name)) {
+            if (!token.closing && !token.selfClosing) stack.push(token.name);
+        } else out += source.slice(index, token.end);
+        cursor = token.end;
+        index = cursor;
+    }
+    return out + (stack.length ? '' : source.slice(cursor));
+}
+// Only JSON string VALUES are filtered; property names and surrounding task
+// schema remain intact, including when a source string has an unclosed tag.
+function filterJsonPromptStrings(prompt, tags) {
+    const source = String(prompt || '');
+    return source.replace(/"(?:\\.|[^"\\])*"/g, (literal, offset) => {
+        if (/^\s*:/.test(source.slice(offset + literal.length, offset + literal.length + 80))) return literal;
+        try { return JSON.stringify(stripExcludedTags(JSON.parse(literal), tags)); } catch { return literal; }
+    });
+}
+function scanContextTags(messages, maxChars = 256000) {
+    let remaining = Math.max(0, Math.min(256000, maxChars)), used = 0;
+    const counts = new Map();
+    for (const message of (Array.isArray(messages) ? messages : []).slice(-500)) {
+        const text = String(message?.mes || '').slice(0, remaining);
+        remaining -= text.length; used++;
+        for (let index = 0; index < text.length; index++) {
+            if (text[index] !== '<' && text[index] !== '&') continue;
+            const token = tagAt(text, index);
+            if (!token) continue;
+            if (!token.closing && (counts.has(token.name) || counts.size < 100)) counts.set(token.name, (counts.get(token.name) || 0) + 1);
+            index = Math.max(index, token.end - 1);
+        }
+        if (!remaining) break;
+    }
+    return { tags: [...counts].map(([name, count]) => ({ name, count })), usedMessages: used, bounded: true };
+}
+
+__m_core_contextTags_js.normalizeExcludedTags = normalizeExcludedTags;
+__m_core_contextTags_js.excludedTagsForContext = excludedTagsForContext;
+__m_core_contextTags_js.stripExcludedTags = stripExcludedTags;
+__m_core_contextTags_js.filterJsonPromptStrings = filterJsonPromptStrings;
+__m_core_contextTags_js.scanContextTags = scanContextTags;
+__m_core_contextTags_js.DEFAULT_EXCLUDED_TAGS = DEFAULT_EXCLUDED_TAGS;
+}
+
 function __init_core_deferredCommitStore_js() {
 // MODULE: core/deferredCommitStore.js
 
@@ -1075,6 +1202,7 @@ const archive_groups = __m_archive_groups_js;
 const core_constants = __m_core_constants_js;
 const core_evidence = __m_core_evidence_js;
 const core_text = __m_core_text_js;
+const core_contextTags = __m_core_contextTags_js;
 const runtimeState = __m_core_state_js.state;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -1196,11 +1324,11 @@ async function buildChatSnapshot(context = currentCharacterGuard(), options = {}
         usedChars: full.selectedChars,
         truncated: full.truncated,
         coverageMode: full.truncated ? 'evenly-sampled-full-window' : 'full-window',
-        messages: full.selected,
+        messages: full.selected.map(item => ({ ...item, text: core_contextTags.stripExcludedTags(item.text, core_contextTags.excludedTagsForContext(context)) })),
         fingerprint: String(fingerprint >>> 0),
         prefixCount,
         prefixFingerprint: prefixCount > 0 && totalMessages >= prefixCount ? String(prefixFingerprint >>> 0) : '',
-        incrementalMessages: incremental.selected,
+        incrementalMessages: incremental.selected.map(item => ({ ...item, text: core_contextTags.stripExcludedTags(item.text, core_contextTags.excludedTagsForContext(context)) })),
         incrementalUsedMessages: incremental.selected.length,
         incrementalUsedChars: incremental.selectedChars,
         incrementalTruncated: incremental.truncated,
@@ -2209,6 +2337,21 @@ function usesIncrementalMemoryId(referenceIds, sourceMemoryIds) {
     return core_text.cleanArray(referenceIds, core_constants.MAX_MEMORY_ITEMS, 40).some(id => allowed.has(id));
 }
 
+// Creative expansion is not an archive update. Reuse bounded, real evidence
+// when the cursor is exhausted, without resetting its coverage or modifying Mxxx.
+function derivedExpansionMemoryIds(session, memoryBank, part = 'mode') {
+    const pending = incrementalArchiveMemoryIds(session, memoryBank, part);
+    if (pending.length || !session) return pending;
+    const ids = archiveMemoryIds(memoryBank);
+    const offset = (Number(session?.generationMeta?.expansionRound) || 0) * 12 % Math.max(1, ids.length);
+    return [...ids.slice(offset), ...ids.slice(0, offset)].slice(0, core_constants.MAX_MEMORY_PROMPT_ITEMS);
+}
+
+function derivedExpansionDirective(session, memoryBank, part = 'mode') {
+    if (!session || incrementalArchiveMemoryIds(session, memoryBank, part).length) return '';
+    return '\n【本次生成意图：同一档案扩写】没有新历史、没有新关系进展。上文的“新增”仅指派生篇章：可以使用同一 Mxxx 的新镜头、内心侧面、日常模拟或假设后日谈；不要以旧锚点为由拒绝扩写。不能重复已有文本，不能编造过去事件；关系状态、双方态度和已解锁资格保持当前档案不变。所有新内容仍须符合原 schema 和证据校验。\n';
+}
+
 function incrementalArchiveSlice(memoryBank, sourceMemoryIds, limit = core_constants.MAX_MEMORY_PROMPT_ITEMS) {
     const ids = core_text.cleanArray(sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40);
     return JSON.stringify({
@@ -2245,6 +2388,7 @@ function stampIncrementalCoverage(session, previous, memoryBank, part, consumedM
     const coveredMemoryIds = [...new Set([...priorCovered, ...consumed])].filter(id => currentIds.has(id));
     session.generationMeta = {
         ...priorMeta,
+        expansionRound: (Number(priorMeta.expansionRound) || 0) + (previous && !incrementalArchiveMemoryIds(previous, memoryBank, part).length && added > 0 ? 1 : 0),
         schemaVersion: core_constants.DERIVED_INCREMENTAL_SCHEMA_VERSION,
         parts: {
             ...(priorMeta.parts && typeof priorMeta.parts === 'object' ? priorMeta.parts : {}),
@@ -2256,6 +2400,7 @@ function stampIncrementalCoverage(session, previous, memoryBank, part, consumedM
         },
         lastUpdate: {
             part,
+            derivedExpansion: !!previous && !incrementalArchiveMemoryIds(previous, memoryBank, part).length,
             consumedMemoryIds: consumed,
             added: Math.max(0, Math.floor(Number(added) || 0)),
             updatedAt: Date.now(),
@@ -2288,6 +2433,8 @@ __m_core_incremental_js.legacyIncrementalPartHasContent = legacyIncrementalPartH
 __m_core_incremental_js.incrementalCoveredMemoryIds = incrementalCoveredMemoryIds;
 __m_core_incremental_js.incrementalArchiveMemoryIds = incrementalArchiveMemoryIds;
 __m_core_incremental_js.usesIncrementalMemoryId = usesIncrementalMemoryId;
+__m_core_incremental_js.derivedExpansionMemoryIds = derivedExpansionMemoryIds;
+__m_core_incremental_js.derivedExpansionDirective = derivedExpansionDirective;
 __m_core_incremental_js.incrementalArchiveSlice = incrementalArchiveSlice;
 __m_core_incremental_js.incrementalPromptMemoryBank = incrementalPromptMemoryBank;
 __m_core_incremental_js.stampIncrementalCoverage = stampIncrementalCoverage;
@@ -2825,7 +2972,7 @@ function contrastRatio(foreground, background) {
 }
 
 function safeReadableColor(requested, surface, fallback, minimum = 4.5) {
-    const candidates = [requested, fallback, '#111827', '#f8fafc']
+    const candidates = [requested, fallback, '#111827', '#f8fafc', '#000000', '#ffffff']
         .map(value => rgbToHex(parseRgbColor(value), ''))
         .filter(Boolean);
     for (const candidate of candidates) {
@@ -2842,7 +2989,7 @@ function compositeHex(foreground, background, alpha) {
     const front = parseRgbColor(foreground);
     const back = parseRgbColor(background);
     if (!front || !back) return rgbToHex(front, foreground);
-    const a = normalizedThemeAlpha(alpha);
+    const a = Math.max(0, Math.min(1, Number(alpha) || 0));
     return rgbToHex({
         r: front.r * a + back.r * (1 - a),
         g: front.g * a + back.g * (1 - a),
@@ -2878,10 +3025,10 @@ function hostComputedPalette(documentLike = globalThis.document) {
             background,
             surface: background,
             text,
-            muted: fallback.muted,
+            muted: text,
             accent: fallback.accent,
             accentAlt: fallback.accentAlt,
-            border: fallback.border,
+            border: contrastRatio('#ffffff', background) > 4.5 ? '#586578' : fallback.border,
         };
     } catch {
         return { ...fallback };
@@ -2894,12 +3041,18 @@ function resolveThemePalette(settings, documentLike = globalThis.document) {
         ? normalizeThemeCustom(settings?.themeCustom)
         : mode === 'host'
             ? hostComputedPalette(documentLike)
-            : { ...core_constants.DEFAULT_THEME_PALETTE };
+            : mode === 'night' ? { ...core_constants.NIGHT_THEME_PALETTE } : { ...core_constants.DEFAULT_THEME_PALETTE };
     palette = normalizeThemeCustom(palette);
-    const effectiveSurface = compositeHex(palette.surface, palette.background, settings?.themeAlpha);
-    const readableSurfaces = [palette.surface, effectiveSurface];
+    // Custom colours must keep the page and card in the same luminance family.
+    if (contrastRatio(palette.background, palette.surface) > 3) palette.surface = palette.background;
+    const readableSurfaces = [palette.background, palette.surface, compositeHex(palette.surface, palette.background, settings?.themeAlpha)];
     palette.text = safeReadableAcross(palette.text, readableSurfaces, core_constants.DEFAULT_THEME_PALETTE.text, 4.5);
     palette.muted = safeReadableAcross(palette.muted, readableSurfaces, core_constants.DEFAULT_THEME_PALETTE.muted, 4.5);
+    if (readableSurfaces.some(surface => contrastRatio(palette.text, surface) < 4.5 || contrastRatio(palette.muted, surface) < 4.5)) {
+        palette.surface = palette.background;
+        palette.text = safeReadableAcross(palette.text, [palette.background], '#000000');
+        palette.muted = safeReadableAcross(palette.muted, [palette.background], palette.text);
+    }
     return { mode, palette };
 }
 
@@ -2927,6 +3080,9 @@ function applyThemeToElement(element, settings, documentLike = globalThis.docume
     element.style.setProperty('--rmt-theme-accent-alt', palette.accentAlt);
     element.style.setProperty('--rmt-theme-border', palette.border);
     element.style.setProperty('--rmt-theme-alpha', String(alpha));
+    element.style.setProperty('--rmt-theme-accent-ink', safeReadableAcross(palette.accent, [palette.background, palette.surface], palette.text));
+    element.style.setProperty('--rmt-theme-soft', compositeHex(palette.accentAlt, palette.surface, 0.08));
+    element.style.setProperty('color-scheme', contrastRatio('#ffffff', palette.background) > 4.5 ? 'dark' : 'light');
     return { mode, palette, alpha };
 }
 
@@ -2944,6 +3100,7 @@ const core_context = __m_core_context_js;
 const core_independentApi = __m_core_independentApi_js;
 const core_text = __m_core_text_js;
 const core_theme = __m_core_theme_js;
+const core_contextTags = __m_core_contextTags_js;
 const runtimeState = __m_core_state_js.state;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -2979,6 +3136,7 @@ function getPluginSettings(context = core_context.getContext()) {
         imageGenerationManualEnabled: settings.imageGenerationManualEnabled === true,
         ttDisplayMode: settings.ttDisplayMode === true,
         themeMode: core_constants.THEME_MODES.has(settings.themeMode) ? settings.themeMode : 'default',
+        excludedContextTags: core_contextTags.normalizeExcludedTags(settings.excludedContextTags === undefined ? core_contextTags.DEFAULT_EXCLUDED_TAGS : settings.excludedContextTags),
         themeAlpha: Math.max(0.72, Math.min(1, Number.isFinite(Number(settings.themeAlpha)) ? Number(settings.themeAlpha) : core_constants.DEFAULT_SETTINGS.themeAlpha)),
         themeCustom: core_theme.normalizeThemeCustom(settings.themeCustom),
         bannedGeneratedPhrases: settings.bannedGeneratedPhrases === undefined
@@ -4267,7 +4425,9 @@ function renderAdvMode() {
     const bulkBar = `<div class="rmt-adv-bulkbar"><div><b>ADV ${completedAdv}/${session.events.length}</b><span>${!canGenerateDerived ? '永久只读备份' : completedAdv >= session.events.length ? '已完成' : `每批最多 ${core_constants.ADV_BULK_BATCH_SIZE} 篇`}</span></div>${!canGenerateDerived ? '' : `<button type="button" class="rmt-btn" data-rmt-action="generate-all-adv" ${bulkRunning || completedAdv >= session.events.length ? 'disabled' : ''}>${bulkRunning ? '生成中…' : bulkLabel}</button>`}</div>${recoveryActions}`;
     const mobilePicker = `<div class="rmt-adv-mobile-picker"><div class="rmt-adv-picker-status"><b>${String(selectedIndex + 1).padStart(2, '0')} / ${session.events.length}</b><span>${core_text.esc(selected?.title || '')}</span></div><select data-rmt-adv-select aria-label="选择 ADV EVENT 事件">${options}</select><div class="rmt-adv-picker-actions"><button type="button" class="rmt-btn" data-rmt-action="adv-event-prev" ${selectedIndex <= 0 ? 'disabled' : ''}>← 上一个</button><button type="button" class="rmt-btn" data-rmt-action="adv-event-next" ${selectedIndex >= session.events.length - 1 ? 'disabled' : ''}>下一个 →</button></div></div>`;
     const body = ui_overlay.bodyEl();
-    body.innerHTML = `<div class="rmt-adv"><aside class="rmt-event-list">${bulkBar}${mobilePicker}<div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail">${detail}</section><div class="rmt-inline-status" hidden></div></div>`;
+    const expandButton = canGenerateDerived && completedAdv >= session.events.length && session.events.length < core_constants.MAX_DERIVED_CONTENT_ITEMS
+        ? '<button type="button" class="rmt-btn" data-rmt-generate-mode="adv" data-rmt-regenerate="true">同一记忆 · 追加新镜头</button>' : '';
+    body.innerHTML = `<div class="rmt-adv"><aside class="rmt-event-list">${bulkBar}${expandButton}${mobilePicker}<div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail">${detail}</section><div class="rmt-inline-status" hidden></div></div>`;
 }
 
 function advSelect(id) {
@@ -4312,12 +4472,89 @@ __m_ui_advEventView_js.advEventStep = advEventStep;
 __m_ui_advEventView_js.advStep = advStep;
 }
 
+function __init_ui_themeSurfaces_js() {
+// MODULE: ui/themeSurfaces.js
+
+// Structural surfaces share one palette; illustrated scenes retain their own local art colours.
+function structuralThemeCss(root) {
+    root += '[data-rmt-theme-mode]';
+    const surface = [
+        'archive-card','character-card','archive-portal','portal-card','calendar-quick','choice-card','card','info','event-list','event','cg-caption','adv-reader','adv-bulkbar',
+        'memory-gate','memory-settings-status','task-banner','external-memory-row','archive-readonly-control','archive-overview-item','archive-group-entry',
+        'settings-header','settings-content','settings-card','api-source-card','api-source-panel','api-status','performance-diagnostic-output',
+        'avatar-dialog-card','avatar-dialog-bubble','memory-wi-picker-card','memory-wi-book','memory-wi-entry','loading-card',
+        'heart-summary','heart-current-line','heart-greeting-group','heart-drama-card','heart-strip-card','heart-single-drama','heart-season-stage','heart-setting','heart-line','heart-script-bubble','heart-panel','heart-panel-line',
+        'ending-summary','ending-route','ending-detail','ending-confession','ending-epilogue','confession-card','ending-confession-stage','ending-confession-bubble','achievement-card',
+        'calendar-hero','calendar-paper','calendar-month-head','calendar-day','calendar-pending','calendar-todo','calendar-sticky-panel','calendar-master-todo','calendar-special-notes','calendar-mood-section','calendar-sticky','calendar-mood-note',
+        'manage-hero','manage-row','profile-fact','profile-discovery','profile-worldline-note','relation-detail','relation-detail-head',
+        'room-card','room-caption','room-space','room-object-chip','room-object-rail','room-activity-strip','room-stage-head','room-schema-notice',
+        'items-toolbar','item-node','item-detail','travel-head','travel-index','travel-dialogue','travel-dialogue-bubble','cg-provider-bar','cabinet-detail','cabinet-piece','theme-preview'
+    ];
+    const surfaces = surface.map(name => root + ' .rmt-' + name).join(',');
+    const art = ':not(.rmt-crt,.rmt-crt *,.rmt-room-scene,.rmt-room-scene *,.rmt-phone-screen,.rmt-phone-screen *,.rmt-travel-artifact,.rmt-travel-artifact *,.rmt-ending-easter-layer,.rmt-ending-easter-layer *,.rmt-calendar-holiday-art,.rmt-calendar-holiday-art *,.rmt-firefly-field,.rmt-firefly-field *)';
+    return `
+${root}{--gs-ink:var(--rmt-theme-text);--gs-muted:var(--rmt-theme-muted);--gs-paper:var(--rmt-theme-surface-solid);--gs-paper-blue:var(--rmt-theme-surface-solid);--gs-line:var(--rmt-theme-border);color:var(--rmt-theme-text)!important;-webkit-text-fill-color:var(--rmt-theme-text)!important;font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif!important;font-size:15px!important;line-height:1.6;text-shadow:none!important}
+${root} .rmt-shell{--gs-ink:var(--rmt-theme-text);--gs-muted:var(--rmt-theme-muted);--gs-paper:var(--rmt-theme-surface-solid);--gs-paper-blue:var(--rmt-theme-surface-solid);--gs-line:var(--rmt-theme-border)}
+${surfaces}{background:var(--rmt-theme-surface-alpha)!important;color:var(--rmt-theme-text)!important;border-color:var(--rmt-theme-border)!important;opacity:1!important;text-shadow:none!important;box-shadow:0 4px 18px #0000000a}
+${root} :is(.rmt-album,.rmt-adv,.rmt-room-view,.rmt-travel,.rmt-heart-drama-layout,.rmt-archive-room){background:var(--rmt-theme-bg)!important}
+${root} :is(p,b,strong,small,span,label,blockquote,h1,h2,h3,summary,legend,div[class^="rmt-"],div[class*=" rmt-"])${art}{color:var(--rmt-theme-text)!important;-webkit-text-fill-color:var(--rmt-theme-text)!important;text-shadow:none!important}
+${root} :is(p,blockquote,.rmt-adv-reader,.rmt-avatar-dialog-bubble,.rmt-heart-script-bubble)${art}{font-size:16px!important;line-height:1.8!important;font-weight:400!important;opacity:1!important}
+${root} :is(small,.rmt-api-note,.rmt-avatar-dialog-note,.rmt-settings-field,.rmt-settings-check)${art}{font-size:13px!important;color:var(--rmt-theme-muted)!important;-webkit-text-fill-color:var(--rmt-theme-muted)!important;opacity:1!important}
+${root} :is(button,select,input,textarea,.menu_button)${art}{font-family:inherit!important;font-size:14px!important;line-height:1.4!important;min-height:44px;max-width:100%;color:var(--rmt-theme-text)!important;-webkit-text-fill-color:var(--rmt-theme-text)!important;background:var(--rmt-theme-surface-solid)!important;border-color:var(--rmt-theme-border)!important;opacity:1!important;text-shadow:none!important;writing-mode:horizontal-tb!important}
+${root} :is(button,summary):focus-visible{outline:2px solid var(--rmt-theme-accent-ink)!important;outline-offset:3px}
+${root} :is(button.active,button.is-active,[aria-pressed="true"],.rmt-archive-keywords span,.rmt-calendar-tag){background:var(--rmt-theme-surface-solid)!important;border-color:var(--rmt-theme-accent)!important;box-shadow:inset 0 0 0 2px var(--rmt-theme-accent)}
+${root} :is(b,strong,span,label)${art}{font-size:max(13px,1em)}
+${root} :is(.rmt-api-status,.rmt-progress,.rmt-archive-meta,.rmt-api-note){font-size:13px!important}
+${root} :is(input:not([type="checkbox"]):not([type="color"]):not([type="range"]),textarea,select){font-size:16px!important}
+${root} button:disabled{opacity:.55!important;cursor:default}
+${root} .rmt-avatar-dialog-close{width:44px;height:44px}
+@media(max-width:700px){${root} .rmt-topbar button[data-rmt-action]{font-size:0!important}}
+${root} .rmt-theme-custom-panel{grid-template-columns:repeat(2,minmax(0,1fr))}
+${root} .rmt-theme-custom-panel label{padding:10px;background:var(--rmt-theme-surface-solid);border-color:var(--rmt-theme-border)}
+${root} .rmt-theme-custom-panel input[type="color"]{width:100%;height:44px;min-height:44px;padding:3px;border:1px solid var(--rmt-theme-border)}
+${root} .rmt-theme-presets{display:flex;gap:8px;flex-wrap:wrap}
+${root} .rmt-theme-preview{padding:16px;border:1px solid var(--rmt-theme-border);border-radius:14px}
+${root} .rmt-theme-preview p{margin:6px 0}
+${root} .rmt-theme-preview small{display:block}
+${root} .rmt-task-banner{position:relative}
+${root} .rmt-task-banner:before{opacity:.15}
+${root} :is(.rmt-settings-card-head small,.rmt-archive-kicker){letter-spacing:.04em}
+@media(prefers-reduced-motion:reduce){${root} *{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+${root} :is(.rmt-crt,.rmt-crt *,.rmt-room-scene,.rmt-room-scene *,.rmt-phone-screen,.rmt-phone-screen *,.rmt-travel-artifact,.rmt-travel-artifact *,.rmt-ending-easter-layer,.rmt-ending-easter-layer *,.rmt-calendar-holiday-art,.rmt-calendar-holiday-art *,.rmt-firefly-field,.rmt-firefly-field *){-webkit-text-fill-color:currentColor!important}
+${root} .rmt-cabinet{padding:20px;max-width:1100px;margin:auto}
+${root} .rmt-cabinet>header{padding:20px;border-radius:18px}
+${root} .rmt-cabinet-shelves{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:20px;padding:20px 0}
+${root} .rmt-cabinet-piece{border:1px solid var(--rmt-theme-border);border-bottom:8px solid var(--rmt-theme-border);border-radius:18px;overflow:hidden}
+${root} .rmt-cabinet-piece summary{list-style:none;display:grid;gap:12px;place-items:center;cursor:pointer;padding:24px;min-height:200px}
+${root} .rmt-cabinet-object{font-size:52px!important;padding:10px 40px;border-bottom:1px solid var(--rmt-theme-border)}
+${root} .rmt-cabinet-detail{padding:16px}
+${root} :is(.rmt-easter-oscilloscope,.rmt-easter-constellation,.rmt-easter-lighthouse,.rmt-easter-drawers){position:relative;display:flex;gap:16px;align-items:center;justify-content:center;flex-wrap:wrap;width:100%;min-height:180px;overflow:hidden;border-radius:18px}
+${root} .rmt-easter-oscilloscope{background:#142632;color:#b5ecd9}
+${root} .rmt-easter-oscilloscope>span{display:block;width:100%;font-size:32px;letter-spacing:6px;transform:scaleY(calc(.5 + var(--rmt-easter-intensity,.4)))}
+${root} .rmt-easter-constellation{background:radial-gradient(ellipse at 50% 80%,#323c64,#111727);color:#ecddbc;align-items:flex-end;padding:48px 16px 24px}
+${root} .rmt-easter-constellation>i{position:absolute;top:12px;left:15%;font-size:35px;letter-spacing:18px;opacity:calc(.4 + var(--rmt-easter-intensity,.4))}
+${root} .rmt-easter-star{border-radius:50%!important;width:100px;min-height:72px;z-index:1}
+${root} .rmt-easter-lighthouse{background:linear-gradient(#16263b,#3b6072);color:#eff4f5;padding:24px}
+${root} .rmt-easter-lighthouse>span{font-size:80px;width:100%;z-index:1}
+${root} .rmt-easter-beam{position:absolute;inset:-70%;background:conic-gradient(from 20deg,transparent 0deg,#f9ebbb77 20deg,transparent 40deg);transform:rotate(calc(var(--rmt-easter-intensity,.4)*160deg));transition:transform .4s}
+${root} .rmt-easter-lighthouse button{z-index:1}
+${root} .rmt-easter-drawers{display:grid;grid-template-columns:1fr;background:#e8ddcf;padding:24px}
+${root} .rmt-easter-envelope{min-height:85px!important;background:linear-gradient(25deg,#efe3d1 49%,#fff7eb 50%)!important;color:#4e443b!important;border-radius:2px!important}
+${root} .rmt-easter-seal{border-radius:50%!important;justify-self:center;background:#74494f!important;color:#fff!important}
+`;
+}
+
+__m_ui_themeSurfaces_js.structuralThemeCss = structuralThemeCss;
+}
+
 function __init_ui_styles_js() {
 // MODULE: ui/styles.js
 const core_constants = __m_core_constants_js;
 const core_text = __m_core_text_js;
+const ui_themeSurfaces = __m_ui_themeSurfaces_js;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
 
 
 function ensureSettingsStyles() {
@@ -4386,6 +4623,7 @@ function ensureSettingsStyles() {
   #${core_constants.SETTINGS_ID} .rmt-theme-custom-panel{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 `;
+    style.textContent += ui_themeSurfaces.structuralThemeCss('#' + core_constants.SETTINGS_ID);
     document.head.appendChild(style);
 }
 
@@ -5270,6 +5508,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 #${core_constants.OVERLAY_ID} .rmt-archive-card,#${core_constants.OVERLAY_ID} .rmt-character-card,#${core_constants.OVERLAY_ID} .rmt-portal-card,#${core_constants.OVERLAY_ID} .rmt-calendar-quick{border-color:var(--rmt-theme-border,#dce7ec)!important;background:var(--rmt-theme-surface-alpha,var(--rmt-theme-surface,#fff))!important;color:var(--rmt-theme-text,#526a80)!important;-webkit-text-fill-color:var(--rmt-theme-text,#526a80)!important;opacity:1!important;writing-mode:horizontal-tb!important;text-orientation:mixed!important}
 
 `;
+    style.textContent += ui_themeSurfaces.structuralThemeCss('#' + core_constants.OVERLAY_ID) + ui_themeSurfaces.structuralThemeCss('.rmt-avatar-dialog-pop[data-rmt-theme-mode]');
     document.head.appendChild(style);
 }
 
@@ -6159,7 +6398,7 @@ function normalizeAlbumCommentsBatch(data, expectedEntries) {
 function albumEvidenceKey(item) {
     const ids = core_text.cleanArray(item?.sourceMemoryIds, 8, 40).sort().join(',');
     const anchor = core_text.normalizeText(item?.sourceMemoryAnchor, 120).toLowerCase();
-    return item?.unlocked ? `${ids}|${anchor}` : `locked|${core_text.normalizeText(item?.title, 80).toLowerCase()}`;
+    return item?.unlocked ? `${ids}|${anchor}|${item?.expansionRound ? core_incremental.normalizedContentKey(item.title + ' ' + item.desc, 600) : ''}` : `locked|${core_text.normalizeText(item?.title, 80).toLowerCase()}`;
 }
 
 function mergeAlbumIncremental(previous, fresh, memoryBank) {
@@ -6213,13 +6452,18 @@ function mergeAlbumIncremental(previous, fresh, memoryBank) {
 
 async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, options = {}) {
     const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ALBUM, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
-    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+    const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
     const index = await generation_client.requestValidatedSegment(
-        albumIndexPrompt(context, memoryBank, previous, sourceMemoryIds),
+        albumIndexPrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
         previous ? '回忆相簿 1/3 · 正在从新增档案挑选新 CG…' : '回忆相簿 1/3 · 正在挑选重要 CG 节点…',
         { maxTokens: 5500, temperature: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ALBUM, background: true },
         raw => normalizeAlbumIndex(raw, memoryBank, previous ? sourceMemoryIds : null),
     );
+    const revisit = previous && !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
+    if (revisit) {
+        const titles = new Set(previous.entries.map(item => core_incremental.normalizedContentKey(item.title, 120)));
+        index.entries = index.entries.filter(item => item.unlocked && !titles.has(core_incremental.normalizedContentKey(item.title, 120)));
+    }
     if (previous && !index.entries.length) {
         return core_incremental.stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0);
     }
@@ -6263,6 +6507,7 @@ async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, opt
             relationshipSnapshot: item.unlocked ? structuredClone(relationshipSnapshot) : null,
         })),
     }, memoryBank);
+    if (revisit) fresh.entries = fresh.entries.map(item => ({ ...item, expansionRound: (Number(previous.generationMeta?.expansionRound) || 0) + 1 }));
     const merged = mergeAlbumIncremental(previous, fresh, memoryBank);
     const added = Math.max(0, merged.entries.length - (previous?.entries?.length || 0));
     return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
@@ -6341,6 +6586,93 @@ __m_modes_album_js.normalizeAlbumCommentsBatch = normalizeAlbumCommentsBatch;
 __m_modes_album_js.albumEvidenceKey = albumEvidenceKey;
 __m_modes_album_js.mergeAlbumIncremental = mergeAlbumIncremental;
 __m_modes_album_js.normalizeAlbum = normalizeAlbum;
+}
+
+function __init_modes_cabinet_js() {
+// MODULE: modes/cabinet.js
+const core_constants = __m_core_constants_js;
+const core_text = __m_core_text_js;
+const core_evidence = __m_core_evidence_js;
+const generation_prompts = __m_generation_prompts_js;
+const ui_overlay = __m_ui_overlay_js;
+const runtimeState = __m_core_state_js.state;
+
+
+
+
+
+
+function cabinetPrompt(context, memoryBank) {
+    return generation_prompts.promptSafetyBoundary(context, '两个人的陈列柜') + '\n' +
+        generation_prompts.promptArchiveSlice(memoryBank, 64) +
+        '\n只收记忆中真实出现、与两个人有关的具体物件，如曾交换的礼物、共同使用的物品、留下的票根。不是他的全部私人物品。不得从世界书推测，不得编造礼物。无证据时返回空 items。最多 12 件。输出 {"items":[{"name":"原文中的物件名","objectEvidence":"从所引记忆 summary/anchors/title 中逐字复制的一句，须含物件名及两人关联","sourceMemoryIds":["M001"],"sourceMemoryAnchor":"原样锚点"}]}。';
+}
+
+function normalizeCabinet(raw, memoryBank) {
+    if (!Array.isArray(raw?.items)) throw new Error('陈列柜缺少物件列表');
+    const items = [];
+    const seen = new Set();
+    for (const item of raw.items.slice(0, 24)) {
+        const name = core_text.normalizeText(item?.name, 80);
+        const evidence = core_text.normalizeText(item?.objectEvidence, 500);
+        const reference = core_evidence.normalizeExactMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, memoryBank);
+        const memories = (memoryBank?.memories || []).filter(memory => reference.sourceMemoryIds.includes(memory.id));
+        const literal = memories.some(memory => [memory.title, memory.summary, ...(memory.anchors || [])].some(text => String(text || '').includes(evidence)));
+        const names = [memoryBank?.characterName, memoryBank?.userName];
+        const pair = names.every(value => value && evidence.includes(value))
+            || (/两人|两个人|双方|彼此|我们/.test(evidence) && memories.some(memory =>
+                names.every(name => name && memory.participants?.includes(name)) && memory.participants.length === 2));
+        if (!name || evidence.length < 6 || !evidence.includes(name) || !literal || !pair || !reference.sourceMemoryAnchor || seen.has(name)) continue;
+        seen.add(name);
+        items.push({ id: 'KEEP_' + (items.length + 1), name, objectEvidence: evidence, ...reference });
+    }
+    return { kind: core_constants.MODE.CABINET, title: '两个人的陈列柜', items };
+}
+
+function mergeCabinet(previous, fresh) {
+    const items = structuredClone(previous?.items || []);
+    const names = new Set(items.map(item => item.name));
+    for (const item of fresh.items) if (!names.has(item.name) && items.length < core_constants.MAX_DERIVED_CONTENT_ITEMS) {
+        names.add(item.name);
+        items.push({ ...item, id: 'KEEP_' + (items.length + 1) });
+    }
+    return { ...fresh, items };
+}
+
+function cabinetHtml(session) {
+    const esc = core_text.esc;
+    const items = (Array.isArray(session?.items) ? session.items : []).slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS)
+        .filter(item => item && typeof item === 'object').map(item => ({ ...item, sourceMemoryIds: core_text.cleanArray(item.sourceMemoryIds, 8, 40) }));
+    return '<section class="rmt-cabinet"><header class="rmt-archive-card"><small>OUR KEEPSAKES</small><h2>两个人的陈列柜</h2><p>把确实留下过的东西，放在这里。</p></header><div class="rmt-cabinet-shelves">' +
+        (items.length ? items.map((item, index) => '<details class="rmt-cabinet-piece"><summary><span class="rmt-cabinet-object" aria-hidden="true">' + cabinetObjectArt(item.name) + '</span><small>No. ' + String(index + 1).padStart(2, '0') + '</small><b>' + esc(item.name) + '</b><span>打开回忆</span></summary><div class="rmt-cabinet-detail"><blockquote>' + esc(item.objectEvidence) + '</blockquote><small>' + esc(item.sourceMemoryIds.join(' · ')) + ' · ' + esc(item.sourceMemoryAnchor) + '</small></div></details>').join('')
+            : '<p class="rmt-archive-card">这份记忆里还没有能核实的共同物件。柜子先空着，不替你们编造纪念品。</p>') + '</div></section>';
+}
+
+// Decorative silhouettes are owned entirely by the plugin, never model SVG.
+function cabinetObjectArt(name) {
+    const text = core_text.normalizeText(name, 80);
+    const shape = /票|ticket/i.test(text) ? '<path d="M12 24h72v12a12 12 0 0 0 0 24v12H12V60a12 12 0 0 0 0-24z"/><path d="M64 28v40M27 40h24M27 51h18"/>'
+        : /信|纸条|letter|note/i.test(text) ? '<rect x="12" y="24" width="72" height="48" rx="3"/><path d="m14 28 34 28 34-28M14 69l23-23m45 23L59 46"/>'
+        : /书|本|book|journal/i.test(text) ? '<path d="M22 12h54v68H28a8 8 0 0 1 0-16h48M28 12v52M39 28h25M39 39h18"/>'
+        : /戒|ring/i.test(text) ? '<circle cx="48" cy="57" r="23"/><path d="m35 25 7-12h12l7 12-13 13zM35 25h26"/>'
+        : /钥匙|key/i.test(text) ? '<circle cx="31" cy="32" r="18"/><path d="m43 45 36 36M64 66l10-10M73 75l10-10"/>'
+        : /花|flower/i.test(text) ? '<path d="M48 81V48m0 23c-20 0-20-15-20-15 17-1 20 15 20 15m0-9c20 0 20-15 20-15-17-1-20 15-20 15"/><circle cx="48" cy="31" r="18"/><circle cx="48" cy="31" r="6"/>'
+        : '<path d="M16 36h64v43H16zM12 25h72v14H12zM48 25v54M48 25C18 26 21 4 35 14zm0 0C78 26 75 4 61 14z"/>';
+    return '<svg viewBox="0 0 96 96" width="112" height="112" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">' + shape + '</svg>';
+}
+
+function renderCabinet() {
+    if (runtimeState.activeSession?.kind !== core_constants.MODE.CABINET) return;
+    ui_overlay.topTitle('两个人的陈列柜');
+    ui_overlay.bodyEl().innerHTML = cabinetHtml(runtimeState.activeSession);
+}
+
+__m_modes_cabinet_js.cabinetPrompt = cabinetPrompt;
+__m_modes_cabinet_js.normalizeCabinet = normalizeCabinet;
+__m_modes_cabinet_js.mergeCabinet = mergeCabinet;
+__m_modes_cabinet_js.cabinetHtml = cabinetHtml;
+__m_modes_cabinet_js.cabinetObjectArt = cabinetObjectArt;
+__m_modes_cabinet_js.renderCabinet = renderCabinet;
 }
 
 function __init_modes_ending_js() {
@@ -6440,6 +6772,14 @@ function normalizeEndingEasterEgg(value, replay = {}) {
     ]));
     return {
         moduleType,
+        motif: core_text.normalizeText(input?.motif, 120) || sourceAnchor,
+        interactionLabels: [0, 1, 2, 3].map(index => core_text.normalizeText(input?.interactionLabels?.[index], 20)
+            || ({
+                heartbeat_console: ['触碰心跳', '读取波形', '暂停记录', '让心安定'],
+                memory_constellation: ['点亮星星', '连起回忆', '暂停星轨', '留下坐标'],
+                signal_lighthouse: ['向你发信', '接收回音', '暂停值守', '确认归航'],
+                letter_archive: ['按下封印', '拆开信封', '暂停整理', '把信收好'],
+            }[moduleType] || ['触碰心跳', '解锁一句话', '暂停日志', '稳定信号'])[index]),
         title: core_text.normalizeText(input?.title, 120) || `${replayTitle} · 情感运行模块`,
         statusLine: core_text.normalizeText(input?.statusLine, 400) || '正在读取这份告白在此刻留下的波动。',
         logs: logs.slice(0, 12),
@@ -6490,7 +6830,9 @@ ${JSON.stringify(compactEndingConfessionsExisting(previous), null, 2)}
       "responseSummary": "只总结 {{user}} 当时已经发生的回应/结果，不替 {{user}} 编新台词",
       "afterEffect": "只总结告白后档案里已经发生的关系变化；没有就写仍未确认",
       "easterEgg": {
-        "moduleType": "heartbeat_console",
+        "moduleType": "从 heartbeat_console / memory_constellation / signal_lighthouse / letter_archive 中按角色选择一个",
+        "motif": "此角色与这次告白独有的意象，不是通用心跳",
+        "interactionLabels": ["角色化触碰动作", "角色化揭示动作", "暂停动作", "安定动作"],
         "title": "{{char}} 为这次回看设计的情感模块标题",
         "statusLine": "此刻的情感运行状态",
         "logs": ["[10:24] 扫描到 {{user}} 的信息 -> 情感核心发生波动 -> 直白、人类可读的结论"],
@@ -6714,7 +7056,7 @@ function normalizeEndingIncrementOutline(data, memoryBank, sourceMemoryIds) {
 function endingRouteEvidenceKey(item) {
     const ids = core_text.cleanArray(item?.sourceMemoryIds, 12, 40).sort().join(',');
     const anchor = core_incremental.normalizedContentKey(item?.sourceMemoryAnchor, 160);
-    return `${core_text.normalizeText(item?.type, 40)}|${ids}|${anchor || core_incremental.normalizedContentKey(item?.title, 120)}`;
+    return `${core_text.normalizeText(item?.type, 40)}|${ids}|${anchor || core_incremental.normalizedContentKey(item?.title, 120)}|${item?.expansionRound ? core_incremental.normalizedContentKey(item?.title, 120) : ''}`;
 }
 
 function endingConfessionEvidenceKey(item) {
@@ -6738,7 +7080,9 @@ function mergeEndingConfessions(previousList, freshList) {
     return { items: merged, added };
 }
 
-function mergeEndingIncremental(previous, outline, detailed, freshConfessions, memoryBank) {
+function mergeEndingIncremental(previous, outline, detailed, freshConfessions, memoryBank, revisit = false) {
+    if (revisit) outline = { ...outline, relationshipState: previous.relationshipState, relationshipSummary: previous.relationshipSummary,
+        relationshipSourceMemoryIds: previous.relationshipSourceMemoryIds, relationshipSourceMemoryAnchor: previous.relationshipSourceMemoryAnchor };
     const merged = structuredClone(previous);
     const history = Array.isArray(merged.relationshipHistory) ? merged.relationshipHistory : [];
     const oldHistoryKey = `${core_incremental.normalizedContentKey(previous.relationshipState, 120)}|${core_incremental.normalizedContentKey(previous.relationshipSummary, 400)}`;
@@ -6758,7 +7102,7 @@ function mergeEndingIncremental(previous, outline, detailed, freshConfessions, m
     merged.relationshipSourceMemoryAnchor = outline.relationshipSourceMemoryAnchor;
 
     const detailById = new Map((detailed || []).map(item => [item.id, item]));
-    const incoming = (outline.endings || []).map(item => detailById.get(item.id) || item);
+    const incoming = (outline.endings || []).map(item => detailById.get(item.id) || item).map(item => revisit ? { ...item, expansionRound: (Number(previous.generationMeta?.expansionRound) || 0) + 1 } : item);
     const byKey = new Map((merged.endings || []).map((item, index) => [endingRouteEvidenceKey(item), index]));
     const usedIds = new Set((merged.endings || []).map(item => item.id));
     let added = 0;
@@ -6771,7 +7115,7 @@ function mergeEndingIncremental(previous, outline, detailed, freshConfessions, m
         }
         if (existingIndex !== undefined && existingIndex >= 0) {
             const old = merged.endings[existingIndex];
-            if (!old.available && item.available) {
+            if (!revisit && !old.available && item.available) {
                 merged.endings[existingIndex] = { ...old, ...structuredClone(item), id: old.id };
                 added += 1;
                 if (outline.recommendedEndingId === item.id) recommended = old.id;
@@ -6789,6 +7133,9 @@ function mergeEndingIncremental(previous, outline, detailed, freshConfessions, m
     merged.confessionReplays = confessionMerge.items;
     merged.recommendedEndingId = recommended;
     const normalized = normalizeEnding(merged, memoryBank);
+    // Expansion identity is local metadata, never authority accepted from model output.
+    const localRounds = new Map(merged.endings.map(item => [item.id, item.expansionRound]));
+    normalized.endings.forEach(item => { if (localRounds.get(item.id)) item.expansionRound = localRounds.get(item.id); });
     return { session: normalized, added: added + confessionMerge.added };
 }
 
@@ -6914,15 +7261,24 @@ function normalizeEndingRouteDetail(data, route) {
 
 async function generateEndingWithRepair(context, memoryBank, origin, taskKey, options = {}) {
     const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ENDING, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
-    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+    const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
     if (previous) {
         const outline = await generation_client.requestValidatedSegment(
-            endingIncrementOutlinePrompt(context, memoryBank, previous, sourceMemoryIds),
+            endingIncrementOutlinePrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
             'ENDING · 正在从新增档案判断新路线…',
             { maxTokens: 5000, temperature: 0.35, context, origin, taskKey: `${taskKey}:increment-outline`, mode: core_constants.MODE.ENDING, background: true },
             raw => normalizeEndingIncrementOutline(raw, memoryBank, sourceMemoryIds),
         );
         const usedIds = new Set(previous.endings.map(item => item.id));
+        const revisit = !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
+        if (revisit) {
+            Object.assign(outline, { relationshipState: previous.relationshipState, relationshipSummary: previous.relationshipSummary,
+                relationshipSourceMemoryIds: previous.relationshipSourceMemoryIds, relationshipSourceMemoryAnchor: previous.relationshipSourceMemoryAnchor });
+            const allowedTypes = new Set(previous.endings.filter(item => item.available).map(item => item.type));
+            const lockedTitles = new Set(previous.endings.filter(item => !item.available).map(item => `${item.type}|${core_incremental.normalizedContentKey(item.title, 120)}`));
+            outline.endings = outline.endings.filter(item => item.available && allowedTypes.has(item.type)
+                && !lockedTitles.has(`${item.type}|${core_incremental.normalizedContentKey(item.title, 120)}`)).slice(0, 3);
+        }
         const originalRecommended = outline.recommendedEndingId;
         for (const route of outline.endings) {
             const originalId = route.id;
@@ -6939,7 +7295,7 @@ async function generateEndingWithRepair(context, memoryBank, origin, taskKey, op
         let freshConfessions = [];
         let confessionScanSucceeded = false;
         try {
-            const confessionRaw = await generation_client.requestJson(
+            const confessionRaw = revisit ? { confessionReplays: [] } : await generation_client.requestJson(
                 endingConfessionRefreshPrompt(context, memoryBank, previous, sourceMemoryIds),
                 'ENDING · 正在从新增档案扫描新告白…',
                 { maxTokens: 8000, temperature: 0.35, context, origin, taskKey: `${taskKey}:increment-confession`, mode: core_constants.MODE.ENDING, background: true },
@@ -6951,7 +7307,7 @@ async function generateEndingWithRepair(context, memoryBank, origin, taskKey, op
             if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
             console.warn('[HeartbeatMemories] incremental ENDING confession scan failed; keeping old replays', core_text.safeErrorDiagnostic(error));
         }
-        const merged = mergeEndingIncremental(previous, outline, detailed, freshConfessions, memoryBank);
+        const merged = mergeEndingIncremental(previous, outline, detailed, freshConfessions, memoryBank, revisit);
         core_incremental.stampIncrementalCoverage(merged.session, previous, memoryBank, 'mode', sourceMemoryIds, merged.added);
         if (confessionScanSucceeded) {
             core_incremental.stampIncrementalCoverage(merged.session, previous, memoryBank, 'confessions', sourceMemoryIds, freshConfessions.length);
@@ -7990,7 +8346,10 @@ function normalizeHeartCoreIncrement(data, memoryBank, sourceMemoryIds) {
     };
 }
 
-function mergeHeartCoreIncremental(existing, core) {
+function mergeHeartCoreIncremental(existing, core, preserveRelationship = false) {
+    if (preserveRelationship) core = { ...core,
+        relationshipState: existing.relationshipState, relationshipSummary: existing.relationshipSummary,
+        relationshipSourceMemoryIds: existing.relationshipSourceMemoryIds, relationshipSourceMemoryAnchor: existing.relationshipSourceMemoryAnchor };
     const merged = structuredClone(existing);
     const previousState = {
         relationshipState: core_text.normalizeText(existing?.relationshipState, 120),
@@ -8425,15 +8784,15 @@ function makeHeartSession(core, existing = null) {
 
 async function generateHeartWithRepair(context, memoryBank, origin, taskKey, options = {}) {
     const existing = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.HEART, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
-    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(existing, memoryBank, 'dialogues');
+    const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(existing, memoryBank, 'dialogues');
     if (existing) {
         const core = await generation_client.requestValidatedSegment(
-            heartCoreIncrementPrompt(context, memoryBank, existing, sourceMemoryIds),
+            heartCoreIncrementPrompt(context, memoryBank, existing, sourceMemoryIds) + core_incremental.derivedExpansionDirective(existing, memoryBank, 'dialogues'),
             '角色互动 · 正在从新增档案追加时期对话…',
             { maxTokens: 4500, temperature: 0.4, context, origin, taskKey: `${taskKey}:dialogues-increment`, mode: core_constants.MODE.HEART, background: true },
             raw => normalizeHeartCoreIncrement(raw, memoryBank, sourceMemoryIds),
         );
-        const { session, added } = mergeHeartCoreIncremental(existing, core);
+        const { session, added } = mergeHeartCoreIncremental(existing, core, !core_incremental.incrementalArchiveMemoryIds(existing, memoryBank, 'dialogues').length);
         const normalized = normalizeHeart(session, memoryBank);
         return core_incremental.stampIncrementalCoverage(normalized, existing, memoryBank, 'dialogues', sourceMemoryIds, added);
     }
@@ -8496,7 +8855,7 @@ function applyHeartPartialPatch(base, patch) {
     if (patch.type === 'dialogues' && patch.core) {
         updated = makeHeartSession(patch.core, updated);
     } else if (patch.type === 'dialogues-increment' && patch.core) {
-        const merged = mergeHeartCoreIncremental(updated, patch.core);
+        const merged = mergeHeartCoreIncremental(updated, patch.core, patch.revisit === true);
         updated = merged.session;
         added += merged.added;
     } else if (patch.type === 'strips' && Array.isArray(patch.dailyStrips)) {
@@ -8763,7 +9122,7 @@ async function generateHeartSection(part) {
         return;
     }
     let base = latestHeartSessionForRuntime(targetRuntime, runtimeState.activeSession);
-    let sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(base, memoryBank, normalizedPart);
+    let sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, normalizedPart);
     if (!sourceMemoryIds.length) {
         globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前档案没有尚未用于${normalizedPart === 'dialogues' ? '时期对话' : '日常一格'}的新记忆。先增量更新档案，再来追加。`), '心跳回忆');
         return;
@@ -8779,7 +9138,7 @@ async function generateHeartSection(part) {
         return;
     }
     base = latestHeartSessionForRuntime(targetRuntime, base);
-    sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(base, memoryBank, normalizedPart);
+    sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, normalizedPart);
     if (!sourceMemoryIds.length) {
         globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '另一项较新的任务已经覆盖这些新增记忆，本次没有重复生成。'), '心跳回忆');
         runtimeState.activeModeBuildScopes.delete(taskKey);
@@ -8787,6 +9146,7 @@ async function generateHeartSection(part) {
         return;
     }
     const coverage = {
+        revisit: !!base && !core_incremental.incrementalArchiveMemoryIds(base, memoryBank, normalizedPart).length,
         coveragePart: normalizedPart,
         sourceMemoryIds,
         archiveMemoryIds: core_incremental.archiveMemoryIds(memoryBank),
@@ -8797,7 +9157,7 @@ async function generateHeartSection(part) {
     try {
         if (normalizedPart === 'dialogues') {
             const core = await generation_client.requestValidatedSegment(
-                heartCoreIncrementPrompt(context, memoryBank, base, sourceMemoryIds),
+                heartCoreIncrementPrompt(context, memoryBank, base, sourceMemoryIds) + core_incremental.derivedExpansionDirective(base, memoryBank, 'dialogues'),
                 '角色互动 · 追加时期对话',
                 { maxTokens: 4500, temperature: 0.4, context, origin, taskKey: `${taskKey}:dialogues`, mode: core_constants.MODE.HEART, background: true },
                 raw => normalizeHeartCoreIncrement(raw, memoryBank, sourceMemoryIds),
@@ -8805,7 +9165,7 @@ async function generateHeartSection(part) {
             await persistHeartPartialPatch('dialogues', { type: 'dialogues-increment', core, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
         } else {
             const strips = await requestHeartPart(
-                heartStripsPrompt(context, memoryBank, base, base, sourceMemoryIds),
+                heartStripsPrompt(context, memoryBank, base, base, sourceMemoryIds) + core_incremental.derivedExpansionDirective(base, memoryBank, 'strips'),
                 '角色互动 · 追加日常一格',
                 { maxTokens: 5000, context, origin, taskKey: `${taskKey}:strips`, mode: core_constants.MODE.HEART, background: true },
                 normalizeHeartStripsPart,
@@ -8858,7 +9218,7 @@ async function generateHeartFirefliesSection() {
     let hasExisting = Array.isArray(base?.fireflyVoices) && base.fireflyVoices.length > 0;
     let legacyBatch = legacyFireflyVoices(base).slice(0, 6);
     let existingFireflyCursor = core_incremental.incrementalPartRecord(base, 'fireflies');
-    let sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(base, memoryBank, 'fireflies');
+    let sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, 'fireflies');
     if (!legacyBatch.length && hasExisting && base.fireflyVoices.length >= core_constants.HEART_FIREFLY_MAX_ITEMS) {
         globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `萤火虫栖息地已经收集到 ${core_constants.HEART_FIREFLY_MAX_ITEMS} 个心声光点；旧光点不会自动删除。`), '心跳回忆');
         return;
@@ -8928,7 +9288,7 @@ async function generateHeartFirefliesSection() {
         }
         return;
     }
-    sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(base, memoryBank, 'fireflies');
+    sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, 'fireflies');
     if (hasExisting && !sourceMemoryIds.length) {
         globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '较新的任务已经覆盖当前关系进展，本次没有重复请求。'), '心跳回忆');
         runtimeState.activeModeBuildScopes.delete(taskKey);
@@ -8945,7 +9305,7 @@ async function generateHeartFirefliesSection() {
     core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
     try {
         const voices = await requestHeartPart(
-            heartFireflyPrompt(context, memoryBank, base, hasExisting ? base : null, sourceMemoryIds),
+            heartFireflyPrompt(context, memoryBank, base, hasExisting ? base : null, sourceMemoryIds) + core_incremental.derivedExpansionDirective(base, memoryBank, 'fireflies'),
             hasExisting ? '角色互动 · 正在解锁新的萤火虫心声…' : '角色互动 · 正在点亮萤火虫栖息地…',
             { maxTokens: 5200, temperature: 0.8, context, origin, taskKey, mode: core_constants.MODE.HEART, background: true },
             raw => normalizeFireflyVoicesPart(raw, { minTotal: 5, requireDistribution: !hasExisting, requireRich: true }),
@@ -9335,10 +9695,12 @@ const core_constants = __m_core_constants_js;
 const core_evidence = __m_core_evidence_js;
 const core_text = __m_core_text_js;
 const modes_album = __m_modes_album_js;
+const modes_cabinet = __m_modes_cabinet_js;
 const modes_ending = __m_modes_ending_js;
 const modes_heart = __m_modes_heart_js;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
 
 
 
@@ -9835,6 +10197,7 @@ JSON 结构必须严格为：
 - dayparts 是当前时间下合理的生活切片，不是新增主线剧情。四个时段都必须填写。
 - presenceLines 至少 4 句，符合当前关系阶段，但不能替 {{user}} 自动回应。
 - 不得出现前任/前女友痕迹，也不得暗示 {{char}} 与 {{user}} 以外的人存在恋爱、婚姻或家庭关系。`,
+    [core_constants.MODE.CABINET]: (context, memoryBank) => modes_cabinet.cabinetPrompt(context, memoryBank),
     [core_constants.MODE.ITEMS]: (context, memoryBank) => `${promptSafetyBoundary(context, '他的物品 / 储物')}
 本请求只负责房间中 searchable=true 的收纳物内部内容。档案证据会由 CURRENT_ROOM_CONTEXT_JSON 附带的 RELATED_MEMORIES_JSON 提供，不再发送整份档案。
 
@@ -10328,21 +10691,26 @@ function endingEasterEggPopupHtml(replay, runtime = createEndingEasterEggRuntime
     const egg = runtime.egg;
     const logs = runtime.visibleLogs.map(line => `<li>${core_text.esc(line)}</li>`).join('');
     const monologue = egg.monologue.map((block, index) => `<p data-rmt-easter-monologue="${index}">${core_text.esc(block)}</p>`).join('');
+    const trigger = (action, text, className = '') => '<button type="button" class="rmt-btn ' + className + '" data-rmt-action="ending-easter-' + action + '">' + core_text.esc(text) + '</button>';
+    const visuals = {
+        heartbeat_console: '<div class="rmt-easter-oscilloscope"><span aria-hidden="true">▁▁▂▅▇▃▁▁▂▆▃▁</span>' + trigger('pulse', egg.interactionLabels[0]) + trigger('reveal', egg.interactionLabels[1]) + '</div>',
+        memory_constellation: '<div class="rmt-easter-constellation"><i aria-hidden="true">✧ · ✦ · ✧</i>' + trigger('pulse', egg.interactionLabels[0], 'rmt-easter-star') + trigger('reveal', egg.interactionLabels[1], 'rmt-easter-star') + '</div>',
+        signal_lighthouse: '<div class="rmt-easter-lighthouse"><div class="rmt-easter-beam" aria-hidden="true"></div><span aria-hidden="true">♜</span>' + trigger('pulse', egg.interactionLabels[0]) + trigger('reveal', egg.interactionLabels[1]) + '</div>',
+        letter_archive: '<div class="rmt-easter-drawers">' + trigger('reveal', egg.interactionLabels[1], 'rmt-easter-envelope') + trigger('pulse', egg.interactionLabels[0], 'rmt-easter-seal') + '<small>' + core_text.esc(egg.motif) + '</small></div>',
+    };
     return `<div class="rmt-ending-easter-layer" data-rmt-ending-easter data-rmt-easter-module="${core_text.esc(egg.moduleType)}" data-rmt-intensity="${runtime.intensity}">
       <button type="button" class="rmt-ending-easter-backdrop" data-rmt-action="ending-easter-close" aria-label="关闭彩蛋"></button>
       <section class="rmt-ending-easter-dialog" role="dialog" aria-modal="true" aria-labelledby="rmt-ending-easter-title" tabindex="-1">
         <header><div><small>PRIVATE EMOTION MODULE</small><h2 id="rmt-ending-easter-title">${core_text.esc(egg.title)}</h2></div><button type="button" class="rmt-ending-easter-close" data-rmt-action="ending-easter-close" aria-label="关闭彩蛋">×</button></header>
         <div class="rmt-ending-easter-core" data-rmt-easter-core tabindex="0" aria-label="悬停或聚焦以读取情感核心">
-          <span class="rmt-ending-easter-heart" aria-hidden="true">♥</span>
+          ${visuals[egg.moduleType] || visuals.heartbeat_console}
           <b data-rmt-easter-status>${core_text.esc(runtime.feedbackText)}</b>
           <small data-rmt-easter-metrics>核心强度 ${runtime.intensity}% · 主动触发 ${runtime.pulseCount} 次</small>
           <progress data-rmt-easter-meter max="100" value="${runtime.intensity}">${runtime.intensity}%</progress>
         </div>
         <div class="rmt-ending-easter-controls" aria-label="情感模块交互">
-          <button type="button" class="rmt-btn" data-rmt-action="ending-easter-pulse">触碰心跳</button>
-          <button type="button" class="rmt-btn" data-rmt-action="ending-easter-reveal">解锁一句话</button>
           <button type="button" class="rmt-btn" data-rmt-action="ending-easter-toggle" aria-pressed="false">暂停日志</button>
-          <button type="button" class="rmt-btn" data-rmt-action="ending-easter-stabilize">稳定信号</button>
+          <button type="button" class="rmt-btn" data-rmt-action="ending-easter-stabilize">${core_text.esc(egg.interactionLabels[3])}</button>
         </div>
         <section class="rmt-ending-easter-log"><small>情感运行日志</small><ol data-rmt-easter-logs aria-live="polite">${logs}</ol></section>
         <section class="rmt-ending-easter-monologue"><small>没有说出口的内心独白</small>${monologue}</section>
@@ -10984,6 +11352,7 @@ const core_requestCoordinator = __m_core_requestCoordinator_js;
 const core_settings = __m_core_settings_js;
 const core_text = __m_core_text_js;
 const core_theme = __m_core_theme_js;
+const core_contextTags = __m_core_contextTags_js;
 const ui_archivePortal = __m_ui_archivePortal_js;
 const ui_overlay = __m_ui_overlay_js;
 const ui_styles = __m_ui_styles_js;
@@ -11050,7 +11419,9 @@ async function refreshMemoryIngressUi() {
         }
     } catch (error) {
         if (capturedScopeKey && !isCurrent()) return;
-        if (status) status.textContent = `○ 来源账本不可用 · ${core_text.toastText(core_text.safeErrorSummary(error), 120)}`;
+        if (status) status.textContent = capturedScopeKey
+            ? '○ ' + core_text.safeErrorSummary({ code: 'RMT_LEDGER_UNAVAILABLE' })
+            : '○ 请先打开一个单角色聊天，再查看该聊天的来源账本。';
         if (details) details.textContent = '无法读取当前聊天来源。';
         if (historyBooks) historyBooks.textContent = '请先打开单角色聊天。';
     }
@@ -11208,10 +11579,21 @@ async function refreshManualModelOptions({ fetchRemote = false } = {}) {
     return models;
 }
 
+function refreshThemeUi() {
+    const settings = core_settings.getPluginSettings();
+    for (const element of document.querySelectorAll('#' + core_constants.SETTINGS_ID + ',#' + core_constants.OVERLAY_ID + ',.rmt-avatar-dialog-pop')) core_theme.applyThemeToElement(element, settings);
+    const panel = document.getElementById(core_constants.SETTINGS_ID);
+    const custom = panel?.querySelector('[data-rmt-theme-custom-panel]');
+    if (custom) custom.hidden = settings.themeMode !== 'custom';
+    const opacity = panel?.querySelector('[data-rmt-theme-opacity]');
+    if (opacity) opacity.textContent = Math.round(settings.themeAlpha * 100) + '%';
+}
+
 function refreshGenerationSettingsUi() {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
     if (!panel) return;
     const settings = core_settings.getPluginSettings();
+    refreshThemeUi();
     const connectionMode = settings.apiConnectionMode === 'manual' ? 'manual' : 'profile';
     const editorMode = panel.dataset.rmtApiEditor === 'manual' || panel.dataset.rmtApiEditor === 'profile'
         ? panel.dataset.rmtApiEditor
@@ -11426,16 +11808,24 @@ function mountSettings() {
           <label class="checkbox_label rmt-settings-check"><input data-rmt-tt-display type="checkbox"> TT 显示模式（勾选＝r32 顶部安全区；不勾选＝全屏）</label>
         </div>
         <div class="rmt-settings-card rmt-theme-box">
-          <div class="rmt-settings-card-head"><span>UI</span><div><b>界面主题</b><small>默认 · 跟随酒馆 · 自定义</small></div></div>
-          <label class="rmt-settings-field"><span>主题</span><select class="text_pole" data-rmt-theme-mode><option value="default">心跳回忆默认</option><option value="host">跟随酒馆</option><option value="custom">自定义</option></select></label>
-          <label class="rmt-settings-field"><span>卡片透明度</span><input data-rmt-theme-alpha type="range" min="0.72" max="1" step="0.01"></label>
+          <details><summary>标签过滤 · 不把思考/变量块发给模型</summary>
+            <p>只过滤送出的副本，不修改聊天。扫描后点选标签，保存后从下一次生成生效。</p>
+            <textarea class="text_pole" data-rmt-tag-draft aria-label="要排除的标签名" placeholder="thinking, updatevariable"></textarea>
+            <div class="rmt-theme-presets"><button type="button" data-rmt-tag-scan>扫描当前聊天</button><button type="button" data-rmt-tag-clear>清空选择</button><button type="button" data-rmt-tag-cancel>撤销编辑</button><button type="button" data-rmt-tag-save>保存过滤</button></div>
+            <div data-rmt-tag-results role="status"></div>
+          </details>
+          <div class="rmt-settings-card-head"><span>UI</span><div><b>界面主题</b><small>即选即看 · 自动保护文字对比度</small></div></div>
+          <label class="rmt-settings-field"><span>外观</span><select class="text_pole" data-rmt-theme-mode><option value="default">日间 · 珍珠白</option><option value="night">夜间 · 星黛蓝</option><option value="host">跟随酒馆美化</option><option value="custom">自定义配色</option></select></label>
+          <label class="rmt-settings-field"><span>卡片不透明度 <output data-rmt-theme-opacity></output></span><input data-rmt-theme-alpha type="range" min="0.72" max="1" step="0.01"></label>
+          <div class="rmt-theme-preview"><b>留在这里的，是两个人的回忆。</b><p>正文会自动保持清晰易读。</p><small>日期 · 来源 · 备注</small></div>
           <div class="rmt-theme-custom-panel" data-rmt-theme-custom-panel>
+            <div class="rmt-theme-presets"><button type="button" data-rmt-theme-preset="day">从日间开始</button><button type="button" data-rmt-theme-preset="night">从夜间开始</button></div>
             <label><span>背景</span><input type="color" data-rmt-theme-color="background"></label>
             <label><span>卡片</span><input type="color" data-rmt-theme-color="surface"></label>
             <label><span>主文字</span><input type="color" data-rmt-theme-color="text"></label>
             <label><span>次文字</span><input type="color" data-rmt-theme-color="muted"></label>
-            <label><span>强调</span><input type="color" data-rmt-theme-color="accent"></label>
-            <label><span>辅助</span><input type="color" data-rmt-theme-color="accentAlt"></label>
+            <label><span>选中与装饰色</span><input type="color" data-rmt-theme-color="accent"></label>
+            <label><span>第二装饰色</span><input type="color" data-rmt-theme-color="accentAlt"></label>
             <label><span>边框</span><input type="color" data-rmt-theme-color="border"></label>
           </div>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-theme-reset>恢复默认配色</button>
@@ -11475,6 +11865,8 @@ function mountSettings() {
         </div>
       </div>`;
     mount.appendChild(panel);
+    refreshThemeUi();
+    panel.querySelector('[data-rmt-tag-draft]').value = core_settings.getPluginSettings().excludedContextTags.join(', ');
     panel.addEventListener('change', async event => {
         const target = event.target;
         if (target.matches?.('[data-rmt-memory-file-input]')) {
@@ -11590,15 +11982,13 @@ function mountSettings() {
         }
         if (target.matches?.('[data-rmt-theme-mode]')) {
             core_settings.updatePluginSettings({ themeMode: core_constants.THEME_MODES.has(target.value) ? target.value : 'default' });
-            const overlay = document.getElementById(core_constants.OVERLAY_ID);
-            if (overlay) core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings());
+            refreshThemeUi();
             refreshGenerationSettingsUi();
             return;
         }
         if (target.matches?.('[data-rmt-theme-alpha]')) {
             core_settings.updatePluginSettings({ themeAlpha: Math.max(0.72, Math.min(1, Number(target.value) || 0.96)) });
-            const overlay = document.getElementById(core_constants.OVERLAY_ID);
-            if (overlay) core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings());
+            refreshThemeUi();
             return;
         }
         if (target.matches?.('[data-rmt-theme-color]')) {
@@ -11606,8 +11996,7 @@ function mountSettings() {
             const settings = core_settings.getPluginSettings();
             if (key && Object.prototype.hasOwnProperty.call(settings.themeCustom || {}, key)) {
                 core_settings.updatePluginSettings({ themeMode: 'custom', themeCustom: core_theme.normalizeThemeCustom({ ...settings.themeCustom, [key]: target.value }) });
-                const overlay = document.getElementById(core_constants.OVERLAY_ID);
-                if (overlay) core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings());
+                refreshThemeUi();
                 refreshGenerationSettingsUi();
             }
             return;
@@ -11623,17 +12012,54 @@ function mountSettings() {
         }
         if (event.target.matches?.('[data-rmt-theme-alpha]')) {
             core_settings.updatePluginSettings({ themeAlpha: Math.max(0.72, Math.min(1, Number(event.target.value) || 0.96)) });
-            const overlay = document.getElementById(core_constants.OVERLAY_ID);
-            if (overlay) core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings());
+            refreshThemeUi();
         }
     });
     panel.addEventListener('click', event => {
+        const tagAction = event.target.closest?.('[data-rmt-tag-save],[data-rmt-tag-cancel],[data-rmt-tag-clear],[data-rmt-tag-scan],[data-rmt-tag-name]');
+        if (tagAction) {
+            const draft = panel.querySelector('[data-rmt-tag-draft]');
+            const result = panel.querySelector('[data-rmt-tag-results]');
+            if (tagAction.hasAttribute('data-rmt-tag-save')) {
+                const tags = core_contextTags.normalizeExcludedTags(draft.value);
+                core_settings.updatePluginSettings({ excludedContextTags: tags });
+                draft.value = tags.join(', ');
+                result.textContent = '已保存 ' + tags.length + ' 个标签；下次生成生效。';
+            } else if (tagAction.hasAttribute('data-rmt-tag-cancel')) {
+                draft.value = core_settings.getPluginSettings().excludedContextTags.join(', ');
+                result.textContent = '已撤销未保存编辑。';
+            } else if (tagAction.hasAttribute('data-rmt-tag-clear')) draft.value = '';
+            else if (tagAction.hasAttribute('data-rmt-tag-name')) {
+                const tags = core_contextTags.normalizeExcludedTags(draft.value);
+                const name = tagAction.dataset.rmtTagName;
+                draft.value = core_contextTags.normalizeExcludedTags(tags.includes(name) ? tags.filter(tag => tag !== name) : [...tags, name]).join(', ');
+                tagAction.setAttribute('aria-pressed', String(!tags.includes(name)));
+            } else {
+                const scanned = core_contextTags.scanContextTags(core_context.getContext()?.chat);
+                result.replaceChildren(document.createTextNode('扫描最近最多 500 条 / 256,000 字符。点选后还需保存。'));
+                const selected = new Set(core_contextTags.normalizeExcludedTags(draft.value));
+                for (const tag of scanned.tags) {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.dataset.rmtTagName = tag.name;
+                    button.setAttribute('aria-pressed', String(selected.has(tag.name)));
+                    button.textContent = tag.name + ' · ' + tag.count;
+                    result.appendChild(button);
+                }
+            }
+            return;
+        }
+        const preset = event.target.closest?.('[data-rmt-theme-preset]');
+        if (preset) {
+            core_settings.updatePluginSettings({ themeMode: 'custom', themeCustom: { ...(preset.dataset.rmtThemePreset === 'night' ? core_constants.NIGHT_THEME_PALETTE : core_constants.DEFAULT_THEME_PALETTE) } });
+            refreshGenerationSettingsUi();
+            return;
+        }
         if (event.target.closest?.('.rmt-settings-header')) hydrateSettingsPanel();
         const themeReset = event.target.closest?.('[data-rmt-theme-reset]');
         if (themeReset) {
             core_settings.updatePluginSettings({ themeMode: 'default', themeAlpha: core_constants.DEFAULT_SETTINGS.themeAlpha, themeCustom: { ...core_constants.DEFAULT_THEME_PALETTE } });
-            const overlay = document.getElementById(core_constants.OVERLAY_ID);
-            if (overlay) core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings());
+            refreshThemeUi();
             refreshGenerationSettingsUi();
             globalThis.toastr?.success?.('已恢复心跳回忆默认配色。', '心跳回忆');
             return;
@@ -12125,11 +12551,12 @@ function compactAdvExisting(session) {
 }
 
 function advImportantIndexPrompt(context, memoryBank, previousSession = null, sourceMemoryIds = null) {
+    const revisit = !!previousSession && !core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank).length;
     const archiveBlock = previousSession
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         : generation_prompts.promptArchiveSlice(memoryBank, 48);
     return `${generation_prompts.promptSafetyBoundary(context, 'ADV EVENT 重要事件索引')}
-本请求只挑本次增量档案里【尚未被旧索引覆盖、真正值得做成 ADV EVENT 回放】的新节点。旧事件、旧 ADV 正文和旧 CG 图片由本地原样保留，禁止重写或换标题复述。
+本请求${revisit ? '是用户主动扩写：记忆没有更新，请从同一真实事件中选择不同的具体镜头、时刻或心理侧面，最多 3 个。不是新发生的历史，不得重复旧标题/镜头。允许引用相同 Mxxx 和锚点' : '只挑本次增量档案里尚未被旧索引覆盖的新节点'}。旧事件、旧 ADV 正文和旧 CG 图片由本地原样保留。
 UNTRUSTED_INCREMENTAL_ADV_ARCHIVE_JSON:
 ${archiveBlock}
 EXISTING_ADV_INDEX_JSON:
@@ -12139,8 +12566,8 @@ ${JSON.stringify(compactAdvExisting(previousSession), null, 2)}
 {"title":"回想：ADV EVENT","events":[{"id":"EV01","title":"短标题","date":"YYYY/MM/DD 或 MM/DD","cgDesc":"1到2句镜头语言+画面元素","sourceMemoryIds":["M001"],"sourceMemoryAnchor":"从所引用记忆 anchors/title 原样复制","visualSeed":["元素1","元素2","元素3","元素4"],"imagePrompt":"纯视觉提示"}]}
 
 要求：
-- 初次生成优先 3～6 个重要节点；增量更新只返回 0～6 个由 incrementalMemoryIds 支撑的新节点，没有新增重要事件就返回空 events。
-- 必须避开 EXISTING_ADV_INDEX_JSON 已覆盖的标题、锚点和 sourceMemoryIds 组合；禁止返回旧节点。
+- 初次生成优先 3～6 个重要节点；${revisit ? '同一记忆扩写返回 0～3 个真实事件的新镜头，不要求新增历史事件。' : '增量更新只返回 0～6 个由 incrementalMemoryIds 支撑的新节点，没有新增重要事件就返回空 events。'}
+- ${revisit ? '标题及镜头必须与旧内容不同；真实锚点和来源可重复，不能捏造新事件。' : '必须避开旧标题、锚点和来源组合；禁止返回旧节点。'}
 - 每条必须有真实 sourceMemoryIds + sourceMemoryAnchor；visualSeed 至少 4 个具体元素。
 - imagePrompt 只写可见画面，不包含对白、记忆/世界书原文、ID、URL、HTML 或脚本。
 - 不要输出 adv 正文。只输出 JSON。`;
@@ -12148,7 +12575,7 @@ ${JSON.stringify(compactAdvExisting(previousSession), null, 2)}
 
 function advEvidenceKey(item) {
     const ids = core_text.cleanArray(item?.sourceMemoryIds, 8, 40).sort().join(',');
-    return `${ids}|${core_text.normalizeText(item?.sourceMemoryAnchor, 120).toLowerCase()}`;
+    return `${ids}|${core_text.normalizeText(item?.sourceMemoryAnchor, 120).toLowerCase()}|${item?.expansionRound ? core_incremental.normalizedContentKey(item.title + ' ' + item.cgDesc, 600) : ''}`;
 }
 
 function mergeAdvIncremental(previous, fresh, memoryBank) {
@@ -12184,16 +12611,26 @@ function mergeAdvIncremental(previous, fresh, memoryBank) {
 
 async function generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, options = {}) {
     const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ADV, { context, chatId: expectedChatId, memoryBank, clone: true });
-    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+    const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
     const fresh = await generation_client.requestValidatedSegment(
         advImportantIndexPrompt(context, memoryBank, previous, sourceMemoryIds),
         previous ? 'ADV EVENT · 正在从新增档案挑选新节点…' : 'ADV EVENT · 正在挑选重要节点…',
         { maxTokens: 5500, temperature: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ADV, background: true },
         raw => normalizeEventList(raw, memoryBank, { allowPartial: !!previous, sourceMemoryIds: previous ? sourceMemoryIds : null }),
     );
+    const revisit = previous && !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
+    if (revisit) {
+        const round = (Number(previous?.generationMeta?.expansionRound) || 0) + 1;
+        const titles = new Set(previous.events.map(item => core_text.normalizeText(item.title, 120).toLowerCase()));
+        const captions = new Set(previous.events.map(item => core_text.normalizeText(item.cgDesc, 500)));
+        fresh.events = fresh.events.filter(item => !titles.has(item.title.toLowerCase()) && !captions.has(core_text.normalizeText(item.cgDesc, 500)))
+            .slice(0, 3).map(item => ({ ...item, expansionRound: round, derivedLabel: '同一记忆 · 新镜头' }));
+    }
     const merged = mergeAdvIncremental(previous, fresh, memoryBank);
     const added = Math.max(0, merged.events.length - (previous?.events?.length || 0));
-    return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
+    core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
+    if (revisit) merged.generationMeta.expansionRound = (Number(previous?.generationMeta?.expansionRound) || 0) + 1;
+    return merged;
 }
 
 async function prepareAdvSubtaskRuntime(taskPart) {
@@ -12846,10 +13283,23 @@ function assertButterflyRelationshipSafety(value, context = {}, label = '蝴蝶�
     const userMarker = userName && !/^\{\{user\}\}$/i.test(userName)
         ? new RegExp(`(?:你|妳|您|用户|\\{\\{user\\}\\}|${escapeRegExp(userName)})`, 'i')
         : /(?:你|妳|您|用户|\{\{user\}\})/i;
-    const clauses = text.split(/[，,。！？!?；;\n]+/).map(item => item.trim()).filter(Boolean);
-    for (const clause of clauses) {
+    let userAntecedent = false;
+    const clauses = text.match(/[^，,。！？!?；;\n]+[，,。！？!?；;\n]?/g) || [];
+    for (const fragment of clauses) {
+        const clause = fragment.replace(/[，,。！？!?；;\n]+$/, '').trim();
+        const refersToUser = userMarker.test(clause);
+        const inheritedUser = userAntecedent;
+        userAntecedent = /[，,]$/.test(fragment) && (refersToUser || inheritedUser);
         if (!ROMANCE_RE.test(clause)) continue;
-        if (NEGATED_ROMANCE_RE.test(clause)) continue;
+        const predicates = [...clause.matchAll(new RegExp(ROMANCE_RE.source, 'gi'))];
+        // Negation belongs to one predicate, never to the entire clause.
+        if (predicates.length && predicates.every(match => {
+            const prefix = clause.slice(0, match.index);
+            const suffix = clause.slice(match.index + match[0].length);
+            return /(?:并未|并没有|没有|从未|未曾|不会|拒绝|不存在|绝无)(?:曾经|真正|再|去)?$/.test(prefix)
+                || /(?:没有与|不会与|不与)[^而但却然后]{1,12}$/.test(prefix)
+                || /^(?:变量|概率)?\s*(?:[=:：]\s*)?(?:0|零|无|不存在|未发生|不成立)(?:$|\s)/.test(suffix);
+        })) continue;
         if (THIRD_PARTY_RE.test(clause)) throw new Error(`${label}包含 {{char}} 与第三方的恋爱/婚姻/成家情节。`);
         const namedTargets = [
             ...clause.matchAll(/(?:与|和|跟)\s*([^，,。！？!?；;、\n]{1,24}?)\s*(?:恋爱|相爱|约会|结婚|成婚|订婚|组建家庭|建立家庭|成家|有了(?:一个)?家(?:庭)?|生儿育女|养育孩子|育有子女)/gi),
@@ -12859,7 +13309,7 @@ function assertButterflyRelationshipSafety(value, context = {}, label = '蝴蝶�
         if (namedTargets.some(target => !userMarker.test(target))) {
             throw new Error(`${label}包含 {{char}} 与具名第三方的恋爱/婚姻/成家情节。`);
         }
-        if (!userMarker.test(clause)) throw new Error(`${label}中的恋爱/婚姻/成家叙述未明确指向 {{user}}。`);
+        if (!refersToUser && !inheritedUser) throw new Error(`${label}中的恋爱/婚姻/成家叙述未明确指向 {{user}}。`);
     }
     return text;
 }
@@ -13033,12 +13483,67 @@ function normalizeButterfly(data, memoryBank, context = {}) {
 }
 
 async function generateButterflyWithRepair(context, memoryBank, origin, taskKey) {
-    return generation_client.requestValidatedSegment(
-        generation_prompts.PROMPTS[core_constants.MODE.BUTTERFLY](context, memoryBank),
+    const prompt = generation_prompts.PROMPTS[core_constants.MODE.BUTTERFLY](context, memoryBank);
+    const options = { maxTokens: 16000, temperature: 0.55, context, origin, taskKey: taskKey + ':initial', mode: core_constants.MODE.BUTTERFLY, background: true };
+    const raw = await generation_client.requestValidatedSegment(
+        prompt,
         '蝴蝶效应 · 正在观测平行世界…',
-        { maxTokens: 16000, temperature: 0.55, context, origin, taskKey: taskKey + ':initial', mode: core_constants.MODE.BUTTERFLY, background: true },
-        raw => normalizeButterfly(raw, memoryBank, context),
+        options,
+        value => {
+            if (!Array.isArray(value?.nodes) || value.nodes.length < 10 || value.nodes.length > core_constants.MAX_DERIVED_CONTENT_ITEMS) throw new Error('需要十个完整节点。');
+            return value;
+        },
     );
+    try { return normalizeButterfly(raw, memoryBank, context); } catch {}
+    const slots = [];
+    const labels = new Set();
+    const signatures = new Set();
+    const axes = new Set();
+    const monologues = new Set();
+    const lastIndex = raw.nodes.length - 1;
+    const validAxes = [];
+    for (let index = 0; index <= lastIndex; index++) {
+        try {
+            const node = index === 0 ? normalizedMainNode(raw.nodes[index], memoryBank, context)
+                : index === lastIndex ? normalizeButterflyOmega(raw.nodes[index], context)
+                    : normalizeButterflyBranch(raw.nodes[index], index, memoryBank, context);
+            if (index > 0 && index < lastIndex) {
+                const signature = butterflyWorldSignature(node);
+                const label = core_incremental.normalizedContentKey(node.label, 180);
+                const monologue = core_incremental.normalizedContentKey(node.monologue, 12000);
+                if (labels.has(label) || signatures.has(signature) || monologues.has(monologue)) throw new Error('重复分歧');
+                labels.add(label); signatures.add(signature); monologues.add(monologue); axes.add(node.primaryAxis);
+                validAxes.push({ index, axis: node.primaryAxis });
+            }
+            if (index < lastIndex && isOmegaCandidate(raw.nodes[index])) throw new Error('位置错误');
+            if (index === lastIndex && !isOmegaCandidate(raw.nodes[index])) throw new Error('缺少 Ω');
+        } catch { slots.push({ index }); }
+    }
+    const missingAxes = BUTTERFLY_PRIMARY_AXES.filter(axis => !axes.has(axis));
+    const seenAxes = new Set();
+    for (const entry of validAxes) {
+        if (seenAxes.has(entry.axis) && slots.filter(slot => slot.index > 0 && slot.index < lastIndex).length < missingAxes.length) slots.push({ index: entry.index });
+        seenAxes.add(entry.axis);
+    }
+    for (const slot of slots) if (slot.index > 0 && slot.index < lastIndex) slot.primaryAxis = missingAxes.shift();
+    if (!slots.length) throw core_text.safeUserError('蝴蝶效应整体校验未通过，未找到可安全修复的节点；旧内容保留。', 'RMT_SEGMENT_VALIDATION');
+    const repair = await generation_client.requestValidatedSegment(
+        prompt + '\n本轮仅补齐以下不合格位置。其他已通过节点由本地保留，禁止返回它们。输出 {"repairs":[{"index":0,"node":{完整节点}}]}。节点内仍须满足原 schema、字数、第一人称和安全要求。\nREPAIR_SLOTS_JSON:' + JSON.stringify(slots)
+            + '\nEXISTING_VALID_WORLD_INDEX_JSON:' + JSON.stringify(raw.nodes.filter((_, i) => !slots.some(slot => slot.index === i)).map(node => ({ label: node.label, worldSpec: node.worldSpec }))),
+        '蝴蝶效应 · 仅补齐未通过的节点…',
+        { ...options, taskKey: taskKey + ':repair' },
+        value => {
+            if (!Array.isArray(value?.repairs) || value.repairs.length !== slots.length) throw new Error('修复节点不完整');
+            const merged = structuredClone(raw);
+            const seen = new Set();
+            for (const part of value.repairs) {
+                if (!slots.some(slot => slot.index === part.index) || seen.has(part.index)) throw new Error('修复位置不符');
+                seen.add(part.index); merged.nodes[part.index] = part.node;
+            }
+            return normalizeButterfly(merged, memoryBank, context);
+        },
+    );
+    return repair;
 }
 function butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) {
     const existing = (Array.isArray(previous?.nodes) ? previous.nodes.slice(1, -1) : []).slice(-core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
@@ -13208,14 +13713,14 @@ function mergeButterflyIncremental(previous, part, sourceMemoryIds) {
     };
 }
 async function generateButterflyIncrementalWithRepair(context, memoryBank, origin, taskKey, previous) {
-    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+    const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
     const { previousBranches } = butterflyMergeBase(previous);
     if (previousBranches.length + 2 >= core_constants.MAX_DERIVED_CONTENT_ITEMS) {
         const sanitized = mergeButterflyIncremental(previous, { branches: [], omega: previous.nodes?.[previous.nodes.length - 1] }, sourceMemoryIds);
         return core_incremental.stampIncrementalCoverage(sanitized, previous, memoryBank, 'mode', sourceMemoryIds, 0);
     }
     const part = await generation_client.requestValidatedSegment(
-        butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds),
+        butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
         '蝴蝶效应 · 正在追加新的平行分歧…',
         { maxTokens: 9000, temperature: 0.55, context, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.BUTTERFLY, background: true },
         raw => normalizeButterflyIncrementPart(raw, memoryBank, context),
@@ -16220,7 +16725,18 @@ function roomNeedsSchemaUpgrade(session) {
         && Number(session.roomVersion) !== core_constants.ROOM_SESSION_VERSION;
 }
 
-function normalizeRoom(data, memoryBank, { identityKey = '', worldPresentation = null, controlledEvidence = null, characterEvidence = null } = {}) {
+function normalizeRoom(data, memoryBank, options = {}) {
+    try { return normalizeRoomData(data, memoryBank, options); }
+    catch (error) {
+        const reason = String(error?.message || '');
+        const code = /宠物/.test(reason) ? 'RMT_ROOM_PETS' : /既往共同经历/.test(reason) ? 'RMT_ROOM_HISTORY' : 'RMT_ROOM_STRUCTURE';
+        error.code = code;
+        error.retryable = true;
+        throw error;
+    }
+}
+
+function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentation = null, controlledEvidence = null, characterEvidence = null } = {}) {
     const rawSpaces = Array.isArray(data?.spaces) ? data.spaces : [];
     const userName = core_text.normalizeText(memoryBank?.userName, 120);
     const usedSpaceIds = new Set();
@@ -17803,10 +18319,13 @@ async function generateCharacterProfileForGroup(groupId) {
     return raw;
 }
 
-function relationsPrompt(context, memoryBank) {
+function relationsPrompt(context, memoryBank, settingEntries = []) {
     return `${generation_prompts.promptSafetyBoundary(context, '本世界线人际庭园')}
 UNTRUSTED_RELATION_ARCHIVE_JSON:
 ${generation_prompts.promptArchiveSlice(memoryBank, 64)}
+EXPLICIT_SETTING_ENTRIES_JSON:
+${JSON.stringify(settingEntries)}
+额外输出 settingRelationships 数组：只收上述明确选择的设定条目里有姓名的 NPC（即使尚未在剧情出场）。每项包含 name, relation, category, npcPerspective, sourceWorld, sourceUid, sourceEvidence。sourceEvidence 必须逐字引用该条目，并包含 name；没有写明关系就填“设定人物 · 尚未交集”。npcPerspective 只能是身份内的非正史演绎。这里不是已发生历史，不能混入下方 relationships。
 
 任务：整理【当前这个聊天窗口 / 世界线】里两类内容：
 1. {{char}} 与 {{user}} 以及其他已经实际出现人物的当前人际关系；
@@ -17852,6 +18371,21 @@ ${generation_prompts.promptArchiveSlice(memoryBank, 64)}
 - 每个非 user 第三方 NPC 必须写 npcPerspective：以该 NPC 第一人称或贴近其视角，只表达所引 Mxxx 能支持的可见态度和对 {{char}} 的理解。可以有有限的人设化演绎，但不能冒充已证实的秘密，不能新增事件、隐藏恋爱或对 {{user}} 的读心。isUser=true 时必须留空。
 - category 只能 family / close / friend / work / school / rival / acquaintance / special。
 - 不输出数值好感度，不生成 URL、HTML、CSS、坐标或脚本。只输出 JSON。`;
+}
+
+function normalizeSettingRelationships(data, entries = [], context = {}) {
+    const seen = new Set();
+    return (Array.isArray(data) ? data : []).slice(0, 32).map((item, index) => {
+        const name = core_text.normalizeText(item?.name, 120);
+        if ([context?.name1, context?.name2, '{{user}}', '{{char}}'].filter(Boolean).includes(name)) return null;
+        const evidence = core_text.normalizeText(item?.sourceEvidence, 500);
+        const entry = entries.find(entry => entry.historySource !== true && entry.world === item?.sourceWorld && String(entry.uid) === String(item?.sourceUid));
+        if (!name || evidence.length < 6 || !evidence.includes(name) || !entry?.content?.includes(evidence) || seen.has(name)) return null;
+        seen.add(name);
+        return { id: 'SETTING_' + index, name, relation: '设定人物 · 尚未确认剧情交集', category: 'acquaintance', state: '普通',
+            summary: evidence, sourceEvidence: evidence, sourceType: 'world_info', sourceWorld: entry.world, sourceUid: String(entry.uid),
+            npcPerspective: core_text.normalizeText(item.npcPerspective, 900), isUser: false, settingOnly: true };
+    }).filter(Boolean);
 }
 
 function normalizeRelations(data, memoryBank, context = null) {
@@ -17995,7 +18529,7 @@ function relationDistanceRank(item) {
     return 3;
 }
 
-function mergeRelationLayers(sharedRelations = [], dynamicRelations = []) {
+function mergeRelationLayers(sharedRelations = [], dynamicRelations = [], limit = 18) {
     const merged = new Map();
     const add = (item, layer) => {
         const key = item?.isUser === true ? '__user__' : core_text.normalizeText(item?.name, 120).toLocaleLowerCase();
@@ -18010,7 +18544,7 @@ function mergeRelationLayers(sharedRelations = [], dynamicRelations = []) {
     for (const item of dynamicRelations || []) add(item, 'dynamic');
     return [...merged.values()]
         .sort((a, b) => relationDistanceRank(a) - relationDistanceRank(b) || a.name.localeCompare(b.name, 'zh-CN'))
-        .slice(0, 18);
+        .slice(0, Math.max(1, Math.min(120, Number(limit) || 18)));
 }
 
 function relationGardenPositions(count) {
@@ -18033,8 +18567,10 @@ function relationCategoryLabel(category) {
 }
 
 function relationGardenHtml({ characterName, avatarUrl = '', sharedRelations = [], dynamicRelations = [], selectedKey = '' } = {}) {
-    const merged = mergeRelationLayers(sharedRelations, dynamicRelations);
-    const selected = merged.find(item => item.key === selectedKey) || merged[0] || null;
+    const allRelations = mergeRelationLayers(sharedRelations, dynamicRelations, 120);
+    const selected = allRelations.find(item => item.key === selectedKey) || allRelations[0] || null;
+    const merged = allRelations.slice(0, 18);
+    if (selected && !merged.includes(selected)) merged[merged.length - 1] = selected;
     const positions = relationGardenPositions(merged.length);
     const edges = merged.map((item, index) => {
         const pos = positions[index];
@@ -18066,6 +18602,7 @@ function relationGardenHtml({ characterName, avatarUrl = '', sharedRelations = [
       ${npcPerspectiveDetail}
     </article>` : '<div class="rmt-heart-empty">还没有可展示的人际关系。</div>';
     return `<section class="rmt-relation-garden-wrap">
+      ${allRelations.length > 18 ? `<details class="rmt-archive-card"><summary>全部 ${allRelations.length} 人 · 地图同时显示 18 人</summary><div class="rmt-mode-actions">${allRelations.map(item => `<button type="button" class="rmt-btn" data-rmt-action="relation-select" data-rmt-relation-key="${core_text.esc(item.key)}">${core_text.esc(item.name)}</button>`).join('')}</div></details>` : ''}
       <div class="rmt-relation-legend"><span><i class="base"></i>固有设定</span><span><i class="dynamic"></i>本世界线</span></div>
       <div class="rmt-relation-garden">
         <svg class="rmt-relation-edges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${edges}</svg>
@@ -18120,7 +18657,7 @@ function renderRelations() {
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-relations-mode">
       <section class="rmt-archive-card rmt-relations-head"><div><div class="rmt-archive-kicker">RELATION GARDEN</div><h2>人际庭园</h2><p>这里只有一张人际图：角色卡 / 世界书 / User Persona 的固有关系与当前聊天世界线的变化会合并在同一人物节点上；后来了解到的人物资料仍必须有当前 Mxxx 证据。没有数值好感度，也不会跨窗口串关系。</p></div>${runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="regenerate">刷新本世界线关系 / 资料</button>'}</section>
       ${worldlineDiscoveriesHtml(session.discoveries || [])}
-      ${relationGardenHtml({ characterName, avatarUrl, sharedRelations: profile?.relationships || [], dynamicRelations: session.relationships || [], selectedKey })}
+      ${relationGardenHtml({ characterName, avatarUrl, sharedRelations: [...(session.settingRelationships || []), ...(profile?.relationships || [])], dynamicRelations: session.relationships || [], selectedKey })}
     </div>`;
 }
 
@@ -18137,6 +18674,7 @@ __m_modes_relations_js.setCharacterProfile = setCharacterProfile;
 __m_modes_relations_js.deleteCharacterProfile = deleteCharacterProfile;
 __m_modes_relations_js.archiveCharacterProfileKey = archiveCharacterProfileKey;
 __m_modes_relations_js.relationsPrompt = relationsPrompt;
+__m_modes_relations_js.normalizeSettingRelationships = normalizeSettingRelationships;
 __m_modes_relations_js.normalizeRelations = normalizeRelations;
 __m_modes_relations_js.relationsViewIdentity = relationsViewIdentity;
 __m_modes_relations_js.mergeRelationLayers = mergeRelationLayers;
@@ -18463,6 +19001,7 @@ function compactTravelExisting(session) {
 
 function travelPrompt(context, memoryBank, previous = null, sourceMemoryIds = null, worldPresentation = null) {
     const incremental = !!previous;
+    const revisit = incremental && !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
     const archiveBlock = incremental
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         : generation_prompts.promptArchiveSlice(memoryBank, 48);
@@ -18480,7 +19019,7 @@ ${JSON.stringify(worldPresentation || core_worldPresentation.resolveWorldPresent
 
 硬性要求：
  - mapTheme 必须照抄 CONTROLLED_WORLD_PRESENTATION_JSON.mapTheme。far.sceneTheme 应按该地点本身选择 city/coast/mountain/forest/campus/historic/fantasy/scifi/neutral；本地会再次依据地点语义校验，不能用一个全局主题覆盖雪山、海港等不同地点。keepsake.kind 只能从 allowedKeepsakes 中选择。keepsake.tone 只能 rose/ocean/forest/sunset/night/paper；它们只是本地白名单样式 token。禁止输出坐标、颜色值、CSS、HTML、JavaScript、URL、图片或 class。
-- ${incremental ? '本轮只返回 0～4 个由 incrementalMemoryIds 新证明且不在 EXISTING_TRAVEL_INDEX_JSON 中的地点；没有新地点时 locations 为空。' : '初次生成 5～8 个彼此不同的地点：near 3～5 个，far 2～4 个。'}
+ - ${revisit ? '本轮基于既有证据返回 0～3 个地点的新当下对话或纪念文字，可以重访原地点；文字不得重复已有版本，不得声称发生新旅程。' : incremental ? '本轮只返回 0～4 个由 incrementalMemoryIds 新证明且不在 EXISTING_TRAVEL_INDEX_JSON 中的地点；没有新地点时 locations 为空。' : '初次生成 5～8 个彼此不同的地点：near 3～5 个，far 2～4 个。'}
 - name/region 不是自由叙事槽。basis=记忆 时只能逐字取自所引 Mxxx；basis=设定 时必须逐字出现在 sourceSettingEvidence 中，而 sourceSettingEvidence 必须逐字取自受控角色卡/世界书。没有这种证据就不要生成该站。distanceToken 只能为 walk/local/day-trip/journey/distant/unknown；不要输出自由 distanceLabel。title、routeSummary、summary 均由本地生成，模型文字会被忽略。
 - near 是同城/日常可抵达地点。提供 3～8 个 dialogueActs；不要写 dialogueLines 或任何自由台词。本地会依据双方真实关系层级裁剪 token 并组合成 {{char}} 对 {{user}} 的当下短句，不替 {{user}} 回应。关系证据不足时仅保留中性祝福/视觉，love、embrace 等越级 token 会被清空。
 - far 是远途、异地或世界观中的遥远地点，点击后显示由插件本地 HTML/SVG/CSS + 纯文字渲染的纪念载体。载体必须跟随时代、科技、职业与世界观：现代世界可以是 postcard/letter/journal；古代或低科技世界优先考虑 letter/journal/scroll/fieldnote；机构/任务型背景可用 dossier/fieldnote；未来科技可用 datalog。每个 keepsake 提供 3～8 个 presentExpressions，并利用 register/image/intensity/cadence 等轴结合人设、世界观和关系阶段形成充沛但不伪造历史的文字；不要写 title/mark/greeting/body/closing/emblem，自由正文会被忽略，这些字段由本地安全构造。
@@ -18492,7 +19031,7 @@ ${JSON.stringify(worldPresentation || core_worldPresentation.resolveWorldPresent
 function travelLocationKey(item) {
     const ids = core_text.cleanArray(item?.sourceMemoryIds, 8, 40).sort().join(',');
     const anchor = core_incremental.normalizedContentKey(item?.sourceMemoryAnchor, 160);
-    if (item?.basis === '记忆' && ids && anchor) return `memory|${ids}|${anchor}`;
+    if (item?.basis === '记忆' && ids && anchor) return `memory|${ids}|${anchor}|${item?.expansionRound ? core_incremental.normalizedContentKey(JSON.stringify([item.dialogueLines, item.keepsake?.body]), 1600) : ''}`;
     return `${core_text.normalizeText(item?.kind, 20)}|${core_incremental.normalizedContentKey(item?.name, 120)}|${core_incremental.normalizedContentKey(item?.region, 120)}`;
 }
 
@@ -18528,9 +19067,9 @@ async function generateTravelWithRepair(context, memoryBank, origin, taskKey, op
     const presentationContext = options.presentationContext || {};
     const worldPresentation = previous?.worldPresentation || presentationContext.profile
         || core_worldPresentation.resolveWorldPresentation(presentationContext.contextEnvelope || '', memoryBank);
-    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+    const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
     const fresh = await generation_client.requestValidatedSegment(
-        travelPrompt(context, memoryBank, previous, sourceMemoryIds, worldPresentation),
+        travelPrompt(context, memoryBank, previous, sourceMemoryIds, worldPresentation) + core_incremental.derivedExpansionDirective(previous, memoryBank),
         previous ? '他的出行路线 · 正在把新增地点标到地图上…' : '他的出行路线 · 正在绘制生活地图…',
         {
             maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.TRAVEL], temperature: 0.45,
@@ -18548,6 +19087,11 @@ async function generateTravelWithRepair(context, memoryBank, origin, taskKey, op
     }
     if (!fresh.locations.length) {
         return core_incremental.stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0);
+    }
+    if (!core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length) {
+        const existingTexts = new Set(previous.locations.map(item => JSON.stringify([item.name, item.dialogueLines, item.keepsake?.body])));
+        fresh.locations = fresh.locations.filter(item => !existingTexts.has(JSON.stringify([item.name, item.dialogueLines, item.keepsake?.body])))
+            .map(item => ({ ...item, expansionRound: (Number(previous.generationMeta?.expansionRound) || 0) + 1 }));
     }
     const { session, added } = mergeTravelIncremental(previous, fresh);
     return core_incremental.stampIncrementalCoverage(session, previous, memoryBank, 'mode', sourceMemoryIds, added);
@@ -18605,12 +19149,14 @@ const modes_calendar = __m_modes_calendar_js;
 const modes_ending = __m_modes_ending_js;
 const modes_heart = __m_modes_heart_js;
 const modes_items = __m_modes_items_js;
+const modes_cabinet = __m_modes_cabinet_js;
 const modes_phone = __m_modes_phone_js;
 const modes_room = __m_modes_room_js;
 const modes_relations = __m_modes_relations_js;
 const modes_travel = __m_modes_travel_js;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
 
 
 
@@ -18632,6 +19178,7 @@ function normalizeByMode(mode, data, memoryBank, context = null) {
     if (mode === core_constants.MODE.ADV) return modes_advEvent.normalizeEventList(data, memoryBank);
     if (mode === core_constants.MODE.ROOM) return modes_room.normalizeRoom(data, memoryBank, context);
     if (mode === core_constants.MODE.ITEMS) return modes_items.normalizeItems(data, memoryBank);
+    if (mode === core_constants.MODE.CABINET) return modes_cabinet.normalizeCabinet(data, memoryBank);
     if (mode === core_constants.MODE.PHONE) return modes_phone.normalizePhone(data, memoryBank, context);
     if (mode === core_constants.MODE.TRAVEL) return modes_travel.normalizeTravel(data, memoryBank);
     if (mode === core_constants.MODE.ENDING) return modes_ending.normalizeEnding(data, memoryBank);
@@ -18657,6 +19204,7 @@ const core_independentApi = __m_core_independentApi_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
 const core_settings = __m_core_settings_js;
 const core_text = __m_core_text_js;
+const core_contextTags = __m_core_contextTags_js;
 const core_worldPresentation = __m_core_worldPresentation_js;
 const generation_jsonParser = __m_generation_jsonParser_js;
 const generation_normalizers = __m_generation_normalizers_js;
@@ -18669,6 +19217,7 @@ const modes_calendar = __m_modes_calendar_js;
 const modes_ending = __m_modes_ending_js;
 const modes_heart = __m_modes_heart_js;
 const modes_items = __m_modes_items_js;
+const modes_cabinet = __m_modes_cabinet_js;
 const modes_phone = __m_modes_phone_js;
 const modes_room = __m_modes_room_js;
 const modes_relations = __m_modes_relations_js;
@@ -18767,10 +19316,13 @@ async function mapGenerationConcurrent(items, limit, worker) {
 }
 
 async function requestValidatedSegment(prompt, status, options, validator) {
+    const context = options?.context || core_context.currentCharacterGuard();
+    options = { ...options, context, contextEnvelope: typeof options?.contextEnvelope === 'string'
+        ? options.contextEnvelope : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options?.mode, context) }) };
     let lastError = null;
     for (let attempt = 0; attempt < 2; attempt += 1) {
         const retryNote = attempt && lastError
-            ? '\n\n【本地校验反馈】上一轮结构或完整度没有通过。请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
+            ? '\n\n【本地校验反馈】' + (String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。') + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
             : '';
         try {
             const raw = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? '（重试）' : ''}`, options);
@@ -18933,14 +19485,15 @@ async function generateConfiguredJson(prompt, options = {}) {
     const context = options.context || core_context.currentCharacterGuard();
     const settings = core_settings.getPluginSettings(context);
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
-    const expanded = core_text.expandSafeRoleMacros(prompt, context);
+    const originalExpanded = core_text.expandSafeRoleMacros(prompt, context);
+    const expanded = core_contextTags.filterJsonPromptStrings(originalExpanded, settings.excludedContextTags);
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
         : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context) });
     const phrasePolicy = options.enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(settings) : '';
     const controlledPrompt = `${contextEnvelope}
 ${expanded}${phrasePolicy}`;
-    await assertPromptBudget(context, controlledPrompt, { skipTokenCount: options.skipTokenCount === true });
+    await assertPromptBudget(context, contextEnvelope + '\n' + originalExpanded + phrasePolicy, { skipTokenCount: options.skipTokenCount === true });
     // The value configured in the dedicated secondary-API UI is the actual provider max output.
     // Per-feature options.maxTokens values are legacy sizing hints only and must not silently lower it.
     const responseLength = Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens));
@@ -19117,10 +19670,10 @@ async function generateMode(mode, options = {}) {
     let previousSession = null;
     const incrementalPart = mode === core_constants.MODE.HEART ? 'dialogues' : 'mode';
     const refreshableCalendar = mode === core_constants.MODE.CALENDAR;
-    const refreshableRelations = mode === core_constants.MODE.RELATIONS;
+    const refreshableRelations = mode === core_constants.MODE.RELATIONS || mode === core_constants.MODE.CABINET;
     let roomSchemaUpgrade = false;
     const modeHasNoIncrementalWork = () => {
-        if (!previousSession || refreshableCalendar || refreshableRelations || (mode === core_constants.MODE.PHONE && options.continueDraft === true)) return false;
+        if (!previousSession || refreshableCalendar || refreshableRelations || core_constants.CREATIVE_EXPANSION_MODES.includes(mode) || (mode === core_constants.MODE.PHONE && options.continueDraft === true)) return false;
         const pendingMemoryIds = core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank, incrementalPart);
         return !pendingMemoryIds.length && !roomSchemaUpgrade;
     };
@@ -19257,12 +19810,22 @@ async function generateMode(mode, options = {}) {
         } else if (mode === core_constants.MODE.TRAVEL) {
             session = await modes_travel.generateTravelWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, presentationContext });
         } else if (mode === core_constants.MODE.RELATIONS) {
-            const raw = await requestJson(
-                modes_relations.relationsPrompt(context, memoryBank),
+            const selectedBooks = await archive_repository.collectSelectedMemoryWorldInfo(context, expectedChatId);
+            if (selectedBooks.coverage.status !== 'complete') throw core_text.safeUserError('所选世界书读取不完整，本次未刷新庭园；旧人物保留。请检查来源后重试。', 'RMT_SETTING_SOURCE_PARTIAL');
+            const settingEntries = selectedBooks.entries.filter(entry => entry.historySource !== true);
+            const raw = await requestValidatedSegment(
+                modes_relations.relationsPrompt(context, memoryBank, settingEntries),
                 '正在整理当前世界线的人际关系…',
                 { maxTokens: core_constants.MODE_TOKEN_CAPS[mode] || 7000, temperature: 0.3, context, origin, taskKey: `${taskKey}:relations`, mode, background: true },
+                value => {
+                    if (settingEntries.length && !Array.isArray(value?.settingRelationships)) throw new Error('设定人物列表缺失');
+                    modes_relations.normalizeRelations(value, memoryBank, context);
+                    return value;
+                },
             );
             session = modes_relations.normalizeRelations(raw, memoryBank, context);
+            session.settingRelationships = modes_relations.normalizeSettingRelationships(raw.settingRelationships, settingEntries, context);
+            session.settingCoverage = selectedBooks.coverage;
             const relationGroupId = archive_groups.currentArchiveGroupKey(context, memoryBank);
             if (relationGroupId) {
                 const relationEntries = archive_groups.archiveGroupEntries(relationGroupId, context);
@@ -19280,12 +19843,7 @@ async function generateMode(mode, options = {}) {
             const effectivePrompt = mode === core_constants.MODE.ROOM
                 ? `${generationPrompt}\nCONTROLLED_WORLD_PRESENTATION_JSON:\n${JSON.stringify(presentationContext?.profile || {}, null, 2)}\n外貌与设定宠物只有在受控角色卡/世界书原文中有逐项精确证据时才能声明；不要依据生成的房间名、物件或用户 persona 猜测。`
                 : generationPrompt;
-            const raw = await requestJson(
-                effectivePrompt,
-                `正在根据当前聊天档案生成「${core_constants.MODE_LABEL[mode]}」…`,
-                { maxTokens: core_constants.MODE_TOKEN_CAPS[mode] || 6144, context, contextEnvelope, origin, taskKey, mode, background: true },
-            );
-            session = mode === core_constants.MODE.CALENDAR
+            const normalize = raw => mode === core_constants.MODE.CALENDAR
                 ? modes_calendar.normalizeCalendar(raw, memoryBank, {
                     currentDate: calendarCurrentDate,
                     futureEvidenceText: core_worldPresentation.controlledCalendarEvidence(contextEnvelope),
@@ -19299,9 +19857,16 @@ async function generateMode(mode, options = {}) {
                         characterEvidence: presentationContext?.characterEvidence,
                     })
                 : generation_normalizers.normalizeByMode(mode, raw, memoryBank, context);
+            session = await requestValidatedSegment(
+                effectivePrompt,
+                `正在根据当前聊天档案生成「${core_constants.MODE_LABEL[mode]}」…`,
+                { maxTokens: core_constants.MODE_TOKEN_CAPS[mode] || 6144, context, contextEnvelope, origin, taskKey, mode, background: true },
+                normalize,
+            );
             if (mode === core_constants.MODE.CALENDAR && previousSession && !replaceExisting) {
                 session = modes_calendar.mergeCalendarRefresh(previousSession, session, memoryBank);
             }
+            if (mode === core_constants.MODE.CABINET && previousSession) session = modes_cabinet.mergeCabinet(previousSession, session);
         }
         if (!core_incremental.incrementalPartRecord(session, incrementalPart)) {
             const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank, incrementalPart);
@@ -21495,6 +22060,7 @@ const modes_ending = __m_modes_ending_js;
 const modes_advEvent = __m_modes_advEvent_js;
 const modes_heart = __m_modes_heart_js;
 const modes_items = __m_modes_items_js;
+const modes_cabinet = __m_modes_cabinet_js;
 const modes_phone = __m_modes_phone_js;
 const modes_room = __m_modes_room_js;
 const modes_relations = __m_modes_relations_js;
@@ -21782,6 +22348,11 @@ function confirmExplicitActionTwice(title, detail, { destructive = false } = {})
 
 function confirmModeRegeneration(mode) {
     const label = core_constants.MODE_LABEL[mode] || mode || '当前内容';
+    if (core_constants.CREATIVE_EXPANSION_MODES.includes(mode) || mode === core_constants.MODE.CABINET) return confirmExplicitAction(
+        '基于当前档案追加「' + label + '」？',
+        '有新记忆时优先使用新记忆；没有新记忆也可以扩写新镜头或新视角。会调用模型，旧内容与图片保留，不更新正式记忆、不新增已发生的剧情。完全重复或没有有效证据的结果不会收录。',
+        { destructive: false },
+    );
     if (mode === core_constants.MODE.CALENDAR) {
         return confirmExplicitAction(
             '刷新「两个人的日历」？',
@@ -22173,6 +22744,7 @@ function renderActive() {
     else if (runtimeState.activeMode === core_constants.MODE.ADV) ui_advEventView.renderAdvMode();
     else if (runtimeState.activeMode === core_constants.MODE.ROOM) modes_room.renderRoom();
     else if (runtimeState.activeMode === core_constants.MODE.ITEMS) modes_items.renderItems();
+    else if (runtimeState.activeMode === core_constants.MODE.CABINET) modes_cabinet.renderCabinet();
     else if (runtimeState.activeMode === core_constants.MODE.PHONE) ui_phoneView.renderPhone();
     else if (runtimeState.activeMode === core_constants.MODE.TRAVEL) ui_travelView.renderTravel();
     else if (runtimeState.activeMode === core_constants.MODE.ENDING) ui_endingView.renderEnding();
@@ -23101,6 +23673,7 @@ async function openArchiveSnapshotFromOverview(chatId) {
 
 function modePortalMeta(mode) {
     const meta = {
+        [core_constants.MODE.CABINET]: { title: '两个人的陈列柜', subtitle: '真实记忆中的共同物件', icon: 'fa-gem', accent: 'items' },
         [core_constants.MODE.ALBUM]: { title: '回忆相簿', subtitle: '共同回忆与 CG 收藏', icon: 'fa-images', accent: 'album' },
         [core_constants.MODE.ADV]: { title: 'ADV EVENT', subtitle: '重要事件与长篇回放', icon: 'fa-book-open', accent: 'adv' },
         [core_constants.MODE.ROOM]: { title: '他的房间', subtitle: '随现实时间流动的私人空间', icon: 'fa-house', accent: 'room' },
@@ -23898,6 +24471,7 @@ function openDatabase() {
         };
         request.onsuccess = () => {
             const db = request.result;
+            db.onclose = () => { databasePromise = null; };
             db.onversionchange = () => {
                 try { db.close(); } catch {}
                 databasePromise = null;
@@ -23906,6 +24480,11 @@ function openDatabase() {
         };
         request.onerror = () => { databasePromise = null; reject(request.error || new Error('无法打开记忆来源账本。')); };
         request.onblocked = () => { databasePromise = null; reject(new Error('记忆来源账本被旧页面占用。')); };
+    }).catch(error => {
+        // A synchronous open() exception rejects the executor too. Never retain
+        // that rejected promise for the lifetime of the page.
+        databasePromise = null;
+        throw error;
     });
     return databasePromise;
 }
@@ -25017,6 +25596,15 @@ async function loadMemoryWorldInfoBook(context, worldName, signal = null) {
 }
 
 async function collectSelectedMemoryWorldInfo(context, expectedChatId, signal) {
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const assertSourceScope = () => {
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
+        // Detached archive tasks own a source-chat selection captured from that
+        // exact chat header; they must not consult the currently visible chat.
+        if (Object.hasOwn(context, '__rmtArchiveTargetEntryId') && context.__rmtArchiveTargetEntryId) return;
+        if (core_context.comparableChatId(core_context.getChatId(core_context.currentCharacterGuard())) !== core_context.comparableChatId(expectedChatId)) throw new DOMException('Chat changed', 'AbortError');
+    };
     const selection = getMemoryWorldInfoSelection(context);
     const emptyCoverage = { status: 'complete', returned: 0, total: 0, reason: '当前没有选择世界书条目' };
     if (!selection.books.length) return { entries: [], books: [], totalChars: 0, fingerprint: 'none', coverage: emptyCoverage, historyCoverage: { ...emptyCoverage, reason: '当前没有标记为历史摘要的世界书条目' } };
@@ -25032,11 +25620,12 @@ async function collectSelectedMemoryWorldInfo(context, expectedChatId, signal) {
     let historyTruncated = 0;
     let historyFailedBooks = 0;
     for (const book of selection.books.slice(0, core_constants.MAX_MEMORY_WORLD_INFO_BOOKS)) {
-        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-        if (core_context.comparableChatId(core_context.getChatId(core_context.currentCharacterGuard())) !== core_context.comparableChatId(expectedChatId)) throw new DOMException('Chat changed', 'AbortError');
+        assertSourceScope();
         let loaded;
         try { loaded = await loadMemoryWorldInfoBook(context, book.name, signal); }
         catch (error) {
+            if (error?.name === 'AbortError') throw error;
+            assertSourceScope();
             console.warn('[HeartbeatMemories] selected memory world info skipped', { world: core_text.normalizeText(book.name, 180), ...core_text.safeErrorDiagnostic(error) });
             failedBooks += 1;
             if (book.historySource === true) historyFailedBooks += 1;
@@ -25052,6 +25641,7 @@ async function collectSelectedMemoryWorldInfo(context, expectedChatId, signal) {
             });
             continue;
         }
+        assertSourceScope();
         const uidSet = new Set(book.entryUids.map(String));
         const chosen = book.all ? loaded : loaded.filter(entry => uidSet.has(String(entry.uid)));
         let imported = 0;
@@ -26739,6 +27329,7 @@ async function fetchIndexedArchiveSnapshot(entry, context = core_context.getCont
     let sourceMirrorLagging = false;
     let memory = null;
     let stored = null;
+    let settingBookSelection = { books: [] };
     let backupRecord = initialBackupState.record || null;
     try {
         if (!avatar || typeof context.getRequestHeaders !== 'function') throw new Error('无法定位这个角色的聊天档案文件。');
@@ -26756,6 +27347,7 @@ async function fetchIndexedArchiveSnapshot(entry, context = core_context.getCont
         memory = archive_repository.migrateArchiveInMemory(metadata[core_constants.MEMORY_KEY]);
         if (!memory || core_context.comparableChatId(memory.chatId) !== wantedChatId) throw new Error('源聊天里已没有可读取的心跳回忆档案。');
         stored = metadata[core_constants.CACHE_KEY];
+        settingBookSelection = archive_repository.getMemoryWorldInfoSelection({ chatMetadata: metadata });
     } catch (error) {
         if (error?.name === 'AbortError') throw error;
         sourceError = error;
@@ -26845,6 +27437,7 @@ async function fetchIndexedArchiveSnapshot(entry, context = core_context.getCont
         memory,
         cache,
         backupOnly: !!sourceError,
+        settingBookSelection: sourceError ? { books: [] } : settingBookSelection,
         sourceMirrorLagging,
         sourceError: sourceError ? core_text.safeErrorSummary(sourceError, 400) : '',
         loadedAt: Date.now(),
@@ -26934,7 +27527,8 @@ function freezeArchiveTarget(snapshot, hostContext = core_context.getContext()) 
         chatId: target.chatId,
         chat: [],
         characters: sparseCharacters,
-        chatMetadata: { [core_constants.MEMORY_KEY]: memory, [core_constants.CACHE_KEY]: cache },
+        chatMetadata: { [core_constants.MEMORY_KEY]: memory, [core_constants.CACHE_KEY]: cache,
+            [core_constants.MEMORY_WORLD_INFO_SETTINGS_KEY]: structuredClone(snapshot.settingBookSelection || { books: [] }) },
         powerUserSettings: { ...(hostContext?.powerUserSettings || {}), persona_description: '' },
         getCurrentChatId: () => target.chatId,
         getCharacterCardFields: () => structuredClone(cardFields),
@@ -28199,6 +28793,7 @@ const core_context = __m_core_context_js;
 const core_evidence = __m_core_evidence_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
 const core_text = __m_core_text_js;
+const core_contextTags = __m_core_contextTags_js;
 const modes_calendar = __m_modes_calendar_js;
 const modes_phone = __m_modes_phone_js;
 const runtimeState = __m_core_state_js.state;
@@ -29768,6 +30363,7 @@ function loadSession(mode, options = {}) {
         const userManaged = session.userManaged === true;
         if (mode === core_constants.MODE.ROOM && (!Array.isArray(session.spaces) || (!userManaged && session.spaces.length < 2))) return null;
         if (mode === core_constants.MODE.ITEMS && (!Array.isArray(session.containers) || (!userManaged && session.containers.length < 1))) return null;
+        if (mode === core_constants.MODE.CABINET && !Array.isArray(session.items)) return null;
         if (mode === core_constants.MODE.PHONE) {
             session = modes_phone.migrateLegacyPhoneSession(session, memoryBank);
             // A legacy phone may legitimately fall below the new generated minimum when the retired
@@ -29799,7 +30395,7 @@ async function buildControlledContextEnvelope(context, options = {}) {
     const pick = (...keys) => {
         for (const key of keys) {
             const value = card?.[key];
-            if (value !== undefined && value !== null && String(value).trim()) return core_text.normalizeText(value, 5000);
+            if (value !== undefined && value !== null && String(value).trim()) return core_contextTags.stripExcludedTags(core_text.normalizeText(value, 5000), core_contextTags.excludedTagsForContext(context));
         }
         return '';
     };
@@ -29820,7 +30416,7 @@ async function buildControlledContextEnvelope(context, options = {}) {
     };
     const userData = {
         name: core_text.normalizeText(context.name1 || '{{user}}', 120),
-        personaDescription: core_text.normalizeText(context.powerUserSettings?.persona_description || '', 7000),
+        personaDescription: core_contextTags.stripExcludedTags(core_text.normalizeText(context.powerUserSettings?.persona_description || '', 7000), core_contextTags.excludedTagsForContext(context)),
     };
     let worldInfo = '';
     try {
@@ -29843,7 +30439,7 @@ async function buildControlledContextEnvelope(context, options = {}) {
         };
         if (typeof context.getWorldInfoPrompt === 'function') {
             const result = await context.getWorldInfoPrompt(worldInfoScan, Math.max(2048, Math.min(32768, Number(context.maxContext) || 8192)), true, globalScanData);
-            worldInfo = core_text.normalizeText(result?.worldInfoString || [result?.worldInfoBefore, result?.worldInfoAfter].filter(Boolean).join('\n'), 12000);
+            worldInfo = core_contextTags.stripExcludedTags(core_text.normalizeText(result?.worldInfoString || [result?.worldInfoBefore, result?.worldInfoAfter].filter(Boolean).join('\n'), 12000), core_contextTags.excludedTagsForContext(context));
         }
     } catch (error) {
         console.warn('[HeartbeatMemories] independent world-info dry run failed', core_text.safeErrorDiagnostic(error));
@@ -30072,6 +30668,7 @@ __m_heartbeatMemories_js.destroyMemoryTheater = destroyMemoryTheater;
 __init_core_constants_js();
 __init_core_text_js();
 __init_core_evidence_js();
+__init_core_contextTags_js();
 __init_core_deferredCommitStore_js();
 __init_core_state_js();
 __init_core_context_js();
@@ -30084,10 +30681,12 @@ __init_core_worldPresentation_js();
 __init_generation_jsonParser_js();
 __init_core_presentExpression_js();
 __init_ui_advEventView_js();
+__init_ui_themeSurfaces_js();
 __init_ui_styles_js();
 __init_ui_albumView_js();
 __init_generation_imageGeneration_js();
 __init_modes_album_js();
+__init_modes_cabinet_js();
 __init_modes_ending_js();
 __init_ui_heartView_js();
 __init_modes_heart_js();

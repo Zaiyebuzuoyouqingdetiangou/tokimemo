@@ -107,9 +107,9 @@ test('r47 default/custom theme uses semantic palette and contrast guard', () => 
         themeCustom: { background: '#101820', surface: '#ffffff', text: '#ffffff', muted: '#eeeeee' },
     });
     assert.equal(translucent.alpha, 0.72);
-    assert.equal(styleValues.get('--rmt-theme-surface-alpha'), 'rgba(255, 255, 255, 0.72)');
+    assert.equal(styleValues.get('--rmt-theme-surface-alpha'), 'rgba(16, 24, 32, 0.72)');
     assert.match(styleValues.get('--rmt-theme-surface'), /^#[0-9a-f]{6}$/);
-    assert.ok(contrastRatio(translucent.palette.text, '#bcc1c6') >= 4.5, 'text must remain readable over the alpha-composited card');
+    assert.ok(contrastRatio(translucent.palette.text, translucent.palette.background) >= 4.5, 'r50 protects page copy as well as cards for conflicting custom colours');
 
     const opaque = applyThemeToElement(element, { themeMode: 'default', themeAlpha: 1.5 });
     assert.equal(opaque.alpha, 1);

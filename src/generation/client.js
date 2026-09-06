@@ -13,6 +13,7 @@ import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
+import * as core_contextTags from '../core/contextTags.js';
 import * as core_worldPresentation from '../core/worldPresentation.js';
 import * as generation_jsonParser from './jsonParser.js';
 import * as generation_normalizers from './normalizers.js';
@@ -25,6 +26,7 @@ import * as modes_calendar from '../modes/calendar.js';
 import * as modes_ending from '../modes/ending.js';
 import * as modes_heart from '../modes/heart.js';
 import * as modes_items from '../modes/items.js';
+import * as modes_cabinet from '../modes/cabinet.js';
 import * as modes_phone from '../modes/phone.js';
 import * as modes_room from '../modes/room.js';
 import * as modes_relations from '../modes/relations.js';
@@ -109,10 +111,13 @@ export async function mapGenerationConcurrent(items, limit, worker) {
 }
 
 export async function requestValidatedSegment(prompt, status, options, validator) {
+    const context = options?.context || core_context.currentCharacterGuard();
+    options = { ...options, context, contextEnvelope: typeof options?.contextEnvelope === 'string'
+        ? options.contextEnvelope : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options?.mode, context) }) };
     let lastError = null;
     for (let attempt = 0; attempt < 2; attempt += 1) {
         const retryNote = attempt && lastError
-            ? '\n\n【本地校验反馈】上一轮结构或完整度没有通过。请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
+            ? '\n\n【本地校验反馈】' + (String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。') + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
             : '';
         try {
             const raw = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? '（重试）' : ''}`, options);
@@ -275,14 +280,15 @@ export async function generateConfiguredJson(prompt, options = {}) {
     const context = options.context || core_context.currentCharacterGuard();
     const settings = core_settings.getPluginSettings(context);
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
-    const expanded = core_text.expandSafeRoleMacros(prompt, context);
+    const originalExpanded = core_text.expandSafeRoleMacros(prompt, context);
+    const expanded = core_contextTags.filterJsonPromptStrings(originalExpanded, settings.excludedContextTags);
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
         : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context) });
     const phrasePolicy = options.enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(settings) : '';
     const controlledPrompt = `${contextEnvelope}
 ${expanded}${phrasePolicy}`;
-    await assertPromptBudget(context, controlledPrompt, { skipTokenCount: options.skipTokenCount === true });
+    await assertPromptBudget(context, contextEnvelope + '\n' + originalExpanded + phrasePolicy, { skipTokenCount: options.skipTokenCount === true });
     // The value configured in the dedicated secondary-API UI is the actual provider max output.
     // Per-feature options.maxTokens values are legacy sizing hints only and must not silently lower it.
     const responseLength = Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens));
@@ -459,10 +465,10 @@ export async function generateMode(mode, options = {}) {
     let previousSession = null;
     const incrementalPart = mode === core_constants.MODE.HEART ? 'dialogues' : 'mode';
     const refreshableCalendar = mode === core_constants.MODE.CALENDAR;
-    const refreshableRelations = mode === core_constants.MODE.RELATIONS;
+    const refreshableRelations = mode === core_constants.MODE.RELATIONS || mode === core_constants.MODE.CABINET;
     let roomSchemaUpgrade = false;
     const modeHasNoIncrementalWork = () => {
-        if (!previousSession || refreshableCalendar || refreshableRelations || (mode === core_constants.MODE.PHONE && options.continueDraft === true)) return false;
+        if (!previousSession || refreshableCalendar || refreshableRelations || core_constants.CREATIVE_EXPANSION_MODES.includes(mode) || (mode === core_constants.MODE.PHONE && options.continueDraft === true)) return false;
         const pendingMemoryIds = core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank, incrementalPart);
         return !pendingMemoryIds.length && !roomSchemaUpgrade;
     };
@@ -599,12 +605,22 @@ export async function generateMode(mode, options = {}) {
         } else if (mode === core_constants.MODE.TRAVEL) {
             session = await modes_travel.generateTravelWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, presentationContext });
         } else if (mode === core_constants.MODE.RELATIONS) {
-            const raw = await requestJson(
-                modes_relations.relationsPrompt(context, memoryBank),
+            const selectedBooks = await archive_repository.collectSelectedMemoryWorldInfo(context, expectedChatId);
+            if (selectedBooks.coverage.status !== 'complete') throw core_text.safeUserError('所选世界书读取不完整，本次未刷新庭园；旧人物保留。请检查来源后重试。', 'RMT_SETTING_SOURCE_PARTIAL');
+            const settingEntries = selectedBooks.entries.filter(entry => entry.historySource !== true);
+            const raw = await requestValidatedSegment(
+                modes_relations.relationsPrompt(context, memoryBank, settingEntries),
                 '正在整理当前世界线的人际关系…',
                 { maxTokens: core_constants.MODE_TOKEN_CAPS[mode] || 7000, temperature: 0.3, context, origin, taskKey: `${taskKey}:relations`, mode, background: true },
+                value => {
+                    if (settingEntries.length && !Array.isArray(value?.settingRelationships)) throw new Error('设定人物列表缺失');
+                    modes_relations.normalizeRelations(value, memoryBank, context);
+                    return value;
+                },
             );
             session = modes_relations.normalizeRelations(raw, memoryBank, context);
+            session.settingRelationships = modes_relations.normalizeSettingRelationships(raw.settingRelationships, settingEntries, context);
+            session.settingCoverage = selectedBooks.coverage;
             const relationGroupId = archive_groups.currentArchiveGroupKey(context, memoryBank);
             if (relationGroupId) {
                 const relationEntries = archive_groups.archiveGroupEntries(relationGroupId, context);
@@ -622,12 +638,7 @@ export async function generateMode(mode, options = {}) {
             const effectivePrompt = mode === core_constants.MODE.ROOM
                 ? `${generationPrompt}\nCONTROLLED_WORLD_PRESENTATION_JSON:\n${JSON.stringify(presentationContext?.profile || {}, null, 2)}\n外貌与设定宠物只有在受控角色卡/世界书原文中有逐项精确证据时才能声明；不要依据生成的房间名、物件或用户 persona 猜测。`
                 : generationPrompt;
-            const raw = await requestJson(
-                effectivePrompt,
-                `正在根据当前聊天档案生成「${core_constants.MODE_LABEL[mode]}」…`,
-                { maxTokens: core_constants.MODE_TOKEN_CAPS[mode] || 6144, context, contextEnvelope, origin, taskKey, mode, background: true },
-            );
-            session = mode === core_constants.MODE.CALENDAR
+            const normalize = raw => mode === core_constants.MODE.CALENDAR
                 ? modes_calendar.normalizeCalendar(raw, memoryBank, {
                     currentDate: calendarCurrentDate,
                     futureEvidenceText: core_worldPresentation.controlledCalendarEvidence(contextEnvelope),
@@ -641,9 +652,16 @@ export async function generateMode(mode, options = {}) {
                         characterEvidence: presentationContext?.characterEvidence,
                     })
                 : generation_normalizers.normalizeByMode(mode, raw, memoryBank, context);
+            session = await requestValidatedSegment(
+                effectivePrompt,
+                `正在根据当前聊天档案生成「${core_constants.MODE_LABEL[mode]}」…`,
+                { maxTokens: core_constants.MODE_TOKEN_CAPS[mode] || 6144, context, contextEnvelope, origin, taskKey, mode, background: true },
+                normalize,
+            );
             if (mode === core_constants.MODE.CALENDAR && previousSession && !replaceExisting) {
                 session = modes_calendar.mergeCalendarRefresh(previousSession, session, memoryBank);
             }
+            if (mode === core_constants.MODE.CABINET && previousSession) session = modes_cabinet.mergeCabinet(previousSession, session);
         }
         if (!core_incremental.incrementalPartRecord(session, incrementalPart)) {
             const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank, incrementalPart);

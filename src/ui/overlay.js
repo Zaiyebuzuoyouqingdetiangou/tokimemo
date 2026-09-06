@@ -23,6 +23,7 @@ import * as modes_ending from '../modes/ending.js';
 import * as modes_advEvent from '../modes/advEvent.js';
 import * as modes_heart from '../modes/heart.js';
 import * as modes_items from '../modes/items.js';
+import * as modes_cabinet from '../modes/cabinet.js';
 import * as modes_phone from '../modes/phone.js';
 import * as modes_room from '../modes/room.js';
 import * as modes_relations from '../modes/relations.js';
@@ -298,6 +299,11 @@ export function confirmExplicitActionTwice(title, detail, { destructive = false 
 
 export function confirmModeRegeneration(mode) {
     const label = core_constants.MODE_LABEL[mode] || mode || '当前内容';
+    if (core_constants.CREATIVE_EXPANSION_MODES.includes(mode) || mode === core_constants.MODE.CABINET) return confirmExplicitAction(
+        '基于当前档案追加「' + label + '」？',
+        '有新记忆时优先使用新记忆；没有新记忆也可以扩写新镜头或新视角。会调用模型，旧内容与图片保留，不更新正式记忆、不新增已发生的剧情。完全重复或没有有效证据的结果不会收录。',
+        { destructive: false },
+    );
     if (mode === core_constants.MODE.CALENDAR) {
         return confirmExplicitAction(
             '刷新「两个人的日历」？',
@@ -689,6 +695,7 @@ export function renderActive() {
     else if (runtimeState.activeMode === core_constants.MODE.ADV) ui_advEventView.renderAdvMode();
     else if (runtimeState.activeMode === core_constants.MODE.ROOM) modes_room.renderRoom();
     else if (runtimeState.activeMode === core_constants.MODE.ITEMS) modes_items.renderItems();
+    else if (runtimeState.activeMode === core_constants.MODE.CABINET) modes_cabinet.renderCabinet();
     else if (runtimeState.activeMode === core_constants.MODE.PHONE) ui_phoneView.renderPhone();
     else if (runtimeState.activeMode === core_constants.MODE.TRAVEL) ui_travelView.renderTravel();
     else if (runtimeState.activeMode === core_constants.MODE.ENDING) ui_endingView.renderEnding();

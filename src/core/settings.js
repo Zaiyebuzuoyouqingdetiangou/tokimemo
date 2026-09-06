@@ -6,6 +6,7 @@ import * as core_independentApi from './independentApi.js';
 import { state as runtimeState } from './state.js';
 import * as core_text from './text.js';
 import * as core_theme from './theme.js';
+import * as core_contextTags from './contextTags.js';
 
 export function normalizeBannedGeneratedPhrases(value) {
     const source = Array.isArray(value) ? value : String(value ?? '').split(/[\n,，]+/g);
@@ -35,6 +36,7 @@ export function getPluginSettings(context = core_context.getContext()) {
         imageGenerationManualEnabled: settings.imageGenerationManualEnabled === true,
         ttDisplayMode: settings.ttDisplayMode === true,
         themeMode: core_constants.THEME_MODES.has(settings.themeMode) ? settings.themeMode : 'default',
+        excludedContextTags: core_contextTags.normalizeExcludedTags(settings.excludedContextTags === undefined ? core_contextTags.DEFAULT_EXCLUDED_TAGS : settings.excludedContextTags),
         themeAlpha: Math.max(0.72, Math.min(1, Number.isFinite(Number(settings.themeAlpha)) ? Number(settings.themeAlpha) : core_constants.DEFAULT_SETTINGS.themeAlpha)),
         themeCustom: core_theme.normalizeThemeCustom(settings.themeCustom),
         bannedGeneratedPhrases: settings.bannedGeneratedPhrases === undefined

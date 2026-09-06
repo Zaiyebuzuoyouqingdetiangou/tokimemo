@@ -57,7 +57,7 @@ export function contrastRatio(foreground, background) {
 }
 
 function safeReadableColor(requested, surface, fallback, minimum = 4.5) {
-    const candidates = [requested, fallback, '#111827', '#f8fafc']
+    const candidates = [requested, fallback, '#111827', '#f8fafc', '#000000', '#ffffff']
         .map(value => rgbToHex(parseRgbColor(value), ''))
         .filter(Boolean);
     for (const candidate of candidates) {
@@ -74,7 +74,7 @@ function compositeHex(foreground, background, alpha) {
     const front = parseRgbColor(foreground);
     const back = parseRgbColor(background);
     if (!front || !back) return rgbToHex(front, foreground);
-    const a = normalizedThemeAlpha(alpha);
+    const a = Math.max(0, Math.min(1, Number(alpha) || 0));
     return rgbToHex({
         r: front.r * a + back.r * (1 - a),
         g: front.g * a + back.g * (1 - a),
@@ -110,10 +110,10 @@ function hostComputedPalette(documentLike = globalThis.document) {
             background,
             surface: background,
             text,
-            muted: fallback.muted,
+            muted: text,
             accent: fallback.accent,
             accentAlt: fallback.accentAlt,
-            border: fallback.border,
+            border: contrastRatio('#ffffff', background) > 4.5 ? '#586578' : fallback.border,
         };
     } catch {
         return { ...fallback };
@@ -126,12 +126,18 @@ export function resolveThemePalette(settings, documentLike = globalThis.document
         ? normalizeThemeCustom(settings?.themeCustom)
         : mode === 'host'
             ? hostComputedPalette(documentLike)
-            : { ...core_constants.DEFAULT_THEME_PALETTE };
+            : mode === 'night' ? { ...core_constants.NIGHT_THEME_PALETTE } : { ...core_constants.DEFAULT_THEME_PALETTE };
     palette = normalizeThemeCustom(palette);
-    const effectiveSurface = compositeHex(palette.surface, palette.background, settings?.themeAlpha);
-    const readableSurfaces = [palette.surface, effectiveSurface];
+    // Custom colours must keep the page and card in the same luminance family.
+    if (contrastRatio(palette.background, palette.surface) > 3) palette.surface = palette.background;
+    const readableSurfaces = [palette.background, palette.surface, compositeHex(palette.surface, palette.background, settings?.themeAlpha)];
     palette.text = safeReadableAcross(palette.text, readableSurfaces, core_constants.DEFAULT_THEME_PALETTE.text, 4.5);
     palette.muted = safeReadableAcross(palette.muted, readableSurfaces, core_constants.DEFAULT_THEME_PALETTE.muted, 4.5);
+    if (readableSurfaces.some(surface => contrastRatio(palette.text, surface) < 4.5 || contrastRatio(palette.muted, surface) < 4.5)) {
+        palette.surface = palette.background;
+        palette.text = safeReadableAcross(palette.text, [palette.background], '#000000');
+        palette.muted = safeReadableAcross(palette.muted, [palette.background], palette.text);
+    }
     return { mode, palette };
 }
 
@@ -159,5 +165,8 @@ export function applyThemeToElement(element, settings, documentLike = globalThis
     element.style.setProperty('--rmt-theme-accent-alt', palette.accentAlt);
     element.style.setProperty('--rmt-theme-border', palette.border);
     element.style.setProperty('--rmt-theme-alpha', String(alpha));
+    element.style.setProperty('--rmt-theme-accent-ink', safeReadableAcross(palette.accent, [palette.background, palette.surface], palette.text));
+    element.style.setProperty('--rmt-theme-soft', compositeHex(palette.accentAlt, palette.surface, 0.08));
+    element.style.setProperty('color-scheme', contrastRatio('#ffffff', palette.background) > 4.5 ? 'dark' : 'light');
     return { mode, palette, alpha };
 }

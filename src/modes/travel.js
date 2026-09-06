@@ -303,6 +303,7 @@ export function compactTravelExisting(session) {
 
 export function travelPrompt(context, memoryBank, previous = null, sourceMemoryIds = null, worldPresentation = null) {
     const incremental = !!previous;
+    const revisit = incremental && !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
     const archiveBlock = incremental
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         : generation_prompts.promptArchiveSlice(memoryBank, 48);
@@ -320,7 +321,7 @@ ${JSON.stringify(worldPresentation || core_worldPresentation.resolveWorldPresent
 
 硬性要求：
  - mapTheme 必须照抄 CONTROLLED_WORLD_PRESENTATION_JSON.mapTheme。far.sceneTheme 应按该地点本身选择 city/coast/mountain/forest/campus/historic/fantasy/scifi/neutral；本地会再次依据地点语义校验，不能用一个全局主题覆盖雪山、海港等不同地点。keepsake.kind 只能从 allowedKeepsakes 中选择。keepsake.tone 只能 rose/ocean/forest/sunset/night/paper；它们只是本地白名单样式 token。禁止输出坐标、颜色值、CSS、HTML、JavaScript、URL、图片或 class。
-- ${incremental ? '本轮只返回 0～4 个由 incrementalMemoryIds 新证明且不在 EXISTING_TRAVEL_INDEX_JSON 中的地点；没有新地点时 locations 为空。' : '初次生成 5～8 个彼此不同的地点：near 3～5 个，far 2～4 个。'}
+ - ${revisit ? '本轮基于既有证据返回 0～3 个地点的新当下对话或纪念文字，可以重访原地点；文字不得重复已有版本，不得声称发生新旅程。' : incremental ? '本轮只返回 0～4 个由 incrementalMemoryIds 新证明且不在 EXISTING_TRAVEL_INDEX_JSON 中的地点；没有新地点时 locations 为空。' : '初次生成 5～8 个彼此不同的地点：near 3～5 个，far 2～4 个。'}
 - name/region 不是自由叙事槽。basis=记忆 时只能逐字取自所引 Mxxx；basis=设定 时必须逐字出现在 sourceSettingEvidence 中，而 sourceSettingEvidence 必须逐字取自受控角色卡/世界书。没有这种证据就不要生成该站。distanceToken 只能为 walk/local/day-trip/journey/distant/unknown；不要输出自由 distanceLabel。title、routeSummary、summary 均由本地生成，模型文字会被忽略。
 - near 是同城/日常可抵达地点。提供 3～8 个 dialogueActs；不要写 dialogueLines 或任何自由台词。本地会依据双方真实关系层级裁剪 token 并组合成 {{char}} 对 {{user}} 的当下短句，不替 {{user}} 回应。关系证据不足时仅保留中性祝福/视觉，love、embrace 等越级 token 会被清空。
 - far 是远途、异地或世界观中的遥远地点，点击后显示由插件本地 HTML/SVG/CSS + 纯文字渲染的纪念载体。载体必须跟随时代、科技、职业与世界观：现代世界可以是 postcard/letter/journal；古代或低科技世界优先考虑 letter/journal/scroll/fieldnote；机构/任务型背景可用 dossier/fieldnote；未来科技可用 datalog。每个 keepsake 提供 3～8 个 presentExpressions，并利用 register/image/intensity/cadence 等轴结合人设、世界观和关系阶段形成充沛但不伪造历史的文字；不要写 title/mark/greeting/body/closing/emblem，自由正文会被忽略，这些字段由本地安全构造。
@@ -332,7 +333,7 @@ ${JSON.stringify(worldPresentation || core_worldPresentation.resolveWorldPresent
 export function travelLocationKey(item) {
     const ids = core_text.cleanArray(item?.sourceMemoryIds, 8, 40).sort().join(',');
     const anchor = core_incremental.normalizedContentKey(item?.sourceMemoryAnchor, 160);
-    if (item?.basis === '记忆' && ids && anchor) return `memory|${ids}|${anchor}`;
+    if (item?.basis === '记忆' && ids && anchor) return `memory|${ids}|${anchor}|${item?.expansionRound ? core_incremental.normalizedContentKey(JSON.stringify([item.dialogueLines, item.keepsake?.body]), 1600) : ''}`;
     return `${core_text.normalizeText(item?.kind, 20)}|${core_incremental.normalizedContentKey(item?.name, 120)}|${core_incremental.normalizedContentKey(item?.region, 120)}`;
 }
 
@@ -368,9 +369,9 @@ export async function generateTravelWithRepair(context, memoryBank, origin, task
     const presentationContext = options.presentationContext || {};
     const worldPresentation = previous?.worldPresentation || presentationContext.profile
         || core_worldPresentation.resolveWorldPresentation(presentationContext.contextEnvelope || '', memoryBank);
-    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+    const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
     const fresh = await generation_client.requestValidatedSegment(
-        travelPrompt(context, memoryBank, previous, sourceMemoryIds, worldPresentation),
+        travelPrompt(context, memoryBank, previous, sourceMemoryIds, worldPresentation) + core_incremental.derivedExpansionDirective(previous, memoryBank),
         previous ? '他的出行路线 · 正在把新增地点标到地图上…' : '他的出行路线 · 正在绘制生活地图…',
         {
             maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.TRAVEL], temperature: 0.45,
@@ -388,6 +389,11 @@ export async function generateTravelWithRepair(context, memoryBank, origin, task
     }
     if (!fresh.locations.length) {
         return core_incremental.stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0);
+    }
+    if (!core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length) {
+        const existingTexts = new Set(previous.locations.map(item => JSON.stringify([item.name, item.dialogueLines, item.keepsake?.body])));
+        fresh.locations = fresh.locations.filter(item => !existingTexts.has(JSON.stringify([item.name, item.dialogueLines, item.keepsake?.body])))
+            .map(item => ({ ...item, expansionRound: (Number(previous.generationMeta?.expansionRound) || 0) + 1 }));
     }
     const { session, added } = mergeTravelIncremental(previous, fresh);
     return core_incremental.stampIncrementalCoverage(session, previous, memoryBank, 'mode', sourceMemoryIds, added);

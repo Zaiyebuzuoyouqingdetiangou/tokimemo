@@ -2,6 +2,7 @@
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_constants from '../core/constants.js';
 import * as core_text from '../core/text.js';
+import * as ui_themeSurfaces from './themeSurfaces.js';
 
 export function ensureSettingsStyles() {
     if (document.getElementById(core_constants.SETTINGS_STYLE_ID)) return;
@@ -69,6 +70,7 @@ export function ensureSettingsStyles() {
   #${core_constants.SETTINGS_ID} .rmt-theme-custom-panel{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 `;
+    style.textContent += ui_themeSurfaces.structuralThemeCss('#' + core_constants.SETTINGS_ID);
     document.head.appendChild(style);
 }
 
@@ -953,6 +955,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 #${core_constants.OVERLAY_ID} .rmt-archive-card,#${core_constants.OVERLAY_ID} .rmt-character-card,#${core_constants.OVERLAY_ID} .rmt-portal-card,#${core_constants.OVERLAY_ID} .rmt-calendar-quick{border-color:var(--rmt-theme-border,#dce7ec)!important;background:var(--rmt-theme-surface-alpha,var(--rmt-theme-surface,#fff))!important;color:var(--rmt-theme-text,#526a80)!important;-webkit-text-fill-color:var(--rmt-theme-text,#526a80)!important;opacity:1!important;writing-mode:horizontal-tb!important;text-orientation:mixed!important}
 
 `;
+    style.textContent += ui_themeSurfaces.structuralThemeCss('#' + core_constants.OVERLAY_ID) + ui_themeSurfaces.structuralThemeCss('.rmt-avatar-dialog-pop[data-rmt-theme-mode]');
     document.head.appendChild(style);
 }
 

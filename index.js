@@ -1,5 +1,5 @@
-const VERSION = '0.8.45';
-const BUILD = '0.8.45-deep-review-r49.0';
+const VERSION = '0.8.46';
+const BUILD = '0.8.46-feedback-r50.0';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -203,6 +203,9 @@ function ensureBootstrapStyle() {
 #${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-diagnostic-close{box-sizing:border-box;min-width:88px!important;min-height:40px!important;height:auto!important;margin:0!important;padding:7px 10px!important;white-space:nowrap!important;word-break:keep-all!important;writing-mode:horizontal-tb!important;touch-action:manipulation}
 #${SETTINGS_ID}[data-rmt-bootstrap="1"] pre{box-sizing:border-box;min-width:0;max-width:100%;margin:0;padding:8px;max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:9px;line-height:1.45;border-radius:8px;background:rgba(38,49,63,.07);writing-mode:horizontal-tb}
 #${MENU_ID}[data-rmt-bootstrap="1"]{cursor:pointer}
+#${SETTINGS_ID}[data-rmt-bootstrap="1"]{background:inherit!important;color:inherit!important;border-color:currentColor!important;font-family:inherit}
+#${SETTINGS_ID}[data-rmt-bootstrap="1"] :is(b,small,span,div,button,pre){color:inherit!important;-webkit-text-fill-color:currentColor!important;text-shadow:none!important;opacity:1!important}
+#${SETTINGS_ID}[data-rmt-bootstrap="1"] :is(.rmt-bootstrap-note,.rmt-bootstrap-head small){font-size:12px!important}
 @media(min-width:768px){#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
 `;
     document.head.appendChild(style);

@@ -5,15 +5,25 @@
 ## 当前候选
 
 - 产品名：心跳回忆
-- version：`0.8.45`
-- BUILD / runtime cache-bust：`0.8.45-deep-review-r49.0`
+- version：`0.8.46`
+- BUILD / runtime cache-bust：`0.8.46-feedback-r50.0`
 - 正式档案 key：`heartbeatMemoriesArchiveV3`
 - 派生缓存 key：`heartbeatMemoriesTheaterV3`
 - 压缩格式：`gzip-base64-v1`
 - Calendar / Phone / Room / Travel session：v6 / v4 / v3 / v4
 - SillyTavern 最低版本：`1.18.0`；一键配置入口明确标注 `1.1.18`
 
-V3 metadata key 为旧档案兼容边界，不随发布版本改名。浏览器加载 r49 runtime 由 manifest 与 index 中一致的 BUILD query 隔离，不能继续命中 r48 bundle。
+V3 metadata key 为旧档案兼容边界，不随发布版本改名。浏览器加载 r50 runtime 由 manifest 与 index 中一致的 BUILD query 隔离，不能继续命中旧 bundle。
+
+## r50 用户反馈新增契约
+
+- 正式记忆不变也可主动扩写派生内容；同一锚点的新正文用本地扩写身份去重。不得自动扫描新聊天、推进双方感情、解锁旧锁定结局或冒充新历史。旧记录和图片保留，达到单模式内容上限仍停止。
+- 庭园同时显示设定人物与剧情关系，证据层级分开。设定人物只来自目标档案明确勾选的非历史世界书及匹配 world/uid/逐字原文；不得读取当前另一聊天的勾选项。读取不完整不覆盖旧会话。
+- 陈列柜只使用正式 Mxxx 中可核实的具体物件与两人关联，保留逐字证据；空结果合法。本地 SVG 仅作物件类别示意，不冒充真实照片。
+- 主题含 default（日间）、night（夜间）、host（标准计算背景/文字）、custom。所有结构卡片共享主题；场景插画保留本地艺术配色。禁止读取第三方美化插件私有变量/状态或执行模型样式。
+- 输入标签过滤扫描最近 500 条、最多 256000 字符；最多保存 32 个排除标签。支持嵌套、编码和未闭合块；只处理模型输入副本，不改持久化原文、fingerprint 或扫描范围，不执行 DOM。
+- Room 校验失败允许原有上限内修复，固定安全原因码不回显私密源文。Butterfly 局部修复不能降低分歧维度、唯一性或关系安全。
+- 分段并发上限 2，仍受 provider 全局 2 / 逻辑任务 5 限制。只复用同请求重试的受控上下文，不建立跨角色全局源缓存。
 
 ## 数据权威与世界线
 

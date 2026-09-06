@@ -9,6 +9,7 @@ import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as core_theme from '../core/theme.js';
+import * as core_contextTags from '../core/contextTags.js';
 import * as ui_archivePortal from './archivePortal.js';
 import * as ui_overlay from './overlay.js';
 import * as ui_styles from './styles.js';
@@ -66,7 +67,9 @@ export async function refreshMemoryIngressUi() {
         }
     } catch (error) {
         if (capturedScopeKey && !isCurrent()) return;
-        if (status) status.textContent = `○ 来源账本不可用 · ${core_text.toastText(core_text.safeErrorSummary(error), 120)}`;
+        if (status) status.textContent = capturedScopeKey
+            ? '○ ' + core_text.safeErrorSummary({ code: 'RMT_LEDGER_UNAVAILABLE' })
+            : '○ 请先打开一个单角色聊天，再查看该聊天的来源账本。';
         if (details) details.textContent = '无法读取当前聊天来源。';
         if (historyBooks) historyBooks.textContent = '请先打开单角色聊天。';
     }
@@ -224,10 +227,21 @@ export async function refreshManualModelOptions({ fetchRemote = false } = {}) {
     return models;
 }
 
+function refreshThemeUi() {
+    const settings = core_settings.getPluginSettings();
+    for (const element of document.querySelectorAll('#' + core_constants.SETTINGS_ID + ',#' + core_constants.OVERLAY_ID + ',.rmt-avatar-dialog-pop')) core_theme.applyThemeToElement(element, settings);
+    const panel = document.getElementById(core_constants.SETTINGS_ID);
+    const custom = panel?.querySelector('[data-rmt-theme-custom-panel]');
+    if (custom) custom.hidden = settings.themeMode !== 'custom';
+    const opacity = panel?.querySelector('[data-rmt-theme-opacity]');
+    if (opacity) opacity.textContent = Math.round(settings.themeAlpha * 100) + '%';
+}
+
 export function refreshGenerationSettingsUi() {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
     if (!panel) return;
     const settings = core_settings.getPluginSettings();
+    refreshThemeUi();
     const connectionMode = settings.apiConnectionMode === 'manual' ? 'manual' : 'profile';
     const editorMode = panel.dataset.rmtApiEditor === 'manual' || panel.dataset.rmtApiEditor === 'profile'
         ? panel.dataset.rmtApiEditor
@@ -442,16 +456,24 @@ export function mountSettings() {
           <label class="checkbox_label rmt-settings-check"><input data-rmt-tt-display type="checkbox"> TT 显示模式（勾选＝r32 顶部安全区；不勾选＝全屏）</label>
         </div>
         <div class="rmt-settings-card rmt-theme-box">
-          <div class="rmt-settings-card-head"><span>UI</span><div><b>界面主题</b><small>默认 · 跟随酒馆 · 自定义</small></div></div>
-          <label class="rmt-settings-field"><span>主题</span><select class="text_pole" data-rmt-theme-mode><option value="default">心跳回忆默认</option><option value="host">跟随酒馆</option><option value="custom">自定义</option></select></label>
-          <label class="rmt-settings-field"><span>卡片透明度</span><input data-rmt-theme-alpha type="range" min="0.72" max="1" step="0.01"></label>
+          <details><summary>标签过滤 · 不把思考/变量块发给模型</summary>
+            <p>只过滤送出的副本，不修改聊天。扫描后点选标签，保存后从下一次生成生效。</p>
+            <textarea class="text_pole" data-rmt-tag-draft aria-label="要排除的标签名" placeholder="thinking, updatevariable"></textarea>
+            <div class="rmt-theme-presets"><button type="button" data-rmt-tag-scan>扫描当前聊天</button><button type="button" data-rmt-tag-clear>清空选择</button><button type="button" data-rmt-tag-cancel>撤销编辑</button><button type="button" data-rmt-tag-save>保存过滤</button></div>
+            <div data-rmt-tag-results role="status"></div>
+          </details>
+          <div class="rmt-settings-card-head"><span>UI</span><div><b>界面主题</b><small>即选即看 · 自动保护文字对比度</small></div></div>
+          <label class="rmt-settings-field"><span>外观</span><select class="text_pole" data-rmt-theme-mode><option value="default">日间 · 珍珠白</option><option value="night">夜间 · 星黛蓝</option><option value="host">跟随酒馆美化</option><option value="custom">自定义配色</option></select></label>
+          <label class="rmt-settings-field"><span>卡片不透明度 <output data-rmt-theme-opacity></output></span><input data-rmt-theme-alpha type="range" min="0.72" max="1" step="0.01"></label>
+          <div class="rmt-theme-preview"><b>留在这里的，是两个人的回忆。</b><p>正文会自动保持清晰易读。</p><small>日期 · 来源 · 备注</small></div>
           <div class="rmt-theme-custom-panel" data-rmt-theme-custom-panel>
+            <div class="rmt-theme-presets"><button type="button" data-rmt-theme-preset="day">从日间开始</button><button type="button" data-rmt-theme-preset="night">从夜间开始</button></div>
             <label><span>背景</span><input type="color" data-rmt-theme-color="background"></label>
             <label><span>卡片</span><input type="color" data-rmt-theme-color="surface"></label>
             <label><span>主文字</span><input type="color" data-rmt-theme-color="text"></label>
             <label><span>次文字</span><input type="color" data-rmt-theme-color="muted"></label>
-            <label><span>强调</span><input type="color" data-rmt-theme-color="accent"></label>
-            <label><span>辅助</span><input type="color" data-rmt-theme-color="accentAlt"></label>
+            <label><span>选中与装饰色</span><input type="color" data-rmt-theme-color="accent"></label>
+            <label><span>第二装饰色</span><input type="color" data-rmt-theme-color="accentAlt"></label>
             <label><span>边框</span><input type="color" data-rmt-theme-color="border"></label>
           </div>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-theme-reset>恢复默认配色</button>
@@ -491,6 +513,8 @@ export function mountSettings() {
         </div>
       </div>`;
     mount.appendChild(panel);
+    refreshThemeUi();
+    panel.querySelector('[data-rmt-tag-draft]').value = core_settings.getPluginSettings().excludedContextTags.join(', ');
     panel.addEventListener('change', async event => {
         const target = event.target;
         if (target.matches?.('[data-rmt-memory-file-input]')) {
@@ -606,15 +630,13 @@ export function mountSettings() {
         }
         if (target.matches?.('[data-rmt-theme-mode]')) {
             core_settings.updatePluginSettings({ themeMode: core_constants.THEME_MODES.has(target.value) ? target.value : 'default' });
-            const overlay = document.getElementById(core_constants.OVERLAY_ID);
-            if (overlay) core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings());
+            refreshThemeUi();
             refreshGenerationSettingsUi();
             return;
         }
         if (target.matches?.('[data-rmt-theme-alpha]')) {
             core_settings.updatePluginSettings({ themeAlpha: Math.max(0.72, Math.min(1, Number(target.value) || 0.96)) });
-            const overlay = document.getElementById(core_constants.OVERLAY_ID);
-            if (overlay) core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings());
+            refreshThemeUi();
             return;
         }
         if (target.matches?.('[data-rmt-theme-color]')) {
@@ -622,8 +644,7 @@ export function mountSettings() {
             const settings = core_settings.getPluginSettings();
             if (key && Object.prototype.hasOwnProperty.call(settings.themeCustom || {}, key)) {
                 core_settings.updatePluginSettings({ themeMode: 'custom', themeCustom: core_theme.normalizeThemeCustom({ ...settings.themeCustom, [key]: target.value }) });
-                const overlay = document.getElementById(core_constants.OVERLAY_ID);
-                if (overlay) core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings());
+                refreshThemeUi();
                 refreshGenerationSettingsUi();
             }
             return;
@@ -639,17 +660,54 @@ export function mountSettings() {
         }
         if (event.target.matches?.('[data-rmt-theme-alpha]')) {
             core_settings.updatePluginSettings({ themeAlpha: Math.max(0.72, Math.min(1, Number(event.target.value) || 0.96)) });
-            const overlay = document.getElementById(core_constants.OVERLAY_ID);
-            if (overlay) core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings());
+            refreshThemeUi();
         }
     });
     panel.addEventListener('click', event => {
+        const tagAction = event.target.closest?.('[data-rmt-tag-save],[data-rmt-tag-cancel],[data-rmt-tag-clear],[data-rmt-tag-scan],[data-rmt-tag-name]');
+        if (tagAction) {
+            const draft = panel.querySelector('[data-rmt-tag-draft]');
+            const result = panel.querySelector('[data-rmt-tag-results]');
+            if (tagAction.hasAttribute('data-rmt-tag-save')) {
+                const tags = core_contextTags.normalizeExcludedTags(draft.value);
+                core_settings.updatePluginSettings({ excludedContextTags: tags });
+                draft.value = tags.join(', ');
+                result.textContent = '已保存 ' + tags.length + ' 个标签；下次生成生效。';
+            } else if (tagAction.hasAttribute('data-rmt-tag-cancel')) {
+                draft.value = core_settings.getPluginSettings().excludedContextTags.join(', ');
+                result.textContent = '已撤销未保存编辑。';
+            } else if (tagAction.hasAttribute('data-rmt-tag-clear')) draft.value = '';
+            else if (tagAction.hasAttribute('data-rmt-tag-name')) {
+                const tags = core_contextTags.normalizeExcludedTags(draft.value);
+                const name = tagAction.dataset.rmtTagName;
+                draft.value = core_contextTags.normalizeExcludedTags(tags.includes(name) ? tags.filter(tag => tag !== name) : [...tags, name]).join(', ');
+                tagAction.setAttribute('aria-pressed', String(!tags.includes(name)));
+            } else {
+                const scanned = core_contextTags.scanContextTags(core_context.getContext()?.chat);
+                result.replaceChildren(document.createTextNode('扫描最近最多 500 条 / 256,000 字符。点选后还需保存。'));
+                const selected = new Set(core_contextTags.normalizeExcludedTags(draft.value));
+                for (const tag of scanned.tags) {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.dataset.rmtTagName = tag.name;
+                    button.setAttribute('aria-pressed', String(selected.has(tag.name)));
+                    button.textContent = tag.name + ' · ' + tag.count;
+                    result.appendChild(button);
+                }
+            }
+            return;
+        }
+        const preset = event.target.closest?.('[data-rmt-theme-preset]');
+        if (preset) {
+            core_settings.updatePluginSettings({ themeMode: 'custom', themeCustom: { ...(preset.dataset.rmtThemePreset === 'night' ? core_constants.NIGHT_THEME_PALETTE : core_constants.DEFAULT_THEME_PALETTE) } });
+            refreshGenerationSettingsUi();
+            return;
+        }
         if (event.target.closest?.('.rmt-settings-header')) hydrateSettingsPanel();
         const themeReset = event.target.closest?.('[data-rmt-theme-reset]');
         if (themeReset) {
             core_settings.updatePluginSettings({ themeMode: 'default', themeAlpha: core_constants.DEFAULT_SETTINGS.themeAlpha, themeCustom: { ...core_constants.DEFAULT_THEME_PALETTE } });
-            const overlay = document.getElementById(core_constants.OVERLAY_ID);
-            if (overlay) core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings());
+            refreshThemeUi();
             refreshGenerationSettingsUi();
             globalThis.toastr?.success?.('已恢复心跳回忆默认配色。', '心跳回忆');
             return;

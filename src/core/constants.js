@@ -141,7 +141,12 @@ export const MAX_MEMORY_WORLD_INFO_ENTRIES = 160;
 
 export const MAX_MEMORY_WORLD_INFO_CHARS = 52000;
 
-export const THEME_MODES = new Set(['default', 'host', 'custom']);
+export const THEME_MODES = new Set(['default', 'night', 'host', 'custom']);
+
+export const NIGHT_THEME_PALETTE = Object.freeze({
+    background: '#171d28', surface: '#232c3a', text: '#edf1f8', muted: '#b8c5d6',
+    accent: '#d9a8c1', accentAlt: '#90c9c5', border: '#455269',
+});
 
 export const DEFAULT_THEME_PALETTE = Object.freeze({
     background: '#f7fafc',
@@ -182,6 +187,7 @@ export const MODE = Object.freeze({
     ADV: 'adv',
     ROOM: 'room',
     ITEMS: 'items',
+    CABINET: 'cabinet',
     PHONE: 'phone',
     TRAVEL: 'travel',
     ENDING: 'ending',
@@ -197,6 +203,7 @@ export const MODE_LABEL = Object.freeze({
     [MODE.ADV]: 'ADV EVENT',
     [MODE.ROOM]: '他的房间',
     [MODE.ITEMS]: '他的物品',
+    [MODE.CABINET]: '两个人的陈列柜',
     [MODE.PHONE]: '他的私人终端',
     [MODE.TRAVEL]: '他的出行路线',
     [MODE.ENDING]: '结局与后日谈',
@@ -212,6 +219,7 @@ export const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ADV]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.ROOM]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.ITEMS]: MAX_GENERATION_OUTPUT_TOKENS,
+    [MODE.CABINET]: 5500,
     [MODE.PHONE]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.TRAVEL]: 9000,
     [MODE.ENDING]: MAX_GENERATION_OUTPUT_TOKENS,
@@ -221,9 +229,10 @@ export const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ACHIEVEMENTS]: 6000,
 });
 
-export const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
+export const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.CABINET, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
 
 export const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS, MODE.PHONE]);
+export const CREATIVE_EXPANSION_MODES = Object.freeze([MODE.ADV, MODE.BUTTERFLY, MODE.HEART, MODE.ENDING, MODE.ALBUM, MODE.TRAVEL]);
 
 export const ARCHIVE_OVERVIEW_CACHE_MS = 60000;
 
@@ -287,7 +296,7 @@ export const MANUAL_API_MODEL_LIST_TIMEOUT_MS = 30000;
 
 export const MAX_MANUAL_API_RESPONSE_BYTES = 4000000;
 
-export const SEGMENT_REQUEST_CONCURRENCY = 1;
+export const SEGMENT_REQUEST_CONCURRENCY = 2;
 
 export const ARCHIVE_SNAPSHOT_CACHE_MAX = 4;
 

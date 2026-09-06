@@ -4,6 +4,7 @@ import * as core_constants from '../core/constants.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_text from '../core/text.js';
 import * as modes_album from '../modes/album.js';
+import * as modes_cabinet from '../modes/cabinet.js';
 import * as modes_ending from '../modes/ending.js';
 import * as modes_heart from '../modes/heart.js';
 
@@ -497,6 +498,7 @@ JSON 结构必须严格为：
 - dayparts 是当前时间下合理的生活切片，不是新增主线剧情。四个时段都必须填写。
 - presenceLines 至少 4 句，符合当前关系阶段，但不能替 {{user}} 自动回应。
 - 不得出现前任/前女友痕迹，也不得暗示 {{char}} 与 {{user}} 以外的人存在恋爱、婚姻或家庭关系。`,
+    [core_constants.MODE.CABINET]: (context, memoryBank) => modes_cabinet.cabinetPrompt(context, memoryBank),
     [core_constants.MODE.ITEMS]: (context, memoryBank) => `${promptSafetyBoundary(context, '他的物品 / 储物')}
 本请求只负责房间中 searchable=true 的收纳物内部内容。档案证据会由 CURRENT_ROOM_CONTEXT_JSON 附带的 RELATED_MEMORIES_JSON 提供，不再发送整份档案。
 

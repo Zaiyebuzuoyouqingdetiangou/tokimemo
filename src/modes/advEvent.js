@@ -269,11 +269,12 @@ export function compactAdvExisting(session) {
 }
 
 export function advImportantIndexPrompt(context, memoryBank, previousSession = null, sourceMemoryIds = null) {
+    const revisit = !!previousSession && !core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank).length;
     const archiveBlock = previousSession
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         : generation_prompts.promptArchiveSlice(memoryBank, 48);
     return `${generation_prompts.promptSafetyBoundary(context, 'ADV EVENT 重要事件索引')}
-本请求只挑本次增量档案里【尚未被旧索引覆盖、真正值得做成 ADV EVENT 回放】的新节点。旧事件、旧 ADV 正文和旧 CG 图片由本地原样保留，禁止重写或换标题复述。
+本请求${revisit ? '是用户主动扩写：记忆没有更新，请从同一真实事件中选择不同的具体镜头、时刻或心理侧面，最多 3 个。不是新发生的历史，不得重复旧标题/镜头。允许引用相同 Mxxx 和锚点' : '只挑本次增量档案里尚未被旧索引覆盖的新节点'}。旧事件、旧 ADV 正文和旧 CG 图片由本地原样保留。
 UNTRUSTED_INCREMENTAL_ADV_ARCHIVE_JSON:
 ${archiveBlock}
 EXISTING_ADV_INDEX_JSON:
@@ -283,8 +284,8 @@ ${JSON.stringify(compactAdvExisting(previousSession), null, 2)}
 {"title":"回想：ADV EVENT","events":[{"id":"EV01","title":"短标题","date":"YYYY/MM/DD 或 MM/DD","cgDesc":"1到2句镜头语言+画面元素","sourceMemoryIds":["M001"],"sourceMemoryAnchor":"从所引用记忆 anchors/title 原样复制","visualSeed":["元素1","元素2","元素3","元素4"],"imagePrompt":"纯视觉提示"}]}
 
 要求：
-- 初次生成优先 3～6 个重要节点；增量更新只返回 0～6 个由 incrementalMemoryIds 支撑的新节点，没有新增重要事件就返回空 events。
-- 必须避开 EXISTING_ADV_INDEX_JSON 已覆盖的标题、锚点和 sourceMemoryIds 组合；禁止返回旧节点。
+- 初次生成优先 3～6 个重要节点；${revisit ? '同一记忆扩写返回 0～3 个真实事件的新镜头，不要求新增历史事件。' : '增量更新只返回 0～6 个由 incrementalMemoryIds 支撑的新节点，没有新增重要事件就返回空 events。'}
+- ${revisit ? '标题及镜头必须与旧内容不同；真实锚点和来源可重复，不能捏造新事件。' : '必须避开旧标题、锚点和来源组合；禁止返回旧节点。'}
 - 每条必须有真实 sourceMemoryIds + sourceMemoryAnchor；visualSeed 至少 4 个具体元素。
 - imagePrompt 只写可见画面，不包含对白、记忆/世界书原文、ID、URL、HTML 或脚本。
 - 不要输出 adv 正文。只输出 JSON。`;
@@ -292,7 +293,7 @@ ${JSON.stringify(compactAdvExisting(previousSession), null, 2)}
 
 export function advEvidenceKey(item) {
     const ids = core_text.cleanArray(item?.sourceMemoryIds, 8, 40).sort().join(',');
-    return `${ids}|${core_text.normalizeText(item?.sourceMemoryAnchor, 120).toLowerCase()}`;
+    return `${ids}|${core_text.normalizeText(item?.sourceMemoryAnchor, 120).toLowerCase()}|${item?.expansionRound ? core_incremental.normalizedContentKey(item.title + ' ' + item.cgDesc, 600) : ''}`;
 }
 
 export function mergeAdvIncremental(previous, fresh, memoryBank) {
@@ -328,16 +329,26 @@ export function mergeAdvIncremental(previous, fresh, memoryBank) {
 
 export async function generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, options = {}) {
     const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ADV, { context, chatId: expectedChatId, memoryBank, clone: true });
-    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+    const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
     const fresh = await generation_client.requestValidatedSegment(
         advImportantIndexPrompt(context, memoryBank, previous, sourceMemoryIds),
         previous ? 'ADV EVENT · 正在从新增档案挑选新节点…' : 'ADV EVENT · 正在挑选重要节点…',
         { maxTokens: 5500, temperature: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ADV, background: true },
         raw => normalizeEventList(raw, memoryBank, { allowPartial: !!previous, sourceMemoryIds: previous ? sourceMemoryIds : null }),
     );
+    const revisit = previous && !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
+    if (revisit) {
+        const round = (Number(previous?.generationMeta?.expansionRound) || 0) + 1;
+        const titles = new Set(previous.events.map(item => core_text.normalizeText(item.title, 120).toLowerCase()));
+        const captions = new Set(previous.events.map(item => core_text.normalizeText(item.cgDesc, 500)));
+        fresh.events = fresh.events.filter(item => !titles.has(item.title.toLowerCase()) && !captions.has(core_text.normalizeText(item.cgDesc, 500)))
+            .slice(0, 3).map(item => ({ ...item, expansionRound: round, derivedLabel: '同一记忆 · 新镜头' }));
+    }
     const merged = mergeAdvIncremental(previous, fresh, memoryBank);
     const added = Math.max(0, merged.events.length - (previous?.events?.length || 0));
-    return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
+    core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
+    if (revisit) merged.generationMeta.expansionRound = (Number(previous?.generationMeta?.expansionRound) || 0) + 1;
+    return merged;
 }
 
 async function prepareAdvSubtaskRuntime(taskPart) {

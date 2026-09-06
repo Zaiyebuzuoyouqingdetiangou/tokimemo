@@ -5,6 +5,7 @@ import * as core_constants from './constants.js';
 import * as core_evidence from './evidence.js';
 import { state as runtimeState } from './state.js';
 import * as core_text from './text.js';
+import * as core_contextTags from './contextTags.js';
 
 export function getContext() {
     const context = globalThis.SillyTavern?.getContext?.();
@@ -120,11 +121,11 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
         usedChars: full.selectedChars,
         truncated: full.truncated,
         coverageMode: full.truncated ? 'evenly-sampled-full-window' : 'full-window',
-        messages: full.selected,
+        messages: full.selected.map(item => ({ ...item, text: core_contextTags.stripExcludedTags(item.text, core_contextTags.excludedTagsForContext(context)) })),
         fingerprint: String(fingerprint >>> 0),
         prefixCount,
         prefixFingerprint: prefixCount > 0 && totalMessages >= prefixCount ? String(prefixFingerprint >>> 0) : '',
-        incrementalMessages: incremental.selected,
+        incrementalMessages: incremental.selected.map(item => ({ ...item, text: core_contextTags.stripExcludedTags(item.text, core_contextTags.excludedTagsForContext(context)) })),
         incrementalUsedMessages: incremental.selected.length,
         incrementalUsedChars: incremental.selectedChars,
         incrementalTruncated: incremental.truncated,

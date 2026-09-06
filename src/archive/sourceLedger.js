@@ -245,6 +245,7 @@ function openDatabase() {
         };
         request.onsuccess = () => {
             const db = request.result;
+            db.onclose = () => { databasePromise = null; };
             db.onversionchange = () => {
                 try { db.close(); } catch {}
                 databasePromise = null;
@@ -253,6 +254,11 @@ function openDatabase() {
         };
         request.onerror = () => { databasePromise = null; reject(request.error || new Error('无法打开记忆来源账本。')); };
         request.onblocked = () => { databasePromise = null; reject(new Error('记忆来源账本被旧页面占用。')); };
+    }).catch(error => {
+        // A synchronous open() exception rejects the executor too. Never retain
+        // that rejected promise for the lifetime of the page.
+        databasePromise = null;
+        throw error;
     });
     return databasePromise;
 }
