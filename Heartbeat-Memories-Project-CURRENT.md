@@ -5,15 +5,24 @@
 ## 当前候选
 
 - 产品名：心跳回忆
-- version：`0.8.46`
-- BUILD / runtime cache-bust：`0.8.46-feedback-r50.0`
+- version：`0.8.47`
+- BUILD / runtime cache-bust：`0.8.47-polish-r51.0`
 - 正式档案 key：`heartbeatMemoriesArchiveV3`
 - 派生缓存 key：`heartbeatMemoriesTheaterV3`
 - 压缩格式：`gzip-base64-v1`
 - Calendar / Phone / Room / Travel session：v6 / v4 / v3 / v4
 - SillyTavern 最低版本：`1.18.0`；一键配置入口明确标注 `1.1.18`
 
-V3 metadata key 为旧档案兼容边界，不随发布版本改名。浏览器加载 r50 runtime 由 manifest 与 index 中一致的 BUILD query 隔离，不能继续命中旧 bundle。
+V3 metadata key 为旧档案兼容边界，不随发布版本改名。浏览器加载 r51 runtime 由 manifest 与 index 中一致的 BUILD query 隔离，不能继续命中旧 bundle。
+
+## r51 反馈修复契约
+
+- Room 的独立字段分别检查既往历史，字段内部跨句检查保留；normalizer、四时段重开、最终物件显示均需一致。
+- Butterfly 初始、增量、单节点提示引用同一份本地完整性契约。只回传固定错误分类，不能把异常 message 或来源正文放入校验反馈；原完整性、唯一性、关系与来源规则不减。
+- 对话生成与旧缓存显示使用同一保守拆分器。动作独立，明确 user/NPC 不归入 char；未知归属显示中性旁白，不改缓存原文。无法从旧内容恢复的信息不得猜测。
+- 脚本使用统一的 120 行 / 50400 字符上限，拆分后再次规范化不得按旧输入行数裁切。新生成超限拒绝，旧缓存超限显示明确限额说明并保留原文。
+- 日间保留白色卡片与柔和色彩，正文正常字重，主要卡片留白。跟随宿主仍仅读取标准颜色；不运行生成代码。
+- 用户指定逻辑任务上限改为 10；provider 请求仍最多 2，并保持已有串行提交与生命周期围栏。
 
 ## r50 用户反馈新增契约
 
@@ -23,7 +32,7 @@ V3 metadata key 为旧档案兼容边界，不随发布版本改名。浏览器�
 - 主题含 default（日间）、night（夜间）、host（标准计算背景/文字）、custom。所有结构卡片共享主题；场景插画保留本地艺术配色。禁止读取第三方美化插件私有变量/状态或执行模型样式。
 - 输入标签过滤扫描最近 500 条、最多 256000 字符；最多保存 32 个排除标签。支持嵌套、编码和未闭合块；只处理模型输入副本，不改持久化原文、fingerprint 或扫描范围，不执行 DOM。
 - Room 校验失败允许原有上限内修复，固定安全原因码不回显私密源文。Butterfly 局部修复不能降低分歧维度、唯一性或关系安全。
-- 分段并发上限 2，仍受 provider 全局 2 / 逻辑任务 5 限制。只复用同请求重试的受控上下文，不建立跨角色全局源缓存。
+- 分段并发上限 2，仍受 provider 全局 2 / 逻辑任务 10 限制。只复用同请求重试的受控上下文，不建立跨角色全局源缓存。
 
 ## 数据权威与世界线
 
@@ -96,7 +105,7 @@ V3 metadata key 为旧档案兼容边界，不随发布版本改名。浏览器�
 
 - lazy bootstrap 保持：普通启动不扫描长聊天、不读世界书、不枚举连接、不打开 IndexedDB、不解压缓存、不调用模型。
 - 普通 MESSAGE 事件不扫描完整历史、不重建角色资料、不恢复其他档案、不发 provider 请求。
-- provider 并发不超过 2，逻辑主任务不超过 5；所有请求有 timeout、abort、epoch 与 stale-result discard。
+- provider 并发不超过 2，逻辑主任务不超过 10；所有请求有 timeout、abort、epoch 与 stale-result discard。
 - 320 / 375 / 390 / 430 px 不应横向溢出，主要触摸目标适合 iPhone；界面不堆玩法说明，只保留必要标题、内容、状态、操作、简短错误与风险确认。
 
 ## 发布门槛

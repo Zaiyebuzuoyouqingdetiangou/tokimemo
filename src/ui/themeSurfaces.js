@@ -6,7 +6,7 @@ export function structuralThemeCss(root) {
         'memory-gate','memory-settings-status','task-banner','external-memory-row','archive-readonly-control','archive-overview-item','archive-group-entry',
         'settings-header','settings-content','settings-card','api-source-card','api-source-panel','api-status','performance-diagnostic-output',
         'avatar-dialog-card','avatar-dialog-bubble','memory-wi-picker-card','memory-wi-book','memory-wi-entry','loading-card',
-        'heart-summary','heart-current-line','heart-greeting-group','heart-drama-card','heart-strip-card','heart-single-drama','heart-season-stage','heart-setting','heart-line','heart-script-bubble','heart-panel','heart-panel-line',
+        'heart-summary','heart-current-line','heart-greeting-group','heart-drama-card','heart-strip-card','heart-single-drama','heart-season-stage','heart-setting','heart-script-bubble','heart-panel','heart-panel-line',
         'ending-summary','ending-route','ending-detail','ending-confession','ending-epilogue','confession-card','ending-confession-stage','ending-confession-bubble','achievement-card',
         'calendar-hero','calendar-paper','calendar-month-head','calendar-day','calendar-pending','calendar-todo','calendar-sticky-panel','calendar-master-todo','calendar-special-notes','calendar-mood-section','calendar-sticky','calendar-mood-note',
         'manage-hero','manage-row','profile-fact','profile-discovery','profile-worldline-note','relation-detail','relation-detail-head',
@@ -16,16 +16,39 @@ export function structuralThemeCss(root) {
     const surfaces = surface.map(name => root + ' .rmt-' + name).join(',');
     const art = ':not(.rmt-crt,.rmt-crt *,.rmt-room-scene,.rmt-room-scene *,.rmt-phone-screen,.rmt-phone-screen *,.rmt-travel-artifact,.rmt-travel-artifact *,.rmt-ending-easter-layer,.rmt-ending-easter-layer *,.rmt-calendar-holiday-art,.rmt-calendar-holiday-art *,.rmt-firefly-field,.rmt-firefly-field *)';
     return `
-${root}{--gs-ink:var(--rmt-theme-text);--gs-muted:var(--rmt-theme-muted);--gs-paper:var(--rmt-theme-surface-solid);--gs-paper-blue:var(--rmt-theme-surface-solid);--gs-line:var(--rmt-theme-border);color:var(--rmt-theme-text)!important;-webkit-text-fill-color:var(--rmt-theme-text)!important;font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif!important;font-size:15px!important;line-height:1.6;text-shadow:none!important}
+${root}{--gs-ink:var(--rmt-theme-text);--gs-muted:var(--rmt-theme-muted);--gs-paper:var(--rmt-theme-surface-solid);--gs-paper-blue:var(--rmt-theme-surface-solid);--gs-line:var(--rmt-theme-border);color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important;font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif!important;font-size:15px!important;font-weight:400!important;line-height:1.6;text-shadow:none!important;filter:none!important;opacity:1!important}
 ${root} .rmt-shell{--gs-ink:var(--rmt-theme-text);--gs-muted:var(--rmt-theme-muted);--gs-paper:var(--rmt-theme-surface-solid);--gs-paper-blue:var(--rmt-theme-surface-solid);--gs-line:var(--rmt-theme-border)}
 ${surfaces}{background:var(--rmt-theme-surface-alpha)!important;color:var(--rmt-theme-text)!important;border-color:var(--rmt-theme-border)!important;opacity:1!important;text-shadow:none!important;box-shadow:0 4px 18px #0000000a}
 ${root} :is(.rmt-album,.rmt-adv,.rmt-room-view,.rmt-travel,.rmt-heart-drama-layout,.rmt-archive-room){background:var(--rmt-theme-bg)!important}
-${root} :is(p,b,strong,small,span,label,blockquote,h1,h2,h3,summary,legend,div[class^="rmt-"],div[class*=" rmt-"])${art}{color:var(--rmt-theme-text)!important;-webkit-text-fill-color:var(--rmt-theme-text)!important;text-shadow:none!important}
+${root} :is(p,b,strong,small,span,label,blockquote,h1,h2,h3,summary,legend,div[class^="rmt-"],div[class*=" rmt-"])${art}{color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important;text-shadow:none!important;font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif!important;font-weight:400!important;letter-spacing:normal;overflow-wrap:anywhere}
+${root} :is(h1,h2,h3,b,strong,.rmt-topbar-title)${art}{font-weight:600!important}
+${root} :is(h1,h2,h3)${art}{line-height:1.4!important;margin-block:12px 16px}
+${root} :is(h1,h2)${art}{font-size:22px!important}
+${root} h3${art}{font-size:18px!important}
+${root} :is(.rmt-portal-title,.rmt-calendar-quick-copy>b){font-size:18px!important;font-weight:600!important}
+${root} .rmt-archive-card{padding:20px!important}
 ${root} :is(p,blockquote,.rmt-adv-reader,.rmt-avatar-dialog-bubble,.rmt-heart-script-bubble)${art}{font-size:16px!important;line-height:1.8!important;font-weight:400!important;opacity:1!important}
 ${root} :is(small,.rmt-api-note,.rmt-avatar-dialog-note,.rmt-settings-field,.rmt-settings-check)${art}{font-size:13px!important;color:var(--rmt-theme-muted)!important;-webkit-text-fill-color:var(--rmt-theme-muted)!important;opacity:1!important}
-${root} :is(button,select,input,textarea,.menu_button)${art}{font-family:inherit!important;font-size:14px!important;line-height:1.4!important;min-height:44px;max-width:100%;color:var(--rmt-theme-text)!important;-webkit-text-fill-color:var(--rmt-theme-text)!important;background:var(--rmt-theme-surface-solid)!important;border-color:var(--rmt-theme-border)!important;opacity:1!important;text-shadow:none!important;writing-mode:horizontal-tb!important}
+${root} :is(button,select,input,textarea,.menu_button)${art}{font-family:inherit!important;font-size:14px!important;font-weight:500!important;line-height:1.4!important;min-height:44px;max-width:100%;color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important;background:var(--rmt-theme-surface-solid)!important;border-color:var(--rmt-theme-border)!important;opacity:1!important;text-shadow:none!important;writing-mode:horizontal-tb!important}
 ${root} :is(button,summary):focus-visible{outline:2px solid var(--rmt-theme-accent-ink)!important;outline-offset:3px}
-${root} :is(button.active,button.is-active,[aria-pressed="true"],.rmt-archive-keywords span,.rmt-calendar-tag){background:var(--rmt-theme-surface-solid)!important;border-color:var(--rmt-theme-accent)!important;box-shadow:inset 0 0 0 2px var(--rmt-theme-accent)}
+${root} :is(button.active,button.is-active,[aria-pressed="true"]){background:var(--rmt-theme-surface-solid)!important;border-color:var(--rmt-theme-accent)!important;box-shadow:0 0 0 1px var(--rmt-theme-accent)}
+${root} :is(.rmt-archive-keywords span,.rmt-calendar-tag){background:var(--rmt-theme-surface-solid)!important;border:1px solid var(--rmt-theme-border)!important;box-shadow:none!important;padding:5px 11px;font-size:13px!important}
+${root} :is(.rmt-archive-portal,.rmt-character-card,.rmt-calendar-quick,.rmt-room-card){background:linear-gradient(165deg,var(--rmt-theme-surface-alpha),color-mix(in srgb,var(--rmt-theme-surface-alpha) 97%,var(--rmt-theme-accent-alt)))!important;box-shadow:0 6px 20px #34546b0a}
+${root} .rmt-btn{border-width:1px!important;border-radius:999px!important;box-shadow:0 3px 10px #34546b0a;padding:10px 16px!important}
+${root} :is(.rmt-portal-avatar,.rmt-calendar-quick-icon),${root} :is(.rmt-portal-avatar,.rmt-calendar-quick-icon)>i{color:#fff!important;-webkit-text-fill-color:currentColor!important}
+${root} .rmt-portal-ready-dot{color:var(--rmt-theme-accent-ink)!important;background:var(--rmt-theme-surface-solid)!important}
+${root} :is(.rmt-relations-mode,.rmt-heart){padding:20px!important;max-width:1100px;margin-inline:auto;min-width:0}
+${root} :is(.rmt-relations-head,.rmt-profile-discoveries,.rmt-profile-discovery,.rmt-profile-worldline-note){padding:20px!important}
+${root} .rmt-profile-discovery-empty{font-size:13px!important;line-height:1.7!important}
+${root} .rmt-heart-line{background:transparent!important;box-shadow:none!important;gap:12px;margin:18px 0}
+${root} .rmt-heart-line>div{background:var(--rmt-theme-surface-solid)!important;border:1px solid var(--rmt-theme-border);border-radius:6px 20px 20px 20px;padding:14px 18px!important;min-width:0}
+${root} .rmt-heart-line.user>div{border-radius:20px 6px 20px 20px;border-color:var(--rmt-theme-accent-alt)}
+${root} .rmt-heart-line p{margin:6px 0!important}
+${root} .rmt-heart-drama-dot{position:relative;width:44px!important;height:44px!important;min-width:44px;min-height:44px;border:0!important;box-shadow:none!important;background:transparent!important;padding:0!important}
+${root} .rmt-heart-drama-dot:before{content:"";position:absolute;inset:18px;border-radius:50%;background:var(--rmt-theme-border)}
+${root} .rmt-heart-drama-dot.active:before{background:var(--rmt-theme-accent);box-shadow:0 0 0 4px var(--rmt-theme-soft)}
+${root} .rmt-heart-narration{font-size:15px!important;font-weight:400!important;font-style:normal;line-height:1.8!important;padding:12px 16px!important;text-align:left;color:var(--rmt-theme-muted)!important}
+@media(max-width:700px){${root} :is(.rmt-relations-mode,.rmt-heart){padding:16px!important}${root} :is(.rmt-relations-head,.rmt-profile-discoveries,.rmt-profile-discovery,.rmt-profile-worldline-note){padding:16px!important}}
 ${root} :is(b,strong,span,label)${art}{font-size:max(13px,1em)}
 ${root} :is(.rmt-api-status,.rmt-progress,.rmt-archive-meta,.rmt-api-note){font-size:13px!important}
 ${root} :is(input:not([type="checkbox"]):not([type="color"]):not([type="range"]),textarea,select){font-size:16px!important}
@@ -36,9 +59,6 @@ ${root} .rmt-theme-custom-panel{grid-template-columns:repeat(2,minmax(0,1fr))}
 ${root} .rmt-theme-custom-panel label{padding:10px;background:var(--rmt-theme-surface-solid);border-color:var(--rmt-theme-border)}
 ${root} .rmt-theme-custom-panel input[type="color"]{width:100%;height:44px;min-height:44px;padding:3px;border:1px solid var(--rmt-theme-border)}
 ${root} .rmt-theme-presets{display:flex;gap:8px;flex-wrap:wrap}
-${root} .rmt-theme-preview{padding:16px;border:1px solid var(--rmt-theme-border);border-radius:14px}
-${root} .rmt-theme-preview p{margin:6px 0}
-${root} .rmt-theme-preview small{display:block}
 ${root} .rmt-task-banner{position:relative}
 ${root} .rmt-task-banner:before{opacity:.15}
 ${root} :is(.rmt-settings-card-head small,.rmt-archive-kicker){letter-spacing:.04em}

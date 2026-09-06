@@ -465,7 +465,6 @@ export function mountSettings() {
           <div class="rmt-settings-card-head"><span>UI</span><div><b>界面主题</b><small>即选即看 · 自动保护文字对比度</small></div></div>
           <label class="rmt-settings-field"><span>外观</span><select class="text_pole" data-rmt-theme-mode><option value="default">日间 · 珍珠白</option><option value="night">夜间 · 星黛蓝</option><option value="host">跟随酒馆美化</option><option value="custom">自定义配色</option></select></label>
           <label class="rmt-settings-field"><span>卡片不透明度 <output data-rmt-theme-opacity></output></span><input data-rmt-theme-alpha type="range" min="0.72" max="1" step="0.01"></label>
-          <div class="rmt-theme-preview"><b>留在这里的，是两个人的回忆。</b><p>正文会自动保持清晰易读。</p><small>日期 · 来源 · 备注</small></div>
           <div class="rmt-theme-custom-panel" data-rmt-theme-custom-panel>
             <div class="rmt-theme-presets"><button type="button" data-rmt-theme-preset="day">从日间开始</button><button type="button" data-rmt-theme-preset="night">从夜间开始</button></div>
             <label><span>背景</span><input type="color" data-rmt-theme-color="background"></label>
@@ -509,7 +508,6 @@ export function mountSettings() {
             <div class="rmt-performance-diagnostic-head"><b>诊断结果</b><button type="button" class="menu_button rmt-performance-diagnostic-close" data-rmt-performance-diagnostic-close>关闭诊断</button></div>
             <pre class="rmt-performance-diagnostic-output" data-rmt-performance-diagnostic-output></pre>
           </div>
-          <div class="rmt-api-note">当前聊天窗口一份独立档案。普通更新只追加上次归档后的新内容并保留已生成 ADV EVENT / 房间 / ENDING；需要从头重整时请进入档案后明确选择“完全重建档案”。性能诊断只读取缓存 manifest/字符串长度，不会解压缓存或遍历聊天正文。</div>
         </div>
       </div>`;
     mount.appendChild(panel);

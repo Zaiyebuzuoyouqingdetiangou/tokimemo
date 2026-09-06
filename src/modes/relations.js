@@ -726,7 +726,7 @@ export function relationGardenHtml({ characterName, avatarUrl = '', sharedRelati
         ? core_text.normalizeText(dynamic?.npcPerspective || base?.npcPerspective, 900)
         : '';
     const npcPerspectiveDetail = selected && !selected.isUser
-        ? `<div class="rmt-relation-layer-row npc-perspective"><strong>NPC视角</strong><span>${npcPerspective ? core_text.esc(npcPerspective) : '尚未生成'}</span><small>${npcPerspective ? '动态世界线视角优先于固有设定；内容只是证据边界内的视角化演绎。' : '这是旧缓存条目；刷新本世界线关系或重新读取固定设定后可查看。'}</small></div>`
+        ? `<div class="rmt-relation-layer-row npc-perspective"><strong>NPC视角</strong><span>${npcPerspective ? core_text.esc(npcPerspective) : '尚未生成'}</span>${npcPerspective ? '' : '<small>刷新本世界线关系或重新读取固定设定后可查看。</small>'}</div>`
         : '';
     const detail = selected ? `<article class="rmt-relation-detail">
       <div class="rmt-relation-detail-head"><b>${core_text.esc(selected.name || '{{user}}')}</b>${selected.isUser ? '<span>USER</span>' : ''}</div>

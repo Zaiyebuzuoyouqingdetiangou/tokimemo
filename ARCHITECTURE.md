@@ -1,4 +1,8 @@
-# Heartbeat Memories r35–r50 Architecture
+# Heartbeat Memories r35–r51 Architecture
+
+## r51 corrective boundaries
+
+Room checks separate schema fields independently without weakening intra-field history rules. Butterfly's code-owned contract supplies limits and safe feedback across all generation entry points. A pure dialogue normalizer is shared by production and legacy renderers; unknown attribution never defaults to char. Theme refinements live in the existing structural theme layer. Logical task admission is 10, with provider permits still 2 and persistence locks unchanged.
 
 ## r50 feedback additions
 

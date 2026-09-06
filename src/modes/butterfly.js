@@ -1,3 +1,4 @@
+import * as core_butterflyContract from '../core/butterflyContract.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_constants from '../core/constants.js';
@@ -88,16 +89,16 @@ export function butterflyFirstPersonCount(value) {
 export function normalizeButterflyWorldSpec(node) {
     const source = worldSource(node);
     const primaryAxis = normalizedPrimaryAxis(node?.primaryAxis || source?.primaryAxis || source?.axis);
-    if (!PRIMARY_AXIS_SET.has(primaryAxis)) throw new Error(`平行分歧缺少有效 primaryAxis：${BUTTERFLY_PRIMARY_AXES.join('/')}。`);
+    if (!PRIMARY_AXIS_SET.has(primaryAxis)) throw core_butterflyContract.butterflyValidationError('worldSpec');
     const worldSpec = { primaryAxis };
     for (const field of WORLD_FIELDS) {
         const text = worldField(source, WORLD_FIELD_ALIASES[field]);
         const compact = text.replace(/\s+/g, '');
-        if (compact.length < 2 || WORLD_PLACEHOLDER_RE.test(compact)) throw new Error(`平行分歧的 worldSpec.${field} 缺少具体内容。`);
+        if (compact.length < 2 || WORLD_PLACEHOLDER_RE.test(compact)) throw core_butterflyContract.butterflyValidationError('worldSpec');
         worldSpec[field] = text;
     }
     const thirdPartyRomance = source?.thirdPartyRomance ?? node?.thirdPartyRomance;
-    if (thirdPartyRomance !== false) throw new Error('平行分歧必须明确 thirdPartyRomance=false。');
+    if (thirdPartyRomance !== false) throw core_butterflyContract.butterflyValidationError('worldSpec');
     worldSpec.thirdPartyRomance = false;
     return worldSpec;
 }
@@ -161,8 +162,8 @@ export function assertButterflyColdSystemNote(value, label = 'SYSTEM NOTE') {
         /分析/, /结论/, /变量/, /(?:概率|置信)/, /(?:算法|模型)/,
         /(?:主体|样本)/, /(?:路径|时间线)/, /(?:收敛|偏差|阈值)/, /(?:判定|分类)/, /(?:结局|结果|终局)/,
     ].filter(pattern => pattern.test(text)).length;
-    if (butterflyHanCount(text) < 30 || cueCount < 3 || !/(?:最终(?:判定|结局|结果)|终局(?:判定|结果)|判定(?:结果|结局))/.test(text)) {
-        throw new Error(`${label}必须是不少于 30 个汉字的冷酷中文算法分析，并给出最终判定。`);
+    if (butterflyHanCount(text) < core_butterflyContract.BUTTERFLY_LIMITS.systemHan || cueCount < 3 || !/(?:最终(?:判定|结局|结果)|终局(?:判定|结果)|判定(?:结果|结局))/.test(text)) {
+        throw core_butterflyContract.butterflyValidationError('systemNote');
     }
     return text;
 }
@@ -173,18 +174,18 @@ function normalizeNarrative(node, context, options = {}) {
     const intervention = core_text.normalizeText(node?.intervention, 12000);
     const systemNote = assertButterflyColdSystemNote(node?.systemNote, `${options.label || label || '观测节点'} SYSTEM NOTE`);
     if (!label || core_text.isPlaceholderText(label)) throw new Error(`${options.label || '观测节点'}缺少有效标题。`);
-    const minimumHan = Math.max(1, Number(options.minimumHan) || 100);
-    const minimumFirstPerson = Math.max(1, Number(options.minimumFirstPerson) || 3);
+    const minimumHan = Math.max(1, Number(options.minimumHan) || core_butterflyContract.BUTTERFLY_LIMITS.monologueHan);
+    const minimumFirstPerson = Math.max(1, Number(options.minimumFirstPerson) || core_butterflyContract.BUTTERFLY_LIMITS.monologueFirstPerson);
     if (butterflyHanCount(monologue) < minimumHan || butterflyFirstPersonCount(monologue) < minimumFirstPerson) {
-        throw new Error(`${options.label || label}的第一人称独白不足：至少 ${minimumHan} 个汉字且需有清晰的“我”视角。`);
+        throw core_butterflyContract.butterflyValidationError('monologue');
     }
     if (options.requireInterventionContrast !== false) {
-        if (butterflyHanCount(intervention) < 40 || butterflyFirstPersonCount(intervention) < 1
+        if (butterflyHanCount(intervention) < core_butterflyContract.BUTTERFLY_LIMITS.interventionHan || butterflyFirstPersonCount(intervention) < 1
             || !INTERVENTION_CONTRAST_RE.test(intervention) || !INTERVENTION_REFLECTION_RE.test(intervention)) {
-            throw new Error(`${options.label || label}的现世回应必须以当前 {{char}} 第一人称对照“那个我”并完成自省。`);
+            throw core_butterflyContract.butterflyValidationError('intervention');
         }
     } else if (!intervention) {
-        throw new Error(`${options.label || label}缺少现世回应。`);
+        throw core_butterflyContract.butterflyValidationError('intervention');
     }
     for (const [field, value] of Object.entries({ label, monologue, intervention, systemNote })) {
         assertButterflyRelationshipSafety(value, context, `${options.label || label} ${field}`);
@@ -197,8 +198,8 @@ export function normalizeButterflyBranch(node, index, memoryBank, context = {}, 
     const worldSpec = normalizeButterflyWorldSpec(node);
     const narrative = normalizeNarrative(node, context, {
         label: options.label || `平行分歧 ${serial}`,
-        minimumHan: 100,
-        minimumFirstPerson: 3,
+        minimumHan: core_butterflyContract.BUTTERFLY_LIMITS.monologueHan,
+        minimumFirstPerson: core_butterflyContract.BUTTERFLY_LIMITS.monologueFirstPerson,
         requireInterventionContrast: true,
     });
     for (const [field, value] of Object.entries(worldSpec)) {
@@ -240,17 +241,17 @@ export function normalizeButterflyOmega(node, context = {}) {
     const monologue = core_text.normalizeText(node?.monologue, 12000);
     const intervention = core_text.normalizeText(node?.intervention, 12000);
     const systemNote = assertButterflyColdSystemNote(node?.systemNote, '观测点 Ω SYSTEM NOTE');
-    if (!label || !/(?:观测点\s*Ω|TRUE\s*ENDING)/i.test(label)) throw new Error('最后一项必须明确标记为观测点 Ω / TRUE ENDING。');
-    if (monologue) throw new Error('观测点 Ω 不是平行体，monologue 必须严格为空。');
+    if (!label || !/(?:观测点\s*Ω|TRUE\s*ENDING)/i.test(label)) throw core_butterflyContract.butterflyValidationError('omega');
+    if (monologue) throw core_butterflyContract.butterflyValidationError('omega');
     const axisCueCount = OMEGA_AXIS_CUES.filter(pattern => pattern.test(intervention)).length;
-    if (butterflyHanCount(intervention) < 160 || butterflyFirstPersonCount(intervention) < 4
+    if (butterflyHanCount(intervention) < core_butterflyContract.BUTTERFLY_LIMITS.omegaHan || butterflyFirstPersonCount(intervention) < core_butterflyContract.BUTTERFLY_LIMITS.omegaFirstPerson
         || !omegaUserReferencePattern(context).test(intervention) || axisCueCount < 3
         || !/(?:命运|奇迹|不可能)/.test(intervention)
         || !/(?:唯一(?:解|答案|选择|路径|可能)|最优解|最终选择|选择(?:了)?你|找到(?:了)?你|仍然会?(?:遇见|找到|选择)你)/.test(intervention)) {
-        throw new Error('观测点 Ω 必须以现世 {{char}} 第一人称综合至少 3 类命运差异，不少于 160 个汉字，并表达穿越不可能仍找到/选择 {{user}} 的唯一解。');
+        throw core_butterflyContract.butterflyValidationError('omega');
     }
     if (!/(?:TRUE\s*ENDING|真结局|唯一解|最优解|唯一(?:答案|路径|解法)|奇迹|命运)/i.test(systemNote)) {
-        throw new Error('观测点 Ω SYSTEM NOTE 必须给出命运/奇迹/唯一解的终局判定。');
+        throw core_butterflyContract.butterflyValidationError('omega');
     }
     for (const [field, value] of Object.entries({ label, intervention, systemNote })) {
         assertButterflyRelationshipSafety(value, context, `观测点 Ω ${field}`);
@@ -269,7 +270,7 @@ function isOmegaCandidate(node) {
 
 function normalizedMainNode(node, memoryBank, context) {
     const narrative = normalizeNarrative(node, context, {
-        label: '主时间线', minimumHan: 100, minimumFirstPerson: 3, requireInterventionContrast: false,
+        label: '主时间线', minimumHan: core_butterflyContract.BUTTERFLY_LIMITS.monologueHan, minimumFirstPerson: core_butterflyContract.BUTTERFLY_LIMITS.monologueFirstPerson, requireInterventionContrast: false,
     });
     const reference = core_evidence.normalizeMemoryReference(
         node?.sourceMemoryIds, node?.sourceMemoryAnchor,
@@ -358,7 +359,7 @@ export async function generateButterflyWithRepair(context, memoryBank, origin, t
             }
             if (index < lastIndex && isOmegaCandidate(raw.nodes[index])) throw new Error('位置错误');
             if (index === lastIndex && !isOmegaCandidate(raw.nodes[index])) throw new Error('缺少 Ω');
-        } catch { slots.push({ index }); }
+        } catch (error) { slots.push({ index, issue: core_butterflyContract.butterflyValidationFeedback(error) || '节点身份、证据、关系或唯一性未通过；按原契约重写此节点。' }); }
     }
     const missingAxes = BUTTERFLY_PRIMARY_AXES.filter(axis => !axes.has(axis));
     const seenAxes = new Set();
@@ -395,6 +396,7 @@ export function butterflyIncrementPrompt(context, memoryBank, previous, sourceMe
         worldSpec: looseWorldSpec(item),
     }));
     return `${generation_prompts.promptSafetyBoundary(context, '蝴蝶效应 / 增量分歧')}
+${core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
 旧终端节点由本地原样保留。本请求只根据新增档案生成 1～3 个尚未出现的平行分歧，并给出看完全部旧分歧和新分歧后的新观测点 Ω；禁止改写或换措辞复述旧节点。
 UNTRUSTED_INCREMENTAL_TIMELINE_JSON:
 ${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}

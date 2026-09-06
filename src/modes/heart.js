@@ -4,6 +4,7 @@ import * as archive_library from '../archive/library.js';
 import * as archive_repository from '../archive/repository.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
+import * as core_dialogue from '../core/dialogue.js';
 import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
@@ -47,6 +48,7 @@ export function normalizeHeartCore(data, memoryBank) {
 export function heartCorePrompt(context, memoryBank) {
     return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 时期对话')}
 本请求只生成【关系锚点 + 各种时期/时段的角色对话 + 特别日】。春夏秋冬 Drama 和日常一格都在各自入口单独生成。
+greetings 和 specialDays.line 是 {{char}} 直接对 {{user}} 说的话；只写台词，不混入动作、旁白或其他人的发言。
 UNTRUSTED_HEART_ARCHIVE_JSON:
 ${generation_prompts.endingArchiveSlice(memoryBank, 40)}
 
@@ -72,6 +74,7 @@ export function compactHeartDialoguesExisting(session) {
 export function heartCoreIncrementPrompt(context, memoryBank, existing, sourceMemoryIds) {
     return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 时期对话增量')}
 旧关系时期记录和旧台词由本地原样保留。本请求只根据新增档案补充新的关系阶段说明与新台词，禁止改写、润色或换措辞复述旧台词。
+greetings 和 specialDays.line 是 {{char}} 直接对 {{user}} 说的话；只写台词，不混入动作、旁白或其他人的发言。
 UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:
 ${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}
 EXISTING_HEART_DIALOGUES_JSON:
@@ -202,6 +205,7 @@ export function compactHeartSeasonExisting(session, season) {
 
 export function heartPostVoicePrompt(context, memoryBank, core, previous = null, sourceMemoryIds = null) {
     return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / Drama：未来')}
+${core_dialogue.DIALOGUE_CONTRACT}
 RELATIONSHIP_TONE_ONLY_JSON:
 ${heartDramaRelationshipOnlyContext(core)}
 ${previous ? `EXISTING_POSTENDING_DRAMA_INDEX_JSON:
@@ -222,6 +226,7 @@ export function heartSeasonVoicePrompt(context, memoryBank, core, season, previo
     const labels = { spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
     const label = labels[season] || season;
     return `${generation_prompts.promptSafetyBoundary(context, `角色互动 / Drama：${label} Voice`)}
+${core_dialogue.DIALOGUE_CONTRACT}
 RELATIONSHIP_TONE_ONLY_JSON:
 ${heartDramaRelationshipOnlyContext(core)}
 ${previous ? `EXISTING_${season.toUpperCase()}_DRAMA_INDEX_JSON:
@@ -241,6 +246,7 @@ export function heartSeasonScenarioPrompt(context, memoryBank, core, season, pre
     const labels = { spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
     const label = labels[season] || season;
     return `${generation_prompts.promptSafetyBoundary(context, `角色互动 / Drama：${label} Scenario`)}
+${core_dialogue.DIALOGUE_CONTRACT}
 RELATIONSHIP_TONE_ONLY_JSON:
 ${heartDramaRelationshipOnlyContext(core)}
 ${previous ? `EXISTING_${season.toUpperCase()}_DRAMA_INDEX_JSON:
@@ -438,7 +444,7 @@ ${previous ? `UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:\n${core_incremental.incr
 - userLine 只是非正史小剧场台词，不代表用户真实选择。${previous ? '必须避开 EXISTING_STRIP_INDEX_JSON 的标题、动作和梗；旧一格与已绘图片由本地保留。' : ''}只输出 JSON。`;
 }
 
-export function normalizeVoiceDramaPart(data, expectedKinds) {
+export function normalizeVoiceDramaPart(data, expectedKinds, memoryBank = {}) {
     const raw = Array.isArray(data?.voiceDramas) ? data.voiceDramas : [];
     const out = [];
     for (const expected of expectedKinds) {
@@ -446,6 +452,7 @@ export function normalizeVoiceDramaPart(data, expectedKinds) {
         if (!item) throw new Error(`Voice Drama 缺少 ${expected}。`);
         const post = expected === 'postending';
         const script = normalizeHeartScript(item?.script, {
+            characterName: memoryBank.characterName, userName: memoryBank.userName,
             minLines: post ? 8 : 5,
             maxLines: post ? 24 : 16,
             minChars: post ? 420 : 280,
@@ -464,14 +471,14 @@ export function normalizeVoiceDramaPart(data, expectedKinds) {
     return out;
 }
 
-export function normalizeScenarioDramaPart(data, expectedSeason = '') {
+export function normalizeScenarioDramaPart(data, expectedSeason = '', memoryBank = {}) {
     const raw = Array.isArray(data?.scenarioDramas) ? data.scenarioDramas : [];
     const seasons = expectedSeason ? [expectedSeason] : ['spring', 'summer', 'autumn', 'winter'];
     const out = [];
     for (const expected of seasons) {
         const item = raw.find(candidate => core_text.normalizeText(candidate?.season, 40).toLowerCase() === expected);
         if (!item) throw new Error(`Scenario Drama 缺少 ${expected}。`);
-        const script = normalizeHeartScript(item?.script, { minLines: 6, maxLines: 20, minChars: 360 });
+        const script = normalizeHeartScript(item?.script, { minLines: 6, maxLines: 20, minChars: 360, characterName: memoryBank.characterName, userName: memoryBank.userName });
         if (!script.length) throw new Error(`Scenario Drama ${expected} 长度不足。`);
         out.push({
             id: core_text.safeId(item?.id, `SCENE_${expected.toUpperCase()}`),
@@ -1188,7 +1195,7 @@ export async function generateHeartSeasonSection(season) {
                     heartPostVoicePrompt(context, memoryBank, latest, latest, null),
                     '角色互动 · 追加未来 / 后日谈',
                     { maxTokens: 3800, temperature: 0.65, context, origin, taskKey: `${taskKey}:voice`, mode: core_constants.MODE.HEART, background: true },
-                    raw => normalizeVoiceDramaPart(raw, ['postending']),
+                    raw => normalizeVoiceDramaPart(raw, ['postending'], memoryBank),
                 ))[0]);
                 await persistHeartPartialPatch(`season:postending:${batchId}:voice`, { type: 'season', season: 'postending', voice }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
                 savedParts += 1;
@@ -1206,7 +1213,7 @@ export async function generateHeartSeasonSection(season) {
                         heartSeasonVoicePrompt(context, memoryBank, latest, normalizedSeason, latest, null),
                         `角色互动 · 追加${ui_heartView.heartSeasonLabel(normalizedSeason)} Voice`,
                         { maxTokens: 3000, temperature: 0.65, context, origin, taskKey: `${taskKey}:voice`, mode: core_constants.MODE.HEART, background: true },
-                        raw => normalizeVoiceDramaPart(raw, [normalizedSeason]),
+                        raw => normalizeVoiceDramaPart(raw, [normalizedSeason], memoryBank),
                     ))[0]);
                     await persistHeartPartialPatch(`season:${normalizedSeason}:${batchId}:voice`, { type: 'season', season: normalizedSeason, voice }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
                     savedParts += 1;
@@ -1223,7 +1230,7 @@ export async function generateHeartSeasonSection(season) {
                         heartSeasonScenarioPrompt(context, memoryBank, latest, normalizedSeason, latest, null),
                         `角色互动 · 追加${ui_heartView.heartSeasonLabel(normalizedSeason)} Scenario`,
                         { maxTokens: 3200, temperature: 0.65, context, origin, taskKey: `${taskKey}:scenario`, mode: core_constants.MODE.HEART, background: true },
-                        raw => normalizeScenarioDramaPart(raw, normalizedSeason),
+                        raw => normalizeScenarioDramaPart(raw, normalizedSeason, memoryBank),
                     ))[0]);
                     await persistHeartPartialPatch(`season:${normalizedSeason}:${batchId}:scenario`, { type: 'season', season: normalizedSeason, scenario }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
                     savedParts += 1;
@@ -1255,15 +1262,9 @@ export async function generateHeartSeasonSection(season) {
     }
 }
 
-export function normalizeHeartScript(rawLines, { minLines = 8, maxLines = 28, minChars = 500 } = {}) {
-    const allowedSpeakers = new Set(['char', 'user', 'narrator']);
-    const lines = (Array.isArray(rawLines) ? rawLines : []).slice(0, maxLines).map((line, index) => {
-        const speakerRaw = core_text.normalizeText(line?.speaker, 40).toLowerCase();
-        const speaker = allowedSpeakers.has(speakerRaw) ? speakerRaw : (index % 4 === 0 ? 'narrator' : 'char');
-        const text = core_text.normalizeText(line?.text, 1800);
-        if (!text) return null;
-        return { speaker, text };
-    }).filter(Boolean);
+export function normalizeHeartScript(rawLines, { minLines = 8, minChars = 500, characterName = '', userName = '' } = {}) {
+    // The shared post-split budget also applies on re-normalization; never slice an expanded script.
+    const lines = core_dialogue.normalizeDialogueRows(rawLines, { strict: true, characterName, userName });
     if (lines.length < minLines || lines.reduce((sum, line) => sum + line.text.length, 0) < minChars) return [];
     return lines;
 }
@@ -1311,6 +1312,7 @@ export function normalizeHeart(data, memoryBank) {
         const kind = core_constants.HEART_VOICE_KINDS.has(kindRaw) ? kindRaw : '';
         if (!kind) return null;
         const script = normalizeHeartScript(item?.script, {
+            characterName: memoryBank?.characterName, userName: memoryBank?.userName,
             minLines: kind === 'postending' ? 8 : 5,
             maxLines: kind === 'postending' ? 24 : 16,
             minChars: kind === 'postending' ? 420 : 280,
@@ -1333,7 +1335,7 @@ export function normalizeHeart(data, memoryBank) {
         const seasonRaw = core_text.normalizeText(item?.season, 40).toLowerCase();
         const season = core_constants.HEART_SCENARIO_SEASONS.has(seasonRaw) ? seasonRaw : '';
         if (!season) return null;
-        const script = normalizeHeartScript(item?.script, { minLines: 6, maxLines: 20, minChars: 360 });
+        const script = normalizeHeartScript(item?.script, { minLines: 6, maxLines: 20, minChars: 360, characterName: memoryBank?.characterName, userName: memoryBank?.userName });
         if (!script.length) return null;
         return {
             id: core_text.safeId(item?.id, `SCENE${String(index + 1).padStart(2, '0')}`),

@@ -1,3 +1,4 @@
+import * as core_butterflyContract from '../core/butterflyContract.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_constants from '../core/constants.js';
@@ -275,6 +276,7 @@ CURRENT_LOCAL_DATE: ${currentDate}
 export const PROMPTS = {
     [core_constants.MODE.CALENDAR]: (context, memoryBank) => calendarPrompt(context, memoryBank),
     [core_constants.MODE.BUTTERFLY]: (context, memoryBank) => `${promptSafetyBoundary(context, '蝴蝶效应')}
+${core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
 主时间线只从下面较小的档案锚点集中取证；平行分歧主要依据受控角色卡/人设/世界书推演。
 UNTRUSTED_TIMELINE_ANCHORS_JSON:
 ${promptArchiveSlice(memoryBank, 16)}

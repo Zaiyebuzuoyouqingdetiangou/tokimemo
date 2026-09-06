@@ -449,7 +449,7 @@ function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentati
             const label = core_text.normalizeText(item?.label, 60) || `角落 ${objectIndex + 1}`;
             const description = core_text.normalizeText(item?.description, 1600);
             const line = core_text.normalizeText(item?.line, 800);
-            if (basis === '设定' && roomNarrativeClaimsSharedHistory([label, description, line], userName)) return null;
+            if (basis === '设定' && [label, description, line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) return null;
             const reference = basis === '记忆'
                 ? core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, `${item?.label || ''}
 ${description}
@@ -511,7 +511,7 @@ ${line}`, memoryBank, 1)
         const objectIds = new Set(space.objects.map(item => item.id));
         const focusObjectId = objectIds.has(String(raw?.focusObjectId || '')) ? String(raw.focusObjectId) : space.objects[0].id;
         if (!activity || !line) throw new Error(`“他的房间”缺少 ${key} 时段的生活状态。`);
-        if (roomNarrativeClaimsSharedHistory([activity, line], userName)) {
+        if ([activity, line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) {
             throw new Error(`“他的房间”${key} 时段混入了没有档案证据的既往共同经历。`);
         }
         dayparts[key] = { spaceId: space.id, activity, line, focusObjectId };
@@ -1095,7 +1095,7 @@ export function roomCurrentSlot(session = runtimeState.activeSession, date = new
     if (!stored) return null;
     const userName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.memory?.userName
         || core_context.getContext()?.name1, 120);
-    if (!roomNarrativeClaimsSharedHistory([stored.activity, stored.line], userName)) return stored;
+    if (![stored.activity, stored.line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) return stored;
     return {
         ...stored,
         activity: '按自己的节奏处理此刻的日常。',
@@ -1218,9 +1218,9 @@ export function roomPetSummaryHtml(pet) {
     return `<div class="rmt-room-pet-note"><b>🐾 ${core_text.esc(name)}</b><span>${core_text.esc(description)}</span>${line ? `<em>${core_text.esc(line)}</em>` : ''}${evidence}</div>`;
 }
 
-function roomObjectSafeForPresentation(item, memoryBank, userName) {
+export function roomObjectSafeForPresentation(item, memoryBank, userName) {
     const narrative = [item?.label, item?.description, item?.line];
-    if (!roomNarrativeClaimsSharedHistory(narrative, userName)) return true;
+    if (!narrative.some(field => roomNarrativeClaimsSharedHistory(field, userName))) return true;
     if (item?.basis !== '记忆') return false;
     const reference = core_evidence.normalizeExactMemoryReference(
         item?.sourceMemoryIds,

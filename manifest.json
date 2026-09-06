@@ -1,15 +1,15 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.46-feedback-r50.0",
+  "js": "index.js?heartbeat=0.8.47-polish-r51.0",
   "author": "Toto",
-  "version": "0.8.46",
+  "version": "0.8.47",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r50.0：同档案扩写、设定 NPC、生成修复、共同陈列柜、四种主题与输入标签过滤。",
+  "description": "r51.0：房间误判修复、蝴蝶效应校验契约、对话归属与排版修复、10 项逻辑任务。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

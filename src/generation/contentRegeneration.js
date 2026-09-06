@@ -1,3 +1,4 @@
+import * as core_butterflyContract from '../core/butterflyContract.js';
 // Targeted regeneration for user-managed derived content.
 // Targets are selected only from the currently normalized session; model output never chooses a cache path.
 import * as core_constants from '../core/constants.js';
@@ -91,7 +92,7 @@ async function regenerateHeartVoice(session, item, context, memoryBank, origin, 
         : modes_heart.heartSeasonVoicePrompt(context, memoryBank, session, kind, null, null);
     const list = await modes_heart.requestHeartPart(
         prompt, `重新生成 ${item.title}…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:voice`, 8000, 0.65),
-        raw => modes_heart.normalizeVoiceDramaPart(raw, [kind]),
+        raw => modes_heart.normalizeVoiceDramaPart(raw, [kind], memoryBank),
     );
     return { ...list[0], id: item.id, incrementBatchId: item.incrementBatchId || '', sourceArchiveMemoryIds: item.sourceArchiveMemoryIds || [], generatedAt: Date.now() };
 }
@@ -101,7 +102,7 @@ async function regenerateHeartScenario(session, item, context, memoryBank, origi
     const list = await modes_heart.requestHeartPart(
         modes_heart.heartSeasonScenarioPrompt(context, memoryBank, session, season, null, null),
         `重新生成 ${item.title}…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:scenario`, 9000, 0.7),
-        raw => modes_heart.normalizeScenarioDramaPart(raw, season),
+        raw => modes_heart.normalizeScenarioDramaPart(raw, season, memoryBank),
     );
     return { ...list[0], id: item.id, incrementBatchId: item.incrementBatchId || '', sourceArchiveMemoryIds: item.sourceArchiveMemoryIds || [], generatedAt: Date.now() };
 }
@@ -360,6 +361,7 @@ export function normalizeRegeneratedButterflyNode(item, rawNode, memoryBank, con
 async function regenerateButterflyNode(item, context, memoryBank, origin, taskKey) {
     const evidence = item.sourceMemoryIds?.length ? core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 10) : [];
     const prompt = `${generation_prompts.promptSafetyBoundary(context, '蝴蝶效应 / 单个观测节点重新生成')}
+${core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
 只重新生成下面这个${item.trueEnding ? '观测点 Ω' : '平行分歧'}的模拟内容，保持节点身份不变。它是派生模拟，不得修改正式档案。
 CURRENT_NODE_JSON:\n${JSON.stringify(item, null, 2)}
 ${evidence.length ? `TRUSTED_MAIN_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}` : ''}

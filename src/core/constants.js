@@ -278,7 +278,7 @@ export const HEART_FIREFLY_PAGE_SIZE = 6;
 
 export const HEART_STRIP_PANEL_COUNTS = new Set([1, 2, 4]);
 
-export const MAX_CONCURRENT_GENERATION_TASKS = 5;
+export const MAX_CONCURRENT_GENERATION_TASKS = 10;
 
 export const ADV_BULK_BATCH_SIZE = 6;
 

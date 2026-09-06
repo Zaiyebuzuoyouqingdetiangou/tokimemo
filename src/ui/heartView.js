@@ -6,6 +6,7 @@ import * as archive_repository from '../archive/repository.js';
 import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
+import * as core_dialogue from '../core/dialogue.js';
 import * as core_context from '../core/context.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import { state as runtimeState } from '../core/state.js';
@@ -132,9 +133,14 @@ export function renderAvatarDialoguePopup(state = runtimeState.activeAvatarDialo
             ? '这份历史档案还没有生成角色互动台词库。为了不偷偷切换聊天，我不会在这里只读状态下直接发起生成。'
             : '这份当前档案还没有角色互动台词库。生成后，点头像会按早中晚、周末、生日、节日和久未访问状态自动换台词。';
     const label = session ? speech?.label || '角色互动' : 'HEART VOICE';
+    const dialogueIdentity = { characterName: state.characterName || session?.characterName || entry?.characterName || '角色', userName: state.userName || state.snapshot?.memory?.userName || entry?.memory?.userName || session?.userName || '', charAvatar: avatarSrc || '', userAvatar: '' };
+    const rows = core_dialogue.normalizeDialogueRows([{ speaker: session ? 'char' : 'narrator', text: message }], dialogueIdentity);
+    const dialogueHtml = session && (rows.length > 1 || rows[0]?.speaker !== 'char')
+        ? renderHeartScriptLines(rows, dialogueIdentity)
+        : `<div class="rmt-avatar-dialog-bubble">${core_text.esc(rows[0]?.text || message)}</div>`;
     const pop = document.createElement('div');
     pop.className = 'rmt-avatar-dialog-pop';
-    pop.innerHTML = `<div class="rmt-avatar-dialog-card"><button type="button" class="rmt-avatar-dialog-close" data-rmt-action="avatar-dialog-close" aria-label="关闭">×</button><div class="rmt-avatar-dialog-head"><span class="rmt-avatar-dialog-avatar">${avatarSrc ? `<img src="${core_text.esc(avatarSrc)}" alt="">` : '<i class="fa-solid fa-heart"></i>'}</span><div><b>${core_text.esc(state.characterName || session?.characterName || entry?.characterName || '角色')}</b><small>${core_text.esc(label)}</small></div></div><div class="rmt-avatar-dialog-bubble">${core_text.esc(message)}</div><div class="rmt-avatar-dialog-actions">${actions}</div>${readOnly ? '<div class="rmt-avatar-dialog-note">只读档案：可以听已保存台词，但不能在这里重生成。</div>' : ''}</div>`;
+    pop.innerHTML = `<div class="rmt-avatar-dialog-card"><button type="button" class="rmt-avatar-dialog-close" data-rmt-action="avatar-dialog-close" aria-label="关闭">×</button><div class="rmt-avatar-dialog-head"><span class="rmt-avatar-dialog-avatar">${avatarSrc ? `<img src="${core_text.esc(avatarSrc)}" alt="">` : '<i class="fa-solid fa-heart"></i>'}</span><div><b>${core_text.esc(dialogueIdentity.characterName)}</b><small>${core_text.esc(label)}</small></div></div>${dialogueHtml}<div class="rmt-avatar-dialog-actions">${actions}</div>${readOnly ? '<div class="rmt-avatar-dialog-note">只读档案：可以听已保存台词，但不能在这里重生成。</div>' : ''}</div>`;
     body.appendChild(pop);
 }
 
@@ -155,9 +161,11 @@ export async function showAvatarDialogueForCharacter(characterKey) {
         let session = null;
         let snapshot = null;
         let readOnly = false;
+        let userName = '';
         if (generation_imageGeneration.indexedArchiveMatchesCurrentChat(entry, context)) {
             const live = core_context.currentCharacterGuard();
             const memory = archive_repository.getImportedMemory(live);
+            userName = core_text.normalizeText(memory?.userName, 120);
             if (memory) session = core_cache.loadSession(core_constants.MODE.HEART, { context: live, chatId: core_context.getChatId(live), memoryBank: memory });
         } else {
             readOnly = true;
@@ -165,7 +173,7 @@ export async function showAvatarDialogueForCharacter(characterKey) {
             session = core_cache.loadSession(core_constants.MODE.HEART, { cache: snapshot.cache, chatId: snapshot.chatId, memoryBank: snapshot.memory });
         }
         if (requestEpoch !== runtimeState.avatarDialogueRequestEpoch) return;
-        runtimeState.activeAvatarDialogue = { characterKey: key, characterName: entry.characterName, entry, snapshot, session, readOnly, avatarSrc, category: '' };
+        runtimeState.activeAvatarDialogue = { characterKey: key, characterName: entry.characterName, userName, entry, snapshot, session, readOnly, avatarSrc, category: '' };
         renderAvatarDialoguePopup(runtimeState.activeAvatarDialogue);
     } catch (error) {
         if (requestEpoch !== runtimeState.avatarDialogueRequestEpoch) return;
@@ -231,17 +239,18 @@ export function selectedHeartStrip() {
     return runtimeState.activeSession.dailyStrips.find(item => item.id === runtimeState.activeSession.selectedStripId) || runtimeState.activeSession.dailyStrips[0] || null;
 }
 
-export function renderHeartScriptLines(lines) {
-    const charAvatar = heartCharacterAvatarUrl(runtimeState.activeArchiveSnapshot);
-    const userAvatar = heartUserAvatarUrl();
-    const charName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext().name2, 120) || '角色';
-    const userName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.memory?.userName || core_context.getContext().name1, 120) || '你';
-    return `<div class="rmt-heart-script">${(lines || []).map(line => {
+export function renderHeartScriptLines(lines, identity = {}) {
+    const charAvatar = identity.charAvatar ?? heartCharacterAvatarUrl(runtimeState.activeArchiveSnapshot);
+    const userAvatar = identity.userAvatar ?? heartUserAvatarUrl();
+    const charName = core_text.normalizeText(identity.characterName ?? runtimeState.activeArchiveSnapshot?.characterName ?? core_context.getContext().name2, 120) || '角色';
+    const userName = core_text.normalizeText(identity.userName ?? runtimeState.activeArchiveSnapshot?.memory?.userName ?? core_context.getContext().name1, 120) || '你';
+    return `<div class="rmt-heart-script">${core_dialogue.normalizeDialogueRows(lines, { characterName: charName, userName }).map(line => {
         if (line.speaker === 'narrator') return `<div class="rmt-heart-narration">${core_text.esc(line.text)}</div>`;
         const isUser = line.speaker === 'user';
-        const avatar = isUser ? userAvatar : charAvatar;
+        const isNpc = line.speaker === 'npc';
+        const avatar = isNpc ? '' : isUser ? userAvatar : charAvatar;
         const fallback = isUser ? '<i class="fa-solid fa-user"></i>' : '<i class="fa-solid fa-heart"></i>';
-        return `<div class="rmt-heart-line ${isUser ? 'user' : 'char'}"><span class="rmt-heart-line-avatar">${avatar ? `<img src="${core_text.esc(avatar)}" alt="">` : fallback}</span><div><small>${core_text.esc(isUser ? userName : charName)}</small><p>${core_text.esc(line.text)}</p></div></div>`;
+        return `<div class="rmt-heart-line ${isNpc ? 'npc' : isUser ? 'user' : 'char'}"><span class="rmt-heart-line-avatar">${avatar ? `<img src="${core_text.esc(avatar)}" alt="">` : isNpc ? '<i class="fa-solid fa-user"></i>' : fallback}</span><div><small>${core_text.esc(isNpc ? line.speakerName : isUser ? userName : charName)}</small><p>${core_text.esc(line.text)}</p></div></div>`;
     }).join('')}</div>`;
 }
 

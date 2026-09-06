@@ -1,3 +1,12 @@
+## 0.8.47 / r51.0 changed-surface security review
+
+- Main-owned edits after two read-only reviews. Source contracts checked against CURRENT; no private plugin API, remote endpoint or storage key introduced.
+- Room checks retain intra-field retrospective rejection and exact source anchors. Follow-up review caught the final display filter still joining fields; corrected that path too.
+- Butterfly feedback uses only local white-listed classifications, never arbitrary exception messages. Existing relationship, provenance, world variety and uniqueness checks remain in place; Ω remains 160 Han characters.
+- Dialogue rows remain data; text and NPC labels are escaped by renderers. Unknown speakers are neutral. Old caches are not rewritten by display normalization.
+- Logical task limit changes only admission (10). Provider limit remains 2; archive revisions, CAS, delete fences, serialized commits and navigation are unchanged.
+- This is a scoped source and regression review, not external penetration testing or live-provider acceptance.
+
 ## 0.8.46 / r50.0 changed-surface security review
 
 Main-agent source review plus independent read-only generation and source/product reviews. All production fixes were integrated by the main agent after checking the actual paths. This is not a claim of external penetration testing.

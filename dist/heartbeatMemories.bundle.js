@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 57
-// Source SHA-256: 67481e3b6e7fe05159d2baa1520e5967086987366d6120afdd14ca443a828ada
+// Source modules: 59
+// Source SHA-256: c477af1d2f2e6285cbf627dab70cd7362ee5e14a664c98e165a359ea36d71352
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -11,11 +11,13 @@ const __m_archive_memoryProviders_js = Object.create(null);
 const __m_archive_repository_js = Object.create(null);
 const __m_archive_snapshots_js = Object.create(null);
 const __m_archive_sourceLedger_js = Object.create(null);
+const __m_core_butterflyContract_js = Object.create(null);
 const __m_core_cache_js = Object.create(null);
 const __m_core_constants_js = Object.create(null);
 const __m_core_context_js = Object.create(null);
 const __m_core_contextTags_js = Object.create(null);
 const __m_core_deferredCommitStore_js = Object.create(null);
+const __m_core_dialogue_js = Object.create(null);
 const __m_core_evidence_js = Object.create(null);
 const __m_core_incremental_js = Object.create(null);
 const __m_core_independentApi_js = Object.create(null);
@@ -344,7 +346,7 @@ const HEART_FIREFLY_PAGE_SIZE = 6;
 
 const HEART_STRIP_PANEL_COUNTS = new Set([1, 2, 4]);
 
-const MAX_CONCURRENT_GENERATION_TASKS = 5;
+const MAX_CONCURRENT_GENERATION_TASKS = 10;
 
 const ADV_BULK_BATCH_SIZE = 6;
 
@@ -559,6 +561,11 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_CONNECTION_NETWORK: '无法连接模型服务；请检查地址、网络、代理与服务状态后重试。',
     RMT_REQUEST_TIMEOUT: '模型请求超时，已停止等待并释放任务位；请稍后重试。',
     RMT_SEGMENT_VALIDATION: '模型结果没有通过本地完整性校验；旧内容未被覆盖。',
+    RMT_BUTTERFLY_systemNote: '该节点缺少完整的系统结局判定；旧内容保留，可单独重试。',
+    RMT_BUTTERFLY_monologue: '该节点的角色独白不完整；旧内容保留，可单独重试。',
+    RMT_BUTTERFLY_intervention: '该节点缺少完整的现世回应；旧内容保留，可单独重试。',
+    RMT_BUTTERFLY_omega: '最终观测点的告白或结局判定不完整；旧内容保留，可单独重试。',
+    RMT_BUTTERFLY_worldSpec: '该节点的世界条件不完整；旧内容保留，可单独重试。',
     RMT_ROOM_STRUCTURE: '房间的空间差异、四时段生活或互动台词不完整；已保留旧内容，可单独重试房间。',
     RMT_ROOM_PETS: '人设有宠物，但模型漏写了有效宠物节点；请单独重试房间。',
     RMT_ROOM_HISTORY: '房间台词把没有证据的共同经历当成了过去；本次未保存，可重试。',
@@ -3023,7 +3030,7 @@ function hostComputedPalette(documentLike = globalThis.document) {
         const text = rgbToHex(parseRgbColor(bodyStyle.color), fallback.text);
         return {
             background,
-            surface: background,
+            surface: compositeHex('#ffffff', background, contrastRatio('#ffffff', background) > 4.5 ? 0.06 : 0.65),
             text,
             muted: text,
             accent: fallback.accent,
@@ -3651,6 +3658,43 @@ __m_core_settings_js.connectionManagerSettings = connectionManagerSettings;
 __m_core_settings_js.slashCommandObject = slashCommandObject;
 __m_core_settings_js.profileFingerprint = profileFingerprint;
 __m_core_settings_js.uniqueImportedProfileName = uniqueImportedProfileName;
+}
+
+function __init_core_butterflyContract_js() {
+// MODULE: core/butterflyContract.js
+
+// Code-owned limits and feedback only. Never echo model/source text or exception messages.
+const BUTTERFLY_LIMITS = Object.freeze({ monologueHan: 100, monologueFirstPerson: 3, interventionHan: 40, omegaHan: 160, omegaFirstPerson: 4, systemHan: 30 });
+const BUTTERFLY_GENERATION_CONTRACT = `【节点完整性契约】
+MAIN 与普通分歧的 monologue 至少 ${BUTTERFLY_LIMITS.monologueHan} 个汉字，至少 ${BUTTERFLY_LIMITS.monologueFirstPerson} 次明确“我”的第一人称视角，不用旁白代替发言。
+普通分歧 intervention 至少 ${BUTTERFLY_LIMITS.interventionHan} 个汉字，至少一次“我”；现世角色明确对照“那个我 / 那个世界 / 现世 / 平行世界”，并表达“明白 / 承认 / 意识到 / 庆幸 / 选择 / 珍惜”等自省。MAIN 的 intervention 也不可为空。
+每项 systemNote 至少 ${BUTTERFLY_LIMITS.systemHan} 个汉字，包含至少三类算法线索：分析、结论、变量、概率/置信、算法/模型、主体/样本、路径/时间线、收敛/偏差/阈值、判定/分类、结局/结果/终局。必须明确写出“最终判定 / 最终结局 / 最终结果 / 终局判定 / 终局结果 / 判定结果 / 判定结局”之一并给出结论，而非仅罗列标签。
+Ω 的 label 必须含“观测点 Ω”或“TRUE ENDING”；monologue 严格为空。intervention 至少 ${BUTTERFLY_LIMITS.omegaHan} 个汉字、至少 ${BUTTERFLY_LIMITS.omegaFirstPerson} 次“我”，明确指向你/用户姓名，综合时代、身份、职业、地点、选择、相遇、羁绊、命运中至少三类差异；包含命运/奇迹/不可能与唯一解/唯一答案/最终选择/选择了你/找到了你之一。Ω 的 systemNote 还须明确命运/奇迹/唯一解/真结局。
+worldSpec 的 era、identity、occupation、location、keyDecision、encounterWithUser、bondWithUser、finalFate 八字段均为具体文本，不用“同上/不变/未知”；thirdPartyRomance 严格为 false。不得虚构第三方恋爱、婚姻或前任；节点标题、世界条件与独白均不可重复。`;
+
+const ISSUES = Object.freeze({
+    systemNote: 'systemNote 未满足汉字数、三类算法线索或明确终局判定。',
+    monologue: 'monologue 未满足汉字数或第一人称次数。',
+    intervention: 'intervention 缺少足量现世第一人称对照和自省。',
+    omega: '观测点 Ω 的标题、空 monologue、综合告白或终局说明不完整。',
+    worldSpec: 'worldSpec 维度、具体字段或 thirdPartyRomance=false 不完整。',
+});
+function butterflyValidationError(field) {
+    const key = Object.hasOwn(ISSUES, field) ? field : 'worldSpec';
+    const error = new Error(ISSUES[key]);
+    error.code = 'RMT_BUTTERFLY_' + key;
+    error.retryable = true;
+    return error;
+}
+function butterflyValidationFeedback(error) {
+    const key = String(error?.code || '').replace(/^RMT_BUTTERFLY_/, '');
+    return String(error?.code || '').startsWith('RMT_BUTTERFLY_') && Object.hasOwn(ISSUES, key) ? ISSUES[key] : '';
+}
+
+__m_core_butterflyContract_js.butterflyValidationError = butterflyValidationError;
+__m_core_butterflyContract_js.butterflyValidationFeedback = butterflyValidationFeedback;
+__m_core_butterflyContract_js.BUTTERFLY_LIMITS = BUTTERFLY_LIMITS;
+__m_core_butterflyContract_js.BUTTERFLY_GENERATION_CONTRACT = BUTTERFLY_GENERATION_CONTRACT;
 }
 
 function __init_core_worldPresentation_js() {
@@ -4483,7 +4527,7 @@ function structuralThemeCss(root) {
         'memory-gate','memory-settings-status','task-banner','external-memory-row','archive-readonly-control','archive-overview-item','archive-group-entry',
         'settings-header','settings-content','settings-card','api-source-card','api-source-panel','api-status','performance-diagnostic-output',
         'avatar-dialog-card','avatar-dialog-bubble','memory-wi-picker-card','memory-wi-book','memory-wi-entry','loading-card',
-        'heart-summary','heart-current-line','heart-greeting-group','heart-drama-card','heart-strip-card','heart-single-drama','heart-season-stage','heart-setting','heart-line','heart-script-bubble','heart-panel','heart-panel-line',
+        'heart-summary','heart-current-line','heart-greeting-group','heart-drama-card','heart-strip-card','heart-single-drama','heart-season-stage','heart-setting','heart-script-bubble','heart-panel','heart-panel-line',
         'ending-summary','ending-route','ending-detail','ending-confession','ending-epilogue','confession-card','ending-confession-stage','ending-confession-bubble','achievement-card',
         'calendar-hero','calendar-paper','calendar-month-head','calendar-day','calendar-pending','calendar-todo','calendar-sticky-panel','calendar-master-todo','calendar-special-notes','calendar-mood-section','calendar-sticky','calendar-mood-note',
         'manage-hero','manage-row','profile-fact','profile-discovery','profile-worldline-note','relation-detail','relation-detail-head',
@@ -4493,16 +4537,39 @@ function structuralThemeCss(root) {
     const surfaces = surface.map(name => root + ' .rmt-' + name).join(',');
     const art = ':not(.rmt-crt,.rmt-crt *,.rmt-room-scene,.rmt-room-scene *,.rmt-phone-screen,.rmt-phone-screen *,.rmt-travel-artifact,.rmt-travel-artifact *,.rmt-ending-easter-layer,.rmt-ending-easter-layer *,.rmt-calendar-holiday-art,.rmt-calendar-holiday-art *,.rmt-firefly-field,.rmt-firefly-field *)';
     return `
-${root}{--gs-ink:var(--rmt-theme-text);--gs-muted:var(--rmt-theme-muted);--gs-paper:var(--rmt-theme-surface-solid);--gs-paper-blue:var(--rmt-theme-surface-solid);--gs-line:var(--rmt-theme-border);color:var(--rmt-theme-text)!important;-webkit-text-fill-color:var(--rmt-theme-text)!important;font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif!important;font-size:15px!important;line-height:1.6;text-shadow:none!important}
+${root}{--gs-ink:var(--rmt-theme-text);--gs-muted:var(--rmt-theme-muted);--gs-paper:var(--rmt-theme-surface-solid);--gs-paper-blue:var(--rmt-theme-surface-solid);--gs-line:var(--rmt-theme-border);color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important;font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif!important;font-size:15px!important;font-weight:400!important;line-height:1.6;text-shadow:none!important;filter:none!important;opacity:1!important}
 ${root} .rmt-shell{--gs-ink:var(--rmt-theme-text);--gs-muted:var(--rmt-theme-muted);--gs-paper:var(--rmt-theme-surface-solid);--gs-paper-blue:var(--rmt-theme-surface-solid);--gs-line:var(--rmt-theme-border)}
 ${surfaces}{background:var(--rmt-theme-surface-alpha)!important;color:var(--rmt-theme-text)!important;border-color:var(--rmt-theme-border)!important;opacity:1!important;text-shadow:none!important;box-shadow:0 4px 18px #0000000a}
 ${root} :is(.rmt-album,.rmt-adv,.rmt-room-view,.rmt-travel,.rmt-heart-drama-layout,.rmt-archive-room){background:var(--rmt-theme-bg)!important}
-${root} :is(p,b,strong,small,span,label,blockquote,h1,h2,h3,summary,legend,div[class^="rmt-"],div[class*=" rmt-"])${art}{color:var(--rmt-theme-text)!important;-webkit-text-fill-color:var(--rmt-theme-text)!important;text-shadow:none!important}
+${root} :is(p,b,strong,small,span,label,blockquote,h1,h2,h3,summary,legend,div[class^="rmt-"],div[class*=" rmt-"])${art}{color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important;text-shadow:none!important;font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif!important;font-weight:400!important;letter-spacing:normal;overflow-wrap:anywhere}
+${root} :is(h1,h2,h3,b,strong,.rmt-topbar-title)${art}{font-weight:600!important}
+${root} :is(h1,h2,h3)${art}{line-height:1.4!important;margin-block:12px 16px}
+${root} :is(h1,h2)${art}{font-size:22px!important}
+${root} h3${art}{font-size:18px!important}
+${root} :is(.rmt-portal-title,.rmt-calendar-quick-copy>b){font-size:18px!important;font-weight:600!important}
+${root} .rmt-archive-card{padding:20px!important}
 ${root} :is(p,blockquote,.rmt-adv-reader,.rmt-avatar-dialog-bubble,.rmt-heart-script-bubble)${art}{font-size:16px!important;line-height:1.8!important;font-weight:400!important;opacity:1!important}
 ${root} :is(small,.rmt-api-note,.rmt-avatar-dialog-note,.rmt-settings-field,.rmt-settings-check)${art}{font-size:13px!important;color:var(--rmt-theme-muted)!important;-webkit-text-fill-color:var(--rmt-theme-muted)!important;opacity:1!important}
-${root} :is(button,select,input,textarea,.menu_button)${art}{font-family:inherit!important;font-size:14px!important;line-height:1.4!important;min-height:44px;max-width:100%;color:var(--rmt-theme-text)!important;-webkit-text-fill-color:var(--rmt-theme-text)!important;background:var(--rmt-theme-surface-solid)!important;border-color:var(--rmt-theme-border)!important;opacity:1!important;text-shadow:none!important;writing-mode:horizontal-tb!important}
+${root} :is(button,select,input,textarea,.menu_button)${art}{font-family:inherit!important;font-size:14px!important;font-weight:500!important;line-height:1.4!important;min-height:44px;max-width:100%;color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important;background:var(--rmt-theme-surface-solid)!important;border-color:var(--rmt-theme-border)!important;opacity:1!important;text-shadow:none!important;writing-mode:horizontal-tb!important}
 ${root} :is(button,summary):focus-visible{outline:2px solid var(--rmt-theme-accent-ink)!important;outline-offset:3px}
-${root} :is(button.active,button.is-active,[aria-pressed="true"],.rmt-archive-keywords span,.rmt-calendar-tag){background:var(--rmt-theme-surface-solid)!important;border-color:var(--rmt-theme-accent)!important;box-shadow:inset 0 0 0 2px var(--rmt-theme-accent)}
+${root} :is(button.active,button.is-active,[aria-pressed="true"]){background:var(--rmt-theme-surface-solid)!important;border-color:var(--rmt-theme-accent)!important;box-shadow:0 0 0 1px var(--rmt-theme-accent)}
+${root} :is(.rmt-archive-keywords span,.rmt-calendar-tag){background:var(--rmt-theme-surface-solid)!important;border:1px solid var(--rmt-theme-border)!important;box-shadow:none!important;padding:5px 11px;font-size:13px!important}
+${root} :is(.rmt-archive-portal,.rmt-character-card,.rmt-calendar-quick,.rmt-room-card){background:linear-gradient(165deg,var(--rmt-theme-surface-alpha),color-mix(in srgb,var(--rmt-theme-surface-alpha) 97%,var(--rmt-theme-accent-alt)))!important;box-shadow:0 6px 20px #34546b0a}
+${root} .rmt-btn{border-width:1px!important;border-radius:999px!important;box-shadow:0 3px 10px #34546b0a;padding:10px 16px!important}
+${root} :is(.rmt-portal-avatar,.rmt-calendar-quick-icon),${root} :is(.rmt-portal-avatar,.rmt-calendar-quick-icon)>i{color:#fff!important;-webkit-text-fill-color:currentColor!important}
+${root} .rmt-portal-ready-dot{color:var(--rmt-theme-accent-ink)!important;background:var(--rmt-theme-surface-solid)!important}
+${root} :is(.rmt-relations-mode,.rmt-heart){padding:20px!important;max-width:1100px;margin-inline:auto;min-width:0}
+${root} :is(.rmt-relations-head,.rmt-profile-discoveries,.rmt-profile-discovery,.rmt-profile-worldline-note){padding:20px!important}
+${root} .rmt-profile-discovery-empty{font-size:13px!important;line-height:1.7!important}
+${root} .rmt-heart-line{background:transparent!important;box-shadow:none!important;gap:12px;margin:18px 0}
+${root} .rmt-heart-line>div{background:var(--rmt-theme-surface-solid)!important;border:1px solid var(--rmt-theme-border);border-radius:6px 20px 20px 20px;padding:14px 18px!important;min-width:0}
+${root} .rmt-heart-line.user>div{border-radius:20px 6px 20px 20px;border-color:var(--rmt-theme-accent-alt)}
+${root} .rmt-heart-line p{margin:6px 0!important}
+${root} .rmt-heart-drama-dot{position:relative;width:44px!important;height:44px!important;min-width:44px;min-height:44px;border:0!important;box-shadow:none!important;background:transparent!important;padding:0!important}
+${root} .rmt-heart-drama-dot:before{content:"";position:absolute;inset:18px;border-radius:50%;background:var(--rmt-theme-border)}
+${root} .rmt-heart-drama-dot.active:before{background:var(--rmt-theme-accent);box-shadow:0 0 0 4px var(--rmt-theme-soft)}
+${root} .rmt-heart-narration{font-size:15px!important;font-weight:400!important;font-style:normal;line-height:1.8!important;padding:12px 16px!important;text-align:left;color:var(--rmt-theme-muted)!important}
+@media(max-width:700px){${root} :is(.rmt-relations-mode,.rmt-heart){padding:16px!important}${root} :is(.rmt-relations-head,.rmt-profile-discoveries,.rmt-profile-discovery,.rmt-profile-worldline-note){padding:16px!important}}
 ${root} :is(b,strong,span,label)${art}{font-size:max(13px,1em)}
 ${root} :is(.rmt-api-status,.rmt-progress,.rmt-archive-meta,.rmt-api-note){font-size:13px!important}
 ${root} :is(input:not([type="checkbox"]):not([type="color"]):not([type="range"]),textarea,select){font-size:16px!important}
@@ -4513,9 +4580,6 @@ ${root} .rmt-theme-custom-panel{grid-template-columns:repeat(2,minmax(0,1fr))}
 ${root} .rmt-theme-custom-panel label{padding:10px;background:var(--rmt-theme-surface-solid);border-color:var(--rmt-theme-border)}
 ${root} .rmt-theme-custom-panel input[type="color"]{width:100%;height:44px;min-height:44px;padding:3px;border:1px solid var(--rmt-theme-border)}
 ${root} .rmt-theme-presets{display:flex;gap:8px;flex-wrap:wrap}
-${root} .rmt-theme-preview{padding:16px;border:1px solid var(--rmt-theme-border);border-radius:14px}
-${root} .rmt-theme-preview p{margin:6px 0}
-${root} .rmt-theme-preview small{display:block}
 ${root} .rmt-task-banner{position:relative}
 ${root} .rmt-task-banner:before{opacity:.15}
 ${root} :is(.rmt-settings-card-head small,.rmt-archive-kicker){letter-spacing:.04em}
@@ -7552,6 +7616,95 @@ __m_modes_ending_js.ENDING_CONFESSION_HINT_RE = ENDING_CONFESSION_HINT_RE;
 __m_modes_ending_js.ENDING_EASTER_EGG_MODULES = ENDING_EASTER_EGG_MODULES;
 }
 
+function __init_core_dialogue_js() {
+// MODULE: core/dialogue.js
+const core_text = __m_core_text_js;
+
+const DIALOGUE_CONTRACT = '脚本每项只属于一个说话人：speaker 为 char/user/narrator/npc；npc 必须另给 speakerName。动作、神态、环境写独立 narrator 项，气泡 text 只放该人实际说出的台词，不混入其他人的话。不要按段落顺序轮流猜说话人。';
+
+// One pure boundary for generated scripts and legacy display. Unknown attribution is neutral.
+function normalizeDialogueRows(raw, { characterName = '', userName = '', strict = false } = {}) {
+    const identities = [[core_text.normalizeText(characterName, 120), 'char'], [core_text.normalizeText(userName, 120), 'user']].filter(([name]) => name);
+    const inputs = Array.isArray(raw) ? raw : [];
+    const overBudget = () => {
+        if (strict) throw new Error('对话拆分后超过 120 行或 50400 字符，请减少脚本长度后重新生成。');
+        return [{ speaker: 'narrator', text: '这篇旧对话超过安全显示限额；原文仍保留在档案中。' }];
+    };
+    if (inputs.length > 120) return overBudget();
+    const rows = [];
+    const push = (speaker, text, speakerName = '') => {
+        text = core_text.normalizeText(text, 50401);
+        if (text) rows.push({ speaker, text, ...(speaker === 'npc' ? { speakerName } : {}) });
+    };
+    const explicitOwner = text => {
+        const prefix = text.trim();
+        // A name prefix is not an identity: 林舟的妹妹 / 小雨伞店 are different subjects.
+        return identities.find(([name]) => prefix.startsWith(name)
+            && /^(?:\s*[:：]|(?:说|问|答|道|笑|看|望|抬|低|转|伸|点|摇|歪|把|眼睛|眼神|轻声|轻轻|缓缓|忽然|停下|拿起|放下))/.test(prefix.slice(name.length)))?.[1] || '';
+    };
+    for (const rawLine of inputs) {
+        const line = typeof rawLine === 'string' ? { speaker: 'narrator', text: rawLine } : rawLine;
+        const name = core_text.normalizeText(line?.speaker, 120);
+        const alias = name.toLowerCase();
+        let speaker = ['char', 'user', 'narrator', 'npc'].includes(alias) ? alias
+            : identities.find(([identity]) => name === identity)?.[1] || 'narrator';
+        const npcName = core_text.normalizeText(line?.speakerName, 120);
+        if (speaker === 'npc' && !npcName) speaker = 'narrator';
+        const originalText = core_text.normalizeText(line?.text, 50401);
+        const action = core_text.normalizeText(line?.action || line?.narration, 50401);
+        if (action) push('narrator', action);
+        if (!originalText) continue;
+        const labelled = value => {
+            const match = value.match(/^\s*([^\n:：]{1,120})\s*[:：]\s*([^]*)$/);
+            if (!match) return null;
+            const label = match[1].trim();
+            const owner = identities.find(([identity]) => identity === label)?.[1]
+                || (['char', 'user', 'narrator'].includes(label.toLowerCase()) ? label.toLowerCase() : '')
+                || (npcName && label === npcName ? 'npc' : '');
+            if (owner) return { speaker: owner, text: match[2] };
+            // Unknown short speaker labels are neutral; ordinary first-person prose is not a label.
+            if (/^[\p{L}\p{N}_·]{1,12}$/u.test(label) && !/^(?:我|我们|你|您|我的|意思|例如|注意)/.test(label)) return { speaker: 'narrator', text: value };
+            return null;
+        };
+        const physicalLines = originalText.split(/\r?\n/);
+        const hasLabels = physicalLines.some(value => labelled(value));
+        for (const value of hasLabels ? physicalLines : [originalText]) {
+            const tagged = hasLabels ? labelled(value) : null;
+            const text = tagged ? tagged.text : value;
+            const rowSpeaker = tagged ? tagged.speaker : hasLabels ? 'narrator' : speaker;
+            if (!text.trim()) continue;
+            const quotes = [...text.matchAll(/“([^”]*)”|「([^」]*)」|"([^"\n]*)"/g)];
+            const firstPrefix = quotes.length ? text.slice(0, quotes[0].index).trim() : '';
+            const narrativePrefix = explicitOwner(firstPrefix) || (!/^(?:我|我们|你|您)/.test(firstPrefix) && /(?:说|问|答|道|笑|看|伸手|转身)[^“”「」"]*[:：]?$/.test(firstPrefix));
+            // Quoting a word inside ordinary speech is not narration: 我只想说“谢谢”，真的。
+            if (quotes.length && (!firstPrefix || rowSpeaker === 'narrator' || narrativePrefix)) {
+                let cursor = 0;
+                let owner = rowSpeaker;
+                for (const quote of quotes) {
+                    const before = text.slice(cursor, quote.index).trim();
+                    const nextOwner = explicitOwner(before);
+                    if (before.replace(/[，。！？、：；,.!?:;\s]/g, '')) owner = nextOwner || 'narrator';
+                    // An unattributed quote in narration stays narration, not a char bubble.
+                    if (before) push('narrator', before);
+                    push(owner, quote[1] ?? quote[2] ?? quote[3], npcName);
+                    cursor = quote.index + quote[0].length;
+                }
+                push('narrator', text.slice(cursor));
+            } else if (/^(?:\*[^*]+\*|（[^）]+）|\([^)]*\))$/.test(text) || explicitOwner(text) && /(?:说道|问道|看着|看了|转身|伸手|点头|摇头|歪了|笑了)/.test(text)) {
+                push('narrator', text);
+            } else {
+                push(rowSpeaker, text, npcName);
+            }
+        }
+    }
+    if (rows.length > 120 || rows.reduce((sum, row) => sum + row.text.length, 0) > 50400) return overBudget();
+    return rows;
+}
+
+__m_core_dialogue_js.normalizeDialogueRows = normalizeDialogueRows;
+__m_core_dialogue_js.DIALOGUE_CONTRACT = DIALOGUE_CONTRACT;
+}
+
 function __init_ui_heartView_js() {
 // MODULE: ui/heartView.js
 const archive_groups = __m_archive_groups_js;
@@ -7560,6 +7713,7 @@ const archive_repository = __m_archive_repository_js;
 const archive_snapshots = __m_archive_snapshots_js;
 const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
+const core_dialogue = __m_core_dialogue_js;
 const core_context = __m_core_context_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
 const core_text = __m_core_text_js;
@@ -7569,6 +7723,7 @@ const ui_overlay = __m_ui_overlay_js;
 const runtimeState = __m_core_state_js.state;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
 
 
 
@@ -7696,9 +7851,14 @@ function renderAvatarDialoguePopup(state = runtimeState.activeAvatarDialogue, { 
             ? '这份历史档案还没有生成角色互动台词库。为了不偷偷切换聊天，我不会在这里只读状态下直接发起生成。'
             : '这份当前档案还没有角色互动台词库。生成后，点头像会按早中晚、周末、生日、节日和久未访问状态自动换台词。';
     const label = session ? speech?.label || '角色互动' : 'HEART VOICE';
+    const dialogueIdentity = { characterName: state.characterName || session?.characterName || entry?.characterName || '角色', userName: state.userName || state.snapshot?.memory?.userName || entry?.memory?.userName || session?.userName || '', charAvatar: avatarSrc || '', userAvatar: '' };
+    const rows = core_dialogue.normalizeDialogueRows([{ speaker: session ? 'char' : 'narrator', text: message }], dialogueIdentity);
+    const dialogueHtml = session && (rows.length > 1 || rows[0]?.speaker !== 'char')
+        ? renderHeartScriptLines(rows, dialogueIdentity)
+        : `<div class="rmt-avatar-dialog-bubble">${core_text.esc(rows[0]?.text || message)}</div>`;
     const pop = document.createElement('div');
     pop.className = 'rmt-avatar-dialog-pop';
-    pop.innerHTML = `<div class="rmt-avatar-dialog-card"><button type="button" class="rmt-avatar-dialog-close" data-rmt-action="avatar-dialog-close" aria-label="关闭">×</button><div class="rmt-avatar-dialog-head"><span class="rmt-avatar-dialog-avatar">${avatarSrc ? `<img src="${core_text.esc(avatarSrc)}" alt="">` : '<i class="fa-solid fa-heart"></i>'}</span><div><b>${core_text.esc(state.characterName || session?.characterName || entry?.characterName || '角色')}</b><small>${core_text.esc(label)}</small></div></div><div class="rmt-avatar-dialog-bubble">${core_text.esc(message)}</div><div class="rmt-avatar-dialog-actions">${actions}</div>${readOnly ? '<div class="rmt-avatar-dialog-note">只读档案：可以听已保存台词，但不能在这里重生成。</div>' : ''}</div>`;
+    pop.innerHTML = `<div class="rmt-avatar-dialog-card"><button type="button" class="rmt-avatar-dialog-close" data-rmt-action="avatar-dialog-close" aria-label="关闭">×</button><div class="rmt-avatar-dialog-head"><span class="rmt-avatar-dialog-avatar">${avatarSrc ? `<img src="${core_text.esc(avatarSrc)}" alt="">` : '<i class="fa-solid fa-heart"></i>'}</span><div><b>${core_text.esc(dialogueIdentity.characterName)}</b><small>${core_text.esc(label)}</small></div></div>${dialogueHtml}<div class="rmt-avatar-dialog-actions">${actions}</div>${readOnly ? '<div class="rmt-avatar-dialog-note">只读档案：可以听已保存台词，但不能在这里重生成。</div>' : ''}</div>`;
     body.appendChild(pop);
 }
 
@@ -7719,9 +7879,11 @@ async function showAvatarDialogueForCharacter(characterKey) {
         let session = null;
         let snapshot = null;
         let readOnly = false;
+        let userName = '';
         if (generation_imageGeneration.indexedArchiveMatchesCurrentChat(entry, context)) {
             const live = core_context.currentCharacterGuard();
             const memory = archive_repository.getImportedMemory(live);
+            userName = core_text.normalizeText(memory?.userName, 120);
             if (memory) session = core_cache.loadSession(core_constants.MODE.HEART, { context: live, chatId: core_context.getChatId(live), memoryBank: memory });
         } else {
             readOnly = true;
@@ -7729,7 +7891,7 @@ async function showAvatarDialogueForCharacter(characterKey) {
             session = core_cache.loadSession(core_constants.MODE.HEART, { cache: snapshot.cache, chatId: snapshot.chatId, memoryBank: snapshot.memory });
         }
         if (requestEpoch !== runtimeState.avatarDialogueRequestEpoch) return;
-        runtimeState.activeAvatarDialogue = { characterKey: key, characterName: entry.characterName, entry, snapshot, session, readOnly, avatarSrc, category: '' };
+        runtimeState.activeAvatarDialogue = { characterKey: key, characterName: entry.characterName, userName, entry, snapshot, session, readOnly, avatarSrc, category: '' };
         renderAvatarDialoguePopup(runtimeState.activeAvatarDialogue);
     } catch (error) {
         if (requestEpoch !== runtimeState.avatarDialogueRequestEpoch) return;
@@ -7795,17 +7957,18 @@ function selectedHeartStrip() {
     return runtimeState.activeSession.dailyStrips.find(item => item.id === runtimeState.activeSession.selectedStripId) || runtimeState.activeSession.dailyStrips[0] || null;
 }
 
-function renderHeartScriptLines(lines) {
-    const charAvatar = heartCharacterAvatarUrl(runtimeState.activeArchiveSnapshot);
-    const userAvatar = heartUserAvatarUrl();
-    const charName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext().name2, 120) || '角色';
-    const userName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.memory?.userName || core_context.getContext().name1, 120) || '你';
-    return `<div class="rmt-heart-script">${(lines || []).map(line => {
+function renderHeartScriptLines(lines, identity = {}) {
+    const charAvatar = identity.charAvatar ?? heartCharacterAvatarUrl(runtimeState.activeArchiveSnapshot);
+    const userAvatar = identity.userAvatar ?? heartUserAvatarUrl();
+    const charName = core_text.normalizeText(identity.characterName ?? runtimeState.activeArchiveSnapshot?.characterName ?? core_context.getContext().name2, 120) || '角色';
+    const userName = core_text.normalizeText(identity.userName ?? runtimeState.activeArchiveSnapshot?.memory?.userName ?? core_context.getContext().name1, 120) || '你';
+    return `<div class="rmt-heart-script">${core_dialogue.normalizeDialogueRows(lines, { characterName: charName, userName }).map(line => {
         if (line.speaker === 'narrator') return `<div class="rmt-heart-narration">${core_text.esc(line.text)}</div>`;
         const isUser = line.speaker === 'user';
-        const avatar = isUser ? userAvatar : charAvatar;
+        const isNpc = line.speaker === 'npc';
+        const avatar = isNpc ? '' : isUser ? userAvatar : charAvatar;
         const fallback = isUser ? '<i class="fa-solid fa-user"></i>' : '<i class="fa-solid fa-heart"></i>';
-        return `<div class="rmt-heart-line ${isUser ? 'user' : 'char'}"><span class="rmt-heart-line-avatar">${avatar ? `<img src="${core_text.esc(avatar)}" alt="">` : fallback}</span><div><small>${core_text.esc(isUser ? userName : charName)}</small><p>${core_text.esc(line.text)}</p></div></div>`;
+        return `<div class="rmt-heart-line ${isNpc ? 'npc' : isUser ? 'user' : 'char'}"><span class="rmt-heart-line-avatar">${avatar ? `<img src="${core_text.esc(avatar)}" alt="">` : isNpc ? '<i class="fa-solid fa-user"></i>' : fallback}</span><div><small>${core_text.esc(isNpc ? line.speakerName : isUser ? userName : charName)}</small><p>${core_text.esc(line.text)}</p></div></div>`;
     }).join('')}</div>`;
 }
 
@@ -8224,6 +8387,7 @@ const archive_library = __m_archive_library_js;
 const archive_repository = __m_archive_repository_js;
 const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
+const core_dialogue = __m_core_dialogue_js;
 const core_context = __m_core_context_js;
 const core_evidence = __m_core_evidence_js;
 const core_incremental = __m_core_incremental_js;
@@ -8236,6 +8400,7 @@ const ui_heartView = __m_ui_heartView_js;
 const runtimeState = __m_core_state_js.state;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
 
 
 
@@ -8277,6 +8442,7 @@ function normalizeHeartCore(data, memoryBank) {
 function heartCorePrompt(context, memoryBank) {
     return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 时期对话')}
 本请求只生成【关系锚点 + 各种时期/时段的角色对话 + 特别日】。春夏秋冬 Drama 和日常一格都在各自入口单独生成。
+greetings 和 specialDays.line 是 {{char}} 直接对 {{user}} 说的话；只写台词，不混入动作、旁白或其他人的发言。
 UNTRUSTED_HEART_ARCHIVE_JSON:
 ${generation_prompts.endingArchiveSlice(memoryBank, 40)}
 
@@ -8302,6 +8468,7 @@ function compactHeartDialoguesExisting(session) {
 function heartCoreIncrementPrompt(context, memoryBank, existing, sourceMemoryIds) {
     return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 时期对话增量')}
 旧关系时期记录和旧台词由本地原样保留。本请求只根据新增档案补充新的关系阶段说明与新台词，禁止改写、润色或换措辞复述旧台词。
+greetings 和 specialDays.line 是 {{char}} 直接对 {{user}} 说的话；只写台词，不混入动作、旁白或其他人的发言。
 UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:
 ${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}
 EXISTING_HEART_DIALOGUES_JSON:
@@ -8432,6 +8599,7 @@ function compactHeartSeasonExisting(session, season) {
 
 function heartPostVoicePrompt(context, memoryBank, core, previous = null, sourceMemoryIds = null) {
     return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / Drama：未来')}
+${core_dialogue.DIALOGUE_CONTRACT}
 RELATIONSHIP_TONE_ONLY_JSON:
 ${heartDramaRelationshipOnlyContext(core)}
 ${previous ? `EXISTING_POSTENDING_DRAMA_INDEX_JSON:
@@ -8452,6 +8620,7 @@ function heartSeasonVoicePrompt(context, memoryBank, core, season, previous = nu
     const labels = { spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
     const label = labels[season] || season;
     return `${generation_prompts.promptSafetyBoundary(context, `角色互动 / Drama：${label} Voice`)}
+${core_dialogue.DIALOGUE_CONTRACT}
 RELATIONSHIP_TONE_ONLY_JSON:
 ${heartDramaRelationshipOnlyContext(core)}
 ${previous ? `EXISTING_${season.toUpperCase()}_DRAMA_INDEX_JSON:
@@ -8471,6 +8640,7 @@ function heartSeasonScenarioPrompt(context, memoryBank, core, season, previous =
     const labels = { spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
     const label = labels[season] || season;
     return `${generation_prompts.promptSafetyBoundary(context, `角色互动 / Drama：${label} Scenario`)}
+${core_dialogue.DIALOGUE_CONTRACT}
 RELATIONSHIP_TONE_ONLY_JSON:
 ${heartDramaRelationshipOnlyContext(core)}
 ${previous ? `EXISTING_${season.toUpperCase()}_DRAMA_INDEX_JSON:
@@ -8668,7 +8838,7 @@ ${previous ? `UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:\n${core_incremental.incr
 - userLine 只是非正史小剧场台词，不代表用户真实选择。${previous ? '必须避开 EXISTING_STRIP_INDEX_JSON 的标题、动作和梗；旧一格与已绘图片由本地保留。' : ''}只输出 JSON。`;
 }
 
-function normalizeVoiceDramaPart(data, expectedKinds) {
+function normalizeVoiceDramaPart(data, expectedKinds, memoryBank = {}) {
     const raw = Array.isArray(data?.voiceDramas) ? data.voiceDramas : [];
     const out = [];
     for (const expected of expectedKinds) {
@@ -8676,6 +8846,7 @@ function normalizeVoiceDramaPart(data, expectedKinds) {
         if (!item) throw new Error(`Voice Drama 缺少 ${expected}。`);
         const post = expected === 'postending';
         const script = normalizeHeartScript(item?.script, {
+            characterName: memoryBank.characterName, userName: memoryBank.userName,
             minLines: post ? 8 : 5,
             maxLines: post ? 24 : 16,
             minChars: post ? 420 : 280,
@@ -8694,14 +8865,14 @@ function normalizeVoiceDramaPart(data, expectedKinds) {
     return out;
 }
 
-function normalizeScenarioDramaPart(data, expectedSeason = '') {
+function normalizeScenarioDramaPart(data, expectedSeason = '', memoryBank = {}) {
     const raw = Array.isArray(data?.scenarioDramas) ? data.scenarioDramas : [];
     const seasons = expectedSeason ? [expectedSeason] : ['spring', 'summer', 'autumn', 'winter'];
     const out = [];
     for (const expected of seasons) {
         const item = raw.find(candidate => core_text.normalizeText(candidate?.season, 40).toLowerCase() === expected);
         if (!item) throw new Error(`Scenario Drama 缺少 ${expected}。`);
-        const script = normalizeHeartScript(item?.script, { minLines: 6, maxLines: 20, minChars: 360 });
+        const script = normalizeHeartScript(item?.script, { minLines: 6, maxLines: 20, minChars: 360, characterName: memoryBank.characterName, userName: memoryBank.userName });
         if (!script.length) throw new Error(`Scenario Drama ${expected} 长度不足。`);
         out.push({
             id: core_text.safeId(item?.id, `SCENE_${expected.toUpperCase()}`),
@@ -9418,7 +9589,7 @@ async function generateHeartSeasonSection(season) {
                     heartPostVoicePrompt(context, memoryBank, latest, latest, null),
                     '角色互动 · 追加未来 / 后日谈',
                     { maxTokens: 3800, temperature: 0.65, context, origin, taskKey: `${taskKey}:voice`, mode: core_constants.MODE.HEART, background: true },
-                    raw => normalizeVoiceDramaPart(raw, ['postending']),
+                    raw => normalizeVoiceDramaPart(raw, ['postending'], memoryBank),
                 ))[0]);
                 await persistHeartPartialPatch(`season:postending:${batchId}:voice`, { type: 'season', season: 'postending', voice }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
                 savedParts += 1;
@@ -9436,7 +9607,7 @@ async function generateHeartSeasonSection(season) {
                         heartSeasonVoicePrompt(context, memoryBank, latest, normalizedSeason, latest, null),
                         `角色互动 · 追加${ui_heartView.heartSeasonLabel(normalizedSeason)} Voice`,
                         { maxTokens: 3000, temperature: 0.65, context, origin, taskKey: `${taskKey}:voice`, mode: core_constants.MODE.HEART, background: true },
-                        raw => normalizeVoiceDramaPart(raw, [normalizedSeason]),
+                        raw => normalizeVoiceDramaPart(raw, [normalizedSeason], memoryBank),
                     ))[0]);
                     await persistHeartPartialPatch(`season:${normalizedSeason}:${batchId}:voice`, { type: 'season', season: normalizedSeason, voice }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
                     savedParts += 1;
@@ -9453,7 +9624,7 @@ async function generateHeartSeasonSection(season) {
                         heartSeasonScenarioPrompt(context, memoryBank, latest, normalizedSeason, latest, null),
                         `角色互动 · 追加${ui_heartView.heartSeasonLabel(normalizedSeason)} Scenario`,
                         { maxTokens: 3200, temperature: 0.65, context, origin, taskKey: `${taskKey}:scenario`, mode: core_constants.MODE.HEART, background: true },
-                        raw => normalizeScenarioDramaPart(raw, normalizedSeason),
+                        raw => normalizeScenarioDramaPart(raw, normalizedSeason, memoryBank),
                     ))[0]);
                     await persistHeartPartialPatch(`season:${normalizedSeason}:${batchId}:scenario`, { type: 'season', season: normalizedSeason, scenario }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
                     savedParts += 1;
@@ -9485,15 +9656,9 @@ async function generateHeartSeasonSection(season) {
     }
 }
 
-function normalizeHeartScript(rawLines, { minLines = 8, maxLines = 28, minChars = 500 } = {}) {
-    const allowedSpeakers = new Set(['char', 'user', 'narrator']);
-    const lines = (Array.isArray(rawLines) ? rawLines : []).slice(0, maxLines).map((line, index) => {
-        const speakerRaw = core_text.normalizeText(line?.speaker, 40).toLowerCase();
-        const speaker = allowedSpeakers.has(speakerRaw) ? speakerRaw : (index % 4 === 0 ? 'narrator' : 'char');
-        const text = core_text.normalizeText(line?.text, 1800);
-        if (!text) return null;
-        return { speaker, text };
-    }).filter(Boolean);
+function normalizeHeartScript(rawLines, { minLines = 8, minChars = 500, characterName = '', userName = '' } = {}) {
+    // The shared post-split budget also applies on re-normalization; never slice an expanded script.
+    const lines = core_dialogue.normalizeDialogueRows(rawLines, { strict: true, characterName, userName });
     if (lines.length < minLines || lines.reduce((sum, line) => sum + line.text.length, 0) < minChars) return [];
     return lines;
 }
@@ -9541,6 +9706,7 @@ function normalizeHeart(data, memoryBank) {
         const kind = core_constants.HEART_VOICE_KINDS.has(kindRaw) ? kindRaw : '';
         if (!kind) return null;
         const script = normalizeHeartScript(item?.script, {
+            characterName: memoryBank?.characterName, userName: memoryBank?.userName,
             minLines: kind === 'postending' ? 8 : 5,
             maxLines: kind === 'postending' ? 24 : 16,
             minChars: kind === 'postending' ? 420 : 280,
@@ -9563,7 +9729,7 @@ function normalizeHeart(data, memoryBank) {
         const seasonRaw = core_text.normalizeText(item?.season, 40).toLowerCase();
         const season = core_constants.HEART_SCENARIO_SEASONS.has(seasonRaw) ? seasonRaw : '';
         if (!season) return null;
-        const script = normalizeHeartScript(item?.script, { minLines: 6, maxLines: 20, minChars: 360 });
+        const script = normalizeHeartScript(item?.script, { minLines: 6, maxLines: 20, minChars: 360, characterName: memoryBank?.characterName, userName: memoryBank?.userName });
         if (!script.length) return null;
         return {
             id: core_text.safeId(item?.id, `SCENE${String(index + 1).padStart(2, '0')}`),
@@ -9691,6 +9857,7 @@ __m_modes_heart_js.normalizeHeart = normalizeHeart;
 
 function __init_generation_prompts_js() {
 // MODULE: generation/prompts.js
+const core_butterflyContract = __m_core_butterflyContract_js;
 const core_constants = __m_core_constants_js;
 const core_evidence = __m_core_evidence_js;
 const core_text = __m_core_text_js;
@@ -9698,6 +9865,7 @@ const modes_album = __m_modes_album_js;
 const modes_cabinet = __m_modes_cabinet_js;
 const modes_ending = __m_modes_ending_js;
 const modes_heart = __m_modes_heart_js;
+
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 
@@ -9974,6 +10142,7 @@ CURRENT_LOCAL_DATE: ${currentDate}
 const PROMPTS = {
     [core_constants.MODE.CALENDAR]: (context, memoryBank) => calendarPrompt(context, memoryBank),
     [core_constants.MODE.BUTTERFLY]: (context, memoryBank) => `${promptSafetyBoundary(context, '蝴蝶效应')}
+${core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
 主时间线只从下面较小的档案锚点集中取证；平行分歧主要依据受控角色卡/人设/世界书推演。
 UNTRUSTED_TIMELINE_ANCHORS_JSON:
 ${promptArchiveSlice(memoryBank, 16)}
@@ -11817,7 +11986,6 @@ function mountSettings() {
           <div class="rmt-settings-card-head"><span>UI</span><div><b>界面主题</b><small>即选即看 · 自动保护文字对比度</small></div></div>
           <label class="rmt-settings-field"><span>外观</span><select class="text_pole" data-rmt-theme-mode><option value="default">日间 · 珍珠白</option><option value="night">夜间 · 星黛蓝</option><option value="host">跟随酒馆美化</option><option value="custom">自定义配色</option></select></label>
           <label class="rmt-settings-field"><span>卡片不透明度 <output data-rmt-theme-opacity></output></span><input data-rmt-theme-alpha type="range" min="0.72" max="1" step="0.01"></label>
-          <div class="rmt-theme-preview"><b>留在这里的，是两个人的回忆。</b><p>正文会自动保持清晰易读。</p><small>日期 · 来源 · 备注</small></div>
           <div class="rmt-theme-custom-panel" data-rmt-theme-custom-panel>
             <div class="rmt-theme-presets"><button type="button" data-rmt-theme-preset="day">从日间开始</button><button type="button" data-rmt-theme-preset="night">从夜间开始</button></div>
             <label><span>背景</span><input type="color" data-rmt-theme-color="background"></label>
@@ -11861,7 +12029,6 @@ function mountSettings() {
             <div class="rmt-performance-diagnostic-head"><b>诊断结果</b><button type="button" class="menu_button rmt-performance-diagnostic-close" data-rmt-performance-diagnostic-close>关闭诊断</button></div>
             <pre class="rmt-performance-diagnostic-output" data-rmt-performance-diagnostic-output></pre>
           </div>
-          <div class="rmt-api-note">当前聊天窗口一份独立档案。普通更新只追加上次归档后的新内容并保留已生成 ADV EVENT / 房间 / ENDING；需要从头重整时请进入档案后明确选择“完全重建档案”。性能诊断只读取缓存 manifest/字符串长度，不会解压缓存或遍历聊天正文。</div>
         </div>
       </div>`;
     mount.appendChild(panel);
@@ -13152,12 +13319,14 @@ __m_modes_advEvent_js.mergeAdvIncremental = mergeAdvIncremental;
 
 function __init_modes_butterfly_js() {
 // MODULE: modes/butterfly.js
+const core_butterflyContract = __m_core_butterflyContract_js;
 const core_constants = __m_core_constants_js;
 const core_evidence = __m_core_evidence_js;
 const core_incremental = __m_core_incremental_js;
 const core_text = __m_core_text_js;
 const generation_client = __m_generation_client_js;
 const generation_prompts = __m_generation_prompts_js;
+
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 
@@ -13247,16 +13416,16 @@ function butterflyFirstPersonCount(value) {
 function normalizeButterflyWorldSpec(node) {
     const source = worldSource(node);
     const primaryAxis = normalizedPrimaryAxis(node?.primaryAxis || source?.primaryAxis || source?.axis);
-    if (!PRIMARY_AXIS_SET.has(primaryAxis)) throw new Error(`平行分歧缺少有效 primaryAxis：${BUTTERFLY_PRIMARY_AXES.join('/')}。`);
+    if (!PRIMARY_AXIS_SET.has(primaryAxis)) throw core_butterflyContract.butterflyValidationError('worldSpec');
     const worldSpec = { primaryAxis };
     for (const field of WORLD_FIELDS) {
         const text = worldField(source, WORLD_FIELD_ALIASES[field]);
         const compact = text.replace(/\s+/g, '');
-        if (compact.length < 2 || WORLD_PLACEHOLDER_RE.test(compact)) throw new Error(`平行分歧的 worldSpec.${field} 缺少具体内容。`);
+        if (compact.length < 2 || WORLD_PLACEHOLDER_RE.test(compact)) throw core_butterflyContract.butterflyValidationError('worldSpec');
         worldSpec[field] = text;
     }
     const thirdPartyRomance = source?.thirdPartyRomance ?? node?.thirdPartyRomance;
-    if (thirdPartyRomance !== false) throw new Error('平行分歧必须明确 thirdPartyRomance=false。');
+    if (thirdPartyRomance !== false) throw core_butterflyContract.butterflyValidationError('worldSpec');
     worldSpec.thirdPartyRomance = false;
     return worldSpec;
 }
@@ -13320,8 +13489,8 @@ function assertButterflyColdSystemNote(value, label = 'SYSTEM NOTE') {
         /分析/, /结论/, /变量/, /(?:概率|置信)/, /(?:算法|模型)/,
         /(?:主体|样本)/, /(?:路径|时间线)/, /(?:收敛|偏差|阈值)/, /(?:判定|分类)/, /(?:结局|结果|终局)/,
     ].filter(pattern => pattern.test(text)).length;
-    if (butterflyHanCount(text) < 30 || cueCount < 3 || !/(?:最终(?:判定|结局|结果)|终局(?:判定|结果)|判定(?:结果|结局))/.test(text)) {
-        throw new Error(`${label}必须是不少于 30 个汉字的冷酷中文算法分析，并给出最终判定。`);
+    if (butterflyHanCount(text) < core_butterflyContract.BUTTERFLY_LIMITS.systemHan || cueCount < 3 || !/(?:最终(?:判定|结局|结果)|终局(?:判定|结果)|判定(?:结果|结局))/.test(text)) {
+        throw core_butterflyContract.butterflyValidationError('systemNote');
     }
     return text;
 }
@@ -13332,18 +13501,18 @@ function normalizeNarrative(node, context, options = {}) {
     const intervention = core_text.normalizeText(node?.intervention, 12000);
     const systemNote = assertButterflyColdSystemNote(node?.systemNote, `${options.label || label || '观测节点'} SYSTEM NOTE`);
     if (!label || core_text.isPlaceholderText(label)) throw new Error(`${options.label || '观测节点'}缺少有效标题。`);
-    const minimumHan = Math.max(1, Number(options.minimumHan) || 100);
-    const minimumFirstPerson = Math.max(1, Number(options.minimumFirstPerson) || 3);
+    const minimumHan = Math.max(1, Number(options.minimumHan) || core_butterflyContract.BUTTERFLY_LIMITS.monologueHan);
+    const minimumFirstPerson = Math.max(1, Number(options.minimumFirstPerson) || core_butterflyContract.BUTTERFLY_LIMITS.monologueFirstPerson);
     if (butterflyHanCount(monologue) < minimumHan || butterflyFirstPersonCount(monologue) < minimumFirstPerson) {
-        throw new Error(`${options.label || label}的第一人称独白不足：至少 ${minimumHan} 个汉字且需有清晰的“我”视角。`);
+        throw core_butterflyContract.butterflyValidationError('monologue');
     }
     if (options.requireInterventionContrast !== false) {
-        if (butterflyHanCount(intervention) < 40 || butterflyFirstPersonCount(intervention) < 1
+        if (butterflyHanCount(intervention) < core_butterflyContract.BUTTERFLY_LIMITS.interventionHan || butterflyFirstPersonCount(intervention) < 1
             || !INTERVENTION_CONTRAST_RE.test(intervention) || !INTERVENTION_REFLECTION_RE.test(intervention)) {
-            throw new Error(`${options.label || label}的现世回应必须以当前 {{char}} 第一人称对照“那个我”并完成自省。`);
+            throw core_butterflyContract.butterflyValidationError('intervention');
         }
     } else if (!intervention) {
-        throw new Error(`${options.label || label}缺少现世回应。`);
+        throw core_butterflyContract.butterflyValidationError('intervention');
     }
     for (const [field, value] of Object.entries({ label, monologue, intervention, systemNote })) {
         assertButterflyRelationshipSafety(value, context, `${options.label || label} ${field}`);
@@ -13356,8 +13525,8 @@ function normalizeButterflyBranch(node, index, memoryBank, context = {}, options
     const worldSpec = normalizeButterflyWorldSpec(node);
     const narrative = normalizeNarrative(node, context, {
         label: options.label || `平行分歧 ${serial}`,
-        minimumHan: 100,
-        minimumFirstPerson: 3,
+        minimumHan: core_butterflyContract.BUTTERFLY_LIMITS.monologueHan,
+        minimumFirstPerson: core_butterflyContract.BUTTERFLY_LIMITS.monologueFirstPerson,
         requireInterventionContrast: true,
     });
     for (const [field, value] of Object.entries(worldSpec)) {
@@ -13399,17 +13568,17 @@ function normalizeButterflyOmega(node, context = {}) {
     const monologue = core_text.normalizeText(node?.monologue, 12000);
     const intervention = core_text.normalizeText(node?.intervention, 12000);
     const systemNote = assertButterflyColdSystemNote(node?.systemNote, '观测点 Ω SYSTEM NOTE');
-    if (!label || !/(?:观测点\s*Ω|TRUE\s*ENDING)/i.test(label)) throw new Error('最后一项必须明确标记为观测点 Ω / TRUE ENDING。');
-    if (monologue) throw new Error('观测点 Ω 不是平行体，monologue 必须严格为空。');
+    if (!label || !/(?:观测点\s*Ω|TRUE\s*ENDING)/i.test(label)) throw core_butterflyContract.butterflyValidationError('omega');
+    if (monologue) throw core_butterflyContract.butterflyValidationError('omega');
     const axisCueCount = OMEGA_AXIS_CUES.filter(pattern => pattern.test(intervention)).length;
-    if (butterflyHanCount(intervention) < 160 || butterflyFirstPersonCount(intervention) < 4
+    if (butterflyHanCount(intervention) < core_butterflyContract.BUTTERFLY_LIMITS.omegaHan || butterflyFirstPersonCount(intervention) < core_butterflyContract.BUTTERFLY_LIMITS.omegaFirstPerson
         || !omegaUserReferencePattern(context).test(intervention) || axisCueCount < 3
         || !/(?:命运|奇迹|不可能)/.test(intervention)
         || !/(?:唯一(?:解|答案|选择|路径|可能)|最优解|最终选择|选择(?:了)?你|找到(?:了)?你|仍然会?(?:遇见|找到|选择)你)/.test(intervention)) {
-        throw new Error('观测点 Ω 必须以现世 {{char}} 第一人称综合至少 3 类命运差异，不少于 160 个汉字，并表达穿越不可能仍找到/选择 {{user}} 的唯一解。');
+        throw core_butterflyContract.butterflyValidationError('omega');
     }
     if (!/(?:TRUE\s*ENDING|真结局|唯一解|最优解|唯一(?:答案|路径|解法)|奇迹|命运)/i.test(systemNote)) {
-        throw new Error('观测点 Ω SYSTEM NOTE 必须给出命运/奇迹/唯一解的终局判定。');
+        throw core_butterflyContract.butterflyValidationError('omega');
     }
     for (const [field, value] of Object.entries({ label, intervention, systemNote })) {
         assertButterflyRelationshipSafety(value, context, `观测点 Ω ${field}`);
@@ -13428,7 +13597,7 @@ function isOmegaCandidate(node) {
 
 function normalizedMainNode(node, memoryBank, context) {
     const narrative = normalizeNarrative(node, context, {
-        label: '主时间线', minimumHan: 100, minimumFirstPerson: 3, requireInterventionContrast: false,
+        label: '主时间线', minimumHan: core_butterflyContract.BUTTERFLY_LIMITS.monologueHan, minimumFirstPerson: core_butterflyContract.BUTTERFLY_LIMITS.monologueFirstPerson, requireInterventionContrast: false,
     });
     const reference = core_evidence.normalizeMemoryReference(
         node?.sourceMemoryIds, node?.sourceMemoryAnchor,
@@ -13517,7 +13686,7 @@ async function generateButterflyWithRepair(context, memoryBank, origin, taskKey)
             }
             if (index < lastIndex && isOmegaCandidate(raw.nodes[index])) throw new Error('位置错误');
             if (index === lastIndex && !isOmegaCandidate(raw.nodes[index])) throw new Error('缺少 Ω');
-        } catch { slots.push({ index }); }
+        } catch (error) { slots.push({ index, issue: core_butterflyContract.butterflyValidationFeedback(error) || '节点身份、证据、关系或唯一性未通过；按原契约重写此节点。' }); }
     }
     const missingAxes = BUTTERFLY_PRIMARY_AXES.filter(axis => !axes.has(axis));
     const seenAxes = new Set();
@@ -13554,6 +13723,7 @@ function butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds
         worldSpec: looseWorldSpec(item),
     }));
     return `${generation_prompts.promptSafetyBoundary(context, '蝴蝶效应 / 增量分歧')}
+${core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
 旧终端节点由本地原样保留。本请求只根据新增档案生成 1～3 个尚未出现的平行分歧，并给出看完全部旧分歧和新分歧后的新观测点 Ω；禁止改写或换措辞复述旧节点。
 UNTRUSTED_INCREMENTAL_TIMELINE_JSON:
 ${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}
@@ -16753,7 +16923,7 @@ function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentati
             const label = core_text.normalizeText(item?.label, 60) || `角落 ${objectIndex + 1}`;
             const description = core_text.normalizeText(item?.description, 1600);
             const line = core_text.normalizeText(item?.line, 800);
-            if (basis === '设定' && roomNarrativeClaimsSharedHistory([label, description, line], userName)) return null;
+            if (basis === '设定' && [label, description, line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) return null;
             const reference = basis === '记忆'
                 ? core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, `${item?.label || ''}
 ${description}
@@ -16815,7 +16985,7 @@ ${line}`, memoryBank, 1)
         const objectIds = new Set(space.objects.map(item => item.id));
         const focusObjectId = objectIds.has(String(raw?.focusObjectId || '')) ? String(raw.focusObjectId) : space.objects[0].id;
         if (!activity || !line) throw new Error(`“他的房间”缺少 ${key} 时段的生活状态。`);
-        if (roomNarrativeClaimsSharedHistory([activity, line], userName)) {
+        if ([activity, line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) {
             throw new Error(`“他的房间”${key} 时段混入了没有档案证据的既往共同经历。`);
         }
         dayparts[key] = { spaceId: space.id, activity, line, focusObjectId };
@@ -17399,7 +17569,7 @@ function roomCurrentSlot(session = runtimeState.activeSession, date = new Date()
     if (!stored) return null;
     const userName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.memory?.userName
         || core_context.getContext()?.name1, 120);
-    if (!roomNarrativeClaimsSharedHistory([stored.activity, stored.line], userName)) return stored;
+    if (![stored.activity, stored.line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) return stored;
     return {
         ...stored,
         activity: '按自己的节奏处理此刻的日常。',
@@ -17524,7 +17694,7 @@ function roomPetSummaryHtml(pet) {
 
 function roomObjectSafeForPresentation(item, memoryBank, userName) {
     const narrative = [item?.label, item?.description, item?.line];
-    if (!roomNarrativeClaimsSharedHistory(narrative, userName)) return true;
+    if (!narrative.some(field => roomNarrativeClaimsSharedHistory(field, userName))) return true;
     if (item?.basis !== '记忆') return false;
     const reference = core_evidence.normalizeExactMemoryReference(
         item?.sourceMemoryIds,
@@ -17845,6 +18015,7 @@ __m_modes_room_js.roomMotifToken = roomMotifToken;
 __m_modes_room_js.roomPetPlacement = roomPetPlacement;
 __m_modes_room_js.roomPetNodeHtml = roomPetNodeHtml;
 __m_modes_room_js.roomPetSummaryHtml = roomPetSummaryHtml;
+__m_modes_room_js.roomObjectSafeForPresentation = roomObjectSafeForPresentation;
 __m_modes_room_js.roomDeepAvailability = roomDeepAvailability;
 __m_modes_room_js.openRoomDeepMode = openRoomDeepMode;
 __m_modes_room_js.returnToRoomFromDeep = returnToRoomFromDeep;
@@ -18593,7 +18764,7 @@ function relationGardenHtml({ characterName, avatarUrl = '', sharedRelations = [
         ? core_text.normalizeText(dynamic?.npcPerspective || base?.npcPerspective, 900)
         : '';
     const npcPerspectiveDetail = selected && !selected.isUser
-        ? `<div class="rmt-relation-layer-row npc-perspective"><strong>NPC视角</strong><span>${npcPerspective ? core_text.esc(npcPerspective) : '尚未生成'}</span><small>${npcPerspective ? '动态世界线视角优先于固有设定；内容只是证据边界内的视角化演绎。' : '这是旧缓存条目；刷新本世界线关系或重新读取固定设定后可查看。'}</small></div>`
+        ? `<div class="rmt-relation-layer-row npc-perspective"><strong>NPC视角</strong><span>${npcPerspective ? core_text.esc(npcPerspective) : '尚未生成'}</span>${npcPerspective ? '' : '<small>刷新本世界线关系或重新读取固定设定后可查看。</small>'}</div>`
         : '';
     const detail = selected ? `<article class="rmt-relation-detail">
       <div class="rmt-relation-detail-head"><b>${core_text.esc(selected.name || '{{user}}')}</b>${selected.isUser ? '<span>USER</span>' : ''}</div>
@@ -19192,6 +19363,7 @@ __m_generation_normalizers_js.normalizeByMode = normalizeByMode;
 
 function __init_generation_client_js() {
 // MODULE: generation/client.js
+const core_butterflyContract = __m_core_butterflyContract_js;
 const archive_groups = __m_archive_groups_js;
 const archive_repository = __m_archive_repository_js;
 const archive_snapshots = __m_archive_snapshots_js;
@@ -19225,6 +19397,7 @@ const modes_travel = __m_modes_travel_js;
 const ui_overlay = __m_ui_overlay_js;
 const ui_settingsPanel = __m_ui_settingsPanel_js;
 const runtimeState = __m_core_state_js.state;
+
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 
@@ -19322,7 +19495,7 @@ async function requestValidatedSegment(prompt, status, options, validator) {
     let lastError = null;
     for (let attempt = 0; attempt < 2; attempt += 1) {
         const retryNote = attempt && lastError
-            ? '\n\n【本地校验反馈】' + (String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。') + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
+            ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || (String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
             : '';
         try {
             const raw = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? '（重试）' : ''}`, options);
@@ -19979,6 +20152,7 @@ __m_generation_client_js.GENERATED_PHRASE_EVIDENCE_KEYS = GENERATED_PHRASE_EVIDE
 
 function __init_generation_contentRegeneration_js() {
 // MODULE: generation/contentRegeneration.js
+const core_butterflyContract = __m_core_butterflyContract_js;
 const core_constants = __m_core_constants_js;
 const core_evidence = __m_core_evidence_js;
 const core_text = __m_core_text_js;
@@ -19992,6 +20166,7 @@ const modes_butterfly = __m_modes_butterfly_js;
 const modes_phone = __m_modes_phone_js;
 const generation_client = __m_generation_client_js;
 const generation_prompts = __m_generation_prompts_js;
+
 // Targeted regeneration for user-managed derived content.
 // Targets are selected only from the currently normalized session; model output never chooses a cache path.
 
@@ -20084,7 +20259,7 @@ async function regenerateHeartVoice(session, item, context, memoryBank, origin, 
         : modes_heart.heartSeasonVoicePrompt(context, memoryBank, session, kind, null, null);
     const list = await modes_heart.requestHeartPart(
         prompt, `重新生成 ${item.title}…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:voice`, 8000, 0.65),
-        raw => modes_heart.normalizeVoiceDramaPart(raw, [kind]),
+        raw => modes_heart.normalizeVoiceDramaPart(raw, [kind], memoryBank),
     );
     return { ...list[0], id: item.id, incrementBatchId: item.incrementBatchId || '', sourceArchiveMemoryIds: item.sourceArchiveMemoryIds || [], generatedAt: Date.now() };
 }
@@ -20094,7 +20269,7 @@ async function regenerateHeartScenario(session, item, context, memoryBank, origi
     const list = await modes_heart.requestHeartPart(
         modes_heart.heartSeasonScenarioPrompt(context, memoryBank, session, season, null, null),
         `重新生成 ${item.title}…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:scenario`, 9000, 0.7),
-        raw => modes_heart.normalizeScenarioDramaPart(raw, season),
+        raw => modes_heart.normalizeScenarioDramaPart(raw, season, memoryBank),
     );
     return { ...list[0], id: item.id, incrementBatchId: item.incrementBatchId || '', sourceArchiveMemoryIds: item.sourceArchiveMemoryIds || [], generatedAt: Date.now() };
 }
@@ -20353,6 +20528,7 @@ function normalizeRegeneratedButterflyNode(item, rawNode, memoryBank, context = 
 async function regenerateButterflyNode(item, context, memoryBank, origin, taskKey) {
     const evidence = item.sourceMemoryIds?.length ? core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 10) : [];
     const prompt = `${generation_prompts.promptSafetyBoundary(context, '蝴蝶效应 / 单个观测节点重新生成')}
+${core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
 只重新生成下面这个${item.trueEnding ? '观测点 Ω' : '平行分歧'}的模拟内容，保持节点身份不变。它是派生模拟，不得修改正式档案。
 CURRENT_NODE_JSON:\n${JSON.stringify(item, null, 2)}
 ${evidence.length ? `TRUSTED_MAIN_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}` : ''}
@@ -30677,6 +30853,7 @@ __init_core_incremental_js();
 __init_core_independentApi_js();
 __init_core_theme_js();
 __init_core_settings_js();
+__init_core_butterflyContract_js();
 __init_core_worldPresentation_js();
 __init_generation_jsonParser_js();
 __init_core_presentExpression_js();
@@ -30688,6 +30865,7 @@ __init_generation_imageGeneration_js();
 __init_modes_album_js();
 __init_modes_cabinet_js();
 __init_modes_ending_js();
+__init_core_dialogue_js();
 __init_ui_heartView_js();
 __init_modes_heart_js();
 __init_generation_prompts_js();

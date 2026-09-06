@@ -196,7 +196,7 @@ try {
             document.body.dataset.hostTheme = 'dark';
             document.body.innerHTML = '<div id="extensions_settings2"></div>';
             const host = document.createElement('style');
-            host.textContent = 'body button{background:black;color:white}body small{opacity:.3}.inline-drawer-content{display:block!important}';
+            host.textContent = 'body,body div,body p,body span,body h2{font-weight:900;font-family:serif}body button{background:black;color:white}body small{opacity:.3}.inline-drawer-content{display:block!important}';
             document.head.appendChild(host);
             const context = { characterId: 0, chatId: 'fixture-A', name1: '小雨', name2: '林舟', chat: [], chatMetadata: {},
                 characters: [{ name: '林舟', avatar: 'lin.png', description: '住在河边的木匠' }], extensionSettings: { heartbeatMemories: { themeMode, themeAlpha: 1, themeCustom: { background: '#1e293b', surface: '#273449', text: '#ffffff', muted: '#cbd5e1' } } }, saveSettingsDebounced() {} };
@@ -217,10 +217,18 @@ try {
                     state.activeSession = { kind: 'adv', events: [{ id: 'E1', title: '一起留下车票', date: '初秋', cgDesc: '河岸边，两人一起看着归程车票。', adv: { paragraphs: ['我把车票小心地收进盒子，想起你认真写下日期时的样子。'] } }], selectedId: 'E1', view: 'adv', paragraphIndex: 0 };
                     (await import('/src/ui/advEventView.js')).renderAdvMode();
                 } else if (view === 'heart' || view === 'avatar') {
-                    state.activeSession = { kind: 'heart', characterName: '林舟', relationshipSummary: '从初识到愿意分享日常，两人慢慢认识彼此。', greetings: { morning: ['早上好，一起去河边走走吧。'] }, voiceDramas: [], scenarioDramas: [], dailyStrips: [], fireflyVoices: [], view: 'seasons' };
+                    state.activeSession = { kind: 'heart', characterName: '林舟', relationshipSummary: '从初识到愿意分享日常，两人慢慢认识彼此。', greetings: { morning: ['早上好，一起去河边走走吧。'] }, voiceDramas: [{ id: 'V1', kind: 'postending', title: '河边的午后', setting: '阳光从树叶间落下来。', script: [{ speaker: 'char', text: '“坐一会儿吧。”林舟把书放在桌边。' }, { speaker: 'char', text: '小雨问道：“你在读什么？”' }, { speaker: '店员', text: '您的茶来了。' }] }], scenarioDramas: [], dailyStrips: [], fireflyVoices: [], view: 'seasons' };
                     const heart = await import('/src/ui/heartView.js');
                     heart.renderHeart();
-                    if (view === 'avatar') heart.renderAvatarDialoguePopup({ characterKey: 'lin.png', characterName: '林舟', session: state.activeSession, readOnly: true });
+                    if (view === 'avatar') {
+                        const previous = state.activeArchiveSnapshot;
+                        state.activeArchiveSnapshot = { characterName: '背景角色', memory: { userName: '背景用户' } };
+                        const session = { ...state.activeSession, greetings: Object.fromEntries(['morning','noon','evening','night','weekend','birthday','userBirthday','holiday','absenceWorry','absenceSulky','absenceJealous'].map(key => [key, ['小雨问道：“要一起去河边吗？”']])) };
+                        heart.renderAvatarDialoguePopup({ characterKey: 'lin.png', characterName: '林舟', snapshot: { memory: { userName: '小雨' } }, session, readOnly: true });
+                        const pop = document.querySelector('.rmt-avatar-dialog-card');
+                        if (!pop.querySelector('.rmt-heart-line.user') || pop.textContent.includes('背景用户')) throw new Error('avatar identity crossed archive boundary');
+                        state.activeArchiveSnapshot = previous;
+                    }
                 } else if (view === 'cabinet') {
                     overlay.bodyEl().innerHTML = (await import('/src/modes/cabinet.js')).cabinetHtml({ items: [{ id: 'K1', name: '回程车票', objectEvidence: '林舟和小雨一起把回程车票放进盒子。', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '一起留下车票' }] });
                     overlay.bodyEl().querySelector('details').open = true;
@@ -243,9 +251,18 @@ try {
                     if (!el.textContent.trim() || !el.getClientRects().length || el.closest('[hidden]')) continue;
                     const s = getComputedStyle(el), bg = background(el), ink = rgb(s.webkitTextFillColor === 'currentcolor' ? s.color : s.webkitTextFillColor);
                     const a = luminance(ink), b = luminance(bg), contrast = (Math.max(a,b)+.05)/(Math.min(a,b)+.05);
-                    const sample = { text: el.textContent.trim().slice(0,32), cls: el.className, contrast: +contrast.toFixed(2), fontSize: s.fontSize };
+                    const sample = { text: el.textContent.trim().slice(0,32), cls: el.className, contrast: +contrast.toFixed(2), fontSize: s.fontSize, weight: s.fontWeight };
                     samples.push(sample);
                     if (contrast < 4.45) bad.push(sample);
+                    if (el.tagName === 'P' && Number(s.fontWeight) > 500) bad.push({ ...sample, error: 'host weight leaked into body prose' });
+                }
+                for (const el of root.querySelectorAll('.rmt-relations-head,.rmt-profile-discoveries,.rmt-heart-line>div')) {
+                    const s = getComputedStyle(el);
+                    if (parseFloat(s.paddingLeft) < 16 || parseFloat(s.paddingRight) < 16) bad.push({ cls: el.className, error: 'missing card gutters' });
+                }
+                if (view === 'heart') {
+                    if (!root.querySelector('.rmt-heart-line.user') || root.querySelectorAll('.rmt-heart-line.char').length !== 1) bad.push({ error: 'wrong legacy dialogue attribution' });
+                    if (!root.querySelector('.rmt-heart-narration')?.textContent.includes('林舟')) bad.push({ error: 'action not outside bubble' });
                 }
                 return { count: samples.length, bad, overflow: root.scrollWidth - root.clientWidth };
             }, view);
@@ -253,6 +270,27 @@ try {
             assert.deepEqual(inspection.bad, [], `${themeMode}/${view} unreadable production text: ${JSON.stringify(inspection.bad)}`);
             assert.ok(inspection.overflow <= 1, `${themeMode}/${view} overflow ${inspection.overflow}`);
             await page.screenshot({ path: path.join(outputDir, `production-${themeMode}-${view}.png`) });
+            if (themeMode === 'default' && view === 'heart') {
+                await page.evaluate(() => document.querySelector('.rmt-heart-script').scrollIntoView({ block: 'center' }));
+                await page.screenshot({ path: path.join(outputDir, 'production-default-dialogue-detail.png') });
+                for (const viewport of [{ width: 375, height: 844 }, { width: 844, height: 390 }]) {
+                    await page.setViewportSize(viewport);
+                    await page.emulateMedia({ reducedMotion: 'reduce' });
+                    const layout = await page.evaluate(() => {
+                        const body = document.querySelector('.rmt-body');
+                        const close = document.querySelector('[data-rmt-action="close"]');
+                        const r = close.getBoundingClientRect();
+                        const dot = document.querySelector('.rmt-heart-drama-dot');
+                        return { overflow: body.scrollWidth - body.clientWidth, close: { width: r.width, height: r.height, right: r.right }, dotWidth: dot.getBoundingClientRect().width, transition: getComputedStyle(close).transitionDuration };
+                    });
+                    assert.ok(layout.overflow <= 1);
+                    assert.ok(layout.close.width >= 44 && layout.close.height >= 44 && layout.close.right <= viewport.width);
+                    assert.equal(layout.dotWidth, 44);
+                    results.push({ case: 'dialogue-layout-' + viewport.width, ...layout });
+                    await page.screenshot({ path: path.join(outputDir, 'dialogue-layout-' + viewport.width + '.png') });
+                }
+                await page.setViewportSize({ width: 390, height: 844 });
+            }
             results.push({ case: `production-${themeMode}-${view}`, ...inspection });
         }
         await page.close();

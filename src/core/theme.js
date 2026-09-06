@@ -108,7 +108,7 @@ function hostComputedPalette(documentLike = globalThis.document) {
         const text = rgbToHex(parseRgbColor(bodyStyle.color), fallback.text);
         return {
             background,
-            surface: background,
+            surface: compositeHex('#ffffff', background, contrastRatio('#ffffff', background) > 4.5 ? 0.06 : 0.65),
             text,
             muted: text,
             accent: fallback.accent,
