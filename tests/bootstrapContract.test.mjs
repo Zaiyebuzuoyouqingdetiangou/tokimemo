@@ -42,11 +42,12 @@ test('DOM ready stays bootstrap-only and the diagnostic branch cannot import the
     const runtimeImport = indexSource.indexOf('await import(`./dist/heartbeatMemories.bundle.js');
     const requestArchiveStart = indexSource.indexOf('\nfunction requestArchiveOpen(', ensureRuntimeStart);
     assert.ok(ensureRuntimeStart >= 0 && runtimeImport > ensureRuntimeStart && runtimeImport < requestArchiveStart);
-    assert.equal(indexSource.match(/\bimport\s*\(/g)?.length, 1);
+    assert.equal(indexSource.match(/\bimport\s*\(/g)?.length, 2);
     assert.doesNotMatch(indexSource, /\bindexedDB\b|backupStore|ArchiveBackup/);
 
     const startup = functionBlock('startBootstrap', 'onDisable');
-    assert.doesNotMatch(startup, /ensureRuntime\s*\(|\bimport\s*\(/);
+    assert.match(startup, /autoRules[^]*?enabled === true[^]*?ensureRuntime\('auto-update-opt-in'\)/);
+    assert.doesNotMatch(startup, /\bimport\s*\(/);
     assert.match(indexSource, /DOMContentLoaded', startBootstrap/);
     assert.match(indexSource, /else queueMicrotask\(startBootstrap\)/);
 

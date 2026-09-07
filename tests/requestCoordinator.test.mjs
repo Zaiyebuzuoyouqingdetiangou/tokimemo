@@ -60,7 +60,7 @@ test('mobile overlay early-close fallback accepts only its code-owned topbar clo
 });
 
 test('role interaction stays before achievements while travel is a standalone room-adjacent portal', () => {
-    assert.match(sourceByFile.get('core/constants.js'), /ARCHIVE_PORTAL_MODES = Object\.freeze\(\[MODE\.ALBUM, MODE\.ADV, MODE\.ROOM, MODE\.CABINET, MODE\.TRAVEL, MODE\.ENDING, MODE\.CALENDAR, MODE\.RELATIONS, MODE\.HEART, MODE\.ACHIEVEMENTS/);
+    assert.match(sourceByFile.get('core/constants.js'), /ARCHIVE_PORTAL_MODES = Object\.freeze\(\[MODE\.ALBUM, MODE\.ADV, MODE\.ROOM, MODE\.PHONE, MODE\.CABINET, MODE\.TRAVEL, MODE\.ENDING, MODE\.CALENDAR, MODE\.RELATIONS, MODE\.HEART, MODE\.ACHIEVEMENTS/);
     assert.match(sourceByFile.get('archive/snapshots.js'), /\[core_constants\.MODE\.HEART\]: \{ title: '角色互动'/);
 });
 
@@ -1237,7 +1237,7 @@ test('r35 modular architecture keeps the entrypoint thin and modes horizontally 
     assert.ok(entry.length < 12000, `entrypoint unexpectedly large: ${entry.length}`);
     assert.deepEqual(
         [...entry.matchAll(/export function ([A-Za-z0-9_]+)/g)].map(match => match[1]).sort(),
-        ['destroyMemoryTheater', 'initMemoryTheater', 'openArchiveLibrary'],
+        ['destroyMemoryTheater', 'initMemoryTheater', 'isGenerationBusy', 'openArchiveLibrary'],
     );
     for (const [name, text] of sourceByFile) {
         if (!name.startsWith('modes/') || name === 'modes/registry.js') continue;
@@ -1308,7 +1308,7 @@ test('r37 content manager exposes category and granular CG / ADV / Drama / phone
     assert.match(overlaySource, /type === 'calendar-note'/);
     assert.match(overlaySource, /type === 'calendar-mood'/);
     assert.match(overlaySource, /confirmExplicitActionTwice/);
-    assert.match(overlaySource, /MODE\.ROOM \? \[core_constants\.MODE\.ROOM, core_constants\.MODE\.ITEMS, core_constants\.MODE\.PHONE\]/);
+    assert.match(overlaySource, /MODE\.ROOM \? \[core_constants\.MODE\.ROOM, core_constants\.MODE\.ITEMS\]/);
 });
 
 test('r37 individual deletion is derived-cache only and user-pruned sessions remain loadable', () => {
