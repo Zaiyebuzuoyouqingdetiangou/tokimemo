@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { mkdir, readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -189,7 +189,7 @@ try {
         await page.close();
     }
     // Exercise production renderers, not only palette tokens or a synthetic card.
-    for (const themeMode of ['default', 'night', 'host', 'custom']) {
+    for (const themeMode of ['default', 'night', 'host', 'custom', 'gs1', 'gs2', 'gs3', 'gs4']) {
         const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
         await page.goto(baseUrl);
         await page.evaluate(async themeMode => {
@@ -205,9 +205,10 @@ try {
             styles.ensureStyles();
             const settings = await import('/src/ui/settingsPanel.js');
             settings.mountSettings();
+            settings.hydrateSettingsPanel();
             globalThis.fixture = { context, state: (await import('/src/core/state.js')).state, overlay: await import('/src/ui/overlay.js') };
         }, themeMode);
-        for (const view of ['settings', 'archive', 'adv', 'heart', 'avatar', 'cabinet', 'relations']) {
+        for (const view of ['settings', 'archive', 'adv', 'heart', 'avatar', 'cabinet', 'relations', 'room']) {
             await page.evaluate(async view => {
                 const { overlay, state } = globalThis.fixture;
                 if (view === 'settings') return;
@@ -232,6 +233,20 @@ try {
                 } else if (view === 'cabinet') {
                     overlay.bodyEl().innerHTML = (await import('/src/modes/cabinet.js')).cabinetHtml({ items: [{ id: 'K1', name: '回程车票', objectEvidence: '林舟和小雨一起把回程车票放进盒子。', sourceMemoryIds: ['M001'], sourceMemoryAnchor: '一起留下车票' }] });
                     overlay.bodyEl().querySelector('details').open = true;
+                } else if (view === 'room') {
+                    document.querySelector('.rmt-avatar-dialog-card')?.closest('.rmt-avatar-dialog-overlay')?.remove();
+                    const room = await import('/src/modes/room.js');
+                    const memory = { characterName: '林舟', userName: '小雨', memories: [] };
+                    state.activeArchiveSnapshot = { characterName: '林舟', chatId: 'fixture-A', memory, cache: {} };
+                    state.activeArchiveReadOnly = true;
+                    state.activeMode = 'room';
+                    state.activeSession = room.normalizeRoom({ spaces: ['书房','卧室','阳台'].map((label, i) => ({ id: 'S'+i, label, spaceType: label,
+                        objects: ['抽屉','书架','绿植'].map((label,j) => ({ id: 'O'+i+j, label, basis: '设定', description: '表面很干净。', line: '你要喝茶还是咖啡？', searchable: j === 0 })) })),
+                        dayparts: Object.fromEntries(['morning','daytime','evening','night'].map(key => [key,{ spaceId:'S0',activity:'整理书架',line:'请坐。' }])),
+                        presenceLines: ['请坐。','你来了。','早安。','晚安。'] }, memory);
+                    room.renderRoom();
+                    if (document.querySelector('[data-rmt-action="room-open-phone"]')) throw new Error('terminal still nested in room');
+                    if (!document.querySelector('[data-rmt-action="room-open-items"]')) throw new Error('storage object entry missing');
                 } else if (view === 'relations') {
                     state.activeSession = { kind: 'relations', characterName: '林舟', summary: '尚未在剧情中相遇的设定人物也可以在这里查看。', relationships: [], settingRelationships: [{ name: '阿南', relation: '设定人物', summary: '住在城中的木匠', settingOnly: true, npcPerspective: '我每天都在木工店工作。' }] };
                     (await import('/src/modes/relations.js')).renderRelations();
@@ -300,4 +315,6 @@ try {
     await new Promise(resolve => server.close(resolve));
 }
 
-console.log(JSON.stringify({ ok: true, engine: 'Edge/Chromium computed style', cases: results }, null, 2));
+const report = { ok: true, engine: 'Edge/Chromium computed style', cases: results };
+await writeFile(path.join(outputDir, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+console.log(JSON.stringify(report, null, 2));

@@ -59,7 +59,7 @@ const ROOM_VISUAL_LEGACY_ALIASES = Object.freeze({
 // while a completed event involving the user must be backed by a real archive reference.  Keep
 // the grammar compositional (participant + temporal/resultative signal) so ordinary rewrites do
 // not bypass a growing list of exact phrases.
-const ROOM_PAST_TIME_SIGNAL = /(?:去年|前年|往年|从前|以前|过去|当年|那年|那天|那晚|那次|上次|曾经|早先|先前|多年前|几年前|小时候|还记得|记得当初|回想起|想起当时|\b(?:yesterday|previously|formerly|once|used\s+to|last\s+(?:year|month|week|night|time)|\d+\s+(?:days?|weeks?|months?|years?)\s+ago|remember\s+when)\b)/iu;
+const ROOM_PAST_TIME_SIGNAL = /(?:昨天|昨日|昨晚|前天|去年|前年|往年|从前|以前|过去|当年|那年|那天|那晚|那次|上次|曾经|早先|先前|多年前|几年前|小时候|还记得|记得当初|回想起|想起当时|\b(?:yesterday|previously|formerly|once|used\s+to|last\s+(?:year|month|week|night|time)|\d+\s+(?:days?|weeks?|months?|years?)\s+ago|remember\s+when)\b)/iu;
 const ROOM_SHARED_PARTICIPANT_SIGNAL = /(?:\{\{user\}\}|你|我们|咱们|两个人|彼此|共同|一起|\b(?:you|your|yours|we|us|our|ours|together)\b)/iu;
 const ROOM_RESULTATIVE_SIGNAL = /(?:曾经|已经|过|了|的|挑中|选中|留下|留着|至今|一直|仍然|第一次|初次|\b(?:once|used\s+to|already|previously|before|kept|left|gave|sent|wrote|made|bought|picked|chose|went|visited|met|married|lived)\b)/iu;
 const ROOM_RELATIONAL_ACTION_SIGNAL = /(?:送|赠|寄|写|画|拍|做|织|缝|刻|买|选|挑|留|带|救|拥抱|亲吻|告白|约定|结婚|同居|旅行|见面|相识|相遇|结识|来过|去过|住过|\b(?:give|gave|send|sent|write|wrote|draw|drew|paint|painted|make|made|buy|bought|pick|picked|choose|chose|leave|left|keep|kept|visit|visited|meet|met|marry|married|live|lived|travel|traveled|travelled|kiss|kissed|hug|hugged|promise|promised)\b)/iu;
@@ -116,6 +116,12 @@ function roomClauseIsProvenPresentOnly(value, userName = '') {
         || ROOM_PRESENT_PROGRESS_SIGNAL.test(clause)
         || ROOM_PRESENT_SPEECH_SIGNAL.test(clause)) return true;
     const canonical = roomCanonicalUserText(clause, userName);
+    // Bounded speech acts, not a whole-paragraph exemption for words such as "现在".
+    // Completed/remembered events are checked independently before this grammar is used.
+    if (/^\{\{user\}\}(?:要|想)(?:喝|吃|坐|看|听)[^的了过]{0,24}(?:还是|或)[^的了过]{1,24}$/u.test(canonical)
+        || /^(?:\{\{user\}\})?(?:看|坐|站|靠|躺|等)(?:这里|这边|那边|那里|一会儿?)?$/u.test(canonical)
+        || /^(?:这里|这边|那里|那边)是[^的了过]{1,16}$/u.test(canonical)
+        || /^我(?:去|来|给\{\{user\}\})(?:倒|拿|端|取|泡|煮)[^的了过]{1,16}$/u.test(canonical)) return true;
     if (ROOM_SIMPLE_CURRENT_ACTION_SIGNAL.test(canonical)
         || ROOM_SIMPLE_CURRENT_RECOLLECTION_SIGNAL.test(canonical)
         || ROOM_SIMPLE_CURRENT_REACTION_SIGNAL.test(canonical)
@@ -551,6 +557,103 @@ ${line}`, memoryBank, 1)
     };
 }
 
+// Paths are code-owned arrays. Neither model keys nor raw exception messages become diagnostics.
+export function roomCandidateRepairSlots(data, memoryBank) {
+    const slots = [];
+    const check = (path, value, history = true) => {
+        if (!core_text.normalizeText(value, 6000) || history && roomNarrativeClaimsSharedHistory(value, memoryBank?.userName)) {
+            slots.push({ path, reason: !core_text.normalizeText(value, 6000) ? 'missing_text' : 'present_scope_unproven' });
+        }
+    };
+    (data?.spaces || []).slice(0, 10).forEach((space, i) => {
+        (space?.objects || []).slice(0, 8).forEach((item, j) => {
+            for (const key of ['label', 'description', 'line']) check(['spaces', i, 'objects', j, key], item?.[key], item?.basis !== '记忆');
+        });
+    });
+    for (const key of core_constants.ROOM_DAYPART_KEYS) {
+        for (const field of ['activity', 'line']) check(['dayparts', key, field], data?.dayparts?.[key]?.[field]);
+    }
+    for (let i = 0; i < Math.max(4, Math.min(12, data?.presenceLines?.length || 0)); i++) check(['presenceLines', i], data?.presenceLines?.[i]);
+    return slots;
+}
+
+export function applyRoomTextRepairs(candidate, slots, response) {
+    if (!Array.isArray(response?.repairs) || response.repairs.length !== slots.length) throw core_text.safeUserError('房间待补字段不完整。', 'RMT_ROOM_FIELDS');
+    const result = structuredClone(candidate), seen = new Set();
+    for (const repair of response.repairs) {
+        const key = JSON.stringify(repair?.path);
+        const slot = slots.find(item => JSON.stringify(item.path) === key);
+        if (!slot || seen.has(key) || typeof repair.text !== 'string' || !repair.text.trim() || repair.text.length > 1600) throw core_text.safeUserError('房间待补字段不完整。', 'RMT_ROOM_FIELDS');
+        seen.add(key);
+        let target = result;
+        for (const part of slot.path.slice(0, -1)) {
+            if (!Object.hasOwn(target, part) || !target[part] || typeof target[part] !== 'object') {
+                // Missing containers may only be the locally enumerated daypart/presence slots.
+                target[part] = part === 'presenceLines' ? [] : {};
+            }
+            target = target[part];
+        }
+        target[slot.path.at(-1)] = core_text.normalizeText(repair.text, 1600);
+    }
+    return result;
+}
+
+export async function generateRoomWithRepair(context, memoryBank, origin, taskKey, options = {}) {
+    const presentation = options.presentationContext || {};
+    const request = options.request || generation_client.requestValidatedSegment;
+    const normalizeOptions = { identityKey: core_context.currentCharacterRuntimeKey(context), worldPresentation: presentation.profile,
+        controlledEvidence: presentation.settingEvidence, characterEvidence: presentation.characterEvidence };
+    const prompt = generation_prompts.PROMPTS[core_constants.MODE.ROOM](context, memoryBank)
+        + '\nCONTROLLED_WORLD_PRESENTATION_JSON:\n' + JSON.stringify(presentation.profile || {});
+    const requestOptions = { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], context, contextEnvelope: presentation.contextEnvelope, origin, taskKey, mode: core_constants.MODE.ROOM, background: true };
+    let raw = await request(prompt, '他的房间 · 正在整理空间…', requestOptions, value => {
+        if (!Array.isArray(value?.spaces) || value.spaces.length < 3 || value.spaces.length > 10
+            || value.spaces.some(space => !Array.isArray(space?.objects) || space.objects.length < 3)) throw core_text.safeUserError('房间空间或物件未写完整。', 'RMT_ROOM_STRUCTURE');
+        return value;
+    });
+    const slots = roomCandidateRepairSlots(raw, memoryBank);
+    // Small fixed groups keep feedback/repair output bounded; good fields are never regenerated.
+    for (let offset = 0; offset < slots.length; offset += 6) {
+        const group = slots.slice(offset, offset + 6);
+        raw = await request(prompt + '\n【仅修复文字字段】只输出 {"repairs":[{"path":["spaces",0,"objects",0,"line"],"text":"修复文字"}]}。'
+            + '\n只重写下面的路径；不改变 basis、来源或任何其他字段。present_scope_unproven 表示不能确认是当前观察/当下对白，请明确表达当下邀请、观察或感受，不能陈述任何无证据往事。'
+            + '\nREPAIR_SLOTS_JSON:' + JSON.stringify(group)
+            + '\nROOM_INDEX_JSON:' + JSON.stringify(compactRoomExisting(raw)),
+        '他的房间 · 只补齐待确认字段…', { ...requestOptions, maxTokens: 3000, taskKey: taskKey + ':fields:' + offset },
+        value => {
+            const repaired = applyRoomTextRepairs(raw, group, value);
+            const unresolved = new Set(roomCandidateRepairSlots(repaired, memoryBank).map(slot => JSON.stringify(slot.path)));
+            if (group.some(slot => unresolved.has(JSON.stringify(slot.path)))) throw core_text.safeUserError('房间待补字段仍不能确认。', 'RMT_ROOM_FIELDS');
+            return repaired;
+        });
+    }
+    const repairedGroups = new Set();
+    for (;;) {
+        try { return normalizeRoom(raw, memoryBank, normalizeOptions); }
+        catch (error) {
+            const field = error?.code === 'RMT_ROOM_PETS' ? 'pets' : 'spaces';
+            if (repairedGroups.has(field) || repairedGroups.size >= 2) throw error;
+            repairedGroups.add(field);
+            raw = await request(prompt + '\n【最终局部修复】仅返回 {"' + field + '":修复后的该字段完整值}。其他已通过字段由本地保留。'
+                + '\n修复原因：' + core_text.safeErrorSummary(error)
+                + '\nCURRENT_ROOM_INDEX_JSON:' + JSON.stringify(compactRoomExisting(raw)),
+            '他的房间 · 补齐' + (field === 'pets' ? '宠物' : '空间与证据'), { ...requestOptions, taskKey: taskKey + ':final:' + field },
+            value => {
+                if (!Array.isArray(value?.[field])) throw core_text.safeUserError('房间局部修复不完整。', 'RMT_ROOM_FIELDS');
+                const repaired = { ...raw, [field]: value[field] };
+                if (roomCandidateRepairSlots(repaired, memoryBank).length) throw core_text.safeUserError('房间局部修复仍有无据描述。', 'RMT_ROOM_FIELDS');
+                try { normalizeRoom(repaired, memoryBank, normalizeOptions); }
+                catch (nextError) {
+                    const nextField = nextError?.code === 'RMT_ROOM_PETS' ? 'pets' : 'spaces';
+                    if (nextField === field || repairedGroups.has(nextField)) throw nextError;
+                    // This group passed; the other group can be repaired once next. Nothing commits here.
+                }
+                return repaired;
+            });
+        }
+    }
+}
+
 export function compactRoomExisting(session) {
     return (Array.isArray(session?.spaces) ? session.spaces : []).slice(0, 20).map(space => ({
         id: core_text.normalizeText(space?.id, 80),
@@ -567,25 +670,44 @@ export function compactRoomExisting(session) {
 }
 
 export function roomIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) {
-    const incrementalBank = core_incremental.incrementalPromptMemoryBank(memoryBank, sourceMemoryIds);
-    const schemaUpgrade = roomNeedsSchemaUpgrade(previous);
-    return `${generation_prompts.PROMPTS[core_constants.MODE.ROOM](context, incrementalBank)}
+    return generation_prompts.promptSafetyBoundary(context, '他的房间 / 增量物件')
+        + (roomNeedsSchemaUpgrade(previous) ? '\n【旧版房间一次性补全】重新扫描受控设定中明确的宠物，有据才补入 pets。' : '')
+        + '\n旧房间由本地原样保留，只输出新增物件 patch，不返回旧描述、dayparts、presenceLines 或完整房间。'
+        + '\n严格输出 {"additions":[{"spaceId":"已有空间id","objects":[{"id":"新id","label":"物件名称","basis":"记忆","zone":"中央","description":"有据描述","line":"当下角色对白","sourceMemoryIds":["Mxxx"],"sourceMemoryAnchor":"对应记忆精确原文"}]}],"pets":[]}'
+        + '\n只向已有空间添加新增记忆明确证明的物件；不扩建空间、不伪造赠礼。没有新增痕迹就 additions=[]。'
+        + '\n宠物字段沿用现有宠物 schema：id/name/species/spaceId/description/line/basis/sourceMemoryIds/sourceMemoryAnchor/sourceEvidence。设定宠物必须有受控原文；没有则为空。'
+        + '\nUNTRUSTED_INCREMENTAL_ROOM_ARCHIVE_JSON:\n' + core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
+        + '\nEXISTING_ROOM_INDEX_JSON:\n' + JSON.stringify(compactRoomExisting(previous));
+}
 
-【本轮是增量追加，以下规则优先于上面的初次生成数量建议】
-旧房间、旧空间、旧物件和旧台词由本地原样保留。本轮请返回一份可通过同一结构校验的房间候选，但只把新增档案能证明的新生活痕迹做成新物件/必要的新空间；已有对象可以原样列入结构帮助定位，禁止改写其描述或换名复述。
-${schemaUpgrade ? `
-【旧版房间一次性补全】
-这份旧缓存尚未使用宠物字段。即使 incrementalMemoryIds 为空，也必须重新扫描 CHARACTER_CARD_JSON 与 WORLD_INFO_TEXT 里的明确宠物/动物伙伴设定。有明确设定就以 basis=设定放入 pets；没有就保持 pets=[]。不得凭空发明。本地只会合并宠物/新证据，不会用候选重写旧房间。
-` : ''}
-UNTRUSTED_INCREMENTAL_ROOM_ARCHIVE_JSON:
-${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}
-EXISTING_ROOM_INDEX_JSON:
-${JSON.stringify(compactRoomExisting(previous), null, 2)}
-
-- 新增到既有空间的物件必须 basis=记忆，且 sourceMemoryIds 至少包含一个 incrementalMemoryIds。
-- 只有新增档案明确显示居住/工作空间发生变化时才新增空间；不得借更新凭空扩建豪宅。
-- 必须避开已有空间/物件的 label、锚点和 sourceMemoryIds 组合。
-- 为满足结构校验，可以把旧空间目录一起返回；本地只会提取真正的新内容，绝不会用候选文字覆盖旧内容。`;
+export function normalizeRoomIncrementPatch(raw, previous, memoryBank, sourceMemoryIds, options = {}) {
+    if (!Array.isArray(raw?.additions) || raw.additions.length > 20) throw core_text.safeUserError('房间增量 patch 不完整。', 'RMT_ROOM_FIELDS');
+    const fresh = { spaces: [], pets: [] };
+    const seen = new Set();
+    for (const part of raw.additions) {
+        const existing = previous.spaces.find(space => space.id === part?.spaceId);
+        if (!existing || seen.has(existing.id) || !Array.isArray(part.objects) || part.objects.length > 8) throw core_text.safeUserError('房间增量空间不匹配。', 'RMT_ROOM_FIELDS');
+        seen.add(existing.id);
+        const objects = part.objects.map(item => {
+            if (!roomObjectUsesIncrement(item, sourceMemoryIds, memoryBank)) throw core_text.safeUserError('新物件缺少新增记忆证据。', 'RMT_ROOM_HISTORY');
+            const reference = core_evidence.normalizeMemoryReference(item.sourceMemoryIds, item.sourceMemoryAnchor, [item.label, item.description, item.line].join('\n'), memoryBank, 1);
+            const label = core_text.normalizeText(item.label, 60), description = core_text.normalizeText(item.description, 1600), line = core_text.normalizeText(item.line, 800);
+            if (!label || !description || !line || !reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) throw core_text.safeUserError('新物件正文或证据不完整。', 'RMT_ROOM_FIELDS');
+            const normalized = { id: core_text.safeId(item.id, 'NEW'), label, description, line, basis: '记忆', ...reference,
+                zone: core_constants.ROOM_ZONE_VALUES.has(item.zone) ? item.zone : '中央', searchable: core_evidence.isSearchableRoomObject(item) };
+            if (!roomObjectSafeForPresentation(normalized, memoryBank, memoryBank?.userName)) throw core_text.safeUserError('物件可见正文缺少精确记忆锚点。', 'RMT_ROOM_HISTORY');
+            return normalized;
+        });
+        fresh.spaces.push({ id: existing.id, label: existing.label, spaceType: existing.spaceType, atmosphere: existing.atmosphere, objects });
+    }
+    fresh.pets = normalizeRoomPets(raw.pets, previous.spaces, memoryBank, options);
+    if (roomNeedsSchemaUpgrade(previous)) {
+        const required = roomRequiredPetSpecies(memoryBank, options);
+        if (required.some(species => !fresh.pets.some(pet => pet.species === species) && !(previous.pets || []).some(pet => pet.species === species))) {
+            throw core_text.safeUserError('房间增量漏写了有据宠物。', 'RMT_ROOM_PETS');
+        }
+    }
+    return fresh;
 }
 
 export function roomSpaceKey(space) {
@@ -700,7 +822,7 @@ export async function generateRoomIncrementalWithRepair(context, memoryBank, ori
         `${roomIncrementPrompt(context, memoryBank, previous, sourceMemoryIds)}\nCONTROLLED_WORLD_PRESENTATION_JSON:\n${JSON.stringify(worldPresentation, null, 2)}\nvisualProfile.explicitFields 的每一项都必须在 explicitEvidence 中给出角色卡/世界书的精确原文；basis=设定 的每只宠物必须给出 sourceEvidence 精确原文，且原文要同时包含物种与所用名字。`,
         '他的房间 · 正在从新增档案追加生活痕迹…',
         { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], temperature: 0.45, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ROOM, background: true },
-        raw => normalizeRoom(raw, memoryBank, {
+        raw => normalizeRoomIncrementPatch(raw, previous, memoryBank, sourceMemoryIds, {
             identityKey: core_context.currentCharacterRuntimeKey(context),
             worldPresentation,
             controlledEvidence: presentationContext.settingEvidence ?? '',
@@ -1391,14 +1513,6 @@ export function renderRoom() {
     const presenceLine = safePresenceLines[Math.max(0, Number(session.presenceIndex) || 0) % Math.max(1, safePresenceLines.length)] || slot?.line || '';
     const currentLocationText = `${daypart.label} · ${charName} 现在在「${presentSpace.label}」`;
     const deep = roomDeepAvailability();
-    let phoneDraft = null;
-    if (!runtimeState.activeArchiveSnapshot && !deep.phone) {
-        try {
-            const liveContext = core_context.currentCharacterGuard();
-            phoneDraft = core_cache.loadPhoneGenerationDraft(liveContext, archive_repository.requireArchive(liveContext));
-        } catch {}
-    }
-    const phoneLabel = deep.phone?.deviceName || phoneDraft?.plan?.deviceName || '私人通讯终端';
     const itemsGenerating = core_requestCoordinator.isModeGenerating(core_constants.MODE.ITEMS);
     const readOnlyArchive = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
     const schemaUpgradeNotice = roomNeedsSchemaUpgrade(session)
@@ -1457,7 +1571,6 @@ export function renderRoom() {
           <div class="rmt-room-card-kicker">PRIVATE ACCESS</div>
           <div class="rmt-room-deep-actions">
             <button type="button" class="rmt-btn" data-rmt-action="room-open-items" ${!selectedSearchable || itemsGenerating || (readOnlyArchive && !deep.items) ? 'disabled' : ''}><i class="fa-solid fa-box-open"></i> ${core_text.esc(itemActionText)}</button>
-            <button type="button" class="rmt-btn" data-rmt-action="room-open-phone" ${core_requestCoordinator.isModeGenerating(core_constants.MODE.PHONE) || (readOnlyArchive && !deep.phone) ? 'disabled' : ''}><i class="fa-solid fa-mobile-screen"></i> ${deep.phone ? `查看${core_text.esc(phoneLabel)}` : readOnlyArchive ? `${core_text.esc(phoneLabel)}尚未生成` : core_requestCoordinator.isModeGenerating(core_constants.MODE.PHONE) ? '私人终端生成中…' : phoneDraft ? `继续生成${core_text.esc(phoneLabel)} · ${phoneDraft.completedApps.length}/${phoneDraft.plan.apps.length}` : `生成并查看${core_text.esc(phoneLabel)}`}</button>
           </div>
           
         </section>

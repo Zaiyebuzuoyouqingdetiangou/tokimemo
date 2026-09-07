@@ -1,5 +1,5 @@
-const VERSION = '0.8.47';
-const BUILD = '0.8.47-polish-r51.0';
+const VERSION = '0.8.48';
+const BUILD = '0.8.48-evolution-r52.0';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -243,6 +243,8 @@ function mountBootstrapSettings() {
       <div class="rmt-bootstrap-head"><b>心跳回忆</b><small>LAZY BOOTSTRAP</small></div>
       <div class="rmt-bootstrap-actions">
         <button type="button" class="menu_button" data-rmt-bootstrap-load-settings>配置独立 API</button>
+        <button type="button" class="menu_button" data-rmt-bootstrap-update>检查并更新插件</button>
+        <small data-rmt-bootstrap-update-status role="status"></small>
         <button type="button" class="menu_button" data-rmt-bootstrap-diagnostic aria-expanded="false" aria-controls="heartbeat_memories_bootstrap_diagnostic"><span data-rmt-diagnostic-label>性能诊断（不解压缓存）</span></button>
       </div>
       <div class="rmt-bootstrap-note">普通酒馆启动不会解析 Heartbeat 完整 runtime。只有第一次打开档案室或加载完整设置时才加载。</div>
@@ -251,6 +253,11 @@ function mountBootstrapSettings() {
         <pre data-rmt-bootstrap-diagnostic-output></pre>
       </div>`;
     panel.addEventListener('click', event => {
+        const updateButton = event.target.closest?.('[data-rmt-bootstrap-update]');
+        if (updateButton) {
+            void import(`./src/core/selfUpdater.js?heartbeat=${BUILD}`).then(module => module.updateFromButton(updateButton, panel.querySelector('[data-rmt-bootstrap-update-status]'), { moduleUrl: import.meta.url, isBusy: () => runtimeModule?.isGenerationBusy?.() || false })).catch(showBootError);
+            return;
+        }
         if (event.target.closest?.('[data-rmt-bootstrap-diagnostic-close]')) {
             hideDiagnostic(
                 panel.querySelector('[data-rmt-bootstrap-diagnostic-output]'),
@@ -366,6 +373,12 @@ function requestArchiveOpen(source = 'bootstrap') {
 
 function startBootstrap() {
     if (disabled || runtimeModule) return;
+    // Explicit persisted opt-in is the only exception to inert ordinary startup.
+    const autoRules = globalThis.SillyTavern?.getContext?.()?.extensionSettings?.heartbeatMemories?.autoUpdates;
+    if (autoRules && Object.values(autoRules).some(rule => rule?.enabled === true)) {
+        void ensureRuntime('auto-update-opt-in').catch(showBootError);
+        return;
+    }
     mountBootstrapEntrypoints();
     bindBootstrapEarlyOpen();
     if (!document.getElementById(SETTINGS_ID) || !document.getElementById(MENU_ID)) {

@@ -1,10 +1,10 @@
 import * as core_text from './text.js';
 
-export const DIALOGUE_CONTRACT = '脚本每项只属于一个说话人：speaker 为 char/user/narrator/npc；npc 必须另给 speakerName。动作、神态、环境写独立 narrator 项，气泡 text 只放该人实际说出的台词，不混入其他人的话。不要按段落顺序轮流猜说话人。';
+export const DIALOGUE_CONTRACT = '脚本每项只属于一个说话人：speaker 为 char/user/narrator/npc；npc 必须另给 speakerName。{{user}} 实际说出口的话必须单列 speaker="user"，同样展示气泡，不能放进 narrator 或 char。动作、神态、环境写独立 narrator 项，气泡 text 只放该人实际说出的台词，不混入其他人的话。不强行编造用户的内心独白，不按段落顺序轮流猜说话人。';
 
 // One pure boundary for generated scripts and legacy display. Unknown attribution is neutral.
 export function normalizeDialogueRows(raw, { characterName = '', userName = '', strict = false } = {}) {
-    const identities = [[core_text.normalizeText(characterName, 120), 'char'], [core_text.normalizeText(userName, 120), 'user']].filter(([name]) => name);
+    const identities = [[core_text.normalizeText(characterName, 120), 'char'], [core_text.normalizeText(userName, 120), 'user'], ['{{char}}', 'char'], ['{{user}}', 'user']].filter(([name]) => name);
     const inputs = Array.isArray(raw) ? raw : [];
     const overBudget = () => {
         if (strict) throw new Error('对话拆分后超过 120 行或 50400 字符，请减少脚本长度后重新生成。');
@@ -20,7 +20,7 @@ export function normalizeDialogueRows(raw, { characterName = '', userName = '', 
         const prefix = text.trim();
         // A name prefix is not an identity: 林舟的妹妹 / 小雨伞店 are different subjects.
         return identities.find(([name]) => prefix.startsWith(name)
-            && /^(?:\s*[:：]|(?:说|问|答|道|笑|看|望|抬|低|转|伸|点|摇|歪|把|眼睛|眼神|轻声|轻轻|缓缓|忽然|停下|拿起|放下))/.test(prefix.slice(name.length)))?.[1] || '';
+            && /^(?:\s*[:：]|(?:说|问|答|道|笑|看|望|抬|低|转|伸|点|摇|歪|把|眼睛|眼神|轻声|轻轻|缓缓|忽然|停下|拿起|放下|端起|捧起|侧过|眨了|皱了|拉住|挽住|靠近|走近|跑来|凑近|递给|摆手|摊手|托着|咬着|红着|歪着|仰头|回头))/.test(prefix.slice(name.length)))?.[1] || '';
     };
     for (const rawLine of inputs) {
         const line = typeof rawLine === 'string' ? { speaker: 'narrator', text: rawLine } : rawLine;
@@ -63,7 +63,8 @@ export function normalizeDialogueRows(raw, { characterName = '', userName = '', 
                 for (const quote of quotes) {
                     const before = text.slice(cursor, quote.index).trim();
                     const nextOwner = explicitOwner(before);
-                    if (before.replace(/[，。！？、：；,.!?:;\s]/g, '')) owner = nextOwner || 'narrator';
+                    const selfSpeechAside = ['char', 'user', 'npc'].includes(owner) && /^(?:我说|我问|我答|我说道|我问道)[，,:：\s]*$/.test(before);
+                    if (before.replace(/[，。！？、：；,.!?:;\s]/g, '') && !selfSpeechAside) owner = nextOwner || 'narrator';
                     // An unattributed quote in narration stays narration, not a char bubble.
                     if (before) push('narrator', before);
                     push(owner, quote[1] ?? quote[2] ?? quote[3], npcName);

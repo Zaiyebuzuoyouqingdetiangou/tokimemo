@@ -1,4 +1,10 @@
-# Heartbeat Memories r35–r51 Architecture
+# Heartbeat Memories r35–r52 Architecture
+
+## r52 opt-in orchestration and bounded repairs
+
+One pure floor policy and one host adapter reuse archive/generation entry points; there is no second persistence or transport pipeline. Rules default off; explicitly opted-in startup may load the runtime. Web Locks serialize tabs, own-storage checkpoints dedupe attempts, and origin/lifetime/revision fences still own results. No automatic image/TTS/chat-writing/plugin-updating authority is added.
+
+Room initial text repair uses local paths, then at most spaces and pets groups; final normalization owns acceptance. Room delta is an append-only grounded object patch. Butterfly initial generation uses ten local slots and bounded per-slot repairs, with final whole-result validation. Phone becomes a portal without changing v4 or its draft storage. The updater is explicit, same-origin and exact-own-Git-target only. GS-inspired palettes use existing local theme primitives.
 
 ## r51 corrective boundaries
 

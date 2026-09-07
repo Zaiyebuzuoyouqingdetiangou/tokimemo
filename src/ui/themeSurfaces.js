@@ -42,8 +42,18 @@ ${root} :is(.rmt-relations-head,.rmt-profile-discoveries,.rmt-profile-discovery,
 ${root} .rmt-profile-discovery-empty{font-size:13px!important;line-height:1.7!important}
 ${root} .rmt-heart-line{background:transparent!important;box-shadow:none!important;gap:12px;margin:18px 0}
 ${root} .rmt-heart-line>div{background:var(--rmt-theme-surface-solid)!important;border:1px solid var(--rmt-theme-border);border-radius:6px 20px 20px 20px;padding:14px 18px!important;min-width:0}
-${root} .rmt-heart-line.user>div{border-radius:20px 6px 20px 20px;border-color:var(--rmt-theme-accent-alt)}
+${root} .rmt-heart-line.user{flex-direction:row-reverse;justify-content:flex-start}
+${root} .rmt-heart-line.user>div{background:var(--rmt-theme-soft)!important;border-radius:20px 6px 20px 20px;border-color:var(--rmt-theme-accent-alt)}
 ${root} .rmt-heart-line p{margin:6px 0!important}
+${root} .rmt-auto-rule{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 12px;padding:12px 0;border-bottom:1px solid var(--rmt-theme-border)}
+${root} .rmt-auto-rule>label{display:flex;align-items:center;gap:8px;min-width:0;min-height:44px;cursor:pointer}
+${root} .rmt-auto-rule input[type=checkbox]{width:18px;height:18px;min-width:18px;min-height:18px;accent-color:var(--rmt-theme-accent-ink)}
+${root} .rmt-auto-rule>small{flex-basis:100%}
+${root} .rmt-auto-rule input[type=number]{width:76px;min-height:44px;padding:8px;border:1px solid var(--rmt-theme-border);border-radius:12px}
+${root}[data-rmt-theme-mode=gs1] .rmt-topbar{background:linear-gradient(110deg,#fff,#edf5e5)!important;border-bottom-color:#d8b857!important}
+${root}[data-rmt-theme-mode=gs2] .rmt-topbar{background:linear-gradient(110deg,#f4faff,#edeafa)!important;border-bottom-color:#66a9d3!important}
+${root}[data-rmt-theme-mode=gs3] .rmt-topbar{background:linear-gradient(110deg,#fff5fa,#f1faef)!important;border-bottom-color:#d97aa4!important}
+${root}[data-rmt-theme-mode=gs4] .rmt-topbar{background:linear-gradient(110deg,#fff3dc,#edf7ff)!important;border-bottom-color:#e8a15c!important}
 ${root} .rmt-heart-drama-dot{position:relative;width:44px!important;height:44px!important;min-width:44px;min-height:44px;border:0!important;box-shadow:none!important;background:transparent!important;padding:0!important}
 ${root} .rmt-heart-drama-dot:before{content:"";position:absolute;inset:18px;border-radius:50%;background:var(--rmt-theme-border)}
 ${root} .rmt-heart-drama-dot.active:before{background:var(--rmt-theme-accent);box-shadow:0 0 0 4px var(--rmt-theme-soft)}

@@ -257,8 +257,8 @@ export function renderPhone() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.PHONE) return;
     upgradePhoneViewSession(session);
-    ui_overlay.setBackVisible(true, '他的房间');
-    ui_overlay.topTitle('他的房间 · 私人终端');
+    ui_overlay.setBackVisible(true, '档案');
+    ui_overlay.topTitle('他的私人终端');
     const now = new Date();
     const live = phoneLiveState(session, now);
     const app = selectedPhoneApp();
@@ -285,7 +285,7 @@ export function renderPhone() {
         ? '<button type="button" class="rmt-btn rmt-phone-increment" data-rmt-action="regenerate"><i class="fa-solid fa-plus"></i> 增量追加终端</button>'
         : '<button type="button" class="rmt-btn rmt-phone-increment" disabled title="关闭只读查看后可增量追加"><i class="fa-solid fa-lock"></i> 只读 · 无法增量</button>';
     const reversePrivacyGate = `<section class="rmt-reverse-terminal-gate" aria-label="反查终端隐私状态"><i class="fa-solid fa-user-shield" aria-hidden="true"></i><div><b>反查终端 · 隐私保护未开放</b><p>当前架构还不能可靠区分用户人设、正式档案与模拟内容，所以不会替你生成私人事实。</p></div><span>BLOCKED SAFELY</span></section>`;
-    ui_overlay.bodyEl().innerHTML = `<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="room-deep-back">← 返回他的房间</button>${incrementalButton}</div>${reversePrivacyGate}<div class="rmt-phone"><div class="rmt-phone-shell rmt-device-${kind} rmt-phone-view-${view} ${profileClasses}" data-rmt-phone-daypart="${core_text.esc(live.key)}">${phoneHardware(kind)}<div class="rmt-phone-screen">${phoneStatusBar(now, kind)}<main class="rmt-phone-content rmt-phone-content-single">${page}</main></div></div></div>`;
+    ui_overlay.bodyEl().innerHTML = `<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="back">← 返回档案</button>${incrementalButton}</div>${reversePrivacyGate}<div class="rmt-phone"><div class="rmt-phone-shell rmt-device-${kind} rmt-phone-view-${view} ${profileClasses}" data-rmt-phone-daypart="${core_text.esc(live.key)}">${phoneHardware(kind)}<div class="rmt-phone-screen">${phoneStatusBar(now, kind)}<main class="rmt-phone-content rmt-phone-content-single">${page}</main></div></div></div>`;
     startPhoneClock();
 }
 

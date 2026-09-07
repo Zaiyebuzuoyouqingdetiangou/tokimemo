@@ -227,7 +227,7 @@ export function navigateBack() {
         return renderActive();
     }
     if (runtimeState.activeMode === core_constants.MODE.TRAVEL && runtimeState.activeSession?.selectedLocationId) return ui_travelView.closeTravelDetail();
-    if (runtimeState.activeMode === core_constants.MODE.ITEMS || runtimeState.activeMode === core_constants.MODE.PHONE) return modes_room.returnToRoomFromDeep();
+    if (runtimeState.activeMode === core_constants.MODE.ITEMS) return modes_room.returnToRoomFromDeep();
     if (runtimeState.activeMode === core_constants.MODE.ADV && runtimeState.activeSession?.kind === core_constants.MODE.ADV && runtimeState.activeSession.view === 'adv') {
         runtimeState.activeSession.view = 'cg';
         runtimeState.activeSession.paragraphIndex = 0;
@@ -458,11 +458,12 @@ export function showChooser() {
         return;
     }
     const ready = state.status === 'ready';
+    const settings = core_settings.getPluginSettings(context);
     const memory = state.memory;
     const importLabel = ready ? '增量更新当前窗口档案' : '生成当前窗口档案';
     const preview = ready ? memory.memories.slice(0, 7).map(item => item.title).join(' · ') : '';
     const archiveName = ready ? (memory.archiveName || archive_repository.fallbackArchiveName(memory.memories)) : '尚未创建档案';
-    const archiveSummary = ready ? (memory.archiveSummary || archive_repository.fallbackArchiveSummary(memory.memories)) : '先为当前聊天创建档案。档案只在你手动创建 / 更新时变化，不会因为继续聊天而自动改写。';
+    const archiveSummary = ready ? (memory.archiveSummary || archive_repository.fallbackArchiveSummary(memory.memories)) : '先为当前聊天创建档案。默认手动更新，也可在设置中开启按楼层自动同步。';
     const keywords = ready ? core_text.cleanArray(memory.archiveKeywords, 10, 80) : [];
     const pendingClass = ready && (state.pendingMessages > 0 || state.sourceChanged) ? 'pending' : 'ready';
     const cachedRead = ready ? { context, chatId: core_context.getChatId(context), memoryBank: memory, clone: false } : null;
@@ -484,7 +485,8 @@ export function showChooser() {
         const statusText = generating
             ? (generated ? (isCalendar ? '刷新中 · 旧日历仍可查看' : '增量追加中 · 旧内容仍可查看') : '后台生成中 · 可继续启动其他入口')
             : generated ? (isCalendar ? '已整理 · 点击查看日历' : '已生成 · 点击头像查看') : '尚未生成';
-        const actionText = generating ? '生成中…' : generated ? (isCalendar ? '刷新日历' : '增量追加') : (isCalendar ? '生成日历' : '生成这一项');
+        const draft = mode === core_constants.MODE.PHONE && ready ? core_cache.loadPhoneGenerationDraft(context) : null;
+        const actionText = generating ? '生成中…' : draft ? `继续生成 · ${draft.completedApps.length}/${draft.plan.apps.length}` : generated ? (isCalendar ? '刷新日历' : '增量追加') : (isCalendar ? '生成日历' : '生成这一项');
         return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} ${generating ? 'generating' : ''} rmt-archive-portal-${core_text.esc(meta.accent)}">
           <button type="button" class="rmt-portal-open" ${generated ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
             <span class="rmt-portal-avatar"><i class="fa-solid ${core_text.esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
@@ -532,8 +534,8 @@ export function showChooser() {
             <strong class="rmt-archive-title">${core_text.esc(archiveName)}</strong>
             <div class="rmt-archive-summary">${core_text.esc(archiveSummary)}</div>
             ${keywords.length ? `<div class="rmt-archive-keywords">${keywords.map(word => `<span>${core_text.esc(word)}</span>`).join('')}</div>` : ''}
-            <div class="rmt-memory-status ${pendingClass}">${core_text.esc(archive_snapshots.memoryStateLabel(state))}</div>
-            ${ready ? `<div class="rmt-archive-meta">上次手动更新：${core_text.esc(formatArchiveTime(memory.updatedAt || memory.createdAt))}</div>` : ''}
+            <div class="rmt-memory-status ${pendingClass}">${core_text.esc(archive_snapshots.memoryStateLabel(state, settings.autoUpdates?.archive?.enabled))}</div>
+            ${ready ? `<div class="rmt-archive-meta">上次归档：${core_text.esc(formatArchiveTime(memory.updatedAt || memory.createdAt))}</div>` : ''}
             ${preview ? `<div class="rmt-memory-preview">记忆索引：${core_text.esc(preview)}</div>` : ''}
           </div>
           <div class="rmt-current-archive-actions">
@@ -887,10 +889,10 @@ async function deleteManagedCategory() {
     if (!runtimeState.activeMode || !archive_library.requireWritableArchiveAction()) return;
     const mode = runtimeState.activeMode;
     const label = core_constants.MODE_LABEL[mode] || mode;
-    const cascade = mode === core_constants.MODE.ROOM ? [core_constants.MODE.ROOM, core_constants.MODE.ITEMS, core_constants.MODE.PHONE] : [mode];
+    const cascade = mode === core_constants.MODE.ROOM ? [core_constants.MODE.ROOM, core_constants.MODE.ITEMS] : [mode];
     if (!confirmExplicitActionTwice(
         `删除整个「${label}」？`,
-        `${mode === core_constants.MODE.ROOM ? '“他的物品”和“私人终端”依赖房间结构，也会一起清除。' : ''}只删除这些派生缓存，不删除正式档案 Mxxx 或聊天正文。`,
+        `${mode === core_constants.MODE.ROOM ? '“他的物品”依赖房间结构，也会一起清除；私人终端保留。' : ''}只删除这些派生缓存，不删除正式档案 Mxxx 或聊天正文。`,
         { destructive: true },
     )) return;
     try {
@@ -913,7 +915,7 @@ async function regenerateManagedCategory() {
     const label = core_constants.MODE_LABEL[mode] || mode;
     if (!confirmExplicitActionTwice(
         `重新生成整个「${label}」？`,
-        `成功后会用全新的分类基础内容替换当前分类；旧内容在新结果成功写入之前会一直保留。${mode === core_constants.MODE.ROOM ? '房间成功替换后，会清除依赖旧结构的“他的物品”和“私人终端”，需要重新生成。' : ''} 实图/可选长正文等独立子内容可继续使用各自的单项重新生成按钮。正式档案不会修改。`,
+        `成功后会用全新的分类基础内容替换当前分类；旧内容在新结果成功写入之前会一直保留。${mode === core_constants.MODE.ROOM ? '房间成功替换后，只清除依赖旧结构的“他的物品”；私人终端保留。' : ''} 实图/可选长正文等独立子内容可继续使用各自的单项重新生成按钮。正式档案不会修改。`,
         { destructive: true },
     )) return;
     runtimeState.contentManagerOpen = false;
@@ -921,7 +923,7 @@ async function regenerateManagedCategory() {
     if (fresh && mode === core_constants.MODE.ROOM) {
         try {
             const context = core_context.currentCharacterGuard();
-            await core_cache.deleteSessions([core_constants.MODE.ITEMS, core_constants.MODE.PHONE], core_context.getChatId(context));
+            await core_cache.deleteSessions([core_constants.MODE.ITEMS], core_context.getChatId(context));
         } catch (error) {
             console.warn('[HeartbeatMemories] room dependent cache invalidation after replacement failed', core_text.safeErrorDiagnostic(error));
         }
@@ -1271,7 +1273,7 @@ export function handleOverlayClick(event) {
         return modes_room.ensureRoomLifePlan({ force: true });
     }
     if (action === 'room-open-items') return modes_room.openRoomDeepMode(core_constants.MODE.ITEMS);
-    if (action === 'room-open-phone') return modes_room.openRoomDeepMode(core_constants.MODE.PHONE);
+    if (action === 'room-open-phone') return openCachedOrGenerate(core_constants.MODE.PHONE);
     if (action === 'room-deep-back') return modes_room.returnToRoomFromDeep();
     if (action === 'phone-entry-back') return ui_phoneView.phoneEntryBack();
     if (action === 'items-open') return modes_items.itemsOpenSelected();

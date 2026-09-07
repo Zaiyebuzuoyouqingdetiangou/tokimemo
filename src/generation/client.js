@@ -418,6 +418,7 @@ export async function generateArchiveChunkJson(prompt, options, label) {
         return await generateConfiguredJson(prompt, options);
     } catch (error) {
         if (error?.name === 'AbortError' || !error?.retryableJson) throw error;
+        if (options.automatic === true) throw error;
         const retry = ui_overlay.confirmExplicitAction(
             `模型没有返回完整 JSON · ${label}`,
             `${core_text.safeErrorSummary(error, 900)}\n\n是否只重试这一块？重试会额外消耗 1 次模型请求；取消则停止本次档案整理，旧档案、旧 ADV EVENT / ENDING 等内容都不会被覆盖。`,
@@ -505,9 +506,10 @@ export async function generateMode(mode, options = {}) {
         clone: true,
     });
     roomSchemaUpgrade = mode === core_constants.MODE.ROOM && modes_room.roomNeedsSchemaUpgrade(previousSession);
+    if (mode === core_constants.MODE.PHONE && !replaceExisting && core_cache.loadPhoneGenerationDraft(context, memoryBank)) options.continueDraft = true;
     if (modeHasNoIncrementalWork()) {
-        reportNoIncrementalWork();
-        return;
+        if (!options.automatic) reportNoIncrementalWork();
+        return options.automatic ? { status: 'noop' } : undefined;
     }
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     let origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId), archiveTargetEntryId: core_text.normalizeText(archiveTarget?.entryId, 120) };
@@ -550,6 +552,7 @@ export async function generateMode(mode, options = {}) {
             clone: true,
         });
         roomSchemaUpgrade = mode === core_constants.MODE.ROOM && modes_room.roomNeedsSchemaUpgrade(previousSession);
+        if (mode === core_constants.MODE.PHONE && !replaceExisting && core_cache.loadPhoneGenerationDraft(context, memoryBank)) options.continueDraft = true;
         if (core_constants.ROOM_DEEP_MODES.includes(mode)) {
             roomSession = options.roomSessionOverride
                 || core_cache.loadSession(core_constants.MODE.ROOM, { context, chatId: expectedChatId, memoryBank, clone: false });
@@ -569,8 +572,8 @@ export async function generateMode(mode, options = {}) {
             if (mode !== core_constants.MODE.PHONE) generationPrompt = generation_prompts.roomDeepGenerationPrompt(mode, context, memoryBank, roomSession, focusObject);
         }
         if (modeHasNoIncrementalWork()) {
-            reportNoIncrementalWork();
-            return;
+            if (!options.automatic) reportNoIncrementalWork();
+            return options.automatic ? { status: 'noop' } : undefined;
         }
         origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId), archiveTargetEntryId: core_text.normalizeText(archiveTarget?.entryId, 120) };
         let session;
@@ -586,6 +589,8 @@ export async function generateMode(mode, options = {}) {
                 : await modes_butterfly.generateButterflyWithRepair(context, memoryBank, origin, taskKey);
         } else if (mode === core_constants.MODE.ROOM && previousSession) {
             session = await modes_room.generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext });
+        } else if (mode === core_constants.MODE.ROOM) {
+            session = await modes_room.generateRoomWithRepair(context, memoryBank, origin, taskKey, { presentationContext });
         } else if (mode === core_constants.MODE.ITEMS && previousSession) {
             session = await modes_items.generateItemsIncrementalWithRepair(context, memoryBank, roomSession, focusObject, origin, taskKey, previousSession);
         } else if (mode === core_constants.MODE.ENDING) {
@@ -696,12 +701,13 @@ export async function generateMode(mode, options = {}) {
         if (stayBackground) {
             if (archiveTarget) ui_settingsPanel.refreshSettingsTaskStatus();
             else ui_settingsPanel.refreshSettingsMemoryStatus();
-            if (overlay && !overlay.hidden && !runtimeState.activeMode) archive_snapshots.scheduleChooserRefresh(20);
-            if (!archiveTarget && mode === core_constants.MODE.ROOM && runtimeState.activeMode === core_constants.MODE.ROOM && committed) {
+            if (!options.automatic && overlay && !overlay.hidden && !runtimeState.activeMode) archive_snapshots.scheduleChooserRefresh(20);
+            if (!options.automatic && !archiveTarget && mode === core_constants.MODE.ROOM && runtimeState.activeMode === core_constants.MODE.ROOM && committed) {
                 runtimeState.activeSession = core_cache.loadSession(core_constants.MODE.ROOM) || runtimeState.activeSession;
                 modes_room.renderRoom();
             }
             const targetDone = archiveTarget ? `已安全写回：${archiveTarget.characterName} · ${archiveTarget.archiveName} · ` : '';
+            if (options.automatic) return { status: committed ? 'committed' : 'deferred' };
             globalThis.toastr?.success?.(`${targetDone}${replaceExisting ? '后台重新生成完成' : refreshableCalendar && previousSession ? '后台刷新完成' : refreshableRelations && previousSession ? '后台刷新完成' : previousSession ? '后台增量追加完成' : '后台生成完成'}：${core_constants.MODE_LABEL[mode]}${committed || archiveTarget ? '' : '（回到原窗口自动写入）'}`, '心跳回忆');
             return session;
         }

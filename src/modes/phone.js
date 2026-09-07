@@ -779,7 +779,7 @@ export async function generatePhoneWithRepair(context, memoryBank, origin, taskK
             const detail = core_text.safeErrorSummary(lastError, 600);
             const draftSaved = await core_cache.savePhoneGenerationDraft(context, memoryBank, plan, [...completedById.values()], app.id, detail, origin, draftOptions);
             const error = new Error(draftSaved
-                ? `私人终端在 App“${app.label}”中断，已保存 ${completedById.size}/${plan.apps.length} 个 App。回到房间后点击“继续生成${plan.deviceName}”即可从这里续写，不会重做已完成 App。${detail ? `\n${detail}` : ''}`
+                ? `私人终端在 App“${app.label}”中断，已保存 ${completedById.size}/${plan.apps.length} 个 App。回到档案室的私人终端卡片，点击“继续生成”即可从这里续写，不会重做已完成 App。${detail ? `\n${detail}` : ''}`
                 : `私人终端在 App“${app.label}”中断，且无法确认续写断点已安全保存；请不要依赖本次进度。${detail ? `\n${detail}` : ''}`);
             error.code = draftSaved ? 'RMT_PHONE_DRAFT_AVAILABLE' : 'RMT_PHONE_DRAFT_UNAVAILABLE';
             error.retryable = false;

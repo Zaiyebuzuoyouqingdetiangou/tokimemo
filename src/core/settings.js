@@ -7,6 +7,7 @@ import { state as runtimeState } from './state.js';
 import * as core_text from './text.js';
 import * as core_theme from './theme.js';
 import * as core_contextTags from './contextTags.js';
+import * as core_autoUpdatePolicy from './autoUpdatePolicy.js';
 
 export function normalizeBannedGeneratedPhrases(value) {
     const source = Array.isArray(value) ? value : String(value ?? '').split(/[\n,，]+/g);
@@ -32,6 +33,7 @@ export function getPluginSettings(context = core_context.getContext()) {
         maxTokens: Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens)),
         temperature: Math.max(0, Math.min(2, Number.isFinite(Number(settings.temperature)) ? Number(settings.temperature) : core_constants.DEFAULT_SETTINGS.temperature)),
         roomLifeAutoDaily: settings.roomLifeAutoDaily !== false,
+        autoUpdates: core_autoUpdatePolicy.normalizeAutoUpdates(settings.autoUpdates),
         useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory !== false,
         imageGenerationManualEnabled: settings.imageGenerationManualEnabled === true,
         ttDisplayMode: settings.ttDisplayMode === true,

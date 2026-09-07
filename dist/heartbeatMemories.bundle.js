@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 59
-// Source SHA-256: c477af1d2f2e6285cbf627dab70cd7362ee5e14a664c98e165a359ea36d71352
+// Source modules: 62
+// Source SHA-256: dc7afeea3eaa89a4c9553d186a50d7960d808c583533ea939bf672d743d8539d
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -11,6 +11,8 @@ const __m_archive_memoryProviders_js = Object.create(null);
 const __m_archive_repository_js = Object.create(null);
 const __m_archive_snapshots_js = Object.create(null);
 const __m_archive_sourceLedger_js = Object.create(null);
+const __m_core_autoUpdatePolicy_js = Object.create(null);
+const __m_core_autoUpdates_js = Object.create(null);
 const __m_core_butterflyContract_js = Object.create(null);
 const __m_core_cache_js = Object.create(null);
 const __m_core_constants_js = Object.create(null);
@@ -23,6 +25,7 @@ const __m_core_incremental_js = Object.create(null);
 const __m_core_independentApi_js = Object.create(null);
 const __m_core_presentExpression_js = Object.create(null);
 const __m_core_requestCoordinator_js = Object.create(null);
+const __m_core_selfUpdater_js = Object.create(null);
 const __m_core_settings_js = Object.create(null);
 const __m_core_state_js = Object.create(null);
 const __m_core_text_js = Object.create(null);
@@ -209,7 +212,13 @@ const MAX_MEMORY_WORLD_INFO_ENTRIES = 160;
 
 const MAX_MEMORY_WORLD_INFO_CHARS = 52000;
 
-const THEME_MODES = new Set(['default', 'night', 'host', 'custom']);
+const THEME_MODES = new Set(['default', 'night', 'host', 'custom', 'gs1', 'gs2', 'gs3', 'gs4']);
+const SEASON_THEME_PALETTES = Object.freeze({
+    gs1: Object.freeze({ background: '#f5faf2', surface: '#ffffff', text: '#334c40', muted: '#56675a', accent: '#79a75e', accentAlt: '#d8b857', border: '#d5e4cc' }),
+    gs2: Object.freeze({ background: '#f0f8fc', surface: '#ffffff', text: '#35465f', muted: '#586781', accent: '#66a9d3', accentAlt: '#aa96c7', border: '#cfe4ef' }),
+    gs3: Object.freeze({ background: '#fff5f8', surface: '#ffffff', text: '#594151', muted: '#745c69', accent: '#d97aa4', accentAlt: '#8dbf9c', border: '#efd4e1' }),
+    gs4: Object.freeze({ background: '#fff8ed', surface: '#fffefd', text: '#634b38', muted: '#786556', accent: '#e8a15c', accentAlt: '#92b9d5', border: '#eddfca' }),
+});
 
 const NIGHT_THEME_PALETTE = Object.freeze({
     background: '#171d28', surface: '#232c3a', text: '#edf1f8', muted: '#b8c5d6',
@@ -297,9 +306,9 @@ const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ACHIEVEMENTS]: 6000,
 });
 
-const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.CABINET, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
+const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.PHONE, MODE.CABINET, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
 
-const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS, MODE.PHONE]);
+const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS]);
 const CREATIVE_EXPANSION_MODES = Object.freeze([MODE.ADV, MODE.BUTTERFLY, MODE.HEART, MODE.ENDING, MODE.ALBUM, MODE.TRAVEL]);
 
 const ARCHIVE_OVERVIEW_CACHE_MS = 60000;
@@ -439,6 +448,7 @@ __m_core_constants_js.MAX_MEMORY_WORLD_INFO_BOOKS = MAX_MEMORY_WORLD_INFO_BOOKS;
 __m_core_constants_js.MAX_MEMORY_WORLD_INFO_ENTRIES = MAX_MEMORY_WORLD_INFO_ENTRIES;
 __m_core_constants_js.MAX_MEMORY_WORLD_INFO_CHARS = MAX_MEMORY_WORLD_INFO_CHARS;
 __m_core_constants_js.THEME_MODES = THEME_MODES;
+__m_core_constants_js.SEASON_THEME_PALETTES = SEASON_THEME_PALETTES;
 __m_core_constants_js.NIGHT_THEME_PALETTE = NIGHT_THEME_PALETTE;
 __m_core_constants_js.DEFAULT_THEME_PALETTE = DEFAULT_THEME_PALETTE;
 __m_core_constants_js.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
@@ -567,6 +577,9 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_BUTTERFLY_omega: '最终观测点的告白或结局判定不完整；旧内容保留，可单独重试。',
     RMT_BUTTERFLY_worldSpec: '该节点的世界条件不完整；旧内容保留，可单独重试。',
     RMT_ROOM_STRUCTURE: '房间的空间差异、四时段生活或互动台词不完整；已保留旧内容，可单独重试房间。',
+    RMT_ROOM_FIELDS: '房间的待补文字或增量物件尚未通过校验；已保留旧内容，请重试。若反复截断，请检查最大输出设置。',
+    RMT_BUTTERFLY_relationship: '该节点的人物关系归属不明确；旧内容保留，请重试此节点。',
+    RMT_BUTTERFLY_unique: '该节点重复或分歧维度不符；旧内容保留，请重试此节点。',
     RMT_ROOM_PETS: '人设有宠物，但模型漏写了有效宠物节点；请单独重试房间。',
     RMT_ROOM_HISTORY: '房间台词把没有证据的共同经历当成了过去；本次未保存，可重试。',
     RMT_LEDGER_UNAVAILABLE: '浏览器来源存储暂时不可用。请退出隐私模式或关闭旧页后重试；不要清除站点数据。',
@@ -3048,7 +3061,8 @@ function resolveThemePalette(settings, documentLike = globalThis.document) {
         ? normalizeThemeCustom(settings?.themeCustom)
         : mode === 'host'
             ? hostComputedPalette(documentLike)
-            : mode === 'night' ? { ...core_constants.NIGHT_THEME_PALETTE } : { ...core_constants.DEFAULT_THEME_PALETTE };
+            : mode === 'night' ? { ...core_constants.NIGHT_THEME_PALETTE }
+                : { ...(core_constants.SEASON_THEME_PALETTES[mode] || core_constants.DEFAULT_THEME_PALETTE) };
     palette = normalizeThemeCustom(palette);
     // Custom colours must keep the page and card in the same luminance family.
     if (contrastRatio(palette.background, palette.surface) > 3) palette.surface = palette.background;
@@ -3100,6 +3114,91 @@ __m_core_theme_js.resolveThemePalette = resolveThemePalette;
 __m_core_theme_js.applyThemeToElement = applyThemeToElement;
 }
 
+function __init_core_autoUpdatePolicy_js() {
+// MODULE: core/autoUpdatePolicy.js
+
+const AUTO_UPDATE_MODES = Object.freeze(['archive', 'album', 'adv', 'room', 'phone', 'cabinet', 'travel', 'ending', 'calendar', 'relations', 'heart', 'achievements', 'butterfly']);
+
+function normalizeAutoUpdates(value) {
+    return Object.fromEntries(AUTO_UPDATE_MODES.map(mode => {
+        const item = value && Object.hasOwn(value, mode) ? value[mode] : null;
+        return [mode, { enabled: item?.enabled === true, every: Math.max(1, Math.min(1000, Math.floor(Number(item?.every) || 20))),
+            epoch: Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(Number(item?.epoch) || 0))) }];
+    }));
+}
+
+// One scheduler owns eligibility, attempt dedupe and success checkpoints. No timers or APIs here.
+function createFloorScheduler({ snapshot, read, write, run, lock, busy, now = Date.now }) {
+    let stopped = false, pending = null;
+    const tick = () => {
+        if (stopped || pending) return pending || Promise.resolve();
+        const start = { ...snapshot() };
+        if (!start?.scope || !start.ready || busy() || !AUTO_UPDATE_MODES.some(mode => start.rules?.[mode]?.enabled)) return Promise.resolve();
+        pending = Promise.resolve(lock(start.scope, async () => {
+            if (stopped || busy() || snapshot()?.scope !== start.scope) return;
+            const state = await read(start.scope);
+            const same = () => !stopped && snapshot()?.scope === start.scope && snapshot()?.lifetime === start.lifetime;
+            // A confirmed manual archive commit supersedes a failed automatic attempt.
+            if (same() && ['failed', 'running'].includes(state.archive?.status) && start.revision
+                && state.archive.archiveRevision && start.revision !== state.archive.archiveRevision) {
+                state.archive = { ...state.archive, status: 'complete', attemptFloor: start.floor,
+                    successFloor: start.floor, archiveRevision: start.revision, at: now() };
+                await write(start.scope, state);
+            }
+            for (const mode of AUTO_UPDATE_MODES) {
+                if (!same() || busy()) break;
+                const rule = snapshot()?.rules?.[mode];
+                if (!rule?.enabled) continue;
+                const archiveRule = snapshot()?.rules?.archive;
+                if (mode !== 'archive' && archiveRule?.enabled && state.archive?.signature === archiveRule.every + ':' + archiveRule.epoch
+                    && ['failed', 'running'].includes(state.archive?.status)) break;
+                const signature = rule.every + ':' + rule.epoch;
+                let cursor = state[mode];
+                if (!cursor || cursor.signature !== signature || start.floor < cursor.attemptFloor) {
+                    state[mode] = { signature, attemptFloor: start.floor, successFloor: start.floor, status: 'armed', archiveRevision: start.revision || '', at: now() };
+                    await write(start.scope, state);
+                    continue;
+                }
+                if (start.floor - cursor.attemptFloor < rule.every) continue;
+                // Persist before requesting: reloads, duplicate events and another page cannot replay a paid attempt.
+                const previousCursor = cursor;
+                cursor = state[mode] = { ...cursor, attemptFloor: start.floor, status: 'running', archiveRevision: start.revision || '', at: now() };
+                await write(start.scope, state);
+                const stillEligible = () => same() && snapshot()?.rules?.[mode]?.enabled
+                    && snapshot().rules[mode].every + ':' + snapshot().rules[mode].epoch === signature;
+                if (!stillEligible()) break;
+                if (busy()) {
+                    // No provider call occurred. Keep this interval eligible when the manual task ends.
+                    state[mode] = previousCursor;
+                    await write(start.scope, state);
+                    break;
+                }
+                try {
+                    const result = await run(mode);
+                    if (!stillEligible()) break;
+                    const success = result?.status === 'committed' || result?.status === 'noop';
+                    state[mode] = { ...cursor, status: success ? 'complete' : 'failed', successFloor: success ? start.floor : cursor.successFloor,
+                        archiveRevision: success ? snapshot()?.revision || cursor.archiveRevision : cursor.archiveRevision, at: now() };
+                    await write(start.scope, state);
+                    if (mode === 'archive' && !success) break;
+                } catch {
+                    if (!stillEligible()) break;
+                    state[mode] = { ...cursor, status: 'failed', at: now() };
+                    await write(start.scope, state);
+                    if (mode === 'archive') break;
+                }
+            }
+        })).finally(() => { pending = null; });
+        return pending;
+    };
+    return { tick, stop() { stopped = true; } };
+}
+
+__m_core_autoUpdatePolicy_js.normalizeAutoUpdates = normalizeAutoUpdates;
+__m_core_autoUpdatePolicy_js.createFloorScheduler = createFloorScheduler;
+__m_core_autoUpdatePolicy_js.AUTO_UPDATE_MODES = AUTO_UPDATE_MODES;
+}
+
 function __init_core_settings_js() {
 // MODULE: core/settings.js
 const core_constants = __m_core_constants_js;
@@ -3108,6 +3207,7 @@ const core_independentApi = __m_core_independentApi_js;
 const core_text = __m_core_text_js;
 const core_theme = __m_core_theme_js;
 const core_contextTags = __m_core_contextTags_js;
+const core_autoUpdatePolicy = __m_core_autoUpdatePolicy_js;
 const runtimeState = __m_core_state_js.state;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -3139,6 +3239,7 @@ function getPluginSettings(context = core_context.getContext()) {
         maxTokens: Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens)),
         temperature: Math.max(0, Math.min(2, Number.isFinite(Number(settings.temperature)) ? Number(settings.temperature) : core_constants.DEFAULT_SETTINGS.temperature)),
         roomLifeAutoDaily: settings.roomLifeAutoDaily !== false,
+        autoUpdates: core_autoUpdatePolicy.normalizeAutoUpdates(settings.autoUpdates),
         useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory !== false,
         imageGenerationManualEnabled: settings.imageGenerationManualEnabled === true,
         ttDisplayMode: settings.ttDisplayMode === true,
@@ -3673,6 +3774,8 @@ MAIN 与普通分歧的 monologue 至少 ${BUTTERFLY_LIMITS.monologueHan} 个汉
 worldSpec 的 era、identity、occupation、location、keyDecision、encounterWithUser、bondWithUser、finalFate 八字段均为具体文本，不用“同上/不变/未知”；thirdPartyRomance 严格为 false。不得虚构第三方恋爱、婚姻或前任；节点标题、世界条件与独白均不可重复。`;
 
 const ISSUES = Object.freeze({
+    relationship: '人物关系归属不明确或包含第三方恋爱。每个独立字段明确用我与你指向双方，不把我们指代新的第三人。',
+    unique: '当前节点与已通过节点重复，或 primaryAxis 不等于本槽位指定维度。请只重写当前节点。',
     systemNote: 'systemNote 未满足汉字数、三类算法线索或明确终局判定。',
     monologue: 'monologue 未满足汉字数或第一人称次数。',
     intervention: 'intervention 缺少足量现世第一人称对照和自省。',
@@ -4563,8 +4666,18 @@ ${root} :is(.rmt-relations-head,.rmt-profile-discoveries,.rmt-profile-discovery,
 ${root} .rmt-profile-discovery-empty{font-size:13px!important;line-height:1.7!important}
 ${root} .rmt-heart-line{background:transparent!important;box-shadow:none!important;gap:12px;margin:18px 0}
 ${root} .rmt-heart-line>div{background:var(--rmt-theme-surface-solid)!important;border:1px solid var(--rmt-theme-border);border-radius:6px 20px 20px 20px;padding:14px 18px!important;min-width:0}
-${root} .rmt-heart-line.user>div{border-radius:20px 6px 20px 20px;border-color:var(--rmt-theme-accent-alt)}
+${root} .rmt-heart-line.user{flex-direction:row-reverse;justify-content:flex-start}
+${root} .rmt-heart-line.user>div{background:var(--rmt-theme-soft)!important;border-radius:20px 6px 20px 20px;border-color:var(--rmt-theme-accent-alt)}
 ${root} .rmt-heart-line p{margin:6px 0!important}
+${root} .rmt-auto-rule{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 12px;padding:12px 0;border-bottom:1px solid var(--rmt-theme-border)}
+${root} .rmt-auto-rule>label{display:flex;align-items:center;gap:8px;min-width:0;min-height:44px;cursor:pointer}
+${root} .rmt-auto-rule input[type=checkbox]{width:18px;height:18px;min-width:18px;min-height:18px;accent-color:var(--rmt-theme-accent-ink)}
+${root} .rmt-auto-rule>small{flex-basis:100%}
+${root} .rmt-auto-rule input[type=number]{width:76px;min-height:44px;padding:8px;border:1px solid var(--rmt-theme-border);border-radius:12px}
+${root}[data-rmt-theme-mode=gs1] .rmt-topbar{background:linear-gradient(110deg,#fff,#edf5e5)!important;border-bottom-color:#d8b857!important}
+${root}[data-rmt-theme-mode=gs2] .rmt-topbar{background:linear-gradient(110deg,#f4faff,#edeafa)!important;border-bottom-color:#66a9d3!important}
+${root}[data-rmt-theme-mode=gs3] .rmt-topbar{background:linear-gradient(110deg,#fff5fa,#f1faef)!important;border-bottom-color:#d97aa4!important}
+${root}[data-rmt-theme-mode=gs4] .rmt-topbar{background:linear-gradient(110deg,#fff3dc,#edf7ff)!important;border-bottom-color:#e8a15c!important}
 ${root} .rmt-heart-drama-dot{position:relative;width:44px!important;height:44px!important;min-width:44px;min-height:44px;border:0!important;box-shadow:none!important;background:transparent!important;padding:0!important}
 ${root} .rmt-heart-drama-dot:before{content:"";position:absolute;inset:18px;border-radius:50%;background:var(--rmt-theme-border)}
 ${root} .rmt-heart-drama-dot.active:before{background:var(--rmt-theme-accent);box-shadow:0 0 0 4px var(--rmt-theme-soft)}
@@ -7620,11 +7733,11 @@ function __init_core_dialogue_js() {
 // MODULE: core/dialogue.js
 const core_text = __m_core_text_js;
 
-const DIALOGUE_CONTRACT = '脚本每项只属于一个说话人：speaker 为 char/user/narrator/npc；npc 必须另给 speakerName。动作、神态、环境写独立 narrator 项，气泡 text 只放该人实际说出的台词，不混入其他人的话。不要按段落顺序轮流猜说话人。';
+const DIALOGUE_CONTRACT = '脚本每项只属于一个说话人：speaker 为 char/user/narrator/npc；npc 必须另给 speakerName。{{user}} 实际说出口的话必须单列 speaker="user"，同样展示气泡，不能放进 narrator 或 char。动作、神态、环境写独立 narrator 项，气泡 text 只放该人实际说出的台词，不混入其他人的话。不强行编造用户的内心独白，不按段落顺序轮流猜说话人。';
 
 // One pure boundary for generated scripts and legacy display. Unknown attribution is neutral.
 function normalizeDialogueRows(raw, { characterName = '', userName = '', strict = false } = {}) {
-    const identities = [[core_text.normalizeText(characterName, 120), 'char'], [core_text.normalizeText(userName, 120), 'user']].filter(([name]) => name);
+    const identities = [[core_text.normalizeText(characterName, 120), 'char'], [core_text.normalizeText(userName, 120), 'user'], ['{{char}}', 'char'], ['{{user}}', 'user']].filter(([name]) => name);
     const inputs = Array.isArray(raw) ? raw : [];
     const overBudget = () => {
         if (strict) throw new Error('对话拆分后超过 120 行或 50400 字符，请减少脚本长度后重新生成。');
@@ -7640,7 +7753,7 @@ function normalizeDialogueRows(raw, { characterName = '', userName = '', strict 
         const prefix = text.trim();
         // A name prefix is not an identity: 林舟的妹妹 / 小雨伞店 are different subjects.
         return identities.find(([name]) => prefix.startsWith(name)
-            && /^(?:\s*[:：]|(?:说|问|答|道|笑|看|望|抬|低|转|伸|点|摇|歪|把|眼睛|眼神|轻声|轻轻|缓缓|忽然|停下|拿起|放下))/.test(prefix.slice(name.length)))?.[1] || '';
+            && /^(?:\s*[:：]|(?:说|问|答|道|笑|看|望|抬|低|转|伸|点|摇|歪|把|眼睛|眼神|轻声|轻轻|缓缓|忽然|停下|拿起|放下|端起|捧起|侧过|眨了|皱了|拉住|挽住|靠近|走近|跑来|凑近|递给|摆手|摊手|托着|咬着|红着|歪着|仰头|回头))/.test(prefix.slice(name.length)))?.[1] || '';
     };
     for (const rawLine of inputs) {
         const line = typeof rawLine === 'string' ? { speaker: 'narrator', text: rawLine } : rawLine;
@@ -7683,7 +7796,8 @@ function normalizeDialogueRows(raw, { characterName = '', userName = '', strict 
                 for (const quote of quotes) {
                     const before = text.slice(cursor, quote.index).trim();
                     const nextOwner = explicitOwner(before);
-                    if (before.replace(/[，。！？、：；,.!?:;\s]/g, '')) owner = nextOwner || 'narrator';
+                    const selfSpeechAside = ['char', 'user', 'npc'].includes(owner) && /^(?:我说|我问|我答|我说道|我问道)[，,:：\s]*$/.test(before);
+                    if (before.replace(/[，。！？、：；,.!?:;\s]/g, '') && !selfSpeechAside) owner = nextOwner || 'narrator';
                     // An unattributed quote in narration stays narration, not a char bubble.
                     if (before) push('narrator', before);
                     push(owner, quote[1] ?? quote[2] ?? quote[3], npcName);
@@ -8626,7 +8740,7 @@ ${heartDramaRelationshipOnlyContext(core)}
 ${previous ? `EXISTING_${season.toUpperCase()}_DRAMA_INDEX_JSON:
 ${JSON.stringify(compactHeartSeasonExisting(previous, season), null, 2)}` : ''}
 本请求只生成【${label} Voice Drama ${previous ? '新增一篇' : '首篇'}】，不要生成 Scenario：
-{"voiceDramas":[{"id":"VOICE_${season.toUpperCase()}","kind":"${season}","title":"${label} Voice Drama","subtitle":"...","setting":"...","visualTone":"soft|clear|muted|deep","script":[{"speaker":"char","text":"..."}]}]}
+{"voiceDramas":[{"id":"VOICE_${season.toUpperCase()}","kind":"${season}","title":"${label} Voice Drama","subtitle":"...","setting":"...","visualTone":"soft|clear|muted|deep","script":[{"speaker":"char","text":"..."},{"speaker":"user","text":"..."}]}]}
 要求：
 - 只返回 1 个 kind=${season} 的 Voice Drama；script 5～10 节点、总文本不少于280汉字，以 {{char}} 主观感受为中心，允许少量 narrator/user。
 - 这是【未来的${label}日常模拟】，不是对档案记忆的回放。只用 relationshipState 控制说话距离，不得引用或改写档案里的具体事件、物品、伤痛、亲密细节、证据锚点或摘要。
@@ -8646,7 +8760,7 @@ ${heartDramaRelationshipOnlyContext(core)}
 ${previous ? `EXISTING_${season.toUpperCase()}_DRAMA_INDEX_JSON:
 ${JSON.stringify(compactHeartSeasonExisting(previous, season), null, 2)}` : ''}
 本请求只生成【${label} Scenario Drama ${previous ? '新增一篇' : '首篇'}】，不要生成 Voice：
-{"scenarioDramas":[{"id":"SCENE_${season.toUpperCase()}","season":"${season}","title":"${label} Scenario Drama","subtitle":"普通一天里的小事件","setting":"...","visualTone":"soft|clear|muted|deep","script":[{"speaker":"narrator","text":"..."}]}]}
+{"scenarioDramas":[{"id":"SCENE_${season.toUpperCase()}","season":"${season}","title":"${label} Scenario Drama","subtitle":"普通一天里的小事件","setting":"...","visualTone":"soft|clear|muted|deep","script":[{"speaker":"narrator","text":"..."},{"speaker":"char","text":"..."},{"speaker":"user","text":"..."}]}]}
 要求：
 - 只返回 1 个 season=${season} 的 Scenario Drama；script 6～12 节点、总文本不少于360汉字，写未来普通一天里的一个完整小事件。
 - 不从档案记忆里挑“关键词”写剧情。RELATIONSHIP_TONE_ONLY_JSON 只决定两个人现在适合多亲近；不得把历史中的具体物品、伤痛、性生活/敏感细节、争吵、告白等反复搬进四季日常。
@@ -10764,6 +10878,188 @@ __m_modes_achievements_js.mergeAchievementsIncremental = mergeAchievementsIncrem
 __m_modes_achievements_js.renderAchievements = renderAchievements;
 }
 
+function __init_core_autoUpdates_js() {
+// MODULE: core/autoUpdates.js
+const core_autoUpdatePolicy = __m_core_autoUpdatePolicy_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_settings = __m_core_settings_js;
+const core_requestCoordinator = __m_core_requestCoordinator_js;
+const archive_repository = __m_archive_repository_js;
+const generation_client = __m_generation_client_js;
+const runtimeState = __m_core_state_js.state;
+
+
+
+
+
+
+
+
+let cleanup = null;
+let requestTick = null;
+const storageKey = scope => 'heartbeatMemoriesAutoFloorsV1:' + encodeURIComponent(scope);
+
+function refreshAutoUpdateStatus() {
+    const elements = [...document.querySelectorAll('[data-rmt-auto-status]')];
+    for (const element of elements) element.textContent = '未选择可用聊天';
+    try {
+        const scope = core_context.chatScopeKey(core_context.currentCharacterGuard());
+        const rules = core_autoUpdatePolicy.normalizeAutoUpdates(core_settings.getPluginSettings().autoUpdates);
+        const raw = JSON.parse(localStorage.getItem(storageKey(scope)) || '{}');
+        const labels = { armed: '已待命', running: '本轮已开始', complete: '已完成', failed: '未完成 · 等下一间隔或手动重试' };
+        for (const element of elements) {
+            const entry = raw?.[element.dataset.rmtAutoStatus];
+            const rule = rules[element.dataset.rmtAutoStatus];
+            element.textContent = !rule?.enabled ? '已关闭' : entry && entry.signature === rule.every + ':' + rule.epoch
+                && labels[entry.status] && Number.isSafeInteger(entry.attemptFloor)
+                ? entry.attemptFloor + ' 楼 · ' + labels[entry.status] : '尚未计数';
+        }
+    } catch {}
+}
+
+function notifyAutoUpdateSettingsChanged() {
+    if (!cleanup) startAutoUpdates();
+    else requestTick?.();
+    refreshAutoUpdateStatus();
+}
+
+function autoUpdateAvailability() {
+    if (!globalThis.navigator?.locks?.request) return '当前浏览器缺少跨页面任务锁，自动更新暂不可用；手动生成不受影响。';
+    try { if (!globalThis.localStorage) return '浏览器本地存储不可用。'; } catch { return '浏览器本地存储不可用。'; }
+    return '';
+}
+
+function startAutoUpdates() {
+    stopAutoUpdates();
+    const context = core_context.getContext(), source = context.eventSource, types = context.eventTypes || {};
+    if (!source?.on || autoUpdateAvailability()) return;
+    const snapshot = () => {
+        try {
+            const current = core_context.currentCharacterGuard();
+            const archive = archive_repository.getImportedMemory(current);
+            return { scope: core_context.chatScopeKey(current), floor: current.chat?.length || 0,
+                ready: !!archive, revision: String(archive?.archiveRevision || '').slice(0, 240), lifetime: runtimeState.runtimeLifecycleEpoch,
+                rules: core_settings.getPluginSettings(current).autoUpdates };
+        } catch { return null; }
+    };
+    const scheduler = core_autoUpdatePolicy.createFloorScheduler({
+        snapshot,
+        busy: () => runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !!runtimeState.roomLifeRefreshPromise,
+        lock: (scope, job) => navigator.locks.request('heartbeat-auto:' + scope, { ifAvailable: true }, lock => lock ? job() : undefined),
+        read: scope => {
+            const raw = JSON.parse(localStorage.getItem(storageKey(scope)) || '{}');
+            const safe = {};
+            for (const mode of core_autoUpdatePolicy.AUTO_UPDATE_MODES) {
+                const item = raw?.[mode];
+                if (item && Number.isSafeInteger(item.attemptFloor) && item.attemptFloor >= 0 && Number.isSafeInteger(item.successFloor)
+                    && typeof item.signature === 'string' && item.signature.length < 100) safe[mode] = item;
+            }
+            return safe;
+        },
+        write: (scope, state) => { localStorage.setItem(storageKey(scope), JSON.stringify(state)); },
+        run: async mode => {
+            if (mode === 'archive') return archive_repository.importCurrentChatMemory({ automatic: true });
+            const result = await generation_client.generateMode(mode, { background: true, automatic: true });
+            return result?.status ? result : { status: result?.kind ? 'committed' : 'failed' };
+        },
+    });
+    let storageFailed = false;
+    const listener = () => { if (!storageFailed) void scheduler.tick().then(refreshAutoUpdateStatus).catch(() => {
+        storageFailed = true; stopAutoUpdates();
+        globalThis.toastr?.warning?.('自动更新检查点无法保存，本轮已停止；请使用手动更新。', '心跳回忆');
+    }); };
+    const events = [...new Set([types.MESSAGE_SENT, types.MESSAGE_RECEIVED, types.CHAT_CHANGED, types.CHAT_LOADED].filter(Boolean))];
+    for (const type of events) source.on(type, listener);
+    // Eligibility is checked on a short UI-idle timer too, so a due floor is not lost while a manual task runs.
+    const timer = setInterval(listener, 5000);
+    requestTick = listener;
+    cleanup = () => { clearInterval(timer); scheduler.stop(); for (const type of events) source.off?.(type, listener); };
+    listener();
+}
+
+function stopAutoUpdates() { cleanup?.(); cleanup = null; requestTick = null; }
+
+__m_core_autoUpdates_js.refreshAutoUpdateStatus = refreshAutoUpdateStatus;
+__m_core_autoUpdates_js.notifyAutoUpdateSettingsChanged = notifyAutoUpdateSettingsChanged;
+__m_core_autoUpdates_js.autoUpdateAvailability = autoUpdateAvailability;
+__m_core_autoUpdates_js.startAutoUpdates = startAutoUpdates;
+__m_core_autoUpdates_js.stopAutoUpdates = stopAutoUpdates;
+}
+
+function __init_core_selfUpdater_js() {
+// MODULE: core/selfUpdater.js
+
+const UPDATE_STATE = Symbol.for('heartbeatMemories.selfUpdate');
+const PROJECT_REMOTE = 'https://github.com/zaiyebuzuoyouqingdetiangou/tokimemo';
+function updateError(message) { const error = new Error(message); error.userMessage = message; return error; }
+
+function ownExtensionFolder(moduleUrl, origin) {
+    const url = new URL(moduleUrl);
+    if (url.origin !== origin) throw updateError('无法确认本插件安装位置，未执行更新。');
+    const match = url.pathname.match(/^\/scripts\/extensions\/third-party\/([^/]+)\//);
+    if (!match) throw updateError('当前不是可识别的第三方扩展安装，未执行更新。');
+    const folder = decodeURIComponent(match[1]);
+    if (!/^[\p{L}\p{N}_(). -]{1,120}$/u.test(folder) || folder === '.' || folder === '..' || folder.trim() !== folder) throw updateError('本插件目录名不符合安全要求。');
+    return folder;
+}
+
+function isProjectRemote(value) {
+    return typeof value === 'string' && value.toLowerCase().replace(/\/$/, '').replace(/\.git$/, '') === PROJECT_REMOTE;
+}
+
+async function updateSelf({ moduleUrl = import.meta.url, origin = globalThis.location?.origin,
+    context = globalThis.SillyTavern?.getContext?.(), fetcher = globalThis.fetch, isBusy = () => false } = {}) {
+    if (globalThis[UPDATE_STATE]) return globalThis[UPDATE_STATE];
+    if (isBusy()) throw updateError('请等待生成和档案保存完成后，再更新插件。');
+    const folder = ownExtensionFolder(moduleUrl, origin);
+    if (typeof context?.getRequestHeaders !== 'function') throw updateError('宿主未提供更新所需的请求接口，请使用管理扩展或手动安装。');
+    const job = (async () => {
+        const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 90000);
+        const call = async (path, body) => {
+            const response = await fetcher('/api/extensions/' + path, { method: body ? 'POST' : 'GET',
+                headers: context.getRequestHeaders(), ...(body ? { body: JSON.stringify(body) } : {}),
+                cache: 'no-store', credentials: 'same-origin', redirect: 'error', signal: controller.signal });
+            if (!response.ok) throw updateError(response.status === 403 ? '宿主拒绝更新权限；请联系管理员，不能在插件内绕过。' : '宿主更新检查失败，请检查 Git、网络及服务器日志；没有重装或删除文件。');
+            return response.json();
+        };
+        try {
+            const found = await call('discover');
+            const matches = Array.isArray(found) ? found.filter(row => row?.name === 'third-party/' + folder && ['local', 'global'].includes(row.type)) : [];
+            if (matches.length !== 1) throw updateError('无法唯一确认本扩展的位置，未执行更新。');
+            const target = { extensionName: folder, global: matches[0].type === 'global' };
+            const version = await call('version', target);
+            if (!version?.currentCommitHash || !version?.remoteUrl) throw updateError('这是 ZIP/非 Git 安装，无法直接拉取；请保留数据并手动覆盖安装新版文件。');
+            if (!isProjectRemote(version.remoteUrl)) throw updateError('当前安装的远端不是本项目仓库，未拉取其他来源的代码。');
+            if (isBusy()) throw updateError('有新的生成任务开始，已暂停插件更新。');
+            const result = await call('update', target);
+            if (!isProjectRemote(result?.remoteUrl) || !/^[a-f0-9]{7,40}$/i.test(result?.shortCommitHash || '')) throw updateError('更新结果尚未确认，请稍后检查版本。');
+            return { message: result.isUpToDate ? '已强制检查：仓库中没有新更新。' : '已拉取更新。请在保存聊天后手动刷新页面。' };
+        } catch (error) {
+            if (error?.userMessage) throw error;
+            throw updateError(controller.signal.aborted ? '请求超时，服务器可能仍在更新；请稍后检查版本，不要连续重试。' : '更新请求未完成；请检查网络或宿主支持情况。');
+        } finally { clearTimeout(timer); }
+    })();
+    globalThis[UPDATE_STATE] = job;
+    try { return await job; } finally { if (globalThis[UPDATE_STATE] === job) delete globalThis[UPDATE_STATE]; }
+}
+
+async function updateFromButton(button, status, options = {}) {
+    if (!button || button.disabled) return;
+    button.disabled = true;
+    const say = text => { if (status) status.textContent = text; };
+    say('正在检查并更新…');
+    try { say((await updateSelf(options)).message); }
+    catch (error) { say(error?.userMessage || '更新未完成，请检查宿主与网络。'); }
+    finally { button.disabled = false; }
+}
+
+__m_core_selfUpdater_js.updateSelf = updateSelf;
+__m_core_selfUpdater_js.updateFromButton = updateFromButton;
+__m_core_selfUpdater_js.ownExtensionFolder = ownExtensionFolder;
+__m_core_selfUpdater_js.isProjectRemote = isProjectRemote;
+}
+
 function __init_ui_endingView_js() {
 // MODULE: ui/endingView.js
 const archive_library = __m_archive_library_js;
@@ -11521,6 +11817,9 @@ const core_requestCoordinator = __m_core_requestCoordinator_js;
 const core_settings = __m_core_settings_js;
 const core_text = __m_core_text_js;
 const core_theme = __m_core_theme_js;
+const core_autoUpdatePolicy = __m_core_autoUpdatePolicy_js;
+const core_autoUpdates = __m_core_autoUpdates_js;
+const core_selfUpdater = __m_core_selfUpdater_js;
 const core_contextTags = __m_core_contextTags_js;
 const ui_archivePortal = __m_ui_archivePortal_js;
 const ui_overlay = __m_ui_overlay_js;
@@ -11828,6 +12127,12 @@ function refreshGenerationSettingsUi() {
     if (imageGenerationManual) imageGenerationManual.checked = settings.imageGenerationManualEnabled;
     if (ttDisplay) ttDisplay.checked = settings.ttDisplayMode;
     if (themeMode) themeMode.value = settings.themeMode;
+    const autoRules = core_autoUpdatePolicy.normalizeAutoUpdates(settings.autoUpdates);
+    for (const input of panel.querySelectorAll('[data-rmt-auto-enabled]')) input.checked = autoRules[input.dataset.rmtAutoEnabled]?.enabled === true;
+    for (const input of panel.querySelectorAll('[data-rmt-auto-every]')) input.value = String(autoRules[input.dataset.rmtAutoEvery]?.every || 20);
+    const autoWarning = panel.querySelector('[data-rmt-auto-warning]');
+    if (autoWarning) autoWarning.textContent = core_autoUpdates.autoUpdateAvailability();
+    core_autoUpdates.refreshAutoUpdateStatus();
     if (themeAlpha) themeAlpha.value = String(settings.themeAlpha);
     if (themeCustomPanel) themeCustomPanel.hidden = settings.themeMode !== 'custom';
     for (const input of panel.querySelectorAll('[data-rmt-theme-color]')) {
@@ -11984,7 +12289,7 @@ function mountSettings() {
             <div data-rmt-tag-results role="status"></div>
           </details>
           <div class="rmt-settings-card-head"><span>UI</span><div><b>界面主题</b><small>即选即看 · 自动保护文字对比度</small></div></div>
-          <label class="rmt-settings-field"><span>外观</span><select class="text_pole" data-rmt-theme-mode><option value="default">日间 · 珍珠白</option><option value="night">夜间 · 星黛蓝</option><option value="host">跟随酒馆美化</option><option value="custom">自定义配色</option></select></label>
+          <label class="rmt-settings-field"><span>外观</span><select class="text_pole" data-rmt-theme-mode><option value="default">日间 · 珍珠白</option><option value="night">夜间 · 星黛蓝</option><option value="gs1">初叶绿 · GS1 灵感</option><option value="gs2">海盐蓝 · GS2 灵感</option><option value="gs3">花漾粉 · GS3 灵感</option><option value="gs4">杏糖橙 · GS4 灵感</option><option value="host">跟随酒馆美化</option><option value="custom">自定义配色</option></select></label>
           <label class="rmt-settings-field"><span>卡片不透明度 <output data-rmt-theme-opacity></output></span><input data-rmt-theme-alpha type="range" min="0.72" max="1" step="0.01"></label>
           <div class="rmt-theme-custom-panel" data-rmt-theme-custom-panel>
             <div class="rmt-theme-presets"><button type="button" data-rmt-theme-preset="day">从日间开始</button><button type="button" data-rmt-theme-preset="night">从夜间开始</button></div>
@@ -11997,6 +12302,18 @@ function mountSettings() {
             <label><span>边框</span><input type="color" data-rmt-theme-color="border"></label>
           </div>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-theme-reset>恢复默认配色</button>
+        </div>
+        <div class="rmt-settings-card">
+          <div class="rmt-settings-card-head"><span>↻</span><div><b>跟随当前聊天 · 自动更新</b><small>默认关闭 · 每项独立设置</small></div></div>
+          <p>只在已有档案的当前窗口运行。每条聊天消息算一楼，编辑不加楼；开启后从当前楼数起计。</p>
+          <p>“档案同步”收录新聊天；其他模块使用已归档记忆，不改旧内容。会调用独立 API。</p>
+          <div class="rmt-auto-rules">${core_autoUpdatePolicy.AUTO_UPDATE_MODES.map(mode => `<div class="rmt-auto-rule"><label><input type="checkbox" data-rmt-auto-enabled="${mode}"> ${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}</label><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-every="${mode}" aria-label="${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}间隔楼层"> 楼</label><small data-rmt-auto-status="${mode}" role="status"></small></div>`).join('')}</div>
+          <small data-rmt-auto-warning role="status"></small>
+          <small>失败后不连续重试，等待下一个间隔；可随时手动生成。不支持跨页任务锁的浏览器仅保留手动操作。</small>
+        </div>
+        <div class="rmt-settings-card">
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-self-update>检查并更新插件</button>
+          <small data-rmt-self-update-status role="status">强制检查已发布更新 · 完成后手动刷新页面</small>
         </div>
         <div class="rmt-settings-card rmt-api-box">
           <div class="rmt-settings-card-head"><span>MEM</span><div><b>记忆来源</b><small>当前角色 · 当前聊天</small></div></div>
@@ -12036,6 +12353,16 @@ function mountSettings() {
     panel.querySelector('[data-rmt-tag-draft]').value = core_settings.getPluginSettings().excludedContextTags.join(', ');
     panel.addEventListener('change', async event => {
         const target = event.target;
+        const autoMode = target.dataset?.rmtAutoEnabled || target.dataset?.rmtAutoEvery;
+        if (core_autoUpdatePolicy.AUTO_UPDATE_MODES.includes(autoMode)) {
+            const rules = core_autoUpdatePolicy.normalizeAutoUpdates(core_settings.getPluginSettings().autoUpdates);
+            rules[autoMode] = { ...rules[autoMode], epoch: Date.now(),
+                ...(target.dataset.rmtAutoEnabled ? { enabled: target.checked } : { every: Number(target.value) }) };
+            core_settings.updatePluginSettings({ autoUpdates: rules });
+            core_autoUpdates.notifyAutoUpdateSettingsChanged();
+            refreshGenerationSettingsUi();
+            return;
+        }
         if (target.matches?.('[data-rmt-memory-file-input]')) {
             const file = target.files?.[0];
             pendingMemoryFilePreview = null;
@@ -12183,6 +12510,13 @@ function mountSettings() {
         }
     });
     panel.addEventListener('click', event => {
+        const updateButton = event.target.closest?.('[data-rmt-self-update]');
+        if (updateButton) {
+            void core_selfUpdater.updateFromButton(updateButton, panel.querySelector('[data-rmt-self-update-status]'), {
+                isBusy: () => runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !!runtimeState.roomLifeRefreshPromise,
+            });
+            return;
+        }
         const tagAction = event.target.closest?.('[data-rmt-tag-save],[data-rmt-tag-cancel],[data-rmt-tag-clear],[data-rmt-tag-scan],[data-rmt-tag-name]');
         if (tagAction) {
             const draft = panel.querySelector('[data-rmt-tag-draft]');
@@ -13320,12 +13654,14 @@ __m_modes_advEvent_js.mergeAdvIncremental = mergeAdvIncremental;
 function __init_modes_butterfly_js() {
 // MODULE: modes/butterfly.js
 const core_butterflyContract = __m_core_butterflyContract_js;
+const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
 const core_evidence = __m_core_evidence_js;
 const core_incremental = __m_core_incremental_js;
 const core_text = __m_core_text_js;
 const generation_client = __m_generation_client_js;
 const generation_prompts = __m_generation_prompts_js;
+
 
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -13453,12 +13789,19 @@ function assertButterflyRelationshipSafety(value, context = {}, label = '蝴蝶�
         ? new RegExp(`(?:你|妳|您|用户|\\{\\{user\\}\\}|${escapeRegExp(userName)})`, 'i')
         : /(?:你|妳|您|用户|\{\{user\}\})/i;
     let userAntecedent = false;
+    let precedingComma = false;
     const clauses = text.match(/[^，,。！？!?；;\n]+[，,。！？!?；;\n]?/g) || [];
     for (const fragment of clauses) {
         const clause = fragment.replace(/[，,。！？!?；;\n]+$/, '').trim();
         const refersToUser = userMarker.test(clause);
-        const inheritedUser = userAntecedent;
-        userAntecedent = /[，,]$/.test(fragment) && (refersToUser || inheritedUser);
+        const separatePartners = /(?:各自|分别|另有|新(?:的)?(?:恋人|爱人|伴侣|妻子|丈夫))/.test(clause);
+        const inheritedUser = !separatePartners && userAntecedent && (/^(?:我们|咱们|我俩|双方)/.test(clause)
+            || precedingComma && /^(?:我的|婚姻|家庭)/.test(clause));
+        // Only an explicit joint subject licenses the immediately following same-subject clause.
+        // A new named or third-person subject clears the antecedent even without punctuation.
+        userAntecedent = !separatePartners && !THIRD_PARTY_RE.test(clause) && (inheritedUser
+            || refersToUser && (ROMANCE_RE.test(clause) || /(?:我\s*(?:与|和|跟)|(?:你|妳|您)\s*(?:与|和|跟)\s*我)/.test(clause)));
+        precedingComma = /[，,]$/.test(fragment);
         if (!ROMANCE_RE.test(clause)) continue;
         const predicates = [...clause.matchAll(new RegExp(ROMANCE_RE.source, 'gi'))];
         // Negation belongs to one predicate, never to the entire clause.
@@ -13469,6 +13812,7 @@ function assertButterflyRelationshipSafety(value, context = {}, label = '蝴蝶�
                 || /(?:没有与|不会与|不与)[^而但却然后]{1,12}$/.test(prefix)
                 || /^(?:变量|概率)?\s*(?:[=:：]\s*)?(?:0|零|无|不存在|未发生|不成立)(?:$|\s)/.test(suffix);
         })) continue;
+        if (separatePartners) throw core_butterflyContract.butterflyValidationError('relationship');
         if (THIRD_PARTY_RE.test(clause)) throw new Error(`${label}包含 {{char}} 与第三方的恋爱/婚姻/成家情节。`);
         const namedTargets = [
             ...clause.matchAll(/(?:与|和|跟)\s*([^，,。！？!?；;、\n]{1,24}?)\s*(?:恋爱|相爱|约会|结婚|成婚|订婚|组建家庭|建立家庭|成家|有了(?:一个)?家(?:庭)?|生儿育女|养育孩子|育有子女)/gi),
@@ -13478,7 +13822,7 @@ function assertButterflyRelationshipSafety(value, context = {}, label = '蝴蝶�
         if (namedTargets.some(target => !userMarker.test(target))) {
             throw new Error(`${label}包含 {{char}} 与具名第三方的恋爱/婚姻/成家情节。`);
         }
-        if (!refersToUser && !inheritedUser) throw new Error(`${label}中的恋爱/婚姻/成家叙述未明确指向 {{user}}。`);
+        if (!refersToUser && !inheritedUser) throw core_butterflyContract.butterflyValidationError('relationship');
     }
     return text;
 }
@@ -13651,68 +13995,49 @@ function normalizeButterfly(data, memoryBank, context = {}) {
     };
 }
 
-async function generateButterflyWithRepair(context, memoryBank, origin, taskKey) {
-    const prompt = generation_prompts.PROMPTS[core_constants.MODE.BUTTERFLY](context, memoryBank);
-    const options = { maxTokens: 16000, temperature: 0.55, context, origin, taskKey: taskKey + ':initial', mode: core_constants.MODE.BUTTERFLY, background: true };
-    const raw = await generation_client.requestValidatedSegment(
-        prompt,
-        '蝴蝶效应 · 正在观测平行世界…',
-        options,
-        value => {
-            if (!Array.isArray(value?.nodes) || value.nodes.length < 10 || value.nodes.length > core_constants.MAX_DERIVED_CONTENT_ITEMS) throw new Error('需要十个完整节点。');
-            return value;
-        },
-    );
-    try { return normalizeButterfly(raw, memoryBank, context); } catch {}
-    const slots = [];
-    const labels = new Set();
-    const signatures = new Set();
-    const axes = new Set();
-    const monologues = new Set();
-    const lastIndex = raw.nodes.length - 1;
-    const validAxes = [];
-    for (let index = 0; index <= lastIndex; index++) {
-        try {
-            const node = index === 0 ? normalizedMainNode(raw.nodes[index], memoryBank, context)
-                : index === lastIndex ? normalizeButterflyOmega(raw.nodes[index], context)
-                    : normalizeButterflyBranch(raw.nodes[index], index, memoryBank, context);
-            if (index > 0 && index < lastIndex) {
-                const signature = butterflyWorldSignature(node);
-                const label = core_incremental.normalizedContentKey(node.label, 180);
-                const monologue = core_incremental.normalizedContentKey(node.monologue, 12000);
-                if (labels.has(label) || signatures.has(signature) || monologues.has(monologue)) throw new Error('重复分歧');
-                labels.add(label); signatures.add(signature); monologues.add(monologue); axes.add(node.primaryAxis);
-                validAxes.push({ index, axis: node.primaryAxis });
-            }
-            if (index < lastIndex && isOmegaCandidate(raw.nodes[index])) throw new Error('位置错误');
-            if (index === lastIndex && !isOmegaCandidate(raw.nodes[index])) throw new Error('缺少 Ω');
-        } catch (error) { slots.push({ index, issue: core_butterflyContract.butterflyValidationFeedback(error) || '节点身份、证据、关系或唯一性未通过；按原契约重写此节点。' }); }
+async function generateButterflyWithRepair(context, memoryBank, origin, taskKey, dependencies = {}) {
+    const request = dependencies.request || generation_client.requestValidatedSegment;
+    const basePrompt = generation_prompts.PROMPTS[core_constants.MODE.BUTTERFLY](context, memoryBank);
+    const contextEnvelope = dependencies.contextEnvelope ?? await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generation_client.generationWorldInfoScanTerms(core_constants.MODE.BUTTERFLY, context) });
+    const nodes = [];
+    const labels = new Set(), signatures = new Set(), monologues = new Set();
+    // Local scheduling, never a model-authored slot count. Partial nodes are not formal sessions.
+    const slots = ['MAIN', ...BUTTERFLY_PRIMARY_AXES, 'OMEGA'];
+    for (let index = 0; index < slots.length; index++) {
+        const slot = slots[index];
+        const existing = nodes.map(node => ({ label: node.label, primaryAxis: node.primaryAxis, worldSpec: node.worldSpec }));
+        const prompt = basePrompt + '\n【本请求的分段输出规则替代上面的整批输出 schema】'
+            + '\n本地将组装十个节点；你这次只输出 {"node":{当前一个完整节点}}，不要返回 nodes 数组或其他节点。'
+            + '\nCURRENT_SLOT_JSON:' + JSON.stringify({ index, kind: slot, primaryAxis: index > 0 && index < 9 ? slot : undefined })
+            + '\nMAIN 只写主时间线；普通槽位严格使用指定 primaryAxis；OMEGA 只写唯一终点。每节点继续遵守原字数、来源和关系契约。'
+            + '\nEXISTING_VALID_WORLD_INDEX_JSON:' + JSON.stringify(existing)
+            + (slot === 'OMEGA' ? '\nVALIDATED_VOICES_JSON:' + JSON.stringify(nodes.map(node => ({ label: node.label, monologue: node.monologue.slice(0, 700), intervention: node.intervention.slice(0, 500) }))) : '');
+        const node = await request(prompt, '蝴蝶效应 · 节点 ' + (index + 1) + '/10 · ' + slot,
+            { maxTokens: 4096, temperature: 0.55, context, contextEnvelope, origin, taskKey: taskKey + ':slot:' + index, mode: core_constants.MODE.BUTTERFLY, background: true },
+            value => {
+                const raw = value?.node;
+                if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw core_butterflyContract.butterflyValidationError('worldSpec');
+                const candidate = index === 0 ? normalizedMainNode(raw, memoryBank, context)
+                    : index === 9 ? normalizeButterflyOmega(raw, context)
+                    : normalizeButterflyBranch(raw, index, memoryBank, context);
+                if (index > 0 && index < 9) {
+                    const label = core_incremental.normalizedContentKey(candidate.label, 180);
+                    const signature = butterflyWorldSignature(candidate);
+                    const monologue = core_incremental.normalizedContentKey(candidate.monologue, 12000);
+                    if (candidate.primaryAxis !== slot || labels.has(label) || signatures.has(signature) || monologues.has(monologue)) {
+                        throw core_butterflyContract.butterflyValidationError('unique');
+                    }
+                }
+                return candidate;
+            });
+        nodes.push(node);
+        if (index > 0 && index < 9) {
+            labels.add(core_incremental.normalizedContentKey(node.label, 180));
+            signatures.add(butterflyWorldSignature(node));
+            monologues.add(core_incremental.normalizedContentKey(node.monologue, 12000));
+        }
     }
-    const missingAxes = BUTTERFLY_PRIMARY_AXES.filter(axis => !axes.has(axis));
-    const seenAxes = new Set();
-    for (const entry of validAxes) {
-        if (seenAxes.has(entry.axis) && slots.filter(slot => slot.index > 0 && slot.index < lastIndex).length < missingAxes.length) slots.push({ index: entry.index });
-        seenAxes.add(entry.axis);
-    }
-    for (const slot of slots) if (slot.index > 0 && slot.index < lastIndex) slot.primaryAxis = missingAxes.shift();
-    if (!slots.length) throw core_text.safeUserError('蝴蝶效应整体校验未通过，未找到可安全修复的节点；旧内容保留。', 'RMT_SEGMENT_VALIDATION');
-    const repair = await generation_client.requestValidatedSegment(
-        prompt + '\n本轮仅补齐以下不合格位置。其他已通过节点由本地保留，禁止返回它们。输出 {"repairs":[{"index":0,"node":{完整节点}}]}。节点内仍须满足原 schema、字数、第一人称和安全要求。\nREPAIR_SLOTS_JSON:' + JSON.stringify(slots)
-            + '\nEXISTING_VALID_WORLD_INDEX_JSON:' + JSON.stringify(raw.nodes.filter((_, i) => !slots.some(slot => slot.index === i)).map(node => ({ label: node.label, worldSpec: node.worldSpec }))),
-        '蝴蝶效应 · 仅补齐未通过的节点…',
-        { ...options, taskKey: taskKey + ':repair' },
-        value => {
-            if (!Array.isArray(value?.repairs) || value.repairs.length !== slots.length) throw new Error('修复节点不完整');
-            const merged = structuredClone(raw);
-            const seen = new Set();
-            for (const part of value.repairs) {
-                if (!slots.some(slot => slot.index === part.index) || seen.has(part.index)) throw new Error('修复位置不符');
-                seen.add(part.index); merged.nodes[part.index] = part.node;
-            }
-            return normalizeButterfly(merged, memoryBank, context);
-        },
-    );
-    return repair;
+    return normalizeButterfly({ nodes }, memoryBank, context);
 }
 function butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) {
     const existing = (Array.isArray(previous?.nodes) ? previous.nodes.slice(1, -1) : []).slice(-core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
@@ -16100,7 +16425,7 @@ async function generatePhoneWithRepair(context, memoryBank, origin, taskKey, opt
             const detail = core_text.safeErrorSummary(lastError, 600);
             const draftSaved = await core_cache.savePhoneGenerationDraft(context, memoryBank, plan, [...completedById.values()], app.id, detail, origin, draftOptions);
             const error = new Error(draftSaved
-                ? `私人终端在 App“${app.label}”中断，已保存 ${completedById.size}/${plan.apps.length} 个 App。回到房间后点击“继续生成${plan.deviceName}”即可从这里续写，不会重做已完成 App。${detail ? `\n${detail}` : ''}`
+                ? `私人终端在 App“${app.label}”中断，已保存 ${completedById.size}/${plan.apps.length} 个 App。回到档案室的私人终端卡片，点击“继续生成”即可从这里续写，不会重做已完成 App。${detail ? `\n${detail}` : ''}`
                 : `私人终端在 App“${app.label}”中断，且无法确认续写断点已安全保存；请不要依赖本次进度。${detail ? `\n${detail}` : ''}`);
             error.code = draftSaved ? 'RMT_PHONE_DRAFT_AVAILABLE' : 'RMT_PHONE_DRAFT_UNAVAILABLE';
             error.retryable = false;
@@ -16533,7 +16858,7 @@ const ROOM_VISUAL_LEGACY_ALIASES = Object.freeze({
 // while a completed event involving the user must be backed by a real archive reference.  Keep
 // the grammar compositional (participant + temporal/resultative signal) so ordinary rewrites do
 // not bypass a growing list of exact phrases.
-const ROOM_PAST_TIME_SIGNAL = /(?:去年|前年|往年|从前|以前|过去|当年|那年|那天|那晚|那次|上次|曾经|早先|先前|多年前|几年前|小时候|还记得|记得当初|回想起|想起当时|\b(?:yesterday|previously|formerly|once|used\s+to|last\s+(?:year|month|week|night|time)|\d+\s+(?:days?|weeks?|months?|years?)\s+ago|remember\s+when)\b)/iu;
+const ROOM_PAST_TIME_SIGNAL = /(?:昨天|昨日|昨晚|前天|去年|前年|往年|从前|以前|过去|当年|那年|那天|那晚|那次|上次|曾经|早先|先前|多年前|几年前|小时候|还记得|记得当初|回想起|想起当时|\b(?:yesterday|previously|formerly|once|used\s+to|last\s+(?:year|month|week|night|time)|\d+\s+(?:days?|weeks?|months?|years?)\s+ago|remember\s+when)\b)/iu;
 const ROOM_SHARED_PARTICIPANT_SIGNAL = /(?:\{\{user\}\}|你|我们|咱们|两个人|彼此|共同|一起|\b(?:you|your|yours|we|us|our|ours|together)\b)/iu;
 const ROOM_RESULTATIVE_SIGNAL = /(?:曾经|已经|过|了|的|挑中|选中|留下|留着|至今|一直|仍然|第一次|初次|\b(?:once|used\s+to|already|previously|before|kept|left|gave|sent|wrote|made|bought|picked|chose|went|visited|met|married|lived)\b)/iu;
 const ROOM_RELATIONAL_ACTION_SIGNAL = /(?:送|赠|寄|写|画|拍|做|织|缝|刻|买|选|挑|留|带|救|拥抱|亲吻|告白|约定|结婚|同居|旅行|见面|相识|相遇|结识|来过|去过|住过|\b(?:give|gave|send|sent|write|wrote|draw|drew|paint|painted|make|made|buy|bought|pick|picked|choose|chose|leave|left|keep|kept|visit|visited|meet|met|marry|married|live|lived|travel|traveled|travelled|kiss|kissed|hug|hugged|promise|promised)\b)/iu;
@@ -16590,6 +16915,12 @@ function roomClauseIsProvenPresentOnly(value, userName = '') {
         || ROOM_PRESENT_PROGRESS_SIGNAL.test(clause)
         || ROOM_PRESENT_SPEECH_SIGNAL.test(clause)) return true;
     const canonical = roomCanonicalUserText(clause, userName);
+    // Bounded speech acts, not a whole-paragraph exemption for words such as "现在".
+    // Completed/remembered events are checked independently before this grammar is used.
+    if (/^\{\{user\}\}(?:要|想)(?:喝|吃|坐|看|听)[^的了过]{0,24}(?:还是|或)[^的了过]{1,24}$/u.test(canonical)
+        || /^(?:\{\{user\}\})?(?:看|坐|站|靠|躺|等)(?:这里|这边|那边|那里|一会儿?)?$/u.test(canonical)
+        || /^(?:这里|这边|那里|那边)是[^的了过]{1,16}$/u.test(canonical)
+        || /^我(?:去|来|给\{\{user\}\})(?:倒|拿|端|取|泡|煮)[^的了过]{1,16}$/u.test(canonical)) return true;
     if (ROOM_SIMPLE_CURRENT_ACTION_SIGNAL.test(canonical)
         || ROOM_SIMPLE_CURRENT_RECOLLECTION_SIGNAL.test(canonical)
         || ROOM_SIMPLE_CURRENT_REACTION_SIGNAL.test(canonical)
@@ -17025,6 +17356,103 @@ ${line}`, memoryBank, 1)
     };
 }
 
+// Paths are code-owned arrays. Neither model keys nor raw exception messages become diagnostics.
+function roomCandidateRepairSlots(data, memoryBank) {
+    const slots = [];
+    const check = (path, value, history = true) => {
+        if (!core_text.normalizeText(value, 6000) || history && roomNarrativeClaimsSharedHistory(value, memoryBank?.userName)) {
+            slots.push({ path, reason: !core_text.normalizeText(value, 6000) ? 'missing_text' : 'present_scope_unproven' });
+        }
+    };
+    (data?.spaces || []).slice(0, 10).forEach((space, i) => {
+        (space?.objects || []).slice(0, 8).forEach((item, j) => {
+            for (const key of ['label', 'description', 'line']) check(['spaces', i, 'objects', j, key], item?.[key], item?.basis !== '记忆');
+        });
+    });
+    for (const key of core_constants.ROOM_DAYPART_KEYS) {
+        for (const field of ['activity', 'line']) check(['dayparts', key, field], data?.dayparts?.[key]?.[field]);
+    }
+    for (let i = 0; i < Math.max(4, Math.min(12, data?.presenceLines?.length || 0)); i++) check(['presenceLines', i], data?.presenceLines?.[i]);
+    return slots;
+}
+
+function applyRoomTextRepairs(candidate, slots, response) {
+    if (!Array.isArray(response?.repairs) || response.repairs.length !== slots.length) throw core_text.safeUserError('房间待补字段不完整。', 'RMT_ROOM_FIELDS');
+    const result = structuredClone(candidate), seen = new Set();
+    for (const repair of response.repairs) {
+        const key = JSON.stringify(repair?.path);
+        const slot = slots.find(item => JSON.stringify(item.path) === key);
+        if (!slot || seen.has(key) || typeof repair.text !== 'string' || !repair.text.trim() || repair.text.length > 1600) throw core_text.safeUserError('房间待补字段不完整。', 'RMT_ROOM_FIELDS');
+        seen.add(key);
+        let target = result;
+        for (const part of slot.path.slice(0, -1)) {
+            if (!Object.hasOwn(target, part) || !target[part] || typeof target[part] !== 'object') {
+                // Missing containers may only be the locally enumerated daypart/presence slots.
+                target[part] = part === 'presenceLines' ? [] : {};
+            }
+            target = target[part];
+        }
+        target[slot.path.at(-1)] = core_text.normalizeText(repair.text, 1600);
+    }
+    return result;
+}
+
+async function generateRoomWithRepair(context, memoryBank, origin, taskKey, options = {}) {
+    const presentation = options.presentationContext || {};
+    const request = options.request || generation_client.requestValidatedSegment;
+    const normalizeOptions = { identityKey: core_context.currentCharacterRuntimeKey(context), worldPresentation: presentation.profile,
+        controlledEvidence: presentation.settingEvidence, characterEvidence: presentation.characterEvidence };
+    const prompt = generation_prompts.PROMPTS[core_constants.MODE.ROOM](context, memoryBank)
+        + '\nCONTROLLED_WORLD_PRESENTATION_JSON:\n' + JSON.stringify(presentation.profile || {});
+    const requestOptions = { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], context, contextEnvelope: presentation.contextEnvelope, origin, taskKey, mode: core_constants.MODE.ROOM, background: true };
+    let raw = await request(prompt, '他的房间 · 正在整理空间…', requestOptions, value => {
+        if (!Array.isArray(value?.spaces) || value.spaces.length < 3 || value.spaces.length > 10
+            || value.spaces.some(space => !Array.isArray(space?.objects) || space.objects.length < 3)) throw core_text.safeUserError('房间空间或物件未写完整。', 'RMT_ROOM_STRUCTURE');
+        return value;
+    });
+    const slots = roomCandidateRepairSlots(raw, memoryBank);
+    // Small fixed groups keep feedback/repair output bounded; good fields are never regenerated.
+    for (let offset = 0; offset < slots.length; offset += 6) {
+        const group = slots.slice(offset, offset + 6);
+        raw = await request(prompt + '\n【仅修复文字字段】只输出 {"repairs":[{"path":["spaces",0,"objects",0,"line"],"text":"修复文字"}]}。'
+            + '\n只重写下面的路径；不改变 basis、来源或任何其他字段。present_scope_unproven 表示不能确认是当前观察/当下对白，请明确表达当下邀请、观察或感受，不能陈述任何无证据往事。'
+            + '\nREPAIR_SLOTS_JSON:' + JSON.stringify(group)
+            + '\nROOM_INDEX_JSON:' + JSON.stringify(compactRoomExisting(raw)),
+        '他的房间 · 只补齐待确认字段…', { ...requestOptions, maxTokens: 3000, taskKey: taskKey + ':fields:' + offset },
+        value => {
+            const repaired = applyRoomTextRepairs(raw, group, value);
+            const unresolved = new Set(roomCandidateRepairSlots(repaired, memoryBank).map(slot => JSON.stringify(slot.path)));
+            if (group.some(slot => unresolved.has(JSON.stringify(slot.path)))) throw core_text.safeUserError('房间待补字段仍不能确认。', 'RMT_ROOM_FIELDS');
+            return repaired;
+        });
+    }
+    const repairedGroups = new Set();
+    for (;;) {
+        try { return normalizeRoom(raw, memoryBank, normalizeOptions); }
+        catch (error) {
+            const field = error?.code === 'RMT_ROOM_PETS' ? 'pets' : 'spaces';
+            if (repairedGroups.has(field) || repairedGroups.size >= 2) throw error;
+            repairedGroups.add(field);
+            raw = await request(prompt + '\n【最终局部修复】仅返回 {"' + field + '":修复后的该字段完整值}。其他已通过字段由本地保留。'
+                + '\n修复原因：' + core_text.safeErrorSummary(error)
+                + '\nCURRENT_ROOM_INDEX_JSON:' + JSON.stringify(compactRoomExisting(raw)),
+            '他的房间 · 补齐' + (field === 'pets' ? '宠物' : '空间与证据'), { ...requestOptions, taskKey: taskKey + ':final:' + field },
+            value => {
+                if (!Array.isArray(value?.[field])) throw core_text.safeUserError('房间局部修复不完整。', 'RMT_ROOM_FIELDS');
+                const repaired = { ...raw, [field]: value[field] };
+                if (roomCandidateRepairSlots(repaired, memoryBank).length) throw core_text.safeUserError('房间局部修复仍有无据描述。', 'RMT_ROOM_FIELDS');
+                try { normalizeRoom(repaired, memoryBank, normalizeOptions); }
+                catch (nextError) {
+                    const nextField = nextError?.code === 'RMT_ROOM_PETS' ? 'pets' : 'spaces';
+                    if (nextField === field || repairedGroups.has(nextField)) throw nextError;
+                    // This group passed; the other group can be repaired once next. Nothing commits here.
+                }
+                return repaired;
+            });
+        }
+    }
+}
+
 function compactRoomExisting(session) {
     return (Array.isArray(session?.spaces) ? session.spaces : []).slice(0, 20).map(space => ({
         id: core_text.normalizeText(space?.id, 80),
@@ -17041,25 +17469,44 @@ function compactRoomExisting(session) {
 }
 
 function roomIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) {
-    const incrementalBank = core_incremental.incrementalPromptMemoryBank(memoryBank, sourceMemoryIds);
-    const schemaUpgrade = roomNeedsSchemaUpgrade(previous);
-    return `${generation_prompts.PROMPTS[core_constants.MODE.ROOM](context, incrementalBank)}
+    return generation_prompts.promptSafetyBoundary(context, '他的房间 / 增量物件')
+        + (roomNeedsSchemaUpgrade(previous) ? '\n【旧版房间一次性补全】重新扫描受控设定中明确的宠物，有据才补入 pets。' : '')
+        + '\n旧房间由本地原样保留，只输出新增物件 patch，不返回旧描述、dayparts、presenceLines 或完整房间。'
+        + '\n严格输出 {"additions":[{"spaceId":"已有空间id","objects":[{"id":"新id","label":"物件名称","basis":"记忆","zone":"中央","description":"有据描述","line":"当下角色对白","sourceMemoryIds":["Mxxx"],"sourceMemoryAnchor":"对应记忆精确原文"}]}],"pets":[]}'
+        + '\n只向已有空间添加新增记忆明确证明的物件；不扩建空间、不伪造赠礼。没有新增痕迹就 additions=[]。'
+        + '\n宠物字段沿用现有宠物 schema：id/name/species/spaceId/description/line/basis/sourceMemoryIds/sourceMemoryAnchor/sourceEvidence。设定宠物必须有受控原文；没有则为空。'
+        + '\nUNTRUSTED_INCREMENTAL_ROOM_ARCHIVE_JSON:\n' + core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
+        + '\nEXISTING_ROOM_INDEX_JSON:\n' + JSON.stringify(compactRoomExisting(previous));
+}
 
-【本轮是增量追加，以下规则优先于上面的初次生成数量建议】
-旧房间、旧空间、旧物件和旧台词由本地原样保留。本轮请返回一份可通过同一结构校验的房间候选，但只把新增档案能证明的新生活痕迹做成新物件/必要的新空间；已有对象可以原样列入结构帮助定位，禁止改写其描述或换名复述。
-${schemaUpgrade ? `
-【旧版房间一次性补全】
-这份旧缓存尚未使用宠物字段。即使 incrementalMemoryIds 为空，也必须重新扫描 CHARACTER_CARD_JSON 与 WORLD_INFO_TEXT 里的明确宠物/动物伙伴设定。有明确设定就以 basis=设定放入 pets；没有就保持 pets=[]。不得凭空发明。本地只会合并宠物/新证据，不会用候选重写旧房间。
-` : ''}
-UNTRUSTED_INCREMENTAL_ROOM_ARCHIVE_JSON:
-${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}
-EXISTING_ROOM_INDEX_JSON:
-${JSON.stringify(compactRoomExisting(previous), null, 2)}
-
-- 新增到既有空间的物件必须 basis=记忆，且 sourceMemoryIds 至少包含一个 incrementalMemoryIds。
-- 只有新增档案明确显示居住/工作空间发生变化时才新增空间；不得借更新凭空扩建豪宅。
-- 必须避开已有空间/物件的 label、锚点和 sourceMemoryIds 组合。
-- 为满足结构校验，可以把旧空间目录一起返回；本地只会提取真正的新内容，绝不会用候选文字覆盖旧内容。`;
+function normalizeRoomIncrementPatch(raw, previous, memoryBank, sourceMemoryIds, options = {}) {
+    if (!Array.isArray(raw?.additions) || raw.additions.length > 20) throw core_text.safeUserError('房间增量 patch 不完整。', 'RMT_ROOM_FIELDS');
+    const fresh = { spaces: [], pets: [] };
+    const seen = new Set();
+    for (const part of raw.additions) {
+        const existing = previous.spaces.find(space => space.id === part?.spaceId);
+        if (!existing || seen.has(existing.id) || !Array.isArray(part.objects) || part.objects.length > 8) throw core_text.safeUserError('房间增量空间不匹配。', 'RMT_ROOM_FIELDS');
+        seen.add(existing.id);
+        const objects = part.objects.map(item => {
+            if (!roomObjectUsesIncrement(item, sourceMemoryIds, memoryBank)) throw core_text.safeUserError('新物件缺少新增记忆证据。', 'RMT_ROOM_HISTORY');
+            const reference = core_evidence.normalizeMemoryReference(item.sourceMemoryIds, item.sourceMemoryAnchor, [item.label, item.description, item.line].join('\n'), memoryBank, 1);
+            const label = core_text.normalizeText(item.label, 60), description = core_text.normalizeText(item.description, 1600), line = core_text.normalizeText(item.line, 800);
+            if (!label || !description || !line || !reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) throw core_text.safeUserError('新物件正文或证据不完整。', 'RMT_ROOM_FIELDS');
+            const normalized = { id: core_text.safeId(item.id, 'NEW'), label, description, line, basis: '记忆', ...reference,
+                zone: core_constants.ROOM_ZONE_VALUES.has(item.zone) ? item.zone : '中央', searchable: core_evidence.isSearchableRoomObject(item) };
+            if (!roomObjectSafeForPresentation(normalized, memoryBank, memoryBank?.userName)) throw core_text.safeUserError('物件可见正文缺少精确记忆锚点。', 'RMT_ROOM_HISTORY');
+            return normalized;
+        });
+        fresh.spaces.push({ id: existing.id, label: existing.label, spaceType: existing.spaceType, atmosphere: existing.atmosphere, objects });
+    }
+    fresh.pets = normalizeRoomPets(raw.pets, previous.spaces, memoryBank, options);
+    if (roomNeedsSchemaUpgrade(previous)) {
+        const required = roomRequiredPetSpecies(memoryBank, options);
+        if (required.some(species => !fresh.pets.some(pet => pet.species === species) && !(previous.pets || []).some(pet => pet.species === species))) {
+            throw core_text.safeUserError('房间增量漏写了有据宠物。', 'RMT_ROOM_PETS');
+        }
+    }
+    return fresh;
 }
 
 function roomSpaceKey(space) {
@@ -17174,7 +17621,7 @@ async function generateRoomIncrementalWithRepair(context, memoryBank, origin, ta
         `${roomIncrementPrompt(context, memoryBank, previous, sourceMemoryIds)}\nCONTROLLED_WORLD_PRESENTATION_JSON:\n${JSON.stringify(worldPresentation, null, 2)}\nvisualProfile.explicitFields 的每一项都必须在 explicitEvidence 中给出角色卡/世界书的精确原文；basis=设定 的每只宠物必须给出 sourceEvidence 精确原文，且原文要同时包含物种与所用名字。`,
         '他的房间 · 正在从新增档案追加生活痕迹…',
         { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], temperature: 0.45, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ROOM, background: true },
-        raw => normalizeRoom(raw, memoryBank, {
+        raw => normalizeRoomIncrementPatch(raw, previous, memoryBank, sourceMemoryIds, {
             identityKey: core_context.currentCharacterRuntimeKey(context),
             worldPresentation,
             controlledEvidence: presentationContext.settingEvidence ?? '',
@@ -17865,14 +18312,6 @@ function renderRoom() {
     const presenceLine = safePresenceLines[Math.max(0, Number(session.presenceIndex) || 0) % Math.max(1, safePresenceLines.length)] || slot?.line || '';
     const currentLocationText = `${daypart.label} · ${charName} 现在在「${presentSpace.label}」`;
     const deep = roomDeepAvailability();
-    let phoneDraft = null;
-    if (!runtimeState.activeArchiveSnapshot && !deep.phone) {
-        try {
-            const liveContext = core_context.currentCharacterGuard();
-            phoneDraft = core_cache.loadPhoneGenerationDraft(liveContext, archive_repository.requireArchive(liveContext));
-        } catch {}
-    }
-    const phoneLabel = deep.phone?.deviceName || phoneDraft?.plan?.deviceName || '私人通讯终端';
     const itemsGenerating = core_requestCoordinator.isModeGenerating(core_constants.MODE.ITEMS);
     const readOnlyArchive = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
     const schemaUpgradeNotice = roomNeedsSchemaUpgrade(session)
@@ -17931,7 +18370,6 @@ function renderRoom() {
           <div class="rmt-room-card-kicker">PRIVATE ACCESS</div>
           <div class="rmt-room-deep-actions">
             <button type="button" class="rmt-btn" data-rmt-action="room-open-items" ${!selectedSearchable || itemsGenerating || (readOnlyArchive && !deep.items) ? 'disabled' : ''}><i class="fa-solid fa-box-open"></i> ${core_text.esc(itemActionText)}</button>
-            <button type="button" class="rmt-btn" data-rmt-action="room-open-phone" ${core_requestCoordinator.isModeGenerating(core_constants.MODE.PHONE) || (readOnlyArchive && !deep.phone) ? 'disabled' : ''}><i class="fa-solid fa-mobile-screen"></i> ${deep.phone ? `查看${core_text.esc(phoneLabel)}` : readOnlyArchive ? `${core_text.esc(phoneLabel)}尚未生成` : core_requestCoordinator.isModeGenerating(core_constants.MODE.PHONE) ? '私人终端生成中…' : phoneDraft ? `继续生成${core_text.esc(phoneLabel)} · ${phoneDraft.completedApps.length}/${phoneDraft.plan.apps.length}` : `生成并查看${core_text.esc(phoneLabel)}`}</button>
           </div>
           
         </section>
@@ -17974,6 +18412,7 @@ function roomPresenceNext() {
     renderRoom();
 }
 
+__m_modes_room_js.generateRoomWithRepair = generateRoomWithRepair;
 __m_modes_room_js.generateRoomIncrementalWithRepair = generateRoomIncrementalWithRepair;
 __m_modes_room_js.ensureRoomLifePlan = ensureRoomLifePlan;
 __m_modes_room_js.roomNarrativeClaimsSharedHistory = roomNarrativeClaimsSharedHistory;
@@ -17983,8 +18422,11 @@ __m_modes_room_js.normalizeRoomPets = normalizeRoomPets;
 __m_modes_room_js.roomRequiredPetSpecies = roomRequiredPetSpecies;
 __m_modes_room_js.roomNeedsSchemaUpgrade = roomNeedsSchemaUpgrade;
 __m_modes_room_js.normalizeRoom = normalizeRoom;
+__m_modes_room_js.roomCandidateRepairSlots = roomCandidateRepairSlots;
+__m_modes_room_js.applyRoomTextRepairs = applyRoomTextRepairs;
 __m_modes_room_js.compactRoomExisting = compactRoomExisting;
 __m_modes_room_js.roomIncrementPrompt = roomIncrementPrompt;
+__m_modes_room_js.normalizeRoomIncrementPatch = normalizeRoomIncrementPatch;
 __m_modes_room_js.roomSpaceKey = roomSpaceKey;
 __m_modes_room_js.roomObjectKey = roomObjectKey;
 __m_modes_room_js.roomObjectUsesIncrement = roomObjectUsesIncrement;
@@ -19795,6 +20237,7 @@ async function generateArchiveChunkJson(prompt, options, label) {
         return await generateConfiguredJson(prompt, options);
     } catch (error) {
         if (error?.name === 'AbortError' || !error?.retryableJson) throw error;
+        if (options.automatic === true) throw error;
         const retry = ui_overlay.confirmExplicitAction(
             `模型没有返回完整 JSON · ${label}`,
             `${core_text.safeErrorSummary(error, 900)}\n\n是否只重试这一块？重试会额外消耗 1 次模型请求；取消则停止本次档案整理，旧档案、旧 ADV EVENT / ENDING 等内容都不会被覆盖。`,
@@ -19882,9 +20325,10 @@ async function generateMode(mode, options = {}) {
         clone: true,
     });
     roomSchemaUpgrade = mode === core_constants.MODE.ROOM && modes_room.roomNeedsSchemaUpgrade(previousSession);
+    if (mode === core_constants.MODE.PHONE && !replaceExisting && core_cache.loadPhoneGenerationDraft(context, memoryBank)) options.continueDraft = true;
     if (modeHasNoIncrementalWork()) {
-        reportNoIncrementalWork();
-        return;
+        if (!options.automatic) reportNoIncrementalWork();
+        return options.automatic ? { status: 'noop' } : undefined;
     }
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     let origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId), archiveTargetEntryId: core_text.normalizeText(archiveTarget?.entryId, 120) };
@@ -19927,6 +20371,7 @@ async function generateMode(mode, options = {}) {
             clone: true,
         });
         roomSchemaUpgrade = mode === core_constants.MODE.ROOM && modes_room.roomNeedsSchemaUpgrade(previousSession);
+        if (mode === core_constants.MODE.PHONE && !replaceExisting && core_cache.loadPhoneGenerationDraft(context, memoryBank)) options.continueDraft = true;
         if (core_constants.ROOM_DEEP_MODES.includes(mode)) {
             roomSession = options.roomSessionOverride
                 || core_cache.loadSession(core_constants.MODE.ROOM, { context, chatId: expectedChatId, memoryBank, clone: false });
@@ -19946,8 +20391,8 @@ async function generateMode(mode, options = {}) {
             if (mode !== core_constants.MODE.PHONE) generationPrompt = generation_prompts.roomDeepGenerationPrompt(mode, context, memoryBank, roomSession, focusObject);
         }
         if (modeHasNoIncrementalWork()) {
-            reportNoIncrementalWork();
-            return;
+            if (!options.automatic) reportNoIncrementalWork();
+            return options.automatic ? { status: 'noop' } : undefined;
         }
         origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId), archiveTargetEntryId: core_text.normalizeText(archiveTarget?.entryId, 120) };
         let session;
@@ -19963,6 +20408,8 @@ async function generateMode(mode, options = {}) {
                 : await modes_butterfly.generateButterflyWithRepair(context, memoryBank, origin, taskKey);
         } else if (mode === core_constants.MODE.ROOM && previousSession) {
             session = await modes_room.generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext });
+        } else if (mode === core_constants.MODE.ROOM) {
+            session = await modes_room.generateRoomWithRepair(context, memoryBank, origin, taskKey, { presentationContext });
         } else if (mode === core_constants.MODE.ITEMS && previousSession) {
             session = await modes_items.generateItemsIncrementalWithRepair(context, memoryBank, roomSession, focusObject, origin, taskKey, previousSession);
         } else if (mode === core_constants.MODE.ENDING) {
@@ -20073,12 +20520,13 @@ async function generateMode(mode, options = {}) {
         if (stayBackground) {
             if (archiveTarget) ui_settingsPanel.refreshSettingsTaskStatus();
             else ui_settingsPanel.refreshSettingsMemoryStatus();
-            if (overlay && !overlay.hidden && !runtimeState.activeMode) archive_snapshots.scheduleChooserRefresh(20);
-            if (!archiveTarget && mode === core_constants.MODE.ROOM && runtimeState.activeMode === core_constants.MODE.ROOM && committed) {
+            if (!options.automatic && overlay && !overlay.hidden && !runtimeState.activeMode) archive_snapshots.scheduleChooserRefresh(20);
+            if (!options.automatic && !archiveTarget && mode === core_constants.MODE.ROOM && runtimeState.activeMode === core_constants.MODE.ROOM && committed) {
                 runtimeState.activeSession = core_cache.loadSession(core_constants.MODE.ROOM) || runtimeState.activeSession;
                 modes_room.renderRoom();
             }
             const targetDone = archiveTarget ? `已安全写回：${archiveTarget.characterName} · ${archiveTarget.archiveName} · ` : '';
+            if (options.automatic) return { status: committed ? 'committed' : 'deferred' };
             globalThis.toastr?.success?.(`${targetDone}${replaceExisting ? '后台重新生成完成' : refreshableCalendar && previousSession ? '后台刷新完成' : refreshableRelations && previousSession ? '后台刷新完成' : previousSession ? '后台增量追加完成' : '后台生成完成'}：${core_constants.MODE_LABEL[mode]}${committed || archiveTarget ? '' : '（回到原窗口自动写入）'}`, '心跳回忆');
             return session;
         }
@@ -21758,8 +22206,8 @@ function renderPhone() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.PHONE) return;
     upgradePhoneViewSession(session);
-    ui_overlay.setBackVisible(true, '他的房间');
-    ui_overlay.topTitle('他的房间 · 私人终端');
+    ui_overlay.setBackVisible(true, '档案');
+    ui_overlay.topTitle('他的私人终端');
     const now = new Date();
     const live = phoneLiveState(session, now);
     const app = selectedPhoneApp();
@@ -21786,7 +22234,7 @@ function renderPhone() {
         ? '<button type="button" class="rmt-btn rmt-phone-increment" data-rmt-action="regenerate"><i class="fa-solid fa-plus"></i> 增量追加终端</button>'
         : '<button type="button" class="rmt-btn rmt-phone-increment" disabled title="关闭只读查看后可增量追加"><i class="fa-solid fa-lock"></i> 只读 · 无法增量</button>';
     const reversePrivacyGate = `<section class="rmt-reverse-terminal-gate" aria-label="反查终端隐私状态"><i class="fa-solid fa-user-shield" aria-hidden="true"></i><div><b>反查终端 · 隐私保护未开放</b><p>当前架构还不能可靠区分用户人设、正式档案与模拟内容，所以不会替你生成私人事实。</p></div><span>BLOCKED SAFELY</span></section>`;
-    ui_overlay.bodyEl().innerHTML = `<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="room-deep-back">← 返回他的房间</button>${incrementalButton}</div>${reversePrivacyGate}<div class="rmt-phone"><div class="rmt-phone-shell rmt-device-${kind} rmt-phone-view-${view} ${profileClasses}" data-rmt-phone-daypart="${core_text.esc(live.key)}">${phoneHardware(kind)}<div class="rmt-phone-screen">${phoneStatusBar(now, kind)}<main class="rmt-phone-content rmt-phone-content-single">${page}</main></div></div></div>`;
+    ui_overlay.bodyEl().innerHTML = `<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="back">← 返回档案</button>${incrementalButton}</div>${reversePrivacyGate}<div class="rmt-phone"><div class="rmt-phone-shell rmt-device-${kind} rmt-phone-view-${view} ${profileClasses}" data-rmt-phone-daypart="${core_text.esc(live.key)}">${phoneHardware(kind)}<div class="rmt-phone-screen">${phoneStatusBar(now, kind)}<main class="rmt-phone-content rmt-phone-content-single">${page}</main></div></div></div>`;
     startPhoneClock();
 }
 
@@ -22452,7 +22900,7 @@ function navigateBack() {
         return renderActive();
     }
     if (runtimeState.activeMode === core_constants.MODE.TRAVEL && runtimeState.activeSession?.selectedLocationId) return ui_travelView.closeTravelDetail();
-    if (runtimeState.activeMode === core_constants.MODE.ITEMS || runtimeState.activeMode === core_constants.MODE.PHONE) return modes_room.returnToRoomFromDeep();
+    if (runtimeState.activeMode === core_constants.MODE.ITEMS) return modes_room.returnToRoomFromDeep();
     if (runtimeState.activeMode === core_constants.MODE.ADV && runtimeState.activeSession?.kind === core_constants.MODE.ADV && runtimeState.activeSession.view === 'adv') {
         runtimeState.activeSession.view = 'cg';
         runtimeState.activeSession.paragraphIndex = 0;
@@ -22683,11 +23131,12 @@ function showChooser() {
         return;
     }
     const ready = state.status === 'ready';
+    const settings = core_settings.getPluginSettings(context);
     const memory = state.memory;
     const importLabel = ready ? '增量更新当前窗口档案' : '生成当前窗口档案';
     const preview = ready ? memory.memories.slice(0, 7).map(item => item.title).join(' · ') : '';
     const archiveName = ready ? (memory.archiveName || archive_repository.fallbackArchiveName(memory.memories)) : '尚未创建档案';
-    const archiveSummary = ready ? (memory.archiveSummary || archive_repository.fallbackArchiveSummary(memory.memories)) : '先为当前聊天创建档案。档案只在你手动创建 / 更新时变化，不会因为继续聊天而自动改写。';
+    const archiveSummary = ready ? (memory.archiveSummary || archive_repository.fallbackArchiveSummary(memory.memories)) : '先为当前聊天创建档案。默认手动更新，也可在设置中开启按楼层自动同步。';
     const keywords = ready ? core_text.cleanArray(memory.archiveKeywords, 10, 80) : [];
     const pendingClass = ready && (state.pendingMessages > 0 || state.sourceChanged) ? 'pending' : 'ready';
     const cachedRead = ready ? { context, chatId: core_context.getChatId(context), memoryBank: memory, clone: false } : null;
@@ -22709,7 +23158,8 @@ function showChooser() {
         const statusText = generating
             ? (generated ? (isCalendar ? '刷新中 · 旧日历仍可查看' : '增量追加中 · 旧内容仍可查看') : '后台生成中 · 可继续启动其他入口')
             : generated ? (isCalendar ? '已整理 · 点击查看日历' : '已生成 · 点击头像查看') : '尚未生成';
-        const actionText = generating ? '生成中…' : generated ? (isCalendar ? '刷新日历' : '增量追加') : (isCalendar ? '生成日历' : '生成这一项');
+        const draft = mode === core_constants.MODE.PHONE && ready ? core_cache.loadPhoneGenerationDraft(context) : null;
+        const actionText = generating ? '生成中…' : draft ? `继续生成 · ${draft.completedApps.length}/${draft.plan.apps.length}` : generated ? (isCalendar ? '刷新日历' : '增量追加') : (isCalendar ? '生成日历' : '生成这一项');
         return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} ${generating ? 'generating' : ''} rmt-archive-portal-${core_text.esc(meta.accent)}">
           <button type="button" class="rmt-portal-open" ${generated ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
             <span class="rmt-portal-avatar"><i class="fa-solid ${core_text.esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
@@ -22757,8 +23207,8 @@ function showChooser() {
             <strong class="rmt-archive-title">${core_text.esc(archiveName)}</strong>
             <div class="rmt-archive-summary">${core_text.esc(archiveSummary)}</div>
             ${keywords.length ? `<div class="rmt-archive-keywords">${keywords.map(word => `<span>${core_text.esc(word)}</span>`).join('')}</div>` : ''}
-            <div class="rmt-memory-status ${pendingClass}">${core_text.esc(archive_snapshots.memoryStateLabel(state))}</div>
-            ${ready ? `<div class="rmt-archive-meta">上次手动更新：${core_text.esc(formatArchiveTime(memory.updatedAt || memory.createdAt))}</div>` : ''}
+            <div class="rmt-memory-status ${pendingClass}">${core_text.esc(archive_snapshots.memoryStateLabel(state, settings.autoUpdates?.archive?.enabled))}</div>
+            ${ready ? `<div class="rmt-archive-meta">上次归档：${core_text.esc(formatArchiveTime(memory.updatedAt || memory.createdAt))}</div>` : ''}
             ${preview ? `<div class="rmt-memory-preview">记忆索引：${core_text.esc(preview)}</div>` : ''}
           </div>
           <div class="rmt-current-archive-actions">
@@ -23112,10 +23562,10 @@ async function deleteManagedCategory() {
     if (!runtimeState.activeMode || !archive_library.requireWritableArchiveAction()) return;
     const mode = runtimeState.activeMode;
     const label = core_constants.MODE_LABEL[mode] || mode;
-    const cascade = mode === core_constants.MODE.ROOM ? [core_constants.MODE.ROOM, core_constants.MODE.ITEMS, core_constants.MODE.PHONE] : [mode];
+    const cascade = mode === core_constants.MODE.ROOM ? [core_constants.MODE.ROOM, core_constants.MODE.ITEMS] : [mode];
     if (!confirmExplicitActionTwice(
         `删除整个「${label}」？`,
-        `${mode === core_constants.MODE.ROOM ? '“他的物品”和“私人终端”依赖房间结构，也会一起清除。' : ''}只删除这些派生缓存，不删除正式档案 Mxxx 或聊天正文。`,
+        `${mode === core_constants.MODE.ROOM ? '“他的物品”依赖房间结构，也会一起清除；私人终端保留。' : ''}只删除这些派生缓存，不删除正式档案 Mxxx 或聊天正文。`,
         { destructive: true },
     )) return;
     try {
@@ -23138,7 +23588,7 @@ async function regenerateManagedCategory() {
     const label = core_constants.MODE_LABEL[mode] || mode;
     if (!confirmExplicitActionTwice(
         `重新生成整个「${label}」？`,
-        `成功后会用全新的分类基础内容替换当前分类；旧内容在新结果成功写入之前会一直保留。${mode === core_constants.MODE.ROOM ? '房间成功替换后，会清除依赖旧结构的“他的物品”和“私人终端”，需要重新生成。' : ''} 实图/可选长正文等独立子内容可继续使用各自的单项重新生成按钮。正式档案不会修改。`,
+        `成功后会用全新的分类基础内容替换当前分类；旧内容在新结果成功写入之前会一直保留。${mode === core_constants.MODE.ROOM ? '房间成功替换后，只清除依赖旧结构的“他的物品”；私人终端保留。' : ''} 实图/可选长正文等独立子内容可继续使用各自的单项重新生成按钮。正式档案不会修改。`,
         { destructive: true },
     )) return;
     runtimeState.contentManagerOpen = false;
@@ -23146,7 +23596,7 @@ async function regenerateManagedCategory() {
     if (fresh && mode === core_constants.MODE.ROOM) {
         try {
             const context = core_context.currentCharacterGuard();
-            await core_cache.deleteSessions([core_constants.MODE.ITEMS, core_constants.MODE.PHONE], core_context.getChatId(context));
+            await core_cache.deleteSessions([core_constants.MODE.ITEMS], core_context.getChatId(context));
         } catch (error) {
             console.warn('[HeartbeatMemories] room dependent cache invalidation after replacement failed', core_text.safeErrorDiagnostic(error));
         }
@@ -23496,7 +23946,7 @@ function handleOverlayClick(event) {
         return modes_room.ensureRoomLifePlan({ force: true });
     }
     if (action === 'room-open-items') return modes_room.openRoomDeepMode(core_constants.MODE.ITEMS);
-    if (action === 'room-open-phone') return modes_room.openRoomDeepMode(core_constants.MODE.PHONE);
+    if (action === 'room-open-phone') return openCachedOrGenerate(core_constants.MODE.PHONE);
     if (action === 'room-deep-back') return modes_room.returnToRoomFromDeep();
     if (action === 'phone-entry-back') return ui_phoneView.phoneEntryBack();
     if (action === 'items-open') return modes_items.itemsOpenSelected();
@@ -23649,15 +24099,15 @@ const runtimeState = __m_core_state_js.state;
 
 
 
-function memoryStateLabel(state) {
+function memoryStateLabel(state, autoSync = false) {
     if (state.status === 'missing') return '这个聊天窗口还没有自己的“心跳回忆”档案。';
     const memory = state.memory;
     const suffix = memory?.truncated ? `；超长聊天已从全窗口均匀覆盖 ${memory.usedMessageCount} / ${memory.sourceMessageCount} 条消息` : '';
     let pending = '当前没有检测到新增聊天。';
     if (state.pendingMessages > 0) {
-        pending = `当前还有 ${state.pendingMessages} 条新聊天未收录；档案不会自动更新。`;
+        pending = `当前还有 ${state.pendingMessages} 条新聊天未收录；${autoSync ? '已开启按楼层自动同步。' : '档案自动同步未开启。'}`;
     } else if (state.sourceChanged) {
-        pending = '当前聊天内容与上次记录点有修改；档案仍保留上次手动版本，除非你主动更新。';
+        pending = '当前聊天内容与上次记录点有修改；编辑不会增加楼层，档案保留已归档版本。';
     }
     return `已收录 ${memory.memories.length} 条记忆，记录到 ${memory.sourceMessageCount} 条聊天消息${suffix}。${pending}`;
 }
@@ -23854,7 +24304,7 @@ function modePortalMeta(mode) {
         [core_constants.MODE.ADV]: { title: 'ADV EVENT', subtitle: '重要事件与长篇回放', icon: 'fa-book-open', accent: 'adv' },
         [core_constants.MODE.ROOM]: { title: '他的房间', subtitle: '随现实时间流动的私人空间', icon: 'fa-house', accent: 'room' },
         [core_constants.MODE.ITEMS]: { title: '他的物品', subtitle: '翻找各种收纳容器与私人物件', icon: 'fa-box-open', accent: 'items' },
-        [core_constants.MODE.PHONE]: { title: '他的手机', subtitle: '查看私人通讯与数字生活', icon: 'fa-mobile-screen-button', accent: 'phone' },
+        [core_constants.MODE.PHONE]: { title: '他的私人终端', subtitle: '通讯、草稿与私人记录', icon: 'fa-mobile-screen-button', accent: 'phone' },
         [core_constants.MODE.TRAVEL]: { title: '他的出行路线', subtitle: '附近对话与远方文字明信片', icon: 'fa-map-location-dot', accent: 'travel' },
         [core_constants.MODE.BUTTERFLY]: { title: '蝴蝶效应', subtitle: '平行时间线观测终端', icon: 'fa-code-branch', accent: 'butterfly' },
         [core_constants.MODE.ENDING]: { title: 'ENDING / 后日谈', subtitle: '关系路线终章与未来生活', icon: 'fa-heart', accent: 'ending' },
@@ -26640,10 +27090,10 @@ async function collectCurrentChatExternalMemory(context, expectedChatId, signal)
     return { records: normalized, sources: normalizedSources, fingerprint };
 }
 
-async function readCurrentChatMemoryPlugins() {
+async function readCurrentChatMemoryPlugins({ automatic = false, preparationToken = null } = {}) {
     const context = core_context.currentCharacterGuard();
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
-    if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) throw new Error('当前还有内容生成任务在进行，请等生成结束后再扫描记忆 / 摘要。');
+    if ((runtimeState.busy && !(automatic && preparationToken && preparationToken === runtimeState.archivePreparationToken)) || core_requestCoordinator.hasGenerationTasks()) throw new Error('当前还有内容生成任务在进行，请等生成结束后再扫描记忆 / 摘要。');
     const chatId = core_context.getChatId(context);
     if (!chatId) throw new Error('无法识别当前聊天窗口。');
     const taskOrigin = core_context.captureTaskOrigin(context);
@@ -26659,6 +27109,7 @@ async function readCurrentChatMemoryPlugins() {
     if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
     if (!core_context.isCurrentTaskOrigin(taskOrigin, core_context.currentCharacterGuard())) throw new DOMException('Chat changed', 'AbortError');
     runtimeState.memoryPreflightCache.set(core_context.chatScopeKey(context, chatId), preflight);
+    if (automatic) return preflight;
     if (!result.records.length && !worldInfo.entries.length) {
         globalThis.toastr?.info?.('当前窗口没有检测到可读取的记忆 / 摘要，也没有选择记忆相关世界书；建档仍会使用聊天正文。', '心跳回忆');
     } else {
@@ -26943,9 +27394,19 @@ function normalizeArchiveProfile(data, memories) {
     };
 }
 
-async function importCurrentChatMemoryOperation({ fullRebuild = false } = {}, preparation) {
+async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic = false } = {}, preparation) {
     const context = preparation.context;
     const existing = preparation.existing;
+    const preparationStillCurrent = () => core_context.isCurrentTaskOrigin(preparation.origin, core_context.currentCharacterGuard());
+    if (automatic) {
+        if (!existing) return { status: 'blocked' };
+        await core_cache.ensureCacheHydrated(context);
+        if (!preparationStillCurrent()) throw new DOMException('Chat changed', 'AbortError');
+        if (core_cache.loadPhoneGenerationDraft(context, existing)) {
+            globalThis.toastr?.info?.('私人终端有未完成草稿，自动档案同步暂缓；请先继续生成终端。', '心跳回忆');
+            return { status: 'blocked' };
+        }
+    }
     const assertPreparationCurrent = () => {
         let live;
         try { live = core_context.currentCharacterGuard(); } catch { live = null; }
@@ -26958,14 +27419,18 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false } = {}, pr
     const actionLabel = fullRebuild ? '完全重建' : existing ? '增量更新' : '创建';
     const detected = externalMemorySourceSummary(context);
     const settings = core_settings.getPluginSettings(context);
-    const preflight = getMemoryPreflight(context);
+    const preflight = automatic && settings.useCurrentChatExternalMemory
+        ? await readCurrentChatMemoryPlugins({ automatic: true, preparationToken: runtimeState.archivePreparationToken }) : getMemoryPreflight(context);
+    assertPreparationCurrent();
+    if (automatic && (preflight?.sources?.some(source => source.coverage?.status === 'failed')
+        || preflight?.worldInfo?.books?.some(book => book.error === true))) throw core_text.safeUserError('自动同步的来源读取失败。', 'RMT_LEDGER_UNAVAILABLE');
     let external = { records: [], sources: [], fingerprint: 'disabled', worldInfo: emptyMemoryWorldInfo('disabled') };
     if (settings.useCurrentChatExternalMemory) {
         external = preflight || await currentMemorySourceLedgerExternal(context);
         assertPreparationCurrent();
         if (!preflight && !external.records.length && (detected.length || hasMemoryWorldInfoSelection(context))) {
             globalThis.toastr?.info?.('先点击“自动读取”，确认它实际读到了多少当前窗口资料，再创建/更新档案。', '心跳回忆');
-            return;
+            return { status: 'blocked' };
         }
         const limited = external.sources.filter(source => source.coverage?.status === 'truncated'
             && /本次档案生成/.test(source.coverage?.reason || ''));
@@ -27010,7 +27475,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false } = {}, pr
     if (incrementalUpdate && !chatInput.length && !externalChanged) {
         clearMemoryPreflight(context);
         globalThis.toastr?.info?.('当前窗口没有发现新的聊天消息或新的记忆 / 摘要资料；现有档案和全部已生成内容保持不变。', '心跳回忆');
-        return;
+        return { status: 'noop' };
     }
     const chunks = splitSnapshotIntoChunks({ messages: chatInput });
     const externalChunks = externalChanged ? splitExternalMemoryIntoChunks(external.records) : [];
@@ -27026,11 +27491,13 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false } = {}, pr
     runtimeState.activeTaskLabel = `正在${actionLabel}当前聊天档案…`;
     runtimeState.activeTaskBackgrounded = true;
     runtimeState.busy = true;
-    runtimeState.activeArchiveSnapshot = null;
-    ui_overlay.openOverlay();
-    ui_overlay.setBusyUi(true, runtimeState.activeTaskLabel);
-    ui_overlay.showChooser();
-    ui_overlay.setBusyUi(true, runtimeState.activeTaskLabel);
+    if (!automatic) {
+        runtimeState.activeArchiveSnapshot = null;
+        ui_overlay.openOverlay();
+        ui_overlay.setBusyUi(true, runtimeState.activeTaskLabel);
+        ui_overlay.showChooser();
+        ui_overlay.setBusyUi(true, runtimeState.activeTaskLabel);
+    }
     await core_context.yieldToUi();
     try {
         const liveEnvelopeContext = assertPreparationCurrent();
@@ -27041,14 +27508,16 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false } = {}, pr
             runtimeState.activeTaskLabel = `正在${actionLabel}新增聊天 · ${i + 1} / ${chunks.length}`;
             ui_overlay.updateBackgroundTaskLabel(runtimeState.activeTaskLabel);
             await core_context.yieldToUi();
-            const raw = await generation_client.generateArchiveChunkJson(memoryImportPrompt(context, chunks[i], i, chunks.length), { maxTokens: core_constants.MAX_GENERATION_OUTPUT_TOKENS, temperature: Math.min(settings.temperature, 0.35), contextEnvelope, signal: importController.signal, skipTokenCount: true, context }, `聊天分块 ${i + 1} / ${chunks.length}`);
+            if (automatic) assertPreparationCurrent();
+            const raw = await generation_client.generateArchiveChunkJson(memoryImportPrompt(context, chunks[i], i, chunks.length), { maxTokens: core_constants.MAX_GENERATION_OUTPUT_TOKENS, temperature: Math.min(settings.temperature, 0.35), contextEnvelope, signal: importController.signal, skipTokenCount: true, automatic, context }, `聊天分块 ${i + 1} / ${chunks.length}`);
             fresh.push(...normalizeImportedChunk(raw, chunks[i]).map(item => ({ ...item, sourceKind: 'chat' })));
         }
         for (let i = 0; i < externalChunks.length; i += 1) {
             runtimeState.activeTaskLabel = `正在${actionLabel}记忆 / 摘要资料 · ${i + 1} / ${externalChunks.length}`;
             ui_overlay.updateBackgroundTaskLabel(runtimeState.activeTaskLabel);
             await core_context.yieldToUi();
-            const externalRaw = await generation_client.generateArchiveChunkJson(externalMemoryImportPrompt(context, externalChunks[i], external.worldInfo), { maxTokens: core_constants.MAX_GENERATION_OUTPUT_TOKENS, temperature: Math.min(settings.temperature, 0.35), contextEnvelope, signal: importController.signal, skipTokenCount: true, context }, `记忆 / 摘要分块 ${i + 1} / ${externalChunks.length}`);
+            if (automatic) assertPreparationCurrent();
+            const externalRaw = await generation_client.generateArchiveChunkJson(externalMemoryImportPrompt(context, externalChunks[i], external.worldInfo), { maxTokens: core_constants.MAX_GENERATION_OUTPUT_TOKENS, temperature: Math.min(settings.temperature, 0.35), contextEnvelope, signal: importController.signal, skipTokenCount: true, automatic, context }, `记忆 / 摘要分块 ${i + 1} / ${externalChunks.length}`);
             fresh.push(...normalizeExternalImportedMemories(externalRaw, externalChunks[i]));
         }
 
@@ -27068,6 +27537,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false } = {}, pr
         runtimeState.activeTaskLabel = `正在${actionLabel}档案摘要…`;
         ui_overlay.updateBackgroundTaskLabel(runtimeState.activeTaskLabel);
         await core_context.yieldToUi();
+        if (automatic) assertPreparationCurrent();
         let profile;
         try {
             const rawProfile = await generation_client.generateConfiguredJson(archiveProfilePrompt(context, memories), { maxTokens: 8192, temperature: Math.min(settings.temperature, 0.35), contextEnvelope, signal: importController.signal, context });
@@ -27137,27 +27607,27 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false } = {}, pr
             if (!commitIntent.durable) throw new Error('聊天窗口已经切换，且浏览器未能持久保存待写回档案。请回到原聊天后重新更新。');
         }
         runtimeState.activeTaskBackgrounded = false;
-        runtimeState.activeMode = null;
-        runtimeState.activeSession = null;
+        if (!automatic) { runtimeState.activeMode = null; runtimeState.activeSession = null; }
         if (core_context.isCurrentTaskOrigin(origin)) {
             ui_settingsPanel.refreshSettingsMemoryStatus();
             const overlayAfterSave = document.getElementById(core_constants.OVERLAY_ID);
-            if (overlayAfterSave && !overlayAfterSave.hidden) setTimeout(() => { if (!runtimeState.busy && !runtimeState.activeMode) ui_overlay.showChooser(); }, 0);
+            if (!automatic && overlayAfterSave && !overlayAfterSave.hidden) setTimeout(() => { if (!runtimeState.busy && !runtimeState.activeMode) ui_overlay.showChooser(); }, 0);
         }
         const added = Math.max(0, memories.length - (incrementalUpdate ? existing.memories.length : 0));
         globalThis.toastr?.success?.(core_text.toastText(`${actionLabel}完成：${memoryBank.archiveName} · 当前 ${memories.length} 条记忆${incrementalUpdate ? ` · 新增 ${added} 条 · 已保留原 ADV EVENT 等缓存` : ''}${wasBackgrounded ? '（后台；回到原窗口自动写入）' : ''}`), '心跳回忆');
+        return { status: core_context.isCurrentTaskOrigin(origin) ? 'committed' : 'deferred' };
     } catch (error) {
-        runtimeState.activeMode = null;
-        runtimeState.activeSession = null;
+        if (!automatic) { runtimeState.activeMode = null; runtimeState.activeSession = null; }
         if (error?.name === 'AbortError') {
             console.warn('[HeartbeatMemories] archive import aborted by extension/task cancellation');
         } else {
             console.error('[HeartbeatMemories] archive import failed', core_text.safeErrorDiagnostic(error));
             const wasBackgrounded = runtimeState.activeTaskBackgrounded || document.getElementById(core_constants.OVERLAY_ID)?.hidden;
             runtimeState.activeTaskBackgrounded = false;
-            if (!wasBackgrounded) ui_overlay.showMemoryImportError(core_text.safeErrorSummary(error));
+            if (!automatic && !wasBackgrounded) ui_overlay.showMemoryImportError(core_text.safeErrorSummary(error));
             globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
         }
+        return { status: 'failed' };
     } finally {
         if (runtimeState.activeTaskAbortController === importController) runtimeState.activeTaskAbortController = null;
         if (runtimeState.activeTaskOrigin === origin) runtimeState.activeTaskOrigin = null;
@@ -27991,7 +28461,7 @@ function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchiveSnapsho
     const portalHtml = portals.filter(item => item.mode !== core_constants.MODE.CALENDAR).map(({ mode, session, meta }) => {
         const generated = !!session;
         const generating = core_requestCoordinator.isArchiveTargetModeGenerating(mode, snapshot);
-        const editAction = canGenerateDerived ? `<button type="button" class="rmt-btn rmt-portal-generate" data-rmt-generate-mode="${core_text.esc(mode)}" ${generated ? 'data-rmt-regenerate="true"' : ''} ${generating ? 'disabled' : ''}>${generating ? '生成中…' : generated ? '增量追加' : '生成这一项'}</button>` : '';
+        const editAction = canGenerateDerived ? `<button type="button" class="rmt-btn rmt-portal-generate" data-rmt-generate-mode="${core_text.esc(mode)}" ${generated ? 'data-rmt-regenerate="true"' : ''} ${generating ? 'disabled' : ''}>${generating ? '生成中…' : mode === core_constants.MODE.PHONE ? (generated ? '追加 / 继续' : '生成 / 继续') : generated ? '增量追加' : '生成这一项'}</button>` : '';
         return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} rmt-archive-portal-${core_text.esc(meta.accent)}">
           <button type="button" class="rmt-portal-open" ${generated ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
             <span class="rmt-portal-avatar"><i class="fa-solid ${core_text.esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
@@ -30673,6 +31143,7 @@ __m_core_cache_js.loadSession = loadSession;
 function __init_heartbeatMemories_js() {
 // MODULE: heartbeatMemories.js
 const core_cache = __m_core_cache_js;
+const core_autoUpdates = __m_core_autoUpdates_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
@@ -30694,8 +31165,13 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+
 function openArchiveLibrary(source = 'runtime-api') {
     return ui_archivePortal.safeShowArchiveLibrary(source);
+}
+
+function isGenerationBusy() {
+    return runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !!runtimeState.roomLifeRefreshPromise;
 }
 
 function initMemoryTheater() {
@@ -30703,6 +31179,7 @@ function initMemoryTheater() {
         const settingsMounted = ui_settingsPanel.mountSettings();
         const menuMounted = ui_archivePortal.mountMenuItem();
         ui_archivePortal.bindChatStateEvents();
+        core_autoUpdates.startAutoUpdates();
         ui_archivePortal.bindRobustArchiveOpenHandlers();
         ui_archivePortal.bindGenerationNavigationGuards();
         ui_archivePortal.scheduleMounts(settingsMounted, menuMounted);
@@ -30721,6 +31198,7 @@ function initMemoryTheater() {
 }
 
 function destroyMemoryTheater() {
+    core_autoUpdates.stopAutoUpdates();
     try {
         // Extension updates/reloads can destroy the module before the short gzip debounce fires.
         // A destroy path cannot await gzip. Persist a detached raw compatibility copy only when it
@@ -30837,6 +31315,7 @@ function destroyMemoryTheater() {
 }
 
 __m_heartbeatMemories_js.openArchiveLibrary = openArchiveLibrary;
+__m_heartbeatMemories_js.isGenerationBusy = isGenerationBusy;
 __m_heartbeatMemories_js.initMemoryTheater = initMemoryTheater;
 __m_heartbeatMemories_js.destroyMemoryTheater = destroyMemoryTheater;
 }
@@ -30852,6 +31331,7 @@ __init_archive_backupStore_js();
 __init_core_incremental_js();
 __init_core_independentApi_js();
 __init_core_theme_js();
+__init_core_autoUpdatePolicy_js();
 __init_core_settings_js();
 __init_core_butterflyContract_js();
 __init_core_worldPresentation_js();
@@ -30870,6 +31350,8 @@ __init_ui_heartView_js();
 __init_modes_heart_js();
 __init_generation_prompts_js();
 __init_modes_achievements_js();
+__init_core_autoUpdates_js();
+__init_core_selfUpdater_js();
 __init_ui_endingView_js();
 __init_ui_archivePortal_js();
 __init_ui_settingsPanel_js();
@@ -30902,5 +31384,6 @@ __init_core_cache_js();
 __init_heartbeatMemories_js();
 
 export const openArchiveLibrary = __m_heartbeatMemories_js.openArchiveLibrary;
+export const isGenerationBusy = __m_heartbeatMemories_js.isGenerationBusy;
 export const initMemoryTheater = __m_heartbeatMemories_js.initMemoryTheater;
 export const destroyMemoryTheater = __m_heartbeatMemories_js.destroyMemoryTheater;

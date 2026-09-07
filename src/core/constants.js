@@ -141,7 +141,13 @@ export const MAX_MEMORY_WORLD_INFO_ENTRIES = 160;
 
 export const MAX_MEMORY_WORLD_INFO_CHARS = 52000;
 
-export const THEME_MODES = new Set(['default', 'night', 'host', 'custom']);
+export const THEME_MODES = new Set(['default', 'night', 'host', 'custom', 'gs1', 'gs2', 'gs3', 'gs4']);
+export const SEASON_THEME_PALETTES = Object.freeze({
+    gs1: Object.freeze({ background: '#f5faf2', surface: '#ffffff', text: '#334c40', muted: '#56675a', accent: '#79a75e', accentAlt: '#d8b857', border: '#d5e4cc' }),
+    gs2: Object.freeze({ background: '#f0f8fc', surface: '#ffffff', text: '#35465f', muted: '#586781', accent: '#66a9d3', accentAlt: '#aa96c7', border: '#cfe4ef' }),
+    gs3: Object.freeze({ background: '#fff5f8', surface: '#ffffff', text: '#594151', muted: '#745c69', accent: '#d97aa4', accentAlt: '#8dbf9c', border: '#efd4e1' }),
+    gs4: Object.freeze({ background: '#fff8ed', surface: '#fffefd', text: '#634b38', muted: '#786556', accent: '#e8a15c', accentAlt: '#92b9d5', border: '#eddfca' }),
+});
 
 export const NIGHT_THEME_PALETTE = Object.freeze({
     background: '#171d28', surface: '#232c3a', text: '#edf1f8', muted: '#b8c5d6',
@@ -229,9 +235,9 @@ export const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ACHIEVEMENTS]: 6000,
 });
 
-export const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.CABINET, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
+export const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.PHONE, MODE.CABINET, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
 
-export const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS, MODE.PHONE]);
+export const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS]);
 export const CREATIVE_EXPANSION_MODES = Object.freeze([MODE.ADV, MODE.BUTTERFLY, MODE.HEART, MODE.ENDING, MODE.ALBUM, MODE.TRAVEL]);
 
 export const ARCHIVE_OVERVIEW_CACHE_MS = 60000;

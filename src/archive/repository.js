@@ -1211,10 +1211,10 @@ export async function collectCurrentChatExternalMemory(context, expectedChatId, 
     return { records: normalized, sources: normalizedSources, fingerprint };
 }
 
-export async function readCurrentChatMemoryPlugins() {
+export async function readCurrentChatMemoryPlugins({ automatic = false, preparationToken = null } = {}) {
     const context = core_context.currentCharacterGuard();
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
-    if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) throw new Error('当前还有内容生成任务在进行，请等生成结束后再扫描记忆 / 摘要。');
+    if ((runtimeState.busy && !(automatic && preparationToken && preparationToken === runtimeState.archivePreparationToken)) || core_requestCoordinator.hasGenerationTasks()) throw new Error('当前还有内容生成任务在进行，请等生成结束后再扫描记忆 / 摘要。');
     const chatId = core_context.getChatId(context);
     if (!chatId) throw new Error('无法识别当前聊天窗口。');
     const taskOrigin = core_context.captureTaskOrigin(context);
@@ -1230,6 +1230,7 @@ export async function readCurrentChatMemoryPlugins() {
     if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
     if (!core_context.isCurrentTaskOrigin(taskOrigin, core_context.currentCharacterGuard())) throw new DOMException('Chat changed', 'AbortError');
     runtimeState.memoryPreflightCache.set(core_context.chatScopeKey(context, chatId), preflight);
+    if (automatic) return preflight;
     if (!result.records.length && !worldInfo.entries.length) {
         globalThis.toastr?.info?.('当前窗口没有检测到可读取的记忆 / 摘要，也没有选择记忆相关世界书；建档仍会使用聊天正文。', '心跳回忆');
     } else {
@@ -1514,9 +1515,19 @@ export function normalizeArchiveProfile(data, memories) {
     };
 }
 
-async function importCurrentChatMemoryOperation({ fullRebuild = false } = {}, preparation) {
+async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic = false } = {}, preparation) {
     const context = preparation.context;
     const existing = preparation.existing;
+    const preparationStillCurrent = () => core_context.isCurrentTaskOrigin(preparation.origin, core_context.currentCharacterGuard());
+    if (automatic) {
+        if (!existing) return { status: 'blocked' };
+        await core_cache.ensureCacheHydrated(context);
+        if (!preparationStillCurrent()) throw new DOMException('Chat changed', 'AbortError');
+        if (core_cache.loadPhoneGenerationDraft(context, existing)) {
+            globalThis.toastr?.info?.('私人终端有未完成草稿，自动档案同步暂缓；请先继续生成终端。', '心跳回忆');
+            return { status: 'blocked' };
+        }
+    }
     const assertPreparationCurrent = () => {
         let live;
         try { live = core_context.currentCharacterGuard(); } catch { live = null; }
@@ -1529,14 +1540,18 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false } = {}, pr
     const actionLabel = fullRebuild ? '完全重建' : existing ? '增量更新' : '创建';
     const detected = externalMemorySourceSummary(context);
     const settings = core_settings.getPluginSettings(context);
-    const preflight = getMemoryPreflight(context);
+    const preflight = automatic && settings.useCurrentChatExternalMemory
+        ? await readCurrentChatMemoryPlugins({ automatic: true, preparationToken: runtimeState.archivePreparationToken }) : getMemoryPreflight(context);
+    assertPreparationCurrent();
+    if (automatic && (preflight?.sources?.some(source => source.coverage?.status === 'failed')
+        || preflight?.worldInfo?.books?.some(book => book.error === true))) throw core_text.safeUserError('自动同步的来源读取失败。', 'RMT_LEDGER_UNAVAILABLE');
     let external = { records: [], sources: [], fingerprint: 'disabled', worldInfo: emptyMemoryWorldInfo('disabled') };
     if (settings.useCurrentChatExternalMemory) {
         external = preflight || await currentMemorySourceLedgerExternal(context);
         assertPreparationCurrent();
         if (!preflight && !external.records.length && (detected.length || hasMemoryWorldInfoSelection(context))) {
             globalThis.toastr?.info?.('先点击“自动读取”，确认它实际读到了多少当前窗口资料，再创建/更新档案。', '心跳回忆');
-            return;
+            return { status: 'blocked' };
         }
         const limited = external.sources.filter(source => source.coverage?.status === 'truncated'
             && /本次档案生成/.test(source.coverage?.reason || ''));
@@ -1581,7 +1596,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false } = {}, pr
     if (incrementalUpdate && !chatInput.length && !externalChanged) {
         clearMemoryPreflight(context);
         globalThis.toastr?.info?.('当前窗口没有发现新的聊天消息或新的记忆 / 摘要资料；现有档案和全部已生成内容保持不变。', '心跳回忆');
-        return;
+        return { status: 'noop' };
     }
     const chunks = splitSnapshotIntoChunks({ messages: chatInput });
     const externalChunks = externalChanged ? splitExternalMemoryIntoChunks(external.records) : [];
@@ -1597,11 +1612,13 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false } = {}, pr
     runtimeState.activeTaskLabel = `正在${actionLabel}当前聊天档案…`;
     runtimeState.activeTaskBackgrounded = true;
     runtimeState.busy = true;
-    runtimeState.activeArchiveSnapshot = null;
-    ui_overlay.openOverlay();
-    ui_overlay.setBusyUi(true, runtimeState.activeTaskLabel);
-    ui_overlay.showChooser();
-    ui_overlay.setBusyUi(true, runtimeState.activeTaskLabel);
+    if (!automatic) {
+        runtimeState.activeArchiveSnapshot = null;
+        ui_overlay.openOverlay();
+        ui_overlay.setBusyUi(true, runtimeState.activeTaskLabel);
+        ui_overlay.showChooser();
+        ui_overlay.setBusyUi(true, runtimeState.activeTaskLabel);
+    }
     await core_context.yieldToUi();
     try {
         const liveEnvelopeContext = assertPreparationCurrent();
@@ -1612,14 +1629,16 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false } = {}, pr
             runtimeState.activeTaskLabel = `正在${actionLabel}新增聊天 · ${i + 1} / ${chunks.length}`;
             ui_overlay.updateBackgroundTaskLabel(runtimeState.activeTaskLabel);
             await core_context.yieldToUi();
-            const raw = await generation_client.generateArchiveChunkJson(memoryImportPrompt(context, chunks[i], i, chunks.length), { maxTokens: core_constants.MAX_GENERATION_OUTPUT_TOKENS, temperature: Math.min(settings.temperature, 0.35), contextEnvelope, signal: importController.signal, skipTokenCount: true, context }, `聊天分块 ${i + 1} / ${chunks.length}`);
+            if (automatic) assertPreparationCurrent();
+            const raw = await generation_client.generateArchiveChunkJson(memoryImportPrompt(context, chunks[i], i, chunks.length), { maxTokens: core_constants.MAX_GENERATION_OUTPUT_TOKENS, temperature: Math.min(settings.temperature, 0.35), contextEnvelope, signal: importController.signal, skipTokenCount: true, automatic, context }, `聊天分块 ${i + 1} / ${chunks.length}`);
             fresh.push(...normalizeImportedChunk(raw, chunks[i]).map(item => ({ ...item, sourceKind: 'chat' })));
         }
         for (let i = 0; i < externalChunks.length; i += 1) {
             runtimeState.activeTaskLabel = `正在${actionLabel}记忆 / 摘要资料 · ${i + 1} / ${externalChunks.length}`;
             ui_overlay.updateBackgroundTaskLabel(runtimeState.activeTaskLabel);
             await core_context.yieldToUi();
-            const externalRaw = await generation_client.generateArchiveChunkJson(externalMemoryImportPrompt(context, externalChunks[i], external.worldInfo), { maxTokens: core_constants.MAX_GENERATION_OUTPUT_TOKENS, temperature: Math.min(settings.temperature, 0.35), contextEnvelope, signal: importController.signal, skipTokenCount: true, context }, `记忆 / 摘要分块 ${i + 1} / ${externalChunks.length}`);
+            if (automatic) assertPreparationCurrent();
+            const externalRaw = await generation_client.generateArchiveChunkJson(externalMemoryImportPrompt(context, externalChunks[i], external.worldInfo), { maxTokens: core_constants.MAX_GENERATION_OUTPUT_TOKENS, temperature: Math.min(settings.temperature, 0.35), contextEnvelope, signal: importController.signal, skipTokenCount: true, automatic, context }, `记忆 / 摘要分块 ${i + 1} / ${externalChunks.length}`);
             fresh.push(...normalizeExternalImportedMemories(externalRaw, externalChunks[i]));
         }
 
@@ -1639,6 +1658,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false } = {}, pr
         runtimeState.activeTaskLabel = `正在${actionLabel}档案摘要…`;
         ui_overlay.updateBackgroundTaskLabel(runtimeState.activeTaskLabel);
         await core_context.yieldToUi();
+        if (automatic) assertPreparationCurrent();
         let profile;
         try {
             const rawProfile = await generation_client.generateConfiguredJson(archiveProfilePrompt(context, memories), { maxTokens: 8192, temperature: Math.min(settings.temperature, 0.35), contextEnvelope, signal: importController.signal, context });
@@ -1708,27 +1728,27 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false } = {}, pr
             if (!commitIntent.durable) throw new Error('聊天窗口已经切换，且浏览器未能持久保存待写回档案。请回到原聊天后重新更新。');
         }
         runtimeState.activeTaskBackgrounded = false;
-        runtimeState.activeMode = null;
-        runtimeState.activeSession = null;
+        if (!automatic) { runtimeState.activeMode = null; runtimeState.activeSession = null; }
         if (core_context.isCurrentTaskOrigin(origin)) {
             ui_settingsPanel.refreshSettingsMemoryStatus();
             const overlayAfterSave = document.getElementById(core_constants.OVERLAY_ID);
-            if (overlayAfterSave && !overlayAfterSave.hidden) setTimeout(() => { if (!runtimeState.busy && !runtimeState.activeMode) ui_overlay.showChooser(); }, 0);
+            if (!automatic && overlayAfterSave && !overlayAfterSave.hidden) setTimeout(() => { if (!runtimeState.busy && !runtimeState.activeMode) ui_overlay.showChooser(); }, 0);
         }
         const added = Math.max(0, memories.length - (incrementalUpdate ? existing.memories.length : 0));
         globalThis.toastr?.success?.(core_text.toastText(`${actionLabel}完成：${memoryBank.archiveName} · 当前 ${memories.length} 条记忆${incrementalUpdate ? ` · 新增 ${added} 条 · 已保留原 ADV EVENT 等缓存` : ''}${wasBackgrounded ? '（后台；回到原窗口自动写入）' : ''}`), '心跳回忆');
+        return { status: core_context.isCurrentTaskOrigin(origin) ? 'committed' : 'deferred' };
     } catch (error) {
-        runtimeState.activeMode = null;
-        runtimeState.activeSession = null;
+        if (!automatic) { runtimeState.activeMode = null; runtimeState.activeSession = null; }
         if (error?.name === 'AbortError') {
             console.warn('[HeartbeatMemories] archive import aborted by extension/task cancellation');
         } else {
             console.error('[HeartbeatMemories] archive import failed', core_text.safeErrorDiagnostic(error));
             const wasBackgrounded = runtimeState.activeTaskBackgrounded || document.getElementById(core_constants.OVERLAY_ID)?.hidden;
             runtimeState.activeTaskBackgrounded = false;
-            if (!wasBackgrounded) ui_overlay.showMemoryImportError(core_text.safeErrorSummary(error));
+            if (!automatic && !wasBackgrounded) ui_overlay.showMemoryImportError(core_text.safeErrorSummary(error));
             globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
         }
+        return { status: 'failed' };
     } finally {
         if (runtimeState.activeTaskAbortController === importController) runtimeState.activeTaskAbortController = null;
         if (runtimeState.activeTaskOrigin === origin) runtimeState.activeTaskOrigin = null;

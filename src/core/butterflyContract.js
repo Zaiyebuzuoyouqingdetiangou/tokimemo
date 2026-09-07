@@ -8,6 +8,8 @@ MAIN 与普通分歧的 monologue 至少 ${BUTTERFLY_LIMITS.monologueHan} 个汉
 worldSpec 的 era、identity、occupation、location、keyDecision、encounterWithUser、bondWithUser、finalFate 八字段均为具体文本，不用“同上/不变/未知”；thirdPartyRomance 严格为 false。不得虚构第三方恋爱、婚姻或前任；节点标题、世界条件与独白均不可重复。`;
 
 const ISSUES = Object.freeze({
+    relationship: '人物关系归属不明确或包含第三方恋爱。每个独立字段明确用我与你指向双方，不把我们指代新的第三人。',
+    unique: '当前节点与已通过节点重复，或 primaryAxis 不等于本槽位指定维度。请只重写当前节点。',
     systemNote: 'systemNote 未满足汉字数、三类算法线索或明确终局判定。',
     monologue: 'monologue 未满足汉字数或第一人称次数。',
     intervention: 'intervention 缺少足量现世第一人称对照和自省。',

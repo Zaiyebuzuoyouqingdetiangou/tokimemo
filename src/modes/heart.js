@@ -232,7 +232,7 @@ ${heartDramaRelationshipOnlyContext(core)}
 ${previous ? `EXISTING_${season.toUpperCase()}_DRAMA_INDEX_JSON:
 ${JSON.stringify(compactHeartSeasonExisting(previous, season), null, 2)}` : ''}
 本请求只生成【${label} Voice Drama ${previous ? '新增一篇' : '首篇'}】，不要生成 Scenario：
-{"voiceDramas":[{"id":"VOICE_${season.toUpperCase()}","kind":"${season}","title":"${label} Voice Drama","subtitle":"...","setting":"...","visualTone":"soft|clear|muted|deep","script":[{"speaker":"char","text":"..."}]}]}
+{"voiceDramas":[{"id":"VOICE_${season.toUpperCase()}","kind":"${season}","title":"${label} Voice Drama","subtitle":"...","setting":"...","visualTone":"soft|clear|muted|deep","script":[{"speaker":"char","text":"..."},{"speaker":"user","text":"..."}]}]}
 要求：
 - 只返回 1 个 kind=${season} 的 Voice Drama；script 5～10 节点、总文本不少于280汉字，以 {{char}} 主观感受为中心，允许少量 narrator/user。
 - 这是【未来的${label}日常模拟】，不是对档案记忆的回放。只用 relationshipState 控制说话距离，不得引用或改写档案里的具体事件、物品、伤痛、亲密细节、证据锚点或摘要。
@@ -252,7 +252,7 @@ ${heartDramaRelationshipOnlyContext(core)}
 ${previous ? `EXISTING_${season.toUpperCase()}_DRAMA_INDEX_JSON:
 ${JSON.stringify(compactHeartSeasonExisting(previous, season), null, 2)}` : ''}
 本请求只生成【${label} Scenario Drama ${previous ? '新增一篇' : '首篇'}】，不要生成 Voice：
-{"scenarioDramas":[{"id":"SCENE_${season.toUpperCase()}","season":"${season}","title":"${label} Scenario Drama","subtitle":"普通一天里的小事件","setting":"...","visualTone":"soft|clear|muted|deep","script":[{"speaker":"narrator","text":"..."}]}]}
+{"scenarioDramas":[{"id":"SCENE_${season.toUpperCase()}","season":"${season}","title":"${label} Scenario Drama","subtitle":"普通一天里的小事件","setting":"...","visualTone":"soft|clear|muted|deep","script":[{"speaker":"narrator","text":"..."},{"speaker":"char","text":"..."},{"speaker":"user","text":"..."}]}]}
 要求：
 - 只返回 1 个 season=${season} 的 Scenario Drama；script 6～12 节点、总文本不少于360汉字，写未来普通一天里的一个完整小事件。
 - 不从档案记忆里挑“关键词”写剧情。RELATIONSHIP_TONE_ONLY_JSON 只决定两个人现在适合多亲近；不得把历史中的具体物品、伤痛、性生活/敏感细节、争吵、告白等反复搬进四季日常。

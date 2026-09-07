@@ -126,7 +126,8 @@ export function resolveThemePalette(settings, documentLike = globalThis.document
         ? normalizeThemeCustom(settings?.themeCustom)
         : mode === 'host'
             ? hostComputedPalette(documentLike)
-            : mode === 'night' ? { ...core_constants.NIGHT_THEME_PALETTE } : { ...core_constants.DEFAULT_THEME_PALETTE };
+            : mode === 'night' ? { ...core_constants.NIGHT_THEME_PALETTE }
+                : { ...(core_constants.SEASON_THEME_PALETTES[mode] || core_constants.DEFAULT_THEME_PALETTE) };
     palette = normalizeThemeCustom(palette);
     // Custom colours must keep the page and card in the same luminance family.
     if (contrastRatio(palette.background, palette.surface) > 3) palette.surface = palette.background;

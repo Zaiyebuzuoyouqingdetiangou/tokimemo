@@ -10,15 +10,15 @@ import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as ui_overlay from '../ui/overlay.js';
 
-export function memoryStateLabel(state) {
+export function memoryStateLabel(state, autoSync = false) {
     if (state.status === 'missing') return '这个聊天窗口还没有自己的“心跳回忆”档案。';
     const memory = state.memory;
     const suffix = memory?.truncated ? `；超长聊天已从全窗口均匀覆盖 ${memory.usedMessageCount} / ${memory.sourceMessageCount} 条消息` : '';
     let pending = '当前没有检测到新增聊天。';
     if (state.pendingMessages > 0) {
-        pending = `当前还有 ${state.pendingMessages} 条新聊天未收录；档案不会自动更新。`;
+        pending = `当前还有 ${state.pendingMessages} 条新聊天未收录；${autoSync ? '已开启按楼层自动同步。' : '档案自动同步未开启。'}`;
     } else if (state.sourceChanged) {
-        pending = '当前聊天内容与上次记录点有修改；档案仍保留上次手动版本，除非你主动更新。';
+        pending = '当前聊天内容与上次记录点有修改；编辑不会增加楼层，档案保留已归档版本。';
     }
     return `已收录 ${memory.memories.length} 条记忆，记录到 ${memory.sourceMessageCount} 条聊天消息${suffix}。${pending}`;
 }
@@ -215,7 +215,7 @@ export function modePortalMeta(mode) {
         [core_constants.MODE.ADV]: { title: 'ADV EVENT', subtitle: '重要事件与长篇回放', icon: 'fa-book-open', accent: 'adv' },
         [core_constants.MODE.ROOM]: { title: '他的房间', subtitle: '随现实时间流动的私人空间', icon: 'fa-house', accent: 'room' },
         [core_constants.MODE.ITEMS]: { title: '他的物品', subtitle: '翻找各种收纳容器与私人物件', icon: 'fa-box-open', accent: 'items' },
-        [core_constants.MODE.PHONE]: { title: '他的手机', subtitle: '查看私人通讯与数字生活', icon: 'fa-mobile-screen-button', accent: 'phone' },
+        [core_constants.MODE.PHONE]: { title: '他的私人终端', subtitle: '通讯、草稿与私人记录', icon: 'fa-mobile-screen-button', accent: 'phone' },
         [core_constants.MODE.TRAVEL]: { title: '他的出行路线', subtitle: '附近对话与远方文字明信片', icon: 'fa-map-location-dot', accent: 'travel' },
         [core_constants.MODE.BUTTERFLY]: { title: '蝴蝶效应', subtitle: '平行时间线观测终端', icon: 'fa-code-branch', accent: 'butterfly' },
         [core_constants.MODE.ENDING]: { title: 'ENDING / 后日谈', subtitle: '关系路线终章与未来生活', icon: 'fa-heart', accent: 'ending' },

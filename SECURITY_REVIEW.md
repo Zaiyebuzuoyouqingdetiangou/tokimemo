@@ -1,3 +1,12 @@
+## 0.8.48 / r52.0 changed-surface review
+
+- Scope: main-owned changes reconciled against two read-only reviewers and CURRENT; this is a changed-path source/regression review, not an exhaustive security scan.
+- Fixed reviewer counterexamples: spaces/pets chained repair, split third-party romance after a joint antecedent, busy-before-provider checkpoint rollback, unrelated setting changes during generation, source failure recovery, missing automatic-status UI, room drawer variable, visible source anchors, Ω context, and Phone draft preflight.
+- Auto mode is explicit opt-in, current-chat-only, lock/checkpoint deduped, and uses the original CAS/revision/lifecycle/delete fences. Unknown image tags and private memory/provider keys gain no access.
+- Exact-target updater accepts only this project's known Git remote, uses host CSRF headers and relative same-origin endpoints, rejects ZIP/non-Git, foreign remote and permission failure, and never reset/reinstalls or reloads the host.
+- Generated text stays inert; repair paths, palettes, classes and writable fields are code-owned. Old archives, drafts and third-party data are not deleted by migration.
+- Offline tests plus local Edge synthetic-host checks do not establish real provider/SillyTavern/iPhone/TT acceptance. See RELEASE_VALIDATION-r52.md.
+
 ## 0.8.47 / r51.0 changed-surface security review
 
 - Main-owned edits after two read-only reviews. Source contracts checked against CURRENT; no private plugin API, remote endpoint or storage key introduced.

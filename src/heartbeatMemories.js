@@ -1,6 +1,7 @@
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_cache from './core/cache.js';
+import * as core_autoUpdates from './core/autoUpdates.js';
 import * as core_constants from './core/constants.js';
 import * as core_context from './core/context.js';
 import * as core_requestCoordinator from './core/requestCoordinator.js';
@@ -19,11 +20,16 @@ export function openArchiveLibrary(source = 'runtime-api') {
     return ui_archivePortal.safeShowArchiveLibrary(source);
 }
 
+export function isGenerationBusy() {
+    return runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !!runtimeState.roomLifeRefreshPromise;
+}
+
 export function initMemoryTheater() {
     try {
         const settingsMounted = ui_settingsPanel.mountSettings();
         const menuMounted = ui_archivePortal.mountMenuItem();
         ui_archivePortal.bindChatStateEvents();
+        core_autoUpdates.startAutoUpdates();
         ui_archivePortal.bindRobustArchiveOpenHandlers();
         ui_archivePortal.bindGenerationNavigationGuards();
         ui_archivePortal.scheduleMounts(settingsMounted, menuMounted);
@@ -42,6 +48,7 @@ export function initMemoryTheater() {
 }
 
 export function destroyMemoryTheater() {
+    core_autoUpdates.stopAutoUpdates();
     try {
         // Extension updates/reloads can destroy the module before the short gzip debounce fires.
         // A destroy path cannot await gzip. Persist a detached raw compatibility copy only when it

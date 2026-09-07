@@ -9,6 +9,9 @@ import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as core_theme from '../core/theme.js';
+import * as core_autoUpdatePolicy from '../core/autoUpdatePolicy.js';
+import * as core_autoUpdates from '../core/autoUpdates.js';
+import * as core_selfUpdater from '../core/selfUpdater.js';
 import * as core_contextTags from '../core/contextTags.js';
 import * as ui_archivePortal from './archivePortal.js';
 import * as ui_overlay from './overlay.js';
@@ -307,6 +310,12 @@ export function refreshGenerationSettingsUi() {
     if (imageGenerationManual) imageGenerationManual.checked = settings.imageGenerationManualEnabled;
     if (ttDisplay) ttDisplay.checked = settings.ttDisplayMode;
     if (themeMode) themeMode.value = settings.themeMode;
+    const autoRules = core_autoUpdatePolicy.normalizeAutoUpdates(settings.autoUpdates);
+    for (const input of panel.querySelectorAll('[data-rmt-auto-enabled]')) input.checked = autoRules[input.dataset.rmtAutoEnabled]?.enabled === true;
+    for (const input of panel.querySelectorAll('[data-rmt-auto-every]')) input.value = String(autoRules[input.dataset.rmtAutoEvery]?.every || 20);
+    const autoWarning = panel.querySelector('[data-rmt-auto-warning]');
+    if (autoWarning) autoWarning.textContent = core_autoUpdates.autoUpdateAvailability();
+    core_autoUpdates.refreshAutoUpdateStatus();
     if (themeAlpha) themeAlpha.value = String(settings.themeAlpha);
     if (themeCustomPanel) themeCustomPanel.hidden = settings.themeMode !== 'custom';
     for (const input of panel.querySelectorAll('[data-rmt-theme-color]')) {
@@ -463,7 +472,7 @@ export function mountSettings() {
             <div data-rmt-tag-results role="status"></div>
           </details>
           <div class="rmt-settings-card-head"><span>UI</span><div><b>界面主题</b><small>即选即看 · 自动保护文字对比度</small></div></div>
-          <label class="rmt-settings-field"><span>外观</span><select class="text_pole" data-rmt-theme-mode><option value="default">日间 · 珍珠白</option><option value="night">夜间 · 星黛蓝</option><option value="host">跟随酒馆美化</option><option value="custom">自定义配色</option></select></label>
+          <label class="rmt-settings-field"><span>外观</span><select class="text_pole" data-rmt-theme-mode><option value="default">日间 · 珍珠白</option><option value="night">夜间 · 星黛蓝</option><option value="gs1">初叶绿 · GS1 灵感</option><option value="gs2">海盐蓝 · GS2 灵感</option><option value="gs3">花漾粉 · GS3 灵感</option><option value="gs4">杏糖橙 · GS4 灵感</option><option value="host">跟随酒馆美化</option><option value="custom">自定义配色</option></select></label>
           <label class="rmt-settings-field"><span>卡片不透明度 <output data-rmt-theme-opacity></output></span><input data-rmt-theme-alpha type="range" min="0.72" max="1" step="0.01"></label>
           <div class="rmt-theme-custom-panel" data-rmt-theme-custom-panel>
             <div class="rmt-theme-presets"><button type="button" data-rmt-theme-preset="day">从日间开始</button><button type="button" data-rmt-theme-preset="night">从夜间开始</button></div>
@@ -476,6 +485,18 @@ export function mountSettings() {
             <label><span>边框</span><input type="color" data-rmt-theme-color="border"></label>
           </div>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-theme-reset>恢复默认配色</button>
+        </div>
+        <div class="rmt-settings-card">
+          <div class="rmt-settings-card-head"><span>↻</span><div><b>跟随当前聊天 · 自动更新</b><small>默认关闭 · 每项独立设置</small></div></div>
+          <p>只在已有档案的当前窗口运行。每条聊天消息算一楼，编辑不加楼；开启后从当前楼数起计。</p>
+          <p>“档案同步”收录新聊天；其他模块使用已归档记忆，不改旧内容。会调用独立 API。</p>
+          <div class="rmt-auto-rules">${core_autoUpdatePolicy.AUTO_UPDATE_MODES.map(mode => `<div class="rmt-auto-rule"><label><input type="checkbox" data-rmt-auto-enabled="${mode}"> ${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}</label><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-every="${mode}" aria-label="${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}间隔楼层"> 楼</label><small data-rmt-auto-status="${mode}" role="status"></small></div>`).join('')}</div>
+          <small data-rmt-auto-warning role="status"></small>
+          <small>失败后不连续重试，等待下一个间隔；可随时手动生成。不支持跨页任务锁的浏览器仅保留手动操作。</small>
+        </div>
+        <div class="rmt-settings-card">
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-self-update>检查并更新插件</button>
+          <small data-rmt-self-update-status role="status">强制检查已发布更新 · 完成后手动刷新页面</small>
         </div>
         <div class="rmt-settings-card rmt-api-box">
           <div class="rmt-settings-card-head"><span>MEM</span><div><b>记忆来源</b><small>当前角色 · 当前聊天</small></div></div>
@@ -515,6 +536,16 @@ export function mountSettings() {
     panel.querySelector('[data-rmt-tag-draft]').value = core_settings.getPluginSettings().excludedContextTags.join(', ');
     panel.addEventListener('change', async event => {
         const target = event.target;
+        const autoMode = target.dataset?.rmtAutoEnabled || target.dataset?.rmtAutoEvery;
+        if (core_autoUpdatePolicy.AUTO_UPDATE_MODES.includes(autoMode)) {
+            const rules = core_autoUpdatePolicy.normalizeAutoUpdates(core_settings.getPluginSettings().autoUpdates);
+            rules[autoMode] = { ...rules[autoMode], epoch: Date.now(),
+                ...(target.dataset.rmtAutoEnabled ? { enabled: target.checked } : { every: Number(target.value) }) };
+            core_settings.updatePluginSettings({ autoUpdates: rules });
+            core_autoUpdates.notifyAutoUpdateSettingsChanged();
+            refreshGenerationSettingsUi();
+            return;
+        }
         if (target.matches?.('[data-rmt-memory-file-input]')) {
             const file = target.files?.[0];
             pendingMemoryFilePreview = null;
@@ -662,6 +693,13 @@ export function mountSettings() {
         }
     });
     panel.addEventListener('click', event => {
+        const updateButton = event.target.closest?.('[data-rmt-self-update]');
+        if (updateButton) {
+            void core_selfUpdater.updateFromButton(updateButton, panel.querySelector('[data-rmt-self-update-status]'), {
+                isBusy: () => runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !!runtimeState.roomLifeRefreshPromise,
+            });
+            return;
+        }
         const tagAction = event.target.closest?.('[data-rmt-tag-save],[data-rmt-tag-cancel],[data-rmt-tag-clear],[data-rmt-tag-scan],[data-rmt-tag-name]');
         if (tagAction) {
             const draft = panel.querySelector('[data-rmt-tag-draft]');
