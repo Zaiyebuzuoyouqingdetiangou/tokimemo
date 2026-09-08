@@ -1,3 +1,11 @@
+## 0.8.49 / r53.0 changed-surface review
+
+- Local semantic HEX colours and validated ink pairs only; model-controlled CSS, selectors, paths and scripts remain forbidden. Generated notes remain escaped text. Card opacity does not fade text. Extreme custom-colour decorative tints are reduced if contrast would fail.
+- Settings use scoped native details/summary; toggling neither writes chat nor sends model requests, and preserves mounted unsaved inputs. Existing settings/credential handlers are unchanged.
+- Initial Butterfly count is code-owned and final axes/count are checked against the local plan. MAIN evidence, branch uniqueness, relationship safety and Ω checks remain; no-usable-anchor archives stop before request. Old sessions are not trimmed or migrated.
+- Two independent read-only reviewers reported the actual root causes; the main agent reproduced and fixed their follow-up counterexamples (missing usable anchor and grey custom gradient). This is changed-path review, not an exhaustive repository security scan.
+- No archive keys, backup/CAS/revision/deletion/lifetime guards, provider concurrency, third-party plugins or remote repositories were modified. Real-host/model acceptance is separate from local checks.
+
 ## 0.8.48 / r52.0 changed-surface review
 
 - Scope: main-owned changes reconciled against two read-only reviewers and CURRENT; this is a changed-path source/regression review, not an exhaustive security scan.

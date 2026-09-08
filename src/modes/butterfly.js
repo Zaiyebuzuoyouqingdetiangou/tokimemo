@@ -9,9 +9,7 @@ import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
 
-export const BUTTERFLY_PRIMARY_AXES = Object.freeze([
-    'era', 'identity', 'occupation', 'location', 'decision', 'encounter', 'bond', 'fate',
-]);
+export const BUTTERFLY_PRIMARY_AXES = core_butterflyContract.BUTTERFLY_PRIMARY_AXES;
 
 const PRIMARY_AXIS_SET = new Set(BUTTERFLY_PRIMARY_AXES);
 const PRIMARY_AXIS_ALIASES = Object.freeze({
@@ -294,18 +292,23 @@ function normalizedMainNode(node, memoryBank, context) {
     };
 }
 
-export function normalizeButterfly(data, memoryBank, context = {}) {
+export function normalizeButterfly(data, memoryBank, context = {}, options = {}) {
     const rawNodes = Array.isArray(data?.nodes) ? data.nodes.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS) : [];
-    if (rawNodes.length < 10) throw new Error('平行时空节点不足：共 ' + rawNodes.length + ' 条，必须包含主线、至少 8 个普通分歧和唯一 Ω。');
+    if (rawNodes.length < 3) throw new Error('平行时空节点不足：必须包含主线、至少一个普通分歧和唯一 Ω。');
     const omegaIndexes = rawNodes.map((node, index) => isOmegaCandidate(node) ? index : -1).filter(index => index >= 0);
     if (omegaIndexes.length !== 1 || omegaIndexes[0] !== rawNodes.length - 1) {
         throw new Error('蝴蝶效应必须只有一个 Ω / TRUE ENDING，且它必须是数组末项。');
     }
     const main = normalizedMainNode(rawNodes[0], memoryBank, context);
     const normalBranches = rawNodes.slice(1, -1).map((node, index) => normalizeButterflyBranch(node, index + 1, memoryBank, context));
-    if (normalBranches.length < 8) throw new Error('普通平行分歧不足：得到 ' + normalBranches.length + ' 条，至少需要 8 条。');
     const axes = new Set(normalBranches.map(node => node.primaryAxis));
-    const missingAxes = BUTTERFLY_PRIMARY_AXES.filter(axis => !axes.has(axis));
+    const expectedAxes = options.expectedAxes;
+    if (expectedAxes && (normalBranches.length !== expectedAxes.length
+        || normalBranches.some((node, index) => node.primaryAxis !== expectedAxes[index]))) {
+        throw new Error('观测节点与本次本地计划不符；保留旧内容。');
+    }
+    if (normalBranches.length < 8 && axes.size !== normalBranches.length) throw core_butterflyContract.butterflyValidationError('unique');
+    const missingAxes = normalBranches.length >= 8 ? BUTTERFLY_PRIMARY_AXES.filter(axis => !axes.has(axis)) : [];
     if (missingAxes.length) throw new Error('平行世界差异维度不足，缺少 primaryAxis：' + missingAxes.join('/') + '。');
     const labels = new Set();
     const signatures = new Set();
@@ -334,31 +337,33 @@ export function normalizeButterfly(data, memoryBank, context = {}) {
 }
 
 export async function generateButterflyWithRepair(context, memoryBank, origin, taskKey, dependencies = {}) {
+    const plan = core_butterflyContract.buildButterflyPlan(memoryBank);
+    if (!plan.total) throw new Error('当前没有可用记忆，请先生成当前窗口档案。');
     const request = dependencies.request || generation_client.requestValidatedSegment;
     const basePrompt = generation_prompts.PROMPTS[core_constants.MODE.BUTTERFLY](context, memoryBank);
     const contextEnvelope = dependencies.contextEnvelope ?? await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generation_client.generationWorldInfoScanTerms(core_constants.MODE.BUTTERFLY, context) });
     const nodes = [];
     const labels = new Set(), signatures = new Set(), monologues = new Set();
     // Local scheduling, never a model-authored slot count. Partial nodes are not formal sessions.
-    const slots = ['MAIN', ...BUTTERFLY_PRIMARY_AXES, 'OMEGA'];
+    const slots = ['MAIN', ...plan.axes, 'OMEGA'];
     for (let index = 0; index < slots.length; index++) {
         const slot = slots[index];
         const existing = nodes.map(node => ({ label: node.label, primaryAxis: node.primaryAxis, worldSpec: node.worldSpec }));
         const prompt = basePrompt + '\n【本请求的分段输出规则替代上面的整批输出 schema】'
-            + '\n本地将组装十个节点；你这次只输出 {"node":{当前一个完整节点}}，不要返回 nodes 数组或其他节点。'
-            + '\nCURRENT_SLOT_JSON:' + JSON.stringify({ index, kind: slot, primaryAxis: index > 0 && index < 9 ? slot : undefined })
+            + '\n本地将组装 ' + plan.total + ' 个节点；你这次只输出 {"node":{当前一个完整节点}}，不要返回 nodes 数组或其他节点。'
+            + '\nCURRENT_SLOT_JSON:' + JSON.stringify({ index, kind: slot, primaryAxis: PRIMARY_AXIS_SET.has(slot) ? slot : undefined })
             + '\nMAIN 只写主时间线；普通槽位严格使用指定 primaryAxis；OMEGA 只写唯一终点。每节点继续遵守原字数、来源和关系契约。'
             + '\nEXISTING_VALID_WORLD_INDEX_JSON:' + JSON.stringify(existing)
             + (slot === 'OMEGA' ? '\nVALIDATED_VOICES_JSON:' + JSON.stringify(nodes.map(node => ({ label: node.label, monologue: node.monologue.slice(0, 700), intervention: node.intervention.slice(0, 500) }))) : '');
-        const node = await request(prompt, '蝴蝶效应 · 节点 ' + (index + 1) + '/10 · ' + slot,
+        const node = await request(prompt, '蝴蝶效应 · 节点 ' + (index + 1) + '/' + plan.total + ' · ' + slot,
             { maxTokens: 4096, temperature: 0.55, context, contextEnvelope, origin, taskKey: taskKey + ':slot:' + index, mode: core_constants.MODE.BUTTERFLY, background: true },
             value => {
                 const raw = value?.node;
                 if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw core_butterflyContract.butterflyValidationError('worldSpec');
                 const candidate = index === 0 ? normalizedMainNode(raw, memoryBank, context)
-                    : index === 9 ? normalizeButterflyOmega(raw, context)
+                    : slot === 'OMEGA' ? normalizeButterflyOmega(raw, context)
                     : normalizeButterflyBranch(raw, index, memoryBank, context);
-                if (index > 0 && index < 9) {
+                if (PRIMARY_AXIS_SET.has(slot)) {
                     const label = core_incremental.normalizedContentKey(candidate.label, 180);
                     const signature = butterflyWorldSignature(candidate);
                     const monologue = core_incremental.normalizedContentKey(candidate.monologue, 12000);
@@ -369,13 +374,13 @@ export async function generateButterflyWithRepair(context, memoryBank, origin, t
                 return candidate;
             });
         nodes.push(node);
-        if (index > 0 && index < 9) {
+        if (PRIMARY_AXIS_SET.has(slot)) {
             labels.add(core_incremental.normalizedContentKey(node.label, 180));
             signatures.add(butterflyWorldSignature(node));
             monologues.add(core_incremental.normalizedContentKey(node.monologue, 12000));
         }
     }
-    return normalizeButterfly({ nodes }, memoryBank, context);
+    return normalizeButterfly({ nodes }, memoryBank, context, { expectedAxes: plan.axes });
 }
 export function butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) {
     const existing = (Array.isArray(previous?.nodes) ? previous.nodes.slice(1, -1) : []).slice(-core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({

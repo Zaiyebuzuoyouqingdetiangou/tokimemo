@@ -148,6 +148,17 @@ function rgba(hex, alpha) {
     return `rgba(${Math.round(rgb.r)}, ${Math.round(rgb.g)}, ${Math.round(rgb.b)}, ${a})`;
 }
 
+function readableTint(base, tint, inks, amount) {
+    // Interpolated stops are sampled too: contrasting endpoints alone do not prove
+    // arbitrary colourful gradients readable. Fade decoration back, never fade text.
+    for (let step = 10; step >= 0; step--) {
+        const end = compositeHex(tint, base, amount * step / 10);
+        const stops = Array.from({ length: 17 }, (_, i) => compositeHex(end, base, i / 16));
+        if (stops.every(stop => inks.every(ink => contrastRatio(ink, stop) >= 4.6))) return end;
+    }
+    return base;
+}
+
 export function applyThemeToElement(element, settings, documentLike = globalThis.document) {
     if (!element?.style) return null;
     const { mode, palette } = resolveThemePalette(settings, documentLike);
@@ -167,7 +178,24 @@ export function applyThemeToElement(element, settings, documentLike = globalThis
     element.style.setProperty('--rmt-theme-border', palette.border);
     element.style.setProperty('--rmt-theme-alpha', String(alpha));
     element.style.setProperty('--rmt-theme-accent-ink', safeReadableAcross(palette.accent, [palette.background, palette.surface], palette.text));
-    element.style.setProperty('--rmt-theme-soft', compositeHex(palette.accentAlt, palette.surface, 0.08));
+    const inks = [palette.text, palette.muted];
+    element.style.setProperty('--rmt-theme-soft', readableTint(palette.surface, palette.accentAlt, inks, 0.08));
+    element.style.setProperty('--rmt-theme-surface-tint', readableTint(compositeHex(palette.surface, palette.background, alpha), palette.accentAlt, inks, 0.11));
+    element.style.setProperty('--rmt-theme-bg-tint', readableTint(palette.background, palette.accentAlt, inks, 0.03));
+    element.style.setProperty('--rmt-theme-header-tint', readableTint(palette.surface, palette.accent, inks, 0.06));
+    // Semantic paper is opaque, with its own validated ink. Theme changes never turn a
+    // yellow memo, rose keepsake, or violet journal into the same structural white card.
+    const dark = contrastRatio('#ffffff', palette.background) > 4.5;
+    const papers = dark
+        ? { note: ['#4b3d20', '#fff0ba'], 'note-blue': ['#203e55', '#dceeff'], 'note-rose': ['#512b3d', '#ffe2ed'], letter: ['#37312c', '#f9ecdc'], journal: ['#382f50', '#eee3ff'] }
+        : { note: ['#ffecab', '#594019'], 'note-blue': ['#e0f0ff', '#264c70'], 'note-rose': ['#ffe2ec', '#71344e'], letter: ['#fff9ed', '#594934'], journal: ['#eee6fc', '#584070'] };
+    for (const [kind, [paper, requestedInk]] of Object.entries(papers)) {
+        element.style.setProperty('--rmt-paper-' + kind, paper);
+        element.style.setProperty('--rmt-paper-' + kind + '-ink', safeReadableColor(requestedInk, paper, palette.text));
+    }
+    element.style.setProperty('--rmt-theme-wash', compositeHex(palette.accent, palette.surface, dark ? 0.12 : 0.10));
+    element.style.setProperty('--rmt-theme-wash-ink', safeReadableColor(palette.text, compositeHex(palette.accent, palette.surface, dark ? 0.12 : 0.10), palette.text));
+    element.style.setProperty('--rmt-theme-shadow', dark ? '#00000055' : '#26395316');
     element.style.setProperty('color-scheme', contrastRatio('#ffffff', palette.background) > 4.5 ? 'dark' : 'light');
     return { mode, palette, alpha };
 }

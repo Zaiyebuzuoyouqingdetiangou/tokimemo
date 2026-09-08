@@ -188,6 +188,24 @@ try {
         results.push({ case: `hostile-${width}`, close: probe.dimensions.close, overflow: probe.dimensions.documentScrollWidth - width });
         await page.close();
     }
+    // Regression: an otherwise readable custom grey must stay readable at gradient ends.
+    for (const [background, accentAlt] of [['#707070','#ffffff'],['#787878','#000000']]) {
+        const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+        await mountThemeProbe(page, { hostTheme: 'dark', themeMode: 'custom', themeAlpha: .72 });
+        const result = await page.evaluate(({ background, accentAlt }) => {
+            const { theme, overlay } = globalThis.__rmtThemeProbe;
+            const applied = theme.applyThemeToElement(overlay, { themeMode: 'custom', themeAlpha: .72, themeCustom: { background, surface: background, accentAlt } });
+            const card = overlay.querySelector('.rmt-archive-card');
+            card.classList.add('rmt-character-card');
+            const gradient = getComputedStyle(card).backgroundImage;
+            const stops = gradient.match(/rgba?\([^)]*\)/g) || [];
+            return { gradient, contrast: stops.map(stop => Math.min(theme.contrastRatio(applied.palette.text, stop), theme.contrastRatio(applied.palette.muted, stop))) };
+        }, { background, accentAlt });
+        assert.equal(result.contrast.length, 2);
+        assert.ok(result.contrast.every(value => value >= 4.5), JSON.stringify(result));
+        results.push({ case: 'custom-gradient-' + background, ...result });
+        await page.close();
+    }
     // Exercise production renderers, not only palette tokens or a synthetic card.
     for (const themeMode of ['default', 'night', 'host', 'custom', 'gs1', 'gs2', 'gs3', 'gs4']) {
         const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
@@ -208,7 +226,20 @@ try {
             settings.hydrateSettingsPanel();
             globalThis.fixture = { context, state: (await import('/src/core/state.js')).state, overlay: await import('/src/ui/overlay.js') };
         }, themeMode);
-        for (const view of ['settings', 'archive', 'adv', 'heart', 'avatar', 'cabinet', 'relations', 'room']) {
+        const sections = page.locator('[data-rmt-settings-section]');
+        assert.equal(await sections.count(), 5);
+        assert.equal(await page.locator('[data-rmt-settings-section][open]').count(), 0);
+        assert.equal(await page.locator('select[data-rmt-theme-mode]').isVisible(), false);
+        await page.screenshot({ path: path.join(outputDir, 'collapsed-' + themeMode + '.png'), fullPage: true });
+        await page.locator('[data-rmt-settings-section="theme"]>summary').focus();
+        await page.keyboard.press('Enter');
+        assert.equal(await page.locator('select[data-rmt-theme-mode]').isVisible(), true);
+        await page.locator('[data-rmt-settings-section="theme"]>summary').focus();
+        await page.keyboard.press('Space');
+        assert.equal(await page.locator('select[data-rmt-theme-mode]').isVisible(), false);
+        for (const section of await sections.all()) await section.locator(':scope>summary').click();
+        results.push({ case: 'settings-disclosure-' + themeMode, collapsedByDefault: true, keyboardToggle: true });
+        for (const view of ['settings', 'archive', 'adv', 'heart', 'avatar', 'cabinet', 'relations', 'room', 'calendar']) {
             await page.evaluate(async view => {
                 const { overlay, state } = globalThis.fixture;
                 if (view === 'settings') return;
@@ -247,6 +278,20 @@ try {
                     room.renderRoom();
                     if (document.querySelector('[data-rmt-action="room-open-phone"]')) throw new Error('terminal still nested in room');
                     if (!document.querySelector('[data-rmt-action="room-open-items"]')) throw new Error('storage object entry missing');
+                } else if (view === 'calendar') {
+                    const calendar = await import('/src/modes/calendar.js');
+                    const key = calendar.calendarPageKeyForDate('2026/09/08'), day = calendar.createCalendarDayPage(key);
+                    day.stickyNotes = [
+                        { kind: 'memo', title: '留一盏灯', text: '你回来以前，我会把窗边的灯点亮。', sourceType: 'setting', sourceLabel: '角色设定' },
+                        { kind: 'memo', title: '带上蓝伞', text: '出门前，别忘了门边那把蓝色的伞。', sourceType: 'setting', sourceLabel: '角色设定' },
+                        { kind: 'special', title: '那天的车票', text: '我们一起留下的车票，还在书的第一页。', sourceLabel: '剧情档案' },
+                    ];
+                    day.moodNotes = [{ text: '原来安静的午后，也会因为有人陪着而变得不同。', date: '09/08', sourceLabel: '角色随笔' }];
+                    state.activeSession = { kind: 'calendar', title: '两个人的日历', entries: [
+                        { id: 'D1', title: '留下车票', date: '2026/09/08', status: 'past', tags: ['出行'] },
+                        { id: 'D2', title: '河边散步', date: '2026/09/09', status: 'promised', tags: ['约定'] },
+                    ], selectedMonth: '2026-09', selectedDateKey: key, dayPages: { [key]: day } };
+                    (await import('/src/ui/calendarView.js')).renderCalendar();
                 } else if (view === 'relations') {
                     state.activeSession = { kind: 'relations', characterName: '林舟', summary: '尚未在剧情中相遇的设定人物也可以在这里查看。', relationships: [], settingRelationships: [{ name: '阿南', relation: '设定人物', summary: '住在城中的木匠', settingOnly: true, npcPerspective: '我每天都在木工店工作。' }] };
                     (await import('/src/modes/relations.js')).renderRelations();
@@ -262,7 +307,7 @@ try {
                 for (const el of root.querySelectorAll('.rmt-api-source-card,.rmt-model-refresh,.rmt-heart-summary,.rmt-avatar-dialog-card')) {
                     if (getComputedStyle(el).backgroundImage !== 'none') bad.push({ cls: el.className, error: 'uncontrolled gradient over theme surface' });
                 }
-                for (const el of root.querySelectorAll('p,b,small,label,.rmt-adv-para,.rmt-avatar-dialog-bubble')) {
+                for (const el of root.querySelectorAll('p,b,small,label,.rmt-adv-para,.rmt-avatar-dialog-bubble,.rmt-calendar-selected-chip,.rmt-calendar-day-number,.rmt-calendar-sticky footer')) {
                     if (!el.textContent.trim() || !el.getClientRects().length || el.closest('[hidden]')) continue;
                     const s = getComputedStyle(el), bg = background(el), ink = rgb(s.webkitTextFillColor === 'currentcolor' ? s.color : s.webkitTextFillColor);
                     const a = luminance(ink), b = luminance(bg), contrast = (Math.max(a,b)+.05)/(Math.min(a,b)+.05);
@@ -279,12 +324,27 @@ try {
                     if (!root.querySelector('.rmt-heart-line.user') || root.querySelectorAll('.rmt-heart-line.char').length !== 1) bad.push({ error: 'wrong legacy dialogue attribution' });
                     if (!root.querySelector('.rmt-heart-narration')?.textContent.includes('林舟')) bad.push({ error: 'action not outside bubble' });
                 }
-                return { count: samples.length, bad, overflow: root.scrollWidth - root.clientWidth };
+                const papers = {};
+                if (view === 'calendar') {
+                    for (const [name, selector] of Object.entries({ note: '.rmt-calendar-sticky.memo', blue: '.rmt-calendar-sticky.memo:nth-child(2)', rose: '.rmt-calendar-sticky.special', journal: '.rmt-calendar-mood-note', letter: '.rmt-calendar-paper' })) {
+                        const el = root.querySelector(selector);
+                        if (!el) { bad.push({ error: 'missing production paper: ' + name }); continue; }
+                        const css = getComputedStyle(el);
+                        papers[name] = { background: css.backgroundColor, shadow: css.boxShadow, ink: css.color };
+                        if (css.backgroundColor === getComputedStyle(root.querySelector('.rmt-calendar-sticky-panel')).backgroundColor) bad.push({ error: name + ' collapsed to structural surface' });
+                    }
+                    if (new Set(Object.values(papers).map(p => p.background)).size !== 5) bad.push({ error: 'paper roles are indistinguishable' });
+                }
+                return { count: samples.length, bad, papers, overflow: root.scrollWidth - root.clientWidth };
             }, view);
             assert.ok(inspection.count > 0, `${themeMode}/${view} did not render text`);
             assert.deepEqual(inspection.bad, [], `${themeMode}/${view} unreadable production text: ${JSON.stringify(inspection.bad)}`);
             assert.ok(inspection.overflow <= 1, `${themeMode}/${view} overflow ${inspection.overflow}`);
             await page.screenshot({ path: path.join(outputDir, `production-${themeMode}-${view}.png`) });
+            if (view === 'calendar') {
+                await page.locator('.rmt-calendar-notebook-board').scrollIntoViewIfNeeded();
+                await page.screenshot({ path: path.join(outputDir, 'papers-' + themeMode + '.png') });
+            }
             if (themeMode === 'default' && view === 'heart') {
                 await page.evaluate(() => document.querySelector('.rmt-heart-script').scrollIntoView({ block: 'center' }));
                 await page.screenshot({ path: path.join(outputDir, 'production-default-dialogue-detail.png') });

@@ -143,10 +143,10 @@ export const MAX_MEMORY_WORLD_INFO_CHARS = 52000;
 
 export const THEME_MODES = new Set(['default', 'night', 'host', 'custom', 'gs1', 'gs2', 'gs3', 'gs4']);
 export const SEASON_THEME_PALETTES = Object.freeze({
-    gs1: Object.freeze({ background: '#f5faf2', surface: '#ffffff', text: '#334c40', muted: '#56675a', accent: '#79a75e', accentAlt: '#d8b857', border: '#d5e4cc' }),
-    gs2: Object.freeze({ background: '#f0f8fc', surface: '#ffffff', text: '#35465f', muted: '#586781', accent: '#66a9d3', accentAlt: '#aa96c7', border: '#cfe4ef' }),
-    gs3: Object.freeze({ background: '#fff5f8', surface: '#ffffff', text: '#594151', muted: '#745c69', accent: '#d97aa4', accentAlt: '#8dbf9c', border: '#efd4e1' }),
-    gs4: Object.freeze({ background: '#fff8ed', surface: '#fffefd', text: '#634b38', muted: '#786556', accent: '#e8a15c', accentAlt: '#92b9d5', border: '#eddfca' }),
+    gs1: Object.freeze({ background: '#edf6e5', surface: '#ffffff', text: '#234831', muted: '#50624d', accent: '#43833d', accentAlt: '#e7b83b', border: '#bad7a7' }),
+    gs2: Object.freeze({ background: '#e9f3ff', surface: '#ffffff', text: '#233d61', muted: '#52647d', accent: '#287dc3', accentAlt: '#9b79c8', border: '#b4d2ee' }),
+    gs3: Object.freeze({ background: '#fff0f5', surface: '#ffffff', text: '#572c43', muted: '#78536a', accent: '#cc4d87', accentAlt: '#68a97d', border: '#edb6cf' }),
+    gs4: Object.freeze({ background: '#fff1d9', surface: '#fffefd', text: '#553b24', muted: '#74604b', accent: '#c77425', accentAlt: '#5096c8', border: '#e9ca94' }),
 });
 
 export const NIGHT_THEME_PALETTE = Object.freeze({
@@ -155,13 +155,13 @@ export const NIGHT_THEME_PALETTE = Object.freeze({
 });
 
 export const DEFAULT_THEME_PALETTE = Object.freeze({
-    background: '#f7fafc',
+    background: '#f5f4fb',
     surface: '#ffffff',
-    text: '#526a80',
-    muted: '#657586',
-    accent: '#d58eaa',
-    accentAlt: '#83bdb9',
-    border: '#dce7ec',
+    text: '#34495d',
+    muted: '#586b7c',
+    accent: '#ce729c',
+    accentAlt: '#58a59e',
+    border: '#cfdae5',
 });
 
 export const DEFAULT_SETTINGS = Object.freeze({

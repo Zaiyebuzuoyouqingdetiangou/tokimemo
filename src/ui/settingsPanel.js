@@ -432,8 +432,9 @@ export function mountSettings() {
         <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
       </div>
       <div class="inline-drawer-content rmt-settings-content">
-        <div class="rmt-settings-card rmt-api-box">
-          <div class="rmt-settings-card-head"><span>API</span><div><b>心跳回忆独立 API</b><small>请选择一种配置方式</small></div></div>
+        <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="api">
+          <summary class="rmt-settings-card-head"><span>API</span><div><b>独立 API</b><small>1.1.18 一键配置 · 手动配置</small></div></summary>
+          <div class="rmt-settings-section-body">
           <div class="rmt-api-source-grid" role="group" aria-label="独立 API 配置方式">
             <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-import-current aria-pressed="false"><span class="rmt-api-source-badge">要求</span><b>1.1.18 一键配置</b><small>读取酒馆当前连接</small></button>
             <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-select-manual aria-pressed="false"><span class="rmt-api-source-badge">OPENAI</span><b>手动配置</b><small>URL · Key · 模型</small></button>
@@ -463,15 +464,20 @@ export function mountSettings() {
           <label class="checkbox_label rmt-settings-check"><input data-rmt-room-life-auto type="checkbox"> 每天首次打开房间时允许一次“今日生活”自动请求</label>
           <label class="checkbox_label rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"> 手动确认 SillyTavern Image Generation 已启用（自动检测失败时使用 /sd 兜底）</label>
           <label class="checkbox_label rmt-settings-check"><input data-rmt-tt-display type="checkbox"> TT 显示模式（勾选＝r32 顶部安全区；不勾选＝全屏）</label>
-        </div>
-        <div class="rmt-settings-card rmt-theme-box">
-          <details><summary>标签过滤 · 不把思考/变量块发给模型</summary>
+          </div>
+        </details>
+        <details class="rmt-settings-card" data-rmt-settings-section="filter">
+          <summary class="rmt-settings-card-head"><span>TAG</span><div><b>标签过滤</b><small>思考与变量块</small></div></summary>
+          <div class="rmt-settings-section-body">
             <p>只过滤送出的副本，不修改聊天。扫描后点选标签，保存后从下一次生成生效。</p>
             <textarea class="text_pole" data-rmt-tag-draft aria-label="要排除的标签名" placeholder="thinking, updatevariable"></textarea>
             <div class="rmt-theme-presets"><button type="button" data-rmt-tag-scan>扫描当前聊天</button><button type="button" data-rmt-tag-clear>清空选择</button><button type="button" data-rmt-tag-cancel>撤销编辑</button><button type="button" data-rmt-tag-save>保存过滤</button></div>
             <div data-rmt-tag-results role="status"></div>
-          </details>
-          <div class="rmt-settings-card-head"><span>UI</span><div><b>界面主题</b><small>即选即看 · 自动保护文字对比度</small></div></div>
+          </div>
+        </details>
+        <details class="rmt-settings-card rmt-theme-box" data-rmt-settings-section="theme">
+          <summary class="rmt-settings-card-head"><span>UI</span><div><b>界面主题</b><small>配色与透明度</small></div></summary>
+          <div class="rmt-settings-section-body">
           <label class="rmt-settings-field"><span>外观</span><select class="text_pole" data-rmt-theme-mode><option value="default">日间 · 珍珠白</option><option value="night">夜间 · 星黛蓝</option><option value="gs1">初叶绿 · GS1 灵感</option><option value="gs2">海盐蓝 · GS2 灵感</option><option value="gs3">花漾粉 · GS3 灵感</option><option value="gs4">杏糖橙 · GS4 灵感</option><option value="host">跟随酒馆美化</option><option value="custom">自定义配色</option></select></label>
           <label class="rmt-settings-field"><span>卡片不透明度 <output data-rmt-theme-opacity></output></span><input data-rmt-theme-alpha type="range" min="0.72" max="1" step="0.01"></label>
           <div class="rmt-theme-custom-panel" data-rmt-theme-custom-panel>
@@ -485,21 +491,25 @@ export function mountSettings() {
             <label><span>边框</span><input type="color" data-rmt-theme-color="border"></label>
           </div>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-theme-reset>恢复默认配色</button>
-        </div>
-        <div class="rmt-settings-card">
-          <div class="rmt-settings-card-head"><span>↻</span><div><b>跟随当前聊天 · 自动更新</b><small>默认关闭 · 每项独立设置</small></div></div>
+          </div>
+        </details>
+        <details class="rmt-settings-card" data-rmt-settings-section="auto">
+          <summary class="rmt-settings-card-head"><span>↻</span><div><b>自动更新</b><small>跟随当前聊天 · 每项独立设置</small></div></summary>
+          <div class="rmt-settings-section-body">
           <p>只在已有档案的当前窗口运行。每条聊天消息算一楼，编辑不加楼；开启后从当前楼数起计。</p>
           <p>“档案同步”收录新聊天；其他模块使用已归档记忆，不改旧内容。会调用独立 API。</p>
           <div class="rmt-auto-rules">${core_autoUpdatePolicy.AUTO_UPDATE_MODES.map(mode => `<div class="rmt-auto-rule"><label><input type="checkbox" data-rmt-auto-enabled="${mode}"> ${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}</label><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-every="${mode}" aria-label="${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}间隔楼层"> 楼</label><small data-rmt-auto-status="${mode}" role="status"></small></div>`).join('')}</div>
           <small data-rmt-auto-warning role="status"></small>
           <small>失败后不连续重试，等待下一个间隔；可随时手动生成。不支持跨页任务锁的浏览器仅保留手动操作。</small>
-        </div>
+          </div>
+        </details>
         <div class="rmt-settings-card">
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-self-update>检查并更新插件</button>
           <small data-rmt-self-update-status role="status">强制检查已发布更新 · 完成后手动刷新页面</small>
         </div>
-        <div class="rmt-settings-card rmt-api-box">
-          <div class="rmt-settings-card-head"><span>MEM</span><div><b>记忆来源</b><small>当前角色 · 当前聊天</small></div></div>
+        <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="memory">
+          <summary class="rmt-settings-card-head"><span>MEM</span><div><b>记忆来源</b><small>当前角色 · 当前聊天</small></div></summary>
+          <div class="rmt-settings-section-body">
           <div class="rmt-api-source-grid" role="group" aria-label="记忆来源操作">
             <button type="button" class="menu_button rmt-api-source-card" data-rmt-memory-auto-read><span class="rmt-api-source-badge">AUTO</span><b>自动读取</b><small>已注册的当前聊天来源</small></button>
             <button type="button" class="menu_button rmt-api-source-card" data-rmt-memory-file-choose><span class="rmt-api-source-badge">FILE</span><b>导入记忆</b><small>JSON · JSONL · TXT · Markdown</small></button>
@@ -520,7 +530,8 @@ export function mountSettings() {
           </details>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-memory-source-clear>清除当前聊天已导入来源</button>
           <small>只清除心跳回忆自己的来源账本；不会删除聊天、第三方记忆或正式 Mxxx。</small>
-        </div>
+          </div>
+        </details>
         <div class="rmt-settings-archive-actions">
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
@@ -739,7 +750,7 @@ export function mountSettings() {
             refreshGenerationSettingsUi();
             return;
         }
-        if (event.target.closest?.('.rmt-settings-header')) hydrateSettingsPanel();
+        if (event.target.closest?.('.rmt-settings-header, [data-rmt-settings-section] > summary')) hydrateSettingsPanel();
         const themeReset = event.target.closest?.('[data-rmt-theme-reset]');
         if (themeReset) {
             core_settings.updatePluginSettings({ themeMode: 'default', themeAlpha: core_constants.DEFAULT_SETTINGS.themeAlpha, themeCustom: { ...core_constants.DEFAULT_THEME_PALETTE } });

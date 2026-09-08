@@ -1,5 +1,5 @@
-const VERSION = '0.8.48';
-const BUILD = '0.8.48-evolution-r52.0';
+const VERSION = '0.8.49';
+const BUILD = '0.8.49-visual-adaptive-r53.0';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -276,6 +276,8 @@ function mountBootstrapSettings() {
                     const full = document.getElementById(SETTINGS_ID);
                     full?.scrollIntoView?.({ block: 'nearest' });
                     full?.querySelector?.('.rmt-settings-header')?.click?.();
+                    const apiSection = full?.querySelector?.('[data-rmt-settings-section="api"]');
+                    if (apiSection) apiSection.open = true;
                 }, 0);
             }).catch(showBootError);
         }

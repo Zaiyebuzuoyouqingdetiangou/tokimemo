@@ -1,4 +1,10 @@
-# Heartbeat Memories r35–r52 Architecture
+# Heartbeat Memories r35–r53 Architecture
+
+## r53 semantic surfaces and adaptive initial observations
+
+The existing theme service owns readable paper/ink pairs and contrast-preserving decorative tints. Structural cards, coloured notes, letter paper and journals have separate roles; no generated HTML/CSS or additional host integration. Native settings disclosures preserve mounted inputs and event handlers.
+
+One pure buildButterflyPlan uses unique Mxxx records with a usable MAIN anchor, selects 1–8 axes (ceil(count/3)), and drives the prompt, request slots, progress and final expectedAxes check. Empty-anchor archives stop before any request. Saved sessions are never resized; old ten-node sessions and append-only incremental history keep their existing storage contracts.
 
 ## r52 opt-in orchestration and bounded repairs
 

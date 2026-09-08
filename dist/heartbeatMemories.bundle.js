@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 62
-// Source SHA-256: dc7afeea3eaa89a4c9553d186a50d7960d808c583533ea939bf672d743d8539d
+// Source SHA-256: ef0defd888e189520919e4fe807c1224f2cbbda69058e19e191f5e4901d0495a
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -214,10 +214,10 @@ const MAX_MEMORY_WORLD_INFO_CHARS = 52000;
 
 const THEME_MODES = new Set(['default', 'night', 'host', 'custom', 'gs1', 'gs2', 'gs3', 'gs4']);
 const SEASON_THEME_PALETTES = Object.freeze({
-    gs1: Object.freeze({ background: '#f5faf2', surface: '#ffffff', text: '#334c40', muted: '#56675a', accent: '#79a75e', accentAlt: '#d8b857', border: '#d5e4cc' }),
-    gs2: Object.freeze({ background: '#f0f8fc', surface: '#ffffff', text: '#35465f', muted: '#586781', accent: '#66a9d3', accentAlt: '#aa96c7', border: '#cfe4ef' }),
-    gs3: Object.freeze({ background: '#fff5f8', surface: '#ffffff', text: '#594151', muted: '#745c69', accent: '#d97aa4', accentAlt: '#8dbf9c', border: '#efd4e1' }),
-    gs4: Object.freeze({ background: '#fff8ed', surface: '#fffefd', text: '#634b38', muted: '#786556', accent: '#e8a15c', accentAlt: '#92b9d5', border: '#eddfca' }),
+    gs1: Object.freeze({ background: '#edf6e5', surface: '#ffffff', text: '#234831', muted: '#50624d', accent: '#43833d', accentAlt: '#e7b83b', border: '#bad7a7' }),
+    gs2: Object.freeze({ background: '#e9f3ff', surface: '#ffffff', text: '#233d61', muted: '#52647d', accent: '#287dc3', accentAlt: '#9b79c8', border: '#b4d2ee' }),
+    gs3: Object.freeze({ background: '#fff0f5', surface: '#ffffff', text: '#572c43', muted: '#78536a', accent: '#cc4d87', accentAlt: '#68a97d', border: '#edb6cf' }),
+    gs4: Object.freeze({ background: '#fff1d9', surface: '#fffefd', text: '#553b24', muted: '#74604b', accent: '#c77425', accentAlt: '#5096c8', border: '#e9ca94' }),
 });
 
 const NIGHT_THEME_PALETTE = Object.freeze({
@@ -226,13 +226,13 @@ const NIGHT_THEME_PALETTE = Object.freeze({
 });
 
 const DEFAULT_THEME_PALETTE = Object.freeze({
-    background: '#f7fafc',
+    background: '#f5f4fb',
     surface: '#ffffff',
-    text: '#526a80',
-    muted: '#657586',
-    accent: '#d58eaa',
-    accentAlt: '#83bdb9',
-    border: '#dce7ec',
+    text: '#34495d',
+    muted: '#586b7c',
+    accent: '#ce729c',
+    accentAlt: '#58a59e',
+    border: '#cfdae5',
 });
 
 const DEFAULT_SETTINGS = Object.freeze({
@@ -3083,6 +3083,17 @@ function rgba(hex, alpha) {
     return `rgba(${Math.round(rgb.r)}, ${Math.round(rgb.g)}, ${Math.round(rgb.b)}, ${a})`;
 }
 
+function readableTint(base, tint, inks, amount) {
+    // Interpolated stops are sampled too: contrasting endpoints alone do not prove
+    // arbitrary colourful gradients readable. Fade decoration back, never fade text.
+    for (let step = 10; step >= 0; step--) {
+        const end = compositeHex(tint, base, amount * step / 10);
+        const stops = Array.from({ length: 17 }, (_, i) => compositeHex(end, base, i / 16));
+        if (stops.every(stop => inks.every(ink => contrastRatio(ink, stop) >= 4.6))) return end;
+    }
+    return base;
+}
+
 function applyThemeToElement(element, settings, documentLike = globalThis.document) {
     if (!element?.style) return null;
     const { mode, palette } = resolveThemePalette(settings, documentLike);
@@ -3102,7 +3113,24 @@ function applyThemeToElement(element, settings, documentLike = globalThis.docume
     element.style.setProperty('--rmt-theme-border', palette.border);
     element.style.setProperty('--rmt-theme-alpha', String(alpha));
     element.style.setProperty('--rmt-theme-accent-ink', safeReadableAcross(palette.accent, [palette.background, palette.surface], palette.text));
-    element.style.setProperty('--rmt-theme-soft', compositeHex(palette.accentAlt, palette.surface, 0.08));
+    const inks = [palette.text, palette.muted];
+    element.style.setProperty('--rmt-theme-soft', readableTint(palette.surface, palette.accentAlt, inks, 0.08));
+    element.style.setProperty('--rmt-theme-surface-tint', readableTint(compositeHex(palette.surface, palette.background, alpha), palette.accentAlt, inks, 0.11));
+    element.style.setProperty('--rmt-theme-bg-tint', readableTint(palette.background, palette.accentAlt, inks, 0.03));
+    element.style.setProperty('--rmt-theme-header-tint', readableTint(palette.surface, palette.accent, inks, 0.06));
+    // Semantic paper is opaque, with its own validated ink. Theme changes never turn a
+    // yellow memo, rose keepsake, or violet journal into the same structural white card.
+    const dark = contrastRatio('#ffffff', palette.background) > 4.5;
+    const papers = dark
+        ? { note: ['#4b3d20', '#fff0ba'], 'note-blue': ['#203e55', '#dceeff'], 'note-rose': ['#512b3d', '#ffe2ed'], letter: ['#37312c', '#f9ecdc'], journal: ['#382f50', '#eee3ff'] }
+        : { note: ['#ffecab', '#594019'], 'note-blue': ['#e0f0ff', '#264c70'], 'note-rose': ['#ffe2ec', '#71344e'], letter: ['#fff9ed', '#594934'], journal: ['#eee6fc', '#584070'] };
+    for (const [kind, [paper, requestedInk]] of Object.entries(papers)) {
+        element.style.setProperty('--rmt-paper-' + kind, paper);
+        element.style.setProperty('--rmt-paper-' + kind + '-ink', safeReadableColor(requestedInk, paper, palette.text));
+    }
+    element.style.setProperty('--rmt-theme-wash', compositeHex(palette.accent, palette.surface, dark ? 0.12 : 0.10));
+    element.style.setProperty('--rmt-theme-wash-ink', safeReadableColor(palette.text, compositeHex(palette.accent, palette.surface, dark ? 0.12 : 0.10), palette.text));
+    element.style.setProperty('--rmt-theme-shadow', dark ? '#00000055' : '#26395316');
     element.style.setProperty('color-scheme', contrastRatio('#ffffff', palette.background) > 4.5 ? 'dark' : 'light');
     return { mode, palette, alpha };
 }
@@ -3765,6 +3793,32 @@ function __init_core_butterflyContract_js() {
 // MODULE: core/butterflyContract.js
 
 // Code-owned limits and feedback only. Never echo model/source text or exception messages.
+const BUTTERFLY_PRIMARY_AXES = Object.freeze([
+    'era', 'identity', 'occupation', 'location', 'decision', 'encounter', 'bond', 'fate',
+]);
+
+// Initial generation only. Never resize a saved session after the archive grows.
+function buildButterflyPlan(memoryBank) {
+    const ids = new Set();
+    for (const item of Array.isArray(memoryBank?.memories) ? memoryBank.memories : []) {
+        const id = typeof item?.id === 'string' ? item.id.trim() : '';
+        // Match MAIN's evidence vocabulary: summary alone is not a source anchor.
+        // Keep this planning module host-independent (evidence.js imports the runtime).
+        const clean = value => String(value ?? '').replace(/\r\n?/g, '\n').replace(/\u0000/g, '').trim();
+        const anchors = (Array.isArray(item?.anchors) ? item.anchors : []).map(clean).filter(Boolean).slice(0, 8);
+        if (/^M\d{3,}$/.test(id) && [clean(item?.title), ...anchors].some(value => value.length >= 2)) ids.add(id);
+    }
+    const count = Math.min(BUTTERFLY_PRIMARY_AXES.length, Math.ceil(ids.size / 3));
+    return { memoryCount: ids.size, axes: BUTTERFLY_PRIMARY_AXES.slice(0, count), total: count ? count + 2 : 0 };
+}
+
+function butterflyPlanPrompt(memoryBank) {
+    const plan = buildButterflyPlan(memoryBank);
+    return plan.total
+        ? '本次初始观测共 ' + plan.total + ' 个节点：MAIN、' + plan.axes.length + ' 个普通分歧、唯一末项 OMEGA。普通分歧 primaryAxis 依次为 ' + plan.axes.join(' / ') + '；不可少项或额外凑数。'
+        : '当前没有可用档案锚点，不生成观测节点。';
+}
+
 const BUTTERFLY_LIMITS = Object.freeze({ monologueHan: 100, monologueFirstPerson: 3, interventionHan: 40, omegaHan: 160, omegaFirstPerson: 4, systemHan: 30 });
 const BUTTERFLY_GENERATION_CONTRACT = `【节点完整性契约】
 MAIN 与普通分歧的 monologue 至少 ${BUTTERFLY_LIMITS.monologueHan} 个汉字，至少 ${BUTTERFLY_LIMITS.monologueFirstPerson} 次明确“我”的第一人称视角，不用旁白代替发言。
@@ -3794,8 +3848,11 @@ function butterflyValidationFeedback(error) {
     return String(error?.code || '').startsWith('RMT_BUTTERFLY_') && Object.hasOwn(ISSUES, key) ? ISSUES[key] : '';
 }
 
+__m_core_butterflyContract_js.buildButterflyPlan = buildButterflyPlan;
+__m_core_butterflyContract_js.butterflyPlanPrompt = butterflyPlanPrompt;
 __m_core_butterflyContract_js.butterflyValidationError = butterflyValidationError;
 __m_core_butterflyContract_js.butterflyValidationFeedback = butterflyValidationFeedback;
+__m_core_butterflyContract_js.BUTTERFLY_PRIMARY_AXES = BUTTERFLY_PRIMARY_AXES;
 __m_core_butterflyContract_js.BUTTERFLY_LIMITS = BUTTERFLY_LIMITS;
 __m_core_butterflyContract_js.BUTTERFLY_GENERATION_CONTRACT = BUTTERFLY_GENERATION_CONTRACT;
 }
@@ -4632,7 +4689,7 @@ function structuralThemeCss(root) {
         'avatar-dialog-card','avatar-dialog-bubble','memory-wi-picker-card','memory-wi-book','memory-wi-entry','loading-card',
         'heart-summary','heart-current-line','heart-greeting-group','heart-drama-card','heart-strip-card','heart-single-drama','heart-season-stage','heart-setting','heart-script-bubble','heart-panel','heart-panel-line',
         'ending-summary','ending-route','ending-detail','ending-confession','ending-epilogue','confession-card','ending-confession-stage','ending-confession-bubble','achievement-card',
-        'calendar-hero','calendar-paper','calendar-month-head','calendar-day','calendar-pending','calendar-todo','calendar-sticky-panel','calendar-master-todo','calendar-special-notes','calendar-mood-section','calendar-sticky','calendar-mood-note',
+        'calendar-hero','calendar-paper','calendar-month-head','calendar-day','calendar-pending','calendar-todo','calendar-filter','calendar-sticky-panel','calendar-master-todo','calendar-special-notes','calendar-mood-section','calendar-sticky','calendar-mood-note',
         'manage-hero','manage-row','profile-fact','profile-discovery','profile-worldline-note','relation-detail','relation-detail-head',
         'room-card','room-caption','room-space','room-object-chip','room-object-rail','room-activity-strip','room-stage-head','room-schema-notice',
         'items-toolbar','item-node','item-detail','travel-head','travel-index','travel-dialogue','travel-dialogue-bubble','cg-provider-bar','cabinet-detail','cabinet-piece','theme-preview'
@@ -4640,11 +4697,11 @@ function structuralThemeCss(root) {
     const surfaces = surface.map(name => root + ' .rmt-' + name).join(',');
     const art = ':not(.rmt-crt,.rmt-crt *,.rmt-room-scene,.rmt-room-scene *,.rmt-phone-screen,.rmt-phone-screen *,.rmt-travel-artifact,.rmt-travel-artifact *,.rmt-ending-easter-layer,.rmt-ending-easter-layer *,.rmt-calendar-holiday-art,.rmt-calendar-holiday-art *,.rmt-firefly-field,.rmt-firefly-field *)';
     return `
-${root}{--gs-ink:var(--rmt-theme-text);--gs-muted:var(--rmt-theme-muted);--gs-paper:var(--rmt-theme-surface-solid);--gs-paper-blue:var(--rmt-theme-surface-solid);--gs-line:var(--rmt-theme-border);color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important;font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif!important;font-size:15px!important;font-weight:400!important;line-height:1.6;text-shadow:none!important;filter:none!important;opacity:1!important}
-${root} .rmt-shell{--gs-ink:var(--rmt-theme-text);--gs-muted:var(--rmt-theme-muted);--gs-paper:var(--rmt-theme-surface-solid);--gs-paper-blue:var(--rmt-theme-surface-solid);--gs-line:var(--rmt-theme-border)}
-${surfaces}{background:var(--rmt-theme-surface-alpha)!important;color:var(--rmt-theme-text)!important;border-color:var(--rmt-theme-border)!important;opacity:1!important;text-shadow:none!important;box-shadow:0 4px 18px #0000000a}
+${root}{--gs-ink:var(--rmt-theme-text);--gs-muted:var(--rmt-theme-muted);--gs-paper:var(--rmt-theme-surface-solid);--gs-paper-blue:var(--rmt-theme-soft);--gs-line:var(--rmt-theme-border);color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important;font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif!important;font-size:15px!important;font-weight:400!important;line-height:1.6;text-shadow:none!important;filter:none!important;opacity:1!important}
+${root} .rmt-shell{--gs-ink:var(--rmt-theme-text);--gs-muted:var(--rmt-theme-muted);--gs-paper:var(--rmt-theme-surface-solid);--gs-paper-blue:var(--rmt-theme-soft);--gs-line:var(--rmt-theme-border)}
+${surfaces}{background:var(--rmt-theme-surface-alpha)!important;color:var(--rmt-theme-text)!important;border-color:var(--rmt-theme-border)!important;opacity:1!important;text-shadow:none!important;box-shadow:0 7px 20px var(--rmt-theme-shadow)}
 ${root} :is(.rmt-album,.rmt-adv,.rmt-room-view,.rmt-travel,.rmt-heart-drama-layout,.rmt-archive-room){background:var(--rmt-theme-bg)!important}
-${root} :is(p,b,strong,small,span,label,blockquote,h1,h2,h3,summary,legend,div[class^="rmt-"],div[class*=" rmt-"])${art}{color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important;text-shadow:none!important;font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif!important;font-weight:400!important;letter-spacing:normal;overflow-wrap:anywhere}
+${root} :is(p,b,strong,small,span,label,blockquote,h1,h2,h3,summary,legend,div[class^="rmt-"],div[class*=" rmt-"])${art}{color:var(--rmt-content-ink,var(--rmt-theme-text))!important;-webkit-text-fill-color:currentColor!important;text-shadow:none!important;font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif!important;font-weight:400!important;letter-spacing:normal;overflow-wrap:anywhere}
 ${root} :is(h1,h2,h3,b,strong,.rmt-topbar-title)${art}{font-weight:600!important}
 ${root} :is(h1,h2,h3)${art}{line-height:1.4!important;margin-block:12px 16px}
 ${root} :is(h1,h2)${art}{font-size:22px!important}
@@ -4652,12 +4709,12 @@ ${root} h3${art}{font-size:18px!important}
 ${root} :is(.rmt-portal-title,.rmt-calendar-quick-copy>b){font-size:18px!important;font-weight:600!important}
 ${root} .rmt-archive-card{padding:20px!important}
 ${root} :is(p,blockquote,.rmt-adv-reader,.rmt-avatar-dialog-bubble,.rmt-heart-script-bubble)${art}{font-size:16px!important;line-height:1.8!important;font-weight:400!important;opacity:1!important}
-${root} :is(small,.rmt-api-note,.rmt-avatar-dialog-note,.rmt-settings-field,.rmt-settings-check)${art}{font-size:13px!important;color:var(--rmt-theme-muted)!important;-webkit-text-fill-color:var(--rmt-theme-muted)!important;opacity:1!important}
+${root} :is(small,.rmt-api-note,.rmt-avatar-dialog-note,.rmt-settings-field,.rmt-settings-check)${art}{font-size:13px!important;color:var(--rmt-content-ink,var(--rmt-theme-muted))!important;-webkit-text-fill-color:currentColor!important;opacity:1!important}
 ${root} :is(button,select,input,textarea,.menu_button)${art}{font-family:inherit!important;font-size:14px!important;font-weight:500!important;line-height:1.4!important;min-height:44px;max-width:100%;color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important;background:var(--rmt-theme-surface-solid)!important;border-color:var(--rmt-theme-border)!important;opacity:1!important;text-shadow:none!important;writing-mode:horizontal-tb!important}
 ${root} :is(button,summary):focus-visible{outline:2px solid var(--rmt-theme-accent-ink)!important;outline-offset:3px}
-${root} :is(button.active,button.is-active,[aria-pressed="true"]){background:var(--rmt-theme-surface-solid)!important;border-color:var(--rmt-theme-accent)!important;box-shadow:0 0 0 1px var(--rmt-theme-accent)}
-${root} :is(.rmt-archive-keywords span,.rmt-calendar-tag){background:var(--rmt-theme-surface-solid)!important;border:1px solid var(--rmt-theme-border)!important;box-shadow:none!important;padding:5px 11px;font-size:13px!important}
-${root} :is(.rmt-archive-portal,.rmt-character-card,.rmt-calendar-quick,.rmt-room-card){background:linear-gradient(165deg,var(--rmt-theme-surface-alpha),color-mix(in srgb,var(--rmt-theme-surface-alpha) 97%,var(--rmt-theme-accent-alt)))!important;box-shadow:0 6px 20px #34546b0a}
+${root} :is(button.active,button.is-active,[aria-pressed="true"]){background:var(--rmt-theme-wash)!important;--rmt-content-ink:var(--rmt-theme-wash-ink);color:var(--rmt-theme-wash-ink)!important;border-color:var(--rmt-theme-accent)!important;box-shadow:0 0 0 1px var(--rmt-theme-accent)}
+${root} :is(.rmt-archive-keywords span,.rmt-calendar-tag){background:var(--rmt-theme-soft)!important;border:1px solid var(--rmt-theme-border)!important;box-shadow:none!important;padding:5px 11px;font-size:13px!important}
+${root} :is(.rmt-archive-portal,.rmt-character-card,.rmt-calendar-quick,.rmt-room-card){background:linear-gradient(165deg,var(--rmt-theme-surface-alpha),var(--rmt-theme-surface-tint))!important;box-shadow:0 10px 26px var(--rmt-theme-shadow)}
 ${root} .rmt-btn{border-width:1px!important;border-radius:999px!important;box-shadow:0 3px 10px #34546b0a;padding:10px 16px!important}
 ${root} :is(.rmt-portal-avatar,.rmt-calendar-quick-icon),${root} :is(.rmt-portal-avatar,.rmt-calendar-quick-icon)>i{color:#fff!important;-webkit-text-fill-color:currentColor!important}
 ${root} .rmt-portal-ready-dot{color:var(--rmt-theme-accent-ink)!important;background:var(--rmt-theme-surface-solid)!important}
@@ -4674,10 +4731,49 @@ ${root} .rmt-auto-rule>label{display:flex;align-items:center;gap:8px;min-width:0
 ${root} .rmt-auto-rule input[type=checkbox]{width:18px;height:18px;min-width:18px;min-height:18px;accent-color:var(--rmt-theme-accent-ink)}
 ${root} .rmt-auto-rule>small{flex-basis:100%}
 ${root} .rmt-auto-rule input[type=number]{width:76px;min-height:44px;padding:8px;border:1px solid var(--rmt-theme-border);border-radius:12px}
-${root}[data-rmt-theme-mode=gs1] .rmt-topbar{background:linear-gradient(110deg,#fff,#edf5e5)!important;border-bottom-color:#d8b857!important}
-${root}[data-rmt-theme-mode=gs2] .rmt-topbar{background:linear-gradient(110deg,#f4faff,#edeafa)!important;border-bottom-color:#66a9d3!important}
-${root}[data-rmt-theme-mode=gs3] .rmt-topbar{background:linear-gradient(110deg,#fff5fa,#f1faef)!important;border-bottom-color:#d97aa4!important}
-${root}[data-rmt-theme-mode=gs4] .rmt-topbar{background:linear-gradient(110deg,#fff3dc,#edf7ff)!important;border-bottom-color:#e8a15c!important}
+${root}[data-rmt-theme-mode=gs1] .rmt-topbar{background:linear-gradient(110deg,#fff,#dcefc9)!important;border-bottom-color:#d8b857!important}
+${root}[data-rmt-theme-mode=gs2] .rmt-topbar{background:linear-gradient(110deg,#e1f2ff,#e7def9)!important;border-bottom-color:#66a9d3!important}
+${root}[data-rmt-theme-mode=gs3] .rmt-topbar{background:linear-gradient(110deg,#ffe0ed,#e3f3e2)!important;border-bottom-color:#d97aa4!important}
+${root}[data-rmt-theme-mode=gs4] .rmt-topbar{background:linear-gradient(110deg,#ffe3ae,#dfedff)!important;border-bottom-color:#e8a15c!important}
+/* Local paper roles override structural surfaces; no generated CSS or model tokens. */
+${root} :is(.rmt-calendar-sticky,.rmt-calendar-paper,.rmt-calendar-mood-note,.rmt-ending-confession){
+  --rmt-paper:var(--rmt-paper-note);--rmt-content-ink:var(--rmt-paper-note-ink);
+  background:var(--rmt-paper)!important;color:var(--rmt-content-ink)!important;
+  -webkit-text-fill-color:currentColor!important;border-color:color-mix(in srgb,var(--rmt-content-ink) 22%,var(--rmt-paper))!important;
+  box-shadow:0 9px 18px var(--rmt-theme-shadow),inset 0 1px 0 #ffffff44!important;
+}
+${root} .rmt-calendar-sticky:nth-child(even){--rmt-paper:var(--rmt-paper-note-blue);--rmt-content-ink:var(--rmt-paper-note-blue-ink)}
+${root} :is(.rmt-calendar-sticky.special,.rmt-ending-confession){--rmt-paper:var(--rmt-paper-note-rose);--rmt-content-ink:var(--rmt-paper-note-rose-ink)}
+${root} .rmt-calendar-paper{--rmt-paper:var(--rmt-paper-letter);--rmt-content-ink:var(--rmt-paper-letter-ink);box-shadow:0 15px 32px var(--rmt-theme-shadow)!important}
+${root} .rmt-calendar-mood-note{--rmt-paper:var(--rmt-paper-journal);--rmt-content-ink:var(--rmt-paper-journal-ink);border-left:3px solid var(--rmt-content-ink)!important;box-shadow:none!important}
+${root} .rmt-calendar-sticky{padding:20px 16px 16px!important;border-radius:3px 3px 16px 3px;overflow:visible}
+${root} .rmt-calendar-sticky:before{content:"";position:absolute;top:-6px;left:calc(50% - 22px);width:44px;height:13px;background:#ffffff70;transform:rotate(-3deg);border:1px solid #ffffff55;pointer-events:none}
+${root} .rmt-calendar-sticky-pin{background:var(--rmt-content-ink)!important;opacity:.4}
+${root} .rmt-calendar-sticky footer{color:var(--rmt-content-ink)!important;font-size:13px!important;border-top-color:color-mix(in srgb,var(--rmt-content-ink) 24%,transparent)}
+${root} .rmt-calendar-sticky :is(h3,p){margin-block:8px!important}
+${root} :is(.rmt-calendar-day,.rmt-calendar-month-head){--rmt-content-ink:var(--rmt-theme-text)}
+${root} :is(.rmt-calendar-counts>span,.rmt-calendar-day.marked .rmt-calendar-day-number){background:var(--rmt-theme-surface-solid)!important;color:var(--rmt-theme-text)!important;border-color:var(--rmt-theme-border)!important}
+${root} .rmt-calendar-day.selected{border-color:var(--rmt-theme-accent)!important;box-shadow:0 0 0 2px var(--rmt-theme-accent)!important}
+${root} .rmt-calendar-selected-chip{--rmt-content-ink:var(--rmt-paper-note-blue-ink);background:var(--rmt-paper-note-blue)!important;color:var(--rmt-content-ink)!important}
+${root} :is(.rmt-calendar-sticky-panel,.rmt-calendar-master-todo,.rmt-calendar-special-notes,.rmt-calendar-mood-section){padding:20px!important}
+${root} .rmt-settings-content{background:var(--rmt-theme-bg)!important;box-shadow:none;gap:0}
+${root} .rmt-settings-content>.rmt-settings-card{margin-bottom:12px}
+${root} details[data-rmt-settings-section]{display:block!important;padding:0!important;overflow:hidden}
+${root} details[data-rmt-settings-section]>summary{display:flex;list-style:none;cursor:pointer;padding:16px;min-height:72px;gap:12px;touch-action:manipulation}
+${root} details[data-rmt-settings-section]>summary::-webkit-details-marker{display:none}
+${root} details[data-rmt-settings-section]>summary>div{flex:1;min-width:0}
+${root} details[data-rmt-settings-section]>summary:after{content:"";width:8px;height:8px;flex:0 0 8px;border:solid var(--rmt-theme-accent-ink);border-width:0 2px 2px 0;transform:rotate(45deg);margin:0 6px 4px}
+${root} details[data-rmt-settings-section][open]>summary{background:var(--rmt-theme-wash)!important;--rmt-content-ink:var(--rmt-theme-wash-ink);border-bottom:1px solid var(--rmt-theme-border)}
+${root} details[data-rmt-settings-section][open]>summary:after{transform:rotate(225deg);margin-bottom:0}
+${root} details[data-rmt-settings-section]:not([open])>:not(summary){display:none!important}
+${root} .rmt-settings-section-body{display:grid;gap:14px;padding:18px;min-width:0}
+${root} .rmt-settings-card-head>span{width:36px;height:36px;flex:0 0 36px;border-radius:12px;background:var(--rmt-theme-wash)!important;color:var(--rmt-theme-wash-ink)!important;font-size:11px!important}
+${root} .rmt-settings-card-head b{font-size:16px!important}
+${root} .rmt-settings-section-body .rmt-settings-field{margin:0}
+${root} .rmt-portal-open{background:transparent!important;box-shadow:none!important}
+${root} :is(.rmt-archive-kicker,.rmt-heart-summary-kicker,.rmt-portal-status){color:var(--rmt-theme-accent-ink)!important}
+@media(max-width:480px){${root} .rmt-calendar-sticky-grid{grid-template-columns:1fr;gap:16px}${root} .rmt-calendar-sticky-panel{padding:16px!important}}
+
 ${root} .rmt-heart-drama-dot{position:relative;width:44px!important;height:44px!important;min-width:44px;min-height:44px;border:0!important;box-shadow:none!important;background:transparent!important;padding:0!important}
 ${root} .rmt-heart-drama-dot:before{content:"";position:absolute;inset:18px;border-radius:50%;background:var(--rmt-theme-border)}
 ${root} .rmt-heart-drama-dot.active:before{background:var(--rmt-theme-accent);box-shadow:0 0 0 4px var(--rmt-theme-soft)}
@@ -5675,11 +5771,11 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 #${core_constants.OVERLAY_ID}{background:var(--rmt-theme-bg,rgba(247,250,252,.96))!important;color:var(--rmt-theme-text,#526a80)!important;opacity:1!important}
 #${core_constants.OVERLAY_ID} .rmt-shell{background:var(--rmt-theme-bg,rgba(247,250,252,.96))!important;color:var(--rmt-theme-text,#526a80)!important;opacity:1!important}
 #${core_constants.OVERLAY_ID},#${core_constants.OVERLAY_ID} .rmt-shell,#${core_constants.OVERLAY_ID} .rmt-topbar,#${core_constants.OVERLAY_ID} .rmt-topbar-title,#${core_constants.OVERLAY_ID} .rmt-body{writing-mode:horizontal-tb!important;text-orientation:mixed!important}
-#${core_constants.OVERLAY_ID} .rmt-topbar{background:color-mix(in srgb,var(--rmt-theme-surface-solid,#fff) 94%,var(--rmt-theme-accent,#d58eaa) 6%)!important;border-color:var(--rmt-theme-border,#dce7ec)!important;color:var(--rmt-theme-text,#526a80)!important;opacity:1!important}
+#${core_constants.OVERLAY_ID} .rmt-topbar{background:var(--rmt-theme-header-tint,#fff)!important;border-color:var(--rmt-theme-border,#dce7ec)!important;color:var(--rmt-theme-text,#526a80)!important;opacity:1!important}
 #${core_constants.OVERLAY_ID} .rmt-topbar-title,#${core_constants.OVERLAY_ID} .rmt-topbar button{color:var(--rmt-theme-text,#526a80)!important;-webkit-text-fill-color:var(--rmt-theme-text,#526a80)!important;opacity:1!important}
 #${core_constants.OVERLAY_ID} .rmt-topbar-title{background:transparent!important}
 #${core_constants.OVERLAY_ID} .rmt-topbar button{border-color:var(--rmt-theme-border,#dce7ec)!important;background:var(--rmt-theme-surface-solid,#fff)!important;writing-mode:horizontal-tb!important;text-orientation:mixed!important}
-#${core_constants.OVERLAY_ID} .rmt-body{color:var(--rmt-theme-text,#526a80)!important;background:linear-gradient(180deg,var(--rmt-theme-bg,rgba(247,250,252,.96)),color-mix(in srgb,var(--rmt-theme-accent-alt,#83bdb9) 3%,var(--rmt-theme-bg,rgba(247,250,252,.96))))!important;opacity:1!important}
+#${core_constants.OVERLAY_ID} .rmt-body{color:var(--rmt-theme-text,#526a80)!important;background:linear-gradient(180deg,var(--rmt-theme-bg,rgba(247,250,252,.96)),var(--rmt-theme-bg-tint,#f7fafc))!important;opacity:1!important}
 #${core_constants.OVERLAY_ID} .rmt-btn{border-color:var(--rmt-theme-border,#dce7ec)!important;color:var(--rmt-theme-text,#526a80)!important;-webkit-text-fill-color:var(--rmt-theme-text,#526a80)!important;background:var(--rmt-theme-surface-solid,#fff)!important;opacity:1!important;writing-mode:horizontal-tb!important;text-orientation:mixed!important}
 #${core_constants.OVERLAY_ID} input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),#${core_constants.OVERLAY_ID} select,#${core_constants.OVERLAY_ID} textarea{border-color:var(--rmt-theme-border,#dce7ec)!important;background:var(--rmt-theme-surface-solid,#fff)!important;color:var(--rmt-theme-text,#526a80)!important;-webkit-text-fill-color:var(--rmt-theme-text,#526a80)!important;opacity:1!important;writing-mode:horizontal-tb!important;text-orientation:mixed!important}
 #${core_constants.OVERLAY_ID} .rmt-archive-card,#${core_constants.OVERLAY_ID} .rmt-character-card,#${core_constants.OVERLAY_ID} .rmt-portal-card,#${core_constants.OVERLAY_ID} .rmt-calendar-quick{border-color:var(--rmt-theme-border,#dce7ec)!important;background:var(--rmt-theme-surface-alpha,var(--rmt-theme-surface,#fff))!important;color:var(--rmt-theme-text,#526a80)!important;-webkit-text-fill-color:var(--rmt-theme-text,#526a80)!important;opacity:1!important;writing-mode:horizontal-tb!important;text-orientation:mixed!important}
@@ -10257,6 +10353,7 @@ const PROMPTS = {
     [core_constants.MODE.CALENDAR]: (context, memoryBank) => calendarPrompt(context, memoryBank),
     [core_constants.MODE.BUTTERFLY]: (context, memoryBank) => `${promptSafetyBoundary(context, '蝴蝶效应')}
 ${core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
+${core_butterflyContract.butterflyPlanPrompt(memoryBank)}
 主时间线只从下面较小的档案锚点集中取证；平行分歧主要依据受控角色卡/人设/世界书推演。
 UNTRUSTED_TIMELINE_ANCHORS_JSON:
 ${promptArchiveSlice(memoryBank, 16)}
@@ -10267,7 +10364,7 @@ ${promptArchiveSlice(memoryBank, 16)}
 
 核心叙事结构：
 1. MAIN 是现世主时间线锚点。
-2. EG01～EG08（或更多）才是平行世界；每个平行世界都有【那个世界里的 {{char}}】自己的第一人称发言。
+2. 本地计划中的普通分歧才是平行世界；每个平行世界都有【那个世界里的 {{char}}】自己的第一人称发言。
 3. 最后一项【观测点 Ω】不是另一个平行世界，而是【现世 {{char}} 已经依次看完前面所有平行世界发言之后】回到主时间线的最终观测点。因此 Ω 不存在“平行体”，不得生成平行体独白。
 
 JSON 结构必须严格为：
@@ -10328,11 +10425,11 @@ JSON 结构必须严格为：
 }
 
 硬性要求：
-- nodes 至少 10 条：第 1 条必须是“主时间线（锁定）”；其后至少 8 条互不重复的平行世界分歧；数组最后 1 条必须是【观测点 Ω】。
+- nodes 数量严格遵守本次本地初始观测计划：第 1 条必须是“主时间线（锁定）”；中间是计划指定的互不重复的平行分歧；数组最后 1 条必须是【观测点 Ω】。记忆较少时不要凑满十个。
 - 主时间线必须 locked=true、trueEnding=false，并至少引用 1 条当前手动档案 sourceMemoryIds + sourceMemoryAnchor，用来锚定“当前世界”。
 - 普通平行节点是模拟，不得伪装成已经发生的回忆；它们可以不带 sourceMemoryIds。若从某段档案作为分歧起点，可以附带真实引用，但平行世界里新增的事情仍只能写成模拟。
-- 至少 8 个普通平行节点要从角色卡、人设、世界书中的身份、职业、时代、地点、关系条件、选择或命运约束向外推演；不能只把同一场景换措辞。
-- 前 8 个普通平行节点的 worldSpec.primaryAxis 必须依次覆盖且不重复：era / identity / occupation / location / decision / encounter / bond / fate。worldSpec 其余字段都要填写具体内容，8 份组合必须实质不同；thirdPartyRomance 必须始终为 false。
+- 普通平行节点要从角色卡、人设、世界书中的身份、职业、时代、地点、关系条件、选择或命运约束向外推演；不能只把同一场景换措辞。
+- 普通平行节点的 worldSpec.primaryAxis 必须按本地计划依次填写且不重复。worldSpec 其余字段都要填写具体内容，各份组合必须实质不同；thirdPartyRomance 必须始终为 false。
 - 每个普通平行节点的 monologue 都必须是【那个平行世界里的 {{char}} 本人】第一人称发言，不少于 100 个汉字，有具体生活、处境、记忆感与情绪；不能由现世 {{char}} 代替平行体说话。
 - 每个普通平行节点的 intervention 才是【现世 {{char}}】刚看完该平行体后的即时反应；不要把两种说话者混在一个字段里。
 - 最后一项必须 id="OMEGA"、trueEnding=true，label 包含“观测点 Ω”或“TRUE ENDING”。【Ω 不是平行世界，不存在平行体】；它的 monologue 必须严格为空字符串 ""，绝对禁止再写平行体发言。
@@ -10343,6 +10440,7 @@ JSON 结构必须严格为：
 - 禁止出现任何前任、前女友相关情节。
 - 禁止出现 {{char}} 与除了 {{user}} 以外任何人恋爱、结婚或组建家庭；第三方只能保持非恋爱关系。
 - Ω 必须把至少 3 种前述命运差异汇入最终判断，并清楚表达：跨越不可能仍然相遇是命运/奇迹，而 {{user}} 是所有世界线收敛后的唯一解。
+- 当普通分歧只有一两个时，三类差异指这些已生成 worldSpec 中真实改变的时代、身份、职业等条件，不是要求三个世界。Ω 只能回应实际已通过的节点，不能杜撰未观测的世界。
 - 只输出结构化 JSON；视觉快照、像素边框、噪点、1 秒干扰动画由插件本地渲染，不由模型输出 HTML/CSS。蝴蝶效应页面现有 UI 完全冻结，本次只生成内容，不提出或描述任何 UI 改版。`,
     [core_constants.MODE.ENDING]: (context, memoryBank) => modes_ending.endingOutlinePrompt(context, memoryBank),
     [core_constants.MODE.HEART]: (context, memoryBank) => modes_heart.heartCorePrompt(context, memoryBank),
@@ -12249,8 +12347,9 @@ function mountSettings() {
         <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
       </div>
       <div class="inline-drawer-content rmt-settings-content">
-        <div class="rmt-settings-card rmt-api-box">
-          <div class="rmt-settings-card-head"><span>API</span><div><b>心跳回忆独立 API</b><small>请选择一种配置方式</small></div></div>
+        <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="api">
+          <summary class="rmt-settings-card-head"><span>API</span><div><b>独立 API</b><small>1.1.18 一键配置 · 手动配置</small></div></summary>
+          <div class="rmt-settings-section-body">
           <div class="rmt-api-source-grid" role="group" aria-label="独立 API 配置方式">
             <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-import-current aria-pressed="false"><span class="rmt-api-source-badge">要求</span><b>1.1.18 一键配置</b><small>读取酒馆当前连接</small></button>
             <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-select-manual aria-pressed="false"><span class="rmt-api-source-badge">OPENAI</span><b>手动配置</b><small>URL · Key · 模型</small></button>
@@ -12280,15 +12379,20 @@ function mountSettings() {
           <label class="checkbox_label rmt-settings-check"><input data-rmt-room-life-auto type="checkbox"> 每天首次打开房间时允许一次“今日生活”自动请求</label>
           <label class="checkbox_label rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"> 手动确认 SillyTavern Image Generation 已启用（自动检测失败时使用 /sd 兜底）</label>
           <label class="checkbox_label rmt-settings-check"><input data-rmt-tt-display type="checkbox"> TT 显示模式（勾选＝r32 顶部安全区；不勾选＝全屏）</label>
-        </div>
-        <div class="rmt-settings-card rmt-theme-box">
-          <details><summary>标签过滤 · 不把思考/变量块发给模型</summary>
+          </div>
+        </details>
+        <details class="rmt-settings-card" data-rmt-settings-section="filter">
+          <summary class="rmt-settings-card-head"><span>TAG</span><div><b>标签过滤</b><small>思考与变量块</small></div></summary>
+          <div class="rmt-settings-section-body">
             <p>只过滤送出的副本，不修改聊天。扫描后点选标签，保存后从下一次生成生效。</p>
             <textarea class="text_pole" data-rmt-tag-draft aria-label="要排除的标签名" placeholder="thinking, updatevariable"></textarea>
             <div class="rmt-theme-presets"><button type="button" data-rmt-tag-scan>扫描当前聊天</button><button type="button" data-rmt-tag-clear>清空选择</button><button type="button" data-rmt-tag-cancel>撤销编辑</button><button type="button" data-rmt-tag-save>保存过滤</button></div>
             <div data-rmt-tag-results role="status"></div>
-          </details>
-          <div class="rmt-settings-card-head"><span>UI</span><div><b>界面主题</b><small>即选即看 · 自动保护文字对比度</small></div></div>
+          </div>
+        </details>
+        <details class="rmt-settings-card rmt-theme-box" data-rmt-settings-section="theme">
+          <summary class="rmt-settings-card-head"><span>UI</span><div><b>界面主题</b><small>配色与透明度</small></div></summary>
+          <div class="rmt-settings-section-body">
           <label class="rmt-settings-field"><span>外观</span><select class="text_pole" data-rmt-theme-mode><option value="default">日间 · 珍珠白</option><option value="night">夜间 · 星黛蓝</option><option value="gs1">初叶绿 · GS1 灵感</option><option value="gs2">海盐蓝 · GS2 灵感</option><option value="gs3">花漾粉 · GS3 灵感</option><option value="gs4">杏糖橙 · GS4 灵感</option><option value="host">跟随酒馆美化</option><option value="custom">自定义配色</option></select></label>
           <label class="rmt-settings-field"><span>卡片不透明度 <output data-rmt-theme-opacity></output></span><input data-rmt-theme-alpha type="range" min="0.72" max="1" step="0.01"></label>
           <div class="rmt-theme-custom-panel" data-rmt-theme-custom-panel>
@@ -12302,21 +12406,25 @@ function mountSettings() {
             <label><span>边框</span><input type="color" data-rmt-theme-color="border"></label>
           </div>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-theme-reset>恢复默认配色</button>
-        </div>
-        <div class="rmt-settings-card">
-          <div class="rmt-settings-card-head"><span>↻</span><div><b>跟随当前聊天 · 自动更新</b><small>默认关闭 · 每项独立设置</small></div></div>
+          </div>
+        </details>
+        <details class="rmt-settings-card" data-rmt-settings-section="auto">
+          <summary class="rmt-settings-card-head"><span>↻</span><div><b>自动更新</b><small>跟随当前聊天 · 每项独立设置</small></div></summary>
+          <div class="rmt-settings-section-body">
           <p>只在已有档案的当前窗口运行。每条聊天消息算一楼，编辑不加楼；开启后从当前楼数起计。</p>
           <p>“档案同步”收录新聊天；其他模块使用已归档记忆，不改旧内容。会调用独立 API。</p>
           <div class="rmt-auto-rules">${core_autoUpdatePolicy.AUTO_UPDATE_MODES.map(mode => `<div class="rmt-auto-rule"><label><input type="checkbox" data-rmt-auto-enabled="${mode}"> ${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}</label><label>每 <input type="number" min="1" max="1000" step="1" data-rmt-auto-every="${mode}" aria-label="${core_text.esc(mode === 'archive' ? '档案同步' : core_constants.MODE_LABEL[mode])}间隔楼层"> 楼</label><small data-rmt-auto-status="${mode}" role="status"></small></div>`).join('')}</div>
           <small data-rmt-auto-warning role="status"></small>
           <small>失败后不连续重试，等待下一个间隔；可随时手动生成。不支持跨页任务锁的浏览器仅保留手动操作。</small>
-        </div>
+          </div>
+        </details>
         <div class="rmt-settings-card">
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-self-update>检查并更新插件</button>
           <small data-rmt-self-update-status role="status">强制检查已发布更新 · 完成后手动刷新页面</small>
         </div>
-        <div class="rmt-settings-card rmt-api-box">
-          <div class="rmt-settings-card-head"><span>MEM</span><div><b>记忆来源</b><small>当前角色 · 当前聊天</small></div></div>
+        <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="memory">
+          <summary class="rmt-settings-card-head"><span>MEM</span><div><b>记忆来源</b><small>当前角色 · 当前聊天</small></div></summary>
+          <div class="rmt-settings-section-body">
           <div class="rmt-api-source-grid" role="group" aria-label="记忆来源操作">
             <button type="button" class="menu_button rmt-api-source-card" data-rmt-memory-auto-read><span class="rmt-api-source-badge">AUTO</span><b>自动读取</b><small>已注册的当前聊天来源</small></button>
             <button type="button" class="menu_button rmt-api-source-card" data-rmt-memory-file-choose><span class="rmt-api-source-badge">FILE</span><b>导入记忆</b><small>JSON · JSONL · TXT · Markdown</small></button>
@@ -12337,7 +12445,8 @@ function mountSettings() {
           </details>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-memory-source-clear>清除当前聊天已导入来源</button>
           <small>只清除心跳回忆自己的来源账本；不会删除聊天、第三方记忆或正式 Mxxx。</small>
-        </div>
+          </div>
+        </details>
         <div class="rmt-settings-archive-actions">
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
@@ -12556,7 +12665,7 @@ function mountSettings() {
             refreshGenerationSettingsUi();
             return;
         }
-        if (event.target.closest?.('.rmt-settings-header')) hydrateSettingsPanel();
+        if (event.target.closest?.('.rmt-settings-header, [data-rmt-settings-section] > summary')) hydrateSettingsPanel();
         const themeReset = event.target.closest?.('[data-rmt-theme-reset]');
         if (themeReset) {
             core_settings.updatePluginSettings({ themeMode: 'default', themeAlpha: core_constants.DEFAULT_SETTINGS.themeAlpha, themeCustom: { ...core_constants.DEFAULT_THEME_PALETTE } });
@@ -13671,9 +13780,7 @@ const generation_prompts = __m_generation_prompts_js;
 
 
 
-const BUTTERFLY_PRIMARY_AXES = Object.freeze([
-    'era', 'identity', 'occupation', 'location', 'decision', 'encounter', 'bond', 'fate',
-]);
+const BUTTERFLY_PRIMARY_AXES = core_butterflyContract.BUTTERFLY_PRIMARY_AXES;
 
 const PRIMARY_AXIS_SET = new Set(BUTTERFLY_PRIMARY_AXES);
 const PRIMARY_AXIS_ALIASES = Object.freeze({
@@ -13956,18 +14063,23 @@ function normalizedMainNode(node, memoryBank, context) {
     };
 }
 
-function normalizeButterfly(data, memoryBank, context = {}) {
+function normalizeButterfly(data, memoryBank, context = {}, options = {}) {
     const rawNodes = Array.isArray(data?.nodes) ? data.nodes.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS) : [];
-    if (rawNodes.length < 10) throw new Error('平行时空节点不足：共 ' + rawNodes.length + ' 条，必须包含主线、至少 8 个普通分歧和唯一 Ω。');
+    if (rawNodes.length < 3) throw new Error('平行时空节点不足：必须包含主线、至少一个普通分歧和唯一 Ω。');
     const omegaIndexes = rawNodes.map((node, index) => isOmegaCandidate(node) ? index : -1).filter(index => index >= 0);
     if (omegaIndexes.length !== 1 || omegaIndexes[0] !== rawNodes.length - 1) {
         throw new Error('蝴蝶效应必须只有一个 Ω / TRUE ENDING，且它必须是数组末项。');
     }
     const main = normalizedMainNode(rawNodes[0], memoryBank, context);
     const normalBranches = rawNodes.slice(1, -1).map((node, index) => normalizeButterflyBranch(node, index + 1, memoryBank, context));
-    if (normalBranches.length < 8) throw new Error('普通平行分歧不足：得到 ' + normalBranches.length + ' 条，至少需要 8 条。');
     const axes = new Set(normalBranches.map(node => node.primaryAxis));
-    const missingAxes = BUTTERFLY_PRIMARY_AXES.filter(axis => !axes.has(axis));
+    const expectedAxes = options.expectedAxes;
+    if (expectedAxes && (normalBranches.length !== expectedAxes.length
+        || normalBranches.some((node, index) => node.primaryAxis !== expectedAxes[index]))) {
+        throw new Error('观测节点与本次本地计划不符；保留旧内容。');
+    }
+    if (normalBranches.length < 8 && axes.size !== normalBranches.length) throw core_butterflyContract.butterflyValidationError('unique');
+    const missingAxes = normalBranches.length >= 8 ? BUTTERFLY_PRIMARY_AXES.filter(axis => !axes.has(axis)) : [];
     if (missingAxes.length) throw new Error('平行世界差异维度不足，缺少 primaryAxis：' + missingAxes.join('/') + '。');
     const labels = new Set();
     const signatures = new Set();
@@ -13996,31 +14108,33 @@ function normalizeButterfly(data, memoryBank, context = {}) {
 }
 
 async function generateButterflyWithRepair(context, memoryBank, origin, taskKey, dependencies = {}) {
+    const plan = core_butterflyContract.buildButterflyPlan(memoryBank);
+    if (!plan.total) throw new Error('当前没有可用记忆，请先生成当前窗口档案。');
     const request = dependencies.request || generation_client.requestValidatedSegment;
     const basePrompt = generation_prompts.PROMPTS[core_constants.MODE.BUTTERFLY](context, memoryBank);
     const contextEnvelope = dependencies.contextEnvelope ?? await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generation_client.generationWorldInfoScanTerms(core_constants.MODE.BUTTERFLY, context) });
     const nodes = [];
     const labels = new Set(), signatures = new Set(), monologues = new Set();
     // Local scheduling, never a model-authored slot count. Partial nodes are not formal sessions.
-    const slots = ['MAIN', ...BUTTERFLY_PRIMARY_AXES, 'OMEGA'];
+    const slots = ['MAIN', ...plan.axes, 'OMEGA'];
     for (let index = 0; index < slots.length; index++) {
         const slot = slots[index];
         const existing = nodes.map(node => ({ label: node.label, primaryAxis: node.primaryAxis, worldSpec: node.worldSpec }));
         const prompt = basePrompt + '\n【本请求的分段输出规则替代上面的整批输出 schema】'
-            + '\n本地将组装十个节点；你这次只输出 {"node":{当前一个完整节点}}，不要返回 nodes 数组或其他节点。'
-            + '\nCURRENT_SLOT_JSON:' + JSON.stringify({ index, kind: slot, primaryAxis: index > 0 && index < 9 ? slot : undefined })
+            + '\n本地将组装 ' + plan.total + ' 个节点；你这次只输出 {"node":{当前一个完整节点}}，不要返回 nodes 数组或其他节点。'
+            + '\nCURRENT_SLOT_JSON:' + JSON.stringify({ index, kind: slot, primaryAxis: PRIMARY_AXIS_SET.has(slot) ? slot : undefined })
             + '\nMAIN 只写主时间线；普通槽位严格使用指定 primaryAxis；OMEGA 只写唯一终点。每节点继续遵守原字数、来源和关系契约。'
             + '\nEXISTING_VALID_WORLD_INDEX_JSON:' + JSON.stringify(existing)
             + (slot === 'OMEGA' ? '\nVALIDATED_VOICES_JSON:' + JSON.stringify(nodes.map(node => ({ label: node.label, monologue: node.monologue.slice(0, 700), intervention: node.intervention.slice(0, 500) }))) : '');
-        const node = await request(prompt, '蝴蝶效应 · 节点 ' + (index + 1) + '/10 · ' + slot,
+        const node = await request(prompt, '蝴蝶效应 · 节点 ' + (index + 1) + '/' + plan.total + ' · ' + slot,
             { maxTokens: 4096, temperature: 0.55, context, contextEnvelope, origin, taskKey: taskKey + ':slot:' + index, mode: core_constants.MODE.BUTTERFLY, background: true },
             value => {
                 const raw = value?.node;
                 if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw core_butterflyContract.butterflyValidationError('worldSpec');
                 const candidate = index === 0 ? normalizedMainNode(raw, memoryBank, context)
-                    : index === 9 ? normalizeButterflyOmega(raw, context)
+                    : slot === 'OMEGA' ? normalizeButterflyOmega(raw, context)
                     : normalizeButterflyBranch(raw, index, memoryBank, context);
-                if (index > 0 && index < 9) {
+                if (PRIMARY_AXIS_SET.has(slot)) {
                     const label = core_incremental.normalizedContentKey(candidate.label, 180);
                     const signature = butterflyWorldSignature(candidate);
                     const monologue = core_incremental.normalizedContentKey(candidate.monologue, 12000);
@@ -14031,13 +14145,13 @@ async function generateButterflyWithRepair(context, memoryBank, origin, taskKey,
                 return candidate;
             });
         nodes.push(node);
-        if (index > 0 && index < 9) {
+        if (PRIMARY_AXIS_SET.has(slot)) {
             labels.add(core_incremental.normalizedContentKey(node.label, 180));
             signatures.add(butterflyWorldSignature(node));
             monologues.add(core_incremental.normalizedContentKey(node.monologue, 12000));
         }
     }
-    return normalizeButterfly({ nodes }, memoryBank, context);
+    return normalizeButterfly({ nodes }, memoryBank, context, { expectedAxes: plan.axes });
 }
 function butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) {
     const existing = (Array.isArray(previous?.nodes) ? previous.nodes.slice(1, -1) : []).slice(-core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({

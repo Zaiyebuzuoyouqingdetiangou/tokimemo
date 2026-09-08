@@ -1,4 +1,30 @@
 // Code-owned limits and feedback only. Never echo model/source text or exception messages.
+export const BUTTERFLY_PRIMARY_AXES = Object.freeze([
+    'era', 'identity', 'occupation', 'location', 'decision', 'encounter', 'bond', 'fate',
+]);
+
+// Initial generation only. Never resize a saved session after the archive grows.
+export function buildButterflyPlan(memoryBank) {
+    const ids = new Set();
+    for (const item of Array.isArray(memoryBank?.memories) ? memoryBank.memories : []) {
+        const id = typeof item?.id === 'string' ? item.id.trim() : '';
+        // Match MAIN's evidence vocabulary: summary alone is not a source anchor.
+        // Keep this planning module host-independent (evidence.js imports the runtime).
+        const clean = value => String(value ?? '').replace(/\r\n?/g, '\n').replace(/\u0000/g, '').trim();
+        const anchors = (Array.isArray(item?.anchors) ? item.anchors : []).map(clean).filter(Boolean).slice(0, 8);
+        if (/^M\d{3,}$/.test(id) && [clean(item?.title), ...anchors].some(value => value.length >= 2)) ids.add(id);
+    }
+    const count = Math.min(BUTTERFLY_PRIMARY_AXES.length, Math.ceil(ids.size / 3));
+    return { memoryCount: ids.size, axes: BUTTERFLY_PRIMARY_AXES.slice(0, count), total: count ? count + 2 : 0 };
+}
+
+export function butterflyPlanPrompt(memoryBank) {
+    const plan = buildButterflyPlan(memoryBank);
+    return plan.total
+        ? '本次初始观测共 ' + plan.total + ' 个节点：MAIN、' + plan.axes.length + ' 个普通分歧、唯一末项 OMEGA。普通分歧 primaryAxis 依次为 ' + plan.axes.join(' / ') + '；不可少项或额外凑数。'
+        : '当前没有可用档案锚点，不生成观测节点。';
+}
+
 export const BUTTERFLY_LIMITS = Object.freeze({ monologueHan: 100, monologueFirstPerson: 3, interventionHan: 40, omegaHan: 160, omegaFirstPerson: 4, systemHan: 30 });
 export const BUTTERFLY_GENERATION_CONTRACT = `【节点完整性契约】
 MAIN 与普通分歧的 monologue 至少 ${BUTTERFLY_LIMITS.monologueHan} 个汉字，至少 ${BUTTERFLY_LIMITS.monologueFirstPerson} 次明确“我”的第一人称视角，不用旁白代替发言。

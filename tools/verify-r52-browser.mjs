@@ -77,6 +77,7 @@ async function mountSettings(page, prefix = '') {
         (await import(prefix + '/src/ui/settingsPanel.js')).mountSettings();
     }, prefix);
     await page.locator('.rmt-settings-header').click();
+    await page.locator('[data-rmt-settings-section="auto"]>summary').click();
 }
 try {
     const a = await context.newPage(), b = await context.newPage(); observe(a); observe(b);

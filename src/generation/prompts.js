@@ -277,6 +277,7 @@ export const PROMPTS = {
     [core_constants.MODE.CALENDAR]: (context, memoryBank) => calendarPrompt(context, memoryBank),
     [core_constants.MODE.BUTTERFLY]: (context, memoryBank) => `${promptSafetyBoundary(context, '蝴蝶效应')}
 ${core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
+${core_butterflyContract.butterflyPlanPrompt(memoryBank)}
 主时间线只从下面较小的档案锚点集中取证；平行分歧主要依据受控角色卡/人设/世界书推演。
 UNTRUSTED_TIMELINE_ANCHORS_JSON:
 ${promptArchiveSlice(memoryBank, 16)}
@@ -287,7 +288,7 @@ ${promptArchiveSlice(memoryBank, 16)}
 
 核心叙事结构：
 1. MAIN 是现世主时间线锚点。
-2. EG01～EG08（或更多）才是平行世界；每个平行世界都有【那个世界里的 {{char}}】自己的第一人称发言。
+2. 本地计划中的普通分歧才是平行世界；每个平行世界都有【那个世界里的 {{char}}】自己的第一人称发言。
 3. 最后一项【观测点 Ω】不是另一个平行世界，而是【现世 {{char}} 已经依次看完前面所有平行世界发言之后】回到主时间线的最终观测点。因此 Ω 不存在“平行体”，不得生成平行体独白。
 
 JSON 结构必须严格为：
@@ -348,11 +349,11 @@ JSON 结构必须严格为：
 }
 
 硬性要求：
-- nodes 至少 10 条：第 1 条必须是“主时间线（锁定）”；其后至少 8 条互不重复的平行世界分歧；数组最后 1 条必须是【观测点 Ω】。
+- nodes 数量严格遵守本次本地初始观测计划：第 1 条必须是“主时间线（锁定）”；中间是计划指定的互不重复的平行分歧；数组最后 1 条必须是【观测点 Ω】。记忆较少时不要凑满十个。
 - 主时间线必须 locked=true、trueEnding=false，并至少引用 1 条当前手动档案 sourceMemoryIds + sourceMemoryAnchor，用来锚定“当前世界”。
 - 普通平行节点是模拟，不得伪装成已经发生的回忆；它们可以不带 sourceMemoryIds。若从某段档案作为分歧起点，可以附带真实引用，但平行世界里新增的事情仍只能写成模拟。
-- 至少 8 个普通平行节点要从角色卡、人设、世界书中的身份、职业、时代、地点、关系条件、选择或命运约束向外推演；不能只把同一场景换措辞。
-- 前 8 个普通平行节点的 worldSpec.primaryAxis 必须依次覆盖且不重复：era / identity / occupation / location / decision / encounter / bond / fate。worldSpec 其余字段都要填写具体内容，8 份组合必须实质不同；thirdPartyRomance 必须始终为 false。
+- 普通平行节点要从角色卡、人设、世界书中的身份、职业、时代、地点、关系条件、选择或命运约束向外推演；不能只把同一场景换措辞。
+- 普通平行节点的 worldSpec.primaryAxis 必须按本地计划依次填写且不重复。worldSpec 其余字段都要填写具体内容，各份组合必须实质不同；thirdPartyRomance 必须始终为 false。
 - 每个普通平行节点的 monologue 都必须是【那个平行世界里的 {{char}} 本人】第一人称发言，不少于 100 个汉字，有具体生活、处境、记忆感与情绪；不能由现世 {{char}} 代替平行体说话。
 - 每个普通平行节点的 intervention 才是【现世 {{char}}】刚看完该平行体后的即时反应；不要把两种说话者混在一个字段里。
 - 最后一项必须 id="OMEGA"、trueEnding=true，label 包含“观测点 Ω”或“TRUE ENDING”。【Ω 不是平行世界，不存在平行体】；它的 monologue 必须严格为空字符串 ""，绝对禁止再写平行体发言。
@@ -363,6 +364,7 @@ JSON 结构必须严格为：
 - 禁止出现任何前任、前女友相关情节。
 - 禁止出现 {{char}} 与除了 {{user}} 以外任何人恋爱、结婚或组建家庭；第三方只能保持非恋爱关系。
 - Ω 必须把至少 3 种前述命运差异汇入最终判断，并清楚表达：跨越不可能仍然相遇是命运/奇迹，而 {{user}} 是所有世界线收敛后的唯一解。
+- 当普通分歧只有一两个时，三类差异指这些已生成 worldSpec 中真实改变的时代、身份、职业等条件，不是要求三个世界。Ω 只能回应实际已通过的节点，不能杜撰未观测的世界。
 - 只输出结构化 JSON；视觉快照、像素边框、噪点、1 秒干扰动画由插件本地渲染，不由模型输出 HTML/CSS。蝴蝶效应页面现有 UI 完全冻结，本次只生成内容，不提出或描述任何 UI 改版。`,
     [core_constants.MODE.ENDING]: (context, memoryBank) => modes_ending.endingOutlinePrompt(context, memoryBank),
     [core_constants.MODE.HEART]: (context, memoryBank) => modes_heart.heartCorePrompt(context, memoryBank),
