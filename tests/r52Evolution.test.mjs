@@ -121,7 +121,8 @@ test('r52 production butterfly pipeline retries only a truncated slot and delive
     globalThis.document = { getElementById() { return null; }, querySelector() { return null; }, querySelectorAll() { return []; } };
     globalThis.fetch = () => { throw Error('Network is forbidden'); };
     try {
-        const result = await generateButterflyWithRepair(context, bank, null, 'r52-butterfly', { contextEnvelope: '' });
+        const largeBank = { ...bank, memories: Array.from({ length: 24 }, (_, i) => ({ ...bank.memories[0], id: 'M' + String(i + 1).padStart(3, '0') })) };
+        const result = await generateButterflyWithRepair(context, largeBank, null, 'r52-butterfly', { contextEnvelope: '' });
         assert.equal(result.nodes.length, 10);
         assert.deepEqual(calls, [0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9]);
         assert.equal(state.activeGenerationTasks.size, 0);
