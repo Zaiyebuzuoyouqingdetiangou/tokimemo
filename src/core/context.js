@@ -48,6 +48,17 @@ export function assertRuntimeLifecycleCurrent(lifecycleEpoch) {
     return true;
 }
 
+// ST/TT hide normal dialogue by toggling is_system, not by removing a floor.
+// Recover only explicitly attributed dialogue, never system/tool messages or guessed names.
+export function isArchiveDialogueMessage(message, context) {
+    if (!message?.is_system) return true;
+    if (typeof message.is_user !== 'boolean' || ['system', 'tool', 'developer'].includes(message.role)
+        || message.extra?.type || message.extra?.uses_system_ui || message.extra?.tool_invocations) return false;
+    const name = core_text.normalizeText(message.name, 120);
+    const expected = core_text.normalizeText(message.is_user ? context?.name1 : context?.name2, 120);
+    return !!name && !!expected && name === expected;
+}
+
 export async function buildChatSnapshot(context = currentCharacterGuard(), options = {}) {
     const rawChat = Array.isArray(context.chat) ? context.chat : [];
     const usable = [];
@@ -74,7 +85,7 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
     for (let index = 0; index < rawChat.length; index += 1) {
         const message = rawChat[index];
         const text = core_text.normalizeText(message?.mes, 8000);
-        if (text && !message?.is_system) {
+        if (text && isArchiveDialogueMessage(message, context)) {
             const isUser = message?.is_user === true;
             const item = {
                 index: index + 1,

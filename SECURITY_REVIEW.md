@@ -1,3 +1,7 @@
+## 0.8.50 / r54.0 changed-surface review
+
+Changed paths: hidden-floor evidence classification, selected setting-worldbook ingress, exact evidence phrase filtering, room pet ownership, sparse travel validation/cache, reversible overlay close, scoped settings CSS, auto status/event naming. No provider endpoint, API key, storage schema, delete fence, CAS, image adapter or third-party plugin changes. Hidden messages require explicit matching speaker metadata and no system/tool marker. Worldbook reads retain completeness/lifecycle checks and reject live role/chat/selection drift; detached A reads only A's selected books. Exact-quote exemptions are bounded by mode/path/source; generated dialogue is not exempt. Local TT stylesheet checks are compatibility probes, not a claim of native iOS or actual model acceptance. See RELEASE_VALIDATION-r54.md for fresh checks and limits.
+
 ## 0.8.49 / r53.0 changed-surface review
 
 - Local semantic HEX colours and validated ink pairs only; model-controlled CSS, selectors, paths and scripts remain forbidden. Generated notes remain escaped text. Card opacity does not fade text. Extreme custom-colour decorative tints are reduced if contrast would fail.

@@ -461,9 +461,9 @@ export function mountSettings() {
             <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
           </div>
           <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
-          <label class="checkbox_label rmt-settings-check"><input data-rmt-room-life-auto type="checkbox"> 每天首次打开房间时允许一次“今日生活”自动请求</label>
-          <label class="checkbox_label rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"> 手动确认 SillyTavern Image Generation 已启用（自动检测失败时使用 /sd 兜底）</label>
-          <label class="checkbox_label rmt-settings-check"><input data-rmt-tt-display type="checkbox"> TT 显示模式（勾选＝r32 顶部安全区；不勾选＝全屏）</label>
+          <label class="rmt-settings-check"><input data-rmt-room-life-auto type="checkbox"><span>每天首次打开房间时允许一次“今日生活”自动请求</span></label>
+          <label class="rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"><span>手动确认 SillyTavern Image Generation 已启用（自动检测失败时使用 /sd 兜底）</span></label>
+          <label class="rmt-settings-check"><input data-rmt-tt-display type="checkbox"><span>TT 顶部安全区</span></label>
           </div>
         </details>
         <details class="rmt-settings-card" data-rmt-settings-section="filter">

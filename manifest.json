@@ -1,15 +1,15 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.49-visual-adaptive-r53.0",
+  "js": "index.js?heartbeat=0.8.50-tt-compat-r54.0",
   "author": "Toto",
-  "version": "0.8.49",
+  "version": "0.8.50",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r53：恢复语义纸张与配色层次，设置分区默认折叠，蝴蝶效应按记忆量生成3至10节点；保留已有档案。",
+  "description": "r54：关闭转后台不依赖确认框，修复 TT 设置裁切、隐藏楼层增量、房间宠物与稀疏出行路线；保留已有档案。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

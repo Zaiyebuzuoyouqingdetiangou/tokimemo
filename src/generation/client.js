@@ -66,13 +66,26 @@ function worldPresentationProfileBinding(context) {
 }
 
 export async function buildWorldPresentationContext(context, memoryBank, mode) {
+    let selectedSettingText = '';
+    if ([core_constants.MODE.ROOM, core_constants.MODE.TRAVEL].includes(mode)) {
+        const selected = await archive_repository.collectSelectedMemoryWorldInfo(context, core_context.getChatId(context), null, { settingsOnly: true });
+        if (selected.coverage.status !== 'complete') throw core_text.safeUserError('所选设定世界书读取不完整，本次未生成；旧内容保留。请检查来源后重试。', 'RMT_SETTING_SOURCE_PARTIAL');
+        selectedSettingText = selected.entries.map(entry => core_contextTags.stripExcludedTags(entry.content, core_contextTags.excludedTagsForContext(context))).join('\n');
+    }
     const contextEnvelope = await core_cache.buildControlledContextEnvelope(context, {
         worldInfoScanTerms: generationWorldInfoScanTerms(mode, context),
+        selectedSettingText,
     });
+    const settingEvidence = core_worldPresentation.controlledWorldEvidence(contextEnvelope, null);
+    // The local evidence reader also has a combined card/world budget. Never send
+    // selected text that the validator would silently drop from the tail.
+    if (selectedSettingText && !settingEvidence.includes(core_text.normalizeText(selectedSettingText, core_constants.MAX_MEMORY_WORLD_INFO_CHARS))) {
+        throw core_text.safeUserError('所选设定超出本次完整证据容量，请减少所选条目后重试；旧内容保留。', 'RMT_SETTING_SOURCE_PARTIAL');
+    }
     return {
         contextEnvelope,
         profile: core_worldPresentation.resolveWorldPresentation(contextEnvelope, memoryBank, worldPresentationProfileBinding(context)),
-        settingEvidence: core_worldPresentation.controlledWorldEvidence(contextEnvelope, null),
+        settingEvidence,
         characterEvidence: core_worldPresentation.controlledCharacterEvidence(contextEnvelope),
     };
 }
@@ -160,32 +173,37 @@ export const GENERATED_PHRASE_EVIDENCE_KEYS = new Set([
 export function generatedPhrasePolicyText(settings) {
     const banned = core_settings.normalizeBannedGeneratedPhrases(settings?.bannedGeneratedPhrases);
     if (!banned.length) return '';
-    return `\n\n【新生成文本禁用词】除 sourceMemoryAnchor / relationshipSourceMemoryAnchor / sourceExternalAnchor 等证据锚点必须忠实引用原档案外，任何新生成的标题、叙述、角色台词、模拟用户台词、摘要、场景文本中都禁止出现以下词语：${banned.map(item => `「${item}」`).join('、')}。不要解释这条规则，只需改用符合人设且不含禁用词的表达。`;
+    return `\n\n【新生成文本禁用词】除 sourceMemoryAnchor / relationshipSourceMemoryAnchor / sourceExternalAnchor 等证据锚点必须忠实引用原档案外，任何新生成的标题、叙述、角色台词、模拟用户台词、摘要、场景文本中都禁止出现以下词语：${banned.map(item => `「${item}」`).join('、')}。房间 pets[].sourceEvidence、visualProfile.explicitEvidence 以及出行 locations[].sourceSettingEvidence 也只能逐字引用本次受控设定原文，不能改写或补造证据；这些证据中的原词不等于允许在台词中使用。不要解释这条规则，只需改用符合人设且不含禁用词的表达。`;
 }
 
-export function findBannedGeneratedPhrase(value, banned, key = '') {
+export function findBannedGeneratedPhrase(value, banned, key = '', evidence = null, path = '') {
     if (GENERATED_PHRASE_EVIDENCE_KEYS.has(key)) return '';
+    const settingPath = evidence?.mode === core_constants.MODE.ROOM
+        ? /^(?:pets\.\d+\.sourceEvidence|visualProfile\.explicitEvidence\.[a-zA-Z.]+)$/.test(path)
+        : evidence?.mode === core_constants.MODE.TRAVEL && /^locations\.\d+\.sourceSettingEvidence$/.test(path);
+    if (settingPath && typeof value === 'string' && value.length <= 800
+        && core_worldPresentation.controlledEvidenceContains(evidence.settingText || '', value)) return '';
     if (typeof value === 'string') return banned.find(phrase => phrase && value.includes(phrase)) || '';
     if (Array.isArray(value)) {
-        for (const item of value) {
-            const found = findBannedGeneratedPhrase(item, banned, key);
+        for (const [index, item] of value.entries()) {
+            const found = findBannedGeneratedPhrase(item, banned, key, evidence, path ? `${path}.${index}` : String(index));
             if (found) return found;
         }
         return '';
     }
     if (value && typeof value === 'object') {
         for (const [childKey, childValue] of Object.entries(value)) {
-            const found = findBannedGeneratedPhrase(childValue, banned, childKey);
+            const found = findBannedGeneratedPhrase(childValue, banned, childKey, evidence, path ? `${path}.${childKey}` : childKey);
             if (found) return found;
         }
     }
     return '';
 }
 
-export function assertNoBannedGeneratedPhrase(value, settings) {
+export function assertNoBannedGeneratedPhrase(value, settings, evidence = null) {
     const banned = core_settings.normalizeBannedGeneratedPhrases(settings?.bannedGeneratedPhrases);
     if (!banned.length) return;
-    const found = findBannedGeneratedPhrase(value, banned);
+    const found = findBannedGeneratedPhrase(value, banned, '', evidence);
     if (!found) return;
     const error = new Error(`模型新生成内容命中禁用词「${found}」。本次结果没有保存，也不会自动重试；请手动重试，或在插件设置里调整“生成禁用词”。历史聊天原文和证据锚点不会被改写。`);
     error.code = 'RMT_BANNED_GENERATED_PHRASE';
@@ -367,7 +385,9 @@ ${expanded}${phrasePolicy}`;
         requestMaxTokens: responseLength,
         configuredMaxTokens: settings.maxTokens,
     });
-    if (options.enforceGeneratedPhrasePolicy === true) assertNoBannedGeneratedPhrase(parsed, settings);
+    if (options.enforceGeneratedPhrasePolicy === true) assertNoBannedGeneratedPhrase(parsed, settings, {
+        mode: options.mode, settingText: core_worldPresentation.controlledWorldEvidence(contextEnvelope, null),
+    });
     return parsed;
 }
 

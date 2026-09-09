@@ -5,15 +5,27 @@
 ## 当前候选
 
 - 产品名：心跳回忆
-- version：`0.8.49`
-- BUILD / runtime cache-bust：`0.8.49-visual-adaptive-r53.0`
+- version：`0.8.50`
+- BUILD / runtime cache-bust：`0.8.50-tt-compat-r54.0`
 - 正式档案 key：`heartbeatMemoriesArchiveV3`
 - 派生缓存 key：`heartbeatMemoriesTheaterV3`
 - 压缩格式：`gzip-base64-v1`
 - Calendar / Phone / Room / Travel session：v6 / v4 / v3 / v4
 - SillyTavern 最低版本：`1.18.0`；一键配置入口明确标注 `1.1.18`
 
-V3 metadata key 为旧档案兼容边界，不随发布版本改名。浏览器加载 r53 runtime 由 manifest 与 index 中一致的 BUILD query 隔离，不能继续命中旧 bundle。
+V3 metadata key 为旧档案兼容边界，不随发布版本改名。浏览器加载 r54 runtime 由 manifest 与 index 中一致的 BUILD query 隔离，不能继续命中旧 bundle。
+
+## r54 当前增补契约
+
+- 关闭档案室直接关闭原生 dialog 并隐藏插件，不询问同步 confirm，不取消任务；宿主切聊事件仍不拦截。删除/重建确认、整页 beforeunload、原聊天提交围栏保留。后台仅指当前页面仍存活，不承诺关闭 TT 应用后继续请求。
+- TT 隐藏普通角色/用户楼层只改变 is_system，不应改变档案正文指纹。仅严格布尔 is_user、精确匹配对应 name1/name2 且无真正系统/工具标记的隐藏消息可作为聊天证据；同一判定用于快照与可用消息计数，不改宿主正文。旧消息真正编辑/删除/重排仍拒绝覆盖；旧档案若原先已经漏收隐藏楼层，不得静默重设基线。
+- 自动间隔仍按当前 chat.length 原始楼层计数，新增支持 event_types 宿主命名；缺少 Web Locks 时每项显示不可用，不启用无锁替代方案。付费请求前持久化、聊天隔离、失败退避不变。旧档案基线不一致可记录唯一白名单 failureCode=RMT_ARCHIVE_PREFIX_CHANGED 并显示固定提示，不记录异常原文或聊天。
+- Room 必需宠物必须有同一物种、同一有界分句的所有权证据；不能把泛词“宠物”或别句动物画、职业、他人宠物当成必需物种。原 no-front-face、真实历史与宠物校验仍在。
+- Travel 初次 1～8 个已验证地点即可，不要求 near/far 各固定数；无有效地点固定安全错误、保留旧结果。不改本地地图/对白/明信片结构，缓存重开允许一站，缺少近/远范围显示简短空状态。
+- Room/Travel 复用已有显式选书只读入口，将目标档案的非历史设定世界书放进同一受控上下文；不恢复 detached context 的宿主 dry-run，不读取当前 B 的选择/Persona。live 读取前后核对角色/聊天/选择/lifecycle，缺失条目或超限明确失败，不能部分冒充完整。选书合计与 dry-run 不超过 16000 字符，且整段所选设定必须完整保留于本地 32000 字符合并证据中，否则请求前停止。
+- 新生成禁词仅对 Room pets[].sourceEvidence、visualProfile.explicitEvidence 及 Travel locations[].sourceSettingEvidence 的受控逐字短引文作有限豁免；普通台词、伪造引文和其他路径不豁免。
+- TT 样式修复仅限插件自己的设置字段与复选标签：自然高度、文本换行、移除覆盖文字的伪元素，保留可点击控件。r53 语义纸色/正文对比/设置折叠保留，不修改 TT 或用户主题。
+- 本轮 TT 源码核对固定提交 9693a4ec47cd4552f90878bccab453f176de0f18；旧窗口化版本、用户自定义主题及真实移动 WebView/模型仍需实测。源码由主 agent 修改，独立 reviewer 只读。
 
 ## r53 当前增补契约（覆盖下方旧版固定数量约束）
 

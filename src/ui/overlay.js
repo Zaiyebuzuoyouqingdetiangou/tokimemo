@@ -76,33 +76,11 @@ export function overlayCloseButtonFromEvent(event, overlay) {
     return button;
 }
 
-// While a generation task is still bound to this chat the archive overlay stays
-// modal on purpose: it covers SillyTavern, so keeping it open is what actually
-// prevents the user from switching or closing the chat mid-flight. The override
-// is always available so a stalled request can never trap anyone.
-export function confirmLeaveDuringGeneration({
-    title = '生成还没结束，确定要离开吗？',
-    action = '关闭档案室',
-    allowUnavailable = false,
-} = {}) {
-    const labels = core_requestCoordinator.currentChatBlockingTasks();
-    if (!labels.length) return true;
-    const list = labels.slice(0, 4).map(label => `· ${label}`).join('\n');
-    const more = labels.length > 4 ? `\n· 以及其它 ${labels.length - 4} 项` : '';
-    return confirmExplicitAction(
-        title,
-        `当前聊天窗口还有 ${labels.length} 项心跳回忆任务在进行：\n${list}${more}\n\n只${action}、继续留在当前网页时，任务会在页面内后台运行。切换聊天后，成功完成的结果会先在本机安全等待，回到原聊天再写回。刷新或关闭整个网页仍会中断尚未完成的模型/生图请求。`,
-        { destructive: true, unavailableFallback: allowUnavailable },
-    );
-}
-
 export function closeArchiveOverlayFromUser() {
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
     if (!overlay || overlay.hidden) return closeOverlay();
-    if (!confirmLeaveDuringGeneration({ allowUnavailable: true })) {
-        globalThis.toastr?.info?.('已为你保持档案室打开，避免生成期间误切聊天窗口。', '心跳回忆');
-        return overlay;
-    }
+    // Closing this reversible view is not cancelling a task. Native confirm may return
+    // false without displaying UI in a WebView; it must never trap the modal on screen.
     if (runtimeState.busy) runtimeState.activeTaskBackgrounded = true;
     if (core_requestCoordinator.hasAnyTask()) globalThis.toastr?.info?.('当前任务会继续在后台运行，完成后会通知你。', '心跳回忆');
     return closeOverlay();

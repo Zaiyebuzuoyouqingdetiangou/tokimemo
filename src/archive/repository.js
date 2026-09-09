@@ -342,17 +342,22 @@ export async function loadMemoryWorldInfoBook(context, worldName, signal = null)
     return worldInfoEntriesFromData(name, data);
 }
 
-export async function collectSelectedMemoryWorldInfo(context, expectedChatId, signal) {
+export async function collectSelectedMemoryWorldInfo(context, expectedChatId, signal, { settingsOnly = false } = {}) {
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const sourceScope = core_context.chatScopeKey(context, expectedChatId);
+    const selection = getMemoryWorldInfoSelection(context);
+    const selectionSignature = JSON.stringify(selection);
     const assertSourceScope = () => {
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
         // Detached archive tasks own a source-chat selection captured from that
         // exact chat header; they must not consult the currently visible chat.
         if (Object.hasOwn(context, '__rmtArchiveTargetEntryId') && context.__rmtArchiveTargetEntryId) return;
-        if (core_context.comparableChatId(core_context.getChatId(core_context.currentCharacterGuard())) !== core_context.comparableChatId(expectedChatId)) throw new DOMException('Chat changed', 'AbortError');
+        const current = core_context.currentCharacterGuard();
+        if (core_context.chatScopeKey(current) !== sourceScope
+            || JSON.stringify(getMemoryWorldInfoSelection(current)) !== selectionSignature) throw new DOMException('Source scope changed', 'AbortError');
     };
-    const selection = getMemoryWorldInfoSelection(context);
+    assertSourceScope();
     const emptyCoverage = { status: 'complete', returned: 0, total: 0, reason: '当前没有选择世界书条目' };
     if (!selection.books.length) return { entries: [], books: [], totalChars: 0, fingerprint: 'none', coverage: emptyCoverage, historyCoverage: { ...emptyCoverage, reason: '当前没有标记为历史摘要的世界书条目' } };
     const entries = [];
@@ -366,7 +371,7 @@ export async function collectSelectedMemoryWorldInfo(context, expectedChatId, si
     let historyImported = 0;
     let historyTruncated = 0;
     let historyFailedBooks = 0;
-    for (const book of selection.books.slice(0, core_constants.MAX_MEMORY_WORLD_INFO_BOOKS)) {
+    for (const book of selection.books.filter(book => !settingsOnly || book.historySource !== true).slice(0, core_constants.MAX_MEMORY_WORLD_INFO_BOOKS)) {
         assertSourceScope();
         let loaded;
         try { loaded = await loadMemoryWorldInfoBook(context, book.name, signal); }
@@ -391,6 +396,8 @@ export async function collectSelectedMemoryWorldInfo(context, expectedChatId, si
         assertSourceScope();
         const uidSet = new Set(book.entryUids.map(String));
         const chosen = book.all ? loaded : loaded.filter(entry => uidSet.has(String(entry.uid)));
+        const missing = !book.all && chosen.length < uidSet.size;
+        if (missing) { failedBooks += 1; if (book.historySource === true) historyFailedBooks += 1; }
         let imported = 0;
         let bookTruncated = 0;
         for (const entry of chosen) {
@@ -417,8 +424,11 @@ export async function collectSelectedMemoryWorldInfo(context, expectedChatId, si
             requested: chosen.length,
             imported,
             truncated: bookTruncated,
-            coverage: bookTruncated ? 'truncated' : 'complete',
-            coverageInfo: bookTruncated
+            error: missing,
+            coverage: bookTruncated ? 'truncated' : missing ? 'partial' : 'complete',
+            coverageInfo: missing
+                ? { status: 'partial', returned: imported, total: uidSet.size, reason: '已选条目有缺失，本次读取不完整' }
+                : bookTruncated
                 ? { status: 'truncated', returned: imported, total: chosen.length, reason: `${bookTruncated} 条超过本次世界书条数/字符上限，未切半保存` }
                 : { status: 'complete', returned: imported, total: chosen.length, reason: '已完整读取这本世界书中明确选择的条目' },
         });
@@ -1319,7 +1329,7 @@ export function getCurrentUsableMessageCount(context = core_context.currentChara
     if (cached && cached.rawLength === rawChat.length) return cached.count;
     let count = 0;
     for (const message of rawChat) {
-        if (message?.is_system) continue;
+        if (!core_context.isArchiveDialogueMessage(message, context)) continue;
         const text = String(message?.mes ?? '');
         if (!text || !/\S/.test(text)) continue;
         count += 1;
@@ -1587,7 +1597,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     if (incrementalUpdate) {
         const oldChatFingerprint = archivedChatFingerprint(existing);
         if (!oldChatFingerprint || previousMessageCount > snapshot.totalMessages || snapshot.prefixFingerprint !== oldChatFingerprint) {
-            throw new Error('检测到已归档范围内的旧聊天消息被编辑、删除或重排。为了不让旧记忆 ID 和已生成 ADV EVENT 的证据引用错位，本次不会自动覆盖。请使用“完全重建档案”明确重做；普通“更新当前窗口档案”只处理旧档案之后新增的聊天。');
+            throw core_text.safeUserError('旧档案与当前历史基线不一致，可能是旧消息被修改或旧版漏收了隐藏楼层。本次未覆盖；请先检查来源，不必删除档案。', 'RMT_ARCHIVE_PREFIX_CHANGED');
         }
     }
 

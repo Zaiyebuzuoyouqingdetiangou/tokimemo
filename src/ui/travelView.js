@@ -325,7 +325,7 @@ export function renderTravel() {
           ${selectedDetail}
           <div class="rmt-travel-map-key"><span><i class="near"></i>附近 · 点击听他说</span><span><i class="far"></i>远方 · 点击收下纪念</span></div>
         </section>
-        <aside class="rmt-travel-index"><div><small>ROUTE INDEX</small><h3>地图坐标</h3></div><nav>${legendRows}</nav></aside>
+        <aside class="rmt-travel-index"><div><small>ROUTE INDEX</small><h3>地图坐标</h3></div>${!near.length ? '<p>还没有可确认的附近地点。</p>' : ''}${!far.length ? '<p>远方坐标待故事留下线索。</p>' : ''}<nav>${legendRows}</nav></aside>
       </div>
     </div>`;
 }

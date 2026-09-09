@@ -22,9 +22,10 @@ export function refreshAutoUpdateStatus() {
         for (const element of elements) {
             const entry = raw?.[element.dataset.rmtAutoStatus];
             const rule = rules[element.dataset.rmtAutoStatus];
-            element.textContent = !rule?.enabled ? '已关闭' : entry && entry.signature === rule.every + ':' + rule.epoch
+            element.textContent = !rule?.enabled ? '已关闭' : autoUpdateAvailability() || (entry && entry.signature === rule.every + ':' + rule.epoch
                 && labels[entry.status] && Number.isSafeInteger(entry.attemptFloor)
-                ? entry.attemptFloor + ' 楼 · ' + labels[entry.status] : '尚未计数';
+                ? entry.attemptFloor + ' 楼 · ' + (entry.status === 'failed' && entry.failureCode === 'RMT_ARCHIVE_PREFIX_CHANGED'
+                    ? '原档案基线不一致 · 请检查来源，旧内容保留' : labels[entry.status]) : '尚未计数');
         }
     } catch {}
 }
@@ -43,7 +44,7 @@ export function autoUpdateAvailability() {
 
 export function startAutoUpdates() {
     stopAutoUpdates();
-    const context = core_context.getContext(), source = context.eventSource, types = context.eventTypes || {};
+    const context = core_context.getContext(), source = context.eventSource, types = context.eventTypes || context.event_types || {};
     if (!source?.on || autoUpdateAvailability()) return;
     const snapshot = () => {
         try {

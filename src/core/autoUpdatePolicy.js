@@ -43,7 +43,7 @@ export function createFloorScheduler({ snapshot, read, write, run, lock, busy, n
                 if (start.floor - cursor.attemptFloor < rule.every) continue;
                 // Persist before requesting: reloads, duplicate events and another page cannot replay a paid attempt.
                 const previousCursor = cursor;
-                cursor = state[mode] = { ...cursor, attemptFloor: start.floor, status: 'running', archiveRevision: start.revision || '', at: now() };
+                cursor = state[mode] = { ...cursor, failureCode: undefined, attemptFloor: start.floor, status: 'running', archiveRevision: start.revision || '', at: now() };
                 await write(start.scope, state);
                 const stillEligible = () => same() && snapshot()?.rules?.[mode]?.enabled
                     && snapshot().rules[mode].every + ':' + snapshot().rules[mode].epoch === signature;
@@ -62,9 +62,10 @@ export function createFloorScheduler({ snapshot, read, write, run, lock, busy, n
                         archiveRevision: success ? snapshot()?.revision || cursor.archiveRevision : cursor.archiveRevision, at: now() };
                     await write(start.scope, state);
                     if (mode === 'archive' && !success) break;
-                } catch {
+                } catch (error) {
                     if (!stillEligible()) break;
-                    state[mode] = { ...cursor, status: 'failed', at: now() };
+                    // Only a fixed code may survive in a checkpoint, never source or error text.
+                    state[mode] = { ...cursor, status: 'failed', at: now(), failureCode: error?.code === 'RMT_ARCHIVE_PREFIX_CHANGED' ? 'RMT_ARCHIVE_PREFIX_CHANGED' : undefined };
                     await write(start.scope, state);
                     if (mode === 'archive') break;
                 }

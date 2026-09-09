@@ -1,4 +1,8 @@
-# Heartbeat Memories r35–r53 Architecture
+# Heartbeat Memories r35–r54 Architecture
+
+## r54 TT compatibility and evidence-bound generation
+
+One dialogue eligibility predicate preserves hidden user/character floors in snapshots and counts. The existing floor scheduler, request queue and captured-origin persistence remain authoritative. Closing the view does not ask native confirm or abort work. Room/Travel use the existing explicit-book reader, with role/chat/selection/lifecycle guards and complete-only bounded setting context. Travel's initial count and reopen minimum agree at one evidenced location; neither range has a quota. Setting evidence exemptions from generated-phrase filtering require the exact mode/path and a bounded quote from controlled source text. UI resets are scoped to owned settings labels and inputs; no TT code is shipped.
 
 ## r53 semantic surfaces and adaptive initial observations
 
