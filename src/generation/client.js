@@ -220,7 +220,7 @@ export function normalizeConnectionManagerError(error) {
         'RMT_MANUAL_MESSAGES', 'RMT_MANUAL_MODEL', 'RMT_MANUAL_MODEL_TIMEOUT', 'RMT_MANUAL_MODELS_EMPTY',
         'RMT_MANUAL_PROVIDER_ERROR', 'RMT_MANUAL_RESPONSE_TOO_LARGE', 'RMT_PHONE_DRAFT_AVAILABLE',
         'RMT_PROFILE_CAPABILITY', 'RMT_PROFILE_MODEL_TIMEOUT', 'RMT_PROFILE_PROXY_UNAVAILABLE',
-        'RMT_REQUEST_TIMEOUT', 'RMT_RESPONSE_HTML', 'RMT_SEGMENT_VALIDATION',
+        'RMT_REQUEST_TIMEOUT', 'RMT_RESPONSE_HTML', 'RMT_SEGMENT_VALIDATION', 'RMT_CONNECTION_QUOTA',
     ]);
     if (knownInternalCodes.has(String(error?.code || ''))) return error;
     const evidence = [];
@@ -243,41 +243,45 @@ export function normalizeConnectionManagerError(error) {
     const messageStatus = original.match(/(?:http|status(?:\s+code)?|response)\s*[:=]?\s*(\d{3})/i)
         || original.match(/(?:api|request|response).{0,40}\b(400|401|403|404|408|413|422|429|500|502|503|504)\b/i);
     const hasRawStatus = rawStatus !== null && rawStatus !== '' && Number.isFinite(Number(rawStatus));
-    const status = hasRawStatus ? Number(rawStatus) : Number(messageStatus?.[1]) || 0;
+    const candidateStatus = hasRawStatus ? Number(rawStatus) : Number(messageStatus?.[1]) || 0;
+    const status = Number.isInteger(candidateStatus) && candidateStatus >= 400 && candidateStatus <= 599 ? candidateStatus : 0;
+    // Numeric transport status is authoritative; generic words from wrappers may describe
+    // an authentication service being rate-limited, not an invalid user credential.
+    const hints = status ? '' : original;
     const technical = status ? `（HTTP ${status}）` : safeCode ? `（${safeCode}）` : '';
     const sourceName = error?.code === 'RMT_MANUAL_HTTP' ? '手动 API' : '专用连接';
     let code = 'RMT_CONNECTION_FAILED';
     let message = `${sourceName}请求失败${technical}。没有收到可判断是否可重试的模型结果；请检查当前独立 API 设置与 SillyTavern 控制台中的上游错误，本段不会自动重试。`;
     let retryable = false;
-    if (/(?:<!doctype\s+html|<html\b|<head\b|<body\b|cf-error|cdn-cgi|cloudflare)/i.test(original)) {
+    if (/(?:<!doctype\s+html|<html\b|<head\b|<body\b|cf-error|cdn-cgi)/i.test(original)) {
         code = 'RMT_RESPONSE_HTML';
         message = `${sourceName}返回了网页错误页而不是模型数据${technical}。请检查代理地址、鉴权和上游状态；错误页正文不会显示或保存。`;
         retryable = false;
-    } else if (status === 401 || status === 403 || /(unauthori[sz]ed|forbidden|authentication|(?:invalid|incorrect|expired) api key|api key.*(?:invalid|incorrect|expired)|key.*(?:invalid|incorrect|expired))/i.test(original)) {
+    } else if (status === 401 || status === 403 || /(unauthori[sz]ed|forbidden|authentication|(?:invalid|incorrect|expired) api key|api key.*(?:invalid|incorrect|expired)|key.*(?:invalid|incorrect|expired))/i.test(hints)) {
         code = 'RMT_CONNECTION_AUTH';
         message = `${sourceName}认证失败${technical}。请检查当前配置、API Key 与账号权限；本段不会自动重试。`;
         retryable = false;
-    } else if (status === 429 || /(too many requests|rate.?limit|quota exceeded|resource exhausted)/i.test(original)) {
+    } else if (status === 429 || /(too many requests|rate.?limit|quota exceeded|resource exhausted)/i.test(hints)) {
         code = 'RMT_CONNECTION_RATE_LIMIT';
-        message = `模型服务正在限流或额度不足${technical}。心跳回忆会降低并发并仅对本段等待后重试一次；若仍失败，请稍后再试。`;
+        message = `模型服务正在限流${technical}。仅对本段按等待窗口有界重试；等待过长或再次失败会停止本次组合任务。`;
         retryable = true;
-    } else if (status === 413 || /(context length|context window|too many tokens|maximum context|payload too large|request too large)/i.test(original)) {
+    } else if (status === 413 || ((status === 400 || !status) && /(context length|context window|too many tokens|maximum context|payload too large|request too large)/i.test(original))) {
         code = 'RMT_CONNECTION_CONTEXT_LIMIT';
         message = `本段输入超过模型或代理的上下文上限${technical}。请换用更大上下文模型，或减少导入的世界书/记忆资料；本段不会自动重试。`;
         retryable = false;
-    } else if (status === 404 || /(model.*not found|profile.*not found|endpoint.*not found)/i.test(original)) {
+    } else if (status === 404 || /(model.*not found|profile.*not found|endpoint.*not found)/i.test(hints)) {
         code = 'RMT_CONNECTION_CONFIG';
         message = `${sourceName}、模型或上游端点不可用${technical}。请重新配置并确认模型名称；本段不会自动重试。`;
         retryable = false;
-    } else if (status === 400 || status === 422 || /(invalid request|bad request|unprocessable)/i.test(original)) {
+    } else if (status === 400 || status === 422 || /(invalid request|bad request|unprocessable)/i.test(hints)) {
         code = 'RMT_CONNECTION_INVALID_REQUEST';
         message = `上游拒绝了本段请求${technical}。请检查所选模型是否支持当前 Connection Manager 请求格式与最大输出；本段不会自动重试。`;
         retryable = false;
-    } else if (status === 408 || status === 504 || /(gateway timeout|request timeout|timed out|etimedout)/i.test(original)) {
+    } else if (status === 408 || status === 504 || /(gateway timeout|request timeout|timed out|etimedout)/i.test(hints)) {
         code = 'RMT_CONNECTION_SERVER';
         message = `模型服务或代理响应超时${technical}。本段会等待后重试一次；若再次失败，旧内容仍会保留。`;
         retryable = true;
-    } else if (/(failed to fetch|networkerror|network request failed|load failed|enotfound|fetch failed)/i.test(original)) {
+    } else if (/(failed to fetch|networkerror|network request failed|load failed|enotfound|fetch failed)/i.test(hints)) {
         code = 'RMT_CONNECTION_NETWORK';
         message = '无法连接模型服务。请检查地址、网络、代理与服务状态；本段会等待后重试一次，旧内容仍会保留。';
         retryable = true;
@@ -292,6 +296,9 @@ export function normalizeConnectionManagerError(error) {
     normalized.safeUserMessage = message;
     normalized.status = status || undefined;
     normalized.retryable = retryable;
+    if (code === 'RMT_CONNECTION_RATE_LIMIT' && Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > 0) {
+        normalized.retryAfterMs = Math.min(86400000, Math.ceil(error.retryAfterMs));
+    }
     return normalized;
 }
 
@@ -380,7 +387,10 @@ ${expanded}${phrasePolicy}`;
         error.retryable = false;
         throw error;
     }
-    const parsed = generation_jsonParser.extractJson(core_independentApi.assertIndependentResponsePayload(result), {
+    let responsePayload;
+    try { responsePayload = core_independentApi.assertIndependentResponsePayload(result); }
+    catch (error) { throw normalizeConnectionManagerError(error); }
+    const parsed = generation_jsonParser.extractJson(responsePayload, {
         reasoning: result?.reasoning || '',
         requestMaxTokens: responseLength,
         configuredMaxTokens: settings.maxTokens,

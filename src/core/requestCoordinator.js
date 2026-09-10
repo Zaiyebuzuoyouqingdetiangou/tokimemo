@@ -420,8 +420,13 @@ export function runGenerationRequestWithTimeout(factory, controller, timeoutMs, 
 
 export function shouldRetrySegmentRequest(error) {
     if (!error || error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') return false;
-    if (['RMT_REQUEST_TIMEOUT', 'RMT_CONNECTION_AUTH', 'RMT_CONNECTION_CONTEXT_LIMIT', 'RMT_CONNECTION_CONFIG', 'RMT_CONNECTION_INVALID_REQUEST'].includes(error?.code)) return false;
+    if (['RMT_REQUEST_TIMEOUT', 'RMT_CONNECTION_AUTH', 'RMT_CONNECTION_QUOTA', 'RMT_CONNECTION_CONTEXT_LIMIT', 'RMT_CONNECTION_CONFIG', 'RMT_CONNECTION_INVALID_REQUEST'].includes(error?.code)) return false;
+    if (error?.code === 'RMT_CONNECTION_RATE_LIMIT' && Number(error.retryAfterMs) > 60000) return false;
     return error?.retryableJson === true || error?.retryable === true;
+}
+
+export function stopsCompositeGeneration(error) {
+    return error?.name === 'AbortError' || /^(?:RMT_CONNECTION_|RMT_MANUAL_|RMT_PROFILE_|RMT_API_|RMT_RESPONSE_HTML|RMT_REQUEST_TIMEOUT)/.test(String(error?.code || ''));
 }
 
 export function validateGeneratedSegment(raw, validator) {
@@ -435,7 +440,7 @@ export function validateGeneratedSegment(raw, validator) {
 }
 
 export async function waitBeforeSegmentRetry(error) {
-    const delay = error?.code === 'RMT_CONNECTION_RATE_LIMIT' ? 1800
+    const delay = error?.code === 'RMT_CONNECTION_RATE_LIMIT' ? Math.min(60000, Math.max(1800, Number(error?.retryAfterMs) || 0))
         : error?.code === 'RMT_CONNECTION_SERVER' ? 1000
             : 0;
     if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));

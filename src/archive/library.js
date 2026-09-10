@@ -5,6 +5,7 @@ import * as archive_backupStore from './backupStore.js';
 import * as archive_repository from './repository.js';
 import * as archive_snapshots from './snapshots.js';
 import * as core_cache from '../core/cache.js';
+import * as core_archiveCover from '../core/archiveCover.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
@@ -733,7 +734,7 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
         <div class="rmt-memory-gate-text">
           <div class="rmt-archive-kicker">${snapshot.backupOnly ? 'RECOVERED LOCAL BACKUP' : 'READ-ONLY ARCHIVE'}</div>
           <strong class="rmt-archive-title">${core_text.esc(snapshot.archiveName)}</strong>
-          <div class="rmt-archive-summary">${core_text.esc(memory.archiveSummary || archive_repository.fallbackArchiveSummary(memory.memories))}</div>
+          ${core_archiveCover.archiveCoverHtml(memory, { writable: !snapshot.backupOnly && core_context.getChatId(core_context.getContext()) === snapshot.chatId && !runtimeState.activeArchiveReadOnly, busy: runtimeState.busy || core_requestCoordinator.hasGenerationTasks() })}
           <div class="rmt-memory-status ready">${snapshot.backupOnly ? '源聊天不可用 · 已从独立备份恢复 · 永久只读' : runtimeState.activeArchiveReadOnly ? '只读查看' : '编辑待命'} · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${core_constants.ARCHIVE_PORTAL_MODES.length}</div>
           <div class="rmt-archive-meta">${snapshot.backupOnly ? `本机备份 · ${core_text.esc(snapshot.sourceError || '源聊天无法读取')}` : (runtimeState.activeArchiveReadOnly ? '当前为只读档案' : '写入前会再次验证目标聊天')}</div>
           <div class="rmt-archive-readonly-control">

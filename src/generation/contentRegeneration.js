@@ -2,6 +2,7 @@ import * as core_butterflyContract from '../core/butterflyContract.js';
 // Targeted regeneration for user-managed derived content.
 // Targets are selected only from the currently normalized session; model output never chooses a cache path.
 import * as core_constants from '../core/constants.js';
+import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_text from '../core/text.js';
 import * as modes_achievements from '../modes/achievements.js';
@@ -159,7 +160,17 @@ function phonePlanFromSession(session, app) {
     };
 }
 
+function assertPhoneRegenerationOrigin(origin, memoryBank) {
+    let live;
+    try { live = core_context.getContext(); } catch {}
+    if (!live || !core_context.isCurrentTaskOrigin(origin, live)
+        || live.chatMetadata?.[core_constants.MEMORY_KEY]?.archiveRevision !== memoryBank.archiveRevision) {
+        throw new DOMException('Archive changed during terminal preparation', 'AbortError');
+    }
+}
+
 async function regeneratePhoneApp(session, app, context, memoryBank, origin, taskKey) {
+    assertPhoneRegenerationOrigin(origin, memoryBank);
     const planApp = {
         id: app.id, label: app.label, kind: app.kind, summary: app.summary,
         incremental: true,
@@ -167,23 +178,30 @@ async function regeneratePhoneApp(session, app, context, memoryBank, origin, tas
     };
     const plan = phonePlanFromSession(session, planApp);
     const presentationContext = await generation_client.buildWorldPresentationContext(context, memoryBank, core_constants.MODE.PHONE);
+    assertPhoneRegenerationOrigin(origin, memoryBank);
     const raw = await generation_client.requestValidatedSegment(
         modes_phone.phoneAppPrompt(context, memoryBank, plan, planApp),
         `重新生成 App「${app.label}」…`, { ...taskOptions(core_constants.MODE.PHONE, context, origin, `${taskKey}:app`, app.kind === 'chat' ? 12000 : 9000, 0.55), contextEnvelope: presentationContext.contextEnvelope },
-        data => modes_phone.normalizePhoneDraftApp(data, planApp, memoryBank, session.deviceKind, null, { controlledEvidence: presentationContext.settingEvidence }),
+        data => modes_phone.assertPhoneReplacementPreservesRecords(app,
+            modes_phone.normalizePhoneDraftApp(data, planApp, memoryBank, session.deviceKind, null, { controlledEvidence: presentationContext.settingEvidence })),
     );
+    assertPhoneRegenerationOrigin(origin, memoryBank);
     return raw;
 }
 
 async function regeneratePhoneEntry(session, app, entry, context, memoryBank, origin, taskKey) {
+    assertPhoneRegenerationOrigin(origin, memoryBank);
     const planApp = { id: app.id, label: app.label, kind: app.kind, summary: app.summary, incremental: true, entries: [{ id: entry.id, title: entry.title, meta: entry.meta }] };
     const plan = phonePlanFromSession(session, planApp);
     const presentationContext = await generation_client.buildWorldPresentationContext(context, memoryBank, core_constants.MODE.PHONE);
+    assertPhoneRegenerationOrigin(origin, memoryBank);
     const raw = await generation_client.requestValidatedSegment(
         modes_phone.phoneAppPrompt(context, memoryBank, plan, planApp),
         `重新生成「${entry.title}」…`, { ...taskOptions(core_constants.MODE.PHONE, context, origin, `${taskKey}:entry`, 8000, 0.6), contextEnvelope: presentationContext.contextEnvelope },
-        data => modes_phone.normalizePhoneDraftApp(data, planApp, memoryBank, session.deviceKind, null, { controlledEvidence: presentationContext.settingEvidence }),
+        data => modes_phone.assertPhoneReplacementPreservesRecords({ entries: [entry] },
+            modes_phone.normalizePhoneDraftApp(data, planApp, memoryBank, session.deviceKind, null, { controlledEvidence: presentationContext.settingEvidence })),
     );
+    assertPhoneRegenerationOrigin(origin, memoryBank);
     return raw.entries[0];
 }
 

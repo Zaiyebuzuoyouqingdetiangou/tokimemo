@@ -65,6 +65,8 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_CONNECTION_FAILED: '专用连接请求失败；响应详情已隐藏，请检查当前独立 API 设置。',
     RMT_CONNECTION_AUTH: '专用连接认证失败；请检查当前配置、API Key 与账号权限。',
     RMT_CONNECTION_RATE_LIMIT: '模型服务正在限流或额度不足；请稍后重试。',
+    RMT_CONNECTION_QUOTA: '模型服务报告额度不足；请检查当前独立 API 账号余额或配额。不会自动重试。',
+    RMT_ARCHIVE_VERDICT: '判词尚未通过校验；原有回忆与封面保留，可只重写判词，无需重建档案。',
     RMT_CONNECTION_CONTEXT_LIMIT: '本段输入超过模型或代理的上下文上限；请减少导入资料或更换模型。',
     RMT_CONNECTION_CONFIG: '专用连接、模型或上游端点不可用；请重新检查配置。',
     RMT_CONNECTION_INVALID_REQUEST: '上游拒绝了本段请求；请检查模型兼容性与输出设置。',
@@ -93,6 +95,11 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_JSON_NOT_FOUND: '模型最终正文中没有完整 JSON；旧内容未被覆盖。',
     RMT_JSON_TRUNCATED: '模型返回的 JSON 疑似被截断；旧内容未被覆盖。',
     RMT_PHONE_DRAFT_AVAILABLE: '私人终端只完成了部分内容；已保留可继续生成的草稿。',
+    RMT_PHONE_DRAFT_UNAVAILABLE: '私人终端未完成，且本次草稿未能保存；旧终端保留。请检查存储状态后重试。',
+    RMT_PHONE_SPEAKERS: '聊天缺少有原文依据的双方发言；不会补造对话来凑数量。',
+    RMT_PHONE_EVIDENCE: '这项终端内容缺少完整的条目或来源证据；旧内容保留，可继续补齐。',
+    RMT_PHONE_SOURCE_EMPTY: '当前来源不足以收录终端内容；请补充来源并更新档案后再生成，不会编造记录。',
+    RMT_PHONE_SOURCE_CHANGED: '终端草稿的来源已变化，已完成内容未删除。请恢复原来的设定来源后继续，或明确重新生成终端。',
     RMT_INPUT_BUDGET: '本次输入超过安全预算，已在发送前拦截。',
     RMT_JSON_INVALID: '模型没有返回完整、可解析的 JSON；响应正文已隐藏。',
     RMT_ARCHIVE_DELETED_FENCE: '目标档案已被明确删除；较早启动的任务不会重新创建它。',
@@ -156,6 +163,21 @@ export function safeErrorSummary(error, max = 520) {
     const raw = normalizeText(error?.message, 12000);
     const status = safeErrorStatus(error);
     const code = safeErrorCode(error);
+    if (code === 'RMT_PHONE_DRAFT_AVAILABLE' || code === 'RMT_PHONE_DRAFT_UNAVAILABLE') {
+        const completed = Number(error?.partialProgress?.completed);
+        const total = Number(error?.partialProgress?.total);
+        const progress = Number.isInteger(completed) && Number.isInteger(total) && total >= 1 && total <= 10 && completed >= 0 && completed <= total
+            ? `${completed}/${total} 个应用` : '部分内容';
+        const failure = safeErrorDiagnostic(error?.failure);
+        const cause = failure.code && !/^RMT_PHONE_DRAFT_/.test(failure.code)
+            ? SAFE_ERROR_CODE_MESSAGES[failure.code] || ''
+            : failure.status === 401 || failure.status === 403 ? '上游认证或权限校验失败。'
+                : failure.status === 429 ? '上游正在限流，请稍后再试。' : '本次未完成；旧版草稿可能没有具体原因记录。';
+        const statusLabel = failure.status >= 400 ? `（状态 ${failure.status}）` : '';
+        return normalizeText(code === 'RMT_PHONE_DRAFT_AVAILABLE'
+            ? `已保留 ${progress}。${cause}${statusLabel}处理后点击“继续生成”，已完成的应用不会重做。`
+            : `${SAFE_ERROR_CODE_MESSAGES[code]}${cause}${statusLabel}`, max);
+    }
     const looksHtml = /<!doctype\s+html|<html(?:\s|>)|<head(?:\s|>)|<body(?:\s|>)|<title>[^<]*cloudflare|cf-error|cdn-cgi\//i.test(raw);
     const blocked = /cloudflare|sorry,? you have been blocked|attention required|unable to access/i.test(raw);
     const unauthorized = /unauthorized|authentication|invalid api key|\b401\b/i.test(raw) || status === 401;

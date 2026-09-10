@@ -4,6 +4,7 @@ import * as archive_groups from './groups.js';
 import * as archive_library from './library.js';
 import * as archive_repository from './repository.js';
 import * as core_cache from '../core/cache.js';
+import * as core_archiveCover from '../core/archiveCover.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import { state as runtimeState } from '../core/state.js';
@@ -35,7 +36,7 @@ export function archiveOverviewArchiveSummary(memory) {
     if (!archive_repository.isCompatibleArchive(memory)) return null;
     return {
         name: core_text.normalizeText(memory.archiveName, 120) || archive_repository.fallbackArchiveName(memory.memories),
-        summary: core_text.normalizeText(memory.archiveSummary, 420),
+        summary: core_archiveCover.archiveVerdictText(memory),
         memoryCount: memory.memories.length,
         updatedAt: Number(memory.updatedAt || memory.createdAt) || 0,
     };

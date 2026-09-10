@@ -197,8 +197,23 @@ function isExcludedPhoneApp(app) {
 }
 
 function phoneAppLimits(deviceKind) {
-    if (['neutral', 'watch', 'communicator', 'folio', 'relic'].includes(deviceKind)) return { minApps: 4, maxApps: 8, minEntries: 8 };
-    return { minApps: 5, maxApps: 10, minEntries: 12 };
+    if (['neutral', 'watch', 'communicator', 'folio', 'relic'].includes(deviceKind)) return { minApps: 1, maxApps: 8, minEntries: 1 };
+    return { minApps: 1, maxApps: 10, minEntries: 1 };
+}
+
+function unavailablePhoneEntry(id) {
+    return { id, title: '暂无可核实记录', preview: '这项目录没有足够原文，暂未收录。', detail: '可在补充来源并更新档案后，再单独生成这一项。',
+        sourceStatus: 'unavailable', meta: '', contactName: '', messages: [], fields: [], imageCaption: '',
+        basis: '设定', sourceMemoryIds: [], sourceMemoryAnchor: '', sourceMemoryEvidence: '', sourceSettingEvidence: '' };
+}
+
+function isUnavailablePhoneEntry(entry) { return entry?.unavailable === true || entry?.sourceStatus === 'unavailable'; }
+
+function assertPhoneConversation(messages) {
+    const roles = new Set(messages.map(message => message.speakerRole));
+    if (messages.length < 2 || !roles.has('owner') || !roles.has('contact')) {
+        throw core_text.safeUserError('聊天没有同时出现设备主人和聊天对象；请保留有据的双方原话。', 'RMT_PHONE_SPEAKERS');
+    }
 }
 
 export function migrateLegacyPhoneSession(session, memoryBank = null) {
@@ -404,6 +419,16 @@ function normalizePhoneSettingEvidence(entry, planApp, conversation, generatedTe
     return excerpt;
 }
 
+export function assertPhoneReplacementPreservesRecords(previous, replacement) {
+    for (const oldEntry of previous?.entries || []) {
+        const newEntry = replacement?.entries?.find(entry => entry.id === oldEntry.id);
+        if (oldEntry.sourceStatus !== 'unavailable' && (!newEntry || newEntry.sourceStatus === 'unavailable')) {
+            throw core_text.safeUserError('本次没有生成出新的有据内容；旧记录保留。', 'RMT_PHONE_EVIDENCE');
+        }
+    }
+    return replacement;
+}
+
 function phoneReferencedMemoryText(reference, memoryBank) {
     const ids = new Set(core_text.cleanArray(reference?.sourceMemoryIds, 16, 40));
     return (Array.isArray(memoryBank?.memories) ? memoryBank.memories : [])
@@ -421,6 +446,34 @@ function normalizePhoneMemoryEvidence(entry, reference, memoryBank, { trustedSto
     return core_worldPresentation.controlledEvidenceContains(canonical, excerpt) ? excerpt : '';
 }
 
+function phoneQuoteHasSpeaker(message, conversation, canonical) {
+    const speaker = core_text.normalizeText(message?.speaker, 100);
+    const words = core_text.normalizeText(message?.text, 1600);
+    const names = [...new Set([conversation?.ownerName, conversation?.contactName, speaker].filter(Boolean))];
+    if (!speaker || !words) return false;
+    const literal = canonical.split(/\r?\n/).some(line =>
+        line.trim() === speaker + '：' + words || line.trim() === speaker + ': ' + words || line.trim() === speaker + ':' + words);
+    if (literal) return true;
+    // Attribute from source text, not model role labels. Ambiguous indirect speech
+    // cannot become a private chat transcript.
+    const quotes = /[“「『"]([^”」』"\n]+)[”」』"]/gu;
+    let match;
+    while ((match = quotes.exec(canonical))) {
+        if (match[1].trim() !== words) continue;
+        const prefix = canonical.slice(Math.max(0, match.index - 160), match.index)
+            .split(/[\n。！？!?；;，,”」』"]/).pop().trim();
+        const positions = names.map(name => ({ name, index: prefix.indexOf(name) })).filter(item => item.index >= 0).sort((a, b) => a.index - b.index);
+        const escape = value => value.replace(/[.*+?^\u0024{}()|[\]\\]/g, '\\$&');
+        const targets = names.map(escape).join('|');
+        const verb = '(?:说|说道|道|问|回答|答道|回应|回复|写道|留言|said|asked|replied|wrote|says)';
+        const syntax = new RegExp('^\\s*(?:[:：]|(?:(?:轻声|低声|笑着|补充)\\s*)?' + verb
+            + '\\s*(?:(?:to\\s+)?(?:' + targets + '))?\\s*[:：]?|对(?:' + targets + ')\\s*' + verb + '\\s*[:：]?)\\s*$', 'iu');
+        const subject = positions.find(item => syntax.test(prefix.slice(item.index + item.name.length)));
+        if (subject?.name === speaker) return true;
+    }
+    return false;
+}
+
 function phoneMemoryStructuredFactsSupported(kind, conversation, messages, fields, evidence, canonical) {
     const contains = value => {
         const needle = core_text.normalizeText(value, 1600);
@@ -430,7 +483,7 @@ function phoneMemoryStructuredFactsSupported(kind, conversation, messages, field
     if (kind === 'chat') {
         return contains(conversation?.contactName)
             && messages.length > 0
-            && messages.every(message => contains(message?.text)
+            && messages.every(message => contains(message?.text) && phoneQuoteHasSpeaker(message, conversation, canonical)
                 && (message?.speakerRole === 'owner'
                     ? core_text.normalizeText(message?.speaker, 100) === core_text.normalizeText(conversation?.ownerName, 100)
                     : contains(message?.speaker)));
@@ -473,8 +526,8 @@ UNTRUSTED_PHONE_ARCHIVE_JSON:\n${generation_prompts.promptArchiveSlice(memoryBan
 {"title":"他的私人终端","deviceName":"设备名称","deviceKind":"phone","lockText":"...","uiProfile":{"explicitFields":[],"palette":"PALETTE_TOKEN","wallpaper":"WALLPAPER_TOKEN","typography":"TYPOGRAPHY_TOKEN","iconStyle":"ICON_STYLE_TOKEN","density":"DENSITY_TOKEN","shellTone":"SHELL_TONE_TOKEN"},"liveStates":{"morning":{"lockText":"...","statusLine":"...","badgeCounts":{}},"daytime":{},"evening":{},"night":{}},"apps":[{"id":"CHAT","label":"通讯","kind":"chat","icon":"message","summary":"...","entries":[{"id":"C01","title":"条目标题","meta":"时间/对象/分类"}]}]}
 
 数量要求：
-- phone / terminal 生成 5～10 个功能入口；watch / communicator / folio / relic 生成 4～8 个符合载体能力的入口。至少保留一个 chat / 通讯或书信入口，其余名称、类型、数量和顺序都必须服从角色人设，不得照抄固定模板。
-- 至少 2 个 App 应明显来自角色职业、兴趣或世界观，例如案件库、训练记录、乐谱、实验日志、任务终端、宠物、阅读、健康或学习；不适合现代 App 的世界观应使用功能等价但符合时代的命名。
+- 只规划有可引用资料的入口：phone / terminal 为1～10个，其余为1～8个；每个1～4条目录即可，资料丰富才增加。没有通讯原话就不建 chat，不为凑数量编造通讯、联系人或记录。
+- 优先选择有据的职业、兴趣与世界观记录，不固定入口组合。chat/contacts 只允许来自当前 Mxxx 的原话/字段；角色卡提到一个人不等于存在通讯记录。不适合现代 App 的世界观使用符合时代的命名。
 - kind 只能选 moments/chat/gallery/camera/notes/store/browser/contacts/music/work/study/health/fitness/training/reading/books/files/research/games/finance/security/creative/weather/tools/misc；icon 只能选 message/people/photo/camera/note/bag/globe/contact/music/briefcase/book/heart/activity/game/wallet/shield/palette/cloud/tool/spark/grid。
 - uiProfile 只能使用：palette=noir-gold/ink-blue/frost/moss/ember/lilac/sky/sand；wallpaper=smoke/rain/grid/starfield/library/aurora/minimal/paper；typography=modern/serif/mono；iconStyle=rounded/square/glyph/glass；density=compact/cozy/roomy；shellTone=graphite/silver/ivory/bronze/navy。上面的 *_TOKEN 只是占位符，必须换成某个允许值，不得原样照抄。这些是本地安全样式 token，不得输出颜色值、CSS、URL 或 class 名。
 - uiProfile.explicitFields 只允许 palette/wallpaper/typography/iconStyle/density/shellTone；只有世界书或角色卡对该项有明文时才列入。其余字段保持不在列表中，本地会依据 {{char}} 的人设、设备名和 App 组合稳定补全，防止不同角色照抄同一套合法模板。
@@ -532,7 +585,6 @@ export function normalizePhonePlan(data, memoryBank = null, { worldPresentation 
     if (apps.length < minApps) throw new Error(`私人终端目录 App 不足：${apps.length}/${minApps}。`);
     const total = apps.reduce((sum, app) => sum + app.entries.length, 0);
     if (total < minEntries) throw new Error(`私人终端目录条目不足：${total}/${minEntries}。`);
-    if (!apps.some(app => app.kind === 'chat')) throw new Error('私人终端目录缺少 chat / 通讯分区。');
     const lockText = 'PRIVATE';
     const appIds = new Set(apps.map(app => app.id));
     const liveStates = {};
@@ -565,9 +617,6 @@ export function normalizePhonePlan(data, memoryBank = null, { worldPresentation 
 }
 
 export function phoneAppPrompt(context, memoryBank, plan, app, sourceMemoryIds = null) {
-    const compact = ['watch', 'communicator', 'folio', 'relic'].includes(plan.deviceKind);
-    const deepCount = 1;
-    const deepMessages = compact ? 8 : plan.deviceKind === 'terminal' ? 10 : 12;
     const archiveBlock = sourceMemoryIds
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         : generation_prompts.promptArchiveSlice(memoryBank, 24);
@@ -582,10 +631,11 @@ UNTRUSTED_APP_PLAN_JSON:\n${JSON.stringify(app, null, 2)}
 
 硬性要求：
 - 必须补完 UNTRUSTED_APP_PLAN_JSON 中全部 ${app.entries.length} 个 entry id，不得删减或换 id；每项必须有 preview，且 detail/messages/fields/imageCaption 至少一种有实质内容。
+- 例外：若某个目录没有足够原文，保留该 id 并仅返回 {"id":"原id","unavailable":true}。这是明确的资料空缺，不是虚构记录；不要为满足目录数量补造内容，也不要因这一项空缺放弃其他有据条目。
 - basis=记忆 时必须提供当前档案中有效 sourceMemoryIds + sourceMemoryAnchor${sourceMemoryIds ? '，并至少引用一个 incrementalMemoryIds' : ''}，并把直接支持条目的 Mxxx 原句逐字放入 sourceMemoryEvidence；chat 的联系人和每条消息、contacts 的每个字段值都必须在该原句或所引 Mxxx 中逐字出现，不能用真实 id/anchor 替无关新事实洗白。sourceSettingEvidence 留空。basis=设定 必须把直接支持该条目的角色卡/世界书原句逐字放进 sourceSettingEvidence，sourceMemoryIds/sourceMemoryAnchor/sourceMemoryEvidence 留空。没有直接证据就不要生成；绝不能推导新职业、新亲属或新重要 NPC，也不能冒充与 {{user}} 已发生的共同历史。
-- kind=chat 时至少 ${deepCount} 个联系人达到 ${deepMessages} 条 messages；只有角色卡/世界书明确存在，或当前 Mxxx 明确出现的联系人才能写。每个有 messages 的聊天条目必须提供 contactName；每条消息必须用 speakerRole=owner 或 contact 明确区分设备主人和聊天对象，且同一段对话中 owner/contact 两边都必须实际出现。speaker 必须写实际显示名，禁止用“对方”“我”“本人”作为偷懒标签。群聊里 contact 消息可保留各自真实姓名，但 owner 仍表示设备主人。
+- kind=chat 只收录 basis=记忆 的逐字原话，不接受设定推演冒充消息。每个有 messages 的聊天条目至少2条有据的双向消息即可，不重复句子、不拆散摘要凑8/10/12条。必须提供 contactName；每条消息必须用 speakerRole=owner 或 contact 明确区分设备主人和聊天对象，且同一段对话中 owner/contact 两边都必须实际出现。speaker 必须写实际显示名，禁止用“对方”“我”“本人”作为偷懒标签。群聊里 contact 消息可保留各自真实姓名，但 owner 仍表示设备主人。
 - 设备主人是 ${core_text.normalizeText(context?.name2 || memoryBank?.characterName, 100) || '当前角色'}；当前用户是 ${core_text.normalizeText(context?.name1 || memoryBank?.userName, 100) || '当前用户'}。如果聊天对象就是当前用户，contactName/speaker 使用当前用户实际名字。
-- kind=contacts 时至少1项 fields 达3个以上。gallery 用 imageCaption 写纯文字照片说明。
+- kind=contacts 同样只收录 basis=记忆 的有据字段，至少1个字段，不凑电话号码、地址或关系。gallery 用 imageCaption 写纯文字照片说明。
 - 禁止前任/前女友；禁止 {{char}} 与 {{user}} 之外的恋爱/婚姻对象。不输出 URL、HTML 或脚本。只输出 JSON。`;
 }
 
@@ -596,11 +646,10 @@ export function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sour
     const expectedIds = new Set(planApp.entries.map(item => item.id));
     const entries = Array.isArray(raw?.entries) ? raw.entries : [];
     const seen = new Set();
-    let deepChats = 0;
-    let contactDetails = false;
     for (const entry of entries) {
         const id = core_text.safeId(entry?.id, '');
         if (!expectedIds.has(id) || seen.has(id)) continue;
+        if (isUnavailablePhoneEntry(entry)) { seen.add(id); continue; }
         const preview = core_text.normalizeText(entry?.preview, 1200);
         const detail = core_text.normalizeText(entry?.detail, 5000);
         const conversation = normalizePhoneConversationMessages(entry, memoryBank, { strict: planApp.kind === 'chat' });
@@ -625,22 +674,9 @@ export function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sour
                 || !normalizePhoneSettingEvidence(entry, planApp, conversation, generatedText, options.controlledEvidence, options)) continue;
         }
         seen.add(id);
-        const deepThreshold = ['watch', 'communicator'].includes(deviceKind) ? 8 : deviceKind === 'terminal' ? 10 : 12;
-        if (planApp.kind === 'chat' && messages.length) {
-            const roles = new Set(messages.map(message => message.speakerRole).filter(Boolean));
-            if (!roles.has('owner') || !roles.has('contact')) {
-                throw new Error(`App ${planApp.label} 的聊天「${core_text.normalizeText(entry?.title, 100) || id}」没有同时出现设备主人和聊天对象。`);
-            }
-            if (messages.length >= deepThreshold) deepChats += 1;
-        }
-        if (planApp.kind === 'contacts' && fields.length >= 3) contactDetails = true;
+        if (planApp.kind === 'chat') assertPhoneConversation(messages);
     }
-    if (seen.size < expectedIds.size) throw new Error(`App ${planApp.label} 详情不完整：${seen.size}/${expectedIds.size} 个条目通过校验。`);
-    if (planApp.kind === 'chat') {
-        const minimum = 1;
-        if (deepChats < minimum) throw new Error(`App ${planApp.label} 深聊不足：${deepChats}/${minimum}。`);
-    }
-    if (planApp.kind === 'contacts' && deviceKind === 'phone' && !contactDetails) throw new Error(`App ${planApp.label} 缺少至少 1 个三字段联系人详情。`);
+    if (seen.size < expectedIds.size) throw core_text.safeUserError('终端详情不完整：缺字段、ID不符或未能对应原文；没有原文的项目应明确为空。', 'RMT_PHONE_EVIDENCE');
     return { ...raw, id: planApp.id, label: planApp.label, kind: planApp.kind };
 }
 
@@ -650,6 +686,7 @@ export function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, so
     const entries = (Array.isArray(raw?.entries) ? raw.entries : []).slice(0, 24).map((entry, index) => {
         const id = core_text.safeId(entry?.id, '');
         if (!plannedIds.has(id)) return null;
+        if (isUnavailablePhoneEntry(entry)) return unavailablePhoneEntry(id);
         const basis = core_constants.ROOM_BASIS_VALUES.has(entry?.basis) ? entry.basis : '设定';
         let title = core_text.normalizeText(entry?.title, 100) || planApp.entries.find(item => item.id === id)?.title || `条目 ${index + 1}`;
         let meta = core_text.normalizeText(entry?.meta, 200);
@@ -754,7 +791,8 @@ export async function generatePhoneWithRepair(context, memoryBank, origin, taskK
         for (let attempt = 0; attempt < 2; attempt += 1) {
             try {
                 const raw = await generation_client.requestJson(
-                    phoneAppPrompt(context, memoryBank, plan, app),
+                    phoneAppPrompt(context, memoryBank, plan, app) + ((lastError || (resumeDraft?.failedAppId === app.id && resumeDraft?.failure))
+                        ? `\n本次只修正以下安全分类：${core_text.safeErrorSummary(lastError || resumeDraft.failure)}。没有直接原文的项目请用 unavailable，不重做已完成的其他 App。` : ''),
                     `私人终端 2/2 · ${index + 1}/${plan.apps.length} ${app.label}${attempt ? '（重试）' : ''}…`,
                     { maxTokens: app.kind === 'chat' ? 8000 : app.entries.length >= 8 ? 7000 : 5000, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:app:${app.id}`, mode: core_constants.MODE.PHONE, background: true },
                 );
@@ -777,12 +815,15 @@ export async function generatePhoneWithRepair(context, memoryBank, origin, taskK
         }
         if (lastError) {
             const detail = core_text.safeErrorSummary(lastError, 600);
-            const draftSaved = await core_cache.savePhoneGenerationDraft(context, memoryBank, plan, [...completedById.values()], app.id, detail, origin, draftOptions);
+            const failure = core_text.safeErrorDiagnostic(lastError);
+            const draftSaved = await core_cache.savePhoneGenerationDraft(context, memoryBank, plan, [...completedById.values()], app.id, detail, origin, { ...draftOptions, failure });
             const error = new Error(draftSaved
                 ? `私人终端在 App“${app.label}”中断，已保存 ${completedById.size}/${plan.apps.length} 个 App。回到档案室的私人终端卡片，点击“继续生成”即可从这里续写，不会重做已完成 App。${detail ? `\n${detail}` : ''}`
                 : `私人终端在 App“${app.label}”中断，且无法确认续写断点已安全保存；请不要依赖本次进度。${detail ? `\n${detail}` : ''}`);
             error.code = draftSaved ? 'RMT_PHONE_DRAFT_AVAILABLE' : 'RMT_PHONE_DRAFT_UNAVAILABLE';
             error.retryable = false;
+            error.failure = failure;
+            error.partialProgress = { completed: completedById.size, total: plan.apps.length };
             throw error;
         }
     }
@@ -790,7 +831,30 @@ export async function generatePhoneWithRepair(context, memoryBank, origin, taskK
     if (details.length !== plan.apps.length) {
         throw new Error(`私人终端续写结果不完整：${details.length}/${plan.apps.length} 个 App。`);
     }
-    return normalizePhone({ ...plan, apps: details }, memoryBank, { worldPresentation, ...evidenceOptions });
+    try {
+        let normalized;
+        try { normalized = normalizePhone({ ...plan, apps: details }, memoryBank, { worldPresentation, ...evidenceOptions }); }
+        catch (error) {
+            if (error?.code === 'RMT_PHONE_SOURCE_EMPTY') throw error;
+            throw core_text.safeUserError('草稿来源发生变化。', 'RMT_PHONE_SOURCE_CHANGED');
+        }
+        if (details.some(app => {
+            const retained = normalized.apps.find(candidate => candidate.id === app.id);
+            return !retained || app.entries.some(entry => !retained.entries.some(candidate => candidate.id === entry.id));
+        })) throw core_text.safeUserError('草稿来源发生变化。', 'RMT_PHONE_SOURCE_CHANGED');
+        return normalized;
+    } catch (error) {
+        if (error?.code === 'RMT_PHONE_SOURCE_EMPTY') {
+            // Empty directory placeholders are not completed content. An explicit
+            // retry must reach the provider, not loop forever over an N/N draft.
+            await core_cache.savePhoneGenerationDraft(context, memoryBank, plan, [], '', '', origin,
+                { ...draftOptions, failure: core_text.safeErrorDiagnostic(error) });
+        } else if (error?.code === 'RMT_PHONE_SOURCE_CHANGED') {
+            await core_cache.savePhoneGenerationDraft(context, memoryBank, plan, details, '', '', origin,
+                { ...draftOptions, failure: core_text.safeErrorDiagnostic(error) });
+        }
+        throw error;
+    }
 }
 
 export function compactPhoneExisting(session) {
@@ -799,7 +863,7 @@ export function compactPhoneExisting(session) {
         label: core_text.normalizeText(app?.label, 80),
         kind: normalizePhoneAppKind(app?.kind, app?.label),
         icon: normalizePhoneAppIcon(app?.icon, app?.kind, app?.label),
-        entries: core_evidence.evenlySample(Array.isArray(app?.entries) ? app.entries : [], 60).map((entry, index) => ({
+        entries: core_evidence.evenlySample((Array.isArray(app?.entries) ? app.entries : []).filter(entry => entry.sourceStatus !== 'unavailable'), 60).map((entry, index) => ({
             id: core_text.normalizeText(entry?.id, 80),
             title: entry?.legacyEvidenceUnverified === true ? `旧版记录 ${index + 1}` : core_text.normalizeText(entry?.title, 120),
             meta: entry?.legacyEvidenceUnverified === true ? '' : core_text.normalizeText(entry?.meta, 200),
@@ -981,6 +1045,7 @@ export function normalizePhone(data, memoryBank, { worldPresentation = null, con
             const entryId = core_text.safeId(entry?.id, `${appId}_E${String(index + 1).padStart(2, '0')}`);
             if (usedEntryIds.has(entryId)) return null;
             usedEntryIds.add(entryId);
+            if (isUnavailablePhoneEntry(entry)) return unavailablePhoneEntry(entryId);
             const basis = core_constants.ROOM_BASIS_VALUES.has(entry?.basis) ? entry.basis : '设定';
             let title = core_text.normalizeText(entry?.title, 100) || `条目 ${index + 1}`;
             let meta = core_text.normalizeText(entry?.meta, 200);
@@ -1007,6 +1072,7 @@ export function normalizePhone(data, memoryBank, { worldPresentation = null, con
             if (basis === '记忆' && !trustedStored) {
                 const canonical = phoneReferencedMemoryText(reference, memoryBank);
                 if (!phoneMemoryStructuredFactsSupported(kind, conversation, messages, fields, sourceMemoryEvidence, canonical)) return null;
+                if (kind === 'chat') assertPhoneConversation(messages);
                 messages = sanitizePhoneMemoryMessageTimes(messages, sourceMemoryEvidence, canonical);
                 title = core_worldPresentation.controlledEvidenceContains(sourceMemoryEvidence, title) ? title : `剧情摘录 ${index + 1}`;
                 preview = sourceMemoryEvidence;
@@ -1062,20 +1128,11 @@ export function normalizePhone(data, memoryBank, { worldPresentation = null, con
         };
     }).filter(app => app && app.entries.length >= 1);
 
-    const compactDevice = ['watch', 'communicator', 'folio', 'relic'].includes(deviceKind);
     if (apps.length < limits.minApps) throw new Error(`“他的私人终端”分区不足：得到 ${apps.length} 个，当前设备至少需要 ${limits.minApps} 个。`);
     const totalEntries = apps.reduce((sum, app) => sum + app.entries.length, 0);
     if (totalEntries < limits.minEntries) throw new Error(`“他的私人终端”内容过少：只有 ${totalEntries} 个可读条目，至少需要 ${limits.minEntries} 个。`);
-    if (!apps.some(app => app.kind === 'chat')) throw new Error('“他的私人终端”缺少 chat / 通讯分区。');
-    if (deviceKind === 'phone' && apps.some(app => app.kind === 'contacts')) {
-        const contactDetails = apps.filter(app => app.kind === 'contacts').flatMap(app => app.entries).some(entry => entry.fields.length >= 3);
-        if (!contactDetails) throw new Error('“他的私人终端”联系人详情不足：至少 1 个联系人需要 3 项以上备注 / 最近通话 / 位置或提醒字段。');
-    }
-    const deepChatMessageMinimum = compactDevice ? 8 : (deviceKind === 'terminal' ? 10 : 12);
-    const deepChats = apps.filter(app => app.kind === 'chat').flatMap(app => app.entries).filter(entry => entry.messages.length >= deepChatMessageMinimum).length;
-    const minDeepChats = 1;
-    if (deepChats < minDeepChats) {
-        throw new Error(`“他的私人终端”深度对话不足：只有 ${deepChats} 个达到 ${deepChatMessageMinimum} 条消息以上的对话窗，当前设备至少需要 ${minDeepChats} 个。`);
+    if (!apps.some(app => app.entries.some(entry => entry.sourceStatus !== 'unavailable'))) {
+        throw core_text.safeUserError('目录没有可核实原文。', 'RMT_PHONE_SOURCE_EMPTY');
     }
 
     const appIds = new Set(apps.map(app => app.id));

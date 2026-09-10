@@ -217,17 +217,56 @@ export async function readBoundedJsonResponse(response, maxBytes = core_constant
     return await boundedJson(response, maxBytes);
 }
 
-function httpFailure(status) {
-    const code = Number(status) || 0;
-    return apiError(
+function httpFailure(response) {
+    const code = Number(response?.status) || 0;
+    const html = /text\/html/i.test(String(response?.headers?.get?.('content-type') || ''));
+    const error = apiError(
         code ? `手动 API 请求失败（HTTP ${code}）。请检查手动配置与服务状态。` : '手动 API 请求失败。请检查手动配置与服务状态。',
-        'RMT_MANUAL_HTTP',
+        html ? 'RMT_RESPONSE_HTML' : 'RMT_MANUAL_HTTP',
         code,
     );
+    const retryAfter = String(response?.headers?.get?.('retry-after') || '').slice(0, 100).trim();
+    const delay = /^\d+(?:\.\d+)?$/.test(retryAfter) ? Number(retryAfter) * 1000 : Date.parse(retryAfter) - Date.now();
+    if (code === 429 && Number.isFinite(delay) && delay > 0) error.retryAfterMs = Math.min(86400000, Math.ceil(delay));
+    return error;
 }
 
-function providerEnvelopeFailure() {
-    const error = apiError('手动 API 返回了错误状态，请检查服务配置后重试。', 'RMT_MANUAL_PROVIDER_ERROR', 502);
+function providerEnvelopeFailure(payload, manual = true) {
+    // Read only bounded error metadata. Never propagate a provider message/body as a cause.
+    const seen = new Set();
+    let status = 0, typeStatus = 0, quota = false;
+    const visit = (node, depth) => {
+        if (!node || typeof node !== 'object' || seen.has(node) || depth > 4 || seen.size >= 24) return;
+        seen.add(node);
+        for (const key of ['status', 'statusCode', 'code', 'type']) {
+            const descriptor = Object.getOwnPropertyDescriptor(node, key);
+            const value = descriptor && 'value' in descriptor ? descriptor.value : null;
+            if (!['string', 'number'].includes(typeof value)) continue;
+            const token = String(value).slice(0, 100).toLowerCase();
+            const numeric = Number(token);
+            if (!status && Number.isInteger(numeric) && numeric >= 400 && numeric <= 599) status = numeric;
+            if (['insufficient_quota', 'billing_hard_limit_reached', 'credit_balance_too_low'].includes(token)) quota = true;
+            if (['rate_limit_error', 'rate_limit_exceeded', 'resource_exhausted'].includes(token)) typeStatus = 429;
+            else if (!typeStatus && ['invalid_api_key', 'authentication_error', 'unauthorized', 'unauthenticated'].includes(token)) typeStatus = 401;
+            else if (!typeStatus && ['permission_denied', 'permission_error', 'forbidden'].includes(token)) typeStatus = 403;
+        }
+        for (const key of ['error', 'errors', 'data', 'result', 'response', 'body', 'details']) {
+            const descriptor = Object.getOwnPropertyDescriptor(node, key);
+            if (descriptor && 'value' in descriptor) visit(descriptor.value, depth + 1);
+        }
+        if (Array.isArray(node)) for (let i = 0; i < Math.min(4, node.length); i++) {
+            const descriptor = Object.getOwnPropertyDescriptor(node, String(i));
+            if (descriptor && 'value' in descriptor) visit(descriptor.value, depth + 1);
+        }
+    };
+    visit(payload, 0);
+    if (quota && (!status || status === 429)) {
+        const error = apiError('服务商报告额度不足，请检查该账号额度。', 'RMT_CONNECTION_QUOTA', status);
+        error.retryable = false;
+        return error;
+    }
+    if (status || typeStatus) return apiError('模型服务返回错误状态；详情已隐藏。', 'RMT_PROVIDER_STATUS', status || typeStatus);
+    const error = apiError('专用连接返回了错误状态，请检查服务配置后重试。', manual ? 'RMT_MANUAL_PROVIDER_ERROR' : 'RMT_CONNECTION_FAILED');
     error.retryable = false;
     return error;
 }
@@ -333,9 +372,7 @@ export function payloadHasProviderError(payload) {
 
 export function assertIndependentResponsePayload(payload) {
     if (payloadHasProviderError(payload)) {
-        const error = apiError('专用连接返回了错误状态；响应详情已隐藏，请检查连接与账号权限。', 'RMT_CONNECTION_FAILED');
-        error.retryable = false;
-        throw error;
+        throw providerEnvelopeFailure(payload, false);
     }
     const content = extractIndependentResponseContent(payload);
     if (typeof content === 'string' && looksLikeHtmlResponse(content)) {
@@ -391,10 +428,10 @@ export async function fetchManualApiModels(settings, context, options = {}) {
         const response = await Promise.race([fetchPromise, timeoutPromise, externalAbortPromise]);
         if (!response?.ok) {
             try { await response?.body?.cancel?.(); } catch {}
-            throw httpFailure(response?.status);
+            throw httpFailure(response);
         }
         const payload = await boundedJson(response, 2000000);
-        if (payloadHasProviderError(payload)) throw providerEnvelopeFailure();
+        if (payloadHasProviderError(payload)) throw providerEnvelopeFailure(payload);
         const models = extractManualModelIds(payload);
         if (!models.length) throw apiError('接口没有返回可用模型；仍可直接填写模型 ID。', 'RMT_MANUAL_MODELS_EMPTY');
         return models;
@@ -434,10 +471,10 @@ export async function requestManualApiCompletion(settings, context, messages, ma
     });
     if (!response?.ok) {
         try { await response?.body?.cancel?.(); } catch {}
-        throw httpFailure(response?.status);
+        throw httpFailure(response);
     }
     const payload = await boundedJson(response, core_constants.MAX_MANUAL_API_RESPONSE_BYTES);
-    if (payloadHasProviderError(payload)) throw providerEnvelopeFailure();
+    if (payloadHasProviderError(payload)) throw providerEnvelopeFailure(payload);
     const content = extractIndependentResponseContent(payload);
     if (typeof content === 'string' && !content.trim()) throw apiError('手动 API 没有返回可见正文。', 'RMT_MANUAL_EMPTY');
     return content;

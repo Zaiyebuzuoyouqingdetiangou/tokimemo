@@ -257,14 +257,17 @@ export function loadPhoneGenerationDraft(context = core_context.getContext(), me
                 completedApps.push(modes_phone.normalizePhoneDraftApp(saved, planApp, bank, plan.deviceKind, null, { trustedStored: true }));
             } catch {}
         }
+        const entirelyUnavailable = completedApps.length === plan.apps.length
+            && completedApps.every(app => app.entries.every(entry => entry.sourceStatus === 'unavailable'));
         return {
             kind: 'phone-draft',
             chatId,
             archiveRevision: bank.archiveRevision,
             plan,
-            completedApps,
+            completedApps: entirelyUnavailable ? [] : completedApps,
             failedAppId: core_text.safeId(raw.failedAppId, ''),
             failedMessage: core_text.normalizeText(raw.failedMessage, 600),
+            failure: entirelyUnavailable ? { code: 'RMT_PHONE_SOURCE_EMPTY' } : core_text.safeErrorDiagnostic(raw.failure),
             updatedAt: Math.max(0, Number(raw.updatedAt) || 0),
             [core_constants.SESSION_MODE_WRITE_FENCE_KEY]: core_text.normalizeText(raw?.[core_constants.SESSION_MODE_WRITE_FENCE_KEY], 240),
         };
@@ -282,6 +285,7 @@ export async function savePhoneGenerationDraft(context, memoryBank, plan, comple
         completedApps: Array.isArray(completedApps) ? completedApps : [],
         failedAppId: core_text.safeId(failedAppId, ''),
         failedMessage: core_text.normalizeText(failedMessage, 600),
+        failure: core_text.safeErrorDiagnostic(options.failure),
         updatedAt: Date.now(),
     };
     const detachedTarget = options.archiveTarget && typeof options.archiveTarget === 'object' ? options.archiveTarget : null;
@@ -791,6 +795,13 @@ function assertExpectedTaskOrigin(context, origin) {
     }
 }
 
+export function assertPresentationOnlyMemoryPatch(previous, next) {
+    const withoutCover = value => Object.fromEntries(Object.entries(value || {}).filter(([key]) => !['archiveName', 'archiveVerdict', 'archiveCoverUpdatedAt'].includes(key)));
+    if (!previous || !next || JSON.stringify(withoutCover(previous)) !== JSON.stringify(withoutCover(next))) {
+        throw core_text.safeUserError('重写封面不能改变档案事实或历史基线。', 'RMT_ARCHIVE_VERDICT');
+    }
+}
+
 async function saveImportedMemoryOperation(context, memoryBank, expectedChatId = memoryBank?.chatId, options = {}) {
     const initialScope = cacheScopeFromContext(context);
     let currentContext = core_context.currentCharacterGuard();
@@ -820,6 +831,7 @@ async function saveImportedMemoryOperation(context, memoryBank, expectedChatId =
         throw error;
     }
     const previousMemory = archive_repository.getImportedMemory(context);
+    if (options.presentationOnly) assertPresentationOnlyMemoryPatch(previousMemory, memoryBank);
     const backupEntry = archiveBackupEntryForContext(currentContext, memoryBank, {
         expectedTaskOrigin: options.expectedTaskOrigin,
         previousMemory,
@@ -849,9 +861,9 @@ async function saveImportedMemoryOperation(context, memoryBank, expectedChatId =
                 candidate = mergeCacheSnapshotsWithModeFences(primary, secondary, candidate, recovered);
             }
         }
-        if (candidate && typeof candidate === 'object' && Object.values(core_constants.MODE).some(mode => candidate?.[mode]?.kind === mode)) {
+        if (candidate && typeof candidate === 'object' && (options.presentationOnly || Object.values(core_constants.MODE).some(mode => candidate?.[mode]?.kind === mode))) {
             preservedCache = cloneCacheValue(candidate);
-            archive_repository.migrateDerivedCacheRevision(preservedCache, previousMemory, stagedMemory);
+            if (!options.presentationOnly) archive_repository.migrateDerivedCacheRevision(preservedCache, previousMemory, stagedMemory);
             if (options.expectedTaskOrigin) {
                 stabilizeDeferredMigrationTimestamps(preservedCache, candidate, stagedMemory);
                 stampStableMigratedCacheCommit(preservedCache, candidate, stagedMemory, initialScope);

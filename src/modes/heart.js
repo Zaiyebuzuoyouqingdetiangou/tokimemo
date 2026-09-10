@@ -1224,7 +1224,7 @@ export async function generateHeartSeasonSection(season) {
             }
 
             scenario = latest.scenarioDramas?.find(item => item.season === normalizedSeason && item.incrementBatchId === batchId) || scenario;
-            if (!scenario) {
+            if (!scenario && !errors.some(core_requestCoordinator.stopsCompositeGeneration)) {
                 try {
                     scenario = enrichScenario((await requestHeartPart(
                         heartSeasonScenarioPrompt(context, memoryBank, latest, normalizedSeason, latest, null),
@@ -1242,7 +1242,7 @@ export async function generateHeartSeasonSection(season) {
 
         if (errors.length && !savedParts) throw errors[0];
         if (errors.length) {
-            globalThis.toastr?.warning?.(heartTargetMessage(targetRuntime, `${ui_heartView.heartSeasonLabel(normalizedSeason)}已保存成功部分；再次点击会补完本次缺失部分。`), '心跳回忆');
+            globalThis.toastr?.warning?.(heartTargetMessage(targetRuntime, `${ui_heartView.heartSeasonLabel(normalizedSeason)}已保存成功部分；${core_text.safeErrorSummary(errors[0])} 处理后再次点击只补缺失部分。`), '心跳回忆');
         } else {
             globalThis.toastr?.success?.(heartTargetMessage(targetRuntime, `已追加：${ui_heartView.heartSeasonLabel(normalizedSeason)}未来日常 Drama。`), '心跳回忆');
         }

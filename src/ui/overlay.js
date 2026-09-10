@@ -5,6 +5,7 @@ import * as archive_library from '../archive/library.js';
 import * as archive_repository from '../archive/repository.js';
 import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_cache from '../core/cache.js';
+import * as core_archiveCover from '../core/archiveCover.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
@@ -472,6 +473,7 @@ export function showChooser() {
             <span class="rmt-portal-subtitle">${core_text.esc(meta.subtitle)}</span>
             <span class="rmt-portal-status">${core_text.esc(statusText)}</span>
           </button>
+          ${draft ? `<p class="rmt-phone-draft-status" role="status">${core_text.esc(core_text.safeErrorSummary({ code: 'RMT_PHONE_DRAFT_AVAILABLE', failure: draft.failure, partialProgress: { completed: draft.completedApps.length, total: draft.plan.apps.length } }))}</p>` : ''}
           <button type="button" class="rmt-btn rmt-portal-generate" data-rmt-generate-mode="${core_text.esc(mode)}" ${generated ? 'data-rmt-regenerate="true"' : ''} ${runtimeState.busy || generating || capacityReached ? 'disabled' : ''}>${core_text.esc(actionText)}</button>
         </article>`;
     }).join('');
@@ -510,11 +512,10 @@ export function showChooser() {
           <div class="rmt-memory-gate-text">
             <div class="rmt-archive-kicker">PRIVATE MEMORY ARCHIVE</div>
             <strong class="rmt-archive-title">${core_text.esc(archiveName)}</strong>
-            <div class="rmt-archive-summary">${core_text.esc(archiveSummary)}</div>
+            ${ready ? core_archiveCover.archiveCoverHtml(memory, { writable: true, busy: anyRunning }) : `<div class="rmt-archive-summary">${core_text.esc(archiveSummary)}</div>`}
             ${keywords.length ? `<div class="rmt-archive-keywords">${keywords.map(word => `<span>${core_text.esc(word)}</span>`).join('')}</div>` : ''}
             <div class="rmt-memory-status ${pendingClass}">${core_text.esc(archive_snapshots.memoryStateLabel(state, settings.autoUpdates?.archive?.enabled))}</div>
             ${ready ? `<div class="rmt-archive-meta">上次归档：${core_text.esc(formatArchiveTime(memory.updatedAt || memory.createdAt))}</div>` : ''}
-            ${preview ? `<div class="rmt-memory-preview">记忆索引：${core_text.esc(preview)}</div>` : ''}
           </div>
           <div class="rmt-current-archive-actions">
             <button class="rmt-btn rmt-archive-update" type="button" data-rmt-action="import-memory" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>${core_text.esc(requirePreflight ? '先扫描记忆 / 摘要' : (ready ? '增量更新当前窗口档案' : importLabel))}</button>
@@ -543,7 +544,7 @@ export function showError(message, mode) {
     setRegenerateVisible(!!runtimeState.activeMode);
     const body = bodyEl();
     if (!body) return;
-    body.innerHTML = `<div class="rmt-error"><div><b>生成未通过数据校验</b><div style="margin:10px 0;white-space:pre-wrap;opacity:.78">${core_text.esc(message)}</div><button type="button" class="rmt-btn" data-rmt-action="regenerate">重试本次生成 / 追加</button></div></div>`;
+    body.innerHTML = `<div class="rmt-error" role="alert"><div><b>本次生成未完成</b><div style="margin:10px 0;white-space:pre-wrap">${core_text.esc(message)}</div><button type="button" class="rmt-btn" data-rmt-action="regenerate">重试本次生成 / 追加</button></div></div>`;
 }
 
 export function showMemoryImportError(message) {
@@ -1025,6 +1026,11 @@ export function handleOverlayClick(event) {
     const actionEl = event.target.closest?.('[data-rmt-action]');
     const action = actionEl?.dataset?.rmtAction;
     if (!action) return;
+    if (action === 'rewrite-archive-verdict') {
+        if (runtimeState.activeArchiveSnapshot && !archive_library.requireWritableArchiveAction()) return;
+        if (!confirmExplicitAction('重写这份回忆的判词？', '只读取已归档经历，使用当前独立 API 生成封面题辞；不扫描新聊天、不重建档案或其他内容。')) return;
+        return archive_repository.rewriteCurrentArchiveVerdict();
+    }
     if (runtimeState.activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'draw-heart-strip', 'clear-heart-strip', 'room-life-refresh', 'room-schema-upgrade', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins', 'memory-worldinfo-picker', 'refresh-ending-confessions'].includes(action)) {
         if (!archive_library.requireWritableArchiveAction()) return;
     }
