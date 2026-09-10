@@ -429,7 +429,7 @@ test('r49 manual API transport sanitizes the real 401/403 HTML/429/5xx/invalid J
     ]) {
         await assert.rejects(
             invoke(async () => new Response(body, { status, headers: { 'content-type': contentType } })),
-            error => error?.code === 'RMT_MANUAL_HTTP'
+            error => error?.code === (contentType === 'text/html' ? 'RMT_RESPONSE_HTML' : 'RMT_MANUAL_HTTP')
                 && error?.status === status
                 && !new RegExp(`${secret}|${prompt}|<html|private upstream`, 'i').test(error.message),
         );

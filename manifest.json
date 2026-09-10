@@ -1,15 +1,15 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.50-tt-compat-r54.0",
+  "js": "index.js?heartbeat=0.8.51-cover-terminal-r55.0",
   "author": "Toto",
-  "version": "0.8.50",
+  "version": "0.8.51",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r54：关闭转后台不依赖确认框，修复 TT 设置裁切、隐藏楼层增量、房间宠物与稀疏出行路线；保留已有档案。",
+  "description": "r55：独立封面判词、私人终端按来源收录与断点恢复、认证和限流分类；保留旧档案与已生成内容。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

@@ -100,10 +100,13 @@ test('r49 travel revalidates cached class tokens at the final HTML sink', () => 
     }
 });
 
-test('r44 travel rejects a memory stop without matching evidence and requires both map ranges', () => {
+test('travel rejects unproven stops without requiring invented near or far locations', () => {
     const bad = validLocations();
     bad[0] = { ...bad[0], sourceMemoryIds: ['M404'], sourceMemoryAnchor: '不存在' };
-    assert.throws(() => normalizeTravel({ locations: bad }, memoryBank, { controlledEvidence: SETTING_EVIDENCE }), /地点不足/);
+    const accepted = normalizeTravel({ locations: bad }, memoryBank, { controlledEvidence: SETTING_EVIDENCE });
+    assert.equal(accepted.locations.length, bad.length - 1);
+    assert.ok(accepted.locations.every(item => !item.sourceMemoryIds.includes('M404')));
+    assert.throws(() => normalizeTravel({ locations: [bad[0]] }, memoryBank, { controlledEvidence: SETTING_EVIDENCE }), error => error.code === 'RMT_TRAVEL_LOCATIONS');
     const partial = normalizeTravel({ locations: [] }, memoryBank, { allowPartial: true, sourceMemoryIds: ['M002'] });
     assert.deepEqual(partial.locations, []);
     const settingOnlyIncrement = normalizeTravel({ locations: validLocations().filter(item => item.basis === '设定') }, memoryBank, {
@@ -123,7 +126,8 @@ test('r44 travel is an independent portal with nearby dialogue and CSS text post
     assert.match(prompt, /禁止输出坐标、颜色值、CSS、HTML、JavaScript、URL/);
     assert.match(prompt, /sceneTheme/);
     assert.match(prompt, /city\/coast\/mountain\/forest\/campus\/historic\/fantasy\/scifi\/neutral/);
-    assert.match(prompt, /near 3～5 个，far 2～4 个/);
+    assert.match(prompt, /最多 8 个/);
+    assert.match(prompt, /不设最低配额/);
     const [constants, snapshots, overlay, view, styles] = await Promise.all([
         readFile(new URL('src/core/constants.js', root), 'utf8'),
         readFile(new URL('src/archive/snapshots.js', root), 'utf8'),

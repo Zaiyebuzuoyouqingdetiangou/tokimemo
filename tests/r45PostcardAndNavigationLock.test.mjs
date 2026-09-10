@@ -229,7 +229,7 @@ test('a task bound to the current chat is reported; one bound elsewhere is not',
     resetTasks();
 });
 
-test('closing the archive room is blocked while generating, and allowed after confirming', async () => {
+test('closing the archive room detaches generation without depending on native confirm', async () => {
     const ui_overlay = await import('../src/ui/overlay.js');
     installContext('chat-A');
     resetTasks();
@@ -246,13 +246,10 @@ test('closing the archive room is blocked while generating, and allowed after co
     let asked = 0;
     globalThis.confirm = message => { asked += 1; globalThis.__lastConfirm = message; return false; };
     ui_overlay.closeArchiveOverlayFromUser();
-    assert.equal(asked, 1, 'user must be asked before leaving mid-generation');
-    assert.equal(overlay.hidden, false, 'overlay must stay open when the user declines');
-    assert.match(globalThis.__lastConfirm, /正在整理聊天档案/);
-
-    globalThis.confirm = () => true;
-    ui_overlay.closeArchiveOverlayFromUser();
-    assert.equal(overlay.hidden, true, 'overlay must close once the user confirms');
+    assert.equal(asked, 0, 'closing a reversible overlay must not depend on a native confirmation');
+    assert.equal(overlay.hidden, true);
+    assert.equal(runtimeState.busy, true, 'closing does not cancel the captured generation');
+    assert.equal(runtimeState.activeTaskOrigin.chatId, 'chat-A');
 
     // With nothing running, closing is silent as before.
     resetTasks();

@@ -5,15 +5,26 @@
 ## 当前候选
 
 - 产品名：心跳回忆
-- version：`0.8.50`
-- BUILD / runtime cache-bust：`0.8.50-tt-compat-r54.0`
+- version：`0.8.51`
+- BUILD / runtime cache-bust：`0.8.51-cover-terminal-r55.0`
 - 正式档案 key：`heartbeatMemoriesArchiveV3`
 - 派生缓存 key：`heartbeatMemoriesTheaterV3`
 - 压缩格式：`gzip-base64-v1`
 - Calendar / Phone / Room / Travel session：v6 / v4 / v3 / v4
 - SillyTavern 最低版本：`1.18.0`；一键配置入口明确标注 `1.1.18`
 
-V3 metadata key 为旧档案兼容边界，不随发布版本改名。浏览器加载 r54 runtime 由 manifest 与 index 中一致的 BUILD query 隔离，不能继续命中旧 bundle。
+V3 metadata key 为旧档案兼容边界，不随发布版本改名。浏览器加载 r55 runtime 由 manifest 与 index 中一致的 BUILD query 隔离，不能继续命中旧 bundle。
+
+## r55 当前增补契约（覆盖旧终端固定数量约束）
+
+- archiveVerdict v1 仅是封面表现字段，不作为 Mxxx、关系状态或历史事实来源。提示先读双方态度与关系，再写 1～3 句、12～160 字符的题辞；来源 ID 与完整 title/anchor 本地校验，拒绝整段复制或超长总结。语义与文学质量仍需真实模型验收，不把格式校验冒充语义证明。
+- 旧 archiveSummary 保留用于历史上下文，首页/快照折叠显示。旧封面没有判词时不自动生成；点击写下/重写判词使用独立 API，仅允许修改 archiveName、archiveVerdict、archiveCoverUpdatedAt。历史基线、Mxxx、缓存、终端草稿不可改变，保留 CAS、角色/聊天/revision/lifecycle 围栏。
+- 终端按来源允许 1～10 个应用（紧凑设备上限 8），每个至少 1 个目录项，不再强制 chat 或 8/10/12 句。新聊天必须有至少两条、双方可归属的逐字原話；明确群聊参与者可保留。无法明确归属的转述不猜测。旧 trustedStored 内容不按新配额裁剪。
+- unavailable 是固定本地非事实空态；模型附带正文全部丢弃，不能覆盖已有有效条目，也不进入后续已有事实索引。全空终端不算生成成功；全空完成草稿重开按未完成处理，避免 N/N 零请求循环。最终重验不能静默过滤已完成应用；来源变化显式失败并保留草稿。
+- 草稿 failure 只保存 safeErrorDiagnostic 白名单，页面显示固定原因和 x/y 进度；不显示模型响应、Key、URL、旧 failedMessage 原文。认证失败不自动重试，限流遵守有界 Retry-After；过长等待停止，真正额度不足不重试。
+- Profile 与手动 HTTP 200 错误封装均进入正常错误归一化；明确数字状态优先于歧义词，仅 cloudflare 单词不等于 HTML。Heart 季节组合在认证/连接/限流失败后停止兄弟请求；已有成功部分保留并显示安全原因。
+- 单 App/entry 重生成在读取世界书前后与返回候选前检查原聊天、角色、revision、lifecycle，防止 A 记忆混入 B 世界书后发送。旧提交围栏保留。
+- 本轮仅修复用户截图中的封面、终端与连接错误，不全站重美化、不发布远端；独立 reviewer 只读，生产代码由主 agent 收口。
 
 ## r54 当前增补契约
 

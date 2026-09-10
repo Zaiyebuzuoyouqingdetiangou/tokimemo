@@ -101,7 +101,7 @@ try {
         if (url.pathname === '/api/backends/chat-completions/generate') {
             const body = request.postDataJSON(); paid.push(body);
             const result = paid.length === 1 ? { memories: [{ title: '一起看海', summary: '林舟和小雨在海边看到了灯塔。', anchors: ['灯塔', '海边'], messageStart: 3, messageEnd: 4 }] }
-                : { archiveName: '沿途的光', archiveSummary: '两个人散步和看海的记录。', keywords: ['散步', '灯塔'] };
+                : { archiveName: '沿途的光', archiveVerdict: '走过的路不曾替我们回答，远处的灯却照见了并肩的方向。', relationshipReading: { char: '他留意路边灯火', user: '她与他同行', relation: '一同散步，未确认恋爱' }, verdictSources: [{ memoryId: 'M002', anchor: '灯塔' }], keywords: ['散步', '灯塔'] };
             return route.fulfill({ json: { choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(result) } }] } });
         }
         if (url.pathname.startsWith('/api/')) return route.abort();

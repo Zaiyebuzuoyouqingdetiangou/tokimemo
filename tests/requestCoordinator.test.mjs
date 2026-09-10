@@ -42,7 +42,7 @@ test('TT display is opt-in while legacy mobile fullscreen remains the default', 
     assert.equal(api.getPluginSettings(context).ttDisplayMode, true);
     assert.equal(api.archiveMobileSafeTopFallback({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)', platform: 'iPhone', maxTouchPoints: 5 }), 52);
     assert.match(source, /rmt-tt-display/);
-    assert.match(source, /TT 显示模式/);
+    assert.match(source, /TT 顶部安全区/);
     assert.match(sourceByFile.get('ui/styles.js'), /#\$\{core_constants\.OVERLAY_ID\}\{padding:0\}/);
     assert.match(source, /max\(env\(safe-area-inset-top, 0px\),var\(--rmt-mobile-safe-top, 0px\)\)/);
 });
@@ -101,8 +101,8 @@ test('private terminal exposes an explicit mobile-visible incremental button in 
 test('private terminal chat requires distinguishable owner/contact speakers and renders opposite sides', () => {
     const chatEvidence = [
         '佐伯与小月的晚间聊天。',
-        ...Array.from({ length: 12 }, (_, i) => `消息${i + 1}`),
-        ...Array.from({ length: 12 }, (_, i) => `双向消息${i + 1}`),
+        ...Array.from({ length: 12 }, (_, i) => `小月说：“消息${i + 1}”`),
+        ...Array.from({ length: 12 }, (_, i) => `${i % 2 ? '佐伯' : '小月'}说：“双向消息${i + 1}”`),
     ].join('；');
     const chatBank = {
         characterName: '佐伯', userName: '小月',
@@ -967,7 +967,7 @@ test('phone continuation draft keeps only bounded normalized App fields', () => 
         id: 'CHAT', label: '通讯', kind: 'chat', summary: '联系人',
         entries: [{ id: 'C1', title: '甲', meta: '' }, { id: 'C2', title: '乙', meta: '' }, { id: 'C3', title: '丙', meta: '' }],
     };
-    const draftEvidence = ['佐伯与小月的通讯记录。', ...Array.from({ length: 12 }, (_, i) => `消息${i + 1}`)].join('；');
+    const draftEvidence = ['佐伯与小月的通讯记录。', ...Array.from({ length: 12 }, (_, i) => `${i % 2 ? '佐伯' : '小月'}说：“消息${i + 1}”`)].join('；');
     const draftBank = {
         characterName: '佐伯', userName: '小月',
         memories: [{ id: 'MCHAT', title: '通讯记录', anchors: ['通讯记录'], summary: draftEvidence }],

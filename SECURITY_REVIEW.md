@@ -1,3 +1,7 @@
+## 0.8.51 / r55.0 changed-surface review
+
+本轮为变更面安全复核，不是全仓安全认证。判词字符串经过转义，模型不提供 HTML/CSS/JS；封面改写有字段白名单与原档案 CAS。终端保留逐字来源与说话人归属、未知项固定空态、旧有效内容不被空结果覆盖；异步读取后换聊必须在请求前停止。safeErrorDiagnostic 白名单进入草稿，原始上游正文/凭据不进入新错误反馈。独立 API/终端 reviewer 的实证问题由主 agent 验证后单一修复并补生产入口回归。没有真实用户数据或凭据参与测试；真实宿主仍待验收。
+
 ## 0.8.50 / r54.0 changed-surface review
 
 Changed paths: hidden-floor evidence classification, selected setting-worldbook ingress, exact evidence phrase filtering, room pet ownership, sparse travel validation/cache, reversible overlay close, scoped settings CSS, auto status/event naming. No provider endpoint, API key, storage schema, delete fence, CAS, image adapter or third-party plugin changes. Hidden messages require explicit matching speaker metadata and no system/tool marker. Worldbook reads retain completeness/lifecycle checks and reject live role/chat/selection drift; detached A reads only A's selected books. Exact-quote exemptions are bounded by mode/path/source; generated dialogue is not exempt. Local TT stylesheet checks are compatibility probes, not a claim of native iOS or actual model acceptance. See RELEASE_VALIDATION-r54.md for fresh checks and limits.

@@ -1,4 +1,8 @@
-# Heartbeat Memories r35–r54 Architecture
+# Heartbeat Memories r35–r55 Architecture
+
+## r55 cover-only writes and terminal checkpoints
+
+The cover has its own validated presentation field; rewriting it uses canonical archive persistence with an allowed-field check, preserving the revision, source baseline, derived sessions and phone draft. It never feeds historical evidence. Terminal normalization uses source-dependent counts and explicit non-factual unavailable slots; targeted replacement refuses to erase proven entries. Checkpoints persist only allowlisted errors, resume missing apps, reject silent filtering of completed apps and recover all-empty drafts. The existing connection layer classifies typed provider envelopes before composite orchestration. No alternate transport or persistence system is added.
 
 ## r54 TT compatibility and evidence-bound generation
 

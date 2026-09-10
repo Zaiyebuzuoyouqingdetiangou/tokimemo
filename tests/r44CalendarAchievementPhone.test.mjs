@@ -141,10 +141,12 @@ test('r44 phone removes route and travel aliases before migration or plan minimu
         kind: 'navigation',
         entries: [0, 1, 2].map(itemIndex => ({ id: `R_${itemIndex}`, title: `路线 ${itemIndex}` })),
     });
-    assert.throws(() => normalizePhonePlan({
+    const plan = normalizePhonePlan({
         title: '他的私人终端',
         deviceName: '私人手机',
         deviceKind: 'phone',
         apps: planApps,
-    }, memoryBank), /App 不足：4\/5/);
+    }, memoryBank);
+    // r55 deliberately removes minimum quotas; excluded route apps must still disappear.
+    assert.deepEqual(plan.apps.map(app => app.id), ['CHAT', 'NOTES', 'WORK', 'BOOKS']);
 });
