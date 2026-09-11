@@ -632,7 +632,8 @@ UNTRUSTED_APP_PLAN_JSON:\n${JSON.stringify(app, null, 2)}
 硬性要求：
 - 必须补完 UNTRUSTED_APP_PLAN_JSON 中全部 ${app.entries.length} 个 entry id，不得删减或换 id；每项必须有 preview，且 detail/messages/fields/imageCaption 至少一种有实质内容。
 - 例外：若某个目录没有足够原文，保留该 id 并仅返回 {"id":"原id","unavailable":true}。这是明确的资料空缺，不是虚构记录；不要为满足目录数量补造内容，也不要因这一项空缺放弃其他有据条目。
-- 这是一台正在使用中的设备，绝大多数条目应当是 basis=设定 的日常内容：工作往来、兴趣、购物、提醒、草稿、未发送的话、与非重要 NPC 的事务性对话等。只有确实需要复述与 {{user}} 已发生的共同经历时才用 basis=记忆。不要把整台设备写成剧情回顾。
+- basis=推演：当角色卡/世界书没有写到这件事时使用。依据人设与世界观合理推断他会有的日常内容，sourceMemoryIds/sourceMemoryAnchor/sourceSettingEvidence 全部留空；但**绝不能出现"你们/我们一起/陪你/上次你"之类与 {{user}} 共同经历的表述**，出现即整条作废。优先 记忆 与 设定，凑不够再用 推演 补足。
+- 这是一台正在使用中的设备，绝大多数条目应当是 basis=设定 或 basis=推演 的日常内容：工作往来、兴趣、购物、提醒、草稿、未发送的话、与非重要 NPC 的事务性对话等。只有确实需要复述与 {{user}} 已发生的共同经历时才用 basis=记忆。不要把整台设备写成剧情回顾。
 - basis=记忆 时必须提供当前档案中有效 sourceMemoryIds + sourceMemoryAnchor${sourceMemoryIds ? '，并至少引用一个 incrementalMemoryIds' : ''}，并把直接支持条目的 Mxxx 原句逐字放入 sourceMemoryEvidence；chat 的联系人和每条消息、contacts 的每个字段值都必须在该原句或所引 Mxxx 中逐字出现，不能用真实 id/anchor 替无关新事实洗白。sourceSettingEvidence 留空。basis=设定 必须把直接支持该条目的角色卡/世界书原句逐字放进 sourceSettingEvidence，sourceMemoryIds/sourceMemoryAnchor/sourceMemoryEvidence 留空。没有直接证据就不要生成；绝不能推导新职业、新亲属或新重要 NPC，也不能冒充与 {{user}} 已发生的共同历史。
 - kind=chat 只收录 basis=记忆 的逐字原话，不接受设定推演冒充消息。每个有 messages 的聊天条目至少2条有据的双向消息即可，不重复句子、不拆散摘要凑8/10/12条。必须提供 contactName；每条消息必须用 speakerRole=owner 或 contact 明确区分设备主人和聊天对象，且同一段对话中 owner/contact 两边都必须实际出现。speaker 必须写实际显示名，禁止用“对方”“我”“本人”作为偷懒标签。群聊里 contact 消息可保留各自真实姓名，但 owner 仍表示设备主人。
 - 设备主人是 ${core_text.normalizeText(context?.name2 || memoryBank?.characterName, 100) || '当前角色'}；当前用户是 ${core_text.normalizeText(context?.name1 || memoryBank?.userName, 100) || '当前用户'}。如果聊天对象就是当前用户，contactName/speaker 使用当前用户实际名字。
@@ -669,10 +670,19 @@ export function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sour
             if (options.trustedStored !== true && (!memoryEvidence || !phoneMemoryStructuredFactsSupported(planApp.kind, conversation, messages, fields, memoryEvidence, canonical))) continue;
         } else {
             const generatedText = [entry?.title, preview, detail, imageCaption, ...messages.map(m => `${m.speaker}:${m.text}`), ...fields.map(f => `${f.label}:${f.value}`)].join('\n');
-            // A static setting sentence cannot prove a generated conversation or contact record.
-            // Those high-impact entities require canonical Mxxx provenance instead.
-            if (['chat', 'contacts'].includes(planApp.kind)
-                || !normalizePhoneSettingEvidence(entry, planApp, conversation, generatedText, options.controlledEvidence, options)) continue;
+            if (basis === '推演') {
+                // Inferred device content is characterisation, so it needs no quote. Two hard
+                // limits remain: it may not claim a shared past with the user, and it may not
+                // put words in the user's mouth — a fabricated thread "from" {{user}} would
+                // show messages they never sent, which is the one thing worse than an empty app.
+                if (sourceMemoryIds || PHONE_SHARED_HISTORY_PROBE.test(generatedText)) continue;
+                if (phoneSpeaksAsUser(messages, memoryBank)) continue;
+            } else if (['chat', 'contacts'].includes(planApp.kind)
+                || !normalizePhoneSettingEvidence(entry, planApp, conversation, generatedText, options.controlledEvidence, options)) {
+                // A static setting sentence cannot prove a generated conversation or contact
+                // record. Those high-impact entities require canonical Mxxx provenance instead.
+                continue;
+            }
         }
         seen.add(id);
         if (planApp.kind === 'chat') assertPhoneConversation(messages);
@@ -680,6 +690,20 @@ export function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sour
     if (seen.size < expectedIds.size) throw core_text.safeUserError('终端详情不完整：缺字段、ID不符或未能对应原文；没有原文的项目应明确为空。', 'RMT_PHONE_EVIDENCE');
     return { ...raw, id: planApp.id, label: planApp.label, kind: planApp.kind };
 }
+
+// Wording that asserts a joint past with the user. A 推演 entry that trips this is
+// dropped whole rather than rewritten: fewer entries is the safe direction.
+// An inferred thread may never contain a line attributed to the user.
+function phoneSpeaksAsUser(messages, memoryBank) {
+    const userName = core_text.normalizeText(memoryBank?.userName, 120).toLowerCase();
+    if (!userName || !Array.isArray(messages)) return false;
+    return messages.some(message => {
+        const speaker = core_text.normalizeText(message?.speaker, 120).toLowerCase();
+        return speaker === userName || speaker === '{{user}}' || speaker === 'user' || speaker === '我';
+    });
+}
+
+const PHONE_SHARED_HISTORY_PROBE = /你们|我们一起|和你一起|与你一起|陪你|带你去|你送|你陪|上次你|那天你|你我曾|一起去过|我们曾/;
 
 export function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, sourceMemoryIds = null, options = {}) {
     const raw = validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sourceMemoryIds, options);
@@ -710,6 +734,10 @@ export function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, so
         const sourceSettingEvidence = basis === '设定'
             ? normalizePhoneSettingEvidence(entry, planApp, conversation, evidenceText, options.controlledEvidence, options)
             : '';
+        // A 推演 entry is ordinary device content inferred from persona (a reminder, a
+        // draft, a mundane exchange). It needs no quote, but must not smuggle in a past
+        // with {{user}}, and incremental passes never admit it.
+        if (basis === '推演' && (sourceMemoryIds || PHONE_SHARED_HISTORY_PROBE.test(evidenceText) || phoneSpeaksAsUser(messages, memoryBank))) return null;
         if (!preview || (!detail && !messages.length && !fields.length && !imageCaption)
             || (basis === '记忆' && (!reference.sourceMemoryIds.length || (options.trustedStored !== true && !sourceMemoryEvidence) || (sourceMemoryIds && !core_incremental.usesIncrementalMemoryId(reference.sourceMemoryIds, sourceMemoryIds))))
             || (basis === '设定' && !sourceSettingEvidence)) return null;

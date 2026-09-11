@@ -168,6 +168,10 @@ function travelReferencedMemoryText(reference, memoryBank) {
         .join('\n');
 }
 
+// Wording that asserts a joint past with the user. Deliberately broad: a 推演 stop that
+// trips this is dropped, never rewritten, because the safe direction is fewer stops.
+const TRAVEL_SHARED_HISTORY_PROBE = /你们|我们一起|和你一起|与你一起|陪你|带你去|你送|你陪|上次你|那天你|你我曾|一起去过|共同去过|我们曾/;
+
 function evidenceBackedTravelLabel(value, evidence, fallback, limit = 100) {
     const label = core_text.normalizeText(value, limit);
     return label && core_worldPresentation.controlledEvidenceContains(evidence, label) ? label : fallback;
@@ -179,7 +183,16 @@ function normalizeTravelLocation(item, index, memoryBank, mapTheme, sourceMemory
 } = {}) {
     const kindRaw = core_text.normalizeText(item?.kind, 20).toLowerCase();
     if (!core_constants.TRAVEL_LOCATION_KINDS.has(kindRaw)) return null;
-    const basis = item?.basis === '记忆' ? '记忆' : '设定';
+    // Three bases, three different truth claims:
+    //   记忆 — this stop is part of a shared past with {{user}}. Fabricating it would make
+    //          the user believe something happened. Verbatim archive evidence required.
+    //   设定 — this stop is written down in the card or world book. Verbatim quote required.
+    //   推演 — this is somewhere the character would plausibly go, inferred from persona and
+    //          world. That is ordinary characterisation, not a claim about the user's history,
+    //          so it needs no quote — but it may never mention a shared past, and the UI
+    //          always labels it as inferred.
+    const basisRaw = core_text.normalizeText(item?.basis, 20);
+    const basis = basisRaw === '记忆' ? '记忆' : basisRaw === '推演' ? '推演' : '设定';
     const dialogueActs = kindRaw === 'near' ? normalizeTravelPresentExpressions(item?.dialogueActs, memoryBank, 8) : [];
     const legacyDialogueLines = allowLegacyStored && kindRaw === 'near' ? core_text.cleanArray(item?.dialogueLines, 8, 1000) : [];
     const dialogueLines = allowLegacyStored ? legacyDialogueLines : renderTravelPresentLines(dialogueActs, 8);
@@ -195,24 +208,35 @@ function normalizeTravelLocation(item, index, memoryBank, mapTheme, sourceMemory
     if (basis === '记忆' && (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor)) return null;
     if (sourceMemoryIds && core_text.normalizeText(item?.sourceMemoryAnchor, 120) !== reference.sourceMemoryAnchor) return null;
     if (basis === '记忆' && sourceMemoryIds && !core_incremental.usesIncrementalMemoryId(reference.sourceMemoryIds, sourceMemoryIds)) return null;
+    // A 推演 stop is the character's own routine, so any claim of a joint past is the one
+    // thing it must not smuggle in. Reject the stop rather than silently rewriting it.
+    if (basis === '推演') {
+        if (sourceMemoryIds) return null;
+        const claimText = [item?.name, item?.region, item?.summary,
+            ...(Array.isArray(item?.dialogueActs) ? [] : []), item?.keepsake?.body].map(v => core_text.normalizeText(v, 1800)).join(' ');
+        if (TRAVEL_SHARED_HISTORY_PROBE.test(claimText)) return null;
+    }
     const settingEvidenceRaw = core_text.normalizeText(item?.sourceSettingEvidence, 800);
     const settingEvidence = basis === '设定' && settingEvidenceRaw.length >= 4
         && core_worldPresentation.controlledEvidenceContains(controlledEvidence, settingEvidenceRaw)
         ? settingEvidenceRaw : '';
     if (!allowLegacyStored && basis === '设定' && !settingEvidence) return null;
     const labelEvidence = basis === '记忆' ? travelReferencedMemoryText(reference, memoryBank) : settingEvidence;
+    const inferred = basis === '推演';
     const fallbackName = kindRaw === 'near' ? `附近停靠 ${index + 1}` : `远方坐标 ${index + 1}`;
-    const name = allowLegacyStored
+    const name = allowLegacyStored || inferred
         ? (core_text.normalizeText(item?.name, 100) || fallbackName)
         : evidenceBackedTravelLabel(item?.name, labelEvidence, fallbackName, 100);
-    const region = allowLegacyStored
+    const region = allowLegacyStored || inferred
         ? core_text.normalizeText(item?.region, 120)
         : evidenceBackedTravelLabel(item?.region, labelEvidence, kindRaw === 'near' ? '生活半径' : '远方', 120);
     const summary = allowLegacyStored
         ? (core_text.normalizeText(item?.summary, 1800) || (kindRaw === 'near' ? '旧版附近地点。' : '旧版远方地点。'))
         : basis === '记忆'
             ? reference.sourceMemoryAnchor
-            : settingEvidence;
+            : inferred
+                ? core_text.normalizeText(item?.summary, 1800)
+                : settingEvidence;
     const keepsake = kindRaw === 'far'
         ? secureTravelKeepsake(rawKeepsake, item, memoryBank, reference, { allowLegacyStored })
         : null;
@@ -320,10 +344,11 @@ ${JSON.stringify(worldPresentation || core_worldPresentation.resolveWorldPresent
 硬性要求：
  - mapTheme 必须照抄 CONTROLLED_WORLD_PRESENTATION_JSON.mapTheme。far.sceneTheme 应按该地点本身选择 city/coast/mountain/forest/campus/historic/fantasy/scifi/neutral；本地会再次依据地点语义校验，不能用一个全局主题覆盖雪山、海港等不同地点。keepsake.kind 只能从 allowedKeepsakes 中选择。keepsake.tone 只能 rose/ocean/forest/sunset/night/paper；它们只是本地白名单样式 token。禁止输出坐标、颜色值、CSS、HTML、JavaScript、URL、图片或 class。
  - ${revisit ? '本轮基于既有证据返回 0～3 个地点的新当下对话或纪念文字，可以重访原地点；文字不得重复已有版本，不得声称发生新旅程。' : incremental ? '本轮只返回 0～4 个由 incrementalMemoryIds 新证明且不在 EXISTING_TRAVEL_INDEX_JSON 中的地点；没有新地点时 locations 为空。' : '初次只生成证据支持的不同地点，最多 8 个；只有 1 处就返回 1 处。near/far 不设最低配额，允许只有附近或只有远方。没有可证地点则返回 locations:[]，不要凑数。'}
-- name/region 不是自由叙事槽。basis=记忆 时只能逐字取自所引 Mxxx；basis=设定 时必须逐字出现在 sourceSettingEvidence 中，而 sourceSettingEvidence 必须逐字取自受控角色卡/世界书。没有这种证据就不要生成该站。distanceToken 只能为 walk/local/day-trip/journey/distant/unknown；不要输出自由 distanceLabel。title、routeSummary、summary 均由本地生成，模型文字会被忽略。
+- name/region：basis=记忆 时只能逐字取自所引 Mxxx；basis=设定 时必须逐字出现在 sourceSettingEvidence 中，而 sourceSettingEvidence 必须逐字取自受控角色卡/世界书；basis=推演 时可自由命名，但必须符合角色人设与世界观。distanceToken 只能为 walk/local/day-trip/journey/distant/unknown；不要输出自由 distanceLabel。title、routeSummary、summary 均由本地生成，模型文字会被忽略。
 - near 是同城/日常可抵达地点。提供 3～8 个 dialogueActs；不要写 dialogueLines 或任何自由台词。本地会依据双方真实关系层级裁剪 token 并组合成 {{char}} 对 {{user}} 的当下短句，不替 {{user}} 回应。关系证据不足时仅保留中性祝福/视觉，love、embrace 等越级 token 会被清空。
 - far 是远途、异地或世界观中的遥远地点，点击后显示由插件本地 HTML/SVG/CSS + 纯文字渲染的纪念载体。载体必须跟随时代、科技、职业与世界观：现代世界可以是 postcard/letter/journal；古代或低科技世界优先考虑 letter/journal/scroll/fieldnote；机构/任务型背景可用 dossier/fieldnote；未来科技可用 datalog。每个 keepsake 提供 3～8 个 presentExpressions，并利用 register/image/intensity/cadence 等轴结合人设、世界观和关系阶段形成充沛但不伪造历史的文字；不要写 title/mark/greeting/body/closing/emblem，自由正文会被忽略，这些字段由本地安全构造。
 - presentExpression 的白名单与贺卡相同：time=none/now/today/tonight/from-now-on；emotion=none/love/miss/cherish/care/calm/grateful/joy；wish=none/peace/joy/health/freedom/warmth/good-dreams/success；gesture=none/stay/meet/hold-hands/embrace/walk/listen；tone=quiet/direct/warm/playful/ceremonial；register=plain/restrained/lyrical/classical/futurist；image=none/light/stars/wind/rain/sea/home/path/season；intensity=low/medium/high；cadence=single/stacked/fragments。古代/奇幻/未来语境应选择合适 register，不要所有角色都用同一种现代语气。
+- basis=推演：当档案与受控角色卡/世界书都没有写明具体地点时使用。这是"依据人设与世界观合理推断他会去的地方"，属于角色塑造，不是事实主张。此时 sourceMemoryIds/sourceMemoryAnchor/sourceSettingEvidence 全部留空，name/region/summary 由你自己写；但**绝对不能出现任何"你们/我们一起/陪你/带你去/上次你"之类与 {{user}} 共同经历的表述**，出现即整站作废。优先使用 记忆 与 设定；只有在它们凑不出足够地点时才用 推演 补足。
 - basis=记忆 时必须引用真实 sourceMemoryIds + 完全匹配的 sourceMemoryAnchor${incremental ? '，且至少使用一个 incrementalMemoryIds' : ''}，sourceSettingEvidence 留空；keepsake.evidenceExcerpt 若填写，只能是该 exact anchor 的逐字子串。basis=设定 时 sourceMemoryIds/sourceMemoryAnchor 与 evidenceExcerpt 必须为空，sourceSettingEvidence 必须逐字摘录受控角色卡/世界书；只能表达角色稳定生活/世界观或尚未发生的当下愿望，不能声称和 {{user}} 已经共同去过。
 - 手机里的地图、导航、旅行与行程 App 已停用，不要描述手机界面。只输出 JSON。`;
 }

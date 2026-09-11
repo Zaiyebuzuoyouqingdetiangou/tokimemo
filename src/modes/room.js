@@ -428,6 +428,31 @@ export function roomRequiredPetSpecies(memoryBank, { controlledEvidence = null, 
     return genericControlled || genericCharacter ? ['other'] : [];
 }
 
+// Fixed templates only. The single interpolated value is a locally counted integer.
+function roomRepairHint(reason) {
+    const count = () => {
+        const found = /得到\s*(\d{1,3})\s*个/.exec(reason);
+        return found ? Number(found[1]) : null;
+    };
+    if (/私人生活空间不足/.test(reason)) {
+        const got = count();
+        return `上一轮只有 ${got === null ? '不足 3' : got} 个空间通过校验。每个空间必须写满至少 3 件物件，且每件物件的 description 与 line 都不能为空——物件不足 3 件的空间会被整个丢弃。请输出 3～10 个彼此明显不同的空间（label 与 spaceType 不可重复），每个空间 3～8 件物件。`;
+    }
+    if (/空间或物件未写完整/.test(reason)) {
+        return '上一轮有空间的 objects 少于 3 件或缺字段。每件物件都必须同时有 label、description、line 三项，缺任意一项该物件即作废。';
+    }
+    if (/既往共同经历/.test(reason)) {
+        return `上一轮有物件在 basis 非"记忆"的情况下写了与 {{user}} 的共同往事。basis=设定/推演 的物件只能写他自己的生活痕迹，不能出现"你们/我们一起/陪你/上次你"之类表述。`;
+    }
+    if (/宠物/.test(reason)) {
+        return '上一轮的宠物缺少受控原文证据。没有角色卡/世界书明确写到宠物时，pets 请直接留空数组。';
+    }
+    if (/时段|daypart/i.test(reason)) {
+        return 'dayparts 必须同时包含 morning/daytime/evening/night 四个时段，每段都要有 spaceId、activity、line 与 focusObjectId。';
+    }
+    return '';
+}
+
 export function roomNeedsSchemaUpgrade(session) {
     return !!session
         && session.kind === core_constants.MODE.ROOM
@@ -441,6 +466,11 @@ export function normalizeRoom(data, memoryBank, options = {}) {
         const code = /宠物/.test(reason) ? 'RMT_ROOM_PETS' : /既往共同经历/.test(reason) ? 'RMT_ROOM_HISTORY' : 'RMT_ROOM_STRUCTURE';
         error.code = code;
         error.retryable = true;
+        // The user-facing message is deliberately sanitised, which left the retry with
+        // "something was incomplete" and no idea what to fix. The shortfall itself is
+        // computed locally from counts, so a fixed-template hint carries no model or user
+        // text and can safely be fed back into the next attempt.
+        error.repairHint = roomRepairHint(reason);
         throw error;
     }
 }
@@ -462,7 +492,7 @@ function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentati
             const label = core_text.normalizeText(item?.label, 60) || `角落 ${objectIndex + 1}`;
             const description = core_text.normalizeText(item?.description, 1600);
             const line = core_text.normalizeText(item?.line, 800);
-            if (basis === '设定' && [label, description, line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) return null;
+            if (basis !== '记忆' && [label, description, line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) return null;
             const reference = basis === '记忆'
                 ? core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, `${item?.label || ''}
 ${description}
