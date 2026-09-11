@@ -632,6 +632,7 @@ UNTRUSTED_APP_PLAN_JSON:\n${JSON.stringify(app, null, 2)}
 硬性要求：
 - 必须补完 UNTRUSTED_APP_PLAN_JSON 中全部 ${app.entries.length} 个 entry id，不得删减或换 id；每项必须有 preview，且 detail/messages/fields/imageCaption 至少一种有实质内容。
 - 例外：若某个目录没有足够原文，保留该 id 并仅返回 {"id":"原id","unavailable":true}。这是明确的资料空缺，不是虚构记录；不要为满足目录数量补造内容，也不要因这一项空缺放弃其他有据条目。
+- 这是一台正在使用中的设备，绝大多数条目应当是 basis=设定 的日常内容：工作往来、兴趣、购物、提醒、草稿、未发送的话、与非重要 NPC 的事务性对话等。只有确实需要复述与 {{user}} 已发生的共同经历时才用 basis=记忆。不要把整台设备写成剧情回顾。
 - basis=记忆 时必须提供当前档案中有效 sourceMemoryIds + sourceMemoryAnchor${sourceMemoryIds ? '，并至少引用一个 incrementalMemoryIds' : ''}，并把直接支持条目的 Mxxx 原句逐字放入 sourceMemoryEvidence；chat 的联系人和每条消息、contacts 的每个字段值都必须在该原句或所引 Mxxx 中逐字出现，不能用真实 id/anchor 替无关新事实洗白。sourceSettingEvidence 留空。basis=设定 必须把直接支持该条目的角色卡/世界书原句逐字放进 sourceSettingEvidence，sourceMemoryIds/sourceMemoryAnchor/sourceMemoryEvidence 留空。没有直接证据就不要生成；绝不能推导新职业、新亲属或新重要 NPC，也不能冒充与 {{user}} 已发生的共同历史。
 - kind=chat 只收录 basis=记忆 的逐字原话，不接受设定推演冒充消息。每个有 messages 的聊天条目至少2条有据的双向消息即可，不重复句子、不拆散摘要凑8/10/12条。必须提供 contactName；每条消息必须用 speakerRole=owner 或 contact 明确区分设备主人和聊天对象，且同一段对话中 owner/contact 两边都必须实际出现。speaker 必须写实际显示名，禁止用“对方”“我”“本人”作为偷懒标签。群聊里 contact 消息可保留各自真实姓名，但 owner 仍表示设备主人。
 - 设备主人是 ${core_text.normalizeText(context?.name2 || memoryBank?.characterName, 100) || '当前角色'}；当前用户是 ${core_text.normalizeText(context?.name1 || memoryBank?.userName, 100) || '当前用户'}。如果聊天对象就是当前用户，contactName/speaker 使用当前用户实际名字。
@@ -888,7 +889,7 @@ ${JSON.stringify(compactPhoneExisting(previous), null, 2)}
 - 总共规划 0～8 个真正由 incrementalMemoryIds 带来的新条目；每个相关 App 1～3 条即可。没有任何合适的新条目时必须返回 {"apps":[]}，该空增量会被本地正常记录，不要为了凑数复述旧内容。
 - app id/kind 必须对应现有 App；不得向 schedule/calendar/location/travel/map/navigation/transit/route 或日历/地图/导航/路线/行程/出行/旅行追加内容；不改变 deviceKind、设备名、锁屏或既有 liveStates。
 - 新条目的标题、对象、时间与主题必须避开 EXISTING_PHONE_INDEX_JSON；禁止把旧聊天、旧相册、旧笔记换措辞再说一次。
-- 与 {{user}} 的已发生共同历史必须在详情阶段使用 basis=记忆并引用 incrementalMemoryIds；普通工作/兴趣当前状态可为设定。
+- 与 {{user}} 的已发生共同历史必须在详情阶段使用 basis=记忆并引用 incrementalMemoryIds；但新增档案更多是用来确定“这段时间他在过什么日子”，由此规划的工作、兴趣、事务、草稿等当前状态条目应当用 basis=设定，不必逐条复述剧情。
 - 禁止前任/第三方恋爱；只输出 JSON。`;
 }
 
