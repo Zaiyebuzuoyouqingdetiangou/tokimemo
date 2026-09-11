@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 63
-// Source SHA-256: 59fd67c607effa803c724d1354c51be1965a66822a96fe31104f8a47fd42c3a4
+// Source SHA-256: c5848cc5ceafe911bdbf1c591c0517e32fda2382363c63eab709b50b7c09ce91
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -324,7 +324,12 @@ const CATEGORY_VALUES = new Set(['日常', '约会', '结局']);
 
 const ROOM_ZONE_VALUES = new Set(['左上', '右上', '左下', '右下', '中央', '近景']);
 
-const ROOM_BASIS_VALUES = new Set(['设定', '记忆']);
+// 记忆 = shared past with the user (hard archive evidence required).
+// 设定 = written down in the card or world book (verbatim quote required).
+// 推演 = inferred from persona and world. That is characterisation, not a factual claim
+//        about the user's history, so it carries no quote — but it may never mention a
+//        shared past, and the UI always labels it as inferred.
+const ROOM_BASIS_VALUES = new Set(['设定', '记忆', '推演']);
 
 const PHONE_DEVICE_KINDS = new Set(['neutral', 'phone', 'watch', 'terminal', 'communicator', 'folio', 'relic']);
 
@@ -16556,7 +16561,8 @@ UNTRUSTED_APP_PLAN_JSON:\n${JSON.stringify(app, null, 2)}
 硬性要求：
 - 必须补完 UNTRUSTED_APP_PLAN_JSON 中全部 ${app.entries.length} 个 entry id，不得删减或换 id；每项必须有 preview，且 detail/messages/fields/imageCaption 至少一种有实质内容。
 - 例外：若某个目录没有足够原文，保留该 id 并仅返回 {"id":"原id","unavailable":true}。这是明确的资料空缺，不是虚构记录；不要为满足目录数量补造内容，也不要因这一项空缺放弃其他有据条目。
-- 这是一台正在使用中的设备，绝大多数条目应当是 basis=设定 的日常内容：工作往来、兴趣、购物、提醒、草稿、未发送的话、与非重要 NPC 的事务性对话等。只有确实需要复述与 {{user}} 已发生的共同经历时才用 basis=记忆。不要把整台设备写成剧情回顾。
+- basis=推演：当角色卡/世界书没有写到这件事时使用。依据人设与世界观合理推断他会有的日常内容，sourceMemoryIds/sourceMemoryAnchor/sourceSettingEvidence 全部留空；但**绝不能出现"你们/我们一起/陪你/上次你"之类与 {{user}} 共同经历的表述**，出现即整条作废。优先 记忆 与 设定，凑不够再用 推演 补足。
+- 这是一台正在使用中的设备，绝大多数条目应当是 basis=设定 或 basis=推演 的日常内容：工作往来、兴趣、购物、提醒、草稿、未发送的话、与非重要 NPC 的事务性对话等。只有确实需要复述与 {{user}} 已发生的共同经历时才用 basis=记忆。不要把整台设备写成剧情回顾。
 - basis=记忆 时必须提供当前档案中有效 sourceMemoryIds + sourceMemoryAnchor${sourceMemoryIds ? '，并至少引用一个 incrementalMemoryIds' : ''}，并把直接支持条目的 Mxxx 原句逐字放入 sourceMemoryEvidence；chat 的联系人和每条消息、contacts 的每个字段值都必须在该原句或所引 Mxxx 中逐字出现，不能用真实 id/anchor 替无关新事实洗白。sourceSettingEvidence 留空。basis=设定 必须把直接支持该条目的角色卡/世界书原句逐字放进 sourceSettingEvidence，sourceMemoryIds/sourceMemoryAnchor/sourceMemoryEvidence 留空。没有直接证据就不要生成；绝不能推导新职业、新亲属或新重要 NPC，也不能冒充与 {{user}} 已发生的共同历史。
 - kind=chat 只收录 basis=记忆 的逐字原话，不接受设定推演冒充消息。每个有 messages 的聊天条目至少2条有据的双向消息即可，不重复句子、不拆散摘要凑8/10/12条。必须提供 contactName；每条消息必须用 speakerRole=owner 或 contact 明确区分设备主人和聊天对象，且同一段对话中 owner/contact 两边都必须实际出现。speaker 必须写实际显示名，禁止用“对方”“我”“本人”作为偷懒标签。群聊里 contact 消息可保留各自真实姓名，但 owner 仍表示设备主人。
 - 设备主人是 ${core_text.normalizeText(context?.name2 || memoryBank?.characterName, 100) || '当前角色'}；当前用户是 ${core_text.normalizeText(context?.name1 || memoryBank?.userName, 100) || '当前用户'}。如果聊天对象就是当前用户，contactName/speaker 使用当前用户实际名字。
@@ -16593,10 +16599,19 @@ function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sourceMemor
             if (options.trustedStored !== true && (!memoryEvidence || !phoneMemoryStructuredFactsSupported(planApp.kind, conversation, messages, fields, memoryEvidence, canonical))) continue;
         } else {
             const generatedText = [entry?.title, preview, detail, imageCaption, ...messages.map(m => `${m.speaker}:${m.text}`), ...fields.map(f => `${f.label}:${f.value}`)].join('\n');
-            // A static setting sentence cannot prove a generated conversation or contact record.
-            // Those high-impact entities require canonical Mxxx provenance instead.
-            if (['chat', 'contacts'].includes(planApp.kind)
-                || !normalizePhoneSettingEvidence(entry, planApp, conversation, generatedText, options.controlledEvidence, options)) continue;
+            if (basis === '推演') {
+                // Inferred device content is characterisation, so it needs no quote. Two hard
+                // limits remain: it may not claim a shared past with the user, and it may not
+                // put words in the user's mouth — a fabricated thread "from" {{user}} would
+                // show messages they never sent, which is the one thing worse than an empty app.
+                if (sourceMemoryIds || PHONE_SHARED_HISTORY_PROBE.test(generatedText)) continue;
+                if (phoneSpeaksAsUser(messages, memoryBank)) continue;
+            } else if (['chat', 'contacts'].includes(planApp.kind)
+                || !normalizePhoneSettingEvidence(entry, planApp, conversation, generatedText, options.controlledEvidence, options)) {
+                // A static setting sentence cannot prove a generated conversation or contact
+                // record. Those high-impact entities require canonical Mxxx provenance instead.
+                continue;
+            }
         }
         seen.add(id);
         if (planApp.kind === 'chat') assertPhoneConversation(messages);
@@ -16604,6 +16619,20 @@ function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sourceMemor
     if (seen.size < expectedIds.size) throw core_text.safeUserError('终端详情不完整：缺字段、ID不符或未能对应原文；没有原文的项目应明确为空。', 'RMT_PHONE_EVIDENCE');
     return { ...raw, id: planApp.id, label: planApp.label, kind: planApp.kind };
 }
+
+// Wording that asserts a joint past with the user. A 推演 entry that trips this is
+// dropped whole rather than rewritten: fewer entries is the safe direction.
+// An inferred thread may never contain a line attributed to the user.
+function phoneSpeaksAsUser(messages, memoryBank) {
+    const userName = core_text.normalizeText(memoryBank?.userName, 120).toLowerCase();
+    if (!userName || !Array.isArray(messages)) return false;
+    return messages.some(message => {
+        const speaker = core_text.normalizeText(message?.speaker, 120).toLowerCase();
+        return speaker === userName || speaker === '{{user}}' || speaker === 'user' || speaker === '我';
+    });
+}
+
+const PHONE_SHARED_HISTORY_PROBE = /你们|我们一起|和你一起|与你一起|陪你|带你去|你送|你陪|上次你|那天你|你我曾|一起去过|我们曾/;
 
 function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, sourceMemoryIds = null, options = {}) {
     const raw = validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sourceMemoryIds, options);
@@ -16634,6 +16663,10 @@ function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, sourceMem
         const sourceSettingEvidence = basis === '设定'
             ? normalizePhoneSettingEvidence(entry, planApp, conversation, evidenceText, options.controlledEvidence, options)
             : '';
+        // A 推演 entry is ordinary device content inferred from persona (a reminder, a
+        // draft, a mundane exchange). It needs no quote, but must not smuggle in a past
+        // with {{user}}, and incremental passes never admit it.
+        if (basis === '推演' && (sourceMemoryIds || PHONE_SHARED_HISTORY_PROBE.test(evidenceText) || phoneSpeaksAsUser(messages, memoryBank))) return null;
         if (!preview || (!detail && !messages.length && !fields.length && !imageCaption)
             || (basis === '记忆' && (!reference.sourceMemoryIds.length || (options.trustedStored !== true && !sourceMemoryEvidence) || (sourceMemoryIds && !core_incremental.usesIncrementalMemoryId(reference.sourceMemoryIds, sourceMemoryIds))))
             || (basis === '设定' && !sourceSettingEvidence)) return null;
@@ -17564,6 +17597,31 @@ function roomRequiredPetSpecies(memoryBank, { controlledEvidence = null, charact
     return genericControlled || genericCharacter ? ['other'] : [];
 }
 
+// Fixed templates only. The single interpolated value is a locally counted integer.
+function roomRepairHint(reason) {
+    const count = () => {
+        const found = /得到\s*(\d{1,3})\s*个/.exec(reason);
+        return found ? Number(found[1]) : null;
+    };
+    if (/私人生活空间不足/.test(reason)) {
+        const got = count();
+        return `上一轮只有 ${got === null ? '不足 3' : got} 个空间通过校验。每个空间必须写满至少 3 件物件，且每件物件的 description 与 line 都不能为空——物件不足 3 件的空间会被整个丢弃。请输出 3～10 个彼此明显不同的空间（label 与 spaceType 不可重复），每个空间 3～8 件物件。`;
+    }
+    if (/空间或物件未写完整/.test(reason)) {
+        return '上一轮有空间的 objects 少于 3 件或缺字段。每件物件都必须同时有 label、description、line 三项，缺任意一项该物件即作废。';
+    }
+    if (/既往共同经历/.test(reason)) {
+        return `上一轮有物件在 basis 非"记忆"的情况下写了与 {{user}} 的共同往事。basis=设定/推演 的物件只能写他自己的生活痕迹，不能出现"你们/我们一起/陪你/上次你"之类表述。`;
+    }
+    if (/宠物/.test(reason)) {
+        return '上一轮的宠物缺少受控原文证据。没有角色卡/世界书明确写到宠物时，pets 请直接留空数组。';
+    }
+    if (/时段|daypart/i.test(reason)) {
+        return 'dayparts 必须同时包含 morning/daytime/evening/night 四个时段，每段都要有 spaceId、activity、line 与 focusObjectId。';
+    }
+    return '';
+}
+
 function roomNeedsSchemaUpgrade(session) {
     return !!session
         && session.kind === core_constants.MODE.ROOM
@@ -17577,6 +17635,11 @@ function normalizeRoom(data, memoryBank, options = {}) {
         const code = /宠物/.test(reason) ? 'RMT_ROOM_PETS' : /既往共同经历/.test(reason) ? 'RMT_ROOM_HISTORY' : 'RMT_ROOM_STRUCTURE';
         error.code = code;
         error.retryable = true;
+        // The user-facing message is deliberately sanitised, which left the retry with
+        // "something was incomplete" and no idea what to fix. The shortfall itself is
+        // computed locally from counts, so a fixed-template hint carries no model or user
+        // text and can safely be fed back into the next attempt.
+        error.repairHint = roomRepairHint(reason);
         throw error;
     }
 }
@@ -17598,7 +17661,7 @@ function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentati
             const label = core_text.normalizeText(item?.label, 60) || `角落 ${objectIndex + 1}`;
             const description = core_text.normalizeText(item?.description, 1600);
             const line = core_text.normalizeText(item?.line, 800);
-            if (basis === '设定' && [label, description, line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) return null;
+            if (basis !== '记忆' && [label, description, line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) return null;
             const reference = basis === '记忆'
                 ? core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, `${item?.label || ''}
 ${description}
@@ -19823,6 +19886,10 @@ function travelReferencedMemoryText(reference, memoryBank) {
         .join('\n');
 }
 
+// Wording that asserts a joint past with the user. Deliberately broad: a 推演 stop that
+// trips this is dropped, never rewritten, because the safe direction is fewer stops.
+const TRAVEL_SHARED_HISTORY_PROBE = /你们|我们一起|和你一起|与你一起|陪你|带你去|你送|你陪|上次你|那天你|你我曾|一起去过|共同去过|我们曾/;
+
 function evidenceBackedTravelLabel(value, evidence, fallback, limit = 100) {
     const label = core_text.normalizeText(value, limit);
     return label && core_worldPresentation.controlledEvidenceContains(evidence, label) ? label : fallback;
@@ -19834,7 +19901,16 @@ function normalizeTravelLocation(item, index, memoryBank, mapTheme, sourceMemory
 } = {}) {
     const kindRaw = core_text.normalizeText(item?.kind, 20).toLowerCase();
     if (!core_constants.TRAVEL_LOCATION_KINDS.has(kindRaw)) return null;
-    const basis = item?.basis === '记忆' ? '记忆' : '设定';
+    // Three bases, three different truth claims:
+    //   记忆 — this stop is part of a shared past with {{user}}. Fabricating it would make
+    //          the user believe something happened. Verbatim archive evidence required.
+    //   设定 — this stop is written down in the card or world book. Verbatim quote required.
+    //   推演 — this is somewhere the character would plausibly go, inferred from persona and
+    //          world. That is ordinary characterisation, not a claim about the user's history,
+    //          so it needs no quote — but it may never mention a shared past, and the UI
+    //          always labels it as inferred.
+    const basisRaw = core_text.normalizeText(item?.basis, 20);
+    const basis = basisRaw === '记忆' ? '记忆' : basisRaw === '推演' ? '推演' : '设定';
     const dialogueActs = kindRaw === 'near' ? normalizeTravelPresentExpressions(item?.dialogueActs, memoryBank, 8) : [];
     const legacyDialogueLines = allowLegacyStored && kindRaw === 'near' ? core_text.cleanArray(item?.dialogueLines, 8, 1000) : [];
     const dialogueLines = allowLegacyStored ? legacyDialogueLines : renderTravelPresentLines(dialogueActs, 8);
@@ -19850,24 +19926,35 @@ function normalizeTravelLocation(item, index, memoryBank, mapTheme, sourceMemory
     if (basis === '记忆' && (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor)) return null;
     if (sourceMemoryIds && core_text.normalizeText(item?.sourceMemoryAnchor, 120) !== reference.sourceMemoryAnchor) return null;
     if (basis === '记忆' && sourceMemoryIds && !core_incremental.usesIncrementalMemoryId(reference.sourceMemoryIds, sourceMemoryIds)) return null;
+    // A 推演 stop is the character's own routine, so any claim of a joint past is the one
+    // thing it must not smuggle in. Reject the stop rather than silently rewriting it.
+    if (basis === '推演') {
+        if (sourceMemoryIds) return null;
+        const claimText = [item?.name, item?.region, item?.summary,
+            ...(Array.isArray(item?.dialogueActs) ? [] : []), item?.keepsake?.body].map(v => core_text.normalizeText(v, 1800)).join(' ');
+        if (TRAVEL_SHARED_HISTORY_PROBE.test(claimText)) return null;
+    }
     const settingEvidenceRaw = core_text.normalizeText(item?.sourceSettingEvidence, 800);
     const settingEvidence = basis === '设定' && settingEvidenceRaw.length >= 4
         && core_worldPresentation.controlledEvidenceContains(controlledEvidence, settingEvidenceRaw)
         ? settingEvidenceRaw : '';
     if (!allowLegacyStored && basis === '设定' && !settingEvidence) return null;
     const labelEvidence = basis === '记忆' ? travelReferencedMemoryText(reference, memoryBank) : settingEvidence;
+    const inferred = basis === '推演';
     const fallbackName = kindRaw === 'near' ? `附近停靠 ${index + 1}` : `远方坐标 ${index + 1}`;
-    const name = allowLegacyStored
+    const name = allowLegacyStored || inferred
         ? (core_text.normalizeText(item?.name, 100) || fallbackName)
         : evidenceBackedTravelLabel(item?.name, labelEvidence, fallbackName, 100);
-    const region = allowLegacyStored
+    const region = allowLegacyStored || inferred
         ? core_text.normalizeText(item?.region, 120)
         : evidenceBackedTravelLabel(item?.region, labelEvidence, kindRaw === 'near' ? '生活半径' : '远方', 120);
     const summary = allowLegacyStored
         ? (core_text.normalizeText(item?.summary, 1800) || (kindRaw === 'near' ? '旧版附近地点。' : '旧版远方地点。'))
         : basis === '记忆'
             ? reference.sourceMemoryAnchor
-            : settingEvidence;
+            : inferred
+                ? core_text.normalizeText(item?.summary, 1800)
+                : settingEvidence;
     const keepsake = kindRaw === 'far'
         ? secureTravelKeepsake(rawKeepsake, item, memoryBank, reference, { allowLegacyStored })
         : null;
@@ -19975,10 +20062,11 @@ ${JSON.stringify(worldPresentation || core_worldPresentation.resolveWorldPresent
 硬性要求：
  - mapTheme 必须照抄 CONTROLLED_WORLD_PRESENTATION_JSON.mapTheme。far.sceneTheme 应按该地点本身选择 city/coast/mountain/forest/campus/historic/fantasy/scifi/neutral；本地会再次依据地点语义校验，不能用一个全局主题覆盖雪山、海港等不同地点。keepsake.kind 只能从 allowedKeepsakes 中选择。keepsake.tone 只能 rose/ocean/forest/sunset/night/paper；它们只是本地白名单样式 token。禁止输出坐标、颜色值、CSS、HTML、JavaScript、URL、图片或 class。
  - ${revisit ? '本轮基于既有证据返回 0～3 个地点的新当下对话或纪念文字，可以重访原地点；文字不得重复已有版本，不得声称发生新旅程。' : incremental ? '本轮只返回 0～4 个由 incrementalMemoryIds 新证明且不在 EXISTING_TRAVEL_INDEX_JSON 中的地点；没有新地点时 locations 为空。' : '初次只生成证据支持的不同地点，最多 8 个；只有 1 处就返回 1 处。near/far 不设最低配额，允许只有附近或只有远方。没有可证地点则返回 locations:[]，不要凑数。'}
-- name/region 不是自由叙事槽。basis=记忆 时只能逐字取自所引 Mxxx；basis=设定 时必须逐字出现在 sourceSettingEvidence 中，而 sourceSettingEvidence 必须逐字取自受控角色卡/世界书。没有这种证据就不要生成该站。distanceToken 只能为 walk/local/day-trip/journey/distant/unknown；不要输出自由 distanceLabel。title、routeSummary、summary 均由本地生成，模型文字会被忽略。
+- name/region：basis=记忆 时只能逐字取自所引 Mxxx；basis=设定 时必须逐字出现在 sourceSettingEvidence 中，而 sourceSettingEvidence 必须逐字取自受控角色卡/世界书；basis=推演 时可自由命名，但必须符合角色人设与世界观。distanceToken 只能为 walk/local/day-trip/journey/distant/unknown；不要输出自由 distanceLabel。title、routeSummary、summary 均由本地生成，模型文字会被忽略。
 - near 是同城/日常可抵达地点。提供 3～8 个 dialogueActs；不要写 dialogueLines 或任何自由台词。本地会依据双方真实关系层级裁剪 token 并组合成 {{char}} 对 {{user}} 的当下短句，不替 {{user}} 回应。关系证据不足时仅保留中性祝福/视觉，love、embrace 等越级 token 会被清空。
 - far 是远途、异地或世界观中的遥远地点，点击后显示由插件本地 HTML/SVG/CSS + 纯文字渲染的纪念载体。载体必须跟随时代、科技、职业与世界观：现代世界可以是 postcard/letter/journal；古代或低科技世界优先考虑 letter/journal/scroll/fieldnote；机构/任务型背景可用 dossier/fieldnote；未来科技可用 datalog。每个 keepsake 提供 3～8 个 presentExpressions，并利用 register/image/intensity/cadence 等轴结合人设、世界观和关系阶段形成充沛但不伪造历史的文字；不要写 title/mark/greeting/body/closing/emblem，自由正文会被忽略，这些字段由本地安全构造。
 - presentExpression 的白名单与贺卡相同：time=none/now/today/tonight/from-now-on；emotion=none/love/miss/cherish/care/calm/grateful/joy；wish=none/peace/joy/health/freedom/warmth/good-dreams/success；gesture=none/stay/meet/hold-hands/embrace/walk/listen；tone=quiet/direct/warm/playful/ceremonial；register=plain/restrained/lyrical/classical/futurist；image=none/light/stars/wind/rain/sea/home/path/season；intensity=low/medium/high；cadence=single/stacked/fragments。古代/奇幻/未来语境应选择合适 register，不要所有角色都用同一种现代语气。
+- basis=推演：当档案与受控角色卡/世界书都没有写明具体地点时使用。这是"依据人设与世界观合理推断他会去的地方"，属于角色塑造，不是事实主张。此时 sourceMemoryIds/sourceMemoryAnchor/sourceSettingEvidence 全部留空，name/region/summary 由你自己写；但**绝对不能出现任何"你们/我们一起/陪你/带你去/上次你"之类与 {{user}} 共同经历的表述**，出现即整站作废。优先使用 记忆 与 设定；只有在它们凑不出足够地点时才用 推演 补足。
 - basis=记忆 时必须引用真实 sourceMemoryIds + 完全匹配的 sourceMemoryAnchor${incremental ? '，且至少使用一个 incrementalMemoryIds' : ''}，sourceSettingEvidence 留空；keepsake.evidenceExcerpt 若填写，只能是该 exact anchor 的逐字子串。basis=设定 时 sourceMemoryIds/sourceMemoryAnchor 与 evidenceExcerpt 必须为空，sourceSettingEvidence 必须逐字摘录受控角色卡/世界书；只能表达角色稳定生活/世界观或尚未发生的当下愿望，不能声称和 {{user}} 已经共同去过。
 - 手机里的地图、导航、旅行与行程 App 已停用，不要描述手机界面。只输出 JSON。`;
 }
@@ -20351,7 +20439,7 @@ async function requestValidatedSegment(prompt, status, options, validator) {
     let lastError = null;
     for (let attempt = 0; attempt < core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS; attempt += 1) {
         const retryNote = attempt && lastError
-            ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || (String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
+            ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || core_text.normalizeText(lastError?.repairHint, 600) || (String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
             : '';
         try {
             const raw = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? '（重试）' : ''}`, options);
@@ -22772,6 +22860,9 @@ function selectedTravelLocation() {
 function travelSourceLabel(item) {
     if (item?.legacyEvidenceUnverified === true) return '旧版自由文字 · 证据未重新核验';
     if (item?.basis === '记忆' && item?.sourceMemoryAnchor) return `剧情足迹 · ${item.sourceMemoryAnchor}`;
+    // An inferred stop must stay visibly distinguishable from an evidenced one, so the
+    // user can always tell which places actually appear in the archive or the card.
+    if (item?.basis === '推演') return '人设推演 · 未见于档案或设定';
     return '角色生活 / 世界设定';
 }
 
