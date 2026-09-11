@@ -32,6 +32,13 @@ export const state = {
   activeAvatarDialogue: null,
   activeProviderRequestCount: 0,
   providerRequestQueue: [],
+  // Adaptive rate-limit throttle (see core/requestCoordinator.js).
+  rateLimitHits: 0,
+  rateLimitSeenAt: 0,
+  rateLimitRetryAfterMs: 0,
+  // Backoff ladder used when the endpoint sends no Retry-After. Overridable so tests
+  // can exercise the retry policy without sleeping through the real ladder.
+  rateLimitRetryDelaysMs: [5000, 15000, 40000],
   butterflyTransitionTimer: 0,
   archiveOverviewCache: { key: '', fetchedAt: 0, items: [] },
   archiveOverviewPromise: null,

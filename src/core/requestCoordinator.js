@@ -333,6 +333,74 @@ export function shouldDeferCachePersistForProviderTraffic() {
     return runtimeState.activeProviderRequestCount > 0 || runtimeState.providerRequestQueue.length > 0;
 }
 
+// ---------------------------------------------------------------------------
+// Adaptive rate-limit throttle.
+//
+// A composite mode fires many requests back to back (the terminal alone is a plan
+// plus one request per app). On a low-RPM endpoint the 3rd or 4th one gets a 429,
+// the single 1.8s retry is nowhere near the provider's window, and the whole
+// composite aborts — which is why these modes "never come out".
+//
+// Once a 429 is seen we stop guessing: serialise provider requests and space them
+// out for the rest of the session. The throttle decays on its own after a quiet
+// period so a one-off spike does not slow everything down forever.
+// ---------------------------------------------------------------------------
+const RATE_LIMIT_MEMORY_MS = 10 * 60 * 1000;
+const RATE_LIMIT_PACING_MS = [0, 2500, 6000, 12000];
+
+export function resetProviderRateLimitThrottle() {
+    runtimeState.rateLimitHits = 0;
+    runtimeState.rateLimitSeenAt = 0;
+    runtimeState.rateLimitRetryAfterMs = 0;
+    drainProviderRequestQueue();
+}
+
+export function noteProviderRateLimit(error = null) {
+    runtimeState.rateLimitHits = Math.min(8, Number(runtimeState.rateLimitHits || 0) + 1);
+    runtimeState.rateLimitSeenAt = Date.now();
+    const hinted = Number(error?.retryAfterMs);
+    if (Number.isFinite(hinted) && hinted > 0) runtimeState.rateLimitRetryAfterMs = Math.min(120000, hinted);
+}
+
+export function activeRateLimitPressure() {
+    const seenAt = Number(runtimeState.rateLimitSeenAt || 0);
+    if (!seenAt || Date.now() - seenAt > RATE_LIMIT_MEMORY_MS) {
+        runtimeState.rateLimitHits = 0;
+        runtimeState.rateLimitRetryAfterMs = 0;
+        return 0;
+    }
+    return Number(runtimeState.rateLimitHits || 0);
+}
+
+// Effective parallelism: drop to a single in-flight request as soon as the endpoint
+// has complained once. Two concurrent requests double the rate you hit the limit.
+export function effectiveProviderConcurrency() {
+    return activeRateLimitPressure() > 0 ? 1 : core_constants.MAX_CONCURRENT_PROVIDER_REQUESTS;
+}
+
+export function providerPacingDelayMs() {
+    const pressure = activeRateLimitPressure();
+    if (pressure <= 0) return 0;
+    return RATE_LIMIT_PACING_MS[Math.min(pressure, RATE_LIMIT_PACING_MS.length - 1)];
+}
+
+export async function waitForProviderPacing(signal = null) {
+    const delay = providerPacingDelayMs();
+    if (delay <= 0) return;
+    await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            try { signal?.removeEventListener?.('abort', onAbort); } catch {}
+            resolve();
+        }, delay);
+        function onAbort() {
+            clearTimeout(timer);
+            reject(createGenerationAbortError());
+        }
+        if (signal?.aborted) { onAbort(); return; }
+        signal?.addEventListener?.('abort', onAbort, { once: true });
+    });
+}
+
 export function createProviderPermitRelease() {
     let released = false;
     return () => {
@@ -344,7 +412,7 @@ export function createProviderPermitRelease() {
 }
 
 export function drainProviderRequestQueue() {
-    while (runtimeState.activeProviderRequestCount < core_constants.MAX_CONCURRENT_PROVIDER_REQUESTS && runtimeState.providerRequestQueue.length) {
+    while (runtimeState.activeProviderRequestCount < effectiveProviderConcurrency() && runtimeState.providerRequestQueue.length) {
         const waiter = runtimeState.providerRequestQueue.shift();
         if (!waiter || waiter.signal?.aborted) {
             try { waiter?.signal?.removeEventListener?.('abort', waiter.onAbort); } catch {}
@@ -359,7 +427,7 @@ export function drainProviderRequestQueue() {
 
 export function acquireProviderRequestPermit(signal) {
     if (signal?.aborted) return Promise.reject(createGenerationAbortError());
-    if (runtimeState.activeProviderRequestCount < core_constants.MAX_CONCURRENT_PROVIDER_REQUESTS) {
+    if (runtimeState.activeProviderRequestCount < effectiveProviderConcurrency()) {
         runtimeState.activeProviderRequestCount += 1;
         return Promise.resolve(createProviderPermitRelease());
     }
@@ -418,10 +486,26 @@ export function runGenerationRequestWithTimeout(factory, controller, timeoutMs, 
     });
 }
 
-export function shouldRetrySegmentRequest(error) {
+// A rate limit is the one failure that is almost always worth waiting out, so it gets
+// its own attempt budget instead of sharing the single validation retry.
+export const MAX_SEGMENT_ATTEMPTS = 2;
+export const MAX_RATE_LIMIT_ATTEMPTS = 4;
+
+export function isRateLimitError(error) {
+    return error?.code === 'RMT_CONNECTION_RATE_LIMIT';
+}
+
+export function segmentAttemptBudget(error) {
+    return isRateLimitError(error) ? MAX_RATE_LIMIT_ATTEMPTS : MAX_SEGMENT_ATTEMPTS;
+}
+
+export function shouldRetrySegmentRequest(error, attempt = 0) {
     if (!error || error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') return false;
     if (['RMT_REQUEST_TIMEOUT', 'RMT_CONNECTION_AUTH', 'RMT_CONNECTION_QUOTA', 'RMT_CONNECTION_CONTEXT_LIMIT', 'RMT_CONNECTION_CONFIG', 'RMT_CONNECTION_INVALID_REQUEST'].includes(error?.code)) return false;
-    if (error?.code === 'RMT_CONNECTION_RATE_LIMIT' && Number(error.retryAfterMs) > 60000) return false;
+    if (attempt + 1 >= segmentAttemptBudget(error)) return false;
+    // Give up only when the endpoint itself says the wait is longer than we should
+    // hold a generation slot. (Unchanged 60s contract.)
+    if (isRateLimitError(error)) return !(Number(error.retryAfterMs) > 60000);
     return error?.retryableJson === true || error?.retryable === true;
 }
 
@@ -439,10 +523,21 @@ export function validateGeneratedSegment(raw, validator) {
     }
 }
 
-export async function waitBeforeSegmentRetry(error) {
-    const delay = error?.code === 'RMT_CONNECTION_RATE_LIMIT' ? Math.min(60000, Math.max(1800, Number(error?.retryAfterMs) || 0))
-        : error?.code === 'RMT_CONNECTION_SERVER' ? 1000
-            : 0;
+export function segmentRetryDelayMs(error, attempt = 0) {
+    if (isRateLimitError(error)) {
+        const hinted = Number(error?.retryAfterMs);
+        // Retry-After is authoritative when the endpoint sends one; otherwise back off
+        // 5s / 15s / 40s, because 1.8s is shorter than every real provider window.
+        if (Number.isFinite(hinted) && hinted > 0) return Math.min(120000, Math.max(1000, hinted));
+        const ladder = Array.isArray(runtimeState.rateLimitRetryDelaysMs) && runtimeState.rateLimitRetryDelaysMs.length
+            ? runtimeState.rateLimitRetryDelaysMs : [5000, 15000, 40000];
+        return Number(ladder[Math.min(attempt, ladder.length - 1)]) || 0;
+    }
+    return error?.code === 'RMT_CONNECTION_SERVER' ? 1000 : 0;
+}
+
+export async function waitBeforeSegmentRetry(error, attempt = 0) {
+    const delay = segmentRetryDelayMs(error, attempt);
     if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
     await core_context.yieldToUi();
 }
