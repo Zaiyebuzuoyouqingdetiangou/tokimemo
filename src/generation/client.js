@@ -188,7 +188,7 @@ export async function requestValidatedSegment(prompt, status, options, validator
     options = { ...options, context, contextEnvelope: typeof options?.contextEnvelope === 'string'
         ? options.contextEnvelope : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options?.mode, context) }) };
     let lastError = null;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (let attempt = 0; attempt < core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS; attempt += 1) {
         const retryNote = attempt && lastError
             ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || (String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
             : '';
@@ -198,8 +198,8 @@ export async function requestValidatedSegment(prompt, status, options, validator
         } catch (error) {
             if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
             lastError = error;
-            if (!attempt && core_requestCoordinator.shouldRetrySegmentRequest(error)) {
-                await core_requestCoordinator.waitBeforeSegmentRetry(error);
+            if (core_requestCoordinator.shouldRetrySegmentRequest(error, attempt)) {
+                await core_requestCoordinator.waitBeforeSegmentRetry(error, attempt);
                 continue;
             }
             throw error;
@@ -322,6 +322,9 @@ export function normalizeConnectionManagerError(error) {
         retryable = false;
     } else if (status === 429 || /(too many requests|rate.?limit|quota exceeded|resource exhausted)/i.test(hints)) {
         code = 'RMT_CONNECTION_RATE_LIMIT';
+        // Single observation point: from here on the throttle serialises and paces
+        // provider traffic until it decays.
+        core_requestCoordinator.noteProviderRateLimit(error);
         message = `模型服务正在限流${technical}。仅对本段按等待窗口有界重试；等待过长或再次失败会停止本次组合任务。`;
         retryable = true;
     } else if (status === 413 || ((status === 400 || !status) && /(context length|context window|too many tokens|maximum context|payload too large|request too large)/i.test(original))) {
@@ -487,6 +490,9 @@ export async function requestJson(prompt, statusText = '正在根据当前聊天
     let releaseProviderPermit = null;
     try {
         releaseProviderPermit = await core_requestCoordinator.acquireProviderRequestPermit(controller.signal);
+        // Once the endpoint has rate-limited us, space requests out instead of firing
+        // the next one the instant a slot frees up.
+        await core_requestCoordinator.waitForProviderPacing(controller.signal);
         core_context.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
         return await generateConfiguredJson(prompt, {
             ...options,
