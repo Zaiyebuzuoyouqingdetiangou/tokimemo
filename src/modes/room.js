@@ -118,6 +118,10 @@ function roomClauseIsProvenPresentOnly(value, userName = '') {
     const canonical = roomCanonicalUserText(clause, userName);
     // Bounded speech acts, not a whole-paragraph exemption for words such as "现在".
     // Completed/remembered events are checked independently before this grammar is used.
+    // A second-person imperative with an immediate-action particle states a directive for
+    // right now, never a past event. The existing 的/了/过 exclusion still keeps possessive
+    // and perfective phrasing ("你落下的围巾") out, and past-time wording is caught earlier.
+    if (/^\{\{user\}\}(?:先|就|这就|现在)?[^的了过]{1,16}(?:一下|一把|一点儿?|一会儿?|吧)$/u.test(canonical)) return true;
     if (/^\{\{user\}\}(?:要|想)(?:喝|吃|坐|看|听)[^的了过]{0,24}(?:还是|或)[^的了过]{1,24}$/u.test(canonical)
         || /^(?:\{\{user\}\})?(?:看|坐|站|靠|躺|等)(?:这里|这边|那边|那里|一会儿?)?$/u.test(canonical)
         || /^(?:这里|这边|那里|那边)是[^的了过]{1,16}$/u.test(canonical)
@@ -459,9 +463,25 @@ export function roomNeedsSchemaUpgrade(session) {
         && Number(session.roomVersion) !== core_constants.ROOM_SESSION_VERSION;
 }
 
+// Errors that assert something untrue about the user, or about evidence that does exist.
+// These are never relaxed: a second pass must not be able to buy its way past them.
+function roomTruthClaimFailure(reason) {
+    return /既往共同经历|宠物/.test(String(reason || ''));
+}
+
 export function normalizeRoom(data, memoryBank, options = {}) {
     try { return normalizeRoomData(data, memoryBank, options); }
-    catch (error) {
+    catch (first) {
+        // Tiering, per the evidence layer's actual purpose: it exists to stop false claims
+        // about the user, not to enforce how many corners a character's flat has. A purely
+        // structural shortfall degrades to a smaller room instead of no room at all.
+        if (!options.relaxStructure && !roomTruthClaimFailure(first?.message)) {
+            try {
+                const relaxed = normalizeRoomData(data, memoryBank, { ...options, relaxStructure: true });
+                return { ...relaxed, structureRelaxed: true };
+            } catch { /* fall through to the original, more informative failure */ }
+        }
+        const error = first;
         const reason = String(error?.message || '');
         const code = /宠物/.test(reason) ? 'RMT_ROOM_PETS' : /既往共同经历/.test(reason) ? 'RMT_ROOM_HISTORY' : 'RMT_ROOM_STRUCTURE';
         error.code = code;
@@ -475,7 +495,11 @@ export function normalizeRoom(data, memoryBank, options = {}) {
     }
 }
 
-function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentation = null, controlledEvidence = null, characterEvidence = null } = {}) {
+function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentation = null, controlledEvidence = null, characterEvidence = null, relaxStructure = false } = {}) {
+    // Minimums for the character's own space. Truth-claim checks below ignore this entirely.
+    const minObjects = relaxStructure ? 2 : 3;
+    const minSpaces = relaxStructure ? 2 : 3;
+    const minPresenceLines = relaxStructure ? 2 : 4;
     const rawSpaces = Array.isArray(data?.spaces) ? data.spaces : [];
     const userName = core_text.normalizeText(memoryBank?.userName, 120);
     const usedSpaceIds = new Set();
@@ -525,8 +549,8 @@ ${line}`, memoryBank, 1)
                 ? requestedAtmosphere : '这里保留着他长期生活留下的细小痕迹。',
             objects,
         };
-    }).filter(space => space.objects.length >= 3);
-    if (spaces.length < 3) throw new Error(`私人生活空间不足：得到 ${spaces.length} 个有效空间，至少需要 3 个。`);
+    }).filter(space => space.objects.length >= minObjects);
+    if (spaces.length < minSpaces) throw new Error(`私人生活空间不足：得到 ${spaces.length} 个有效空间，至少需要 ${minSpaces} 个。`);
     const spaceSignatures = new Set(spaces.map(space => `${core_incremental.normalizedContentKey(space.label, 80)}|${core_incremental.normalizedContentKey(space.spaceType, 100)}`));
     if (spaceSignatures.size !== spaces.length) throw new Error('私人空间出现重复：每个空间必须有不同的名称和主功能。');
     const sceneClasses = new Set(spaces.map(space => roomSceneClass(space.spaceType, space.label)));
@@ -561,7 +585,7 @@ ${line}`, memoryBank, 1)
     }
     const presenceLines = core_text.cleanArray(data?.presenceLines, 12, 900)
         .filter(line => !roomNarrativeClaimsSharedHistory(line, userName));
-    if (presenceLines.length < 4) throw new Error(`“他的房间”角色互动台词不足：${presenceLines.length} 句，至少需要 4 句。`);
+    if (presenceLines.length < minPresenceLines) throw new Error(`“他的房间”角色互动台词不足：${presenceLines.length} 句，至少需要 ${minPresenceLines} 句。`);
     const initialDaypart = roomDaypartState();
     const initialSpace = spaceById.get(dayparts[initialDaypart.key]?.spaceId) || spaces[0];
     const title = core_text.normalizeText(data?.title, 100) || '他的房间';
@@ -644,8 +668,14 @@ export async function generateRoomWithRepair(context, memoryBank, origin, taskKe
         + '\nCONTROLLED_WORLD_PRESENTATION_JSON:\n' + JSON.stringify(presentation.profile || {});
     const requestOptions = { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], context, contextEnvelope: presentation.contextEnvelope, origin, taskKey, mode: core_constants.MODE.ROOM, background: true };
     let raw = await request(prompt, '他的房间 · 正在整理空间…', requestOptions, value => {
-        if (!Array.isArray(value?.spaces) || value.spaces.length < 3 || value.spaces.length > 10
-            || value.spaces.some(space => !Array.isArray(space?.objects) || space.objects.length < 3)) throw core_text.safeUserError('房间空间或物件未写完整。', 'RMT_ROOM_STRUCTURE');
+        // This pre-check only decides whether a response is worth normalising at all, so it
+        // must not be stricter than the normaliser's own relaxed fallback — otherwise the
+        // fallback is unreachable and a slightly thin room is rejected before it is tried.
+        const usable = Array.isArray(value?.spaces)
+            ? value.spaces.filter(space => Array.isArray(space?.objects) && space.objects.length >= 2) : [];
+        if (!Array.isArray(value?.spaces) || value.spaces.length > 10 || usable.length < 2) {
+            throw core_text.safeUserError('房间空间或物件未写完整。', 'RMT_ROOM_STRUCTURE');
+        }
         return value;
     });
     const slots = roomCandidateRepairSlots(raw, memoryBank);
