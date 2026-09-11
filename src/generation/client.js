@@ -65,28 +65,87 @@ function worldPresentationProfileBinding(context) {
     }
 }
 
+// Collect the hand-picked setting entries that actually fit this request.
+//
+// Two rules, both deliberate:
+//   1. Whole entries only. Half a setting entry is worse than none, because the model
+//      would quote a sentence that is no longer present in the evidence and the quote
+//      would then fail verbatim validation anyway.
+//   2. Never throw. A world book that is missing, unselected, partially readable or
+//      simply too large must degrade to "less evidence", not to "no generation". The
+//      modes already work with zero setting evidence — they fall back to the character
+//      card — so blocking the whole request was never the right failure mode.
+async function collectFittingSelectedSetting(context, budget = core_constants.MAX_SELECTED_SETTING_CHARS) {
+    const empty = { text: '', used: 0, total: 0, dropped: 0, complete: true, note: '' };
+    let selected;
+    try {
+        selected = await archive_repository.collectSelectedMemoryWorldInfo(context, core_context.getChatId(context), null, { settingsOnly: true });
+    } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        console.warn('[HeartbeatMemories] selected setting unavailable', core_text.safeErrorDiagnostic(error));
+        return { ...empty, complete: false, note: '本次没能读取所选设定世界书，已改用角色卡证据继续生成。' };
+    }
+    const excluded = core_contextTags.excludedTagsForContext(context);
+    const kept = [];
+    let chars = 0;
+    let total = 0;
+    for (const entry of selected.entries) {
+        const text = core_contextTags.stripExcludedTags(entry.content, excluded);
+        if (!text) continue;
+        total += 1;
+        if (chars + text.length + 1 > budget) continue;
+        kept.push(text);
+        chars += text.length + 1;
+    }
+    const dropped = total - kept.length;
+    const collectorIncomplete = selected.coverage?.status !== 'complete';
+    const notes = [];
+    if (dropped > 0) notes.push(`本次设定容量只装下 ${kept.length}/${total} 条所选条目，其余条目未送入（旧内容保留）`);
+    if (collectorIncomplete) notes.push(core_text.normalizeText(selected.coverage?.reason, 200));
+    return {
+        text: kept.join('\n'),
+        used: kept.length,
+        total,
+        dropped,
+        complete: dropped === 0 && !collectorIncomplete,
+        note: notes.filter(Boolean).join('；'),
+    };
+}
+
 export async function buildWorldPresentationContext(context, memoryBank, mode) {
-    let selectedSettingText = '';
-    if ([core_constants.MODE.ROOM, core_constants.MODE.TRAVEL].includes(mode)) {
-        const selected = await archive_repository.collectSelectedMemoryWorldInfo(context, core_context.getChatId(context), null, { settingsOnly: true });
-        if (selected.coverage.status !== 'complete') throw core_text.safeUserError('所选设定世界书读取不完整，本次未生成；旧内容保留。请检查来源后重试。', 'RMT_SETTING_SOURCE_PARTIAL');
-        selectedSettingText = selected.entries.map(entry => core_contextTags.stripExcludedTags(entry.content, core_contextTags.excludedTagsForContext(context))).join('\n');
+    const wantsSelectedSetting = [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE].includes(mode);
+    let selectedSetting = wantsSelectedSetting
+        ? await collectFittingSelectedSetting(context)
+        : { text: '', used: 0, total: 0, dropped: 0, complete: true, note: '' };
+
+    const build = async settingText => {
+        const contextEnvelope = await core_cache.buildControlledContextEnvelope(context, {
+            worldInfoScanTerms: generationWorldInfoScanTerms(mode, context),
+            selectedSettingText: settingText,
+        });
+        return { contextEnvelope, settingEvidence: core_worldPresentation.controlledWorldEvidence(contextEnvelope, null) };
+    };
+
+    let { contextEnvelope, settingEvidence } = await build(selectedSetting.text);
+    // The evidence reader has its own combined card/world budget, so a large character
+    // card can still push the tail of the setting text out. Halve once and retry rather
+    // than failing: a smaller quotable set still beats no setting evidence at all.
+    if (selectedSetting.text && !settingEvidence.includes(selectedSetting.text)) {
+        selectedSetting = await collectFittingSelectedSetting(context, Math.floor(core_constants.MAX_SELECTED_SETTING_CHARS / 2));
+        ({ contextEnvelope, settingEvidence } = await build(selectedSetting.text));
+        if (selectedSetting.text && !settingEvidence.includes(selectedSetting.text)) {
+            selectedSetting = { text: '', used: 0, total: selectedSetting.total, dropped: selectedSetting.total, complete: false,
+                note: '角色卡与世界书合计超出本次证据容量，本轮改用角色卡证据生成；所选设定未送入，旧内容保留。' };
+            ({ contextEnvelope, settingEvidence } = await build(''));
+        }
     }
-    const contextEnvelope = await core_cache.buildControlledContextEnvelope(context, {
-        worldInfoScanTerms: generationWorldInfoScanTerms(mode, context),
-        selectedSettingText,
-    });
-    const settingEvidence = core_worldPresentation.controlledWorldEvidence(contextEnvelope, null);
-    // The local evidence reader also has a combined card/world budget. Never send
-    // selected text that the validator would silently drop from the tail.
-    if (selectedSettingText && !settingEvidence.includes(core_text.normalizeText(selectedSettingText, core_constants.MAX_MEMORY_WORLD_INFO_CHARS))) {
-        throw core_text.safeUserError('所选设定超出本次完整证据容量，请减少所选条目后重试；旧内容保留。', 'RMT_SETTING_SOURCE_PARTIAL');
-    }
+
     return {
         contextEnvelope,
         profile: core_worldPresentation.resolveWorldPresentation(contextEnvelope, memoryBank, worldPresentationProfileBinding(context)),
         settingEvidence,
         characterEvidence: core_worldPresentation.controlledCharacterEvidence(contextEnvelope),
+        selectedSetting,
     };
 }
 
@@ -610,6 +669,11 @@ export async function generateMode(mode, options = {}) {
         let presentationContext = null;
         if ([core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL].includes(mode)) {
             presentationContext = await buildWorldPresentationContext(context, memoryBank, mode);
+            // Degrading is fine, degrading silently is not: the user picked these entries
+            // by hand and deserves to know which of them this request could actually carry.
+            if (!options.automatic && presentationContext.selectedSetting?.note) {
+                globalThis.toastr?.info?.(presentationContext.selectedSetting.note, `心跳回忆 · ${core_constants.MODE_LABEL[mode]}`);
+            }
         }
         if (mode === core_constants.MODE.ADV) {
             session = await modes_advEvent.generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, { replaceExisting });
@@ -642,7 +706,11 @@ export async function generateMode(mode, options = {}) {
             session = await modes_travel.generateTravelWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, presentationContext });
         } else if (mode === core_constants.MODE.RELATIONS) {
             const selectedBooks = await archive_repository.collectSelectedMemoryWorldInfo(context, expectedChatId);
-            if (selectedBooks.coverage.status !== 'complete') throw core_text.safeUserError('所选世界书读取不完整，本次未刷新庭园；旧人物保留。请检查来源后重试。', 'RMT_SETTING_SOURCE_PARTIAL');
+            // Same rule as the setting envelope: an unreadable or oversized book means
+            // "fewer people to draw from", not "refuse to refresh the garden".
+            if (selectedBooks.coverage.status !== 'complete' && !options.automatic) {
+                globalThis.toastr?.info?.(`所选世界书本次只读到部分条目，庭园将只依据已读到的内容刷新；旧人物保留。${core_text.normalizeText(selectedBooks.coverage?.reason, 160)}`, '心跳回忆 · 人际庭园');
+            }
             const settingEntries = selectedBooks.entries.filter(entry => entry.historySource !== true);
             const raw = await requestValidatedSegment(
                 modes_relations.relationsPrompt(context, memoryBank, settingEntries),
