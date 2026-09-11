@@ -118,8 +118,14 @@ test('r54 selected setting books are available to frozen A without reading B or 
     assert.match(result.settingEvidence, /白塔/);
     assert.doesNotMatch(result.characterEvidence, /白塔/);
     assert.deepEqual(reads, ['A-settings']);
+    // A world book that cannot be read must cost evidence, not the whole generation:
+    // the mode still has the character card to fall back on.
     ctx.loadWorldInfo = async () => { throw new Error('private raw failure'); };
-    await assert.rejects(buildWorldPresentationContext(ctx, bank, 'travel'), error => error.code === 'RMT_SETTING_SOURCE_PARTIAL');
+    const degraded = await buildWorldPresentationContext(ctx, bank, 'travel');
+    assert.equal(degraded.selectedSetting.text, '');
+    assert.equal(degraded.selectedSetting.complete, false);
+    assert.ok(degraded.selectedSetting.note, 'the user must be told the book was skipped');
+    assert.match(degraded.characterEvidence, /林舟/, 'card evidence still carries the request');
 });
 
 test('r54 selected settings reject missing entries, oversized context and live character or selection drift', async () => {
@@ -130,7 +136,11 @@ test('r54 selected settings reject missing entries, oversized context and live c
     let live = ctx;
     globalThis.SillyTavern = { getContext: () => live };
     assert.equal((await collectSelectedMemoryWorldInfo(ctx, 'A', null, { settingsOnly: true })).coverage.status, 'partial');
-    await assert.rejects(buildWorldPresentationContext(ctx, bank, 'room'), error => error.code === 'RMT_SETTING_SOURCE_PARTIAL');
+    // One of the two picked entries is missing: ship the one that read, flag the gap.
+    const partial = await buildWorldPresentationContext(ctx, bank, 'room');
+    assert.match(partial.settingEvidence, /白塔/);
+    assert.equal(partial.selectedSetting.complete, false);
+    assert.ok(partial.selectedSetting.note);
     ctx.chatMetadata[MEMORY_WORLD_INFO_SETTINGS_KEY].books[0].entryUids = ['1'];
     ctx.loadWorldInfo = async () => {
         live = { ...ctx, characterId: 1, characters: [...ctx.characters, { name: '林舟', avatar: 'b.png' }] };
@@ -145,7 +155,14 @@ test('r54 selected settings reject missing entries, oversized context and live c
     await assert.rejects(buildWorldPresentationContext(ctx, bank, 'travel'), error => error.name === 'AbortError');
     ctx.chatMetadata[MEMORY_WORLD_INFO_SETTINGS_KEY].books[0].all = true;
     ctx.loadWorldInfo = async () => ({ entries: Object.fromEntries([1, 2, 3, 4].map(uid => [uid, { uid, content: '设定'.repeat(2200) }])) });
-    await assert.rejects(buildWorldPresentationContext(ctx, bank, 'room'), error => error.code === 'RMT_SETTING_SOURCE_PARTIAL');
+    const trimmed = await buildWorldPresentationContext(ctx, bank, 'room');
+    // 4 entries x 4400 chars cannot all fit in 12,000. Whole entries only: some ship,
+    // none are cut in half, and the request still completes.
+    assert.ok(trimmed.selectedSetting.used > 0 && trimmed.selectedSetting.used < 4, `used=${trimmed.selectedSetting.used}`);
+    assert.equal(trimmed.selectedSetting.dropped, 4 - trimmed.selectedSetting.used);
+    assert.equal(trimmed.selectedSetting.text.length % 4401, trimmed.selectedSetting.used === 0 ? 0 : trimmed.selectedSetting.text.length % 4401);
+    assert.ok(trimmed.settingEvidence.includes(trimmed.selectedSetting.text), 'shipped text must be quotable in full');
+    assert.ok(trimmed.selectedSetting.note.includes('/4'), trimmed.selectedSetting.note);
 });
 
 test('r54 selected setting evidence cannot be silently lost behind a long character card', async () => {
@@ -155,5 +172,14 @@ test('r54 selected setting evidence cannot be silently lost behind a long charac
     ctx.chatMetadata[MEMORY_WORLD_INFO_SETTINGS_KEY] = { books: [{ name: 'settings', all: true, entryUids: [] }] };
     ctx.getWorldInfoNames = () => ['settings'];
     ctx.loadWorldInfo = async () => ({ entries: { 1: { uid: 1, content: '戊'.repeat(14600) + '林舟常去云栖书店。' } } });
-    await assert.rejects(buildWorldPresentationContext(ctx, bank, 'travel'), error => error.code === 'RMT_SETTING_SOURCE_PARTIAL');
+    // The invariant is "never silently lost", not "never lost". A 14,600-char entry does
+    // not fit beside an 18,700-char card, so it is dropped whole and reported — and the
+    // request still runs on card evidence instead of failing outright.
+    const result = await buildWorldPresentationContext(ctx, bank, 'travel');
+    assert.equal(result.selectedSetting.text, '', 'a half entry must never be shipped');
+    assert.equal(result.selectedSetting.dropped, 1);
+    assert.ok(result.selectedSetting.note, 'the drop must be reported to the user');
+    assert.doesNotMatch(result.settingEvidence, /云栖书店/, 'nothing unquotable may be implied as evidence');
+    // Whatever does ship must always be quotable in full.
+    assert.ok(result.settingEvidence.includes(result.selectedSetting.text));
 });
