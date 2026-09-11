@@ -177,8 +177,12 @@ test('r55 Heart authentication failure stops before the sibling Scenario request
     assert.doesNotMatch(failures.join(''), /private-secret/);
 });
 
-test('r55 Heart rate limit retries only the failed part once, then stops; validation may continue a sibling', async () => {
-    for (const [kind, expected] of [['rate', 2], ['validation', 4]]) {
+test('r55 Heart rate limit retries the failed part with backoff, then stops; validation may continue a sibling', async () => {
+    // A 429 now gets the full rate-limit budget (1 attempt + 3 retries) instead of the
+    // single 1.8s retry, which was shorter than every real provider window and made
+    // composite modes abort on the third or fourth request.
+    state.rateLimitRetryDelaysMs = [0, 0, 0];
+    for (const [kind, expected] of [['rate', 4], ['validation', 4]]) {
         let calls = 0;
         const { context, bank } = fixture(async () => { calls++; return kind === 'rate' ? { error: { code: 429 } } : { content: '{}' }; });
         state.activeMode = 'heart';

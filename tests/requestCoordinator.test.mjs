@@ -25,6 +25,11 @@ const api = {
     state.activeCgImageTasks.clear();
     state.providerRequestQueue.splice(0);
     state.activeProviderRequestCount = 0;
+    // The adaptive rate-limit throttle is session state; clear it so concurrency
+    // assertions do not depend on whether an earlier test classified a 429.
+    state.rateLimitHits = 0;
+    state.rateLimitSeenAt = 0;
+    state.rateLimitRetryAfterMs = 0;
   },
   addCgImageTask(key, controller) { state.activeCgImageTasks.set(key, { controller }); },
   addBuildScope(key) { state.activeModeBuildScopes.add(key); },
