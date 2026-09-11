@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 63
-// Source SHA-256: 21e32f49e8a814df989fb22a322857df15e0ea9167d247a9a1f2ff0b8f7fb39f
+// Source SHA-256: 59fd67c607effa803c724d1354c51be1965a66822a96fe31104f8a47fd42c3a4
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -1215,6 +1215,13 @@ const state = {
   activeAvatarDialogue: null,
   activeProviderRequestCount: 0,
   providerRequestQueue: [],
+  // Adaptive rate-limit throttle (see core/requestCoordinator.js).
+  rateLimitHits: 0,
+  rateLimitSeenAt: 0,
+  rateLimitRetryAfterMs: 0,
+  // Backoff ladder used when the endpoint sends no Retry-After. Overridable so tests
+  // can exercise the retry policy without sleeping through the real ladder.
+  rateLimitRetryDelaysMs: [5000, 15000, 40000],
   butterflyTransitionTimer: 0,
   archiveOverviewCache: { key: '', fetchedAt: 0, items: [] },
   archiveOverviewPromise: null,
@@ -20342,7 +20349,7 @@ async function requestValidatedSegment(prompt, status, options, validator) {
     options = { ...options, context, contextEnvelope: typeof options?.contextEnvelope === 'string'
         ? options.contextEnvelope : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options?.mode, context) }) };
     let lastError = null;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (let attempt = 0; attempt < core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS; attempt += 1) {
         const retryNote = attempt && lastError
             ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || (String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
             : '';
@@ -20352,8 +20359,8 @@ async function requestValidatedSegment(prompt, status, options, validator) {
         } catch (error) {
             if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
             lastError = error;
-            if (!attempt && core_requestCoordinator.shouldRetrySegmentRequest(error)) {
-                await core_requestCoordinator.waitBeforeSegmentRetry(error);
+            if (core_requestCoordinator.shouldRetrySegmentRequest(error, attempt)) {
+                await core_requestCoordinator.waitBeforeSegmentRetry(error, attempt);
                 continue;
             }
             throw error;
@@ -20476,6 +20483,9 @@ function normalizeConnectionManagerError(error) {
         retryable = false;
     } else if (status === 429 || /(too many requests|rate.?limit|quota exceeded|resource exhausted)/i.test(hints)) {
         code = 'RMT_CONNECTION_RATE_LIMIT';
+        // Single observation point: from here on the throttle serialises and paces
+        // provider traffic until it decays.
+        core_requestCoordinator.noteProviderRateLimit(error);
         message = `模型服务正在限流${technical}。仅对本段按等待窗口有界重试；等待过长或再次失败会停止本次组合任务。`;
         retryable = true;
     } else if (status === 413 || ((status === 400 || !status) && /(context length|context window|too many tokens|maximum context|payload too large|request too large)/i.test(original))) {
@@ -20641,6 +20651,9 @@ async function requestJson(prompt, statusText = '正在根据当前聊天档案�
     let releaseProviderPermit = null;
     try {
         releaseProviderPermit = await core_requestCoordinator.acquireProviderRequestPermit(controller.signal);
+        // Once the endpoint has rate-limited us, space requests out instead of firing
+        // the next one the instant a slot frees up.
+        await core_requestCoordinator.waitForProviderPacing(controller.signal);
         core_context.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
         return await generateConfiguredJson(prompt, {
             ...options,
@@ -25125,6 +25138,74 @@ function shouldDeferCachePersistForProviderTraffic() {
     return runtimeState.activeProviderRequestCount > 0 || runtimeState.providerRequestQueue.length > 0;
 }
 
+// ---------------------------------------------------------------------------
+// Adaptive rate-limit throttle.
+//
+// A composite mode fires many requests back to back (the terminal alone is a plan
+// plus one request per app). On a low-RPM endpoint the 3rd or 4th one gets a 429,
+// the single 1.8s retry is nowhere near the provider's window, and the whole
+// composite aborts — which is why these modes "never come out".
+//
+// Once a 429 is seen we stop guessing: serialise provider requests and space them
+// out for the rest of the session. The throttle decays on its own after a quiet
+// period so a one-off spike does not slow everything down forever.
+// ---------------------------------------------------------------------------
+const RATE_LIMIT_MEMORY_MS = 10 * 60 * 1000;
+const RATE_LIMIT_PACING_MS = [0, 2500, 6000, 12000];
+
+function resetProviderRateLimitThrottle() {
+    runtimeState.rateLimitHits = 0;
+    runtimeState.rateLimitSeenAt = 0;
+    runtimeState.rateLimitRetryAfterMs = 0;
+    drainProviderRequestQueue();
+}
+
+function noteProviderRateLimit(error = null) {
+    runtimeState.rateLimitHits = Math.min(8, Number(runtimeState.rateLimitHits || 0) + 1);
+    runtimeState.rateLimitSeenAt = Date.now();
+    const hinted = Number(error?.retryAfterMs);
+    if (Number.isFinite(hinted) && hinted > 0) runtimeState.rateLimitRetryAfterMs = Math.min(120000, hinted);
+}
+
+function activeRateLimitPressure() {
+    const seenAt = Number(runtimeState.rateLimitSeenAt || 0);
+    if (!seenAt || Date.now() - seenAt > RATE_LIMIT_MEMORY_MS) {
+        runtimeState.rateLimitHits = 0;
+        runtimeState.rateLimitRetryAfterMs = 0;
+        return 0;
+    }
+    return Number(runtimeState.rateLimitHits || 0);
+}
+
+// Effective parallelism: drop to a single in-flight request as soon as the endpoint
+// has complained once. Two concurrent requests double the rate you hit the limit.
+function effectiveProviderConcurrency() {
+    return activeRateLimitPressure() > 0 ? 1 : core_constants.MAX_CONCURRENT_PROVIDER_REQUESTS;
+}
+
+function providerPacingDelayMs() {
+    const pressure = activeRateLimitPressure();
+    if (pressure <= 0) return 0;
+    return RATE_LIMIT_PACING_MS[Math.min(pressure, RATE_LIMIT_PACING_MS.length - 1)];
+}
+
+async function waitForProviderPacing(signal = null) {
+    const delay = providerPacingDelayMs();
+    if (delay <= 0) return;
+    await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            try { signal?.removeEventListener?.('abort', onAbort); } catch {}
+            resolve();
+        }, delay);
+        function onAbort() {
+            clearTimeout(timer);
+            reject(createGenerationAbortError());
+        }
+        if (signal?.aborted) { onAbort(); return; }
+        signal?.addEventListener?.('abort', onAbort, { once: true });
+    });
+}
+
 function createProviderPermitRelease() {
     let released = false;
     return () => {
@@ -25136,7 +25217,7 @@ function createProviderPermitRelease() {
 }
 
 function drainProviderRequestQueue() {
-    while (runtimeState.activeProviderRequestCount < core_constants.MAX_CONCURRENT_PROVIDER_REQUESTS && runtimeState.providerRequestQueue.length) {
+    while (runtimeState.activeProviderRequestCount < effectiveProviderConcurrency() && runtimeState.providerRequestQueue.length) {
         const waiter = runtimeState.providerRequestQueue.shift();
         if (!waiter || waiter.signal?.aborted) {
             try { waiter?.signal?.removeEventListener?.('abort', waiter.onAbort); } catch {}
@@ -25151,7 +25232,7 @@ function drainProviderRequestQueue() {
 
 function acquireProviderRequestPermit(signal) {
     if (signal?.aborted) return Promise.reject(createGenerationAbortError());
-    if (runtimeState.activeProviderRequestCount < core_constants.MAX_CONCURRENT_PROVIDER_REQUESTS) {
+    if (runtimeState.activeProviderRequestCount < effectiveProviderConcurrency()) {
         runtimeState.activeProviderRequestCount += 1;
         return Promise.resolve(createProviderPermitRelease());
     }
@@ -25210,10 +25291,26 @@ function runGenerationRequestWithTimeout(factory, controller, timeoutMs, statusT
     });
 }
 
-function shouldRetrySegmentRequest(error) {
+// A rate limit is the one failure that is almost always worth waiting out, so it gets
+// its own attempt budget instead of sharing the single validation retry.
+const MAX_SEGMENT_ATTEMPTS = 2;
+const MAX_RATE_LIMIT_ATTEMPTS = 4;
+
+function isRateLimitError(error) {
+    return error?.code === 'RMT_CONNECTION_RATE_LIMIT';
+}
+
+function segmentAttemptBudget(error) {
+    return isRateLimitError(error) ? MAX_RATE_LIMIT_ATTEMPTS : MAX_SEGMENT_ATTEMPTS;
+}
+
+function shouldRetrySegmentRequest(error, attempt = 0) {
     if (!error || error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') return false;
     if (['RMT_REQUEST_TIMEOUT', 'RMT_CONNECTION_AUTH', 'RMT_CONNECTION_QUOTA', 'RMT_CONNECTION_CONTEXT_LIMIT', 'RMT_CONNECTION_CONFIG', 'RMT_CONNECTION_INVALID_REQUEST'].includes(error?.code)) return false;
-    if (error?.code === 'RMT_CONNECTION_RATE_LIMIT' && Number(error.retryAfterMs) > 60000) return false;
+    if (attempt + 1 >= segmentAttemptBudget(error)) return false;
+    // Give up only when the endpoint itself says the wait is longer than we should
+    // hold a generation slot. (Unchanged 60s contract.)
+    if (isRateLimitError(error)) return !(Number(error.retryAfterMs) > 60000);
     return error?.retryableJson === true || error?.retryable === true;
 }
 
@@ -25231,10 +25328,21 @@ function validateGeneratedSegment(raw, validator) {
     }
 }
 
-async function waitBeforeSegmentRetry(error) {
-    const delay = error?.code === 'RMT_CONNECTION_RATE_LIMIT' ? Math.min(60000, Math.max(1800, Number(error?.retryAfterMs) || 0))
-        : error?.code === 'RMT_CONNECTION_SERVER' ? 1000
-            : 0;
+function segmentRetryDelayMs(error, attempt = 0) {
+    if (isRateLimitError(error)) {
+        const hinted = Number(error?.retryAfterMs);
+        // Retry-After is authoritative when the endpoint sends one; otherwise back off
+        // 5s / 15s / 40s, because 1.8s is shorter than every real provider window.
+        if (Number.isFinite(hinted) && hinted > 0) return Math.min(120000, Math.max(1000, hinted));
+        const ladder = Array.isArray(runtimeState.rateLimitRetryDelaysMs) && runtimeState.rateLimitRetryDelaysMs.length
+            ? runtimeState.rateLimitRetryDelaysMs : [5000, 15000, 40000];
+        return Number(ladder[Math.min(attempt, ladder.length - 1)]) || 0;
+    }
+    return error?.code === 'RMT_CONNECTION_SERVER' ? 1000 : 0;
+}
+
+async function waitBeforeSegmentRetry(error, attempt = 0) {
+    const delay = segmentRetryDelayMs(error, attempt);
     if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
     await core_context.yieldToUi();
 }
@@ -25257,6 +25365,7 @@ function refreshConcurrentTaskUi(taskMode = '', origin = null) {
     if (!runtimeState.activeMode) archive_snapshots.scheduleChooserRefresh(30);
 }
 
+__m_core_requestCoordinator_js.waitForProviderPacing = waitForProviderPacing;
 __m_core_requestCoordinator_js.waitBeforeSegmentRetry = waitBeforeSegmentRetry;
 __m_core_requestCoordinator_js.queueDeferredCommitRecord = queueDeferredCommitRecord;
 __m_core_requestCoordinator_js.queueDeferredCommit = queueDeferredCommit;
@@ -25283,15 +25392,25 @@ __m_core_requestCoordinator_js.activeLogicalGenerationCount = activeLogicalGener
 __m_core_requestCoordinator_js.canStartGenerationTask = canStartGenerationTask;
 __m_core_requestCoordinator_js.createGenerationAbortError = createGenerationAbortError;
 __m_core_requestCoordinator_js.shouldDeferCachePersistForProviderTraffic = shouldDeferCachePersistForProviderTraffic;
+__m_core_requestCoordinator_js.resetProviderRateLimitThrottle = resetProviderRateLimitThrottle;
+__m_core_requestCoordinator_js.noteProviderRateLimit = noteProviderRateLimit;
+__m_core_requestCoordinator_js.activeRateLimitPressure = activeRateLimitPressure;
+__m_core_requestCoordinator_js.effectiveProviderConcurrency = effectiveProviderConcurrency;
+__m_core_requestCoordinator_js.providerPacingDelayMs = providerPacingDelayMs;
 __m_core_requestCoordinator_js.createProviderPermitRelease = createProviderPermitRelease;
 __m_core_requestCoordinator_js.drainProviderRequestQueue = drainProviderRequestQueue;
 __m_core_requestCoordinator_js.acquireProviderRequestPermit = acquireProviderRequestPermit;
 __m_core_requestCoordinator_js.generationRequestTimeoutMs = generationRequestTimeoutMs;
 __m_core_requestCoordinator_js.runGenerationRequestWithTimeout = runGenerationRequestWithTimeout;
+__m_core_requestCoordinator_js.isRateLimitError = isRateLimitError;
+__m_core_requestCoordinator_js.segmentAttemptBudget = segmentAttemptBudget;
 __m_core_requestCoordinator_js.shouldRetrySegmentRequest = shouldRetrySegmentRequest;
 __m_core_requestCoordinator_js.stopsCompositeGeneration = stopsCompositeGeneration;
 __m_core_requestCoordinator_js.validateGeneratedSegment = validateGeneratedSegment;
+__m_core_requestCoordinator_js.segmentRetryDelayMs = segmentRetryDelayMs;
 __m_core_requestCoordinator_js.refreshConcurrentTaskUi = refreshConcurrentTaskUi;
+__m_core_requestCoordinator_js.MAX_SEGMENT_ATTEMPTS = MAX_SEGMENT_ATTEMPTS;
+__m_core_requestCoordinator_js.MAX_RATE_LIMIT_ATTEMPTS = MAX_RATE_LIMIT_ATTEMPTS;
 }
 
 function __init_archive_sourceLedger_js() {
