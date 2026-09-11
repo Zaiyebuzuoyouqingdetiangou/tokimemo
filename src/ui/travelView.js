@@ -15,6 +15,9 @@ export function selectedTravelLocation() {
 function travelSourceLabel(item) {
     if (item?.legacyEvidenceUnverified === true) return '旧版自由文字 · 证据未重新核验';
     if (item?.basis === '记忆' && item?.sourceMemoryAnchor) return `剧情足迹 · ${item.sourceMemoryAnchor}`;
+    // An inferred stop must stay visibly distinguishable from an evidenced one, so the
+    // user can always tell which places actually appear in the archive or the card.
+    if (item?.basis === '推演') return '人设推演 · 未见于档案或设定';
     return '角色生活 / 世界设定';
 }
 
