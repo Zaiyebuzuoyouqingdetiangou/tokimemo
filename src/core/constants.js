@@ -252,7 +252,12 @@ export const CATEGORY_VALUES = new Set(['日常', '约会', '结局']);
 
 export const ROOM_ZONE_VALUES = new Set(['左上', '右上', '左下', '右下', '中央', '近景']);
 
-export const ROOM_BASIS_VALUES = new Set(['设定', '记忆']);
+// 记忆 = shared past with the user (hard archive evidence required).
+// 设定 = written down in the card or world book (verbatim quote required).
+// 推演 = inferred from persona and world. That is characterisation, not a factual claim
+//        about the user's history, so it carries no quote — but it may never mention a
+//        shared past, and the UI always labels it as inferred.
+export const ROOM_BASIS_VALUES = new Set(['设定', '记忆', '推演']);
 
 export const PHONE_DEVICE_KINDS = new Set(['neutral', 'phone', 'watch', 'terminal', 'communicator', 'folio', 'relic']);
 
