@@ -140,6 +140,12 @@ export const MAX_MEMORY_WORLD_INFO_BOOKS = 8;
 export const MAX_MEMORY_WORLD_INFO_ENTRIES = 160;
 
 export const MAX_MEMORY_WORLD_INFO_CHARS = 52000;
+// Controlled-envelope budget for ROOM / TRAVEL / PHONE. The picker above allows a much
+// larger selection than one request can carry, so these two numbers decide what actually
+// ships. Hand-picked setting entries outrank the dry-run tail: the user chose them on
+// purpose, the dry run only happened to activate.
+export const MAX_CONTROLLED_WORLD_TOTAL_CHARS = 16000;
+export const MAX_SELECTED_SETTING_CHARS = 12000;
 
 export const THEME_MODES = new Set(['default', 'night', 'host', 'custom', 'gs1', 'gs2', 'gs3', 'gs4']);
 export const SEASON_THEME_PALETTES = Object.freeze({
