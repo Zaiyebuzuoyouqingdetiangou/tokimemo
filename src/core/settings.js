@@ -8,6 +8,7 @@ import * as core_text from './text.js';
 import * as core_theme from './theme.js';
 import * as core_contextTags from './contextTags.js';
 import * as core_autoUpdatePolicy from './autoUpdatePolicy.js';
+import * as creative_supplement from './creativeSupplement.js';
 
 export function normalizeBannedGeneratedPhrases(value) {
     const source = Array.isArray(value) ? value : String(value ?? '').split(/[\n,，]+/g);
@@ -37,6 +38,8 @@ export function getPluginSettings(context = core_context.getContext()) {
         useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory !== false,
         imageGenerationManualEnabled: settings.imageGenerationManualEnabled === true,
         imageGenerationProvider: settings.imageGenerationProvider === 'baibai-image' ? 'baibai-image' : core_constants.CG_IMAGE_PROVIDER,
+        creativeSupplementEnabled: settings.creativeSupplementEnabled === true,
+        creativeSupplement: creative_supplement.normalizeCreativeSupplement(settings.creativeSupplement),
         ttDisplayMode: settings.ttDisplayMode === true,
         themeMode: core_constants.THEME_MODES.has(settings.themeMode) ? settings.themeMode : 'default',
         excludedContextTags: core_contextTags.normalizeExcludedTags(settings.excludedContextTags === undefined ? core_contextTags.DEFAULT_EXCLUDED_TAGS : settings.excludedContextTags),
@@ -60,6 +63,7 @@ export function updatePluginSettings(patch) {
     const current = getPluginSettings(context);
     const previousApiFingerprint = core_independentApi.apiConfigurationFingerprint(current);
     const supplied = patch && typeof patch === 'object' ? { ...patch } : {};
+    if (Object.hasOwn(supplied, 'creativeSupplement')) supplied.creativeSupplement = creative_supplement.normalizeCreativeSupplement(supplied.creativeSupplement);
     if (Object.prototype.hasOwnProperty.call(supplied, 'manualApiKey')) {
         runtimeState.manualApiKey = core_text.normalizeText(supplied.manualApiKey, 4000);
         delete supplied.manualApiKey;

@@ -2,7 +2,7 @@ export const DEFAULT_EXCLUDED_TAGS = Object.freeze(['thinking', 'updatevariable'
 export function normalizeExcludedTags(value) {
     const parts = Array.isArray(value) ? value : String(value || '').split(/[\s,，]+/);
     return [...new Set(parts.map(item => String(item).trim().replace(/^<\/?|\/?\s*>$/g, '').toLowerCase())
-        .filter(item => /^[a-z][a-z0-9._:-]{0,63}$/.test(item)))].slice(0, 32);
+        .filter(item => /^[\p{L}][\p{L}\p{N}\p{M}._:-]{0,63}$/u.test(item)))].slice(0, 32);
 }
 export function excludedTagsForContext(context) {
     const source = context?.extensionSettings?.heartbeatMemories?.excludedContextTags;
@@ -22,10 +22,12 @@ function tagAt(source, start) {
     if (closing) index++;
     while (/\s/.test(source[index] || '') && index < source.length) index++;
     const nameStart = index;
-    if (!/[a-z]/i.test(source[index] || '')) return null;
-    while (/[a-z0-9._:-]/i.test(source[index] || '') && index - nameStart < 65) index++;
+    const point = at => at < source.length ? String.fromCodePoint(source.codePointAt(at)) : '';
+    if (!/\p{L}/u.test(point(index))) return null;
+    let nameLength = 0;
+    while (/[\p{L}\p{N}\p{M}._:-]/u.test(point(index)) && nameLength < 65) { index += point(index).length; nameLength++; }
     const name = source.slice(nameStart, index).toLowerCase();
-    if (name.length > 64) return null;
+    if (nameLength > 64) return null;
     const next = symbolAt(source, index).char;
     if (next !== undefined && !/[\s/>]/.test(next)) return null;
     let quote = '', previous = '';

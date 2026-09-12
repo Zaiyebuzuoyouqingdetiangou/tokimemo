@@ -334,28 +334,13 @@ export async function generateAlbumWithRepair(context, memoryBank, origin, taskK
         raw => normalizeAlbumRelationshipSnapshot(raw, memoryBank),
     );
     const batches = generation_client.chunkForGeneration(unlocked, 3);
-    const commentMaps = await generation_client.mapGenerationConcurrent(batches, core_constants.SEGMENT_REQUEST_CONCURRENCY, async (batch, batchIndex) => {
-        let lastError = null;
-        for (let attempt = 0; attempt < 2; attempt += 1) {
-            try {
-                const raw = await generation_client.requestJson(
-                    albumCommentsPrompt(context, memoryBank, batch, relationshipSnapshot),
-                    `回忆相簿 3/3 · 共同回忆 ${batchIndex + 1}/${batches.length}${attempt ? '（重试）' : ''}…`,
-                    { maxTokens: 6000, context, origin, taskKey: `${taskKey}:comments:${batchIndex}`, mode: core_constants.MODE.ALBUM, background: true },
-                );
-                return core_requestCoordinator.validateGeneratedSegment(raw, data => normalizeAlbumCommentsBatch(data, batch));
-            } catch (error) {
-                if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
-                lastError = error;
-                if (!attempt && core_requestCoordinator.shouldRetrySegmentRequest(error)) {
-                    await core_requestCoordinator.waitBeforeSegmentRetry(error);
-                    continue;
-                }
-                throw error;
-            }
-        }
-        throw new Error(`相簿共同回忆第 ${batchIndex + 1} 组连续两次失败：${core_text.normalizeText(lastError?.message || String(lastError || ''), 600)}`);
-    });
+    const commentMaps = await generation_client.mapGenerationConcurrent(batches, core_constants.SEGMENT_REQUEST_CONCURRENCY,
+        (batch, batchIndex) => generation_client.requestValidatedSegment(
+            albumCommentsPrompt(context, memoryBank, batch, relationshipSnapshot),
+            `回忆相簿 3/3 · 共同回忆 ${batchIndex + 1}/${batches.length}…`,
+            { maxTokens: 6000, context, origin, taskKey: `${taskKey}:comments:${batchIndex}`, mode: core_constants.MODE.ALBUM, background: true },
+            data => normalizeAlbumCommentsBatch(data, batch),
+        ));
     const allComments = new Map();
     for (const map of commentMaps) for (const [id, comments] of map.entries()) allComments.set(id, comments);
     const fresh = normalizeAlbum({

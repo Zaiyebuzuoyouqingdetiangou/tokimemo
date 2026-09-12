@@ -15,6 +15,7 @@ import * as core_text from '../core/text.js';
 import * as core_worldPresentation from '../core/worldPresentation.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
+import * as generation_recovery from '../generation/recovery.js';
 import * as ui_overlay from '../ui/overlay.js';
 
 const ROOM_VISUAL_PROFILE_VERSION = 1;
@@ -1100,18 +1101,46 @@ export function roomLifeBeat(session = runtimeState.activeSession, date = new Da
     return current;
 }
 
-export async function ensureRoomLifePlan({ force = false, quiet = false } = {}) {
+export async function ensureRoomLifePlan(options = {}) {
+    const { force = false, quiet = false } = options;
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ROOM) return null;
     const roomSession = runtimeState.activeSession;
-    const context = core_context.currentCharacterGuard();
+    const targetRuntime = await archive_library.prepareArchiveTargetSubtask(core_constants.MODE.ROOM, 'daily-life');
+    const context = targetRuntime?.context || core_context.currentCharacterGuard();
     const chatId = core_context.getChatId(context);
-    const memoryBank = archive_repository.requireArchive(context);
+    const memoryBank = targetRuntime?.memoryBank || archive_repository.requireArchive(context);
     const archiveRevision = memoryBank.archiveRevision;
     const settings = core_settings.getPluginSettings(context);
-    const today = new Date();
+    const existingRecovery = options.existing === undefined
+        ? core_cache.loadGenerationRecovery(core_constants.MODE.ROOM, context, targetRuntime?.archiveTarget?.cache) : options.existing;
+    const previousDate = existingRecovery?.operation?.kind === 'room-daily-life' ? existingRecovery.operation.dateKey : '';
+    const today = /^\d{4}-\d{2}-\d{2}$/.test(previousDate) ? new Date(`${previousDate}T12:00:00`) : new Date();
     const dateKey = localDateKey(today);
     const current = roomSession.lifePlan;
     const attempt = roomSession.lifePlanAttempt;
+    const recoverySummary = generation_recovery.generationRecoverySummary(existingRecovery);
+    if (existingRecovery?.operation?.kind === 'room-daily-life' && recoverySummary?.completed
+        && !recoverySummary.truncated && !recoverySummary.failed && !recoverySummary.failureCode
+        && current?.dateKey === dateKey && current?.archiveRevision === archiveRevision) {
+        // A deferred session can have committed before its UI cleanup ran. Re-run the
+        // real daily-plan validator and compare saved beats, never infer completion
+        // merely because an older plan for this day already exists.
+        const last = [...existingRecovery.segments].reverse().find(segment => segment.state === 'complete');
+        let matches = false;
+        try {
+            const accepted = normalizeRoomLifePlan(JSON.parse(last.rawJson), roomSession, memoryBank, today);
+            matches = JSON.stringify(accepted.beats) === JSON.stringify(current.beats);
+        } catch { /* An unmatched old plan is not proof that this task committed. */ }
+        if (matches) {
+            const completedOrigin = targetRuntime?.origin || core_context.captureTaskOrigin(context, archiveRevision);
+            await core_cache.saveGenerationRecovery(context, memoryBank, core_constants.MODE.ROOM, null, completedOrigin, {
+                archiveTarget: targetRuntime?.archiveTarget,
+                archiveEntry: targetRuntime?.archiveTarget || core_cache.archiveBackupEntryForContext(context, memoryBank),
+                stillCurrent: targetRuntime?.stillCurrent,
+            });
+            return current;
+        }
+    }
     if (!force && current?.dateKey === dateKey && current?.archiveRevision === archiveRevision && Array.isArray(current.beats)
         && (current.beats.length >= 6 || current.generatedAt === 0)) {
         return current;
@@ -1120,38 +1149,67 @@ export async function ensureRoomLifePlan({ force = false, quiet = false } = {}) 
         return current || fallbackRoomLifePlan(roomSession, today);
     }
     if (!settings.roomLifeAutoDaily && !force) return current || null;
+    // Restoring the room must not spend another request on a saved failure.
+    if (existingRecovery && !force && !options.continueRecovery) return current || null;
     if (runtimeState.roomLifeRefreshPromise) return runtimeState.roomLifeRefreshPromise;
-    const taskKey = `room-life:${core_context.chatScopeKey(context)}:${dateKey}`;
+    const taskKey = `room-life:${targetRuntime?.scope || core_context.chatScopeKey(context)}:${dateKey}`;
     if (core_requestCoordinator.isModeGenerating(core_constants.MODE.ROOM, context) || !core_requestCoordinator.canStartGenerationTask(taskKey)) {
         if (!quiet && force) globalThis.toastr?.info?.('当前生成队列较忙，等房间主体/其他任务完成后再更新今日生活。', '心跳回忆');
         return current || fallbackRoomLifePlan(roomSession, today);
     }
-    const origin = { ...core_context.captureTaskOrigin(context, archiveRevision), chatId: core_context.comparableChatId(chatId) };
+    let origin = targetRuntime?.origin || { ...core_context.captureTaskOrigin(context, archiveRevision), chatId: core_context.comparableChatId(chatId) };
+    const archiveEntry = targetRuntime?.archiveTarget || core_cache.archiveBackupEntryForContext(context, memoryBank);
     runtimeState.roomLifeRefreshOrigin = origin;
     runtimeState.roomLifeRefreshPromise = (async () => {
         try {
+            if (targetRuntime) {
+                await archive_library.beginArchiveTargetSubtask(targetRuntime);
+                origin = targetRuntime.origin;
+            } else {
+                await core_cache.claimLiveModeGeneration(core_constants.MODE.ROOM, context, memoryBank);
+                origin = core_context.captureTaskOrigin(context, archiveRevision);
+            }
+            runtimeState.roomLifeRefreshOrigin = origin;
+            await generation_client.beginModeRecovery(core_constants.MODE.ROOM, context, memoryBank, origin, {
+                ...options, existing: existingRecovery, operation: { kind: 'room-daily-life', dateKey },
+                archiveTarget: targetRuntime?.archiveTarget, archiveEntry,
+                stillCurrent: targetRuntime?.stillCurrent,
+            });
             if (!quiet) ui_overlay.setInnerLoading(true, `正在生成 ${dateKey} 的生活时间线…`);
-            const raw = await generation_client.requestJson(roomLifePrompt(context, roomSession, memoryBank, today), `正在让“他的房间”进入 ${dateKey} 的生活状态…`, { maxTokens: 6144, context, origin, taskKey, mode: core_constants.MODE.ROOM, background: true });
-            const plan = normalizeRoomLifePlan(raw, roomSession, memoryBank, today);
+            const plan = await generation_client.requestValidatedSegment(
+                roomLifePrompt(context, roomSession, memoryBank, today),
+                `正在让“他的房间”进入 ${dateKey} 的生活状态…`,
+                { maxTokens: 6144, context, origin, taskKey, mode: core_constants.MODE.ROOM, background: true },
+                raw => normalizeRoomLifePlan(raw, roomSession, memoryBank, today),
+            );
             roomSession.lifePlan = plan;
             roomSession.lifePlanAttempt = { dateKey, count: 0, failedAt: 0 };
             let committed = false;
-            if (core_context.isCurrentTaskOrigin(origin)) {
+            if (targetRuntime) {
+                const result = await targetRuntime.options.commitArchiveTarget(targetRuntime.archiveTarget, core_constants.MODE.ROOM, roomSession, targetRuntime.stillCurrent, origin);
+                archive_library.syncArchiveTargetSubtask(targetRuntime, result);
+                committed = true;
+            } else if (core_context.isCurrentTaskOrigin(origin)) {
                 try { const latestMemory = archive_repository.requireArchive(core_context.currentCharacterGuard()); if (latestMemory.archiveRevision === archiveRevision) committed = await core_cache.commitSession(core_constants.MODE.ROOM, roomSession, chatId, origin); } catch {}
             }
             if (!committed) core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [core_constants.MODE.ROOM]: roomSession } });
+            if (committed) await core_cache.saveGenerationRecovery(context, memoryBank, core_constants.MODE.ROOM, null, origin, {
+                archiveTarget: targetRuntime?.archiveTarget, archiveEntry, stillCurrent: targetRuntime?.stillCurrent,
+            });
             if (committed && runtimeState.activeMode === core_constants.MODE.ROOM && runtimeState.activeSession === roomSession && !document.getElementById(core_constants.OVERLAY_ID)?.hidden) renderRoom();
             else globalThis.toastr?.success?.(`今日生活后台生成完成：${dateKey}${committed ? '' : '（回到原窗口自动写入）'}`, '心跳回忆');
             return roomSession.lifePlan;
         } catch (error) {
+            await generation_recovery.noteGenerationRecoveryFailure(origin, error);
             console.warn('[HeartbeatMemories] room life plan failed, using one-day fallback without automatic retry', core_text.safeErrorDiagnostic(error));
             try {
                 const latestContext = core_context.currentCharacterGuard();
                 const latestMemory = archive_repository.requireArchive(latestContext);
-                if (core_context.getChatId(latestContext) === chatId && latestMemory.archiveRevision === archiveRevision) {
+                if (!targetRuntime && core_context.isCurrentTaskOrigin(origin) && core_context.getChatId(latestContext) === chatId && latestMemory.archiveRevision === archiveRevision) {
                     const previousCount = roomSession.lifePlanAttempt?.dateKey === dateKey ? Number(roomSession.lifePlanAttempt.count) || 0 : 0;
                     roomSession.lifePlanAttempt = { dateKey, count: previousCount + 1, failedAt: Date.now() };
-                    roomSession.lifePlan = fallbackRoomLifePlan(roomSession, today);
+                    // A failed refresh must not replace an already generated daily plan.
+                    if (!roomSession.lifePlan) roomSession.lifePlan = fallbackRoomLifePlan(roomSession, today);
                     await core_cache.commitSession(core_constants.MODE.ROOM, roomSession, chatId, origin);
                     if (runtimeState.activeMode === core_constants.MODE.ROOM && runtimeState.activeSession === roomSession && !document.getElementById(core_constants.OVERLAY_ID)?.hidden) renderRoom();
                 }
@@ -1161,6 +1219,7 @@ export async function ensureRoomLifePlan({ force = false, quiet = false } = {}) 
             if (!quiet) globalThis.toastr?.warning?.(core_text.toastText(`当天生活时间线生成失败，今日自动生成已停止；可稍后手动点击“更新今日生活”重试：${core_text.safeErrorSummary(error)}`), '心跳回忆');
             return roomSession.lifePlan?.dateKey === dateKey ? roomSession.lifePlan : null;
         } finally {
+            generation_recovery.detachGenerationRecovery(origin);
             if (!quiet) ui_overlay.setInnerLoading(false);
             runtimeState.roomLifeRefreshPromise = null;
             if (runtimeState.roomLifeRefreshOrigin === origin) runtimeState.roomLifeRefreshOrigin = null;

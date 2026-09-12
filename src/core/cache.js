@@ -14,6 +14,32 @@ import * as core_contextTags from './contextTags.js';
 import * as modes_calendar from '../modes/calendar.js';
 import * as modes_phone from '../modes/phone.js';
 import * as modes_inbox from '../modes/inbox.js';
+import * as generation_recovery from '../generation/recovery.js';
+
+// Per-fence clear markers survive cache merges: an older metadata mirror must not
+// resurrect a completed/deleted journal merely because its cache clock is newer.
+const GENERATION_RECOVERY_CLEARED_KEY = '__generationRecoveryClearedV1';
+
+function recoveryCleared(cache, mode) {
+    const cleared = cache?.[GENERATION_RECOVERY_CLEARED_KEY];
+    return Object.prototype.hasOwnProperty.call(cleared || {}, mode)
+        && cleared[mode] === modeWriteFenceForCache(cache, mode);
+}
+
+function clearRecoveryInCache(cache, mode) {
+    if (cache[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]) delete cache[generation_recovery.GENERATION_RECOVERY_CACHE_KEY][mode];
+    cache[GENERATION_RECOVERY_CLEARED_KEY] = { ...(cache[GENERATION_RECOVERY_CLEARED_KEY] || {}),
+        [mode]: modeWriteFenceForCache(cache, mode) };
+}
+
+function clearCompletedRecovery(cache, mode) {
+    const journal = cache?.[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode];
+    const summary = generation_recovery.generationRecoverySummary(journal);
+    if (summary && summary.mode === mode && !summary.failureCode && !summary.truncated && !summary.failed
+        && journal[core_constants.SESSION_MODE_WRITE_FENCE_KEY] === modeWriteFenceForCache(cache, mode)) {
+        clearRecoveryInCache(cache, mode);
+    }
+}
 
 function cloneCacheValue(value) {
     if (!value || typeof value !== 'object') return {};
@@ -104,6 +130,18 @@ function discardSessionsBehindModeFences(cache) {
         const draftFence = core_text.normalizeText(cache[core_constants.PHONE_DRAFT_CACHE_KEY]?.[core_constants.SESSION_MODE_WRITE_FENCE_KEY], 240);
         if (draftFence !== phoneFence) delete cache[core_constants.PHONE_DRAFT_CACHE_KEY];
     }
+    const journals = cache?.[generation_recovery.GENERATION_RECOVERY_CACHE_KEY];
+    if (journals && typeof journals === 'object') {
+        for (const mode of Object.keys(journals)) {
+            const journal = journals[mode];
+            if (!Object.values(core_constants.MODE).includes(mode) || recoveryCleared(cache, mode)
+                || !generation_recovery.generationRecoverySummary(journal)
+                || journal.identity?.mode !== mode
+                || journal.identity?.chatId !== cache.chatId
+                || journal.identity?.archiveRevision !== cache.archiveRevision
+                || journal[core_constants.SESSION_MODE_WRITE_FENCE_KEY] !== modeWriteFenceForCache(cache, mode)) delete journals[mode];
+        }
+    }
     return cache;
 }
 
@@ -113,6 +151,29 @@ function mergeCacheSnapshotsWithModeFences(primary, secondary, supplied, canonic
     const mergedFences = mergeModeWriteFences(supplied, canonical);
     if (Object.keys(mergedFences).length) merged[core_constants.MODE_WRITE_FENCES_CACHE_KEY] = mergedFences;
     else delete merged[core_constants.MODE_WRITE_FENCES_CACHE_KEY];
+    const cleared = Object.create(null);
+    for (const mode of Object.values(core_constants.MODE)) {
+        const fence = modeWriteFenceForCache(merged, mode);
+        for (const source of [supplied, canonical]) {
+            if (Object.prototype.hasOwnProperty.call(source?.[GENERATION_RECOVERY_CLEARED_KEY] || {}, mode)
+                && source[GENERATION_RECOVERY_CLEARED_KEY][mode] === fence) cleared[mode] = fence;
+        }
+        if (Object.prototype.hasOwnProperty.call(canonical?.[GENERATION_RECOVERY_CLEARED_KEY] || {}, mode)
+            && canonical[GENERATION_RECOVERY_CLEARED_KEY][mode] === fence) {
+            // A completed/cleared generation's canonical artifact belongs to the same
+            // commit as its clear marker; do not roll it back with a pre-completion mirror.
+            if (canonical[mode]) merged[mode] = cloneCacheValue(canonical[mode]);
+            else delete merged[mode];
+        }
+    }
+    merged[GENERATION_RECOVERY_CLEARED_KEY] = cleared;
+    discardSessionsBehindModeFences(merged);
+    for (const mode of Object.values(core_constants.MODE)) {
+        if (!merged[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode] && fallback[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode]) {
+            merged[generation_recovery.GENERATION_RECOVERY_CACHE_KEY] ||= {};
+            merged[generation_recovery.GENERATION_RECOVERY_CACHE_KEY][mode] = cloneCacheValue(fallback[generation_recovery.GENERATION_RECOVERY_CACHE_KEY][mode]);
+        }
+    }
     discardSessionsBehindModeFences(merged);
     for (const mode of Object.values(core_constants.MODE)) {
         if (merged?.[mode] || !fallback?.[mode]) continue;
@@ -342,6 +403,100 @@ export async function savePhoneGenerationDraft(context, memoryBank, plan, comple
         draft[core_constants.SESSION_MODE_WRITE_FENCE_KEY] = fence;
         cache[core_constants.PHONE_DRAFT_CACHE_KEY] = cloneCacheValue(draft);
     }, stillCurrent);
+}
+
+// Independent recovery journal; never used as formal memories or as a completed mode.
+export function loadGenerationRecovery(mode, context = core_context.getContext(), suppliedCache = null) {
+    try {
+        const bank = archive_repository.requireArchive(context);
+        const cache = suppliedCache || getCache(context);
+        const raw = cache?.[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode];
+        const origin = core_context.captureTaskOrigin(context, bank.archiveRevision);
+        const entryId = context?.__rmtArchiveTargetEntryId || archiveBackupEntryForContext(context, bank, { expectedTaskOrigin: origin, previousMemory: bank }).entryId;
+        if (!Object.values(core_constants.MODE).includes(mode) || !generation_recovery.generationRecoverySummary(raw)
+            || recoveryCleared(cache, mode) || raw.identity?.mode !== mode
+            || raw.identity?.characterKey !== origin.characterKey
+            || raw.identity?.characterId !== origin.characterId
+            || raw.identity?.characterAvatar !== origin.characterAvatar
+            || (raw.identity?.archiveTargetEntryId && raw.identity.archiveTargetEntryId !== entryId)
+            || raw.identity?.chatId !== core_context.comparableChatId(core_context.getChatId(context))
+            || raw.identity?.archiveRevision !== bank.archiveRevision
+            || raw[core_constants.SESSION_MODE_WRITE_FENCE_KEY] !== modeWriteFenceForCache(cache, mode)) return null;
+        return cloneCacheValue(raw);
+    } catch { return null; }
+}
+export async function saveGenerationRecovery(context, bank, mode, journal, origin, options = {}) {
+    // Freeze before the first await: host getContext() objects may mutate in place
+    // when A switches to B. The canonical entry, never that mutable object, owns a draft.
+    if (!Object.values(core_constants.MODE).includes(mode) || !origin
+        || !core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)) return false;
+    const memoryBank = cloneCacheValue(bank);
+    const expectedOrigin = cloneCacheValue(origin);
+    const revision = core_text.normalizeText(memoryBank.archiveRevision, 240);
+    const chatId = core_context.comparableChatId(memoryBank.chatId);
+    if (!revision || revision !== expectedOrigin.archiveRevision || chatId !== expectedOrigin.chatId) return false;
+    const frozenJournal = journal ? cloneCacheValue(journal) : null;
+    if (frozenJournal) {
+        const identity = frozenJournal.identity;
+        if (!generation_recovery.generationRecoverySummary(frozenJournal) || identity.mode !== mode
+            || ['characterKey', 'characterId', 'characterAvatar', 'chatId', 'archiveRevision']
+                .some(key => (identity[key] || '') !== (expectedOrigin[key] || ''))) return false;
+    }
+    const detachedTarget = options.archiveTarget || null;
+    let entry = detachedTarget || options.archiveEntry;
+    const originFingerprint = expectedOrigin.characterKey.split('\u001fcharacter:')[0];
+    const entryMatches = candidate => !!candidate
+        && core_context.comparableChatId(candidate.chatId) === chatId
+        && core_context.archiveStoredAvatar(candidate) === expectedOrigin.characterAvatar
+        && String(candidate.characterIndexHint) === String(expectedOrigin.characterId)
+        && core_text.normalizeText(candidate.characterFingerprint, 160) === originFingerprint
+        && (!expectedOrigin.archiveTargetEntryId
+            || core_context.archiveIndexEntryId(candidate) === expectedOrigin.archiveTargetEntryId);
+    if (!entry && core_context.deferredCommitOriginMatchesContext(expectedOrigin, context)) {
+        entry = archiveBackupEntryForContext(context, memoryBank, { expectedTaskOrigin: expectedOrigin, previousMemory: memoryBank });
+    }
+    if (!entry) {
+        // Only index identities are consulted here; B's chat/worldbook never enter A's save.
+        const matches = archive_groups.getArchiveIndex(context).filter(entryMatches);
+        if (matches.length === 1) entry = matches[0];
+    }
+    if (!entryMatches(entry)) return false;
+    entry = cloneCacheValue(entry);
+    if (frozenJournal?.identity?.archiveTargetEntryId && frozenJournal.identity.archiveTargetEntryId !== core_context.archiveIndexEntryId(entry)) return false;
+    const stillCurrent = () => core_context.runtimeLifecycleStillCurrent(expectedOrigin.lifecycleEpoch)
+        && (typeof options.stillCurrent !== 'function' || options.stillCurrent());
+    const mutate = cache => {
+        const fence = assertModeWriteFence(cache, mode, expectedOrigin, null);
+        if (!frozenJournal) { clearRecoveryInCache(cache, mode); return; }
+        if (recoveryCleared(cache, mode)) {
+            throw core_text.safeUserError('这轮生成已完成或被清除，旧草稿不会重新写回。', 'RMT_RECOVERY_CLEARED');
+        }
+        const journals = { ...(cache[generation_recovery.GENERATION_RECOVERY_CACHE_KEY] || {}) };
+        journals[mode] = { ...frozenJournal, [core_constants.SESSION_MODE_WRITE_FENCE_KEY]: fence };
+        if (JSON.stringify(journals).length > 6000000) throw new Error('Recovery storage capacity reached');
+        cache[generation_recovery.GENERATION_RECOVERY_CACHE_KEY] = journals;
+    };
+    return serializeArchiveCommitOperation(entry, memoryBank, async () => {
+        const result = await commitArchiveCacheMutation(entry, memoryBank, {}, mutate, stillCurrent, { requireExisting: true });
+        if (detachedTarget) detachedTarget.cache = cloneCacheValue(result.cache);
+        // A background checkpoint is durable even when it has no current-chat mirror.
+        // Mirror only after re-reading the actual host and proving the same origin.
+        try {
+            const live = core_context.currentCharacterGuard();
+            if (stillCurrent() && core_context.deferredCommitOriginMatchesContext(expectedOrigin, live)
+                && archive_repository.requireArchive(live).archiveRevision === revision) {
+                rememberRuntimeSessionCache(cacheScopeFromContext(live), result.cache);
+                live.chatMetadata[core_constants.CACHE_KEY] = cloneCacheValue(result.stored);
+                await saveMetadataDurably(live);
+            }
+        } catch { /* The canonical checkpoint is already durable; do not fall back to another chat. */ }
+        if (detachedTarget && context?.__rmtArchiveTargetEntryId === entry.entryId
+            && core_context.comparableChatId(core_context.getChatId(context)) === chatId
+            && context.chatMetadata?.[core_constants.MEMORY_KEY]?.archiveRevision === revision) {
+            context.chatMetadata[core_constants.CACHE_KEY] = cloneCacheValue(result.cache);
+        }
+        return true;
+    });
 }
 
 export function isCompressedCacheRecord(value) {
@@ -866,7 +1021,12 @@ async function saveImportedMemoryOperation(context, memoryBank, expectedChatId =
         }
         if (candidate && typeof candidate === 'object' && (options.presentationOnly || Object.values(core_constants.MODE).some(mode => candidate?.[mode]?.kind === mode))) {
             preservedCache = cloneCacheValue(candidate);
-            if (!options.presentationOnly) archive_repository.migrateDerivedCacheRevision(preservedCache, previousMemory, stagedMemory);
+            if (!options.presentationOnly) {
+                // A new evidence revision cannot inherit an unfinished request identity.
+                delete preservedCache[generation_recovery.GENERATION_RECOVERY_CACHE_KEY];
+                delete preservedCache[GENERATION_RECOVERY_CLEARED_KEY];
+                archive_repository.migrateDerivedCacheRevision(preservedCache, previousMemory, stagedMemory);
+            }
             if (options.expectedTaskOrigin) {
                 stabilizeDeferredMigrationTimestamps(preservedCache, candidate, stagedMemory);
                 stampStableMigratedCacheCommit(preservedCache, candidate, stagedMemory, initialScope);
@@ -984,7 +1144,7 @@ async function hydrateBackupCacheValue(value, expectedChatId, expectedRevision) 
     return cache;
 }
 
-async function commitArchiveCacheMutation(entry, memoryBank, baseCache, mutate, stillCurrent = null) {
+async function commitArchiveCacheMutation(entry, memoryBank, baseCache, mutate, stillCurrent = null, options = {}) {
     const chatId = core_context.comparableChatId(memoryBank?.chatId);
     const revision = core_text.normalizeText(memoryBank?.archiveRevision, 240);
     const tokenScope = `archive:${archiveCommitScope(entry, memoryBank)}`;
@@ -999,6 +1159,9 @@ async function commitArchiveCacheMutation(entry, memoryBank, baseCache, mutate, 
             throw error;
         }
         const latest = backupState.record?.archiveRevision === revision ? backupState.record : null;
+        if (options.requireExisting && !latest) {
+            throw core_text.safeUserError('原档案已不存在或版本已变化，旧草稿没有写回。', 'RMT_RECOVERY_ORIGIN_CHANGED');
+        }
         const supplied = cloneCacheValue(baseCache || {});
         let canonical = null;
         let starting = cloneCacheValue(supplied);
@@ -1025,10 +1188,12 @@ async function commitArchiveCacheMutation(entry, memoryBank, baseCache, mutate, 
         const stored = await prepareCacheBackupValue(cache);
         if (typeof stillCurrent === 'function' && !stillCurrent()) throw new Error('同一档案已启动更新的任务，本次旧结果没有写入。');
         try {
-            await archive_backupStore.updateArchiveBackupCache(entry, memoryBank, stored, {
-                expectedCacheOrder: cacheOrderValue(latest?.cache),
-                stillCurrent,
-            });
+            const writeOptions = { expectedCacheOrder: cacheOrderValue(latest?.cache), stillCurrent };
+            if (options.requireExisting) {
+                await archive_backupStore.replaceArchiveBackup(entry, memoryBank, stored, { present: true, revision }, {
+                    ...writeOptions, allowMissingPrevious: false, allowCharacterRename: entry?.allowCharacterRename === true,
+                });
+            } else await archive_backupStore.updateArchiveBackupCache(entry, memoryBank, stored, writeOptions);
             if (typeof stillCurrent === 'function' && !stillCurrent()) throw new Error('同一档案已启动更新的任务，本次旧结果没有写入。');
             return { cache, stored };
         } catch (error) {
@@ -1068,12 +1233,14 @@ async function commitLiveCacheMutation(entry, memoryBank, scope, baseCache, muta
 
 function advanceModeWriteFence(cache, mode) {
     if (!Object.values(core_constants.MODE).includes(mode)) throw new Error('无法识别要生成的派生分类。');
+    discardSessionsBehindModeFences(cache);
     if (!cache[core_constants.MODE_WRITE_FENCES_CACHE_KEY] || typeof cache[core_constants.MODE_WRITE_FENCES_CACHE_KEY] !== 'object') {
         cache[core_constants.MODE_WRITE_FENCES_CACHE_KEY] = Object.create(null);
     }
     const next = nextModeWriteFence(cache, mode);
     cache[core_constants.MODE_WRITE_FENCES_CACHE_KEY][mode] = next;
     const signature = modeWriteFenceSignature(next);
+    if (cache[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode]) cache[generation_recovery.GENERATION_RECOVERY_CACHE_KEY][mode][core_constants.SESSION_MODE_WRITE_FENCE_KEY] = signature;
     if (cache?.[mode] && typeof cache[mode] === 'object') cache[mode][core_constants.SESSION_MODE_WRITE_FENCE_KEY] = signature;
     if (mode === core_constants.MODE.PHONE && cache?.[core_constants.PHONE_DRAFT_CACHE_KEY]) {
         cache[core_constants.PHONE_DRAFT_CACHE_KEY][core_constants.SESSION_MODE_WRITE_FENCE_KEY] = signature;
@@ -1363,6 +1530,7 @@ export async function deleteSessions(modes, expectedChatId = '') {
         }
         for (const mode of requested) {
             cache[core_constants.MODE_WRITE_FENCES_CACHE_KEY][mode] = nextModeWriteFence(cache, mode);
+            clearRecoveryInCache(cache, mode);
             changed = true;
             if (Object.prototype.hasOwnProperty.call(cache, mode)) {
                 delete cache[mode];
@@ -1422,7 +1590,7 @@ export function saveSession(mode, session, expectedChatId = core_text.normalizeT
     }
 }
 
-export async function commitSessionMutation(mode, expectedChatId, expectedTaskOrigin, mutateSession, fallbackSession = null) {
+export async function commitSessionMutation(mode, expectedChatId, expectedTaskOrigin, mutateSession, fallbackSession = null, options = {}) {
     const mutationLifecycle = runtimeState.runtimeLifecycleEpoch;
     if (typeof mutateSession !== 'function') return null;
     let context;
@@ -1467,6 +1635,7 @@ export async function commitSessionMutation(mode, expectedChatId, expectedTaskOr
             stagedSession.archiveRevision = memoryBank.archiveRevision;
             stagedSession[core_constants.SESSION_MODE_WRITE_FENCE_KEY] = fence;
             cache[mode] = stagedSession;
+            if (options.completeGeneration === true) clearCompletedRecovery(cache, mode);
             if (mode === core_constants.MODE.PHONE) delete cache[core_constants.PHONE_DRAFT_CACHE_KEY];
         }, stillCurrent);
         if (committed.unchanged || !stagedSession || !stillCurrent()) return null;
@@ -1494,11 +1663,11 @@ export async function commitSession(mode, session, expectedChatId = core_text.no
     const committed = await commitSessionMutation(mode, expectedChatId, expectedTaskOrigin, (_latest, memoryBank) => {
         if (expectedRevision && expectedRevision !== core_text.normalizeText(memoryBank.archiveRevision, 240)) return null;
         return mode === core_constants.MODE.INBOX ? modes_inbox.mergeInboxLatest(_latest, session) : session;
-    }, session);
+    }, session, { completeGeneration: true });
     return !!committed;
 }
 
-export async function commitDetachedArchiveSessionMutation(target, mode, expectedTaskOrigin, mutateSession, fallbackSession = null, stillCurrent = null) {
+export async function commitDetachedArchiveSessionMutation(target, mode, expectedTaskOrigin, mutateSession, fallbackSession = null, stillCurrent = null, options = {}) {
     if (typeof mutateSession !== 'function') throw new Error('后台派生内容缺少安全合并函数，本次结果没有写入。');
     const entryId = core_text.normalizeText(target?.entryId, 120);
     const chatId = core_context.comparableChatId(target?.chatId);
@@ -1530,6 +1699,7 @@ export async function commitDetachedArchiveSessionMutation(target, mode, expecte
             stagedSession.archiveRevision = revision;
             stagedSession[core_constants.SESSION_MODE_WRITE_FENCE_KEY] = fence;
             cache[mode] = stagedSession;
+            if (options.completeGeneration === true) clearCompletedRecovery(cache, mode);
             if (mode === core_constants.MODE.PHONE) delete cache[core_constants.PHONE_DRAFT_CACHE_KEY];
         }, stillCurrent);
         return { ...committed, session: cloneCacheValue(stagedSession) };
@@ -1544,6 +1714,7 @@ export async function commitDetachedArchiveSession(target, mode, session, stillC
         latest => mode === core_constants.MODE.INBOX ? modes_inbox.mergeInboxLatest(latest, session) : session,
         session,
         stillCurrent,
+        { completeGeneration: true },
     );
 }
 

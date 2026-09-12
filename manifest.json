@@ -1,15 +1,15 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.55-baibai-image-r59.0",
+  "js": "index.js?heartbeat=0.8.56-creative-recovery-r60.0",
   "author": "Toto",
-  "version": "0.8.55",
+  "version": "0.8.56",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r59：柏宝绘公开 API v1 适配；相簿、ADV、日常一格生图；进度、取消与原档案安全保存。",
+  "description": "r60：中文标签、创作补充词、CG 提示词编辑、阅读位置与手动分段续写。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

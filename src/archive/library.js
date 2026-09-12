@@ -17,6 +17,7 @@ import * as modes_relations from '../modes/relations.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as ui_phoneView from '../ui/phoneView.js';
 import * as ui_endingView from '../ui/endingView.js';
+import * as recovery_view from '../ui/recoveryView.js';
 
 export async function showArchiveLibrary() {
     ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
@@ -730,6 +731,7 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
         </article>`;
     }).join('');
     body.innerHTML = `<div class="rmt-archive-room">
+      ${recovery_view.recoveryBannerHtml(snapshot.cache, memory, { readOnly: snapshot.backupOnly })}
       <section class="rmt-memory-gate rmt-archive-card">
         <div class="rmt-memory-gate-text">
           <div class="rmt-archive-kicker">${snapshot.backupOnly ? 'RECOVERED LOCAL BACKUP' : 'READ-ONLY ARCHIVE'}</div>

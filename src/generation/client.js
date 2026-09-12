@@ -2,6 +2,7 @@ import * as core_butterflyContract from '../core/butterflyContract.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_groups from '../archive/groups.js';
+import * as archive_library from '../archive/library.js';
 import * as archive_repository from '../archive/repository.js';
 import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_cache from '../core/cache.js';
@@ -12,6 +13,8 @@ import * as core_incremental from '../core/incremental.js';
 import * as core_independentApi from '../core/independentApi.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
+import * as creative_supplement from '../core/creativeSupplement.js';
+import * as generation_recovery from './recovery.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as core_contextTags from '../core/contextTags.js';
@@ -35,6 +38,7 @@ import * as modes_relations from '../modes/relations.js';
 import * as modes_travel from '../modes/travel.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as ui_settingsPanel from '../ui/settingsPanel.js';
+import * as ui_contentManager from '../ui/contentManager.js';
 
 export function generationWorldInfoScanTerms(mode, context = {}) {
     const characterName = core_text.normalizeText(context?.name2, 120);
@@ -188,18 +192,22 @@ export async function requestValidatedSegment(prompt, status, options, validator
     const context = options?.context || core_context.currentCharacterGuard();
     options = { ...options, context, contextEnvelope: typeof options?.contextEnvelope === 'string'
         ? options.contextEnvelope : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options?.mode, context) }) };
+    return generation_recovery.withRecoverySegment(prompt, options, validator, async (prompt, options, accepted) => {
     let lastError = null;
-    for (let attempt = 0; attempt < core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS; attempt += 1) {
+    const maxAttempts = Math.max(1, Math.min(core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS, Number(options?.segmentMaxAttempts) || core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS));
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const retryNote = attempt && lastError
             ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || core_text.normalizeText(lastError?.repairHint, 600) || (String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
             : '';
         try {
             const raw = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? '（重试）' : ''}`, options);
-            return core_requestCoordinator.validateGeneratedSegment(raw, validator);
+            const value = core_requestCoordinator.validateGeneratedSegment(raw, validator);
+            await accepted(raw);
+            return value;
         } catch (error) {
             if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
             lastError = error;
-            if (core_requestCoordinator.shouldRetrySegmentRequest(error, attempt)) {
+            if (attempt + 1 < maxAttempts && core_requestCoordinator.shouldRetrySegmentRequest(error, attempt)) {
                 await core_requestCoordinator.waitBeforeSegmentRetry(error, attempt);
                 continue;
             }
@@ -207,6 +215,7 @@ export async function requestValidatedSegment(prompt, status, options, validator
         }
     }
     throw lastError || new Error(`${status}失败。`);
+    });
 }
 
 export async function assertPromptBudget(context, prompt, { skipTokenCount = false } = {}) {
@@ -375,9 +384,10 @@ export async function generateConfiguredJson(prompt, options = {}) {
         ? options.contextEnvelope
         : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context) });
     const phrasePolicy = options.enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(settings) : '';
+    const creativeSupplement = creative_supplement.creativeSupplementBlock(settings);
     const controlledPrompt = `${contextEnvelope}
-${expanded}${phrasePolicy}`;
-    await assertPromptBudget(context, contextEnvelope + '\n' + originalExpanded + phrasePolicy, { skipTokenCount: options.skipTokenCount === true });
+${expanded}${creativeSupplement}${phrasePolicy}`;
+    await assertPromptBudget(context, contextEnvelope + '\n' + originalExpanded + creativeSupplement + phrasePolicy, { skipTokenCount: options.skipTokenCount === true });
     // The value configured in the dedicated secondary-API UI is the actual provider max output.
     // Per-feature options.maxTokens values are legacy sizing hints only and must not silently lower it.
     const responseLength = Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens));
@@ -444,8 +454,9 @@ ${expanded}${phrasePolicy}`;
         catch { latestProfileFingerprint = 'missing'; }
     }
     if (core_independentApi.apiConfigurationFingerprint(latestSettings) !== configurationFingerprint
+        || creative_supplement.creativeSupplementBlock(latestSettings) !== creativeSupplement
         || (connectionMode === 'profile' && latestProfileFingerprint !== selectedProfileFingerprint)) {
-        const error = new Error('API 配置在生成期间发生变化，本次旧连接结果已丢弃。');
+        const error = new Error('API 配置或创作补充词在生成期间发生变化，本次旧请求结果已丢弃。');
         error.code = 'RMT_API_CONFIG_CHANGED';
         error.retryable = false;
         throw error;
@@ -453,11 +464,15 @@ ${expanded}${phrasePolicy}`;
     let responsePayload;
     try { responsePayload = core_independentApi.assertIndependentResponsePayload(result); }
     catch (error) { throw normalizeConnectionManagerError(error); }
-    const parsed = generation_jsonParser.extractJson(responsePayload, {
+    let parsed;
+    try { parsed = generation_jsonParser.extractJson(responsePayload, {
         reasoning: result?.reasoning || '',
         requestMaxTokens: responseLength,
         configuredMaxTokens: settings.maxTokens,
-    });
+    }); } catch (error) {
+        await generation_recovery.recordRecoveryTruncation(options, responsePayload, error);
+        throw error;
+    }
     if (options.enforceGeneratedPhrasePolicy === true) assertNoBannedGeneratedPhrase(parsed, settings, {
         mode: options.mode, settingText: core_worldPresentation.controlledWorldEvidence(contextEnvelope, null),
     });
@@ -525,14 +540,107 @@ export async function generateArchiveChunkJson(prompt, options, label) {
     }
 }
 
+function recoverySettingsIdentity(context) {
+    const settings = core_settings.getPluginSettings(context);
+    // Connection/model/output limits may be repaired before an explicit continuation.
+    // Writing rules and evidence filters must not silently change accepted content.
+    return JSON.stringify({ creativeSupplementEnabled: settings.creativeSupplementEnabled,
+        creativeSupplement: settings.creativeSupplement, excludedContextTags: settings.excludedContextTags,
+        bannedGeneratedPhrases: settings.bannedGeneratedPhrases });
+}
+export async function beginModeRecovery(mode, context, bank, origin, options = {}) {
+    const identity = recoverySettingsIdentity(context);
+    const existing = options.existing === undefined ? core_cache.loadGenerationRecovery(mode, context, options.archiveTarget?.cache) : options.existing;
+    const operation = options.operation || { kind: 'mode', mode };
+    if (existing?.operation && await generation_recovery.generationRecoveryDigest(existing.operation) !== await generation_recovery.generationRecoveryDigest(operation)) {
+        throw core_text.safeUserError('这项还保留着另一入口的草稿，请从“继续生成”回到原来的任务；旧内容与草稿未改动。', 'RMT_RECOVERY_OPERATION_CHANGED');
+    }
+    const archiveEntry = options.archiveEntry || (!options.archiveTarget
+        ? structuredClone(core_cache.archiveBackupEntryForContext(context, bank, { expectedTaskOrigin: origin, previousMemory: bank })) : null);
+    const handle = await generation_recovery.createGenerationRecovery({
+        origin: { ...origin, archiveTargetEntryId: options.archiveTarget?.entryId || archiveEntry?.entryId || origin.archiveTargetEntryId || '' },
+        mode, settingsIdentity: identity, existing, continueRequested: !!existing,
+        taskScopes: [`${origin.characterKey}|${origin.chatId}`, `archive-target:${options.archiveTarget?.entryId || archiveEntry?.entryId || origin.archiveTargetEntryId || ''}`],
+        assertCurrent: () => {
+            if (!core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch) || options.stillCurrent?.() === false
+                || recoverySettingsIdentity(context) !== identity) return false;
+            const live = core_context.getContext();
+            if (!options.archiveTarget && core_context.deferredCommitOriginMatchesContext(origin, live)) {
+                return archive_repository.getImportedMemory(live)?.archiveRevision === bank.archiveRevision
+                    && core_cache.modeWriteFenceForCache(core_cache.getCache(live), mode) === core_cache.modeWriteFenceSignature(origin.modeWriteFences?.[mode]);
+            }
+            return true;
+        },
+        save: journal => core_cache.saveGenerationRecovery(context, bank, mode, journal
+            ? { ...journal, operation, replaceExisting: options.replaceExisting === true } : null, origin, { ...options, archiveEntry }),
+    });
+    generation_recovery.attachGenerationRecovery(origin, handle);
+    return handle;
+}
+
+export async function continueSavedGeneration(mode, options = {}) {
+    if (!Object.values(core_constants.MODE).includes(mode)) return;
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    if (snapshot?.backupOnly) throw new Error('独立备份是只读快照，不能继续生成。');
+    const targetOptions = snapshot ? archive_library.archiveTargetGenerationOptions(snapshot) : {};
+    const context = targetOptions.context || options.context || core_context.currentCharacterGuard();
+    const bank = archive_repository.requireArchive(context);
+    const existing = core_cache.loadGenerationRecovery(mode, context, targetOptions.archiveTarget?.cache);
+    if (!existing) { globalThis.toastr?.info?.('当前档案没有可继续的草稿，不会发起新请求。', '缘侧'); return; }
+    if (!ui_overlay.confirmExplicitAction('继续未完成内容？', '只补原任务未完成的内容，会使用文本生成额度。认证或额度问题需要先在设置里解决；取消不改动草稿。', { destructive: false })) return;
+    const operation = existing.operation || { kind: 'mode', mode };
+    const resumeOptions = { ...options, ...targetOptions, existing, continueRecovery: true };
+    if (operation.kind === 'mode') return generateMode(mode, { ...resumeOptions, background: true });
+    const session = core_cache.loadSession(mode, { context, memoryBank: bank, cache: targetOptions.archiveTarget?.cache, clone: true });
+    if (!session) throw new Error('原任务所依赖的内容已不在当前档案；草稿保留，没有重新生成。');
+    if (operation.kind === 'content-item') {
+        runtimeState.activeMode = mode;
+        runtimeState.activeSession = session;
+        return ui_contentManager.resumeContentRegeneration(resumeOptions);
+    }
+    const routes = {
+        'adv-single': () => modes_advEvent.generateAdvForSelected({ ...resumeOptions, eventId: operation.eventId }),
+        'adv-bulk': () => modes_advEvent.generateAllAdvForSession(resumeOptions),
+        'adv-repair': () => modes_advEvent.repairFailedAdvForSession(resumeOptions),
+        'heart-section': () => modes_heart.generateHeartSection(operation.part, resumeOptions),
+        'heart-fireflies': () => modes_heart.generateHeartFirefliesSection(resumeOptions),
+        'heart-season': () => modes_heart.generateHeartSeasonSection(operation.season, resumeOptions),
+        'room-daily-life': () => modes_room.ensureRoomLifePlan({ ...resumeOptions, force: true }),
+    };
+    if (!routes[operation.kind] || !operation.kind.startsWith(mode === core_constants.MODE.ADV ? 'adv-' : mode === core_constants.MODE.HEART ? 'heart-' : mode === core_constants.MODE.ROOM ? 'room-' : '!')) throw new Error('无法识别原续写入口，草稿保留。');
+    runtimeState.activeMode = mode;
+    runtimeState.activeSession = session;
+    return routes[operation.kind]();
+}
+
+export async function discardSavedGeneration(mode) {
+    if (!Object.values(core_constants.MODE).includes(mode)) return;
+    if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || runtimeState.activeModeBuildScopes.size) {
+        globalThis.toastr?.info?.('请等当前生成任务结束后，再放弃未提交草稿。', '缘侧'); return;
+    }
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    if (snapshot?.backupOnly) return;
+    const opts = snapshot ? archive_library.archiveTargetGenerationOptions(snapshot) : {};
+    const context = opts.context || core_context.currentCharacterGuard();
+    const bank = archive_repository.requireArchive(context);
+    if (!core_cache.loadGenerationRecovery(mode, context, opts.archiveTarget?.cache)) return;
+    if (!ui_overlay.confirmExplicitAction('放弃这轮未提交草稿？', '仅清除此轮分段恢复记录，不删除已保存的模块、正式记忆或图片。未提交的成功分段也会放弃，不能恢复；不会自动重新生成。终端原有的逐 App 草稿另行保留。', { destructive: true })) return;
+    const origin = { ...core_context.captureTaskOrigin(context, bank.archiveRevision), archiveTargetEntryId: opts.archiveTarget?.entryId || '' };
+    await core_cache.saveGenerationRecovery(context, bank, mode, null, origin, opts);
+    if (snapshot) await ui_overlay.refreshArchiveTargetSnapshotView(snapshot.entryId);
+    else ui_overlay.showChooser();
+}
+
 export async function generateMode(mode, options = {}) {
     // Capture once, before any archive/network/storage await. A destroyed invocation must never
     // adopt the next runtime lifetime and re-register itself as a fresh paid task.
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
-    const inboxDate = mode === core_constants.MODE.INBOX ? new Date() : null;
+    let inboxDate = mode === core_constants.MODE.INBOX ? new Date() : null;
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     const background = options.background === true;
-    const replaceExisting = options.replaceExisting === true;
+    let replaceExisting = options.replaceExisting === true;
+    let recoveryHandle = null;
+    let recoveryExisting = null;
     if (mode === core_constants.MODE.INBOX && replaceExisting) throw new Error('邮箱只追加新信，不支持整箱重新生成。');
     const archiveTarget = options.archiveTarget && typeof options.archiveTarget === 'object' ? options.archiveTarget : null;
     if (archiveTarget?.backupOnly) throw new Error('独立备份是永久只读快照，不能生成或写入派生内容。');
@@ -554,7 +662,7 @@ export async function generateMode(mode, options = {}) {
     const promptFactory = generation_prompts.PROMPTS[mode];
     if (!promptFactory && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX].includes(mode)) return;
     const segmentedMode = [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX].includes(mode);
-    const calendarCurrentDate = mode === core_constants.MODE.CALENDAR ? modes_calendar.currentCalendarDate() : '';
+    let calendarCurrentDate = mode === core_constants.MODE.CALENDAR ? modes_calendar.currentCalendarDate() : '';
     let generationPrompt = segmentedMode || mode === core_constants.MODE.RELATIONS
         ? ''
         : mode === core_constants.MODE.CALENDAR
@@ -568,6 +676,7 @@ export async function generateMode(mode, options = {}) {
     const refreshableRelations = mode === core_constants.MODE.RELATIONS || mode === core_constants.MODE.CABINET;
     let roomSchemaUpgrade = false;
     const modeHasNoIncrementalWork = () => {
+        if (options.continueRecovery) return false;
         if (mode === core_constants.MODE.INBOX) return !modes_inbox.inboxPlan(memoryBank, previousSession, inboxDate).length;
         if (mode === core_constants.MODE.ROOM && options.visualOnly && previousSession) return false;
         if (mode === core_constants.MODE.PHONE && options.fillMissing) {
@@ -604,6 +713,25 @@ export async function generateMode(mode, options = {}) {
     // A no-op must not advance the durable mode fence. In another tab, doing so would cancel a
     // real in-flight build for the same frozen archive even though this invocation never calls a
     // provider. Preflight against the freshly revalidated snapshot, then repeat after the CAS.
+    recoveryExisting = core_cache.loadGenerationRecovery(mode, context, archiveTarget?.cache);
+    if (recoveryExisting) {
+        if (options.automatic) return { status: 'noop' };
+        if (recoveryExisting.operation?.kind && recoveryExisting.operation.kind !== 'mode') return continueSavedGeneration(mode, options);
+        if (!options.continueRecovery && !ui_overlay.confirmExplicitAction('继续未完成内容？', '这项还保留着上次的分段草稿。继续只补未完成部分，会使用文本生成额度；取消不会改动草稿或旧内容。', { destructive: false })) return;
+        options.continueRecovery = true;
+        replaceExisting = recoveryExisting.replaceExisting === true;
+        const savedOperation = recoveryExisting.operation;
+        if (savedOperation?.kind === 'mode') {
+            if (mode === core_constants.MODE.INBOX && typeof savedOperation.inboxDate === 'string' && Number.isFinite(Date.parse(savedOperation.inboxDate))) inboxDate = new Date(savedOperation.inboxDate);
+            if (mode === core_constants.MODE.CALENDAR && /^\d{4}\/\d{2}\/\d{2}$/.test(savedOperation.calendarDate || '')) {
+                calendarCurrentDate = savedOperation.calendarDate;
+                generationPrompt = generation_prompts.calendarPrompt(context, memoryBank, { currentDate: calendarCurrentDate });
+            }
+            options.visualOnly = savedOperation.visualOnly === true;
+            options.fillMissing = savedOperation.fillMissing === true;
+            if (typeof savedOperation.focusObjectId === 'string') options.focusObjectId = savedOperation.focusObjectId;
+        }
+    }
     previousSession = replaceExisting ? null : core_cache.loadSession(mode, {
         context,
         chatId: expectedChatId,
@@ -681,6 +809,9 @@ export async function generateMode(mode, options = {}) {
             return options.automatic ? { status: 'noop' } : undefined;
         }
         origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId), archiveTargetEntryId: core_text.normalizeText(archiveTarget?.entryId, 120) };
+        recoveryHandle = await beginModeRecovery(mode, context, memoryBank, origin, { ...options, archiveTarget, stillCurrent: archiveTargetStillCurrent, existing: recoveryExisting, replaceExisting,
+            operation: recoveryExisting?.operation || { kind: 'mode', mode, inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
+                visualOnly: options.visualOnly === true, fillMissing: options.fillMissing === true, focusObjectId: core_text.normalizeText(options.focusObjectId, 120) } });
         let session;
         let presentationContext = null;
         if ([core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX].includes(mode)) {
@@ -718,8 +849,8 @@ export async function generateMode(mode, options = {}) {
                 ? await modes_phone.generatePhoneMissingWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext,
                     savePartial: async partial => {
                         partial.chatId = expectedChatId; partial.archiveRevision = expectedArchiveRevision;
-                        if (archiveTarget) await options.commitArchiveTarget(archiveTarget, mode, partial, archiveTargetStillCurrent, origin);
-                        else if (!await core_cache.commitSession(mode, partial, expectedChatId, origin)) throw new DOMException('Archive changed', 'AbortError');
+                        if (archiveTarget) await archive_library.commitArchiveTargetSessionMutation(archiveTarget, mode, origin, () => partial, partial, archiveTargetStillCurrent);
+                        else if (!await core_cache.commitSessionMutation(mode, expectedChatId, origin, () => partial, partial)) throw new DOMException('Archive changed', 'AbortError');
                     } })
                 : previousSession && options.continueDraft !== true
                 ? await modes_phone.generatePhoneIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext })
@@ -821,6 +952,7 @@ export async function generateMode(mode, options = {}) {
         }
         if (!committed && !archiveTarget) core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [mode]: session } });
 
+        if (committed && recoveryHandle) await core_cache.saveGenerationRecovery(context, memoryBank, mode, null, origin, { archiveTarget, stillCurrent: archiveTargetStillCurrent });
         if (committed && mode === core_constants.MODE.INBOX) {
             session = archiveTarget
                 ? core_cache.loadSession(mode, { chatId: expectedChatId, memoryBank, cache: runtimeState.activeArchiveSnapshot?.entryId === archiveTarget.entryId ? runtimeState.activeArchiveSnapshot.cache : archiveTarget.cache }) || session
@@ -848,6 +980,7 @@ export async function generateMode(mode, options = {}) {
         globalThis.toastr?.success?.(`${replaceExisting ? '已重新生成' : refreshableCalendar && previousSession ? '已刷新' : refreshableRelations && previousSession ? '已刷新' : previousSession ? '已增量追加' : '已生成'}：${core_constants.MODE_LABEL[mode]}${previousSession && !refreshableCalendar && !refreshableRelations && !replaceExisting ? '；旧内容保持不变' : ''}`, '心跳回忆');
         return session;
     } catch (error) {
+        if (recoveryHandle) { try { await generation_recovery.noteGenerationRecoveryFailure(origin, error?.failure || error); } catch {} }
         if (error?.name === 'AbortError') {
             console.warn('[HeartbeatMemories] generation aborted by extension/task cancellation', { mode });
             return null;
@@ -880,6 +1013,7 @@ export async function generateMode(mode, options = {}) {
         globalThis.toastr?.error?.(core_text.toastText(safeError), '心跳回忆');
         return null;
     } finally {
+        generation_recovery.detachGenerationRecovery(origin);
         runtimeState.activeModeBuildScopes.delete(taskKey);
         core_requestCoordinator.unregisterArchiveTargetReservation(taskKey);
         core_requestCoordinator.refreshConcurrentTaskUi(mode, origin);

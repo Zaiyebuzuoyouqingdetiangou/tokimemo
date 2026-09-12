@@ -974,6 +974,43 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 `;
     style.textContent += ui_inboxStyles.inboxCss('#' + core_constants.OVERLAY_ID);
     style.textContent += ui_themeSurfaces.structuralThemeCss('#' + core_constants.OVERLAY_ID) + ui_themeSurfaces.structuralThemeCss('.rmt-avatar-dialog-pop[data-rmt-theme-mode]');
+    // CG controls are structural UI, not part of the generated artwork. Keep the
+    // editor opaque and locally scoped so host themes cannot wash out its text.
+    style.textContent += `
+#${core_constants.OVERLAY_ID} .rmt-recovery-status{margin:12px 0;padding:16px;border:1px solid var(--rmt-theme-border,#cbdce6);border-left:4px solid var(--rmt-theme-accent-ink,#5f5770);border-radius:12px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#334155);font-size:14px;line-height:1.65;overflow-wrap:anywhere}
+#${core_constants.OVERLAY_ID} .rmt-recovery-status p{margin:8px 0;white-space:pre-wrap}
+#${core_constants.OVERLAY_ID} .rmt-recovery-status .rmt-btn{min-height:44px;font-size:14px;max-width:100%;white-space:normal}
+#${core_constants.OVERLAY_ID} .rmt-cg-card-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;min-width:0}
+#${core_constants.OVERLAY_ID} .rmt-cg-card-actions .rmt-btn{position:static;flex:1 1 120px;min-width:0;min-height:44px;white-space:normal;overflow-wrap:anywhere}
+#${core_constants.OVERLAY_ID} .rmt-cg-prompt-backdrop{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;padding: max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));box-sizing:border-box;background:rgba(15,23,42,.58);overflow:auto;overscroll-behavior:contain}
+#${core_constants.OVERLAY_ID} .rmt-cg-prompt-dialog{display:flex;flex-direction:column;gap:12px;width:min(720px,100%);min-width:0;max-width:100%;max-height:100%;overflow:auto;overscroll-behavior:contain;box-sizing:border-box;padding:24px;border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:20px;background:var(--rmt-theme-surface-solid,#fff)!important;color:var(--rmt-theme-text,#334155)!important;-webkit-text-fill-color:currentColor!important;box-shadow:0 20px 60px rgba(15,23,42,.3);font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;font-size:16px;line-height:1.6;opacity:1!important;text-align:left;writing-mode:horizontal-tb!important}
+#${core_constants.OVERLAY_ID} .rmt-cg-prompt-dialog>*{flex-shrink:0;min-width:0;max-width:100%;box-sizing:border-box}
+#${core_constants.OVERLAY_ID} .rmt-cg-prompt-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#${core_constants.OVERLAY_ID} #rmt-cg-prompt-title{margin:0!important;font-size:22px!important;line-height:1.4!important;overflow-wrap:anywhere}
+#${core_constants.OVERLAY_ID} .rmt-cg-prompt-head .rmt-btn{flex:0 0 auto;min-width:64px;min-height:44px}
+#${core_constants.OVERLAY_ID} .rmt-cg-prompt-dialog p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+#${core_constants.OVERLAY_ID} .rmt-cg-prompt-scene{margin:0;padding:0;border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:12px;background:var(--rmt-theme-soft,var(--rmt-theme-surface-solid,#fff))}
+#${core_constants.OVERLAY_ID} .rmt-cg-prompt-scene summary{min-height:44px;padding:10px 12px;box-sizing:border-box;cursor:pointer;line-height:1.5}
+#${core_constants.OVERLAY_ID} .rmt-cg-prompt-scene p{padding:0 12px 12px}
+#${core_constants.OVERLAY_ID} .rmt-cg-prompt-dialog label{display:block;margin:0;font-size:16px;line-height:1.5}
+#${core_constants.OVERLAY_ID} #rmt-cg-prompt-input{display:block;box-sizing:border-box;width:100%;min-height:180px;height:220px;max-height:50vh;padding:12px;border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:12px;background:var(--rmt-theme-surface-solid,#fff)!important;color:var(--rmt-theme-text,#334155)!important;font-size:16px!important;line-height:1.6!important;resize:vertical;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere}
+#${core_constants.OVERLAY_ID} #rmt-cg-prompt-count{font-size:14px!important;line-height:1.5;text-align:right;font-variant-numeric:tabular-nums}
+#${core_constants.OVERLAY_ID} #rmt-cg-prompt-help{font-size:14px!important;line-height:1.7!important;color:var(--rmt-theme-text,#334155)!important}
+#${core_constants.OVERLAY_ID} .rmt-cg-prompt-dialog [data-rmt-cg-prompt-status]:empty{display:none}
+#${core_constants.OVERLAY_ID} .rmt-cg-prompt-dialog [data-rmt-cg-prompt-status]:not(:empty){padding:12px;border:1px solid var(--rmt-theme-border,#cbdce6);border-left:3px solid var(--rmt-theme-accent-ink,var(--rmt-theme-text,#334155));border-radius:8px;background:var(--rmt-theme-soft,var(--rmt-theme-surface-solid,#fff));overflow-wrap:anywhere}
+#${core_constants.OVERLAY_ID} .rmt-cg-prompt-actions{display:flex;flex-wrap:wrap;gap:10px;padding-top:4px}
+#${core_constants.OVERLAY_ID} .rmt-cg-prompt-actions .rmt-btn{flex:1 1 180px;min-width:0;min-height:44px;white-space:normal;overflow-wrap:anywhere}
+#${core_constants.OVERLAY_ID} .rmt-cg-prompt-dialog .rmt-btn:disabled,#${core_constants.OVERLAY_ID} #rmt-cg-prompt-input:disabled{cursor:wait;border-style:dashed!important}
+#${core_constants.OVERLAY_ID} .rmt-cg-prompt-dialog :is(button,summary):focus-visible,#${core_constants.OVERLAY_ID} #rmt-cg-prompt-input:focus-visible,#${core_constants.OVERLAY_ID} .rmt-cg-card-actions .rmt-btn:focus-visible{outline:3px solid var(--rmt-theme-accent-ink,var(--rmt-theme-text,#334155))!important;outline-offset:3px}
+@media(max-width:480px){
+  #${core_constants.OVERLAY_ID} .rmt-cg-prompt-dialog{padding:16px;gap:10px;border-radius:16px}
+  #${core_constants.OVERLAY_ID} .rmt-cg-prompt-actions{flex-direction:column}
+  #${core_constants.OVERLAY_ID} .rmt-cg-prompt-actions .rmt-btn{flex:auto;width:100%}
+}
+@media(prefers-reduced-motion:reduce){
+  #${core_constants.OVERLAY_ID} .rmt-cg-prompt-backdrop,#${core_constants.OVERLAY_ID} .rmt-cg-prompt-backdrop *,#${core_constants.OVERLAY_ID} .rmt-cg-card-actions .rmt-btn{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+`;
     document.head.appendChild(style);
 }
 

@@ -1,10 +1,18 @@
 // Heartbeat Memories content management UI.
 // This module only renders allowlisted management targets from the already-normalized session.
 import * as core_constants from '../core/constants.js';
+import * as core_cache from '../core/cache.js';
+import * as core_context from '../core/context.js';
+import * as core_requestCoordinator from '../core/requestCoordinator.js';
+import * as archive_library from '../archive/library.js';
+import * as archive_repository from '../archive/repository.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as modes_calendar from '../modes/calendar.js';
 import * as ui_overlay from './overlay.js';
+import * as generation_client from '../generation/client.js';
+import * as generation_recovery from '../generation/recovery.js';
+import * as content_regeneration from '../generation/contentRegeneration.js';
 
 const MANAGEABLE_TARGET_TYPES = new Set([
     'album-entry', 'album-image',
@@ -117,6 +125,119 @@ export function managementTargetsForSession(session) {
         ));
     }
     return [];
+}
+
+export async function runContentRegeneration(type, id, parentId = '', options = {}) {
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const mode = options.mode || runtimeState.activeMode;
+    let origin = null;
+    let targetRuntime = null;
+    let taskKey = '';
+    let modeKey = '';
+    let reserved = false;
+    try {
+        if (!Object.values(core_constants.MODE).includes(mode) || !isManageableTargetType(type)
+            || ['album-image', 'adv-image', 'heart-strip-image', 'room-life'].includes(type)) throw new Error('这项应使用原有的图片或今日生活入口。');
+        if (runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly) throw new Error('当前档案只读，不能重新生成单项内容。');
+        targetRuntime = await archive_library.prepareArchiveTargetSubtask(mode, `content:${type}:${parentId}:${id}`);
+        core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
+        const context = targetRuntime?.context || core_context.currentCharacterGuard();
+        const memoryBank = targetRuntime?.memoryBank || archive_repository.requireArchive(context);
+        const chatId = core_context.getChatId(context);
+        if (!targetRuntime) await core_cache.ensureCacheHydrated(context);
+        core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
+        const readBase = () => core_cache.loadSession(mode, { context, memoryBank, chatId,
+            cache: targetRuntime?.archiveTarget?.cache, clone: true });
+        let base = readBase();
+        if (!base) throw new Error('原分类缓存已不存在；没有生成或重建整个分类。');
+        const choices = managementTargetsForSession(base).filter(item => item.type === type && item.id === id && item.parentId === parentId && item.canRegenerate);
+        if (choices.length !== 1) throw new Error('原单项内容已不存在或身份不唯一。');
+        const record = choices[0];
+        const selected = content_regeneration.contentRegenerationTarget(base, type, id, parentId);
+        const itemHash = await generation_recovery.generationRecoveryDigest(selected.item);
+        const safeTarget = { ...selected.target, itemHash };
+        const existing = options.existing === undefined
+            ? core_cache.loadGenerationRecovery(mode, context, targetRuntime?.archiveTarget?.cache) : options.existing;
+        if (existing?.operation && await generation_recovery.generationRecoveryDigest(existing.operation)
+            !== await generation_recovery.generationRecoveryDigest({ kind: 'content-item', target: safeTarget })) {
+            throw core_text.safeUserError('原单项内容已变化，或当前保存的是另一项任务的草稿；没有覆盖内容，也没有发送新请求。', 'RMT_RECOVERY_TARGET_CHANGED');
+        }
+        if (!options.confirmed && !ui_overlay.confirmExplicitActionTwice(`重新生成「${record.label}」？`,
+            '只有本项通过校验并成功保存后才替换旧内容；截断会保留草稿及成功分段。其他条目和正式档案 Mxxx 不会被改写。', { destructive: true })) return null;
+        const archiveEntry = targetRuntime?.archiveTarget || core_cache.archiveBackupEntryForContext(context, memoryBank);
+        taskKey = `manage:${archiveEntry.entryId}:${type}:${parentId}:${id}`;
+        modeKey = core_requestCoordinator.generationTaskKeyForMode(mode, context);
+        if (core_requestCoordinator.isModeGenerating(mode, context) || runtimeState.activeModeBuildScopes.has(taskKey)
+            || !core_requestCoordinator.canStartGenerationTask(taskKey)) throw new Error('本分类已有生成任务，请等它结束再操作。');
+        runtimeState.activeModeBuildScopes.add(taskKey);
+        runtimeState.activeModeBuildScopes.add(modeKey);
+        core_requestCoordinator.registerArchiveTargetReservation(taskKey, targetRuntime, mode, `单项重新生成：${record.label}`);
+        reserved = true;
+        if (targetRuntime) {
+            await archive_library.beginArchiveTargetSubtask(targetRuntime);
+            origin = targetRuntime.origin;
+        } else {
+            await core_cache.claimLiveModeGeneration(mode, context, memoryBank);
+            origin = core_context.captureTaskOrigin(context, memoryBank.archiveRevision);
+        }
+        core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
+        base = readBase();
+        const current = content_regeneration.contentRegenerationTarget(base, type, id, parentId);
+        if (await generation_recovery.generationRecoveryDigest(current.item) !== itemHash) throw core_text.safeUserError('原单项内容已被更新，没有覆盖较新内容。', 'RMT_RECOVERY_TARGET_CHANGED');
+        const expectedItemJson = JSON.stringify(current.item);
+        const recoveryOptions = { ...options, existing, operation: { kind: 'content-item', target: safeTarget },
+            archiveTarget: targetRuntime?.archiveTarget, archiveEntry, stillCurrent: targetRuntime?.stillCurrent };
+        await generation_client.beginModeRecovery(mode, context, memoryBank, origin, recoveryOptions);
+        ui_overlay.setInnerLoading(true, `正在重新生成「${record.label}」…`);
+        const updated = await content_regeneration.regenerateManagedTarget(base, type, id, parentId, { context, memoryBank, origin, taskKey });
+        const merge = (latest, liveMemory = memoryBank) => {
+            const normalizedLatest = core_cache.loadSession(mode, { memoryBank: liveMemory, chatId, clone: true,
+                cache: { chatId, archiveRevision: liveMemory.archiveRevision, [mode]: latest } });
+            if (!normalizedLatest) throw new Error('原分类已不存在或不能读取，旧结果没有重建它。');
+            return content_regeneration.mergeRegeneratedContentTarget(normalizedLatest, updated, safeTarget, expectedItemJson);
+        };
+        let committed;
+        if (targetRuntime) {
+            const result = await targetRuntime.options.commitArchiveTargetMutation(targetRuntime.archiveTarget, mode, origin, merge, base, targetRuntime.stillCurrent);
+            archive_library.syncArchiveTargetSubtask(targetRuntime, result.snapshot);
+            committed = result.session;
+        } else committed = await core_cache.commitSessionMutation(mode, chatId, origin, merge, base);
+        if (!committed) throw core_text.safeUserError('结果已保存在续写草稿中；原窗口当前不可写，回到原档案继续即可，不会重做成功分段。', 'RMT_RECOVERY_COMMIT_PENDING');
+        await core_cache.saveGenerationRecovery(context, memoryBank, mode, null, origin, {
+            archiveTarget: targetRuntime?.archiveTarget, archiveEntry, stillCurrent: targetRuntime?.stillCurrent,
+        });
+        const visible = targetRuntime ? runtimeState.activeArchiveSnapshot?.entryId === targetRuntime.archiveTarget.entryId : core_context.isCurrentTaskOrigin(origin);
+        if (visible && runtimeState.activeMode === mode) {
+            runtimeState.activeSession = committed;
+            if (ui_overlay.bodyEl()) renderContentManager();
+        }
+        globalThis.toastr?.success?.(`已重新生成：${record.label}`, '心跳回忆');
+        return committed;
+    } catch (error) {
+        if (origin) await generation_recovery.noteGenerationRecoveryFailure(origin, error);
+        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
+        return null;
+    } finally {
+        if (origin) generation_recovery.detachGenerationRecovery(origin);
+        if (reserved) {
+            runtimeState.activeModeBuildScopes.delete(taskKey);
+            runtimeState.activeModeBuildScopes.delete(modeKey);
+            core_requestCoordinator.unregisterArchiveTargetReservation(taskKey);
+        }
+        if (core_context.runtimeLifecycleStillCurrent(lifecycleEpoch)) ui_overlay.setInnerLoading(false);
+    }
+}
+
+export async function resumeContentRegeneration(options = {}) {
+    const existing = options.existing;
+    if (!generation_recovery.generationRecoverySummary(existing) || existing.operation?.kind !== 'content-item') {
+        throw new Error('没有有效的单项续写草稿；不会转为整个分类重新生成。');
+    }
+    const selected = existing.operation.target;
+    if (!selected || typeof selected.itemHash !== 'string' || !/^[a-f0-9]{64}$/.test(selected.itemHash)) throw new Error('原单项目标身份不完整。');
+    return runContentRegeneration(selected.type, selected.id, selected.parentId, {
+        ...options, mode: existing.identity.mode, continueRecovery: true, confirmed: true,
+    });
 }
 
 function actionButton(action, item, label, danger = false) {

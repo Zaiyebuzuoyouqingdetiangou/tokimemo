@@ -11,6 +11,8 @@ import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as ui_endingView from './endingView.js';
 import * as ui_overlay from './overlay.js';
+import * as navigation_bookmark from './navigationBookmark.js';
+import * as room from '../modes/room.js';
 import * as ui_settingsPanel from './settingsPanel.js';
 
 export function mountMenuItem() {
@@ -46,6 +48,16 @@ export function archiveOpenButtonFromEvent(event) {
 
 export function safeShowArchiveLibrary(source = 'unknown') {
     try {
+        if (navigation_bookmark.restoreReadingPosition({ open: ui_overlay.openOverlay, render: ui_overlay.renderActive, stopAutomaticLife: room.stopRoomClock })) return true;
+        if (navigation_bookmark.hasIndexedReadingPosition()) {
+            // Keep the public synchronous boolean contract. Indexed restoration
+            // performs a read-only canonical fetch and cancels on chat/lifecycle changes.
+            void navigation_bookmark.restoreIndexedReadingPosition({ open: ui_overlay.openOverlay, render: ui_overlay.renderActive,
+                stopAutomaticLife: room.stopRoomClock, fallback: () => {
+                    void archive_library.showArchiveLibrary().catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '缘侧'));
+                } });
+            return true;
+        }
         archive_library.showArchiveLibrary();
         return true;
     } catch (error) {

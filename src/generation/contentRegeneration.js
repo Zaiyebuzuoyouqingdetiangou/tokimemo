@@ -20,6 +20,55 @@ function taskOptions(mode, context, origin, taskKey, maxTokens = 6000, temperatu
     return { maxTokens, temperature, context, origin, taskKey, mode, background: true };
 }
 
+const CONTENT_TARGETS = Object.freeze({
+    'album-entry': ['album', 'entries'], 'adv-event': ['adv', 'events'], 'adv-text': ['adv', 'events'],
+    'phone-app': ['phone', 'apps'], 'phone-entry': ['phone', 'apps'],
+    'ending-route': ['ending', 'endings'], 'ending-confession': ['ending', 'confessionReplays'],
+    'heart-voice': ['heart', 'voiceDramas'], 'heart-scenario': ['heart', 'scenarioDramas'],
+    'heart-strip': ['heart', 'dailyStrips'], 'heart-firefly': ['heart', 'fireflyVoices'],
+    achievement: ['achievements', 'entries'], 'calendar-entry': ['calendar', 'entries'],
+    'calendar-note': ['calendar', 'stickyNotes'], 'calendar-mood': ['calendar', 'moodNotes'],
+    'butterfly-node': ['butterfly', 'nodes'],
+});
+
+// Same allowlisted lookup is used before generation, on resume, and inside the
+// production commit callback. Persisted/model data cannot choose an object path.
+function locateContentTarget(session, type, id, parentId = '') {
+    const specification = Object.hasOwn(CONTENT_TARGETS, type) ? CONTENT_TARGETS[type] : null;
+    if (!specification || session?.kind !== specification[0] || typeof id !== 'string' || !id || id.length > 120
+        || typeof parentId !== 'string' || parentId.length > 160) throw new Error('单项重新生成目标无效。');
+    let list = session[specification[1]];
+    if (type === 'phone-entry') {
+        const parents = (session.apps || []).filter(app => app.id === parentId);
+        if (parents.length !== 1) throw new Error('原终端 App 已不存在或身份不唯一。');
+        list = parents[0].entries;
+    } else if (type === 'calendar-note' || type === 'calendar-mood') {
+        const page = modes_calendar.calendarDayPage(session, parentId);
+        list = page?.[specification[1]];
+    } else if (type !== 'calendar-entry' && parentId) throw new Error('单项目标不接受额外父级路径。');
+    const matches = (Array.isArray(list) ? list : []).map((item, index) => ({ item, index })).filter(({ item }) => item.id === id
+        && (type !== 'calendar-entry' || modes_calendar.calendarEntryPageKey(item) === parentId));
+    if (matches.length !== 1 || (type === 'butterfly-node' && matches[0].index === 0)) throw new Error('原单项内容已不存在或身份不唯一；没有生成新内容。');
+    return { list, index: matches[0].index, item: matches[0].item };
+}
+
+export function contentRegenerationTarget(session, type, id, parentId = '') {
+    const { item } = locateContentTarget(session, type, id, parentId);
+    return { target: { type, id, parentId }, item: structuredClone(item) };
+}
+
+export function mergeRegeneratedContentTarget(latest, generated, target, expectedItemJson) {
+    const updated = structuredClone(latest);
+    const destination = locateContentTarget(updated, target.type, target.id, target.parentId);
+    if (JSON.stringify(destination.item) !== expectedItemJson) {
+        throw core_text.safeUserError('原单项内容在生成期间已被修改或替换，旧草稿保留，没有覆盖较新的内容。', 'RMT_RECOVERY_TARGET_CHANGED');
+    }
+    const replacement = locateContentTarget(generated, target.type, target.id, target.parentId).item;
+    destination.list[destination.index] = structuredClone(replacement);
+    updated.userManaged = true;
+    return updated;
+}
+
 export function sameEvidence(candidate, current) {
     const wanted = [...new Set(core_text.cleanArray(current?.sourceMemoryIds, 16, 40))].sort();
     const got = [...new Set(core_text.cleanArray(candidate?.sourceMemoryIds, 16, 40))].sort();
@@ -38,10 +87,13 @@ TRUSTED_EVENT_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
 只输出 JSON。`;
     const normalized = await generation_client.requestValidatedSegment(
         prompt, `重新生成相簿「${item.title}」…`, taskOptions(core_constants.MODE.ALBUM, context, origin, `${taskKey}:album`, 6000),
-        raw => modes_album.normalizeAlbumIndex(raw, memoryBank),
+        raw => {
+            const normalized = modes_album.normalizeAlbumIndex(raw, memoryBank);
+            if (!normalized.entries[0] || !sameEvidence(normalized.entries[0], item)) throw new Error('重新生成的相簿条目没有保持原档案证据。');
+            return normalized;
+        },
     );
     const candidate = normalized.entries[0];
-    if (!candidate || !sameEvidence(candidate, item)) throw new Error('重新生成的相簿条目没有保持原档案证据。');
     let comments = [];
     let relationshipSnapshot = null;
     if (item.unlocked) {
@@ -70,10 +122,13 @@ TRUSTED_EVENT_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
 只输出 JSON。`;
     const raw = await generation_client.requestValidatedSegment(
         prompt, `重新生成 ADV EVENT「${item.title}」…`, taskOptions(core_constants.MODE.ADV, context, origin, `${taskKey}:event`, 6000),
-        data => modes_advEvent.normalizeEventList(data, memoryBank, { allowPartial: false }),
+        data => {
+            const normalized = modes_advEvent.normalizeEventList(data, memoryBank, { allowPartial: false });
+            if (!normalized.events[0] || !sameEvidence(normalized.events[0], item)) throw new Error('重新生成的 ADV EVENT 没有保持原档案证据。');
+            return normalized;
+        },
     );
     const candidate = raw.events[0];
-    if (!candidate || !sameEvidence(candidate, item)) throw new Error('重新生成的 ADV EVENT 没有保持原档案证据。');
     return { ...candidate, id: item.id, sourceMemoryIds: [...item.sourceMemoryIds], sourceMemoryAnchor: item.sourceMemoryAnchor, adv: null, cgImage: null };
 }
 
@@ -131,10 +186,13 @@ ${JSON.stringify(item, null, 2)}
         prompt,
         '重新生成萤火虫追加约会会话…',
         taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:firefly`, 4200, 0.75),
-        raw => modes_heart.normalizeFireflyVoicesPart(raw, { minTotal: 1, requireDistribution: false, requireRich: true }),
+        raw => {
+            const list = modes_heart.normalizeFireflyVoicesPart(raw, { minTotal: 1, requireDistribution: false, requireRich: true });
+            if (!list[0] || list[0].color !== color) throw new Error('重新生成的萤火虫会话没有保持原颜色。');
+            return list;
+        },
     );
     const candidate = list[0];
-    if (!candidate || candidate.color !== color) throw new Error('重新生成的萤火虫会话没有保持原颜色。');
     return { ...candidate, id: item.id, color, generatedAt: Date.now() };
 }
 
@@ -244,10 +302,13 @@ easterEgg 只允许上述结构化文字和 moduleType 枚举，不得输出 Jav
 只输出 JSON。`;
     const list = await generation_client.requestValidatedSegment(
         prompt, `重新生成告白回看「${item.title || item.id}」…`, taskOptions(core_constants.MODE.ENDING, context, origin, `${taskKey}:confession`, 7000, 0.55),
-        raw => modes_ending.normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank),
+        raw => {
+            const list = modes_ending.normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank);
+            if (!list[0] || !sameEvidence(list[0], item)) throw new Error('重新生成的告白回看没有保持原档案证据。');
+            return list;
+        },
     );
     const candidate = list[0];
-    if (!candidate || !sameEvidence(candidate, item)) throw new Error('重新生成的告白回看没有保持原档案证据。');
     return { ...candidate, id: item.id, sourceMemoryIds: [...(item.sourceMemoryIds || [])], sourceMemoryAnchor: item.sourceMemoryAnchor || '' };
 }
 
@@ -261,11 +322,15 @@ ${item.unlocked ? `TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}`
 只输出 JSON。`;
     const normalized = await generation_client.requestValidatedSegment(
         prompt, `重新生成成就「${item.title}」…`, taskOptions(core_constants.MODE.ACHIEVEMENTS, context, origin, `${taskKey}:achievement`, 5000, 0.6),
-        raw => modes_achievements.normalizeAchievements(raw, memoryBank, { allowPartial: false }),
+        raw => {
+            const normalized = modes_achievements.normalizeAchievements(raw, memoryBank, { allowPartial: false });
+            const candidate = normalized.entries[0];
+            if (!candidate) throw new Error('成就重新生成没有返回可用条目。');
+            if (item.unlocked && !sameEvidence(candidate, item)) throw new Error('重新生成的成就没有保持原档案证据。');
+            return normalized;
+        },
     );
     const candidate = normalized.entries[0];
-    if (!candidate) throw new Error('成就重新生成没有返回可用条目。');
-    if (item.unlocked && !sameEvidence(candidate, item)) throw new Error('重新生成的成就没有保持原档案证据。');
     return { ...candidate, id: item.id, unlocked: item.unlocked, unlockedAt: item.unlockedAt, sourceMemoryIds: [...(item.sourceMemoryIds || [])], sourceMemoryAnchor: item.sourceMemoryAnchor || '' };
 }
 

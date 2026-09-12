@@ -508,11 +508,21 @@ export function mountSettings() {
             <label class="rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"><span>手动确认 SillyTavern Image Generation 已启用（仅酒馆渠道自动检测失败时使用 /sd 兜底）</span></label>
           </div>
         </details>
+        <details class="rmt-settings-card" data-rmt-settings-section="creative">
+          <summary class="rmt-settings-card-head"><span>文</span><div><b>创作补充词</b><small>仅用于缘侧独立 API</small></div></summary>
+          <div class="rmt-settings-section-body">
+            <label class="rmt-settings-check"><input type="checkbox" data-rmt-creative-enabled><span>启用创作补充词</span></label>
+            <label class="rmt-settings-field"><span>文风、氛围与叙事偏好</span><textarea class="text_pole" data-rmt-creative-text maxlength="20000" rows="8" placeholder="例如：少用总结式旁白，让情绪从对白和细节中自然流露。"></textarea></label>
+            <p><output data-rmt-creative-count>0 / 20,000</output> 字符。仅随缘侧文本生成发送，不写入主聊天、不发送给生图接口；会占用模型输入额度。</p>
+            <div class="rmt-theme-presets"><button type="button" data-rmt-creative-save>保存补充词</button><button type="button" data-rmt-creative-cancel>撤销编辑</button></div>
+            <div role="status" data-rmt-creative-status></div>
+          </div>
+        </details>
         <details class="rmt-settings-card" data-rmt-settings-section="filter">
           <summary class="rmt-settings-card-head"><span>TAG</span><div><b>标签过滤</b><small>思考与变量块</small></div></summary>
           <div class="rmt-settings-section-body">
             <p>只过滤送出的副本，不修改聊天。扫描后点选标签，保存后从下一次生成生效。</p>
-            <textarea class="text_pole" data-rmt-tag-draft aria-label="要排除的标签名" placeholder="thinking, updatevariable"></textarea>
+            <textarea class="text_pole" data-rmt-tag-draft aria-label="要排除的标签名" placeholder="thinking, 版权水印, bbi_image"></textarea>
             <div class="rmt-theme-presets"><button type="button" data-rmt-tag-scan>扫描当前聊天</button><button type="button" data-rmt-tag-clear>清空选择</button><button type="button" data-rmt-tag-cancel>撤销编辑</button><button type="button" data-rmt-tag-save>保存过滤</button></div>
             <div data-rmt-tag-results role="status"></div>
           </div>
@@ -587,6 +597,13 @@ export function mountSettings() {
     mount.appendChild(panel);
     refreshThemeUi();
     panel.querySelector('[data-rmt-tag-draft]').value = core_settings.getPluginSettings().excludedContextTags.join(', ');
+    const refreshCreative = () => {
+        const settings = core_settings.getPluginSettings();
+        panel.querySelector('[data-rmt-creative-text]').value = settings.creativeSupplement;
+        panel.querySelector('[data-rmt-creative-enabled]').checked = settings.creativeSupplementEnabled;
+        panel.querySelector('[data-rmt-creative-count]').textContent = settings.creativeSupplement.length.toLocaleString() + ' / 20,000';
+    };
+    refreshCreative();
     panel.addEventListener('change', async event => {
         const target = event.target;
         const autoMode = target.dataset?.rmtAutoEnabled || target.dataset?.rmtAutoEvery;
@@ -743,6 +760,7 @@ export function mountSettings() {
         }
     });
     panel.addEventListener('input', event => {
+        if (event.target.matches?.('[data-rmt-creative-text]')) panel.querySelector('[data-rmt-creative-count]').textContent = event.target.value.length.toLocaleString() + ' / 20,000';
         if (event.target.matches?.('[data-rmt-manual-api-base],[data-rmt-manual-api-key],[data-rmt-manual-api-model]')) {
             panel.dataset.rmtManualDirty = '1';
         }
@@ -752,6 +770,14 @@ export function mountSettings() {
         }
     });
     panel.addEventListener('click', event => {
+        if (event.target.closest?.('[data-rmt-creative-save]')) {
+            try {
+                core_settings.updatePluginSettings({ creativeSupplement: panel.querySelector('[data-rmt-creative-text]').value, creativeSupplementEnabled: panel.querySelector('[data-rmt-creative-enabled]').checked });
+                panel.querySelector('[data-rmt-creative-status]').textContent = '已保存；下次缘侧文本生成生效。';
+            } catch (error) { panel.querySelector('[data-rmt-creative-status]').textContent = core_text.safeErrorSummary(error); }
+            return;
+        }
+        if (event.target.closest?.('[data-rmt-creative-cancel]')) { refreshCreative(); panel.querySelector('[data-rmt-creative-status]').textContent = '已撤销未保存编辑。'; return; }
         const updateButton = event.target.closest?.('[data-rmt-self-update]');
         if (updateButton) {
             void core_selfUpdater.updateFromButton(updateButton, panel.querySelector('[data-rmt-self-update-status]'), {

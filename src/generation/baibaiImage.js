@@ -8,7 +8,7 @@ let pendingGeneration = false;
 const ownErrors = new WeakSet();
 
 const MESSAGES = Object.freeze({
-    BBI_NOT_READY: '尚未检测到柏宝绘公开接口。请启用含公开 API v1 的版本并刷新页面。',
+    BBI_NOT_READY: '未检测到柏宝绘公开 API v1。若已安装柏宝绘，请更新到支持公开接口的版本，启用后刷新页面；刚完成加载可点击“重新检测”。',
     BBI_VERSION: '柏宝绘接口版本或能力不兼容，需要公开 API v1 和图库保存能力。',
     BBI_NOT_CONFIGURED: '柏宝绘出图渠道尚未配置完成，请在柏宝绘中检查 NAI / ComfyUI 设置。',
     BBI_INVALID_ARGS: '柏宝绘未接受这次画面提示，请检查画面描述后重试。',

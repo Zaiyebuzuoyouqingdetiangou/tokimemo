@@ -843,31 +843,30 @@ export async function generatePhoneWithRepair(context, memoryBank, origin, taskK
         if (!missing.length) continue;
         const requestApp = { ...app, incremental: !!completed, entries: missing };
         let lastError = null;
-        for (let attempt = 0; attempt < 2; attempt += 1) {
-            try {
-                const raw = await generation_client.requestJson(
-                    phoneAppPrompt(context, memoryBank, plan, requestApp) + ((lastError || (resumeDraft?.failedAppId === app.id && resumeDraft?.failure))
-                        ? `\n本次只修正以下安全分类：${core_text.safeErrorSummary(lastError || resumeDraft.failure)}。需要真实历史/私密字段却没有来源的项目才用 unavailable；普通日常继续按人设演绎，不重做已完成的其他 App。` : ''),
-                    `私人终端 2/2 · ${index + 1}/${plan.apps.length} ${app.label}${attempt ? '（重试）' : ''}…`,
-                    { maxTokens: app.kind === 'chat' ? 8000 : app.entries.length >= 8 ? 7000 : 5000, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:app:${app.id}`, mode: core_constants.MODE.PHONE, background: true },
-                );
-                const normalizedApp = core_requestCoordinator.validateGeneratedSegment(raw, data => normalizePhoneDraftApp(data, requestApp, memoryBank, plan.deviceKind, null, evidenceOptions));
-                completedById.set(app.id, completed ? mergePhoneMissingEntries(completed, normalizedApp) : normalizedApp);
-                if (preservedApps.has(app.id)) preservedApps.set(app.id, structuredClone(completedById.get(app.id)));
-                if (!await core_cache.savePhoneGenerationDraft(context, memoryBank, plan, [...completedById.values()], '', '', origin, draftOptions)) {
-                    throw new Error('这个 App 已生成，但无法确认续写断点已安全保存；本次已停止。');
-                }
-                lastError = null;
-                break;
-            } catch (error) {
-                if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
-                lastError = error;
-                if (!attempt && core_requestCoordinator.shouldRetrySegmentRequest(error)) {
-                    await core_requestCoordinator.waitBeforeSegmentRetry(error);
-                    continue;
-                }
-                break;
+        try {
+            // Keep the base request stable across reload/continuation. Transient failure
+            // feedback belongs to the bounded retry, not to the saved segment identity.
+            const normalizedApp = await generation_client.requestValidatedSegment(
+                phoneAppPrompt(context, memoryBank, plan, requestApp)
+                    + '\n需要真实历史/私密字段却没有来源的项目才用 unavailable；普通日常继续按人设演绎，不重做已完成的其他 App。',
+                `私人终端 2/2 · ${index + 1}/${plan.apps.length} ${app.label}…`,
+                { maxTokens: app.kind === 'chat' ? 8000 : app.entries.length >= 8 ? 7000 : 5000, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:app:${app.id}`, mode: core_constants.MODE.PHONE, background: true, segmentMaxAttempts: 2 },
+                raw => {
+                    try { return normalizePhoneDraftApp(raw, requestApp, memoryBank, plan.deviceKind, null, evidenceOptions); }
+                    catch (error) {
+                        error.repairHint = `本次只修正以下安全分类：${core_text.safeErrorSummary(error)}。需要真实历史/私密字段却没有来源的项目才用 unavailable；普通日常继续按人设演绎。`;
+                        throw error;
+                    }
+                },
+            );
+            completedById.set(app.id, completed ? mergePhoneMissingEntries(completed, normalizedApp) : normalizedApp);
+            if (preservedApps.has(app.id)) preservedApps.set(app.id, structuredClone(completedById.get(app.id)));
+            if (!await core_cache.savePhoneGenerationDraft(context, memoryBank, plan, [...completedById.values()], '', '', origin, draftOptions)) {
+                throw new Error('这个 App 已生成，但无法确认续写断点已安全保存；本次已停止。');
             }
+        } catch (error) {
+            if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
+            lastError = error;
         }
         if (lastError) {
             const detail = core_text.safeErrorSummary(lastError, 600);
@@ -1086,14 +1085,15 @@ export async function generatePhoneIncrementalWithRepair(context, memoryBank, or
     const patches = [];
     for (let index = 0; index < plan.apps.length; index += 1) {
         const app = plan.apps[index];
-        const raw = await generation_client.requestJson(
+        const patch = await generation_client.requestValidatedSegment(
             phoneAppPrompt(context, memoryBank, plan, app, sourceMemoryIds),
             `私人终端 · 新增详情 ${index + 1}/${plan.apps.length} ${app.label}…`,
-            { maxTokens: app.kind === 'chat' ? 8000 : 5000, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment-app:${app.id}`, mode: core_constants.MODE.PHONE, background: true },
+            { maxTokens: app.kind === 'chat' ? 8000 : 5000, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment-app:${app.id}`, mode: core_constants.MODE.PHONE, background: true, segmentMaxAttempts: 1 },
+            raw => normalizePhoneDraftApp(raw, app, memoryBank, plan.deviceKind, sourceMemoryIds, {
+                controlledEvidence: presentationContext.settingEvidence || '',
+            }),
         );
-        patches.push(core_requestCoordinator.validateGeneratedSegment(raw, data => normalizePhoneDraftApp(data, app, memoryBank, plan.deviceKind, sourceMemoryIds, {
-            controlledEvidence: presentationContext.settingEvidence || '',
-        })));
+        patches.push(patch);
     }
     const { session, added } = mergePhoneIncremental(previous, patches, memoryBank, {
         controlledEvidence: presentationContext.settingEvidence || '',

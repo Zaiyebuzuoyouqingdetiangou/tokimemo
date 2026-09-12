@@ -11,7 +11,9 @@ import * as core_text from './core/text.js';
 import * as generation_imageGeneration from './generation/imageGeneration.js';
 import * as modes_room from './modes/room.js';
 import * as ui_archivePortal from './ui/archivePortal.js';
+import * as ui_cgPromptEditor from './ui/cgPromptEditor.js';
 import * as ui_endingView from './ui/endingView.js';
+import * as ui_navigationBookmark from './ui/navigationBookmark.js';
 import * as ui_phoneView from './ui/phoneView.js';
 import * as ui_settingsPanel from './ui/settingsPanel.js';
 import * as ui_styles from './ui/styles.js';
@@ -76,6 +78,10 @@ export function destroyMemoryTheater() {
         runtimeState.runtimeLifecycleEpoch += 1;
         runtimeState.apiConfigurationEpoch += 1;
         runtimeState.manualApiKey = '';
+        // These are in-page UI state, not saved archives. Invalidate them with
+        // the runtime and remove the editor's cancel handler before its host.
+        try { ui_cgPromptEditor.closeCgPromptEditor({ restoreFocus: false }); } catch {}
+        ui_navigationBookmark.clearReadingPositions();
         const timer = globalThis.__heartbeatMemoriesMountTimer;
         if (timer) clearInterval(timer);
         globalThis.__heartbeatMemoriesMountTimer = null;

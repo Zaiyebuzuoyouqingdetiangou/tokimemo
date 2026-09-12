@@ -608,16 +608,17 @@ export async function generateEndingWithRepair(context, memoryBank, origin, task
         let freshConfessions = [];
         let confessionScanSucceeded = false;
         try {
-            const confessionRaw = revisit ? { confessionReplays: [] } : await generation_client.requestJson(
+            freshConfessions = revisit ? [] : await generation_client.requestValidatedSegment(
                 endingConfessionRefreshPrompt(context, memoryBank, previous, sourceMemoryIds),
                 'ENDING · 正在从新增档案扫描新告白…',
-                { maxTokens: 8000, temperature: 0.35, context, origin, taskKey: `${taskKey}:increment-confession`, mode: core_constants.MODE.ENDING, background: true },
+                { maxTokens: 8000, temperature: 0.35, context, origin, taskKey: `${taskKey}:increment-confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
+                raw => normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank)
+                    .filter(item => core_incremental.usesIncrementalMemoryId(item.sourceMemoryIds, sourceMemoryIds)),
             );
-            freshConfessions = normalizeEndingConfessionReplays(confessionRaw?.confessionReplays, memoryBank)
-                .filter(item => core_incremental.usesIncrementalMemoryId(item.sourceMemoryIds, sourceMemoryIds));
             confessionScanSucceeded = true;
         } catch (error) {
-            if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
+            if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE'
+                || error?.code === 'RMT_JSON_TRUNCATED' || String(error?.code || '').startsWith('RMT_RECOVERY_')) throw error;
             console.warn('[HeartbeatMemories] incremental ENDING confession scan failed; keeping old replays', core_text.safeErrorDiagnostic(error));
         }
         const merged = mergeEndingIncremental(previous, outline, detailed, freshConfessions, memoryBank, revisit);
@@ -634,47 +635,26 @@ export async function generateEndingWithRepair(context, memoryBank, origin, task
         raw => normalizeEndingOutline(raw, memoryBank),
     );
     const available = outline.endings.filter(item => item.available);
-    const detailed = await generation_client.mapGenerationConcurrent(available, core_constants.SEGMENT_REQUEST_CONCURRENCY, async (route, index) => {
-        let completed = null;
-        let lastError = null;
-        for (let attempt = 0; attempt < 2 && !completed; attempt += 1) {
-            try {
-                const raw = await generation_client.requestJson(
-                    endingRouteDetailPrompt(context, memoryBank, outline, route),
-                    `ENDING · 路线 ${index + 1}/${available.length}：${route.title}${attempt ? '（重试）' : ''}…`,
-                    { maxTokens: 9000, context, origin, taskKey: `${taskKey}:route:${route.id}`, mode: core_constants.MODE.ENDING, background: true },
-                );
-                completed = core_requestCoordinator.validateGeneratedSegment(raw, data => normalizeEndingRouteDetail(data, route));
-            } catch (error) {
-                if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
-                lastError = error;
-                console.warn('[HeartbeatMemories] split ENDING route detail failed', { route: core_text.normalizeText(route.id, 80), attempt: attempt + 1, ...core_text.safeErrorDiagnostic(error) });
-                if (attempt === 0 && core_requestCoordinator.shouldRetrySegmentRequest(error)) {
-                    await core_requestCoordinator.waitBeforeSegmentRetry(error);
-                    continue;
-                }
-                throw error;
-            }
-        }
-        if (!completed) {
-            const detail = core_text.normalizeText(lastError?.message || String(lastError || ''), 700);
-            throw new Error(`ENDING 路线“${route.title}”连续两次失败。其他分段不会覆盖旧 ENDING。${detail ? `
-${detail}` : ''}`);
-        }
-        return completed;
-    });
+    const detailed = await generation_client.mapGenerationConcurrent(available, core_constants.SEGMENT_REQUEST_CONCURRENCY,
+        (route, index) => generation_client.requestValidatedSegment(
+            endingRouteDetailPrompt(context, memoryBank, outline, route),
+            `ENDING · 路线 ${index + 1}/${available.length}：${route.title}…`,
+            { maxTokens: 9000, context, origin, taskKey: `${taskKey}:route:${route.id}`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 2 },
+            raw => normalizeEndingRouteDetail(raw, route),
+        ));
     let confessionReplays = [];
     let confessionScanSucceeded = false;
     try {
-        const confessionRaw = await generation_client.requestJson(
+        confessionReplays = await generation_client.requestValidatedSegment(
             endingConfessionRefreshPrompt(context, memoryBank),
             'ENDING · 正在扫描已发生告白…',
-            { maxTokens: 10000, temperature: 0.35, context, origin, taskKey: `${taskKey}:confession`, mode: core_constants.MODE.ENDING, background: true },
+            { maxTokens: 10000, temperature: 0.35, context, origin, taskKey: `${taskKey}:confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
+            raw => normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank),
         );
-        confessionReplays = normalizeEndingConfessionReplays(confessionRaw?.confessionReplays, memoryBank);
         confessionScanSucceeded = true;
     } catch (error) {
-        if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
+        if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE'
+            || error?.code === 'RMT_JSON_TRUNCATED' || String(error?.code || '').startsWith('RMT_RECOVERY_')) throw error;
         console.warn('[HeartbeatMemories] split ENDING confession scan failed; preserving the previous replay cache when available', core_text.safeErrorDiagnostic(error));
         try {
             const previous = core_cache.loadSession(core_constants.MODE.ENDING, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });

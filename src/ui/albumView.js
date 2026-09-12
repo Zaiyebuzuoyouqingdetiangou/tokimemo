@@ -6,9 +6,9 @@ import * as core_context from '../core/context.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
+import * as ui_cgPromptEditor from './cgPromptEditor.js';
 import * as ui_overlay from './overlay.js';
 import * as ui_styles from './styles.js';
-
 export function filteredAlbumEntries() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ALBUM) return [];
     const category = runtimeState.activeSession.category || '全部';
@@ -44,15 +44,16 @@ export function renderAlbum() {
     const cards = pageItems.map(item => {
         const drawing = item.unlocked && !readOnlyArchive && generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ALBUM, item.id);
         const image = generation_imageGeneration.normalizeCgImageRecord(item.cgImage);
-        const drawPill = item.unlocked && !readOnlyArchive
-            ? `<button type="button" class="rmt-cg-card-draw ${drawing ? 'rmt-cg-drawing' : ''}" data-rmt-album-draw="${core_text.esc(item.id)}" ${drawing ? 'disabled' : ''} title="${image ? '重新绘制这张 CG' : '绘制这张 CG'}">${drawing ? '绘制中…' : image ? '↻ 重绘' : '🎨 绘制'}</button>`
+        const cardActions = item.unlocked && !readOnlyArchive
+            ? `<div class="rmt-cg-card-actions"><button type="button" class="rmt-btn ${drawing ? 'rmt-cg-drawing' : ''}" data-rmt-album-draw="${core_text.esc(item.id)}" ${drawing ? 'disabled' : ''} aria-label="${core_text.esc(item.title)}：${image ? '重绘图片' : '绘制图片'}">${drawing ? '绘制中…' : image ? '重绘图片' : '绘制图片'}</button><button type="button" class="rmt-btn" data-rmt-album-prompt="${core_text.esc(item.id)}" ${drawing ? 'disabled' : ''}>画面提示词</button></div>`
             : '';
         return `<article class="rmt-card ${item.id === session.selectedId ? 'active' : ''} ${item.unlocked ? '' : 'locked'}" data-rmt-album-id="${core_text.esc(item.id)}">
-      <div class="rmt-thumb">${item.unlocked ? generation_imageGeneration.cgImageLayerHtml(item) : `<div class="rmt-abstract" style="${ui_styles.abstractStyle(item.visualSeed, item.id)}"></div>`}${drawPill}</div>
+      <div class="rmt-thumb">${item.unlocked ? generation_imageGeneration.cgImageLayerHtml(item) : `<div class="rmt-abstract" style="${ui_styles.abstractStyle(item.visualSeed, item.id)}"></div>`}</div>
       <div class="rmt-card-meta">
         <div class="rmt-card-title">${core_text.esc(item.unlocked ? item.title : `（未解锁）${item.title}`)}</div>
         <div class="rmt-card-date">${core_text.esc(item.date)}</div>
         <div class="rmt-card-desc">${core_text.esc(item.desc)}</div>
+        ${cardActions}
       </div>
     </article>`;
     }).join('');
@@ -64,6 +65,7 @@ export function renderAlbum() {
       <div class="rmt-actions">
         <button type="button" class="rmt-btn" data-rmt-action="shared-memory" ${selected.unlocked ? '' : 'disabled'}>${selected.unlocked ? '共同回忆' : '尚未解锁'}</button>
         ${selected.unlocked && !readOnlyArchive ? `<button type="button" class="rmt-btn ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ALBUM, selected.id) ? 'rmt-cg-drawing' : ''}" data-rmt-action="draw-cg" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ALBUM, selected.id) ? 'disabled' : ''}>${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ALBUM, selected.id) ? '正在绘制CG…' : generation_imageGeneration.normalizeCgImageRecord(selected.cgImage) ? '↻ 重绘CG' : '🎨 绘制CG'}</button>${generation_imageGeneration.normalizeCgImageRecord(selected.cgImage) ? '<button type="button" class="rmt-btn" data-rmt-action="clear-cg-image">恢复抽象CG</button>' : ''}` : ''}
+        ${selected.unlocked && !readOnlyArchive ? '<button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt">画面提示词</button>' : ''}
         ${selected.unlocked ? '' : '<button type="button" class="rmt-btn" data-rmt-action="show-hint">解锁提示</button>'}
         <button type="button" class="rmt-btn" data-rmt-action="album-cancel">取消选择</button>
       </div>
@@ -91,6 +93,20 @@ export function albumDrawCg(id) {
     runtimeState.activeSession.hintVisible = false;
     renderAlbum();
     void generation_imageGeneration.drawSelectedCgImage();
+}
+
+export function albumEditCgPrompt(id) {
+    if (!archive_library.requireWritableArchiveAction()) return;
+    const session = runtimeState.activeSession;
+    if (session?.kind !== core_constants.MODE.ALBUM || !session.entries.find(item => item.id === id)?.unlocked) return;
+    session.selectedId = id;
+    session.hintVisible = false;
+    renderAlbum();
+    // Rendering replaced the clicked card. The editor must remember its new
+    // button so cancelling can restore keyboard focus to the same picture.
+    [...(ui_overlay.bodyEl()?.querySelectorAll('[data-rmt-album-prompt]') || [])]
+        .find(button => button.dataset.rmtAlbumPrompt === id)?.focus();
+    ui_cgPromptEditor.openCgPromptEditor();
 }
 
 export function albumSelect(id) {
@@ -163,6 +179,7 @@ export function renderSharedMemory() {
     session.dialogueIndex = Math.max(0, Math.min(session.dialogueIndex, comments.length - 1));
     const last = session.dialogueIndex >= comments.length - 1;
     const charName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext()?.name2, 80) || '他';
+    const readOnly = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
     ui_overlay.setBackVisible(true, '回忆相簿');
     ui_overlay.topTitle(`共同回忆 · ${item.title}`);
     const body = ui_overlay.bodyEl();
@@ -171,6 +188,8 @@ export function renderSharedMemory() {
         ${generation_imageGeneration.cgImageLayerHtml(item, { lazy: false })}
         <div class="rmt-memory-caption"><b>${core_text.esc(item.title)}</b> · ${core_text.esc(item.date)}<br><span style="opacity:.82">${core_text.esc(item.desc)}</span></div>
       </div>
+      ${readOnly ? '' : `<div class="rmt-cg-card-actions rmt-cg-memory-actions"><button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt">画面提示词</button><button type="button" class="rmt-btn" data-rmt-action="draw-cg" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ALBUM, item.id) ? 'disabled' : ''}>${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ALBUM, item.id) ? '绘制中…' : generation_imageGeneration.normalizeCgImageRecord(item.cgImage) ? '重绘图片' : '绘制图片'}</button></div>`}
+      ${generation_imageGeneration.cgImageProgressHtml()}
       <div class="rmt-dialogue">
         <div class="rmt-dialogue-speaker">${core_text.esc(charName)}</div>
         <div class="rmt-dialogue-text">${core_text.esc(comments[session.dialogueIndex] || '')}</div>

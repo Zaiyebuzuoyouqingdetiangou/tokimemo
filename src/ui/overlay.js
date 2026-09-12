@@ -4,6 +4,7 @@ import * as archive_groups from '../archive/groups.js';
 import * as archive_library from '../archive/library.js';
 import * as archive_repository from '../archive/repository.js';
 import * as archive_snapshots from '../archive/snapshots.js';
+import * as archive_importRecovery from '../archive/importRecovery.js';
 import * as core_cache from '../core/cache.js';
 import * as core_archiveCover from '../core/archiveCover.js';
 import * as core_constants from '../core/constants.js';
@@ -16,6 +17,9 @@ import * as core_theme from '../core/theme.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_contentRegeneration from '../generation/contentRegeneration.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
+import * as cg_editor from './cgPromptEditor.js';
+import * as navigation_bookmark from './navigationBookmark.js';
+import * as recovery_view from './recoveryView.js';
 import * as modes_achievements from '../modes/achievements.js';
 import * as modes_album from '../modes/album.js';
 import * as modes_butterfly from '../modes/butterfly.js';
@@ -167,6 +171,8 @@ export function openOverlay() {
 }
 
 export function closeOverlay() {
+    navigation_bookmark.rememberReadingPosition();
+    cg_editor.closeCgPromptEditor({ restoreFocus: false });
     modes_room.stopRoomClock();
     ui_phoneView.stopPhoneClock();
     ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
@@ -202,6 +208,7 @@ export function setBackVisible(visible, label = '返回上级') {
 }
 
 export function navigateBack() {
+    if (cg_editor.hasCgPromptEditor()) return cg_editor.closeCgPromptEditor();
     if (runtimeState.endingEasterEggRuntime) return ui_endingView.closeEndingEasterEgg();
     if (runtimeState.contentManagerOpen) {
         runtimeState.contentManagerOpen = false;
@@ -510,6 +517,9 @@ export function showChooser() {
     body.innerHTML = `
       <div class="rmt-archive-room">
         ${busyBanner}
+        ${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveImportRecoverySummary(context))}
+        ${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveProfileRecoverySummary(context), { profile: true })}
+        ${ready ? recovery_view.recoveryBannerHtml(core_cache.getCache(context), memory) : ''}
         ${calendarQuick}
         <section class="rmt-memory-gate rmt-archive-card">
           <div class="rmt-memory-gate-text">
@@ -620,6 +630,15 @@ export function showInlineError(message) {
         detail.prepend(box);
     }
     box.textContent = message;
+    if (runtimeState.activeMode) {
+        const context = core_context.getContext();
+        const snapshot = runtimeState.activeArchiveSnapshot;
+        const bank = snapshot?.memory || archive_repository.getImportedMemory(context);
+        const all = snapshot?.cache || core_cache.getCache(context);
+        const host = document.createElement('div');
+        host.innerHTML = recovery_view.recoveryBannerHtml({ ...all, __generationRecoveryV1: { [runtimeState.activeMode]: all?.__generationRecoveryV1?.[runtimeState.activeMode] } }, bank, { readOnly: snapshot?.backupOnly });
+        box.appendChild(host);
+    }
 }
 
 export function openCachedOrGenerate(mode) {
@@ -846,26 +865,7 @@ async function regenerateManagedTarget(type, id, parentId = '') {
         '模型成功返回并通过校验后，才会用新内容替换这一项；如果生成失败、聊天切换或档案 revision 变化，旧内容会原样保留。正式档案 Mxxx 不会被修改。',
         { destructive: true },
     )) return;
-    const mode = runtimeState.activeMode;
-    try {
-        const context = core_context.currentCharacterGuard();
-        const expectedChatId = core_context.getChatId(context);
-        const memoryBank = archive_repository.requireArchive(context);
-        const expectedArchiveRevision = memoryBank.archiveRevision;
-        const origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
-        const base = core_cache.loadSession(mode, { context, chatId: expectedChatId, memoryBank, clone: true });
-        if (!base) throw new Error('当前分类缓存已经变化，请返回后重新打开再操作。');
-        const taskKey = `manage:${core_context.chatScopeKey(context)}:${core_text.normalizeText(type, 60)}:${core_text.normalizeText(parentId, 160)}:${core_text.normalizeText(id, 120)}`;
-        setInnerLoading(true, `正在重新生成「${record.label}」…`);
-        const updated = await generation_contentRegeneration.regenerateManagedTarget(base, type, id, parentId, { context, memoryBank, origin, taskKey });
-        await commitManagedSession(updated, expectedChatId, expectedArchiveRevision, origin);
-        globalThis.toastr?.success?.(`已重新生成：${record.label}`, '心跳回忆');
-        ui_contentManager.renderContentManager();
-    } catch (error) {
-        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
-    } finally {
-        setInnerLoading(false);
-    }
+    return ui_contentManager.runContentRegeneration(type, id, parentId, { confirmed: true });
 }
 
 async function deleteManagedCategory() {
@@ -915,6 +915,20 @@ async function regenerateManagedCategory() {
 }
 
 export function handleOverlayClick(event) {
+    const discardButton = event.target.closest?.('[data-rmt-recovery-discard]');
+    if (discardButton) return void generation_client.discardSavedGeneration(discardButton.dataset.rmtRecoveryDiscard).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '缘侧'));
+    if (event.target.closest?.('[data-rmt-archive-discard]')) {
+        if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return;
+        if (!confirmExplicitAction('放弃本页整理草稿？', '仅清除当前聊天尚未提交的档案整理/简介草稿，不能恢复。不删除已保存的正式记忆、模块或图片，也不会自动发起新请求。', { destructive: true })) return;
+        const context = core_context.currentCharacterGuard();
+        archive_importRecovery.clearArchiveRecovery(core_context.captureTaskOrigin(context, archive_repository.getImportedMemory(context)?.archiveRevision || ''));
+        return showChooser();
+    }
+    const recoveryButton = event.target.closest?.('[data-rmt-recovery-mode]');
+    if (recoveryButton) return void generation_client.continueSavedGeneration(recoveryButton.dataset.rmtRecoveryMode).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '缘侧'));
+    const archiveRecoveryButton = event.target.closest?.('[data-rmt-archive-recovery]');
+    if (archiveRecoveryButton) return void (archiveRecoveryButton.dataset.rmtArchiveRecovery === 'profile'
+        ? archive_repository.rewriteCurrentArchiveVerdict() : archive_repository.continueCurrentArchiveImport()).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '缘侧'));
     const mailButton = event.target.closest?.('[data-rmt-inbox]');
     if (mailButton) return void ui_inboxView.handleInboxAction(mailButton.dataset.rmtInbox, mailButton.dataset.rmtInboxId);
     const generateModeButton = event.target.closest?.('[data-rmt-generate-mode]');
@@ -969,6 +983,8 @@ export function handleOverlayClick(event) {
     if (confessionReplay) return ui_endingView.confessionSelect(confessionReplay.dataset.rmtConfessionId);
     const endingRoute = event.target.closest?.('[data-rmt-ending-id]');
     if (endingRoute) return ui_endingView.endingSelect(endingRoute.dataset.rmtEndingId);
+    const albumPrompt = event.target.closest?.('[data-rmt-album-prompt]');
+    if (albumPrompt) return ui_albumView.albumEditCgPrompt(albumPrompt.dataset.rmtAlbumPrompt);
     const albumDraw = event.target.closest?.('[data-rmt-album-draw]');
     if (albumDraw) {
         if (!archive_library.requireWritableArchiveAction()) return;
@@ -1251,6 +1267,8 @@ export function handleOverlayClick(event) {
         }
         return;
     }
+    if (action === 'edit-cg-prompt') return cg_editor.openCgPromptEditor();
+    if (action === 'edit-heart-cg-prompt') return cg_editor.openCgPromptEditor({ heartStrip: true });
     if (action === 'draw-cg') return void generation_imageGeneration.drawSelectedCgImage();
     if (action === 'clear-cg-image') return generation_imageGeneration.clearSelectedCgImage();
     if (action === 'draw-heart-strip') return void ui_heartView.drawHeartStripImage(actionEl.dataset.rmtHeartStripId);

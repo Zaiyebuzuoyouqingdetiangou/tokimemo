@@ -13,6 +13,7 @@ import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as generation_prompts from '../generation/prompts.js';
+import * as generation_recovery from '../generation/recovery.js';
 import * as ui_advEventView from '../ui/advEventView.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as ui_settingsPanel from '../ui/settingsPanel.js';
@@ -483,7 +484,11 @@ function refreshAdvArchiveTarget(targetRuntime) {
 
 async function beginAdvSubtask(targetRuntime) {
     try {
-        await archive_library.beginArchiveTargetSubtask(targetRuntime);
+        if (targetRuntime.archiveTarget) await archive_library.beginArchiveTargetSubtask(targetRuntime);
+        else {
+            await core_cache.claimLiveModeGeneration(core_constants.MODE.ADV, targetRuntime.context, targetRuntime.memoryBank);
+            targetRuntime.origin = core_context.captureTaskOrigin(targetRuntime.context, targetRuntime.expectedArchiveRevision);
+        }
         return true;
     } catch (error) {
         showAdvFailure(targetRuntime, error);
@@ -491,7 +496,41 @@ async function beginAdvSubtask(targetRuntime) {
     }
 }
 
-export async function generateAllAdvForSession() {
+async function startAdvRecovery(targetRuntime, operation, options = {}) {
+    const existing = options.existing === undefined
+        ? core_cache.loadGenerationRecovery(core_constants.MODE.ADV, targetRuntime.context, targetRuntime.archiveTarget?.cache)
+        : options.existing;
+    const retainedOperation = existing?.operation?.kind === operation.kind && operation.kind !== 'adv-single'
+        ? existing.operation : operation;
+    targetRuntime.recoveryArchiveEntry = targetRuntime.archiveTarget || core_cache.archiveBackupEntryForContext(targetRuntime.context, targetRuntime.memoryBank);
+    return generation_client.beginModeRecovery(core_constants.MODE.ADV, targetRuntime.context, targetRuntime.memoryBank, targetRuntime.origin, {
+        ...options, existing, operation: retainedOperation, archiveTarget: targetRuntime.archiveTarget,
+        archiveEntry: targetRuntime.recoveryArchiveEntry,
+        stillCurrent: targetRuntime.archiveTarget ? targetRuntime.stillCurrent : undefined,
+    });
+}
+
+async function finishAdvRecovery(targetRuntime, committed) {
+    if (!committed) return;
+    await core_cache.saveGenerationRecovery(targetRuntime.context, targetRuntime.memoryBank, core_constants.MODE.ADV, null, targetRuntime.origin, {
+        archiveTarget: targetRuntime.archiveTarget,
+        archiveEntry: targetRuntime.recoveryArchiveEntry,
+        stillCurrent: targetRuntime.archiveTarget ? targetRuntime.stillCurrent : undefined,
+    });
+}
+
+async function clearCommittedAdvRecovery(targetRuntime, session, kind, eventId = '') {
+    const journal = core_cache.loadGenerationRecovery(core_constants.MODE.ADV, targetRuntime.context, targetRuntime.archiveTarget?.cache);
+    const summary = generation_recovery.generationRecoverySummary(journal);
+    if (!summary?.completed || summary.truncated || summary.failed || summary.failureCode || journal.operation?.kind !== kind) return;
+    const wanted = kind === 'adv-single' ? [journal.operation.eventId] : journal.operation.eventIds;
+    if (!Array.isArray(wanted) || !wanted.length || (eventId && wanted[0] !== eventId)
+        || !wanted.every(id => session?.events?.some(event => event.id === id && event.adv?.paragraphs?.length))) return;
+    targetRuntime.recoveryArchiveEntry = targetRuntime.archiveTarget || core_cache.archiveBackupEntryForContext(targetRuntime.context, targetRuntime.memoryBank);
+    await finishAdvRecovery(targetRuntime, true);
+}
+
+export async function generateAllAdvForSession(options = {}) {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ADV) return;
     const targetHint = advPreparationTargetHint();
     let targetRuntime;
@@ -509,6 +548,7 @@ export async function generateAllAdvForSession() {
     // archive must not advance the ADV fence and invalidate a real task in another tab.
     let session = latestAdvSessionForRuntime(targetRuntime, runtimeState.activeSession);
     if (!session?.events?.some(event => !event.adv?.paragraphs?.length)) {
+        await clearCommittedAdvRecovery(targetRuntime, session, 'adv-bulk');
         globalThis.toastr?.info?.(advTargetMessage(targetRuntime, '全部 ADV 都已经生成完成。'), '心跳回忆');
         return;
     }
@@ -525,6 +565,7 @@ export async function generateAllAdvForSession() {
     session = latestAdvSessionForRuntime(targetRuntime, session);
     const allPending = session.events.filter(event => !event.adv?.paragraphs?.length);
     if (!allPending.length) {
+        await clearCommittedAdvRecovery(targetRuntime, session, 'adv-bulk');
         globalThis.toastr?.info?.(advTargetMessage(targetRuntime, '较新的任务已经补完全部 ADV，本次没有重复请求。'), '心跳回忆');
         runtimeState.activeAdvBulkScopes.delete(scope);
         refreshAdvArchiveTarget(targetRuntime);
@@ -538,10 +579,12 @@ export async function generateAllAdvForSession() {
     if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(true, advTargetStatus(targetRuntime, `本批生成 ${pending.length} 篇 ADV…`));
     let batchCount = 0;
     let batchError = '';
+    let batchAccepted = false;
     const completedBatch = new Map();
     try {
+        await startAdvRecovery(targetRuntime, { kind: 'adv-bulk', eventIds: pending.map(event => event.id) }, options);
         try {
-            const raw = await generation_client.requestJson(
+            const batch = await generation_client.requestValidatedSegment(
                 advBatchPrompt(context, pending, memoryBank),
                 `正在生成本批 ${pending.length} 篇 ADV…`,
                 {
@@ -552,9 +595,11 @@ export async function generateAllAdvForSession() {
                     taskKey: bulkTaskKey,
                     mode: core_constants.MODE.ADV,
                     background: true,
+                    segmentMaxAttempts: 1,
                 },
+                raw => normalizeAdvBatch(raw, pending),
             );
-            const batch = normalizeAdvBatch(raw, pending);
+            batchAccepted = true;
             for (const event of pending) {
                 const adv = batch.get(event.id);
                 if (!adv) continue;
@@ -563,6 +608,7 @@ export async function generateAllAdvForSession() {
             }
         } catch (error) {
             if (error?.name === 'AbortError') throw error;
+            await generation_recovery.noteGenerationRecoveryFailure(origin, error);
             batchError = core_text.safeErrorSummary(error, 1000);
             console.warn('[HeartbeatMemories] bulk ADV request failed; waiting for user recovery choice', core_text.safeErrorDiagnostic(error));
         }
@@ -588,6 +634,13 @@ export async function generateAllAdvForSession() {
             return next;
         }, session);
         session = persisted.session || session;
+        // A syntactically complete batch may contain fewer valid entries than requested,
+        // including none. Once its accepted entries and missing IDs are durably consumed,
+        // retire this exact-prompt checkpoint. The next explicit action can then request
+        // only missing IDs (or use per-item repair), without replaying an empty batch or
+        // changing a saved segment's prompt identity. Truncation/failure and deferred
+        // writes keep their journal; the canonical deferred session commit retires it.
+        if (batchAccepted) await finishAdvRecovery(targetRuntime, persisted.committed);
         const failedAfterBatch = pending.filter(event => !session.events?.find(item => item.id === event.id)?.adv?.paragraphs?.length);
         const completed = session.events.filter(event => event.adv?.paragraphs?.length).length;
         const failed = session.events.length - completed;
@@ -607,11 +660,13 @@ export async function generateAllAdvForSession() {
             globalThis.toastr?.success?.(advTargetMessage(targetRuntime, `ADV 已完成：${completed}/${session.events.length}。`), '心跳回忆');
         }
     } catch (error) {
+        await generation_recovery.noteGenerationRecoveryFailure(origin, error);
         if (error?.name !== 'AbortError') {
             console.error('[HeartbeatMemories] bulk ADV flow failed', core_text.safeErrorDiagnostic(error));
             showAdvFailure(targetRuntime, error);
         }
     } finally {
+        generation_recovery.detachGenerationRecovery(origin);
         runtimeState.activeAdvBulkScopes.delete(scope);
         core_requestCoordinator.unregisterArchiveTargetReservation(bulkTaskKey);
         if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
@@ -626,7 +681,7 @@ export async function generateAllAdvForSession() {
     }
 }
 
-export async function repairFailedAdvForSession() {
+export async function repairFailedAdvForSession(options = {}) {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ADV) return;
     const targetHint = advPreparationTargetHint();
     let targetRuntime;
@@ -641,6 +696,7 @@ export async function repairFailedAdvForSession() {
     let requestedIds = new Set(core_text.cleanArray(session.advBulkRecovery?.failedIds, 64, 100));
     let failed = session.events.filter(event => !event.adv?.paragraphs?.length && (!requestedIds.size || requestedIds.has(event.id)));
     if (!failed.length) {
+        await clearCommittedAdvRecovery(targetRuntime, session, 'adv-repair');
         session.advBulkRecovery = null;
         if (advTargetVisible(targetRuntime, origin)) {
             runtimeState.activeSession = session;
@@ -669,6 +725,7 @@ export async function repairFailedAdvForSession() {
     requestedIds = new Set(core_text.cleanArray(session.advBulkRecovery?.failedIds, 64, 100));
     failed = session.events.filter(event => !event.adv?.paragraphs?.length && (!requestedIds.size || requestedIds.has(event.id)));
     if (!failed.length) {
+        await clearCommittedAdvRecovery(targetRuntime, session, 'adv-repair');
         globalThis.toastr?.info?.('较新的任务已经补完这些 ADV，本次没有重复请求。', '心跳回忆');
         runtimeState.activeAdvBulkScopes.delete(scope);
         refreshAdvArchiveTarget(targetRuntime);
@@ -676,12 +733,13 @@ export async function repairFailedAdvForSession() {
     }
     let repaired = 0;
     try {
+        await startAdvRecovery(targetRuntime, { kind: 'adv-repair', eventIds: failed.map(event => event.id) }, options);
         for (let i = 0; i < failed.length; i += 1) {
             const event = failed[i];
             if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(true, advTargetStatus(targetRuntime, `逐个补完 ${i + 1} / ${failed.length}：${event.title}`));
             let adv;
             try {
-                const raw = await generation_client.requestJson(
+                adv = await generation_client.requestValidatedSegment(
                     advPrompt(context, event, memoryBank),
                     `正在补 ADV：${event.title}`,
                     {
@@ -692,11 +750,14 @@ export async function repairFailedAdvForSession() {
                         taskKey: `adv-user-repair:${scope}:${core_text.safeId(event.id, String(i + 1))}`,
                         mode: core_constants.MODE.ADV,
                         background: true,
+                        segmentMaxAttempts: 1,
                     },
+                    raw => normalizeAdv(raw),
                 );
-                adv = normalizeAdv(raw);
             } catch (error) {
                 if (error?.name === 'AbortError') throw error;
+                await generation_recovery.noteGenerationRecoveryFailure(origin, error);
+                if (error?.code === 'RMT_JSON_TRUNCATED' || /^RMT_RECOVERY_/.test(error?.code || '')) throw error;
                 console.warn('[HeartbeatMemories] user-requested ADV repair failed', { eventId: core_text.normalizeText(event.id, 80), ...core_text.safeErrorDiagnostic(error) });
                 await core_context.yieldToUi();
                 continue;
@@ -719,6 +780,7 @@ export async function repairFailedAdvForSession() {
         }, session);
         session = persisted.session || session;
         const stillFailed = session.events.filter(event => !event.adv?.paragraphs?.length);
+        if (!stillFailed.length) await finishAdvRecovery(targetRuntime, persisted.committed);
         const visible = shouldRenderAdvTarget(targetRuntime)
             && (targetRuntime.archiveTarget || core_context.isCurrentTaskOrigin(origin))
             && runtimeState.activeSession?.kind === core_constants.MODE.ADV
@@ -729,8 +791,10 @@ export async function repairFailedAdvForSession() {
         }
         globalThis.toastr?.[stillFailed.length ? 'warning' : 'success']?.(advTargetMessage(targetRuntime, `逐个补完完成：成功 ${repaired} 篇${stillFailed.length ? `，仍有 ${stillFailed.length} 篇失败` : '，全部 ADV 已就绪'}。`), '心跳回忆');
     } catch (error) {
+        await generation_recovery.noteGenerationRecoveryFailure(origin, error);
         if (error?.name !== 'AbortError') showAdvFailure(targetRuntime, error);
     } finally {
+        generation_recovery.detachGenerationRecovery(origin);
         runtimeState.activeAdvBulkScopes.delete(scope);
         core_requestCoordinator.unregisterArchiveTargetReservation(bulkTaskKey);
         if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
@@ -745,9 +809,9 @@ export async function repairFailedAdvForSession() {
     }
 }
 
-export async function generateAdvForSelected() {
+export async function generateAdvForSelected(options = {}) {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ADV) return;
-    const selectedId = runtimeState.activeSession.selectedId;
+    const selectedId = options.eventId || runtimeState.activeSession.selectedId;
     const targetHint = advPreparationTargetHint();
     let targetRuntime;
     try { targetRuntime = await prepareAdvSubtaskRuntime(`event:${core_text.safeId(selectedId, 'event')}`); }
@@ -756,7 +820,8 @@ export async function generateAdvForSelected() {
     let event = session.events.find(x => x.id === selectedId);
     if (!event) return;
     if (event.adv?.paragraphs?.length) {
-        if (shouldRenderAdvTarget(targetRuntime) && runtimeState.activeSession?.kind === core_constants.MODE.ADV) {
+        await clearCommittedAdvRecovery(targetRuntime, session, 'adv-single', selectedId);
+        if (shouldRenderAdvTarget(targetRuntime) && runtimeState.activeSession?.kind === core_constants.MODE.ADV && ui_overlay.bodyEl()) {
             session.view = 'adv';
             session.paragraphIndex = 0;
             runtimeState.activeSession = session;
@@ -791,6 +856,7 @@ export async function generateAdvForSelected() {
     session = latestAdvSessionForRuntime(targetRuntime, session);
     event = session?.events?.find(item => item.id === eventId);
     if (!event || event.adv?.paragraphs?.length) {
+        if (event) await clearCommittedAdvRecovery(targetRuntime, session, 'adv-single', eventId);
         globalThis.toastr?.info?.(advTargetMessage(targetRuntime, event ? '较新的任务已经补完这篇 ADV，本次没有重复请求。' : '这条 ADV 事件已不在最新档案中，本次没有请求。'), '心跳回忆');
         runtimeState.activeModeBuildScopes.delete(taskKey);
         refreshAdvArchiveTarget(targetRuntime);
@@ -799,8 +865,12 @@ export async function generateAdvForSelected() {
     const memoryBank = targetRuntime.memoryBank;
     if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(true, advTargetStatus(targetRuntime, `正在为「${event.title}」生成长篇 ADV…`));
     try {
-        const raw = await generation_client.requestJson(advPrompt(context, event, memoryBank), `正在根据当前聊天档案生成「${event.title}」ADV…`, { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV], temperature: 0.55, context, origin, taskKey, mode: core_constants.MODE.ADV, background: true });
-        const generatedAdv = normalizeAdv(raw);
+        await startAdvRecovery(targetRuntime, { kind: 'adv-single', eventId }, options);
+        const generatedAdv = await generation_client.requestValidatedSegment(
+            advPrompt(context, event, memoryBank), `正在根据当前聊天档案生成「${event.title}」ADV…`,
+            { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV], temperature: 0.55, context, origin, taskKey, mode: core_constants.MODE.ADV, background: true, segmentMaxAttempts: 1 },
+            raw => normalizeAdv(raw),
+        );
         const persisted = await persistAdvMutation(targetRuntime, latest => {
             const next = structuredClone(latest || session);
             const item = next.events?.find(candidate => candidate.id === eventId);
@@ -812,6 +882,7 @@ export async function generateAdvForSelected() {
             return next;
         }, session);
         session = persisted.session || session;
+        await finishAdvRecovery(targetRuntime, persisted.committed);
         const wasBackgrounded = !shouldRenderAdvTarget(targetRuntime)
             || (!targetRuntime.archiveTarget && !core_context.isCurrentTaskOrigin(origin))
             || document.getElementById(core_constants.OVERLAY_ID)?.hidden
@@ -826,6 +897,7 @@ export async function generateAdvForSelected() {
         ui_advEventView.renderAdvMode();
         globalThis.toastr?.success?.(advTargetMessage(targetRuntime, `ADV 已生成：${event.title}`), '心跳回忆');
     } catch (error) {
+        await generation_recovery.noteGenerationRecoveryFailure(origin, error);
         if (error?.name === 'AbortError') {
             console.warn('[HeartbeatMemories] ADV generation aborted after chat/extension change');
             if (advTargetVisible(targetRuntime, origin)) {
@@ -837,6 +909,7 @@ export async function generateAdvForSelected() {
         console.error('[HeartbeatMemories] ADV generation failed', core_text.safeErrorDiagnostic(error));
         showAdvFailure(targetRuntime, error);
     } finally {
+        generation_recovery.detachGenerationRecovery(origin);
         runtimeState.activeModeBuildScopes.delete(taskKey);
         core_requestCoordinator.unregisterArchiveTargetReservation(taskKey);
         if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
