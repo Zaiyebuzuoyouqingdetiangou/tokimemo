@@ -29,6 +29,7 @@ import * as modes_heart from '../modes/heart.js';
 import * as modes_items from '../modes/items.js';
 import * as modes_cabinet from '../modes/cabinet.js';
 import * as modes_phone from '../modes/phone.js';
+import * as modes_inbox from '../modes/inbox.js';
 import * as modes_room from '../modes/room.js';
 import * as modes_relations from '../modes/relations.js';
 import * as modes_travel from '../modes/travel.js';
@@ -113,7 +114,7 @@ async function collectFittingSelectedSetting(context, budget = core_constants.MA
 }
 
 export async function buildWorldPresentationContext(context, memoryBank, mode) {
-    const wantsSelectedSetting = [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE].includes(mode);
+    const wantsSelectedSetting = [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE, core_constants.MODE.INBOX].includes(mode);
     let selectedSetting = wantsSelectedSetting
         ? await collectFittingSelectedSetting(context)
         : { text: '', used: 0, total: 0, dropped: 0, complete: true, note: '' };
@@ -528,9 +529,11 @@ export async function generateMode(mode, options = {}) {
     // Capture once, before any archive/network/storage await. A destroyed invocation must never
     // adopt the next runtime lifetime and re-register itself as a fresh paid task.
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const inboxDate = mode === core_constants.MODE.INBOX ? new Date() : null;
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     const background = options.background === true;
     const replaceExisting = options.replaceExisting === true;
+    if (mode === core_constants.MODE.INBOX && replaceExisting) throw new Error('邮箱只追加新信，不支持整箱重新生成。');
     const archiveTarget = options.archiveTarget && typeof options.archiveTarget === 'object' ? options.archiveTarget : null;
     if (archiveTarget?.backupOnly) throw new Error('独立备份是永久只读快照，不能生成或写入派生内容。');
     const context = archiveTarget ? options.context : (options.context || core_context.currentCharacterGuard());
@@ -549,8 +552,8 @@ export async function generateMode(mode, options = {}) {
     let memoryBank = archive_repository.requireArchive(context);
     const expectedArchiveRevision = memoryBank.archiveRevision;
     const promptFactory = generation_prompts.PROMPTS[mode];
-    if (!promptFactory && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS, core_constants.MODE.TRAVEL].includes(mode)) return;
-    const segmentedMode = [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.TRAVEL].includes(mode);
+    if (!promptFactory && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX].includes(mode)) return;
+    const segmentedMode = [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX].includes(mode);
     const calendarCurrentDate = mode === core_constants.MODE.CALENDAR ? modes_calendar.currentCalendarDate() : '';
     let generationPrompt = segmentedMode || mode === core_constants.MODE.RELATIONS
         ? ''
@@ -565,11 +568,18 @@ export async function generateMode(mode, options = {}) {
     const refreshableRelations = mode === core_constants.MODE.RELATIONS || mode === core_constants.MODE.CABINET;
     let roomSchemaUpgrade = false;
     const modeHasNoIncrementalWork = () => {
+        if (mode === core_constants.MODE.INBOX) return !modes_inbox.inboxPlan(memoryBank, previousSession, inboxDate).length;
+        if (mode === core_constants.MODE.ROOM && options.visualOnly && previousSession) return false;
+        if (mode === core_constants.MODE.PHONE && options.fillMissing) {
+            if (options.continueDraft) throw new Error('私人终端还有已保存的续写草稿，请先从档案入口继续生成；补旧终端不会清除这份草稿。');
+            return !modes_phone.phoneHasMissingEntries(previousSession);
+        }
         if (!previousSession || refreshableCalendar || refreshableRelations || core_constants.CREATIVE_EXPANSION_MODES.includes(mode) || (mode === core_constants.MODE.PHONE && options.continueDraft === true)) return false;
         const pendingMemoryIds = core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank, incrementalPart);
         return !pendingMemoryIds.length && !roomSchemaUpgrade;
     };
     const reportNoIncrementalWork = () => {
+        if (mode === core_constants.MODE.INBOX) { globalThis.toastr?.info?.('今天的来信与最新关系事件已经收录，不会重复请求。', '缘侧 · 邮箱'); return; }
         const targetPrefix = archiveTarget ? `「${archiveTarget.characterName} · ${archiveTarget.archiveName}」的` : '';
         globalThis.toastr?.info?.(`${targetPrefix}「${core_constants.MODE_LABEL[mode]}」已经覆盖当前档案。请先增量更新档案；下次只会追加新内容，旧内容不会重写。`, '心跳回忆');
     };
@@ -673,7 +683,7 @@ export async function generateMode(mode, options = {}) {
         origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId), archiveTargetEntryId: core_text.normalizeText(archiveTarget?.entryId, 120) };
         let session;
         let presentationContext = null;
-        if ([core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL].includes(mode)) {
+        if ([core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX].includes(mode)) {
             presentationContext = await buildWorldPresentationContext(context, memoryBank, mode);
             // Degrading is fine, degrading silently is not: the user picked these entries
             // by hand and deserves to know which of them this request could actually carry.
@@ -681,12 +691,16 @@ export async function generateMode(mode, options = {}) {
                 globalThis.toastr?.info?.(presentationContext.selectedSetting.note, `心跳回忆 · ${core_constants.MODE_LABEL[mode]}`);
             }
         }
-        if (mode === core_constants.MODE.ADV) {
+        if (mode === core_constants.MODE.INBOX) {
+            session = await modes_inbox.generateInbox(context, memoryBank, origin, taskKey, previousSession, { presentationContext, date: inboxDate });
+        } else if (mode === core_constants.MODE.ADV) {
             session = await modes_advEvent.generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.BUTTERFLY) {
             session = previousSession
                 ? await modes_butterfly.generateButterflyIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession)
                 : await modes_butterfly.generateButterflyWithRepair(context, memoryBank, origin, taskKey);
+        } else if (mode === core_constants.MODE.ROOM && options.visualOnly && previousSession) {
+            session = await modes_room.refreshRoomFigure(context, memoryBank, origin, taskKey, previousSession, { presentationContext });
         } else if (mode === core_constants.MODE.ROOM && previousSession) {
             session = await modes_room.generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext });
         } else if (mode === core_constants.MODE.ROOM) {
@@ -700,7 +714,14 @@ export async function generateMode(mode, options = {}) {
         } else if (mode === core_constants.MODE.HEART) {
             session = await modes_heart.generateHeartWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.PHONE) {
-            session = previousSession && options.continueDraft !== true
+            session = previousSession && options.fillMissing
+                ? await modes_phone.generatePhoneMissingWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext,
+                    savePartial: async partial => {
+                        partial.chatId = expectedChatId; partial.archiveRevision = expectedArchiveRevision;
+                        if (archiveTarget) await options.commitArchiveTarget(archiveTarget, mode, partial, archiveTargetStillCurrent, origin);
+                        else if (!await core_cache.commitSession(mode, partial, expectedChatId, origin)) throw new DOMException('Archive changed', 'AbortError');
+                    } })
+                : previousSession && options.continueDraft !== true
                 ? await modes_phone.generatePhoneIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext })
                 : await modes_phone.generatePhoneWithRepair(context, memoryBank, origin, taskKey, {
                     continueDraft: options.continueDraft === true,
@@ -800,6 +821,11 @@ export async function generateMode(mode, options = {}) {
         }
         if (!committed && !archiveTarget) core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [mode]: session } });
 
+        if (committed && mode === core_constants.MODE.INBOX) {
+            session = archiveTarget
+                ? core_cache.loadSession(mode, { chatId: expectedChatId, memoryBank, cache: runtimeState.activeArchiveSnapshot?.entryId === archiveTarget.entryId ? runtimeState.activeArchiveSnapshot.cache : archiveTarget.cache }) || session
+                : core_cache.loadSession(mode) || session;
+        }
         const overlay = document.getElementById(core_constants.OVERLAY_ID);
         const stayBackground = background || !committed || !core_context.isCurrentTaskOrigin(origin) || overlay?.hidden || runtimeState.activeMode !== mode;
         if (stayBackground) {

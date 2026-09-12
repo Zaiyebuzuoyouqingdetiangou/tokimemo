@@ -163,7 +163,7 @@ function phoneConversationNeedsSpeakerRepair(entry, session) {
 
 export function renderPhoneEntryDetail(entry, app, session = runtimeState.activeSession) {
     if (!entry) return '<div class="rmt-phone-detail rmt-phone-detail-empty">选择一条记录查看详情。</div>';
-    if (entry.sourceStatus === 'unavailable') return '<div class="rmt-phone-detail rmt-phone-detail-empty"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回列表</button><h3>暂无可核实记录</h3><p>这项目录没有足够原文，暂未收录。补充来源并更新档案后，可单独生成这一项。</p></div>';
+    if (entry.sourceStatus === 'unavailable') return '<div class="rmt-phone-detail rmt-phone-detail-empty"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回列表</button><h3>内容待补齐</h3><p>返回终端后可补齐缺项，已有内容会保留。</p></div>';
     const appKind = phonePresentationKind(app);
     const messages = entry.messages?.length ? `<div class="rmt-phone-chat-thread">${entry.messages.map(message => {
         const role = phoneRenderedSpeakerRole(message, session);
@@ -180,7 +180,7 @@ export function renderPhoneEntryDetail(entry, app, session = runtimeState.active
     const legacyWarning = entry.legacyEvidenceUnverified === true
         ? '<div class="rmt-phone-legacy-warning">旧版内容 · 证据未重新核验。内容原样保留，但不会作为新增事实的依据。</div>'
         : '';
-    return `<div class="rmt-phone-detail rmt-phone-detail-${appKind}"><div class="rmt-phone-detail-toolbar"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回${core_text.esc(app?.label || '列表')}</button><span>${core_text.esc(entry.meta || app?.label || '')}</span></div>${legacyWarning}${entry.basis !== '记忆' && !entry.legacyEvidenceUnverified ? '<div class="rmt-phone-evidence">角色日常演绎</div>' : ''}<h3>${core_text.esc(entry.title)}</h3>${gallery}${entry.detail ? `<p>${core_text.esc(entry.detail)}</p>` : ''}${fields}${speakerRepair}${messages}${entry.basis === '记忆' ? `<div class="rmt-phone-evidence">档案痕迹：${core_text.esc(entry.sourceMemoryAnchor)}</div>` : ''}</div>`;
+    return `<div class="rmt-phone-detail rmt-phone-detail-${appKind}"><div class="rmt-phone-detail-toolbar"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回${core_text.esc(app?.label || '列表')}</button><span>${core_text.esc(entry.meta || app?.label || '')}</span></div>${legacyWarning ? `<details class="rmt-phone-evidence"><summary>关于这条内容</summary>${legacyWarning}</details>` : ''}${entry.basis !== '记忆' && !entry.legacyEvidenceUnverified ? '<div class="rmt-phone-evidence">角色日常演绎</div>' : ''}<h3>${core_text.esc(entry.title)}</h3>${gallery}${entry.detail ? `<p>${core_text.esc(entry.detail)}</p>` : ''}${fields}${speakerRepair}${messages}${entry.basis === '记忆' ? `<div class="rmt-phone-evidence">档案痕迹：${core_text.esc(entry.sourceMemoryAnchor)}</div>` : ''}</div>`;
 }
 
 function phoneStatusBar(now, kind) {
@@ -220,7 +220,7 @@ function renderPhoneHome(session, apps, live, now, kind) {
     const legacyNotice = legacyCount
         ? `<div class="rmt-phone-legacy-notice">旧版内容 ${legacyCount} 项 · 已保留，证据未重新核验</div>`
         : '';
-    return `<section class="rmt-phone-home rmt-phone-home-screen rmt-phone-wallpaper rmt-phone-wallpaper-${session.uiProfile.wallpaper}" aria-label="私人载体主页"><div class="rmt-phone-lock"><div><b>${core_text.esc(session.deviceName)}</b><small>${core_text.esc(live.statusLine || modes_room.roomDaypartState(now).label)}</small></div><span><small>${core_text.esc(live.lockText)}</small></span></div>${legacyNotice}<div class="rmt-phone-apps rmt-phone-home-grid">${launcher || '<div class="rmt-phone-home-empty">这个设备还没有可读入口。</div>'}</div>${dock ? `<div class="rmt-phone-dock" aria-label="常用功能">${dock}</div>` : ''}</section>`;
+    return `<section class="rmt-phone-home rmt-phone-home-screen rmt-phone-wallpaper rmt-phone-wallpaper-${session.uiProfile.wallpaper}" aria-label="私人载体主页"><div class="rmt-phone-lock"><div><b>${core_text.esc(session.deviceName)}</b><small>${core_text.esc(live.statusLine || modes_room.roomDaypartState(now).label)}</small></div><span><small>${core_text.esc(live.lockText)}</small></span></div><div class="rmt-phone-apps rmt-phone-home-grid">${launcher || '<div class="rmt-phone-home-empty">这个设备还没有可读入口。</div>'}</div>${dock ? `<div class="rmt-phone-dock" aria-label="常用功能">${dock}</div>` : ''}</section>`;
 }
 
 function phoneEntryKindMarkup(item, kind) {
@@ -236,18 +236,22 @@ function phoneEntryKindMarkup(item, kind) {
     if (kind === 'music') return open(`<i class="rmt-phone-entry-symbol fa-solid fa-music" aria-hidden="true"></i><span class="rmt-phone-entry-main"><b>${title}</b><small>${meta}</small><span>${preview}</span></span>`);
     if (kind === 'finance') return open(`<span class="rmt-phone-entry-main"><small>${meta || 'LEDGER'}</small><b>${title}</b><span>${preview}</span></span>`);
     if (kind === 'moments') return open(`<span class="rmt-phone-entry-feedmark" aria-hidden="true"></span><span class="rmt-phone-entry-main"><b>${title}</b><span>${preview}</span><small>${meta}</small></span>`);
-    if (['notes', 'reading', 'books', 'files', 'research', 'work', 'study'].includes(kind)) return open(`<i class="rmt-phone-entry-symbol fa-solid fa-file-lines" aria-hidden="true"></i><span class="rmt-phone-entry-main"><b>${title}</b><small>${meta}</small><span>${preview}</span></span>`);
+    if (['reading', 'books'].includes(kind)) return open(`<span class="rmt-phone-book-spine" aria-hidden="true">BOOK</span><span class="rmt-phone-entry-main"><b>${title}</b><small>${meta}</small><span>${preview}</span></span>`);
+    if (kind === 'notes') return open(`<span class="rmt-phone-note-sheet"><small>${meta}</small><b>${title}</b><span>${preview}</span></span>`);
+    if (kind === 'games') return open(`<i class="fa-solid fa-gamepad" aria-hidden="true"></i><span class="rmt-phone-entry-main"><b>${title}</b><small>${meta}</small><span>${preview}</span></span>`);
+    if (['files', 'research', 'work', 'study'].includes(kind)) return open(`<i class="rmt-phone-entry-symbol fa-solid fa-file-lines" aria-hidden="true"></i><span class="rmt-phone-entry-main"><b>${title}</b><small>${meta}</small><span>${preview}</span></span>`);
     return open(`<b>${title}</b><small>${meta}</small><span>${preview}</span>${messageCount ? `<em>${messageCount}</em>` : ''}`);
 }
 
 function renderPhoneAppList(app) {
     if (!app) return '<section class="rmt-phone-page rmt-phone-page-empty">这里暂时没有可读入口。</section>';
     const kind = phonePresentationKind(app);
-    const entries = (Array.isArray(app.entries) ? app.entries : []).map(item => phoneEntryKindMarkup(item, kind)).join('');
+    const readable = (app.entries || []).filter(item => item.sourceStatus !== 'unavailable');
+    const entries = readable.map(item => phoneEntryKindMarkup(item, kind)).join('');
     const legacyNotice = app.legacyEvidenceUnverified === true
         ? '<div class="rmt-phone-legacy-notice">此分区含旧版内容 · 证据未重新核验</div>'
         : '';
-    return `<section class="rmt-phone-page rmt-phone-app-screen rmt-phone-page-list rmt-phone-page-${kind}"><div class="rmt-phone-page-header"><button type="button" class="rmt-phone-page-back" data-rmt-action="phone-home" data-rmt-phone-app="${PHONE_HOME_APP_ID}" aria-label="返回主页">‹</button>${phoneIconHtml(app)}<div><b>${core_text.esc(app.label)}</b><small>${core_text.esc(app.summary || `${app.entries?.length || 0} 项`)}</small></div></div>${legacyNotice}<div class="rmt-phone-list rmt-phone-list-${kind}">${entries || '<div class="rmt-phone-list-empty">这里暂时没有内容。</div>'}</div></section>`;
+    return `<section class="rmt-phone-page rmt-phone-app-screen rmt-phone-page-list rmt-phone-page-${kind}"><div class="rmt-phone-page-header"><button type="button" class="rmt-phone-page-back" data-rmt-action="phone-home" data-rmt-phone-app="${PHONE_HOME_APP_ID}" aria-label="返回主页">‹</button>${phoneIconHtml(app)}<div><b>${core_text.esc(app.label)}</b><small>${core_text.esc(app.summary || `${readable.length} 项`)}</small></div></div><div class="rmt-phone-list rmt-phone-list-${kind}">${entries || '<div class="rmt-phone-list-empty">内容待补齐，可从终端顶部继续生成。</div>'}</div></section>`;
 }
 
 function renderPhoneDetailPage(entry, app) {
@@ -287,8 +291,8 @@ export function renderPhone() {
         : '<button type="button" class="rmt-btn rmt-phone-increment" disabled title="关闭只读查看后可增量追加"><i class="fa-solid fa-lock"></i> 只读 · 无法增量</button>';
     const reversePrivacyGate = `<section class="rmt-reverse-terminal-gate" aria-label="反查终端隐私状态"><i class="fa-solid fa-user-shield" aria-hidden="true"></i><div><b>反查终端 · 隐私保护未开放</b><p>当前架构还不能可靠区分用户人设、正式档案与模拟内容，所以不会替你生成私人事实。</p></div><span>BLOCKED SAFELY</span></section>`;
     const unavailableCount = apps.flatMap(item => item.entries || []).filter(item => item.sourceStatus === 'unavailable').length;
-    const sourceNotice = unavailableCount ? `<p class="rmt-phone-draft-status" role="status">已收录有依据的内容；另有 ${unavailableCount} 项来源不足，目录中已标明，未编造记录。</p>` : '';
-    ui_overlay.bodyEl().innerHTML = `<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="back">← 返回档案</button>${incrementalButton}</div>${sourceNotice}${reversePrivacyGate}<div class="rmt-phone"><div class="rmt-phone-shell rmt-device-${kind} rmt-phone-view-${view} ${profileClasses}" data-rmt-phone-daypart="${core_text.esc(live.key)}">${phoneHardware(kind)}<div class="rmt-phone-screen">${phoneStatusBar(now, kind)}<main class="rmt-phone-content rmt-phone-content-single">${page}</main></div></div></div>`;
+    const sourceNotice = unavailableCount ? `<p class="rmt-phone-draft-status" role="status">${unavailableCount} 项待补齐。${phoneWritable ? '<button type="button" class="rmt-btn" data-rmt-action="phone-fill-missing">补齐缺项 · 保留已有内容</button>' : ''}</p>` : '';
+    ui_overlay.bodyEl().innerHTML = `<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="back">← 返回档案</button>${incrementalButton}</div>${sourceNotice}<div class="rmt-phone"><div class="rmt-phone-shell rmt-device-${kind} rmt-phone-view-${view} ${profileClasses}" data-rmt-phone-daypart="${core_text.esc(live.key)}">${phoneHardware(kind)}<div class="rmt-phone-screen">${phoneStatusBar(now, kind)}<main class="rmt-phone-content rmt-phone-content-single">${page}</main></div></div></div>`;
     startPhoneClock();
 }
 

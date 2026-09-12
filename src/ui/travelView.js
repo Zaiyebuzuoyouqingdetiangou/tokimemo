@@ -216,16 +216,16 @@ function travelPostcardScene(item, theme) {
     </svg>`;
 }
 
-export function travelPostcardHtml(item, session) {
+export function travelPostcardHtml(item, session, options = {}) {
     const card = item?.postcard || {};
     const rawTone = core_text.normalizeText(card.tone, 30).toLowerCase();
     const tone = core_constants.TRAVEL_POSTCARD_TONES.has(rawTone) ? rawTone : 'paper';
-    const userName = core_text.normalizeText(runtimeState.activeArchiveSnapshot
+    const userName = core_text.normalizeText(options.recipient || (runtimeState.activeArchiveSnapshot
         ? runtimeState.activeArchiveSnapshot.memory?.userName
-        : core_context.getContext()?.name1, 100) || '你';
+        : core_context.getContext()?.name1), 100) || '你';
     const theme = modes_travel.resolveTravelSceneTheme(item, session?.mapTheme);
     return `<section class="rmt-travel-postcard tone-${tone}" data-rmt-postcard-theme="${theme}" role="dialog" aria-modal="false" aria-label="${core_text.esc(item.name)}的明信片">
-      <button type="button" class="rmt-travel-detail-close" data-rmt-action="travel-close-detail" aria-label="收起明信片">×</button>
+      <button type="button" class="rmt-travel-detail-close" data-rmt-action="${core_text.esc(options.closeAction || 'travel-close-detail')}" aria-label="收起明信片">×</button>
       <figure class="rmt-travel-postcard-face">
         ${travelPostcardScene(item, theme)}
         <figcaption><small>GREETINGS FROM</small><b>${core_text.esc(item.region || item.name)}</b></figcaption>
@@ -318,7 +318,7 @@ export function renderTravel() {
         : '';
     const legendRows = session.locations.map(item => `<button type="button" class="${selected?.id === item.id ? 'active' : ''}" data-rmt-travel-location="${core_text.esc(item.id)}"><i class="fa-solid ${item.kind === 'near' ? 'fa-location-dot' : 'fa-envelope'}"></i><span><b>${core_text.esc(item.name)}</b><small>${core_text.esc(item.region || item.distanceLabel)} · ${core_text.esc(travelSourceLabel(item))}</small></span></button>`).join('');
     body.innerHTML = `<div class="rmt-travel" data-rmt-travel-theme="${modes_travel.safeTravelTheme(session.mapTheme)}">
-      <header class="rmt-travel-head"><div><small>THE ROUTES HE TAKES</small><h2>${core_text.esc(session.title)}</h2><p>${core_text.esc(session.routeSummary)}</p></div><div><span><b>${near.length}</b> 附近</span><span><b>${far.length}</b> 远方</span></div></header>
+      <div class="rmt-mail-actions"><button type="button" class="rmt-btn" data-rmt-mode="inbox">打开你的邮箱 · 收藏路线明信片</button></div><header class="rmt-travel-head"><div><small>THE ROUTES HE TAKES</small><h2>${core_text.esc(session.title)}</h2><p>${core_text.esc(session.routeSummary)}</p></div><div><span><b>${near.length}</b> 附近</span><span><b>${far.length}</b> 远方</span></div></header>
       <div class="rmt-travel-layout">
         <section class="rmt-travel-map" aria-label="他的出行路线地图">
           <div class="rmt-travel-grid" aria-hidden="true"></div>

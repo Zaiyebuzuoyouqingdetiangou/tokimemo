@@ -97,6 +97,38 @@ function roomVisualPreset(identitySeed) {
 function roomVisualEvidenceSupports(path, value, excerpt) {
     const text = core_text.normalizeText(excerpt, 800).toLowerCase();
     const patterns = {
+        'figure.build:slender': /(?:纤长|纤细|修长|清瘦|slender)/iu,
+        'figure.build:lean': /(?:精瘦|精实|劲瘦|lean)/iu,
+        'figure.build:average': /(?:中等身材|匀称|average build)/iu,
+        'figure.build:broad': /(?:宽肩|魁梧|高大健壮|broad|stocky)/iu,
+        'figure.build:compact': /(?:娇小|小个子|矮小|compact|petite)/iu,
+        'figure.build:soft': /(?:圆润|柔软的身形|微胖|soft build|plump)/iu,
+        'figure.hairTone:dark': /(?:黑|乌|墨)[^，。；\n]{0,8}(?:发|髮)|dark hair|black hair/iu,
+        'figure.hairTone:brown': /(?:棕|栗|褐)[^，。；\n]{0,8}(?:发|髮)|brown hair|brunette/iu,
+        'figure.hairTone:light': /(?:金|浅色|亚麻)[^，。；\n]{0,8}(?:发|髮)|blond|light hair/iu,
+        'figure.hairTone:red': /(?:红|赤|赭)[^，。；\n]{0,8}(?:发|髮)|red hair|ginger hair/iu,
+        'figure.hairTone:silver': /(?:银白|银|白)(?:色|的|及腰|长|短|头|卷|直|柔顺|一头){0,5}(?:发|髮)|silver hair|white hair/iu,
+        'figure.hairTone:fantasy_cool': /(?:蓝|绿|青|紫)[^，。；\n]{0,8}(?:发|髮)|blue hair|green hair|purple hair/iu,
+        'figure.hairTone:fantasy_warm': /(?:粉|橙)[^，。；\n]{0,8}(?:发|髮)|pink hair|orange hair/iu,
+        'figure.outfit:casual': /(?:便服|休闲服|T恤|卫衣|casual|hoodie|t-shirt)/iu,
+        'figure.outfit:formal': /(?:西装|礼服|正装|formal|suit|tuxedo)/iu,
+        'figure.outfit:uniform': /(?:制服|警服|军装|工装制服|uniform)/iu,
+        'figure.outfit:academic': /(?:校服|学袍|学院制服|academic|school uniform)/iu,
+        'figure.outfit:artisan': /(?:围裙|工匠服|工作围裙|artisan|apron)/iu,
+        'figure.outfit:combat': /(?:战斗服|铠甲|盔甲|作战服|combat|armor)/iu,
+        'figure.outfit:ceremonial': /(?:祭服|礼仪长袍|祭祀袍|ceremonial)/iu,
+        'figure.outfit:technical': /(?:防护服|宇航服|实验服|technical|spacesuit)/iu,
+        'figure.outfit:historical': /(?:古装|长袍|汉服|和服|道袍|historic|kimono|hanfu)/iu,
+        'figure.outfit:fantasy': /(?:法袍|魔法袍|精灵长袍|fantasy|mage robe)/iu,
+        'figure.posture:reserved': /(?:拘谨|收敛|内敛|reserved)/iu,
+        'figure.posture:relaxed': /(?:放松|慵懒|随意坐|relaxed)/iu,
+        'figure.posture:upright': /(?:挺拔|端正|笔直|upright)/iu,
+        'figure.posture:active': /(?:活泼|好动|矫健|active)/iu,
+        'figure.posture:studious': /(?:伏案|专注读书|埋头阅读|studious)/iu,
+        'figure.posture:tired': /(?:疲惫|疲倦|困倦|tired)/iu,
+        'figure.hairShape:medium': /(?:中长发|齐颈|及肩|medium hair|shoulder.length hair)/iu,
+        'figure.detail:headphones': /(?:耳机|headphones)/iu,
+        'figure.detail:scarf': /(?:围巾|scarf)/iu,
         'figure.hairShape:long': /(?:长发|长头发|及腰|披肩发|long hair)/iu,
         'figure.hairShape:short': /(?:短发|短头发|short hair)/iu,
         'figure.hairShape:cropped': /(?:寸头|板寸|剃短|cropped|buzz cut)/iu,
@@ -778,6 +810,20 @@ export function mergeRoomIncremental(previous, fresh, sourceMemoryIds, { memoryB
     merged.selectedSpaceId = previous.selectedSpaceId;
     merged.selectedObjectId = previous.selectedObjectId;
     return { session: merged, added };
+}
+
+export async function refreshRoomFigure(context, memoryBank, origin, taskKey, previous, options = {}) {
+    const presentation = options.presentationContext || {};
+    const visualProfile = await generation_client.requestValidatedSegment(
+        `仅提取当前 char 的外形，不生成房间、对白或故事。返回 {"figure":{...},"explicitFields":["figure.hairShape"],"explicitEvidence":{"figure.hairShape":"角色卡或世界书精确原文"}}。枚举：${JSON.stringify(ROOM_VISUAL_VALUES)}。
+只填写确属 char 的外形。没有写明的字段用 unspecified，detail 用 none；不要把 User/NPC 的外形、衣服颜色当发色。不凭房间风格猜人长相。`,
+        '正在更新人物外形，保留房间内容…',
+        { context, contextEnvelope: presentation.contextEnvelope, origin, taskKey: `${taskKey}:figure`, mode: core_constants.MODE.ROOM, maxTokens: 2500, background: true },
+        raw => normalizeRoomVisualProfile({ ...previous.visualProfile, ...raw },
+            { identitySeed: core_context.currentCharacterRuntimeKey(context), bindPersona: true, worldPresentation: presentation.profile,
+                controlledEvidence: presentation.characterEvidence || presentation.settingEvidence || '' }),
+    );
+    return { ...structuredClone(previous), visualProfile };
 }
 
 export async function generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previous, options = {}) {
@@ -1496,7 +1542,7 @@ export function renderRoom() {
     const sceneMotif = roomMotifToken(session, selectedSpace);
     const tempLine = temporaryObjects.length ? `<div class="rmt-room-temp-line">此刻临时物件：${temporaryObjects.map(item => core_text.esc(item)).join(' · ')}</div>` : '';
     const body = ui_overlay.bodyEl();
-    body.innerHTML = `<div class="rmt-room-view" data-rmt-room-world="${core_text.esc(visualProfile.worldStyle)}" data-rmt-room-palette="${core_text.esc(visualProfile.palette)}" data-rmt-room-material="${core_text.esc(visualProfile.material)}" data-rmt-room-density="${core_text.esc(visualProfile.density)}" data-rmt-room-motif="${core_text.esc(sceneMotif)}">
+    body.innerHTML = `${!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly ? '<button type="button" class="rmt-btn" data-rmt-action="room-refresh-figure">更新人物外形 · 保留房间内容</button>' : ''}<div class="rmt-room-view" data-rmt-room-world="${core_text.esc(visualProfile.worldStyle)}" data-rmt-room-palette="${core_text.esc(visualProfile.palette)}" data-rmt-room-material="${core_text.esc(visualProfile.material)}" data-rmt-room-density="${core_text.esc(visualProfile.density)}" data-rmt-room-motif="${core_text.esc(sceneMotif)}">
       <div class="rmt-room-map" aria-label="私人空间地图">${map}</div>
       <div class="rmt-room-location"><div><b>${core_text.esc(currentLocationText)}</b><small>${core_text.esc(session.homeName)} · ${session.spaces.length} 个可观察区域</small></div><div class="rmt-room-location-actions">${!personIsHere ? `<button type="button" class="rmt-room-find" data-rmt-action="room-find-presence">去看看他</button>` : ''}${readOnlyArchive ? '' : `<button type="button" class="rmt-room-find" data-rmt-action="room-life-refresh" ${runtimeState.busy ? 'disabled' : ''}>更新今日生活</button>`}</div></div>
       ${schemaUpgradeNotice}
@@ -1517,7 +1563,7 @@ export function renderRoom() {
             <div class="rmt-room-decor" aria-hidden="true"><span class="rmt-room-prop-a"></span><span class="rmt-room-prop-b"></span><span class="rmt-room-prop-c"></span></div>
             ${hotspots}
             ${petNodes}
-            ${personIsHere ? `<button type="button" class="rmt-room-person" data-rmt-action="room-presence" data-rmt-facing="away" data-rmt-identity-key="${core_text.esc(visualProfile.identityKey)}" data-rmt-build="${core_text.esc(figureProfile.build)}" data-rmt-hair-shape="${core_text.esc(figureProfile.hairShape)}" data-rmt-hair-tone="${core_text.esc(figureProfile.hairTone)}" data-rmt-outfit="${core_text.esc(figureProfile.outfit)}" data-rmt-detail="${core_text.esc(figureProfile.detail)}" data-rmt-posture="${core_text.esc(figureProfile.posture)}" aria-label="从背影看看${core_text.esc(charName)}现在在做什么"><span class="rmt-room-figure-shadow" aria-hidden="true"></span><span class="rmt-room-body-figure" aria-hidden="true"><span class="rmt-room-outfit-mark"></span></span><span class="rmt-room-head" aria-hidden="true"><span class="rmt-room-hair"></span><span class="rmt-room-figure-detail"></span></span><span class="rmt-room-person-label" aria-hidden="true">♥</span></button>` : ''}
+            ${personIsHere ? `<button type="button" class="rmt-room-person" data-rmt-action="room-presence" data-rmt-facing="away" data-rmt-identity-key="${core_text.esc(visualProfile.identityKey)}" data-rmt-build="${core_text.esc(figureProfile.build)}" data-rmt-hair-shape="${core_text.esc(figureProfile.hairShape)}" data-rmt-hair-tone="${core_text.esc(figureProfile.hairTone)}" data-rmt-outfit="${core_text.esc(figureProfile.outfit)}" data-rmt-detail="${core_text.esc(figureProfile.detail)}" data-rmt-posture="${core_text.esc(figureProfile.posture)}" aria-label="从背影看看${core_text.esc(charName)}现在在做什么"><span class="rmt-room-figure-shadow" aria-hidden="true"></span><span class="rmt-room-body-figure" aria-hidden="true"><span class="rmt-room-outfit-mark"></span></span><span class="rmt-room-head" aria-hidden="true"><span class="rmt-room-hair"></span><span class="rmt-room-figure-detail"></span></span><span class="rmt-room-unseen" aria-hidden="true">人在光影外</span><span class="rmt-room-person-label" aria-hidden="true">♥</span></button>` : ''}
           </div>
           <div class="rmt-room-object-rail" aria-label="房间物件">${objectRail}</div>
           <div class="rmt-room-activity-strip ${personIsHere ? '' : 'empty'}">

@@ -5,15 +5,29 @@
 ## 当前候选
 
 - 产品名：心跳回忆
-- version：`0.8.53`
-- BUILD / runtime cache-bust：`0.8.53-narrative-intro-r57.0`
+- version：`0.8.54`
+- BUILD / runtime cache-bust：`0.8.54-inbox-lifestyle-r58.0`
 - 正式档案 key：`heartbeatMemoriesArchiveV3`
 - 派生缓存 key：`heartbeatMemoriesTheaterV3`
 - 压缩格式：`gzip-base64-v1`
 - Calendar / Phone / Room / Travel session：v6 / v4 / v3 / v4
 - SillyTavern 最低版本：`1.18.0`；一键配置入口明确标注 `1.1.18`
 
-V3 metadata key 为旧档案兼容边界，不随发布版本改名。浏览器加载 r57 runtime 由 manifest 与 index 中一致的 BUILD query 隔离，不能继续命中旧 bundle。
+V3 metadata key 为旧档案兼容边界，不随发布版本改名。浏览器加载 r58 runtime 由 manifest 与 index 中一致的 BUILD query 隔离，不能继续命中旧 bundle。
+
+## r58 当前增补契约（优先于下方旧表现要求）
+
+- 基于 r57 隔离副本；生产代码仅主 agent 修改，reviewer 提供独立复现与限定测试/浏览器工具。不改上传 ZIP，不改第三方，不发布远端。
+- 新增 INBOX session v1，仍使用原 V3 cache。旧信 append-only；日常每本地日期最多一封，最新关键关系记忆最多一封，eventKey 不随 revision 改变。手动收信/自动楼层更新均走 generateMode，已有候选去重先于 mode claim 和付费请求。自动项默认关，无第二计时器。
+- 阶段候选包括逐渐熟悉、确认关系、冷战、和好、告别等节点；节点只选择来信话题，不自动赋予亲密关系。一次生成固定本地日期，preflight、claim 后计划与模型请求共用，避免跨午夜计划变化。
+- 收件人、ID、来源、时间与已读/收藏由本地控制。关系称谓受全档案已有关系约束；当下心情/未来邀请自由演绎，真正共同往事仍须计划绑定的真实来源。邮件不进入 Mxxx。语言检测有界，不宣称完整语义证明。
+- 收录当前档案路线明信片是零模型请求，冻结已保存位置、风景 token 和文字。旧路线重写或删除不影响邮件。只读箱能看不能修改；整档删除/完全重建会按原确认清除邮箱，需备份。
+- live/detached/deferred 保存使用统一 append 合并，既有正文与并发已读/收藏不被模型输出覆盖。显示 A、当前 B 的 read/favorite/postcards/receive 全阻断；异步 mutation 绑定调用时 lifecycle。
+- Phone 的普通日常可依据角色/所选世界书演绎，名称/目录意图保留；空项不呈现为重复可点正文。补缺逐 App 落盘，仅替换 unavailable；旧 mixed App 的成功项保留，新补项独立校验后加入受控兼容 Map。已有合法续写草稿时阻止补旧终端，避免静默清除另一份成功进度。私人字段/User已发消息/共同历史未放开。
+- Room botanical/athletic 只画有界物件；中文外形逐项精确证据匹配；未知外形不默认蓝衣短发。显式“更新人物外形”保留正文/物件/宠物。人物为抽象背影而非真人肖像。
+- archiveVerdict 仍 v2，新提示约80～180字，以双方态度/关系/分歧为主，禁止动作场景式复述。旧简介不自动覆盖，“重写简介”仍 presentationOnly。
+- 修复明信片艺术纸色/墨色不被宿主深色文字污染；邮箱结构使用已有主题和纸张 token。没有承诺真实 TT、iPhone 或真实模型文风通过。
+- 手机便笺不用联系人图标列，正文正常横排；列表标题/摘要/时间分级，预览与消息正文不再沿用 9px 小字。
 
 ## r57 当前增补契约（覆盖下方旧短判词与终端聊天限制）
 

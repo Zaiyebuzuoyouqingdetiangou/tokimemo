@@ -1,3 +1,7 @@
+## 0.8.54 / r58.0 changed-surface review
+
+Mailbox scope: local ownership check before UI writes/requests, lifecycle gate on pending mutation, canonical append merge for live/detached/deferred, model cannot select persistent IDs or flags, frozen normalized postcard data (not SVG/HTML supplied by model). Relationship labels use existing full-archive tier; shared-history wording remains a bounded detector, not semantic proof. Phone successful drafts and gaps preserve independently validated output; no third-party or remote mutation. Fresh evidence is in the r58 verification artifacts, not inherited r57 counts.
+
 ## 0.8.53 / r57.0 changed-surface review
 
 Scope: the r56 candidate's Room/Travel/Phone generation boundary, canonical terminal checkpoint resume, and archive cover presentation. This is a changed-surface review, not a full repository scan or external security certification.

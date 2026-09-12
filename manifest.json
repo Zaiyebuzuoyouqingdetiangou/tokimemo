@@ -1,15 +1,15 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.53-narrative-intro-r57.0",
+  "js": "index.js?heartbeat=0.8.54-inbox-lifestyle-r58.0",
   "author": "Toto",
-  "version": "0.8.53",
+  "version": "0.8.54",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r57：统一日常演绎与往事证据边界；保留旧终端断点；档案封面改为按内容选择文风的关系简介。",
+  "description": "r58：User 邮箱与 SVG 明信片收藏；手机缺项续写；房间人物与装饰修复；关系短简介。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

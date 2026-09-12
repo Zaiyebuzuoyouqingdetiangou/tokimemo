@@ -36,6 +36,8 @@ import * as ui_contentManager from './contentManager.js';
 import * as ui_endingView from './endingView.js';
 import * as ui_heartView from './heartView.js';
 import * as ui_phoneView from './phoneView.js';
+import * as ui_inboxView from './inboxView.js';
+import * as modes_inbox from '../modes/inbox.js';
 import * as ui_travelView from './travelView.js';
 import * as ui_settingsPanel from './settingsPanel.js';
 import * as ui_styles from './styles.js';
@@ -205,6 +207,7 @@ export function navigateBack() {
         runtimeState.contentManagerOpen = false;
         return renderActive();
     }
+    if (runtimeState.activeMode === core_constants.MODE.INBOX && ui_inboxView.closeInboxLetter()) return;
     if (runtimeState.activeMode === core_constants.MODE.TRAVEL && runtimeState.activeSession?.selectedLocationId) return ui_travelView.closeTravelDetail();
     if (runtimeState.activeMode === core_constants.MODE.ITEMS) return modes_room.returnToRoomFromDeep();
     if (runtimeState.activeMode === core_constants.MODE.ADV && runtimeState.activeSession?.kind === core_constants.MODE.ADV && runtimeState.activeSession.view === 'adv') {
@@ -349,7 +352,7 @@ export function requestCurrentArchiveFullRebuild() {
     }
     if (!confirmExplicitActionTwice(
         '完全重建当前窗口档案？',
-        '这会重新读取整个当前聊天并重新编号 Mxxx 记忆，因此旧档案版本对应的回忆相簿、CG、ADV、房间、蝴蝶效应、ENDING、储物和私人终端缓存都会失效。只有当你明确需要从头整理（例如旧消息被大量编辑/删除）时才建议使用。',
+        '这会重新读取整个当前聊天并重新编号 Mxxx 记忆，因此旧档案版本对应的回忆相簿、CG、ADV、房间、蝴蝶效应、ENDING、储物、私人终端和邮箱（含来信及收藏的明信片）缓存都会失效，请先备份。只有当你明确需要从头整理（例如旧消息被大量编辑/删除）时才建议使用。',
         { destructive: true },
     )) return false;
     void archive_repository.importCurrentChatMemory({ fullRebuild: true }).catch(error => {
@@ -465,9 +468,9 @@ export function showChooser() {
             ? (generated ? (isCalendar ? '刷新中 · 旧日历仍可查看' : '增量追加中 · 旧内容仍可查看') : '后台生成中 · 可继续启动其他入口')
             : generated ? (isCalendar ? '已整理 · 点击查看日历' : '已生成 · 点击头像查看') : '尚未生成';
         const draft = mode === core_constants.MODE.PHONE && ready ? core_cache.loadPhoneGenerationDraft(context) : null;
-        const actionText = generating ? '生成中…' : draft ? `继续生成 · ${draft.completedApps.length}/${draft.plan.apps.length}` : generated ? (isCalendar ? '刷新日历' : '增量追加') : (isCalendar ? '生成日历' : '生成这一项');
+        const actionText = mode === core_constants.MODE.INBOX ? (generating ? '收信中…' : '收取新信') : generating ? '生成中…' : draft ? `继续生成 · ${draft.completedApps.length}/${draft.plan.apps.length}` : generated ? (isCalendar ? '刷新日历' : '增量追加') : (isCalendar ? '生成日历' : '生成这一项');
         return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} ${generating ? 'generating' : ''} rmt-archive-portal-${core_text.esc(meta.accent)}">
-          <button type="button" class="rmt-portal-open" ${generated ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
+          <button type="button" class="rmt-portal-open" ${generated || (ready && mode === core_constants.MODE.INBOX) ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
             <span class="rmt-portal-avatar"><i class="fa-solid ${core_text.esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
             <span class="rmt-portal-title">${core_text.esc(meta.title)}</span>
             <span class="rmt-portal-subtitle">${core_text.esc(meta.subtitle)}</span>
@@ -622,7 +625,7 @@ export function showInlineError(message) {
 export function openCachedOrGenerate(mode) {
     if (runtimeState.activeArchiveSnapshot) {
         const snapshot = runtimeState.activeArchiveSnapshot;
-        const cached = core_cache.loadSession(mode, { chatId: snapshot.chatId, memoryBank: snapshot.memory, cache: snapshot.cache, clone: true });
+        const cached = core_cache.loadSession(mode, { chatId: snapshot.chatId, memoryBank: snapshot.memory, cache: snapshot.cache, clone: true }) || (mode === core_constants.MODE.INBOX ? modes_inbox.emptyInbox(snapshot.memory) : null);
         if (cached) {
             runtimeState.activeMode = mode;
             runtimeState.activeSession = cached;
@@ -639,7 +642,7 @@ export function openCachedOrGenerate(mode) {
         globalThis.toastr?.warning?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
         return;
     }
-    const cached = core_cache.loadSession(mode);
+    const cached = core_cache.loadSession(mode) || (mode === core_constants.MODE.INBOX ? modes_inbox.emptyInbox(archive_repository.requireArchive(core_context.currentCharacterGuard()), core_context.currentCharacterGuard()) : null);
     if (cached) {
         runtimeState.activeMode = mode;
         runtimeState.activeSession = cached;
@@ -665,9 +668,9 @@ export function renderActive() {
     runtimeState.contentManagerOpen = false;
     if (runtimeState.activeMode !== core_constants.MODE.ENDING) ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     if (!runtimeState.activeSession || !runtimeState.activeMode) return runtimeState.activeArchiveSnapshot ? archive_library.showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot) : showChooser();
-    const supportsTopbarIncrement = !core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) || runtimeState.activeMode === core_constants.MODE.PHONE;
+    const supportsTopbarIncrement = runtimeState.activeMode !== core_constants.MODE.INBOX && (!core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) || runtimeState.activeMode === core_constants.MODE.PHONE);
     setRegenerateVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && supportsTopbarIncrement);
-    setManageVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && runtimeState.activeMode !== core_constants.MODE.RELATIONS);
+    setManageVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && ![core_constants.MODE.RELATIONS, core_constants.MODE.INBOX].includes(runtimeState.activeMode));
     setBackVisible(true, runtimeState.activeArchiveSnapshot ? (runtimeState.activeArchiveReadOnly ? '只读档案' : '档案') : core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) ? '他的房间' : '当前档案');
     if (runtimeState.activeMode !== core_constants.MODE.ROOM) modes_room.stopRoomClock();
     if (runtimeState.activeMode !== core_constants.MODE.PHONE) ui_phoneView.stopPhoneClock();
@@ -678,6 +681,7 @@ export function renderActive() {
     else if (runtimeState.activeMode === core_constants.MODE.ITEMS) modes_items.renderItems();
     else if (runtimeState.activeMode === core_constants.MODE.CABINET) modes_cabinet.renderCabinet();
     else if (runtimeState.activeMode === core_constants.MODE.PHONE) ui_phoneView.renderPhone();
+    else if (runtimeState.activeMode === core_constants.MODE.INBOX) ui_inboxView.renderInbox();
     else if (runtimeState.activeMode === core_constants.MODE.TRAVEL) ui_travelView.renderTravel();
     else if (runtimeState.activeMode === core_constants.MODE.ENDING) ui_endingView.renderEnding();
     else if (runtimeState.activeMode === core_constants.MODE.CALENDAR) ui_calendarView.renderCalendar();
@@ -889,6 +893,7 @@ async function deleteManagedCategory() {
 }
 
 async function regenerateManagedCategory() {
+    if (runtimeState.activeMode === core_constants.MODE.INBOX) return;
     if (!runtimeState.activeMode || !archive_library.requireWritableArchiveAction()) return;
     const mode = runtimeState.activeMode;
     const label = core_constants.MODE_LABEL[mode] || mode;
@@ -910,6 +915,8 @@ async function regenerateManagedCategory() {
 }
 
 export function handleOverlayClick(event) {
+    const mailButton = event.target.closest?.('[data-rmt-inbox]');
+    if (mailButton) return void ui_inboxView.handleInboxAction(mailButton.dataset.rmtInbox, mailButton.dataset.rmtInboxId);
     const generateModeButton = event.target.closest?.('[data-rmt-generate-mode]');
     if (generateModeButton) {
         const mode = generateModeButton.dataset.rmtGenerateMode;
@@ -1034,6 +1041,7 @@ export function handleOverlayClick(event) {
     if (runtimeState.activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'draw-heart-strip', 'clear-heart-strip', 'room-life-refresh', 'room-schema-upgrade', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins', 'memory-worldinfo-picker', 'refresh-ending-confessions'].includes(action)) {
         if (!archive_library.requireWritableArchiveAction()) return;
     }
+    if (action === 'inbox-back') return ui_inboxView.closeInboxLetter();
     if (action === 'back') return navigateBack();
     if (action === 'travel-close-detail') return ui_travelView.closeTravelDetail();
     if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
@@ -1093,6 +1101,12 @@ export function handleOverlayClick(event) {
         return;
     }
     if (action === 'read-memory-plugins') return void archive_repository.readCurrentChatMemoryPlugins().catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆'));
+    if (action === 'phone-fill-missing' || action === 'room-refresh-figure') {
+        if (!archive_library.requireWritableArchiveAction()) return;
+        const mode = action === 'phone-fill-missing' ? core_constants.MODE.PHONE : core_constants.MODE.ROOM;
+        const extra = runtimeState.activeArchiveSnapshot ? archive_library.archiveTargetGenerationOptions(runtimeState.activeArchiveSnapshot) : {};
+        return void generation_client.generateMode(mode, { ...extra, background: false, fillMissing: action === 'phone-fill-missing', visualOnly: action === 'room-refresh-figure' }).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '缘侧'));
+    }
     if (action === 'memory-worldinfo-picker') return void archive_repository.showMemoryWorldInfoPicker();
     if (action === 'memory-worldinfo-close') { document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-memory-wi-picker`)?.remove(); return showChooser(); }
     if (action === 'memory-worldinfo-expand') return void archive_repository.expandMemoryWorldInfoBook(actionEl);

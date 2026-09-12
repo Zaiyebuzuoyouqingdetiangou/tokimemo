@@ -13,6 +13,7 @@ import * as core_text from './text.js';
 import * as core_contextTags from './contextTags.js';
 import * as modes_calendar from '../modes/calendar.js';
 import * as modes_phone from '../modes/phone.js';
+import * as modes_inbox from '../modes/inbox.js';
 
 function cloneCacheValue(value) {
     if (!value || typeof value !== 'object') return {};
@@ -1422,6 +1423,7 @@ export function saveSession(mode, session, expectedChatId = core_text.normalizeT
 }
 
 export async function commitSessionMutation(mode, expectedChatId, expectedTaskOrigin, mutateSession, fallbackSession = null) {
+    const mutationLifecycle = runtimeState.runtimeLifecycleEpoch;
     if (typeof mutateSession !== 'function') return null;
     let context;
     try { context = core_context.currentCharacterGuard(); } catch { return null; }
@@ -1441,6 +1443,7 @@ export async function commitSessionMutation(mode, expectedChatId, expectedTaskOr
         let memoryBank;
         try { memoryBank = archive_repository.requireArchive(context); } catch { return null; }
         const stillCurrent = () => {
+            if (!core_context.runtimeLifecycleStillCurrent(mutationLifecycle)) return false;
             let live;
             try { live = core_context.currentCharacterGuard(); } catch { return false; }
             if (expectedTaskOrigin && !core_context.deferredCommitOriginMatchesContext(expectedTaskOrigin, live)) return false;
@@ -1490,7 +1493,7 @@ export async function commitSession(mode, session, expectedChatId = core_text.no
     const expectedRevision = core_text.normalizeText(session?.archiveRevision, 240);
     const committed = await commitSessionMutation(mode, expectedChatId, expectedTaskOrigin, (_latest, memoryBank) => {
         if (expectedRevision && expectedRevision !== core_text.normalizeText(memoryBank.archiveRevision, 240)) return null;
-        return session;
+        return mode === core_constants.MODE.INBOX ? modes_inbox.mergeInboxLatest(_latest, session) : session;
     }, session);
     return !!committed;
 }
@@ -1538,7 +1541,7 @@ export async function commitDetachedArchiveSession(target, mode, session, stillC
         target,
         mode,
         expectedTaskOrigin,
-        () => session,
+        latest => mode === core_constants.MODE.INBOX ? modes_inbox.mergeInboxLatest(latest, session) : session,
         session,
         stillCurrent,
     );
@@ -1580,6 +1583,7 @@ export function loadSession(mode, options = {}) {
         if (core_text.normalizeText(session.chatId, 240) !== chatId) return null;
         if (cache.archiveRevision !== memoryBank.archiveRevision) return null;
         if (session.archiveRevision !== memoryBank.archiveRevision) return null;
+        if (mode === core_constants.MODE.INBOX && (session.inboxVersion !== modes_inbox.INBOX_VERSION || !Array.isArray(session.letters))) return null;
         const userManaged = session.userManaged === true;
         if (mode === core_constants.MODE.ROOM && (!Array.isArray(session.spaces) || (!userManaged && session.spaces.length < 2))) return null;
         if (mode === core_constants.MODE.ITEMS && (!Array.isArray(session.containers) || (!userManaged && session.containers.length < 1))) return null;

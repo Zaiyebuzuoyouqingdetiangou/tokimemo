@@ -1,4 +1,8 @@
-# Heartbeat Memories r35–r57 Architecture
+# Heartbeat Memories r35–r58 Architecture
+
+## r58.0 Inbox and presentation
+
+`modes/inbox.js` owns bounded local plans, provider normalization, append-only merge, frozen postcard inputs. `ui/inboxView.js` owns ephemeral navigation and durable read/favorite mutations. One INBOX mode uses existing V3 cache/auto-update/ArchiveTarget/deferred/delete boundaries. commitSession and detached wrappers merge against canonical inbox so incoming model batches cannot replace old prose or concurrent flags. No new storage namespace or timer. Mail remains derivative, never archive evidence. Room visual-only refresh and Phone missing-entry repair use the existing generateMode guard and provider pipeline.
 
 ## r57 narrative authority, canonical legacy resume and cover introduction
 

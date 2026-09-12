@@ -201,6 +201,7 @@ export const MODE = Object.freeze({
     ITEMS: 'items',
     CABINET: 'cabinet',
     PHONE: 'phone',
+    INBOX: 'inbox',
     TRAVEL: 'travel',
     ENDING: 'ending',
     CALENDAR: 'calendar',
@@ -217,6 +218,7 @@ export const MODE_LABEL = Object.freeze({
     [MODE.ITEMS]: '他的物品',
     [MODE.CABINET]: '两个人的陈列柜',
     [MODE.PHONE]: '他的私人终端',
+    [MODE.INBOX]: '你的邮箱',
     [MODE.TRAVEL]: '他的出行路线',
     [MODE.ENDING]: '结局与后日谈',
     [MODE.CALENDAR]: '两个人的日历',
@@ -233,6 +235,7 @@ export const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ITEMS]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.CABINET]: 5500,
     [MODE.PHONE]: MAX_GENERATION_OUTPUT_TOKENS,
+    [MODE.INBOX]: 4000,
     [MODE.TRAVEL]: 9000,
     [MODE.ENDING]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.CALENDAR]: 6000,
@@ -241,7 +244,7 @@ export const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ACHIEVEMENTS]: 6000,
 });
 
-export const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.PHONE, MODE.CABINET, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
+export const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.PHONE, MODE.INBOX, MODE.CABINET, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
 
 export const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS]);
 export const CREATIVE_EXPANSION_MODES = Object.freeze([MODE.ADV, MODE.BUTTERFLY, MODE.HEART, MODE.ENDING, MODE.ALBUM, MODE.TRAVEL]);

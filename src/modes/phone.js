@@ -528,7 +528,7 @@ UNTRUSTED_PHONE_ARCHIVE_JSON:\n${generation_prompts.promptArchiveSlice(memoryBan
 
 数量要求：
 - phone / terminal 规划1～10个入口，其余1～8个；每个1～4条目录即可。职业、兴趣、购物、草稿、工作学习、阅读、创作等可以依据 {{char}} 人设与世界观合理生成，不要求角色卡/世界书逐字写过这条日常。
-- chat/contacts 仍只在当前 Mxxx 有可核对的原话/字段时建立；没有通讯原话就不建 chat，不为凑数量编造当前用户发言、电话号码、地址、亲属或固定重要 NPC。不适合现代 App 的世界观使用符合时代的命名。
+- chat 可以安排与受控人设/世界书或档案已知普通 NPC 的当下社交；实际历史原话才需 Mxxx。没有已知聊天对象时不建 chat，改为适合角色的其他 App。contacts 私密字段仍只用有据记录，不编造 User 已发消息、电话、地址、亲属。不要为了凑数规划明知只能留空的项目。不适合现代 App 的世界观使用符合时代的命名。
 - kind 只能选 moments/chat/gallery/camera/notes/store/browser/contacts/music/work/study/health/fitness/training/reading/books/files/research/games/finance/security/creative/weather/tools/misc；icon 只能选 message/people/photo/camera/note/bag/globe/contact/music/briefcase/book/heart/activity/game/wallet/shield/palette/cloud/tool/spark/grid。
 - uiProfile 只能使用：palette=noir-gold/ink-blue/frost/moss/ember/lilac/sky/sand；wallpaper=smoke/rain/grid/starfield/library/aurora/minimal/paper；typography=modern/serif/mono；iconStyle=rounded/square/glyph/glass；density=compact/cozy/roomy；shellTone=graphite/silver/ivory/bronze/navy。上面的 *_TOKEN 只是占位符，必须换成某个允许值，不得原样照抄。这些是本地安全样式 token，不得输出颜色值、CSS、URL 或 class 名。
 - uiProfile.explicitFields 只允许 palette/wallpaper/typography/iconStyle/density/shellTone；只有世界书或角色卡对该项有明文时才列入。其余字段保持不在列表中，本地会依据 {{char}} 的人设、设备名和 App 组合稳定补全，防止不同角色照抄同一套合法模板。
@@ -536,6 +536,12 @@ UNTRUSTED_PHONE_ARCHIVE_JSON:\n${generation_prompts.promptArchiveSlice(memoryBan
 - 每个 entries 现在只写 id/title/meta，标题必须彼此有生活区分，不要填 preview/detail/messages/fields/imageCaption。
 - deviceKind 只能 neutral/phone/watch/terminal/communicator/folio/relic，并且只能从 CONTROLLED_WORLD_PRESENTATION_JSON.allowedDevices 选择；证据不足时必须为 neutral。不要因为功能名叫“私人终端”就强塞现代手机。四个 liveStates 都要有。
 - 不复刻真实商业 App 商标；禁止前任/第三方恋爱。只输出 JSON。`;
+}
+
+function phoneDisplayText(value, limit, fallback, memoryBank) {
+    const text = core_text.normalizeText(value, limit);
+    return text && !core_narrativeAuthority.narrativeClaimsSharedHistory(text, { userName: memoryBank?.userName })
+        ? text : fallback;
 }
 
 export function normalizePhonePlan(data, memoryBank = null, { worldPresentation = null } = {}) {
@@ -548,7 +554,7 @@ export function normalizePhonePlan(data, memoryBank = null, { worldPresentation 
     const deviceKind = controlledProfile
         ? (allowedDevices.has(requestedKind) ? requestedKind : controlledDefault)
         : (core_constants.PHONE_DEVICE_KINDS.has(requestedKind) ? requestedKind : inferredKind);
-    deviceName = PHONE_DEVICE_LABEL[deviceKind] || '私人记录载体';
+    deviceName = phoneDisplayText(deviceName, 100, PHONE_DEVICE_LABEL[deviceKind] || '私人记录载体', memoryBank);
     const limits = phoneAppLimits(deviceKind);
     const apps = [];
     const usedAppIds = new Set();
@@ -559,7 +565,7 @@ export function normalizePhonePlan(data, memoryBank = null, { worldPresentation 
         if (PHONE_RESERVED_APP_IDS.has(id) || usedAppIds.has(id)) continue;
         usedAppIds.add(id);
         const kind = normalizePhoneAppKind(app?.kind, requestedLabel);
-        const label = PHONE_KIND_LABEL[kind] || `分区 ${appIndex + 1}`;
+        const label = phoneDisplayText(requestedLabel, 60, PHONE_KIND_LABEL[kind] || `分区 ${appIndex + 1}`, memoryBank);
         const entries = [];
         const usedEntryIds = new Set();
         for (const [index, entry] of (Array.isArray(app?.entries) ? app.entries : []).slice(0, 24).entries()) {
@@ -568,8 +574,8 @@ export function normalizePhonePlan(data, memoryBank = null, { worldPresentation 
             usedEntryIds.add(entryId);
             entries.push({
                 id: entryId,
-                title: `记录 ${index + 1}`,
-                meta: '',
+                title: phoneDisplayText(entry?.title, 100, `记录 ${index + 1}`, memoryBank),
+                meta: phoneDisplayText(entry?.meta, 200, '', memoryBank),
             });
         }
         if (!entries.length) continue;
@@ -578,7 +584,7 @@ export function normalizePhonePlan(data, memoryBank = null, { worldPresentation 
             label,
             kind,
             icon: normalizePhoneAppIcon(app?.icon, kind, label),
-            summary: '',
+            summary: phoneDisplayText(app?.summary, 600, '', memoryBank),
             entries,
         });
     }
@@ -586,7 +592,7 @@ export function normalizePhonePlan(data, memoryBank = null, { worldPresentation 
     if (apps.length < minApps) throw new Error(`私人终端目录 App 不足：${apps.length}/${minApps}。`);
     const total = apps.reduce((sum, app) => sum + app.entries.length, 0);
     if (total < minEntries) throw new Error(`私人终端目录条目不足：${total}/${minEntries}。`);
-    const lockText = 'PRIVATE';
+    const lockText = phoneDisplayText(data?.lockText, 400, 'PRIVATE', memoryBank);
     const appIds = new Set(apps.map(app => app.id));
     const liveStates = {};
     for (const key of core_constants.ROOM_DAYPART_KEYS) {
@@ -599,8 +605,8 @@ export function normalizePhonePlan(data, memoryBank = null, { worldPresentation 
             if (number > 0) badgeCounts[appId] = number;
         }
         liveStates[key] = {
-            lockText,
-            statusLine: '',
+            lockText: phoneDisplayText(rawState?.lockText, 400, lockText, memoryBank),
+            statusLine: phoneDisplayText(rawState?.statusLine, 500, '', memoryBank),
             badgeCounts,
         };
     }
@@ -632,7 +638,7 @@ UNTRUSTED_APP_PLAN_JSON:\n${JSON.stringify(app, null, 2)}
 
 硬性要求：
 - 必须补完 UNTRUSTED_APP_PLAN_JSON 中全部 ${app.entries.length} 个 entry id，不得删减或换 id；每项必须有 preview，且 detail/messages/fields/imageCaption 至少一种有实质内容。
-- 例外：若某个目录没有足够原文，保留该 id 并仅返回 {"id":"原id","unavailable":true}。这是明确的资料空缺，不是虚构记录；不要为满足目录数量补造内容，也不要因这一项空缺放弃其他有据条目。
+- 只有确实索取私人字段或既往原话而无证据时，才保留该 id 并返回 {"id":"原id","unavailable":true}；不得把普通笔记、工作、阅读、兴趣等日常因为缺少逐字记忆而置空。没有记忆原句时请读人设和所选世界书，写正在使用的 App 内容，不能写“设定补摘”“缺少设定”或资料报告。
 - basis=推演：依据人设和世界观写日常提醒、感受、未来计划、未发送草稿。正文不需要逐字人设引文。sourceMemoryIds/sourceMemoryAnchor/sourceSettingEvidence 留空。${core_narrativeAuthority.NARRATIVE_AUTHORITY_PROMPT}
 - 这是一台正在使用中的设备，绝大多数条目应当是 basis=设定 或 basis=推演 的日常内容：工作、兴趣、购物、提醒、草稿、未发送的话、阅读、创作等。basis=设定 可以按明确人设/世界观展开合理日常，不要求把生成正文压成设定原文摘录；有直接原文时填写 sourceSettingEvidence。若没有逐字来源也不要伪造，本地会安全降级为 basis=推演，不会因此删除内容。只有确实复述与 {{user}} 已发生的共同经历时才用 basis=记忆。
 - basis=记忆 时必须提供当前档案中有效 sourceMemoryIds + sourceMemoryAnchor${sourceMemoryIds ? '，并至少引用一个 incrementalMemoryIds' : ''}，并把直接支持条目的 Mxxx 原句逐字放入 sourceMemoryEvidence；chat 的联系人和每条消息、contacts 的每个字段值都必须在该原句或所引 Mxxx 中逐字出现，不能用真实 id/anchor 替无关新事实洗白。sourceSettingEvidence 留空。basis=设定/推演 不得冒充已经发生的共同历史，也不得替 {{user}} 生成其从未说过的消息。
@@ -652,7 +658,10 @@ export function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sour
     for (const entry of entries) {
         const id = core_text.safeId(entry?.id, '');
         if (!expectedIds.has(id) || seen.has(id)) continue;
-        if (isUnavailablePhoneEntry(entry)) { seen.add(id); continue; }
+        if (isUnavailablePhoneEntry(entry)) {
+            if (options.requireLifestyleContent && !['contacts', 'chat'].includes(planApp.kind)) continue;
+            seen.add(id); continue;
+        }
         const preview = core_text.normalizeText(entry?.preview, 1200);
         const detail = core_text.normalizeText(entry?.detail, 5000);
         const conversation = normalizePhoneConversationMessages(entry, memoryBank, { strict: planApp.kind === 'chat' });
@@ -677,12 +686,12 @@ export function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sour
             // context without a verbatim quote. Only a claim that a shared past already happened
             // requires Mxxx authority. Only known-NPC ordinary chat can use inference;
             // private contacts and user messages stay on the evidence path.
-            if (sourceMemoryIds || !phoneInferredEntryAllowed(entry, planApp.kind, conversation, generatedText, memoryBank, options)) continue;
+            if (!phoneInferredEntryAllowed(entry, planApp.kind, conversation, generatedText, memoryBank, options)) continue;
         }
         seen.add(id);
         if (planApp.kind === 'chat') assertPhoneConversation(messages);
     }
-    if (seen.size < expectedIds.size) throw core_text.safeUserError('终端详情不完整：缺字段、ID不符或未能对应原文；没有原文的项目应明确为空。', 'RMT_PHONE_EVIDENCE');
+    if (seen.size < expectedIds.size) throw core_text.safeUserError('终端详情不完整：请补齐对应 ID 的 App 内容。普通日常允许依据人设和世界书演绎；共同过去与私人字段才需要原文证据。', 'RMT_PHONE_EVIDENCE');
     return { ...raw, id: planApp.id, label: planApp.label, kind: planApp.kind };
 }
 
@@ -754,9 +763,9 @@ export function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, so
         if (options.trustedStored !== true && basis === '设定' && !sourceSettingEvidence) basis = '推演';
         // A 推演 entry is ordinary device content inferred from persona (a reminder, a
         // draft, a mundane exchange). It needs no quote, but must not smuggle in a past
-        // with {{user}}, and incremental passes never admit it.
+        // with {{user}}. Archive-driven increments may also contain ordinary current life.
         const legacyStored = options.trustedStored === true && entry?.narrativeVersion !== 1;
-        if (!legacyStored && basis !== '记忆' && (sourceMemoryIds || !phoneInferredEntryAllowed(entry, planApp.kind, conversation, evidenceText, memoryBank, options))) return null;
+        if (!legacyStored && basis !== '记忆' && !phoneInferredEntryAllowed(entry, planApp.kind, conversation, evidenceText, memoryBank, options)) return null;
         if (!preview || (!detail && !messages.length && !fields.length && !imageCaption)
             || (!legacyStored && basis === '记忆' && (!reference.sourceMemoryIds.length || (options.trustedStored !== true && !sourceMemoryEvidence) || (sourceMemoryIds && !core_incremental.usesIncrementalMemoryId(reference.sourceMemoryIds, sourceMemoryIds))))) return null;
         if (basis === '记忆' && options.trustedStored !== true) {
@@ -798,7 +807,7 @@ export function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, so
         label: planApp.label,
         kind: planApp.kind,
         icon: normalizePhoneAppIcon(planApp.icon, planApp.kind, planApp.label),
-        summary: options.trustedStored === true ? (core_text.normalizeText(raw?.summary, 1200) || planApp.summary) : '',
+        summary: phoneDisplayText(raw?.summary || planApp.summary, 1200, '', memoryBank),
         entries,
     };
 }
@@ -822,25 +831,29 @@ export async function generatePhoneWithRepair(context, memoryBank, origin, taskK
         .filter(app => app.entries.some(entry => entry.legacyEvidenceUnverified === true))
         .map(app => [app.id, structuredClone(app)]));
     const draftOptions = { archiveTarget: options.archiveTarget, stillCurrent: options.stillCurrent };
-    const evidenceOptions = { controlledEvidence: presentationContext.settingEvidence || '' };
+    const evidenceOptions = { controlledEvidence: presentationContext.settingEvidence || '', requireLifestyleContent: true };
     if (!resumeDraft && !await core_cache.savePhoneGenerationDraft(context, memoryBank, plan, [], '', '', origin, draftOptions)) {
         throw new Error('私人终端目录已经生成，但无法确认续写断点已安全保存；本次已停止，避免虚假提示可续写。');
     }
 
     for (let index = 0; index < plan.apps.length; index += 1) {
         const app = plan.apps[index];
-        if (completedById.has(app.id)) continue;
+        const completed = completedById.get(app.id);
+        const missing = completed ? app.entries.filter(entry => !completed.entries.some(item => item.id === entry.id && !isUnavailablePhoneEntry(item))) : app.entries;
+        if (!missing.length) continue;
+        const requestApp = { ...app, incremental: !!completed, entries: missing };
         let lastError = null;
         for (let attempt = 0; attempt < 2; attempt += 1) {
             try {
                 const raw = await generation_client.requestJson(
-                    phoneAppPrompt(context, memoryBank, plan, app) + ((lastError || (resumeDraft?.failedAppId === app.id && resumeDraft?.failure))
+                    phoneAppPrompt(context, memoryBank, plan, requestApp) + ((lastError || (resumeDraft?.failedAppId === app.id && resumeDraft?.failure))
                         ? `\n本次只修正以下安全分类：${core_text.safeErrorSummary(lastError || resumeDraft.failure)}。需要真实历史/私密字段却没有来源的项目才用 unavailable；普通日常继续按人设演绎，不重做已完成的其他 App。` : ''),
                     `私人终端 2/2 · ${index + 1}/${plan.apps.length} ${app.label}${attempt ? '（重试）' : ''}…`,
                     { maxTokens: app.kind === 'chat' ? 8000 : app.entries.length >= 8 ? 7000 : 5000, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:app:${app.id}`, mode: core_constants.MODE.PHONE, background: true },
                 );
-                const normalizedApp = core_requestCoordinator.validateGeneratedSegment(raw, data => normalizePhoneDraftApp(data, app, memoryBank, plan.deviceKind, null, evidenceOptions));
-                completedById.set(app.id, normalizedApp);
+                const normalizedApp = core_requestCoordinator.validateGeneratedSegment(raw, data => normalizePhoneDraftApp(data, requestApp, memoryBank, plan.deviceKind, null, evidenceOptions));
+                completedById.set(app.id, completed ? mergePhoneMissingEntries(completed, normalizedApp) : normalizedApp);
+                if (preservedApps.has(app.id)) preservedApps.set(app.id, structuredClone(completedById.get(app.id)));
                 if (!await core_cache.savePhoneGenerationDraft(context, memoryBank, plan, [...completedById.values()], '', '', origin, draftOptions)) {
                     throw new Error('这个 App 已生成，但无法确认续写断点已安全保存；本次已停止。');
                 }
@@ -898,6 +911,43 @@ export async function generatePhoneWithRepair(context, memoryBank, origin, taskK
         }
         throw error;
     }
+}
+
+export function phoneHasMissingEntries(session) {
+    return !!session?.apps?.some(app => app.entries?.some(isUnavailablePhoneEntry));
+}
+
+export function mergePhoneMissingEntries(previous, fresh) {
+    const merged = structuredClone(previous);
+    merged.entries = (previous.entries || []).map(entry => {
+        const replacement = fresh.entries?.find(item => item.id === entry.id);
+        return isUnavailablePhoneEntry(entry) && replacement && !isUnavailablePhoneEntry(replacement)
+            ? structuredClone(replacement) : structuredClone(entry);
+    });
+    return merged;
+}
+
+export async function generatePhoneMissingWithRepair(context, memoryBank, origin, taskKey, previous, options = {}) {
+    let session = structuredClone(previous);
+    const presentation = options.presentationContext || {};
+    for (const app of previous.apps || []) {
+        const entries = (app.entries || []).filter(isUnavailablePhoneEntry);
+        if (!entries.length) continue;
+        const planApp = { ...app, incremental: true, entries: entries.map(item => ({
+            id: item.id, title: '按此 App 用途与角色生活补齐', meta: '',
+        })) };
+        const fresh = await generation_client.requestValidatedSegment(
+            phoneAppPrompt(context, memoryBank, session, planApp),
+            `正在补齐「${app.label}」的 ${entries.length} 项内容…`,
+            { context, contextEnvelope: presentation.contextEnvelope, origin, taskKey: `${taskKey}:missing:${app.id}`,
+                mode: core_constants.MODE.PHONE, maxTokens: 8000, background: true },
+            raw => normalizePhoneDraftApp(raw, planApp, memoryBank, session.deviceKind, null,
+                { controlledEvidence: presentation.settingEvidence || '', requireLifestyleContent: true }),
+        );
+        session.apps = session.apps.map(item => item.id === app.id ? mergePhoneMissingEntries(item, fresh) : item);
+        if (options.savePartial) await options.savePartial(session);
+    }
+    return session;
 }
 
 export function compactPhoneExisting(session) {
@@ -1152,11 +1202,9 @@ export function normalizePhone(data, memoryBank, { worldPresentation = null, con
                 legacyEvidenceUnverified: trustedStored && entry?.legacyEvidenceUnverified === true,
             };
         }).filter(Boolean);
-        const evidencePool = entries.flatMap(entry => [entry.sourceMemoryEvidence, entry.sourceSettingEvidence]).filter(Boolean).join('\n');
-        const safeLabel = trustedStored || core_worldPresentation.controlledEvidenceContains(evidencePool, label)
-            ? label : (PHONE_KIND_LABEL[kind] || `分区 ${appIndex + 1}`);
+        const safeLabel = trustedStored ? label : phoneDisplayText(label, 60, PHONE_KIND_LABEL[kind] || `分区 ${appIndex + 1}`, memoryBank);
         const rawSummary = core_text.normalizeText(app?.summary, 1200);
-        const safeSummary = trustedStored || core_worldPresentation.controlledEvidenceContains(evidencePool, rawSummary) ? rawSummary : '';
+        const safeSummary = trustedStored ? rawSummary : phoneDisplayText(rawSummary, 1200, '', memoryBank);
         return {
             id: appId,
             label: safeLabel,
@@ -1187,8 +1235,8 @@ export function normalizePhone(data, memoryBank, { worldPresentation = null, con
             if (number > 0) badges[appId] = number;
         }
         liveStates[key] = {
-            lockText: trustedStored ? (core_text.normalizeText(rawState?.lockText, 400) || core_text.normalizeText(data?.lockText, 400) || 'PRIVATE') : 'PRIVATE',
-            statusLine: trustedStored ? core_text.normalizeText(rawState?.statusLine, 500) : '',
+            lockText: trustedStored ? (core_text.normalizeText(rawState?.lockText, 400) || core_text.normalizeText(data?.lockText, 400) || 'PRIVATE') : phoneDisplayText(rawState?.lockText || data?.lockText, 400, 'PRIVATE', memoryBank),
+            statusLine: trustedStored ? core_text.normalizeText(rawState?.statusLine, 500) : phoneDisplayText(rawState?.statusLine, 500, '', memoryBank),
             badgeCounts: badges,
         };
     }
@@ -1201,7 +1249,7 @@ export function normalizePhone(data, memoryBank, { worldPresentation = null, con
         uiVersion: core_constants.PHONE_SESSION_VERSION,
         worldPresentation: controlledProfile ? structuredClone(controlledProfile) : null,
         uiProfile: normalizePhoneUiProfile(data?.uiProfile, { data: { ...data, apps }, memoryBank, deviceKind, bindPersona: true }),
-        lockText: trustedStored ? core_text.normalizeText(data?.lockText, 400) : 'PRIVATE',
+        lockText: trustedStored ? core_text.normalizeText(data?.lockText, 400) : phoneDisplayText(data?.lockText, 400, 'PRIVATE', memoryBank),
         liveStates,
         apps,
         legacyEvidenceUnverifiedCount: apps.reduce(

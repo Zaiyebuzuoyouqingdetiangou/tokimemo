@@ -128,7 +128,7 @@ function actionButton(action, item, label, danger = false) {
 export function renderContentManager() {
     const session = runtimeState.activeSession;
     const mode = runtimeState.activeMode;
-    if (!session || !mode || session.kind !== mode) return ui_overlay.renderActive();
+    if (!session || !mode || session.kind !== mode || mode === core_constants.MODE.INBOX) return ui_overlay.renderActive();
     runtimeState.contentManagerOpen = true;
     ui_overlay.topTitle(`${core_constants.MODE_LABEL[mode] || mode} · 管理`);
     ui_overlay.setBackVisible(true, '返回内容');
