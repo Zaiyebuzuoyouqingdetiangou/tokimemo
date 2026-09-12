@@ -66,7 +66,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_CONNECTION_AUTH: '专用连接认证失败；请检查当前配置、API Key 与账号权限。',
     RMT_CONNECTION_RATE_LIMIT: '模型服务正在限流或额度不足；请稍后重试。',
     RMT_CONNECTION_QUOTA: '模型服务报告额度不足；请检查当前独立 API 账号余额或配额。不会自动重试。',
-    RMT_ARCHIVE_VERDICT: '判词尚未通过校验；原有回忆与封面保留，可只重写判词，无需重建档案。',
+    RMT_ARCHIVE_VERDICT: '档案简介尚未通过校验；原有回忆与封面保留，可只重写简介，无需重建档案。',
     RMT_CONNECTION_CONTEXT_LIMIT: '本段输入超过模型或代理的上下文上限；请减少导入资料或更换模型。',
     RMT_CONNECTION_CONFIG: '专用连接、模型或上游端点不可用；请重新检查配置。',
     RMT_CONNECTION_INVALID_REQUEST: '上游拒绝了本段请求；请检查模型兼容性与输出设置。',

@@ -5,15 +5,28 @@
 ## 当前候选
 
 - 产品名：心跳回忆
-- version：`0.8.51`
-- BUILD / runtime cache-bust：`0.8.51-cover-terminal-r55.0`
+- version：`0.8.53`
+- BUILD / runtime cache-bust：`0.8.53-narrative-intro-r57.0`
 - 正式档案 key：`heartbeatMemoriesArchiveV3`
 - 派生缓存 key：`heartbeatMemoriesTheaterV3`
 - 压缩格式：`gzip-base64-v1`
 - Calendar / Phone / Room / Travel session：v6 / v4 / v3 / v4
 - SillyTavern 最低版本：`1.18.0`；一键配置入口明确标注 `1.1.18`
 
-V3 metadata key 为旧档案兼容边界，不随发布版本改名。浏览器加载 r55 runtime 由 manifest 与 index 中一致的 BUILD query 隔离，不能继续命中旧 bundle。
+V3 metadata key 为旧档案兼容边界，不随发布版本改名。浏览器加载 r57 runtime 由 manifest 与 index 中一致的 BUILD query 隔离，不能继续命中旧 bundle。
+
+## r57 当前增补契约（覆盖下方旧短判词与终端聊天限制）
+
+- 本轮以用户上传的 0.8.52 r56 包为基线，旧 0.8.41 包只作生成体验对照。仅主 agent 修改隔离副本，第三方插件与远端均未修改。
+- Room / Travel / Phone 使用唯一 `core/narrativeAuthority.js` 判断共同往事风险；当下观察、普通未来邀请、角色自身日常不要求逐字人设引文。字段分别处理，时间和主体范围保留跨逗号关系；嵌套赠物、回想初见、双方实名等共同过去仍须对应 Mxxx。该有界语言检测不是全文语义证明，不宣称能够识别所有自由表述。
+- Room 的今日生活使用相同判断，不再因为出现 User 就一律判定历史。物件、宠物、正脸、局部修复、真实锚点和保存围栏保留。
+- Travel 近地点接受角色原创 `dialogueLines`，远地点接受纯文字信件正文；旧枚举表达仍可读取，不作为新提示的拼句要求。题目/署名/正文均为转义数据，地图/画面/载体/token 仍由本地生成。历史来源和规范化后可见 anchor 复核，不能靠被删除的 raw 地点名通过。没有有效增量地点可以保留旧地图而非整站失败。
+- Phone 允许与已知普通 NPC 的日常演绎并显示短标签；每位新发言人均须为当前角色或受控已知人物，不能替 User 编造已发消息。历史聊天继续逐字校验 Mxxx、完整 anchor、原文与说话者；contacts 私密字段没有放开。设定引文不覆盖日常正文。
+- 旧成功终端草稿只从 canonical chat/revision/fence 匹配存储加载；兼容内容标记 legacyEvidenceUnverified，旧成功项冻结在 out-of-band preservedApps Map 中，终验不重做、不改写，模型同名 id/版本/flags 不能取得该权限。新生成项仍独立校验。结构无法安全读取的成功项显式停止并保留草稿，不静默删掉进度。旧未核验内容不作为新增事实或增量已覆盖证据。
+- `archiveVerdict` 复用同一存储字段升级 v2，仅为档案简介表现字段：1～3段、建议180～450字、80～900字符；先读双方态度、关系底色、现有张力及当前变化。自动择一受控文风：轻小说、古典情缘、易象取意、细腻心理、书信、都市悬疑、生活散文、青春成长、寓言童话。不复制作者句子、不强加命数或创伤、不预言未来。
+- v1 旧封面原样读取；普通增量保留旧封面，只有首次建档或明确点“重写简介”才生成新简介。仍复用 presentationOnly/CAS 写入，只能改变已有封面 allowlist 字段，Mxxx、revision、派生内容和终端草稿不变。风格选择不新增独立模型请求。
+- User 收到的阶段邮件本轮仅作设计建议，未增加入口、定时任务、付费请求或写入主聊天。未修订其他模式与自动更新策略。
+
 
 ## r55 当前增补契约（覆盖旧终端固定数量约束）
 

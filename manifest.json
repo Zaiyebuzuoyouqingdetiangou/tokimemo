@@ -1,15 +1,15 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.51-cover-terminal-r55.0",
+  "js": "index.js?heartbeat=0.8.53-narrative-intro-r57.0",
   "author": "Toto",
-  "version": "0.8.51",
+  "version": "0.8.53",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r55：独立封面判词、私人终端按来源收录与断点恢复、认证和限流分类；保留旧档案与已生成内容。",
+  "description": "r57：统一日常演绎与往事证据边界；保留旧终端断点；档案封面改为按内容选择文风的关系简介。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

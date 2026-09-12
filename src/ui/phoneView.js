@@ -180,7 +180,7 @@ export function renderPhoneEntryDetail(entry, app, session = runtimeState.active
     const legacyWarning = entry.legacyEvidenceUnverified === true
         ? '<div class="rmt-phone-legacy-warning">旧版内容 · 证据未重新核验。内容原样保留，但不会作为新增事实的依据。</div>'
         : '';
-    return `<div class="rmt-phone-detail rmt-phone-detail-${appKind}"><div class="rmt-phone-detail-toolbar"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回${core_text.esc(app?.label || '列表')}</button><span>${core_text.esc(entry.meta || app?.label || '')}</span></div>${legacyWarning}<h3>${core_text.esc(entry.title)}</h3>${gallery}${entry.detail ? `<p>${core_text.esc(entry.detail)}</p>` : ''}${fields}${speakerRepair}${messages}${entry.basis === '记忆' ? `<div class="rmt-phone-evidence">档案痕迹：${core_text.esc(entry.sourceMemoryAnchor)}</div>` : ''}</div>`;
+    return `<div class="rmt-phone-detail rmt-phone-detail-${appKind}"><div class="rmt-phone-detail-toolbar"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回${core_text.esc(app?.label || '列表')}</button><span>${core_text.esc(entry.meta || app?.label || '')}</span></div>${legacyWarning}${entry.basis !== '记忆' && !entry.legacyEvidenceUnverified ? '<div class="rmt-phone-evidence">角色日常演绎</div>' : ''}<h3>${core_text.esc(entry.title)}</h3>${gallery}${entry.detail ? `<p>${core_text.esc(entry.detail)}</p>` : ''}${fields}${speakerRepair}${messages}${entry.basis === '记忆' ? `<div class="rmt-phone-evidence">档案痕迹：${core_text.esc(entry.sourceMemoryAnchor)}</div>` : ''}</div>`;
 }
 
 function phoneStatusBar(now, kind) {

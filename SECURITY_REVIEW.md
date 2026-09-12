@@ -1,3 +1,26 @@
+## 0.8.53 / r57.0 changed-surface review
+
+Scope: the r56 candidate's Room/Travel/Phone generation boundary, canonical terminal checkpoint resume, and archive cover presentation. This is a changed-surface review, not a full repository scan or external security certification.
+
+- Present dialogue, future invitations and persona-consistent ordinary life retain generated text without claiming archive authority. The shared language guard is bounded and does not prove the truth of all free prose. Real shared-past candidates still need real Mxxx and exact anchors; historical/private terminal records keep their quote and speaker checks.
+- Travel text is escaped at rendering. Models receive no executable markup, CSS, scene geometry or class authority. Final normalized history output is checked for a visible anchor after fallback transformations.
+- Legacy terminal trust is granted only by the canonical loader and an out-of-band Map of already saved successful apps, never by model-provided flags. New apps in a resumed task remain strict. Unreadable successful slots are not silently re-requested; legacy-unverified records cannot supply archive evidence.
+- Independent read-only reviewers identified a group-chat unknown-speaker gap, several ordinary-language/history counterexamples, and Travel anchor loss after name fallback. The main agent reproduced them, applied one production implementation, and added production-path regressions. Reviewers did not edit or merge code.
+- Literary introductions remain escaped, bounded presentation data with an allowlisted style and exact archive references. A model cannot downgrade its output to legacy validation. Rewriting does not change the historical revision, source baseline, existing mode sessions or phone checkpoint.
+- Storage keys, captured-origin ownership, archive CAS, delete fences, provider concurrency and transport remain unchanged. No private keys, actual chat records or paid real-provider requests were used by these tests.
+- Fresh commands and counts are recorded in RELEASE_VALIDATION-r57.md. Real SillyTavern/TT/iPhone and real-model quality remain separate acceptance items.
+
+## 0.8.52 / r56.0 changed-surface review
+
+Scope: r55.0 -> r56.0 Room/Travel/Phone prompts and normalization only, plus release identity/tests/docs. This review checks the changed authority boundary; it is not a full repository penetration test and is not an independent external reviewer attestation.
+
+- The relaxed paths authorize only present/future/persona-derived display content. `basis=记忆` and completed shared-past claims retain the existing real-Mxxx ID + anchor checks.
+- History probes are clause-local, preventing an unrelated character-only past clause from contaminating a future user invitation while still rejecting examples such as “上次我们一起去过这里”。
+- Phone keeps unquoted role-life prose by downgrading an unproven `basis=设定` candidate to `basis=推演`; it no longer substitutes the source quote for the generated prose. chat/contacts remain source-only and user speech fabrication remains rejected.
+- Travel missing literal setting evidence is downgraded to `basis=推演`; it is not promoted to historical evidence. Incremental Travel continues to admit memory-backed additions only.
+- Model text remains bounded structured data and receives no HTML/CSS/JS/URL/class/storage/target authority. No provider, credentials, cache key, archive schema, CAS, delete fence, request concurrency, timeout or lifecycle code was changed.
+- Local diff review found no open High/Medium issue in the r56 changed surface. Real SillyTavern/TT/iPhone and real-provider behavior remain acceptance items.
+
 ## 0.8.51 / r55.0 changed-surface review
 
 本轮为变更面安全复核，不是全仓安全认证。判词字符串经过转义，模型不提供 HTML/CSS/JS；封面改写有字段白名单与原档案 CAS。终端保留逐字来源与说话人归属、未知项固定空态、旧有效内容不被空结果覆盖；异步读取后换聊必须在请求前停止。safeErrorDiagnostic 白名单进入草稿，原始上游正文/凭据不进入新错误反馈。独立 API/终端 reviewer 的实证问题由主 agent 验证后单一修复并补生产入口回归。没有真实用户数据或凭据参与测试；真实宿主仍待验收。

@@ -15,6 +15,7 @@ export function archiveMemoryIds(memoryBank) {
 export function collectSessionEvidenceIds(value, out = new Set(), seen = new WeakSet(), depth = 0) {
     if (!value || typeof value !== 'object' || depth > 10 || out.size >= core_constants.MAX_MEMORY_ITEMS) return out;
     if (seen.has(value)) return out;
+    if (value.legacyEvidenceUnverified === true) return out;
     seen.add(value);
     if (Array.isArray(value)) {
         for (const item of value) collectSessionEvidenceIds(item, out, seen, depth + 1);

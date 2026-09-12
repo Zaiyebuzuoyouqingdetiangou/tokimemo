@@ -196,6 +196,8 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-archive-source-fold summary{cursor:pointer;min-height:44px;display:list-item;padding:10px 4px}
 .rmt-archive-source-fold p{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0 16px}
 .rmt-cover-rewrite{min-height:44px}
+.rmt-archive-verdict p{margin:0 0 1em;line-height:inherit;font-size:inherit;font-weight:400;color:inherit}
+.rmt-archive-verdict p:last-child{margin-bottom:0}
 .rmt-archive-keywords{display:flex;gap:5px;flex-wrap:wrap;margin:9px 0}
 .rmt-archive-keywords span{
   font-size:10px;padding:3px 8px;border:1px solid #d6e4eb;border-radius:999px;color:#718296;

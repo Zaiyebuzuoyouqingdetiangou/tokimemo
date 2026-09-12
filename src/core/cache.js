@@ -249,13 +249,14 @@ export function loadPhoneGenerationDraft(context = core_context.getContext(), me
         if (core_text.normalizeText(raw.archiveRevision, 240) !== core_text.normalizeText(bank.archiveRevision, 240)) return null;
         const plan = modes_phone.normalizePhonePlan(raw.plan);
         const completedApps = [];
+        const unreadableCompletedApps = [];
         const rawCompleted = Array.isArray(raw.completedApps) ? raw.completedApps : [];
         for (const planApp of plan.apps) {
             const saved = rawCompleted.find(item => core_text.safeId(item?.id, '') === planApp.id);
             if (!saved) continue;
             try {
                 completedApps.push(modes_phone.normalizePhoneDraftApp(saved, planApp, bank, plan.deviceKind, null, { trustedStored: true }));
-            } catch {}
+            } catch { unreadableCompletedApps.push(planApp.id); }
         }
         const entirelyUnavailable = completedApps.length === plan.apps.length
             && completedApps.every(app => app.entries.every(entry => entry.sourceStatus === 'unavailable'));
@@ -265,6 +266,7 @@ export function loadPhoneGenerationDraft(context = core_context.getContext(), me
             archiveRevision: bank.archiveRevision,
             plan,
             completedApps: entirelyUnavailable ? [] : completedApps,
+            unreadableCompletedApps,
             failedAppId: core_text.safeId(raw.failedAppId, ''),
             failedMessage: core_text.normalizeText(raw.failedMessage, 600),
             failure: entirelyUnavailable ? { code: 'RMT_PHONE_SOURCE_EMPTY' } : core_text.safeErrorDiagnostic(raw.failure),

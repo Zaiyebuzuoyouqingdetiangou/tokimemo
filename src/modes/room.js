@@ -7,6 +7,7 @@ import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
+import * as core_narrativeAuthority from '../core/narrativeAuthority.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
@@ -55,110 +56,9 @@ const ROOM_VISUAL_LEGACY_ALIASES = Object.freeze({
     hairTone: Object.freeze({ cool: 'fantasy_cool', warm: 'fantasy_warm' }),
     detail: Object.freeze({ 'pointed-ears': 'pointed_ears', 'animal-ears': 'animal_ears' }),
 });
-// Room prose has two different authorities: present-tense observation may be generated freely,
-// while a completed event involving the user must be backed by a real archive reference.  Keep
-// the grammar compositional (participant + temporal/resultative signal) so ordinary rewrites do
-// not bypass a growing list of exact phrases.
-const ROOM_PAST_TIME_SIGNAL = /(?:昨天|昨日|昨晚|前天|去年|前年|往年|从前|以前|过去|当年|那年|那天|那晚|那次|上次|曾经|早先|先前|多年前|几年前|小时候|还记得|记得当初|回想起|想起当时|\b(?:yesterday|previously|formerly|once|used\s+to|last\s+(?:year|month|week|night|time)|\d+\s+(?:days?|weeks?|months?|years?)\s+ago|remember\s+when)\b)/iu;
-const ROOM_SHARED_PARTICIPANT_SIGNAL = /(?:\{\{user\}\}|你|我们|咱们|两个人|彼此|共同|一起|\b(?:you|your|yours|we|us|our|ours|together)\b)/iu;
-const ROOM_RESULTATIVE_SIGNAL = /(?:曾经|已经|过|了|的|挑中|选中|留下|留着|至今|一直|仍然|第一次|初次|\b(?:once|used\s+to|already|previously|before|kept|left|gave|sent|wrote|made|bought|picked|chose|went|visited|met|married|lived)\b)/iu;
-const ROOM_RELATIONAL_ACTION_SIGNAL = /(?:送|赠|寄|写|画|拍|做|织|缝|刻|买|选|挑|留|带|救|拥抱|亲吻|告白|约定|结婚|同居|旅行|见面|相识|相遇|结识|来过|去过|住过|\b(?:give|gave|send|sent|write|wrote|draw|drew|paint|painted|make|made|buy|bought|pick|picked|choose|chose|leave|left|keep|kept|visit|visited|meet|met|marry|married|live|lived|travel|traveled|travelled|kiss|kissed|hug|hugged|promise|promised)\b)/iu;
-const ROOM_SHARED_FACT_SIGNAL = /(?:来自.{0,16}(?:\{\{user\}\}|你)|属于(?:你|我|我们|咱们|两个人|彼此)|(?:\{\{user\}\}|你).{0,12}(?:给我的|留给我的|为我|替我)|给你的|留给你的|为你的|替你的|我们的|两个人的|共同拥有|共同选|共同挑|\b(?:from\s+you|belongs?\s+to\s+(?:you|us)|yours?|ours?|we\s+(?:met|knew|shared))\b)/iu;
-const ROOM_FUTURE_INTENT_SIGNAL = /(?:(?:准备|打算|计划|将要|将|会|想|要|愿意).{0,10}(?:送|赠|寄|写|画|拍|做|织|缝|刻|买|选|挑|留|带|见面|旅行)|以后|未来|接下来|从今|待会儿?|等会儿?|一会儿|过会儿|稍后|马上|希望|\b(?:plan|planning|intend|intending|going\s+to|will|shall|later|soon|hope|wish|want\s+to)\b)/iu;
-const ROOM_PRESENT_PROGRESS_SIGNAL = /(?:正在|正(?:在|给|替|为)|此刻.{0,12}(?:写|画|做|选|挑|买)|\b(?:am|is|are)\s+(?:writing|making|buying|choosing|picking|sending|giving)\b)/iu;
-const ROOM_PRESENT_SPEECH_SIGNAL = /(?:我(?:(?:真的|确实|特别|非常|很|仍然|一直)\s*){0,3}(?:爱|喜欢|想念|思念|在意|担心)你|谢谢|感谢|欢迎|辛苦|早安|晚上好|晚安|请|别|不要|小心|慢点|坐(?:吧|一会)|喝(?:点|一杯)|看看|听听|要不要|可以|愿意|需要|觉得|看起来|似乎|好吗|行吗|[吗么呢吧]$|\b(?:love|like|miss|care|worry|thank|welcome|please|good\s+(?:morning|evening|night)|sit|drink|look|listen|may|can|need|feel|seem|okay)\b)/iu;
-// A present-tense wrapper does not make the remembered episode itself present.  This pair is
-// deliberately text-wide so a comma cannot separate the participant ("我望着你") from the
-// recalled episode ("脑海里浮现初见...").  Recollection alone ("今天我想起你") remains a
-// present feeling; it is blocked only when an episode marker is also present.
-const ROOM_RECOLLECTION_FRAME_SIGNAL = /(?:(?:又|忽然|突然|总会|仍会|还会)?(?:想起(?!身)|想到|忆起|记起|回忆(?:起|着)?)|脑海(?:里|中)?.{0,12}(?:浮现|闪过)|\b(?:remember|recall|recalled|remembering)\b)/iu;
-const ROOM_RECOLLECTION_EPISODE_SIGNAL = /(?:初见|初遇|初识|往事|旧事|当初|当时|那(?:场|次|天|晚|夜|年|段|件|个)|把.{0,24}交到.{0,16}(?:手里|手中)|收到.{0,24}(?:礼物|信|戒指|照片)|拍完|说完|走过|去过|来过|住过|见过|认识(?:了|过)|相遇(?:了|过)|\b(?:first\s+(?:met|meeting)|that\s+(?:day|night|time|rain)|the\s+time\s+when|when\s+we)\b)/iu;
-const ROOM_SIMPLE_CURRENT_ACTION_SIGNAL = /^(?:(?:现在|此刻|当下|今天|今日|今夜|刚刚)(?:我)?(?:正在|正)?(?:看着?|望着?|听着?|等着?|陪着?|见到|看见)\{\{user\}\}(?:了|呢|呀|啊)?|(?:我)?(?:看|望|听|等|陪)着\{\{user\}\}(?:呢|呀|啊)?|(?:现在|此刻|当下|今天|今日|今夜|刚刚)(?:我)?(?:正在|正)?(?:给|替|为)\{\{user\}\}(?:买|写|画|做|选|挑|拿|递|倒|煮|准备)[^，,。！？!?；;：:\n]{0,16})$/u;
-const ROOM_SIMPLE_CURRENT_RECOLLECTION_SIGNAL = /^(?:现在|此刻|当下|今天|今日|今夜|刚刚)(?:我)?(?:又|忽然|突然)?(?:想起|想到|忆起|记起)(?:了)?\{\{user\}\}(?:了|呢|呀|啊)?$/u;
-const ROOM_SIMPLE_CURRENT_REACTION_SIGNAL = /^(?:一|每次|每当)?(?:见到|看到|看见)\{\{user\}\}$/u;
-const ROOM_SIMPLE_CURRENT_PROXIMITY_SIGNAL = /^(?:(?:现在|此刻|当下|今天|今日|今夜|刚刚)?我(?:正|正在)?(?:坐|站|待|留|陪)在\{\{user\}\}(?:身边|旁边|附近)|我就?在\{\{user\}\}(?:身边|旁边|附近))$/u;
-const ROOM_PRESENT_STATE_CLAUSE_SIGNAL = /(?:正在|仍然|依然|继续|还(?:在|是|有|亮|开|关|放|摆|靠)|很|真|格外|显得|看起来|似乎|亮着|暗着|开着|关着|放着|摆着|靠着|散着|下雨|起风|落雪|安静|温暖|暖和|寒冷|凉快|炎热|开心|高兴|平静|紧张|忙碌|空着|有人|无人|\b(?:currently|still|is|are|looks?|seems?|raining|snowing|quiet|warm|cold|happy|calm)\b)/iu;
-
-function roomTextMentionsUser(value, userName = '') {
-    const text = core_text.normalizeText(value, 6000);
-    const normalizedUserName = core_text.normalizeText(userName, 120);
-    return !!text && (ROOM_SHARED_PARTICIPANT_SIGNAL.test(text)
-        || (!!normalizedUserName && text.includes(normalizedUserName)));
-}
-
-function roomClauseIsImmediateGreeting(value, userName = '') {
-    const clause = core_text.normalizeText(value, 900).replace(/\s+/gu, '');
-    const actors = ['{{user}}', '你', core_text.normalizeText(userName, 120).replace(/\s+/gu, '')].filter(Boolean);
-    return actors.some(actor => {
-        if (!clause.startsWith(actor)) return false;
-        return /^(?:终于|刚刚|刚|也|可算|总算)?(?:来|到|回来)了(?:呀|啊|呢)?$/u.test(clause.slice(actor.length));
-    });
-}
-
-function roomClauseIsUserVocative(value, userName = '') {
-    const clause = core_text.normalizeText(value, 900).replace(/\s+/gu, '');
-    const normalizedUserName = core_text.normalizeText(userName, 120).replace(/\s+/gu, '');
-    return clause === '{{user}}' || clause === '你' || (!!normalizedUserName && clause === normalizedUserName);
-}
-
-function roomCanonicalUserText(value, userName = '') {
-    let text = core_text.normalizeText(value, 900).replace(/\s+/gu, '');
-    const normalizedUserName = core_text.normalizeText(userName, 120).replace(/\s+/gu, '');
-    if (normalizedUserName) text = text.split(normalizedUserName).join('{{user}}');
-    return text.replace(/你/gu, '{{user}}');
-}
-
-function roomClauseIsProvenPresentOnly(value, userName = '') {
-    const clause = core_text.normalizeText(value, 900);
-    if (!clause) return true;
-    if (roomClauseIsImmediateGreeting(clause, userName) || roomClauseIsUserVocative(clause, userName)) return true;
-    if (ROOM_FUTURE_INTENT_SIGNAL.test(clause)
-        || ROOM_PRESENT_PROGRESS_SIGNAL.test(clause)
-        || ROOM_PRESENT_SPEECH_SIGNAL.test(clause)) return true;
-    const canonical = roomCanonicalUserText(clause, userName);
-    // Bounded speech acts, not a whole-paragraph exemption for words such as "现在".
-    // Completed/remembered events are checked independently before this grammar is used.
-    // A second-person imperative with an immediate-action particle states a directive for
-    // right now, never a past event. The existing 的/了/过 exclusion still keeps possessive
-    // and perfective phrasing ("你落下的围巾") out, and past-time wording is caught earlier.
-    if (/^\{\{user\}\}(?:先|就|这就|现在)?[^的了过]{1,16}(?:一下|一把|一点儿?|一会儿?|吧)$/u.test(canonical)) return true;
-    if (/^\{\{user\}\}(?:要|想)(?:喝|吃|坐|看|听)[^的了过]{0,24}(?:还是|或)[^的了过]{1,24}$/u.test(canonical)
-        || /^(?:\{\{user\}\})?(?:看|坐|站|靠|躺|等)(?:这里|这边|那边|那里|一会儿?)?$/u.test(canonical)
-        || /^(?:这里|这边|那里|那边)是[^的了过]{1,16}$/u.test(canonical)
-        || /^我(?:去|来|给\{\{user\}\})(?:倒|拿|端|取|泡|煮)[^的了过]{1,16}$/u.test(canonical)) return true;
-    if (ROOM_SIMPLE_CURRENT_ACTION_SIGNAL.test(canonical)
-        || ROOM_SIMPLE_CURRENT_RECOLLECTION_SIGNAL.test(canonical)
-        || ROOM_SIMPLE_CURRENT_REACTION_SIGNAL.test(canonical)
-        || ROOM_SIMPLE_CURRENT_PROXIMITY_SIGNAL.test(canonical)) return true;
-    return !roomTextMentionsUser(clause, userName) && ROOM_PRESENT_STATE_CLAUSE_SIGNAL.test(clause);
-}
 
 export function roomNarrativeClaimsSharedHistory(value, userName = '') {
-    const text = core_text.normalizeText(Array.isArray(value) ? value.join('\n') : value, 6000);
-    if (!text || !roomTextMentionsUser(text, userName)) return false;
-    if (ROOM_RECOLLECTION_FRAME_SIGNAL.test(text) && ROOM_RECOLLECTION_EPISODE_SIGNAL.test(text)) return true;
-    const clauses = text.split(/[，,。！？!?；;：:\n]+/u).map(item => item.trim()).filter(Boolean);
-    return clauses.some(clause => {
-        const mentionsUser = roomTextMentionsUser(clause, userName);
-        // Once a prose block mentions the user, every clause must independently prove that it is
-        // present-only.  A current-time word in one clause cannot authorize an adjacent or nested
-        // unclassified episode.  This is the structural boundary; the signals below catch known
-        // history early, while the final branch rejects unseen paraphrases by default.
-        if (ROOM_PAST_TIME_SIGNAL.test(clause)) return true;
-        if (!mentionsUser) return !roomClauseIsProvenPresentOnly(clause, userName);
-        const completed = ROOM_RESULTATIVE_SIGNAL.test(clause);
-        const futureIntent = ROOM_FUTURE_INTENT_SIGNAL.test(clause);
-        const presentProgress = ROOM_PRESENT_PROGRESS_SIGNAL.test(clause);
-        const relationalAction = ROOM_RELATIONAL_ACTION_SIGNAL.test(clause);
-        if (relationalAction && completed && !futureIntent && !presentProgress) return true;
-        if (ROOM_SHARED_FACT_SIGNAL.test(clause) && !futureIntent) return true;
-        // In Room, an aspectless interpersonal action is ambiguous unless the model explicitly
-        // scopes it to now or the future. Fail closed instead of guessing that it is present-tense.
-        if (relationalAction && !futureIntent && !presentProgress && !roomClauseIsProvenPresentOnly(clause, userName)) return true;
-        const collective = /(?:我们|咱们|两个人|彼此|共同|一起|\b(?:we|us|our|ours|together)\b)/iu.test(clause);
-        if (collective && completed && !futureIntent) return true;
-        return !roomClauseIsProvenPresentOnly(clause, userName);
-    });
+    return core_narrativeAuthority.narrativeClaimsSharedHistory(value, { userName });
 }
 
 function roomTextContainsAnchor(value, anchor) {
@@ -1050,7 +950,7 @@ function roomLifeNarrativeEvidenceState(beat, memoryBank) {
         ? core_evidence.normalizeExactMemoryReference(beat?.sourceMemoryIds, beat?.sourceMemoryAnchor, memoryBank, 1)
         : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
     const userName = core_text.normalizeText(memoryBank?.userName, 120);
-    const referenceRequired = roomTextMentionsUser(historyProbe, userName)
+    const referenceRequired = roomNarrativeClaimsSharedHistory([activity, ambient, trace, ...temporaryObjects], userName)
         || roomNarrativeClaimsSharedHistory(line, userName);
     const combinedNarrative = `${historyProbe}\n${line}`;
     const safe = !referenceRequired || (reference.sourceMemoryIds.length >= 1

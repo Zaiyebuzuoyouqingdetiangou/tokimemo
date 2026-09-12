@@ -3,6 +3,7 @@ import * as core_butterflyContract from '../core/butterflyContract.js';
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_constants from '../core/constants.js';
 import * as core_evidence from '../core/evidence.js';
+import * as core_narrativeAuthority from '../core/narrativeAuthority.js';
 import * as core_text from '../core/text.js';
 import * as modes_album from '../modes/album.js';
 import * as modes_cabinet from '../modes/cabinet.js';
@@ -402,6 +403,7 @@ JSON 结构必须严格为：
 - 不要输出 adv 字段.`,
     [core_constants.MODE.ROOM]: (context, memoryBank) => `${promptSafetyBoundary(context, '他的房间')}
 本请求只负责私人生活空间蓝图；手机与储物内容不会在这里生成。
+${core_narrativeAuthority.NARRATIVE_AUTHORITY_PROMPT}
 UNTRUSTED_ROOM_ARCHIVE_JSON:
 ${promptArchiveSlice(memoryBank, 24)}
 

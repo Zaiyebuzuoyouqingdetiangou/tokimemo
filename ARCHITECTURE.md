@@ -1,4 +1,16 @@
-# Heartbeat Memories r35–r55 Architecture
+# Heartbeat Memories r35–r57 Architecture
+
+## r57 narrative authority, canonical legacy resume and cover introduction
+
+This section supersedes the older r56 chat/source-only and prose constraints below. Room, Travel and Phone use the single core/narrativeAuthority module for bounded shared-history risk detection. The prompt and production checks distinguish display-only present/future/persona inference from history authority. It is a bounded language guard, not a universal semantic verifier. Real history continues through exact memory IDs/anchors; normalized Travel output must retain its visible anchor after local name fallback.
+
+Travel preserves escaped generated dialogue and postcard prose; semantic scene tokens remain local allowlists. Phone permits ordinary known-NPC conversations as inference, checks each contact speaker and the raw owner, and keeps historical/private records on their existing quote-validation path. Canonically loaded legacy successful apps are captured in an out-of-band preservedApps Map. New provider flags cannot enter that trust path; mixed old/new final normalization retains the original apps and strictly validates the newly requested apps. Unreadable successful checkpoint slots stop explicitly. Legacy unverified entries do not become archive evidence.
+
+The existing archiveVerdict presentation field supports version 2 introductions with nine allowlisted styles, relation/tension/current-direction readings and exact archive references. New generation cannot opt into version 1 validation; only stored legacy covers can use that read path. Paragraphs are escaped, internal archive summaries remain folded, and rewrites still use the original captured target, presentation-only allowlist and CAS. Normal archive increments retain existing covers. No mail feature, alternate storage system, provider transport or third-party integration is introduced.
+
+## r56 room / travel / terminal inference boundary
+
+Room, Travel and Phone separate **shared-past authority** from ordinary role-life generation. Present dialogue, future intent and persona/world-consistent inference are display-only derived content and do not require verbatim archive evidence. A completed past involving both `{{char}}` and `{{user}}` still enters the existing memory-reference path and must satisfy Mxxx/anchor validation. Past detection is clause-local so an unrelated character-history sentence cannot contaminate a neighboring future invitation. Travel may downgrade an unquoted setting location to `basis=推演`; Phone setting/inference retains generated prose instead of replacing it with the source quote. Chat/contact terminal entries remain evidence-only. No storage, transport, target, lifecycle or archive authority changes.
 
 ## r55 cover-only writes and terminal checkpoints
 

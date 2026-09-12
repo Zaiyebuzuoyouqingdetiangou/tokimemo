@@ -1028,7 +1028,7 @@ export function handleOverlayClick(event) {
     if (!action) return;
     if (action === 'rewrite-archive-verdict') {
         if (runtimeState.activeArchiveSnapshot && !archive_library.requireWritableArchiveAction()) return;
-        if (!confirmExplicitAction('重写这份回忆的判词？', '只读取已归档经历，使用当前独立 API 生成封面题辞；不扫描新聊天、不重建档案或其他内容。')) return;
+        if (!confirmExplicitAction('重写这份档案的简介？', '只读取已归档经历，使用当前独立 API；记忆和其他已生成内容保持不变。')) return;
         return archive_repository.rewriteCurrentArchiveVerdict();
     }
     if (runtimeState.activeArchiveSnapshot && ['regenerate', 'draw-cg', 'clear-cg-image', 'draw-heart-strip', 'clear-heart-strip', 'room-life-refresh', 'room-schema-upgrade', 'import-memory', 'full-rebuild-memory', 'read-memory-plugins', 'memory-worldinfo-picker', 'refresh-ending-confessions'].includes(action)) {
