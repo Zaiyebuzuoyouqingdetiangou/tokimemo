@@ -184,6 +184,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     // not exposed through the current context registry. Off by default; when enabled we may use
     // the public executeSlashCommandsWithOptions('/sd quiet=true ...') path with a sanitized prompt.
     imageGenerationManualEnabled: false,
+    imageGenerationProvider: 'sillytavern-imagine',
     // Optional r32-style mobile safe-area presentation. Off keeps the long-standing edge-to-edge fullscreen UI.
     ttDisplayMode: false,
     themeMode: 'default',

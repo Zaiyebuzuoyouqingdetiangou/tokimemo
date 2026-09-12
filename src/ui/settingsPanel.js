@@ -1,6 +1,7 @@
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_repository from '../archive/repository.js';
+import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_independentApi from '../core/independentApi.js';
@@ -16,6 +17,38 @@ import * as core_contextTags from '../core/contextTags.js';
 import * as ui_archivePortal from './archivePortal.js';
 import * as ui_overlay from './overlay.js';
 import * as ui_styles from './styles.js';
+
+let imageProviderEventCleanup = null;
+
+export function refreshImageGenerationSettingsUi() {
+    const panel = document.getElementById(core_constants.SETTINGS_ID);
+    if (!panel) return;
+    const settings = core_settings.getPluginSettings();
+    const choice = panel.querySelector('[data-rmt-image-generation-provider]');
+    if (choice) choice.value = settings.imageGenerationProvider;
+    const statusNode = panel.querySelector('[data-rmt-image-generation-status]');
+    const status = generation_imageGeneration.imageGenerationUiState();
+    if (statusNode) statusNode.textContent = status.provider === 'baibai-image' ? status.reason
+        : status.detected ? 'SillyTavern Image Generation 已连接'
+        : status.manual ? '已启用手动 /sd 兜底' : '尚未检测到 SillyTavern Image Generation';
+}
+
+export function bindImageProviderEvents() {
+    if (imageProviderEventCleanup || typeof globalThis.addEventListener !== 'function') return;
+    const changed = () => {
+        refreshImageGenerationSettingsUi();
+        generation_imageGeneration.refreshCgImageProviderBars();
+    };
+    globalThis.addEventListener('st-baibai-image:ready', changed);
+    globalThis.addEventListener('st-baibai-image:changed', changed);
+    imageProviderEventCleanup = () => {
+        globalThis.removeEventListener('st-baibai-image:ready', changed);
+        globalThis.removeEventListener('st-baibai-image:changed', changed);
+        imageProviderEventCleanup = null;
+    };
+}
+
+export function unbindImageProviderEvents() { imageProviderEventCleanup?.(); }
 
 let pendingMemoryFilePreview = null;
 let memoryIngressRequestEpoch = 0;
@@ -308,6 +341,7 @@ export function refreshGenerationSettingsUi() {
     }
     if (roomDaily) roomDaily.checked = settings.roomLifeAutoDaily;
     if (imageGenerationManual) imageGenerationManual.checked = settings.imageGenerationManualEnabled;
+    refreshImageGenerationSettingsUi();
     if (ttDisplay) ttDisplay.checked = settings.ttDisplayMode;
     if (themeMode) themeMode.value = settings.themeMode;
     const autoRules = core_autoUpdatePolicy.normalizeAutoUpdates(settings.autoUpdates);
@@ -462,8 +496,16 @@ export function mountSettings() {
           </div>
           <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
           <label class="rmt-settings-check"><input data-rmt-room-life-auto type="checkbox"><span>每天首次打开房间时允许一次“今日生活”自动请求</span></label>
-          <label class="rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"><span>手动确认 SillyTavern Image Generation 已启用（自动检测失败时使用 /sd 兜底）</span></label>
           <label class="rmt-settings-check"><input data-rmt-tt-display type="checkbox"><span>TT 顶部安全区</span></label>
+          </div>
+        </details>
+        <details class="rmt-settings-card" data-rmt-settings-section="image">
+          <summary class="rmt-settings-card-head"><span>CG</span><div><b>CG 生图</b><small>相簿 · ADV · 日常一格</small></div></summary>
+          <div class="rmt-settings-section-body">
+            <label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-describedby="rmt-image-provider-status"><option value="sillytavern-imagine">SillyTavern Image Generation</option><option value="baibai-image">柏宝绘 · 公开 API v1</option></select></label>
+            <p id="rmt-image-provider-status" data-rmt-image-generation-status role="status" aria-live="polite"></p>
+            <p>柏宝绘需单独安装并配置出图渠道。只在点击绘制并确认后出图，失败不会自动换渠道。</p>
+            <label class="rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"><span>手动确认 SillyTavern Image Generation 已启用（仅酒馆渠道自动检测失败时使用 /sd 兜底）</span></label>
           </div>
         </details>
         <details class="rmt-settings-card" data-rmt-settings-section="filter">
@@ -653,6 +695,12 @@ export function mountSettings() {
         if (target.matches?.('[data-rmt-room-life-auto]')) {
             core_settings.updatePluginSettings({ roomLifeAutoDaily: !!target.checked });
             refreshGenerationSettingsUi();
+            return;
+        }
+        if (target.matches?.('[data-rmt-image-generation-provider]')) {
+            core_settings.updatePluginSettings({ imageGenerationProvider: target.value });
+            refreshImageGenerationSettingsUi();
+            generation_imageGeneration.refreshCgImageProviderBars();
             return;
         }
         if (target.matches?.('[data-rmt-image-generation-manual]')) {

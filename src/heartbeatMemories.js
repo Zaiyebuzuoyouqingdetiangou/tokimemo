@@ -27,6 +27,7 @@ export function isGenerationBusy() {
 export function initMemoryTheater() {
     try {
         const settingsMounted = ui_settingsPanel.mountSettings();
+        ui_settingsPanel.bindImageProviderEvents();
         const menuMounted = ui_archivePortal.mountMenuItem();
         ui_archivePortal.bindChatStateEvents();
         core_autoUpdates.startAutoUpdates();
@@ -49,6 +50,7 @@ export function initMemoryTheater() {
 
 export function destroyMemoryTheater() {
     core_autoUpdates.stopAutoUpdates();
+    ui_settingsPanel.unbindImageProviderEvents();
     try {
         // Extension updates/reloads can destroy the module before the short gzip debounce fires.
         // A destroy path cannot await gzip. Persist a detached raw compatibility copy only when it

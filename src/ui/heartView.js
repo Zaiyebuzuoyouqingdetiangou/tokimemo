@@ -318,6 +318,8 @@ export async function drawHeartStripImage(stripId) {
             orientation: Number(item.panelCount) === 1 ? 'landscape' : 'portrait',
             provider: imageState.provider,
             signal: controller.signal,
+            characterName: context.name2,
+            onProgress: progress => generation_imageGeneration.updateCgImageProgress(taskKey, progress),
         });
         const url = generation_imageGeneration.normalizeCgImageUrl(generated?.url);
         if (!url) throw new Error('生图插件没有返回可保存的 SillyTavern 本地图片路径。');
@@ -328,7 +330,7 @@ export async function drawHeartStripImage(stripId) {
         const nextImage = {
             url,
             prompt,
-            provider: core_constants.CG_IMAGE_PROVIDER,
+            provider: generated.provider,
             generatedAt: Date.now(),
         };
         if (!core_context.isCurrentTaskOrigin(origin)) {
@@ -354,7 +356,7 @@ export async function drawHeartStripImage(stripId) {
             throw new Error('图片已生成，但档案版本已经变化，因此未保存引用。');
         }
         const activeItem = runtimeState.activeSession?.dailyStrips?.find(strip => strip.id === item.id);
-        if (activeItem) activeItem.cgImage = nextImage;
+        if (activeItem && core_context.isCurrentTaskOrigin(origin)) activeItem.cgImage = nextImage;
         globalThis.toastr?.success?.(`日常一格已绘制：${item.title}`, '心跳回忆');
     } catch (error) {
         console.error('[HeartbeatMemories] daily strip image generation failed', core_text.safeErrorDiagnostic(error));
@@ -370,6 +372,7 @@ export async function clearHeartStripImage(stripId) {
     if (!archive_library.requireWritableArchiveAction()) return;
     const item = runtimeState.activeSession.dailyStrips.find(strip => strip.id === stripId) || selectedHeartStrip();
     if (!item || !generation_imageGeneration.normalizeCgImageRecord(item.cgImage)) return;
+    if (generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, item.id)) return globalThis.toastr?.info?.('请先取消正在绘制的图片，再移除旧图引用。', '心跳回忆');
     if (!ui_overlay.confirmExplicitActionTwice(`恢复「${item.title}」的文字/抽象小剧场？`, '只会移除心跳回忆缓存中的图片引用，不会删除 SillyTavern 已保存的图片文件。', { destructive: true })) return;
     const previous = item.cgImage;
     item.cgImage = null;
@@ -625,7 +628,7 @@ export function renderHeart() {
         } else {
             detail = `<div class="rmt-heart-empty">${readOnly ? '日常一格还没有生成。' : '点击上方按钮单独生成日常一格。'}</div>`;
         }
-        content = `<div class="rmt-heart-drama-layout rmt-heart-strip-layout"><nav>${nav}</nav><main>${detail}</main></div>`;
+        content = `${generation_imageGeneration.cgImageProviderBar({ readOnly })}<div class="rmt-heart-drama-layout rmt-heart-strip-layout"><nav>${nav}</nav><main>${detail}</main></div>`;
     }
 
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-heart">${summary}${tabs}${content}</div>`;

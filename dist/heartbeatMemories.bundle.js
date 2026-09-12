@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 67
-// Source SHA-256: 6d9bb322c1f111ae709c647ed3a93ed4d7eeb060109f614dd26a9622c2b304d8
+// Source modules: 68
+// Source SHA-256: ddb9d120ac3f1bd160b96948dbba676e5b5c058162d42746dd2aad572d2491a6
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -33,6 +33,7 @@ const __m_core_state_js = Object.create(null);
 const __m_core_text_js = Object.create(null);
 const __m_core_theme_js = Object.create(null);
 const __m_core_worldPresentation_js = Object.create(null);
+const __m_generation_baibaiImage_js = Object.create(null);
 const __m_generation_client_js = Object.create(null);
 const __m_generation_contentRegeneration_js = Object.create(null);
 const __m_generation_imageGeneration_js = Object.create(null);
@@ -260,6 +261,7 @@ const DEFAULT_SETTINGS = Object.freeze({
     // not exposed through the current context registry. Off by default; when enabled we may use
     // the public executeSlashCommandsWithOptions('/sd quiet=true ...') path with a sanitized prompt.
     imageGenerationManualEnabled: false,
+    imageGenerationProvider: 'sillytavern-imagine',
     // Optional r32-style mobile safe-area presentation. Off keeps the long-standing edge-to-edge fullscreen UI.
     ttDisplayMode: false,
     themeMode: 'default',
@@ -3449,6 +3451,7 @@ function getPluginSettings(context = core_context.getContext()) {
         autoUpdates: core_autoUpdatePolicy.normalizeAutoUpdates(settings.autoUpdates),
         useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory !== false,
         imageGenerationManualEnabled: settings.imageGenerationManualEnabled === true,
+        imageGenerationProvider: settings.imageGenerationProvider === 'baibai-image' ? 'baibai-image' : core_constants.CG_IMAGE_PROVIDER,
         ttDisplayMode: settings.ttDisplayMode === true,
         themeMode: core_constants.THEME_MODES.has(settings.themeMode) ? settings.themeMode : 'default',
         excludedContextTags: core_contextTags.normalizeExcludedTags(settings.excludedContextTags === undefined ? core_contextTags.DEFAULT_EXCLUDED_TAGS : settings.excludedContextTags),
@@ -4806,6 +4809,140 @@ __m_core_presentExpression_js.presentExpressionHasContent = presentExpressionHas
 __m_core_presentExpression_js.renderPresentExpressionLines = renderPresentExpressionLines;
 __m_core_presentExpression_js.renderPresentExpressionText = renderPresentExpressionText;
 __m_core_presentExpression_js.PRESENT_EXPRESSION_SCHEMA = PRESENT_EXPRESSION_SCHEMA;
+}
+
+function __init_generation_baibaiImage_js() {
+// MODULE: generation/baibaiImage.js
+const core_text = __m_core_text_js;
+// Original adapter for the author's documented STBaiBaiImage API v1.
+// No third-party implementation, settings, credentials or DOM are accessed.
+
+const BAIBAI_IMAGE_PROVIDER = 'baibai-image';
+const BAIBAI_IMAGE_TIMEOUT_MS = 300000;
+let pendingGeneration = false;
+const ownErrors = new WeakSet();
+
+const MESSAGES = Object.freeze({
+    BBI_NOT_READY: '尚未检测到柏宝绘公开接口。请启用含公开 API v1 的版本并刷新页面。',
+    BBI_VERSION: '柏宝绘接口版本或能力不兼容，需要公开 API v1 和图库保存能力。',
+    BBI_NOT_CONFIGURED: '柏宝绘出图渠道尚未配置完成，请在柏宝绘中检查 NAI / ComfyUI 设置。',
+    BBI_INVALID_ARGS: '柏宝绘未接受这次画面提示，请检查画面描述后重试。',
+    BBI_RATE_LIMITED: '柏宝绘生图限流，内置等待已结束；本次不会再自动重试或切换渠道。',
+    BBI_BACKEND_ERROR: '柏宝绘出图失败，请检查其渠道配置与请求历史。旧图已保留。',
+    BBI_SAVE_FAILED: '图片已生成，但没有取得可保存的本地路径。旧图已保留；请检查柏宝绘的图库保存状态，避免重复出图。',
+    BBI_TIMEOUT: '等待柏宝绘超过 5 分钟，已请求取消。旧图已保留；请先检查柏宝绘任务状态。',
+    BBI_ABORTED: '已取消接收本次图片，旧图已保留。',
+    BBI_BUSY: '上一次柏宝绘请求尚未结束，请先等待它结束，避免重复出图。',
+});
+
+function baiBaiImageError(code) {
+    const safeCode = Object.hasOwn(MESSAGES, code) ? code : 'BBI_BACKEND_ERROR';
+    const error = new Error(MESSAGES[safeCode]);
+    error.code = safeCode;
+    error.safeUserMessage = error.message;
+    error.safeToDisplay = true;
+    ownErrors.add(error);
+    if (safeCode === 'BBI_ABORTED') error.name = 'AbortError';
+    return error;
+}
+
+function baiBaiImageState() {
+    try {
+        const api = globalThis.STBaiBaiImage;
+        if (!api) return { available: false, detected: false, reason: MESSAGES.BBI_NOT_READY, code: 'BBI_NOT_READY' };
+        if (api.apiVersion !== 1 || api.capabilities?.generate !== true || api.capabilities?.saveToGallery !== true
+            || typeof api.generate !== 'function' || typeof api.getBackendStatus !== 'function') {
+            return { available: false, detected: true, reason: MESSAGES.BBI_VERSION, code: 'BBI_VERSION' };
+        }
+        const status = api.getBackendStatus();
+        if (status?.configured !== true) return { available: false, detected: true, reason: MESSAGES.BBI_NOT_CONFIGURED, code: 'BBI_NOT_CONFIGURED' };
+        return { api, available: true, detected: true, reason: '柏宝绘已连接 · API v1', code: '' };
+    } catch {
+        return { available: false, detected: false, reason: MESSAGES.BBI_BACKEND_ERROR, code: 'BBI_BACKEND_ERROR' };
+    }
+}
+
+function savedImagePath(value) {
+    if (typeof value !== 'string' || value.length > 4096 || !value.trim()) return '';
+    try {
+        const base = globalThis.location?.href || 'http://localhost/';
+        const parsed = new URL(value, base);
+        if (!['http:', 'https:'].includes(parsed.protocol) || parsed.origin !== new URL(base).origin
+            || parsed.username || parsed.password || !/^\/user\/images\/.+\.(?:png|jpe?g|webp|gif)$/i.test(parsed.pathname)) return '';
+        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    } catch { return ''; }
+}
+
+function publicFailure(error) {
+    const mapped = {
+        aborted: 'BBI_ABORTED', not_configured: 'BBI_NOT_CONFIGURED', invalid_args: 'BBI_INVALID_ARGS',
+        rate_limited: 'BBI_RATE_LIMITED', backend_error: 'BBI_BACKEND_ERROR',
+    };
+    // Never forward third-party message, cause, response, prompt or credentials.
+    let code;
+    try { code = typeof error?.code === 'string' ? mapped[error.code] : ''; } catch {}
+    return baiBaiImageError(code);
+}
+
+async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', onProgress = null } = {}) {
+    if (signal?.aborted) throw baiBaiImageError('BBI_ABORTED');
+    const state = baiBaiImageState();
+    if (!state.available) throw baiBaiImageError(state.code);
+    if (pendingGeneration) throw baiBaiImageError('BBI_BUSY');
+    const visual = core_text.normalizeText(prompt, 1800);
+    if (!visual) throw baiBaiImageError('BBI_INVALID_ARGS');
+    // Freeze grouping before the provider awaits; its default otherwise reads the new chat at save time.
+    const request = {
+        prompt: visual, nl: visual, size: orientation === 'portrait' ? 'portrait' : 'landscape',
+        save: true, character: core_text.normalizeText(characterName, 120) || '缘侧 CG',
+    };
+    const controller = new AbortController();
+    let timer;
+    let stopped = false;
+    let rejectStop;
+    const stopPromise = new Promise((_, reject) => { rejectStop = reject; });
+    const stop = code => {
+        if (stopped) return;
+        stopped = true;
+        controller.abort();
+        rejectStop(baiBaiImageError(code));
+    };
+    const onAbort = () => stop('BBI_ABORTED');
+    const report = progress => {
+        if (stopped || controller.signal.aborted || typeof onProgress !== 'function') return;
+        const phase = progress?.phase;
+        if (!['queued', 'generating', 'queued-remote', 'retrying', 'saving'].includes(phase)) return;
+        try { onProgress({ phase }); } catch {}
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+    timer = setTimeout(() => stop('BBI_TIMEOUT'), BAIBAI_IMAGE_TIMEOUT_MS);
+    pendingGeneration = true;
+    try {
+        // No await before generate: caller's captured chat and chosen provider are still current.
+        const providerPromise = Promise.resolve(state.api.generate(request, { signal: controller.signal, onProgress: report }))
+            .catch(error => { throw publicFailure(error); })
+            .finally(() => { pendingGeneration = false; });
+        const result = await Promise.race([providerPromise, stopPromise]);
+        if (signal?.aborted || stopped) throw baiBaiImageError('BBI_ABORTED');
+        const path = savedImagePath(result?.path);
+        if (!path) throw baiBaiImageError('BBI_SAVE_FAILED');
+        // Drop the potentially multi-MB dataUrl; only durable image references enter archive metadata.
+        return { url: path, provider: BAIBAI_IMAGE_PROVIDER };
+    } catch (error) {
+        if (ownErrors.has(error)) throw error;
+        pendingGeneration = false; // synchronous API failure, before it returned a promise
+        throw publicFailure(error);
+    } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', onAbort);
+    }
+}
+
+__m_generation_baibaiImage_js.generateBaiBaiImage = generateBaiBaiImage;
+__m_generation_baibaiImage_js.baiBaiImageError = baiBaiImageError;
+__m_generation_baibaiImage_js.baiBaiImageState = baiBaiImageState;
+__m_generation_baibaiImage_js.BAIBAI_IMAGE_PROVIDER = BAIBAI_IMAGE_PROVIDER;
+__m_generation_baibaiImage_js.BAIBAI_IMAGE_TIMEOUT_MS = BAIBAI_IMAGE_TIMEOUT_MS;
 }
 
 function __init_ui_advEventView_js() {
@@ -6343,6 +6480,7 @@ __m_ui_albumView_js.renderSharedMemory = renderSharedMemory;
 
 function __init_generation_imageGeneration_js() {
 // MODULE: generation/imageGeneration.js
+const baibai_image = __m_generation_baibaiImage_js;
 const archive_library = __m_archive_library_js;
 const archive_repository = __m_archive_repository_js;
 const core_cache = __m_core_cache_js;
@@ -6366,6 +6504,7 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+
 const IMAGE_GENERATION_COMMAND_NAMES = Object.freeze(['imagine', 'sd', 'img']);
 
 function imageGenerationCommand(context = core_context.getContext()) {
@@ -6380,6 +6519,12 @@ function imageGenerationCommand(context = core_context.getContext()) {
 }
 
 function imageGenerationUiState(context = core_context.getContext()) {
+    const settings = core_settings.getPluginSettings(context);
+    if (settings.imageGenerationProvider === baibai_image.BAIBAI_IMAGE_PROVIDER) {
+        const status = baibai_image.baiBaiImageState();
+        return { detected: status.detected, available: status.available, reason: status.reason,
+            provider: baibai_image.BAIBAI_IMAGE_PROVIDER, providerLabel: '柏宝绘', manual: false, command: null };
+    }
     const command = imageGenerationCommand(context);
     const manual = core_settings.getPluginSettings(context).imageGenerationManualEnabled === true;
     return {
@@ -6402,7 +6547,14 @@ function sanitizeImageGenerationSlashPrompt(value) {
         .trim();
 }
 
-async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null } = {}) {
+async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', characterName = '', onProgress = null } = {}) {
+    const selectedProvider = provider || core_settings.getPluginSettings(context).imageGenerationProvider;
+    if (selectedProvider === baibai_image.BAIBAI_IMAGE_PROVIDER) {
+        return baibai_image.generateBaiBaiImage(sanitizeCgVisualText(prompt), {
+            signal, orientation, characterName: characterName || context?.name2, onProgress,
+        });
+    }
+    if (selectedProvider !== core_constants.CG_IMAGE_PROVIDER) throw new Error('未支持的生图渠道，请在设置中重新选择。');
     if (signal?.aborted) throw signal.reason || Object.assign(new Error('生图请求已取消。'), { name: 'AbortError' });
     const direct = imageGenerationCommand(context);
     if (direct) {
@@ -6451,7 +6603,7 @@ function normalizeCgImageRecord(value) {
     return {
         url,
         prompt: core_text.normalizeText(value.prompt, core_constants.MAX_CG_IMAGE_PROMPT_CHARS),
-        provider: core_constants.CG_IMAGE_PROVIDER,
+        provider: value.provider === baibai_image.BAIBAI_IMAGE_PROVIDER ? baibai_image.BAIBAI_IMAGE_PROVIDER : core_constants.CG_IMAGE_PROVIDER,
         generatedAt: Math.max(0, Number(value.generatedAt) || 0),
     };
 }
@@ -6499,23 +6651,57 @@ function cgImageLayerHtml(item, { lazy = true } = {}) {
 
 function cgImageProviderBar({ readOnly = false } = {}) {
     const state = imageGenerationUiState();
-    const status = state.detected
+    const status = state.provider === baibai_image.BAIBAI_IMAGE_PROVIDER ? state.reason : state.detected
         ? 'Image Generation 已连接'
         : state.manual
             ? '已手动勾选 Image Generation · 绘制时尝试 /sd 兜底'
             : '当前未检测到 Image Generation';
     const detail = readOnly ? `只读档案 · ${status}` : `${status}${state.available ? ' · 点击 🎨 绘制CG' : ''}`;
-    return `<div class="rmt-cg-provider-bar ${state.available ? 'ready' : ''}"><span class="rmt-cg-provider-dot"></span><b>CG 实图</b><span>${core_text.esc(detail)}</span><button type="button" class="rmt-btn" data-rmt-action="refresh-image-provider">重新检测</button></div>`;
+    return `<div class="rmt-cg-provider-bar ${state.available ? 'ready' : ''}"><span class="rmt-cg-provider-dot"></span><b>CG 实图</b><span>${core_text.esc(detail)}</span>${cgImageProgressHtml()}<button type="button" class="rmt-btn" data-rmt-action="refresh-image-provider">重新检测</button></div>`;
 }
 
-function imageGenerationUnavailableMessage() {
+function visibleCgImageTask() {
+    return [...runtimeState.activeCgImageTasks.values()].find(task =>
+        task.mode === runtimeState.activeMode && core_context.isCurrentTaskOrigin(task.origin));
+}
+
+function cgImageProgressHtml() {
+    const task = visibleCgImageTask();
+    return task ? `<span data-rmt-cg-progress role="status" aria-live="polite">${core_text.esc(task.imageProgress || '正在准备图片…')}</span><button type="button" class="rmt-btn" data-rmt-action="cancel-cg-image">取消本次绘制</button>` : '';
+}
+
+function updateCgImageProgress(taskKey, progress) {
+    const task = runtimeState.activeCgImageTasks.get(taskKey);
+    if (!task || task !== visibleCgImageTask() || task.controller.signal.aborted) return;
+    const labels = { queued: '等待柏宝绘出图…', generating: '柏宝绘正在绘制…',
+        'queued-remote': '在 ComfyUI 队列中等待…', retrying: '柏宝绘正在限流等待…', saving: '图片已生成，正在保存…' };
+    const label = labels[progress?.phase];
+    if (!label) return;
+    task.imageProgress = label;
+    const overlay = globalThis.document?.getElementById?.(core_constants.OVERLAY_ID);
+    for (const node of overlay?.querySelectorAll?.('[data-rmt-cg-progress]') || []) node.textContent = label;
+}
+
+function cancelCurrentCgImage() {
+    visibleCgImageTask()?.controller?.abort();
+}
+
+function refreshCgImageProviderBars() {
+    const overlay = globalThis.document?.getElementById?.(core_constants.OVERLAY_ID);
+    for (const bar of overlay?.querySelectorAll?.('.rmt-cg-provider-bar') || []) {
+        bar.outerHTML = cgImageProviderBar({ readOnly: !!runtimeState.activeArchiveSnapshot });
+    }
+}
+
+function imageGenerationUnavailableMessage(state = imageGenerationUiState()) {
+    if (state.provider === baibai_image.BAIBAI_IMAGE_PROVIDER) return state.reason;
     return '没有检测到 SillyTavern Image Generation。请先启用并配置扩展；自动检测失败时可在心跳回忆设置中手动勾选 /sd 兜底。';
 }
 
 function refreshImageGenerationUi() {
     const state = imageGenerationUiState(core_context.getContext());
     if (runtimeState.activeMode && runtimeState.activeSession) ui_overlay.renderActive();
-    const message = state.detected
+    const message = state.provider === baibai_image.BAIBAI_IMAGE_PROVIDER ? state.reason : state.detected
         ? '已检测到 SillyTavern Image Generation（/imagine、/sd 或 /img），绘制按钮可以直接使用。'
         : state.manual
             ? '自动检测仍未发现命令，但你已手动勾选 Image Generation；绘制时会使用受控的 /sd quiet=true 兜底。'
@@ -6622,7 +6808,10 @@ async function drawSelectedCgImage() {
     });
     renderCurrentCgMode(mode, session);
     try {
-        const generated = await invokeImageGeneration(prompt, context, { provider: imageState.provider, signal: controller.signal });
+        const generated = await invokeImageGeneration(prompt, context, {
+            provider: imageState.provider, signal: controller.signal, orientation: 'landscape', characterName: context.name2,
+            onProgress: progress => updateCgImageProgress(taskKey, progress),
+        });
         const url = normalizeCgImageUrl(generated?.url);
         if (!url) throw new Error('生图插件没有返回可保存的 SillyTavern 本地图片路径。');
         if (runtimeState.cgImageLifecycleEpoch !== lifecycleEpoch) {
@@ -6632,7 +6821,7 @@ async function drawSelectedCgImage() {
         const nextImage = {
             url,
             prompt,
-            provider: core_constants.CG_IMAGE_PROVIDER,
+            provider: generated.provider,
             generatedAt: Date.now(),
         };
         if (!core_context.isCurrentTaskOrigin(origin)) {
@@ -6660,7 +6849,7 @@ async function drawSelectedCgImage() {
             liveItem.cgImage = previousImage;
             throw new Error('图片已生成，但当前档案版本已变化，未保存 CG 图片引用。');
         }
-        if (runtimeState.activeMode === mode && runtimeState.activeSession?.kind === mode) {
+        if (core_context.isCurrentTaskOrigin(origin) && runtimeState.activeMode === mode && runtimeState.activeSession?.kind === mode) {
             const activeItem = mode === core_constants.MODE.ALBUM
                 ? runtimeState.activeSession.entries?.find(entry => entry.id === itemId)
                 : runtimeState.activeSession.events?.find(entry => entry.id === itemId);
@@ -6681,6 +6870,7 @@ async function clearSelectedCgImage() {
     const target = selectedCgTarget();
     if (!target) return;
     const { mode, session, item } = target;
+    if (isCgImageDrawing(mode, item.id)) return globalThis.toastr?.info?.('请先取消正在绘制的图片，再移除旧图引用。', '心跳回忆');
     const image = normalizeCgImageRecord(item.cgImage);
     if (!image) return;
     if (!ui_overlay.confirmExplicitActionTwice(
@@ -6723,6 +6913,10 @@ __m_generation_imageGeneration_js.cgImageTaskKey = cgImageTaskKey;
 __m_generation_imageGeneration_js.isCgImageDrawing = isCgImageDrawing;
 __m_generation_imageGeneration_js.cgImageLayerHtml = cgImageLayerHtml;
 __m_generation_imageGeneration_js.cgImageProviderBar = cgImageProviderBar;
+__m_generation_imageGeneration_js.cgImageProgressHtml = cgImageProgressHtml;
+__m_generation_imageGeneration_js.updateCgImageProgress = updateCgImageProgress;
+__m_generation_imageGeneration_js.cancelCurrentCgImage = cancelCurrentCgImage;
+__m_generation_imageGeneration_js.refreshCgImageProviderBars = refreshCgImageProviderBars;
 __m_generation_imageGeneration_js.imageGenerationUnavailableMessage = imageGenerationUnavailableMessage;
 __m_generation_imageGeneration_js.refreshImageGenerationUi = refreshImageGenerationUi;
 __m_generation_imageGeneration_js.indexedArchiveMatchesCurrentChat = indexedArchiveMatchesCurrentChat;
@@ -8580,6 +8774,8 @@ async function drawHeartStripImage(stripId) {
             orientation: Number(item.panelCount) === 1 ? 'landscape' : 'portrait',
             provider: imageState.provider,
             signal: controller.signal,
+            characterName: context.name2,
+            onProgress: progress => generation_imageGeneration.updateCgImageProgress(taskKey, progress),
         });
         const url = generation_imageGeneration.normalizeCgImageUrl(generated?.url);
         if (!url) throw new Error('生图插件没有返回可保存的 SillyTavern 本地图片路径。');
@@ -8590,7 +8786,7 @@ async function drawHeartStripImage(stripId) {
         const nextImage = {
             url,
             prompt,
-            provider: core_constants.CG_IMAGE_PROVIDER,
+            provider: generated.provider,
             generatedAt: Date.now(),
         };
         if (!core_context.isCurrentTaskOrigin(origin)) {
@@ -8616,7 +8812,7 @@ async function drawHeartStripImage(stripId) {
             throw new Error('图片已生成，但档案版本已经变化，因此未保存引用。');
         }
         const activeItem = runtimeState.activeSession?.dailyStrips?.find(strip => strip.id === item.id);
-        if (activeItem) activeItem.cgImage = nextImage;
+        if (activeItem && core_context.isCurrentTaskOrigin(origin)) activeItem.cgImage = nextImage;
         globalThis.toastr?.success?.(`日常一格已绘制：${item.title}`, '心跳回忆');
     } catch (error) {
         console.error('[HeartbeatMemories] daily strip image generation failed', core_text.safeErrorDiagnostic(error));
@@ -8632,6 +8828,7 @@ async function clearHeartStripImage(stripId) {
     if (!archive_library.requireWritableArchiveAction()) return;
     const item = runtimeState.activeSession.dailyStrips.find(strip => strip.id === stripId) || selectedHeartStrip();
     if (!item || !generation_imageGeneration.normalizeCgImageRecord(item.cgImage)) return;
+    if (generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, item.id)) return globalThis.toastr?.info?.('请先取消正在绘制的图片，再移除旧图引用。', '心跳回忆');
     if (!ui_overlay.confirmExplicitActionTwice(`恢复「${item.title}」的文字/抽象小剧场？`, '只会移除心跳回忆缓存中的图片引用，不会删除 SillyTavern 已保存的图片文件。', { destructive: true })) return;
     const previous = item.cgImage;
     item.cgImage = null;
@@ -8887,7 +9084,7 @@ function renderHeart() {
         } else {
             detail = `<div class="rmt-heart-empty">${readOnly ? '日常一格还没有生成。' : '点击上方按钮单独生成日常一格。'}</div>`;
         }
-        content = `<div class="rmt-heart-drama-layout rmt-heart-strip-layout"><nav>${nav}</nav><main>${detail}</main></div>`;
+        content = `${generation_imageGeneration.cgImageProviderBar({ readOnly })}<div class="rmt-heart-drama-layout rmt-heart-strip-layout"><nav>${nav}</nav><main>${detail}</main></div>`;
     }
 
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-heart">${summary}${tabs}${content}</div>`;
@@ -12246,6 +12443,7 @@ __m_ui_archivePortal_js.scheduleMounts = scheduleMounts;
 function __init_ui_settingsPanel_js() {
 // MODULE: ui/settingsPanel.js
 const archive_repository = __m_archive_repository_js;
+const generation_imageGeneration = __m_generation_imageGeneration_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_independentApi = __m_core_independentApi_js;
@@ -12269,6 +12467,39 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+
+
+let imageProviderEventCleanup = null;
+
+function refreshImageGenerationSettingsUi() {
+    const panel = document.getElementById(core_constants.SETTINGS_ID);
+    if (!panel) return;
+    const settings = core_settings.getPluginSettings();
+    const choice = panel.querySelector('[data-rmt-image-generation-provider]');
+    if (choice) choice.value = settings.imageGenerationProvider;
+    const statusNode = panel.querySelector('[data-rmt-image-generation-status]');
+    const status = generation_imageGeneration.imageGenerationUiState();
+    if (statusNode) statusNode.textContent = status.provider === 'baibai-image' ? status.reason
+        : status.detected ? 'SillyTavern Image Generation 已连接'
+        : status.manual ? '已启用手动 /sd 兜底' : '尚未检测到 SillyTavern Image Generation';
+}
+
+function bindImageProviderEvents() {
+    if (imageProviderEventCleanup || typeof globalThis.addEventListener !== 'function') return;
+    const changed = () => {
+        refreshImageGenerationSettingsUi();
+        generation_imageGeneration.refreshCgImageProviderBars();
+    };
+    globalThis.addEventListener('st-baibai-image:ready', changed);
+    globalThis.addEventListener('st-baibai-image:changed', changed);
+    imageProviderEventCleanup = () => {
+        globalThis.removeEventListener('st-baibai-image:ready', changed);
+        globalThis.removeEventListener('st-baibai-image:changed', changed);
+        imageProviderEventCleanup = null;
+    };
+}
+
+function unbindImageProviderEvents() { imageProviderEventCleanup?.(); }
 
 let pendingMemoryFilePreview = null;
 let memoryIngressRequestEpoch = 0;
@@ -12561,6 +12792,7 @@ function refreshGenerationSettingsUi() {
     }
     if (roomDaily) roomDaily.checked = settings.roomLifeAutoDaily;
     if (imageGenerationManual) imageGenerationManual.checked = settings.imageGenerationManualEnabled;
+    refreshImageGenerationSettingsUi();
     if (ttDisplay) ttDisplay.checked = settings.ttDisplayMode;
     if (themeMode) themeMode.value = settings.themeMode;
     const autoRules = core_autoUpdatePolicy.normalizeAutoUpdates(settings.autoUpdates);
@@ -12715,8 +12947,16 @@ function mountSettings() {
           </div>
           <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
           <label class="rmt-settings-check"><input data-rmt-room-life-auto type="checkbox"><span>每天首次打开房间时允许一次“今日生活”自动请求</span></label>
-          <label class="rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"><span>手动确认 SillyTavern Image Generation 已启用（自动检测失败时使用 /sd 兜底）</span></label>
           <label class="rmt-settings-check"><input data-rmt-tt-display type="checkbox"><span>TT 顶部安全区</span></label>
+          </div>
+        </details>
+        <details class="rmt-settings-card" data-rmt-settings-section="image">
+          <summary class="rmt-settings-card-head"><span>CG</span><div><b>CG 生图</b><small>相簿 · ADV · 日常一格</small></div></summary>
+          <div class="rmt-settings-section-body">
+            <label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-describedby="rmt-image-provider-status"><option value="sillytavern-imagine">SillyTavern Image Generation</option><option value="baibai-image">柏宝绘 · 公开 API v1</option></select></label>
+            <p id="rmt-image-provider-status" data-rmt-image-generation-status role="status" aria-live="polite"></p>
+            <p>柏宝绘需单独安装并配置出图渠道。只在点击绘制并确认后出图，失败不会自动换渠道。</p>
+            <label class="rmt-settings-check"><input data-rmt-image-generation-manual type="checkbox"><span>手动确认 SillyTavern Image Generation 已启用（仅酒馆渠道自动检测失败时使用 /sd 兜底）</span></label>
           </div>
         </details>
         <details class="rmt-settings-card" data-rmt-settings-section="filter">
@@ -12906,6 +13146,12 @@ function mountSettings() {
         if (target.matches?.('[data-rmt-room-life-auto]')) {
             core_settings.updatePluginSettings({ roomLifeAutoDaily: !!target.checked });
             refreshGenerationSettingsUi();
+            return;
+        }
+        if (target.matches?.('[data-rmt-image-generation-provider]')) {
+            core_settings.updatePluginSettings({ imageGenerationProvider: target.value });
+            refreshImageGenerationSettingsUi();
+            generation_imageGeneration.refreshCgImageProviderBars();
             return;
         }
         if (target.matches?.('[data-rmt-image-generation-manual]')) {
@@ -13211,6 +13457,9 @@ function mountSettings() {
 __m_ui_settingsPanel_js.refreshMemoryIngressUi = refreshMemoryIngressUi;
 __m_ui_settingsPanel_js.refreshModelOptions = refreshModelOptions;
 __m_ui_settingsPanel_js.refreshManualModelOptions = refreshManualModelOptions;
+__m_ui_settingsPanel_js.refreshImageGenerationSettingsUi = refreshImageGenerationSettingsUi;
+__m_ui_settingsPanel_js.bindImageProviderEvents = bindImageProviderEvents;
+__m_ui_settingsPanel_js.unbindImageProviderEvents = unbindImageProviderEvents;
 __m_ui_settingsPanel_js.refreshGenerationSettingsUi = refreshGenerationSettingsUi;
 __m_ui_settingsPanel_js.hydrateSettingsPanel = hydrateSettingsPanel;
 __m_ui_settingsPanel_js.refreshSettingsTaskStatus = refreshSettingsTaskStatus;
@@ -24995,6 +25244,7 @@ function handleOverlayClick(event) {
     if (action === 'ending-easter-reveal') return ui_endingView.endingEasterEggReveal();
     if (action === 'ending-easter-toggle') return ui_endingView.endingEasterEggToggleLogs();
     if (action === 'ending-easter-stabilize') return ui_endingView.endingEasterEggStabilize();
+    if (action === 'cancel-cg-image') return generation_imageGeneration.cancelCurrentCgImage();
     if (action === 'refresh-image-provider') return generation_imageGeneration.refreshImageGenerationUi();
     if (action === 'album-prev') return ui_albumView.albumPage(-1);
     if (action === 'album-next') return ui_albumView.albumPage(1);
@@ -32501,6 +32751,7 @@ function isGenerationBusy() {
 function initMemoryTheater() {
     try {
         const settingsMounted = ui_settingsPanel.mountSettings();
+        ui_settingsPanel.bindImageProviderEvents();
         const menuMounted = ui_archivePortal.mountMenuItem();
         ui_archivePortal.bindChatStateEvents();
         core_autoUpdates.startAutoUpdates();
@@ -32523,6 +32774,7 @@ function initMemoryTheater() {
 
 function destroyMemoryTheater() {
     core_autoUpdates.stopAutoUpdates();
+    ui_settingsPanel.unbindImageProviderEvents();
     try {
         // Extension updates/reloads can destroy the module before the short gzip debounce fires.
         // A destroy path cannot await gzip. Persist a detached raw compatibility copy only when it
@@ -32663,6 +32915,7 @@ __init_core_worldPresentation_js();
 __init_generation_jsonParser_js();
 __init_core_narrativeAuthority_js();
 __init_core_presentExpression_js();
+__init_generation_baibaiImage_js();
 __init_ui_advEventView_js();
 __init_ui_themeSurfaces_js();
 __init_ui_inboxStyles_js();

@@ -1216,6 +1216,7 @@ export function handleOverlayClick(event) {
     if (action === 'ending-easter-reveal') return ui_endingView.endingEasterEggReveal();
     if (action === 'ending-easter-toggle') return ui_endingView.endingEasterEggToggleLogs();
     if (action === 'ending-easter-stabilize') return ui_endingView.endingEasterEggStabilize();
+    if (action === 'cancel-cg-image') return generation_imageGeneration.cancelCurrentCgImage();
     if (action === 'refresh-image-provider') return generation_imageGeneration.refreshImageGenerationUi();
     if (action === 'album-prev') return ui_albumView.albumPage(-1);
     if (action === 'album-next') return ui_albumView.albumPage(1);

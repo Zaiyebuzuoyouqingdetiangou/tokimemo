@@ -1,15 +1,15 @@
 {
   "display_name": "心跳回忆",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.54-inbox-lifestyle-r58.0",
+  "js": "index.js?heartbeat=0.8.55-baibai-image-r59.0",
   "author": "Toto",
-  "version": "0.8.54",
+  "version": "0.8.55",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r58：User 邮箱与 SVG 明信片收藏；手机缺项续写；房间人物与装饰修复；关系短简介。",
+  "description": "r59：柏宝绘公开 API v1 适配；相簿、ADV、日常一格生图；进度、取消与原档案安全保存。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

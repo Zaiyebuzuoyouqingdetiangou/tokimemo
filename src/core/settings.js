@@ -36,6 +36,7 @@ export function getPluginSettings(context = core_context.getContext()) {
         autoUpdates: core_autoUpdatePolicy.normalizeAutoUpdates(settings.autoUpdates),
         useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory !== false,
         imageGenerationManualEnabled: settings.imageGenerationManualEnabled === true,
+        imageGenerationProvider: settings.imageGenerationProvider === 'baibai-image' ? 'baibai-image' : core_constants.CG_IMAGE_PROVIDER,
         ttDisplayMode: settings.ttDisplayMode === true,
         themeMode: core_constants.THEME_MODES.has(settings.themeMode) ? settings.themeMode : 'default',
         excludedContextTags: core_contextTags.normalizeExcludedTags(settings.excludedContextTags === undefined ? core_contextTags.DEFAULT_EXCLUDED_TAGS : settings.excludedContextTags),

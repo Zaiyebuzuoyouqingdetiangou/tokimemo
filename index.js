@@ -1,5 +1,5 @@
-const VERSION = '0.8.54';
-const BUILD = '0.8.54-inbox-lifestyle-r58.0';
+const VERSION = '0.8.55';
+const BUILD = '0.8.55-baibai-image-r59.0';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
