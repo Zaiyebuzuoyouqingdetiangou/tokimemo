@@ -200,7 +200,7 @@ export function renderSharedMemory() {
           <button type="button" class="rmt-btn" data-rmt-action="${last ? 'shared-replay' : 'shared-next'}">${last ? '重看' : '下一句'}</button>
         </div>
       </div>
-      ${readOnly ? '' : '<div class="rmt-cg-card-actions rmt-cg-memory-actions"><button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt">图片设置</button></div>'}
+      <div class="rmt-cg-card-actions rmt-cg-memory-actions">${generation_imageGeneration.normalizeCgImageRecord(item.cgImage) ? '<button type="button" class="rmt-btn" data-rmt-action="view-original-image">查看完整原图</button>' : ''}${readOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt">图片设置</button>'}</div>
       ${generation_imageGeneration.cgImageProgressHtml()}
     </div>`;
 }

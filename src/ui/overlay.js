@@ -1,3 +1,6 @@
+import * as utility_panels from './utilityPanels.js';
+import * as image_viewer from './imageViewer.js';
+import * as character_labels from '../core/characterLabels.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_groups from '../archive/groups.js';
@@ -120,6 +123,7 @@ export function bindOverlayCloseFallback(overlay) {
 export function revealArchiveOverlay(overlay) {
     if (!overlay) return;
     overlay.hidden = false;
+    globalThis.__heartbeatMemoriesFloatingLauncher?.setCovered?.(true);
     overlay.removeAttribute('aria-hidden');
     if (typeof globalThis.HTMLDialogElement === 'function' && overlay instanceof globalThis.HTMLDialogElement) {
         if (!overlay.open) {
@@ -170,10 +174,13 @@ export function openOverlay() {
     try { core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings(core_context.getContext())); } catch {}
     bindOverlayCloseFallback(overlay);
     revealArchiveOverlay(overlay);
+    navigation_bookmark.noteArchiveViewOpened();
     return overlay;
 }
 
 export function closeOverlay() {
+    image_viewer.closeImageViewer({ restoreFocus: false });
+    utility_panels.closeUtilityPanel();
     navigation_bookmark.rememberReadingPosition();
     cg_editor.closeCgPromptEditor({ restoreFocus: false });
     modes_room.stopRoomClock();
@@ -185,6 +192,7 @@ export function closeOverlay() {
             try { overlay.close(); } catch {}
         }
         overlay.hidden = true;
+        globalThis.__heartbeatMemoriesFloatingLauncher?.setCovered?.(false);
         const body = overlay.querySelector('.rmt-body');
         if (body) body.replaceChildren();
     }
@@ -198,11 +206,13 @@ export function bodyEl() {
 }
 
 export function topTitle(text) {
+    text = character_labels.characterUiLabel(text);
     const el = document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-topbar-title`);
     if (el) el.textContent = text || '心迹回廊';
 }
 
 export function setBackVisible(visible, label = '返回上级') {
+    label = character_labels.characterUiLabel(label);
     const button = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-action="back"]`);
     if (!button) return;
     button.hidden = !visible;
@@ -211,6 +221,7 @@ export function setBackVisible(visible, label = '返回上级') {
 }
 
 export function navigateBack() {
+    if (image_viewer.hasImageViewer()) return image_viewer.closeImageViewer();
     if (runtimeState.activeMode === 'pastLives' && past_lives_view.closePastLivesDetail()) return;
     if (cg_editor.hasCgPromptEditor()) return cg_editor.closeCgPromptEditor();
     if (runtimeState.endingEasterEggRuntime) return ui_endingView.closeEndingEasterEgg();
@@ -529,16 +540,17 @@ export function showChooser() {
           <div class="rmt-memory-gate-text">
             <div class="rmt-archive-kicker">PRIVATE MEMORY ARCHIVE</div>
             <strong class="rmt-archive-title">${core_text.esc(archiveName)}</strong>
-            ${ready ? core_archiveCover.archiveCoverHtml(memory, { writable: true, busy: anyRunning }) : `<div class="rmt-archive-summary">${core_text.esc(archiveSummary)}</div>`}
+            ${ready ? core_archiveCover.archiveCoverHtml(memory, { writable: true, busy: anyRunning, update: true }) : `<div class="rmt-archive-summary">${core_text.esc(archiveSummary)}</div>`}
             ${keywords.length ? `<div class="rmt-archive-keywords">${keywords.map(word => `<span>${core_text.esc(word)}</span>`).join('')}</div>` : ''}
             <div class="rmt-memory-status ${pendingClass}">${core_text.esc(archive_snapshots.memoryStateLabel(state, settings.autoUpdates?.archive?.enabled))}</div>
             ${ready ? `<div class="rmt-archive-meta">上次归档：${core_text.esc(formatArchiveTime(memory.updatedAt || memory.createdAt))}</div>` : ''}
           </div>
           <div class="rmt-current-archive-actions">
-            <button class="rmt-btn rmt-archive-update" type="button" data-rmt-action="import-memory" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>${core_text.esc(requirePreflight ? '先扫描记忆 / 摘要' : (ready ? '增量更新当前窗口档案' : importLabel))}</button>
-            ${ready ? `<button class="rmt-btn" type="button" data-rmt-action="full-rebuild-memory" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>完全重建档案</button><button class="rmt-btn" type="button" data-rmt-action="current-archive-delete" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>删除当前档案</button>` : ''}
+            ${!ready ? `<button class="rmt-btn rmt-archive-update" type="button" data-rmt-action="import-memory" ${anyRunning ? 'disabled' : ''}>${core_text.esc(importLabel)}</button>` : ''}
+            ${ready ? `<button class="rmt-btn" type="button" data-rmt-action="full-rebuild-memory" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>完全重建档案</button>${utility_panels.operationHelpButton('full-rebuild-memory')}<button class="rmt-btn" type="button" data-rmt-action="current-archive-delete" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>删除当前档案</button>${utility_panels.operationHelpButton('current-archive-delete')}` : ''}
           </div>
         </section>
+        <div class="rmt-diagnostic-entry"><button type="button" class="rmt-btn" data-rmt-action="open-generation-diagnostics">生成诊断</button></div>
         ${externalMemoryControls}
         <section class="rmt-archive-portals" aria-label="档案室内容入口">${portalHtml}</section>
         ${generationAction}
@@ -919,6 +931,7 @@ async function regenerateManagedCategory() {
 }
 
 export function handleOverlayClick(event) {
+    navigation_bookmark.cancelReadingRestore();
     const pastLivesButton = event.target.closest?.('[data-rmt-past-lives]');
     if (pastLivesButton) return void past_lives_view.handlePastLivesAction(pastLivesButton.dataset.rmtPastLives, pastLivesButton.dataset.rmtPastLivesId);
     const discardButton = event.target.closest?.('[data-rmt-recovery-discard]');
@@ -1054,9 +1067,18 @@ export function handleOverlayClick(event) {
         return;
     }
 
+    const help = event.target.closest?.('[data-rmt-help]');
+    if (help) { event.preventDefault(); return utility_panels.showOperationHelp(help.dataset.rmtHelp); }
     const actionEl = event.target.closest?.('[data-rmt-action]');
     const action = actionEl?.dataset?.rmtAction;
     if (!action) return;
+    if (action === 'open-generation-diagnostics') return utility_panels.openGenerationDiagnostics();
+    if (action === 'view-original-image') {
+        event.preventDefault();
+        const item = runtimeState.activeMode === core_constants.MODE.HEART ? ui_heartView.selectedHeartStrip() : generation_imageGeneration.selectedCgTarget()?.item;
+        const image = generation_imageGeneration.normalizeCgImageRecord(item?.cgImage);
+        return image && image_viewer.openImageViewer(image.url);
+    }
     if (action === 'rewrite-archive-verdict') {
         if (runtimeState.activeArchiveSnapshot && !archive_library.requireWritableArchiveAction()) return;
         if (!confirmExplicitAction('重写这份档案的简介？', '只读取已归档经历，使用当前独立 API；记忆和其他已生成内容保持不变。')) return;

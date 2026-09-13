@@ -1,3 +1,4 @@
+import * as character_labels from '../core/characterLabels.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_groups from './groups.js';
@@ -227,7 +228,8 @@ export function modePortalMeta(mode) {
         [core_constants.MODE.HEART]: { title: '角色互动', subtitle: '时期对话 / Drama / 日常一格', icon: 'fa-comments', accent: 'heart' },
         [core_constants.MODE.ACHIEVEMENTS]: { title: '成就库', subtitle: '已解锁 / 未解锁', icon: 'fa-trophy', accent: 'achievements' },
     };
-    return meta[mode] || { title: core_constants.MODE_LABEL[mode] || mode, subtitle: '', icon: 'fa-circle', accent: 'default' };
+    const value = meta[mode] || { title: core_constants.MODE_LABEL[mode] || mode, subtitle: '', icon: 'fa-circle', accent: 'default' };
+    return { ...value, title: character_labels.characterUiLabel(value.title) };
 }
 
 export function baseModeAvailability(options = {}) {

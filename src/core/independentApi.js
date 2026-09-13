@@ -141,6 +141,7 @@ export function apiConfigurationFingerprint(settings) {
         mode,
         core_text.normalizeText(settings?.connectionProfileId, 160),
         core_text.normalizeText(settings?.modelOverride, 240),
+        settings?.profileApiStreaming === true,
         Number(settings?.maxTokens) || 0,
         Number(settings?.temperature) || 0,
     ]);
@@ -387,6 +388,54 @@ export function assertIndependentResponsePayload(payload) {
 // Transport completion is local authority, not model JSON. A provider cannot forge it
 // by emitting fields named complete/finishReason. Keep partial text out of Error objects.
 const manualStreamCompletions = new WeakMap();
+const profileStreamCompletions = new WeakMap();
+
+function profileStreamResult(content, reasoning = '', interrupted = false) {
+    const result = Object.freeze({ content, reasoning });
+    profileStreamCompletions.set(result, Object.freeze({ complete: !interrupted, finishReason: interrupted ? 'interrupted' : 'done', interrupted: interrupted === true }));
+    return result;
+}
+
+export async function collectConnectionManagerStream(streamFactory, { signal = null } = {}) {
+    if (typeof streamFactory !== 'function') {
+        throw apiError('一键连接没有返回可读取的流式结果。', 'RMT_PROFILE_STREAM_INVALID');
+    }
+    let stream;
+    try { stream = streamFactory(); }
+    catch { throw apiError('一键连接无法开始读取流式结果。', 'RMT_PROFILE_STREAM_INVALID'); }
+    if (!stream || typeof stream[Symbol.asyncIterator] !== 'function') {
+        throw apiError('一键连接没有返回可读取的流式结果。', 'RMT_PROFILE_STREAM_INVALID');
+    }
+    let content = '', reasoning = '', interrupted = false;
+    try {
+        for await (const chunk of stream) {
+            if (signal?.aborted) throw streamAbortReason(signal);
+            if (!chunk || typeof chunk !== 'object') continue;
+            if (typeof chunk.text === 'string') content = chunk.text;
+            const nextReasoning = chunk?.state && typeof chunk.state.reasoning === 'string' ? chunk.state.reasoning : '';
+            if (nextReasoning) reasoning = nextReasoning;
+            if (content.length > core_constants.MAX_GENERATION_OUTPUT_CHARS || reasoning.length > core_constants.MAX_GENERATION_OUTPUT_CHARS) {
+                throw apiError('模型服务返回内容过大，已停止读取。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
+            }
+        }
+    } catch (error) {
+        if (signal?.aborted || error?.name === 'AbortError') throw streamAbortReason(signal);
+        if (error?.code === 'RMT_MANUAL_RESPONSE_TOO_LARGE') throw error;
+        if (!content.trim()) {
+            const safe = apiError('一键连接的流式响应读取失败；本段没有保存。', 'RMT_PROFILE_STREAM_INVALID');
+            safe.retryable = false; safe.retryableJson = false;
+            throw safe;
+        }
+        interrupted = true;
+    }
+    if (!content.trim()) {
+        const error = apiError('一键连接没有返回可见正文。', 'RMT_PROFILE_STREAM_EMPTY');
+        error.retryable = false;
+        throw error;
+    }
+    return profileStreamResult(content, reasoning, interrupted);
+}
+
 const STREAM_FINISH_REASONS = new Set(['stop', 'end_turn', 'stop_sequence', 'length', 'max_tokens', 'content_filter', 'tool_calls', 'function_call']);
 const COMPLETE_STREAM_REASONS = new Set(['stop', 'end_turn', 'stop_sequence', 'done']);
 
@@ -410,8 +459,9 @@ export function manualStreamCompletionInfo(result) {
 
 // Call inside the JSON-parser/recovery try block, after the normal origin/config guard.
 // Its catch can pass the separately held content to recordRecoveryTruncation unchanged.
-export function assertManualStreamComplete(result) {
-    const completion = manualStreamCompletionInfo(result);
+export function assertIndependentStreamComplete(result) {
+    const completion = manualStreamCompletionInfo(result)
+        || (result && typeof result === 'object' ? profileStreamCompletions.get(result) || null : null);
     if (completion && !completion.complete) {
         const error = apiError('流式正文尚未完整结束；已停止本段，不会自动重发请求。可保留草稿后显式继续。', 'RMT_JSON_TRUNCATED');
         error.retryable = false;
@@ -419,6 +469,10 @@ export function assertManualStreamComplete(result) {
         throw error;
     }
     return true;
+}
+
+export function assertManualStreamComplete(result) {
+    return assertIndependentStreamComplete(result);
 }
 
 function streamReadError(code = 'RMT_MANUAL_INVALID_JSON') {

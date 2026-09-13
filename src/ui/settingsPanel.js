@@ -1,3 +1,4 @@
+import * as utility_panels from './utilityPanels.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_repository from '../archive/repository.js';
@@ -310,6 +311,8 @@ function refreshThemeUi() {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
     const custom = panel?.querySelector('[data-rmt-theme-custom-panel]');
     if (custom) custom.hidden = settings.themeMode !== 'custom';
+    const floating = panel?.querySelector('[data-rmt-floating-enabled]');
+    if (floating) { floating.checked = globalThis.__heartbeatMemoriesFloatingLauncher?.isEnabled?.() !== false; floating.disabled = !globalThis.__heartbeatMemoriesFloatingLauncher; }
     const opacity = panel?.querySelector('[data-rmt-theme-opacity]');
     if (opacity) opacity.textContent = Math.round(settings.themeAlpha * 100) + '%';
 }
@@ -335,6 +338,7 @@ export function refreshGenerationSettingsUi() {
     const maxTokens = panel.querySelector('[data-rmt-api-max-tokens]');
     const temperature = panel.querySelector('[data-rmt-api-temperature]');
     const roomDaily = panel.querySelector('[data-rmt-room-life-auto]');
+    const profileStreaming = panel.querySelector('[data-rmt-profile-streaming]');
     const manualStreaming = panel.querySelector('[data-rmt-manual-streaming]');
     const ttDisplay = panel.querySelector('[data-rmt-tt-display]');
     const themeMode = panel.querySelector('[data-rmt-theme-mode]');
@@ -381,6 +385,7 @@ export function refreshGenerationSettingsUi() {
         temperature.title = '覆盖心迹回廊专用连接的温度';
     }
     if (roomDaily) roomDaily.checked = settings.roomLifeAutoDaily;
+    if (profileStreaming) profileStreaming.checked = settings.profileApiStreaming === true;
     if (manualStreaming) manualStreaming.checked = settings.manualApiStreaming === true;
     const externalSource = panel.querySelector('[data-rmt-source-external]');
     const worldInfoSource = panel.querySelector('[data-rmt-source-world-info]');
@@ -546,6 +551,7 @@ export function mountSettings({ homeTarget = null } = {}) {
               <label class="rmt-settings-field"><span>模型</span><select class="text_pole" data-rmt-api-model><option value="">请先选择专用连接</option></select></label>
               <button type="button" class="menu_button rmt-model-refresh" data-rmt-api-model-refresh>刷新模型</button>
             </div>
+            <label class="rmt-settings-check"><input type="checkbox" data-rmt-profile-streaming ${core_settings.getPluginSettings().profileApiStreaming === true ? 'checked' : ''}><span>使用流式输出</span></label>
           </div>
           <div class="rmt-api-source-panel" data-rmt-api-manual-panel hidden>
             <label class="rmt-settings-field"><span>API 地址</span><input class="text_pole" data-rmt-manual-api-base type="url" inputmode="url" placeholder="https://api.example.com/v1"></label>
@@ -577,12 +583,12 @@ export function mountSettings({ homeTarget = null } = {}) {
           </div>
         </details>
         <details class="rmt-settings-card" data-rmt-settings-section="creative">
-          <summary class="rmt-settings-card-head"><span>文</span><div><b>创作补充词</b><small>仅用于心迹回廊独立 API</small></div></summary>
+          <summary class="rmt-settings-card-head"><span>文</span><div><b>提示词生成规则</b><small>由心迹回廊的文字模型使用</small></div></summary>
           <div class="rmt-settings-section-body">
-            <label class="rmt-settings-check"><input type="checkbox" data-rmt-creative-enabled><span>启用创作补充词</span></label>
-            <label class="rmt-settings-field"><span>文风、氛围与叙事偏好</span><textarea class="text_pole" data-rmt-creative-text maxlength="20000" rows="8" placeholder="例如：少用总结式旁白，让情绪从对白和细节中自然流露。"></textarea></label>
-            <p><output data-rmt-creative-count>0 / 20,000</output> 字符。仅随心迹回廊文本生成发送，不写入主聊天、不发送给生图接口；会占用模型输入额度。</p>
-            <div class="rmt-theme-presets"><button type="button" data-rmt-creative-save>保存补充词</button><button type="button" data-rmt-creative-cancel>撤销编辑</button></div>
+            <label class="rmt-settings-check"><input type="checkbox" data-rmt-creative-enabled><span>启用提示词生成规则</span></label>
+            <label class="rmt-settings-field"><span>直接填写规则，无需分区标记</span><textarea class="text_pole" data-rmt-creative-text maxlength="20000" rows="8" placeholder="例如：绘图提示词使用英文标签；准确保留当前场景的人数、动作和道具，分别描述两人的动作，不改换地点；角色外貌以所选柏宝绘角色库为准。"></textarea></label>
+            <p><output data-rmt-creative-count>0 / 20,000</output> 字符</p>
+            <div class="rmt-theme-presets"><button type="button" data-rmt-creative-save>保存规则</button><button type="button" data-rmt-creative-cancel>撤销编辑</button></div>
             <div role="status" data-rmt-creative-status></div>
           </div>
         </details>
@@ -611,6 +617,8 @@ export function mountSettings({ homeTarget = null } = {}) {
             <label><span>边框</span><input type="color" data-rmt-theme-color="border"></label>
           </div>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-theme-reset>恢复默认配色</button>
+          <label class="rmt-settings-check"><input type="checkbox" data-rmt-floating-enabled ${globalThis.__heartbeatMemoriesFloatingLauncher?.isEnabled?.() !== false ? 'checked' : ''}><span>显示悬浮球</span></label>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-floating-reset>重置悬浮球位置</button>
           </div>
         </details>
         <details class="rmt-settings-card" data-rmt-settings-section="auto">
@@ -659,6 +667,7 @@ export function mountSettings({ homeTarget = null } = {}) {
         <div class="rmt-settings-archive-actions">
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
+          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-generation-diagnostic>生成诊断（去敏报告）</button>
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-performance-diagnostic aria-expanded="false" aria-controls="heartbeat_memories_performance_diagnostic"><i class="fa-solid fa-gauge-high"></i><span data-rmt-diagnostic-label>性能诊断（不解压缓存）</span></button>
           <div class="rmt-performance-diagnostic-panel" id="heartbeat_memories_performance_diagnostic" data-rmt-diagnostic-panel hidden>
             <div class="rmt-performance-diagnostic-head"><b>诊断结果</b><button type="button" class="menu_button rmt-performance-diagnostic-close" data-rmt-performance-diagnostic-close>关闭诊断</button></div>
@@ -678,12 +687,20 @@ export function mountSettings({ homeTarget = null } = {}) {
     refreshCreative();
     panel.addEventListener('change', async event => {
         const target = event.target;
+        if (target.matches?.('[data-rmt-floating-enabled]')) {
+            globalThis.__heartbeatMemoriesFloatingLauncher?.setEnabled?.(target.checked);
+            return;
+        }
         if (target.matches?.('[data-rmt-source-external]')) {
             core_settings.updatePluginSettings({ useCurrentChatExternalMemory: !!target.checked });
             return;
         }
         if (target.matches?.('[data-rmt-source-world-info]')) {
             core_settings.updatePluginSettings({ useActivatedWorldInfo: !!target.checked });
+            return;
+        }
+        if (target.matches?.('[data-rmt-profile-streaming]')) {
+            core_settings.updatePluginSettings({ profileApiStreaming: !!target.checked });
             return;
         }
         if (target.matches?.('[data-rmt-manual-streaming]')) {
@@ -869,6 +886,11 @@ export function mountSettings({ homeTarget = null } = {}) {
         }
     });
     panel.addEventListener('click', event => {
+        if (event.target.closest?.('[data-rmt-floating-reset]')) {
+            globalThis.__heartbeatMemoriesFloatingLauncher?.resetPosition?.();
+            return;
+        }
+        if (event.target.closest?.('[data-rmt-generation-diagnostic]')) { event.stopPropagation(); utility_panels.openGenerationDiagnostics(); return; }
         if (event.target.closest?.('[data-rmt-read-preview]')) {
             const status = panel.querySelector('[data-rmt-read-preview-status]');
             try {
@@ -880,7 +902,7 @@ export function mountSettings({ homeTarget = null } = {}) {
         if (event.target.closest?.('[data-rmt-creative-save]')) {
             try {
                 core_settings.updatePluginSettings({ creativeSupplement: panel.querySelector('[data-rmt-creative-text]').value, creativeSupplementEnabled: panel.querySelector('[data-rmt-creative-enabled]').checked });
-                panel.querySelector('[data-rmt-creative-status]').textContent = '已保存；下次心迹回廊文本生成生效。';
+                panel.querySelector('[data-rmt-creative-status]').textContent = '已保存；下次文字生成或整理画面提示词时生效。';
             } catch (error) { panel.querySelector('[data-rmt-creative-status]').textContent = core_text.safeErrorSummary(error); }
             return;
         }

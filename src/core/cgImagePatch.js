@@ -5,15 +5,40 @@ import * as text from './text.js';
 
 const IMAGE_MODES = new Set([constants.MODE.ALBUM, constants.MODE.ADV, constants.MODE.HEART]);
 
+// Tauri iOS/WebKit uses the documented tauri://localhost resource authority.
+// Opaque URL origins are all "null": compare the exact scheme/host, never null==null.
+export function imageResourceBase() {
+    const href = globalThis.location?.href;
+    if (typeof href === 'string' && href) return href;
+    const origin = globalThis.location?.origin;
+    return typeof origin === 'string' && /^https?:\/\//.test(origin) ? origin + '/' : 'http://localhost/';
+}
+export function isSameImageHost(parsed, base) {
+    try {
+        const host = new URL(base);
+        if (parsed.username || parsed.password || host.username || host.password) return false;
+        if (host.protocol === 'tauri:') return host.host === 'localhost' && !host.port
+            && parsed.protocol === 'tauri:' && parsed.host === 'localhost' && !parsed.port;
+        return ['http:', 'https:'].includes(host.protocol) && ['http:', 'https:'].includes(parsed.protocol)
+            && parsed.origin === host.origin;
+    } catch { return false; }
+}
+export function savedLocalImagePath(raw, base = imageResourceBase()) {
+    if (typeof raw !== 'string' || !raw || raw.length > 4096 || /[\\\u0000-\u001f\u007f]/.test(raw)) return '';
+    try {
+        const url = new URL(raw, base);
+        if (!isSameImageHost(url, base) || url.search || url.hash || /%(?:2f|5c|2e|25|0[0-9a-f]|1[0-9a-f]|7f)/i.test(url.pathname)
+            || !/^\/user\/images\/.+\.(?:png|jpe?g|webp|gif)$/i.test(url.pathname)) return '';
+        return url.pathname;
+    } catch { return ''; }
+}
 export function normalizeCgImageUrl(value) {
     const raw = text.normalizeText(value, 4096);
     if (!raw) return '';
     try {
-        const base = globalThis.location?.href || 'http://localhost/';
+        const base = imageResourceBase();
         const parsed = new URL(raw, base);
-        if (!['http:', 'https:'].includes(parsed.protocol)) return '';
-        const currentOrigin = globalThis.location?.origin;
-        if (currentOrigin && parsed.origin !== currentOrigin) return '';
+        if (!isSameImageHost(parsed, base)) return '';
         return `${parsed.pathname}${parsed.search}${parsed.hash}`.slice(0, 4096);
     } catch { return ''; }
 }
@@ -45,12 +70,7 @@ export function normalizeCgImagePatch(value) {
         || typeof value.expectedSignature !== 'string' || !value.expectedSignature || value.expectedSignature.length > 120000) return null;
     const image = normalizeCgImageRecord(value.image);
     if (!image || image.provider !== 'baibai-image' || typeof value.image.url !== 'string' || value.image.url.length > 4096) return null;
-    try {
-        const base = globalThis.location?.href || 'http://localhost/';
-        const parsed = new URL(value.image.url, base);
-        if (parsed.origin !== new URL(base).origin || parsed.username || parsed.password
-            || !/^\/user\/images\/.+\.(?:png|jpe?g|webp|gif)$/i.test(parsed.pathname)) return null;
-    } catch { return null; }
+    if (!savedLocalImagePath(value.image.url)) return null;
     return { version: 1, mode: value.mode, itemId: value.itemId, expectedSignature: value.expectedSignature, image };
 }
 

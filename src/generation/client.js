@@ -1,3 +1,4 @@
+import * as generation_diagnostics from '../core/generationDiagnostics.js';
 import * as core_butterflyContract from '../core/butterflyContract.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -289,7 +290,7 @@ export function normalizeConnectionManagerError(error) {
         'RMT_MANUAL_API_URL', 'RMT_MANUAL_EMPTY', 'RMT_MANUAL_FETCH_UNAVAILABLE', 'RMT_MANUAL_INVALID_JSON',
         'RMT_MANUAL_MESSAGES', 'RMT_MANUAL_MODEL', 'RMT_MANUAL_MODEL_TIMEOUT', 'RMT_MANUAL_MODELS_EMPTY',
         'RMT_MANUAL_PROVIDER_ERROR', 'RMT_MANUAL_RESPONSE_TOO_LARGE', 'RMT_PHONE_DRAFT_AVAILABLE',
-        'RMT_PROFILE_CAPABILITY', 'RMT_PROFILE_MODEL_TIMEOUT', 'RMT_PROFILE_PROXY_UNAVAILABLE',
+        'RMT_PROFILE_CAPABILITY', 'RMT_PROFILE_MODEL_TIMEOUT', 'RMT_PROFILE_PROXY_UNAVAILABLE', 'RMT_PROFILE_STREAM_INVALID', 'RMT_PROFILE_STREAM_EMPTY',
         'RMT_REQUEST_TIMEOUT', 'RMT_RESPONSE_HTML', 'RMT_SEGMENT_VALIDATION', 'RMT_CONNECTION_QUOTA',
     ]);
     if (knownInternalCodes.has(String(error?.code || ''))) return error;
@@ -376,6 +377,7 @@ export function normalizeConnectionManagerError(error) {
 }
 
 export async function generateConfiguredJson(prompt, options = {}) {
+    options.assertRequestCurrent?.();
     const context = options.context || core_context.currentCharacterGuard();
     const settings = core_settings.getPluginSettings(context);
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
@@ -384,11 +386,13 @@ export async function generateConfiguredJson(prompt, options = {}) {
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
         : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context) });
+    options.assertRequestCurrent?.();
     const phrasePolicy = options.enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(settings) : '';
-    const creativeSupplement = creative_supplement.creativeSupplementBlock(settings);
+    const creativeSupplement = creative_supplement.creativeSupplementBlock(settings, { purpose: options.purpose });
     const controlledPrompt = `${contextEnvelope}
 ${expanded}${creativeSupplement}${phrasePolicy}`;
     await assertPromptBudget(context, contextEnvelope + '\n' + originalExpanded + creativeSupplement + phrasePolicy, { skipTokenCount: options.skipTokenCount === true });
+    options.assertRequestCurrent?.();
     // The value configured in the dedicated secondary-API UI is the actual provider max output.
     // Per-feature options.maxTokens values are legacy sizing hints only and must not silently lower it.
     const responseLength = Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens));
@@ -415,6 +419,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
         const apiMap = service.validateProfile(rawProfile);
         if (apiMap?.selected !== 'openai' || !apiMap?.source) throw core_text.safeUserError('当前一键连接不是可复用的 Chat Completion 配置。');
     }
+    options.assertRequestCurrent?.();
     let result;
     const lifecycleController = new AbortController();
     const externalSignal = options.signal || null;
@@ -426,19 +431,24 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
     else externalSignal?.addEventListener?.('abort', forwardAbort, { once: true });
     try {
         result = await core_requestCoordinator.runGenerationRequestWithTimeout(
-            () => connectionMode === 'manual'
+            () => {
+                options.assertRequestCurrent?.();
+                return connectionMode === 'manual'
                 ? core_independentApi.requestManualApiCompletion(settings, context, messages, responseLength, {
                     signal: lifecycleController.signal,
                     model: modelOverride,
                     temperature: overridePayload.temperature,
                 })
-                : service.sendRequest(
+                : Promise.resolve(service.sendRequest(
                     settings.connectionProfileId,
                     messages,
                     responseLength,
-                    { stream: false, extractData: true, includePreset: false, includeInstruct: false, signal: lifecycleController.signal },
+                    { stream: settings.profileApiStreaming === true, extractData: true, includePreset: false, includeInstruct: false, signal: lifecycleController.signal },
                     overridePayload,
-                ),
+                )).then(value => settings.profileApiStreaming === true
+                    ? core_independentApi.collectConnectionManagerStream(value, { signal: lifecycleController.signal })
+                    : value);
+            },
             lifecycleController,
             options.timeoutMs,
             options.statusText || '',
@@ -448,6 +458,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
     } finally {
         try { externalSignal?.removeEventListener?.('abort', forwardAbort); } catch {}
     }
+    options.assertRequestCurrent?.();
     const latestSettings = core_settings.getPluginSettings(context);
     let latestProfileFingerprint = '';
     if (connectionMode === 'profile') {
@@ -455,9 +466,9 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
         catch { latestProfileFingerprint = 'missing'; }
     }
     if (core_independentApi.apiConfigurationFingerprint(latestSettings) !== configurationFingerprint
-        || creative_supplement.creativeSupplementBlock(latestSettings) !== creativeSupplement
+        || creative_supplement.creativeSupplementBlock(latestSettings, { purpose: options.purpose }) !== creativeSupplement
         || (connectionMode === 'profile' && latestProfileFingerprint !== selectedProfileFingerprint)) {
-        const error = new Error('API 配置或创作补充词在生成期间发生变化，本次旧请求结果已丢弃。');
+        const error = new Error('API 配置或提示词生成规则在生成期间发生变化，本次旧请求结果已丢弃。');
         error.code = 'RMT_API_CONFIG_CHANGED';
         error.retryable = false;
         throw error;
@@ -466,7 +477,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
     try { responsePayload = core_independentApi.assertIndependentResponsePayload(result); }
     catch (error) { throw normalizeConnectionManagerError(error); }
     let parsed;
-    try { core_independentApi.assertManualStreamComplete(result);
+    try { core_independentApi.assertIndependentStreamComplete(result);
         parsed = generation_jsonParser.extractJson(responsePayload, {
         reasoning: result?.reasoning || '',
         requestMaxTokens: responseLength,
@@ -494,6 +505,7 @@ export async function requestJson(prompt, statusText = '正在根据当前聊天
     if (logicalKeys.size >= core_constants.MAX_CONCURRENT_GENERATION_TASKS) {
         throw new Error(`当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请等其中一项完成后再启动新的任务。`);
     }
+    options.assertRequestCurrent?.();
     const controller = new AbortController();
     const requestContext = options.context || core_context.currentCharacterGuard();
     const origin = options.origin || core_context.captureTaskOrigin(requestContext, archive_repository.getImportedMemory(requestContext)?.archiveRevision || '');
@@ -505,6 +517,10 @@ export async function requestJson(prompt, statusText = '正在根据当前聊天
         mode: core_text.normalizeText(options.mode, 80), parentTaskKey, startedAt: Date.now(),
     });
     core_requestCoordinator.refreshConcurrentTaskUi(core_text.normalizeText(options.mode, 80), origin);
+    const externalSignal = options.signal;
+    const forwardAbort = () => controller.abort(core_requestCoordinator.createGenerationAbortError());
+    if (externalSignal?.aborted) forwardAbort();
+    else externalSignal?.addEventListener?.('abort', forwardAbort, { once: true });
     let releaseProviderPermit = null;
     try {
         releaseProviderPermit = await core_requestCoordinator.acquireProviderRequestPermit(controller.signal);
@@ -512,6 +528,7 @@ export async function requestJson(prompt, statusText = '正在根据当前聊天
         // the next one the instant a slot frees up.
         await core_requestCoordinator.waitForProviderPacing(controller.signal);
         core_context.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
+        options.assertRequestCurrent?.();
         return await generateConfiguredJson(prompt, {
             ...options,
             signal: controller.signal,
@@ -519,6 +536,7 @@ export async function requestJson(prompt, statusText = '正在根据当前聊天
             enforceGeneratedPhrasePolicy: options.enforceGeneratedPhrasePolicy !== false,
         });
     } finally {
+        externalSignal?.removeEventListener?.('abort', forwardAbort);
         try { releaseProviderPermit?.(); } catch {}
         const current = runtimeState.activeGenerationTasks.get(taskKey);
         if (current?.controller === controller) runtimeState.activeGenerationTasks.delete(taskKey);
@@ -992,6 +1010,7 @@ export async function generateMode(mode, options = {}) {
             console.warn('[HeartbeatMemories] generation aborted by extension/task cancellation', { mode });
             return null;
         }
+        generation_diagnostics.recordGenerationDiagnostic({ ...core_text.safeErrorDiagnostic(error?.failure || error), mode });
         const safeError = core_text.safeErrorSummary(error);
         console.error('[HeartbeatMemories] generation failed', {
             mode,

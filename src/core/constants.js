@@ -174,6 +174,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     apiConnectionMode: 'profile',
     connectionProfileId: '',
     modelOverride: '',
+    profileApiStreaming: false,
     manualApiBaseUrl: '',
     manualApiModel: '',
     manualApiStreaming: false,

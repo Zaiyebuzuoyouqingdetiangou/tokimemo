@@ -1,3 +1,6 @@
+import * as utility_panels from './ui/utilityPanels.js';
+import * as image_viewer from './ui/imageViewer.js';
+import * as generation_diagnostics from './core/generationDiagnostics.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_cache from './core/cache.js';
@@ -26,6 +29,9 @@ export function openArchiveLibrary(source = 'runtime-api') {
 export function openSettingsHome() {
     return ui_archivePortal.showHome({ section: 'api' });
 }
+
+export function getGenerationDiagnosticReport() { return generation_diagnostics.generationDiagnosticReport(); }
+export function openGenerationDiagnostics() { return utility_panels.openGenerationDiagnostics(); }
 
 export function isGenerationBusy() {
     return runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !!runtimeState.roomLifeRefreshPromise;
@@ -57,6 +63,8 @@ export function initMemoryTheater() {
 }
 
 export function destroyMemoryTheater() {
+    image_viewer.closeImageViewer({ restoreFocus: false });
+    utility_panels.closeUtilityPanel();
     core_autoUpdates.stopAutoUpdates();
     ui_settingsPanel.clearHomeSettingsPanel();
     ui_settingsPanel.unbindImageProviderEvents();

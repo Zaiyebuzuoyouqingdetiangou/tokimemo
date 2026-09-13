@@ -15,7 +15,7 @@ function draftKey(origin, operation) {
 }
 
 function incompatible() {
-    return text.safeUserError('这份档案整理草稿与当前来源、档案或生成设置不一致。原草稿仍保留，本次没有重新生成成功分块。', 'RMT_RECOVERY_INPUT_CHANGED');
+    return text.safeUserError('这份档案整理草稿与当前聊天来源、档案版本或读取规则不一致。原草稿仍保留，本次没有重新生成成功分块。', 'RMT_RECOVERY_INPUT_CHANGED');
 }
 
 export function archiveRecoverySummary(origin, operation = 'import') {
@@ -91,11 +91,16 @@ export async function beginArchiveRecovery({ origin, operation = 'import', sourc
 
 export async function requestArchiveRecoverySegment(ticket, slot, prompt, options, validator) {
     if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry || !ticket.entry.active) throw incompatible();
-    return recovery.withRecoverySegment(prompt, { ...options, origin: ticket.origin, taskKey: slot }, validator,
+    // Only archive-import/profile tickets use this policy. Transport choices
+    // belong to an attempt, not to a completed chunk's source identity. Keep the
+    // exact prompt, context envelope, slot, schema and validator on replay; do not
+    // change the shared recovery engine or relax any other mode's checkpoints.
+    const { temperature, model, maxTokens, ...checkpointOptions } = options || {};
+    return recovery.withRecoverySegment(prompt, { ...checkpointOptions, origin: ticket.origin, taskKey: slot }, validator,
         async (effectivePrompt, requestOptions, accepted) => {
             // Archive extraction owns runtimeState.busy, so requestJson's module
             // task gate is deliberately not used. Same provider/parser, no retries.
-            const raw = await client.generateConfiguredJson(effectivePrompt, requestOptions);
+            const raw = await client.generateConfiguredJson(effectivePrompt, { ...requestOptions, temperature, model, maxTokens });
             if (ticket.assertCurrent() === false) throw new DOMException('Archive recovery origin changed', 'AbortError');
             const result = await validator(raw);
             await accepted(raw);

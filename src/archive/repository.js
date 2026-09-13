@@ -1035,6 +1035,7 @@ export function externalMemorySourceSummary(context = core_context.getContext())
     if (archive_memoryProviders.findBaiBaiBookPublicApi()) {
         sources.push({ id: 'baibai-book-public-api', label: '柏宝书记忆', kind: 'registered-current-chat-api-v1' });
     }
+    if (archive_memoryProviders.findMyriadKnotsPublicApi()) sources.push({ id: 'myriad-knots-public-v1', label: '千千结记忆', kind: 'registered-current-chat-snapshot-v1' });
     const unique = [];
     const seen = new Set();
     for (const item of sources) {
@@ -1203,6 +1204,23 @@ export async function collectCurrentChatExternalMemory(context, expectedChatId, 
             if (error?.name === 'AbortError') throw error;
             sources.push({ id: 'baibai-book-public-api', label: '柏宝书记忆', kind: 'registered-v1', count: 0, coverage: { status: 'failed', returned: 0, total: null, reason: core_text.toastText(core_text.safeErrorSummary(error), 180) } });
             console.warn('[HeartbeatMemories] BaiBai Book current-chat provider rejected', core_text.safeErrorDiagnostic(error));
+        }
+    }
+
+    const myriadKnots = archive_memoryProviders.findMyriadKnotsPublicApi();
+    if (myriadKnots) {
+        try {
+            const origin = core_context.captureTaskOrigin(context);
+            if (!core_context.isCurrentTaskOrigin(origin)) throw core_text.safeUserError('', 'RMT_QQJ_IDENTITY');
+            const batch = archive_memoryProviders.readMyriadKnotsCurrentChat(myriadKnots, expectedChatId, signal);
+            if (!core_context.isCurrentTaskOrigin(origin)) throw core_text.safeUserError('', 'RMT_QQJ_IDENTITY');
+            if (batch?.records.length) await ingestBatch(batch);
+            else if (batch) sources.push({ id: batch.provider, label: batch.label, kind: 'registered-v1', count: 0, coverage: batch.coverage });
+        } catch (error) {
+            if (error?.name === 'AbortError') throw error;
+            sources.push({ id: 'myriad-knots-public-v1', label: '千千结记忆', kind: 'registered-v1', count: 0,
+                coverage: { status: 'failed', returned: 0, total: null, reason: core_text.safeErrorSummary(error) } });
+            console.warn('[HeartbeatMemories] public memory snapshot rejected', core_text.safeErrorDiagnostic(error));
         }
     }
 
@@ -1573,13 +1591,14 @@ function checkedArchiveProfile(data, memories) {
     return profile;
 }
 
-function archiveRecoverySettingsIdentity(context) {
+// A resumable archive is bound to its source/validation policy, not the provider
+// used to extract it. Each NEW request still freezes its own current transport
+// in generateConfiguredJson; changing that transport cannot accept a late reply.
+export function archiveRecoverySettingsIdentity(context) {
     const settings = core_settings.getPluginSettings(context);
-    const generationSettings = Object.fromEntries(['apiConnectionMode', 'connectionProfileId', 'modelOverride', 'manualApiBaseUrl',
-        'manualApiModel', 'manualApiKey', 'manualApiStreaming', 'chatReadRange', 'useActivatedWorldInfo', 'maxTokens', 'temperature', 'useCurrentChatExternalMemory', 'excludedContextTags',
-        'bannedGeneratedPhrases', 'creativeSupplementEnabled', 'creativeSupplement'].map(key => [key, settings[key]]));
-    return JSON.stringify({ settings: generationSettings, profile: settings.apiConnectionMode === 'profile'
-        ? core_settings.rawConnectionProfile(settings.connectionProfileId, context) : null });
+    return JSON.stringify({ contract: 'archive-source-policy-v1', schema: core_constants.ARCHIVE_SCHEMA_VERSION,
+        settings: Object.fromEntries(['chatReadRange', 'useActivatedWorldInfo', 'useCurrentChatExternalMemory',
+            'excludedContextTags', 'bannedGeneratedPhrases'].map(key => [key, settings[key]])) });
 }
 
 export function getCurrentArchiveImportRecoverySummary(context = core_context.getContext()) {
@@ -1991,7 +2010,7 @@ export async function importCurrentChatMemory(options = {}) {
             return { status: 'blocked' };
         }
         if (!ui_overlay.confirmExplicitAction(pending.canContinue ? '继续档案整理？' : '重试未完成分块？',
-            `本页已保留 ${pending.completed} 个通过校验的分块；只处理未完成部分，不重做成功项。继续会使用文本生成额度。\n${archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE}`,
+            `本页已保留 ${pending.completed} 个通过校验的分块；将使用当前模型继续未完成部分，不重做成功项。继续会使用文本生成额度。\n${archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE}`,
             { destructive: false })) return { status: 'cancelled' };
         options = { ...options, fullRebuild: pending.fullRebuild, continueRecovery: true };
     }

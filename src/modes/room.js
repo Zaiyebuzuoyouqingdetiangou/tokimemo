@@ -1,3 +1,5 @@
+import * as room_artwork from '../ui/roomArtwork.js';
+import * as character_labels from '../core/characterLabels.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_library from '../archive/library.js';
@@ -525,7 +527,7 @@ ${line}`, memoryBank, 1)
     const homeName = core_text.normalizeText(data?.homeName, 100) || '私人生活空间';
     const requestedHomeSummary = core_text.normalizeText(data?.homeSummary, 2200);
     const homeSummary = requestedHomeSummary && !roomNarrativeClaimsSharedHistory(requestedHomeSummary, userName)
-        ? requestedHomeSummary : '这些空间拼成了他日常生活真正会经过的路线。';
+        ? requestedHomeSummary : '这些空间连起了角色的日常生活。';
     const profileSeed = [identityKey, memoryBank?.characterName, memoryBank?.chatId, worldPresentation?.evidenceHash].filter(Boolean).join('|');
     // This normalizer consumes new model output. Legacy session pets are retained by
     // cache loading/refresh/incremental merge, never reconstructed from model fields.
@@ -1274,6 +1276,9 @@ const ROOM_OBJECT_ICON_PATHS = Object.freeze({
     bed: '<path d="M4 10v19M28 17v12M4 24h24M4 17h24v7M8 12h7v5H8zM18 12h7v5h-7z"/>',
     cup: '<path d="M6 10h17v11a6 6 0 0 1-6 6h-5a6 6 0 0 1-6-6zM23 12h3a4 4 0 0 1 0 8h-3M5 30h20M10 3v3M16 2v4"/>',
     window: '<rect x="5" y="4" width="22" height="24" rx="1"/><path d="M16 4v24M5 16h22M2 28h28"/>',
+    fabric: '<path d="m4 10 20-5 4 18-21 5zM8 13l17-5M9 20l16-6"/>',
+    keepsake: '<ellipse cx="16" cy="18" rx="11" ry="8"/><path d="m16 6 4 5-4 5-4-5z"/>',
+    bag: '<path d="M10 9 7 5l9 3 9-3-4 4 7 15q-12 9-24 0zM10 12h12"/>',
     other: '<path d="m16 3 12 7v13l-12 7L4 23V10zM4 10l12 7 12-7M16 17v13"/>',
 });
 
@@ -1287,38 +1292,12 @@ export function roomObjectLayoutButtonHtml(entry, surface = 'scene', selectedId 
     const label = core_text.normalizeText(entry.item?.label, 100) || '未命名物件';
     const selected = entry.id === selectedId;
     const number = Math.max(1, Math.floor(Number(entry.number) || 1));
-    return `<button type="button" class="${scene ? 'rmt-room-layout-object' : 'rmt-room-object-chip rmt-room-layout-chip'} ${selected ? 'active' : ''} ${entry.id === focusId ? 'focus' : ''}"${scene ? ` style="${roomObjectPlacement(entry.item, entry.index, entry)}"` : ''} data-rmt-room-id="${core_text.esc(entry.id)}" data-rmt-room-number="${number}" data-rmt-visual-kind="${core_text.esc(entry.visualKind)}" aria-pressed="${selected}" aria-controls="${core_constants.OVERLAY_ID}_room_object_detail" aria-label="${core_text.esc(`${number}. ${label}${entry.item?.searchable ? '，可翻找' : ''}`)}"><span class="rmt-room-layout-number">${number}</span>${roomObjectIconHtml(entry.visualKind)}<b class="rmt-room-layout-name">${core_text.esc(label)}</b>${entry.item?.searchable ? '<em>可翻找</em>' : ''}</button>`;
+    return `<button type="button" class="${scene ? 'rmt-room-layout-object' : 'rmt-room-object-chip rmt-room-layout-chip'} ${selected ? 'active' : ''} ${entry.id === focusId ? 'focus' : ''}"${scene ? ` style="${roomObjectPlacement(entry.item, entry.index, entry)}"` : ''} data-rmt-room-id="${core_text.esc(entry.id)}" data-rmt-room-number="${number}" data-rmt-visual-kind="${core_text.esc(entry.visualKind)}" aria-pressed="${selected}" aria-controls="${core_constants.OVERLAY_ID}_room_object_detail" aria-label="${core_text.esc(`${number}. ${label}${entry.item?.searchable ? '，可翻找' : ''}`)}"><span class="rmt-room-layout-number">${number}</span>${scene ? room_artwork.furnitureArt(entry.visualKind) : roomObjectIconHtml(entry.visualKind)}<b class="rmt-room-layout-name">${core_text.esc(label)}</b>${entry.item?.searchable ? '<em>可翻找</em>' : ''}</button>`;
 }
 
 // Scoped, local-only component CSS. No provider styles/SVG/coordinates enter the DOM.
 export function roomLayoutCss(root = `#${core_constants.OVERLAY_ID}`) {
-    return `${root} .rmt-room-view .rmt-room-layout-scene{min-height:0;padding:24px 16px 12px;isolation:isolate}
-${root} .rmt-room-view .rmt-room-layout-scene:before{inset:0;width:auto;height:auto;border:0;border-radius:0;clip-path:none;box-shadow:none;transform:none;background:linear-gradient(135deg,transparent,var(--rmt-room-wash));pointer-events:none;z-index:0}
-${root} .rmt-room-view .rmt-room-layout-scene:after{display:none}
-${root} .rmt-room-view[data-rmt-room-world="historical"] .rmt-room-layout-scene:before{background:repeating-linear-gradient(90deg,transparent 0 48px,var(--rmt-room-wash) 49px 52px)}
-${root} .rmt-room-view[data-rmt-room-world="fantasy"] .rmt-room-layout-scene:before{background:radial-gradient(ellipse at 50% 20%,var(--rmt-room-soft),transparent 65%)}
-${root} .rmt-room-view[data-rmt-room-world="scifi"] .rmt-room-layout-scene:before{background:repeating-linear-gradient(90deg,transparent 0 48px,var(--rmt-room-wash) 49px 51px),repeating-linear-gradient(0deg,transparent 0 40px,var(--rmt-room-wash) 41px 43px)}
-${root} .rmt-room-object-layout{position:relative;z-index:8;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:stretch}
-${root} .rmt-room-layout-object{grid-column:var(--rmt-object-column);grid-row:var(--rmt-object-row);min-width:0;min-height:106px;display:grid;grid-template-columns:24px minmax(0,1fr) 24px;justify-items:center;align-content:center;gap:6px;border:1px solid var(--rmt-room-accent);border-radius:12px;background:var(--rmt-room-paper);color:var(--rmt-room-accent-deep);padding:12px 8px;font:inherit;cursor:pointer;touch-action:manipulation;box-shadow:0 4px 0 color-mix(in srgb,var(--rmt-room-accent) 18%,transparent);transition:background .15s ease,border-color .15s ease}
-${root} .rmt-room-layout-object svg{grid-column:2;width:40px;height:40px}
-${root} .rmt-room-layout-object .rmt-room-layout-number{grid-column:1;grid-row:1;align-self:start;display:grid;place-items:center;min-width:24px;min-height:24px;border-radius:50%;background:var(--rmt-room-soft);font-size:12px;font-weight:800}
-${root} .rmt-room-layout-object .rmt-room-layout-name{grid-column:1/-1;max-width:100%;font-size:13px;line-height:1.5;overflow-wrap:anywhere;text-align:center}
-${root} .rmt-room-layout-object em{grid-column:1/-1;font-size:11px;font-style:normal}
-${root} .rmt-room-layout-object.active,${root} .rmt-room-layout-chip.active{background:var(--rmt-room-soft);border-color:var(--rmt-room-accent-deep);box-shadow:inset 0 0 0 1px var(--rmt-room-accent-deep)}
-${root} .rmt-room-layout-object.focus:after{content:'正在使用';grid-column:1/-1;font-size:11px;line-height:1.4}
-${root} .rmt-room-layout-object:hover,${root} .rmt-room-layout-chip:hover{background:var(--rmt-room-soft)}
-${root} .rmt-room-layout-object:focus-visible,${root} .rmt-room-layout-chip:focus-visible{outline:3px solid var(--rmt-room-accent-deep);outline-offset:3px}
-${root} .rmt-room-layout-object:active,${root} .rmt-room-layout-chip:active{border-color:var(--rmt-room-accent-deep)}
-${root} .rmt-room-object-rail .rmt-room-layout-chip{min-height:48px;grid-template-columns:24px 24px minmax(0,1fr);gap:8px;padding:8px;text-align:left}
-${root} .rmt-room-layout-chip svg{width:24px;height:24px}
-${root} .rmt-room-layout-chip .rmt-room-layout-name{font-size:12px;line-height:1.5;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
-${root} .rmt-room-layout-chip em{grid-column:3;font-size:11px}
-${root} .rmt-room-presence-stage{position:relative;z-index:5;height:186px;margin-top:18px;pointer-events:none}
-${root} .rmt-room-presence-stage.is-empty{height:80px}
-${root} .rmt-room-presence-stage .rmt-room-person{left:50%;bottom:8px;transform:translateX(-50%);pointer-events:auto}
-${root} .rmt-room-layout-caption{position:relative;z-index:1;margin:12px 0 0;text-align:center;font-size:12px;color:var(--rmt-room-accent-deep);line-height:1.5}
-@media(max-width:600px){${root} .rmt-room-view .rmt-room-layout-scene{padding:16px 12px 10px}${root} .rmt-room-object-layout{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}${root} .rmt-room-layout-object{grid-column:auto;grid-row:auto;min-height:108px}${root} .rmt-room-layout-object svg{width:36px;height:36px}${root} .rmt-room-layout-object .rmt-room-layout-name{font-size:12px}${root} .rmt-room-object-rail .rmt-room-layout-chip{grid-template-columns:24px 24px minmax(0,1fr)}}
-@media(prefers-reduced-motion:reduce){${root} .rmt-room-layout-object,${root} .rmt-room-layout-chip{transition:none}}`;
+    return room_artwork.roomSceneCss(root);
 }
 
 export function roomCurrentSlot(session = runtimeState.activeSession, date = new Date()) {
@@ -1387,6 +1366,9 @@ export function roomTemporaryPlacement(label, index) {
 
 export function roomObjectVisualKind(item) {
     const classify = text => {
+    if (/手绳|手链|项链|戒指|饰品|bracelet|jewelry/.test(text)) return 'keepsake';
+    if (/布条|衣物|衣服|衬衫|围巾|fabric|scarf|shirt/.test(text)) return 'fabric';
+    if (/包袱|背包|旅行袋|布包|rucksack|satchel/.test(text)) return 'bag';
     if (/宠物|猫|狗|鸟|鱼|窝|笼|水族|\b(?:pet|cat|dog|bird|aquarium)\b/.test(text)) return 'pet';
     if (/行李|地图|车票|护照|旅行|luggage|map|ticket|travel/.test(text)) return 'travel';
     if (/柜|箱|盒|包|抽屉|收纳|cabinet|box|drawer|storage/.test(text)) return 'storage';
@@ -1395,7 +1377,7 @@ export function roomObjectVisualKind(item) {
     if (/书桌|餐桌|工作台|桌|书案|几案|案几|台面|desk|table|workbench/.test(text)) return 'table';
     if (/椅|沙发|坐垫|chair|sofa|seat/.test(text)) return 'seat';
     if (/杯|茶壶|水壶|cup|mug|teapot/.test(text)) return 'cup';
-    if (/书|杂志|文件|卷宗|阅读|book|magazine|file/.test(text)) return 'book';
+    if (/书|手册|典籍|杂志|文件|卷宗|阅读|book|manual|magazine|file/.test(text)) return 'book';
     if (/琴|乐器|唱片|音箱|耳机|麦克风|music|guitar|piano|record|speaker/.test(text)) return 'music';
     if (/植物|花|盆栽|草|花园|plant|flower|garden/.test(text)) return 'plant';
     if (/电脑|显示器|终端|设备|仪器|机械|screen|terminal|device|computer|console/.test(text)) return 'tech';
@@ -1407,7 +1389,7 @@ export function roomObjectVisualKind(item) {
     };
     // Incidental prose ("a chair next to books") must not change the named object icon.
     const named = classify(core_text.normalizeText(item?.label, 100).toLowerCase());
-    return named !== 'other' ? named : classify(core_text.normalizeText(item?.description, 1600).toLowerCase());
+    return named;
 }
 
 export function roomMotifToken(session, space) {
@@ -1640,7 +1622,7 @@ export function renderRoom() {
     const body = ui_overlay.bodyEl();
     body.innerHTML = `<style data-rmt-room-layout-css>${roomLayoutCss()}</style>${!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly ? '<button type="button" class="rmt-btn" data-rmt-action="room-refresh-figure">更新人物外形 · 保留房间内容</button>' : ''}<div class="rmt-room-view" data-rmt-room-world="${core_text.esc(visualProfile.worldStyle)}" data-rmt-room-palette="${core_text.esc(visualProfile.palette)}" data-rmt-room-material="${core_text.esc(visualProfile.material)}" data-rmt-room-density="${core_text.esc(visualProfile.density)}" data-rmt-room-motif="${core_text.esc(sceneMotif)}">
       <div class="rmt-room-map" aria-label="私人空间地图">${map}</div>
-      <div class="rmt-room-location"><div><b>${core_text.esc(currentLocationText)}</b><small>${core_text.esc(session.homeName)} · ${session.spaces.length} 个可观察区域</small></div><div class="rmt-room-location-actions">${!personIsHere ? `<button type="button" class="rmt-room-find" data-rmt-action="room-find-presence">去看看他</button>` : ''}${readOnlyArchive ? '' : `<button type="button" class="rmt-room-find" data-rmt-action="room-life-refresh" ${runtimeState.busy ? 'disabled' : ''}>更新今日生活</button>`}</div></div>
+      <div class="rmt-room-location"><div><b>${core_text.esc(currentLocationText)}</b><small>${core_text.esc(session.homeName)} · ${session.spaces.length} 个可观察区域</small></div><div class="rmt-room-location-actions">${!personIsHere ? `<button type="button" class="rmt-room-find" data-rmt-action="room-find-presence">${core_text.esc(character_labels.characterUiLabel('去看看他'))}</button>` : ''}${readOnlyArchive ? '' : `<button type="button" class="rmt-room-find" data-rmt-action="room-life-refresh" ${runtimeState.busy ? 'disabled' : ''}>更新今日生活</button>`}</div></div>
 
       <div class="rmt-room-flow">
         <section class="rmt-room-card rmt-room-space-note-card" id="${core_constants.OVERLAY_ID}_room_object_detail" aria-live="polite">
@@ -1653,12 +1635,13 @@ export function renderRoom() {
         <section class="rmt-room-stage">
           <div class="rmt-room-stage-head"><b>${core_text.esc(sceneTitle)}</b><span class="rmt-room-clock" data-rmt-room-clock>${core_text.esc(daypart.label)} · ${core_text.esc(roomClockText(now))}</span></div>
           <div class="rmt-room-scene rmt-room-scene-${sceneKind} rmt-room-layout-scene" data-rmt-layout="${sceneLayout}" data-rmt-room-beat="${core_text.esc(String(slot?.id || `${daypart.key}:${slot?.spaceId || ''}:${slot?.activity || ''}`))}" data-rmt-room-daypart="${core_text.esc(daypart.key)}" data-rmt-lighting="${core_text.esc(visualState.lighting)}" data-rmt-window="${core_text.esc(visualState.window)}" data-rmt-order="${core_text.esc(visualState.order)}" data-rmt-surface="${core_text.esc(visualState.surface)}" data-rmt-room-motif="${core_text.esc(sceneMotif)}">
+            ${room_artwork.roomInteriorArt(sceneKind)}
             <div class="rmt-room-object-layout" aria-label="${core_text.esc(selectedSpace.label)}的物件布局">${hotspots}</div>
             ${personIsHere || selectedPets.length ? `<div class="rmt-room-presence-stage ${personIsHere ? '' : 'is-empty'}">` : ''}
             ${petNodes}
             ${personIsHere ? `<button type="button" class="rmt-room-person" data-rmt-action="room-presence" data-rmt-facing="away" data-rmt-identity-key="${core_text.esc(visualProfile.identityKey)}" data-rmt-build="${core_text.esc(figureProfile.build)}" data-rmt-hair-shape="${core_text.esc(figureProfile.hairShape)}" data-rmt-hair-tone="${core_text.esc(figureProfile.hairTone)}" data-rmt-outfit="${core_text.esc(figureProfile.outfit)}" data-rmt-detail="${core_text.esc(figureProfile.detail)}" data-rmt-posture="${core_text.esc(figureProfile.posture)}" aria-label="从背影看看${core_text.esc(charName)}现在在做什么"><span class="rmt-room-figure-shadow" aria-hidden="true"></span><span class="rmt-room-body-figure" aria-hidden="true"><span class="rmt-room-outfit-mark"></span></span><span class="rmt-room-head" aria-hidden="true"><span class="rmt-room-hair"></span><span class="rmt-room-figure-detail"></span></span><span class="rmt-room-unseen" aria-hidden="true">人在光影外</span><span class="rmt-room-person-label" aria-hidden="true">♥</span></button>` : ''}
             ${personIsHere || selectedPets.length ? '</div>' : ''}
-            <div class="rmt-room-layout-caption">图标与编号对应真实物件；背景仅示意空间光影。</div>
+            <div class="rmt-room-layout-caption">点击物件查看 · 室内为示意场景</div>
           </div>
           <div class="rmt-room-object-rail" aria-label="房间物件">${objectRail}</div>
           <div class="rmt-room-activity-strip ${personIsHere ? '' : 'empty'}">

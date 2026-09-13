@@ -1,3 +1,4 @@
+import * as cg_editor from './cgPromptEditor.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_groups from '../archive/groups.js';
@@ -258,14 +259,15 @@ export function heartStripImagePrompt(item) {
     return generation_imageGeneration.dailyComicImagePrompt(item);
 }
 
-export async function drawHeartStripImage(stripId, { promptOverride, expectedTarget = null, onAccepted = null } = {}) {
+export async function drawHeartStripImage(stripId, { promptOverride, expectedTarget = null, onAccepted = null, appearanceBinding = null, preparedPromptPlan = null } = {}) {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
     if (!archive_library.requireWritableArchiveAction()) return;
     const session = runtimeState.activeSession;
     const item = session.dailyStrips.find(strip => strip.id === stripId) || selectedHeartStrip();
     if (!item) return;
+    if (!appearanceBinding || !preparedPromptPlan) { session.selectedStripId = item.id; return cg_editor.openCgPromptEditor({ heartStrip: true }); }
     let captured;
-    try { captured = expectedTarget || generation_imageGeneration.captureCgImageTarget({ mode: core_constants.MODE.HEART, session, item }); generation_imageGeneration.assertCgImageTargetCurrent(captured); }
+    try { captured = expectedTarget || generation_imageGeneration.captureCgImageTarget({ mode: core_constants.MODE.HEART, session, item }); generation_imageGeneration.assertCgImageTargetCurrent(captured); generation_imageGeneration.assertPreparedImagePrompt(preparedPromptPlan, captured, appearanceBinding); }
     catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); return; }
     const context = core_context.currentCharacterGuard();
     const imageState = generation_imageGeneration.imageGenerationUiState(context);
@@ -282,13 +284,13 @@ export async function drawHeartStripImage(stripId, { promptOverride, expectedTar
     const confirmDraw = previous ? ui_overlay.confirmExplicitActionTwice : ui_overlay.confirmExplicitAction;
     const ok = confirmDraw(
         previous ? `重新绘制「${item.title}」？` : `绘制「${item.title}」？`,
-        `${previous ? '成功后会替换当前图片引用；旧文件不会由心迹回廊主动删除。\n\n' : ''}会调用${imageState.providerLabel || '已配置的生图插件'}，可能消耗额度。为了减少 AI 画坏文字，图片提示只要求 Q 版分镜和动作，真正台词仍由心迹回廊界面显示。`,
+        generation_imageGeneration.imageDrawingConfirmationText(imageState, { replacing: !!previous }),
         { destructive: !!previous },
     );
     if (!ok) return;
-    try { generation_imageGeneration.assertCgImageTargetCurrent(captured); }
+    try { generation_imageGeneration.assertCgImageTargetCurrent(captured); generation_imageGeneration.assertPreparedImagePrompt(preparedPromptPlan, captured, appearanceBinding); }
     catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); return; }
-    const prompt = generation_imageGeneration.dailyComicImagePrompt(item, promptOverride);
+    const prompt = preparedPromptPlan.prompt;
     if (!prompt) return globalThis.toastr?.error?.('这条日常一格没有可用的视觉提示。', '心迹回廊');
     const expectedChatId = core_context.getChatId(context);
     const origin = captured.origin;
@@ -311,7 +313,7 @@ export async function drawHeartStripImage(stripId, { promptOverride, expectedTar
     renderHeart();
     try {
         const generated = await generation_imageGeneration.invokeImageGeneration(prompt, context, {
-            orientation: Number(item.panelCount) === 1 ? 'landscape' : 'portrait',
+            appearanceBinding, preparedPromptPlan, orientation: Number(item.panelCount) === 1 ? 'landscape' : 'portrait',
             provider: imageState.provider,
             signal: controller.signal,
             targetKey: generation_imageGeneration.cgImageReservationKey(core_constants.MODE.HEART, item.id, context),
@@ -628,7 +630,7 @@ export function renderHeart() {
             const charDisplayName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext().name2, 120) || '角色';
             const userDisplayName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.memory?.userName || core_context.getContext().name1, 120) || '你';
             const panels = selected.panels.map((panel, index) => `<article class="rmt-heart-panel"><b>${index + 1}</b><div><small>${core_text.esc(panel.caption || `第 ${index + 1} 格`)}</small><p>${core_text.esc(panel.action)}</p>${panel.charLine ? `<div class="rmt-heart-panel-line"><strong>${core_text.esc(charDisplayName)}</strong>${core_text.esc(panel.charLine)}</div>` : ''}${panel.userLine ? `<div class="rmt-heart-panel-line user"><strong>${core_text.esc(userDisplayName)}</strong>${core_text.esc(panel.userLine)}</div>` : ''}</div></article>`).join('');
-            detail = `<div class="rmt-heart-strip-head"><div><h2>${core_text.esc(selected.title)}</h2><p>${core_text.esc(selected.subtitle)}</p></div><span>${selected.panelCount}格</span></div>${image ? `<a class="rmt-heart-strip-image rmt-heart-strip-image-full" href="${core_text.esc(image.url)}" target="_blank" rel="noopener noreferrer" aria-label="查看完整原图（新窗口）">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</a>` : `<div class="rmt-heart-strip-image">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</div>`}<div class="rmt-heart-strip-actions">${readOnly ? '' : `<button type="button" class="rmt-btn" data-rmt-action="edit-heart-cg-prompt" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, selected.id) ? 'disabled' : ''}>图片设置</button>`}</div><div class="rmt-heart-panels">${panels}</div>`;
+            detail = `<div class="rmt-heart-strip-head"><div><h2>${core_text.esc(selected.title)}</h2><p>${core_text.esc(selected.subtitle)}</p></div><span>${selected.panelCount}格</span></div>${image ? `<button type="button" class="rmt-heart-strip-image rmt-heart-strip-image-full" data-rmt-action="view-original-image" aria-label="查看完整原图">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</button>` : `<div class="rmt-heart-strip-image">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</div>`}<div class="rmt-heart-strip-actions">${readOnly ? '' : `<button type="button" class="rmt-btn" data-rmt-action="edit-heart-cg-prompt" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, selected.id) ? 'disabled' : ''}>图片设置</button>`}</div><div class="rmt-heart-panels">${panels}</div>`;
         } else {
             detail = `<div class="rmt-heart-empty">${readOnly ? '日常一格还没有生成。' : '点击上方按钮单独生成日常一格。'}</div>`;
         }

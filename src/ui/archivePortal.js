@@ -50,14 +50,25 @@ export function archiveOpenButtonFromEvent(event) {
 
 export function safeShowArchiveLibrary(source = 'unknown') {
     try {
-        if (navigation_bookmark.restoreReadingPosition({ open: ui_overlay.openOverlay, render: ui_overlay.renderActive, stopAutomaticLife: room.stopRoomClock })) return true;
+        // A menu gesture can arrive through pointer/touch and click. Do not reset an open view.
+        const element = document.getElementById(core_constants.OVERLAY_ID);
+        if (element && !element.hidden) return true;
+        const navigation = { open: ui_overlay.openOverlay, render: ui_overlay.renderActive,
+            stopAutomaticLife: room.stopRoomClock, home: showHome, chooser: ui_overlay.showChooser,
+            library: archive_library.showArchiveLibrary, character: archive_library.showArchiveCharacter,
+            fallback: showHome, pending: () => {
+                runtimeState.activeMode = null; runtimeState.activeSession = null;
+                runtimeState.activeArchiveSnapshot = null; runtimeState.activeArchiveReadOnly = true;
+                runtimeState.archiveViewLevel = 'restoring';
+                ui_overlay.openOverlay(); ui_overlay.topTitle('心迹回廊 · 正在恢复上次位置…');
+                ui_overlay.setBackVisible(false); ui_overlay.setManageVisible(false); ui_overlay.setRegenerateVisible(false);
+                const body = ui_overlay.bodyEl();
+                if (body) body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在读取上次查看的档案…</b></div></div>';
+            } };
+        if (navigation_bookmark.restoreReadingPosition(navigation)) return true;
         if (navigation_bookmark.hasIndexedReadingPosition()) {
-            // Keep the public synchronous boolean contract. Indexed restoration
-            // performs a read-only canonical fetch and cancels on chat/lifecycle changes.
-            void navigation_bookmark.restoreIndexedReadingPosition({ open: ui_overlay.openOverlay, render: ui_overlay.renderActive,
-                stopAutomaticLife: room.stopRoomClock, fallback: () => {
-                    showHome();
-                } });
+            // Preserve the synchronous public opener; pending read completion is cancellable.
+            void navigation_bookmark.restoreIndexedReadingPosition(navigation);
             return true;
         }
         showHome();
@@ -163,6 +174,7 @@ export function bindChatStateEvents() {
     ].filter(Boolean);
 
     const chatHandler = () => {
+        navigation_bookmark.cancelReadingRestore();
         ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
         // Chat navigation must not cancel a request that is already running. Results are
         // bound to their origin chat and are committed when that chat is current again.

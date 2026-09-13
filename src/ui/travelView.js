@@ -314,7 +314,7 @@ export function renderTravel() {
     body.innerHTML = `<div class="rmt-travel" data-rmt-travel-theme="${modes_travel.safeTravelTheme(session.mapTheme)}">
       <div class="rmt-mail-actions"><button type="button" class="rmt-btn" data-rmt-mode="inbox">打开你的邮箱 · 收藏路线明信片</button></div><header class="rmt-travel-head"><div><small>THE ROUTES HE TAKES</small><h2>${core_text.esc(session.title)}</h2><p>${core_text.esc(session.routeSummary)}</p></div><div><span><b>${near.length}</b> 附近</span><span><b>${far.length}</b> 远方</span></div></header>
       <div class="rmt-travel-layout">
-        <section class="rmt-travel-map" aria-label="他的出行路线地图">
+        <section class="rmt-travel-map" aria-label="出行路线地图">
           <div class="rmt-travel-grid" aria-hidden="true"></div>
           <svg class="rmt-travel-routes" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M7 73 C22 57 27 29 46 39 S70 78 93 47"/><path d="M12 22 C31 12 44 27 55 61 S73 86 91 82"/><path d="M18 89 C33 70 54 83 66 52 S81 19 94 17"/></svg>
           <div class="rmt-travel-horizon" aria-hidden="true"><span></span><span></span><span></span></div>

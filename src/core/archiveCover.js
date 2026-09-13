@@ -1,3 +1,4 @@
+import * as utility_panels from '../ui/utilityPanels.js';
 import * as core_text from './text.js';
 
 export const ARCHIVE_INTRO_STYLES = Object.freeze({
@@ -54,13 +55,14 @@ export function archiveVerdictText(memory) {
         verdictStyle: verdict.style, verdictSources: verdict.sources }, memory?.memories || [], { legacy: verdict.version === 1 })?.text || '';
 }
 
-export function archiveCoverHtml(memory, { writable = false, busy = false } = {}) {
+export function archiveCoverHtml(memory, { writable = false, busy = false, update = false } = {}) {
     const verdict = archiveVerdictText(memory);
     const oldSummary = core_text.normalizeText(memory?.archiveSummary, 1800);
     const titles = (memory?.memories || []).slice(0, 7).map(item => core_text.normalizeText(item?.title, 100)).filter(Boolean);
     return `<div class="rmt-archive-cover">
       ${verdict ? `<div class="rmt-archive-verdict">${verdict.split(/\n\s*\n/).map(paragraph => `<p>${core_text.esc(paragraph)}</p>`).join('')}</div>` : '<p class="rmt-archive-verdict-empty">尚未写下档案简介。</p>'}
-      ${writable ? `<button class="rmt-btn rmt-cover-rewrite" type="button" data-rmt-action="rewrite-archive-verdict" ${busy ? 'disabled' : ''}>${verdict ? '重写简介' : '写下简介'}</button>` : !verdict ? '<small>回到这份档案的聊天窗口，可单独写下简介。</small>' : ''}
+      ${writable && update ? `<div class="rmt-cover-update-row"><button type="button" class="rmt-btn rmt-archive-update" data-rmt-action="import-memory" ${busy ? 'disabled' : ''}>增量更新当前档案</button>${utility_panels.operationHelpButton('import-memory')}</div>` : ''}
+      ${writable ? `<button class="rmt-btn rmt-cover-rewrite" type="button" data-rmt-action="rewrite-archive-verdict" ${busy ? 'disabled' : ''}>${verdict ? '重写简介' : '写下简介'}</button>${utility_panels.operationHelpButton('rewrite-archive-verdict')}` : !verdict ? '<small>回到这份档案的聊天窗口，可单独写下简介。</small>' : ''}
       ${oldSummary || titles.length ? `<details class="rmt-archive-source-fold"><summary>查看记忆梗概与索引</summary>${oldSummary ? `<p>${core_text.esc(oldSummary)}</p>` : ''}${titles.length ? `<p>${titles.map(core_text.esc).join(' · ')}</p>` : ''}</details>` : ''}
     </div>`;
 }

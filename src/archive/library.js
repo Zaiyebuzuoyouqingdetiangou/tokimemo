@@ -19,7 +19,8 @@ import * as ui_phoneView from '../ui/phoneView.js';
 import * as ui_endingView from '../ui/endingView.js';
 import * as recovery_view from '../ui/recoveryView.js';
 
-export async function showArchiveLibrary() {
+export async function showArchiveLibrary({ canContinue = () => true } = {}) {
+    if (!canContinue()) return;
     ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock(); runtimeState.activeMode = null; runtimeState.activeSession = null; runtimeState.activeArchiveSnapshot = null; runtimeState.activeArchiveReadOnly = true; runtimeState.archiveLibraryCharacterKey = ''; runtimeState.archiveViewLevel = 'library';
     ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setManageVisible(false); ui_overlay.setBackVisible(false); ui_overlay.topTitle('心迹回廊 · 档案室');
@@ -35,7 +36,7 @@ export async function showArchiveLibrary() {
             }
         } catch {}
     }));
-    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) return;
+    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch || !canContinue()) return;
     if (deletedEntryIds.size) {
         const liveContext = core_context.getContext();
         const rawMemory = archive_repository.migrateArchiveInMemory(liveContext.chatMetadata?.[core_constants.MEMORY_KEY]);
@@ -51,6 +52,7 @@ export async function showArchiveLibrary() {
     try {
         let ctx = core_context.currentCharacterGuard();
         await core_cache.ensureCurrentArchiveBackup(ctx);
+        if (!canContinue()) return;
         ctx = core_context.currentCharacterGuard();
         const mem = archive_repository.getImportedMemory(ctx);
         if (mem) {
@@ -59,6 +61,7 @@ export async function showArchiveLibrary() {
             // after the tombstone; genuinely old source metadata stays hidden.
             const resolvedEntry = core_cache.archiveBackupEntryForContext(ctx, mem);
             const backupState = await archive_backupStore.readArchiveBackupState(resolvedEntry);
+            if (!canContinue()) return;
             if (backupState.deleted) {
                 runtimeState.archiveDeletionFences.add(archive_repository.archiveDeletionFenceKey(ctx, mem, resolvedEntry.entryId));
             } else {
@@ -67,6 +70,7 @@ export async function showArchiveLibrary() {
             }
         }
     } catch {}
+    if (!canContinue()) return;
     const archiveContext = core_context.getContext();
     const index = archive_groups.getArchiveIndex(archiveContext);
     const deletedIndex = archive_groups.buildDeletedArchiveCharacterIndex(archiveContext);
@@ -140,7 +144,7 @@ export function showArchiveCharacter(groupId) {
     if (profile && matchedDescriptor) profile = modes_relations.patchCharacterProfileFromCard(context, profile, matchedDescriptor.index);
     const canGenerateProfile = !!matchedDescriptor;
     const profileHtml = modes_relations.characterProfileHtml({ profile, profileKey, characterName: name, avatarUrl: charAvatar, canGenerate: canGenerateProfile });
-    const rows = entries.map(item => `<button type="button" class="rmt-archive-overview-item" data-rmt-indexed-chat="${core_text.esc(item.chatId)}" data-rmt-indexed-character="${core_text.esc(item.characterKey)}" data-rmt-indexed-entry="${core_text.esc(core_context.archiveIndexEntryId(item))}"><span class="rmt-overview-dot">●</span><span><b>${core_text.esc(item.archiveName)}</b><small>${core_text.esc(item.characterName)} · ${core_text.esc(item.chatId)} · ${item.memoryCount} 条记忆 · ${core_text.esc(ui_overlay.formatArchiveTime(item.updatedAt))}</small></span><i class="fa-solid fa-chevron-right"></i></button>`).join('');
+    const rows = entries.map((item, volumeIndex) => `<button type="button" class="rmt-archive-overview-item rmt-archive-volume" data-rmt-indexed-chat="${core_text.esc(item.chatId)}" data-rmt-indexed-character="${core_text.esc(item.characterKey)}" data-rmt-indexed-entry="${core_text.esc(core_context.archiveIndexEntryId(item))}"><span class="rmt-volume-spine" aria-hidden="true">卷 ${String(volumeIndex + 1).padStart(2, '0')}</span><span class="rmt-volume-cover"><small class="rmt-volume-kicker">CHAT ARCHIVE</small><b>${core_text.esc(item.archiveName)}</b><small>${core_text.esc(item.characterName)} · ${core_text.esc(item.chatId)} · ${item.memoryCount} 条记忆 · ${core_text.esc(ui_overlay.formatArchiveTime(item.updatedAt))}</small></span><i class="fa-solid fa-chevron-right"></i></button>`).join('');
     body.innerHTML = `<div class="rmt-archive-room">${profileHtml}<section class="rmt-archive-card rmt-character-chat-archives"><div class="rmt-character-heart-head"><button type="button" class="rmt-character-heart-avatar" data-rmt-avatar-talk="${core_text.esc(key)}" aria-label="和角色说话">${charAvatar ? `<img src="${core_text.esc(charAvatar)}" alt="">` : '<i class="fa-solid fa-user"></i>'}<span><i class="fa-solid fa-comment-dots"></i></span></button><div><div class="rmt-archive-kicker">CHAT ARCHIVES</div><strong class="rmt-archive-title">${core_text.esc(name)} · 不同聊天世界线</strong></div></div><div style="margin:10px 0"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button></div><div class="rmt-archive-overview-list" style="max-height:none">${rows || '<div class="rmt-archive-overview-empty">这个角色组还没有已索引档案。</div>'}</div></section></div>`;
 }
 
@@ -736,7 +740,7 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
         <div class="rmt-memory-gate-text">
           <div class="rmt-archive-kicker">${snapshot.backupOnly ? 'RECOVERED LOCAL BACKUP' : 'READ-ONLY ARCHIVE'}</div>
           <strong class="rmt-archive-title">${core_text.esc(snapshot.archiveName)}</strong>
-          ${core_archiveCover.archiveCoverHtml(memory, { writable: !snapshot.backupOnly && core_context.getChatId(core_context.getContext()) === snapshot.chatId && !runtimeState.activeArchiveReadOnly, busy: runtimeState.busy || core_requestCoordinator.hasGenerationTasks() })}
+          ${core_archiveCover.archiveCoverHtml(memory, { writable: !snapshot.backupOnly && core_context.getChatId(core_context.getContext()) === snapshot.chatId && !runtimeState.activeArchiveReadOnly, update: true, busy: runtimeState.busy || core_requestCoordinator.hasGenerationTasks() })}
           <div class="rmt-memory-status ready">${snapshot.backupOnly ? '源聊天不可用 · 已从独立备份恢复 · 永久只读' : runtimeState.activeArchiveReadOnly ? '只读查看' : '编辑待命'} · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${core_constants.ARCHIVE_PORTAL_MODES.length}</div>
           <div class="rmt-archive-meta">${snapshot.backupOnly ? `本机备份 · ${core_text.esc(snapshot.sourceError || '源聊天无法读取')}` : (runtimeState.activeArchiveReadOnly ? '当前为只读档案' : '写入前会再次验证目标聊天')}</div>
           <div class="rmt-archive-readonly-control">

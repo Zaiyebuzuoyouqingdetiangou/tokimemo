@@ -1,3 +1,5 @@
+import * as image_paths from '../core/cgImagePatch.js';
+import * as baiBai_characters from './baiBaiCharacters.js';
 // Original adapter for the author's documented STBaiBaiImage API v1.
 // No third-party implementation, settings, credentials or DOM are accessed.
 import * as core_text from '../core/text.js';
@@ -45,22 +47,13 @@ export function baiBaiImageState() {
         }
         const status = api.getBackendStatus();
         if (status?.configured !== true) return { available: false, detected: true, reason: MESSAGES.BBI_NOT_CONFIGURED, code: 'BBI_NOT_CONFIGURED' };
-        return { api, available: true, detected: true, reason: '柏宝绘已连接 · API v1', code: '' };
+        return { api, status, available: true, detected: true, reason: '柏宝绘已连接 · API v1', code: '' };
     } catch {
         return { available: false, detected: false, reason: MESSAGES.BBI_BACKEND_ERROR, code: 'BBI_BACKEND_ERROR' };
     }
 }
 
-function savedImagePath(value) {
-    if (typeof value !== 'string' || value.length > 4096 || !value.trim()) return '';
-    try {
-        const base = globalThis.location?.href || 'http://localhost/';
-        const parsed = new URL(value, base);
-        if (!['http:', 'https:'].includes(parsed.protocol) || parsed.origin !== new URL(base).origin
-            || parsed.username || parsed.password || !/^\/user\/images\/.+\.(?:png|jpe?g|webp|gif)$/i.test(parsed.pathname)) return '';
-        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-    } catch { return ''; }
-}
+function savedImagePath(value) { return image_paths.savedLocalImagePath(value); }
 
 function publicFailure(error) {
     const mapped = {
@@ -76,7 +69,7 @@ function publicFailure(error) {
 export function baiBaiImagePendingCount() { return pendingGenerations.size; }
 export function isBaiBaiImageTargetPending(targetKey) { return !!targetKey && pendingGenerations.has(targetKey); }
 
-export async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', onProgress = null, onSettled = null, targetKey = '' } = {}) {
+export async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', onProgress = null, onSettled = null, targetKey = '', appearanceBinding = null, requestNl = '', characterDirections = null, assertBeforeGenerate = null } = {}) {
     if (signal?.aborted) throw baiBaiImageError('BBI_ABORTED');
     const state = baiBaiImageState();
     if (!state.available) throw baiBaiImageError(state.code);
@@ -85,11 +78,14 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
     if (pendingGenerations.size >= BAIBAI_IMAGE_CONCURRENCY) throw baiBaiImageError('BBI_BUSY');
     const visual = core_text.normalizeText(prompt, 1800);
     if (!visual) throw baiBaiImageError('BBI_INVALID_ARGS');
+    const sceneNl = core_text.normalizeText(requestNl, 5000) || visual;
     // Freeze grouping before the provider awaits; its default otherwise reads the new chat at save time.
     const request = {
-        prompt: visual, nl: visual, size: orientation === 'portrait' ? 'portrait' : 'landscape',
+        ...(appearanceBinding ? baiBai_characters.buildBaiBaiCharacterRequest(appearanceBinding, state.api, state.status, visual, sceneNl, characterDirections) : { prompt: visual, nl: sceneNl }),
+        size: orientation === 'portrait' ? 'portrait' : 'landscape',
         save: true, character: core_text.normalizeText(characterName, 120) || '心迹回廊 CG',
     };
+    assertBeforeGenerate?.();
     const controller = new AbortController();
     let timer;
     let stopped = false;
@@ -122,13 +118,16 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
             });
         const result = await Promise.race([providerPromise, stopPromise]);
         if (signal?.aborted || stopped) throw baiBaiImageError('BBI_ABORTED');
+        if (request.characters?.length && result?.charactersApplied !== true) {
+            throw core_text.safeUserError('', 'BBI_CHARACTERS_NOT_APPLIED');
+        }
         const path = savedImagePath(result?.path);
         if (!path) throw baiBaiImageError('BBI_SAVE_FAILED');
         // Drop the potentially multi-MB dataUrl; only durable image references enter archive metadata.
         return { url: path, provider: BAIBAI_IMAGE_PROVIDER };
     } catch (error) {
         if (!providerPromise) pendingGenerations.delete(reservation); // synchronous API failure
-        if (ownErrors.has(error)) throw error;
+        if (ownErrors.has(error) || error?.code === 'BBI_CHARACTERS_NOT_APPLIED') throw error;
         throw publicFailure(error);
     } finally {
         clearTimeout(timer);

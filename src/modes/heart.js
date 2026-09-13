@@ -442,7 +442,7 @@ ${previous ? `UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:\n${core_incremental.incr
 要求：
 - panelCount 只能 1/2/4，按故事选择，panels 数量与所选格数一致；一格也可以完整收尾。
 - 每格 action 描述这一格独有的动作、表情或镜头变化，按先后推进，不能把同一动作同一构图复制数遍。没有第二个变化就选单格。
-- visualSeed 按需提供，不要求凑数；imagePrompt 明确 Q版/chibi、大头小身体的成年角色漫画造型（不是儿童），不用正常身材写实比例，并明确 no text / no speech bubble / no watermark。
+- visualSeed 按需提供，不要求凑数；imagePrompt 明确 Q版/chibi、大头小身体的成年角色漫画造型（不是儿童），先写主要角色的发型、外貌、服装与人数，再写每格动作和环境，不用正常身材写实比例，并明确 no text / no speech bubble / no watermark。
 - userLine 只是非正史小剧场台词，不代表用户真实选择。${previous ? '必须避开 EXISTING_STRIP_INDEX_JSON 的标题、动作和梗；旧一格与已绘图片由本地保留。' : ''}只输出 JSON。`;
 }
 

@@ -1,3 +1,4 @@
+import * as character_labels from '../core/characterLabels.js';
 // Character Profile + Relation Garden.
 // Shared profile uses only controlled setting sources; per-chat relations use evidence-gated Mxxx memories.
 import * as archive_groups from '../archive/groups.js';
@@ -771,10 +772,10 @@ export function characterProfileHtml({ profile, profileKey = '', characterName =
 export function worldlineDiscoveriesHtml(discoveries = []) {
     const items = Array.isArray(discoveries) ? discoveries.slice(0, 16) : [];
     if (!items.length) {
-        return `<section class="rmt-archive-card rmt-profile-discoveries"><div class="rmt-profile-section-head"><div><b>这个世界线了解到的他</b><small>只显示当前聊天档案中后来明确得知、并能回指 Mxxx 的资料。</small></div><span>0</span></div><div class="rmt-profile-discovery-empty">还没有可验证的新资料。角色卡 / 世界书里的固定资料仍在上层 Character Profile 中。</div></section>`;
+        return `<section class="rmt-archive-card rmt-profile-discoveries"><div class="rmt-profile-section-head"><div><b>${core_text.esc(character_labels.characterUiLabel('这个世界线了解到的他'))}</b><small>只显示当前聊天档案中后来明确得知、并能回指 Mxxx 的资料。</small></div><span>0</span></div><div class="rmt-profile-discovery-empty">还没有可验证的新资料。角色卡 / 世界书里的固定资料仍在上层 Character Profile 中。</div></section>`;
     }
     const cards = items.map(item => `<article class="rmt-profile-discovery"><div><small>${core_text.esc(item.label)}</small><b>${core_text.esc(item.value)}</b></div>${item.summary ? `<p>${core_text.esc(item.summary)}</p>` : ''}<i>${core_text.esc((item.sourceMemoryIds || []).join(' · '))}${item.sourceMemoryAnchor ? ` · ${core_text.esc(item.sourceMemoryAnchor)}` : ''}</i></article>`).join('');
-    return `<section class="rmt-archive-card rmt-profile-discoveries"><div class="rmt-profile-section-head"><div><b>这个世界线了解到的他</b><small>这些资料只属于当前聊天窗口，不会自动写进其它世界线的公共 Profile。</small></div><span>${items.length}</span></div><div class="rmt-profile-discovery-grid">${cards}</div></section>`;
+    return `<section class="rmt-archive-card rmt-profile-discoveries"><div class="rmt-profile-section-head"><div><b>${core_text.esc(character_labels.characterUiLabel('这个世界线了解到的他'))}</b><small>这些资料只属于当前聊天窗口，不会自动写进其它世界线的公共 Profile。</small></div><span>${items.length}</span></div><div class="rmt-profile-discovery-grid">${cards}</div></section>`;
 }
 
 export function renderRelations() {

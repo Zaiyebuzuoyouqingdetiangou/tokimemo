@@ -288,7 +288,7 @@ ${JSON.stringify(compactAdvExisting(previousSession), null, 2)}
 - 初次生成优先 3～6 个重要节点；${revisit ? '同一记忆扩写返回 0～3 个真实事件的新镜头，不要求新增历史事件。' : '增量更新只返回 0～6 个由 incrementalMemoryIds 支撑的新节点，没有新增重要事件就返回空 events。'}
 - ${revisit ? '标题及镜头必须与旧内容不同；真实锚点和来源可重复，不能捏造新事件。' : '必须避开旧标题、锚点和来源组合；禁止返回旧节点。'}
 - 每条必须有真实 sourceMemoryIds + sourceMemoryAnchor；visualSeed 至少 4 个具体元素。
-- imagePrompt 只写可见画面，不包含对白、记忆/世界书原文、ID、URL、HTML 或脚本。
+- imagePrompt 只写可见画面，先交代画面中主要角色的可辨识外貌、服装和人数，再写动作、镜头、场景与光线；不包含对白、记忆/世界书原文、ID、URL、HTML 或脚本。
 - 不要输出 adv 正文。只输出 JSON。`;
 }
 

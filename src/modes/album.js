@@ -163,7 +163,7 @@ ${JSON.stringify(compactAlbumExisting(previousSession), null, 2)}
 - unlocked=true 必须来自本次提供的真实增量档案；必须避开 EXISTING_ALBUM_INDEX_JSON 已覆盖的标题、锚点与 sourceMemoryIds 组合。
 - unlocked=false 不是硬性数量要求；只有存在明确、自然的未来期许时才给 0～2 个，hintLines 写解锁提示。
 - 每个 unlocked=true 必须有有效 sourceMemoryIds + sourceMemoryAnchor；category 只能是“日常”“约会”“结局”；visualSeed 至少 4 个元素。
-- imagePrompt 只写肉眼可见的角色、服装、动作、场景、构图与光线；禁止 URL、HTML、脚本、记忆原文和不可见心理活动。
+- imagePrompt 只写肉眼可见的角色、服装、动作、场景、构图与光线；先写画面中主要角色的可辨识外貌与服装，再写动作、站位、道具和环境；禁止 URL、HTML、脚本、记忆原文和不可见心理活动。
 - 不要输出 comments；共同回忆会在后续更小的请求里生成。只输出 JSON。`;
 }
 

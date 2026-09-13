@@ -30,6 +30,7 @@ export function getPluginSettings(context = core_context.getContext()) {
         apiConnectionMode: settings.apiConnectionMode === 'manual' ? 'manual' : 'profile',
         connectionProfileId: core_text.normalizeText(settings.connectionProfileId, 160),
         modelOverride: core_text.normalizeText(settings.modelOverride, 240),
+        profileApiStreaming: settings.profileApiStreaming === true,
         manualApiBaseUrl,
         manualApiModel: core_text.normalizeText(settings.manualApiModel, 240),
         manualApiStreaming: settings.manualApiStreaming === true,

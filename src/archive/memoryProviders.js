@@ -8,6 +8,7 @@ import * as archive_sourceLedger from './sourceLedger.js';
 export const MEMORY_PROVIDER_REGISTRY = Object.freeze([
     Object.freeze({ id: 'sillytavern-memory', adapterVersion: 1, label: 'SillyTavern Memory', mode: 'passive-current-chat' }),
     Object.freeze({ id: 'baibai-book-public-api', adapterVersion: 1, label: '柏宝书记忆', mode: 'public-current-chat-api-v1' }),
+    Object.freeze({ id: 'myriad-knots-public-v1', adapterVersion: 1, label: '千千结记忆', mode: 'public-current-chat-snapshot-v1' }),
 ]);
 
 export function registeredMemoryProvider(id) {
@@ -323,4 +324,82 @@ export function stMemoryCurrentChatBatch(context, expectedChatId) {
         records: [{ provider: 'sillytavern-memory', providerVersion: '1', sourceId: 'st:1_memory', revision, type: 'summary', content }],
         coverage: { status: 'partial', returned: 1, total: null, reason: '当前提示中已注入的摘要，不代表完整记忆库' },
     };
+}
+
+
+// Author contract: atonal519/ST-MyriadKnots/docs/public-api.md.
+// Identity-ready is NOT data-ready. Import only saved floor summaries, never CSE,
+// people profiles, private cognition or the prompt-oriented readMemory aggregate.
+export function findMyriadKnotsPublicApi(root = globalThis) {
+    const api = safeOwn(root, 'qqj_v3_public_bridge_v1');
+    const getStatus = safeMethod(api, 'getStatus');
+    const getSnapshot = safeMethod(api, 'getSnapshot');
+    return getStatus && getSnapshot ? { api, getStatus, getSnapshot, apiVersion: 1 } : null;
+}
+
+function myriadIdentity(dto) {
+    const identity = safeOwn(dto, 'identity');
+    const keys = ['hostChatId', 'qqjChatId', 'characterLocator', 'personaLocator'];
+    const values = keys.map(key => safeOwn(identity, key));
+    if (values.some(value => typeof value !== 'string' || !value || value.length > 1000)) return null;
+    return values;
+}
+
+export function readMyriadKnotsCurrentChat(provider, expectedChatId, signal) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    const fail = code => { throw core_text.safeUserError('', code); };
+    if (!provider?.api || typeof provider.getStatus !== 'function' || typeof provider.getSnapshot !== 'function') return null;
+    let before, snapshot, after;
+    try {
+        before = provider.getStatus.call(provider.api);
+        if (safeOwn(before, 'status') !== 'ready') return fail('RMT_QQJ_NOT_READY');
+        snapshot = provider.getSnapshot.call(provider.api);
+        after = provider.getStatus.call(provider.api);
+    } catch (error) {
+        if (error?.code === 'RMT_QQJ_NOT_READY') throw error;
+        return fail('RMT_QQJ_READ');
+    }
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    const ids = [before, snapshot, after].map(myriadIdentity);
+    const wanted = comparable(expectedChatId);
+    // hostChatId can be reused by another character. The public characterLocator
+    // is the host card avatar locator; a consistently stale QQJ snapshot must not
+    // become another character's history merely because all three reads agree.
+    let characterLocator;
+    try { characterLocator = core_context.currentCharacterAvatar(core_context.currentCharacterGuard()); }
+    catch { return fail('RMT_QQJ_IDENTITY'); }
+    if (!wanted || !characterLocator || ids.some(id => !id || comparable(id[0]) !== wanted || id[2] !== characterLocator)
+        || [before, snapshot, after].some(value => safeOwn(value, 'status') !== 'ready')
+        || ids.some(id => id.some((value, i) => value !== ids[0][i]))) return fail('RMT_QQJ_IDENTITY');
+    const memory = safeOwn(snapshot, 'memory');
+    if (safeOwn(memory, 'status') !== 'ready') return fail('RMT_QQJ_NOT_READY');
+    const rows = safeArrayDataValues(safeOwn(memory, 'floors'), core_constants.MAX_MEMORY_SOURCE_LEDGER_RECORDS);
+    if (!Array.isArray(safeOwn(memory, 'floors')) || rows.rejectedAccessors) return fail('RMT_QQJ_READ');
+    const records = [];
+    const seen = new Set();
+    let chars = 0, truncated = rows.length > rows.values.length;
+    for (const row of rows.values) {
+        const summary = safeOwn(row, 'summary');
+        const floorId = safeOwn(row, 'floorId');
+        const index = safeOwn(row, 'messageIndex');
+        if (typeof summary !== 'string' || typeof floorId !== 'string' || !floorId || floorId.length > 300
+            || !Number.isSafeInteger(index) || index < 0 || seen.has(floorId)) return fail('RMT_QQJ_READ');
+        seen.add(floorId);
+        if (!summary.trim()) continue;
+        if (chars + summary.length > core_constants.MAX_MEMORY_SOURCE_LEDGER_CHARS) { truncated = true; break; }
+        chars += summary.length;
+        const revision = String(core_text.hashString(summary));
+        records.push({ provider: 'myriad-knots-public-v1', providerVersion: 'bridge-v1',
+            sourceId: `qqj:${floorId}`, revision, type: 'summary', content: summary,
+            coverage: { messageStart: index + 1, messageEnd: index + 1 } });
+    }
+    const checkpoint = safeOwn(memory, 'headCheckpointId');
+    const revision = String(core_text.hashString(`${typeof checkpoint === 'string' ? checkpoint.slice(0, 1000) : ''}|${records.map(row => row.sourceId + ':' + row.revision).join('|')}`));
+    return { provider: 'myriad-knots-public-v1', providerVersion: 'bridge-v1', apiVersion: 1,
+        label: '千千结记忆', revision, records,
+        // The snapshot has no full-chat coverage contract. Never erase a previous
+        // complete source or claim that an unloaded/empty partition covers history.
+        coverage: { status: truncated ? 'truncated' : 'partial', returned: records.length,
+            total: rows.length, reason: truncated ? '已加载摘要超过本地读取上限，未宣称完整'
+                : records.length ? '千千结当前已加载并保存的摘要；不代表完整聊天覆盖' : '千千结当前已加载快照没有摘要；旧来源保留' } };
 }

@@ -1,6 +1,7 @@
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_context from './context.js';
+import * as generation_diagnostics from './generationDiagnostics.js';
 
 export function esc(value) {
     return String(value ?? '')
@@ -42,6 +43,35 @@ export function toastText(value, max = 800) {
 }
 
 const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
+    RMT_IMAGE_SCENE_INVALID: '当前画面描述或分镜不完整、超出长度限制，请在图片设置中检查；尚未调用柏宝绘。',
+    RMT_IMAGE_PROMPT_INVALID: '文字模型返回的画面提示词结构不完整或含不允许的字段内容；尚未调用柏宝绘，旧图保留。',
+    RMT_IMAGE_PROMPT_LANGUAGE: '文字模型没有返回可用的英文画面标签与英文描述；尚未调用柏宝绘，请重新整理提示词。',
+    RMT_IMAGE_PROMPT_CHANGED: '画面、规则、角色绑定或出图后端已变化，请重新整理提示词；旧图保留。',
+
+    RMT_QQJ_NOT_READY: "千千结当前摘要尚未加载或未启用。请先打开千千结面板，准备好后重新扫描；旧来源保留。",
+    RMT_QQJ_IDENTITY: "千千结返回的聊天、角色或 Persona 身份发生变化；本次拒绝混入其他窗口。",
+    RMT_QQJ_READ: "千千结公开快照不可读取或格式不兼容；旧来源保留，不调用私有接口。",
+    RMT_CG_TARGET_CHANGED: "当前图片对应的角色、聊天或档案已经变化；旧图保留。",
+    RMT_IMAGE_VIEW_URL: "原图地址不是可安全显示的本地图片；未跳转网页。",
+    RMT_IMAGE_VIEW_LOAD: "原图读取失败。请检查图库中是否仍有该图片，酒馆页面未跳转。",
+    RMT_IMAGE_EXPORT_LIMIT: "原图超过25MB安全导出上限，未继续载入；请从柏宝绘图库保存。",
+    RMT_IMAGE_EXPORT: "当前环境无法导出图片；请长按原图或从柏宝绘图库保存。酒馆页面未跳转。",
+    BBI_LIBRARY: "柏宝绘角色库公开接口不可用或内容格式不兼容，请先在柏宝绘准备角色外貌。",
+    BBI_BINDING: "角色外貌选择已失效或两人绑定冲突，请重新打开图片设置。",
+    BBI_CHARACTERS_UNSUPPORTED: "当前柏宝绘后端不支持多角色提示；本次没有出图，请使用支持角色提示的后端或手动整理单张提示词。",
+    BBI_CHARACTERS_NOT_APPLIED: "图片已生成，但柏宝绘返回角色提示未生效。旧图保留，请先到柏宝绘图库检查，避免重复付费。",
+    BBI_PROMPT_PIPELINE_UNAVAILABLE: "当前柏宝绘公开 API 未提供提示词生成入口。此处只使用已有画面描述与公开角色库，不会另调文本 API 或调用私有流程。",
+    BBI_NOT_READY: "未检测到柏宝绘公开 API v1。若已安装柏宝绘，请更新到支持公开接口的版本，启用后刷新页面；刚完成加载可点击“重新检测”。",
+    BBI_VERSION: "柏宝绘接口版本或能力不兼容，需要公开 API v1 和图库保存能力。",
+    BBI_NOT_CONFIGURED: "柏宝绘出图渠道尚未配置完成，请在柏宝绘中检查 NAI / ComfyUI 设置。",
+    BBI_INVALID_ARGS: "柏宝绘未接受这次画面提示，请检查画面描述后重试。",
+    BBI_RATE_LIMITED: "柏宝绘生图限流，内置等待已结束；本次不会再自动重试或切换渠道。",
+    BBI_BACKEND_ERROR: "柏宝绘出图失败，请检查其渠道配置与请求历史。旧图已保留。",
+    BBI_SAVE_FAILED: "图片已生成，但没有取得可保存的本地路径。旧图已保留；请检查柏宝绘的图库保存状态，避免重复出图。",
+    BBI_TIMEOUT: "等待柏宝绘超过 5 分钟，已请求取消。旧图已保留；请先检查柏宝绘任务状态。",
+    BBI_ABORTED: "已取消接收本次图片，旧图已保留。",
+    BBI_BUSY: "已有两张图片提交给柏宝绘，请等其中一张结束后再绘制。",
+    BBI_TARGET_BUSY: "这张图片的绘制请求还未结束，请先等待，避免重复出图。",
     RMT_PROFILE_CAPABILITY: '1.1.18 一键配置要求新版连接能力；当前页面未提供安全的配置读取能力，本次没有发送请求。',
     RMT_MANUAL_API_URL: '手动 API 地址无效；请检查地址，并把 Key、Token 或密码放在独立凭据输入框中。',
     RMT_MANUAL_API_TRANSPORT: '远程手动 API 必须使用 HTTPS；只有本机地址可以使用 HTTP。',
@@ -92,7 +122,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_BUTTERFLY_omega: '最终观测点的告白或结局判定不完整；旧内容保留，可单独重试。',
     RMT_BUTTERFLY_worldSpec: '该节点的世界条件不完整；旧内容保留，可单独重试。',
     RMT_ROOM_STRUCTURE: '房间的空间差异、四时段生活或互动台词不完整；已保留旧内容，可单独重试房间。',
-    RMT_ROOM_FIELDS: '房间的待补文字或增量物件尚未通过校验；已保留旧内容，请重试。若反复截断，请检查最大输出设置。',
+    RMT_ROOM_FIELDS: '房间的待补文字或增量物件尚未通过校验；已保留旧内容。此错误不等于已确认输出截断，请查看生成诊断。',
     RMT_BUTTERFLY_relationship: '该节点的人物关系归属不明确；旧内容保留，请重试此节点。',
     RMT_BUTTERFLY_unique: '该节点重复或分歧维度不符；旧内容保留，请重试此节点。',
     RMT_ROOM_PETS: '人设有宠物，但模型漏写了有效宠物节点；请单独重试房间。',
@@ -117,6 +147,8 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_ARCHIVE_DELETED_FENCE: '目标档案已被明确删除；较早启动的任务不会重新创建它。',
     RMT_METADATA_DURABILITY_UNAVAILABLE: '当前页面无法确认档案已经持久保存；结果保留待重试，不会假装成功。',
 });
+
+generation_diagnostics.configureDiagnosticReasons(SAFE_ERROR_CODE_MESSAGES);
 
 const SAFE_DIAGNOSTIC_CODES = new Set([
     ...Object.keys(SAFE_ERROR_CODE_MESSAGES),
@@ -168,10 +200,12 @@ export function safeErrorDiagnostic(error) {
     if (/^(?:network|timeout|transport|provider|validation|storage|lifecycle)$/.test(kind)) diagnostic.kind = kind;
     if (typeof error?.retryable === 'boolean') diagnostic.retryable = error.retryable;
     if (typeof error?.retryableJson === 'boolean') diagnostic.retryableJson = error.retryableJson;
+    generation_diagnostics.recordGenerationDiagnostic(diagnostic);
     return diagnostic;
 }
 
 export function safeErrorSummary(error, max = 520) {
+    safeErrorDiagnostic(error);
     const raw = normalizeText(error?.message, 12000);
     const status = safeErrorStatus(error);
     const code = safeErrorCode(error);
