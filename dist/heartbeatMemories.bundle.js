@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 86
-// Source SHA-256: db4186825f72a08f0636147637881fc699dc21feebeb08799cec532f75014a74
+// Source SHA-256: eec75c2e1f761057c4fbc4a0b7f3561f3bfb3a49d7e4191a69cba61b92cb9a8e
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -9796,14 +9796,43 @@ function sanitizeCgVisualText(value, limit = core_constants.MAX_CG_IMAGE_PROMPT_
     return core_text.normalizeText(text.replace(/\s{2,}/g, ' '), limit);
 }
 
+
+// Appearance for image generation.
+//
+// The CG prompt previously carried only the scene, so the image model invented a new
+// character design every time — the "图文不符" everyone hits. Pull a bounded, appearance-only
+// slice of the character card and pin it to every prompt so all CGs of one character match.
+//
+// Appearance clauses only: plot, relationships and archive text must never reach the image
+// provider, so this filters by visual keywords and caps hard at 240 characters.
+const CG_APPEARANCE_HINT = /(头发|长发|短发|发色|发型|银发|黑发|金发|白发|红发|眼|瞳|身高|身形|体型|身材|穿|衣|袍|制服|西装|衬衫|外套|裙|肤色|皮肤|耳|角|尾|疤|痣|眼镜|面容|长相|样貌|hair|eyes?|tall|wears?|outfit)/i;
+
+function characterAppearanceForCg(context = null) {
+    let fields = null;
+    try { fields = (context || core_context.getContext())?.getCharacterCardFields?.() || null; } catch { return ''; }
+    if (!fields) return '';
+    const raw = core_text.normalizeText([fields.description, fields.personality].filter(Boolean).join('\n'), 6000);
+    if (!raw) return '';
+    const picked = [];
+    for (const clause of raw.split(/[\n。；;!?！？]/)) {
+        const line = core_text.normalizeText(clause, 120);
+        if (!line || !CG_APPEARANCE_HINT.test(line)) continue;
+        picked.push(line);
+        if (picked.join('，').length >= 200) break;
+    }
+    return sanitizeCgVisualText(picked.join('，'), 240);
+}
+
 function cgImagePromptForItem(item) {
     const saved = sanitizeCgVisualText(normalizeCgImageRecord(item?.cgImage)?.prompt);
     if (saved) return saved;
     const authored = sanitizeCgVisualText(item?.imagePrompt, core_constants.MAX_CG_IMAGE_PROMPT_CHARS);
     const visibleDescription = authored || sanitizeCgVisualText(item?.cgDesc || item?.desc, 1100);
     const seeds = core_text.cleanArray(item?.visualSeed, 10, 80).map(seed => sanitizeCgVisualText(seed, 80)).filter(Boolean);
+    const appearance = characterAppearanceForCg();
     const prompt = [
         'visual novel event CG, cinematic anime illustration, 16:9 landscape composition, no text, no subtitle, no logo, no watermark',
+        appearance ? `character design, keep identical across every image: ${appearance}` : '',
         visibleDescription,
         seeds.length ? `visible details: ${seeds.join(', ')}` : '',
         'single coherent still image, expressive composition, scene-accurate clothing and environment',
@@ -10261,6 +10290,7 @@ __m_generation_imageGeneration_js.sanitizeImageGenerationSlashPrompt = sanitizeI
 __m_generation_imageGeneration_js.normalizeCgImageUrl = normalizeCgImageUrl;
 __m_generation_imageGeneration_js.normalizeCgImageRecord = normalizeCgImageRecord;
 __m_generation_imageGeneration_js.sanitizeCgVisualText = sanitizeCgVisualText;
+__m_generation_imageGeneration_js.characterAppearanceForCg = characterAppearanceForCg;
 __m_generation_imageGeneration_js.cgImagePromptForItem = cgImagePromptForItem;
 __m_generation_imageGeneration_js.cgImageTaskKey = cgImageTaskKey;
 __m_generation_imageGeneration_js.cgImageReservationKey = cgImageReservationKey;
@@ -11715,17 +11745,17 @@ const runtimeState = __m_core_state_js.state;
 function normalizeHeartCore(data, memoryBank) {
     const relationshipState = core_text.normalizeText(data?.relationshipState, 120) || '关系仍在发展';
     const relationshipSummary = core_text.normalizeText(data?.relationshipSummary, 1800);
-    if (!relationshipSummary) throw new Error('角色互动时期对话缺少关系摘要。');
+    if (!relationshipSummary) throw core_text.safeUserError('角色互动时期对话缺少关系摘要。', 'RMT_HEART_INCOMPLETE');
     const relationshipReference = core_evidence.normalizeMemoryReference(data?.relationshipSourceMemoryIds, data?.relationshipSourceMemoryAnchor, `${relationshipState}\n${relationshipSummary}`, memoryBank, 1);
-    if (!relationshipReference.sourceMemoryIds.length || !relationshipReference.sourceMemoryAnchor) throw new Error('角色互动时期对话缺少真实关系锚点。');
+    if (!relationshipReference.sourceMemoryIds.length || !relationshipReference.sourceMemoryAnchor) throw core_text.safeUserError('角色互动时期对话缺少真实关系锚点。', 'RMT_HEART_INCOMPLETE');
 
     const greetings = {};
     for (const key of core_constants.HEART_GREETING_KEYS) greetings[key] = core_text.cleanArray(data?.greetings?.[key], 6, 600);
     for (const key of ['morning', 'noon', 'evening', 'night', 'weekend']) {
-        if (greetings[key].length < 2) throw new Error(`角色互动“${key}”台词不足 2 条。`);
+        if (greetings[key].length < 2) throw core_text.safeUserError(`角色互动“${key}”台词不足 2 条。`, 'RMT_HEART_INCOMPLETE');
     }
     for (const key of ['birthday', 'userBirthday', 'holiday', 'absenceWorry', 'absenceSulky']) {
-        if (greetings[key].length < 1) throw new Error(`角色互动“${key}”台词不足 1 条。`);
+        if (greetings[key].length < 1) throw core_text.safeUserError(`角色互动“${key}”台词不足 1 条。`, 'RMT_HEART_INCOMPLETE');
     }
 
     return {
@@ -11786,7 +11816,7 @@ ${JSON.stringify(compactHeartDialoguesExisting(existing), null, 2)}
 function normalizeHeartCoreIncrement(data, memoryBank, sourceMemoryIds) {
     const relationshipState = core_text.normalizeText(data?.relationshipState, 120) || '关系继续发展';
     const relationshipSummary = core_text.normalizeText(data?.relationshipSummary, 1800);
-    if (!relationshipSummary) throw new Error('角色互动增量缺少关系摘要。');
+    if (!relationshipSummary) throw core_text.safeUserError('角色互动增量缺少关系摘要。', 'RMT_HEART_INCOMPLETE');
     const reference = core_evidence.normalizeMemoryReference(
         data?.relationshipSourceMemoryIds,
         data?.relationshipSourceMemoryAnchor,
@@ -11794,15 +11824,15 @@ function normalizeHeartCoreIncrement(data, memoryBank, sourceMemoryIds) {
         memoryBank,
         1,
     );
-    if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) throw new Error('角色互动增量缺少真实关系锚点。');
-    if (!core_incremental.usesIncrementalMemoryId(reference.sourceMemoryIds, sourceMemoryIds)) throw new Error('角色互动增量的关系阶段没有引用本轮新增档案。');
+    if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) throw core_text.safeUserError('角色互动增量缺少真实关系锚点。', 'RMT_HEART_INCOMPLETE');
+    if (!core_incremental.usesIncrementalMemoryId(reference.sourceMemoryIds, sourceMemoryIds)) throw core_text.safeUserError('角色互动增量的关系阶段没有引用本轮新增档案。', 'RMT_HEART_INCOMPLETE');
     const greetings = {};
     let total = 0;
     for (const key of core_constants.HEART_GREETING_KEYS) {
         greetings[key] = core_text.cleanArray(data?.greetings?.[key], 2, 600);
         total += greetings[key].length;
     }
-    if (!total) throw new Error('角色互动增量没有生成任何新台词。');
+    if (!total) throw core_text.safeUserError('角色互动增量没有生成任何新台词。', 'RMT_HEART_INCOMPLETE');
     return {
         relationshipState,
         relationshipSummary,
@@ -12055,7 +12085,7 @@ function fireflyVoiceKey(item) {
 
 function normalizeFireflyVoicesPart(data, { minTotal = 5, requireDistribution = true, requireRich = true } = {}) {
     const out = (Array.isArray(data?.fireflyVoices) ? data.fireflyVoices : []).slice(0, 6).map(normalizeFireflyVoice).filter(Boolean);
-    if (out.length < minTotal) throw new Error(`萤火虫会话不足：${out.length}/${minTotal}。`);
+    if (out.length < minTotal) throw core_text.safeUserError(`萤火虫会话不足：${out.length}/${minTotal}。`, 'RMT_HEART_INCOMPLETE');
     if (requireRich) {
         const invalid = out.find(item => {
             const script = Array.isArray(item?.script) ? item.script : [];
@@ -12064,13 +12094,13 @@ function normalizeFireflyVoicesPart(data, { minTotal = 5, requireDistribution = 
             const totalChars = script.reduce((sum, node) => sum + String(node?.text || '').length, 0);
             return script.length < 5 || chars < 3 || users < 1 || totalChars < 120;
         });
-        if (invalid) throw new Error(`萤火虫「${invalid.title || invalid.id}」不是完整的追加约会会话；至少需要 5 个节点、3 条角色台词和 1 条用户即时回应。`);
+        if (invalid) throw core_text.safeUserError(`萤火虫「${invalid.title || invalid.id}」不是完整的追加约会会话；至少需要 5 个节点、3 条角色台词和 1 条用户即时回应。`, 'RMT_HEART_INCOMPLETE');
     }
     if (requireDistribution) {
         const represented = new Set(out.map(item => item.color));
-        if (represented.size < 3) throw new Error(`萤火虫颜色分布过窄：${represented.size}/3。首次至少覆盖 3 种颜色。`);
+        if (represented.size < 3) throw core_text.safeUserError(`萤火虫颜色分布过窄：${represented.size}/3。首次至少覆盖 3 种颜色。`, 'RMT_HEART_INCOMPLETE');
         if (![...represented].some(color => color === 'yellow' || color === 'white')) {
-            throw new Error('首次萤火虫不能全部围绕恋爱/渴望；至少需要 1 个 yellow「朋友」或 white「个性话题」。');
+            throw core_text.safeUserError('首次萤火虫不能全部围绕恋爱/渴望；至少需要 1 个 yellow「朋友」或 white「个性话题」。', 'RMT_HEART_INCOMPLETE');
         }
     }
     return out;
@@ -12121,8 +12151,8 @@ function normalizeFireflyUpgradePart(data, expectedItems) {
         const id = core_text.normalizeText(item?.id, 80);
         const color = core_text.normalizeText(item?.color, 20).toLowerCase();
         const candidate = byId.get(id);
-        if (!candidate) throw new Error(`旧版萤火虫升级缺少 ${id}。`);
-        if (candidate.color !== color) throw new Error(`旧版萤火虫 ${id} 升级时改变了颜色。`);
+        if (!candidate) throw core_text.safeUserError(`旧版萤火虫升级缺少 ${id}。`, 'RMT_HEART_INCOMPLETE');
+        if (candidate.color !== color) throw core_text.safeUserError(`旧版萤火虫 ${id} 升级时改变了颜色。`, 'RMT_HEART_INCOMPLETE');
         return candidate;
     });
 }
@@ -12146,7 +12176,7 @@ function normalizeVoiceDramaPart(data, expectedKinds, memoryBank = {}) {
     const out = [];
     for (const expected of expectedKinds) {
         const item = raw.find(candidate => core_text.normalizeText(candidate?.kind, 40).toLowerCase() === expected);
-        if (!item) throw new Error(`Voice Drama 缺少 ${expected}。`);
+        if (!item) throw core_text.safeUserError(`Voice Drama 缺少 ${expected}。`, 'RMT_HEART_INCOMPLETE');
         const post = expected === 'postending';
         const script = normalizeHeartScript(item?.script, {
             characterName: memoryBank.characterName, userName: memoryBank.userName,
@@ -12154,7 +12184,7 @@ function normalizeVoiceDramaPart(data, expectedKinds, memoryBank = {}) {
             maxLines: post ? 24 : 16,
             minChars: post ? 420 : 280,
         });
-        if (!script.length) throw new Error(`Voice Drama ${expected} 长度不足。`);
+        if (!script.length) throw core_text.safeUserError(`Voice Drama ${expected} 长度不足。`, 'RMT_HEART_INCOMPLETE');
         out.push({
             id: core_text.safeId(item?.id, `VOICE_${expected.toUpperCase()}`),
             kind: expected,
@@ -12174,9 +12204,9 @@ function normalizeScenarioDramaPart(data, expectedSeason = '', memoryBank = {}) 
     const out = [];
     for (const expected of seasons) {
         const item = raw.find(candidate => core_text.normalizeText(candidate?.season, 40).toLowerCase() === expected);
-        if (!item) throw new Error(`Scenario Drama 缺少 ${expected}。`);
+        if (!item) throw core_text.safeUserError(`Scenario Drama 缺少 ${expected}。`, 'RMT_HEART_INCOMPLETE');
         const script = normalizeHeartScript(item?.script, { minLines: 6, maxLines: 20, minChars: 360, characterName: memoryBank.characterName, userName: memoryBank.userName });
-        if (!script.length) throw new Error(`Scenario Drama ${expected} 长度不足。`);
+        if (!script.length) throw core_text.safeUserError(`Scenario Drama ${expected} 长度不足。`, 'RMT_HEART_INCOMPLETE');
         out.push({
             id: core_text.safeId(item?.id, `SCENE_${expected.toUpperCase()}`),
             season: expected,
@@ -13048,7 +13078,7 @@ function normalizeHeartScript(rawLines, { minLines = 8, minChars = 500, characte
 function normalizeHeart(data, memoryBank) {
     const relationshipState = core_text.normalizeText(data?.relationshipState, 120) || '关系仍在发展';
     const relationshipSummary = core_text.normalizeText(data?.relationshipSummary, 1800);
-    if (!relationshipSummary) throw new Error('角色互动台词库缺少关系摘要。');
+    if (!relationshipSummary) throw core_text.safeUserError('角色互动台词库缺少关系摘要。', 'RMT_HEART_INCOMPLETE');
     const relationshipReference = core_evidence.normalizeMemoryReference(
         data?.relationshipSourceMemoryIds,
         data?.relationshipSourceMemoryAnchor,
@@ -13057,7 +13087,7 @@ function normalizeHeart(data, memoryBank) {
         1,
     );
     if (!relationshipReference.sourceMemoryIds.length || !relationshipReference.sourceMemoryAnchor) {
-        throw new Error('角色互动台词库缺少真实关系锚点。');
+        throw core_text.safeUserError('角色互动台词库缺少真实关系锚点。', 'RMT_HEART_INCOMPLETE');
     }
 
     const greetings = {};
@@ -13065,10 +13095,10 @@ function normalizeHeart(data, memoryBank) {
         greetings[key] = core_text.cleanArray(data?.greetings?.[key], 40, 600);
     }
     for (const key of ['morning', 'noon', 'evening', 'night', 'weekend']) {
-        if (greetings[key].length < 2) throw new Error(`角色互动“${key}”台词不足 2 条。`);
+        if (greetings[key].length < 2) throw core_text.safeUserError(`角色互动“${key}”台词不足 2 条。`, 'RMT_HEART_INCOMPLETE');
     }
     for (const key of ['birthday', 'userBirthday', 'holiday', 'absenceWorry', 'absenceSulky']) {
-        if (greetings[key].length < 1) throw new Error(`角色互动“${key}”台词不足 1 条。`);
+        if (greetings[key].length < 1) throw core_text.safeUserError(`角色互动“${key}”台词不足 1 条。`, 'RMT_HEART_INCOMPLETE');
     }
 
     const birthdayRaw = core_text.normalizeText(data?.birthdayMmDd, 20);
