@@ -1,0 +1,180 @@
+// Heartbeat Memories r35 modular runtime.
+// Extracted from r34 without changing archive/cache storage contracts.
+import * as core_cache from './core/cache.js';
+import * as core_autoUpdates from './core/autoUpdates.js';
+import * as core_constants from './core/constants.js';
+import * as core_context from './core/context.js';
+import * as core_requestCoordinator from './core/requestCoordinator.js';
+import * as archive_snapshots from './archive/snapshots.js';
+import { state as runtimeState } from './core/state.js';
+import * as core_text from './core/text.js';
+import * as backup_diagnostics from './core/backupDiagnostics.js';
+import * as generation_imageGeneration from './generation/imageGeneration.js';
+import * as modes_room from './modes/room.js';
+import * as ui_archivePortal from './ui/archivePortal.js';
+import * as ui_cgPromptEditor from './ui/cgPromptEditor.js';
+import * as ui_endingView from './ui/endingView.js';
+import * as ui_navigationBookmark from './ui/navigationBookmark.js';
+import * as ui_phoneView from './ui/phoneView.js';
+import * as ui_settingsPanel from './ui/settingsPanel.js';
+import * as ui_styles from './ui/styles.js';
+
+export function openArchiveLibrary(source = 'runtime-api') {
+    return ui_archivePortal.safeShowArchiveLibrary(source);
+}
+
+export function openSettingsHome() {
+    return ui_archivePortal.showHome({ section: 'api' });
+}
+
+export function isGenerationBusy() {
+    return runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !!runtimeState.roomLifeRefreshPromise;
+}
+
+export function initMemoryTheater() {
+    try {
+        const settingsMounted = ui_settingsPanel.mountSettings();
+        ui_settingsPanel.bindImageProviderEvents();
+        const menuMounted = ui_archivePortal.mountMenuItem();
+        ui_archivePortal.bindChatStateEvents();
+        core_autoUpdates.startAutoUpdates();
+        ui_archivePortal.bindRobustArchiveOpenHandlers();
+        ui_archivePortal.bindGenerationNavigationGuards();
+        ui_archivePortal.scheduleMounts(settingsMounted, menuMounted);
+        // This runs only after the user explicitly loaded the full runtime. It lazily migrates the
+        // current chat's existing archive into the independent local backup without touching startup.
+        void core_cache.ensureCurrentArchiveBackup().then(reconciled => {
+            if (reconciled) archive_snapshots.scheduleChooserRefresh(0);
+        }).catch(error => {
+            const diagnostic = backup_diagnostics.backupFailureSummary(error);
+            console.warn('[HeartbeatMemories] current archive backup seed failed', diagnostic);
+            globalThis.toastr?.warning?.(`独立备份未更新：${diagnostic.message}（${diagnostic.code}/${diagnostic.stage}）。${diagnostic.action} 本次失败不会触发档案重建或删除。`, '心迹回廊');
+        });
+        console.log('[HeartbeatMemories] initialized');
+    } catch (error) {
+        console.error('[HeartbeatMemories] init failed', core_text.safeErrorDiagnostic(error));
+    }
+}
+
+export function destroyMemoryTheater() {
+    core_autoUpdates.stopAutoUpdates();
+    ui_settingsPanel.clearHomeSettingsPanel();
+    ui_settingsPanel.unbindImageProviderEvents();
+    try {
+        // Extension updates/reloads can destroy the module before the short gzip debounce fires.
+        // A destroy path cannot await gzip. Persist a detached raw compatibility copy only when it
+        // satisfies the same UTF-8 byte cap as every other sink; otherwise preserve the previous
+        // valid compressed/raw metadata instead of replacing it with an unreadable oversized value.
+        try {
+            const liveContext = core_context.currentCharacterGuard();
+            const liveScope = core_cache.cacheScopeFromContext(liveContext);
+            const liveCache = runtimeState.runtimeSessionCache.get(liveScope);
+            if (liveCache && typeof liveCache === 'object'
+                && core_cache.cacheStillMatchesLiveArchive(liveCache, liveContext, liveScope)
+                && Object.values(core_constants.MODE).some(mode => liveCache?.[mode]?.kind === mode)) {
+                const prepared = core_cache.prepareBoundedRawCache(liveCache);
+                liveContext.chatMetadata[core_constants.CACHE_KEY] = prepared.value;
+                liveContext.saveMetadataDebounced?.();
+            }
+        } catch (error) {
+            console.warn('[HeartbeatMemories] destroy-time cache preservation skipped', core_text.safeErrorDiagnostic(error));
+            globalThis.toastr?.warning?.(`${core_text.safeErrorSummary(error)} 销毁流程没有覆盖上一份有效缓存。`, '心迹回廊');
+        }
+        // Invalidate every asynchronous state writer before clearing containers. Results that
+        // started in the old runtime lifetime must not refill caches after disable/clean.
+        runtimeState.runtimeLifecycleEpoch += 1;
+        runtimeState.apiConfigurationEpoch += 1;
+        runtimeState.manualApiKey = '';
+        // These are in-page UI state, not saved archives. Invalidate them with
+        // the runtime and remove the editor's cancel handler before its host.
+        try { ui_cgPromptEditor.closeCgPromptEditor({ restoreFocus: false }); } catch {}
+        ui_navigationBookmark.clearReadingPositions();
+        const timer = globalThis.__heartbeatMemoriesMountTimer;
+        if (timer) clearInterval(timer);
+        globalThis.__heartbeatMemoriesMountTimer = null;
+        try { globalThis.__heartbeatMemoriesEventCleanup?.(); } catch {}
+        globalThis.__heartbeatMemoriesEventCleanup = null;
+        try { globalThis.__heartbeatMemoriesOpenCleanup?.(); } catch {}
+        globalThis.__heartbeatMemoriesOpenCleanup = null;
+        try { globalThis.__heartbeatMemoriesNavigationGuardCleanup?.(); } catch {}
+        globalThis.__heartbeatMemoriesNavigationGuardCleanup = null;
+        document.getElementById(core_constants.OVERLAY_ID)?.remove();
+        document.getElementById(core_constants.SETTINGS_ID)?.remove();
+        document.getElementById(core_constants.MENU_ID)?.remove();
+        document.getElementById(core_constants.STYLE_ID)?.remove();
+        document.getElementById(core_constants.SETTINGS_STYLE_ID)?.remove();
+        modes_room.stopRoomClock();
+        ui_phoneView.stopPhoneClock();
+        ui_endingView.stopEndingEasterEggTimer();
+        runtimeState.endingEasterEggRuntime = null;
+        try { runtimeState.activeTaskAbortController?.abort?.(); } catch {}
+        runtimeState.activeTaskAbortController = null;
+        runtimeState.archivePreparationToken = null;
+        for (const task of runtimeState.activeGenerationTasks.values()) {
+            try { task.controller?.abort?.(); } catch {}
+        }
+        generation_imageGeneration.abortActiveCgImageTasks();
+        while (runtimeState.providerRequestQueue.length) {
+            const waiter = runtimeState.providerRequestQueue.shift();
+            try { waiter?.signal?.removeEventListener?.('abort', waiter.onAbort); } catch {}
+            try { waiter?.reject?.(core_requestCoordinator.createGenerationAbortError()); } catch {}
+        }
+        runtimeState.activeProviderRequestCount = 0;
+        runtimeState.activeGenerationTasks.clear();
+        runtimeState.activeModeBuildScopes.clear();
+        runtimeState.activeAdvBulkScopes.clear();
+        runtimeState.activeArchiveTargetReservations.clear();
+        runtimeState.cgImageLifecycleEpoch += 1;
+        runtimeState.activeCgImageTasks.clear();
+        runtimeState.avatarDialogueRequestEpoch += 1;
+        runtimeState.activeAvatarDialogue = null;
+        runtimeState.roomLifeRefreshPromise = null;
+        runtimeState.roomLifeRefreshOrigin = null;
+        if (runtimeState.butterflyTransitionTimer) clearTimeout(runtimeState.butterflyTransitionTimer);
+        runtimeState.butterflyTransitionTimer = 0;
+        if (runtimeState.chooserRefreshTimer) clearTimeout(runtimeState.chooserRefreshTimer);
+        runtimeState.chooserRefreshTimer = 0;
+        runtimeState.archiveOverviewPromise = null;
+        runtimeState.archiveOverviewPromiseKey = '';
+        runtimeState.archiveOverviewCache = { key: '', fetchedAt: 0, items: [] };
+        runtimeState.archiveOverviewAllowedChats.clear();
+        runtimeState.archiveOverviewKnownArchives.clear();
+        runtimeState.archiveOverviewLastKey = '';
+        runtimeState.memoryPreflightCache.clear();
+        // Completed results waiting for their origin chat are intentionally durable.
+        // Disabling/reloading the runtime must not erase them; the next initialization
+        // will validate their chat/archive identity before attempting writeback.
+        runtimeState.archiveSnapshotCache.clear();
+        runtimeState.connectionModelCache.clear();
+        runtimeState.connectionModelRequestEpochs.clear();
+        for (const timer of runtimeState.cachePersistTimers.values()) clearTimeout(timer);
+        runtimeState.cachePersistTimers.clear();
+        runtimeState.cachePersistChains.clear();
+        runtimeState.archiveCommitChains.clear();
+        runtimeState.archiveDeletionFences.clear();
+        runtimeState.cacheCommitSequences.clear();
+        runtimeState.cacheHydrationPromises.clear();
+        runtimeState.cacheHydrationErrors.clear();
+        runtimeState.runtimeSessionCache.clear();
+        runtimeState.pendingCompressedCacheWrites.clear();
+        runtimeState.archiveTargetTaskEpochs.clear();
+        runtimeState.calendarTagFilters.clear();
+        runtimeState.usableMessageCountCache.clear();
+        runtimeState.busy = false;
+        runtimeState.contentManagerOpen = false;
+        runtimeState.activeMode = null;
+        runtimeState.activeSession = null;
+        runtimeState.activeTaskLabel = '';
+        runtimeState.activeTaskBackgrounded = false;
+        runtimeState.activeTaskOrigin = null;
+        runtimeState.archiveViewLevel = 'library';
+        runtimeState.archiveLibraryCharacterKey = '';
+        runtimeState.archiveCharacterRelationSelection = '';
+        runtimeState.relationSelectedKey = '';
+        runtimeState.activeArchiveSnapshot = null;
+        runtimeState.activeArchiveReadOnly = true;
+        console.log('[HeartbeatMemories] destroyed');
+    } catch (error) {
+        console.warn('[HeartbeatMemories] destroy failed', core_text.safeErrorDiagnostic(error));
+    }
+}

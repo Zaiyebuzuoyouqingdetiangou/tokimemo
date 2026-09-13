@@ -1,6 +1,5 @@
-import * as floating_launcher from './floatingLauncher.js?heartbeat=0.8.66-profile-stream-r71.0';
-const VERSION = '0.8.66';
-const BUILD = '0.8.66-profile-stream-r71.0';
+const VERSION = '0.8.58';
+const BUILD = '0.8.58-reading-reliability-r62.0';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -15,7 +14,6 @@ let bootstrapTimer = 0;
 let bootstrapEarlyCleanup = null;
 let lastArchiveOpenAt = 0;
 let disabled = false;
-let floatingLauncher = null;
 
 function safeBootstrapErrorDiagnostic(error) {
     const diagnostic = {};
@@ -193,7 +191,6 @@ function ensureBootstrapStyle() {
     style.id = BOOTSTRAP_STYLE_ID;
     style.textContent = `
 #${SETTINGS_ID}[data-rmt-bootstrap="1"]{box-sizing:border-box;width:100%;max-width:100%;min-width:0;height:auto!important;min-height:0;margin-top:10px;padding:10px;border:1px solid rgba(142,191,213,.52);border-radius:12px;background:linear-gradient(135deg,rgba(255,248,251,.92),rgba(244,251,255,.92));color:#596b80;display:grid;align-self:start;align-content:start;flex:0 0 auto!important;gap:8px}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-floating{display:flex;align-items:center;gap:8px;min-height:44px;font-size:14px}
 #${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;min-width:0;gap:6px 8px;writing-mode:horizontal-tb}
 #${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-head b{min-width:0}
 #${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-head small{opacity:.68;font-size:9px;letter-spacing:.08em;white-space:nowrap;word-break:keep-all;writing-mode:horizontal-tb}
@@ -244,12 +241,10 @@ function mountBootstrapSettings() {
     panel.dataset.rmtBootstrap = '1';
     panel.innerHTML = `
       <div class="rmt-bootstrap-head"><b>心迹回廊</b><small>LAZY BOOTSTRAP</small></div>
-      <label class="rmt-bootstrap-floating"><input type="checkbox" data-rmt-floating-enabled> 显示悬浮球</label>
       <div class="rmt-bootstrap-actions">
         <button type="button" class="menu_button" data-rmt-bootstrap-load-settings>配置独立 API</button>
         <button type="button" class="menu_button" data-rmt-bootstrap-update>检查并更新插件</button>
         <small data-rmt-bootstrap-update-status role="status"></small>
-        <button type="button" class="menu_button" data-rmt-bootstrap-generation-diagnostic>生成诊断（去敏报告）</button>
         <button type="button" class="menu_button" data-rmt-bootstrap-diagnostic aria-expanded="false" aria-controls="heartbeat_memories_bootstrap_diagnostic"><span data-rmt-diagnostic-label>性能诊断（不解压缓存）</span></button>
       </div>
       <div class="rmt-bootstrap-note">普通酒馆启动不会解析 Heartbeat 完整 runtime。只有第一次打开档案室或加载完整设置时才加载。</div>
@@ -257,20 +252,7 @@ function mountBootstrapSettings() {
         <div class="rmt-bootstrap-diagnostic-head"><b>诊断结果</b><button type="button" class="menu_button rmt-bootstrap-diagnostic-close" data-rmt-bootstrap-diagnostic-close>关闭诊断</button></div>
         <pre data-rmt-bootstrap-diagnostic-output></pre>
       </div>`;
-    panel.querySelector('[data-rmt-floating-enabled]').checked = floatingLauncher?.isEnabled() !== false;
-    panel.addEventListener('change', event => {
-        if (event.target.matches?.('[data-rmt-floating-enabled]')) floatingLauncher?.setEnabled(event.target.checked);
-    });
     panel.addEventListener('click', event => {
-        if (event.target.closest?.('[data-rmt-bootstrap-generation-diagnostic]')) {
-            if (runtimeModule?.openGenerationDiagnostics) runtimeModule.openGenerationDiagnostics();
-            else {
-                const output = panel.querySelector('[data-rmt-bootstrap-diagnostic-output]');
-                output.textContent = '完整运行时尚未加载，本页没有生成记录。此诊断不会加载运行时、解压缓存或读取聊天。';
-                output.hidden = false; panel.querySelector('[data-rmt-diagnostic-panel]').hidden = false;
-            }
-            return;
-        }
         const updateButton = event.target.closest?.('[data-rmt-bootstrap-update]');
         if (updateButton) {
             void import(`./src/core/selfUpdater.js?heartbeat=${BUILD}`).then(module => module.updateFromButton(updateButton, panel.querySelector('[data-rmt-bootstrap-update-status]'), { moduleUrl: import.meta.url, isBusy: () => runtimeModule?.isGenerationBusy?.() || false })).catch(showBootError);
@@ -377,33 +359,14 @@ function requestArchiveOpen(source = 'bootstrap') {
     const now = Date.now();
     if (now - lastArchiveOpenAt < 700) return;
     lastArchiveOpenAt = now;
-    return ensureRuntime('archive').then(module => {
+    void ensureRuntime('archive').then(module => {
         if (disabled) return;
-        return module.openArchiveLibrary?.(source);
+        module.openArchiveLibrary?.(source);
     }).catch(showBootError);
-}
-
-function mountStaticLauncher() {
-    if (disabled || floatingLauncher) return;
-    // A reload must not leave an older entrypoint or drag listeners behind.
-    try { globalThis.__heartbeatMemoriesFloatingLauncher?.dispose?.(); } catch {}
-    floatingLauncher = floating_launcher.mountFloatingLauncher({
-        assetUrl: new URL('./assets/firefly-heart.png', import.meta.url).href,
-        onOpen: () => requestArchiveOpen('floating-launcher'),
-        onError: () => showBootError({ code: 'RMT_FLOATING_OPEN_FAILED' }),
-    });
-    globalThis.__heartbeatMemoriesFloatingLauncher = floatingLauncher;
-}
-
-function disposeStaticLauncher() {
-    floatingLauncher?.dispose();
-    if (globalThis.__heartbeatMemoriesFloatingLauncher === floatingLauncher) delete globalThis.__heartbeatMemoriesFloatingLauncher;
-    floatingLauncher = null;
 }
 
 function startBootstrap() {
     if (disabled || runtimeModule) return;
-    mountStaticLauncher();
     // Explicit persisted opt-in is the only exception to inert ordinary startup.
     const autoRules = globalThis.SillyTavern?.getContext?.()?.extensionSettings?.heartbeatMemories?.autoUpdates;
     if (autoRules && Object.values(autoRules).some(rule => rule?.enabled === true)) {
@@ -432,7 +395,6 @@ else queueMicrotask(startBootstrap);
 
 export function onDisable() {
     disabled = true;
-    disposeStaticLauncher();
     stopBootstrapMountTimer();
     unbindBootstrapEarlyOpen();
     try { runtimeModule?.destroyMemoryTheater?.(); } catch (error) { console.warn('[HeartbeatMemories] disable cleanup failed', safeBootstrapErrorDiagnostic(error)); }
@@ -441,7 +403,6 @@ export function onDisable() {
 
 export function onClean() {
     disabled = true;
-    disposeStaticLauncher();
     stopBootstrapMountTimer();
     unbindBootstrapEarlyOpen();
     try { runtimeModule?.destroyMemoryTheater?.(); } catch (error) { console.warn('[HeartbeatMemories] clean cleanup failed', safeBootstrapErrorDiagnostic(error)); }
