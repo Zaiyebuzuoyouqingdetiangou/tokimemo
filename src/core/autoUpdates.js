@@ -79,7 +79,7 @@ export function startAutoUpdates() {
     let storageFailed = false;
     const listener = () => { if (!storageFailed) void scheduler.tick().then(refreshAutoUpdateStatus).catch(() => {
         storageFailed = true; stopAutoUpdates();
-        globalThis.toastr?.warning?.('自动更新检查点无法保存，本轮已停止；请使用手动更新。', '心跳回忆');
+        globalThis.toastr?.warning?.('自动更新检查点无法保存，本轮已停止；请使用手动更新。', '心迹回廊');
     }); };
     const events = [...new Set([types.MESSAGE_SENT, types.MESSAGE_RECEIVED, types.CHAT_CHANGED, types.CHAT_LOADED].filter(Boolean))];
     for (const type of events) source.on(type, listener);

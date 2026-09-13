@@ -289,7 +289,7 @@ export async function readBaiBaiBookCurrentChat(provider, expectedChatId, signal
     const coverage = normalizeCoverage(coverageSource, deduped.length);
     if (localRead.truncated) {
         coverage.status = 'truncated';
-        const reason = `心跳回忆读取达到${localRead.reason || '本地安全上限'}，其余内容未静默冒充完整`;
+        const reason = `心迹回廊读取达到${localRead.reason || '本地安全上限'}，其余内容未静默冒充完整`;
         coverage.reason = coverage.reason ? `${coverage.reason}；${reason}` : reason;
     }
     if (provider.historyMode === 'injected-subset') {

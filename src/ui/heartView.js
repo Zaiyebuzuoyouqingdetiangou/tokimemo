@@ -177,7 +177,7 @@ export async function showAvatarDialogueForCharacter(characterKey) {
         renderAvatarDialoguePopup(runtimeState.activeAvatarDialogue);
     } catch (error) {
         if (requestEpoch !== runtimeState.avatarDialogueRequestEpoch) return;
-        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
     }
 }
 
@@ -199,7 +199,7 @@ export function openHeartMode() {
             memoryBank: runtimeState.activeArchiveSnapshot.memory,
         });
         if (!session) {
-            globalThis.toastr?.info?.('这份只读档案还没有生成角色互动 / Voice Drama。关闭只读并进入对应聊天后即可生成。', '心跳回忆');
+            globalThis.toastr?.info?.('这份只读档案还没有生成角色互动 / Voice Drama。关闭只读并进入对应聊天后即可生成。', '心迹回廊');
             return;
         }
         runtimeState.activeMode = core_constants.MODE.HEART;
@@ -278,35 +278,35 @@ export async function drawHeartStripImage(stripId, { promptOverride, expectedTar
     if (!item) return;
     let captured;
     try { captured = expectedTarget || generation_imageGeneration.captureCgImageTarget({ mode: core_constants.MODE.HEART, session, item }); generation_imageGeneration.assertCgImageTargetCurrent(captured); }
-    catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心跳回忆'); return; }
+    catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); return; }
     const context = core_context.currentCharacterGuard();
     const imageState = generation_imageGeneration.imageGenerationUiState(context);
     if (!imageState.available) {
-        globalThis.toastr?.info?.(generation_imageGeneration.imageGenerationUnavailableMessage(imageState), '心跳回忆');
+        globalThis.toastr?.info?.(generation_imageGeneration.imageGenerationUnavailableMessage(imageState), '心迹回廊');
         return;
     }
     if (runtimeState.activeCgImageTasks.size >= 1) {
-        globalThis.toastr?.info?.('当前已有一张图片正在绘制，请等它完成。', '心跳回忆');
+        globalThis.toastr?.info?.('当前已有一张图片正在绘制，请等它完成。', '心迹回廊');
         return;
     }
     const previous = generation_imageGeneration.normalizeCgImageRecord(item.cgImage);
     const confirmDraw = previous ? ui_overlay.confirmExplicitActionTwice : ui_overlay.confirmExplicitAction;
     const ok = confirmDraw(
         previous ? `重新绘制「${item.title}」？` : `绘制「${item.title}」？`,
-        `${previous ? '成功后会替换当前图片引用；旧文件不会由心跳回忆主动删除。\n\n' : ''}会调用${imageState.providerLabel || '已配置的生图插件'}，可能消耗额度。为了减少 AI 画坏文字，图片提示只要求 Q 版分镜和动作，真正台词仍由心跳回忆界面显示。`,
+        `${previous ? '成功后会替换当前图片引用；旧文件不会由心迹回廊主动删除。\n\n' : ''}会调用${imageState.providerLabel || '已配置的生图插件'}，可能消耗额度。为了减少 AI 画坏文字，图片提示只要求 Q 版分镜和动作，真正台词仍由心迹回廊界面显示。`,
         { destructive: !!previous },
     );
     if (!ok) return;
     try { generation_imageGeneration.assertCgImageTargetCurrent(captured); }
-    catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心跳回忆'); return; }
+    catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); return; }
     const prompt = promptOverride === undefined ? heartStripImagePrompt(item) : generation_imageGeneration.sanitizeCgVisualText(promptOverride);
-    if (!prompt) return globalThis.toastr?.error?.('这条日常一格没有可用的视觉提示。', '心跳回忆');
+    if (!prompt) return globalThis.toastr?.error?.('这条日常一格没有可用的视觉提示。', '心迹回廊');
     const expectedChatId = core_context.getChatId(context);
     const origin = captured.origin;
     const lifecycleEpoch = runtimeState.cgImageLifecycleEpoch;
     const taskKey = generation_imageGeneration.cgImageTaskKey(core_constants.MODE.HEART, item.id, context);
     if (!core_requestCoordinator.canStartGenerationTask(taskKey)) {
-        globalThis.toastr?.info?.(`当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请等其中一项完成后再绘制日常一格。`, '心跳回忆');
+        globalThis.toastr?.info?.(`当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请等其中一项完成后再绘制日常一格。`, '心迹回廊');
         return;
     }
     const controller = new AbortController();
@@ -331,7 +331,7 @@ export async function drawHeartStripImage(stripId, { promptOverride, expectedTar
         const url = generation_imageGeneration.normalizeCgImageUrl(generated?.url);
         if (!url) throw new Error('生图插件没有返回可保存的 SillyTavern 本地图片路径。');
         if (runtimeState.cgImageLifecycleEpoch !== lifecycleEpoch) {
-            globalThis.toastr?.warning?.('图片已经生成，但插件已重载/停用，因此没有接收旧运行实例的结果。', '心跳回忆');
+            globalThis.toastr?.warning?.('图片已经生成，但插件已重载/停用，因此没有接收旧运行实例的结果。', '心迹回廊');
             return;
         }
         const nextImage = {
@@ -351,7 +351,7 @@ export async function drawHeartStripImage(stripId, { promptOverride, expectedTar
                 durable
                     ? `日常一格已绘制并安全等待写回：${item.title}；回到原聊天后会自动保存引用。`
                     : `日常一格已绘制：${item.title}；结果暂存在当前页面，回到原聊天前不要刷新。`,
-                '心跳回忆',
+                '心迹回廊',
             );
             return;
         }
@@ -372,10 +372,10 @@ export async function drawHeartStripImage(stripId, { promptOverride, expectedTar
         if (mayUpdateUi) item.cgImage = nextImage;
         const activeItem = runtimeState.activeSession?.dailyStrips?.find(strip => strip.id === item.id);
         if (activeItem && mayUpdateUi) activeItem.cgImage = nextImage;
-        globalThis.toastr?.success?.(`日常一格已绘制：${item.title}`, '心跳回忆');
+        globalThis.toastr?.success?.(`日常一格已绘制：${item.title}`, '心迹回廊');
     } catch (error) {
         console.error('[HeartbeatMemories] daily strip image generation failed', core_text.safeErrorDiagnostic(error));
-        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
     } finally {
         runtimeState.activeCgImageTasks.delete(taskKey);
         if (runtimeState.activeMode === core_constants.MODE.HEART && runtimeState.activeSession?.kind === core_constants.MODE.HEART) renderHeart();
@@ -387,8 +387,8 @@ export async function clearHeartStripImage(stripId) {
     if (!archive_library.requireWritableArchiveAction()) return;
     const item = runtimeState.activeSession.dailyStrips.find(strip => strip.id === stripId) || selectedHeartStrip();
     if (!item || !generation_imageGeneration.normalizeCgImageRecord(item.cgImage)) return;
-    if (generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, item.id)) return globalThis.toastr?.info?.('请先取消正在绘制的图片，再移除旧图引用。', '心跳回忆');
-    if (!ui_overlay.confirmExplicitActionTwice(`恢复「${item.title}」的文字/抽象小剧场？`, '只会移除心跳回忆缓存中的图片引用，不会删除 SillyTavern 已保存的图片文件。', { destructive: true })) return;
+    if (generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, item.id)) return globalThis.toastr?.info?.('请先取消正在绘制的图片，再移除旧图引用。', '心迹回廊');
+    if (!ui_overlay.confirmExplicitActionTwice(`恢复「${item.title}」的文字/抽象小剧场？`, '只会移除心迹回廊缓存中的图片引用，不会删除 SillyTavern 已保存的图片文件。', { destructive: true })) return;
     const previous = item.cgImage;
     item.cgImage = null;
     const context = core_context.currentCharacterGuard();
@@ -397,7 +397,7 @@ export async function clearHeartStripImage(stripId) {
     const origin = { ...core_context.captureTaskOrigin(context, memoryBank.archiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
     if (!await core_cache.commitSession(core_constants.MODE.HEART, runtimeState.activeSession, expectedChatId, origin)) {
         item.cgImage = previous;
-        return globalThis.toastr?.error?.('当前档案状态已变化，未修改图片引用。', '心跳回忆');
+        return globalThis.toastr?.error?.('当前档案状态已变化，未修改图片引用。', '心迹回廊');
     }
     renderHeart();
 }
@@ -530,7 +530,7 @@ function fireflyMeta(color) {
         pink: { icon: '💗', label: '恋爱' },
         blue: { icon: '💙', label: '恋爱的烦恼' },
         yellow: { icon: '💛', label: '朋友' },
-        white: { icon: '🤍', label: 'お楽しみ / 个性话题' },
+        white: { icon: '🤍', label: '个性话题' },
         desire: { icon: '♥️', label: '扩展 · 直白渴望' },
     })[color] || { icon: '✦', label: '话题' };
 }
@@ -639,7 +639,7 @@ export function renderHeart() {
             const charDisplayName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext().name2, 120) || '角色';
             const userDisplayName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.memory?.userName || core_context.getContext().name1, 120) || '你';
             const panels = selected.panels.map((panel, index) => `<article class="rmt-heart-panel"><b>${index + 1}</b><div><small>${core_text.esc(panel.caption || `第 ${index + 1} 格`)}</small><p>${core_text.esc(panel.action)}</p>${panel.charLine ? `<div class="rmt-heart-panel-line"><strong>${core_text.esc(charDisplayName)}</strong>${core_text.esc(panel.charLine)}</div>` : ''}${panel.userLine ? `<div class="rmt-heart-panel-line user"><strong>${core_text.esc(userDisplayName)}</strong>${core_text.esc(panel.userLine)}</div>` : ''}</div></article>`).join('');
-            detail = `<div class="rmt-heart-strip-head"><div><h2>${core_text.esc(selected.title)}</h2><p>${core_text.esc(selected.subtitle)}</p></div><span>${selected.panelCount}格</span></div><div class="rmt-heart-strip-image">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</div><div class="rmt-heart-strip-actions">${readOnly ? '' : `<button type="button" class="rmt-btn rmt-cg-primary" data-rmt-action="draw-heart-strip" data-rmt-heart-strip-id="${core_text.esc(selected.id)}" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, selected.id) ? 'disabled' : ''}>${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, selected.id) ? '正在绘制…' : image ? '↻ 重绘日常一格' : '🎨 绘制日常一格'}</button><button type="button" class="rmt-btn" data-rmt-action="edit-heart-cg-prompt">画面提示词</button>${image ? `<button type="button" class="rmt-btn" data-rmt-action="clear-heart-strip" data-rmt-heart-strip-id="${core_text.esc(selected.id)}">恢复文字版</button>` : ''}`}</div><div class="rmt-heart-panels">${panels}</div>`;
+            detail = `<div class="rmt-heart-strip-head"><div><h2>${core_text.esc(selected.title)}</h2><p>${core_text.esc(selected.subtitle)}</p></div><span>${selected.panelCount}格</span></div>${image ? `<a class="rmt-heart-strip-image rmt-heart-strip-image-full" href="${core_text.esc(image.url)}" target="_blank" rel="noopener noreferrer" aria-label="查看完整原图（新窗口）">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</a>` : `<div class="rmt-heart-strip-image">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</div>`}<div class="rmt-heart-strip-actions">${readOnly ? '' : `<button type="button" class="rmt-btn" data-rmt-action="edit-heart-cg-prompt" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, selected.id) ? 'disabled' : ''}>图片设置</button>`}</div><div class="rmt-heart-panels">${panels}</div>`;
         } else {
             detail = `<div class="rmt-heart-empty">${readOnly ? '日常一格还没有生成。' : '点击上方按钮单独生成日常一格。'}</div>`;
         }

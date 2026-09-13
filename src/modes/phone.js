@@ -669,7 +669,7 @@ export function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sour
         const fields = Array.isArray(entry?.fields) ? entry.fields.filter(field => core_text.normalizeText(field?.label, 100) && core_text.normalizeText(field?.value, 1000)).slice(0, 16) : [];
         const imageCaption = core_text.normalizeText(entry?.imageCaption, 1800);
         if (!preview || (!detail && !messages.length && !fields.length && !imageCaption)) continue;
-        const basis = core_constants.ROOM_BASIS_VALUES.has(entry?.basis) ? entry.basis : '设定';
+        const basis = phoneEntryBasis(entry, planApp.kind, conversation, memoryBank, options);
         const legacyStored = options.trustedStored === true && entry?.narrativeVersion !== 1;
         if (legacyStored) { seen.add(id); continue; }
         let memoryEvidence = '';
@@ -703,7 +703,8 @@ function phoneSpeaksAsUser(messages, memoryBank) {
     if (!userName || !Array.isArray(messages)) return false;
     return messages.some(message => {
         const speaker = core_text.normalizeText(message?.speaker, 120).toLowerCase();
-        return speaker === userName || speaker === '{{user}}' || speaker === 'user' || speaker === '我';
+        const ownerSelf = speaker === '我' && core_text.normalizeText(message?.speakerRole, 20).toLowerCase() === 'owner';
+        return speaker === userName || speaker === '{{user}}' || speaker === 'user' || (speaker === '我' && !ownerSelf);
     });
 }
 
@@ -711,6 +712,9 @@ function phoneInferredEntryAllowed(entry, kind, conversation, text, memoryBank, 
     // Raw speaker names must be checked before owner/contact normalization can rename them.
     if (phoneSpeaksAsUser(entry?.messages, memoryBank) || phoneSpeaksAsUser(conversation.messages, memoryBank)) return false;
     if (kind === 'contacts') return false;
+    const userName = core_text.normalizeText(memoryBank?.userName, 120);
+    const attributed = userName ? String(text).split(userName).join('{{user}}') : String(text);
+    if (/(?:\{\{user\}\}|你)(?:的)?[^\n。！？]{0,12}(?:手机号码?|电话号码?|邮箱|住址|家庭地址|身份证号?|银行账号|银行卡号|密码|病历)[\s:：是为]+[^\s\n。！？]{3,}/u.test(attributed)) return false;
     if (kind === 'chat') {
         const name = conversation.contactName;
         const known = [options.controlledEvidence, phoneReferencedMemoryText({ sourceMemoryIds: (memoryBank?.memories || []).map(item => item.id) }, memoryBank)].filter(Boolean).join('\n');
@@ -718,7 +722,7 @@ function phoneInferredEntryAllowed(entry, kind, conversation, text, memoryBank, 
         if (options.trustedStored !== true) {
             const ownerNames = new Set([conversation.ownerName, '{{char}}', 'owner']);
             if ((entry?.messages || []).some(message => core_text.normalizeText(message?.speakerRole, 20).trim().toLowerCase() === 'owner'
-                && !ownerNames.has(core_text.normalizeText(message?.speaker, 100)))) return false;
+                && !ownerNames.has(core_text.normalizeText(message?.speaker, 100)) && !isGenericOwnerLabel(message?.speaker))) return false;
             if (conversation.messages.some(message => message.speakerRole === 'contact'
                 && !core_worldPresentation.controlledEvidenceContains(known, message.speaker))) return false;
         }
@@ -731,7 +735,45 @@ function phoneInferredEntryAllowed(entry, kind, conversation, text, memoryBank, 
     });
 }
 
+function phoneEntryBasis(entry, kind, conversation, memoryBank, options = {}) {
+    const declared = core_constants.ROOM_BASIS_VALUES.has(entry?.basis) ? entry.basis : '设定';
+    if (declared !== '记忆' || options.trustedStored === true || kind === 'contacts') return declared;
+    const text = [entry?.title, entry?.meta, entry?.preview, entry?.detail, entry?.imageCaption,
+        ...(Array.isArray(entry?.fields) ? entry.fields : []).map(field => `${field?.label || ''}:${field?.value || ''}`),
+        ...(Array.isArray(entry?.messages) ? entry.messages : []).map(message => `${message?.speaker || ''}:${message?.text || ''}`)].join('\n');
+    const unquoted = text.replace(/[“「『"][^”」』"\n]*[”」』"]/gu, '');
+    // A quoted "tomorrow" inside an already-recorded conversation is not a future
+    // frame for that transcript. Ambiguous retrospective records keep memory rules.
+    if (!/(?:正在|现在|今天|今日|明早|明晚|明天|后天|下周|下次|待会|等会|稍后|计划|准备|待办|提醒|草稿|未发送|想和|想陪|要不要)/u.test(unquoted)) return declared;
+    // "basis" is a model hint, not authority. Current life content does not become
+    // a historical transcript merely because that hint says memory. Never downgrade
+    // actual joint history or user transcript/contact fields to avoid their checks.
+    return phoneInferredEntryAllowed(entry, kind, conversation, text, memoryBank, options) ? '推演' : declared;
+}
+
 export function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, sourceMemoryIds = null, options = {}) {
+    if (options.allowPartial === true) {
+        const raw = data?.app && typeof data.app === 'object' ? data.app : data;
+        const returnedId = core_text.safeId(raw?.id, '');
+        if (returnedId && returnedId !== planApp.id) throw core_text.safeUserError('App 标识与当前目录不符。', 'RMT_PHONE_EVIDENCE');
+        const candidates = Array.isArray(raw?.entries) ? raw.entries : [];
+        const entries = planApp.entries.map(planned => {
+            const candidate = candidates.find(entry => core_text.safeId(entry?.id, '') === planned.id);
+            if (!candidate || isUnavailablePhoneEntry(candidate)) return unavailablePhoneEntry(planned.id);
+            try {
+                // The exact production validator remains the only acceptance path.
+                // A bad sibling has no authority to discard another validated item.
+                return normalizePhoneDraftApp({ ...raw, entries: [candidate] }, { ...planApp, entries: [planned] },
+                    memoryBank, deviceKind, sourceMemoryIds, { ...options, allowPartial: false }).entries[0];
+            } catch { return unavailablePhoneEntry(planned.id); }
+        });
+        if (!entries.some(entry => !isUnavailablePhoneEntry(entry))) {
+            throw core_text.safeUserError('本次没有可保存的新条目；旧内容保留，可以重试这些缺项。', 'RMT_PHONE_EVIDENCE');
+        }
+        return { id: planApp.id, label: planApp.label, kind: planApp.kind,
+            icon: normalizePhoneAppIcon(planApp.icon, planApp.kind, planApp.label),
+            summary: phoneDisplayText(raw?.summary || planApp.summary, 1200, '', memoryBank), entries };
+    }
     const raw = validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sourceMemoryIds, options);
     const plannedIds = new Set(planApp.entries.map(item => item.id));
     const entries = (Array.isArray(raw?.entries) ? raw.entries : []).slice(0, 24).map((entry, index) => {
@@ -744,6 +786,7 @@ export function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, so
         let preview = core_text.normalizeText(entry?.preview, 1200);
         let detail = core_text.normalizeText(entry?.detail, 5000);
         const conversation = normalizePhoneConversationMessages(entry, memoryBank, { strict: planApp.kind === 'chat' });
+        basis = phoneEntryBasis(entry, planApp.kind, conversation, memoryBank, options);
         let messages = conversation.messages;
         let fields = (Array.isArray(entry?.fields) ? entry.fields : []).slice(0, 16).map(field => ({
             label: core_text.normalizeText(field?.label, 100),
@@ -831,7 +874,7 @@ export async function generatePhoneWithRepair(context, memoryBank, origin, taskK
         .filter(app => app.entries.some(entry => entry.legacyEvidenceUnverified === true))
         .map(app => [app.id, structuredClone(app)]));
     const draftOptions = { archiveTarget: options.archiveTarget, stillCurrent: options.stillCurrent };
-    const evidenceOptions = { controlledEvidence: presentationContext.settingEvidence || '', requireLifestyleContent: true };
+    const evidenceOptions = { controlledEvidence: presentationContext.settingEvidence || '', requireLifestyleContent: true, allowPartial: true };
     if (!resumeDraft && !await core_cache.savePhoneGenerationDraft(context, memoryBank, plan, [], '', '', origin, draftOptions)) {
         throw new Error('私人终端目录已经生成，但无法确认续写断点已安全保存；本次已停止，避免虚假提示可续写。');
     }
@@ -841,7 +884,7 @@ export async function generatePhoneWithRepair(context, memoryBank, origin, taskK
         const completed = completedById.get(app.id);
         const missing = completed ? app.entries.filter(entry => !completed.entries.some(item => item.id === entry.id && !isUnavailablePhoneEntry(item))) : app.entries;
         if (!missing.length) continue;
-        const requestApp = { ...app, incremental: !!completed, entries: missing };
+        const requestApp = { ...app, incremental: !!completed?.entries?.some(entry => !isUnavailablePhoneEntry(entry)), entries: missing };
         let lastError = null;
         try {
             // Keep the base request stable across reload/continuation. Transient failure
@@ -850,7 +893,7 @@ export async function generatePhoneWithRepair(context, memoryBank, origin, taskK
                 phoneAppPrompt(context, memoryBank, plan, requestApp)
                     + '\n需要真实历史/私密字段却没有来源的项目才用 unavailable；普通日常继续按人设演绎，不重做已完成的其他 App。',
                 `私人终端 2/2 · ${index + 1}/${plan.apps.length} ${app.label}…`,
-                { maxTokens: app.kind === 'chat' ? 8000 : app.entries.length >= 8 ? 7000 : 5000, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:app:${app.id}`, mode: core_constants.MODE.PHONE, background: true, segmentMaxAttempts: 2 },
+                { maxTokens: app.kind === 'chat' ? 8000 : app.entries.length >= 8 ? 7000 : 5000, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:app:${app.id}:${core_text.hashString(missing.map(entry => entry.id).join('\n'))}`, mode: core_constants.MODE.PHONE, background: true, segmentMaxAttempts: 2 },
                 raw => {
                     try { return normalizePhoneDraftApp(raw, requestApp, memoryBank, plan.deviceKind, null, evidenceOptions); }
                     catch (error) {
@@ -872,13 +915,28 @@ export async function generatePhoneWithRepair(context, memoryBank, origin, taskK
             const detail = core_text.safeErrorSummary(lastError, 600);
             const failure = core_text.safeErrorDiagnostic(lastError);
             const draftSaved = await core_cache.savePhoneGenerationDraft(context, memoryBank, plan, [...completedById.values()], app.id, detail, origin, { ...draftOptions, failure });
+            if (draftSaved && lastError?.code === 'RMT_PHONE_EVIDENCE') {
+                // A complete but unusable App response is a local content failure, not
+                // a broken provider connection. Keep its exact slots pending and let
+                // other independent Apps produce useful content. Transport, truncated
+                // JSON, cancellation, stale origins and storage failures still stop.
+                if (!completed) completedById.set(app.id, { ...app,
+                    entries: app.entries.map(entry => unavailablePhoneEntry(entry.id)) });
+                if (!await core_cache.savePhoneGenerationDraft(context, memoryBank, plan,
+                    [...completedById.values()], app.id, detail, origin, { ...draftOptions, failure })) {
+                    throw core_text.safeUserError('无法确认已完成内容已保存，本次已停止。', 'RMT_PHONE_DRAFT_UNAVAILABLE');
+                }
+                continue;
+            }
             const error = new Error(draftSaved
-                ? `私人终端在 App“${app.label}”中断，已保存 ${completedById.size}/${plan.apps.length} 个 App。回到档案室的私人终端卡片，点击“继续生成”即可从这里续写，不会重做已完成 App。${detail ? `\n${detail}` : ''}`
+                ? `私人终端在 App“${app.label}”中断，已保留 ${phoneCompletionSummary({ plan, completedApps: [...completedById.values()] }).readableItems} 项可读内容。回到档案室的私人终端卡片，点击“继续生成”即可补齐缺项，不会重做成功内容。${detail ? `\n${detail}` : ''}`
                 : `私人终端在 App“${app.label}”中断，且无法确认续写断点已安全保存；请不要依赖本次进度。${detail ? `\n${detail}` : ''}`);
             error.code = draftSaved ? 'RMT_PHONE_DRAFT_AVAILABLE' : 'RMT_PHONE_DRAFT_UNAVAILABLE';
             error.retryable = false;
             error.failure = failure;
-            error.partialProgress = { completed: completedById.size, total: plan.apps.length };
+            const progress = phoneCompletionSummary({ plan, completedApps: [...completedById.values()] });
+            error.partialProgress = { completed: progress.completeApps, total: progress.totalApps,
+                readableItems: progress.readableItems, totalItems: progress.totalItems };
             throw error;
         }
     }
@@ -916,6 +974,21 @@ export function phoneHasMissingEntries(session) {
     return !!session?.apps?.some(app => app.entries?.some(isUnavailablePhoneEntry));
 }
 
+export function phoneCompletionSummary(value) {
+    const planned = Array.isArray(value?.plan?.apps) ? value.plan.apps : (Array.isArray(value?.apps) ? value.apps : []);
+    const completed = Array.isArray(value?.completedApps) ? value.completedApps : (Array.isArray(value?.apps) ? value.apps : []);
+    let readableItems = 0, totalItems = 0, completeApps = 0;
+    for (const app of planned) {
+        const entries = Array.isArray(app?.entries) ? app.entries : [];
+        const saved = completed.find(item => item.id === app.id);
+        const readable = entries.filter(entry => saved?.entries?.some(item => item.id === entry.id && !isUnavailablePhoneEntry(item))).length;
+        totalItems += entries.length; readableItems += readable;
+        if (entries.length && readable === entries.length) completeApps++;
+    }
+    return { readableItems, totalItems, missingItems: totalItems - readableItems,
+        completeApps, totalApps: planned.length, partial: readableItems > 0 && readableItems < totalItems };
+}
+
 export function mergePhoneMissingEntries(previous, fresh) {
     const merged = structuredClone(previous);
     merged.entries = (previous.entries || []).map(entry => {
@@ -929,23 +1002,33 @@ export function mergePhoneMissingEntries(previous, fresh) {
 export async function generatePhoneMissingWithRepair(context, memoryBank, origin, taskKey, previous, options = {}) {
     let session = structuredClone(previous);
     const presentation = options.presentationContext || {};
+    let acceptedAny = false, contentFailure = null;
     for (const app of previous.apps || []) {
         const entries = (app.entries || []).filter(isUnavailablePhoneEntry);
         if (!entries.length) continue;
         const planApp = { ...app, incremental: true, entries: entries.map(item => ({
             id: item.id, title: '按此 App 用途与角色生活补齐', meta: '',
         })) };
-        const fresh = await generation_client.requestValidatedSegment(
+        let fresh;
+        try { fresh = await generation_client.requestValidatedSegment(
             phoneAppPrompt(context, memoryBank, session, planApp),
             `正在补齐「${app.label}」的 ${entries.length} 项内容…`,
-            { context, contextEnvelope: presentation.contextEnvelope, origin, taskKey: `${taskKey}:missing:${app.id}`,
+            { context, contextEnvelope: presentation.contextEnvelope, origin, taskKey: `${taskKey}:missing:${app.id}:${core_text.hashString(entries.map(entry => entry.id).join('\n'))}`,
                 mode: core_constants.MODE.PHONE, maxTokens: 8000, background: true },
             raw => normalizePhoneDraftApp(raw, planApp, memoryBank, session.deviceKind, null,
-                { controlledEvidence: presentation.settingEvidence || '', requireLifestyleContent: true }),
-        );
+                { controlledEvidence: presentation.settingEvidence || '', requireLifestyleContent: true, allowPartial: true }),
+        ); } catch (error) {
+            if (error?.code !== 'RMT_PHONE_EVIDENCE') throw error;
+            contentFailure = error;
+            continue;
+        }
         session.apps = session.apps.map(item => item.id === app.id ? mergePhoneMissingEntries(item, fresh) : item);
-        if (options.savePartial) await options.savePartial(session);
+        if (options.savePartial && await options.savePartial(session) === false) {
+            throw core_text.safeUserError('无法确认补齐内容已保存，本次已停止。', 'RMT_PHONE_DRAFT_UNAVAILABLE');
+        }
+        acceptedAny = true;
     }
+    if (!acceptedAny && contentFailure) throw contentFailure;
     return session;
 }
 
@@ -1033,6 +1116,7 @@ export function normalizePhoneIncrementPlan(data, previous) {
 }
 
 export function phoneEntryKey(appKind, entry) {
+    if (isUnavailablePhoneEntry(entry)) return `${appKind}|pending|${core_text.safeId(entry?.id, '')}`;
     const ids = core_text.cleanArray(entry?.sourceMemoryIds, 8, 40).sort().join(',');
     const anchor = core_incremental.normalizedContentKey(entry?.sourceMemoryAnchor, 140);
     return ids && anchor
@@ -1091,6 +1175,7 @@ export async function generatePhoneIncrementalWithRepair(context, memoryBank, or
             { maxTokens: app.kind === 'chat' ? 8000 : 5000, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment-app:${app.id}`, mode: core_constants.MODE.PHONE, background: true, segmentMaxAttempts: 1 },
             raw => normalizePhoneDraftApp(raw, app, memoryBank, plan.deviceKind, sourceMemoryIds, {
                 controlledEvidence: presentationContext.settingEvidence || '',
+                allowPartial: true,
             }),
         );
         patches.push(patch);
@@ -1149,6 +1234,7 @@ export function normalizePhone(data, memoryBank, { worldPresentation = null, con
             let preview = core_text.normalizeText(entry?.preview, 1200);
             let detail = core_text.normalizeText(entry?.detail, 5000);
             const conversation = normalizePhoneConversationMessages(entry, memoryBank, { strict: false });
+            basis = phoneEntryBasis(entry, kind, conversation, memoryBank, { controlledEvidence, trustedStored });
             let messages = conversation.messages;
             let fields = (Array.isArray(entry?.fields) ? entry.fields : []).slice(0, 16).map(field => ({
                 label: core_text.normalizeText(field?.label, 100),

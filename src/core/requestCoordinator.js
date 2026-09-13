@@ -28,7 +28,7 @@ function reportDeferredDurability() {
         deferredDurabilityWarningShown = true;
         const detail = core_text.normalizeText(status.error, 400) || '浏览器没有保存待写回结果。';
         console.error('[HeartbeatMemories] deferred commit is memory-only', detail);
-        globalThis.toastr?.error?.(`生成结果暂时只能保留在当前页面内：${detail} 请先回到原聊天完成写回，不要刷新页面。`, '心跳回忆');
+        globalThis.toastr?.error?.(`生成结果暂时只能保留在当前页面内：${detail} 请先回到原聊天完成写回，不要刷新页面。`, '心迹回廊');
     }
     return false;
 }

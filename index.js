@@ -1,5 +1,5 @@
-const VERSION = '0.8.56';
-const BUILD = '0.8.56-creative-recovery-r60.0';
+const VERSION = '0.8.57';
+const BUILD = '0.8.57-hearttrace-r61.0';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -62,7 +62,7 @@ function getHeartbeatPerformanceDiagnostic() {
     if (!context) {
         return {
             snapshot: { available: false },
-            text: '心跳回忆性能诊断（不解压缓存）\n\n当前还没有可读取的 SillyTavern 上下文。\n\n本诊断不会加载 Heartbeat 完整 runtime。',
+            text: '心迹回廊性能诊断（不解压缓存）\n\n当前还没有可读取的 SillyTavern 上下文。\n\n本诊断不会加载 Heartbeat 完整 runtime。',
         };
     }
 
@@ -93,7 +93,7 @@ function getHeartbeatPerformanceDiagnostic() {
     const storage = compressed ? CACHE_STORAGE_FORMAT : legacyRaw ? 'legacy-uncompressed' : 'none';
 
     const rows = [
-        '心跳回忆性能诊断（不解压缓存）',
+        '心迹回廊性能诊断（不解压缓存）',
         '',
         `当前聊天：${chatId || '未命名 / 未取得 ID'}`,
         `聊天消息数组：${messageCount} 条（只读取 length，没有遍历正文）`,
@@ -221,7 +221,7 @@ function mountBootstrapMenu() {
     item.className = 'list-group-item flex-container flexGap5 interactable';
     item.tabIndex = 0;
     item.setAttribute('role', 'button');
-    item.innerHTML = '<i class="fa-solid fa-box-archive"></i><span>心跳回忆 · 档案室</span>';
+    item.innerHTML = '<i class="fa-solid fa-box-archive"></i><span>心迹回廊 · 档案室</span>';
     item.addEventListener('click', () => requestArchiveOpen('bootstrap-menu-click'));
     item.addEventListener('keydown', event => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -240,7 +240,7 @@ function mountBootstrapSettings() {
     panel.id = SETTINGS_ID;
     panel.dataset.rmtBootstrap = '1';
     panel.innerHTML = `
-      <div class="rmt-bootstrap-head"><b>心跳回忆</b><small>LAZY BOOTSTRAP</small></div>
+      <div class="rmt-bootstrap-head"><b>心迹回廊</b><small>LAZY BOOTSTRAP</small></div>
       <div class="rmt-bootstrap-actions">
         <button type="button" class="menu_button" data-rmt-bootstrap-load-settings>配置独立 API</button>
         <button type="button" class="menu_button" data-rmt-bootstrap-update>检查并更新插件</button>
@@ -271,15 +271,7 @@ function mountBootstrapSettings() {
             return;
         }
         if (event.target.closest?.('[data-rmt-bootstrap-load-settings]')) {
-            void ensureRuntime('settings').then(() => {
-                setTimeout(() => {
-                    const full = document.getElementById(SETTINGS_ID);
-                    full?.scrollIntoView?.({ block: 'nearest' });
-                    full?.querySelector?.('.rmt-settings-header')?.click?.();
-                    const apiSection = full?.querySelector?.('[data-rmt-settings-section="api"]');
-                    if (apiSection) apiSection.open = true;
-                }, 0);
-            }).catch(showBootError);
+            void ensureRuntime('settings').then(() => runtimeModule?.openSettingsHome?.()).catch(showBootError);
         }
     });
     mount.appendChild(panel);
@@ -332,8 +324,8 @@ function unbindBootstrapEarlyOpen() {
 
 function showBootError(error) {
     console.error('[HeartbeatMemories] lazy runtime load failed', safeBootstrapErrorDiagnostic(error));
-    const message = '心跳回忆加载失败。错误详情已隐藏，请刷新页面后重试；若仍失败，请检查插件文件是否完整。';
-    try { globalThis.toastr?.error?.(message, '心跳回忆'); } catch {}
+    const message = '心迹回廊加载失败。错误详情已隐藏，请刷新页面后重试；若仍失败，请检查插件文件是否完整。';
+    try { globalThis.toastr?.error?.(message, '心迹回廊'); } catch {}
 }
 
 async function ensureRuntime(reason = 'unknown') {

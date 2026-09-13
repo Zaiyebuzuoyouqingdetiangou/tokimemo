@@ -468,13 +468,13 @@ function advPreparationTargetHint() {
 function showAdvNotice(targetRuntime, message, type = 'info') {
     const text = core_text.normalizeText(message, 1200);
     if (advTargetVisible(targetRuntime)) ui_overlay.showInlineError(text);
-    else globalThis.toastr?.[type]?.(core_text.toastText(advTargetMessage(targetRuntime, text)), '心跳回忆 · ADV EVENT');
+    else globalThis.toastr?.[type]?.(core_text.toastText(advTargetMessage(targetRuntime, text)), '心迹回廊 · ADV EVENT');
 }
 
 function showAdvFailure(targetRuntime, error) {
     const message = core_text.safeErrorSummary(error);
     if (advTargetVisible(targetRuntime)) ui_overlay.showInlineError(message);
-    else globalThis.toastr?.error?.(core_text.toastText(advTargetMessage(targetRuntime, message)), '心跳回忆 · ADV EVENT');
+    else globalThis.toastr?.error?.(core_text.toastText(advTargetMessage(targetRuntime, message)), '心迹回廊 · ADV EVENT');
 }
 
 function refreshAdvArchiveTarget(targetRuntime) {
@@ -549,7 +549,7 @@ export async function generateAllAdvForSession(options = {}) {
     let session = latestAdvSessionForRuntime(targetRuntime, runtimeState.activeSession);
     if (!session?.events?.some(event => !event.adv?.paragraphs?.length)) {
         await clearCommittedAdvRecovery(targetRuntime, session, 'adv-bulk');
-        globalThis.toastr?.info?.(advTargetMessage(targetRuntime, '全部 ADV 都已经生成完成。'), '心跳回忆');
+        globalThis.toastr?.info?.(advTargetMessage(targetRuntime, '全部 ADV 都已经生成完成。'), '心迹回廊');
         return;
     }
     runtimeState.activeAdvBulkScopes.add(scope);
@@ -566,7 +566,7 @@ export async function generateAllAdvForSession(options = {}) {
     const allPending = session.events.filter(event => !event.adv?.paragraphs?.length);
     if (!allPending.length) {
         await clearCommittedAdvRecovery(targetRuntime, session, 'adv-bulk');
-        globalThis.toastr?.info?.(advTargetMessage(targetRuntime, '较新的任务已经补完全部 ADV，本次没有重复请求。'), '心跳回忆');
+        globalThis.toastr?.info?.(advTargetMessage(targetRuntime, '较新的任务已经补完全部 ADV，本次没有重复请求。'), '心迹回廊');
         runtimeState.activeAdvBulkScopes.delete(scope);
         refreshAdvArchiveTarget(targetRuntime);
         return;
@@ -653,11 +653,11 @@ export async function generateAllAdvForSession(options = {}) {
             ui_advEventView.renderAdvMode();
         }
         if (failedAfterBatch.length) {
-            globalThis.toastr?.warning?.(advTargetMessage(targetRuntime, `本批完成 ${batchCount}/${pending.length} 篇；${failedAfterBatch.length} 篇需要重试。`), '心跳回忆');
+            globalThis.toastr?.warning?.(advTargetMessage(targetRuntime, `本批完成 ${batchCount}/${pending.length} 篇；${failedAfterBatch.length} 篇需要重试。`), '心迹回廊');
         } else if (failed) {
-            globalThis.toastr?.success?.(advTargetMessage(targetRuntime, `本批完成 ${batchCount} 篇；还有 ${failed} 篇未生成，可继续生成下一批。`), '心跳回忆');
+            globalThis.toastr?.success?.(advTargetMessage(targetRuntime, `本批完成 ${batchCount} 篇；还有 ${failed} 篇未生成，可继续生成下一批。`), '心迹回廊');
         } else {
-            globalThis.toastr?.success?.(advTargetMessage(targetRuntime, `ADV 已完成：${completed}/${session.events.length}。`), '心跳回忆');
+            globalThis.toastr?.success?.(advTargetMessage(targetRuntime, `ADV 已完成：${completed}/${session.events.length}。`), '心迹回廊');
         }
     } catch (error) {
         await generation_recovery.noteGenerationRecoveryFailure(origin, error);
@@ -726,7 +726,7 @@ export async function repairFailedAdvForSession(options = {}) {
     failed = session.events.filter(event => !event.adv?.paragraphs?.length && (!requestedIds.size || requestedIds.has(event.id)));
     if (!failed.length) {
         await clearCommittedAdvRecovery(targetRuntime, session, 'adv-repair');
-        globalThis.toastr?.info?.('较新的任务已经补完这些 ADV，本次没有重复请求。', '心跳回忆');
+        globalThis.toastr?.info?.('较新的任务已经补完这些 ADV，本次没有重复请求。', '心迹回廊');
         runtimeState.activeAdvBulkScopes.delete(scope);
         refreshAdvArchiveTarget(targetRuntime);
         return;
@@ -789,7 +789,7 @@ export async function repairFailedAdvForSession(options = {}) {
             runtimeState.activeSession = session;
             ui_advEventView.renderAdvMode();
         }
-        globalThis.toastr?.[stillFailed.length ? 'warning' : 'success']?.(advTargetMessage(targetRuntime, `逐个补完完成：成功 ${repaired} 篇${stillFailed.length ? `，仍有 ${stillFailed.length} 篇失败` : '，全部 ADV 已就绪'}。`), '心跳回忆');
+        globalThis.toastr?.[stillFailed.length ? 'warning' : 'success']?.(advTargetMessage(targetRuntime, `逐个补完完成：成功 ${repaired} 篇${stillFailed.length ? `，仍有 ${stillFailed.length} 篇失败` : '，全部 ADV 已就绪'}。`), '心迹回廊');
     } catch (error) {
         await generation_recovery.noteGenerationRecoveryFailure(origin, error);
         if (error?.name !== 'AbortError') showAdvFailure(targetRuntime, error);
@@ -857,7 +857,7 @@ export async function generateAdvForSelected(options = {}) {
     event = session?.events?.find(item => item.id === eventId);
     if (!event || event.adv?.paragraphs?.length) {
         if (event) await clearCommittedAdvRecovery(targetRuntime, session, 'adv-single', eventId);
-        globalThis.toastr?.info?.(advTargetMessage(targetRuntime, event ? '较新的任务已经补完这篇 ADV，本次没有重复请求。' : '这条 ADV 事件已不在最新档案中，本次没有请求。'), '心跳回忆');
+        globalThis.toastr?.info?.(advTargetMessage(targetRuntime, event ? '较新的任务已经补完这篇 ADV，本次没有重复请求。' : '这条 ADV 事件已不在最新档案中，本次没有请求。'), '心迹回廊');
         runtimeState.activeModeBuildScopes.delete(taskKey);
         refreshAdvArchiveTarget(targetRuntime);
         return;
@@ -890,12 +890,12 @@ export async function generateAdvForSelected(options = {}) {
         if (wasBackgrounded || !persisted.committed) {
             if (targetRuntime.archiveTarget) ui_settingsPanel.refreshSettingsTaskStatus();
             else ui_settingsPanel.refreshSettingsMemoryStatus();
-            globalThis.toastr?.success?.(advTargetMessage(targetRuntime, `ADV 后台生成完成：${event.title}`), '心跳回忆');
+            globalThis.toastr?.success?.(advTargetMessage(targetRuntime, `ADV 后台生成完成：${event.title}`), '心迹回廊');
             return;
         }
         runtimeState.activeSession = session;
         ui_advEventView.renderAdvMode();
-        globalThis.toastr?.success?.(advTargetMessage(targetRuntime, `ADV 已生成：${event.title}`), '心跳回忆');
+        globalThis.toastr?.success?.(advTargetMessage(targetRuntime, `ADV 已生成：${event.title}`), '心迹回廊');
     } catch (error) {
         await generation_recovery.noteGenerationRecoveryFailure(origin, error);
         if (error?.name === 'AbortError') {

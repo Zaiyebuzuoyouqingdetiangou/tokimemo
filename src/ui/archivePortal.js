@@ -14,6 +14,8 @@ import * as ui_overlay from './overlay.js';
 import * as navigation_bookmark from './navigationBookmark.js';
 import * as room from '../modes/room.js';
 import * as ui_settingsPanel from './settingsPanel.js';
+import * as home_view from './homeView.js';
+export const showHome = options => home_view.showHome(options);
 
 export function mountMenuItem() {
     if (document.getElementById(core_constants.MENU_ID)) return true;
@@ -24,7 +26,7 @@ export function mountMenuItem() {
     item.className = 'list-group-item flex-container flexGap5 interactable';
     item.tabIndex = 0;
     item.setAttribute('role', 'button');
-    item.innerHTML = '<i class="fa-solid fa-box-archive"></i><span>心跳回忆 · 档案室</span>';
+    item.innerHTML = '<i class="fa-solid fa-book-open" aria-hidden="true"></i><span>心迹回廊</span>';
     const open = () => safeShowArchiveLibrary('extensions-menu');
     item.addEventListener('click', open);
     item.addEventListener('keydown', event => {
@@ -38,7 +40,7 @@ export function mountMenuItem() {
 }
 
 export function archiveOpenButtonFromEvent(event) {
-    const selector = '[data-rmt-settings-open-archive], #heartbeat_memories_menu_item';
+    const selector = '#heartbeat_memories_menu_item';
     const path = typeof event?.composedPath === 'function' ? event.composedPath() : [];
     for (const node of path) {
         if (node?.matches?.(selector)) return node;
@@ -54,15 +56,15 @@ export function safeShowArchiveLibrary(source = 'unknown') {
             // performs a read-only canonical fetch and cancels on chat/lifecycle changes.
             void navigation_bookmark.restoreIndexedReadingPosition({ open: ui_overlay.openOverlay, render: ui_overlay.renderActive,
                 stopAutomaticLife: room.stopRoomClock, fallback: () => {
-                    void archive_library.showArchiveLibrary().catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '缘侧'));
+                    showHome();
                 } });
             return true;
         }
-        archive_library.showArchiveLibrary();
+        showHome();
         return true;
     } catch (error) {
         console.error(`[HeartbeatMemories] open archive failed (${core_text.normalizeText(source, 80)})`, core_text.safeErrorDiagnostic(error));
-        globalThis.toastr?.error?.(`档案室打开失败：${core_text.toastText(core_text.safeErrorSummary(error))}`, '心跳回忆');
+        globalThis.toastr?.error?.(`档案室打开失败：${core_text.toastText(core_text.safeErrorSummary(error))}`, '心迹回廊');
         return false;
     }
 }

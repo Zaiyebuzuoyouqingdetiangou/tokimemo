@@ -36,7 +36,7 @@ function busyEditor(active) {
     editor.busy = active;
     editor.element.setAttribute('aria-busy', String(active));
     editor.element.querySelector('[data-rmt-cg-prompt-input]').disabled = active;
-    for (const button of editor.element.querySelectorAll('[data-rmt-cg-prompt-action="reconceive"], [data-rmt-cg-prompt-action="draw"]')) button.disabled = active;
+    for (const button of editor.element.querySelectorAll('[data-rmt-cg-prompt-action="reconceive"], [data-rmt-cg-prompt-action="draw"], [data-rmt-cg-prompt-action="clear"]')) button.disabled = active;
 }
 
 export function openCgPromptEditor({ heartStrip = false } = {}) {
@@ -49,8 +49,9 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
         const target = images.captureCgImageTarget(rawTarget);
         images.assertCgImageTargetCurrent(target);
         const selected = images.cgItemInSession(target.mode, target.session, target.itemId);
+        const savedImage = images.normalizeCgImageRecord(selected.cgImage);
         if (images.isCgImageDrawing(target.mode, target.itemId)) {
-            globalThis.toastr?.info?.('请先等当前图片绘制完成，再编辑画面提示词。', '心跳回忆');
+            globalThis.toastr?.info?.('请先等当前图片绘制完成，再编辑画面提示词。', '心迹回廊');
             return;
         }
         const host = document.getElementById(core_constants.OVERLAY_ID);
@@ -61,7 +62,7 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
         const element = document.createElement('div');
         element.className = 'rmt-cg-prompt-backdrop';
         element.innerHTML = `<section class="rmt-cg-prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="rmt-cg-prompt-title" aria-describedby="rmt-cg-prompt-help" tabindex="-1">
-          <div class="rmt-cg-prompt-head"><h2 id="rmt-cg-prompt-title">画面提示词</h2><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="close" aria-label="关闭画面提示词">关闭</button></div>
+          <div class="rmt-cg-prompt-head"><h2 id="rmt-cg-prompt-title">图片设置</h2><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="close" aria-label="关闭图片设置">关闭</button></div>
           <p class="rmt-cg-prompt-event">${core_text.esc(selected.title)}</p>
           <details class="rmt-cg-prompt-scene"><summary>查看这条回忆</summary><p>${core_text.esc(selected.cgDesc || selected.desc || selected.subtitle || '')}</p></details>
           <label for="rmt-cg-prompt-input">将发送给生图插件的画面描述</label>
@@ -69,7 +70,8 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
           <div id="rmt-cg-prompt-count" data-rmt-cg-prompt-count></div>
           <p id="rmt-cg-prompt-help">编辑和重新构思都不会自动生图。确认绘图后才消耗生图额度；只有新图成功保存，才会替换原图与提示词。关闭会放弃本次草稿。</p>
           <p data-rmt-cg-prompt-status role="status" aria-live="polite"></p>
-          <div class="rmt-cg-prompt-actions"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="reconceive">重新构思画面</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="draw">确认提示词并绘图</button></div>
+          <div class="rmt-cg-prompt-actions"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="reconceive">重新构思画面</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="draw">${savedImage ? '确认提示词并重绘' : '确认提示词并绘图'}</button></div>
+          ${savedImage ? `<div class="rmt-cg-prompt-secondary"><a class="rmt-btn" href="${core_text.esc(savedImage.url)}" target="_blank" rel="noopener noreferrer">查看完整原图</a><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="clear">${target.mode === core_constants.MODE.HEART ? '恢复文字版' : '恢复抽象图'}</button><small>仅移除本档案的图片引用，不删除柏宝绘图库文件。</small></div>` : ''}
         </section>`;
         const cancel = event => { event.preventDefault(); event.stopImmediatePropagation(); closeCgPromptEditor(); };
         editor = { target, element, host, opener: document.activeElement, busy: false, cancel,
@@ -88,7 +90,7 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
         element.addEventListener('keydown', event => {
             if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeCgPromptEditor(); return; }
             if (event.key !== 'Tab') return;
-            const controls = [...element.querySelectorAll('button:not(:disabled), textarea:not(:disabled), summary')];
+            const controls = [...element.querySelectorAll('button:not(:disabled), textarea:not(:disabled), summary, a[href]')];
             const first = controls[0], last = controls[controls.length - 1];
             if (event.shiftKey && (document.activeElement === first || !element.contains(document.activeElement))) {
                 event.preventDefault(); last?.focus();
@@ -98,7 +100,7 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
         shell.appendChild(element);
         updateCount();
         textarea.focus();
-    } catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心跳回忆'); }
+    } catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); }
 }
 
 export async function handleCgPromptEditorAction(action) {
@@ -107,9 +109,17 @@ export async function handleCgPromptEditorAction(action) {
     if (!current || current.busy) return;
     try {
         images.assertCgImageTargetCurrent(current.target);
+        if (action === 'clear') {
+            busyEditor(true);
+            if (current.target.mode === core_constants.MODE.HEART) await heart.clearHeartStripImage(current.target.itemId);
+            else await images.clearSelectedCgImage();
+            const item = images.cgItemInSession(current.target.mode, current.target.session, current.target.itemId);
+            if (!images.normalizeCgImageRecord(item?.cgImage)) closeCgPromptEditor();
+            return;
+        }
         if (action === 'reconceive') {
             if (!overlay.confirmExplicitAction('重新构思这张回忆的画面？',
-                '会使用缘侧的独立 API 消耗一次文本生成额度，只依据这条回忆的场景资料整理画面。结果先放入编辑框，不会立即生图，也不会改写回忆或原图。', { destructive: false })) return;
+                '会使用心迹回廊的独立 API 消耗一次文本生成额度，只依据这条回忆的场景资料整理画面。结果先放入编辑框，不会立即生图，也不会改写回忆或原图。', { destructive: false })) return;
             images.assertCgImageTargetCurrent(current.target);
             busyEditor(true);
             const status = current.element.querySelector('[data-rmt-cg-prompt-status]');

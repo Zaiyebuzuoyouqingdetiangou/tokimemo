@@ -4,7 +4,7 @@ import * as recovery from '../generation/recovery.js';
 import * as client from '../generation/client.js';
 import * as text from '../core/text.js';
 
-export const ARCHIVE_RECOVERY_PAGE_NOTICE = '档案整理草稿仅本页保留，请勿刷新；关闭缘侧可保留。';
+export const ARCHIVE_RECOVERY_PAGE_NOTICE = '档案整理草稿仅本页保留，请勿刷新；关闭心迹回廊可保留。';
 export const ARCHIVE_RECOVERY_MAX_DRAFTS = 4;
 const drafts = new Map();
 const tickets = new WeakSet();

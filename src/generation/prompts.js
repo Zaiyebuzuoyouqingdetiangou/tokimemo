@@ -14,7 +14,7 @@ export function promptSafetyBoundary(context, taskLabel = '番外数据') {
     const charName = core_text.normalizeText(context.name2 || '{{char}}', 120);
     const userName = core_text.normalizeText(context.name1 || '{{user}}', 120);
     return `
-你正在为 SillyTavern 插件“心跳回忆”生成【${taskLabel}】。
+你正在为 SillyTavern 插件“心迹回廊”生成【${taskLabel}】。
 当前角色：${charName}
 当前用户：${userName}
 
@@ -455,20 +455,6 @@ JSON 结构必须严格为：
       ]
     }
   ],
-  "pets": [
-    {
-      "id": "PET01",
-      "name": "宠物名",
-      "species": "cat / dog / bird / rabbit / fish / reptile / small_mammal / fantasy / other",
-      "spaceId": "SP01",
-      "description": "它在这个空间里的样子、习惯与长期生活痕迹",
-      "line": "{{char}} 提到它时的一句短台词",
-      "basis": "设定",
-      "sourceEvidence": "basis=设定时，从角色卡/世界书原样复制含物种、以及设定中确有名字时同时含名字的短句；basis=记忆时为空",
-      "sourceMemoryIds": [],
-      "sourceMemoryAnchor": "basis=记忆时原样复制证据锚点；basis=设定时为空"
-    }
-  ],
   "dayparts": {
     "morning": {"spaceId": "SP01", "activity": "早晨在该空间做什么", "line": "对应短台词", "focusObjectId": "OBJ01"},
     "daytime": {"spaceId": "SP02", "activity": "白天在该空间做什么", "line": "对应短台词", "focusObjectId": "OBJ02"},
@@ -487,9 +473,7 @@ JSON 结构必须严格为：
 - spaces 通常 5～8 个；若角色客观居住条件很简单，也应尽量给出 3～4 个真实会长期使用的生活区域。最多 10 个，仍不得为了“丰富”凭空给普通角色豪宅。
 - 每个空间 objects 3～6 个；空间间的物件必须有区别，不能把同一套床/桌/书架换名重复。不同 spaceType 的主陈设结构也必须明显不同：卧室以床/床头为核心，客厅以沙发/茶几为核心，书房以书架/书桌为核心，音乐/录音工作室以乐器/控制台/监听或吸音结构为核心，实验室以工作台/设备为核心，餐厅以餐桌为核心，浴室以浴缸/淋浴/洗漱为核心。
 - 每个空间都要有清楚不同的主功能、陈设母题与物件组合；不得把同一个通用房间只改名称、颜色或三件摆设后重复输出。优先用角色的职业、兴趣、时代和生活方式拉开空间差异。
-- 先扫描 CHARACTER_CARD_JSON、WORLD_INFO_TEXT 与档案中关于宠物/动物伙伴的明确设定。{{char}} 明确养有宠物时，pets 必须包含它，并放入合理 spaceId；有多只时可生成多项。没有明确依据时 pets=[]，禁止为了可爱凭空发明宠物。
-- pets.basis=“记忆”时必须引用至少 1 个真实 sourceMemoryIds 并原样复制 sourceMemoryAnchor；basis=“设定”时 sourceMemoryIds 必须为空，并必须用 sourceEvidence 原样复制角色卡/世界书中含物种的短句；若输出宠物名，原文也必须包含该名字，不能凭物种擅自起名。
-- pets 只允许上述 species 枚举和纯文本，不得输出图片、URL、HTML、CSS 或脚本；实际宠物外形由插件本地固定 CSS 绘制。
+- 本轮不生成 pets/companions，不要求补宠物；已有宠物由本地原样保留。
 - zone 只能是“左上/右上/左下/右下/中央/近景”。
 - spaceType 必须符合角色时代与生活条件。不要强行现代化；“他的房间”只是功能名，不代表一定是现代卧室。
 - basis 只能是“设定”或“记忆”。

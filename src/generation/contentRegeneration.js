@@ -170,7 +170,7 @@ async function regenerateHeartFirefly(session, item, context, memoryBank, origin
         pink: 'GS4 分类：恋爱。围绕喜欢、特别感、想更靠近等恋爱情绪',
         blue: 'GS4 分类：恋爱的烦恼。围绕吃醋、不安、竞争意识、怕失去或想确认关系',
         yellow: 'GS4 分类：朋友。围绕明确存在的朋友、同学、同事或朋友圈关系；不得凭空编固定人物',
-        white: 'GS4 分类：お楽しみ / 个性话题。围绕角色自己的梦想、兴趣、食物、习惯、工作学习、宠物、价值观等；具体事实必须来自受控设定',
+        white: 'GS4 分类：个性话题。围绕角色自己的梦想、兴趣、食物、习惯、工作学习、宠物、价值观等；具体事实必须来自受控设定',
         desire: '本插件扩展：对 {{user}} 更直白的渴望或身体亲近愿望；禁止露骨性行为或色情细节',
     }[color] || '追加约会话题';
     const prompt = `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 单个萤火虫追加约会会话重新生成')}

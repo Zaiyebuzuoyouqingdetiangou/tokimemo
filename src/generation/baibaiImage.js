@@ -79,7 +79,7 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
     // Freeze grouping before the provider awaits; its default otherwise reads the new chat at save time.
     const request = {
         prompt: visual, nl: visual, size: orientation === 'portrait' ? 'portrait' : 'landscape',
-        save: true, character: core_text.normalizeText(characterName, 120) || '缘侧 CG',
+        save: true, character: core_text.normalizeText(characterName, 120) || '心迹回廊 CG',
     };
     const controller = new AbortController();
     let timer;

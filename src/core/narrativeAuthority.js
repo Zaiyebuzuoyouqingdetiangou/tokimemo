@@ -25,6 +25,11 @@ export function narrativeClaimsSharedHistory(value, { userName = '', secondPerso
     const relativeGift = /(?:\{\{user\}\}|你)(?:亲手|曾经|以前|去年|昨天)?(?:送|赠|留|寄|买|织|写|画)(?:给)?(?:我|我的)[^，,。！？!?；;\n]{0,12}的|(?:\{\{user\}\}|你)(?:给我的|送我的|留给我的)|\b(?:you\s+(?:gave|sent|made|bought)|from\s+you)\b/iu;
     if (secondPersonIsUser && relativeGift.test(text)) return true;
     if (!secondPersonIsUser && relativeGift.test(text.replace(/你/gu, '对方'))) return true;
+    // An individual old object is not an old shared action: "明天一起看看去年我拍的照片".
+    // Remove only the bounded first-person noun modifier, never a modifier involving
+    // the user/us ("去年我们拍的照片" or "去年我给你写的信" still needs evidence).
+    text = text.replace(/(?:去年|前年|往年|以前|从前|过去|当年|那年|上次|昨天|昨日)(?:我|本人)(?:独自|自己)?[^，,。！？!?；;\n]{1,40}?的(?:照片|相片|作品|画作|书|相册|笔记|日记|信|文章|手作|录音|视频|曲子)/gu,
+        fragment => mentions(fragment) ? fragment : '个人旧物');
     for (const sentence of text.split(/[。！？!?；;\n]+/u)) {
         if (mentions(sentence) && RECALL.test(sentence) && EPISODE.test(sentence)) return true;
         const clauses = sentence.split(/[，,：:]+/u).map(part => part.trim()).filter(Boolean);

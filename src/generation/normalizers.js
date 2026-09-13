@@ -11,11 +11,13 @@ import * as modes_heart from '../modes/heart.js';
 import * as modes_items from '../modes/items.js';
 import * as modes_cabinet from '../modes/cabinet.js';
 import * as modes_phone from '../modes/phone.js';
+import * as modes_pastLives from '../modes/pastLives.js';
 import * as modes_room from '../modes/room.js';
 import * as modes_relations from '../modes/relations.js';
 import * as modes_travel from '../modes/travel.js';
 
 export function normalizeByMode(mode, data, memoryBank, context = null) {
+    if (mode === core_constants.MODE.PAST_LIVES) return modes_pastLives.normalizePastLives(data, memoryBank, { context });
     if (mode === core_constants.MODE.CALENDAR) return modes_calendar.normalizeCalendar(data, memoryBank);
     if (mode === core_constants.MODE.RELATIONS) return modes_relations.normalizeRelations(data, memoryBank, context);
     if (mode === core_constants.MODE.BUTTERFLY) return modes_butterfly.normalizeButterfly(data, memoryBank, context);
@@ -29,5 +31,5 @@ export function normalizeByMode(mode, data, memoryBank, context = null) {
     if (mode === core_constants.MODE.ENDING) return modes_ending.normalizeEnding(data, memoryBank);
     if (mode === core_constants.MODE.HEART) return modes_heart.normalizeHeart(data, memoryBank);
     if (mode === core_constants.MODE.ACHIEVEMENTS) return modes_achievements.normalizeAchievements(data, memoryBank);
-    throw new Error('未知心跳回忆模式。');
+    throw new Error('未知心迹回廊模式。');
 }

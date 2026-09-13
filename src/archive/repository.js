@@ -337,7 +337,8 @@ export async function loadMemoryWorldInfoBook(context, worldName, signal = null)
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     if (typeof context.loadWorldInfo !== 'function') throw new Error('当前 SillyTavern 没有公开的世界书读取接口。');
     const name = core_text.normalizeText(worldName, 240);
-    const names = typeof context.getWorldInfoNames === 'function' ? core_text.cleanArray(context.getWorldInfoNames(), 500, 240) : [];
+    const names = typeof context.getWorldInfoNames === 'function' ? core_text.cleanArray(await context.getWorldInfoNames(), 500, 240) : [];
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     if (!name || !names.includes(name)) throw new Error('所选世界书已经不存在，或当前 SillyTavern 无法读取。');
     const data = await context.loadWorldInfo(name);
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -653,11 +654,21 @@ export function memoryWorldInfoPromptBlock(worldInfo) {
 
 export async function showMemoryWorldInfoPicker() {
     const context = core_context.currentCharacterGuard();
-    if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return globalThis.toastr?.info?.('当前还有任务，等任务结束后再选择世界书。', '心跳回忆');
+    if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return globalThis.toastr?.info?.('当前还有任务，等任务结束后再选择世界书。', '心迹回廊');
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
-    if (!overlay) return;
+    if (!overlay) {
+        globalThis.toastr?.info?.('请从魔法棒打开心迹回廊首页，再选择记忆来源。', '心迹回廊');
+        return;
+    }
     overlay.querySelector('.rmt-memory-wi-picker')?.remove();
-    const names = typeof context.getWorldInfoNames === 'function' ? core_text.cleanArray(context.getWorldInfoNames(), 500, 240) : [];
+    let names = [];
+    try {
+        if (typeof context.getWorldInfoNames !== 'function') throw new Error('unavailable');
+        names = core_text.cleanArray(await context.getWorldInfoNames(), 500, 240);
+    } catch {
+        globalThis.toastr?.info?.('酒馆当前未提供可读取的世界书列表，请确认世界书已加载并刷新页面。无需先扫描记忆插件。', '心迹回廊');
+    }
+    if (core_context.chatScopeKey(context) !== core_context.chatScopeKey(core_context.currentCharacterGuard()) || !overlay.isConnected) return;
     const selection = getMemoryWorldInfoSelection(context);
     const selected = new Map(selection.books.map(book => [book.name, book]));
     const modal = document.createElement('div');
@@ -863,7 +874,7 @@ export async function flushDeferredCommitsForCurrentChat() {
                 if (liveCharacterName) bank.characterName = liveCharacterName;
                 const currentCount = getCurrentUsableMessageCount(context);
                 if (Number(bank?.sourceMessageCount) !== currentCount) {
-                    globalThis.toastr?.warning?.(`后台档案已完成，但原聊天在此期间发生变化，因此没有自动覆盖「${bank?.archiveName || '档案'}」。请重新更新档案。`, '心跳回忆');
+                    globalThis.toastr?.warning?.(`后台档案已完成，但原聊天在此期间发生变化，因此没有自动覆盖「${bank?.archiveName || '档案'}」。请重新更新档案。`, '心迹回廊');
                     acknowledge = true;
                     continue;
                 }
@@ -881,14 +892,14 @@ export async function flushDeferredCommitsForCurrentChat() {
                 }
                 if ((item.origin?.archivePresent === true && (!hasMemory || liveRevision !== expectedRevision))
                     || (item.origin?.archivePresent === false && hasMemory)) {
-                    globalThis.toastr?.warning?.('后台档案对应的是旧版本，已停止写回，较新的档案没有被覆盖。', '心跳回忆');
+                    globalThis.toastr?.warning?.('后台档案对应的是旧版本，已停止写回，较新的档案没有被覆盖。', '心迹回廊');
                     acknowledge = true;
                     continue;
                 }
                 if (item.preserveDerivedCache && core_cache.isCompressedCacheRecord(context.chatMetadata?.[core_constants.CACHE_KEY])) {
                     try { await core_cache.ensureCacheHydrated(context); }
                     catch (error) {
-                        globalThis.toastr?.warning?.('后台增量档案已完成，但旧的 ADV EVENT 缓存暂时无法读取，因此没有覆盖原档案。请刷新后重新更新。', '心跳回忆');
+                        globalThis.toastr?.warning?.('后台增量档案已完成，但旧的 ADV EVENT 缓存暂时无法读取，因此没有覆盖原档案。请刷新后重新更新。', '心迹回廊');
                         continue;
                     }
                     context = currentOriginContext(item.origin);
@@ -910,18 +921,18 @@ export async function flushDeferredCommitsForCurrentChat() {
                     && core_text.normalizeText(committedMemory?.archiveRevision, 240) === completedRevision;
                 if (!sameCommittedTarget) throw new Error('后台档案保存后目标窗口已经变化；完成记录保留等待精确确认。');
                 clearMemoryPreflight(context, item.origin.chatId);
-                globalThis.toastr?.success?.(`后台档案已写回：${bank.archiveName}`, '心跳回忆');
+                globalThis.toastr?.success?.(`后台档案已写回：${bank.archiveName}`, '心迹回廊');
                 acknowledge = true;
             } else if (item.kind === 'heartPatches') {
                 let memory;
                 try { memory = requireArchive(context); }
                 catch {
-                    globalThis.toastr?.warning?.('原聊天已经没有可写入的档案，旧的后台角色互动结果已停止写回。', '心跳回忆');
+                    globalThis.toastr?.warning?.('原聊天已经没有可写入的档案，旧的后台角色互动结果已停止写回。', '心迹回廊');
                     acknowledge = true;
                     continue;
                 }
                 if (memory.archiveRevision !== item.origin.archiveRevision) {
-                    globalThis.toastr?.warning?.('后台角色互动结果对应的是旧档案版本，已停止写回。', '心跳回忆');
+                    globalThis.toastr?.warning?.('后台角色互动结果对应的是旧档案版本，已停止写回。', '心迹回廊');
                     acknowledge = true;
                     continue;
                 }
@@ -931,7 +942,7 @@ export async function flushDeferredCommitsForCurrentChat() {
                 if (memory.archiveRevision !== item.origin.archiveRevision) continue;
                 const fallback = core_cache.loadSession(core_constants.MODE.HEART, { context, chatId: item.origin.chatId, memoryBank: memory, clone: true });
                 if (!fallback) {
-                    globalThis.toastr?.warning?.('原聊天没有可合并的角色互动缓存，旧的后台结果已停止写回。', '心跳回忆');
+                    globalThis.toastr?.warning?.('原聊天没有可合并的角色互动缓存，旧的后台结果已停止写回。', '心迹回廊');
                     acknowledge = true;
                     continue;
                 }
@@ -947,18 +958,18 @@ export async function flushDeferredCommitsForCurrentChat() {
                     fallback,
                 );
                 if (!merged) continue;
-                globalThis.toastr?.success?.('之前窗口的角色互动结果已自动写回。', '心跳回忆');
+                globalThis.toastr?.success?.('之前窗口的角色互动结果已自动写回。', '心迹回廊');
                 acknowledge = true;
             } else if (item.kind === 'sessions') {
                 let memory;
                 try { memory = requireArchive(context); }
                 catch {
-                    globalThis.toastr?.warning?.('原聊天已经没有可写入的档案，旧的后台生成结果已停止写回。', '心跳回忆');
+                    globalThis.toastr?.warning?.('原聊天已经没有可写入的档案，旧的后台生成结果已停止写回。', '心迹回廊');
                     acknowledge = true;
                     continue;
                 }
                 if (memory.archiveRevision !== item.origin.archiveRevision) {
-                    globalThis.toastr?.warning?.('后台生成结果对应的是旧档案版本，已停止写回。', '心跳回忆');
+                    globalThis.toastr?.warning?.('后台生成结果对应的是旧档案版本，已停止写回。', '心迹回廊');
                     acknowledge = true;
                     continue;
                 }
@@ -971,17 +982,17 @@ export async function flushDeferredCommitsForCurrentChat() {
                     if (!await core_cache.commitSession(mode, session, item.origin.chatId, item.origin)) allSaved = false;
                 }
                 if (!allSaved) continue;
-                globalThis.toastr?.success?.('之前窗口的后台生成结果已自动写回。', '心跳回忆');
+                globalThis.toastr?.success?.('之前窗口的后台生成结果已自动写回。', '心迹回廊');
                 acknowledge = true;
             } else {
                 acknowledge = true;
             }
         } catch (error) {
             if (error?.code === 'RMT_ARCHIVE_DELETED_FENCE') {
-                globalThis.toastr?.warning?.('这项后台建档任务启动后，目标档案已被明确删除；旧结果已停止写回。', '心跳回忆');
+                globalThis.toastr?.warning?.('这项后台建档任务启动后，目标档案已被明确删除；旧结果已停止写回。', '心迹回廊');
                 acknowledge = true;
             } else if (error?.code === 'RMT_MODE_WRITE_FENCE') {
-                globalThis.toastr?.warning?.('这项后台内容已被删除或由更新的任务接管；旧结果已停止写回。', '心跳回忆');
+                globalThis.toastr?.warning?.('这项后台内容已被删除或由更新的任务接管；旧结果已停止写回。', '心迹回廊');
                 acknowledge = true;
             }
             console.warn('[HeartbeatMemories] deferred commit failed', core_text.safeErrorDiagnostic(error));
@@ -1244,10 +1255,10 @@ export async function readCurrentChatMemoryPlugins({ automatic = false, preparat
     runtimeState.memoryPreflightCache.set(core_context.chatScopeKey(context, chatId), preflight);
     if (automatic) return preflight;
     if (!result.records.length && !worldInfo.entries.length) {
-        globalThis.toastr?.info?.('当前窗口没有检测到可读取的记忆 / 摘要，也没有选择记忆相关世界书；建档仍会使用聊天正文。', '心跳回忆');
+        globalThis.toastr?.info?.('当前窗口没有检测到可读取的记忆 / 摘要，也没有选择记忆相关世界书；建档仍会使用聊天正文。', '心迹回廊');
     } else {
         const wiText = worldInfo.entries.length ? ` · 世界书 ${worldInfo.books.filter(book => book.imported > 0).length} 本 / ${worldInfo.entries.length} 条` : '';
-        globalThis.toastr?.success?.(`扫描完成：记忆/摘要 ${result.sources.length} 个来源 · ${result.records.length} 条${wiText} · 合计 ${totalChars.toLocaleString()} 字符。`, '心跳回忆');
+        globalThis.toastr?.success?.(`扫描完成：记忆/摘要 ${result.sources.length} 个来源 · ${result.records.length} 条${wiText} · 合计 ${totalChars.toLocaleString()} 字符。`, '心迹回廊');
     }
     ui_overlay.showChooser();
     return preflight;
@@ -1265,7 +1276,7 @@ export function externalMemoryImportPrompt(context, records, worldInfo = null) {
     const charName = core_text.normalizeText(context.name2 || '{{char}}', 120);
     const userName = core_text.normalizeText(context.name1 || '{{user}}', 120);
     return `
-你正在为 SillyTavern 插件“心跳回忆”整理【当前聊天窗口的外部记忆补充】。
+你正在为 SillyTavern 插件“心迹回廊”整理【当前聊天窗口的外部记忆补充】。
 当前角色：${charName}
 当前用户：${userName}
 
@@ -1360,7 +1371,7 @@ export function getMemoryState(context = core_context.currentCharacterGuard()) {
 export function requireArchive(context = core_context.currentCharacterGuard()) {
     const state = getMemoryState(context);
     if (state.status === 'missing') {
-        throw new Error('当前聊天窗口还没有“心跳回忆”档案。请先点击“创建聊天档案”。');
+        throw new Error('当前聊天窗口还没有“心迹回廊”档案。请先点击“创建聊天档案”。');
     }
     if (!state.memory.memories.length) {
         throw new Error('当前聊天档案里没有可用记忆，请手动更新档案后再试。');
@@ -1397,7 +1408,7 @@ export function memoryImportPrompt(context, chunk, chunkIndex, chunkTotal) {
     const charName = core_text.normalizeText(context.name2 || '{{char}}', 120);
     const userName = core_text.normalizeText(context.name1 || '{{user}}', 120);
     return `
-你正在为 SillyTavern 插件“心跳回忆”执行【聊天窗口档案整理】。
+你正在为 SillyTavern 插件“心迹回廊”执行【聊天窗口档案整理】。
 当前角色：${charName}
 当前用户：${userName}
 这是第 ${chunkIndex + 1}/${chunkTotal} 段聊天资料，用于创建或手动更新当前聊天窗口自己的档案。
@@ -1480,7 +1491,7 @@ export function archiveProfilePrompt(context, memories) {
     const userName = core_text.normalizeText(context.name1 || '{{user}}', 120);
     const source = JSON.stringify(core_evidence.memoryPayload({ memories: memories || [] }, null, core_constants.MAX_MEMORY_ITEMS), null, 2);
     return `
-你正在为 SillyTavern 插件“缘侧”给【当前聊天窗口的独立档案】命名并写档案简介。
+你正在为 SillyTavern 插件“心迹回廊”给【当前聊天窗口的独立档案】命名并写档案简介。
 当前角色：${charName}
 当前用户：${userName}
 
@@ -1542,7 +1553,7 @@ function checkedArchiveProfile(data, memories) {
 function archiveRecoverySettingsIdentity(context) {
     const settings = core_settings.getPluginSettings(context);
     const generationSettings = Object.fromEntries(['apiConnectionMode', 'connectionProfileId', 'modelOverride', 'manualApiBaseUrl',
-        'manualApiModel', 'manualApiKey', 'maxTokens', 'temperature', 'useCurrentChatExternalMemory', 'excludedContextTags',
+        'manualApiModel', 'manualApiKey', 'manualApiStreaming', 'chatReadRange', 'useActivatedWorldInfo', 'maxTokens', 'temperature', 'useCurrentChatExternalMemory', 'excludedContextTags',
         'bannedGeneratedPhrases', 'creativeSupplementEnabled', 'creativeSupplement'].map(key => [key, settings[key]]));
     return JSON.stringify({ settings: generationSettings, profile: settings.apiConnectionMode === 'profile'
         ? core_settings.rawConnectionProfile(settings.connectionProfileId, context) : null });
@@ -1592,7 +1603,7 @@ export async function rewriteCurrentArchiveVerdict() {
     const pendingImport = getCurrentArchiveImportRecoverySummary(context);
     const pendingProfile = getCurrentArchiveProfileRecoverySummary(context);
     if (pendingImport?.profileOnly && pendingImport.committedRevision !== memory.archiveRevision) {
-        globalThis.toastr?.warning?.('原档案简介待重试记录与当前档案版本不一致；旧草稿保留，没有重新生成。', '缘侧');
+        globalThis.toastr?.warning?.('原档案简介待重试记录与当前档案版本不一致；旧草稿保留，没有重新生成。', '心迹回廊');
         return { status: 'blocked' };
     }
     if ((pendingProfile || pendingImport?.profileOnly) && !ui_overlay.confirmExplicitAction(
@@ -1632,11 +1643,11 @@ export async function rewriteCurrentArchiveVerdict() {
             expectedPreviousArchiveState: { present: true, revision: memory.archiveRevision },
         });
         archive_importRecovery.finishArchiveProfileRecovery(recoveryTicket, origin);
-        globalThis.toastr?.success?.('简介已写好；记忆与其他内容保持不变。', '缘侧');
+        globalThis.toastr?.success?.('简介已写好；记忆与其他内容保持不变。', '心迹回廊');
         return { status: 'committed' };
     } catch (error) {
-        globalThis.toastr?.warning?.(core_text.toastText(core_text.safeErrorSummary(error)), '缘侧 · 简介未更新');
-        if (getCurrentArchiveProfileRecoverySummary(context)) globalThis.toastr?.info?.(archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '缘侧 · 简介草稿');
+        globalThis.toastr?.warning?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊 · 简介未更新');
+        if (getCurrentArchiveProfileRecoverySummary(context)) globalThis.toastr?.info?.(archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '心迹回廊 · 简介草稿');
         return { status: 'failed' };
     } finally {
         archive_importRecovery.releaseArchiveRecovery(recoveryTicket);
@@ -1658,7 +1669,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         await core_cache.ensureCacheHydrated(context);
         if (!preparationStillCurrent()) throw new DOMException('Chat changed', 'AbortError');
         if (core_cache.loadPhoneGenerationDraft(context, existing)) {
-            globalThis.toastr?.info?.('私人终端有未完成草稿，自动档案同步暂缓；请先继续生成终端。', '心跳回忆');
+            globalThis.toastr?.info?.('私人终端有未完成草稿，自动档案同步暂缓；请先继续生成终端。', '心迹回廊');
             return { status: 'blocked' };
         }
     }
@@ -1684,13 +1695,13 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         external = preflight || await currentMemorySourceLedgerExternal(context);
         assertPreparationCurrent();
         if (!preflight && !external.records.length && (detected.length || hasMemoryWorldInfoSelection(context))) {
-            globalThis.toastr?.info?.('先点击“自动读取”，确认它实际读到了多少当前窗口资料，再创建/更新档案。', '心跳回忆');
+            globalThis.toastr?.info?.('先点击“自动读取”，确认它实际读到了多少当前窗口资料，再创建/更新档案。', '心迹回廊');
             return { status: 'blocked' };
         }
         const limited = external.sources.filter(source => source.coverage?.status === 'truncated'
             && /本次档案生成/.test(source.coverage?.reason || ''));
         if (limited.length) {
-            globalThis.toastr?.warning?.(`来源账本仍完整保存；本次模型输入受安全预算限制：${limited.map(source => source.label).slice(0, 3).join('、')}${limited.length > 3 ? ` 等 ${limited.length} 个来源` : ''}。详情可在“记忆来源”中查看。`, '心跳回忆');
+            globalThis.toastr?.warning?.(`来源账本仍完整保存；本次模型输入受安全预算限制：${limited.map(source => source.label).slice(0, 3).join('、')}${limited.length > 3 ? ` 等 ${limited.length} 个来源` : ''}。详情可在“记忆来源”中查看。`, '心迹回廊');
         }
     }
 
@@ -1709,6 +1720,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     const previousMessageCount = incrementalUpdate ? Math.max(0, Number(existing?.sourceMessageCount) || 0) : 0;
     const snapshot = await core_context.buildChatSnapshot(context, {
         prefixCount: previousMessageCount,
+        readRange: settings.chatReadRange,
         expectedChatId: preparation.origin.chatId,
         stillCurrent: () => {
             try { return core_context.isCurrentTaskOrigin(preparation.origin, core_context.currentCharacterGuard()); }
@@ -1725,11 +1737,14 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         }
     }
 
-    const chatInput = incrementalUpdate ? snapshot.incrementalMessages : snapshot.messages;
+    const rangeChanged = incrementalUpdate && JSON.stringify(existing?.chatReadRange || null) !== JSON.stringify(snapshot.readRange);
+    // Broader/revised choices may explicitly add older selected floors. The merge below
+    // deduplicates already archived content and never deletes records outside the range.
+    const chatInput = incrementalUpdate && !rangeChanged ? snapshot.incrementalMessages : snapshot.messages;
     const externalChanged = !incrementalUpdate || core_text.normalizeText(existing?.externalMemoryFingerprint, 240) !== core_text.normalizeText(external.fingerprint, 240);
     if (incrementalUpdate && !chatInput.length && !externalChanged) {
         clearMemoryPreflight(context);
-        globalThis.toastr?.info?.('当前窗口没有发现新的聊天消息或新的记忆 / 摘要资料；现有档案和全部已生成内容保持不变。', '心跳回忆');
+        globalThis.toastr?.info?.('当前窗口没有发现新的聊天消息或新的记忆 / 摘要资料；现有档案和全部已生成内容保持不变。', '心迹回廊');
         return { status: 'noop' };
     }
     const chunks = splitSnapshotIntoChunks({ messages: chatInput });
@@ -1760,6 +1775,17 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         const liveEnvelopeContext = assertPreparationCurrent();
         const contextEnvelope = await core_cache.buildControlledContextEnvelope(liveEnvelopeContext);
         assertPreparationCurrent();
+        if (!automatic && !continueRecovery) {
+            const chatCharacters = chatInput.reduce((sum, item) => sum + item.text.length, 0);
+            const externalCharacters = externalChunks.reduce((sum, chunk) => sum + JSON.stringify(chunk).length, 0);
+            const rangeLabel = snapshot.readRange?.mode === 'all' ? '全部楼层'
+                : snapshot.readRange?.mode === 'recent' ? `最近 ${snapshot.readRange.recent} 楼`
+                    : `第 ${snapshot.readRange?.start}–${snapshot.readRange?.end} 楼`;
+            if (!ui_overlay.confirmExplicitAction('确认本次读取范围',
+                `${rangeLabel}；本次实际读取 ${chatInput.length} 条聊天正文，约 ${chatCharacters.toLocaleString()} 字符。${snapshot.readRange?.includeHidden ? '包含隐藏普通对话' : '不含隐藏对话'}。\n外部摘要独立选择：${externalChunks.length} 个分块，约 ${externalCharacters.toLocaleString()} 字符；角色/用户设定与世界书背景每次请求约 ${contextEnvelope.length.toLocaleString()} 字符。\n分块整理后还有档案概述步骤；字符数不是精确 token 或费用。已有 ${existing?.memories?.length || 0} 条档案记忆保留，不会因缩小范围而删除。`,
+                { destructive: false })) return { status: 'cancelled' };
+            assertPreparationCurrent();
+        }
         const settingsIdentity = archiveRecoverySettingsIdentity(context);
         recoveryTicket = await archive_importRecovery.beginArchiveRecovery({ origin,
             sourceIdentity: JSON.stringify({ fullRebuild, archivePresent: !!existing, baseRevision: existing?.archiveRevision || '',
@@ -1772,7 +1798,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
                 && core_context.comparableChatId(core_context.getChatId(context)) === origin.chatId
                 && (getImportedMemory(context)?.archiveRevision || '') === origin.archiveRevision
                 && archiveRecoverySettingsIdentity(context) === settingsIdentity });
-        if (!automatic) globalThis.toastr?.info?.(archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '缘侧 · 档案整理');
+        if (!automatic) globalThis.toastr?.info?.(archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '心迹回廊 · 档案整理');
         const fresh = [];
         for (let i = 0; i < chunks.length; i += 1) {
             runtimeState.activeTaskLabel = `正在${actionLabel}新增聊天 · ${i + 1} / ${chunks.length}`;
@@ -1828,7 +1854,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             profile = incrementalUpdate
                 ? { archiveName: existing.archiveName || fallbackArchiveName(memories), archiveSummary: existing.archiveSummary || fallbackArchiveSummary(memories), archiveVerdict: existing.archiveVerdict || null, keywords: core_text.cleanArray(existing.archiveKeywords, 10, 80) }
                 : normalizeArchiveProfile({}, memories);
-            globalThis.toastr?.warning?.(`回忆会继续保存；档案简介未更新。${core_text.safeErrorSummary(error)}`, '缘侧');
+            globalThis.toastr?.warning?.(`回忆会继续保存；档案简介未更新。${core_text.safeErrorSummary(error)}`, '心迹回廊');
         }
         if (incrementalUpdate) profile.archiveName = existing.archiveName || fallbackArchiveName(memories);
         const now = Date.now();
@@ -1857,10 +1883,11 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             memoryWorldInfoSources: (external.worldInfo?.books || []).filter(book => book.imported > 0).map(book => ({ name: book.name, mode: book.mode, count: book.imported })),
             memoryWorldInfoEntryCount: external.worldInfo?.entries?.length || 0,
             sourceMessageCount: snapshot.totalMessages,
-            usedMessageCount: incrementalUpdate ? (Number(existing?.usedMessageCount) || 0) + snapshot.incrementalUsedMessages : snapshot.usedMessages,
-            usedCharacterCount: incrementalUpdate ? (Number(existing?.usedCharacterCount) || 0) + snapshot.incrementalUsedChars : snapshot.usedChars,
+            chatReadRange: snapshot.readRange,
+            usedMessageCount: incrementalUpdate ? (Number(existing?.usedMessageCount) || 0) + chatInput.length : snapshot.usedMessages,
+            usedCharacterCount: incrementalUpdate ? (Number(existing?.usedCharacterCount) || 0) + (rangeChanged ? snapshot.usedChars : snapshot.incrementalUsedChars) : snapshot.usedChars,
             coverageMode: incrementalUpdate ? 'incremental-append' : snapshot.coverageMode,
-            truncated: incrementalUpdate ? (!!existing?.truncated || snapshot.incrementalTruncated) : snapshot.truncated,
+            truncated: incrementalUpdate ? (!!existing?.truncated || (rangeChanged ? snapshot.truncated : snapshot.incrementalTruncated)) : snapshot.truncated,
             memories,
         };
         const commitIntent = core_requestCoordinator.queueDeferredCommitRecord(origin, {
@@ -1895,7 +1922,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             const saved = getImportedMemory(core_context.currentCharacterGuard());
             if (saved?.archiveRevision === memoryBank.archiveRevision) archive_importRecovery.acknowledgeArchiveRecoveryCommit({ ...origin, archiveRevision: saved.archiveRevision });
         }
-        if (profilePending) globalThis.toastr?.info?.('回忆已保存。可点“仅重试档案简介”，不会重新抽取成功记忆。' + archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '缘侧 · 简介待重试');
+        if (profilePending) globalThis.toastr?.info?.('回忆已保存。可点“仅重试档案简介”，不会重新抽取成功记忆。' + archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '心迹回廊 · 简介待重试');
         runtimeState.activeTaskBackgrounded = false;
         if (!automatic) { runtimeState.activeMode = null; runtimeState.activeSession = null; }
         if (core_context.isCurrentTaskOrigin(origin)) {
@@ -1904,7 +1931,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             if (!automatic && overlayAfterSave && !overlayAfterSave.hidden) setTimeout(() => { if (!runtimeState.busy && !runtimeState.activeMode) ui_overlay.showChooser(); }, 0);
         }
         const added = Math.max(0, memories.length - (incrementalUpdate ? existing.memories.length : 0));
-        globalThis.toastr?.success?.(core_text.toastText(`${actionLabel}完成：${memoryBank.archiveName} · 当前 ${memories.length} 条记忆${incrementalUpdate ? ` · 新增 ${added} 条 · 已保留原 ADV EVENT 等缓存` : ''}${wasBackgrounded ? '（后台；回到原窗口自动写入）' : ''}`), '心跳回忆');
+        globalThis.toastr?.success?.(core_text.toastText(`${actionLabel}完成：${memoryBank.archiveName} · 当前 ${memories.length} 条记忆${incrementalUpdate ? ` · 新增 ${added} 条 · 已保留原 ADV EVENT 等缓存` : ''}${wasBackgrounded ? '（后台；回到原窗口自动写入）' : ''}`), '心迹回廊');
         return { status: core_context.isCurrentTaskOrigin(origin) ? 'committed' : 'deferred' };
     } catch (error) {
         if (!automatic) { runtimeState.activeMode = null; runtimeState.activeSession = null; }
@@ -1915,8 +1942,8 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             const wasBackgrounded = runtimeState.activeTaskBackgrounded || document.getElementById(core_constants.OVERLAY_ID)?.hidden;
             runtimeState.activeTaskBackgrounded = false;
             if (!automatic && !wasBackgrounded) ui_overlay.showMemoryImportError(core_text.safeErrorSummary(error));
-            globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
-            if (archive_importRecovery.archiveRecoverySummary(origin)) globalThis.toastr?.info?.(archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '缘侧 · 档案整理草稿');
+            globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
+            if (archive_importRecovery.archiveRecoverySummary(origin)) globalThis.toastr?.info?.(archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '心迹回廊 · 档案整理草稿');
         }
         return { status: 'failed' };
     } finally {
@@ -1937,7 +1964,7 @@ export async function importCurrentChatMemory(options = {}) {
         if (options.automatic === true) return { status: 'blocked' };
         if (pending.profileOnly) return rewriteCurrentArchiveVerdict();
         if (pending.awaitingCommit) {
-            globalThis.toastr?.info?.('整理结果仍在等待原聊天写回；草稿和成功内容保留，当前不会重新请求模型。', '缘侧');
+            globalThis.toastr?.info?.('整理结果仍在等待原聊天写回；草稿和成功内容保留，当前不会重新请求模型。', '心迹回廊');
             return { status: 'blocked' };
         }
         if (!ui_overlay.confirmExplicitAction(pending.canContinue ? '继续档案整理？' : '重试未完成分块？',

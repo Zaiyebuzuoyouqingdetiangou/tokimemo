@@ -301,6 +301,30 @@ export function confessionReplayPlayerHtml(replay, session) {
     </div>`;
 }
 
+export function endingReadingParagraphs(value) {
+    const source = typeof value === 'string' ? value : '';
+    if (!source) return [];
+    const result = [];
+    let start = 0;
+    // Presentation only: every original character remains in one paragraph.
+    // Prefer authored line breaks; gently break long prose at sentence endings.
+    for (let i = 0; i < source.length; i += 1) {
+        const atBreak = source[i] === '\n';
+        const sentenceEnd = i - start >= 180 && /[。！？!?]/.test(source[i]);
+        if (!atBreak && !sentenceEnd) continue;
+        let end = i + 1;
+        if (atBreak) while (end < source.length && source[end] === '\n') end += 1;
+        if (sentenceEnd) while (end < source.length && /[”’」』）)]/.test(source[end])) end += 1;
+        result.push(source.slice(start, end));
+        start = end; i = end - 1;
+    }
+    if (start < source.length) result.push(source.slice(start));
+    return result;
+}
+export function endingProseHtml(value) {
+    return endingReadingParagraphs(value).map(paragraph => `<p class="rmt-ending-prose">${core_text.esc(paragraph)}</p>`).join('');
+}
+
 export function renderEnding() {
     closeEndingEasterEgg({ restoreFocus: false });
     const session = runtimeState.activeSession;
@@ -337,8 +361,8 @@ export function renderEnding() {
     const routes = session.endings.map(item => `<button type="button" class="rmt-ending-route ${item.id === selected.id ? 'active' : ''} ${item.available ? '' : 'locked'}" data-rmt-ending-id="${core_text.esc(item.id)}"><b>${item.id === session.recommendedEndingId ? '♥ ' : ''}${core_text.esc(item.title)}</b><span>${core_text.esc(item.subtitle || typeLabel[item.type] || '路线')}</span><em>${item.available ? '可观测 · 未来推演' : '未解锁'}</em></button>`).join('');
     const detail = selected.available
         ? `<div class="rmt-ending-head"><div><h2>${core_text.esc(selected.title)}</h2><div class="rmt-ending-subtitle">${core_text.esc(selected.subtitle || typeLabel[selected.type] || '')}</div></div><span>未来路线推演</span></div>
-           <section class="rmt-ending-section"><small>终章</small><p>${core_text.esc(selected.endingScene)}</p>${selected.creditsLine ? `<div class="rmt-ending-final">— ${core_text.esc(selected.creditsLine)}</div>` : ''}</section>
-           <section class="rmt-ending-section"><small>EPILOGUE // 后日谈 · ${core_text.esc(selected.epilogue?.timeSkip || '未来')}</small><div class="rmt-ending-epilogue">${(selected.epilogue?.scenes || []).map(scene => `<article><b>${core_text.esc(scene.title)}</b><p>${core_text.esc(scene.text)}</p></article>`).join('')}</div>${selected.epilogue?.finalLine ? `<div class="rmt-ending-final">${core_text.esc(selected.epilogue.finalLine)}</div>` : ''}</section>
+           <section class="rmt-ending-section"><small>终章</small>${endingProseHtml(selected.endingScene)}${selected.creditsLine ? `<div class="rmt-ending-final">— ${core_text.esc(selected.creditsLine)}</div>` : ''}</section>
+           <section class="rmt-ending-section"><small>EPILOGUE // 后日谈 · ${core_text.esc(selected.epilogue?.timeSkip || '未来')}</small><div class="rmt-ending-epilogue">${(selected.epilogue?.scenes || []).map(scene => `<article><b>${core_text.esc(scene.title)}</b>${endingProseHtml(scene.text)}</article>`).join('')}</div>${selected.epilogue?.finalLine ? `<div class="rmt-ending-final">${core_text.esc(selected.epilogue.finalLine)}</div>` : ''}</section>
            `
         : `<div class="rmt-ending-head"><div><h2>${core_text.esc(selected.title)}</h2><div class="rmt-ending-subtitle">${core_text.esc(selected.subtitle || typeLabel[selected.type] || '')}</div></div><span>未解锁</span></div><div class="rmt-ending-lock"><b>这条路线还没有被当前档案解锁。</b><br>${core_text.esc(selected.unlockHint || '继续让关系在真实聊天中自然发展后，再增量更新档案并追加结局。')}</div>`;
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-ending">${summary}${tabs}<nav class="rmt-ending-list" aria-label="结局路线">${routes}</nav><main class="rmt-ending-detail">${detail}</main></div>`;
@@ -349,14 +373,14 @@ export async function refreshEndingConfessionReplays() {
     if (!archive_library.requireWritableArchiveAction()) return;
     const context = core_context.currentCharacterGuard();
     if (core_requestCoordinator.isModeGenerating(core_constants.MODE.ENDING, context)) {
-        globalThis.toastr?.info?.('ENDING / 告白扫描已经有任务在进行中，请等它完成。', '心跳回忆');
+        globalThis.toastr?.info?.('ENDING / 告白扫描已经有任务在进行中，请等它完成。', '心迹回廊');
         return;
     }
     const memoryBank = archive_repository.requireArchive(context);
     const baseSession = structuredClone(runtimeState.activeSession);
     const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(baseSession, memoryBank, 'confessions');
     if (!sourceMemoryIds.length) {
-        globalThis.toastr?.info?.('当前档案没有尚未扫描告白的新记忆。旧告白回看保持不变。', '心跳回忆');
+        globalThis.toastr?.info?.('当前档案没有尚未扫描告白的新记忆。旧告白回看保持不变。', '心迹回廊');
         return;
     }
     const confirmed = ui_overlay.confirmExplicitAction(
@@ -409,12 +433,12 @@ export async function refreshEndingConfessionReplays() {
             runtimeState.activeSession = updated;
             renderEnding();
         }
-        globalThis.toastr?.success?.(`告白回看已追加 ${mergedReplays.added} 条；当前共 ${updated.confessionReplays.length} 条。旧告白、结局路线与后日谈保持不变。`, '心跳回忆');
+        globalThis.toastr?.success?.(`告白回看已追加 ${mergedReplays.added} 条；当前共 ${updated.confessionReplays.length} 条。旧告白、结局路线与后日谈保持不变。`, '心迹回廊');
     } catch (error) {
         if (error?.name !== 'AbortError') {
             console.error('[HeartbeatMemories] confession replay refresh failed', core_text.safeErrorDiagnostic(error));
             ui_overlay.showInlineError(core_text.safeErrorSummary(error));
-            globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆 · 告白回看更新失败');
+            globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊 · 告白回看更新失败');
         }
     } finally {
         ui_overlay.setInnerLoading(false);

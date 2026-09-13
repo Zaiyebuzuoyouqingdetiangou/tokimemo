@@ -9,6 +9,7 @@ import * as core_theme from './theme.js';
 import * as core_contextTags from './contextTags.js';
 import * as core_autoUpdatePolicy from './autoUpdatePolicy.js';
 import * as creative_supplement from './creativeSupplement.js';
+import * as chat_read_range from './chatReadRange.js';
 
 export function normalizeBannedGeneratedPhrases(value) {
     const source = Array.isArray(value) ? value : String(value ?? '').split(/[\n,，]+/g);
@@ -31,13 +32,16 @@ export function getPluginSettings(context = core_context.getContext()) {
         modelOverride: core_text.normalizeText(settings.modelOverride, 240),
         manualApiBaseUrl,
         manualApiModel: core_text.normalizeText(settings.manualApiModel, 240),
+        manualApiStreaming: settings.manualApiStreaming === true,
+        chatReadRange: chat_read_range.normalizeChatReadRange(settings),
         maxTokens: Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens)),
         temperature: Math.max(0, Math.min(2, Number.isFinite(Number(settings.temperature)) ? Number(settings.temperature) : core_constants.DEFAULT_SETTINGS.temperature)),
         roomLifeAutoDaily: settings.roomLifeAutoDaily !== false,
         autoUpdates: core_autoUpdatePolicy.normalizeAutoUpdates(settings.autoUpdates),
         useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory !== false,
-        imageGenerationManualEnabled: settings.imageGenerationManualEnabled === true,
-        imageGenerationProvider: settings.imageGenerationProvider === 'baibai-image' ? 'baibai-image' : core_constants.CG_IMAGE_PROVIDER,
+        useActivatedWorldInfo: settings.useActivatedWorldInfo !== false,
+        imageGenerationManualEnabled: false,
+        imageGenerationProvider: 'baibai-image',
         creativeSupplementEnabled: settings.creativeSupplementEnabled === true,
         creativeSupplement: creative_supplement.normalizeCreativeSupplement(settings.creativeSupplement),
         ttDisplayMode: settings.ttDisplayMode === true,
@@ -522,7 +526,7 @@ export async function importCurrentSillyTavernConnection(options = {}) {
     assertStillCurrent();
     const displayApi = core_text.normalizeText(profile.api, 80) || 'API';
     const displayModel = core_text.normalizeText(profile.model, 100);
-    profile.name = uniqueImportedProfileName(manager, `心跳回忆 · ${displayApi}${displayModel ? ` · ${displayModel}` : ''}`);
+    profile.name = uniqueImportedProfileName(manager, `心迹回廊 · ${displayApi}${displayModel ? ` · ${displayModel}` : ''}`);
     manager.profiles.push(profile);
     context.saveSettingsDebounced?.();
     assertStillCurrent();

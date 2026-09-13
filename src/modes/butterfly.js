@@ -6,6 +6,7 @@ import * as core_constants from '../core/constants.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
 import * as core_text from '../core/text.js';
+import * as core_relationshipSafety from '../core/relationshipSafety.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
 
@@ -36,9 +37,6 @@ const WORLD_FIELD_ALIASES = Object.freeze({
     finalFate: ['finalFate', 'fate', 'outcome', 'ending'],
 });
 const WORLD_PLACEHOLDER_RE = /^(?:同上|同现世|不变|照旧|原样|未知|不详|待定|未设定|无资料|none|null|unknown|unchanged|same|n\/?a|[-—_.。…?？]+)$/i;
-const FORMER_RELATIONSHIP_RE = /(?:前任|前女友|前男友|旧爱|前妻|前夫|前对象|上一任)/i;
-const ROMANCE_RE = /(?:恋爱|相爱|爱上|爱着|深爱|倾心|约会|结婚|成婚|订婚|婚姻|婚礼|嫁给|娶了|恋人|伴侣|爱人|妻子|丈夫|夫妻|老公|老婆|组建家庭|建立家庭|成家|有了(?:一个)?家(?:庭)?|生儿育女|养育孩子|育有子女)/i;
-const THIRD_PARTY_RE = /(?:别人|他人|其他人|第三者|另一个人|某个人|陌生人|除你以外|非用户)/i;
 const NEGATED_ROMANCE_RE = /(?:(?:没有|从未|未曾|不会|不与|拒绝|不存在|绝无|无)[^，,。！？!?；;\n]{0,24}(?:恋爱|相爱|爱上|爱着|深爱|倾心|约会|结婚|成婚|订婚|婚姻|婚礼|嫁给|娶了|恋人|伴侣|爱人|妻子|丈夫|夫妻|组建家庭|建立家庭|成家|有了(?:一个)?家(?:庭)?|生儿育女|养育孩子|育有子女)|(?:恋爱|婚姻|伴侣|组建家庭|建立家庭)(?:变量|概率)?\s*(?:[=:：]\s*)?(?:0|零|无|不存在|未发生|不成立))/i;
 const INTERVENTION_CONTRAST_RE = /(?:那个世界|那个我|平行(?:世界|世界线|体)|现世|当前世界|现在的我|这个世界的我|与之相比|相比之下|看见另一个)/;
 const INTERVENTION_REFLECTION_RE = /(?:明白|承认|发现|意识到|庆幸|害怕|羡慕|遗憾|选择|在意|不愿|想要|珍惜|确信|确定|原来|释然|后悔)/;
@@ -118,49 +116,8 @@ export function butterflyWorldSignature(node) {
 }
 
 export function assertButterflyRelationshipSafety(value, context = {}, label = '蝴蝶效应内容') {
-    const text = core_text.normalizeText(value, 30000);
-    if (FORMER_RELATIONSHIP_RE.test(text)) throw new Error(`${label}包含被禁止的前任/旧爱情节。`);
-    const userName = core_text.normalizeText(context?.name1, 120);
-    const userMarker = userName && !/^\{\{user\}\}$/i.test(userName)
-        ? new RegExp(`(?:你|妳|您|用户|\\{\\{user\\}\\}|${escapeRegExp(userName)})`, 'i')
-        : /(?:你|妳|您|用户|\{\{user\}\})/i;
-    let userAntecedent = false;
-    let precedingComma = false;
-    const clauses = text.match(/[^，,。！？!?；;\n]+[，,。！？!?；;\n]?/g) || [];
-    for (const fragment of clauses) {
-        const clause = fragment.replace(/[，,。！？!?；;\n]+$/, '').trim();
-        const refersToUser = userMarker.test(clause);
-        const separatePartners = /(?:各自|分别|另有|新(?:的)?(?:恋人|爱人|伴侣|妻子|丈夫))/.test(clause);
-        const inheritedUser = !separatePartners && userAntecedent && (/^(?:我们|咱们|我俩|双方)/.test(clause)
-            || precedingComma && /^(?:我的|婚姻|家庭)/.test(clause));
-        // Only an explicit joint subject licenses the immediately following same-subject clause.
-        // A new named or third-person subject clears the antecedent even without punctuation.
-        userAntecedent = !separatePartners && !THIRD_PARTY_RE.test(clause) && (inheritedUser
-            || refersToUser && (ROMANCE_RE.test(clause) || /(?:我\s*(?:与|和|跟)|(?:你|妳|您)\s*(?:与|和|跟)\s*我)/.test(clause)));
-        precedingComma = /[，,]$/.test(fragment);
-        if (!ROMANCE_RE.test(clause)) continue;
-        const predicates = [...clause.matchAll(new RegExp(ROMANCE_RE.source, 'gi'))];
-        // Negation belongs to one predicate, never to the entire clause.
-        if (predicates.length && predicates.every(match => {
-            const prefix = clause.slice(0, match.index);
-            const suffix = clause.slice(match.index + match[0].length);
-            return /(?:并未|并没有|没有|从未|未曾|不会|拒绝|不存在|绝无)(?:曾经|真正|再|去)?$/.test(prefix)
-                || /(?:没有与|不会与|不与)[^而但却然后]{1,12}$/.test(prefix)
-                || /^(?:变量|概率)?\s*(?:[=:：]\s*)?(?:0|零|无|不存在|未发生|不成立)(?:$|\s)/.test(suffix);
-        })) continue;
-        if (separatePartners) throw core_butterflyContract.butterflyValidationError('relationship');
-        if (THIRD_PARTY_RE.test(clause)) throw new Error(`${label}包含 {{char}} 与第三方的恋爱/婚姻/成家情节。`);
-        const namedTargets = [
-            ...clause.matchAll(/(?:与|和|跟)\s*([^，,。！？!?；;、\n]{1,24}?)\s*(?:恋爱|相爱|约会|结婚|成婚|订婚|组建家庭|建立家庭|成家|有了(?:一个)?家(?:庭)?|生儿育女|养育孩子|育有子女)/gi),
-            ...clause.matchAll(/(?:爱上|爱着|深爱|倾心于?|嫁给|娶了)\s*([^，,。！？!?；;、\n]{1,24})/gi),
-            ...clause.matchAll(/([^，,。！？!?；;、\n]{1,24}?)\s*(?:成为|是)(?:了)?我的(?:恋人|伴侣|爱人|妻子|丈夫|老公|老婆)/gi),
-        ].map(match => core_text.normalizeText(match?.[1], 40)).filter(Boolean);
-        if (namedTargets.some(target => !userMarker.test(target))) {
-            throw new Error(`${label}包含 {{char}} 与具名第三方的恋爱/婚姻/成家情节。`);
-        }
-        if (!refersToUser && !inheritedUser) throw core_butterflyContract.butterflyValidationError('relationship');
-    }
-    return text;
+    return core_relationshipSafety.assertPairRelationshipSafety(value, context, label,
+        () => core_butterflyContract.butterflyValidationError('relationship'));
 }
 
 export function assertButterflyColdSystemNote(value, label = 'SYSTEM NOTE') {

@@ -8,7 +8,7 @@ import * as library from '../archive/library.js';
 import { state as runtimeState } from '../core/state.js';
 const positions = new Map();
 let restoreSequence = 0;
-const fields = ['selectedId','selectedSpaceId','selectedObjectId','selectedContainerId','selectedAppId','selectedEntryId','selectedLocationId','selectedLetterId','selectedSeason','selectedVoiceId','selectedScenarioId','selectedDramaKey','selectedStripId','category','page','view','viewMode','sharedMemory','dialogueIndex','paragraphIndex','reading','cgOnly','tab','selectedDate','selectedKey','fireflyPage'];
+const fields = ['selectedId','selectedSpaceId','selectedObjectId','selectedContainerId','selectedAppId','selectedEntryId','selectedLocationId','selectedLetterId','selectedSeason','selectedVoiceId','selectedScenarioId','selectedDramaKey','selectedStripId','category','page','view','viewMode','sharedMemory','dialogueIndex','paragraphIndex','reading','cgOnly','tab','selectedDate','selectedKey','fireflyPage','pastLivesReadMask','pastLivesDrawn','pastLivesClosing'];
 export function readingPosition(session) {
     const result = {};
     for (const key of fields) {
@@ -55,7 +55,7 @@ export function restoreReadingPosition({ open, render, stopAutomaticLife } = {})
         const session = cache.loadSession(mark.mode, {context:ctx,memoryBank:bank,clone:true});
         if (!session) return false;
         const selected = mark.ui.selectedId;
-        const items = session.entries || session.events || session.nodes;
+        const items = session.entries || session.events || session.nodes || session.episodes;
         if (selected && Array.isArray(items) && !items.some(item => item.id === selected)) return false;
         Object.assign(session, mark.ui);
         // Read from the current canonical chat, never restore a stale snapshot from another chat.
@@ -106,7 +106,7 @@ export async function restoreIndexedReadingPosition({ open, render, stopAutomati
             fallback?.(); return false;
         }
         const session = cache.loadSession(mark.mode, { context: live, memoryBank: snapshot.memory, cache: snapshot.cache, clone: true });
-        const selected = mark.ui.selectedId, items = session?.entries || session?.events || session?.nodes;
+        const selected = mark.ui.selectedId, items = session?.entries || session?.events || session?.nodes || session?.episodes;
         if (!session || (selected && Array.isArray(items) && !items.some(item => item.id === selected))) { fallback?.(); return false; }
         Object.assign(session, mark.ui);
         runtimeState.activeArchiveSnapshot = snapshot;

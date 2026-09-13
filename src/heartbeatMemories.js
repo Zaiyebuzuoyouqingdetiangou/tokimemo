@@ -8,6 +8,7 @@ import * as core_requestCoordinator from './core/requestCoordinator.js';
 import * as archive_snapshots from './archive/snapshots.js';
 import { state as runtimeState } from './core/state.js';
 import * as core_text from './core/text.js';
+import * as backup_diagnostics from './core/backupDiagnostics.js';
 import * as generation_imageGeneration from './generation/imageGeneration.js';
 import * as modes_room from './modes/room.js';
 import * as ui_archivePortal from './ui/archivePortal.js';
@@ -20,6 +21,10 @@ import * as ui_styles from './ui/styles.js';
 
 export function openArchiveLibrary(source = 'runtime-api') {
     return ui_archivePortal.safeShowArchiveLibrary(source);
+}
+
+export function openSettingsHome() {
+    return ui_archivePortal.showHome({ section: 'api' });
 }
 
 export function isGenerationBusy() {
@@ -41,8 +46,9 @@ export function initMemoryTheater() {
         void core_cache.ensureCurrentArchiveBackup().then(reconciled => {
             if (reconciled) archive_snapshots.scheduleChooserRefresh(0);
         }).catch(error => {
-            console.warn('[HeartbeatMemories] current archive backup seed failed', core_text.safeErrorDiagnostic(error));
-            globalThis.toastr?.warning?.(`当前档案可正常使用，但独立备份没有更新：${core_text.safeErrorSummary(error)}`, '心跳回忆');
+            const diagnostic = backup_diagnostics.backupFailureSummary(error);
+            console.warn('[HeartbeatMemories] current archive backup seed failed', diagnostic);
+            globalThis.toastr?.warning?.(`独立备份未更新：${diagnostic.message}（${diagnostic.code}/${diagnostic.stage}）。${diagnostic.action} 本次失败不会触发档案重建或删除。`, '心迹回廊');
         });
         console.log('[HeartbeatMemories] initialized');
     } catch (error) {
@@ -52,6 +58,7 @@ export function initMemoryTheater() {
 
 export function destroyMemoryTheater() {
     core_autoUpdates.stopAutoUpdates();
+    ui_settingsPanel.clearHomeSettingsPanel();
     ui_settingsPanel.unbindImageProviderEvents();
     try {
         // Extension updates/reloads can destroy the module before the short gzip debounce fires.
@@ -71,7 +78,7 @@ export function destroyMemoryTheater() {
             }
         } catch (error) {
             console.warn('[HeartbeatMemories] destroy-time cache preservation skipped', core_text.safeErrorDiagnostic(error));
-            globalThis.toastr?.warning?.(`${core_text.safeErrorSummary(error)} 销毁流程没有覆盖上一份有效缓存。`, '心跳回忆');
+            globalThis.toastr?.warning?.(`${core_text.safeErrorSummary(error)} 销毁流程没有覆盖上一份有效缓存。`, '心迹回廊');
         }
         // Invalidate every asynchronous state writer before clearing containers. Results that
         // started in the old runtime lifetime must not refill caches after disable/clean.

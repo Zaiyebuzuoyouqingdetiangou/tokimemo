@@ -30,22 +30,12 @@ export function imageGenerationCommand(context = core_context.getContext()) {
 }
 
 export function imageGenerationUiState(context = core_context.getContext()) {
-    const settings = core_settings.getPluginSettings(context);
-    if (settings.imageGenerationProvider === baibai_image.BAIBAI_IMAGE_PROVIDER) {
+    {
         const status = baibai_image.baiBaiImageState();
         return { detected: status.detected, available: status.available, reason: status.reason,
             provider: baibai_image.BAIBAI_IMAGE_PROVIDER, providerLabel: '柏宝绘', manual: false, command: null };
     }
-    const command = imageGenerationCommand(context);
-    const manual = core_settings.getPluginSettings(context).imageGenerationManualEnabled === true;
-    return {
-        command,
-        detected: !!command,
-        manual,
-        provider: core_constants.CG_IMAGE_PROVIDER,
-        providerLabel: 'SillyTavern Image Generation',
-        available: !!command || manual,
-    };
+
 }
 
 export function sanitizeImageGenerationSlashPrompt(value) {
@@ -59,37 +49,14 @@ export function sanitizeImageGenerationSlashPrompt(value) {
 }
 
 export async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', characterName = '', onProgress = null } = {}) {
-    const selectedProvider = provider || core_settings.getPluginSettings(context).imageGenerationProvider;
+    // Explicit legacy requests must not silently switch providers or invoke /sd.
+    const selectedProvider = provider || baibai_image.BAIBAI_IMAGE_PROVIDER;
     if (selectedProvider === baibai_image.BAIBAI_IMAGE_PROVIDER) {
         return baibai_image.generateBaiBaiImage(sanitizeCgVisualText(prompt), {
             signal, orientation, characterName: characterName || context?.name2, onProgress,
         });
     }
-    if (selectedProvider !== core_constants.CG_IMAGE_PROVIDER) throw new Error('未支持的生图渠道，请在设置中重新选择。');
-    if (signal?.aborted) throw signal.reason || Object.assign(new Error('生图请求已取消。'), { name: 'AbortError' });
-    const direct = imageGenerationCommand(context);
-    if (direct) {
-        const url = await core_settings.invokeSlashCommandCapture(direct, { quiet: 'true', gallery: 'false' }, prompt, context);
-        if (signal?.aborted) throw signal.reason || Object.assign(new Error('生图请求已取消。'), { name: 'AbortError' });
-        return { url, provider: core_constants.CG_IMAGE_PROVIDER };
-    }
-    const settings = core_settings.getPluginSettings(context);
-    if (!settings.imageGenerationManualEnabled) {
-        throw new Error('没有检测到 SillyTavern Image Generation 的 /imagine、/sd 或 /img 命令。');
-    }
-    if (typeof context.executeSlashCommandsWithOptions !== 'function') {
-        throw new Error('你已手动勾选 Image Generation，但当前 SillyTavern 没有提供公开的 Slash Command 执行接口。');
-    }
-    const safePrompt = sanitizeImageGenerationSlashPrompt(prompt);
-    if (!safePrompt) throw new Error('生图提示为空，无法调用手动 /sd 兜底。');
-    const result = await context.executeSlashCommandsWithOptions(`/sd quiet=true ${safePrompt}`);
-    if (signal?.aborted) throw signal.reason || Object.assign(new Error('生图请求已取消。'), { name: 'AbortError' });
-    if (result?.isError) {
-        throw new Error(`手动 /sd 调用失败：${core_text.normalizeText(result?.errorMessage || result?.abortReason, 500) || 'Image Generation 没有接受请求。'}`);
-    }
-    const pipe = core_text.normalizeText(result?.pipe, 4096);
-    if (!pipe) throw new Error('手动 /sd 已执行，但没有返回可保存的图片路径。请确认 Image Generation 已启用并完成配置。');
-    return { url: pipe, provider: core_constants.CG_IMAGE_PROVIDER };
+    throw core_text.safeUserError('本版本仅支持柏宝绘，请启用其公开 API 并刷新；旧渠道图片仍可查看。', 'RMT_IMAGE_PROVIDER_RETIRED');
 }
 
 export function normalizeCgImageUrl(value) {
@@ -305,7 +272,7 @@ export function refreshCgImageProviderBars() {
 
 export function imageGenerationUnavailableMessage(state = imageGenerationUiState()) {
     if (state.provider === baibai_image.BAIBAI_IMAGE_PROVIDER) return state.reason;
-    return '没有检测到 SillyTavern Image Generation。请先启用并配置扩展；自动检测失败时可在心跳回忆设置中手动勾选 /sd 兜底。';
+    return '请安装或更新柏宝绘，启用公开 API 并刷新页面后重新检测。';
 }
 
 export function refreshImageGenerationUi() {
@@ -316,7 +283,7 @@ export function refreshImageGenerationUi() {
         : state.manual
             ? '自动检测仍未发现命令，但你已手动勾选 Image Generation；绘制时会使用受控的 /sd quiet=true 兜底。'
             : imageGenerationUnavailableMessage(state);
-    globalThis.toastr?.[state.available ? 'success' : 'info']?.(message, '心跳回忆');
+    globalThis.toastr?.[state.available ? 'success' : 'info']?.(message, '心迹回廊');
 }
 
 export function indexedArchiveMatchesCurrentChat(entry, context = core_context.getContext()) {
@@ -370,36 +337,36 @@ export async function drawSelectedCgImage({ promptOverride, expectedTarget = nul
     const { mode, session, item } = target;
     let captured;
     try { captured = expectedTarget || captureCgImageTarget(target); assertCgImageTargetCurrent(captured); }
-    catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心跳回忆'); return; }
+    catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); return; }
     let context;
     try { context = core_context.currentCharacterGuard(); }
     catch (error) {
-        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
         return;
     }
     const imageState = imageGenerationUiState(context);
     if (!imageState.available) {
-        globalThis.toastr?.info?.(imageGenerationUnavailableMessage(imageState), '心跳回忆');
+        globalThis.toastr?.info?.(imageGenerationUnavailableMessage(imageState), '心迹回廊');
         return;
     }
     if (runtimeState.activeCgImageTasks.size >= 1) {
-        globalThis.toastr?.info?.('已有一张 CG 正在绘制，请等它完成后再绘制下一张。', '心跳回忆');
+        globalThis.toastr?.info?.('已有一张 CG 正在绘制，请等它完成后再绘制下一张。', '心迹回廊');
         return;
     }
     const previous = normalizeCgImageRecord(item.cgImage);
     const confirmDraw = previous ? ui_overlay.confirmExplicitActionTwice : ui_overlay.confirmExplicitAction;
     const confirmed = confirmDraw(
         previous ? `重新绘制「${item.title}」CG？` : `绘制「${item.title}」CG？`,
-        `${previous ? '新的图片成功后会替换当前 CG 图片引用；旧图片文件不会由心跳回忆主动删除。\n\n' : ''}这会调用${imageState.providerLabel || '已配置的生图插件'}，可能消耗本地算力、额度或付费点数。只会发送这张 CG 的可见画面提示，不发送聊天原文、档案原文、世界书原文、私人终端内容或任何 API 凭据。`,
+        `${previous ? '新的图片成功后会替换当前 CG 图片引用；旧图片文件不会由心迹回廊主动删除。\n\n' : ''}这会调用${imageState.providerLabel || '已配置的生图插件'}，可能消耗本地算力、额度或付费点数。只会发送这张 CG 的可见画面提示，不发送聊天原文、档案原文、世界书原文、私人终端内容或任何 API 凭据。`,
         { destructive: !!previous },
     );
     if (!confirmed) return;
 
     try { assertCgImageTargetCurrent(captured); }
-    catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心跳回忆'); return; }
+    catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); return; }
     const prompt = promptOverride === undefined ? cgImagePromptForItem(item) : sanitizeCgVisualText(promptOverride);
     if (!prompt) {
-        globalThis.toastr?.error?.('这张 CG 没有可用的可视化描述，无法绘制。', '心跳回忆');
+        globalThis.toastr?.error?.('这张 CG 没有可用的可视化描述，无法绘制。', '心迹回廊');
         return;
     }
     const expectedChatId = core_context.getChatId(context);
@@ -408,7 +375,7 @@ export async function drawSelectedCgImage({ promptOverride, expectedTarget = nul
     const itemId = item.id;
     const taskKey = cgImageTaskKey(mode, itemId, context);
     if (!core_requestCoordinator.canStartGenerationTask(taskKey)) {
-        globalThis.toastr?.info?.(`当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请等其中一项完成后再绘制 CG。`, '心跳回忆');
+        globalThis.toastr?.info?.(`当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请等其中一项完成后再绘制 CG。`, '心迹回廊');
         return;
     }
     const controller = new AbortController();
@@ -430,7 +397,7 @@ export async function drawSelectedCgImage({ promptOverride, expectedTarget = nul
         const url = normalizeCgImageUrl(generated?.url);
         if (!url) throw new Error('生图插件没有返回可保存的 SillyTavern 本地图片路径。');
         if (runtimeState.cgImageLifecycleEpoch !== lifecycleEpoch) {
-            globalThis.toastr?.warning?.('CG 已由生图扩展完成，但插件已重载/停用，因此没有接收旧运行实例的图片结果。', '心跳回忆');
+            globalThis.toastr?.warning?.('CG 已由生图扩展完成，但插件已重载/停用，因此没有接收旧运行实例的图片结果。', '心迹回廊');
             return;
         }
         const nextImage = {
@@ -450,7 +417,7 @@ export async function drawSelectedCgImage({ promptOverride, expectedTarget = nul
                 durable
                     ? `CG 已绘制并安全等待写回：${item.title}；回到原聊天后会自动保存引用。`
                     : `CG 已绘制：${item.title}；结果暂存在当前页面，回到原聊天前不要刷新。`,
-                '心跳回忆',
+                '心迹回廊',
             );
             return;
         }
@@ -475,10 +442,10 @@ export async function drawSelectedCgImage({ promptOverride, expectedTarget = nul
                 : runtimeState.activeSession.events?.find(entry => entry.id === itemId);
             if (activeItem) activeItem.cgImage = nextImage;
         }
-        globalThis.toastr?.success?.(`CG 已绘制：${item.title}`, '心跳回忆');
+        globalThis.toastr?.success?.(`CG 已绘制：${item.title}`, '心迹回廊');
     } catch (error) {
         console.error('[HeartbeatMemories] CG image generation failed', core_text.safeErrorDiagnostic(error));
-        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
+        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
     } finally {
         runtimeState.activeCgImageTasks.delete(taskKey);
         renderCurrentCgMode(mode, session);
@@ -490,12 +457,12 @@ export async function clearSelectedCgImage() {
     const target = selectedCgTarget();
     if (!target) return;
     const { mode, session, item } = target;
-    if (isCgImageDrawing(mode, item.id)) return globalThis.toastr?.info?.('请先取消正在绘制的图片，再移除旧图引用。', '心跳回忆');
+    if (isCgImageDrawing(mode, item.id)) return globalThis.toastr?.info?.('请先取消正在绘制的图片，再移除旧图引用。', '心迹回廊');
     const image = normalizeCgImageRecord(item.cgImage);
     if (!image) return;
     if (!ui_overlay.confirmExplicitActionTwice(
         `恢复「${item.title}」的抽象 CG？`,
-        '只会从心跳回忆缓存中移除这张图片的引用，不会删除 SillyTavern 已保存的图片文件。',
+        '只会从心迹回廊缓存中移除这张图片的引用，不会删除 SillyTavern 已保存的图片文件。',
         { destructive: false },
     )) return;
     const previousImage = item.cgImage;
@@ -506,7 +473,7 @@ export async function clearSelectedCgImage() {
     const origin = { ...core_context.captureTaskOrigin(context, memoryBank.archiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
     if (!await core_cache.commitSession(mode, session, expectedChatId, origin)) {
         item.cgImage = previousImage;
-        globalThis.toastr?.error?.('当前档案版本已经变化，未移除 CG 图片引用。', '心跳回忆');
+        globalThis.toastr?.error?.('当前档案版本已经变化，未移除 CG 图片引用。', '心迹回廊');
         return;
     }
     renderCurrentCgMode(mode, session);

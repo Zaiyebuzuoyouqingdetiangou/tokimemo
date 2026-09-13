@@ -22,9 +22,9 @@ import * as recovery_view from '../ui/recoveryView.js';
 export async function showArchiveLibrary() {
     ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock(); runtimeState.activeMode = null; runtimeState.activeSession = null; runtimeState.activeArchiveSnapshot = null; runtimeState.activeArchiveReadOnly = true; runtimeState.archiveLibraryCharacterKey = ''; runtimeState.archiveViewLevel = 'library';
-    ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setManageVisible(false); ui_overlay.setBackVisible(false); ui_overlay.topTitle('心跳回忆 · 档案室');
+    ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setManageVisible(false); ui_overlay.setBackVisible(false); ui_overlay.topTitle('心迹回廊 · 档案室');
     const body = ui_overlay.bodyEl(); if (!body) return;
-    body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在核对档案室…</b><div class="rmt-loading-note">只读取心跳回忆自己的本机删除记录，不扫描或改写聊天正文。</div></div></div>';
+    body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在核对档案室…</b><div class="rmt-loading-note">只读取心迹回廊自己的本机删除记录，不扫描或改写聊天正文。</div></div></div>';
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     const indexedBefore = archive_groups.getArchiveIndex(core_context.getContext());
     const deletedEntryIds = new Set();
@@ -124,7 +124,7 @@ export function showArchiveCharacter(groupId) {
     const context = core_context.getContext();
     const entries = archive_groups.archiveGroupEntries(key, context).sort((a,b)=>b.updatedAt-a.updatedAt);
     const meta = archive_groups.archiveGroupMeta(key, entries, context);
-    const name = core_text.normalizeText(meta.label || meta.characterName || entries[0]?.characterName, 120) || '角色档案'; ui_overlay.topTitle(`心跳回忆 · ${name}`);
+    const name = core_text.normalizeText(meta.label || meta.characterName || entries[0]?.characterName, 120) || '角色档案'; ui_overlay.topTitle(`心迹回廊 · ${name}`);
     const body = ui_overlay.bodyEl(); if (!body) return;
     const charAvatar = archive_groups.archiveGroupAvatarUrl(meta, entries[0] || null, context);
     const profileKey = modes_relations.archiveCharacterProfileKey(key, meta, entries);
@@ -164,11 +164,11 @@ export function showArchiveGroupManager() {
         const ambiguous = archive_groups.archiveEntryNeedsManualClassification(item, context);
         const live = (() => { try { return generation_imageGeneration.indexedArchiveMatchesCurrentChat(item, context); } catch { return false; } })();
         const status = item.archiveGroupManual ? '手动归类' : ambiguous ? '待手动分类' : '自动归类';
-        return `<article class="rmt-archive-group-entry"><div><b>${core_text.esc(item.archiveName)}</b><small>${core_text.esc(item.characterName)} · ${core_text.esc(item.chatId)} · ${status}${item.characterFingerprint ? ' · 已绑定角色卡指纹' : ''}</small></div><div class="rmt-archive-group-entry-actions"><select class="text_pole" data-rmt-archive-move-select="${core_text.esc(entryId)}"><option value="__AUTO__">恢复自动分类</option>${groupOptions}</select><button type="button" class="rmt-btn" data-rmt-action="archive-group-move" data-rmt-archive-entry-id="${core_text.esc(entryId)}">移动</button><button type="button" class="rmt-btn" data-rmt-action="${live ? 'archive-delete-live' : 'archive-remove-index'}" data-rmt-archive-entry-id="${core_text.esc(entryId)}">${live ? '删除心跳回忆档案' : '从档案室移除'}</button></div></article>`;
+        return `<article class="rmt-archive-group-entry"><div><b>${core_text.esc(item.archiveName)}</b><small>${core_text.esc(item.characterName)} · ${core_text.esc(item.chatId)} · ${status}${item.characterFingerprint ? ' · 已绑定角色卡指纹' : ''}</small></div><div class="rmt-archive-group-entry-actions"><select class="text_pole" data-rmt-archive-move-select="${core_text.esc(entryId)}"><option value="__AUTO__">恢复自动分类</option>${groupOptions}</select><button type="button" class="rmt-btn" data-rmt-action="archive-group-move" data-rmt-archive-entry-id="${core_text.esc(entryId)}">移动</button><button type="button" class="rmt-btn" data-rmt-action="${live ? 'archive-delete-live' : 'archive-remove-index'}" data-rmt-archive-entry-id="${core_text.esc(entryId)}">${live ? '删除心迹回廊档案' : '从档案室移除'}</button></div></article>`;
     }).join('');
     const modal = document.createElement('div');
     modal.className = 'rmt-archive-group-manager';
-    modal.innerHTML = `<div class="rmt-memory-wi-picker-card"><div class="rmt-memory-wi-picker-head"><div><b>角色档案分类</b><small>自动分类 / 手动移动 / 绑定 SillyTavern 角色新建组</small></div><button type="button" class="rmt-btn" data-rmt-action="archive-group-close">完成</button></div><div class="rmt-memory-wi-picker-note">只整理心跳回忆的档案索引，不改酒馆聊天；无法可靠识别时保留为待手动分类。</div><div class="rmt-archive-group-create"><select class="text_pole" data-rmt-archive-new-character><option value="">选择一个 SillyTavern char…</option>${characterOptions}</select><button type="button" class="rmt-btn" data-rmt-action="archive-group-create">按所选 char 新建组</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类未锁定档案</button></div><div class="rmt-archive-group-entries">${rows || '<div class="rmt-memory-wi-empty">还没有档案可以分类。</div>'}</div></div>`;
+    modal.innerHTML = `<div class="rmt-memory-wi-picker-card"><div class="rmt-memory-wi-picker-head"><div><b>角色档案分类</b><small>自动分类 / 手动移动 / 绑定 SillyTavern 角色新建组</small></div><button type="button" class="rmt-btn" data-rmt-action="archive-group-close">完成</button></div><div class="rmt-memory-wi-picker-note">只整理心迹回廊的档案索引，不改酒馆聊天；无法可靠识别时保留为待手动分类。</div><div class="rmt-archive-group-create"><select class="text_pole" data-rmt-archive-new-character><option value="">选择一个 SillyTavern char…</option>${characterOptions}</select><button type="button" class="rmt-btn" data-rmt-action="archive-group-create">按所选 char 新建组</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类未锁定档案</button></div><div class="rmt-archive-group-entries">${rows || '<div class="rmt-memory-wi-empty">还没有档案可以分类。</div>'}</div></div>`;
     overlay.appendChild(modal);
     for (const select of modal.querySelectorAll('[data-rmt-archive-move-select]')) {
         const item = items.find(entry => core_context.archiveIndexEntryId(entry) === select.dataset.rmtArchiveMoveSelect);
@@ -225,7 +225,7 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
     const initialBackupState = await archive_backupStore.readArchiveBackupState(entry);
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     if (initialBackupState.deleted) {
-        const error = new Error('这份心跳回忆档案已被明确删除，旧聊天来源不会令它重新出现。');
+        const error = new Error('这份心迹回廊档案已被明确删除，旧聊天来源不会令它重新出现。');
         error.code = 'RMT_ARCHIVE_DELETED_FENCE';
         throw error;
     }
@@ -249,7 +249,7 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
         const header = Array.isArray(chat) ? chat[0] : chat;
         const metadata = header?.chat_metadata && typeof header.chat_metadata === 'object' ? header.chat_metadata : {};
         memory = archive_repository.migrateArchiveInMemory(metadata[core_constants.MEMORY_KEY]);
-        if (!memory || core_context.comparableChatId(memory.chatId) !== wantedChatId) throw new Error('源聊天里已没有可读取的心跳回忆档案。');
+        if (!memory || core_context.comparableChatId(memory.chatId) !== wantedChatId) throw new Error('源聊天里已没有可读取的心迹回廊档案。');
         stored = metadata[core_constants.CACHE_KEY];
         settingBookSelection = archive_repository.getMemoryWorldInfoSelection({ chatMetadata: metadata });
     } catch (error) {
@@ -263,7 +263,7 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
         const latestBackupState = await archive_backupStore.readArchiveBackupState(entry);
         core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
         if (latestBackupState.deleted) {
-            const deleted = new Error('这份心跳回忆档案已被明确删除，旧聊天来源不会令它重新出现。');
+            const deleted = new Error('这份心迹回廊档案已被明确删除，旧聊天来源不会令它重新出现。');
             deleted.code = 'RMT_ARCHIVE_DELETED_FENCE';
             throw deleted;
         }
@@ -353,7 +353,7 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
             stillCurrent: () => core_context.runtimeLifecycleStillCurrent(lifecycleEpoch),
         }).catch(error => {
             console.warn('[HeartbeatMemories] independent archive backup seed failed', core_text.safeErrorDiagnostic(error));
-            globalThis.toastr?.warning?.(core_text.toastText(`档案已打开，但独立备份没有更新：${core_text.safeErrorSummary(error)}`), '心跳回忆');
+            globalThis.toastr?.warning?.(core_text.toastText(`档案已打开，但独立备份没有更新：${core_text.safeErrorSummary(error)}`), '心迹回廊');
         });
     }
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
@@ -599,7 +599,7 @@ export function setArchiveReadOnly(readOnly) {
     if (!runtimeState.activeArchiveSnapshot) return;
     if (runtimeState.activeArchiveSnapshot.backupOnly && readOnly === false) {
         runtimeState.activeArchiveReadOnly = true;
-        globalThis.toastr?.info?.('源聊天已丢失或无法读取；独立备份只能永久只读查看，不能重新绑定到其他聊天。', '心跳回忆');
+        globalThis.toastr?.info?.('源聊天已丢失或无法读取；独立备份只能永久只读查看，不能重新绑定到其他聊天。', '心迹回廊');
         return showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot);
     }
     runtimeState.activeArchiveReadOnly = readOnly !== false;
@@ -610,8 +610,8 @@ export function setArchiveReadOnly(readOnly) {
         globalThis.toastr?.info?.(
             live
                 ? '已关闭只读保护。当前酒馆正好打开这份档案对应聊天；增量追加/绘制仍会逐项确认。'
-                : '已关闭只读保护，但心跳回忆不会自动切换聊天。你可以查看编辑按钮；真正写入前必须先手动在酒馆打开这份档案对应聊天。',
-            '心跳回忆',
+                : '已关闭只读保护，但心迹回廊不会自动切换聊天。你可以查看编辑按钮；真正写入前必须先手动在酒馆打开这份档案对应聊天。',
+            '心迹回廊',
         );
     }
 }
@@ -632,17 +632,17 @@ export function promoteSnapshotToLiveIfCurrent() {
     if (!runtimeState.activeArchiveSnapshot) return true;
     if (runtimeState.activeArchiveSnapshot.backupOnly) {
         runtimeState.activeArchiveReadOnly = true;
-        globalThis.toastr?.warning?.('独立备份是永久只读快照，不能重新绑定或写入当前聊天。', '心跳回忆');
+        globalThis.toastr?.warning?.('独立备份是永久只读快照，不能重新绑定或写入当前聊天。', '心迹回廊');
         return false;
     }
     if (runtimeState.activeArchiveReadOnly) {
-        globalThis.toastr?.info?.('当前仍是只读查看。请先关闭“只读查看”开关。', '心跳回忆');
+        globalThis.toastr?.info?.('当前仍是只读查看。请先关闭“只读查看”开关。', '心迹回廊');
         return false;
     }
     const snapshot = runtimeState.activeArchiveSnapshot;
     const context = core_context.getContext();
     if (!generation_imageGeneration.indexedArchiveMatchesCurrentChat(snapshot, context)) {
-        globalThis.toastr?.warning?.(snapshotWriteBlockMessage(), '心跳回忆');
+        globalThis.toastr?.warning?.(snapshotWriteBlockMessage(), '心迹回廊');
         return false;
     }
     const mode = runtimeState.activeMode;
@@ -651,7 +651,7 @@ export function promoteSnapshotToLiveIfCurrent() {
     if (mode) {
         live = core_cache.loadSession(mode);
         if (!live) {
-            globalThis.toastr?.warning?.('当前真实聊天的这项已生成缓存尚未加载，心跳回忆不会用只读快照覆盖它。请先从“当前窗口档案”打开一次这项，再执行绘制/修改。', '心跳回忆');
+            globalThis.toastr?.warning?.('当前真实聊天的这项已生成缓存尚未加载，心迹回廊不会用只读快照覆盖它。请先从“当前窗口档案”打开一次这项，再执行绘制/修改。', '心迹回廊');
             return false;
         }
     }
@@ -706,7 +706,7 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
     ui_overlay.setRegenerateVisible(false);
     ui_overlay.setManageVisible(false);
     ui_overlay.setBackVisible(true, '角色档案');
-    ui_overlay.topTitle(`心跳回忆 · ${snapshot.characterName} · ${snapshot.backupOnly ? '独立备份' : runtimeState.activeArchiveReadOnly ? '只读档案' : '编辑待命'}`);
+    ui_overlay.topTitle(`心迹回廊 · ${snapshot.characterName} · ${snapshot.backupOnly ? '独立备份' : runtimeState.activeArchiveReadOnly ? '只读档案' : '编辑待命'}`);
     const body = ui_overlay.bodyEl();
     if (!body) return;
     const memory = snapshot.memory;
@@ -769,13 +769,13 @@ export async function openIndexedArchive(characterKey, chatId, entryId = '') {
         return ui_overlay.showChooser();
     }
     ui_overlay.openOverlay();
-    ui_overlay.topTitle('心跳回忆 · 正在读取只读档案…');
+    ui_overlay.topTitle('心迹回廊 · 正在读取只读档案…');
     const body = ui_overlay.bodyEl();
     if (body) body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在读取这个聊天的档案与已生成内容…</b><div class="rmt-loading-note">只请求这一条目标聊天，不扫描同角色的其他聊天；不会切换当前角色或聊天。</div></div></div>';
     try {
         const snapshot = await fetchIndexedArchiveSnapshot(entry, context);
         showIndexedArchiveSnapshot(snapshot);
-        if (snapshot.backupOnly) globalThis.toastr?.warning?.('源聊天无法读取，已从当前浏览器的独立备份恢复为永久只读档案。', '心跳回忆');
+        if (snapshot.backupOnly) globalThis.toastr?.warning?.('源聊天无法读取，已从当前浏览器的独立备份恢复为永久只读档案。', '心迹回廊');
     } catch (error) {
         console.warn('[HeartbeatMemories] indexed archive read-only load failed', core_text.safeErrorDiagnostic(error));
         if (ui_overlay.bodyEl()) ui_overlay.bodyEl().innerHTML = `<div class="rmt-error"><div><b>档案读取失败</b><div style="margin-top:10px;white-space:pre-wrap;opacity:.78">${core_text.esc(core_text.safeErrorSummary(error))}</div><button type="button" class="rmt-btn" data-rmt-action="library-home">返回档案室</button></div></div>`;
@@ -783,7 +783,7 @@ export async function openIndexedArchive(characterKey, chatId, entryId = '') {
 }
 
 export async function rebuildArchiveIndexFromExisting() {
-    if (core_requestCoordinator.hasAnyTask()) { globalThis.toastr?.info?.('后台任务进行中，暂不扫描旧档案。', '心跳回忆'); return; }
+    if (core_requestCoordinator.hasAnyTask()) { globalThis.toastr?.info?.('后台任务进行中，暂不扫描旧档案。', '心迹回廊'); return; }
     const context = core_context.getContext();
     const descriptors = (context.characters || []).map((_, index) => archive_groups.characterDescriptor(context, index)).filter(item => item?.avatar);
     const byAvatar = new Map();
@@ -796,7 +796,7 @@ export async function rebuildArchiveIndexFromExisting() {
     const deletedIndex = archive_groups.buildDeletedArchiveCharacterIndex(context);
     const existingByChatFile = new Map(existing.map(item => [`${core_context.archiveStoredAvatar(item)}\u001f${item.chatId}`, item]));
     const found = [];
-    ui_overlay.openOverlay(); const body = ui_overlay.bodyEl(); ui_overlay.topTitle('心跳回忆 · 扫描旧档案');
+    ui_overlay.openOverlay(); const body = ui_overlay.bodyEl(); ui_overlay.topTitle('心迹回廊 · 扫描旧档案');
     const avatarEntries = [...byAvatar.entries()];
     for (let i = 0; i < avatarEntries.length; i += 1) {
         const [avatar, avatarDescriptors] = avatarEntries[i];
@@ -851,6 +851,6 @@ export async function rebuildArchiveIndexFromExisting() {
     }
     archive_groups.setArchiveIndex(context, found.sort((a,b) => b.updatedAt - a.updatedAt));
     archive_groups.autoClassifyArchiveIndex(context, { confirm: false });
-    globalThis.toastr?.success?.(`旧档案扫描完成：索引 ${found.length} 个聊天档案。无法唯一判断的同头像/同名旧档案已单独列为“待手动分类”。`, '心跳回忆');
+    globalThis.toastr?.success?.(`旧档案扫描完成：索引 ${found.length} 个聊天档案。无法唯一判断的同头像/同名旧档案已单独列为“待手动分类”。`, '心迹回廊');
     showArchiveLibrary();
 }

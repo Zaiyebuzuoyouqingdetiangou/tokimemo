@@ -415,7 +415,7 @@ export function ensureArchiveAutoGroup(groups, descriptor, fallbackEntry = null,
 export function autoClassifyArchiveIndex(context = core_context.getContext(), { confirm = true } = {}) {
     const items = getArchiveIndex(context);
     if (!items.length) return 0;
-    if (confirm && !ui_overlay.confirmExplicitAction('自动分类档案？', '只会重排心跳回忆“档案室”的索引归属，不会移动、重命名、删除 SillyTavern 的任何聊天文件，也不会切换当前聊天。手动移动过的档案不会被自动分类覆盖。', { destructive: false })) return 0;
+    if (confirm && !ui_overlay.confirmExplicitAction('自动分类档案？', '只会重排心迹回廊“档案室”的索引归属，不会移动、重命名、删除 SillyTavern 的任何聊天文件，也不会切换当前聊天。手动移动过的档案不会被自动分类覆盖。', { destructive: false })) return 0;
     const groups = getArchiveGroups(context);
     let changed = 0;
     for (const item of items) {
@@ -494,7 +494,7 @@ export async function deleteArchiveCharacterFromLibrary(groupId) {
     const count = entries.length;
     if (!ui_overlay.confirmExplicitActionTwice(
         `删除角色档案「${name}」？`,
-        `将从“心跳回忆 · 档案室”移除这个角色的头像、角色档案入口、其下 ${count} 个聊天档案索引及相应的 Heartbeat 本机独立备份。不会删除、清空、重命名或改写任何 SillyTavern 正文聊天窗口；聊天正文会完整保留。删除后，“扫描旧版本已有档案”也不会自动把这个角色重新加入档案室。`,
+        `将从“心迹回廊 · 档案室”移除这个角色的头像、角色档案入口、其下 ${count} 个聊天档案索引及相应的 Heartbeat 本机独立备份。不会删除、清空、重命名或改写任何 SillyTavern 正文聊天窗口；聊天正文会完整保留。删除后，“扫描旧版本已有档案”也不会自动把这个角色重新加入档案室。`,
         { destructive: true },
     )) return null;
 
@@ -565,7 +565,7 @@ export async function deleteCurrentHeartbeatArchive(entryId = '') {
     const context = core_context.currentCharacterGuard();
     const memory = archive_repository.getImportedMemory(context)
         || archive_repository.migrateArchiveInMemory(context.chatMetadata?.[core_constants.MEMORY_KEY]);
-    if (!memory) throw new Error('当前真实聊天没有可删除的心跳回忆档案。');
+    if (!memory) throw new Error('当前真实聊天没有可删除的心迹回廊档案。');
     const expectedChatId = core_context.comparableChatId(core_context.getChatId(context));
     const expectedCharacterKey = core_context.currentCharacterRuntimeKey(context);
     const indexed = getArchiveIndex(context).find(item => {
@@ -577,13 +577,13 @@ export async function deleteCurrentHeartbeatArchive(entryId = '') {
     }
     const archiveName = core_text.normalizeText(memory.archiveName, 160) || archive_repository.fallbackArchiveName(memory.memories);
     if (!ui_overlay.confirmExplicitAction(
-        `删除当前聊天的心跳回忆档案「${archiveName}」？`,
-        '删除心跳回忆自己的 MEMORY_KEY、已生成派生缓存（相簿 / ADV EVENT / 房间 / ENDING / HEART 等）和对应的本机独立备份；不会删除、清空或改写 SillyTavern 聊天正文。删除后如需恢复心跳回忆内容，需要重新建档/生成。',
+        `删除当前聊天的心迹回廊档案「${archiveName}」？`,
+        '删除心迹回廊自己的 MEMORY_KEY、已生成派生缓存（相簿 / ADV EVENT / 房间 / ENDING / HEART 等）和对应的本机独立备份；不会删除、清空或改写 SillyTavern 聊天正文。删除后如需恢复心迹回廊内容，需要重新建档/生成。',
         { destructive: true },
     )) return false;
     if (!ui_overlay.confirmExplicitAction(
-        '最后确认：永久删除这份心跳回忆档案？',
-        '请确认你已经选对当前聊天。聊天正文会保留，但心跳回忆档案、派生缓存及 Heartbeat 本机独立备份会被移除。',
+        '最后确认：永久删除这份心迹回廊档案？',
+        '请确认你已经选对当前聊天。聊天正文会保留，但心迹回廊档案、派生缓存及 Heartbeat 本机独立备份会被移除。',
         { destructive: true },
     )) return false;
 
@@ -646,7 +646,7 @@ export function removeIndexedArchiveFromLibrary(entryId) {
     if (!item) throw new Error('没有找到这个档案索引。');
     if (!ui_overlay.confirmExplicitActionTwice(
         `从档案室移除「${item.archiveName}」？`,
-        '这里只删除心跳回忆 extension settings 里的轻量索引，不会删除聊天文件，也不会删除聊天 metadata 中真正的心跳回忆档案。以后手动“扫描旧版本已有档案”时它可能重新出现。',
+        '这里只删除心迹回廊 extension settings 里的轻量索引，不会删除聊天文件，也不会删除聊天 metadata 中真正的心迹回廊档案。以后手动“扫描旧版本已有档案”时它可能重新出现。',
         { destructive: true },
     )) return false;
     return removeArchiveIndexEntry(context, id);

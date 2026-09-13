@@ -12,7 +12,7 @@ import * as core_text from '../core/text.js';
 import * as ui_overlay from '../ui/overlay.js';
 
 export function memoryStateLabel(state, autoSync = false) {
-    if (state.status === 'missing') return '这个聊天窗口还没有自己的“心跳回忆”档案。';
+    if (state.status === 'missing') return '这个聊天窗口还没有自己的“心迹回廊”档案。';
     const memory = state.memory;
     const suffix = memory?.truncated ? `；超长聊天已从全窗口均匀覆盖 ${memory.usedMessageCount} / ${memory.sourceMessageCount} 条消息` : '';
     let pending = '当前没有检测到新增聊天。';
@@ -173,7 +173,7 @@ export function archiveOverviewHtml(items, { loading = false, error = '' } = {})
     if (!list.length) return '<div class="rmt-archive-overview-empty">还没有可显示的聊天窗口。</div>';
     return list.map(item => {
         const archive = item.archive;
-        const name = archive?.name || '尚未创建心跳回忆档案';
+        const name = archive?.name || '尚未创建心迹回廊档案';
         const meta = archive ? `${archive.memoryCount} 条记忆 · 更新 ${ui_overlay.formatArchiveTime(archive.updatedAt)}` : (item.current ? '未建档' : '聊天档案 · 进入后读取详情');
         return `<button type="button" class="rmt-archive-overview-item ${item.current ? 'current' : ''}" data-rmt-archive-chat="${core_text.esc(item.chatId)}" ${runtimeState.busy && !item.current ? 'disabled' : ''}>
           <span class="rmt-overview-dot">${item.current ? '●' : '○'}</span><span><b>${core_text.esc(name)}</b><small>${item.current ? '当前窗口 · ' : ''}${core_text.esc(item.chatId)} · ${core_text.esc(meta)}</small></span><i class="fa-solid fa-chevron-right"></i>
@@ -203,7 +203,7 @@ export async function openArchiveSnapshotFromOverview(chatId) {
     if (core_context.comparableChatId(core_context.getChatId(context)) === id) return ui_overlay.showChooser();
     const entry = archive_groups.getArchiveIndex(core_context.getContext()).find(item => item.chatId === id && core_context.archiveEntryMatchesContextCharacter(item, context));
     if (!entry) {
-        globalThis.toastr?.info?.('这个聊天还没有被索引为心跳回忆档案；不会为了查看而自动切换聊天。', '心跳回忆');
+        globalThis.toastr?.info?.('这个聊天还没有被索引为心迹回廊档案；不会为了查看而自动切换聊天。', '心迹回廊');
         return;
     }
     return archive_library.openIndexedArchive(entry.characterKey, id, core_context.archiveIndexEntryId(entry));
@@ -217,6 +217,7 @@ export function modePortalMeta(mode) {
         [core_constants.MODE.ROOM]: { title: '他的房间', subtitle: '随现实时间流动的私人空间', icon: 'fa-house', accent: 'room' },
         [core_constants.MODE.ITEMS]: { title: '他的物品', subtitle: '翻找各种收纳容器与私人物件', icon: 'fa-box-open', accent: 'items' },
         [core_constants.MODE.INBOX]: { title: '你的邮箱', subtitle: '寄给你的信 · 远方明信片', icon: 'fa-envelope', accent: 'album' },
+        [core_constants.MODE.PAST_LIVES]: { title: '前世今生', subtitle: '另一段人生 · 旧梦卷宗与今生回响', icon: 'fa-scroll', accent: 'ending' },
         [core_constants.MODE.PHONE]: { title: '他的私人终端', subtitle: '通讯、草稿与私人记录', icon: 'fa-mobile-screen-button', accent: 'phone' },
         [core_constants.MODE.TRAVEL]: { title: '他的出行路线', subtitle: '附近对话与远方文字明信片', icon: 'fa-map-location-dot', accent: 'travel' },
         [core_constants.MODE.BUTTERFLY]: { title: '蝴蝶效应', subtitle: '平行时间线观测终端', icon: 'fa-code-branch', accent: 'butterfly' },

@@ -134,6 +134,7 @@ export function apiConfigurationFingerprint(settings) {
             key ? `${key.length}:${core_text.hashString(key)}` : '',
             Number(settings?.maxTokens) || 0,
             Number(settings?.temperature) || 0,
+            settings?.manualApiStreaming === true,
         ]);
     }
     return JSON.stringify([
@@ -383,6 +384,184 @@ export function assertIndependentResponsePayload(payload) {
     return content;
 }
 
+// Transport completion is local authority, not model JSON. A provider cannot forge it
+// by emitting fields named complete/finishReason. Keep partial text out of Error objects.
+const manualStreamCompletions = new WeakMap();
+const STREAM_FINISH_REASONS = new Set(['stop', 'end_turn', 'stop_sequence', 'length', 'max_tokens', 'content_filter', 'tool_calls', 'function_call']);
+const COMPLETE_STREAM_REASONS = new Set(['stop', 'end_turn', 'stop_sequence', 'done']);
+
+function streamFinishReason(value) {
+    if (value == null || value === '') return '';
+    return typeof value === 'string' && STREAM_FINISH_REASONS.has(value) ? value : 'unknown';
+}
+
+function streamCompletion(content, finishReason, interrupted = false) {
+    const result = Object.freeze({ content });
+    manualStreamCompletions.set(result, Object.freeze({
+        complete: !interrupted && COMPLETE_STREAM_REASONS.has(finishReason),
+        finishReason, interrupted: interrupted === true,
+    }));
+    return result;
+}
+
+export function manualStreamCompletionInfo(result) {
+    return result && typeof result === 'object' ? manualStreamCompletions.get(result) || null : null;
+}
+
+// Call inside the JSON-parser/recovery try block, after the normal origin/config guard.
+// Its catch can pass the separately held content to recordRecoveryTruncation unchanged.
+export function assertManualStreamComplete(result) {
+    const completion = manualStreamCompletionInfo(result);
+    if (completion && !completion.complete) {
+        const error = apiError('流式正文尚未完整结束；已停止本段，不会自动重发请求。可保留草稿后显式继续。', 'RMT_JSON_TRUNCATED');
+        error.retryable = false;
+        error.retryableJson = false;
+        throw error;
+    }
+    return true;
+}
+
+function streamReadError(code = 'RMT_MANUAL_INVALID_JSON') {
+    const error = apiError(code === 'RMT_MANUAL_PROVIDER_ERROR'
+        ? '手动 API 在流式响应中返回错误；详情已隐藏，本段不会自动重发。'
+        : '流式响应没有完整结束或格式无效；详情已隐藏，本段不会自动重发。', code);
+    error.retryable = false;
+    error.retryableJson = false;
+    return error;
+}
+
+function streamAbortReason(signal) {
+    return signal?.reason instanceof Error ? signal.reason : new DOMException('Aborted', 'AbortError');
+}
+
+async function readManualApiStream(response, options = {}) {
+    const maxBytes = core_constants.MAX_MANUAL_API_RESPONSE_BYTES;
+    const declaredBytes = Number(response?.headers?.get?.('content-length'));
+    if (Number.isFinite(declaredBytes) && declaredBytes > maxBytes) {
+        try { void response?.body?.cancel?.()?.catch?.(() => {}); } catch {}
+        throw apiError('模型服务返回内容过大，已停止读取。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
+    }
+    const reader = response?.body?.getReader?.();
+    if (!reader) throw streamReadError();
+    const signal = options.signal || null;
+    const decoder = new TextDecoder('utf-8');
+    let bytes = 0, content = '', line = '', eventType = '', dataLines = [];
+    let previousCR = false, firstCharacter = true, terminal = false, finishReason = '', interrupted = false;
+    const cancel = () => { try { void reader.cancel().catch(() => {}); } catch {} };
+    // reader.cancel settles outstanding read() calls. Avoid adding one reaction per
+    // tiny network fragment to a long-lived abort promise.
+    const onAbort = () => { cancel(); };
+    const append = value => {
+        if (content.length + value.length > core_constants.MAX_GENERATION_OUTPUT_CHARS) {
+            throw apiError('模型服务返回内容过大，已停止读取。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
+        }
+        content += value;
+    };
+    const dispatch = () => {
+        const data = dataLines.join('\n');
+        const type = eventType;
+        dataLines = [];
+        eventType = '';
+        if (!data) return;
+        if (type === 'error') throw streamReadError('RMT_MANUAL_PROVIDER_ERROR');
+        if (data.trim() === '[DONE]') {
+            if (!finishReason) finishReason = 'done';
+            terminal = true;
+            return;
+        }
+        let payload;
+        try { payload = JSON.parse(data); } catch { throw streamReadError(); }
+        if (payloadHasProviderError(payload)) throw streamReadError('RMT_MANUAL_PROVIDER_ERROR');
+        if (!payload || typeof payload !== 'object') throw streamReadError();
+        // The fixed custom backend forwards OpenAI-compatible choice deltas. Ignore
+        // usage/reasoning-only events, and never combine independent candidates.
+        const choices = Array.isArray(payload.choices) ? payload.choices : [];
+        const choice = choices.find(value => value?.index === 0)
+            || choices.find(value => value && value.index == null);
+        if (!choice) return;
+        let visible = visibleContentText(choice.delta?.content);
+        if (!visible && typeof choice.text === 'string') visible = choice.text;
+        if (!visible && choice.message?.content != null) {
+            const full = visibleContentText(choice.message.content);
+            if (content && !full.startsWith(content)) throw streamReadError();
+            visible = full.slice(content.length);
+        }
+        if (visible) append(visible);
+        if (choice.delta?.refusal || choice.message?.refusal) {
+            finishReason = 'content_filter';
+            terminal = true;
+            return;
+        }
+        const reason = streamFinishReason(choice.finish_reason);
+        if (reason) {
+            finishReason = reason;
+            terminal = true;
+        }
+    };
+    const consumeLine = () => {
+        if (!line) dispatch();
+        else if (!line.startsWith(':')) {
+            const colon = line.indexOf(':');
+            const field = colon < 0 ? line : line.slice(0, colon);
+            let value = colon < 0 ? '' : line.slice(colon + 1);
+            if (value.startsWith(' ')) value = value.slice(1);
+            if (field === 'data') dataLines.push(value);
+            else if (field === 'event') eventType = value;
+            // id/retry are deliberately ignored: this paid request never reconnects.
+        }
+        line = '';
+    };
+    const consume = text => {
+        // SSE permits CRLF, CR, or LF; a split CRLF is one newline, not two.
+        for (const character of text) {
+            if (terminal) break;
+            if (firstCharacter) { firstCharacter = false; if (character === '\uFEFF') continue; }
+            if (previousCR) { previousCR = false; if (character === '\n') continue; }
+            if (character === '\r' || character === '\n') {
+                consumeLine();
+                previousCR = character === '\r';
+            } else line += character;
+        }
+    };
+    signal?.addEventListener?.('abort', onAbort, { once: true });
+    try {
+        if (signal?.aborted) throw streamAbortReason(signal);
+        while (!terminal) {
+            const { value, done } = await reader.read();
+            if (signal?.aborted) throw streamAbortReason(signal);
+            if (done) {
+                consume(decoder.decode());
+                // Per SSE framing, EOF does not dispatch an unfinished event.
+                if (!terminal) interrupted = true;
+                break;
+            }
+            bytes += value?.byteLength || 0;
+            if (bytes > maxBytes) throw apiError('模型服务返回内容过大，已停止读取。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
+            consume(decoder.decode(value, { stream: true }));
+        }
+    } catch (error) {
+        if (signal?.aborted || error?.name === 'AbortError') throw streamAbortReason(signal);
+        if (!content.trim()) {
+            if (['RMT_MANUAL_INVALID_JSON', 'RMT_MANUAL_PROVIDER_ERROR', 'RMT_MANUAL_RESPONSE_TOO_LARGE'].includes(error?.code)) throw error;
+            throw streamReadError();
+        }
+        // Previously dispatched visible text may be recoverable; never append the
+        // malformed/error event, put provider text in an Error, or issue another fetch.
+        interrupted = true;
+    } finally {
+        signal?.removeEventListener?.('abort', onAbort);
+        cancel();
+        try { reader.releaseLock(); } catch {}
+    }
+    if (signal?.aborted) throw streamAbortReason(signal);
+    if (!content.trim()) {
+        const error = apiError('手动 API 没有返回可见正文。', 'RMT_MANUAL_EMPTY');
+        error.retryable = false;
+        throw error;
+    }
+    return streamCompletion(content, finishReason, interrupted);
+}
+
 export async function fetchManualApiModels(settings, context, options = {}) {
     const customUrl = assertManualApiCredentialTransport(settings?.manualApiBaseUrl, settings?.manualApiKey);
     const fetchImpl = options.fetchImpl || globalThis.fetch;
@@ -443,6 +622,7 @@ export async function fetchManualApiModels(settings, context, options = {}) {
 }
 
 export async function requestManualApiCompletion(settings, context, messages, maxTokens, options = {}) {
+    if (options.signal?.aborted) throw streamAbortReason(options.signal);
     const customUrl = assertManualApiCredentialTransport(settings?.manualApiBaseUrl, settings?.manualApiKey);
     const model = core_text.normalizeText(options.model || settings?.manualApiModel, 240);
     if (!model) throw apiError('请先填写手动 API 的模型 ID。', 'RMT_MANUAL_MODEL');
@@ -454,7 +634,7 @@ export async function requestManualApiCompletion(settings, context, messages, ma
         messages,
         max_tokens: Math.max(1, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens)),
         temperature: Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : settings?.temperature,
-        stream: false,
+        stream: settings?.manualApiStreaming === true,
         chat_completion_source: 'custom',
         custom_url: customUrl,
         custom_include_headers: manualApiHeadersJson(settings?.manualApiKey),
@@ -473,9 +653,17 @@ export async function requestManualApiCompletion(settings, context, messages, ma
         try { await response?.body?.cancel?.(); } catch {}
         throw httpFailure(response);
     }
+    const contentType = String(response?.headers?.get?.('content-type') || '').toLowerCase();
+    if (body.stream && contentType.includes('text/event-stream')) return await readManualApiStream(response, options);
     const payload = await boundedJson(response, core_constants.MAX_MANUAL_API_RESPONSE_BYTES);
     if (payloadHasProviderError(payload)) throw providerEnvelopeFailure(payload);
     const content = extractIndependentResponseContent(payload);
     if (typeof content === 'string' && !content.trim()) throw apiError('手动 API 没有返回可见正文。', 'RMT_MANUAL_EMPTY');
+    if (body.stream && typeof content === 'string') {
+        // Some compatible services ignore stream:true and answer JSON on this same
+        // request. Read it without a second request or a persisted mode change.
+        const reason = streamFinishReason(payload?.choices?.[0]?.finish_reason) || 'stop';
+        return streamCompletion(content, reason);
+    }
     return content;
 }

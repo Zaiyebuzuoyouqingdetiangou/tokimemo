@@ -176,17 +176,20 @@ export const DEFAULT_SETTINGS = Object.freeze({
     modelOverride: '',
     manualApiBaseUrl: '',
     manualApiModel: '',
+    manualApiStreaming: false,
+    chatReadRange: Object.freeze({ mode: 'recent', recent: 50, start: 1, end: 100, includeHidden: false }),
     maxTokens: 16384,
     temperature: 0.9,
     roomLifeAutoDaily: true,
     useCurrentChatExternalMemory: true,
+    useActivatedWorldInfo: true,
     // Manual fallback for hosts where Image Generation is active but its SlashCommand object is
     // not exposed through the current context registry. Off by default; when enabled we may use
     // the public executeSlashCommandsWithOptions('/sd quiet=true ...') path with a sanitized prompt.
     imageGenerationManualEnabled: false,
     creativeSupplementEnabled: false,
     creativeSupplement: '',
-    imageGenerationProvider: 'sillytavern-imagine',
+    imageGenerationProvider: 'baibai-image',
     // Optional r32-style mobile safe-area presentation. Off keeps the long-standing edge-to-edge fullscreen UI.
     ttDisplayMode: false,
     themeMode: 'default',
@@ -205,6 +208,7 @@ export const MODE = Object.freeze({
     CABINET: 'cabinet',
     PHONE: 'phone',
     INBOX: 'inbox',
+    PAST_LIVES: 'pastLives',
     TRAVEL: 'travel',
     ENDING: 'ending',
     CALENDAR: 'calendar',
@@ -222,6 +226,7 @@ export const MODE_LABEL = Object.freeze({
     [MODE.CABINET]: '两个人的陈列柜',
     [MODE.PHONE]: '他的私人终端',
     [MODE.INBOX]: '你的邮箱',
+    [MODE.PAST_LIVES]: '前世今生',
     [MODE.TRAVEL]: '他的出行路线',
     [MODE.ENDING]: '结局与后日谈',
     [MODE.CALENDAR]: '两个人的日历',
@@ -239,6 +244,7 @@ export const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.CABINET]: 5500,
     [MODE.PHONE]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.INBOX]: 4000,
+    [MODE.PAST_LIVES]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.TRAVEL]: 9000,
     [MODE.ENDING]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.CALENDAR]: 6000,
@@ -247,10 +253,10 @@ export const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ACHIEVEMENTS]: 6000,
 });
 
-export const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.PHONE, MODE.INBOX, MODE.CABINET, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY]);
+export const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.PHONE, MODE.INBOX, MODE.CABINET, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY, MODE.PAST_LIVES]);
 
 export const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS]);
-export const CREATIVE_EXPANSION_MODES = Object.freeze([MODE.ADV, MODE.BUTTERFLY, MODE.HEART, MODE.ENDING, MODE.ALBUM, MODE.TRAVEL]);
+export const CREATIVE_EXPANSION_MODES = Object.freeze([MODE.ADV, MODE.BUTTERFLY, MODE.HEART, MODE.ENDING, MODE.ALBUM, MODE.TRAVEL, MODE.PAST_LIVES]);
 
 export const ARCHIVE_OVERVIEW_CACHE_MS = 60000;
 

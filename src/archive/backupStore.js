@@ -3,6 +3,7 @@
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_text from '../core/text.js';
+import * as core_backupDiagnostics from '../core/backupDiagnostics.js';
 
 let databasePromise = null;
 let testBackend = null;
@@ -16,17 +17,19 @@ function assertBackupWriteCurrent(options = {}) {
 
 function cloneValue(value) {
     if (value == null) return value;
-    if (typeof structuredClone === 'function') return structuredClone(value);
-    return JSON.parse(JSON.stringify(value));
+    try {
+        if (typeof structuredClone === 'function') return structuredClone(value);
+        return JSON.parse(JSON.stringify(value));
+    } catch (error) { throw core_backupDiagnostics.backupFailureError(error, 'serialize', 'clone'); }
 }
 
-function utf8JsonSize(value, label) {
+function utf8JsonSize(value) {
     let json;
     try { json = JSON.stringify(value); }
-    catch { throw new Error(`${label}无法序列化，独立备份没有写入。`); }
+    catch (error) { throw core_backupDiagnostics.backupFailureError(error, 'serialize', 'clone'); }
     const bytes = new Blob([json], { type: 'application/json' }).size;
     if (bytes > core_constants.MAX_CACHE_SOURCE_BYTES) {
-        throw new Error(`${label}超过 12 MB UTF-8 安全上限，独立备份没有写入。`);
+        throw core_backupDiagnostics.backupFailureError(null, 'serialize', 'schema');
     }
     return bytes;
 }
@@ -176,7 +179,7 @@ function compatibleCacheValue(cache, memory) {
         if (Number(cache.sourceBytes) > core_constants.MAX_CACHE_SOURCE_BYTES) return null;
         return cloneValue(cache);
     }
-    utf8JsonSize(cache, '未压缩派生缓存');
+    utf8JsonSize(cache);
     return cloneValue(cache);
 }
 
@@ -194,7 +197,7 @@ function normalizeRecord(raw, entry = null) {
     if (!identity.entryId || !identity.chatId || identity.chatId !== core_context.comparableChatId(memory.chatId)) return null;
     const revision = core_text.normalizeText(memory.archiveRevision, 240);
     if (!revision || revision !== core_text.normalizeText(raw.archiveRevision, 240)) return null;
-    utf8JsonSize(memory, '正式 Mxxx 档案');
+    utf8JsonSize(memory);
     const cache = compatibleCacheValue(raw.cache, memory);
     return {
         storageVersion: core_constants.ARCHIVE_BACKUP_STORAGE_VERSION,
@@ -210,13 +213,13 @@ function normalizeRecord(raw, entry = null) {
 
 function buildRecord(entry, memory, cache = null) {
     const identity = normalizedIdentity(entry, memory);
-    if (!identity.entryId || !identity.chatId) throw new Error('无法建立独立档案备份身份。');
+    if (!identity.entryId || !identity.chatId) throw core_backupDiagnostics.backupFailureError(null, 'normalize', 'schema');
     const safeMemory = cloneValue(memory);
-    if (!safeMemory || !Array.isArray(safeMemory.memories)) throw new Error('正式 Mxxx 档案格式无效，独立备份没有写入。');
+    if (!safeMemory || !Array.isArray(safeMemory.memories)) throw core_backupDiagnostics.backupFailureError(null, 'normalize', 'schema');
     safeMemory.chatId = identity.chatId;
     const archiveRevision = core_text.normalizeText(safeMemory.archiveRevision, 240);
-    if (!archiveRevision) throw new Error('正式档案缺少 archiveRevision，独立备份没有写入。');
-    utf8JsonSize(safeMemory, '正式 Mxxx 档案');
+    if (!archiveRevision) throw core_backupDiagnostics.backupFailureError(null, 'normalize', 'schema');
+    utf8JsonSize(safeMemory);
     return {
         storageVersion: core_constants.ARCHIVE_BACKUP_STORAGE_VERSION,
         ...identity,
@@ -232,44 +235,69 @@ function buildRecord(entry, memory, cache = null) {
 function requestValue(request) {
     return new Promise((resolve, reject) => {
         request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error || new Error('IndexedDB 请求失败。'));
+        request.onerror = () => reject(core_backupDiagnostics.backupFailureError(request.error, 'read', 'transaction'));
     });
 }
 
 function openDatabase() {
     if (databasePromise) return databasePromise;
-    if (!globalThis.indexedDB?.open) return Promise.reject(new Error('当前浏览器没有可用的 IndexedDB，无法建立独立档案备份。'));
-    databasePromise = new Promise((resolve, reject) => {
-        const request = globalThis.indexedDB.open(core_constants.ARCHIVE_BACKUP_DB_NAME, core_constants.ARCHIVE_BACKUP_STORAGE_VERSION);
-        request.onupgradeneeded = () => {
-            const db = request.result;
-            const store = db.objectStoreNames.contains(core_constants.ARCHIVE_BACKUP_STORE_NAME)
-                ? request.transaction.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME)
-                : db.createObjectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME, { keyPath: 'entryId' });
-            if (!store.indexNames.contains('chatId')) store.createIndex('chatId', 'chatId', { unique: false });
-            if (!store.indexNames.contains('updatedAt')) store.createIndex('updatedAt', 'updatedAt', { unique: false });
+    // Getter/open may throw synchronously in restricted webviews. Every failed
+    // attempt releases the cached promise so a later explicit retry is possible.
+    const pending = new Promise((resolve, reject) => {
+        let settled = false;
+        let request;
+        const fail = (error, stage = 'open', category = 'unknown') => {
+            if (settled) return;
+            settled = true;
+            reject(core_backupDiagnostics.backupFailureError(error, stage, category));
         };
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => { databasePromise = null; reject(request.error || new Error('无法打开独立档案备份数据库。')); };
-        request.onblocked = () => { databasePromise = null; reject(new Error('独立档案备份数据库正在被旧页面占用，请关闭其他酒馆页面后重试。')); };
+        try {
+            if (typeof globalThis.indexedDB?.open !== 'function') return fail(null, 'open', 'unavailable');
+            request = globalThis.indexedDB.open(core_constants.ARCHIVE_BACKUP_DB_NAME, core_constants.ARCHIVE_BACKUP_STORAGE_VERSION);
+        } catch (error) { fail(error); return; }
+        request.onupgradeneeded = () => {
+            if (settled) { try { request.transaction?.abort(); } catch {} return; }
+            try {
+                const db = request.result;
+                const store = db.objectStoreNames.contains(core_constants.ARCHIVE_BACKUP_STORE_NAME)
+                    ? request.transaction.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME)
+                    : db.createObjectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME, { keyPath: 'entryId' });
+                if (!store.indexNames.contains('chatId')) store.createIndex('chatId', 'chatId', { unique: false });
+                if (!store.indexNames.contains('updatedAt')) store.createIndex('updatedAt', 'updatedAt', { unique: false });
+            } catch (error) {
+                fail(error, 'upgrade', 'schema');
+                try { request.transaction?.abort(); } catch {}
+            }
+        };
+        request.onsuccess = () => {
+            if (settled) { try { request.result?.close(); } catch {} return; }
+            settled = true;
+            resolve(request.result);
+        };
+        request.onerror = () => fail(request.error);
+        request.onblocked = () => fail(null, 'open', 'blocked');
     });
-    return databasePromise;
+    databasePromise = pending;
+    void pending.catch(() => { if (databasePromise === pending) databasePromise = null; });
+    return pending;
 }
 
 async function idbRead(entry) {
     const db = await openDatabase();
-    const identity = normalizedIdentity(entry);
-    const transaction = db.transaction(core_constants.ARCHIVE_BACKUP_STORE_NAME, 'readonly');
-    const store = transaction.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME);
-    const exact = await requestValue(store.get(identity.entryId));
-    if (exact) return exact;
-    const matches = await requestValue(store.index('chatId').getAll(identity.chatId));
-    const compatible = (Array.isArray(matches) ? matches : []).filter(item => item?.deleted === true
-        ? deletionIdentityMatches(item, entry)
-        : identityMatches(item, entry));
-    // A legacy entry ID may differ from the newer fingerprint-derived ID. Recover only when the
-    // chat + stable display identity resolve to exactly one record; ambiguity stays fail-closed.
-    return compatible.length === 1 ? compatible[0] : null;
+    try {
+        const identity = normalizedIdentity(entry);
+        const transaction = db.transaction(core_constants.ARCHIVE_BACKUP_STORE_NAME, 'readonly');
+        const store = transaction.objectStore(core_constants.ARCHIVE_BACKUP_STORE_NAME);
+        const exact = await requestValue(store.get(identity.entryId));
+        if (exact) return exact;
+        const matches = await requestValue(store.index('chatId').getAll(identity.chatId));
+        const compatible = (Array.isArray(matches) ? matches : []).filter(item => item?.deleted === true
+            ? deletionIdentityMatches(item, entry)
+            : identityMatches(item, entry));
+        // A legacy entry ID may differ from the newer fingerprint-derived ID. Recover only when the
+        // chat + stable display identity resolve to exactly one record; ambiguity stays fail-closed.
+        return compatible.length === 1 ? compatible[0] : null;
+    } catch (error) { throw core_backupDiagnostics.backupFailureError(error, 'read', 'transaction'); }
 }
 
 async function idbPut(record, expected = null, options = {}) {
@@ -284,15 +312,15 @@ async function idbPut(record, expected = null, options = {}) {
         let exactDone = false;
         let matchesDone = false;
         let abortReason = null;
-        const finalize = () => {
-            if (finalized || !exactDone || !matchesDone) return;
-            finalized = true;
-            try { assertBackupWriteCurrent(options); }
-            catch (error) {
-                abortReason = error;
-                transaction.abort();
-                return;
-            }
+        const abortWith = error => {
+            // A request error is often more specific than transaction.error (or
+            // the later AbortError); retain it before aborting the transaction.
+            if (!abortReason) abortReason = error || core_backupDiagnostics.backupFailureError(null, 'write', 'transaction');
+            try { transaction.abort(); }
+            catch { reject(abortReason); }
+        };
+        const finalizeWrite = () => {
+            assertBackupWriteCurrent(options);
             const aliases = new Map();
             for (const candidate of [exactRaw, ...chatRecords]) {
                 const id = core_text.normalizeText(candidate?.entryId, 120);
@@ -392,27 +420,36 @@ async function idbPut(record, expected = null, options = {}) {
                 outcome = true;
                 return;
             }
-            if (!idempotentRetry) store.put(record);
+            if (!idempotentRetry) {
+                const putRequest = store.put(record);
+                if (putRequest) putRequest.onerror = () => abortWith(putRequest.error);
+            }
             outcome = true;
         };
+        const finalize = () => {
+            if (finalized || !exactDone || !matchesDone) return;
+            finalized = true;
+            try { finalizeWrite(); }
+            catch (error) { abortWith(error); }
+        };
         const getRequest = store.get(record.entryId);
-        getRequest.onerror = () => transaction.abort();
+        getRequest.onerror = () => abortWith(getRequest.error);
         getRequest.onsuccess = () => {
             exactRaw = getRequest.result || null;
             exactDone = true;
             finalize();
         };
         const matchesRequest = store.index('chatId').getAll(record.chatId);
-        matchesRequest.onerror = () => transaction.abort();
+        matchesRequest.onerror = () => abortWith(matchesRequest.error);
         matchesRequest.onsuccess = () => {
             chatRecords = Array.isArray(matchesRequest.result) ? matchesRequest.result : [];
             matchesDone = true;
             finalize();
         };
         transaction.oncomplete = () => resolve(outcome);
-        transaction.onabort = () => reject(abortReason || new Error('独立档案备份版本已经变化，本次旧结果没有覆盖备份。'));
-        transaction.onerror = () => reject(transaction.error || new Error('独立档案备份写入失败。'));
-    });
+        transaction.onabort = () => reject(abortReason || transaction.error || core_backupDiagnostics.backupFailureError(null, 'write', 'transaction'));
+        transaction.onerror = () => reject(abortReason || transaction.error || core_backupDiagnostics.backupFailureError(null, 'write', 'transaction'));
+    }).catch(error => { throw core_backupDiagnostics.backupFailureError(error, 'write', 'transaction'); });
 }
 
 async function idbDeleteOne(db, entry) {
@@ -560,17 +597,23 @@ export function setArchiveBackupBackendForTests(value = null) {
 }
 
 export async function readArchiveBackup(entry) {
-    const raw = await backend().read(entry);
-    return normalizeRecord(raw, entry);
+    let raw;
+    try { raw = await backend().read(entry); }
+    catch (error) { throw core_backupDiagnostics.annotateBackupFailure(error, 'read'); }
+    try { return normalizeRecord(raw, entry); }
+    catch (error) { throw core_backupDiagnostics.annotateBackupFailure(error, 'normalize'); }
 }
 
 export async function readArchiveBackupState(entry) {
-    const raw = await backend().read(entry);
+    let raw;
+    try { raw = await backend().read(entry); }
+    catch (error) { throw core_backupDiagnostics.annotateBackupFailure(error, 'read'); }
     const exactEntryId = core_text.normalizeText(raw?.entryId, 120) === core_context.archiveIndexEntryId(entry);
     if (raw?.deleted === true && (exactEntryId || deletionIdentityMatches(raw, entry))) {
         return { deleted: true, deletedAt: Math.max(0, Number(raw.deletedAt) || 0), record: null };
     }
-    return { deleted: false, deletedAt: 0, record: normalizeRecord(raw, entry) };
+    try { return { deleted: false, deletedAt: 0, record: normalizeRecord(raw, entry) }; }
+    catch (error) { throw core_backupDiagnostics.annotateBackupFailure(error, 'normalize'); }
 }
 
 export async function hasArchiveBackupDeletionFence(entry) {
@@ -594,9 +637,11 @@ export async function replaceArchiveBackup(entry, memory, cache, expectedState, 
             }
         }
         assertBackupWriteCurrent(options);
-        const saved = await backend().put(record, expectedState, options);
+        let saved;
+        try { saved = await backend().put(record, expectedState, options); }
+        catch (error) { throw core_backupDiagnostics.annotateBackupFailure(error, 'write'); }
         assertBackupWriteCurrent(options);
-        if (!saved) throw new Error('独立档案备份没有写入。');
+        if (!saved) throw core_backupDiagnostics.backupFailureError(null, 'write', 'transaction');
         return cloneValue(record);
     });
 }
@@ -611,13 +656,16 @@ export async function seedArchiveBackup(entry, memory, cache = null, options = {
             && (!record.cache || cacheCommitOrder(previous.cache) > cacheCommitOrder(record.cache))) {
             record.cache = cloneValue(previous.cache);
         }
-        const saved = await backend().put(record, null, {
-            seed: true,
-            allowMissingPrevious: true,
-            allowCharacterRename: entry?.allowCharacterRename === true,
-            replaceInvalidCache: options.replaceInvalidCache === true,
-            stillCurrent: options.stillCurrent,
-        });
+        let saved;
+        try {
+            saved = await backend().put(record, null, {
+                seed: true,
+                allowMissingPrevious: true,
+                allowCharacterRename: entry?.allowCharacterRename === true,
+                replaceInvalidCache: options.replaceInvalidCache === true,
+                stillCurrent: options.stillCurrent,
+            });
+        } catch (error) { throw core_backupDiagnostics.annotateBackupFailure(error, 'write'); }
         assertBackupWriteCurrent(options);
         return saved ? cloneValue(record) : null;
     });

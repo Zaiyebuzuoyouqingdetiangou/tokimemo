@@ -293,7 +293,7 @@ ${incremental ? '旧光点由本地永久保留。本请求只根据本轮新增
 - pink 💗【恋爱】：{{char}} 对 {{user}} 的恋爱情绪、喜欢、特别感、想更靠近等。
 - blue 💙【恋爱的烦恼】：吃醋、没有把握、担心关系、竞争意识、怕失去、想确认 {{user}} 的心情等。
 - yellow 💛【朋友】：{{char}} 的朋友、同学、同事、朋友圈/小团体、他怎么看身边的人；只有角色卡、世界书或当前档案明确存在的人物才能点名，不能凭空编固定朋友。
-- white 🤍【お楽しみ / 个性话题】：最能体现这个角色自己的有趣话题，例如梦想、兴趣、喜欢的食物、工作/学习习惯、日常怪癖、童年小事、宠物、价值观等；涉及具体事实时必须来自受控角色卡/世界书，不要把它写成“脆弱与秘密”专栏。
+- white 🤍【个性话题】：最能体现这个角色自己的有趣话题，例如梦想、兴趣、喜欢的食物、工作/学习习惯、日常怪癖、童年小事、宠物、价值观等；涉及具体事实时必须来自受控角色卡/世界书，不要把它写成“脆弱与秘密”专栏。
 - desire ♥️【本插件扩展，不是 GS4 原四色】：对 {{user}} 更直接的渴望或身体亲近愿望。仍然写成现场对话，不写色情过程或露骨身体细节。
 
 会话结构：
@@ -375,7 +375,7 @@ export function normalizeFireflyVoicesPart(data, { minTotal = 5, requireDistribu
         const represented = new Set(out.map(item => item.color));
         if (represented.size < 3) throw new Error(`萤火虫颜色分布过窄：${represented.size}/3。首次至少覆盖 3 种颜色。`);
         if (![...represented].some(color => color === 'yellow' || color === 'white')) {
-            throw new Error('首次萤火虫不能全部围绕恋爱/渴望；至少需要 1 个 yellow「朋友」或 white「お楽しみ/个性话题」。');
+            throw new Error('首次萤火虫不能全部围绕恋爱/渴望；至少需要 1 个 yellow「朋友」或 white「个性话题」。');
         }
     }
     return out;
@@ -413,7 +413,7 @@ ${JSON.stringify(batch, null, 2)}
 - user 只能是非正史、中性、极短的即时回应；不得替用户新增决定、承诺、偏好或历史事实。
 - user_thought 最多 1 条且只能放结尾，用来表现“刚才是不是他的心声？”一类即时感受。
 - 以 legacyText 的核心主题为起点改成【两个人当场对话】，不要继续扩写成长篇内心独白。
-- 颜色语义必须遵守：pink=恋爱，blue=恋爱的烦恼，yellow=朋友，white=お楽しみ/角色个性话题，desire=本插件扩展的直白渴望。
+- 颜色语义必须遵守：pink=恋爱，blue=恋爱的烦恼，yellow=朋友，white=角色个性话题，desire=本插件扩展的直白渴望。
 - 不新增历史事实，不机械复述档案敏感细节；id / color 必须逐项一致。只输出 JSON。`;
 }
 
@@ -765,7 +765,7 @@ async function beginHeartSubtask(targetRuntime) {
         }
         return true;
     } catch (error) {
-        globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心跳回忆');
+        globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心迹回廊');
         return false;
     }
 }
@@ -927,24 +927,24 @@ export async function generateHeartSection(part, options = {}) {
     let targetRuntime;
     try { targetRuntime = await prepareHeartSubtaskRuntime(`part:${normalizedPart}`); }
     catch (error) {
-        globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetHint, core_text.safeErrorSummary(error))), '心跳回忆');
+        globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetHint, core_text.safeErrorSummary(error))), '心迹回廊');
         return;
     }
     const { context, memoryBank, expectedChatId, expectedArchiveRevision, scope } = targetRuntime;
     const taskKey = `heart-part:${scope}:${normalizedPart}`;
     if (core_requestCoordinator.isModeGenerating(core_constants.MODE.HEART, context) || core_requestCoordinator.isGenerationTaskRunning(taskKey) || runtimeState.activeModeBuildScopes.has(taskKey)) {
-        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '这一项已经在生成中。'), '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '这一项已经在生成中。'), '心迹回廊');
         return;
     }
     if (!core_requestCoordinator.canStartGenerationTask(taskKey)) {
-        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成。`), '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成。`), '心迹回廊');
         return;
     }
     let base = latestHeartSessionForRuntime(targetRuntime, runtimeState.activeSession);
     let sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, normalizedPart);
     if (!sourceMemoryIds.length) {
         await clearCommittedHeartRecovery(targetRuntime, base, { kind: 'heart-section', part: normalizedPart });
-        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前档案没有尚未用于${normalizedPart === 'dialogues' ? '时期对话' : '日常一格'}的新记忆。先增量更新档案，再来追加。`), '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前档案没有尚未用于${normalizedPart === 'dialogues' ? '时期对话' : '日常一格'}的新记忆。先增量更新档案，再来追加。`), '心迹回廊');
         return;
     }
     let origin = targetRuntime.origin;
@@ -961,7 +961,7 @@ export async function generateHeartSection(part, options = {}) {
     sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, normalizedPart);
     if (!sourceMemoryIds.length) {
         await clearCommittedHeartRecovery(targetRuntime, base, { kind: 'heart-section', part: normalizedPart });
-        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '另一项较新的任务已经覆盖这些新增记忆，本次没有重复生成。'), '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '另一项较新的任务已经覆盖这些新增记忆，本次没有重复生成。'), '心迹回廊');
         runtimeState.activeModeBuildScopes.delete(taskKey);
         refreshHeartArchiveTarget(targetRuntime);
         return;
@@ -998,10 +998,10 @@ export async function generateHeartSection(part, options = {}) {
             persisted = await persistHeartPartialPatch('strips', { type: 'strips', dailyStrips: enriched, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
         }
         await finishHeartRecovery(targetRuntime, persisted?.committed);
-        globalThis.toastr?.success?.(heartTargetMessage(targetRuntime, `角色互动已追加：${normalizedPart === 'dialogues' ? '时期对话' : '日常一格'}；旧内容保持不变。`), '心跳回忆');
+        globalThis.toastr?.success?.(heartTargetMessage(targetRuntime, `角色互动已追加：${normalizedPart === 'dialogues' ? '时期对话' : '日常一格'}；旧内容保持不变。`), '心迹回廊');
     } catch (error) {
         await generation_recovery.noteGenerationRecoveryFailure(origin, error);
-        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心跳回忆');
+        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心迹回廊');
     } finally {
         generation_recovery.detachGenerationRecovery(origin);
         runtimeState.activeModeBuildScopes.delete(taskKey);
@@ -1023,7 +1023,7 @@ export async function generateHeartFirefliesSection(options = {}) {
     let targetRuntime;
     try { targetRuntime = await prepareHeartSubtaskRuntime('fireflies'); }
     catch (error) {
-        globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetHint, core_text.safeErrorSummary(error))), '心跳回忆');
+        globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetHint, core_text.safeErrorSummary(error))), '心迹回廊');
         return;
     }
     const { context, expectedChatId, expectedArchiveRevision, scope } = targetRuntime;
@@ -1031,11 +1031,11 @@ export async function generateHeartFirefliesSection(options = {}) {
     let origin = targetRuntime.origin;
     const taskKey = `heart-fireflies:${scope}`;
     if (core_requestCoordinator.isModeGenerating(core_constants.MODE.HEART, context) || core_requestCoordinator.isGenerationTaskRunning(taskKey) || runtimeState.activeModeBuildScopes.has(taskKey)) {
-        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '萤火虫栖息地正在点亮。'), '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '萤火虫栖息地正在点亮。'), '心迹回廊');
         return;
     }
     if (!core_requestCoordinator.canStartGenerationTask(taskKey)) {
-        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成。`), '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成。`), '心迹回廊');
         return;
     }
     // A pure no-op must not advance the persistent HEART write fence. Inspect the freshly
@@ -1047,12 +1047,12 @@ export async function generateHeartFirefliesSection(options = {}) {
     let sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, 'fireflies');
     if (!legacyBatch.length && hasExisting && base.fireflyVoices.length >= core_constants.HEART_FIREFLY_MAX_ITEMS) {
         await clearCommittedHeartRecovery(targetRuntime, base, { kind: 'heart-fireflies' });
-        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `萤火虫栖息地已经收集到 ${core_constants.HEART_FIREFLY_MAX_ITEMS} 个心声光点；旧光点不会自动删除。`), '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `萤火虫栖息地已经收集到 ${core_constants.HEART_FIREFLY_MAX_ITEMS} 个心声光点；旧光点不会自动删除。`), '心迹回廊');
         return;
     }
     if (!legacyBatch.length && hasExisting && existingFireflyCursor && !sourceMemoryIds.length) {
         await clearCommittedHeartRecovery(targetRuntime, base, { kind: 'heart-fireflies' });
-        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '当前档案没有新的关系进展可用于解锁萤火虫。先增量更新档案，再来点亮新的光点。'), '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '当前档案没有新的关系进展可用于解锁萤火虫。先增量更新档案，再来点亮新的光点。'), '心迹回廊');
         return;
     }
     runtimeState.activeModeBuildScopes.add(taskKey);
@@ -1082,10 +1082,10 @@ export async function generateHeartFirefliesSection(options = {}) {
             const result = await persistHeartPartialPatch('firefly-upgrade', { type: 'firefly-upgrade', fireflyVoices: upgraded }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
             await finishHeartRecovery(targetRuntime, result.committed);
             const remain = legacyFireflyVoices(result.updated || base).length;
-            globalThis.toastr?.success?.(heartTargetMessage(targetRuntime, `已升级 ${upgraded.length} 个旧光点为追加约会会话${remain ? `，还剩 ${remain} 个可继续升级` : '，旧版独白光点已全部升级'}.`), '心跳回忆');
+            globalThis.toastr?.success?.(heartTargetMessage(targetRuntime, `已升级 ${upgraded.length} 个旧光点为追加约会会话${remain ? `，还剩 ${remain} 个可继续升级` : '，旧版独白光点已全部升级'}.`), '心迹回廊');
         } catch (error) {
             await generation_recovery.noteGenerationRecoveryFailure(origin, error);
-            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心跳回忆');
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心迹回廊');
         } finally {
             generation_recovery.detachGenerationRecovery(origin);
             runtimeState.activeModeBuildScopes.delete(taskKey);
@@ -1096,7 +1096,7 @@ export async function generateHeartFirefliesSection(options = {}) {
     }
     if (hasExisting && base.fireflyVoices.length >= core_constants.HEART_FIREFLY_MAX_ITEMS) {
         await clearCommittedHeartRecovery(targetRuntime, base, { kind: 'heart-fireflies' });
-        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `萤火虫栖息地已经收集到 ${core_constants.HEART_FIREFLY_MAX_ITEMS} 个心声光点；旧光点不会自动删除。`), '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `萤火虫栖息地已经收集到 ${core_constants.HEART_FIREFLY_MAX_ITEMS} 个心声光点；旧光点不会自动删除。`), '心迹回廊');
         runtimeState.activeModeBuildScopes.delete(taskKey);
         refreshHeartArchiveTarget(targetRuntime);
         return;
@@ -1114,7 +1114,7 @@ export async function generateHeartFirefliesSection(options = {}) {
                 runtimeState.activeSession = persisted;
                 ui_heartView.renderHeart();
             }
-            globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '已把旧版萤火虫保存为永久解锁基线。之后档案出现新的 Mxxx 时，只会继续追加新光点。'), '心跳回忆');
+            globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '已把旧版萤火虫保存为永久解锁基线。之后档案出现新的 Mxxx 时，只会继续追加新光点。'), '心迹回廊');
         } finally {
             runtimeState.activeModeBuildScopes.delete(taskKey);
             refreshHeartArchiveTarget(targetRuntime);
@@ -1124,7 +1124,7 @@ export async function generateHeartFirefliesSection(options = {}) {
     sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, 'fireflies');
     if (hasExisting && !sourceMemoryIds.length) {
         await clearCommittedHeartRecovery(targetRuntime, base, { kind: 'heart-fireflies' });
-        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '较新的任务已经覆盖当前关系进展，本次没有重复请求。'), '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '较新的任务已经覆盖当前关系进展，本次没有重复请求。'), '心迹回廊');
         runtimeState.activeModeBuildScopes.delete(taskKey);
         refreshHeartArchiveTarget(targetRuntime);
         return;
@@ -1156,10 +1156,10 @@ export async function generateHeartFirefliesSection(options = {}) {
         await finishHeartRecovery(targetRuntime, result.committed);
         const total = result.updated?.fireflyVoices?.length || base.fireflyVoices?.length || 0;
         const addedNow = Math.max(0, total - (base.fireflyVoices?.length || 0));
-        globalThis.toastr?.success?.(heartTargetMessage(targetRuntime, hasExisting ? `新增 ${addedNow} 个萤火虫心声；旧光点继续保留，共 ${total} 个。` : `萤火虫栖息地已点亮 ${total} 个心声光点。`), '心跳回忆');
+        globalThis.toastr?.success?.(heartTargetMessage(targetRuntime, hasExisting ? `新增 ${addedNow} 个萤火虫心声；旧光点继续保留，共 ${total} 个。` : `萤火虫栖息地已点亮 ${total} 个心声光点。`), '心迹回廊');
     } catch (error) {
         await generation_recovery.noteGenerationRecoveryFailure(origin, error);
-        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心跳回忆');
+        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心迹回廊');
     } finally {
         generation_recovery.detachGenerationRecovery(origin);
         runtimeState.activeModeBuildScopes.delete(taskKey);
@@ -1205,21 +1205,21 @@ export async function generateHeartSeasonSection(season, options = {}) {
     let targetRuntime;
     try { targetRuntime = await prepareHeartSubtaskRuntime(`season:${normalizedSeason}`); }
     catch (error) {
-        globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetHint, core_text.safeErrorSummary(error))), '心跳回忆');
+        globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetHint, core_text.safeErrorSummary(error))), '心迹回廊');
         return;
     }
     const { context, memoryBank, expectedChatId, expectedArchiveRevision, scope } = targetRuntime;
     const taskKey = `heart-season:${scope}:${normalizedSeason}`;
     if (core_requestCoordinator.isModeGenerating(core_constants.MODE.HEART, context) || core_requestCoordinator.isGenerationTaskRunning(taskKey) || runtimeState.activeModeBuildScopes.has(taskKey)) {
-        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `${ui_heartView.heartSeasonLabel(normalizedSeason)}正在生成中。`), '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `${ui_heartView.heartSeasonLabel(normalizedSeason)}正在生成中。`), '心迹回廊');
         return;
     }
     if (!core_requestCoordinator.canStartGenerationTask(taskKey)) {
-        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成。`), '心跳回忆');
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成。`), '心迹回廊');
         return;
     }
     if (await clearCommittedHeartRecovery(targetRuntime, latestHeartSessionForRuntime(targetRuntime, runtimeState.activeSession), { kind: 'heart-season', season: normalizedSeason })) {
-        globalThis.toastr?.info?.('原季节篇章已完整保存，已清理完成草稿；没有重复生成。', '心跳回忆');
+        globalThis.toastr?.info?.('原季节篇章已完整保存，已清理完成草稿；没有重复生成。', '心迹回廊');
         return;
     }
     let origin = targetRuntime.origin;
@@ -1319,14 +1319,14 @@ export async function generateHeartSeasonSection(season, options = {}) {
 
         if (errors.length && !savedParts) throw errors[0];
         if (errors.length) {
-            globalThis.toastr?.warning?.(heartTargetMessage(targetRuntime, `${ui_heartView.heartSeasonLabel(normalizedSeason)}已保存成功部分；${core_text.safeErrorSummary(errors[0])} 处理后再次点击只补缺失部分。`), '心跳回忆');
+            globalThis.toastr?.warning?.(heartTargetMessage(targetRuntime, `${ui_heartView.heartSeasonLabel(normalizedSeason)}已保存成功部分；${core_text.safeErrorSummary(errors[0])} 处理后再次点击只补缺失部分。`), '心迹回廊');
         } else {
             await finishHeartRecovery(targetRuntime, allCommitted);
-            globalThis.toastr?.success?.(heartTargetMessage(targetRuntime, `已追加：${ui_heartView.heartSeasonLabel(normalizedSeason)}未来日常 Drama。`), '心跳回忆');
+            globalThis.toastr?.success?.(heartTargetMessage(targetRuntime, `已追加：${ui_heartView.heartSeasonLabel(normalizedSeason)}未来日常 Drama。`), '心迹回廊');
         }
     } catch (error) {
         await generation_recovery.noteGenerationRecoveryFailure(origin, error);
-        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), `心跳回忆 · ${ui_heartView.heartSeasonLabel(normalizedSeason)} Drama`);
+        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), `心迹回廊 · ${ui_heartView.heartSeasonLabel(normalizedSeason)} Drama`);
     } finally {
         generation_recovery.detachGenerationRecovery(origin);
         runtimeState.activeModeBuildScopes.delete(taskKey);

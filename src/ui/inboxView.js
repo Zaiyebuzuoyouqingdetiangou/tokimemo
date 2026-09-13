@@ -117,7 +117,7 @@ export async function handleInboxAction(action, id = '') {
                 }
                 return session;
             });
-            globalThis.toastr?.info?.(`邮箱现有 ${result.letters.length} 封；已有明信片不会重复收录。`, '缘侧');
+            globalThis.toastr?.info?.(`邮箱现有 ${result.letters.length} 封；已有明信片不会重复收录。`, '心迹回廊');
             return;
         }
         if (action === 'receive') {
@@ -125,5 +125,5 @@ export async function handleInboxAction(action, id = '') {
             const extra = runtimeState.activeArchiveSnapshot ? library.archiveTargetGenerationOptions(runtimeState.activeArchiveSnapshot) : {};
             return await generation.generateMode('inbox', { ...extra, background: false });
         }
-    } catch (error) { globalThis.toastr?.error?.(text.safeErrorSummary(error), '缘侧 · 邮箱'); }
+    } catch (error) { globalThis.toastr?.error?.(text.safeErrorSummary(error), '心迹回廊 · 邮箱'); }
 }

@@ -33,6 +33,7 @@ import * as modes_items from '../modes/items.js';
 import * as modes_cabinet from '../modes/cabinet.js';
 import * as modes_phone from '../modes/phone.js';
 import * as modes_inbox from '../modes/inbox.js';
+import * as modes_pastLives from '../modes/pastLives.js';
 import * as modes_room from '../modes/room.js';
 import * as modes_relations from '../modes/relations.js';
 import * as modes_travel from '../modes/travel.js';
@@ -118,7 +119,7 @@ async function collectFittingSelectedSetting(context, budget = core_constants.MA
 }
 
 export async function buildWorldPresentationContext(context, memoryBank, mode) {
-    const wantsSelectedSetting = [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE, core_constants.MODE.INBOX].includes(mode);
+    const wantsSelectedSetting = [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES].includes(mode);
     let selectedSetting = wantsSelectedSetting
         ? await collectFittingSelectedSetting(context)
         : { text: '', used: 0, total: 0, dropped: 0, complete: true, note: '' };
@@ -220,13 +221,13 @@ export async function requestValidatedSegment(prompt, status, options, validator
 
 export async function assertPromptBudget(context, prompt, { skipTokenCount = false } = {}) {
     if (prompt.length > core_constants.MAX_GENERATION_INPUT_CHARS) {
-        throw core_text.safeUserError(`本次心跳回忆输入过大（${prompt.length.toLocaleString()} 字符），已在发送前拦截。请更新/精简档案或减少世界书内容。`, 'RMT_INPUT_BUDGET');
+        throw core_text.safeUserError(`本次心迹回廊输入过大（${prompt.length.toLocaleString()} 字符），已在发送前拦截。请更新/精简档案或减少世界书内容。`, 'RMT_INPUT_BUDGET');
     }
     if (!skipTokenCount && typeof context.getTokenCountAsync === 'function') {
         try {
             const tokens = Number(await context.getTokenCountAsync(prompt));
             if (Number.isFinite(tokens) && tokens > core_constants.MAX_GENERATION_INPUT_TOKENS) {
-                throw core_text.safeUserError(`本次心跳回忆输入约 ${Math.round(tokens).toLocaleString()} tokens，超过 ${core_constants.MAX_GENERATION_INPUT_TOKENS.toLocaleString()} 的安全预算，已在发送前拦截。`, 'RMT_INPUT_BUDGET');
+                throw core_text.safeUserError(`本次心迹回廊输入约 ${Math.round(tokens).toLocaleString()} tokens，超过 ${core_constants.MAX_GENERATION_INPUT_TOKENS.toLocaleString()} 的安全预算，已在发送前拦截。`, 'RMT_INPUT_BUDGET');
             }
         } catch (error) {
             if (error?.code === 'RMT_INPUT_BUDGET') throw error;
@@ -405,7 +406,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
         if (!modelOverride) throw core_text.safeUserError('手动 API 还没有模型 ID。请先在插件设置中完成手动配置。', 'RMT_MANUAL_MODEL');
     } else {
         if (!settings.connectionProfileId) {
-            throw core_text.safeUserError(`心跳回忆还没有一键连接。请使用“${core_independentApi.PROFILE_ONE_CLICK_UI_VERSION} 一键配置”，或切换到手动配置。`);
+            throw core_text.safeUserError(`心迹回廊还没有一键连接。请使用“${core_independentApi.PROFILE_ONE_CLICK_UI_VERSION} 一键配置”，或切换到手动配置。`);
         }
         core_independentApi.assertConnectionManagerProfileSupport(service);
         const rawProfile = core_settings.rawConnectionProfile(settings.connectionProfileId, context);
@@ -465,7 +466,8 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
     try { responsePayload = core_independentApi.assertIndependentResponsePayload(result); }
     catch (error) { throw normalizeConnectionManagerError(error); }
     let parsed;
-    try { parsed = generation_jsonParser.extractJson(responsePayload, {
+    try { core_independentApi.assertManualStreamComplete(result);
+        parsed = generation_jsonParser.extractJson(responsePayload, {
         reasoning: result?.reasoning || '',
         requestMaxTokens: responseLength,
         configuredMaxTokens: settings.maxTokens,
@@ -586,7 +588,7 @@ export async function continueSavedGeneration(mode, options = {}) {
     const context = targetOptions.context || options.context || core_context.currentCharacterGuard();
     const bank = archive_repository.requireArchive(context);
     const existing = core_cache.loadGenerationRecovery(mode, context, targetOptions.archiveTarget?.cache);
-    if (!existing) { globalThis.toastr?.info?.('当前档案没有可继续的草稿，不会发起新请求。', '缘侧'); return; }
+    if (!existing) { globalThis.toastr?.info?.('当前档案没有可继续的草稿，不会发起新请求。', '心迹回廊'); return; }
     if (!ui_overlay.confirmExplicitAction('继续未完成内容？', '只补原任务未完成的内容，会使用文本生成额度。认证或额度问题需要先在设置里解决；取消不改动草稿。', { destructive: false })) return;
     const operation = existing.operation || { kind: 'mode', mode };
     const resumeOptions = { ...options, ...targetOptions, existing, continueRecovery: true };
@@ -616,7 +618,7 @@ export async function continueSavedGeneration(mode, options = {}) {
 export async function discardSavedGeneration(mode) {
     if (!Object.values(core_constants.MODE).includes(mode)) return;
     if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || runtimeState.activeModeBuildScopes.size) {
-        globalThis.toastr?.info?.('请等当前生成任务结束后，再放弃未提交草稿。', '缘侧'); return;
+        globalThis.toastr?.info?.('请等当前生成任务结束后，再放弃未提交草稿。', '心迹回廊'); return;
     }
     const snapshot = runtimeState.activeArchiveSnapshot;
     if (snapshot?.backupOnly) return;
@@ -660,8 +662,8 @@ export async function generateMode(mode, options = {}) {
     let memoryBank = archive_repository.requireArchive(context);
     const expectedArchiveRevision = memoryBank.archiveRevision;
     const promptFactory = generation_prompts.PROMPTS[mode];
-    if (!promptFactory && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX].includes(mode)) return;
-    const segmentedMode = [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX].includes(mode);
+    if (!promptFactory && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES].includes(mode)) return;
+    const segmentedMode = [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES].includes(mode);
     let calendarCurrentDate = mode === core_constants.MODE.CALENDAR ? modes_calendar.currentCalendarDate() : '';
     let generationPrompt = segmentedMode || mode === core_constants.MODE.RELATIONS
         ? ''
@@ -688,26 +690,26 @@ export async function generateMode(mode, options = {}) {
         return !pendingMemoryIds.length && !roomSchemaUpgrade;
     };
     const reportNoIncrementalWork = () => {
-        if (mode === core_constants.MODE.INBOX) { globalThis.toastr?.info?.('今天的来信与最新关系事件已经收录，不会重复请求。', '缘侧 · 邮箱'); return; }
+        if (mode === core_constants.MODE.INBOX) { globalThis.toastr?.info?.('今天的来信与最新关系事件已经收录，不会重复请求。', '心迹回廊 · 邮箱'); return; }
         const targetPrefix = archiveTarget ? `「${archiveTarget.characterName} · ${archiveTarget.archiveName}」的` : '';
-        globalThis.toastr?.info?.(`${targetPrefix}「${core_constants.MODE_LABEL[mode]}」已经覆盖当前档案。请先增量更新档案；下次只会追加新内容，旧内容不会重写。`, '心跳回忆');
+        globalThis.toastr?.info?.(`${targetPrefix}「${core_constants.MODE_LABEL[mode]}」已经覆盖当前档案。请先增量更新档案；下次只会追加新内容，旧内容不会重写。`, '心迹回廊');
     };
     const taskKey = core_requestCoordinator.generationTaskKeyForMode(mode, context);
     const alreadyGenerating = core_requestCoordinator.isModeGenerating(mode, context);
     if (alreadyGenerating) {
-        globalThis.toastr?.info?.(`「${core_constants.MODE_LABEL[mode]}」已经在生成/补齐中。`, '心跳回忆');
+        globalThis.toastr?.info?.(`「${core_constants.MODE_LABEL[mode]}」已经在生成/补齐中。`, '心迹回廊');
         return;
     }
     if (!core_requestCoordinator.canStartGenerationTask(taskKey)) {
-        globalThis.toastr?.info?.(`当前已经有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请等其中一项完成。`, '心跳回忆');
+        globalThis.toastr?.info?.(`当前已经有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请等其中一项完成。`, '心迹回廊');
         return;
     }
     if (mode === core_constants.MODE.ROOM && runtimeState.roomLifeRefreshPromise) {
-        globalThis.toastr?.info?.('“今日生活”正在更新，请等它完成后再从新增档案追加房间内容。', '心跳回忆');
+        globalThis.toastr?.info?.('“今日生活”正在更新，请等它完成后再从新增档案追加房间内容。', '心迹回廊');
         return;
     }
     if (mode === core_constants.MODE.ADV && (core_requestCoordinator.hasGenerationTaskPrefix(`adv:${core_context.chatScopeKey(context)}:`) || runtimeState.activeAdvBulkScopes.has(core_context.chatScopeKey(context)))) {
-        globalThis.toastr?.info?.('当前有 ADV 正文正在生成，请等它完成后再追加 ADV EVENT 事件索引。', '心跳回忆');
+        globalThis.toastr?.info?.('当前有 ADV 正文正在生成，请等它完成后再追加 ADV EVENT 事件索引。', '心迹回廊');
         return;
     }
     // A no-op must not advance the durable mode fence. In another tab, doing so would cancel a
@@ -761,7 +763,7 @@ export async function generateMode(mode, options = {}) {
     core_requestCoordinator.refreshConcurrentTaskUi(mode, origin);
     if (!background) {
         ui_overlay.openOverlay();
-        const actionText = replaceExisting ? `正在重新生成「${core_constants.MODE_LABEL[mode]}」…` : roomSchemaUpgrade ? '正在为旧版房间补全宠物与视觉设定…' : refreshableCalendar && previousSession ? '正在刷新「两个人的日历」…' : refreshableRelations && previousSession ? '正在刷新「本世界线人际关系」…' : previousSession ? `正在从新增档案追加「${core_constants.MODE_LABEL[mode]}」…` : `正在生成「${core_constants.MODE_LABEL[mode]}」…`;
+        const actionText = replaceExisting ? `正在重新生成「${core_constants.MODE_LABEL[mode]}」…` : roomSchemaUpgrade ? '正在为旧版房间刷新视觉设定…' : refreshableCalendar && previousSession ? '正在刷新「两个人的日历」…' : refreshableRelations && previousSession ? '正在刷新「本世界线人际关系」…' : previousSession ? `正在从新增档案追加「${core_constants.MODE_LABEL[mode]}」…` : `正在生成「${core_constants.MODE_LABEL[mode]}」…`;
         ui_overlay.setInnerLoading(true, archiveTarget ? `正在为：${archiveTarget.characterName} · ${archiveTarget.archiveName} · ${actionText}` : actionText);
     }
     try {
@@ -790,7 +792,7 @@ export async function generateMode(mode, options = {}) {
             roomSession = options.roomSessionOverride
                 || core_cache.loadSession(core_constants.MODE.ROOM, { context, chatId: expectedChatId, memoryBank, clone: false });
             if (!roomSession) {
-                globalThis.toastr?.info?.('请先生成“他的房间”，再从房间内部生成这项深层内容。', '心跳回忆');
+                globalThis.toastr?.info?.('请先生成“他的房间”，再从房间内部生成这项深层内容。', '心迹回廊');
                 return;
             }
             const selectedSpace = roomSession.spaces.find(space => space.id === roomSession.selectedSpaceId) || roomSession.spaces[0];
@@ -799,7 +801,7 @@ export async function generateMode(mode, options = {}) {
                 || selectedSpace?.objects[0]
                 || null;
             if (mode === core_constants.MODE.ITEMS && !core_evidence.isSearchableRoomObject(focusObject)) {
-                globalThis.toastr?.info?.('只有房间里的盒子、抽屉、柜子、包等收纳物可以生成翻找内容。', '心跳回忆');
+                globalThis.toastr?.info?.('只有房间里的盒子、抽屉、柜子、包等收纳物可以生成翻找内容。', '心迹回廊');
                 return;
             }
             if (mode !== core_constants.MODE.PHONE) generationPrompt = generation_prompts.roomDeepGenerationPrompt(mode, context, memoryBank, roomSession, focusObject);
@@ -814,16 +816,18 @@ export async function generateMode(mode, options = {}) {
                 visualOnly: options.visualOnly === true, fillMissing: options.fillMissing === true, focusObjectId: core_text.normalizeText(options.focusObjectId, 120) } });
         let session;
         let presentationContext = null;
-        if ([core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX].includes(mode)) {
+        if ([core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES].includes(mode)) {
             presentationContext = await buildWorldPresentationContext(context, memoryBank, mode);
             // Degrading is fine, degrading silently is not: the user picked these entries
             // by hand and deserves to know which of them this request could actually carry.
             if (!options.automatic && presentationContext.selectedSetting?.note) {
-                globalThis.toastr?.info?.(presentationContext.selectedSetting.note, `心跳回忆 · ${core_constants.MODE_LABEL[mode]}`);
+                globalThis.toastr?.info?.(presentationContext.selectedSetting.note, `心迹回廊 · ${core_constants.MODE_LABEL[mode]}`);
             }
         }
         if (mode === core_constants.MODE.INBOX) {
             session = await modes_inbox.generateInbox(context, memoryBank, origin, taskKey, previousSession, { presentationContext, date: inboxDate });
+        } else if (mode === core_constants.MODE.PAST_LIVES) {
+            session = await modes_pastLives.generatePastLivesWithRepair(context, memoryBank, origin, taskKey, { previousSession, replaceExisting, presentationContext });
         } else if (mode === core_constants.MODE.ADV) {
             session = await modes_advEvent.generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.BUTTERFLY) {
@@ -867,7 +871,7 @@ export async function generateMode(mode, options = {}) {
             // Same rule as the setting envelope: an unreadable or oversized book means
             // "fewer people to draw from", not "refuse to refresh the garden".
             if (selectedBooks.coverage.status !== 'complete' && !options.automatic) {
-                globalThis.toastr?.info?.(`所选世界书本次只读到部分条目，庭园将只依据已读到的内容刷新；旧人物保留。${core_text.normalizeText(selectedBooks.coverage?.reason, 160)}`, '心跳回忆 · 人际庭园');
+                globalThis.toastr?.info?.(`所选世界书本次只读到部分条目，庭园将只依据已读到的内容刷新；旧人物保留。${core_text.normalizeText(selectedBooks.coverage?.reason, 160)}`, '心迹回廊 · 人际庭园');
             }
             const settingEntries = selectedBooks.entries.filter(entry => entry.historySource !== true);
             const raw = await requestValidatedSegment(
@@ -898,7 +902,7 @@ export async function generateMode(mode, options = {}) {
                 ? await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(mode, context) })
                 : presentationContext?.contextEnvelope;
             const effectivePrompt = mode === core_constants.MODE.ROOM
-                ? `${generationPrompt}\nCONTROLLED_WORLD_PRESENTATION_JSON:\n${JSON.stringify(presentationContext?.profile || {}, null, 2)}\n外貌与设定宠物只有在受控角色卡/世界书原文中有逐项精确证据时才能声明；不要依据生成的房间名、物件或用户 persona 猜测。`
+                ? `${generationPrompt}\nCONTROLLED_WORLD_PRESENTATION_JSON:\n${JSON.stringify(presentationContext?.profile || {}, null, 2)}\n明确的外貌设定优先采用角色卡/世界书原文；本轮不生成宠物；不要依据生成的房间名、物件或用户 persona 猜测。`
                 : generationPrompt;
             const normalize = raw => mode === core_constants.MODE.CALENDAR
                 ? modes_calendar.normalizeCalendar(raw, memoryBank, {
@@ -959,6 +963,8 @@ export async function generateMode(mode, options = {}) {
                 : core_cache.loadSession(mode) || session;
         }
         const overlay = document.getElementById(core_constants.OVERLAY_ID);
+        const phoneProgress = mode === core_constants.MODE.PHONE ? modes_phone.phoneCompletionSummary(session) : null;
+        const partialNotice = phoneProgress?.partial ? `已保留 ${phoneProgress.readableItems} 条，另有 ${phoneProgress.missingItems} 项可在终端补齐` : '';
         const stayBackground = background || !committed || !core_context.isCurrentTaskOrigin(origin) || overlay?.hidden || runtimeState.activeMode !== mode;
         if (stayBackground) {
             if (archiveTarget) ui_settingsPanel.refreshSettingsTaskStatus();
@@ -970,14 +976,15 @@ export async function generateMode(mode, options = {}) {
             }
             const targetDone = archiveTarget ? `已安全写回：${archiveTarget.characterName} · ${archiveTarget.archiveName} · ` : '';
             if (options.automatic) return { status: committed ? 'committed' : 'deferred' };
-            globalThis.toastr?.success?.(`${targetDone}${replaceExisting ? '后台重新生成完成' : refreshableCalendar && previousSession ? '后台刷新完成' : refreshableRelations && previousSession ? '后台刷新完成' : previousSession ? '后台增量追加完成' : '后台生成完成'}：${core_constants.MODE_LABEL[mode]}${committed || archiveTarget ? '' : '（回到原窗口自动写入）'}`, '心跳回忆');
+            globalThis.toastr?.success?.(`${targetDone}${partialNotice || (replaceExisting ? '后台重新生成完成' : refreshableCalendar && previousSession ? '后台刷新完成' : refreshableRelations && previousSession ? '后台刷新完成' : previousSession ? '后台增量追加完成' : '后台生成完成')}：${core_constants.MODE_LABEL[mode]}${committed || archiveTarget ? '' : '（回到原窗口自动写入）'}`, '心迹回廊');
             return session;
         }
         runtimeState.activeMode = mode;
         runtimeState.activeSession = session;
         ui_overlay.renderActive();
-        if (mode === core_constants.MODE.ROOM) void modes_room.ensureRoomLifePlan({ force: true });
-        globalThis.toastr?.success?.(`${replaceExisting ? '已重新生成' : refreshableCalendar && previousSession ? '已刷新' : refreshableRelations && previousSession ? '已刷新' : previousSession ? '已增量追加' : '已生成'}：${core_constants.MODE_LABEL[mode]}${previousSession && !refreshableCalendar && !refreshableRelations && !replaceExisting ? '；旧内容保持不变' : ''}`, '心跳回忆');
+        // Today's life is a separate explicit action; saving a room does not incur
+        // an additional unconfirmed provider request.
+        globalThis.toastr?.success?.(`${partialNotice || (replaceExisting ? '已重新生成' : refreshableCalendar && previousSession ? '已刷新' : refreshableRelations && previousSession ? '已刷新' : previousSession ? '已增量追加' : '已生成')}：${core_constants.MODE_LABEL[mode]}${previousSession && !refreshableCalendar && !refreshableRelations && !replaceExisting ? '；旧内容保持不变' : ''}`, '心迹回廊');
         return session;
     } catch (error) {
         if (recoveryHandle) { try { await generation_recovery.noteGenerationRecoveryFailure(origin, error?.failure || error); } catch {} }
@@ -1000,17 +1007,17 @@ export async function generateMode(mode, options = {}) {
         if (archiveTarget && !targetVisible) {
             globalThis.toastr?.error?.(
                 core_text.toastText(`${archiveTarget.characterName} · ${archiveTarget.archiveName} · ${core_constants.MODE_LABEL[mode]}：${safeError}`),
-                '心跳回忆 · 档案生成失败',
+                '心迹回廊 · 档案生成失败',
             );
             return null;
         }
         if (background || document.getElementById(core_constants.OVERLAY_ID)?.hidden || runtimeState.activeMode !== mode) {
             const targetPrefix = archiveTarget ? `${archiveTarget.characterName} · ${archiveTarget.archiveName} · ` : '';
-            globalThis.toastr?.error?.(core_text.toastText(`${targetPrefix}${safeError}`), `心跳回忆 · ${core_constants.MODE_LABEL[mode]}生成失败`);
+            globalThis.toastr?.error?.(core_text.toastText(`${targetPrefix}${safeError}`), `心迹回廊 · ${core_constants.MODE_LABEL[mode]}生成失败`);
             return null;
         }
         ui_overlay.showInlineError(safeError);
-        globalThis.toastr?.error?.(core_text.toastText(safeError), '心跳回忆');
+        globalThis.toastr?.error?.(core_text.toastText(safeError), '心迹回廊');
         return null;
     } finally {
         generation_recovery.detachGenerationRecovery(origin);

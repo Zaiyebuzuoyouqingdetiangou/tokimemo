@@ -6,6 +6,7 @@ import * as core_evidence from './evidence.js';
 import { state as runtimeState } from './state.js';
 import * as core_text from './text.js';
 import * as core_contextTags from './contextTags.js';
+import * as chat_read_range from './chatReadRange.js';
 
 export function getContext() {
     const context = globalThis.SillyTavern?.getContext?.();
@@ -16,7 +17,7 @@ export function getContext() {
 export function currentCharacterGuard() {
     const context = getContext();
     if (context.groupId) {
-        throw new Error('“心跳回忆”当前只支持单角色聊天，请打开一个角色对话后再使用。');
+        throw new Error('“心迹回廊”当前只支持单角色聊天，请打开一个角色对话后再使用。');
     }
     if (context.characterId === undefined || context.characterId === null) {
         throw new Error('请先打开一个角色聊天。');
@@ -121,9 +122,13 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
         return { selected, selectedChars, truncated: source.length > selected.length };
     };
 
-    const full = capMessages(usable);
+    // Selection controls model input only: keep the full canonical history and prefix
+    // fingerprints above intact for stale-write protection and existing archive baselines.
+    const selectedFloors = options.readRange ? new Set(chat_read_range.selectChatReadRange(context, options.readRange).map(row => row.index)) : null;
+    const selectedUsable = selectedFloors ? usable.filter(item => selectedFloors.has(item.index)) : usable;
+    const full = capMessages(selectedUsable);
     const incrementalRaw = prefixCount > 0 && totalMessages >= prefixCount ? usable.slice(prefixCount) : usable;
-    const incremental = capMessages(incrementalRaw);
+    const incremental = capMessages(selectedFloors ? incrementalRaw.filter(item => selectedFloors.has(item.index)) : incrementalRaw);
     assertStillCurrent();
     return {
         chatId,
@@ -131,7 +136,8 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
         usedMessages: full.selected.length,
         usedChars: full.selectedChars,
         truncated: full.truncated,
-        coverageMode: full.truncated ? 'evenly-sampled-full-window' : 'full-window',
+        coverageMode: options.readRange ? 'selected-floors' : full.truncated ? 'evenly-sampled-full-window' : 'full-window',
+        readRange: options.readRange ? chat_read_range.normalizeChatReadRange(options.readRange) : null,
         messages: full.selected.map(item => ({ ...item, text: core_contextTags.stripExcludedTags(item.text, core_contextTags.excludedTagsForContext(context)) })),
         fingerprint: String(fingerprint >>> 0),
         prefixCount,

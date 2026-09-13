@@ -211,11 +211,11 @@ export async function runContentRegeneration(type, id, parentId = '', options = 
             runtimeState.activeSession = committed;
             if (ui_overlay.bodyEl()) renderContentManager();
         }
-        globalThis.toastr?.success?.(`已重新生成：${record.label}`, '心跳回忆');
+        globalThis.toastr?.success?.(`已重新生成：${record.label}`, '心迹回廊');
         return committed;
     } catch (error) {
         if (origin) await generation_recovery.noteGenerationRecoveryFailure(origin, error);
-        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心跳回忆');
+        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
         return null;
     } finally {
         if (origin) generation_recovery.detachGenerationRecovery(origin);
@@ -267,7 +267,7 @@ export function renderContentManager() {
         : '';
     body.innerHTML = `<div class="rmt-manage-shell">
       <section class="rmt-manage-hero">
-        <div><div class="rmt-archive-kicker">CONTENT CONTROL</div><h2>${core_text.esc(core_constants.MODE_LABEL[mode] || mode)}</h2><p>删除和重新生成都只处理心跳回忆的派生内容。每一次操作都必须连续确认两次；正式聊天档案 Mxxx 不会被这里的按钮删除。</p>${dependentNote}</div>
+        <div><div class="rmt-archive-kicker">CONTENT CONTROL</div><h2>${core_text.esc(core_constants.MODE_LABEL[mode] || mode)}</h2><p>删除和重新生成都只处理心迹回廊的派生内容。每一次操作都必须连续确认两次；正式聊天档案 Mxxx 不会被这里的按钮删除。</p>${dependentNote}</div>
         <div class="rmt-manage-category-actions">
           <button type="button" class="rmt-btn" data-rmt-action="manage-regenerate-category">重新生成整个分类</button>
           <button type="button" class="rmt-btn rmt-manage-danger" data-rmt-action="manage-delete-category">删除整个分类</button>
