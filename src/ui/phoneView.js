@@ -173,15 +173,30 @@ export function renderPhoneEntryDetail(entry, app, session = runtimeState.active
             : (core_text.normalizeText(message?.speaker, 100) || core_text.normalizeText(entry?.contactName, 100) || '联系人');
         return `<div class="rmt-phone-message rmt-phone-message-${role}"><div><b>${core_text.esc(speaker)}</b>${message.time ? `<small>${core_text.esc(message.time)}</small>` : ''}</div><p>${core_text.esc(message.text)}</p></div>`;
     }).join('')}</div>` : '';
-    const speakerRepair = appKind === 'chat' && phoneConversationNeedsSpeakerRepair(entry, session)
-        ? '<div class="rmt-phone-speaker-warning">旧版对话缺少发言人标记，可在“管理”中重新生成。</div>'
-        : '';
     const fields = entry.fields?.length ? `<dl class="rmt-phone-fields">${entry.fields.map(field => `<div><dt>${core_text.esc(field.label)}</dt><dd>${core_text.esc(field.value)}</dd></div>`).join('')}</dl>` : '';
     const gallery = entry.imageCaption ? `<div class="rmt-phone-image-caption">${core_text.esc(entry.imageCaption)}</div>` : '';
-    const legacyWarning = entry.legacyEvidenceUnverified === true
-        ? '<div class="rmt-phone-legacy-warning">旧版内容 · 证据未重新核验。内容原样保留，但不会作为新增事实的依据。</div>'
-        : '';
-    return `<div class="rmt-phone-detail rmt-phone-detail-${appKind}"><div class="rmt-phone-detail-toolbar"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回${core_text.esc(app?.label || '列表')}</button><span>${core_text.esc(entry.meta || app?.label || '')}</span></div>${legacyWarning ? `<details class="rmt-phone-evidence"><summary>关于这条内容</summary>${legacyWarning}</details>` : ''}${entry.basis !== '记忆' && !entry.legacyEvidenceUnverified ? '<div class="rmt-phone-evidence">角色日常演绎</div>' : ''}<h3>${core_text.esc(entry.title)}</h3>${gallery}${entry.detail ? `<p>${core_text.esc(entry.detail)}</p>` : ''}${fields}${speakerRepair}${messages}${entry.basis === '记忆' ? `<div class="rmt-phone-evidence">档案痕迹：${core_text.esc(entry.sourceMemoryAnchor)}</div>` : ''}</div>`;
+    const title = `<h3>${core_text.esc(entry.title)}</h3>`;
+    const body = entry.detail ? `<p class="rmt-phone-record-copy">${core_text.esc(entry.detail)}</p>` : '';
+    const badge = `<span class="rmt-phone-record-mark" aria-hidden="true">${phoneIconHtml(app)}</span>`;
+    const person = core_text.esc(entry.contactName || entry.title || '');
+    // Layout is owned here; no invented balances, media URLs, or executable app content.
+    // Provenance stays on stored entries and is not repeated inside immersive reading.
+    let content;
+    if (appKind === 'chat') content = `<section class="rmt-phone-conversation"><header>${title}</header>${body}${messages}${fields}${gallery}</section>`;
+    else if (['finance', 'store'].includes(appKind)) content = `<article class="rmt-phone-ledger"><header>${badge}<small>${core_text.esc(app?.label || '账本')}</small>${title}</header>${fields}<div class="rmt-phone-ledger-memo">${body}${gallery}${messages}</div></article>`;
+    else if (appKind === 'notes') content = `<article class="rmt-phone-notepaper"><header>${title}</header>${body}${fields}${gallery}${messages}</article>`;
+    else if (appKind === 'moments') content = `<article class="rmt-phone-feed-post"><header><span class="rmt-phone-contact-avatar" aria-hidden="true">${core_text.esc(String(session?.ownerName || '').slice(0, 1))}</span><b>${core_text.esc(session?.ownerName || '')}</b></header>${title}${body}${gallery}${fields}${messages}</article>`;
+    else if (appKind === 'contacts') content = `<article class="rmt-phone-contact-card"><header><span class="rmt-phone-contact-avatar" aria-hidden="true">${core_text.esc(String(entry.contactName || entry.title || '').slice(0, 1))}</span><b>${person}</b></header>${title}${fields}${body}${gallery}${messages}</article>`;
+    else if (appKind === 'music') content = `<article class="rmt-phone-track-card"><div class="rmt-phone-record-art" aria-hidden="true"><i class="fa-solid fa-music"></i></div><header>${title}</header>${fields}${body}${gallery}${messages}</article>`;
+    else if (['gallery', 'camera'].includes(appKind)) content = `<article class="rmt-phone-photo-record"><figure><i class="fa-regular fa-image" aria-hidden="true"></i><figcaption>${gallery}</figcaption></figure>${title}${body}${fields}${messages}</article>`;
+    else if (['reading', 'books'].includes(appKind)) content = `<article class="rmt-phone-book-page"><header>${badge}${title}</header>${body}${fields}${gallery}${messages}</article>`;
+    else if (['files', 'research', 'work', 'study'].includes(appKind)) content = `<article class="rmt-phone-document"><header>${badge}${title}</header>${fields}${body}${gallery}${messages}</article>`;
+    else if (appKind === 'browser') content = `<article class="rmt-phone-browser-page"><header>${badge}<span>${core_text.esc(app?.label || '浏览器')}</span></header>${title}${body}${gallery}${fields}${messages}</article>`;
+    else if (['health', 'fitness', 'training', 'weather', 'tools', 'security'].includes(appKind)) content = `<article class="rmt-phone-dashboard"><header>${badge}${title}</header>${fields}${body}${gallery}${messages}</article>`;
+    else if (['location', 'travel'].includes(appKind)) content = `<article class="rmt-phone-route-journal"><header>${badge}${title}</header>${fields}<div class="rmt-phone-route-entry">${body}${gallery}${messages}</div></article>`;
+    else if (['games', 'creative'].includes(appKind)) content = `<article class="rmt-phone-collection-card"><header>${badge}${title}</header>${gallery}${fields}${body}${messages}</article>`;
+    else content = `<article class="rmt-phone-record"><header>${badge}${title}</header>${fields}${body}${gallery}${messages}</article>`;
+    return `<div class="rmt-phone-detail rmt-phone-detail-${appKind}"><div class="rmt-phone-detail-toolbar"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回${core_text.esc(app?.label || '列表')}</button><span>${core_text.esc(entry.meta || '')}</span></div>${content}</div>`;
 }
 
 function phoneStatusBar(now, kind) {

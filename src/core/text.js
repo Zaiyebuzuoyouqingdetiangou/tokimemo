@@ -74,6 +74,18 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_CONNECTION_NETWORK: '无法连接模型服务；请检查地址、网络、代理与服务状态后重试。',
     RMT_REQUEST_TIMEOUT: '模型请求超时，已停止等待并释放任务位；请稍后重试。',
     RMT_SEGMENT_VALIDATION: '模型结果没有通过本地完整性校验；旧内容未被覆盖。',
+    RMT_PAST_LIVES_STRUCTURE: '前世今生这一段的结构不完整；已保留成功部分，只需重试未完成段。',
+    RMT_PAST_LIVES_RELATIONSHIP: '前世今生这一段出现与两人设定冲突的关系表述；已保留成功部分，可重试这一段。',
+    RMT_PAST_LIVES_HISTORY: '今生回响把尚未发生的内容写成了既往记忆；已保留成功部分，可重试这一段。',
+    RMT_PAST_LIVES_SOURCE: '关联记忆与当前档案不一致；旧内容保留，请回到对应档案重试。',
+    RMT_PAST_LIVES_VERSION: '这份前世今生暂时无法按当前格式读取；旧记录保留，请勿删除档案。',
+    RMT_PAST_LIVES_LIMIT: '前世今生已达到本地保存容量；旧内容与成功部分保留。',
+    RMT_PAIR_RELATIONSHIP: '这一段出现与两人设定冲突的关系表述；原有内容保留。',
+    RMT_RECOVERY_VALIDATION_CHANGED: '已保存片段暂未通过当前校验；草稿仍保留，没有重新收费生成。',
+    RMT_RECOVERY_STORAGE: '这一段已返回，但浏览器没有保存成功；已停止后续生成，请检查存储后重试。',
+    RMT_RECOVERY_LIMIT: '这一段超出草稿保存容量；此前成功部分与旧内容保留。',
+    RMT_RECOVERY_UNAVAILABLE: '当前环境无法建立可靠的续写记录；请保留页面与已有内容。',
+    RMT_RECOVERY_DATA: '这一段的返回结构无法保存；此前成功部分与旧内容保留。',
     RMT_BUTTERFLY_systemNote: '该节点缺少完整的系统结局判定；旧内容保留，可单独重试。',
     RMT_BUTTERFLY_monologue: '该节点的角色独白不完整；旧内容保留，可单独重试。',
     RMT_BUTTERFLY_intervention: '该节点缺少完整的现世回应；旧内容保留，可单独重试。',
@@ -211,7 +223,7 @@ export function safeErrorSummary(error, max = 520) {
     if (/failed to fetch|networkerror|network request failed|load failed|econn(?:reset|refused)|enotfound|fetch failed/i.test(raw)) {
         return '网络连接失败；请检查地址、网络与服务状态后重试。';
     }
-    return '操作失败；敏感详情已隐藏 [hidden]。请重试或检查设置。';
+    return '本次操作未完成，旧内容保留。没有可识别的错误原因，请检查连接与存储后重试。';
 }
 
 export function cleanArray(value, maxItems = 64, maxChars = 12000) {

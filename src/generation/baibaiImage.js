@@ -4,7 +4,10 @@ import * as core_text from '../core/text.js';
 
 export const BAIBAI_IMAGE_PROVIDER = 'baibai-image';
 export const BAIBAI_IMAGE_TIMEOUT_MS = 300000;
-let pendingGeneration = false;
+export const BAIBAI_IMAGE_CONCURRENCY = 2;
+// Keep a cancelled provider call reserved until its promise really settles.
+// Otherwise an uncooperative backend could be charged twice for the same item.
+const pendingGenerations = new Map();
 const ownErrors = new WeakSet();
 
 const MESSAGES = Object.freeze({
@@ -17,7 +20,8 @@ const MESSAGES = Object.freeze({
     BBI_SAVE_FAILED: '图片已生成，但没有取得可保存的本地路径。旧图已保留；请检查柏宝绘的图库保存状态，避免重复出图。',
     BBI_TIMEOUT: '等待柏宝绘超过 5 分钟，已请求取消。旧图已保留；请先检查柏宝绘任务状态。',
     BBI_ABORTED: '已取消接收本次图片，旧图已保留。',
-    BBI_BUSY: '上一次柏宝绘请求尚未结束，请先等待它结束，避免重复出图。',
+    BBI_BUSY: '已有两张图片提交给柏宝绘，请等其中一张结束后再绘制。',
+    BBI_TARGET_BUSY: '这张图片的绘制请求还未结束，请先等待，避免重复出图。',
 });
 
 export function baiBaiImageError(code) {
@@ -69,11 +73,16 @@ function publicFailure(error) {
     return baiBaiImageError(code);
 }
 
-export async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', onProgress = null } = {}) {
+export function baiBaiImagePendingCount() { return pendingGenerations.size; }
+export function isBaiBaiImageTargetPending(targetKey) { return !!targetKey && pendingGenerations.has(targetKey); }
+
+export async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', onProgress = null, onSettled = null, targetKey = '' } = {}) {
     if (signal?.aborted) throw baiBaiImageError('BBI_ABORTED');
     const state = baiBaiImageState();
     if (!state.available) throw baiBaiImageError(state.code);
-    if (pendingGeneration) throw baiBaiImageError('BBI_BUSY');
+    const reservation = typeof targetKey === 'string' && targetKey ? targetKey : Symbol('image');
+    if (pendingGenerations.has(reservation)) throw baiBaiImageError('BBI_TARGET_BUSY');
+    if (pendingGenerations.size >= BAIBAI_IMAGE_CONCURRENCY) throw baiBaiImageError('BBI_BUSY');
     const visual = core_text.normalizeText(prompt, 1800);
     if (!visual) throw baiBaiImageError('BBI_INVALID_ARGS');
     // Freeze grouping before the provider awaits; its default otherwise reads the new chat at save time.
@@ -101,12 +110,16 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
     };
     signal?.addEventListener('abort', onAbort, { once: true });
     timer = setTimeout(() => stop('BBI_TIMEOUT'), BAIBAI_IMAGE_TIMEOUT_MS);
-    pendingGeneration = true;
+    pendingGenerations.set(reservation, controller);
+    let providerPromise;
     try {
         // No await before generate: caller's captured chat and chosen provider are still current.
-        const providerPromise = Promise.resolve(state.api.generate(request, { signal: controller.signal, onProgress: report }))
+        providerPromise = Promise.resolve(state.api.generate(request, { signal: controller.signal, onProgress: report }))
             .catch(error => { throw publicFailure(error); })
-            .finally(() => { pendingGeneration = false; });
+            .finally(() => {
+                pendingGenerations.delete(reservation);
+                try { onSettled?.(); } catch {}
+            });
         const result = await Promise.race([providerPromise, stopPromise]);
         if (signal?.aborted || stopped) throw baiBaiImageError('BBI_ABORTED');
         const path = savedImagePath(result?.path);
@@ -114,8 +127,8 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
         // Drop the potentially multi-MB dataUrl; only durable image references enter archive metadata.
         return { url: path, provider: BAIBAI_IMAGE_PROVIDER };
     } catch (error) {
+        if (!providerPromise) pendingGenerations.delete(reservation); // synchronous API failure
         if (ownErrors.has(error)) throw error;
-        pendingGeneration = false; // synchronous API failure, before it returned a promise
         throw publicFailure(error);
     } finally {
         clearTimeout(timer);

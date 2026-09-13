@@ -1,6 +1,7 @@
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_cache from '../core/cache.js';
+import * as image_patch from '../core/cgImagePatch.js';
 import * as core_archiveCover from '../core/archiveCover.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
@@ -960,6 +961,28 @@ export async function flushDeferredCommitsForCurrentChat() {
                 if (!merged) continue;
                 globalThis.toastr?.success?.('之前窗口的角色互动结果已自动写回。', '心迹回廊');
                 acknowledge = true;
+            } else if (item.kind === 'cgImagePatch') {
+                const patch = image_patch.normalizeCgImagePatch(item.patch);
+                const memory = getImportedMemory(context);
+                if (!patch || !memory || memory.archiveRevision !== item.origin.archiveRevision) {
+                    globalThis.toastr?.warning?.('旧图片结果已停止写回；原档案或图片目标已变化。', '心迹回廊');
+                    acknowledge = true;
+                    continue;
+                }
+                let patchStatus = '';
+                const saved = await core_cache.commitSessionMutation(patch.mode, item.origin.chatId, item.origin, (latest, liveMemory) => {
+                    if (liveMemory.archiveRevision !== item.origin.archiveRevision) return null;
+                    const result = image_patch.applyCgImagePatch(latest, patch);
+                    patchStatus = result.status;
+                    return result.session;
+                });
+                if (saved) {
+                    globalThis.toastr?.success?.('之前窗口的图片已保存。', '心迹回廊');
+                    acknowledge = true;
+                } else if (patchStatus === 'conflict' || patchStatus === 'invalid') {
+                    globalThis.toastr?.warning?.('这张回忆已更新，旧图片结果未替换当前图片；可以在柏宝绘图库查看。', '心迹回廊');
+                    acknowledge = true;
+                }
             } else if (item.kind === 'sessions') {
                 let memory;
                 try { memory = requireArchive(context); }

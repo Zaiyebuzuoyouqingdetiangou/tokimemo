@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.57-hearttrace-r61.0",
+  "js": "index.js?heartbeat=0.8.58-reading-reliability-r62.0",
   "author": "Toto",
-  "version": "0.8.57",
+  "version": "0.8.58",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r61：心迹回廊独立首页、读取范围、流式续写、终端与邮箱、图片阅读及前世今生。",
+  "description": "r62：手机完整看图与ADV阅读、并发绘图、终端与信纸体验、前世今生与蝴蝶效应误拦修复。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

@@ -437,11 +437,12 @@ export function heartStripsPrompt(context, memoryBank, core, previous = null, so
 UNTRUSTED_HEART_RELATIONSHIP_JSON:
 ${heartDramaContext(core, memoryBank)}
 ${previous ? `UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:\n${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}\nEXISTING_STRIP_INDEX_JSON:\n${JSON.stringify((previous.dailyStrips || []).slice(-60).map(item => ({ id: item.id, title: item.title, subtitle: item.subtitle, visualSeed: item.visualSeed })), null, 2)}` : ''}
-只生成 2～3 条${previous ? '由新增档案触发、尚未出现的' : ''}轻松日常一格，不生成时期对话、Voice Drama 或 Scenario Drama。
+生成${previous ? '由新增档案触发、尚未出现的' : ''}轻松日常一格，一条完整小故事就够，每次最多3条，不为数量凑梗。不生成时期对话、Voice Drama 或 Scenario Drama。
 {"dailyStrips":[{"id":"STRIP01","title":"标题","subtitle":"短句","panelCount":2,"panels":[{"caption":"...","action":"...","charLine":"...","userLine":"..."}],"visualSeed":["元素1","元素2","元素3"],"imagePrompt":"Q版/chibi，可见画面，no text, no speech bubble, no watermark"}]}
 要求：
-- 2～3 条即可，不要凑更多；panelCount 只能 1/2/4，panels 数量必须匹配。
-- visualSeed 至少3项；imagePrompt 只写可见画面并明确 no text / no speech bubble / no watermark。
+- panelCount 只能 1/2/4，按故事选择，panels 数量与所选格数一致；一格也可以完整收尾。
+- 每格 action 描述这一格独有的动作、表情或镜头变化，按先后推进，不能把同一动作同一构图复制数遍。没有第二个变化就选单格。
+- visualSeed 按需提供，不要求凑数；imagePrompt 明确 Q版/chibi、大头小身体的成年角色漫画造型（不是儿童），不用正常身材写实比例，并明确 no text / no speech bubble / no watermark。
 - userLine 只是非正史小剧场台词，不代表用户真实选择。${previous ? '必须避开 EXISTING_STRIP_INDEX_JSON 的标题、动作和梗；旧一格与已绘图片由本地保留。' : ''}只输出 JSON。`;
 }
 
@@ -506,7 +507,7 @@ export function normalizeHeartStripsPart(data) {
         })).filter(panel => panel.action || panel.caption || panel.charLine || panel.userLine);
         const visualSeed = core_text.cleanArray(item?.visualSeed, 10, 100);
         const imagePrompt = generation_imageGeneration.sanitizeCgVisualText(item?.imagePrompt, core_constants.MAX_CG_IMAGE_PROMPT_CHARS);
-        if (panels.length !== panelCount || visualSeed.length < 3 || !imagePrompt) return null;
+        if (panels.length !== panelCount || !imagePrompt) return null;
         return {
             id: core_text.safeId(item?.id, `STRIP${String(index + 1).padStart(2, '0')}`),
             title: core_text.normalizeText(item?.title, 100) || `日常一格 ${index + 1}`,
@@ -518,7 +519,7 @@ export function normalizeHeartStripsPart(data) {
             cgImage: generation_imageGeneration.normalizeCgImageRecord(item?.cgImage),
         };
     }).filter(Boolean);
-    if (dailyStrips.length < 2) throw new Error(`日常一格不足：${dailyStrips.length}/2。`);
+    if (!dailyStrips.length) throw core_text.safeUserError('这次没有返回完整的日常一格；旧图与旧内容保留，可重试未完成部分。', 'RMT_SEGMENT_VALIDATION');
     return dailyStrips;
 }
 
@@ -1442,7 +1443,7 @@ export function normalizeHeart(data, memoryBank) {
         if (panels.length !== panelCount) return null;
         const visualSeed = core_text.cleanArray(item?.visualSeed, 10, 100);
         const imagePrompt = generation_imageGeneration.sanitizeCgVisualText(item?.imagePrompt, core_constants.MAX_CG_IMAGE_PROMPT_CHARS);
-        if (!imagePrompt || visualSeed.length < 3) return null;
+        if (!imagePrompt) return null;
         return {
             id: core_text.safeId(item?.id, `STRIP${String(index + 1).padStart(2, '0')}`),
             title: core_text.normalizeText(item?.title, 100) || `日常一格 ${index + 1}`,

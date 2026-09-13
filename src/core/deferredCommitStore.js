@@ -35,7 +35,7 @@ function safeSerializedPayload(entries) {
 function validStoredList(value, now = Date.now()) {
     if (!Array.isArray(value)) return [];
     return value.filter(item => {
-        if (!item || typeof item !== 'object' || !['archive', 'sessions', 'heartPatches'].includes(item.kind)) return false;
+        if (!item || typeof item !== 'object' || !['archive', 'sessions', 'heartPatches', 'cgImagePatch'].includes(item.kind)) return false;
         if (!item.origin?.characterKey || !item.origin?.chatId) return false;
         const queuedAt = Number(item.queuedAt) || 0;
         return !queuedAt || now - queuedAt <= DEFERRED_COMMIT_STORE_MAX_AGE_MS;

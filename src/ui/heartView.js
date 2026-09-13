@@ -255,19 +255,7 @@ export function renderHeartScriptLines(lines, identity = {}) {
 }
 
 export function heartStripImagePrompt(item) {
-    const saved = generation_imageGeneration.sanitizeCgVisualText(generation_imageGeneration.normalizeCgImageRecord(item?.cgImage)?.prompt);
-    if (saved) return saved;
-    const authored = generation_imageGeneration.sanitizeCgVisualText(item?.imagePrompt, core_constants.MAX_CG_IMAGE_PROMPT_CHARS);
-    if (!authored) return '';
-    const layout = Number(item?.panelCount) === 1 ? 'single-panel comic illustration' : Number(item?.panelCount) === 4 ? 'clean four-panel yonkoma comic layout' : 'clean vertical two-panel comic layout';
-    const seeds = core_text.cleanArray(item?.visualSeed, 10, 100).map(seed => generation_imageGeneration.sanitizeCgVisualText(seed, 100)).filter(Boolean);
-    return core_text.normalizeText([
-        'cute chibi slice-of-life anime comic, consistent character design across every panel',
-        layout,
-        authored,
-        seeds.length ? `visible details: ${seeds.join(', ')}` : '',
-        'clear readable poses and facial expressions, simple warm background, no text, no letters, no speech bubbles, no subtitle, no logo, no watermark',
-    ].filter(Boolean).join(', '), core_constants.MAX_CG_IMAGE_PROMPT_CHARS);
+    return generation_imageGeneration.dailyComicImagePrompt(item);
 }
 
 export async function drawHeartStripImage(stripId, { promptOverride, expectedTarget = null, onAccepted = null } = {}) {
@@ -285,8 +273,9 @@ export async function drawHeartStripImage(stripId, { promptOverride, expectedTar
         globalThis.toastr?.info?.(generation_imageGeneration.imageGenerationUnavailableMessage(imageState), '心迹回廊');
         return;
     }
-    if (runtimeState.activeCgImageTasks.size >= 1) {
-        globalThis.toastr?.info?.('当前已有一张图片正在绘制，请等它完成。', '心迹回廊');
+    const blockedReason = generation_imageGeneration.cgImageStartBlockedReason(core_constants.MODE.HEART, item.id, context);
+    if (blockedReason) {
+        globalThis.toastr?.info?.(blockedReason, '心迹回廊');
         return;
     }
     const previous = generation_imageGeneration.normalizeCgImageRecord(item.cgImage);
@@ -299,7 +288,7 @@ export async function drawHeartStripImage(stripId, { promptOverride, expectedTar
     if (!ok) return;
     try { generation_imageGeneration.assertCgImageTargetCurrent(captured); }
     catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); return; }
-    const prompt = promptOverride === undefined ? heartStripImagePrompt(item) : generation_imageGeneration.sanitizeCgVisualText(promptOverride);
+    const prompt = generation_imageGeneration.dailyComicImagePrompt(item, promptOverride);
     if (!prompt) return globalThis.toastr?.error?.('这条日常一格没有可用的视觉提示。', '心迹回廊');
     const expectedChatId = core_context.getChatId(context);
     const origin = captured.origin;
@@ -325,6 +314,8 @@ export async function drawHeartStripImage(stripId, { promptOverride, expectedTar
             orientation: Number(item.panelCount) === 1 ? 'landscape' : 'portrait',
             provider: imageState.provider,
             signal: controller.signal,
+            targetKey: generation_imageGeneration.cgImageReservationKey(core_constants.MODE.HEART, item.id, context),
+            onSettled: () => generation_imageGeneration.refreshSettledCgImage(taskKey, origin),
             characterName: context.name2,
             onProgress: progress => generation_imageGeneration.updateCgImageProgress(taskKey, progress),
         });
@@ -344,9 +335,7 @@ export async function drawHeartStripImage(stripId, { promptOverride, expectedTar
             if (session.archiveRevision !== captured.revision || generation_imageGeneration.cgItemSignature(item) !== captured.signature) {
                 throw core_text.safeUserError('原日常一格已变化，新图片没有替换旧图；可以在生图插件图库中查看。', 'RMT_CG_TARGET_CHANGED');
             }
-            const staged = JSON.parse(JSON.stringify(session));
-            staged.dailyStrips.find(strip => strip.id === item.id).cgImage = nextImage;
-            const { durable } = generation_imageGeneration.deferCgSessionIfOriginChanged(origin, core_constants.MODE.HEART, staged);
+            const { durable } = generation_imageGeneration.deferCgImageIfOriginChanged(captured, nextImage);
             globalThis.toastr?.[durable ? 'success' : 'warning']?.(
                 durable
                     ? `日常一格已绘制并安全等待写回：${item.title}；回到原聊天后会自动保存引用。`

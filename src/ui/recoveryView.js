@@ -14,7 +14,7 @@ export function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
         if (!summary || (!summary.completed && !summary.truncated && !summary.failed)) return '';
         const label = summary.canContinue ? '继续生成' : '重试未完成部分';
         const reason = summary.canContinue ? '正文未写完' : summary.failureCode ? text.safeErrorSummary({ code: summary.failureCode }) : '任务尚未完成';
-        return `<section class="rmt-recovery-status" role="status"><b>${text.esc(constants.MODE_LABEL[mode] || mode)} · 已保留 ${summary.completed} 个成功分段</b><p>${text.esc(reason)}。继续会使用文本生成额度，旧内容保持不变。</p><button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(mode)}">${label}</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(mode)}">放弃未提交草稿</button></section>`;
+        return `<section class="rmt-recovery-status" role="status"><b>${text.esc(constants.MODE_LABEL[mode] || mode)} · 已保留 ${summary.completed} 个成功分段</b><p>${text.esc(reason.replace(/[。\s]+$/, ''))}。继续会使用文本生成额度，旧内容保持不变。</p><button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(mode)}">${label}</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(mode)}">放弃未提交草稿</button></section>`;
     }).join('');
 }
 

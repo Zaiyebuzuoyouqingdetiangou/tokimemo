@@ -1,5 +1,5 @@
-const VERSION = '0.8.57';
-const BUILD = '0.8.57-hearttrace-r61.0';
+const VERSION = '0.8.58';
+const BUILD = '0.8.58-reading-reliability-r62.0';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

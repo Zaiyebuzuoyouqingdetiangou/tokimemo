@@ -14,32 +14,41 @@ export function buildButterflyPlan(memoryBank) {
         const anchors = (Array.isArray(item?.anchors) ? item.anchors : []).map(clean).filter(Boolean).slice(0, 8);
         if (/^M\d{3,}$/.test(id) && [clean(item?.title), ...anchors].some(value => value.length >= 2)) ids.add(id);
     }
-    const count = Math.min(BUTTERFLY_PRIMARY_AXES.length, Math.ceil(ids.size / 3));
-    return { memoryCount: ids.size, axes: BUTTERFLY_PRIMARY_AXES.slice(0, count), total: count ? count + 2 : 0 };
+    // A larger archive supplies context, not a compulsory number of paid calls.
+    // MAIN may return its own bounded branchAxes; this is only a small fallback.
+    return { memoryCount: ids.size, axes: ids.size ? ['decision'] : [], total: ids.size ? 3 : 0 };
+}
+
+export function normalizeButterflyBranchAxes(value) {
+    if (value === undefined) return ['decision'];
+    if (!Array.isArray(value) || value.length > BUTTERFLY_PRIMARY_AXES.length
+        || value.some(axis => typeof axis !== 'string' || !BUTTERFLY_PRIMARY_AXES.includes(axis)))
+        throw butterflyValidationError('worldSpec');
+    return [...new Set(value)];
 }
 
 export function butterflyPlanPrompt(memoryBank) {
     const plan = buildButterflyPlan(memoryBank);
     return plan.total
-        ? '本次初始观测共 ' + plan.total + ' 个节点：MAIN、' + plan.axes.length + ' 个普通分歧、唯一末项 OMEGA。普通分歧 primaryAxis 依次为 ' + plan.axes.join(' / ') + '；不可少项或额外凑数。'
+        ? '先写 MAIN，并在 MAIN.branchAxes 中选择本次值得展开的分歧维度；数量由内容决定，可为空。无需遍历所有维度，也不随记忆条数增加节点。每次只写当前一段，最后 OMEGA 收尾。'
         : '当前没有可用档案锚点，不生成观测节点。';
 }
 
-export const BUTTERFLY_LIMITS = Object.freeze({ monologueHan: 100, monologueFirstPerson: 3, interventionHan: 40, omegaHan: 160, omegaFirstPerson: 4, systemHan: 30 });
+// Retained export for compatibility. These are not generation minima.
+export const BUTTERFLY_LIMITS = Object.freeze({ monologueHan: 0, monologueFirstPerson: 0, interventionHan: 0, omegaHan: 0, omegaFirstPerson: 0, systemHan: 0 });
 export const BUTTERFLY_GENERATION_CONTRACT = `【节点完整性契约】
-MAIN 与普通分歧的 monologue 至少 ${BUTTERFLY_LIMITS.monologueHan} 个汉字，至少 ${BUTTERFLY_LIMITS.monologueFirstPerson} 次明确“我”的第一人称视角，不用旁白代替发言。
-普通分歧 intervention 至少 ${BUTTERFLY_LIMITS.interventionHan} 个汉字，至少一次“我”；现世角色明确对照“那个我 / 那个世界 / 现世 / 平行世界”，并表达“明白 / 承认 / 意识到 / 庆幸 / 选择 / 珍惜”等自省。MAIN 的 intervention 也不可为空。
-每项 systemNote 至少 ${BUTTERFLY_LIMITS.systemHan} 个汉字，包含至少三类算法线索：分析、结论、变量、概率/置信、算法/模型、主体/样本、路径/时间线、收敛/偏差/阈值、判定/分类、结局/结果/终局。必须明确写出“最终判定 / 最终结局 / 最终结果 / 终局判定 / 终局结果 / 判定结果 / 判定结局”之一并给出结论，而非仅罗列标签。
-Ω 的 label 必须含“观测点 Ω”或“TRUE ENDING”；monologue 严格为空。intervention 至少 ${BUTTERFLY_LIMITS.omegaHan} 个汉字、至少 ${BUTTERFLY_LIMITS.omegaFirstPerson} 次“我”，明确指向你/用户姓名，综合时代、身份、职业、地点、选择、相遇、羁绊、命运中至少三类差异；包含命运/奇迹/不可能与唯一解/唯一答案/最终选择/选择了你/找到了你之一。Ω 的 systemNote 还须明确命运/奇迹/唯一解/真结局。
+MAIN 与普通分歧的 monologue 是角色在该世界的完整心声，intervention 是现世角色读后的回应；短句也可以。不要求固定汉字数、第一人称次数或指定文学用词。
+systemNote 给出易读、完整的简短观测结论，不用凑算法术语或固定判定句。
+Ω 的 label 含“观测点 Ω”或“TRUE ENDING”；monologue 为空，intervention 回应已经看过的内容，systemNote 负责收尾。没有普通分歧时也可以回到现世，不虚构额外世界，不强迫告白或永世相守。
 worldSpec 的 era、identity、occupation、location、keyDecision、encounterWithUser、bondWithUser、finalFate 八字段均为具体文本，不用“同上/不变/未知”；thirdPartyRomance 严格为 false。不得虚构第三方恋爱、婚姻或前任；节点标题、世界条件与独白均不可重复。`;
 
 const ISSUES = Object.freeze({
-    relationship: '人物关系归属不明确或包含第三方恋爱。每个独立字段明确用我与你指向双方，不把我们指代新的第三人。',
+    relationship: '本段出现明确的前任或第三方恋爱、婚姻情节，请只调整这一处；两人的旁白和省略主语不需要反复补“我与你”。',
     unique: '当前节点与已通过节点重复，或 primaryAxis 不等于本槽位指定维度。请只重写当前节点。',
-    systemNote: 'systemNote 未满足汉字数、三类算法线索或明确终局判定。',
-    monologue: 'monologue 未满足汉字数或第一人称次数。',
-    intervention: 'intervention 缺少足量现世第一人称对照和自省。',
-    omega: '观测点 Ω 的标题、空 monologue、综合告白或终局说明不完整。',
+    systemNote: 'systemNote 缺少可读结论，请补完当前字段；没有字数或术语配额。',
+    monologue: 'monologue 缺少可读正文，请补完当前字段；没有字数或人称次数配额。',
+    intervention: 'intervention 缺少可读回应，请补完当前字段；没有字数配额。',
+    omega: '观测点 Ω 的标题、空 monologue 或结尾正文不完整；没有告白字数要求。',
     worldSpec: 'worldSpec 维度、具体字段或 thirdPartyRomance=false 不完整。',
 });
 export function butterflyValidationError(field) {

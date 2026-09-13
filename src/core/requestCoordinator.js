@@ -3,6 +3,7 @@
 import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_constants from './constants.js';
 import * as core_context from './context.js';
+import * as image_patch from './cgImagePatch.js';
 import { state as runtimeState } from './state.js';
 import * as core_text from './text.js';
 import * as modes_heart from '../modes/heart.js';
@@ -42,6 +43,15 @@ export function queueDeferredCommitRecord(origin, commit) {
     if (Number(origin.lifecycleEpoch) !== runtimeState.runtimeLifecycleEpoch) return { durable: false, key: '', item: null };
     const key = `${origin.characterKey}|${origin.chatId}`;
     const list = runtimeState.deferredChatCommits.get(key) || [];
+    if (commit.kind === 'cgImagePatch') {
+        const patch = image_patch.normalizeCgImagePatch(commit.patch);
+        if (!patch) return { durable: false, key: '', item: null };
+        const previous = list.find(item => item.kind === 'cgImagePatch' && sameDeferredOrigin(item.origin, origin)
+            && item.patch?.mode === patch.mode && item.patch?.itemId === patch.itemId);
+        const item = { kind: 'cgImagePatch', patch, origin, queuedAt: Date.now() };
+        runtimeState.deferredChatCommits.set(key, [...list.filter(row => row !== previous), item]);
+        return { durable: reportDeferredDurability(), key, item };
+    }
     if (commit.kind === 'heartPatches') {
         const previous = list.find(item => item.kind === 'heartPatches' && sameDeferredOrigin(item.origin, origin));
         const mergedPatches = modes_heart.mergeDeferredHeartPatches(previous?.patches, commit.patches);

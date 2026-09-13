@@ -13,12 +13,8 @@ export function selectedTravelLocation() {
 }
 
 function travelSourceLabel(item) {
-    if (item?.legacyEvidenceUnverified === true) return '旧版自由文字 · 证据未重新核验';
-    if (item?.basis === '记忆' && item?.sourceMemoryAnchor) return `剧情足迹 · ${item.sourceMemoryAnchor}`;
-    // An inferred stop must stay visibly distinguishable from an evidenced one, so the
-    // user can always tell which places actually appear in the archive or the card.
-    if (item?.basis === '推演') return '人设推演 · 未见于档案或设定';
-    return '角色生活 / 世界设定';
+    // The reader sees a place, not a provenance audit. Stored basis is unchanged.
+    return item?.distanceLabel || '';
 }
 
 // ---------------------------------------------------------------------------
@@ -231,7 +227,6 @@ export function travelPostcardHtml(item, session, options = {}) {
         <figcaption><small>GREETINGS FROM</small><b>${core_text.esc(item.region || item.name)}</b></figcaption>
       </figure>
       <div class="rmt-travel-postcard-back">
-        ${item?.legacyEvidenceUnverified === true || item?.keepsake?.legacyEvidenceUnverified === true ? '<div class="rmt-travel-legacy-warning">旧版自由文字 · 证据未重新核验</div>' : ''}
         <div class="rmt-travel-postcard-mark"><span>${core_text.esc(card.stampLabel || 'POST')}</span><i>${core_text.esc(card.postmark || item.region || 'FAR AWAY')}</i></div>
         <div class="rmt-travel-postcard-copy">
           <small>POSTCARD FROM ${core_text.esc(item.region || item.name)}</small>
@@ -271,7 +266,6 @@ function travelKeepsakeHtml(item, session) {
     return `<section class="rmt-travel-artifact artifact-${keepsake.kind} tone-${core_text.esc(keepsake.tone || 'paper')}" data-rmt-artifact-kind="${keepsake.kind}" role="dialog" aria-modal="false" aria-label="${core_text.esc(item.name)}的出行纪念">
       <button type="button" class="rmt-travel-detail-close" data-rmt-action="travel-close-detail" aria-label="收起出行纪念">×</button>
       <header class="rmt-travel-artifact-head"><span>${label}</span><i>${core_text.esc(keepsake.mark || item.region || label)}</i></header>
-      ${item?.legacyEvidenceUnverified === true || item?.keepsake?.legacyEvidenceUnverified === true ? '<div class="rmt-travel-legacy-warning">旧版自由文字 · 证据未重新核验</div>' : ''}
       <figure class="rmt-travel-artifact-figure" data-rmt-artifact-theme="${core_text.esc(theme)}">${travelPostcardScene(item, theme).replace('rmt-travel-postcard-scene', 'rmt-travel-artifact-scene').replaceAll('pc-', 'artifact-scene-').replace('明信片风景插画', '出行纪念风景插画')}<figcaption>${core_text.esc(item.region || item.name)}</figcaption></figure>
       <div class="rmt-travel-artifact-emblem" aria-hidden="true">${core_text.esc(emblem)}</div>
       <article class="rmt-travel-artifact-copy"><small>${core_text.esc(item.region || item.name)}</small><h3>${core_text.esc(keepsake.title)}</h3>${keepsake.greeting ? `<b>${core_text.esc(keepsake.greeting)}</b>` : ''}<p>${core_text.esc(keepsake.body)}</p><footer>${core_text.esc(keepsake.closing)}</footer></article>
@@ -287,7 +281,7 @@ function travelDialogueHtml(item, session) {
     const charName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext()?.name2, 100) || '他';
     return `<section class="rmt-travel-dialogue" role="dialog" aria-modal="false" aria-label="${core_text.esc(item.name)}的地点对话">
       <button type="button" class="rmt-travel-detail-close" data-rmt-action="travel-close-detail" aria-label="收起地点对话">×</button>
-      <div class="rmt-travel-dialogue-place"><small>NEARBY STOP · ${core_text.esc(item.distanceLabel)}</small><h3>${core_text.esc(item.name)}</h3><p>${core_text.esc(item.summary)}</p>${item?.legacyEvidenceUnverified === true ? '<div class="rmt-travel-legacy-warning">旧版自由文字 · 证据未重新核验</div>' : ''}</div>
+      <div class="rmt-travel-dialogue-place"><small>NEARBY STOP · ${core_text.esc(item.distanceLabel)}</small><h3>${core_text.esc(item.name)}</h3><p>${core_text.esc(item.summary)}</p></div>
       <div class="rmt-travel-dialogue-bubble"><b>${core_text.esc(charName)}</b><p>${core_text.esc(lines[index] || '')}</p><span>${lines.length ? `${index + 1} / ${lines.length}` : '0 / 0'}</span></div>
       <div class="rmt-travel-dialogue-actions">
         <button type="button" class="rmt-btn" data-rmt-action="travel-dialogue-prev" ${index <= 0 ? 'disabled' : ''}>上一句</button>
@@ -316,7 +310,7 @@ export function renderTravel() {
     const selectedDetail = selected
         ? selected.kind === 'far' ? travelKeepsakeHtml(selected, session) : travelDialogueHtml(selected, session)
         : '';
-    const legendRows = session.locations.map(item => `<button type="button" class="${selected?.id === item.id ? 'active' : ''}" data-rmt-travel-location="${core_text.esc(item.id)}"><i class="fa-solid ${item.kind === 'near' ? 'fa-location-dot' : 'fa-envelope'}"></i><span><b>${core_text.esc(item.name)}</b><small>${core_text.esc(item.region || item.distanceLabel)} · ${core_text.esc(travelSourceLabel(item))}</small></span></button>`).join('');
+    const legendRows = session.locations.map(item => `<button type="button" class="${selected?.id === item.id ? 'active' : ''}" data-rmt-travel-location="${core_text.esc(item.id)}"><i class="fa-solid ${item.kind === 'near' ? 'fa-location-dot' : 'fa-envelope'}"></i><span><b>${core_text.esc(item.name)}</b><small>${core_text.esc([...new Set([item.region, travelSourceLabel(item)].filter(Boolean))].join(' · '))}</small></span></button>`).join('');
     body.innerHTML = `<div class="rmt-travel" data-rmt-travel-theme="${modes_travel.safeTravelTheme(session.mapTheme)}">
       <div class="rmt-mail-actions"><button type="button" class="rmt-btn" data-rmt-mode="inbox">打开你的邮箱 · 收藏路线明信片</button></div><header class="rmt-travel-head"><div><small>THE ROUTES HE TAKES</small><h2>${core_text.esc(session.title)}</h2><p>${core_text.esc(session.routeSummary)}</p></div><div><span><b>${near.length}</b> 附近</span><span><b>${far.length}</b> 远方</span></div></header>
       <div class="rmt-travel-layout">

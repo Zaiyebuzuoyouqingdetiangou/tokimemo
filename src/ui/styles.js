@@ -5,6 +5,8 @@ import * as core_text from '../core/text.js';
 import * as ui_themeSurfaces from './themeSurfaces.js';
 import * as ui_inboxStyles from './inboxStyles.js';
 import * as ui_pastLivesView from './pastLivesView.js';
+import * as ui_immersionStyles from './immersionStyles.js';
+import * as ui_readingStyles from './readingStyles.js';
 
 export function homeAndReadingCss() {
     const root = '#' + core_constants.OVERLAY_ID;
@@ -794,7 +796,6 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-archive-portal-adv .rmt-portal-avatar{background:linear-gradient(145deg,#ebcf8c,#c9aa62)}
 .rmt-archive-portal-room .rmt-portal-avatar{background:linear-gradient(145deg,#9bcfc4,#78afa5)}
 .rmt-archive-portal-butterfly .rmt-portal-avatar{background:linear-gradient(145deg,#708aa9,#4f6585)}
-@media(min-width:761px){.rmt-archive-portals>.rmt-archive-portal-butterfly{grid-column:1/-1;min-height:170px}}
 .rmt-archive-portal-ending .rmt-portal-avatar{background:linear-gradient(145deg,#efa9bf,#c86e91)}
 .rmt-archive-portal-heart .rmt-portal-avatar{background:linear-gradient(145deg,#f0a7b8,#db7895)}
 .rmt-portal-ready-dot,.rmt-portal-lock{position:absolute;right:-2px;bottom:2px;width:25px;height:25px;border-radius:50%;display:grid;place-items:center;background:#fff;color:#cf7599;border:1px solid #edbdd0;font-size:12px;font-weight:900;box-shadow:0 3px 8px rgba(61,79,95,.12)}
@@ -1077,6 +1078,8 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 }
 `;
     style.textContent += homeAndReadingCss();
+    style.textContent += ui_immersionStyles.immersionCss('#' + core_constants.OVERLAY_ID);
+    style.textContent += ui_readingStyles.readingCss('#' + core_constants.OVERLAY_ID);
     document.head.appendChild(style);
 }
 

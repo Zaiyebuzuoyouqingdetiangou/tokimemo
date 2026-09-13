@@ -497,14 +497,8 @@ export function refreshSettingsMemoryStatus({ lightweight = false } = {}) {
 export function mountSettings({ homeTarget = null } = {}) {
     ui_styles.ensureSettingsStyles();
     if (!homeTarget) {
-        if (document.getElementById(SETTINGS_LAUNCHER_ID)) return true;
-        const mount = document.querySelector('#extensions_settings2');
-        if (!mount) return false;
-        const launcher = document.createElement('div');
-        launcher.id = SETTINGS_LAUNCHER_ID; launcher.className = 'rmt-settings-launcher';
-        launcher.innerHTML = '<b>心迹回廊</b><p>设置、记忆来源与档案都在独立首页。</p><button type="button" class="menu_button" data-rmt-open-home>打开首页与设置</button>';
-        launcher.addEventListener('click', event => { if (event.target.closest?.('[data-rmt-open-home]')) ui_archivePortal.showHome(); });
-        mount.appendChild(launcher); return true;
+        document.getElementById(SETTINGS_LAUNCHER_ID)?.remove();
+        return true;
     }
     const existing = homeSettingsEpoch === runtimeState.runtimeLifecycleEpoch ? homeSettingsPanel : null;
     let scope = '';

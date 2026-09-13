@@ -188,12 +188,10 @@ export function renderSharedMemory() {
     ui_overlay.topTitle(`共同回忆 · ${item.title}`);
     const body = ui_overlay.bodyEl();
     body.innerHTML = `<div class="rmt-memory-scene">
-      <div class="rmt-memory-cg">
+      <div class="rmt-memory-cg rmt-reading-image${generation_imageGeneration.normalizeCgImageRecord(item.cgImage) ? ' rmt-reading-image-saved' : ''}">
         ${generation_imageGeneration.cgImageLayerHtml(item, { lazy: false })}
-        <div class="rmt-memory-caption"><b>${core_text.esc(item.title)}</b> · ${core_text.esc(item.date)}<br><span style="opacity:.82">${core_text.esc(item.desc)}</span></div>
       </div>
-      ${readOnly ? '' : '<div class="rmt-cg-card-actions rmt-cg-memory-actions"><button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt">图片设置</button></div>'}
-      ${generation_imageGeneration.cgImageProgressHtml()}
+      <div class="rmt-memory-caption"><b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.date)}</span><p>${core_text.esc(item.desc)}</p></div>
       <div class="rmt-dialogue">
         <div class="rmt-dialogue-speaker">${core_text.esc(charName)}</div>
         <div class="rmt-dialogue-text">${core_text.esc(comments[session.dialogueIndex] || '')}</div>
@@ -202,5 +200,7 @@ export function renderSharedMemory() {
           <button type="button" class="rmt-btn" data-rmt-action="${last ? 'shared-replay' : 'shared-next'}">${last ? '重看' : '下一句'}</button>
         </div>
       </div>
+      ${readOnly ? '' : '<div class="rmt-cg-card-actions rmt-cg-memory-actions"><button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt">图片设置</button></div>'}
+      ${generation_imageGeneration.cgImageProgressHtml()}
     </div>`;
 }

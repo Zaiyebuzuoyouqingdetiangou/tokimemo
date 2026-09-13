@@ -1298,7 +1298,10 @@ export function handleOverlayClick(event) {
     }
     if (action === 'generate-all-adv') return modes_advEvent.generateAllAdvForSession();
     if (action === 'repair-failed-adv') return modes_advEvent.repairFailedAdvForSession();
-    if (action === 'read-adv') return modes_advEvent.generateAdvForSelected();
+    if (action === 'read-adv') {
+        if (ui_advEventView.resumeAdvReading()) return;
+        return modes_advEvent.generateAdvForSelected();
+    }
     if (action === 'room-presence') return modes_room.roomPresenceNext();
     if (action === 'room-find-presence') return modes_room.roomFindPresence();
     if (action === 'room-life-refresh') {

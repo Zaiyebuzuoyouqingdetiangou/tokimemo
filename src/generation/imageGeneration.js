@@ -4,6 +4,7 @@ import * as baibai_image from './baibaiImage.js';
 import * as archive_library from '../archive/library.js';
 import * as archive_repository from '../archive/repository.js';
 import * as core_cache from '../core/cache.js';
+import * as image_patch from '../core/cgImagePatch.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
@@ -48,42 +49,23 @@ export function sanitizeImageGenerationSlashPrompt(value) {
         .trim();
 }
 
-export async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', characterName = '', onProgress = null } = {}) {
+export async function invokeImageGeneration(prompt, context = core_context.getContext(), { signal = null, provider = null, orientation = 'landscape', characterName = '', onProgress = null, onSettled = null, targetKey = '' } = {}) {
     // Explicit legacy requests must not silently switch providers or invoke /sd.
     const selectedProvider = provider || baibai_image.BAIBAI_IMAGE_PROVIDER;
     if (selectedProvider === baibai_image.BAIBAI_IMAGE_PROVIDER) {
         return baibai_image.generateBaiBaiImage(sanitizeCgVisualText(prompt), {
-            signal, orientation, characterName: characterName || context?.name2, onProgress,
+            signal, orientation, characterName: characterName || context?.name2, onProgress, onSettled, targetKey,
         });
     }
     throw core_text.safeUserError('本版本仅支持柏宝绘，请启用其公开 API 并刷新；旧渠道图片仍可查看。', 'RMT_IMAGE_PROVIDER_RETIRED');
 }
 
 export function normalizeCgImageUrl(value) {
-    const raw = core_text.normalizeText(value, 4096);
-    if (!raw) return '';
-    try {
-        const base = globalThis.location?.href || 'http://localhost/';
-        const parsed = new URL(raw, base);
-        if (!['http:', 'https:'].includes(parsed.protocol)) return '';
-        const currentOrigin = globalThis.location?.origin;
-        if (currentOrigin && parsed.origin !== currentOrigin) return '';
-        return `${parsed.pathname}${parsed.search}${parsed.hash}`.slice(0, 4096);
-    } catch {
-        return '';
-    }
+    return image_patch.normalizeCgImageUrl(value);
 }
 
 export function normalizeCgImageRecord(value) {
-    if (!value || typeof value !== 'object') return null;
-    const url = normalizeCgImageUrl(value.url);
-    if (!url) return null;
-    return {
-        url,
-        prompt: core_text.normalizeText(value.prompt, core_constants.MAX_CG_IMAGE_PROMPT_CHARS),
-        provider: value.provider === baibai_image.BAIBAI_IMAGE_PROVIDER ? baibai_image.BAIBAI_IMAGE_PROVIDER : core_constants.CG_IMAGE_PROVIDER,
-        generatedAt: Math.max(0, Number(value.generatedAt) || 0),
-    };
+    return image_patch.normalizeCgImageRecord(value);
 }
 
 export function sanitizeCgVisualText(value, limit = core_constants.MAX_CG_IMAGE_PROMPT_CHARS) {
@@ -116,9 +98,55 @@ export function cgImageTaskKey(mode, itemId, context = core_context.currentChara
     return `cg-image:${core_context.chatScopeKey(context)}:${mode}:${core_text.safeId(itemId, 'cg')}`;
 }
 
+export function cgImageReservationKey(mode, itemId, context = core_context.currentCharacterGuard()) {
+    // Billing dedupe is not a write capability: editing the same card's prose
+    // must not unlock a still-running request. Save permissions continue to use
+    // the separately captured, fingerprinted origin and item signature.
+    return `cg-billing:${JSON.stringify([core_context.comparableChatId(core_context.getChatId(context)),
+        String(context?.characterId ?? ''), core_context.currentCharacterAvatar(context), mode, String(itemId ?? '')])}`;
+}
+
 export function isCgImageDrawing(mode, itemId) {
-    try { return runtimeState.activeCgImageTasks.has(cgImageTaskKey(mode, itemId)); }
+    try { return runtimeState.activeCgImageTasks.has(cgImageTaskKey(mode, itemId))
+        || baibai_image.isBaiBaiImageTargetPending(cgImageReservationKey(mode, itemId)); }
     catch { return false; }
+}
+
+export function cgImageStartBlockedReason(mode, itemId, context = core_context.currentCharacterGuard()) {
+    const key = cgImageTaskKey(mode, itemId, context);
+    if (runtimeState.activeCgImageTasks.has(key) || baibai_image.isBaiBaiImageTargetPending(cgImageReservationKey(mode, itemId, context))) {
+        return '这张图片的绘制请求还未结束，请先等待，避免重复出图。';
+    }
+    if (runtimeState.activeCgImageTasks.size >= baibai_image.BAIBAI_IMAGE_CONCURRENCY
+        || baibai_image.baiBaiImagePendingCount() >= baibai_image.BAIBAI_IMAGE_CONCURRENCY) {
+        return '已有两张图片正在绘制，请等其中一张完成后再开始。';
+    }
+    return '';
+}
+
+// Style and panel actions belong to the daily-comic mode, even when a saved
+// prompt or an edited scene is used. The wrapper is idempotent and bounded.
+export function dailyComicImagePrompt(item, promptOverride) {
+    const marker = 'DAILY_COMIC_Q_V1';
+    const sceneMarker = '[SCENE] ';
+    let scene = sanitizeCgVisualText(promptOverride === undefined
+        ? normalizeCgImageRecord(item?.cgImage)?.prompt || item?.imagePrompt || item?.subtitle
+        : promptOverride);
+    if (scene.startsWith(marker) && scene.includes(sceneMarker)) scene = scene.slice(scene.indexOf(sceneMarker) + sceneMarker.length);
+    const panels = (Array.isArray(item?.panels) ? item.panels : []).slice(0, 4);
+    const count = panels.length || Math.max(1, Math.min(4, Number(item?.panelCount) || 1));
+    if (!scene && !panels.some(panel => sanitizeCgVisualText(panel?.action))) return '';
+    const cameras = ['wide establishing shot', 'medium action shot', 'close-up reaction', 'different final angle'];
+    const instructions = [
+        marker,
+        'chibi, super deformed, cute miniature anime characters, oversized heads and tiny bodies, Q版二头身，非正常成人身材比例',
+        count === 1 ? 'single-panel comic' : `${count} distinct vertically arranged comic panels, sequential visual storytelling`,
+        'consistent identity and clothing; different action, pose, expression and framing in each panel; do not duplicate or mirror a panel',
+        ...Array.from({ length: count }, (_, index) => `Panel ${index + 1}: ${cameras[index]}; ${sanitizeCgVisualText(panels[index]?.action || panels[index]?.caption, 200)}`),
+        'no text, no speech bubbles, no subtitles, no logo, no watermark',
+    ].join(', ');
+    const room = Math.max(0, core_constants.MAX_CG_IMAGE_PROMPT_CHARS - instructions.length - sceneMarker.length - 2);
+    return `${instructions}\n${sceneMarker}${scene.slice(0, room)}`;
 }
 
 export function cgImageLayerHtml(item, { lazy = true } = {}) {
@@ -134,16 +162,11 @@ export function cgImageLayerHtml(item, { lazy = true } = {}) {
 const capturedCgTargets = new WeakSet();
 
 export function cgItemSignature(item) {
-    return JSON.stringify([item?.id, item?.title, item?.date, item?.desc, item?.cgDesc,
-        item?.subtitle, item?.imagePrompt, item?.visualSeed, item?.panelCount, item?.panels,
-        normalizeCgImageRecord(item?.cgImage)]);
+    return image_patch.cgItemSignature(item);
 }
 
 export function cgItemInSession(mode, session, itemId) {
-    const rows = mode === core_constants.MODE.ALBUM ? session?.entries
-        : mode === core_constants.MODE.ADV ? session?.events
-            : mode === core_constants.MODE.HEART ? session?.dailyStrips : null;
-    return Array.isArray(rows) ? rows.find(item => item.id === itemId) || null : null;
+    return image_patch.cgItemInSession(mode, session, itemId);
 }
 
 export function captureCgImageTarget(target = selectedCgTarget()) {
@@ -205,7 +228,7 @@ export function buildCgReconceptPrompt(item, context, mode) {
 
 export async function reconceiveCgImagePrompt(target) {
     assertCgImageTargetCurrent(target);
-    if (runtimeState.activeCgImageTasks.size) throw core_text.safeUserError('请先等当前图片绘制完成，再重新构思画面。', 'RMT_CG_BUSY');
+    if (isCgImageDrawing(target.mode, target.itemId)) throw core_text.safeUserError('请先等这张图片绘制完成，再重新构思画面。', 'RMT_CG_BUSY');
     const context = core_context.currentCharacterGuard();
     const item = cgItemInSession(target.mode, target.session, target.itemId);
     const prompt = buildCgReconceptPrompt(item, context, target.mode);
@@ -238,8 +261,11 @@ export function cgImageProviderBar({ readOnly = false } = {}) {
 }
 
 function visibleCgImageTask() {
+    const selectedId = runtimeState.activeMode === core_constants.MODE.HEART
+        ? runtimeState.activeSession?.selectedStripId || runtimeState.activeSession?.dailyStrips?.[0]?.id
+        : runtimeState.activeSession?.selectedId;
     return [...runtimeState.activeCgImageTasks.values()].find(task =>
-        task.mode === runtimeState.activeMode && core_context.isCurrentTaskOrigin(task.origin));
+        task.mode === runtimeState.activeMode && task.itemId === selectedId && core_context.isCurrentTaskOrigin(task.origin));
 }
 
 export function cgImageProgressHtml() {
@@ -249,18 +275,26 @@ export function cgImageProgressHtml() {
 
 export function updateCgImageProgress(taskKey, progress) {
     const task = runtimeState.activeCgImageTasks.get(taskKey);
-    if (!task || task !== visibleCgImageTask() || task.controller.signal.aborted) return;
+    if (!task || task.controller.signal.aborted) return;
     const labels = { queued: '等待柏宝绘出图…', generating: '柏宝绘正在绘制…',
         'queued-remote': '在 ComfyUI 队列中等待…', retrying: '柏宝绘正在限流等待…', saving: '图片已生成，正在保存…' };
     const label = labels[progress?.phase];
     if (!label) return;
     task.imageProgress = label;
+    if (task !== visibleCgImageTask()) return;
     const overlay = globalThis.document?.getElementById?.(core_constants.OVERLAY_ID);
     for (const node of overlay?.querySelectorAll?.('[data-rmt-cg-progress]') || []) node.textContent = label;
 }
 
 export function cancelCurrentCgImage() {
     visibleCgImageTask()?.controller?.abort();
+}
+
+export function refreshSettledCgImage(taskKey, origin) {
+    // After a local cancellation/timeout the UI task is already removed, but the
+    // provider may only now have released its key. Re-enable controls read-only.
+    if (!runtimeState.activeCgImageTasks.has(taskKey) && core_context.isCurrentTaskOrigin(origin)
+        && [core_constants.MODE.ALBUM, core_constants.MODE.ADV, core_constants.MODE.HEART].includes(runtimeState.activeMode)) ui_overlay.renderActive();
 }
 
 export function refreshCgImageProviderBars() {
@@ -324,6 +358,19 @@ export function deferCgSessionIfOriginChanged(origin, mode, session) {
     return { deferred: true, durable };
 }
 
+export function deferCgImageIfOriginChanged(target, image) {
+    if (!capturedCgTargets.has(target) || target.imageLifecycleEpoch !== runtimeState.cgImageLifecycleEpoch
+        || Number(target.origin.lifecycleEpoch) !== runtimeState.runtimeLifecycleEpoch) {
+        throw core_text.safeUserError('这次图片任务已失效，旧图已保留。', 'RMT_CG_TARGET_CHANGED');
+    }
+    if (core_context.isCurrentTaskOrigin(target.origin)) return null;
+    const patch = image_patch.normalizeCgImagePatch({ version: 1, mode: target.mode, itemId: target.itemId,
+        expectedSignature: target.signature, image });
+    if (!patch) throw core_text.safeUserError('图片结果无法安全写回，旧图已保留。', 'RMT_CG_PATCH_INVALID');
+    const durable = core_requestCoordinator.queueDeferredCommit(target.origin, { kind: 'cgImagePatch', patch });
+    return { deferred: true, durable };
+}
+
 export function abortActiveCgImageTasks() {
     for (const task of runtimeState.activeCgImageTasks.values()) {
         try { task?.controller?.abort?.(); } catch {}
@@ -349,8 +396,9 @@ export async function drawSelectedCgImage({ promptOverride, expectedTarget = nul
         globalThis.toastr?.info?.(imageGenerationUnavailableMessage(imageState), '心迹回廊');
         return;
     }
-    if (runtimeState.activeCgImageTasks.size >= 1) {
-        globalThis.toastr?.info?.('已有一张 CG 正在绘制，请等它完成后再绘制下一张。', '心迹回廊');
+    const blockedReason = cgImageStartBlockedReason(mode, item.id, context);
+    if (blockedReason) {
+        globalThis.toastr?.info?.(blockedReason, '心迹回廊');
         return;
     }
     const previous = normalizeCgImageRecord(item.cgImage);
@@ -392,6 +440,8 @@ export async function drawSelectedCgImage({ promptOverride, expectedTarget = nul
     try {
         const generated = await invokeImageGeneration(prompt, context, {
             provider: imageState.provider, signal: controller.signal, orientation: 'landscape', characterName: context.name2,
+            targetKey: cgImageReservationKey(mode, itemId, context),
+            onSettled: () => refreshSettledCgImage(taskKey, origin),
             onProgress: progress => updateCgImageProgress(taskKey, progress),
         });
         const url = normalizeCgImageUrl(generated?.url);
@@ -410,9 +460,7 @@ export async function drawSelectedCgImage({ promptOverride, expectedTarget = nul
             if (session.archiveRevision !== captured.revision || cgItemSignature(item) !== captured.signature) {
                 throw core_text.safeUserError('原回忆已变化，新图片没有替换旧图；可以在生图插件图库中查看。', 'RMT_CG_TARGET_CHANGED');
             }
-            const staged = JSON.parse(JSON.stringify(session));
-            cgItemInSession(mode, staged, itemId).cgImage = nextImage;
-            const { durable } = deferCgSessionIfOriginChanged(origin, mode, staged);
+            const { durable } = deferCgImageIfOriginChanged(captured, nextImage);
             globalThis.toastr?.[durable ? 'success' : 'warning']?.(
                 durable
                     ? `CG 已绘制并安全等待写回：${item.title}；回到原聊天后会自动保存引用。`

@@ -22,7 +22,7 @@ function fictionalText(value, memory, max = L.prose, required = false, speaker =
     const result = clean(value, max, required);
     const context = roleContext(memory);
     if (speaker === 'user') [context.name1, context.name2] = [context.name2, context.name1];
-    try { relationshipSafety.assertPairRelationshipSafety(result, context, '前世今生'); }
+    try { relationshipSafety.assertPairRelationshipSafety(result, context, '前世今生', undefined, { fictionPairScope: true }); }
     catch { throw fail('RELATIONSHIP', '番外只能围绕两人展开，不增加前任或第三人的恋爱婚姻。'); }
     return result;
 }
@@ -204,8 +204,12 @@ export async function generatePastLivesWithRepair(context, memory, origin, taskK
     assertContextRead();
     const presentation = contract.pastLivesPresentation(presentationContext.profile);
     const baseOptions = { context, contextEnvelope: presentationContext.contextEnvelope, origin, mode: PAST_LIVES_MODE, background: true, temperature: 0.75 };
-    const plan = await generation.requestValidatedSegment(pastLivesPlanPrompt(context, memory, previous, presentation), '前世今生 · 正在写下入卷引子…',
-        { ...baseOptions, taskKey: `${taskKey}:past-lives-plan`, maxTokens: 4200 }, raw => normalizePastLivesPlan(raw, memory));
+    // r62 changes only the validator for this mode, not its r61 prompt recipe.
+    // The exact legacy prompt authenticates replay; it is not a general hash bypass.
+    const planPrompt = pastLivesPlanPrompt(context, memory, previous, presentation);
+    const compatibility = prompt => ({ contract: 'past-lives-readable-r62', legacyPrompts: [prompt] });
+    const plan = await generation.requestValidatedSegment(planPrompt, '前世今生 · 正在写下入卷引子…',
+        { ...baseOptions, taskKey: `${taskKey}:past-lives-plan`, maxTokens: 4200, recoveryCompatibility: compatibility(planPrompt) }, raw => normalizePastLivesPlan(raw, memory));
     const dossiers = [];
     for (const slot of plan.dossiers) {
         const prompt = `${prompts.promptSafetyBoundary(context, '前世今生 · 虚构卷宗')}
@@ -216,7 +220,7 @@ missing 必须有完整 revealedText，显字纯本地完成。每卷 clues 安�
 LOCAL_DOSSIER_PLAN:
 ${JSON.stringify({ opening: plan.opening, dossier: slot, presentation })}`;
         dossiers.push(await generation.requestValidatedSegment(prompt, `前世今生 · 正在展开「${slot.title}」…`,
-            { ...baseOptions, taskKey: `${taskKey}:past-lives-dossier:${slot.id}`, maxTokens: 6800 },
+            { ...baseOptions, taskKey: `${taskKey}:past-lives-dossier:${slot.id}`, maxTokens: 6800, recoveryCompatibility: compatibility(prompt) },
             raw => normalizePastLivesDossier(raw, memory, { id: slot.id, title: slot.title })));
     }
     const finalePrompt = `${prompts.promptSafetyBoundary(context, '前世今生 · 今生回响与落款')}
@@ -229,7 +233,7 @@ ${JSON.stringify({ title: plan.title, opening: plan.opening, dossiers })}
 UNTRUSTED_CURRENT_ARCHIVE_JSON:
 ${prompts.promptArchiveSlice(memory, 48)}`;
     const finale = await generation.requestValidatedSegment(finalePrompt, '前世今生 · 正在写今生回响与落款…',
-        { ...baseOptions, taskKey: `${taskKey}:past-lives-finale`, maxTokens: 6400 }, raw => normalizePastLivesFinale(raw, memory, dossiers));
+        { ...baseOptions, taskKey: `${taskKey}:past-lives-finale`, maxTokens: 6400, recoveryCompatibility: compatibility(finalePrompt) }, raw => normalizePastLivesFinale(raw, memory, dossiers));
     const episode = normalizePastLivesEpisode({ title: plan.title, opening: plan.opening, dossiers, ...finale }, memory,
         { id: localId('PL', previous?.episodes?.length || 0), presentation });
     const next = previous ? structuredClone(previous) : emptyPastLives(memory, context);

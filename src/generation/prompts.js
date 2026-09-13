@@ -306,7 +306,7 @@ JSON 结构必须严格为：
       "trueEnding": false,
       "sourceMemoryIds": ["M001"],
       "sourceMemoryAnchor": "主时间线必须从真实档案 anchors/title 原样复制一个具体锚点",
-      "monologue": "主时间线 {{char}} 第一人称观测独白，不少于100个汉字",
+      "monologue": "主时间线 {{char}} 第一人称观测独白，表达完整即可",
       "intervention": "当前世界线 {{char}} 的主时间线自省",
       "systemNote": "冷酷、客观的系统算法结局判定"
     },
@@ -330,7 +330,7 @@ JSON 结构必须严格为：
         "finalFate": "这个世界最终命运",
         "thirdPartyRomance": false
       },
-      "monologue": "这个平行世界中的 {{char}} 第一人称发言，不少于100个汉字；这是平行体本人说的话",
+      "monologue": "这个平行世界中的 {{char}} 第一人称发言；这是平行体本人说的话，长短随内容",
       "intervention": "现世 {{char}} 看见这个平行体后的即时共鸣、自省或告白",
       "systemNote": "冷酷算法对该平行时空主体的最终判定与结局预测"
     },
@@ -343,7 +343,7 @@ JSON 结构必须严格为：
       "sourceMemoryIds": [],
       "sourceMemoryAnchor": "",
       "monologue": "",
-      "intervention": "现世 {{char}} 已经看完前面所有平行世界、听完所有平行体发言之后的最终第一人称发言，不少于160个汉字",
+      "intervention": "现世 {{char}} 回应实际已观测内容的最终第一人称发言，表达完整即可",
       "systemNote": "系统对完整观测结束、现世主体回归主时间线后的最终判定"
     }
   ]
@@ -355,17 +355,17 @@ JSON 结构必须严格为：
 - 普通平行节点是模拟，不得伪装成已经发生的回忆；它们可以不带 sourceMemoryIds。若从某段档案作为分歧起点，可以附带真实引用，但平行世界里新增的事情仍只能写成模拟。
 - 普通平行节点要从角色卡、人设、世界书中的身份、职业、时代、地点、关系条件、选择或命运约束向外推演；不能只把同一场景换措辞。
 - 普通平行节点的 worldSpec.primaryAxis 必须按本地计划依次填写且不重复。worldSpec 其余字段都要填写具体内容，各份组合必须实质不同；thirdPartyRomance 必须始终为 false。
-- 每个普通平行节点的 monologue 都必须是【那个平行世界里的 {{char}} 本人】第一人称发言，不少于 100 个汉字，有具体生活、处境、记忆感与情绪；不能由现世 {{char}} 代替平行体说话。
+- 普通平行节点的 monologue 是【那个平行世界里的 {{char}} 本人】的发言，写清生活、处境与情绪即可，不按字数或代词次数凑篇幅。
 - 每个普通平行节点的 intervention 才是【现世 {{char}}】刚看完该平行体后的即时反应；不要把两种说话者混在一个字段里。
 - 最后一项必须 id="OMEGA"、trueEnding=true，label 包含“观测点 Ω”或“TRUE ENDING”。【Ω 不是平行世界，不存在平行体】；它的 monologue 必须严格为空字符串 ""，绝对禁止再写平行体发言。
-- Ω 的 intervention 是【现世 {{char}} 在看完前面全部平行世界、听完全部平行体发言之后】的最终第一人称发言，不少于 160 个汉字。应自然综合至少 3 种以上前面出现过的命运差异/情绪冲击，而不是只回应最后一个节点，也不要逐条机械复述。
+- Ω 的 intervention 是【现世 {{char}}】在观测后的最终发言。只回应实际已经观测的内容；无最低字数，不凑额外世界或差异。
 - Ω 的 systemNote 只评价“完整观测结束后的现世主体/主时间线”，不要再判定不存在的 Ω 平行体。
 - 普通节点 code 使用“> SIMULATION RECORD #...”形式；Ω 使用“> OBSERVATION POINT #OMEGA”。
-- 每条 systemNote 使用中文、冷酷客观的 AI 算法口吻，并明确出现分析结论、变量/概率和最终结局判定，不能写成温柔旁白。
+- systemNote 是简洁的观测批语，口吻符合终端与当前世界观，不要求固定算法词汇。
 - 禁止出现任何前任、前女友相关情节。
 - 禁止出现 {{char}} 与除了 {{user}} 以外任何人恋爱、结婚或组建家庭；第三方只能保持非恋爱关系。
-- Ω 必须把至少 3 种前述命运差异汇入最终判断，并清楚表达：跨越不可能仍然相遇是命运/奇迹，而 {{user}} 是所有世界线收敛后的唯一解。
-- 当普通分歧只有一两个时，三类差异指这些已生成 worldSpec 中真实改变的时代、身份、职业等条件，不是要求三个世界。Ω 只能回应实际已通过的节点，不能杜撰未观测的世界。
+- Ω 的收束应贴合两人的性格与已观测内容，可以简短，不强制出现命运、奇迹或唯一解等口号。
+- Ω 只能回应实际已通过的节点，不能杜撰未观测的世界。
 - 只输出结构化 JSON；视觉快照、像素边框、噪点、1 秒干扰动画由插件本地渲染，不由模型输出 HTML/CSS。蝴蝶效应页面现有 UI 完全冻结，本次只生成内容，不提出或描述任何 UI 改版。`,
     [core_constants.MODE.ENDING]: (context, memoryBank) => modes_ending.endingOutlinePrompt(context, memoryBank),
     [core_constants.MODE.HEART]: (context, memoryBank) => modes_heart.heartCorePrompt(context, memoryBank),

@@ -449,7 +449,7 @@ ${core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
 CURRENT_NODE_JSON:\n${JSON.stringify(item, null, 2)}
 ${evidence.length ? `TRUSTED_MAIN_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}` : ''}
 节点 id/code/locked/trueEnding、证据字段与已有 worldSpec 都由本地锁定，不接受模型改写。普通旧节点如果 CURRENT_NODE_JSON 缺少 worldSpec，则必须补全 primaryAxis 与 worldSpec 八个具体字段，并明确 thirdPartyRomance=false。
-严格输出：{"node":{"label":"...","primaryAxis":"era","worldSpec":{"primaryAxis":"era","era":"...","identity":"...","occupation":"...","location":"...","keyDecision":"...","encounterWithUser":"...","bondWithUser":"...","finalFate":"...","thirdPartyRomance":false},"monologue":"...","intervention":"...","systemNote":"..."}}。${item.trueEnding ? 'Ω 的 monologue 必须为空，intervention 不少于160个中文汉字，并明确命运/奇迹/唯一解。' : '普通分歧 monologue 不少于100个中文汉字且是第一人称；intervention 要由现世 {{char}} 对照“那个我”自省；systemNote 必须是冷酷中文算法判定。'}禁止前任，禁止 {{char}} 与 {{user}} 以外的任何人恋爱、结婚或成家。只输出 JSON。`;
+严格输出：{"node":{"label":"...","primaryAxis":"era","worldSpec":{"primaryAxis":"era","era":"...","identity":"...","occupation":"...","location":"...","keyDecision":"...","encounterWithUser":"...","bondWithUser":"...","finalFate":"...","thirdPartyRomance":false},"monologue":"...","intervention":"...","systemNote":"..."}}。${item.trueEnding ? 'Ω 的 monologue 为空，intervention 回应实际观测后的感受，完整即可，不凑字数或固定口号。' : '普通分歧 monologue 是平行世界角色本人的发言；intervention 是现世 {{char}} 的自省；systemNote 是简洁的观测批语。长短随内容，不按字数或代词次数验收。'}禁止前任，禁止 {{char}} 与 {{user}} 以外的任何人恋爱、结婚或成家。只输出 JSON。`;
     const raw = await generation_client.requestValidatedSegment(
         prompt, `重新生成「${item.label}」…`, taskOptions(core_constants.MODE.BUTTERFLY, context, origin, `${taskKey}:butterfly`, 9000, 0.7),
         data => normalizeRegeneratedButterflyNode(item, data?.node, memoryBank, context),
