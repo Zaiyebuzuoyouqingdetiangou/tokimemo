@@ -19,6 +19,7 @@ export const state = {
   roomLifeRefreshOrigin: null,
   activeTaskAbortController: null,
   activeTaskLabel: '',
+  activeTaskTrace: null,
   activeTaskBackgrounded: false,
   activeTaskOrigin: null,
   archivePreparationToken: null,

@@ -5,6 +5,7 @@ import * as core_constants from './constants.js';
 import * as core_context from './context.js';
 import * as image_patch from './cgImagePatch.js';
 import { state as runtimeState } from './state.js';
+import * as core_taskTrace from './taskTrace.js';
 import * as core_text from './text.js';
 import * as modes_heart from '../modes/heart.js';
 import * as modes_room from '../modes/room.js';

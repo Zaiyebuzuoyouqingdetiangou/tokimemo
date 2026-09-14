@@ -162,9 +162,13 @@ function mergeCacheSnapshotsWithModeFences(primary, secondary, supplied, canonic
                 && source[GENERATION_RECOVERY_CLEARED_KEY][mode] === fence) cleared[mode] = fence;
         }
         if (Object.prototype.hasOwnProperty.call(canonical?.[GENERATION_RECOVERY_CLEARED_KEY] || {}, mode)
-            && canonical[GENERATION_RECOVERY_CLEARED_KEY][mode] === fence) {
+            && canonical[GENERATION_RECOVERY_CLEARED_KEY][mode] === fence
+            && !(modeWriteFenceForCache(supplied, mode) === fence && recoveryCleared(supplied, mode)
+                && cacheOrderValue(supplied) > cacheOrderValue(canonical))) {
             // A completed/cleared generation's canonical artifact belongs to the same
             // commit as its clear marker; do not roll it back with a pre-completion mirror.
+            // A newer mirror which already carries that same completion marker
+            // may contain later image/UI edits; it is not a pre-completion snapshot.
             if (canonical[mode]) merged[mode] = cloneCacheValue(canonical[mode]);
             else delete merged[mode];
         }
@@ -1655,6 +1659,14 @@ export async function commitSessionMutation(mode, expectedChatId, expectedTaskOr
         context.chatMetadata[core_constants.CACHE_KEY] = cloneCacheValue(committed.stored);
         try { await saveMetadataDurably(context); }
         catch (error) {
+            if (options.keepCommittedOnMirrorFailure === true) {
+                // The awaited IndexedDB transaction already owns this image.
+                // A host mirror scheduling failure must not discard a confirmed
+                // image or invite another paid generation.
+                console.warn('[HeartbeatMemories] CG metadata mirror not scheduled',
+                    { code: 'RMT_CG_MIRROR_PENDING', stage: 'mirror' });
+                return cloneCacheValue(stagedSession);
+            }
             if (hadStored) context.chatMetadata[core_constants.CACHE_KEY] = previousStored;
             else delete context.chatMetadata[core_constants.CACHE_KEY];
             if (hadRuntime) rememberRuntimeSessionCache(scope, previousRuntime);

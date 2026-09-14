@@ -81,6 +81,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_PAST_LIVES_VERSION: '这份前世今生暂时无法按当前格式读取；旧记录保留，请勿删除档案。',
     RMT_PAST_LIVES_LIMIT: '前世今生已达到本地保存容量；旧内容与成功部分保留。',
     RMT_PAIR_RELATIONSHIP: '这一段出现与两人设定冲突的关系表述；原有内容保留。',
+    RMT_RECOVERY_INPUT_CHANGED: '建档期间这个聊天窗口或生成设置发生了变化，已通过校验的分块全部保留；请点「重试未完成分块」继续，不会重做成功项。',
     RMT_RECOVERY_VALIDATION_CHANGED: '已保存片段暂未通过当前校验；草稿仍保留，没有重新收费生成。',
     RMT_RECOVERY_STORAGE: '这一段已返回，但浏览器没有保存成功；已停止后续生成，请检查存储后重试。',
     RMT_RECOVERY_LIMIT: '这一段超出草稿保存容量；此前成功部分与旧内容保留。',

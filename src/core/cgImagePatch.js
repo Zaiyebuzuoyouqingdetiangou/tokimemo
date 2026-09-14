@@ -2,6 +2,7 @@
 // deferred payload: never replay a stale whole Album / ADV / Heart session.
 import * as constants from './constants.js';
 import * as text from './text.js';
+import * as appearance from '../generation/cgAppearance.js';
 
 const IMAGE_MODES = new Set([constants.MODE.ALBUM, constants.MODE.ADV, constants.MODE.HEART]);
 
@@ -24,9 +25,11 @@ export function normalizeCgImageRecord(value) {
     if (!value || typeof value !== 'object') return null;
     const url = normalizeCgImageUrl(value.url);
     if (!url) return null;
+    const promptMetadata = appearance.normalizeCgPromptMetadata(value.promptMetadata);
     return { url, prompt: text.normalizeText(value.prompt, constants.MAX_CG_IMAGE_PROMPT_CHARS),
         provider: value.provider === 'baibai-image' ? 'baibai-image' : constants.CG_IMAGE_PROVIDER,
-        generatedAt: Math.max(0, Number(value.generatedAt) || 0) };
+        generatedAt: Math.max(0, Number(value.generatedAt) || 0),
+        ...(promptMetadata ? { promptMetadata } : {}) };
 }
 
 export function cgItemInSession(mode, session, itemId) {
