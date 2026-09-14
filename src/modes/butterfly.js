@@ -246,11 +246,27 @@ export function normalizeButterfly(data, memoryBank, context = {}, options = {})
     };
 }
 
+// The code-owned slot marker keeps r84 drafts on their original prompt recipe.
+// It is not acceptance authority: recovery still checks the exact request hash.
+const NARRATIVE_SLOT_MARKER = ':narrative-r84';
+
+export function butterflySlotPrompt(context, memoryBank, index, slot, nodes, options = {}) {
+    const basePrompt = generation_prompts.PROMPTS[core_constants.MODE.BUTTERFLY](context, memoryBank, options);
+    const existing = nodes.map(node => ({ label: node.label, primaryAxis: node.primaryAxis, worldSpec: node.worldSpec }));
+    return basePrompt + '\n【本请求的分段输出规则替代上面的整批输出 schema】'
+        + '\n你这次只输出 {"node":{当前一个完整节点}}，不要返回 nodes 数组或其他节点。不凑节点数量。'
+        + '\nCURRENT_SLOT_JSON:' + JSON.stringify({ index, kind: slot, primaryAxis: PRIMARY_AXIS_SET.has(slot) ? slot : undefined })
+        + (options.readableR62
+            ? '\nMAIN 只写主时间线，并可给 node.branchAxes 数组，从 era/identity/occupation/location/decision/encounter/bond/fate 选择真正需要的维度。可为空，缺省只展开一个 decision。普通槽位使用指定 primaryAxis；OMEGA 只写终点。没有字数、人称次数或凑齐维度的要求。'
+            : '\nMAIN 只写主时间线，并给 node.branchAxes 数组，从 era/identity/occupation/location/decision/encounter/bond/fate 选择至少一个值得展开的分歧维度，缺省为 decision。普通槽位使用指定 primaryAxis；OMEGA 只写终点。继续遵守上面的观测叙事、来源和关系要求。')
+        + '\nEXISTING_VALID_WORLD_INDEX_JSON:' + JSON.stringify(existing)
+        + (slot === 'OMEGA' ? '\nVALIDATED_VOICES_JSON:' + JSON.stringify(nodes.map(node => ({ label: node.label, monologue: node.monologue.slice(0, 700), intervention: node.intervention.slice(0, 500) }))) : '');
+}
+
 export async function generateButterflyWithRepair(context, memoryBank, origin, taskKey, dependencies = {}) {
     const plan = core_butterflyContract.buildButterflyPlan(memoryBank);
     if (!plan.total) throw new Error('当前没有可用记忆，请先生成当前窗口档案。');
     const request = dependencies.request || generation_client.requestValidatedSegment;
-    const basePrompt = generation_prompts.PROMPTS[core_constants.MODE.BUTTERFLY](context, memoryBank);
     const contextEnvelope = dependencies.contextEnvelope ?? await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generation_client.generationWorldInfoScanTerms(core_constants.MODE.BUTTERFLY, context) });
     const nodes = [];
     const labels = new Set(), signatures = new Set(), monologues = new Set();
@@ -261,11 +277,13 @@ export async function generateButterflyWithRepair(context, memoryBank, origin, t
     const savedSegments = generation_recovery.generationRecoverySegmentsForOrigin(origin) || [];
     const savedMain = savedSegments.find(segment => /:slot:0$/u.test(segment.slot));
     const legacyPlan = legacy_recovery.legacyButterflyPlan(memoryBank);
-    // Restored to the pre-r62 rules by request: the readable-r62 contract dropped every
-    // length/person quota and the fixed axis plan, which changed what the mode produces.
-    // A draft saved under the newer contract still resumes under that contract.
+    // Only a real old draft may retain the old fixed plan. A new task must use
+    // MAIN's chosen axes, rather than an empty list of previously attempted slots.
+    const savedNarrative = savedMain?.slot.endsWith(NARRATIVE_SLOT_MARKER + ':slot:0') === true;
+    const readableR62 = Boolean(savedMain) && !savedNarrative;
     const savedReadableContract = savedMain?.contract === 'butterfly-readable-r62';
-    const continueLegacyPlan = !savedReadableContract;
+    const continueLegacyPlan = readableR62 && !savedReadableContract;
+    const requestTaskKey = readableR62 ? taskKey : taskKey + NARRATIVE_SLOT_MARKER;
     const attemptedLegacyBranches = continueLegacyPlan ? Math.max(0, ...savedSegments.map(segment => {
         const index = Number(segment.slot.match(/:slot:(\d+)$/u)?.[1]);
         return index > 0 && index <= legacyPlan.axes.length ? index : 0;
@@ -275,24 +293,21 @@ export async function generateButterflyWithRepair(context, memoryBank, origin, t
         // A legacy Ω keeps its original slot number, even when unstarted old
         // quota slots are omitted. This makes a second interruption resumable.
         const requestIndex = continueLegacyPlan && slot === 'OMEGA' ? legacyPlan.axes.length + 1 : index;
-        const existing = nodes.map(node => ({ label: node.label, primaryAxis: node.primaryAxis, worldSpec: node.worldSpec }));
-        const prompt = basePrompt + '\n【本请求的分段输出规则替代上面的整批输出 schema】'
-            + '\n你这次只输出 {"node":{当前一个完整节点}}，不要返回 nodes 数组或其他节点。不凑节点数量。'
-            + '\nCURRENT_SLOT_JSON:' + JSON.stringify({ index, kind: slot, primaryAxis: PRIMARY_AXIS_SET.has(slot) ? slot : undefined })
-            + '\nMAIN 只写主时间线，并可给 node.branchAxes 数组，从 era/identity/occupation/location/decision/encounter/bond/fate 选择真正需要的维度。可为空，缺省只展开一个 decision。普通槽位使用指定 primaryAxis；OMEGA 只写终点。没有字数、人称次数或凑齐维度的要求。'
-            + '\nEXISTING_VALID_WORLD_INDEX_JSON:' + JSON.stringify(existing)
-            + (slot === 'OMEGA' ? '\nVALIDATED_VOICES_JSON:' + JSON.stringify(nodes.map(node => ({ label: node.label, monologue: node.monologue.slice(0, 700), intervention: node.intervention.slice(0, 500) }))) : '');
+        const prompt = butterflySlotPrompt(context, memoryBank, index, slot, nodes, { readableR62 });
         const node = await request(prompt, '蝴蝶效应 · 节点 ' + (index + 1) + '/' + (index ? slots.length : '待定') + ' · ' + slot,
-            { maxTokens: 4096, temperature: 0.55, context, contextEnvelope, origin, taskKey: taskKey + ':slot:' + requestIndex, mode: core_constants.MODE.BUTTERFLY, background: true,
-                recoveryCompatibility: { contract: continueLegacyPlan ? 'butterfly-legacy-plan-r62' : 'butterfly-readable-r62',
-                    legacyPrompts: [legacy_recovery.legacyButterflySlotPrompt(context, memoryBank, requestIndex, nodes)] } },
+            { maxTokens: 4096, temperature: 0.55, context, contextEnvelope, origin, taskKey: requestTaskKey + ':slot:' + requestIndex, mode: core_constants.MODE.BUTTERFLY, background: true,
+                ...(readableR62 ? { recoveryCompatibility: { contract: continueLegacyPlan ? 'butterfly-legacy-plan-r62' : 'butterfly-readable-r62',
+                    legacyPrompts: [legacy_recovery.legacyButterflySlotPrompt(context, memoryBank, requestIndex, nodes)] } } : {}) },
             value => {
                 const raw = value?.node;
                 if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw core_butterflyContract.butterflyValidationError('worldSpec');
                 const candidate = index === 0 ? normalizedMainNode(raw, memoryBank, context)
                     : slot === 'OMEGA' ? normalizeButterflyOmega(raw, context)
                     : normalizeButterflyBranch(raw, index, memoryBank, context);
-                if (index === 0) candidate.branchAxes = core_butterflyContract.normalizeButterflyBranchAxes(raw.branchAxes);
+                if (index === 0) {
+                    candidate.branchAxes = core_butterflyContract.normalizeButterflyBranchAxes(raw.branchAxes);
+                    if (!readableR62 && !candidate.branchAxes.length) candidate.branchAxes = ['decision'];
+                }
                 if (PRIMARY_AXIS_SET.has(slot)) {
                     const label = core_incremental.normalizedContentKey(candidate.label, 180);
                     const signature = butterflyWorldSignature(candidate);
@@ -316,7 +331,7 @@ export async function generateButterflyWithRepair(context, memoryBank, origin, t
     }
     return normalizeButterfly({ nodes }, memoryBank, context, { expectedAxes: plannedAxes });
 }
-export function butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) {
+export function butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds, options = {}) {
     const existing = (Array.isArray(previous?.nodes) ? previous.nodes.slice(1, -1) : []).slice(-core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
         id: core_text.normalizeText(item?.id, 50),
         label: core_text.normalizeText(item?.label, 120),
@@ -325,7 +340,7 @@ export function butterflyIncrementPrompt(context, memoryBank, previous, sourceMe
         worldSpec: looseWorldSpec(item),
     }));
     return `${generation_prompts.promptSafetyBoundary(context, '蝴蝶效应 / 增量分歧')}
-${core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
+${options.readableR62 ? core_butterflyContract.BUTTERFLY_READABLE_R62_CONTRACT : core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
 旧终端节点由本地原样保留。本请求只根据当前档案写确有不同的平行分歧，最多三个是容量上限，不是目标数量。没有新分歧可以只写新观测点 Ω；禁止改写或换措辞复述旧节点。
 UNTRUSTED_INCREMENTAL_TIMELINE_JSON:
 ${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}
@@ -333,15 +348,15 @@ EXISTING_DIVERGENCE_INDEX_JSON:
 ${JSON.stringify(existing, null, 2)}
 
 严格输出：
-{"nodes":[{"id":"EG_NEW_01","label":"新的分歧点","primaryAxis":"era","worldSpec":{"primaryAxis":"era","era":"具体时代","identity":"具体身份","occupation":"具体职业","location":"具体地点","keyDecision":"关键选择","encounterWithUser":"与 {{user}} 如何相遇或错过","bondWithUser":"与 {{user}} 的关系结果","finalFate":"最终命运","thirdPartyRomance":false},"sourceMemoryIds":[],"sourceMemoryAnchor":"","monologue":"该平行世界角色的心声","intervention":"现世角色读后的回应","systemNote":"简短观测结论"}],"omega":{"id":"OMEGA","label":"观测点 Ω：再次回归现世","monologue":"","intervention":"回应已经看到的分歧与当下选择","systemNote":"本次观测的收尾"}}
+{"nodes":[{"id":"EG_NEW_01","label":"新的分歧点","primaryAxis":"era","worldSpec":{"primaryAxis":"era","era":"具体时代","identity":"具体身份","occupation":"具体职业","location":"具体地点","keyDecision":"关键选择","encounterWithUser":"与 {{user}} 如何相遇或错过","bondWithUser":"与 {{user}} 的关系结果","finalFate":"最终命运","thirdPartyRomance":false},"sourceMemoryIds":[],"sourceMemoryAnchor":"","monologue":"${options.readableR62 ? '该平行世界角色的心声' : '平行体完整第一人称独白，展开生活、选择代价与情绪'}","intervention":"${options.readableR62 ? '现世角色读后的回应' : '现世角色对照另一个我后的触动与自省'}","systemNote":"${options.readableR62 ? '简短观测结论' : '冷酷系统对关键变量和命运结果的判定'}"}],"omega":{"id":"OMEGA","label":"观测点 Ω：再次回归现世","monologue":"","intervention":"${options.readableR62 ? '回应已经看到的分歧与当下选择' : '汇合已观测命运，回到与 {{user}} 的当下关系，形成情绪余韵'}","systemNote":"本次观测的收尾"}}
 
 要求：
 - nodes 可以为空，最多三个真正新的普通分歧；primaryAxis 只能是 era/identity/occupation/location/decision/encounter/bond/fate。
 - worldSpec 八个文本字段都要具体，不得写“同上/不变/未知”，thirdPartyRomance 必须为 false，且整体命运组合不得与旧 worldSpec 重复。
-- monologue、intervention、systemNote 有完整内容即可，不要求字数、人称次数或算法词配额。
+- ${options.readableR62 ? 'monologue、intervention、systemNote 有完整内容即可，不要求字数、人称次数或算法词配额。' : 'monologue 展开具体人生与情绪起伏，intervention 写出对照后的自省，systemNote 给出冷静冷酷的明确判定；不靠字数、代词或术语配额凑篇幅。'}
 - 新分歧应由 incrementalMemoryIds 带来的关系变化、选择或理解触发，但仍明确是模拟，不伪装成真实历史。
 - 必须避开 EXISTING_DIVERGENCE_INDEX_JSON 的标签和命运条件。
-- omega.monologue 为空，intervention 自然收尾，不强迫告白或凑齐差异维度。
+- ${options.readableR62 ? 'omega.monologue 为空，intervention 自然收尾，不强迫告白或凑齐差异维度。' : 'omega.monologue 为空，intervention 汇合实际看到的新旧命运，写出回归现世后对 {{user}} 的理解、珍惜或选择，贴合当前关系，不擅自确立恋爱。'}
 - 禁止前任/前女友；禁止 {{char}} 与 {{user}} 以外任何人恋爱、结婚或组建家庭。只输出 JSON。`;
 }
 
@@ -491,13 +506,15 @@ export async function generateButterflyIncrementalWithRepair(context, memoryBank
         const sanitized = mergeButterflyIncremental(previous, { branches: [], omega: previous.nodes?.[previous.nodes.length - 1] }, sourceMemoryIds);
         return core_incremental.stampIncrementalCoverage(sanitized, previous, memoryBank, 'mode', sourceMemoryIds, 0);
     }
+    const savedIncrement = generation_recovery.generationRecoverySegmentsForOrigin(origin)?.find(segment => /:increment$/u.test(segment.slot));
+    const readableR62 = Boolean(savedIncrement) && !savedIncrement.slot.endsWith(NARRATIVE_SLOT_MARKER + ':increment');
     const part = await generation_client.requestValidatedSegment(
-        butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
+        butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds, { readableR62 }) + core_incremental.derivedExpansionDirective(previous, memoryBank),
         '蝴蝶效应 · 正在追加新的平行分歧…',
-        { maxTokens: 9000, temperature: 0.55, context, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.BUTTERFLY, background: true,
-            recoveryCompatibility: { contract: 'butterfly-readable-r62', legacyPrompts: [
+        { maxTokens: 9000, temperature: 0.55, context, origin, taskKey: `${taskKey}${readableR62 ? '' : NARRATIVE_SLOT_MARKER}:increment`, mode: core_constants.MODE.BUTTERFLY, background: true,
+            ...(readableR62 ? { recoveryCompatibility: { contract: 'butterfly-readable-r62', legacyPrompts: [
                 legacy_recovery.legacyButterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
-            ] } },
+            ] } } : {}) },
         raw => normalizeButterflyIncrementPart(raw, memoryBank, context),
     );
     const merged = mergeButterflyIncremental(previous, part, sourceMemoryIds);

@@ -27,20 +27,29 @@ export function normalizeButterflyBranchAxes(value) {
     return [...new Set(value)];
 }
 
-export function butterflyPlanPrompt(memoryBank) {
+export function butterflyPlanPrompt(memoryBank, { readableR62 = false } = {}) {
     const plan = buildButterflyPlan(memoryBank);
     return plan.total
-        ? '先写 MAIN，并在 MAIN.branchAxes 中选择本次值得展开的分歧维度；数量由内容决定，可为空。无需遍历所有维度，也不随记忆条数增加节点。每次只写当前一段，最后 OMEGA 收尾。'
+        ? readableR62
+            ? '先写 MAIN，并在 MAIN.branchAxes 中选择本次值得展开的分歧维度；数量由内容决定，可为空。无需遍历所有维度，也不随记忆条数增加节点。每次只写当前一段，最后 OMEGA 收尾。'
+            : '先写 MAIN，并在 MAIN.branchAxes 中选择至少一个值得展开的分歧维度，展示人生关键条件改变后的不同命运。无需遍历所有维度，也不随记忆条数增加节点。每次只写当前一段，最后 OMEGA 收尾。'
         : '当前没有可用档案锚点，不生成观测节点。';
 }
 
 // Retained export for compatibility. These are not generation minima.
 export const BUTTERFLY_LIMITS = Object.freeze({ monologueHan: 0, monologueFirstPerson: 0, interventionHan: 0, omegaHan: 0, omegaFirstPerson: 0, systemHan: 0 });
-export const BUTTERFLY_GENERATION_CONTRACT = `【节点完整性契约】
+// Exact r62 text is retained solely for resuming already-started requests.
+export const BUTTERFLY_READABLE_R62_CONTRACT = `【节点完整性契约】
 MAIN 与普通分歧的 monologue 是角色在该世界的完整心声，intervention 是现世角色读后的回应；短句也可以。不要求固定汉字数、第一人称次数或指定文学用词。
 systemNote 给出易读、完整的简短观测结论，不用凑算法术语或固定判定句。
 Ω 的 label 含“观测点 Ω”或“TRUE ENDING”；monologue 为空，intervention 回应已经看过的内容，systemNote 负责收尾。没有普通分歧时也可以回到现世，不虚构额外世界，不强迫告白或永世相守。
 worldSpec 的 era、identity、occupation、location、keyDecision、encounterWithUser、bondWithUser、finalFate 八字段均为具体文本，不用“同上/不变/未知”；thirdPartyRomance 严格为 false。不得虚构第三方恋爱、婚姻或前任；节点标题、世界条件与独白均不可重复。`;
+
+export const BUTTERFLY_GENERATION_CONTRACT = `【观测叙事】
+MAIN 与普通分歧的 monologue 由该世界的 {{char}} 以第一人称展开生活处境、关键选择及其代价、内心情绪，形成有起伏的完整独白，不以一句概述代替。intervention 则由现世 {{char}} 对照“另一个我”，写出被触动后的即时反应与自省；口吻贴合人设，两种说话者不要混淆。
+systemNote 以冷静、冷酷的系统口吻点明关键变量与命运结果，形成明确判定，与人物的情绪形成反差，术语贴合世界观。
+Ω 的 label 含“观测点 Ω”或“TRUE ENDING”，monologue 为空。intervention 汇合实际已观测的不同命运，由现世 {{char}} 回到与 {{user}} 的当下关系，写出这一轮观测如何改变自己的理解、珍惜或选择，形成有余韵的情绪落点；systemNote 判定观测结束后的现世主体。不得虚构未观测的世界或擅自把当前关系升级为恋爱、婚姻。
+不设字数、代词次数或算法词汇配额。worldSpec 的 era、identity、occupation、location、keyDecision、encounterWithUser、bondWithUser、finalFate 均为具体文本，不用“同上/不变/未知”；thirdPartyRomance 严格为 false。不得虚构第三方恋爱、婚姻或前任；节点标题、世界条件与独白均不可重复。`;
 
 const ISSUES = Object.freeze({
     relationship: '本段出现明确的前任或第三方恋爱、婚姻情节，请只调整这一处；两人的旁白和省略主语不需要反复补“我与你”。',

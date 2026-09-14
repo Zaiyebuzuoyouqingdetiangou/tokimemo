@@ -276,9 +276,9 @@ CURRENT_LOCAL_DATE: ${currentDate}
 
 export const PROMPTS = {
     [core_constants.MODE.CALENDAR]: (context, memoryBank) => calendarPrompt(context, memoryBank),
-    [core_constants.MODE.BUTTERFLY]: (context, memoryBank) => `${promptSafetyBoundary(context, '蝴蝶效应')}
-${core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
-${core_butterflyContract.butterflyPlanPrompt(memoryBank)}
+    [core_constants.MODE.BUTTERFLY]: (context, memoryBank, options = {}) => `${promptSafetyBoundary(context, '蝴蝶效应')}
+${options.readableR62 ? core_butterflyContract.BUTTERFLY_READABLE_R62_CONTRACT : core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
+${core_butterflyContract.butterflyPlanPrompt(memoryBank, options)}
 主时间线只从下面较小的档案锚点集中取证；平行分歧主要依据受控角色卡/人设/世界书推演。
 UNTRUSTED_TIMELINE_ANCHORS_JSON:
 ${promptArchiveSlice(memoryBank, 16)}
@@ -306,7 +306,7 @@ JSON 结构必须严格为：
       "trueEnding": false,
       "sourceMemoryIds": ["M001"],
       "sourceMemoryAnchor": "主时间线必须从真实档案 anchors/title 原样复制一个具体锚点",
-      "monologue": "主时间线 {{char}} 第一人称观测独白，表达完整即可",
+      "monologue": "${options.readableR62 ? '主时间线 {{char}} 第一人称观测独白，表达完整即可' : '主时间线 {{char}} 第一人称独白，展开有档案依据的处境、选择与情绪'}",
       "intervention": "当前世界线 {{char}} 的主时间线自省",
       "systemNote": "冷酷、客观的系统算法结局判定"
     },
@@ -330,7 +330,7 @@ JSON 结构必须严格为：
         "finalFate": "这个世界最终命运",
         "thirdPartyRomance": false
       },
-      "monologue": "这个平行世界中的 {{char}} 第一人称发言；这是平行体本人说的话，长短随内容",
+      "monologue": "${options.readableR62 ? '这个平行世界中的 {{char}} 第一人称发言；这是平行体本人说的话，长短随内容' : '平行体 {{char}} 的完整第一人称独白，展开不同人生的生活、选择代价和情绪变化'}",
       "intervention": "现世 {{char}} 看见这个平行体后的即时共鸣、自省或告白",
       "systemNote": "冷酷算法对该平行时空主体的最终判定与结局预测"
     },
@@ -343,7 +343,7 @@ JSON 结构必须严格为：
       "sourceMemoryIds": [],
       "sourceMemoryAnchor": "",
       "monologue": "",
-      "intervention": "现世 {{char}} 回应实际已观测内容的最终第一人称发言，表达完整即可",
+      "intervention": "${options.readableR62 ? '现世 {{char}} 回应实际已观测内容的最终第一人称发言，表达完整即可' : '现世 {{char}} 汇合已观测命运后的第一人称发言，回到与 {{user}} 的当下，形成情绪落点'}",
       "systemNote": "系统对完整观测结束、现世主体回归主时间线后的最终判定"
     }
   ]
@@ -355,16 +355,16 @@ JSON 结构必须严格为：
 - 普通平行节点是模拟，不得伪装成已经发生的回忆；它们可以不带 sourceMemoryIds。若从某段档案作为分歧起点，可以附带真实引用，但平行世界里新增的事情仍只能写成模拟。
 - 普通平行节点要从角色卡、人设、世界书中的身份、职业、时代、地点、关系条件、选择或命运约束向外推演；不能只把同一场景换措辞。
 - 普通平行节点的 worldSpec.primaryAxis 必须按本地计划依次填写且不重复。worldSpec 其余字段都要填写具体内容，各份组合必须实质不同；thirdPartyRomance 必须始终为 false。
-- 普通平行节点的 monologue 是【那个平行世界里的 {{char}} 本人】的发言，写清生活、处境与情绪即可，不按字数或代词次数凑篇幅。
+- ${options.readableR62 ? '普通平行节点的 monologue 是【那个平行世界里的 {{char}} 本人】的发言，写清生活、处境与情绪即可，不按字数或代词次数凑篇幅。' : '普通平行节点的 monologue 是【那个平行世界里的 {{char}} 本人】的完整独白，要让人看见具体人生和选择的代价，情绪有展开，不以情节提纲代替。'}
 - 每个普通平行节点的 intervention 才是【现世 {{char}}】刚看完该平行体后的即时反应；不要把两种说话者混在一个字段里。
 - 最后一项必须 id="OMEGA"、trueEnding=true，label 包含“观测点 Ω”或“TRUE ENDING”。【Ω 不是平行世界，不存在平行体】；它的 monologue 必须严格为空字符串 ""，绝对禁止再写平行体发言。
-- Ω 的 intervention 是【现世 {{char}}】在观测后的最终发言。只回应实际已经观测的内容；无最低字数，不凑额外世界或差异。
+- ${options.readableR62 ? 'Ω 的 intervention 是【现世 {{char}}】在观测后的最终发言。只回应实际已经观测的内容；无最低字数，不凑额外世界或差异。' : 'Ω 的 intervention 是【现世 {{char}}】观测后的最终发言，将实际看过的命运差异化为对当下关系的理解、珍惜或选择，不只是逐条总结。'}
 - Ω 的 systemNote 只评价“完整观测结束后的现世主体/主时间线”，不要再判定不存在的 Ω 平行体。
 - 普通节点 code 使用“> SIMULATION RECORD #...”形式；Ω 使用“> OBSERVATION POINT #OMEGA”。
-- systemNote 是简洁的观测批语，口吻符合终端与当前世界观，不要求固定算法词汇。
+- ${options.readableR62 ? 'systemNote 是简洁的观测批语，口吻符合终端与当前世界观，不要求固定算法词汇。' : 'systemNote 是冷静、冷酷的系统判定，点明人生关键变量与结局，形成理性判定和人物情感的反差，术语符合世界观。'}
 - 禁止出现任何前任、前女友相关情节。
 - 禁止出现 {{char}} 与除了 {{user}} 以外任何人恋爱、结婚或组建家庭；第三方只能保持非恋爱关系。
-- Ω 的收束应贴合两人的性格与已观测内容，可以简短，不强制出现命运、奇迹或唯一解等口号。
+- ${options.readableR62 ? 'Ω 的收束应贴合两人的性格与已观测内容，可以简短，不强制出现命运、奇迹或唯一解等口号。' : 'Ω 的收束贴合两人的性格与当前关系，让不同命运在现世汇合并留下情绪余韵；珍惜与选择须有观测铺垫，不套用告白口号或擅自确立恋爱。'}
 - Ω 只能回应实际已通过的节点，不能杜撰未观测的世界。
 - 只输出结构化 JSON；视觉快照、像素边框、噪点、1 秒干扰动画由插件本地渲染，不由模型输出 HTML/CSS。蝴蝶效应页面现有 UI 完全冻结，本次只生成内容，不提出或描述任何 UI 改版。`,
     [core_constants.MODE.ENDING]: (context, memoryBank) => modes_ending.endingOutlinePrompt(context, memoryBank),

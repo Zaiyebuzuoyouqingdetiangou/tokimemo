@@ -15,6 +15,7 @@ import * as modes_butterfly from '../modes/butterfly.js';
 import * as modes_phone from '../modes/phone.js';
 import * as generation_client from './client.js';
 import * as generation_prompts from './prompts.js';
+import * as generation_recovery from './recovery.js';
 
 function taskOptions(mode, context, origin, taskKey, maxTokens = 6000, temperature = 0.45) {
     return { maxTokens, temperature, context, origin, taskKey, mode, background: true };
@@ -441,17 +442,22 @@ export function normalizeRegeneratedButterflyNode(item, rawNode, memoryBank, con
     };
 }
 
-async function regenerateButterflyNode(item, context, memoryBank, origin, taskKey) {
+async function regenerateButterflyNode(item, context, memoryBank, origin, taskKey, observedNodes = []) {
+    const savedNode = generation_recovery.generationRecoverySegmentsForOrigin(origin)?.find(segment => /:butterfly$/u.test(segment.slot));
+    const readableR62 = Boolean(savedNode) && !savedNode.slot.endsWith(':narrative-r84:butterfly');
     const evidence = item.sourceMemoryIds?.length ? core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 10) : [];
     const prompt = `${generation_prompts.promptSafetyBoundary(context, '蝴蝶效应 / 单个观测节点重新生成')}
-${core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
+${readableR62 ? core_butterflyContract.BUTTERFLY_READABLE_R62_CONTRACT : core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
 只重新生成下面这个${item.trueEnding ? '观测点 Ω' : '平行分歧'}的模拟内容，保持节点身份不变。它是派生模拟，不得修改正式档案。
 CURRENT_NODE_JSON:\n${JSON.stringify(item, null, 2)}
 ${evidence.length ? `TRUSTED_MAIN_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}` : ''}
 节点 id/code/locked/trueEnding、证据字段与已有 worldSpec 都由本地锁定，不接受模型改写。普通旧节点如果 CURRENT_NODE_JSON 缺少 worldSpec，则必须补全 primaryAxis 与 worldSpec 八个具体字段，并明确 thirdPartyRomance=false。
-严格输出：{"node":{"label":"...","primaryAxis":"era","worldSpec":{"primaryAxis":"era","era":"...","identity":"...","occupation":"...","location":"...","keyDecision":"...","encounterWithUser":"...","bondWithUser":"...","finalFate":"...","thirdPartyRomance":false},"monologue":"...","intervention":"...","systemNote":"..."}}。${item.trueEnding ? 'Ω 的 monologue 为空，intervention 回应实际观测后的感受，完整即可，不凑字数或固定口号。' : '普通分歧 monologue 是平行世界角色本人的发言；intervention 是现世 {{char}} 的自省；systemNote 是简洁的观测批语。长短随内容，不按字数或代词次数验收。'}禁止前任，禁止 {{char}} 与 {{user}} 以外的任何人恋爱、结婚或成家。只输出 JSON。`;
+严格输出：{"node":{"label":"...","primaryAxis":"era","worldSpec":{"primaryAxis":"era","era":"...","identity":"...","occupation":"...","location":"...","keyDecision":"...","encounterWithUser":"...","bondWithUser":"...","finalFate":"...","thirdPartyRomance":false},"monologue":"...","intervention":"...","systemNote":"..."}}。${readableR62
+        ? item.trueEnding ? 'Ω 的 monologue 为空，intervention 回应实际观测后的感受，完整即可，不凑字数或固定口号。' : '普通分歧 monologue 是平行世界角色本人的发言；intervention 是现世 {{char}} 的自省；systemNote 是简洁的观测批语。长短随内容，不按字数或代词次数验收。'
+        : item.trueEnding ? 'Ω 的 monologue 为空，intervention 汇合实际已观测命运，回到与 {{user}} 的当下关系，形成有余韵的情绪落点；不擅自确立恋爱。' : '普通分歧 monologue 展开平行体第一人称的生活处境、关键选择及代价与情绪起伏；intervention 写现世 {{char}} 对照另一个我的触动与自省；systemNote 给出冷酷、明确的命运判定。不按字数或代词次数验收。'}禁止前任，禁止 {{char}} 与 {{user}} 以外的任何人恋爱、结婚或成家。只输出 JSON。`
+        + (!readableR62 && item.trueEnding ? '\nVALIDATED_VOICES_JSON:' + JSON.stringify(observedNodes.filter(node => !node.trueEnding && !node.historicalObservation && !node.formerOmega).slice(-8).map(node => ({ label: node.label, monologue: core_text.normalizeText(node.monologue, 300), intervention: core_text.normalizeText(node.intervention, 200) }))) : '');
     const raw = await generation_client.requestValidatedSegment(
-        prompt, `重新生成「${item.label}」…`, taskOptions(core_constants.MODE.BUTTERFLY, context, origin, `${taskKey}:butterfly`, 9000, 0.7),
+        prompt, `重新生成「${item.label}」…`, taskOptions(core_constants.MODE.BUTTERFLY, context, origin, `${taskKey}${readableR62 ? '' : ':narrative-r84'}:butterfly`, 9000, 0.7),
         data => normalizeRegeneratedButterflyNode(item, data?.node, memoryBank, context),
     );
     return raw;
@@ -530,7 +536,7 @@ export async function regenerateManagedTarget(session, type, id, parentId, optio
     } else if (type === 'butterfly-node') {
         const index = updated.nodes?.findIndex(item => item.id === id) ?? -1;
         if (index <= 0) throw new Error('主时间线不能作为单项重新生成目标。');
-        updated.nodes[index] = await regenerateButterflyNode(updated.nodes[index], context, memoryBank, origin, taskKey);
+        updated.nodes[index] = await regenerateButterflyNode(updated.nodes[index], context, memoryBank, origin, taskKey, updated.nodes);
     } else {
         throw new Error('这一类内容目前不支持单项模型重新生成。');
     }
