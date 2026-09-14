@@ -1,0 +1,17 @@
+Heartbeat Memories r84.1 HEART persona fallback replacement
+
+Base: Hearttrace-r84-full.zip (0.8.79-tt-cg-r84.0)
+
+Replace these four files in the plugin root, preserving paths:
+1. index.js
+2. manifest.json
+3. dist/heartbeatMemories.bundle.js
+4. src/modes/heart.js
+
+Then fully refresh/restart SillyTavern/TT so build 0.8.79-tt-cg-r84.1 is loaded.
+
+Change scope:
+- HEART/角色互动 no longer fails solely because relationshipSourceMemoryIds/Anchor are absent.
+- When real relationship evidence is unavailable, generation may use controlled character card / Persona / world context for characterization, while keeping relationship conservative.
+- It must not invent Mxxx/anchors or claim unproven romance/cohabitation/confession as historical fact.
+- Evidence gates for album/confession/achievements/calendar and other historical claims are unchanged.
