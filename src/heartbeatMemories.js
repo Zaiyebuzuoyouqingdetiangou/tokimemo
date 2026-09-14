@@ -4,6 +4,7 @@ import * as core_cache from './core/cache.js';
 import * as core_autoUpdates from './core/autoUpdates.js';
 import * as core_constants from './core/constants.js';
 import * as core_context from './core/context.js';
+import * as core_diagnosticReport from './core/diagnosticReport.js';
 import * as core_requestCoordinator from './core/requestCoordinator.js';
 import * as archive_snapshots from './archive/snapshots.js';
 import { state as runtimeState } from './core/state.js';
@@ -33,6 +34,7 @@ export function isGenerationBusy() {
 }
 
 export function initMemoryTheater() {
+    core_diagnosticReport.installRuntimeDiagnostic();
     try {
         const settingsMounted = ui_settingsPanel.mountSettings();
         ui_settingsPanel.bindImageProviderEvents();
@@ -59,6 +61,8 @@ export function initMemoryTheater() {
 }
 
 export function destroyMemoryTheater() {
+    core_diagnosticReport.uninstallRuntimeDiagnostic();
+    try { globalThis.__heartbeatMemoriesRemoveDiagnostics?.(); } catch {}
     ui_cgImageViewer.closeCgImageViewer({ restoreFocus: false });
     core_autoUpdates.stopAutoUpdates();
     ui_settingsPanel.clearHomeSettingsPanel();
