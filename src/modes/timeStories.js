@@ -64,7 +64,8 @@ export function normalizeTimeStoryEpisode(mode, value, memory, options = {}) {
             return { id: localId('S', index), title: prose(scene.title, L.title, true),
                 charTime: prose(scene.charTime, 240, true), userTime: prose(scene.userTime, 240, true),
                 charOrder: scene.charOrder, userOrder: scene.userOrder,
-                charKnows: prose(scene.charKnows, 1600), userKnows: prose(scene.userKnows, 1600, false, 'user'), text: prose(scene.text, L.prose, true) };
+                charKnows: prose(scene.charKnows, 1600), userKnows: prose(scene.userKnows, 1600, false, 'user'), text: prose(scene.text, L.prose, true),
+                ...(scene.waiting == null ? {} : { waiting: prose(scene.waiting, L.prose, false, raw.traveler === 'char' ? 'user' : 'char') }) };
         });
         contract.assertTimeJourneyOrders(result.encounters);
     }
@@ -100,9 +101,10 @@ export function timeStoryPrompt(mode, context, memory, previous = null, profile 
         ? `不同时间的两人，或同一人的不同时期，通过联络传递关键信息并试图改变命运；让信息影响选择，成败由人物与故事决定。媒介 kind 仅可用 ${contract.timeStoryMediumKinds(profile).join('|')}，label 沿用世界已有通讯方式或熟悉器物；未知时代用器物/声音承载这次异常，不硬添手机或魔法体系。
 ends 按 a、b 顺序写两端人物与不同的时间，role 可相同；lines 按通话顺序写双方发言与必要叙述，message 写传递的关键信息，closing 写这次联络的后续。
 输出 {"title":"篇名","opening":"开场","closing":"完整结尾","palette":"配色","motif":"意象","medium":{"kind":"允许的媒介","label":"器物名称"},"ends":[{"role":"char|user","time":"一端时间"},{"role":"char|user","time":"另一端时间"}],"lines":[{"speaker":"a|b|narrator","text":"正文"}],"message":"关键信息"}。`
-        : `一方无法控制时间跳跃，两人以不同顺序经历相遇、感情与离别；不固定谁跳跃，不要求已经结婚。错位要影响他们当时知道什么和作出的选择，时间与器物沿用世界设定。
-encounters 写完整的相遇场景；charTime/userTime 可用相对时间，charOrder/userOrder 为双方个人经历中各自唯一的正整数顺序，至少两次相遇的先后颠倒。charKnows/userKnows 可简述各自已知，省略亦可；不要为了凑数量重复场景。
-输出 {"title":"篇名","opening":"开场","closing":"完整结尾","palette":"配色","motif":"意象","traveler":"char|user","encounters":[{"title":"相遇名","charTime":"角色此刻","userTime":"用户此刻","charOrder":1,"userOrder":2,"charKnows":"角色已知，可选","userKnows":"用户已知，可选","text":"这次相遇的完整正文"}]}。`;
+        : `核心是「时空旅行者的妻子」式的爱情：一方拥有不受控的时间跳跃能力，无法决定何时离开、去往何时或何时回来；另一方在自己的时间里继续生活、等待，并与归来的人重新相爱。让突然消失、缺席中的日常、归来后的亲密与离别推动完整故事，两人的记忆与经历可以错乱。时间跳跃不能成为随叫随到的旅行工具，也不要只把几次相遇打乱排序。
+traveler 可为 char 或 user；沿用双方性格、性别与关系进展，题名不要求谁必须为女性或已经结婚。穿越是本篇的异常，日常生活、用语与器物适配原世界，不强塞现代都市或新的科技、法术体系；结局由人物与故事决定。
+encounters 按故事阅读顺序写场景，离开、等待或重逢均可成一幕，不凑数量或刻意制造逆序。charTime/userTime 可用相对时间，charOrder/userOrder 为双方个人经历中各自唯一的正整数顺序。charKnows/userKnows 可简述各自已知；waiting 可补写留下的一方如何度过缺席时光，已经写入正文则省略。
+输出 {"title":"篇名","opening":"时间打乱两人生活的开场","closing":"本篇完整结尾","palette":"配色","motif":"意象","traveler":"char|user","encounters":[{"title":"场景名","charTime":"角色此刻","userTime":"用户此刻","charOrder":1,"userOrder":1,"charKnows":"角色已知，可选","userKnows":"用户已知，可选","text":"场景完整正文","waiting":"留下的一方的日子，可选"}]}。`;
     return `${common}${modePrompt}
 UNTRUSTED_EXISTING_TITLES_JSON:
 ${JSON.stringify((previous?.episodes || []).map(item => ({ title: item.title, motif: item.motif })))}

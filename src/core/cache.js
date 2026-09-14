@@ -1375,7 +1375,15 @@ async function recoverMissingCurrentArchiveFromBackup(context) {
     });
 }
 
-export async function ensureCurrentArchiveBackup(context = core_context.currentCharacterGuard()) {
+export async function ensureCurrentArchiveBackup(context = null) {
+    // Opted-in auto updates may load the runtime before a chat is ready. No
+    // eligible chat is a no-op, not a storage failure; do not open IndexedDB.
+    if (!context) {
+        try { context = core_context.currentCharacterGuard(); } catch { return false; }
+    }
+    if (context.groupId || context.characterId === undefined || context.characterId === null
+        || !context.chatMetadata || typeof context.chatMetadata !== 'object'
+        || !core_context.getChatId(context)) return false;
     const initialMemory = archive_repository.getImportedMemory(context);
     if (!initialMemory) return recoverMissingCurrentArchiveFromBackup(context);
     if (archive_groups.isCurrentCharacterDeletedFromLibrary(context, initialMemory)) return false;

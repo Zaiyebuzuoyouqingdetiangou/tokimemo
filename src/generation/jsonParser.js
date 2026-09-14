@@ -59,6 +59,12 @@ export function jsonOutputBudgetSummary({ requestMaxTokens = 0, configuredMaxTok
 }
 
 export function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {
+    if (raw != null && typeof raw !== 'string') {
+        const error = jsonOutputError('RMT_RESPONSE_FORMAT', '连接返回的正文结构暂不支持，未取得可解析的最终正文；旧内容未改变。');
+        error.retryable = false;
+        error.retryableJson = false;
+        throw error;
+    }
     let text = core_text.normalizeText(raw, core_constants.MAX_GENERATION_OUTPUT_CHARS).replace(/^\uFEFF/, '').trim();
     const reasoningChars = core_text.normalizeText(reasoning, core_constants.MAX_GENERATION_OUTPUT_CHARS).length;
     const budgetSummary = jsonOutputBudgetSummary({ requestMaxTokens, configuredMaxTokens });
@@ -70,6 +76,19 @@ export function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configu
                 : `模型返回了空的最终正文，没有 JSON 可解析。${budgetSummary} 可只重试这一项，或检查所选模型/连接是否正常。`,
             { contentChars: 0, reasoningChars, requestMaxTokens: Math.floor(Number(requestMaxTokens) || 0), configuredMaxTokens: Math.floor(Number(configuredMaxTokens) || 0) },
         );
+    }
+    // Parse the complete document first so code-fence markers inside JSON strings
+    // stay literal. A closed JSON fence is independent of unmatched braces in prose.
+    try {
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    } catch {}
+    const fences = [...text.matchAll(/(?:^|\n)[ \t]*```json[ \t]*\n([\s\S]*?)\n[ \t]*```[ \t]*(?=\n|$)/gi)];
+    for (let i = fences.length - 1; i >= 0; i -= 1) {
+        try {
+            const parsed = JSON.parse(fences[i][1].trim());
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+        } catch {}
     }
     text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
     const { candidates, hasUnclosedObject } = extractBalancedJsonObjects(text);

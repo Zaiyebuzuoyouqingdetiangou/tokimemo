@@ -125,6 +125,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_BANNED_GENERATED_PHRASE: '模型新生成内容命中了本地禁用词；本次结果没有保存。',
     RMT_JSON_EMPTY_FINAL: '模型没有返回最终正文 JSON；旧内容未被覆盖。',
     RMT_JSON_EMPTY_FINAL_WITH_REASONING: '模型产生了推理内容，但没有返回最终正文 JSON；旧内容未被覆盖。',
+    RMT_RESPONSE_FORMAT: '当前连接返回了未识别的正文包装；旧内容保留，请导出诊断以核对返回格式。',
     RMT_JSON_NOT_FOUND: '模型最终正文中没有完整 JSON；旧内容未被覆盖。',
     RMT_JSON_TRUNCATED: '模型返回的 JSON 疑似被截断；旧内容未被覆盖。',
     RMT_PHONE_DRAFT_AVAILABLE: '私人终端只完成了部分内容；已保留可继续生成的草稿。',

@@ -11,7 +11,7 @@ export const TIME_STORY_PRESENTATIONS = Object.freeze(['modern', 'classical', 'f
 const MEDIA = ['phone', 'terminal', 'relic', 'object', 'voice'];
 
 export function isTimeStoryMode(mode) { return mode === TIME_ECHO_MODE || mode === TIME_JOURNEY_MODE; }
-export function timeStoryLabel(mode) { return mode === TIME_ECHO_MODE ? '时空回响' : mode === TIME_JOURNEY_MODE ? '错时相逢' : '时空番外'; }
+export function timeStoryLabel(mode) { return mode === TIME_ECHO_MODE ? '时空回响' : mode === TIME_JOURNEY_MODE ? '时空旅行者的妻子' : '时空番外'; }
 export function timeStoryError(code, message) {
     const error = new Error(message);
     Object.assign(error, { code: `RMT_TIME_STORY_${code}`, safeToDisplay: true, safeUserMessage: message, repairHint: message });
@@ -53,14 +53,12 @@ export function timeStoryMediumKinds(profile = {}) {
 }
 
 export function assertTimeJourneyOrders(encounters) {
-    const require = condition => { if (!condition) throw timeStoryError('STRUCTURE', '相遇需有双方各自唯一的正整数顺序，且至少两次相遇的先后不同。'); };
-    require(encounters.length >= 2);
+    const require = condition => { if (!condition) throw timeStoryError('STRUCTURE', '故事需有可阅读的场景，双方经历顺序请使用各自唯一的正整数。'); };
+    require(encounters.length >= 1);
     for (const field of ['charOrder', 'userOrder']) {
         require(encounters.every(item => Number.isSafeInteger(item[field]) && item[field] > 0 && item[field] <= 100000));
         require(new Set(encounters.map(item => item[field])).size === encounters.length);
     }
-    const sorted = [...encounters].sort((a, b) => a.charOrder - b.charOrder);
-    require(sorted.some((item, index) => index > 0 && item.userOrder < sorted[index - 1].userOrder));
 }
 
 // Reopening authenticates data shape and local references; it does not rejudge
@@ -99,6 +97,7 @@ export function timeStoriesStoredData(value) {
             for (const scene of scenes) {
                 prose(scene.title, L.title); prose(scene.charTime, 240); prose(scene.userTime, 240); prose(scene.text);
                 prose(scene.charKnows, 1600, false); prose(scene.userKnows, 1600, false);
+                prose(scene.waiting, L.prose, false);
             }
         }
     }

@@ -9,10 +9,11 @@ import { state as runtimeState } from './state.js';
 
 let cleanup = null;
 let requestTick = null;
-const storageKey = scope => 'heartbeatMemoriesAutoFloorsV1:' + encodeURIComponent(scope);
+const storageKey = core_autoUpdatePolicy.autoUpdateStorageKey;
 
 export function refreshAutoUpdateStatus() {
     const elements = [...document.querySelectorAll('[data-rmt-auto-status]')];
+    if (!elements.length) return;
     for (const element of elements) element.textContent = '未选择可用聊天';
     try {
         const scope = core_context.chatScopeKey(core_context.currentCharacterGuard());
@@ -49,10 +50,12 @@ export function startAutoUpdates() {
     const snapshot = () => {
         try {
             const current = core_context.currentCharacterGuard();
+            const rules = core_autoUpdatePolicy.normalizeAutoUpdates(current.extensionSettings?.[core_constants.EXTENSION_SETTINGS_KEY]?.autoUpdates);
+            if (!core_autoUpdatePolicy.hasEnabledAutoUpdates(rules)) return null;
             const archive = archive_repository.getImportedMemory(current);
             return { scope: core_context.chatScopeKey(current), floor: current.chat?.length || 0,
                 ready: !!archive, revision: String(archive?.archiveRevision || '').slice(0, 240), lifetime: runtimeState.runtimeLifecycleEpoch,
-                rules: core_settings.getPluginSettings(current).autoUpdates };
+                rules };
         } catch { return null; }
     };
     const scheduler = core_autoUpdatePolicy.createFloorScheduler({
@@ -61,13 +64,7 @@ export function startAutoUpdates() {
         lock: (scope, job) => navigator.locks.request('heartbeat-auto:' + scope, { ifAvailable: true }, lock => lock ? job() : undefined),
         read: scope => {
             const raw = JSON.parse(localStorage.getItem(storageKey(scope)) || '{}');
-            const safe = {};
-            for (const mode of core_autoUpdatePolicy.AUTO_UPDATE_MODES) {
-                const item = raw?.[mode];
-                if (item && Number.isSafeInteger(item.attemptFloor) && item.attemptFloor >= 0 && Number.isSafeInteger(item.successFloor)
-                    && typeof item.signature === 'string' && item.signature.length < 100) safe[mode] = item;
-            }
-            return safe;
+            return core_autoUpdatePolicy.normalizeAutoUpdateCheckpoint(raw);
         },
         write: (scope, state) => { localStorage.setItem(storageKey(scope), JSON.stringify(state)); },
         run: async mode => {
@@ -76,15 +73,26 @@ export function startAutoUpdates() {
             return result?.status ? result : { status: result?.kind ? 'committed' : 'failed' };
         },
     });
-    let storageFailed = false;
-    const listener = () => { if (!storageFailed) void scheduler.tick().then(refreshAutoUpdateStatus).catch(() => {
-        storageFailed = true; stopAutoUpdates();
-        globalThis.toastr?.warning?.('自动更新检查点无法保存，本轮已停止；请使用手动更新。', '心迹回廊');
-    }); };
+    let storageFailed = false, timer = 0;
+    const listener = () => {
+        if (storageFailed) return Promise.resolve();
+        let enabled = false;
+        try { enabled = core_autoUpdatePolicy.hasEnabledAutoUpdates(core_context.getContext().extensionSettings?.[core_constants.EXTENSION_SETTINGS_KEY]?.autoUpdates); } catch {}
+        if (!enabled) {
+            if (timer) clearInterval(timer);
+            timer = 0;
+            refreshAutoUpdateStatus();
+            return Promise.resolve();
+        }
+        // Keep due floors eligible after a manual task ends, without polling archives while off.
+        if (!timer) timer = setInterval(listener, 5000);
+        return scheduler.tick().then(refreshAutoUpdateStatus).catch(() => {
+            storageFailed = true; stopAutoUpdates();
+            globalThis.toastr?.warning?.('自动更新检查点无法保存，本轮已停止；请使用手动更新。', '心迹回廊');
+        });
+    };
     const events = [...new Set([types.MESSAGE_SENT, types.MESSAGE_RECEIVED, types.CHAT_CHANGED, types.CHAT_LOADED].filter(Boolean))];
     for (const type of events) source.on(type, listener);
-    // Eligibility is checked on a short UI-idle timer too, so a due floor is not lost while a manual task runs.
-    const timer = setInterval(listener, 5000);
     requestTick = listener;
     cleanup = () => { clearInterval(timer); scheduler.stop(); for (const type of events) source.off?.(type, listener); };
     listener();

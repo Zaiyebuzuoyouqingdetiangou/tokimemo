@@ -232,7 +232,7 @@ export const MODE_LABEL = Object.freeze({
     [MODE.INBOX]: '你的邮箱',
     [MODE.PAST_LIVES]: '前世今生',
     [MODE.TIME_ECHO]: '时空回响',
-    [MODE.TIME_JOURNEY]: '错时相逢',
+    [MODE.TIME_JOURNEY]: '时空旅行者的妻子',
     [MODE.TRAVEL]: '他的出行路线',
     [MODE.ENDING]: '结局与后日谈',
     [MODE.CALENDAR]: '两个人的日历',

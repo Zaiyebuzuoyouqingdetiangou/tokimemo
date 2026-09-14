@@ -218,7 +218,7 @@ export function modePortalMeta(mode) {
         [core_constants.MODE.ITEMS]: { title: '他的物品', subtitle: '翻找各种收纳容器与私人物件', icon: 'fa-box-open', accent: 'items' },
         [core_constants.MODE.INBOX]: { title: '你的邮箱', subtitle: '寄给你的信 · 远方明信片', icon: 'fa-envelope', accent: 'album' },
         [core_constants.MODE.PAST_LIVES]: { title: '前世今生', subtitle: '另一段人生 · 旧梦卷宗与今生回响', icon: 'fa-scroll', accent: 'ending' },
-        [core_constants.MODE.TIME_JOURNEY]: { title: '错时相逢', subtitle: '错序的时光 · 相爱与离别', icon: 'fa-hourglass-half', accent: 'butterfly' },
+        [core_constants.MODE.TIME_JOURNEY]: { title: '时空旅行者的妻子', subtitle: '不由自主的离开 · 等待与重逢', icon: 'fa-hourglass-half', accent: 'butterfly' },
         [core_constants.MODE.TIME_ECHO]: { title: '时空回响', subtitle: '另一端的你 · 另一刻的声音', icon: 'fa-wave-square', accent: 'phone' },
         [core_constants.MODE.PHONE]: { title: '他的私人终端', subtitle: '通讯、草稿与私人记录', icon: 'fa-mobile-screen-button', accent: 'phone' },
         [core_constants.MODE.TRAVEL]: { title: '他的出行路线', subtitle: '附近对话与远方文字明信片', icon: 'fa-map-location-dot', accent: 'travel' },

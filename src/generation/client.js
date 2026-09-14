@@ -45,6 +45,13 @@ import * as ui_settingsPanel from '../ui/settingsPanel.js';
 import * as ui_contentManager from '../ui/contentManager.js';
 import * as navigation_bookmark from '../ui/navigationBookmark.js';
 
+// Only in-flight bindings; never persisted or exported. Clear at the owning mode's finally.
+const modeTaskTraces = new Map();
+function generationTrace(options = {}) {
+    const parentKey = options.parentTaskKey || core_requestCoordinator.activeModeBuildScopeForTask(options.taskKey || '');
+    return options.taskTrace || modeTaskTraces.get(parentKey || options.taskKey) || null;
+}
+
 export function generationWorldInfoScanTerms(mode, context = {}) {
     const characterName = core_text.normalizeText(context?.name2, 120);
     const common = characterName ? [characterName] : [];
@@ -195,10 +202,15 @@ export async function mapGenerationConcurrent(items, limit, worker) {
 }
 
 export async function requestValidatedSegment(prompt, status, options, validator) {
+    const parentTrace = generationTrace(options);
+    const taskTrace = core_taskTrace.startTaskTrace('', options?.mode, parentTrace);
+    core_taskTrace.markStage(taskTrace, 'start');
+    core_taskTrace.beginStage(taskTrace, 'prompt');
+    try {
     const context = options?.context || core_context.currentCharacterGuard();
-    options = { ...options, context, contextEnvelope: typeof options?.contextEnvelope === 'string'
+    options = { ...options, taskTrace, context, contextEnvelope: typeof options?.contextEnvelope === 'string'
         ? options.contextEnvelope : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options?.mode, context) }) };
-    return generation_recovery.withRecoverySegment(prompt, options, validator, async (prompt, options, accepted) => {
+    const result = await generation_recovery.withRecoverySegment(prompt, options, validator, async (prompt, options, accepted) => {
     let lastError = null;
     const maxAttempts = Math.max(1, Math.min(core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS, Number(options?.segmentMaxAttempts) || core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS));
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -207,7 +219,9 @@ export async function requestValidatedSegment(prompt, status, options, validator
             : '';
         try {
             const raw = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? '（重试）' : ''}`, options);
+            core_taskTrace.beginStage(options.taskTrace, 'validate');
             const value = core_requestCoordinator.validateGeneratedSegment(raw, validator);
+            core_taskTrace.markStage(options.taskTrace, 'validate');
             await accepted(raw);
             return value;
         } catch (error) {
@@ -222,6 +236,12 @@ export async function requestValidatedSegment(prompt, status, options, validator
     }
     throw lastError || new Error(`${status}失败。`);
     });
+    core_taskTrace.finishSegmentTrace(parentTrace, taskTrace, 'ok');
+    return result;
+    } catch (error) {
+        core_taskTrace.finishSegmentTrace(parentTrace, taskTrace, error?.name === 'AbortError' ? 'cancelled' : 'failed', error);
+        throw error;
+    }
 }
 
 // The host tokenizer may use an unavailable service. Bound the wait, then use
@@ -255,6 +275,7 @@ function countPromptTokens(context, prompt, signal, timeoutMs) {
 export async function assertPromptBudget(context, prompt, { skipTokenCount = false, signal = null,
     tokenCountTimeoutMs = TOKEN_COUNT_TIMEOUT_MS, taskTrace = null } = {}) {
     if (signal?.aborted) throw core_requestCoordinator.createGenerationAbortError();
+    core_taskTrace.recordInput(taskTrace, prompt.length);
     if (prompt.length > core_constants.MAX_GENERATION_INPUT_CHARS) {
         throw core_text.safeUserError(`本次心迹回廊输入过大（${prompt.length.toLocaleString()} 字符），已在发送前拦截。请更新/精简档案或减少世界书内容。`, 'RMT_INPUT_BUDGET');
     }
@@ -267,6 +288,7 @@ export async function assertPromptBudget(context, prompt, { skipTokenCount = fal
             if (!Number.isFinite(tokens) || tokens < 0) {
                 throw core_text.safeUserError('本地计数暂不可用。', 'RMT_TOKEN_COUNT_UNAVAILABLE');
             }
+            core_taskTrace.recordInput(taskTrace, prompt.length, tokens);
             if (Number.isFinite(tokens) && tokens > core_constants.MAX_GENERATION_INPUT_TOKENS) {
                 throw core_text.safeUserError(`本次心迹回廊输入约 ${Math.round(tokens).toLocaleString()} tokens，超过 ${core_constants.MAX_GENERATION_INPUT_TOKENS.toLocaleString()} 的安全预算，已在发送前拦截。`, 'RMT_INPUT_BUDGET');
             }
@@ -336,7 +358,7 @@ export function normalizeConnectionManagerError(error) {
         'RMT_MANUAL_MESSAGES', 'RMT_MANUAL_MODEL', 'RMT_MANUAL_MODEL_TIMEOUT', 'RMT_MANUAL_MODELS_EMPTY',
         'RMT_MANUAL_PROVIDER_ERROR', 'RMT_MANUAL_RESPONSE_TOO_LARGE', 'RMT_PHONE_DRAFT_AVAILABLE',
         'RMT_PROFILE_CAPABILITY', 'RMT_PROFILE_MODEL_TIMEOUT', 'RMT_PROFILE_PROXY_UNAVAILABLE',
-        'RMT_REQUEST_TIMEOUT', 'RMT_RESPONSE_HTML', 'RMT_SEGMENT_VALIDATION', 'RMT_CONNECTION_QUOTA',
+        'RMT_REQUEST_TIMEOUT', 'RMT_RESPONSE_FORMAT', 'RMT_RESPONSE_HTML', 'RMT_SEGMENT_VALIDATION', 'RMT_CONNECTION_QUOTA',
     ]);
     if (knownInternalCodes.has(String(error?.code || ''))) return error;
     const evidence = [];
@@ -436,7 +458,7 @@ export async function generateConfiguredJson(prompt, options = {}) {
     const creativeSupplement = creative_supplement.creativeSupplementBlock(settings);
     const controlledPrompt = `${contextEnvelope}
 ${expanded}${creativeSupplement}${phrasePolicy}`;
-    await assertPromptBudget(context, contextEnvelope + '\n' + originalExpanded + creativeSupplement + phrasePolicy,
+    await assertPromptBudget(context, controlledPrompt,
         { skipTokenCount: options.skipTokenCount === true, signal: options.signal,
             tokenCountTimeoutMs: options.tokenCountTimeoutMs, taskTrace });
     core_taskTrace.markStage(taskTrace, 'prompt');
@@ -516,6 +538,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
         error.retryable = false;
         throw error;
     }
+    core_taskTrace.recordResponse(taskTrace, core_independentApi.responseShapeSummary(result));
     let responsePayload;
     try { responsePayload = core_independentApi.assertIndependentResponsePayload(result); }
     catch (error) { throw normalizeConnectionManagerError(error); }
@@ -561,6 +584,9 @@ export async function requestJson(prompt, statusText = '正在根据当前聊天
         mode: core_text.normalizeText(options.mode, 80), parentTaskKey, startedAt: Date.now(),
     });
     core_requestCoordinator.refreshConcurrentTaskUi(core_text.normalizeText(options.mode, 80), origin);
+    const inheritedTrace = generationTrace(options);
+    const taskTrace = inheritedTrace || core_taskTrace.startTaskTrace(taskKey, options.mode);
+    if (!inheritedTrace) core_taskTrace.markStage(taskTrace, 'start');
     let releaseProviderPermit = null;
     try {
         releaseProviderPermit = await core_requestCoordinator.acquireProviderRequestPermit(controller.signal);
@@ -568,12 +594,18 @@ export async function requestJson(prompt, statusText = '正在根据当前聊天
         // the next one the instant a slot frees up.
         await core_requestCoordinator.waitForProviderPacing(controller.signal);
         core_context.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
-        return await generateConfiguredJson(prompt, {
-            ...options,
+        const result = await generateConfiguredJson(prompt, {
+            ...options, taskTrace,
             signal: controller.signal,
             statusText,
             enforceGeneratedPhrasePolicy: options.enforceGeneratedPhrasePolicy !== false,
         });
+        if (!inheritedTrace) core_taskTrace.endTaskTrace(taskTrace, 'ok');
+        return result;
+    } catch (error) {
+        if (!inheritedTrace) core_taskTrace.endTaskTrace(taskTrace, error?.name === 'AbortError' ? 'cancelled' : 'failed', error);
+        else if (taskTrace.activeStage) core_taskTrace.markStage(taskTrace, taskTrace.activeStage, false);
+        throw error;
     } finally {
         try { releaseProviderPermit?.(); } catch {}
         const current = runtimeState.activeGenerationTasks.get(taskKey);
@@ -827,6 +859,9 @@ export async function generateMode(mode, options = {}) {
     const targetEpochKey = archiveTarget ? `${origin.archiveTargetEntryId}:${mode}` : '';
     const targetEpoch = archiveTarget ? (Number(runtimeState.archiveTargetTaskEpochs.get(targetEpochKey)) || 0) + 1 : 0;
     if (archiveTarget) runtimeState.archiveTargetTaskEpochs.set(targetEpochKey, targetEpoch);
+    const taskTrace = core_taskTrace.startTaskTrace(taskKey, mode);
+    core_taskTrace.markStage(taskTrace, 'start');
+    modeTaskTraces.set(taskKey, taskTrace);
     runtimeState.activeModeBuildScopes.add(taskKey);
     core_requestCoordinator.registerArchiveTargetReservation(taskKey, { archiveTarget }, mode,
         archiveTarget ? `${archiveTarget.characterName} · ${archiveTarget.archiveName} · ${core_constants.MODE_LABEL[mode]}生成中` : '');
@@ -945,13 +980,14 @@ export async function generateMode(mode, options = {}) {
         } else if (mode === core_constants.MODE.TRAVEL) {
             session = await modes_travel.generateTravelWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, presentationContext });
         } else if (mode === core_constants.MODE.RELATIONS) {
-            const selectedBooks = await archive_repository.collectSelectedMemoryWorldInfo(context, expectedChatId);
+            const selectedBooks = await archive_repository.collectSelectedMemoryWorldInfo(context, expectedChatId, null, { settingsOnly: true });
+            const settingSelection = modes_relations.fitRelationSettingEntries(selectedBooks.entries, { coverage: selectedBooks.coverage });
             // Same rule as the setting envelope: an unreadable or oversized book means
             // "fewer people to draw from", not "refuse to refresh the garden".
-            if (selectedBooks.coverage.status !== 'complete' && !options.automatic) {
-                globalThis.toastr?.info?.(`所选世界书本次只读到部分条目，庭园将只依据已读到的内容刷新；旧人物保留。${core_text.normalizeText(selectedBooks.coverage?.reason, 160)}`, '心迹回廊 · 人际庭园');
+            if (settingSelection.coverage.status !== 'complete' && !options.automatic) {
+                globalThis.toastr?.info?.(`本次按输入容量整理部分世界书条目；未送出的旧人物仅在来源仍有效时保留。${core_text.normalizeText(settingSelection.coverage?.reason, 160)}`, '心迹回廊 · 人际庭园');
             }
-            const settingEntries = selectedBooks.entries.filter(entry => entry.historySource !== true);
+            const settingEntries = settingSelection.entries;
             const raw = await requestValidatedSegment(
                 modes_relations.relationsPrompt(context, memoryBank, settingEntries),
                 '正在整理当前世界线的人际关系…',
@@ -963,8 +999,8 @@ export async function generateMode(mode, options = {}) {
                 },
             );
             session = modes_relations.normalizeRelations(raw, memoryBank, context);
-            session.settingRelationships = modes_relations.normalizeSettingRelationships(raw.settingRelationships, settingEntries, context);
-            session.settingCoverage = selectedBooks.coverage;
+            session.settingRelationships = modes_relations.mergeBudgetRetainedSettingRelations(raw.settingRelationships, previousSession?.settingRelationships, settingSelection, context);
+            session.settingCoverage = settingSelection.coverage;
             const relationGroupId = archive_groups.currentArchiveGroupKey(context, memoryBank);
             if (relationGroupId) {
                 const relationEntries = archive_groups.archiveGroupEntries(relationGroupId, context);
@@ -1007,6 +1043,7 @@ export async function generateMode(mode, options = {}) {
             }
             if (mode === core_constants.MODE.CABINET && previousSession) session = modes_cabinet.mergeCabinet(previousSession, session);
         }
+        core_taskTrace.markStage(taskTrace, 'validate');
         if (!core_incremental.incrementalPartRecord(session, incrementalPart)) {
             const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank, incrementalPart);
             const added = previousSession ? 0 : 1;
@@ -1015,6 +1052,7 @@ export async function generateMode(mode, options = {}) {
         session.chatId = expectedChatId;
         session.archiveRevision = expectedArchiveRevision;
         await core_context.yieldToUi();
+        core_taskTrace.beginStage(taskTrace, 'save');
         let committed = false;
         if (archiveTarget) {
             const stillCurrent = archiveTargetStillCurrent;
@@ -1030,7 +1068,9 @@ export async function generateMode(mode, options = {}) {
                 if (latestMemory.archiveRevision === expectedArchiveRevision) {
                     committed = await core_cache.commitSession(mode, session, expectedChatId, origin);
                 }
-            } catch {}
+            } catch (error) {
+                core_taskTrace.recordTaskFailure(taskTrace, error);
+            }
         }
         if (!committed && !archiveTarget) core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [mode]: session } });
 
@@ -1040,6 +1080,8 @@ export async function generateMode(mode, options = {}) {
                 ? core_cache.loadSession(mode, { chatId: expectedChatId, memoryBank, cache: runtimeState.activeArchiveSnapshot?.entryId === archiveTarget.entryId ? runtimeState.activeArchiveSnapshot.cache : archiveTarget.cache }) || session
                 : core_cache.loadSession(mode) || session;
         }
+        core_taskTrace.markStage(taskTrace, 'save', committed);
+        if (!committed) core_taskTrace.markStage(taskTrace, 'deferred');
         const overlay = document.getElementById(core_constants.OVERLAY_ID);
         const phoneProgress = mode === core_constants.MODE.PHONE ? modes_phone.phoneCompletionSummary(session) : null;
         const partialNotice = phoneProgress?.partial ? `已保留 ${phoneProgress.readableItems} 条，另有 ${phoneProgress.missingItems} 项可在终端补齐` : '';
@@ -1055,18 +1097,23 @@ export async function generateMode(mode, options = {}) {
                 modes_room.renderRoom();
             }
             const targetDone = archiveTarget ? `已安全写回：${archiveTarget.characterName} · ${archiveTarget.archiveName} · ` : '';
+            core_taskTrace.endTaskTrace(taskTrace, committed ? 'ok' : 'deferred');
             if (options.automatic) return { status: committed ? 'committed' : 'deferred' };
             globalThis.toastr?.success?.(`${targetDone}${partialNotice || (replaceExisting ? '后台重新生成完成' : refreshableCalendar && previousSession ? '后台刷新完成' : refreshableRelations && previousSession ? '后台刷新完成' : previousSession ? '后台增量追加完成' : '后台生成完成')}：${core_constants.MODE_LABEL[mode]}${committed || archiveTarget ? '' : '（回到原窗口自动写入）'}`, '心迹回廊');
             return session;
         }
         runtimeState.activeMode = mode;
         runtimeState.activeSession = session;
+        core_taskTrace.beginStage(taskTrace, 'render');
         ui_overlay.renderActive();
+        core_taskTrace.markStage(taskTrace, 'render');
+        core_taskTrace.endTaskTrace(taskTrace, 'ok');
         // Today's life is a separate explicit action; saving a room does not incur
         // an additional unconfirmed provider request.
         globalThis.toastr?.success?.(`${partialNotice || (replaceExisting ? '已重新生成' : refreshableCalendar && previousSession ? '已刷新' : refreshableRelations && previousSession ? '已刷新' : previousSession ? '已增量追加' : '已生成')}：${core_constants.MODE_LABEL[mode]}${previousSession && !refreshableCalendar && !refreshableRelations && !replaceExisting ? '；旧内容保持不变' : ''}`, '心迹回廊');
         return session;
     } catch (error) {
+        core_taskTrace.endTaskTrace(taskTrace, error?.name === 'AbortError' ? 'cancelled' : 'failed', error?.failure || error);
         if (recoveryHandle) { try { await generation_recovery.noteGenerationRecoveryFailure(origin, error?.failure || error); } catch {} }
         if (error?.name === 'AbortError') {
             console.warn('[HeartbeatMemories] generation aborted by extension/task cancellation', { mode });
@@ -1101,6 +1148,8 @@ export async function generateMode(mode, options = {}) {
         globalThis.toastr?.error?.(core_text.toastText(safeError), '心迹回廊');
         return null;
     } finally {
+        core_taskTrace.endTaskTrace(taskTrace, 'noop');
+        modeTaskTraces.delete(taskKey);
         generation_recovery.detachGenerationRecovery(origin);
         runtimeState.activeModeBuildScopes.delete(taskKey);
         core_requestCoordinator.unregisterArchiveTargetReservation(taskKey);

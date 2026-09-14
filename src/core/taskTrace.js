@@ -14,7 +14,7 @@ const MAX_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
 const STAGES = Object.freeze(['start', 'prompt', 'request', 'response', 'parse', 'validate',
     'token-count', 'token-count-fallback', 'merge', 'profile', 'save', 'deferred', 'render', 'done', 'failed']);
 const trace = [];
-const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone']);
+const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'pastLives', 'timeEcho', 'timeJourney', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
 const OUTCOMES = new Set(['running', 'ok', 'failed', 'cancelled', 'deferred', 'blocked', 'noop']);
 const CODES = new Set([
     ...Object.keys(core_backupDiagnostics.BACKUP_FAILURE_MESSAGES),
@@ -33,10 +33,27 @@ const CODES = new Set([
     'RMT_RECOVERY_BUSY', 'RMT_RECOVERY_CLEARED', 'RMT_RECOVERY_DATA', 'RMT_RECOVERY_IDENTITY',
     'RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_LIMIT', 'RMT_RECOVERY_OPERATION_CHANGED', 'RMT_RECOVERY_ORIGIN_CHANGED',
     'RMT_RECOVERY_STORAGE', 'RMT_RECOVERY_UNAVAILABLE', 'RMT_RECOVERY_VALIDATION_CHANGED',
-    'RMT_REQUEST_TIMEOUT', 'RMT_RESPONSE_HTML', 'RMT_SEGMENT_VALIDATION', 'RMT_TOKEN_COUNT_TIMEOUT',
+    'RMT_TIME_STORY_STRUCTURE', 'RMT_TIME_STORY_RELATIONSHIP', 'RMT_TIME_STORY_WORLD', 'RMT_TIME_STORY_SOURCE', 'RMT_TIME_STORY_VERSION', 'RMT_TIME_STORY_LIMIT',
+    'RMT_REQUEST_TIMEOUT', 'RMT_RESPONSE_FORMAT', 'RMT_RESPONSE_HTML', 'RMT_SEGMENT_VALIDATION', 'RMT_TOKEN_COUNT_TIMEOUT',
 ]);
 
-export function startTaskTrace(taskKey, mode) {
+const RESPONSE_SHAPES = new Set(['text', 'choices', 'message', 'content', 'output_text', 'output', 'candidates', 'text_fallback', 'wrapped', 'unsupported', 'empty', 'error']);
+const FINISH_REASONS = new Set(['stop', 'end_turn', 'stop_sequence', 'length', 'max_tokens', 'content_filter', 'tool_calls', 'function_call', 'completed', 'incomplete', 'done', 'unknown', 'none']);
+const count = value => Math.floor(Math.max(0, Math.min(1000000, Number(value) || 0)));
+
+export function recordInput(entry, chars, tokens = null) {
+    if (!entry) return;
+    entry.input = { chars: count(chars), tokens: Number.isFinite(tokens) ? count(tokens) : null };
+}
+
+export function recordResponse(entry, value) {
+    if (!entry || !value) return;
+    entry.response = { shape: RESPONSE_SHAPES.has(value.shape) ? value.shape : 'unsupported',
+        finalChars: count(value.finalChars), reasoningChars: count(value.reasoningChars),
+        finishReason: FINISH_REASONS.has(value.finishReason) ? value.finishReason : 'unknown' };
+}
+
+export function startTaskTrace(taskKey, mode, parent = null) {
     const entry = {
         // The caller's task key can contain a chat name: do not retain it at all.
         mode: MODES.has(mode) ? mode : 'unknown',
@@ -49,9 +66,28 @@ export function startTaskTrace(taskKey, mode) {
         chunks: { total: 0, ok: 0, failed: 0, pending: 0 },
         stages: [],
     };
-    trace.push(entry);
-    while (trace.length > MAX_TASKS) trace.shift();
+    if (parent) {
+        parent.requests ||= [];
+        parent.requests.push(entry);
+        while (parent.requests.length > 4) parent.requests.shift();
+    } else {
+        trace.push(entry);
+        while (trace.length > MAX_TASKS) trace.shift();
+    }
     return entry;
+}
+
+// Merge only after a segment finishes: concurrent requests never share activeStage,
+// and the input/response pair always comes from the same completed segment.
+export function finishSegmentTrace(parent, child, outcome, error = null) {
+    endTaskTrace(child, outcome, error);
+    if (!parent) return;
+    parent.input = child.input;
+    parent.response = child.response;
+    const offset = child.startedAt - parent.startedAt;
+    parent.stages.push(...child.stages.filter(row => !['done', 'failed'].includes(row.stage)).map(row => ({ ...row, at: row.at + offset })));
+    parent.stages.sort((a, b) => a.at - b.at);
+    parent.stages = parent.stages.slice(-MAX_STAGES);
 }
 
 export function markStage(entry, stage, ok = true) {
@@ -101,9 +137,9 @@ export function endTaskTrace(entry, outcome, error = null) {
     return entry;
 }
 
-export function taskTraceSnapshot() {
+function snapshotEntries(entries, includeRequests = false) {
     const bounded = (value, max) => Math.floor(Math.max(0, Math.min(max, Number(value) || 0)));
-    return trace.slice(-MAX_TASKS).map(entry => ({
+    return entries.map(entry => ({
         mode: MODES.has(entry.mode) ? entry.mode : 'unknown',
         outcome: OUTCOMES.has(entry.outcome) ? entry.outcome : 'failed',
         ms: bounded((entry.endedAt || Date.now()) - entry.startedAt, MAX_DURATION_MS),
@@ -113,10 +149,15 @@ export function taskTraceSnapshot() {
         ...(entry.storage ? { storage: core_backupDiagnostics.backupFailureDiagnostic({
             code: entry.storage.code, kind: 'storage', backupStage: entry.storage.stage,
         }) } : {}),
+        ...(includeRequests && entry.requests?.length ? { requests: snapshotEntries(entry.requests.slice(-4)) } : {}),
+        ...(entry.input ? { input: { chars: count(entry.input.chars), tokens: Number.isFinite(entry.input.tokens) ? count(entry.input.tokens) : null } } : {}),
+        ...(entry.response ? { response: { shape: RESPONSE_SHAPES.has(entry.response.shape) ? entry.response.shape : 'unsupported', finalChars: count(entry.response.finalChars), reasoningChars: count(entry.response.reasoningChars), finishReason: FINISH_REASONS.has(entry.response.finishReason) ? entry.response.finishReason : 'unknown' } } : {}),
         chunks: Object.fromEntries(['total', 'ok', 'failed', 'pending'].map(key => [key, bounded(entry.chunks[key], 9999)])),
         stages: entry.stages.filter(row => STAGES.includes(row.stage)).slice(-MAX_STAGES)
             .map(row => `${row.stage}${row.ok === true ? '' : '!'}@${bounded(row.at, MAX_DURATION_MS)}ms`),
     }));
 }
+
+export function taskTraceSnapshot() { return snapshotEntries(trace.slice(-MAX_TASKS), true); }
 
 export function clearTaskTrace() { trace.length = 0; }

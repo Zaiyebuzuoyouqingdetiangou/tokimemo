@@ -452,6 +452,57 @@ export async function generateCharacterProfileForGroup(groupId) {
     return raw;
 }
 
+// The archive source picker can hold 52k characters; one garden request should
+// carry only a bounded set of complete setting entries. Keep the identifiers
+// used by verbatim evidence validation and omit collector bookkeeping.
+export function fitRelationSettingEntries(sourceEntries, { maxChars = core_constants.MAX_SELECTED_SETTING_CHARS, coverage = null } = {}) {
+    const requested = Number(maxChars);
+    const budget = Number.isFinite(requested)
+        ? Math.max(2, Math.min(core_constants.MAX_SELECTED_SETTING_CHARS, Math.floor(requested)))
+        : core_constants.MAX_SELECTED_SETTING_CHARS;
+    const entries = [], omittedEntries = [];
+    let serializedChars = 2;
+    for (const source of Array.isArray(sourceEntries) ? sourceEntries : []) {
+        if (!source || source.historySource === true || source.contentTruncated === true) continue;
+        const world = typeof source.world === 'string' ? source.world : '';
+        const uid = typeof source.uid === 'string' || Number.isFinite(source.uid) ? String(source.uid) : '';
+        const content = typeof source.content === 'string' ? source.content : '';
+        if (!world.trim() || !uid.trim() || !content.trim()) continue;
+        const projected = { world, uid, title: typeof source.title === 'string' ? source.title : '', content };
+        const added = JSON.stringify(projected).length + (entries.length ? 1 : 0);
+        if (serializedChars + added > budget) {
+            omittedEntries.push(projected);
+            continue;
+        }
+        entries.push(projected); serializedChars += added;
+    }
+    const knownTotal = entries.length + omittedEntries.length;
+    const previousStatus = ['partial', 'truncated'].includes(coverage?.status) ? coverage.status : 'complete';
+    const notes = [];
+    if (previousStatus !== 'complete') notes.push('所选设定本次未能全部读取');
+    if (omittedEntries.length) notes.push(`本次送入 ${entries.length}/${knownTotal} 条已读设定，${omittedEntries.length} 条因输入预算整条未送入`);
+    return { entries, omittedEntries, coverage: {
+        status: omittedEntries.length ? 'truncated' : previousStatus,
+        returned: entries.length,
+        total: coverage?.total === null ? null : Math.max(knownTotal, Number(coverage?.total) || 0),
+        reason: notes.join('；') || (knownTotal ? '已完整送入本次所选设定条目' : '当前没有选择设定条目'),
+    } };
+}
+
+// Sent sources are refreshed solely from the new result. An old setting person
+// can survive a budget omission only while the same selected source still
+// proves that person's exact evidence; removed or changed sources do not qualify.
+export function mergeBudgetRetainedSettingRelations(generated, previous, selection = {}, context = {}) {
+    const sent = Array.isArray(selection.entries) ? selection.entries : [];
+    const sentIds = new Set(sent.map(entry => JSON.stringify([entry.world, String(entry.uid)])));
+    const omitted = (Array.isArray(selection.omittedEntries) ? selection.omittedEntries : [])
+        .filter(entry => !sentIds.has(JSON.stringify([entry.world, String(entry.uid)])));
+    const fresh = normalizeSettingRelationships(generated, sent, context);
+    const names = new Set(fresh.map(item => item.name));
+    const retained = normalizeSettingRelationships(previous, omitted, context).filter(item => !names.has(item.name));
+    return [...fresh, ...retained].slice(0, 32).map((item, index) => ({ ...item, id: `SETTING_${index}` }));
+}
+
 export function relationsPrompt(context, memoryBank, settingEntries = []) {
     return `${generation_prompts.promptSafetyBoundary(context, '本世界线人际庭园')}
 UNTRUSTED_RELATION_ARCHIVE_JSON:

@@ -305,46 +305,162 @@ export function extractManualModelIds(payload) {
     return [...new Set(lists.flatMap(list => list.map(modelId)).filter(Boolean))].slice(0, 2000);
 }
 
-function visibleContentText(value, depth = 0) {
-    if (depth > 5 || value == null) return '';
+function responseField(value, key) {
+    if (!value || typeof value !== 'object') return undefined;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor && 'value' in descriptor ? descriptor.value : undefined;
+}
+
+function hasResponseField(value, key) {
+    const descriptor = value && typeof value === 'object' ? Object.getOwnPropertyDescriptor(value, key) : null;
+    return !!descriptor && 'value' in descriptor;
+}
+
+function nonFinalContent(value) {
+    const type = responseField(value, 'type');
+    const role = responseField(value, 'role');
+    return (typeof type === 'string' && /(?:reasoning|thought|thinking|analysis|tool|function|refusal|error|_call(?:_output)?$)/i.test(type))
+        || responseField(value, 'thought') === true
+        || (typeof role === 'string' && !['assistant', 'model'].includes(role))
+        || !!responseField(value, 'refusal');
+}
+
+// null means an unsupported shape; an empty string means a recognized but empty
+// final channel. Do not promote reasoning/tool text when the final channel is empty.
+function finalContentText(value, depth = 0) {
+    if (depth > 6) return null;
+    if (value == null) return '';
     if (typeof value === 'string') return value;
-    if (Array.isArray(value)) return value.map(item => visibleContentText(item, depth + 1)).filter(Boolean).join('');
-    if (typeof value !== 'object') return '';
-    const type = String(value.type || '').toLowerCase();
-    if (/(?:reasoning|thought|analysis)/.test(type)) return '';
-    if (typeof value.text === 'string') return value.text;
-    if (typeof value.text?.value === 'string') return value.text.value;
-    if (typeof value.output_text === 'string') return value.output_text;
-    if (Object.prototype.hasOwnProperty.call(value, 'content')) return visibleContentText(value.content, depth + 1);
-    return '';
+    if (Array.isArray(value)) {
+        if (value.length > 4096) return null;
+        const parts = [];
+        for (let i = 0; i < value.length; i += 1) {
+            const text = finalContentText(responseField(value, String(i)), depth + 1);
+            // Responses may interleave visible messages with non-text output.
+            // Unknown blocks never contribute text and are not serialized.
+            if (text !== null) parts.push(text);
+        }
+        return parts.join('');
+    }
+    if (typeof value !== 'object') return null;
+    if (nonFinalContent(value)) return '';
+    const text = responseField(value, 'text');
+    if (typeof text === 'string') return text;
+    if (typeof responseField(text, 'value') === 'string') return responseField(text, 'value');
+    if (typeof responseField(value, 'output_text') === 'string') return responseField(value, 'output_text');
+    if (hasResponseField(value, 'content')) return finalContentText(responseField(value, 'content'), depth + 1);
+    if (['assistant', 'model'].includes(responseField(value, 'role'))
+        || ['reasoning', 'reasoning_content', 'thinking'].some(key => hasResponseField(value, key))) return '';
+    return null;
+}
+
+function visibleContentText(value, depth = 0) { return finalContentText(value, depth) || ''; }
+
+function finalResponseSelection(payload, depth = 0, seen = new Set()) {
+    const unsupported = { shape: 'unsupported', text: null };
+    if (depth > 4) return unsupported;
+    if (typeof payload === 'string') return { shape: 'text', text: payload };
+    if (payload == null) return { shape: 'empty', text: '' };
+    if (typeof payload !== 'object' || Array.isArray(payload) || seen.has(payload)) return unsupported;
+    seen.add(payload);
+    const selected = (shape, value) => {
+        const text = finalContentText(value);
+        return text === null ? unsupported : { shape, text };
+    };
+    if (nonFinalContent(payload)) return { shape: 'content', text: '' };
+    const choices = responseField(payload, 'choices');
+    if (Array.isArray(choices)) {
+        const choice = choices.find(item => responseField(item, 'index') === 0)
+            || choices.find(item => item && responseField(item, 'index') == null);
+        if (!choice || ['tool_calls', 'function_call', 'content_filter'].includes(responseField(choice, 'finish_reason'))) {
+            return { shape: 'choices', text: '' };
+        }
+        for (const key of ['message', 'delta']) {
+            if (hasResponseField(choice, key)) return selected('choices', responseField(choice, key));
+        }
+        return selected('choices', responseField(choice, 'text'));
+    }
+    for (const key of ['content', 'output_text', 'output', 'message']) {
+        if (!hasResponseField(payload, key)) continue;
+        const value = responseField(payload, key);
+        // A wrapper's generic message string is not an assistant message.
+        if (key === 'message' && (!value || typeof value !== 'object')) continue;
+        return selected(key, value);
+    }
+    const candidates = responseField(payload, 'candidates');
+    if (Array.isArray(candidates)) {
+        const candidate = responseField(candidates, '0');
+        const parts = responseField(responseField(candidate, 'content'), 'parts');
+        return selected('candidates', parts ?? responseField(candidate, 'output'));
+    }
+    // Only known response containers are traversed. Never scan arbitrary keys or
+    // serialize an API envelope/parsed application object into generated JSON.
+    let hadWrapper = false;
+    for (const key of ['data', 'result', 'response', 'body']) {
+        if (!hasResponseField(payload, key)) continue;
+        hadWrapper = true;
+        const value = responseField(payload, key);
+        if (key === 'response' && typeof value === 'string') return selected('wrapped', value);
+        if (!value || typeof value !== 'object') continue;
+        const nested = finalResponseSelection(value, depth + 1, seen);
+        if (nested.text !== null) return { shape: 'wrapped', text: nested.text };
+    }
+    if (hadWrapper) return unsupported;
+    if (hasResponseField(payload, 'text')) return selected('text_fallback', responseField(payload, 'text'));
+    if (['reasoning', 'reasoning_content', 'thinking'].some(key => hasResponseField(payload, key))) {
+        return { shape: 'empty', text: '' };
+    }
+    return unsupported;
 }
 
 export function extractIndependentResponseContent(payload) {
-    if (typeof payload === 'string') return payload;
-    if (!payload || typeof payload !== 'object') return payload;
-    const candidates = [
-        payload?.choices?.[0]?.message?.content,
-        payload?.choices?.[0]?.text,
-        payload?.choices?.[0]?.delta?.content,
-        payload?.message?.content,
-        payload?.text,
-        payload?.output_text,
-        payload?.response,
-        payload?.candidates?.[0]?.content?.parts,
-        payload?.candidates?.[0]?.output,
-        payload?.data?.choices?.[0]?.message?.content,
-        payload?.data?.content,
-        payload?.data?.text,
-        payload?.data?.output_text,
-        payload?.data?.response,
-    ];
-    if (Object.prototype.hasOwnProperty.call(payload, 'content')) candidates.push(payload.content);
-    if (Array.isArray(payload.output)) candidates.push(payload.output);
-    for (const candidate of candidates) {
-        const text = visibleContentText(candidate);
-        if (text) return text;
-    }
-    return payload;
+    const selected = finalResponseSelection(payload);
+    return selected.text === null ? payload : selected.text;
+}
+
+const SUMMARY_FINISH_REASONS = new Set(['stop', 'end_turn', 'stop_sequence', 'length', 'max_tokens',
+    'content_filter', 'tool_calls', 'function_call', 'completed', 'incomplete', 'done']);
+
+// Pure diagnostics: fixed labels and bounded counts only. Provider text, keys,
+// identifiers and error messages are never returned, even for unsupported shapes.
+export function responseShapeSummary(payload) {
+    const summary = { shape: 'unsupported', finalChars: 0, reasoningChars: 0, finishReason: 'none' };
+    try {
+        const selected = finalResponseSelection(payload);
+        summary.shape = payloadHasProviderError(payload) ? 'error' : selected.shape;
+        summary.finalChars = summary.shape === 'error' ? 0 : Math.min(core_constants.MAX_GENERATION_OUTPUT_CHARS, selected.text?.length || 0);
+        const seen = new Set();
+        const addReasoning = value => {
+            if (typeof value === 'string') summary.reasoningChars = Math.min(core_constants.MAX_GENERATION_OUTPUT_CHARS, summary.reasoningChars + value.length);
+        };
+        const visit = (node, depth = 0, reasoning = false) => {
+            if (depth > 8 || seen.size >= 256) return;
+            if (typeof node === 'string') { if (reasoning) addReasoning(node); return; }
+            if (!node || typeof node !== 'object' || seen.has(node)) return;
+            seen.add(node);
+            if (Array.isArray(node)) {
+                for (let i = 0; i < Math.min(node.length, 256); i += 1) visit(responseField(node, String(i)), depth + 1, reasoning);
+                return;
+            }
+            const type = responseField(node, 'type');
+            reasoning = reasoning || responseField(node, 'thought') === true
+                || (typeof type === 'string' && /(?:reasoning|thought|thinking|analysis)/i.test(type));
+            for (const key of ['reasoning', 'reasoning_content', 'thinking']) visit(responseField(node, key), depth + 1, true);
+            for (const key of ['finish_reason', 'finishReason', 'stop_reason', 'status']) {
+                const raw = responseField(node, key);
+                if (typeof raw !== 'string' || (key === 'status' && !['completed', 'incomplete'].includes(raw))) continue;
+                if (summary.finishReason === 'none') summary.finishReason = SUMMARY_FINISH_REASONS.has(raw.toLowerCase()) ? raw.toLowerCase() : 'unknown';
+            }
+            for (const key of ['choices', 'message', 'delta', 'content', 'output', 'candidates', 'parts', 'data', 'result', 'response', 'body']) {
+                visit(responseField(node, key), depth + 1, reasoning);
+            }
+            if (reasoning) for (const key of ['text', 'value', 'output_text', 'summary']) visit(responseField(node, key), depth + 1, true);
+        };
+        visit(payload);
+        const completion = manualStreamCompletionInfo(payload);
+        if (completion) summary.finishReason = SUMMARY_FINISH_REASONS.has(completion.finishReason) ? completion.finishReason : 'unknown';
+    } catch { return { shape: 'unsupported', finalChars: 0, reasoningChars: 0, finishReason: 'none' }; }
+    return summary;
 }
 
 export function payloadHasProviderError(payload) {
@@ -376,6 +492,12 @@ export function assertIndependentResponsePayload(payload) {
         throw providerEnvelopeFailure(payload, false);
     }
     const content = extractIndependentResponseContent(payload);
+    if (typeof content !== 'string') {
+        const error = apiError('连接返回的正文结构暂不支持，尚未取得可解析的最终正文；旧内容未改变。请导出诊断报告检查返回形态。', 'RMT_RESPONSE_FORMAT');
+        error.retryable = false;
+        error.retryableJson = false;
+        throw error;
+    }
     if (typeof content === 'string' && looksLikeHtmlResponse(content)) {
         const error = apiError('专用连接返回了 HTML 页面；响应正文已隐藏。', 'RMT_RESPONSE_HTML');
         error.retryable = false;
