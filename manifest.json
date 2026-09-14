@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.68-tt-cg-r73.0",
+  "js": "index.js?heartbeat=0.8.69-tt-cg-r74.0",
   "author": "Toto",
-  "version": "0.8.68",
+  "version": "0.8.69",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r73：TT 图片回填、事件场景提示与插件内大图查看修复候选。",
+  "description": "r74：双方人设外貌 tag、TT 图片回填与免费重试修复候选。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
