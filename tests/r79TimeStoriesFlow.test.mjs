@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as trace from '../src/core/taskTrace.js';
 import * as client from '../src/generation/client.js';
 import * as stories from '../src/modes/timeStories.js';
 import * as cache from '../src/core/cache.js';
@@ -326,4 +327,50 @@ test('closing historical B during source preflight keeps the overlay closed whil
     assert.equal(f.body.innerHTML, 'CLOSED_DURING_PREFLIGHT'); assert.equal(f.body.scrollTop, 29);
     assert.deepEqual((await f.persisted(f.bEntry)).timeEcho.episodes, session.episodes);
     assert.deepEqual(f.ctx.chatMetadata, liveBefore); assert.equal(f.ctx.characterId, 0);
+});
+
+// Derived requests must remain attached to one logical mode record through save/recovery.
+test('derived diagnostics distinguish accepted model output from a failed save and a successful save-only retry', async t => {
+    const f = await fixture(t); trace.clearTaskTrace(); t.after(() => trace.clearTaskTrace());
+    f.open('timeEcho'); f.failCompletedSave('timeEcho');
+    await client.generateMode('timeEcho', { background: true });
+    let rows = trace.taskTraceSnapshot();
+    assert.equal(rows.length, 1); assert.equal(rows[0].mode, 'timeEcho');
+    assert.equal(rows[0].outcome, 'deferred');
+    assert.ok(rows[0].stages.some(stage => stage.startsWith('parse@')));
+    assert.ok(rows[0].stages.some(stage => stage.startsWith('save!@')));
+    assert.equal(rows[0].response.shape, 'content');
+    assert.doesNotMatch(JSON.stringify(rows), /time-flow-|CARD_A_ONLY|旧电话|fixture-only/);
+    f.failCompletedSave('');
+    await client.continueSavedGeneration('timeEcho');
+    rows = trace.taskTraceSnapshot();
+    assert.equal(rows.length, 2); assert.equal(rows[1].outcome, 'ok');
+    assert.equal(rows[1].response, undefined, 'save-only recovery does not pretend a new model response happened');
+    assert.equal(f.requests.length, 1);
+});
+
+test('real garden generation excludes selected history books and fits complete setting entries before saving', async t => {
+    const f = await fixture(t);
+    f.ctx.chatMetadata[constants.MEMORY_WORLD_INFO_SETTINGS_KEY] = { books: [
+        { name: 'history-book', all: true, historySource: true },
+        { name: 'setting-book', all: true, historySource: false },
+    ] };
+    f.ctx.getWorldInfoNames = () => ['history-book', 'setting-book'];
+    const reads = [];
+    f.ctx.loadWorldInfo = async name => {
+        reads.push(name);
+        if (name === 'history-book') throw new Error('history must not consume the garden setting budget');
+        return { entries: {
+            1: { uid: 1, comment: '很长的设定', key: ['林舟'], content: '大条目不应进入本次庭园'.repeat(2000) },
+            2: { uid: 2, comment: '邻居', key: ['林舟'], content: '白露是林舟的邻居，常在庭院种花。' },
+        } };
+    };
+    f.setResponse({ title: '庭园', summary: '附近的朋友', discoveries: [], relationships: [],
+        settingRelationships: [{ name: '白露', sourceWorld: 'setting-book', sourceUid: '2', sourceEvidence: '白露是林舟的邻居，常在庭院种花。' }] });
+    const result = await client.generateMode('relations', { background: true });
+    assert.ok(result, JSON.stringify(f.diagnostics));
+    assert.equal(f.requests.length, 1); assert.ok(reads.includes('setting-book')); assert.ok(!reads.includes('history-book'));
+    assert.doesNotMatch(JSON.stringify(f.requests), /大条目不应进入本次庭园/);
+    assert.equal(result.settingRelationships[0].name, '白露');
+    assert.equal((await f.persisted()).relations.settingRelationships[0].name, '白露');
 });

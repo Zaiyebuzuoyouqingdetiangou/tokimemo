@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 97
-// Source SHA-256: 3f71c2a1e6a0bf4002a5f519fc69da9b0892492da23edf7b93a0d96c72156055
+// Source SHA-256: c45d485cea141f6c2e9c1e0d36f5d863a8d5291c5cef30c63000a598d8687d23
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -338,7 +338,7 @@ const MODE_LABEL = Object.freeze({
     [MODE.INBOX]: '你的邮箱',
     [MODE.PAST_LIVES]: '前世今生',
     [MODE.TIME_ECHO]: '时空回响',
-    [MODE.TIME_JOURNEY]: '错时相逢',
+    [MODE.TIME_JOURNEY]: '时空旅行者的妻子',
     [MODE.TRAVEL]: '他的出行路线',
     [MODE.ENDING]: '结局与后日谈',
     [MODE.CALENDAR]: '两个人的日历',
@@ -857,6 +857,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_BANNED_GENERATED_PHRASE: '模型新生成内容命中了本地禁用词；本次结果没有保存。',
     RMT_JSON_EMPTY_FINAL: '模型没有返回最终正文 JSON；旧内容未被覆盖。',
     RMT_JSON_EMPTY_FINAL_WITH_REASONING: '模型产生了推理内容，但没有返回最终正文 JSON；旧内容未被覆盖。',
+    RMT_RESPONSE_FORMAT: '当前连接返回了未识别的正文包装；旧内容保留，请导出诊断以核对返回格式。',
     RMT_JSON_NOT_FOUND: '模型最终正文中没有完整 JSON；旧内容未被覆盖。',
     RMT_JSON_TRUNCATED: '模型返回的 JSON 疑似被截断；旧内容未被覆盖。',
     RMT_PHONE_DRAFT_AVAILABLE: '私人终端只完成了部分内容；已保留可继续生成的草稿。',
@@ -4403,46 +4404,162 @@ function extractManualModelIds(payload) {
     return [...new Set(lists.flatMap(list => list.map(modelId)).filter(Boolean))].slice(0, 2000);
 }
 
-function visibleContentText(value, depth = 0) {
-    if (depth > 5 || value == null) return '';
+function responseField(value, key) {
+    if (!value || typeof value !== 'object') return undefined;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor && 'value' in descriptor ? descriptor.value : undefined;
+}
+
+function hasResponseField(value, key) {
+    const descriptor = value && typeof value === 'object' ? Object.getOwnPropertyDescriptor(value, key) : null;
+    return !!descriptor && 'value' in descriptor;
+}
+
+function nonFinalContent(value) {
+    const type = responseField(value, 'type');
+    const role = responseField(value, 'role');
+    return (typeof type === 'string' && /(?:reasoning|thought|thinking|analysis|tool|function|refusal|error|_call(?:_output)?$)/i.test(type))
+        || responseField(value, 'thought') === true
+        || (typeof role === 'string' && !['assistant', 'model'].includes(role))
+        || !!responseField(value, 'refusal');
+}
+
+// null means an unsupported shape; an empty string means a recognized but empty
+// final channel. Do not promote reasoning/tool text when the final channel is empty.
+function finalContentText(value, depth = 0) {
+    if (depth > 6) return null;
+    if (value == null) return '';
     if (typeof value === 'string') return value;
-    if (Array.isArray(value)) return value.map(item => visibleContentText(item, depth + 1)).filter(Boolean).join('');
-    if (typeof value !== 'object') return '';
-    const type = String(value.type || '').toLowerCase();
-    if (/(?:reasoning|thought|analysis)/.test(type)) return '';
-    if (typeof value.text === 'string') return value.text;
-    if (typeof value.text?.value === 'string') return value.text.value;
-    if (typeof value.output_text === 'string') return value.output_text;
-    if (Object.prototype.hasOwnProperty.call(value, 'content')) return visibleContentText(value.content, depth + 1);
-    return '';
+    if (Array.isArray(value)) {
+        if (value.length > 4096) return null;
+        const parts = [];
+        for (let i = 0; i < value.length; i += 1) {
+            const text = finalContentText(responseField(value, String(i)), depth + 1);
+            // Responses may interleave visible messages with non-text output.
+            // Unknown blocks never contribute text and are not serialized.
+            if (text !== null) parts.push(text);
+        }
+        return parts.join('');
+    }
+    if (typeof value !== 'object') return null;
+    if (nonFinalContent(value)) return '';
+    const text = responseField(value, 'text');
+    if (typeof text === 'string') return text;
+    if (typeof responseField(text, 'value') === 'string') return responseField(text, 'value');
+    if (typeof responseField(value, 'output_text') === 'string') return responseField(value, 'output_text');
+    if (hasResponseField(value, 'content')) return finalContentText(responseField(value, 'content'), depth + 1);
+    if (['assistant', 'model'].includes(responseField(value, 'role'))
+        || ['reasoning', 'reasoning_content', 'thinking'].some(key => hasResponseField(value, key))) return '';
+    return null;
+}
+
+function visibleContentText(value, depth = 0) { return finalContentText(value, depth) || ''; }
+
+function finalResponseSelection(payload, depth = 0, seen = new Set()) {
+    const unsupported = { shape: 'unsupported', text: null };
+    if (depth > 4) return unsupported;
+    if (typeof payload === 'string') return { shape: 'text', text: payload };
+    if (payload == null) return { shape: 'empty', text: '' };
+    if (typeof payload !== 'object' || Array.isArray(payload) || seen.has(payload)) return unsupported;
+    seen.add(payload);
+    const selected = (shape, value) => {
+        const text = finalContentText(value);
+        return text === null ? unsupported : { shape, text };
+    };
+    if (nonFinalContent(payload)) return { shape: 'content', text: '' };
+    const choices = responseField(payload, 'choices');
+    if (Array.isArray(choices)) {
+        const choice = choices.find(item => responseField(item, 'index') === 0)
+            || choices.find(item => item && responseField(item, 'index') == null);
+        if (!choice || ['tool_calls', 'function_call', 'content_filter'].includes(responseField(choice, 'finish_reason'))) {
+            return { shape: 'choices', text: '' };
+        }
+        for (const key of ['message', 'delta']) {
+            if (hasResponseField(choice, key)) return selected('choices', responseField(choice, key));
+        }
+        return selected('choices', responseField(choice, 'text'));
+    }
+    for (const key of ['content', 'output_text', 'output', 'message']) {
+        if (!hasResponseField(payload, key)) continue;
+        const value = responseField(payload, key);
+        // A wrapper's generic message string is not an assistant message.
+        if (key === 'message' && (!value || typeof value !== 'object')) continue;
+        return selected(key, value);
+    }
+    const candidates = responseField(payload, 'candidates');
+    if (Array.isArray(candidates)) {
+        const candidate = responseField(candidates, '0');
+        const parts = responseField(responseField(candidate, 'content'), 'parts');
+        return selected('candidates', parts ?? responseField(candidate, 'output'));
+    }
+    // Only known response containers are traversed. Never scan arbitrary keys or
+    // serialize an API envelope/parsed application object into generated JSON.
+    let hadWrapper = false;
+    for (const key of ['data', 'result', 'response', 'body']) {
+        if (!hasResponseField(payload, key)) continue;
+        hadWrapper = true;
+        const value = responseField(payload, key);
+        if (key === 'response' && typeof value === 'string') return selected('wrapped', value);
+        if (!value || typeof value !== 'object') continue;
+        const nested = finalResponseSelection(value, depth + 1, seen);
+        if (nested.text !== null) return { shape: 'wrapped', text: nested.text };
+    }
+    if (hadWrapper) return unsupported;
+    if (hasResponseField(payload, 'text')) return selected('text_fallback', responseField(payload, 'text'));
+    if (['reasoning', 'reasoning_content', 'thinking'].some(key => hasResponseField(payload, key))) {
+        return { shape: 'empty', text: '' };
+    }
+    return unsupported;
 }
 
 function extractIndependentResponseContent(payload) {
-    if (typeof payload === 'string') return payload;
-    if (!payload || typeof payload !== 'object') return payload;
-    const candidates = [
-        payload?.choices?.[0]?.message?.content,
-        payload?.choices?.[0]?.text,
-        payload?.choices?.[0]?.delta?.content,
-        payload?.message?.content,
-        payload?.text,
-        payload?.output_text,
-        payload?.response,
-        payload?.candidates?.[0]?.content?.parts,
-        payload?.candidates?.[0]?.output,
-        payload?.data?.choices?.[0]?.message?.content,
-        payload?.data?.content,
-        payload?.data?.text,
-        payload?.data?.output_text,
-        payload?.data?.response,
-    ];
-    if (Object.prototype.hasOwnProperty.call(payload, 'content')) candidates.push(payload.content);
-    if (Array.isArray(payload.output)) candidates.push(payload.output);
-    for (const candidate of candidates) {
-        const text = visibleContentText(candidate);
-        if (text) return text;
-    }
-    return payload;
+    const selected = finalResponseSelection(payload);
+    return selected.text === null ? payload : selected.text;
+}
+
+const SUMMARY_FINISH_REASONS = new Set(['stop', 'end_turn', 'stop_sequence', 'length', 'max_tokens',
+    'content_filter', 'tool_calls', 'function_call', 'completed', 'incomplete', 'done']);
+
+// Pure diagnostics: fixed labels and bounded counts only. Provider text, keys,
+// identifiers and error messages are never returned, even for unsupported shapes.
+function responseShapeSummary(payload) {
+    const summary = { shape: 'unsupported', finalChars: 0, reasoningChars: 0, finishReason: 'none' };
+    try {
+        const selected = finalResponseSelection(payload);
+        summary.shape = payloadHasProviderError(payload) ? 'error' : selected.shape;
+        summary.finalChars = summary.shape === 'error' ? 0 : Math.min(core_constants.MAX_GENERATION_OUTPUT_CHARS, selected.text?.length || 0);
+        const seen = new Set();
+        const addReasoning = value => {
+            if (typeof value === 'string') summary.reasoningChars = Math.min(core_constants.MAX_GENERATION_OUTPUT_CHARS, summary.reasoningChars + value.length);
+        };
+        const visit = (node, depth = 0, reasoning = false) => {
+            if (depth > 8 || seen.size >= 256) return;
+            if (typeof node === 'string') { if (reasoning) addReasoning(node); return; }
+            if (!node || typeof node !== 'object' || seen.has(node)) return;
+            seen.add(node);
+            if (Array.isArray(node)) {
+                for (let i = 0; i < Math.min(node.length, 256); i += 1) visit(responseField(node, String(i)), depth + 1, reasoning);
+                return;
+            }
+            const type = responseField(node, 'type');
+            reasoning = reasoning || responseField(node, 'thought') === true
+                || (typeof type === 'string' && /(?:reasoning|thought|thinking|analysis)/i.test(type));
+            for (const key of ['reasoning', 'reasoning_content', 'thinking']) visit(responseField(node, key), depth + 1, true);
+            for (const key of ['finish_reason', 'finishReason', 'stop_reason', 'status']) {
+                const raw = responseField(node, key);
+                if (typeof raw !== 'string' || (key === 'status' && !['completed', 'incomplete'].includes(raw))) continue;
+                if (summary.finishReason === 'none') summary.finishReason = SUMMARY_FINISH_REASONS.has(raw.toLowerCase()) ? raw.toLowerCase() : 'unknown';
+            }
+            for (const key of ['choices', 'message', 'delta', 'content', 'output', 'candidates', 'parts', 'data', 'result', 'response', 'body']) {
+                visit(responseField(node, key), depth + 1, reasoning);
+            }
+            if (reasoning) for (const key of ['text', 'value', 'output_text', 'summary']) visit(responseField(node, key), depth + 1, true);
+        };
+        visit(payload);
+        const completion = manualStreamCompletionInfo(payload);
+        if (completion) summary.finishReason = SUMMARY_FINISH_REASONS.has(completion.finishReason) ? completion.finishReason : 'unknown';
+    } catch { return { shape: 'unsupported', finalChars: 0, reasoningChars: 0, finishReason: 'none' }; }
+    return summary;
 }
 
 function payloadHasProviderError(payload) {
@@ -4474,6 +4591,12 @@ function assertIndependentResponsePayload(payload) {
         throw providerEnvelopeFailure(payload, false);
     }
     const content = extractIndependentResponseContent(payload);
+    if (typeof content !== 'string') {
+        const error = apiError('连接返回的正文结构暂不支持，尚未取得可解析的最终正文；旧内容未改变。请导出诊断报告检查返回形态。', 'RMT_RESPONSE_FORMAT');
+        error.retryable = false;
+        error.retryableJson = false;
+        throw error;
+    }
     if (typeof content === 'string' && looksLikeHtmlResponse(content)) {
         const error = apiError('专用连接返回了 HTML 页面；响应正文已隐藏。', 'RMT_RESPONSE_HTML');
         error.retryable = false;
@@ -4780,6 +4903,7 @@ __m_core_independentApi_js.looksLikeHtmlResponse = looksLikeHtmlResponse;
 __m_core_independentApi_js.assertManualApiCredentialTransport = assertManualApiCredentialTransport;
 __m_core_independentApi_js.extractManualModelIds = extractManualModelIds;
 __m_core_independentApi_js.extractIndependentResponseContent = extractIndependentResponseContent;
+__m_core_independentApi_js.responseShapeSummary = responseShapeSummary;
 __m_core_independentApi_js.payloadHasProviderError = payloadHasProviderError;
 __m_core_independentApi_js.assertIndependentResponsePayload = assertIndependentResponsePayload;
 __m_core_independentApi_js.manualStreamCompletionInfo = manualStreamCompletionInfo;
@@ -5004,6 +5128,22 @@ function __init_core_autoUpdatePolicy_js() {
 
 const AUTO_UPDATE_MODES = Object.freeze(['archive', 'album', 'adv', 'room', 'phone', 'inbox', 'cabinet', 'travel', 'ending', 'calendar', 'relations', 'heart', 'achievements', 'butterfly']);
 
+const autoUpdateStorageKey = scope => 'heartbeatMemoriesAutoFloorsV1:' + encodeURIComponent(scope);
+
+function hasEnabledAutoUpdates(value) {
+    return !!value && AUTO_UPDATE_MODES.some(mode => Object.hasOwn(value, mode) && value[mode]?.enabled === true);
+}
+
+function normalizeAutoUpdateCheckpoint(raw) {
+    const safe = {};
+    for (const mode of AUTO_UPDATE_MODES) {
+        const item = raw?.[mode];
+        if (item && Number.isSafeInteger(item.attemptFloor) && item.attemptFloor >= 0 && Number.isSafeInteger(item.successFloor)
+            && typeof item.signature === 'string' && item.signature.length < 100) safe[mode] = item;
+    }
+    return safe;
+}
+
 function normalizeAutoUpdates(value) {
     return Object.fromEntries(AUTO_UPDATE_MODES.map(mode => {
         const item = value && Object.hasOwn(value, mode) ? value[mode] : null;
@@ -5013,28 +5153,34 @@ function normalizeAutoUpdates(value) {
 }
 
 // One scheduler owns eligibility, attempt dedupe and success checkpoints. No timers or APIs here.
-function createFloorScheduler({ snapshot, read, write, run, lock, busy, now = Date.now }) {
+function createFloorScheduler({ snapshot, read, write, run, lock, busy, wake, now = Date.now }) {
     let stopped = false, pending = null;
     const tick = () => {
         if (stopped || pending) return pending || Promise.resolve();
         const start = { ...snapshot() };
         if (!start?.scope || !start.ready || busy() || !AUTO_UPDATE_MODES.some(mode => start.rules?.[mode]?.enabled)) return Promise.resolve();
         pending = Promise.resolve(lock(start.scope, async () => {
-            if (stopped || busy() || snapshot()?.scope !== start.scope) return;
+            // Reuse the snapshot while no asynchronous operation can change the host.
+            // Refresh at each await boundary; chat/opt-in/lifecycle checks must stay live.
+            let current = snapshot();
+            const refresh = () => { current = snapshot(); };
+            const same = () => !stopped && current?.scope === start.scope && current?.lifetime === start.lifetime;
+            if (!same() || busy()) return;
             const state = await read(start.scope);
-            const same = () => !stopped && snapshot()?.scope === start.scope && snapshot()?.lifetime === start.lifetime;
+            refresh();
             // A confirmed manual archive commit supersedes a failed automatic attempt.
             if (same() && ['failed', 'running'].includes(state.archive?.status) && start.revision
                 && state.archive.archiveRevision && start.revision !== state.archive.archiveRevision) {
                 state.archive = { ...state.archive, status: 'complete', attemptFloor: start.floor,
                     successFloor: start.floor, archiveRevision: start.revision, at: now() };
                 await write(start.scope, state);
+                refresh();
             }
             for (const mode of AUTO_UPDATE_MODES) {
                 if (!same() || busy()) break;
-                const rule = snapshot()?.rules?.[mode];
+                const rule = current?.rules?.[mode];
                 if (!rule?.enabled) continue;
-                const archiveRule = snapshot()?.rules?.archive;
+                const archiveRule = current?.rules?.archive;
                 if (mode !== 'archive' && archiveRule?.enabled && state.archive?.signature === archiveRule.every + ':' + archiveRule.epoch
                     && ['failed', 'running'].includes(state.archive?.status)) break;
                 const signature = rule.every + ':' + rule.epoch;
@@ -5042,15 +5188,20 @@ function createFloorScheduler({ snapshot, read, write, run, lock, busy, now = Da
                 if (!cursor || cursor.signature !== signature || start.floor < cursor.attemptFloor) {
                     state[mode] = { signature, attemptFloor: start.floor, successFloor: start.floor, status: 'armed', archiveRevision: start.revision || '', at: now() };
                     await write(start.scope, state);
+                    refresh();
                     continue;
                 }
                 if (start.floor - cursor.attemptFloor < rule.every) continue;
+                // The lightweight bootstrap hands over only a genuinely due interval.
+                // It must leave attemptFloor untouched for the runtime's paid-request gate.
+                if (wake) { wake(mode); break; }
                 // Persist before requesting: reloads, duplicate events and another page cannot replay a paid attempt.
                 const previousCursor = cursor;
                 cursor = state[mode] = { ...cursor, failureCode: undefined, attemptFloor: start.floor, status: 'running', archiveRevision: start.revision || '', at: now() };
                 await write(start.scope, state);
-                const stillEligible = () => same() && snapshot()?.rules?.[mode]?.enabled
-                    && snapshot().rules[mode].every + ':' + snapshot().rules[mode].epoch === signature;
+                refresh();
+                const stillEligible = () => same() && current?.rules?.[mode]?.enabled
+                    && current.rules[mode].every + ':' + current.rules[mode].epoch === signature;
                 if (!stillEligible()) break;
                 if (busy()) {
                     // No provider call occurred. Keep this interval eligible when the manual task ends.
@@ -5060,17 +5211,21 @@ function createFloorScheduler({ snapshot, read, write, run, lock, busy, now = Da
                 }
                 try {
                     const result = await run(mode);
+                    refresh();
                     if (!stillEligible()) break;
                     const success = result?.status === 'committed' || result?.status === 'noop';
                     state[mode] = { ...cursor, status: success ? 'complete' : 'failed', successFloor: success ? start.floor : cursor.successFloor,
-                        archiveRevision: success ? snapshot()?.revision || cursor.archiveRevision : cursor.archiveRevision, at: now() };
+                        archiveRevision: success ? current?.revision || cursor.archiveRevision : cursor.archiveRevision, at: now() };
                     await write(start.scope, state);
+                    refresh();
                     if (mode === 'archive' && !success) break;
                 } catch (error) {
+                    refresh();
                     if (!stillEligible()) break;
                     // Only a fixed code may survive in a checkpoint, never source or error text.
                     state[mode] = { ...cursor, status: 'failed', at: now(), failureCode: error?.code === 'RMT_ARCHIVE_PREFIX_CHANGED' ? 'RMT_ARCHIVE_PREFIX_CHANGED' : undefined };
                     await write(start.scope, state);
+                    refresh();
                     if (mode === 'archive') break;
                 }
             }
@@ -5080,9 +5235,12 @@ function createFloorScheduler({ snapshot, read, write, run, lock, busy, now = Da
     return { tick, stop() { stopped = true; } };
 }
 
+__m_core_autoUpdatePolicy_js.hasEnabledAutoUpdates = hasEnabledAutoUpdates;
+__m_core_autoUpdatePolicy_js.normalizeAutoUpdateCheckpoint = normalizeAutoUpdateCheckpoint;
 __m_core_autoUpdatePolicy_js.normalizeAutoUpdates = normalizeAutoUpdates;
 __m_core_autoUpdatePolicy_js.createFloorScheduler = createFloorScheduler;
 __m_core_autoUpdatePolicy_js.AUTO_UPDATE_MODES = AUTO_UPDATE_MODES;
+__m_core_autoUpdatePolicy_js.autoUpdateStorageKey = autoUpdateStorageKey;
 }
 
 function __init_core_creativeSupplement_js() {
@@ -5714,7 +5872,7 @@ const MAX_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
 const STAGES = Object.freeze(['start', 'prompt', 'request', 'response', 'parse', 'validate',
     'token-count', 'token-count-fallback', 'merge', 'profile', 'save', 'deferred', 'render', 'done', 'failed']);
 const trace = [];
-const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone']);
+const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'pastLives', 'timeEcho', 'timeJourney', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
 const OUTCOMES = new Set(['running', 'ok', 'failed', 'cancelled', 'deferred', 'blocked', 'noop']);
 const CODES = new Set([
     ...Object.keys(core_backupDiagnostics.BACKUP_FAILURE_MESSAGES),
@@ -5733,10 +5891,27 @@ const CODES = new Set([
     'RMT_RECOVERY_BUSY', 'RMT_RECOVERY_CLEARED', 'RMT_RECOVERY_DATA', 'RMT_RECOVERY_IDENTITY',
     'RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_LIMIT', 'RMT_RECOVERY_OPERATION_CHANGED', 'RMT_RECOVERY_ORIGIN_CHANGED',
     'RMT_RECOVERY_STORAGE', 'RMT_RECOVERY_UNAVAILABLE', 'RMT_RECOVERY_VALIDATION_CHANGED',
-    'RMT_REQUEST_TIMEOUT', 'RMT_RESPONSE_HTML', 'RMT_SEGMENT_VALIDATION', 'RMT_TOKEN_COUNT_TIMEOUT',
+    'RMT_TIME_STORY_STRUCTURE', 'RMT_TIME_STORY_RELATIONSHIP', 'RMT_TIME_STORY_WORLD', 'RMT_TIME_STORY_SOURCE', 'RMT_TIME_STORY_VERSION', 'RMT_TIME_STORY_LIMIT',
+    'RMT_REQUEST_TIMEOUT', 'RMT_RESPONSE_FORMAT', 'RMT_RESPONSE_HTML', 'RMT_SEGMENT_VALIDATION', 'RMT_TOKEN_COUNT_TIMEOUT',
 ]);
 
-function startTaskTrace(taskKey, mode) {
+const RESPONSE_SHAPES = new Set(['text', 'choices', 'message', 'content', 'output_text', 'output', 'candidates', 'text_fallback', 'wrapped', 'unsupported', 'empty', 'error']);
+const FINISH_REASONS = new Set(['stop', 'end_turn', 'stop_sequence', 'length', 'max_tokens', 'content_filter', 'tool_calls', 'function_call', 'completed', 'incomplete', 'done', 'unknown', 'none']);
+const count = value => Math.floor(Math.max(0, Math.min(1000000, Number(value) || 0)));
+
+function recordInput(entry, chars, tokens = null) {
+    if (!entry) return;
+    entry.input = { chars: count(chars), tokens: Number.isFinite(tokens) ? count(tokens) : null };
+}
+
+function recordResponse(entry, value) {
+    if (!entry || !value) return;
+    entry.response = { shape: RESPONSE_SHAPES.has(value.shape) ? value.shape : 'unsupported',
+        finalChars: count(value.finalChars), reasoningChars: count(value.reasoningChars),
+        finishReason: FINISH_REASONS.has(value.finishReason) ? value.finishReason : 'unknown' };
+}
+
+function startTaskTrace(taskKey, mode, parent = null) {
     const entry = {
         // The caller's task key can contain a chat name: do not retain it at all.
         mode: MODES.has(mode) ? mode : 'unknown',
@@ -5749,9 +5924,28 @@ function startTaskTrace(taskKey, mode) {
         chunks: { total: 0, ok: 0, failed: 0, pending: 0 },
         stages: [],
     };
-    trace.push(entry);
-    while (trace.length > MAX_TASKS) trace.shift();
+    if (parent) {
+        parent.requests ||= [];
+        parent.requests.push(entry);
+        while (parent.requests.length > 4) parent.requests.shift();
+    } else {
+        trace.push(entry);
+        while (trace.length > MAX_TASKS) trace.shift();
+    }
     return entry;
+}
+
+// Merge only after a segment finishes: concurrent requests never share activeStage,
+// and the input/response pair always comes from the same completed segment.
+function finishSegmentTrace(parent, child, outcome, error = null) {
+    endTaskTrace(child, outcome, error);
+    if (!parent) return;
+    parent.input = child.input;
+    parent.response = child.response;
+    const offset = child.startedAt - parent.startedAt;
+    parent.stages.push(...child.stages.filter(row => !['done', 'failed'].includes(row.stage)).map(row => ({ ...row, at: row.at + offset })));
+    parent.stages.sort((a, b) => a.at - b.at);
+    parent.stages = parent.stages.slice(-MAX_STAGES);
 }
 
 function markStage(entry, stage, ok = true) {
@@ -5801,9 +5995,9 @@ function endTaskTrace(entry, outcome, error = null) {
     return entry;
 }
 
-function taskTraceSnapshot() {
+function snapshotEntries(entries, includeRequests = false) {
     const bounded = (value, max) => Math.floor(Math.max(0, Math.min(max, Number(value) || 0)));
-    return trace.slice(-MAX_TASKS).map(entry => ({
+    return entries.map(entry => ({
         mode: MODES.has(entry.mode) ? entry.mode : 'unknown',
         outcome: OUTCOMES.has(entry.outcome) ? entry.outcome : 'failed',
         ms: bounded((entry.endedAt || Date.now()) - entry.startedAt, MAX_DURATION_MS),
@@ -5813,15 +6007,23 @@ function taskTraceSnapshot() {
         ...(entry.storage ? { storage: core_backupDiagnostics.backupFailureDiagnostic({
             code: entry.storage.code, kind: 'storage', backupStage: entry.storage.stage,
         }) } : {}),
+        ...(includeRequests && entry.requests?.length ? { requests: snapshotEntries(entry.requests.slice(-4)) } : {}),
+        ...(entry.input ? { input: { chars: count(entry.input.chars), tokens: Number.isFinite(entry.input.tokens) ? count(entry.input.tokens) : null } } : {}),
+        ...(entry.response ? { response: { shape: RESPONSE_SHAPES.has(entry.response.shape) ? entry.response.shape : 'unsupported', finalChars: count(entry.response.finalChars), reasoningChars: count(entry.response.reasoningChars), finishReason: FINISH_REASONS.has(entry.response.finishReason) ? entry.response.finishReason : 'unknown' } } : {}),
         chunks: Object.fromEntries(['total', 'ok', 'failed', 'pending'].map(key => [key, bounded(entry.chunks[key], 9999)])),
         stages: entry.stages.filter(row => STAGES.includes(row.stage)).slice(-MAX_STAGES)
             .map(row => `${row.stage}${row.ok === true ? '' : '!'}@${bounded(row.at, MAX_DURATION_MS)}ms`),
     }));
 }
 
+function taskTraceSnapshot() { return snapshotEntries(trace.slice(-MAX_TASKS), true); }
+
 function clearTaskTrace() { trace.length = 0; }
 
+__m_core_taskTrace_js.recordInput = recordInput;
+__m_core_taskTrace_js.recordResponse = recordResponse;
 __m_core_taskTrace_js.startTaskTrace = startTaskTrace;
+__m_core_taskTrace_js.finishSegmentTrace = finishSegmentTrace;
 __m_core_taskTrace_js.markStage = markStage;
 __m_core_taskTrace_js.beginStage = beginStage;
 __m_core_taskTrace_js.markChunks = markChunks;
@@ -6273,6 +6475,12 @@ function jsonOutputBudgetSummary({ requestMaxTokens = 0, configuredMaxTokens = 0
 }
 
 function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {
+    if (raw != null && typeof raw !== 'string') {
+        const error = jsonOutputError('RMT_RESPONSE_FORMAT', '连接返回的正文结构暂不支持，未取得可解析的最终正文；旧内容未改变。');
+        error.retryable = false;
+        error.retryableJson = false;
+        throw error;
+    }
     let text = core_text.normalizeText(raw, core_constants.MAX_GENERATION_OUTPUT_CHARS).replace(/^\uFEFF/, '').trim();
     const reasoningChars = core_text.normalizeText(reasoning, core_constants.MAX_GENERATION_OUTPUT_CHARS).length;
     const budgetSummary = jsonOutputBudgetSummary({ requestMaxTokens, configuredMaxTokens });
@@ -6284,6 +6492,19 @@ function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxT
                 : `模型返回了空的最终正文，没有 JSON 可解析。${budgetSummary} 可只重试这一项，或检查所选模型/连接是否正常。`,
             { contentChars: 0, reasoningChars, requestMaxTokens: Math.floor(Number(requestMaxTokens) || 0), configuredMaxTokens: Math.floor(Number(configuredMaxTokens) || 0) },
         );
+    }
+    // Parse the complete document first so code-fence markers inside JSON strings
+    // stay literal. A closed JSON fence is independent of unmatched braces in prose.
+    try {
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    } catch {}
+    const fences = [...text.matchAll(/(?:^|\n)[ \t]*```json[ \t]*\n([\s\S]*?)\n[ \t]*```[ \t]*(?=\n|$)/gi)];
+    for (let i = fences.length - 1; i >= 0; i -= 1) {
+        try {
+            const parsed = JSON.parse(fences[i][1].trim());
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+        } catch {}
     }
     text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
     const { candidates, hasUnclosedObject } = extractBalancedJsonObjects(text);
@@ -9102,7 +9323,7 @@ const TIME_STORY_PRESENTATIONS = Object.freeze(['modern', 'classical', 'fantasy'
 const MEDIA = ['phone', 'terminal', 'relic', 'object', 'voice'];
 
 function isTimeStoryMode(mode) { return mode === TIME_ECHO_MODE || mode === TIME_JOURNEY_MODE; }
-function timeStoryLabel(mode) { return mode === TIME_ECHO_MODE ? '时空回响' : mode === TIME_JOURNEY_MODE ? '错时相逢' : '时空番外'; }
+function timeStoryLabel(mode) { return mode === TIME_ECHO_MODE ? '时空回响' : mode === TIME_JOURNEY_MODE ? '时空旅行者的妻子' : '时空番外'; }
 function timeStoryError(code, message) {
     const error = new Error(message);
     Object.assign(error, { code: `RMT_TIME_STORY_${code}`, safeToDisplay: true, safeUserMessage: message, repairHint: message });
@@ -9144,14 +9365,12 @@ function timeStoryMediumKinds(profile = {}) {
 }
 
 function assertTimeJourneyOrders(encounters) {
-    const require = condition => { if (!condition) throw timeStoryError('STRUCTURE', '相遇需有双方各自唯一的正整数顺序，且至少两次相遇的先后不同。'); };
-    require(encounters.length >= 2);
+    const require = condition => { if (!condition) throw timeStoryError('STRUCTURE', '故事需有可阅读的场景，双方经历顺序请使用各自唯一的正整数。'); };
+    require(encounters.length >= 1);
     for (const field of ['charOrder', 'userOrder']) {
         require(encounters.every(item => Number.isSafeInteger(item[field]) && item[field] > 0 && item[field] <= 100000));
         require(new Set(encounters.map(item => item[field])).size === encounters.length);
     }
-    const sorted = [...encounters].sort((a, b) => a.charOrder - b.charOrder);
-    require(sorted.some((item, index) => index > 0 && item.userOrder < sorted[index - 1].userOrder));
 }
 
 // Reopening authenticates data shape and local references; it does not rejudge
@@ -9190,6 +9409,7 @@ function timeStoriesStoredData(value) {
             for (const scene of scenes) {
                 prose(scene.title, L.title); prose(scene.charTime, 240); prose(scene.userTime, 240); prose(scene.text);
                 prose(scene.charKnows, 1600, false); prose(scene.userKnows, 1600, false);
+                prose(scene.waiting, L.prose, false);
             }
         }
     }
@@ -9301,7 +9521,8 @@ function normalizeTimeStoryEpisode(mode, value, memory, options = {}) {
             return { id: localId('S', index), title: prose(scene.title, L.title, true),
                 charTime: prose(scene.charTime, 240, true), userTime: prose(scene.userTime, 240, true),
                 charOrder: scene.charOrder, userOrder: scene.userOrder,
-                charKnows: prose(scene.charKnows, 1600), userKnows: prose(scene.userKnows, 1600, false, 'user'), text: prose(scene.text, L.prose, true) };
+                charKnows: prose(scene.charKnows, 1600), userKnows: prose(scene.userKnows, 1600, false, 'user'), text: prose(scene.text, L.prose, true),
+                ...(scene.waiting == null ? {} : { waiting: prose(scene.waiting, L.prose, false, raw.traveler === 'char' ? 'user' : 'char') }) };
         });
         contract.assertTimeJourneyOrders(result.encounters);
     }
@@ -9337,9 +9558,10 @@ function timeStoryPrompt(mode, context, memory, previous = null, profile = {}) {
         ? `不同时间的两人，或同一人的不同时期，通过联络传递关键信息并试图改变命运；让信息影响选择，成败由人物与故事决定。媒介 kind 仅可用 ${contract.timeStoryMediumKinds(profile).join('|')}，label 沿用世界已有通讯方式或熟悉器物；未知时代用器物/声音承载这次异常，不硬添手机或魔法体系。
 ends 按 a、b 顺序写两端人物与不同的时间，role 可相同；lines 按通话顺序写双方发言与必要叙述，message 写传递的关键信息，closing 写这次联络的后续。
 输出 {"title":"篇名","opening":"开场","closing":"完整结尾","palette":"配色","motif":"意象","medium":{"kind":"允许的媒介","label":"器物名称"},"ends":[{"role":"char|user","time":"一端时间"},{"role":"char|user","time":"另一端时间"}],"lines":[{"speaker":"a|b|narrator","text":"正文"}],"message":"关键信息"}。`
-        : `一方无法控制时间跳跃，两人以不同顺序经历相遇、感情与离别；不固定谁跳跃，不要求已经结婚。错位要影响他们当时知道什么和作出的选择，时间与器物沿用世界设定。
-encounters 写完整的相遇场景；charTime/userTime 可用相对时间，charOrder/userOrder 为双方个人经历中各自唯一的正整数顺序，至少两次相遇的先后颠倒。charKnows/userKnows 可简述各自已知，省略亦可；不要为了凑数量重复场景。
-输出 {"title":"篇名","opening":"开场","closing":"完整结尾","palette":"配色","motif":"意象","traveler":"char|user","encounters":[{"title":"相遇名","charTime":"角色此刻","userTime":"用户此刻","charOrder":1,"userOrder":2,"charKnows":"角色已知，可选","userKnows":"用户已知，可选","text":"这次相遇的完整正文"}]}。`;
+        : `核心是「时空旅行者的妻子」式的爱情：一方拥有不受控的时间跳跃能力，无法决定何时离开、去往何时或何时回来；另一方在自己的时间里继续生活、等待，并与归来的人重新相爱。让突然消失、缺席中的日常、归来后的亲密与离别推动完整故事，两人的记忆与经历可以错乱。时间跳跃不能成为随叫随到的旅行工具，也不要只把几次相遇打乱排序。
+traveler 可为 char 或 user；沿用双方性格、性别与关系进展，题名不要求谁必须为女性或已经结婚。穿越是本篇的异常，日常生活、用语与器物适配原世界，不强塞现代都市或新的科技、法术体系；结局由人物与故事决定。
+encounters 按故事阅读顺序写场景，离开、等待或重逢均可成一幕，不凑数量或刻意制造逆序。charTime/userTime 可用相对时间，charOrder/userOrder 为双方个人经历中各自唯一的正整数顺序。charKnows/userKnows 可简述各自已知；waiting 可补写留下的一方如何度过缺席时光，已经写入正文则省略。
+输出 {"title":"篇名","opening":"时间打乱两人生活的开场","closing":"本篇完整结尾","palette":"配色","motif":"意象","traveler":"char|user","encounters":[{"title":"场景名","charTime":"角色此刻","userTime":"用户此刻","charOrder":1,"userOrder":1,"charKnows":"角色已知，可选","userKnows":"用户已知，可选","text":"场景完整正文","waiting":"留下的一方的日子，可选"}]}。`;
     return `${common}${modePrompt}
 UNTRUSTED_EXISTING_TITLES_JSON:
 ${JSON.stringify((previous?.episodes || []).map(item => ({ title: item.title, motif: item.motif })))}
@@ -9451,16 +9673,19 @@ function journeyHtml(session, episode, ui) {
     const ordered = orderedEncounters(episode, ui.tab);
     const selected = ordered.find(item => item.id === ui.selectedEntryId) || ordered[0];
     const index = ordered.findIndex(item => item.id === selected?.id);
+    const waitingRole = episode.traveler === 'char' ? 'user' : 'char';
+    const roles = `<div class="rmt-time-roles"><div><small>被时间带走的人</small><b>${esc(nameFor(session, episode.traveler))}</b></div><div><small>等待归来的人</small><b>${esc(nameFor(session, waitingRole))}</b></div></div>`;
     const lane = role => `<section class="rmt-time-lane" data-rmt-time-lane="${role}"><h3>${esc(nameFor(session, role))}</h3><ol>${orderedEncounters(episode, role).map(item => `<li><button type="button" data-rmt-time-story="encounter" data-rmt-time-story-id="${esc(item.id)}" aria-pressed="${selected?.id === item.id}"><small>${esc(item[`${role}Time`])}</small><b>${esc(item.title)}</b><span>${esc(item.id)}</span></button></li>`).join('')}</ol></section>`;
-    const timelines = `<div class="rmt-time-timelines" aria-label="两人的相遇顺序">${lane('char')}${lane('user')}</div>`;
+    const timelines = `<details class="rmt-time-timeline-details"><summary>回看两人的时间线</summary><div class="rmt-time-timelines" aria-label="两人的经历顺序">${lane('char')}${lane('user')}</div></details>`;
     const orderButtons = `<nav class="rmt-time-order" aria-label="阅读顺序">${button('order', '故事顺序', 'story', `aria-pressed="${ui.tab === 'story'}"`)}${button('order', nameFor(session, 'char'), 'char', `aria-pressed="${ui.tab === 'char'}"`)}${button('order', nameFor(session, 'user'), 'user', `aria-pressed="${ui.tab === 'user'}"`)}</nav>`;
     const knowledge = selected ? `<div class="rmt-time-knowledge"><div><b>${esc(session.characterName)} · ${esc(selected.charTime)}</b>${selected.charKnows ? `<p>${esc(selected.charKnows)}</p>` : ''}</div><div><b>${esc(session.userName)} · ${esc(selected.userTime)}</b>${selected.userKnows ? `<p>${esc(selected.userKnows)}</p>` : ''}</div></div>` : '';
+    const waiting = selected?.waiting ? `<aside class="rmt-time-waiting"><h3>${esc(nameFor(session, waitingRole))} · 等待中的日子</h3>${paragraphs(selected.waiting)}</aside>` : '';
     const ending = ui.reading;
-    const content = ending ? `<article class="rmt-time-prose rmt-time-closing" aria-live="polite"><h3>相逢之后</h3>${paragraphs(episode.closing)}</article>`
-        : selected ? `<article class="rmt-time-prose rmt-time-encounter" aria-live="polite"><header><small>${esc(selected.id)} · ${index + 1} / ${ordered.length}</small><h3>${esc(selected.title)}</h3></header>${knowledge}${paragraphs(selected.text)}</article>` : '';
-    const controls = ending ? `<div class="rmt-time-actions">${button('encounter', '返回相逢', selected?.id || '')}</div>`
-        : `<div class="rmt-time-reading-controls">${button('prev-scene', '上一幕', '', index <= 0 ? 'disabled' : '')}<span>${index + 1} / ${ordered.length}</span>${button(index + 1 < ordered.length ? 'next-scene' : 'ending', index + 1 < ordered.length ? '下一幕' : '相逢之后')}</div>`;
-    return `<p class="rmt-time-traveler">穿行于时间的人：${esc(nameFor(session, episode.traveler))}</p>${timelines}${orderButtons}<div class="rmt-time-opening">${paragraphs(episode.opening)}</div>${content}${controls}`;
+    const content = ending ? `<article class="rmt-time-prose rmt-time-closing" aria-live="polite"><h3>此后的日子</h3>${paragraphs(episode.closing)}</article>`
+        : selected ? `<article class="rmt-time-prose rmt-time-encounter" aria-live="polite"><header><small>${esc(selected.id)} · ${index + 1} / ${ordered.length}</small><h3>${esc(selected.title)}</h3></header>${knowledge}${paragraphs(selected.text)}${waiting}</article>` : '';
+    const controls = ending ? `<div class="rmt-time-actions">${button('encounter', '返回故事', selected?.id || '')}</div>`
+        : `<div class="rmt-time-reading-controls">${button('prev-scene', '上一幕', '', index <= 0 ? 'disabled' : '')}<span>${index + 1} / ${ordered.length}</span>${button(index + 1 < ordered.length ? 'next-scene' : 'ending', index + 1 < ordered.length ? '下一幕' : '此后的日子')}</div>`;
+    return `${roles}<div class="rmt-time-opening">${paragraphs(episode.opening)}</div>${content}${controls}${orderButtons}${timelines}`;
 }
 
 function timeStoriesHtml(session, { readOnly: locked = false, busy = false } = {}) {
@@ -9477,7 +9702,7 @@ function timeStoriesHtml(session, { readOnly: locked = false, busy = false } = {
         const content = inStory
             ? `<div class="rmt-time-story-head">${button('library', '返回篇章')}<div><small>${esc(selected.motif)}</small><h3>${esc(selected.title)}</h3></div></div>${mode === 'timeEcho' ? echoHtml(session, selected, ui) : journeyHtml(session, selected, ui)}`
             : session.episodes.length ? `<div class="rmt-time-library">${session.episodes.map(episode => `<button type="button" class="rmt-time-cover" data-rmt-time-story="open" data-rmt-time-story-id="${esc(episode.id)}"><i class="fa-solid ${mode === 'timeEcho' ? mediumIcon(episode.medium?.kind) : 'fa-hourglass-half'}" aria-hidden="true"></i><span><small>${esc(episode.motif)}</small><b>${esc(episode.title)}</b>${mode === 'timeEcho' ? `<small>${esc(episode.medium?.label || '')}</small>` : ''}</span><span aria-hidden="true">›</span></button>`).join('')}</div>`
-                : `<div class="rmt-time-empty"><i class="fa-solid ${mode === 'timeEcho' ? 'fa-wave-square' : 'fa-hourglass-half'}" aria-hidden="true"></i><h3>${mode === 'timeEcho' ? '有一道回声，尚未抵达' : '有一次相逢，尚未写下'}</h3></div>`;
+                : `<div class="rmt-time-empty"><i class="fa-solid ${mode === 'timeEcho' ? 'fa-wave-square' : 'fa-hourglass-half'}" aria-hidden="true"></i><h3>${mode === 'timeEcho' ? '有一道回声，尚未抵达' : '归期无法约定，爱仍在继续'}</h3>${mode === 'timeJourney' ? '<p>一人被时间带走，一人在日常里等待。写下他们错乱时光中的相爱、归来与离别。</p>' : ''}</div>`;
         return `<section class="rmt-time-stories" data-rmt-time-presentation="${presentation(selected?.presentation)}" data-rmt-time-palette="${palette(selected?.palette)}">${header}${content}</section>`;
     } catch { return '<section class="rmt-time-stories"><p role="status">这篇故事暂时无法读取，原内容仍保留。</p></section>'; }
 }
@@ -9592,7 +9817,10 @@ ${root} .rmt-time-line[data-rmt-time-speaker=b]{border-left-width:1px;border-rig
 ${root} .rmt-time-line header{display:flex;gap:12px;justify-content:space-between;align-items:baseline;flex-wrap:wrap;margin-bottom:22px}
 ${root} .rmt-time-reading-controls{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0}
 ${root} .rmt-time-reading-controls>span{font-size:13px;color:var(--rmt-theme-muted)}
-${root} .rmt-time-traveler{font-size:14px}
+${root} .rmt-time-roles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:22px;padding:18px;border:1px solid var(--rmt-theme-border);border-radius:18px;background:var(--rmt-theme-surface)}
+${root} .rmt-time-roles>div{display:grid;gap:4px}
+${root} .rmt-time-waiting{margin-top:24px;padding:18px 0 0;border-top:1px solid var(--rmt-theme-border)}
+${root} .rmt-time-timeline-details>summary{cursor:pointer;min-height:44px;padding:8px 0;margin-bottom:12px;color:var(--rmt-theme-muted)}
 ${root} .rmt-time-timelines{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
 ${root} .rmt-time-lane ol{list-style:none;margin:0!important;padding:0 0 0 12px!important;border-left:2px solid var(--rmt-time-accent)}
 ${root} .rmt-time-lane li{position:relative;margin:0 0 12px!important;padding:0!important}
@@ -21006,10 +21234,11 @@ const runtimeState = __m_core_state_js.state;
 
 let cleanup = null;
 let requestTick = null;
-const storageKey = scope => 'heartbeatMemoriesAutoFloorsV1:' + encodeURIComponent(scope);
+const storageKey = core_autoUpdatePolicy.autoUpdateStorageKey;
 
 function refreshAutoUpdateStatus() {
     const elements = [...document.querySelectorAll('[data-rmt-auto-status]')];
+    if (!elements.length) return;
     for (const element of elements) element.textContent = '未选择可用聊天';
     try {
         const scope = core_context.chatScopeKey(core_context.currentCharacterGuard());
@@ -21046,10 +21275,12 @@ function startAutoUpdates() {
     const snapshot = () => {
         try {
             const current = core_context.currentCharacterGuard();
+            const rules = core_autoUpdatePolicy.normalizeAutoUpdates(current.extensionSettings?.[core_constants.EXTENSION_SETTINGS_KEY]?.autoUpdates);
+            if (!core_autoUpdatePolicy.hasEnabledAutoUpdates(rules)) return null;
             const archive = archive_repository.getImportedMemory(current);
             return { scope: core_context.chatScopeKey(current), floor: current.chat?.length || 0,
                 ready: !!archive, revision: String(archive?.archiveRevision || '').slice(0, 240), lifetime: runtimeState.runtimeLifecycleEpoch,
-                rules: core_settings.getPluginSettings(current).autoUpdates };
+                rules };
         } catch { return null; }
     };
     const scheduler = core_autoUpdatePolicy.createFloorScheduler({
@@ -21058,13 +21289,7 @@ function startAutoUpdates() {
         lock: (scope, job) => navigator.locks.request('heartbeat-auto:' + scope, { ifAvailable: true }, lock => lock ? job() : undefined),
         read: scope => {
             const raw = JSON.parse(localStorage.getItem(storageKey(scope)) || '{}');
-            const safe = {};
-            for (const mode of core_autoUpdatePolicy.AUTO_UPDATE_MODES) {
-                const item = raw?.[mode];
-                if (item && Number.isSafeInteger(item.attemptFloor) && item.attemptFloor >= 0 && Number.isSafeInteger(item.successFloor)
-                    && typeof item.signature === 'string' && item.signature.length < 100) safe[mode] = item;
-            }
-            return safe;
+            return core_autoUpdatePolicy.normalizeAutoUpdateCheckpoint(raw);
         },
         write: (scope, state) => { localStorage.setItem(storageKey(scope), JSON.stringify(state)); },
         run: async mode => {
@@ -21073,15 +21298,26 @@ function startAutoUpdates() {
             return result?.status ? result : { status: result?.kind ? 'committed' : 'failed' };
         },
     });
-    let storageFailed = false;
-    const listener = () => { if (!storageFailed) void scheduler.tick().then(refreshAutoUpdateStatus).catch(() => {
-        storageFailed = true; stopAutoUpdates();
-        globalThis.toastr?.warning?.('自动更新检查点无法保存，本轮已停止；请使用手动更新。', '心迹回廊');
-    }); };
+    let storageFailed = false, timer = 0;
+    const listener = () => {
+        if (storageFailed) return Promise.resolve();
+        let enabled = false;
+        try { enabled = core_autoUpdatePolicy.hasEnabledAutoUpdates(core_context.getContext().extensionSettings?.[core_constants.EXTENSION_SETTINGS_KEY]?.autoUpdates); } catch {}
+        if (!enabled) {
+            if (timer) clearInterval(timer);
+            timer = 0;
+            refreshAutoUpdateStatus();
+            return Promise.resolve();
+        }
+        // Keep due floors eligible after a manual task ends, without polling archives while off.
+        if (!timer) timer = setInterval(listener, 5000);
+        return scheduler.tick().then(refreshAutoUpdateStatus).catch(() => {
+            storageFailed = true; stopAutoUpdates();
+            globalThis.toastr?.warning?.('自动更新检查点无法保存，本轮已停止；请使用手动更新。', '心迹回廊');
+        });
+    };
     const events = [...new Set([types.MESSAGE_SENT, types.MESSAGE_RECEIVED, types.CHAT_CHANGED, types.CHAT_LOADED].filter(Boolean))];
     for (const type of events) source.on(type, listener);
-    // Eligibility is checked on a short UI-idle timer too, so a due floor is not lost while a manual task runs.
-    const timer = setInterval(listener, 5000);
     requestTick = listener;
     cleanup = () => { clearInterval(timer); scheduler.stop(); for (const type of events) source.off?.(type, listener); };
     listener();
@@ -25892,6 +26128,57 @@ async function generateCharacterProfileForGroup(groupId) {
     return raw;
 }
 
+// The archive source picker can hold 52k characters; one garden request should
+// carry only a bounded set of complete setting entries. Keep the identifiers
+// used by verbatim evidence validation and omit collector bookkeeping.
+function fitRelationSettingEntries(sourceEntries, { maxChars = core_constants.MAX_SELECTED_SETTING_CHARS, coverage = null } = {}) {
+    const requested = Number(maxChars);
+    const budget = Number.isFinite(requested)
+        ? Math.max(2, Math.min(core_constants.MAX_SELECTED_SETTING_CHARS, Math.floor(requested)))
+        : core_constants.MAX_SELECTED_SETTING_CHARS;
+    const entries = [], omittedEntries = [];
+    let serializedChars = 2;
+    for (const source of Array.isArray(sourceEntries) ? sourceEntries : []) {
+        if (!source || source.historySource === true || source.contentTruncated === true) continue;
+        const world = typeof source.world === 'string' ? source.world : '';
+        const uid = typeof source.uid === 'string' || Number.isFinite(source.uid) ? String(source.uid) : '';
+        const content = typeof source.content === 'string' ? source.content : '';
+        if (!world.trim() || !uid.trim() || !content.trim()) continue;
+        const projected = { world, uid, title: typeof source.title === 'string' ? source.title : '', content };
+        const added = JSON.stringify(projected).length + (entries.length ? 1 : 0);
+        if (serializedChars + added > budget) {
+            omittedEntries.push(projected);
+            continue;
+        }
+        entries.push(projected); serializedChars += added;
+    }
+    const knownTotal = entries.length + omittedEntries.length;
+    const previousStatus = ['partial', 'truncated'].includes(coverage?.status) ? coverage.status : 'complete';
+    const notes = [];
+    if (previousStatus !== 'complete') notes.push('所选设定本次未能全部读取');
+    if (omittedEntries.length) notes.push(`本次送入 ${entries.length}/${knownTotal} 条已读设定，${omittedEntries.length} 条因输入预算整条未送入`);
+    return { entries, omittedEntries, coverage: {
+        status: omittedEntries.length ? 'truncated' : previousStatus,
+        returned: entries.length,
+        total: coverage?.total === null ? null : Math.max(knownTotal, Number(coverage?.total) || 0),
+        reason: notes.join('；') || (knownTotal ? '已完整送入本次所选设定条目' : '当前没有选择设定条目'),
+    } };
+}
+
+// Sent sources are refreshed solely from the new result. An old setting person
+// can survive a budget omission only while the same selected source still
+// proves that person's exact evidence; removed or changed sources do not qualify.
+function mergeBudgetRetainedSettingRelations(generated, previous, selection = {}, context = {}) {
+    const sent = Array.isArray(selection.entries) ? selection.entries : [];
+    const sentIds = new Set(sent.map(entry => JSON.stringify([entry.world, String(entry.uid)])));
+    const omitted = (Array.isArray(selection.omittedEntries) ? selection.omittedEntries : [])
+        .filter(entry => !sentIds.has(JSON.stringify([entry.world, String(entry.uid)])));
+    const fresh = normalizeSettingRelationships(generated, sent, context);
+    const names = new Set(fresh.map(item => item.name));
+    const retained = normalizeSettingRelationships(previous, omitted, context).filter(item => !names.has(item.name));
+    return [...fresh, ...retained].slice(0, 32).map((item, index) => ({ ...item, id: `SETTING_${index}` }));
+}
+
 function relationsPrompt(context, memoryBank, settingEntries = []) {
     return `${generation_prompts.promptSafetyBoundary(context, '本世界线人际庭园')}
 UNTRUSTED_RELATION_ARCHIVE_JSON:
@@ -26246,6 +26533,8 @@ __m_modes_relations_js.getCharacterProfile = getCharacterProfile;
 __m_modes_relations_js.setCharacterProfile = setCharacterProfile;
 __m_modes_relations_js.deleteCharacterProfile = deleteCharacterProfile;
 __m_modes_relations_js.archiveCharacterProfileKey = archiveCharacterProfileKey;
+__m_modes_relations_js.fitRelationSettingEntries = fitRelationSettingEntries;
+__m_modes_relations_js.mergeBudgetRetainedSettingRelations = mergeBudgetRetainedSettingRelations;
 __m_modes_relations_js.relationsPrompt = relationsPrompt;
 __m_modes_relations_js.normalizeSettingRelationships = normalizeSettingRelationships;
 __m_modes_relations_js.normalizeRelations = normalizeRelations;
@@ -27865,6 +28154,13 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+// Only in-flight bindings; never persisted or exported. Clear at the owning mode's finally.
+const modeTaskTraces = new Map();
+function generationTrace(options = {}) {
+    const parentKey = options.parentTaskKey || core_requestCoordinator.activeModeBuildScopeForTask(options.taskKey || '');
+    return options.taskTrace || modeTaskTraces.get(parentKey || options.taskKey) || null;
+}
+
 function generationWorldInfoScanTerms(mode, context = {}) {
     const characterName = core_text.normalizeText(context?.name2, 120);
     const common = characterName ? [characterName] : [];
@@ -28015,10 +28311,15 @@ async function mapGenerationConcurrent(items, limit, worker) {
 }
 
 async function requestValidatedSegment(prompt, status, options, validator) {
+    const parentTrace = generationTrace(options);
+    const taskTrace = core_taskTrace.startTaskTrace('', options?.mode, parentTrace);
+    core_taskTrace.markStage(taskTrace, 'start');
+    core_taskTrace.beginStage(taskTrace, 'prompt');
+    try {
     const context = options?.context || core_context.currentCharacterGuard();
-    options = { ...options, context, contextEnvelope: typeof options?.contextEnvelope === 'string'
+    options = { ...options, taskTrace, context, contextEnvelope: typeof options?.contextEnvelope === 'string'
         ? options.contextEnvelope : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options?.mode, context) }) };
-    return generation_recovery.withRecoverySegment(prompt, options, validator, async (prompt, options, accepted) => {
+    const result = await generation_recovery.withRecoverySegment(prompt, options, validator, async (prompt, options, accepted) => {
     let lastError = null;
     const maxAttempts = Math.max(1, Math.min(core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS, Number(options?.segmentMaxAttempts) || core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS));
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -28027,7 +28328,9 @@ async function requestValidatedSegment(prompt, status, options, validator) {
             : '';
         try {
             const raw = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? '（重试）' : ''}`, options);
+            core_taskTrace.beginStage(options.taskTrace, 'validate');
             const value = core_requestCoordinator.validateGeneratedSegment(raw, validator);
+            core_taskTrace.markStage(options.taskTrace, 'validate');
             await accepted(raw);
             return value;
         } catch (error) {
@@ -28042,6 +28345,12 @@ async function requestValidatedSegment(prompt, status, options, validator) {
     }
     throw lastError || new Error(`${status}失败。`);
     });
+    core_taskTrace.finishSegmentTrace(parentTrace, taskTrace, 'ok');
+    return result;
+    } catch (error) {
+        core_taskTrace.finishSegmentTrace(parentTrace, taskTrace, error?.name === 'AbortError' ? 'cancelled' : 'failed', error);
+        throw error;
+    }
 }
 
 // The host tokenizer may use an unavailable service. Bound the wait, then use
@@ -28075,6 +28384,7 @@ function countPromptTokens(context, prompt, signal, timeoutMs) {
 async function assertPromptBudget(context, prompt, { skipTokenCount = false, signal = null,
     tokenCountTimeoutMs = TOKEN_COUNT_TIMEOUT_MS, taskTrace = null } = {}) {
     if (signal?.aborted) throw core_requestCoordinator.createGenerationAbortError();
+    core_taskTrace.recordInput(taskTrace, prompt.length);
     if (prompt.length > core_constants.MAX_GENERATION_INPUT_CHARS) {
         throw core_text.safeUserError(`本次心迹回廊输入过大（${prompt.length.toLocaleString()} 字符），已在发送前拦截。请更新/精简档案或减少世界书内容。`, 'RMT_INPUT_BUDGET');
     }
@@ -28087,6 +28397,7 @@ async function assertPromptBudget(context, prompt, { skipTokenCount = false, sig
             if (!Number.isFinite(tokens) || tokens < 0) {
                 throw core_text.safeUserError('本地计数暂不可用。', 'RMT_TOKEN_COUNT_UNAVAILABLE');
             }
+            core_taskTrace.recordInput(taskTrace, prompt.length, tokens);
             if (Number.isFinite(tokens) && tokens > core_constants.MAX_GENERATION_INPUT_TOKENS) {
                 throw core_text.safeUserError(`本次心迹回廊输入约 ${Math.round(tokens).toLocaleString()} tokens，超过 ${core_constants.MAX_GENERATION_INPUT_TOKENS.toLocaleString()} 的安全预算，已在发送前拦截。`, 'RMT_INPUT_BUDGET');
             }
@@ -28156,7 +28467,7 @@ function normalizeConnectionManagerError(error) {
         'RMT_MANUAL_MESSAGES', 'RMT_MANUAL_MODEL', 'RMT_MANUAL_MODEL_TIMEOUT', 'RMT_MANUAL_MODELS_EMPTY',
         'RMT_MANUAL_PROVIDER_ERROR', 'RMT_MANUAL_RESPONSE_TOO_LARGE', 'RMT_PHONE_DRAFT_AVAILABLE',
         'RMT_PROFILE_CAPABILITY', 'RMT_PROFILE_MODEL_TIMEOUT', 'RMT_PROFILE_PROXY_UNAVAILABLE',
-        'RMT_REQUEST_TIMEOUT', 'RMT_RESPONSE_HTML', 'RMT_SEGMENT_VALIDATION', 'RMT_CONNECTION_QUOTA',
+        'RMT_REQUEST_TIMEOUT', 'RMT_RESPONSE_FORMAT', 'RMT_RESPONSE_HTML', 'RMT_SEGMENT_VALIDATION', 'RMT_CONNECTION_QUOTA',
     ]);
     if (knownInternalCodes.has(String(error?.code || ''))) return error;
     const evidence = [];
@@ -28256,7 +28567,7 @@ async function generateConfiguredJson(prompt, options = {}) {
     const creativeSupplement = creative_supplement.creativeSupplementBlock(settings);
     const controlledPrompt = `${contextEnvelope}
 ${expanded}${creativeSupplement}${phrasePolicy}`;
-    await assertPromptBudget(context, contextEnvelope + '\n' + originalExpanded + creativeSupplement + phrasePolicy,
+    await assertPromptBudget(context, controlledPrompt,
         { skipTokenCount: options.skipTokenCount === true, signal: options.signal,
             tokenCountTimeoutMs: options.tokenCountTimeoutMs, taskTrace });
     core_taskTrace.markStage(taskTrace, 'prompt');
@@ -28336,6 +28647,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
         error.retryable = false;
         throw error;
     }
+    core_taskTrace.recordResponse(taskTrace, core_independentApi.responseShapeSummary(result));
     let responsePayload;
     try { responsePayload = core_independentApi.assertIndependentResponsePayload(result); }
     catch (error) { throw normalizeConnectionManagerError(error); }
@@ -28381,6 +28693,9 @@ async function requestJson(prompt, statusText = '正在根据当前聊天档案�
         mode: core_text.normalizeText(options.mode, 80), parentTaskKey, startedAt: Date.now(),
     });
     core_requestCoordinator.refreshConcurrentTaskUi(core_text.normalizeText(options.mode, 80), origin);
+    const inheritedTrace = generationTrace(options);
+    const taskTrace = inheritedTrace || core_taskTrace.startTaskTrace(taskKey, options.mode);
+    if (!inheritedTrace) core_taskTrace.markStage(taskTrace, 'start');
     let releaseProviderPermit = null;
     try {
         releaseProviderPermit = await core_requestCoordinator.acquireProviderRequestPermit(controller.signal);
@@ -28388,12 +28703,18 @@ async function requestJson(prompt, statusText = '正在根据当前聊天档案�
         // the next one the instant a slot frees up.
         await core_requestCoordinator.waitForProviderPacing(controller.signal);
         core_context.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
-        return await generateConfiguredJson(prompt, {
-            ...options,
+        const result = await generateConfiguredJson(prompt, {
+            ...options, taskTrace,
             signal: controller.signal,
             statusText,
             enforceGeneratedPhrasePolicy: options.enforceGeneratedPhrasePolicy !== false,
         });
+        if (!inheritedTrace) core_taskTrace.endTaskTrace(taskTrace, 'ok');
+        return result;
+    } catch (error) {
+        if (!inheritedTrace) core_taskTrace.endTaskTrace(taskTrace, error?.name === 'AbortError' ? 'cancelled' : 'failed', error);
+        else if (taskTrace.activeStage) core_taskTrace.markStage(taskTrace, taskTrace.activeStage, false);
+        throw error;
     } finally {
         try { releaseProviderPermit?.(); } catch {}
         const current = runtimeState.activeGenerationTasks.get(taskKey);
@@ -28647,6 +28968,9 @@ async function generateMode(mode, options = {}) {
     const targetEpochKey = archiveTarget ? `${origin.archiveTargetEntryId}:${mode}` : '';
     const targetEpoch = archiveTarget ? (Number(runtimeState.archiveTargetTaskEpochs.get(targetEpochKey)) || 0) + 1 : 0;
     if (archiveTarget) runtimeState.archiveTargetTaskEpochs.set(targetEpochKey, targetEpoch);
+    const taskTrace = core_taskTrace.startTaskTrace(taskKey, mode);
+    core_taskTrace.markStage(taskTrace, 'start');
+    modeTaskTraces.set(taskKey, taskTrace);
     runtimeState.activeModeBuildScopes.add(taskKey);
     core_requestCoordinator.registerArchiveTargetReservation(taskKey, { archiveTarget }, mode,
         archiveTarget ? `${archiveTarget.characterName} · ${archiveTarget.archiveName} · ${core_constants.MODE_LABEL[mode]}生成中` : '');
@@ -28765,13 +29089,14 @@ async function generateMode(mode, options = {}) {
         } else if (mode === core_constants.MODE.TRAVEL) {
             session = await modes_travel.generateTravelWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, presentationContext });
         } else if (mode === core_constants.MODE.RELATIONS) {
-            const selectedBooks = await archive_repository.collectSelectedMemoryWorldInfo(context, expectedChatId);
+            const selectedBooks = await archive_repository.collectSelectedMemoryWorldInfo(context, expectedChatId, null, { settingsOnly: true });
+            const settingSelection = modes_relations.fitRelationSettingEntries(selectedBooks.entries, { coverage: selectedBooks.coverage });
             // Same rule as the setting envelope: an unreadable or oversized book means
             // "fewer people to draw from", not "refuse to refresh the garden".
-            if (selectedBooks.coverage.status !== 'complete' && !options.automatic) {
-                globalThis.toastr?.info?.(`所选世界书本次只读到部分条目，庭园将只依据已读到的内容刷新；旧人物保留。${core_text.normalizeText(selectedBooks.coverage?.reason, 160)}`, '心迹回廊 · 人际庭园');
+            if (settingSelection.coverage.status !== 'complete' && !options.automatic) {
+                globalThis.toastr?.info?.(`本次按输入容量整理部分世界书条目；未送出的旧人物仅在来源仍有效时保留。${core_text.normalizeText(settingSelection.coverage?.reason, 160)}`, '心迹回廊 · 人际庭园');
             }
-            const settingEntries = selectedBooks.entries.filter(entry => entry.historySource !== true);
+            const settingEntries = settingSelection.entries;
             const raw = await requestValidatedSegment(
                 modes_relations.relationsPrompt(context, memoryBank, settingEntries),
                 '正在整理当前世界线的人际关系…',
@@ -28783,8 +29108,8 @@ async function generateMode(mode, options = {}) {
                 },
             );
             session = modes_relations.normalizeRelations(raw, memoryBank, context);
-            session.settingRelationships = modes_relations.normalizeSettingRelationships(raw.settingRelationships, settingEntries, context);
-            session.settingCoverage = selectedBooks.coverage;
+            session.settingRelationships = modes_relations.mergeBudgetRetainedSettingRelations(raw.settingRelationships, previousSession?.settingRelationships, settingSelection, context);
+            session.settingCoverage = settingSelection.coverage;
             const relationGroupId = archive_groups.currentArchiveGroupKey(context, memoryBank);
             if (relationGroupId) {
                 const relationEntries = archive_groups.archiveGroupEntries(relationGroupId, context);
@@ -28827,6 +29152,7 @@ async function generateMode(mode, options = {}) {
             }
             if (mode === core_constants.MODE.CABINET && previousSession) session = modes_cabinet.mergeCabinet(previousSession, session);
         }
+        core_taskTrace.markStage(taskTrace, 'validate');
         if (!core_incremental.incrementalPartRecord(session, incrementalPart)) {
             const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank, incrementalPart);
             const added = previousSession ? 0 : 1;
@@ -28835,6 +29161,7 @@ async function generateMode(mode, options = {}) {
         session.chatId = expectedChatId;
         session.archiveRevision = expectedArchiveRevision;
         await core_context.yieldToUi();
+        core_taskTrace.beginStage(taskTrace, 'save');
         let committed = false;
         if (archiveTarget) {
             const stillCurrent = archiveTargetStillCurrent;
@@ -28850,7 +29177,9 @@ async function generateMode(mode, options = {}) {
                 if (latestMemory.archiveRevision === expectedArchiveRevision) {
                     committed = await core_cache.commitSession(mode, session, expectedChatId, origin);
                 }
-            } catch {}
+            } catch (error) {
+                core_taskTrace.recordTaskFailure(taskTrace, error);
+            }
         }
         if (!committed && !archiveTarget) core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [mode]: session } });
 
@@ -28860,6 +29189,8 @@ async function generateMode(mode, options = {}) {
                 ? core_cache.loadSession(mode, { chatId: expectedChatId, memoryBank, cache: runtimeState.activeArchiveSnapshot?.entryId === archiveTarget.entryId ? runtimeState.activeArchiveSnapshot.cache : archiveTarget.cache }) || session
                 : core_cache.loadSession(mode) || session;
         }
+        core_taskTrace.markStage(taskTrace, 'save', committed);
+        if (!committed) core_taskTrace.markStage(taskTrace, 'deferred');
         const overlay = document.getElementById(core_constants.OVERLAY_ID);
         const phoneProgress = mode === core_constants.MODE.PHONE ? modes_phone.phoneCompletionSummary(session) : null;
         const partialNotice = phoneProgress?.partial ? `已保留 ${phoneProgress.readableItems} 条，另有 ${phoneProgress.missingItems} 项可在终端补齐` : '';
@@ -28875,18 +29206,23 @@ async function generateMode(mode, options = {}) {
                 modes_room.renderRoom();
             }
             const targetDone = archiveTarget ? `已安全写回：${archiveTarget.characterName} · ${archiveTarget.archiveName} · ` : '';
+            core_taskTrace.endTaskTrace(taskTrace, committed ? 'ok' : 'deferred');
             if (options.automatic) return { status: committed ? 'committed' : 'deferred' };
             globalThis.toastr?.success?.(`${targetDone}${partialNotice || (replaceExisting ? '后台重新生成完成' : refreshableCalendar && previousSession ? '后台刷新完成' : refreshableRelations && previousSession ? '后台刷新完成' : previousSession ? '后台增量追加完成' : '后台生成完成')}：${core_constants.MODE_LABEL[mode]}${committed || archiveTarget ? '' : '（回到原窗口自动写入）'}`, '心迹回廊');
             return session;
         }
         runtimeState.activeMode = mode;
         runtimeState.activeSession = session;
+        core_taskTrace.beginStage(taskTrace, 'render');
         ui_overlay.renderActive();
+        core_taskTrace.markStage(taskTrace, 'render');
+        core_taskTrace.endTaskTrace(taskTrace, 'ok');
         // Today's life is a separate explicit action; saving a room does not incur
         // an additional unconfirmed provider request.
         globalThis.toastr?.success?.(`${partialNotice || (replaceExisting ? '已重新生成' : refreshableCalendar && previousSession ? '已刷新' : refreshableRelations && previousSession ? '已刷新' : previousSession ? '已增量追加' : '已生成')}：${core_constants.MODE_LABEL[mode]}${previousSession && !refreshableCalendar && !refreshableRelations && !replaceExisting ? '；旧内容保持不变' : ''}`, '心迹回廊');
         return session;
     } catch (error) {
+        core_taskTrace.endTaskTrace(taskTrace, error?.name === 'AbortError' ? 'cancelled' : 'failed', error?.failure || error);
         if (recoveryHandle) { try { await generation_recovery.noteGenerationRecoveryFailure(origin, error?.failure || error); } catch {} }
         if (error?.name === 'AbortError') {
             console.warn('[HeartbeatMemories] generation aborted by extension/task cancellation', { mode });
@@ -28921,6 +29257,8 @@ async function generateMode(mode, options = {}) {
         globalThis.toastr?.error?.(core_text.toastText(safeError), '心迹回廊');
         return null;
     } finally {
+        core_taskTrace.endTaskTrace(taskTrace, 'noop');
+        modeTaskTraces.delete(taskKey);
         generation_recovery.detachGenerationRecovery(origin);
         runtimeState.activeModeBuildScopes.delete(taskKey);
         core_requestCoordinator.unregisterArchiveTargetReservation(taskKey);
@@ -32065,7 +32403,7 @@ function modePortalMeta(mode) {
         [core_constants.MODE.ITEMS]: { title: '他的物品', subtitle: '翻找各种收纳容器与私人物件', icon: 'fa-box-open', accent: 'items' },
         [core_constants.MODE.INBOX]: { title: '你的邮箱', subtitle: '寄给你的信 · 远方明信片', icon: 'fa-envelope', accent: 'album' },
         [core_constants.MODE.PAST_LIVES]: { title: '前世今生', subtitle: '另一段人生 · 旧梦卷宗与今生回响', icon: 'fa-scroll', accent: 'ending' },
-        [core_constants.MODE.TIME_JOURNEY]: { title: '错时相逢', subtitle: '错序的时光 · 相爱与离别', icon: 'fa-hourglass-half', accent: 'butterfly' },
+        [core_constants.MODE.TIME_JOURNEY]: { title: '时空旅行者的妻子', subtitle: '不由自主的离开 · 等待与重逢', icon: 'fa-hourglass-half', accent: 'butterfly' },
         [core_constants.MODE.TIME_ECHO]: { title: '时空回响', subtitle: '另一端的你 · 另一刻的声音', icon: 'fa-wave-square', accent: 'phone' },
         [core_constants.MODE.PHONE]: { title: '他的私人终端', subtitle: '通讯、草稿与私人记录', icon: 'fa-mobile-screen-button', accent: 'phone' },
         [core_constants.MODE.TRAVEL]: { title: '他的出行路线', subtitle: '附近对话与远方文字明信片', icon: 'fa-map-location-dot', accent: 'travel' },
@@ -39197,7 +39535,15 @@ async function recoverMissingCurrentArchiveFromBackup(context) {
     });
 }
 
-async function ensureCurrentArchiveBackup(context = core_context.currentCharacterGuard()) {
+async function ensureCurrentArchiveBackup(context = null) {
+    // Opted-in auto updates may load the runtime before a chat is ready. No
+    // eligible chat is a no-op, not a storage failure; do not open IndexedDB.
+    if (!context) {
+        try { context = core_context.currentCharacterGuard(); } catch { return false; }
+    }
+    if (context.groupId || context.characterId === undefined || context.characterId === null
+        || !context.chatMetadata || typeof context.chatMetadata !== 'object'
+        || !core_context.getChatId(context)) return false;
     const initialMemory = archive_repository.getImportedMemory(context);
     if (!initialMemory) return recoverMissingCurrentArchiveFromBackup(context);
     if (archive_groups.isCurrentCharacterDeletedFromLibrary(context, initialMemory)) return false;

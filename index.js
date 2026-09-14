@@ -1,5 +1,5 @@
-const VERSION = '0.8.74';
-const BUILD = '0.8.74-tt-cg-r79.0';
+const VERSION = '0.8.76';
+const BUILD = '0.8.76-tt-cg-r81.0';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -21,6 +21,9 @@ let lastArchiveOpenAt = 0;
 let disabled = false;
 let externalDiagnosticCleanup = null;
 let runtimeLoadFailed = false;
+let bootstrapAutoPending = null;
+let bootstrapAutoCleanup = null;
+let bootstrapAutoEpoch = 0;
 const diagnosticDownloadTimers = new Map();
 
 function safeBootstrapErrorDiagnostic(error) {
@@ -478,6 +481,100 @@ function showBootError(error) {
     try { globalThis.toastr?.error?.(message, '心迹回廊'); } catch {}
 }
 
+// Match core/context.chatScopeKey without importing the archive/runtime graph.
+// These bounded card fields are already present in the host; no card/worldbook API is called.
+function bootstrapAutoUpdateScope(context) {
+    const text = (value, max) => String(value ?? '').replace(/\r\n?/g, '\n').replace(/\u0000/g, '').trim().slice(0, max);
+    const character = context.characters?.[Number(context.characterId)];
+    let identity;
+    if (character) {
+        const data = character.data && typeof character.data === 'object' ? character.data : character;
+        const source = [text(character.avatar || data.avatar, 300), text(character.name || data.name, 120) || `角色 ${Number(context.characterId) + 1}`,
+            ...['description', 'personality', 'scenario', 'first_mes', 'mes_example'].map(key => text(data[key] || character[key], 5000))].join('\u001f');
+        let hash = 2166136261;
+        for (let i = 0; i < source.length; i += 1) hash = Math.imul(hash ^ source.charCodeAt(i), 16777619);
+        identity = 'card:' + (hash >>> 0).toString(36);
+    } else {
+        const fallback = context.characters?.[context.characterId];
+        identity = (text(fallback?.avatar || fallback?.data?.avatar, 300) || `character:${String(context.characterId ?? '')}`) + '\u001f' + text(context.name2, 120);
+    }
+    let chatId;
+    try { chatId = context.getCurrentChatId?.() ?? context.chatId; } catch { chatId = context.chatId; }
+    return `${identity}\u001fcharacter:${String(context.characterId ?? '')}|${text(chatId, 240).replace(/\.jsonl$/i, '').trim()}`;
+}
+
+function stopBootstrapAutoUpdates() {
+    bootstrapAutoEpoch += 1;
+    bootstrapAutoCleanup?.();
+    bootstrapAutoCleanup = null;
+}
+
+function startBootstrapAutoUpdates({ wakeRuntime = () => ensureRuntime('auto-update-due') } = {}) {
+    if (disabled || runtimeModule || bootstrapAutoCleanup) return Promise.resolve();
+    if (bootstrapAutoPending) return bootstrapAutoPending;
+    let context;
+    try {
+        context = globalThis.SillyTavern?.getContext?.();
+        const raw = context?.extensionSettings?.heartbeatMemories?.autoUpdates;
+        if (!raw || !Object.values(raw).some(rule => rule?.enabled === true)
+            || !context.eventSource?.on || !globalThis.navigator?.locks?.request || !globalThis.localStorage) return Promise.resolve();
+    } catch { return Promise.resolve(); }
+    const lifetime = bootstrapAutoEpoch;
+    // The pure floor policy has no runtime imports. A saved toggle alone never loads the bundle.
+    bootstrapAutoPending = import(`./src/core/autoUpdatePolicy.js?heartbeat=${BUILD}`).then(async policy => {
+        if (disabled || runtimeModule || lifetime !== bootstrapAutoEpoch
+            || !policy.hasEnabledAutoUpdates(context.extensionSettings?.heartbeatMemories?.autoUpdates)) return;
+        const snapshot = () => {
+            try {
+                const current = globalThis.SillyTavern?.getContext?.();
+                if (!current || current.groupId || current.characterId == null || !Array.isArray(current.chat)) return null;
+                const rules = policy.normalizeAutoUpdates(current.extensionSettings?.heartbeatMemories?.autoUpdates);
+                if (!policy.hasEnabledAutoUpdates(rules)) return null;
+                const memory = current.chatMetadata?.[MEMORY_KEY];
+                if (Number(memory?.version) !== 3 || !Array.isArray(memory?.memories)) return null;
+                let chatId;
+                try { chatId = current.getCurrentChatId?.() ?? current.chatId; } catch { chatId = current.chatId; }
+                const comparable = (value, max) => String(value ?? '').replace(/\r\n?/g, '\n').replace(/\u0000/g, '').trim().slice(0, max).replace(/\.jsonl$/i, '').trim();
+                if (!comparable(chatId, 240) || comparable(memory.chatId, 260) !== comparable(chatId, 240)) return null;
+                return { scope: bootstrapAutoUpdateScope(current), floor: current.chat.length, ready: true,
+                    revision: String(memory.archiveRevision || '').slice(0, 240), lifetime: bootstrapAutoEpoch, rules };
+            } catch { return null; }
+        };
+        const scheduler = policy.createFloorScheduler({ snapshot, busy: () => disabled || !!runtimeModule,
+            lock: (scope, job) => navigator.locks.request('heartbeat-auto:' + scope, { ifAvailable: true }, lock => lock ? job() : undefined),
+            read: scope => policy.normalizeAutoUpdateCheckpoint(JSON.parse(localStorage.getItem(policy.autoUpdateStorageKey(scope)) || '{}')),
+            write: (scope, value) => localStorage.setItem(policy.autoUpdateStorageKey(scope), JSON.stringify(value)),
+            wake: () => {
+                stopBootstrapAutoUpdates();
+                // Do not await the runtime under the scheduler lock or consume its due checkpoint.
+                void Promise.resolve().then(wakeRuntime).catch(showBootError);
+            },
+        });
+        let timer = 0, stopped = false;
+        const listener = () => {
+            if (stopped) return Promise.resolve();
+            let enabled = false;
+            try { enabled = policy.hasEnabledAutoUpdates(globalThis.SillyTavern?.getContext?.()?.extensionSettings?.heartbeatMemories?.autoUpdates); } catch {}
+            if (!enabled) { if (timer) clearInterval(timer); timer = 0; return Promise.resolve(); }
+            if (!timer) timer = setInterval(listener, 5000);
+            return scheduler.tick().catch(() => {
+                stopBootstrapAutoUpdates();
+                globalThis.toastr?.warning?.('自动更新检查点无法读取或保存，本轮已停止；请使用手动更新。', '心迹回廊');
+            });
+        };
+        const source = context.eventSource, types = context.eventTypes || context.event_types || {};
+        const events = [...new Set([types.MESSAGE_SENT, types.MESSAGE_RECEIVED, types.CHAT_CHANGED, types.CHAT_LOADED].filter(Boolean))];
+        for (const type of events) source.on(type, listener);
+        bootstrapAutoCleanup = () => { stopped = true; scheduler.stop(); if (timer) clearInterval(timer);
+            for (const type of events) source.off?.(type, listener); };
+        await listener();
+    }).catch(() => {
+        stopBootstrapAutoUpdates();
+        globalThis.toastr?.warning?.('自动更新暂时无法启用，请使用手动更新。', '心迹回廊');
+    }).finally(() => { bootstrapAutoPending = null; });
+    return bootstrapAutoPending;
+}
+
 async function ensureRuntime(reason = 'unknown') {
     if (runtimeModule) return runtimeModule;
     if (bootPromise) return bootPromise;
@@ -486,6 +583,7 @@ async function ensureRuntime(reason = 'unknown') {
         const module = await import(`./dist/heartbeatMemories.bundle.js?heartbeat=${BUILD}`);
         if (disabled) return module;
         stopBootstrapMountTimer();
+        stopBootstrapAutoUpdates();
         unbindBootstrapEarlyOpen();
         removeBootstrapShells();
         runtimeModule = module;
@@ -521,12 +619,7 @@ function requestArchiveOpen(source = 'bootstrap') {
 
 function startBootstrap() {
     if (disabled || runtimeModule) return;
-    // Explicit persisted opt-in is the only exception to inert ordinary startup.
-    const autoRules = globalThis.SillyTavern?.getContext?.()?.extensionSettings?.heartbeatMemories?.autoUpdates;
-    if (autoRules && Object.values(autoRules).some(rule => rule?.enabled === true)) {
-        void ensureRuntime('auto-update-opt-in').catch(showBootError);
-        return;
-    }
+    void startBootstrapAutoUpdates();
     mountBootstrapEntrypoints();
     bindBootstrapEarlyOpen();
     if (!document.getElementById(SETTINGS_ID) || !document.getElementById(MENU_ID)) {
@@ -550,6 +643,7 @@ else queueMicrotask(startBootstrap);
 export function onDisable() {
     disabled = true;
     stopBootstrapMountTimer();
+    stopBootstrapAutoUpdates();
     unbindBootstrapEarlyOpen();
     try { runtimeModule?.destroyMemoryTheater?.(); } catch (error) { console.warn('[HeartbeatMemories] disable cleanup failed', safeBootstrapErrorDiagnostic(error)); }
     removeBootstrapShells();
@@ -559,6 +653,7 @@ export function onDisable() {
 export function onClean() {
     disabled = true;
     stopBootstrapMountTimer();
+    stopBootstrapAutoUpdates();
     unbindBootstrapEarlyOpen();
     try { runtimeModule?.destroyMemoryTheater?.(); } catch (error) { console.warn('[HeartbeatMemories] clean cleanup failed', safeBootstrapErrorDiagnostic(error)); }
     removeBootstrapShells();
@@ -581,4 +676,4 @@ function cleanupDiagnostics() {
 }
 
 export { VERSION, BUILD, bootPromise, ensureRuntime, getHeartbeatPerformanceDiagnostic,
-    getDiagnosticReportText, mountExternalDiagnostic, deliverDiagnosticReport };
+    getDiagnosticReportText, mountExternalDiagnostic, deliverDiagnosticReport, startBootstrapAutoUpdates, bootstrapAutoUpdateScope };

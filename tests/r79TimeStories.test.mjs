@@ -42,11 +42,13 @@ test('media follows controlled technology; unknown worlds do not acquire phones 
     assert.equal(episode('timeEcho', future, { profile: { technology: 'future', worldStyle: 'scifi' } }).presentation, 'scifi');
 });
 
-test('journey preserves personal time orders and requires a real inversion rather than different numeric labels', () => {
+test('journey preserves personal time orders without requiring an artificial inversion', () => {
     const result = episode('timeJourney', journey());
     assert.deepEqual(result.encounters.map(item => item.id), ['S01', 'S02']);
     assert.deepEqual([...result.encounters].sort((a, b) => a.userOrder - b.userOrder).map(item => item.id), ['S02', 'S01']);
-    for (const orders of [[3, 4], [1, 1], [0, 2], [1.5, 2], [1, Number.MAX_SAFE_INTEGER + 1]]) {
+    const sequential = journey(); sequential.encounters.forEach((item, i) => item.userOrder = i + 3);
+    assert.deepEqual(episode('timeJourney', sequential).encounters.map(item => item.userOrder), [3, 4]);
+    for (const orders of [[1, 1], [0, 2], [1.5, 2], [1, Number.MAX_SAFE_INTEGER + 1]]) {
         const raw = journey(); raw.encounters.forEach((item, i) => item.userOrder = orders[i]);
         assert.throws(() => episode('timeJourney', raw), { code: 'RMT_TIME_STORY_STRUCTURE' });
     }

@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.74-tt-cg-r79.0",
+  "js": "index.js?heartbeat=0.8.76-tt-cg-r81.0",
   "author": "Toto",
-  "version": "0.8.74",
+  "version": "0.8.76",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r79：私人终端内的时空回响，以及双时间线番外错时相逢。",
+  "description": "r81：生成正文与输入预算修复、轻量启动，以及时空旅行者的妻子。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
