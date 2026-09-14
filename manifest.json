@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.58-reading-reliability-r62.0",
+  "js": "index.js?heartbeat=0.8.68-tt-cg-r73.0",
   "author": "Toto",
-  "version": "0.8.58",
+  "version": "0.8.68",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r62：手机完整看图与ADV阅读、并发绘图、终端与信纸体验、前世今生与蝴蝶效应误拦修复。",
+  "description": "r73：TT 图片回填、事件场景提示与插件内大图查看修复候选。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
