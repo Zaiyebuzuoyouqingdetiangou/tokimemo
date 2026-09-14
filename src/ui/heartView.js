@@ -265,119 +265,18 @@ export function heartStripImagePrompt(item) {
     return generation_imageGeneration.dailyComicImagePrompt(item);
 }
 
-export async function drawHeartStripImage(stripId, { promptOverride, promptMetadata, expectedTarget = null, onAccepted = null } = {}) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
+export async function drawHeartStripImage(stripId, options = {}) {
+    if (runtimeState.activeMode !== core_constants.MODE.HEART || runtimeState.activeSession?.kind !== core_constants.MODE.HEART) return;
     if (!archive_library.requireWritableArchiveAction()) return;
     const session = runtimeState.activeSession;
     const item = session.dailyStrips.find(strip => strip.id === stripId) || selectedHeartStrip();
     if (!item) return;
-    let captured;
-    try { captured = expectedTarget || generation_imageGeneration.captureCgImageTarget({ mode: core_constants.MODE.HEART, session, item }); generation_imageGeneration.assertCgImageTargetCurrent(captured); }
-    catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); return; }
-    const context = core_context.currentCharacterGuard();
-    const imageState = generation_imageGeneration.imageGenerationUiState(context);
-    if (!imageState.available) {
-        globalThis.toastr?.info?.(generation_imageGeneration.imageGenerationUnavailableMessage(imageState), '心迹回廊');
-        return;
-    }
-    const blockedReason = generation_imageGeneration.cgImageStartBlockedReason(core_constants.MODE.HEART, item.id, context);
-    if (blockedReason) {
-        globalThis.toastr?.info?.(blockedReason, '心迹回廊');
-        return;
-    }
-    const previous = generation_imageGeneration.normalizeCgImageRecord(item.cgImage);
-    const confirmDraw = previous ? ui_overlay.confirmExplicitActionTwice : ui_overlay.confirmExplicitAction;
-    const ok = confirmDraw(
-        previous ? `重新绘制「${item.title}」？` : `绘制「${item.title}」？`,
-        `${previous ? '成功后会替换当前图片引用；旧文件不会由心迹回廊主动删除。\n\n' : ''}会调用${imageState.providerLabel || '已配置的生图插件'}，可能消耗额度。为了减少 AI 画坏文字，图片提示只要求 Q 版分镜和动作，真正台词仍由心迹回廊界面显示。`,
-        { destructive: !!previous },
-    );
-    if (!ok) return;
-    try { generation_imageGeneration.assertCgImageTargetCurrent(captured); }
-    catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); return; }
-    const prompt = generation_imageGeneration.dailyComicImagePrompt(item, promptOverride);
-    if (!prompt) return globalThis.toastr?.error?.('这条日常一格没有可用的视觉提示。', '心迹回廊');
-    const expectedChatId = core_context.getChatId(context);
-    const origin = captured.origin;
-    const lifecycleEpoch = runtimeState.cgImageLifecycleEpoch;
-    const taskKey = generation_imageGeneration.cgImageTaskKey(core_constants.MODE.HEART, item.id, context);
-    if (!core_requestCoordinator.canStartGenerationTask(taskKey)) {
-        globalThis.toastr?.info?.(`当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成，请等其中一项完成后再绘制日常一格。`, '心迹回廊');
-        return;
-    }
-    const controller = new AbortController();
-    runtimeState.activeCgImageTasks.set(taskKey, {
-        mode: core_constants.MODE.HEART,
-        itemId: item.id,
-        origin,
-        label: '日常一格绘制',
-        startedAt: Date.now(),
-        controller,
-    });
-    if (typeof onAccepted === 'function') onAccepted();
-    renderHeart();
     try {
-        const generated = await generation_imageGeneration.invokeImageGeneration(prompt, context, {
-            orientation: Number(item.panelCount) === 1 ? 'landscape' : 'portrait',
-            provider: imageState.provider,
-            signal: controller.signal,
-            targetKey: generation_imageGeneration.cgImageReservationKey(core_constants.MODE.HEART, item.id, context),
-            onSettled: () => generation_imageGeneration.refreshSettledCgImage(taskKey, origin),
-            characterName: context.name2,
-            promptMetadata: promptMetadata === undefined ? previous?.promptMetadata : promptMetadata,
-            onProgress: progress => generation_imageGeneration.updateCgImageProgress(taskKey, progress),
-        });
-        const url = generation_imageGeneration.normalizeCgImageUrl(generated?.url);
-        if (!url) throw core_text.safeUserError('图片已生成，但没有取得可保存的本地路径。旧图已保留；请检查柏宝绘的图库保存状态，避免重复出图。', 'BBI_SAVE_FAILED');
-        if (runtimeState.cgImageLifecycleEpoch !== lifecycleEpoch) {
-            globalThis.toastr?.warning?.('图片已经生成，但插件已重载/停用，因此没有接收旧运行实例的结果。', '心迹回廊');
-            return;
-        }
-        const nextImage = {
-            url,
-            prompt,
-            provider: generated.provider,
-            generatedAt: Date.now(),
-            ...((promptMetadata === undefined ? previous?.promptMetadata : promptMetadata)
-                ? { promptMetadata: promptMetadata === undefined ? previous?.promptMetadata : promptMetadata } : {}),
-        };
-        if (!core_context.isCurrentTaskOrigin(origin)) {
-            if (session.archiveRevision !== captured.revision || generation_imageGeneration.cgItemSignature(item) !== captured.signature) {
-                throw core_text.safeUserError('原日常一格已变化，新图片没有替换旧图；可以在生图插件图库中查看。', 'RMT_CG_TARGET_CHANGED');
-            }
-            const { durable } = generation_imageGeneration.deferCgImageIfOriginChanged(captured, nextImage);
-            globalThis.toastr?.[durable ? 'success' : 'warning']?.(
-                durable
-                    ? `日常一格已绘制并安全等待写回：${item.title}；回到原聊天后会自动保存引用。`
-                    : `日常一格已绘制：${item.title}；结果暂存在当前页面，回到原聊天前不要刷新。`,
-                '心迹回廊',
-            );
-            return;
-        }
-        generation_imageGeneration.assertCgImageTargetCurrent(captured, { requireSelection: false });
-        const committed = await core_cache.commitSessionMutation(core_constants.MODE.HEART, expectedChatId, origin, (latest, memoryBank) => {
-            const liveItem = latest?.dailyStrips?.find(strip => strip.id === item.id);
-            if (memoryBank.archiveRevision !== captured.revision || !liveItem
-                || generation_imageGeneration.cgItemSignature(liveItem) !== captured.signature) return null;
-            liveItem.cgImage = nextImage;
-            return latest;
-        }, session);
-        if (!committed) {
-            throw new Error('图片已生成，但档案版本已经变化，因此未保存引用。');
-        }
-        const mayUpdateUi = core_context.isCurrentTaskOrigin(origin)
-            && archive_repository.getImportedMemory(core_context.getContext())?.archiveRevision === captured.revision
-            && runtimeState.cgImageLifecycleEpoch === lifecycleEpoch;
-        if (mayUpdateUi) item.cgImage = nextImage;
-        const activeItem = runtimeState.activeSession?.dailyStrips?.find(strip => strip.id === item.id);
-        if (activeItem && mayUpdateUi) activeItem.cgImage = nextImage;
-        globalThis.toastr?.success?.(`日常一格已绘制：${item.title}`, '心迹回廊');
+        const expectedTarget = options.expectedTarget || generation_imageGeneration.captureCgImageTarget({ mode: core_constants.MODE.HEART, session, item });
+        generation_imageGeneration.assertCgImageTargetCurrent(expectedTarget);
+        return await generation_imageGeneration.drawSelectedCgImage({ ...options, expectedTarget });
     } catch (error) {
-        console.error('[HeartbeatMemories] daily strip image generation failed', core_text.safeErrorDiagnostic(error));
-        globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
-    } finally {
-        runtimeState.activeCgImageTasks.delete(taskKey);
-        if (runtimeState.activeMode === core_constants.MODE.HEART && runtimeState.activeSession?.kind === core_constants.MODE.HEART) renderHeart();
+        globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
     }
 }
 

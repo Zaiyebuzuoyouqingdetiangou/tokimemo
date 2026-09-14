@@ -124,12 +124,21 @@ export function hostChatNavigationTargetFromEvent(event) {
 export function bindDiagnosticCopy() {
     try { globalThis.__heartbeatMemoriesDiagnosticCleanup?.(); } catch {}
     const onClick = event => {
-        const button = event.target?.closest?.('[data-rmt-copy-diagnostic]');
+        const button = event.target?.closest?.('[data-rmt-copy-diagnostic], [data-rmt-export-diagnostic]');
         if (!button) return;
+        const panel = button.closest?.('[data-rmt-diagnostic-panel]');
+        if (!panel?.closest?.('#' + core_constants.SETTINGS_ID)) return;
         event.preventDefault();
+        const output = panel.querySelector('[data-rmt-performance-diagnostic-output]');
+        const status = panel.querySelector('[data-rmt-diagnostic-status]');
+        if (typeof globalThis.__heartbeatMemoriesDeliverDiagnostic === 'function') {
+            void globalThis.__heartbeatMemoriesDeliverDiagnostic(
+                button.hasAttribute('data-rmt-export-diagnostic') ? 'export' : 'copy', { output, status });
+            return;
+        }
         const text = core_diagnosticReport.diagnosticReportText();
-        const output = document.querySelector('[data-rmt-performance-diagnostic-output]');
-        if (output) output.textContent = text;
+        panel.hidden = false;
+        if (output) { output.hidden = false; output.textContent = text; }
         const done = ok => globalThis.toastr?.[ok ? 'success' : 'info']?.(
             ok ? '诊断报告已复制，可直接发给开发者。' : '无法访问剪贴板，报告已显示在下方，可手动复制。', '心迹回廊 · 诊断');
         try {
