@@ -265,7 +265,7 @@ export function heartStripImagePrompt(item) {
     return generation_imageGeneration.dailyComicImagePrompt(item);
 }
 
-export async function drawHeartStripImage(stripId, { promptOverride, expectedTarget = null, onAccepted = null } = {}) {
+export async function drawHeartStripImage(stripId, { promptOverride, promptMetadata, expectedTarget = null, onAccepted = null } = {}) {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
     if (!archive_library.requireWritableArchiveAction()) return;
     const session = runtimeState.activeSession;
@@ -324,6 +324,7 @@ export async function drawHeartStripImage(stripId, { promptOverride, expectedTar
             targetKey: generation_imageGeneration.cgImageReservationKey(core_constants.MODE.HEART, item.id, context),
             onSettled: () => generation_imageGeneration.refreshSettledCgImage(taskKey, origin),
             characterName: context.name2,
+            promptMetadata: promptMetadata === undefined ? previous?.promptMetadata : promptMetadata,
             onProgress: progress => generation_imageGeneration.updateCgImageProgress(taskKey, progress),
         });
         const url = generation_imageGeneration.normalizeCgImageUrl(generated?.url);
@@ -337,6 +338,8 @@ export async function drawHeartStripImage(stripId, { promptOverride, expectedTar
             prompt,
             provider: generated.provider,
             generatedAt: Date.now(),
+            ...((promptMetadata === undefined ? previous?.promptMetadata : promptMetadata)
+                ? { promptMetadata: promptMetadata === undefined ? previous?.promptMetadata : promptMetadata } : {}),
         };
         if (!core_context.isCurrentTaskOrigin(origin)) {
             if (session.archiveRevision !== captured.revision || generation_imageGeneration.cgItemSignature(item) !== captured.signature) {

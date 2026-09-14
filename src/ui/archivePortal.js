@@ -6,6 +6,7 @@ import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
+import * as core_diagnosticReport from '../core/diagnosticReport.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
@@ -116,6 +117,29 @@ export function hostChatNavigationTargetFromEvent(event) {
     const target = event?.target;
     if (!target?.closest) return null;
     try { return target.closest(HOST_CHAT_NAVIGATION_SELECTOR); } catch { return null; }
+}
+
+// Diagnostics must stay reachable when the archive room will not open, so this is bound
+// on the settings page and never calls a generation API, writes an archive, or retries.
+export function bindDiagnosticCopy() {
+    try { globalThis.__heartbeatMemoriesDiagnosticCleanup?.(); } catch {}
+    const onClick = event => {
+        const button = event.target?.closest?.('[data-rmt-copy-diagnostic]');
+        if (!button) return;
+        event.preventDefault();
+        const text = core_diagnosticReport.diagnosticReportText();
+        const output = document.querySelector('[data-rmt-performance-diagnostic-output]');
+        if (output) output.textContent = text;
+        const done = ok => globalThis.toastr?.[ok ? 'success' : 'info']?.(
+            ok ? '诊断报告已复制，可直接发给开发者。' : '无法访问剪贴板，报告已显示在下方，可手动复制。', '心迹回廊 · 诊断');
+        try {
+            const write = globalThis.navigator?.clipboard?.writeText?.(text);
+            if (write?.then) write.then(() => done(true)).catch(() => done(false));
+            else done(false);
+        } catch { done(false); }
+    };
+    document.addEventListener('click', onClick, true);
+    globalThis.__heartbeatMemoriesDiagnosticCleanup = () => document.removeEventListener('click', onClick, true);
 }
 
 export function bindGenerationNavigationGuards() {

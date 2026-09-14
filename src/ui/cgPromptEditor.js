@@ -6,6 +6,7 @@ import * as core_context from '../core/context.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as images from '../generation/imageGeneration.js';
+import * as appearance from '../generation/cgAppearance.js';
 import * as image_viewer from './cgImageViewer.js';
 import * as heart from './heartView.js';
 import * as overlay from './overlay.js';
@@ -37,8 +38,51 @@ function busyEditor(active) {
     if (!editor) return;
     editor.busy = active;
     editor.element.setAttribute('aria-busy', String(active));
-    editor.element.querySelector('[data-rmt-cg-prompt-input]').disabled = active;
-    for (const button of editor.element.querySelectorAll('[data-rmt-cg-prompt-action="reconceive"], [data-rmt-cg-prompt-action="draw"], [data-rmt-cg-prompt-action="clear"]')) button.disabled = active;
+    for (const field of editor.element.querySelectorAll('[data-rmt-cg-prompt-input], [data-rmt-cg-scene-tags], [data-rmt-cg-tag-input], [data-rmt-cg-flat-prompt]')) field.disabled = active;
+    for (const button of editor.element.querySelectorAll('[data-rmt-cg-prompt-action="reconceive"], [data-rmt-cg-prompt-action="draw"], [data-rmt-cg-prompt-action="clear"], [data-rmt-cg-prompt-action="retry"]')) button.disabled = active;
+}
+
+function editorMetadata(current) {
+    return appearance.normalizeCgPromptMetadata({
+        sceneTags: current.element.querySelector('[data-rmt-cg-scene-tags]').value,
+        flatPrompt: current.element.querySelector('[data-rmt-cg-flat-prompt]').value,
+        characters: ['char', 'user'].map(role => ({ role, name: current.characterNames[role],
+            tag: current.element.querySelector(`[data-rmt-cg-tag-input="${role}"]`).value,
+            // All sendable appearance is visible/editable in tag. A stale model nl
+            // must not silently override the user's subsequent tag edits.
+            nl: '' })),
+    });
+}
+
+function updatePreparedPreview(current) {
+    const scene = current.element.querySelector('[data-rmt-cg-prompt-input]').value;
+    const metadata = editorMetadata(current);
+    const visual = appearance.cgPreparedVisualPrompt(scene, metadata);
+    current.element.querySelector('[data-rmt-cg-send-preview]').value =
+        `${metadata?.sceneTags ? `场景标签：${metadata.sceneTags}\n\n` : ''}${metadata?.flatPrompt ? `通用后端完整提示：${metadata.flatPrompt}\n\n` : ''}${visual}`;
+}
+
+function invalidateFlatPrompt(current) {
+    const flat = current.element.querySelector('[data-rmt-cg-flat-prompt]');
+    if (!flat.value) return;
+    flat.value = '';
+    const status = current.element.querySelector('[data-rmt-cg-prompt-status]');
+    status.setAttribute('role', 'status');
+    status.textContent = '画面或标签已修改，旧通用提示已清空。可手动补全，或重新构思后核对。';
+}
+
+function fillEditorMetadata(current, raw) {
+    const metadata = appearance.normalizeCgPromptMetadata(raw);
+    current.element.querySelector('[data-rmt-cg-scene-tags]').value = metadata?.sceneTags || '';
+    current.element.querySelector('[data-rmt-cg-flat-prompt]').value = metadata?.flatPrompt || '';
+    for (const role of ['char', 'user']) {
+        const character = metadata?.characters.find(row => row.role === role);
+        if (character?.name) current.characterNames[role] = character.name;
+        current.element.querySelector(`[data-rmt-cg-tag-name="${role}"]`).textContent =
+            `${current.characterNames[role] || (role === 'char' ? '角色' : '用户')} · 外貌 tag`;
+        current.element.querySelector(`[data-rmt-cg-tag-input="${role}"]`).value = character?.tag || '';
+    }
+    updatePreparedPreview(current);
 }
 
 export function openCgPromptEditor({ heartStrip = false } = {}) {
@@ -61,6 +105,8 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
         if (!shell) return;
         closeCgPromptEditor({ restoreFocus: false });
         const draft = target.mode === core_constants.MODE.HEART ? heart.heartStripImagePrompt(selected) : images.cgImagePromptForItem(selected);
+        const context = core_context.currentCharacterGuard();
+        const canRetry = target.mode !== core_constants.MODE.HEART && images.hasPendingCgImage(target);
         const element = document.createElement('div');
         element.className = 'rmt-cg-prompt-backdrop';
         element.innerHTML = `<section class="rmt-cg-prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="rmt-cg-prompt-title" aria-describedby="rmt-cg-prompt-help" tabindex="-1">
@@ -70,9 +116,18 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
           <label for="rmt-cg-prompt-input">将发送给生图插件的画面描述</label>
           <textarea id="rmt-cg-prompt-input" data-rmt-cg-prompt-input rows="8" maxlength="${core_constants.MAX_CG_IMAGE_PROMPT_CHARS}" aria-describedby="rmt-cg-prompt-help rmt-cg-prompt-count"></textarea>
           <div id="rmt-cg-prompt-count" data-rmt-cg-prompt-count></div>
+          <details class="rmt-cg-prompt-scene" data-rmt-cg-appearance>
+            <summary>人物外貌与场景标签</summary>
+            <p><label for="rmt-cg-char-tags" data-rmt-cg-tag-name="char">角色 · 外貌 tag</label><textarea id="rmt-cg-char-tags" data-rmt-cg-tag-input="char" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p>
+            <p><label for="rmt-cg-user-tags" data-rmt-cg-tag-name="user">用户 · 外貌 tag</label><textarea id="rmt-cg-user-tags" data-rmt-cg-tag-input="user" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p>
+            <p><label for="rmt-cg-scene-tags">场景 tag</label><textarea id="rmt-cg-scene-tags" data-rmt-cg-scene-tags rows="2" maxlength="${appearance.CG_SCENE_TAG_LIMIT}" placeholder="人物动作、场景与构图"></textarea></p>
+            <p><label for="rmt-cg-flat-prompt">通用后端完整提示</label><textarea id="rmt-cg-flat-prompt" data-rmt-cg-flat-prompt rows="4" maxlength="${appearance.CG_FLAT_PROMPT_LIMIT}" placeholder="包含双方外貌、动作与场景的完整英文提示"></textarea></p>
+          </details>
+          <details class="rmt-cg-prompt-scene"><summary>发送预览</summary><p><textarea data-rmt-cg-send-preview aria-label="将发送的场景与人物外貌" rows="5" readonly></textarea></p></details>
           <p id="rmt-cg-prompt-help">编辑和重新构思都不会自动生图。确认绘图后才消耗生图额度；只有新图成功保存，才会替换原图与提示词。关闭会放弃本次草稿。</p>
           <p data-rmt-cg-prompt-status role="status" aria-live="polite"></p>
-          <div class="rmt-cg-prompt-actions"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="reconceive">重新构思画面</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="draw">${savedImage ? '确认提示词并重绘' : '确认提示词并绘图'}</button></div>
+          <div class="rmt-cg-prompt-actions"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="reconceive">重新构思／提取外貌</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="draw">${savedImage ? '确认提示词并重绘' : '确认提示词并绘图'}</button></div>
+          ${canRetry ? '<div class="rmt-cg-prompt-secondary"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="retry">回填已生成图片（不再生图）</button></div>' : ''}
           ${savedImage ? `<div class="rmt-cg-prompt-secondary"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="view">查看完整原图</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="clear">${target.mode === core_constants.MODE.HEART ? '恢复文字版' : '恢复抽象图'}</button><small>仅移除本档案的图片引用，不删除柏宝绘图库文件。</small></div>` : ''}
         </section>`;
         const cancel = event => {
@@ -80,13 +135,21 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
             if (!image_viewer.closeCgImageViewer()) closeCgPromptEditor();
         };
         editor = { target, element, host, opener: document.activeElement, busy: false, cancel,
+            characterNames: { char: core_text.normalizeText(context.name2, 120), user: core_text.normalizeText(context.name1, 120) },
             taskKey: `cg-prompt:${core_context.chatScopeKey()}:${target.mode}:${core_text.safeId(target.itemId, 'cg')}` };
+        const current = editor;
         const textarea = element.querySelector('[data-rmt-cg-prompt-input]');
         textarea.value = draft;
         const updateCount = () => {
             element.querySelector('[data-rmt-cg-prompt-count]').textContent = `${textarea.value.length} / ${core_constants.MAX_CG_IMAGE_PROMPT_CHARS} 字符`;
+            updatePreparedPreview(current);
         };
-        textarea.addEventListener('input', updateCount);
+        textarea.addEventListener('input', () => { invalidateFlatPrompt(current); updateCount(); });
+        for (const field of element.querySelectorAll('[data-rmt-cg-tag-input], [data-rmt-cg-scene-tags]')) {
+            field.addEventListener('input', () => { invalidateFlatPrompt(current); updatePreparedPreview(current); });
+        }
+        element.querySelector('[data-rmt-cg-flat-prompt]').addEventListener('input', () => updatePreparedPreview(current));
+        fillEditorMetadata(current, savedImage?.promptMetadata);
         element.addEventListener('click', event => {
             event.stopPropagation();
             const action = event.target.closest?.('[data-rmt-cg-prompt-action]')?.dataset.rmtCgPromptAction;
@@ -114,6 +177,12 @@ export async function handleCgPromptEditorAction(action) {
     if (!current || current.busy) return;
     try {
         images.assertCgImageTargetCurrent(current.target);
+        if (action === 'retry' && current.target.mode !== core_constants.MODE.HEART) {
+            busyEditor(true);
+            const saved = await images.retryPendingCgImage(current.target);
+            if (saved && editor === current) closeCgPromptEditor();
+            return;
+        }
         if (action === 'view') {
             const item = images.cgItemInSession(current.target.mode, current.target.session, current.target.itemId);
             image_viewer.openCgImageViewer(item?.cgImage, item?.title, {
@@ -131,7 +200,7 @@ export async function handleCgPromptEditorAction(action) {
         }
         if (action === 'reconceive') {
             if (!overlay.confirmExplicitAction('重新构思这张回忆的画面？',
-                '会使用心迹回廊的独立 API 消耗一次文本生成额度，只依据这条回忆的场景资料整理画面。结果先放入编辑框，不会立即生图，也不会改写回忆或原图。', { destructive: false })) return;
+                '会使用心迹回廊的独立 API 消耗一次文本生成额度，结合这条回忆、当前角色卡与用户人设整理画面并提取双方外貌；若柏宝绘公开角色库有同名资料，也会作为外貌依据。结果先放入编辑框，不会立即生图或改写回忆。', { destructive: false })) return;
             images.assertCgImageTargetCurrent(current.target);
             busyEditor(true);
             const status = current.element.querySelector('[data-rmt-cg-prompt-status]');
@@ -139,9 +208,14 @@ export async function handleCgPromptEditorAction(action) {
             const result = await images.reconceiveCgImagePrompt(current.target);
             if (editor !== current || !current.element.isConnected) return;
             const textarea = current.element.querySelector('[data-rmt-cg-prompt-input]');
-            textarea.value = result;
-            current.element.querySelector('[data-rmt-cg-prompt-count]').textContent = `${result.length} / ${core_constants.MAX_CG_IMAGE_PROMPT_CHARS} 字符`;
-            status.textContent = '新提示词已放入编辑框。检查人物、地点和动作后，再确认绘图。';
+            textarea.value = typeof result === 'string' ? result : result.imagePrompt;
+            fillEditorMetadata(current, typeof result === 'string' ? null : result);
+            current.element.querySelector('[data-rmt-cg-appearance]').open = true;
+            current.element.querySelector('[data-rmt-cg-prompt-count]').textContent = `${textarea.value.length} / ${core_constants.MAX_CG_IMAGE_PROMPT_CHARS} 字符`;
+            const missing = (result?.missingRoles || []).filter(role => role === 'char' || role === 'user')
+                .map(role => current.characterNames[role] || (role === 'char' ? '角色' : '用户'));
+            status.textContent = missing.length ? `画面已更新。未提取到${missing.join('、')}的可用外貌；如本画面需要，请补全人设或手填标签。`
+                : '画面与双方外貌已更新，请核对后确认绘图。';
             return;
         }
         if (action === 'draw') {
@@ -149,14 +223,15 @@ export async function handleCgPromptEditorAction(action) {
             if (value.length > core_constants.MAX_CG_IMAGE_PROMPT_CHARS) throw core_text.safeUserError('画面提示词超过字数上限，请缩短后再绘图。');
             const prompt = images.sanitizeCgVisualText(value);
             if (!prompt) throw core_text.safeUserError('请先写入可用的画面提示词。');
+            const promptMetadata = editorMetadata(current);
             images.assertCgImageTargetCurrent(current.target);
             busyEditor(true);
             // Existing drawing flow owns the explicit cost/replacement confirmation,
             // provider lock and durable commit; this editor never invokes a provider.
             const onAccepted = () => closeCgPromptEditor({ restoreFocus: false });
             if (current.target.mode === core_constants.MODE.HEART) {
-                await heart.drawHeartStripImage(current.target.itemId, { promptOverride: prompt, expectedTarget: current.target, onAccepted });
-            } else await images.drawSelectedCgImage({ promptOverride: prompt, expectedTarget: current.target, onAccepted });
+                await heart.drawHeartStripImage(current.target.itemId, { promptOverride: prompt, promptMetadata, expectedTarget: current.target, onAccepted });
+            } else await images.drawSelectedCgImage({ promptOverride: prompt, promptMetadata, expectedTarget: current.target, onAccepted });
         }
     } catch (error) {
         if (editor === current) promptError(core_text.safeErrorSummary(error));

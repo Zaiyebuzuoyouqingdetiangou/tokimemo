@@ -7,6 +7,7 @@ import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_independentApi from '../core/independentApi.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
+import * as core_diagnosticReport from '../core/diagnosticReport.js';
 import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
@@ -661,7 +662,7 @@ export function mountSettings({ homeTarget = null } = {}) {
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-performance-diagnostic aria-expanded="false" aria-controls="heartbeat_memories_performance_diagnostic"><i class="fa-solid fa-gauge-high"></i><span data-rmt-diagnostic-label>性能诊断（不解压缓存）</span></button>
           <div class="rmt-performance-diagnostic-panel" id="heartbeat_memories_performance_diagnostic" data-rmt-diagnostic-panel hidden>
-            <div class="rmt-performance-diagnostic-head"><b>诊断结果</b><button type="button" class="menu_button rmt-performance-diagnostic-close" data-rmt-performance-diagnostic-close>关闭诊断</button></div>
+            <div class="rmt-performance-diagnostic-head"><b>诊断结果</b><button type="button" class="menu_button" data-rmt-copy-diagnostic>复制诊断报告</button><button type="button" class="menu_button rmt-performance-diagnostic-close" data-rmt-performance-diagnostic-close>关闭诊断</button></div>
             <pre class="rmt-performance-diagnostic-output" data-rmt-performance-diagnostic-output></pre>
           </div>
         </div>
