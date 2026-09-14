@@ -13,6 +13,7 @@ import * as generation_imageGeneration from './generation/imageGeneration.js';
 import * as modes_room from './modes/room.js';
 import * as ui_archivePortal from './ui/archivePortal.js';
 import * as ui_cgPromptEditor from './ui/cgPromptEditor.js';
+import * as ui_cgImageViewer from './ui/cgImageViewer.js';
 import * as ui_endingView from './ui/endingView.js';
 import * as ui_navigationBookmark from './ui/navigationBookmark.js';
 import * as ui_phoneView from './ui/phoneView.js';
@@ -57,6 +58,7 @@ export function initMemoryTheater() {
 }
 
 export function destroyMemoryTheater() {
+    ui_cgImageViewer.closeCgImageViewer({ restoreFocus: false });
     core_autoUpdates.stopAutoUpdates();
     ui_settingsPanel.clearHomeSettingsPanel();
     ui_settingsPanel.unbindImageProviderEvents();
