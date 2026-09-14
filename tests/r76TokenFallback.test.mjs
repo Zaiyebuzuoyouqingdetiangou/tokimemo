@@ -23,6 +23,7 @@ function fixture(t, counter) {
                 const payload = { secret_id: profile['secret-id'], model: profile.model, ...overridePayload };
                 assert.equal(payload.secret_id, 'fixture-reference');
                 assert.equal(options.signal.aborted, false);
+                assert.equal(state.activeProviderRequestCount, 1, 'only the actual transport holds a permit');
                 calls++;
                 return { content: '{"ok":true}' };
             },
@@ -106,7 +107,7 @@ test('cancelling pending token count prevents provider dispatch even when the co
     released();
 });
 
-for (const cancel of [false, true]) test(`real request task releases its occupied permit after token ${cancel ? 'cancellation' : 'fallback'}`, async t => {
+for (const cancel of [false, true]) test(`real request task keeps preflight outside the permit and releases after token ${cancel ? 'cancellation' : 'fallback'}`, async t => {
     const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
     globalThis.document = { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] };
     t.after(() => originalDocument ? Object.defineProperty(globalThis, 'document', originalDocument) : delete globalThis.document);
@@ -118,7 +119,7 @@ for (const cancel of [false, true]) test(`real request task releases its occupie
         tokenCountTimeoutMs: cancel ? 5000 : 1,
         origin: { lifecycleEpoch: state.runtimeLifecycleEpoch, archiveTargetEntryId: 'fixture-entry' } });
     await ready;
-    assert.equal(state.activeProviderRequestCount, 1);
+    assert.equal(state.activeProviderRequestCount, 0);
     assert.equal(state.activeGenerationTasks.size, 1);
     if (cancel) {
         state.activeGenerationTasks.get(taskKey).controller.abort();

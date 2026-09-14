@@ -12,6 +12,8 @@ import * as backup from '../src/archive/backupStore.js';
 import * as overlay from '../src/ui/overlay.js';
 import * as navigation from '../src/ui/navigationBookmark.js';
 import * as floating from '../src/ui/floatingArchive.js';
+import * as recovery from '../src/generation/recovery.js';
+import * as recoveryView from '../src/ui/recoveryView.js';
 import { createDurableDeferredCommitMap } from '../src/core/deferredCommitStore.js';
 import { state } from '../src/core/state.js';
 
@@ -23,17 +25,6 @@ const echo = (title = '雨声从明天传来', medium = { kind: 'phone', label: 
     lines: [{ speaker: 'a', text: '你那边还在下雨吗？' }, { speaker: 'b', text: '明天别坐那班车。' }],
     message: '换一班车，带上那封信。',
 });
-const journey = (title = '来得比春天早') => ({
-    title, opening: '他无法决定自己何时离开，又会在哪一日醒来。', closing: '这一次，两人终于赴了同一场约。',
-    palette: 'moss', motif: '未开的花', traveler: 'char',
-    encounters: [
-        { title: '初见', charTime: '第一次跳跃', userTime: '离别以后', charOrder: 1, userOrder: 2,
-            charKnows: '还不认识她', userKnows: '知道他会回来', text: '她叫出了陌生人的名字。' },
-        { title: '旧约', charTime: '最后一次归来', userTime: '春天以前', charOrder: 2, userOrder: 1,
-            charKnows: '记得她的名字', userKnows: '不认识来人', text: '他把迟到的花递到她手中。' },
-    ],
-});
-
 // Exercise real mode admission, controlled context, provider validation, recovery,
 // compressed canonical persistence and readers. Only browser/host capabilities,
 // transport and the IndexedDB backend are replaced; there is no live model call.
@@ -200,9 +191,113 @@ async function fixture(t) {
     };
 }
 
-for (const mode of ['timeEcho', 'timeJourney']) {
+async function retiredCache(f) {
+    const mode = 'timeJourney';
+    const fence = { generation: 1, token: 'retired-fence' };
+    const signature = '1:retired-fence';
+    const journal = (await recovery.createGenerationRecovery({
+        origin: contextApi.captureTaskOrigin(f.ctx, f.liveBank.archiveRevision), mode,
+        settingsIdentity: 'retired-settings', save() {},
+    })).journal;
+    journal.failureCode = 'RMT_JSON_NOT_FOUND';
+    journal.segments = [{ slot: 'old-story', requestHash: 'a'.repeat(64), state: 'complete', rawJson: '{"title":"OLD_ACCEPTED_STORY"}' }];
+    journal[constants.SESSION_MODE_WRITE_FENCE_KEY] = signature;
+    return { chatId: f.liveBank.chatId, archiveRevision: f.liveBank.archiveRevision,
+        [mode]: { kind: mode, version: 1, chatId: f.liveBank.chatId, archiveRevision: f.liveBank.archiveRevision,
+            title: '旧篇章', episodes: [{ id: 'TS01', title: 'OLD_STORY_SENTINEL' }], selectedId: 'TS01', view: 'story',
+            [constants.SESSION_MODE_WRITE_FENCE_KEY]: signature },
+        [constants.MODE_WRITE_FENCES_CACHE_KEY]: { [mode]: fence },
+        __generationRecoveryV1: { [mode]: journal } };
+}
+
+for (const side of ['canonical', 'mirror']) {
+    test(`removing journey preserves its ${side}-only old payload while echo saves and reopens`, async t => {
+        const f = await fixture(t), retired = await retiredCache(f);
+        const canonical = clone(f.records.get(f.aEntry.entryId));
+        const plain = { ...clone(f.liveCache), updatedAt: 200 };
+        const old = { ...clone(f.liveCache), ...retired, updatedAt: 100 };
+        canonical.cache = side === 'canonical' ? old : plain;
+        f.records.set(f.aEntry.entryId, canonical);
+        f.ctx.chatMetadata[constants.CACHE_KEY] = side === 'mirror' ? old : plain;
+        state.runtimeSessionCache.clear();
+        f.open('timeEcho'); await client.generateMode('timeEcho');
+        const saved = await f.persisted();
+        assert.equal(f.requests.length, 1, JSON.stringify(f.diagnostics));
+        assert.equal(saved.timeEcho.episodes.length, 1);
+        assert.deepEqual(saved.timeJourney, retired.timeJourney);
+        assert.deepEqual(saved.__generationRecoveryV1.timeJourney, retired.__generationRecoveryV1.timeJourney);
+        assert.deepEqual(saved[constants.MODE_WRITE_FENCES_CACHE_KEY].timeJourney, retired[constants.MODE_WRITE_FENCES_CACHE_KEY].timeJourney);
+        assert.deepEqual(saved.phone, f.liveCache.phone); assert.deepEqual(saved.cabinet, f.liveCache.cabinet);
+        assert.equal(cache.loadSession('timeJourney', { cache: saved, chatId: f.liveBank.chatId, memoryBank: f.liveBank }), null);
+        assert.equal(cache.loadGenerationRecovery('timeJourney', f.ctx), null);
+        assert.doesNotMatch(recoveryView.recoveryBannerHtml(saved, f.liveBank), /timeJourney|OLD_ACCEPTED_STORY/);
+        overlay.closeOverlay(); state.runtimeSessionCache.clear();
+        await cache.ensureCacheHydrated(f.ctx); f.open('timeEcho');
+        assert.equal(state.activeSession.episodes.length, 1); assert.equal(f.requests.length, 1);
+    });
+}
+
+test('an archive containing only retired data keeps it inert across an evidence revision', async t => {
+    const f = await fixture(t), retired = await retiredCache(f);
+    const old = clone(retired);
+    old.__generationRecoveryV1.album = { mustStillBeCleared: true };
+    const record = clone(f.records.get(f.aEntry.entryId)); record.cache = old;
+    f.records.set(f.aEntry.entryId, record); f.ctx.chatMetadata[constants.CACHE_KEY] = clone(old);
+    state.runtimeSessionCache.clear();
+    const chat = JSON.stringify(f.ctx.chat);
+    const next = { ...clone(f.liveBank), archiveRevision: 'next-revision', updatedAt: 2 };
+    await cache.saveImportedMemory(f.ctx, next, next.chatId, { preserveDerivedCache: true,
+        expectedPreviousArchiveState: { present: true, revision: f.liveBank.archiveRevision } });
+    const saved = await f.persisted();
+    assert.deepEqual(saved.timeJourney, retired.timeJourney);
+    assert.deepEqual(saved.__generationRecoveryV1.timeJourney, retired.__generationRecoveryV1.timeJourney);
+    assert.equal(saved.__generationRecoveryV1.album, undefined);
+    assert.equal(saved.archiveRevision, 'next-revision');
+    assert.equal(saved.timeJourney.archiveRevision, f.liveBank.archiveRevision, 'retired story must not acquire new evidence identity');
+    assert.equal(JSON.stringify(f.ctx.chat), chat); assert.equal(f.requests.length, 0);
+});
+
+test('retired clear markers and newer deletion fences still prevent old mirror resurrection', async t => {
+    const f = await fixture(t), retired = await retiredCache(f);
+    for (const deleted of [false, true]) {
+        const record = clone(f.records.get(f.aEntry.entryId));
+        const canonical = { ...clone(f.liveCache), ...clone(retired), updatedAt: 100 };
+        if (deleted) {
+            canonical[constants.MODE_WRITE_FENCES_CACHE_KEY].timeJourney = { generation: 2, token: 'removed' };
+            delete canonical.timeJourney;
+        }
+        canonical.__generationRecoveryClearedV1 = { timeJourney: deleted ? '2:removed' : '1:retired-fence' };
+        delete canonical.__generationRecoveryV1;
+        record.cache = canonical; f.records.set(f.aEntry.entryId, record);
+        f.ctx.chatMetadata[constants.CACHE_KEY] = { ...clone(f.liveCache), ...clone(retired), updatedAt: 200 };
+        state.runtimeSessionCache.clear();
+        const origin = contextApi.captureTaskOrigin(f.ctx, f.liveBank.archiveRevision);
+        assert.equal(await cache.commitSession('cabinet', f.liveCache.cabinet, f.liveBank.chatId, origin), true);
+        const saved = await f.persisted();
+        assert.equal(saved.__generationRecoveryV1?.timeJourney, undefined);
+        assert.equal(saved.__generationRecoveryClearedV1.timeJourney, canonical.__generationRecoveryClearedV1.timeJourney);
+        assert.deepEqual(saved.timeJourney, deleted ? undefined : retired.timeJourney);
+        assert.deepEqual(saved.cabinet.items, f.liveCache.cabinet.items);
+    }
+});
+
+test('retired opening, generation, retry and old bookmarks do not replace another reader or send requests', async t => {
+    const f = await fixture(t), retired = await retiredCache(f);
+    Object.assign(f.ctx.chatMetadata[constants.CACHE_KEY], retired);
+    state.activeMode = 'timeJourney'; state.activeSession = clone(retired.timeJourney);
+    navigation.rememberReadingPosition();
+    f.open('phone'); const active = state.activeSession, html = f.body.innerHTML;
+    const before = JSON.stringify(f.ctx.chatMetadata), recordsBefore = JSON.stringify([...f.records]);
+    f.open('timeJourney'); await client.generateMode('timeJourney'); await client.continueSavedGeneration('timeJourney');
+    assert.equal(navigation.restoreReadingPosition({ open() { assert.fail('retired bookmark reopened'); } }), false);
+    assert.equal(state.activeSession, active); assert.equal(state.activeMode, 'phone'); assert.equal(f.body.innerHTML, html);
+    assert.equal(JSON.stringify(f.ctx.chatMetadata), before); assert.equal(JSON.stringify([...f.records]), recordsBefore);
+    assert.equal(f.requests.length, 0); assert.equal(f.reads.length, 0); assert.equal(f.booksRead.length, 0);
+});
+
+for (const mode of ['timeEcho']) {
     test(`${mode}: real generation saves an episode, appends with no new memory, and reopens from durable cache`, async t => {
-        const f = await fixture(t); f.setResponse(mode === 'timeEcho' ? echo() : journey()); f.open(mode);
+        const f = await fixture(t); f.setResponse(echo()); f.open(mode);
         assert.equal(state.activeSession.episodes.length, 0);
         assert.equal(f.requests.length, 0, 'opening the empty reader is free');
         const first = await client.generateMode(mode);
@@ -212,7 +307,7 @@ for (const mode of ['timeEcho', 'timeJourney']) {
         assert.match(f.body.innerHTML, new RegExp(first.episodes[0].title));
         const exactFirst = clone(first.episodes[0]);
         const foregroundSession = state.activeSession;
-        f.setResponse(mode === 'timeEcho' ? echo('第二声铃响') : journey('下一次相逢'));
+        f.setResponse(echo('第二声铃响'));
         const second = await client.generateMode(mode, { background: true });
         assert.equal(f.requests.length, 2, 'another explicit story is allowed without adding formal memories');
         assert.equal(second?.episodes.length, 2, JSON.stringify(f.diagnostics));
@@ -260,7 +355,7 @@ for (const interruption of ['close', 'different-mode', 'new-reader']) {
         const f = await fixture(t); f.open('timeEcho'); const paused = f.pauseProvider();
         const pending = client.generateMode('timeEcho'); await paused.ready;
         if (interruption === 'close') overlay.closeOverlay();
-        if (interruption === 'different-mode') f.open('timeJourney');
+        if (interruption === 'different-mode') f.open('phone');
         if (interruption === 'new-reader') { overlay.closeOverlay(); f.open('timeEcho'); }
         const currentSession = state.activeSession, currentMode = state.activeMode;
         f.body.innerHTML = 'NEWER_PAGE_SENTINEL'; f.body.scrollTop = 37;

@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 97
-// Source SHA-256: c45d485cea141f6c2e9c1e0d36f5d863a8d5291c5cef30c63000a598d8687d23
+// Source SHA-256: c97c900d17d5f383b4641fad417ee3ccaa71050902c2d9dbf7ca8cc86305cec2
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -318,7 +318,6 @@ const MODE = Object.freeze({
     INBOX: 'inbox',
     PAST_LIVES: 'pastLives',
     TIME_ECHO: 'timeEcho',
-    TIME_JOURNEY: 'timeJourney',
     TRAVEL: 'travel',
     ENDING: 'ending',
     CALENDAR: 'calendar',
@@ -338,7 +337,6 @@ const MODE_LABEL = Object.freeze({
     [MODE.INBOX]: '你的邮箱',
     [MODE.PAST_LIVES]: '前世今生',
     [MODE.TIME_ECHO]: '时空回响',
-    [MODE.TIME_JOURNEY]: '时空旅行者的妻子',
     [MODE.TRAVEL]: '他的出行路线',
     [MODE.ENDING]: '结局与后日谈',
     [MODE.CALENDAR]: '两个人的日历',
@@ -358,7 +356,6 @@ const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.INBOX]: 4000,
     [MODE.PAST_LIVES]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.TIME_ECHO]: 12000,
-    [MODE.TIME_JOURNEY]: 12000,
     [MODE.TRAVEL]: 9000,
     [MODE.ENDING]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.CALENDAR]: 6000,
@@ -367,10 +364,10 @@ const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ACHIEVEMENTS]: 6000,
 });
 
-const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.PHONE, MODE.INBOX, MODE.CABINET, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY, MODE.PAST_LIVES, MODE.TIME_JOURNEY]);
+const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.PHONE, MODE.INBOX, MODE.CABINET, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY, MODE.PAST_LIVES]);
 
 const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS]);
-const CREATIVE_EXPANSION_MODES = Object.freeze([MODE.ADV, MODE.BUTTERFLY, MODE.HEART, MODE.ENDING, MODE.ALBUM, MODE.TRAVEL, MODE.PAST_LIVES, MODE.TIME_ECHO, MODE.TIME_JOURNEY]);
+const CREATIVE_EXPANSION_MODES = Object.freeze([MODE.ADV, MODE.BUTTERFLY, MODE.HEART, MODE.ENDING, MODE.ALBUM, MODE.TRAVEL, MODE.PAST_LIVES, MODE.TIME_ECHO]);
 
 const ARCHIVE_OVERVIEW_CACHE_MS = 60000;
 
@@ -421,7 +418,7 @@ const HEART_FIREFLY_PAGE_SIZE = 6;
 
 const HEART_STRIP_PANEL_COUNTS = new Set([1, 2, 4]);
 
-const MAX_CONCURRENT_GENERATION_TASKS = 10;
+const MAX_CONCURRENT_GENERATION_TASKS = 5;
 
 const ADV_BULK_BATCH_SIZE = 6;
 
@@ -802,6 +799,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_PROFILE_PROXY_UNAVAILABLE: '这一键连接指定的代理无法从该 Profile 自身安全解析；已停止远端拉取。',
     RMT_PROFILE_MODEL_STATUS: '这一键连接的模型列表返回了错误状态；响应详情已隐藏。',
     RMT_PROFILE_MODEL_TIMEOUT: '一键连接的模型列表请求超时；仍可使用该连接自己保存的模型。',
+    RMT_CONNECTION_UPSTREAM_CUTOFF: '请求在约两分钟处被上游网关切断，本段没有返回；这通常是酒馆所在服务器或反代的超时上限，不是 API Key 或模型设置的问题。已完成的分段全部保留，可点续写只重做这一段；若反复发生，请缩短档案/世界书以降低单段生成时间。',
     RMT_CONNECTION_FAILED: '专用连接请求失败；响应详情已隐藏，请检查当前独立 API 设置。',
     RMT_CONNECTION_AUTH: '专用连接认证失败；请检查当前配置、API Key 与账号权限。',
     RMT_CONNECTION_RATE_LIMIT: '模型服务正在限流或额度不足；请稍后重试。',
@@ -5870,9 +5868,13 @@ const MAX_TASKS = 8;
 const MAX_STAGES = 24;
 const MAX_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
 const STAGES = Object.freeze(['start', 'prompt', 'request', 'response', 'parse', 'validate',
-    'token-count', 'token-count-fallback', 'merge', 'profile', 'save', 'deferred', 'render', 'done', 'failed']);
+    'token-count', 'token-count-fallback', 'queue', 'pacing', 'retry', 'merge', 'profile', 'save', 'deferred', 'render', 'done', 'failed']);
 const trace = [];
-const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'pastLives', 'timeEcho', 'timeJourney', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
+// Timers stay separate from exported entries; concurrent segments cannot overwrite them.
+const stageStarts = new WeakMap();
+const mergedSegments = new WeakMap();
+const traceParents = new WeakMap();
+const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'pastLives', 'timeEcho', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
 const OUTCOMES = new Set(['running', 'ok', 'failed', 'cancelled', 'deferred', 'blocked', 'noop']);
 const CODES = new Set([
     ...Object.keys(core_backupDiagnostics.BACKUP_FAILURE_MESSAGES),
@@ -5887,7 +5889,7 @@ const CODES = new Set([
     'RMT_MANUAL_API_TRANSPORT', 'RMT_MANUAL_API_URL', 'RMT_MANUAL_EMPTY', 'RMT_MANUAL_FETCH_UNAVAILABLE',
     'RMT_MANUAL_HTTP', 'RMT_MANUAL_INVALID_JSON', 'RMT_MANUAL_MESSAGES', 'RMT_MANUAL_MODEL',
     'RMT_MANUAL_PROVIDER_ERROR', 'RMT_MANUAL_RESPONSE_TOO_LARGE', 'RMT_METADATA_DURABILITY_UNAVAILABLE',
-    'RMT_MODE_WRITE_FENCE', 'RMT_PROFILE_CAPABILITY', 'RMT_PROFILE_PROXY_UNAVAILABLE',
+    'RMT_MODE_WRITE_FENCE', 'RMT_PHONE_EVIDENCE', 'RMT_PROFILE_CAPABILITY', 'RMT_PROFILE_PROXY_UNAVAILABLE',
     'RMT_RECOVERY_BUSY', 'RMT_RECOVERY_CLEARED', 'RMT_RECOVERY_DATA', 'RMT_RECOVERY_IDENTITY',
     'RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_LIMIT', 'RMT_RECOVERY_OPERATION_CHANGED', 'RMT_RECOVERY_ORIGIN_CHANGED',
     'RMT_RECOVERY_STORAGE', 'RMT_RECOVERY_UNAVAILABLE', 'RMT_RECOVERY_VALIDATION_CHANGED',
@@ -5898,6 +5900,51 @@ const CODES = new Set([
 const RESPONSE_SHAPES = new Set(['text', 'choices', 'message', 'content', 'output_text', 'output', 'candidates', 'text_fallback', 'wrapped', 'unsupported', 'empty', 'error']);
 const FINISH_REASONS = new Set(['stop', 'end_turn', 'stop_sequence', 'length', 'max_tokens', 'content_filter', 'tool_calls', 'function_call', 'completed', 'incomplete', 'done', 'unknown', 'none']);
 const count = value => Math.floor(Math.max(0, Math.min(1000000, Number(value) || 0)));
+const duration = value => Math.floor(Math.max(0, Math.min(MAX_DURATION_MS, Number(value) || 0)));
+
+function finishStageDuration(entry, stage, now = Date.now()) {
+    const starts = stageStarts.get(entry);
+    if (!starts?.has(stage)) return;
+    entry.durations ||= {};
+    entry.durations[stage] = duration(duration(entry.durations[stage]) + duration(now - starts.get(stage)));
+    starts.delete(stage);
+}
+
+function snapshotDurations(entry) {
+    const result = {};
+    const starts = stageStarts.get(entry);
+    const now = entry.endedAt || Date.now();
+    for (const stage of STAGES) {
+        if (Object.hasOwn(entry.durations || {}, stage) || starts?.has(stage)) {
+            result[stage] = duration(duration(entry.durations?.[stage]) + (starts?.has(stage) ? duration(now - starts.get(stage)) : 0));
+        }
+    }
+    return result;
+}
+
+function beginRequestAttempt(entry) {
+    if (!entry || entry.outcome !== 'running') return entry;
+    entry.attempt = Math.min(9999, count(entry.attempt) + 1);
+    delete entry.input;
+    delete entry.response;
+    return entry;
+}
+
+// Call only at the transport invocation boundary. This counts initiated requests,
+// not billing events; preflight attempts and time spent queued never increment it.
+function recordProviderRequest(entry) {
+    if (!entry || entry.outcome !== 'running') return entry;
+    for (let current = entry; current; current = traceParents.get(current)) {
+        current.providerRequests = count(count(current.providerRequests) + 1);
+    }
+    return entry;
+}
+
+function recordRetry(entry, error) {
+    if (!entry || entry.outcome !== 'running') return entry;
+    entry.retryCode = CODES.has(error?.code) ? error.code : 'RMT_UNCODED';
+    return markStage(entry, 'retry');
+}
 
 function recordInput(entry, chars, tokens = null) {
     if (!entry) return;
@@ -5923,8 +5970,11 @@ function startTaskTrace(taskKey, mode, parent = null) {
         activeStage: '',
         chunks: { total: 0, ok: 0, failed: 0, pending: 0 },
         stages: [],
+        durations: {},
+        providerRequests: 0,
     };
     if (parent) {
+        traceParents.set(entry, parent);
         parent.requests ||= [];
         parent.requests.push(entry);
         while (parent.requests.length > 4) parent.requests.shift();
@@ -5939,9 +5989,19 @@ function startTaskTrace(taskKey, mode, parent = null) {
 // and the input/response pair always comes from the same completed segment.
 function finishSegmentTrace(parent, child, outcome, error = null) {
     endTaskTrace(child, outcome, error);
-    if (!parent) return;
+    if (!parent || !child) return;
+    let merged = mergedSegments.get(parent);
+    if (!merged) { merged = new WeakSet(); mergedSegments.set(parent, merged); }
+    if (merged.has(child)) return;
+    merged.add(child);
     parent.input = child.input;
     parent.response = child.response;
+    parent.attempt = child.attempt;
+    parent.retryCode = child.retryCode;
+    parent.durations ||= {};
+    for (const [stage, ms] of Object.entries(snapshotDurations(child))) {
+        parent.durations[stage] = duration(duration(parent.durations[stage]) + ms);
+    }
     const offset = child.startedAt - parent.startedAt;
     parent.stages.push(...child.stages.filter(row => !['done', 'failed'].includes(row.stage)).map(row => ({ ...row, at: row.at + offset })));
     parent.stages.sort((a, b) => a.at - b.at);
@@ -5950,6 +6010,7 @@ function finishSegmentTrace(parent, child, outcome, error = null) {
 
 function markStage(entry, stage, ok = true) {
     if (!entry || !STAGES.includes(stage)) return entry;
+    finishStageDuration(entry, stage);
     entry.stages.push({ stage, ok: ok === true, at: Date.now() - entry.startedAt });
     while (entry.stages.length > MAX_STAGES) entry.stages.shift();
     if (entry.activeStage === stage) entry.activeStage = '';
@@ -5957,7 +6018,12 @@ function markStage(entry, stage, ok = true) {
 }
 
 function beginStage(entry, stage) {
-    if (entry && entry.outcome === 'running' && STAGES.includes(stage)) entry.activeStage = stage;
+    if (entry && entry.outcome === 'running' && STAGES.includes(stage)) {
+        let starts = stageStarts.get(entry);
+        if (!starts) { starts = new Map(); stageStarts.set(entry, starts); }
+        if (!starts.has(stage)) starts.set(stage, Date.now());
+        entry.activeStage = stage;
+    }
     return entry;
 }
 
@@ -5989,6 +6055,7 @@ function endTaskTrace(entry, outcome, error = null) {
     entry.outcome = ['ok', 'failed', 'cancelled', 'deferred', 'blocked', 'noop'].includes(outcome) ? outcome : 'failed';
     recordTaskFailure(entry, error);
     if (entry.activeStage && ['failed', 'cancelled'].includes(entry.outcome)) markStage(entry, entry.activeStage, false);
+    for (const stage of stageStarts.get(entry)?.keys() || []) finishStageDuration(entry, stage, entry.endedAt);
     entry.activeStage = '';
     if (entry.outcome === 'ok') markStage(entry, 'done');
     else if (entry.outcome === 'failed') markStage(entry, 'failed', false);
@@ -6004,6 +6071,10 @@ function snapshotEntries(entries, includeRequests = false) {
         code: CODES.has(entry.code) || entry.code === 'RMT_UNCODED' ? entry.code : '',
         field: STAGES.includes(entry.field) ? entry.field : '',
         activeStage: STAGES.includes(entry.activeStage) ? entry.activeStage : '',
+        providerRequests: count(entry.providerRequests),
+        durations: snapshotDurations(entry),
+        ...(entry.attempt ? { attempt: bounded(entry.attempt, 9999) } : {}),
+        ...(CODES.has(entry.retryCode) || entry.retryCode === 'RMT_UNCODED' ? { retryCode: entry.retryCode } : {}),
         ...(entry.storage ? { storage: core_backupDiagnostics.backupFailureDiagnostic({
             code: entry.storage.code, kind: 'storage', backupStage: entry.storage.stage,
         }) } : {}),
@@ -6020,6 +6091,9 @@ function taskTraceSnapshot() { return snapshotEntries(trace.slice(-MAX_TASKS), t
 
 function clearTaskTrace() { trace.length = 0; }
 
+__m_core_taskTrace_js.beginRequestAttempt = beginRequestAttempt;
+__m_core_taskTrace_js.recordProviderRequest = recordProviderRequest;
+__m_core_taskTrace_js.recordRetry = recordRetry;
 __m_core_taskTrace_js.recordInput = recordInput;
 __m_core_taskTrace_js.recordResponse = recordResponse;
 __m_core_taskTrace_js.startTaskTrace = startTaskTrace;
@@ -9314,16 +9388,15 @@ const safeData = __m_core_pastLivesContract_js;
 // Bounded inert story data. The renderer owns markup, themes, IDs and controls.
 
 const TIME_ECHO_MODE = 'timeEcho';
-const TIME_JOURNEY_MODE = 'timeJourney';
 const TIME_STORY_VERSION = 1;
-const TIME_STORY_LIMITS = Object.freeze({ episodes: 48, lines: 120, encounters: 24,
+const TIME_STORY_LIMITS = Object.freeze({ episodes: 48, lines: 120,
     title: 120, prose: 30000, line: 3000, episodeChars: 180000, sessionChars: 1800000 });
 const TIME_STORY_PALETTES = Object.freeze(['rose', 'blue', 'moss', 'gold', 'plum', 'slate']);
 const TIME_STORY_PRESENTATIONS = Object.freeze(['modern', 'classical', 'fantasy', 'scifi', 'neutral']);
 const MEDIA = ['phone', 'terminal', 'relic', 'object', 'voice'];
 
-function isTimeStoryMode(mode) { return mode === TIME_ECHO_MODE || mode === TIME_JOURNEY_MODE; }
-function timeStoryLabel(mode) { return mode === TIME_ECHO_MODE ? '时空回响' : mode === TIME_JOURNEY_MODE ? '时空旅行者的妻子' : '时空番外'; }
+function isTimeStoryMode(mode) { return mode === TIME_ECHO_MODE; }
+function timeStoryLabel(mode) { return mode === TIME_ECHO_MODE ? '时空回响' : '时空番外'; }
 function timeStoryError(code, message) {
     const error = new Error(message);
     Object.assign(error, { code: `RMT_TIME_STORY_${code}`, safeToDisplay: true, safeUserMessage: message, repairHint: message });
@@ -9364,15 +9437,6 @@ function timeStoryMediumKinds(profile = {}) {
         : presentation === 'fantasy' ? ['relic', 'object', 'voice'] : ['object', 'voice'];
 }
 
-function assertTimeJourneyOrders(encounters) {
-    const require = condition => { if (!condition) throw timeStoryError('STRUCTURE', '故事需有可阅读的场景，双方经历顺序请使用各自唯一的正整数。'); };
-    require(encounters.length >= 1);
-    for (const field of ['charOrder', 'userOrder']) {
-        require(encounters.every(item => Number.isSafeInteger(item[field]) && item[field] > 0 && item[field] <= 100000));
-        require(new Set(encounters.map(item => item[field])).size === encounters.length);
-    }
-}
-
 // Reopening authenticates data shape and local references; it does not rejudge
 // yesterday's story against a changed character card or relationship classifier.
 function timeStoriesStoredData(value) {
@@ -9393,38 +9457,27 @@ function timeStoriesStoredData(value) {
     for (const episode of sequence(raw.episodes, L.episodes, /^TS\d{2,4}$/u)) {
         require(episode.fiction === true && TIME_STORY_PRESENTATIONS.includes(episode.presentation) && TIME_STORY_PALETTES.includes(episode.palette));
         prose(episode.title, L.title); prose(episode.opening); prose(episode.closing); prose(episode.motif, 160, false);
-        if (raw.kind === TIME_ECHO_MODE) {
-            require(MEDIA.includes(episode.medium?.kind)); prose(episode.medium.label, L.title);
-            const ends = timeStoryArray(episode.ends, 2); require(ends.length === 2);
-            for (const end of ends) { require(['char', 'user'].includes(end?.role)); prose(end.time, 240); }
-            require(ends[0].time !== ends[1].time);
-            const lines = timeStoryArray(episode.lines, L.lines);
-            for (const line of lines) { require(['a', 'b', 'narrator'].includes(line?.speaker)); prose(line.text, L.line); }
-            require(lines.some(line => line.speaker === 'a') && lines.some(line => line.speaker === 'b'));
-            prose(episode.message, 1800);
-        } else {
-            require(['char', 'user'].includes(episode.traveler));
-            const scenes = sequence(episode.encounters, L.encounters, /^S\d{2,4}$/u);
-            assertTimeJourneyOrders(scenes);
-            for (const scene of scenes) {
-                prose(scene.title, L.title); prose(scene.charTime, 240); prose(scene.userTime, 240); prose(scene.text);
-                prose(scene.charKnows, 1600, false); prose(scene.userKnows, 1600, false);
-                prose(scene.waiting, L.prose, false);
-            }
-        }
+        require(MEDIA.includes(episode.medium?.kind)); prose(episode.medium.label, L.title);
+        const ends = timeStoryArray(episode.ends, 2); require(ends.length === 2);
+        for (const end of ends) { require(['char', 'user'].includes(end?.role)); prose(end.time, 240); }
+        require(ends[0].time !== ends[1].time);
+        const lines = timeStoryArray(episode.lines, L.lines);
+        for (const line of lines) { require(['a', 'b', 'narrator'].includes(line?.speaker)); prose(line.text, L.line); }
+        require(lines.some(line => line.speaker === 'a') && lines.some(line => line.speaker === 'b'));
+        prose(episode.message, 1800);
     }
     return raw;
 }
 
 function timeStoryReadingState(session) {
+    if (!isTimeStoryMode(session?.kind)) throw timeStoryError('STRUCTURE', '这份番外结构暂不可读取，原记录保持不变。');
     const selected = (Array.isArray(session?.episodes) ? session.episodes : []).find(item => item?.id === session?.selectedId);
-    const scenes = Array.isArray(selected?.encounters) ? selected.encounters : [];
     return { selectedId: selected?.id || '',
-        selectedEntryId: scenes.some(item => item.id === session?.selectedEntryId) ? session.selectedEntryId : scenes[0]?.id || '',
+        selectedEntryId: '',
         view: selected && session?.view === 'story' ? 'story' : 'library',
         dialogueIndex: Math.max(0, Math.min(selected?.lines?.length || 0, Math.floor(Number(session?.dialogueIndex) || 0))),
         reading: session?.reading === true,
-        tab: ['story', 'char', 'user'].includes(session?.tab) ? session.tab : 'story' };
+        tab: 'story' };
 }
 
 __m_core_timeStoriesContract_js.isTimeStoryMode = isTimeStoryMode;
@@ -9435,11 +9488,9 @@ __m_core_timeStoriesContract_js.timeStoryArray = timeStoryArray;
 __m_core_timeStoriesContract_js.timeStoryData = timeStoryData;
 __m_core_timeStoriesContract_js.timeStoryPresentation = timeStoryPresentation;
 __m_core_timeStoriesContract_js.timeStoryMediumKinds = timeStoryMediumKinds;
-__m_core_timeStoriesContract_js.assertTimeJourneyOrders = assertTimeJourneyOrders;
 __m_core_timeStoriesContract_js.timeStoriesStoredData = timeStoriesStoredData;
 __m_core_timeStoriesContract_js.timeStoryReadingState = timeStoryReadingState;
 __m_core_timeStoriesContract_js.TIME_ECHO_MODE = TIME_ECHO_MODE;
-__m_core_timeStoriesContract_js.TIME_JOURNEY_MODE = TIME_JOURNEY_MODE;
 __m_core_timeStoriesContract_js.TIME_STORY_VERSION = TIME_STORY_VERSION;
 __m_core_timeStoriesContract_js.TIME_STORY_LIMITS = TIME_STORY_LIMITS;
 __m_core_timeStoriesContract_js.TIME_STORY_PALETTES = TIME_STORY_PALETTES;
@@ -9499,33 +9550,20 @@ function normalizeTimeStoryEpisode(mode, value, memory, options = {}) {
     const result = { id, fiction: true, title: prose(raw.title, L.title, true), opening: prose(raw.opening, L.prose, true),
         closing: prose(raw.closing, L.prose, true), presentation,
         palette: contract.TIME_STORY_PALETTES.includes(raw.palette) ? raw.palette : 'slate', motif: prose(raw.motif, 160) };
-    if (mode === contract.TIME_ECHO_MODE) {
-        const allowed = contract.timeStoryMediumKinds(profile);
-        if (!allowed.includes(raw.medium?.kind)) throw fail('WORLD', `本世界的联络媒介请使用 ${allowed.join('|')}，并沿用已有设定中的器物，不增加现代科技或新的法术体系。`);
-        result.medium = { kind: raw.medium.kind, label: prose(raw.medium.label, L.title, true) };
-        const ends = contract.timeStoryArray(raw.ends, 2); requireShape(ends.length === 2);
-        result.ends = ends.map(end => { requireShape(end && ['char', 'user'].includes(end.role));
-            return { role: end.role, time: prose(end.time, 240, true) }; });
-        requireShape(result.ends[0].time !== result.ends[1].time);
-        result.lines = contract.timeStoryArray(raw.lines, L.lines).map(line => {
-            requireShape(line && ['a', 'b', 'narrator'].includes(line.speaker));
-            const role = line.speaker === 'a' ? result.ends[0].role : line.speaker === 'b' ? result.ends[1].role : 'char';
-            return { speaker: line.speaker, text: prose(line.text, L.line, true, role) };
-        });
-        requireShape(result.lines.some(line => line.speaker === 'a') && result.lines.some(line => line.speaker === 'b'));
-        result.message = prose(raw.message, 1800, true);
-    } else {
-        requireShape(['char', 'user'].includes(raw.traveler)); result.traveler = raw.traveler;
-        result.encounters = contract.timeStoryArray(raw.encounters, L.encounters).map((scene, index) => {
-            requireShape(scene && typeof scene === 'object');
-            return { id: localId('S', index), title: prose(scene.title, L.title, true),
-                charTime: prose(scene.charTime, 240, true), userTime: prose(scene.userTime, 240, true),
-                charOrder: scene.charOrder, userOrder: scene.userOrder,
-                charKnows: prose(scene.charKnows, 1600), userKnows: prose(scene.userKnows, 1600, false, 'user'), text: prose(scene.text, L.prose, true),
-                ...(scene.waiting == null ? {} : { waiting: prose(scene.waiting, L.prose, false, raw.traveler === 'char' ? 'user' : 'char') }) };
-        });
-        contract.assertTimeJourneyOrders(result.encounters);
-    }
+    const allowed = contract.timeStoryMediumKinds(profile);
+    if (!allowed.includes(raw.medium?.kind)) throw fail('WORLD', `本世界的联络媒介请使用 ${allowed.join('|')}，并沿用已有设定中的器物，不增加现代科技或新的法术体系。`);
+    result.medium = { kind: raw.medium.kind, label: prose(raw.medium.label, L.title, true) };
+    const ends = contract.timeStoryArray(raw.ends, 2); requireShape(ends.length === 2);
+    result.ends = ends.map(end => { requireShape(end && ['char', 'user'].includes(end.role));
+        return { role: end.role, time: prose(end.time, 240, true) }; });
+    requireShape(result.ends[0].time !== result.ends[1].time);
+    result.lines = contract.timeStoryArray(raw.lines, L.lines).map(line => {
+        requireShape(line && ['a', 'b', 'narrator'].includes(line.speaker));
+        const role = line.speaker === 'a' ? result.ends[0].role : line.speaker === 'b' ? result.ends[1].role : 'char';
+        return { speaker: line.speaker, text: prose(line.text, L.line, true, role) };
+    });
+    requireShape(result.lines.some(line => line.speaker === 'a') && result.lines.some(line => line.speaker === 'b'));
+    result.message = prose(raw.message, 1800, true);
     contract.timeStoryData(result, L.episodeChars);
     return result;
 }
@@ -9554,14 +9592,9 @@ function timeStoryPrompt(mode, context, memory, previous = null, profile = {}) {
 人物：${JSON.stringify({ char: memory.characterName || context.name2, user: memory.userName || context.name1 })}。
 表现风格：${contract.timeStoryPresentation(profile)}；palette 从 rose|blue|moss|gold|plum|slate 选与人物气质相合的一种，motif 是短意象。
 `;
-    const modePrompt = mode === contract.TIME_ECHO_MODE
-        ? `不同时间的两人，或同一人的不同时期，通过联络传递关键信息并试图改变命运；让信息影响选择，成败由人物与故事决定。媒介 kind 仅可用 ${contract.timeStoryMediumKinds(profile).join('|')}，label 沿用世界已有通讯方式或熟悉器物；未知时代用器物/声音承载这次异常，不硬添手机或魔法体系。
+    const modePrompt = `不同时间的两人，或同一人的不同时期，通过联络传递关键信息并试图改变命运；让信息影响选择，成败由人物与故事决定。媒介 kind 仅可用 ${contract.timeStoryMediumKinds(profile).join('|')}，label 沿用世界已有通讯方式或熟悉器物；未知时代用器物/声音承载这次异常，不硬添手机或魔法体系。
 ends 按 a、b 顺序写两端人物与不同的时间，role 可相同；lines 按通话顺序写双方发言与必要叙述，message 写传递的关键信息，closing 写这次联络的后续。
-输出 {"title":"篇名","opening":"开场","closing":"完整结尾","palette":"配色","motif":"意象","medium":{"kind":"允许的媒介","label":"器物名称"},"ends":[{"role":"char|user","time":"一端时间"},{"role":"char|user","time":"另一端时间"}],"lines":[{"speaker":"a|b|narrator","text":"正文"}],"message":"关键信息"}。`
-        : `核心是「时空旅行者的妻子」式的爱情：一方拥有不受控的时间跳跃能力，无法决定何时离开、去往何时或何时回来；另一方在自己的时间里继续生活、等待，并与归来的人重新相爱。让突然消失、缺席中的日常、归来后的亲密与离别推动完整故事，两人的记忆与经历可以错乱。时间跳跃不能成为随叫随到的旅行工具，也不要只把几次相遇打乱排序。
-traveler 可为 char 或 user；沿用双方性格、性别与关系进展，题名不要求谁必须为女性或已经结婚。穿越是本篇的异常，日常生活、用语与器物适配原世界，不强塞现代都市或新的科技、法术体系；结局由人物与故事决定。
-encounters 按故事阅读顺序写场景，离开、等待或重逢均可成一幕，不凑数量或刻意制造逆序。charTime/userTime 可用相对时间，charOrder/userOrder 为双方个人经历中各自唯一的正整数顺序。charKnows/userKnows 可简述各自已知；waiting 可补写留下的一方如何度过缺席时光，已经写入正文则省略。
-输出 {"title":"篇名","opening":"时间打乱两人生活的开场","closing":"本篇完整结尾","palette":"配色","motif":"意象","traveler":"char|user","encounters":[{"title":"场景名","charTime":"角色此刻","userTime":"用户此刻","charOrder":1,"userOrder":1,"charKnows":"角色已知，可选","userKnows":"用户已知，可选","text":"场景完整正文","waiting":"留下的一方的日子，可选"}]}。`;
+输出 {"title":"篇名","opening":"开场","closing":"完整结尾","palette":"配色","motif":"意象","medium":{"kind":"允许的媒介","label":"器物名称"},"ends":[{"role":"char|user","time":"一端时间"},{"role":"char|user","time":"另一端时间"}],"lines":[{"speaker":"a|b|narrator","text":"正文"}],"message":"关键信息"}。`;
     return `${common}${modePrompt}
 UNTRUSTED_EXISTING_TITLES_JSON:
 ${JSON.stringify((previous?.episodes || []).map(item => ({ title: item.title, motif: item.motif })))}
@@ -9598,7 +9631,7 @@ async function generateTimeStoryWithRepair(mode, context, memory, origin, taskKe
     contextApi.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
     const next = previous ? structuredClone(previous) : emptyTimeStories(mode, memory, context);
     next.episodes.push(episode);
-    Object.assign(next, { selectedId: episode.id, selectedEntryId: episode.encounters?.[0]?.id || '', view: 'story', dialogueIndex: 0, reading: false, tab: 'story' });
+    Object.assign(next, { selectedId: episode.id, selectedEntryId: '', view: 'story', dialogueIndex: 0, reading: false, tab: 'story' });
     incremental.stampIncrementalCoverage(next, previous, memory, 'mode', incremental.derivedExpansionMemoryIds(previous, memory), 1);
     contract.timeStoriesStoredData(next);
     return next;
@@ -9663,31 +9696,6 @@ function echoHtml(session, episode, ui) {
     return endpoints + reader;
 }
 
-function orderedEncounters(episode, order = 'story') {
-    const entries = Array.isArray(episode.encounters) ? [...episode.encounters] : [];
-    if (order === 'char' || order === 'user') entries.sort((a, b) => Number(a[`${order}Order`]) - Number(b[`${order}Order`]));
-    return entries;
-}
-
-function journeyHtml(session, episode, ui) {
-    const ordered = orderedEncounters(episode, ui.tab);
-    const selected = ordered.find(item => item.id === ui.selectedEntryId) || ordered[0];
-    const index = ordered.findIndex(item => item.id === selected?.id);
-    const waitingRole = episode.traveler === 'char' ? 'user' : 'char';
-    const roles = `<div class="rmt-time-roles"><div><small>被时间带走的人</small><b>${esc(nameFor(session, episode.traveler))}</b></div><div><small>等待归来的人</small><b>${esc(nameFor(session, waitingRole))}</b></div></div>`;
-    const lane = role => `<section class="rmt-time-lane" data-rmt-time-lane="${role}"><h3>${esc(nameFor(session, role))}</h3><ol>${orderedEncounters(episode, role).map(item => `<li><button type="button" data-rmt-time-story="encounter" data-rmt-time-story-id="${esc(item.id)}" aria-pressed="${selected?.id === item.id}"><small>${esc(item[`${role}Time`])}</small><b>${esc(item.title)}</b><span>${esc(item.id)}</span></button></li>`).join('')}</ol></section>`;
-    const timelines = `<details class="rmt-time-timeline-details"><summary>回看两人的时间线</summary><div class="rmt-time-timelines" aria-label="两人的经历顺序">${lane('char')}${lane('user')}</div></details>`;
-    const orderButtons = `<nav class="rmt-time-order" aria-label="阅读顺序">${button('order', '故事顺序', 'story', `aria-pressed="${ui.tab === 'story'}"`)}${button('order', nameFor(session, 'char'), 'char', `aria-pressed="${ui.tab === 'char'}"`)}${button('order', nameFor(session, 'user'), 'user', `aria-pressed="${ui.tab === 'user'}"`)}</nav>`;
-    const knowledge = selected ? `<div class="rmt-time-knowledge"><div><b>${esc(session.characterName)} · ${esc(selected.charTime)}</b>${selected.charKnows ? `<p>${esc(selected.charKnows)}</p>` : ''}</div><div><b>${esc(session.userName)} · ${esc(selected.userTime)}</b>${selected.userKnows ? `<p>${esc(selected.userKnows)}</p>` : ''}</div></div>` : '';
-    const waiting = selected?.waiting ? `<aside class="rmt-time-waiting"><h3>${esc(nameFor(session, waitingRole))} · 等待中的日子</h3>${paragraphs(selected.waiting)}</aside>` : '';
-    const ending = ui.reading;
-    const content = ending ? `<article class="rmt-time-prose rmt-time-closing" aria-live="polite"><h3>此后的日子</h3>${paragraphs(episode.closing)}</article>`
-        : selected ? `<article class="rmt-time-prose rmt-time-encounter" aria-live="polite"><header><small>${esc(selected.id)} · ${index + 1} / ${ordered.length}</small><h3>${esc(selected.title)}</h3></header>${knowledge}${paragraphs(selected.text)}${waiting}</article>` : '';
-    const controls = ending ? `<div class="rmt-time-actions">${button('encounter', '返回故事', selected?.id || '')}</div>`
-        : `<div class="rmt-time-reading-controls">${button('prev-scene', '上一幕', '', index <= 0 ? 'disabled' : '')}<span>${index + 1} / ${ordered.length}</span>${button(index + 1 < ordered.length ? 'next-scene' : 'ending', index + 1 < ordered.length ? '下一幕' : '此后的日子')}</div>`;
-    return `${roles}<div class="rmt-time-opening">${paragraphs(episode.opening)}</div>${content}${controls}${orderButtons}${timelines}`;
-}
-
 function timeStoriesHtml(session, { readOnly: locked = false, busy = false } = {}) {
     try {
         if (!contract.isTimeStoryMode(session?.kind) || session.version !== 1 || !Array.isArray(session.episodes)) throw new Error('shape');
@@ -9697,12 +9705,12 @@ function timeStoriesHtml(session, { readOnly: locked = false, busy = false } = {
         const selected = session.episodes.find(item => item.id === ui.selectedId);
         const inStory = !!selected && ui.view === 'story';
         const generate = locked || inStory ? '' : `<button type="button" class="rmt-btn" data-rmt-generate-mode="${mode}" ${busy ? 'disabled' : ''}>${busy ? '正在写下故事…' : session.episodes.length ? '再写一篇' : '生成第一篇'}</button>`;
-        const returnButton = mode === 'timeEcho' ? '<button type="button" class="rmt-btn" data-rmt-mode="phone">返回终端</button>' : '';
+        const returnButton = '<button type="button" class="rmt-btn" data-rmt-mode="phone">返回终端</button>';
         const header = `<header class="rmt-time-head"><div><small>时空番外${locked ? ' · 只读' : ''}</small><h2>${esc(label)}</h2></div><div class="rmt-time-actions">${generate}${returnButton}</div></header>`;
         const content = inStory
-            ? `<div class="rmt-time-story-head">${button('library', '返回篇章')}<div><small>${esc(selected.motif)}</small><h3>${esc(selected.title)}</h3></div></div>${mode === 'timeEcho' ? echoHtml(session, selected, ui) : journeyHtml(session, selected, ui)}`
-            : session.episodes.length ? `<div class="rmt-time-library">${session.episodes.map(episode => `<button type="button" class="rmt-time-cover" data-rmt-time-story="open" data-rmt-time-story-id="${esc(episode.id)}"><i class="fa-solid ${mode === 'timeEcho' ? mediumIcon(episode.medium?.kind) : 'fa-hourglass-half'}" aria-hidden="true"></i><span><small>${esc(episode.motif)}</small><b>${esc(episode.title)}</b>${mode === 'timeEcho' ? `<small>${esc(episode.medium?.label || '')}</small>` : ''}</span><span aria-hidden="true">›</span></button>`).join('')}</div>`
-                : `<div class="rmt-time-empty"><i class="fa-solid ${mode === 'timeEcho' ? 'fa-wave-square' : 'fa-hourglass-half'}" aria-hidden="true"></i><h3>${mode === 'timeEcho' ? '有一道回声，尚未抵达' : '归期无法约定，爱仍在继续'}</h3>${mode === 'timeJourney' ? '<p>一人被时间带走，一人在日常里等待。写下他们错乱时光中的相爱、归来与离别。</p>' : ''}</div>`;
+            ? `<div class="rmt-time-story-head">${button('library', '返回篇章')}<div><small>${esc(selected.motif)}</small><h3>${esc(selected.title)}</h3></div></div>${echoHtml(session, selected, ui)}`
+            : session.episodes.length ? `<div class="rmt-time-library">${session.episodes.map(episode => `<button type="button" class="rmt-time-cover" data-rmt-time-story="open" data-rmt-time-story-id="${esc(episode.id)}"><i class="fa-solid ${mediumIcon(episode.medium?.kind)}" aria-hidden="true"></i><span><small>${esc(episode.motif)}</small><b>${esc(episode.title)}</b><small>${esc(episode.medium?.label || '')}</small></span><span aria-hidden="true">›</span></button>`).join('')}</div>`
+                : `<div class="rmt-time-empty"><i class="fa-solid fa-wave-square" aria-hidden="true"></i><h3>有一道回声，尚未抵达</h3></div>`;
         return `<section class="rmt-time-stories" data-rmt-time-presentation="${presentation(selected?.presentation)}" data-rmt-time-palette="${palette(selected?.palette)}">${header}${content}</section>`;
     } catch { return '<section class="rmt-time-stories"><p role="status">这篇故事暂时无法读取，原内容仍保留。</p></section>'; }
 }
@@ -9726,7 +9734,7 @@ function renderTimeStories() {
     if (!contract.isTimeStoryMode(runtimeState.activeMode) || runtimeState.activeSession?.kind !== runtimeState.activeMode) return;
     const mode = runtimeState.activeMode;
     overlay.topTitle(contract.timeStoryLabel(mode));
-    overlay.setBackVisible(true, runtimeState.activeSession.view === 'story' ? '篇章' : mode === 'timeEcho' ? '私人终端' : '档案');
+    overlay.setBackVisible(true, runtimeState.activeSession.view === 'story' ? '篇章' : '私人终端');
     const body = overlay.bodyEl();
     if (!body) return;
     try {
@@ -9745,7 +9753,7 @@ function closeTimeStoryDetail() {
 // Only scalar reading state changes here. Generation is handled by the existing
 // explicit generate-mode action, with the normal archive target and save guards.
 function handleTimeStoryAction(action, id = '') {
-    if (!['library', 'open', 'connect', 'prev-line', 'next-line', 'replay', 'order', 'encounter', 'prev-scene', 'next-scene', 'ending'].includes(action)) return false;
+    if (!['library', 'open', 'connect', 'prev-line', 'next-line', 'replay'].includes(action)) return false;
     try {
         assertShownTarget();
         const session = runtimeState.activeSession;
@@ -9763,19 +9771,11 @@ function handleTimeStoryAction(action, id = '') {
             if (session.reading && action === 'next-line') session.dialogueIndex = Math.min(count, session.dialogueIndex + 1);
             if (session.reading && action === 'prev-line') session.dialogueIndex = Math.max(0, session.dialogueIndex - 1);
         }
-        if (episode && session.kind === 'timeJourney') {
-            if (action === 'order' && ['story', 'char', 'user'].includes(id)) { session.tab = id; session.selectedEntryId = orderedEncounters(episode, id)[0]?.id || ''; session.reading = false; }
-            if (action === 'encounter' && episode.encounters.some(item => item.id === id)) { session.selectedEntryId = id; session.reading = false; }
-            const ordered = orderedEncounters(episode, session.tab);
-            const current = Math.max(0, ordered.findIndex(item => item.id === session.selectedEntryId));
-            if (action === 'prev-scene' || action === 'next-scene') { session.selectedEntryId = ordered[Math.max(0, Math.min(ordered.length - 1, current + (action === 'next-scene' ? 1 : -1)))]?.id || ''; session.reading = false; }
-            if (action === 'ending') session.reading = true;
-        }
         renderTimeStories();
         const body = overlay.bodyEl();
         const nodes = body?.querySelectorAll?.('[data-rmt-time-story]') || [];
         const matching = [...nodes].find(node => node.dataset.rmtTimeStory === action && node.dataset.rmtTimeStoryId === id && !node.disabled);
-        const focus = matching || body?.querySelector?.('.rmt-time-line, .rmt-time-encounter, .rmt-time-closing, .rmt-time-library');
+        const focus = matching || body?.querySelector?.('.rmt-time-line, .rmt-time-closing, .rmt-time-library');
         if (focus) { if (!matching) focus.tabIndex = -1; focus.focus?.({ preventScroll: true }); }
         return true;
     } catch (error) { globalThis.toastr?.error?.(text.toastText(text.safeErrorSummary(error)), '心迹回廊 · 时空番外'); return false; }
@@ -9796,8 +9796,7 @@ ${root} .rmt-time-stories button:focus-visible{outline:3px solid var(--rmt-time-
 ${root} .rmt-time-stories [aria-pressed=true]{box-shadow:inset 0 0 0 2px var(--rmt-time-accent)!important}
 ${root} .rmt-time-head,${root} .rmt-time-story-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--rmt-theme-border);padding-bottom:18px;margin-bottom:22px}
 ${root} .rmt-time-story-head{justify-content:flex-start;align-items:flex-start}
-${root} .rmt-time-actions,${root} .rmt-time-order{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-${root} .rmt-time-order{margin:22px 0 16px}
+${root} .rmt-time-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 ${root} .rmt-time-library{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 ${root} .rmt-time-cover{display:grid;grid-template-columns:32px minmax(0,1fr) 12px;align-items:center;gap:14px;padding:22px!important;text-align:left;border:1px solid var(--rmt-theme-border);border-radius:18px;background:var(--rmt-theme-surface)!important;color:var(--rmt-theme-text)!important;min-height:132px!important}
 ${root} .rmt-time-cover>span:nth-child(2){display:grid;gap:5px}
@@ -9817,18 +9816,6 @@ ${root} .rmt-time-line[data-rmt-time-speaker=b]{border-left-width:1px;border-rig
 ${root} .rmt-time-line header{display:flex;gap:12px;justify-content:space-between;align-items:baseline;flex-wrap:wrap;margin-bottom:22px}
 ${root} .rmt-time-reading-controls{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0}
 ${root} .rmt-time-reading-controls>span{font-size:13px;color:var(--rmt-theme-muted)}
-${root} .rmt-time-roles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:22px;padding:18px;border:1px solid var(--rmt-theme-border);border-radius:18px;background:var(--rmt-theme-surface)}
-${root} .rmt-time-roles>div{display:grid;gap:4px}
-${root} .rmt-time-waiting{margin-top:24px;padding:18px 0 0;border-top:1px solid var(--rmt-theme-border)}
-${root} .rmt-time-timeline-details>summary{cursor:pointer;min-height:44px;padding:8px 0;margin-bottom:12px;color:var(--rmt-theme-muted)}
-${root} .rmt-time-timelines{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
-${root} .rmt-time-lane ol{list-style:none;margin:0!important;padding:0 0 0 12px!important;border-left:2px solid var(--rmt-time-accent)}
-${root} .rmt-time-lane li{position:relative;margin:0 0 12px!important;padding:0!important}
-${root} .rmt-time-lane li:before{content:'';position:absolute;left:-18px;top:20px;width:10px;height:10px;border-radius:50%;background:var(--rmt-time-accent);border:2px solid var(--rmt-theme-bg)}
-${root} .rmt-time-lane button{display:grid;gap:4px;width:100%;padding:12px!important;text-align:left;border:1px solid var(--rmt-theme-border);border-radius:12px;background:var(--rmt-theme-surface)!important;color:var(--rmt-theme-text)!important}
-${root} .rmt-time-lane button>span{font-size:11px;color:var(--rmt-theme-muted)}
-${root} .rmt-time-knowledge{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding-bottom:12px;border-bottom:1px dashed var(--rmt-theme-border);margin-bottom:20px;font-size:14px}
-${root} .rmt-time-knowledge p{color:var(--rmt-theme-muted);margin-top:6px!important}
 ${root} .rmt-time-stories[data-rmt-time-palette=rose]{--rmt-time-accent:#c36d89}
 ${root} .rmt-time-stories[data-rmt-time-palette=blue]{--rmt-time-accent:#679abe}
 ${root} .rmt-time-stories[data-rmt-time-palette=moss]{--rmt-time-accent:#77977b}
@@ -9841,13 +9828,12 @@ ${root} [data-rmt-time-presentation=classical] :is(.rmt-time-prose,.rmt-time-lin
 ${root} [data-rmt-time-presentation=fantasy] .rmt-time-connection{border-radius:40px 10px;background-image:radial-gradient(ellipse at center,color-mix(in srgb,var(--rmt-time-accent) 12%,transparent),transparent 70%)}
 ${root} [data-rmt-time-presentation=fantasy] .rmt-time-prose{border-radius:24px 4px 24px 4px;background-image:radial-gradient(ellipse at top left,color-mix(in srgb,var(--rmt-time-accent) 10%,transparent),transparent 65%)}
 ${root} [data-rmt-time-presentation=scifi] :is(.rmt-time-connection,.rmt-time-line){border-radius:4px;background-image:linear-gradient(color-mix(in srgb,var(--rmt-time-accent) 5%,transparent) 1px,transparent 1px);background-size:100% 8px}
-${root} [data-rmt-time-presentation=scifi] .rmt-time-lane button{border-radius:2px;border-left:3px solid var(--rmt-time-accent)}
 ${root} [data-rmt-time-presentation=scifi] :is(.rmt-time-end,.rmt-time-medium){font-family:ui-monospace,monospace}
 ${root} .rmt-phone-empty-terminal{width:min(620px,100%);margin:20px auto;padding:24px;border:1px solid var(--rmt-theme-border);border-radius:20px;background:var(--rmt-theme-surface);color:var(--rmt-theme-text);box-sizing:border-box;overflow-wrap:anywhere}
 ${root} .rmt-phone-empty-terminal .rmt-time-actions{display:flex;gap:12px;flex-wrap:wrap}
 ${root} .rmt-phone-empty-terminal button{min-height:44px;max-width:100%;white-space:normal}
 ${root} .rmt-phone-home-grid .rmt-phone-time-echo{min-height:64px}
-@media(max-width:600px){${root} .rmt-time-library{grid-template-columns:1fr}${root} .rmt-time-timelines{gap:14px}${root} .rmt-time-lane h3{font-size:17px!important}${root} .rmt-time-knowledge{grid-template-columns:1fr;gap:8px}${root} .rmt-time-connection{gap:6px;padding:18px 8px}${root} .rmt-time-end>b{font-size:18px}${root} .rmt-time-end>span{font-size:12px}${root} .rmt-time-medium{padding-inline:4px}${root} .rmt-time-head{align-items:flex-start}}
+@media(max-width:600px){${root} .rmt-time-library{grid-template-columns:1fr}${root} .rmt-time-connection{gap:6px;padding:18px 8px}${root} .rmt-time-end>b{font-size:18px}${root} .rmt-time-end>span{font-size:12px}${root} .rmt-time-medium{padding-inline:4px}${root} .rmt-time-head{align-items:flex-start}}
 `;
 }
 
@@ -16447,6 +16433,11 @@ function buildDiagnosticReport() {
         runtime: {
             busy: state.busy === true,
             hasActiveTask: !!state.activeTaskLabel,
+            hasPendingWork: state.busy === true || !!state.activeTaskLabel
+                || count(state.activeGenerationTasks?.size) > 0 || count(state.activeModeBuildScopes?.size) > 0
+                || count(state.activeAdvBulkScopes?.size) > 0 || count(state.activeArchiveTargetReservations?.size) > 0
+                || count(state.activeCgImageTasks?.size) > 0 || count(state.activeProviderRequestCount) > 0
+                || count(state.providerRequestQueue?.length) > 0 || !!state.roomLifeRefreshPromise,
             generationTasks: count(state.activeGenerationTasks?.size),
             cgImageTasks: count(state.activeCgImageTasks?.size),
             providerInFlight: count(state.activeProviderRequestCount),
@@ -24016,7 +24007,11 @@ async function generateButterflyWithRepair(context, memoryBank, origin, taskKey,
     const savedSegments = generation_recovery.generationRecoverySegmentsForOrigin(origin) || [];
     const savedMain = savedSegments.find(segment => /:slot:0$/u.test(segment.slot));
     const legacyPlan = legacy_recovery.legacyButterflyPlan(memoryBank);
-    const continueLegacyPlan = !!savedMain && (!savedMain.contract || savedMain.contract === 'butterfly-legacy-plan-r62');
+    // Restored to the pre-r62 rules by request: the readable-r62 contract dropped every
+    // length/person quota and the fixed axis plan, which changed what the mode produces.
+    // A draft saved under the newer contract still resumes under that contract.
+    const savedReadableContract = savedMain?.contract === 'butterfly-readable-r62';
+    const continueLegacyPlan = !savedReadableContract;
     const attemptedLegacyBranches = continueLegacyPlan ? Math.max(0, ...savedSegments.map(segment => {
         const index = Number(segment.slot.match(/:slot:(\d+)$/u)?.[1]);
         return index > 0 && index <= legacyPlan.axes.length ? index : 0;
@@ -28321,23 +28316,34 @@ async function requestValidatedSegment(prompt, status, options, validator) {
         ? options.contextEnvelope : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options?.mode, context) }) };
     const result = await generation_recovery.withRecoverySegment(prompt, options, validator, async (prompt, options, accepted) => {
     let lastError = null;
-    const maxAttempts = Math.max(1, Math.min(core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS, Number(options?.segmentMaxAttempts) || core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS));
+    // Automatic retry is off by default. A failed segment used to silently re-run prompt
+    // building, token counting and a second paid request; on a slow host that turned one
+    // failure into minutes of extra billing the user could not stop. Successful segments
+    // are already kept by the recovery draft, so the run stops and waits for「续写」.
+    const allowAutoRetry = options?.allowAutoRetry === true;
+    const maxAttempts = allowAutoRetry
+        ? Math.max(1, Math.min(core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS, Number(options?.segmentMaxAttempts) || core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS))
+        : 1;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const retryNote = attempt && lastError
             ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || core_text.normalizeText(lastError?.repairHint, 600) || (lastError?.code === 'RMT_JSON_NOT_FOUND' || lastError?.code === 'RMT_JSON_INVALID' ? '上一轮你返回的是散文，没有任何可解析的 JSON 对象。本轮只输出一个 JSON 对象：第一个字符必须是 {，最后一个字符必须是 }。不要前言、不要解释、不要引用来源、不要代码围栏。' : String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
             : '';
         try {
-            const raw = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? '（重试）' : ''}`, options);
+            const raw = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? `（重试 ${attempt}/${maxAttempts - 1}）` : ''}`, options);
             core_taskTrace.beginStage(options.taskTrace, 'validate');
             const value = core_requestCoordinator.validateGeneratedSegment(raw, validator);
             core_taskTrace.markStage(options.taskTrace, 'validate');
             await accepted(raw);
             return value;
         } catch (error) {
+            if (options.taskTrace?.activeStage === 'validate') core_taskTrace.markStage(options.taskTrace, 'validate', false);
             if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
             lastError = error;
             if (attempt + 1 < maxAttempts && core_requestCoordinator.shouldRetrySegmentRequest(error, attempt)) {
-                await core_requestCoordinator.waitBeforeSegmentRetry(error, attempt);
+                core_taskTrace.recordRetry(options.taskTrace, error);
+                core_taskTrace.beginStage(options.taskTrace, 'retry');
+                try { await core_requestCoordinator.waitBeforeSegmentRetry(error, attempt); }
+                finally { core_taskTrace.markStage(options.taskTrace, 'retry'); }
                 continue;
             }
             throw error;
@@ -28357,6 +28363,9 @@ async function requestValidatedSegment(prompt, status, options, validator) {
 // r74's character-budget fallback. This is not an exact token estimate or a
 // provider retry; the user's original generation request has not been sent yet.
 const TOKEN_COUNT_TIMEOUT_MS = 5000;
+// Observed on a cloud tavern: every failure landed at 125-134s while every success finished
+// under 50s. That cliff is the host's gateway limit, which the extension cannot raise.
+const UPSTREAM_CUTOFF_HINT_MS = 90000;
 
 function countPromptTokens(context, prompt, signal, timeoutMs) {
     return new Promise((resolve, reject) => {
@@ -28457,7 +28466,7 @@ function assertNoBannedGeneratedPhrase(value, settings, evidence = null) {
     throw error;
 }
 
-function normalizeConnectionManagerError(error) {
+function normalizeConnectionManagerError(error, timing = {}) {
     if (error?.name === 'AbortError' || error?.retryableJson === true) return error;
     const knownInternalCodes = new Set([
         'RMT_API_CONFIG_CHANGED', 'RMT_API_CONFIGURATION_SUPERSEDED', 'RMT_API_MODEL_REQUEST_SUPERSEDED',
@@ -28498,6 +28507,12 @@ function normalizeConnectionManagerError(error) {
     const technical = status ? `（HTTP ${status}）` : safeCode ? `（${safeCode}）` : '';
     const sourceName = error?.code === 'RMT_MANUAL_HTTP' ? '手动 API' : '专用连接';
     let code = 'RMT_CONNECTION_FAILED';
+    // A request that dies around two minutes with no response is an upstream gateway or
+    // reverse-proxy cut, not a misconfigured key. Saying "检查独立 API 设置" sends the user
+    // to settings that are already correct, so name the real shape of the failure.
+    if (Number(timing?.elapsedMs) >= UPSTREAM_CUTOFF_HINT_MS && timing?.receivedResponse !== true) {
+        code = 'RMT_CONNECTION_UPSTREAM_CUTOFF';
+    }
     let message = `${sourceName}请求失败${technical}。没有收到可判断是否可重试的模型结果；请检查当前独立 API 设置与 SillyTavern 控制台中的上游错误，本段不会自动重试。`;
     let retryable = false;
     if (/(?:<!doctype\s+html|<html\b|<head\b|<body\b|cf-error|cdn-cgi)/i.test(original)) {
@@ -28554,7 +28569,10 @@ function normalizeConnectionManagerError(error) {
 
 async function generateConfiguredJson(prompt, options = {}) {
     const taskTrace = options.taskTrace || null;
+    core_taskTrace.beginRequestAttempt(taskTrace);
     core_taskTrace.beginStage(taskTrace, 'prompt');
+    const lifecycleEpoch = options.origin?.lifecycleEpoch ?? runtimeState.runtimeLifecycleEpoch;
+    core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     const context = options.context || core_context.currentCharacterGuard();
     const settings = core_settings.getPluginSettings(context);
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
@@ -28597,7 +28615,23 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
         const apiMap = service.validateProfile(rawProfile);
         if (apiMap?.selected !== 'openai' || !apiMap?.source) throw core_text.safeUserError('当前一键连接不是可复用的 Chat Completion 配置。');
     }
-    let result;
+    const assertConfigurationCurrent = async () => {
+        const latestSettings = core_settings.getPluginSettings(context);
+        let latestProfileFingerprint = '';
+        if (connectionMode === 'profile') {
+            try { latestProfileFingerprint = await core_settings.resolvedProfileTransportFingerprint(core_settings.rawConnectionProfile(latestSettings.connectionProfileId, context)); }
+            catch { latestProfileFingerprint = 'missing'; }
+        }
+        if (core_independentApi.apiConfigurationFingerprint(latestSettings) !== configurationFingerprint
+            || creative_supplement.creativeSupplementBlock(latestSettings) !== creativeSupplement
+            || (connectionMode === 'profile' && latestProfileFingerprint !== selectedProfileFingerprint)) {
+            const error = new Error('API 配置或创作补充词在生成期间发生变化，本次旧请求已停止。');
+            error.code = 'RMT_API_CONFIG_CHANGED';
+            error.retryable = false;
+            throw error;
+        }
+    };
+    let result, responsePayload, releaseProviderPermit = null;
     const lifecycleController = new AbortController();
     const externalSignal = options.signal || null;
     const forwardAbort = () => {
@@ -28606,10 +28640,30 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
     };
     if (externalSignal?.aborted) forwardAbort();
     else externalSignal?.addEventListener?.('abort', forwardAbort, { once: true });
+    const assertRequestCurrent = () => {
+        if (lifecycleController.signal.aborted) throw lifecycleController.signal.reason instanceof Error
+            ? lifecycleController.signal.reason : core_requestCoordinator.createGenerationAbortError();
+        core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
+    };
+    const __sentAt = Date.now();
+    let __gotResponse = false;
     try {
+        assertRequestCurrent();
+        core_taskTrace.beginStage(taskTrace, 'queue');
+        releaseProviderPermit = await core_requestCoordinator.acquireProviderRequestPermit(lifecycleController.signal);
+        core_taskTrace.markStage(taskTrace, 'queue');
+        core_taskTrace.beginStage(taskTrace, 'pacing');
+        await core_requestCoordinator.waitForProviderPacing(lifecycleController.signal);
+        core_taskTrace.markStage(taskTrace, 'pacing');
+        assertRequestCurrent();
+        await assertConfigurationCurrent();
+        assertRequestCurrent();
         core_taskTrace.beginStage(taskTrace, 'request');
         result = await core_requestCoordinator.runGenerationRequestWithTimeout(
-            () => connectionMode === 'manual'
+            () => {
+                assertRequestCurrent();
+                core_taskTrace.recordProviderRequest(taskTrace);
+                return connectionMode === 'manual'
                 ? core_independentApi.requestManualApiCompletion(settings, context, messages, responseLength, {
                     signal: lifecycleController.signal,
                     model: modelOverride,
@@ -28621,36 +28675,27 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
                     responseLength,
                     { stream: false, extractData: true, includePreset: false, includeInstruct: false, signal: lifecycleController.signal },
                     overridePayload,
-                ),
+                );
+            },
             lifecycleController,
             options.timeoutMs,
             options.statusText || '',
         );
         core_taskTrace.markStage(taskTrace, 'request');
         core_taskTrace.markStage(taskTrace, 'response');
+        __gotResponse = true;
+        core_taskTrace.recordResponse(taskTrace, core_independentApi.responseShapeSummary(result));
+        // Observe error envelopes (including HTTP-200 429s) before draining the queue.
+        responsePayload = core_independentApi.assertIndependentResponsePayload(result);
     } catch (error) {
-        throw normalizeConnectionManagerError(error);
+        throw normalizeConnectionManagerError(error, { elapsedMs: Date.now() - __sentAt, receivedResponse: __gotResponse });
     } finally {
+        try { releaseProviderPermit?.(); } catch {}
         try { externalSignal?.removeEventListener?.('abort', forwardAbort); } catch {}
     }
-    const latestSettings = core_settings.getPluginSettings(context);
-    let latestProfileFingerprint = '';
-    if (connectionMode === 'profile') {
-        try { latestProfileFingerprint = await core_settings.resolvedProfileTransportFingerprint(core_settings.rawConnectionProfile(latestSettings.connectionProfileId, context)); }
-        catch { latestProfileFingerprint = 'missing'; }
-    }
-    if (core_independentApi.apiConfigurationFingerprint(latestSettings) !== configurationFingerprint
-        || creative_supplement.creativeSupplementBlock(latestSettings) !== creativeSupplement
-        || (connectionMode === 'profile' && latestProfileFingerprint !== selectedProfileFingerprint)) {
-        const error = new Error('API 配置或创作补充词在生成期间发生变化，本次旧请求结果已丢弃。');
-        error.code = 'RMT_API_CONFIG_CHANGED';
-        error.retryable = false;
-        throw error;
-    }
-    core_taskTrace.recordResponse(taskTrace, core_independentApi.responseShapeSummary(result));
-    let responsePayload;
-    try { responsePayload = core_independentApi.assertIndependentResponsePayload(result); }
-    catch (error) { throw normalizeConnectionManagerError(error); }
+    await assertConfigurationCurrent();
+    if (externalSignal?.aborted) forwardAbort();
+    assertRequestCurrent();
     let parsed;
     core_taskTrace.beginStage(taskTrace, 'parse');
     try { core_independentApi.assertManualStreamComplete(result);
@@ -28686,6 +28731,12 @@ async function requestJson(prompt, statusText = '正在根据当前聊天档案�
     const requestContext = options.context || core_context.currentCharacterGuard();
     const origin = options.origin || core_context.captureTaskOrigin(requestContext, archive_repository.getImportedMemory(requestContext)?.archiveRevision || '');
     core_context.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
+    const externalSignal = options.signal || null;
+    const forwardAbort = () => {
+        try { controller.abort(externalSignal?.reason instanceof Error ? externalSignal.reason : core_requestCoordinator.createGenerationAbortError()); } catch {}
+    };
+    if (externalSignal?.aborted) forwardAbort();
+    else externalSignal?.addEventListener?.('abort', forwardAbort, { once: true });
     const targetLabel = core_text.normalizeText(requestContext?.__rmtArchiveTargetLabel, 260);
     const displayStatus = targetLabel ? `正在为：${targetLabel} · ${core_text.normalizeText(statusText, 180)}` : statusText;
     runtimeState.activeGenerationTasks.set(taskKey, {
@@ -28696,15 +28747,10 @@ async function requestJson(prompt, statusText = '正在根据当前聊天档案�
     const inheritedTrace = generationTrace(options);
     const taskTrace = inheritedTrace || core_taskTrace.startTaskTrace(taskKey, options.mode);
     if (!inheritedTrace) core_taskTrace.markStage(taskTrace, 'start');
-    let releaseProviderPermit = null;
     try {
-        releaseProviderPermit = await core_requestCoordinator.acquireProviderRequestPermit(controller.signal);
-        // Once the endpoint has rate-limited us, space requests out instead of firing
-        // the next one the instant a slot frees up.
-        await core_requestCoordinator.waitForProviderPacing(controller.signal);
         core_context.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
         const result = await generateConfiguredJson(prompt, {
-            ...options, taskTrace,
+            ...options, taskTrace, origin, context: requestContext,
             signal: controller.signal,
             statusText,
             enforceGeneratedPhrasePolicy: options.enforceGeneratedPhrasePolicy !== false,
@@ -28716,7 +28762,7 @@ async function requestJson(prompt, statusText = '正在根据当前聊天档案�
         else if (taskTrace.activeStage) core_taskTrace.markStage(taskTrace, taskTrace.activeStage, false);
         throw error;
     } finally {
-        try { releaseProviderPermit?.(); } catch {}
+        try { externalSignal?.removeEventListener?.('abort', forwardAbort); } catch {}
         const current = runtimeState.activeGenerationTasks.get(taskKey);
         if (current?.controller === controller) runtimeState.activeGenerationTasks.delete(taskKey);
         core_requestCoordinator.refreshConcurrentTaskUi(core_text.normalizeText(options.mode, 80), origin);
@@ -28833,6 +28879,7 @@ async function discardSavedGeneration(mode) {
 }
 
 async function generateMode(mode, options = {}) {
+    if (!Object.values(core_constants.MODE).includes(mode)) return;
     // Capture once, before any archive/network/storage await. A destroyed invocation must never
     // adopt the next runtime lifetime and re-register itself as a fresh paid task.
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
@@ -29290,6 +29337,7 @@ __m_generation_client_js.findBannedGeneratedPhrase = findBannedGeneratedPhrase;
 __m_generation_client_js.assertNoBannedGeneratedPhrase = assertNoBannedGeneratedPhrase;
 __m_generation_client_js.normalizeConnectionManagerError = normalizeConnectionManagerError;
 __m_generation_client_js.TOKEN_COUNT_TIMEOUT_MS = TOKEN_COUNT_TIMEOUT_MS;
+__m_generation_client_js.UPSTREAM_CUTOFF_HINT_MS = UPSTREAM_CUTOFF_HINT_MS;
 __m_generation_client_js.GENERATED_PHRASE_EVIDENCE_KEYS = GENERATED_PHRASE_EVIDENCE_KEYS;
 }
 
@@ -31194,7 +31242,7 @@ function showChooser() {
         const draft = mode === core_constants.MODE.PHONE && ready ? core_cache.loadPhoneGenerationDraft(context) : null;
         const actionText = mode === core_constants.MODE.INBOX ? (generating ? '收信中…' : '收取新信') : generating ? '生成中…' : draft ? `继续生成 · ${draft.completedApps.length}/${draft.plan.apps.length}` : generated ? (isCalendar ? '刷新日历' : '增量追加') : (isCalendar ? '生成日历' : '生成这一项');
         return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} ${generating ? 'generating' : ''} rmt-archive-portal-${core_text.esc(meta.accent)}">
-          <button type="button" class="rmt-portal-open" ${generated || (ready && [core_constants.MODE.INBOX, core_constants.MODE.PHONE, core_constants.MODE.TIME_JOURNEY].includes(mode)) ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
+          <button type="button" class="rmt-portal-open" ${generated || (ready && [core_constants.MODE.INBOX, core_constants.MODE.PHONE].includes(mode)) ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
             <span class="rmt-portal-avatar"><i class="fa-solid ${core_text.esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
             <span class="rmt-portal-title">${core_text.esc(meta.title)}</span>
             <span class="rmt-portal-subtitle">${core_text.esc(meta.subtitle)}</span>
@@ -31370,6 +31418,7 @@ function emptyArchiveMode(mode, memory, context, stored) {
 }
 
 function openCachedOrGenerate(mode) {
+    if (!Object.values(core_constants.MODE).includes(mode)) return;
     if (runtimeState.activeArchiveSnapshot) {
         const snapshot = runtimeState.activeArchiveSnapshot;
         const cached = core_cache.loadSession(mode, { chatId: snapshot.chatId, memoryBank: snapshot.memory, cache: snapshot.cache, clone: true }) || emptyArchiveMode(mode, snapshot.memory, null, snapshot.cache);
@@ -32403,7 +32452,6 @@ function modePortalMeta(mode) {
         [core_constants.MODE.ITEMS]: { title: '他的物品', subtitle: '翻找各种收纳容器与私人物件', icon: 'fa-box-open', accent: 'items' },
         [core_constants.MODE.INBOX]: { title: '你的邮箱', subtitle: '寄给你的信 · 远方明信片', icon: 'fa-envelope', accent: 'album' },
         [core_constants.MODE.PAST_LIVES]: { title: '前世今生', subtitle: '另一段人生 · 旧梦卷宗与今生回响', icon: 'fa-scroll', accent: 'ending' },
-        [core_constants.MODE.TIME_JOURNEY]: { title: '时空旅行者的妻子', subtitle: '不由自主的离开 · 等待与重逢', icon: 'fa-hourglass-half', accent: 'butterfly' },
         [core_constants.MODE.TIME_ECHO]: { title: '时空回响', subtitle: '另一端的你 · 另一刻的声音', icon: 'fa-wave-square', accent: 'phone' },
         [core_constants.MODE.PHONE]: { title: '他的私人终端', subtitle: '通讯、草稿与私人记录', icon: 'fa-mobile-screen-button', accent: 'phone' },
         [core_constants.MODE.TRAVEL]: { title: '他的出行路线', subtitle: '附近对话与远方文字明信片', icon: 'fa-map-location-dot', accent: 'travel' },
@@ -32866,10 +32914,12 @@ async function waitForProviderPacing(signal = null) {
 }
 
 function createProviderPermitRelease() {
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     let released = false;
     return () => {
         if (released) return;
         released = true;
+        if (runtimeState.runtimeLifecycleEpoch !== lifecycleEpoch) return;
         runtimeState.activeProviderRequestCount = Math.max(0, runtimeState.activeProviderRequestCount - 1);
         drainProviderRequestQueue();
     };
@@ -32950,10 +33000,10 @@ function runGenerationRequestWithTimeout(factory, controller, timeoutMs, statusT
     });
 }
 
-// A rate limit is the one failure that is almost always worth waiting out, so it gets
-// its own attempt budget instead of sharing the single validation retry.
+// Every segment gets at most one automatic retry, including rate limits.
+// A composite may have multiple distinct segments; accepted segments are reused.
 const MAX_SEGMENT_ATTEMPTS = 2;
-const MAX_RATE_LIMIT_ATTEMPTS = 4;
+const MAX_RATE_LIMIT_ATTEMPTS = MAX_SEGMENT_ATTEMPTS;
 
 function isRateLimitError(error) {
     return error?.code === 'RMT_CONNECTION_RATE_LIMIT';
@@ -37179,7 +37229,7 @@ function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchiveSnapsho
         const generating = core_requestCoordinator.isArchiveTargetModeGenerating(mode, snapshot);
         const editAction = canGenerateDerived ? `<button type="button" class="rmt-btn rmt-portal-generate" data-rmt-generate-mode="${core_text.esc(mode)}" ${generated ? 'data-rmt-regenerate="true"' : ''} ${generating ? 'disabled' : ''}>${generating ? '生成中…' : mode === core_constants.MODE.INBOX ? '收取新信' : mode === core_constants.MODE.PHONE ? (generated ? '追加 / 继续' : '生成 / 继续') : generated ? '增量追加' : '生成这一项'}</button>` : '';
         return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} rmt-archive-portal-${core_text.esc(meta.accent)}">
-          <button type="button" class="rmt-portal-open" ${generated || [core_constants.MODE.INBOX, core_constants.MODE.PHONE, core_constants.MODE.TIME_JOURNEY].includes(mode) ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
+          <button type="button" class="rmt-portal-open" ${generated || [core_constants.MODE.INBOX, core_constants.MODE.PHONE].includes(mode) ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
             <span class="rmt-portal-avatar"><i class="fa-solid ${core_text.esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
             <span class="rmt-portal-title">${core_text.esc(meta.title)}</span>
             <span class="rmt-portal-subtitle">${core_text.esc(meta.subtitle)}</span>
@@ -38184,6 +38234,9 @@ const runtimeState = __m_core_state_js.state;
 // Per-fence clear markers survive cache merges: an older metadata mirror must not
 // resurrect a completed/deleted journal merely because its cache clock is newer.
 const GENERATION_RECOVERY_CLEARED_KEY = '__generationRecoveryClearedV1';
+// Retired story data remains inert in existing saves; it is never an active mode.
+const RETIRED_STORY_MODE = 'timeJourney';
+const STORED_MODES = Object.freeze([...Object.values(core_constants.MODE), RETIRED_STORY_MODE]);
 
 function recoveryCleared(cache, mode) {
     const cleared = cache?.[GENERATION_RECOVERY_CLEARED_KEY];
@@ -38271,7 +38324,7 @@ function mergeModeWriteFences(baseCache, canonicalCache) {
     const base = baseCache?.[core_constants.MODE_WRITE_FENCES_CACHE_KEY];
     const canonical = canonicalCache?.[core_constants.MODE_WRITE_FENCES_CACHE_KEY];
     const merged = Object.create(null);
-    for (const mode of Object.values(core_constants.MODE)) {
+    for (const mode of STORED_MODES) {
         const left = normalizedModeWriteFence(base?.[mode]);
         const right = normalizedModeWriteFence(canonical?.[mode]);
         const winner = !left ? right : !right ? left
@@ -38284,7 +38337,7 @@ function mergeModeWriteFences(baseCache, canonicalCache) {
 }
 
 function discardSessionsBehindModeFences(cache) {
-    for (const mode of Object.values(core_constants.MODE)) {
+    for (const mode of STORED_MODES) {
         const fence = modeWriteFenceForCache(cache, mode);
         if (!fence || !cache?.[mode]) continue;
         const sessionFence = core_text.normalizeText(cache[mode]?.[core_constants.SESSION_MODE_WRITE_FENCE_KEY], 240);
@@ -38298,8 +38351,12 @@ function discardSessionsBehindModeFences(cache) {
     const journals = cache?.[generation_recovery.GENERATION_RECOVERY_CACHE_KEY];
     if (journals && typeof journals === 'object') {
         for (const mode of Object.keys(journals)) {
+            if (mode === RETIRED_STORY_MODE) {
+                if (recoveryCleared(cache, mode)) delete journals[mode];
+                continue; // Preserve opaque retired drafts without offering recovery.
+            }
             const journal = journals[mode];
-            if (!Object.values(core_constants.MODE).includes(mode) || recoveryCleared(cache, mode)
+            if (!STORED_MODES.includes(mode) || recoveryCleared(cache, mode)
                 || !generation_recovery.generationRecoverySummary(journal)
                 || journal.identity?.mode !== mode
                 || journal.identity?.chatId !== cache.chatId
@@ -38317,7 +38374,7 @@ function mergeCacheSnapshotsWithModeFences(primary, secondary, supplied, canonic
     if (Object.keys(mergedFences).length) merged[core_constants.MODE_WRITE_FENCES_CACHE_KEY] = mergedFences;
     else delete merged[core_constants.MODE_WRITE_FENCES_CACHE_KEY];
     const cleared = Object.create(null);
-    for (const mode of Object.values(core_constants.MODE)) {
+    for (const mode of STORED_MODES) {
         const fence = modeWriteFenceForCache(merged, mode);
         for (const source of [supplied, canonical]) {
             if (Object.prototype.hasOwnProperty.call(source?.[GENERATION_RECOVERY_CLEARED_KEY] || {}, mode)
@@ -38337,14 +38394,14 @@ function mergeCacheSnapshotsWithModeFences(primary, secondary, supplied, canonic
     }
     merged[GENERATION_RECOVERY_CLEARED_KEY] = cleared;
     discardSessionsBehindModeFences(merged);
-    for (const mode of Object.values(core_constants.MODE)) {
+    for (const mode of STORED_MODES) {
         if (!merged[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode] && fallback[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode]) {
             merged[generation_recovery.GENERATION_RECOVERY_CACHE_KEY] ||= {};
             merged[generation_recovery.GENERATION_RECOVERY_CACHE_KEY][mode] = cloneCacheValue(fallback[generation_recovery.GENERATION_RECOVERY_CACHE_KEY][mode]);
         }
     }
     discardSessionsBehindModeFences(merged);
-    for (const mode of Object.values(core_constants.MODE)) {
+    for (const mode of STORED_MODES) {
         if (merged?.[mode] || !fallback?.[mode]) continue;
         const wantedFence = modeWriteFenceForCache(merged, mode);
         const candidateFence = core_text.normalizeText(fallback[mode]?.[core_constants.SESSION_MODE_WRITE_FENCE_KEY], 240);
@@ -39193,12 +39250,19 @@ async function saveImportedMemoryOperation(context, memoryBank, expectedChatId =
                 candidate = mergeCacheSnapshotsWithModeFences(primary, secondary, candidate, recovered);
             }
         }
-        if (candidate && typeof candidate === 'object' && (options.presentationOnly || Object.values(core_constants.MODE).some(mode => candidate?.[mode]?.kind === mode))) {
+        if (candidate && typeof candidate === 'object' && (options.presentationOnly || STORED_MODES.some(mode => candidate?.[mode]?.kind === mode)
+            || Object.prototype.hasOwnProperty.call(candidate[generation_recovery.GENERATION_RECOVERY_CACHE_KEY] || {}, RETIRED_STORY_MODE))) {
             preservedCache = cloneCacheValue(candidate);
             if (!options.presentationOnly) {
                 // A new evidence revision cannot inherit an unfinished request identity.
-                delete preservedCache[generation_recovery.GENERATION_RECOVERY_CACHE_KEY];
-                delete preservedCache[GENERATION_RECOVERY_CLEARED_KEY];
+                for (const key of [generation_recovery.GENERATION_RECOVERY_CACHE_KEY, GENERATION_RECOVERY_CLEARED_KEY]) {
+                    const previous = preservedCache[key];
+                    delete preservedCache[key];
+                    // Retired drafts keep their original identity as inert backup data.
+                    if (Object.prototype.hasOwnProperty.call(previous || {}, RETIRED_STORY_MODE)) {
+                        preservedCache[key] = { [RETIRED_STORY_MODE]: previous[RETIRED_STORY_MODE] };
+                    }
+                }
                 archive_repository.migrateDerivedCacheRevision(preservedCache, previousMemory, stagedMemory);
             }
             if (options.expectedTaskOrigin) {
@@ -39943,6 +40007,7 @@ async function flushSessionCacheNow(expectedChatId = '', expectedTaskOrigin = nu
 }
 
 function loadSession(mode, options = {}) {
+    if (!Object.values(core_constants.MODE).includes(mode)) return null;
     try {
         const suppliedCache = options.cache && typeof options.cache === 'object' ? options.cache : null;
         const context = options.context || (suppliedCache ? null : core_context.currentCharacterGuard());

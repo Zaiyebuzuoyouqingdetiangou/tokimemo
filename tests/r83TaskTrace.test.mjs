@@ -1,0 +1,160 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import * as trace from '../src/core/taskTrace.js';
+
+function clock(t) {
+    const original = Date.now;
+    let now = 1000;
+    Date.now = () => now;
+    trace.clearTaskTrace();
+    t.after(() => { Date.now = original; trace.clearTaskTrace(); });
+    return ms => { now += ms; };
+}
+
+test('stage durations measure started work and include elapsed running work without inventing mark-only durations', t => {
+    const tick = clock(t);
+    const entry = trace.startTaskTrace('PRIVATE_CHAT', 'phone');
+    tick(30); trace.markStage(entry, 'start');
+    trace.beginStage(entry, 'queue');
+    tick(20); trace.beginStage(entry, 'queue');
+    tick(30);
+    let row = trace.taskTraceSnapshot()[0];
+    assert.equal(row.activeStage, 'queue');
+    assert.deepEqual(row.durations, { queue: 50 });
+    trace.markStage(entry, 'queue');
+    trace.beginStage(entry, 'prompt');
+    tick(5); trace.beginStage(entry, 'token-count');
+    tick(10); trace.markStage(entry, 'token-count');
+    tick(5); trace.markStage(entry, 'prompt');
+    tick(500);
+    row = trace.taskTraceSnapshot()[0];
+    assert.deepEqual(row.durations, { prompt: 20, 'token-count': 10, queue: 50 });
+    assert.ok(row.stages.includes('queue@80ms'));
+    assert.equal(row.ms, 600);
+});
+
+test('concurrent children isolate timings and aggregate completed durations and stages exactly once', t => {
+    const tick = clock(t);
+    const parent = trace.startTaskTrace('PRIVATE_PARENT', 'album');
+    const first = trace.startTaskTrace('PRIVATE_FIRST', 'album', parent);
+    trace.beginStage(first, 'queue');
+    tick(10);
+    const second = trace.startTaskTrace('PRIVATE_SECOND', 'album', parent);
+    trace.beginStage(second, 'request');
+    tick(20);
+    trace.finishSegmentTrace(parent, second, 'ok');
+    let row = trace.taskTraceSnapshot()[0];
+    assert.equal(row.requests[0].activeStage, 'queue');
+    assert.deepEqual(row.requests[0].durations, { queue: 30 });
+    assert.deepEqual(row.requests[1].durations, { request: 20 });
+    assert.deepEqual(row.durations, { request: 20 });
+    const stages = [...row.stages];
+    tick(10); trace.finishSegmentTrace(parent, second, 'ok');
+    row = trace.taskTraceSnapshot()[0];
+    assert.deepEqual(row.stages, stages);
+    assert.deepEqual(row.durations, { request: 20 });
+    trace.finishSegmentTrace(parent, first, 'failed', { code: 'RMT_CONNECTION_FAILED' });
+    trace.endTaskTrace(parent, 'failed');
+    tick(100);
+    row = trace.taskTraceSnapshot()[0];
+    assert.deepEqual(row.durations, { request: 20, queue: 40 });
+    assert.deepEqual(row.requests[0].durations, { queue: 40 });
+    assert.equal(row.requests[0].activeStage, '');
+    assert.ok(row.requests[0].stages.includes('queue!@40ms'));
+    assert.equal(row.ms, 40);
+});
+
+test('new request attempts clear stale summaries and export only whitelisted retry codes', t => {
+    const tick = clock(t);
+    const parent = trace.startTaskTrace('PRIVATE_PARENT', 'phone');
+    const entry = trace.startTaskTrace('PRIVATE_CHILD', 'phone', parent);
+    trace.beginRequestAttempt(entry);
+    trace.recordInput(entry, 123, 42);
+    trace.recordResponse(entry, { shape: 'content', finalChars: 77, reasoningChars: 0, finishReason: 'stop' });
+    trace.recordRetry(entry, { code: 'RMT_JSON_NOT_FOUND', message: 'PRIVATE_RESPONSE' });
+    trace.beginStage(entry, 'retry'); tick(50); trace.markStage(entry, 'retry');
+    trace.beginRequestAttempt(entry);
+    let row = trace.taskTraceSnapshot()[0].requests[0];
+    assert.equal(row.attempt, 2);
+    assert.equal(row.retryCode, 'RMT_JSON_NOT_FOUND');
+    assert.equal(row.input, undefined);
+    assert.equal(row.response, undefined);
+    assert.deepEqual(row.durations, { retry: 50 });
+    trace.recordRetry(entry, { code: 'RMT_PRIVATE_SECRET', message: 'PRIVATE_SECRET' });
+    trace.recordInput(entry, 90, 30);
+    trace.recordResponse(entry, { shape: 'content', finalChars: 13, finishReason: 'stop' });
+    trace.finishSegmentTrace(parent, entry, 'ok');
+    row = trace.taskTraceSnapshot()[0];
+    assert.equal(row.attempt, 2);
+    assert.equal(row.retryCode, 'RMT_UNCODED');
+    assert.equal(row.response.finalChars, 13);
+    trace.beginRequestAttempt(entry);
+    assert.equal(entry.attempt, 2);
+    assert.doesNotMatch(JSON.stringify(row), /PRIVATE_|SECRET/);
+});
+
+test('trace snapshots retain bounded tasks, children, stages, attempts and duration labels', t => {
+    const tick = clock(t);
+    let parent;
+    for (let i = 0; i < 10; i++) parent = trace.startTaskTrace('PRIVATE_CHAT', 'phone');
+    for (let i = 0; i < 6; i++) trace.startTaskTrace('PRIVATE_CHILD', 'phone', parent);
+    for (let i = 0; i < 30; i++) trace.markStage(parent, 'parse');
+    trace.beginStage(parent, 'pacing');
+    tick(8 * 24 * 60 * 60 * 1000);
+    parent.attempt = 1e30;
+    parent.durations.PRIVATE_PROMPT = 999;
+    parent.durations.queue = -3;
+    parent.retryCode = 'PRIVATE_RESPONSE';
+    trace.beginStage(parent, 'PRIVATE_STAGE');
+    const rows = trace.taskTraceSnapshot();
+    const row = rows.at(-1);
+    assert.equal(rows.length, 8);
+    assert.equal(row.requests.length, 4);
+    assert.equal(row.stages.length, 24);
+    assert.equal(row.attempt, 9999);
+    assert.equal(row.ms, 7 * 24 * 60 * 60 * 1000);
+    assert.equal(row.durations.pacing, row.ms);
+    assert.equal(row.durations.queue, 0);
+    assert.equal(row.activeStage, 'pacing');
+    assert.doesNotMatch(JSON.stringify(rows), /PRIVATE_/);
+});
+
+test('transport attempts count only explicit sends and survive child eviction without merge duplication', t => {
+    clock(t);
+    const parent = trace.startTaskTrace('PRIVATE_PARENT', 'phone');
+    const first = trace.startTaskTrace('PRIVATE_FIRST', 'phone', parent);
+    trace.beginRequestAttempt(first);
+    trace.beginRequestAttempt(first);
+    assert.equal(trace.taskTraceSnapshot()[0].providerRequests, 0);
+    trace.recordProviderRequest(first);
+    trace.recordProviderRequest(first);
+    assert.equal(trace.taskTraceSnapshot()[0].providerRequests, 2);
+    trace.finishSegmentTrace(parent, first, 'ok');
+    trace.finishSegmentTrace(parent, first, 'ok');
+    assert.equal(trace.taskTraceSnapshot()[0].providerRequests, 2);
+    let child;
+    for (let i = 0; i < 5; i++) {
+        child = trace.startTaskTrace('PRIVATE_NEXT', 'phone', parent);
+        trace.recordProviderRequest(child);
+    }
+    const leaf = trace.startTaskTrace('PRIVATE_LEAF', 'phone', child);
+    trace.recordProviderRequest(leaf);
+    let row = trace.taskTraceSnapshot()[0];
+    assert.equal(row.requests.length, 4);
+    assert.equal(row.providerRequests, 8);
+    assert.equal(row.requests.at(-1).providerRequests, 2);
+    assert.equal(leaf.providerRequests, 1);
+    trace.finishSegmentTrace(child, leaf, 'ok');
+    trace.finishSegmentTrace(parent, child, 'failed', { code: 'RMT_PHONE_EVIDENCE', message: 'PRIVATE_BODY' });
+    row = trace.taskTraceSnapshot()[0];
+    assert.equal(row.providerRequests, 8);
+    assert.equal(row.requests.at(-1).code, 'RMT_PHONE_EVIDENCE');
+    assert.doesNotMatch(JSON.stringify(row), /PRIVATE_/);
+    parent.providerRequests = 999999;
+    trace.recordProviderRequest(parent); trace.recordProviderRequest(parent);
+    assert.equal(trace.taskTraceSnapshot()[0].providerRequests, 1000000);
+    trace.clearTaskTrace();
+    assert.deepEqual(trace.taskTraceSnapshot(), []);
+    trace.startTaskTrace('PRIVATE_NEW', 'phone');
+    assert.equal(trace.taskTraceSnapshot()[0].providerRequests, 0);
+});

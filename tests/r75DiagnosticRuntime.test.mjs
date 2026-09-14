@@ -81,3 +81,26 @@ test('legacy cache diagnostic never enumerates keys or enters derived sessions',
     assert.equal(report.storage.base64Chars, 0);
     assert.deepEqual(fixture.calls(), { hostCalls: 0, storageWrites: 0 });
 });
+
+test('pending work includes queued generation while the exclusive archive busy flag is false', () => {
+    const fixture = installContext(null);
+    const previous = { busy: state.busy, tasks: state.activeGenerationTasks, queue: state.providerRequestQueue };
+    try {
+        state.busy = false;
+        state.activeTaskLabel = '';
+        state.activeGenerationTasks = new Map([['PRIVATE_TASK', { label: 'PRIVATE_CONTENT' }]]);
+        state.providerRequestQueue = [{ signal: 'PRIVATE_SIGNAL' }];
+        const report = buildDiagnosticReport();
+        assert.equal(report.runtime.busy, false);
+        assert.equal(report.runtime.hasActiveTask, false);
+        assert.equal(report.runtime.hasPendingWork, true);
+        assert.equal(report.runtime.generationTasks, 1);
+        assert.equal(report.runtime.providerQueued, 1);
+        assert.doesNotMatch(JSON.stringify(report), /PRIVATE_/);
+        assert.deepEqual(fixture.calls(), { hostCalls: 0, storageWrites: 0 });
+    } finally {
+        state.busy = previous.busy;
+        state.activeGenerationTasks = previous.tasks;
+        state.providerRequestQueue = previous.queue;
+    }
+});

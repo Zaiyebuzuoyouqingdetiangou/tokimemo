@@ -12,9 +12,6 @@ const bank = { version: 3, chatId: 'time-story-chat', archiveRevision: 'time-r1'
 const echo = () => ({ title: '明日的雨声', opening: '窗外的雨还没有落下，听筒先传来雨声。', closing: '林舟把原定的车票放回抽屉。',
     palette: 'blue', motif: '雨落在窗沿', medium: { kind: 'phone', label: '旧电话' }, ends: [{ role: 'char', time: '今夜' }, { role: 'user', time: '三年后的今夜' }],
     lines: [{ speaker: 'a', text: '你那边怎么也在下雨？' }, { speaker: 'b', text: '明天别坐那班车。' }], message: '换一班车，带上那封信。' });
-const journey = () => ({ title: '你来得比春天早', opening: '林舟无法决定自己何时离开。', closing: '这次，小月终于能把花亲手交给他。', palette: 'moss', motif: '尚未开放的花', traveler: 'char',
-    encounters: [{ title: '初见', charTime: '第一次跳跃', userTime: '离别以后', charOrder: 1, userOrder: 2, charKnows: '还不认识她', userKnows: '知道他会回来', text: '小月叫出了陌生人的名字。' },
-        { title: '旧约', charTime: '最后一次归来', userTime: '春天以前', charOrder: 2, userOrder: 1, text: '林舟没有解释那句迟到的问候。' }] });
 const episode = (mode, raw, opts = {}) => stories.normalizeTimeStoryEpisode(mode, raw, bank, { id: 'TS01', presentation: 'modern', ...opts });
 const sessionFor = (mode, raw) => ({ ...stories.emptyTimeStories(mode, bank), episodes: [episode(mode, raw)], selectedId: 'TS01', view: 'story' });
 
@@ -42,27 +39,15 @@ test('media follows controlled technology; unknown worlds do not acquire phones 
     assert.equal(episode('timeEcho', future, { profile: { technology: 'future', worldStyle: 'scifi' } }).presentation, 'scifi');
 });
 
-test('journey preserves personal time orders without requiring an artificial inversion', () => {
-    const result = episode('timeJourney', journey());
-    assert.deepEqual(result.encounters.map(item => item.id), ['S01', 'S02']);
-    assert.deepEqual([...result.encounters].sort((a, b) => a.userOrder - b.userOrder).map(item => item.id), ['S02', 'S01']);
-    const sequential = journey(); sequential.encounters.forEach((item, i) => item.userOrder = i + 3);
-    assert.deepEqual(episode('timeJourney', sequential).encounters.map(item => item.userOrder), [3, 4]);
-    for (const orders of [[1, 1], [0, 2], [1.5, 2], [1, Number.MAX_SAFE_INTEGER + 1]]) {
-        const raw = journey(); raw.encounters.forEach((item, i) => item.userOrder = orders[i]);
-        assert.throws(() => episode('timeJourney', raw), { code: 'RMT_TIME_STORY_STRUCTURE' });
-    }
-});
-
 test('stored reading checks structure and archive identity without reinterpreting old prose', () => {
-    const session = sessionFor('timeJourney', journey());
+    const session = sessionFor('timeEcho', echo());
     session.episodes[0].closing = '旧故事中的前任与别人结婚。';
     assert.ok(stories.readableTimeStoriesSession(session, bank));
     assert.equal(stories.readableTimeStoriesSession(session, { ...bank, chatId: 'other-chat' }), null);
     assert.equal(stories.readableTimeStoriesSession(session, { ...bank, archiveRevision: 'other-revision' }), null);
     assert.equal(stories.readableTimeStoriesSession(session, { ...bank, characterName: '另一人' }), null);
     assert.equal(stories.readableTimeStoriesSession(session, { ...bank, userName: '另一个用户' }), null);
-    const malformed = structuredClone(session); malformed.episodes[0].encounters[1].id = 'S01';
+    const malformed = structuredClone(session); malformed.episodes.push(structuredClone(malformed.episodes[0]));
     assert.equal(stories.readableTimeStoriesSession(malformed, bank), null);
 });
 
@@ -87,15 +72,12 @@ test('new fiction rejects third-party romance without requiring present-day marr
     assert.ok(episode('timeEcho', { ...echo(), title: '雨', opening: '雨。', closing: '晴。' }));
 });
 
-test('reading state clamps missing selections and dialogue position and preserves supported timeline tabs', () => {
+test('reading state clamps missing selections and dialogue position and preserves the echo reading flag', () => {
     const session = sessionFor('timeEcho', echo());
     assert.equal(contract.timeStoryReadingState({ ...session, dialogueIndex: 100000 }).dialogueIndex, 2);
     assert.equal(contract.timeStoryReadingState({ ...session, dialogueIndex: -1 }).dialogueIndex, 0);
     assert.equal(contract.timeStoryReadingState({ ...session, selectedId: 'missing' }).view, 'library');
-    const pair = sessionFor('timeJourney', journey());
-    const ui = contract.timeStoryReadingState({ ...pair, selectedEntryId: 'missing', tab: 'user' });
-    assert.equal(ui.selectedEntryId, 'S01'); assert.equal(ui.tab, 'user');
-    assert.equal(contract.timeStoryReadingState({ ...pair, reading: true }).reading, true, 'journey closing remains visible');
+    assert.equal(contract.timeStoryReadingState({ ...session, reading: true }).reading, true);
 });
 
 function providerFixture(t) {
@@ -170,12 +152,12 @@ test('unknown stored versions and mismatched previous identity stop before a pai
     assert.equal(f.requests.length, 0);
 });
 
-test('the complete journey is accepted in one request and stale live source identity is rejected before requesting', async t => {
-    const f = providerFixture(t); f.setResponse(journey());
-    const result = await stories.generateTimeStoryWithRepair('timeJourney', f.ctx, f.memory, f.origin, 'journey-fixture', { presentationContext: f.presentationContext });
-    assert.equal(f.requests.length, 1); assert.equal(result.episodes[0].encounters.length, 2);
+test('the complete echo is accepted in one request and stale live source identity is rejected before requesting', async t => {
+    const f = providerFixture(t); f.setResponse(echo());
+    const result = await stories.generateTimeStoryWithRepair('timeEcho', f.ctx, f.memory, f.origin, 'echo-source-fixture', { presentationContext: f.presentationContext });
+    assert.equal(f.requests.length, 1); assert.equal(result.episodes[0].lines.length, 2);
     f.ctx.name1 = '已切换的用户';
-    await assert.rejects(stories.generateTimeStoryWithRepair('timeJourney', f.ctx, f.memory, f.origin, 'journey-stale', { presentationContext: f.presentationContext }), { code: 'RMT_TIME_STORY_SOURCE' });
+    await assert.rejects(stories.generateTimeStoryWithRepair('timeEcho', f.ctx, f.memory, f.origin, 'echo-stale', { presentationContext: f.presentationContext }), { code: 'RMT_TIME_STORY_SOURCE' });
     assert.equal(f.requests.length, 1);
 });
 

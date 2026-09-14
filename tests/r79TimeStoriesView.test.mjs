@@ -11,12 +11,8 @@ function story(kind = 'timeEcho') {
     if (kind === 'timeEcho') Object.assign(episode, { medium: { kind: 'relic', label: '传音铜铃' },
         ends: [{ role: 'char', time: '冬至之前' }, { role: 'char', time: '冬至之后' }],
         lines: [{ speaker: 'a', text: '你是否记得那条路？' }, { speaker: 'b', text: '不要走向城门。' }], message: '避开城门' });
-    else Object.assign(episode, { traveler: 'user', encounters: [
-        { id: 'S01', title: '初见', charTime: '春日', userTime: '暮年', charOrder: 1, userOrder: 2, charKnows: '尚不相识', userKnows: '记得每次告别', text: '她知道他的名字。' },
-        { id: 'S02', title: '再会', charTime: '秋夜', userTime: '少年时', charOrder: 2, userOrder: 1, charKnows: '一直在等待', userKnows: '第一次相见', text: '这次换他伸出手。' },
-    ] });
     return { kind, version: 1, chatId: 'chat-a', archiveRevision: 'rev-a', ownerKey: '', characterName: '甲', userName: '乙',
-        title: kind === 'timeEcho' ? '时空回响' : '错时相逢', episodes: [episode], selectedId: 'TS01', selectedEntryId: '', view: 'story', dialogueIndex: 0, reading: false, tab: 'story' };
+        title: '时空回响', episodes: [episode], selectedId: 'TS01', selectedEntryId: '', view: 'story', dialogueIndex: 0, reading: false, tab: 'story' };
 }
 
 test('echo distinguishes both times of one person and uses the world-specific medium', () => {
@@ -34,16 +30,6 @@ test('echo reveals one local line at a time and shows the result only after the 
     assert.match(html, /不要走向城门/); assert.doesNotMatch(html, /避开城门/);
     session.dialogueIndex = 2; html = view.timeStoriesHtml(session);
     assert.match(html, /避开城门/); assert.match(html, /他终于走向另一条路/);
-});
-
-test('journey shows both personal timelines and changes encounter order by viewpoint', () => {
-    const session = story('timeJourney');
-    let html = view.timeStoriesHtml(session);
-    assert.match(html, /data-rmt-time-lane="char"/); assert.match(html, /data-rmt-time-lane="user"/);
-    assert.match(html, /暮年/); assert.match(html, /少年时/);
-    session.tab = 'user'; session.selectedEntryId = 'S02'; html = view.timeStoriesHtml(session);
-    assert.match(html, /第一次相见/); assert.match(html, /一直在等待/);
-    assert.match(html, /这次换他伸出手/);
 });
 
 test('read-only shelves hide generation but keep local reading and terminal navigation', () => {
@@ -117,15 +103,6 @@ test('historical echo reading works locally and never changes saved content or l
     assert.match(f.body.innerHTML, /避开城门/);
     assert.equal(view.closeTimeStoryDetail(), true); assert.equal(f.session.view, 'library');
     assert.equal(view.handleTimeStoryAction('generate'), false);
-    assert.equal(f.requests(), 0); assert.equal(JSON.stringify(f.saved), before);
-});
-
-test('journey viewpoint changes select the corresponding first encounter and reveal ending locally', t => {
-    const f = readerFixture(t, 'timeJourney'); const before = JSON.stringify(f.saved);
-    assert.equal(view.handleTimeStoryAction('order', 'user'), true);
-    assert.equal(f.session.tab, 'user'); assert.equal(f.session.selectedEntryId, 'S02');
-    view.handleTimeStoryAction('next-scene'); assert.equal(f.session.selectedEntryId, 'S01');
-    view.handleTimeStoryAction('ending'); assert.equal(f.session.reading, true); assert.match(f.body.innerHTML, /他终于走向另一条路/);
     assert.equal(f.requests(), 0); assert.equal(JSON.stringify(f.saved), before);
 });
 

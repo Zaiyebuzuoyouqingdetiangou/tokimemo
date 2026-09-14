@@ -1,5 +1,5 @@
-const VERSION = '0.8.76';
-const BUILD = '0.8.76-tt-cg-r81.0';
+const VERSION = '0.8.78';
+const BUILD = '0.8.78-tt-cg-r83.0';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -9,7 +9,7 @@ const MEMORY_KEY = 'heartbeatMemoriesArchiveV3';
 const CACHE_STORAGE_FORMAT = 'gzip-base64-v1';
 const DIAGNOSTIC_ID = 'heartbeat_memories_external_diagnostic';
 const DIAGNOSTIC_STYLE_ID = DIAGNOSTIC_ID + '_style';
-const DIAGNOSTIC_MODES = Object.freeze(['butterfly', 'album', 'adv', 'room', 'items', 'cabinet', 'phone', 'inbox', 'pastLives', 'timeEcho', 'timeJourney', 'travel', 'ending', 'calendar', 'relations', 'heart', 'achievements']);
+const DIAGNOSTIC_MODES = Object.freeze(['butterfly', 'album', 'adv', 'room', 'items', 'cabinet', 'phone', 'inbox', 'pastLives', 'timeEcho', 'travel', 'ending', 'calendar', 'relations', 'heart', 'achievements']);
 const boundedCount = value => typeof value === 'number' && Number.isFinite(value)
     ? Math.max(0, Math.min(1_000_000_000, Math.floor(value))) : 0;
 
