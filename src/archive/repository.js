@@ -4,12 +4,14 @@ import * as core_cache from '../core/cache.js';
 import * as image_patch from '../core/cgImagePatch.js';
 import * as core_archiveCover from '../core/archiveCover.js';
 import * as core_constants from '../core/constants.js';
+import * as cast_looks from '../core/castLooks.js';
 import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
+import * as core_taskTrace from '../core/taskTrace.js';
 import * as core_text from '../core/text.js';
 import * as archive_memoryFileImport from './memoryFileImport.js';
 import * as archive_memoryProviders from './memoryProviders.js';
@@ -1857,6 +1859,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         if (!memories.length) throw new Error('当前档案没有可保存的共同记忆。');
 
         runtimeState.activeTaskLabel = `正在整理档案简介…`;
+        core_taskTrace.markStage(runtimeState.activeTaskTrace, 'profile');
         ui_overlay.updateBackgroundTaskLabel(runtimeState.activeTaskLabel);
         await core_context.yieldToUi();
         if (automatic) assertPreparationCurrent();
@@ -1871,14 +1874,23 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
                 { maxTokens: 8192, temperature: Math.min(settings.temperature, 0.35), contextEnvelope, signal: importController.signal, context },
                 raw => checkedArchiveProfile(raw, memories));
         } catch (error) {
-            if (error?.name === 'AbortError' || ['RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_VALIDATION_CHANGED'].includes(error?.code)) throw error;
+            // Only a real cancellation may discard the run. The memories were already
+            // validated against the snapshot taken at import start, so a chat or setting
+            // change during the *summary* step is a reason to skip the summary, not to
+            // throw away every validated chunk and leave the chat with no archive.
+            if (error?.name === 'AbortError') throw error;
             profilePending = true;
+            core_taskTrace.markStage(runtimeState.activeTaskTrace, 'profile', false);
             console.warn('[HeartbeatMemories] archive profile generation failed; using existing/local fallback', core_text.safeErrorDiagnostic(error));
             profile = incrementalUpdate
                 ? { archiveName: existing.archiveName || fallbackArchiveName(memories), archiveSummary: existing.archiveSummary || fallbackArchiveSummary(memories), archiveVerdict: existing.archiveVerdict || null, keywords: core_text.cleanArray(existing.archiveKeywords, 10, 80) }
                 : normalizeArchiveProfile({}, memories);
-            globalThis.toastr?.warning?.(`回忆会继续保存；档案简介未更新。${core_text.safeErrorSummary(error)}`, '心迹回廊');
+            globalThis.toastr?.warning?.(`档案简介这一步没完成，回忆本身已全部保存。${core_text.safeErrorSummary(error)}`, '心迹回廊 · 档案简介');
         }
+        // Capture the chat's cast appearance here, where the card is already in hand.
+        // A record the user confirmed by hand is never replaced by this.
+        try { cast_looks.ensureCastLooks(context); } catch {}
+        core_taskTrace.markStage(runtimeState.activeTaskTrace, 'merge');
         if (incrementalUpdate) profile.archiveName = existing.archiveName || fallbackArchiveName(memories);
         const now = Date.now();
         const memoryBank = {
