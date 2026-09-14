@@ -80,46 +80,21 @@ export function sanitizeCgVisualText(value, limit = core_constants.MAX_CG_IMAGE_
 }
 
 
-// Appearance for image generation.
-//
-// The CG prompt previously carried only the scene, so the image model invented a new
-// character design every time — the "图文不符" everyone hits. Pull a bounded, appearance-only
-// slice of the character card and pin it to every prompt so all CGs of one character match.
-//
-// Appearance clauses only: plot, relationships and archive text must never reach the image
-// provider, so this filters by visual keywords and caps hard at 240 characters.
-const CG_APPEARANCE_HINT = /(头发|长发|短发|发色|发型|银发|黑发|金发|白发|红发|眼|瞳|身高|身形|体型|身材|穿|衣|袍|制服|西装|衬衫|外套|裙|肤色|皮肤|耳|角|尾|疤|痣|眼镜|面容|长相|样貌|hair|eyes?|tall|wears?|outfit)/i;
-
-export function characterAppearanceForCg(context = null) {
-    let fields = null;
-    try { fields = (context || core_context.getContext())?.getCharacterCardFields?.() || null; } catch { return ''; }
-    if (!fields) return '';
-    const raw = core_text.normalizeText([fields.description, fields.personality].filter(Boolean).join('\n'), 6000);
-    if (!raw) return '';
-    const picked = [];
-    for (const clause of raw.split(/[\n。；;!?！？]/)) {
-        const line = core_text.normalizeText(clause, 120);
-        if (!line || !CG_APPEARANCE_HINT.test(line)) continue;
-        picked.push(line);
-        if (picked.join('，').length >= 200) break;
-    }
-    return sanitizeCgVisualText(picked.join('，'), 240);
-}
-
 export function cgImagePromptForItem(item) {
     const saved = sanitizeCgVisualText(normalizeCgImageRecord(item?.cgImage)?.prompt);
     if (saved) return saved;
+    // Only the initial editable draft is composed here. Keep the event ahead of
+    // optional design details; never read a live card or rewrite a confirmed image.
+    const scene = sanitizeCgVisualText(item?.cgDesc || item?.desc, 1100);
     const authored = sanitizeCgVisualText(item?.imagePrompt, core_constants.MAX_CG_IMAGE_PROMPT_CHARS);
-    const visibleDescription = authored || sanitizeCgVisualText(item?.cgDesc || item?.desc, 1100);
     const seeds = core_text.cleanArray(item?.visualSeed, 10, 80).map(seed => sanitizeCgVisualText(seed, 80)).filter(Boolean);
-    const appearance = characterAppearanceForCg();
-    const prompt = [
-        'visual novel event CG, cinematic anime illustration, 16:9 landscape composition, no text, no subtitle, no logo, no watermark',
-        appearance ? `character design, keep identical across every image: ${appearance}` : '',
-        visibleDescription,
-        seeds.length ? `visible details: ${seeds.join(', ')}` : '',
-        'single coherent still image, expressive composition, scene-accurate clothing and environment',
-    ].filter(Boolean).join(', ');
+    const style = 'visual novel event CG, cinematic anime illustration, 16:9 landscape composition, no text, no subtitle, no logo, no watermark';
+    const framing = 'Preserve the scene participants, their actions and environment; character design is supporting detail.';
+    const details = seeds.length ? `visible details: ${seeds.join(', ').slice(0, 180)}` : '';
+    const fixed = [style, scene, framing, details].filter(Boolean).join(', ');
+    const room = Math.max(0, core_constants.MAX_CG_IMAGE_PROMPT_CHARS - fixed.length - 2);
+    const supplement = authored && authored !== scene ? authored.slice(0, room) : '';
+    const prompt = [style, scene, framing, supplement, details].filter(Boolean).join(', ');
     return core_text.normalizeText(prompt, core_constants.MAX_CG_IMAGE_PROMPT_CHARS);
 }
 
@@ -474,7 +449,7 @@ export async function drawSelectedCgImage({ promptOverride, expectedTarget = nul
             onProgress: progress => updateCgImageProgress(taskKey, progress),
         });
         const url = normalizeCgImageUrl(generated?.url);
-        if (!url) throw new Error('生图插件没有返回可保存的 SillyTavern 本地图片路径。');
+        if (!url) throw baibai_image.baiBaiImageError('BBI_SAVE_FAILED');
         if (runtimeState.cgImageLifecycleEpoch !== lifecycleEpoch) {
             globalThis.toastr?.warning?.('CG 已由生图扩展完成，但插件已重载/停用，因此没有接收旧运行实例的图片结果。', '心迹回廊');
             return;
