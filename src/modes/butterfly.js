@@ -261,7 +261,11 @@ export async function generateButterflyWithRepair(context, memoryBank, origin, t
     const savedSegments = generation_recovery.generationRecoverySegmentsForOrigin(origin) || [];
     const savedMain = savedSegments.find(segment => /:slot:0$/u.test(segment.slot));
     const legacyPlan = legacy_recovery.legacyButterflyPlan(memoryBank);
-    const continueLegacyPlan = !!savedMain && (!savedMain.contract || savedMain.contract === 'butterfly-legacy-plan-r62');
+    // Restored to the pre-r62 rules by request: the readable-r62 contract dropped every
+    // length/person quota and the fixed axis plan, which changed what the mode produces.
+    // A draft saved under the newer contract still resumes under that contract.
+    const savedReadableContract = savedMain?.contract === 'butterfly-readable-r62';
+    const continueLegacyPlan = !savedReadableContract;
     const attemptedLegacyBranches = continueLegacyPlan ? Math.max(0, ...savedSegments.map(segment => {
         const index = Number(segment.slot.match(/:slot:(\d+)$/u)?.[1]);
         return index > 0 && index <= legacyPlan.axes.length ? index : 0;

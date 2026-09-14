@@ -499,7 +499,7 @@ export function showChooser() {
         const draft = mode === core_constants.MODE.PHONE && ready ? core_cache.loadPhoneGenerationDraft(context) : null;
         const actionText = mode === core_constants.MODE.INBOX ? (generating ? '收信中…' : '收取新信') : generating ? '生成中…' : draft ? `继续生成 · ${draft.completedApps.length}/${draft.plan.apps.length}` : generated ? (isCalendar ? '刷新日历' : '增量追加') : (isCalendar ? '生成日历' : '生成这一项');
         return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} ${generating ? 'generating' : ''} rmt-archive-portal-${core_text.esc(meta.accent)}">
-          <button type="button" class="rmt-portal-open" ${generated || (ready && [core_constants.MODE.INBOX, core_constants.MODE.PHONE, core_constants.MODE.TIME_JOURNEY].includes(mode)) ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
+          <button type="button" class="rmt-portal-open" ${generated || (ready && [core_constants.MODE.INBOX, core_constants.MODE.PHONE].includes(mode)) ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
             <span class="rmt-portal-avatar"><i class="fa-solid ${core_text.esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
             <span class="rmt-portal-title">${core_text.esc(meta.title)}</span>
             <span class="rmt-portal-subtitle">${core_text.esc(meta.subtitle)}</span>
@@ -675,6 +675,7 @@ function emptyArchiveMode(mode, memory, context, stored) {
 }
 
 export function openCachedOrGenerate(mode) {
+    if (!Object.values(core_constants.MODE).includes(mode)) return;
     if (runtimeState.activeArchiveSnapshot) {
         const snapshot = runtimeState.activeArchiveSnapshot;
         const cached = core_cache.loadSession(mode, { chatId: snapshot.chatId, memoryBank: snapshot.memory, cache: snapshot.cache, clone: true }) || emptyArchiveMode(mode, snapshot.memory, null, snapshot.cache);

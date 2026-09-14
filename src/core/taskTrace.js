@@ -12,9 +12,13 @@ const MAX_TASKS = 8;
 const MAX_STAGES = 24;
 const MAX_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
 const STAGES = Object.freeze(['start', 'prompt', 'request', 'response', 'parse', 'validate',
-    'token-count', 'token-count-fallback', 'merge', 'profile', 'save', 'deferred', 'render', 'done', 'failed']);
+    'token-count', 'token-count-fallback', 'queue', 'pacing', 'retry', 'merge', 'profile', 'save', 'deferred', 'render', 'done', 'failed']);
 const trace = [];
-const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'pastLives', 'timeEcho', 'timeJourney', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
+// Timers stay separate from exported entries; concurrent segments cannot overwrite them.
+const stageStarts = new WeakMap();
+const mergedSegments = new WeakMap();
+const traceParents = new WeakMap();
+const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'pastLives', 'timeEcho', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
 const OUTCOMES = new Set(['running', 'ok', 'failed', 'cancelled', 'deferred', 'blocked', 'noop']);
 const CODES = new Set([
     ...Object.keys(core_backupDiagnostics.BACKUP_FAILURE_MESSAGES),
@@ -29,7 +33,7 @@ const CODES = new Set([
     'RMT_MANUAL_API_TRANSPORT', 'RMT_MANUAL_API_URL', 'RMT_MANUAL_EMPTY', 'RMT_MANUAL_FETCH_UNAVAILABLE',
     'RMT_MANUAL_HTTP', 'RMT_MANUAL_INVALID_JSON', 'RMT_MANUAL_MESSAGES', 'RMT_MANUAL_MODEL',
     'RMT_MANUAL_PROVIDER_ERROR', 'RMT_MANUAL_RESPONSE_TOO_LARGE', 'RMT_METADATA_DURABILITY_UNAVAILABLE',
-    'RMT_MODE_WRITE_FENCE', 'RMT_PROFILE_CAPABILITY', 'RMT_PROFILE_PROXY_UNAVAILABLE',
+    'RMT_MODE_WRITE_FENCE', 'RMT_PHONE_EVIDENCE', 'RMT_PROFILE_CAPABILITY', 'RMT_PROFILE_PROXY_UNAVAILABLE',
     'RMT_RECOVERY_BUSY', 'RMT_RECOVERY_CLEARED', 'RMT_RECOVERY_DATA', 'RMT_RECOVERY_IDENTITY',
     'RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_LIMIT', 'RMT_RECOVERY_OPERATION_CHANGED', 'RMT_RECOVERY_ORIGIN_CHANGED',
     'RMT_RECOVERY_STORAGE', 'RMT_RECOVERY_UNAVAILABLE', 'RMT_RECOVERY_VALIDATION_CHANGED',
@@ -40,6 +44,51 @@ const CODES = new Set([
 const RESPONSE_SHAPES = new Set(['text', 'choices', 'message', 'content', 'output_text', 'output', 'candidates', 'text_fallback', 'wrapped', 'unsupported', 'empty', 'error']);
 const FINISH_REASONS = new Set(['stop', 'end_turn', 'stop_sequence', 'length', 'max_tokens', 'content_filter', 'tool_calls', 'function_call', 'completed', 'incomplete', 'done', 'unknown', 'none']);
 const count = value => Math.floor(Math.max(0, Math.min(1000000, Number(value) || 0)));
+const duration = value => Math.floor(Math.max(0, Math.min(MAX_DURATION_MS, Number(value) || 0)));
+
+function finishStageDuration(entry, stage, now = Date.now()) {
+    const starts = stageStarts.get(entry);
+    if (!starts?.has(stage)) return;
+    entry.durations ||= {};
+    entry.durations[stage] = duration(duration(entry.durations[stage]) + duration(now - starts.get(stage)));
+    starts.delete(stage);
+}
+
+function snapshotDurations(entry) {
+    const result = {};
+    const starts = stageStarts.get(entry);
+    const now = entry.endedAt || Date.now();
+    for (const stage of STAGES) {
+        if (Object.hasOwn(entry.durations || {}, stage) || starts?.has(stage)) {
+            result[stage] = duration(duration(entry.durations?.[stage]) + (starts?.has(stage) ? duration(now - starts.get(stage)) : 0));
+        }
+    }
+    return result;
+}
+
+export function beginRequestAttempt(entry) {
+    if (!entry || entry.outcome !== 'running') return entry;
+    entry.attempt = Math.min(9999, count(entry.attempt) + 1);
+    delete entry.input;
+    delete entry.response;
+    return entry;
+}
+
+// Call only at the transport invocation boundary. This counts initiated requests,
+// not billing events; preflight attempts and time spent queued never increment it.
+export function recordProviderRequest(entry) {
+    if (!entry || entry.outcome !== 'running') return entry;
+    for (let current = entry; current; current = traceParents.get(current)) {
+        current.providerRequests = count(count(current.providerRequests) + 1);
+    }
+    return entry;
+}
+
+export function recordRetry(entry, error) {
+    if (!entry || entry.outcome !== 'running') return entry;
+    entry.retryCode = CODES.has(error?.code) ? error.code : 'RMT_UNCODED';
+    return markStage(entry, 'retry');
+}
 
 export function recordInput(entry, chars, tokens = null) {
     if (!entry) return;
@@ -65,8 +114,11 @@ export function startTaskTrace(taskKey, mode, parent = null) {
         activeStage: '',
         chunks: { total: 0, ok: 0, failed: 0, pending: 0 },
         stages: [],
+        durations: {},
+        providerRequests: 0,
     };
     if (parent) {
+        traceParents.set(entry, parent);
         parent.requests ||= [];
         parent.requests.push(entry);
         while (parent.requests.length > 4) parent.requests.shift();
@@ -81,9 +133,19 @@ export function startTaskTrace(taskKey, mode, parent = null) {
 // and the input/response pair always comes from the same completed segment.
 export function finishSegmentTrace(parent, child, outcome, error = null) {
     endTaskTrace(child, outcome, error);
-    if (!parent) return;
+    if (!parent || !child) return;
+    let merged = mergedSegments.get(parent);
+    if (!merged) { merged = new WeakSet(); mergedSegments.set(parent, merged); }
+    if (merged.has(child)) return;
+    merged.add(child);
     parent.input = child.input;
     parent.response = child.response;
+    parent.attempt = child.attempt;
+    parent.retryCode = child.retryCode;
+    parent.durations ||= {};
+    for (const [stage, ms] of Object.entries(snapshotDurations(child))) {
+        parent.durations[stage] = duration(duration(parent.durations[stage]) + ms);
+    }
     const offset = child.startedAt - parent.startedAt;
     parent.stages.push(...child.stages.filter(row => !['done', 'failed'].includes(row.stage)).map(row => ({ ...row, at: row.at + offset })));
     parent.stages.sort((a, b) => a.at - b.at);
@@ -92,6 +154,7 @@ export function finishSegmentTrace(parent, child, outcome, error = null) {
 
 export function markStage(entry, stage, ok = true) {
     if (!entry || !STAGES.includes(stage)) return entry;
+    finishStageDuration(entry, stage);
     entry.stages.push({ stage, ok: ok === true, at: Date.now() - entry.startedAt });
     while (entry.stages.length > MAX_STAGES) entry.stages.shift();
     if (entry.activeStage === stage) entry.activeStage = '';
@@ -99,7 +162,12 @@ export function markStage(entry, stage, ok = true) {
 }
 
 export function beginStage(entry, stage) {
-    if (entry && entry.outcome === 'running' && STAGES.includes(stage)) entry.activeStage = stage;
+    if (entry && entry.outcome === 'running' && STAGES.includes(stage)) {
+        let starts = stageStarts.get(entry);
+        if (!starts) { starts = new Map(); stageStarts.set(entry, starts); }
+        if (!starts.has(stage)) starts.set(stage, Date.now());
+        entry.activeStage = stage;
+    }
     return entry;
 }
 
@@ -131,6 +199,7 @@ export function endTaskTrace(entry, outcome, error = null) {
     entry.outcome = ['ok', 'failed', 'cancelled', 'deferred', 'blocked', 'noop'].includes(outcome) ? outcome : 'failed';
     recordTaskFailure(entry, error);
     if (entry.activeStage && ['failed', 'cancelled'].includes(entry.outcome)) markStage(entry, entry.activeStage, false);
+    for (const stage of stageStarts.get(entry)?.keys() || []) finishStageDuration(entry, stage, entry.endedAt);
     entry.activeStage = '';
     if (entry.outcome === 'ok') markStage(entry, 'done');
     else if (entry.outcome === 'failed') markStage(entry, 'failed', false);
@@ -146,6 +215,10 @@ function snapshotEntries(entries, includeRequests = false) {
         code: CODES.has(entry.code) || entry.code === 'RMT_UNCODED' ? entry.code : '',
         field: STAGES.includes(entry.field) ? entry.field : '',
         activeStage: STAGES.includes(entry.activeStage) ? entry.activeStage : '',
+        providerRequests: count(entry.providerRequests),
+        durations: snapshotDurations(entry),
+        ...(entry.attempt ? { attempt: bounded(entry.attempt, 9999) } : {}),
+        ...(CODES.has(entry.retryCode) || entry.retryCode === 'RMT_UNCODED' ? { retryCode: entry.retryCode } : {}),
         ...(entry.storage ? { storage: core_backupDiagnostics.backupFailureDiagnostic({
             code: entry.storage.code, kind: 'storage', backupStage: entry.storage.stage,
         }) } : {}),

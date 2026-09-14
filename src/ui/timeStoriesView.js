@@ -39,31 +39,6 @@ function echoHtml(session, episode, ui) {
     return endpoints + reader;
 }
 
-function orderedEncounters(episode, order = 'story') {
-    const entries = Array.isArray(episode.encounters) ? [...episode.encounters] : [];
-    if (order === 'char' || order === 'user') entries.sort((a, b) => Number(a[`${order}Order`]) - Number(b[`${order}Order`]));
-    return entries;
-}
-
-function journeyHtml(session, episode, ui) {
-    const ordered = orderedEncounters(episode, ui.tab);
-    const selected = ordered.find(item => item.id === ui.selectedEntryId) || ordered[0];
-    const index = ordered.findIndex(item => item.id === selected?.id);
-    const waitingRole = episode.traveler === 'char' ? 'user' : 'char';
-    const roles = `<div class="rmt-time-roles"><div><small>被时间带走的人</small><b>${esc(nameFor(session, episode.traveler))}</b></div><div><small>等待归来的人</small><b>${esc(nameFor(session, waitingRole))}</b></div></div>`;
-    const lane = role => `<section class="rmt-time-lane" data-rmt-time-lane="${role}"><h3>${esc(nameFor(session, role))}</h3><ol>${orderedEncounters(episode, role).map(item => `<li><button type="button" data-rmt-time-story="encounter" data-rmt-time-story-id="${esc(item.id)}" aria-pressed="${selected?.id === item.id}"><small>${esc(item[`${role}Time`])}</small><b>${esc(item.title)}</b><span>${esc(item.id)}</span></button></li>`).join('')}</ol></section>`;
-    const timelines = `<details class="rmt-time-timeline-details"><summary>回看两人的时间线</summary><div class="rmt-time-timelines" aria-label="两人的经历顺序">${lane('char')}${lane('user')}</div></details>`;
-    const orderButtons = `<nav class="rmt-time-order" aria-label="阅读顺序">${button('order', '故事顺序', 'story', `aria-pressed="${ui.tab === 'story'}"`)}${button('order', nameFor(session, 'char'), 'char', `aria-pressed="${ui.tab === 'char'}"`)}${button('order', nameFor(session, 'user'), 'user', `aria-pressed="${ui.tab === 'user'}"`)}</nav>`;
-    const knowledge = selected ? `<div class="rmt-time-knowledge"><div><b>${esc(session.characterName)} · ${esc(selected.charTime)}</b>${selected.charKnows ? `<p>${esc(selected.charKnows)}</p>` : ''}</div><div><b>${esc(session.userName)} · ${esc(selected.userTime)}</b>${selected.userKnows ? `<p>${esc(selected.userKnows)}</p>` : ''}</div></div>` : '';
-    const waiting = selected?.waiting ? `<aside class="rmt-time-waiting"><h3>${esc(nameFor(session, waitingRole))} · 等待中的日子</h3>${paragraphs(selected.waiting)}</aside>` : '';
-    const ending = ui.reading;
-    const content = ending ? `<article class="rmt-time-prose rmt-time-closing" aria-live="polite"><h3>此后的日子</h3>${paragraphs(episode.closing)}</article>`
-        : selected ? `<article class="rmt-time-prose rmt-time-encounter" aria-live="polite"><header><small>${esc(selected.id)} · ${index + 1} / ${ordered.length}</small><h3>${esc(selected.title)}</h3></header>${knowledge}${paragraphs(selected.text)}${waiting}</article>` : '';
-    const controls = ending ? `<div class="rmt-time-actions">${button('encounter', '返回故事', selected?.id || '')}</div>`
-        : `<div class="rmt-time-reading-controls">${button('prev-scene', '上一幕', '', index <= 0 ? 'disabled' : '')}<span>${index + 1} / ${ordered.length}</span>${button(index + 1 < ordered.length ? 'next-scene' : 'ending', index + 1 < ordered.length ? '下一幕' : '此后的日子')}</div>`;
-    return `${roles}<div class="rmt-time-opening">${paragraphs(episode.opening)}</div>${content}${controls}${orderButtons}${timelines}`;
-}
-
 export function timeStoriesHtml(session, { readOnly: locked = false, busy = false } = {}) {
     try {
         if (!contract.isTimeStoryMode(session?.kind) || session.version !== 1 || !Array.isArray(session.episodes)) throw new Error('shape');
@@ -73,12 +48,12 @@ export function timeStoriesHtml(session, { readOnly: locked = false, busy = fals
         const selected = session.episodes.find(item => item.id === ui.selectedId);
         const inStory = !!selected && ui.view === 'story';
         const generate = locked || inStory ? '' : `<button type="button" class="rmt-btn" data-rmt-generate-mode="${mode}" ${busy ? 'disabled' : ''}>${busy ? '正在写下故事…' : session.episodes.length ? '再写一篇' : '生成第一篇'}</button>`;
-        const returnButton = mode === 'timeEcho' ? '<button type="button" class="rmt-btn" data-rmt-mode="phone">返回终端</button>' : '';
+        const returnButton = '<button type="button" class="rmt-btn" data-rmt-mode="phone">返回终端</button>';
         const header = `<header class="rmt-time-head"><div><small>时空番外${locked ? ' · 只读' : ''}</small><h2>${esc(label)}</h2></div><div class="rmt-time-actions">${generate}${returnButton}</div></header>`;
         const content = inStory
-            ? `<div class="rmt-time-story-head">${button('library', '返回篇章')}<div><small>${esc(selected.motif)}</small><h3>${esc(selected.title)}</h3></div></div>${mode === 'timeEcho' ? echoHtml(session, selected, ui) : journeyHtml(session, selected, ui)}`
-            : session.episodes.length ? `<div class="rmt-time-library">${session.episodes.map(episode => `<button type="button" class="rmt-time-cover" data-rmt-time-story="open" data-rmt-time-story-id="${esc(episode.id)}"><i class="fa-solid ${mode === 'timeEcho' ? mediumIcon(episode.medium?.kind) : 'fa-hourglass-half'}" aria-hidden="true"></i><span><small>${esc(episode.motif)}</small><b>${esc(episode.title)}</b>${mode === 'timeEcho' ? `<small>${esc(episode.medium?.label || '')}</small>` : ''}</span><span aria-hidden="true">›</span></button>`).join('')}</div>`
-                : `<div class="rmt-time-empty"><i class="fa-solid ${mode === 'timeEcho' ? 'fa-wave-square' : 'fa-hourglass-half'}" aria-hidden="true"></i><h3>${mode === 'timeEcho' ? '有一道回声，尚未抵达' : '归期无法约定，爱仍在继续'}</h3>${mode === 'timeJourney' ? '<p>一人被时间带走，一人在日常里等待。写下他们错乱时光中的相爱、归来与离别。</p>' : ''}</div>`;
+            ? `<div class="rmt-time-story-head">${button('library', '返回篇章')}<div><small>${esc(selected.motif)}</small><h3>${esc(selected.title)}</h3></div></div>${echoHtml(session, selected, ui)}`
+            : session.episodes.length ? `<div class="rmt-time-library">${session.episodes.map(episode => `<button type="button" class="rmt-time-cover" data-rmt-time-story="open" data-rmt-time-story-id="${esc(episode.id)}"><i class="fa-solid ${mediumIcon(episode.medium?.kind)}" aria-hidden="true"></i><span><small>${esc(episode.motif)}</small><b>${esc(episode.title)}</b><small>${esc(episode.medium?.label || '')}</small></span><span aria-hidden="true">›</span></button>`).join('')}</div>`
+                : `<div class="rmt-time-empty"><i class="fa-solid fa-wave-square" aria-hidden="true"></i><h3>有一道回声，尚未抵达</h3></div>`;
         return `<section class="rmt-time-stories" data-rmt-time-presentation="${presentation(selected?.presentation)}" data-rmt-time-palette="${palette(selected?.palette)}">${header}${content}</section>`;
     } catch { return '<section class="rmt-time-stories"><p role="status">这篇故事暂时无法读取，原内容仍保留。</p></section>'; }
 }
@@ -102,7 +77,7 @@ export function renderTimeStories() {
     if (!contract.isTimeStoryMode(runtimeState.activeMode) || runtimeState.activeSession?.kind !== runtimeState.activeMode) return;
     const mode = runtimeState.activeMode;
     overlay.topTitle(contract.timeStoryLabel(mode));
-    overlay.setBackVisible(true, runtimeState.activeSession.view === 'story' ? '篇章' : mode === 'timeEcho' ? '私人终端' : '档案');
+    overlay.setBackVisible(true, runtimeState.activeSession.view === 'story' ? '篇章' : '私人终端');
     const body = overlay.bodyEl();
     if (!body) return;
     try {
@@ -121,7 +96,7 @@ export function closeTimeStoryDetail() {
 // Only scalar reading state changes here. Generation is handled by the existing
 // explicit generate-mode action, with the normal archive target and save guards.
 export function handleTimeStoryAction(action, id = '') {
-    if (!['library', 'open', 'connect', 'prev-line', 'next-line', 'replay', 'order', 'encounter', 'prev-scene', 'next-scene', 'ending'].includes(action)) return false;
+    if (!['library', 'open', 'connect', 'prev-line', 'next-line', 'replay'].includes(action)) return false;
     try {
         assertShownTarget();
         const session = runtimeState.activeSession;
@@ -139,19 +114,11 @@ export function handleTimeStoryAction(action, id = '') {
             if (session.reading && action === 'next-line') session.dialogueIndex = Math.min(count, session.dialogueIndex + 1);
             if (session.reading && action === 'prev-line') session.dialogueIndex = Math.max(0, session.dialogueIndex - 1);
         }
-        if (episode && session.kind === 'timeJourney') {
-            if (action === 'order' && ['story', 'char', 'user'].includes(id)) { session.tab = id; session.selectedEntryId = orderedEncounters(episode, id)[0]?.id || ''; session.reading = false; }
-            if (action === 'encounter' && episode.encounters.some(item => item.id === id)) { session.selectedEntryId = id; session.reading = false; }
-            const ordered = orderedEncounters(episode, session.tab);
-            const current = Math.max(0, ordered.findIndex(item => item.id === session.selectedEntryId));
-            if (action === 'prev-scene' || action === 'next-scene') { session.selectedEntryId = ordered[Math.max(0, Math.min(ordered.length - 1, current + (action === 'next-scene' ? 1 : -1)))]?.id || ''; session.reading = false; }
-            if (action === 'ending') session.reading = true;
-        }
         renderTimeStories();
         const body = overlay.bodyEl();
         const nodes = body?.querySelectorAll?.('[data-rmt-time-story]') || [];
         const matching = [...nodes].find(node => node.dataset.rmtTimeStory === action && node.dataset.rmtTimeStoryId === id && !node.disabled);
-        const focus = matching || body?.querySelector?.('.rmt-time-line, .rmt-time-encounter, .rmt-time-closing, .rmt-time-library');
+        const focus = matching || body?.querySelector?.('.rmt-time-line, .rmt-time-closing, .rmt-time-library');
         if (focus) { if (!matching) focus.tabIndex = -1; focus.focus?.({ preventScroll: true }); }
         return true;
     } catch (error) { globalThis.toastr?.error?.(text.toastText(text.safeErrorSummary(error)), '心迹回廊 · 时空番外'); return false; }
@@ -172,8 +139,7 @@ ${root} .rmt-time-stories button:focus-visible{outline:3px solid var(--rmt-time-
 ${root} .rmt-time-stories [aria-pressed=true]{box-shadow:inset 0 0 0 2px var(--rmt-time-accent)!important}
 ${root} .rmt-time-head,${root} .rmt-time-story-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--rmt-theme-border);padding-bottom:18px;margin-bottom:22px}
 ${root} .rmt-time-story-head{justify-content:flex-start;align-items:flex-start}
-${root} .rmt-time-actions,${root} .rmt-time-order{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-${root} .rmt-time-order{margin:22px 0 16px}
+${root} .rmt-time-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 ${root} .rmt-time-library{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 ${root} .rmt-time-cover{display:grid;grid-template-columns:32px minmax(0,1fr) 12px;align-items:center;gap:14px;padding:22px!important;text-align:left;border:1px solid var(--rmt-theme-border);border-radius:18px;background:var(--rmt-theme-surface)!important;color:var(--rmt-theme-text)!important;min-height:132px!important}
 ${root} .rmt-time-cover>span:nth-child(2){display:grid;gap:5px}
@@ -193,18 +159,6 @@ ${root} .rmt-time-line[data-rmt-time-speaker=b]{border-left-width:1px;border-rig
 ${root} .rmt-time-line header{display:flex;gap:12px;justify-content:space-between;align-items:baseline;flex-wrap:wrap;margin-bottom:22px}
 ${root} .rmt-time-reading-controls{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0}
 ${root} .rmt-time-reading-controls>span{font-size:13px;color:var(--rmt-theme-muted)}
-${root} .rmt-time-roles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:22px;padding:18px;border:1px solid var(--rmt-theme-border);border-radius:18px;background:var(--rmt-theme-surface)}
-${root} .rmt-time-roles>div{display:grid;gap:4px}
-${root} .rmt-time-waiting{margin-top:24px;padding:18px 0 0;border-top:1px solid var(--rmt-theme-border)}
-${root} .rmt-time-timeline-details>summary{cursor:pointer;min-height:44px;padding:8px 0;margin-bottom:12px;color:var(--rmt-theme-muted)}
-${root} .rmt-time-timelines{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
-${root} .rmt-time-lane ol{list-style:none;margin:0!important;padding:0 0 0 12px!important;border-left:2px solid var(--rmt-time-accent)}
-${root} .rmt-time-lane li{position:relative;margin:0 0 12px!important;padding:0!important}
-${root} .rmt-time-lane li:before{content:'';position:absolute;left:-18px;top:20px;width:10px;height:10px;border-radius:50%;background:var(--rmt-time-accent);border:2px solid var(--rmt-theme-bg)}
-${root} .rmt-time-lane button{display:grid;gap:4px;width:100%;padding:12px!important;text-align:left;border:1px solid var(--rmt-theme-border);border-radius:12px;background:var(--rmt-theme-surface)!important;color:var(--rmt-theme-text)!important}
-${root} .rmt-time-lane button>span{font-size:11px;color:var(--rmt-theme-muted)}
-${root} .rmt-time-knowledge{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding-bottom:12px;border-bottom:1px dashed var(--rmt-theme-border);margin-bottom:20px;font-size:14px}
-${root} .rmt-time-knowledge p{color:var(--rmt-theme-muted);margin-top:6px!important}
 ${root} .rmt-time-stories[data-rmt-time-palette=rose]{--rmt-time-accent:#c36d89}
 ${root} .rmt-time-stories[data-rmt-time-palette=blue]{--rmt-time-accent:#679abe}
 ${root} .rmt-time-stories[data-rmt-time-palette=moss]{--rmt-time-accent:#77977b}
@@ -217,12 +171,11 @@ ${root} [data-rmt-time-presentation=classical] :is(.rmt-time-prose,.rmt-time-lin
 ${root} [data-rmt-time-presentation=fantasy] .rmt-time-connection{border-radius:40px 10px;background-image:radial-gradient(ellipse at center,color-mix(in srgb,var(--rmt-time-accent) 12%,transparent),transparent 70%)}
 ${root} [data-rmt-time-presentation=fantasy] .rmt-time-prose{border-radius:24px 4px 24px 4px;background-image:radial-gradient(ellipse at top left,color-mix(in srgb,var(--rmt-time-accent) 10%,transparent),transparent 65%)}
 ${root} [data-rmt-time-presentation=scifi] :is(.rmt-time-connection,.rmt-time-line){border-radius:4px;background-image:linear-gradient(color-mix(in srgb,var(--rmt-time-accent) 5%,transparent) 1px,transparent 1px);background-size:100% 8px}
-${root} [data-rmt-time-presentation=scifi] .rmt-time-lane button{border-radius:2px;border-left:3px solid var(--rmt-time-accent)}
 ${root} [data-rmt-time-presentation=scifi] :is(.rmt-time-end,.rmt-time-medium){font-family:ui-monospace,monospace}
 ${root} .rmt-phone-empty-terminal{width:min(620px,100%);margin:20px auto;padding:24px;border:1px solid var(--rmt-theme-border);border-radius:20px;background:var(--rmt-theme-surface);color:var(--rmt-theme-text);box-sizing:border-box;overflow-wrap:anywhere}
 ${root} .rmt-phone-empty-terminal .rmt-time-actions{display:flex;gap:12px;flex-wrap:wrap}
 ${root} .rmt-phone-empty-terminal button{min-height:44px;max-width:100%;white-space:normal}
 ${root} .rmt-phone-home-grid .rmt-phone-time-echo{min-height:64px}
-@media(max-width:600px){${root} .rmt-time-library{grid-template-columns:1fr}${root} .rmt-time-timelines{gap:14px}${root} .rmt-time-lane h3{font-size:17px!important}${root} .rmt-time-knowledge{grid-template-columns:1fr;gap:8px}${root} .rmt-time-connection{gap:6px;padding:18px 8px}${root} .rmt-time-end>b{font-size:18px}${root} .rmt-time-end>span{font-size:12px}${root} .rmt-time-medium{padding-inline:4px}${root} .rmt-time-head{align-items:flex-start}}
+@media(max-width:600px){${root} .rmt-time-library{grid-template-columns:1fr}${root} .rmt-time-connection{gap:6px;padding:18px 8px}${root} .rmt-time-end>b{font-size:18px}${root} .rmt-time-end>span{font-size:12px}${root} .rmt-time-medium{padding-inline:4px}${root} .rmt-time-head{align-items:flex-start}}
 `;
 }

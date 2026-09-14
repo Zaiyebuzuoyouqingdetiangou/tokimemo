@@ -413,10 +413,12 @@ export async function waitForProviderPacing(signal = null) {
 }
 
 export function createProviderPermitRelease() {
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     let released = false;
     return () => {
         if (released) return;
         released = true;
+        if (runtimeState.runtimeLifecycleEpoch !== lifecycleEpoch) return;
         runtimeState.activeProviderRequestCount = Math.max(0, runtimeState.activeProviderRequestCount - 1);
         drainProviderRequestQueue();
     };
@@ -497,10 +499,10 @@ export function runGenerationRequestWithTimeout(factory, controller, timeoutMs, 
     });
 }
 
-// A rate limit is the one failure that is almost always worth waiting out, so it gets
-// its own attempt budget instead of sharing the single validation retry.
+// Every segment gets at most one automatic retry, including rate limits.
+// A composite may have multiple distinct segments; accepted segments are reused.
 export const MAX_SEGMENT_ATTEMPTS = 2;
-export const MAX_RATE_LIMIT_ATTEMPTS = 4;
+export const MAX_RATE_LIMIT_ATTEMPTS = MAX_SEGMENT_ATTEMPTS;
 
 export function isRateLimitError(error) {
     return error?.code === 'RMT_CONNECTION_RATE_LIMIT';

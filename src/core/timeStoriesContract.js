@@ -2,16 +2,15 @@
 import * as safeData from './pastLivesContract.js';
 
 export const TIME_ECHO_MODE = 'timeEcho';
-export const TIME_JOURNEY_MODE = 'timeJourney';
 export const TIME_STORY_VERSION = 1;
-export const TIME_STORY_LIMITS = Object.freeze({ episodes: 48, lines: 120, encounters: 24,
+export const TIME_STORY_LIMITS = Object.freeze({ episodes: 48, lines: 120,
     title: 120, prose: 30000, line: 3000, episodeChars: 180000, sessionChars: 1800000 });
 export const TIME_STORY_PALETTES = Object.freeze(['rose', 'blue', 'moss', 'gold', 'plum', 'slate']);
 export const TIME_STORY_PRESENTATIONS = Object.freeze(['modern', 'classical', 'fantasy', 'scifi', 'neutral']);
 const MEDIA = ['phone', 'terminal', 'relic', 'object', 'voice'];
 
-export function isTimeStoryMode(mode) { return mode === TIME_ECHO_MODE || mode === TIME_JOURNEY_MODE; }
-export function timeStoryLabel(mode) { return mode === TIME_ECHO_MODE ? '时空回响' : mode === TIME_JOURNEY_MODE ? '时空旅行者的妻子' : '时空番外'; }
+export function isTimeStoryMode(mode) { return mode === TIME_ECHO_MODE; }
+export function timeStoryLabel(mode) { return mode === TIME_ECHO_MODE ? '时空回响' : '时空番外'; }
 export function timeStoryError(code, message) {
     const error = new Error(message);
     Object.assign(error, { code: `RMT_TIME_STORY_${code}`, safeToDisplay: true, safeUserMessage: message, repairHint: message });
@@ -52,15 +51,6 @@ export function timeStoryMediumKinds(profile = {}) {
         : presentation === 'fantasy' ? ['relic', 'object', 'voice'] : ['object', 'voice'];
 }
 
-export function assertTimeJourneyOrders(encounters) {
-    const require = condition => { if (!condition) throw timeStoryError('STRUCTURE', '故事需有可阅读的场景，双方经历顺序请使用各自唯一的正整数。'); };
-    require(encounters.length >= 1);
-    for (const field of ['charOrder', 'userOrder']) {
-        require(encounters.every(item => Number.isSafeInteger(item[field]) && item[field] > 0 && item[field] <= 100000));
-        require(new Set(encounters.map(item => item[field])).size === encounters.length);
-    }
-}
-
 // Reopening authenticates data shape and local references; it does not rejudge
 // yesterday's story against a changed character card or relationship classifier.
 export function timeStoriesStoredData(value) {
@@ -81,36 +71,25 @@ export function timeStoriesStoredData(value) {
     for (const episode of sequence(raw.episodes, L.episodes, /^TS\d{2,4}$/u)) {
         require(episode.fiction === true && TIME_STORY_PRESENTATIONS.includes(episode.presentation) && TIME_STORY_PALETTES.includes(episode.palette));
         prose(episode.title, L.title); prose(episode.opening); prose(episode.closing); prose(episode.motif, 160, false);
-        if (raw.kind === TIME_ECHO_MODE) {
-            require(MEDIA.includes(episode.medium?.kind)); prose(episode.medium.label, L.title);
-            const ends = timeStoryArray(episode.ends, 2); require(ends.length === 2);
-            for (const end of ends) { require(['char', 'user'].includes(end?.role)); prose(end.time, 240); }
-            require(ends[0].time !== ends[1].time);
-            const lines = timeStoryArray(episode.lines, L.lines);
-            for (const line of lines) { require(['a', 'b', 'narrator'].includes(line?.speaker)); prose(line.text, L.line); }
-            require(lines.some(line => line.speaker === 'a') && lines.some(line => line.speaker === 'b'));
-            prose(episode.message, 1800);
-        } else {
-            require(['char', 'user'].includes(episode.traveler));
-            const scenes = sequence(episode.encounters, L.encounters, /^S\d{2,4}$/u);
-            assertTimeJourneyOrders(scenes);
-            for (const scene of scenes) {
-                prose(scene.title, L.title); prose(scene.charTime, 240); prose(scene.userTime, 240); prose(scene.text);
-                prose(scene.charKnows, 1600, false); prose(scene.userKnows, 1600, false);
-                prose(scene.waiting, L.prose, false);
-            }
-        }
+        require(MEDIA.includes(episode.medium?.kind)); prose(episode.medium.label, L.title);
+        const ends = timeStoryArray(episode.ends, 2); require(ends.length === 2);
+        for (const end of ends) { require(['char', 'user'].includes(end?.role)); prose(end.time, 240); }
+        require(ends[0].time !== ends[1].time);
+        const lines = timeStoryArray(episode.lines, L.lines);
+        for (const line of lines) { require(['a', 'b', 'narrator'].includes(line?.speaker)); prose(line.text, L.line); }
+        require(lines.some(line => line.speaker === 'a') && lines.some(line => line.speaker === 'b'));
+        prose(episode.message, 1800);
     }
     return raw;
 }
 
 export function timeStoryReadingState(session) {
+    if (!isTimeStoryMode(session?.kind)) throw timeStoryError('STRUCTURE', '这份番外结构暂不可读取，原记录保持不变。');
     const selected = (Array.isArray(session?.episodes) ? session.episodes : []).find(item => item?.id === session?.selectedId);
-    const scenes = Array.isArray(selected?.encounters) ? selected.encounters : [];
     return { selectedId: selected?.id || '',
-        selectedEntryId: scenes.some(item => item.id === session?.selectedEntryId) ? session.selectedEntryId : scenes[0]?.id || '',
+        selectedEntryId: '',
         view: selected && session?.view === 'story' ? 'story' : 'library',
         dialogueIndex: Math.max(0, Math.min(selected?.lines?.length || 0, Math.floor(Number(session?.dialogueIndex) || 0))),
         reading: session?.reading === true,
-        tab: ['story', 'char', 'user'].includes(session?.tab) ? session.tab : 'story' };
+        tab: 'story' };
 }

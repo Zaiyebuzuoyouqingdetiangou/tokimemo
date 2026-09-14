@@ -24,6 +24,9 @@ import * as generation_recovery from '../generation/recovery.js';
 // Per-fence clear markers survive cache merges: an older metadata mirror must not
 // resurrect a completed/deleted journal merely because its cache clock is newer.
 const GENERATION_RECOVERY_CLEARED_KEY = '__generationRecoveryClearedV1';
+// Retired story data remains inert in existing saves; it is never an active mode.
+const RETIRED_STORY_MODE = 'timeJourney';
+const STORED_MODES = Object.freeze([...Object.values(core_constants.MODE), RETIRED_STORY_MODE]);
 
 function recoveryCleared(cache, mode) {
     const cleared = cache?.[GENERATION_RECOVERY_CLEARED_KEY];
@@ -111,7 +114,7 @@ function mergeModeWriteFences(baseCache, canonicalCache) {
     const base = baseCache?.[core_constants.MODE_WRITE_FENCES_CACHE_KEY];
     const canonical = canonicalCache?.[core_constants.MODE_WRITE_FENCES_CACHE_KEY];
     const merged = Object.create(null);
-    for (const mode of Object.values(core_constants.MODE)) {
+    for (const mode of STORED_MODES) {
         const left = normalizedModeWriteFence(base?.[mode]);
         const right = normalizedModeWriteFence(canonical?.[mode]);
         const winner = !left ? right : !right ? left
@@ -124,7 +127,7 @@ function mergeModeWriteFences(baseCache, canonicalCache) {
 }
 
 function discardSessionsBehindModeFences(cache) {
-    for (const mode of Object.values(core_constants.MODE)) {
+    for (const mode of STORED_MODES) {
         const fence = modeWriteFenceForCache(cache, mode);
         if (!fence || !cache?.[mode]) continue;
         const sessionFence = core_text.normalizeText(cache[mode]?.[core_constants.SESSION_MODE_WRITE_FENCE_KEY], 240);
@@ -138,8 +141,12 @@ function discardSessionsBehindModeFences(cache) {
     const journals = cache?.[generation_recovery.GENERATION_RECOVERY_CACHE_KEY];
     if (journals && typeof journals === 'object') {
         for (const mode of Object.keys(journals)) {
+            if (mode === RETIRED_STORY_MODE) {
+                if (recoveryCleared(cache, mode)) delete journals[mode];
+                continue; // Preserve opaque retired drafts without offering recovery.
+            }
             const journal = journals[mode];
-            if (!Object.values(core_constants.MODE).includes(mode) || recoveryCleared(cache, mode)
+            if (!STORED_MODES.includes(mode) || recoveryCleared(cache, mode)
                 || !generation_recovery.generationRecoverySummary(journal)
                 || journal.identity?.mode !== mode
                 || journal.identity?.chatId !== cache.chatId
@@ -157,7 +164,7 @@ function mergeCacheSnapshotsWithModeFences(primary, secondary, supplied, canonic
     if (Object.keys(mergedFences).length) merged[core_constants.MODE_WRITE_FENCES_CACHE_KEY] = mergedFences;
     else delete merged[core_constants.MODE_WRITE_FENCES_CACHE_KEY];
     const cleared = Object.create(null);
-    for (const mode of Object.values(core_constants.MODE)) {
+    for (const mode of STORED_MODES) {
         const fence = modeWriteFenceForCache(merged, mode);
         for (const source of [supplied, canonical]) {
             if (Object.prototype.hasOwnProperty.call(source?.[GENERATION_RECOVERY_CLEARED_KEY] || {}, mode)
@@ -177,14 +184,14 @@ function mergeCacheSnapshotsWithModeFences(primary, secondary, supplied, canonic
     }
     merged[GENERATION_RECOVERY_CLEARED_KEY] = cleared;
     discardSessionsBehindModeFences(merged);
-    for (const mode of Object.values(core_constants.MODE)) {
+    for (const mode of STORED_MODES) {
         if (!merged[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode] && fallback[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode]) {
             merged[generation_recovery.GENERATION_RECOVERY_CACHE_KEY] ||= {};
             merged[generation_recovery.GENERATION_RECOVERY_CACHE_KEY][mode] = cloneCacheValue(fallback[generation_recovery.GENERATION_RECOVERY_CACHE_KEY][mode]);
         }
     }
     discardSessionsBehindModeFences(merged);
-    for (const mode of Object.values(core_constants.MODE)) {
+    for (const mode of STORED_MODES) {
         if (merged?.[mode] || !fallback?.[mode]) continue;
         const wantedFence = modeWriteFenceForCache(merged, mode);
         const candidateFence = core_text.normalizeText(fallback[mode]?.[core_constants.SESSION_MODE_WRITE_FENCE_KEY], 240);
@@ -1033,12 +1040,19 @@ async function saveImportedMemoryOperation(context, memoryBank, expectedChatId =
                 candidate = mergeCacheSnapshotsWithModeFences(primary, secondary, candidate, recovered);
             }
         }
-        if (candidate && typeof candidate === 'object' && (options.presentationOnly || Object.values(core_constants.MODE).some(mode => candidate?.[mode]?.kind === mode))) {
+        if (candidate && typeof candidate === 'object' && (options.presentationOnly || STORED_MODES.some(mode => candidate?.[mode]?.kind === mode)
+            || Object.prototype.hasOwnProperty.call(candidate[generation_recovery.GENERATION_RECOVERY_CACHE_KEY] || {}, RETIRED_STORY_MODE))) {
             preservedCache = cloneCacheValue(candidate);
             if (!options.presentationOnly) {
                 // A new evidence revision cannot inherit an unfinished request identity.
-                delete preservedCache[generation_recovery.GENERATION_RECOVERY_CACHE_KEY];
-                delete preservedCache[GENERATION_RECOVERY_CLEARED_KEY];
+                for (const key of [generation_recovery.GENERATION_RECOVERY_CACHE_KEY, GENERATION_RECOVERY_CLEARED_KEY]) {
+                    const previous = preservedCache[key];
+                    delete preservedCache[key];
+                    // Retired drafts keep their original identity as inert backup data.
+                    if (Object.prototype.hasOwnProperty.call(previous || {}, RETIRED_STORY_MODE)) {
+                        preservedCache[key] = { [RETIRED_STORY_MODE]: previous[RETIRED_STORY_MODE] };
+                    }
+                }
                 archive_repository.migrateDerivedCacheRevision(preservedCache, previousMemory, stagedMemory);
             }
             if (options.expectedTaskOrigin) {
@@ -1783,6 +1797,7 @@ export async function flushSessionCacheNow(expectedChatId = '', expectedTaskOrig
 }
 
 export function loadSession(mode, options = {}) {
+    if (!Object.values(core_constants.MODE).includes(mode)) return null;
     try {
         const suppliedCache = options.cache && typeof options.cache === 'object' ? options.cache : null;
         const context = options.context || (suppliedCache ? null : core_context.currentCharacterGuard());

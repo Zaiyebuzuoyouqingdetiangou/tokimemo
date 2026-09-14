@@ -212,23 +212,34 @@ export async function requestValidatedSegment(prompt, status, options, validator
         ? options.contextEnvelope : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options?.mode, context) }) };
     const result = await generation_recovery.withRecoverySegment(prompt, options, validator, async (prompt, options, accepted) => {
     let lastError = null;
-    const maxAttempts = Math.max(1, Math.min(core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS, Number(options?.segmentMaxAttempts) || core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS));
+    // Automatic retry is off by default. A failed segment used to silently re-run prompt
+    // building, token counting and a second paid request; on a slow host that turned one
+    // failure into minutes of extra billing the user could not stop. Successful segments
+    // are already kept by the recovery draft, so the run stops and waits for「续写」.
+    const allowAutoRetry = options?.allowAutoRetry === true;
+    const maxAttempts = allowAutoRetry
+        ? Math.max(1, Math.min(core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS, Number(options?.segmentMaxAttempts) || core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS))
+        : 1;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const retryNote = attempt && lastError
             ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || core_text.normalizeText(lastError?.repairHint, 600) || (lastError?.code === 'RMT_JSON_NOT_FOUND' || lastError?.code === 'RMT_JSON_INVALID' ? '上一轮你返回的是散文，没有任何可解析的 JSON 对象。本轮只输出一个 JSON 对象：第一个字符必须是 {，最后一个字符必须是 }。不要前言、不要解释、不要引用来源、不要代码围栏。' : String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
             : '';
         try {
-            const raw = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? '（重试）' : ''}`, options);
+            const raw = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? `（重试 ${attempt}/${maxAttempts - 1}）` : ''}`, options);
             core_taskTrace.beginStage(options.taskTrace, 'validate');
             const value = core_requestCoordinator.validateGeneratedSegment(raw, validator);
             core_taskTrace.markStage(options.taskTrace, 'validate');
             await accepted(raw);
             return value;
         } catch (error) {
+            if (options.taskTrace?.activeStage === 'validate') core_taskTrace.markStage(options.taskTrace, 'validate', false);
             if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
             lastError = error;
             if (attempt + 1 < maxAttempts && core_requestCoordinator.shouldRetrySegmentRequest(error, attempt)) {
-                await core_requestCoordinator.waitBeforeSegmentRetry(error, attempt);
+                core_taskTrace.recordRetry(options.taskTrace, error);
+                core_taskTrace.beginStage(options.taskTrace, 'retry');
+                try { await core_requestCoordinator.waitBeforeSegmentRetry(error, attempt); }
+                finally { core_taskTrace.markStage(options.taskTrace, 'retry'); }
                 continue;
             }
             throw error;
@@ -248,6 +259,9 @@ export async function requestValidatedSegment(prompt, status, options, validator
 // r74's character-budget fallback. This is not an exact token estimate or a
 // provider retry; the user's original generation request has not been sent yet.
 export const TOKEN_COUNT_TIMEOUT_MS = 5000;
+// Observed on a cloud tavern: every failure landed at 125-134s while every success finished
+// under 50s. That cliff is the host's gateway limit, which the extension cannot raise.
+export const UPSTREAM_CUTOFF_HINT_MS = 90000;
 
 function countPromptTokens(context, prompt, signal, timeoutMs) {
     return new Promise((resolve, reject) => {
@@ -348,7 +362,7 @@ export function assertNoBannedGeneratedPhrase(value, settings, evidence = null) 
     throw error;
 }
 
-export function normalizeConnectionManagerError(error) {
+export function normalizeConnectionManagerError(error, timing = {}) {
     if (error?.name === 'AbortError' || error?.retryableJson === true) return error;
     const knownInternalCodes = new Set([
         'RMT_API_CONFIG_CHANGED', 'RMT_API_CONFIGURATION_SUPERSEDED', 'RMT_API_MODEL_REQUEST_SUPERSEDED',
@@ -389,6 +403,12 @@ export function normalizeConnectionManagerError(error) {
     const technical = status ? `（HTTP ${status}）` : safeCode ? `（${safeCode}）` : '';
     const sourceName = error?.code === 'RMT_MANUAL_HTTP' ? '手动 API' : '专用连接';
     let code = 'RMT_CONNECTION_FAILED';
+    // A request that dies around two minutes with no response is an upstream gateway or
+    // reverse-proxy cut, not a misconfigured key. Saying "检查独立 API 设置" sends the user
+    // to settings that are already correct, so name the real shape of the failure.
+    if (Number(timing?.elapsedMs) >= UPSTREAM_CUTOFF_HINT_MS && timing?.receivedResponse !== true) {
+        code = 'RMT_CONNECTION_UPSTREAM_CUTOFF';
+    }
     let message = `${sourceName}请求失败${technical}。没有收到可判断是否可重试的模型结果；请检查当前独立 API 设置与 SillyTavern 控制台中的上游错误，本段不会自动重试。`;
     let retryable = false;
     if (/(?:<!doctype\s+html|<html\b|<head\b|<body\b|cf-error|cdn-cgi)/i.test(original)) {
@@ -445,7 +465,10 @@ export function normalizeConnectionManagerError(error) {
 
 export async function generateConfiguredJson(prompt, options = {}) {
     const taskTrace = options.taskTrace || null;
+    core_taskTrace.beginRequestAttempt(taskTrace);
     core_taskTrace.beginStage(taskTrace, 'prompt');
+    const lifecycleEpoch = options.origin?.lifecycleEpoch ?? runtimeState.runtimeLifecycleEpoch;
+    core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     const context = options.context || core_context.currentCharacterGuard();
     const settings = core_settings.getPluginSettings(context);
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
@@ -488,7 +511,23 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
         const apiMap = service.validateProfile(rawProfile);
         if (apiMap?.selected !== 'openai' || !apiMap?.source) throw core_text.safeUserError('当前一键连接不是可复用的 Chat Completion 配置。');
     }
-    let result;
+    const assertConfigurationCurrent = async () => {
+        const latestSettings = core_settings.getPluginSettings(context);
+        let latestProfileFingerprint = '';
+        if (connectionMode === 'profile') {
+            try { latestProfileFingerprint = await core_settings.resolvedProfileTransportFingerprint(core_settings.rawConnectionProfile(latestSettings.connectionProfileId, context)); }
+            catch { latestProfileFingerprint = 'missing'; }
+        }
+        if (core_independentApi.apiConfigurationFingerprint(latestSettings) !== configurationFingerprint
+            || creative_supplement.creativeSupplementBlock(latestSettings) !== creativeSupplement
+            || (connectionMode === 'profile' && latestProfileFingerprint !== selectedProfileFingerprint)) {
+            const error = new Error('API 配置或创作补充词在生成期间发生变化，本次旧请求已停止。');
+            error.code = 'RMT_API_CONFIG_CHANGED';
+            error.retryable = false;
+            throw error;
+        }
+    };
+    let result, responsePayload, releaseProviderPermit = null;
     const lifecycleController = new AbortController();
     const externalSignal = options.signal || null;
     const forwardAbort = () => {
@@ -497,10 +536,30 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
     };
     if (externalSignal?.aborted) forwardAbort();
     else externalSignal?.addEventListener?.('abort', forwardAbort, { once: true });
+    const assertRequestCurrent = () => {
+        if (lifecycleController.signal.aborted) throw lifecycleController.signal.reason instanceof Error
+            ? lifecycleController.signal.reason : core_requestCoordinator.createGenerationAbortError();
+        core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
+    };
+    const __sentAt = Date.now();
+    let __gotResponse = false;
     try {
+        assertRequestCurrent();
+        core_taskTrace.beginStage(taskTrace, 'queue');
+        releaseProviderPermit = await core_requestCoordinator.acquireProviderRequestPermit(lifecycleController.signal);
+        core_taskTrace.markStage(taskTrace, 'queue');
+        core_taskTrace.beginStage(taskTrace, 'pacing');
+        await core_requestCoordinator.waitForProviderPacing(lifecycleController.signal);
+        core_taskTrace.markStage(taskTrace, 'pacing');
+        assertRequestCurrent();
+        await assertConfigurationCurrent();
+        assertRequestCurrent();
         core_taskTrace.beginStage(taskTrace, 'request');
         result = await core_requestCoordinator.runGenerationRequestWithTimeout(
-            () => connectionMode === 'manual'
+            () => {
+                assertRequestCurrent();
+                core_taskTrace.recordProviderRequest(taskTrace);
+                return connectionMode === 'manual'
                 ? core_independentApi.requestManualApiCompletion(settings, context, messages, responseLength, {
                     signal: lifecycleController.signal,
                     model: modelOverride,
@@ -512,36 +571,27 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
                     responseLength,
                     { stream: false, extractData: true, includePreset: false, includeInstruct: false, signal: lifecycleController.signal },
                     overridePayload,
-                ),
+                );
+            },
             lifecycleController,
             options.timeoutMs,
             options.statusText || '',
         );
         core_taskTrace.markStage(taskTrace, 'request');
         core_taskTrace.markStage(taskTrace, 'response');
+        __gotResponse = true;
+        core_taskTrace.recordResponse(taskTrace, core_independentApi.responseShapeSummary(result));
+        // Observe error envelopes (including HTTP-200 429s) before draining the queue.
+        responsePayload = core_independentApi.assertIndependentResponsePayload(result);
     } catch (error) {
-        throw normalizeConnectionManagerError(error);
+        throw normalizeConnectionManagerError(error, { elapsedMs: Date.now() - __sentAt, receivedResponse: __gotResponse });
     } finally {
+        try { releaseProviderPermit?.(); } catch {}
         try { externalSignal?.removeEventListener?.('abort', forwardAbort); } catch {}
     }
-    const latestSettings = core_settings.getPluginSettings(context);
-    let latestProfileFingerprint = '';
-    if (connectionMode === 'profile') {
-        try { latestProfileFingerprint = await core_settings.resolvedProfileTransportFingerprint(core_settings.rawConnectionProfile(latestSettings.connectionProfileId, context)); }
-        catch { latestProfileFingerprint = 'missing'; }
-    }
-    if (core_independentApi.apiConfigurationFingerprint(latestSettings) !== configurationFingerprint
-        || creative_supplement.creativeSupplementBlock(latestSettings) !== creativeSupplement
-        || (connectionMode === 'profile' && latestProfileFingerprint !== selectedProfileFingerprint)) {
-        const error = new Error('API 配置或创作补充词在生成期间发生变化，本次旧请求结果已丢弃。');
-        error.code = 'RMT_API_CONFIG_CHANGED';
-        error.retryable = false;
-        throw error;
-    }
-    core_taskTrace.recordResponse(taskTrace, core_independentApi.responseShapeSummary(result));
-    let responsePayload;
-    try { responsePayload = core_independentApi.assertIndependentResponsePayload(result); }
-    catch (error) { throw normalizeConnectionManagerError(error); }
+    await assertConfigurationCurrent();
+    if (externalSignal?.aborted) forwardAbort();
+    assertRequestCurrent();
     let parsed;
     core_taskTrace.beginStage(taskTrace, 'parse');
     try { core_independentApi.assertManualStreamComplete(result);
@@ -577,6 +627,12 @@ export async function requestJson(prompt, statusText = '正在根据当前聊天
     const requestContext = options.context || core_context.currentCharacterGuard();
     const origin = options.origin || core_context.captureTaskOrigin(requestContext, archive_repository.getImportedMemory(requestContext)?.archiveRevision || '');
     core_context.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
+    const externalSignal = options.signal || null;
+    const forwardAbort = () => {
+        try { controller.abort(externalSignal?.reason instanceof Error ? externalSignal.reason : core_requestCoordinator.createGenerationAbortError()); } catch {}
+    };
+    if (externalSignal?.aborted) forwardAbort();
+    else externalSignal?.addEventListener?.('abort', forwardAbort, { once: true });
     const targetLabel = core_text.normalizeText(requestContext?.__rmtArchiveTargetLabel, 260);
     const displayStatus = targetLabel ? `正在为：${targetLabel} · ${core_text.normalizeText(statusText, 180)}` : statusText;
     runtimeState.activeGenerationTasks.set(taskKey, {
@@ -587,15 +643,10 @@ export async function requestJson(prompt, statusText = '正在根据当前聊天
     const inheritedTrace = generationTrace(options);
     const taskTrace = inheritedTrace || core_taskTrace.startTaskTrace(taskKey, options.mode);
     if (!inheritedTrace) core_taskTrace.markStage(taskTrace, 'start');
-    let releaseProviderPermit = null;
     try {
-        releaseProviderPermit = await core_requestCoordinator.acquireProviderRequestPermit(controller.signal);
-        // Once the endpoint has rate-limited us, space requests out instead of firing
-        // the next one the instant a slot frees up.
-        await core_requestCoordinator.waitForProviderPacing(controller.signal);
         core_context.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
         const result = await generateConfiguredJson(prompt, {
-            ...options, taskTrace,
+            ...options, taskTrace, origin, context: requestContext,
             signal: controller.signal,
             statusText,
             enforceGeneratedPhrasePolicy: options.enforceGeneratedPhrasePolicy !== false,
@@ -607,7 +658,7 @@ export async function requestJson(prompt, statusText = '正在根据当前聊天
         else if (taskTrace.activeStage) core_taskTrace.markStage(taskTrace, taskTrace.activeStage, false);
         throw error;
     } finally {
-        try { releaseProviderPermit?.(); } catch {}
+        try { externalSignal?.removeEventListener?.('abort', forwardAbort); } catch {}
         const current = runtimeState.activeGenerationTasks.get(taskKey);
         if (current?.controller === controller) runtimeState.activeGenerationTasks.delete(taskKey);
         core_requestCoordinator.refreshConcurrentTaskUi(core_text.normalizeText(options.mode, 80), origin);
@@ -724,6 +775,7 @@ export async function discardSavedGeneration(mode) {
 }
 
 export async function generateMode(mode, options = {}) {
+    if (!Object.values(core_constants.MODE).includes(mode)) return;
     // Capture once, before any archive/network/storage await. A destroyed invocation must never
     // adopt the next runtime lifetime and re-register itself as a fresh paid task.
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
