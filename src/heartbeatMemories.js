@@ -38,6 +38,7 @@ export function initMemoryTheater() {
         ui_settingsPanel.bindImageProviderEvents();
         const menuMounted = ui_archivePortal.mountMenuItem();
         ui_archivePortal.bindChatStateEvents();
+        ui_archivePortal.bindDiagnosticCopy();
         core_autoUpdates.startAutoUpdates();
         ui_archivePortal.bindRobustArchiveOpenHandlers();
         ui_archivePortal.bindGenerationNavigationGuards();
@@ -96,6 +97,8 @@ export function destroyMemoryTheater() {
         globalThis.__heartbeatMemoriesMountTimer = null;
         try { globalThis.__heartbeatMemoriesEventCleanup?.(); } catch {}
         globalThis.__heartbeatMemoriesEventCleanup = null;
+        try { globalThis.__heartbeatMemoriesDiagnosticCleanup?.(); } catch {}
+        globalThis.__heartbeatMemoriesDiagnosticCleanup = null;
         try { globalThis.__heartbeatMemoriesOpenCleanup?.(); } catch {}
         globalThis.__heartbeatMemoriesOpenCleanup = null;
         try { globalThis.__heartbeatMemoriesNavigationGuardCleanup?.(); } catch {}
