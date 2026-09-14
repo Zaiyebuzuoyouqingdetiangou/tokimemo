@@ -17,6 +17,7 @@ import * as creative_supplement from '../core/creativeSupplement.js';
 import * as generation_recovery from './recovery.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
+import * as core_taskTrace from '../core/taskTrace.js';
 import * as core_contextTags from '../core/contextTags.js';
 import * as core_worldPresentation from '../core/worldPresentation.js';
 import * as generation_jsonParser from './jsonParser.js';
@@ -219,21 +220,57 @@ export async function requestValidatedSegment(prompt, status, options, validator
     });
 }
 
-export async function assertPromptBudget(context, prompt, { skipTokenCount = false } = {}) {
+// The host tokenizer may use an unavailable service. Never let it hold an archive
+// task forever. A timeout stops this request; archive profile generation can then
+// use its existing local fallback without sending another model request.
+export const TOKEN_COUNT_TIMEOUT_MS = 5000;
+
+function countPromptTokens(context, prompt, signal, timeoutMs) {
+    return new Promise((resolve, reject) => {
+        let settled = false;
+        let timer = 0;
+        const finish = (handler, value) => {
+            if (settled) return;
+            settled = true;
+            if (timer) clearTimeout(timer);
+            signal?.removeEventListener?.('abort', onAbort);
+            handler(value);
+        };
+        const onAbort = () => finish(reject, core_requestCoordinator.createGenerationAbortError());
+        if (signal?.aborted) { onAbort(); return; }
+        signal?.addEventListener?.('abort', onAbort, { once: true });
+        timer = setTimeout(() => finish(reject,
+            core_text.safeUserError('本地 token 计数超时，本段未发送生成请求。', 'RMT_TOKEN_COUNT_TIMEOUT')), timeoutMs);
+        Promise.resolve().then(() => {
+            if (signal?.aborted) throw core_requestCoordinator.createGenerationAbortError();
+            return context.getTokenCountAsync(prompt);
+        }).then(value => finish(resolve, value), error => finish(reject, error));
+    });
+}
+
+export async function assertPromptBudget(context, prompt, { skipTokenCount = false, signal = null,
+    tokenCountTimeoutMs = TOKEN_COUNT_TIMEOUT_MS, taskTrace = null } = {}) {
+    if (signal?.aborted) throw core_requestCoordinator.createGenerationAbortError();
     if (prompt.length > core_constants.MAX_GENERATION_INPUT_CHARS) {
         throw core_text.safeUserError(`本次心迹回廊输入过大（${prompt.length.toLocaleString()} 字符），已在发送前拦截。请更新/精简档案或减少世界书内容。`, 'RMT_INPUT_BUDGET');
     }
     if (!skipTokenCount && typeof context.getTokenCountAsync === 'function') {
+        core_taskTrace.beginStage(taskTrace, 'token-count');
         try {
-            const tokens = Number(await context.getTokenCountAsync(prompt));
+            const timeout = Math.max(1, Math.min(TOKEN_COUNT_TIMEOUT_MS, Number(tokenCountTimeoutMs) || TOKEN_COUNT_TIMEOUT_MS));
+            const tokens = Number(await countPromptTokens(context, prompt, signal, timeout));
             if (Number.isFinite(tokens) && tokens > core_constants.MAX_GENERATION_INPUT_TOKENS) {
                 throw core_text.safeUserError(`本次心迹回廊输入约 ${Math.round(tokens).toLocaleString()} tokens，超过 ${core_constants.MAX_GENERATION_INPUT_TOKENS.toLocaleString()} 的安全预算，已在发送前拦截。`, 'RMT_INPUT_BUDGET');
             }
+            core_taskTrace.markStage(taskTrace, 'token-count');
         } catch (error) {
-            if (error?.code === 'RMT_INPUT_BUDGET') throw error;
+            core_taskTrace.markStage(taskTrace, 'token-count', false);
+            if (signal?.aborted || error?.name === 'AbortError') throw core_requestCoordinator.createGenerationAbortError();
+            if (error?.code === 'RMT_INPUT_BUDGET' || error?.code === 'RMT_TOKEN_COUNT_TIMEOUT') throw error;
             console.warn('[HeartbeatMemories] input token count unavailable; using character budget only', core_text.safeErrorDiagnostic(error));
         }
     }
+    if (signal?.aborted) throw core_requestCoordinator.createGenerationAbortError();
 }
 
 export const GENERATED_PHRASE_EVIDENCE_KEYS = new Set([
@@ -376,6 +413,8 @@ export function normalizeConnectionManagerError(error) {
 }
 
 export async function generateConfiguredJson(prompt, options = {}) {
+    const taskTrace = options.taskTrace || null;
+    core_taskTrace.beginStage(taskTrace, 'prompt');
     const context = options.context || core_context.currentCharacterGuard();
     const settings = core_settings.getPluginSettings(context);
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
@@ -388,7 +427,10 @@ export async function generateConfiguredJson(prompt, options = {}) {
     const creativeSupplement = creative_supplement.creativeSupplementBlock(settings);
     const controlledPrompt = `${contextEnvelope}
 ${expanded}${creativeSupplement}${phrasePolicy}`;
-    await assertPromptBudget(context, contextEnvelope + '\n' + originalExpanded + creativeSupplement + phrasePolicy, { skipTokenCount: options.skipTokenCount === true });
+    await assertPromptBudget(context, contextEnvelope + '\n' + originalExpanded + creativeSupplement + phrasePolicy,
+        { skipTokenCount: options.skipTokenCount === true, signal: options.signal,
+            tokenCountTimeoutMs: options.tokenCountTimeoutMs, taskTrace });
+    core_taskTrace.markStage(taskTrace, 'prompt');
     // The value configured in the dedicated secondary-API UI is the actual provider max output.
     // Per-feature options.maxTokens values are legacy sizing hints only and must not silently lower it.
     const responseLength = Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens));
@@ -425,6 +467,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
     if (externalSignal?.aborted) forwardAbort();
     else externalSignal?.addEventListener?.('abort', forwardAbort, { once: true });
     try {
+        core_taskTrace.beginStage(taskTrace, 'request');
         result = await core_requestCoordinator.runGenerationRequestWithTimeout(
             () => connectionMode === 'manual'
                 ? core_independentApi.requestManualApiCompletion(settings, context, messages, responseLength, {
@@ -443,6 +486,8 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
             options.timeoutMs,
             options.statusText || '',
         );
+        core_taskTrace.markStage(taskTrace, 'request');
+        core_taskTrace.markStage(taskTrace, 'response');
     } catch (error) {
         throw normalizeConnectionManagerError(error);
     } finally {
@@ -466,6 +511,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
     try { responsePayload = core_independentApi.assertIndependentResponsePayload(result); }
     catch (error) { throw normalizeConnectionManagerError(error); }
     let parsed;
+    core_taskTrace.beginStage(taskTrace, 'parse');
     try { core_independentApi.assertManualStreamComplete(result);
         parsed = generation_jsonParser.extractJson(responsePayload, {
         reasoning: result?.reasoning || '',
@@ -478,6 +524,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
     if (options.enforceGeneratedPhrasePolicy === true) assertNoBannedGeneratedPhrase(parsed, settings, {
         mode: options.mode, settingText: core_worldPresentation.controlledWorldEvidence(contextEnvelope, null),
     });
+    core_taskTrace.markStage(taskTrace, 'parse');
     return parsed;
 }
 

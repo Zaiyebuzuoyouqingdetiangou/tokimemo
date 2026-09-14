@@ -2,6 +2,7 @@
 // No third-party implementation, settings, credentials or DOM are accessed.
 import * as image_patch from '../core/cgImagePatch.js';
 import * as core_text from '../core/text.js';
+import * as appearance from './cgAppearance.js';
 
 export const BAIBAI_IMAGE_PROVIDER = 'baibai-image';
 export const BAIBAI_IMAGE_TIMEOUT_MS = 300000;
@@ -46,7 +47,8 @@ export function baiBaiImageState() {
         }
         const status = api.getBackendStatus();
         if (status?.configured !== true) return { available: false, detected: true, reason: MESSAGES.BBI_NOT_CONFIGURED, code: 'BBI_NOT_CONFIGURED' };
-        return { api, available: true, detected: true, reason: '柏宝绘已连接 · API v1', code: '' };
+        return { api, supportsCharacters: status.supportsCharacters === true,
+            available: true, detected: true, reason: '柏宝绘已连接 · API v1', code: '' };
     } catch {
         return { available: false, detected: false, reason: MESSAGES.BBI_BACKEND_ERROR, code: 'BBI_BACKEND_ERROR' };
     }
@@ -68,7 +70,7 @@ function publicFailure(error) {
 export function baiBaiImagePendingCount() { return pendingGenerations.size; }
 export function isBaiBaiImageTargetPending(targetKey) { return !!targetKey && pendingGenerations.has(targetKey); }
 
-export async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', onProgress = null, onSettled = null, targetKey = '' } = {}) {
+export async function generateBaiBaiImage(prompt, { signal = null, orientation = 'landscape', characterName = '', promptMetadata = null, onProgress = null, onSettled = null, targetKey = '' } = {}) {
     if (signal?.aborted) throw baiBaiImageError('BBI_ABORTED');
     const state = baiBaiImageState();
     if (!state.available) throw baiBaiImageError(state.code);
@@ -78,10 +80,30 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
     const visual = core_text.normalizeText(prompt, 1800);
     if (!visual) throw baiBaiImageError('BBI_INVALID_ARGS');
     // Freeze grouping before the provider awaits; its default otherwise reads the new chat at save time.
+    const metadata = appearance.normalizeCgPromptMetadata(promptMetadata);
+    const fullVisual = appearance.cgPreparedVisualPrompt(visual, metadata);
+    let primaryPrompt = !state.supportsCharacters && metadata
+        ? metadata.flatPrompt || fullVisual : metadata?.sceneTags || visual;
+    // Daily-comic constraints come from the local mode wrapper. Providers that only
+    // consume prompt must receive the same panel actions as those that consume nl.
+    const sceneMarker = '\n[SCENE] ';
+    const comicEnd = visual.startsWith('DAILY_COMIC_Q_V1') ? visual.indexOf(sceneMarker) : -1;
+    if (comicEnd > 0 && primaryPrompt !== visual && !primaryPrompt.startsWith('DAILY_COMIC_Q_V1')) {
+        primaryPrompt = `${visual.slice(0, comicEnd)}\n[SCENE] ${primaryPrompt}`.slice(0, appearance.CG_PREPARED_NL_LIMIT);
+    }
     const request = {
-        prompt: visual, nl: visual, size: orientation === 'portrait' ? 'portrait' : 'landscape',
+        // Workflows and older NAI models may consume only prompt. Give those
+        // backends one composed scene with named appearances, not scene-only
+        // tags or two disconnected single-person tag lists.
+        prompt: primaryPrompt,
+        nl: fullVisual,
+        size: orientation === 'portrait' ? 'portrait' : 'landscape',
         save: true, character: core_text.normalizeText(characterName, 120) || '心迹回廊 CG',
     };
+    if (state.supportsCharacters && metadata?.characters?.length) {
+        request.characters = metadata.characters.filter(character => character.tag)
+            .map(({ name, tag, nl }) => ({ name, tag, ...(nl ? { nl } : {}) }));
+    }
     const controller = new AbortController();
     let timer;
     let stopped = false;
