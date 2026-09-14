@@ -15,17 +15,33 @@ import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as modes_room from '../modes/room.js';
 import * as modes_relations from '../modes/relations.js';
 import * as ui_overlay from '../ui/overlay.js';
+import * as archive_avatars from '../ui/archiveAvatars.js';
 import * as ui_phoneView from '../ui/phoneView.js';
 import * as ui_endingView from '../ui/endingView.js';
 import * as recovery_view from '../ui/recoveryView.js';
 
+let archiveLibraryRenderSequence = 0;
 export async function showArchiveLibrary() {
+    const renderSequence = ++archiveLibraryRenderSequence;
+    const openingContext = core_context.getContext();
+    const openingScope = core_context.chatScopeKey(openingContext), openingGroup = openingContext.groupId;
     ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock(); runtimeState.activeMode = null; runtimeState.activeSession = null; runtimeState.activeArchiveSnapshot = null; runtimeState.activeArchiveReadOnly = true; runtimeState.archiveLibraryCharacterKey = ''; runtimeState.archiveViewLevel = 'library';
     ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setManageVisible(false); ui_overlay.setBackVisible(false); ui_overlay.topTitle('心迹回廊 · 档案室');
     const body = ui_overlay.bodyEl(); if (!body) return;
+    const overlay = document.getElementById(core_constants.OVERLAY_ID);
     body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在核对档案室…</b><div class="rmt-loading-note">只读取心迹回廊自己的本机删除记录，不扫描或改写聊天正文。</div></div></div>';
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const viewStillCurrent = () => {
+        try {
+            const live = core_context.getContext();
+            return renderSequence === archiveLibraryRenderSequence && lifecycleEpoch === runtimeState.runtimeLifecycleEpoch
+                && core_context.chatScopeKey(live) === openingScope && live.groupId === openingGroup
+                && runtimeState.archiveViewLevel === 'library' && !runtimeState.activeMode && !runtimeState.activeSession
+                && document.getElementById(core_constants.OVERLAY_ID) === overlay && !overlay.hidden
+                && ui_overlay.bodyEl() === body;
+        } catch { return false; }
+    };
     const indexedBefore = archive_groups.getArchiveIndex(core_context.getContext());
     const deletedEntryIds = new Set();
     await Promise.all(indexedBefore.map(async entry => {
@@ -35,7 +51,7 @@ export async function showArchiveLibrary() {
             }
         } catch {}
     }));
-    if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) return;
+    if (!viewStillCurrent()) return;
     if (deletedEntryIds.size) {
         const liveContext = core_context.getContext();
         const rawMemory = archive_repository.migrateArchiveInMemory(liveContext.chatMetadata?.[core_constants.MEMORY_KEY]);
@@ -51,6 +67,7 @@ export async function showArchiveLibrary() {
     try {
         let ctx = core_context.currentCharacterGuard();
         await core_cache.ensureCurrentArchiveBackup(ctx);
+        if (!viewStillCurrent()) return;
         ctx = core_context.currentCharacterGuard();
         const mem = archive_repository.getImportedMemory(ctx);
         if (mem) {
@@ -59,6 +76,7 @@ export async function showArchiveLibrary() {
             // after the tombstone; genuinely old source metadata stays hidden.
             const resolvedEntry = core_cache.archiveBackupEntryForContext(ctx, mem);
             const backupState = await archive_backupStore.readArchiveBackupState(resolvedEntry);
+            if (!viewStillCurrent()) return;
             if (backupState.deleted) {
                 runtimeState.archiveDeletionFences.add(archive_repository.archiveDeletionFenceKey(ctx, mem, resolvedEntry.entryId));
             } else {
@@ -110,6 +128,7 @@ export async function showArchiveLibrary() {
             currentQuick = `<section class="rmt-archive-card rmt-current-archive-card" style="margin-top:12px"><div><b>当前聊天还没有档案</b></div><div class="rmt-current-archive-actions"><button type="button" class="rmt-btn" data-rmt-action="current-archive-import">生成当前窗口档案</button></div></section>`;
         }
     } catch {}
+    if (!viewStillCurrent()) return;
     body.innerHTML = `<div class="rmt-archive-room"><section class="rmt-archive-card"><div class="rmt-archive-kicker">MEMORY ARCHIVE LIBRARY</div><strong class="rmt-archive-title">档案室一览</strong><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="rmt-btn" data-rmt-action="archive-group-manager">管理角色分类</button><button type="button" class="rmt-btn" data-rmt-action="archive-auto-classify">自动分类</button><button type="button" class="rmt-btn" data-rmt-action="rebuild-archive-index">扫描旧版本已有档案</button></div></section>${calendarQuick}${cards ? `<section class="rmt-archive-portals rmt-character-portals">${cards}</section>` : '<div class="rmt-archive-overview-empty">还没有已索引的档案。当前版本创建/更新档案后会自动加入这里；旧版本档案可点上方按钮手动扫描一次。</div>'}${currentQuick}</div>`;
 }
 
@@ -234,6 +253,7 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
     let memory = null;
     let stored = null;
     let settingBookSelection = { books: [] };
+    let sourceUserAvatar = '';
     let backupRecord = initialBackupState.record || null;
     try {
         if (!avatar || typeof context.getRequestHeaders !== 'function') throw new Error('无法定位这个角色的聊天档案文件。');
@@ -248,6 +268,7 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
         core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
         const header = Array.isArray(chat) ? chat[0] : chat;
         const metadata = header?.chat_metadata && typeof header.chat_metadata === 'object' ? header.chat_metadata : {};
+        sourceUserAvatar = archive_avatars.archiveUserAvatar(null, null, metadata);
         memory = archive_repository.migrateArchiveInMemory(metadata[core_constants.MEMORY_KEY]);
         if (!memory || core_context.comparableChatId(memory.chatId) !== wantedChatId) throw new Error('源聊天里已没有可读取的心迹回廊档案。');
         stored = metadata[core_constants.CACHE_KEY];
@@ -335,6 +356,7 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
         characterFingerprint: core_text.normalizeText(entry.characterFingerprint, 160),
         characterIndexHint: Number.isInteger(Number(entry.characterIndexHint)) ? Number(entry.characterIndexHint) : -1,
         avatar,
+        userAvatar: archive_avatars.archiveUserAvatar(memory, entry) || (!sourceError ? sourceUserAvatar : ''),
         characterName: core_text.normalizeText(entry.characterName || memory.characterName, 120) || '未命名角色',
         chatId: wantedChatId,
         archiveName: core_text.normalizeText(memory.archiveName, 160) || archive_repository.fallbackArchiveName(memory.memories),
@@ -721,7 +743,7 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
         const generating = core_requestCoordinator.isArchiveTargetModeGenerating(mode, snapshot);
         const editAction = canGenerateDerived ? `<button type="button" class="rmt-btn rmt-portal-generate" data-rmt-generate-mode="${core_text.esc(mode)}" ${generated ? 'data-rmt-regenerate="true"' : ''} ${generating ? 'disabled' : ''}>${generating ? '生成中…' : mode === core_constants.MODE.INBOX ? '收取新信' : mode === core_constants.MODE.PHONE ? (generated ? '追加 / 继续' : '生成 / 继续') : generated ? '增量追加' : '生成这一项'}</button>` : '';
         return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} rmt-archive-portal-${core_text.esc(meta.accent)}">
-          <button type="button" class="rmt-portal-open" ${generated || mode === core_constants.MODE.INBOX ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
+          <button type="button" class="rmt-portal-open" ${generated || [core_constants.MODE.INBOX, core_constants.MODE.PHONE, core_constants.MODE.TIME_JOURNEY].includes(mode) ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
             <span class="rmt-portal-avatar"><i class="fa-solid ${core_text.esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
             <span class="rmt-portal-title">${core_text.esc(meta.title)}</span>
             <span class="rmt-portal-subtitle">${core_text.esc(meta.subtitle)}</span>

@@ -12,6 +12,7 @@ import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as ui_overlay from '../ui/overlay.js';
+import * as archive_avatars from '../ui/archiveAvatars.js';
 
 export function normalizeArchiveGroup(item) {
     const id = core_text.normalizeText(item?.id, 120);
@@ -197,6 +198,7 @@ export function getArchiveIndex(context = core_context.getContext()) {
             entryId: core_text.normalizeText(item?.entryId, 120),
             characterKey: core_text.normalizeText(item?.characterKey, 300),
             avatar: core_text.normalizeText(item?.avatar, 300),
+            ...(archive_avatars.normalizeAvatarFile(item?.userAvatar) ? { userAvatar: archive_avatars.normalizeAvatarFile(item.userAvatar) } : {}),
             characterName: core_text.normalizeText(item?.characterName, 120) || '未命名角色',
             characterFingerprint: core_text.normalizeText(item?.characterFingerprint, 160),
             characterIndexHint: Number.isInteger(Number(item?.characterIndexHint)) ? Number(item.characterIndexHint) : -1,
@@ -728,6 +730,7 @@ export function upsertArchiveIndex(context, memoryBank, options = {}) {
     const item = {
         entryId: core_text.normalizeText(existing?.entryId, 120),
         characterKey, avatar,
+        ...(archive_avatars.archiveUserAvatar(memoryBank, existing) ? { userAvatar: archive_avatars.archiveUserAvatar(memoryBank, existing) } : {}),
         characterName,
         characterFingerprint: core_text.normalizeText(descriptor?.fingerprint || existing?.characterFingerprint, 160),
         characterIndexHint: Number.isInteger(Number(descriptor?.index)) ? Number(descriptor.index) : -1,

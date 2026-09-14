@@ -192,6 +192,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
     imageGenerationProvider: 'baibai-image',
     // Optional r32-style mobile safe-area presentation. Off keeps the long-standing edge-to-edge fullscreen UI.
     ttDisplayMode: false,
+    floatingAvatar: 'char',
+    floatingAvatarPosition: null,
     themeMode: 'default',
     themeAlpha: 0.96,
     themeCustom: DEFAULT_THEME_PALETTE,
@@ -209,6 +211,8 @@ export const MODE = Object.freeze({
     PHONE: 'phone',
     INBOX: 'inbox',
     PAST_LIVES: 'pastLives',
+    TIME_ECHO: 'timeEcho',
+    TIME_JOURNEY: 'timeJourney',
     TRAVEL: 'travel',
     ENDING: 'ending',
     CALENDAR: 'calendar',
@@ -227,6 +231,8 @@ export const MODE_LABEL = Object.freeze({
     [MODE.PHONE]: '他的私人终端',
     [MODE.INBOX]: '你的邮箱',
     [MODE.PAST_LIVES]: '前世今生',
+    [MODE.TIME_ECHO]: '时空回响',
+    [MODE.TIME_JOURNEY]: '错时相逢',
     [MODE.TRAVEL]: '他的出行路线',
     [MODE.ENDING]: '结局与后日谈',
     [MODE.CALENDAR]: '两个人的日历',
@@ -245,6 +251,8 @@ export const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.PHONE]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.INBOX]: 4000,
     [MODE.PAST_LIVES]: MAX_GENERATION_OUTPUT_TOKENS,
+    [MODE.TIME_ECHO]: 12000,
+    [MODE.TIME_JOURNEY]: 12000,
     [MODE.TRAVEL]: 9000,
     [MODE.ENDING]: MAX_GENERATION_OUTPUT_TOKENS,
     [MODE.CALENDAR]: 6000,
@@ -253,10 +261,10 @@ export const MODE_TOKEN_CAPS = Object.freeze({
     [MODE.ACHIEVEMENTS]: 6000,
 });
 
-export const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.PHONE, MODE.INBOX, MODE.CABINET, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY, MODE.PAST_LIVES]);
+export const ARCHIVE_PORTAL_MODES = Object.freeze([MODE.ALBUM, MODE.ADV, MODE.ROOM, MODE.PHONE, MODE.INBOX, MODE.CABINET, MODE.TRAVEL, MODE.ENDING, MODE.CALENDAR, MODE.RELATIONS, MODE.HEART, MODE.ACHIEVEMENTS, MODE.BUTTERFLY, MODE.PAST_LIVES, MODE.TIME_JOURNEY]);
 
 export const ROOM_DEEP_MODES = Object.freeze([MODE.ITEMS]);
-export const CREATIVE_EXPANSION_MODES = Object.freeze([MODE.ADV, MODE.BUTTERFLY, MODE.HEART, MODE.ENDING, MODE.ALBUM, MODE.TRAVEL, MODE.PAST_LIVES]);
+export const CREATIVE_EXPANSION_MODES = Object.freeze([MODE.ADV, MODE.BUTTERFLY, MODE.HEART, MODE.ENDING, MODE.ALBUM, MODE.TRAVEL, MODE.PAST_LIVES, MODE.TIME_ECHO, MODE.TIME_JOURNEY]);
 
 export const ARCHIVE_OVERVIEW_CACHE_MS = 60000;
 

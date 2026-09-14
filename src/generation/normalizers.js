@@ -12,11 +12,14 @@ import * as modes_items from '../modes/items.js';
 import * as modes_cabinet from '../modes/cabinet.js';
 import * as modes_phone from '../modes/phone.js';
 import * as modes_pastLives from '../modes/pastLives.js';
+import * as modes_timeStories from '../modes/timeStories.js';
+import * as time_stories from '../core/timeStoriesContract.js';
 import * as modes_room from '../modes/room.js';
 import * as modes_relations from '../modes/relations.js';
 import * as modes_travel from '../modes/travel.js';
 
 export function normalizeByMode(mode, data, memoryBank, context = null) {
+    if (time_stories.isTimeStoryMode(mode)) return modes_timeStories.normalizeTimeStories(data, memoryBank, { context });
     if (mode === core_constants.MODE.PAST_LIVES) return modes_pastLives.normalizePastLives(data, memoryBank, { context });
     if (mode === core_constants.MODE.CALENDAR) return modes_calendar.normalizeCalendar(data, memoryBank);
     if (mode === core_constants.MODE.RELATIONS) return modes_relations.normalizeRelations(data, memoryBank, context);

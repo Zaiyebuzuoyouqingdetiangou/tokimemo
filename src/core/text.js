@@ -1,6 +1,7 @@
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_context from './context.js';
+import * as core_backupDiagnostics from './backupDiagnostics.js';
 
 export function esc(value) {
     return String(value ?? '')
@@ -42,6 +43,13 @@ export function toastText(value, max = 800) {
 }
 
 const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
+    ...core_backupDiagnostics.BACKUP_FAILURE_MESSAGES,
+    RMT_DEFERRED_QUOTA: '浏览器可用存储空间不足，待写回结果仅保留在当前页面。',
+    RMT_DEFERRED_SECURITY: '浏览器权限或隐私设置阻止保存待写回结果；结果仅保留在当前页面。',
+    RMT_DEFERRED_UNAVAILABLE: '当前环境无法使用待写回存储；结果仅保留在当前页面。',
+    RMT_DEFERRED_LIMIT: '待写回结果超过本地安全容量；结果仅保留在当前页面。',
+    RMT_DEFERRED_SERIALIZE: '待写回结果无法序列化；结果仅保留在当前页面。',
+    RMT_DEFERRED_UNKNOWN: '待写回结果未能保存到浏览器；结果仅保留在当前页面。',
     RMT_PROFILE_CAPABILITY: '1.1.18 一键配置要求新版连接能力；当前页面未提供安全的配置读取能力，本次没有发送请求。',
     RMT_MANUAL_API_URL: '手动 API 地址无效；请检查地址，并把 Key、Token 或密码放在独立凭据输入框中。',
     RMT_MANUAL_API_TRANSPORT: '远程手动 API 必须使用 HTTPS；只有本机地址可以使用 HTTP。',
@@ -80,8 +88,19 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_PAST_LIVES_SOURCE: '关联记忆与当前档案不一致；旧内容保留，请回到对应档案重试。',
     RMT_PAST_LIVES_VERSION: '这份前世今生暂时无法按当前格式读取；旧记录保留，请勿删除档案。',
     RMT_PAST_LIVES_LIMIT: '前世今生已达到本地保存容量；旧内容与成功部分保留。',
+    RMT_TIME_STORY_STRUCTURE: '这一篇的时间、人物或正文不完整；旧篇章保留，可重试当前故事。',
+    RMT_TIME_STORY_WORLD: '这一篇的联络媒介与世界设定不符；旧篇章保留，可重试当前故事。',
+    RMT_TIME_STORY_RELATIONSHIP: '这一篇出现与两人设定冲突的关系表述；旧篇章保留。',
+    RMT_TIME_STORY_SOURCE: '番外所属聊天、人物或档案版本不一致；请重新打开对应档案。',
+    RMT_TIME_STORY_VERSION: '这份番外暂不可安全读取；原记录保持不变，请勿删除档案。',
+    RMT_TIME_STORY_LIMIT: '番外已达到本地保存容量；旧篇章保留，请先备份整理。',
     RMT_PAIR_RELATIONSHIP: '这一段出现与两人设定冲突的关系表述；原有内容保留。',
     RMT_RECOVERY_INPUT_CHANGED: '建档期间这个聊天窗口或生成设置发生了变化，已通过校验的分块全部保留；请点「重试未完成分块」继续，不会重做成功项。',
+    RMT_RECOVERY_ORIGIN_CHANGED: '目标聊天或角色已变化；本次没有覆盖档案，请回到原聊天继续。',
+    RMT_CACHE_CAS_CONFLICT: '档案已被其他操作更新；本次旧结果没有覆盖新内容，请检查当前档案后再保存。',
+    RMT_RECOVERY_IDENTITY: '缺少当前档案身份，本次未发送；请重新打开对应档案。',
+    RMT_RECOVERY_BUSY: '这一段正在生成，请等当前请求结束。',
+    RMT_RECOVERY_FAILED: '具体原因未记录；旧内容保留，可重试。',
     RMT_RECOVERY_VALIDATION_CHANGED: '已保存片段暂未通过当前校验；草稿仍保留，没有重新收费生成。',
     RMT_RECOVERY_STORAGE: '这一段已返回，但浏览器没有保存成功；已停止后续生成，请检查存储后重试。',
     RMT_RECOVERY_LIMIT: '这一段超出草稿保存容量；此前成功部分与旧内容保留。',
@@ -100,6 +119,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_TRAVEL_LOCATIONS: '尚无通过证据与对白校验的地点；请确认档案或已选设定世界书包含地点。不会补造远方，旧地图保留。',
     RMT_SETTING_SOURCE_PARTIAL: '所选设定世界书读取不完整或超出本次容量；请检查所选书和条目后重试，旧内容保留。',
     RMT_ARCHIVE_PREFIX_CHANGED: '旧档案与当前历史基线不一致，可能是旧消息被修改或旧版漏收了隐藏楼层。本次未覆盖；请先检查来源，不必删除档案。',
+    RMT_ARCHIVE_SOURCE_MISMATCH: '当前聊天中的档案标识或格式不匹配，已停止生成并保留原数据。',
     RMT_ROOM_HISTORY: '房间台词把没有证据的共同经历当成了过去；本次未保存，可重试。',
     RMT_LEDGER_UNAVAILABLE: '浏览器来源存储暂时不可用。请退出隐私模式或关闭旧页后重试；不要清除站点数据。',
     RMT_BANNED_GENERATED_PHRASE: '模型新生成内容命中了本地禁用词；本次结果没有保存。',
@@ -114,6 +134,8 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_PHONE_SOURCE_EMPTY: '当前来源不足以收录终端内容；请补充来源并更新档案后再生成，不会编造记录。',
     RMT_PHONE_SOURCE_CHANGED: '终端草稿的来源已变化，已完成内容未删除。请恢复原来的设定来源后继续，或明确重新生成终端。',
     RMT_INPUT_BUDGET: '本次输入超过安全预算，已在发送前拦截。',
+    RMT_TOKEN_COUNT_TIMEOUT: '输入检查超时，本段未发送；旧内容保留，可重试。',
+    RMT_TOKEN_COUNT_UNAVAILABLE: '本地计数暂不可用。',
     RMT_JSON_INVALID: '模型没有返回完整、可解析的 JSON；响应正文已隐藏。',
     RMT_ARCHIVE_DELETED_FENCE: '目标档案已被明确删除；较早启动的任务不会重新创建它。',
     RMT_METADATA_DURABILITY_UNAVAILABLE: '当前页面无法确认档案已经持久保存；结果保留待重试，不会假装成功。',
@@ -158,6 +180,9 @@ export function safeUserError(message, code = 'RMT_LOCAL_OPERATION', options = {
  * world-book text, archive text, URLs, keys, tokens, or raw exception messages.
  */
 export function safeErrorDiagnostic(error) {
+    const backup = core_backupDiagnostics.backupFailureDiagnostic(error);
+    if (backup) return { code: backup.code, kind: 'storage', retryable: false,
+        backupCategory: backup.category, backupStage: backup.stage };
     const diagnostic = {};
     const name = normalizeText(error?.name, 40);
     const code = safeErrorCode(error);
@@ -173,6 +198,9 @@ export function safeErrorDiagnostic(error) {
 }
 
 export function safeErrorSummary(error, max = 520) {
+    if (core_backupDiagnostics.backupFailureDiagnostic(error)) {
+        return normalizeText(core_backupDiagnostics.backupFailureSummary(error).message, max);
+    }
     const raw = normalizeText(error?.message, 12000);
     const status = safeErrorStatus(error);
     const code = safeErrorCode(error);
@@ -224,7 +252,7 @@ export function safeErrorSummary(error, max = 520) {
     if (/failed to fetch|networkerror|network request failed|load failed|econn(?:reset|refused)|enotfound|fetch failed/i.test(raw)) {
         return '网络连接失败；请检查地址、网络与服务状态后重试。';
     }
-    return '本次操作未完成，旧内容保留。没有可识别的错误原因，请检查连接与存储后重试。';
+    return SAFE_ERROR_CODE_MESSAGES.RMT_RECOVERY_FAILED;
 }
 
 export function cleanArray(value, maxItems = 64, maxChars = 12000) {

@@ -20,6 +20,7 @@ import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as cg_editor from './cgPromptEditor.js';
 import * as image_viewer from './cgImageViewer.js';
 import * as navigation_bookmark from './navigationBookmark.js';
+import * as floating_archive from './floatingArchive.js';
 import * as recovery_view from './recoveryView.js';
 import * as modes_achievements from '../modes/achievements.js';
 import * as modes_album from '../modes/album.js';
@@ -48,6 +49,9 @@ import * as ui_travelView from './travelView.js';
 import * as ui_settingsPanel from './settingsPanel.js';
 import * as home_view from './homeView.js';
 import * as past_lives_view from './pastLivesView.js';
+import * as time_stories_view from './timeStoriesView.js';
+import * as time_stories from '../core/timeStoriesContract.js';
+import * as modes_timeStories from '../modes/timeStories.js';
 import * as ui_styles from './styles.js';
 
 export function isArchiveMobileViewport() {
@@ -134,6 +138,7 @@ export function revealArchiveOverlay(overlay) {
 }
 
 export function openOverlay() {
+    floating_archive.hideFloatingArchive();
     image_viewer.closeCgImageViewer({ restoreFocus: false });
     ui_styles.ensureStyles();
     const preferDialog = isArchiveMobileViewport() && typeof globalThis.HTMLDialogElement === 'function';
@@ -178,12 +183,17 @@ export function openOverlay() {
 
 export function closeOverlay() {
     image_viewer.closeCgImageViewer({ restoreFocus: false });
-    navigation_bookmark.rememberReadingPosition();
+    const overlay = document.getElementById(core_constants.OVERLAY_ID);
+    // Mobile close gestures can deliver both an early event and a click. Only
+    // the first close records the page; later events must not replace it.
+    if (overlay && !overlay.hidden) {
+        floating_archive.rememberFloatingArchive();
+        navigation_bookmark.rememberReadingPosition();
+    }
     cg_editor.closeCgPromptEditor({ restoreFocus: false });
     modes_room.stopRoomClock();
     ui_phoneView.stopPhoneClock();
     ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
-    const overlay = document.getElementById(core_constants.OVERLAY_ID);
     if (overlay) {
         if (typeof globalThis.HTMLDialogElement === 'function' && overlay instanceof globalThis.HTMLDialogElement && overlay.open) {
             try { overlay.close(); } catch {}
@@ -195,6 +205,7 @@ export function closeOverlay() {
     runtimeState.activeMode = null;
     runtimeState.activeSession = null;
     runtimeState.contentManagerOpen = false;
+    floating_archive.refreshFloatingArchive();
 }
 
 export function bodyEl() {
@@ -217,6 +228,8 @@ export function setBackVisible(visible, label = '返回上级') {
 export function navigateBack() {
     if (image_viewer.closeCgImageViewer()) return;
     if (runtimeState.activeMode === 'pastLives' && past_lives_view.closePastLivesDetail()) return;
+    if (time_stories.isTimeStoryMode(runtimeState.activeMode) && time_stories_view.closeTimeStoryDetail()) return;
+    if (runtimeState.activeMode === core_constants.MODE.TIME_ECHO) return openCachedOrGenerate(core_constants.MODE.PHONE);
     if (cg_editor.hasCgPromptEditor()) return cg_editor.closeCgPromptEditor();
     if (runtimeState.endingEasterEggRuntime) return ui_endingView.closeEndingEasterEgg();
     if (runtimeState.contentManagerOpen) {
@@ -486,7 +499,7 @@ export function showChooser() {
         const draft = mode === core_constants.MODE.PHONE && ready ? core_cache.loadPhoneGenerationDraft(context) : null;
         const actionText = mode === core_constants.MODE.INBOX ? (generating ? '收信中…' : '收取新信') : generating ? '生成中…' : draft ? `继续生成 · ${draft.completedApps.length}/${draft.plan.apps.length}` : generated ? (isCalendar ? '刷新日历' : '增量追加') : (isCalendar ? '生成日历' : '生成这一项');
         return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} ${generating ? 'generating' : ''} rmt-archive-portal-${core_text.esc(meta.accent)}">
-          <button type="button" class="rmt-portal-open" ${generated || (ready && mode === core_constants.MODE.INBOX) ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
+          <button type="button" class="rmt-portal-open" ${generated || (ready && [core_constants.MODE.INBOX, core_constants.MODE.PHONE, core_constants.MODE.TIME_JOURNEY].includes(mode)) ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
             <span class="rmt-portal-avatar"><i class="fa-solid ${core_text.esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
             <span class="rmt-portal-title">${core_text.esc(meta.title)}</span>
             <span class="rmt-portal-subtitle">${core_text.esc(meta.subtitle)}</span>
@@ -650,10 +663,21 @@ export function showInlineError(message) {
     }
 }
 
+function emptyArchiveMode(mode, memory, context, stored) {
+    if (mode === core_constants.MODE.INBOX) return modes_inbox.emptyInbox(memory, context);
+    if (mode === core_constants.MODE.PAST_LIVES) return modes_pastLives.emptyPastLives(memory, context);
+    // Opening an empty reader is free. An unreadable existing record is not an
+    // empty reader and never grants permission to overwrite saved material.
+    if (stored?.[mode]) return null;
+    if (time_stories.isTimeStoryMode(mode)) return modes_timeStories.emptyTimeStories(mode, memory, context);
+    if (mode === core_constants.MODE.PHONE) return ui_phoneView.emptyPhone(memory, context);
+    return null;
+}
+
 export function openCachedOrGenerate(mode) {
     if (runtimeState.activeArchiveSnapshot) {
         const snapshot = runtimeState.activeArchiveSnapshot;
-        const cached = core_cache.loadSession(mode, { chatId: snapshot.chatId, memoryBank: snapshot.memory, cache: snapshot.cache, clone: true }) || (mode === core_constants.MODE.INBOX ? modes_inbox.emptyInbox(snapshot.memory) : mode === 'pastLives' ? modes_pastLives.emptyPastLives(snapshot.memory) : null);
+        const cached = core_cache.loadSession(mode, { chatId: snapshot.chatId, memoryBank: snapshot.memory, cache: snapshot.cache, clone: true }) || emptyArchiveMode(mode, snapshot.memory, null, snapshot.cache);
         if (cached) {
             runtimeState.activeMode = mode;
             runtimeState.activeSession = cached;
@@ -670,7 +694,8 @@ export function openCachedOrGenerate(mode) {
         globalThis.toastr?.warning?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
         return;
     }
-    const cached = core_cache.loadSession(mode) || (mode === core_constants.MODE.INBOX ? modes_inbox.emptyInbox(archive_repository.requireArchive(core_context.currentCharacterGuard()), core_context.currentCharacterGuard()) : mode === 'pastLives' ? modes_pastLives.emptyPastLives(archive_repository.requireArchive(core_context.currentCharacterGuard()), core_context.currentCharacterGuard()) : null);
+    const context = core_context.currentCharacterGuard();
+    const cached = core_cache.loadSession(mode) || emptyArchiveMode(mode, archive_repository.requireArchive(context), context, core_cache.getCache(context));
     if (cached) {
         runtimeState.activeMode = mode;
         runtimeState.activeSession = cached;
@@ -696,9 +721,9 @@ export function renderActive() {
     runtimeState.contentManagerOpen = false;
     if (runtimeState.activeMode !== core_constants.MODE.ENDING) ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     if (!runtimeState.activeSession || !runtimeState.activeMode) return runtimeState.activeArchiveSnapshot ? archive_library.showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot) : showChooser();
-    const supportsTopbarIncrement = ![core_constants.MODE.INBOX, 'pastLives'].includes(runtimeState.activeMode) && (!core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) || runtimeState.activeMode === core_constants.MODE.PHONE);
+    const supportsTopbarIncrement = !time_stories.isTimeStoryMode(runtimeState.activeMode) && ![core_constants.MODE.INBOX, 'pastLives'].includes(runtimeState.activeMode) && (!core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) || runtimeState.activeMode === core_constants.MODE.PHONE);
     setRegenerateVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && supportsTopbarIncrement);
-    setManageVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && ![core_constants.MODE.RELATIONS, core_constants.MODE.INBOX, 'pastLives'].includes(runtimeState.activeMode));
+    setManageVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && !time_stories.isTimeStoryMode(runtimeState.activeMode) && ![core_constants.MODE.RELATIONS, core_constants.MODE.INBOX, 'pastLives'].includes(runtimeState.activeMode));
     setBackVisible(true, runtimeState.activeArchiveSnapshot ? (runtimeState.activeArchiveReadOnly ? '只读档案' : '档案') : core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) ? '他的房间' : '当前档案');
     if (runtimeState.activeMode !== core_constants.MODE.ROOM) modes_room.stopRoomClock();
     if (runtimeState.activeMode !== core_constants.MODE.PHONE) ui_phoneView.stopPhoneClock();
@@ -717,6 +742,7 @@ export function renderActive() {
     else if (runtimeState.activeMode === core_constants.MODE.ACHIEVEMENTS) modes_achievements.renderAchievements();
     else if (runtimeState.activeMode === core_constants.MODE.HEART) ui_heartView.renderHeart();
     else if (runtimeState.activeMode === 'pastLives') past_lives_view.renderPastLives();
+    else if (time_stories.isTimeStoryMode(runtimeState.activeMode)) time_stories_view.renderTimeStories();
     decorateReadOnlyModeUi();
 }
 
@@ -927,14 +953,18 @@ async function regenerateManagedCategory() {
 export function handleOverlayClick(event) {
     const pastLivesButton = event.target.closest?.('[data-rmt-past-lives]');
     if (pastLivesButton) return void past_lives_view.handlePastLivesAction(pastLivesButton.dataset.rmtPastLives, pastLivesButton.dataset.rmtPastLivesId);
+    const timeStoryButton = event.target.closest?.('[data-rmt-time-story]');
+    if (timeStoryButton) return void time_stories_view.handleTimeStoryAction(timeStoryButton.dataset.rmtTimeStory, timeStoryButton.dataset.rmtTimeStoryId);
     const discardButton = event.target.closest?.('[data-rmt-recovery-discard]');
     if (discardButton) return void generation_client.discardSavedGeneration(discardButton.dataset.rmtRecoveryDiscard).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
     if (event.target.closest?.('[data-rmt-archive-discard]')) {
         if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return;
         if (!confirmExplicitAction('放弃本页整理草稿？', '仅清除当前聊天尚未提交的档案整理/简介草稿，不能恢复。不删除已保存的正式记忆、模块或图片，也不会自动发起新请求。', { destructive: true })) return;
         const context = core_context.currentCharacterGuard();
-        archive_importRecovery.clearArchiveRecovery(core_context.captureTaskOrigin(context, archive_repository.getImportedMemory(context)?.archiveRevision || ''));
-        return showChooser();
+        try {
+            if (archive_repository.discardCurrentArchiveImportRecovery(context)) return showChooser();
+        } catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 草稿未放弃'); }
+        return;
     }
     const recoveryButton = event.target.closest?.('[data-rmt-recovery-mode]');
     if (recoveryButton) return void generation_client.continueSavedGeneration(recoveryButton.dataset.rmtRecoveryMode).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
@@ -946,6 +976,7 @@ export function handleOverlayClick(event) {
     const generateModeButton = event.target.closest?.('[data-rmt-generate-mode]');
     if (generateModeButton) {
         const mode = generateModeButton.dataset.rmtGenerateMode;
+        const background = !time_stories.isTimeStoryMode(mode) && generateModeButton.dataset.rmtReaderGeneration !== 'true';
         if (runtimeState.activeArchiveSnapshot) {
             if (runtimeState.activeArchiveSnapshot.backupOnly) {
                 globalThis.toastr?.warning?.('独立备份是永久只读快照，不能启动派生生成。', '心迹回廊');
@@ -956,7 +987,7 @@ export function handleOverlayClick(event) {
             void (async () => {
                 try {
                     const targetOptions = archive_library.archiveTargetGenerationOptions(snapshot);
-                    await generation_client.generateMode(mode, { background: true, ...targetOptions });
+                    await generation_client.generateMode(mode, { background, ...targetOptions });
                 } catch (error) {
                     globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
                 }
@@ -965,7 +996,7 @@ export function handleOverlayClick(event) {
         }
         if (!archive_library.requireWritableArchiveAction()) return;
         if (generateModeButton.dataset.rmtRegenerate === 'true' && !confirmModeRegeneration(mode)) return;
-        void generation_client.generateMode(mode, { background: true });
+        void generation_client.generateMode(mode, { background });
         return;
     }
     const modeButton = event.target.closest?.('[data-rmt-mode]');

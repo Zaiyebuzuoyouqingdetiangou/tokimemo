@@ -3,6 +3,7 @@
 import * as core_constants from '../core/constants.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
+import * as core_context from '../core/context.js';
 import * as modes_phone from '../modes/phone.js';
 import * as modes_room from '../modes/room.js';
 import * as ui_overlay from './overlay.js';
@@ -43,6 +44,28 @@ const PHONE_KIND_ICONS = Object.freeze({
     reading: 'book', books: 'book', files: 'briefcase', research: 'tool', games: 'game', finance: 'wallet', travel: 'plane', security: 'shield', creative: 'palette',
     weather: 'cloud', tools: 'tool', misc: 'spark',
 });
+
+// An unsaved navigation shell: opening the terminal never creates a generation
+// prerequisite for its independently stored time-echo stories.
+export function emptyPhone(memory, context = null) {
+    return { kind: core_constants.MODE.PHONE, chatId: core_text.normalizeText(memory?.chatId, 240),
+        archiveRevision: core_text.normalizeText(memory?.archiveRevision, 240),
+        ownerKey: context ? core_context.currentCharacterRuntimeKey(context) : '',
+        ownerName: core_text.normalizeText(memory?.characterName, 120),
+        characterName: core_text.normalizeText(memory?.characterName, 120),
+        userName: core_text.normalizeText(memory?.userName, 120),
+        _rmtEmptyTerminal: true, apps: [], view: 'home', selectedAppId: '', selectedEntryId: '' };
+}
+
+function renderEmptyPhone(session) {
+    stopPhoneClock();
+    ui_overlay.topTitle('他的私人终端');
+    ui_overlay.setBackVisible(true, '档案');
+    const body = ui_overlay.bodyEl();
+    if (!body) return;
+    const locked = !!runtimeState.activeArchiveSnapshot && (runtimeState.activeArchiveReadOnly || runtimeState.activeArchiveSnapshot.backupOnly === true);
+    body.innerHTML = `<section class="rmt-phone-empty-terminal"><h2>${core_text.esc(session.ownerName || '他')}的私人终端</h2><p>尚未生成终端记录。</p><div class="rmt-time-actions">${locked ? '' : '<button type="button" class="rmt-btn" data-rmt-generate-mode="phone" data-rmt-reader-generation="true">生成终端</button>'}<button type="button" class="rmt-btn" data-rmt-mode="timeEcho"><i class="fa-solid fa-wave-square" aria-hidden="true"></i> 时空回响</button></div></section>`;
+}
 
 function visiblePhoneApps(session) {
     return (Array.isArray(session?.apps) ? session.apps : []).filter(app => {
@@ -221,7 +244,10 @@ function phoneAppButton(app, badge, className = '') {
 }
 
 function renderPhoneHome(session, apps, live, now, kind) {
-    const launcher = apps.map(app => phoneAppButton(app, Math.max(0, Number(live.badgeCounts?.[app.id]) || 0))).join('');
+    // A local portal, not a generated app: it survives terminal regeneration and
+    // sits first so compact watch layouts cannot hide it after their sixth app.
+    const echo = '<button type="button" class="rmt-phone-app rmt-phone-home-app rmt-phone-time-echo" data-rmt-mode="timeEcho" aria-label="打开时空回响"><span class="rmt-phone-icon rmt-phone-icon-spark" aria-hidden="true"><i class="fa-solid fa-wave-square"></i></span><span>时空回响</span></button>';
+    const launcher = echo + apps.map(app => phoneAppButton(app, Math.max(0, Number(live.badgeCounts?.[app.id]) || 0))).join('');
     const dockCandidates = [];
     for (const preferred of ['chat', 'notes', 'contacts', 'browser']) {
         const app = apps.find(item => phonePresentationKind(item) === preferred && !dockCandidates.includes(item));
@@ -277,6 +303,7 @@ function renderPhoneDetailPage(entry, app) {
 export function renderPhone() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.PHONE) return;
+    if (session._rmtEmptyTerminal === true) return renderEmptyPhone(session);
     upgradePhoneViewSession(session);
     ui_overlay.setBackVisible(true, '档案');
     ui_overlay.topTitle('他的私人终端');

@@ -7,16 +7,20 @@
 // Hard rule: only code-owned labels, booleans, counts, durations and RMT_* codes are
 // stored. No prompt, no model response, no chat, no persona, no card, no URL, no header,
 // no key, no exception text. The exporter therefore has nothing to redact.
+import * as core_backupDiagnostics from './backupDiagnostics.js';
 const MAX_TASKS = 8;
 const MAX_STAGES = 24;
 const MAX_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
 const STAGES = Object.freeze(['start', 'prompt', 'request', 'response', 'parse', 'validate',
-    'token-count', 'merge', 'profile', 'save', 'deferred', 'render', 'done', 'failed']);
+    'token-count', 'token-count-fallback', 'merge', 'profile', 'save', 'deferred', 'render', 'done', 'failed']);
 const trace = [];
 const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone']);
 const OUTCOMES = new Set(['running', 'ok', 'failed', 'cancelled', 'deferred', 'blocked', 'noop']);
 const CODES = new Set([
-    'RMT_API_CONFIG_CHANGED', 'RMT_ARCHIVE_CHUNK', 'RMT_ARCHIVE_DELETED_FENCE', 'RMT_ARCHIVE_PREFIX_CHANGED',
+    ...Object.keys(core_backupDiagnostics.BACKUP_FAILURE_MESSAGES),
+    'RMT_DEFERRED_QUOTA', 'RMT_DEFERRED_SECURITY', 'RMT_DEFERRED_UNAVAILABLE',
+    'RMT_DEFERRED_LIMIT', 'RMT_DEFERRED_SERIALIZE', 'RMT_DEFERRED_UNKNOWN',
+    'RMT_API_CONFIG_CHANGED', 'RMT_ARCHIVE_CHUNK', 'RMT_ARCHIVE_DELETED_FENCE', 'RMT_ARCHIVE_PREFIX_CHANGED', 'RMT_ARCHIVE_SOURCE_MISMATCH',
     'RMT_ARCHIVE_VERDICT', 'RMT_BANNED_GENERATED_PHRASE', 'RMT_CACHE_CAS_CONFLICT', 'RMT_CONNECTION_AUTH',
     'RMT_CONNECTION_CONFIG', 'RMT_CONNECTION_CONTEXT_LIMIT', 'RMT_CONNECTION_FAILED', 'RMT_CONNECTION_INVALID_REQUEST',
     'RMT_CONNECTION_NETWORK', 'RMT_CONNECTION_QUOTA', 'RMT_CONNECTION_RATE_LIMIT', 'RMT_CONNECTION_SERVER',
@@ -72,8 +76,16 @@ export function markChunks(entry, { total = 0, ok = 0, failed = 0, pending = 0 }
 
 export function recordTaskFailure(entry, error) {
     if (!entry || !error) return entry;
+    const storage = core_backupDiagnostics.backupFailureDiagnostic(error);
+    if (storage) {
+        entry.code = storage.code;
+        entry.storage = storage;
+        entry.field = '';
+        return entry;
+    }
     entry.code = CODES.has(error.code) ? error.code : 'RMT_UNCODED';
     entry.field = STAGES.includes(error.failedField) ? error.failedField : '';
+    delete entry.storage;
     return entry;
 }
 
@@ -98,6 +110,9 @@ export function taskTraceSnapshot() {
         code: CODES.has(entry.code) || entry.code === 'RMT_UNCODED' ? entry.code : '',
         field: STAGES.includes(entry.field) ? entry.field : '',
         activeStage: STAGES.includes(entry.activeStage) ? entry.activeStage : '',
+        ...(entry.storage ? { storage: core_backupDiagnostics.backupFailureDiagnostic({
+            code: entry.storage.code, kind: 'storage', backupStage: entry.storage.stage,
+        }) } : {}),
         chunks: Object.fromEntries(['total', 'ok', 'failed', 'pending'].map(key => [key, bounded(entry.chunks[key], 9999)])),
         stages: entry.stages.filter(row => STAGES.includes(row.stage)).slice(-MAX_STAGES)
             .map(row => `${row.stage}${row.ok === true ? '' : '!'}@${bounded(row.at, MAX_DURATION_MS)}ms`),

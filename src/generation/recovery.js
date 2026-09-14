@@ -2,6 +2,7 @@
 // Storage is supplied by the existing origin/revision/fence-aware cache boundary.
 // Model text stays inert and is never put on Error objects, in logs, or in DOM.
 import * as core_digest from '../core/digest.js';
+import * as core_text from '../core/text.js';
 export const GENERATION_RECOVERY_CACHE_KEY = '__generationRecoveryV1';
 export const GENERATION_RECOVERY_LIMITS = Object.freeze({
     segments: 128, segmentChars: 600000, journalChars: 1800000,
@@ -29,6 +30,13 @@ function recoveryError(code, message) {
     error.retryable = false;
     error.retryableJson = false;
     return error;
+}
+
+function recoveryFailureCode(error) {
+    // A provider can supply an arbitrary code, including an RMT-prefixed value.
+    // Persist only fixed local classifications, never raw error fields.
+    const code = core_text.safeErrorDiagnostic(error).code;
+    return code && FAILURE_CODE.test(code) ? code : 'RMT_RECOVERY_FAILED';
 }
 
 function primitiveString(value, max, required = false) {
@@ -356,7 +364,7 @@ export async function withRecoverySegment(prompt, options, validator, run) {
             if (error?.name !== 'AbortError') {
                 await changeJournal(handle, journal => {
                     const saved = journal.segments.find(segment => segment.slot === slot);
-                    const code = FAILURE_CODE.test(error?.code || '') ? error.code : 'RMT_SEGMENT_VALIDATION';
+                    const code = recoveryFailureCode(error);
                     // Preserve a genuine truncated draft across later auth/rate/validation errors.
                     if (saved?.state !== 'complete' && saved?.state !== 'truncated') replaceSegment(journal, { slot, requestHash, state: 'retry', failureCode: code, ...(contract ? { contract } : {}) });
                     journal.failureCode = code;
@@ -396,6 +404,6 @@ export async function recordRecoveryTruncation(options, raw, error) {
 export async function noteGenerationRecoveryFailure(origin, error) {
     const handle = origin && handles.get(origin);
     if (!handle || error?.name === 'AbortError') return false;
-    const code = FAILURE_CODE.test(error?.code || '') ? error.code : 'RMT_SEGMENT_VALIDATION';
+    const code = recoveryFailureCode(error);
     return changeJournal(handle, journal => { journal.failureCode = code; });
 }

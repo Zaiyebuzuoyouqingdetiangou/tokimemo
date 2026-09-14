@@ -51,12 +51,14 @@ export function archiveOpenButtonFromEvent(event) {
 
 export function safeShowArchiveLibrary(source = 'unknown') {
     try {
+        if (navigation_bookmark.restorePagePosition({ home: showHome, chooser: ui_overlay.showChooser,
+            library: archive_library.showArchiveLibrary, character: archive_library.showArchiveCharacter })) return true;
         if (navigation_bookmark.restoreReadingPosition({ open: ui_overlay.openOverlay, render: ui_overlay.renderActive, stopAutomaticLife: room.stopRoomClock })) return true;
         if (navigation_bookmark.hasIndexedReadingPosition()) {
             // Keep the public synchronous boolean contract. Indexed restoration
             // performs a read-only canonical fetch and cancels on chat/lifecycle changes.
             void navigation_bookmark.restoreIndexedReadingPosition({ open: ui_overlay.openOverlay, render: ui_overlay.renderActive,
-                stopAutomaticLife: room.stopRoomClock, fallback: () => {
+                renderSnapshot: archive_library.showIndexedArchiveSnapshot, stopAutomaticLife: room.stopRoomClock, fallback: () => {
                     showHome();
                 } });
             return true;

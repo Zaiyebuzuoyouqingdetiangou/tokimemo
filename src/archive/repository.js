@@ -12,6 +12,7 @@ import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_taskTrace from '../core/taskTrace.js';
+import * as core_backupDiagnostics from '../core/backupDiagnostics.js';
 import * as core_text from '../core/text.js';
 import * as archive_memoryFileImport from './memoryFileImport.js';
 import * as archive_memoryProviders from './memoryProviders.js';
@@ -21,6 +22,7 @@ import * as generation_client from '../generation/client.js';
 import * as modes_heart from '../modes/heart.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as ui_settingsPanel from '../ui/settingsPanel.js';
+import * as archive_avatars from '../ui/archiveAvatars.js';
 
 export function archiveSchemaVersion(memory) {
     const version = Number(memory?.version);
@@ -45,7 +47,8 @@ export function migrateArchiveInMemory(memory) {
 export function getImportedMemory(context = core_context.getContext()) {
     const memory = migrateArchiveInMemory(context.chatMetadata?.[core_constants.MEMORY_KEY]);
     if (!memory) return null;
-    if (core_text.normalizeText(memory.chatId, 240) !== core_context.getChatId(context)) return null;
+    if (!core_context.comparableChatId(memory.chatId)
+        || core_context.comparableChatId(memory.chatId) !== core_context.comparableChatId(core_context.getChatId(context))) return null;
     if (runtimeState.archiveDeletionFences.has(archiveDeletionFenceKey(context, memory))) return null;
     return memory;
 }
@@ -1588,8 +1591,115 @@ export function getCurrentArchiveImportRecoverySummary(context = core_context.ge
     try {
         const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
         archive_importRecovery.acknowledgeArchiveRecoveryCommit(origin);
-        return archive_importRecovery.archiveRecoverySummary(origin);
+        const summary = archive_importRecovery.archiveRecoverySummary(origin);
+        const pending = currentPendingArchiveSave(context);
+        if (!pending) return summary;
+        return { ...summary, operation: 'import', profileOnly: false, awaitingCommit: true,
+            committedRevision: pending.item.memoryBank.archiveRevision,
+            completed: summary?.completed || Number(pending.item.completedChunks) || 0,
+            canContinue: false, canRetry: true, pageOnly: true,
+            notice: '整理已完成，尚未保存；仅重试保存不会请求模型。请保留当前页面。' };
     } catch { return null; }
+}
+
+function currentPendingArchiveSave(context) {
+    const savedRevision = getImportedMemory(context)?.archiveRevision;
+    let pending = null;
+    for (const [key, bucket] of runtimeState.deferredChatCommits) {
+        for (const item of Array.isArray(bucket) ? bucket : []) {
+            if (item?.kind !== 'archive' || !core_context.deferredCommitOriginMatchesContext(item.origin, context)
+                || !isCompatibleArchive(item.memoryBank) || !item.memoryBank.archiveRevision
+                || core_context.comparableChatId(item.memoryBank.chatId) !== core_context.comparableChatId(item.origin.chatId)
+                || item.memoryBank.archiveRevision === savedRevision) continue;
+            if (!pending || Number(item.queuedAt) >= Number(pending.item.queuedAt)) pending = { key, item };
+        }
+    }
+    return pending;
+}
+
+// The existing explicit discard confirmation owns permission. Remove the exact
+// pending archive records first so a later chat-open flush cannot resurrect them.
+export function discardCurrentArchiveImportRecovery(context = core_context.currentCharacterGuard()) {
+    if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return false;
+    for (const [key, bucket] of runtimeState.deferredChatCommits) {
+        for (const item of Array.isArray(bucket) ? bucket.slice() : []) {
+            if (item?.kind !== 'archive' || !core_context.deferredCommitOriginMatchesContext(item.origin, context)) continue;
+            if (!core_requestCoordinator.acknowledgeDeferredCommit(key, item)) {
+                const code = runtimeState.deferredChatCommits.diagnosticStatus?.().errorCode || 'RMT_DEFERRED_UNKNOWN';
+                throw core_text.safeUserError('待写回草稿尚未移除，整理草稿继续保留。', code);
+            }
+        }
+    }
+    archive_importRecovery.clearArchiveRecovery(core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || ''));
+    return true;
+}
+
+async function retryCurrentArchiveSave(context, taskTrace) {
+    const pending = currentPendingArchiveSave(context);
+    if (!pending) return { status: 'blocked' };
+    const { key, item } = pending;
+    const bank = { ...item.memoryBank,
+        characterName: core_text.normalizeText(context.name2, 120) || item.memoryBank.characterName };
+    const liveOrigin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
+    const controller = new AbortController();
+    const liveTaskCurrent = () => !controller.signal.aborted && core_context.isCurrentTaskOrigin(liveOrigin);
+    const stillCurrent = () => liveTaskCurrent()
+        && core_context.deferredCommitOriginMatchesContext(item.origin, core_context.getContext());
+    const assertCurrent = () => {
+        if (!stillCurrent()) throw core_text.safeUserError('原聊天或任务已经变化，待保存结果保留。', 'RMT_RECOVERY_ORIGIN_CHANGED');
+    };
+    runtimeState.busy = true;
+    runtimeState.activeTaskTrace = taskTrace;
+    runtimeState.activeTaskOrigin = liveOrigin;
+    runtimeState.activeTaskAbortController = controller;
+    runtimeState.activeTaskLabel = '正在保存已整理的档案…';
+    try {
+        ui_overlay.setBusyUi(true, runtimeState.activeTaskLabel);
+        core_taskTrace.beginStage(taskTrace, 'validate');
+        const snapshot = await core_context.buildChatSnapshot(context, { expectedChatId: item.origin.chatId, stillCurrent });
+        assertCurrent();
+        if (!runtimeState.deferredChatCommits.get(key)?.includes(item)) return { status: 'blocked' };
+        if (!archivedChatFingerprint(bank) || archivedChatFingerprint(bank) !== snapshot.fingerprint
+            || Number(bank.sourceMessageCount) !== snapshot.totalMessages) {
+            throw core_text.safeUserError('聊天来源已经变化，整理结果保留，本次没有写入。', 'RMT_RECOVERY_INPUT_CHANGED');
+        }
+        core_taskTrace.markStage(taskTrace, 'validate');
+        core_taskTrace.beginStage(taskTrace, 'save');
+        await core_cache.saveImportedMemory(core_context.currentCharacterGuard(), bank, item.origin.chatId, {
+            preserveDerivedCache: !!item.preserveDerivedCache,
+            expectedTaskOrigin: item.origin, assertTaskCurrent: assertCurrent,
+            explicitCreate: item.origin.archivePresent === false,
+            expectedPreviousArchiveState: { present: item.origin.archivePresent === true, revision: item.origin.archiveRevision },
+        });
+        // After commit the old origin's revision no longer exists. Keep the live
+        // chat/card/lifecycle fence, then confirm the exact committed revision.
+        if (!liveTaskCurrent()) throw core_text.safeUserError('原聊天或任务已经变化，未确认本次保存。', 'RMT_RECOVERY_ORIGIN_CHANGED');
+        const savedContext = core_context.currentCharacterGuard();
+        if (getImportedMemory(savedContext)?.archiveRevision !== bank.archiveRevision) {
+            throw core_text.safeUserError('档案版本已变化，未确认本次保存。', 'RMT_CACHE_CAS_CONFLICT');
+        }
+        core_taskTrace.markStage(taskTrace, 'save');
+        core_requestCoordinator.acknowledgeDeferredCommit(key, item);
+        archive_importRecovery.acknowledgeArchiveRecoveryCommit({ ...item.origin, archiveRevision: bank.archiveRevision });
+        clearMemoryPreflight(savedContext);
+        ui_settingsPanel.refreshSettingsMemoryStatus();
+        const overlay = document.getElementById(core_constants.OVERLAY_ID);
+        if (overlay && !overlay.hidden && !runtimeState.activeMode && runtimeState.archiveViewLevel === 'chooser') ui_overlay.showChooser();
+        globalThis.toastr?.success?.('档案已保存，本次没有请求模型。', '心迹回廊');
+        return { status: 'committed' };
+    } catch (error) {
+        core_taskTrace.endTaskTrace(taskTrace, controller.signal.aborted ? 'cancelled' : 'failed', error);
+        globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 保存未完成');
+        return { status: controller.signal.aborted ? 'cancelled' : 'failed' };
+    } finally {
+        if (runtimeState.activeTaskAbortController === controller) {
+            runtimeState.activeTaskAbortController = null;
+            runtimeState.activeTaskOrigin = null;
+            runtimeState.activeTaskLabel = '';
+            runtimeState.busy = false;
+            ui_overlay.setBusyUi(false);
+        }
+    }
 }
 
 export function getCurrentArchiveProfileRecoverySummary(context = core_context.getContext()) {
@@ -1625,6 +1735,10 @@ function finishArchiveTaskTrace(taskTrace, result) {
     core_taskTrace.endTaskTrace(taskTrace, outcome);
 }
 
+function isArchiveCancellation(error) {
+    return error?.name === 'AbortError' && !core_backupDiagnostics.backupFailureDiagnostic(error);
+}
+
 export async function rewriteCurrentArchiveVerdict() {
     const taskTrace = core_taskTrace.startTaskTrace('archive-profile', 'archive-profile');
     core_taskTrace.markStage(taskTrace, 'start');
@@ -1633,7 +1747,7 @@ export async function rewriteCurrentArchiveVerdict() {
         finishArchiveTaskTrace(taskTrace, result);
         return result;
     } catch (error) {
-        core_taskTrace.endTaskTrace(taskTrace, error?.name === 'AbortError' ? 'cancelled' : 'failed', error);
+        core_taskTrace.endTaskTrace(taskTrace, isArchiveCancellation(error) ? 'cancelled' : 'failed', error);
         throw error;
     } finally {
         if (runtimeState.activeTaskTrace === taskTrace) runtimeState.activeTaskTrace = null;
@@ -1697,10 +1811,10 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace) {
         globalThis.toastr?.success?.('简介已写好；记忆与其他内容保持不变。', '心迹回廊');
         return { status: 'committed' };
     } catch (error) {
-        core_taskTrace.endTaskTrace(taskTrace, error?.name === 'AbortError' ? 'cancelled' : 'failed', error);
+        core_taskTrace.endTaskTrace(taskTrace, isArchiveCancellation(error) ? 'cancelled' : 'failed', error);
         globalThis.toastr?.warning?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊 · 简介未更新');
         if (getCurrentArchiveProfileRecoverySummary(context)) globalThis.toastr?.info?.(archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '心迹回廊 · 简介草稿');
-        return { status: error?.name === 'AbortError' ? 'cancelled' : 'failed' };
+        return { status: isArchiveCancellation(error) ? 'cancelled' : 'failed' };
     } finally {
         archive_importRecovery.releaseArchiveRecovery(recoveryTicket);
         runtimeState.busy = false;
@@ -1719,6 +1833,9 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace) {
 async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic = false, continueRecovery = false } = {}, preparation) {
     const context = preparation.context;
     const existing = preparation.existing;
+    // Capture before any await; a later chat/Persona switch cannot rebind this bank.
+    const userAvatar = fullRebuild ? archive_avatars.currentUserAvatar(context)
+        : archive_avatars.archiveUserAvatar(existing) || archive_avatars.currentUserAvatar(context);
     const taskTrace = preparation.taskTrace;
     const preparationStillCurrent = () => core_context.isCurrentTaskOrigin(preparation.origin, core_context.currentCharacterGuard());
     if (automatic) {
@@ -1946,6 +2063,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             chatId: snapshot.chatId,
             characterName: core_text.normalizeText(context.name2, 120),
             userName: core_text.normalizeText(context.name1, 120),
+            ...(userAvatar ? { userAvatar } : {}),
             archiveName: profile.archiveName,
             archiveSummary: profile.archiveSummary,
             archiveVerdict: profile.archiveVerdict,
@@ -1977,8 +2095,10 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             kind: 'archive',
             memoryBank,
             preserveDerivedCache: incrementalUpdate,
+            profilePending,
+            completedChunks,
         });
-        if (commitIntent.durable) archive_importRecovery.stageArchiveRecoveryCommit(recoveryTicket, memoryBank.archiveRevision, { profilePending });
+        if (commitIntent.item) archive_importRecovery.stageArchiveRecoveryCommit(recoveryTicket, memoryBank.archiveRevision, { profilePending });
         let wasBackgrounded = runtimeState.activeTaskBackgrounded || !core_context.isCurrentTaskOrigin(origin);
         if (core_context.isCurrentTaskOrigin(origin)) {
             try {
@@ -2024,13 +2144,14 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         globalThis.toastr?.success?.(core_text.toastText(`${actionLabel}完成：${memoryBank.archiveName} · 当前 ${memories.length} 条记忆${incrementalUpdate ? ` · 新增 ${added} 条 · 已保留原 ADV EVENT 等缓存` : ''}${wasBackgrounded ? '（后台；回到原窗口自动写入）' : ''}`), '心迹回廊');
         return { status: core_context.isCurrentTaskOrigin(origin) ? 'committed' : 'deferred' };
     } catch (error) {
+        const cancelled = isArchiveCancellation(error);
         if (chunkInFlight) core_taskTrace.markChunks(taskTrace, {
-            total: totalChunks, ok: completedChunks, failed: error?.name === 'AbortError' ? 0 : 1,
-            pending: totalChunks - completedChunks - (error?.name === 'AbortError' ? 0 : 1),
+            total: totalChunks, ok: completedChunks, failed: cancelled ? 0 : 1,
+            pending: totalChunks - completedChunks - (cancelled ? 0 : 1),
         });
-        core_taskTrace.endTaskTrace(taskTrace, error?.name === 'AbortError' ? 'cancelled' : 'failed', error);
+        core_taskTrace.endTaskTrace(taskTrace, cancelled ? 'cancelled' : 'failed', error);
         if (!automatic) { runtimeState.activeMode = null; runtimeState.activeSession = null; }
-        if (error?.name === 'AbortError') {
+        if (cancelled) {
             console.warn('[HeartbeatMemories] archive import aborted by extension/task cancellation');
         } else {
             console.error('[HeartbeatMemories] archive import failed', core_text.safeErrorDiagnostic(error));
@@ -2040,7 +2161,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
             if (archive_importRecovery.archiveRecoverySummary(origin)) globalThis.toastr?.info?.(archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '心迹回廊 · 档案整理草稿');
         }
-        return { status: error?.name === 'AbortError' ? 'cancelled' : 'failed' };
+        return { status: cancelled ? 'cancelled' : 'failed' };
     } finally {
         archive_importRecovery.releaseArchiveRecovery(recoveryTicket);
         if (runtimeState.activeTaskAbortController === importController) runtimeState.activeTaskAbortController = null;
@@ -2060,7 +2181,7 @@ export async function importCurrentChatMemory(options = {}) {
         finishArchiveTaskTrace(taskTrace, result);
         return result;
     } catch (error) {
-        core_taskTrace.endTaskTrace(taskTrace, error?.name === 'AbortError' ? 'cancelled' : 'failed', error);
+        core_taskTrace.endTaskTrace(taskTrace, isArchiveCancellation(error) ? 'cancelled' : 'failed', error);
         throw error;
     } finally {
         if (runtimeState.activeTaskTrace === taskTrace) runtimeState.activeTaskTrace = null;
@@ -2071,20 +2192,22 @@ async function runArchiveImport(context, options = {}, taskTrace = null) {
     if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) {
         throw new Error('当前还有内容生成任务在进行，请等生成结束后再创建/更新档案。');
     }
+    const existing = getImportedMemory(context);
+    if (Object.prototype.hasOwnProperty.call(context.chatMetadata || {}, core_constants.MEMORY_KEY) && !existing) {
+        throw core_text.safeUserError('当前聊天中的档案标识或格式不匹配，已停止生成并保留原数据。', 'RMT_ARCHIVE_SOURCE_MISMATCH');
+    }
     const pending = getCurrentArchiveImportRecoverySummary(context);
     if (pending) {
         if (options.automatic === true) return { status: 'blocked' };
         if (pending.profileOnly) return rewriteCurrentArchiveVerdict();
         if (pending.awaitingCommit) {
-            globalThis.toastr?.info?.('整理结果仍在等待原聊天写回；草稿和成功内容保留，当前不会重新请求模型。', '心迹回廊');
-            return { status: 'blocked' };
+            return retryCurrentArchiveSave(context, taskTrace);
         }
         if (!ui_overlay.confirmExplicitAction(pending.canContinue ? '继续档案整理？' : '重试未完成分块？',
             `本页已保留 ${pending.completed} 个通过校验的分块；只处理未完成部分，不重做成功项。继续会使用文本生成额度。\n${archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE}`,
             { destructive: false })) return { status: 'cancelled' };
         options = { ...options, fullRebuild: pending.fullRebuild, continueRecovery: true };
     }
-    const existing = getImportedMemory(context);
     const preparation = {
         context,
         existing,

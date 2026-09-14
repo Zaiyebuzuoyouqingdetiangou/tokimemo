@@ -17,6 +17,8 @@ import * as modes_inbox from '../modes/inbox.js';
 import * as core_settings from './settings.js';
 import * as backup_diagnostics from './backupDiagnostics.js';
 import * as modes_pastLives from '../modes/pastLives.js';
+import * as modes_timeStories from '../modes/timeStories.js';
+import * as time_stories from './timeStoriesContract.js';
 import * as generation_recovery from '../generation/recovery.js';
 
 // Per-fence clear markers survive cache merges: an older metadata mirror must not
@@ -946,17 +948,17 @@ function archiveCommitStateMatches(context, expectedState) {
 
 function assertArchiveCommitState(context, expectedState) {
     if (!expectedState || typeof expectedState.present !== 'boolean') {
-        throw new Error('档案保存缺少旧版本校验，本次结果已安全丢弃。');
+        throw core_text.safeUserError('档案保存缺少旧版本校验，本次没有写入。', 'RMT_CACHE_CAS_CONFLICT');
     }
     if (!archiveCommitStateMatches(context, expectedState)) {
-        throw new Error('档案生成期间原档案版本已经变化，本次旧结果没有覆盖较新的档案。请重新更新。');
+        throw core_text.safeUserError('原档案状态与本次任务不一致，已保留现有档案，生成结果没有覆盖它。', 'RMT_CACHE_CAS_CONFLICT');
     }
 }
 
 function assertExpectedTaskOrigin(context, origin) {
     if (!origin) return;
     if (!core_context.deferredCommitOriginMatchesContext(origin, context)) {
-        throw new Error('后台档案对应的角色已经切换，本次结果没有写入其他角色；回到原角色后会继续重试。');
+        throw core_text.safeUserError('后台档案对应的角色已经切换，本次结果没有写入其他角色；请回到原角色后重试保存。', 'RMT_RECOVERY_ORIGIN_CHANGED');
     }
 }
 
@@ -968,19 +970,24 @@ export function assertPresentationOnlyMemoryPatch(previous, next) {
 }
 
 async function saveImportedMemoryOperation(context, memoryBank, expectedChatId = memoryBank?.chatId, options = {}) {
+    options.assertTaskCurrent?.();
     const initialScope = cacheScopeFromContext(context);
     let currentContext = core_context.currentCharacterGuard();
-    const currentChatId = core_context.getChatId(currentContext);
-    if (core_context.comparableChatId(memoryBank?.chatId) !== core_context.comparableChatId(expectedChatId)) {
-        throw new Error('待保存档案与目标聊天身份不一致，本次结果没有写入。');
+    // The host can expose a filename with .jsonl while the independent backup
+    // and deferred origin use its canonical ID. Apply the same established
+    // identity comparison without changing stored content or revision fences.
+    const targetChatId = core_context.comparableChatId(expectedChatId);
+    const currentChatId = core_context.comparableChatId(core_context.getChatId(currentContext));
+    if (core_context.comparableChatId(memoryBank?.chatId) !== targetChatId) {
+        throw core_text.safeUserError('待保存档案与目标聊天身份不一致，本次结果没有写入。', 'RMT_RECOVERY_ORIGIN_CHANGED');
     }
-    if (!expectedChatId || currentChatId !== expectedChatId || core_context.getChatId(context) !== expectedChatId
+    if (!targetChatId || currentChatId !== targetChatId || core_context.comparableChatId(core_context.getChatId(context)) !== targetChatId
         || cacheScopeFromContext(currentContext) !== initialScope) {
-        throw new Error('档案整理期间聊天窗口已经切换，本次结果已安全丢弃；请回到原聊天后重新更新档案。');
+        throw core_text.safeUserError('档案整理期间聊天窗口已经切换，本次没有写入；请回到原聊天后重试保存。', 'RMT_RECOVERY_ORIGIN_CHANGED');
     }
     assertExpectedTaskOrigin(currentContext, options.expectedTaskOrigin);
     if (!context.chatMetadata || typeof context.chatMetadata !== 'object') {
-        throw new Error('当前聊天无法保存 metadata，不能创建或更新档案。');
+        throw core_text.safeUserError('当前聊天无法保存档案，生成结果保留待重试。', 'RMT_METADATA_DURABILITY_UNAVAILABLE');
     }
     const expectedState = options.expectedPreviousArchiveState;
     assertArchiveCommitState(context, expectedState);
@@ -1043,7 +1050,9 @@ async function saveImportedMemoryOperation(context, memoryBank, expectedChatId =
 
     const storedCache = preservedCache ? await prepareCacheBackupValue(preservedCache) : null;
     currentContext = core_context.currentCharacterGuard();
-    if (core_context.getChatId(currentContext) !== expectedChatId || cacheScopeFromContext(currentContext) !== initialScope) throw new Error('档案整理期间聊天窗口已经切换，本次结果已安全丢弃。');
+    if (core_context.comparableChatId(core_context.getChatId(currentContext)) !== targetChatId || cacheScopeFromContext(currentContext) !== initialScope) {
+        throw core_text.safeUserError('档案整理期间聊天窗口已经切换，本次没有写入；请回到原聊天后重试保存。', 'RMT_RECOVERY_ORIGIN_CHANGED');
+    }
     assertExpectedTaskOrigin(currentContext, options.expectedTaskOrigin);
     assertArchiveCommitState(currentContext, expectedState);
     const liveDeletionFence = archive_groups.currentCharacterArchiveDeletionFence(currentContext, stagedMemory);
@@ -1053,7 +1062,10 @@ async function saveImportedMemoryOperation(context, memoryBank, expectedChatId =
         error.code = 'RMT_ARCHIVE_DELETED_FENCE';
         throw error;
     }
+    options.assertTaskCurrent?.();
     await archive_backupStore.replaceArchiveBackup(backupEntry, stagedMemory, storedCache, expectedState, {
+        ...(typeof options.assertTaskCurrent === 'function'
+            ? { stillCurrent: () => { options.assertTaskCurrent(); return true; } } : {}),
         allowMissingPrevious: expectedState.present === true,
         allowCharacterRename: backupEntry.allowCharacterRename === true,
         allowIdempotentRetry: !!options.expectedTaskOrigin,
@@ -1065,8 +1077,11 @@ async function saveImportedMemoryOperation(context, memoryBank, expectedChatId =
 
     // Backup persistence is awaited before replacing the chat copy. Recheck after that await so
     // an old foreground/deferred result cannot win a same-chat revision race.
+    options.assertTaskCurrent?.();
     currentContext = core_context.currentCharacterGuard();
-    if (core_context.getChatId(currentContext) !== expectedChatId || cacheScopeFromContext(currentContext) !== initialScope) throw new Error('档案整理期间聊天窗口已经切换，本次结果已安全丢弃。');
+    if (core_context.comparableChatId(core_context.getChatId(currentContext)) !== targetChatId || cacheScopeFromContext(currentContext) !== initialScope) {
+        throw core_text.safeUserError('档案整理期间聊天窗口已经切换，本次没有写入；请回到原聊天后重试保存。', 'RMT_RECOVERY_ORIGIN_CHANGED');
+    }
     assertExpectedTaskOrigin(currentContext, options.expectedTaskOrigin);
     assertArchiveCommitState(currentContext, expectedState);
     const scope = cacheScopeFromContext(currentContext);
@@ -1774,6 +1789,7 @@ export function loadSession(mode, options = {}) {
         if (cache.archiveRevision !== memoryBank.archiveRevision) return null;
         if (session.archiveRevision !== memoryBank.archiveRevision) return null;
         if (mode === core_constants.MODE.PAST_LIVES && !modes_pastLives.readablePastLivesSession(session, memoryBank)) return null;
+        if (time_stories.isTimeStoryMode(mode) && !modes_timeStories.readableTimeStoriesSession(session, memoryBank)) return null;
         if (mode === core_constants.MODE.INBOX && (session.inboxVersion !== modes_inbox.INBOX_VERSION || !Array.isArray(session.letters))) return null;
         const userManaged = session.userManaged === true;
         if (mode === core_constants.MODE.ROOM && (!Array.isArray(session.spaces) || (!userManaged && session.spaces.length < 2))) return null;

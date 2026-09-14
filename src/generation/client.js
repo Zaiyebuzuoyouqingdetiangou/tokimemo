@@ -35,16 +35,20 @@ import * as modes_cabinet from '../modes/cabinet.js';
 import * as modes_phone from '../modes/phone.js';
 import * as modes_inbox from '../modes/inbox.js';
 import * as modes_pastLives from '../modes/pastLives.js';
+import * as modes_timeStories from '../modes/timeStories.js';
+import * as time_stories from '../core/timeStoriesContract.js';
 import * as modes_room from '../modes/room.js';
 import * as modes_relations from '../modes/relations.js';
 import * as modes_travel from '../modes/travel.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as ui_settingsPanel from '../ui/settingsPanel.js';
 import * as ui_contentManager from '../ui/contentManager.js';
+import * as navigation_bookmark from '../ui/navigationBookmark.js';
 
 export function generationWorldInfoScanTerms(mode, context = {}) {
     const characterName = core_text.normalizeText(context?.name2, 120);
     const common = characterName ? [characterName] : [];
+    if (time_stories.isTimeStoryMode(mode)) return [...common, '通讯', '时代', '世界观', '科技', '时间', '身份', '性格', '传音', '命运', 'communication', 'era', 'time', 'personality'];
     if (mode === core_constants.MODE.ROOM) return [...common, '外貌', '发色', '发型', '穿着', '制服', '服饰', '种族', '住处', '房间', '居所', '时代', '职业', '阶层', '生活习惯', '宠物', '猫', '狗', '鸟', '鹦鹉', '兔', '鱼', '爬宠', '仓鼠', '豚鼠', '灵兽', '使魔', '动物伙伴', 'appearance', 'hair', 'outfit', 'species', 'residence', 'room', 'home', 'pet', 'cat', 'dog', 'bird', 'parrot', 'rabbit', 'fish', 'reptile', 'hamster', 'familiar', 'animal companion'];
     if (mode === core_constants.MODE.PHONE) return [...common, '通讯', '终端', '手机', '设备', '职业', '爱好', '生活习惯', '科技', '时代', '世界观', 'phone', 'device', 'terminal', 'communication', 'hobby', 'occupation'];
     if (mode === core_constants.MODE.TRAVEL) return [...common, '住处', '工作', '学校', '地点', '交通', '出行', '旅行', '路线', '世界观', 'residence', 'work', 'school', 'location', 'travel', 'route', 'transport'];
@@ -120,7 +124,7 @@ async function collectFittingSelectedSetting(context, budget = core_constants.MA
 }
 
 export async function buildWorldPresentationContext(context, memoryBank, mode) {
-    const wantsSelectedSetting = [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES].includes(mode);
+    const wantsSelectedSetting = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES].includes(mode);
     let selectedSetting = wantsSelectedSetting
         ? await collectFittingSelectedSetting(context)
         : { text: '', used: 0, total: 0, dropped: 0, complete: true, note: '' };
@@ -220,9 +224,9 @@ export async function requestValidatedSegment(prompt, status, options, validator
     });
 }
 
-// The host tokenizer may use an unavailable service. Never let it hold an archive
-// task forever. A timeout stops this request; archive profile generation can then
-// use its existing local fallback without sending another model request.
+// The host tokenizer may use an unavailable service. Bound the wait, then use
+// r74's character-budget fallback. This is not an exact token estimate or a
+// provider retry; the user's original generation request has not been sent yet.
 export const TOKEN_COUNT_TIMEOUT_MS = 5000;
 
 function countPromptTokens(context, prompt, signal, timeoutMs) {
@@ -258,7 +262,11 @@ export async function assertPromptBudget(context, prompt, { skipTokenCount = fal
         core_taskTrace.beginStage(taskTrace, 'token-count');
         try {
             const timeout = Math.max(1, Math.min(TOKEN_COUNT_TIMEOUT_MS, Number(tokenCountTimeoutMs) || TOKEN_COUNT_TIMEOUT_MS));
-            const tokens = Number(await countPromptTokens(context, prompt, signal, timeout));
+            const count = await countPromptTokens(context, prompt, signal, timeout);
+            const tokens = (typeof count === 'number' || (typeof count === 'string' && count.trim())) ? Number(count) : NaN;
+            if (!Number.isFinite(tokens) || tokens < 0) {
+                throw core_text.safeUserError('本地计数暂不可用。', 'RMT_TOKEN_COUNT_UNAVAILABLE');
+            }
             if (Number.isFinite(tokens) && tokens > core_constants.MAX_GENERATION_INPUT_TOKENS) {
                 throw core_text.safeUserError(`本次心迹回廊输入约 ${Math.round(tokens).toLocaleString()} tokens，超过 ${core_constants.MAX_GENERATION_INPUT_TOKENS.toLocaleString()} 的安全预算，已在发送前拦截。`, 'RMT_INPUT_BUDGET');
             }
@@ -266,7 +274,8 @@ export async function assertPromptBudget(context, prompt, { skipTokenCount = fal
         } catch (error) {
             core_taskTrace.markStage(taskTrace, 'token-count', false);
             if (signal?.aborted || error?.name === 'AbortError') throw core_requestCoordinator.createGenerationAbortError();
-            if (error?.code === 'RMT_INPUT_BUDGET' || error?.code === 'RMT_TOKEN_COUNT_TIMEOUT') throw error;
+            if (error?.code === 'RMT_INPUT_BUDGET') throw error;
+            core_taskTrace.markStage(taskTrace, 'token-count-fallback');
             console.warn('[HeartbeatMemories] input token count unavailable; using character budget only', core_text.safeErrorDiagnostic(error));
         }
     }
@@ -639,7 +648,9 @@ export async function continueSavedGeneration(mode, options = {}) {
     if (!ui_overlay.confirmExplicitAction('继续未完成内容？', '只补原任务未完成的内容，会使用文本生成额度。认证或额度问题需要先在设置里解决；取消不改动草稿。', { destructive: false })) return;
     const operation = existing.operation || { kind: 'mode', mode };
     const resumeOptions = { ...options, ...targetOptions, existing, continueRecovery: true };
-    if (operation.kind === 'mode') return generateMode(mode, { ...resumeOptions, background: true });
+    if (operation.kind === 'mode') return generateMode(mode, { ...resumeOptions,
+        background: !(runtimeState.activeMode === mode && (time_stories.isTimeStoryMode(mode)
+            || (mode === core_constants.MODE.PHONE && runtimeState.activeSession?._rmtEmptyTerminal === true))) });
     const session = core_cache.loadSession(mode, { context, memoryBank: bank, cache: targetOptions.archiveTarget?.cache, clone: true });
     if (!session) throw new Error('原任务所依赖的内容已不在当前档案；草稿保留，没有重新生成。');
     if (operation.kind === 'content-item') {
@@ -684,6 +695,24 @@ export async function generateMode(mode, options = {}) {
     // Capture once, before any archive/network/storage await. A destroyed invocation must never
     // adopt the next runtime lifetime and re-register itself as a fresh paid task.
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    // Readers may belong to a historical archive while the host stays in another
+    // chat. Only that exact, unchanged reader may receive a foreground result.
+    const scopedReaderMode = time_stories.isTimeStoryMode(mode)
+        || (mode === core_constants.MODE.PHONE && runtimeState.activeSession?._rmtEmptyTerminal === true);
+    const timeReader = scopedReaderMode && runtimeState.activeMode === mode && runtimeState.activeSession
+        ? { session: runtimeState.activeSession, entryId: runtimeState.activeArchiveSnapshot?.entryId || '',
+            scope: core_context.chatScopeKey(core_context.getContext()),
+            position: JSON.stringify(navigation_bookmark.readingPosition(runtimeState.activeSession)) } : null;
+    const timeReaderVisible = () => {
+        try {
+            return !!timeReader && core_context.runtimeLifecycleStillCurrent(lifecycleEpoch)
+                && runtimeState.activeMode === mode && runtimeState.activeSession === timeReader.session
+                && (runtimeState.activeArchiveSnapshot?.entryId || '') === timeReader.entryId
+                && core_context.chatScopeKey(core_context.getContext()) === timeReader.scope
+                && JSON.stringify(navigation_bookmark.readingPosition(runtimeState.activeSession)) === timeReader.position
+                && !document.getElementById(core_constants.OVERLAY_ID)?.hidden;
+        } catch { return false; }
+    };
     let inboxDate = mode === core_constants.MODE.INBOX ? new Date() : null;
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     const background = options.background === true;
@@ -709,8 +738,8 @@ export async function generateMode(mode, options = {}) {
     let memoryBank = archive_repository.requireArchive(context);
     const expectedArchiveRevision = memoryBank.archiveRevision;
     const promptFactory = generation_prompts.PROMPTS[mode];
-    if (!promptFactory && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES].includes(mode)) return;
-    const segmentedMode = [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES].includes(mode);
+    if (!promptFactory && !time_stories.isTimeStoryMode(mode) && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES].includes(mode)) return;
+    const segmentedMode = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES].includes(mode);
     let calendarCurrentDate = mode === core_constants.MODE.CALENDAR ? modes_calendar.currentCalendarDate() : '';
     let generationPrompt = segmentedMode || mode === core_constants.MODE.RELATIONS
         ? ''
@@ -808,7 +837,7 @@ export async function generateMode(mode, options = {}) {
         && runtimeState.activeModeBuildScopes.has(taskKey)
     );
     core_requestCoordinator.refreshConcurrentTaskUi(mode, origin);
-    if (!background) {
+    if (!background && (!scopedReaderMode || timeReaderVisible())) {
         ui_overlay.openOverlay();
         const actionText = replaceExisting ? `正在重新生成「${core_constants.MODE_LABEL[mode]}」…` : roomSchemaUpgrade ? '正在为旧版房间刷新视觉设定…' : refreshableCalendar && previousSession ? '正在刷新「两个人的日历」…' : refreshableRelations && previousSession ? '正在刷新「本世界线人际关系」…' : previousSession ? `正在从新增档案追加「${core_constants.MODE_LABEL[mode]}」…` : `正在生成「${core_constants.MODE_LABEL[mode]}」…`;
         ui_overlay.setInnerLoading(true, archiveTarget ? `正在为：${archiveTarget.characterName} · ${archiveTarget.archiveName} · ${actionText}` : actionText);
@@ -863,7 +892,7 @@ export async function generateMode(mode, options = {}) {
                 visualOnly: options.visualOnly === true, fillMissing: options.fillMissing === true, focusObjectId: core_text.normalizeText(options.focusObjectId, 120) } });
         let session;
         let presentationContext = null;
-        if ([core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES].includes(mode)) {
+        if (time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES].includes(mode)) {
             presentationContext = await buildWorldPresentationContext(context, memoryBank, mode);
             // Degrading is fine, degrading silently is not: the user picked these entries
             // by hand and deserves to know which of them this request could actually carry.
@@ -873,6 +902,8 @@ export async function generateMode(mode, options = {}) {
         }
         if (mode === core_constants.MODE.INBOX) {
             session = await modes_inbox.generateInbox(context, memoryBank, origin, taskKey, previousSession, { presentationContext, date: inboxDate });
+        } else if (time_stories.isTimeStoryMode(mode)) {
+            session = await modes_timeStories.generateTimeStoryWithRepair(mode, context, memoryBank, origin, taskKey, { previousSession, replaceExisting, presentationContext });
         } else if (mode === core_constants.MODE.PAST_LIVES) {
             session = await modes_pastLives.generatePastLivesWithRepair(context, memoryBank, origin, taskKey, { previousSession, replaceExisting, presentationContext });
         } else if (mode === core_constants.MODE.ADV) {
@@ -1012,7 +1043,9 @@ export async function generateMode(mode, options = {}) {
         const overlay = document.getElementById(core_constants.OVERLAY_ID);
         const phoneProgress = mode === core_constants.MODE.PHONE ? modes_phone.phoneCompletionSummary(session) : null;
         const partialNotice = phoneProgress?.partial ? `已保留 ${phoneProgress.readableItems} 条，另有 ${phoneProgress.missingItems} 项可在终端补齐` : '';
-        const stayBackground = background || !committed || !core_context.isCurrentTaskOrigin(origin) || overlay?.hidden || runtimeState.activeMode !== mode;
+        const stayBackground = background || !committed || (scopedReaderMode
+            ? !timeReaderVisible()
+            : !core_context.isCurrentTaskOrigin(origin) || overlay?.hidden || runtimeState.activeMode !== mode);
         if (stayBackground) {
             if (archiveTarget) ui_settingsPanel.refreshSettingsTaskStatus();
             else ui_settingsPanel.refreshSettingsMemoryStatus();
@@ -1058,7 +1091,8 @@ export async function generateMode(mode, options = {}) {
             );
             return null;
         }
-        if (background || document.getElementById(core_constants.OVERLAY_ID)?.hidden || runtimeState.activeMode !== mode) {
+        if (background || document.getElementById(core_constants.OVERLAY_ID)?.hidden || runtimeState.activeMode !== mode
+            || (scopedReaderMode && !timeReaderVisible())) {
             const targetPrefix = archiveTarget ? `${archiveTarget.characterName} · ${archiveTarget.archiveName} · ` : '';
             globalThis.toastr?.error?.(core_text.toastText(`${targetPrefix}${safeError}`), `心迹回廊 · ${core_constants.MODE_LABEL[mode]}生成失败`);
             return null;
@@ -1076,6 +1110,6 @@ export async function generateMode(mode, options = {}) {
             runtimeState.activeArchiveSnapshot?.entryId === archiveTarget.entryId
             && !document.getElementById(core_constants.OVERLAY_ID)?.hidden
         );
-        if (!background && targetVisible) ui_overlay.setInnerLoading(false);
+        if (!background && targetVisible && (!scopedReaderMode || timeReaderVisible())) ui_overlay.setInnerLoading(false);
     }
 }

@@ -17,6 +17,12 @@ export function normalizeBannedGeneratedPhrases(value) {
         .slice(0, core_constants.MAX_BANNED_GENERATED_PHRASES);
 }
 
+export function normalizeFloatingAvatarPosition(value) {
+    if (!value || !Number.isFinite(value.x) || !Number.isFinite(value.y)) return null;
+    return { x: Math.round(Math.max(0, Math.min(1, value.x)) * 10000) / 10000,
+        y: Math.round(Math.max(0, Math.min(1, value.y)) * 10000) / 10000 };
+}
+
 export function getPluginSettings(context = core_context.getContext()) {
     if (!context.extensionSettings || typeof context.extensionSettings !== 'object') {
         return { ...core_constants.DEFAULT_SETTINGS, manualApiKey: core_text.normalizeText(runtimeState.manualApiKey, 4000) };
@@ -45,6 +51,8 @@ export function getPluginSettings(context = core_context.getContext()) {
         creativeSupplementEnabled: settings.creativeSupplementEnabled === true,
         creativeSupplement: creative_supplement.normalizeCreativeSupplement(settings.creativeSupplement),
         ttDisplayMode: settings.ttDisplayMode === true,
+        floatingAvatar: ['char', 'user', 'off'].includes(settings.floatingAvatar) ? settings.floatingAvatar : 'char',
+        floatingAvatarPosition: normalizeFloatingAvatarPosition(settings.floatingAvatarPosition),
         themeMode: core_constants.THEME_MODES.has(settings.themeMode) ? settings.themeMode : 'default',
         excludedContextTags: core_contextTags.normalizeExcludedTags(settings.excludedContextTags === undefined ? core_contextTags.DEFAULT_EXCLUDED_TAGS : settings.excludedContextTags),
         themeAlpha: Math.max(0.72, Math.min(1, Number.isFinite(Number(settings.themeAlpha)) ? Number(settings.themeAlpha) : core_constants.DEFAULT_SETTINGS.themeAlpha)),

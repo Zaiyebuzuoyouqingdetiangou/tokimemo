@@ -8,6 +8,7 @@ import * as core_context from '../core/context.js';
 import * as core_independentApi from '../core/independentApi.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
+import * as floating_archive from './floatingArchive.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as core_theme from '../core/theme.js';
@@ -388,6 +389,8 @@ export function refreshGenerationSettingsUi() {
     if (worldInfoSource) worldInfoSource.checked = settings.useActivatedWorldInfo !== false;
     refreshImageGenerationSettingsUi();
     if (ttDisplay) ttDisplay.checked = settings.ttDisplayMode;
+    const floatingAvatar = panel.querySelector('[data-rmt-floating-avatar]');
+    if (floatingAvatar) floatingAvatar.value = settings.floatingAvatar;
     if (themeMode) themeMode.value = settings.themeMode;
     const autoRules = core_autoUpdatePolicy.normalizeAutoUpdates(settings.autoUpdates);
     for (const input of panel.querySelectorAll('[data-rmt-auto-enabled]')) input.checked = autoRules[input.dataset.rmtAutoEnabled]?.enabled === true;
@@ -498,9 +501,8 @@ export function mountSettings({ homeTarget = null } = {}) {
     ui_styles.ensureSettingsStyles();
     if (!homeTarget) {
         document.getElementById(SETTINGS_LAUNCHER_ID)?.remove();
-        // The full settings view belongs inside the archive home, but diagnostics
-        // must remain in the host drawer even if opening that home fails.
-        return globalThis.__heartbeatMemoriesMountDiagnostics?.() ?? true;
+        // The full settings and normal diagnostics entry belong to Hearttrace home.
+        return true;
     }
     const existing = homeSettingsEpoch === runtimeState.runtimeLifecycleEpoch ? homeSettingsPanel : null;
     let scope = '';
@@ -601,6 +603,7 @@ export function mountSettings({ homeTarget = null } = {}) {
           <summary class="rmt-settings-card-head"><span>UI</span><div><b>界面主题</b><small>配色与透明度</small></div></summary>
           <div class="rmt-settings-section-body">
           <label class="rmt-settings-field"><span>外观</span><select class="text_pole" data-rmt-theme-mode><option value="default">日间 · 珍珠白</option><option value="night">夜间 · 星黛蓝</option><option value="gs1">初叶绿</option><option value="gs2">海盐蓝</option><option value="gs3">花漾粉</option><option value="gs4">杏糖橙</option><option value="host">跟随酒馆美化</option><option value="custom">自定义配色</option></select></label>
+          <label class="rmt-settings-field"><span>悬浮头像</span><select class="text_pole" data-rmt-floating-avatar><option value="char">角色 char（默认）</option><option value="user">用户 user</option><option value="off">关闭</option></select></label>
           <label class="rmt-settings-field"><span>卡片不透明度 <output data-rmt-theme-opacity></output></span><input data-rmt-theme-alpha type="range" min="0.72" max="1" step="0.01"></label>
           <div class="rmt-theme-custom-panel" data-rmt-theme-custom-panel>
             <div class="rmt-theme-presets"><button type="button" data-rmt-theme-preset="day">从日间开始</button><button type="button" data-rmt-theme-preset="night">从夜间开始</button></div>
@@ -661,12 +664,6 @@ export function mountSettings({ homeTarget = null } = {}) {
         <div class="rmt-settings-archive-actions">
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-current-archive><i class="fa-solid fa-file-circle-plus"></i><span>生成当前窗口档案</span></button>
           <button type="button" class="menu_button rmt-open-archive-room" data-rmt-settings-open-archive><i class="fa-solid fa-box-archive"></i><span>打开档案室</span></button>
-          <button type="button" class="menu_button rmt-open-archive-room" data-rmt-performance-diagnostic aria-expanded="false" aria-controls="heartbeat_memories_performance_diagnostic"><i class="fa-solid fa-gauge-high"></i><span data-rmt-diagnostic-label>性能诊断（不解压缓存）</span></button>
-          <div class="rmt-performance-diagnostic-panel" id="heartbeat_memories_performance_diagnostic" data-rmt-diagnostic-panel hidden>
-            <div class="rmt-performance-diagnostic-head"><b>诊断结果</b><button type="button" class="menu_button" data-rmt-copy-diagnostic>复制诊断报告</button><button type="button" class="menu_button" data-rmt-export-diagnostic>导出 JSON</button><button type="button" class="menu_button rmt-performance-diagnostic-close" data-rmt-performance-diagnostic-close>关闭诊断</button></div>
-            <span data-rmt-diagnostic-status role="status"></span>
-            <pre class="rmt-performance-diagnostic-output" data-rmt-performance-diagnostic-output></pre>
-          </div>
         </div>
       </div>`;
     mount.appendChild(panel);
@@ -833,6 +830,11 @@ export function mountSettings({ homeTarget = null } = {}) {
             const overlay = document.getElementById(core_constants.OVERLAY_ID);
             if (overlay) ui_overlay.applyArchiveMobileSafeArea(overlay);
             refreshGenerationSettingsUi();
+            return;
+        }
+        if (target.matches?.('[data-rmt-floating-avatar]')) {
+            core_settings.updatePluginSettings({ floatingAvatar: target.value });
+            floating_archive.refreshFloatingArchive();
             return;
         }
         if (target.matches?.('[data-rmt-theme-mode]')) {
@@ -1088,37 +1090,6 @@ export function mountSettings({ homeTarget = null } = {}) {
             }).finally(() => {
                 if (isLatestUiRequest()) apiImportButton.disabled = false;
             });
-            return;
-        }
-        const diagnosticCloseButton = event.target.closest?.('[data-rmt-performance-diagnostic-close]');
-        if (diagnosticCloseButton) {
-            const output = panel.querySelector('[data-rmt-performance-diagnostic-output]');
-            const trigger = panel.querySelector('[data-rmt-performance-diagnostic]');
-            const hide = globalThis.__heartbeatMemoriesHidePerformanceDiagnostic;
-            if (typeof hide === 'function') hide(output, trigger);
-            else {
-                const diagnosticPanel = output?.closest?.('[data-rmt-diagnostic-panel]') || output;
-                if (diagnosticPanel) diagnosticPanel.hidden = true;
-                trigger?.setAttribute?.('aria-expanded', 'false');
-                const label = trigger?.querySelector?.('[data-rmt-diagnostic-label]');
-                if (label) label.textContent = '性能诊断（不解压缓存）';
-            }
-            return;
-        }
-        const diagnosticButton = event.target.closest?.('[data-rmt-performance-diagnostic]');
-        if (diagnosticButton) {
-            const output = panel.querySelector('[data-rmt-performance-diagnostic-output]');
-            const toggle = globalThis.__heartbeatMemoriesTogglePerformanceDiagnostic;
-            if (typeof toggle === 'function') toggle(output, diagnosticButton);
-            else if (output) {
-                const diagnosticPanel = output.closest?.('[data-rmt-diagnostic-panel]') || output;
-                const expanded = !diagnosticPanel.hidden;
-                diagnosticPanel.hidden = expanded;
-                diagnosticButton.setAttribute?.('aria-expanded', expanded ? 'false' : 'true');
-                const label = diagnosticButton.querySelector?.('[data-rmt-diagnostic-label]');
-                if (label) label.textContent = expanded ? '性能诊断（不解压缓存）' : '关闭性能诊断';
-                if (!expanded) output.textContent = '性能诊断器尚未就绪。';
-            }
             return;
         }
         const currentArchiveButton = event.target.closest?.('[data-rmt-settings-current-archive]');

@@ -4,12 +4,16 @@ import * as core_constants from './constants.js';
 import * as core_context from './context.js';
 import * as core_state from './state.js';
 import * as core_taskTrace from './taskTrace.js';
+import * as core_backupDiagnostics from './backupDiagnostics.js';
 
 const MODES = Object.freeze(Object.values(core_constants.MODE));
 const CAST_LOOKS_KEY = 'heartbeatMemoriesCastLooksV1';
 const count = value => typeof value === 'number' && Number.isFinite(value)
     ? Math.max(0, Math.min(1_000_000_000, Math.floor(value))) : 0;
 const length = value => typeof value === 'string' ? count(value.length) : 0;
+const DEFERRED_ERROR_CODES = new Set(['RMT_DEFERRED_QUOTA', 'RMT_DEFERRED_SECURITY',
+    'RMT_DEFERRED_UNAVAILABLE', 'RMT_DEFERRED_LIMIT', 'RMT_DEFERRED_SERIALIZE', 'RMT_DEFERRED_UNKNOWN']);
+const DEFERRED_ERROR_CATEGORIES = new Set(['quota', 'security', 'unavailable', 'limit', 'serialize', 'unknown']);
 
 function hostCapabilities(context) {
     const names = ['getCharacterCardFields', 'getWorldInfoPrompt', 'getTokenCountAsync',
@@ -20,7 +24,44 @@ function hostCapabilities(context) {
         const value = context?.[name];
         out[name] = typeof value === 'function' || (!!value && typeof value === 'object');
     }
+    try { out.indexedDB = !!globalThis.indexedDB; } catch { out.indexedDB = false; }
+    out.secureContext = typeof globalThis.isSecureContext === 'boolean' ? globalThis.isSecureContext : null;
     return out;
+}
+
+function deferredStorageState() {
+    // diagnosticStatus reads scalar fields maintained at actual persistence
+    // boundaries. Do not call persistenceStatus: it counts the pending payloads.
+    let status = null;
+    try { status = core_state.state.deferredChatCommits?.diagnosticStatus?.() || null; } catch {}
+    return {
+        available: typeof status?.available === 'boolean' ? status.available : null,
+        healthy: typeof status?.healthy === 'boolean' ? status.healthy : null,
+        errorCode: DEFERRED_ERROR_CODES.has(status?.errorCode) ? status.errorCode : '',
+        errorCategory: DEFERRED_ERROR_CATEGORIES.has(status?.errorCategory) ? status.errorCategory : '',
+    };
+}
+
+function archiveIdentityState(archive, context) {
+    const versionValue = archive?.version;
+    const version = typeof versionValue === 'number' || (typeof versionValue === 'string' && /^\d{1,3}$/.test(versionValue))
+        ? Number(versionValue) : 0;
+    const schema = Number.isInteger(version) && version > 0 && version < 1000 ? version : 0;
+    // Compare already-held scalars only. Calling a host ID getter here would
+    // make an otherwise passive diagnostic dependent on arbitrary host work.
+    const heldId = value => typeof value === 'string' && value.length <= 512
+        ? value.replace(/\r\n?/g, '\n').replace(/\u0000/g, '').trim().slice(0, 240) : '';
+    const archiveId = heldId(archive?.chatId), chatId = heldId(context?.chatId);
+    const comparable = value => value.replace(/\.jsonl$/i, '').trim();
+    const comparableIds = !!(archiveId && chatId);
+    return {
+        archiveSchema: schema,
+        archiveSchemaSupported: !!archive && Array.isArray(archive.memories)
+            && schema >= core_constants.MIN_SUPPORTED_ARCHIVE_SCHEMA_VERSION && schema <= core_constants.ARCHIVE_SCHEMA_VERSION,
+        archiveChatComparisonSource: comparableIds ? 'context.chatId' : 'unavailable',
+        archiveChatMatches: comparableIds ? comparable(archiveId) === comparable(chatId) : null,
+        archiveChatExactMatch: comparableIds ? archiveId === chatId : null,
+    };
 }
 
 function storageState(context) {
@@ -39,6 +80,7 @@ function storageState(context) {
     }
     return {
         hasArchive: !!archive,
+        ...archiveIdentityState(archive, context),
         memoryCount: Array.isArray(archive?.memories) ? count(archive.memories.length) : 0,
         hasCache: !!cache,
         cacheCompressed: compressed,
@@ -47,6 +89,8 @@ function storageState(context) {
         sourceChars: compressed ? count(cache.sourceChars) : 0,
         sourceBytes: compressed ? count(cache.sourceBytes) : 0,
         cachedModes,
+        backup: core_backupDiagnostics.backupDiagnosticSnapshot(),
+        deferred: deferredStorageState(),
     };
 }
 
@@ -102,8 +146,9 @@ export function diagnosticReportText() {
     catch { return JSON.stringify({ code: 'RMT_DIAGNOSTIC_UNAVAILABLE' }, null, 2); }
 }
 
-// The bootstrap keeps the external UI alive; this callback adds runtime counters
-// only after the user has already loaded the runtime for another action.
+// The normal diagnostic entry lives on the plugin home page. The bootstrap
+// retains an external fallback if runtime loading fails; this callback supplies
+// counters only after the runtime has already been loaded for another action.
 export function installRuntimeDiagnostic() {
     globalThis.__heartbeatMemoriesRuntimeDiagnosticText = diagnosticReportText;
 }

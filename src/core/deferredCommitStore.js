@@ -1,5 +1,6 @@
 // Heartbeat Memories r46: bounded, browser-local durability for completed results
 // that are waiting for their origin chat to become current again.
+import * as backupDiagnostics from './backupDiagnostics.js';
 
 export const DEFERRED_COMMIT_STORE_KEY = 'heartbeat_memories_deferred_commits_v1';
 export const DEFERRED_COMMIT_STORE_VERSION = 1;
@@ -9,6 +10,22 @@ export const DEFERRED_COMMIT_STORE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 const SENSITIVE_FIELD = /^(?:api[_-]?key|authorization|proxy[_-]?password|password|secret|access[_-]?token|refresh[_-]?token|bearer[_-]?token)$/i;
 const UNSAFE_FIELD = /^(?:__proto__|prototype|constructor)$/;
+const FAILURE_MESSAGES = Object.freeze({
+    quota: '本地待写回存储空间不足；新结果仅保留在当前页面。',
+    security: '浏览器拒绝访问本地待写回存储；新结果仅保留在当前页面。',
+    unavailable: '当前浏览器没有可用的本地待写回存储。',
+    limit: '待写回结果超过本地安全上限；新结果仅保留在当前页面。',
+    serialize: '待写回结果无法序列化；新结果仅保留在当前页面。',
+    unknown: '浏览器没有保存待写回结果；具体原因尚未确定。',
+});
+
+function deferredFailure(category) {
+    const fixed = Object.prototype.hasOwnProperty.call(FAILURE_MESSAGES, category) ? category : 'unknown';
+    const error = new Error(FAILURE_MESSAGES[fixed]);
+    error.code = `RMT_DEFERRED_${fixed.toUpperCase()}`;
+    error.category = fixed;
+    return error;
+}
 
 function defaultStorage() {
     try { return globalThis.localStorage || null; } catch { return null; }
@@ -75,7 +92,11 @@ class DurableDeferredCommitMap extends Map {
         super();
         this.storage = storage;
         this.onError = typeof onError === 'function' ? onError : null;
-        this.lastPersistError = storage ? null : new Error('当前浏览器不允许使用本地待写回存储。');
+        this.storageAvailable = false;
+        this.lastPersistError = null;
+        try { this.storageAvailable = typeof storage?.setItem === 'function'; }
+        catch (error) { this.lastPersistError = deferredFailure(backupDiagnostics.backupFailureSummary(error).category); }
+        if (!this.storageAvailable && !this.lastPersistError) this.lastPersistError = deferredFailure('unavailable');
         this.restoring = true;
         for (const [key, list] of restoredEntries(storage)) super.set(key, list);
         this.restoring = false;
@@ -89,8 +110,7 @@ class DurableDeferredCommitMap extends Map {
 
     persistenceStatus() {
         return {
-            available: !!this.storage,
-            healthy: !!this.storage && !this.lastPersistError,
+            ...this.diagnosticStatus(),
             pendingItems: this.itemCount(),
             maxItems: DEFERRED_COMMIT_STORE_MAX_ITEMS,
             maxBytes: DEFERRED_COMMIT_STORE_MAX_BYTES,
@@ -98,8 +118,18 @@ class DurableDeferredCommitMap extends Map {
         };
     }
 
+    // Fixed maintained scalars only: safe even with many large pending results.
+    diagnosticStatus() {
+        return {
+            available: this.storageAvailable,
+            healthy: this.storageAvailable && !this.lastPersistError,
+            errorCode: this.lastPersistError?.code || '',
+            errorCategory: this.lastPersistError?.category || '',
+        };
+    }
+
     reportFailure(error) {
-        this.lastPersistError = error instanceof Error ? error : new Error('待写回结果无法持久化。');
+        this.lastPersistError = deferredFailure(error?.category);
         // Keep the last successfully persisted snapshot intact. A quota or serialization
         // failure for a newer result must never erase older recoverable commits.
         try { this.onError?.(this.lastPersistError); } catch {}
@@ -108,24 +138,25 @@ class DurableDeferredCommitMap extends Map {
 
     persistNow() {
         if (this.restoring) return true;
-        if (!this.storage?.setItem) return this.reportFailure(new Error('当前浏览器不允许使用本地待写回存储。'));
+        if (!this.storage?.setItem) return this.reportFailure(deferredFailure('unavailable'));
         if (this.itemCount() > DEFERRED_COMMIT_STORE_MAX_ITEMS) {
-            return this.reportFailure(new Error(`待写回结果超过 ${DEFERRED_COMMIT_STORE_MAX_ITEMS} 项安全上限。`));
+            return this.reportFailure(deferredFailure('limit'));
         }
         let raw;
         try { raw = safeSerializedPayload([...this.entries()]); }
-        catch { return this.reportFailure(new Error('待写回结果无法序列化。')); }
+        catch { return this.reportFailure(deferredFailure('serialize')); }
         const bytes = byteLength(raw);
         if (bytes > DEFERRED_COMMIT_STORE_MAX_BYTES) {
-            return this.reportFailure(new Error(`待写回结果超过 ${Math.round(DEFERRED_COMMIT_STORE_MAX_BYTES / 1_000_000 * 10) / 10} MB 安全上限。`));
+            return this.reportFailure(deferredFailure('limit'));
         }
         try {
             if (this.size) this.storage.setItem(DEFERRED_COMMIT_STORE_KEY, raw);
             else this.storage.removeItem?.(DEFERRED_COMMIT_STORE_KEY);
             this.lastPersistError = null;
             return true;
-        } catch {
-            return this.reportFailure(new Error('浏览器没有保存待写回结果；可能是浏览器存储不可用或空间不足。'));
+        } catch (error) {
+            const category = backupDiagnostics.backupFailureSummary(error).category;
+            return this.reportFailure(deferredFailure(['quota', 'security', 'unavailable'].includes(category) ? category : 'unknown'));
         }
     }
 
