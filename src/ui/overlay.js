@@ -18,6 +18,7 @@ import * as generation_client from '../generation/client.js';
 import * as generation_contentRegeneration from '../generation/contentRegeneration.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as cg_editor from './cgPromptEditor.js';
+import * as image_viewer from './cgImageViewer.js';
 import * as navigation_bookmark from './navigationBookmark.js';
 import * as recovery_view from './recoveryView.js';
 import * as modes_achievements from '../modes/achievements.js';
@@ -87,6 +88,7 @@ export function overlayCloseButtonFromEvent(event, overlay) {
 }
 
 export function closeArchiveOverlayFromUser() {
+    if (image_viewer.closeCgImageViewer()) return;
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
     if (!overlay || overlay.hidden) return closeOverlay();
     // Closing this reversible view is not cancelling a task. Native confirm may return
@@ -132,6 +134,7 @@ export function revealArchiveOverlay(overlay) {
 }
 
 export function openOverlay() {
+    image_viewer.closeCgImageViewer({ restoreFocus: false });
     ui_styles.ensureStyles();
     const preferDialog = isArchiveMobileViewport() && typeof globalThis.HTMLDialogElement === 'function';
     let overlay = document.getElementById(core_constants.OVERLAY_ID);
@@ -174,6 +177,7 @@ export function openOverlay() {
 }
 
 export function closeOverlay() {
+    image_viewer.closeCgImageViewer({ restoreFocus: false });
     navigation_bookmark.rememberReadingPosition();
     cg_editor.closeCgPromptEditor({ restoreFocus: false });
     modes_room.stopRoomClock();
@@ -211,6 +215,7 @@ export function setBackVisible(visible, label = '返回上级') {
 }
 
 export function navigateBack() {
+    if (image_viewer.closeCgImageViewer()) return;
     if (runtimeState.activeMode === 'pastLives' && past_lives_view.closePastLivesDetail()) return;
     if (cg_editor.hasCgPromptEditor()) return cg_editor.closeCgPromptEditor();
     if (runtimeState.endingEasterEggRuntime) return ui_endingView.closeEndingEasterEgg();
@@ -687,6 +692,7 @@ export function decorateReadOnlyModeUi() {
 }
 
 export function renderActive() {
+    image_viewer.closeCgImageViewer({ restoreFocus: false });
     runtimeState.contentManagerOpen = false;
     if (runtimeState.activeMode !== core_constants.MODE.ENDING) ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     if (!runtimeState.activeSession || !runtimeState.activeMode) return runtimeState.activeArchiveSnapshot ? archive_library.showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot) : showChooser();
@@ -1249,6 +1255,7 @@ export function handleOverlayClick(event) {
     if (action === 'ending-easter-toggle') return ui_endingView.endingEasterEggToggleLogs();
     if (action === 'ending-easter-stabilize') return ui_endingView.endingEasterEggStabilize();
     if (action === 'cancel-cg-image') return generation_imageGeneration.cancelCurrentCgImage();
+    if (action === 'view-heart-cg') return ui_heartView.viewHeartStripImage(actionEl);
     if (action === 'refresh-image-provider') return generation_imageGeneration.refreshImageGenerationUi();
     if (action === 'album-prev') return ui_albumView.albumPage(-1);
     if (action === 'album-next') return ui_albumView.albumPage(1);

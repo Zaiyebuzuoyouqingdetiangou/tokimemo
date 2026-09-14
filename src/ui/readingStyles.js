@@ -1,6 +1,19 @@
 // Reading-only presentation. No persistence, provider calls or generated styles.
 export function readingCss(root) {
     return `
+${root} .rmt-cg-viewer{position:fixed;inset:0;z-index:140;display:flex;flex-direction:column;gap:8px;box-sizing:border-box;min-width:0;min-height:0;overflow:hidden;padding:10px;padding:max(10px,env(safe-area-inset-top),var(--rmt-mobile-safe-top,0px)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));background:#11151c!important;color:#f5f7fa!important;font:16px/1.5 system-ui,-apple-system,sans-serif;isolation:isolate}
+${root} .rmt-cg-viewer-toolbar{display:flex;flex:none;align-items:center;gap:8px;min-width:0}
+${root} .rmt-cg-viewer-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;color:inherit}
+${root} .rmt-cg-viewer button{flex:none;min-width:58px;min-height:46px;box-sizing:border-box;border:1px solid #718097;border-radius:10px;padding:8px 12px;background:#263142!important;color:#f5f7fa!important;-webkit-text-fill-color:currentColor!important;font:inherit;cursor:pointer}
+${root} .rmt-cg-viewer button:disabled{opacity:.55;cursor:default}
+${root} .rmt-cg-viewer :is(button,[tabindex]):focus-visible{outline:3px solid #a9d9ff;outline-offset:-3px}
+${root} .rmt-cg-viewer-status{flex:none;margin:0;text-align:center;color:inherit;overflow-wrap:anywhere;font-size:14px}
+${root} .rmt-cg-viewer-status:empty{display:none}
+${root} .rmt-cg-viewer-stage{display:flex;flex:1 1 0%;min-width:0;min-height:0;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y pinch-zoom}
+${root} .rmt-cg-viewer-image{position:static!important;display:block;flex:none;max-width:100%!important;max-height:100%!important;width:auto!important;height:auto!important;margin:auto;object-fit:contain;transform:none!important;box-sizing:border-box}
+${root} .rmt-cg-viewer-image[hidden]{display:none!important}
+${root} .rmt-cg-viewer-native .rmt-cg-viewer-image{max-width:none!important;max-height:none!important}
+${root} button.rmt-heart-strip-image-full{display:block;width:100%;padding:0;cursor:zoom-in;background:transparent;color:inherit;font:inherit}
 ${root} .rmt-memory-scene{display:flex;flex-direction:column;min-height:0;padding-bottom:16px;background:var(--rmt-theme-bg)}
 ${root} .rmt-reading-image{position:relative;display:block;aspect-ratio:16/10;height:auto;min-height:160px;max-height:none;box-sizing:border-box;overflow:hidden;background:var(--rmt-theme-soft);border-color:var(--rmt-theme-surface-solid)}
 ${root} .rmt-reading-image-saved{aspect-ratio:auto;min-height:0}

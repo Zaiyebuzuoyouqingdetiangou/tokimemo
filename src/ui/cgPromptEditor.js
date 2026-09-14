@@ -6,6 +6,7 @@ import * as core_context from '../core/context.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as images from '../generation/imageGeneration.js';
+import * as image_viewer from './cgImageViewer.js';
 import * as heart from './heartView.js';
 import * as overlay from './overlay.js';
 
@@ -14,6 +15,7 @@ let editor = null;
 export function hasCgPromptEditor() { return !!editor?.element?.isConnected; }
 
 export function closeCgPromptEditor({ restoreFocus = true } = {}) {
+    image_viewer.closeCgImageViewer({ restoreFocus: false });
     const previous = editor;
     if (!previous) return;
     editor = null;
@@ -71,9 +73,12 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
           <p id="rmt-cg-prompt-help">编辑和重新构思都不会自动生图。确认绘图后才消耗生图额度；只有新图成功保存，才会替换原图与提示词。关闭会放弃本次草稿。</p>
           <p data-rmt-cg-prompt-status role="status" aria-live="polite"></p>
           <div class="rmt-cg-prompt-actions"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="reconceive">重新构思画面</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="draw">${savedImage ? '确认提示词并重绘' : '确认提示词并绘图'}</button></div>
-          ${savedImage ? `<div class="rmt-cg-prompt-secondary"><a class="rmt-btn" href="${core_text.esc(savedImage.url)}" target="_blank" rel="noopener noreferrer">查看完整原图</a><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="clear">${target.mode === core_constants.MODE.HEART ? '恢复文字版' : '恢复抽象图'}</button><small>仅移除本档案的图片引用，不删除柏宝绘图库文件。</small></div>` : ''}
+          ${savedImage ? `<div class="rmt-cg-prompt-secondary"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="view">查看完整原图</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="clear">${target.mode === core_constants.MODE.HEART ? '恢复文字版' : '恢复抽象图'}</button><small>仅移除本档案的图片引用，不删除柏宝绘图库文件。</small></div>` : ''}
         </section>`;
-        const cancel = event => { event.preventDefault(); event.stopImmediatePropagation(); closeCgPromptEditor(); };
+        const cancel = event => {
+            event.preventDefault(); event.stopImmediatePropagation();
+            if (!image_viewer.closeCgImageViewer()) closeCgPromptEditor();
+        };
         editor = { target, element, host, opener: document.activeElement, busy: false, cancel,
             taskKey: `cg-prompt:${core_context.chatScopeKey()}:${target.mode}:${core_text.safeId(target.itemId, 'cg')}` };
         const textarea = element.querySelector('[data-rmt-cg-prompt-input]');
@@ -109,6 +114,13 @@ export async function handleCgPromptEditorAction(action) {
     if (!current || current.busy) return;
     try {
         images.assertCgImageTargetCurrent(current.target);
+        if (action === 'view') {
+            const item = images.cgItemInSession(current.target.mode, current.target.session, current.target.itemId);
+            image_viewer.openCgImageViewer(item?.cgImage, item?.title, {
+                opener: current.element.querySelector('[data-rmt-cg-prompt-action="view"]'),
+            });
+            return;
+        }
         if (action === 'clear') {
             busyEditor(true);
             if (current.target.mode === core_constants.MODE.HEART) await heart.clearHeartStripImage(current.target.itemId);

@@ -14,6 +14,13 @@ import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as ui_overlay from './overlay.js';
+import * as image_viewer from './cgImageViewer.js';
+
+export function viewHeartStripImage(opener = null) {
+    const item = selectedHeartStrip();
+    if (item) return image_viewer.openCgImageViewer(item.cgImage, item.title, { opener });
+    return false;
+}
 
 export function heartCharacterAvatarUrl(entry = runtimeState.activeArchiveSnapshot, context = core_context.getContext()) {
     try {
@@ -320,7 +327,7 @@ export async function drawHeartStripImage(stripId, { promptOverride, expectedTar
             onProgress: progress => generation_imageGeneration.updateCgImageProgress(taskKey, progress),
         });
         const url = generation_imageGeneration.normalizeCgImageUrl(generated?.url);
-        if (!url) throw new Error('生图插件没有返回可保存的 SillyTavern 本地图片路径。');
+        if (!url) throw core_text.safeUserError('图片已生成，但没有取得可保存的本地路径。旧图已保留；请检查柏宝绘的图库保存状态，避免重复出图。', 'BBI_SAVE_FAILED');
         if (runtimeState.cgImageLifecycleEpoch !== lifecycleEpoch) {
             globalThis.toastr?.warning?.('图片已经生成，但插件已重载/停用，因此没有接收旧运行实例的结果。', '心迹回廊');
             return;
@@ -628,7 +635,7 @@ export function renderHeart() {
             const charDisplayName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext().name2, 120) || '角色';
             const userDisplayName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.memory?.userName || core_context.getContext().name1, 120) || '你';
             const panels = selected.panels.map((panel, index) => `<article class="rmt-heart-panel"><b>${index + 1}</b><div><small>${core_text.esc(panel.caption || `第 ${index + 1} 格`)}</small><p>${core_text.esc(panel.action)}</p>${panel.charLine ? `<div class="rmt-heart-panel-line"><strong>${core_text.esc(charDisplayName)}</strong>${core_text.esc(panel.charLine)}</div>` : ''}${panel.userLine ? `<div class="rmt-heart-panel-line user"><strong>${core_text.esc(userDisplayName)}</strong>${core_text.esc(panel.userLine)}</div>` : ''}</div></article>`).join('');
-            detail = `<div class="rmt-heart-strip-head"><div><h2>${core_text.esc(selected.title)}</h2><p>${core_text.esc(selected.subtitle)}</p></div><span>${selected.panelCount}格</span></div>${image ? `<a class="rmt-heart-strip-image rmt-heart-strip-image-full" href="${core_text.esc(image.url)}" target="_blank" rel="noopener noreferrer" aria-label="查看完整原图（新窗口）">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</a>` : `<div class="rmt-heart-strip-image">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</div>`}<div class="rmt-heart-strip-actions">${readOnly ? '' : `<button type="button" class="rmt-btn" data-rmt-action="edit-heart-cg-prompt" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, selected.id) ? 'disabled' : ''}>图片设置</button>`}</div><div class="rmt-heart-panels">${panels}</div>`;
+            detail = `<div class="rmt-heart-strip-head"><div><h2>${core_text.esc(selected.title)}</h2><p>${core_text.esc(selected.subtitle)}</p></div><span>${selected.panelCount}格</span></div>${image ? `<button type="button" class="rmt-heart-strip-image rmt-heart-strip-image-full" data-rmt-action="view-heart-cg" aria-label="查看完整原图">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</button>` : `<div class="rmt-heart-strip-image">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</div>`}<div class="rmt-heart-strip-actions">${readOnly ? '' : `<button type="button" class="rmt-btn" data-rmt-action="edit-heart-cg-prompt" ${generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, selected.id) ? 'disabled' : ''}>图片设置</button>`}</div><div class="rmt-heart-panels">${panels}</div>`;
         } else {
             detail = `<div class="rmt-heart-empty">${readOnly ? '日常一格还没有生成。' : '点击上方按钮单独生成日常一格。'}</div>`;
         }
