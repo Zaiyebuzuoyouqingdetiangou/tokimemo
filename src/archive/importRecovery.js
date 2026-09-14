@@ -3,6 +3,7 @@
 import * as recovery from '../generation/recovery.js';
 import * as client from '../generation/client.js';
 import * as text from '../core/text.js';
+import * as taskTrace from '../core/taskTrace.js';
 
 export const ARCHIVE_RECOVERY_PAGE_NOTICE = '档案整理草稿仅本页保留，请勿刷新；关闭心迹回廊可保留。';
 export const ARCHIVE_RECOVERY_MAX_DRAFTS = 4;
@@ -91,13 +92,19 @@ export async function beginArchiveRecovery({ origin, operation = 'import', sourc
 
 export async function requestArchiveRecoverySegment(ticket, slot, prompt, options, validator) {
     if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry || !ticket.entry.active) throw incompatible();
-    return recovery.withRecoverySegment(prompt, { ...options, origin: ticket.origin, taskKey: slot }, validator,
+    const checked = async raw => {
+        taskTrace.beginStage(options?.taskTrace, 'validate');
+        const result = await validator(raw);
+        taskTrace.markStage(options?.taskTrace, 'validate');
+        return result;
+    };
+    return recovery.withRecoverySegment(prompt, { ...options, origin: ticket.origin, taskKey: slot }, checked,
         async (effectivePrompt, requestOptions, accepted) => {
             // Archive extraction owns runtimeState.busy, so requestJson's module
             // task gate is deliberately not used. Same provider/parser, no retries.
             const raw = await client.generateConfiguredJson(effectivePrompt, requestOptions);
             if (ticket.assertCurrent() === false) throw new DOMException('Archive recovery origin changed', 'AbortError');
-            const result = await validator(raw);
+            const result = await checked(raw);
             await accepted(raw);
             return result;
         });
