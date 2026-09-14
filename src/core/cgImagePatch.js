@@ -6,14 +6,16 @@ import * as text from './text.js';
 const IMAGE_MODES = new Set([constants.MODE.ALBUM, constants.MODE.ADV, constants.MODE.HEART]);
 
 export function normalizeCgImageUrl(value) {
-    const raw = text.normalizeText(value, 4096);
+    if (typeof value !== 'string' || value.length > 4096 || /[\\\u0000-\u001f\u007f]/.test(value)) return '';
+    const raw = value.trim();
     if (!raw) return '';
     try {
-        const base = globalThis.location?.href || 'http://localhost/';
+        const base = imageResourceBase();
         const parsed = new URL(raw, base);
-        if (!['http:', 'https:'].includes(parsed.protocol)) return '';
-        const currentOrigin = globalThis.location?.origin;
-        if (currentOrigin && parsed.origin !== currentOrigin) return '';
+        if (!isSameImageHost(parsed, base)) return '';
+        // A returned path is parsed again by <img>. Leading // would become a
+        // different authority even if the original absolute URL was same-host.
+        if (parsed.pathname.startsWith('//')) return '';
         return `${parsed.pathname}${parsed.search}${parsed.hash}`.slice(0, 4096);
     } catch { return ''; }
 }
@@ -45,12 +47,11 @@ export function normalizeCgImagePatch(value) {
         || typeof value.expectedSignature !== 'string' || !value.expectedSignature || value.expectedSignature.length > 120000) return null;
     const image = normalizeCgImageRecord(value.image);
     if (!image || image.provider !== 'baibai-image' || typeof value.image.url !== 'string' || value.image.url.length > 4096) return null;
-    try {
-        const base = globalThis.location?.href || 'http://localhost/';
-        const parsed = new URL(value.image.url, base);
-        if (parsed.origin !== new URL(base).origin || parsed.username || parsed.password
-            || !/^\/user\/images\/.+\.(?:png|jpe?g|webp|gif)$/i.test(parsed.pathname)) return null;
-    } catch { return null; }
+    // Deferred writes use the same strict saved-file contract as fresh results.
+    // Displaying legacy same-host URLs does not grant permission to write them.
+    const savedPath = savedLocalImagePath(value.image.url);
+    if (!savedPath) return null;
+    image.url = savedPath;
     return { version: 1, mode: value.mode, itemId: value.itemId, expectedSignature: value.expectedSignature, image };
 }
 
@@ -71,11 +72,7 @@ export function applyCgImagePatch(session, raw) {
     return { status: 'applied', session: updated };
 }
 
-// Image host resolution.
-//
-// r62 only accepted http/https, so a locally hosted tavern served over a custom scheme
-// (TT on iOS, Tauri desktop) had every generated image rejected — the picture landed in
-// the provider's own gallery and never reached the album. Ported from r72.
+// Shared host resolution for provider results, stored records and image display.
 export function imageResourceBase() {
     const href = globalThis.location?.href;
     if (typeof href === 'string' && href) return href;
@@ -97,6 +94,7 @@ export function isSameImageHost(parsed, base) {
 
 export function savedLocalImagePath(raw, base = imageResourceBase()) {
     if (typeof raw !== 'string' || !raw || raw.length > 4096 || /[\\\u0000-\u001f\u007f]/.test(raw)) return '';
+    if (/(?:^|\/)\.{1,2}(?:\/|$)/.test(raw) || /%(?:2f|5c|2e|25|0[0-9a-f]|1[0-9a-f]|7f)/i.test(raw)) return '';
     try {
         const url = new URL(raw, base);
         if (!isSameImageHost(url, base) || url.search || url.hash || /%(?:2f|5c|2e|25|0[0-9a-f]|1[0-9a-f]|7f)/i.test(url.pathname)
