@@ -1,5 +1,5 @@
-const VERSION = '0.8.69';
-const BUILD = '0.8.69-tt-cg-r74.0';
+const VERSION = '0.8.70';
+const BUILD = '0.8.70-tt-cg-r75.0';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -7,6 +7,11 @@ const BOOTSTRAP_STYLE_ID = 'heartbeat_memories_bootstrap_styles';
 const CACHE_KEY = 'heartbeatMemoriesTheaterV3';
 const MEMORY_KEY = 'heartbeatMemoriesArchiveV3';
 const CACHE_STORAGE_FORMAT = 'gzip-base64-v1';
+const DIAGNOSTIC_ID = 'heartbeat_memories_external_diagnostic';
+const DIAGNOSTIC_STYLE_ID = DIAGNOSTIC_ID + '_style';
+const DIAGNOSTIC_MODES = Object.freeze(['butterfly', 'album', 'adv', 'room', 'items', 'cabinet', 'phone', 'inbox', 'pastLives', 'travel', 'ending', 'calendar', 'relations', 'heart', 'achievements']);
+const boundedCount = value => typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.min(1_000_000_000, Math.floor(value))) : 0;
 
 let runtimeModule = null;
 let bootPromise = null;
@@ -14,6 +19,8 @@ let bootstrapTimer = 0;
 let bootstrapEarlyCleanup = null;
 let lastArchiveOpenAt = 0;
 let disabled = false;
+let externalDiagnosticCleanup = null;
+const diagnosticDownloadTimers = new Map();
 
 function safeBootstrapErrorDiagnostic(error) {
     const diagnostic = {};
@@ -69,10 +76,8 @@ function getHeartbeatPerformanceDiagnostic() {
     const metadata = context.chatMetadata && typeof context.chatMetadata === 'object' ? context.chatMetadata : {};
     const memory = metadata[MEMORY_KEY];
     const stored = metadata[CACHE_KEY];
-    const memoryCount = Array.isArray(memory?.memories) ? memory.memories.length : 0;
-    const messageCount = Array.isArray(context.chat) ? context.chat.length : 0;
-    let chatId = '';
-    try { chatId = String(context.getCurrentChatId?.() ?? context.chatId ?? ''); } catch { chatId = String(context.chatId || ''); }
+    const memoryCount = Array.isArray(memory?.memories) ? boundedCount(memory.memories.length) : 0;
+    const messageCount = Array.isArray(context.chat) ? boundedCount(context.chat.length) : 0;
 
     const compressed = !!stored && typeof stored === 'object'
         && stored.format === CACHE_STORAGE_FORMAT
@@ -80,22 +85,25 @@ function getHeartbeatPerformanceDiagnostic() {
     const legacyRaw = !!stored && typeof stored === 'object' && !compressed;
     const base64Chars = compressed ? stored.data.length : 0;
     const compressedBytesApprox = compressed ? approximateBase64Bytes(stored.data) : 0;
-    const sourceChars = compressed ? Math.max(0, Number(stored.sourceChars) || 0) : 0;
-    const storedSourceBytes = compressed ? Math.max(0, Number(stored.sourceBytes) || 0) : 0;
+    const sourceChars = compressed ? boundedCount(stored.sourceChars) : 0;
+    const storedSourceBytes = compressed ? boundedCount(stored.sourceBytes) : 0;
     const sourceBytesExact = storedSourceBytes > 0;
     // r42.2 manifests only recorded UTF-16 characters. Three UTF-8 bytes per code unit is a
     // conservative upper bound that keeps this diagnostic zero-decompression and O(1).
-    const sourceBytes = sourceBytesExact ? storedSourceBytes : Math.min(Number.MAX_SAFE_INTEGER, sourceChars * 3);
-    const modes = compressed && Array.isArray(stored.modes)
-        ? stored.modes.map(value => String(value || '')).filter(Boolean).slice(0, 32)
-        : legacyRaw ? Object.keys(stored).filter(key => !['chatId', 'archiveRevision', 'updatedAt'].includes(key)).slice(0, 32) : [];
+    const sourceBytes = sourceBytesExact ? storedSourceBytes : boundedCount(sourceChars * 3);
+    const modes = [];
+    if (compressed && Array.isArray(stored.modes)) {
+        for (let i = 0; i < Math.min(32, stored.modes.length); i += 1) {
+            const mode = stored.modes[i];
+            if (DIAGNOSTIC_MODES.includes(mode) && !modes.includes(mode)) modes.push(mode);
+        }
+    }
     const risk = diagnosticRisk(base64Chars, sourceBytes, legacyRaw);
     const storage = compressed ? CACHE_STORAGE_FORMAT : legacyRaw ? 'legacy-uncompressed' : 'none';
 
     const rows = [
         '心迹回廊性能诊断（不解压缓存）',
         '',
-        `当前聊天：${chatId || '未命名 / 未取得 ID'}`,
         `聊天消息数组：${messageCount} 条（只读取 length，没有遍历正文）`,
         `Mxxx 档案：${memoryCount} 条`,
         `派生缓存格式：${storage}`,
@@ -123,7 +131,6 @@ function getHeartbeatPerformanceDiagnostic() {
     return {
         snapshot: {
             available: true,
-            chatId,
             messageCount,
             memoryCount,
             storage,
@@ -140,6 +147,7 @@ function getHeartbeatPerformanceDiagnostic() {
     };
 }
 
+globalThis.__heartbeatMemoriesVersion = BUILD;
 globalThis.__heartbeatMemoriesGetPerformanceDiagnostic = getHeartbeatPerformanceDiagnostic;
 
 function renderDiagnostic(output = null) {
@@ -148,7 +156,6 @@ function renderDiagnostic(output = null) {
         output.textContent = report.text;
         output.hidden = false;
     }
-    try { console.info('[HeartbeatMemories] zero-decompression performance diagnostic', report.snapshot); } catch {}
     return report;
 }
 
@@ -184,6 +191,148 @@ function toggleDiagnostic(output = null, trigger = null) {
 
 globalThis.__heartbeatMemoriesHidePerformanceDiagnostic = hideDiagnostic;
 globalThis.__heartbeatMemoriesTogglePerformanceDiagnostic = toggleDiagnostic;
+
+function getDiagnosticReportText() {
+    try {
+        const runtimeReport = globalThis.__heartbeatMemoriesRuntimeDiagnosticText;
+        if (typeof runtimeReport === 'function') return runtimeReport();
+        return JSON.stringify({
+            generatedAt: new Date().toISOString(),
+            plugin: { declaredVersion: BUILD, runtimeLoaded: false },
+            performance: getHeartbeatPerformanceDiagnostic().snapshot,
+            recentTasks: [],
+        }, null, 2);
+    } catch {
+        return JSON.stringify({ code: 'RMT_DIAGNOSTIC_UNAVAILABLE' }, null, 2);
+    }
+}
+
+function displayDiagnosticReport(output, text) {
+    if (!output) return;
+    if ('value' in output) output.value = text;
+    else output.textContent = text;
+    output.hidden = false;
+    const panel = output.closest?.('[data-rmt-diagnostic-panel]');
+    if (panel) panel.hidden = false;
+}
+
+// Keep the report visible before attempting either browser facility. iOS/WebView
+// may reject clipboard or download operations without allowing feature detection.
+async function deliverDiagnosticReport(action, { output = null, status = null } = {}) {
+    if (disabled) return false;
+    const text = getDiagnosticReportText();
+    displayDiagnosticReport(output, text);
+    const say = message => { if (!disabled && status && status.isConnected !== false) status.textContent = message; };
+    if (action === 'copy') {
+        try {
+            if (typeof globalThis.navigator?.clipboard?.writeText !== 'function') throw new Error();
+            await globalThis.navigator.clipboard.writeText(text);
+            say('已复制诊断报告。');
+            return true;
+        } catch {
+            say('无法自动复制，请长按下方报告手动复制。');
+            return false;
+        }
+    }
+    if (action === 'export') {
+        let url = '';
+        let link = null;
+        try {
+            url = URL.createObjectURL(new Blob([text], { type: 'application/json;charset=utf-8' }));
+            link = document.createElement('a');
+            link.href = url;
+            link.download = 'Hearttrace-diagnostic.json';
+            link.hidden = true;
+            document.body.appendChild(link);
+            link.click();
+            say('已请求导出；若未出现下载，请复制下方报告。');
+            return true;
+        } catch {
+            say('无法下载，请复制下方报告。');
+            return false;
+        } finally {
+            link?.remove();
+            if (url) {
+                const timer = setTimeout(() => {
+                    try { URL.revokeObjectURL(url); } catch {}
+                    diagnosticDownloadTimers.delete(url);
+                }, 1000);
+                diagnosticDownloadTimers.set(url, timer);
+            }
+        }
+    }
+    say('报告不含聊天、外貌、提示词或密钥。');
+    return true;
+}
+
+function removeExternalDiagnostic() {
+    try { externalDiagnosticCleanup?.(); } catch {}
+    externalDiagnosticCleanup = null;
+    document.getElementById(DIAGNOSTIC_ID)?.remove();
+    document.getElementById(DIAGNOSTIC_STYLE_ID)?.remove();
+    for (const [url, timer] of diagnosticDownloadTimers) {
+        clearTimeout(timer);
+        try { URL.revokeObjectURL(url); } catch {}
+    }
+    diagnosticDownloadTimers.clear();
+}
+
+function mountExternalDiagnostic() {
+    if (disabled) return false;
+    if (document.getElementById(DIAGNOSTIC_ID)) return true;
+    const mount = document.querySelector('#extensions_settings2');
+    if (!mount) return false;
+    const style = document.createElement('style');
+    style.id = DIAGNOSTIC_STYLE_ID;
+    style.textContent = `
+#${DIAGNOSTIC_ID}{box-sizing:border-box;width:100%;max-width:100%;min-width:0;display:grid;gap:8px;margin-top:10px;padding:10px;border:1px solid currentColor;border-radius:10px;color:inherit;background:inherit;font-family:inherit}
+#${DIAGNOSTIC_ID} [hidden]{display:none!important}
+#${DIAGNOSTIC_ID} button{box-sizing:border-box;min-width:0;min-height:46px;margin:0;padding:9px 10px;white-space:normal;overflow-wrap:anywhere;color:inherit;touch-action:manipulation}
+#${DIAGNOSTIC_ID} .rmt-external-diagnostic-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+#${DIAGNOSTIC_ID} .rmt-external-diagnostic-actions button{flex:1 1 110px}
+#${DIAGNOSTIC_ID} textarea{box-sizing:border-box;display:block;width:100%;max-width:100%;min-width:0;height:240px;margin-top:8px;padding:8px;resize:vertical;font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text;touch-action:auto;color:inherit;background:inherit}
+#${DIAGNOSTIC_ID} [role="status"]{display:block;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+`;
+    document.getElementById(DIAGNOSTIC_STYLE_ID)?.remove();
+    document.head.appendChild(style);
+    const panel = document.createElement('section');
+    panel.id = DIAGNOSTIC_ID;
+    const trigger = document.createElement('button');
+    trigger.type = 'button'; trigger.className = 'menu_button';
+    trigger.textContent = '心迹回廊 · 诊断';
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-controls', DIAGNOSTIC_ID + '_body');
+    const body = document.createElement('div');
+    body.id = DIAGNOSTIC_ID + '_body'; body.hidden = true;
+    body.setAttribute('data-rmt-diagnostic-panel', '');
+    const actions = document.createElement('div');
+    actions.className = 'rmt-external-diagnostic-actions';
+    const status = document.createElement('span'); status.setAttribute('role', 'status');
+    const output = document.createElement('textarea'); output.readOnly = true;
+    output.setAttribute('aria-label', '脱敏诊断报告'); output.spellcheck = false;
+    const listeners = [];
+    const on = (node, handler) => { node.addEventListener('click', handler); listeners.push(() => node.removeEventListener('click', handler)); };
+    const close = () => { body.hidden = true; trigger.setAttribute('aria-expanded', 'false'); };
+    on(trigger, () => {
+        if (!body.hidden) return close();
+        trigger.setAttribute('aria-expanded', 'true');
+        void deliverDiagnosticReport('show', { output, status });
+    });
+    for (const [action, label] of [['copy', '复制报告'], ['export', '导出 JSON'], ['close', '关闭']]) {
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'menu_button';
+        button.textContent = label;
+        on(button, () => action === 'close' ? close() : void deliverDiagnosticReport(action, { output, status }));
+        actions.appendChild(button);
+    }
+    body.appendChild(actions); body.appendChild(status); body.appendChild(output);
+    panel.appendChild(trigger); panel.appendChild(body); mount.appendChild(panel);
+    externalDiagnosticCleanup = () => { for (const cleanup of listeners) cleanup(); };
+    return true;
+}
+
+globalThis.__heartbeatMemoriesMountDiagnostics = mountExternalDiagnostic;
+globalThis.__heartbeatMemoriesRemoveDiagnostics = removeExternalDiagnostic;
+globalThis.__heartbeatMemoriesDeliverDiagnostic = deliverDiagnosticReport;
 
 function ensureBootstrapStyle() {
     if (document.getElementById(BOOTSTRAP_STYLE_ID)) return;
@@ -292,11 +441,13 @@ function stopBootstrapMountTimer() {
 }
 
 function mountBootstrapEntrypoints() {
-    if (disabled || runtimeModule) return;
+    if (disabled) return;
+    const diagnosticMounted = mountExternalDiagnostic();
+    if (runtimeModule) return;
     ensureBootstrapStyle();
     const settingsMounted = mountBootstrapSettings();
     const menuMounted = mountBootstrapMenu();
-    if (settingsMounted && menuMounted) stopBootstrapMountTimer();
+    if (settingsMounted && menuMounted && diagnosticMounted) stopBootstrapMountTimer();
 }
 
 function bindBootstrapEarlyOpen() {
@@ -339,6 +490,7 @@ async function ensureRuntime(reason = 'unknown') {
         unbindBootstrapEarlyOpen();
         removeBootstrapShells();
         runtimeModule = module;
+        globalThis.__heartbeatMemoriesRuntimeLoaded = true;
         runtimeModule.initMemoryTheater();
         globalThis.__heartbeatMemoriesBuild = BUILD;
         const finishedAt = globalThis.performance?.now?.() ?? Date.now();
@@ -399,6 +551,7 @@ export function onDisable() {
     unbindBootstrapEarlyOpen();
     try { runtimeModule?.destroyMemoryTheater?.(); } catch (error) { console.warn('[HeartbeatMemories] disable cleanup failed', safeBootstrapErrorDiagnostic(error)); }
     removeBootstrapShells();
+    cleanupDiagnostics();
 }
 
 export function onClean() {
@@ -407,6 +560,23 @@ export function onClean() {
     unbindBootstrapEarlyOpen();
     try { runtimeModule?.destroyMemoryTheater?.(); } catch (error) { console.warn('[HeartbeatMemories] clean cleanup failed', safeBootstrapErrorDiagnostic(error)); }
     removeBootstrapShells();
+    cleanupDiagnostics();
 }
 
-export { VERSION, BUILD, bootPromise, ensureRuntime, getHeartbeatPerformanceDiagnostic };
+function cleanupDiagnostics() {
+    document.removeEventListener('DOMContentLoaded', startBootstrap);
+    removeExternalDiagnostic();
+    globalThis.__heartbeatMemoriesRuntimeLoaded = false;
+    for (const [key, owned] of [
+        ['__heartbeatMemoriesGetPerformanceDiagnostic', getHeartbeatPerformanceDiagnostic],
+        ['__heartbeatMemoriesRenderPerformanceDiagnostic', renderDiagnostic],
+        ['__heartbeatMemoriesHidePerformanceDiagnostic', hideDiagnostic],
+        ['__heartbeatMemoriesTogglePerformanceDiagnostic', toggleDiagnostic],
+        ['__heartbeatMemoriesMountDiagnostics', mountExternalDiagnostic],
+        ['__heartbeatMemoriesRemoveDiagnostics', removeExternalDiagnostic],
+        ['__heartbeatMemoriesDeliverDiagnostic', deliverDiagnosticReport],
+    ]) if (globalThis[key] === owned) delete globalThis[key];
+}
+
+export { VERSION, BUILD, bootPromise, ensureRuntime, getHeartbeatPerformanceDiagnostic,
+    getDiagnosticReportText, mountExternalDiagnostic, deliverDiagnosticReport };
