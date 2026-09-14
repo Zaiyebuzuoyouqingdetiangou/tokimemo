@@ -70,3 +70,37 @@ export function applyCgImagePatch(session, raw) {
     cgItemInSession(patch.mode, updated, patch.itemId).cgImage = patch.image;
     return { status: 'applied', session: updated };
 }
+
+// Image host resolution.
+//
+// r62 only accepted http/https, so a locally hosted tavern served over a custom scheme
+// (TT on iOS, Tauri desktop) had every generated image rejected — the picture landed in
+// the provider's own gallery and never reached the album. Ported from r72.
+export function imageResourceBase() {
+    const href = globalThis.location?.href;
+    if (typeof href === 'string' && href) return href;
+    const origin = globalThis.location?.origin;
+    return typeof origin === 'string' && /^https?:\/\//.test(origin) ? origin + '/' : 'http://localhost/';
+}
+
+export function isSameImageHost(parsed, base) {
+    try {
+        const host = new URL(base);
+        if (parsed.username || parsed.password || host.username || host.password) return false;
+        // Same-origin is still required; the scheme allowance does not widen it.
+        if (host.protocol === 'tauri:') return host.host === 'localhost' && !host.port
+            && parsed.protocol === 'tauri:' && parsed.host === 'localhost' && !parsed.port;
+        return ['http:', 'https:'].includes(host.protocol) && ['http:', 'https:'].includes(parsed.protocol)
+            && parsed.origin === host.origin;
+    } catch { return false; }
+}
+
+export function savedLocalImagePath(raw, base = imageResourceBase()) {
+    if (typeof raw !== 'string' || !raw || raw.length > 4096 || /[\\\u0000-\u001f\u007f]/.test(raw)) return '';
+    try {
+        const url = new URL(raw, base);
+        if (!isSameImageHost(url, base) || url.search || url.hash || /%(?:2f|5c|2e|25|0[0-9a-f]|1[0-9a-f]|7f)/i.test(url.pathname)
+            || !/^\/user\/images\/.+\.(?:png|jpe?g|webp|gif)$/i.test(url.pathname)) return '';
+        return url.pathname;
+    } catch { return ''; }
+}
