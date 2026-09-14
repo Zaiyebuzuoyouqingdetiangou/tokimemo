@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 86
-// Source SHA-256: eec75c2e1f761057c4fbc4a0b7f3561f3bfb3a49d7e4191a69cba61b92cb9a8e
+// Source SHA-256: 2b48bafc4cd51602e18aa123e939fbc152471136108bf91b68a6bb1ff61de9a5
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -2701,12 +2701,49 @@ function applyCgImagePatch(session, raw) {
     return { status: 'applied', session: updated };
 }
 
+// Image host resolution.
+//
+// r62 only accepted http/https, so a locally hosted tavern served over a custom scheme
+// (TT on iOS, Tauri desktop) had every generated image rejected — the picture landed in
+// the provider's own gallery and never reached the album. Ported from r72.
+function imageResourceBase() {
+    const href = globalThis.location?.href;
+    if (typeof href === 'string' && href) return href;
+    const origin = globalThis.location?.origin;
+    return typeof origin === 'string' && /^https?:\/\//.test(origin) ? origin + '/' : 'http://localhost/';
+}
+
+function isSameImageHost(parsed, base) {
+    try {
+        const host = new URL(base);
+        if (parsed.username || parsed.password || host.username || host.password) return false;
+        // Same-origin is still required; the scheme allowance does not widen it.
+        if (host.protocol === 'tauri:') return host.host === 'localhost' && !host.port
+            && parsed.protocol === 'tauri:' && parsed.host === 'localhost' && !parsed.port;
+        return ['http:', 'https:'].includes(host.protocol) && ['http:', 'https:'].includes(parsed.protocol)
+            && parsed.origin === host.origin;
+    } catch { return false; }
+}
+
+function savedLocalImagePath(raw, base = imageResourceBase()) {
+    if (typeof raw !== 'string' || !raw || raw.length > 4096 || /[\\\u0000-\u001f\u007f]/.test(raw)) return '';
+    try {
+        const url = new URL(raw, base);
+        if (!isSameImageHost(url, base) || url.search || url.hash || /%(?:2f|5c|2e|25|0[0-9a-f]|1[0-9a-f]|7f)/i.test(url.pathname)
+            || !/^\/user\/images\/.+\.(?:png|jpe?g|webp|gif)$/i.test(url.pathname)) return '';
+        return url.pathname;
+    } catch { return ''; }
+}
+
 __m_core_cgImagePatch_js.normalizeCgImageUrl = normalizeCgImageUrl;
 __m_core_cgImagePatch_js.normalizeCgImageRecord = normalizeCgImageRecord;
 __m_core_cgImagePatch_js.cgItemInSession = cgItemInSession;
 __m_core_cgImagePatch_js.cgItemSignature = cgItemSignature;
 __m_core_cgImagePatch_js.normalizeCgImagePatch = normalizeCgImagePatch;
 __m_core_cgImagePatch_js.applyCgImagePatch = applyCgImagePatch;
+__m_core_cgImagePatch_js.imageResourceBase = imageResourceBase;
+__m_core_cgImagePatch_js.isSameImageHost = isSameImageHost;
+__m_core_cgImagePatch_js.savedLocalImagePath = savedLocalImagePath;
 }
 
 function __init_core_archiveCover_js() {
@@ -5933,9 +5970,11 @@ __m_core_presentExpression_js.PRESENT_EXPRESSION_SCHEMA = PRESENT_EXPRESSION_SCH
 
 function __init_generation_baibaiImage_js() {
 // MODULE: generation/baibaiImage.js
+const image_patch = __m_core_cgImagePatch_js;
 const core_text = __m_core_text_js;
 // Original adapter for the author's documented STBaiBaiImage API v1.
 // No third-party implementation, settings, credentials or DOM are accessed.
+
 
 const BAIBAI_IMAGE_PROVIDER = 'baibai-image';
 const BAIBAI_IMAGE_TIMEOUT_MS = 300000;
@@ -5986,16 +6025,7 @@ function baiBaiImageState() {
     }
 }
 
-function savedImagePath(value) {
-    if (typeof value !== 'string' || value.length > 4096 || !value.trim()) return '';
-    try {
-        const base = globalThis.location?.href || 'http://localhost/';
-        const parsed = new URL(value, base);
-        if (!['http:', 'https:'].includes(parsed.protocol) || parsed.origin !== new URL(base).origin
-            || parsed.username || parsed.password || !/^\/user\/images\/.+\.(?:png|jpe?g|webp|gif)$/i.test(parsed.pathname)) return '';
-        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-    } catch { return ''; }
-}
+function savedImagePath(value) { return image_patch.savedLocalImagePath(value); }
 
 function publicFailure(error) {
     const mapped = {
@@ -25755,7 +25785,7 @@ async function requestValidatedSegment(prompt, status, options, validator) {
     const maxAttempts = Math.max(1, Math.min(core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS, Number(options?.segmentMaxAttempts) || core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS));
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const retryNote = attempt && lastError
-            ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || core_text.normalizeText(lastError?.repairHint, 600) || (String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
+            ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || core_text.normalizeText(lastError?.repairHint, 600) || (lastError?.code === 'RMT_JSON_NOT_FOUND' || lastError?.code === 'RMT_JSON_INVALID' ? '上一轮你返回的是散文，没有任何可解析的 JSON 对象。本轮只输出一个 JSON 对象：第一个字符必须是 {，最后一个字符必须是 }。不要前言、不要解释、不要引用来源、不要代码围栏。' : String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
             : '';
         try {
             const raw = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? '（重试）' : ''}`, options);
