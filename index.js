@@ -1,5 +1,5 @@
-const VERSION = '0.8.70';
-const BUILD = '0.8.70-tt-cg-r75.0';
+const VERSION = '0.8.74';
+const BUILD = '0.8.74-tt-cg-r79.0';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
@@ -9,7 +9,7 @@ const MEMORY_KEY = 'heartbeatMemoriesArchiveV3';
 const CACHE_STORAGE_FORMAT = 'gzip-base64-v1';
 const DIAGNOSTIC_ID = 'heartbeat_memories_external_diagnostic';
 const DIAGNOSTIC_STYLE_ID = DIAGNOSTIC_ID + '_style';
-const DIAGNOSTIC_MODES = Object.freeze(['butterfly', 'album', 'adv', 'room', 'items', 'cabinet', 'phone', 'inbox', 'pastLives', 'travel', 'ending', 'calendar', 'relations', 'heart', 'achievements']);
+const DIAGNOSTIC_MODES = Object.freeze(['butterfly', 'album', 'adv', 'room', 'items', 'cabinet', 'phone', 'inbox', 'pastLives', 'timeEcho', 'timeJourney', 'travel', 'ending', 'calendar', 'relations', 'heart', 'achievements']);
 const boundedCount = value => typeof value === 'number' && Number.isFinite(value)
     ? Math.max(0, Math.min(1_000_000_000, Math.floor(value))) : 0;
 
@@ -20,6 +20,7 @@ let bootstrapEarlyCleanup = null;
 let lastArchiveOpenAt = 0;
 let disabled = false;
 let externalDiagnosticCleanup = null;
+let runtimeLoadFailed = false;
 const diagnosticDownloadTimers = new Map();
 
 function safeBootstrapErrorDiagnostic(error) {
@@ -216,13 +217,14 @@ function displayDiagnosticReport(output, text) {
     if (panel) panel.hidden = false;
 }
 
-// Keep the report visible before attempting either browser facility. iOS/WebView
-// may reject clipboard or download operations without allowing feature detection.
-async function deliverDiagnosticReport(action, { output = null, status = null } = {}) {
-    if (disabled) return false;
+// Showing raw diagnostics is an explicit troubleshooting action. Successful copy
+// and export stay compact; a rejected browser facility offers manual copy instead.
+async function deliverDiagnosticReport(action, { output = null, status = null, isCurrent = () => true } = {}) {
+    const active = () => !disabled && isCurrent() && (!output || output.isConnected !== false);
+    if (!active()) return false;
     const text = getDiagnosticReportText();
-    displayDiagnosticReport(output, text);
-    const say = message => { if (!disabled && status && status.isConnected !== false) status.textContent = message; };
+    const show = () => { if (active()) displayDiagnosticReport(output, text); };
+    const say = message => { if (active() && status && status.isConnected !== false) status.textContent = message; };
     if (action === 'copy') {
         try {
             if (typeof globalThis.navigator?.clipboard?.writeText !== 'function') throw new Error();
@@ -230,6 +232,7 @@ async function deliverDiagnosticReport(action, { output = null, status = null } 
             say('已复制诊断报告。');
             return true;
         } catch {
+            show();
             say('无法自动复制，请长按下方报告手动复制。');
             return false;
         }
@@ -245,9 +248,10 @@ async function deliverDiagnosticReport(action, { output = null, status = null } 
             link.hidden = true;
             document.body.appendChild(link);
             link.click();
-            say('已请求导出；若未出现下载，请复制下方报告。');
+            say('已请求导出；若未出现下载，请使用“复制报告”或“查看报告”。');
             return true;
         } catch {
+            show();
             say('无法下载，请复制下方报告。');
             return false;
         } finally {
@@ -261,6 +265,7 @@ async function deliverDiagnosticReport(action, { output = null, status = null } 
             }
         }
     }
+    show();
     say('报告不含聊天、外貌、提示词或密钥。');
     return true;
 }
@@ -278,53 +283,65 @@ function removeExternalDiagnostic() {
 }
 
 function mountExternalDiagnostic() {
-    if (disabled) return false;
+    // The normal diagnostics entry belongs to Hearttrace home. Only a failed
+    // runtime load needs a fallback outside the plugin UI.
+    if (disabled || !runtimeLoadFailed) return false;
     if (document.getElementById(DIAGNOSTIC_ID)) return true;
     const mount = document.querySelector('#extensions_settings2');
     if (!mount) return false;
     const style = document.createElement('style');
     style.id = DIAGNOSTIC_STYLE_ID;
     style.textContent = `
-#${DIAGNOSTIC_ID}{box-sizing:border-box;width:100%;max-width:100%;min-width:0;display:grid;gap:8px;margin-top:10px;padding:10px;border:1px solid currentColor;border-radius:10px;color:inherit;background:inherit;font-family:inherit}
+#${DIAGNOSTIC_ID}{box-sizing:border-box;width:100%;max-width:100%;min-width:0;display:block;flex:0 0 auto;margin-top:8px;padding:0;border:0;color:inherit;background:inherit;font-family:inherit;writing-mode:horizontal-tb}
 #${DIAGNOSTIC_ID} [hidden]{display:none!important}
-#${DIAGNOSTIC_ID} button{box-sizing:border-box;min-width:0;min-height:46px;margin:0;padding:9px 10px;white-space:normal;overflow-wrap:anywhere;color:inherit;touch-action:manipulation}
-#${DIAGNOSTIC_ID} .rmt-external-diagnostic-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
-#${DIAGNOSTIC_ID} .rmt-external-diagnostic-actions button{flex:1 1 110px}
+#${DIAGNOSTIC_ID}>summary{box-sizing:border-box;width:100%;min-width:0;min-height:46px;padding:12px 8px;cursor:pointer;white-space:normal;word-break:normal;overflow-wrap:break-word;writing-mode:horizontal-tb;touch-action:manipulation}
+#${DIAGNOSTIC_ID}:not([open])>.rmt-external-diagnostic-content{display:none!important}
+#${DIAGNOSTIC_ID} .rmt-external-diagnostic-content{box-sizing:border-box;min-width:0;max-width:100%;padding:8px}
+#${DIAGNOSTIC_ID} button.menu_button{box-sizing:border-box;display:flex!important;align-items:center;justify-content:center;width:100%!important;max-width:100%!important;min-width:0!important;min-height:46px!important;height:auto!important;margin:0!important;padding:9px 10px!important;white-space:nowrap!important;word-break:keep-all!important;overflow-wrap:normal!important;writing-mode:horizontal-tb!important;text-orientation:mixed!important;color:inherit;touch-action:manipulation}
+#${DIAGNOSTIC_ID} .rmt-external-diagnostic-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:8px;min-width:0;max-width:100%}
 #${DIAGNOSTIC_ID} textarea{box-sizing:border-box;display:block;width:100%;max-width:100%;min-width:0;height:240px;margin-top:8px;padding:8px;resize:vertical;font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text;touch-action:auto;color:inherit;background:inherit}
 #${DIAGNOSTIC_ID} [role="status"]{display:block;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
 `;
     document.getElementById(DIAGNOSTIC_STYLE_ID)?.remove();
     document.head.appendChild(style);
-    const panel = document.createElement('section');
+    const panel = document.createElement('details');
     panel.id = DIAGNOSTIC_ID;
-    const trigger = document.createElement('button');
-    trigger.type = 'button'; trigger.className = 'menu_button';
-    trigger.textContent = '心迹回廊 · 诊断';
-    trigger.setAttribute('aria-expanded', 'false');
-    trigger.setAttribute('aria-controls', DIAGNOSTIC_ID + '_body');
+    panel.open = false;
+    const trigger = document.createElement('summary');
+    trigger.textContent = '心迹回廊 · 故障排查';
     const body = document.createElement('div');
-    body.id = DIAGNOSTIC_ID + '_body'; body.hidden = true;
-    body.setAttribute('data-rmt-diagnostic-panel', '');
+    body.className = 'rmt-external-diagnostic-content';
     const actions = document.createElement('div');
     actions.className = 'rmt-external-diagnostic-actions';
     const status = document.createElement('span'); status.setAttribute('role', 'status');
+    const report = document.createElement('div'); report.hidden = true;
+    report.setAttribute('data-rmt-diagnostic-panel', '');
     const output = document.createElement('textarea'); output.readOnly = true;
+    output.hidden = true;
     output.setAttribute('aria-label', '脱敏诊断报告'); output.spellcheck = false;
     const listeners = [];
-    const on = (node, handler) => { node.addEventListener('click', handler); listeners.push(() => node.removeEventListener('click', handler)); };
-    const close = () => { body.hidden = true; trigger.setAttribute('aria-expanded', 'false'); };
-    on(trigger, () => {
-        if (!body.hidden) return close();
-        trigger.setAttribute('aria-expanded', 'true');
-        void deliverDiagnosticReport('show', { output, status });
-    });
-    for (const [action, label] of [['copy', '复制报告'], ['export', '导出 JSON'], ['close', '关闭']]) {
+    const on = (node, type, handler) => { node.addEventListener(type, handler); listeners.push(() => node.removeEventListener(type, handler)); };
+    let reportEpoch = 0;
+    const clear = () => {
+        reportEpoch += 1; report.hidden = true; output.hidden = true;
+        output.value = ''; status.textContent = '';
+    };
+    const close = () => { panel.open = false; clear(); };
+    on(panel, 'toggle', () => { if (!panel.open) clear(); });
+    for (const [action, label] of [['copy', '复制报告'], ['export', '导出 JSON'], ['show', '查看报告'], ['close', '关闭']]) {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'menu_button';
         button.textContent = label;
-        on(button, () => action === 'close' ? close() : void deliverDiagnosticReport(action, { output, status }));
+        button.setAttribute('data-rmt-diagnostic-action', action);
+        on(button, 'click', () => {
+            if (action === 'close') return close();
+            clear();
+            const epoch = reportEpoch;
+            void deliverDiagnosticReport(action, { output, status, isCurrent: () => panel.open && epoch === reportEpoch });
+        });
         actions.appendChild(button);
     }
-    body.appendChild(actions); body.appendChild(status); body.appendChild(output);
+    report.appendChild(output);
+    body.appendChild(actions); body.appendChild(status); body.appendChild(report);
     panel.appendChild(trigger); panel.appendChild(body); mount.appendChild(panel);
     externalDiagnosticCleanup = () => { for (const cleanup of listeners) cleanup(); };
     return true;
@@ -389,34 +406,16 @@ function mountBootstrapSettings() {
     panel.id = SETTINGS_ID;
     panel.dataset.rmtBootstrap = '1';
     panel.innerHTML = `
-      <div class="rmt-bootstrap-head"><b>心迹回廊</b><small>LAZY BOOTSTRAP</small></div>
+      <div class="rmt-bootstrap-head"><b>心迹回廊</b></div>
       <div class="rmt-bootstrap-actions">
         <button type="button" class="menu_button" data-rmt-bootstrap-load-settings>配置独立 API</button>
         <button type="button" class="menu_button" data-rmt-bootstrap-update>检查并更新插件</button>
         <small data-rmt-bootstrap-update-status role="status"></small>
-        <button type="button" class="menu_button" data-rmt-bootstrap-diagnostic aria-expanded="false" aria-controls="heartbeat_memories_bootstrap_diagnostic"><span data-rmt-diagnostic-label>性能诊断（不解压缓存）</span></button>
-      </div>
-      <div class="rmt-bootstrap-note">普通酒馆启动不会解析 Heartbeat 完整 runtime。只有第一次打开档案室或加载完整设置时才加载。</div>
-      <div class="rmt-bootstrap-diagnostic" id="heartbeat_memories_bootstrap_diagnostic" data-rmt-diagnostic-panel hidden>
-        <div class="rmt-bootstrap-diagnostic-head"><b>诊断结果</b><button type="button" class="menu_button rmt-bootstrap-diagnostic-close" data-rmt-bootstrap-diagnostic-close>关闭诊断</button></div>
-        <pre data-rmt-bootstrap-diagnostic-output></pre>
       </div>`;
     panel.addEventListener('click', event => {
         const updateButton = event.target.closest?.('[data-rmt-bootstrap-update]');
         if (updateButton) {
             void import(`./src/core/selfUpdater.js?heartbeat=${BUILD}`).then(module => module.updateFromButton(updateButton, panel.querySelector('[data-rmt-bootstrap-update-status]'), { moduleUrl: import.meta.url, isBusy: () => runtimeModule?.isGenerationBusy?.() || false })).catch(showBootError);
-            return;
-        }
-        if (event.target.closest?.('[data-rmt-bootstrap-diagnostic-close]')) {
-            hideDiagnostic(
-                panel.querySelector('[data-rmt-bootstrap-diagnostic-output]'),
-                panel.querySelector('[data-rmt-bootstrap-diagnostic]'),
-            );
-            return;
-        }
-        const diag = event.target.closest?.('[data-rmt-bootstrap-diagnostic]');
-        if (diag) {
-            toggleDiagnostic(panel.querySelector('[data-rmt-bootstrap-diagnostic-output]'), diag);
             return;
         }
         if (event.target.closest?.('[data-rmt-bootstrap-load-settings]')) {
@@ -442,12 +441,12 @@ function stopBootstrapMountTimer() {
 
 function mountBootstrapEntrypoints() {
     if (disabled) return;
-    const diagnosticMounted = mountExternalDiagnostic();
+    if (runtimeLoadFailed) mountExternalDiagnostic();
     if (runtimeModule) return;
     ensureBootstrapStyle();
     const settingsMounted = mountBootstrapSettings();
     const menuMounted = mountBootstrapMenu();
-    if (settingsMounted && menuMounted && diagnosticMounted) stopBootstrapMountTimer();
+    if (settingsMounted && menuMounted) stopBootstrapMountTimer();
 }
 
 function bindBootstrapEarlyOpen() {
@@ -492,12 +491,15 @@ async function ensureRuntime(reason = 'unknown') {
         runtimeModule = module;
         globalThis.__heartbeatMemoriesRuntimeLoaded = true;
         runtimeModule.initMemoryTheater();
+        runtimeLoadFailed = false;
+        removeExternalDiagnostic();
         globalThis.__heartbeatMemoriesBuild = BUILD;
         const finishedAt = globalThis.performance?.now?.() ?? Date.now();
         console.log(`[HeartbeatMemories] ${VERSION} runtime loaded on ${reason} in ${Math.max(0, Math.round(finishedAt - startedAt))}ms`);
         return runtimeModule;
     })().catch(error => {
         bootPromise = null;
+        runtimeLoadFailed = true;
         if (!disabled) {
             mountBootstrapEntrypoints();
             bindBootstrapEarlyOpen();
