@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 97
-// Source SHA-256: c97c900d17d5f383b4641fad417ee3ccaa71050902c2d9dbf7ca8cc86305cec2
+// Source SHA-256: b854e1556ea2e229624512f657aaa2ed08bcb5a85b8f57fd82250772839d8f03
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -799,8 +799,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_PROFILE_PROXY_UNAVAILABLE: '这一键连接指定的代理无法从该 Profile 自身安全解析；已停止远端拉取。',
     RMT_PROFILE_MODEL_STATUS: '这一键连接的模型列表返回了错误状态；响应详情已隐藏。',
     RMT_PROFILE_MODEL_TIMEOUT: '一键连接的模型列表请求超时；仍可使用该连接自己保存的模型。',
-    RMT_CONNECTION_UPSTREAM_CUTOFF: '请求在约两分钟处被上游网关切断，本段没有返回；这通常是酒馆所在服务器或反代的超时上限，不是 API Key 或模型设置的问题。已完成的分段全部保留，可点续写只重做这一段；若反复发生，请缩短档案/世界书以降低单段生成时间。',
-    RMT_CONNECTION_FAILED: '专用连接请求失败；响应详情已隐藏，请检查当前独立 API 设置。',
+    RMT_CONNECTION_FAILED: '生成连接请求失败，尚不能确定原因；请查看连接与服务端状态后再试，旧内容保留。',
     RMT_CONNECTION_AUTH: '专用连接认证失败；请检查当前配置、API Key 与账号权限。',
     RMT_CONNECTION_RATE_LIMIT: '模型服务正在限流或额度不足；请稍后重试。',
     RMT_CONNECTION_QUOTA: '模型服务报告额度不足；请检查当前独立 API 账号余额或配额。不会自动重试。',
@@ -4046,20 +4045,29 @@ function normalizeButterflyBranchAxes(value) {
     return [...new Set(value)];
 }
 
-function butterflyPlanPrompt(memoryBank) {
+function butterflyPlanPrompt(memoryBank, { readableR62 = false } = {}) {
     const plan = buildButterflyPlan(memoryBank);
     return plan.total
-        ? '先写 MAIN，并在 MAIN.branchAxes 中选择本次值得展开的分歧维度；数量由内容决定，可为空。无需遍历所有维度，也不随记忆条数增加节点。每次只写当前一段，最后 OMEGA 收尾。'
+        ? readableR62
+            ? '先写 MAIN，并在 MAIN.branchAxes 中选择本次值得展开的分歧维度；数量由内容决定，可为空。无需遍历所有维度，也不随记忆条数增加节点。每次只写当前一段，最后 OMEGA 收尾。'
+            : '先写 MAIN，并在 MAIN.branchAxes 中选择至少一个值得展开的分歧维度，展示人生关键条件改变后的不同命运。无需遍历所有维度，也不随记忆条数增加节点。每次只写当前一段，最后 OMEGA 收尾。'
         : '当前没有可用档案锚点，不生成观测节点。';
 }
 
 // Retained export for compatibility. These are not generation minima.
 const BUTTERFLY_LIMITS = Object.freeze({ monologueHan: 0, monologueFirstPerson: 0, interventionHan: 0, omegaHan: 0, omegaFirstPerson: 0, systemHan: 0 });
-const BUTTERFLY_GENERATION_CONTRACT = `【节点完整性契约】
+// Exact r62 text is retained solely for resuming already-started requests.
+const BUTTERFLY_READABLE_R62_CONTRACT = `【节点完整性契约】
 MAIN 与普通分歧的 monologue 是角色在该世界的完整心声，intervention 是现世角色读后的回应；短句也可以。不要求固定汉字数、第一人称次数或指定文学用词。
 systemNote 给出易读、完整的简短观测结论，不用凑算法术语或固定判定句。
 Ω 的 label 含“观测点 Ω”或“TRUE ENDING”；monologue 为空，intervention 回应已经看过的内容，systemNote 负责收尾。没有普通分歧时也可以回到现世，不虚构额外世界，不强迫告白或永世相守。
 worldSpec 的 era、identity、occupation、location、keyDecision、encounterWithUser、bondWithUser、finalFate 八字段均为具体文本，不用“同上/不变/未知”；thirdPartyRomance 严格为 false。不得虚构第三方恋爱、婚姻或前任；节点标题、世界条件与独白均不可重复。`;
+
+const BUTTERFLY_GENERATION_CONTRACT = `【观测叙事】
+MAIN 与普通分歧的 monologue 由该世界的 {{char}} 以第一人称展开生活处境、关键选择及其代价、内心情绪，形成有起伏的完整独白，不以一句概述代替。intervention 则由现世 {{char}} 对照“另一个我”，写出被触动后的即时反应与自省；口吻贴合人设，两种说话者不要混淆。
+systemNote 以冷静、冷酷的系统口吻点明关键变量与命运结果，形成明确判定，与人物的情绪形成反差，术语贴合世界观。
+Ω 的 label 含“观测点 Ω”或“TRUE ENDING”，monologue 为空。intervention 汇合实际已观测的不同命运，由现世 {{char}} 回到与 {{user}} 的当下关系，写出这一轮观测如何改变自己的理解、珍惜或选择，形成有余韵的情绪落点；systemNote 判定观测结束后的现世主体。不得虚构未观测的世界或擅自把当前关系升级为恋爱、婚姻。
+不设字数、代词次数或算法词汇配额。worldSpec 的 era、identity、occupation、location、keyDecision、encounterWithUser、bondWithUser、finalFate 均为具体文本，不用“同上/不变/未知”；thirdPartyRomance 严格为 false。不得虚构第三方恋爱、婚姻或前任；节点标题、世界条件与独白均不可重复。`;
 
 const ISSUES = Object.freeze({
     relationship: '本段出现明确的前任或第三方恋爱、婚姻情节，请只调整这一处；两人的旁白和省略主语不需要反复补“我与你”。',
@@ -4089,6 +4097,7 @@ __m_core_butterflyContract_js.butterflyValidationError = butterflyValidationErro
 __m_core_butterflyContract_js.butterflyValidationFeedback = butterflyValidationFeedback;
 __m_core_butterflyContract_js.BUTTERFLY_PRIMARY_AXES = BUTTERFLY_PRIMARY_AXES;
 __m_core_butterflyContract_js.BUTTERFLY_LIMITS = BUTTERFLY_LIMITS;
+__m_core_butterflyContract_js.BUTTERFLY_READABLE_R62_CONTRACT = BUTTERFLY_READABLE_R62_CONTRACT;
 __m_core_butterflyContract_js.BUTTERFLY_GENERATION_CONTRACT = BUTTERFLY_GENERATION_CONTRACT;
 }
 
@@ -15285,9 +15294,9 @@ CURRENT_LOCAL_DATE: ${currentDate}
 
 const PROMPTS = {
     [core_constants.MODE.CALENDAR]: (context, memoryBank) => calendarPrompt(context, memoryBank),
-    [core_constants.MODE.BUTTERFLY]: (context, memoryBank) => `${promptSafetyBoundary(context, '蝴蝶效应')}
-${core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
-${core_butterflyContract.butterflyPlanPrompt(memoryBank)}
+    [core_constants.MODE.BUTTERFLY]: (context, memoryBank, options = {}) => `${promptSafetyBoundary(context, '蝴蝶效应')}
+${options.readableR62 ? core_butterflyContract.BUTTERFLY_READABLE_R62_CONTRACT : core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
+${core_butterflyContract.butterflyPlanPrompt(memoryBank, options)}
 主时间线只从下面较小的档案锚点集中取证；平行分歧主要依据受控角色卡/人设/世界书推演。
 UNTRUSTED_TIMELINE_ANCHORS_JSON:
 ${promptArchiveSlice(memoryBank, 16)}
@@ -15315,7 +15324,7 @@ JSON 结构必须严格为：
       "trueEnding": false,
       "sourceMemoryIds": ["M001"],
       "sourceMemoryAnchor": "主时间线必须从真实档案 anchors/title 原样复制一个具体锚点",
-      "monologue": "主时间线 {{char}} 第一人称观测独白，表达完整即可",
+      "monologue": "${options.readableR62 ? '主时间线 {{char}} 第一人称观测独白，表达完整即可' : '主时间线 {{char}} 第一人称独白，展开有档案依据的处境、选择与情绪'}",
       "intervention": "当前世界线 {{char}} 的主时间线自省",
       "systemNote": "冷酷、客观的系统算法结局判定"
     },
@@ -15339,7 +15348,7 @@ JSON 结构必须严格为：
         "finalFate": "这个世界最终命运",
         "thirdPartyRomance": false
       },
-      "monologue": "这个平行世界中的 {{char}} 第一人称发言；这是平行体本人说的话，长短随内容",
+      "monologue": "${options.readableR62 ? '这个平行世界中的 {{char}} 第一人称发言；这是平行体本人说的话，长短随内容' : '平行体 {{char}} 的完整第一人称独白，展开不同人生的生活、选择代价和情绪变化'}",
       "intervention": "现世 {{char}} 看见这个平行体后的即时共鸣、自省或告白",
       "systemNote": "冷酷算法对该平行时空主体的最终判定与结局预测"
     },
@@ -15352,7 +15361,7 @@ JSON 结构必须严格为：
       "sourceMemoryIds": [],
       "sourceMemoryAnchor": "",
       "monologue": "",
-      "intervention": "现世 {{char}} 回应实际已观测内容的最终第一人称发言，表达完整即可",
+      "intervention": "${options.readableR62 ? '现世 {{char}} 回应实际已观测内容的最终第一人称发言，表达完整即可' : '现世 {{char}} 汇合已观测命运后的第一人称发言，回到与 {{user}} 的当下，形成情绪落点'}",
       "systemNote": "系统对完整观测结束、现世主体回归主时间线后的最终判定"
     }
   ]
@@ -15364,16 +15373,16 @@ JSON 结构必须严格为：
 - 普通平行节点是模拟，不得伪装成已经发生的回忆；它们可以不带 sourceMemoryIds。若从某段档案作为分歧起点，可以附带真实引用，但平行世界里新增的事情仍只能写成模拟。
 - 普通平行节点要从角色卡、人设、世界书中的身份、职业、时代、地点、关系条件、选择或命运约束向外推演；不能只把同一场景换措辞。
 - 普通平行节点的 worldSpec.primaryAxis 必须按本地计划依次填写且不重复。worldSpec 其余字段都要填写具体内容，各份组合必须实质不同；thirdPartyRomance 必须始终为 false。
-- 普通平行节点的 monologue 是【那个平行世界里的 {{char}} 本人】的发言，写清生活、处境与情绪即可，不按字数或代词次数凑篇幅。
+- ${options.readableR62 ? '普通平行节点的 monologue 是【那个平行世界里的 {{char}} 本人】的发言，写清生活、处境与情绪即可，不按字数或代词次数凑篇幅。' : '普通平行节点的 monologue 是【那个平行世界里的 {{char}} 本人】的完整独白，要让人看见具体人生和选择的代价，情绪有展开，不以情节提纲代替。'}
 - 每个普通平行节点的 intervention 才是【现世 {{char}}】刚看完该平行体后的即时反应；不要把两种说话者混在一个字段里。
 - 最后一项必须 id="OMEGA"、trueEnding=true，label 包含“观测点 Ω”或“TRUE ENDING”。【Ω 不是平行世界，不存在平行体】；它的 monologue 必须严格为空字符串 ""，绝对禁止再写平行体发言。
-- Ω 的 intervention 是【现世 {{char}}】在观测后的最终发言。只回应实际已经观测的内容；无最低字数，不凑额外世界或差异。
+- ${options.readableR62 ? 'Ω 的 intervention 是【现世 {{char}}】在观测后的最终发言。只回应实际已经观测的内容；无最低字数，不凑额外世界或差异。' : 'Ω 的 intervention 是【现世 {{char}}】观测后的最终发言，将实际看过的命运差异化为对当下关系的理解、珍惜或选择，不只是逐条总结。'}
 - Ω 的 systemNote 只评价“完整观测结束后的现世主体/主时间线”，不要再判定不存在的 Ω 平行体。
 - 普通节点 code 使用“> SIMULATION RECORD #...”形式；Ω 使用“> OBSERVATION POINT #OMEGA”。
-- systemNote 是简洁的观测批语，口吻符合终端与当前世界观，不要求固定算法词汇。
+- ${options.readableR62 ? 'systemNote 是简洁的观测批语，口吻符合终端与当前世界观，不要求固定算法词汇。' : 'systemNote 是冷静、冷酷的系统判定，点明人生关键变量与结局，形成理性判定和人物情感的反差，术语符合世界观。'}
 - 禁止出现任何前任、前女友相关情节。
 - 禁止出现 {{char}} 与除了 {{user}} 以外任何人恋爱、结婚或组建家庭；第三方只能保持非恋爱关系。
-- Ω 的收束应贴合两人的性格与已观测内容，可以简短，不强制出现命运、奇迹或唯一解等口号。
+- ${options.readableR62 ? 'Ω 的收束应贴合两人的性格与已观测内容，可以简短，不强制出现命运、奇迹或唯一解等口号。' : 'Ω 的收束贴合两人的性格与当前关系，让不同命运在现世汇合并留下情绪余韵；珍惜与选择须有观测铺垫，不套用告白口号或擅自确立恋爱。'}
 - Ω 只能回应实际已通过的节点，不能杜撰未观测的世界。
 - 只输出结构化 JSON；视觉快照、像素边框、噪点、1 秒干扰动画由插件本地渲染，不由模型输出 HTML/CSS。蝴蝶效应页面现有 UI 完全冻结，本次只生成内容，不提出或描述任何 UI 改版。`,
     [core_constants.MODE.ENDING]: (context, memoryBank) => modes_ending.endingOutlinePrompt(context, memoryBank),
@@ -23992,11 +24001,27 @@ function normalizeButterfly(data, memoryBank, context = {}, options = {}) {
     };
 }
 
+// The code-owned slot marker keeps r84 drafts on their original prompt recipe.
+// It is not acceptance authority: recovery still checks the exact request hash.
+const NARRATIVE_SLOT_MARKER = ':narrative-r84';
+
+function butterflySlotPrompt(context, memoryBank, index, slot, nodes, options = {}) {
+    const basePrompt = generation_prompts.PROMPTS[core_constants.MODE.BUTTERFLY](context, memoryBank, options);
+    const existing = nodes.map(node => ({ label: node.label, primaryAxis: node.primaryAxis, worldSpec: node.worldSpec }));
+    return basePrompt + '\n【本请求的分段输出规则替代上面的整批输出 schema】'
+        + '\n你这次只输出 {"node":{当前一个完整节点}}，不要返回 nodes 数组或其他节点。不凑节点数量。'
+        + '\nCURRENT_SLOT_JSON:' + JSON.stringify({ index, kind: slot, primaryAxis: PRIMARY_AXIS_SET.has(slot) ? slot : undefined })
+        + (options.readableR62
+            ? '\nMAIN 只写主时间线，并可给 node.branchAxes 数组，从 era/identity/occupation/location/decision/encounter/bond/fate 选择真正需要的维度。可为空，缺省只展开一个 decision。普通槽位使用指定 primaryAxis；OMEGA 只写终点。没有字数、人称次数或凑齐维度的要求。'
+            : '\nMAIN 只写主时间线，并给 node.branchAxes 数组，从 era/identity/occupation/location/decision/encounter/bond/fate 选择至少一个值得展开的分歧维度，缺省为 decision。普通槽位使用指定 primaryAxis；OMEGA 只写终点。继续遵守上面的观测叙事、来源和关系要求。')
+        + '\nEXISTING_VALID_WORLD_INDEX_JSON:' + JSON.stringify(existing)
+        + (slot === 'OMEGA' ? '\nVALIDATED_VOICES_JSON:' + JSON.stringify(nodes.map(node => ({ label: node.label, monologue: node.monologue.slice(0, 700), intervention: node.intervention.slice(0, 500) }))) : '');
+}
+
 async function generateButterflyWithRepair(context, memoryBank, origin, taskKey, dependencies = {}) {
     const plan = core_butterflyContract.buildButterflyPlan(memoryBank);
     if (!plan.total) throw new Error('当前没有可用记忆，请先生成当前窗口档案。');
     const request = dependencies.request || generation_client.requestValidatedSegment;
-    const basePrompt = generation_prompts.PROMPTS[core_constants.MODE.BUTTERFLY](context, memoryBank);
     const contextEnvelope = dependencies.contextEnvelope ?? await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generation_client.generationWorldInfoScanTerms(core_constants.MODE.BUTTERFLY, context) });
     const nodes = [];
     const labels = new Set(), signatures = new Set(), monologues = new Set();
@@ -24007,11 +24032,13 @@ async function generateButterflyWithRepair(context, memoryBank, origin, taskKey,
     const savedSegments = generation_recovery.generationRecoverySegmentsForOrigin(origin) || [];
     const savedMain = savedSegments.find(segment => /:slot:0$/u.test(segment.slot));
     const legacyPlan = legacy_recovery.legacyButterflyPlan(memoryBank);
-    // Restored to the pre-r62 rules by request: the readable-r62 contract dropped every
-    // length/person quota and the fixed axis plan, which changed what the mode produces.
-    // A draft saved under the newer contract still resumes under that contract.
+    // Only a real old draft may retain the old fixed plan. A new task must use
+    // MAIN's chosen axes, rather than an empty list of previously attempted slots.
+    const savedNarrative = savedMain?.slot.endsWith(NARRATIVE_SLOT_MARKER + ':slot:0') === true;
+    const readableR62 = Boolean(savedMain) && !savedNarrative;
     const savedReadableContract = savedMain?.contract === 'butterfly-readable-r62';
-    const continueLegacyPlan = !savedReadableContract;
+    const continueLegacyPlan = readableR62 && !savedReadableContract;
+    const requestTaskKey = readableR62 ? taskKey : taskKey + NARRATIVE_SLOT_MARKER;
     const attemptedLegacyBranches = continueLegacyPlan ? Math.max(0, ...savedSegments.map(segment => {
         const index = Number(segment.slot.match(/:slot:(\d+)$/u)?.[1]);
         return index > 0 && index <= legacyPlan.axes.length ? index : 0;
@@ -24021,24 +24048,21 @@ async function generateButterflyWithRepair(context, memoryBank, origin, taskKey,
         // A legacy Ω keeps its original slot number, even when unstarted old
         // quota slots are omitted. This makes a second interruption resumable.
         const requestIndex = continueLegacyPlan && slot === 'OMEGA' ? legacyPlan.axes.length + 1 : index;
-        const existing = nodes.map(node => ({ label: node.label, primaryAxis: node.primaryAxis, worldSpec: node.worldSpec }));
-        const prompt = basePrompt + '\n【本请求的分段输出规则替代上面的整批输出 schema】'
-            + '\n你这次只输出 {"node":{当前一个完整节点}}，不要返回 nodes 数组或其他节点。不凑节点数量。'
-            + '\nCURRENT_SLOT_JSON:' + JSON.stringify({ index, kind: slot, primaryAxis: PRIMARY_AXIS_SET.has(slot) ? slot : undefined })
-            + '\nMAIN 只写主时间线，并可给 node.branchAxes 数组，从 era/identity/occupation/location/decision/encounter/bond/fate 选择真正需要的维度。可为空，缺省只展开一个 decision。普通槽位使用指定 primaryAxis；OMEGA 只写终点。没有字数、人称次数或凑齐维度的要求。'
-            + '\nEXISTING_VALID_WORLD_INDEX_JSON:' + JSON.stringify(existing)
-            + (slot === 'OMEGA' ? '\nVALIDATED_VOICES_JSON:' + JSON.stringify(nodes.map(node => ({ label: node.label, monologue: node.monologue.slice(0, 700), intervention: node.intervention.slice(0, 500) }))) : '');
+        const prompt = butterflySlotPrompt(context, memoryBank, index, slot, nodes, { readableR62 });
         const node = await request(prompt, '蝴蝶效应 · 节点 ' + (index + 1) + '/' + (index ? slots.length : '待定') + ' · ' + slot,
-            { maxTokens: 4096, temperature: 0.55, context, contextEnvelope, origin, taskKey: taskKey + ':slot:' + requestIndex, mode: core_constants.MODE.BUTTERFLY, background: true,
-                recoveryCompatibility: { contract: continueLegacyPlan ? 'butterfly-legacy-plan-r62' : 'butterfly-readable-r62',
-                    legacyPrompts: [legacy_recovery.legacyButterflySlotPrompt(context, memoryBank, requestIndex, nodes)] } },
+            { maxTokens: 4096, temperature: 0.55, context, contextEnvelope, origin, taskKey: requestTaskKey + ':slot:' + requestIndex, mode: core_constants.MODE.BUTTERFLY, background: true,
+                ...(readableR62 ? { recoveryCompatibility: { contract: continueLegacyPlan ? 'butterfly-legacy-plan-r62' : 'butterfly-readable-r62',
+                    legacyPrompts: [legacy_recovery.legacyButterflySlotPrompt(context, memoryBank, requestIndex, nodes)] } } : {}) },
             value => {
                 const raw = value?.node;
                 if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw core_butterflyContract.butterflyValidationError('worldSpec');
                 const candidate = index === 0 ? normalizedMainNode(raw, memoryBank, context)
                     : slot === 'OMEGA' ? normalizeButterflyOmega(raw, context)
                     : normalizeButterflyBranch(raw, index, memoryBank, context);
-                if (index === 0) candidate.branchAxes = core_butterflyContract.normalizeButterflyBranchAxes(raw.branchAxes);
+                if (index === 0) {
+                    candidate.branchAxes = core_butterflyContract.normalizeButterflyBranchAxes(raw.branchAxes);
+                    if (!readableR62 && !candidate.branchAxes.length) candidate.branchAxes = ['decision'];
+                }
                 if (PRIMARY_AXIS_SET.has(slot)) {
                     const label = core_incremental.normalizedContentKey(candidate.label, 180);
                     const signature = butterflyWorldSignature(candidate);
@@ -24062,7 +24086,7 @@ async function generateButterflyWithRepair(context, memoryBank, origin, taskKey,
     }
     return normalizeButterfly({ nodes }, memoryBank, context, { expectedAxes: plannedAxes });
 }
-function butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) {
+function butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds, options = {}) {
     const existing = (Array.isArray(previous?.nodes) ? previous.nodes.slice(1, -1) : []).slice(-core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
         id: core_text.normalizeText(item?.id, 50),
         label: core_text.normalizeText(item?.label, 120),
@@ -24071,7 +24095,7 @@ function butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds
         worldSpec: looseWorldSpec(item),
     }));
     return `${generation_prompts.promptSafetyBoundary(context, '蝴蝶效应 / 增量分歧')}
-${core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
+${options.readableR62 ? core_butterflyContract.BUTTERFLY_READABLE_R62_CONTRACT : core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
 旧终端节点由本地原样保留。本请求只根据当前档案写确有不同的平行分歧，最多三个是容量上限，不是目标数量。没有新分歧可以只写新观测点 Ω；禁止改写或换措辞复述旧节点。
 UNTRUSTED_INCREMENTAL_TIMELINE_JSON:
 ${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}
@@ -24079,15 +24103,15 @@ EXISTING_DIVERGENCE_INDEX_JSON:
 ${JSON.stringify(existing, null, 2)}
 
 严格输出：
-{"nodes":[{"id":"EG_NEW_01","label":"新的分歧点","primaryAxis":"era","worldSpec":{"primaryAxis":"era","era":"具体时代","identity":"具体身份","occupation":"具体职业","location":"具体地点","keyDecision":"关键选择","encounterWithUser":"与 {{user}} 如何相遇或错过","bondWithUser":"与 {{user}} 的关系结果","finalFate":"最终命运","thirdPartyRomance":false},"sourceMemoryIds":[],"sourceMemoryAnchor":"","monologue":"该平行世界角色的心声","intervention":"现世角色读后的回应","systemNote":"简短观测结论"}],"omega":{"id":"OMEGA","label":"观测点 Ω：再次回归现世","monologue":"","intervention":"回应已经看到的分歧与当下选择","systemNote":"本次观测的收尾"}}
+{"nodes":[{"id":"EG_NEW_01","label":"新的分歧点","primaryAxis":"era","worldSpec":{"primaryAxis":"era","era":"具体时代","identity":"具体身份","occupation":"具体职业","location":"具体地点","keyDecision":"关键选择","encounterWithUser":"与 {{user}} 如何相遇或错过","bondWithUser":"与 {{user}} 的关系结果","finalFate":"最终命运","thirdPartyRomance":false},"sourceMemoryIds":[],"sourceMemoryAnchor":"","monologue":"${options.readableR62 ? '该平行世界角色的心声' : '平行体完整第一人称独白，展开生活、选择代价与情绪'}","intervention":"${options.readableR62 ? '现世角色读后的回应' : '现世角色对照另一个我后的触动与自省'}","systemNote":"${options.readableR62 ? '简短观测结论' : '冷酷系统对关键变量和命运结果的判定'}"}],"omega":{"id":"OMEGA","label":"观测点 Ω：再次回归现世","monologue":"","intervention":"${options.readableR62 ? '回应已经看到的分歧与当下选择' : '汇合已观测命运，回到与 {{user}} 的当下关系，形成情绪余韵'}","systemNote":"本次观测的收尾"}}
 
 要求：
 - nodes 可以为空，最多三个真正新的普通分歧；primaryAxis 只能是 era/identity/occupation/location/decision/encounter/bond/fate。
 - worldSpec 八个文本字段都要具体，不得写“同上/不变/未知”，thirdPartyRomance 必须为 false，且整体命运组合不得与旧 worldSpec 重复。
-- monologue、intervention、systemNote 有完整内容即可，不要求字数、人称次数或算法词配额。
+- ${options.readableR62 ? 'monologue、intervention、systemNote 有完整内容即可，不要求字数、人称次数或算法词配额。' : 'monologue 展开具体人生与情绪起伏，intervention 写出对照后的自省，systemNote 给出冷静冷酷的明确判定；不靠字数、代词或术语配额凑篇幅。'}
 - 新分歧应由 incrementalMemoryIds 带来的关系变化、选择或理解触发，但仍明确是模拟，不伪装成真实历史。
 - 必须避开 EXISTING_DIVERGENCE_INDEX_JSON 的标签和命运条件。
-- omega.monologue 为空，intervention 自然收尾，不强迫告白或凑齐差异维度。
+- ${options.readableR62 ? 'omega.monologue 为空，intervention 自然收尾，不强迫告白或凑齐差异维度。' : 'omega.monologue 为空，intervention 汇合实际看到的新旧命运，写出回归现世后对 {{user}} 的理解、珍惜或选择，贴合当前关系，不擅自确立恋爱。'}
 - 禁止前任/前女友；禁止 {{char}} 与 {{user}} 以外任何人恋爱、结婚或组建家庭。只输出 JSON。`;
 }
 
@@ -24237,13 +24261,15 @@ async function generateButterflyIncrementalWithRepair(context, memoryBank, origi
         const sanitized = mergeButterflyIncremental(previous, { branches: [], omega: previous.nodes?.[previous.nodes.length - 1] }, sourceMemoryIds);
         return core_incremental.stampIncrementalCoverage(sanitized, previous, memoryBank, 'mode', sourceMemoryIds, 0);
     }
+    const savedIncrement = generation_recovery.generationRecoverySegmentsForOrigin(origin)?.find(segment => /:increment$/u.test(segment.slot));
+    const readableR62 = Boolean(savedIncrement) && !savedIncrement.slot.endsWith(NARRATIVE_SLOT_MARKER + ':increment');
     const part = await generation_client.requestValidatedSegment(
-        butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
+        butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds, { readableR62 }) + core_incremental.derivedExpansionDirective(previous, memoryBank),
         '蝴蝶效应 · 正在追加新的平行分歧…',
-        { maxTokens: 9000, temperature: 0.55, context, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.BUTTERFLY, background: true,
-            recoveryCompatibility: { contract: 'butterfly-readable-r62', legacyPrompts: [
+        { maxTokens: 9000, temperature: 0.55, context, origin, taskKey: `${taskKey}${readableR62 ? '' : NARRATIVE_SLOT_MARKER}:increment`, mode: core_constants.MODE.BUTTERFLY, background: true,
+            ...(readableR62 ? { recoveryCompatibility: { contract: 'butterfly-readable-r62', legacyPrompts: [
                 legacy_recovery.legacyButterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
-            ] } },
+            ] } } : {}) },
         raw => normalizeButterflyIncrementPart(raw, memoryBank, context),
     );
     const merged = mergeButterflyIncremental(previous, part, sourceMemoryIds);
@@ -24261,6 +24287,7 @@ __m_modes_butterfly_js.assertButterflyColdSystemNote = assertButterflyColdSystem
 __m_modes_butterfly_js.normalizeButterflyBranch = normalizeButterflyBranch;
 __m_modes_butterfly_js.normalizeButterflyOmega = normalizeButterflyOmega;
 __m_modes_butterfly_js.normalizeButterfly = normalizeButterfly;
+__m_modes_butterfly_js.butterflySlotPrompt = butterflySlotPrompt;
 __m_modes_butterfly_js.butterflyIncrementPrompt = butterflyIncrementPrompt;
 __m_modes_butterfly_js.normalizeButterflyIncrementPart = normalizeButterflyIncrementPart;
 __m_modes_butterfly_js.butterflyBranchKey = butterflyBranchKey;
@@ -27245,9 +27272,11 @@ const modes_butterfly = __m_modes_butterfly_js;
 const modes_phone = __m_modes_phone_js;
 const generation_client = __m_generation_client_js;
 const generation_prompts = __m_generation_prompts_js;
+const generation_recovery = __m_generation_recovery_js;
 
 // Targeted regeneration for user-managed derived content.
 // Targets are selected only from the currently normalized session; model output never chooses a cache path.
+
 
 
 
@@ -27687,17 +27716,22 @@ function normalizeRegeneratedButterflyNode(item, rawNode, memoryBank, context = 
     };
 }
 
-async function regenerateButterflyNode(item, context, memoryBank, origin, taskKey) {
+async function regenerateButterflyNode(item, context, memoryBank, origin, taskKey, observedNodes = []) {
+    const savedNode = generation_recovery.generationRecoverySegmentsForOrigin(origin)?.find(segment => /:butterfly$/u.test(segment.slot));
+    const readableR62 = Boolean(savedNode) && !savedNode.slot.endsWith(':narrative-r84:butterfly');
     const evidence = item.sourceMemoryIds?.length ? core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 10) : [];
     const prompt = `${generation_prompts.promptSafetyBoundary(context, '蝴蝶效应 / 单个观测节点重新生成')}
-${core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
+${readableR62 ? core_butterflyContract.BUTTERFLY_READABLE_R62_CONTRACT : core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
 只重新生成下面这个${item.trueEnding ? '观测点 Ω' : '平行分歧'}的模拟内容，保持节点身份不变。它是派生模拟，不得修改正式档案。
 CURRENT_NODE_JSON:\n${JSON.stringify(item, null, 2)}
 ${evidence.length ? `TRUSTED_MAIN_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}` : ''}
 节点 id/code/locked/trueEnding、证据字段与已有 worldSpec 都由本地锁定，不接受模型改写。普通旧节点如果 CURRENT_NODE_JSON 缺少 worldSpec，则必须补全 primaryAxis 与 worldSpec 八个具体字段，并明确 thirdPartyRomance=false。
-严格输出：{"node":{"label":"...","primaryAxis":"era","worldSpec":{"primaryAxis":"era","era":"...","identity":"...","occupation":"...","location":"...","keyDecision":"...","encounterWithUser":"...","bondWithUser":"...","finalFate":"...","thirdPartyRomance":false},"monologue":"...","intervention":"...","systemNote":"..."}}。${item.trueEnding ? 'Ω 的 monologue 为空，intervention 回应实际观测后的感受，完整即可，不凑字数或固定口号。' : '普通分歧 monologue 是平行世界角色本人的发言；intervention 是现世 {{char}} 的自省；systemNote 是简洁的观测批语。长短随内容，不按字数或代词次数验收。'}禁止前任，禁止 {{char}} 与 {{user}} 以外的任何人恋爱、结婚或成家。只输出 JSON。`;
+严格输出：{"node":{"label":"...","primaryAxis":"era","worldSpec":{"primaryAxis":"era","era":"...","identity":"...","occupation":"...","location":"...","keyDecision":"...","encounterWithUser":"...","bondWithUser":"...","finalFate":"...","thirdPartyRomance":false},"monologue":"...","intervention":"...","systemNote":"..."}}。${readableR62
+        ? item.trueEnding ? 'Ω 的 monologue 为空，intervention 回应实际观测后的感受，完整即可，不凑字数或固定口号。' : '普通分歧 monologue 是平行世界角色本人的发言；intervention 是现世 {{char}} 的自省；systemNote 是简洁的观测批语。长短随内容，不按字数或代词次数验收。'
+        : item.trueEnding ? 'Ω 的 monologue 为空，intervention 汇合实际已观测命运，回到与 {{user}} 的当下关系，形成有余韵的情绪落点；不擅自确立恋爱。' : '普通分歧 monologue 展开平行体第一人称的生活处境、关键选择及代价与情绪起伏；intervention 写现世 {{char}} 对照另一个我的触动与自省；systemNote 给出冷酷、明确的命运判定。不按字数或代词次数验收。'}禁止前任，禁止 {{char}} 与 {{user}} 以外的任何人恋爱、结婚或成家。只输出 JSON。`
+        + (!readableR62 && item.trueEnding ? '\nVALIDATED_VOICES_JSON:' + JSON.stringify(observedNodes.filter(node => !node.trueEnding && !node.historicalObservation && !node.formerOmega).slice(-8).map(node => ({ label: node.label, monologue: core_text.normalizeText(node.monologue, 300), intervention: core_text.normalizeText(node.intervention, 200) }))) : '');
     const raw = await generation_client.requestValidatedSegment(
-        prompt, `重新生成「${item.label}」…`, taskOptions(core_constants.MODE.BUTTERFLY, context, origin, `${taskKey}:butterfly`, 9000, 0.7),
+        prompt, `重新生成「${item.label}」…`, taskOptions(core_constants.MODE.BUTTERFLY, context, origin, `${taskKey}${readableR62 ? '' : ':narrative-r84'}:butterfly`, 9000, 0.7),
         data => normalizeRegeneratedButterflyNode(item, data?.node, memoryBank, context),
     );
     return raw;
@@ -27776,7 +27810,7 @@ async function regenerateManagedTarget(session, type, id, parentId, options) {
     } else if (type === 'butterfly-node') {
         const index = updated.nodes?.findIndex(item => item.id === id) ?? -1;
         if (index <= 0) throw new Error('主时间线不能作为单项重新生成目标。');
-        updated.nodes[index] = await regenerateButterflyNode(updated.nodes[index], context, memoryBank, origin, taskKey);
+        updated.nodes[index] = await regenerateButterflyNode(updated.nodes[index], context, memoryBank, origin, taskKey, updated.nodes);
     } else {
         throw new Error('这一类内容目前不支持单项模型重新生成。');
     }
@@ -28363,9 +28397,6 @@ async function requestValidatedSegment(prompt, status, options, validator) {
 // r74's character-budget fallback. This is not an exact token estimate or a
 // provider retry; the user's original generation request has not been sent yet.
 const TOKEN_COUNT_TIMEOUT_MS = 5000;
-// Observed on a cloud tavern: every failure landed at 125-134s while every success finished
-// under 50s. That cliff is the host's gateway limit, which the extension cannot raise.
-const UPSTREAM_CUTOFF_HINT_MS = 90000;
 
 function countPromptTokens(context, prompt, signal, timeoutMs) {
     return new Promise((resolve, reject) => {
@@ -28466,7 +28497,7 @@ function assertNoBannedGeneratedPhrase(value, settings, evidence = null) {
     throw error;
 }
 
-function normalizeConnectionManagerError(error, timing = {}) {
+function normalizeConnectionManagerError(error) {
     if (error?.name === 'AbortError' || error?.retryableJson === true) return error;
     const knownInternalCodes = new Set([
         'RMT_API_CONFIG_CHANGED', 'RMT_API_CONFIGURATION_SUPERSEDED', 'RMT_API_MODEL_REQUEST_SUPERSEDED',
@@ -28507,12 +28538,6 @@ function normalizeConnectionManagerError(error, timing = {}) {
     const technical = status ? `（HTTP ${status}）` : safeCode ? `（${safeCode}）` : '';
     const sourceName = error?.code === 'RMT_MANUAL_HTTP' ? '手动 API' : '专用连接';
     let code = 'RMT_CONNECTION_FAILED';
-    // A request that dies around two minutes with no response is an upstream gateway or
-    // reverse-proxy cut, not a misconfigured key. Saying "检查独立 API 设置" sends the user
-    // to settings that are already correct, so name the real shape of the failure.
-    if (Number(timing?.elapsedMs) >= UPSTREAM_CUTOFF_HINT_MS && timing?.receivedResponse !== true) {
-        code = 'RMT_CONNECTION_UPSTREAM_CUTOFF';
-    }
     let message = `${sourceName}请求失败${technical}。没有收到可判断是否可重试的模型结果；请检查当前独立 API 设置与 SillyTavern 控制台中的上游错误，本段不会自动重试。`;
     let retryable = false;
     if (/(?:<!doctype\s+html|<html\b|<head\b|<body\b|cf-error|cdn-cgi)/i.test(original)) {
@@ -28528,7 +28553,7 @@ function normalizeConnectionManagerError(error, timing = {}) {
         // Single observation point: from here on the throttle serialises and paces
         // provider traffic until it decays.
         core_requestCoordinator.noteProviderRateLimit(error);
-        message = `模型服务正在限流${technical}。仅对本段按等待窗口有界重试；等待过长或再次失败会停止本次组合任务。`;
+        message = `模型服务正在限流${technical}。请稍后再试，旧内容仍会保留。`;
         retryable = true;
     } else if (status === 413 || ((status === 400 || !status) && /(context length|context window|too many tokens|maximum context|payload too large|request too large)/i.test(original))) {
         code = 'RMT_CONNECTION_CONTEXT_LIMIT';
@@ -28544,15 +28569,15 @@ function normalizeConnectionManagerError(error, timing = {}) {
         retryable = false;
     } else if (status === 408 || status === 504 || /(gateway timeout|request timeout|timed out|etimedout)/i.test(hints)) {
         code = 'RMT_CONNECTION_SERVER';
-        message = `模型服务或代理响应超时${technical}。本段会等待后重试一次；若再次失败，旧内容仍会保留。`;
+        message = `模型服务或代理响应超时${technical}。可以稍后重试，旧内容仍会保留。`;
         retryable = true;
     } else if (/(failed to fetch|networkerror|network request failed|load failed|enotfound|fetch failed)/i.test(hints)) {
         code = 'RMT_CONNECTION_NETWORK';
-        message = '无法连接模型服务。请检查地址、网络、代理与服务状态；本段会等待后重试一次，旧内容仍会保留。';
+        message = '无法连接模型服务。请检查地址、网络、代理与服务状态，旧内容仍会保留。';
         retryable = true;
     } else if (status >= 500 || /(bad gateway|service unavailable|upstream.*(?:failed|error)|econnreset|econnrefused)/i.test(original)) {
         code = 'RMT_CONNECTION_SERVER';
-        message = `模型服务或代理暂时不可用${technical}。本段会等待后重试一次；若再次失败，旧内容仍会保留。`;
+        message = `模型服务或代理暂时不可用${technical}。可以稍后重试，旧内容仍会保留。`;
         retryable = true;
     }
     const normalized = new Error(message);
@@ -28645,8 +28670,6 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
             ? lifecycleController.signal.reason : core_requestCoordinator.createGenerationAbortError();
         core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     };
-    const __sentAt = Date.now();
-    let __gotResponse = false;
     try {
         assertRequestCurrent();
         core_taskTrace.beginStage(taskTrace, 'queue');
@@ -28683,12 +28706,11 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
         );
         core_taskTrace.markStage(taskTrace, 'request');
         core_taskTrace.markStage(taskTrace, 'response');
-        __gotResponse = true;
         core_taskTrace.recordResponse(taskTrace, core_independentApi.responseShapeSummary(result));
         // Observe error envelopes (including HTTP-200 429s) before draining the queue.
         responsePayload = core_independentApi.assertIndependentResponsePayload(result);
     } catch (error) {
-        throw normalizeConnectionManagerError(error, { elapsedMs: Date.now() - __sentAt, receivedResponse: __gotResponse });
+        throw normalizeConnectionManagerError(error);
     } finally {
         try { releaseProviderPermit?.(); } catch {}
         try { externalSignal?.removeEventListener?.('abort', forwardAbort); } catch {}
@@ -29337,7 +29359,6 @@ __m_generation_client_js.findBannedGeneratedPhrase = findBannedGeneratedPhrase;
 __m_generation_client_js.assertNoBannedGeneratedPhrase = assertNoBannedGeneratedPhrase;
 __m_generation_client_js.normalizeConnectionManagerError = normalizeConnectionManagerError;
 __m_generation_client_js.TOKEN_COUNT_TIMEOUT_MS = TOKEN_COUNT_TIMEOUT_MS;
-__m_generation_client_js.UPSTREAM_CUTOFF_HINT_MS = UPSTREAM_CUTOFF_HINT_MS;
 __m_generation_client_js.GENERATED_PHRASE_EVIDENCE_KEYS = GENERATED_PHRASE_EVIDENCE_KEYS;
 }
 

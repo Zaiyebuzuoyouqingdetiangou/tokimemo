@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.78-tt-cg-r83.0",
+  "js": "index.js?heartbeat=0.8.79-tt-cg-r84.0",
   "author": "Toto",
-  "version": "0.8.78",
+  "version": "0.8.79",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r82：移除时间旅行故事模块，保留时空回响、蝴蝶效应及既有生成与启动修复。",
+  "description": "r84：修复蝴蝶分歧与叙事，保留成功草稿和默认不自动重试，纠正连接错误归因。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
