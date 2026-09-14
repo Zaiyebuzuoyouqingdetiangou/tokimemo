@@ -4,7 +4,7 @@
   "js": "index.js?heartbeat=0.8.79-tt-cg-r84.1",
   "author": "Toto",
   "version": "0.8.79",
-  "auto_update": true,
+  "auto_update": false,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
