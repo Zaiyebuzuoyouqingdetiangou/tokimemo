@@ -22,7 +22,9 @@ export function normalizeHeartCore(data, memoryBank) {
     const relationshipSummary = core_text.normalizeText(data?.relationshipSummary, 1800);
     if (!relationshipSummary) throw core_text.safeUserError('角色互动时期对话缺少关系摘要。', 'RMT_HEART_INCOMPLETE');
     const relationshipReference = core_evidence.normalizeMemoryReference(data?.relationshipSourceMemoryIds, data?.relationshipSourceMemoryAnchor, `${relationshipState}\n${relationshipSummary}`, memoryBank, 1);
-    if (!relationshipReference.sourceMemoryIds.length || !relationshipReference.sourceMemoryAnchor) throw core_text.safeUserError('角色互动时期对话缺少真实关系锚点。', 'RMT_HEART_INCOMPLETE');
+    // HEART dialogue is present/future character interaction, not a historical claim.
+    // If the archive cannot prove a relationship stage, keep evidence empty and use the
+    // controlled character/persona/world context only for characterization.
 
     const greetings = {};
     for (const key of core_constants.HEART_GREETING_KEYS) greetings[key] = core_text.cleanArray(data?.greetings?.[key], 6, 600);
@@ -56,8 +58,8 @@ ${generation_prompts.endingArchiveSlice(memoryBank, 40)}
 严格输出字段：title, relationshipState, relationshipSummary, relationshipSourceMemoryIds, relationshipSourceMemoryAnchor, birthdayMmDd, userBirthdayMmDd, specialDays, greetings。
 - morning/noon/evening/night/weekend 各 2～3 条。
 - birthday/userBirthday/holiday/absenceWorry/absenceSulky 各 1～2 条；absenceJealous 只有关系适合时写 0～2 条。
-- relationship 必须由真实档案 sourceMemoryIds + sourceMemoryAnchor 支撑；生日不知道就写空字符串。
-- 这些只是角色化台词，不写回历史事实，不替 {{user}} 创造真实决定。
+- relationship 优先使用真实档案 sourceMemoryIds + sourceMemoryAnchor；如果当前档案没有足够关系证据，不要伪造 ID/anchor，两个字段留空，并依据角色卡、Persona、世界观中明确的人设保持保守的互动基线。
+- 无真实关系证据时不得擅自升级为已恋爱、已告白、已同居等既成事实；这些只是角色化台词，不写回历史事实，不替 {{user}} 创造真实决定。
 - 不要输出 voiceDramas / scenarioDramas / dailyStrips。只输出 JSON。`;
 }
 
@@ -82,7 +84,7 @@ EXISTING_HEART_DIALOGUES_JSON:
 ${JSON.stringify(compactHeartDialoguesExisting(existing), null, 2)}
 
 严格输出字段：relationshipState, relationshipSummary, relationshipSourceMemoryIds, relationshipSourceMemoryAnchor, birthdayMmDd, userBirthdayMmDd, specialDays, greetings。
-- relationship 说明当前新增档案带来的最新阶段，必须由真实档案 ID + anchor 支撑；旧阶段会被本地保存到历史，不会丢失。
+- relationship 优先说明新增档案能证明的最新阶段并给出真实 ID + anchor；如果新增档案不足以证明关系变化，不要伪造证据，关系证据字段留空，本地会保留旧关系阶段，新增台词可继续按角色人设与既有关系边界生成。
 - greetings 每一类只写 0～2 条真正新的台词；至少一个分类有新增内容。必须避开 EXISTING_HEART_DIALOGUES_JSON 中的原句与近义复述。
 - specialDays 只补新增档案能确定的新日期；不知道就空数组。生日不知道就空字符串。
 - 不输出旧台词，不输出 Drama / Scenario / dailyStrips。只输出 JSON。`;
@@ -99,8 +101,13 @@ export function normalizeHeartCoreIncrement(data, memoryBank, sourceMemoryIds) {
         memoryBank,
         1,
     );
-    if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) throw core_text.safeUserError('角色互动增量缺少真实关系锚点。', 'RMT_HEART_INCOMPLETE');
-    if (!core_incremental.usesIncrementalMemoryId(reference.sourceMemoryIds, sourceMemoryIds)) throw core_text.safeUserError('角色互动增量的关系阶段没有引用本轮新增档案。', 'RMT_HEART_INCOMPLETE');
+    const hasIncrementalRelationshipEvidence = !!reference.sourceMemoryIds.length
+        && !!reference.sourceMemoryAnchor
+        && core_incremental.usesIncrementalMemoryId(reference.sourceMemoryIds, sourceMemoryIds);
+    // No proven relationship change is a valid HEART increment: keep evidence empty so the
+    // merge preserves the previous relationship stage while still accepting new persona-led lines.
+    const relationshipSourceMemoryIds = hasIncrementalRelationshipEvidence ? reference.sourceMemoryIds : [];
+    const relationshipSourceMemoryAnchor = hasIncrementalRelationshipEvidence ? reference.sourceMemoryAnchor : '';
     const greetings = {};
     let total = 0;
     for (const key of core_constants.HEART_GREETING_KEYS) {
@@ -111,8 +118,8 @@ export function normalizeHeartCoreIncrement(data, memoryBank, sourceMemoryIds) {
     return {
         relationshipState,
         relationshipSummary,
-        relationshipSourceMemoryIds: reference.sourceMemoryIds,
-        relationshipSourceMemoryAnchor: reference.sourceMemoryAnchor,
+        relationshipSourceMemoryIds,
+        relationshipSourceMemoryAnchor,
         birthdayMmDd: core_text.normalizeText(data?.birthdayMmDd, 20),
         userBirthdayMmDd: core_text.normalizeText(data?.userBirthdayMmDd, 20),
         specialDays: Array.isArray(data?.specialDays) ? data.specialDays : [],
@@ -571,7 +578,10 @@ export async function generateHeartWithRepair(context, memoryBank, origin, taskK
             { maxTokens: 4500, temperature: 0.4, context, origin, taskKey: `${taskKey}:dialogues-increment`, mode: core_constants.MODE.HEART, background: true },
             raw => normalizeHeartCoreIncrement(raw, memoryBank, sourceMemoryIds),
         );
-        const { session, added } = mergeHeartCoreIncremental(existing, core, !core_incremental.incrementalArchiveMemoryIds(existing, memoryBank, 'dialogues').length);
+        const preserveRelationship = !core.relationshipSourceMemoryIds?.length
+            || !core.relationshipSourceMemoryAnchor
+            || !core_incremental.incrementalArchiveMemoryIds(existing, memoryBank, 'dialogues').length;
+        const { session, added } = mergeHeartCoreIncremental(existing, core, preserveRelationship);
         const normalized = normalizeHeart(session, memoryBank);
         return core_incremental.stampIncrementalCoverage(normalized, existing, memoryBank, 'dialogues', sourceMemoryIds, added);
     }
@@ -1361,9 +1371,8 @@ export function normalizeHeart(data, memoryBank) {
         memoryBank,
         1,
     );
-    if (!relationshipReference.sourceMemoryIds.length || !relationshipReference.sourceMemoryAnchor) {
-        throw core_text.safeUserError('角色互动台词库缺少真实关系锚点。', 'RMT_HEART_INCOMPLETE');
-    }
+    // HEART may legitimately have no archive-backed relationship evidence. In that case
+    // the source fields stay empty; this mode must not invent an Mxxx/anchor merely to pass validation.
 
     const greetings = {};
     for (const key of core_constants.HEART_GREETING_KEYS) {
