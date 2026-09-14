@@ -198,7 +198,7 @@ export async function requestValidatedSegment(prompt, status, options, validator
     const maxAttempts = Math.max(1, Math.min(core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS, Number(options?.segmentMaxAttempts) || core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS));
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const retryNote = attempt && lastError
-            ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || core_text.normalizeText(lastError?.repairHint, 600) || (String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
+            ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || core_text.normalizeText(lastError?.repairHint, 600) || (lastError?.code === 'RMT_JSON_NOT_FOUND' || lastError?.code === 'RMT_JSON_INVALID' ? '上一轮你返回的是散文，没有任何可解析的 JSON 对象。本轮只输出一个 JSON 对象：第一个字符必须是 {，最后一个字符必须是 }。不要前言、不要解释、不要引用来源、不要代码围栏。' : String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
             : '';
         try {
             const raw = await requestJson(`${prompt}${retryNote}`, `${status}${attempt ? '（重试）' : ''}`, options);

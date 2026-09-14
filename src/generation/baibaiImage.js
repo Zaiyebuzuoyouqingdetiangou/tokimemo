@@ -1,5 +1,6 @@
 // Original adapter for the author's documented STBaiBaiImage API v1.
 // No third-party implementation, settings, credentials or DOM are accessed.
+import * as image_patch from '../core/cgImagePatch.js';
 import * as core_text from '../core/text.js';
 
 export const BAIBAI_IMAGE_PROVIDER = 'baibai-image';
@@ -51,16 +52,7 @@ export function baiBaiImageState() {
     }
 }
 
-function savedImagePath(value) {
-    if (typeof value !== 'string' || value.length > 4096 || !value.trim()) return '';
-    try {
-        const base = globalThis.location?.href || 'http://localhost/';
-        const parsed = new URL(value, base);
-        if (!['http:', 'https:'].includes(parsed.protocol) || parsed.origin !== new URL(base).origin
-            || parsed.username || parsed.password || !/^\/user\/images\/.+\.(?:png|jpe?g|webp|gif)$/i.test(parsed.pathname)) return '';
-        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-    } catch { return ''; }
-}
+function savedImagePath(value) { return image_patch.savedLocalImagePath(value); }
 
 function publicFailure(error) {
     const mapped = {
