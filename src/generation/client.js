@@ -258,7 +258,9 @@ export async function requestValidatedSegment(prompt, status, options, validator
 // The host tokenizer may use an unavailable service. Bound the wait, then use
 // r74's character-budget fallback. This is not an exact token estimate or a
 // provider retry; the user's original generation request has not been sent yet.
-export const TOKEN_COUNT_TIMEOUT_MS = 5000;
+// A reachable tokenizer answers in milliseconds; an unreachable one burned 5s on every
+// single request here. The character budget still enforces the real limit.
+export const TOKEN_COUNT_TIMEOUT_MS = 1500;
 
 function countPromptTokens(context, prompt, signal, timeoutMs) {
     return new Promise((resolve, reject) => {
