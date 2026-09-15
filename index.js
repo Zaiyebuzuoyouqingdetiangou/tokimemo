@@ -1,5 +1,5 @@
-const VERSION = '0.8.79';
-const BUILD = '0.8.79-tt-cg-r84.1';
+const VERSION = '0.8.80';
+const BUILD = '0.8.80-tt-cg-r84.2';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
