@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 97
-// Source SHA-256: 6b4948ef8c16fbed279920dae4e036c02ea2a0e43c468ce83ea401916735c42b
+// Source SHA-256: 4b6c43c1d21ab4ec7d63686e5ebebc89b751aaaf3164ec8311c3d307649cf73c
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -10245,40 +10245,7 @@ ${root} .rmt-ending-final{color:var(--rmt-theme-accent-ink,#5f5770)!important;-w
 `;
 }
 
-// Load the generated stylesheet as a linked file.
-//
-// The same CSS used to be injected as a 256KB string, which the browser had to parse on
-// the JS main thread every time the archive room opened. A <link> is parsed by the CSS
-// engine and cached by HTTP, so reopening costs nothing. Falls back to the inline copy if
-// the file cannot be resolved (manual install with a trimmed dist, for example).
-const LINKED_STYLESHEET_ID = 'heartbeat_memories_linked_styles';
-
-function linkedStylesheetHref() {
-    try {
-        const url = new URL('../../dist/heartbeatMemories.bundle.css', import.meta.url);
-        return url.href;
-    } catch { return ''; }
-}
-
-function ensureLinkedStylesheet() {
-    if (document.getElementById(LINKED_STYLESHEET_ID)) return true;
-    // A host without document.head (or a trimmed dist) must still get styled, so any
-    // failure here falls through to the inline copy rather than rendering unstyled.
-    if (typeof document.head?.appendChild !== 'function') return false;
-    const href = linkedStylesheetHref();
-    if (!href) return false;
-    try {
-        const link = document.createElement('link');
-        link.id = LINKED_STYLESHEET_ID;
-        link.rel = 'stylesheet';
-        link.href = href;
-        document.head.appendChild(link);
-        return true;
-    } catch { return false; }
-}
-
 function ensureSettingsStyles() {
-    if (ensureLinkedStylesheet()) return;
     if (document.getElementById(core_constants.SETTINGS_STYLE_ID)) return;
     const style = document.createElement('style');
     style.id = core_constants.SETTINGS_STYLE_ID;
@@ -10357,7 +10324,6 @@ function ensureSettingsStyles() {
 
 function ensureStyles() {
     ensureSettingsStyles();
-    if (ensureLinkedStylesheet()) return;
     if (document.getElementById(core_constants.STYLE_ID)) return;
     const style = document.createElement('style');
     style.id = core_constants.STYLE_ID;
@@ -11317,7 +11283,6 @@ function abstractStyle(seed, id) {
 }
 
 __m_ui_styles_js.homeAndReadingCss = homeAndReadingCss;
-__m_ui_styles_js.ensureLinkedStylesheet = ensureLinkedStylesheet;
 __m_ui_styles_js.ensureSettingsStyles = ensureSettingsStyles;
 __m_ui_styles_js.ensureStyles = ensureStyles;
 __m_ui_styles_js.abstractStyle = abstractStyle;
