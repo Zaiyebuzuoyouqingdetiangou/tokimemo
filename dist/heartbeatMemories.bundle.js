@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 97
-// Source SHA-256: 79c34de29ea383d242199f01bbebd48e605f56869dc964bbf09908a289ae6ea3
+// Source SHA-256: 6b4948ef8c16fbed279920dae4e036c02ea2a0e43c468ce83ea401916735c42b
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -7358,7 +7358,28 @@ const core_text = __m_core_text_js;
 
 const DIALOGUE_CONTRACT = '脚本每项只属于一个说话人：speaker 为 char/user/narrator/npc；npc 必须另给 speakerName。{{user}} 实际说出口的话必须单列 speaker="user"，同样展示气泡，不能放进 narrator 或 char。动作、神态、环境写独立 narrator 项，气泡 text 只放该人实际说出的台词，不混入其他人的话。不强行编造用户的内心独白，不按段落顺序轮流猜说话人。';
 
-// One pure boundary for generated scripts and legacy display. Unknown attribution is neutral.
+// These are syntax cues, not gender/turn-taking inference. The immediate, bounded
+// lead-in must name a known subject, or qualify an already attributed row.
+const SPEECH_END = /(?:说(?:道|着)?|问(?:道|着)?|答(?:道|着)?|回答(?:道)?|开口(?:道)?|嘀咕(?:道)?|嘟囔(?:道)?|喊(?:道)?|提醒(?:道)?|补充(?:道)?|笑道|轻声道|低声道)[，,：:\s]*$/u;
+const NON_SPEECH = /(?:心想|心里|心中|脑子里|脑海|暗想|默念|写着|写道|写下|标着|标签|字样|名为|叫作|所谓|响起|一声)/u;
+const ACTION_START = /^(?:说|问|答|道|回答|开口|嘀咕|嘟囔|喊|提醒|补充|笑|看|望|抬|低下|转|伸|点头|摇头|歪|把|眼睛|眼神|停下|拿起|放下|端起|捧起|侧过|眨|皱|拉住|挽住|靠近|走近|跑来|凑近|递给|摆手|摊手|托着|咬着|红着|仰头|回头|张开|踮|心想|心里|心中|脑子里)/u;
+const ADVERB_START = /^(?:十分|非常|有些|似乎|正在|一边|忽然|突然|轻声|低声|轻轻|缓缓|主动|微微|自然|认真|好奇|不解|疑惑|平静|很|正|又|也|却|便|就|才|还|仍|先)/u;
+function subjectAction(text) {
+    let rest = text.trimStart().slice(0, 120);
+    // Bounded token consumption instead of nested repeating regexes on model text.
+    for (let i = 0; i < 16; i += 1) {
+        if (ACTION_START.test(rest)) return true;
+        const marker = rest.match(ADVERB_START);
+        if (!marker) return false;
+        const adverb = rest.match(/^[^，。！？：\n]{1,24}地/u) || marker;
+        rest = rest.slice(adverb[0].length);
+    }
+    return false;
+}
+const DIRECT_TEXT = /^(?:我|我们|咱们|你|您|那你|那我|要不|别|嗯|啊|好|怎么|为什么|真的|谢谢|快|走吧)/u;
+
+// One pure boundary for generated scripts and legacy display. No cache mutation,
+// host access or provider calls. Unknown attribution remains neutral.
 function normalizeDialogueRows(raw, { characterName = '', userName = '', strict = false } = {}) {
     const identities = [[core_text.normalizeText(characterName, 120), 'char'], [core_text.normalizeText(userName, 120), 'user'], ['{{char}}', 'char'], ['{{user}}', 'user']].filter(([name]) => name);
     const inputs = Array.isArray(raw) ? raw : [];
@@ -7368,75 +7389,213 @@ function normalizeDialogueRows(raw, { characterName = '', userName = '', strict 
     };
     if (inputs.length > 120) return overBudget();
     const rows = [];
-    const push = (speaker, text, speakerName = '') => {
+    let chars = 0, inputChars = 0, overflow = false;
+    let pending = null;
+    const push = (speaker, text, speakerName = '', unresolvedSpeaker = false) => {
         text = core_text.normalizeText(text, 50401);
-        if (text) rows.push({ speaker, text, ...(speaker === 'npc' ? { speakerName } : {}) });
+        if (!text || overflow) return;
+        chars += text.length;
+        if (rows.length >= 120 || chars > 50400) { overflow = true; return; }
+        // Preserve the resolved local identity across normalize -> save -> render.
+        // Otherwise a stripped name label could be re-attributed on the second pass.
+        const localName = speaker === 'char' ? core_text.normalizeText(characterName, 120) : speaker === 'user'
+            ? core_text.normalizeText(userName, 120) : '';
+        const resolvedName = localName && namedOwner(localName) === speaker ? localName : '';
+        rows.push({ speaker, text, ...(unresolvedSpeaker ? { unresolvedSpeaker: true } : {}), ...(speaker === 'npc' ? { speakerName }
+            : resolvedName ? { speakerName: resolvedName } : {}) });
     };
-    const explicitOwner = text => {
+    const namedOwner = (value, npcName = '') => {
+        const matches = new Set(identities.filter(([name]) => name === value).map(([, role]) => role));
+        if (matches.size) return matches.size === 1 ? [...matches][0] : 'narrator';
+        return npcName && value === npcName ? 'npc' : '';
+    };
+    const subjectOwner = (text, npcName = '') => {
         const prefix = text.trim();
-        // A name prefix is not an identity: 林舟的妹妹 / 小雨伞店 are different subjects.
-        return identities.find(([name]) => prefix.startsWith(name)
-            && /^(?:\s*[:：]|(?:说|问|答|道|笑|看|望|抬|低|转|伸|点|摇|歪|把|眼睛|眼神|轻声|轻轻|缓缓|忽然|停下|拿起|放下|端起|捧起|侧过|眨了|皱了|拉住|挽住|靠近|走近|跑来|凑近|递给|摆手|摊手|托着|咬着|红着|歪着|仰头|回头))/.test(prefix.slice(name.length)))?.[1] || '';
+        const names = [...identities.map(([name]) => name), ...(npcName ? [npcName] : [])].sort((a, b) => b.length - a.length);
+        // A prefix alone is never an identity: 小雨的妹妹 / 小雨伞店 remain unknown.
+        const name = names.find(name => prefix.startsWith(name) && subjectAction(prefix.slice(name.length).trimStart()));
+        return name ? namedOwner(name, npcName) : '';
     };
-    for (const rawLine of inputs) {
+    const leadIn = (text, fallback = '', npcName = '') => {
+        const prefix = text.trim();
+        if (!prefix || prefix.length > 600) return null;
+        if (/^(?:我|我们|你|您)/u.test(prefix) && !subjectAction(prefix.slice(1))) return null;
+        const clauses = prefix.split(/[，,。！？!?；;\n]/u).map(part => part.trim()).filter(Boolean);
+        const last = clauses.at(-1) || '';
+        if (NON_SPEECH.test(last) || !(SPEECH_END.test(prefix) || /[:：]$/.test(prefix))) return null;
+        let owner = '';
+        for (const clause of clauses) {
+            const explicit = subjectOwner(clause, npcName);
+            if (explicit) owner = explicit;
+            else if (/^(?:他|她|它|我)/u.test(clause) && subjectAction(clause.slice(1))) {
+                owner ||= fallback;
+            } else if (SPEECH_END.test(clause) && !subjectAction(clause)) {
+                // A new, unknown subject (e.g. 某人 / 小雨的妹妹) blocks inheritance.
+                owner = '';
+            }
+        }
+        if (!owner && !SPEECH_END.test(prefix)) return null;
+        return { owner: owner && owner !== 'narrator' ? owner : '', text: prefix };
+    };
+    const looksNarrative = (text, npcName = '') => /^(?:\*[^*]+\*|（[^）]+）|\([^)]*\))$/.test(text)
+        || !!subjectOwner(text, npcName)
+        || /^(?:他|她|它)/u.test(text) && subjectAction(text.slice(1));
+
+    const postAttribution = (next, npcName = '') => {
+        // Only an adjacent narrator's explicit 'X 说着/说完' can repair the
+        // preceding bare enum. An action, gender, or alternating turn cannot.
+        const text = typeof next === 'string' ? next : next?.speaker === 'narrator' ? next.text : '';
+        if (typeof text !== 'string' || text.length > 600 || /[:：“”「」"]/u.test(text)) return '';
+        let owner = '';
+        for (const clause of text.split(/[，,。！？!?；;\n]/u).map(part => part.trim())) {
+            let explicit = subjectOwner(clause, npcName);
+            if (!explicit) {
+                const described = identities.find(([name]) => clause.startsWith(name)
+                    && /^(?:[^的，。！？:：]{1,12}的|的)?(?:眼眸|眼睛|目光|眉眼|脸颊|神情|嘴角)/u.test(clause.slice(name.length)));
+                if (described) explicit = namedOwner(described[0], npcName);
+            }
+            if (explicit) owner = explicit;
+            if (/(?:说着|说完|问完)[了]?$/u.test(clause)) {
+                const attributed = explicit || (/^(?:他|她|它)/u.test(clause) && owner);
+                return attributed && attributed !== 'narrator' ? attributed : '';
+            }
+        }
+        return '';
+    };
+
+    for (let rawIndex = 0; rawIndex < inputs.length; rawIndex += 1) {
+        const rawLine = inputs[rawIndex];
         const line = typeof rawLine === 'string' ? { speaker: 'narrator', text: rawLine } : rawLine;
         const name = core_text.normalizeText(line?.speaker, 120);
         const alias = name.toLowerCase();
-        let speaker = ['char', 'user', 'narrator', 'npc'].includes(alias) ? alias
-            : identities.find(([identity]) => name === identity)?.[1] || 'narrator';
-        const npcName = core_text.normalizeText(line?.speakerName, 120);
+        let npcName = core_text.normalizeText(line?.speakerName, 120);
+        const nameOwner = namedOwner(npcName);
+        const directOwner = namedOwner(name);
+        let speaker = ['char', 'user', 'narrator', 'npc'].includes(alias) ? alias : directOwner || 'narrator';
+        // An exact known name corrects the model's generic enum before saving and
+        // before legacy rendering. Unknown names cannot borrow char's avatar.
+        const conflictingNames = nameOwner && directOwner && nameOwner !== directOwner;
+        if (conflictingNames) {
+            if (strict) throw core_text.safeUserError('对话中的姓名标记互相冲突，原内容保留；请只重试这篇剧本。', 'RMT_HEART_INCOMPLETE');
+            speaker = 'narrator';
+        } else if (nameOwner) speaker = nameOwner;
+        else if (npcName && speaker !== 'npc') speaker = 'narrator';
         if (speaker === 'npc' && !npcName) speaker = 'narrator';
+        if (speaker !== 'npc') npcName = '';
         const originalText = core_text.normalizeText(line?.text, 50401);
         const action = core_text.normalizeText(line?.action || line?.narration, 50401);
-        if (action) push('narrator', action);
-        if (!originalText) continue;
+        inputChars += originalText.length + action.length;
+        if (inputChars > 50400) return overBudget();
+        if (conflictingNames || line?.unresolvedSpeaker === true) {
+            // This inert flag only restricts attribution. Preserve neutrality on a
+            // second render instead of turning discarded conflicting names into a guess.
+            push('narrator', action);
+            push('narrator', originalText, '', true);
+            pending = null;
+            continue;
+        }
+        if (action) {
+            push('narrator', action);
+            const cue = leadIn(action, speaker, npcName);
+            pending = cue?.owner ? { owner: cue.owner, npcName } : null;
+        }
+        if (!originalText) { if (!action) pending = null; continue; }
         const labelled = value => {
             const match = value.match(/^\s*([^\n:：]{1,120})\s*[:：]\s*([^]*)$/);
             if (!match) return null;
             const label = match[1].trim();
-            const owner = identities.find(([identity]) => identity === label)?.[1]
-                || (['char', 'user', 'narrator'].includes(label.toLowerCase()) ? label.toLowerCase() : '')
-                || (npcName && label === npcName ? 'npc' : '');
+            const owner = namedOwner(label, npcName)
+                || (['char', 'user', 'narrator'].includes(label.toLowerCase()) ? label.toLowerCase() : '');
             if (owner) return { speaker: owner, text: match[2] };
-            // Unknown short speaker labels are neutral; ordinary first-person prose is not a label.
+            // Speech/action leads with a colon are not unknown speaker labels.
+            if (leadIn(`${label}：`, speaker, npcName)) return null;
             if (/^[\p{L}\p{N}_·]{1,12}$/u.test(label) && !/^(?:我|我们|你|您|我的|意思|例如|注意)/.test(label)) return { speaker: 'narrator', text: value };
             return null;
         };
         const physicalLines = originalText.split(/\r?\n/);
         const hasLabels = physicalLines.some(value => labelled(value));
         for (const value of hasLabels ? physicalLines : [originalText]) {
+            if (overflow) break;
+            const inherited = pending;
+            pending = null; // Only the immediately following utterance can consume a cue.
             const tagged = hasLabels ? labelled(value) : null;
-            const text = tagged ? tagged.text : value;
-            const rowSpeaker = tagged ? tagged.speaker : hasLabels ? 'narrator' : speaker;
-            if (!text.trim()) continue;
-            const quotes = [...text.matchAll(/“([^”]*)”|「([^」]*)」|"([^"\n]*)"/g)];
-            const firstPrefix = quotes.length ? text.slice(0, quotes[0].index).trim() : '';
-            const narrativePrefix = explicitOwner(firstPrefix) || (!/^(?:我|我们|你|您)/.test(firstPrefix) && /(?:说|问|答|道|笑|看|伸手|转身)[^“”「」"]*[:：]?$/.test(firstPrefix));
-            // Quoting a word inside ordinary speech is not narration: 我只想说“谢谢”，真的。
-            if (quotes.length && (!firstPrefix || rowSpeaker === 'narrator' || narrativePrefix)) {
-                let cursor = 0;
-                let owner = rowSpeaker;
-                for (const quote of quotes) {
-                    const before = text.slice(cursor, quote.index).trim();
-                    const nextOwner = explicitOwner(before);
-                    const selfSpeechAside = ['char', 'user', 'npc'].includes(owner) && /^(?:我说|我问|我答|我说道|我问道)[，,:：\s]*$/.test(before);
-                    if (before.replace(/[，。！？、：；,.!?:;\s]/g, '') && !selfSpeechAside) owner = nextOwner || 'narrator';
-                    // An unattributed quote in narration stays narration, not a char bubble.
-                    if (before) push('narrator', before);
-                    push(owner, quote[1] ?? quote[2] ?? quote[3], npcName);
-                    cursor = quote.index + quote[0].length;
-                }
+            const text = (tagged ? tagged.text : value).trim();
+            let rowSpeaker = tagged ? tagged.speaker : hasLabels ? 'narrator' : speaker;
+            let rowNpcName = npcName;
+            if (!text) continue;
+            const narrative = looksNarrative(text, npcName);
+            if (inherited && !tagged && !nameOwner && !directOwner && !npcName && !narrative
+                && (rowSpeaker !== 'narrator' || /^[“「"]/.test(text) || DIRECT_TEXT.test(text))) {
+                rowSpeaker = inherited.owner;
+                rowNpcName = inherited.npcName;
+            }
+            if (!tagged && !nameOwner && !directOwner && !npcName && !narrative && !hasLabels
+                && (rowSpeaker !== 'narrator' || /^[“「"]/.test(text) || DIRECT_TEXT.test(text))) {
+                const post = postAttribution(inputs[rawIndex + 1], rowNpcName);
+                if (post && (!inherited || inherited.owner === post)) rowSpeaker = post;
+            }
+            let cursor = 0, split = false, quoteNarration = false, lastOwner = rowSpeaker;
+            for (const quote of text.matchAll(/“([^”]*)”|「([^」]*)」|"([^"\n]*)"/g)) {
+                const before = text.slice(cursor, quote.index).trim();
+                const cue = leadIn(before, lastOwner, rowNpcName);
+                if (cue) quoteNarration = true;
+                const tail = text.slice(quote.index + quote[0].length).replace(/^[，,\s]+/, '');
+                const postLead = !before ? tail.split(/[，,。！？!?；;\n]/u)[0] : '';
+                const postOwner = postLead && subjectOwner(postLead, rowNpcName)
+                    && SPEECH_END.test(postLead) ? leadIn(postLead, '', rowNpcName)?.owner : '';
+                // A quote is not by itself a speech cue. In particular, sound effects,
+                // thoughts and quoted words remain in their original paragraph.
+                const quotedRow = !before && rowSpeaker !== 'narrator'
+                    && (!tail.trim() || looksNarrative(postLead, rowNpcName) || leadIn(postLead, rowSpeaker, rowNpcName)?.owner);
+                const owner = cue?.owner || postOwner || (quotedRow ? rowSpeaker : '');
+                if (!owner) continue;
+                push('narrator', text.slice(cursor, quote.index));
+                push(owner, quote[1] ?? quote[2] ?? quote[3], rowNpcName);
+                lastOwner = owner;
+                cursor = quote.index + quote[0].length;
+                split = true;
+                if (overflow) break;
+            }
+            if (split) {
                 push('narrator', text.slice(cursor));
-            } else if (/^(?:\*[^*]+\*|（[^）]+）|\([^)]*\))$/.test(text) || explicitOwner(text) && /(?:说道|问道|看着|看了|转身|伸手|点头|摇头|歪了|笑了)/.test(text)) {
+                continue;
+            }
+            // Legacy unquoted dialogue can still be recovered from a named lead-in.
+            const colon = text.search(/[:：]/);
+            const inlineCue = colon >= 0 ? leadIn(text.slice(0, colon + 1), rowSpeaker, rowNpcName) : null;
+            if (inlineCue?.owner && text.slice(colon + 1).trim() && !/[“”「」"]/.test(text.slice(colon + 1))) {
+                push('narrator', text.slice(0, colon + 1));
+                push(inlineCue.owner, text.slice(colon + 1), rowNpcName);
+                continue;
+            }
+            const cue = leadIn(text, rowSpeaker, rowNpcName);
+            if (cue || narrative || quoteNarration) {
                 push('narrator', text);
+                if (cue?.owner && /[:：]$/.test(text)) pending = { owner: cue.owner, npcName: rowNpcName };
             } else {
-                push(rowSpeaker, text, npcName);
+                push(rowSpeaker, text, rowNpcName);
             }
         }
+        if (overflow) return overBudget();
     }
-    if (rows.length > 120 || rows.reduce((sum, row) => sum + row.text.length, 0) > 50400) return overBudget();
-    return rows;
+    if (overflow) return overBudget();
+    if (strict) return rows;
+    // Old normalizers may already have removed the quotation marks and saved a
+    // sound as three narrator rows. Only this unambiguous fragment shape is joined
+    // for display; no words/quotes are invented and the stored array is untouched.
+    const displayed = [];
+    for (let i = 0; i < rows.length; i += 1) {
+        const first = rows[i], sound = rows[i + 1], tail = rows[i + 2];
+        if (first.speaker === 'narrator' && sound?.speaker === 'narrator' && tail?.speaker === 'narrator'
+            && /(?:脑子里|脑海里|心里|耳边|耳畔|传来|响起)$/.test(first.text)
+            && /^[轰砰咚嗡啪怦哐叮咔]{1,4}$/.test(sound.text) && /^的(?:一声|声音|声响)/.test(tail.text)) {
+            displayed.push({ speaker: 'narrator', text: first.text + sound.text + tail.text });
+            i += 2;
+        } else displayed.push(first);
+    }
+    return displayed;
 }
+
 
 __m_core_dialogue_js.normalizeDialogueRows = normalizeDialogueRows;
 __m_core_dialogue_js.DIALOGUE_CONTRACT = DIALOGUE_CONTRACT;
@@ -10086,7 +10245,40 @@ ${root} .rmt-ending-final{color:var(--rmt-theme-accent-ink,#5f5770)!important;-w
 `;
 }
 
+// Load the generated stylesheet as a linked file.
+//
+// The same CSS used to be injected as a 256KB string, which the browser had to parse on
+// the JS main thread every time the archive room opened. A <link> is parsed by the CSS
+// engine and cached by HTTP, so reopening costs nothing. Falls back to the inline copy if
+// the file cannot be resolved (manual install with a trimmed dist, for example).
+const LINKED_STYLESHEET_ID = 'heartbeat_memories_linked_styles';
+
+function linkedStylesheetHref() {
+    try {
+        const url = new URL('../../dist/heartbeatMemories.bundle.css', import.meta.url);
+        return url.href;
+    } catch { return ''; }
+}
+
+function ensureLinkedStylesheet() {
+    if (document.getElementById(LINKED_STYLESHEET_ID)) return true;
+    // A host without document.head (or a trimmed dist) must still get styled, so any
+    // failure here falls through to the inline copy rather than rendering unstyled.
+    if (typeof document.head?.appendChild !== 'function') return false;
+    const href = linkedStylesheetHref();
+    if (!href) return false;
+    try {
+        const link = document.createElement('link');
+        link.id = LINKED_STYLESHEET_ID;
+        link.rel = 'stylesheet';
+        link.href = href;
+        document.head.appendChild(link);
+        return true;
+    } catch { return false; }
+}
+
 function ensureSettingsStyles() {
+    if (ensureLinkedStylesheet()) return;
     if (document.getElementById(core_constants.SETTINGS_STYLE_ID)) return;
     const style = document.createElement('style');
     style.id = core_constants.SETTINGS_STYLE_ID;
@@ -10165,6 +10357,7 @@ function ensureSettingsStyles() {
 
 function ensureStyles() {
     ensureSettingsStyles();
+    if (ensureLinkedStylesheet()) return;
     if (document.getElementById(core_constants.STYLE_ID)) return;
     const style = document.createElement('style');
     style.id = core_constants.STYLE_ID;
@@ -11124,6 +11317,7 @@ function abstractStyle(seed, id) {
 }
 
 __m_ui_styles_js.homeAndReadingCss = homeAndReadingCss;
+__m_ui_styles_js.ensureLinkedStylesheet = ensureLinkedStylesheet;
 __m_ui_styles_js.ensureSettingsStyles = ensureSettingsStyles;
 __m_ui_styles_js.ensureStyles = ensureStyles;
 __m_ui_styles_js.abstractStyle = abstractStyle;
@@ -21909,18 +22103,28 @@ function refreshSettingsMemoryStatus({ lightweight = false } = {}) {
     if (archiveButton) {
         let ready = false;
         let actionable = false;
+        let mismatch = null;
         try {
             const context = core_context.currentCharacterGuard();
             actionable = !!core_context.getChatId(context);
             ready = lightweight
                 ? !!archive_repository.getImportedMemory(context)
                 : archive_repository.getMemoryState(context).status === 'ready';
+            // An archive whose only problem is a different chat id used to dead-end here:
+            // unreadable, and blocking a new one. Surface the way out on this very button.
+            if (!ready) mismatch = archive_repository.mismatchedArchiveInfo(context);
         } catch {}
         archiveButton.disabled = runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !actionable;
-        archiveButton.textContent = !actionable
+        archiveButton.dataset.rmtArchiveClaim = mismatch ? '1' : '';
+        const archiveLabelNode = archiveButton.querySelector('span') || archiveButton;
+        archiveLabelNode.textContent = !actionable
             ? '当前窗口档案不可用'
             : runtimeState.busy ? '当前窗口档案整理中…'
+            : mismatch ? `认领这份档案（${mismatch.memoryCount} 条记忆）`
             : ready ? '增量更新当前窗口档案' : '生成当前窗口档案';
+        archiveButton.title = mismatch
+            ? '这个聊天里存着一份档案，但它记录的聊天标识与当前不同（重命名、分支或复制聊天后会这样）。认领只改变绑定，不改动任何记忆内容。'
+            : '';
     }
 }
 
@@ -22521,6 +22725,28 @@ function mountSettings({ homeTarget = null } = {}) {
         }
         const currentArchiveButton = event.target.closest?.('[data-rmt-settings-current-archive]');
         if (currentArchiveButton) {
+            // In claim mode this button re-binds the existing archive instead of paying for
+            // a rebuild. Nothing is generated and no memory is altered.
+            if (currentArchiveButton.dataset.rmtArchiveClaim === '1') {
+                let info = null;
+                try { info = archive_repository.mismatchedArchiveInfo(core_context.currentCharacterGuard()); } catch {}
+                if (!info) { refreshSettingsMemoryStatus(); return; }
+                const ok = ui_overlay.confirmExplicitAction('认领这份档案到当前聊天？',
+                    `找到「${info.archiveName || '未命名档案'}」，共 ${info.memoryCount} 条记忆，但它记录的聊天标识与当前聊天不同。`
+                    + '\n\n聊天被重命名、分支或复制后会出现这种情况。'
+                    + '\n\n确定＝把它绑定到当前聊天。不改动任何记忆内容，不消耗生成额度，原标识会被保留备查。'
+                    + '\n取消＝保持原样。',
+                    { destructive: false });
+                if (!ok) return;
+                try {
+                    const claimed = archive_repository.claimMismatchedArchive(core_context.currentCharacterGuard());
+                    globalThis.toastr?.success?.(`已认领 ${claimed.memoryCount} 条记忆到当前聊天。`, '心迹回廊');
+                } catch (error) {
+                    globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 认领失败');
+                }
+                refreshSettingsMemoryStatus();
+                return;
+            }
             ui_overlay.requestCurrentArchiveImport();
             return;
         }
@@ -36375,13 +36601,69 @@ async function importCurrentChatMemory(options = {}) {
     }
 }
 
+
+// A well-formed archive whose only problem is a different chatId.
+//
+// SillyTavern's chat id changes when a chat is renamed, branched or copied, and the
+// archive travels inside that chat's metadata. Before this, such an archive was
+// unreadable *and* blocked a new one from being created, leaving the chat permanently
+// unable to generate anything. Detect that exact shape so the user can decide.
+function mismatchedArchiveInfo(context = core_context.getContext()) {
+    const raw = context?.chatMetadata?.[core_constants.MEMORY_KEY];
+    if (!raw || getImportedMemory(context)) return null;
+    const memory = migrateArchiveInMemory(raw);
+    if (!memory || !Array.isArray(memory.memories) || !memory.memories.length) return null;
+    const stored = core_context.comparableChatId(memory.chatId);
+    const current = core_context.comparableChatId(core_context.getChatId(context));
+    // Only a pure identity mismatch qualifies; a deletion fence or broken shape does not.
+    if (!stored || stored === current) return null;
+    if (runtimeState.archiveDeletionFences.has(archiveDeletionFenceKey(context, memory))) return null;
+    return { memoryCount: memory.memories.length, archiveName: core_text.normalizeText(memory.archiveName, 120) };
+}
+
+// Re-binds the existing archive to the chat the user is actually in. Explicit action only:
+// it never runs automatically, and it keeps the previous identity for traceability.
+function claimMismatchedArchive(context = core_context.getContext()) {
+    const info = mismatchedArchiveInfo(context);
+    if (!info) return null;
+    const memory = migrateArchiveInMemory(context.chatMetadata[core_constants.MEMORY_KEY]);
+    const previousChatId = core_text.normalizeText(memory.chatId, 240);
+    memory.chatId = core_context.getChatId(context);
+    memory.claimedFromChatId = previousChatId;
+    memory.updatedAt = Date.now();
+    context.chatMetadata[core_constants.MEMORY_KEY] = memory;
+    context.saveMetadataDebounced?.();
+    return { memoryCount: info.memoryCount, previousChatId };
+}
+
 async function runArchiveImport(context, options = {}, taskTrace = null) {
     if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) {
         throw new Error('当前还有内容生成任务在进行，请等生成结束后再创建/更新档案。');
     }
-    const existing = getImportedMemory(context);
+    let existing = getImportedMemory(context);
     if (Object.prototype.hasOwnProperty.call(context.chatMetadata || {}, core_constants.MEMORY_KEY) && !existing) {
-        throw core_text.safeUserError('当前聊天中的档案标识或格式不匹配，已停止生成并保留原数据。', 'RMT_ARCHIVE_SOURCE_MISMATCH');
+        const mismatch = mismatchedArchiveInfo(context);
+        if (mismatch && !options.automatic && options.allowArchiveClaim === true) {
+            // Offer the way out instead of dead-ending: the data is intact and the user is
+            // the only one who can say whether this chat is the same story.
+            const claim = ui_overlay.confirmExplicitAction(
+                '这个聊天里有一份档案，但标识对不上',
+                `找到「${mismatch.archiveName || '未命名档案'}」，共 ${mismatch.memoryCount} 条记忆，但它记录的聊天标识与当前聊天不同。`
+                + '\n\n聊天被重命名、分支或复制后会出现这种情况。'
+                + '\n\n确定＝把这份档案认领到当前聊天（不改动任何记忆内容，之后即可正常使用）。'
+                + '\n取消＝保持原样，本次不生成。',
+                { destructive: false });
+            if (claim) {
+                claimMismatchedArchive(context);
+                existing = getImportedMemory(context);
+                globalThis.toastr?.success?.(`已认领 ${mismatch.memoryCount} 条记忆到当前聊天。`, '心迹回廊');
+            }
+        }
+        if (!existing) {
+            throw core_text.safeUserError(mismatch
+                ? `这个聊天里存着一份 ${mismatch.memoryCount} 条记忆的档案，但它记录的聊天标识与当前不同（重命名、分支或复制聊天后会这样）。原数据完好未动。请用档案室的「认领这份档案」把它绑到当前聊天，或先备份后删除它再新建。`
+                : '当前聊天中的档案标识或格式不匹配，已停止生成并保留原数据。', 'RMT_ARCHIVE_SOURCE_MISMATCH');
+        }
     }
     const pending = getCurrentArchiveImportRecoverySummary(context);
     if (pending) {
@@ -36501,6 +36783,8 @@ __m_archive_repository_js.getCurrentArchiveImportRecoverySummary = getCurrentArc
 __m_archive_repository_js.discardCurrentArchiveImportRecovery = discardCurrentArchiveImportRecovery;
 __m_archive_repository_js.getCurrentArchiveProfileRecoverySummary = getCurrentArchiveProfileRecoverySummary;
 __m_archive_repository_js.continueCurrentArchiveImport = continueCurrentArchiveImport;
+__m_archive_repository_js.mismatchedArchiveInfo = mismatchedArchiveInfo;
+__m_archive_repository_js.claimMismatchedArchive = claimMismatchedArchive;
 }
 
 function __init_archive_library_js() {
