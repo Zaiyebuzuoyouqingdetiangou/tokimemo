@@ -2188,13 +2188,69 @@ export async function importCurrentChatMemory(options = {}) {
     }
 }
 
+
+// A well-formed archive whose only problem is a different chatId.
+//
+// SillyTavern's chat id changes when a chat is renamed, branched or copied, and the
+// archive travels inside that chat's metadata. Before this, such an archive was
+// unreadable *and* blocked a new one from being created, leaving the chat permanently
+// unable to generate anything. Detect that exact shape so the user can decide.
+export function mismatchedArchiveInfo(context = core_context.getContext()) {
+    const raw = context?.chatMetadata?.[core_constants.MEMORY_KEY];
+    if (!raw || getImportedMemory(context)) return null;
+    const memory = migrateArchiveInMemory(raw);
+    if (!memory || !Array.isArray(memory.memories) || !memory.memories.length) return null;
+    const stored = core_context.comparableChatId(memory.chatId);
+    const current = core_context.comparableChatId(core_context.getChatId(context));
+    // Only a pure identity mismatch qualifies; a deletion fence or broken shape does not.
+    if (!stored || stored === current) return null;
+    if (runtimeState.archiveDeletionFences.has(archiveDeletionFenceKey(context, memory))) return null;
+    return { memoryCount: memory.memories.length, archiveName: core_text.normalizeText(memory.archiveName, 120) };
+}
+
+// Re-binds the existing archive to the chat the user is actually in. Explicit action only:
+// it never runs automatically, and it keeps the previous identity for traceability.
+export function claimMismatchedArchive(context = core_context.getContext()) {
+    const info = mismatchedArchiveInfo(context);
+    if (!info) return null;
+    const memory = migrateArchiveInMemory(context.chatMetadata[core_constants.MEMORY_KEY]);
+    const previousChatId = core_text.normalizeText(memory.chatId, 240);
+    memory.chatId = core_context.getChatId(context);
+    memory.claimedFromChatId = previousChatId;
+    memory.updatedAt = Date.now();
+    context.chatMetadata[core_constants.MEMORY_KEY] = memory;
+    context.saveMetadataDebounced?.();
+    return { memoryCount: info.memoryCount, previousChatId };
+}
+
 async function runArchiveImport(context, options = {}, taskTrace = null) {
     if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) {
         throw new Error('当前还有内容生成任务在进行，请等生成结束后再创建/更新档案。');
     }
-    const existing = getImportedMemory(context);
+    let existing = getImportedMemory(context);
     if (Object.prototype.hasOwnProperty.call(context.chatMetadata || {}, core_constants.MEMORY_KEY) && !existing) {
-        throw core_text.safeUserError('当前聊天中的档案标识或格式不匹配，已停止生成并保留原数据。', 'RMT_ARCHIVE_SOURCE_MISMATCH');
+        const mismatch = mismatchedArchiveInfo(context);
+        if (mismatch && !options.automatic && options.allowArchiveClaim === true) {
+            // Offer the way out instead of dead-ending: the data is intact and the user is
+            // the only one who can say whether this chat is the same story.
+            const claim = ui_overlay.confirmExplicitAction(
+                '这个聊天里有一份档案，但标识对不上',
+                `找到「${mismatch.archiveName || '未命名档案'}」，共 ${mismatch.memoryCount} 条记忆，但它记录的聊天标识与当前聊天不同。`
+                + '\n\n聊天被重命名、分支或复制后会出现这种情况。'
+                + '\n\n确定＝把这份档案认领到当前聊天（不改动任何记忆内容，之后即可正常使用）。'
+                + '\n取消＝保持原样，本次不生成。',
+                { destructive: false });
+            if (claim) {
+                claimMismatchedArchive(context);
+                existing = getImportedMemory(context);
+                globalThis.toastr?.success?.(`已认领 ${mismatch.memoryCount} 条记忆到当前聊天。`, '心迹回廊');
+            }
+        }
+        if (!existing) {
+            throw core_text.safeUserError(mismatch
+                ? `这个聊天里存着一份 ${mismatch.memoryCount} 条记忆的档案，但它记录的聊天标识与当前不同（重命名、分支或复制聊天后会这样）。原数据完好未动。请用档案室的「认领这份档案」把它绑到当前聊天，或先备份后删除它再新建。`
+                : '当前聊天中的档案标识或格式不匹配，已停止生成并保留原数据。', 'RMT_ARCHIVE_SOURCE_MISMATCH');
+        }
     }
     const pending = getCurrentArchiveImportRecoverySummary(context);
     if (pending) {
