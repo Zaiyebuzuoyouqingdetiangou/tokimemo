@@ -112,7 +112,7 @@ export function buildDiagnosticReport() {
     return {
         generatedAt: new Date().toISOString(),
         plugin: {
-            declaredVersion: typeof version === 'string' && /^\d{1,3}\.\d{1,3}\.\d{1,3}(?:-tt-cg-r\d{1,3}\.\d{1,2})?$/.test(version) ? version : 'unknown',
+            declaredVersion: typeof version === 'string' && /^\d{1,3}\.\d{1,3}\.\d{1,3}(?:-[0-9a-z.\-]{1,40})?$/i.test(version) ? version : 'unknown',
             runtimeLoaded: !!globalThis.__heartbeatMemoriesRuntimeLoaded,
             archiveSchema: core_constants.ARCHIVE_SCHEMA_VERSION,
         },

@@ -320,7 +320,11 @@ export const MAX_CONCURRENT_PROVIDER_REQUESTS = 2;
 
 export const CACHE_PERSIST_IDLE_RETRY_MS = 1200;
 
-export const DEFAULT_GENERATION_REQUEST_TIMEOUT_MS = 600000;
+// Measured on this user's host: a failing request sat for 4-12 minutes before the
+// transport gave up, and with two provider slots one stuck request queued everything
+// behind it. A request that has produced nothing after three minutes will not recover,
+// so fail it fast and release the slot.
+export const DEFAULT_GENERATION_REQUEST_TIMEOUT_MS = 180000;
 
 export const MIN_GENERATION_REQUEST_TIMEOUT_MS = 30000;
 
