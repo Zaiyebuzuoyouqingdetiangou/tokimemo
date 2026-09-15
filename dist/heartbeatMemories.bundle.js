@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 97
-// Source SHA-256: 4b6c43c1d21ab4ec7d63686e5ebebc89b751aaaf3164ec8311c3d307649cf73c
+// Source SHA-256: a8a7c5d50d9db99454067948443d4dada7d4d7a377255aef1bd90935a3c2b351
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -426,7 +426,11 @@ const MAX_CONCURRENT_PROVIDER_REQUESTS = 2;
 
 const CACHE_PERSIST_IDLE_RETRY_MS = 1200;
 
-const DEFAULT_GENERATION_REQUEST_TIMEOUT_MS = 600000;
+// Measured on this user's host: a failing request sat for 4-12 minutes before the
+// transport gave up, and with two provider slots one stuck request queued everything
+// behind it. A request that has produced nothing after three minutes will not recover,
+// so fail it fast and release the slot.
+const DEFAULT_GENERATION_REQUEST_TIMEOUT_MS = 180000;
 
 const MIN_GENERATION_REQUEST_TIMEOUT_MS = 30000;
 
@@ -16594,7 +16598,7 @@ function buildDiagnosticReport() {
     return {
         generatedAt: new Date().toISOString(),
         plugin: {
-            declaredVersion: typeof version === 'string' && /^\d{1,3}\.\d{1,3}\.\d{1,3}(?:-tt-cg-r\d{1,3}\.\d{1,2})?$/.test(version) ? version : 'unknown',
+            declaredVersion: typeof version === 'string' && /^\d{1,3}\.\d{1,3}\.\d{1,3}(?:-[0-9a-z.\-]{1,40})?$/i.test(version) ? version : 'unknown',
             runtimeLoaded: !!globalThis.__heartbeatMemoriesRuntimeLoaded,
             archiveSchema: core_constants.ARCHIVE_SCHEMA_VERSION,
         },
@@ -28596,7 +28600,9 @@ async function requestValidatedSegment(prompt, status, options, validator) {
 // The host tokenizer may use an unavailable service. Bound the wait, then use
 // r74's character-budget fallback. This is not an exact token estimate or a
 // provider retry; the user's original generation request has not been sent yet.
-const TOKEN_COUNT_TIMEOUT_MS = 5000;
+// A reachable tokenizer answers in milliseconds; an unreachable one burned 5s on every
+// single request here. The character budget still enforces the real limit.
+const TOKEN_COUNT_TIMEOUT_MS = 1500;
 
 function countPromptTokens(context, prompt, signal, timeoutMs) {
     return new Promise((resolve, reject) => {
