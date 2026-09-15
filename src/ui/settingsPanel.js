@@ -482,18 +482,28 @@ export function refreshSettingsMemoryStatus({ lightweight = false } = {}) {
     if (archiveButton) {
         let ready = false;
         let actionable = false;
+        let mismatch = null;
         try {
             const context = core_context.currentCharacterGuard();
             actionable = !!core_context.getChatId(context);
             ready = lightweight
                 ? !!archive_repository.getImportedMemory(context)
                 : archive_repository.getMemoryState(context).status === 'ready';
+            // An archive whose only problem is a different chat id used to dead-end here:
+            // unreadable, and blocking a new one. Surface the way out on this very button.
+            if (!ready) mismatch = archive_repository.mismatchedArchiveInfo(context);
         } catch {}
         archiveButton.disabled = runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !actionable;
-        archiveButton.textContent = !actionable
+        archiveButton.dataset.rmtArchiveClaim = mismatch ? '1' : '';
+        const archiveLabelNode = archiveButton.querySelector('span') || archiveButton;
+        archiveLabelNode.textContent = !actionable
             ? '当前窗口档案不可用'
             : runtimeState.busy ? '当前窗口档案整理中…'
+            : mismatch ? `认领这份档案（${mismatch.memoryCount} 条记忆）`
             : ready ? '增量更新当前窗口档案' : '生成当前窗口档案';
+        archiveButton.title = mismatch
+            ? '这个聊天里存着一份档案，但它记录的聊天标识与当前不同（重命名、分支或复制聊天后会这样）。认领只改变绑定，不改动任何记忆内容。'
+            : '';
     }
 }
 
@@ -1094,6 +1104,28 @@ export function mountSettings({ homeTarget = null } = {}) {
         }
         const currentArchiveButton = event.target.closest?.('[data-rmt-settings-current-archive]');
         if (currentArchiveButton) {
+            // In claim mode this button re-binds the existing archive instead of paying for
+            // a rebuild. Nothing is generated and no memory is altered.
+            if (currentArchiveButton.dataset.rmtArchiveClaim === '1') {
+                let info = null;
+                try { info = archive_repository.mismatchedArchiveInfo(core_context.currentCharacterGuard()); } catch {}
+                if (!info) { refreshSettingsMemoryStatus(); return; }
+                const ok = ui_overlay.confirmExplicitAction('认领这份档案到当前聊天？',
+                    `找到「${info.archiveName || '未命名档案'}」，共 ${info.memoryCount} 条记忆，但它记录的聊天标识与当前聊天不同。`
+                    + '\n\n聊天被重命名、分支或复制后会出现这种情况。'
+                    + '\n\n确定＝把它绑定到当前聊天。不改动任何记忆内容，不消耗生成额度，原标识会被保留备查。'
+                    + '\n取消＝保持原样。',
+                    { destructive: false });
+                if (!ok) return;
+                try {
+                    const claimed = archive_repository.claimMismatchedArchive(core_context.currentCharacterGuard());
+                    globalThis.toastr?.success?.(`已认领 ${claimed.memoryCount} 条记忆到当前聊天。`, '心迹回廊');
+                } catch (error) {
+                    globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 认领失败');
+                }
+                refreshSettingsMemoryStatus();
+                return;
+            }
             ui_overlay.requestCurrentArchiveImport();
             return;
         }
