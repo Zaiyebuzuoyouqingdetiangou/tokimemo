@@ -5,6 +5,7 @@
 import * as core_constants from '../core/constants.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_presentExpression from '../core/presentExpression.js';
+import * as core_narrativeAuthority from '../core/narrativeAuthority.js';
 import * as core_text from '../core/text.js';
 import * as core_worldPresentation from '../core/worldPresentation.js';
 
@@ -732,45 +733,62 @@ function normalizeStickyNotes(value, memoryBank, { controlledEvidence = '' } = {
     return out;
 }
 
-function normalizeMoodNotes(value, memoryBank) {
+function normalizeMoodNotes(value, memoryBank, { entries = [], currentDate = '' } = {}) {
     const raw = Array.isArray(value) ? value : [];
     const out = [];
     for (const item of raw.slice(0, 5)) {
+        const textMode = core_text.normalizeText(item?.textMode, 40).toLowerCase();
         const ref = core_evidence.normalizeExactMemoryReference(
             item?.sourceMemoryIds,
             item?.sourceMemoryAnchor,
             memoryBank,
             1,
         );
-        if (!ref.sourceMemoryIds.length || !ref.sourceMemoryAnchor) continue;
-        const memory = resolveAnchoredMemory(memoryBank, ref.sourceMemoryIds, ref.sourceMemoryAnchor);
-        if (!memory) continue;
-        const textMode = core_text.normalizeText(item?.textMode, 40).toLowerCase();
+        const memory = ref.sourceMemoryIds.length && ref.sourceMemoryAnchor
+            ? resolveAnchoredMemory(memoryBank, ref.sourceMemoryIds, ref.sourceMemoryAnchor) : null;
         let text = '';
         let presentExpression = null;
+        let evidenceMode = 'persona-present';
         if (textMode === 'present-expression') {
             presentExpression = core_presentExpression.normalizePresentExpression(item?.presentExpression, {
                 relationshipTier: core_presentExpression.relationshipExpressionTier(memoryBank),
             });
             text = core_presentExpression.renderPresentExpressionText(presentExpression);
+            evidenceMode = 'present-structured';
         } else if (textMode === 'evidence-excerpt') {
+            if (!memory) continue;
             const requestedText = core_text.normalizeText(item?.text, 220);
             if (requestedText && folded(ref.sourceMemoryAnchor, 240).includes(folded(requestedText, 440))) text = requestedText;
+            evidenceMode = 'memory-anchor-excerpt';
+        } else if (textMode === 'persona-expression') {
+            text = core_text.normalizeText(item?.text, 220);
+            // Free page-corner prose is a present/persona expression. It may not turn an
+            // unanchored shared past into a calendar fact.
+            if (text && core_narrativeAuthority.narrativeClaimsSharedHistory(text, { userName: memoryBank?.userName })) continue;
         }
         if (!text || !folded(text)) continue;
-        const parsed = normalizeCalendarDate(memory?.date);
+        const parsed = memory ? normalizeCalendarDate(memory?.date) : null;
+        const isPersona = evidenceMode === 'persona-present' || !memory && evidenceMode === 'present-structured';
+        const targetId = core_text.safeId(item?.calendarEntryId, '');
+        const targets = entries.filter(entry => entry.id === targetId
+            || targetId && entry.calendarEntrySourceId === targetId);
+        const target = targets.length === 1 ? targets[0] : null;
+        // Only a locally validated calendar entry or the locally captured current day
+        // chooses the page. Provider date strings cannot create or move historical dates.
+        const date = isPersona ? (target?.date || normalizeCalendarDate(currentDate)?.date || '') : parsed?.date || '';
+        if (isPersona && !normalizeCalendarDate(date, { allowPending: true })) continue;
         out.push({
             id: core_text.safeId(item?.id, `CAL_MOOD_${String(out.length + 1).padStart(2, '0')}`),
             text,
-            textMode,
+            textMode: evidenceMode === 'persona-present' ? 'persona-expression' : textMode,
             presentExpression,
-            evidenceMode: textMode === 'evidence-excerpt' ? 'memory-anchor-excerpt' : 'present-structured',
-            date: parsed?.date || '',
-            calendarEntryId: core_text.safeId(item?.calendarEntryId, ''),
-            sourceKind: 'archive-mood',
-            sourceLabel: '剧情档案 · 角色随笔',
-            sourceMemoryIds: ref.sourceMemoryIds,
-            sourceMemoryAnchor: ref.sourceMemoryAnchor,
+            evidenceMode,
+            date,
+            calendarEntryId: isPersona ? target?.id || '' : targetId,
+            sourceKind: isPersona ? 'persona-mood' : 'archive-mood',
+            sourceLabel: isPersona ? '角色人设 · 此刻随笔' : '剧情档案 · 角色随笔',
+            sourceMemoryIds: !isPersona && memory ? ref.sourceMemoryIds : [],
+            sourceMemoryAnchor: !isPersona && memory ? ref.sourceMemoryAnchor : '',
         });
         if (out.length >= 3) break;
     }
@@ -842,6 +860,15 @@ function calendarItemEvidenceMatches(entry, item) {
 
 function calendarSupplementPageKey(item, entries, memoryBank, { legacy = false } = {}) {
     const explicitId = core_text.safeId(item?.calendarEntryId, '');
+    const personaMood = item?.sourceKind === 'persona-mood'
+        && ['persona-present', 'present-structured'].includes(item?.evidenceMode);
+    if (personaMood) {
+        const target = entries.filter(entry => entry.id === explicitId);
+        if (target.length === 1) return calendarEntryPageKey(target[0]);
+        // date was assigned locally at generation; legacy records keep their stored page.
+        if (normalizeCalendarDate(item.date)) return calendarPageKeyForDate(item.date);
+        return CALENDAR_LEGACY_PAGE_KEY;
+    }
     if (explicitId) {
         const explicitMatches = entries.filter(entry => (
             entry.id === explicitId
@@ -923,7 +950,7 @@ function boundedLegacyMoodNotes(value) {
     return (Array.isArray(value) ? value : []).slice(0, 16).map((item, index) => {
         const text = core_text.normalizeText(item?.text, 220);
         if (!text) return null;
-        const evidenceMode = ['memory-anchor-excerpt', 'present-structured'].includes(item?.evidenceMode) ? item.evidenceMode : 'legacy-unverified';
+        const evidenceMode = ['memory-anchor-excerpt', 'present-structured', 'persona-present'].includes(item?.evidenceMode) ? item.evidenceMode : 'legacy-unverified';
         return {
             id: core_text.safeId(item?.id, `CAL_MOOD_${String(index + 1).padStart(2, '0')}`),
             text,
@@ -933,7 +960,7 @@ function boundedLegacyMoodNotes(value) {
             sourceLabel: core_text.normalizeText(item?.sourceLabel, 120),
             sourceMemoryIds: core_text.cleanArray(item?.sourceMemoryIds, 16, 40),
             sourceMemoryAnchor: core_text.normalizeText(item?.sourceMemoryAnchor, 160),
-            textMode: ['present-expression', 'evidence-excerpt'].includes(item?.textMode) ? item.textMode : 'legacy-free-text',
+            textMode: ['present-expression', 'evidence-excerpt', 'persona-expression'].includes(item?.textMode) ? item.textMode : 'legacy-free-text',
             presentExpression: item?.presentExpression && typeof item.presentExpression === 'object'
                 ? core_presentExpression.normalizePresentExpression(item.presentExpression) : null,
             evidenceMode,
@@ -1070,9 +1097,9 @@ export function normalizeCalendar(data, memoryBank, options = {}) {
     const stickyNotes = normalizeStickyNotes(data?.stickyNotes, memoryBank, {
         controlledEvidence: options.futureEvidenceText || options.worldEvidenceText,
     });
-    const moodNotes = normalizeMoodNotes(data?.moodNotes, memoryBank);
     const entries = ensureUniqueCalendarEntryIds([...past, ...promised, ...future]);
     const currentDate = core_text.normalizeText(options.currentDate, 20) || currentCalendarDate();
+    const moodNotes = normalizeMoodNotes(data?.moodNotes, memoryBank, { entries, currentDate });
     const holidayCards = normalizeHolidayCards(data?.holidayCards, entries, { currentDate, memoryBank });
     const statusRank = { past: 0, promised: 1, future: 2 };
     entries.sort((a, b) => {

@@ -17,6 +17,8 @@ const TOKEN = Symbol('generation-recovery-request');
 const DIGEST = /^[a-f0-9]{64}$/;
 const FAILURE_CODE = /^(?:RMT_[A-Z0-9_]{1,80}|RMT_BUTTERFLY_(?:systemNote|monologue|intervention|omega|worldSpec|relationship|unique))$/;
 const COMPATIBILITY_CONTRACTS = Object.freeze({
+    'heart-language-birthday-r8412': Object.freeze({ mode: 'heart', slot: /:(?:dialogues|dialogues-full)$/ }),
+    'heart-season-siblings-r8412': Object.freeze({ mode: 'heart', slot: /^heart-season:.*:(?:spring|summer|autumn|winter):(?:voice|scenario)$/ }),
     'butterfly-readable-r62': Object.freeze({ mode: 'butterfly', slot: /:(?:slot:\d{1,2}|increment)$/ }),
     'butterfly-legacy-plan-r62': Object.freeze({ mode: 'butterfly', slot: /:(?:slot:\d{1,2}|increment)$/ }),
     'past-lives-readable-r62': Object.freeze({ mode: 'pastLives', slot: /:past-lives-(?:plan|finale|dossier:D\d{2})$/ }),

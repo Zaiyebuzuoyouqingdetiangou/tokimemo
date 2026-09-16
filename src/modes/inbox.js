@@ -49,10 +49,10 @@ ${JSON.stringify(plan)}
 UNTRUSTED_RELATIONSHIP_ARCHIVE:
 ${JSON.stringify({ character: memory.characterName, user: memory.userName, memories: evidence.memoryPayload(memory) })}`;
 }
-export function inboxRelationshipAllows(prose, memory) {
-    return relationshipSafety.presentRelationshipAllows(prose, memory);
+export function inboxRelationshipAllows(prose, memory, options = {}) {
+    return relationshipSafety.presentRelationshipAllows(prose, memory, options);
 }
-export function normalizeInboxLetters(raw, memory, plan, date = new Date()) {
+export function normalizeInboxLetters(raw, memory, plan, date = new Date(), options = {}) {
     const values = raw?.letters;
     if (!Array.isArray(values) || values.length !== plan.length) throw new Error('来信未完整返回，请只补齐计划中的信件。');
     const sourceText = ids => (memory.memories || []).filter(item => ids.includes(item.id)).map(item => [item.title, item.summary, ...(item.anchors || [])].join('\n')).join('\n');
@@ -62,7 +62,7 @@ export function normalizeInboxLetters(raw, memory, plan, date = new Date()) {
         const value = matches[0];
         const title = clean(value.title, 120), greeting = clean(value.greeting, 160), body = clean(value.body, 1800), closing = clean(value.closing, 200);
         if (!title || body.length < 20) throw new Error('来信正文还未写完。');
-        if (!inboxRelationshipAllows([title, greeting, body, closing].join('\n'), memory)) throw new Error('称呼超出了两人当前关系，请按真实关系写来信。');
+        if (!inboxRelationshipAllows([title, greeting, body, closing].join('\n'), memory, options)) throw new Error('称呼超出了两人当前关系，请按真实关系写来信。');
         if (String(value.body || '').length > 1800) throw new Error('来信过长，请完整收束在1800字内。');
         const historic = [title, greeting, body, closing].flatMap(part => part.split(/[。！？!?\n]+/u))
             .filter(part => narrative.narrativeClaimsSharedHistory(part, { userName: memory.userName }));
@@ -96,7 +96,7 @@ export async function generateInbox(context, memory, origin, taskKey, previous, 
     if (!plan.length) return previous || emptyInbox(memory);
     const fresh = await generation.requestValidatedSegment(inboxPrompt(memory, plan), '正在收取寄给你的信…',
         { context, contextEnvelope: options.presentationContext?.contextEnvelope, origin, taskKey, mode: 'inbox', maxTokens: 4000, background: true },
-        raw => normalizeInboxLetters(raw, memory, plan, date));
+        raw => normalizeInboxLetters(raw, memory, plan, date, { controlledEvidence: options.presentationContext?.settingEvidence || '' }));
     fresh.ownerKey = contextApi.currentCharacterRuntimeKey(context);
     return mergeInboxLatest(previous, fresh);
 }

@@ -1,3 +1,4 @@
+import * as cg_format from './cgPromptFormat.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_constants from './constants.js';
@@ -48,6 +49,7 @@ export function getPluginSettings(context = core_context.getContext()) {
         useActivatedWorldInfo: settings.useActivatedWorldInfo !== false,
         imageGenerationManualEnabled: false,
         imageGenerationProvider: 'baibai-image',
+        cgPromptFormat: cg_format.normalizeCgPromptFormat(settings.cgPromptFormat, 'nai5-natural'),
         creativeSupplementEnabled: settings.creativeSupplementEnabled === true,
         creativeSupplement: creative_supplement.normalizeCreativeSupplement(settings.creativeSupplement),
         ttDisplayMode: settings.ttDisplayMode === true,

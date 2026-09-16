@@ -958,8 +958,7 @@ export async function flushDeferredCommitsForCurrentChat() {
                     item.origin,
                     (latest, liveMemory) => {
                         let session = latest || fallback;
-                        for (const patch of Object.values(item.patches || {})) session = modes_heart.applyHeartPartialPatch(session, patch);
-                        return modes_heart.normalizeHeart(session, liveMemory);
+                        return modes_heart.normalizeHeartContentPatch(session, Object.values(item.patches || {}), liveMemory);
                     },
                     fallback,
                 );

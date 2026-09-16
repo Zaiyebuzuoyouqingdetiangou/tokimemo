@@ -27,12 +27,12 @@ function fictionalText(value, memory, max = L.prose, required = false, speaker =
     return result;
 }
 
-function presentText(value, memory, max = L.prose, required = false) {
+function presentText(value, memory, max = L.prose, required = false, options = {}) {
     const result = fictionalText(value, memory, max, required);
     if (narrative.narrativeClaimsSharedHistory(result, { userName: memory?.userName })
         || /(?:今生|现实|此生).{0,16}(?:已经应验|确实发生|命中注定|注定.{0,6}(?:恋人|夫妻|相爱))/u.test(result))
         throw fail('HISTORY', '今生的新文字只写当下感受或未来可能；真正共同往事请放入有真实引文的记忆回响。');
-    if (!relationshipSafety.presentRelationshipAllows(result, memory)) throw fail('RELATIONSHIP', '今生称呼超出了两人当前关系，请保留原本的关系和选择。');
+    if (!relationshipSafety.presentRelationshipAllows(result, memory, options)) throw fail('RELATIONSHIP', '今生称呼超出了两人当前关系，请保留原本的关系和选择。');
     return result;
 }
 
@@ -100,7 +100,7 @@ export function normalizePastLivesDossier(value, memory, { id = 'D01', title = '
         }) };
 }
 
-export function normalizePastLivesFinale(value, memory, dossiers) {
+export function normalizePastLivesFinale(value, memory, dossiers, options = {}) {
     const raw = contract.pastLivesData(value, L.episodeChars);
     const clueIds = new Set(dossiers.flatMap(item => item.clues.map(clue => clue.id)));
     const echoes = list(raw.echoes, L.echoes).map((echo, index) => {
@@ -111,30 +111,30 @@ export function normalizePastLivesFinale(value, memory, dossiers) {
                 throw fail('HISTORY', '今生记忆须为所引 Mxxx 的真实原文片段，不能借一个 anchor 添加新往事。');
             const source = memory.memories.find(item => item.id === reference.sourceMemoryIds[0]);
             return { id: localId('E', index), kind: 'memory', title: text.normalizeText(source?.title || reference.sourceMemoryAnchor, L.title),
-                text: quote, reflection: presentText(echo.reflection, memory, 1800), ...reference };
+                text: quote, reflection: presentText(echo.reflection, memory, 1800, false, options), ...reference };
         }
         if (echo.kind !== 'possibility') throw fail('STRUCTURE', '回响须区分真实记忆与未来可能。');
-        const prose = presentText(echo.text, memory, L.prose, true);
+        const prose = presentText(echo.text, memory, L.prose, true, options);
         if (!/(?:可能|也许|或许|如果|假如|愿|希望|未必|不一定)/u.test(prose))
             throw fail('HISTORY', '未来回响应写成可能、愿望或假设，不预先替两人确定未来。');
-        return { id: localId('E', index), kind: 'possibility', title: presentText(echo.title, memory, L.title, true),
-            text: prose, reflection: presentText(echo.reflection, memory, 1800), sourceMemoryIds: [], sourceMemoryAnchor: '' };
+        return { id: localId('E', index), kind: 'possibility', title: presentText(echo.title, memory, L.title, true, options),
+            text: prose, reflection: presentText(echo.reflection, memory, 1800, false, options), sourceMemoryIds: [], sourceMemoryAnchor: '' };
     });
     const annotations = list(raw.annotations, L.annotations).map((annotation, index) => {
         const afterClueIds = [...new Set(list(annotation.afterClueIds, L.dossiers * L.clues))];
         if (afterClueIds.some(id => typeof id !== 'string' || !clueIds.has(id))) throw fail('STRUCTURE', '旁批引用了不存在的线索，请只对应本篇已写出的线索。');
         return { id: localId('A', index), afterClueIds, text: annotationText(annotation.text, memory) };
     });
-    return { echoes, annotations, closing: { text: presentText(raw.closing?.text, memory, L.prose, true),
-        signature: presentText(raw.closing?.signature, memory, 240) || text.normalizeText(memory.characterName, 120) } };
+    return { echoes, annotations, closing: { text: presentText(raw.closing?.text, memory, L.prose, true, options),
+        signature: presentText(raw.closing?.signature, memory, 240, false, options) || text.normalizeText(memory.characterName, 120) } };
 }
 
-export function normalizePastLivesEpisode(value, memory, { id = 'PL01', presentation = 'neutral' } = {}) {
+export function normalizePastLivesEpisode(value, memory, { id = 'PL01', presentation = 'neutral', controlledEvidence = '' } = {}) {
     const raw = contract.pastLivesData(value, L.episodeChars);
     const opening = normalizePastLivesOpening(raw.opening, memory);
     const dossiers = list(raw.dossiers, L.dossiers).map((item, index) => normalizePastLivesDossier(item, memory, { id: localId('D', index) }));
     return { id, title: fictionalText(raw.title, memory, L.title, true), presentation: ['classical', 'modern', 'fantasy', 'neutral'].includes(presentation) ? presentation : 'neutral',
-        fiction: true, opening, dossiers, ...normalizePastLivesFinale(raw, memory, dossiers) };
+        fiction: true, opening, dossiers, ...normalizePastLivesFinale(raw, memory, dossiers, { controlledEvidence }) };
 }
 
 export function normalizePastLives(value, memory, options = {}) {
@@ -146,7 +146,7 @@ export function normalizePastLives(value, memory, options = {}) {
     result.ownerKey = result.ownerKey || clean(raw.ownerKey, 1200);
     result.presentation = ['classical', 'modern', 'fantasy', 'neutral'].includes(raw.presentation) ? raw.presentation : 'neutral';
     result.episodes = list(raw.episodes, L.episodes).map((episode, index) => normalizePastLivesEpisode(episode, memory,
-        { id: localId('PL', index), presentation: episode.presentation || result.presentation }));
+        { id: localId('PL', index), presentation: episode.presentation || result.presentation, controlledEvidence: options.controlledEvidence || '' }));
     Object.assign(result, contract.pastLivesReadingState({ ...result, ...Object.fromEntries(['selectedId', 'selectedEntryId', 'selectedKey', 'view', 'pastLivesReadMask', 'pastLivesDrawn', 'pastLivesClosing'].map(key => [key, raw[key]])) }));
     return result;
 }
@@ -233,9 +233,9 @@ ${JSON.stringify({ title: plan.title, opening: plan.opening, dossiers })}
 UNTRUSTED_CURRENT_ARCHIVE_JSON:
 ${prompts.promptArchiveSlice(memory, 48)}`;
     const finale = await generation.requestValidatedSegment(finalePrompt, '前世今生 · 正在写今生回响与落款…',
-        { ...baseOptions, taskKey: `${taskKey}:past-lives-finale`, maxTokens: 6400, recoveryCompatibility: compatibility(finalePrompt) }, raw => normalizePastLivesFinale(raw, memory, dossiers));
+        { ...baseOptions, taskKey: `${taskKey}:past-lives-finale`, maxTokens: 6400, recoveryCompatibility: compatibility(finalePrompt) }, raw => normalizePastLivesFinale(raw, memory, dossiers, { controlledEvidence: presentationContext.settingEvidence || '' }));
     const episode = normalizePastLivesEpisode({ title: plan.title, opening: plan.opening, dossiers, ...finale }, memory,
-        { id: localId('PL', previous?.episodes?.length || 0), presentation });
+        { id: localId('PL', previous?.episodes?.length || 0), presentation, controlledEvidence: presentationContext.settingEvidence || '' });
     const next = previous ? structuredClone(previous) : emptyPastLives(memory, context);
     next.presentation = presentation;
     next.episodes.push(episode);

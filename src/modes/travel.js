@@ -185,6 +185,7 @@ function evidenceBackedTravelLabel(value, evidence, fallback, limit = 100) {
 
 function normalizeTravelLocation(item, index, memoryBank, mapTheme, sourceMemoryIds = null, allowedKeepsakes = null, {
     allowLegacyStored = false,
+    allowPersonaExpansion = false,
     controlledEvidence = '',
 } = {}) {
     const kindRaw = core_text.normalizeText(item?.kind, 20).toLowerCase();
@@ -211,16 +212,17 @@ function normalizeTravelLocation(item, index, memoryBank, mapTheme, sourceMemory
     const proseLines = kindRaw === 'near' ? core_text.cleanArray(item?.dialogueLines, 8, 1000) : [];
     const dialogueLines = proseLines.length ? proseLines : renderTravelPresentLines(dialogueActs, 8);
     const rawKeepsake = kindRaw === 'far' ? normalizeTravelKeepsake(item?.keepsake, item?.postcard, allowedKeepsakes) : null;
-    // Incremental refreshes may only add stops proven by the newly scanned memories.
-    // Stable setting-based stops belong to the initial map and would otherwise be
-    // regenerated as fresh locations on every incremental pass.
-    if (sourceMemoryIds && basis !== '记忆') return null;
+    if (sourceMemoryIds && basis !== '记忆' && !allowPersonaExpansion) return null;
+    // Incremental refreshes may add either newly proven memory stops or new persona/world
+    // inferences. Inferred stops remain simulation/character-life content and are still
+    // rejected below if they smuggle in a shared past with {{user}}.
+
     const evidenceBank = sourceMemoryIds ? core_incremental.incrementalPromptMemoryBank(memoryBank, sourceMemoryIds) : memoryBank;
     const reference = basis === '记忆'
         ? core_evidence.normalizeExactMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, evidenceBank, 1)
         : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
     if (basis === '记忆' && (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor)) return null;
-    if (sourceMemoryIds && core_text.normalizeText(item?.sourceMemoryAnchor, 120) !== reference.sourceMemoryAnchor) return null;
+    if (basis === '记忆' && sourceMemoryIds && core_text.normalizeText(item?.sourceMemoryAnchor, 120) !== reference.sourceMemoryAnchor) return null;
     if (basis === '记忆' && sourceMemoryIds && !core_incremental.usesIncrementalMemoryId(reference.sourceMemoryIds, sourceMemoryIds)) return null;
     // A 推演 stop is the character's own routine, so any claim of a joint past is the one
     // thing it must not smuggle in. Reject the stop rather than silently rewriting it.
@@ -277,6 +279,7 @@ function normalizeTravelLocation(item, index, memoryBank, mapTheme, sourceMemory
 export function normalizeTravel(data, memoryBank, {
     allowPartial = false,
     sourceMemoryIds = null,
+    allowPersonaExpansion = false,
     worldPresentation = null,
     controlledEvidence = '',
     trustedStored = false,
@@ -294,6 +297,7 @@ export function normalizeTravel(data, memoryBank, {
     const locations = raw.slice(0, 12).map((item, index) => {
         const normalized = normalizeTravelLocation(item, index, memoryBank, mapTheme, sourceMemoryIds, allowedKeepsakes, {
             allowLegacyStored,
+            allowPersonaExpansion,
             controlledEvidence,
         });
         if (!normalized || seenIds.has(normalized.id)) return null;
@@ -351,7 +355,7 @@ ${JSON.stringify(worldPresentation || core_worldPresentation.resolveWorldPresent
 
 硬性要求：
  - mapTheme 必须照抄 CONTROLLED_WORLD_PRESENTATION_JSON.mapTheme。far.sceneTheme 应按该地点本身选择 city/coast/mountain/forest/campus/historic/fantasy/scifi/neutral；本地会再次依据地点语义校验，不能用一个全局主题覆盖雪山、海港等不同地点。keepsake.kind 只能从 allowedKeepsakes 中选择。keepsake.tone 只能 rose/ocean/forest/sunset/night/paper；它们只是本地白名单样式 token。禁止输出坐标、颜色值、CSS、HTML、JavaScript、URL、图片或 class。
- - ${revisit ? '本轮基于既有证据返回 0～3 个地点的新当下对话或纪念文字，可以重访原地点；文字不得重复已有版本，不得声称发生新旅程。' : incremental ? '本轮只返回 0～4 个由 incrementalMemoryIds 新证明且不在 EXISTING_TRAVEL_INDEX_JSON 中的地点；没有新地点时 locations 为空。' : '初次生成 5～8 个彼此不同、符合角色人设与世界观的地点，最多 8 个。优先使用档案/设定中已有地点；没有写明具体地点时用 basis=推演 合理补足，不要因为缺少逐字地名而返回空路线。near/far 不设最低配额，但应尽量同时有日常可达与远方地点。'}
+ - ${revisit ? '本轮返回 0～3 个新的角色生活扩展：可以重访原地点写新的当下对白/纪念文字，也可以依据明确人设与世界观补充此前未出现的 basis=推演 地点；不得重复已有版本，不得声称推演地点是已经发生的新旅程。' : incremental ? '本轮返回 0～4 个新增地点：新增记忆明确证明的地点用 basis=记忆；也允许依据明确人设、职业、时代和世界观补充此前未出现的 basis=推演 地点。没有合适新增时 locations 为空。' : '初次建议生成 5～8 个彼此不同、符合角色人设与世界观的地点；可以少写，最多 8 个，不为数量凑地点。优先使用档案/设定中已有地点；没有写明具体地点时用 basis=推演 合理补足，不要因为缺少逐字地名而返回空路线。near/far 不设最低配额，但应尽量同时有日常可达与远方地点。'}
 - name/region：basis=记忆 时只能逐字取自所引 Mxxx；basis=设定 应以受控角色卡/世界书为依据，有逐字原文时填写 sourceSettingEvidence；若没有逐字地点证据，本地会按推演处理而不是删站。basis=推演 可按人设与世界观合理命名。distanceToken 只能为 walk/local/day-trip/journey/distant/unknown；不要输出自由 distanceLabel。
 - near 是同城/日常可抵达地点。dialogueLines 写1～8句 {{char}} 对 {{user}} 的当下对白，推荐3～5句，必须有角色自己的措辞，不替 {{user}} 回应；可以观察、邀请、开玩笑，不能无据升级双方关系。不要返回 dialogueActs 枚举拼句。
 - far 是远途、异地或世界观中的遥远地点。keepsake 必须有 body：写有风景、生活细节和角色心绪的信件/札记，推荐100～400字；title/greeting/closing 自拟，正文不是设定原文。kind 服从 allowedKeepsakes；现代可用 postcard，古代优先 letter/scroll/fieldnote，未来可用 datalog。画面由本地 HTML/SVG/CSS 渲染，不输出代码。
@@ -365,7 +369,8 @@ export function travelLocationKey(item) {
     const ids = core_text.cleanArray(item?.sourceMemoryIds, 8, 40).sort().join(',');
     const anchor = core_incremental.normalizedContentKey(item?.sourceMemoryAnchor, 160);
     if (item?.basis === '记忆' && ids && anchor) return `memory|${ids}|${anchor}|${item?.expansionRound ? core_incremental.normalizedContentKey(JSON.stringify([item.dialogueLines, item.keepsake?.body]), 1600) : ''}`;
-    return `${core_text.normalizeText(item?.kind, 20)}|${core_incremental.normalizedContentKey(item?.name, 120)}|${core_incremental.normalizedContentKey(item?.region, 120)}`;
+    // Preserve earlier pages on revisits. Equal words stay a no-op across rounds.
+    return `${core_text.normalizeText(item?.kind, 20)}|${core_incremental.normalizedContentKey(item?.name, 120)}|${core_incremental.normalizedContentKey(item?.region, 120)}|${core_incremental.normalizedContentKey(JSON.stringify([item?.dialogueLines, item?.keepsake?.body]), 6000)}`;
 }
 
 export function mergeTravelIncremental(previous, fresh) {
@@ -402,7 +407,8 @@ export async function generateTravelWithRepair(context, memoryBank, origin, task
         || core_worldPresentation.resolveWorldPresentation(presentationContext.contextEnvelope || '', memoryBank);
     const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
     const fresh = await generation_client.requestValidatedSegment(
-        travelPrompt(context, memoryBank, previous, sourceMemoryIds, worldPresentation) + core_incremental.derivedExpansionDirective(previous, memoryBank),
+        travelPrompt(context, memoryBank, previous, sourceMemoryIds, worldPresentation) + core_incremental.derivedExpansionDirective(previous, memoryBank)
+            + (previous && options.allowPersonaExpansion !== true ? '\n本轮只同步历史：所有新地点必须 basis=记忆，引用本轮 incrementalMemoryIds；不补人设推演地点。' : ''),
         previous ? '他的出行路线 · 正在把新增地点标到地图上…' : '他的出行路线 · 正在绘制生活地图…',
         {
             maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.TRAVEL], temperature: 0.45,
@@ -411,6 +417,7 @@ export async function generateTravelWithRepair(context, memoryBank, origin, task
         raw => normalizeTravel(raw, memoryBank, {
             allowPartial: !!previous,
             sourceMemoryIds: previous ? sourceMemoryIds : null,
+            allowPersonaExpansion: options.allowPersonaExpansion === true,
             worldPresentation,
             controlledEvidence: presentationContext.settingEvidence || '',
         }),

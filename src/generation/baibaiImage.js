@@ -104,6 +104,12 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
         request.characters = metadata.characters.filter(character => character.tag)
             .map(({ name, tag, nl }) => ({ name, tag, ...(nl ? { nl } : {}) }));
     }
+    const formatted = appearance.formattedCgProviderPrompts(visual, metadata, state.supportsCharacters);
+    if (formatted) {
+        request.prompt = formatted.prompt; request.nl = formatted.nl;
+        if (formatted.characters) request.characters = formatted.characters;
+        else delete request.characters;
+    }
     const controller = new AbortController();
     let timer;
     let stopped = false;

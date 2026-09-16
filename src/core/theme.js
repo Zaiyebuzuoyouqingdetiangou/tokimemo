@@ -186,6 +186,7 @@ export function applyThemeToElement(element, settings, documentLike = globalThis
     // Semantic paper is opaque, with its own validated ink. Theme changes never turn a
     // yellow memo, rose keepsake, or violet journal into the same structural white card.
     const dark = contrastRatio('#ffffff', palette.background) > 4.5;
+    element.dataset.rmtThemeDark = String(dark);
     const papers = dark
         ? { note: ['#4b3d20', '#fff0ba'], 'note-blue': ['#203e55', '#dceeff'], 'note-rose': ['#512b3d', '#ffe2ed'], letter: ['#37312c', '#f9ecdc'], journal: ['#382f50', '#eee3ff'] }
         : { note: ['#ffecab', '#594019'], 'note-blue': ['#e0f0ff', '#264c70'], 'note-rose': ['#ffe2ec', '#71344e'], letter: ['#fff9ed', '#594934'], journal: ['#eee6fc', '#584070'] };

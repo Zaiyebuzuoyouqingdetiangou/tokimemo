@@ -17,6 +17,7 @@ import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
 import * as generation_recovery from '../generation/recovery.js';
 import * as ui_overlay from '../ui/overlay.js';
+import * as room_interior from '../ui/roomInterior.js';
 
 const ROOM_VISUAL_PROFILE_VERSION = 1;
 const ROOM_VISUAL_VALUES = Object.freeze({
@@ -430,9 +431,9 @@ export function normalizeRoom(data, memoryBank, options = {}) {
 
 function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentation = null, controlledEvidence = null, characterEvidence = null, relaxStructure = false } = {}) {
     // Minimums for the character's own space. Truth-claim checks below ignore this entirely.
-    const minObjects = relaxStructure ? 2 : 3;
-    const minSpaces = relaxStructure ? 2 : 3;
-    const minPresenceLines = relaxStructure ? 2 : 4;
+    const minObjects = 1;
+    const minSpaces = 1;
+    const minPresenceLines = 0;
     const rawSpaces = Array.isArray(data?.spaces) ? data.spaces : [];
     const userName = core_text.normalizeText(memoryBank?.userName, 120);
     const usedSpaceIds = new Set();
@@ -488,14 +489,14 @@ ${line}`, memoryBank, 1)
     if (spaceSignatures.size !== spaces.length) throw new Error('私人空间出现重复：每个空间必须有不同的名称和主功能。');
     const sceneClasses = new Set(spaces.map(space => roomSceneClass(space.spaceType, space.label)));
     const motifs = new Set(spaces.map(space => roomMotifToken({ visualProfile: data?.visualProfile || {} }, space)));
-    if (sceneClasses.size < 2 && motifs.size < 2) {
+    if (spaces.length > 1 && sceneClasses.size < 2 && motifs.size < 2) {
         throw new Error('私人空间缺少功能差异：至少要呈现 2 种明显不同的空间结构或陈设母题。');
     }
     const visibleSignatures = new Set(spaces.map(space => {
         const objectKinds = [...new Set(space.objects.map(roomObjectVisualKind))].sort().join(',');
         return `${roomSceneClass(space.spaceType, space.label)}|${roomMotifToken({ visualProfile: data?.visualProfile || {} }, space)}|${objectKinds}`;
     }));
-    const requiredVisibleSignatures = Math.max(2, Math.ceil(spaces.length / 2));
+    const requiredVisibleSignatures = Math.min(spaces.length, Math.max(2, Math.ceil(spaces.length / 2)));
     if (visibleSignatures.size < requiredVisibleSignatures) {
         throw new Error(`私人空间的可见结构过于相似：${spaces.length} 个空间至少需要 ${requiredVisibleSignatures} 种不同的主陈设/物件组合。`);
     }
@@ -564,7 +565,7 @@ export function roomCandidateRepairSlots(data, memoryBank) {
     for (const key of core_constants.ROOM_DAYPART_KEYS) {
         for (const field of ['activity', 'line']) check(['dayparts', key, field], data?.dayparts?.[key]?.[field]);
     }
-    for (let i = 0; i < Math.max(4, Math.min(12, data?.presenceLines?.length || 0)); i++) check(['presenceLines', i], data?.presenceLines?.[i]);
+    for (let i = 0; i < Math.min(12, data?.presenceLines?.length || 0); i++) check(['presenceLines', i], data?.presenceLines?.[i]);
     return slots;
 }
 
@@ -602,8 +603,8 @@ export async function generateRoomWithRepair(context, memoryBank, origin, taskKe
         // must not be stricter than the normaliser's own relaxed fallback — otherwise the
         // fallback is unreachable and a slightly thin room is rejected before it is tried.
         const usable = Array.isArray(value?.spaces)
-            ? value.spaces.filter(space => Array.isArray(space?.objects) && space.objects.length >= 2) : [];
-        if (!Array.isArray(value?.spaces) || value.spaces.length > 10 || usable.length < 2) {
+            ? value.spaces.filter(space => Array.isArray(space?.objects) && space.objects.length >= 1) : [];
+        if (!Array.isArray(value?.spaces) || value.spaces.length > 10 || usable.length < 1) {
             throw core_text.safeUserError('房间空间或物件未写完整。', 'RMT_ROOM_STRUCTURE');
         }
         return value;
@@ -666,11 +667,11 @@ export function compactRoomExisting(session) {
     }));
 }
 
-export function roomIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) {
+export function roomIncrementPrompt(context, memoryBank, previous, sourceMemoryIds, { allowPersonaExpansion = false } = {}) {
     return generation_prompts.promptSafetyBoundary(context, '他的房间 / 增量物件')
         + '\n旧房间由本地原样保留，只输出新增物件 patch，不返回旧描述、dayparts、presenceLines 或完整房间。'
-        + '\n严格输出 {"additions":[{"spaceId":"已有空间id","objects":[{"id":"新id","label":"物件名称","basis":"记忆","zone":"中央","description":"有据描述","line":"当下角色对白","sourceMemoryIds":["Mxxx"],"sourceMemoryAnchor":"对应记忆精确原文"}]}]}'
-        + '\n只向已有空间添加新增记忆明确证明的物件；不扩建空间、不伪造赠礼。没有新增痕迹就 additions=[]。'
+        + '\n严格输出 {"additions":[{"spaceId":"已有空间id","objects":[{"id":"新id","label":"物件名称","basis":"记忆|推演","zone":"中央","description":"物件与生活描述","line":"当下角色对白","sourceMemoryIds":["仅记忆时 Mxxx"],"sourceMemoryAnchor":"仅记忆时精确原文"}]}]}'
+        + (allowPersonaExpansion ? '\n可向已有空间追加两类普通生活物件：basis=记忆 时必须由本轮新增记忆明确证明；basis=推演 时可依据明确人设、职业、时代和既有房间生活方式补充合理物件，sourceMemoryIds/sourceMemoryAnchor 留空。推演物件不得声称是 {{user}} 赠送、共同购买或两人过去共同使用过，也不得伪造既往事件。不扩建空间。没有合适新增就 additions=[]。' : '\n本轮只同步历史：新物件必须 basis=记忆 并由新增 Mxxx 证明；无新增则 additions=[]，不补人设推演。')
         + '\n本轮不生成宠物节点或 companions；旧宠物由本地原样保留。此限制不改变 char/user 的身份、称呼或普通物件中的宠物用品。'
         + '\nUNTRUSTED_INCREMENTAL_ROOM_ARCHIVE_JSON:\n' + core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         + '\nEXISTING_ROOM_INDEX_JSON:\n' + JSON.stringify(compactRoomExisting(previous));
@@ -685,10 +686,22 @@ export function normalizeRoomIncrementPatch(raw, previous, memoryBank, sourceMem
         if (!existing || seen.has(existing.id) || !Array.isArray(part.objects) || part.objects.length > 8) throw core_text.safeUserError('房间增量空间不匹配。', 'RMT_ROOM_FIELDS');
         seen.add(existing.id);
         const objects = part.objects.map(item => {
-            if (!roomObjectUsesIncrement(item, sourceMemoryIds, memoryBank)) throw core_text.safeUserError('新物件缺少新增记忆证据。', 'RMT_ROOM_HISTORY');
-            const reference = core_evidence.normalizeMemoryReference(item.sourceMemoryIds, item.sourceMemoryAnchor, [item.label, item.description, item.line].join('\n'), memoryBank, 1);
+            const basis = ['推演', '设定'].includes(item?.basis) ? '推演' : '记忆';
             const label = core_text.normalizeText(item.label, 60), description = core_text.normalizeText(item.description, 1600), line = core_text.normalizeText(item.line, 800);
-            if (!label || !description || !line || !reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) throw core_text.safeUserError('新物件正文或证据不完整。', 'RMT_ROOM_FIELDS');
+            if (!label || !description || !line) throw core_text.safeUserError('新物件正文不完整。', 'RMT_ROOM_FIELDS');
+            if (basis === '推演') {
+                if (options.allowPersonaExpansion !== true) throw core_text.safeUserError('历史同步不能追加推演物件。', 'RMT_ROOM_HISTORY');
+                const visible = [label, description, line].join('\n');
+                if (core_narrativeAuthority.narrativeClaimsSharedHistory(visible, { userName: memoryBank?.userName })) {
+                    throw core_text.safeUserError('人设推演物件不能冒充两人已经发生的共同往事。', 'RMT_ROOM_HISTORY');
+                }
+                return { id: core_text.safeId(item.id, 'NEW'), label, description, line, basis: '推演',
+                    sourceMemoryIds: [], sourceMemoryAnchor: '',
+                    zone: core_constants.ROOM_ZONE_VALUES.has(item.zone) ? item.zone : '中央', searchable: core_evidence.isSearchableRoomObject({ label, description }) };
+            }
+            if (!roomObjectUsesIncrement(item, sourceMemoryIds, memoryBank)) throw core_text.safeUserError('记忆物件缺少新增记忆证据。', 'RMT_ROOM_HISTORY');
+            const reference = core_evidence.normalizeMemoryReference(item.sourceMemoryIds, item.sourceMemoryAnchor, [label, description, line].join('\n'), memoryBank, 1);
+            if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) throw core_text.safeUserError('记忆物件证据不完整。', 'RMT_ROOM_FIELDS');
             const normalized = { id: core_text.safeId(item.id, 'NEW'), label, description, line, basis: '记忆', ...reference,
                 zone: core_constants.ROOM_ZONE_VALUES.has(item.zone) ? item.zone : '中央', searchable: core_evidence.isSearchableRoomObject(item) };
             if (!roomObjectSafeForPresentation(normalized, memoryBank, memoryBank?.userName)) throw core_text.safeUserError('物件可见正文缺少精确记忆锚点。', 'RMT_ROOM_HISTORY');
@@ -710,6 +723,15 @@ export function roomObjectKey(item) {
     return ids && anchor ? `memory|${ids}|${anchor}` : `label|${core_incremental.normalizedContentKey(item?.label, 100)}`;
 }
 
+export function roomObjectAllowedIncrement(item, sourceMemoryIds, memoryBank = null, { allowPersonaExpansion = false } = {}) {
+    if (item?.basis === '推演' && allowPersonaExpansion) {
+        if (item?.sourceMemoryIds?.length || item?.sourceMemoryAnchor || !item?.label || !item?.description || !item?.line) return false;
+        const visible = [item?.label, item?.description, item?.line].map(value => core_text.normalizeText(value, 1800)).filter(Boolean).join('\n');
+        return !!visible && !core_narrativeAuthority.narrativeClaimsSharedHistory(visible, { userName: memoryBank?.userName });
+    }
+    return roomObjectUsesIncrement(item, sourceMemoryIds, memoryBank);
+}
+
 export function roomObjectUsesIncrement(item, sourceMemoryIds, memoryBank = null) {
     if (item?.basis !== '记忆') return false;
     const allowed = new Set(core_text.cleanArray(sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40));
@@ -721,7 +743,7 @@ export function roomObjectUsesIncrement(item, sourceMemoryIds, memoryBank = null
         && core_text.normalizeText(item?.sourceMemoryAnchor, 120) === reference.sourceMemoryAnchor;
 }
 
-export function mergeRoomIncremental(previous, fresh, sourceMemoryIds, { memoryBank = null } = {}) {
+export function mergeRoomIncremental(previous, fresh, sourceMemoryIds, { memoryBank = null, allowPersonaExpansion = false } = {}) {
     const merged = structuredClone(previous);
     merged.roomVersion = core_constants.ROOM_SESSION_VERSION;
     if (!previous?.worldPresentation && fresh?.worldPresentation) merged.worldPresentation = structuredClone(fresh.worldPresentation);
@@ -753,7 +775,7 @@ export function mergeRoomIncremental(previous, fresh, sourceMemoryIds, { memoryB
         const seenObjects = new Set((target.objects || []).map(roomObjectKey));
         const usedObjectIds = new Set((target.objects || []).map(item => item.id));
         for (const item of freshSpace.objects || []) {
-            if (!roomObjectUsesIncrement(item, sourceMemoryIds, memoryBank)) continue;
+            if (!roomObjectAllowedIncrement(item, sourceMemoryIds, memoryBank, { allowPersonaExpansion })) continue;
             const objectKey = roomObjectKey(item);
             if (!objectKey || seenObjects.has(objectKey) || target.objects.length >= 24) continue;
             seenObjects.add(objectKey);
@@ -796,17 +818,18 @@ export async function generateRoomIncrementalWithRepair(context, memoryBank, ori
     const worldPresentation = previous?.worldPresentation || presentationContext.profile
         || core_worldPresentation.resolveWorldPresentation(presentationContext.contextEnvelope || '', memoryBank);
     const fresh = await generation_client.requestValidatedSegment(
-        `${roomIncrementPrompt(context, memoryBank, previous, sourceMemoryIds)}\nCONTROLLED_WORLD_PRESENTATION_JSON:\n${JSON.stringify(worldPresentation, null, 2)}`,
+        `${roomIncrementPrompt(context, memoryBank, previous, sourceMemoryIds, options)}\nCONTROLLED_WORLD_PRESENTATION_JSON:\n${JSON.stringify(worldPresentation, null, 2)}`,
         '他的房间 · 正在从新增档案追加生活痕迹…',
         { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], temperature: 0.45, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ROOM, background: true },
         raw => normalizeRoomIncrementPatch(raw, previous, memoryBank, sourceMemoryIds, {
+            allowPersonaExpansion: options.allowPersonaExpansion === true,
             identityKey: core_context.currentCharacterRuntimeKey(context),
             worldPresentation,
             controlledEvidence: presentationContext.settingEvidence ?? '',
             characterEvidence: presentationContext.characterEvidence ?? '',
         }),
     );
-    const { session, added } = mergeRoomIncremental(previous, fresh, sourceMemoryIds, { memoryBank });
+    const { session, added } = mergeRoomIncremental(previous, fresh, sourceMemoryIds, { memoryBank, allowPersonaExpansion: options.allowPersonaExpansion === true });
     return core_incremental.stampIncrementalCoverage(session, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
@@ -922,7 +945,7 @@ ${data}
 }
 
 硬性要求：
-- beats 8～14 条，按时间从早到晚排序，覆盖至少 06:00～23:00；不要每小时机械一条，要符合角色作息。
+- beats 建议 8～14 条；可以少于建议数量，返回几条完整的生活节点就保留几条，不为数量凑占位内容。按时间排序，时段符合角色作息；数量不足不需要补数。
 - 每条 time 必须是 HH:MM；spaceId 必须引用 home.spaces；focusObjectId 必须属于对应空间。
 - activity / line / ambient / trace 都必须具体，不得使用“暂无”“待定”“...”等占位词。
 - visualState 只能使用给定枚举；它用于让房间画面随时间真正改变，不得输出 CSS、颜色值、URL 或任意代码。
@@ -1003,7 +1026,7 @@ export function normalizeRoomLifePlan(data, session, memoryBank, expectedDate) {
             sourceMemoryAnchor: reference.sourceMemoryAnchor,
         };
     }).filter(Boolean).sort((a, b) => a.minute - b.minute);
-    if (beats.length < 6) throw new Error(`当天生活时间线不足：得到 ${beats.length} 个有效节点，至少需要 6 个。`);
+    if (!beats.length) throw new Error('当天生活没有完整可用的节点；旧内容保留。');
     return {
         dateKey,
         archiveRevision: memoryBank.archiveRevision,
@@ -1105,7 +1128,7 @@ export async function ensureRoomLifePlan(options = {}) {
         }
     }
     if (!force && current?.dateKey === dateKey && current?.archiveRevision === archiveRevision && Array.isArray(current.beats)
-        && (current.beats.length >= 6 || current.generatedAt === 0)) {
+        && (current.beats.length >= 1 || current.generatedAt === 0)) {
         return current;
     }
     if (!force && attempt?.dateKey === dateKey && Number(attempt.count) >= 1) {
@@ -1609,7 +1632,7 @@ export function renderRoom() {
     const petNodes = selectedPets.map(roomPetNodeHtml).join('');
     const petNotes = selectedPets.map(roomPetSummaryHtml).join('');
     const objectLayout = roomObjectLayout(selectedSpace);
-    const hotspots = objectLayout.map(entry => roomObjectLayoutButtonHtml(entry, 'scene', selected?.id, focusId)).join('');
+    const hotspots = room_interior.roomInteriorHtml(objectLayout, { figure: figureProfile, personIsHere, charName, selectedId: selected?.id, world: visualProfile.worldStyle });
     const objectRail = objectLayout.map(entry => roomObjectLayoutButtonHtml(entry, 'rail', selected?.id, focusId)).join('');
     const map = session.spaces.map(space => {
         const typeLabel = core_text.normalizeText(space.spaceType, 100);
@@ -1643,22 +1666,12 @@ export function renderRoom() {
       <div class="rmt-room-location"><div><b>${core_text.esc(currentLocationText)}</b><small>${core_text.esc(session.homeName)} · ${session.spaces.length} 个可观察区域</small></div><div class="rmt-room-location-actions">${!personIsHere ? `<button type="button" class="rmt-room-find" data-rmt-action="room-find-presence">去看看他</button>` : ''}${readOnlyArchive ? '' : `<button type="button" class="rmt-room-find" data-rmt-action="room-life-refresh" ${runtimeState.busy ? 'disabled' : ''}>更新今日生活</button>`}</div></div>
 
       <div class="rmt-room-flow">
-        <section class="rmt-room-card rmt-room-space-note-card" id="${core_constants.OVERLAY_ID}_room_object_detail" aria-live="polite">
-          <div class="rmt-room-card-kicker">SPACE NOTE</div>
-          <div class="rmt-room-object-title">${core_text.esc(selected?.label || selectedSpace.label)} ${selectedSearchable ? '<span class="rmt-room-searchable-tag">可翻找</span>' : ''}</div>
-          <div class="rmt-room-object-desc">${core_text.esc(selected?.description || selectedSpace.atmosphere)}</div>
-          ${selected ? `<div class="rmt-room-object-line">${core_text.esc(selected.line)}</div><div class="rmt-room-source">${core_text.esc(memorySource)}</div>` : ''}
-        </section>
 
         <section class="rmt-room-stage">
           <div class="rmt-room-stage-head"><b>${core_text.esc(sceneTitle)}</b><span class="rmt-room-clock" data-rmt-room-clock>${core_text.esc(daypart.label)} · ${core_text.esc(roomClockText(now))}</span></div>
           <div class="rmt-room-scene rmt-room-scene-${sceneKind} rmt-room-layout-scene" data-rmt-layout="${sceneLayout}" data-rmt-room-beat="${core_text.esc(String(slot?.id || `${daypart.key}:${slot?.spaceId || ''}:${slot?.activity || ''}`))}" data-rmt-room-daypart="${core_text.esc(daypart.key)}" data-rmt-lighting="${core_text.esc(visualState.lighting)}" data-rmt-window="${core_text.esc(visualState.window)}" data-rmt-order="${core_text.esc(visualState.order)}" data-rmt-surface="${core_text.esc(visualState.surface)}" data-rmt-room-motif="${core_text.esc(sceneMotif)}">
-            <div class="rmt-room-object-layout" aria-label="${core_text.esc(selectedSpace.label)}的物件布局">${hotspots}</div>
-            ${personIsHere || selectedPets.length ? `<div class="rmt-room-presence-stage ${personIsHere ? '' : 'is-empty'}">` : ''}
-            ${petNodes}
-            ${personIsHere ? `<button type="button" class="rmt-room-person" data-rmt-action="room-presence" data-rmt-facing="away" data-rmt-identity-key="${core_text.esc(visualProfile.identityKey)}" data-rmt-build="${core_text.esc(figureProfile.build)}" data-rmt-hair-shape="${core_text.esc(figureProfile.hairShape)}" data-rmt-hair-tone="${core_text.esc(figureProfile.hairTone)}" data-rmt-outfit="${core_text.esc(figureProfile.outfit)}" data-rmt-detail="${core_text.esc(figureProfile.detail)}" data-rmt-posture="${core_text.esc(figureProfile.posture)}" aria-label="从背影看看${core_text.esc(charName)}现在在做什么"><span class="rmt-room-figure-shadow" aria-hidden="true"></span><span class="rmt-room-body-figure" aria-hidden="true"><span class="rmt-room-outfit-mark"></span></span><span class="rmt-room-head" aria-hidden="true"><span class="rmt-room-hair"></span><span class="rmt-room-figure-detail"></span></span><span class="rmt-room-unseen" aria-hidden="true">人在光影外</span><span class="rmt-room-person-label" aria-hidden="true">♥</span></button>` : ''}
-            ${personIsHere || selectedPets.length ? '</div>' : ''}
-            <div class="rmt-room-layout-caption">图标与编号对应真实物件；背景仅示意空间光影。</div>
+            <div class="rmt-room-interior-layout" aria-label="${core_text.esc(selectedSpace.label)}的物件布局">${hotspots}</div>
+            ${selectedPets.length ? `<div class="rmt-room-pets-overlay">${petNodes}</div>` : ''}
           </div>
           <div class="rmt-room-object-rail" aria-label="房间物件">${objectRail}</div>
           <div class="rmt-room-activity-strip ${personIsHere ? '' : 'empty'}">
@@ -1667,8 +1680,15 @@ export function renderRoom() {
           <div class="rmt-room-caption"><b>${core_text.esc(selectedSpace.label)}：</b>${core_text.esc(personIsHere ? (slot?.line || '') : selectedSpace.atmosphere)}${personIsHere && slot?.trace ? `<div class="rmt-room-live-trace">此刻留下的痕迹：${core_text.esc(slot.trace)}</div>` : ''}${tempLine}</div>
         </section>
 
+        <section class="rmt-room-card rmt-room-space-note-card" id="${core_constants.OVERLAY_ID}_room_object_detail" aria-live="polite">
+          <div class="rmt-room-card-kicker">物品介绍</div>
+          <div class="rmt-room-object-title">${core_text.esc(selected?.label || selectedSpace.label)} ${selectedSearchable ? '<span class="rmt-room-searchable-tag">可翻找</span>' : ''}</div>
+          <div class="rmt-room-object-desc">${core_text.esc(selected?.description || selectedSpace.atmosphere)}</div>
+          ${selected ? `<div class="rmt-room-object-line"><b>${core_text.esc(charName)}的话</b><p>${core_text.esc(selected.line)}</p></div><div class="rmt-room-source">${core_text.esc(memorySource)}</div>` : ''}
+        </section>
+
         <section class="rmt-room-card rmt-room-private-life-card">
-          <div class="rmt-room-card-kicker">PRIVATE LIFE</div>
+          <div class="rmt-room-card-kicker">房间介绍</div>
           <div class="rmt-room-atmosphere">${core_text.esc(selectedSpace.atmosphere)}</div>
           <div class="rmt-room-summary" style="margin-top:9px">${core_text.esc(roomNarrativeClaimsSharedHistory(session.homeSummary, roomUserName) ? '这些空间拼成了他日常生活真正会经过的路线。' : session.homeSummary)}</div>
           ${petNotes ? `<div class="rmt-room-pet-notes" aria-label="这个空间里的宠物">${petNotes}</div>` : ''}

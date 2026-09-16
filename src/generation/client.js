@@ -1,3 +1,4 @@
+import * as cg_policy from './cgPromptPolicy.js';
 import * as core_butterflyContract from '../core/butterflyContract.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -33,6 +34,9 @@ import * as modes_heart from '../modes/heart.js';
 import * as modes_items from '../modes/items.js';
 import * as modes_cabinet from '../modes/cabinet.js';
 import * as modes_phone from '../modes/phone.js';
+import * as modes_song from '../modes/themeSong.js';
+import * as song_contract from '../core/themeSongContract.js';
+import * as heart_reader from '../ui/heartReaderState.js';
 import * as modes_inbox from '../modes/inbox.js';
 import * as modes_pastLives from '../modes/pastLives.js';
 import * as modes_timeStories from '../modes/timeStories.js';
@@ -131,7 +135,7 @@ async function collectFittingSelectedSetting(context, budget = core_constants.MA
 }
 
 export async function buildWorldPresentationContext(context, memoryBank, mode) {
-    const wantsSelectedSetting = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES].includes(mode);
+    const wantsSelectedSetting = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode);
     let selectedSetting = wantsSelectedSetting
         ? await collectFittingSelectedSetting(context)
         : { text: '', used: 0, total: 0, dropped: 0, complete: true, note: '' };
@@ -202,6 +206,7 @@ export async function mapGenerationConcurrent(items, limit, worker) {
 }
 
 export async function requestValidatedSegment(prompt, status, options, validator) {
+    prompt = cg_policy.cgPromptForSegment(prompt, options);
     const parentTrace = generationTrace(options);
     const taskTrace = core_taskTrace.startTaskTrace('', options?.mode, parentTrace);
     core_taskTrace.markStage(taskTrace, 'start');
@@ -682,7 +687,9 @@ function recoverySettingsIdentity(context) {
 export async function beginModeRecovery(mode, context, bank, origin, options = {}) {
     const identity = recoverySettingsIdentity(context);
     const existing = options.existing === undefined ? core_cache.loadGenerationRecovery(mode, context, options.archiveTarget?.cache) : options.existing;
-    const operation = options.operation || { kind: 'mode', mode };
+    const operation = cg_policy.cgRecoveryOperation(mode, options.operation || { kind: 'mode', mode }, existing,
+        options.cgPromptFormat || core_settings.getPluginSettings(context).cgPromptFormat);
+    cg_policy.bindCgPromptFormat(origin, operation.cgPromptFormat);
     if (existing?.operation && await generation_recovery.generationRecoveryDigest(existing.operation) !== await generation_recovery.generationRecoveryDigest(operation)) {
         throw core_text.safeUserError('这项还保留着另一入口的草稿，请从“继续生成”回到原来的任务；旧内容与草稿未改动。', 'RMT_RECOVERY_OPERATION_CHANGED');
     }
@@ -723,8 +730,12 @@ export async function continueSavedGeneration(mode, options = {}) {
     const resumeOptions = { ...options, ...targetOptions, existing, continueRecovery: true };
     if (operation.kind === 'mode') return generateMode(mode, { ...resumeOptions,
         background: !(runtimeState.activeMode === mode && (time_stories.isTimeStoryMode(mode)
+            || mode === core_constants.MODE.THEME_SONG
             || (mode === core_constants.MODE.PHONE && runtimeState.activeSession?._rmtEmptyTerminal === true))) });
-    const session = core_cache.loadSession(mode, { context, memoryBank: bank, cache: targetOptions.archiveTarget?.cache, clone: true });
+    let session = core_cache.loadSession(mode, { context, memoryBank: bank, cache: targetOptions.archiveTarget?.cache, clone: true });
+    const stored = targetOptions.archiveTarget?.cache || core_cache.getCache(context);
+    if (!session && mode === core_constants.MODE.HEART && !stored?.[mode]
+        && ['heart-section', 'heart-season', 'heart-fireflies'].includes(operation.kind)) session = modes_heart.makeHeartShell(bank);
     if (!session) throw new Error('原任务所依赖的内容已不在当前档案；草稿保留，没有重新生成。');
     if (operation.kind === 'content-item') {
         runtimeState.activeMode = mode;
@@ -769,9 +780,12 @@ export async function generateMode(mode, options = {}) {
     // Capture once, before any archive/network/storage await. A destroyed invocation must never
     // adopt the next runtime lifetime and re-register itself as a fresh paid task.
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    if (mode === core_constants.MODE.THEME_SONG && options.automatic) return { status: 'noop' };
+    options = { ...options, cgPromptFormat: options.cgPromptFormat || core_settings.getPluginSettings(options.context || core_context.getContext()).cgPromptFormat };
     // Readers may belong to a historical archive while the host stays in another
     // chat. Only that exact, unchanged reader may receive a foreground result.
     const scopedReaderMode = time_stories.isTimeStoryMode(mode)
+        || mode === core_constants.MODE.THEME_SONG || mode === core_constants.MODE.HEART
         || (mode === core_constants.MODE.PHONE && runtimeState.activeSession?._rmtEmptyTerminal === true);
     const timeReader = scopedReaderMode && runtimeState.activeMode === mode && runtimeState.activeSession
         ? { session: runtimeState.activeSession, entryId: runtimeState.activeArchiveSnapshot?.entryId || '',
@@ -787,12 +801,14 @@ export async function generateMode(mode, options = {}) {
                 && !document.getElementById(core_constants.OVERLAY_ID)?.hidden;
         } catch { return false; }
     };
+    let themeSongPlan = null;
     let inboxDate = mode === core_constants.MODE.INBOX ? new Date() : null;
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     const background = options.background === true;
     let replaceExisting = options.replaceExisting === true;
     let recoveryHandle = null;
     let recoveryExisting = null;
+    if (mode === core_constants.MODE.THEME_SONG && replaceExisting) throw song_contract.songError('REPLACE', '印象曲每次追加新作品，不会整册覆盖。');
     if (mode === core_constants.MODE.INBOX && replaceExisting) throw new Error('邮箱只追加新信，不支持整箱重新生成。');
     const archiveTarget = options.archiveTarget && typeof options.archiveTarget === 'object' ? options.archiveTarget : null;
     if (archiveTarget?.backupOnly) throw new Error('独立备份是永久只读快照，不能生成或写入派生内容。');
@@ -812,8 +828,8 @@ export async function generateMode(mode, options = {}) {
     let memoryBank = archive_repository.requireArchive(context);
     const expectedArchiveRevision = memoryBank.archiveRevision;
     const promptFactory = generation_prompts.PROMPTS[mode];
-    if (!promptFactory && !time_stories.isTimeStoryMode(mode) && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES].includes(mode)) return;
-    const segmentedMode = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES].includes(mode);
+    if (!promptFactory && !time_stories.isTimeStoryMode(mode) && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode)) return;
+    const segmentedMode = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode);
     let calendarCurrentDate = mode === core_constants.MODE.CALENDAR ? modes_calendar.currentCalendarDate() : '';
     let generationPrompt = segmentedMode || mode === core_constants.MODE.RELATIONS
         ? ''
@@ -827,8 +843,10 @@ export async function generateMode(mode, options = {}) {
     const refreshableCalendar = mode === core_constants.MODE.CALENDAR;
     const refreshableRelations = mode === core_constants.MODE.RELATIONS || mode === core_constants.MODE.CABINET;
     let roomSchemaUpgrade = false;
+    let allowPersonaExpansion = options.automatic !== true && [core_constants.MODE.ROOM, core_constants.MODE.ITEMS, core_constants.MODE.TRAVEL].includes(mode);
     const modeHasNoIncrementalWork = () => {
         if (options.continueRecovery) return false;
+        if (allowPersonaExpansion && previousSession) return false;
         if (mode === core_constants.MODE.INBOX) return !modes_inbox.inboxPlan(memoryBank, previousSession, inboxDate).length;
         if (mode === core_constants.MODE.ROOM && options.visualOnly && previousSession) return false;
         if (mode === core_constants.MODE.PHONE && options.fillMissing) {
@@ -879,6 +897,7 @@ export async function generateMode(mode, options = {}) {
                 calendarCurrentDate = savedOperation.calendarDate;
                 generationPrompt = generation_prompts.calendarPrompt(context, memoryBank, { currentDate: calendarCurrentDate });
             }
+            allowPersonaExpansion = options.automatic !== true && savedOperation.allowPersonaExpansion === true;
             options.visualOnly = savedOperation.visualOnly === true;
             options.fillMissing = savedOperation.fillMissing === true;
             if (typeof savedOperation.focusObjectId === 'string') options.focusObjectId = savedOperation.focusObjectId;
@@ -963,13 +982,20 @@ export async function generateMode(mode, options = {}) {
             if (!options.automatic) reportNoIncrementalWork();
             return options.automatic ? { status: 'noop' } : undefined;
         }
+        if (mode === core_constants.MODE.THEME_SONG) {
+            const stored = core_cache.getCache(context);
+            if (!previousSession && stored?.[mode]) throw song_contract.songError('SOURCE', '已有印象曲暂不可读取，原作品保留。');
+            themeSongPlan = recoveryExisting?.operation?.themeSongPlan
+                ? modes_song.validateThemeSongPlan(recoveryExisting.operation.themeSongPlan, memoryBank)
+                : modes_song.validateThemeSongPlan(modes_song.createThemeSongPlan(options.songOptions, memoryBank, previousSession), memoryBank);
+        }
         origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId), archiveTargetEntryId: core_text.normalizeText(archiveTarget?.entryId, 120) };
         recoveryHandle = await beginModeRecovery(mode, context, memoryBank, origin, { ...options, archiveTarget, stillCurrent: archiveTargetStillCurrent, existing: recoveryExisting, replaceExisting,
-            operation: recoveryExisting?.operation || { kind: 'mode', mode, inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
-                visualOnly: options.visualOnly === true, fillMissing: options.fillMissing === true, focusObjectId: core_text.normalizeText(options.focusObjectId, 120) } });
+            operation: recoveryExisting?.operation || { kind: 'mode', mode, ...(themeSongPlan ? { themeSongPlan } : {}), inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
+                allowPersonaExpansion, visualOnly: options.visualOnly === true, fillMissing: options.fillMissing === true, focusObjectId: core_text.normalizeText(options.focusObjectId, 120) } });
         let session;
         let presentationContext = null;
-        if (time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES].includes(mode)) {
+        if (time_stories.isTimeStoryMode(mode) || (mode === core_constants.MODE.ITEMS && previousSession && allowPersonaExpansion) || [core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode)) {
             presentationContext = await buildWorldPresentationContext(context, memoryBank, mode);
             // Degrading is fine, degrading silently is not: the user picked these entries
             // by hand and deserves to know which of them this request could actually carry.
@@ -977,7 +1003,9 @@ export async function generateMode(mode, options = {}) {
                 globalThis.toastr?.info?.(presentationContext.selectedSetting.note, `心迹回廊 · ${core_constants.MODE_LABEL[mode]}`);
             }
         }
-        if (mode === core_constants.MODE.INBOX) {
+        if (mode === core_constants.MODE.THEME_SONG) {
+            session = await modes_song.generateThemeSong(context, memoryBank, origin, taskKey, previousSession, { plan: themeSongPlan, presentationContext });
+        } else if (mode === core_constants.MODE.INBOX) {
             session = await modes_inbox.generateInbox(context, memoryBank, origin, taskKey, previousSession, { presentationContext, date: inboxDate });
         } else if (time_stories.isTimeStoryMode(mode)) {
             session = await modes_timeStories.generateTimeStoryWithRepair(mode, context, memoryBank, origin, taskKey, { previousSession, replaceExisting, presentationContext });
@@ -992,11 +1020,11 @@ export async function generateMode(mode, options = {}) {
         } else if (mode === core_constants.MODE.ROOM && options.visualOnly && previousSession) {
             session = await modes_room.refreshRoomFigure(context, memoryBank, origin, taskKey, previousSession, { presentationContext });
         } else if (mode === core_constants.MODE.ROOM && previousSession) {
-            session = await modes_room.generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext });
+            session = await modes_room.generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext, allowPersonaExpansion });
         } else if (mode === core_constants.MODE.ROOM) {
             session = await modes_room.generateRoomWithRepair(context, memoryBank, origin, taskKey, { presentationContext });
         } else if (mode === core_constants.MODE.ITEMS && previousSession) {
-            session = await modes_items.generateItemsIncrementalWithRepair(context, memoryBank, roomSession, focusObject, origin, taskKey, previousSession);
+            session = await modes_items.generateItemsIncrementalWithRepair(context, memoryBank, roomSession, focusObject, origin, taskKey, previousSession, { presentationContext, allowPersonaExpansion });
         } else if (mode === core_constants.MODE.ENDING) {
             session = await modes_ending.generateEndingWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.ALBUM) {
@@ -1020,7 +1048,7 @@ export async function generateMode(mode, options = {}) {
                     presentationContext,
                 });
         } else if (mode === core_constants.MODE.TRAVEL) {
-            session = await modes_travel.generateTravelWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, presentationContext });
+            session = await modes_travel.generateTravelWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, presentationContext, allowPersonaExpansion });
         } else if (mode === core_constants.MODE.RELATIONS) {
             const selectedBooks = await archive_repository.collectSelectedMemoryWorldInfo(context, expectedChatId, null, { settingsOnly: true });
             const settingSelection = modes_relations.fitRelationSettingEntries(selectedBooks.entries, { coverage: selectedBooks.coverage });
@@ -1091,6 +1119,7 @@ export async function generateMode(mode, options = {}) {
             const added = previousSession ? 0 : 1;
             core_incremental.stampIncrementalCoverage(session, previousSession, memoryBank, incrementalPart, sourceMemoryIds, added);
         }
+        const generatedSongId = mode === core_constants.MODE.THEME_SONG ? session.songs[0]?.id || '' : '';
         session.chatId = expectedChatId;
         session.archiveRevision = expectedArchiveRevision;
         await core_context.yieldToUi();
@@ -1117,7 +1146,7 @@ export async function generateMode(mode, options = {}) {
         if (!committed && !archiveTarget) core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [mode]: session } });
 
         if (committed && recoveryHandle) await core_cache.saveGenerationRecovery(context, memoryBank, mode, null, origin, { archiveTarget, stillCurrent: archiveTargetStillCurrent });
-        if (committed && mode === core_constants.MODE.INBOX) {
+        if (committed && [core_constants.MODE.INBOX, core_constants.MODE.THEME_SONG].includes(mode)) {
             session = archiveTarget
                 ? core_cache.loadSession(mode, { chatId: expectedChatId, memoryBank, cache: runtimeState.activeArchiveSnapshot?.entryId === archiveTarget.entryId ? runtimeState.activeArchiveSnapshot.cache : archiveTarget.cache }) || session
                 : core_cache.loadSession(mode) || session;
@@ -1126,7 +1155,7 @@ export async function generateMode(mode, options = {}) {
         if (!committed) core_taskTrace.markStage(taskTrace, 'deferred');
         const overlay = document.getElementById(core_constants.OVERLAY_ID);
         const phoneProgress = mode === core_constants.MODE.PHONE ? modes_phone.phoneCompletionSummary(session) : null;
-        const partialNotice = phoneProgress?.partial ? `已保留 ${phoneProgress.readableItems} 条，另有 ${phoneProgress.missingItems} 项可在终端补齐` : '';
+        const partialNotice = phoneProgress?.partial ? `已保留 ${phoneProgress.readableItems} 条，另有 ${phoneProgress.missingItems} 项未完成，可在终端选择重试` : '';
         const stayBackground = background || !committed || (scopedReaderMode
             ? !timeReaderVisible()
             : !core_context.isCurrentTaskOrigin(origin) || overlay?.hidden || runtimeState.activeMode !== mode);
@@ -1144,8 +1173,12 @@ export async function generateMode(mode, options = {}) {
             globalThis.toastr?.success?.(`${targetDone}${partialNotice || (replaceExisting ? '后台重新生成完成' : refreshableCalendar && previousSession ? '后台刷新完成' : refreshableRelations && previousSession ? '后台刷新完成' : previousSession ? '后台增量追加完成' : '后台生成完成')}：${core_constants.MODE_LABEL[mode]}${committed || archiveTarget ? '' : '（回到原窗口自动写入）'}`, '心迹回廊');
             return session;
         }
+        if (mode === core_constants.MODE.THEME_SONG && session.songs.some(song => song.id === generatedSongId)) {
+            session = { ...session, selectedId: generatedSongId };
+        }
         runtimeState.activeMode = mode;
-        runtimeState.activeSession = session;
+        runtimeState.activeSession = mode === core_constants.MODE.HEART
+            ? { ...session, ...heart_reader.heartSelectionScalars(runtimeState.activeSession) } : session;
         core_taskTrace.beginStage(taskTrace, 'render');
         ui_overlay.renderActive();
         core_taskTrace.markStage(taskTrace, 'render');

@@ -2,6 +2,7 @@ import * as core_butterflyContract from '../core/butterflyContract.js';
 // Targeted regeneration for user-managed derived content.
 // Targets are selected only from the currently normalized session; model output never chooses a cache path.
 import * as core_constants from '../core/constants.js';
+import * as core_narrativeAuthority from '../core/narrativeAuthority.js';
 import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_text from '../core/text.js';
@@ -385,9 +386,10 @@ ${evidence.length ? `TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)
 
 async function regenerateCalendarMood(item, context, memoryBank, origin, taskKey) {
     const evidence = core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 8);
-    if (!evidence.length) throw new Error('这条页角随笔缺少可复核档案证据。');
+    const excerptOnly = item.textMode === 'evidence-excerpt' || item.evidenceMode === 'memory-anchor-excerpt';
+    if (excerptOnly && !evidence.length) throw new Error('这条历史摘录缺少可复核档案证据。');
     const prompt = `${generation_prompts.promptSafetyBoundary(context, '两个人的日历 / 页角随笔重新生成')}
-只重新写下面这条【角色第一人称的很短心情随笔】。保持 sourceMemoryIds/sourceMemoryAnchor 不变，不得新增共同事件，不得替 {{user}} 补行动或心理；一两句即可，不要长篇独白。
+只重新写下面这条【角色第一人称的很短心情随笔】。日期和所属页面由本地保留。${excerptOnly ? '本条为历史摘录：正文仍须逐字来自原锚点。' : '本条为当下人设表达：可自由写此刻心情，不需要历史原句。'}不得新增共同事件，不得替 {{user}} 补行动或心理；一两句即可，不要长篇独白。
 CURRENT_MOOD_NOTE_JSON:\n${JSON.stringify(item, null, 2)}
 TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
 严格输出：{"mood":{"text":"一两句、简短、第一人称"}}。只输出 JSON。`;
@@ -396,10 +398,16 @@ TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
         data => {
             const text = core_text.normalizeText(data?.mood?.text, 220);
             if (!text || text.length < 8) throw new Error('页角随笔重新生成内容不足。');
+            if (excerptOnly) {
+                const ref = core_evidence.normalizeExactMemoryReference(item.sourceMemoryIds, item.sourceMemoryAnchor, memoryBank, 1);
+                if (!ref.sourceMemoryIds.length || !ref.sourceMemoryAnchor?.includes(text)) throw new Error('历史随笔摘录只能来自原有真实锚点。');
+            } else if (core_narrativeAuthority.narrativeClaimsSharedHistory(text, { userName: memoryBank?.userName })) {
+                throw new Error('当下随笔不能补造已发生的共同往事。');
+            }
             return { text };
         },
     );
-    return { ...item, ...raw };
+    return { ...item, ...raw, ...(excerptOnly ? {} : { textMode: 'persona-expression', evidenceMode: 'persona-present', sourceKind: 'persona-mood', sourceLabel: '角色人设 · 此刻随笔', sourceMemoryIds: [], sourceMemoryAnchor: '', presentExpression: null }) };
 }
 
 export function normalizeRegeneratedButterflyNode(item, rawNode, memoryBank, context = {}) {

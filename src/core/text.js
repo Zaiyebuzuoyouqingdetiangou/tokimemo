@@ -95,7 +95,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_TIME_STORY_VERSION: '这份番外暂不可安全读取；原记录保持不变，请勿删除档案。',
     RMT_TIME_STORY_LIMIT: '番外已达到本地保存容量；旧篇章保留，请先备份整理。',
     RMT_PAIR_RELATIONSHIP: '这一段出现与两人设定冲突的关系表述；原有内容保留。',
-    RMT_RECOVERY_INPUT_CHANGED: '建档期间这个聊天窗口或生成设置发生了变化，已通过校验的分块全部保留；请点「重试未完成分块」继续，不会重做成功项。',
+    RMT_RECOVERY_INPUT_CHANGED: '原任务的聊天身份、档案版本、来源或生成条件与当前输入不一致；成功内容和草稿保留，没有自动重做。请核对原任务来源后再继续。',
     RMT_RECOVERY_ORIGIN_CHANGED: '目标聊天或角色已变化；本次没有覆盖档案，请回到原聊天继续。',
     RMT_CACHE_CAS_CONFLICT: '档案已被其他操作更新；本次旧结果没有覆盖新内容，请检查当前档案后再保存。',
     RMT_RECOVERY_IDENTITY: '缺少当前档案身份，本次未发送；请重新打开对应档案。',

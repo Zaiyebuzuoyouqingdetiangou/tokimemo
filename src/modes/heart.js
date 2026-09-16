@@ -4,6 +4,7 @@ import * as archive_library from '../archive/library.js';
 import * as archive_repository from '../archive/repository.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
+import * as core_heartLanguage from '../core/heartLanguage.js';
 import * as core_dialogue from '../core/dialogue.js';
 import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
@@ -16,6 +17,8 @@ import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as generation_prompts from '../generation/prompts.js';
 import * as generation_recovery from '../generation/recovery.js';
 import * as ui_heartView from '../ui/heartView.js';
+import * as ui_heartReader from '../ui/heartReaderState.js';
+import * as ui_overlay from '../ui/overlay.js';
 
 export function normalizeHeartCore(data, memoryBank) {
     const relationshipState = core_text.normalizeText(data?.relationshipState, 120) || '关系仍在发展';
@@ -28,11 +31,8 @@ export function normalizeHeartCore(data, memoryBank) {
 
     const greetings = {};
     for (const key of core_constants.HEART_GREETING_KEYS) greetings[key] = core_text.cleanArray(data?.greetings?.[key], 6, 600);
-    for (const key of ['morning', 'noon', 'evening', 'night', 'weekend']) {
-        if (greetings[key].length < 2) throw core_text.safeUserError(`角色互动“${key}”台词不足 2 条。`, 'RMT_HEART_INCOMPLETE');
-    }
-    for (const key of ['birthday', 'userBirthday', 'holiday', 'absenceWorry', 'absenceSulky']) {
-        if (greetings[key].length < 1) throw core_text.safeUserError(`角色互动“${key}”台词不足 1 条。`, 'RMT_HEART_INCOMPLETE');
+    if (!Object.values(greetings).some(lines => lines.length)) {
+        throw core_text.safeUserError('这次没有可保存的基础语言；旧台词保留。', 'RMT_HEART_INCOMPLETE');
     }
 
     return {
@@ -56,11 +56,18 @@ UNTRUSTED_HEART_ARCHIVE_JSON:
 ${generation_prompts.endingArchiveSlice(memoryBank, 40)}
 
 严格输出字段：title, relationshipState, relationshipSummary, relationshipSourceMemoryIds, relationshipSourceMemoryAnchor, birthdayMmDd, userBirthdayMmDd, specialDays, greetings。
-- morning/noon/evening/night/weekend 各 2～3 条。
-- birthday/userBirthday/holiday/absenceWorry/absenceSulky 各 1～2 条；absenceJealous 只有关系适合时写 0～2 条。
+- morning/noon/evening/night/weekend 建议各 2～3 条，可按实际内容少写或留空；数量不是配额。
+- holiday/absenceWorry/absenceSulky 可写 0～2 条；没有合适台词的类别留空。absenceJealous 只有关系适合时写 0～2 条。不为补数生成重复句；每条台词必须完整。
+- birthday/userBirthday 不属于本次必生成内容，不主动补生日祝福，可以省略或留空；只有用户单独选择相应生日类别时才生成该类。生日日期没有明确设定就留空，不猜日期。
 - relationship 优先使用真实档案 sourceMemoryIds + sourceMemoryAnchor；如果当前档案没有足够关系证据，不要伪造 ID/anchor，两个字段留空，并依据角色卡、Persona、世界观中明确的人设保持保守的互动基线。
 - 无真实关系证据时不得擅自升级为已恋爱、已告白、已同居等既成事实；这些只是角色化台词，不写回历史事实，不替 {{user}} 创造真实决定。
 - 不要输出 voiceDramas / scenarioDramas / dailyStrips。只输出 JSON。`;
+}
+
+// Exact prior wording is only a legacy-request authenticator; it is never sent
+// for a fresh generation. Existing successful drafts keep their original slot.
+export function heartCoreLegacyPrompt(context, memoryBank) {
+    return heartCorePrompt(context, memoryBank).replace("- holiday/absenceWorry/absenceSulky 可写 0～2 条；没有合适台词的类别留空。absenceJealous 只有关系适合时写 0～2 条。不为补数生成重复句；每条台词必须完整。\n- birthday/userBirthday 不属于本次必生成内容，不主动补生日祝福，可以省略或留空；只有用户单独选择相应生日类别时才生成该类。生日日期没有明确设定就留空，不猜日期。", "- birthday/userBirthday/holiday/absenceWorry/absenceSulky 建议各 1～2 条；没有合适台词的类别留空。absenceJealous 只有关系适合时写 0～2 条。不为补数生成重复句；每条台词必须完整。");
 }
 
 export function compactHeartDialoguesExisting(session) {
@@ -313,7 +320,7 @@ ${incremental ? '旧光点由本地永久保留。本请求只根据本轮新增
 - 不把会话当成当前聊天已经发生的历史事实。新增档案只用于决定可解锁的话题和关系阶段，不得逐字搬运敏感经历。
 
 数量和分布：
-- ${incremental ? '本轮新增 5～6 个真正新的话题；不要求五色平均。优先让不同颜色承担不同主题，♥️ 只在关系与人设适合时出现。' : '首次总数 5～6 个；至少覆盖 3 种颜色。优先覆盖 pink / blue / yellow / white 中适合当前角色的类别，♥️ 不是必出项。'}
+- ${incremental ? '本轮建议新增 5～6 个真正新的话题；可以少于建议数量，不要求五色平均。优先让不同颜色承担不同主题，♥️ 只在关系与人设适合时出现。' : '首次建议 5～6 个；内容不足时少写也可以，最多 6 个。尽量覆盖不同颜色；优先 pink / blue / yellow / white 中适合当前角色的类别，♥️ 不是必出项。'}
 - 主题彼此必须明显不同，不能把同一占有欲、同一不安或同一回忆换措辞拆成多个光点。
 - ${incremental ? '必须避开 EXISTING_FIREFLY_TOPICS_JSON 中已有标题、情节核心和近义重复。' : ''}
 只输出 JSON。`;
@@ -365,7 +372,7 @@ export function fireflyVoiceKey(item) {
     return core_incremental.normalizedContentKey(`${item?.title || ''} ${text || ''}`, 1600);
 }
 
-export function normalizeFireflyVoicesPart(data, { minTotal = 5, requireDistribution = true, requireRich = true } = {}) {
+export function normalizeFireflyVoicesPart(data, { minTotal = 1, requireDistribution = false, requireRich = true } = {}) {
     const out = (Array.isArray(data?.fireflyVoices) ? data.fireflyVoices : []).slice(0, 6).map(normalizeFireflyVoice).filter(Boolean);
     if (out.length < minTotal) throw core_text.safeUserError(`萤火虫会话不足：${out.length}/${minTotal}。`, 'RMT_HEART_INCOMPLETE');
     if (requireRich) {
@@ -530,8 +537,53 @@ export function normalizeHeartStripsPart(data) {
     return dailyStrips;
 }
 
+export function normalizeHeartCollectionBatch(data, part) {
+    const field = part === 'fireflies' ? 'fireflyVoices' : part === 'strips' ? 'dailyStrips' : '';
+    const max = part === 'fireflies' ? 6 : 3;
+    if (!field || !Array.isArray(data?.[field]) || data[field].length > max) {
+        throw core_text.safeUserError('本次条目列表结构不完整；旧内容保留。', 'RMT_HEART_INCOMPLETE');
+    }
+    const items = [], seen = new Set();
+    let rejectedCount = 0;
+    for (const raw of data[field]) {
+        try {
+            const item = part === 'fireflies'
+                ? normalizeFireflyVoicesPart({ fireflyVoices: [raw] }, { minTotal: 1, requireDistribution: false, requireRich: true })[0]
+                : normalizeHeartStripsPart({ dailyStrips: [raw] })[0];
+            const key = part === 'fireflies' ? fireflyVoiceKey(item) : heartStripKey(item);
+            if (!seen.has(key)) { seen.add(key); items.push(item); }
+        } catch (error) {
+            if (!['RMT_HEART_INCOMPLETE', 'RMT_SEGMENT_VALIDATION'].includes(error?.code)) throw error;
+            rejectedCount++;
+        }
+    }
+    if (!items.length) throw core_text.safeUserError('本次没有完整可保存的条目；旧内容保留。', 'RMT_HEART_INCOMPLETE');
+    return { items, rejectedCount };
+}
+
+function languageCategory(raw) {
+    return core_constants.HEART_GREETING_KEYS.includes(raw) ? raw : '';
+}
+
+function categoryLanguageInput(raw, category) {
+    if (!category) return raw;
+    return { ...raw, greetings: { [category]: raw?.greetings?.[category] }, specialDays: [] };
+}
+
+function categoryLanguagePrompt(category) {
+    return category ? `\n本次只写 greetings.${category} 的新完整台词，其他类别留空，不为数量凑句；不要输出特别日。` : '';
+}
+
 export async function requestHeartPart(prompt, status, options, validator) {
     return generation_client.requestValidatedSegment(prompt, status, options, validator);
+}
+
+export function partsDialoguesReady(session) {
+    return core_heartLanguage.heartLanguageStatus(session).complete;
+}
+
+export function makeHeartShell(memoryBank) {
+    return core_heartLanguage.makeHeartShell(memoryBank);
 }
 
 export function makeHeartSession(core, existing = null) {
@@ -547,6 +599,7 @@ export function makeHeartSession(core, existing = null) {
         specialDays: Array.isArray(core.specialDays) ? core.specialDays : [],
         relationshipHistory: Array.isArray(existing?.relationshipHistory) ? existing.relationshipHistory : [],
         greetings: core.greetings || {},
+        collectionIssues: core_heartLanguage.heartCollectionIssues(existing),
         voiceDramas: Array.isArray(existing?.voiceDramas) ? existing.voiceDramas : [],
         scenarioDramas: Array.isArray(existing?.scenarioDramas) ? existing.scenarioDramas : [],
         dailyStrips: Array.isArray(existing?.dailyStrips) ? existing.dailyStrips : [],
@@ -569,9 +622,9 @@ export function makeHeartSession(core, existing = null) {
 }
 
 export async function generateHeartWithRepair(context, memoryBank, origin, taskKey, options = {}) {
-    const existing = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.HEART, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
+    const existing = core_cache.loadSession(core_constants.MODE.HEART, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
     const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(existing, memoryBank, 'dialogues');
-    if (existing) {
+    if (existing && partsDialoguesReady(existing) && options.replaceExisting !== true) {
         const core = await generation_client.requestValidatedSegment(
             heartCoreIncrementPrompt(context, memoryBank, existing, sourceMemoryIds) + core_incremental.derivedExpansionDirective(existing, memoryBank, 'dialogues'),
             '角色互动 · 正在从新增档案追加时期对话…',
@@ -588,11 +641,17 @@ export async function generateHeartWithRepair(context, memoryBank, origin, taskK
     const core = await generation_client.requestValidatedSegment(
         heartCorePrompt(context, memoryBank),
         '角色互动 · 正在生成时期对话…',
-        { maxTokens: 6000, temperature: 0.35, context, origin, taskKey: `${taskKey}:dialogues`, mode: core_constants.MODE.HEART, background: true },
+        { maxTokens: 6000, temperature: 0.35, context, origin, taskKey: `${taskKey}:dialogues`, mode: core_constants.MODE.HEART, background: true,
+            recoveryCompatibility: { contract: 'heart-language-birthday-r8412', legacyPrompts: [heartCoreLegacyPrompt(context, memoryBank)] } },
         raw => normalizeHeartCore(raw, memoryBank),
     );
-    const normalized = normalizeHeart(makeHeartSession(core, existing), memoryBank);
-    return core_incremental.stampIncrementalCoverage(normalized, null, memoryBank, 'dialogues', sourceMemoryIds, Object.values(core.greetings || {}).flat().length);
+    // Generic/automatic admission only fills an incomplete library. Explicit
+    // replacement lives in generateHeartSection and always asks twice first.
+    const combined = existing && options.replaceExisting !== true
+        ? mergeHeartCoreIncremental(existing, core, !!existing.relationshipSummary && !core.relationshipSourceMemoryIds?.length).session
+        : makeHeartSession(core, existing);
+    const normalized = normalizeHeart(combined, memoryBank);
+    return core_incremental.stampIncrementalCoverage(normalized, existing, memoryBank, 'dialogues', sourceMemoryIds, Object.values(core.greetings || {}).flat().length);
 }
 
 export function heartDramaItemKey(item, kindKey) {
@@ -637,10 +696,29 @@ export function applyHeartPatchCoverage(updated, base, patch, added) {
     );
 }
 
+export function preserveHeartSelection(target, source) {
+    for (const key of ['view', 'selectedSeason', 'selectedVoiceId', 'selectedScenarioId',
+        'selectedDramaKey', 'selectedStripId', 'selectedFireflyId']) {
+        if (Object.hasOwn(source || {}, key)) target[key] = ui_heartReader.heartSelectionScalars(source)[key] || '';
+        else delete target[key];
+    }
+    return target;
+}
+
+export function normalizeHeartContentPatch(base, patches, memoryBank) {
+    let content = base;
+    for (const patch of patches) content = applyHeartPartialPatch(content, patch);
+    return preserveHeartSelection(normalizeHeart(content, memoryBank), base);
+}
+
 export function applyHeartPartialPatch(base, patch) {
     let updated = structuredClone(base || {});
     if (!patch || typeof patch !== 'object') return updated;
     let added = 0;
+    if (['fireflies', 'strips'].includes(patch.type)) {
+        updated.collectionIssues = { ...core_heartLanguage.heartCollectionIssues(updated),
+            [patch.type]: Math.max(0, Math.min(6, Math.floor(Number(patch.rejectedCount) || 0))) };
+    }
     if (patch.type === 'dialogues' && patch.core) {
         updated = makeHeartSession(patch.core, updated);
     } else if (patch.type === 'dialogues-increment' && patch.core) {
@@ -661,9 +739,7 @@ export function applyHeartPartialPatch(base, patch) {
             added += 1;
         }
         updated.dailyStrips = out;
-        updated.selectedStripId = latest?.id || updated.selectedStripId || '';
         updated.generationParts = { ...(updated.generationParts || {}), strips: true };
-        updated.view = 'strips';
     } else if (patch.type === 'fireflies' && Array.isArray(patch.fireflyVoices)) {
         const out = Array.isArray(updated.fireflyVoices) ? updated.fireflyVoices : [];
         const seen = new Set(out.map(fireflyVoiceKey).filter(Boolean));
@@ -678,9 +754,7 @@ export function applyHeartPartialPatch(base, patch) {
             added += 1;
         }
         updated.fireflyVoices = out;
-        updated.selectedFireflyId = latest?.id || updated.selectedFireflyId || out[0]?.id || '';
         updated.generationParts = { ...(updated.generationParts || {}), fireflies: out.length > 0 };
-        updated.view = 'fireflies';
     } else if (patch.type === 'firefly-upgrade' && Array.isArray(patch.fireflyVoices)) {
         const replacements = new Map(patch.fireflyVoices.map(item => [core_text.normalizeText(item?.id, 80), item]));
         const out = (Array.isArray(updated.fireflyVoices) ? updated.fireflyVoices : []).map(item => {
@@ -697,34 +771,23 @@ export function applyHeartPartialPatch(base, patch) {
             };
         });
         updated.fireflyVoices = out;
-        const lastUpgraded = [...patch.fireflyVoices].reverse().find(item => out.some(existing => existing.id === item.id));
-        if (lastUpgraded) updated.selectedFireflyId = lastUpgraded.id;
         updated.generationParts = { ...(updated.generationParts || {}), fireflies: out.length > 0 };
-        updated.view = 'fireflies';
     } else if (patch.type === 'season') {
         const season = core_text.normalizeText(patch.season, 40).toLowerCase();
         if (patch.voice?.kind === season) {
             const result = appendHeartDramaItem(updated.voiceDramas, patch.voice, `voice:${season}`, 'VOICE');
             updated.voiceDramas = result.list;
-            if (result.item) {
-                updated.selectedVoiceId = result.item.id;
-                updated.selectedDramaKey = `voice:${result.item.id}`;
-            }
             added += result.added;
         }
         if (season !== 'postending' && patch.scenario?.season === season) {
             const result = appendHeartDramaItem(updated.scenarioDramas, patch.scenario, `scenario:${season}`, 'SCENE');
             updated.scenarioDramas = result.list;
-            if (result.item) {
-                updated.selectedScenarioId = result.item.id;
-                updated.selectedDramaKey = `scenario:${result.item.id}`;
-            }
             added += result.added;
         }
-        updated.selectedSeason = season || updated.selectedSeason || 'postending';
         updated.generationParts = { ...(updated.generationParts || {}), seasons: true };
-        updated.view = 'seasons';
     }
+    // Generating content must not navigate any reader, including deferred replay.
+    preserveHeartSelection(updated, base);
     return applyHeartPatchCoverage(updated, base, patch, added);
 }
 
@@ -758,13 +821,15 @@ async function prepareHeartSubtaskRuntime(taskPart) {
 }
 
 function latestHeartSessionForRuntime(targetRuntime, fallback = null) {
-    return core_cache.loadSession(core_constants.MODE.HEART, {
-        context: targetRuntime.context,
-        cache: targetRuntime.archiveTarget?.cache,
+    const cache = targetRuntime.archiveTarget?.cache || core_cache.getCache(targetRuntime.context);
+    const session = core_cache.loadSession(core_constants.MODE.HEART, {
+        context: targetRuntime.context, cache,
         chatId: targetRuntime.expectedChatId,
         memoryBank: targetRuntime.archiveTarget?.memory || targetRuntime.memoryBank,
         clone: true,
-    }) || structuredClone(fallback);
+    });
+    if (!session && cache?.[core_constants.MODE.HEART]) throw core_text.safeUserError('原角色互动暂不可安全读取，旧内容保留。', 'RMT_HEART_SOURCE_CHANGED');
+    return session || structuredClone(fallback) || makeHeartShell(targetRuntime.memoryBank);
 }
 
 async function beginHeartSubtask(targetRuntime) {
@@ -889,7 +954,7 @@ export async function persistHeartPartialPatch(patchKey, patch, fallbackBase, me
             target,
             core_constants.MODE.HEART,
             origin,
-            (latestSession, liveMemory) => normalizeHeart(applyHeartPartialPatch(latestSession || fallbackBase, patch), liveMemory),
+            (latestSession, liveMemory) => normalizeHeartContentPatch(latestSession || fallbackBase, [patch], liveMemory),
             fallbackBase,
             targetRuntime.stillCurrent,
         );
@@ -905,7 +970,7 @@ export async function persistHeartPartialPatch(patchKey, patch, fallbackBase, me
                     core_constants.MODE.HEART,
                     expectedChatId,
                     origin,
-                    (latest, liveMemory) => normalizeHeart(applyHeartPartialPatch(latest || fallbackBase, patch), liveMemory),
+                    (latest, liveMemory) => normalizeHeartContentPatch(latest || fallbackBase, [patch], liveMemory),
                     fallbackBase,
                 );
                 committed = !!updated;
@@ -914,16 +979,23 @@ export async function persistHeartPartialPatch(patchKey, patch, fallbackBase, me
     }
     if (!committed && !targetRuntime?.archiveTarget) {
         core_requestCoordinator.queueDeferredCommit(origin, { kind: 'heartPatches', patches: { [patchKey]: patch } });
-        updated = normalizeHeart(applyHeartPartialPatch(fallbackBase, patch), memoryBank);
+        updated = normalizeHeartContentPatch(fallbackBase, [patch], memoryBank);
         updated.chatId = expectedChatId;
         updated.archiveRevision = expectedArchiveRevision;
     }
     const sameTargetVisible = targetRuntime?.archiveTarget
         ? runtimeState.activeArchiveSnapshot?.entryId === targetRuntime.archiveTarget.entryId
         : true;
-    if (committed && sameTargetVisible && runtimeState.activeSession?.kind === core_constants.MODE.HEART) {
-        runtimeState.activeSession = updated;
-        ui_heartView.renderHeart();
+    const visible = runtimeState.activeSession;
+    const sameReaderOwner = visible?.kind === core_constants.MODE.HEART
+        && visible.chatId === expectedChatId && visible.archiveRevision === expectedArchiveRevision
+        && (targetRuntime?.archiveTarget ? sameTargetVisible
+            : !runtimeState.activeArchiveSnapshot && core_context.isCurrentTaskOrigin(origin));
+    if (committed && sameReaderOwner) {
+        // Merge the latest committed content, never the saved reader cursor. The user may
+        // have turned pages or changed standalone routes while this request was running.
+        runtimeState.activeSession = preserveHeartSelection({ ...updated }, visible);
+        if (runtimeState.activeMode === core_constants.MODE.HEART) ui_heartView.renderHeart();
     }
     return { updated, committed };
 }
@@ -933,6 +1005,8 @@ export async function generateHeartSection(part, options = {}) {
     if (part === 'seasons') return generateHeartSeasonSection(runtimeState.activeSession.selectedSeason || 'postending', options);
     if (part === 'fireflies') return generateHeartFirefliesSection(options);
     const normalizedPart = ['dialogues', 'strips'].includes(part) ? part : '';
+    const resumeFull = options.existing?.operation?.dialogueMode === 'full';
+    const category = languageCategory(options.existing?.operation?.languageCategory || options.languageCategory);
     if (!normalizedPart) return;
     const targetHint = heartPreparationTargetHint();
     let targetRuntime;
@@ -951,13 +1025,23 @@ export async function generateHeartSection(part, options = {}) {
         globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前已有 ${core_constants.MAX_CONCURRENT_GENERATION_TASKS} 项同时生成。`), '心迹回廊');
         return;
     }
-    let base = latestHeartSessionForRuntime(targetRuntime, runtimeState.activeSession);
-    let sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, normalizedPart);
-    if (!sourceMemoryIds.length) {
-        await clearCommittedHeartRecovery(targetRuntime, base, { kind: 'heart-section', part: normalizedPart });
-        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前档案没有尚未用于${normalizedPart === 'dialogues' ? '时期对话' : '日常一格'}的新记忆。先增量更新档案，再来追加。`), '心迹回廊');
+    let base;
+    try { base = latestHeartSessionForRuntime(targetRuntime, runtimeState.activeSession); }
+    catch (error) {
+        globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心迹回廊');
         return;
     }
+    let sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, normalizedPart);
+    let fullDialogues = normalizedPart === 'dialogues'
+        && (options.replaceDialogues === true || resumeFull || !partsDialoguesReady(base));
+    if (!sourceMemoryIds.length && !fullDialogues) {
+        await clearCommittedHeartRecovery(targetRuntime, base, { kind: 'heart-section', part: normalizedPart });
+        globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, `当前档案没有尚未用于${normalizedPart === 'dialogues' ? '基础语言' : '日常一格'}的新记忆。`), '心迹回廊');
+        return;
+    }
+    const confirmationIdentity = JSON.stringify(compactHeartDialoguesExisting(base));
+    if (fullDialogues && core_heartLanguage.heartLanguageStatus(base).hasContent
+        && !ui_heartView.confirmHeartLanguageReplacement()) return;
     let origin = targetRuntime.origin;
     runtimeState.activeModeBuildScopes.add(taskKey);
     core_requestCoordinator.registerArchiveTargetReservation(taskKey, targetRuntime, core_constants.MODE.HEART,
@@ -970,11 +1054,17 @@ export async function generateHeartSection(part, options = {}) {
     }
     base = latestHeartSessionForRuntime(targetRuntime, base);
     sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(base, memoryBank, normalizedPart);
-    if (!sourceMemoryIds.length) {
+    fullDialogues = normalizedPart === 'dialogues'
+        && (options.replaceDialogues === true || resumeFull || !partsDialoguesReady(base));
+    if (!sourceMemoryIds.length && !fullDialogues) {
         await clearCommittedHeartRecovery(targetRuntime, base, { kind: 'heart-section', part: normalizedPart });
         globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '另一项较新的任务已经覆盖这些新增记忆，本次没有重复生成。'), '心迹回廊');
         runtimeState.activeModeBuildScopes.delete(taskKey);
         refreshHeartArchiveTarget(targetRuntime);
+        return;
+    }
+    if (fullDialogues && JSON.stringify(compactHeartDialoguesExisting(base)) !== confirmationIdentity) {
+        globalThis.toastr?.info?.('基础语言已被另一任务更新，请重新确认；旧内容保留。', '心迹回廊');
         return;
     }
     const coverage = {
@@ -987,29 +1077,54 @@ export async function generateHeartSection(part, options = {}) {
     origin = targetRuntime.origin;
     core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
     try {
-        await startHeartRecovery(targetRuntime, { kind: 'heart-section', part: normalizedPart }, options);
+        await startHeartRecovery(targetRuntime, { kind: 'heart-section', part: normalizedPart, ...(normalizedPart === 'dialogues' ? { dialogueMode: fullDialogues ? 'full' : 'increment', ...(category ? { languageCategory: category } : {}) } : {}) }, options);
         let persisted;
         if (normalizedPart === 'dialogues') {
-            const core = await generation_client.requestValidatedSegment(
-                heartCoreIncrementPrompt(context, memoryBank, base, sourceMemoryIds) + core_incremental.derivedExpansionDirective(base, memoryBank, 'dialogues'),
-                '角色互动 · 追加时期对话',
-                { maxTokens: 4500, temperature: 0.4, context, origin, taskKey: `${taskKey}:dialogues`, mode: core_constants.MODE.HEART, background: true },
-                raw => normalizeHeartCoreIncrement(raw, memoryBank, sourceMemoryIds),
-            );
-            persisted = await persistHeartPartialPatch('dialogues', { type: 'dialogues-increment', core, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
+            if (fullDialogues) {
+                const core = await generation_client.requestValidatedSegment(
+                    heartCorePrompt(context, memoryBank) + categoryLanguagePrompt(category),
+                    partsDialoguesReady(base) ? '角色互动 · 正在重新生成基础语言…' : '角色互动 · 正在生成基础语言…',
+                    { maxTokens: 6000, temperature: 0.35, context, origin, taskKey: `${taskKey}:dialogues-full`, mode: core_constants.MODE.HEART, background: true,
+                        recoveryCompatibility: { contract: 'heart-language-birthday-r8412', legacyPrompts: [heartCoreLegacyPrompt(context, memoryBank) + categoryLanguagePrompt(category)] } },
+                    raw => normalizeHeartCore(categoryLanguageInput(raw, category), memoryBank),
+                );
+                const fullCoverage = {
+                    ...coverage,
+                    sourceMemoryIds: core_incremental.archiveMemoryIds(memoryBank),
+                    coverageConsumedMemoryIds: core_incremental.archiveMemoryIds(memoryBank),
+                };
+                persisted = await persistHeartPartialPatch('dialogues', { type: category && core_heartLanguage.heartLanguageStatus(base).hasContent && options.replaceDialogues !== true ? 'dialogues-increment' : 'dialogues', core, ...fullCoverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
+            } else {
+                const core = await generation_client.requestValidatedSegment(
+                    heartCoreIncrementPrompt(context, memoryBank, base, sourceMemoryIds) + core_incremental.derivedExpansionDirective(base, memoryBank, 'dialogues') + categoryLanguagePrompt(category),
+                    '角色互动 · 追加时期对话',
+                    { maxTokens: 4500, temperature: 0.4, context, origin, taskKey: `${taskKey}:dialogues`, mode: core_constants.MODE.HEART, background: true },
+                    raw => normalizeHeartCoreIncrement(categoryLanguageInput(raw, category), memoryBank, sourceMemoryIds),
+                );
+                persisted = await persistHeartPartialPatch('dialogues', { type: 'dialogues-increment', core, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
+            }
         } else {
-            const strips = await requestHeartPart(
+            const batch = await requestHeartPart(
                 heartStripsPrompt(context, memoryBank, base, base, sourceMemoryIds) + core_incremental.derivedExpansionDirective(base, memoryBank, 'strips'),
                 '角色互动 · 追加日常一格',
                 { maxTokens: 5000, context, origin, taskKey: `${taskKey}:strips`, mode: core_constants.MODE.HEART, background: true },
-                normalizeHeartStripsPart,
+                raw => normalizeHeartCollectionBatch(raw, 'strips'),
             );
             const batchId = core_incremental.incrementalBatchId('strips', sourceMemoryIds);
-            const enriched = strips.map(item => ({ ...item, sourceArchiveMemoryIds: sourceMemoryIds, incrementBatchId: batchId, generatedAt: Date.now() }));
-            persisted = await persistHeartPartialPatch('strips', { type: 'strips', dailyStrips: enriched, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
+            const enriched = batch.items.map(item => ({ ...item, sourceArchiveMemoryIds: sourceMemoryIds, incrementBatchId: batchId, generatedAt: Date.now() }));
+            persisted = await persistHeartPartialPatch('strips', { type: 'strips', dailyStrips: enriched, rejectedCount: batch.rejectedCount, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
         }
         await finishHeartRecovery(targetRuntime, persisted?.committed);
-        globalThis.toastr?.success?.(heartTargetMessage(targetRuntime, `角色互动已追加：${normalizedPart === 'dialogues' ? '时期对话' : '日常一格'}；旧内容保持不变。`), '心迹回廊');
+        if (!persisted?.committed) {
+            globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '内容已生成，但尚未确认保存；保留草稿，未计入已保存数量。'), '心迹回廊');
+        } else {
+            const rejected = core_heartLanguage.heartCollectionIssues(persisted.updated)[normalizedPart] || 0;
+            const message = normalizedPart === 'dialogues'
+                ? `基础语言已有 ${core_heartLanguage.heartLanguageStatus(persisted.updated).total} 句；其他内容保留。`
+                : `已有 ${persisted.updated?.dailyStrips?.length || 0} 篇日常一格。`;
+            globalThis.toastr?.[rejected ? 'warning' : 'success']?.(heartTargetMessage(targetRuntime,
+                message + (rejected ? `本次另有 ${rejected} 条未通过校验，可选择重试；已有内容照常阅读。` : '')), '心迹回廊');
+        }
     } catch (error) {
         await generation_recovery.noteGenerationRecoveryFailure(origin, error);
         if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心迹回廊');
@@ -1020,6 +1135,8 @@ export async function generateHeartSection(part, options = {}) {
         core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
         refreshHeartArchiveTarget(targetRuntime);
     }
+    } catch (error) {
+        if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心迹回廊');
     } finally {
         runtimeState.activeModeBuildScopes.delete(taskKey);
         core_requestCoordinator.unregisterArchiveTargetReservation(taskKey);
@@ -1121,8 +1238,10 @@ export async function generateHeartFirefliesSection(options = {}) {
             const persisted = await persistHeartWholeSession(migrated, targetRuntime, origin);
             const sameTargetVisible = !targetRuntime.archiveTarget
                 || runtimeState.activeArchiveSnapshot?.entryId === targetRuntime.archiveTarget.entryId;
-            if (persisted && sameTargetVisible && runtimeState.activeSession?.kind === core_constants.MODE.HEART) {
-                runtimeState.activeSession = persisted;
+            if (persisted && sameTargetVisible && runtimeState.activeSession?.kind === core_constants.MODE.HEART
+                && runtimeState.activeSession.chatId === expectedChatId && runtimeState.activeSession.archiveRevision === expectedArchiveRevision
+                && (targetRuntime.archiveTarget || !runtimeState.activeArchiveSnapshot && core_context.isCurrentTaskOrigin(origin))) {
+                runtimeState.activeSession = preserveHeartSelection({ ...persisted }, runtimeState.activeSession);
                 ui_heartView.renderHeart();
             }
             globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '已把旧版萤火虫保存为永久解锁基线。之后档案出现新的 Mxxx 时，只会继续追加新光点。'), '心迹回廊');
@@ -1150,24 +1269,26 @@ export async function generateHeartFirefliesSection(options = {}) {
     core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.HEART, origin);
     try {
         await startHeartRecovery(targetRuntime, { kind: 'heart-fireflies', upgrade: false }, options);
-        const voices = await requestHeartPart(
+        const batch = await requestHeartPart(
             heartFireflyPrompt(context, memoryBank, base, hasExisting ? base : null, sourceMemoryIds) + core_incremental.derivedExpansionDirective(base, memoryBank, 'fireflies'),
             hasExisting ? '角色互动 · 正在解锁新的萤火虫心声…' : '角色互动 · 正在点亮萤火虫栖息地…',
             { maxTokens: 5200, temperature: 0.8, context, origin, taskKey, mode: core_constants.MODE.HEART, background: true },
-            raw => normalizeFireflyVoicesPart(raw, { minTotal: 5, requireDistribution: !hasExisting, requireRich: true }),
+            raw => normalizeHeartCollectionBatch(raw, 'fireflies'),
         );
         const batchId = core_incremental.incrementalBatchId('fireflies', sourceMemoryIds);
-        const enriched = voices.map(item => ({
+        const enriched = batch.items.map(item => ({
             ...item,
             sourceArchiveMemoryIds: sourceMemoryIds,
             incrementBatchId: batchId,
             generatedAt: Date.now(),
         }));
-        const result = await persistHeartPartialPatch('fireflies', { type: 'fireflies', fireflyVoices: enriched, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
+        const result = await persistHeartPartialPatch('fireflies', { type: 'fireflies', fireflyVoices: enriched, rejectedCount: batch.rejectedCount, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
         await finishHeartRecovery(targetRuntime, result.committed);
         const total = result.updated?.fireflyVoices?.length || base.fireflyVoices?.length || 0;
         const addedNow = Math.max(0, total - (base.fireflyVoices?.length || 0));
-        globalThis.toastr?.success?.(heartTargetMessage(targetRuntime, hasExisting ? `新增 ${addedNow} 个萤火虫心声；旧光点继续保留，共 ${total} 个。` : `萤火虫栖息地已点亮 ${total} 个心声光点。`), '心迹回廊');
+        if (!result.committed) globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '光点已生成，但尚未确认保存；草稿保留。'), '心迹回廊');
+        else globalThis.toastr?.[batch.rejectedCount ? 'warning' : 'success']?.(heartTargetMessage(targetRuntime,
+            `已有 ${total} 个萤火虫光点，本次新增 ${addedNow} 个。` + (batch.rejectedCount ? `另有 ${batch.rejectedCount} 个话题未通过校验，可选择重试。` : '')), '心迹回廊');
     } catch (error) {
         await generation_recovery.noteGenerationRecoveryFailure(origin, error);
         if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心迹回廊');
@@ -1205,6 +1326,18 @@ export function nextHeartDramaBatchId(session, season) {
     const voiceCount = (Array.isArray(session?.voiceDramas) ? session.voiceDramas : []).filter(item => item.kind === season).length;
     const scenarioCount = (Array.isArray(session?.scenarioDramas) ? session.scenarioDramas : []).filter(item => item.season === season).length;
     return core_context.stableArchiveHash(`heart-drama|${season}|${voiceCount}|${scenarioCount}|${Date.now()}|${Math.random()}`);
+}
+
+// A sibling completed by this operation is an output, not a new input. Keeping it
+// out of the duplicate-avoidance index makes retry identity independent of which
+// sibling finished first. Older drafts are matched against their exact old index,
+// with all context/identity/hash and normal validation checks still in place.
+export function heartSeasonRequestBase(session, season, batchId) {
+    const keep = (item, kind) => !(batchId && item?.incrementBatchId === batchId && kind === season);
+    return { ...session,
+        voiceDramas: (session?.voiceDramas || []).filter(item => keep(item, item?.kind)),
+        scenarioDramas: (session?.scenarioDramas || []).filter(item => keep(item, item?.season)),
+    };
 }
 
 export async function generateHeartSeasonSection(season, options = {}) {
@@ -1281,7 +1414,7 @@ export async function generateHeartSeasonSection(season, options = {}) {
                 ))[0]);
                 const persisted = await persistHeartPartialPatch(`season:postending:${batchId}:voice`, { type: 'season', season: 'postending', voice }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
                 allCommitted &&= persisted.committed;
-                savedParts += 1;
+                if (persisted.committed) savedParts += 1;
             } catch (error) {
                 await generation_recovery.noteGenerationRecoveryFailure(origin, error);
                 errors.push(error);
@@ -1294,14 +1427,16 @@ export async function generateHeartSeasonSection(season, options = {}) {
             if (!voice) {
                 try {
                     voice = enrichVoice((await requestHeartPart(
-                        heartSeasonVoicePrompt(context, memoryBank, latest, normalizedSeason, latest, null),
+                        heartSeasonVoicePrompt(context, memoryBank, latest, normalizedSeason, heartSeasonRequestBase(latest, normalizedSeason, batchId), null),
                         `角色互动 · 追加${ui_heartView.heartSeasonLabel(normalizedSeason)} Voice`,
-                        { maxTokens: 3000, temperature: 0.65, context, origin, taskKey: `${taskKey}:voice`, mode: core_constants.MODE.HEART, background: true },
+                        { maxTokens: 3000, temperature: 0.65, context, origin, taskKey: `${taskKey}:voice`, mode: core_constants.MODE.HEART, background: true,
+                            recoveryCompatibility: { contract: 'heart-season-siblings-r8412',
+                                legacyPrompts: [heartSeasonVoicePrompt(context, memoryBank, latest, normalizedSeason, latest, null)] } },
                         raw => normalizeVoiceDramaPart(raw, [normalizedSeason], memoryBank),
                     ))[0]);
                     const persisted = await persistHeartPartialPatch(`season:${normalizedSeason}:${batchId}:voice`, { type: 'season', season: normalizedSeason, voice }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
                     allCommitted &&= persisted.committed;
-                    savedParts += 1;
+                    if (persisted.committed) savedParts += 1;
                     latest = latestSession();
                 } catch (error) {
                     await generation_recovery.noteGenerationRecoveryFailure(origin, error);
@@ -1313,14 +1448,16 @@ export async function generateHeartSeasonSection(season, options = {}) {
             if (!scenario && !errors.some(recoveryStopsHeart)) {
                 try {
                     scenario = enrichScenario((await requestHeartPart(
-                        heartSeasonScenarioPrompt(context, memoryBank, latest, normalizedSeason, latest, null),
+                        heartSeasonScenarioPrompt(context, memoryBank, latest, normalizedSeason, heartSeasonRequestBase(latest, normalizedSeason, batchId), null),
                         `角色互动 · 追加${ui_heartView.heartSeasonLabel(normalizedSeason)} Scenario`,
-                        { maxTokens: 3200, temperature: 0.65, context, origin, taskKey: `${taskKey}:scenario`, mode: core_constants.MODE.HEART, background: true },
+                        { maxTokens: 3200, temperature: 0.65, context, origin, taskKey: `${taskKey}:scenario`, mode: core_constants.MODE.HEART, background: true,
+                            recoveryCompatibility: { contract: 'heart-season-siblings-r8412',
+                                legacyPrompts: [heartSeasonScenarioPrompt(context, memoryBank, latest, normalizedSeason, latest, null)] } },
                         raw => normalizeScenarioDramaPart(raw, normalizedSeason, memoryBank),
                     ))[0]);
                     const persisted = await persistHeartPartialPatch(`season:${normalizedSeason}:${batchId}:scenario`, { type: 'season', season: normalizedSeason, scenario }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
                     allCommitted &&= persisted.committed;
-                    savedParts += 1;
+                    if (persisted.committed) savedParts += 1;
                 } catch (error) {
                     await generation_recovery.noteGenerationRecoveryFailure(origin, error);
                     errors.push(error);
@@ -1330,10 +1467,11 @@ export async function generateHeartSeasonSection(season, options = {}) {
 
         if (errors.length && !savedParts) throw errors[0];
         if (errors.length) {
-            globalThis.toastr?.warning?.(heartTargetMessage(targetRuntime, `${ui_heartView.heartSeasonLabel(normalizedSeason)}已保存成功部分；${core_text.safeErrorSummary(errors[0])} 处理后再次点击只补缺失部分。`), '心迹回廊');
+            globalThis.toastr?.warning?.(heartTargetMessage(targetRuntime, `${ui_heartView.heartSeasonLabel(normalizedSeason)}已保存成功部分；${core_text.safeErrorSummary(errors[0])} 已有篇章照常阅读；需要时可选择重试未完成篇。`), '心迹回廊');
         } else {
             await finishHeartRecovery(targetRuntime, allCommitted);
-            globalThis.toastr?.success?.(heartTargetMessage(targetRuntime, `已追加：${ui_heartView.heartSeasonLabel(normalizedSeason)}未来日常 Drama。`), '心迹回廊');
+            globalThis.toastr?.[allCommitted ? 'success' : 'info']?.(heartTargetMessage(targetRuntime, allCommitted
+                ? `已保存 ${ui_heartView.heartSeasonLabel(normalizedSeason)} 的新增篇章。` : '篇章已生成，但尚未确认保存；草稿保留。'), '心迹回廊');
         }
     } catch (error) {
         await generation_recovery.noteGenerationRecoveryFailure(origin, error);
@@ -1363,7 +1501,6 @@ export function normalizeHeartScript(rawLines, { minLines = 8, minChars = 500, c
 export function normalizeHeart(data, memoryBank) {
     const relationshipState = core_text.normalizeText(data?.relationshipState, 120) || '关系仍在发展';
     const relationshipSummary = core_text.normalizeText(data?.relationshipSummary, 1800);
-    if (!relationshipSummary) throw core_text.safeUserError('角色互动台词库缺少关系摘要。', 'RMT_HEART_INCOMPLETE');
     const relationshipReference = core_evidence.normalizeMemoryReference(
         data?.relationshipSourceMemoryIds,
         data?.relationshipSourceMemoryAnchor,
@@ -1378,13 +1515,6 @@ export function normalizeHeart(data, memoryBank) {
     for (const key of core_constants.HEART_GREETING_KEYS) {
         greetings[key] = core_text.cleanArray(data?.greetings?.[key], 40, 600);
     }
-    for (const key of ['morning', 'noon', 'evening', 'night', 'weekend']) {
-        if (greetings[key].length < 2) throw core_text.safeUserError(`角色互动“${key}”台词不足 2 条。`, 'RMT_HEART_INCOMPLETE');
-    }
-    for (const key of ['birthday', 'userBirthday', 'holiday', 'absenceWorry', 'absenceSulky']) {
-        if (greetings[key].length < 1) throw core_text.safeUserError(`角色互动“${key}”台词不足 1 条。`, 'RMT_HEART_INCOMPLETE');
-    }
-
     const birthdayRaw = core_text.normalizeText(data?.birthdayMmDd, 20);
     const birthdayMmDd = /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])$/.test(birthdayRaw) ? birthdayRaw : '';
     const userBirthdayRaw = core_text.normalizeText(data?.userBirthdayMmDd, 20);
@@ -1487,6 +1617,7 @@ export function normalizeHeart(data, memoryBank) {
             archivedAt: Math.max(0, Number(item?.archivedAt) || 0),
         })).filter(item => item.relationshipSummary),
         greetings,
+        collectionIssues: core_heartLanguage.heartCollectionIssues(data),
         voiceDramas,
         scenarioDramas,
         dailyStrips,
@@ -1497,7 +1628,7 @@ export function normalizeHeart(data, memoryBank) {
         selectedDramaKey: core_text.normalizeText(data?.selectedDramaKey, 180),
         selectedStripId: core_text.normalizeText(data?.selectedStripId, 80) || dailyStrips[0]?.id || '',
         generationParts: {
-            dialogues: data?.generationParts?.dialogues !== false && !!Object.values(greetings).some(lines => lines.length),
+            dialogues: core_heartLanguage.heartLanguageStatus({ ...data, greetings }).complete,
             seasons: data?.generationParts?.seasons === true || voiceDramas.length > 0 || scenarioDramas.length > 0,
             strips: data?.generationParts?.strips === true || dailyStrips.length > 0,
             fireflies: data?.generationParts?.fireflies === true || fireflyVoices.length > 0,

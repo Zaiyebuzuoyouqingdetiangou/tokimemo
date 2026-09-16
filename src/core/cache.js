@@ -5,6 +5,8 @@ import * as archive_backupStore from '../archive/backupStore.js';
 import * as archive_repository from '../archive/repository.js';
 import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_constants from './constants.js';
+import * as core_heartLanguage from './heartLanguage.js';
+import * as song_contract from './themeSongContract.js';
 import * as core_context from './context.js';
 import * as core_evidence from './evidence.js';
 import * as core_requestCoordinator from './requestCoordinator.js';
@@ -1718,7 +1720,8 @@ export async function commitSession(mode, session, expectedChatId = core_text.no
     const expectedRevision = core_text.normalizeText(session?.archiveRevision, 240);
     const committed = await commitSessionMutation(mode, expectedChatId, expectedTaskOrigin, (_latest, memoryBank) => {
         if (expectedRevision && expectedRevision !== core_text.normalizeText(memoryBank.archiveRevision, 240)) return null;
-        return mode === core_constants.MODE.INBOX ? modes_inbox.mergeInboxLatest(_latest, session) : session;
+        return mode === core_constants.MODE.THEME_SONG ? song_contract.mergeThemeSongs(_latest, session)
+            : mode === core_constants.MODE.INBOX ? modes_inbox.mergeInboxLatest(_latest, session) : session;
     }, session, { completeGeneration: true });
     return !!committed;
 }
@@ -1767,7 +1770,8 @@ export async function commitDetachedArchiveSession(target, mode, session, stillC
         target,
         mode,
         expectedTaskOrigin,
-        latest => mode === core_constants.MODE.INBOX ? modes_inbox.mergeInboxLatest(latest, session) : session,
+        latest => mode === core_constants.MODE.THEME_SONG ? song_contract.mergeThemeSongs(latest, session)
+            : mode === core_constants.MODE.INBOX ? modes_inbox.mergeInboxLatest(latest, session) : session,
         session,
         stillCurrent,
         { completeGeneration: true },
@@ -1814,8 +1818,10 @@ export function loadSession(mode, options = {}) {
         if (mode === core_constants.MODE.PAST_LIVES && !modes_pastLives.readablePastLivesSession(session, memoryBank)) return null;
         if (time_stories.isTimeStoryMode(mode) && !modes_timeStories.readableTimeStoriesSession(session, memoryBank)) return null;
         if (mode === core_constants.MODE.INBOX && (session.inboxVersion !== modes_inbox.INBOX_VERSION || !Array.isArray(session.letters))) return null;
+        if (mode === core_constants.MODE.THEME_SONG && (!song_contract.readableThemeSongs(session, memoryBank)
+            || (context && session.ownerKey && session.ownerKey !== core_context.currentCharacterRuntimeKey(context)))) return null;
         const userManaged = session.userManaged === true;
-        if (mode === core_constants.MODE.ROOM && (!Array.isArray(session.spaces) || (!userManaged && session.spaces.length < 2))) return null;
+        if (mode === core_constants.MODE.ROOM && (!Array.isArray(session.spaces) || (!userManaged && session.spaces.length < 1))) return null;
         if (mode === core_constants.MODE.ITEMS && (!Array.isArray(session.containers) || (!userManaged && session.containers.length < 1))) return null;
         if (mode === core_constants.MODE.CABINET && !Array.isArray(session.items)) return null;
         if (mode === core_constants.MODE.PHONE) {
@@ -1834,7 +1840,10 @@ export function loadSession(mode, options = {}) {
             session = modes_calendar.migrateCalendarSession(session, memoryBank);
             if (!session || !Array.isArray(session.entries) || !session.dayPages || session.calendarVersion !== core_constants.CALENDAR_SESSION_VERSION) return null;
         }
-        if (mode === core_constants.MODE.HEART && (!session.greetings || !session.relationshipSourceMemoryAnchor)) return null;
+        if (mode === core_constants.MODE.HEART) {
+            session = core_heartLanguage.readableHeartSession(session);
+            if (!session) return null;
+        }
         if (mode === core_constants.MODE.ACHIEVEMENTS && (!Array.isArray(session.entries) || (!userManaged && session.entries.length < 1))) return null;
         return options.clone === false ? session : structuredClone(session);
     } catch {

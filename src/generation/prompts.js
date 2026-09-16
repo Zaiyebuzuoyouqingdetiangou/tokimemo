@@ -213,11 +213,11 @@ CURRENT_LOCAL_DATE: ${currentDate}
   "moodNotes": [
     {
       "id": "CAL_MOOD_01",
-      "textMode": "present-expression|evidence-excerpt",
+      "textMode": "persona-expression|present-expression|evidence-excerpt",
       "presentExpression": {"time":"now","emotion":"miss","wish":"none","gesture":"none","tone":"quiet","register":"restrained","image":"none","intensity":"low","cadence":"fragments"},
-      "text": "仅 evidence-excerpt 时填写 sourceMemoryAnchor 的逐字子串",
-      "sourceMemoryIds": ["M001"],
-      "sourceMemoryAnchor": "从所引用记忆 anchors/title 原样复制",
+      "text": "persona-expression 时写角色当下的自由短随笔；evidence-excerpt 时只能填锚点原文",
+      "sourceMemoryIds": [],
+      "sourceMemoryAnchor": "仅 evidence-excerpt 需要真实锚点；人设随笔留空",
       "calendarEntryId": "CAL_PAST_01",
       "date": ""
     }
@@ -266,9 +266,10 @@ CURRENT_LOCAL_DATE: ${currentDate}
 
 【moodNotes：页角心情随笔】
 - 允许 0～3 条；没有合适的就空数组。绝对不要每个日期、每个事项都写一条。
-- 每条必须通过 calendarEntryId 绑定一个已发生的 past 项；没有可信日期归属就不要输出，禁止做成所有日期共用的随笔。
-- 每条必须引用真实 sourceMemoryIds + 完全匹配的 sourceMemoryAnchor。textMode=present-expression 时只选择与贺卡相同的受控语义 token，由本地生成 ${charName} 此刻的短心情；textMode=evidence-excerpt 时 text 只能是 anchor 的逐字子串。不得自由改写共同事件，也不得替 {{user}} 补行动或心理。
-- 它是派生的“手账边角字”，不是正式档案事实，不要使用肯定语气扩写未被档案支持的细节。
+- 优先通过 calendarEntryId 绑定本次实际返回的日历条目；否则本地放在 CURRENT_LOCAL_DATE 当天。不要猜 date；随笔是 ${charName} 此刻的角色化短文字，不改变任何事件日期，也不是正式档案事实。
+- 可以使用 textMode=persona-expression，直接依据明确角色人设、当前日期/季节和当下关系边界写 text；此模式 sourceMemoryIds/sourceMemoryAnchor 留空，不要求历史原句。
+- 只有明确声称“过去共同发生过某件事”时才使用 evidence-excerpt，并提供真实 sourceMemoryIds + 完全匹配的 sourceMemoryAnchor；text 只能是 anchor 的逐字子串。
+- present-expression 仍可使用受控语义 token。不得替 {{user}} 补真实决定、承诺或历史行为。
 
 整体原则：翻开某一天时，要像看到 ${charName} 只为那一天写下的一张私人手账：该页有自己的日期圈记、备忘、To-Do、特别备注和偶尔的心情随笔；切换日期后内容也随页切换，绝不共享。页面不接受任何访客输入。不要把它重新做成剧情大纲，也不要把随笔塞得到处都是。
 只输出 JSON。`;
@@ -470,8 +471,8 @@ JSON 结构必须严格为：
 - “covered / headwear”不是历史、航海、制服角色的默认装饰。只有角色卡或世界书明确写到帽子、头巾、兜帽、冠帽、头盔等遮盖物时，才允许把 figure.hairShape=covered 或 figure.detail=headwear 列为 explicitFields；仅凭时代/职业猜帽子一律用自然发型 + detail=none。
 - 世界书对房间、时代、种族、外貌、发型和穿着有明确设定时优先服从；世界书没写的字段，再根据 CHARACTER_CARD_JSON 中 {{char}} 的身份、职业、性格和生活条件合理推断。USER_PERSONA_JSON 描述的是用户，绝不能拿它推断 {{char}} 的长相或房间。
 - 不要照搬角色档案头像。人物由插件使用本地 CSS 轮廓组合渲染，visualProfile 只负责安全视觉语义；人物永远背对镜头或明显侧后朝向，禁止正脸、眼睛、嘴部和写实肖像，不能让生成模型猜一张脸。
-- spaces 通常 5～8 个；若角色客观居住条件很简单，也应尽量给出 3～4 个真实会长期使用的生活区域。最多 10 个，仍不得为了“丰富”凭空给普通角色豪宅。
-- 每个空间 objects 3～6 个；空间间的物件必须有区别，不能把同一套床/桌/书架换名重复。不同 spaceType 的主陈设结构也必须明显不同：卧室以床/床头为核心，客厅以沙发/茶几为核心，书房以书架/书桌为核心，音乐/录音工作室以乐器/控制台/监听或吸音结构为核心，实验室以工作台/设备为核心，餐厅以餐桌为核心，浴室以浴缸/淋浴/洗漱为核心。
+- spaces 建议 5～8 个；角色居住条件简单时可少写，一个完整空间也可以。最多 10 个，不得为了凑数凭空给普通角色豪宅。
+- 每个空间 objects 建议 3～6 个，可少于建议数量；空间间的物件必须有区别，不能把同一套床/桌/书架换名重复。不同 spaceType 的主陈设结构也必须明显不同：卧室以床/床头为核心，客厅以沙发/茶几为核心，书房以书架/书桌为核心，音乐/录音工作室以乐器/控制台/监听或吸音结构为核心，实验室以工作台/设备为核心，餐厅以餐桌为核心，浴室以浴缸/淋浴/洗漱为核心。
 - 每个空间都要有清楚不同的主功能、陈设母题与物件组合；不得把同一个通用房间只改名称、颜色或三件摆设后重复输出。优先用角色的职业、兴趣、时代和生活方式拉开空间差异。
 - 本轮不生成 pets/companions，不要求补宠物；已有宠物由本地原样保留。
 - zone 只能是“左上/右上/左下/右下/中央/近景”。
@@ -486,7 +487,7 @@ JSON 结构必须严格为：
 - 房间物件本身先做浅层观察，但【翻找物品】与【查看私人通讯终端】是“他的房间”内部的深层玩法，不是档案室独立入口。spaces/objects 中应自然出现可通往这些深层玩法的收纳位置或私人终端痕迹；时代不合适时不要强行生成现代手机。
 - dayparts 的 spaceId 必须引用 spaces 中真实存在的空间；focusObjectId 必须属于该时段所在空间。
 - dayparts 是当前时间下合理的生活切片，不是新增主线剧情。四个时段都必须填写。
-- presenceLines 至少 4 句，符合当前关系阶段，但不能替 {{user}} 自动回应。
+- presenceLines 建议 4 句，可以少写或留空，不为凑数补句；符合当前关系阶段，但不能替 {{user}} 自动回应。
 - 不得出现前任/前女友痕迹，也不得暗示 {{char}} 与 {{user}} 以外的人存在恋爱、婚姻或家庭关系。`,
     [core_constants.MODE.CABINET]: (context, memoryBank) => modes_cabinet.cabinetPrompt(context, memoryBank),
     [core_constants.MODE.ITEMS]: (context, memoryBank) => `${promptSafetyBoundary(context, '他的物品 / 储物')}
@@ -510,7 +511,7 @@ JSON 结构必须严格为：
 硬性要求：
 - containers 只允许对应 CURRENT_ROOM_CONTEXT_JSON 中 searchable=true 的真实收纳物，不要把床、桌面、杯子、灯、照片等普通物件再包装成“可翻找容器”。优先覆盖 3～8 个不同收纳点；如果房间设定客观上只有 1～2 个收纳点，就只生成这些真实收纳点并把内部层级做丰富。
 - 每个 container 填写 spaceLabel，并让 label/containerType 能对应房间里的具体 searchable 物件。containerType 可以是任何符合角色世界观的储物形态，绝不能全部写成“抽屉”。
-- 每个容器至少 4 个可查看节点；允许 children 递归 1～3 层，形成“打开箱子 → 里面的小盒/夹层 → 具体物件”的翻找感，但总节点不要超过 45 个。
+- 每个容器建议 4 个可查看节点，一个完整物件也可；允许 children 递归 1～3 层，形成“打开箱子 → 里面的小盒/夹层 → 具体物件”的翻找感，但总节点不要超过 45 个。
 - basis=“设定”表示依据角色卡/世界书/正常生活推导，不得写成 {{user}} 与 {{char}} 已经共同发生过的事。
 - basis=“记忆”才允许写“你送的、你留下的、你们一起买的、某次共同经历留下的”等具体共同痕迹，并且必须带有效 sourceMemoryIds + sourceMemoryAnchor。
 - 不得出现前任/前女友或第三方恋爱痕迹。只输出 JSON。`,
@@ -565,10 +566,10 @@ ${promptArchiveSlice(memoryBank, 24)}
 }
 
 App 组合要求：
-- 不再固定所有角色都使用同一组 App。必须根据 {{char}} 的时代、身份、职业、爱好、世界观、年龄和设备能力选择 5～10 个彼此不同的功能入口；watch / communicator 若屏幕或能力受限为 4～8 个。
+- 不再固定所有角色都使用同一组 App。必须根据 {{char}} 的时代、身份、职业、爱好、世界观、年龄和设备能力选择合适的功能入口，建议 5～10 个，watch / communicator 建议 4～8 个；少于建议数量也可以，不凑数。
 - 通讯型设备通常保留 chat；其余从 moments / gallery / notes / store / browser / contacts / files / books / music / research / health / training / study / work / finance / games / security / creative / weather / tools / misc 中按人设选择。不存在的功能不要硬塞，专属职业或世界观 App 应明显多于套模板的装饰。
 - icon 只能从 message / people / photo / camera / note / bag / globe / contact / pin / music / briefcase / book / heart / activity / game / wallet / plane / shield / palette / cloud / tool / spark / grid 中选择。
-- 至少 3 种不同 kind；每个 App 通常 3～6 条有具体内容的条目。chat 至少一个主要联系人有约 10～12 条消息，形成真正可读的对话窗；其他 App 依类型使用 fields、imageCaption、detail 等表达。
+- 尽量选择不同 kind；每个 App 建议 3～6 条，按实际完整条目数量返回即可。chat 的主要联系人可有约 10～12 条消息，形成真正可读的对话窗；其他 App 依类型使用 fields、imageCaption、detail 等表达。
 - uiProfile 必须只从上面的安全英文枚举中选择。配色、壁纸、字体、图标风格和外壳要符合 {{char}}，禁止颜色值、CSS、class、HTML、URL 或图片；插件会以本地样式绘制完整设备和主屏幕。
 - explicitFields 只允许 palette/wallpaper/typography/iconStyle/density/shellTone；只有世界书或角色卡明文定义时才列入。没写的字段必须依 {{char}} 人设推导，不得把示例配色冒充成角色设定；本地还会用角色身份种子补全这些字段。
 

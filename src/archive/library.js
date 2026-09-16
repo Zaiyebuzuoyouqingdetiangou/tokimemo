@@ -1,3 +1,4 @@
+import * as workspace_ui from '../ui/workspace.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_groups from './groups.js';
@@ -741,9 +742,9 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
     const portalHtml = portals.filter(item => item.mode !== core_constants.MODE.CALENDAR).map(({ mode, session, meta }) => {
         const generated = !!session;
         const generating = core_requestCoordinator.isArchiveTargetModeGenerating(mode, snapshot);
-        const editAction = canGenerateDerived ? `<button type="button" class="rmt-btn rmt-portal-generate" data-rmt-generate-mode="${core_text.esc(mode)}" ${generated ? 'data-rmt-regenerate="true"' : ''} ${generating ? 'disabled' : ''}>${generating ? '生成中…' : mode === core_constants.MODE.INBOX ? '收取新信' : mode === core_constants.MODE.PHONE ? (generated ? '追加 / 继续' : '生成 / 继续') : generated ? '增量追加' : '生成这一项'}</button>` : '';
+        const editAction = canGenerateDerived ? `<button type="button" class="rmt-btn rmt-portal-generate" ${mode === core_constants.MODE.HEART ? 'data-rmt-action="open-heart"' : `data-rmt-generate-mode="${core_text.esc(mode)}"`} ${generated ? 'data-rmt-regenerate="true"' : ''} ${generating ? 'disabled' : ''}>${mode === core_constants.MODE.HEART ? '打开角色互动' : generating ? '生成中…' : mode === core_constants.MODE.INBOX ? '收取新信' : mode === core_constants.MODE.PHONE ? (generated ? '追加 / 继续' : '生成 / 继续') : generated ? '增量追加' : '生成这一项'}</button>` : '';
         return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} rmt-archive-portal-${core_text.esc(meta.accent)}">
-          <button type="button" class="rmt-portal-open" ${generated || [core_constants.MODE.INBOX, core_constants.MODE.PHONE].includes(mode) ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
+          <button type="button" class="rmt-portal-open" ${generated || [core_constants.MODE.INBOX, core_constants.MODE.PHONE, core_constants.MODE.HEART].includes(mode) ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
             <span class="rmt-portal-avatar"><i class="fa-solid ${core_text.esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
             <span class="rmt-portal-title">${core_text.esc(meta.title)}</span>
             <span class="rmt-portal-subtitle">${core_text.esc(meta.subtitle)}</span>
@@ -770,6 +771,8 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
       ${calendarQuick}
       <section class="rmt-archive-portals" aria-label="只读档案内容入口">${portalHtml}</section>
     </div>`;
+    workspace_ui.arrangeArchiveWorkspace(body, { portals, ready: true, snapshot });
+
 }
 
 export async function openIndexedArchive(characterKey, chatId, entryId = '') {
