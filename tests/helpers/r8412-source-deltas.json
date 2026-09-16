@@ -1,0 +1,160 @@
+{
+  "index.js": {
+    "baselineSha256": "538301a9902d3e325f768698d5d5000d26924e2390f5bb0dea670c8ce0cb3dd0",
+    "candidateSha256": "e8f3ac8594fe20c9bcef280b554ca972eecdaf368f44eb05a9d0988851509227",
+    "changes": [
+      {
+        "start": 0,
+        "remove": 2,
+        "old": "const VERSION = '0.8.87';\nconst BUILD = '0.8.87-tt-cg-r84.11-song-reader';\n"
+      }
+    ]
+  },
+  "manifest.json": {
+    "baselineSha256": "b13f3f5e3604b097ea8a307915decf9f158a5563123dc1a993ddd91f2d802b92",
+    "candidateSha256": "8f67b095111d234e320e1120a4900b5e86f11307fc0b4e7dee34ebd5858390c5",
+    "changes": [
+      {
+        "start": 3,
+        "remove": 1,
+        "old": "  \"js\": \"index.js?heartbeat=0.8.87-tt-cg-r84.11-song-reader\",\n"
+      },
+      {
+        "start": 5,
+        "remove": 1,
+        "old": "  \"version\": \"0.8.87\",\n"
+      },
+      {
+        "start": 12,
+        "remove": 1,
+        "old": "  \"description\": \"r84.11：修复 HEART 生成提交与后台完成的阅读状态串页；新增独立角色／事件印象曲，输出歌名、演唱者、曲风及完整歌词。\",\n"
+      }
+    ]
+  },
+  "src/core/text.js": {
+    "baselineSha256": "5643200fcebbafe719bf71fbd1482cc15bb72b01ae4ed8391740fb966f239848",
+    "candidateSha256": "2306aeafae50585666ecb4409a02ddd8e2d14ac63fee46300fcee89cd39f9a67",
+    "changes": [
+      {
+        "start": 97,
+        "remove": 1,
+        "old": "    RMT_RECOVERY_INPUT_CHANGED: '建档期间这个聊天窗口或生成设置发生了变化，已通过校验的分块全部保留；请点「重试未完成分块」继续，不会重做成功项。',\n"
+      }
+    ]
+  },
+  "src/generation/recovery.js": {
+    "baselineSha256": "53bbf72c1a3fa7563c75df3e286d1f5d2e204fa59fff342a01387aa5496b7297",
+    "candidateSha256": "af7dafb7f4852999474fad79bd0fda11074cdf228e3f450109392d84b211c02f",
+    "changes": [
+      {
+        "start": 19,
+        "remove": 2,
+        "old": ""
+      }
+    ]
+  },
+  "src/modes/heart.js": {
+    "baselineSha256": "1cf0c59fbd2e7d02fd1b77ee0c4c60077232b477486f0b9c278b974827e75664",
+    "candidateSha256": "3f73bc6df95b1af40ac379dceb08e3dfd69dc13a085de5a835a0895a81de5cca",
+    "changes": [
+      {
+        "start": 59,
+        "remove": 2,
+        "old": "- birthday/userBirthday/holiday/absenceWorry/absenceSulky 建议各 1～2 条；没有合适台词的类别留空。absenceJealous 只有关系适合时写 0～2 条。不为补数生成重复句；每条台词必须完整。\n"
+      },
+      {
+        "start": 64,
+        "remove": 6,
+        "old": ""
+      },
+      {
+        "start": 643,
+        "remove": 2,
+        "old": "        { maxTokens: 6000, temperature: 0.35, context, origin, taskKey: `${taskKey}:dialogues`, mode: core_constants.MODE.HEART, background: true },\n"
+      },
+      {
+        "start": 1086,
+        "remove": 2,
+        "old": "                    { maxTokens: 6000, temperature: 0.35, context, origin, taskKey: `${taskKey}:dialogues-full`, mode: core_constants.MODE.HEART, background: true },\n"
+      },
+      {
+        "start": 1330,
+        "remove": 12,
+        "old": ""
+      },
+      {
+        "start": 1429,
+        "remove": 1,
+        "old": "                        heartSeasonVoicePrompt(context, memoryBank, latest, normalizedSeason, latest, null),\n"
+      },
+      {
+        "start": 1431,
+        "remove": 3,
+        "old": "                        { maxTokens: 3000, temperature: 0.65, context, origin, taskKey: `${taskKey}:voice`, mode: core_constants.MODE.HEART, background: true },\n"
+      },
+      {
+        "start": 1450,
+        "remove": 1,
+        "old": "                        heartSeasonScenarioPrompt(context, memoryBank, latest, normalizedSeason, latest, null),\n"
+      },
+      {
+        "start": 1452,
+        "remove": 3,
+        "old": "                        { maxTokens: 3200, temperature: 0.65, context, origin, taskKey: `${taskKey}:scenario`, mode: core_constants.MODE.HEART, background: true },\n"
+      }
+    ]
+  },
+  "src/ui/themeSongStyles.js": {
+    "baselineSha256": "590bce5b95710416a5fb1cc57980998b3342901c94738c8e856f8aea1eb57cf6",
+    "candidateSha256": "f0a57a764bfd0e3db21047240a77cc9de31f914c0d7c5fde7fff5db89bab8cb6",
+    "changes": [
+      {
+        "start": 35,
+        "remove": 11,
+        "old": ""
+      }
+    ]
+  },
+  "src/ui/themeSongView.js": {
+    "baselineSha256": "e53e77976974ceba54fa4b1d407878021e166a66670529c7368fcbe7119c8f2a",
+    "candidateSha256": "beaa5a0cb30d82111453411f11993c0ffab58a8366d935b19a6d1296a000d48f",
+    "changes": [
+      {
+        "start": 17,
+        "remove": 22,
+        "old": ""
+      },
+      {
+        "start": 69,
+        "remove": 1,
+        "old": "    const details = selected ? `<article class=\"rmt-song-sheet\"><header><small>${esc(selected.subject === 'event' ? '事件印象曲' : '角色印象曲')} · ${esc(selected.subjectTitle)}</small><h2>${esc(selected.title)}</h2><p><b>演唱者</b> ${esc(selected.singer)} <span>· ${esc(contract.SONG_LANGUAGES[selected.language])}</span></p><p>${esc(selected.vocalDescription)}</p></header>\n"
+      },
+      {
+        "start": 74,
+        "remove": 10,
+        "old": ""
+      },
+      {
+        "start": 87,
+        "remove": 1,
+        "old": "    overlay.bodyEl().innerHTML = `<main class=\"rmt-theme-song\"><header class=\"rmt-song-heading\"><div class=\"rmt-song-emblem\" aria-hidden=\"true\">♫</div><div><h2>角色印象曲</h2><p>${session.songs.length ? `已收录 ${session.songs.length} 首` : '歌名 · 曲风 · 完整歌词'}</p></div></header><p class=\"rmt-song-note\">生成歌曲文本与编曲说明，不生成音频。</p>${recovery}${form}<div class=\"rmt-song-layout ${list ? 'has-songs' : ''}\">${list}${details}</div></main>`;\n"
+      },
+      {
+        "start": 134,
+        "remove": 17,
+        "old": ""
+      }
+    ]
+  },
+  "src/ui/workspaceStyles.js": {
+    "baselineSha256": "778d9bd40385b314814d05f216137e4906c5a072cfc70872d01e751b1c7627ec",
+    "candidateSha256": "17eee5242d76e7f2c15e8ba21a7288d33bf6c81a4e4d74243614ce7b168aa4e3",
+    "changes": [
+      {
+        "start": 22,
+        "remove": 11,
+        "old": ""
+      }
+    ]
+  }
+}

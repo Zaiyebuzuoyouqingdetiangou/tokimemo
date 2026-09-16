@@ -1,0 +1,570 @@
+{
+  "scenario": {
+    "chatId": "time-flow-a",
+    "archiveRevision": "time-revision-a",
+    "phone": {
+      "kind": "phone",
+      "uiVersion": 4,
+      "chatId": "time-flow-a",
+      "archiveRevision": "time-revision-a",
+      "title": "原有私人终端",
+      "deviceKind": "phone",
+      "apps": [
+        {
+          "id": "notes",
+          "kind": "notes",
+          "label": "旧札",
+          "icon": "fa-note-sticky",
+          "entries": [
+            {
+              "id": "keep-1",
+              "title": "不能改写",
+              "preview": "旧终端正文",
+              "detail": "OLD_PHONE_PROSE_SENTINEL",
+              "basis": "推演"
+            }
+          ]
+        }
+      ],
+      "selectedAppId": "notes",
+      "selectedEntryId": "keep-1",
+      "screen": "app"
+    },
+    "cabinet": {
+      "kind": "cabinet",
+      "chatId": "time-flow-a",
+      "archiveRevision": "time-revision-a",
+      "items": [
+        {
+          "id": "old-item",
+          "text": "OLD_OTHER_MODE_SENTINEL"
+        }
+      ]
+    },
+    "__generationRecoveryClearedV1": {},
+    "modeWriteFencesV1": {
+      "heart": {
+        "generation": 1,
+        "token": "fe93251d-f247-4c01-9427-03d6debe36f2"
+      }
+    },
+    "commitToken": 1789567545536001,
+    "updatedAt": 1789567545536,
+    "__generationRecoveryV1": {
+      "heart": {
+        "createdAt": 1789567545518,
+        "failureCode": "RMT_RECOVERY_FAILED",
+        "identity": {
+          "archiveRevision": "time-revision-a",
+          "archiveTargetEntryId": "AE:m7m1ir",
+          "characterAvatar": "time-a.png",
+          "characterId": "0",
+          "characterKey": "card:xefftn\u001fcharacter:0",
+          "chatId": "time-flow-a",
+          "mode": "heart"
+        },
+        "kind": "generation-recovery",
+        "segments": [
+          {
+            "rawJson": "{\"voiceDramas\":[{\"id\":\"V\",\"kind\":\"spring\",\"script\":[{\"speaker\":\"char\",\"text\":\"这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。\"},{\"speaker\":\"char\",\"text\":\"这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。\"},{\"speaker\":\"char\",\"text\":\"这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。\"},{\"speaker\":\"char\",\"text\":\"这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。\"},{\"speaker\":\"char\",\"text\":\"这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。\"},{\"speaker\":\"char\",\"text\":\"这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。\"},{\"speaker\":\"char\",\"text\":\"这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。\"},{\"speaker\":\"char\",\"text\":\"这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。\"}],\"setting\":\"日常模拟\",\"title\":\"新一页\"}]}",
+            "requestHash": "581ef6eeab50d2844784babe961608ffc0d6ed69d07c295d95b39269610915f3",
+            "slot": "heart-season:@origin:spring:voice",
+            "state": "complete"
+          },
+          {
+            "failureCode": "RMT_RECOVERY_FAILED",
+            "requestHash": "5eab7b97064e0cdb067dfc083c6fa775109eb6fd00844a399474f8e523f6053b",
+            "slot": "heart-season:@origin:spring:scenario",
+            "state": "retry"
+          }
+        ],
+        "settingsHash": "b5642034224bbf35337ed8a43c327d8e50186ae83d8f42ece9e5a41f9e04376d",
+        "updatedAt": 1789567545534,
+        "version": 1,
+        "operation": {
+          "kind": "heart-season",
+          "season": "spring",
+          "batchId": "1gbll55"
+        },
+        "replaceExisting": false,
+        "_rmtModeWriteFence": "1:fe93251d-f247-4c01-9427-03d6debe36f2"
+      }
+    },
+    "heart": {
+      "kind": "heart",
+      "title": "HEART VOICE / 角色互动",
+      "relationshipState": "角色互动",
+      "relationshipSummary": "",
+      "relationshipSourceMemoryIds": [],
+      "relationshipSourceMemoryAnchor": "",
+      "birthdayMmDd": "",
+      "userBirthdayMmDd": "",
+      "specialDays": [],
+      "relationshipHistory": [],
+      "greetings": {
+        "morning": [],
+        "noon": [],
+        "evening": [],
+        "night": [],
+        "weekend": [],
+        "birthday": [],
+        "userBirthday": [],
+        "holiday": [],
+        "absenceWorry": [],
+        "absenceSulky": [],
+        "absenceJealous": []
+      },
+      "collectionIssues": {
+        "fireflies": 0,
+        "strips": 0
+      },
+      "voiceDramas": [
+        {
+          "id": "V",
+          "kind": "spring",
+          "title": "新一页",
+          "subtitle": "",
+          "setting": "日常模拟",
+          "visualTone": "soft",
+          "script": [
+            {
+              "speaker": "char",
+              "text": "这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。",
+              "speakerName": "林舟"
+            },
+            {
+              "speaker": "char",
+              "text": "这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。",
+              "speakerName": "林舟"
+            },
+            {
+              "speaker": "char",
+              "text": "这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。",
+              "speakerName": "林舟"
+            },
+            {
+              "speaker": "char",
+              "text": "这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。",
+              "speakerName": "林舟"
+            },
+            {
+              "speaker": "char",
+              "text": "这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。",
+              "speakerName": "林舟"
+            },
+            {
+              "speaker": "char",
+              "text": "这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。",
+              "speakerName": "林舟"
+            },
+            {
+              "speaker": "char",
+              "text": "这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。",
+              "speakerName": "林舟"
+            },
+            {
+              "speaker": "char",
+              "text": "这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。",
+              "speakerName": "林舟"
+            }
+          ],
+          "sourceArchiveMemoryIds": [],
+          "incrementBatchId": "1gbll55",
+          "generatedAt": 1789567545523
+        }
+      ],
+      "scenarioDramas": [],
+      "dailyStrips": [],
+      "fireflyVoices": [],
+      "selectedFireflyId": "",
+      "selectedVoiceId": "",
+      "selectedScenarioId": "",
+      "selectedDramaKey": "",
+      "selectedStripId": "",
+      "generationParts": {
+        "dialogues": false,
+        "seasons": true,
+        "strips": false,
+        "fireflies": false
+      },
+      "selectedSeason": "spring",
+      "view": "seasons",
+      "chatId": "time-flow-a",
+      "archiveRevision": "time-revision-a",
+      "_rmtModeWriteFence": "1:fe93251d-f247-4c01-9427-03d6debe36f2"
+    }
+  },
+  "language": {
+    "chatId": "time-flow-a",
+    "archiveRevision": "time-revision-a",
+    "phone": {
+      "kind": "phone",
+      "uiVersion": 4,
+      "chatId": "time-flow-a",
+      "archiveRevision": "time-revision-a",
+      "title": "原有私人终端",
+      "deviceKind": "phone",
+      "apps": [
+        {
+          "id": "notes",
+          "kind": "notes",
+          "label": "旧札",
+          "icon": "fa-note-sticky",
+          "entries": [
+            {
+              "id": "keep-1",
+              "title": "不能改写",
+              "preview": "旧终端正文",
+              "detail": "OLD_PHONE_PROSE_SENTINEL",
+              "basis": "推演"
+            }
+          ]
+        }
+      ],
+      "selectedAppId": "notes",
+      "selectedEntryId": "keep-1",
+      "screen": "app"
+    },
+    "cabinet": {
+      "kind": "cabinet",
+      "chatId": "time-flow-a",
+      "archiveRevision": "time-revision-a",
+      "items": [
+        {
+          "id": "old-item",
+          "text": "OLD_OTHER_MODE_SENTINEL"
+        }
+      ]
+    },
+    "__generationRecoveryClearedV1": {},
+    "modeWriteFencesV1": {
+      "heart": {
+        "generation": 1,
+        "token": "169f1ca1-de47-4ea0-90cb-2baab8f8ed07"
+      }
+    },
+    "commitToken": 1789567545578001,
+    "updatedAt": 1789567545578,
+    "__generationRecoveryV1": {
+      "heart": {
+        "createdAt": 1789567545571,
+        "failureCode": "RMT_RECOVERY_FAILED",
+        "identity": {
+          "archiveRevision": "time-revision-a",
+          "archiveTargetEntryId": "AE:m7m1ir",
+          "characterAvatar": "time-a.png",
+          "characterId": "0",
+          "characterKey": "card:xefftn\u001fcharacter:0",
+          "chatId": "time-flow-a",
+          "mode": "heart"
+        },
+        "kind": "generation-recovery",
+        "segments": [
+          {
+            "failureCode": "RMT_RECOVERY_FAILED",
+            "requestHash": "56da8adf6b825049101d02461b60e471521f6f28e14e3d0e94bb2e60a70b2519",
+            "slot": "heart-part:@origin:dialogues:dialogues-full",
+            "state": "retry"
+          }
+        ],
+        "settingsHash": "b5642034224bbf35337ed8a43c327d8e50186ae83d8f42ece9e5a41f9e04376d",
+        "updatedAt": 1789567545576,
+        "version": 1,
+        "operation": {
+          "kind": "heart-section",
+          "part": "dialogues",
+          "dialogueMode": "full"
+        },
+        "replaceExisting": false,
+        "_rmtModeWriteFence": "1:169f1ca1-de47-4ea0-90cb-2baab8f8ed07"
+      }
+    }
+  },
+  "voice": {
+    "chatId": "time-flow-a",
+    "archiveRevision": "time-revision-a",
+    "phone": {
+      "kind": "phone",
+      "uiVersion": 4,
+      "chatId": "time-flow-a",
+      "archiveRevision": "time-revision-a",
+      "title": "原有私人终端",
+      "deviceKind": "phone",
+      "apps": [
+        {
+          "id": "notes",
+          "kind": "notes",
+          "label": "旧札",
+          "icon": "fa-note-sticky",
+          "entries": [
+            {
+              "id": "keep-1",
+              "title": "不能改写",
+              "preview": "旧终端正文",
+              "detail": "OLD_PHONE_PROSE_SENTINEL",
+              "basis": "推演"
+            }
+          ]
+        }
+      ],
+      "selectedAppId": "notes",
+      "selectedEntryId": "keep-1",
+      "screen": "app"
+    },
+    "cabinet": {
+      "kind": "cabinet",
+      "chatId": "time-flow-a",
+      "archiveRevision": "time-revision-a",
+      "items": [
+        {
+          "id": "old-item",
+          "text": "OLD_OTHER_MODE_SENTINEL"
+        }
+      ]
+    },
+    "__generationRecoveryClearedV1": {},
+    "modeWriteFencesV1": {
+      "heart": {
+        "generation": 1,
+        "token": "4d0ec9aa-5e39-4084-8fa8-8d8cb1ada4b1"
+      }
+    },
+    "commitToken": 1789567545504001,
+    "updatedAt": 1789567545504,
+    "__generationRecoveryV1": {
+      "heart": {
+        "createdAt": 1789567545452,
+        "failureCode": "",
+        "identity": {
+          "archiveRevision": "time-revision-a",
+          "archiveTargetEntryId": "AE:m7m1ir",
+          "characterAvatar": "time-a.png",
+          "characterId": "0",
+          "characterKey": "card:xefftn\u001fcharacter:0",
+          "chatId": "time-flow-a",
+          "mode": "heart"
+        },
+        "kind": "generation-recovery",
+        "segments": [
+          {
+            "failureCode": "RMT_RECOVERY_FAILED",
+            "requestHash": "581ef6eeab50d2844784babe961608ffc0d6ed69d07c295d95b39269610915f3",
+            "slot": "heart-season:@origin:spring:voice",
+            "state": "retry"
+          },
+          {
+            "rawJson": "{\"scenarioDramas\":[{\"id\":\"S\",\"script\":[{\"speaker\":\"char\",\"text\":\"这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。\"},{\"speaker\":\"char\",\"text\":\"这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。\"},{\"speaker\":\"char\",\"text\":\"这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。\"},{\"speaker\":\"char\",\"text\":\"这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。\"},{\"speaker\":\"char\",\"text\":\"这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。\"},{\"speaker\":\"char\",\"text\":\"这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。\"},{\"speaker\":\"char\",\"text\":\"这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。\"},{\"speaker\":\"char\",\"text\":\"这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。\"}],\"season\":\"spring\",\"setting\":\"日常模拟\",\"title\":\"小花园\"}]}",
+            "requestHash": "318d9ad0fe1b6952c4956de66ce4d91ad285a716a0816af6b96a1de243fc3aa0",
+            "slot": "heart-season:@origin:spring:scenario",
+            "state": "complete"
+          }
+        ],
+        "settingsHash": "b5642034224bbf35337ed8a43c327d8e50186ae83d8f42ece9e5a41f9e04376d",
+        "updatedAt": 1789567545489,
+        "version": 1,
+        "operation": {
+          "kind": "heart-season",
+          "season": "spring",
+          "batchId": "51uze1"
+        },
+        "replaceExisting": false,
+        "_rmtModeWriteFence": "1:4d0ec9aa-5e39-4084-8fa8-8d8cb1ada4b1"
+      }
+    },
+    "heart": {
+      "kind": "heart",
+      "title": "HEART VOICE / 角色互动",
+      "relationshipState": "角色互动",
+      "relationshipSummary": "",
+      "relationshipSourceMemoryIds": [],
+      "relationshipSourceMemoryAnchor": "",
+      "birthdayMmDd": "",
+      "userBirthdayMmDd": "",
+      "specialDays": [],
+      "relationshipHistory": [],
+      "greetings": {
+        "morning": [],
+        "noon": [],
+        "evening": [],
+        "night": [],
+        "weekend": [],
+        "birthday": [],
+        "userBirthday": [],
+        "holiday": [],
+        "absenceWorry": [],
+        "absenceSulky": [],
+        "absenceJealous": []
+      },
+      "collectionIssues": {
+        "fireflies": 0,
+        "strips": 0
+      },
+      "voiceDramas": [],
+      "scenarioDramas": [
+        {
+          "id": "S",
+          "season": "spring",
+          "title": "小花园",
+          "subtitle": "",
+          "setting": "日常模拟",
+          "visualTone": "soft",
+          "script": [
+            {
+              "speaker": "char",
+              "text": "这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。",
+              "speakerName": "林舟"
+            },
+            {
+              "speaker": "char",
+              "text": "这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。",
+              "speakerName": "林舟"
+            },
+            {
+              "speaker": "char",
+              "text": "这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。",
+              "speakerName": "林舟"
+            },
+            {
+              "speaker": "char",
+              "text": "这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。",
+              "speakerName": "林舟"
+            },
+            {
+              "speaker": "char",
+              "text": "这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。",
+              "speakerName": "林舟"
+            },
+            {
+              "speaker": "char",
+              "text": "这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。",
+              "speakerName": "林舟"
+            },
+            {
+              "speaker": "char",
+              "text": "这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。",
+              "speakerName": "林舟"
+            },
+            {
+              "speaker": "char",
+              "text": "这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。这一天的阳光很好，我想和你一起看看院子里的花，等你把手里的事情做完，再慢慢读几页书。",
+              "speakerName": "林舟"
+            }
+          ],
+          "sourceArchiveMemoryIds": [],
+          "incrementBatchId": "51uze1",
+          "generatedAt": 1789567545499
+        }
+      ],
+      "dailyStrips": [],
+      "fireflyVoices": [],
+      "selectedFireflyId": "",
+      "selectedVoiceId": "",
+      "selectedScenarioId": "",
+      "selectedDramaKey": "",
+      "selectedStripId": "",
+      "generationParts": {
+        "dialogues": false,
+        "seasons": true,
+        "strips": false,
+        "fireflies": false
+      },
+      "selectedSeason": "spring",
+      "view": "seasons",
+      "chatId": "time-flow-a",
+      "archiveRevision": "time-revision-a",
+      "_rmtModeWriteFence": "1:4d0ec9aa-5e39-4084-8fa8-8d8cb1ada4b1"
+    }
+  },
+  "both": {
+    "chatId": "time-flow-a",
+    "archiveRevision": "time-revision-a",
+    "phone": {
+      "kind": "phone",
+      "uiVersion": 4,
+      "chatId": "time-flow-a",
+      "archiveRevision": "time-revision-a",
+      "title": "原有私人终端",
+      "deviceKind": "phone",
+      "apps": [
+        {
+          "id": "notes",
+          "kind": "notes",
+          "label": "旧札",
+          "icon": "fa-note-sticky",
+          "entries": [
+            {
+              "id": "keep-1",
+              "title": "不能改写",
+              "preview": "旧终端正文",
+              "detail": "OLD_PHONE_PROSE_SENTINEL",
+              "basis": "推演"
+            }
+          ]
+        }
+      ],
+      "selectedAppId": "notes",
+      "selectedEntryId": "keep-1",
+      "screen": "app"
+    },
+    "cabinet": {
+      "kind": "cabinet",
+      "chatId": "time-flow-a",
+      "archiveRevision": "time-revision-a",
+      "items": [
+        {
+          "id": "old-item",
+          "text": "OLD_OTHER_MODE_SENTINEL"
+        }
+      ]
+    },
+    "__generationRecoveryClearedV1": {},
+    "modeWriteFencesV1": {
+      "heart": {
+        "generation": 1,
+        "token": "8611667a-079e-4524-bdd9-08e066d10299"
+      }
+    },
+    "commitToken": 1789567545564001,
+    "updatedAt": 1789567545564,
+    "__generationRecoveryV1": {
+      "heart": {
+        "createdAt": 1789567545549,
+        "failureCode": "RMT_RECOVERY_FAILED",
+        "identity": {
+          "archiveRevision": "time-revision-a",
+          "archiveTargetEntryId": "AE:m7m1ir",
+          "characterAvatar": "time-a.png",
+          "characterId": "0",
+          "characterKey": "card:xefftn\u001fcharacter:0",
+          "chatId": "time-flow-a",
+          "mode": "heart"
+        },
+        "kind": "generation-recovery",
+        "segments": [
+          {
+            "failureCode": "RMT_RECOVERY_FAILED",
+            "requestHash": "581ef6eeab50d2844784babe961608ffc0d6ed69d07c295d95b39269610915f3",
+            "slot": "heart-season:@origin:spring:voice",
+            "state": "retry"
+          },
+          {
+            "failureCode": "RMT_RECOVERY_FAILED",
+            "requestHash": "318d9ad0fe1b6952c4956de66ce4d91ad285a716a0816af6b96a1de243fc3aa0",
+            "slot": "heart-season:@origin:spring:scenario",
+            "state": "retry"
+          }
+        ],
+        "settingsHash": "b5642034224bbf35337ed8a43c327d8e50186ae83d8f42ece9e5a41f9e04376d",
+        "updatedAt": 1789567545562,
+        "version": 1,
+        "operation": {
+          "kind": "heart-season",
+          "season": "spring",
+          "batchId": "pu0ilb"
+        },
+        "replaceExisting": false,
+        "_rmtModeWriteFence": "1:8611667a-079e-4524-bdd9-08e066d10299"
+      }
+    }
+  }
+}

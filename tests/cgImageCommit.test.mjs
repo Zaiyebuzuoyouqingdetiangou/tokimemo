@@ -317,7 +317,8 @@ test('real draw preserves confirmed character appearance metadata through image 
         { role: 'char', name: '角色', tag: 'black hair' },
         { role: 'user', name: '用户', tag: 'silver hair' },
     ] };
-    const storedMetadata = { ...promptMetadata, characters: promptMetadata.characters.map(character => ({ ...character, nl: '' })) };
+    // r84.10: new images also persist their chosen prompt dialect; appearance unchanged.
+    const storedMetadata = { ...promptMetadata, promptFormat: 'nai5-natural', characters: promptMetadata.characters.map(character => ({ ...character, nl: '' })) };
     const readsBefore = f.cardReadCount();
     await f.draw(null, promptMetadata);
     assert.equal(f.generationCount(), 1);
