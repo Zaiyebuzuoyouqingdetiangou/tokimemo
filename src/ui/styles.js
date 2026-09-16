@@ -1,3 +1,4 @@
+import * as ui_workspaceStyles from './workspaceStyles.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_constants from '../core/constants.js';
@@ -14,6 +15,10 @@ export function homeAndReadingCss() {
     const settings = root + ' #' + core_constants.SETTINGS_ID;
     return `
 ${root} .rmt-home{max-width:960px;margin:0 auto;padding:12px 0 32px}
+${root} .rmt-heart-language{max-width:100%;min-width:0}
+${root} .rmt-heart-language>summary{min-height:44px;display:flex;align-items:center;cursor:pointer}
+${root} .rmt-heart-language select{max-width:100%;min-width:0;min-height:44px;flex:1 1 160px}
+${root} .rmt-heart-language button{min-height:44px;max-width:100%;white-space:normal}
 ${root} .rmt-home-heading{padding:20px 8px 28px;color:var(--rmt-theme-text,#334155)}
 ${root} .rmt-home-heading small{letter-spacing:.18em;font-size:12px;color:var(--rmt-theme-accent-ink,#5f5770)}
 ${root} .rmt-home-heading h1{margin:8px 0 12px;font-size:clamp(26px,5vw,38px);line-height:1.4}
@@ -122,6 +127,7 @@ export function ensureSettingsStyles() {
 #${core_constants.SETTINGS_ID} .rmt-performance-diagnostic-close{min-width:88px!important;min-height:40px!important;white-space:nowrap!important;word-break:keep-all!important;writing-mode:horizontal-tb!important;touch-action:manipulation}
 #${core_constants.SETTINGS_ID} .rmt-performance-diagnostic-output{margin:0;padding:9px;max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:9px;line-height:1.5;border-radius:9px;background:rgba(38,49,63,.07);color:#5f6f80}
 #${core_constants.MENU_ID}{cursor:pointer}
+.rmt-manual-model-picker{display:block;width:100%!important;max-width:100%!important;min-width:0!important;margin-top:6px;overflow:hidden;text-overflow:ellipsis}.rmt-manual-model-picker[hidden]{display:none!important}
 @media(max-width:760px){
   #${core_constants.SETTINGS_ID} .rmt-api-grid{grid-template-columns:1fr 1fr}
   #${core_constants.SETTINGS_ID} .rmt-model-row{grid-template-columns:1fr}
@@ -1083,6 +1089,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
     style.textContent += homeAndReadingCss();
     style.textContent += ui_immersionStyles.immersionCss('#' + core_constants.OVERLAY_ID);
     style.textContent += ui_readingStyles.readingCss('#' + core_constants.OVERLAY_ID);
+    style.textContent += ui_workspaceStyles.workspaceCss('#' + core_constants.OVERLAY_ID);
     document.head.appendChild(style);
 }
 

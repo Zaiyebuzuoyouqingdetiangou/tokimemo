@@ -1,3 +1,5 @@
+import * as cg_format_ui from './cgFormatControl.js';
+import * as heart_reader from './heartReaderState.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_groups from '../archive/groups.js';
@@ -42,6 +44,8 @@ import * as ui_contentManager from './contentManager.js';
 import * as ui_endingView from './endingView.js';
 import * as ui_heartView from './heartView.js';
 import * as ui_phoneView from './phoneView.js';
+import * as song_view from './themeSongView.js';
+import * as song_contract from '../core/themeSongContract.js';
 import * as ui_inboxView from './inboxView.js';
 import * as modes_inbox from '../modes/inbox.js';
 import * as modes_pastLives from '../modes/pastLives.js';
@@ -53,6 +57,9 @@ import * as time_stories_view from './timeStoriesView.js';
 import * as time_stories from '../core/timeStoriesContract.js';
 import * as modes_timeStories from '../modes/timeStories.js';
 import * as ui_styles from './styles.js';
+import * as workspace_ui from './workspace.js';
+import * as language_view from './languageView.js';
+import * as ui_workspaceState from './workspaceState.js';
 
 export function isArchiveMobileViewport() {
     try {
@@ -153,13 +160,15 @@ export function openOverlay() {
         overlay.innerHTML = `
           <div class="rmt-shell" role="dialog" aria-modal="true" aria-label="心迹回廊">
             <div class="rmt-topbar">
-              <button type="button" data-rmt-action="back" hidden aria-label="返回上级">← 返回</button>
+              <button type="button" data-rmt-action="back" hidden aria-label="返回上级">‹</button>
               <div class="rmt-topbar-title">心迹回廊</div>
-              <button type="button" data-rmt-action="home" aria-label="返回心迹回廊首页">首页</button>
-              <button type="button" data-rmt-action="regenerate" hidden>增量追加</button>
-              <button type="button" data-rmt-action="manage" hidden>管理</button>
-              <button type="button" data-rmt-action="close" aria-label="关闭档案室">关闭</button>
+              <button type="button" data-rmt-action="library-home" aria-label="打开档案室" title="档案室"><i class="fa-regular fa-folder" aria-hidden="true"></i></button>
+              <button type="button" data-rmt-action="workspace-expand" aria-label="展开窗口" title="展开窗口"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>
+              <button type="button" data-rmt-action="regenerate" hidden aria-label="增量追加" title="增量追加">＋</button>
+              <button type="button" data-rmt-action="manage" hidden aria-label="管理" title="管理">⋯</button>
+              <button type="button" data-rmt-action="close" aria-label="关闭档案室">×</button>
             </div>
+            ${workspace_ui.workspaceNavHtml()}
             <div class="rmt-body"></div>
           </div>`;
         document.body.appendChild(overlay);
@@ -178,6 +187,7 @@ export function openOverlay() {
     try { core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings(core_context.getContext())); } catch {}
     bindOverlayCloseFallback(overlay);
     revealArchiveOverlay(overlay);
+    workspace_ui.syncWorkspaceChrome();
     return overlay;
 }
 
@@ -190,6 +200,7 @@ export function closeOverlay() {
         floating_archive.rememberFloatingArchive();
         navigation_bookmark.rememberReadingPosition();
     }
+    ui_workspaceState.leaveWorkspaceReader();
     cg_editor.closeCgPromptEditor({ restoreFocus: false });
     modes_room.stopRoomClock();
     ui_phoneView.stopPhoneClock();
@@ -215,13 +226,15 @@ export function bodyEl() {
 export function topTitle(text) {
     const el = document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-topbar-title`);
     if (el) el.textContent = text || '心迹回廊';
+    workspace_ui.syncWorkspaceChrome();
 }
 
 export function setBackVisible(visible, label = '返回上级') {
     const button = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-action="back"]`);
     if (!button) return;
     button.hidden = !visible;
-    button.textContent = `← ${label}`;
+    button.textContent = '‹';
+    button.title = label;
     button.setAttribute('aria-label', label);
 }
 
@@ -239,16 +252,11 @@ export function navigateBack() {
     if (runtimeState.activeMode === core_constants.MODE.INBOX && ui_inboxView.closeInboxLetter()) return;
     if (runtimeState.activeMode === core_constants.MODE.TRAVEL && runtimeState.activeSession?.selectedLocationId) return ui_travelView.closeTravelDetail();
     if (runtimeState.activeMode === core_constants.MODE.ITEMS) return modes_room.returnToRoomFromDeep();
-    if (runtimeState.activeMode === core_constants.MODE.ADV && runtimeState.activeSession?.kind === core_constants.MODE.ADV && runtimeState.activeSession.view === 'adv') {
-        runtimeState.activeSession.view = 'cg';
-        runtimeState.activeSession.paragraphIndex = 0;
-        return ui_advEventView.renderAdvMode();
-    }
     if (runtimeState.activeMode === core_constants.MODE.ALBUM && runtimeState.activeSession?.kind === core_constants.MODE.ALBUM && runtimeState.activeSession.sharedMemory) {
         runtimeState.activeSession.sharedMemory = false;
         return ui_albumView.renderAlbum();
     }
-    if (runtimeState.activeMode) return runtimeState.activeArchiveSnapshot ? archive_library.showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot) : showChooser();
+    if (runtimeState.activeMode) return workspace_ui.openWorkspaceTab('content');
     if (runtimeState.archiveViewLevel === 'snapshot' && runtimeState.activeArchiveSnapshot) {
         const key = core_text.normalizeText(runtimeState.activeArchiveSnapshot.archiveGroupId, 120) || (() => { const entry = archive_groups.getArchiveIndex(core_context.getContext()).find(item => core_context.archiveIndexEntryId(item) === core_text.normalizeText(runtimeState.activeArchiveSnapshot.entryId, 120)); return entry ? archive_groups.archiveGroupKeyForEntry(entry) : ''; })();
         runtimeState.activeArchiveSnapshot = null;
@@ -275,7 +283,8 @@ export function setRegenerateVisible(visible) {
     const button = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-action="regenerate"]`);
     if (button) {
         button.hidden = !visible;
-        button.textContent = '增量追加';
+        button.textContent = '＋';
+        button.setAttribute('aria-label', '增量追加');
     }
 }
 
@@ -310,6 +319,11 @@ export function confirmExplicitActionTwice(title, detail, { destructive = false 
 
 export function confirmModeRegeneration(mode) {
     const label = core_constants.MODE_LABEL[mode] || mode || '当前内容';
+    if ([core_constants.MODE.ROOM, core_constants.MODE.ITEMS].includes(mode)) return confirmExplicitAction(
+        '追加「' + label + '」？',
+        '会调用模型，优先同步新增记忆，也可按明确人设补充普通生活物件。旧房间、旧物件和旧台词保留；推演内容不成为真实共同往事，也不会写入聊天档案。',
+        { destructive: false },
+    );
     if (core_constants.CREATIVE_EXPANSION_MODES.includes(mode) || mode === core_constants.MODE.CABINET) return confirmExplicitAction(
         '基于当前档案追加「' + label + '」？',
         '有新记忆时优先使用新记忆；没有新记忆也可以扩写新镜头或新视角。会调用模型，旧内容与图片保留，不更新正式记忆、不新增已发生的剧情。完全重复或没有有效证据的结果不会收录。',
@@ -425,7 +439,10 @@ function calendarQuickAccessHtml({ ready = false, generated = false, generating 
     </section>`;
 }
 
-export function showChooser() {
+export function showChooser({ section = null } = {}) {
+    const priorTab = ui_workspaceState.workspace.tab;
+    ui_workspaceState.leaveWorkspaceReader();
+    ui_workspaceState.workspace.tab = section === 'content' || (!section && priorTab === 'content') ? 'content' : 'archive';
     ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     runtimeState.activeArchiveSnapshot = null;
     runtimeState.activeArchiveReadOnly = true;
@@ -449,7 +466,15 @@ export function showChooser() {
         if (core_cache.isCompressedCacheRecord(stored) && !runtimeState.runtimeSessionCache.has(scope)) {
             topTitle('心迹回廊 · 档案室');
             body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在读取已生成档案…</b></div></div>';
-            void core_cache.ensureCacheHydrated(hydrationContext).then(() => archive_snapshots.scheduleChooserRefresh(0)).catch(error => {
+            const chooserEpoch = ui_workspaceState.workspace.epoch;
+            const chooserStillVisible = () => chooserEpoch === ui_workspaceState.workspace.epoch
+                && runtimeState.archiveViewLevel === 'chooser' && !runtimeState.activeMode
+                && !runtimeState.activeArchiveSnapshot && !document.getElementById(core_constants.OVERLAY_ID)?.hidden
+                && core_cache.cacheScopeFromContext(core_context.getContext()) === scope;
+            void core_cache.ensureCacheHydrated(hydrationContext).then(() => {
+                if (chooserStillVisible()) archive_snapshots.scheduleChooserRefresh(0);
+            }).catch(error => {
+                if (!chooserStillVisible()) return;
                 console.warn('[HeartbeatMemories] compressed cache read failed', core_text.safeErrorDiagnostic(error));
                 const latestBody = bodyEl();
                 if (latestBody) latestBody.innerHTML = `<div class="rmt-error"><div><b>已生成内容缓存读取失败</b><div style="margin:10px 0;white-space:pre-wrap;opacity:.78">${core_text.esc(core_text.safeErrorSummary(error))}</div><button type="button" class="rmt-btn" data-rmt-action="library-home">返回档案室</button></div></div>`;
@@ -464,6 +489,12 @@ export function showChooser() {
         context = core_context.currentCharacterGuard();
         state = archive_repository.getMemoryState(context);
     } catch (error) {
+        if (ui_workspaceState.workspace.tab === 'content') {
+            topTitle('心迹回廊 · 内容');
+            body.innerHTML = '<main class="rmt-workspace-page">' + workspace_ui.workspaceCatalogueHtml() + '</main>';
+            workspace_ui.syncWorkspaceChrome();
+            return;
+        }
         topTitle('心迹回廊 · 档案室');
         body.innerHTML = `<div class="rmt-error"><div><b>无法读取当前聊天</b><div style="margin-top:10px;white-space:pre-wrap;opacity:.75">${core_text.esc(core_text.safeErrorSummary(error))}</div></div></div>`;
         return;
@@ -497,16 +528,16 @@ export function showChooser() {
             ? (generated ? (isCalendar ? '刷新中 · 旧日历仍可查看' : '增量追加中 · 旧内容仍可查看') : '后台生成中 · 可继续启动其他入口')
             : generated ? (isCalendar ? '已整理 · 点击查看日历' : '已生成 · 点击头像查看') : '尚未生成';
         const draft = mode === core_constants.MODE.PHONE && ready ? core_cache.loadPhoneGenerationDraft(context) : null;
-        const actionText = mode === core_constants.MODE.INBOX ? (generating ? '收信中…' : '收取新信') : generating ? '生成中…' : draft ? `继续生成 · ${draft.completedApps.length}/${draft.plan.apps.length}` : generated ? (isCalendar ? '刷新日历' : '增量追加') : (isCalendar ? '生成日历' : '生成这一项');
+        const actionText = mode === core_constants.MODE.INBOX ? (generating ? '收信中…' : '收取新信') : generating ? '生成中…' : draft ? '重试未完成项' : generated ? (isCalendar ? '刷新日历' : '增量追加') : (isCalendar ? '生成日历' : '生成这一项');
         return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} ${generating ? 'generating' : ''} rmt-archive-portal-${core_text.esc(meta.accent)}">
-          <button type="button" class="rmt-portal-open" ${generated || (ready && [core_constants.MODE.INBOX, core_constants.MODE.PHONE].includes(mode)) ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
+          <button type="button" class="rmt-portal-open" ${generated || (ready && [core_constants.MODE.INBOX, core_constants.MODE.PHONE, core_constants.MODE.HEART].includes(mode)) ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
             <span class="rmt-portal-avatar"><i class="fa-solid ${core_text.esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
             <span class="rmt-portal-title">${core_text.esc(meta.title)}</span>
             <span class="rmt-portal-subtitle">${core_text.esc(meta.subtitle)}</span>
             <span class="rmt-portal-status">${core_text.esc(statusText)}</span>
           </button>
           ${draft ? `<p class="rmt-phone-draft-status" role="status">${core_text.esc(core_text.safeErrorSummary({ code: 'RMT_PHONE_DRAFT_AVAILABLE', failure: draft.failure, partialProgress: { completed: draft.completedApps.length, total: draft.plan.apps.length } }))}</p>` : ''}
-          <button type="button" class="rmt-btn rmt-portal-generate" data-rmt-generate-mode="${core_text.esc(mode)}" ${generated ? 'data-rmt-regenerate="true"' : ''} ${runtimeState.busy || generating || capacityReached ? 'disabled' : ''}>${core_text.esc(actionText)}</button>
+          <button type="button" class="rmt-btn rmt-portal-generate" ${mode === core_constants.MODE.HEART ? 'data-rmt-action="open-heart"' : `data-rmt-generate-mode="${core_text.esc(mode)}"`} ${generated ? 'data-rmt-regenerate="true"' : ''} ${runtimeState.busy || generating || capacityReached ? 'disabled' : ''}>${core_text.esc(mode === core_constants.MODE.HEART ? '打开角色互动' : actionText)}</button>
         </article>`;
     }).join('');
     const memorySettings = core_settings.getPluginSettings();
@@ -561,6 +592,7 @@ export function showChooser() {
         <section class="rmt-archive-portals" aria-label="档案室内容入口">${portalHtml}</section>
         ${generationAction}
       </div>`;
+    workspace_ui.arrangeArchiveWorkspace(body, { portals, ready });
     ui_settingsPanel.refreshSettingsMemoryStatus();
 }
 
@@ -669,42 +701,62 @@ function emptyArchiveMode(mode, memory, context, stored) {
     // Opening an empty reader is free. An unreadable existing record is not an
     // empty reader and never grants permission to overwrite saved material.
     if (stored?.[mode]) return null;
+    if (mode === core_constants.MODE.THEME_SONG) return song_contract.emptyThemeSongs(memory, context ? core_context.currentCharacterRuntimeKey(context) : '');
+    if (mode === core_constants.MODE.HEART) return modes_heart.makeHeartShell(memory);
     if (time_stories.isTimeStoryMode(mode)) return modes_timeStories.emptyTimeStories(mode, memory, context);
     if (mode === core_constants.MODE.PHONE) return ui_phoneView.emptyPhone(memory, context);
     return null;
 }
 
-export function openCachedOrGenerate(mode) {
+let heartOpenRequest = 0;
+export function openCachedOrGenerate(mode, options = {}) {
     if (!Object.values(core_constants.MODE).includes(mode)) return;
+    heart_reader.rememberHeartReader();
+    const openRequest = ++heartOpenRequest;
+    const route = options.workspaceRoute || mode;
+    ui_workspaceState.workspace.route = route; ui_workspaceState.workspace.tab = 'content'; ui_workspaceState.workspace.empty = null;
+    const navigationEpoch = ui_workspaceState.workspace.epoch;
     if (runtimeState.activeArchiveSnapshot) {
         const snapshot = runtimeState.activeArchiveSnapshot;
-        const cached = core_cache.loadSession(mode, { chatId: snapshot.chatId, memoryBank: snapshot.memory, cache: snapshot.cache, clone: true }) || emptyArchiveMode(mode, snapshot.memory, null, snapshot.cache);
-        if (cached) {
-            runtimeState.activeMode = mode;
-            runtimeState.activeSession = cached;
-            return renderActive();
+        const stored = snapshot.cache || {};
+        const cached = core_cache.loadSession(mode, { chatId: snapshot.chatId, memoryBank: snapshot.memory, cache: stored, clone: true });
+        const session = cached || (!stored[mode] ? emptyArchiveMode(mode, snapshot.memory, null, stored) : null);
+        if (session) {
+            runtimeState.activeMode = mode; runtimeState.activeSession = session;
+            ui_workspaceState.prepareWorkspaceSession(mode, session, route);
+        heart_reader.enterHeartReader(session, route); return renderActive();
         }
-        archive_library.showIndexedArchiveSnapshot(snapshot);
-        globalThis.toastr?.info?.('这份旧档案还没有生成这一项。只读浏览不会替你切换聊天或发起生成。', '心迹回廊');
-        return;
+        return workspace_ui.showEmptyWorkspace(mode, { memory: snapshot.memory, stored: !!stored[mode] });
     }
-    try {
-        archive_repository.requireArchive(core_context.currentCharacterGuard());
-    } catch (error) {
-        showChooser();
-        globalThis.toastr?.warning?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
-        return;
+    let context, memory;
+    try { context = core_context.currentCharacterGuard(); memory = archive_repository.requireArchive(context); }
+    catch {
+        return workspace_ui.showEmptyWorkspace(mode, { noChat: !context });
     }
-    const context = core_context.currentCharacterGuard();
-    const cached = core_cache.loadSession(mode) || emptyArchiveMode(mode, archive_repository.requireArchive(context), context, core_cache.getCache(context));
-    if (cached) {
-        runtimeState.activeMode = mode;
-        runtimeState.activeSession = cached;
-        renderActive();
-        return;
+    // Hydrate before deciding whether a record is absent. A fresh empty page must never
+    // become an overwrite route for an existing compressed/unreadable record.
+    if (core_cache.isCompressedCacheRecord(context.chatMetadata?.[core_constants.CACHE_KEY])
+        && !runtimeState.runtimeSessionCache.has(core_cache.cacheScopeFromContext(context))) {
+        const origin = core_context.captureTaskOrigin(context, memory.archiveRevision);
+        const priorMode = runtimeState.activeMode;
+        return core_cache.ensureCacheHydrated(context).then(() => {
+            if (openRequest !== heartOpenRequest || navigationEpoch !== ui_workspaceState.workspace.epoch || !core_context.isCurrentTaskOrigin(origin)
+                || runtimeState.activeArchiveSnapshot || runtimeState.activeMode !== priorMode
+                || document.getElementById(core_constants.OVERLAY_ID)?.hidden) return;
+            return openCachedOrGenerate(mode, { workspaceRoute: route });
+        }).catch(error => {
+            if (openRequest === heartOpenRequest && navigationEpoch === ui_workspaceState.workspace.epoch) globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
+        });
     }
-    showChooser();
-    globalThis.toastr?.info?.('这个入口还没有生成。请在档案室直接点击这个入口下方的“生成这一项”。', '心迹回廊');
+    const stored = core_cache.getCache(context);
+    const cached = core_cache.loadSession(mode, { context, memoryBank: memory, clone: true });
+    const session = cached || (!stored?.[mode] ? emptyArchiveMode(mode, memory, context, stored) : null);
+    if (session) {
+        runtimeState.activeMode = mode; runtimeState.activeSession = session;
+        ui_workspaceState.prepareWorkspaceSession(mode, session, route);
+        heart_reader.enterHeartReader(session, route); return renderActive();
+    }
+    return workspace_ui.showEmptyWorkspace(mode, { memory, stored: !!stored?.[mode] });
 }
 
 export function decorateReadOnlyModeUi() {
@@ -718,13 +770,14 @@ export function decorateReadOnlyModeUi() {
 }
 
 export function renderActive() {
+    if (workspace_ui.renderEmptyWorkspace()) return;
     image_viewer.closeCgImageViewer({ restoreFocus: false });
     runtimeState.contentManagerOpen = false;
     if (runtimeState.activeMode !== core_constants.MODE.ENDING) ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     if (!runtimeState.activeSession || !runtimeState.activeMode) return runtimeState.activeArchiveSnapshot ? archive_library.showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot) : showChooser();
-    const supportsTopbarIncrement = !time_stories.isTimeStoryMode(runtimeState.activeMode) && ![core_constants.MODE.INBOX, 'pastLives'].includes(runtimeState.activeMode) && (!core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) || runtimeState.activeMode === core_constants.MODE.PHONE);
+    const supportsTopbarIncrement = !time_stories.isTimeStoryMode(runtimeState.activeMode) && ![core_constants.MODE.INBOX, core_constants.MODE.HEART, core_constants.MODE.THEME_SONG, 'pastLives'].includes(runtimeState.activeMode) && (!core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) || runtimeState.activeMode === core_constants.MODE.PHONE);
     setRegenerateVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && supportsTopbarIncrement);
-    setManageVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && !time_stories.isTimeStoryMode(runtimeState.activeMode) && ![core_constants.MODE.RELATIONS, core_constants.MODE.INBOX, 'pastLives'].includes(runtimeState.activeMode));
+    setManageVisible(!(runtimeState.activeMode === core_constants.MODE.HEART && ui_workspaceState.workspace.route === 'language') && (!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && !time_stories.isTimeStoryMode(runtimeState.activeMode) && ![core_constants.MODE.RELATIONS, core_constants.MODE.INBOX, core_constants.MODE.THEME_SONG, 'pastLives'].includes(runtimeState.activeMode));
     setBackVisible(true, runtimeState.activeArchiveSnapshot ? (runtimeState.activeArchiveReadOnly ? '只读档案' : '档案') : core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) ? '他的房间' : '当前档案');
     if (runtimeState.activeMode !== core_constants.MODE.ROOM) modes_room.stopRoomClock();
     if (runtimeState.activeMode !== core_constants.MODE.PHONE) ui_phoneView.stopPhoneClock();
@@ -735,6 +788,7 @@ export function renderActive() {
     else if (runtimeState.activeMode === core_constants.MODE.ITEMS) modes_items.renderItems();
     else if (runtimeState.activeMode === core_constants.MODE.CABINET) modes_cabinet.renderCabinet();
     else if (runtimeState.activeMode === core_constants.MODE.PHONE) ui_phoneView.renderPhone();
+    else if (runtimeState.activeMode === core_constants.MODE.THEME_SONG) song_view.renderThemeSongs();
     else if (runtimeState.activeMode === core_constants.MODE.INBOX) ui_inboxView.renderInbox();
     else if (runtimeState.activeMode === core_constants.MODE.TRAVEL) ui_travelView.renderTravel();
     else if (runtimeState.activeMode === core_constants.MODE.ENDING) ui_endingView.renderEnding();
@@ -744,7 +798,9 @@ export function renderActive() {
     else if (runtimeState.activeMode === core_constants.MODE.HEART) ui_heartView.renderHeart();
     else if (runtimeState.activeMode === 'pastLives') past_lives_view.renderPastLives();
     else if (time_stories.isTimeStoryMode(runtimeState.activeMode)) time_stories_view.renderTimeStories();
+    cg_format_ui.mountCgFormatControl(bodyEl(), runtimeState.activeMode, ui_workspaceState.workspace.route, !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly);
     decorateReadOnlyModeUi();
+    workspace_ui.syncWorkspaceChrome();
 }
 
 
@@ -952,6 +1008,7 @@ async function regenerateManagedCategory() {
 }
 
 export function handleOverlayClick(event) {
+    if (workspace_ui.handleWorkspaceClick(event) || language_view.handleLanguageClick(event)) return;
     const pastLivesButton = event.target.closest?.('[data-rmt-past-lives]');
     if (pastLivesButton) return void past_lives_view.handlePastLivesAction(pastLivesButton.dataset.rmtPastLives, pastLivesButton.dataset.rmtPastLivesId);
     const timeStoryButton = event.target.closest?.('[data-rmt-time-story]');
@@ -972,6 +1029,8 @@ export function handleOverlayClick(event) {
     const archiveRecoveryButton = event.target.closest?.('[data-rmt-archive-recovery]');
     if (archiveRecoveryButton) return void (archiveRecoveryButton.dataset.rmtArchiveRecovery === 'profile'
         ? archive_repository.rewriteCurrentArchiveVerdict() : archive_repository.continueCurrentArchiveImport()).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    const songButton = event.target.closest?.('[data-rmt-song]');
+    if (songButton) return void song_view.handleThemeSongAction(songButton.dataset.rmtSong, songButton.dataset.rmtSongId);
     const mailButton = event.target.closest?.('[data-rmt-inbox]');
     if (mailButton) return void ui_inboxView.handleInboxAction(mailButton.dataset.rmtInbox, mailButton.dataset.rmtInboxId);
     const generateModeButton = event.target.closest?.('[data-rmt-generate-mode]');
@@ -1125,6 +1184,13 @@ export function handleOverlayClick(event) {
         return void ui_heartView.showAvatarDialogueForCharacter(key);
     }
     if (action === 'heart-generate-part') return void modes_heart.generateHeartSection(actionEl.dataset.rmtHeartPart || 'dialogues');
+    if (action === 'heart-add-language') {
+        const category = bodyEl()?.querySelector('[data-rmt-language-category]')?.value || '';
+        return void modes_heart.generateHeartSection('dialogues', { languageCategory: category });
+    }
+    if (action === 'heart-generate-language') return void modes_heart.generateHeartSection('dialogues', {
+        replaceDialogues: actionEl.dataset.rmtHeartLanguageReplace === '1',
+    });
     if (action === 'heart-generate-season') return void modes_heart.generateHeartSeasonSection(actionEl.dataset.rmtHeartSeasonTarget || 'postending');
     if (action === 'heart-drama-prev') return ui_heartView.heartStepDrama(-1);
     if (action === 'heart-drama-next') return ui_heartView.heartStepDrama(1);
@@ -1132,17 +1198,7 @@ export function handleOverlayClick(event) {
     if (action === 'heart-firefly-next') return ui_heartView.heartStepFireflyPage(1);
     if (action === 'avatar-talk-again') return ui_heartView.renderAvatarDialoguePopup(runtimeState.activeAvatarDialogue, { repeat: true });
     if (action === 'avatar-heart-open') return ui_heartView.openHeartFromAvatar();
-    if (action === 'avatar-heart-generate') {
-        const state = runtimeState.activeAvatarDialogue;
-        if (!state?.entry || state.readOnly || !generation_imageGeneration.indexedArchiveMatchesCurrentChat(state.entry, core_context.getContext())) {
-            globalThis.toastr?.info?.('只有当前真实聊天对应的档案可以生成角色互动。', '心迹回廊');
-            return;
-        }
-        bodyEl()?.querySelector('.rmt-avatar-dialog-pop')?.remove();
-        runtimeState.activeAvatarDialogue = null;
-        if (!confirmExplicitAction('生成角色互动？', '先生成关系状态与头像专属时期台词。之后可在角色互动页单独生成未来/春夏秋冬 Drama 与日常一格。', { destructive: false })) return;
-        return void generation_client.generateMode(core_constants.MODE.HEART, { background: true });
-    }
+    if (action === 'avatar-heart-generate') return ui_heartView.openHeartFromAvatar();
     if (action === 'avatar-heart-open-archive') {
         const state = runtimeState.activeAvatarDialogue;
         bodyEl()?.querySelector('.rmt-avatar-dialog-pop')?.remove();
@@ -1375,6 +1431,8 @@ function refreshMemoryWorldInfoBookControls(context, world, section, expectedSco
 }
 
 export async function handleOverlayChange(event) {
+    if (cg_format_ui.handleCgFormatChange(event)) return;
+    if (workspace_ui.handleWorkspaceChange(event) || language_view.handleLanguageChange(event)) return;
     const advSelectEl = event.target.closest?.('[data-rmt-adv-select]');
     if (advSelectEl) return ui_advEventView.advSelect(advSelectEl.value);
     const allToggle = event.target.closest?.('[data-rmt-memory-wi-all]');

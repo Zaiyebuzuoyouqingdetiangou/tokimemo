@@ -1,3 +1,5 @@
+import * as ui_workspaceState from './workspaceState.js';
+import * as ui_workspace from './workspace.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_library from '../archive/library.js';
@@ -51,10 +53,11 @@ export function archiveOpenButtonFromEvent(event) {
 
 export function safeShowArchiveLibrary(source = 'unknown') {
     try {
-        if (navigation_bookmark.restorePagePosition({ home: showHome, chooser: ui_overlay.showChooser,
+        ui_workspaceState.loadWorkspacePreferences();
+        if (ui_workspaceState.workspace.restore && navigation_bookmark.restorePagePosition({ home: showHome, chooser: ui_overlay.showChooser,
             library: archive_library.showArchiveLibrary, character: archive_library.showArchiveCharacter })) return true;
-        if (navigation_bookmark.restoreReadingPosition({ open: ui_overlay.openOverlay, render: ui_overlay.renderActive, stopAutomaticLife: room.stopRoomClock })) return true;
-        if (navigation_bookmark.hasIndexedReadingPosition()) {
+        if (ui_workspaceState.workspace.restore && navigation_bookmark.restoreReadingPosition({ open: ui_overlay.openOverlay, render: ui_overlay.renderActive, stopAutomaticLife: room.stopRoomClock })) return true;
+        if (ui_workspaceState.workspace.restore && navigation_bookmark.hasIndexedReadingPosition()) {
             // Keep the public synchronous boolean contract. Indexed restoration
             // performs a read-only canonical fetch and cancels on chat/lifecycle changes.
             void navigation_bookmark.restoreIndexedReadingPosition({ open: ui_overlay.openOverlay, render: ui_overlay.renderActive,
@@ -63,7 +66,8 @@ export function safeShowArchiveLibrary(source = 'unknown') {
                 } });
             return true;
         }
-        showHome();
+        if (ui_workspaceState.workspace.startup === 'settings') showHome();
+        else ui_workspace.openWorkspaceTab(ui_workspaceState.workspace.startup);
         return true;
     } catch (error) {
         console.error(`[HeartbeatMemories] open archive failed (${core_text.normalizeText(source, 80)})`, core_text.safeErrorDiagnostic(error));

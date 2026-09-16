@@ -1,3 +1,4 @@
+import * as cg_format_ui from './cgFormatControl.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_repository from '../archive/repository.js';
@@ -288,14 +289,22 @@ export async function refreshManualModelOptions({ fetchRemote = false } = {}) {
         panel.dataset.rmtManualModelFallback = '1';
     }
     if (!isCurrent()) return null;
-    list.replaceChildren();
-    for (const model of [...new Set(models)]) {
+    const uniqueModels = [...new Set(models)].filter(Boolean);
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = uniqueModels.length ? `选择已拉取模型（${uniqueModels.length}）` : '没有可用模型';
+    list.replaceChildren(placeholder);
+    for (const model of uniqueModels) {
         const option = document.createElement('option');
         option.value = model;
+        option.textContent = model;
         list.appendChild(option);
     }
-    if (!input.value && models[0]) {
-        input.value = models[0];
+    list.hidden = uniqueModels.length === 0;
+    list.value = uniqueModels.includes(input.value) ? input.value : '';
+    if (!input.value && uniqueModels[0]) {
+        input.value = uniqueModels[0];
+        list.value = uniqueModels[0];
         panel.dataset.rmtManualDirty = '1';
     }
     if (button) {
@@ -565,7 +574,7 @@ export function mountSettings({ homeTarget = null } = {}) {
             <label class="rmt-settings-field"><span>API 地址</span><input class="text_pole" data-rmt-manual-api-base type="url" inputmode="url" placeholder="https://api.example.com/v1"></label>
             <label class="rmt-settings-field"><span>API Key</span><div class="rmt-manual-key-row"><input class="text_pole" data-rmt-manual-api-key type="password" autocomplete="new-password" placeholder="API Key（可留空）"><button type="button" class="menu_button" data-rmt-manual-api-key-clear>清除 Key</button></div></label>
             <div class="rmt-model-row">
-              <label class="rmt-settings-field"><span>模型 ID</span><input class="text_pole" data-rmt-manual-api-model list="heartbeat_memories_manual_models" type="text" placeholder="例如 gpt-4.1"><datalist id="heartbeat_memories_manual_models" data-rmt-manual-api-models></datalist></label>
+              <label class="rmt-settings-field"><span>模型 ID</span><input class="text_pole" data-rmt-manual-api-model type="text" placeholder="例如 gpt-4.1"><select class="text_pole rmt-manual-model-picker" data-rmt-manual-api-models hidden><option value="">选择已拉取模型</option></select></label>
               <button type="button" class="menu_button rmt-model-refresh" data-rmt-manual-api-model-refresh>拉取模型</button>
             </div>
             <button type="button" class="menu_button rmt-settings-wide rmt-manual-save" data-rmt-manual-api-save>保存并使用</button>
@@ -585,6 +594,7 @@ export function mountSettings({ homeTarget = null } = {}) {
         <details class="rmt-settings-card" data-rmt-settings-section="image">
           <summary class="rmt-settings-card-head"><span>CG</span><div><b>CG 生图</b><small>相簿 · ADV · 日常一格</small></div></summary>
           <div class="rmt-settings-section-body">
+            ${cg_format_ui.cgFormatControlHtml()}
             <label class="rmt-settings-field"><span>生图渠道</span><select class="text_pole" data-rmt-image-generation-provider aria-describedby="rmt-image-provider-status"><option value="baibai-image">柏宝绘 · 公开 API v1</option></select></label>
             <p id="rmt-image-provider-status" data-rmt-image-generation-status role="status" aria-live="polite"></p>
             <p>柏宝绘需单独安装并配置出图渠道。只在点击绘制并确认后出图，失败不会自动换渠道。</p>
@@ -687,6 +697,7 @@ export function mountSettings({ homeTarget = null } = {}) {
     };
     refreshCreative();
     panel.addEventListener('change', async event => {
+        if (cg_format_ui.handleCgFormatChange(event)) return;
         const target = event.target;
         if (target.matches?.('[data-rmt-source-external]')) {
             core_settings.updatePluginSettings({ useCurrentChatExternalMemory: !!target.checked });
@@ -868,6 +879,14 @@ export function mountSettings({ homeTarget = null } = {}) {
             }
             return;
         }
+        if (target.matches?.('[data-rmt-manual-api-models]')) {
+            const manualInput = panel.querySelector('[data-rmt-manual-api-model]');
+            if (manualInput && target.value) {
+                manualInput.value = target.value;
+                panel.dataset.rmtManualDirty = '1';
+            }
+            return;
+        }
         if (target.matches?.('[data-rmt-banned-generated-phrases]')) {
             core_settings.updatePluginSettings({ bannedGeneratedPhrases: core_settings.normalizeBannedGeneratedPhrases(target.value) });
             refreshGenerationSettingsUi();
@@ -877,6 +896,10 @@ export function mountSettings({ homeTarget = null } = {}) {
         if (event.target.matches?.('[data-rmt-creative-text]')) panel.querySelector('[data-rmt-creative-count]').textContent = event.target.value.length.toLocaleString() + ' / 20,000';
         if (event.target.matches?.('[data-rmt-manual-api-base],[data-rmt-manual-api-key],[data-rmt-manual-api-model]')) {
             panel.dataset.rmtManualDirty = '1';
+            if (event.target.matches?.('[data-rmt-manual-api-model]')) {
+                const picker = panel.querySelector('[data-rmt-manual-api-models]');
+                if (picker) picker.value = [...picker.options].some(option => option.value === event.target.value) ? event.target.value : '';
+            }
         }
         if (event.target.matches?.('[data-rmt-theme-alpha]')) {
             core_settings.updatePluginSettings({ themeAlpha: Math.max(0.72, Math.min(1, Number(event.target.value) || 0.96)) });

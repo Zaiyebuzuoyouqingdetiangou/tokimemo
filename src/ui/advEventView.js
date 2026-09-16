@@ -1,3 +1,4 @@
+import * as cg_format_ui from './cgFormatControl.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_constants from '../core/constants.js';
@@ -30,7 +31,7 @@ export function renderAdvMode() {
     const list = session.events.map((item, index) => `<button type="button" class="rmt-event ${item.id === session.selectedId ? 'active' : ''}" data-rmt-event-id="${core_text.esc(item.id)}"><span class="rmt-event-index">${String(index + 1).padStart(2, '0')}</span><span class="rmt-event-copy"><b>${core_text.esc(item.title)}</b><small>${core_text.esc(item.date)}</small></span><em class="rmt-event-state">${generation_imageGeneration.normalizeCgImageRecord(item.cgImage) ? '图✓ ' : ''}${item.adv?.paragraphs?.length ? 'ADV✓' : 'CG'}</em></button>`).join('');
     const options = session.events.map((item, index) => `<option value="${core_text.esc(item.id)}" ${item.id === selected?.id ? 'selected' : ''}>${String(index + 1).padStart(2, '0')} · ${core_text.esc(item.title)} · ${core_text.esc(item.date)}${item.adv?.paragraphs?.length ? ' · ADV✓' : ''}</option>`).join('');
     const hasAdv = !!selected?.adv?.paragraphs?.length;
-    const reading = session.view === 'adv' && hasAdv;
+    const reading = session.view !== 'cg' && hasAdv;
     let detail = '';
     if (selected) {
         const image = `<div class="rmt-big-cg rmt-reading-image${generation_imageGeneration.normalizeCgImageRecord(selected.cgImage) ? ' rmt-reading-image-saved' : ''}">${generation_imageGeneration.cgImageLayerHtml(selected, { lazy: false })}</div>`;
@@ -38,11 +39,12 @@ export function renderAdvMode() {
         if (reading) {
             const paras = selected.adv.paragraphs;
             session.paragraphIndex = Math.max(0, Math.min(session.paragraphIndex, paras.length - 1));
-            detail = `${actions}<div class="rmt-adv-reading-layout"><div class="rmt-adv-picture">${image}</div><div class="rmt-adv-reading-copy"><details class="rmt-cg-caption"><summary><b>${core_text.esc(selected.title)}</b><span>${core_text.esc(selected.date)}</span></summary><p>${core_text.esc(selected.cgDesc)}</p></details><div class="rmt-adv-reader"><div class="rmt-progress">第 ${session.paragraphIndex + 1} 段 / 共 ${paras.length} 段</div><div class="rmt-adv-para">${core_text.esc(paras[session.paragraphIndex])}</div><div class="rmt-reader-actions"><button type="button" class="rmt-btn" data-rmt-action="adv-prev" ${session.paragraphIndex <= 0 ? 'disabled' : ''}>上一段</button><button type="button" class="rmt-btn" data-rmt-action="adv-next">${session.paragraphIndex >= paras.length - 1 ? '重看' : '下一段'}</button></div></div></div></div>`;
+            detail = `${actions}<div class="rmt-adv-reading-layout rmt-adv-text-first"><div class="rmt-adv-reading-copy"><details class="rmt-cg-caption"><summary><b>${core_text.esc(selected.title)}</b><span>${core_text.esc(selected.date)}</span></summary><p>${core_text.esc(selected.cgDesc)}</p></details><div class="rmt-adv-reader"><div class="rmt-progress">第 ${session.paragraphIndex + 1} 段 / 共 ${paras.length} 段</div><div class="rmt-adv-para">${core_text.esc(paras[session.paragraphIndex])}</div><div class="rmt-reader-actions"><button type="button" class="rmt-btn" data-rmt-action="adv-prev" ${session.paragraphIndex <= 0 ? 'disabled' : ''}>上一段</button><button type="button" class="rmt-btn" data-rmt-action="adv-next">${session.paragraphIndex >= paras.length - 1 ? '重看' : '下一段'}</button></div></div></div></div>`;
         } else {
             // CG view contains no caption or prose layer. The return action stays
             // outside the image, and rendering cannot trigger a paid request.
-            detail = `${actions}${image}`;
+            detail = session.view === 'cg' ? `${actions}${image}`
+                : `${actions}<section class="rmt-workspace-empty"><h2>${core_text.esc(selected.title)}</h2><p>这篇 ADV 正文尚未生成。</p><button type="button" class="rmt-btn" data-rmt-action="cg-only">只看 CG</button></section>`;
         }
     }
     const recoveryIds = new Set(core_text.cleanArray(session.advBulkRecovery?.failedIds, 64, 100));
@@ -61,6 +63,7 @@ export function renderAdvMode() {
         ? '<button type="button" class="rmt-btn" data-rmt-generate-mode="adv" data-rmt-regenerate="true">同一记忆 · 追加新镜头</button>' : '';
     const libraryTools = `<details class="rmt-adv-library-tools"><summary>生成与补全 · ${completedAdv}/${session.events.length}</summary><div>${bulkBar}${expandButton}${generation_imageGeneration.cgImageProviderBar({ readOnly: readOnlyArchive })}</div></details>`;
     body.innerHTML = `<div class="rmt-adv ${reading ? 'rmt-adv-reading' : 'rmt-cg-only'}"><aside class="rmt-event-list">${mobilePicker}${libraryTools}<div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail">${detail}</section><div class="rmt-inline-status" hidden></div></div>`;
+    cg_format_ui.mountCgFormatControl(body, 'adv', '', readOnlyArchive);
 }
 
 export function resumeAdvReading() {
@@ -77,7 +80,7 @@ export function advSelect(id) {
     const item = runtimeState.activeSession.events.find(x => x.id === id);
     if (!item) return;
     runtimeState.activeSession.selectedId = item.id;
-    runtimeState.activeSession.view = 'cg';
+    runtimeState.activeSession.view = 'adv';
     runtimeState.activeSession.paragraphIndex = 0;
     renderAdvMode();
 }
@@ -89,7 +92,7 @@ export function advEventStep(delta) {
     const item = runtimeState.activeSession.events[next];
     if (!item || next === current) return;
     runtimeState.activeSession.selectedId = item.id;
-    runtimeState.activeSession.view = 'cg';
+    runtimeState.activeSession.view = 'adv';
     runtimeState.activeSession.paragraphIndex = 0;
     renderAdvMode();
 }

@@ -1,3 +1,4 @@
+import * as ui_workspaceState from './workspaceState.js';
 // One in-page reading bookmark; never retain a second archive or image payload.
 import * as context from '../core/context.js';
 import * as constants from '../core/constants.js';
@@ -45,7 +46,7 @@ export function rememberFloatingArchive() {
             && !groups.isArchiveEntryDeletedFromLibrary(entry, ctx)) : null;
         const entry = indexed || liveEntry;
         const mode = runtimeState.activeMode;
-        const mark = { scope, page, scroll: scroll(), mode: mode || null, ui: navigation.readingPosition(runtimeState.activeSession) };
+        const mark = { scope, page, scroll: scroll(), mode: mode || null, ui: navigation.readingPosition(runtimeState.activeSession), workspaceRoute: ui_workspaceState.workspace.route, workspaceTab: ui_workspaceState.workspace.tab };
         if (indexed || (!snapshot && (mode || page === 'chooser'))) {
             const bank = indexed ? snapshot.memory : memory;
             Object.assign(mark, { chatId: indexed ? snapshot.chatId : context.getChatId(ctx),
@@ -138,10 +139,12 @@ export async function openFloatingArchive() {
         runtimeState.activeArchiveSnapshot = snapshot; runtimeState.activeArchiveReadOnly = true;
         runtimeState.archiveLibraryCharacterKey = snapshot.archiveGroupId || '';
         if (session) {
+            ui_workspaceState.workspace.route = ui_workspaceState.workspaceRoute(mark.mode, mark.workspaceRoute); ui_workspaceState.workspace.empty = null;
             Object.assign(session, mark.ui);
             runtimeState.activeMode = mark.mode; runtimeState.activeSession = session;
             overlay.renderActive(); room.stopRoomClock(); restoreScroll(mark);
         } else {
+            if (['archive','content'].includes(mark.workspaceTab)) ui_workspaceState.workspace.tab = mark.workspaceTab;
             library.showIndexedArchiveSnapshot(snapshot);
             if (!mark.mode && snapshot.memory.archiveRevision === mark.revision) restoreScroll(mark);
         }

@@ -1,3 +1,7 @@
+import * as cg_format_ui from './cgFormatControl.js';
+import * as heart_reader from './heartReaderState.js';
+import * as ui_workspaceState from './workspaceState.js';
+import * as language_view from './languageView.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_groups from '../archive/groups.js';
@@ -6,12 +10,14 @@ import * as archive_repository from '../archive/repository.js';
 import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
+import * as core_heartLanguage from '../core/heartLanguage.js';
 import * as core_dialogue from '../core/dialogue.js';
 import * as core_context from '../core/context.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
+import * as generation_recovery from '../generation/recovery.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as ui_overlay from './overlay.js';
 import * as image_viewer from './cgImageViewer.js';
@@ -129,16 +135,9 @@ export function renderAvatarDialoguePopup(state = runtimeState.activeAvatarDialo
         archive_groups.touchAvatarVisit(characterKey);
     }
     const canGenerate = !readOnly && !!entry && generation_imageGeneration.indexedArchiveMatchesCurrentChat(entry, core_context.getContext());
-    const actions = session
-        ? `<button type="button" class="rmt-btn" data-rmt-action="avatar-talk-again">再说一句</button><button type="button" class="rmt-btn rmt-cg-primary" data-rmt-action="avatar-heart-open">打开角色互动 / Voice Drama</button>`
-        : canGenerate
-            ? `<button type="button" class="rmt-btn rmt-cg-primary" data-rmt-action="avatar-heart-generate">生成角色互动 / Voice Drama</button>`
-            : `<button type="button" class="rmt-btn" data-rmt-action="avatar-heart-open-archive">打开这份档案</button>`;
-    const message = session
-        ? speech?.text || '……'
-        : readOnly
-            ? '这份历史档案还没有生成角色互动台词库。为了不偷偷切换聊天，我不会在这里只读状态下直接发起生成。'
-            : '这份当前档案还没有角色互动台词库。生成后，点头像会按早中晚、周末、生日、节日和久未访问状态自动换台词。';
+    const language = core_heartLanguage.heartLanguageStatus(session);
+    const actions = `${language.hasContent ? '<button type="button" class="rmt-btn" data-rmt-action="avatar-talk-again">再说一句</button>' : ''}<button type="button" class="rmt-btn rmt-cg-primary" data-rmt-action="avatar-heart-open">打开角色互动</button>`;
+    const message = speech?.text || (language.hasContent ? '当前时段暂无台词。' : '基础语言尚未生成。');
     const label = session ? speech?.label || '角色互动' : 'HEART VOICE';
     const dialogueIdentity = { characterName: state.characterName || session?.characterName || entry?.characterName || '角色', userName: state.userName || state.snapshot?.memory?.userName || entry?.memory?.userName || session?.userName || '', charAvatar: avatarSrc || '', userAvatar: '' };
     const rows = core_dialogue.normalizeDialogueRows([{ speaker: session ? 'char' : 'narrator', text: message }], dialogueIdentity);
@@ -190,37 +189,23 @@ export async function showAvatarDialogueForCharacter(characterKey) {
 
 export function openHeartFromAvatar() {
     const state = runtimeState.activeAvatarDialogue;
-    if (!state?.session) return;
+    if (!state?.entry) return;
     if (state.readOnly && state.snapshot) { runtimeState.activeArchiveSnapshot = state.snapshot; runtimeState.activeArchiveReadOnly = true; }
-    else { runtimeState.activeArchiveSnapshot = null; runtimeState.activeArchiveReadOnly = true; }
-    runtimeState.activeMode = core_constants.MODE.HEART;
-    runtimeState.activeSession = structuredClone(state.session);
-    ui_overlay.renderActive();
+    else {
+        if (!generation_imageGeneration.indexedArchiveMatchesCurrentChat(state.entry, core_context.getContext())) return;
+        runtimeState.activeArchiveSnapshot = null; runtimeState.activeArchiveReadOnly = true;
+    }
+    runtimeState.activeAvatarDialogue = null;
+    return openHeartMode();
 }
 
 export function openHeartMode() {
-    if (runtimeState.activeArchiveSnapshot) {
-        const session = core_cache.loadSession(core_constants.MODE.HEART, {
-            cache: runtimeState.activeArchiveSnapshot.cache,
-            chatId: runtimeState.activeArchiveSnapshot.chatId,
-            memoryBank: runtimeState.activeArchiveSnapshot.memory,
-        });
-        if (!session) {
-            globalThis.toastr?.info?.('这份只读档案还没有生成角色互动 / Voice Drama。关闭只读并进入对应聊天后即可生成。', '心迹回廊');
-            return;
-        }
-        runtimeState.activeMode = core_constants.MODE.HEART;
-        runtimeState.activeSession = session;
-        return ui_overlay.renderActive();
-    }
-    const session = core_cache.loadSession(core_constants.MODE.HEART);
-    if (session) {
-        runtimeState.activeMode = core_constants.MODE.HEART;
-        runtimeState.activeSession = session;
-        return ui_overlay.renderActive();
-    }
-    if (!ui_overlay.confirmExplicitAction('生成角色互动？', '首次先生成关系状态与头像专属时期台词。角色互动页面只展示未来/春夏秋冬 Drama 与日常一格；四季番外之后可随时继续追加。', { destructive: false })) return;
-    void generation_client.generateMode(core_constants.MODE.HEART, { background: true });
+    return ui_overlay.openCachedOrGenerate(core_constants.MODE.HEART);
+}
+
+export function confirmHeartLanguageReplacement() {
+    return ui_overlay.confirmExplicitActionTwice('重新生成基础语言？',
+        '成功后仅替换基础语言及其关系摘要、特别日。春夏秋冬、萤火虫栖息地、日常一格和聊天档案保留；失败不覆盖旧语言。', { destructive: true });
 }
 
 export function heartVoiceKindLabel(kind) {
@@ -232,18 +217,21 @@ export function heartSeasonLabel(season) {
 }
 
 export function selectedHeartVoice() {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return null;
-    return runtimeState.activeSession.voiceDramas.find(item => item.id === runtimeState.activeSession.selectedVoiceId) || runtimeState.activeSession.voiceDramas[0] || null;
+    const session = heart_reader.heartReaderSession();
+    if (!session || session.kind !== core_constants.MODE.HEART) return null;
+    return session.voiceDramas.find(item => item.id === session.selectedVoiceId) || session.voiceDramas[0] || null;
 }
 
 export function selectedHeartScenario() {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return null;
-    return runtimeState.activeSession.scenarioDramas.find(item => item.id === runtimeState.activeSession.selectedScenarioId) || runtimeState.activeSession.scenarioDramas[0] || null;
+    const session = heart_reader.heartReaderSession();
+    if (!session || session.kind !== core_constants.MODE.HEART) return null;
+    return session.scenarioDramas.find(item => item.id === session.selectedScenarioId) || session.scenarioDramas[0] || null;
 }
 
 export function selectedHeartStrip() {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return null;
-    return runtimeState.activeSession.dailyStrips.find(item => item.id === runtimeState.activeSession.selectedStripId) || runtimeState.activeSession.dailyStrips[0] || null;
+    const session = heart_reader.heartReaderSession();
+    if (!session || session.kind !== core_constants.MODE.HEART) return null;
+    return session.dailyStrips.find(item => item.id === session.selectedStripId) || session.dailyStrips[0] || null;
 }
 
 export function renderHeartScriptLines(lines, identity = {}) {
@@ -301,52 +289,62 @@ export async function clearHeartStripImage(stripId) {
 }
 
 export function heartSetView(view) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
+    const session = heart_reader.heartReaderSession();
+    if (!session || session.kind !== core_constants.MODE.HEART) return;
     const allowed = new Set(['seasons', 'strips', 'fireflies']);
-    runtimeState.activeSession.view = allowed.has(view) ? view : 'seasons';
+    session.view = allowed.has(view) ? view : 'seasons';
+    heart_reader.rememberHeartReader(session);
     renderHeart();
 }
 
 export function heartSetSeason(season) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
+    const session = heart_reader.heartReaderSession();
+    if (!session || session.kind !== core_constants.MODE.HEART) return;
     const allowed = new Set(['postending', 'spring', 'summer', 'autumn', 'winter']);
-    runtimeState.activeSession.selectedSeason = allowed.has(season) ? season : 'postending';
-    const items = heartSeasonDramaItems(runtimeState.activeSession, runtimeState.activeSession.selectedSeason);
+    session.selectedSeason = allowed.has(season) ? season : 'postending';
+    const items = heartSeasonDramaItems(session, session.selectedSeason);
     const latest = items[items.length - 1] || null;
-    if (latest?.type === 'voice') runtimeState.activeSession.selectedVoiceId = latest.item.id;
-    if (latest?.type === 'scenario') runtimeState.activeSession.selectedScenarioId = latest.item.id;
-    runtimeState.activeSession.selectedDramaKey = latest ? `${latest.type}:${latest.item.id}` : '';
-    runtimeState.activeSession.view = 'seasons';
+    if (latest?.type === 'voice') session.selectedVoiceId = latest.item.id;
+    if (latest?.type === 'scenario') session.selectedScenarioId = latest.item.id;
+    session.selectedDramaKey = latest ? `${latest.type}:${latest.item.id}` : '';
+    session.view = 'seasons';
+    heart_reader.rememberHeartReader(session);
     renderHeart();
 }
 
 export function heartSelectVoice(id) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
-    const item = runtimeState.activeSession.voiceDramas.find(entry => entry.id === id);
+    const session = heart_reader.heartReaderSession();
+    if (!session || session.kind !== core_constants.MODE.HEART) return;
+    const item = session.voiceDramas.find(entry => entry.id === id);
     if (!item) return;
-    runtimeState.activeSession.selectedVoiceId = id;
-    runtimeState.activeSession.selectedDramaKey = `voice:${id}`;
-    runtimeState.activeSession.selectedSeason = item.kind;
-    runtimeState.activeSession.view = 'seasons';
+    session.selectedVoiceId = id;
+    session.selectedDramaKey = `voice:${id}`;
+    session.selectedSeason = item.kind;
+    session.view = 'seasons';
+    heart_reader.rememberHeartReader(session);
     renderHeart();
 }
 
 export function heartSelectScenario(id) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
-    const item = runtimeState.activeSession.scenarioDramas.find(entry => entry.id === id);
+    const session = heart_reader.heartReaderSession();
+    if (!session || session.kind !== core_constants.MODE.HEART) return;
+    const item = session.scenarioDramas.find(entry => entry.id === id);
     if (!item) return;
-    runtimeState.activeSession.selectedScenarioId = id;
-    runtimeState.activeSession.selectedDramaKey = `scenario:${id}`;
-    runtimeState.activeSession.selectedSeason = item.season;
-    runtimeState.activeSession.view = 'seasons';
+    session.selectedScenarioId = id;
+    session.selectedDramaKey = `scenario:${id}`;
+    session.selectedSeason = item.season;
+    session.view = 'seasons';
+    heart_reader.rememberHeartReader(session);
     renderHeart();
 }
 
 export function heartSelectStrip(id) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
-    if (!runtimeState.activeSession.dailyStrips.some(item => item.id === id)) return;
-    runtimeState.activeSession.selectedStripId = id;
-    runtimeState.activeSession.view = 'strips';
+    const session = heart_reader.heartReaderSession();
+    if (!session || session.kind !== core_constants.MODE.HEART) return;
+    if (!session.dailyStrips.some(item => item.id === id)) return;
+    session.selectedStripId = id;
+    session.view = 'strips';
+    heart_reader.rememberHeartReader(session);
     renderHeart();
 }
 
@@ -375,40 +373,46 @@ export function heartCurrentDrama(session, season) {
 }
 
 export function heartStepDrama(delta) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
-    const season = runtimeState.activeSession.selectedSeason || 'postending';
-    const state = heartCurrentDrama(runtimeState.activeSession, season);
+    const session = heart_reader.heartReaderSession();
+    if (!session || session.kind !== core_constants.MODE.HEART) return;
+    const season = session.selectedSeason || 'postending';
+    const state = heartCurrentDrama(session, season);
     if (!state.items.length) return;
     const nextIndex = (state.index + Number(delta || 0) + state.items.length) % state.items.length;
     const next = state.items[nextIndex];
-    if (next.type === 'voice') runtimeState.activeSession.selectedVoiceId = next.item.id;
-    else runtimeState.activeSession.selectedScenarioId = next.item.id;
-    runtimeState.activeSession.selectedDramaKey = `${next.type}:${next.item.id}`;
+    if (next.type === 'voice') session.selectedVoiceId = next.item.id;
+    else session.selectedScenarioId = next.item.id;
+    session.selectedDramaKey = `${next.type}:${next.item.id}`;
+    heart_reader.rememberHeartReader(session);
     renderHeart();
 }
 
 export function heartSelectFirefly(id) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
-    const item = runtimeState.activeSession.fireflyVoices?.find(entry => entry.id === id);
+    const session = heart_reader.heartReaderSession();
+    if (!session || session.kind !== core_constants.MODE.HEART) return;
+    const item = session.fireflyVoices?.find(entry => entry.id === id);
     if (!item) return;
-    runtimeState.activeSession.selectedFireflyId = id;
-    runtimeState.activeSession.view = 'fireflies';
+    session.selectedFireflyId = id;
+    session.view = 'fireflies';
+    heart_reader.rememberHeartReader(session);
     renderHeart();
 }
 
 export function heartStepFireflyPage(direction) {
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
-    const voices = Array.isArray(runtimeState.activeSession.fireflyVoices) ? runtimeState.activeSession.fireflyVoices : [];
+    const session = heart_reader.heartReaderSession();
+    if (!session || session.kind !== core_constants.MODE.HEART) return;
+    const voices = Array.isArray(session.fireflyVoices) ? session.fireflyVoices : [];
     if (!voices.length) return;
-    const selectedIndex = Math.max(0, voices.findIndex(item => item.id === runtimeState.activeSession.selectedFireflyId));
+    const selectedIndex = Math.max(0, voices.findIndex(item => item.id === session.selectedFireflyId));
     const pageSize = core_constants.HEART_FIREFLY_PAGE_SIZE;
     const pageCount = Math.max(1, Math.ceil(voices.length / pageSize));
     const currentPage = Math.min(pageCount - 1, Math.floor(selectedIndex / pageSize));
     const nextPage = Math.max(0, Math.min(pageCount - 1, currentPage + (Number(direction) < 0 ? -1 : 1)));
     if (nextPage === currentPage) return;
     const next = voices[nextPage * pageSize];
-    if (next) runtimeState.activeSession.selectedFireflyId = next.id;
-    runtimeState.activeSession.view = 'fireflies';
+    if (next) session.selectedFireflyId = next.id;
+    session.view = 'fireflies';
+    heart_reader.rememberHeartReader(session);
     renderHeart();
 }
 
@@ -434,31 +438,38 @@ function fireflyMeta(color) {
 }
 
 export function renderHeart() {
-    const session = runtimeState.activeSession;
+    const session = heart_reader.heartReaderSession();
     if (!session || session.kind !== core_constants.MODE.HEART) return;
+    if (ui_workspaceState.workspace.route === 'language') return language_view.renderLanguage();
+    const standalonePostending = ui_workspaceState.workspace.route === 'postending';
+    const standaloneStrips = ui_workspaceState.workspace.route === 'strips';
+    const standaloneFireflies = ui_workspaceState.workspace.route === 'fireflies';
     const readOnly = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
     const canGenerateDerived = !runtimeState.activeArchiveSnapshot || runtimeState.activeArchiveSnapshot.backupOnly !== true;
     ui_overlay.setBackVisible(true, runtimeState.activeArchiveSnapshot ? (readOnly ? '只读档案' : '档案') : '当前档案');
-    ui_overlay.topTitle('角色互动');
+    ui_overlay.topTitle(standalonePostending ? '未来 / 后日谈' : standaloneStrips ? '日常一格' : standaloneFireflies ? '萤火虫栖息地' : '角色互动');
     const view = ['seasons', 'strips', 'fireflies'].includes(session.view) ? session.view : 'seasons';
     session.view = view;
     const parts = session.generationParts || {};
-    const heartSeasons = ['postending', 'spring', 'summer', 'autumn', 'winter'];
-    const selectedHeartSeason = heartSeasons.includes(session.selectedSeason) ? session.selectedSeason : 'postending';
+    const heartSeasons = standalonePostending ? ['postending'] : ['spring', 'summer', 'autumn', 'winter'];
+    const selectedHeartSeason = heartSeasons.includes(session.selectedSeason) ? session.selectedSeason : heartSeasons[0];
     const heartSeasonLabels = { postending: '未来 / 后日谈', spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
     const selectedHeartSeasonVoiceCount = session.voiceDramas.filter(item => item.kind === selectedHeartSeason).length;
     const selectedHeartSeasonScenarioCount = session.scenarioDramas.filter(item => item.season === selectedHeartSeason).length;
     const selectedHeartSeasonReady = selectedHeartSeason === 'postending'
         ? selectedHeartSeasonVoiceCount > 0
         : selectedHeartSeasonVoiceCount > 0 && selectedHeartSeasonScenarioCount > 0;
-    const selectedHeartSeasonPartial = selectedHeartSeason !== 'postending' && selectedHeartSeasonVoiceCount !== selectedHeartSeasonScenarioCount;
-    const tabs = `<div class="rmt-heart-tabs">
+    const journal = core_cache.loadGenerationRecovery(core_constants.MODE.HEART, core_context.getContext(), runtimeState.activeArchiveSnapshot?.cache);
+    const recoveryStatus = generation_recovery.generationRecoverySummary(journal);
+    const selectedHeartSeasonPartial = journal?.operation?.kind === 'heart-season' && journal.operation.season === selectedHeartSeason
+        && (recoveryStatus?.canRetry || recoveryStatus?.canContinue);
+    const selectedHeartSeasonHasContent = selectedHeartSeasonVoiceCount + selectedHeartSeasonScenarioCount > 0;
+    const tabs = standalonePostending || standaloneStrips || standaloneFireflies ? '' : `<div class="rmt-heart-tabs">
       <button type="button" data-rmt-heart-view="seasons" class="${view === 'seasons' ? 'active' : ''}">春夏秋冬 / Drama</button>
       <button type="button" data-rmt-heart-view="fireflies" class="${view === 'fireflies' ? 'active' : ''}">萤火虫栖息地</button>
-      <button type="button" data-rmt-heart-view="strips" class="${view === 'strips' ? 'active' : ''}">日常一格</button>
     </div>`;
     const generationButton = !canGenerateDerived ? '' : view === 'seasons'
-        ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-season" data-rmt-heart-season-target="${core_text.esc(selectedHeartSeason)}">${selectedHeartSeasonPartial ? '继续补全本次' : selectedHeartSeasonReady ? '追加一篇' : '生成首篇'}${core_text.esc(heartSeasonLabels[selectedHeartSeason])}</button>`
+        ? `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-season" data-rmt-heart-season-target="${core_text.esc(selectedHeartSeason)}">${selectedHeartSeasonPartial ? '重试未完成篇 · ' : selectedHeartSeasonHasContent ? '追加生成 · ' : '生成首篇 · '}${core_text.esc(heartSeasonLabels[selectedHeartSeason])}</button>`
         : view === 'fireflies'
             ? (() => {
                 const legacyCount = (Array.isArray(session.fireflyVoices) ? session.fireflyVoices : []).filter(item => !Array.isArray(item?.script) || item.script.length < 5).length;
@@ -466,8 +477,10 @@ export function renderHeart() {
                 return `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="fireflies">${core_text.esc(label)}</button>`;
             })()
             : `<button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="strips">${parts.strips ? '从新增档案追加日常一格' : '生成日常一格'}</button>`;
-    const topActions = `<div class="rmt-heart-top-actions">${generationButton}</div>`;
-    const summary = `<section class="rmt-heart-summary"><div><b>${core_text.esc(session.relationshipState)}</b><p>${core_text.esc(session.relationshipSummary)}</p></div>${topActions}</section>`;
+    const rejected = core_heartLanguage.heartCollectionIssues(session)[view] || 0;
+    const retryItems = !canGenerateDerived || !rejected ? '' : `<details class="rmt-heart-language"><summary>最近一次有 ${rejected} 条未通过校验</summary><p>已有内容照常阅读；不会自动补数。</p><button type="button" class="rmt-btn" data-rmt-action="heart-generate-part" data-rmt-heart-part="${view}">重试未完成条目</button></details>`;
+    const topActions = `<div class="rmt-heart-top-actions">${generationButton}</div>${retryItems}`;
+    const summary = `<section class="rmt-heart-summary">${session.relationshipSummary ? `<details><summary>${core_text.esc(session.relationshipState || '当前关系')}</summary><p>${core_text.esc(session.relationshipSummary)}</p></details>` : ''}${topActions}</section>`;
     let content = '';
 
     if (view === 'seasons') {
@@ -491,7 +504,7 @@ export function renderHeart() {
             const tone = ['soft', 'clear', 'muted', 'deep'].includes(item.visualTone) ? item.visualTone : 'soft';
             const dots = state.items.map((entry, index) => `<button type="button" class="rmt-heart-drama-dot ${index === state.index ? 'active' : ''}" ${entry.type === 'voice' ? `data-rmt-heart-voice-id="${core_text.esc(entry.item.id)}"` : `data-rmt-heart-scenario-id="${core_text.esc(entry.item.id)}"`} aria-label="${core_text.esc(entry.item.title)}"></button>`).join('');
             detail = `<section class="rmt-heart-season-stage ${seasonClass} tone-${core_text.esc(tone)}">
-              <div class="rmt-heart-drama-pager"><button type="button" data-rmt-action="heart-drama-prev" aria-label="上一篇">‹</button><div><small>${current.type === 'voice' ? 'VOICE DRAMA' : 'SCENARIO DRAMA'}</small><b>${state.index + 1} / ${state.items.length}</b></div><button type="button" data-rmt-action="heart-drama-next" aria-label="下一篇">›</button></div>
+              <div class="rmt-heart-drama-pager"><button type="button" data-rmt-action="heart-drama-prev" aria-label="上一篇">‹</button><div><small>${current.type === 'voice' ? 'VOICE DRAMA' : 'SCENARIO DRAMA'}</small><b>第 ${state.index + 1} 篇 · 共 ${state.items.length} 篇</b></div><button type="button" data-rmt-action="heart-drama-next" aria-label="下一篇">›</button></div>
               <div class="rmt-heart-drama-dots">${dots}</div>
               <div class="rmt-heart-drama-head"><div><h2>${core_text.esc(item.title)}</h2><p>${core_text.esc(item.subtitle)}</p></div><span>${core_text.esc(heartSeasonLabels[selectedHeartSeason])}</span></div>
               <div class="rmt-heart-setting">${core_text.esc(item.setting)}</div>
@@ -500,7 +513,7 @@ export function renderHeart() {
         } else {
             detail = `<div class="rmt-heart-empty">${readOnly ? '这一季还没有 Drama。' : `点击上方按钮生成${core_text.esc(heartSeasonLabels[selectedHeartSeason])}首篇；之后每次只新增并翻阅一篇。`}</div>`;
         }
-        content = `<div class="rmt-heart-drama-layout rmt-heart-single-drama"><nav>${nav}</nav><main>${detail}</main></div>`;
+        content = `<div class="rmt-heart-drama-layout rmt-heart-single-drama">${standalonePostending ? '' : `<nav>${nav}</nav>`}<main>${detail}</main></div>`;
     } else if (view === 'fireflies') {
         const voices = Array.isArray(session.fireflyVoices) ? session.fireflyVoices : [];
         const selected = voices.find(item => item.id === session.selectedFireflyId) || voices[voices.length - 1] || voices[0] || null;
@@ -544,5 +557,7 @@ export function renderHeart() {
         content = `${generation_imageGeneration.cgImageProviderBar({ readOnly })}<div class="rmt-heart-drama-layout rmt-heart-strip-layout"><nav>${nav}</nav><main>${detail}</main></div>`;
     }
 
+    heart_reader.rememberHeartReader(session);
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-heart">${summary}${tabs}${content}</div>`;
+    cg_format_ui.mountCgFormatControl(ui_overlay.bodyEl(), 'heart', view === 'strips' ? 'strips' : '', readOnly);
 }

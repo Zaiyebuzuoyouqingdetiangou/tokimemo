@@ -1,3 +1,5 @@
+import * as cg_format_ui from './cgFormatControl.js';
+import * as ui_albumCategory from './albumCategory.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_library from '../archive/library.js';
@@ -12,7 +14,7 @@ import * as ui_styles from './styles.js';
 export function filteredAlbumEntries() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ALBUM) return [];
     const category = runtimeState.activeSession.category || '全部';
-    return category === '全部' ? runtimeState.activeSession.entries : runtimeState.activeSession.entries.filter(x => x.category === category);
+    return category === '全部' ? runtimeState.activeSession.entries : runtimeState.activeSession.entries.filter(x => ui_albumCategory.albumDisplayCategory(x) === category);
 }
 
 export function selectedAlbumEntry() {
@@ -31,7 +33,7 @@ export function renderAlbum() {
     const start = (session.page - 1) * session.pageSize;
     const pageItems = list.slice(start, start + session.pageSize);
     let selected = selectedAlbumEntry();
-    if (selected && session.category !== '全部' && selected.category !== session.category) {
+    if (selected && session.category !== '全部' && ui_albumCategory.albumDisplayCategory(selected) !== session.category) {
         selected = pageItems[0] || list[0] || null;
         session.selectedId = selected?.id || '';
     } else if (session.selectedId && !selected) {
@@ -40,7 +42,7 @@ export function renderAlbum() {
     }
     const unlocked = session.entries.filter(x => x.unlocked).length;
     const readOnlyArchive = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
-    const filters = ['全部', '日常', '约会', '结局'].map(cat => `<button type="button" class="rmt-btn ${session.category === cat ? 'active' : ''}" data-rmt-category="${cat}">${cat}</button>`).join('');
+    const filters = ui_albumCategory.ALBUM_DISPLAY_CATEGORIES.map(cat => `<button type="button" class="rmt-btn ${session.category === cat ? 'active' : ''}" data-rmt-category="${cat}">${cat}</button>`).join('');
     const cards = pageItems.map(item => {
         const drawing = item.unlocked && !readOnlyArchive && generation_imageGeneration.isCgImageDrawing(core_constants.MODE.ALBUM, item.id);
         const cardActions = item.unlocked
@@ -59,7 +61,7 @@ export function renderAlbum() {
     const hint = selected && !selected.unlocked && session.hintVisible ? selected.hintLines.join('\n') : '';
     const info = selected ? `<aside class="rmt-info">
       <h3>${core_text.esc(selected.unlocked ? selected.title : `（未解锁）${selected.title}`)}</h3>
-      <div class="rmt-info-date">${core_text.esc(selected.date)} · ${core_text.esc(selected.category)}</div>
+      <div class="rmt-info-date">${core_text.esc(selected.date)} · ${core_text.esc(ui_albumCategory.albumDisplayCategory(selected))}</div>
       <div class="rmt-info-desc">${core_text.esc(selected.desc)}</div>
       <div class="rmt-actions">
         <button type="button" class="rmt-btn rmt-memory-primary" data-rmt-action="shared-memory" ${selected.unlocked ? '' : 'disabled'}>${selected.unlocked ? '走进共同回忆' : '尚未解锁'}</button>
@@ -79,6 +81,7 @@ export function renderAlbum() {
         ${info}
       </div>
     </div>`;
+    cg_format_ui.mountCgFormatControl(body, 'album', '', readOnlyArchive);
 }
 
 export function albumDrawCg(id) {
@@ -124,7 +127,7 @@ export function albumSelect(id) {
 
 export function albumFilter(category) {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ALBUM) return;
-    if (!['全部', ...core_constants.CATEGORY_VALUES].includes(category)) return;
+    if (!ui_albumCategory.ALBUM_DISPLAY_CATEGORIES.includes(category)) return;
     runtimeState.activeSession.category = category;
     runtimeState.activeSession.page = 1;
     runtimeState.activeSession.hintVisible = false;

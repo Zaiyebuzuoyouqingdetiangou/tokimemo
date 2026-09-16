@@ -1,3 +1,6 @@
+import * as cg_format_ui from './cgFormatControl.js';
+import * as cg_format from '../core/cgPromptFormat.js';
+import * as settings from '../core/settings.js';
 // One local editor shared by Album, shared memories, ADV and daily comic CGs.
 // Drafts are intentionally ephemeral: reconceiving never writes a session or draws.
 import * as archive_library from '../archive/library.js';
@@ -39,12 +42,13 @@ function busyEditor(active) {
     if (!editor) return;
     editor.busy = active;
     editor.element.setAttribute('aria-busy', String(active));
-    for (const field of editor.element.querySelectorAll('[data-rmt-cg-prompt-input], [data-rmt-cg-scene-tags], [data-rmt-cg-tag-input], [data-rmt-cg-flat-prompt]')) field.disabled = active;
+    for (const field of editor.element.querySelectorAll('[data-rmt-cg-prompt-input], [data-rmt-cg-scene-tags], [data-rmt-cg-tag-input], [data-rmt-cg-flat-prompt], [data-rmt-cg-editor-format]')) field.disabled = active;
     for (const button of editor.element.querySelectorAll('[data-rmt-cg-prompt-action="reconceive"], [data-rmt-cg-prompt-action="draw"], [data-rmt-cg-prompt-action="clear"], [data-rmt-cg-prompt-action="retry"], [data-rmt-cg-prompt-action="save-looks"]')) button.disabled = active;
 }
 
 function editorMetadata(current) {
     return appearance.normalizeCgPromptMetadata({
+        promptFormat: current.promptFormat,
         sceneTags: current.element.querySelector('[data-rmt-cg-scene-tags]').value,
         flatPrompt: current.element.querySelector('[data-rmt-cg-flat-prompt]').value,
         characters: ['char', 'user'].map(role => ({ role, name: current.characterNames[role],
@@ -58,9 +62,12 @@ function editorMetadata(current) {
 function updatePreparedPreview(current) {
     const scene = current.element.querySelector('[data-rmt-cg-prompt-input]').value;
     const metadata = editorMetadata(current);
-    const visual = appearance.cgPreparedVisualPrompt(scene, metadata);
-    current.element.querySelector('[data-rmt-cg-send-preview]').value =
-        `${metadata?.sceneTags ? `场景标签：${metadata.sceneTags}\n\n` : ''}${metadata?.flatPrompt ? `通用后端完整提示：${metadata.flatPrompt}\n\n` : ''}${visual}`;
+    const item = images.cgItemInSession(current.target.mode, current.target.session, current.target.itemId);
+    const output = current.element.querySelector('[data-rmt-cg-send-preview]');
+    try {
+        const sent = images.cgEditorSendPreview(current.target.mode, item, scene, metadata, current.promptFormat);
+        output.value = sent ? `prompt:\n${sent.prompt}\n\nnl:\n${sent.nl}` + (sent.characters?.length ? `\n\n人物标签：\n${sent.characters.map(row => `${row.name}: ${row.tag}`).join('\n')}` : '') : scene;
+    } catch (error) { output.value = core_text.safeErrorSummary(error); }
 }
 
 function invalidateFlatPrompt(current) {
@@ -112,7 +119,8 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
         const shell = host?.querySelector('.rmt-shell');
         if (!shell) return;
         closeCgPromptEditor({ restoreFocus: false });
-        const draft = target.mode === core_constants.MODE.HEART ? heart.heartStripImagePrompt(selected) : images.cgImagePromptForItem(selected);
+        const promptFormat = cg_format.normalizeCgPromptFormat(savedImage?.promptMetadata?.promptFormat, settings.getPluginSettings().cgPromptFormat);
+        const draft = images.cgImagePromptForItem(selected, '', promptFormat);
         const context = core_context.currentCharacterGuard();
         const canRetry = images.hasPendingCgImage(target);
         const element = document.createElement('div');
@@ -120,6 +128,7 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
         element.innerHTML = `<section class="rmt-cg-prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="rmt-cg-prompt-title" aria-describedby="rmt-cg-prompt-help" tabindex="-1">
           <div class="rmt-cg-prompt-head"><h2 id="rmt-cg-prompt-title">图片设置</h2><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="close" aria-label="关闭图片设置">关闭</button></div>
           <p class="rmt-cg-prompt-event">${core_text.esc(selected.title)}</p>
+          <label class="rmt-cg-format"><span>生图提示词格式</span><select data-rmt-cg-editor-format aria-label="当前图片提示词格式">${cg_format_ui.cgFormatOptions(promptFormat)}</select><small>切换不发请求；旧提示请重新构思或手动转换。实际模型在生图插件中选择。</small></label>
           <details class="rmt-cg-prompt-scene"><summary>查看这条回忆</summary><p>${core_text.esc(selected.cgDesc || selected.desc || selected.subtitle || '')}</p></details>
           <label for="rmt-cg-prompt-input">将发送给生图插件的画面描述</label>
           <textarea id="rmt-cg-prompt-input" data-rmt-cg-prompt-input rows="8" maxlength="${core_constants.MAX_CG_IMAGE_PROMPT_CHARS}" aria-describedby="rmt-cg-prompt-help rmt-cg-prompt-count"></textarea>
@@ -143,7 +152,7 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
             event.preventDefault(); event.stopImmediatePropagation();
             if (!image_viewer.closeCgImageViewer()) closeCgPromptEditor();
         };
-        editor = { target, element, host, opener: document.activeElement, busy: false, cancel,
+        editor = { target, element, host, promptFormat, opener: document.activeElement, busy: false, cancel,
             looksSignature: cast_looks.castLooksSignature(cast_looks.readCastLooks(context)),
             characterNames: { char: core_text.normalizeText(context.name2, 120), user: core_text.normalizeText(context.name1, 120) },
             taskKey: `cg-prompt:${core_context.chatScopeKey()}:${target.mode}:${core_text.safeId(target.itemId, 'cg')}` };
@@ -154,6 +163,16 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
             element.querySelector('[data-rmt-cg-prompt-count]').textContent = `${textarea.value.length} / ${core_constants.MAX_CG_IMAGE_PROMPT_CHARS} 字符`;
             updatePreparedPreview(current);
         };
+        element.querySelector('[data-rmt-cg-editor-format]').addEventListener('change', event => {
+            event.stopPropagation();
+            if (current.busy) return;
+            current.promptFormat = cg_format.normalizeCgPromptFormat(event.target.value, current.promptFormat);
+            // A style switch is not a conversion or a draw. Keep visible authored
+            // scene/looks and invalidate dependent fields only in this draft.
+            fillEditorMetadata(current, appearance.metadataAfterSceneEdit(editorMetadata(current)));
+            const status = element.querySelector('[data-rmt-cg-prompt-status]');
+            status.textContent = '格式已切换，未发请求。请重新构思或手动转换并核对发送预览。';
+        });
         textarea.addEventListener('input', () => { invalidateSceneMetadata(current); updateCount(); });
         for (const field of element.querySelectorAll('[data-rmt-cg-tag-input], [data-rmt-cg-scene-tags]')) {
             field.addEventListener('input', () => { invalidateFlatPrompt(current); updatePreparedPreview(current); });
@@ -168,7 +187,7 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
         element.addEventListener('keydown', event => {
             if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeCgPromptEditor(); return; }
             if (event.key !== 'Tab') return;
-            const controls = [...element.querySelectorAll('button:not(:disabled), textarea:not(:disabled), summary, a[href]')];
+            const controls = [...element.querySelectorAll('button:not(:disabled), textarea:not(:disabled), select:not(:disabled), summary, a[href]')];
             const first = controls[0], last = controls[controls.length - 1];
             if (event.shiftKey && (document.activeElement === first || !element.contains(document.activeElement))) {
                 event.preventDefault(); last?.focus();
@@ -231,7 +250,7 @@ export async function handleCgPromptEditorAction(action) {
             busyEditor(true);
             const status = current.element.querySelector('[data-rmt-cg-prompt-status]');
             status.setAttribute('role', 'status'); status.textContent = '正在重新构思，请稍等…';
-            const result = await images.reconceiveCgImagePrompt(current.target);
+            const result = await images.reconceiveCgImagePrompt(current.target, {promptFormat: current.promptFormat});
             if (editor !== current || !current.element.isConnected) return;
             const textarea = current.element.querySelector('[data-rmt-cg-prompt-input]');
             textarea.value = typeof result === 'string' ? result : result.imagePrompt;
@@ -256,8 +275,8 @@ export async function handleCgPromptEditorAction(action) {
             // provider lock and durable commit; this editor never invokes a provider.
             const onAccepted = () => closeCgPromptEditor({ restoreFocus: false });
             if (current.target.mode === core_constants.MODE.HEART) {
-                await heart.drawHeartStripImage(current.target.itemId, { promptOverride: prompt, promptMetadata, expectedTarget: current.target, onAccepted });
-            } else await images.drawSelectedCgImage({ promptOverride: prompt, promptMetadata, expectedTarget: current.target, onAccepted });
+                await heart.drawHeartStripImage(current.target.itemId, { promptOverride: prompt, promptMetadata, promptFormat: current.promptFormat, expectedTarget: current.target, onAccepted });
+            } else await images.drawSelectedCgImage({ promptOverride: prompt, promptMetadata, promptFormat: current.promptFormat, expectedTarget: current.target, onAccepted });
         }
     } catch (error) {
         if (editor === current) promptError(core_text.safeErrorSummary(error));

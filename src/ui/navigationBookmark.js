@@ -1,3 +1,5 @@
+import * as heart_reader from './heartReaderState.js';
+import * as ui_workspaceState from './workspaceState.js';
 // Reading positions only. Never store generated text, source context or live tasks.
 import * as context from '../core/context.js';
 import * as cache from '../core/cache.js';
@@ -42,7 +44,7 @@ export function rememberReadingPosition() {
         const ctx = context.currentCharacterGuard(), key = context.chatScopeKey(ctx);
         const page = runtimeState.archiveViewLevel;
         if (!runtimeState.activeMode && !runtimeState.activeSession && !runtimeState.activeArchiveSnapshot && pages.has(page)) {
-            savePosition(key, { page, scroll: scrollPosition(),
+            savePosition(key, { page, scroll: scrollPosition(), workspaceTab: ui_workspaceState.workspace.tab,
                 ...(page === 'home' ? { sections: settingsSections.filter(section => settingsSection(section)?.open === true) } : {}),
                 ...(page === 'character' ? { groupId: runtimeState.archiveLibraryCharacterKey } : {}) });
             return;
@@ -63,11 +65,11 @@ export function rememberReadingPosition() {
             if (!indexed || !context.archiveEntryMatchesContextCharacter(snapshot, ctx)) return;
         }
         if (snapshotPage && !indexed) return;
-        savePosition(key, { mode: runtimeState.activeMode, revision: bank.archiveRevision,
+        savePosition(key, { mode: runtimeState.activeMode, revision: bank.archiveRevision, workspaceRoute: ui_workspaceState.workspace.route, workspaceTab: ui_workspaceState.workspace.tab,
             ...(snapshotPage ? { page: 'snapshot' } : {}),
             ...(indexed ? { entryId: context.archiveIndexEntryId(indexed), readOnly: runtimeState.activeArchiveReadOnly || snapshot.backupOnly === true } : {}),
             fence: cache.modeWriteFenceForCache(snapshot?.cache || cache.getCache(ctx), runtimeState.activeMode),
-            ui: readingPosition(runtimeState.activeSession), scroll: scrollPosition() });
+            heartUi: heart_reader.captureHeartReaderBookmark(), ui: readingPosition(runtimeState.activeSession), scroll: scrollPosition() });
     } catch {}
 }
 // Page bookmarks do not need an archive: the user may leave the home/settings
@@ -94,6 +96,7 @@ export function restorePagePosition({ home, chooser, library: showLibrary, chara
         // The library renders asynchronously; do not apply its old scroll position
         // after a close, another navigation, or a change of chat.
         const sections = settingsSections.filter(section => mark.sections?.includes(section));
+        if (['archive','content'].includes(mark.workspaceTab)) ui_workspaceState.workspace.tab = mark.workspaceTab;
         const result = show(mark.page === 'home'
             ? { section: sections.includes('memory') ? 'memory' : sections[0] || '' }
             : mark.groupId);
@@ -121,11 +124,13 @@ export function restoreReadingPosition({ open, render, stopAutomaticLife } = {})
         const selected = mark.ui.selectedId;
         const items = session.entries || session.events || session.nodes || session.episodes;
         if (selected && Array.isArray(items) && !items.some(item => item.id === selected)) return false;
+        ui_workspaceState.workspace.route = ui_workspaceState.workspaceRoute(mark.mode, mark.workspaceRoute); ui_workspaceState.workspace.empty = null;
         Object.assign(session, mark.ui);
         // Read from the current canonical chat, never restore a stale snapshot from another chat.
         runtimeState.activeArchiveSnapshot = null;
         runtimeState.activeArchiveReadOnly = false;
         runtimeState.activeMode = mark.mode; runtimeState.activeSession = session;
+        heart_reader.restoreHeartReaderBookmark(session, mark.heartUi);
         open(); render(); stopAutomaticLife?.();
         restoreScroll(mark);
         return true;
@@ -173,6 +178,7 @@ export async function restoreIndexedReadingPosition({ open, render, renderSnapsh
             if (typeof renderSnapshot !== 'function') { fallback?.(); return false; }
             runtimeState.activeArchiveSnapshot = snapshot;
             runtimeState.activeArchiveReadOnly = mark.readOnly !== false || snapshot.backupOnly === true;
+            if (['archive','content'].includes(mark.workspaceTab)) ui_workspaceState.workspace.tab = mark.workspaceTab;
             renderSnapshot(snapshot);
             stopAutomaticLife?.(); restoreScroll(mark);
             return true;
@@ -180,11 +186,13 @@ export async function restoreIndexedReadingPosition({ open, render, renderSnapsh
         const session = cache.loadSession(mark.mode, { context: live, memoryBank: snapshot.memory, cache: snapshot.cache, clone: true });
         const selected = mark.ui.selectedId, items = session?.entries || session?.events || session?.nodes || session?.episodes;
         if (!session || (selected && Array.isArray(items) && !items.some(item => item.id === selected))) { fallback?.(); return false; }
+        ui_workspaceState.workspace.route = ui_workspaceState.workspaceRoute(mark.mode, mark.workspaceRoute); ui_workspaceState.workspace.empty = null;
         Object.assign(session, mark.ui);
         runtimeState.activeArchiveSnapshot = snapshot;
         runtimeState.activeArchiveReadOnly = mark.readOnly !== false || snapshot.backupOnly === true;
         runtimeState.archiveViewLevel = 'snapshot'; runtimeState.archiveLibraryCharacterKey = snapshot.archiveGroupId || '';
         runtimeState.activeMode = mark.mode; runtimeState.activeSession = session;
+        heart_reader.restoreHeartReaderBookmark(session, mark.heartUi);
         open(); render(); stopAutomaticLife?.();
         restoreScroll(mark);
         return true;
@@ -193,4 +201,4 @@ export async function restoreIndexedReadingPosition({ open, render, renderSnapsh
         return false;
     }
 }
-export function clearReadingPositions() { restoreSequence += 1; positions.clear(); }
+export function clearReadingPositions() { restoreSequence += 1; positions.clear(); heart_reader.clearHeartReaderPositions(); }

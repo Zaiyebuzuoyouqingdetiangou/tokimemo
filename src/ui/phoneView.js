@@ -187,7 +187,7 @@ function phoneConversationNeedsSpeakerRepair(entry, session) {
 
 export function renderPhoneEntryDetail(entry, app, session = runtimeState.activeSession) {
     if (!entry) return '<div class="rmt-phone-detail rmt-phone-detail-empty">选择一条记录查看详情。</div>';
-    if (entry.sourceStatus === 'unavailable') return '<div class="rmt-phone-detail rmt-phone-detail-empty"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回列表</button><h3>内容待补齐</h3><p>返回终端后可补齐缺项，已有内容会保留。</p></div>';
+    if (entry.sourceStatus === 'unavailable') return '<div class="rmt-phone-detail rmt-phone-detail-empty"><button type="button" class="rmt-btn" data-rmt-action="phone-entry-back">← 返回列表</button><h3>本条尚未生成</h3><p>已有内容可以正常阅读；需要时可在终端重试本条。</p></div>';
     const appKind = phonePresentationKind(app);
     const messages = entry.messages?.length ? `<div class="rmt-phone-chat-thread">${entry.messages.map(message => {
         const role = phoneRenderedSpeakerRole(message, session);
@@ -293,7 +293,7 @@ function renderPhoneAppList(app) {
     const legacyNotice = app.legacyEvidenceUnverified === true
         ? '<div class="rmt-phone-legacy-notice">此分区含旧版内容 · 证据未重新核验</div>'
         : '';
-    return `<section class="rmt-phone-page rmt-phone-app-screen rmt-phone-page-list rmt-phone-page-${kind}"><div class="rmt-phone-page-header"><button type="button" class="rmt-phone-page-back" data-rmt-action="phone-home" data-rmt-phone-app="${PHONE_HOME_APP_ID}" aria-label="返回主页">‹</button>${phoneIconHtml(app)}<div><b>${core_text.esc(app.label)}</b><small>${core_text.esc(app.summary || `${readable.length} 项`)}</small></div></div><div class="rmt-phone-list rmt-phone-list-${kind}">${entries || '<div class="rmt-phone-list-empty">内容待补齐，可从终端顶部继续生成。</div>'}</div></section>`;
+    return `<section class="rmt-phone-page rmt-phone-app-screen rmt-phone-page-list rmt-phone-page-${kind}"><div class="rmt-phone-page-header"><button type="button" class="rmt-phone-page-back" data-rmt-action="phone-home" data-rmt-phone-app="${PHONE_HOME_APP_ID}" aria-label="返回主页">‹</button>${phoneIconHtml(app)}<div><b>${core_text.esc(app.label)}</b><small>${core_text.esc(app.summary || `${readable.length} 项`)}</small></div></div><div class="rmt-phone-list rmt-phone-list-${kind}">${entries || '<div class="rmt-phone-list-empty">这个 App 暂无可读内容；可选择重试，其他 App 不受影响。</div>'}</div></section>`;
 }
 
 function renderPhoneDetailPage(entry, app) {
@@ -330,11 +330,11 @@ export function renderPhone() {
     ].join(' ');
     const phoneWritable = !runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly;
     const incrementalButton = phoneWritable
-        ? '<button type="button" class="rmt-btn rmt-phone-increment" data-rmt-action="regenerate"><i class="fa-solid fa-plus"></i> 增量追加终端</button>'
+        ? '<button type="button" class="rmt-btn rmt-phone-increment" data-rmt-action="regenerate"><i class="fa-solid fa-plus"></i> 追加生成</button>'
         : '<button type="button" class="rmt-btn rmt-phone-increment" disabled title="关闭只读查看后可增量追加"><i class="fa-solid fa-lock"></i> 只读 · 无法增量</button>';
     const reversePrivacyGate = `<section class="rmt-reverse-terminal-gate" aria-label="反查终端隐私状态"><i class="fa-solid fa-user-shield" aria-hidden="true"></i><div><b>反查终端 · 隐私保护未开放</b><p>当前架构还不能可靠区分用户人设、正式档案与模拟内容，所以不会替你生成私人事实。</p></div><span>BLOCKED SAFELY</span></section>`;
     const completion = modes_phone.phoneCompletionSummary({ apps });
-    const sourceNotice = completion.missingItems ? `<p class="rmt-phone-draft-status" role="status">已保留 ${completion.readableItems}/${completion.totalItems} 项可读内容，${completion.missingItems} 项待补齐。${phoneWritable ? '<button type="button" class="rmt-btn" data-rmt-action="phone-fill-missing">补齐缺项 · 保留已有内容</button>' : ''}</p>` : '';
+    const sourceNotice = `<div class="rmt-phone-draft-status"><span role="status">已有 ${completion.readableItems} 项内容</span>${completion.missingItems ? `<details><summary>另有 ${completion.missingItems} 项未通过校验</summary><p>不影响阅读已有内容。${phoneWritable ? '<button type="button" class="rmt-btn" data-rmt-action="phone-fill-missing">重试未完成项</button>' : ''}</p></details>` : ''}</div>`;
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="back">← 返回档案</button>${incrementalButton}</div>${sourceNotice}<div class="rmt-phone"><div class="rmt-phone-shell rmt-device-${kind} rmt-phone-view-${view} ${profileClasses}" data-rmt-phone-daypart="${core_text.esc(live.key)}">${phoneHardware(kind)}<div class="rmt-phone-screen">${phoneStatusBar(now, kind)}<main class="rmt-phone-content rmt-phone-content-single">${page}</main></div></div></div>`;
     startPhoneClock();
 }

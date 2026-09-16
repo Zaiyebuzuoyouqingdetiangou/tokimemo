@@ -337,7 +337,7 @@ export function renderEnding() {
     session.view = view;
     const tabs = `<div class="rmt-ending-tabs"><button type="button" class="rmt-ending-tab ${view === 'routes' ? 'active' : ''}" data-rmt-ending-view="routes">结局路线 <span>${session.endings.length}</span></button><button type="button" class="rmt-ending-tab ${view === 'confessions' ? 'active' : ''}" data-rmt-ending-view="confessions">告白回看 <span>${replays.length}</span></button></div>`;
     const confessionRefreshAction = view === 'confessions' && !readOnlyArchive ? '<button type="button" class="rmt-btn" data-rmt-action="refresh-ending-confessions"><i class="fa-solid fa-rotate"></i> 只重新读取告白</button>' : '';
-    const summary = `<section class="rmt-ending-summary"><b>${core_text.esc(session.relationshipState)}</b><p>${core_text.esc(session.relationshipSummary)}</p><div class="rmt-ending-extra-actions">${confessionRefreshAction}<button type="button" class="rmt-btn" data-rmt-action="open-heart"><i class="fa-solid fa-heart"></i> 角色互动</button></div></section>`;
+    const summary = `<section class="rmt-ending-summary"><b>${core_text.esc(session.relationshipState)}</b><p>${core_text.esc(session.relationshipSummary)}</p><div class="rmt-ending-extra-actions">${confessionRefreshAction}</div></section>`;
     if (view === 'confessions') {
         const selectedReplay = selectedConfessionReplay();
         if (selectedReplay) session.selectedConfessionId = selectedReplay.id;

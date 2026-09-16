@@ -8,17 +8,18 @@ import * as diagnostics from '../core/diagnosticReport.js';
 import * as room from '../modes/room.js';
 import * as phone from './phoneView.js';
 import { state as runtimeState } from '../core/state.js';
+import * as workspace_ui from './workspace.js';
+import * as ui_workspaceState from './workspaceState.js';
 
 export function homeHeadingHtml(ctx = context.getContext()) {
     const name = text.normalizeText(ctx?.name2, 120);
     const bank = repository.getImportedMemory(ctx);
-    return `<header class="rmt-home-heading"><small>HEARTTRACE ARCHIVE</small><h1>心迹回廊</h1>
-      <p>${name ? `${text.esc(name)} · ${bank ? '故事已归档，可以从下方打开档案室。' : '从当前聊天，留下一份属于你们的档案。'}` : '打开一个角色聊天后，即可整理你们的故事。'}</p>
-      <span>首页不会自动整理记忆或发起生成。</span></header>`;
+    return `<header class="rmt-home-heading"><h1>设置</h1><p>${name ? text.esc(name) + ' · ' : ''}连接、主题与生成参数</p></header>`;
 }
 
 export function showHome({ section = '' } = {}) {
     navigation.rememberReadingPosition();
+    ui_workspaceState.leaveWorkspaceReader(); ui_workspaceState.workspace.tab = 'settings';
     room.stopRoomClock(); phone.stopPhoneClock();
     runtimeState.activeMode = null; runtimeState.activeSession = null; runtimeState.activeArchiveSnapshot = null; runtimeState.activeArchiveReadOnly = true;
     runtimeState.archiveViewLevel = 'home'; runtimeState.contentManagerOpen = false;
@@ -28,9 +29,10 @@ export function showHome({ section = '' } = {}) {
     body.innerHTML = `<main class="rmt-home">${homeHeadingHtml()}<div data-rmt-home-settings></div></main>`;
     settings.mountSettings({ homeTarget: body.querySelector('[data-rmt-home-settings]') });
     mountHomeDiagnostics(body.querySelector('.rmt-home'));
+    workspace_ui.arrangeSettingsHome(body);
     if (section && ['api', 'image', 'creative', 'filter', 'theme', 'auto', 'memory', 'reading'].includes(section)) {
         const details = body.querySelector(`[data-rmt-settings-section="${section}"]`);
-        if (details) { details.open = true; settings.hydrateSettingsPanel({ memory: section === 'memory' }); details.scrollIntoView?.({ block: 'start' }); }
+        if (details) { const more = details.closest('.rmt-workspace-more'); if (more) more.open = true; details.open = true; settings.hydrateSettingsPanel({ memory: section === 'memory' }); details.scrollIntoView?.({ block: 'start' }); }
     }
     return true;
 }

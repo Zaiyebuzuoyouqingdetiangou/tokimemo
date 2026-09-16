@@ -1,3 +1,4 @@
+import * as ui_workspaceState from './workspaceState.js';
 // Heartbeat Memories content management UI.
 // This module only renders allowlisted management targets from the already-normalized session.
 import * as core_constants from '../core/constants.js';
@@ -129,6 +130,8 @@ export function managementTargetsForSession(session) {
 
 export async function runContentRegeneration(type, id, parentId = '', options = {}) {
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const startedUiEpoch = ui_workspaceState.workspace.epoch;
+    const startedUiRoute = ui_workspaceState.workspace.route;
     const mode = options.mode || runtimeState.activeMode;
     let origin = null;
     let targetRuntime = null;
@@ -209,7 +212,7 @@ export async function runContentRegeneration(type, id, parentId = '', options = 
         const visible = targetRuntime ? runtimeState.activeArchiveSnapshot?.entryId === targetRuntime.archiveTarget.entryId : core_context.isCurrentTaskOrigin(origin);
         if (visible && runtimeState.activeMode === mode) {
             runtimeState.activeSession = committed;
-            if (ui_overlay.bodyEl()) renderContentManager();
+            if (ui_overlay.bodyEl() && runtimeState.contentManagerOpen && startedUiEpoch === ui_workspaceState.workspace.epoch && startedUiRoute === ui_workspaceState.workspace.route) renderContentManager();
         }
         globalThis.toastr?.success?.(`已重新生成：${record.label}`, '心迹回廊');
         return committed;
@@ -257,22 +260,25 @@ export function renderContentManager() {
     ui_overlay.setManageVisible(false);
     const body = ui_overlay.bodyEl();
     if (!body) return;
-    const targets = managementTargetsForSession(session);
+    const scope = ui_workspaceState.workspaceManagementScope(session, managementTargetsForSession(session));
+    const targets = scope.targets;
+    const title = scope.title || core_constants.MODE_LABEL[mode] || mode;
     const rows = targets.map(item => `<article class="rmt-manage-row">
       <div class="rmt-manage-copy"><b>${core_text.esc(item.label)}</b>${item.detail ? `<small>${core_text.esc(item.detail)}</small>` : ''}</div>
       <div class="rmt-manage-actions">${actionButton('manage-regenerate-target', item, '重新生成')}${actionButton('manage-delete-target', item, '删除', true)}</div>
     </article>`).join('');
+    ui_overlay.topTitle(`${title} · 管理`);
     const dependentNote = mode === core_constants.MODE.ROOM
         ? '<p class="rmt-manage-note">重新生成或删除整个“他的房间”会同时清除依赖旧房间结构的“他的物品”和“私人终端”派生缓存；正式档案不会动。</p>'
         : '';
     body.innerHTML = `<div class="rmt-manage-shell">
       <section class="rmt-manage-hero">
-        <div><div class="rmt-archive-kicker">CONTENT CONTROL</div><h2>${core_text.esc(core_constants.MODE_LABEL[mode] || mode)}</h2><p>删除和重新生成都只处理心迹回廊的派生内容。每一次操作都必须连续确认两次；正式聊天档案 Mxxx 不会被这里的按钮删除。</p>${dependentNote}</div>
-        <div class="rmt-manage-category-actions">
+        <div><div class="rmt-archive-kicker">CONTENT CONTROL</div><h2>${core_text.esc(title)}</h2><p>删除和重新生成都只处理心迹回廊的派生内容。每一次操作都必须连续确认两次；正式聊天档案 Mxxx 不会被这里的按钮删除。</p>${dependentNote}</div>
+        ${scope.wholeCategory ? `<div class="rmt-manage-category-actions">
           <button type="button" class="rmt-btn" data-rmt-action="manage-regenerate-category">重新生成整个分类</button>
           <button type="button" class="rmt-btn rmt-manage-danger" data-rmt-action="manage-delete-category">删除整个分类</button>
-        </div>
+        </div>` : ''}
       </section>
-      <section class="rmt-manage-list">${rows || '<div class="rmt-manage-empty">这个分类暂时没有可单独管理的子项。仍可在上方删除或重新生成整个分类。</div>'}</section>
+      <section class="rmt-manage-list">${rows || '<div class="rmt-manage-empty">这个页面暂时没有可单独管理的内容。</div>'}</section>
     </div>`;
 }
