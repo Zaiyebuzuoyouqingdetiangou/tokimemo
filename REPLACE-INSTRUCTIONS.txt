@@ -1,20 +1,13 @@
-Hearttrace r84.2 / 0.8.80-tt-cg-r84.2
+心迹回廊 r84.11 完整候选
+加载标识：0.8.87-tt-cg-r84.11-song-reader
 
-覆盖既有心跳回忆/心迹回廊插件目录，不要安装第二份插件。
-适用基线：Hearttrace-r84-full.zip，或已在其上覆盖 r84.1 的安装。
-这次替换包包含以下 5 个运行文件：
-index.js
-manifest.json
-dist/heartbeatMemories.bundle.js
-src/core/dialogue.js
-src/modes/heart.js
+先等在途任务结束，并保留原插件目录及档案备份。
+将 tokimemo-main 文件夹中的内容覆盖到当前插件目录：index.js、manifest.json、src、dist 必须位于同一层。
+不要在原插件目录里再套一层 tokimemo-main，不要只换 src 或单独换 bundle。
+完整刷新／重启后，核对诊断加载标识。不清除站点数据、IndexedDB、聊天或档案。
 
-其中 heart.js 原样保留 r84.1 人设 fallback；本次对话修复在 dialogue.js。
-请一起覆盖，不要只更换 src。先等待在途任务完成并保存草稿，再完整刷新酒馆/重启客户端。
-诊断 declaredVersion 应显示 0.8.80-tt-cg-r84.2。
-无需清站点数据、删除聊天、重建档案或全部重新生成。
-先打开已有四季内容检查；有可靠说话线索的旧内容会在本地显示时纠正。
-旧稿若已丢失姓名、标签及明确说话线索，不能靠本地代码确定身份；本版不按性别或轮次猜测。
+新增入口：内容 → 互动 → 角色印象曲。
+生成的是歌名、人声／曲风说明及完整歌词，不是音频。每次点击追加一首，可分项复制或导出 TXT。
+仍使用原有文本 API 设置。歌曲为派生作品，不写回正式历史记忆。
 
-没有修改 GitHub。真实 iPhone、TT、SillyTavern 安装与视觉、真实模型/网络测试未执行。
-详细验证见随附 RELEASE_VALIDATION-r84.2.md。
+本包未发布 GitHub；真机、实际酒馆和真实 API 未执行。详细测试范围见 RELEASE_VALIDATION-r84.11.md。
