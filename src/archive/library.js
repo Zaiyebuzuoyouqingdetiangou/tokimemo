@@ -22,6 +22,7 @@ import * as ui_endingView from '../ui/endingView.js';
 import * as recovery_view from '../ui/recoveryView.js';
 
 let archiveLibraryRenderSequence = 0;
+let indexedArchiveOpenSequence = 0;
 export async function showArchiveLibrary() {
     const renderSequence = ++archiveLibraryRenderSequence;
     const openingContext = core_context.getContext();
@@ -238,7 +239,9 @@ export async function fetchIndexedArchiveSnapshot(entry, context = core_context.
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     const key = archiveSnapshotCacheKey(entry);
     const cached = runtimeState.archiveSnapshotCache.get(key);
-    if (options.force !== true && cached && Date.now() - Number(cached.loadedAt || 0) < 120000) return cached;
+    // Only explicit opens call this path. A cached fallback must not hide a recovered
+    // source; keep the old backup object readonly and fetch a new verified snapshot.
+    if (options.force !== true && cached && !cached.backupOnly && Date.now() - Number(cached.loadedAt || 0) < 120000) return cached;
     const avatar = core_context.archiveEntryAvatarName(entry, context);
     const wantedChatId = core_context.comparableChatId(entry.chatId);
     if (!wantedChatId) throw new Error('无法识别这个历史聊天的文件 ID。');
@@ -531,7 +534,7 @@ export async function prepareArchiveTargetSubtask(mode, taskPart, snapshot = run
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     if (!snapshot) return null;
-    if (snapshot.backupOnly) throw new Error('独立备份是永久只读快照，不能启动派生生成。');
+    if (snapshot.backupOnly) throw new Error('当前查看的是只读备份，不能启动派生生成；可返回档案页重试读取源聊天。');
     const options = archiveTargetGenerationOptions(snapshot, lifecycleEpoch);
     const latest = await options.revalidateArchiveTarget(options.archiveTarget, lifecycleEpoch);
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
@@ -622,7 +625,7 @@ export function setArchiveReadOnly(readOnly) {
     if (!runtimeState.activeArchiveSnapshot) return;
     if (runtimeState.activeArchiveSnapshot.backupOnly && readOnly === false) {
         runtimeState.activeArchiveReadOnly = true;
-        globalThis.toastr?.info?.('源聊天已丢失或无法读取；独立备份只能永久只读查看，不能重新绑定到其他聊天。', '心迹回廊');
+        globalThis.toastr?.info?.('源聊天暂不可读，当前查看只读备份。请重试读取源聊天；备份本身不能解除只读或绑定到其他聊天。', '心迹回廊');
         return showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot);
     }
     runtimeState.activeArchiveReadOnly = readOnly !== false;
@@ -655,7 +658,7 @@ export function promoteSnapshotToLiveIfCurrent() {
     if (!runtimeState.activeArchiveSnapshot) return true;
     if (runtimeState.activeArchiveSnapshot.backupOnly) {
         runtimeState.activeArchiveReadOnly = true;
-        globalThis.toastr?.warning?.('独立备份是永久只读快照，不能重新绑定或写入当前聊天。', '心迹回廊');
+        globalThis.toastr?.warning?.('当前查看的是只读备份，不能重新绑定或写入当前聊天；请重试读取源聊天。', '心迹回廊');
         return false;
     }
     if (runtimeState.activeArchiveReadOnly) {
@@ -760,11 +763,12 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
           <div class="rmt-archive-kicker">${snapshot.backupOnly ? 'RECOVERED LOCAL BACKUP' : 'READ-ONLY ARCHIVE'}</div>
           <strong class="rmt-archive-title">${core_text.esc(snapshot.archiveName)}</strong>
           ${core_archiveCover.archiveCoverHtml(memory, { writable: !snapshot.backupOnly && core_context.getChatId(core_context.getContext()) === snapshot.chatId && !runtimeState.activeArchiveReadOnly, busy: runtimeState.busy || core_requestCoordinator.hasGenerationTasks() })}
-          <div class="rmt-memory-status ready">${snapshot.backupOnly ? '源聊天不可用 · 已从独立备份恢复 · 永久只读' : runtimeState.activeArchiveReadOnly ? '只读查看' : '编辑待命'} · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${core_constants.ARCHIVE_PORTAL_MODES.length}</div>
+          <div class="rmt-memory-status ready">${snapshot.backupOnly ? '源聊天暂不可读 · 当前查看只读备份' : runtimeState.activeArchiveReadOnly ? '只读查看' : '编辑待命'} · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${core_constants.ARCHIVE_PORTAL_MODES.length}</div>
           <div class="rmt-archive-meta">${snapshot.backupOnly ? `本机备份 · ${core_text.esc(snapshot.sourceError || '源聊天无法读取')}` : (runtimeState.activeArchiveReadOnly ? '当前为只读档案' : '写入前会再次验证目标聊天')}</div>
           <div class="rmt-archive-readonly-control">
             <label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''} ${snapshot.backupOnly ? 'disabled' : ''}> 只读查看</label>
-            <small>${snapshot.backupOnly ? '永久只读' : runtimeState.activeArchiveReadOnly ? '关闭只读后可显示编辑操作' : '编辑待命'}</small>
+            <small>${snapshot.backupOnly ? '备份只读，不代表原聊天已删除' : runtimeState.activeArchiveReadOnly ? '关闭只读后可显示编辑操作' : '编辑待命'}</small>
+            ${snapshot.backupOnly ? `<button type="button" class="rmt-btn" data-rmt-indexed-character="${core_text.esc(snapshot.characterKey)}" data-rmt-indexed-chat="${core_text.esc(snapshot.chatId)}" data-rmt-indexed-entry="${core_text.esc(snapshot.entryId)}">重试读取源聊天</button>` : ''}
           </div>
         </div>
       </section>
@@ -776,6 +780,7 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
 }
 
 export async function openIndexedArchive(characterKey, chatId, entryId = '') {
+    const renderSequence = ++indexedArchiveOpenSequence;
     if (runtimeState.busy) runtimeState.activeTaskBackgrounded = true;
     const context = core_context.getContext();
     const index = archive_groups.getArchiveIndex(context);
@@ -788,7 +793,9 @@ export async function openIndexedArchive(characterKey, chatId, entryId = '') {
     // If the indexed row is exactly the chat that SillyTavern already has open, use the live
     // context instead of a read-only metadata snapshot. This keeps write actions such as CG
     // drawing available without ever switching the host character/chat.
-    if (generation_imageGeneration.indexedArchiveMatchesCurrentChat(entry, context)) {
+    const retryingBackup = runtimeState.activeArchiveSnapshot?.backupOnly === true
+        && archiveSnapshotCacheKey(runtimeState.activeArchiveSnapshot) === archiveSnapshotCacheKey(entry);
+    if (!retryingBackup && generation_imageGeneration.indexedArchiveMatchesCurrentChat(entry, context)) {
         runtimeState.activeArchiveSnapshot = null;
         runtimeState.activeArchiveReadOnly = true;
         return ui_overlay.showChooser();
@@ -796,12 +803,33 @@ export async function openIndexedArchive(characterKey, chatId, entryId = '') {
     ui_overlay.openOverlay();
     ui_overlay.topTitle('心迹回廊 · 正在读取只读档案…');
     const body = ui_overlay.bodyEl();
-    if (body) body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在读取这个聊天的档案与已生成内容…</b><div class="rmt-loading-note">只请求这一条目标聊天，不扫描同角色的其他聊天；不会切换当前角色或聊天。</div></div></div>';
+    const overlay = document.getElementById(core_constants.OVERLAY_ID);
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const openingScope = core_context.chatScopeKey(context), openingGroup = context.groupId;
+    const personaKey = ctx => [String(ctx?.userAvatar ?? ctx?.personaAvatar ?? ctx?.user_avatar ?? globalThis.user_avatar ?? ''),
+        String(ctx?.name1 ?? ''), String(ctx?.powerUserSettings?.persona_description ?? '')];
+    const openingPersona = personaKey(context);
+    const loadingHtml = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在读取这个聊天的档案与已生成内容…</b><div class="rmt-loading-note">只请求这一条目标聊天，不扫描同角色的其他聊天；不会切换当前角色或聊天。</div></div></div>';
+    if (body) body.innerHTML = loadingHtml;
+    const viewStillCurrent = () => {
+        try {
+            const live = core_context.getContext();
+            return renderSequence === indexedArchiveOpenSequence && core_context.runtimeLifecycleStillCurrent(lifecycleEpoch)
+                && core_context.chatScopeKey(live) === openingScope && live.groupId === openingGroup
+                && personaKey(live).every((value, i) => value === openingPersona[i])
+                && document.getElementById(core_constants.OVERLAY_ID) === overlay && overlay && !overlay.hidden
+                && body && ui_overlay.bodyEl() === body && body.innerHTML === loadingHtml;
+        } catch { return false; }
+    };
     try {
-        const snapshot = await fetchIndexedArchiveSnapshot(entry, context);
+        const snapshot = await fetchIndexedArchiveSnapshot(entry, context, { lifecycleEpoch });
+        // Reads may finish after navigation. They must not re-enter a historical readonly
+        // view over the live page, or cancel an explicit readonly choice made meanwhile.
+        if (!viewStillCurrent()) return;
         showIndexedArchiveSnapshot(snapshot);
-        if (snapshot.backupOnly) globalThis.toastr?.warning?.('源聊天无法读取，已从当前浏览器的独立备份恢复为永久只读档案。', '心迹回廊');
+        if (snapshot.backupOnly) globalThis.toastr?.warning?.('源聊天暂不可读，当前查看只读备份。源聊天恢复后可重试读取，备份不会覆盖原聊天。', '心迹回廊');
     } catch (error) {
+        if (!viewStillCurrent()) return;
         console.warn('[HeartbeatMemories] indexed archive read-only load failed', core_text.safeErrorDiagnostic(error));
         if (ui_overlay.bodyEl()) ui_overlay.bodyEl().innerHTML = `<div class="rmt-error"><div><b>档案读取失败</b><div style="margin-top:10px;white-space:pre-wrap;opacity:.78">${core_text.esc(core_text.safeErrorSummary(error))}</div><button type="button" class="rmt-btn" data-rmt-action="library-home">返回档案室</button></div></div>`;
     }

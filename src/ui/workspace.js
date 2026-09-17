@@ -43,7 +43,7 @@ export function syncWorkspaceChrome() {
     const route = ui_workspaceState.WORKSPACE_ROUTES[ui_workspaceState.workspace.route];
     const label = state.activeMode ? (route?.mode === state.activeMode ? route.title : constants.MODE_LABEL[state.activeMode] || '') : '';
     const snapshot = state.activeArchiveSnapshot;
-    const target = snapshot ? (snapshot.backupOnly ? '独立备份 · 永久只读' : `${snapshot.characterName || ''} · ${state.activeArchiveReadOnly ? '只读档案' : '档案'}`) : '';
+    const target = snapshot ? (snapshot.backupOnly ? '独立备份 · 只读查看' : `${snapshot.characterName || ''} · ${state.activeArchiveReadOnly ? '只读档案' : '档案'}`) : '';
     crumb.hidden = !label && !target;
     crumb.replaceChildren();
     if (label) {

@@ -206,6 +206,13 @@ async function boundedJson(response, maxBytes) {
 
 export function looksLikeHtmlResponse(value) {
     const body = String(value ?? '').replace(/^\uFEFF/, '').trimStart();
+    // A complete JSON document is data, including any quoted markup in its strings.
+    // Only a whole-document parse grants this exception; never extract a JSON island
+    // from an HTML error page here. No response text is rendered or executed.
+    const jsonBody = body.replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/i, '$1').trim();
+    if (jsonBody.startsWith('{') || jsonBody.startsWith('[')) {
+        try { const parsed = JSON.parse(jsonBody); if (parsed && typeof parsed === 'object') return false; } catch {}
+    }
     // Proxies commonly prepend comments/meta tags or wrap a JSON-looking fragment in an error
     // page. Detect markup anywhere near the response head, before JSON extraction can mistake an
     // embedded object for the provider payload. The body is never included in the public error.

@@ -74,9 +74,8 @@ function normalize(value) {
     const sky = token(raw.sky, skyValues, 'clear'), light = token(raw.light, lightValues, 'day');
     const density = token(raw.density, densityValues, 'balanced'), palette = token(raw.palette, DESIGN_PALETTES, 'paper');
     if (!sky || !light || !density || !palette) return null;
-    // A boat needs an explicit water/shore support at the same or an earlier depth.
-    if (elements.some(item => item.kind === 'boat' && !elements.some(surface =>
-        ['water', 'shore'].includes(surface.kind) && DESIGN_LAYERS.indexOf(surface.layer) <= DESIGN_LAYERS.indexOf(item.layer)))) return null;
+    // Composition is not a validity gate. A supported boat without water is a sketch;
+    // the renderer already positions unsupported-by-water motifs on their layer base.
     const design = { version: DESIGN_VERSION, sky, light, density, palette, elements };
     const encoder = new TextEncoder();
     if (encoder.encode(JSON.stringify(input)).byteLength > MAX_DESIGN_BYTES
@@ -99,13 +98,13 @@ export function postcardDesignNodeCount(value) {
 }
 
 // Appended only to the travel visual contract, never to other mode prompts.
-export function postcardDesignInstructions() {
+export function postcardDesignInstructions(legacyWaterSupport = false) {
     return `【仅远方纪念页的视觉设计】
 keepsake.design 与本封正文在同一次请求中构思；不是模板编号或自由文本 picturePlan。不要重写附近地点规则或历史证据。
 design={"version":1,"sky":"clear","light":"day","density":"balanced","palette":"paper","elements":[{"kind":"peak","layer":"far","x":30,"size":"m","count":3},{"kind":"pavilion","layer":"mid","x":68,"size":"m","count":1},{"kind":"field","layer":"near","x":50,"size":"l","count":1}]}。
 只允许这些字段。sky=clear/cloud/fog/rain/snow/star；light=day/dawn/dusk/night；density=sparse/balanced/dense；palette=paper/rose/ocean/forest/sunset/night。
 图元 kind=${DESIGN_KINDS.join('/')}。layer=far/mid/near，x为0～100整数，size=s/m/l，count为1～6整数；最多20条图元、8KiB UTF-8，全部展开加两个背景节点最多90个SVG节点。每实例节点成本：${Object.entries(ELEMENT_NODE_COST).map(([k,v]) => k+'='+v).join(',')}。
-模型决定元素组合、层次、横向位置、大小和疏密；地面承托和SVG坐标由本地计算。water/shore给boat提供水面，同层或更远处必须显式设计水面。桥可跨水或地面，gate与wall可同层相邻衔接。位置相同、数量多时应主动缩小，保留合理留白。
+模型决定元素组合、层次、横向位置、大小和疏密；地面承托和SVG坐标由本地计算。${legacyWaterSupport ? 'water/shore给boat提供水面，同层或更远处必须显式设计水面。' : '有water/shore时可为boat定位；也允许只画boat，不要求为了构图补水面。简单、重叠或不写实不是丢弃设计的理由。'}桥可跨水或地面，gate与wall可同层相邻衔接。位置相同、数量多时应主动缩小，保留合理留白。
 只画本封信眼前或明确描写的景物，不把回忆、比喻、否定句当眼前场景。没有设计的亭子、船、月亮、雪点等不会自动添加；不要为填满画布臆造景物。
 支持范围内自行构图，不要每封重复同一排图标。不能合适表达时design=null，正文仍正常输出。禁止SVG/HTML/CSS/JS、任意path、颜色值、URL、class、Base64、对象路径或嵌套图元。视觉设计不能充当共同往事的证据。`;
 }

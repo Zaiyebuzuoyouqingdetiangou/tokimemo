@@ -485,7 +485,7 @@ ${core_narrativeAuthority.NARRATIVE_AUTHORITY_PROMPT}
 
 // New tasks request bounded composition, not keyword-matched free text. Existing
 // recovery tasks deliberately keep their exact original recipe below.
-export function structuredTravelPrompt(context, memoryBank, previous = null, sourceMemoryIds = null, worldPresentation = null) {
+export function structuredTravelPrompt(context, memoryBank, previous = null, sourceMemoryIds = null, worldPresentation = null, legacyWaterSupport = false) {
     return travelPrompt(context, memoryBank, previous, sourceMemoryIds, worldPresentation)
         .replace('"picturePlan":{"summary":"画面重点","foreground":"前景元素","midground":"中景元素","background":"远景元素","details":"可见细节","atmosphere":"整体氛围","layout":"left/center/right"}',
             '"design":{"version":1,"sky":"clear","light":"day","palette":"paper","density":"balanced","elements":[{"kind":"peak","layer":"far","x":35,"size":"m","count":2},{"kind":"pavilion","layer":"mid","x":70,"size":"m","count":1}]}')
@@ -493,7 +493,7 @@ export function structuredTravelPrompt(context, memoryBank, previous = null, sou
             'keepsake.design 只接收下方规定的受限图元数据，x仅为0～100的横向位置，不是SVG坐标。禁止自定义坐标、颜色值、CSS、HTML、JavaScript、URL、图片、Base64 或 class。')
         .replace('picturePlan 可同时描述这封纪念页想呈现的画面重点与构图（例如前景亭子、远景雪峰、雨后湖面等），但不要输出任何代码；最终画面由本地 SVG/CSS 安全渲染。',
             'design 与本封正文同时设计，图元与文字保持一致；设计缺失或不适用时可为null，不影响合格信件正文。最终画面由本地 SVG/CSS 安全渲染。')
-        + '\n' + postcard_design.postcardDesignInstructions();
+        + '\n' + postcard_design.postcardDesignInstructions(legacyWaterSupport);
 }
 
 function travelPromptLegacyR8414(context, memoryBank, previous = null, sourceMemoryIds = null, worldPresentation = null) {
@@ -577,16 +577,18 @@ export async function generateTravelWithRepair(context, memoryBank, origin, task
         || core_worldPresentation.resolveWorldPresentation(presentationContext.contextEnvelope || '', memoryBank);
     const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
     const savedSegment = generation_recovery.generationRecoverySegmentsForOrigin(origin)?.find(segment => segment.slot.endsWith(':travel-map'));
-    const structuredDesign = !savedSegment || savedSegment.contract === 'travel-structured-design-r8416';
+    const legacyWaterSupport = savedSegment?.contract === 'travel-structured-design-r8416';
+    const structuredDesign = !savedSegment || legacyWaterSupport || savedSegment.contract === 'travel-sketch-design-r8418';
+    const designContract = legacyWaterSupport ? 'travel-structured-design-r8416' : 'travel-sketch-design-r8418';
     const promptBuilder = structuredDesign ? structuredTravelPrompt : travelPrompt;
     const fresh = await generation_client.requestValidatedSegment(
-        promptBuilder(context, memoryBank, previous, sourceMemoryIds, worldPresentation) + core_incremental.derivedExpansionDirective(previous, memoryBank)
+        promptBuilder(context, memoryBank, previous, sourceMemoryIds, worldPresentation, legacyWaterSupport) + core_incremental.derivedExpansionDirective(previous, memoryBank)
             + (previous && options.allowPersonaExpansion !== true ? '\n本轮只同步历史：所有新地点必须 basis=记忆，引用本轮 incrementalMemoryIds；不补人设推演地点。' : ''),
         previous ? '他的出行路线 · 正在把新增地点标到地图上…' : '他的出行路线 · 正在绘制生活地图…',
         {
             maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.TRAVEL], temperature: 0.45,
             context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:travel-map`, mode: core_constants.MODE.TRAVEL, background: true,
-            recoveryCompatibility: structuredDesign ? { contract: 'travel-structured-design-r8416', legacyPrompts: [] }
+            recoveryCompatibility: structuredDesign ? { contract: designContract, legacyPrompts: [] }
                 : { contract: 'travel-postcard-design-r8415', legacyPrompts: [
                 legacyTravelRecoveryPromptR8415(context, memoryBank, previous, sourceMemoryIds, worldPresentation, options.allowPersonaExpansion),
             ] },

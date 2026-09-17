@@ -98,7 +98,8 @@ export function normalizeMemorySourceCoverage(value = {}, fallbackStatus = 'part
     const allowed = new Set(['complete', 'partial', 'truncated', 'failed']);
     let status = allowed.has(value?.status) ? value.status : fallbackStatus;
     const returned = Math.max(0, Math.floor(Number(value?.returned) || 0));
-    const total = Number.isFinite(Number(value?.total)) ? Math.max(0, Math.floor(Number(value.total))) : null;
+    const total = value?.total != null && value.total !== '' && Number.isFinite(Number(value.total))
+        ? Math.max(0, Math.floor(Number(value.total))) : null;
     const missingAiFloors = Array.isArray(value?.missingAiFloors)
         ? value.missingAiFloors.filter(item => Number.isInteger(Number(item))).slice(0, 5000).map(Number)
         : [];
@@ -388,23 +389,25 @@ function mergeMemorySourceLedgerBatch(previous, identity, batch = {}) {
     return ledger;
 }
 
-async function upsertMemorySourceLedgerBatchesUnlocked(identity, batches) {
+async function upsertMemorySourceLedgerBatchesUnlocked(identity, batches, assertCurrent = () => {}) {
+    assertCurrent();
     let ledger = await readMemorySourceLedger(identity);
     for (const batch of batches) ledger = mergeMemorySourceLedgerBatch(ledger, identity, batch);
     if (!batches.length) return ledger;
+    assertCurrent();
     await backend().write(cloneValue(ledger));
     return normalizeLedger(ledger, identity);
 }
 
-export async function upsertMemorySourceLedger(scope, batch = {}) {
+export async function upsertMemorySourceLedger(scope, batch = {}, { assertCurrent = () => {} } = {}) {
     const identity = normalizeMemorySourceScope(scope);
-    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, [batch]));
+    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, [batch], assertCurrent));
 }
 
-export async function upsertMemorySourceLedgerBatches(scope, batches = []) {
+export async function upsertMemorySourceLedgerBatches(scope, batches = [], { assertCurrent = () => {} } = {}) {
     const identity = normalizeMemorySourceScope(scope);
     const list = Array.isArray(batches) ? batches.filter(batch => batch && typeof batch === 'object') : [];
-    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, list));
+    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, list, assertCurrent));
 }
 
 export async function deleteMemorySourceLedger(scope) {

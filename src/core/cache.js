@@ -1902,7 +1902,15 @@ export async function buildControlledContextEnvelope(context, options = {}) {
         };
         if (core_settings.getPluginSettings(context).useActivatedWorldInfo !== false && typeof context.getWorldInfoPrompt === 'function') {
             const result = await context.getWorldInfoPrompt(worldInfoScan, Math.max(2048, Math.min(32768, Number(context.maxContext) || 8192)), true, globalScanData);
-            worldInfo = core_contextTags.stripExcludedTags(core_text.normalizeText(result?.worldInfoString || [result?.worldInfoBefore, result?.worldInfoAfter].filter(Boolean).join('\n'), 12000), core_contextTags.excludedTagsForContext(context));
+            let worldText = result?.worldInfoString || [result?.worldInfoBefore, result?.worldInfoAfter].filter(Boolean).join('\n');
+            if (options.includeWorldInfoDepth === true) {
+                const depthText = (Array.isArray(result?.worldInfoDepth) ? result.worldInfoDepth : []).map(item => {
+                    if (typeof item === 'string') return item;
+                    return Array.isArray(item?.entries) ? item.entries.filter(value => typeof value === 'string').join('\n') : '';
+                }).filter(Boolean).join('\n');
+                worldText = [worldText, depthText].filter(Boolean).join('\n');
+            }
+            worldInfo = core_contextTags.stripExcludedTags(core_text.normalizeText(worldText, 12000), core_contextTags.excludedTagsForContext(context));
         }
     } catch (error) {
         console.warn('[HeartbeatMemories] independent world-info dry run failed', core_text.safeErrorDiagnostic(error));

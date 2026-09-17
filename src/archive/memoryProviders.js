@@ -7,6 +7,7 @@ import * as archive_sourceLedger from './sourceLedger.js';
 
 export const MEMORY_PROVIDER_REGISTRY = Object.freeze([
     Object.freeze({ id: 'sillytavern-memory', adapterVersion: 1, label: 'SillyTavern Memory', mode: 'passive-current-chat' }),
+    Object.freeze({ id: 'qianqianjie-public-api', adapterVersion: 1, label: '千千结', mode: 'public-current-chat-api-v1' }),
     Object.freeze({ id: 'baibai-book-public-api', adapterVersion: 1, label: '柏宝书记忆', mode: 'public-current-chat-api-v1' }),
 ]);
 
@@ -201,7 +202,8 @@ function normalizeCoverage(value, returned) {
     const complete = safeOwn(coverage, 'complete') === true || safeOwn(value, 'complete') === true;
     const explicitlyIncomplete = safeOwn(coverage, 'complete') === false || safeOwn(value, 'complete') === false;
     const totalValue = safeOwn(coverage, 'total') ?? safeOwn(value, 'total');
-    const total = Number.isFinite(Number(totalValue)) ? Math.max(0, Math.floor(Number(totalValue))) : null;
+    const total = totalValue != null && totalValue !== '' && Number.isFinite(Number(totalValue))
+        ? Math.max(0, Math.floor(Number(totalValue))) : null;
     const missingFloorData = safeArrayDataValues(safeOwn(coverage, 'missingAiFloors'), 5000);
     const missingAiFloors = missingFloorData.values.filter(item => Number.isInteger(Number(item))).map(Number);
     const totalMismatch = total != null && returned !== total;

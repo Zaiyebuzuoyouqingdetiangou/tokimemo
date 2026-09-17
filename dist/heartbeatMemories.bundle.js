@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 114
-// Source SHA-256: 667aa42618ce6d9bcbb20e65945ca426757dcdc0c72fa83ff002461541b2b238
+// Source modules: 116
+// Source SHA-256: 1991dccffd1481fda5fdfee0538552b47eace1b4bdac2c2132af5001f54ac555
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -9,9 +9,11 @@ const __m_archive_importRecovery_js = Object.create(null);
 const __m_archive_library_js = Object.create(null);
 const __m_archive_memoryFileImport_js = Object.create(null);
 const __m_archive_memoryProviders_js = Object.create(null);
+const __m_archive_qianqianjie_js = Object.create(null);
 const __m_archive_repository_js = Object.create(null);
 const __m_archive_snapshots_js = Object.create(null);
 const __m_archive_sourceLedger_js = Object.create(null);
+const __m_archive_sourceReadGuard_js = Object.create(null);
 const __m_core_archiveCover_js = Object.create(null);
 const __m_core_autoUpdatePolicy_js = Object.create(null);
 const __m_core_autoUpdates_js = Object.create(null);
@@ -2376,6 +2378,13 @@ async function boundedJson(response, maxBytes) {
 
 function looksLikeHtmlResponse(value) {
     const body = String(value ?? '').replace(/^\uFEFF/, '').trimStart();
+    // A complete JSON document is data, including any quoted markup in its strings.
+    // Only a whole-document parse grants this exception; never extract a JSON island
+    // from an HTML error page here. No response text is rendered or executed.
+    const jsonBody = body.replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/i, '$1').trim();
+    if (jsonBody.startsWith('{') || jsonBody.startsWith('[')) {
+        try { const parsed = JSON.parse(jsonBody); if (parsed && typeof parsed === 'object') return false; } catch {}
+    }
     // Proxies commonly prepend comments/meta tags or wrap a JSON-looking fragment in an error
     // page. Detect markup anywhere near the response head, before JSON extraction can mistake an
     // embedded object for the provider payload. The body is never included in the public error.
@@ -5100,6 +5109,7 @@ const COMPATIBILITY_CONTRACTS = Object.freeze({
     'past-lives-readable-r62': Object.freeze({ mode: 'pastLives', slot: /:past-lives-(?:plan|finale|dossier:D\d{2})$/ }),
     'travel-postcard-design-r8415': Object.freeze({ mode: 'travel', slot: /:travel-map$/ }),
     'travel-structured-design-r8416': Object.freeze({ mode: 'travel', slot: /:travel-map$/ }),
+    'travel-sketch-design-r8418': Object.freeze({ mode: 'travel', slot: /:travel-map$/ }),
 });
 
 function recoveryError(code, message) {
@@ -9151,9 +9161,8 @@ function normalize(value) {
     const sky = token(raw.sky, skyValues, 'clear'), light = token(raw.light, lightValues, 'day');
     const density = token(raw.density, densityValues, 'balanced'), palette = token(raw.palette, DESIGN_PALETTES, 'paper');
     if (!sky || !light || !density || !palette) return null;
-    // A boat needs an explicit water/shore support at the same or an earlier depth.
-    if (elements.some(item => item.kind === 'boat' && !elements.some(surface =>
-        ['water', 'shore'].includes(surface.kind) && DESIGN_LAYERS.indexOf(surface.layer) <= DESIGN_LAYERS.indexOf(item.layer)))) return null;
+    // Composition is not a validity gate. A supported boat without water is a sketch;
+    // the renderer already positions unsupported-by-water motifs on their layer base.
     const design = { version: DESIGN_VERSION, sky, light, density, palette, elements };
     const encoder = new TextEncoder();
     if (encoder.encode(JSON.stringify(input)).byteLength > MAX_DESIGN_BYTES
@@ -9176,13 +9185,13 @@ function postcardDesignNodeCount(value) {
 }
 
 // Appended only to the travel visual contract, never to other mode prompts.
-function postcardDesignInstructions() {
+function postcardDesignInstructions(legacyWaterSupport = false) {
     return `【仅远方纪念页的视觉设计】
 keepsake.design 与本封正文在同一次请求中构思；不是模板编号或自由文本 picturePlan。不要重写附近地点规则或历史证据。
 design={"version":1,"sky":"clear","light":"day","density":"balanced","palette":"paper","elements":[{"kind":"peak","layer":"far","x":30,"size":"m","count":3},{"kind":"pavilion","layer":"mid","x":68,"size":"m","count":1},{"kind":"field","layer":"near","x":50,"size":"l","count":1}]}。
 只允许这些字段。sky=clear/cloud/fog/rain/snow/star；light=day/dawn/dusk/night；density=sparse/balanced/dense；palette=paper/rose/ocean/forest/sunset/night。
 图元 kind=${DESIGN_KINDS.join('/')}。layer=far/mid/near，x为0～100整数，size=s/m/l，count为1～6整数；最多20条图元、8KiB UTF-8，全部展开加两个背景节点最多90个SVG节点。每实例节点成本：${Object.entries(ELEMENT_NODE_COST).map(([k,v]) => k+'='+v).join(',')}。
-模型决定元素组合、层次、横向位置、大小和疏密；地面承托和SVG坐标由本地计算。water/shore给boat提供水面，同层或更远处必须显式设计水面。桥可跨水或地面，gate与wall可同层相邻衔接。位置相同、数量多时应主动缩小，保留合理留白。
+模型决定元素组合、层次、横向位置、大小和疏密；地面承托和SVG坐标由本地计算。${legacyWaterSupport ? 'water/shore给boat提供水面，同层或更远处必须显式设计水面。' : '有water/shore时可为boat定位；也允许只画boat，不要求为了构图补水面。简单、重叠或不写实不是丢弃设计的理由。'}桥可跨水或地面，gate与wall可同层相邻衔接。位置相同、数量多时应主动缩小，保留合理留白。
 只画本封信眼前或明确描写的景物，不把回忆、比喻、否定句当眼前场景。没有设计的亭子、船、月亮、雪点等不会自动添加；不要为填满画布臆造景物。
 支持范围内自行构图，不要每封重复同一排图标。不能合适表达时design=null，正文仍正常输出。禁止SVG/HTML/CSS/JS、任意path、颜色值、URL、class、Base64、对象路径或嵌套图元。视觉设计不能充当共同往事的证据。`;
 }
@@ -10090,7 +10099,7 @@ function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
 function archiveRecoveryHtml(summary, { profile = false } = {}) {
     if (!summary) return '';
     const label = profile || summary.profileOnly ? '仅重试档案简介' : summary.awaitingCommit ? '仅重试保存' : summary.canContinue ? '继续整理档案' : '重试未完成分块';
-    return `<section class="rmt-recovery-status" role="status"><b>${label} · 已保留 ${Number(summary.completed) || 0} 个成功分段</b><p>${text.esc(summary.notice)}</p><button type="button" class="rmt-btn" data-rmt-archive-recovery="${profile || summary.profileOnly ? 'profile' : 'import'}">${label}</button> <button type="button" class="rmt-btn" data-rmt-archive-discard>放弃本页整理草稿</button></section>`;
+    return `<section class="rmt-recovery-status" role="status"><b>${label} · 已保留 ${Number(summary.completed) || 0} 个成功分段</b><p>${text.esc(summary.notice)}</p>${summary.failureCode ? `<p>${text.esc(text.safeErrorSummary({ code: summary.failureCode }))}</p>` : ''}<button type="button" class="rmt-btn" data-rmt-archive-recovery="${profile || summary.profileOnly ? 'profile' : 'import'}">${label}</button> <button type="button" class="rmt-btn" data-rmt-archive-discard>放弃本页整理草稿</button></section>`;
 }
 
 __m_ui_recoveryView_js.recoveryBannerHtml = recoveryBannerHtml;
@@ -28582,7 +28591,7 @@ ${core_narrativeAuthority.NARRATIVE_AUTHORITY_PROMPT}
 
 // New tasks request bounded composition, not keyword-matched free text. Existing
 // recovery tasks deliberately keep their exact original recipe below.
-function structuredTravelPrompt(context, memoryBank, previous = null, sourceMemoryIds = null, worldPresentation = null) {
+function structuredTravelPrompt(context, memoryBank, previous = null, sourceMemoryIds = null, worldPresentation = null, legacyWaterSupport = false) {
     return travelPrompt(context, memoryBank, previous, sourceMemoryIds, worldPresentation)
         .replace('"picturePlan":{"summary":"画面重点","foreground":"前景元素","midground":"中景元素","background":"远景元素","details":"可见细节","atmosphere":"整体氛围","layout":"left/center/right"}',
             '"design":{"version":1,"sky":"clear","light":"day","palette":"paper","density":"balanced","elements":[{"kind":"peak","layer":"far","x":35,"size":"m","count":2},{"kind":"pavilion","layer":"mid","x":70,"size":"m","count":1}]}')
@@ -28590,7 +28599,7 @@ function structuredTravelPrompt(context, memoryBank, previous = null, sourceMemo
             'keepsake.design 只接收下方规定的受限图元数据，x仅为0～100的横向位置，不是SVG坐标。禁止自定义坐标、颜色值、CSS、HTML、JavaScript、URL、图片、Base64 或 class。')
         .replace('picturePlan 可同时描述这封纪念页想呈现的画面重点与构图（例如前景亭子、远景雪峰、雨后湖面等），但不要输出任何代码；最终画面由本地 SVG/CSS 安全渲染。',
             'design 与本封正文同时设计，图元与文字保持一致；设计缺失或不适用时可为null，不影响合格信件正文。最终画面由本地 SVG/CSS 安全渲染。')
-        + '\n' + postcard_design.postcardDesignInstructions();
+        + '\n' + postcard_design.postcardDesignInstructions(legacyWaterSupport);
 }
 
 function travelPromptLegacyR8414(context, memoryBank, previous = null, sourceMemoryIds = null, worldPresentation = null) {
@@ -28674,16 +28683,18 @@ async function generateTravelWithRepair(context, memoryBank, origin, taskKey, op
         || core_worldPresentation.resolveWorldPresentation(presentationContext.contextEnvelope || '', memoryBank);
     const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
     const savedSegment = generation_recovery.generationRecoverySegmentsForOrigin(origin)?.find(segment => segment.slot.endsWith(':travel-map'));
-    const structuredDesign = !savedSegment || savedSegment.contract === 'travel-structured-design-r8416';
+    const legacyWaterSupport = savedSegment?.contract === 'travel-structured-design-r8416';
+    const structuredDesign = !savedSegment || legacyWaterSupport || savedSegment.contract === 'travel-sketch-design-r8418';
+    const designContract = legacyWaterSupport ? 'travel-structured-design-r8416' : 'travel-sketch-design-r8418';
     const promptBuilder = structuredDesign ? structuredTravelPrompt : travelPrompt;
     const fresh = await generation_client.requestValidatedSegment(
-        promptBuilder(context, memoryBank, previous, sourceMemoryIds, worldPresentation) + core_incremental.derivedExpansionDirective(previous, memoryBank)
+        promptBuilder(context, memoryBank, previous, sourceMemoryIds, worldPresentation, legacyWaterSupport) + core_incremental.derivedExpansionDirective(previous, memoryBank)
             + (previous && options.allowPersonaExpansion !== true ? '\n本轮只同步历史：所有新地点必须 basis=记忆，引用本轮 incrementalMemoryIds；不补人设推演地点。' : ''),
         previous ? '他的出行路线 · 正在把新增地点标到地图上…' : '他的出行路线 · 正在绘制生活地图…',
         {
             maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.TRAVEL], temperature: 0.45,
             context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:travel-map`, mode: core_constants.MODE.TRAVEL, background: true,
-            recoveryCompatibility: structuredDesign ? { contract: 'travel-structured-design-r8416', legacyPrompts: [] }
+            recoveryCompatibility: structuredDesign ? { contract: designContract, legacyPrompts: [] }
                 : { contract: 'travel-postcard-design-r8415', legacyPrompts: [
                 legacyTravelRecoveryPromptR8415(context, memoryBank, previous, sourceMemoryIds, worldPresentation, options.allowPersonaExpansion),
             ] },
@@ -31293,8 +31304,13 @@ function acknowledgeArchiveRecoveryCommit(origin) {
     return true;
 }
 
+function archiveRecoveryInputs(origin) {
+    const entry = drafts.get(draftKey(origin, 'import'));
+    return entry?.stage === 'segments' && entry.inputs ? structuredClone(entry.inputs) : null;
+}
+
 async function beginArchiveRecovery({ origin, operation = 'import', sourceIdentity, sourceFragments = [], settingsIdentity,
-    fullRebuild = false, continueApproved = false, assertCurrent = () => true } = {}) {
+    fullRebuild = false, continueApproved = false, inputs = null, assertCurrent = () => true } = {}) {
     const key = draftKey(origin, operation);
     if (!key) throw text.safeUserError('无法确定档案整理草稿属于哪个聊天，本次没有发送请求。', 'RMT_RECOVERY_IDENTITY');
     const existing = drafts.get(key);
@@ -31332,6 +31348,7 @@ async function beginArchiveRecovery({ origin, operation = 'import', sourceIdenti
     if (drafts.get(key) && drafts.get(key) !== existing) throw incompatible();
     if (existing?.active) throw text.safeUserError('这份档案草稿正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
     if (!existing && drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) throw text.safeUserError('本页档案整理草稿已满，旧草稿仍保留。', 'RMT_RECOVERY_LIMIT');
+    if (!existing && inputs) entry.inputs = structuredClone(inputs);
     entry.active = true;
     entry.journal = recovery.generationRecoverySnapshot(handle);
     drafts.set(key, entry);
@@ -31398,6 +31415,7 @@ __m_archive_importRecovery_js.beginArchiveRecovery = beginArchiveRecovery;
 __m_archive_importRecovery_js.requestArchiveRecoverySegment = requestArchiveRecoverySegment;
 __m_archive_importRecovery_js.archiveRecoverySummary = archiveRecoverySummary;
 __m_archive_importRecovery_js.acknowledgeArchiveRecoveryCommit = acknowledgeArchiveRecoveryCommit;
+__m_archive_importRecovery_js.archiveRecoveryInputs = archiveRecoveryInputs;
 __m_archive_importRecovery_js.stageArchiveRecoveryCommit = stageArchiveRecoveryCommit;
 __m_archive_importRecovery_js.finishArchiveProfileRecovery = finishArchiveProfileRecovery;
 __m_archive_importRecovery_js.releaseArchiveRecovery = releaseArchiveRecovery;
@@ -33619,18 +33637,19 @@ function showChooser({ section = null } = {}) {
     }), 8, 220) : [];
     const worldInfoSelectionText = archive_repository.memoryWorldInfoSelectionSummary(context);
     const preflightText = preflight
-        ? `本次已扫描：记忆/摘要 ${preflight.sources.length} 个来源 · ${preflight.records.length} 条${preflight.worldInfo?.entries?.length ? ` · 世界书 ${preflight.worldInfo.entries.length} 条` : ''} · ${Number(preflight.totalChars || 0).toLocaleString()} 字符`
+        ? `本次已扫描：建档可用 ${preflight.records.length} 个摘要片段${preflight.worldInfo?.entries?.length ? ` · 世界书 ${preflight.worldInfo.entries.length} 条` : ''} · ${Number(preflight.totalChars || 0).toLocaleString()} 字符`
         : detectedExternalSources.length
             ? `检测到：${detectedExternalSources.map(item => item.label).join(' · ')}；建档前请先扫描一次。`
             : archive_repository.hasMemoryWorldInfoSelection(context)
-                ? `${worldInfoSelectionText}；它会在扫描记忆 / 摘要时作为解释上下文一起读取。`
+                ? `${worldInfoSelectionText}；历史摘要将用于建档，未标记的条目仍只作设定背景。`
                 : '当前没有检测到可读取的当前窗口记忆 / 摘要；仍可只用聊天正文建档。普通世界书/角色卡只作为设定参考。';
-    const externalSourceText = importedSources.length ? `上次档案同步：${importedSources.join(' · ')}` : preflightText;
+    const externalSourceText = preflight ? preflightText : importedSources.length ? `上次档案同步：${importedSources.join(' · ')}` : preflightText;
     const requirePreflight = externalSetting && (detectedExternalSources.length > 0 || archive_repository.hasMemoryWorldInfoSelection(context)) && !preflight;
     const externalMemoryControls = `<div class="rmt-external-memory-row">
-      <label class="rmt-external-memory-toggle"><input type="checkbox" data-rmt-external-memory-toggle ${externalSetting ? 'checked' : ''} ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}> 使用当前窗口记忆 / 摘要</label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:7px"><button type="button" class="rmt-btn" data-rmt-action="read-memory-plugins" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !externalSetting ? 'disabled' : ''}>扫描记忆 / 摘要</button><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-picker" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>选择记忆世界书</button></div>
+      <label class="rmt-external-memory-toggle"><input type="checkbox" data-rmt-external-memory-toggle ${externalSetting ? 'checked' : ''} ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}> 读取外部记忆 / 摘要</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:7px"><button type="button" class="rmt-btn" data-rmt-action="read-memory-plugins" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>扫描记忆 / 摘要</button><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-picker" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>选择记忆世界书</button></div>
       <small>${core_text.esc(externalSourceText)}</small>
+      ${preflight ? `<details class="rmt-memory-read-details"><summary>来源读取详情</summary><small>本地当前来源：${Number(preflight.storedRecordCount || 0)} 条 · ${Number(preflight.storedChars || 0).toLocaleString()} 字符；本次建档：${preflight.records.length} 个片段 · ${Number(preflight.recordChars || 0).toLocaleString()} 字符。</small>${preflight.sources.map(source => `<p>${core_text.esc(source.label)}：${core_text.esc(source.coverage?.reason || ({ complete: '已读取', partial: '部分可用', truncated: '本次输入受限', failed: '读取失败' }[source.coverage?.status] || '状态未知'))}</p>`).join('')}${(preflight.worldInfo?.books || []).filter(book => !book.historySource).map(book => `<p>${core_text.esc(book.name)}：${book.error ? '读取失败' : `${book.imported} 条，仅作设定背景；历史内容请标记为历史摘要`}</p>`).join('')}</details>` : ''}
     </div>`;
     const generationAction = '';
 
@@ -34106,7 +34125,7 @@ function handleOverlayClick(event) {
         const background = !time_stories.isTimeStoryMode(mode) && generateModeButton.dataset.rmtReaderGeneration !== 'true';
         if (runtimeState.activeArchiveSnapshot) {
             if (runtimeState.activeArchiveSnapshot.backupOnly) {
-                globalThis.toastr?.warning?.('独立备份是永久只读快照，不能启动派生生成。', '心迹回廊');
+                globalThis.toastr?.warning?.('当前查看的是只读备份，不能启动派生生成；可返回档案页重试读取源聊天。', '心迹回廊');
                 return;
             }
             if (generateModeButton.dataset.rmtRegenerate === 'true' && !confirmModeRegeneration(mode)) return;
@@ -34491,6 +34510,8 @@ function refreshMemoryWorldInfoBookControls(context, world, section, expectedSco
     const selected = new Set(all ? [] : (book?.entryUids || []).map(String));
     const allInput = section?.querySelector?.('[data-rmt-memory-wi-all]');
     if (allInput) allInput.checked = all;
+    const historyInput = section?.querySelector?.('[data-rmt-memory-wi-history]');
+    if (historyInput) { historyInput.checked = book?.historySource === true; historyInput.disabled = !book; }
     section?.querySelectorAll?.('[data-rmt-memory-wi-entry]').forEach(input => {
         input.disabled = all;
         input.checked = !all && selected.has(String(input.dataset.rmtMemoryWiUid || ''));
@@ -34502,6 +34523,26 @@ async function handleOverlayChange(event) {
     if (workspace_ui.handleWorkspaceChange(event) || language_view.handleLanguageChange(event)) return;
     const advSelectEl = event.target.closest?.('[data-rmt-adv-select]');
     if (advSelectEl) return ui_advEventView.advSelect(advSelectEl.value);
+    const historyToggle = event.target.closest?.('[data-rmt-memory-wi-history]');
+    if (historyToggle) {
+        const context = core_context.currentCharacterGuard();
+        const selection = archive_repository.getMemoryWorldInfoSelection(context);
+        const world = core_text.normalizeText(historyToggle.dataset.rmtMemoryWiHistory, 240);
+        const previous = selection.books.find(book => book.name === world);
+        if (!previous || runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) {
+            historyToggle.checked = previous?.historySource === true; return;
+        }
+        archive_repository.updateMemoryWorldInfoBookSelection(context, world, { historySource: historyToggle.checked === true });
+        const attempted = JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books);
+        try { await archive_repository.syncSelectedWorldInfoHistoryLedger(context); }
+        catch (error) {
+            if (!error?.worldHistoryPersisted && JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books) === attempted) {
+                archive_repository.setMemoryWorldInfoSelection(context, selection); historyToggle.checked = previous.historySource;
+            }
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.('历史来源未同步，原有来源仍保留。', '心迹回廊');
+        }
+        return;
+    }
     const allToggle = event.target.closest?.('[data-rmt-memory-wi-all]');
     if (allToggle) {
         const context = core_context.currentCharacterGuard();
@@ -35608,7 +35649,8 @@ function normalizeMemorySourceCoverage(value = {}, fallbackStatus = 'partial') {
     const allowed = new Set(['complete', 'partial', 'truncated', 'failed']);
     let status = allowed.has(value?.status) ? value.status : fallbackStatus;
     const returned = Math.max(0, Math.floor(Number(value?.returned) || 0));
-    const total = Number.isFinite(Number(value?.total)) ? Math.max(0, Math.floor(Number(value.total))) : null;
+    const total = value?.total != null && value.total !== '' && Number.isFinite(Number(value.total))
+        ? Math.max(0, Math.floor(Number(value.total))) : null;
     const missingAiFloors = Array.isArray(value?.missingAiFloors)
         ? value.missingAiFloors.filter(item => Number.isInteger(Number(item))).slice(0, 5000).map(Number)
         : [];
@@ -35898,23 +35940,25 @@ function mergeMemorySourceLedgerBatch(previous, identity, batch = {}) {
     return ledger;
 }
 
-async function upsertMemorySourceLedgerBatchesUnlocked(identity, batches) {
+async function upsertMemorySourceLedgerBatchesUnlocked(identity, batches, assertCurrent = () => {}) {
+    assertCurrent();
     let ledger = await readMemorySourceLedger(identity);
     for (const batch of batches) ledger = mergeMemorySourceLedgerBatch(ledger, identity, batch);
     if (!batches.length) return ledger;
+    assertCurrent();
     await backend().write(cloneValue(ledger));
     return normalizeLedger(ledger, identity);
 }
 
-async function upsertMemorySourceLedger(scope, batch = {}) {
+async function upsertMemorySourceLedger(scope, batch = {}, { assertCurrent = () => {} } = {}) {
     const identity = normalizeMemorySourceScope(scope);
-    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, [batch]));
+    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, [batch], assertCurrent));
 }
 
-async function upsertMemorySourceLedgerBatches(scope, batches = []) {
+async function upsertMemorySourceLedgerBatches(scope, batches = [], { assertCurrent = () => {} } = {}) {
     const identity = normalizeMemorySourceScope(scope);
     const list = Array.isArray(batches) ? batches.filter(batch => batch && typeof batch === 'object') : [];
-    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, list));
+    return runLedgerMutation(identity, () => upsertMemorySourceLedgerBatchesUnlocked(identity, list, assertCurrent));
 }
 
 async function deleteMemorySourceLedger(scope) {
@@ -36199,6 +36243,7 @@ const archive_sourceLedger = __m_archive_sourceLedger_js;
 
 const MEMORY_PROVIDER_REGISTRY = Object.freeze([
     Object.freeze({ id: 'sillytavern-memory', adapterVersion: 1, label: 'SillyTavern Memory', mode: 'passive-current-chat' }),
+    Object.freeze({ id: 'qianqianjie-public-api', adapterVersion: 1, label: '千千结', mode: 'public-current-chat-api-v1' }),
     Object.freeze({ id: 'baibai-book-public-api', adapterVersion: 1, label: '柏宝书记忆', mode: 'public-current-chat-api-v1' }),
 ]);
 
@@ -36393,7 +36438,8 @@ function normalizeCoverage(value, returned) {
     const complete = safeOwn(coverage, 'complete') === true || safeOwn(value, 'complete') === true;
     const explicitlyIncomplete = safeOwn(coverage, 'complete') === false || safeOwn(value, 'complete') === false;
     const totalValue = safeOwn(coverage, 'total') ?? safeOwn(value, 'total');
-    const total = Number.isFinite(Number(totalValue)) ? Math.max(0, Math.floor(Number(totalValue))) : null;
+    const total = totalValue != null && totalValue !== '' && Number.isFinite(Number(totalValue))
+        ? Math.max(0, Math.floor(Number(totalValue))) : null;
     const missingFloorData = safeArrayDataValues(safeOwn(coverage, 'missingAiFloors'), 5000);
     const missingAiFloors = missingFloorData.values.filter(item => Number.isInteger(Number(item))).map(Number);
     const totalMismatch = total != null && returned !== total;
@@ -36526,6 +36572,183 @@ __m_archive_memoryProviders_js.findBaibaoPublicApi = findBaibaoPublicApi;
 __m_archive_memoryProviders_js.readBaibaoCurrentChat = readBaibaoCurrentChat;
 }
 
+function __init_archive_sourceReadGuard_js() {
+// MODULE: archive/sourceReadGuard.js
+const contextApi = __m_core_context_js;
+const settingsApi = __m_core_settings_js;
+const constants = __m_core_constants_js;
+const stateModule = __m_core_state_js;
+// User-triggered reads only. No module-load discovery, timers, storage, or model calls.
+
+
+
+
+function sourceReadSignature(context) {
+    const settings = settingsApi.getPluginSettings(context);
+    return JSON.stringify([
+        contextApi.chatScopeKey(context), stateModule.state.runtimeLifecycleEpoch,
+        String(context?.userAvatar ?? context?.personaAvatar ?? context?.user_avatar ?? globalThis.user_avatar ?? ''), String(context?.name1 ?? ''),
+        String(context?.powerUserSettings?.persona_description ?? ''),
+        settings.useCurrentChatExternalMemory === true, settings.useActivatedWorldInfo !== false,
+        context?.chatMetadata?.[constants.MEMORY_WORLD_INFO_SETTINGS_KEY]?.books || [],
+    ]);
+}
+
+function createSourceReadGuard(context, expectedChatId = contextApi.getChatId(context), signal = null) {
+    const signature = sourceReadSignature(context);
+    const chatId = contextApi.comparableChatId(expectedChatId);
+    return () => {
+        if (signal?.aborted) throw new DOMException('Read cancelled', 'AbortError');
+        let current;
+        try { current = contextApi.currentCharacterGuard(); } catch { throw new DOMException('Source changed', 'AbortError'); }
+        if (!chatId || contextApi.comparableChatId(contextApi.getChatId(current)) !== chatId
+            || sourceReadSignature(current) !== signature) throw new DOMException('Source changed', 'AbortError');
+    };
+}
+
+function boundedSourceRead(read, signal = null, timeoutMs = 15000) {
+    if (signal?.aborted) return Promise.reject(new DOMException('Read cancelled', 'AbortError'));
+    return new Promise((resolve, reject) => {
+        let done = false;
+        const finish = (fn, value) => {
+            if (done) return;
+            done = true; clearTimeout(timer); signal?.removeEventListener?.('abort', abort);
+            fn(value);
+        };
+        const abort = () => finish(reject, new DOMException('Read cancelled', 'AbortError'));
+        const timer = setTimeout(() => finish(reject, Object.assign(new Error('Memory reader timed out'), { code: 'RMT_MEMORY_READ_TIMEOUT' })),
+            Math.max(1, Math.min(15000, Number(timeoutMs) || 15000)));
+        signal?.addEventListener?.('abort', abort, { once: true });
+        Promise.resolve().then(() => done ? undefined : read()).then(value => finish(resolve, value), error => finish(reject, error));
+    });
+}
+
+__m_archive_sourceReadGuard_js.sourceReadSignature = sourceReadSignature;
+__m_archive_sourceReadGuard_js.createSourceReadGuard = createSourceReadGuard;
+__m_archive_sourceReadGuard_js.boundedSourceRead = boundedSourceRead;
+}
+
+function __init_archive_qianqianjie_js() {
+// MODULE: archive/qianqianjie.js
+const constants = __m_core_constants_js;
+const contextApi = __m_core_context_js;
+const text = __m_core_text_js;
+const ledger = __m_archive_sourceLedger_js;
+const readGuard = __m_archive_sourceReadGuard_js;
+// https://github.com/atonal519/ST-MyriadKnots/blob/main/docs/public-api.md
+// Only the documented current-chat bridge is used. Never read the backend/metadata,
+// trigger generation or use CSE/person profiles as proof of historical events.
+
+
+
+
+
+const QQJ_PROVIDER = 'qianqianjie-public-api';
+const QQJ_BRIDGE = 'qqj_v3_public_bridge_v1';
+const own = (value, key) => {
+    try { const d = value && Object.getOwnPropertyDescriptor(value, key); return d && 'value' in d ? d.value : undefined; }
+    catch { return undefined; }
+};
+const primitive = value => typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
+const identityOf = value => {
+    const identity = own(value, 'identity');
+    return Object.fromEntries(['hostChatId', 'qqjChatId', 'characterLocator', 'personaLocator'].map(key => [key, primitive(own(identity, key))]));
+};
+const sameIdentity = (a, b) => ['hostChatId', 'qqjChatId', 'characterLocator', 'personaLocator'].every(key => a[key] === b[key]);
+function findQianQianJiePublicApi(root = globalThis) {
+    const api = own(root, QQJ_BRIDGE);
+    if (!api || own(api, 'schemaVersion') !== 1 || own(api, 'kind') !== 'qqj-public-memory-bridge') return null;
+    if (typeof own(api, 'getStatus') !== 'function' || typeof own(api, 'getSnapshot') !== 'function') return null;
+    return api;
+}
+const STATUS_TEXT = Object.freeze({
+    'api-unavailable': '千千结公开接口未加载或版本不支持', disabled: '千千结当前已关闭',
+    'not-ready': '千千结当前聊天或摘要尚未加载，请在千千结确认后重新扫描',
+    syncing: '千千结摘要尚未就绪，请稍后重新扫描', unavailable: '千千结暂无可读摘要',
+    error: '千千结摘要读取失败', 'read-failed': '千千结摘要读取失败',
+    'timed-out': '等待千千结公开接口超时', stale: '千千结聊天或记忆身份已变化，本次结果未采用',
+});
+function unavailable(status) {
+    return { provider: QQJ_PROVIDER, label: '千千结', sourceKind: 'public-current-chat-api-v1', providerVersion: '1', records: [], readStatus: status,
+        coverage: { status: 'failed', returned: 0, total: null, reason: STATUS_TEXT[status] || STATUS_TEXT['not-ready'] } };
+}
+function hostMatches(identity, context) {
+    const persona = String(context?.userAvatar ?? context?.personaAvatar ?? context?.user_avatar ?? globalThis.user_avatar ?? '').trim();
+    return identity.hostChatId && identity.qqjChatId && identity.characterLocator
+        && contextApi.comparableChatId(identity.hostChatId) === contextApi.comparableChatId(contextApi.getChatId(context))
+        && identity.characterLocator === contextApi.currentCharacterAvatar(context)
+        && (!persona || identity.personaLocator === persona);
+}
+
+async function readQianQianJieCurrentChat(context, { signal = null, assertCurrent = () => {}, root = globalThis, timeoutMs = 15000 } = {}) {
+    assertCurrent();
+    const api = findQianQianJiePublicApi(root);
+    if (!api) return unavailable('api-unavailable');
+    try {
+        const status = own(api, 'getStatus').call(api);
+        if (own(status, 'status') !== 'ready') return unavailable(primitive(own(status, 'status')) || 'not-ready');
+        const identity = identityOf(status);
+        if (!hostMatches(identity, context)) return unavailable('stale');
+        const snapshot = await readGuard.boundedSourceRead(() => own(api, 'getSnapshot').call(api), signal, timeoutMs);
+        assertCurrent();
+        if (findQianQianJiePublicApi(root) !== api) return unavailable('stale');
+        const after = own(api, 'getStatus').call(api);
+        if (own(after, 'status') !== 'ready' || !sameIdentity(identity, identityOf(after))
+            || !sameIdentity(identity, identityOf(snapshot)) || !hostMatches(identity, context)) return unavailable('stale');
+        if (own(snapshot, 'status') !== 'ready') return unavailable(primitive(own(snapshot, 'status')) || 'not-ready');
+        const memory = own(snapshot, 'memory');
+        if (own(memory, 'status') !== 'ready') return unavailable(primitive(own(memory, 'status')) || 'not-ready');
+        const floors = own(memory, 'floors'), checkpoint = primitive(own(memory, 'headCheckpointId')) || (Array.isArray(floors) && floors.length === 0 ? 'empty' : '');
+        if (!Array.isArray(floors) || !checkpoint) return unavailable('not-ready');
+        const count = own(floors, 'length');
+        if (!Number.isSafeInteger(count) || count > constants.MAX_MEMORY_SOURCE_LEDGER_RECORDS) {
+            const result = unavailable('read-failed'); result.coverage.reason = '千千结摘要超过本地来源记录上限，未截断冒充完整'; return result;
+        }
+        const records = [], ids = new Set(); let chars = 0, rejected = 0;
+        const sourceKey = ledger.normalizeMemorySourceRevision(JSON.stringify(identity));
+        for (let i = 0; i < count; i += 1) {
+            const floor = own(floors, String(i)), content = own(floor, 'summary');
+            const floorId = primitive(own(floor, 'floorId')), messageIndex = own(floor, 'messageIndex');
+            if (!floorId || typeof content !== 'string' || !content.trim() || !Number.isSafeInteger(messageIndex) || messageIndex < 0) { rejected++; continue; }
+            const sourceId = ledger.normalizeMemorySourceId(`${identity.qqjChatId}:${floorId}`);
+            if (ids.has(sourceId)) { rejected++; continue; } ids.add(sourceId);
+            chars += content.length;
+            if (chars > constants.MAX_MEMORY_SOURCE_LEDGER_CHARS) {
+                const result = unavailable('read-failed'); result.coverage.reason = '千千结摘要超过本地来源字符上限，未截断冒充完整'; return result;
+            }
+            records.push({ sourceId, content, type: 'summary', title: `第 ${messageIndex + 1} 楼摘要` });
+        }
+        // Hash content too: user-edited summaries must not be mistaken for the old scan.
+        const revision = ledger.normalizeMemorySourceRevision(`${sourceKey}:${checkpoint}:${text.hashString(JSON.stringify(records))}`);
+        return { provider: QQJ_PROVIDER, label: '千千结', providerVersion: '1', sourceKind: 'public-current-chat-api-v1', sourceKey, revision,
+            records, allowedSourceIds: records.map(row => row.sourceId), readStatus: records.length ? 'ready' : 'empty',
+            coverage: { status: rejected ? 'partial' : 'complete', returned: records.length, total: count,
+                reason: rejected ? `${rejected} 条摘要未通过数据校验；不作为已读取内容`
+                    : count ? '已读取接口当前全部有效摘要；不代表每个聊天楼层均已建档' : '千千结当前聊天暂无已保存摘要' } };
+    } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        assertCurrent();
+        return unavailable(error?.code === 'RMT_MEMORY_READ_TIMEOUT' ? 'timed-out' : 'read-failed');
+    }
+}
+
+function qianQianJieBatchIsCurrent(batch, context, expectedApi, root = globalThis) {
+    try {
+        const api = findQianQianJiePublicApi(root);
+        if (!api || api !== expectedApi) return false;
+        const status = own(api, 'getStatus').call(api), identity = identityOf(status);
+        return own(status, 'status') === 'ready' && hostMatches(identity, context)
+            && ledger.normalizeMemorySourceRevision(JSON.stringify(identity)) === batch.sourceKey;
+    } catch { return false; }
+}
+
+__m_archive_qianqianjie_js.readQianQianJieCurrentChat = readQianQianJieCurrentChat;
+__m_archive_qianqianjie_js.findQianQianJiePublicApi = findQianQianJiePublicApi;
+__m_archive_qianqianjie_js.qianQianJieBatchIsCurrent = qianQianJieBatchIsCurrent;
+__m_archive_qianqianjie_js.QQJ_PROVIDER = QQJ_PROVIDER;
+__m_archive_qianqianjie_js.QQJ_BRIDGE = QQJ_BRIDGE;
+}
+
 function __init_archive_repository_js() {
 // MODULE: archive/repository.js
 const core_cache = __m_core_cache_js;
@@ -36543,6 +36766,8 @@ const core_backupDiagnostics = __m_core_backupDiagnostics_js;
 const core_text = __m_core_text_js;
 const archive_memoryFileImport = __m_archive_memoryFileImport_js;
 const archive_memoryProviders = __m_archive_memoryProviders_js;
+const qianqianjie = __m_archive_qianqianjie_js;
+const sourceGuard = __m_archive_sourceReadGuard_js;
 const archive_sourceLedger = __m_archive_sourceLedger_js;
 const archive_importRecovery = __m_archive_importRecovery_js;
 const generation_client = __m_generation_client_js;
@@ -36655,7 +36880,8 @@ function safeNestedDataValue(object, path) {
 function getMemoryPreflight(context = core_context.currentCharacterGuard()) {
     const chatId = core_context.comparableChatId(core_context.getChatId(context));
     const preflight = runtimeState.memoryPreflightCache.get(core_context.chatScopeKey(context, chatId)) || null;
-    return preflight && core_context.comparableChatId(preflight.chatId) === chatId ? preflight : null;
+    return preflight && core_context.comparableChatId(preflight.chatId) === chatId
+        && (!preflight.sourceSignature || preflight.sourceSignature === sourceGuard.sourceReadSignature(context)) ? preflight : null;
 }
 
 function clearMemoryPreflight(context = core_context.currentCharacterGuard(), chatId = core_context.getChatId(context)) {
@@ -36714,7 +36940,9 @@ function externalMemoryFromSourceLedger(ledger, options = {}) {
         .map(source => [source.provider, source]));
     const selection = options?.worldInfoSelection;
     const current = archive_sourceLedger.ledgerCurrentRecords(ledger)
-        .filter(record => !selection || worldHistoryRecordAllowedBySelection(record, descriptors.get(record.provider), selection));
+        .filter(record => !selection || worldHistoryRecordAllowedBySelection(record, descriptors.get(record.provider), selection))
+        .filter(record => options.useCurrentChatExternalMemory !== false || !archive_memoryProviders.registeredMemoryProvider(record.provider))
+        .filter(record => !options.excludeProviders?.has(record.provider));
     const selected = current.length > core_constants.MAX_EXTERNAL_MEMORY_ITEMS
         ? core_evidence.evenlySample(current, core_constants.MAX_EXTERNAL_MEMORY_ITEMS)
         : current;
@@ -36768,6 +36996,7 @@ function externalMemoryFromSourceLedger(ledger, options = {}) {
 async function currentMemorySourceLedgerExternal(context = core_context.currentCharacterGuard()) {
     return externalMemoryFromSourceLedger(await currentMemorySourceLedger(context), {
         worldInfoSelection: getMemoryWorldInfoSelection(context),
+        useCurrentChatExternalMemory: core_settings.getPluginSettings(context).useCurrentChatExternalMemory,
     });
 }
 
@@ -36853,14 +37082,15 @@ function hasMemoryWorldInfoSelection(context = core_context.currentCharacterGuar
     return getMemoryWorldInfoSelection(context).books.length > 0;
 }
 
-function normalizeMemoryWorldInfoEntry(world, entry, fallbackUid = '') {
+function normalizeMemoryWorldInfoEntry(world, entry, fallbackUid = '', { historySource = false } = {}) {
     if (!entry || typeof entry !== 'object') return null;
     const uid = core_text.normalizeText(safeOwnDataValue(entry, 'uid') ?? fallbackUid, 120);
     const rawContent = String(safeOwnDataValue(entry, 'content') ?? '').replace(/\u0000/g, '').trim();
     const originalChars = rawContent.length;
-    const contentTruncated = originalChars > core_constants.MAX_MEMORY_WORLD_INFO_CHARS;
+    const limit = historySource ? core_constants.MAX_MEMORY_SOURCE_LEDGER_CHARS : core_constants.MAX_MEMORY_WORLD_INFO_CHARS;
+    const contentTruncated = originalChars > limit;
     const content = contentTruncated
-        ? rawContent.slice(0, core_constants.MAX_MEMORY_WORLD_INFO_CHARS + 1)
+        ? rawContent.slice(0, limit + 1)
         : rawContent;
     if (!uid || !content) return null;
     const title = core_text.normalizeText(safeOwnDataValue(entry, 'comment') ?? safeOwnDataValue(entry, 'title') ?? safeOwnDataValue(entry, 'name'), 180) || `条目 ${uid}`;
@@ -36870,25 +37100,27 @@ function normalizeMemoryWorldInfoEntry(world, entry, fallbackUid = '') {
     return { world: core_text.normalizeText(world, 240), uid, title, keys, content, originalChars, contentTruncated, disabled: safeOwnDataValue(entry, 'disable') === true };
 }
 
-function worldInfoEntriesFromData(world, data) {
+function worldInfoEntriesFromData(world, data, options = {}) {
     const entriesValue = safeOwnDataValue(data, 'entries');
     const raw = entriesValue && typeof entriesValue === 'object' ? entriesValue : {};
     return safeOwnDataEntries(raw)
-        .map(([key, value]) => normalizeMemoryWorldInfoEntry(world, value, key))
+        .map(([key, value]) => normalizeMemoryWorldInfoEntry(world, value, key, options))
         .filter(Boolean)
         .sort((a, b) => Number(a.uid) - Number(b.uid) || String(a.uid).localeCompare(String(b.uid)));
 }
 
-async function loadMemoryWorldInfoBook(context, worldName, signal = null) {
+async function loadMemoryWorldInfoBook(context, worldName, signal = null, options = {}) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     if (typeof context.loadWorldInfo !== 'function') throw new Error('当前 SillyTavern 没有公开的世界书读取接口。');
     const name = core_text.normalizeText(worldName, 240);
-    const names = typeof context.getWorldInfoNames === 'function' ? core_text.cleanArray(await context.getWorldInfoNames(), 500, 240) : [];
+    const names = typeof context.getWorldInfoNames === 'function' ? core_text.cleanArray(await sourceGuard.boundedSourceRead(() => context.getWorldInfoNames(), signal), 500, 240) : [];
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    if (!name || !names.includes(name)) throw new Error('所选世界书已经不存在，或当前 SillyTavern 无法读取。');
-    const data = await context.loadWorldInfo(name);
+    if (!name || (typeof context.getWorldInfoNames === 'function' && !names.includes(name))) throw new Error('所选世界书已经不存在，或当前 SillyTavern 无法读取。');
+    const data = await sourceGuard.boundedSourceRead(() => context.loadWorldInfo(name), signal);
+    const entries = safeOwnDataValue(data, 'entries');
+    if (!entries || typeof entries !== 'object') throw new Error('世界书未返回有效条目列表。');
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    return worldInfoEntriesFromData(name, data);
+    return worldInfoEntriesFromData(name, data, options);
 }
 
 async function collectSelectedMemoryWorldInfo(context, expectedChatId, signal, { settingsOnly = false } = {}) {
@@ -36911,7 +37143,7 @@ async function collectSelectedMemoryWorldInfo(context, expectedChatId, signal, {
     if (!selection.books.length) return { entries: [], books: [], totalChars: 0, fingerprint: 'none', coverage: emptyCoverage, historyCoverage: { ...emptyCoverage, reason: '当前没有标记为历史摘要的世界书条目' } };
     const entries = [];
     const books = [];
-    let totalChars = 0;
+    let totalChars = 0, historyChars = 0, contextChars = 0, contextCount = 0;
     let requested = 0;
     let requestedChars = 0;
     let truncated = 0;
@@ -36923,11 +37155,11 @@ async function collectSelectedMemoryWorldInfo(context, expectedChatId, signal, {
     for (const book of selection.books.filter(book => !settingsOnly || book.historySource !== true).slice(0, core_constants.MAX_MEMORY_WORLD_INFO_BOOKS)) {
         assertSourceScope();
         let loaded;
-        try { loaded = await loadMemoryWorldInfoBook(context, book.name, signal); }
+        try { loaded = await loadMemoryWorldInfoBook(context, book.name, signal, { historySource: book.historySource === true }); }
         catch (error) {
             if (error?.name === 'AbortError') throw error;
             assertSourceScope();
-            console.warn('[HeartbeatMemories] selected memory world info skipped', { world: core_text.normalizeText(book.name, 180), ...core_text.safeErrorDiagnostic(error) });
+            console.warn('[HeartbeatMemories] selected memory world info skipped', { code: 'RMT_WORLD_INFO_READ_FAILED' });
             failedBooks += 1;
             if (book.historySource === true) historyFailedBooks += 1;
             books.push({
@@ -36953,9 +37185,13 @@ async function collectSelectedMemoryWorldInfo(context, expectedChatId, signal, {
             requested += 1;
             requestedChars += Number(entry.originalChars) || entry.content.length;
             if (book.historySource === true) historyRequested += 1;
-            const remaining = core_constants.MAX_MEMORY_WORLD_INFO_CHARS - totalChars;
+            const isHistory = book.historySource === true;
+            const remaining = isHistory ? core_constants.MAX_MEMORY_SOURCE_LEDGER_CHARS - historyChars
+                : core_constants.MAX_MEMORY_WORLD_INFO_CHARS - contextChars;
+            const entryLimit = isHistory ? historyImported >= core_constants.MAX_MEMORY_SOURCE_LEDGER_RECORDS
+                : contextCount >= core_constants.MAX_MEMORY_WORLD_INFO_ENTRIES;
             // Never save half of a history entry while claiming it is complete.
-            if (entries.length >= core_constants.MAX_MEMORY_WORLD_INFO_ENTRIES || remaining <= 0 || entry.contentTruncated || entry.content.length > remaining) {
+            if (entryLimit || remaining <= 0 || entry.contentTruncated || entry.content.length > remaining) {
                 truncated += 1;
                 bookTruncated += 1;
                 if (book.historySource === true) historyTruncated += 1;
@@ -36963,6 +37199,8 @@ async function collectSelectedMemoryWorldInfo(context, expectedChatId, signal, {
             }
             entries.push({ ...entry, historySource: book.historySource === true });
             totalChars += entry.content.length;
+            if (isHistory) historyChars += entry.content.length;
+            else { contextChars += entry.content.length; contextCount += 1; }
             imported += 1;
             if (book.historySource === true) historyImported += 1;
         }
@@ -36987,7 +37225,7 @@ async function collectSelectedMemoryWorldInfo(context, expectedChatId, signal, {
         : 'none';
     const coverageStatus = truncated ? 'truncated' : (failedBooks ? 'partial' : 'complete');
     const coverageReason = truncated
-        ? `世界书读取上限为 ${core_constants.MAX_MEMORY_WORLD_INFO_ENTRIES} 条 / ${core_constants.MAX_MEMORY_WORLD_INFO_CHARS.toLocaleString()} 字符；${truncated} 条未送入且没有切半保存`
+        ? `设定背景上限 ${core_constants.MAX_MEMORY_WORLD_INFO_ENTRIES} 条 / ${core_constants.MAX_MEMORY_WORLD_INFO_CHARS.toLocaleString()} 字符；历史来源上限 ${core_constants.MAX_MEMORY_SOURCE_LEDGER_RECORDS} 条 / ${core_constants.MAX_MEMORY_SOURCE_LEDGER_CHARS.toLocaleString()} 字符；${truncated} 条未读取，未切半保存`
         : (failedBooks ? `${failedBooks} 本世界书读取失败；只使用已成功读取的条目` : '已完整读取本次明确选择的世界书条目');
     const historyStatus = historyTruncated ? 'truncated' : (historyFailedBooks ? 'partial' : 'complete');
     const historyReason = historyTruncated
@@ -37165,6 +37403,8 @@ async function syncSelectedWorldInfoHistoryLedger(context = core_context.current
         error.worldHistoryPersisted = persisted;
         return error;
     };
+    const assertCurrent = sourceGuard.createSourceReadGuard(context, expectedChatId, signal);
+    assertCurrent();
     const chatId = core_context.comparableChatId(expectedChatId);
     const selection = getMemoryWorldInfoSelection(context);
     const selectionFingerprint = String(core_text.hashString(JSON.stringify(selection.books)));
@@ -37174,11 +37414,18 @@ async function syncSelectedWorldInfoHistoryLedger(context = core_context.current
     const currentSelectionFingerprint = String(core_text.hashString(JSON.stringify(getMemoryWorldInfoSelection(context).books)));
     if (currentSelectionFingerprint !== selectionFingerprint) throw abortSync('World info selection changed');
     const scope = memorySourceScopeForContext(context, chatId);
-    const previousLedger = await archive_sourceLedger.readMemorySourceLedger(scope);
+    let previousLedger;
+    try { previousLedger = await archive_sourceLedger.readMemorySourceLedger(scope); }
+    catch (error) {
+        if (selection.books.some(book => book.historySource)) throw core_text.safeUserError('历史世界书未能保存，原有来源保留。', 'RMT_LEDGER_UNAVAILABLE');
+        assertCurrent(); return worldInfo;
+    }
+    assertCurrent();
     if (core_context.comparableChatId(core_context.getChatId(core_context.currentCharacterGuard())) !== chatId) throw abortSync('Chat changed');
     if (String(core_text.hashString(JSON.stringify(getMemoryWorldInfoSelection(context).books))) !== selectionFingerprint) throw abortSync('World info selection changed');
     const batches = selectedWorldInfoHistoryBatches(worldInfo, selection, previousLedger);
-    if (batches.length) await archive_sourceLedger.upsertMemorySourceLedgerBatches(scope, batches);
+    if (batches.length) await archive_sourceLedger.upsertMemorySourceLedgerBatches(scope, batches, { assertCurrent });
+    assertCurrent();
     runtimeState.memoryPreflightCache.delete(preflightKey);
     if (core_context.comparableChatId(core_context.getChatId(core_context.currentCharacterGuard())) !== chatId) throw abortSync('Chat changed', true);
     if (String(core_text.hashString(JSON.stringify(getMemoryWorldInfoSelection(context).books))) !== selectionFingerprint) throw abortSync('World info selection changed', true);
@@ -37219,7 +37466,7 @@ async function showMemoryWorldInfoPicker() {
     const selected = new Map(selection.books.map(book => [book.name, book]));
     const modal = document.createElement('div');
     modal.className = 'rmt-memory-wi-picker';
-    modal.innerHTML = `<div class="rmt-memory-wi-picker-card"><div class="rmt-memory-wi-picker-head"><div><b>记忆相关世界书</b><small>整本导入，或展开后精确选择条目</small></div><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-close">完成</button></div><div class="rmt-memory-wi-picker-note">这些条目只作为记忆/摘要的解释上下文，不会单独成为“已经发生”的证据。最多读取 ${core_constants.MAX_MEMORY_WORLD_INFO_BOOKS} 本、${core_constants.MAX_MEMORY_WORLD_INFO_ENTRIES} 条、${core_constants.MAX_MEMORY_WORLD_INFO_CHARS.toLocaleString()} 字符。</div><div class="rmt-memory-wi-books">${names.length ? names.map(name => { const book=selected.get(name); const precise=book && !book.all ? book.entryUids.length : 0; return `<section class="rmt-memory-wi-book" data-rmt-memory-wi-book="${core_text.esc(name)}"><div class="rmt-memory-wi-book-row"><label><input type="checkbox" data-rmt-memory-wi-all="${core_text.esc(name)}" ${book?.all ? 'checked' : ''}> <b>${core_text.esc(name)}</b> · 整本导入</label><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-expand" data-rmt-memory-world="${core_text.esc(name)}">展开条目${precise ? ` · 已选${precise}` : ''}</button></div><div class="rmt-memory-wi-entry-list" hidden></div></section>`; }).join('') : '<div class="rmt-memory-wi-empty">当前没有可读取的世界书。</div>'}</div></div>`;
+    modal.innerHTML = `<div class="rmt-memory-wi-picker-card"><div class="rmt-memory-wi-picker-head"><div><b>记忆相关世界书</b><small>整本导入，或展开后精确选择条目</small></div><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-close">完成</button></div><div class="rmt-memory-wi-picker-note">记录已发生剧情的书，请选“作为历史摘要”；普通设定书保持不勾选。历史来源完整保存在本地账本，本次建档用量会另行显示。</div><div class="rmt-memory-wi-books">${names.length ? names.map(name => { const book=selected.get(name); const precise=book && !book.all ? book.entryUids.length : 0; return `<section class="rmt-memory-wi-book" data-rmt-memory-wi-book="${core_text.esc(name)}"><div class="rmt-memory-wi-book-row"><label><input type="checkbox" data-rmt-memory-wi-all="${core_text.esc(name)}" ${book?.all ? 'checked' : ''}> <b>${core_text.esc(name)}</b> · 整本导入</label><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-expand" data-rmt-memory-world="${core_text.esc(name)}">展开条目${precise ? ` · 已选${precise}` : ''}</button></div><label class="rmt-settings-check"><input type="checkbox" data-rmt-memory-wi-history="${core_text.esc(name)}" ${book?.historySource ? 'checked' : ''} ${book ? '' : 'disabled'}> 作为历史摘要</label><div class="rmt-memory-wi-entry-list" hidden></div></section>`; }).join('') : '<div class="rmt-memory-wi-empty">当前没有可读取的世界书。</div>'}</div></div>`;
     overlay.appendChild(modal);
 }
 
@@ -37576,6 +37823,7 @@ function externalMemorySourceSummary(context = core_context.getContext()) {
     const summary = core_text.normalizeText(context.extensionPrompts?.['1_memory']?.value, 12000);
     if (summary) sources.push({ id: 'sillytavern-memory', label: 'SillyTavern Memory', kind: 'summary' });
 
+    if (qianqianjie.findQianQianJiePublicApi()) sources.push({ id: qianqianjie.QQJ_PROVIDER, label: '千千结', kind: 'registered-current-chat-api-v1' });
     if (archive_memoryProviders.findBaiBaiBookPublicApi()) {
         sources.push({ id: 'baibai-book-public-api', label: '柏宝书记忆', kind: 'registered-current-chat-api-v1' });
     }
@@ -37704,104 +37952,99 @@ function mergeDurableSourceDescriptor(sources, item) {
 
 async function collectCurrentChatExternalMemory(context, expectedChatId, signal) {
     const settings = core_settings.getPluginSettings(context);
-    if (!settings.useCurrentChatExternalMemory) return { records: [], sources: [], fingerprint: 'disabled' };
-    const liveFallbackRecords = [];
-    const scannedMemoryRecords = [];
-    const sources = [];
+    const assertCurrent = sourceGuard.createSourceReadGuard(context, expectedChatId, signal);
+    assertCurrent();
+    const sources = [], liveFallbackRecords = [], scannedMemoryRecords = [];
+    const excluded = new Set();
     const scope = memorySourceScopeForContext(context, expectedChatId);
     let ledgerAvailable = true;
-    const ingestBatch = async batch => {
+    const ingestBatch = async (batch, providerGuard = assertCurrent) => {
         if (!batch?.provider) return;
+        providerGuard();
         const batchRecords = Array.isArray(batch.records) ? batch.records : [];
-        const batchCoverage = archive_sourceLedger.normalizeMemorySourceCoverage(batch.coverage);
-        // A complete empty batch is a meaningful tombstone: it proves the latest
-        // provider revision contains no current records.
-        if (!batchRecords.length && batchCoverage.status !== 'complete') return;
-        scannedMemoryRecords.push(...batchRecords);
-        const source = {
-            id: batch.provider,
-            label: batch.label || batch.provider,
-            kind: `registered-v${core_constants.MEMORY_PROVIDER_REGISTRY_VERSION}`,
-            count: batchRecords.length,
-            coverage: batchCoverage,
-        };
+        const coverage = archive_sourceLedger.normalizeMemorySourceCoverage(batch.coverage);
+        const source = { id: batch.provider, label: batch.label || batch.provider, kind: 'registered-v1', count: batchRecords.length, coverage, readStatus: batch.readStatus || 'ready' };
         sources.push(source);
+        if (!batchRecords.length && coverage.status !== 'complete') { excluded.add(batch.provider); return; }
+        scannedMemoryRecords.push(...batchRecords.map(record => ({ ...record, provider: batch.provider, revision: batch.revision })));
         try {
-            await archive_sourceLedger.upsertMemorySourceLedger(scope, batch);
-        } catch (error) {
-            ledgerAvailable = false;
-            source.coverage = { status: 'failed', returned: batchRecords.length, total: null, reason: '来源账本保存失败；本次仍使用内存副本' };
-            liveFallbackRecords.push(...batchRecords);
-            console.warn('[HeartbeatMemories] source ledger persistence failed', core_text.normalizeText(batch.provider, 120), core_text.safeErrorDiagnostic(error));
-        }
-    };
-
-    const stBatch = archive_memoryProviders.stMemoryCurrentChatBatch(context, expectedChatId);
-    if (stBatch) await ingestBatch(stBatch);
-
-    const baibaiBook = archive_memoryProviders.findBaiBaiBookPublicApi();
-    if (baibaiBook) {
-        try {
-            await ingestBatch(await archive_memoryProviders.readBaiBaiBookCurrentChat(baibaiBook, expectedChatId, signal));
+            await archive_sourceLedger.upsertMemorySourceLedger(scope, batch, { assertCurrent: providerGuard });
+            providerGuard();
         } catch (error) {
             if (error?.name === 'AbortError') throw error;
-            sources.push({ id: 'baibai-book-public-api', label: '柏宝书记忆', kind: 'registered-v1', count: 0, coverage: { status: 'failed', returned: 0, total: null, reason: core_text.toastText(core_text.safeErrorSummary(error), 180) } });
-            console.warn('[HeartbeatMemories] BaiBai Book current-chat provider rejected', core_text.safeErrorDiagnostic(error));
+            providerGuard(); ledgerAvailable = false;
+            source.coverage = { status: 'failed', returned: batchRecords.length, total: null, reason: '来源账本保存失败；本次仅使用内存副本' };
+            liveFallbackRecords.push(...batchRecords.map(record => ({ ...record, provider: batch.provider, revision: batch.revision })));
         }
+    };
+    if (settings.useCurrentChatExternalMemory) {
+        const stBatch = archive_memoryProviders.stMemoryCurrentChatBatch(context, expectedChatId);
+        if (stBatch) await ingestBatch(stBatch);
+        const baibaiBook = archive_memoryProviders.findBaiBaiBookPublicApi();
+        if (baibaiBook) {
+            const providerGuard = () => {
+                assertCurrent();
+                if (archive_memoryProviders.findBaiBaiBookPublicApi()?.api !== baibaiBook.api) throw new DOMException('Provider changed', 'AbortError');
+            };
+            try {
+                const batch = await sourceGuard.boundedSourceRead(() => archive_memoryProviders.readBaiBaiBookCurrentChat(baibaiBook, expectedChatId, signal), signal);
+                providerGuard(); await ingestBatch(batch, providerGuard);
+            } catch (error) {
+                if (error?.name === 'AbortError') throw error;
+                assertCurrent(); excluded.add('baibai-book-public-api');
+                sources.push({ id: 'baibai-book-public-api', label: '柏宝书记忆', kind: 'registered-v1', count: 0, readStatus: 'read-failed',
+                    coverage: { status: 'failed', returned: 0, total: null, reason: error?.code === 'RMT_MEMORY_READ_TIMEOUT' ? '柏宝书公开接口读取超时' : '柏宝书公开接口读取失败或当前聊天身份/版本不匹配' } });
+            }
+        } else {
+            excluded.add('baibai-book-public-api');
+            sources.push({ id: 'baibai-book-public-api', label: '柏宝书记忆', kind: 'registered-v1', count: 0, readStatus: 'api-unavailable',
+                coverage: { status: 'failed', returned: 0, total: null, reason: '柏宝书公开接口未加载或版本不支持' } });
+        }
+        const qqjApi = qianqianjie.findQianQianJiePublicApi();
+        const batch = await qianqianjie.readQianQianJieCurrentChat(context, { signal, assertCurrent });
+        const providerGuard = () => {
+            assertCurrent();
+            if (!qianqianjie.qianQianJieBatchIsCurrent(batch, context, qqjApi)) throw new DOMException('Provider identity changed', 'AbortError');
+        };
+        await ingestBatch(batch, batch.readStatus === 'ready' || batch.readStatus === 'empty' ? providerGuard : assertCurrent);
     }
-
-    let durableRecords = [];
-    let durableFingerprint = 'none';
+    assertCurrent();
+    let durable = { records: [], sources: [], ledgerFingerprint: 'none' };
     let ledgerReadbackFailed = false;
     try {
-        const ledger = await archive_sourceLedger.readMemorySourceLedger(scope);
-        const ledgerInput = externalMemoryFromSourceLedger(ledger, {
-            worldInfoSelection: getMemoryWorldInfoSelection(context),
-        });
-        durableRecords = ledgerInput.records;
-        durableFingerprint = ledgerInput.ledgerFingerprint;
-        for (const item of ledgerInput.sources) {
-            mergeDurableSourceDescriptor(sources, item);
+        const saved = await archive_sourceLedger.readMemorySourceLedger(scope);
+        assertCurrent();
+        durable = externalMemoryFromSourceLedger(saved, { worldInfoSelection: getMemoryWorldInfoSelection(context),
+            useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory, excludeProviders: excluded });
+        for (const item of durable.sources) {
+            if (!excluded.has(item.id) && (settings.useCurrentChatExternalMemory || !archive_memoryProviders.registeredMemoryProvider(item.id))) mergeDurableSourceDescriptor(sources, item);
         }
     } catch (error) {
-        ledgerAvailable = false;
-        ledgerReadbackFailed = true;
-        for (const source of sources) {
-            if (source.coverage?.status === 'failed') continue;
-            source.coverage = {
-                status: 'failed',
-                returned: source.count,
-                total: null,
-                reason: '来源账本读回失败；本次仅使用当前内存副本，未宣称已持久保存',
-            };
-        }
-        console.warn('[HeartbeatMemories] source ledger unavailable for readback', core_text.safeErrorDiagnostic(error));
+        if (error?.name === 'AbortError') throw error;
+        assertCurrent(); ledgerAvailable = false; ledgerReadbackFailed = true;
+        for (const source of sources) if (source.coverage.status !== 'failed') source.coverage = {
+            status: 'failed', returned: source.count, total: null, reason: '来源账本读回失败；未宣称已持久保存' };
     }
-    const activeRecords = ledgerReadbackFailed ? scannedMemoryRecords : [...durableRecords, ...liveFallbackRecords];
-    const normalized = normalizeExternalMemoryRecords(activeRecords).map((item, index) => ({
-        ...item,
-        externalId: item.externalId || `E${String(index + 1).padStart(3, '0')}`,
-    }));
-    const normalizedSources = [];
-    const sourceSeen = new Set();
-    for (const source of sources) {
-        const label = core_text.normalizeText(source?.label, 100);
-        const id = core_text.normalizeText(source?.id, 180) || `source:${core_text.hashString(label)}`;
-        if (!label || sourceSeen.has(id)) continue;
-        sourceSeen.add(id);
-        normalizedSources.push({ id, label, kind: core_text.normalizeText(source?.kind, 100), count: Math.max(0, Number(source?.count) || 0), coverage: archive_sourceLedger.normalizeMemorySourceCoverage(source?.coverage, ledgerAvailable ? 'partial' : 'failed') });
-    }
-    const fingerprintRecords = ledgerReadbackFailed ? scannedMemoryRecords : liveFallbackRecords;
-    const liveFingerprint = fingerprintRecords.length
-        ? String(core_text.hashString(fingerprintRecords.map(item => `${item.provider}|${item.sourceId || item.externalId}|${item.revision}|${item.sourceHash || core_text.hashString(item.content)}`).join('\n')))
-        : 'none';
-    const fingerprint = durableFingerprint === 'none' && liveFingerprint === 'none'
-        ? 'none'
-        : String(core_text.hashString(`LEDGER:${durableFingerprint}|LIVE:${liveFingerprint}`));
-    return { records: normalized, sources: normalizedSources, fingerprint };
+    const fallback = ledgerReadbackFailed ? scannedMemoryRecords : liveFallbackRecords;
+    const records = normalizeExternalMemoryRecords(ledgerReadbackFailed ? fallback : [...durable.records, ...fallback]);
+    const liveFingerprint = fallback.length ? String(core_text.hashString(JSON.stringify(fallback))) : 'none';
+    const fingerprint = durable.ledgerFingerprint === 'none' && liveFingerprint === 'none' ? 'none'
+        : String(core_text.hashString(`LEDGER:${durable.ledgerFingerprint}|LIVE:${liveFingerprint}`));
+    return { records, sources, fingerprint, storedRecordCount: durable.storedRecordCount || 0,
+        storedChars: durable.storedChars || 0, ledgerAvailable };
 }
 
-async function readCurrentChatMemoryPlugins({ automatic = false, preparationToken = null } = {}) {
+const sourceScans = new Map();
+function readCurrentChatMemoryPlugins(options = {}) {
+    const context = core_context.currentCharacterGuard();
+    const signature = sourceGuard.sourceReadSignature(context);
+    if (sourceScans.has(signature)) return sourceScans.get(signature);
+    const pending = readCurrentChatMemoryPluginsOnce(options).finally(() => { if (sourceScans.get(signature) === pending) sourceScans.delete(signature); });
+    sourceScans.set(signature, pending);
+    return pending;
+}
+
+async function readCurrentChatMemoryPluginsOnce({ automatic = false, preparationToken = null } = {}) {
     const context = core_context.currentCharacterGuard();
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     if ((runtimeState.busy && !(automatic && preparationToken && preparationToken === runtimeState.archivePreparationToken)) || core_requestCoordinator.hasGenerationTasks()) throw new Error('当前还有内容生成任务在进行，请等生成结束后再扫描记忆 / 摘要。');
@@ -37809,23 +38052,26 @@ async function readCurrentChatMemoryPlugins({ automatic = false, preparationToke
     if (!chatId) throw new Error('无法识别当前聊天窗口。');
     const taskOrigin = core_context.captureTaskOrigin(context);
     const controller = new AbortController();
+    const assertCurrent = sourceGuard.createSourceReadGuard(context, chatId, controller.signal);
     const worldInfo = await syncSelectedWorldInfoHistoryLedger(context, chatId, controller.signal);
+    assertCurrent();
     const result = await collectCurrentChatExternalMemory(context, chatId, controller.signal);
     const recordChars = result.records.reduce((sum, item) => sum + String(item.content || '').length, 0);
-    const totalChars = recordChars + worldInfo.totalChars;
+    const totalChars = recordChars + worldInfo.entries.filter(item => !item.historySource).reduce((sum, item) => sum + item.content.length, 0);
     const combinedFingerprint = result.records.length
         ? String(core_text.hashString(`${result.fingerprint}|WI:${worldInfo.fingerprint}`))
         : result.fingerprint;
-    const preflight = { ...result, fingerprint: combinedFingerprint, chatId, readAt: Date.now(), totalChars, recordChars, worldInfo };
+    const preflight = { ...result, fingerprint: combinedFingerprint, chatId, sourceSignature: sourceGuard.sourceReadSignature(context), readAt: Date.now(), totalChars, recordChars, worldInfo };
+    assertCurrent();
     if (lifecycleEpoch !== runtimeState.runtimeLifecycleEpoch) throw new DOMException('Runtime destroyed', 'AbortError');
     if (!core_context.isCurrentTaskOrigin(taskOrigin, core_context.currentCharacterGuard())) throw new DOMException('Chat changed', 'AbortError');
     runtimeState.memoryPreflightCache.set(core_context.chatScopeKey(context, chatId), preflight);
     if (automatic) return preflight;
     if (!result.records.length && !worldInfo.entries.length) {
-        globalThis.toastr?.info?.('当前窗口没有检测到可读取的记忆 / 摘要，也没有选择记忆相关世界书；建档仍会使用聊天正文。', '心迹回廊');
+        globalThis.toastr?.info?.('本次暂无可用历史摘要，原因见来源详情；建档仍可使用聊天正文。', '心迹回廊');
     } else {
         const wiText = worldInfo.entries.length ? ` · 世界书 ${worldInfo.books.filter(book => book.imported > 0).length} 本 / ${worldInfo.entries.length} 条` : '';
-        globalThis.toastr?.success?.(`扫描完成：记忆/摘要 ${result.sources.length} 个来源 · ${result.records.length} 条${wiText} · 合计 ${totalChars.toLocaleString()} 字符。`, '心迹回廊');
+        globalThis.toastr?.success?.(`扫描完成：本次建档可用 ${result.records.length} 个片段${wiText} · ${totalChars.toLocaleString()} 字符；读取状态见来源详情。`, '心迹回廊');
     }
     ui_overlay.showChooser();
     return preflight;
@@ -38117,12 +38363,18 @@ function checkedArchiveProfile(data, memories) {
     return profile;
 }
 
+function archiveSourceOwnerIdentity(context) {
+    return JSON.stringify({ character: context.characters?.[context.characterId]?.data || context.characters?.[context.characterId] || null,
+        persona: [context.name1, context.userAvatar || context.personaAvatar || context.user_avatar || globalThis.user_avatar || '', context.powerUserSettings?.persona_description || ''] });
+}
+
 function archiveRecoverySettingsIdentity(context) {
     const settings = core_settings.getPluginSettings(context);
     const generationSettings = Object.fromEntries(['apiConnectionMode', 'connectionProfileId', 'modelOverride', 'manualApiBaseUrl',
         'manualApiModel', 'manualApiKey', 'manualApiStreaming', 'chatReadRange', 'useActivatedWorldInfo', 'maxTokens', 'temperature', 'useCurrentChatExternalMemory', 'excludedContextTags',
         'bannedGeneratedPhrases', 'creativeSupplementEnabled', 'creativeSupplement'].map(key => [key, settings[key]]));
-    return JSON.stringify({ settings: generationSettings, profile: settings.apiConnectionMode === 'profile'
+    return JSON.stringify({ settings: generationSettings, worldInfoSelection: getMemoryWorldInfoSelection(context).books,
+        profile: settings.apiConnectionMode === 'profile'
         ? core_settings.rawConnectionProfile(settings.connectionProfileId, context) : null });
 }
 
@@ -38396,27 +38648,23 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     };
     const incrementalUpdate = !!existing && !fullRebuild;
     const actionLabel = fullRebuild ? '完全重建' : existing ? '增量更新' : '创建';
-    const detected = externalMemorySourceSummary(context);
     const settings = core_settings.getPluginSettings(context);
-    const preflight = automatic && settings.useCurrentChatExternalMemory
-        ? await readCurrentChatMemoryPlugins({ automatic: true, preparationToken: runtimeState.archivePreparationToken }) : getMemoryPreflight(context);
-    assertPreparationCurrent();
-    if (automatic && (preflight?.sources?.some(source => source.coverage?.status === 'failed')
-        || preflight?.worldInfo?.books?.some(book => book.error === true))) throw core_text.safeUserError('自动同步的来源读取失败。', 'RMT_LEDGER_UNAVAILABLE');
-    let external = { records: [], sources: [], fingerprint: 'disabled', worldInfo: emptyMemoryWorldInfo('disabled') };
-    if (settings.useCurrentChatExternalMemory) {
-        external = preflight || await currentMemorySourceLedgerExternal(context);
-        assertPreparationCurrent();
-        if (!preflight && !external.records.length && (detected.length || hasMemoryWorldInfoSelection(context))) {
-            globalThis.toastr?.info?.('先点击“自动读取”，确认它实际读到了多少当前窗口资料，再创建/更新档案。', '心迹回廊');
-            return { status: 'blocked' };
-        }
-        const limited = external.sources.filter(source => source.coverage?.status === 'truncated'
-            && /本次档案生成/.test(source.coverage?.reason || ''));
-        if (limited.length) {
-            globalThis.toastr?.warning?.(`来源账本仍完整保存；本次模型输入受安全预算限制：${limited.map(source => source.label).slice(0, 3).join('、')}${limited.length > 3 ? ` 等 ${limited.length} 个来源` : ''}。详情可在“记忆来源”中查看。`, '心迹回廊');
-        }
+    const pinnedInputs = continueRecovery ? archive_importRecovery.archiveRecoveryInputs(preparation.origin) : null;
+    const inputOwner = archiveSourceOwnerIdentity(context);
+    if (pinnedInputs?.inputOwner && pinnedInputs.inputOwner !== inputOwner) {
+        throw core_text.safeUserError('来源人物或 Persona 已改变。', 'RMT_RECOVERY_INPUT_CHANGED');
     }
+    const shouldScan = settings.useCurrentChatExternalMemory || hasMemoryWorldInfoSelection(context);
+    let external = pinnedInputs?.external || (shouldScan
+        ? await readCurrentChatMemoryPlugins({ automatic: true, preparationToken: runtimeState.archivePreparationToken })
+        : await currentMemorySourceLedgerExternal(context).catch(() => ({ records: [], sources: [], fingerprint: 'none', worldInfo: emptyMemoryWorldInfo('none') })));
+    assertPreparationCurrent();
+    if (automatic && (external?.sources?.some(source => source.coverage?.status === 'failed'
+        && !['api-unavailable', 'disabled', 'not-ready', 'empty', 'unavailable', 'syncing'].includes(source.readStatus)) || external?.worldInfo?.books?.some(book => book.error))) {
+        throw core_text.safeUserError('自动同步的来源读取失败。', 'RMT_LEDGER_UNAVAILABLE');
+    }
+    const limited = external.sources.filter(source => source.coverage?.status === 'truncated');
+    if (limited.length) globalThis.toastr?.warning?.('部分来源达到本次输入预算；完整本地来源不会被删除，具体数量见记忆来源。', '心迹回廊');
 
     if (incrementalUpdate && core_cache.isCompressedCacheRecord(context.chatMetadata?.[core_constants.CACHE_KEY])) {
         try {
@@ -38490,7 +38738,8 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     await core_context.yieldToUi();
     try {
         const liveEnvelopeContext = assertPreparationCurrent();
-        const contextEnvelope = await core_cache.buildControlledContextEnvelope(liveEnvelopeContext);
+        const contextEnvelope = pinnedInputs?.contextEnvelope || (await core_cache.buildControlledContextEnvelope(liveEnvelopeContext, { includeWorldInfoDepth: true }))
+            + memoryWorldInfoPromptBlock(external.worldInfo);
         assertPreparationCurrent();
         if (!automatic && !continueRecovery) {
             const chatCharacters = chatInput.reduce((sum, item) => sum + item.text.length, 0);
@@ -38509,7 +38758,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
                 snapshotFingerprint: snapshot.fingerprint, prefixFingerprint: snapshot.prefixFingerprint,
                 sourceMessageCount: snapshot.totalMessages, externalFingerprint: external.fingerprint, contextEnvelope }),
             sourceFragments: [...chunks.map(chunk => JSON.stringify(chunk)), ...externalChunks.map(chunk => JSON.stringify(chunk))],
-            settingsIdentity, fullRebuild, continueApproved: continueRecovery,
+            settingsIdentity, fullRebuild, continueApproved: continueRecovery, inputs: { external, contextEnvelope, inputOwner },
             assertCurrent: () => core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)
                 && core_context.currentCharacterRuntimeKey(context) === origin.characterKey
                 && core_context.comparableChatId(core_context.getChatId(context)) === origin.chatId
@@ -38853,7 +39102,6 @@ __m_archive_repository_js.showMemoryWorldInfoPicker = showMemoryWorldInfoPicker;
 __m_archive_repository_js.expandMemoryWorldInfoBook = expandMemoryWorldInfoBook;
 __m_archive_repository_js.flushDeferredCommitsForCurrentChat = flushDeferredCommitsForCurrentChat;
 __m_archive_repository_js.collectCurrentChatExternalMemory = collectCurrentChatExternalMemory;
-__m_archive_repository_js.readCurrentChatMemoryPlugins = readCurrentChatMemoryPlugins;
 __m_archive_repository_js.generateArchiveImportSegment = generateArchiveImportSegment;
 __m_archive_repository_js.rewriteCurrentArchiveVerdict = rewriteCurrentArchiveVerdict;
 __m_archive_repository_js.importCurrentChatMemory = importCurrentChatMemory;
@@ -38892,6 +39140,7 @@ __m_archive_repository_js.normalizeExternalMemoryRecords = normalizeExternalMemo
 __m_archive_repository_js.flattenExternalMemoryPayload = flattenExternalMemoryPayload;
 __m_archive_repository_js.currentChatSummaryMemoryRecords = currentChatSummaryMemoryRecords;
 __m_archive_repository_js.mergeDurableSourceDescriptor = mergeDurableSourceDescriptor;
+__m_archive_repository_js.readCurrentChatMemoryPlugins = readCurrentChatMemoryPlugins;
 __m_archive_repository_js.externalMemoryImportPrompt = externalMemoryImportPrompt;
 __m_archive_repository_js.normalizeExternalImportedMemories = normalizeExternalImportedMemories;
 __m_archive_repository_js.getCurrentUsableMessageCount = getCurrentUsableMessageCount;
@@ -38974,7 +39223,7 @@ function syncWorkspaceChrome() {
     const route = ui_workspaceState.WORKSPACE_ROUTES[ui_workspaceState.workspace.route];
     const label = state.activeMode ? (route?.mode === state.activeMode ? route.title : constants.MODE_LABEL[state.activeMode] || '') : '';
     const snapshot = state.activeArchiveSnapshot;
-    const target = snapshot ? (snapshot.backupOnly ? '独立备份 · 永久只读' : `${snapshot.characterName || ''} · ${state.activeArchiveReadOnly ? '只读档案' : '档案'}`) : '';
+    const target = snapshot ? (snapshot.backupOnly ? '独立备份 · 只读查看' : `${snapshot.characterName || ''} · ${state.activeArchiveReadOnly ? '只读档案' : '档案'}`) : '';
     crumb.hidden = !label && !target;
     crumb.replaceChildren();
     if (label) {
@@ -39915,6 +40164,7 @@ const runtimeState = __m_core_state_js.state;
 
 
 let archiveLibraryRenderSequence = 0;
+let indexedArchiveOpenSequence = 0;
 async function showArchiveLibrary() {
     const renderSequence = ++archiveLibraryRenderSequence;
     const openingContext = core_context.getContext();
@@ -40131,7 +40381,9 @@ async function fetchIndexedArchiveSnapshot(entry, context = core_context.getCont
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     const key = archiveSnapshotCacheKey(entry);
     const cached = runtimeState.archiveSnapshotCache.get(key);
-    if (options.force !== true && cached && Date.now() - Number(cached.loadedAt || 0) < 120000) return cached;
+    // Only explicit opens call this path. A cached fallback must not hide a recovered
+    // source; keep the old backup object readonly and fetch a new verified snapshot.
+    if (options.force !== true && cached && !cached.backupOnly && Date.now() - Number(cached.loadedAt || 0) < 120000) return cached;
     const avatar = core_context.archiveEntryAvatarName(entry, context);
     const wantedChatId = core_context.comparableChatId(entry.chatId);
     if (!wantedChatId) throw new Error('无法识别这个历史聊天的文件 ID。');
@@ -40424,7 +40676,7 @@ async function prepareArchiveTargetSubtask(mode, taskPart, snapshot = runtimeSta
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     if (!snapshot) return null;
-    if (snapshot.backupOnly) throw new Error('独立备份是永久只读快照，不能启动派生生成。');
+    if (snapshot.backupOnly) throw new Error('当前查看的是只读备份，不能启动派生生成；可返回档案页重试读取源聊天。');
     const options = archiveTargetGenerationOptions(snapshot, lifecycleEpoch);
     const latest = await options.revalidateArchiveTarget(options.archiveTarget, lifecycleEpoch);
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
@@ -40515,7 +40767,7 @@ function setArchiveReadOnly(readOnly) {
     if (!runtimeState.activeArchiveSnapshot) return;
     if (runtimeState.activeArchiveSnapshot.backupOnly && readOnly === false) {
         runtimeState.activeArchiveReadOnly = true;
-        globalThis.toastr?.info?.('源聊天已丢失或无法读取；独立备份只能永久只读查看，不能重新绑定到其他聊天。', '心迹回廊');
+        globalThis.toastr?.info?.('源聊天暂不可读，当前查看只读备份。请重试读取源聊天；备份本身不能解除只读或绑定到其他聊天。', '心迹回廊');
         return showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot);
     }
     runtimeState.activeArchiveReadOnly = readOnly !== false;
@@ -40548,7 +40800,7 @@ function promoteSnapshotToLiveIfCurrent() {
     if (!runtimeState.activeArchiveSnapshot) return true;
     if (runtimeState.activeArchiveSnapshot.backupOnly) {
         runtimeState.activeArchiveReadOnly = true;
-        globalThis.toastr?.warning?.('独立备份是永久只读快照，不能重新绑定或写入当前聊天。', '心迹回廊');
+        globalThis.toastr?.warning?.('当前查看的是只读备份，不能重新绑定或写入当前聊天；请重试读取源聊天。', '心迹回廊');
         return false;
     }
     if (runtimeState.activeArchiveReadOnly) {
@@ -40653,11 +40905,12 @@ function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchiveSnapsho
           <div class="rmt-archive-kicker">${snapshot.backupOnly ? 'RECOVERED LOCAL BACKUP' : 'READ-ONLY ARCHIVE'}</div>
           <strong class="rmt-archive-title">${core_text.esc(snapshot.archiveName)}</strong>
           ${core_archiveCover.archiveCoverHtml(memory, { writable: !snapshot.backupOnly && core_context.getChatId(core_context.getContext()) === snapshot.chatId && !runtimeState.activeArchiveReadOnly, busy: runtimeState.busy || core_requestCoordinator.hasGenerationTasks() })}
-          <div class="rmt-memory-status ready">${snapshot.backupOnly ? '源聊天不可用 · 已从独立备份恢复 · 永久只读' : runtimeState.activeArchiveReadOnly ? '只读查看' : '编辑待命'} · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${core_constants.ARCHIVE_PORTAL_MODES.length}</div>
+          <div class="rmt-memory-status ready">${snapshot.backupOnly ? '源聊天暂不可读 · 当前查看只读备份' : runtimeState.activeArchiveReadOnly ? '只读查看' : '编辑待命'} · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${core_constants.ARCHIVE_PORTAL_MODES.length}</div>
           <div class="rmt-archive-meta">${snapshot.backupOnly ? `本机备份 · ${core_text.esc(snapshot.sourceError || '源聊天无法读取')}` : (runtimeState.activeArchiveReadOnly ? '当前为只读档案' : '写入前会再次验证目标聊天')}</div>
           <div class="rmt-archive-readonly-control">
             <label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''} ${snapshot.backupOnly ? 'disabled' : ''}> 只读查看</label>
-            <small>${snapshot.backupOnly ? '永久只读' : runtimeState.activeArchiveReadOnly ? '关闭只读后可显示编辑操作' : '编辑待命'}</small>
+            <small>${snapshot.backupOnly ? '备份只读，不代表原聊天已删除' : runtimeState.activeArchiveReadOnly ? '关闭只读后可显示编辑操作' : '编辑待命'}</small>
+            ${snapshot.backupOnly ? `<button type="button" class="rmt-btn" data-rmt-indexed-character="${core_text.esc(snapshot.characterKey)}" data-rmt-indexed-chat="${core_text.esc(snapshot.chatId)}" data-rmt-indexed-entry="${core_text.esc(snapshot.entryId)}">重试读取源聊天</button>` : ''}
           </div>
         </div>
       </section>
@@ -40669,6 +40922,7 @@ function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchiveSnapsho
 }
 
 async function openIndexedArchive(characterKey, chatId, entryId = '') {
+    const renderSequence = ++indexedArchiveOpenSequence;
     if (runtimeState.busy) runtimeState.activeTaskBackgrounded = true;
     const context = core_context.getContext();
     const index = archive_groups.getArchiveIndex(context);
@@ -40681,7 +40935,9 @@ async function openIndexedArchive(characterKey, chatId, entryId = '') {
     // If the indexed row is exactly the chat that SillyTavern already has open, use the live
     // context instead of a read-only metadata snapshot. This keeps write actions such as CG
     // drawing available without ever switching the host character/chat.
-    if (generation_imageGeneration.indexedArchiveMatchesCurrentChat(entry, context)) {
+    const retryingBackup = runtimeState.activeArchiveSnapshot?.backupOnly === true
+        && archiveSnapshotCacheKey(runtimeState.activeArchiveSnapshot) === archiveSnapshotCacheKey(entry);
+    if (!retryingBackup && generation_imageGeneration.indexedArchiveMatchesCurrentChat(entry, context)) {
         runtimeState.activeArchiveSnapshot = null;
         runtimeState.activeArchiveReadOnly = true;
         return ui_overlay.showChooser();
@@ -40689,12 +40945,33 @@ async function openIndexedArchive(characterKey, chatId, entryId = '') {
     ui_overlay.openOverlay();
     ui_overlay.topTitle('心迹回廊 · 正在读取只读档案…');
     const body = ui_overlay.bodyEl();
-    if (body) body.innerHTML = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在读取这个聊天的档案与已生成内容…</b><div class="rmt-loading-note">只请求这一条目标聊天，不扫描同角色的其他聊天；不会切换当前角色或聊天。</div></div></div>';
+    const overlay = document.getElementById(core_constants.OVERLAY_ID);
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const openingScope = core_context.chatScopeKey(context), openingGroup = context.groupId;
+    const personaKey = ctx => [String(ctx?.userAvatar ?? ctx?.personaAvatar ?? ctx?.user_avatar ?? globalThis.user_avatar ?? ''),
+        String(ctx?.name1 ?? ''), String(ctx?.powerUserSettings?.persona_description ?? '')];
+    const openingPersona = personaKey(context);
+    const loadingHtml = '<div class="rmt-loading"><div class="rmt-loading-card"><div class="rmt-spinner"></div><b>正在读取这个聊天的档案与已生成内容…</b><div class="rmt-loading-note">只请求这一条目标聊天，不扫描同角色的其他聊天；不会切换当前角色或聊天。</div></div></div>';
+    if (body) body.innerHTML = loadingHtml;
+    const viewStillCurrent = () => {
+        try {
+            const live = core_context.getContext();
+            return renderSequence === indexedArchiveOpenSequence && core_context.runtimeLifecycleStillCurrent(lifecycleEpoch)
+                && core_context.chatScopeKey(live) === openingScope && live.groupId === openingGroup
+                && personaKey(live).every((value, i) => value === openingPersona[i])
+                && document.getElementById(core_constants.OVERLAY_ID) === overlay && overlay && !overlay.hidden
+                && body && ui_overlay.bodyEl() === body && body.innerHTML === loadingHtml;
+        } catch { return false; }
+    };
     try {
-        const snapshot = await fetchIndexedArchiveSnapshot(entry, context);
+        const snapshot = await fetchIndexedArchiveSnapshot(entry, context, { lifecycleEpoch });
+        // Reads may finish after navigation. They must not re-enter a historical readonly
+        // view over the live page, or cancel an explicit readonly choice made meanwhile.
+        if (!viewStillCurrent()) return;
         showIndexedArchiveSnapshot(snapshot);
-        if (snapshot.backupOnly) globalThis.toastr?.warning?.('源聊天无法读取，已从当前浏览器的独立备份恢复为永久只读档案。', '心迹回廊');
+        if (snapshot.backupOnly) globalThis.toastr?.warning?.('源聊天暂不可读，当前查看只读备份。源聊天恢复后可重试读取，备份不会覆盖原聊天。', '心迹回廊');
     } catch (error) {
+        if (!viewStillCurrent()) return;
         console.warn('[HeartbeatMemories] indexed archive read-only load failed', core_text.safeErrorDiagnostic(error));
         if (ui_overlay.bodyEl()) ui_overlay.bodyEl().innerHTML = `<div class="rmt-error"><div><b>档案读取失败</b><div style="margin-top:10px;white-space:pre-wrap;opacity:.78">${core_text.esc(core_text.safeErrorSummary(error))}</div><button type="button" class="rmt-btn" data-rmt-action="library-home">返回档案室</button></div></div>`;
     }
@@ -43524,7 +43801,15 @@ async function buildControlledContextEnvelope(context, options = {}) {
         };
         if (core_settings.getPluginSettings(context).useActivatedWorldInfo !== false && typeof context.getWorldInfoPrompt === 'function') {
             const result = await context.getWorldInfoPrompt(worldInfoScan, Math.max(2048, Math.min(32768, Number(context.maxContext) || 8192)), true, globalScanData);
-            worldInfo = core_contextTags.stripExcludedTags(core_text.normalizeText(result?.worldInfoString || [result?.worldInfoBefore, result?.worldInfoAfter].filter(Boolean).join('\n'), 12000), core_contextTags.excludedTagsForContext(context));
+            let worldText = result?.worldInfoString || [result?.worldInfoBefore, result?.worldInfoAfter].filter(Boolean).join('\n');
+            if (options.includeWorldInfoDepth === true) {
+                const depthText = (Array.isArray(result?.worldInfoDepth) ? result.worldInfoDepth : []).map(item => {
+                    if (typeof item === 'string') return item;
+                    return Array.isArray(item?.entries) ? item.entries.filter(value => typeof value === 'string').join('\n') : '';
+                }).filter(Boolean).join('\n');
+                worldText = [worldText, depthText].filter(Boolean).join('\n');
+            }
+            worldInfo = core_contextTags.stripExcludedTags(core_text.normalizeText(worldText, 12000), core_contextTags.excludedTagsForContext(context));
         }
     } catch (error) {
         console.warn('[HeartbeatMemories] independent world-info dry run failed', core_text.safeErrorDiagnostic(error));
@@ -43906,6 +44191,8 @@ __init_core_requestCoordinator_js();
 __init_archive_sourceLedger_js();
 __init_archive_memoryFileImport_js();
 __init_archive_memoryProviders_js();
+__init_archive_sourceReadGuard_js();
+__init_archive_qianqianjie_js();
 __init_archive_repository_js();
 __init_ui_workspace_js();
 __init_archive_backupStore_js();

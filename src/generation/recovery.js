@@ -24,6 +24,7 @@ const COMPATIBILITY_CONTRACTS = Object.freeze({
     'past-lives-readable-r62': Object.freeze({ mode: 'pastLives', slot: /:past-lives-(?:plan|finale|dossier:D\d{2})$/ }),
     'travel-postcard-design-r8415': Object.freeze({ mode: 'travel', slot: /:travel-map$/ }),
     'travel-structured-design-r8416': Object.freeze({ mode: 'travel', slot: /:travel-map$/ }),
+    'travel-sketch-design-r8418': Object.freeze({ mode: 'travel', slot: /:travel-map$/ }),
 });
 
 function recoveryError(code, message) {

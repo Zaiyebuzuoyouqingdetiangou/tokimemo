@@ -552,18 +552,19 @@ export function showChooser({ section = null } = {}) {
     }), 8, 220) : [];
     const worldInfoSelectionText = archive_repository.memoryWorldInfoSelectionSummary(context);
     const preflightText = preflight
-        ? `本次已扫描：记忆/摘要 ${preflight.sources.length} 个来源 · ${preflight.records.length} 条${preflight.worldInfo?.entries?.length ? ` · 世界书 ${preflight.worldInfo.entries.length} 条` : ''} · ${Number(preflight.totalChars || 0).toLocaleString()} 字符`
+        ? `本次已扫描：建档可用 ${preflight.records.length} 个摘要片段${preflight.worldInfo?.entries?.length ? ` · 世界书 ${preflight.worldInfo.entries.length} 条` : ''} · ${Number(preflight.totalChars || 0).toLocaleString()} 字符`
         : detectedExternalSources.length
             ? `检测到：${detectedExternalSources.map(item => item.label).join(' · ')}；建档前请先扫描一次。`
             : archive_repository.hasMemoryWorldInfoSelection(context)
-                ? `${worldInfoSelectionText}；它会在扫描记忆 / 摘要时作为解释上下文一起读取。`
+                ? `${worldInfoSelectionText}；历史摘要将用于建档，未标记的条目仍只作设定背景。`
                 : '当前没有检测到可读取的当前窗口记忆 / 摘要；仍可只用聊天正文建档。普通世界书/角色卡只作为设定参考。';
-    const externalSourceText = importedSources.length ? `上次档案同步：${importedSources.join(' · ')}` : preflightText;
+    const externalSourceText = preflight ? preflightText : importedSources.length ? `上次档案同步：${importedSources.join(' · ')}` : preflightText;
     const requirePreflight = externalSetting && (detectedExternalSources.length > 0 || archive_repository.hasMemoryWorldInfoSelection(context)) && !preflight;
     const externalMemoryControls = `<div class="rmt-external-memory-row">
-      <label class="rmt-external-memory-toggle"><input type="checkbox" data-rmt-external-memory-toggle ${externalSetting ? 'checked' : ''} ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}> 使用当前窗口记忆 / 摘要</label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:7px"><button type="button" class="rmt-btn" data-rmt-action="read-memory-plugins" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !externalSetting ? 'disabled' : ''}>扫描记忆 / 摘要</button><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-picker" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>选择记忆世界书</button></div>
+      <label class="rmt-external-memory-toggle"><input type="checkbox" data-rmt-external-memory-toggle ${externalSetting ? 'checked' : ''} ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}> 读取外部记忆 / 摘要</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:7px"><button type="button" class="rmt-btn" data-rmt-action="read-memory-plugins" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>扫描记忆 / 摘要</button><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-picker" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>选择记忆世界书</button></div>
       <small>${core_text.esc(externalSourceText)}</small>
+      ${preflight ? `<details class="rmt-memory-read-details"><summary>来源读取详情</summary><small>本地当前来源：${Number(preflight.storedRecordCount || 0)} 条 · ${Number(preflight.storedChars || 0).toLocaleString()} 字符；本次建档：${preflight.records.length} 个片段 · ${Number(preflight.recordChars || 0).toLocaleString()} 字符。</small>${preflight.sources.map(source => `<p>${core_text.esc(source.label)}：${core_text.esc(source.coverage?.reason || ({ complete: '已读取', partial: '部分可用', truncated: '本次输入受限', failed: '读取失败' }[source.coverage?.status] || '状态未知'))}</p>`).join('')}${(preflight.worldInfo?.books || []).filter(book => !book.historySource).map(book => `<p>${core_text.esc(book.name)}：${book.error ? '读取失败' : `${book.imported} 条，仅作设定背景；历史内容请标记为历史摘要`}</p>`).join('')}</details>` : ''}
     </div>`;
     const generationAction = '';
 
@@ -1039,7 +1040,7 @@ export function handleOverlayClick(event) {
         const background = !time_stories.isTimeStoryMode(mode) && generateModeButton.dataset.rmtReaderGeneration !== 'true';
         if (runtimeState.activeArchiveSnapshot) {
             if (runtimeState.activeArchiveSnapshot.backupOnly) {
-                globalThis.toastr?.warning?.('独立备份是永久只读快照，不能启动派生生成。', '心迹回廊');
+                globalThis.toastr?.warning?.('当前查看的是只读备份，不能启动派生生成；可返回档案页重试读取源聊天。', '心迹回廊');
                 return;
             }
             if (generateModeButton.dataset.rmtRegenerate === 'true' && !confirmModeRegeneration(mode)) return;
@@ -1424,6 +1425,8 @@ function refreshMemoryWorldInfoBookControls(context, world, section, expectedSco
     const selected = new Set(all ? [] : (book?.entryUids || []).map(String));
     const allInput = section?.querySelector?.('[data-rmt-memory-wi-all]');
     if (allInput) allInput.checked = all;
+    const historyInput = section?.querySelector?.('[data-rmt-memory-wi-history]');
+    if (historyInput) { historyInput.checked = book?.historySource === true; historyInput.disabled = !book; }
     section?.querySelectorAll?.('[data-rmt-memory-wi-entry]').forEach(input => {
         input.disabled = all;
         input.checked = !all && selected.has(String(input.dataset.rmtMemoryWiUid || ''));
@@ -1435,6 +1438,26 @@ export async function handleOverlayChange(event) {
     if (workspace_ui.handleWorkspaceChange(event) || language_view.handleLanguageChange(event)) return;
     const advSelectEl = event.target.closest?.('[data-rmt-adv-select]');
     if (advSelectEl) return ui_advEventView.advSelect(advSelectEl.value);
+    const historyToggle = event.target.closest?.('[data-rmt-memory-wi-history]');
+    if (historyToggle) {
+        const context = core_context.currentCharacterGuard();
+        const selection = archive_repository.getMemoryWorldInfoSelection(context);
+        const world = core_text.normalizeText(historyToggle.dataset.rmtMemoryWiHistory, 240);
+        const previous = selection.books.find(book => book.name === world);
+        if (!previous || runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) {
+            historyToggle.checked = previous?.historySource === true; return;
+        }
+        archive_repository.updateMemoryWorldInfoBookSelection(context, world, { historySource: historyToggle.checked === true });
+        const attempted = JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books);
+        try { await archive_repository.syncSelectedWorldInfoHistoryLedger(context); }
+        catch (error) {
+            if (!error?.worldHistoryPersisted && JSON.stringify(archive_repository.getMemoryWorldInfoSelection(context).books) === attempted) {
+                archive_repository.setMemoryWorldInfoSelection(context, selection); historyToggle.checked = previous.historySource;
+            }
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.('历史来源未同步，原有来源仍保留。', '心迹回廊');
+        }
+        return;
+    }
     const allToggle = event.target.closest?.('[data-rmt-memory-wi-all]');
     if (allToggle) {
         const context = core_context.currentCharacterGuard();

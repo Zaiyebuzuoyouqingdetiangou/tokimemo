@@ -41,8 +41,13 @@ export function acknowledgeArchiveRecoveryCommit(origin) {
     return true;
 }
 
+export function archiveRecoveryInputs(origin) {
+    const entry = drafts.get(draftKey(origin, 'import'));
+    return entry?.stage === 'segments' && entry.inputs ? structuredClone(entry.inputs) : null;
+}
+
 export async function beginArchiveRecovery({ origin, operation = 'import', sourceIdentity, sourceFragments = [], settingsIdentity,
-    fullRebuild = false, continueApproved = false, assertCurrent = () => true } = {}) {
+    fullRebuild = false, continueApproved = false, inputs = null, assertCurrent = () => true } = {}) {
     const key = draftKey(origin, operation);
     if (!key) throw text.safeUserError('无法确定档案整理草稿属于哪个聊天，本次没有发送请求。', 'RMT_RECOVERY_IDENTITY');
     const existing = drafts.get(key);
@@ -80,6 +85,7 @@ export async function beginArchiveRecovery({ origin, operation = 'import', sourc
     if (drafts.get(key) && drafts.get(key) !== existing) throw incompatible();
     if (existing?.active) throw text.safeUserError('这份档案草稿正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
     if (!existing && drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) throw text.safeUserError('本页档案整理草稿已满，旧草稿仍保留。', 'RMT_RECOVERY_LIMIT');
+    if (!existing && inputs) entry.inputs = structuredClone(inputs);
     entry.active = true;
     entry.journal = recovery.generationRecoverySnapshot(handle);
     drafts.set(key, entry);

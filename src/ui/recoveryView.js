@@ -21,5 +21,5 @@ export function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
 export function archiveRecoveryHtml(summary, { profile = false } = {}) {
     if (!summary) return '';
     const label = profile || summary.profileOnly ? '仅重试档案简介' : summary.awaitingCommit ? '仅重试保存' : summary.canContinue ? '继续整理档案' : '重试未完成分块';
-    return `<section class="rmt-recovery-status" role="status"><b>${label} · 已保留 ${Number(summary.completed) || 0} 个成功分段</b><p>${text.esc(summary.notice)}</p><button type="button" class="rmt-btn" data-rmt-archive-recovery="${profile || summary.profileOnly ? 'profile' : 'import'}">${label}</button> <button type="button" class="rmt-btn" data-rmt-archive-discard>放弃本页整理草稿</button></section>`;
+    return `<section class="rmt-recovery-status" role="status"><b>${label} · 已保留 ${Number(summary.completed) || 0} 个成功分段</b><p>${text.esc(summary.notice)}</p>${summary.failureCode ? `<p>${text.esc(text.safeErrorSummary({ code: summary.failureCode }))}</p>` : ''}<button type="button" class="rmt-btn" data-rmt-archive-recovery="${profile || summary.profileOnly ? 'profile' : 'import'}">${label}</button> <button type="button" class="rmt-btn" data-rmt-archive-discard>放弃本页整理草稿</button></section>`;
 }
