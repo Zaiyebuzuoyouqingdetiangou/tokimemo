@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.94-tt-cg-r84.18-sketch-readonly",
+  "js": "index.js?heartbeat=0.8.95-tt-cg-r84.19-cg-format-preference",
   "author": "Toto",
-  "version": "0.8.94",
+  "version": "0.8.95",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.18：明信片允许无水简笔小船；只读备份手动重读与迟到页面恢复窄修。",
+  "description": "r84.19：生图格式仅指导构思；相簿、ADV与日常一格不因中文、Tag或混合提示阻断绘图。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

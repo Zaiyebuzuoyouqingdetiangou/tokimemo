@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 116
-// Source SHA-256: 1991dccffd1481fda5fdfee0538552b47eace1b4bdac2c2132af5001f54ac555
+// Source SHA-256: 828fbf64a23e83f2806a0edf031928e819d2b4c031040f8b9ab288b5ed808771
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -2146,7 +2146,8 @@ function formatDailyComicPrompt(item, scene, format) {
     let base = String(scene || '').trim();
     if (base.startsWith(prefix)) return base;
     if (base.startsWith('DAILY_COMIC_Q_V1') && base.includes('[SCENE] ')) base = base.slice(base.indexOf('[SCENE] ') + 8);
-    if (format === 'nai45-tags') assertEnglishTagPrompt(base);
+    // The selected dialect shapes the local comic prefix, not permission to send
+    // the user's Chinese, tag, prose or mixed scene. Keep the same length guard.
     const result = prefix + (format === 'nai45-tags' ? ', ' : '\n') + base;
     if (result.length > 1800) throw text.safeUserError('分镜要求与提示词合计超过 1800 字符，请缩短后再绘图；没有发送请求。', 'RMT_CG_PROMPT_INVALID');
     return result;
@@ -4413,20 +4414,11 @@ function appearanceEvidenceWithDraft(evidence, draft) {
         return { ...row, knownTag: plain(draft[row.role], CG_APPEARANCE_TAG_LIMIT), knownNl: '' };
     }) };
 }
-function assertAppearanceTags(characters) {
-    if (characters.some(row => !format.isEnglishTagPrompt(row.tag))) throw text.safeUserError('人物外貌仍是原始文字，尚未整理成英文外貌标签；请重新构思或手动转换。旧稿与原图保留。', 'RMT_CG_APPEARANCE_FORMAT');
-}
 function validateCgPreparedFormat(prepared, promptFormat) {
     const selected = format.normalizeCgPromptFormat(promptFormat);
-    if (!selected) return prepared;
-    if (selected === 'nai45-tags') {
-        for (const value of [prepared.imagePrompt, prepared.sceneTags, prepared.flatPrompt, ...prepared.characters.map(row => row.tag)]) format.assertEnglishTagPrompt(value);
-    } else {
-        format.assertNaturalScenePrompt(prepared.imagePrompt);
-        format.assertNaturalScenePrompt(prepared.flatPrompt);
-        assertAppearanceTags(prepared.characters);
-    }
-    return { ...prepared, promptFormat: selected, characters: prepared.characters.map(row => selected === 'nai45-tags' ? {...row, nl: ''} : row) };
+    // normalizeCgPreparedPrompt already checked the data and visible-appearance
+    // contract. A dialect mismatch is not a failed draft and needs no retry.
+    return selected ? { ...prepared, promptFormat: selected } : prepared;
 }
 // Shared by the actual provider boundary and the editor preview. No settings,
 // private provider objects or hidden appearance text is read here.
@@ -4439,15 +4431,10 @@ function formattedCgProviderPrompts(scene, rawMetadata, supportsCharacters = fal
     const chars = metadata.characters;
     let prompt, nl;
     if (selected === 'nai45-tags') {
-        format.assertEnglishTagPrompt(visual);
-        for (const value of [metadata.sceneTags, metadata.flatPrompt, ...chars.map(row => row.tag)].filter(Boolean)) format.assertEnglishTagPrompt(value);
-        if (!supportsCharacters && chars.length && !metadata.flatPrompt) throw text.safeUserError('当前后端需要包含外貌与动作的完整英文 Tag。请补全“通用后端完整提示”或重新构思，再确认绘图。', 'RMT_CG_TAG_FORMAT');
-        prompt = supportsCharacters && chars.length ? metadata.sceneTags || visual : metadata.flatPrompt || visual;
-        nl = prompt; // Neither channel can reintroduce Chinese names/descriptions.
+        prompt = supportsCharacters && chars.length ? metadata.sceneTags || visual
+            : metadata.flatPrompt || cgPreparedVisualPrompt(visual, metadata);
+        nl = prompt; // Keep the same confirmed scene in both public channels.
     } else {
-        format.assertNaturalScenePrompt(visual);
-        assertAppearanceTags(chars);
-        if (metadata.flatPrompt) format.assertNaturalScenePrompt(metadata.flatPrompt);
         prompt = metadata.flatPrompt || cgPreparedVisualPrompt(visual, metadata);
         nl = prompt;
     }
@@ -5538,24 +5525,10 @@ function cgRecoveryOperation(mode, operation, existing, selected) {
 }
 
 function cgSegmentValidator(validator, options) {
-    const binding = options?.origin && bindings.get(options.origin);
-    if (!binding?.selected || binding.dialect !== 'r8413' || !format.cgFieldSegment(options.mode, options.taskKey)) return validator;
-    const check = result => {
-        const rows = Array.isArray(result) ? result
-            : options.mode === 'album' ? result?.entries : options.mode === 'adv' ? result?.events : result?.dailyStrips;
-        // Check only content accepted by the original per-item validator. An invalid
-        // sibling which that validator discards must not veto already usable works.
-        if (Array.isArray(rows)) for (const item of rows) {
-            if (typeof item?.imagePrompt !== 'string' || !item.imagePrompt.trim()) continue;
-            if (binding.selected === 'nai45-tags') format.assertEnglishTagPrompt(item.imagePrompt);
-            else format.assertNaturalScenePrompt(item.imagePrompt);
-        }
-        return result;
-    };
-    return raw => {
-        const result = validator(raw);
-        return result && typeof result.then === 'function' ? result.then(check) : check(result);
-    };
+    // The original domain validator still owns fields, evidence and per-item
+    // acceptance. Dialect instructions are attached by cgPromptForSegment;
+    // a model's different imagePrompt wording must not discard valid content.
+    return validator;
 }
 
 __m_generation_cgPromptPolicy_js.bindCgPromptFormat = bindCgPromptFormat;
@@ -8619,7 +8592,7 @@ function openCgPromptEditor({ heartStrip = false } = {}) {
         element.innerHTML = `<section class="rmt-cg-prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="rmt-cg-prompt-title" aria-describedby="rmt-cg-prompt-help" tabindex="-1">
           <div class="rmt-cg-prompt-head"><h2 id="rmt-cg-prompt-title">图片设置</h2><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="close" aria-label="关闭图片设置">关闭</button></div>
           <p class="rmt-cg-prompt-event">${core_text.esc(selected.title)}</p>
-          <label class="rmt-cg-format"><span>生图提示词格式</span><select data-rmt-cg-editor-format aria-label="当前图片提示词格式">${cg_format_ui.cgFormatOptions(promptFormat)}</select><small>切换不发请求；旧提示请重新构思或手动转换。实际模型在生图插件中选择。</small></label>
+          <label class="rmt-cg-format"><span>生图提示词格式</span><select data-rmt-cg-editor-format aria-label="当前图片提示词格式">${cg_format_ui.cgFormatOptions(promptFormat)}</select><small>只指导重新构思的写法，不限制手动提示；切换不发请求，实际模型在生图插件中选择。</small></label>
           <details class="rmt-cg-prompt-scene"><summary>查看这条回忆</summary><p>${core_text.esc(selected.cgDesc || selected.desc || selected.subtitle || '')}</p></details>
           <label for="rmt-cg-prompt-input">将发送给生图插件的画面描述</label>
           <textarea id="rmt-cg-prompt-input" data-rmt-cg-prompt-input rows="8" maxlength="${core_constants.MAX_CG_IMAGE_PROMPT_CHARS}" aria-describedby="rmt-cg-prompt-help rmt-cg-prompt-count"></textarea>
@@ -8664,7 +8637,7 @@ function openCgPromptEditor({ heartStrip = false } = {}) {
             // scene/looks and invalidate dependent fields only in this draft.
             fillEditorMetadata(current, appearance.metadataAfterSceneEdit(editorMetadata(current)));
             const status = element.querySelector('[data-rmt-cg-prompt-status]');
-            status.textContent = '格式已切换，未发请求。请重新构思或手动转换并核对发送预览。';
+            status.textContent = '格式偏好已切换，未发请求；可核对当前提示后直接绘图。';
         });
         textarea.addEventListener('input', () => { invalidateSceneMetadata(current); updateCount(); });
         for (const field of element.querySelectorAll('[data-rmt-cg-tag-input], [data-rmt-cg-scene-tags]')) {

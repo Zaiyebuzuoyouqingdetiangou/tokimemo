@@ -77,7 +77,8 @@ export function formatDailyComicPrompt(item, scene, format) {
     let base = String(scene || '').trim();
     if (base.startsWith(prefix)) return base;
     if (base.startsWith('DAILY_COMIC_Q_V1') && base.includes('[SCENE] ')) base = base.slice(base.indexOf('[SCENE] ') + 8);
-    if (format === 'nai45-tags') assertEnglishTagPrompt(base);
+    // The selected dialect shapes the local comic prefix, not permission to send
+    // the user's Chinese, tag, prose or mixed scene. Keep the same length guard.
     const result = prefix + (format === 'nai45-tags' ? ', ' : '\n') + base;
     if (result.length > 1800) throw text.safeUserError('分镜要求与提示词合计超过 1800 字符，请缩短后再绘图；没有发送请求。', 'RMT_CG_PROMPT_INVALID');
     return result;

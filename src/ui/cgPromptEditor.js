@@ -136,7 +136,7 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
         element.innerHTML = `<section class="rmt-cg-prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="rmt-cg-prompt-title" aria-describedby="rmt-cg-prompt-help" tabindex="-1">
           <div class="rmt-cg-prompt-head"><h2 id="rmt-cg-prompt-title">图片设置</h2><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="close" aria-label="关闭图片设置">关闭</button></div>
           <p class="rmt-cg-prompt-event">${core_text.esc(selected.title)}</p>
-          <label class="rmt-cg-format"><span>生图提示词格式</span><select data-rmt-cg-editor-format aria-label="当前图片提示词格式">${cg_format_ui.cgFormatOptions(promptFormat)}</select><small>切换不发请求；旧提示请重新构思或手动转换。实际模型在生图插件中选择。</small></label>
+          <label class="rmt-cg-format"><span>生图提示词格式</span><select data-rmt-cg-editor-format aria-label="当前图片提示词格式">${cg_format_ui.cgFormatOptions(promptFormat)}</select><small>只指导重新构思的写法，不限制手动提示；切换不发请求，实际模型在生图插件中选择。</small></label>
           <details class="rmt-cg-prompt-scene"><summary>查看这条回忆</summary><p>${core_text.esc(selected.cgDesc || selected.desc || selected.subtitle || '')}</p></details>
           <label for="rmt-cg-prompt-input">将发送给生图插件的画面描述</label>
           <textarea id="rmt-cg-prompt-input" data-rmt-cg-prompt-input rows="8" maxlength="${core_constants.MAX_CG_IMAGE_PROMPT_CHARS}" aria-describedby="rmt-cg-prompt-help rmt-cg-prompt-count"></textarea>
@@ -181,7 +181,7 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
             // scene/looks and invalidate dependent fields only in this draft.
             fillEditorMetadata(current, appearance.metadataAfterSceneEdit(editorMetadata(current)));
             const status = element.querySelector('[data-rmt-cg-prompt-status]');
-            status.textContent = '格式已切换，未发请求。请重新构思或手动转换并核对发送预览。';
+            status.textContent = '格式偏好已切换，未发请求；可核对当前提示后直接绘图。';
         });
         textarea.addEventListener('input', () => { invalidateSceneMetadata(current); updateCount(); });
         for (const field of element.querySelectorAll('[data-rmt-cg-tag-input], [data-rmt-cg-scene-tags]')) {

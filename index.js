@@ -1,5 +1,5 @@
-const VERSION = '0.8.94';
-const BUILD = '0.8.94-tt-cg-r84.18-sketch-readonly';
+const VERSION = '0.8.95';
+const BUILD = '0.8.95-tt-cg-r84.19-cg-format-preference';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

@@ -167,20 +167,11 @@ export function appearanceEvidenceWithDraft(evidence, draft) {
         return { ...row, knownTag: plain(draft[row.role], CG_APPEARANCE_TAG_LIMIT), knownNl: '' };
     }) };
 }
-function assertAppearanceTags(characters) {
-    if (characters.some(row => !format.isEnglishTagPrompt(row.tag))) throw text.safeUserError('人物外貌仍是原始文字，尚未整理成英文外貌标签；请重新构思或手动转换。旧稿与原图保留。', 'RMT_CG_APPEARANCE_FORMAT');
-}
 export function validateCgPreparedFormat(prepared, promptFormat) {
     const selected = format.normalizeCgPromptFormat(promptFormat);
-    if (!selected) return prepared;
-    if (selected === 'nai45-tags') {
-        for (const value of [prepared.imagePrompt, prepared.sceneTags, prepared.flatPrompt, ...prepared.characters.map(row => row.tag)]) format.assertEnglishTagPrompt(value);
-    } else {
-        format.assertNaturalScenePrompt(prepared.imagePrompt);
-        format.assertNaturalScenePrompt(prepared.flatPrompt);
-        assertAppearanceTags(prepared.characters);
-    }
-    return { ...prepared, promptFormat: selected, characters: prepared.characters.map(row => selected === 'nai45-tags' ? {...row, nl: ''} : row) };
+    // normalizeCgPreparedPrompt already checked the data and visible-appearance
+    // contract. A dialect mismatch is not a failed draft and needs no retry.
+    return selected ? { ...prepared, promptFormat: selected } : prepared;
 }
 // Shared by the actual provider boundary and the editor preview. No settings,
 // private provider objects or hidden appearance text is read here.
@@ -193,15 +184,10 @@ export function formattedCgProviderPrompts(scene, rawMetadata, supportsCharacter
     const chars = metadata.characters;
     let prompt, nl;
     if (selected === 'nai45-tags') {
-        format.assertEnglishTagPrompt(visual);
-        for (const value of [metadata.sceneTags, metadata.flatPrompt, ...chars.map(row => row.tag)].filter(Boolean)) format.assertEnglishTagPrompt(value);
-        if (!supportsCharacters && chars.length && !metadata.flatPrompt) throw text.safeUserError('当前后端需要包含外貌与动作的完整英文 Tag。请补全“通用后端完整提示”或重新构思，再确认绘图。', 'RMT_CG_TAG_FORMAT');
-        prompt = supportsCharacters && chars.length ? metadata.sceneTags || visual : metadata.flatPrompt || visual;
-        nl = prompt; // Neither channel can reintroduce Chinese names/descriptions.
+        prompt = supportsCharacters && chars.length ? metadata.sceneTags || visual
+            : metadata.flatPrompt || cgPreparedVisualPrompt(visual, metadata);
+        nl = prompt; // Keep the same confirmed scene in both public channels.
     } else {
-        format.assertNaturalScenePrompt(visual);
-        assertAppearanceTags(chars);
-        if (metadata.flatPrompt) format.assertNaturalScenePrompt(metadata.flatPrompt);
         prompt = metadata.flatPrompt || cgPreparedVisualPrompt(visual, metadata);
         nl = prompt;
     }
