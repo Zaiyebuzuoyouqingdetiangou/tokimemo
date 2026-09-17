@@ -17,6 +17,14 @@ import * as overlay from './overlay.js';
 
 let editor = null;
 
+function snapshotEditorDraft(current) {
+    return { promptFormat: current.promptFormat, scene: current.element.querySelector('[data-rmt-cg-prompt-input]').value, metadata: editorMetadata(current) };
+}
+function rememberEditorDraft(current, value) {
+    current.previousDraft = value;
+    const button = current.element.querySelector('[data-rmt-cg-prompt-action="restore-draft"]');
+    if (button) button.hidden = !value;
+}
 export function hasCgPromptEditor() { return !!editor?.element?.isConnected; }
 
 export function closeCgPromptEditor({ restoreFocus = true } = {}) {
@@ -43,7 +51,7 @@ function busyEditor(active) {
     editor.busy = active;
     editor.element.setAttribute('aria-busy', String(active));
     for (const field of editor.element.querySelectorAll('[data-rmt-cg-prompt-input], [data-rmt-cg-scene-tags], [data-rmt-cg-tag-input], [data-rmt-cg-flat-prompt], [data-rmt-cg-editor-format]')) field.disabled = active;
-    for (const button of editor.element.querySelectorAll('[data-rmt-cg-prompt-action="reconceive"], [data-rmt-cg-prompt-action="draw"], [data-rmt-cg-prompt-action="clear"], [data-rmt-cg-prompt-action="retry"], [data-rmt-cg-prompt-action="save-looks"]')) button.disabled = active;
+    for (const button of editor.element.querySelectorAll('[data-rmt-cg-prompt-action="reconceive"], [data-rmt-cg-prompt-action="draw"], [data-rmt-cg-prompt-action="clear"], [data-rmt-cg-prompt-action="retry"], [data-rmt-cg-prompt-action="save-looks"], [data-rmt-cg-prompt-action="restore-draft"]')) button.disabled = active;
 }
 
 function editorMetadata(current) {
@@ -139,12 +147,13 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
             <p><label for="rmt-cg-user-tags" data-rmt-cg-tag-name="user">用户 · 外貌 tag</label><textarea id="rmt-cg-user-tags" data-rmt-cg-tag-input="user" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p>
             <button type="button" class="rmt-btn" data-rmt-cg-prompt-action="save-looks">保存外貌</button>
             <p><label for="rmt-cg-scene-tags">场景 tag</label><textarea id="rmt-cg-scene-tags" data-rmt-cg-scene-tags rows="2" maxlength="${appearance.CG_SCENE_TAG_LIMIT}" placeholder="人物动作、场景与构图"></textarea></p>
-            <p><label for="rmt-cg-flat-prompt">通用后端完整提示</label><textarea id="rmt-cg-flat-prompt" data-rmt-cg-flat-prompt rows="4" maxlength="${appearance.CG_FLAT_PROMPT_LIMIT}" placeholder="包含双方外貌、动作与场景的完整英文提示"></textarea></p>
+            <p><label for="rmt-cg-flat-prompt">通用后端完整提示</label><textarea id="rmt-cg-flat-prompt" data-rmt-cg-flat-prompt rows="4" maxlength="${appearance.CG_FLAT_PROMPT_LIMIT}" placeholder="包含双方外貌、动作与场景的完整提示"></textarea></p>
           </details>
           <details class="rmt-cg-prompt-scene"><summary>发送预览</summary><p><textarea data-rmt-cg-send-preview aria-label="将发送的场景与人物外貌" rows="5" readonly></textarea></p></details>
           <p id="rmt-cg-prompt-help">保存外貌不生图，供本聊天后续新图使用。关闭仅放弃未保存的草稿；确认绘图后才消耗生图额度。</p>
           <p data-rmt-cg-prompt-status role="status" aria-live="polite"></p>
           <div class="rmt-cg-prompt-actions"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="reconceive">重新构思／提取外貌</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="draw">${savedImage ? '确认提示词并重绘' : '确认提示词并绘图'}</button></div>
+          <button type="button" class="rmt-btn" data-rmt-cg-prompt-action="restore-draft" hidden>还原上次草稿</button>
           ${canRetry ? '<div class="rmt-cg-prompt-secondary"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="retry">回填已生成图片（不再生图）</button></div>' : ''}
           ${savedImage ? `<div class="rmt-cg-prompt-secondary"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="view">查看完整原图</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="clear">${target.mode === core_constants.MODE.HEART ? '恢复文字版' : '恢复抽象图'}</button><small>仅移除本档案的图片引用，不删除柏宝绘图库文件。</small></div>` : ''}
         </section>`;
@@ -166,6 +175,7 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
         element.querySelector('[data-rmt-cg-editor-format]').addEventListener('change', event => {
             event.stopPropagation();
             if (current.busy) return;
+            rememberEditorDraft(current, snapshotEditorDraft(current));
             current.promptFormat = cg_format.normalizeCgPromptFormat(event.target.value, current.promptFormat);
             // A style switch is not a conversion or a draw. Keep visible authored
             // scene/looks and invalidate dependent fields only in this draft.
@@ -187,7 +197,7 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
         element.addEventListener('keydown', event => {
             if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeCgPromptEditor(); return; }
             if (event.key !== 'Tab') return;
-            const controls = [...element.querySelectorAll('button:not(:disabled), textarea:not(:disabled), select:not(:disabled), summary, a[href]')];
+            const controls = [...element.querySelectorAll('button:not(:disabled):not([hidden]), textarea:not(:disabled), select:not(:disabled), summary, a[href]')];
             const first = controls[0], last = controls[controls.length - 1];
             if (event.shiftKey && (document.activeElement === first || !element.contains(document.activeElement))) {
                 event.preventDefault(); last?.focus();
@@ -206,6 +216,18 @@ export async function handleCgPromptEditorAction(action) {
     if (!current || current.busy) return;
     try {
         images.assertCgImageTargetCurrent(current.target);
+        if (action === 'restore-draft') {
+            const draft = current.previousDraft;
+            if (!draft) return;
+            current.promptFormat = draft.promptFormat;
+            current.element.querySelector('[data-rmt-cg-editor-format]').value = draft.promptFormat;
+            current.element.querySelector('[data-rmt-cg-prompt-input]').value = draft.scene;
+            fillEditorMetadata(current, draft.metadata);
+            current.element.querySelector('[data-rmt-cg-prompt-count]').textContent = `${draft.scene.length} / ${core_constants.MAX_CG_IMAGE_PROMPT_CHARS} 字符`;
+            rememberEditorDraft(current, null);
+            current.element.querySelector('[data-rmt-cg-prompt-status]').textContent = '已还原上次草稿，未发送请求。';
+            return;
+        }
         if (action === 'retry') {
             busyEditor(true);
             const saved = await images.retryPendingCgImage(current.target);
@@ -250,9 +272,12 @@ export async function handleCgPromptEditorAction(action) {
             busyEditor(true);
             const status = current.element.querySelector('[data-rmt-cg-prompt-status]');
             status.setAttribute('role', 'status'); status.textContent = '正在重新构思，请稍等…';
-            const result = await images.reconceiveCgImagePrompt(current.target, {promptFormat: current.promptFormat});
+            const previousDraft = snapshotEditorDraft(current);
+            const appearanceDraft = Object.fromEntries(['char', 'user'].map(role => [role, current.element.querySelector(`[data-rmt-cg-tag-input="${role}"]`).value]));
+            const result = await images.reconceiveCgImagePrompt(current.target, {promptFormat: current.promptFormat, appearanceDraft});
             if (editor !== current || !current.element.isConnected) return;
             const textarea = current.element.querySelector('[data-rmt-cg-prompt-input]');
+            rememberEditorDraft(current, previousDraft);
             textarea.value = typeof result === 'string' ? result : result.imagePrompt;
             fillEditorMetadata(current, typeof result === 'string' ? null : result);
             current.element.querySelector('[data-rmt-cg-appearance]').open = true;

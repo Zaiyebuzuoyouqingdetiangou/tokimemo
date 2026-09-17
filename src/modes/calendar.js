@@ -141,6 +141,17 @@ export function currentCalendarDate(now = new Date()) {
     return `${year}/${month}/${day}`;
 }
 
+export function storyCalendarDate(memoryBank) {
+    const memories = Array.isArray(memoryBank?.memories) ? memoryBank.memories : [];
+    // Archive order, not greatest date: an explicit later scene can move backwards in time.
+    for (let index = memories.length - 1; index >= 0; index--) {
+        const memory = memories[index];
+        if (!/^M\d+$/u.test(memory?.id || '')) continue;
+        const date = normalizeCalendarDate(memory.date);
+        if (date) return date.date;
+    }
+    return '';
+}
 function calendarDateEvidenceVariants(parsed) {
     if (!parsed || parsed.date === '待定') return [];
     const { year, month, day } = parsed;
@@ -155,12 +166,12 @@ function calendarDateEvidenceVariants(parsed) {
     ];
 }
 
-export function calendarDateMatchesToday(value, today = currentCalendarDate()) {
+export function calendarDateMatchesToday(value, today = '') {
     const parsed = normalizeCalendarDate(value);
     const current = normalizeCalendarDate(today);
-    if (!parsed || !current?.hasYear) return false;
+    if (!parsed || !current) return false;
     if (parsed.month !== current.month || parsed.day !== current.day) return false;
-    return !parsed.hasYear || parsed.year === current.year;
+    return !parsed.hasYear || current.hasYear && parsed.year === current.year;
 }
 
 function memoryAnchorTerms(memory) {
@@ -775,7 +786,7 @@ function normalizeMoodNotes(value, memoryBank, { entries = [], currentDate = '' 
         const target = targets.length === 1 ? targets[0] : null;
         // Only a locally validated calendar entry or the locally captured current day
         // chooses the page. Provider date strings cannot create or move historical dates.
-        const date = isPersona ? (target?.date || normalizeCalendarDate(currentDate)?.date || '') : parsed?.date || '';
+        const date = isPersona ? (target?.date || normalizeCalendarDate(currentDate)?.date || '待定') : parsed?.date || '';
         if (isPersona && !normalizeCalendarDate(date, { allowPending: true })) continue;
         out.push({
             id: core_text.safeId(item?.id, `CAL_MOOD_${String(out.length + 1).padStart(2, '0')}`),
@@ -866,7 +877,7 @@ function calendarSupplementPageKey(item, entries, memoryBank, { legacy = false }
         const target = entries.filter(entry => entry.id === explicitId);
         if (target.length === 1) return calendarEntryPageKey(target[0]);
         // date was assigned locally at generation; legacy records keep their stored page.
-        if (normalizeCalendarDate(item.date)) return calendarPageKeyForDate(item.date);
+        if (normalizeCalendarDate(item.date, { allowPending: true })) return calendarPageKeyForDate(item.date, { pendingId: item.id });
         return CALENDAR_LEGACY_PAGE_KEY;
     }
     if (explicitId) {
@@ -1035,8 +1046,13 @@ export function migrateCalendarSession(session, memoryBank) {
     const selectedRaw = core_text.normalizeText(session.selectedDateKey, 160);
     const selectedDateKey = pageMetaForKey(selectedRaw)?.key
         || calendarPageKeyForDate(selectedRaw, { pendingId: selectedRaw.replace(/^pending:/, '') });
+    const storyDate = storyCalendarDate(memoryBank);
     const migrated = {
         ...structuredClone(session),
+        storyDate,
+        selectedMonth: !session.dateBasis && !selectedDateKey && storyDate
+            ? calendarMonthKey({ date: storyDate }) : session.selectedMonth,
+        dateBasis: session.dateBasis || 'story', 
         calendarVersion: core_constants.CALENDAR_SESSION_VERSION,
         entries,
         dayPages,
@@ -1098,7 +1114,8 @@ export function normalizeCalendar(data, memoryBank, options = {}) {
         controlledEvidence: options.futureEvidenceText || options.worldEvidenceText,
     });
     const entries = ensureUniqueCalendarEntryIds([...past, ...promised, ...future]);
-    const currentDate = core_text.normalizeText(options.currentDate, 20) || currentCalendarDate();
+    const currentDate = options.dateBasis === 'legacy-local'
+        ? (normalizeCalendarDate(options.currentDate)?.date || '') : storyCalendarDate(memoryBank);
     const moodNotes = normalizeMoodNotes(data?.moodNotes, memoryBank, { entries, currentDate });
     const holidayCards = normalizeHolidayCards(data?.holidayCards, entries, { currentDate, memoryBank });
     const statusRank = { past: 0, promised: 1, future: 2 };
@@ -1114,8 +1131,10 @@ export function normalizeCalendar(data, memoryBank, options = {}) {
         title: core_text.normalizeText(data?.title, 120) || '两个人的日历',
         entries: entries.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS),
         dayPages,
-        selectedMonth: defaultCalendarMonth(entries),
-        selectedDateKey: '',
+        dateBasis: options.dateBasis === 'legacy-local' ? 'legacy-local' : 'story',
+        storyDate: options.dateBasis === 'legacy-local' ? '' : currentDate,
+        selectedMonth: calendarMonthKey({ date: currentDate }) || defaultCalendarMonth(entries),
+        selectedDateKey: currentDate ? calendarPageKeyForDate(currentDate) : '',
         generatedAt: Date.now(),
     };
 }

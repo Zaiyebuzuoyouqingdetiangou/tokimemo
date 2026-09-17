@@ -1,0 +1,244 @@
+{
+  "failed": {
+    "saved": {
+      "chatId": "time-flow-a",
+      "archiveRevision": "time-revision-a",
+      "phone": {
+        "kind": "phone",
+        "uiVersion": 4,
+        "chatId": "time-flow-a",
+        "archiveRevision": "time-revision-a",
+        "title": "原有私人终端",
+        "deviceKind": "phone",
+        "apps": [
+          {
+            "id": "notes",
+            "kind": "notes",
+            "label": "旧札",
+            "icon": "fa-note-sticky",
+            "entries": [
+              {
+                "id": "keep-1",
+                "title": "不能改写",
+                "preview": "旧终端正文",
+                "detail": "OLD_PHONE_PROSE_SENTINEL",
+                "basis": "推演"
+              }
+            ]
+          }
+        ],
+        "selectedAppId": "notes",
+        "selectedEntryId": "keep-1",
+        "screen": "app"
+      },
+      "cabinet": {
+        "kind": "cabinet",
+        "chatId": "time-flow-a",
+        "archiveRevision": "time-revision-a",
+        "items": [
+          {
+            "id": "old-item",
+            "text": "OLD_OTHER_MODE_SENTINEL"
+          }
+        ]
+      },
+      "__generationRecoveryClearedV1": {},
+      "modeWriteFencesV1": {
+        "travel": {
+          "generation": 1,
+          "token": "7181a6b0-b715-4f69-8579-8e51b96c65da"
+        }
+      },
+      "commitToken": 1789610611429001,
+      "updatedAt": 1789610611429,
+      "__generationRecoveryV1": {
+        "travel": {
+          "createdAt": 1789610611387,
+          "failureCode": "RMT_CONNECTION_FAILED",
+          "identity": {
+            "archiveRevision": "time-revision-a",
+            "archiveTargetEntryId": "AE:m7m1ir",
+            "characterAvatar": "time-a.png",
+            "characterId": "0",
+            "characterKey": "card:xefftn\u001fcharacter:0",
+            "chatId": "time-flow-a",
+            "mode": "travel"
+          },
+          "kind": "generation-recovery",
+          "segments": [
+            {
+              "contract": "travel-postcard-design-r8415",
+              "failureCode": "RMT_CONNECTION_FAILED",
+              "requestHash": "668637652163c516273534126e2ee0e230908767f2a2c7fccaee1f8c7c59ed2d",
+              "slot": "mode:AE:m7m1ir|time-flow-a|time-revision-a:travel:travel-map",
+              "state": "retry"
+            }
+          ],
+          "settingsHash": "b5642034224bbf35337ed8a43c327d8e50186ae83d8f42ece9e5a41f9e04376d",
+          "updatedAt": 1789610611427,
+          "version": 1,
+          "operation": {
+            "kind": "mode",
+            "mode": "travel",
+            "inboxDate": "",
+            "calendarDate": "",
+            "allowPersonaExpansion": true,
+            "visualOnly": false,
+            "fillMissing": false,
+            "focusObjectId": ""
+          },
+          "replaceExisting": false,
+          "_rmtModeWriteFence": "1:7181a6b0-b715-4f69-8579-8e51b96c65da"
+        }
+      }
+    },
+    "response": {
+      "locations": [
+        {
+          "id": "F1",
+          "kind": "far",
+          "name": "远山",
+          "region": "山间",
+          "basis": "推演",
+          "summary": "山间的小亭",
+          "sourceMemoryIds": [],
+          "sourceMemoryAnchor": "",
+          "keepsake": {
+            "kind": "postcard",
+            "title": "风的信",
+            "body": "此刻在山间的小亭写信，脚边叶片缓缓翻动，愿你读到时也感到风的温柔。",
+            "closing": "林舟",
+            "tone": "forest",
+            "picturePlan": {
+              "foreground": "小亭",
+              "background": "远山",
+              "layout": "left"
+            }
+          }
+        }
+      ]
+    },
+    "requests": 1
+  },
+  "save-failed": {
+    "saved": {
+      "chatId": "time-flow-a",
+      "archiveRevision": "time-revision-a",
+      "phone": {
+        "kind": "phone",
+        "uiVersion": 4,
+        "chatId": "time-flow-a",
+        "archiveRevision": "time-revision-a",
+        "title": "原有私人终端",
+        "deviceKind": "phone",
+        "apps": [
+          {
+            "id": "notes",
+            "kind": "notes",
+            "label": "旧札",
+            "icon": "fa-note-sticky",
+            "entries": [
+              {
+                "id": "keep-1",
+                "title": "不能改写",
+                "preview": "旧终端正文",
+                "detail": "OLD_PHONE_PROSE_SENTINEL",
+                "basis": "推演"
+              }
+            ]
+          }
+        ],
+        "selectedAppId": "notes",
+        "selectedEntryId": "keep-1",
+        "screen": "app"
+      },
+      "cabinet": {
+        "kind": "cabinet",
+        "chatId": "time-flow-a",
+        "archiveRevision": "time-revision-a",
+        "items": [
+          {
+            "id": "old-item",
+            "text": "OLD_OTHER_MODE_SENTINEL"
+          }
+        ]
+      },
+      "__generationRecoveryClearedV1": {},
+      "modeWriteFencesV1": {
+        "travel": {
+          "generation": 1,
+          "token": "631dc4ff-2715-4eab-a9e1-2cbd4b4c2f0a"
+        }
+      },
+      "commitToken": 1789610611450001,
+      "updatedAt": 1789610611450,
+      "__generationRecoveryV1": {
+        "travel": {
+          "createdAt": 1789610611436,
+          "failureCode": "",
+          "identity": {
+            "archiveRevision": "time-revision-a",
+            "archiveTargetEntryId": "AE:m7m1ir",
+            "characterAvatar": "time-a.png",
+            "characterId": "0",
+            "characterKey": "card:xefftn\u001fcharacter:0",
+            "chatId": "time-flow-a",
+            "mode": "travel"
+          },
+          "kind": "generation-recovery",
+          "segments": [
+            {
+              "contract": "travel-postcard-design-r8415",
+              "rawJson": "{\"locations\":[{\"basis\":\"推演\",\"id\":\"F1\",\"keepsake\":{\"body\":\"此刻在山间的小亭写信，脚边叶片缓缓翻动，愿你读到时也感到风的温柔。\",\"closing\":\"林舟\",\"kind\":\"postcard\",\"picturePlan\":{\"background\":\"远山\",\"foreground\":\"小亭\",\"layout\":\"left\"},\"title\":\"风的信\",\"tone\":\"forest\"},\"kind\":\"far\",\"name\":\"远山\",\"region\":\"山间\",\"sourceMemoryAnchor\":\"\",\"sourceMemoryIds\":[],\"summary\":\"山间的小亭\"}]}",
+              "requestHash": "668637652163c516273534126e2ee0e230908767f2a2c7fccaee1f8c7c59ed2d",
+              "slot": "mode:AE:m7m1ir|time-flow-a|time-revision-a:travel:travel-map",
+              "state": "complete"
+            }
+          ],
+          "settingsHash": "b5642034224bbf35337ed8a43c327d8e50186ae83d8f42ece9e5a41f9e04376d",
+          "updatedAt": 1789610611448,
+          "version": 1,
+          "operation": {
+            "kind": "mode",
+            "mode": "travel",
+            "inboxDate": "",
+            "calendarDate": "",
+            "allowPersonaExpansion": true,
+            "visualOnly": false,
+            "fillMissing": false,
+            "focusObjectId": ""
+          },
+          "replaceExisting": false,
+          "_rmtModeWriteFence": "1:631dc4ff-2715-4eab-a9e1-2cbd4b4c2f0a"
+        }
+      }
+    },
+    "response": {
+      "locations": [
+        {
+          "id": "F1",
+          "kind": "far",
+          "name": "远山",
+          "region": "山间",
+          "basis": "推演",
+          "summary": "山间的小亭",
+          "sourceMemoryIds": [],
+          "sourceMemoryAnchor": "",
+          "keepsake": {
+            "kind": "postcard",
+            "title": "风的信",
+            "body": "此刻在山间的小亭写信，脚边叶片缓缓翻动，愿你读到时也感到风的温柔。",
+            "closing": "林舟",
+            "tone": "forest",
+            "picturePlan": {
+              "foreground": "小亭",
+              "background": "远山",
+              "layout": "left"
+            }
+          }
+        }
+      ]
+    },
+    "requests": 1
+  }
+}

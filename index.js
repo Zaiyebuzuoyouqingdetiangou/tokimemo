@@ -1,5 +1,5 @@
-const VERSION = '0.8.88';
-const BUILD = '0.8.88-tt-cg-r84.12-song-recovery';
+const VERSION = '0.8.92';
+const BUILD = '0.8.92-tt-cg-r84.16-structured-postcards';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

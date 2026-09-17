@@ -1,4 +1,5 @@
 import * as ui_workspaceStyles from './workspaceStyles.js';
+import * as postcard_design_view from './postcardDesignView.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_constants from '../core/constants.js';
@@ -1090,6 +1091,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
     style.textContent += ui_immersionStyles.immersionCss('#' + core_constants.OVERLAY_ID);
     style.textContent += ui_readingStyles.readingCss('#' + core_constants.OVERLAY_ID);
     style.textContent += ui_workspaceStyles.workspaceCss('#' + core_constants.OVERLAY_ID);
+    style.textContent += postcard_design_view.postcardDesignCss('#' + core_constants.OVERLAY_ID);
     document.head.appendChild(style);
 }
 

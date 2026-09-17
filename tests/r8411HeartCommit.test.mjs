@@ -22,7 +22,7 @@ function seed(f){
 }
 async function startGeneration(f,route){
  if(route==='postending'){f.setResponse({voiceDramas:[drama('NEWPOST','postending')]});return heart.generateHeartSeasonSection('postending');}
- if(route==='strips'){f.setResponse({dailyStrips:[{id:'NEWSTRIP',title:'栽花一格',panelCount:1,panels:[{action:'在院子整理花盆。'}],imagePrompt:'1boy, gardening, courtyard'}]});return heart.generateHeartSection('strips');}
+ if(route==='strips'){f.setResponse({dailyStrips:[{id:'NEWSTRIP',title:'栽花一格',panelCount:1,panels:[{action:'在院子整理花盆。'}],imagePrompt:'A man tends a flowerpot in the courtyard, with soft daylight falling across the leaves.'}]});return heart.generateHeartSection('strips');}
  f.setResponse({fireflyVoices:[{id:'NEWF',title:'读书',color:'white',script:[{speaker:'char',text:prose},{speaker:'user',text:'然后呢？'},{speaker:'char',text:prose},{speaker:'char',text:prose},{speaker:'user_thought',text:'是在对我说吗？'}]}]});return heart.generateHeartFirefliesSection();
 }
 for(const route of ['postending','strips','fireflies'])test(`control: opening ${route} does not alter canonical selections`,async t=>{

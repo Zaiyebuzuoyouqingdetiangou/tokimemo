@@ -100,6 +100,12 @@ function calendarArchiveSlice(memoryBank, limit = 64) {
     }, null, 2);
 }
 
+export function calendarStoryPrompt(context, memoryBank, options = {}) {
+    return calendarPrompt(context, memoryBank, options)
+        .replaceAll('CURRENT_LOCAL_DATE', 'CURRENT_STORY_DATE')
+        .replace('否则本地放在 CURRENT_STORY_DATE 当天。', '否则使用已知剧情日期；没有剧情日期则保持待定，不使用设备日期。')
+        .replace('任务：生成的是【', 'CURRENT_STORY_DATE 仅来自当前聊天已归档的剧情日期；没有记录时为未提供。不得用电脑/手机日期、生成时间戳或日期页选择替代剧情时间，不改写已发生事项或已有约定的日期。\n\n任务：生成的是【');
+}
 export function calendarPrompt(context, memoryBank, options = {}) {
     const charName = core_text.normalizeText(context.name2 || '{{char}}', 120);
     const currentDate = core_text.normalizeText(options.currentDate, 20) || '未提供';

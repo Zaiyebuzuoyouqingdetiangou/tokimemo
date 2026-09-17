@@ -1,0 +1,184 @@
+{
+  "failed": {
+    "chatId": "time-flow-a",
+    "archiveRevision": "time-revision-a",
+    "phone": {
+      "kind": "phone",
+      "uiVersion": 4,
+      "chatId": "time-flow-a",
+      "archiveRevision": "time-revision-a",
+      "title": "原有私人终端",
+      "deviceKind": "phone",
+      "apps": [
+        {
+          "id": "notes",
+          "kind": "notes",
+          "label": "旧札",
+          "icon": "fa-note-sticky",
+          "entries": [
+            {
+              "id": "keep-1",
+              "title": "不能改写",
+              "preview": "旧终端正文",
+              "detail": "OLD_PHONE_PROSE_SENTINEL",
+              "basis": "推演"
+            }
+          ]
+        }
+      ],
+      "selectedAppId": "notes",
+      "selectedEntryId": "keep-1",
+      "screen": "app"
+    },
+    "cabinet": {
+      "kind": "cabinet",
+      "chatId": "time-flow-a",
+      "archiveRevision": "time-revision-a",
+      "items": [
+        {
+          "id": "old-item",
+          "text": "OLD_OTHER_MODE_SENTINEL"
+        }
+      ]
+    },
+    "__generationRecoveryClearedV1": {},
+    "modeWriteFencesV1": {
+      "calendar": {
+        "generation": 1,
+        "token": "6d2a167d-664f-450c-a298-88db3914ae89"
+      }
+    },
+    "commitToken": 1789576488266001,
+    "updatedAt": 1789576488266,
+    "__generationRecoveryV1": {
+      "calendar": {
+        "createdAt": 1789576488242,
+        "failureCode": "RMT_CONNECTION_FAILED",
+        "identity": {
+          "archiveRevision": "time-revision-a",
+          "archiveTargetEntryId": "AE:m7m1ir",
+          "characterAvatar": "time-a.png",
+          "characterId": "0",
+          "characterKey": "card:xefftn\u001fcharacter:0",
+          "chatId": "time-flow-a",
+          "mode": "calendar"
+        },
+        "kind": "generation-recovery",
+        "segments": [
+          {
+            "failureCode": "RMT_CONNECTION_FAILED",
+            "requestHash": "db07928b91958375eb4ed93cf3d47aa2b4accc804ff115780979065afbf7af4d",
+            "slot": "mode:AE:m7m1ir|time-flow-a|time-revision-a:calendar",
+            "state": "retry"
+          }
+        ],
+        "settingsHash": "b5642034224bbf35337ed8a43c327d8e50186ae83d8f42ece9e5a41f9e04376d",
+        "updatedAt": 1789576488258,
+        "version": 1,
+        "operation": {
+          "kind": "mode",
+          "mode": "calendar",
+          "inboxDate": "",
+          "calendarDate": "2026/09/16",
+          "allowPersonaExpansion": false,
+          "visualOnly": false,
+          "fillMissing": false,
+          "focusObjectId": ""
+        },
+        "replaceExisting": false,
+        "_rmtModeWriteFence": "1:6d2a167d-664f-450c-a298-88db3914ae89"
+      }
+    }
+  },
+  "complete": {
+    "chatId": "time-flow-a",
+    "archiveRevision": "time-revision-a",
+    "phone": {
+      "kind": "phone",
+      "uiVersion": 4,
+      "chatId": "time-flow-a",
+      "archiveRevision": "time-revision-a",
+      "title": "原有私人终端",
+      "deviceKind": "phone",
+      "apps": [
+        {
+          "id": "notes",
+          "kind": "notes",
+          "label": "旧札",
+          "icon": "fa-note-sticky",
+          "entries": [
+            {
+              "id": "keep-1",
+              "title": "不能改写",
+              "preview": "旧终端正文",
+              "detail": "OLD_PHONE_PROSE_SENTINEL",
+              "basis": "推演"
+            }
+          ]
+        }
+      ],
+      "selectedAppId": "notes",
+      "selectedEntryId": "keep-1",
+      "screen": "app"
+    },
+    "cabinet": {
+      "kind": "cabinet",
+      "chatId": "time-flow-a",
+      "archiveRevision": "time-revision-a",
+      "items": [
+        {
+          "id": "old-item",
+          "text": "OLD_OTHER_MODE_SENTINEL"
+        }
+      ]
+    },
+    "__generationRecoveryClearedV1": {},
+    "modeWriteFencesV1": {
+      "calendar": {
+        "generation": 1,
+        "token": "68be04fc-8d56-41c1-b31f-e89e719c0e34"
+      }
+    },
+    "commitToken": 1789576488307001,
+    "updatedAt": 1789576488307,
+    "__generationRecoveryV1": {
+      "calendar": {
+        "createdAt": 1789576488294,
+        "failureCode": "",
+        "identity": {
+          "archiveRevision": "time-revision-a",
+          "archiveTargetEntryId": "AE:m7m1ir",
+          "characterAvatar": "time-a.png",
+          "characterId": "0",
+          "characterKey": "card:xefftn\u001fcharacter:0",
+          "chatId": "time-flow-a",
+          "mode": "calendar"
+        },
+        "kind": "generation-recovery",
+        "segments": [
+          {
+            "rawJson": "{\"future\":[],\"moodNotes\":[{\"id\":\"MOOD\",\"text\":\"现在想停下来歇一会儿。\",\"textMode\":\"persona-expression\"}],\"past\":[],\"promised\":[]}",
+            "requestHash": "db07928b91958375eb4ed93cf3d47aa2b4accc804ff115780979065afbf7af4d",
+            "slot": "mode:AE:m7m1ir|time-flow-a|time-revision-a:calendar",
+            "state": "complete"
+          }
+        ],
+        "settingsHash": "b5642034224bbf35337ed8a43c327d8e50186ae83d8f42ece9e5a41f9e04376d",
+        "updatedAt": 1789576488305,
+        "version": 1,
+        "operation": {
+          "kind": "mode",
+          "mode": "calendar",
+          "inboxDate": "",
+          "calendarDate": "2026/09/16",
+          "allowPersonaExpansion": false,
+          "visualOnly": false,
+          "fillMissing": false,
+          "focusObjectId": ""
+        },
+        "replaceExisting": false,
+        "_rmtModeWriteFence": "1:68be04fc-8d56-41c1-b31f-e89e719c0e34"
+      }
+    }
+  }
+}

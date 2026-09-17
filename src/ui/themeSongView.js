@@ -50,6 +50,13 @@ export function assertThemeSongReader() {
         throw contract.songError('SOURCE', '当前角色已经切换，请重新打开印象曲。');
     return session;
 }
+export function syncSongLanguageInput(body = overlay.bodyEl()) {
+    const selected = body?.querySelector('[data-rmt-song-language]');
+    const row = body?.querySelector('[data-rmt-song-custom-row]');
+    const input = body?.querySelector('[data-rmt-song-custom-language]');
+    if (row) row.hidden = selected?.value !== 'custom';
+    if (input) input.disabled = selected?.value !== 'custom' || readonly() || busy();
+}
 export function renderThemeSongs() {
     if (runtimeState.activeSession?.kind !== MODE) return;
     const session = runtimeState.activeSession, memory = shownMemory();
@@ -63,11 +70,12 @@ export function renderThemeSongs() {
     const form = `<details class="rmt-song-composer" ${session.songs.length ? '' : 'open'}><summary>创作方向</summary><div class="rmt-song-form">
       <label class="rmt-song-wide">写给谁 / 哪件事<select data-rmt-song-subject ${disabled ? 'disabled' : ''}><option value="character">${esc(memory.characterName)} · 角色印象</option>${events}</select></label>
       <label>歌词语言<select data-rmt-song-language ${disabled ? 'disabled' : ''}>${options}</select></label>
+      <label data-rmt-song-custom-row hidden>语言<input data-rmt-song-custom-language maxlength="40" disabled></label>
       <label>演唱者设定<select data-rmt-song-voice ${disabled ? 'disabled' : ''}>${voices}</select></label>
       <label class="rmt-song-wide">想要的感觉（可不填）<input data-rmt-song-direction maxlength="400" placeholder="例如：克制的钢琴抒情，副歌逐渐明亮" ${disabled ? 'disabled' : ''}></label>
       <button type="button" class="rmt-btn rmt-song-write" data-rmt-song="generate" ${disabled ? 'disabled' : ''}>${busy() ? '正在写歌…' : session.songs.length ? '新写一首' : '创作印象曲'}</button></div></details>`;
     const button = (action, label) => `<button type="button" class="rmt-btn" data-rmt-song="${action}" data-rmt-song-id="${esc(selected.id)}">${label}</button>`;
-    const formatDetails = selected ? `<article class="rmt-song-sheet" data-rmt-song-presentation="format"><header><small>${esc(selected.subject === 'event' ? '事件印象曲' : '角色印象曲')} · ${esc(selected.subjectTitle)}</small><h2>${esc(selected.title)}</h2><p><b>演唱者</b> ${esc(selected.singer)} <span>· ${esc(contract.SONG_LANGUAGES[selected.language])}</span></p><p>${esc(selected.vocalDescription)}</p></header>
+    const formatDetails = selected ? `<article class="rmt-song-sheet" data-rmt-song-presentation="format"><header><small>${esc(selected.subject === 'event' ? '事件印象曲' : '角色印象曲')} · ${esc(selected.subjectTitle)}</small><h2>${esc(selected.title)}</h2><p><b>演唱者</b> ${esc(selected.singer)} <span>· ${esc(contract.songLanguageLabel(selected))}</span></p><p>${esc(selected.vocalDescription)}</p></header>
       <section class="rmt-song-style"><h3>曲风</h3><p>${esc(selected.styleDescription)}</p><div class="rmt-song-toolbar">${button('copy-title','复制歌名')}${button('copy-style','复制曲风')}</div><pre>${esc(selected.stylePrompt)}</pre></section>
       <section class="rmt-song-lyrics"><div class="rmt-song-toolbar"><h3>完整歌词</h3>${button('copy-lyrics','复制歌词')}</div><pre>${esc(selected.lyrics)}</pre></section>
       <footer class="rmt-song-toolbar">${button('copy-all','复制全部')}${button('export','导出文本')}${readonly() ? '' : `<button type="button" class="rmt-btn" data-rmt-song="delete" data-rmt-song-id="${esc(selected.id)}" ${busy() ? 'disabled' : ''}>删除这首</button>`}</footer>
@@ -86,6 +94,7 @@ export function renderThemeSongs() {
     const allCache = runtimeState.activeArchiveSnapshot?.cache || cache.getCache(contextApi.getContext());
     const recovery = recoveryView.recoveryBannerHtml({ __generationRecoveryV1: { [MODE]: allCache?.__generationRecoveryV1?.[MODE] } }, memory, { readOnly: readonly() });
     overlay.bodyEl().innerHTML = `<main class="rmt-theme-song"><header class="rmt-song-heading"><div class="rmt-song-emblem" aria-hidden="true">♫</div><div><h2>角色印象曲</h2><p>${session.songs.length ? `已收录 ${session.songs.length} 首` : '歌名 · 曲风 · 完整歌词'}</p></div></header><p class="rmt-song-note">生成歌曲文本与编曲说明，不生成音频。</p>${switcher}${recovery}${form}<div class="rmt-song-layout ${list ? 'has-songs' : ''}">${list}${details}</div></main>`;
+    overlay.bodyEl().querySelector('[data-rmt-song-language]')?.addEventListener('change', () => syncSongLanguageInput());
 }
 export async function deleteThemeSong(id) {
     const shown = assertThemeSongReader();
@@ -136,7 +145,7 @@ export async function handleThemeSongAction(action, id = '') {
             const body = overlay.bodyEl();
             // Retain typed but unsent composer fields during this local layout switch.
             const composer = body.querySelector('.rmt-song-composer');
-            const draft = ['subject','language','voice','direction'].map(key => [key, body.querySelector(`[data-rmt-song-${key}]`)?.value]);
+            const draft = ['subject','language','custom-language','voice','direction'].map(key => [key, body.querySelector(`[data-rmt-song-${key}]`)?.value]);
             const wasOpen = composer?.open, scrollTop = body.scrollTop;
             displayMode = action === 'view-format' ? 'format' : 'read';
             renderThemeSongs();
@@ -144,6 +153,7 @@ export async function handleThemeSongAction(action, id = '') {
                 const element = body.querySelector(`[data-rmt-song-${key}]`);
                 if (element && typeof value === 'string') element.value = value;
             }
+            syncSongLanguageInput(body);
             const nextComposer = body.querySelector('.rmt-song-composer');
             if (nextComposer && typeof wasOpen === 'boolean') nextComposer.open = wasOpen;
             body.scrollTop = scrollTop;
@@ -159,6 +169,7 @@ export async function handleThemeSongAction(action, id = '') {
             const subject = body.querySelector('[data-rmt-song-subject]')?.value || 'character';
             const songOptions = { subject: subject.startsWith('event:') ? 'event' : 'character', eventId: subject.startsWith('event:') ? subject.slice(6) : '',
                 language: body.querySelector('[data-rmt-song-language]')?.value || 'zh',
+                customLanguage: body.querySelector('[data-rmt-song-custom-language]')?.value || '',
                 voice: body.querySelector('[data-rmt-song-voice]')?.value || 'char',
                 direction: body.querySelector('[data-rmt-song-direction]')?.value || '' };
             const target = runtimeState.activeArchiveSnapshot ? library.archiveTargetGenerationOptions(runtimeState.activeArchiveSnapshot) : {};

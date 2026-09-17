@@ -1,6 +1,8 @@
 // Heartbeat Memories r44 independent travel-map mode.
 // Model output is normalized into text and allowlisted tokens only. Marker geometry, CSS and
 // interactions are owned by local code so generated data can never inject executable UI.
+import * as postcard_design from './postcardDesign.js';
+import * as generation_recovery from '../generation/recovery.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
@@ -33,6 +35,29 @@ export function safeTravelTheme(value, fallback = 'neutral') {
     return core_constants.TRAVEL_MAP_THEMES.has(safeFallback) ? safeFallback : 'neutral';
 }
 
+// Visual selection is bounded, local and independent from the historical evidence gate.
+// Broad single characters (海 in 上海 / 林 in 林舟) are not landscape evidence.
+const POSTCARD_SCENE_RULES = Object.freeze([
+    ['scifi', /(?:星际|赛博|太空|宇宙|空间站|科幻|未来城|\b(?:sci[- ]?fi|cyber|space(?:port|station)?|futuristic)\b)/iu],
+    ['fantasy', /(?:魔法|精灵|龙谷|仙境|秘境|\b(?:fantasy|magic|elven|dragon)\b)/iu],
+    ['coast', /(?:海边|海岸|海港|海滩|海面|大海|海湾|海岛|海浪|海水|海风|海滨|港口|码头|灯塔|潮汐|潮声|沙滩|湖畔|湖面|湖边|河岸|河口|\b(?:coast|ocean|sea|harbou?r|port|maritime|island|beach|lighthouse|lake|riverside)\b)/iu],
+    ['mountain', /(?:雪山|雪峰|山顶|山峰|山脊|山岭|山谷|山麓|山脚|山间|群山|高山|高原|雪原|冰川|峡谷|\b(?:mountain|alpine|peak|highland|glacier|canyon)\b)/iu],
+    ['forest', /(?:森林|林地|树林|雨林|竹林|植物园|\b(?:forest|woodland|grove|jungle|botanical)\b)/iu],
+    ['campus', /(?:学校|学院|大学|校园|校舍|\b(?:campus|school|academy|university|college)\b)/iu],
+    ['historic', /(?:古城|旧城|遗迹|城堡|神殿|古寺|古镇|\b(?:historic|historical|ancient|castle|ruins|temple)\b)/iu],
+    ['city', /(?:都市|市中心|街区|车站|广场|天际线|城市|\b(?:city|urban|downtown|metropolis|station|plaza|skyline)\b)/iu],
+]);
+const NON_LOCAL_SCENE = /(?:想起|回想|回忆|怀念|记得|曾经|从前|仿佛|宛如|犹如|好像|如果|假如|梦想|下次|明天|将来|以后|不是|并非|不在|没有|未见|看不到|\b(?:remember|recalled|imagine|wish|like|if|tomorrow|not|without|no)\b)/iu;
+function postcardSceneClauses(value) {
+    return core_text.normalizeText(value, 5000).split(/[\n。！？!?；;，,]+/u)
+        .filter(clause => clause.trim() && !NON_LOCAL_SCENE.test(clause));
+}
+function postcardSceneKinds(value) {
+    const clauses = postcardSceneClauses(value);
+    return POSTCARD_SCENE_RULES.filter(([, pattern]) => clauses.some(clause => pattern.test(clause))).map(([kind]) => kind);
+}
+// Stored enum / request-index compatibility: leave the original resolver recipe unchanged.
+// The illustration uses travelPostcardSceneProfile below, without migrating old metadata.
 function travelSceneThemeFromText(value) {
     const text = core_text.normalizeText(value, 5000).toLowerCase();
     if (/(?:星际|赛博|太空|宇宙|空间站|科幻|未来城|\b(?:sci[- ]?fi|cyber|space(?:port|station)?|futuristic)\b)/iu.test(text)) return 'scifi';
@@ -62,6 +87,66 @@ export function resolveTravelSceneTheme(item, mapTheme = 'neutral') {
     return safeTravelTheme(mapTheme);
 }
 
+// Prefer the current keepsake when old postcard compatibility fields coexist. All callers
+// (picture, text and duplicate comparison) must read the same representation.
+export function travelKeepsakeForItem(item) {
+    const keepsake = item?.keepsake && typeof item.keepsake === 'object' && !Array.isArray(item.keepsake)
+        && core_text.normalizeText(item.keepsake.body, 4000) ? item.keepsake : null;
+    const legacy = item?.postcard && typeof item.postcard === 'object' && !Array.isArray(item.postcard)
+        && core_text.normalizeText(item.postcard.body, 4000) ? item.postcard : null;
+    return keepsake || legacy ? normalizeTravelKeepsake(keepsake, legacy) : null;
+}
+export function travelPostcardSceneProfile(item, mapTheme = 'neutral') {
+    const card = travelKeepsakeForItem(item);
+    const place = postcardSceneKinds(item?.name);
+    const prose = postcardSceneKinds([item?.summary, card?.title, card?.body].filter(Boolean).join('\n'));
+    const explicit = core_text.normalizeText(item?.sceneTheme, 30).toLowerCase();
+    let theme = 'neutral';
+    // Conflicting landscape statements cannot authorize a detailed illustration. A city
+    // region is not allowed to override a local mountain/lake/forest described in the letter.
+    if (prose.length === 1 && (!place.length || place.every(kind => kind === prose[0] || kind === 'city'))) theme = prose[0];
+    else if (!prose.length && place.length === 1) theme = place[0];
+    else if (!prose.length && !place.length) {
+        const region = postcardSceneKinds(item?.region);
+        theme = region.length === 1 ? region[0] : core_constants.TRAVEL_MAP_THEMES.has(explicit) ? explicit : 'neutral';
+    } else if (place.length === 1 && prose.every(kind => kind === place[0])) theme = place[0];
+    // Do not import the global map's skyline/era when the selected letter gives no scene.
+    const local = postcardSceneClauses([item?.name, item?.summary, card?.title, card?.body].filter(Boolean).join('\n')).join('\n');
+    const night = /(?:夜晚|深夜|夜色|夜空|今夜|月光|星光|星空|\b(?:night|moonlight|starlight)\b)/iu.test(local);
+    const day = /(?:白天|白昼|午后|正午|阳光|日光|早晨|清晨|\b(?:daytime|daylight|sunlight|afternoon|morning|noon)\b)/iu.test(local);
+    return {
+        theme,
+        time: night && !day ? 'night' : day && !night ? 'day' : 'unspecified',
+        snow: theme === 'mountain' && /(?:雪|冰川|glacier|\bsnow\w*\b)/iu.test(local),
+        lighthouse: theme === 'coast' && /(?:灯塔|\blighthouse\b)/iu.test(local),
+    };
+}
+
+function postcardComparableText(value, limit) {
+    // Ignore layout whitespace, but preserve Latin word boundaries (now here != nowhere).
+    return core_text.normalizeText(value, limit).normalize('NFKC').replace(/\s+/gu, ' ')
+        .replace(/([\u4e00-\u9fff，。！？、；：,!?;:]) +(?=[\u4e00-\u9fff])/gu, '$1').trim().toLowerCase();
+}
+// Compare complete text, not IDs, decorative titles, RNG or just a shared paragraph.
+// Different historical evidence remains distinct; a new letter at one stop is not a duplicate.
+export function travelPostcardContentKey(item) {
+    if (item?.kind !== 'far') return '';
+    const card = travelKeepsakeForItem(item);
+    if (!card?.body) return '';
+    const source = item?.basis === '记忆' ? [core_text.cleanArray(item.sourceMemoryIds, 16, 40).sort(),
+        core_text.normalizeText(item.sourceMemoryAnchor, 160)] : [];
+    return JSON.stringify([card.kind, postcardComparableText(card.body, 4000), postcardComparableText(card.closing, 500), source]);
+}
+export function visibleTravelLocations(locations) {
+    const seen = new Set();
+    return (Array.isArray(locations) ? locations : []).filter(item => {
+        const key = travelPostcardContentKey(item);
+        if (key && seen.has(key)) return false;
+        if (key) seen.add(key);
+        return true;
+    });
+}
+
 function normalizePostcard(value, fallbackTone = 'paper') {
     const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     const toneRaw = core_text.normalizeText(raw.tone, 30).toLowerCase();
@@ -74,6 +159,20 @@ function normalizePostcard(value, fallbackTone = 'paper') {
         stampLabel: core_text.normalizeText(raw.stampLabel, 40),
         tone: core_constants.TRAVEL_POSTCARD_TONES.has(toneRaw) ? toneRaw : fallbackTone,
     };
+}
+
+function normalizeTravelPicturePlan(value) {
+    const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const plan = {
+        summary: core_text.normalizeText(raw.summary, 240),
+        foreground: core_text.normalizeText(raw.foreground, 240),
+        midground: core_text.normalizeText(raw.midground, 240),
+        background: core_text.normalizeText(raw.background, 240),
+        details: core_text.normalizeText(raw.details, 240),
+        atmosphere: core_text.normalizeText(raw.atmosphere, 160),
+        layout: core_text.normalizeText(raw.layout, 40),
+    };
+    return Object.values(plan).some(Boolean) ? plan : null;
 }
 
 function normalizeTravelKeepsake(value, legacyPostcard = null, allowedKinds = null) {
@@ -92,6 +191,8 @@ function normalizeTravelKeepsake(value, legacyPostcard = null, allowedKinds = nu
         closing: core_text.normalizeText(raw.closing, 500),
         emblem: core_text.normalizeText(raw.emblem ?? raw.stampLabel, 40),
         tone: core_constants.TRAVEL_POSTCARD_TONES.has(toneRaw) ? toneRaw : 'paper',
+        picturePlan: normalizeTravelPicturePlan(raw.picturePlan),
+        ...postcard_design.postcardDesignFields(raw),
         presentExpressions: (Array.isArray(raw.presentExpressions) ? raw.presentExpressions : []).slice(0, 8),
         evidenceExcerpt: core_text.normalizeText(raw.evidenceExcerpt, 500),
     };
@@ -125,6 +226,7 @@ function secureTravelKeepsake(raw, item, memoryBank, reference, { allowLegacySto
     if (raw.body) return { ...raw,
         title: raw.title || travelKeepsakeTitle(raw.kind, item?.name),
         closing: raw.closing || core_text.normalizeText(memoryBank?.characterName, 80) || '寄信人',
+        picturePlan: normalizeTravelPicturePlan(raw.picturePlan),
         contentMode: 'character-prose', legacyEvidenceUnverified: false,
     };
     const presentExpressions = normalizeTravelPresentExpressions(raw.presentExpressions, memoryBank, 8);
@@ -148,6 +250,8 @@ function secureTravelKeepsake(raw, item, memoryBank, reference, { allowLegacySto
         closing: characterName,
         emblem: '',
         tone: raw.tone,
+        picturePlan: normalizeTravelPicturePlan(raw.picturePlan),
+        ...postcard_design.postcardDesignFields(raw),
         presentExpressions,
         evidenceExcerpt: excerpt,
         contentMode: excerpt ? 'present-plus-anchor' : 'present-structured',
@@ -159,7 +263,8 @@ function postcardFromKeepsake(keepsake) {
     if (!keepsake || keepsake.kind !== 'postcard') return null;
     return {
         title: keepsake.title, postmark: keepsake.mark, greeting: keepsake.greeting, body: keepsake.body,
-        closing: keepsake.closing, stampLabel: keepsake.emblem, tone: keepsake.tone,
+        closing: keepsake.closing, stampLabel: keepsake.emblem, tone: keepsake.tone, picturePlan: keepsake.picturePlan,
+        ...postcard_design.postcardDesignFields(keepsake),
     };
 }
 
@@ -187,6 +292,7 @@ function normalizeTravelLocation(item, index, memoryBank, mapTheme, sourceMemory
     allowLegacyStored = false,
     allowPersonaExpansion = false,
     controlledEvidence = '',
+    structuredDesign = false,
 } = {}) {
     const kindRaw = core_text.normalizeText(item?.kind, 20).toLowerCase();
     if (!core_constants.TRAVEL_LOCATION_KINDS.has(kindRaw)) return null;
@@ -212,6 +318,11 @@ function normalizeTravelLocation(item, index, memoryBank, mapTheme, sourceMemory
     const proseLines = kindRaw === 'near' ? core_text.cleanArray(item?.dialogueLines, 8, 1000) : [];
     const dialogueLines = proseLines.length ? proseLines : renderTravelPresentLines(dialogueActs, 8);
     const rawKeepsake = kindRaw === 'far' ? normalizeTravelKeepsake(item?.keepsake, item?.postcard, allowedKeepsakes) : null;
+    if (rawKeepsake && structuredDesign) {
+        // A missing new design is a simple visual fallback, not the old keyword pipeline.
+        if (!Object.hasOwn(rawKeepsake, 'design')) rawKeepsake.design = null;
+        rawKeepsake.picturePlan = null;
+    }
     if (sourceMemoryIds && basis !== '记忆' && !allowPersonaExpansion) return null;
     // Incremental refreshes may add either newly proven memory stops or new persona/world
     // inferences. Inferred stops remain simulation/character-life content and are still
@@ -283,6 +394,7 @@ export function normalizeTravel(data, memoryBank, {
     worldPresentation = null,
     controlledEvidence = '',
     trustedStored = false,
+    structuredDesign = false,
 } = {}) {
     const raw = Array.isArray(data?.locations) ? data.locations : [];
     const controlledProfile = worldPresentation && typeof worldPresentation === 'object' ? worldPresentation : null;
@@ -294,14 +406,19 @@ export function normalizeTravel(data, memoryBank, {
     const allowLegacyStored = trustedStored === true
         && (!Number.isFinite(storedVersion) || storedVersion <= 0 || storedVersion < core_constants.TRAVEL_SESSION_VERSION);
     const seenIds = new Set();
+    const seenPostcards = new Set();
     const locations = raw.slice(0, 12).map((item, index) => {
         const normalized = normalizeTravelLocation(item, index, memoryBank, mapTheme, sourceMemoryIds, allowedKeepsakes, {
             allowLegacyStored,
             allowPersonaExpansion,
             controlledEvidence,
+            structuredDesign,
         });
         if (!normalized || seenIds.has(normalized.id)) return null;
         seenIds.add(normalized.id);
+        const contentKey = travelPostcardContentKey(normalized);
+        if (!trustedStored && contentKey && seenPostcards.has(contentKey)) return null;
+        if (contentKey) seenPostcards.add(contentKey);
         return normalized;
     }).filter(Boolean);
     if (!allowPartial && !locations.length) {
@@ -351,6 +468,50 @@ CONTROLLED_WORLD_PRESENTATION_JSON:
 ${JSON.stringify(worldPresentation || core_worldPresentation.resolveWorldPresentation('', memoryBank), null, 2)}
 
 严格输出：
+{"title":"他的出行路线","mapTheme":"neutral","locations":[{"id":"N1","kind":"near","name":"符合世界观的地点","region":"区域","distanceToken":"walk","summary":"角色此刻在这里做什么","basis":"推演","sourceMemoryIds":[],"sourceMemoryAnchor":"","sourceSettingEvidence":"","dialogueLines":["符合角色语气的当下对白"],"keepsake":null},{"id":"F1","kind":"far","name":"远方地点","region":"区域","distanceToken":"journey","summary":"此地的风景与他的当下心情","basis":"推演","sourceMemoryIds":[],"sourceMemoryAnchor":"","sourceSettingEvidence":"","dialogueLines":[],"sceneTheme":"mountain","keepsake":{"kind":"letter","title":"来信题目","mark":"","greeting":"收信称呼","body":"有画面感的信件正文，按角色与目前关系书写","closing":"角色署名","emblem":"","tone":"paper","picturePlan":{"summary":"画面重点","foreground":"前景元素","midground":"中景元素","background":"远景元素","details":"可见细节","atmosphere":"整体氛围","layout":"left/center/right"}}}]}
+
+硬性要求：
+ - mapTheme 必须照抄 CONTROLLED_WORLD_PRESENTATION_JSON.mapTheme。far.sceneTheme 应按该地点本身选择 city/coast/mountain/forest/campus/historic/fantasy/scifi/neutral；本地会再次依据地点语义校验，不能用一个全局主题覆盖雪山、海港等不同地点。keepsake.kind 只能从 allowedKeepsakes 中选择。keepsake.tone 只能 rose/ocean/forest/sunset/night/paper；它们只是本地白名单样式 token。keepsake.picturePlan 可选；如果填写，只写简短自然语言设计说明（summary / foreground / midground / background / details / atmosphere / layout），用于本地 SVG 明信片构图。禁止输出坐标、颜色值、CSS、HTML、JavaScript、URL、图片、Base64 或 class。
+ - ${revisit ? '本轮返回 0～3 个新的角色生活扩展：可以重访原地点写新的当下对白/纪念文字，也可以依据明确人设与世界观补充此前未出现的 basis=推演 地点；不得重复已有版本，不得声称推演地点是已经发生的新旅程。' : incremental ? '本轮返回 0～4 个新增地点：新增记忆明确证明的地点用 basis=记忆；也允许依据明确人设、职业、时代和世界观补充此前未出现的 basis=推演 地点。没有合适新增时 locations 为空。' : '初次建议生成 5～8 个彼此不同、符合角色人设与世界观的地点；可以少写，最多 8 个，不为数量凑地点。优先使用档案/设定中已有地点；没有写明具体地点时用 basis=推演 合理补足，不要因为缺少逐字地名而返回空路线。near/far 不设最低配额，但应尽量同时有日常可达与远方地点。'}
+- name/region：basis=记忆 时只能逐字取自所引 Mxxx；basis=设定 应以受控角色卡/世界书为依据，有逐字原文时填写 sourceSettingEvidence；若没有逐字地点证据，本地会按推演处理而不是删站。basis=推演 可按人设与世界观合理命名。distanceToken 只能为 walk/local/day-trip/journey/distant/unknown；不要输出自由 distanceLabel。
+- near 是同城/日常可抵达地点。dialogueLines 写1～8句 {{char}} 对 {{user}} 的当下对白，推荐3～5句，必须有角色自己的措辞，不替 {{user}} 回应；可以观察、邀请、开玩笑，不能无据升级双方关系。不要返回 dialogueActs 枚举拼句。
+- far 是远途、异地或世界观中的遥远地点。keepsake 必须有 body：写有风景、生活细节和角色心绪的信件/札记，推荐100～400字；title/greeting/closing 自拟，正文不是设定原文。kind 服从 allowedKeepsakes；现代可用 postcard，古代优先 letter/scroll/fieldnote，未来可用 datalog。picturePlan 可同时描述这封纪念页想呈现的画面重点与构图（例如前景亭子、远景雪峰、雨后湖面等），但不要输出任何代码；最终画面由本地 SVG/CSS 安全渲染。
+${core_narrativeAuthority.NARRATIVE_AUTHORITY_PROMPT}
+- basis=推演：当档案与受控角色卡/世界书都没有写明具体地点时使用。这是“依据人设与世界观合理推断他会去的地方”，属于角色塑造，不是事实主张。此时 sourceMemoryIds/sourceMemoryAnchor/sourceSettingEvidence 全部留空，name/region/summary 由你自己写。可以有当下邀请或未来愿望（如“下次想和你一起去”）；只有把两人共同旅行/经历写成已经发生的过去事实时才会整站作废。
+- basis=记忆 时必须引用真实 sourceMemoryIds + 完全匹配的 sourceMemoryAnchor${incremental ? '，且至少使用一个 incrementalMemoryIds' : ''}，sourceSettingEvidence 留空；keepsake.evidenceExcerpt 若填写，只能是该 exact anchor 的逐字子串。basis=设定 用于角色卡/世界书明确支持的生活与地点；有直接原文时填写 sourceSettingEvidence，没有逐字地名也不要为了通过校验伪造引文，本地会把它安全降级为推演。设定/推演都不能声称和 {{user}} 已经共同去过。
+
+- 手机里的地图、导航、旅行与行程 App 已停用，不要描述手机界面。只输出 JSON。`;
+}
+
+// New tasks request bounded composition, not keyword-matched free text. Existing
+// recovery tasks deliberately keep their exact original recipe below.
+export function structuredTravelPrompt(context, memoryBank, previous = null, sourceMemoryIds = null, worldPresentation = null) {
+    return travelPrompt(context, memoryBank, previous, sourceMemoryIds, worldPresentation)
+        .replace('"picturePlan":{"summary":"画面重点","foreground":"前景元素","midground":"中景元素","background":"远景元素","details":"可见细节","atmosphere":"整体氛围","layout":"left/center/right"}',
+            '"design":{"version":1,"sky":"clear","light":"day","palette":"paper","density":"balanced","elements":[{"kind":"peak","layer":"far","x":35,"size":"m","count":2},{"kind":"pavilion","layer":"mid","x":70,"size":"m","count":1}]}')
+        .replace('keepsake.picturePlan 可选；如果填写，只写简短自然语言设计说明（summary / foreground / midground / background / details / atmosphere / layout），用于本地 SVG 明信片构图。禁止输出坐标、颜色值、CSS、HTML、JavaScript、URL、图片、Base64 或 class。',
+            'keepsake.design 只接收下方规定的受限图元数据，x仅为0～100的横向位置，不是SVG坐标。禁止自定义坐标、颜色值、CSS、HTML、JavaScript、URL、图片、Base64 或 class。')
+        .replace('picturePlan 可同时描述这封纪念页想呈现的画面重点与构图（例如前景亭子、远景雪峰、雨后湖面等），但不要输出任何代码；最终画面由本地 SVG/CSS 安全渲染。',
+            'design 与本封正文同时设计，图元与文字保持一致；设计缺失或不适用时可为null，不影响合格信件正文。最终画面由本地 SVG/CSS 安全渲染。')
+        + '\n' + postcard_design.postcardDesignInstructions();
+}
+
+function travelPromptLegacyR8414(context, memoryBank, previous = null, sourceMemoryIds = null, worldPresentation = null) {
+    const incremental = !!previous;
+    const revisit = incremental && !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
+    const archiveBlock = incremental
+        ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
+        : generation_prompts.promptArchiveSlice(memoryBank, 48);
+    return `${generation_prompts.promptSafetyBoundary(context, '他的出行路线 / 独立地图')}
+这是档案室里的独立地图，不是手机 App。请根据 {{char}} 的时代、身份、住处、职业、日常习惯和当前关系，整理他真正可能经过的路线。
+UNTRUSTED_TRAVEL_ARCHIVE_JSON:
+${archiveBlock}
+EXISTING_TRAVEL_INDEX_JSON:
+${JSON.stringify(compactTravelExisting(previous), null, 2)}
+CONTROLLED_WORLD_PRESENTATION_JSON:
+${JSON.stringify(worldPresentation || core_worldPresentation.resolveWorldPresentation('', memoryBank), null, 2)}
+
+严格输出：
 {"title":"他的出行路线","mapTheme":"neutral","locations":[{"id":"N1","kind":"near","name":"符合世界观的地点","region":"区域","distanceToken":"walk","summary":"角色此刻在这里做什么","basis":"推演","sourceMemoryIds":[],"sourceMemoryAnchor":"","sourceSettingEvidence":"","dialogueLines":["符合角色语气的当下对白"],"keepsake":null},{"id":"F1","kind":"far","name":"远方地点","region":"区域","distanceToken":"journey","summary":"此地的风景与他的当下心情","basis":"推演","sourceMemoryIds":[],"sourceMemoryAnchor":"","sourceSettingEvidence":"","dialogueLines":[],"sceneTheme":"mountain","keepsake":{"kind":"letter","title":"来信题目","mark":"","greeting":"收信称呼","body":"有画面感的信件正文，按角色与目前关系书写","closing":"角色署名","emblem":"","tone":"paper"}}]}
 
 硬性要求：
@@ -363,6 +524,12 @@ ${core_narrativeAuthority.NARRATIVE_AUTHORITY_PROMPT}
 - basis=推演：当档案与受控角色卡/世界书都没有写明具体地点时使用。这是“依据人设与世界观合理推断他会去的地方”，属于角色塑造，不是事实主张。此时 sourceMemoryIds/sourceMemoryAnchor/sourceSettingEvidence 全部留空，name/region/summary 由你自己写。可以有当下邀请或未来愿望（如“下次想和你一起去”）；只有把两人共同旅行/经历写成已经发生的过去事实时才会整站作废。
 - basis=记忆 时必须引用真实 sourceMemoryIds + 完全匹配的 sourceMemoryAnchor${incremental ? '，且至少使用一个 incrementalMemoryIds' : ''}，sourceSettingEvidence 留空；keepsake.evidenceExcerpt 若填写，只能是该 exact anchor 的逐字子串。basis=设定 用于角色卡/世界书明确支持的生活与地点；有直接原文时填写 sourceSettingEvidence，没有逐字地名也不要为了通过校验伪造引文，本地会把它安全降级为推演。设定/推演都不能声称和 {{user}} 已经共同去过。
 - 手机里的地图、导航、旅行与行程 App 已停用，不要描述手机界面。只输出 JSON。`;
+}
+
+function legacyTravelRecoveryPromptR8415(context, memoryBank, previous, sourceMemoryIds, worldPresentation, allowPersonaExpansion) {
+    return travelPromptLegacyR8414(context, memoryBank, previous, sourceMemoryIds, worldPresentation)
+        + core_incremental.derivedExpansionDirective(previous, memoryBank)
+        + (previous && allowPersonaExpansion !== true ? '\n本轮只同步历史：所有新地点必须 basis=记忆，引用本轮 incrementalMemoryIds；不补人设推演地点。' : '');
 }
 
 export function travelLocationKey(item) {
@@ -384,12 +551,15 @@ export function mergeTravelIncremental(previous, fresh) {
         }));
     }
     const seen = new Set(merged.locations.map(travelLocationKey));
+    const seenPostcards = new Set(merged.locations.map(travelPostcardContentKey).filter(Boolean));
     const usedIds = new Set(merged.locations.map(item => item.id));
     let added = 0;
     for (const item of fresh.locations || []) {
         const key = travelLocationKey(item);
-        if (!key || seen.has(key) || merged.locations.length >= 12) continue;
+        const contentKey = travelPostcardContentKey(item);
+        if (!key || seen.has(key) || (contentKey && seenPostcards.has(contentKey)) || merged.locations.length >= 12) continue;
         seen.add(key);
+        if (contentKey) seenPostcards.add(contentKey);
         merged.locations.push({ ...structuredClone(item), id: core_incremental.uniqueGeneratedId(item.id, usedIds, 'TR') });
         added += 1;
     }
@@ -406,13 +576,20 @@ export async function generateTravelWithRepair(context, memoryBank, origin, task
     const worldPresentation = previous?.worldPresentation || presentationContext.profile
         || core_worldPresentation.resolveWorldPresentation(presentationContext.contextEnvelope || '', memoryBank);
     const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
+    const savedSegment = generation_recovery.generationRecoverySegmentsForOrigin(origin)?.find(segment => segment.slot.endsWith(':travel-map'));
+    const structuredDesign = !savedSegment || savedSegment.contract === 'travel-structured-design-r8416';
+    const promptBuilder = structuredDesign ? structuredTravelPrompt : travelPrompt;
     const fresh = await generation_client.requestValidatedSegment(
-        travelPrompt(context, memoryBank, previous, sourceMemoryIds, worldPresentation) + core_incremental.derivedExpansionDirective(previous, memoryBank)
+        promptBuilder(context, memoryBank, previous, sourceMemoryIds, worldPresentation) + core_incremental.derivedExpansionDirective(previous, memoryBank)
             + (previous && options.allowPersonaExpansion !== true ? '\n本轮只同步历史：所有新地点必须 basis=记忆，引用本轮 incrementalMemoryIds；不补人设推演地点。' : ''),
         previous ? '他的出行路线 · 正在把新增地点标到地图上…' : '他的出行路线 · 正在绘制生活地图…',
         {
             maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.TRAVEL], temperature: 0.45,
             context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:travel-map`, mode: core_constants.MODE.TRAVEL, background: true,
+            recoveryCompatibility: structuredDesign ? { contract: 'travel-structured-design-r8416', legacyPrompts: [] }
+                : { contract: 'travel-postcard-design-r8415', legacyPrompts: [
+                legacyTravelRecoveryPromptR8415(context, memoryBank, previous, sourceMemoryIds, worldPresentation, options.allowPersonaExpansion),
+            ] },
         },
         raw => normalizeTravel(raw, memoryBank, {
             allowPartial: !!previous,
@@ -420,6 +597,7 @@ export async function generateTravelWithRepair(context, memoryBank, origin, task
             allowPersonaExpansion: options.allowPersonaExpansion === true,
             worldPresentation,
             controlledEvidence: presentationContext.settingEvidence || '',
+            structuredDesign,
         }),
     );
     if (!previous) {

@@ -12,6 +12,7 @@ ${root} .rmt-song-composer[open]>summary:before{content:'⌄'}
 ${root} .rmt-song-composer:not([open])>.rmt-song-form{display:none}
 ${root} .rmt-song-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:4px 0 18px}
 ${root} .rmt-song-form label{display:grid;gap:7px;font-size:14px;min-width:0}
+${root} .rmt-song-form [data-rmt-song-custom-row][hidden]{display:none!important}
 ${root} .rmt-song-wide{grid-column:1/-1}
 ${root} .rmt-theme-song :is(input,select,textarea){width:100%;max-width:100%;min-width:0;box-sizing:border-box;min-height:44px;border:1px solid var(--rmt-theme-border);border-radius:10px;color:var(--rmt-theme-text);background:var(--rmt-theme-surface-solid);padding:10px;font:inherit}
 ${root} .rmt-theme-song textarea{min-height:200px;resize:vertical}

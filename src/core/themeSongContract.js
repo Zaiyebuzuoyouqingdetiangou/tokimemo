@@ -5,8 +5,8 @@ export const THEME_SONG_MODE = 'themeSong';
 export const THEME_SONG_VERSION = 1;
 export const SONG_LIMITS = Object.freeze({ songs: 80, title: 120, style: 900, description: 1200,
     vocal: 400, lyrics: 5000, direction: 400, songChars: 14000, sessionChars: 1200000 });
-export const SONG_LANGUAGES = Object.freeze({ zh: '中文', ja: '日语', en: '英语' });
-export const SONG_VOICES = Object.freeze({ char: '角色独唱', duet: '双人合唱', narrator: '旁观者演唱' });
+export const SONG_LANGUAGES = Object.freeze({ zh: '中文', ja: '日语', en: '英语', ko: '韩语', custom: '自定义' });
+export const SONG_VOICES = Object.freeze({ char: '角色独唱', duet: '双人合唱', narrator: '旁观者演唱', ensemble: '群像' });
 export function songError(code, message) { return text.safeUserError(message, `RMT_SONG_${code}`); }
 export function songData(value, max = SONG_LIMITS.sessionChars) {
     try { return safeData.pastLivesData(value, max); }
@@ -17,6 +17,15 @@ export function songText(value, max, required = false) {
     if (typeof value !== 'string' || value.length > max || required && !value.trim())
         throw songError('FIELDS', '印象曲字段缺失或过长；请保留完整歌名、曲风和歌词。');
     return value.replace(/\r\n?/g, '\n').replace(/\u0000/g, '').trim();
+}
+export function customSongLanguage(value) {
+    const label = songText(value, 40, true);
+    if (!/^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} /()+._·（）-]{0,39}$/u.test(label))
+        throw songError('LANGUAGE', '请填写有效的歌词语言名称。');
+    return label;
+}
+export function songLanguageLabel(song) {
+    return song?.language === 'custom' ? customSongLanguage(song.customLanguage) : SONG_LANGUAGES[song?.language] || SONG_LANGUAGES.zh;
 }
 export function assertCompleteLyrics(value) {
     const lyrics = songText(value, SONG_LIMITS.lyrics, true);
@@ -55,6 +64,7 @@ export function normalizeStoredThemeSongs(value, memory = null) {
             || !Number.isFinite(song.createdAt) || song.createdAt < 0)
             throw songError('STRUCTURE', '印象曲条目身份或结构不完整，原作品保留。');
         used.add(song.id);
+        if (song.language === 'custom') customSongLanguage(song.customLanguage);
         songText(song.title, SONG_LIMITS.title, true); songText(song.singer, 300, true);
         songText(song.vocalDescription, SONG_LIMITS.vocal, true);
         songText(song.styleDescription, SONG_LIMITS.description, true);

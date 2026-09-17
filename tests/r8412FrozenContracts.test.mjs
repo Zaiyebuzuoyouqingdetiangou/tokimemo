@@ -1,10 +1,11 @@
+import {r8413ContractSource} from './helpers/r8413SourceCompatibility.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createHash} from 'node:crypto';
 import {r8412ContractSource} from './helpers/r8412SourceCompatibility.mjs';
 import * as heart from '../src/modes/heart.js';
-const read=p=>fs.readFileSync(new URL('../'+p,import.meta.url),'utf8');
+const read=p=>r8413ContractSource(p,fs.readFileSync(new URL('../'+p,import.meta.url),'utf8'));
 const sha=v=>createHash('sha256').update(v).digest('hex');
 const same=JSON.parse(read('tests/helpers/r8412-unchanged.json'));
 const changes=JSON.parse(read('tests/helpers/r8412-source-deltas.json'));

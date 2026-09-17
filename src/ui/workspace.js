@@ -176,10 +176,14 @@ export function arrangeSettingsHome(body) {
             if (!['api','theme','image','reading'].includes(card.dataset.rmtSettingsSection)) sectionBody.appendChild(card);
         }
         if (sectionBody.children.length) content.appendChild(more);
-        const ui = document.createElement('details'); ui.className = 'rmt-settings-card rmt-workspace-preferences';
-        ui_workspaceState.loadWorkspacePreferences();
-        ui.innerHTML = `<summary class="rmt-settings-card-head"><span>UI</span><div><b>窗口与导航</b><small>本设备的显示偏好</small></div></summary><div class="rmt-settings-section-body"><label class="rmt-settings-field"><span>首次打开页面</span><select data-rmt-workspace-startup>${[['settings','设置'],['archive','当前档案'],['content','内容']].map(([k,t])=>`<option value="${k}" ${ui_workspaceState.workspace.startup===k?'selected':''}>${t}</option>`).join('')}</select></label><label class="rmt-settings-check"><input type="checkbox" data-rmt-workspace-restore ${ui_workspaceState.workspace.restore?'checked':''}><span>重新打开时恢复阅读位置</span></label></div>`;
-        content.appendChild(ui);
+        const preferences = [...content.querySelectorAll(':scope > .rmt-workspace-preferences')];
+        for (const duplicate of preferences.slice(1)) duplicate.remove();
+        if (!preferences.length) {
+            const ui = document.createElement('details'); ui.className = 'rmt-settings-card rmt-workspace-preferences';
+            ui_workspaceState.loadWorkspacePreferences();
+            ui.innerHTML = `<summary class="rmt-settings-card-head"><span>UI</span><div><b>窗口与导航</b><small>本设备的显示偏好</small></div></summary><div class="rmt-settings-section-body"><label class="rmt-settings-field"><span>首次打开页面</span><select data-rmt-workspace-startup>${[['settings','设置'],['archive','当前档案'],['content','内容']].map(([k,t])=>`<option value="${k}" ${ui_workspaceState.workspace.startup===k?'selected':''}>${t}</option>`).join('')}</select></label><label class="rmt-settings-check"><input type="checkbox" data-rmt-workspace-restore ${ui_workspaceState.workspace.restore?'checked':''}><span>重新打开时恢复阅读位置</span></label></div>`;
+            content.appendChild(ui);
+        }
     }
     syncWorkspaceChrome();
 }

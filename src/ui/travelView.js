@@ -1,5 +1,6 @@
 // Independent code-drawn travel map. Generated values are escaped text or allowlisted tokens;
 // route lines, marker positions and postcard composition are entirely local.
+import * as design_view from './postcardDesignView.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import { state as runtimeState } from '../core/state.js';
@@ -9,7 +10,11 @@ import * as ui_overlay from './overlay.js';
 
 export function selectedTravelLocation() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.TRAVEL) return null;
-    return runtimeState.activeSession.locations.find(item => item.id === runtimeState.activeSession.selectedLocationId) || null;
+    const locations = runtimeState.activeSession.locations;
+    const selected = locations.find(item => item.id === runtimeState.activeSession.selectedLocationId);
+    if (!selected) return null;
+    const key = modes_travel.travelPostcardContentKey(selected);
+    return key ? modes_travel.visibleTravelLocations(locations).find(item => modes_travel.travelPostcardContentKey(item) === key) || selected : selected;
 }
 
 function travelSourceLabel(item) {
@@ -21,10 +26,10 @@ function travelSourceLabel(item) {
 // Postcard picture side.
 //
 // Every number below is produced locally: either a literal, or a value derived
-// from a hash of the location id/name. The model only ever contributes three
-// allowlisted enum tokens (mapTheme, sceneTheme, postcard.tone) which are validated in
-// modes/travel.js before they reach here. No generated coordinate, colour, URL,
-// class name or markup can enter this SVG.
+// from a hash of the location id/name. The model may contribute validated theme/tone
+// enums plus optional picture-plan text, but that text never becomes markup or style.
+// This file only parses it into local motifs; every coordinate, colour, URL, class name
+// and SVG node remains owned by local code.
 // ---------------------------------------------------------------------------
 
 const POSTCARD_SCENE_WIDTH = 120;
@@ -34,11 +39,88 @@ const POSTCARD_SCENE_HORIZON = 52;
 // Deterministic small-integer generator so one location always draws the same
 // picture across reopens, devices and read-only snapshots.
 function sceneRandom(item) {
-    let seed = core_text.hashString(`${core_text.normalizeText(item?.id, 80)}|${core_text.normalizeText(item?.name, 120)}|postcard`) >>> 0;
+    const source = modes_travel.travelKeepsakeForItem(item);
+    const picturePlan = source?.picturePlan && typeof source.picturePlan === 'object' ? source.picturePlan : null;
+    const planSeed = picturePlan ? [picturePlan.summary, picturePlan.foreground, picturePlan.midground, picturePlan.background,
+        picturePlan.details, picturePlan.atmosphere, picturePlan.layout].filter(Boolean).join('|') : '';
+    let seed = core_text.hashString(`${core_text.normalizeText(item?.name, 120)}|${core_text.normalizeText(item?.region, 120)}|${modes_travel.travelPostcardContentKey(item)}|${planSeed}|postcard`) >>> 0;
     return (min, max) => {
         seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
         const span = Math.max(0, Math.floor(max) - Math.floor(min));
         return Math.floor(min) + (span ? seed % (span + 1) : 0);
+    };
+}
+
+function picturePlanText(plan) {
+    return plan ? [plan.summary, plan.foreground, plan.midground, plan.background, plan.details, plan.atmosphere, plan.layout]
+        .map(value => core_text.normalizeText(value, 240)).filter(Boolean).join('\n') : '';
+}
+
+function picturePlanIncludes(text, pattern, negative = null) {
+    if (!text || !pattern.test(text)) return false;
+    return !(negative && negative.test(text));
+}
+
+function picturePlanLayout(plan) {
+    const value = core_text.normalizeText(plan?.layout, 40).toLowerCase() || picturePlanText(plan).toLowerCase();
+    if (/(?:^|\b)(?:left|左侧|左边|左景)(?:\b|$)/iu.test(value)) return 'left';
+    if (/(?:^|\b)(?:right|右侧|右边|右景)(?:\b|$)/iu.test(value)) return 'right';
+    return 'center';
+}
+
+function inferPlanTheme(text) {
+    if (/(?:灯塔|海边|海湾|海面|海港|码头|船|湖畔|湖边|河岸|coast|sea|ocean|beach|harbou?r|lake|boat|shore)/iu.test(text)) return 'coast';
+    if (/(?:雪山|山顶|山脊|山道|山间|山谷|小亭|凉亭|木屋|cabin|mountain|peak|ridge|alpine|pavilion)/iu.test(text)) return 'mountain';
+    if (/(?:森林|树林|林间|步道|花丛|溪谷|林屋|forest|woodland|grove|trail|wildflower)/iu.test(text)) return 'forest';
+    if (/(?:校园|校门|图书馆|教学楼|操场|campus|library|academy|college|school)/iu.test(text)) return 'campus';
+    if (/(?:古桥|古寺|神殿|城门|长廊|古城|historic|temple|shrine|ruins|ancient)/iu.test(text)) return 'historic';
+    if (/(?:魔法|尖塔|秘境|发光|精灵|fantasy|magic|spire|enchanted)/iu.test(text)) return 'fantasy';
+    if (/(?:科幻|飞船|观景舷窗|霓虹|轨道|星港|赛博|scifi|cyber|spaceport|futuristic)/iu.test(text)) return 'scifi';
+    if (/(?:列车|站台|街灯|高楼|天际线|city|urban|station|street|downtown|skyline)/iu.test(text)) return 'city';
+    return 'neutral';
+}
+
+function travelPostcardPicturePlan(item, baseProfile) {
+    const keepsake = modes_travel.travelKeepsakeForItem(item);
+    const plan = keepsake?.picturePlan && typeof keepsake.picturePlan === 'object' ? keepsake.picturePlan : null;
+    const text = picturePlanText(plan);
+    const theme = baseProfile.theme === 'neutral' && text ? inferPlanTheme(text) : baseProfile.theme;
+    const time = baseProfile.time !== 'unspecified' ? baseProfile.time
+        : picturePlanIncludes(text, /(?:夜色|夜晚|深夜|月光|星空|night|moon|star)/iu)
+            ? 'night'
+            : picturePlanIncludes(text, /(?:清晨|晨光|日出|午后|日光|sunrise|morning|daylight|afternoon)/iu)
+                ? 'day' : 'unspecified';
+    const snow = baseProfile.snow || (theme === 'mountain' && picturePlanIncludes(text, /(?:雪|积雪|snow|frost|glacier)/iu, /(?:没有雪|无雪|not snow|without snow)/iu));
+    const lighthouse = baseProfile.lighthouse || (theme === 'coast' && picturePlanIncludes(text, /(?:灯塔|lighthouse)/iu));
+    const features = [];
+    const push = name => { if (!features.includes(name)) features.push(name); };
+    if (picturePlanIncludes(text, /(?:亭子|凉亭|亭台|pavilion|gazebo)/iu)) push('pavilion');
+    if (picturePlanIncludes(text, /(?:木屋|小屋|屋舍|cabin|hut|lodge)/iu)) push('cabin');
+    if (picturePlanIncludes(text, /(?:桥|拱桥|桥面|bridge)/iu)) push('bridge');
+    if (picturePlanIncludes(text, /(?:船|小舟|帆船|boat|ship|ferry)/iu)) push('boat');
+    if (picturePlanIncludes(text, /(?:校门|门楼|牌坊|gate|entrance)/iu)) push('gate');
+    if (picturePlanIncludes(text, /(?:列车|站台|火车|train|tram)/iu)) push('train');
+    if (picturePlanIncludes(text, /(?:塔|尖塔|高塔|tower|spire)/iu)) push('tower');
+    if (picturePlanIncludes(text, /(?:瀑布|waterfall)/iu)) push('waterfall');
+    if (theme === 'mountain' && !features.length) push('pavilion');
+    else if (theme === 'coast' && !features.length && lighthouse) push('boat');
+    else if (theme === 'campus' && !features.length) push('gate');
+    else if (theme === 'historic' && !features.length) push('bridge');
+    else if (theme === 'city' && !features.length) push('train');
+    return {
+        ...baseProfile,
+        theme,
+        time,
+        snow,
+        lighthouse,
+        plan,
+        planText: text,
+        layout: picturePlanLayout(plan),
+        features,
+        rain: picturePlanIncludes(text, /(?:雨|细雨|雨丝|下雨|rain|drizzle)/iu),
+        flowers: picturePlanIncludes(text, /(?:花|花丛|花树|花枝|flower|blossom)/iu),
+        lanterns: picturePlanIncludes(text, /(?:灯笼|提灯|路灯|灯火|lantern|lamp)/iu),
+        waterfall: picturePlanIncludes(text, /(?:瀑布|waterfall)/iu),
     };
 }
 
@@ -94,20 +176,20 @@ function sceneTrees(next) {
     return out;
 }
 
-function scenePeaks(next) {
+function scenePeaks(next, snowy = false) {
     let out = '';
     let x = -6;
     while (x < POSTCARD_SCENE_WIDTH + 6) {
         const w = next(22, 34);
         const h = next(20, 38);
         out += `<path class="pc-solid" d="M${x} ${POSTCARD_SCENE_HORIZON} L${x + w / 2} ${POSTCARD_SCENE_HORIZON - h} L${x + w} ${POSTCARD_SCENE_HORIZON} Z"/>`;
-        out += `<path class="pc-snow" d="M${x + w / 2 - w / 9} ${POSTCARD_SCENE_HORIZON - h + w / 7} L${x + w / 2} ${POSTCARD_SCENE_HORIZON - h} L${x + w / 2 + w / 9} ${POSTCARD_SCENE_HORIZON - h + w / 7} Z"/>`;
+        if (snowy) out += `<path class="pc-snow" d="M${x + w / 2 - w / 9} ${POSTCARD_SCENE_HORIZON - h + w / 7} L${x + w / 2} ${POSTCARD_SCENE_HORIZON - h} L${x + w / 2 + w / 9} ${POSTCARD_SCENE_HORIZON - h + w / 7} Z"/>`;
         x += w - next(5, 10);
     }
     return out;
 }
 
-function sceneWaves(next) {
+function sceneWaves(next, lighthouse = false) {
     let out = '<path class="pc-sea" d="M0 46 L120 46 L120 60 L0 60 Z"/>';
     for (let i = 0, count = next(3, 4); i < count; i += 1) {
         const y = 49 + i * 3;
@@ -115,10 +197,12 @@ function sceneWaves(next) {
         out += `<path class="pc-wave" d="M${x} ${y} q4 -2 8 0 t8 0 t8 0"/>`;
         out += `<path class="pc-wave" d="M${x + 55} ${y + 1} q4 -2 8 0 t8 0"/>`;
     }
-    const lx = next(78, 104);
-    const top = next(24, 30);
-    out += `<path class="pc-solid" d="M${lx - 4} 46 L${lx - 2} ${top} L${lx + 2} ${top} L${lx + 4} 46 Z"/>`;
-    out += `<circle class="pc-glow" cx="${lx}" cy="${top - 2}" r="3"/>`;
+    if (lighthouse) {
+        const lx = next(78, 104);
+        const top = next(24, 30);
+        out += `<path class="pc-solid" d="M${lx - 4} 46 L${lx - 2} ${top} L${lx + 2} ${top} L${lx + 4} 46 Z"/>`;
+        out += `<circle class="pc-glow" cx="${lx}" cy="${top - 2}" r="3"/>`;
+    }
     return out;
 }
 
@@ -185,45 +269,154 @@ function sceneNeutral(next) {
       <circle class="pc-glow" cx="${right}" cy="${next(13, 23)}" r="${next(4, 7)}"/>`;
 }
 
-function travelPostcardScene(item, theme) {
+function sceneLayoutAnchors(layout) {
+    return layout === 'left' ? [26, 46, 88] : layout === 'right' ? [88, 66, 26] : [60, 32, 90];
+}
+
+function sceneFeatureHeight(theme) {
+    return theme === 'coast' ? 45 : theme === 'mountain' ? 42 : theme === 'city' ? 44 : 46;
+}
+
+function renderPavilionFeature(x, y, scale = 1) {
+    const width = 12 * scale, roof = 6 * scale;
+    return `<path class="pc-solid" d="M${x - width / 2} ${y - roof} L${x} ${y - roof - 4 * scale} L${x + width / 2} ${y - roof} Z"/><rect class="pc-solid" x="${x - width / 2 + 1}" y="${y - roof}" width="${width - 2}" height="2" rx="1"/><rect class="pc-solid" x="${x - 4 * scale}" y="${y - roof}" width="1.8" height="${roof}"/><rect class="pc-solid" x="${x + 2.2 * scale}" y="${y - roof}" width="1.8" height="${roof}"/>`;
+}
+
+function renderCabinFeature(x, y, scale = 1) {
+    const width = 12 * scale, height = 8 * scale;
+    return `<rect class="pc-solid" x="${x - width / 2}" y="${y - height}" width="${width}" height="${height}" rx="1"/><path class="pc-arch" d="M${x - width / 2 - 1} ${y - height} L${x} ${y - height - 5 * scale} L${x + width / 2 + 1} ${y - height} Z"/><rect class="pc-window" x="${x - 2 * scale}" y="${y - height + 2 * scale}" width="3" height="3" rx=".5"/>`;
+}
+
+function renderBridgeFeature(x, y, scale = 1) {
+    const width = 18 * scale;
+    return `<path class="pc-wave" d="M${x - width / 2} ${y} Q${x} ${y - 5 * scale} ${x + width / 2} ${y}"/><path class="pc-solid" d="M${x - width / 2} ${y} h${width}"/>`;
+}
+
+function renderBoatFeature(x, y, scale = 1) {
+    return `<path class="pc-solid" d="M${x - 7 * scale} ${y} Q${x} ${y + 3 * scale} ${x + 7 * scale} ${y} L${x + 5 * scale} ${y + 2 * scale} H${x - 5 * scale} Z"/><path class="pc-solid" d="M${x} ${y - 8 * scale} V${y}"/><path class="pc-window" d="M${x} ${y - 8 * scale} L${x} ${y - 2 * scale} L${x + 5 * scale} ${y - 4 * scale} Z"/>`;
+}
+
+function renderGateFeature(x, y, scale = 1) {
+    const width = 14 * scale;
+    return `<rect class="pc-solid" x="${x - width / 2}" y="${y - 9 * scale}" width="2" height="9"/><rect class="pc-solid" x="${x + width / 2 - 2}" y="${y - 9 * scale}" width="2" height="9"/><rect class="pc-solid" x="${x - width / 2 - 1}" y="${y - 11 * scale}" width="${width + 2}" height="2.4" rx="1"/><path class="pc-arch" d="M${x - width / 2 - 2} ${y - 11 * scale} L${x} ${y - 15 * scale} L${x + width / 2 + 2} ${y - 11 * scale} Z"/>`;
+}
+
+function renderTrainFeature(x, y, scale = 1) {
+    const width = 20 * scale;
+    return `<rect class="pc-solid" x="${x - width / 2}" y="${y - 6 * scale}" width="${width}" height="${6 * scale}" rx="3"/><rect class="pc-window" x="${x - width / 2 + 2}" y="${y - 5 * scale}" width="4" height="2.2" rx="1"/><rect class="pc-window" x="${x - width / 2 + 8}" y="${y - 5 * scale}" width="4" height="2.2" rx="1"/><rect class="pc-window" x="${x - width / 2 + 14}" y="${y - 5 * scale}" width="4" height="2.2" rx="1"/>`;
+}
+
+function renderTowerFeature(x, y, scale = 1) {
+    return `<rect class="pc-solid" x="${x - 3 * scale}" y="${y - 16 * scale}" width="6" height="${16 * scale}" rx="2"/><rect class="pc-glow" x="${x - 2 * scale}" y="${y - 12 * scale}" width="4" height="1.8" rx="1"/><path class="pc-arch" d="M${x - 6 * scale} ${y - 16 * scale} L${x} ${y - 22 * scale} L${x + 6 * scale} ${y - 16 * scale} Z"/>`;
+}
+
+function renderWaterfallFeature(x, y, scale = 1) {
+    return `<path class="pc-window" d="M${x} ${y - 18 * scale} Q${x + 2 * scale} ${y - 10 * scale} ${x} ${y} Q${x - 2 * scale} ${y - 7 * scale} ${x} ${y - 18 * scale} Z" opacity=".7"/>`;
+}
+
+function renderScenePlanFeatures(plan, next) {
+    const [primaryX, secondaryX] = sceneLayoutAnchors(plan.layout);
+    const baseY = sceneFeatureHeight(plan.theme);
+    const scale = plan.theme === 'coast' || plan.theme === 'city' ? 0.95 : 1;
+    const renderers = {
+        pavilion: renderPavilionFeature,
+        cabin: renderCabinFeature,
+        bridge: renderBridgeFeature,
+        boat: renderBoatFeature,
+        gate: renderGateFeature,
+        train: renderTrainFeature,
+        tower: renderTowerFeature,
+        waterfall: renderWaterfallFeature,
+    };
+    let out = '';
+    plan.features.slice(0, 2).forEach((feature, index) => {
+        const renderer = renderers[feature];
+        if (!renderer) return;
+        const x = index === 0 ? primaryX : secondaryX;
+        const y = feature === 'boat' ? baseY + 1 : feature === 'bridge' ? baseY : baseY;
+        out += renderer(x + next(-3, 3), y + next(-1, 1), scale * (index === 0 ? 1 : 0.82));
+    });
+    if (plan.lanterns) {
+        const lampX = plan.layout === 'right' ? 92 : 26;
+        out += `<rect class="pc-solid" x="${lampX}" y="34" width="1.3" height="14"/><circle class="pc-glow" cx="${lampX + 0.7}" cy="33" r="2.2"/>`;
+    }
+    if (plan.waterfall && !plan.features.includes('waterfall')) out += renderWaterfallFeature(plan.layout === 'right' ? 86 : 36, 46, 1);
+    return out;
+}
+
+function renderScenePlanWeather(plan, next) {
+    let out = '';
+    if (plan.rain) {
+        for (let i = 0; i < 10; i += 1) {
+            const x = next(8, 112);
+            const y = next(8, 34);
+            out += `<path class="pc-wave" d="M${x} ${y} l-2 5" opacity=".35"/>`;
+        }
+    }
+    if (plan.flowers) {
+        for (let i = 0; i < 6; i += 1) {
+            const x = next(8, 112);
+            const y = next(49, 58);
+            out += `<circle class="pc-glow" cx="${x}" cy="${y}" r="1.2"/><circle class="pc-window" cx="${x + 1.5}" cy="${y - 0.6}" r="0.8"/>`;
+        }
+    }
+    return out;
+}
+
+function travelPostcardScene(item, profile) {
+    const plan = travelPostcardPicturePlan(item, profile);
     const next = sceneRandom(item);
-    const safeTheme = modes_travel.resolveTravelSceneTheme({ sceneTheme: theme }, 'neutral');
-    const nightish = safeTheme === 'scifi' || safeTheme === 'fantasy';
-    const orb = safeTheme === 'coast' || safeTheme === 'campus'
+    const safeTheme = plan.theme;
+    const nightish = plan.time === 'night';
+    const orb = nightish ? '<path class="pc-orb" d="M96 8 A8 8 0 1 0 96 24 A7 7 0 0 1 96 8 Z"/>' : plan.time === 'unspecified' ? '' : safeTheme === 'coast' || safeTheme === 'campus'
         ? `<circle class="pc-orb" cx="${next(78, 105)}" cy="${next(10, 18)}" r="${next(6, 9)}"/>`
         : `<circle class="pc-orb" cx="${next(18, 102)}" cy="${next(9, 18)}" r="${next(5, 8)}"/>`;
-    const body = safeTheme === 'coast' ? sceneWaves(next)
+    const body = safeTheme === 'coast' ? sceneWaves(next, plan.lighthouse)
         : safeTheme === 'forest' ? sceneTrees(next)
-        : safeTheme === 'mountain' ? scenePeaks(next)
+        : safeTheme === 'mountain' ? scenePeaks(next, plan.snow)
         : safeTheme === 'campus' ? sceneCampus(next)
         : safeTheme === 'historic' ? sceneHistoric(next)
         : safeTheme === 'fantasy' ? sceneFantasy(next)
         : safeTheme === 'scifi' ? sceneScifi(next)
         : safeTheme === 'city' ? sceneSkyline(next)
         : sceneNeutral(next);
-    return `<svg class="rmt-travel-postcard-scene" viewBox="0 0 ${POSTCARD_SCENE_WIDTH} ${POSTCARD_SCENE_HEIGHT}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${core_text.esc(`${item.name} 的明信片风景插画`)}">
+    const skyMarks = nightish ? sceneSky(next) : plan.rain ? '' : sceneBirds(next);
+    const ambience = sceneSky(next);
+    const features = renderScenePlanFeatures(plan, next);
+    const weather = renderScenePlanWeather(plan, next);
+    const pathStart = plan.layout === 'left' ? next(12, 24) : plan.layout === 'right' ? next(52, 72) : next(24, 48);
+    const pathMid = plan.layout === 'left' ? next(46, 58) : plan.layout === 'right' ? next(58, 70) : next(54, 66);
+    const pathEnd = plan.layout === 'left' ? next(78, 102) : plan.layout === 'right' ? next(18, 44) : next(70, 96);
+    return `<svg class="rmt-travel-postcard-scene" data-rmt-scene-theme="${safeTheme}" data-rmt-scene-time="${plan.time}" data-rmt-plan-layout="${plan.layout}" viewBox="0 0 ${POSTCARD_SCENE_WIDTH} ${POSTCARD_SCENE_HEIGHT}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${core_text.esc(`${item.name} 的明信片风景示意`)}">
       <rect class="pc-sky" x="0" y="0" width="${POSTCARD_SCENE_WIDTH}" height="${POSTCARD_SCENE_HEIGHT}"/>
       ${orb}
-      ${nightish ? sceneSky(next) : sceneBirds(next)}
-      ${sceneSky(next)}
+      ${skyMarks}
+      ${ambience}
       ${body}
+      ${features}
+      ${weather}
       <path class="pc-ground" d="M0 ${POSTCARD_SCENE_HORIZON} L${POSTCARD_SCENE_WIDTH} ${POSTCARD_SCENE_HORIZON} L${POSTCARD_SCENE_WIDTH} ${POSTCARD_SCENE_HEIGHT} L0 ${POSTCARD_SCENE_HEIGHT} Z"/>
-      <path class="pc-path" d="M${next(24, 48)} ${POSTCARD_SCENE_HEIGHT} Q${next(54, 66)} ${next(54, 57)} ${next(70, 96)} ${POSTCARD_SCENE_HORIZON}"/>
+      <path class="pc-path" d="M${pathStart} ${POSTCARD_SCENE_HEIGHT} Q${pathMid} ${next(54, 57)} ${pathEnd} ${POSTCARD_SCENE_HORIZON}"/>
     </svg>`;
 }
 
 export function travelPostcardHtml(item, session, options = {}) {
-    const card = item?.postcard || {};
+    const source = modes_travel.travelKeepsakeForItem(item);
+    const card = source ? { title: source.title, postmark: source.mark, greeting: source.greeting, body: source.body, closing: source.closing, stampLabel: source.emblem, tone: source.tone } : {};
     const rawTone = core_text.normalizeText(card.tone, 30).toLowerCase();
     const tone = core_constants.TRAVEL_POSTCARD_TONES.has(rawTone) ? rawTone : 'paper';
     const userName = core_text.normalizeText(options.recipient || (runtimeState.activeArchiveSnapshot
         ? runtimeState.activeArchiveSnapshot.memory?.userName
         : core_context.getContext()?.name1), 100) || '你';
-    const theme = modes_travel.resolveTravelSceneTheme(item, session?.mapTheme);
-    return `<section class="rmt-travel-postcard tone-${tone}" data-rmt-postcard-theme="${theme}" role="dialog" aria-modal="false" aria-label="${core_text.esc(item.name)}的明信片">
+    const sceneProfile = modes_travel.travelPostcardSceneProfile(item, session?.mapTheme);
+    const pictureProfile = travelPostcardPicturePlan(item, sceneProfile);
+    const theme = pictureProfile.theme;
+    const hasDesign = !!source && Object.hasOwn(source, 'design');
+    const designArt = hasDesign ? design_view.renderPostcardDesign(source.design, item.name) || design_view.renderPostcardDesignFallback() : '';
+    return `<section class="rmt-travel-postcard tone-${tone}${hasDesign ? ' rmt-designed-postcard' : ''}" data-rmt-postcard-theme="${theme}" role="dialog" aria-modal="false" aria-label="${core_text.esc(item.name)}的明信片">
       <button type="button" class="rmt-travel-detail-close" data-rmt-action="${core_text.esc(options.closeAction || 'travel-close-detail')}" aria-label="收起明信片">×</button>
       <figure class="rmt-travel-postcard-face">
-        ${travelPostcardScene(item, theme)}
+        ${hasDesign ? designArt : travelPostcardScene(item, sceneProfile)}
         <figcaption><small>GREETINGS FROM</small><b>${core_text.esc(item.region || item.name)}</b></figcaption>
       </figure>
       <div class="rmt-travel-postcard-back">
@@ -241,19 +434,7 @@ export function travelPostcardHtml(item, session, options = {}) {
 }
 
 function travelKeepsakeForView(item) {
-    const source = item?.keepsake && typeof item.keepsake === 'object' ? item.keepsake : null;
-    if (source) {
-        const requested = core_text.normalizeText(source.kind, 30).toLowerCase();
-        const kind = core_constants.TRAVEL_KEEPSAKE_KINDS.has(requested) ? requested : 'letter';
-        return {
-            kind, title: core_text.normalizeText(source.title, 120), mark: core_text.normalizeText(source.mark, 80),
-            greeting: core_text.normalizeText(source.greeting, 240), body: core_text.normalizeText(source.body, 4000),
-            closing: core_text.normalizeText(source.closing, 500), emblem: core_text.normalizeText(source.emblem, 40),
-            tone: core_constants.TRAVEL_POSTCARD_TONES.has(core_text.normalizeText(source.tone, 30).toLowerCase()) ? core_text.normalizeText(source.tone, 30).toLowerCase() : 'paper',
-        };
-    }
-    const card = item?.postcard && typeof item.postcard === 'object' ? item.postcard : null;
-    return card ? { kind: 'postcard', title: card.title, mark: card.postmark, greeting: card.greeting, body: card.body, closing: card.closing, emblem: card.stampLabel, tone: card.tone } : null;
+    return modes_travel.travelKeepsakeForItem(item);
 }
 
 function travelKeepsakeHtml(item, session) {
@@ -262,11 +443,14 @@ function travelKeepsakeHtml(item, session) {
     const labels = { letter: 'LETTER', journal: 'JOURNAL', scroll: 'SCROLL', fieldnote: 'FIELD NOTE', dossier: 'DOSSIER', datalog: 'DATA LOG', token: 'TOKEN' };
     const label = labels[keepsake.kind] || 'KEEPSAKE';
     const emblem = core_text.normalizeText(keepsake.emblem || label.slice(0, 4), 40);
-    const theme = modes_travel.resolveTravelSceneTheme(item, session?.mapTheme);
-    return `<section class="rmt-travel-artifact artifact-${keepsake.kind} tone-${core_text.esc(keepsake.tone || 'paper')}" data-rmt-artifact-kind="${keepsake.kind}" role="dialog" aria-modal="false" aria-label="${core_text.esc(item.name)}的出行纪念">
+    const sceneProfile = modes_travel.travelPostcardSceneProfile(item, session?.mapTheme);
+    const theme = sceneProfile.theme;
+    const hasDesign = Object.hasOwn(keepsake, 'design');
+    const designArt = hasDesign ? design_view.renderPostcardDesign(keepsake.design, item.name) || design_view.renderPostcardDesignFallback() : '';
+    return `<section class="rmt-travel-artifact artifact-${keepsake.kind} tone-${core_text.esc(keepsake.tone || 'paper')}${hasDesign ? ' rmt-designed-postcard' : ''}" data-rmt-artifact-kind="${keepsake.kind}" role="dialog" aria-modal="false" aria-label="${core_text.esc(item.name)}的出行纪念">
       <button type="button" class="rmt-travel-detail-close" data-rmt-action="travel-close-detail" aria-label="收起出行纪念">×</button>
       <header class="rmt-travel-artifact-head"><span>${label}</span><i>${core_text.esc(keepsake.mark || item.region || label)}</i></header>
-      <figure class="rmt-travel-artifact-figure" data-rmt-artifact-theme="${core_text.esc(theme)}">${travelPostcardScene(item, theme).replace('rmt-travel-postcard-scene', 'rmt-travel-artifact-scene').replaceAll('pc-', 'artifact-scene-').replace('明信片风景插画', '出行纪念风景插画')}<figcaption>${core_text.esc(item.region || item.name)}</figcaption></figure>
+      <figure class="rmt-travel-artifact-figure" data-rmt-artifact-theme="${core_text.esc(theme)}">${hasDesign ? designArt : travelPostcardScene(item, sceneProfile).replace('rmt-travel-postcard-scene', 'rmt-travel-artifact-scene').replaceAll('pc-', 'artifact-scene-').replace('明信片风景示意', '出行纪念风景示意')}<figcaption>${core_text.esc(item.region || item.name)}</figcaption></figure>
       <div class="rmt-travel-artifact-emblem" aria-hidden="true">${core_text.esc(emblem)}</div>
       <article class="rmt-travel-artifact-copy"><small>${core_text.esc(item.region || item.name)}</small><h3>${core_text.esc(keepsake.title)}</h3>${keepsake.greeting ? `<b>${core_text.esc(keepsake.greeting)}</b>` : ''}<p>${core_text.esc(keepsake.body)}</p><footer>${core_text.esc(keepsake.closing)}</footer></article>
       <div class="rmt-travel-artifact-meta">${core_text.esc(item.distanceLabel)}</div>
@@ -298,10 +482,11 @@ export function renderTravel() {
     const body = ui_overlay.bodyEl();
     if (!body) return;
     const selected = selectedTravelLocation();
-    const near = session.locations.filter(item => item.kind === 'near');
-    const far = session.locations.filter(item => item.kind === 'far');
-    const markerPositions = modes_travel.travelMarkerPositions(session.locations);
-    const markers = session.locations.map((item, index) => {
+    const locations = modes_travel.visibleTravelLocations(session.locations);
+    const near = locations.filter(item => item.kind === 'near');
+    const far = locations.filter(item => item.kind === 'far');
+    const markerPositions = modes_travel.travelMarkerPositions(locations);
+    const markers = locations.map((item, index) => {
         const position = markerPositions[index];
         const active = selected?.id === item.id;
         const kind = modes_travel.safeTravelLocationKind(item.kind);
@@ -310,7 +495,7 @@ export function renderTravel() {
     const selectedDetail = selected
         ? selected.kind === 'far' ? travelKeepsakeHtml(selected, session) : travelDialogueHtml(selected, session)
         : '';
-    const legendRows = session.locations.map(item => `<button type="button" class="${selected?.id === item.id ? 'active' : ''}" data-rmt-travel-location="${core_text.esc(item.id)}"><i class="fa-solid ${item.kind === 'near' ? 'fa-location-dot' : 'fa-envelope'}"></i><span><b>${core_text.esc(item.name)}</b><small>${core_text.esc([...new Set([item.region, travelSourceLabel(item)].filter(Boolean))].join(' · '))}</small></span></button>`).join('');
+    const legendRows = locations.map(item => `<button type="button" class="${selected?.id === item.id ? 'active' : ''}" data-rmt-travel-location="${core_text.esc(item.id)}"><i class="fa-solid ${item.kind === 'near' ? 'fa-location-dot' : 'fa-envelope'}"></i><span><b>${core_text.esc(item.name)}</b><small>${core_text.esc([...new Set([item.region, travelSourceLabel(item)].filter(Boolean))].join(' · '))}</small></span></button>`).join('');
     body.innerHTML = `<div class="rmt-travel" data-rmt-travel-theme="${modes_travel.safeTravelTheme(session.mapTheme)}">
       <div class="rmt-mail-actions"><button type="button" class="rmt-btn" data-rmt-mode="inbox">打开你的邮箱 · 收藏路线明信片</button></div><header class="rmt-travel-head"><div><small>THE ROUTES HE TAKES</small><h2>${core_text.esc(session.title)}</h2><p>${core_text.esc(session.routeSummary)}</p></div><div><span><b>${near.length}</b> 附近</span><span><b>${far.length}</b> 远方</span></div></header>
       <div class="rmt-travel-layout">

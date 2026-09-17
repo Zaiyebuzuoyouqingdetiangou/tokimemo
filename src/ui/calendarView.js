@@ -19,12 +19,12 @@ function parseMonthKey(value) {
 
 function monthLabel(value) {
     const info = parseMonthKey(value);
-    if (!info) return '未选择月份';
+    if (!info) return '剧情日期未记录';
     return info.year ? `${info.year}年 ${info.month}月` : `${info.month}月 · 每年`;
 }
 
 function monthDays(info) {
-    if (!info) return 31;
+    if (!info) return 0;
     const year = info.year || 2000;
     return new Date(Date.UTC(year, info.month, 0)).getUTCDate();
 }
@@ -174,8 +174,9 @@ function pageHasNotebookContent(page) {
 function pageKeyMatchesMonth(pageKey, monthKey) {
     const info = parseMonthKey(monthKey);
     const key = core_text.normalizeText(pageKey, 160);
-    if (!info || !key) return false;
+    if (!key) return false;
     if (key === modes_calendar.CALENDAR_LEGACY_PAGE_KEY || key.startsWith('pending:')) return true;
+    if (!info) return false;
     if (key.startsWith('date:')) {
         const parsed = modes_calendar.normalizeCalendarDate(key.slice(5));
         return !!parsed?.hasYear && info.year === parsed.year && info.month === parsed.month;
@@ -202,7 +203,9 @@ function preferredPageKeyForCell(session, monthKey, day, dayEntries) {
 
 function defaultPageKeyForMonth(session, monthKey, entries) {
     const info = parseMonthKey(monthKey);
-    if (!info) return '';
+    if (!info) return Object.entries(session.dayPages || {}).find(([key,page]) => (key.startsWith('pending:') || key === modes_calendar.CALENDAR_LEGACY_PAGE_KEY) && pageHasNotebookContent(page))?.[0] || '';
+    const storyKey = modes_calendar.calendarPageKeyForDate(session.storyDate);
+    if (storyKey && pageKeyMatchesMonth(storyKey, monthKey)) return storyKey;
     for (let day = 1; day <= monthDays(info); day += 1) {
         const dateValue = dateValueForCell(monthKey, day);
         const dayEntries = entriesForCell(entries, monthKey, dateValue);
@@ -462,9 +465,9 @@ export function renderCalendar() {
     const selectedTags = selectedCalendarTags(session, tagCounts);
     const visibleEntries = entries.filter(item => calendarEntryMatchesTags(item, selectedTags));
     const monthKeys = availableMonthKeys(entries, session.dayPages);
-    let selectedMonth = parseMonthKey(session.selectedMonth) ? session.selectedMonth : modes_calendar.defaultCalendarMonth(entries);
+    let selectedMonth = parseMonthKey(session.selectedMonth) ? session.selectedMonth : modes_calendar.calendarMonthKey({ date: session.storyDate }) || modes_calendar.defaultCalendarMonth(entries);
     if (!selectedMonth && monthKeys.length) selectedMonth = monthKeys[0];
-    if (!selectedMonth) selectedMonth = `annual-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+    if (!selectedMonth) selectedMonth = '';
     session.selectedMonth = selectedMonth;
     const info = parseMonthKey(selectedMonth);
 
@@ -573,9 +576,9 @@ export function renderCalendar() {
 
       <section class="rmt-calendar-paper">
         <header class="rmt-calendar-month-head">
-          <button type="button" data-rmt-calendar-shift="-1" aria-label="上一个月">‹</button>
-          <div><small>${info?.year ? 'OUR DAYS' : 'ANNUAL DATES'}</small><h3>${core_text.esc(monthLabel(selectedMonth))}</h3></div>
-          <button type="button" data-rmt-calendar-shift="1" aria-label="下一个月">›</button>
+          <button type="button" data-rmt-calendar-shift="-1" aria-label="上一个月" ${info ? '' : 'disabled'}>‹</button>
+          <div><small>${session.storyDate ? '剧情日期 · ' + core_text.esc(session.storyDate) : info ? 'STORY CALENDAR' : ''}</small><h3>${core_text.esc(monthLabel(selectedMonth))}</h3></div>
+          <button type="button" data-rmt-calendar-shift="1" aria-label="下一个月" ${info ? '' : 'disabled'}>›</button>
         </header>
         ${monthJump ? `<div class="rmt-calendar-jumps">${monthJump}</div>` : ''}
         ${info?.year ? `<div class="rmt-calendar-weekdays">${weekdays}</div>` : ''}

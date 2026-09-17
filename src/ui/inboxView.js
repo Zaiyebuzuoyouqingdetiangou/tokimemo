@@ -1,4 +1,5 @@
 import * as inbox from '../modes/inbox.js';
+import * as travel_mode from '../modes/travel.js';
 import * as constants from '../core/constants.js';
 import * as cache from '../core/cache.js';
 import * as contextApi from '../core/context.js';
@@ -115,7 +116,8 @@ export async function handleInboxAction(action, id = '') {
             const result = await mutateInbox((session, memory, sourceCache) => {
                 const travel = cache.loadSession('travel', { cache: sourceCache, memoryBank: memory, chatId: memory.chatId });
                 for (const location of travel?.locations || []) {
-                    if (location.postcard?.body || (location.keepsake?.kind === 'postcard' && location.keepsake.body))
+                    const card = travel_mode.travelKeepsakeForItem(location);
+                    if (card?.kind === 'postcard' && card.body)
                         session = inbox.mergeInboxLatest(session, inbox.postcardInboxItem(location, travel, memory));
                 }
                 return session;

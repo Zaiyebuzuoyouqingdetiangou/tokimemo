@@ -22,6 +22,8 @@ const COMPATIBILITY_CONTRACTS = Object.freeze({
     'butterfly-readable-r62': Object.freeze({ mode: 'butterfly', slot: /:(?:slot:\d{1,2}|increment)$/ }),
     'butterfly-legacy-plan-r62': Object.freeze({ mode: 'butterfly', slot: /:(?:slot:\d{1,2}|increment)$/ }),
     'past-lives-readable-r62': Object.freeze({ mode: 'pastLives', slot: /:past-lives-(?:plan|finale|dossier:D\d{2})$/ }),
+    'travel-postcard-design-r8415': Object.freeze({ mode: 'travel', slot: /:travel-map$/ }),
+    'travel-structured-design-r8416': Object.freeze({ mode: 'travel', slot: /:travel-map$/ }),
 });
 
 function recoveryError(code, message) {

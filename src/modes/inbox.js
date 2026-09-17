@@ -1,4 +1,6 @@
 import * as text from '../core/text.js';
+import * as travel_mode from './travel.js';
+import * as postcard_design from './postcardDesign.js';
 import * as evidence from '../core/evidence.js';
 import * as contextApi from '../core/context.js';
 import * as narrative from '../core/narrativeAuthority.js';
@@ -75,18 +77,27 @@ export function normalizeInboxLetters(raw, memory, plan, date = new Date(), opti
     });
     return { ...emptyInbox(memory), letters };
 }
+function postcardLetterKey(letter) {
+    if (letter?.type !== 'travel' || !letter.travelSnapshot?.location) return '';
+    const location = letter.travelSnapshot.location;
+    return travel_mode.travelPostcardContentKey({ ...location, kind: 'far',
+        sourceMemoryIds: letter.sourceMemoryIds, sourceMemoryAnchor: letter.sourceMemoryAnchor });
+}
 export function mergeInboxLatest(latest, incoming) {
     if (!incoming || incoming.kind !== 'inbox' || !Array.isArray(incoming.letters)) throw new Error('邮箱结构不可读取。');
     if (latest?.kind === 'inbox' && (latest.chatId !== incoming.chatId || latest.archiveRevision !== incoming.archiveRevision || (latest.ownerKey && incoming.ownerKey && latest.ownerKey !== incoming.ownerKey)))
         throw new Error('邮箱所属聊天或档案版本已变化。');
     const merged = structuredClone(latest?.kind === 'inbox' ? latest : { ...incoming, letters: [] });
     const keys = new Set(merged.letters.map(item => item.eventKey));
+    const postcards = new Set(merged.letters.map(postcardLetterKey).filter(Boolean));
     const ids = new Set(merged.letters.map(item => item.id));
     for (const letter of incoming.letters) {
-        if (keys.has(letter.eventKey)) continue;
+        const postcardKey = postcardLetterKey(letter);
+        if (keys.has(letter.eventKey) || (postcardKey && postcards.has(postcardKey))) continue;
         if (!letter.eventKey || !letter.id || ids.has(letter.id)) throw new Error('来信身份冲突，已有信件保持不变。');
         if (merged.letters.length >= 1000) throw new Error('邮箱已满，请先备份档案；旧信未删除。');
         merged.letters.push(structuredClone(letter)); keys.add(letter.eventKey); ids.add(letter.id);
+        if (postcardKey) postcards.add(postcardKey);
     }
     return merged;
 }
@@ -104,7 +115,8 @@ export function postcardInboxItem(location, travel, memory, date = new Date()) {
     if (travel?.chatId !== memory.chatId || travel?.archiveRevision !== memory.archiveRevision
         || !travel.locations?.some(item => item.id === location?.id)) throw new Error('明信片不属于这份当前档案。');
     const original = travel.locations.find(item => item.id === location.id);
-    const card = original.postcard || (original.keepsake?.kind === 'postcard' ? original.keepsake : null);
+    const canonical = travel_mode.travelKeepsakeForItem(original);
+    const card = canonical?.kind === 'postcard' ? { ...canonical, postmark: canonical.mark, stampLabel: canonical.emblem } : null;
     if (!card?.body) throw new Error('这处路线还没有明信片。');
     const frozen = {};
     for (const key of ['id', 'name', 'region', 'summary', 'distanceLabel', 'sceneTheme', 'kind', 'basis'])
@@ -113,7 +125,20 @@ export function postcardInboxItem(location, travel, memory, date = new Date()) {
     frozen.postcard = {};
     for (const key of ['tone', 'title', 'greeting', 'body', 'closing', 'stampLabel', 'postmark'])
         frozen.postcard[key] = clean(card[key], key === 'body' ? 4000 : key === 'closing' ? 500 : 300);
+    const picturePlan = card.picturePlan && typeof card.picturePlan === 'object' && !Array.isArray(card.picturePlan) ? card.picturePlan : null;
+    if (picturePlan) {
+        frozen.postcard.picturePlan = {};
+        for (const key of ['summary', 'foreground', 'midground', 'background', 'details', 'atmosphere', 'layout']) {
+            const limit = key === 'layout' ? 40 : key === 'atmosphere' ? 160 : 240;
+            const value = clean(picturePlan[key], limit);
+            if (value) frozen.postcard.picturePlan[key] = value;
+        }
+        if (!Object.keys(frozen.postcard.picturePlan).length) delete frozen.postcard.picturePlan;
+    }
     const eventKey = 'travel:' + digest(JSON.stringify([frozen.id, frozen.postcard]));
+    Object.assign(frozen.postcard, postcard_design.postcardDesignFields(card));
+    frozen.sourceMemoryIds = text.cleanArray(original.sourceMemoryIds, 16, 40);
+    frozen.sourceMemoryAnchor = clean(original.sourceMemoryAnchor, 160);
     return { ...emptyInbox(memory), letters: [{ id: 'mail-' + digest(eventKey), eventKey, type: 'travel',
         title: frozen.postcard.title || frozen.name, greeting: frozen.postcard.greeting, body: frozen.postcard.body,
         closing: frozen.postcard.closing, createdAt: date.getTime(), sourceArchiveRevision: memory.archiveRevision,

@@ -67,7 +67,7 @@ test('confirmed Chinese looks are translation sources only; English known tags s
 });
 test('image re-preparation recipe is selected, legacy default is unchanged in intent, no conflicting Chinese prose in 4.5 output requirements',()=>{
  const e={characters:[]};const p=images.buildCgReconceptPrompt({desc:'在窗边读书'},{name1:'乙',name2:'甲'},'album',e,'nai45-tags');assert.match(p,/英文逗号/);assert.doesNotMatch(p,/可使用自然中文|完整场景自然语言/);assert.match(p,/不改写这条回忆/);
- assert.match(images.buildCgReconceptPrompt({desc:'在窗边读书'},{},'album',e,'nai5-natural'),/优先英文/);
+ assert.match(images.buildCgReconceptPrompt({desc:'在窗边读书'},{},'album',e,'nai5-natural'),/可使用自然中文/);
 });
 test('only exact CG-field segments receive a format instruction; story and authority prompts remain intact',()=>{
  const origin={};policy.bindCgPromptFormat(origin,'nai45-tags');
@@ -134,7 +134,7 @@ test('actual legacy journal replays identical hashes after new preference is sel
  // A legacy journal has no cgPromptFormat. Explicit existing operation forces the old recipe.
  let handle=await client.beginModeRecovery('album',f.ctx,f.liveBank,origin,{operation:{kind:'mode',mode:'album'}});policy.bindCgPromptFormat(origin,'');f.setResponse({imagePrompt:'legacy scene'});
  await client.requestValidatedSegment('LEGACY','test',{context:f.ctx,contextEnvelope:'',origin,mode:'album',taskKey:'fixture:index',maxTokens:3000,background:true},x=>x);recovery.detachGenerationRecovery(origin);
- const existing=cache.loadGenerationRecovery('album',f.ctx);delete existing.operation.cgPromptFormat;settings.updatePluginSettings({cgPromptFormat:'nai45-tags'});origin=context.captureTaskOrigin(f.ctx,f.liveBank.archiveRevision);
+ const existing=cache.loadGenerationRecovery('album',f.ctx);delete existing.operation.cgPromptFormat;delete existing.operation.cgPromptDialect;settings.updatePluginSettings({cgPromptFormat:'nai45-tags'});origin=context.captureTaskOrigin(f.ctx,f.liveBank.archiveRevision);
  handle=await client.beginModeRecovery('album',f.ctx,f.liveBank,origin,{operation:{kind:'mode',mode:'album'},existing});
  const out=await client.requestValidatedSegment('LEGACY','test',{context:f.ctx,contextEnvelope:'',origin,mode:'album',taskKey:'fixture:index',maxTokens:3000,background:true},x=>x);assert.equal(out.imagePrompt,'legacy scene');assert.equal(f.requests.length,1);recovery.detachGenerationRecovery(origin);
 });

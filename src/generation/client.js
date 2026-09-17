@@ -207,6 +207,7 @@ export async function mapGenerationConcurrent(items, limit, worker) {
 
 export async function requestValidatedSegment(prompt, status, options, validator) {
     prompt = cg_policy.cgPromptForSegment(prompt, options);
+    validator = cg_policy.cgSegmentValidator(validator, options);
     const parentTrace = generationTrace(options);
     const taskTrace = core_taskTrace.startTaskTrace('', options?.mode, parentTrace);
     core_taskTrace.markStage(taskTrace, 'start');
@@ -689,7 +690,7 @@ export async function beginModeRecovery(mode, context, bank, origin, options = {
     const existing = options.existing === undefined ? core_cache.loadGenerationRecovery(mode, context, options.archiveTarget?.cache) : options.existing;
     const operation = cg_policy.cgRecoveryOperation(mode, options.operation || { kind: 'mode', mode }, existing,
         options.cgPromptFormat || core_settings.getPluginSettings(context).cgPromptFormat);
-    cg_policy.bindCgPromptFormat(origin, operation.cgPromptFormat);
+    cg_policy.bindCgPromptFormat(origin, operation.cgPromptFormat, operation.cgPromptDialect || 'legacy');
     if (existing?.operation && await generation_recovery.generationRecoveryDigest(existing.operation) !== await generation_recovery.generationRecoveryDigest(operation)) {
         throw core_text.safeUserError('这项还保留着另一入口的草稿，请从“继续生成”回到原来的任务；旧内容与草稿未改动。', 'RMT_RECOVERY_OPERATION_CHANGED');
     }
@@ -830,11 +831,12 @@ export async function generateMode(mode, options = {}) {
     const promptFactory = generation_prompts.PROMPTS[mode];
     if (!promptFactory && !time_stories.isTimeStoryMode(mode) && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode)) return;
     const segmentedMode = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode);
-    let calendarCurrentDate = mode === core_constants.MODE.CALENDAR ? modes_calendar.currentCalendarDate() : '';
+    let calendarCurrentDate = mode === core_constants.MODE.CALENDAR ? modes_calendar.storyCalendarDate(memoryBank) : '';
+    let calendarLegacyDate = false;
     let generationPrompt = segmentedMode || mode === core_constants.MODE.RELATIONS
         ? ''
         : mode === core_constants.MODE.CALENDAR
-            ? generation_prompts.calendarPrompt(context, memoryBank, { currentDate: calendarCurrentDate })
+            ? generation_prompts.calendarStoryPrompt(context, memoryBank, { currentDate: calendarCurrentDate })
             : promptFactory(context, memoryBank);
     let roomSession = null;
     let focusObject = null;
@@ -893,9 +895,11 @@ export async function generateMode(mode, options = {}) {
         const savedOperation = recoveryExisting.operation;
         if (savedOperation?.kind === 'mode') {
             if (mode === core_constants.MODE.INBOX && typeof savedOperation.inboxDate === 'string' && Number.isFinite(Date.parse(savedOperation.inboxDate))) inboxDate = new Date(savedOperation.inboxDate);
-            if (mode === core_constants.MODE.CALENDAR && /^\d{4}\/\d{2}\/\d{2}$/.test(savedOperation.calendarDate || '')) {
-                calendarCurrentDate = savedOperation.calendarDate;
-                generationPrompt = generation_prompts.calendarPrompt(context, memoryBank, { currentDate: calendarCurrentDate });
+            if (mode === core_constants.MODE.CALENDAR) {
+                // Existing recovery keeps its exact recipe/date; never silently restarts paid work.
+                calendarLegacyDate = savedOperation.calendarTimeBasis !== 'story';
+                calendarCurrentDate = modes_calendar.normalizeCalendarDate(savedOperation.calendarDate)?.date || '';
+                generationPrompt = (calendarLegacyDate ? generation_prompts.calendarPrompt : generation_prompts.calendarStoryPrompt)(context, memoryBank, { currentDate: calendarCurrentDate });
             }
             allowPersonaExpansion = options.automatic !== true && savedOperation.allowPersonaExpansion === true;
             options.visualOnly = savedOperation.visualOnly === true;
@@ -992,6 +996,7 @@ export async function generateMode(mode, options = {}) {
         origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId), archiveTargetEntryId: core_text.normalizeText(archiveTarget?.entryId, 120) };
         recoveryHandle = await beginModeRecovery(mode, context, memoryBank, origin, { ...options, archiveTarget, stillCurrent: archiveTargetStillCurrent, existing: recoveryExisting, replaceExisting,
             operation: recoveryExisting?.operation || { kind: 'mode', mode, ...(themeSongPlan ? { themeSongPlan } : {}), inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
+                ...(mode === core_constants.MODE.CALENDAR ? { calendarTimeBasis: 'story' } : {}),
                 allowPersonaExpansion, visualOnly: options.visualOnly === true, fillMissing: options.fillMissing === true, focusObjectId: core_text.normalizeText(options.focusObjectId, 120) } });
         let session;
         let presentationContext = null;
@@ -1091,6 +1096,7 @@ export async function generateMode(mode, options = {}) {
             const normalize = raw => mode === core_constants.MODE.CALENDAR
                 ? modes_calendar.normalizeCalendar(raw, memoryBank, {
                     currentDate: calendarCurrentDate,
+                    dateBasis: calendarLegacyDate ? 'legacy-local' : 'story',
                     futureEvidenceText: core_worldPresentation.controlledCalendarEvidence(contextEnvelope),
                     holidayEvidenceText: core_worldPresentation.controlledSettingEvidence(contextEnvelope),
                 })

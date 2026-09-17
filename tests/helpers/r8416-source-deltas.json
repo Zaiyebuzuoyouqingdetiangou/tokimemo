@@ -1,0 +1,220 @@
+{
+  "index.js": {
+    "baselineSha256": "2c9ad5180ddffaf5f26833f0acf8fe6f7d4aea6fe788fc9023219778c7166e07",
+    "candidateSha256": "79c2d43d074b1acbc9135e40242fed67dba1862492066c2c1dc429dddfbd7668",
+    "changes": [
+      {
+        "start": 0,
+        "remove": 2,
+        "old": "const VERSION = '0.8.91';\nconst BUILD = '0.8.91-tt-cg-r84.15-postcard-design';\n"
+      }
+    ]
+  },
+  "manifest.json": {
+    "baselineSha256": "27f0d2b7862732665d5b6770848cdda23bf6fdc6208698a6447a6ff15b0418dc",
+    "candidateSha256": "7d3f0353a5f9791edcf83edce81373363369536ca2579f22682e22dfac430eb1",
+    "changes": [
+      {
+        "start": 3,
+        "remove": 1,
+        "old": "  \"js\": \"index.js?heartbeat=0.8.91-tt-cg-r84.15-postcard-design\",\n"
+      },
+      {
+        "start": 5,
+        "remove": 1,
+        "old": "  \"version\": \"0.8.91\",\n"
+      },
+      {
+        "start": 12,
+        "remove": 1,
+        "old": "  \"description\": \"r84.15：路线纪念页新增模型生成明信片构图方案，并保留本地安全渲染与旧稿兼容。\",\n"
+      }
+    ]
+  },
+  "src/generation/recovery.js": {
+    "baselineSha256": "c7f9fad7aaa2fef0aba22acab8d3f78a593d403a463e1d6562287f59746b36ae",
+    "candidateSha256": "4be454c9730f0751596d554b00a4df9bdf3c36f3c2f6a1a080098388ddf964ac",
+    "changes": [
+      {
+        "start": 25,
+        "remove": 1,
+        "old": ""
+      }
+    ]
+  },
+  "src/modes/inbox.js": {
+    "baselineSha256": "af25c6acadd6ea39d6e2cbda6384939e3281d9f47e91b2d1c3e6533eede12067",
+    "candidateSha256": "6f74473d3e4473d1ec67e617cb55ff8430c46f805832d33d3c67229289f6c398",
+    "changes": [
+      {
+        "start": 1,
+        "remove": 2,
+        "old": ""
+      },
+      {
+        "start": 79,
+        "remove": 6,
+        "old": ""
+      },
+      {
+        "start": 91,
+        "remove": 1,
+        "old": ""
+      },
+      {
+        "start": 94,
+        "remove": 2,
+        "old": "        if (keys.has(letter.eventKey)) continue;\n"
+      },
+      {
+        "start": 99,
+        "remove": 1,
+        "old": ""
+      },
+      {
+        "start": 117,
+        "remove": 2,
+        "old": "    const card = original.postcard || (original.keepsake?.kind === 'postcard' ? original.keepsake : null);\n"
+      },
+      {
+        "start": 138,
+        "remove": 3,
+        "old": ""
+      }
+    ]
+  },
+  "src/modes/travel.js": {
+    "baselineSha256": "762cc47e8985012546479abf8ce58f91c46d7f84d627a14bdc042f28f2b6da57",
+    "candidateSha256": "a854655befcd2ccdc92fd93602c9a1fe623c9d6f5d8d260393331d154c5a2631",
+    "changes": [
+      {
+        "start": 3,
+        "remove": 2,
+        "old": ""
+      },
+      {
+        "start": 194,
+        "remove": 1,
+        "old": ""
+      },
+      {
+        "start": 253,
+        "remove": 1,
+        "old": ""
+      },
+      {
+        "start": 266,
+        "remove": 1,
+        "old": ""
+      },
+      {
+        "start": 294,
+        "remove": 1,
+        "old": ""
+      },
+      {
+        "start": 320,
+        "remove": 5,
+        "old": ""
+      },
+      {
+        "start": 396,
+        "remove": 1,
+        "old": ""
+      },
+      {
+        "start": 414,
+        "remove": 1,
+        "old": ""
+      },
+      {
+        "start": 483,
+        "remove": 13,
+        "old": ""
+      },
+      {
+        "start": 578,
+        "remove": 3,
+        "old": ""
+      },
+      {
+        "start": 582,
+        "remove": 1,
+        "old": "        travelPrompt(context, memoryBank, previous, sourceMemoryIds, worldPresentation) + core_incremental.derivedExpansionDirective(previous, memoryBank)\n"
+      },
+      {
+        "start": 588,
+        "remove": 2,
+        "old": "            recoveryCompatibility: { contract: 'travel-postcard-design-r8415', legacyPrompts: [\n"
+      },
+      {
+        "start": 599,
+        "remove": 1,
+        "old": ""
+      }
+    ]
+  },
+  "src/ui/inboxView.js": {
+    "baselineSha256": "07e7f27d4c0c6e6346d6986db1d534cf1e235f268ebbc5ce2c49826ad3a712c1",
+    "candidateSha256": "59ad95f6567f86856bb194a80fd25e08d7a2017dcfdedb2b4e325b0c72e71fc7",
+    "changes": [
+      {
+        "start": 1,
+        "remove": 1,
+        "old": ""
+      },
+      {
+        "start": 118,
+        "remove": 2,
+        "old": "                    if (location.postcard?.body || (location.keepsake?.kind === 'postcard' && location.keepsake.body))\n"
+      }
+    ]
+  },
+  "src/ui/styles.js": {
+    "baselineSha256": "eb698b2d7c07d29debb9e46118fff9942b453657b7f2fd9099b51efe8d9c9ce5",
+    "candidateSha256": "cfc4fc06b2b068304a3dd887dec08e355244abf221e3b4003c1e224ffa2b1fd5",
+    "changes": [
+      {
+        "start": 1,
+        "remove": 1,
+        "old": ""
+      },
+      {
+        "start": 1093,
+        "remove": 1,
+        "old": ""
+      }
+    ]
+  },
+  "src/ui/travelView.js": {
+    "baselineSha256": "627d6d7d4cac18b36b29a89f18d3f5d183fa6b72ecf34a8ce12a4ec4e7aeedf0",
+    "candidateSha256": "00f35bcc6efae362a2baa7375fe93b34e62cb0874b37adae3e7643e78b556574",
+    "changes": [
+      {
+        "start": 2,
+        "remove": 1,
+        "old": ""
+      },
+      {
+        "start": 413,
+        "remove": 3,
+        "old": "    return `<section class=\"rmt-travel-postcard tone-${tone}\" data-rmt-postcard-theme=\"${theme}\" role=\"dialog\" aria-modal=\"false\" aria-label=\"${core_text.esc(item.name)}的明信片\">\n"
+      },
+      {
+        "start": 418,
+        "remove": 1,
+        "old": "        ${travelPostcardScene(item, sceneProfile)}\n"
+      },
+      {
+        "start": 447,
+        "remove": 3,
+        "old": "    return `<section class=\"rmt-travel-artifact artifact-${keepsake.kind} tone-${core_text.esc(keepsake.tone || 'paper')}\" data-rmt-artifact-kind=\"${keepsake.kind}\" role=\"dialog\" aria-modal=\"false\" aria-label=\"${core_text.esc(item.name)}的出行纪念\">\n"
+      },
+      {
+        "start": 452,
+        "remove": 1,
+        "old": "      <figure class=\"rmt-travel-artifact-figure\" data-rmt-artifact-theme=\"${core_text.esc(theme)}\">${travelPostcardScene(item, sceneProfile).replace('rmt-travel-postcard-scene', 'rmt-travel-artifact-scene').replaceAll('pc-', 'artifact-scene-').replace('明信片风景示意', '出行纪念风景示意')}<figcaption>${core_text.esc(item.region || item.name)}</figcaption></figure>\n"
+      }
+    ]
+  }
+}
