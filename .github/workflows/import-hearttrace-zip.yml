@@ -81,7 +81,11 @@ jobs:
               if any(str(p).casefold() in seen for p in PurePosixPath(name).parents if str(p) != "."):
                   raise ValueError("Conflicting file paths inside ZIP.")
 
-          # Overlay only: preserve every existing file absent from the ZIP.
+          # Public main: exclude development-only material and release validation reports.
+          payload = {name: content for name, content in payload.items()
+                     if not name.startswith(("tests/", "tools/"))
+                     and not ("/" not in name and name.startswith("RELEASE_VALIDATION-") and name.endswith(".md"))}
+
           for name, content in payload.items():
               target = root / name
               target.parent.mkdir(parents=True, exist_ok=True)
@@ -101,8 +105,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Remove only these 18 historical root-level reports; preserve later reports.
-          git --literal-pathspecs rm -f --ignore-unmatch -- RELEASE_VALIDATION-r{73..83}.md RELEASE_VALIDATION-r84{,.2,.7,.8,.9,.10,.11}.md
+          # Public release tree: remove development-only directories and validation reports.
+          git rm -r -f --ignore-unmatch -- tests tools
+          git rm -f --ignore-unmatch -- RELEASE_VALIDATION-*.md
           if git diff --cached --quiet; then
             echo "Nothing to commit."
             exit 0
