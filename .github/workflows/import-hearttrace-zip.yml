@@ -101,6 +101,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Remove only these 18 historical root-level reports; preserve later reports.
+          git --literal-pathspecs rm -f --ignore-unmatch -- RELEASE_VALIDATION-r{73..83}.md RELEASE_VALIDATION-r84{,.2,.7,.8,.9,.10,.11}.md
           if git diff --cached --quiet; then
             echo "Nothing to commit."
             exit 0
