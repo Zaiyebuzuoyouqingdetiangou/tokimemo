@@ -1717,6 +1717,61 @@ export function exportCurrentArchiveImportProgress(context = core_context.curren
         paused: bank?.archiveImportPaused || [], pageDrafts: archive_importRecovery.exportArchiveRecovery(origin) };
 }
 
+// Explicit current-archive view/read actions only. No sources, credentials or
+// providers are touched here; loaded checkpoints are not formal archive writes.
+export async function hydrateCurrentArchiveRecovery(context = core_context.currentCharacterGuard(), { operation = null, force = false } = {}) {
+    const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
+    const assertCurrent = () => {
+        if (!core_context.isCurrentTaskOrigin(origin)
+            || (getImportedMemory(core_context.getContext())?.archiveRevision || '') !== origin.archiveRevision) {
+            throw new DOMException('Archive view changed', 'AbortError');
+        }
+    };
+    assertCurrent();
+    for (const target of operation ? [operation] : ['import', 'profile']) {
+        await archive_importRecovery.hydrateArchiveRecovery(origin, target, { force });
+        assertCurrent();
+    }
+    return { archive: getCurrentArchiveImportRecoverySummary(context),
+        profile: getCurrentArchiveProfileRecoverySummary(context) };
+}
+
+export async function exportCurrentArchiveRecoveryAfterLoad(context = core_context.currentCharacterGuard()) {
+    const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
+    let readFailure = null;
+    try { await hydrateCurrentArchiveRecovery(context, { operation: 'import' }); }
+    catch (error) { readFailure = error; }
+    if (!core_context.isCurrentTaskOrigin(origin)
+        || (getImportedMemory(core_context.getContext())?.archiveRevision || '') !== origin.archiveRevision) {
+        throw new DOMException('Archive view changed', 'AbortError');
+    }
+    // Failed storage must not take away the escape hatch for successes still in
+    // this page. Export only those actual records, never an invented empty file.
+    const result = exportCurrentArchiveImportProgress(context);
+    if (!result.pageDrafts.length && !result.pendingSave && !result.progress && !result.paused.length) {
+        if (readFailure) throw readFailure;
+        throw core_text.safeUserError('本机没有找到这条聊天的整理草稿或待入档成果。未删除任何记录；旧版导出文件仍可导入。', 'RMT_ARCHIVE_DRAFT_NOT_FOUND');
+    }
+    return result;
+}
+
+export async function saveCurrentArchiveRecovery(context = core_context.currentCharacterGuard(), operation = 'import') {
+    if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) throw core_text.safeUserError('当前请求尚未结束，草稿仍保留。', 'RMT_RECOVERY_BUSY');
+    const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
+    await hydrateCurrentArchiveRecovery(context, { operation });
+    if (!archive_importRecovery.archiveRecoverySummary(origin, operation)) {
+        throw core_text.safeUserError('没有找到当前整理草稿，未修改原记录。', 'RMT_ARCHIVE_DRAFT_NOT_FOUND');
+    }
+    if (!await archive_importRecovery.flushArchiveRecovery(origin, operation)) {
+        throw core_text.safeUserError('本机草稿存储不可用，成功分段仍仅在本页；请先导出，不要刷新。', 'RMT_ARCHIVE_DRAFT_STORAGE');
+    }
+    if (!core_context.isCurrentTaskOrigin(origin)
+        || (getImportedMemory(core_context.getContext())?.archiveRevision || '') !== origin.archiveRevision) {
+        throw new DOMException('Archive view changed', 'AbortError');
+    }
+    return archive_importRecovery.archiveRecoverySummary(origin, operation);
+}
+
 export async function importCurrentArchiveRecoveryFile(data, context = core_context.currentCharacterGuard()) {
     if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) throw core_text.safeUserError('当前有请求进行中，未导入。', 'RMT_RECOVERY_BUSY');
     const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
@@ -2640,6 +2695,12 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
             runtimeState.activeTaskLabel = '';
             ui_overlay.setBusyUi(false);
         }
+    }
+    // A storage failure may occur before a recovery ticket is returned. Refresh
+    // only the still-visible recovery region, so save/export controls and the
+    // confirmed count reflect the retained page draft without navigating away.
+    if (result?.status === 'failed' && !options.automatic && core_context.isCurrentTaskOrigin(preparation.origin)) {
+        await ui_overlay.loadChooserArchiveRecovery(context);
     }
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
     if (result?.status === 'committed' && !options.automatic && overlay && !overlay.hidden

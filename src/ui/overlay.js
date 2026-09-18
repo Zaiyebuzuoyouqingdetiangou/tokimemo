@@ -440,6 +440,41 @@ function calendarQuickAccessHtml({ ready = false, generated = false, generating 
     </section>`;
 }
 
+// Update only the recovery area: do not reset sources, inputs, scroll position
+// or a reader the user has already opened while local storage was being read.
+export async function loadChooserArchiveRecovery(context = core_context.getContext(), { showEmpty = false } = {}) {
+    const body = bodyEl();
+    const region = body?.querySelector?.('[data-rmt-archive-recoveries]');
+    if (!region || ui_workspaceState.workspace.tab !== 'archive') return;
+    const epoch = ui_workspaceState.workspace.epoch;
+    let origin;
+    try { origin = core_context.captureTaskOrigin(context, archive_repository.getImportedMemory(context)?.archiveRevision || ''); }
+    catch { return; } // The live chat may have closed before this view action ran.
+    const stillVisible = () => epoch === ui_workspaceState.workspace.epoch
+        && ui_workspaceState.workspace.tab === 'archive' && runtimeState.archiveViewLevel === 'chooser'
+        && !runtimeState.activeMode && !runtimeState.activeArchiveSnapshot
+        && !document.getElementById(core_constants.OVERLAY_ID)?.hidden
+        && bodyEl()?.querySelector?.('[data-rmt-archive-recoveries]') === region
+        && core_context.isCurrentTaskOrigin(origin)
+        && (archive_repository.getImportedMemory(core_context.getContext())?.archiveRevision || '') === origin.archiveRevision;
+    const banners = () => recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveImportRecoverySummary(context))
+        + recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveProfileRecoverySummary(context), { profile: true });
+    const status = message => `<p role="status">${core_text.esc(message)}</p>`;
+    region.setAttribute('aria-busy', 'true');
+    region.innerHTML = banners() + status('正在读取本机整理草稿…不会请求模型。');
+    try {
+        await archive_repository.hydrateCurrentArchiveRecovery(context, { force: showEmpty });
+        if (!stillVisible()) return;
+        const html = banners();
+        region.innerHTML = html || (showEmpty ? status('本机未找到这条聊天的整理草稿；原档案未修改。旧版导出的成果文件可从下方导入。') : '');
+    } catch (error) {
+        if (!stillVisible()) return;
+        region.innerHTML = banners() + `<section class="rmt-recovery-status" role="status"><b>本机草稿读取未完成</b><p>${core_text.esc(error?.code === 'RMT_ARCHIVE_DRAFT_CONFLICT' ? '本机版本已变化，未覆盖任何记录。请先导出本页成果，再重新打开原聊天读取。' : '不能认定没有记录；原记录未修改，也没有请求模型。可重新读取；存储恢复前请勿清数据或重做。')}</p><button type="button" class="rmt-btn" data-rmt-archive-read-drafts>重新读取本机草稿</button></section>`;
+    } finally {
+        if (stillVisible()) region.setAttribute('aria-busy', 'false');
+    }
+}
+
 export function showChooser({ section = null } = {}) {
     const priorTab = ui_workspaceState.workspace.tab;
     ui_workspaceState.leaveWorkspaceReader();
@@ -572,8 +607,10 @@ export function showChooser({ section = null } = {}) {
     body.innerHTML = `
       <div class="rmt-archive-room">
         ${busyBanner}
+        <div data-rmt-archive-recoveries aria-live="polite">
         ${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveImportRecoverySummary(context))}
         ${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveProfileRecoverySummary(context), { profile: true })}
+        </div>
         ${ready ? recovery_view.recoveryBannerHtml(core_cache.getCache(context), memory) : ''}
         ${calendarQuick}
         <section class="rmt-memory-gate rmt-archive-card">
@@ -586,6 +623,7 @@ export function showChooser({ section = null } = {}) {
             ${ready ? `<div class="rmt-archive-meta">上次归档：${core_text.esc(formatArchiveTime(memory.updatedAt || memory.createdAt))}</div>` : ''}
           </div>
           <div class="rmt-current-archive-actions">
+            <button type="button" class="rmt-btn" data-rmt-archive-read-drafts>读取已保存草稿（不生成）</button>
             <button type="button" class="rmt-btn" data-rmt-archive-import-draft>导入整理草稿</button>
             <button class="rmt-btn rmt-archive-update" type="button" data-rmt-action="import-memory" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>${core_text.esc(requirePreflight ? '先扫描记忆 / 摘要' : (ready ? '增量更新当前窗口档案' : importLabel))}</button>
             ${ready ? `<button class="rmt-btn" type="button" data-rmt-action="full-rebuild-memory" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>完全重建档案</button><button class="rmt-btn" type="button" data-rmt-action="current-archive-delete" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>删除当前档案</button>` : ''}
@@ -596,6 +634,7 @@ export function showChooser({ section = null } = {}) {
         ${generationAction}
       </div>`;
     workspace_ui.arrangeArchiveWorkspace(body, { portals, ready });
+    if (ui_workspaceState.workspace.tab === 'archive') void loadChooserArchiveRecovery(context);
     ui_settingsPanel.refreshSettingsMemoryStatus();
 }
 
@@ -1018,6 +1057,21 @@ export function handleOverlayClick(event) {
     if (timeStoryButton) return void time_stories_view.handleTimeStoryAction(timeStoryButton.dataset.rmtTimeStory, timeStoryButton.dataset.rmtTimeStoryId);
     const discardButton = event.target.closest?.('[data-rmt-recovery-discard]');
     if (discardButton) return void generation_client.discardSavedGeneration(discardButton.dataset.rmtRecoveryDiscard).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    if (event.target.closest?.('[data-rmt-archive-read-drafts]')) {
+        return void loadChooserArchiveRecovery(core_context.getContext(), { showEmpty: true });
+    }
+    const saveDraftButton = event.target.closest?.('[data-rmt-archive-save-draft]');
+    if (saveDraftButton) {
+        if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !archive_library.requireWritableArchiveAction()) return;
+        const context = core_context.currentCharacterGuard();
+        const origin = core_context.captureTaskOrigin(context, archive_repository.getImportedMemory(context)?.archiveRevision || '');
+        saveDraftButton.disabled = true;
+        return void archive_repository.saveCurrentArchiveRecovery(context, saveDraftButton.dataset.rmtArchiveSaveDraft).then(() => {
+            if (core_context.isCurrentTaskOrigin(origin)) return loadChooserArchiveRecovery(context);
+        }).catch(error => {
+            if (core_context.isCurrentTaskOrigin(origin)) globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 草稿未保存');
+        }).finally(() => { saveDraftButton.disabled = false; });
+    }
     if (event.target.closest?.('[data-rmt-archive-import-draft]')) {
         if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !archive_library.requireWritableArchiveAction()) return;
         const context = core_context.currentCharacterGuard();
@@ -1038,14 +1092,12 @@ export function handleOverlayClick(event) {
         input.click(); return;
     }
     if (event.target.closest?.('[data-rmt-archive-export-pending]')) {
-        try {
-            const value = archive_repository.exportCurrentArchiveImportProgress();
+        return void archive_repository.exportCurrentArchiveRecoveryAfterLoad().then(value => {
             const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob), link = document.createElement('a');
             link.href = url; link.download = 'hearttrace-unarchived-results.json';
             link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-        } catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); }
-        return;
+        }).catch(error => { if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); });
     }
     if (event.target.closest?.('[data-rmt-archive-restart]')) {
         if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return;

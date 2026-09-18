@@ -2,6 +2,7 @@ import * as local_store from '../core/localRecoveryStore.js';
 import * as constants from '../core/constants.js';
 // Draft checkpoints are separate from formal archives and evidence. Lazy local
 // persistence begins only at an explicit archive operation, never at bootstrap.
+// Opening the current archive may read its own checkpoints, without generating.
 import * as recovery from '../generation/recovery.js';
 import * as client from '../generation/client.js';
 import * as text from '../core/text.js';
@@ -14,19 +15,41 @@ const tickets = new WeakSet();
 const scopes = new Map();
 const lanes = new Map();
 const loaded = new Set();
-function storageFailure() { return text.safeUserError('未能把本次整理草稿保存到本机；成功分段仍在当前页面。请先导出，保存成功前不要刷新。', 'RMT_ARCHIVE_DRAFT_STORAGE'); }
+const hydrationLanes = new Map();
+function storageFailure(phase = 'save') {
+    return text.safeUserError(phase === 'read'
+        ? '本机草稿读取未完成，不能认定没有记录；原记录未修改，也没有请求模型。请重新读取，不要清除数据。'
+        : '未能把本次整理草稿保存到本机；已停止后续模型请求，成功分段仍在当前页面。请先导出，保存成功前不要刷新。', phase === 'read' ? 'RMT_ARCHIVE_DRAFT_READ' : 'RMT_ARCHIVE_DRAFT_STORAGE');
+}
+function conflictFailure() {
+    return text.safeUserError('本机草稿版本已变化；页面成果与本机记录均保留，未覆盖或重新生成。请先导出本页成果，再重新打开原聊天读取。', 'RMT_ARCHIVE_DRAFT_CONFLICT');
+}
+function confirmCounts(state, rows) {
+    state.completed = new Map(rows.map(([id, entry]) => [id, recovery.generationRecoverySummary(entry.journal)?.completed || 0]));
+}
 function scopeRows(key) {
     return [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`)).map(([id,entry]) => [id, { ...entry, active: false, durable: true }]);
 }
 async function saveScope(key) {
-    if (!local_store.localRecoveryStorageAvailable()) return false;
     const run = (lanes.get(key) || Promise.resolve()).catch(() => {}).then(async () => {
-        const state = scopes.get(key); if (!state) throw storageFailure();
+        const state = scopes.get(key);
+        if (!state || !local_store.localRecoveryStorageAvailable()) throw storageFailure();
         const rows = scopeRows(key);
         const encoded = JSON.stringify({ version: 1, rows });
         if (new TextEncoder().encode(encoded).byteLength > constants.MAX_CACHE_SOURCE_BYTES) throw storageFailure();
-        state.revision = await local_store.compareLocalRecoveryRecord(state.id, state.revision, rows.length ? JSON.parse(encoded) : null);
-        for (const [id] of rows) if (drafts.has(id)) drafts.get(id).durable = true;
+        const revision = await local_store.compareLocalRecoveryRecord(state.id, state.revision, rows.length ? JSON.parse(encoded) : null);
+        // Only the transaction's exact CAS acknowledgement confirms this write.
+        // false/undefined must not be mistaken for a saved checkpoint in a host.
+        if (revision !== state.revision + 1) throw storageFailure();
+        state.revision = revision;
+        confirmCounts(state, rows);
+        for (const [id, saved] of rows) {
+            const live = drafts.get(id);
+            // An acknowledgement only covers the journal/stage actually written,
+            // not a newer success that arrived while the transaction was pending.
+            if (live && live.journal === saved.journal && live.stage === saved.stage
+                && live.committedRevision === saved.committedRevision) live.durable = true;
+        }
         return true;
     });
     lanes.set(key, run);
@@ -37,33 +60,61 @@ function scheduleSave(key) { void saveScope(key).catch(() => {}); }
 export async function flushArchiveRecovery(origin, operation = 'import') {
     const key = draftKey(origin, operation); if (!key) return false;
     if (lanes.has(key)) await lanes.get(key);
-    return local_store.localRecoveryStorageAvailable() ? saveScope(key) : false;
+    return saveScope(key);
 }
-export function resetArchiveRecoveryMemoryForTests() { drafts.clear(); scopes.clear(); loaded.clear(); lanes.clear(); }
-export async function hydrateArchiveRecovery(origin, operation = 'import') {
-    const key = draftKey(origin, operation); if (!key || loaded.has(key) || !local_store.localRecoveryStorageAvailable()) return false;
+export function resetArchiveRecoveryMemoryForTests() { drafts.clear(); scopes.clear(); loaded.clear(); lanes.clear(); hydrationLanes.clear(); }
+export async function hydrateArchiveRecovery(origin, operation = 'import', { force = false } = {}) {
+    const key = draftKey(origin, operation); if (!key) return false;
+    // An unavailable API is not an empty database (notably in embedded hosts).
+    // Fail before any paid request instead of silently selecting page-only mode.
+    if (!local_store.localRecoveryStorageAvailable()) throw storageFailure('read');
+    if (loaded.has(key) && !force) return false;
+    // Opening the view and clicking continue may overlap. Reuse the same read;
+    // neither path may overwrite a live journal with an older storage snapshot.
+    if (hydrationLanes.has(key)) return hydrationLanes.get(key);
+    const read = hydrateArchiveRecoveryScope(key, origin, operation, force);
+    hydrationLanes.set(key, read);
+    try { return await read; }
+    finally { if (hydrationLanes.get(key) === read) hydrationLanes.delete(key); }
+}
+async function hydrateArchiveRecoveryScope(key, origin, operation, force) {
     const id = `draft:${await recovery.generationRecoveryDigest(key)}`;
+    // An explicit reread waits for our current write. It must never replace a
+    // newer in-page success or adopt a foreign revision just to overwrite it.
+    if (lanes.has(key)) await lanes.get(key).catch(() => {});
+    const readRevision = scopes.get(key)?.revision;
     let record;
-    try { record = await local_store.readLocalRecoveryRecord(id); } catch { throw storageFailure(); }
-    if (loaded.has(key)) return true;
+    try { record = await local_store.readLocalRecoveryRecord(id); } catch { throw storageFailure('read'); }
+    if (record !== null && (!record || record.key !== id || !Number.isSafeInteger(record.revision) || record.revision < 1)) throw storageFailure('read');
+    if (loaded.has(key)) {
+        if (!force) return true;
+        const state = scopes.get(key);
+        if (state?.revision !== readRevision) return true; // Our own write completed during this read.
+        if (scopeRows(key).length || lanes.has(key)) {
+            if ((record?.revision || 0) !== state?.revision) throw conflictFailure();
+            return true;
+        }
+    }
     const payload = record?.payload;
     if (payload) {
         if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > constants.MAX_CACHE_SOURCE_BYTES
-            || payload.version !== 1 || !Array.isArray(payload.rows) || payload.rows.length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure();
+            || payload.version !== 1 || !Array.isArray(payload.rows) || payload.rows.length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure('read');
         const checked = [];
         for (const [rowKey, value] of payload.rows) {
             if (typeof rowKey !== 'string' || (rowKey !== key && !rowKey.startsWith(`${key}:paused:`))
-                || !validStoredEntry(value, key, origin, operation)) throw storageFailure();
+                || !validStoredEntry(value, key, origin, operation)) throw storageFailure('read');
             const entry = structuredClone(value); entry.active = false; entry.durable = true;
             // A saved draft is never a formal commit. If the intended bank wasn't
             // committed, replay validated pieces and the normal CAS path on click.
             if (entry.stage === 'awaiting-commit' && entry.committedRevision !== origin.archiveRevision) entry.stage = 'segments';
             checked.push([rowKey, entry]);
         }
-        if (drafts.size + checked.filter(([id]) => !drafts.has(id)).length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure();
+        if (drafts.size + checked.filter(([id]) => !drafts.has(id)).length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure('read');
         for (const [id,entry] of checked) if (!drafts.has(id)) drafts.set(id,entry);
     }
-    scopes.set(key, { id, revision: record?.revision || 0 }); loaded.add(key);
+    const state = { id, revision: record?.revision || 0 };
+    confirmCounts(state, payload?.rows || []);
+    scopes.set(key, state); loaded.add(key);
     acknowledgeArchiveRecoveryCommit(origin);
     return true;
 }
@@ -115,13 +166,15 @@ export function archiveRecoverySummary(origin, operation = 'import') {
     const entry = drafts.get(draftKey(origin, operation));
     if (!entry) return null;
     const summary = recovery.generationRecoverySummary(entry.journal);
+    const savedCompleted = scopes.get(draftKey(origin, operation))?.completed?.get(draftKey(origin, operation)) || 0;
     return { operation, fullRebuild: entry.fullRebuild, profileOnly: entry.stage === 'profile-only',
         awaitingCommit: entry.stage === 'awaiting-commit', committedRevision: entry.committedRevision || '',
-        completed: summary?.completed || 0, truncated: summary?.truncated || 0,
+        savedCompleted, completed: summary?.completed || 0, truncated: summary?.truncated || 0,
         canContinue: entry.stage === 'segments' && !!summary?.canContinue,
         canRetry: entry.stage === 'profile-only' || !!summary?.canRetry,
         failureCode: summary?.failureCode || '', pageOnly: entry.durable !== true, notice: entry.durable === true
-            ? '成功分段与原任务输入已保存到本机；刷新后可继续未完成部分，不重做已保存分段。换设备前请导出。' : ARCHIVE_RECOVERY_PAGE_NOTICE };
+            ? '成功分段与原任务输入已保存到本机；刷新后可继续未完成部分，不重做已保存分段。换设备前请导出。'
+            : `本机已确认保存 ${savedCompleted} 个成功分段；当前页面共有 ${summary?.completed || 0} 个。尚未确认保存的成果请先导出，不要刷新。` };
 }
 
 // Called only after a real saved bank of exactly this revision is observed.
@@ -186,11 +239,12 @@ export async function beginArchiveRecovery({ origin, operation = 'import', sourc
     let attached = false;
     const stillCurrent = () => (!attached || drafts.get(key) === entry) && assertCurrent() !== false;
     const handle = await recovery.createGenerationRecovery({ origin: recoveryOrigin,
-        mode: operation === 'import' ? 'archive-import' : 'archive-profile', settingsIdentity, pageOnly: !local_store.localRecoveryStorageAvailable(),
+        mode: operation === 'import' ? 'archive-import' : 'archive-profile', settingsIdentity, pageOnly: false,
         existing: entry.journal, continueRequested: !!existing, assertCurrent: stillCurrent,
         save: async journal => {
             if (drafts.get(key) !== entry) throw new DOMException('Archive draft cleared', 'AbortError');
             entry.journal = journal;
+            entry.durable = false;
             return saveScope(key);
         } });
     if (drafts.get(key) && drafts.get(key) !== existing) throw incompatible();
@@ -286,6 +340,5 @@ export async function clearArchiveRecoveryDurably(origin, operation = null) {
 }
 
 export function discardArchiveRecovery(origin, operation = null) {
-    if (!local_store.localRecoveryStorageAvailable()) { clearArchiveRecovery(origin, operation); return true; }
     return clearArchiveRecoveryDurably(origin, operation);
 }

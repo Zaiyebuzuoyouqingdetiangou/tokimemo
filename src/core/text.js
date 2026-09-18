@@ -49,6 +49,8 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_ADVANCED_PARAMETERS: '高级参数无效或包含受保护字段；只允许采样与推理配置，不能覆盖模型、消息、最大输出、连接、Key 或工具。',
     RMT_ADVANCED_BACKEND: '非空排参／附加 JSON 需要手动 API 或自定义 Chat Completions Profile；本次没有改连接或静默忽略参数。',
     RMT_RECOVERY_SOURCE_CHANGED: '角色卡、Persona 或来源选择与原任务不同；原成果与草稿保留，未发起请求。',
+    RMT_ARCHIVE_DRAFT_READ: '本机草稿读取未完成，不能认定没有记录；原记录未修改，本次没有请求模型。请重新读取，不要清数据或重做。',
+    RMT_ARCHIVE_DRAFT_CONFLICT: '本机草稿版本已变化；页面成果与本机记录均保留，没有覆盖或重新生成。请先导出本页成果，再重新打开原聊天读取。',
     RMT_ARCHIVE_DRAFT_STORAGE: '整理草稿尚未确认保存到本机；成功分段仍保留在当前页面，请先导出，勿刷新。',
 
     ...core_backupDiagnostics.BACKUP_FAILURE_MESSAGES,

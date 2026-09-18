@@ -1,5 +1,5 @@
-const VERSION = '0.8.101';
-const BUILD = '0.8.101-tt-cg-r84.25-recovery-models';
+const VERSION = '0.8.103';
+const BUILD = '0.8.103-tt-cg-r84.27-tt-draft-durability';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

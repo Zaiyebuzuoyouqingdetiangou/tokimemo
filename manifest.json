@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.101-tt-cg-r84.25-recovery-models",
+  "js": "index.js?heartbeat=0.8.103-tt-cg-r84.27-tt-draft-durability",
   "author": "Toto",
-  "version": "0.8.101",
+  "version": "0.8.103",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.25：固定原任务背景续接；档案成功分段本机保存与旧草稿导入；手动连接加密保存；可选高级生成参数及多种返回格式。",
+  "description": "r84.27：整理草稿必须确认本机保存；存储不可读不再误判为空，失败暂停后续请求；保留旧成果、原Prompt与安全保护。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

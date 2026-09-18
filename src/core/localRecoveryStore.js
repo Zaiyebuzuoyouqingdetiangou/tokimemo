@@ -30,6 +30,13 @@ async function database() {
         } catch { stop(); }
     });
 }
+function writeTransaction(db, key) {
+    if (key.startsWith('draft:')) {
+        try { return db.transaction(STORE, 'readwrite', { durability: 'strict' }); }
+        catch (error) { if (error?.name !== 'TypeError') throw error; }
+    }
+    return db.transaction(STORE, 'readwrite');
+}
 function validKey(key) { return typeof key === 'string' && /^(?:draft:[a-f0-9]{64}|credential:[a-f0-9-]{36})$/.test(key); }
 export async function readLocalRecoveryRecord(key) {
     if (!validKey(key)) throw failure();
@@ -52,7 +59,7 @@ export async function compareLocalRecoveryRecord(key, expectedRevision, payload)
     const db = await database();
     try {
         return await new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE, 'readwrite'); let mismatch = false;
+            const tx = writeTransaction(db, key); let mismatch = false;
             const timer = setTimeout(() => { try { tx.abort(); } catch {} reject(failure()); }, 5000);
             const store = tx.objectStore(STORE), request = store.get(key);
             request.onsuccess = () => {

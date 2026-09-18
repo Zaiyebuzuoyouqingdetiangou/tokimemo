@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 125
-// Source SHA-256: 83f77f9556f7d6abf3864bb0786a3469b0ecd1ce40e6fc323e0b99b58294492b
+// Source SHA-256: fe0fed9a489d610cd9aac95e65b3d86af96dd65aab9ddb11bbe12297eaaa2379
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -222,6 +222,13 @@ async function database() {
         } catch { stop(); }
     });
 }
+function writeTransaction(db, key) {
+    if (key.startsWith('draft:')) {
+        try { return db.transaction(STORE, 'readwrite', { durability: 'strict' }); }
+        catch (error) { if (error?.name !== 'TypeError') throw error; }
+    }
+    return db.transaction(STORE, 'readwrite');
+}
 function validKey(key) { return typeof key === 'string' && /^(?:draft:[a-f0-9]{64}|credential:[a-f0-9-]{36})$/.test(key); }
 async function readLocalRecoveryRecord(key) {
     if (!validKey(key)) throw failure();
@@ -244,7 +251,7 @@ async function compareLocalRecoveryRecord(key, expectedRevision, payload) {
     const db = await database();
     try {
         return await new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE, 'readwrite'); let mismatch = false;
+            const tx = writeTransaction(db, key); let mismatch = false;
             const timer = setTimeout(() => { try { tx.abort(); } catch {} reject(failure()); }, 5000);
             const store = tx.objectStore(STORE), request = store.get(key);
             request.onsuccess = () => {
@@ -550,6 +557,8 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_ADVANCED_PARAMETERS: '高级参数无效或包含受保护字段；只允许采样与推理配置，不能覆盖模型、消息、最大输出、连接、Key 或工具。',
     RMT_ADVANCED_BACKEND: '非空排参／附加 JSON 需要手动 API 或自定义 Chat Completions Profile；本次没有改连接或静默忽略参数。',
     RMT_RECOVERY_SOURCE_CHANGED: '角色卡、Persona 或来源选择与原任务不同；原成果与草稿保留，未发起请求。',
+    RMT_ARCHIVE_DRAFT_READ: '本机草稿读取未完成，不能认定没有记录；原记录未修改，本次没有请求模型。请重新读取，不要清数据或重做。',
+    RMT_ARCHIVE_DRAFT_CONFLICT: '本机草稿版本已变化；页面成果与本机记录均保留，没有覆盖或重新生成。请先导出本页成果，再重新打开原聊天读取。',
     RMT_ARCHIVE_DRAFT_STORAGE: '整理草稿尚未确认保存到本机；成功分段仍保留在当前页面，请先导出，勿刷新。',
 
     ...core_backupDiagnostics.BACKUP_FAILURE_MESSAGES,
@@ -6489,7 +6498,7 @@ const mergedSegments = new WeakMap();
 const traceParents = new WeakMap();
 const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'themeSong', 'pastLives', 'timeEcho', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
 const OUTCOMES = new Set(['running', 'ok', 'failed', 'cancelled', 'deferred', 'blocked', 'noop']);
-const CODES = new Set(['RMT_LOCAL_STORAGE','RMT_LOCAL_CAS','RMT_MANUAL_KEY_STORAGE','RMT_ADVANCED_PARAMETERS','RMT_ADVANCED_BACKEND','RMT_RECOVERY_SOURCE_CHANGED','RMT_ARCHIVE_DRAFT_STORAGE',
+const CODES = new Set(['RMT_LOCAL_STORAGE','RMT_LOCAL_CAS','RMT_MANUAL_KEY_STORAGE','RMT_ADVANCED_PARAMETERS','RMT_ADVANCED_BACKEND','RMT_RECOVERY_SOURCE_CHANGED','RMT_ARCHIVE_DRAFT_STORAGE','RMT_ARCHIVE_DRAFT_READ','RMT_ARCHIVE_DRAFT_CONFLICT',
     ...Object.keys(core_backupDiagnostics.BACKUP_FAILURE_MESSAGES),
     'RMT_DEFERRED_QUOTA', 'RMT_DEFERRED_SECURITY', 'RMT_DEFERRED_UNAVAILABLE',
     'RMT_DEFERRED_LIMIT', 'RMT_DEFERRED_SERIALIZE', 'RMT_DEFERRED_UNKNOWN',
@@ -10926,6 +10935,7 @@ function archiveRecoveryHtml(summary, { profile = false } = {}) {
     const heading = batch ? `批次 ${batch.currentBatch}/${batch.batches} · 已正式保存 ${batch.saved} 个来源片段`
         : `${label} · 已保留 ${Number(summary.completed) || 0} 个成功分段`;
     return `<section class="rmt-recovery-status" role="status"><b>${text.esc(heading)}</b><p>${text.esc(summary.notice)}</p>${summary.failureCode ? `<p>${text.esc(text.safeErrorSummary({ code: summary.failureCode }))}</p>` : ''}
+${summary.pageOnly && !summary.awaitingCommit ? `<button type="button" class="rmt-btn" data-rmt-archive-save-draft="${profile ? 'profile' : 'import'}">保存本页草稿（不生成）</button>` : ''}
 ${!capacity ? `<button type="button" class="rmt-btn" data-rmt-archive-recovery="${profile || summary.profileOnly ? 'profile' : 'import'}">${label}</button>` : ''}
 ${!profile && !summary.profileOnly ? '<button type="button" class="rmt-btn" data-rmt-archive-export-pending>导出待入档成果</button>' : ''}
 ${!profile && !summary.profileOnly && !summary.awaitingCommit && !capacity ? '<button type="button" class="rmt-btn" data-rmt-archive-restart>按当前条件另起任务</button>' : ''}
@@ -32374,6 +32384,7 @@ const taskTrace = __m_core_taskTrace_js;
 
 // Draft checkpoints are separate from formal archives and evidence. Lazy local
 // persistence begins only at an explicit archive operation, never at bootstrap.
+// Opening the current archive may read its own checkpoints, without generating.
 
 
 
@@ -32385,19 +32396,41 @@ const tickets = new WeakSet();
 const scopes = new Map();
 const lanes = new Map();
 const loaded = new Set();
-function storageFailure() { return text.safeUserError('未能把本次整理草稿保存到本机；成功分段仍在当前页面。请先导出，保存成功前不要刷新。', 'RMT_ARCHIVE_DRAFT_STORAGE'); }
+const hydrationLanes = new Map();
+function storageFailure(phase = 'save') {
+    return text.safeUserError(phase === 'read'
+        ? '本机草稿读取未完成，不能认定没有记录；原记录未修改，也没有请求模型。请重新读取，不要清除数据。'
+        : '未能把本次整理草稿保存到本机；已停止后续模型请求，成功分段仍在当前页面。请先导出，保存成功前不要刷新。', phase === 'read' ? 'RMT_ARCHIVE_DRAFT_READ' : 'RMT_ARCHIVE_DRAFT_STORAGE');
+}
+function conflictFailure() {
+    return text.safeUserError('本机草稿版本已变化；页面成果与本机记录均保留，未覆盖或重新生成。请先导出本页成果，再重新打开原聊天读取。', 'RMT_ARCHIVE_DRAFT_CONFLICT');
+}
+function confirmCounts(state, rows) {
+    state.completed = new Map(rows.map(([id, entry]) => [id, recovery.generationRecoverySummary(entry.journal)?.completed || 0]));
+}
 function scopeRows(key) {
     return [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`)).map(([id,entry]) => [id, { ...entry, active: false, durable: true }]);
 }
 async function saveScope(key) {
-    if (!local_store.localRecoveryStorageAvailable()) return false;
     const run = (lanes.get(key) || Promise.resolve()).catch(() => {}).then(async () => {
-        const state = scopes.get(key); if (!state) throw storageFailure();
+        const state = scopes.get(key);
+        if (!state || !local_store.localRecoveryStorageAvailable()) throw storageFailure();
         const rows = scopeRows(key);
         const encoded = JSON.stringify({ version: 1, rows });
         if (new TextEncoder().encode(encoded).byteLength > constants.MAX_CACHE_SOURCE_BYTES) throw storageFailure();
-        state.revision = await local_store.compareLocalRecoveryRecord(state.id, state.revision, rows.length ? JSON.parse(encoded) : null);
-        for (const [id] of rows) if (drafts.has(id)) drafts.get(id).durable = true;
+        const revision = await local_store.compareLocalRecoveryRecord(state.id, state.revision, rows.length ? JSON.parse(encoded) : null);
+        // Only the transaction's exact CAS acknowledgement confirms this write.
+        // false/undefined must not be mistaken for a saved checkpoint in a host.
+        if (revision !== state.revision + 1) throw storageFailure();
+        state.revision = revision;
+        confirmCounts(state, rows);
+        for (const [id, saved] of rows) {
+            const live = drafts.get(id);
+            // An acknowledgement only covers the journal/stage actually written,
+            // not a newer success that arrived while the transaction was pending.
+            if (live && live.journal === saved.journal && live.stage === saved.stage
+                && live.committedRevision === saved.committedRevision) live.durable = true;
+        }
         return true;
     });
     lanes.set(key, run);
@@ -32408,33 +32441,61 @@ function scheduleSave(key) { void saveScope(key).catch(() => {}); }
 async function flushArchiveRecovery(origin, operation = 'import') {
     const key = draftKey(origin, operation); if (!key) return false;
     if (lanes.has(key)) await lanes.get(key);
-    return local_store.localRecoveryStorageAvailable() ? saveScope(key) : false;
+    return saveScope(key);
 }
-function resetArchiveRecoveryMemoryForTests() { drafts.clear(); scopes.clear(); loaded.clear(); lanes.clear(); }
-async function hydrateArchiveRecovery(origin, operation = 'import') {
-    const key = draftKey(origin, operation); if (!key || loaded.has(key) || !local_store.localRecoveryStorageAvailable()) return false;
+function resetArchiveRecoveryMemoryForTests() { drafts.clear(); scopes.clear(); loaded.clear(); lanes.clear(); hydrationLanes.clear(); }
+async function hydrateArchiveRecovery(origin, operation = 'import', { force = false } = {}) {
+    const key = draftKey(origin, operation); if (!key) return false;
+    // An unavailable API is not an empty database (notably in embedded hosts).
+    // Fail before any paid request instead of silently selecting page-only mode.
+    if (!local_store.localRecoveryStorageAvailable()) throw storageFailure('read');
+    if (loaded.has(key) && !force) return false;
+    // Opening the view and clicking continue may overlap. Reuse the same read;
+    // neither path may overwrite a live journal with an older storage snapshot.
+    if (hydrationLanes.has(key)) return hydrationLanes.get(key);
+    const read = hydrateArchiveRecoveryScope(key, origin, operation, force);
+    hydrationLanes.set(key, read);
+    try { return await read; }
+    finally { if (hydrationLanes.get(key) === read) hydrationLanes.delete(key); }
+}
+async function hydrateArchiveRecoveryScope(key, origin, operation, force) {
     const id = `draft:${await recovery.generationRecoveryDigest(key)}`;
+    // An explicit reread waits for our current write. It must never replace a
+    // newer in-page success or adopt a foreign revision just to overwrite it.
+    if (lanes.has(key)) await lanes.get(key).catch(() => {});
+    const readRevision = scopes.get(key)?.revision;
     let record;
-    try { record = await local_store.readLocalRecoveryRecord(id); } catch { throw storageFailure(); }
-    if (loaded.has(key)) return true;
+    try { record = await local_store.readLocalRecoveryRecord(id); } catch { throw storageFailure('read'); }
+    if (record !== null && (!record || record.key !== id || !Number.isSafeInteger(record.revision) || record.revision < 1)) throw storageFailure('read');
+    if (loaded.has(key)) {
+        if (!force) return true;
+        const state = scopes.get(key);
+        if (state?.revision !== readRevision) return true; // Our own write completed during this read.
+        if (scopeRows(key).length || lanes.has(key)) {
+            if ((record?.revision || 0) !== state?.revision) throw conflictFailure();
+            return true;
+        }
+    }
     const payload = record?.payload;
     if (payload) {
         if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > constants.MAX_CACHE_SOURCE_BYTES
-            || payload.version !== 1 || !Array.isArray(payload.rows) || payload.rows.length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure();
+            || payload.version !== 1 || !Array.isArray(payload.rows) || payload.rows.length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure('read');
         const checked = [];
         for (const [rowKey, value] of payload.rows) {
             if (typeof rowKey !== 'string' || (rowKey !== key && !rowKey.startsWith(`${key}:paused:`))
-                || !validStoredEntry(value, key, origin, operation)) throw storageFailure();
+                || !validStoredEntry(value, key, origin, operation)) throw storageFailure('read');
             const entry = structuredClone(value); entry.active = false; entry.durable = true;
             // A saved draft is never a formal commit. If the intended bank wasn't
             // committed, replay validated pieces and the normal CAS path on click.
             if (entry.stage === 'awaiting-commit' && entry.committedRevision !== origin.archiveRevision) entry.stage = 'segments';
             checked.push([rowKey, entry]);
         }
-        if (drafts.size + checked.filter(([id]) => !drafts.has(id)).length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure();
+        if (drafts.size + checked.filter(([id]) => !drafts.has(id)).length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure('read');
         for (const [id,entry] of checked) if (!drafts.has(id)) drafts.set(id,entry);
     }
-    scopes.set(key, { id, revision: record?.revision || 0 }); loaded.add(key);
+    const state = { id, revision: record?.revision || 0 };
+    confirmCounts(state, payload?.rows || []);
+    scopes.set(key, state); loaded.add(key);
     acknowledgeArchiveRecoveryCommit(origin);
     return true;
 }
@@ -32486,13 +32547,15 @@ function archiveRecoverySummary(origin, operation = 'import') {
     const entry = drafts.get(draftKey(origin, operation));
     if (!entry) return null;
     const summary = recovery.generationRecoverySummary(entry.journal);
+    const savedCompleted = scopes.get(draftKey(origin, operation))?.completed?.get(draftKey(origin, operation)) || 0;
     return { operation, fullRebuild: entry.fullRebuild, profileOnly: entry.stage === 'profile-only',
         awaitingCommit: entry.stage === 'awaiting-commit', committedRevision: entry.committedRevision || '',
-        completed: summary?.completed || 0, truncated: summary?.truncated || 0,
+        savedCompleted, completed: summary?.completed || 0, truncated: summary?.truncated || 0,
         canContinue: entry.stage === 'segments' && !!summary?.canContinue,
         canRetry: entry.stage === 'profile-only' || !!summary?.canRetry,
         failureCode: summary?.failureCode || '', pageOnly: entry.durable !== true, notice: entry.durable === true
-            ? '成功分段与原任务输入已保存到本机；刷新后可继续未完成部分，不重做已保存分段。换设备前请导出。' : ARCHIVE_RECOVERY_PAGE_NOTICE };
+            ? '成功分段与原任务输入已保存到本机；刷新后可继续未完成部分，不重做已保存分段。换设备前请导出。'
+            : `本机已确认保存 ${savedCompleted} 个成功分段；当前页面共有 ${summary?.completed || 0} 个。尚未确认保存的成果请先导出，不要刷新。` };
 }
 
 // Called only after a real saved bank of exactly this revision is observed.
@@ -32557,11 +32620,12 @@ async function beginArchiveRecovery({ origin, operation = 'import', sourceIdenti
     let attached = false;
     const stillCurrent = () => (!attached || drafts.get(key) === entry) && assertCurrent() !== false;
     const handle = await recovery.createGenerationRecovery({ origin: recoveryOrigin,
-        mode: operation === 'import' ? 'archive-import' : 'archive-profile', settingsIdentity, pageOnly: !local_store.localRecoveryStorageAvailable(),
+        mode: operation === 'import' ? 'archive-import' : 'archive-profile', settingsIdentity, pageOnly: false,
         existing: entry.journal, continueRequested: !!existing, assertCurrent: stillCurrent,
         save: async journal => {
             if (drafts.get(key) !== entry) throw new DOMException('Archive draft cleared', 'AbortError');
             entry.journal = journal;
+            entry.durable = false;
             return saveScope(key);
         } });
     if (drafts.get(key) && drafts.get(key) !== existing) throw incompatible();
@@ -32657,7 +32721,6 @@ async function clearArchiveRecoveryDurably(origin, operation = null) {
 }
 
 function discardArchiveRecovery(origin, operation = null) {
-    if (!local_store.localRecoveryStorageAvailable()) { clearArchiveRecovery(origin, operation); return true; }
     return clearArchiveRecoveryDurably(origin, operation);
 }
 
@@ -34783,6 +34846,41 @@ function calendarQuickAccessHtml({ ready = false, generated = false, generating 
     </section>`;
 }
 
+// Update only the recovery area: do not reset sources, inputs, scroll position
+// or a reader the user has already opened while local storage was being read.
+async function loadChooserArchiveRecovery(context = core_context.getContext(), { showEmpty = false } = {}) {
+    const body = bodyEl();
+    const region = body?.querySelector?.('[data-rmt-archive-recoveries]');
+    if (!region || ui_workspaceState.workspace.tab !== 'archive') return;
+    const epoch = ui_workspaceState.workspace.epoch;
+    let origin;
+    try { origin = core_context.captureTaskOrigin(context, archive_repository.getImportedMemory(context)?.archiveRevision || ''); }
+    catch { return; } // The live chat may have closed before this view action ran.
+    const stillVisible = () => epoch === ui_workspaceState.workspace.epoch
+        && ui_workspaceState.workspace.tab === 'archive' && runtimeState.archiveViewLevel === 'chooser'
+        && !runtimeState.activeMode && !runtimeState.activeArchiveSnapshot
+        && !document.getElementById(core_constants.OVERLAY_ID)?.hidden
+        && bodyEl()?.querySelector?.('[data-rmt-archive-recoveries]') === region
+        && core_context.isCurrentTaskOrigin(origin)
+        && (archive_repository.getImportedMemory(core_context.getContext())?.archiveRevision || '') === origin.archiveRevision;
+    const banners = () => recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveImportRecoverySummary(context))
+        + recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveProfileRecoverySummary(context), { profile: true });
+    const status = message => `<p role="status">${core_text.esc(message)}</p>`;
+    region.setAttribute('aria-busy', 'true');
+    region.innerHTML = banners() + status('正在读取本机整理草稿…不会请求模型。');
+    try {
+        await archive_repository.hydrateCurrentArchiveRecovery(context, { force: showEmpty });
+        if (!stillVisible()) return;
+        const html = banners();
+        region.innerHTML = html || (showEmpty ? status('本机未找到这条聊天的整理草稿；原档案未修改。旧版导出的成果文件可从下方导入。') : '');
+    } catch (error) {
+        if (!stillVisible()) return;
+        region.innerHTML = banners() + `<section class="rmt-recovery-status" role="status"><b>本机草稿读取未完成</b><p>${core_text.esc(error?.code === 'RMT_ARCHIVE_DRAFT_CONFLICT' ? '本机版本已变化，未覆盖任何记录。请先导出本页成果，再重新打开原聊天读取。' : '不能认定没有记录；原记录未修改，也没有请求模型。可重新读取；存储恢复前请勿清数据或重做。')}</p><button type="button" class="rmt-btn" data-rmt-archive-read-drafts>重新读取本机草稿</button></section>`;
+    } finally {
+        if (stillVisible()) region.setAttribute('aria-busy', 'false');
+    }
+}
+
 function showChooser({ section = null } = {}) {
     const priorTab = ui_workspaceState.workspace.tab;
     ui_workspaceState.leaveWorkspaceReader();
@@ -34915,8 +35013,10 @@ function showChooser({ section = null } = {}) {
     body.innerHTML = `
       <div class="rmt-archive-room">
         ${busyBanner}
+        <div data-rmt-archive-recoveries aria-live="polite">
         ${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveImportRecoverySummary(context))}
         ${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveProfileRecoverySummary(context), { profile: true })}
+        </div>
         ${ready ? recovery_view.recoveryBannerHtml(core_cache.getCache(context), memory) : ''}
         ${calendarQuick}
         <section class="rmt-memory-gate rmt-archive-card">
@@ -34929,6 +35029,7 @@ function showChooser({ section = null } = {}) {
             ${ready ? `<div class="rmt-archive-meta">上次归档：${core_text.esc(formatArchiveTime(memory.updatedAt || memory.createdAt))}</div>` : ''}
           </div>
           <div class="rmt-current-archive-actions">
+            <button type="button" class="rmt-btn" data-rmt-archive-read-drafts>读取已保存草稿（不生成）</button>
             <button type="button" class="rmt-btn" data-rmt-archive-import-draft>导入整理草稿</button>
             <button class="rmt-btn rmt-archive-update" type="button" data-rmt-action="import-memory" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>${core_text.esc(requirePreflight ? '先扫描记忆 / 摘要' : (ready ? '增量更新当前窗口档案' : importLabel))}</button>
             ${ready ? `<button class="rmt-btn" type="button" data-rmt-action="full-rebuild-memory" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>完全重建档案</button><button class="rmt-btn" type="button" data-rmt-action="current-archive-delete" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>删除当前档案</button>` : ''}
@@ -34939,6 +35040,7 @@ function showChooser({ section = null } = {}) {
         ${generationAction}
       </div>`;
     workspace_ui.arrangeArchiveWorkspace(body, { portals, ready });
+    if (ui_workspaceState.workspace.tab === 'archive') void loadChooserArchiveRecovery(context);
     ui_settingsPanel.refreshSettingsMemoryStatus();
 }
 
@@ -35361,6 +35463,21 @@ function handleOverlayClick(event) {
     if (timeStoryButton) return void time_stories_view.handleTimeStoryAction(timeStoryButton.dataset.rmtTimeStory, timeStoryButton.dataset.rmtTimeStoryId);
     const discardButton = event.target.closest?.('[data-rmt-recovery-discard]');
     if (discardButton) return void generation_client.discardSavedGeneration(discardButton.dataset.rmtRecoveryDiscard).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    if (event.target.closest?.('[data-rmt-archive-read-drafts]')) {
+        return void loadChooserArchiveRecovery(core_context.getContext(), { showEmpty: true });
+    }
+    const saveDraftButton = event.target.closest?.('[data-rmt-archive-save-draft]');
+    if (saveDraftButton) {
+        if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !archive_library.requireWritableArchiveAction()) return;
+        const context = core_context.currentCharacterGuard();
+        const origin = core_context.captureTaskOrigin(context, archive_repository.getImportedMemory(context)?.archiveRevision || '');
+        saveDraftButton.disabled = true;
+        return void archive_repository.saveCurrentArchiveRecovery(context, saveDraftButton.dataset.rmtArchiveSaveDraft).then(() => {
+            if (core_context.isCurrentTaskOrigin(origin)) return loadChooserArchiveRecovery(context);
+        }).catch(error => {
+            if (core_context.isCurrentTaskOrigin(origin)) globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 草稿未保存');
+        }).finally(() => { saveDraftButton.disabled = false; });
+    }
     if (event.target.closest?.('[data-rmt-archive-import-draft]')) {
         if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !archive_library.requireWritableArchiveAction()) return;
         const context = core_context.currentCharacterGuard();
@@ -35381,14 +35498,12 @@ function handleOverlayClick(event) {
         input.click(); return;
     }
     if (event.target.closest?.('[data-rmt-archive-export-pending]')) {
-        try {
-            const value = archive_repository.exportCurrentArchiveImportProgress();
+        return void archive_repository.exportCurrentArchiveRecoveryAfterLoad().then(value => {
             const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob), link = document.createElement('a');
             link.href = url; link.download = 'hearttrace-unarchived-results.json';
             link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-        } catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); }
-        return;
+        }).catch(error => { if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); });
     }
     if (event.target.closest?.('[data-rmt-archive-restart]')) {
         if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return;
@@ -35906,6 +36021,7 @@ async function handleOverlayChange(event) {
     }
 }
 
+__m_ui_overlay_js.loadChooserArchiveRecovery = loadChooserArchiveRecovery;
 __m_ui_overlay_js.handleOverlayChange = handleOverlayChange;
 __m_ui_overlay_js.isArchiveMobileViewport = isArchiveMobileViewport;
 __m_ui_overlay_js.archiveMobileSafeTopFallback = archiveMobileSafeTopFallback;
@@ -39726,6 +39842,61 @@ function exportCurrentArchiveImportProgress(context = core_context.currentCharac
         paused: bank?.archiveImportPaused || [], pageDrafts: archive_importRecovery.exportArchiveRecovery(origin) };
 }
 
+// Explicit current-archive view/read actions only. No sources, credentials or
+// providers are touched here; loaded checkpoints are not formal archive writes.
+async function hydrateCurrentArchiveRecovery(context = core_context.currentCharacterGuard(), { operation = null, force = false } = {}) {
+    const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
+    const assertCurrent = () => {
+        if (!core_context.isCurrentTaskOrigin(origin)
+            || (getImportedMemory(core_context.getContext())?.archiveRevision || '') !== origin.archiveRevision) {
+            throw new DOMException('Archive view changed', 'AbortError');
+        }
+    };
+    assertCurrent();
+    for (const target of operation ? [operation] : ['import', 'profile']) {
+        await archive_importRecovery.hydrateArchiveRecovery(origin, target, { force });
+        assertCurrent();
+    }
+    return { archive: getCurrentArchiveImportRecoverySummary(context),
+        profile: getCurrentArchiveProfileRecoverySummary(context) };
+}
+
+async function exportCurrentArchiveRecoveryAfterLoad(context = core_context.currentCharacterGuard()) {
+    const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
+    let readFailure = null;
+    try { await hydrateCurrentArchiveRecovery(context, { operation: 'import' }); }
+    catch (error) { readFailure = error; }
+    if (!core_context.isCurrentTaskOrigin(origin)
+        || (getImportedMemory(core_context.getContext())?.archiveRevision || '') !== origin.archiveRevision) {
+        throw new DOMException('Archive view changed', 'AbortError');
+    }
+    // Failed storage must not take away the escape hatch for successes still in
+    // this page. Export only those actual records, never an invented empty file.
+    const result = exportCurrentArchiveImportProgress(context);
+    if (!result.pageDrafts.length && !result.pendingSave && !result.progress && !result.paused.length) {
+        if (readFailure) throw readFailure;
+        throw core_text.safeUserError('本机没有找到这条聊天的整理草稿或待入档成果。未删除任何记录；旧版导出文件仍可导入。', 'RMT_ARCHIVE_DRAFT_NOT_FOUND');
+    }
+    return result;
+}
+
+async function saveCurrentArchiveRecovery(context = core_context.currentCharacterGuard(), operation = 'import') {
+    if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) throw core_text.safeUserError('当前请求尚未结束，草稿仍保留。', 'RMT_RECOVERY_BUSY');
+    const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
+    await hydrateCurrentArchiveRecovery(context, { operation });
+    if (!archive_importRecovery.archiveRecoverySummary(origin, operation)) {
+        throw core_text.safeUserError('没有找到当前整理草稿，未修改原记录。', 'RMT_ARCHIVE_DRAFT_NOT_FOUND');
+    }
+    if (!await archive_importRecovery.flushArchiveRecovery(origin, operation)) {
+        throw core_text.safeUserError('本机草稿存储不可用，成功分段仍仅在本页；请先导出，不要刷新。', 'RMT_ARCHIVE_DRAFT_STORAGE');
+    }
+    if (!core_context.isCurrentTaskOrigin(origin)
+        || (getImportedMemory(core_context.getContext())?.archiveRevision || '') !== origin.archiveRevision) {
+        throw new DOMException('Archive view changed', 'AbortError');
+    }
+    return archive_importRecovery.archiveRecoverySummary(origin, operation);
+}
+
 async function importCurrentArchiveRecoveryFile(data, context = core_context.currentCharacterGuard()) {
     if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) throw core_text.safeUserError('当前有请求进行中，未导入。', 'RMT_RECOVERY_BUSY');
     const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
@@ -40650,6 +40821,12 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
             ui_overlay.setBusyUi(false);
         }
     }
+    // A storage failure may occur before a recovery ticket is returned. Refresh
+    // only the still-visible recovery region, so save/export controls and the
+    // confirmed count reflect the retained page draft without navigating away.
+    if (result?.status === 'failed' && !options.automatic && core_context.isCurrentTaskOrigin(preparation.origin)) {
+        await ui_overlay.loadChooserArchiveRecovery(context);
+    }
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
     if (result?.status === 'committed' && !options.automatic && overlay && !overlay.hidden
         && core_context.isCurrentTaskOrigin(preparation.origin) && !runtimeState.activeMode) {
@@ -40673,6 +40850,9 @@ __m_archive_repository_js.showMemoryWorldInfoPicker = showMemoryWorldInfoPicker;
 __m_archive_repository_js.expandMemoryWorldInfoBook = expandMemoryWorldInfoBook;
 __m_archive_repository_js.flushDeferredCommitsForCurrentChat = flushDeferredCommitsForCurrentChat;
 __m_archive_repository_js.collectCurrentChatExternalMemory = collectCurrentChatExternalMemory;
+__m_archive_repository_js.hydrateCurrentArchiveRecovery = hydrateCurrentArchiveRecovery;
+__m_archive_repository_js.exportCurrentArchiveRecoveryAfterLoad = exportCurrentArchiveRecoveryAfterLoad;
+__m_archive_repository_js.saveCurrentArchiveRecovery = saveCurrentArchiveRecovery;
 __m_archive_repository_js.importCurrentArchiveRecoveryFile = importCurrentArchiveRecoveryFile;
 __m_archive_repository_js.restartCurrentArchiveImport = restartCurrentArchiveImport;
 __m_archive_repository_js.generateArchiveImportSegment = generateArchiveImportSegment;
