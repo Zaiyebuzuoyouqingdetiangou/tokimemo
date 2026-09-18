@@ -200,7 +200,7 @@ export async function generatePastLivesWithRepair(context, memory, origin, taskK
             throw new DOMException('Archive context changed before past-lives context capture', 'AbortError');
     };
     assertContextRead();
-    const presentationContext = options.presentationContext || await generation.buildWorldPresentationContext(context, memory, PAST_LIVES_MODE);
+    const presentationContext = options.presentationContext || await generation.buildWorldPresentationContext(context, memory, PAST_LIVES_MODE, options.origin);
     assertContextRead();
     const presentation = contract.pastLivesPresentation(presentationContext.profile);
     const baseOptions = { context, contextEnvelope: presentationContext.contextEnvelope, origin, mode: PAST_LIVES_MODE, background: true, temperature: 0.75 };

@@ -1,3 +1,4 @@
+import * as recovery_source from './recoverySourcePolicy.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_groups from '../archive/groups.js';
@@ -1292,6 +1293,10 @@ export async function claimLiveModeGeneration(mode, context = core_context.curre
     const expectedRevision = core_text.normalizeText(bank.archiveRevision, 240);
     const expectedRuntimeKey = core_context.currentCharacterRuntimeKey(context);
     try { await ensureCacheHydrated(context); } catch {}
+    // Check the raw retained journal before a changed character makes the normal
+    // identity-filtered loader hide it and before advancing any write fence.
+    await recovery_source.assertRecoverySourcePolicy(getCache(context)?.[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode],
+        context, core_context.captureTaskOrigin(context, bank.archiveRevision));
     const scope = cacheScopeFromContext(context);
     const entry = archiveBackupEntryForContext(context, bank);
     const stillCurrent = () => {

@@ -1,3 +1,5 @@
+import * as manual_credentials from './manualCredentialStore.js';
+import * as advanced_generation from './advancedGeneration.js';
 import * as output_budget from './outputBudget.js';
 // Heartbeat Memories independent API transport boundary.
 // Manual providers are reached only through SillyTavern's fixed same-origin custom backend.
@@ -136,6 +138,8 @@ export function apiConfigurationFingerprint(settings) {
             Number(settings?.maxTokens) || 0,
             Number(settings?.temperature) || 0,
             settings?.manualApiStreaming === true,
+            ...(!key && settings?.manualApiSecretRef ? [settings.manualApiSecretRef] : []),
+            ...(advanced_generation.advancedFingerprint(settings) ? [advanced_generation.advancedFingerprint(settings)] : []),
         ]);
     }
     return JSON.stringify([
@@ -144,6 +148,7 @@ export function apiConfigurationFingerprint(settings) {
         core_text.normalizeText(settings?.modelOverride, 240),
         Number(settings?.maxTokens) || 0,
         Number(settings?.temperature) || 0,
+        ...(advanced_generation.advancedFingerprint(settings) ? [advanced_generation.advancedFingerprint(settings)] : []),
     ]);
 }
 
@@ -151,7 +156,7 @@ export function manualModelCacheKey(settings) {
     let base = '';
     try { base = normalizeManualApiBaseUrl(settings?.manualApiBaseUrl); } catch { base = 'invalid'; }
     const key = core_text.normalizeText(settings?.manualApiKey, 4000);
-    return `manual:${core_text.hashString(`${base}|${key.length}:${core_text.hashString(key)}`)}`;
+    return `manual:${core_text.hashString(`${base}|${key.length}:${core_text.hashString(key)}${!key && settings?.manualApiSecretRef ? `|${settings.manualApiSecretRef}` : ''}`)}`;
 }
 
 function requestHeaders(context) {
@@ -466,7 +471,8 @@ export function responseShapeSummary(payload) {
         };
         visit(payload);
         const completion = manualStreamCompletionInfo(payload);
-        if (completion) summary.finishReason = SUMMARY_FINISH_REASONS.has(completion.finishReason) ? completion.finishReason : 'unknown';
+        if (completion) { summary.finishReason = SUMMARY_FINISH_REASONS.has(completion.finishReason) ? completion.finishReason : 'unknown';
+            summary.reasoningChars = Math.max(summary.reasoningChars, completion.reasoningChars || 0); }
     } catch { return { shape: 'unsupported', finalChars: 0, reasoningChars: 0, finishReason: 'none' }; }
     return summary;
 }
@@ -511,6 +517,7 @@ export function assertIndependentResponsePayload(payload) {
         error.retryable = false;
         throw error;
     }
+    if (!content.trim()) throw emptyFinalFailure(responseShapeSummary(payload));
     return content;
 }
 
@@ -525,11 +532,11 @@ function streamFinishReason(value) {
     return typeof value === 'string' && STREAM_FINISH_REASONS.has(value) ? value : 'unknown';
 }
 
-function streamCompletion(content, finishReason, interrupted = false) {
+function streamCompletion(content, finishReason, interrupted = false, reasoningChars = 0, publicStream = false) {
     const result = Object.freeze({ content });
     manualStreamCompletions.set(result, Object.freeze({
         complete: !interrupted && COMPLETE_STREAM_REASONS.has(finishReason),
-        finishReason, interrupted: interrupted === true,
+        finishReason, interrupted: interrupted === true, reasoningChars: Math.max(0, Math.min(core_constants.MAX_GENERATION_OUTPUT_CHARS, Number(reasoningChars) || 0)), publicStream,
     }));
     return result;
 }
@@ -542,13 +549,67 @@ export function manualStreamCompletionInfo(result) {
 // Its catch can pass the separately held content to recordRecoveryTruncation unchanged.
 export function assertManualStreamComplete(result) {
     const completion = manualStreamCompletionInfo(result);
-    if (completion && !completion.complete) {
+    const rawFinish = completion ? '' : responseShapeSummary(result).finishReason;
+    if (['length', 'max_tokens', 'incomplete'].includes(rawFinish)) {
+        const error = apiError('渠道明确报告输出未完成；原成功分段保留，不会自动请求。', 'RMT_JSON_TRUNCATED');
+        error.retryable = false; error.retryableJson = false; throw error;
+    }
+    if (completion && !completion.complete && !(completion.publicStream && !completion.interrupted && completion.finishReason === 'unknown')) {
         const error = apiError('流式正文尚未完整结束；已停止本段，不会自动重发请求。可保留草稿后显式继续。', 'RMT_JSON_TRUNCATED');
         error.retryable = false;
         error.retryableJson = false;
         throw error;
     }
     return true;
+}
+
+const transportFailures = new WeakMap();
+export function transportFailureSummary(error) { return transportFailures.get(error) || null; }
+function emptyFinalFailure(summary) {
+    const error = apiError(summary.reasoningChars ? '本次响应只有推理字段，没有最终正文；未采用推理内容，也没有自动重试。请按渠道文档调整推理参数或流式设置后再点击。' : '本次响应没有最终正文；未自动重试，请检查渠道状态和参数。',
+        summary.reasoningChars ? 'RMT_JSON_EMPTY_FINAL_WITH_REASONING' : 'RMT_JSON_EMPTY_FINAL');
+    error.retryable = false; error.retryableJson = false;
+    transportFailures.set(error, { shape: summary.shape || 'empty', finalChars: 0,
+        reasoningChars: Math.min(core_constants.MAX_GENERATION_OUTPUT_CHARS, summary.reasoningChars || 0), finishReason: summary.finishReason || 'unknown' });
+    return error;
+}
+
+// Public ConnectionManager streaming contract: cumulative text + separate reasoning.
+// Its API does not expose the provider finish reason; do not manufacture a stop code.
+export async function readProfileCompletion(result, { signal = null } = {}) {
+    if (typeof result !== 'function') return result;
+    const iterator = result();
+    if (!iterator || typeof iterator.next !== 'function') throw apiError('连接未提供可读取的流式结果。', 'RMT_RESPONSE_FORMAT');
+    let content = '', reasoningChars = 0, interrupted = false, rejectAbort;
+    const abort = new Promise((_,reject) => { rejectAbort = reject; });
+    const onAbort = () => { rejectAbort(streamAbortReason(signal)); };
+    signal?.addEventListener?.('abort', onAbort, { once:true });
+    try {
+        if (signal?.aborted) throw streamAbortReason(signal);
+        for (;;) {
+            const item = await Promise.race([iterator.next(), abort]);
+            if (signal?.aborted) throw streamAbortReason(signal);
+            if (item.done) break;
+            const next = responseField(item.value, 'text');
+            if (typeof next !== 'string' || !next.startsWith(content)) throw apiError('连接的流式正文结构异常。', 'RMT_RESPONSE_FORMAT');
+            const reasoning = responseField(responseField(item.value, 'state'), 'reasoning');
+            reasoningChars = Math.max(reasoningChars, typeof reasoning === 'string' ? reasoning.length : 0);
+            if (next.length > core_constants.MAX_GENERATION_OUTPUT_CHARS
+                || new TextEncoder().encode(next).byteLength > core_constants.MAX_MANUAL_API_RESPONSE_BYTES
+                || reasoningChars > core_constants.MAX_MANUAL_API_RESPONSE_BYTES) throw apiError('流式响应超过安全范围。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
+            content = next;
+        }
+    } catch (error) {
+        if (signal?.aborted || error?.name === 'AbortError') throw streamAbortReason(signal);
+        if (error?.code === 'RMT_MANUAL_RESPONSE_TOO_LARGE' || error?.code === 'RMT_RESPONSE_FORMAT') throw error;
+        if (!content.trim()) throw error;
+        interrupted = true;
+    } finally {
+        signal?.removeEventListener?.('abort', onAbort);
+        try { void iterator.return?.()?.catch?.(() => {}); } catch {}
+    }
+    if (!content.trim()) throw emptyFinalFailure({ reasoningChars });
+    return streamCompletion(content, 'unknown', interrupted, reasoningChars, true);
 }
 
 function streamReadError(code = 'RMT_MANUAL_INVALID_JSON') {
@@ -575,7 +636,11 @@ async function readManualApiStream(response, options = {}) {
     if (!reader) throw streamReadError();
     const signal = options.signal || null;
     const decoder = new TextDecoder('utf-8');
-    let bytes = 0, content = '', line = '', eventType = '', dataLines = [];
+    let bytes = 0, content = '', line = '', eventType = '', dataLines = [], reasoningChars = 0, protocol = '';
+    const blockKinds = new Map();
+    let responseOutputIndex = null;
+    const chooseProtocol = kind => { if (protocol && protocol !== kind) throw streamReadError(); protocol = kind; };
+    const countReasoning = payload => { reasoningChars = Math.min(core_constants.MAX_GENERATION_OUTPUT_CHARS, reasoningChars + responseShapeSummary(payload).reasoningChars); };
     let previousCR = false, firstCharacter = true, terminal = false, finishReason = '', interrupted = false;
     const cancel = () => { try { void reader.cancel().catch(() => {}); } catch {} };
     // reader.cancel settles outstanding read() calls. Avoid adding one reaction per
@@ -603,12 +668,68 @@ async function readManualApiStream(response, options = {}) {
         try { payload = JSON.parse(data); } catch { throw streamReadError(); }
         if (payloadHasProviderError(payload)) throw streamReadError('RMT_MANUAL_PROVIDER_ERROR');
         if (!payload || typeof payload !== 'object') throw streamReadError();
-        // The fixed custom backend forwards OpenAI-compatible choice deltas. Ignore
-        // usage/reasoning-only events, and never combine independent candidates.
+        // Accept only documented final-bearing event shapes, never JSON from
+        // reasoning/tool blocks. A stream cannot silently switch protocols.
+        const semanticType = payload.type || type;
+        if (Array.isArray(payload.candidates)) {
+            chooseProtocol('gemini');
+            const candidate = payload.candidates.find(value => value?.index === 0) || payload.candidates.find(value => value?.index == null);
+            if (!candidate) return;
+            countReasoning({ candidates: [candidate] });
+            const visible = visibleContentText(candidate.content?.parts); if (visible) append(visible);
+            if (candidate.finishReason) {
+                const mapped = { STOP:'stop', MAX_TOKENS:'max_tokens', SAFETY:'content_filter', RECITATION:'content_filter', BLOCKLIST:'content_filter', PROHIBITED_CONTENT:'content_filter' };
+                finishReason = mapped[candidate.finishReason] || 'unknown'; terminal = true;
+            }
+            return;
+        }
+        if (typeof semanticType === 'string' && semanticType.startsWith('response.')) {
+            chooseProtocol('responses');
+            if (semanticType === 'response.output_text.delta') {
+                // Responses output may begin with a reasoning item; the first
+                // visible message is not necessarily output_index 0. Never join
+                // a second output item into the selected final message.
+                const index = payload.output_index ?? 0;
+                if (!Number.isSafeInteger(index) || index < 0) throw streamReadError();
+                responseOutputIndex ??= index;
+                if (index === responseOutputIndex && typeof payload.delta === 'string') append(payload.delta);
+            } else if (/^response\.reasoning(?:_summary)?_text\.delta$/.test(semanticType)) {
+                if (typeof payload.delta === 'string') reasoningChars = Math.min(core_constants.MAX_GENERATION_OUTPUT_CHARS, reasoningChars + payload.delta.length);
+            } else if (['response.completed','response.incomplete','response.failed'].includes(semanticType)) {
+                if (semanticType === 'response.failed') throw streamReadError('RMT_MANUAL_PROVIDER_ERROR');
+                const full = extractIndependentResponseContent(payload.response);
+                if (typeof full === 'string' && full) {
+                    if (content && !full.startsWith(content)) throw streamReadError();
+                    if (full.length > content.length) append(full.slice(content.length));
+                }
+                finishReason = semanticType === 'response.completed' ? 'stop' : 'length'; terminal = true;
+            }
+            return;
+        }
+        if (['message_start','content_block_start','content_block_delta','content_block_stop','message_delta','message_stop','ping'].includes(semanticType)) {
+            if (semanticType === 'ping') return;
+            chooseProtocol('anthropic');
+            if (semanticType === 'message_start' && payload.message?.role !== 'assistant') throw streamReadError();
+            if (semanticType === 'content_block_start') {
+                if (!Number.isSafeInteger(payload.index) || payload.index < 0 || blockKinds.size >= 4096) throw streamReadError();
+                blockKinds.set(payload.index, payload.content_block?.type || 'unknown');
+                if (payload.content_block?.type === 'text') append(visibleContentText(payload.content_block));
+                else countReasoning(payload.content_block);
+            } else if (semanticType === 'content_block_delta') {
+                const kind = blockKinds.get(payload.index);
+                if (kind === 'text' && payload.delta?.type === 'text_delta' && typeof payload.delta.text === 'string') append(payload.delta.text);
+                else if (kind === 'thinking' && typeof payload.delta?.thinking === 'string') reasoningChars = Math.min(core_constants.MAX_GENERATION_OUTPUT_CHARS, reasoningChars + payload.delta.thinking.length);
+            } else if (semanticType === 'message_delta') finishReason = streamFinishReason(payload.delta?.stop_reason) || finishReason;
+            else if (semanticType === 'message_stop') { finishReason ||= 'unknown'; terminal = true; }
+            return;
+        }
+        // OpenAI-compatible choice deltas (DeepSeek, Qwen, GLM, Doubao, Gemini
+        // compatibility endpoints etc.) share this path regardless of model name.
         const choices = Array.isArray(payload.choices) ? payload.choices : [];
         const choice = choices.find(value => value?.index === 0)
             || choices.find(value => value && value.index == null);
         if (!choice) return;
+        chooseProtocol('choices'); countReasoning({ choices: [choice] });
         let visible = visibleContentText(choice.delta?.content);
         if (!visible && typeof choice.text === 'string') visible = choice.text;
         if (!visible && choice.message?.content != null) {
@@ -687,12 +808,8 @@ async function readManualApiStream(response, options = {}) {
         try { reader.releaseLock(); } catch {}
     }
     if (signal?.aborted) throw streamAbortReason(signal);
-    if (!content.trim()) {
-        const error = apiError('手动 API 没有返回可见正文。', 'RMT_MANUAL_EMPTY');
-        error.retryable = false;
-        throw error;
-    }
-    return streamCompletion(content, finishReason, interrupted);
+    if (!content.trim()) throw emptyFinalFailure({ shape: protocol === 'gemini' ? 'candidates' : 'choices', reasoningChars, finishReason });
+    return streamCompletion(content, finishReason, interrupted, reasoningChars);
 }
 
 // The host may forward SSE without Content-Type, or a provider may answer a
@@ -805,7 +922,17 @@ async function readManualCompletionResponse(response, options = {}) {
     }
 }
 
+async function manualRequestSettings(settings, signal) {
+    if (signal?.aborted) throw streamAbortReason(signal);
+    const base = normalizeManualApiBaseUrl(settings?.manualApiBaseUrl, { required: true });
+    if (settings?.manualApiKey || !settings?.manualApiSecretRef) return settings;
+    const key = await manual_credentials.readManualCredential(base, settings.manualApiSecretRef);
+    if (signal?.aborted) throw streamAbortReason(signal);
+    return { ...settings, manualApiKey: key };
+}
+
 export async function fetchManualApiModels(settings, context, options = {}) {
+    settings = await manualRequestSettings(settings, options.signal);
     const customUrl = assertManualApiCredentialTransport(settings?.manualApiBaseUrl, settings?.manualApiKey);
     const fetchImpl = options.fetchImpl || globalThis.fetch;
     if (typeof fetchImpl !== 'function') throw apiError('当前环境没有可用的网络请求能力。', 'RMT_MANUAL_FETCH_UNAVAILABLE');
@@ -865,6 +992,7 @@ export async function fetchManualApiModels(settings, context, options = {}) {
 }
 
 export async function requestManualApiCompletion(settings, context, messages, maxTokens, options = {}) {
+    settings = await manualRequestSettings(settings, options.signal);
     if (options.signal?.aborted) throw streamAbortReason(options.signal);
     const customUrl = assertManualApiCredentialTransport(settings?.manualApiBaseUrl, settings?.manualApiKey);
     const model = core_text.normalizeText(options.model || settings?.manualApiModel, 240);
@@ -872,7 +1000,8 @@ export async function requestManualApiCompletion(settings, context, messages, ma
     if (!Array.isArray(messages) || !messages.length) throw apiError('手动 API 请求缺少消息。', 'RMT_MANUAL_MESSAGES');
     const fetchImpl = options.fetchImpl || globalThis.fetch;
     if (typeof fetchImpl !== 'function') throw apiError('当前环境没有可用的网络请求能力。', 'RMT_MANUAL_FETCH_UNAVAILABLE');
-    const body = {
+    const advanced = advanced_generation.parseAdvancedGeneration(settings);
+    let body = {
         model,
         messages,
         max_tokens: output_budget.normalizeOutputTokens(maxTokens),
@@ -884,6 +1013,9 @@ export async function requestManualApiCompletion(settings, context, messages, ma
         custom_include_body: '',
         custom_exclude_body: '',
     };
+    Object.assign(body, advanced_generation.advancedCarrier(advanced, 'custom'));
+    body = advanced_generation.applyAdvancedExclusions(body, advanced);
+    if (advanced.streamMode !== 'original') body.stream = advanced.streamMode === 'on';
     const response = await fetchImpl(MANUAL_GENERATE_ENDPOINT, {
         method: 'POST',
         credentials: 'same-origin',
@@ -901,12 +1033,14 @@ export async function requestManualApiCompletion(settings, context, messages, ma
     const payload = decoded.payload;
     if (payloadHasProviderError(payload)) throw providerEnvelopeFailure(payload);
     const content = extractIndependentResponseContent(payload);
-    if (typeof content === 'string' && !content.trim()) throw apiError('手动 API 没有返回可见正文。', 'RMT_MANUAL_EMPTY');
-    if (body.stream && typeof content === 'string') {
-        // Some compatible services ignore stream:true and answer JSON on this same
-        // request. Read it without a second request or a persisted mode change.
-        const reason = streamFinishReason(payload?.choices?.[0]?.finish_reason) || 'stop';
-        return streamCompletion(content, reason);
+    const summary = responseShapeSummary(payload);
+    if (typeof content === 'string' && !content.trim()) throw emptyFinalFailure(summary);
+    if (typeof content === 'string' && (body.stream || summary.reasoningChars
+        || ['length','max_tokens','incomplete','content_filter','tool_calls','function_call'].includes(summary.finishReason))) {
+        // JSON answered this same request. Missing completion metadata remains
+        // unknown; explicit truncation never becomes a successfully saved result.
+        const reason = ['none','unknown'].includes(summary.finishReason) ? 'unknown' : summary.finishReason === 'completed' ? 'stop' : summary.finishReason;
+        return streamCompletion(content, reason, false, summary.reasoningChars, reason === 'unknown');
     }
     return content;
 }

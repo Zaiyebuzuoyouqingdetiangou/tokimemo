@@ -1,3 +1,4 @@
+import * as advanced_ui from './advancedGenerationUi.js';
 import * as output_budget from '../core/outputBudget.js';
 import * as cg_format_ui from './cgFormatControl.js';
 // Heartbeat Memories r35 modular runtime.
@@ -250,13 +251,47 @@ function manualSettingsFromPanel(panel) {
     const keyInput = panel?.querySelector?.('[data-rmt-manual-api-key]');
     const baseInput = panel?.querySelector?.('[data-rmt-manual-api-base]');
     const modelInput = panel?.querySelector?.('[data-rmt-manual-api-model]');
+    const base = baseInput ? baseInput.value : current.manualApiBaseUrl;
+    let sameBase = false;
+    try { sameBase = core_independentApi.normalizeManualApiBaseUrl(base) === current.manualApiBaseUrl; } catch {}
     return {
         ...current,
         apiConnectionMode: 'manual',
-        manualApiBaseUrl: baseInput ? baseInput.value : current.manualApiBaseUrl,
-        manualApiKey: core_text.normalizeText(keyInput?.value, 4000) || current.manualApiKey,
+        manualApiBaseUrl: base,
+        manualApiKey: core_text.normalizeText(keyInput?.value, 4000) || (sameBase ? current.manualApiKey : ''),
+        manualApiSecretRef: sameBase ? current.manualApiSecretRef : '',
         manualApiModel: modelInput ? modelInput.value : current.manualApiModel,
     };
+}
+
+const manualAutosaves = new WeakMap();
+async function saveManualPanel(panel, activate = false) {
+    clearTimeout(manualAutosaves.get(panel)); manualAutosaves.delete(panel);
+    const status = panel.querySelector('[data-rmt-manual-save-status]');
+    const candidate = manualSettingsFromPanel(panel);
+    const keyInput = panel.querySelector('[data-rmt-manual-api-key]');
+    const typedKey = keyInput?.value || '';
+    if (status) status.textContent = '正在保存…';
+    try {
+        const result = await core_settings.saveManualApiConfiguration(candidate, { activate });
+        if (keyInput?.value === typedKey) keyInput.value = '';
+        if (keyInput) keyInput.placeholder = result.credentialSaved ? '已加密保存到本机；填写可替换' : 'API Key（可留空）';
+        if (status) status.textContent = result.credentialSaved ? '连接信息与 Key 已保存到本机；刷新后可用。' : '连接信息已保存；未填写 Key。';
+        if (activate) { panel.dataset.rmtApiEditor = 'manual'; panel.dataset.rmtManualDirty = '0'; refreshGenerationSettingsUi(); }
+        return result;
+    } catch (error) {
+        if (status) status.textContent = error?.name === 'AbortError' ? '配置已再次编辑，旧保存已停止。' : core_text.safeErrorSummary(error);
+        if (activate) globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 未保存');
+        return null;
+    }
+}
+function bindManualAutosave(panel) {
+    const schedule = event => {
+        if (!event.target.matches?.('[data-rmt-manual-api-base],[data-rmt-manual-api-key],[data-rmt-manual-api-model]')) return;
+        clearTimeout(manualAutosaves.get(panel));
+        manualAutosaves.set(panel, setTimeout(() => { void saveManualPanel(panel); }, event.type === 'change' ? 0 : 500));
+    };
+    panel.addEventListener('input', schedule); panel.addEventListener('change', schedule);
 }
 
 export async function refreshManualModelOptions({ fetchRemote = false } = {}) {
@@ -384,7 +419,7 @@ export function refreshGenerationSettingsUi() {
     if (!manualDirty && manualModel) manualModel.value = settings.manualApiModel;
     if (!manualDirty && manualKey) {
         manualKey.value = '';
-        manualKey.placeholder = settings.manualApiKey ? '本页已输入；刷新后需重填' : 'API Key（仅本页，不保存）';
+        manualKey.placeholder = settings.manualApiSecretRef ? '已加密保存到本机；填写可替换' : settings.manualApiKey ? '本页已有 Key；尚未确认持久保存' : 'API Key（可留空）';
     }
     if (maxTokens) maxTokens.value = String(settings.maxTokens);
     if (temperature) {
@@ -580,6 +615,7 @@ export function mountSettings({ homeTarget = null } = {}) {
               <button type="button" class="menu_button rmt-model-refresh" data-rmt-manual-api-model-refresh>拉取模型</button>
             </div>
             <button type="button" class="menu_button rmt-settings-wide rmt-manual-save" data-rmt-manual-api-save>保存并使用</button>
+            <div data-rmt-manual-save-status role="status" aria-live="polite">填写后自动保存到本机，不随档案导出。</div>
             <label class="rmt-settings-check"><input type="checkbox" data-rmt-manual-streaming ${core_settings.getPluginSettings().manualApiStreaming ? 'checked' : ''}><span>使用流式输出（仅此手动 API）</span></label>
             <small>需要服务端支持 SSE；关闭时使用普通完整响应，不影响主聊天。</small>
           </div>
@@ -592,6 +628,7 @@ export function mountSettings({ homeTarget = null } = {}) {
           <label class="rmt-settings-check"><input data-rmt-tt-display type="checkbox"><span>TT 顶部安全区</span></label>
           </div>
         </details>
+        ${advanced_ui.advancedGenerationHtml()}
         ${chatReadingSettingsHtml()}
         <details class="rmt-settings-card" data-rmt-settings-section="image">
           <summary class="rmt-settings-card-head"><span>CG</span><div><b>CG 生图</b><small>相簿 · ADV · 日常一格</small></div></summary>
@@ -747,6 +784,8 @@ export function mountSettings({ homeTarget = null } = {}) {
         panel.querySelector('[data-rmt-creative-count]').textContent = settings.creativeSupplement.length.toLocaleString() + ' / 20,000';
     };
     refreshCreative();
+    advanced_ui.bindAdvancedGenerationUi(panel);
+    bindManualAutosave(panel);
     panel.addEventListener('change', async event => {
         if (cg_format_ui.handleCgFormatChange(event)) return;
         const target = event.target;
@@ -1113,38 +1152,15 @@ export function mountSettings({ homeTarget = null } = {}) {
         }
         const manualClearButton = event.target.closest?.('[data-rmt-manual-api-key-clear]');
         if (manualClearButton) {
-            const keyInput = panel.querySelector('[data-rmt-manual-api-key]');
-            if (keyInput) keyInput.value = '';
-            core_settings.updatePluginSettings({ manualApiKey: '' });
-            if (keyInput) keyInput.placeholder = 'API Key（仅本页，不保存）';
-            refreshGenerationSettingsUi();
-            globalThis.toastr?.success?.('手动 API Key 已清除。', '心迹回廊');
-            return;
-        }
-        const manualSaveButton = event.target.closest?.('[data-rmt-manual-api-save]');
-        if (manualSaveButton) {
-            try {
-                const candidate = manualSettingsFromPanel(panel);
-                const manualApiBaseUrl = core_independentApi.assertManualApiCredentialTransport(candidate.manualApiBaseUrl, candidate.manualApiKey);
-                const manualApiModel = core_text.normalizeText(candidate.manualApiModel, 240);
-                if (!manualApiModel) throw core_text.safeUserError('请填写手动 API 的模型 ID。', 'RMT_MANUAL_MODEL');
-                core_settings.updatePluginSettings({
-                    apiConnectionMode: 'manual',
-                    manualApiBaseUrl,
-                    manualApiKey: candidate.manualApiKey,
-                    manualApiModel,
-                });
-                panel.dataset.rmtApiEditor = 'manual';
-                panel.dataset.rmtManualDirty = '0';
-                const keyInput = panel.querySelector('[data-rmt-manual-api-key]');
-                if (keyInput) keyInput.value = '';
+            clearTimeout(manualAutosaves.get(panel)); manualAutosaves.delete(panel);
+            const keyInput = panel.querySelector('[data-rmt-manual-api-key]'); if (keyInput) keyInput.value = '';
+            void core_settings.forgetManualApiCredential().then(() => {
                 refreshGenerationSettingsUi();
-                globalThis.toastr?.success?.('手动 API 已启用；Key 仅保留在本页，刷新后需重填。', '心迹回廊');
-            } catch (error) {
-                globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
-            }
+                const status = panel.querySelector('[data-rmt-manual-save-status]'); if (status) status.textContent = '本插件手动 Key 已清除，主聊天连接未改。';
+            }).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
             return;
         }
+        if (event.target.closest?.('[data-rmt-manual-api-save]')) { void saveManualPanel(panel, true); return; }
         const manualRefreshButton = event.target.closest?.('[data-rmt-manual-api-model-refresh]');
         if (manualRefreshButton) {
             refreshManualModelOptions({ fetchRemote: true })

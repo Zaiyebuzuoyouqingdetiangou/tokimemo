@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 120
-// Source SHA-256: dca7b52a3814e85182f51d770c667276d6bdb6c4dd202728cfec67aea65813d9
+// Source modules: 125
+// Source SHA-256: 83f77f9556f7d6abf3864bb0786a3469b0ecd1ce40e6fc323e0b99b58294492b
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -16,6 +16,7 @@ const __m_archive_requestBudget_js = Object.create(null);
 const __m_archive_snapshots_js = Object.create(null);
 const __m_archive_sourceLedger_js = Object.create(null);
 const __m_archive_sourceReadGuard_js = Object.create(null);
+const __m_core_advancedGeneration_js = Object.create(null);
 const __m_core_archiveCover_js = Object.create(null);
 const __m_core_autoUpdatePolicy_js = Object.create(null);
 const __m_core_autoUpdates_js = Object.create(null);
@@ -40,10 +41,13 @@ const __m_core_evidence_js = Object.create(null);
 const __m_core_heartLanguage_js = Object.create(null);
 const __m_core_incremental_js = Object.create(null);
 const __m_core_independentApi_js = Object.create(null);
+const __m_core_localRecoveryStore_js = Object.create(null);
+const __m_core_manualCredentialStore_js = Object.create(null);
 const __m_core_narrativeAuthority_js = Object.create(null);
 const __m_core_outputBudget_js = Object.create(null);
 const __m_core_pastLivesContract_js = Object.create(null);
 const __m_core_presentExpression_js = Object.create(null);
+const __m_core_recoverySourcePolicy_js = Object.create(null);
 const __m_core_relationshipSafety_js = Object.create(null);
 const __m_core_requestCoordinator_js = Object.create(null);
 const __m_core_selfUpdater_js = Object.create(null);
@@ -85,6 +89,7 @@ const __m_modes_themeSong_js = Object.create(null);
 const __m_modes_timeStories_js = Object.create(null);
 const __m_modes_travel_js = Object.create(null);
 const __m_ui_advEventView_js = Object.create(null);
+const __m_ui_advancedGenerationUi_js = Object.create(null);
 const __m_ui_albumCategory_js = Object.create(null);
 const __m_ui_albumView_js = Object.create(null);
 const __m_ui_archiveAvatars_js = Object.create(null);
@@ -123,6 +128,775 @@ const __m_ui_travelView_js = Object.create(null);
 const __m_ui_workspace_js = Object.create(null);
 const __m_ui_workspaceState_js = Object.create(null);
 const __m_ui_workspaceStyles_js = Object.create(null);
+
+function __init_core_digest_js() {
+// MODULE: core/digest.js
+
+// SHA-256 for content identity, including HTTP LAN hosts where SubtleCrypto is
+// unavailable. No credentials, network, dependency download or weaker hash fallback.
+let roundConstants;
+let initialWords;
+function constants() {
+    if (roundConstants) return;
+    const primes = [];
+    for (let n = 2; primes.length < 64; n++) {
+        if (!primes.some(p => p * p <= n && n % p === 0)) primes.push(n);
+    }
+    const fraction = value => Math.floor((value - Math.floor(value)) * 0x100000000) >>> 0;
+    roundConstants = primes.map(n => fraction(Math.cbrt(n)));
+    initialWords = primes.slice(0, 8).map(n => fraction(Math.sqrt(n)));
+}
+const rotate = (n, bits) => (n >>> bits) | (n << (32 - bits));
+function sha256Bytes(bytes) {
+    constants();
+    const padded = new Uint8Array(Math.ceil((bytes.length + 9) / 64) * 64);
+    padded.set(bytes); padded[bytes.length] = 0x80;
+    const view = new DataView(padded.buffer);
+    view.setUint32(padded.length - 8, Math.floor(bytes.length / 0x20000000));
+    view.setUint32(padded.length - 4, (bytes.length * 8) >>> 0);
+    const hash = initialWords.slice(), words = new Uint32Array(64);
+    for (let offset = 0; offset < padded.length; offset += 64) {
+        for (let i = 0; i < 16; i++) words[i] = view.getUint32(offset + i * 4);
+        for (let i = 16; i < 64; i++) {
+            const x = words[i - 15], y = words[i - 2];
+            words[i] = (words[i - 16] + (rotate(x, 7) ^ rotate(x, 18) ^ (x >>> 3)) + words[i - 7]
+                + (rotate(y, 17) ^ rotate(y, 19) ^ (y >>> 10))) >>> 0;
+        }
+        let [a,b,c,d,e,f,g,h] = hash;
+        for (let i = 0; i < 64; i++) {
+            const one = (h + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25)) + ((e & f) ^ (~e & g)) + roundConstants[i] + words[i]) >>> 0;
+            const two = ((rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
+            h=g; g=f; f=e; e=(d+one)>>>0; d=c; c=b; b=a; a=(one+two)>>>0;
+        }
+        [a,b,c,d,e,f,g,h].forEach((value, i) => { hash[i] = (hash[i] + value) >>> 0; });
+    }
+    return hash.map(value => value.toString(16).padStart(8, '0')).join('');
+}
+async function sha256Text(input) {
+    const bytes = new TextEncoder().encode(input);
+    if (globalThis.crypto?.subtle) {
+        try {
+            const result = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+            return [...new Uint8Array(result)].map(value => value.toString(16).padStart(2, '0')).join('');
+        } catch { /* Some host webviews expose the API but reject its use. */ }
+    }
+    return sha256Bytes(bytes);
+}
+
+__m_core_digest_js.sha256Text = sha256Text;
+__m_core_digest_js.sha256Bytes = sha256Bytes;
+}
+
+function __init_core_localRecoveryStore_js() {
+// MODULE: core/localRecoveryStore.js
+
+// Own, lazy browser storage. Never opened by bootstrap or ordinary message events.
+// A revisioned null payload is a tombstone: delayed writers cannot resurrect it.
+const DATABASE = 'heartbeat_memories_local_recovery_v1';
+const STORE = 'records';
+let testBackend = null;
+function setLocalRecoveryBackendForTests(value) { testBackend = value; }
+function localRecoveryStorageAvailable() {
+    try { return !!testBackend || typeof globalThis.indexedDB?.open === 'function'; } catch { return false; }
+}
+function failure(code = 'RMT_LOCAL_STORAGE') {
+    const error = new Error(code === 'RMT_LOCAL_CAS' ? '本机保存版本已变化；原记录保留，请重新打开后继续。' : '浏览器未能保存本机记录；原记录保留，请勿刷新未保存的页面。');
+    Object.assign(error, { code, safeToDisplay: true, safeUserMessage: error.message, retryable: false, retryableJson: false });
+    return error;
+}
+async function database() {
+    return new Promise((resolve, reject) => {
+        let request, settled = false;
+        const timer = setTimeout(() => { settled = true; reject(failure()); }, 5000);
+        const stop = () => { clearTimeout(timer); if (!settled) { settled = true; reject(failure()); } };
+        try {
+            request = globalThis.indexedDB.open(DATABASE, 1);
+            request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains(STORE)) request.result.createObjectStore(STORE, { keyPath: 'key' }); };
+            request.onerror = stop; request.onblocked = stop;
+            request.onsuccess = () => {
+                if (settled) { request.result.close(); return; }
+                settled = true; clearTimeout(timer);
+                request.result.onversionchange = () => request.result.close();
+                resolve(request.result);
+            };
+        } catch { stop(); }
+    });
+}
+function validKey(key) { return typeof key === 'string' && /^(?:draft:[a-f0-9]{64}|credential:[a-f0-9-]{36})$/.test(key); }
+async function readLocalRecoveryRecord(key) {
+    if (!validKey(key)) throw failure();
+    if (testBackend) return testBackend.read(key);
+    const db = await database();
+    try {
+        return await new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE, 'readonly'); let result = null;
+            const timer = setTimeout(() => { try { tx.abort(); } catch {} reject(failure()); }, 5000);
+            const request = tx.objectStore(STORE).get(key);
+            request.onsuccess = () => { result = request.result || null; };
+            tx.oncomplete = () => { clearTimeout(timer); resolve(result); };
+            tx.onabort = tx.onerror = () => { clearTimeout(timer); reject(failure()); };
+        });
+    } finally { db.close(); }
+}
+async function compareLocalRecoveryRecord(key, expectedRevision, payload) {
+    if (!validKey(key) || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw failure();
+    if (testBackend) return testBackend.compare(key, expectedRevision, payload);
+    const db = await database();
+    try {
+        return await new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE, 'readwrite'); let mismatch = false;
+            const timer = setTimeout(() => { try { tx.abort(); } catch {} reject(failure()); }, 5000);
+            const store = tx.objectStore(STORE), request = store.get(key);
+            request.onsuccess = () => {
+                if ((request.result?.revision || 0) !== expectedRevision) { mismatch = true; tx.abort(); return; }
+                store.put({ key, revision: expectedRevision + 1, payload });
+            };
+            tx.oncomplete = () => { clearTimeout(timer); resolve(expectedRevision + 1); };
+            tx.onabort = tx.onerror = () => { clearTimeout(timer); reject(failure(mismatch ? 'RMT_LOCAL_CAS' : 'RMT_LOCAL_STORAGE')); };
+        });
+    } finally { db.close(); }
+}
+
+__m_core_localRecoveryStore_js.readLocalRecoveryRecord = readLocalRecoveryRecord;
+__m_core_localRecoveryStore_js.compareLocalRecoveryRecord = compareLocalRecoveryRecord;
+__m_core_localRecoveryStore_js.setLocalRecoveryBackendForTests = setLocalRecoveryBackendForTests;
+__m_core_localRecoveryStore_js.localRecoveryStorageAvailable = localRecoveryStorageAvailable;
+}
+
+function __init_core_manualCredentialStore_js() {
+// MODULE: core/manualCredentialStore.js
+const store = __m_core_localRecoveryStore_js;
+// Explicitly entered manual credentials only. Settings keep an opaque reference.
+// AES-GCM prevents plaintext in ordinary settings/export files; same-origin scripts
+// still share browser privileges. This is not a password-protected external vault.
+
+const REF = /^credential:[a-f0-9-]{36}$/;
+const lanes = new Map();
+const validManualSecretRef = value => typeof value === 'string' && REF.test(value) ? value : '';
+function credentialError() {
+    const error = new Error('手动 API Key 未能从本机加密存储保存或取回；没有使用其他连接的 Key。请保留页面并检查本机存储，或重新输入。');
+    Object.assign(error, { code: 'RMT_MANUAL_KEY_STORAGE', safeToDisplay: true, safeUserMessage: error.message, retryable: false, retryableJson: false });
+    return error;
+}
+function inLane(id, action) {
+    const next = (lanes.get(id) || Promise.resolve()).catch(() => {}).then(action);
+    lanes.set(id, next); void next.finally(() => { if (lanes.get(id) === next) lanes.delete(id); }).catch(() => {});
+    return next;
+}
+async function saveManualCredential(base, value, reference = '') {
+    if (typeof base !== 'string' || !base || typeof value !== 'string' || !value || value.length > 4000) throw credentialError();
+    let id;
+    try { id = validManualSecretRef(reference) || `credential:${globalThis.crypto.randomUUID()}`; } catch { throw credentialError(); }
+    return inLane(id, async () => {
+        try {
+            const crypto = globalThis.crypto;
+            const old = await store.readLocalRecoveryRecord(id);
+            const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const bytes = new TextEncoder().encode(value);
+            let ciphertext;
+            try { ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(JSON.stringify([id, base])) }, key, bytes); }
+            finally { bytes.fill(0); }
+            await store.compareLocalRecoveryRecord(id, old?.revision || 0, { version: 1, base, key, iv, ciphertext });
+            return id;
+        } catch { throw credentialError(); }
+    });
+}
+async function readManualCredential(base, reference) {
+    const id = validManualSecretRef(reference);
+    if (!id) return '';
+    try {
+        await lanes.get(id);
+        const saved = (await store.readLocalRecoveryRecord(id))?.payload;
+        if (saved?.version !== 1 || saved.base !== base || !saved.key || saved.key.extractable !== false
+            || !(saved.iv instanceof Uint8Array) || saved.iv.byteLength !== 12
+            || !(saved.ciphertext instanceof ArrayBuffer) || saved.ciphertext.byteLength > 16016) throw credentialError();
+        const decrypted = await globalThis.crypto.subtle.decrypt({ name: 'AES-GCM', iv: saved.iv,
+            additionalData: new TextEncoder().encode(JSON.stringify([id, base])) }, saved.key, saved.ciphertext);
+        const bytes = new Uint8Array(decrypted);
+        try { const value = new TextDecoder('utf-8', { fatal: true }).decode(bytes); if (!value || value.length > 4000) throw credentialError(); return value; }
+        finally { bytes.fill(0); }
+    } catch { throw credentialError(); }
+}
+async function clearManualCredential(reference) {
+    const id = validManualSecretRef(reference); if (!id) return true;
+    return inLane(id, async () => {
+        try { const old = await store.readLocalRecoveryRecord(id); await store.compareLocalRecoveryRecord(id, old?.revision || 0, null); return true; }
+        catch { throw credentialError(); }
+    });
+}
+
+__m_core_manualCredentialStore_js.saveManualCredential = saveManualCredential;
+__m_core_manualCredentialStore_js.readManualCredential = readManualCredential;
+__m_core_manualCredentialStore_js.clearManualCredential = clearManualCredential;
+__m_core_manualCredentialStore_js.validManualSecretRef = validManualSecretRef;
+}
+
+function __init_core_backupDiagnostics_js() {
+// MODULE: core/backupDiagnostics.js
+
+// Backup diagnostics contain only code-owned labels. Never inspect or stringify
+// an exception message, stack, URL, archive, prompt or provider response here.
+const failureDetails = new WeakMap();
+let lastObservedFailure = null;
+const categories = Object.freeze({
+    quota: ['RMT_BACKUP_QUOTA', '浏览器可用存储空间不足，独立备份未更新。', '先导出保留现有档案，再检查浏览器可用存储；不要清除此站点数据。'],
+    blocked: ['RMT_BACKUP_BLOCKED', '其他页面阻挡了独立备份数据库的打开或升级。', '关闭其他同站点页面后手动重试，不要删除现有数据库。'],
+    security: ['RMT_BACKUP_SECURITY', '浏览器安全或隐私策略拒绝了独立备份访问。', '检查当前站点的存储权限与隐私模式，再手动重试。'],
+    clone: ['RMT_BACKUP_CLONE', '备份数据无法复制或序列化，独立备份未更新。', '保留当前档案并报告此代码；不要重建或清空档案。'],
+    schema: ['RMT_BACKUP_SCHEMA', '备份数据或数据库结构不兼容，独立备份未更新。', '保留当前档案并报告此代码；不要删除数据库或自动重建。'],
+    transaction: ['RMT_BACKUP_TRANSACTION', '独立备份事务未完成，未确认写入成功。', '保留当前档案，确认其他页面的操作后手动重试。'],
+    unavailable: ['RMT_BACKUP_UNAVAILABLE', '当前环境没有可用的独立备份存储。', '检查浏览器是否允许此站点使用 IndexedDB，再手动重试。'],
+    unknown: ['RMT_BACKUP_UNKNOWN', '独立备份未完成，现有信息不足以判断原因。', '保留当前档案，反馈诊断代码和阶段；不要清空站点数据。'],
+});
+const stages = new Set(['open', 'upgrade', 'read', 'write', 'serialize', 'normalize', 'prepare', 'mirror', 'reconcile', 'unknown']);
+const logicalCodes = new Set(['RMT_CACHE_CAS_CONFLICT', 'RMT_ARCHIVE_DELETED_FENCE']);
+const BACKUP_FAILURE_MESSAGES = Object.freeze(Object.fromEntries(
+    Object.values(categories).map(([code, message]) => [code, message]),
+));
+const nameCategories = Object.freeze({
+    QuotaExceededError: 'quota', NS_ERROR_DOM_QUOTA_REACHED: 'quota',
+    SecurityError: 'security', NotAllowedError: 'security',
+    DataCloneError: 'clone',
+    VersionError: 'schema', NotFoundError: 'schema', ConstraintError: 'schema', DataError: 'schema',
+    AbortError: 'transaction', TransactionInactiveError: 'transaction', ReadOnlyError: 'transaction', InvalidStateError: 'transaction',
+    NotSupportedError: 'unavailable',
+});
+const domExceptionName = typeof DOMException === 'function'
+    ? Object.getOwnPropertyDescriptor(DOMException.prototype, 'name')?.get : null;
+
+function isObject(value) { return value !== null && (typeof value === 'object' || typeof value === 'function'); }
+
+// Inspect only data descriptors: arbitrary thrown objects may contain getters.
+function dataValue(value, key) {
+    if (!isObject(value)) return undefined;
+    try {
+        let cursor = value;
+        for (let depth = 0; cursor && depth < 5; depth += 1, cursor = Object.getPrototypeOf(cursor)) {
+            const descriptor = Object.getOwnPropertyDescriptor(cursor, key);
+            if (descriptor) return Object.prototype.hasOwnProperty.call(descriptor, 'value') ? descriptor.value : undefined;
+        }
+    } catch { /* A proxy is not a diagnostic source. */ }
+    return undefined;
+}
+
+function safeErrorName(error) {
+    const name = dataValue(error, 'name');
+    if (typeof name === 'string') return name;
+    if (domExceptionName && isObject(error)) {
+        try { return domExceptionName.call(error); } catch { /* Not a native DOMException. */ }
+    }
+    return '';
+}
+
+function classification(error) {
+    const seen = new Set();
+    let current = error;
+    let transaction = null;
+    for (let depth = 0; isObject(current) && !seen.has(current) && depth < 8; depth += 1) {
+        seen.add(current);
+        const detail = failureDetails.get(current);
+        const code = dataValue(current, 'code');
+        if (logicalCodes.has(code)) return { category: 'transaction', code };
+        if (logicalCodes.has(detail?.code)) return { category: 'transaction', code: detail.code };
+        const known = Object.keys(categories).find(category => categories[category][0] === code);
+        const name = safeErrorName(current);
+        const category = detail?.category && detail.category !== 'unknown' ? detail.category
+            : known && known !== 'unknown' ? known
+                : Object.prototype.hasOwnProperty.call(nameCategories, name) ? nameCategories[name] : null;
+        if (category) {
+            const found = { category, code: categories[category][0] };
+            // IndexedDB often aborts the transaction because an inner request ran
+            // out of quota or hit a permission error. Keep that specific cause.
+            if (category !== 'transaction') return found;
+            transaction = found;
+        }
+        current = detail?.cause || dataValue(current, 'cause');
+    }
+    return transaction || { category: 'unknown', code: categories.unknown[0] };
+}
+
+function makeDetails(error, stage, fallbackCategory) {
+    const existing = isObject(error) ? failureDetails.get(error) : null;
+    const found = classification(error);
+    const category = found.category !== 'unknown' ? found.category
+        : Object.prototype.hasOwnProperty.call(categories, fallbackCategory) ? fallbackCategory : 'unknown';
+    return {
+        category,
+        code: logicalCodes.has(found.code) ? found.code : categories[category][0],
+        stage: existing?.stage && existing.stage !== 'unknown' ? existing.stage : stages.has(stage) ? stage : 'unknown',
+        cause: error,
+    };
+}
+
+// Retains the original thrown value/identity for existing transport/backend
+// contracts. Only module-private metadata changes; nothing is logged or saved.
+function annotateBackupFailure(error, stage, category = 'unknown') {
+    const detail = makeDetails(error, stage, category);
+    if (isObject(error) && !failureDetails.has(error)) failureDetails.set(error, { ...detail, cause: undefined });
+    lastObservedFailure = { code: detail.code, category: detail.category, stage: detail.stage };
+    return error;
+}
+
+// For errors produced at the actual storage boundary, expose a safe fixed
+// message and retain the original cause privately (not enumerable or loggable).
+function backupFailureError(error, stage, category = 'unknown') {
+    const detail = makeDetails(error, stage, category);
+    const wrapped = new Error(categories[detail.category][1]);
+    wrapped.code = detail.code;
+    wrapped.kind = 'storage';
+    wrapped.backupStage = detail.stage;
+    wrapped.retryable = false;
+    failureDetails.set(wrapped, detail);
+    lastObservedFailure = { code: detail.code, category: detail.category, stage: detail.stage };
+    return wrapped;
+}
+
+// Only actual backup-boundary annotations and code-owned backup wrappers count
+// as storage errors. A provider's quota/AbortError must stay a provider error.
+function backupFailureDiagnostic(error) {
+    const detail = isObject(error) ? failureDetails.get(error) : null;
+    const code = dataValue(error, 'code');
+    if (!detail && !(typeof code === 'string' && Object.prototype.hasOwnProperty.call(BACKUP_FAILURE_MESSAGES, code))
+        && !(logicalCodes.has(code) && dataValue(error, 'kind') === 'storage')) return null;
+    const found = classification(error);
+    const stageValue = detail?.stage || dataValue(error, 'backupStage');
+    return { code: found.code, category: found.category, stage: stages.has(stageValue) ? stageValue : 'unknown' };
+}
+
+// A historical failure only; no health claim and no new storage access. Never
+// retain the exception object, message, stack or stored payload in this snapshot.
+function backupDiagnosticSnapshot() {
+    return { scope: 'runtime', lastFailure: lastObservedFailure ? { ...lastObservedFailure } : null };
+}
+
+function backupFailureSummary(error) {
+    const detail = isObject(error) ? failureDetails.get(error) : null;
+    const found = classification(error);
+    const stageValue = detail?.stage || dataValue(error, 'backupStage');
+    const stage = stages.has(stageValue) ? stageValue : 'unknown';
+    const category = found.category;
+    let message = categories[category][1];
+    let action = categories[category][2];
+    if (found.code === 'RMT_CACHE_CAS_CONFLICT') {
+        message = '独立备份已被其他页面更新，本次旧结果未覆盖它。';
+        action = '等待当前合并完成；不要重建档案或删除备份。';
+    } else if (found.code === 'RMT_ARCHIVE_DELETED_FENCE') {
+        message = '档案删除围栏阻止了旧任务重新创建备份。';
+        action = '保留删除状态；不要自动恢复或重建此档案。';
+    }
+    return { code: found.code, category, stage, message, action };
+}
+
+__m_core_backupDiagnostics_js.annotateBackupFailure = annotateBackupFailure;
+__m_core_backupDiagnostics_js.backupFailureError = backupFailureError;
+__m_core_backupDiagnostics_js.backupFailureDiagnostic = backupFailureDiagnostic;
+__m_core_backupDiagnostics_js.backupDiagnosticSnapshot = backupDiagnosticSnapshot;
+__m_core_backupDiagnostics_js.backupFailureSummary = backupFailureSummary;
+__m_core_backupDiagnostics_js.BACKUP_FAILURE_MESSAGES = BACKUP_FAILURE_MESSAGES;
+}
+
+function __init_core_text_js() {
+// MODULE: core/text.js
+const core_context = __m_core_context_js;
+const core_backupDiagnostics = __m_core_backupDiagnostics_js;
+// Heartbeat Memories r35 modular runtime.
+// Extracted from r34 without changing archive/cache storage contracts.
+
+
+function esc(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function normalizeText(value, max = 20000) {
+    return String(value ?? '')
+        .replace(/\r\n?/g, '\n')
+        .replace(/\u0000/g, '')
+        .trim()
+        .slice(0, max);
+}
+
+function isPlaceholderText(value) {
+    const text = normalizeText(value, 120).replace(/\s+/g, '');
+    if (!text) return true;
+    return /^(?:暂无(?:数据|内容)?|待定|待补(?:全)?|未整理|整理中|内容整理中|略|省略|空白|无|none|null|n\/?a|[-—_]{2,}|[.。…?？]{2,})$/i.test(text);
+}
+
+function expandSafeRoleMacros(value, context = core_context.getContext()) {
+    const charName = normalizeText(context.name2 || '角色', 120);
+    const userName = normalizeText(context.name1 || '用户', 120);
+    return String(value ?? '')
+        .replace(/\{\{char\}\}/gi, charName)
+        .replace(/\{\{user\}\}/gi, userName)
+        .replace(/\{\{([^{}\n]{1,200})\}\}/g, (_match, inner) => `｛｛${inner}｝｝`);
+}
+
+function toastText(value, max = 800) {
+    return normalizeText(value, max)
+        .replace(/</g, '‹')
+        .replace(/>/g, '›')
+        .replace(/&/g, '＆');
+}
+
+const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
+    RMT_LOCAL_STORAGE: '本机记录未能保存；旧记录与当前页面内容保留，请勿刷新未保存的页面。',
+    RMT_LOCAL_CAS: '本机记录已被另一操作更新；没有覆盖旧记录，请重新打开后继续。',
+    RMT_MANUAL_KEY_STORAGE: 'Key 未能保存或取回；没有明文落盘或借用其他连接。请保留页面并检查本机存储。',
+    RMT_ADVANCED_PARAMETERS: '高级参数无效或包含受保护字段；只允许采样与推理配置，不能覆盖模型、消息、最大输出、连接、Key 或工具。',
+    RMT_ADVANCED_BACKEND: '非空排参／附加 JSON 需要手动 API 或自定义 Chat Completions Profile；本次没有改连接或静默忽略参数。',
+    RMT_RECOVERY_SOURCE_CHANGED: '角色卡、Persona 或来源选择与原任务不同；原成果与草稿保留，未发起请求。',
+    RMT_ARCHIVE_DRAFT_STORAGE: '整理草稿尚未确认保存到本机；成功分段仍保留在当前页面，请先导出，勿刷新。',
+
+    ...core_backupDiagnostics.BACKUP_FAILURE_MESSAGES,
+    RMT_DEFERRED_QUOTA: '浏览器可用存储空间不足，待写回结果仅保留在当前页面。',
+    RMT_DEFERRED_SECURITY: '浏览器权限或隐私设置阻止保存待写回结果；结果仅保留在当前页面。',
+    RMT_DEFERRED_UNAVAILABLE: '当前环境无法使用待写回存储；结果仅保留在当前页面。',
+    RMT_DEFERRED_LIMIT: '待写回结果超过本地安全容量；结果仅保留在当前页面。',
+    RMT_DEFERRED_SERIALIZE: '待写回结果无法序列化；结果仅保留在当前页面。',
+    RMT_DEFERRED_UNKNOWN: '待写回结果未能保存到浏览器；结果仅保留在当前页面。',
+    RMT_PROFILE_CAPABILITY: '1.1.18 一键配置要求新版连接能力；当前页面未提供安全的配置读取能力，本次没有发送请求。',
+    RMT_MANUAL_API_URL: '手动 API 地址无效；请检查地址，并把 Key、Token 或密码放在独立凭据输入框中。',
+    RMT_MANUAL_API_TRANSPORT: '远程手动 API 必须使用 HTTPS；只有本机地址可以使用 HTTP。',
+    RMT_MANUAL_RESPONSE_TOO_LARGE: '模型服务返回内容过大，已停止读取。',
+    RMT_RESPONSE_HTML: '上游返回了非 API 的 HTML 页面；响应正文已隐藏。',
+    RMT_MANUAL_INVALID_JSON: '接口响应封装无法解析；尚不能判断是模型正文格式、代理错误页或传输损坏，响应正文已隐藏。',
+    RMT_MANUAL_HTTP: '手动 API 请求失败；请检查手动配置与服务状态。',
+    RMT_MANUAL_PROVIDER_ERROR: '手动 API 返回了错误状态；响应详情已隐藏，请检查服务配置后重试。',
+    RMT_MANUAL_FETCH_UNAVAILABLE: '当前环境没有可用的网络请求能力。',
+    RMT_MANUAL_MODELS_EMPTY: '接口没有返回可用模型；仍可直接填写模型 ID。',
+    RMT_MANUAL_MODEL_TIMEOUT: '拉取模型超时；仍可直接填写模型 ID。',
+    RMT_MANUAL_MODEL: '请先填写手动 API 的模型 ID。',
+    RMT_MANUAL_MESSAGES: '手动 API 请求缺少必要消息，本次没有发送。',
+    RMT_MANUAL_EMPTY: '手动 API 没有返回可见正文。',
+    RMT_API_CONFIG_CHANGED: 'API 配置在生成期间发生变化，本次旧连接结果已丢弃。',
+    RMT_API_CONFIGURATION_SUPERSEDED: 'API 设置已经变化，本次旧配置操作已取消。',
+    RMT_API_MODEL_REQUEST_SUPERSEDED: '模型列表请求已被更新的请求取代。',
+    RMT_PROFILE_PROXY_UNAVAILABLE: '这一键连接指定的代理无法从该 Profile 自身安全解析；已停止远端拉取。',
+    RMT_PROFILE_MODEL_STATUS: '这一键连接的模型列表返回了错误状态；响应详情已隐藏。',
+    RMT_PROFILE_MODEL_TIMEOUT: '一键连接的模型列表请求超时；仍可使用该连接自己保存的模型。',
+    RMT_CONNECTION_FAILED: '生成连接请求失败，尚不能确定原因；请查看连接与服务端状态后再试，旧内容保留。',
+    RMT_CONNECTION_AUTH: '专用连接认证失败；请检查当前配置、API Key 与账号权限。',
+    RMT_CONNECTION_RATE_LIMIT: '模型服务正在限流或额度不足；请稍后重试。',
+    RMT_CONNECTION_QUOTA: '模型服务报告额度不足；请检查当前独立 API 账号余额或配额。不会自动重试。',
+    RMT_ARCHIVE_VERDICT: '档案简介尚未通过校验；原有回忆与封面保留，可只重写简介，无需重建档案。',
+    RMT_CONNECTION_CONTEXT_LIMIT: '本段输入超过模型或代理的上下文上限；请减少导入资料或更换模型。',
+    RMT_CONNECTION_CONFIG: '专用连接、模型或上游端点不可用；请重新检查配置。',
+    RMT_CONNECTION_INVALID_REQUEST: '上游拒绝了本段请求；请检查模型兼容性与输出设置。',
+    RMT_CONNECTION_SERVER: '模型服务或代理暂时不可用；请稍后重试。',
+    RMT_CONNECTION_NETWORK: '无法连接模型服务；请检查地址、网络、代理与服务状态后重试。',
+    RMT_REQUEST_TIMEOUT: '模型请求超时，已停止等待并释放任务位；请稍后重试。',
+    RMT_SEGMENT_VALIDATION: '模型结果没有通过本地完整性校验；旧内容未被覆盖。',
+    RMT_PAST_LIVES_STRUCTURE: '前世今生这一段的结构不完整；已保留成功部分，只需重试未完成段。',
+    RMT_PAST_LIVES_RELATIONSHIP: '前世今生这一段出现与两人设定冲突的关系表述；已保留成功部分，可重试这一段。',
+    RMT_PAST_LIVES_HISTORY: '今生回响把尚未发生的内容写成了既往记忆；已保留成功部分，可重试这一段。',
+    RMT_PAST_LIVES_SOURCE: '关联记忆与当前档案不一致；旧内容保留，请回到对应档案重试。',
+    RMT_PAST_LIVES_VERSION: '这份前世今生暂时无法按当前格式读取；旧记录保留，请勿删除档案。',
+    RMT_PAST_LIVES_LIMIT: '前世今生已达到本地保存容量；旧内容与成功部分保留。',
+    RMT_TIME_STORY_STRUCTURE: '这一篇的时间、人物或正文不完整；旧篇章保留，可重试当前故事。',
+    RMT_TIME_STORY_WORLD: '这一篇的联络媒介与世界设定不符；旧篇章保留，可重试当前故事。',
+    RMT_TIME_STORY_RELATIONSHIP: '这一篇出现与两人设定冲突的关系表述；旧篇章保留。',
+    RMT_TIME_STORY_SOURCE: '番外所属聊天、人物或档案版本不一致；请重新打开对应档案。',
+    RMT_TIME_STORY_VERSION: '这份番外暂不可安全读取；原记录保持不变，请勿删除档案。',
+    RMT_TIME_STORY_LIMIT: '番外已达到本地保存容量；旧篇章保留，请先备份整理。',
+    RMT_PAIR_RELATIONSHIP: '这一段出现与两人设定冲突的关系表述；原有内容保留。',
+    RMT_RECOVERY_INPUT_CHANGED: '原任务的聊天身份、档案版本、来源或生成条件与当前输入不一致；成功内容和草稿保留，没有自动重做。请核对原任务来源后再继续。',
+    RMT_RECOVERY_ORIGIN_CHANGED: '目标聊天或角色已变化；本次没有覆盖档案，请回到原聊天继续。',
+    RMT_CACHE_CAS_CONFLICT: '档案已被其他操作更新；本次旧结果没有覆盖新内容，请检查当前档案后再保存。',
+    RMT_RECOVERY_IDENTITY: '缺少当前档案身份，本次未发送；请重新打开对应档案。',
+    RMT_RECOVERY_BUSY: '这一段正在生成，请等当前请求结束。',
+    RMT_RECOVERY_FAILED: '具体原因未记录；旧内容保留，可重试。',
+    RMT_RECOVERY_VALIDATION_CHANGED: '已保存片段暂未通过当前校验；草稿仍保留，没有重新收费生成。',
+    RMT_RECOVERY_STORAGE: '这一段已返回，但浏览器没有保存成功；已停止后续生成，请检查存储后重试。',
+    RMT_RECOVERY_LIMIT: '这一段超出草稿保存容量；此前成功部分与旧内容保留。',
+    RMT_RECOVERY_UNAVAILABLE: '当前环境无法建立可靠的续写记录；请保留页面与已有内容。',
+    RMT_RECOVERY_DATA: '这一段的返回结构无法保存；此前成功部分与旧内容保留。',
+    RMT_BUTTERFLY_systemNote: '该节点缺少完整的系统结局判定；旧内容保留，可单独重试。',
+    RMT_BUTTERFLY_monologue: '该节点的角色独白不完整；旧内容保留，可单独重试。',
+    RMT_BUTTERFLY_intervention: '该节点缺少完整的现世回应；旧内容保留，可单独重试。',
+    RMT_BUTTERFLY_omega: '最终观测点的告白或结局判定不完整；旧内容保留，可单独重试。',
+    RMT_BUTTERFLY_worldSpec: '该节点的世界条件不完整；旧内容保留，可单独重试。',
+    RMT_ROOM_STRUCTURE: '房间的空间差异、四时段生活或互动台词不完整；已保留旧内容，可单独重试房间。',
+    RMT_ROOM_FIELDS: '房间的待补文字或增量物件尚未通过校验；已保留旧内容，请重试。若反复截断，请检查最大输出设置。',
+    RMT_BUTTERFLY_relationship: '该节点的人物关系归属不明确；旧内容保留，请重试此节点。',
+    RMT_BUTTERFLY_unique: '该节点重复或分歧维度不符；旧内容保留，请重试此节点。',
+    RMT_ROOM_PETS: '人设有宠物，但模型漏写了有效宠物节点；请单独重试房间。',
+    RMT_TRAVEL_LOCATIONS: '尚无通过证据与对白校验的地点；请确认档案或已选设定世界书包含地点。不会补造远方，旧地图保留。',
+    RMT_SETTING_SOURCE_PARTIAL: '所选设定世界书读取不完整或超出本次容量；请检查所选书和条目后重试，旧内容保留。',
+    RMT_ARCHIVE_PREFIX_CHANGED: '旧档案与当前历史基线不一致，可能是旧消息被修改或旧版漏收了隐藏楼层。本次未覆盖；请先检查来源，不必删除档案。',
+    RMT_ARCHIVE_SOURCE_MISMATCH: '当前聊天中的档案标识或格式不匹配，已停止生成并保留原数据。',
+    RMT_ROOM_HISTORY: '房间台词把没有证据的共同经历当成了过去；本次未保存，可重试。',
+    RMT_LEDGER_UNAVAILABLE: '浏览器来源存储暂时不可用。请退出隐私模式或关闭旧页后重试；不要清除站点数据。',
+    RMT_BANNED_GENERATED_PHRASE: '模型新生成内容命中了本地禁用词；本次结果没有保存。',
+    RMT_JSON_EMPTY_FINAL: '模型没有返回最终正文 JSON；旧内容未被覆盖。',
+    RMT_JSON_EMPTY_FINAL_WITH_REASONING: '本次响应只有推理字段，没有最终正文 JSON；未采用推理内容，也没有自动重试。可核对渠道支持的推理／流式参数后手动再试，旧内容保留。',
+    RMT_RESPONSE_FORMAT: '当前连接返回了未识别的正文包装；旧内容保留，请导出诊断以核对返回格式。',
+    RMT_JSON_NOT_FOUND: '模型最终正文中没有完整 JSON；旧内容未被覆盖。',
+    RMT_JSON_TRUNCATED: '模型返回的 JSON 疑似被截断；旧内容未被覆盖。',
+    RMT_PHONE_DRAFT_AVAILABLE: '私人终端只完成了部分内容；已保留可继续生成的草稿。',
+    RMT_PHONE_DRAFT_UNAVAILABLE: '私人终端未完成，且本次草稿未能保存；旧终端保留。请检查存储状态后重试。',
+    RMT_PHONE_SPEAKERS: '聊天缺少有原文依据的双方发言；不会补造对话来凑数量。',
+    RMT_PHONE_EVIDENCE: '这项终端内容缺少完整的条目或来源证据；旧内容保留，可继续补齐。',
+    RMT_PHONE_SOURCE_EMPTY: '当前来源不足以收录终端内容；请补充来源并更新档案后再生成，不会编造记录。',
+    RMT_PHONE_SOURCE_CHANGED: '终端草稿的来源已变化，已完成内容未删除。请恢复原来的设定来源后继续，或明确重新生成终端。',
+    RMT_ARCHIVE_CONTEXT_BUDGET: '完整建档请求超出已确认的模型上下文预算，未发送；来源与草稿保留，没有降低输出。',
+    RMT_ARCHIVE_OUTPUT_BUDGET: '请求的最大输出超过已确认能力，未发送且没有擅自降低输出。',
+    RMT_ARCHIVE_CHECKPOINT: '建档检查点格式或容量异常，旧成果保留，未自动重建。',
+    RMT_ARCHIVE_SOURCE_CAPACITY: '全部来源超过账本容量，未仅截取前半部分冒充完成。',
+    RMT_ARCHIVE_RESULT_CAPACITY: '本段结果超过原校验容量，未截取结果或推进完成进度。',
+    RMT_INPUT_BUDGET: '本次输入超过安全预算，已在发送前拦截。',
+    RMT_TOKEN_COUNT_TIMEOUT: '输入检查超时，本段未发送；旧内容保留，可重试。',
+    RMT_TOKEN_COUNT_UNAVAILABLE: '本地计数暂不可用。',
+    RMT_JSON_INVALID: '模型没有返回完整、可解析的 JSON；响应正文已隐藏。',
+    RMT_ARCHIVE_DELETED_FENCE: '目标档案已被明确删除；较早启动的任务不会重新创建它。',
+    RMT_METADATA_DURABILITY_UNAVAILABLE: '当前页面无法确认档案已经持久保存；结果保留待重试，不会假装成功。',
+});
+
+const SAFE_DIAGNOSTIC_CODES = new Set([
+    ...Object.keys(SAFE_ERROR_CODE_MESSAGES),
+    'ABORT_ERR', 'RMT_LOCAL_OPERATION',
+]);
+
+function safeErrorStatus(error) {
+    const value = Number(error?.status ?? error?.statusCode ?? error?.response?.status);
+    return Number.isFinite(value) && value >= 100 && value <= 599 ? Math.floor(value) : 0;
+}
+
+function safeErrorCode(error) {
+    const value = normalizeText(error?.code, 80);
+    return SAFE_DIAGNOSTIC_CODES.has(value) ? value : '';
+}
+
+function sanitizedTrustedErrorMessage(value, max) {
+    const raw = normalizeText(value, Math.max(1200, max * 2));
+    if (!raw) return '';
+    const sensitive = /authorization\s*[:=]|bearer\s+[a-z0-9._~+\/-]{8,}|\bsk-[a-z0-9_-]{8,}\b|[?&](?:api[_-]?key|key|token|secret|password)=|<!doctype\s+html|<html(?:\s|>)|<body(?:\s|>)|failed to generate chat completion\s*:/i;
+    if (sensitive.test(raw)) return '';
+    return normalizeText(raw.replace(/[\r\n]+/g, ' '), max);
+}
+
+function safeUserError(message, code = 'RMT_LOCAL_OPERATION', options = {}) {
+    const error = new Error(normalizeText(message, 1200) || '操作失败。');
+    error.code = /^[A-Z][A-Z0-9_]{1,79}$/.test(String(code || '')) ? String(code) : 'RMT_LOCAL_OPERATION';
+    error.safeToDisplay = true;
+    error.safeUserMessage = error.message;
+    if (Number.isFinite(Number(options.status))) error.status = Math.floor(Number(options.status));
+    if (typeof options.retryable === 'boolean') error.retryable = options.retryable;
+    return error;
+}
+
+/**
+ * Return only low-cardinality, allowlisted diagnostic fields. This object is safe
+ * for console logging and must never contain provider bodies, prompts, history,
+ * world-book text, archive text, URLs, keys, tokens, or raw exception messages.
+ */
+function safeErrorDiagnostic(error) {
+    const backup = core_backupDiagnostics.backupFailureDiagnostic(error);
+    if (backup) return { code: backup.code, kind: 'storage', retryable: false,
+        backupCategory: backup.category, backupStage: backup.stage };
+    const diagnostic = {};
+    const name = normalizeText(error?.name, 40);
+    const code = safeErrorCode(error);
+    const status = safeErrorStatus(error);
+    const kind = normalizeText(error?.kind, 40);
+    if (/^(?:Error|TypeError|RangeError|SyntaxError|AbortError|TimeoutError|DOMException)$/.test(name)) diagnostic.name = name;
+    if (code) diagnostic.code = code;
+    if (status) diagnostic.status = status;
+    if (/^(?:network|timeout|transport|provider|validation|storage|lifecycle)$/.test(kind)) diagnostic.kind = kind;
+    if (typeof error?.retryable === 'boolean') diagnostic.retryable = error.retryable;
+    if (typeof error?.retryableJson === 'boolean') diagnostic.retryableJson = error.retryableJson;
+    return diagnostic;
+}
+
+function safeErrorSummary(error, max = 520) {
+    if (core_backupDiagnostics.backupFailureDiagnostic(error)) {
+        return normalizeText(core_backupDiagnostics.backupFailureSummary(error).message, max);
+    }
+    const categories = { chat: '聊天正文或聊天身份', character: '角色身份或角色卡', persona: '用户 Persona',
+        archive: '正式档案版本', range: '聊天读取范围', selection: '来源选择', configuration: '生成配置',
+        sources: '已捕获来源快照', unknown: '旧格式草稿身份' };
+    if (['RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_SOURCE_CHANGED'].includes(error?.code) && Object.hasOwn(categories, error.archiveInputCategory)) {
+        return `${categories[error.archiveInputCategory]}与原任务不一致；已保存成果和未提交草稿保留。可恢复原条件继续，或明确选择按当前条件另起任务。`;
+    }
+    if (['RMT_ARCHIVE_CONTEXT_BUDGET', 'RMT_ARCHIVE_OUTPUT_BUDGET'].includes(error?.code) && error.archiveBudget) {
+        const b = error.archiveBudget, n = value => Number.isFinite(value) && value >= 0 ? Math.floor(value).toLocaleString() : '未知';
+        return `${SAFE_ERROR_CODE_MESSAGES[error.code]} 完整输入 ${n(b.utf16Chars)} 字符（UTF-16）、${n(b.utf8Bytes)} UTF-8 字节；输入 token ${n(b.inputTokens)}（宿主计数估算）、请求最大输出 ${n(b.outputTokens)} token；模型上下文 ${n(b.contextTokens)}。`;
+    }
+    const raw = normalizeText(error?.message, 12000);
+    const status = safeErrorStatus(error);
+    const code = safeErrorCode(error);
+    if (code === 'RMT_PHONE_DRAFT_AVAILABLE' || code === 'RMT_PHONE_DRAFT_UNAVAILABLE') {
+        const completed = Number(error?.partialProgress?.completed);
+        const total = Number(error?.partialProgress?.total);
+        const progress = Number.isInteger(completed) && Number.isInteger(total) && total >= 1 && total <= 10 && completed >= 0 && completed <= total
+            ? `${completed}/${total} 个应用` : '部分内容';
+        const failure = safeErrorDiagnostic(error?.failure);
+        const cause = failure.code && !/^RMT_PHONE_DRAFT_/.test(failure.code)
+            ? SAFE_ERROR_CODE_MESSAGES[failure.code] || ''
+            : failure.status === 401 || failure.status === 403 ? '上游认证或权限校验失败。'
+                : failure.status === 429 ? '上游正在限流，请稍后再试。' : '本次未完成；旧版草稿可能没有具体原因记录。';
+        const statusLabel = failure.status >= 400 ? `（状态 ${failure.status}）` : '';
+        return normalizeText(code === 'RMT_PHONE_DRAFT_AVAILABLE'
+            ? `已保留 ${progress}。${cause}${statusLabel}处理后点击“继续生成”，已完成的应用不会重做。`
+            : `${SAFE_ERROR_CODE_MESSAGES[code]}${cause}${statusLabel}`, max);
+    }
+    const looksHtml = /<!doctype\s+html|<html(?:\s|>)|<head(?:\s|>)|<body(?:\s|>)|<title>[^<]*cloudflare|cf-error|cdn-cgi\//i.test(raw);
+    const blocked = /cloudflare|sorry,? you have been blocked|attention required|unable to access/i.test(raw);
+    const unauthorized = /unauthorized|authentication|invalid api key|\b401\b/i.test(raw) || status === 401;
+    const forbidden = /forbidden|\b403\b/i.test(raw) || status === 403;
+    if (code && SAFE_ERROR_CODE_MESSAGES[code]) return normalizeText(SAFE_ERROR_CODE_MESSAGES[code], max);
+    if (looksHtml) {
+        const details = [];
+        if (status) details.push(`HTTP ${status}`);
+        if (blocked) details.push('Cloudflare 拦截');
+        const suffix = details.length ? `（${details.join(' / ')}；响应正文已隐藏）` : '（响应正文已隐藏）';
+        if (blocked || forbidden) return `上游服务拒绝了请求${suffix}。`;
+        if (unauthorized) return `上游服务认证失败${suffix}。`;
+        return `上游返回了非 API 的 HTML 页面${suffix}。`;
+    }
+    if (/failed to generate chat completion\s*:/i.test(raw)) {
+        if (unauthorized) return `上游服务认证失败${status ? `（HTTP ${status}）` : ''}。`;
+        if (forbidden) return `上游服务拒绝了请求${status ? `（HTTP ${status}）` : ''}。`;
+        return `上游生成请求失败${status ? `（HTTP ${status}）` : ''}；响应正文已隐藏。`;
+    }
+    if (unauthorized) return `上游服务认证失败${status ? `（HTTP ${status}）` : ''}；响应详情已隐藏。`;
+    if (forbidden) return `上游服务拒绝了请求${status ? `（HTTP ${status}）` : ''}；响应详情已隐藏。`;
+    if (status === 408 || status === 504 || error?.name === 'TimeoutError') return `请求超时${status ? `（HTTP ${status}）` : ''}，请稍后重试。`;
+    if (status === 429) return '请求过于频繁（HTTP 429），请稍后重试。';
+    if (status >= 500) return `上游服务暂时不可用（HTTP ${status}）；响应详情已隐藏。`;
+    if (status >= 400) return `请求失败（HTTP ${status}）；响应详情已隐藏。`;
+    if (error?.name === 'AbortError') return '操作已取消。';
+    if (error?.safeToDisplay === true) {
+        const trusted = sanitizedTrustedErrorMessage(error?.safeUserMessage || raw, max);
+        if (trusted) return trusted;
+    }
+    if (/failed to fetch|networkerror|network request failed|load failed|econn(?:reset|refused)|enotfound|fetch failed/i.test(raw)) {
+        return '网络连接失败；请检查地址、网络与服务状态后重试。';
+    }
+    return SAFE_ERROR_CODE_MESSAGES.RMT_RECOVERY_FAILED;
+}
+
+function cleanArray(value, maxItems = 64, maxChars = 12000) {
+    if (!Array.isArray(value)) return [];
+    return value
+        .slice(0, maxItems)
+        .map(item => normalizeText(item, maxChars))
+        .filter(Boolean);
+}
+
+function hashString(value) {
+    let h = 2166136261;
+    for (const ch of String(value ?? '')) {
+        h ^= ch.codePointAt(0);
+        h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+}
+
+function safeId(value, fallback) {
+    const raw = String(value ?? '').trim();
+    const cleaned = raw.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
+    return cleaned || fallback;
+}
+
+__m_core_text_js.esc = esc;
+__m_core_text_js.normalizeText = normalizeText;
+__m_core_text_js.isPlaceholderText = isPlaceholderText;
+__m_core_text_js.expandSafeRoleMacros = expandSafeRoleMacros;
+__m_core_text_js.toastText = toastText;
+__m_core_text_js.safeUserError = safeUserError;
+__m_core_text_js.safeErrorDiagnostic = safeErrorDiagnostic;
+__m_core_text_js.safeErrorSummary = safeErrorSummary;
+__m_core_text_js.cleanArray = cleanArray;
+__m_core_text_js.hashString = hashString;
+__m_core_text_js.safeId = safeId;
+}
+
+function __init_core_advancedGeneration_js() {
+// MODULE: core/advancedGeneration.js
+const text = __m_core_text_js;
+// Optional request parameters only. Never a prompt, credential, URL or tool carrier.
+
+const EXCLUDABLE_PARAMETERS = Object.freeze(['temperature', 'frequency_penalty', 'presence_penalty', 'top_p', 'top_k', 'seed', 'min_p', 'top_a', 'typical_p', 'repetition_penalty']);
+const REASONING_EFFORTS = Object.freeze(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
+const ADVANCED_MAX_BYTES = 8192;
+const branded = new WeakSet();
+const finite = value => typeof value === 'number' && Number.isFinite(value);
+const positiveInt = value => Number.isSafeInteger(value) && value >= 0;
+const ownObject = value => !!value && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
+function fields(value, validators) { return ownObject(value) && Object.keys(value).every(key => Object.hasOwn(validators, key) && validators[key](value[key])); }
+const validators = Object.freeze({
+    ...Object.fromEntries(EXCLUDABLE_PARAMETERS.map(key => [key, ['top_k','seed'].includes(key) ? Number.isSafeInteger : finite])),
+    reasoning_effort: value => REASONING_EFFORTS.includes(value),
+    verbosity: value => ['low', 'medium', 'high'].includes(value),
+    enable_thinking: value => typeof value === 'boolean',
+    thinking_budget: positiveInt,
+    thinking: value => fields(value, { type: v => ['enabled','disabled','adaptive'].includes(v), budget_tokens: positiveInt }),
+    reasoning: value => fields(value, { effort: v => REASONING_EFFORTS.includes(v), max_tokens: positiveInt, enabled: v => typeof v === 'boolean', exclude: v => typeof v === 'boolean' }),
+    // Verified Google REST shape (not the Python SDK's additional outer wrapper).
+    extra_body: value => fields(value, { google: v => fields(v, { thinking_config: c => fields(c, {
+        thinking_budget: n => Number.isSafeInteger(n) && n >= -1,
+        thinking_level: n => ['minimal','low','medium','high'].includes(n), include_thoughts: n => typeof n === 'boolean',
+    }) }) }),
+});
+function bad() { return text.safeUserError('高级参数无效或包含受保护字段；只允许采样与推理配置，不能覆盖模型、消息、最大输出、连接、Key 或工具。未发送请求。', 'RMT_ADVANCED_PARAMETERS'); }
+function advancedSettings(raw = {}) {
+    return { advancedGenerationEnabled: raw.advancedGenerationEnabled === true,
+        advancedStreamMode: ['on','off'].includes(raw.advancedStreamMode) ? raw.advancedStreamMode : 'original',
+        advancedReasoningEffort: typeof raw.advancedReasoningEffort === 'string' ? raw.advancedReasoningEffort : '',
+        advancedExcludedParams: Array.isArray(raw.advancedExcludedParams) ? [...raw.advancedExcludedParams] : [],
+        advancedExtraParams: typeof raw.advancedExtraParams === 'string' ? raw.advancedExtraParams : '' };
+}
+function parseAdvancedGeneration(settings = {}) {
+    const finish = (enabled, body, excluded) => {
+        const result = Object.freeze({ enabled, streamMode: enabled ? advancedSettings(settings).advancedStreamMode : 'original', body: Object.freeze(body), excluded: Object.freeze(excluded),
+            includeJson: Object.keys(body).length ? JSON.stringify(body) : '', excludeJson: excluded.length ? JSON.stringify(excluded) : '' });
+        branded.add(result); return result;
+    };
+    if (settings.advancedGenerationEnabled !== true) return finish(false, {}, []);
+    const raw = settings.advancedExtraParams ?? '', effort = settings.advancedReasoningEffort ?? '', excluded = settings.advancedExcludedParams ?? [];
+    if (typeof raw !== 'string' || raw.length > ADVANCED_MAX_BYTES || new TextEncoder().encode(raw).byteLength > ADVANCED_MAX_BYTES
+        || (effort && !REASONING_EFFORTS.includes(effort)) || !Array.isArray(excluded)
+        || excluded.some(key => !EXCLUDABLE_PARAMETERS.includes(key))) throw bad();
+    let body = {};
+    try { if (raw.trim()) body = JSON.parse(raw); } catch { throw bad(); }
+    if (!fields(body, validators)) throw bad();
+    if (effort && body.reasoning_effort && body.reasoning_effort !== effort) throw bad();
+    if (effort) body.reasoning_effort = effort;
+    const google = body.extra_body?.google?.thinking_config;
+    if (body.reasoning_effort && google && (Object.hasOwn(google, 'thinking_level') || Object.hasOwn(google, 'thinking_budget'))) throw bad();
+    for (const key of excluded) delete body[key];
+    return finish(true, body, [...new Set(excluded)]);
+}
+function advancedCarrier(parsed, source = 'custom') {
+    if (!branded.has(parsed)) throw bad();
+    if (!parsed.includeJson && !parsed.excludeJson) return {};
+    if (source !== 'custom') throw text.safeUserError('这组非空高级参数需要自定义 Chat Completions Profile 或手动 OpenAI 兼容连接；当前没有改动连接，也不会静默忽略参数。', 'RMT_ADVANCED_BACKEND');
+    return { ...(parsed.includeJson ? { custom_include_body: parsed.includeJson } : {}), ...(parsed.excludeJson ? { custom_exclude_body: parsed.excludeJson } : {}) };
+}
+function applyAdvancedExclusions(body, parsed) {
+    if (!branded.has(parsed)) throw bad();
+    const result = { ...body }; for (const key of parsed.excluded) delete result[key]; return result;
+}
+function advancedFingerprint(settings) {
+    if (settings?.advancedGenerationEnabled !== true) return '';
+    const raw = advancedSettings(settings);
+    return text.hashString(JSON.stringify(raw));
+}
+
+__m_core_advancedGeneration_js.advancedSettings = advancedSettings;
+__m_core_advancedGeneration_js.parseAdvancedGeneration = parseAdvancedGeneration;
+__m_core_advancedGeneration_js.advancedCarrier = advancedCarrier;
+__m_core_advancedGeneration_js.applyAdvancedExclusions = applyAdvancedExclusions;
+__m_core_advancedGeneration_js.advancedFingerprint = advancedFingerprint;
+__m_core_advancedGeneration_js.EXCLUDABLE_PARAMETERS = EXCLUDABLE_PARAMETERS;
+__m_core_advancedGeneration_js.REASONING_EFFORTS = REASONING_EFFORTS;
+__m_core_advancedGeneration_js.ADVANCED_MAX_BYTES = ADVANCED_MAX_BYTES;
+}
 
 function __init_core_constants_js() {
 // MODULE: core/constants.js
@@ -613,1666 +1387,6 @@ __m_core_outputBudget_js.isValidOutputTokens = isValidOutputTokens;
 __m_core_outputBudget_js.normalizeOutputTokens = normalizeOutputTokens;
 }
 
-function __init_core_digest_js() {
-// MODULE: core/digest.js
-
-// SHA-256 for content identity, including HTTP LAN hosts where SubtleCrypto is
-// unavailable. No credentials, network, dependency download or weaker hash fallback.
-let roundConstants;
-let initialWords;
-function constants() {
-    if (roundConstants) return;
-    const primes = [];
-    for (let n = 2; primes.length < 64; n++) {
-        if (!primes.some(p => p * p <= n && n % p === 0)) primes.push(n);
-    }
-    const fraction = value => Math.floor((value - Math.floor(value)) * 0x100000000) >>> 0;
-    roundConstants = primes.map(n => fraction(Math.cbrt(n)));
-    initialWords = primes.slice(0, 8).map(n => fraction(Math.sqrt(n)));
-}
-const rotate = (n, bits) => (n >>> bits) | (n << (32 - bits));
-function sha256Bytes(bytes) {
-    constants();
-    const padded = new Uint8Array(Math.ceil((bytes.length + 9) / 64) * 64);
-    padded.set(bytes); padded[bytes.length] = 0x80;
-    const view = new DataView(padded.buffer);
-    view.setUint32(padded.length - 8, Math.floor(bytes.length / 0x20000000));
-    view.setUint32(padded.length - 4, (bytes.length * 8) >>> 0);
-    const hash = initialWords.slice(), words = new Uint32Array(64);
-    for (let offset = 0; offset < padded.length; offset += 64) {
-        for (let i = 0; i < 16; i++) words[i] = view.getUint32(offset + i * 4);
-        for (let i = 16; i < 64; i++) {
-            const x = words[i - 15], y = words[i - 2];
-            words[i] = (words[i - 16] + (rotate(x, 7) ^ rotate(x, 18) ^ (x >>> 3)) + words[i - 7]
-                + (rotate(y, 17) ^ rotate(y, 19) ^ (y >>> 10))) >>> 0;
-        }
-        let [a,b,c,d,e,f,g,h] = hash;
-        for (let i = 0; i < 64; i++) {
-            const one = (h + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25)) + ((e & f) ^ (~e & g)) + roundConstants[i] + words[i]) >>> 0;
-            const two = ((rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
-            h=g; g=f; f=e; e=(d+one)>>>0; d=c; c=b; b=a; a=(one+two)>>>0;
-        }
-        [a,b,c,d,e,f,g,h].forEach((value, i) => { hash[i] = (hash[i] + value) >>> 0; });
-    }
-    return hash.map(value => value.toString(16).padStart(8, '0')).join('');
-}
-async function sha256Text(input) {
-    const bytes = new TextEncoder().encode(input);
-    if (globalThis.crypto?.subtle) {
-        try {
-            const result = await globalThis.crypto.subtle.digest('SHA-256', bytes);
-            return [...new Uint8Array(result)].map(value => value.toString(16).padStart(2, '0')).join('');
-        } catch { /* Some host webviews expose the API but reject its use. */ }
-    }
-    return sha256Bytes(bytes);
-}
-
-__m_core_digest_js.sha256Text = sha256Text;
-__m_core_digest_js.sha256Bytes = sha256Bytes;
-}
-
-function __init_core_evidence_js() {
-// MODULE: core/evidence.js
-const core_constants = __m_core_constants_js;
-const core_text = __m_core_text_js;
-// Heartbeat Memories r35 modular runtime.
-// Extracted from r34 without changing archive/cache storage contracts.
-
-
-function memoryIdSet(memoryBank) {
-    return new Set((memoryBank?.memories || []).map(item => String(item.id)));
-}
-
-function normalizeSourceMemoryIds(value, memoryBank, minimum = 1) {
-    const allowed = memoryIdSet(memoryBank);
-    const ids = core_text.cleanArray(value, 16, 40).filter(id => allowed.has(id));
-    const unique = [...new Set(ids)];
-    if (unique.length < minimum) return [];
-    return unique;
-}
-
-function memoryEvidenceTerms(memoryBank, sourceMemoryIds) {
-    const ids = new Set(sourceMemoryIds || []);
-    const terms = [];
-    for (const memory of memoryBank?.memories || []) {
-        if (!ids.has(String(memory?.id))) continue;
-        const title = core_text.normalizeText(memory?.title, 100);
-        if (title.length >= 2) terms.push(title);
-        for (const anchor of core_text.cleanArray(memory?.anchors, 8, 120)) {
-            if (anchor.length >= 2) terms.push(anchor);
-        }
-    }
-    return [...new Set(terms)];
-}
-
-function normalizeMemoryReference(sourceIdsValue, evidenceValue, evidenceText, memoryBank, minimum = 1) {
-    const sourceMemoryIds = normalizeSourceMemoryIds(sourceIdsValue, memoryBank, minimum);
-    if (sourceMemoryIds.length < minimum) return { sourceMemoryIds: [], sourceMemoryAnchor: '' };
-    if (!sourceMemoryIds.length) return { sourceMemoryIds: [], sourceMemoryAnchor: '' };
-    const allowedTerms = memoryEvidenceTerms(memoryBank, sourceMemoryIds);
-    const requested = core_text.normalizeText(evidenceValue, 120);
-    const folded = value => core_text.normalizeText(value, 160).replace(/\s+/g, '').toLowerCase();
-    const requestedFolded = folded(requested);
-    let matched = allowedTerms.find(term => folded(term) === requestedFolded) || '';
-    if (!matched) {
-        const haystack = folded(evidenceText);
-        matched = allowedTerms.find(term => {
-            const needle = folded(term);
-            return needle.length >= 2 && haystack.includes(needle);
-        }) || '';
-    }
-    if (!matched) return { sourceMemoryIds: [], sourceMemoryAnchor: '' };
-    return { sourceMemoryIds, sourceMemoryAnchor: matched };
-}
-
-// Use this at authority boundaries where the producer is required to submit an exact
-// title/anchor. Unlike normalizeMemoryReference(), it never discovers a different real anchor
-// inside model-authored prose, so a valid fragment cannot launder an invalid requested anchor.
-function normalizeExactMemoryReference(sourceIdsValue, evidenceValue, memoryBank, minimum = 1) {
-    return normalizeMemoryReference(sourceIdsValue, evidenceValue, '', memoryBank, minimum);
-}
-
-function evenlySample(items, limit) {
-    if (!Array.isArray(items) || items.length <= limit) return Array.isArray(items) ? [...items] : [];
-    if (limit <= 1) return [items[items.length - 1]];
-    const selected = [];
-    const seen = new Set();
-    for (let i = 0; i < limit; i += 1) {
-        const index = Math.round((i * (items.length - 1)) / (limit - 1));
-        if (!seen.has(index)) {
-            seen.add(index);
-            selected.push(items[index]);
-        }
-    }
-    return selected;
-}
-
-function memoryPayload(memoryBank, onlyIds = null, limit = core_constants.MAX_MEMORY_PROMPT_ITEMS) {
-    const filter = onlyIds ? new Set(onlyIds) : null;
-    const source = (memoryBank?.memories || []).filter(item => !filter || filter.has(item.id));
-    const safeLimit = Math.max(1, Math.min(core_constants.MAX_MEMORY_ITEMS, Number(limit) || core_constants.MAX_MEMORY_PROMPT_ITEMS));
-    const selected = filter ? source.slice(0, safeLimit) : evenlySample(source, safeLimit);
-    return selected.map(item => ({
-        id: core_text.normalizeText(item?.id, 40),
-        date: core_text.normalizeText(item?.date, 60),
-        title: core_text.normalizeText(item?.title, 100),
-        summary: core_text.normalizeText(item?.summary, 700),
-        anchors: core_text.cleanArray(item?.anchors, 6, 100),
-        participants: core_text.cleanArray(item?.participants, 6, 80),
-        messageRange: [Number(item?.messageStart) || 0, Number(item?.messageEnd) || 0],
-        sourceKind: core_text.normalizeText(item?.sourceKind, 60) || 'chat',
-        externalSource: core_text.cleanArray(item?.externalSourceIds, 6, 100),
-    }));
-}
-
-function roomReferencedMemoryIds(roomSession, focusObject = null) {
-    const ids = [];
-    const seen = new Set();
-    const add = value => {
-        for (const id of core_text.cleanArray(value, 16, 40)) {
-            if (seen.has(id)) continue;
-            seen.add(id);
-            ids.push(id);
-            if (ids.length >= 24) return;
-        }
-    };
-    add(focusObject?.sourceMemoryIds);
-    for (const space of Array.isArray(roomSession?.spaces) ? roomSession.spaces : []) {
-        for (const item of Array.isArray(space?.objects) ? space.objects : []) {
-            if (isSearchableRoomObject(item) || item?.basis === '记忆') add(item?.sourceMemoryIds);
-            if (ids.length >= 24) return ids;
-        }
-    }
-    return ids;
-}
-
-function isSearchableRoomObject(value) {
-    const text = core_text.normalizeText(`${value?.label || ''} ${value?.description || ''}`, 1800);
-    const containerLike = /(?:盒|匣|箱|柜|抽屉|衣柜|床头柜|储物|收纳|行李|旅行袋|背包|手提包|袋|工具箱|药箱|首饰盒|数据匣|储物格|箱格|柜格|夹层|暗格|case|box|drawer|cabinet|chest|locker|bag|pouch|compartment|wardrobe|storage)/i.test(text);
-    return containerLike && value?.searchable !== false;
-}
-
-__m_core_evidence_js.memoryIdSet = memoryIdSet;
-__m_core_evidence_js.normalizeSourceMemoryIds = normalizeSourceMemoryIds;
-__m_core_evidence_js.memoryEvidenceTerms = memoryEvidenceTerms;
-__m_core_evidence_js.normalizeMemoryReference = normalizeMemoryReference;
-__m_core_evidence_js.normalizeExactMemoryReference = normalizeExactMemoryReference;
-__m_core_evidence_js.evenlySample = evenlySample;
-__m_core_evidence_js.memoryPayload = memoryPayload;
-__m_core_evidence_js.roomReferencedMemoryIds = roomReferencedMemoryIds;
-__m_core_evidence_js.isSearchableRoomObject = isSearchableRoomObject;
-}
-
-function __init_core_contextTags_js() {
-// MODULE: core/contextTags.js
-
-const DEFAULT_EXCLUDED_TAGS = Object.freeze(['thinking', 'updatevariable', 'updatevarible']);
-function normalizeExcludedTags(value) {
-    const parts = Array.isArray(value) ? value : String(value || '').split(/[\s,，]+/);
-    return [...new Set(parts.map(item => String(item).trim().replace(/^<\/?|\/?\s*>$/g, '').toLowerCase())
-        .filter(item => /^[\p{L}][\p{L}\p{N}\p{M}._:-]{0,63}$/u.test(item)))];
-}
-function excludedTagsForContext(context) {
-    const source = context?.extensionSettings?.heartbeatMemories?.excludedContextTags;
-    return normalizeExcludedTags(source === undefined ? DEFAULT_EXCLUDED_TAGS : source);
-}
-function symbolAt(source, index) {
-    const entity = source.slice(index, index + 40).match(/^&(?:amp;){0,3}(lt;|gt;|#0*60;|#0*62;|#x0*3c;|#x0*3e;)/i);
-    if (!entity) return { char: source[index], length: 1 };
-    return { char: /^(lt;|#0*60;|#x0*3c;)$/i.test(entity[1]) ? '<' : '>', length: entity[0].length };
-}
-function tagAt(source, start) {
-    const opener = symbolAt(source, start);
-    if (opener.char !== '<') return null;
-    let index = start + opener.length;
-    while (/\s/.test(source[index] || '') && index < source.length) index++;
-    const closing = source[index] === '/';
-    if (closing) index++;
-    while (/\s/.test(source[index] || '') && index < source.length) index++;
-    const nameStart = index;
-    const point = at => at < source.length ? String.fromCodePoint(source.codePointAt(at)) : '';
-    if (!/\p{L}/u.test(point(index))) return null;
-    let nameLength = 0;
-    while (/[\p{L}\p{N}\p{M}._:-]/u.test(point(index)) && nameLength < 65) { index += point(index).length; nameLength++; }
-    const name = source.slice(nameStart, index).toLowerCase();
-    if (nameLength > 64) return null;
-    const next = symbolAt(source, index).char;
-    if (next !== undefined && !/[\s/>]/.test(next)) return null;
-    let quote = '', previous = '';
-    for (; index < source.length;) {
-        const symbol = symbolAt(source, index);
-        const char = symbol.char;
-        if (quote) { if (char === quote) quote = ''; }
-        else if (char === '"' || char === "'") quote = char;
-        else if (char === '>') return { name, closing, selfClosing: previous === '/', end: index + symbol.length };
-        else if (char === '<') return { name, closing, incomplete: true, end: index };
-        if (!/\s/.test(char)) previous = char;
-        index += symbol.length;
-    }
-    return { name, closing, incomplete: true, end: source.length };
-}
-// Preserve original bytes outside selected blocks, including HTML entities.
-// Malformed/unclosed selected openers fail closed; nesting never releases early.
-function stripExcludedTags(value, tags, onRetainedSpan = null) {
-    const source = String(value || ''), excluded = new Set(normalizeExcludedTags(tags));
-    if (!excluded.size) { if (source.length) onRetainedSpan?.(0, source.length); return source; }
-    const stack = [];
-    let out = '', cursor = 0, index = 0;
-    const retain = (start, end) => {
-        if (end > start) { out += source.slice(start, end); onRetainedSpan?.(start, end); }
-    };
-    while (index < source.length) {
-        if (source[index] !== '<' && source[index] !== '&') { index++; continue; }
-        const token = tagAt(source, index);
-        if (!token) { index++; continue; }
-        if (token.incomplete) {
-            if (stack.length || (excluded.has(token.name) && !token.closing)) {
-                if (!stack.length) retain(cursor, index);
-                return out;
-            }
-            index = Math.max(index + 1, token.end);
-            continue;
-        }
-        if (!stack.length) retain(cursor, index);
-        if (stack.length) {
-            if (token.closing && stack[stack.length - 1] === token.name) stack.pop();
-            else if (!token.closing && !token.selfClosing) stack.push(token.name);
-        } else if (excluded.has(token.name)) {
-            if (!token.closing && !token.selfClosing) stack.push(token.name);
-        } else retain(index, token.end);
-        cursor = token.end;
-        index = cursor;
-    }
-    if (!stack.length) retain(cursor, source.length);
-    return out;
-}
-// Only an explicit save enables keep mode. Legacy exclusion settings are not inverted.
-function savedTagSelection(settings) {
-    return settings?.contextTagMode === 'keep'
-        ? { contextTagMode: 'keep', retainedContextTags: normalizeExcludedTags(settings.retainedContextTags) } : {};
-}
-function tagPolicyForSettings(settings) {
-    return settings?.contextTagMode === 'keep'
-        ? { mode: 'keep', tags: normalizeExcludedTags(settings.retainedContextTags) }
-        : normalizeExcludedTags(settings?.excludedContextTags === undefined ? DEFAULT_EXCLUDED_TAGS : settings.excludedContextTags);
-}
-function tagPolicyForContext(context) {
-    return tagPolicyForSettings(context?.extensionSettings?.heartbeatMemories);
-}
-// Resolve the complement from the actual source, including tags absent from the UI
-// scan. Reuse the original isolator: an unselected outer block includes its children.
-// Plain text outside tags is never discarded and source strings are never mutated.
-function filterContextTags(value, policy, onRetainedSpan = null) {
-    if (policy?.mode !== 'keep') return stripExcludedTags(value, policy, onRetainedSpan);
-    const source = String(value || ''), retained = new Set(normalizeExcludedTags(policy.tags)), excluded = new Set();
-    for (let index = 0; index < source.length; index++) {
-        if (source[index] !== '<' && source[index] !== '&') continue;
-        const token = tagAt(source, index);
-        if (!token) continue;
-        if (!retained.has(token.name)) excluded.add(token.name);
-        index = Math.max(index, token.end - 1);
-    }
-    return stripExcludedTags(source, [...excluded], onRetainedSpan);
-}
-// Filter whole original records before splitting, while keeping each original
-// fragment position (and therefore its evidence ID). A tag spanning fragments
-// must not leak its middle as apparently untagged text. This is a read projection;
-// original ledger bytes and the isolator's nesting/escaping rules stay unchanged.
-function filterContextTagSegments(value, policy, size) {
-    const source = String(value || '');
-    if (!Number.isSafeInteger(size) || size < 1) throw new TypeError('Invalid fragment size');
-    const segments = Array.from({ length: Math.ceil(source.length / size) }, () => '');
-    filterContextTags(source, policy, (start, end) => {
-        while (start < end) {
-            const part = Math.floor(start / size), stop = Math.min(end, (part + 1) * size);
-            segments[part] += source.slice(start, stop); start = stop;
-        }
-    });
-    return segments;
-}
-// Explicit UI scan only. Complete chat, no silent 32/100-tag truncation, with
-// cooperative yielding and a caller-owned scope/lifecycle guard. No model or I/O.
-async function scanContextTagChoices(messages, { assertCurrent = () => {} } = {}) {
-    const counts = new Map(); let usedMessages = 0, usedChars = 0, nextYield = Date.now() + 12;
-    for (const message of Array.isArray(messages) ? messages : []) {
-        assertCurrent();
-        const source = String(message?.mes || ''); usedMessages++; usedChars += source.length;
-        for (let index = 0; index < source.length; index++) {
-            if ((index & 4095) === 0 && Date.now() >= nextYield) {
-                await new Promise(resolve => setTimeout(resolve, 0)); assertCurrent(); nextYield = Date.now() + 12;
-            }
-            if (source[index] !== '<' && source[index] !== '&') continue;
-            const token = tagAt(source, index);
-            if (!token) continue;
-            if (!token.closing) counts.set(token.name, (counts.get(token.name) || 0) + 1);
-            index = Math.max(index, token.end - 1);
-        }
-        if (Date.now() >= nextYield) {
-            await new Promise(resolve => setTimeout(resolve, 0)); assertCurrent(); nextYield = Date.now() + 12;
-        }
-    }
-    assertCurrent();
-    return { tags: [...counts].map(([name, count]) => ({ name, count })), usedMessages, usedChars, bounded: false };
-}
-// Only JSON string VALUES are filtered; property names and surrounding task
-// schema remain intact, including when a source string has an unclosed tag.
-function filterJsonPromptStrings(prompt, tags) {
-    const source = String(prompt || '');
-    return source.replace(/"(?:\\.|[^"\\])*"/g, (literal, offset) => {
-        if (/^\s*:/.test(source.slice(offset + literal.length, offset + literal.length + 80))) return literal;
-        try { return JSON.stringify(filterContextTags(JSON.parse(literal), tags)); } catch { return literal; }
-    });
-}
-function scanContextTags(messages, maxChars = 256000) {
-    let remaining = Math.max(0, Math.min(256000, maxChars)), used = 0;
-    const counts = new Map();
-    for (const message of (Array.isArray(messages) ? messages : []).slice(-500)) {
-        const text = String(message?.mes || '').slice(0, remaining);
-        remaining -= text.length; used++;
-        for (let index = 0; index < text.length; index++) {
-            if (text[index] !== '<' && text[index] !== '&') continue;
-            const token = tagAt(text, index);
-            if (!token) continue;
-            if (!token.closing && (counts.has(token.name) || counts.size < 100)) counts.set(token.name, (counts.get(token.name) || 0) + 1);
-            index = Math.max(index, token.end - 1);
-        }
-        if (!remaining) break;
-    }
-    return { tags: [...counts].map(([name, count]) => ({ name, count })), usedMessages: used, bounded: true };
-}
-
-__m_core_contextTags_js.scanContextTagChoices = scanContextTagChoices;
-__m_core_contextTags_js.normalizeExcludedTags = normalizeExcludedTags;
-__m_core_contextTags_js.excludedTagsForContext = excludedTagsForContext;
-__m_core_contextTags_js.stripExcludedTags = stripExcludedTags;
-__m_core_contextTags_js.savedTagSelection = savedTagSelection;
-__m_core_contextTags_js.tagPolicyForSettings = tagPolicyForSettings;
-__m_core_contextTags_js.tagPolicyForContext = tagPolicyForContext;
-__m_core_contextTags_js.filterContextTags = filterContextTags;
-__m_core_contextTags_js.filterContextTagSegments = filterContextTagSegments;
-__m_core_contextTags_js.filterJsonPromptStrings = filterJsonPromptStrings;
-__m_core_contextTags_js.scanContextTags = scanContextTags;
-__m_core_contextTags_js.DEFAULT_EXCLUDED_TAGS = DEFAULT_EXCLUDED_TAGS;
-}
-
-function __init_core_chatReadRange_js() {
-// MODULE: core/chatReadRange.js
-const core_text = __m_core_text_js;
-// Pure selection over original host floors. No chat/storage mutation or provider work.
-
-const DEFAULT_CHAT_READ_RANGE = Object.freeze({ mode: 'recent', recent: 50, start: 1, end: 100, includeHidden: false });
-
-function positiveFloor(value, fallback) {
-    const number = Number(value);
-    return Number.isFinite(number) && number >= 1 ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(number)) : fallback;
-}
-
-function normalizeChatReadRange(settingsOrRange = {}) {
-    const value = settingsOrRange?.chatReadRange ?? settingsOrRange ?? {};
-    return {
-        mode: ['recent', 'range', 'all'].includes(value.mode) ? value.mode : 'recent',
-        recent: positiveFloor(value.recent, 50),
-        start: positiveFloor(value.start, 1),
-        end: positiveFloor(value.end, 100),
-        includeHidden: value.includeHidden === true,
-    };
-}
-
-function floorWindow(totalFloors, range) {
-    if (!totalFloors) return { start: 0, end: 0 };
-    const start = range.mode === 'range' ? range.start : range.mode === 'recent' ? Math.max(1, totalFloors - range.recent + 1) : 1;
-    const end = range.mode === 'range' ? Math.min(totalFloors, range.end) : totalFloors;
-    // Do not reorder a reversed interval or expand an out-of-bounds selection.
-    return start > end ? { start: 0, end: 0 } : { start, end };
-}
-
-function isChatReadRangeHidden(message) {
-    return !!message?.is_system || message?.is_hidden === true || message?.extra?.is_hidden === true;
-}
-
-function isChatReadRangeDialogue(message, context) {
-    if (!message || typeof message !== 'object' || ['system', 'tool', 'developer'].includes(message.role)
-        || message.extra?.uses_system_ui || message.extra?.tool_invocations) return false;
-    if (!isChatReadRangeHidden(message)) return true;
-    // Host hide toggles are not authority to recover an arbitrary system floor.
-    if (typeof message.is_user !== 'boolean' || message.extra?.type) return false;
-    const name = core_text.normalizeText(message.name, 120);
-    const expected = core_text.normalizeText(message.is_user ? context?.name1 : context?.name2, 120);
-    return !!name && !!expected && name === expected;
-}
-
-function selection(context, settings) {
-    const chat = Array.isArray(context?.chat) ? context.chat : [];
-    const range = normalizeChatReadRange(settings);
-    const { start, end } = floorWindow(chat.length, range);
-    const rows = [];
-    let visibleCount = 0, hiddenCount = 0, characters = 0;
-    if (start) for (let index = start; index <= end; index += 1) {
-        const message = chat[index - 1];
-        if (!isChatReadRangeDialogue(message, context)) continue;
-        const text = core_text.normalizeText(message.mes, 8000);
-        if (!text) continue;
-        const hidden = isChatReadRangeHidden(message);
-        if (hidden) hiddenCount += 1;
-        else visibleCount += 1;
-        if (hidden && !range.includeHidden) continue;
-        rows.push({ index, message, hidden });
-        characters += text.length;
-    }
-    const modeLabel = range.mode === 'all' ? '全部楼层' : range.mode === 'recent' ? `最近 ${range.recent} 楼` : '指定范围';
-    const boundsLabel = start ? `第 ${start}–${end} 楼` : '无匹配楼层';
-    return { rows, preview: {
-        totalFloors: chat.length, selectedFloors: rows.length, visibleCount, hiddenCount, characters, start, end,
-        label: `${modeLabel} · ${boundsLabel} · 读取 ${rows.length} 条正文 · ${range.includeHidden ? '含隐藏对话' : '不含隐藏对话'}`,
-    } };
-}
-
-// Each index remains the 1-based host floor, including gaps left by excluded messages.
-function selectChatReadRange(context, settings = {}) {
-    return selection(context, settings).rows;
-}
-
-// hiddenCount counts eligible hidden dialogue inside the interval, even when excluded.
-// characters estimates normalized per-floor text before downstream tag/budget filtering.
-function readRangePreview(context, settings = {}) {
-    return selection(context, settings).preview;
-}
-
-__m_core_chatReadRange_js.normalizeChatReadRange = normalizeChatReadRange;
-__m_core_chatReadRange_js.isChatReadRangeHidden = isChatReadRangeHidden;
-__m_core_chatReadRange_js.isChatReadRangeDialogue = isChatReadRangeDialogue;
-__m_core_chatReadRange_js.selectChatReadRange = selectChatReadRange;
-__m_core_chatReadRange_js.readRangePreview = readRangePreview;
-__m_core_chatReadRange_js.DEFAULT_CHAT_READ_RANGE = DEFAULT_CHAT_READ_RANGE;
-}
-
-function __init_core_backupDiagnostics_js() {
-// MODULE: core/backupDiagnostics.js
-
-// Backup diagnostics contain only code-owned labels. Never inspect or stringify
-// an exception message, stack, URL, archive, prompt or provider response here.
-const failureDetails = new WeakMap();
-let lastObservedFailure = null;
-const categories = Object.freeze({
-    quota: ['RMT_BACKUP_QUOTA', '浏览器可用存储空间不足，独立备份未更新。', '先导出保留现有档案，再检查浏览器可用存储；不要清除此站点数据。'],
-    blocked: ['RMT_BACKUP_BLOCKED', '其他页面阻挡了独立备份数据库的打开或升级。', '关闭其他同站点页面后手动重试，不要删除现有数据库。'],
-    security: ['RMT_BACKUP_SECURITY', '浏览器安全或隐私策略拒绝了独立备份访问。', '检查当前站点的存储权限与隐私模式，再手动重试。'],
-    clone: ['RMT_BACKUP_CLONE', '备份数据无法复制或序列化，独立备份未更新。', '保留当前档案并报告此代码；不要重建或清空档案。'],
-    schema: ['RMT_BACKUP_SCHEMA', '备份数据或数据库结构不兼容，独立备份未更新。', '保留当前档案并报告此代码；不要删除数据库或自动重建。'],
-    transaction: ['RMT_BACKUP_TRANSACTION', '独立备份事务未完成，未确认写入成功。', '保留当前档案，确认其他页面的操作后手动重试。'],
-    unavailable: ['RMT_BACKUP_UNAVAILABLE', '当前环境没有可用的独立备份存储。', '检查浏览器是否允许此站点使用 IndexedDB，再手动重试。'],
-    unknown: ['RMT_BACKUP_UNKNOWN', '独立备份未完成，现有信息不足以判断原因。', '保留当前档案，反馈诊断代码和阶段；不要清空站点数据。'],
-});
-const stages = new Set(['open', 'upgrade', 'read', 'write', 'serialize', 'normalize', 'prepare', 'mirror', 'reconcile', 'unknown']);
-const logicalCodes = new Set(['RMT_CACHE_CAS_CONFLICT', 'RMT_ARCHIVE_DELETED_FENCE']);
-const BACKUP_FAILURE_MESSAGES = Object.freeze(Object.fromEntries(
-    Object.values(categories).map(([code, message]) => [code, message]),
-));
-const nameCategories = Object.freeze({
-    QuotaExceededError: 'quota', NS_ERROR_DOM_QUOTA_REACHED: 'quota',
-    SecurityError: 'security', NotAllowedError: 'security',
-    DataCloneError: 'clone',
-    VersionError: 'schema', NotFoundError: 'schema', ConstraintError: 'schema', DataError: 'schema',
-    AbortError: 'transaction', TransactionInactiveError: 'transaction', ReadOnlyError: 'transaction', InvalidStateError: 'transaction',
-    NotSupportedError: 'unavailable',
-});
-const domExceptionName = typeof DOMException === 'function'
-    ? Object.getOwnPropertyDescriptor(DOMException.prototype, 'name')?.get : null;
-
-function isObject(value) { return value !== null && (typeof value === 'object' || typeof value === 'function'); }
-
-// Inspect only data descriptors: arbitrary thrown objects may contain getters.
-function dataValue(value, key) {
-    if (!isObject(value)) return undefined;
-    try {
-        let cursor = value;
-        for (let depth = 0; cursor && depth < 5; depth += 1, cursor = Object.getPrototypeOf(cursor)) {
-            const descriptor = Object.getOwnPropertyDescriptor(cursor, key);
-            if (descriptor) return Object.prototype.hasOwnProperty.call(descriptor, 'value') ? descriptor.value : undefined;
-        }
-    } catch { /* A proxy is not a diagnostic source. */ }
-    return undefined;
-}
-
-function safeErrorName(error) {
-    const name = dataValue(error, 'name');
-    if (typeof name === 'string') return name;
-    if (domExceptionName && isObject(error)) {
-        try { return domExceptionName.call(error); } catch { /* Not a native DOMException. */ }
-    }
-    return '';
-}
-
-function classification(error) {
-    const seen = new Set();
-    let current = error;
-    let transaction = null;
-    for (let depth = 0; isObject(current) && !seen.has(current) && depth < 8; depth += 1) {
-        seen.add(current);
-        const detail = failureDetails.get(current);
-        const code = dataValue(current, 'code');
-        if (logicalCodes.has(code)) return { category: 'transaction', code };
-        if (logicalCodes.has(detail?.code)) return { category: 'transaction', code: detail.code };
-        const known = Object.keys(categories).find(category => categories[category][0] === code);
-        const name = safeErrorName(current);
-        const category = detail?.category && detail.category !== 'unknown' ? detail.category
-            : known && known !== 'unknown' ? known
-                : Object.prototype.hasOwnProperty.call(nameCategories, name) ? nameCategories[name] : null;
-        if (category) {
-            const found = { category, code: categories[category][0] };
-            // IndexedDB often aborts the transaction because an inner request ran
-            // out of quota or hit a permission error. Keep that specific cause.
-            if (category !== 'transaction') return found;
-            transaction = found;
-        }
-        current = detail?.cause || dataValue(current, 'cause');
-    }
-    return transaction || { category: 'unknown', code: categories.unknown[0] };
-}
-
-function makeDetails(error, stage, fallbackCategory) {
-    const existing = isObject(error) ? failureDetails.get(error) : null;
-    const found = classification(error);
-    const category = found.category !== 'unknown' ? found.category
-        : Object.prototype.hasOwnProperty.call(categories, fallbackCategory) ? fallbackCategory : 'unknown';
-    return {
-        category,
-        code: logicalCodes.has(found.code) ? found.code : categories[category][0],
-        stage: existing?.stage && existing.stage !== 'unknown' ? existing.stage : stages.has(stage) ? stage : 'unknown',
-        cause: error,
-    };
-}
-
-// Retains the original thrown value/identity for existing transport/backend
-// contracts. Only module-private metadata changes; nothing is logged or saved.
-function annotateBackupFailure(error, stage, category = 'unknown') {
-    const detail = makeDetails(error, stage, category);
-    if (isObject(error) && !failureDetails.has(error)) failureDetails.set(error, { ...detail, cause: undefined });
-    lastObservedFailure = { code: detail.code, category: detail.category, stage: detail.stage };
-    return error;
-}
-
-// For errors produced at the actual storage boundary, expose a safe fixed
-// message and retain the original cause privately (not enumerable or loggable).
-function backupFailureError(error, stage, category = 'unknown') {
-    const detail = makeDetails(error, stage, category);
-    const wrapped = new Error(categories[detail.category][1]);
-    wrapped.code = detail.code;
-    wrapped.kind = 'storage';
-    wrapped.backupStage = detail.stage;
-    wrapped.retryable = false;
-    failureDetails.set(wrapped, detail);
-    lastObservedFailure = { code: detail.code, category: detail.category, stage: detail.stage };
-    return wrapped;
-}
-
-// Only actual backup-boundary annotations and code-owned backup wrappers count
-// as storage errors. A provider's quota/AbortError must stay a provider error.
-function backupFailureDiagnostic(error) {
-    const detail = isObject(error) ? failureDetails.get(error) : null;
-    const code = dataValue(error, 'code');
-    if (!detail && !(typeof code === 'string' && Object.prototype.hasOwnProperty.call(BACKUP_FAILURE_MESSAGES, code))
-        && !(logicalCodes.has(code) && dataValue(error, 'kind') === 'storage')) return null;
-    const found = classification(error);
-    const stageValue = detail?.stage || dataValue(error, 'backupStage');
-    return { code: found.code, category: found.category, stage: stages.has(stageValue) ? stageValue : 'unknown' };
-}
-
-// A historical failure only; no health claim and no new storage access. Never
-// retain the exception object, message, stack or stored payload in this snapshot.
-function backupDiagnosticSnapshot() {
-    return { scope: 'runtime', lastFailure: lastObservedFailure ? { ...lastObservedFailure } : null };
-}
-
-function backupFailureSummary(error) {
-    const detail = isObject(error) ? failureDetails.get(error) : null;
-    const found = classification(error);
-    const stageValue = detail?.stage || dataValue(error, 'backupStage');
-    const stage = stages.has(stageValue) ? stageValue : 'unknown';
-    const category = found.category;
-    let message = categories[category][1];
-    let action = categories[category][2];
-    if (found.code === 'RMT_CACHE_CAS_CONFLICT') {
-        message = '独立备份已被其他页面更新，本次旧结果未覆盖它。';
-        action = '等待当前合并完成；不要重建档案或删除备份。';
-    } else if (found.code === 'RMT_ARCHIVE_DELETED_FENCE') {
-        message = '档案删除围栏阻止了旧任务重新创建备份。';
-        action = '保留删除状态；不要自动恢复或重建此档案。';
-    }
-    return { code: found.code, category, stage, message, action };
-}
-
-__m_core_backupDiagnostics_js.annotateBackupFailure = annotateBackupFailure;
-__m_core_backupDiagnostics_js.backupFailureError = backupFailureError;
-__m_core_backupDiagnostics_js.backupFailureDiagnostic = backupFailureDiagnostic;
-__m_core_backupDiagnostics_js.backupDiagnosticSnapshot = backupDiagnosticSnapshot;
-__m_core_backupDiagnostics_js.backupFailureSummary = backupFailureSummary;
-__m_core_backupDiagnostics_js.BACKUP_FAILURE_MESSAGES = BACKUP_FAILURE_MESSAGES;
-}
-
-function __init_core_deferredCommitStore_js() {
-// MODULE: core/deferredCommitStore.js
-const backupDiagnostics = __m_core_backupDiagnostics_js;
-// Heartbeat Memories r46: bounded, browser-local durability for completed results
-// that are waiting for their origin chat to become current again.
-
-const DEFERRED_COMMIT_STORE_KEY = 'heartbeat_memories_deferred_commits_v1';
-const DEFERRED_COMMIT_STORE_VERSION = 1;
-const DEFERRED_COMMIT_STORE_MAX_ITEMS = 24;
-const DEFERRED_COMMIT_STORE_MAX_BYTES = 3_500_000;
-const DEFERRED_COMMIT_STORE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-
-const SENSITIVE_FIELD = /^(?:api[_-]?key|authorization|proxy[_-]?password|password|secret|access[_-]?token|refresh[_-]?token|bearer[_-]?token)$/i;
-const UNSAFE_FIELD = /^(?:__proto__|prototype|constructor)$/;
-const FAILURE_MESSAGES = Object.freeze({
-    quota: '本地待写回存储空间不足；新结果仅保留在当前页面。',
-    security: '浏览器拒绝访问本地待写回存储；新结果仅保留在当前页面。',
-    unavailable: '当前浏览器没有可用的本地待写回存储。',
-    limit: '待写回结果超过本地安全上限；新结果仅保留在当前页面。',
-    serialize: '待写回结果无法序列化；新结果仅保留在当前页面。',
-    unknown: '浏览器没有保存待写回结果；具体原因尚未确定。',
-});
-
-function deferredFailure(category) {
-    const fixed = Object.prototype.hasOwnProperty.call(FAILURE_MESSAGES, category) ? category : 'unknown';
-    const error = new Error(FAILURE_MESSAGES[fixed]);
-    error.code = `RMT_DEFERRED_${fixed.toUpperCase()}`;
-    error.category = fixed;
-    return error;
-}
-
-function defaultStorage() {
-    try { return globalThis.localStorage || null; } catch { return null; }
-}
-
-function byteLength(value) {
-    const text = String(value || '');
-    if (typeof TextEncoder === 'function') return new TextEncoder().encode(text).byteLength;
-    return text.length * 2;
-}
-
-function safeSerializedPayload(entries) {
-    return JSON.stringify({
-        version: DEFERRED_COMMIT_STORE_VERSION,
-        savedAt: Date.now(),
-        entries,
-    }, (key, value) => {
-        if (SENSITIVE_FIELD.test(key) || UNSAFE_FIELD.test(key)) return undefined;
-        if (typeof value === 'function' || typeof value === 'symbol' || typeof value === 'bigint') return undefined;
-        return value;
-    });
-}
-
-function validStoredList(value, now = Date.now()) {
-    if (!Array.isArray(value)) return [];
-    return value.filter(item => {
-        if (!item || typeof item !== 'object' || !['archive', 'sessions', 'heartPatches', 'cgImagePatch'].includes(item.kind)) return false;
-        if (!item.origin?.characterKey || !item.origin?.chatId) return false;
-        const queuedAt = Number(item.queuedAt) || 0;
-        return !queuedAt || now - queuedAt <= DEFERRED_COMMIT_STORE_MAX_AGE_MS;
-    });
-}
-
-function restoredEntries(storage) {
-    if (!storage?.getItem) return [];
-    let raw = '';
-    try { raw = storage.getItem(DEFERRED_COMMIT_STORE_KEY) || ''; }
-    catch { return []; }
-    if (!raw || byteLength(raw) > DEFERRED_COMMIT_STORE_MAX_BYTES) return [];
-    try {
-        const parsed = JSON.parse(raw, (key, value) => {
-            if (SENSITIVE_FIELD.test(key) || UNSAFE_FIELD.test(key)) return undefined;
-            return value;
-        });
-        if (Number(parsed?.version) !== DEFERRED_COMMIT_STORE_VERSION || !Array.isArray(parsed?.entries)) return [];
-        const result = [];
-        let count = 0;
-        for (const row of parsed.entries) {
-            const key = typeof row?.[0] === 'string' ? row[0].slice(0, 700) : '';
-            const list = validStoredList(row?.[1]);
-            if (!key || !list.length || count + list.length > DEFERRED_COMMIT_STORE_MAX_ITEMS) continue;
-            result.push([key, list]);
-            count += list.length;
-        }
-        return result;
-    } catch {
-        try { storage.removeItem?.(DEFERRED_COMMIT_STORE_KEY); } catch {}
-        return [];
-    }
-}
-
-class DurableDeferredCommitMap extends Map {
-    constructor({ storage = defaultStorage(), onError = null } = {}) {
-        super();
-        this.storage = storage;
-        this.onError = typeof onError === 'function' ? onError : null;
-        this.storageAvailable = false;
-        this.lastPersistError = null;
-        try { this.storageAvailable = typeof storage?.setItem === 'function'; }
-        catch (error) { this.lastPersistError = deferredFailure(backupDiagnostics.backupFailureSummary(error).category); }
-        if (!this.storageAvailable && !this.lastPersistError) this.lastPersistError = deferredFailure('unavailable');
-        this.restoring = true;
-        for (const [key, list] of restoredEntries(storage)) super.set(key, list);
-        this.restoring = false;
-    }
-
-    itemCount() {
-        let count = 0;
-        for (const list of this.values()) count += Array.isArray(list) ? list.length : 0;
-        return count;
-    }
-
-    persistenceStatus() {
-        return {
-            ...this.diagnosticStatus(),
-            pendingItems: this.itemCount(),
-            maxItems: DEFERRED_COMMIT_STORE_MAX_ITEMS,
-            maxBytes: DEFERRED_COMMIT_STORE_MAX_BYTES,
-            error: this.lastPersistError?.message || '',
-        };
-    }
-
-    // Fixed maintained scalars only: safe even with many large pending results.
-    diagnosticStatus() {
-        return {
-            available: this.storageAvailable,
-            healthy: this.storageAvailable && !this.lastPersistError,
-            errorCode: this.lastPersistError?.code || '',
-            errorCategory: this.lastPersistError?.category || '',
-        };
-    }
-
-    reportFailure(error) {
-        this.lastPersistError = deferredFailure(error?.category);
-        // Keep the last successfully persisted snapshot intact. A quota or serialization
-        // failure for a newer result must never erase older recoverable commits.
-        try { this.onError?.(this.lastPersistError); } catch {}
-        return false;
-    }
-
-    persistNow() {
-        if (this.restoring) return true;
-        if (!this.storage?.setItem) return this.reportFailure(deferredFailure('unavailable'));
-        if (this.itemCount() > DEFERRED_COMMIT_STORE_MAX_ITEMS) {
-            return this.reportFailure(deferredFailure('limit'));
-        }
-        let raw;
-        try { raw = safeSerializedPayload([...this.entries()]); }
-        catch { return this.reportFailure(deferredFailure('serialize')); }
-        const bytes = byteLength(raw);
-        if (bytes > DEFERRED_COMMIT_STORE_MAX_BYTES) {
-            return this.reportFailure(deferredFailure('limit'));
-        }
-        try {
-            if (this.size) this.storage.setItem(DEFERRED_COMMIT_STORE_KEY, raw);
-            else this.storage.removeItem?.(DEFERRED_COMMIT_STORE_KEY);
-            this.lastPersistError = null;
-            return true;
-        } catch (error) {
-            const category = backupDiagnostics.backupFailureSummary(error).category;
-            return this.reportFailure(deferredFailure(['quota', 'security', 'unavailable'].includes(category) ? category : 'unknown'));
-        }
-    }
-
-    set(key, value) {
-        super.set(String(key || '').slice(0, 700), value);
-        this.persistNow();
-        return this;
-    }
-
-    replaceDurably(key, value) {
-        const normalizedKey = String(key || '').slice(0, 700);
-        const hadPrevious = super.has(normalizedKey);
-        const previous = super.get(normalizedKey);
-        super.set(normalizedKey, value);
-        if (!this.storage?.setItem) return true;
-        if (this.persistNow()) return true;
-        if (hadPrevious) super.set(normalizedKey, previous);
-        else super.delete(normalizedKey);
-        return false;
-    }
-
-    delete(key) {
-        if (!super.has(key)) return false;
-        const previous = super.get(key);
-        super.delete(key);
-        if (!this.storage?.setItem) return true;
-        if (this.persistNow()) return true;
-        super.set(key, previous);
-        return false;
-    }
-
-    clear() {
-        super.clear();
-        this.persistNow();
-    }
-}
-
-function createDurableDeferredCommitMap(options = {}) {
-    return new DurableDeferredCommitMap(options);
-}
-
-__m_core_deferredCommitStore_js.createDurableDeferredCommitMap = createDurableDeferredCommitMap;
-__m_core_deferredCommitStore_js.DEFERRED_COMMIT_STORE_KEY = DEFERRED_COMMIT_STORE_KEY;
-__m_core_deferredCommitStore_js.DEFERRED_COMMIT_STORE_VERSION = DEFERRED_COMMIT_STORE_VERSION;
-__m_core_deferredCommitStore_js.DEFERRED_COMMIT_STORE_MAX_ITEMS = DEFERRED_COMMIT_STORE_MAX_ITEMS;
-__m_core_deferredCommitStore_js.DEFERRED_COMMIT_STORE_MAX_BYTES = DEFERRED_COMMIT_STORE_MAX_BYTES;
-__m_core_deferredCommitStore_js.DEFERRED_COMMIT_STORE_MAX_AGE_MS = DEFERRED_COMMIT_STORE_MAX_AGE_MS;
-}
-
-function __init_core_state_js() {
-// MODULE: core/state.js
-const core_deferredCommitStore = __m_core_deferredCommitStore_js;
-// Heartbeat Memories r35 modular runtime.
-// Extracted from r34 without changing archive/cache storage contracts.
-
-const state = {
-  runtimeLifecycleEpoch: 0,
-  apiConfigurationEpoch: 0,
-  manualApiKey: '',
-  busy: false,
-  activeMode: null,
-  activeSession: null,
-  contentManagerOpen: false,
-  roomClockTimer: 0,
-  phoneClockTimer: 0,
-  endingEasterEggTimer: 0,
-  endingEasterEggRuntime: null,
-  archiveViewLevel: 'library',
-  roomLifeRefreshPromise: null,
-  roomLifeRefreshOrigin: null,
-  activeTaskAbortController: null,
-  activeTaskLabel: '',
-  activeTaskTrace: null,
-  activeTaskBackgrounded: false,
-  activeTaskOrigin: null,
-  archivePreparationToken: null,
-  activeGenerationTasks: new Map(),
-  activeModeBuildScopes: new Set(),
-  activeAdvBulkScopes: new Set(),
-  activeArchiveTargetReservations: new Map(),
-  activeCgImageTasks: new Map(),
-  cgImageLifecycleEpoch: 0,
-  avatarDialogueRequestEpoch: 0,
-  activeAvatarDialogue: null,
-  activeProviderRequestCount: 0,
-  providerRequestQueue: [],
-  // Adaptive rate-limit throttle (see core/requestCoordinator.js).
-  rateLimitHits: 0,
-  rateLimitSeenAt: 0,
-  rateLimitRetryAfterMs: 0,
-  // Backoff ladder used when the endpoint sends no Retry-After. Overridable so tests
-  // can exercise the retry policy without sleeping through the real ladder.
-  rateLimitRetryDelaysMs: [5000, 15000, 40000],
-  butterflyTransitionTimer: 0,
-  archiveOverviewCache: { key: '', fetchedAt: 0, items: [] },
-  archiveOverviewPromise: null,
-  archiveOverviewPromiseKey: '',
-  archiveOverviewAllowedChats: new Set(),
-  archiveOverviewKnownArchives: new Map(),
-  archiveOverviewLastKey: '',
-  chooserRefreshTimer: 0,
-  memoryPreflightCache: new Map(),
-  deferredChatCommits: core_deferredCommitStore.createDurableDeferredCommitMap(),
-  archiveLibraryCharacterKey: '',
-  archiveCharacterRelationSelection: '',
-  relationSelectedKey: '',
-  activeArchiveSnapshot: null,
-  activeArchiveReadOnly: true,
-  archiveSnapshotCache: new Map(),
-  connectionModelCache: new Map(),
-  connectionModelRequestEpochs: new Map(),
-  runtimeSessionCache: new Map(),
-  cacheHydrationPromises: new Map(),
-  cacheHydrationErrors: new Map(),
-  cachePersistTimers: new Map(),
-  pendingCompressedCacheWrites: new Map(),
-  cacheCommitSequences: new Map(),
-  cachePersistChains: new Map(),
-  archiveCommitChains: new Map(),
-  archiveDeletionFences: new Set(),
-  archiveTargetTaskEpochs: new Map(),
-  calendarTagFilters: new Map(),
-  usableMessageCountCache: new Map(),
-};
-
-__m_core_state_js.state = state;
-}
-
-function __init_core_context_js() {
-// MODULE: core/context.js
-const core_digest = __m_core_digest_js;
-const archive_groups = __m_archive_groups_js;
-const core_constants = __m_core_constants_js;
-const core_evidence = __m_core_evidence_js;
-const core_text = __m_core_text_js;
-const core_contextTags = __m_core_contextTags_js;
-const chat_read_range = __m_core_chatReadRange_js;
-const runtimeState = __m_core_state_js.state;
-// Heartbeat Memories r35 modular runtime.
-// Extracted from r34 without changing archive/cache storage contracts.
-
-
-
-
-
-function getContext() {
-    const context = globalThis.SillyTavern?.getContext?.();
-    if (!context) throw new Error('未检测到 SillyTavern 扩展上下文。');
-    return context;
-}
-
-function currentCharacterGuard() {
-    const context = getContext();
-    if (context.groupId) {
-        throw new Error('“心迹回廊”当前只支持单角色聊天，请打开一个角色对话后再使用。');
-    }
-    if (context.characterId === undefined || context.characterId === null) {
-        throw new Error('请先打开一个角色聊天。');
-    }
-    return context;
-}
-
-function getChatId(context = getContext()) {
-    try {
-        const id = context.getCurrentChatId?.() ?? context.chatId;
-        return core_text.normalizeText(id, 240);
-    } catch {
-        return core_text.normalizeText(context.chatId, 240);
-    }
-}
-
-function yieldToUi() {
-    return new Promise(resolve => setTimeout(resolve, 0));
-}
-
-function runtimeLifecycleStillCurrent(lifecycleEpoch) {
-    return Number(lifecycleEpoch) === runtimeState.runtimeLifecycleEpoch;
-}
-
-function assertRuntimeLifecycleCurrent(lifecycleEpoch) {
-    if (!runtimeLifecycleStillCurrent(lifecycleEpoch)) {
-        throw new DOMException('Runtime destroyed', 'AbortError');
-    }
-    return true;
-}
-
-// ST/TT hide normal dialogue by toggling is_system, not by removing a floor.
-// Recover only explicitly attributed dialogue, never system/tool messages or guessed names.
-function isArchiveDialogueMessage(message, context) {
-    if (!message?.is_system) return true;
-    if (typeof message.is_user !== 'boolean' || ['system', 'tool', 'developer'].includes(message.role)
-        || message.extra?.type || message.extra?.uses_system_ui || message.extra?.tool_invocations) return false;
-    const name = core_text.normalizeText(message.name, 120);
-    const expected = core_text.normalizeText(message.is_user ? context?.name1 : context?.name2, 120);
-    return !!name && !!expected && name === expected;
-}
-
-async function buildChatSnapshot(context = currentCharacterGuard(), options = {}) {
-    const rawChat = Array.isArray(context.chat) ? context.chat : [];
-    const tagPolicy = core_contextTags.tagPolicyForContext(context);
-    const usable = [];
-    const fullSignatures = [];
-    const prefixCount = Math.max(0, Math.floor(Number(options.prefixCount) || 0));
-    let fingerprint = 2166136261;
-    let prefixFingerprint = 2166136261;
-    const mix = (state, value) => {
-        let next = state >>> 0;
-        for (const ch of String(value ?? '')) {
-            next ^= ch.codePointAt(0);
-            next = Math.imul(next, 16777619);
-        }
-        return next >>> 0;
-    };
-    const chatId = comparableChatId(options.expectedChatId) || comparableChatId(getChatId(context));
-    const assertStillCurrent = () => {
-        if (typeof options.stillCurrent === 'function' && options.stillCurrent() === false) {
-            throw new DOMException('Chat changed', 'AbortError');
-        }
-    };
-    assertStillCurrent();
-    fingerprint = mix(fingerprint, chatId);
-    prefixFingerprint = mix(prefixFingerprint, chatId);
-    for (let index = 0; index < rawChat.length; index += 1) {
-        const message = rawChat[index];
-        const text = core_text.normalizeText(message?.mes, 8000);
-        if (text && isArchiveDialogueMessage(message, context)) {
-            const isUser = message?.is_user === true;
-            const item = {
-                index: index + 1,
-                role: isUser ? 'user' : 'char',
-                name: core_text.normalizeText(message?.name || (isUser ? context.name1 : context.name2), 120),
-                date: core_text.normalizeText(message?.send_date || message?.date || '', 80),
-                text: options.completeSource === true ? core_text.normalizeText(message?.mes, Number.MAX_SAFE_INTEGER) : text,
-            };
-            usable.push(item);
-            const signature = `${item.index}|${item.role}|${item.date}|${text}`;
-            if (options.completeSource === true) fullSignatures.push(`${item.index}|${item.role}|${item.date}|${item.text}`);
-            fingerprint = mix(fingerprint, signature);
-            if (usable.length <= prefixCount) prefixFingerprint = mix(prefixFingerprint, signature);
-        }
-        if (index && index % 60 === 0) {
-            await yieldToUi();
-            assertStillCurrent();
-        }
-    }
-    const totalMessages = usable.length;
-    fingerprint = mix(fingerprint, String(totalMessages));
-    if (prefixCount > 0) prefixFingerprint = mix(prefixFingerprint, String(Math.min(prefixCount, totalMessages)));
-
-    const capMessages = source => {
-        if (options.completeSource === true) return { selected: source,
-            selectedChars: source.reduce((sum, item) => sum + item.text.length + item.name.length + item.date.length + 32, 0), truncated: false };
-        const cappedByCount = source.length > core_constants.MAX_IMPORT_MESSAGES ? core_evidence.evenlySample(source, core_constants.MAX_IMPORT_MESSAGES) : source;
-        let selected = cappedByCount;
-        let selectedChars = selected.reduce((sum, item) => sum + item.text.length + item.name.length + item.date.length + 32, 0);
-        if (selectedChars > core_constants.MAX_IMPORT_TOTAL_CHARS) {
-            const ratio = core_constants.MAX_IMPORT_TOTAL_CHARS / Math.max(1, selectedChars);
-            const limit = Math.max(64, Math.floor(selected.length * ratio));
-            selected = core_evidence.evenlySample(selected, limit);
-            selectedChars = selected.reduce((sum, item) => sum + item.text.length + item.name.length + item.date.length + 32, 0);
-        }
-        return { selected, selectedChars, truncated: source.length > selected.length };
-    };
-
-    // Selection controls model input only: keep the full canonical history and prefix
-    // fingerprints above intact for stale-write protection and existing archive baselines.
-    const selectedFloors = options.readRange ? new Set(chat_read_range.selectChatReadRange(context, options.readRange).map(row => row.index)) : null;
-    const selectedUsable = selectedFloors ? usable.filter(item => selectedFloors.has(item.index)) : usable;
-    const full = capMessages(selectedUsable);
-    const incrementalRaw = prefixCount > 0 && totalMessages >= prefixCount ? usable.slice(prefixCount) : usable;
-    const incremental = capMessages(selectedFloors ? incrementalRaw.filter(item => selectedFloors.has(item.index)) : incrementalRaw);
-    assertStillCurrent();
-    return {
-        chatId,
-        ...(options.completeSource === true ? {
-            fullFingerprint: core_digest.sha256Bytes(new TextEncoder().encode(JSON.stringify([chatId, fullSignatures]))),
-            fullPrefixFingerprint: core_digest.sha256Bytes(new TextEncoder().encode(JSON.stringify([chatId, fullSignatures.slice(0, prefixCount)]))),
-        } : {}),
-        totalMessages,
-        usedMessages: full.selected.length,
-        usedChars: full.selectedChars,
-        truncated: full.truncated,
-        coverageMode: options.readRange ? 'selected-floors' : full.truncated ? 'evenly-sampled-full-window' : 'full-window',
-        readRange: options.readRange ? chat_read_range.normalizeChatReadRange(options.readRange) : null,
-        messages: full.selected.map(item => ({ ...item, text: core_contextTags.filterContextTags(item.text, tagPolicy) })),
-        fingerprint: String(fingerprint >>> 0),
-        prefixCount,
-        prefixFingerprint: prefixCount > 0 && totalMessages >= prefixCount ? String(prefixFingerprint >>> 0) : '',
-        incrementalMessages: incremental.selected.map(item => ({ ...item, text: core_contextTags.filterContextTags(item.text, tagPolicy) })),
-        incrementalUsedMessages: incremental.selected.length,
-        incrementalUsedChars: incremental.selectedChars,
-        incrementalTruncated: incremental.truncated,
-    };
-}
-
-// Used only while a batch is explicitly committing (including its deferred save),
-// never by ordinary startup or message listeners. Mirrors the full snapshot identity.
-function completeArchiveChatFingerprint(context = currentCharacterGuard()) {
-    const signatures = [];
-    const chat = Array.isArray(context.chat) ? context.chat : [];
-    for (let index = 0; index < chat.length; index++) {
-        const message = chat[index];
-        const value = core_text.normalizeText(message?.mes, Number.MAX_SAFE_INTEGER);
-        if (value && isArchiveDialogueMessage(message, context)) {
-            const role = message?.is_user === true ? 'user' : 'char';
-            const date = core_text.normalizeText(message?.send_date || message?.date || '', 80);
-            signatures.push(`${index + 1}|${role}|${date}|${value}`);
-        }
-    }
-    return core_digest.sha256Bytes(new TextEncoder().encode(JSON.stringify([comparableChatId(getChatId(context)), signatures])));
-}
-
-function comparableChatId(value) {
-    return core_text.normalizeText(value, 260).replace(/\.jsonl$/i, '').trim();
-}
-
-function contextCharacterAvatar(context = getContext(), preferredName = '') {
-    const characters = Array.isArray(context?.characters) ? context.characters : [];
-    const id = context?.characterId;
-    const requestedName = core_text.normalizeText(preferredName, 120);
-    const currentName = core_text.normalizeText(context?.name2, 120);
-    const preferred = requestedName || currentName;
-    const direct = id !== undefined && id !== null ? characters[id] : null;
-    const candidates = [];
-    if (requestedName) {
-        const byName = characters.find(item => core_text.normalizeText(item?.name || item?.data?.name, 120) === requestedName);
-        if (byName) candidates.push(byName);
-        const directName = core_text.normalizeText(direct?.name || direct?.data?.name, 120);
-        if (direct && directName === requestedName && direct !== byName) candidates.push(direct);
-    } else {
-        if (direct) candidates.push(direct);
-        if (preferred) {
-            const byName = characters.find(item => core_text.normalizeText(item?.name || item?.data?.name, 120) === preferred);
-            if (byName && byName !== direct) candidates.push(byName);
-        }
-    }
-    for (const item of candidates) {
-        const avatar = core_text.normalizeText(item?.avatar || item?.data?.avatar, 300);
-        if (avatar) return avatar;
-    }
-    return '';
-}
-
-function archiveEntryAvatarName(entry, context = getContext()) {
-    const stored = core_text.normalizeText(entry?.avatar, 300);
-    if (stored) return stored;
-    const key = core_text.normalizeText(entry?.characterKey, 300);
-    if (key && !key.startsWith('character:')) return key;
-    return contextCharacterAvatar(context, core_text.normalizeText(entry?.characterName, 120));
-}
-
-function archiveCanonicalCharacterKey(entry, context = getContext()) {
-    return archiveEntryAvatarName(entry, context) || core_text.normalizeText(entry?.characterKey, 300);
-}
-
-function stableArchiveHash(value) {
-    const text = String(value ?? '');
-    let hash = 2166136261;
-    for (let i = 0; i < text.length; i += 1) {
-        hash ^= text.charCodeAt(i);
-        hash = Math.imul(hash, 16777619);
-    }
-    return (hash >>> 0).toString(36);
-}
-
-function archiveStoredAvatar(entry) {
-    const avatar = core_text.normalizeText(entry?.avatar, 300);
-    if (avatar) return avatar;
-    const key = core_text.normalizeText(entry?.characterKey, 300);
-    return key && !key.startsWith('character:') ? key : '';
-}
-
-function archiveSourceIdentityKey(entry) {
-    const fingerprint = core_text.normalizeText(entry?.characterFingerprint, 160);
-    const characterIndexHint = Number.isInteger(Number(entry?.characterIndexHint)) ? Number(entry.characterIndexHint) : -1;
-    if (fingerprint) return `fingerprint:${fingerprint}${characterIndexHint >= 0 ? `\u001fcharacter:${characterIndexHint}` : ''}`;
-    const avatar = archiveStoredAvatar(entry);
-    const name = core_text.normalizeText(entry?.characterName, 120).toLocaleLowerCase();
-    const fallback = core_text.normalizeText(entry?.characterKey, 300);
-    return `${avatar || fallback}\u001f${name}`;
-}
-
-function archiveAutoGroupId(entry) {
-    return `auto:${stableArchiveHash(archiveSourceIdentityKey(entry))}`;
-}
-
-function archiveLegacyScanKey(entry) {
-    const avatar = archiveStoredAvatar(entry) || core_text.normalizeText(entry?.characterKey, 300);
-    const name = core_text.normalizeText(entry?.characterName, 120).toLocaleLowerCase();
-    return `${avatar}\u001f${name}\u001f${comparableChatId(entry?.chatId)}`;
-}
-
-function archiveIndexEntryId(entry) {
-    const existing = core_text.normalizeText(entry?.entryId, 120);
-    if (existing) return existing;
-    return `AE:${stableArchiveHash(`${archiveSourceIdentityKey(entry)}\u001f${comparableChatId(entry?.chatId)}`)}`;
-}
-
-function archiveEntryMatchesContextCharacter(entry, context = getContext()) {
-    if (!entry || !context) return false;
-    const entryName = core_text.normalizeText(entry?.characterName, 120);
-    const descriptor = archive_groups.characterDescriptor(context, Number(context?.characterId));
-    const currentName = core_text.normalizeText(context?.name2 || descriptor?.name, 120);
-    const entryAvatar = archiveStoredAvatar(entry);
-    const currentAvatar = core_text.normalizeText(context?.characters?.[context?.characterId]?.avatar || context?.characters?.[context?.characterId]?.data?.avatar, 300);
-    if (entryAvatar && currentAvatar && entryAvatar !== currentAvatar) return false;
-    const entryHint = Number.isInteger(Number(entry?.characterIndexHint)) ? Number(entry.characterIndexHint) : -1;
-    const currentHint = Number.isInteger(Number(context?.characterId)) ? Number(context.characterId) : -1;
-    // A character slot is only a locator, never a complete identity proof. SillyTavern can
-    // reuse the same slot (and even the same avatar/chat filename) for a different card.
-    if (entryHint >= 0 && currentHint >= 0 && entryHint !== currentHint) return false;
-    if (entryName && entryName !== '未命名角色' && currentName && entryName !== currentName) return false;
-    const entryFingerprint = core_text.normalizeText(entry?.characterFingerprint, 160);
-    const currentFingerprint = core_text.normalizeText(descriptor?.fingerprint, 160);
-    if (entryFingerprint && currentFingerprint) {
-        if (entryFingerprint !== currentFingerprint) return false;
-        const sameFingerprint = (Array.isArray(context?.characters) ? context.characters : [])
-            .map((_, index) => archive_groups.characterDescriptor(context, index))
-            .filter(item => item?.fingerprint === entryFingerprint);
-        if (sameFingerprint.length !== 1) return false;
-    }
-    if (entryName || entryAvatar || entryHint >= 0) return true;
-    return core_text.normalizeText(entry?.characterKey, 300) === `character:${String(context?.characterId ?? '')}`;
-}
-
-function currentCharacterKey(context = currentCharacterGuard()) {
-    const avatar = core_text.normalizeText(context.characters?.[context.characterId]?.avatar || context.characters?.[context.characterId]?.data?.avatar, 300);
-    return avatar || `character:${String(context.characterId ?? '')}`;
-}
-
-function currentCharacterAvatar(context = currentCharacterGuard()) {
-    return core_text.normalizeText(context.characters?.[context.characterId]?.avatar || context.characters?.[context.characterId]?.data?.avatar, 300);
-}
-
-function currentCharacterRuntimeKey(context = currentCharacterGuard()) {
-    const descriptor = archive_groups.characterDescriptor(context, Number(context.characterId));
-    const identity = descriptor?.fingerprint || `${currentCharacterKey(context)}\u001f${core_text.normalizeText(context.name2, 120)}`;
-    return `${identity}\u001fcharacter:${String(context.characterId ?? '')}`;
-}
-
-function chatScopeKey(context = currentCharacterGuard(), chatId = getChatId(context)) {
-    return `${currentCharacterRuntimeKey(context)}|${comparableChatId(chatId)}`;
-}
-
-function captureTaskOrigin(context = currentCharacterGuard(), archiveRevision = '') {
-    const rawCache = context?.__rmtArchiveTargetEntryId
-        ? context?.chatMetadata?.[core_constants.CACHE_KEY]
-        : runtimeState.runtimeSessionCache.get(chatScopeKey(context)) || context?.chatMetadata?.[core_constants.CACHE_KEY];
-    const rawFences = rawCache && typeof rawCache === 'object' && rawCache[core_constants.MODE_WRITE_FENCES_CACHE_KEY]
-        && typeof rawCache[core_constants.MODE_WRITE_FENCES_CACHE_KEY] === 'object'
-        ? rawCache[core_constants.MODE_WRITE_FENCES_CACHE_KEY]
-        : {};
-    const modeWriteFences = Object.create(null);
-    for (const mode of Object.values(core_constants.MODE)) {
-        const fence = rawFences[mode];
-        const generation = Math.max(0, Math.floor(Number(fence?.generation) || 0));
-        const token = core_text.normalizeText(fence?.token, 160);
-        if (generation > 0 && token) modeWriteFences[mode] = { generation, token };
-    }
-    return {
-        startedAt: Date.now(),
-        lifecycleEpoch: runtimeState.runtimeLifecycleEpoch,
-        characterKey: currentCharacterRuntimeKey(context),
-        characterAvatar: currentCharacterAvatar(context),
-        characterId: String(context.characterId ?? ''),
-        characterName: core_text.normalizeText(context.name2, 120),
-        chatId: comparableChatId(getChatId(context)),
-        archiveRevision: core_text.normalizeText(archiveRevision, 240),
-        archivePresent: !!core_text.normalizeText(archiveRevision, 240),
-        modeWriteFences,
-    };
-}
-
-function deferredCommitOriginMatchesContext(origin, context = getContext()) {
-    try {
-        if (!origin || comparableChatId(getChatId(context)) !== comparableChatId(origin.chatId)) return false;
-        const originCharacterId = core_text.normalizeText(origin.characterId, 40);
-        if (originCharacterId && originCharacterId !== String(context?.characterId ?? '')) return false;
-        if (currentCharacterRuntimeKey(context) === origin.characterKey) return true;
-        const originAvatar = core_text.normalizeText(origin.characterAvatar, 300);
-        const currentAvatar = currentCharacterAvatar(context);
-        if (!originAvatar || originAvatar !== currentAvatar) return false;
-        // Modern deferred rows capture the live SillyTavern card slot. Once that exact
-        // slot and its avatar still agree, ordinary edits/renames are safe even when a
-        // second card intentionally uses the same avatar. A different slot already
-        // failed above, so cloned cards can never inherit each other's completed work.
-        if (originCharacterId) {
-            const expectedRevision = core_text.normalizeText(origin.archiveRevision, 240);
-            const liveMemory = context?.chatMetadata?.[core_constants.MEMORY_KEY];
-            const liveCache = runtimeState.runtimeSessionCache.get(chatScopeKey(context))
-                || context?.chatMetadata?.[core_constants.CACHE_KEY];
-            const liveRevision = core_text.normalizeText(liveMemory?.archiveRevision || liveCache?.archiveRevision, 240);
-            return !!expectedRevision
-                && liveRevision === expectedRevision
-                && comparableChatId(liveMemory?.chatId || liveCache?.chatId) === comparableChatId(origin.chatId);
-        }
-        const matches = (Array.isArray(context.characters) ? context.characters : []).filter((character, index) => {
-            const avatar = core_text.normalizeText(character?.avatar || character?.data?.avatar, 300);
-            return avatar === originAvatar && characterDescriptorExists(context, index);
-        });
-        return matches.length === 1;
-    } catch {
-        return false;
-    }
-}
-
-function characterDescriptorExists(context, index) {
-    return !!archive_groups.characterDescriptor(context, Number(index));
-}
-
-function isCurrentTaskOrigin(origin, context = getContext()) {
-    try {
-        return !!origin
-            && Number(origin.lifecycleEpoch) === runtimeState.runtimeLifecycleEpoch
-            && currentCharacterRuntimeKey(context) === origin.characterKey
-            && comparableChatId(getChatId(context)) === origin.chatId;
-    } catch {
-        return false;
-    }
-}
-
-__m_core_context_js.buildChatSnapshot = buildChatSnapshot;
-__m_core_context_js.getContext = getContext;
-__m_core_context_js.currentCharacterGuard = currentCharacterGuard;
-__m_core_context_js.getChatId = getChatId;
-__m_core_context_js.yieldToUi = yieldToUi;
-__m_core_context_js.runtimeLifecycleStillCurrent = runtimeLifecycleStillCurrent;
-__m_core_context_js.assertRuntimeLifecycleCurrent = assertRuntimeLifecycleCurrent;
-__m_core_context_js.isArchiveDialogueMessage = isArchiveDialogueMessage;
-__m_core_context_js.completeArchiveChatFingerprint = completeArchiveChatFingerprint;
-__m_core_context_js.comparableChatId = comparableChatId;
-__m_core_context_js.contextCharacterAvatar = contextCharacterAvatar;
-__m_core_context_js.archiveEntryAvatarName = archiveEntryAvatarName;
-__m_core_context_js.archiveCanonicalCharacterKey = archiveCanonicalCharacterKey;
-__m_core_context_js.stableArchiveHash = stableArchiveHash;
-__m_core_context_js.archiveStoredAvatar = archiveStoredAvatar;
-__m_core_context_js.archiveSourceIdentityKey = archiveSourceIdentityKey;
-__m_core_context_js.archiveAutoGroupId = archiveAutoGroupId;
-__m_core_context_js.archiveLegacyScanKey = archiveLegacyScanKey;
-__m_core_context_js.archiveIndexEntryId = archiveIndexEntryId;
-__m_core_context_js.archiveEntryMatchesContextCharacter = archiveEntryMatchesContextCharacter;
-__m_core_context_js.currentCharacterKey = currentCharacterKey;
-__m_core_context_js.currentCharacterAvatar = currentCharacterAvatar;
-__m_core_context_js.currentCharacterRuntimeKey = currentCharacterRuntimeKey;
-__m_core_context_js.chatScopeKey = chatScopeKey;
-__m_core_context_js.captureTaskOrigin = captureTaskOrigin;
-__m_core_context_js.deferredCommitOriginMatchesContext = deferredCommitOriginMatchesContext;
-__m_core_context_js.isCurrentTaskOrigin = isCurrentTaskOrigin;
-}
-
-function __init_core_text_js() {
-// MODULE: core/text.js
-const core_context = __m_core_context_js;
-const core_backupDiagnostics = __m_core_backupDiagnostics_js;
-// Heartbeat Memories r35 modular runtime.
-// Extracted from r34 without changing archive/cache storage contracts.
-
-
-function esc(value) {
-    return String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
-function normalizeText(value, max = 20000) {
-    return String(value ?? '')
-        .replace(/\r\n?/g, '\n')
-        .replace(/\u0000/g, '')
-        .trim()
-        .slice(0, max);
-}
-
-function isPlaceholderText(value) {
-    const text = normalizeText(value, 120).replace(/\s+/g, '');
-    if (!text) return true;
-    return /^(?:暂无(?:数据|内容)?|待定|待补(?:全)?|未整理|整理中|内容整理中|略|省略|空白|无|none|null|n\/?a|[-—_]{2,}|[.。…?？]{2,})$/i.test(text);
-}
-
-function expandSafeRoleMacros(value, context = core_context.getContext()) {
-    const charName = normalizeText(context.name2 || '角色', 120);
-    const userName = normalizeText(context.name1 || '用户', 120);
-    return String(value ?? '')
-        .replace(/\{\{char\}\}/gi, charName)
-        .replace(/\{\{user\}\}/gi, userName)
-        .replace(/\{\{([^{}\n]{1,200})\}\}/g, (_match, inner) => `｛｛${inner}｝｝`);
-}
-
-function toastText(value, max = 800) {
-    return normalizeText(value, max)
-        .replace(/</g, '‹')
-        .replace(/>/g, '›')
-        .replace(/&/g, '＆');
-}
-
-const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
-    ...core_backupDiagnostics.BACKUP_FAILURE_MESSAGES,
-    RMT_DEFERRED_QUOTA: '浏览器可用存储空间不足，待写回结果仅保留在当前页面。',
-    RMT_DEFERRED_SECURITY: '浏览器权限或隐私设置阻止保存待写回结果；结果仅保留在当前页面。',
-    RMT_DEFERRED_UNAVAILABLE: '当前环境无法使用待写回存储；结果仅保留在当前页面。',
-    RMT_DEFERRED_LIMIT: '待写回结果超过本地安全容量；结果仅保留在当前页面。',
-    RMT_DEFERRED_SERIALIZE: '待写回结果无法序列化；结果仅保留在当前页面。',
-    RMT_DEFERRED_UNKNOWN: '待写回结果未能保存到浏览器；结果仅保留在当前页面。',
-    RMT_PROFILE_CAPABILITY: '1.1.18 一键配置要求新版连接能力；当前页面未提供安全的配置读取能力，本次没有发送请求。',
-    RMT_MANUAL_API_URL: '手动 API 地址无效；请检查地址，并把 Key、Token 或密码放在独立凭据输入框中。',
-    RMT_MANUAL_API_TRANSPORT: '远程手动 API 必须使用 HTTPS；只有本机地址可以使用 HTTP。',
-    RMT_MANUAL_RESPONSE_TOO_LARGE: '模型服务返回内容过大，已停止读取。',
-    RMT_RESPONSE_HTML: '上游返回了非 API 的 HTML 页面；响应正文已隐藏。',
-    RMT_MANUAL_INVALID_JSON: '接口响应封装无法解析；尚不能判断是模型正文格式、代理错误页或传输损坏，响应正文已隐藏。',
-    RMT_MANUAL_HTTP: '手动 API 请求失败；请检查手动配置与服务状态。',
-    RMT_MANUAL_PROVIDER_ERROR: '手动 API 返回了错误状态；响应详情已隐藏，请检查服务配置后重试。',
-    RMT_MANUAL_FETCH_UNAVAILABLE: '当前环境没有可用的网络请求能力。',
-    RMT_MANUAL_MODELS_EMPTY: '接口没有返回可用模型；仍可直接填写模型 ID。',
-    RMT_MANUAL_MODEL_TIMEOUT: '拉取模型超时；仍可直接填写模型 ID。',
-    RMT_MANUAL_MODEL: '请先填写手动 API 的模型 ID。',
-    RMT_MANUAL_MESSAGES: '手动 API 请求缺少必要消息，本次没有发送。',
-    RMT_MANUAL_EMPTY: '手动 API 没有返回可见正文。',
-    RMT_API_CONFIG_CHANGED: 'API 配置在生成期间发生变化，本次旧连接结果已丢弃。',
-    RMT_API_CONFIGURATION_SUPERSEDED: 'API 设置已经变化，本次旧配置操作已取消。',
-    RMT_API_MODEL_REQUEST_SUPERSEDED: '模型列表请求已被更新的请求取代。',
-    RMT_PROFILE_PROXY_UNAVAILABLE: '这一键连接指定的代理无法从该 Profile 自身安全解析；已停止远端拉取。',
-    RMT_PROFILE_MODEL_STATUS: '这一键连接的模型列表返回了错误状态；响应详情已隐藏。',
-    RMT_PROFILE_MODEL_TIMEOUT: '一键连接的模型列表请求超时；仍可使用该连接自己保存的模型。',
-    RMT_CONNECTION_FAILED: '生成连接请求失败，尚不能确定原因；请查看连接与服务端状态后再试，旧内容保留。',
-    RMT_CONNECTION_AUTH: '专用连接认证失败；请检查当前配置、API Key 与账号权限。',
-    RMT_CONNECTION_RATE_LIMIT: '模型服务正在限流或额度不足；请稍后重试。',
-    RMT_CONNECTION_QUOTA: '模型服务报告额度不足；请检查当前独立 API 账号余额或配额。不会自动重试。',
-    RMT_ARCHIVE_VERDICT: '档案简介尚未通过校验；原有回忆与封面保留，可只重写简介，无需重建档案。',
-    RMT_CONNECTION_CONTEXT_LIMIT: '本段输入超过模型或代理的上下文上限；请减少导入资料或更换模型。',
-    RMT_CONNECTION_CONFIG: '专用连接、模型或上游端点不可用；请重新检查配置。',
-    RMT_CONNECTION_INVALID_REQUEST: '上游拒绝了本段请求；请检查模型兼容性与输出设置。',
-    RMT_CONNECTION_SERVER: '模型服务或代理暂时不可用；请稍后重试。',
-    RMT_CONNECTION_NETWORK: '无法连接模型服务；请检查地址、网络、代理与服务状态后重试。',
-    RMT_REQUEST_TIMEOUT: '模型请求超时，已停止等待并释放任务位；请稍后重试。',
-    RMT_SEGMENT_VALIDATION: '模型结果没有通过本地完整性校验；旧内容未被覆盖。',
-    RMT_PAST_LIVES_STRUCTURE: '前世今生这一段的结构不完整；已保留成功部分，只需重试未完成段。',
-    RMT_PAST_LIVES_RELATIONSHIP: '前世今生这一段出现与两人设定冲突的关系表述；已保留成功部分，可重试这一段。',
-    RMT_PAST_LIVES_HISTORY: '今生回响把尚未发生的内容写成了既往记忆；已保留成功部分，可重试这一段。',
-    RMT_PAST_LIVES_SOURCE: '关联记忆与当前档案不一致；旧内容保留，请回到对应档案重试。',
-    RMT_PAST_LIVES_VERSION: '这份前世今生暂时无法按当前格式读取；旧记录保留，请勿删除档案。',
-    RMT_PAST_LIVES_LIMIT: '前世今生已达到本地保存容量；旧内容与成功部分保留。',
-    RMT_TIME_STORY_STRUCTURE: '这一篇的时间、人物或正文不完整；旧篇章保留，可重试当前故事。',
-    RMT_TIME_STORY_WORLD: '这一篇的联络媒介与世界设定不符；旧篇章保留，可重试当前故事。',
-    RMT_TIME_STORY_RELATIONSHIP: '这一篇出现与两人设定冲突的关系表述；旧篇章保留。',
-    RMT_TIME_STORY_SOURCE: '番外所属聊天、人物或档案版本不一致；请重新打开对应档案。',
-    RMT_TIME_STORY_VERSION: '这份番外暂不可安全读取；原记录保持不变，请勿删除档案。',
-    RMT_TIME_STORY_LIMIT: '番外已达到本地保存容量；旧篇章保留，请先备份整理。',
-    RMT_PAIR_RELATIONSHIP: '这一段出现与两人设定冲突的关系表述；原有内容保留。',
-    RMT_RECOVERY_INPUT_CHANGED: '原任务的聊天身份、档案版本、来源或生成条件与当前输入不一致；成功内容和草稿保留，没有自动重做。请核对原任务来源后再继续。',
-    RMT_RECOVERY_ORIGIN_CHANGED: '目标聊天或角色已变化；本次没有覆盖档案，请回到原聊天继续。',
-    RMT_CACHE_CAS_CONFLICT: '档案已被其他操作更新；本次旧结果没有覆盖新内容，请检查当前档案后再保存。',
-    RMT_RECOVERY_IDENTITY: '缺少当前档案身份，本次未发送；请重新打开对应档案。',
-    RMT_RECOVERY_BUSY: '这一段正在生成，请等当前请求结束。',
-    RMT_RECOVERY_FAILED: '具体原因未记录；旧内容保留，可重试。',
-    RMT_RECOVERY_VALIDATION_CHANGED: '已保存片段暂未通过当前校验；草稿仍保留，没有重新收费生成。',
-    RMT_RECOVERY_STORAGE: '这一段已返回，但浏览器没有保存成功；已停止后续生成，请检查存储后重试。',
-    RMT_RECOVERY_LIMIT: '这一段超出草稿保存容量；此前成功部分与旧内容保留。',
-    RMT_RECOVERY_UNAVAILABLE: '当前环境无法建立可靠的续写记录；请保留页面与已有内容。',
-    RMT_RECOVERY_DATA: '这一段的返回结构无法保存；此前成功部分与旧内容保留。',
-    RMT_BUTTERFLY_systemNote: '该节点缺少完整的系统结局判定；旧内容保留，可单独重试。',
-    RMT_BUTTERFLY_monologue: '该节点的角色独白不完整；旧内容保留，可单独重试。',
-    RMT_BUTTERFLY_intervention: '该节点缺少完整的现世回应；旧内容保留，可单独重试。',
-    RMT_BUTTERFLY_omega: '最终观测点的告白或结局判定不完整；旧内容保留，可单独重试。',
-    RMT_BUTTERFLY_worldSpec: '该节点的世界条件不完整；旧内容保留，可单独重试。',
-    RMT_ROOM_STRUCTURE: '房间的空间差异、四时段生活或互动台词不完整；已保留旧内容，可单独重试房间。',
-    RMT_ROOM_FIELDS: '房间的待补文字或增量物件尚未通过校验；已保留旧内容，请重试。若反复截断，请检查最大输出设置。',
-    RMT_BUTTERFLY_relationship: '该节点的人物关系归属不明确；旧内容保留，请重试此节点。',
-    RMT_BUTTERFLY_unique: '该节点重复或分歧维度不符；旧内容保留，请重试此节点。',
-    RMT_ROOM_PETS: '人设有宠物，但模型漏写了有效宠物节点；请单独重试房间。',
-    RMT_TRAVEL_LOCATIONS: '尚无通过证据与对白校验的地点；请确认档案或已选设定世界书包含地点。不会补造远方，旧地图保留。',
-    RMT_SETTING_SOURCE_PARTIAL: '所选设定世界书读取不完整或超出本次容量；请检查所选书和条目后重试，旧内容保留。',
-    RMT_ARCHIVE_PREFIX_CHANGED: '旧档案与当前历史基线不一致，可能是旧消息被修改或旧版漏收了隐藏楼层。本次未覆盖；请先检查来源，不必删除档案。',
-    RMT_ARCHIVE_SOURCE_MISMATCH: '当前聊天中的档案标识或格式不匹配，已停止生成并保留原数据。',
-    RMT_ROOM_HISTORY: '房间台词把没有证据的共同经历当成了过去；本次未保存，可重试。',
-    RMT_LEDGER_UNAVAILABLE: '浏览器来源存储暂时不可用。请退出隐私模式或关闭旧页后重试；不要清除站点数据。',
-    RMT_BANNED_GENERATED_PHRASE: '模型新生成内容命中了本地禁用词；本次结果没有保存。',
-    RMT_JSON_EMPTY_FINAL: '模型没有返回最终正文 JSON；旧内容未被覆盖。',
-    RMT_JSON_EMPTY_FINAL_WITH_REASONING: '模型产生了推理内容，但没有返回最终正文 JSON；旧内容未被覆盖。',
-    RMT_RESPONSE_FORMAT: '当前连接返回了未识别的正文包装；旧内容保留，请导出诊断以核对返回格式。',
-    RMT_JSON_NOT_FOUND: '模型最终正文中没有完整 JSON；旧内容未被覆盖。',
-    RMT_JSON_TRUNCATED: '模型返回的 JSON 疑似被截断；旧内容未被覆盖。',
-    RMT_PHONE_DRAFT_AVAILABLE: '私人终端只完成了部分内容；已保留可继续生成的草稿。',
-    RMT_PHONE_DRAFT_UNAVAILABLE: '私人终端未完成，且本次草稿未能保存；旧终端保留。请检查存储状态后重试。',
-    RMT_PHONE_SPEAKERS: '聊天缺少有原文依据的双方发言；不会补造对话来凑数量。',
-    RMT_PHONE_EVIDENCE: '这项终端内容缺少完整的条目或来源证据；旧内容保留，可继续补齐。',
-    RMT_PHONE_SOURCE_EMPTY: '当前来源不足以收录终端内容；请补充来源并更新档案后再生成，不会编造记录。',
-    RMT_PHONE_SOURCE_CHANGED: '终端草稿的来源已变化，已完成内容未删除。请恢复原来的设定来源后继续，或明确重新生成终端。',
-    RMT_ARCHIVE_CONTEXT_BUDGET: '完整建档请求超出已确认的模型上下文预算，未发送；来源与草稿保留，没有降低输出。',
-    RMT_ARCHIVE_OUTPUT_BUDGET: '请求的最大输出超过已确认能力，未发送且没有擅自降低输出。',
-    RMT_ARCHIVE_CHECKPOINT: '建档检查点格式或容量异常，旧成果保留，未自动重建。',
-    RMT_ARCHIVE_SOURCE_CAPACITY: '全部来源超过账本容量，未仅截取前半部分冒充完成。',
-    RMT_ARCHIVE_RESULT_CAPACITY: '本段结果超过原校验容量，未截取结果或推进完成进度。',
-    RMT_INPUT_BUDGET: '本次输入超过安全预算，已在发送前拦截。',
-    RMT_TOKEN_COUNT_TIMEOUT: '输入检查超时，本段未发送；旧内容保留，可重试。',
-    RMT_TOKEN_COUNT_UNAVAILABLE: '本地计数暂不可用。',
-    RMT_JSON_INVALID: '模型没有返回完整、可解析的 JSON；响应正文已隐藏。',
-    RMT_ARCHIVE_DELETED_FENCE: '目标档案已被明确删除；较早启动的任务不会重新创建它。',
-    RMT_METADATA_DURABILITY_UNAVAILABLE: '当前页面无法确认档案已经持久保存；结果保留待重试，不会假装成功。',
-});
-
-const SAFE_DIAGNOSTIC_CODES = new Set([
-    ...Object.keys(SAFE_ERROR_CODE_MESSAGES),
-    'ABORT_ERR', 'RMT_LOCAL_OPERATION',
-]);
-
-function safeErrorStatus(error) {
-    const value = Number(error?.status ?? error?.statusCode ?? error?.response?.status);
-    return Number.isFinite(value) && value >= 100 && value <= 599 ? Math.floor(value) : 0;
-}
-
-function safeErrorCode(error) {
-    const value = normalizeText(error?.code, 80);
-    return SAFE_DIAGNOSTIC_CODES.has(value) ? value : '';
-}
-
-function sanitizedTrustedErrorMessage(value, max) {
-    const raw = normalizeText(value, Math.max(1200, max * 2));
-    if (!raw) return '';
-    const sensitive = /authorization\s*[:=]|bearer\s+[a-z0-9._~+\/-]{8,}|\bsk-[a-z0-9_-]{8,}\b|[?&](?:api[_-]?key|key|token|secret|password)=|<!doctype\s+html|<html(?:\s|>)|<body(?:\s|>)|failed to generate chat completion\s*:/i;
-    if (sensitive.test(raw)) return '';
-    return normalizeText(raw.replace(/[\r\n]+/g, ' '), max);
-}
-
-function safeUserError(message, code = 'RMT_LOCAL_OPERATION', options = {}) {
-    const error = new Error(normalizeText(message, 1200) || '操作失败。');
-    error.code = /^[A-Z][A-Z0-9_]{1,79}$/.test(String(code || '')) ? String(code) : 'RMT_LOCAL_OPERATION';
-    error.safeToDisplay = true;
-    error.safeUserMessage = error.message;
-    if (Number.isFinite(Number(options.status))) error.status = Math.floor(Number(options.status));
-    if (typeof options.retryable === 'boolean') error.retryable = options.retryable;
-    return error;
-}
-
-/**
- * Return only low-cardinality, allowlisted diagnostic fields. This object is safe
- * for console logging and must never contain provider bodies, prompts, history,
- * world-book text, archive text, URLs, keys, tokens, or raw exception messages.
- */
-function safeErrorDiagnostic(error) {
-    const backup = core_backupDiagnostics.backupFailureDiagnostic(error);
-    if (backup) return { code: backup.code, kind: 'storage', retryable: false,
-        backupCategory: backup.category, backupStage: backup.stage };
-    const diagnostic = {};
-    const name = normalizeText(error?.name, 40);
-    const code = safeErrorCode(error);
-    const status = safeErrorStatus(error);
-    const kind = normalizeText(error?.kind, 40);
-    if (/^(?:Error|TypeError|RangeError|SyntaxError|AbortError|TimeoutError|DOMException)$/.test(name)) diagnostic.name = name;
-    if (code) diagnostic.code = code;
-    if (status) diagnostic.status = status;
-    if (/^(?:network|timeout|transport|provider|validation|storage|lifecycle)$/.test(kind)) diagnostic.kind = kind;
-    if (typeof error?.retryable === 'boolean') diagnostic.retryable = error.retryable;
-    if (typeof error?.retryableJson === 'boolean') diagnostic.retryableJson = error.retryableJson;
-    return diagnostic;
-}
-
-function safeErrorSummary(error, max = 520) {
-    if (core_backupDiagnostics.backupFailureDiagnostic(error)) {
-        return normalizeText(core_backupDiagnostics.backupFailureSummary(error).message, max);
-    }
-    const categories = { chat: '聊天正文或聊天身份', character: '角色身份或角色卡', persona: '用户 Persona',
-        archive: '正式档案版本', range: '聊天读取范围', selection: '来源选择', configuration: '生成配置',
-        sources: '已捕获来源快照', unknown: '旧格式草稿身份' };
-    if (error?.code === 'RMT_RECOVERY_INPUT_CHANGED' && Object.hasOwn(categories, error.archiveInputCategory)) {
-        return `${categories[error.archiveInputCategory]}与原任务不一致；已保存成果和未提交草稿保留。可恢复原条件继续，或明确选择按当前条件另起任务。`;
-    }
-    if (['RMT_ARCHIVE_CONTEXT_BUDGET', 'RMT_ARCHIVE_OUTPUT_BUDGET'].includes(error?.code) && error.archiveBudget) {
-        const b = error.archiveBudget, n = value => Number.isFinite(value) && value >= 0 ? Math.floor(value).toLocaleString() : '未知';
-        return `${SAFE_ERROR_CODE_MESSAGES[error.code]} 完整输入 ${n(b.utf16Chars)} 字符（UTF-16）、${n(b.utf8Bytes)} UTF-8 字节；输入 token ${n(b.inputTokens)}（宿主计数估算）、请求最大输出 ${n(b.outputTokens)} token；模型上下文 ${n(b.contextTokens)}。`;
-    }
-    const raw = normalizeText(error?.message, 12000);
-    const status = safeErrorStatus(error);
-    const code = safeErrorCode(error);
-    if (code === 'RMT_PHONE_DRAFT_AVAILABLE' || code === 'RMT_PHONE_DRAFT_UNAVAILABLE') {
-        const completed = Number(error?.partialProgress?.completed);
-        const total = Number(error?.partialProgress?.total);
-        const progress = Number.isInteger(completed) && Number.isInteger(total) && total >= 1 && total <= 10 && completed >= 0 && completed <= total
-            ? `${completed}/${total} 个应用` : '部分内容';
-        const failure = safeErrorDiagnostic(error?.failure);
-        const cause = failure.code && !/^RMT_PHONE_DRAFT_/.test(failure.code)
-            ? SAFE_ERROR_CODE_MESSAGES[failure.code] || ''
-            : failure.status === 401 || failure.status === 403 ? '上游认证或权限校验失败。'
-                : failure.status === 429 ? '上游正在限流，请稍后再试。' : '本次未完成；旧版草稿可能没有具体原因记录。';
-        const statusLabel = failure.status >= 400 ? `（状态 ${failure.status}）` : '';
-        return normalizeText(code === 'RMT_PHONE_DRAFT_AVAILABLE'
-            ? `已保留 ${progress}。${cause}${statusLabel}处理后点击“继续生成”，已完成的应用不会重做。`
-            : `${SAFE_ERROR_CODE_MESSAGES[code]}${cause}${statusLabel}`, max);
-    }
-    const looksHtml = /<!doctype\s+html|<html(?:\s|>)|<head(?:\s|>)|<body(?:\s|>)|<title>[^<]*cloudflare|cf-error|cdn-cgi\//i.test(raw);
-    const blocked = /cloudflare|sorry,? you have been blocked|attention required|unable to access/i.test(raw);
-    const unauthorized = /unauthorized|authentication|invalid api key|\b401\b/i.test(raw) || status === 401;
-    const forbidden = /forbidden|\b403\b/i.test(raw) || status === 403;
-    if (code && SAFE_ERROR_CODE_MESSAGES[code]) return normalizeText(SAFE_ERROR_CODE_MESSAGES[code], max);
-    if (looksHtml) {
-        const details = [];
-        if (status) details.push(`HTTP ${status}`);
-        if (blocked) details.push('Cloudflare 拦截');
-        const suffix = details.length ? `（${details.join(' / ')}；响应正文已隐藏）` : '（响应正文已隐藏）';
-        if (blocked || forbidden) return `上游服务拒绝了请求${suffix}。`;
-        if (unauthorized) return `上游服务认证失败${suffix}。`;
-        return `上游返回了非 API 的 HTML 页面${suffix}。`;
-    }
-    if (/failed to generate chat completion\s*:/i.test(raw)) {
-        if (unauthorized) return `上游服务认证失败${status ? `（HTTP ${status}）` : ''}。`;
-        if (forbidden) return `上游服务拒绝了请求${status ? `（HTTP ${status}）` : ''}。`;
-        return `上游生成请求失败${status ? `（HTTP ${status}）` : ''}；响应正文已隐藏。`;
-    }
-    if (unauthorized) return `上游服务认证失败${status ? `（HTTP ${status}）` : ''}；响应详情已隐藏。`;
-    if (forbidden) return `上游服务拒绝了请求${status ? `（HTTP ${status}）` : ''}；响应详情已隐藏。`;
-    if (status === 408 || status === 504 || error?.name === 'TimeoutError') return `请求超时${status ? `（HTTP ${status}）` : ''}，请稍后重试。`;
-    if (status === 429) return '请求过于频繁（HTTP 429），请稍后重试。';
-    if (status >= 500) return `上游服务暂时不可用（HTTP ${status}）；响应详情已隐藏。`;
-    if (status >= 400) return `请求失败（HTTP ${status}）；响应详情已隐藏。`;
-    if (error?.name === 'AbortError') return '操作已取消。';
-    if (error?.safeToDisplay === true) {
-        const trusted = sanitizedTrustedErrorMessage(error?.safeUserMessage || raw, max);
-        if (trusted) return trusted;
-    }
-    if (/failed to fetch|networkerror|network request failed|load failed|econn(?:reset|refused)|enotfound|fetch failed/i.test(raw)) {
-        return '网络连接失败；请检查地址、网络与服务状态后重试。';
-    }
-    return SAFE_ERROR_CODE_MESSAGES.RMT_RECOVERY_FAILED;
-}
-
-function cleanArray(value, maxItems = 64, maxChars = 12000) {
-    if (!Array.isArray(value)) return [];
-    return value
-        .slice(0, maxItems)
-        .map(item => normalizeText(item, maxChars))
-        .filter(Boolean);
-}
-
-function hashString(value) {
-    let h = 2166136261;
-    for (const ch of String(value ?? '')) {
-        h ^= ch.codePointAt(0);
-        h = Math.imul(h, 16777619);
-    }
-    return h >>> 0;
-}
-
-function safeId(value, fallback) {
-    const raw = String(value ?? '').trim();
-    const cleaned = raw.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
-    return cleaned || fallback;
-}
-
-__m_core_text_js.esc = esc;
-__m_core_text_js.normalizeText = normalizeText;
-__m_core_text_js.isPlaceholderText = isPlaceholderText;
-__m_core_text_js.expandSafeRoleMacros = expandSafeRoleMacros;
-__m_core_text_js.toastText = toastText;
-__m_core_text_js.safeUserError = safeUserError;
-__m_core_text_js.safeErrorDiagnostic = safeErrorDiagnostic;
-__m_core_text_js.safeErrorSummary = safeErrorSummary;
-__m_core_text_js.cleanArray = cleanArray;
-__m_core_text_js.hashString = hashString;
-__m_core_text_js.safeId = safeId;
-}
-
 function __init_core_cgPromptFormat_js() {
 // MODULE: core/cgPromptFormat.js
 const text = __m_core_text_js;
@@ -2379,9 +1493,13 @@ __m_core_cgPromptFormat_js.CG_PROMPT_FORMATS = CG_PROMPT_FORMATS;
 
 function __init_core_independentApi_js() {
 // MODULE: core/independentApi.js
+const manual_credentials = __m_core_manualCredentialStore_js;
+const advanced_generation = __m_core_advancedGeneration_js;
 const output_budget = __m_core_outputBudget_js;
 const core_constants = __m_core_constants_js;
 const core_text = __m_core_text_js;
+
+
 
 // Heartbeat Memories independent API transport boundary.
 // Manual providers are reached only through SillyTavern's fixed same-origin custom backend.
@@ -2519,6 +1637,8 @@ function apiConfigurationFingerprint(settings) {
             Number(settings?.maxTokens) || 0,
             Number(settings?.temperature) || 0,
             settings?.manualApiStreaming === true,
+            ...(!key && settings?.manualApiSecretRef ? [settings.manualApiSecretRef] : []),
+            ...(advanced_generation.advancedFingerprint(settings) ? [advanced_generation.advancedFingerprint(settings)] : []),
         ]);
     }
     return JSON.stringify([
@@ -2527,6 +1647,7 @@ function apiConfigurationFingerprint(settings) {
         core_text.normalizeText(settings?.modelOverride, 240),
         Number(settings?.maxTokens) || 0,
         Number(settings?.temperature) || 0,
+        ...(advanced_generation.advancedFingerprint(settings) ? [advanced_generation.advancedFingerprint(settings)] : []),
     ]);
 }
 
@@ -2534,7 +1655,7 @@ function manualModelCacheKey(settings) {
     let base = '';
     try { base = normalizeManualApiBaseUrl(settings?.manualApiBaseUrl); } catch { base = 'invalid'; }
     const key = core_text.normalizeText(settings?.manualApiKey, 4000);
-    return `manual:${core_text.hashString(`${base}|${key.length}:${core_text.hashString(key)}`)}`;
+    return `manual:${core_text.hashString(`${base}|${key.length}:${core_text.hashString(key)}${!key && settings?.manualApiSecretRef ? `|${settings.manualApiSecretRef}` : ''}`)}`;
 }
 
 function requestHeaders(context) {
@@ -2849,7 +1970,8 @@ function responseShapeSummary(payload) {
         };
         visit(payload);
         const completion = manualStreamCompletionInfo(payload);
-        if (completion) summary.finishReason = SUMMARY_FINISH_REASONS.has(completion.finishReason) ? completion.finishReason : 'unknown';
+        if (completion) { summary.finishReason = SUMMARY_FINISH_REASONS.has(completion.finishReason) ? completion.finishReason : 'unknown';
+            summary.reasoningChars = Math.max(summary.reasoningChars, completion.reasoningChars || 0); }
     } catch { return { shape: 'unsupported', finalChars: 0, reasoningChars: 0, finishReason: 'none' }; }
     return summary;
 }
@@ -2894,6 +2016,7 @@ function assertIndependentResponsePayload(payload) {
         error.retryable = false;
         throw error;
     }
+    if (!content.trim()) throw emptyFinalFailure(responseShapeSummary(payload));
     return content;
 }
 
@@ -2908,11 +2031,11 @@ function streamFinishReason(value) {
     return typeof value === 'string' && STREAM_FINISH_REASONS.has(value) ? value : 'unknown';
 }
 
-function streamCompletion(content, finishReason, interrupted = false) {
+function streamCompletion(content, finishReason, interrupted = false, reasoningChars = 0, publicStream = false) {
     const result = Object.freeze({ content });
     manualStreamCompletions.set(result, Object.freeze({
         complete: !interrupted && COMPLETE_STREAM_REASONS.has(finishReason),
-        finishReason, interrupted: interrupted === true,
+        finishReason, interrupted: interrupted === true, reasoningChars: Math.max(0, Math.min(core_constants.MAX_GENERATION_OUTPUT_CHARS, Number(reasoningChars) || 0)), publicStream,
     }));
     return result;
 }
@@ -2925,13 +2048,67 @@ function manualStreamCompletionInfo(result) {
 // Its catch can pass the separately held content to recordRecoveryTruncation unchanged.
 function assertManualStreamComplete(result) {
     const completion = manualStreamCompletionInfo(result);
-    if (completion && !completion.complete) {
+    const rawFinish = completion ? '' : responseShapeSummary(result).finishReason;
+    if (['length', 'max_tokens', 'incomplete'].includes(rawFinish)) {
+        const error = apiError('渠道明确报告输出未完成；原成功分段保留，不会自动请求。', 'RMT_JSON_TRUNCATED');
+        error.retryable = false; error.retryableJson = false; throw error;
+    }
+    if (completion && !completion.complete && !(completion.publicStream && !completion.interrupted && completion.finishReason === 'unknown')) {
         const error = apiError('流式正文尚未完整结束；已停止本段，不会自动重发请求。可保留草稿后显式继续。', 'RMT_JSON_TRUNCATED');
         error.retryable = false;
         error.retryableJson = false;
         throw error;
     }
     return true;
+}
+
+const transportFailures = new WeakMap();
+function transportFailureSummary(error) { return transportFailures.get(error) || null; }
+function emptyFinalFailure(summary) {
+    const error = apiError(summary.reasoningChars ? '本次响应只有推理字段，没有最终正文；未采用推理内容，也没有自动重试。请按渠道文档调整推理参数或流式设置后再点击。' : '本次响应没有最终正文；未自动重试，请检查渠道状态和参数。',
+        summary.reasoningChars ? 'RMT_JSON_EMPTY_FINAL_WITH_REASONING' : 'RMT_JSON_EMPTY_FINAL');
+    error.retryable = false; error.retryableJson = false;
+    transportFailures.set(error, { shape: summary.shape || 'empty', finalChars: 0,
+        reasoningChars: Math.min(core_constants.MAX_GENERATION_OUTPUT_CHARS, summary.reasoningChars || 0), finishReason: summary.finishReason || 'unknown' });
+    return error;
+}
+
+// Public ConnectionManager streaming contract: cumulative text + separate reasoning.
+// Its API does not expose the provider finish reason; do not manufacture a stop code.
+async function readProfileCompletion(result, { signal = null } = {}) {
+    if (typeof result !== 'function') return result;
+    const iterator = result();
+    if (!iterator || typeof iterator.next !== 'function') throw apiError('连接未提供可读取的流式结果。', 'RMT_RESPONSE_FORMAT');
+    let content = '', reasoningChars = 0, interrupted = false, rejectAbort;
+    const abort = new Promise((_,reject) => { rejectAbort = reject; });
+    const onAbort = () => { rejectAbort(streamAbortReason(signal)); };
+    signal?.addEventListener?.('abort', onAbort, { once:true });
+    try {
+        if (signal?.aborted) throw streamAbortReason(signal);
+        for (;;) {
+            const item = await Promise.race([iterator.next(), abort]);
+            if (signal?.aborted) throw streamAbortReason(signal);
+            if (item.done) break;
+            const next = responseField(item.value, 'text');
+            if (typeof next !== 'string' || !next.startsWith(content)) throw apiError('连接的流式正文结构异常。', 'RMT_RESPONSE_FORMAT');
+            const reasoning = responseField(responseField(item.value, 'state'), 'reasoning');
+            reasoningChars = Math.max(reasoningChars, typeof reasoning === 'string' ? reasoning.length : 0);
+            if (next.length > core_constants.MAX_GENERATION_OUTPUT_CHARS
+                || new TextEncoder().encode(next).byteLength > core_constants.MAX_MANUAL_API_RESPONSE_BYTES
+                || reasoningChars > core_constants.MAX_MANUAL_API_RESPONSE_BYTES) throw apiError('流式响应超过安全范围。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
+            content = next;
+        }
+    } catch (error) {
+        if (signal?.aborted || error?.name === 'AbortError') throw streamAbortReason(signal);
+        if (error?.code === 'RMT_MANUAL_RESPONSE_TOO_LARGE' || error?.code === 'RMT_RESPONSE_FORMAT') throw error;
+        if (!content.trim()) throw error;
+        interrupted = true;
+    } finally {
+        signal?.removeEventListener?.('abort', onAbort);
+        try { void iterator.return?.()?.catch?.(() => {}); } catch {}
+    }
+    if (!content.trim()) throw emptyFinalFailure({ reasoningChars });
+    return streamCompletion(content, 'unknown', interrupted, reasoningChars, true);
 }
 
 function streamReadError(code = 'RMT_MANUAL_INVALID_JSON') {
@@ -2958,7 +2135,11 @@ async function readManualApiStream(response, options = {}) {
     if (!reader) throw streamReadError();
     const signal = options.signal || null;
     const decoder = new TextDecoder('utf-8');
-    let bytes = 0, content = '', line = '', eventType = '', dataLines = [];
+    let bytes = 0, content = '', line = '', eventType = '', dataLines = [], reasoningChars = 0, protocol = '';
+    const blockKinds = new Map();
+    let responseOutputIndex = null;
+    const chooseProtocol = kind => { if (protocol && protocol !== kind) throw streamReadError(); protocol = kind; };
+    const countReasoning = payload => { reasoningChars = Math.min(core_constants.MAX_GENERATION_OUTPUT_CHARS, reasoningChars + responseShapeSummary(payload).reasoningChars); };
     let previousCR = false, firstCharacter = true, terminal = false, finishReason = '', interrupted = false;
     const cancel = () => { try { void reader.cancel().catch(() => {}); } catch {} };
     // reader.cancel settles outstanding read() calls. Avoid adding one reaction per
@@ -2986,12 +2167,68 @@ async function readManualApiStream(response, options = {}) {
         try { payload = JSON.parse(data); } catch { throw streamReadError(); }
         if (payloadHasProviderError(payload)) throw streamReadError('RMT_MANUAL_PROVIDER_ERROR');
         if (!payload || typeof payload !== 'object') throw streamReadError();
-        // The fixed custom backend forwards OpenAI-compatible choice deltas. Ignore
-        // usage/reasoning-only events, and never combine independent candidates.
+        // Accept only documented final-bearing event shapes, never JSON from
+        // reasoning/tool blocks. A stream cannot silently switch protocols.
+        const semanticType = payload.type || type;
+        if (Array.isArray(payload.candidates)) {
+            chooseProtocol('gemini');
+            const candidate = payload.candidates.find(value => value?.index === 0) || payload.candidates.find(value => value?.index == null);
+            if (!candidate) return;
+            countReasoning({ candidates: [candidate] });
+            const visible = visibleContentText(candidate.content?.parts); if (visible) append(visible);
+            if (candidate.finishReason) {
+                const mapped = { STOP:'stop', MAX_TOKENS:'max_tokens', SAFETY:'content_filter', RECITATION:'content_filter', BLOCKLIST:'content_filter', PROHIBITED_CONTENT:'content_filter' };
+                finishReason = mapped[candidate.finishReason] || 'unknown'; terminal = true;
+            }
+            return;
+        }
+        if (typeof semanticType === 'string' && semanticType.startsWith('response.')) {
+            chooseProtocol('responses');
+            if (semanticType === 'response.output_text.delta') {
+                // Responses output may begin with a reasoning item; the first
+                // visible message is not necessarily output_index 0. Never join
+                // a second output item into the selected final message.
+                const index = payload.output_index ?? 0;
+                if (!Number.isSafeInteger(index) || index < 0) throw streamReadError();
+                responseOutputIndex ??= index;
+                if (index === responseOutputIndex && typeof payload.delta === 'string') append(payload.delta);
+            } else if (/^response\.reasoning(?:_summary)?_text\.delta$/.test(semanticType)) {
+                if (typeof payload.delta === 'string') reasoningChars = Math.min(core_constants.MAX_GENERATION_OUTPUT_CHARS, reasoningChars + payload.delta.length);
+            } else if (['response.completed','response.incomplete','response.failed'].includes(semanticType)) {
+                if (semanticType === 'response.failed') throw streamReadError('RMT_MANUAL_PROVIDER_ERROR');
+                const full = extractIndependentResponseContent(payload.response);
+                if (typeof full === 'string' && full) {
+                    if (content && !full.startsWith(content)) throw streamReadError();
+                    if (full.length > content.length) append(full.slice(content.length));
+                }
+                finishReason = semanticType === 'response.completed' ? 'stop' : 'length'; terminal = true;
+            }
+            return;
+        }
+        if (['message_start','content_block_start','content_block_delta','content_block_stop','message_delta','message_stop','ping'].includes(semanticType)) {
+            if (semanticType === 'ping') return;
+            chooseProtocol('anthropic');
+            if (semanticType === 'message_start' && payload.message?.role !== 'assistant') throw streamReadError();
+            if (semanticType === 'content_block_start') {
+                if (!Number.isSafeInteger(payload.index) || payload.index < 0 || blockKinds.size >= 4096) throw streamReadError();
+                blockKinds.set(payload.index, payload.content_block?.type || 'unknown');
+                if (payload.content_block?.type === 'text') append(visibleContentText(payload.content_block));
+                else countReasoning(payload.content_block);
+            } else if (semanticType === 'content_block_delta') {
+                const kind = blockKinds.get(payload.index);
+                if (kind === 'text' && payload.delta?.type === 'text_delta' && typeof payload.delta.text === 'string') append(payload.delta.text);
+                else if (kind === 'thinking' && typeof payload.delta?.thinking === 'string') reasoningChars = Math.min(core_constants.MAX_GENERATION_OUTPUT_CHARS, reasoningChars + payload.delta.thinking.length);
+            } else if (semanticType === 'message_delta') finishReason = streamFinishReason(payload.delta?.stop_reason) || finishReason;
+            else if (semanticType === 'message_stop') { finishReason ||= 'unknown'; terminal = true; }
+            return;
+        }
+        // OpenAI-compatible choice deltas (DeepSeek, Qwen, GLM, Doubao, Gemini
+        // compatibility endpoints etc.) share this path regardless of model name.
         const choices = Array.isArray(payload.choices) ? payload.choices : [];
         const choice = choices.find(value => value?.index === 0)
             || choices.find(value => value && value.index == null);
         if (!choice) return;
+        chooseProtocol('choices'); countReasoning({ choices: [choice] });
         let visible = visibleContentText(choice.delta?.content);
         if (!visible && typeof choice.text === 'string') visible = choice.text;
         if (!visible && choice.message?.content != null) {
@@ -3070,12 +2307,8 @@ async function readManualApiStream(response, options = {}) {
         try { reader.releaseLock(); } catch {}
     }
     if (signal?.aborted) throw streamAbortReason(signal);
-    if (!content.trim()) {
-        const error = apiError('手动 API 没有返回可见正文。', 'RMT_MANUAL_EMPTY');
-        error.retryable = false;
-        throw error;
-    }
-    return streamCompletion(content, finishReason, interrupted);
+    if (!content.trim()) throw emptyFinalFailure({ shape: protocol === 'gemini' ? 'candidates' : 'choices', reasoningChars, finishReason });
+    return streamCompletion(content, finishReason, interrupted, reasoningChars);
 }
 
 // The host may forward SSE without Content-Type, or a provider may answer a
@@ -3188,7 +2421,17 @@ async function readManualCompletionResponse(response, options = {}) {
     }
 }
 
+async function manualRequestSettings(settings, signal) {
+    if (signal?.aborted) throw streamAbortReason(signal);
+    const base = normalizeManualApiBaseUrl(settings?.manualApiBaseUrl, { required: true });
+    if (settings?.manualApiKey || !settings?.manualApiSecretRef) return settings;
+    const key = await manual_credentials.readManualCredential(base, settings.manualApiSecretRef);
+    if (signal?.aborted) throw streamAbortReason(signal);
+    return { ...settings, manualApiKey: key };
+}
+
 async function fetchManualApiModels(settings, context, options = {}) {
+    settings = await manualRequestSettings(settings, options.signal);
     const customUrl = assertManualApiCredentialTransport(settings?.manualApiBaseUrl, settings?.manualApiKey);
     const fetchImpl = options.fetchImpl || globalThis.fetch;
     if (typeof fetchImpl !== 'function') throw apiError('当前环境没有可用的网络请求能力。', 'RMT_MANUAL_FETCH_UNAVAILABLE');
@@ -3248,6 +2491,7 @@ async function fetchManualApiModels(settings, context, options = {}) {
 }
 
 async function requestManualApiCompletion(settings, context, messages, maxTokens, options = {}) {
+    settings = await manualRequestSettings(settings, options.signal);
     if (options.signal?.aborted) throw streamAbortReason(options.signal);
     const customUrl = assertManualApiCredentialTransport(settings?.manualApiBaseUrl, settings?.manualApiKey);
     const model = core_text.normalizeText(options.model || settings?.manualApiModel, 240);
@@ -3255,7 +2499,8 @@ async function requestManualApiCompletion(settings, context, messages, maxTokens
     if (!Array.isArray(messages) || !messages.length) throw apiError('手动 API 请求缺少消息。', 'RMT_MANUAL_MESSAGES');
     const fetchImpl = options.fetchImpl || globalThis.fetch;
     if (typeof fetchImpl !== 'function') throw apiError('当前环境没有可用的网络请求能力。', 'RMT_MANUAL_FETCH_UNAVAILABLE');
-    const body = {
+    const advanced = advanced_generation.parseAdvancedGeneration(settings);
+    let body = {
         model,
         messages,
         max_tokens: output_budget.normalizeOutputTokens(maxTokens),
@@ -3267,6 +2512,9 @@ async function requestManualApiCompletion(settings, context, messages, maxTokens
         custom_include_body: '',
         custom_exclude_body: '',
     };
+    Object.assign(body, advanced_generation.advancedCarrier(advanced, 'custom'));
+    body = advanced_generation.applyAdvancedExclusions(body, advanced);
+    if (advanced.streamMode !== 'original') body.stream = advanced.streamMode === 'on';
     const response = await fetchImpl(MANUAL_GENERATE_ENDPOINT, {
         method: 'POST',
         credentials: 'same-origin',
@@ -3284,17 +2532,20 @@ async function requestManualApiCompletion(settings, context, messages, maxTokens
     const payload = decoded.payload;
     if (payloadHasProviderError(payload)) throw providerEnvelopeFailure(payload);
     const content = extractIndependentResponseContent(payload);
-    if (typeof content === 'string' && !content.trim()) throw apiError('手动 API 没有返回可见正文。', 'RMT_MANUAL_EMPTY');
-    if (body.stream && typeof content === 'string') {
-        // Some compatible services ignore stream:true and answer JSON on this same
-        // request. Read it without a second request or a persisted mode change.
-        const reason = streamFinishReason(payload?.choices?.[0]?.finish_reason) || 'stop';
-        return streamCompletion(content, reason);
+    const summary = responseShapeSummary(payload);
+    if (typeof content === 'string' && !content.trim()) throw emptyFinalFailure(summary);
+    if (typeof content === 'string' && (body.stream || summary.reasoningChars
+        || ['length','max_tokens','incomplete','content_filter','tool_calls','function_call'].includes(summary.finishReason))) {
+        // JSON answered this same request. Missing completion metadata remains
+        // unknown; explicit truncation never becomes a successfully saved result.
+        const reason = ['none','unknown'].includes(summary.finishReason) ? 'unknown' : summary.finishReason === 'completed' ? 'stop' : summary.finishReason;
+        return streamCompletion(content, reason, false, summary.reasoningChars, reason === 'unknown');
     }
     return content;
 }
 
 __m_core_independentApi_js.readBoundedJsonResponse = readBoundedJsonResponse;
+__m_core_independentApi_js.readProfileCompletion = readProfileCompletion;
 __m_core_independentApi_js.fetchManualApiModels = fetchManualApiModels;
 __m_core_independentApi_js.requestManualApiCompletion = requestManualApiCompletion;
 __m_core_independentApi_js.connectionManagerHasProfileSecrets = connectionManagerHasProfileSecrets;
@@ -3313,6 +2564,7 @@ __m_core_independentApi_js.payloadHasProviderError = payloadHasProviderError;
 __m_core_independentApi_js.assertIndependentResponsePayload = assertIndependentResponsePayload;
 __m_core_independentApi_js.manualStreamCompletionInfo = manualStreamCompletionInfo;
 __m_core_independentApi_js.assertManualStreamComplete = assertManualStreamComplete;
+__m_core_independentApi_js.transportFailureSummary = transportFailureSummary;
 __m_core_independentApi_js.PROFILE_ONE_CLICK_UI_VERSION = PROFILE_ONE_CLICK_UI_VERSION;
 }
 
@@ -3529,6 +2781,198 @@ __m_core_theme_js.resolveThemePalette = resolveThemePalette;
 __m_core_theme_js.applyThemeToElement = applyThemeToElement;
 }
 
+function __init_core_contextTags_js() {
+// MODULE: core/contextTags.js
+
+const DEFAULT_EXCLUDED_TAGS = Object.freeze(['thinking', 'updatevariable', 'updatevarible']);
+function normalizeExcludedTags(value) {
+    const parts = Array.isArray(value) ? value : String(value || '').split(/[\s,，]+/);
+    return [...new Set(parts.map(item => String(item).trim().replace(/^<\/?|\/?\s*>$/g, '').toLowerCase())
+        .filter(item => /^[\p{L}][\p{L}\p{N}\p{M}._:-]{0,63}$/u.test(item)))];
+}
+function excludedTagsForContext(context) {
+    const source = context?.extensionSettings?.heartbeatMemories?.excludedContextTags;
+    return normalizeExcludedTags(source === undefined ? DEFAULT_EXCLUDED_TAGS : source);
+}
+function symbolAt(source, index) {
+    const entity = source.slice(index, index + 40).match(/^&(?:amp;){0,3}(lt;|gt;|#0*60;|#0*62;|#x0*3c;|#x0*3e;)/i);
+    if (!entity) return { char: source[index], length: 1 };
+    return { char: /^(lt;|#0*60;|#x0*3c;)$/i.test(entity[1]) ? '<' : '>', length: entity[0].length };
+}
+function tagAt(source, start) {
+    const opener = symbolAt(source, start);
+    if (opener.char !== '<') return null;
+    let index = start + opener.length;
+    while (/\s/.test(source[index] || '') && index < source.length) index++;
+    const closing = source[index] === '/';
+    if (closing) index++;
+    while (/\s/.test(source[index] || '') && index < source.length) index++;
+    const nameStart = index;
+    const point = at => at < source.length ? String.fromCodePoint(source.codePointAt(at)) : '';
+    if (!/\p{L}/u.test(point(index))) return null;
+    let nameLength = 0;
+    while (/[\p{L}\p{N}\p{M}._:-]/u.test(point(index)) && nameLength < 65) { index += point(index).length; nameLength++; }
+    const name = source.slice(nameStart, index).toLowerCase();
+    if (nameLength > 64) return null;
+    const next = symbolAt(source, index).char;
+    if (next !== undefined && !/[\s/>]/.test(next)) return null;
+    let quote = '', previous = '';
+    for (; index < source.length;) {
+        const symbol = symbolAt(source, index);
+        const char = symbol.char;
+        if (quote) { if (char === quote) quote = ''; }
+        else if (char === '"' || char === "'") quote = char;
+        else if (char === '>') return { name, closing, selfClosing: previous === '/', end: index + symbol.length };
+        else if (char === '<') return { name, closing, incomplete: true, end: index };
+        if (!/\s/.test(char)) previous = char;
+        index += symbol.length;
+    }
+    return { name, closing, incomplete: true, end: source.length };
+}
+// Preserve original bytes outside selected blocks, including HTML entities.
+// Malformed/unclosed selected openers fail closed; nesting never releases early.
+function stripExcludedTags(value, tags, onRetainedSpan = null) {
+    const source = String(value || ''), excluded = new Set(normalizeExcludedTags(tags));
+    if (!excluded.size) { if (source.length) onRetainedSpan?.(0, source.length); return source; }
+    const stack = [];
+    let out = '', cursor = 0, index = 0;
+    const retain = (start, end) => {
+        if (end > start) { out += source.slice(start, end); onRetainedSpan?.(start, end); }
+    };
+    while (index < source.length) {
+        if (source[index] !== '<' && source[index] !== '&') { index++; continue; }
+        const token = tagAt(source, index);
+        if (!token) { index++; continue; }
+        if (token.incomplete) {
+            if (stack.length || (excluded.has(token.name) && !token.closing)) {
+                if (!stack.length) retain(cursor, index);
+                return out;
+            }
+            index = Math.max(index + 1, token.end);
+            continue;
+        }
+        if (!stack.length) retain(cursor, index);
+        if (stack.length) {
+            if (token.closing && stack[stack.length - 1] === token.name) stack.pop();
+            else if (!token.closing && !token.selfClosing) stack.push(token.name);
+        } else if (excluded.has(token.name)) {
+            if (!token.closing && !token.selfClosing) stack.push(token.name);
+        } else retain(index, token.end);
+        cursor = token.end;
+        index = cursor;
+    }
+    if (!stack.length) retain(cursor, source.length);
+    return out;
+}
+// Only an explicit save enables keep mode. Legacy exclusion settings are not inverted.
+function savedTagSelection(settings) {
+    return settings?.contextTagMode === 'keep'
+        ? { contextTagMode: 'keep', retainedContextTags: normalizeExcludedTags(settings.retainedContextTags) } : {};
+}
+function tagPolicyForSettings(settings) {
+    return settings?.contextTagMode === 'keep'
+        ? { mode: 'keep', tags: normalizeExcludedTags(settings.retainedContextTags) }
+        : normalizeExcludedTags(settings?.excludedContextTags === undefined ? DEFAULT_EXCLUDED_TAGS : settings.excludedContextTags);
+}
+function tagPolicyForContext(context) {
+    return tagPolicyForSettings(context?.extensionSettings?.heartbeatMemories);
+}
+// Resolve the complement from the actual source, including tags absent from the UI
+// scan. Reuse the original isolator: an unselected outer block includes its children.
+// Plain text outside tags is never discarded and source strings are never mutated.
+function filterContextTags(value, policy, onRetainedSpan = null) {
+    if (policy?.mode !== 'keep') return stripExcludedTags(value, policy, onRetainedSpan);
+    const source = String(value || ''), retained = new Set(normalizeExcludedTags(policy.tags)), excluded = new Set();
+    for (let index = 0; index < source.length; index++) {
+        if (source[index] !== '<' && source[index] !== '&') continue;
+        const token = tagAt(source, index);
+        if (!token) continue;
+        if (!retained.has(token.name)) excluded.add(token.name);
+        index = Math.max(index, token.end - 1);
+    }
+    return stripExcludedTags(source, [...excluded], onRetainedSpan);
+}
+// Filter whole original records before splitting, while keeping each original
+// fragment position (and therefore its evidence ID). A tag spanning fragments
+// must not leak its middle as apparently untagged text. This is a read projection;
+// original ledger bytes and the isolator's nesting/escaping rules stay unchanged.
+function filterContextTagSegments(value, policy, size) {
+    const source = String(value || '');
+    if (!Number.isSafeInteger(size) || size < 1) throw new TypeError('Invalid fragment size');
+    const segments = Array.from({ length: Math.ceil(source.length / size) }, () => '');
+    filterContextTags(source, policy, (start, end) => {
+        while (start < end) {
+            const part = Math.floor(start / size), stop = Math.min(end, (part + 1) * size);
+            segments[part] += source.slice(start, stop); start = stop;
+        }
+    });
+    return segments;
+}
+// Explicit UI scan only. Complete chat, no silent 32/100-tag truncation, with
+// cooperative yielding and a caller-owned scope/lifecycle guard. No model or I/O.
+async function scanContextTagChoices(messages, { assertCurrent = () => {} } = {}) {
+    const counts = new Map(); let usedMessages = 0, usedChars = 0, nextYield = Date.now() + 12;
+    for (const message of Array.isArray(messages) ? messages : []) {
+        assertCurrent();
+        const source = String(message?.mes || ''); usedMessages++; usedChars += source.length;
+        for (let index = 0; index < source.length; index++) {
+            if ((index & 4095) === 0 && Date.now() >= nextYield) {
+                await new Promise(resolve => setTimeout(resolve, 0)); assertCurrent(); nextYield = Date.now() + 12;
+            }
+            if (source[index] !== '<' && source[index] !== '&') continue;
+            const token = tagAt(source, index);
+            if (!token) continue;
+            if (!token.closing) counts.set(token.name, (counts.get(token.name) || 0) + 1);
+            index = Math.max(index, token.end - 1);
+        }
+        if (Date.now() >= nextYield) {
+            await new Promise(resolve => setTimeout(resolve, 0)); assertCurrent(); nextYield = Date.now() + 12;
+        }
+    }
+    assertCurrent();
+    return { tags: [...counts].map(([name, count]) => ({ name, count })), usedMessages, usedChars, bounded: false };
+}
+// Only JSON string VALUES are filtered; property names and surrounding task
+// schema remain intact, including when a source string has an unclosed tag.
+function filterJsonPromptStrings(prompt, tags) {
+    const source = String(prompt || '');
+    return source.replace(/"(?:\\.|[^"\\])*"/g, (literal, offset) => {
+        if (/^\s*:/.test(source.slice(offset + literal.length, offset + literal.length + 80))) return literal;
+        try { return JSON.stringify(filterContextTags(JSON.parse(literal), tags)); } catch { return literal; }
+    });
+}
+function scanContextTags(messages, maxChars = 256000) {
+    let remaining = Math.max(0, Math.min(256000, maxChars)), used = 0;
+    const counts = new Map();
+    for (const message of (Array.isArray(messages) ? messages : []).slice(-500)) {
+        const text = String(message?.mes || '').slice(0, remaining);
+        remaining -= text.length; used++;
+        for (let index = 0; index < text.length; index++) {
+            if (text[index] !== '<' && text[index] !== '&') continue;
+            const token = tagAt(text, index);
+            if (!token) continue;
+            if (!token.closing && (counts.has(token.name) || counts.size < 100)) counts.set(token.name, (counts.get(token.name) || 0) + 1);
+            index = Math.max(index, token.end - 1);
+        }
+        if (!remaining) break;
+    }
+    return { tags: [...counts].map(([name, count]) => ({ name, count })), usedMessages: used, bounded: true };
+}
+
+__m_core_contextTags_js.scanContextTagChoices = scanContextTagChoices;
+__m_core_contextTags_js.normalizeExcludedTags = normalizeExcludedTags;
+__m_core_contextTags_js.excludedTagsForContext = excludedTagsForContext;
+__m_core_contextTags_js.stripExcludedTags = stripExcludedTags;
+__m_core_contextTags_js.savedTagSelection = savedTagSelection;
+__m_core_contextTags_js.tagPolicyForSettings = tagPolicyForSettings;
+__m_core_contextTags_js.tagPolicyForContext = tagPolicyForContext;
+__m_core_contextTags_js.filterContextTags = filterContextTags;
+__m_core_contextTags_js.filterContextTagSegments = filterContextTagSegments;
+__m_core_contextTags_js.filterJsonPromptStrings = filterJsonPromptStrings;
+__m_core_contextTags_js.scanContextTags = scanContextTags;
+__m_core_contextTags_js.DEFAULT_EXCLUDED_TAGS = DEFAULT_EXCLUDED_TAGS;
+}
+
 function __init_core_autoUpdatePolicy_js() {
 // MODULE: core/autoUpdatePolicy.js
 
@@ -3679,8 +3123,390 @@ __m_core_creativeSupplement_js.creativeSupplementBlock = creativeSupplementBlock
 __m_core_creativeSupplement_js.MAX_CREATIVE_SUPPLEMENT_CHARS = MAX_CREATIVE_SUPPLEMENT_CHARS;
 }
 
+function __init_core_chatReadRange_js() {
+// MODULE: core/chatReadRange.js
+const core_text = __m_core_text_js;
+// Pure selection over original host floors. No chat/storage mutation or provider work.
+
+const DEFAULT_CHAT_READ_RANGE = Object.freeze({ mode: 'recent', recent: 50, start: 1, end: 100, includeHidden: false });
+
+function positiveFloor(value, fallback) {
+    const number = Number(value);
+    return Number.isFinite(number) && number >= 1 ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(number)) : fallback;
+}
+
+function normalizeChatReadRange(settingsOrRange = {}) {
+    const value = settingsOrRange?.chatReadRange ?? settingsOrRange ?? {};
+    return {
+        mode: ['recent', 'range', 'all'].includes(value.mode) ? value.mode : 'recent',
+        recent: positiveFloor(value.recent, 50),
+        start: positiveFloor(value.start, 1),
+        end: positiveFloor(value.end, 100),
+        includeHidden: value.includeHidden === true,
+    };
+}
+
+function floorWindow(totalFloors, range) {
+    if (!totalFloors) return { start: 0, end: 0 };
+    const start = range.mode === 'range' ? range.start : range.mode === 'recent' ? Math.max(1, totalFloors - range.recent + 1) : 1;
+    const end = range.mode === 'range' ? Math.min(totalFloors, range.end) : totalFloors;
+    // Do not reorder a reversed interval or expand an out-of-bounds selection.
+    return start > end ? { start: 0, end: 0 } : { start, end };
+}
+
+function isChatReadRangeHidden(message) {
+    return !!message?.is_system || message?.is_hidden === true || message?.extra?.is_hidden === true;
+}
+
+function isChatReadRangeDialogue(message, context) {
+    if (!message || typeof message !== 'object' || ['system', 'tool', 'developer'].includes(message.role)
+        || message.extra?.uses_system_ui || message.extra?.tool_invocations) return false;
+    if (!isChatReadRangeHidden(message)) return true;
+    // Host hide toggles are not authority to recover an arbitrary system floor.
+    if (typeof message.is_user !== 'boolean' || message.extra?.type) return false;
+    const name = core_text.normalizeText(message.name, 120);
+    const expected = core_text.normalizeText(message.is_user ? context?.name1 : context?.name2, 120);
+    return !!name && !!expected && name === expected;
+}
+
+function selection(context, settings) {
+    const chat = Array.isArray(context?.chat) ? context.chat : [];
+    const range = normalizeChatReadRange(settings);
+    const { start, end } = floorWindow(chat.length, range);
+    const rows = [];
+    let visibleCount = 0, hiddenCount = 0, characters = 0;
+    if (start) for (let index = start; index <= end; index += 1) {
+        const message = chat[index - 1];
+        if (!isChatReadRangeDialogue(message, context)) continue;
+        const text = core_text.normalizeText(message.mes, 8000);
+        if (!text) continue;
+        const hidden = isChatReadRangeHidden(message);
+        if (hidden) hiddenCount += 1;
+        else visibleCount += 1;
+        if (hidden && !range.includeHidden) continue;
+        rows.push({ index, message, hidden });
+        characters += text.length;
+    }
+    const modeLabel = range.mode === 'all' ? '全部楼层' : range.mode === 'recent' ? `最近 ${range.recent} 楼` : '指定范围';
+    const boundsLabel = start ? `第 ${start}–${end} 楼` : '无匹配楼层';
+    return { rows, preview: {
+        totalFloors: chat.length, selectedFloors: rows.length, visibleCount, hiddenCount, characters, start, end,
+        label: `${modeLabel} · ${boundsLabel} · 读取 ${rows.length} 条正文 · ${range.includeHidden ? '含隐藏对话' : '不含隐藏对话'}`,
+    } };
+}
+
+// Each index remains the 1-based host floor, including gaps left by excluded messages.
+function selectChatReadRange(context, settings = {}) {
+    return selection(context, settings).rows;
+}
+
+// hiddenCount counts eligible hidden dialogue inside the interval, even when excluded.
+// characters estimates normalized per-floor text before downstream tag/budget filtering.
+function readRangePreview(context, settings = {}) {
+    return selection(context, settings).preview;
+}
+
+__m_core_chatReadRange_js.normalizeChatReadRange = normalizeChatReadRange;
+__m_core_chatReadRange_js.isChatReadRangeHidden = isChatReadRangeHidden;
+__m_core_chatReadRange_js.isChatReadRangeDialogue = isChatReadRangeDialogue;
+__m_core_chatReadRange_js.selectChatReadRange = selectChatReadRange;
+__m_core_chatReadRange_js.readRangePreview = readRangePreview;
+__m_core_chatReadRange_js.DEFAULT_CHAT_READ_RANGE = DEFAULT_CHAT_READ_RANGE;
+}
+
+function __init_core_deferredCommitStore_js() {
+// MODULE: core/deferredCommitStore.js
+const backupDiagnostics = __m_core_backupDiagnostics_js;
+// Heartbeat Memories r46: bounded, browser-local durability for completed results
+// that are waiting for their origin chat to become current again.
+
+const DEFERRED_COMMIT_STORE_KEY = 'heartbeat_memories_deferred_commits_v1';
+const DEFERRED_COMMIT_STORE_VERSION = 1;
+const DEFERRED_COMMIT_STORE_MAX_ITEMS = 24;
+const DEFERRED_COMMIT_STORE_MAX_BYTES = 3_500_000;
+const DEFERRED_COMMIT_STORE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+const SENSITIVE_FIELD = /^(?:api[_-]?key|authorization|proxy[_-]?password|password|secret|access[_-]?token|refresh[_-]?token|bearer[_-]?token)$/i;
+const UNSAFE_FIELD = /^(?:__proto__|prototype|constructor)$/;
+const FAILURE_MESSAGES = Object.freeze({
+    quota: '本地待写回存储空间不足；新结果仅保留在当前页面。',
+    security: '浏览器拒绝访问本地待写回存储；新结果仅保留在当前页面。',
+    unavailable: '当前浏览器没有可用的本地待写回存储。',
+    limit: '待写回结果超过本地安全上限；新结果仅保留在当前页面。',
+    serialize: '待写回结果无法序列化；新结果仅保留在当前页面。',
+    unknown: '浏览器没有保存待写回结果；具体原因尚未确定。',
+});
+
+function deferredFailure(category) {
+    const fixed = Object.prototype.hasOwnProperty.call(FAILURE_MESSAGES, category) ? category : 'unknown';
+    const error = new Error(FAILURE_MESSAGES[fixed]);
+    error.code = `RMT_DEFERRED_${fixed.toUpperCase()}`;
+    error.category = fixed;
+    return error;
+}
+
+function defaultStorage() {
+    try { return globalThis.localStorage || null; } catch { return null; }
+}
+
+function byteLength(value) {
+    const text = String(value || '');
+    if (typeof TextEncoder === 'function') return new TextEncoder().encode(text).byteLength;
+    return text.length * 2;
+}
+
+function safeSerializedPayload(entries) {
+    return JSON.stringify({
+        version: DEFERRED_COMMIT_STORE_VERSION,
+        savedAt: Date.now(),
+        entries,
+    }, (key, value) => {
+        if (SENSITIVE_FIELD.test(key) || UNSAFE_FIELD.test(key)) return undefined;
+        if (typeof value === 'function' || typeof value === 'symbol' || typeof value === 'bigint') return undefined;
+        return value;
+    });
+}
+
+function validStoredList(value, now = Date.now()) {
+    if (!Array.isArray(value)) return [];
+    return value.filter(item => {
+        if (!item || typeof item !== 'object' || !['archive', 'sessions', 'heartPatches', 'cgImagePatch'].includes(item.kind)) return false;
+        if (!item.origin?.characterKey || !item.origin?.chatId) return false;
+        const queuedAt = Number(item.queuedAt) || 0;
+        return !queuedAt || now - queuedAt <= DEFERRED_COMMIT_STORE_MAX_AGE_MS;
+    });
+}
+
+function restoredEntries(storage) {
+    if (!storage?.getItem) return [];
+    let raw = '';
+    try { raw = storage.getItem(DEFERRED_COMMIT_STORE_KEY) || ''; }
+    catch { return []; }
+    if (!raw || byteLength(raw) > DEFERRED_COMMIT_STORE_MAX_BYTES) return [];
+    try {
+        const parsed = JSON.parse(raw, (key, value) => {
+            if (SENSITIVE_FIELD.test(key) || UNSAFE_FIELD.test(key)) return undefined;
+            return value;
+        });
+        if (Number(parsed?.version) !== DEFERRED_COMMIT_STORE_VERSION || !Array.isArray(parsed?.entries)) return [];
+        const result = [];
+        let count = 0;
+        for (const row of parsed.entries) {
+            const key = typeof row?.[0] === 'string' ? row[0].slice(0, 700) : '';
+            const list = validStoredList(row?.[1]);
+            if (!key || !list.length || count + list.length > DEFERRED_COMMIT_STORE_MAX_ITEMS) continue;
+            result.push([key, list]);
+            count += list.length;
+        }
+        return result;
+    } catch {
+        try { storage.removeItem?.(DEFERRED_COMMIT_STORE_KEY); } catch {}
+        return [];
+    }
+}
+
+class DurableDeferredCommitMap extends Map {
+    constructor({ storage = defaultStorage(), onError = null } = {}) {
+        super();
+        this.storage = storage;
+        this.onError = typeof onError === 'function' ? onError : null;
+        this.storageAvailable = false;
+        this.lastPersistError = null;
+        try { this.storageAvailable = typeof storage?.setItem === 'function'; }
+        catch (error) { this.lastPersistError = deferredFailure(backupDiagnostics.backupFailureSummary(error).category); }
+        if (!this.storageAvailable && !this.lastPersistError) this.lastPersistError = deferredFailure('unavailable');
+        this.restoring = true;
+        for (const [key, list] of restoredEntries(storage)) super.set(key, list);
+        this.restoring = false;
+    }
+
+    itemCount() {
+        let count = 0;
+        for (const list of this.values()) count += Array.isArray(list) ? list.length : 0;
+        return count;
+    }
+
+    persistenceStatus() {
+        return {
+            ...this.diagnosticStatus(),
+            pendingItems: this.itemCount(),
+            maxItems: DEFERRED_COMMIT_STORE_MAX_ITEMS,
+            maxBytes: DEFERRED_COMMIT_STORE_MAX_BYTES,
+            error: this.lastPersistError?.message || '',
+        };
+    }
+
+    // Fixed maintained scalars only: safe even with many large pending results.
+    diagnosticStatus() {
+        return {
+            available: this.storageAvailable,
+            healthy: this.storageAvailable && !this.lastPersistError,
+            errorCode: this.lastPersistError?.code || '',
+            errorCategory: this.lastPersistError?.category || '',
+        };
+    }
+
+    reportFailure(error) {
+        this.lastPersistError = deferredFailure(error?.category);
+        // Keep the last successfully persisted snapshot intact. A quota or serialization
+        // failure for a newer result must never erase older recoverable commits.
+        try { this.onError?.(this.lastPersistError); } catch {}
+        return false;
+    }
+
+    persistNow() {
+        if (this.restoring) return true;
+        if (!this.storage?.setItem) return this.reportFailure(deferredFailure('unavailable'));
+        if (this.itemCount() > DEFERRED_COMMIT_STORE_MAX_ITEMS) {
+            return this.reportFailure(deferredFailure('limit'));
+        }
+        let raw;
+        try { raw = safeSerializedPayload([...this.entries()]); }
+        catch { return this.reportFailure(deferredFailure('serialize')); }
+        const bytes = byteLength(raw);
+        if (bytes > DEFERRED_COMMIT_STORE_MAX_BYTES) {
+            return this.reportFailure(deferredFailure('limit'));
+        }
+        try {
+            if (this.size) this.storage.setItem(DEFERRED_COMMIT_STORE_KEY, raw);
+            else this.storage.removeItem?.(DEFERRED_COMMIT_STORE_KEY);
+            this.lastPersistError = null;
+            return true;
+        } catch (error) {
+            const category = backupDiagnostics.backupFailureSummary(error).category;
+            return this.reportFailure(deferredFailure(['quota', 'security', 'unavailable'].includes(category) ? category : 'unknown'));
+        }
+    }
+
+    set(key, value) {
+        super.set(String(key || '').slice(0, 700), value);
+        this.persistNow();
+        return this;
+    }
+
+    replaceDurably(key, value) {
+        const normalizedKey = String(key || '').slice(0, 700);
+        const hadPrevious = super.has(normalizedKey);
+        const previous = super.get(normalizedKey);
+        super.set(normalizedKey, value);
+        if (!this.storage?.setItem) return true;
+        if (this.persistNow()) return true;
+        if (hadPrevious) super.set(normalizedKey, previous);
+        else super.delete(normalizedKey);
+        return false;
+    }
+
+    delete(key) {
+        if (!super.has(key)) return false;
+        const previous = super.get(key);
+        super.delete(key);
+        if (!this.storage?.setItem) return true;
+        if (this.persistNow()) return true;
+        super.set(key, previous);
+        return false;
+    }
+
+    clear() {
+        super.clear();
+        this.persistNow();
+    }
+}
+
+function createDurableDeferredCommitMap(options = {}) {
+    return new DurableDeferredCommitMap(options);
+}
+
+__m_core_deferredCommitStore_js.createDurableDeferredCommitMap = createDurableDeferredCommitMap;
+__m_core_deferredCommitStore_js.DEFERRED_COMMIT_STORE_KEY = DEFERRED_COMMIT_STORE_KEY;
+__m_core_deferredCommitStore_js.DEFERRED_COMMIT_STORE_VERSION = DEFERRED_COMMIT_STORE_VERSION;
+__m_core_deferredCommitStore_js.DEFERRED_COMMIT_STORE_MAX_ITEMS = DEFERRED_COMMIT_STORE_MAX_ITEMS;
+__m_core_deferredCommitStore_js.DEFERRED_COMMIT_STORE_MAX_BYTES = DEFERRED_COMMIT_STORE_MAX_BYTES;
+__m_core_deferredCommitStore_js.DEFERRED_COMMIT_STORE_MAX_AGE_MS = DEFERRED_COMMIT_STORE_MAX_AGE_MS;
+}
+
+function __init_core_state_js() {
+// MODULE: core/state.js
+const core_deferredCommitStore = __m_core_deferredCommitStore_js;
+// Heartbeat Memories r35 modular runtime.
+// Extracted from r34 without changing archive/cache storage contracts.
+
+const state = {
+  runtimeLifecycleEpoch: 0,
+  apiConfigurationEpoch: 0,
+  manualApiKey: '',
+  busy: false,
+  activeMode: null,
+  activeSession: null,
+  contentManagerOpen: false,
+  roomClockTimer: 0,
+  phoneClockTimer: 0,
+  endingEasterEggTimer: 0,
+  endingEasterEggRuntime: null,
+  archiveViewLevel: 'library',
+  roomLifeRefreshPromise: null,
+  roomLifeRefreshOrigin: null,
+  activeTaskAbortController: null,
+  activeTaskLabel: '',
+  activeTaskTrace: null,
+  activeTaskBackgrounded: false,
+  activeTaskOrigin: null,
+  archivePreparationToken: null,
+  activeGenerationTasks: new Map(),
+  activeModeBuildScopes: new Set(),
+  activeAdvBulkScopes: new Set(),
+  activeArchiveTargetReservations: new Map(),
+  activeCgImageTasks: new Map(),
+  cgImageLifecycleEpoch: 0,
+  avatarDialogueRequestEpoch: 0,
+  activeAvatarDialogue: null,
+  activeProviderRequestCount: 0,
+  providerRequestQueue: [],
+  // Adaptive rate-limit throttle (see core/requestCoordinator.js).
+  rateLimitHits: 0,
+  rateLimitSeenAt: 0,
+  rateLimitRetryAfterMs: 0,
+  // Backoff ladder used when the endpoint sends no Retry-After. Overridable so tests
+  // can exercise the retry policy without sleeping through the real ladder.
+  rateLimitRetryDelaysMs: [5000, 15000, 40000],
+  butterflyTransitionTimer: 0,
+  archiveOverviewCache: { key: '', fetchedAt: 0, items: [] },
+  archiveOverviewPromise: null,
+  archiveOverviewPromiseKey: '',
+  archiveOverviewAllowedChats: new Set(),
+  archiveOverviewKnownArchives: new Map(),
+  archiveOverviewLastKey: '',
+  chooserRefreshTimer: 0,
+  memoryPreflightCache: new Map(),
+  deferredChatCommits: core_deferredCommitStore.createDurableDeferredCommitMap(),
+  archiveLibraryCharacterKey: '',
+  archiveCharacterRelationSelection: '',
+  relationSelectedKey: '',
+  activeArchiveSnapshot: null,
+  activeArchiveReadOnly: true,
+  archiveSnapshotCache: new Map(),
+  connectionModelCache: new Map(),
+  connectionModelRequestEpochs: new Map(),
+  runtimeSessionCache: new Map(),
+  cacheHydrationPromises: new Map(),
+  cacheHydrationErrors: new Map(),
+  cachePersistTimers: new Map(),
+  pendingCompressedCacheWrites: new Map(),
+  cacheCommitSequences: new Map(),
+  cachePersistChains: new Map(),
+  archiveCommitChains: new Map(),
+  archiveDeletionFences: new Set(),
+  archiveTargetTaskEpochs: new Map(),
+  calendarTagFilters: new Map(),
+  usableMessageCountCache: new Map(),
+};
+
+__m_core_state_js.state = state;
+}
+
 function __init_core_settings_js() {
 // MODULE: core/settings.js
+const manual_credentials = __m_core_manualCredentialStore_js;
+const advanced_generation = __m_core_advancedGeneration_js;
 const output_budget = __m_core_outputBudget_js;
 const cg_format = __m_core_cgPromptFormat_js;
 const core_constants = __m_core_constants_js;
@@ -3693,6 +3519,8 @@ const core_autoUpdatePolicy = __m_core_autoUpdatePolicy_js;
 const creative_supplement = __m_core_creativeSupplement_js;
 const chat_read_range = __m_core_chatReadRange_js;
 const runtimeState = __m_core_state_js.state;
+
+
 
 
 // Heartbeat Memories r35 modular runtime.
@@ -3728,6 +3556,8 @@ function getPluginSettings(context = core_context.getContext()) {
         modelOverride: core_text.normalizeText(settings.modelOverride, 240),
         manualApiBaseUrl,
         manualApiModel: core_text.normalizeText(settings.manualApiModel, 240),
+        manualApiSecretRef: manual_credentials.validManualSecretRef(settings.manualApiSecretRef),
+        ...advanced_generation.advancedSettings(settings),
         manualApiStreaming: settings.manualApiStreaming === true,
         chatReadRange: chat_read_range.normalizeChatReadRange(settings),
         maxTokens: output_budget.normalizeOutputTokens(settings.maxTokens),
@@ -3768,6 +3598,10 @@ function updatePluginSettings(patch) {
     const previousApiFingerprint = core_independentApi.apiConfigurationFingerprint(current);
     const supplied = patch && typeof patch === 'object' ? { ...patch } : {};
     if (Object.hasOwn(supplied, 'creativeSupplement')) supplied.creativeSupplement = creative_supplement.normalizeCreativeSupplement(supplied.creativeSupplement);
+    if (Object.hasOwn(supplied, 'manualApiBaseUrl')) {
+        const nextBase = core_independentApi.normalizeManualApiBaseUrl(supplied.manualApiBaseUrl);
+        if (nextBase !== current.manualApiBaseUrl) { runtimeState.manualApiKey = ''; supplied.manualApiSecretRef = ''; }
+    }
     if (Object.prototype.hasOwnProperty.call(supplied, 'manualApiKey')) {
         runtimeState.manualApiKey = core_text.normalizeText(supplied.manualApiKey, 4000);
         delete supplied.manualApiKey;
@@ -3786,6 +3620,56 @@ function updatePluginSettings(patch) {
         }
     }
     return normalized;
+}
+
+// Called only by an explicit manual action or before an authorized request.
+// No plaintext is returned to UI, ordinary settings, logs or export paths.
+async function prepareManualCredential(context = core_context.getContext()) {
+    const before = getPluginSettings(context);
+    if (before.manualApiKey || !before.manualApiSecretRef || before.apiConnectionMode !== 'manual') return;
+    const key = await manual_credentials.readManualCredential(before.manualApiBaseUrl, before.manualApiSecretRef);
+    const latest = getPluginSettings(context);
+    if (core_context.getContext().extensionSettings !== context.extensionSettings || latest.manualApiBaseUrl !== before.manualApiBaseUrl
+        || latest.manualApiSecretRef !== before.manualApiSecretRef || (latest.manualApiKey && latest.manualApiKey !== key)) throw new DOMException('Credential binding changed', 'AbortError');
+    runtimeState.manualApiKey = key;
+}
+let manualSaveLane = Promise.resolve();
+function saveManualApiConfiguration(candidate, { activate = false } = {}) {
+    const context = core_context.getContext();
+    const current = getPluginSettings(context);
+    const base = core_independentApi.assertManualApiCredentialTransport(candidate.manualApiBaseUrl, candidate.manualApiKey);
+    const model = core_text.normalizeText(candidate.manualApiModel, 240);
+    const key = core_text.normalizeText(candidate.manualApiKey, 4000);
+    if (activate && !model) throw core_text.safeUserError('请填写手动 API 的模型 ID。', 'RMT_MANUAL_MODEL');
+    const updated = updatePluginSettings({ manualApiBaseUrl: base, manualApiModel: model, ...(key ? { manualApiKey: key } : {}),
+        ...(activate ? { apiConnectionMode: 'manual' } : {}) });
+    const reference = base === current.manualApiBaseUrl ? current.manualApiSecretRef : '';
+    const run = manualSaveLane.catch(() => {}).then(async () => {
+        // The user may have changed address/key while encryption was pending.
+        const stillCurrent = () => core_context.getContext().extensionSettings === context.extensionSettings
+            && getPluginSettings(context).manualApiBaseUrl === base && getPluginSettings(context).manualApiKey === updated.manualApiKey;
+        if (!stillCurrent()) throw new DOMException('Manual save superseded', 'AbortError');
+        let ref = reference;
+        if (key) ref = await manual_credentials.saveManualCredential(base, key, reference);
+        if (!stillCurrent()) {
+            // A first save can finish after Clear/endpoint change. Remove its
+            // newly-created orphan only; never delete an existing shared ref.
+            if (ref && ref !== reference) await manual_credentials.clearManualCredential(ref);
+            throw new DOMException('Manual save superseded', 'AbortError');
+        }
+        if (ref && ref !== getPluginSettings(context).manualApiSecretRef) updatePluginSettings({ manualApiSecretRef: ref });
+        return { credentialSaved: !!ref, modelSaved: !!model };
+    });
+    manualSaveLane = run;
+    return run;
+}
+async function forgetManualApiCredential() {
+    const context = core_context.getContext(), before = getPluginSettings(context);
+    // Stop stale callers first; deletion is scoped to this exact opaque reference.
+    updatePluginSettings({ manualApiKey: '', manualApiSecretRef: '' });
+    await manualSaveLane.catch(() => {});
+    if (before.manualApiSecretRef) await manual_credentials.clearManualCredential(before.manualApiSecretRef);
+    return true;
 }
 
 function beginApiConfigurationOperation() {
@@ -4239,6 +4123,8 @@ async function importCurrentSillyTavernConnection(options = {}) {
     return { id: profile.id, name: profile.name, model: displayModel, created: true };
 }
 
+__m_core_settings_js.prepareManualCredential = prepareManualCredential;
+__m_core_settings_js.forgetManualApiCredential = forgetManualApiCredential;
 __m_core_settings_js.resolvedProfileTransportFingerprint = resolvedProfileTransportFingerprint;
 __m_core_settings_js.resolvedProfileModelCacheKey = resolvedProfileModelCacheKey;
 __m_core_settings_js.fetchModelsForConnection = fetchModelsForConnection;
@@ -4250,6 +4136,7 @@ __m_core_settings_js.normalizeBannedGeneratedPhrases = normalizeBannedGeneratedP
 __m_core_settings_js.normalizeFloatingAvatarPosition = normalizeFloatingAvatarPosition;
 __m_core_settings_js.getPluginSettings = getPluginSettings;
 __m_core_settings_js.updatePluginSettings = updatePluginSettings;
+__m_core_settings_js.saveManualApiConfiguration = saveManualApiConfiguration;
 __m_core_settings_js.beginApiConfigurationOperation = beginApiConfigurationOperation;
 __m_core_settings_js.isCurrentApiConfigurationOperation = isCurrentApiConfigurationOperation;
 __m_core_settings_js.supportedConnectionProfiles = supportedConnectionProfiles;
@@ -5422,6 +5309,138 @@ __m_core_archiveCover_js.archiveCoverHtml = archiveCoverHtml;
 __m_core_archiveCover_js.ARCHIVE_INTRO_STYLES = ARCHIVE_INTRO_STYLES;
 }
 
+function __init_core_evidence_js() {
+// MODULE: core/evidence.js
+const core_constants = __m_core_constants_js;
+const core_text = __m_core_text_js;
+// Heartbeat Memories r35 modular runtime.
+// Extracted from r34 without changing archive/cache storage contracts.
+
+
+function memoryIdSet(memoryBank) {
+    return new Set((memoryBank?.memories || []).map(item => String(item.id)));
+}
+
+function normalizeSourceMemoryIds(value, memoryBank, minimum = 1) {
+    const allowed = memoryIdSet(memoryBank);
+    const ids = core_text.cleanArray(value, 16, 40).filter(id => allowed.has(id));
+    const unique = [...new Set(ids)];
+    if (unique.length < minimum) return [];
+    return unique;
+}
+
+function memoryEvidenceTerms(memoryBank, sourceMemoryIds) {
+    const ids = new Set(sourceMemoryIds || []);
+    const terms = [];
+    for (const memory of memoryBank?.memories || []) {
+        if (!ids.has(String(memory?.id))) continue;
+        const title = core_text.normalizeText(memory?.title, 100);
+        if (title.length >= 2) terms.push(title);
+        for (const anchor of core_text.cleanArray(memory?.anchors, 8, 120)) {
+            if (anchor.length >= 2) terms.push(anchor);
+        }
+    }
+    return [...new Set(terms)];
+}
+
+function normalizeMemoryReference(sourceIdsValue, evidenceValue, evidenceText, memoryBank, minimum = 1) {
+    const sourceMemoryIds = normalizeSourceMemoryIds(sourceIdsValue, memoryBank, minimum);
+    if (sourceMemoryIds.length < minimum) return { sourceMemoryIds: [], sourceMemoryAnchor: '' };
+    if (!sourceMemoryIds.length) return { sourceMemoryIds: [], sourceMemoryAnchor: '' };
+    const allowedTerms = memoryEvidenceTerms(memoryBank, sourceMemoryIds);
+    const requested = core_text.normalizeText(evidenceValue, 120);
+    const folded = value => core_text.normalizeText(value, 160).replace(/\s+/g, '').toLowerCase();
+    const requestedFolded = folded(requested);
+    let matched = allowedTerms.find(term => folded(term) === requestedFolded) || '';
+    if (!matched) {
+        const haystack = folded(evidenceText);
+        matched = allowedTerms.find(term => {
+            const needle = folded(term);
+            return needle.length >= 2 && haystack.includes(needle);
+        }) || '';
+    }
+    if (!matched) return { sourceMemoryIds: [], sourceMemoryAnchor: '' };
+    return { sourceMemoryIds, sourceMemoryAnchor: matched };
+}
+
+// Use this at authority boundaries where the producer is required to submit an exact
+// title/anchor. Unlike normalizeMemoryReference(), it never discovers a different real anchor
+// inside model-authored prose, so a valid fragment cannot launder an invalid requested anchor.
+function normalizeExactMemoryReference(sourceIdsValue, evidenceValue, memoryBank, minimum = 1) {
+    return normalizeMemoryReference(sourceIdsValue, evidenceValue, '', memoryBank, minimum);
+}
+
+function evenlySample(items, limit) {
+    if (!Array.isArray(items) || items.length <= limit) return Array.isArray(items) ? [...items] : [];
+    if (limit <= 1) return [items[items.length - 1]];
+    const selected = [];
+    const seen = new Set();
+    for (let i = 0; i < limit; i += 1) {
+        const index = Math.round((i * (items.length - 1)) / (limit - 1));
+        if (!seen.has(index)) {
+            seen.add(index);
+            selected.push(items[index]);
+        }
+    }
+    return selected;
+}
+
+function memoryPayload(memoryBank, onlyIds = null, limit = core_constants.MAX_MEMORY_PROMPT_ITEMS) {
+    const filter = onlyIds ? new Set(onlyIds) : null;
+    const source = (memoryBank?.memories || []).filter(item => !filter || filter.has(item.id));
+    const safeLimit = Math.max(1, Math.min(core_constants.MAX_MEMORY_ITEMS, Number(limit) || core_constants.MAX_MEMORY_PROMPT_ITEMS));
+    const selected = filter ? source.slice(0, safeLimit) : evenlySample(source, safeLimit);
+    return selected.map(item => ({
+        id: core_text.normalizeText(item?.id, 40),
+        date: core_text.normalizeText(item?.date, 60),
+        title: core_text.normalizeText(item?.title, 100),
+        summary: core_text.normalizeText(item?.summary, 700),
+        anchors: core_text.cleanArray(item?.anchors, 6, 100),
+        participants: core_text.cleanArray(item?.participants, 6, 80),
+        messageRange: [Number(item?.messageStart) || 0, Number(item?.messageEnd) || 0],
+        sourceKind: core_text.normalizeText(item?.sourceKind, 60) || 'chat',
+        externalSource: core_text.cleanArray(item?.externalSourceIds, 6, 100),
+    }));
+}
+
+function roomReferencedMemoryIds(roomSession, focusObject = null) {
+    const ids = [];
+    const seen = new Set();
+    const add = value => {
+        for (const id of core_text.cleanArray(value, 16, 40)) {
+            if (seen.has(id)) continue;
+            seen.add(id);
+            ids.push(id);
+            if (ids.length >= 24) return;
+        }
+    };
+    add(focusObject?.sourceMemoryIds);
+    for (const space of Array.isArray(roomSession?.spaces) ? roomSession.spaces : []) {
+        for (const item of Array.isArray(space?.objects) ? space.objects : []) {
+            if (isSearchableRoomObject(item) || item?.basis === '记忆') add(item?.sourceMemoryIds);
+            if (ids.length >= 24) return ids;
+        }
+    }
+    return ids;
+}
+
+function isSearchableRoomObject(value) {
+    const text = core_text.normalizeText(`${value?.label || ''} ${value?.description || ''}`, 1800);
+    const containerLike = /(?:盒|匣|箱|柜|抽屉|衣柜|床头柜|储物|收纳|行李|旅行袋|背包|手提包|袋|工具箱|药箱|首饰盒|数据匣|储物格|箱格|柜格|夹层|暗格|case|box|drawer|cabinet|chest|locker|bag|pouch|compartment|wardrobe|storage)/i.test(text);
+    return containerLike && value?.searchable !== false;
+}
+
+__m_core_evidence_js.memoryIdSet = memoryIdSet;
+__m_core_evidence_js.normalizeSourceMemoryIds = normalizeSourceMemoryIds;
+__m_core_evidence_js.memoryEvidenceTerms = memoryEvidenceTerms;
+__m_core_evidence_js.normalizeMemoryReference = normalizeMemoryReference;
+__m_core_evidence_js.normalizeExactMemoryReference = normalizeExactMemoryReference;
+__m_core_evidence_js.evenlySample = evenlySample;
+__m_core_evidence_js.memoryPayload = memoryPayload;
+__m_core_evidence_js.roomReferencedMemoryIds = roomReferencedMemoryIds;
+__m_core_evidence_js.isSearchableRoomObject = isSearchableRoomObject;
+}
+
 function __init_core_incremental_js() {
 // MODULE: core/incremental.js
 const core_constants = __m_core_constants_js;
@@ -5883,7 +5902,7 @@ function primitiveString(value, max, required = false) {
 }
 
 // Own JSON data only: no getters, toJSON hooks, prototypes, cycles, or executable data.
-function jsonData(value, maxChars = GENERATION_RECOVERY_LIMITS.segmentChars) {
+function jsonData(value, maxChars = GENERATION_RECOVERY_LIMITS.segmentChars, preserveOrder = false) {
     let nodes = 0;
     const active = new Set();
     const copy = (item, depth) => {
@@ -5906,7 +5925,7 @@ function jsonData(value, maxChars = GENERATION_RECOVERY_LIMITS.segmentChars) {
             }
         } else {
             result = Object.create(null);
-            for (const key of Object.keys(descriptors).sort()) {
+            for (const key of (preserveOrder ? Object.keys(descriptors) : Object.keys(descriptors).sort())) {
                 if (['__proto__', 'constructor', 'prototype', 'toJSON'].includes(key)) throw new Error('key');
                 const descriptor = descriptors[key];
                 if (!Object.hasOwn(descriptor, 'value')) throw new Error('accessor');
@@ -5955,8 +5974,18 @@ function validJournal(raw, now) {
             || !DIGEST.test(journal.settingsHash || '') || !Array.isArray(journal.segments)
             || journal.segments.length > GENERATION_RECOVERY_LIMITS.segments
             || !Number.isFinite(journal.createdAt) || !Number.isFinite(journal.updatedAt)
-            || journal.createdAt > now || journal.updatedAt < journal.createdAt || journal.updatedAt > now
-            || now - journal.updatedAt > GENERATION_RECOVERY_LIMITS.maxAgeMs) return null;
+            || journal.createdAt > now || journal.updatedAt < journal.createdAt || journal.updatedAt > now) return null;
+        if (journal.frozenInputs !== undefined) {
+            if (!journal.frozenInputs || typeof journal.frozenInputs !== 'object' || Array.isArray(journal.frozenInputs)) return null;
+            for (const [key, value] of Object.entries(journal.frozenInputs)) {
+                if (!/^[a-zA-Z0-9:_-]{1,100}$/.test(key) || typeof value !== 'string'
+                    || value.length > GENERATION_RECOVERY_LIMITS.requestChars) return null;
+                const data = JSON.parse(value);
+                jsonData(data, GENERATION_RECOVERY_LIMITS.requestChars, true);
+            }
+        }
+        if (journal.sourcePolicy !== undefined && (!journal.sourcePolicy || Array.isArray(journal.sourcePolicy)
+            || Object.keys(journal.sourcePolicy).some(key => !['character', 'persona', 'selection'].includes(key) || !DIGEST.test(journal.sourcePolicy[key])))) return null;
         const slots = new Set();
         for (const segment of journal.segments) {
             if (!primitiveString(segment.slot, 1000, true) || slots.has(segment.slot)
@@ -5999,7 +6028,7 @@ function generationRecoverySummary(raw, now = Date.now()) {
 }
 
 async function createGenerationRecovery({ origin, mode, settingsIdentity, existing = null,
-    continueRequested = false, save, assertCurrent = () => true, now = () => Date.now(), pageOnly = false, taskScopes = [] } = {}) {
+    continueRequested = false, save, assertCurrent = () => true, now = () => Date.now(), pageOnly = false, taskScopes = [], sourcePolicy = null, confirmLegacyRestart = null } = {}) {
     const identity = recoveryIdentity(origin, mode);
     if (!identity) throw recoveryError('RMT_RECOVERY_IDENTITY', '续写缺少当前档案身份，未发送请求，也没有改写旧内容。');
     const settingsHash = await generationRecoveryDigest(settingsIdentity ?? '');
@@ -6010,7 +6039,10 @@ async function createGenerationRecovery({ origin, mode, settingsIdentity, existi
     }
     journal ||= { kind: 'generation-recovery', version: 1, identity, settingsHash,
         createdAt: clock, updatedAt: clock, segments: [], failureCode: '' };
+    const legacyWithoutInputs = !!existing && !existing.frozenInputs;
+    if (sourcePolicy) journal.sourcePolicy = sourcePolicy;
     const handle = { journal, save, assertCurrent, now, continueRequested: continueRequested === true,
+        legacyWithoutInputs, confirmLegacyRestart, pendingInputs: new Map(),
         taskScopes: (Array.isArray(taskScopes) ? taskScopes : []).filter(scope => typeof scope === 'string' && scope && scope.length <= 1800).slice(0, 4).sort((a,b) => b.length - a.length),
         pageOnly: pageOnly === true, durable: false, lane: Promise.resolve(), activeSlots: new Set() };
     internalHandles.add(handle);
@@ -6053,6 +6085,33 @@ function currentAttachedJournal(origin, handle) {
     }
     checkCurrent(handle);
     return journal;
+}
+
+// A code-owned input snapshot, never model-owned routing or evidence authority.
+// Store an order-preserving JSON string: canonical digest sorting must not rewrite
+// presentation objects later interpolated into an unchanged prompt.
+async function frozenGenerationInput(origin, key, produce) {
+    const handle = origin && handles.get(origin);
+    if (!handle) return produce();
+    if (!/^[a-zA-Z0-9:_-]{1,100}$/.test(key) || typeof produce !== 'function') throw recoveryError('RMT_RECOVERY_DATA', '不能识别任务背景，旧草稿保留。');
+    const read = () => {
+        const journal = currentAttachedJournal(origin, handle);
+        return typeof journal.frozenInputs?.[key] === 'string' ? JSON.parse(journal.frozenInputs[key]) : undefined;
+    };
+    const previous = read();
+    if (previous !== undefined) return previous;
+    if (handle.pendingInputs.has(key)) return structuredClone(await handle.pendingInputs.get(key));
+    const pending = (async () => {
+        const value = await produce(); checkCurrent(handle);
+        const serialized = jsonData(value, GENERATION_RECOVERY_LIMITS.requestChars, true);
+        const saved = await changeJournal(handle, journal => {
+            journal.frozenInputs = { ...(journal.frozenInputs || {}), [key]: serialized };
+        });
+        if (!saved && !handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '本轮背景未能保存，已停止模型请求；旧内容和草稿仍保留。');
+        return JSON.parse(serialized);
+    })();
+    handle.pendingInputs.set(key, pending);
+    try { return structuredClone(await pending); } finally { handle.pendingInputs.delete(key); }
 }
 
 // Planning data only, never acceptance authority. Callers must still replay each
@@ -6157,7 +6216,22 @@ async function withRecoverySegment(prompt, options, validator, run) {
         const contract = compatibilityContract(options, handle, slot);
         const upgrading = previous && previous.requestHash !== requestHash;
         if (upgrading && !await permitsLegacyRequest(previous, options, handle, contract)) {
-            throw recoveryError('RMT_RECOVERY_INPUT_CHANGED', '这一段的来源或提示词已经变化，原成功内容与草稿仍保留；没有自动重新生成。');
+            // Legacy versions did not capture background. Only an empty failed
+            // attempt may be explicitly restarted; retain the entire prior record.
+            const restartable = handle.legacyWithoutInputs && handle.continueRequested
+                && previous.state === 'retry' && handle.journal.segments.every(row => row.state === 'retry');
+            if (!restartable || typeof handle.confirmLegacyRestart !== 'function' || !await handle.confirmLegacyRestart()) {
+                throw recoveryError('RMT_RECOVERY_INPUT_CHANGED', '这一段的来源或提示词已经变化，原成功内容与草稿仍保留；没有自动重新生成。');
+            }
+            checkCurrent(handle);
+            const saved = await changeJournal(handle, journal => {
+                journal.previousAttempts = [...(journal.previousAttempts || []), {
+                    updatedAt: journal.updatedAt, segments: journal.segments, failureCode: journal.failureCode,
+                }];
+                journal.segments = []; journal.failureCode = '';
+            });
+            if (!saved && !handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '旧失败记录未能保存，未重新请求。');
+            handle.legacyWithoutInputs = false;
         }
         if (previous?.state === 'complete') {
             let value;
@@ -6248,6 +6322,7 @@ async function noteGenerationRecoveryFailure(origin, error) {
 
 __m_generation_recovery_js.generationRecoveryDigest = generationRecoveryDigest;
 __m_generation_recovery_js.createGenerationRecovery = createGenerationRecovery;
+__m_generation_recovery_js.frozenGenerationInput = frozenGenerationInput;
 __m_generation_recovery_js.withRecoverySegment = withRecoverySegment;
 __m_generation_recovery_js.recordRecoveryTruncation = recordRecoveryTruncation;
 __m_generation_recovery_js.noteGenerationRecoveryFailure = noteGenerationRecoveryFailure;
@@ -6414,7 +6489,7 @@ const mergedSegments = new WeakMap();
 const traceParents = new WeakMap();
 const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'themeSong', 'pastLives', 'timeEcho', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
 const OUTCOMES = new Set(['running', 'ok', 'failed', 'cancelled', 'deferred', 'blocked', 'noop']);
-const CODES = new Set([
+const CODES = new Set(['RMT_LOCAL_STORAGE','RMT_LOCAL_CAS','RMT_MANUAL_KEY_STORAGE','RMT_ADVANCED_PARAMETERS','RMT_ADVANCED_BACKEND','RMT_RECOVERY_SOURCE_CHANGED','RMT_ARCHIVE_DRAFT_STORAGE',
     ...Object.keys(core_backupDiagnostics.BACKUP_FAILURE_MESSAGES),
     'RMT_DEFERRED_QUOTA', 'RMT_DEFERRED_SECURITY', 'RMT_DEFERRED_UNAVAILABLE',
     'RMT_DEFERRED_LIMIT', 'RMT_DEFERRED_SERIALIZE', 'RMT_DEFERRED_UNKNOWN',
@@ -10754,7 +10829,7 @@ async function generatePastLivesWithRepair(context, memory, origin, taskKey, opt
             throw new DOMException('Archive context changed before past-lives context capture', 'AbortError');
     };
     assertContextRead();
-    const presentationContext = options.presentationContext || await generation.buildWorldPresentationContext(context, memory, PAST_LIVES_MODE);
+    const presentationContext = options.presentationContext || await generation.buildWorldPresentationContext(context, memory, PAST_LIVES_MODE, options.origin);
     assertContextRead();
     const presentation = contract.pastLivesPresentation(presentationContext.profile);
     const baseOptions = { context, contextEnvelope: presentationContext.contextEnvelope, origin, mode: PAST_LIVES_MODE, background: true, temperature: 0.75 };
@@ -10854,7 +10929,7 @@ function archiveRecoveryHtml(summary, { profile = false } = {}) {
 ${!capacity ? `<button type="button" class="rmt-btn" data-rmt-archive-recovery="${profile || summary.profileOnly ? 'profile' : 'import'}">${label}</button>` : ''}
 ${!profile && !summary.profileOnly ? '<button type="button" class="rmt-btn" data-rmt-archive-export-pending>导出待入档成果</button>' : ''}
 ${!profile && !summary.profileOnly && !summary.awaitingCommit && !capacity ? '<button type="button" class="rmt-btn" data-rmt-archive-restart>按当前条件另起任务</button>' : ''}
-${!batch ? '<button type="button" class="rmt-btn" data-rmt-archive-discard>放弃本页整理草稿</button>' : ''}</section>`;
+${!batch ? '<button type="button" class="rmt-btn" data-rmt-archive-discard>放弃整理草稿</button>' : ''}</section>`;
 }
 
 __m_ui_recoveryView_js.recoveryBannerHtml = recoveryBannerHtml;
@@ -11357,7 +11432,7 @@ async function generateTimeStoryWithRepair(mode, context, memory, origin, taskKe
             throw fail('SOURCE', '聊天或人物在读取生成资料前已变化，请从对应档案重新打开。');
     };
     assertSource();
-    const presentationContext = options.presentationContext || await generation.buildWorldPresentationContext(context, memory, mode);
+    const presentationContext = options.presentationContext || await generation.buildWorldPresentationContext(context, memory, mode, options.origin);
     assertSource();
     const prompt = timeStoryPrompt(mode, context, memory, previous, presentationContext.profile);
     const lastId = Math.max(0, ...(previous?.episodes || []).map(item => Number(item.id.slice(2))));
@@ -17863,6 +17938,72 @@ __m_modes_achievements_js.mergeAchievementsIncremental = mergeAchievementsIncrem
 __m_modes_achievements_js.renderAchievements = renderAchievements;
 }
 
+function __init_ui_advancedGenerationUi_js() {
+// MODULE: ui/advancedGenerationUi.js
+const advanced = __m_core_advancedGeneration_js;
+const settingsApi = __m_core_settings_js;
+const text = __m_core_text_js;
+
+
+
+const labels = { temperature:'温度', frequency_penalty:'频率惩罚', presence_penalty:'存在惩罚', top_p:'Top P', top_k:'Top K', seed:'种子', min_p:'Min P', top_a:'Top A', typical_p:'Typical P', repetition_penalty:'重复惩罚' };
+function advancedGenerationHtml() {
+    return `<details class="rmt-settings-card" data-rmt-settings-section="advanced-generation"><summary class="rmt-settings-card-head"><span>API</span><div><b>高级生成参数</b><small>排除参数 · 推理 · 流式</small></div></summary>
+<div class="rmt-settings-section-body">
+<label class="rmt-settings-check"><input type="checkbox" data-rmt-advanced-enabled><span>启用高级生成参数</span></label>
+<p>默认关闭，仅作用于心迹回廊。参数排除与附加 JSON 用于手动 API / 自定义 Profile，不改主聊天。</p>
+<label class="rmt-settings-field"><span>推理强度（reasoning_effort）</span><select class="text_pole" data-rmt-advanced-effort><option value="">默认：不覆盖</option>${advanced.REASONING_EFFORTS.map(value => `<option value="${value}">${value}</option>`).join('')}</select></label>
+<label class="rmt-settings-field"><span>本插件流式方式</span><select class="text_pole" data-rmt-advanced-stream><option value="original">保持原设置</option><option value="on">使用流式</option><option value="off">使用完整响应</option></select></label>
+<p>不同模型接受的推理配置不同；不会根据模型名自动替你修改。</p>
+<b>排除参数（勾选＝不发送）</b>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0">${advanced.EXCLUDABLE_PARAMETERS.map(key => `<label class="rmt-settings-check" style="min-width:0;overflow-wrap:anywhere"><input type="checkbox" data-rmt-advanced-exclude="${key}"><span>${labels[key]}<small style="display:block;overflow-wrap:anywhere">${key}</small></span></label>`).join('')}</div>
+<div class="rmt-theme-presets"><button type="button" data-rmt-advanced-common>选中常用四项</button><button type="button" data-rmt-advanced-none>取消所有排除</button></div>
+<label class="rmt-settings-field"><span>附加参数（JSON 对象，可留空）</span><textarea class="text_pole" data-rmt-advanced-json rows="6" maxlength="8192" spellcheck="false" placeholder='{"enable_thinking": false}'></textarea></label>
+<p>只填写接口支持的采样／推理参数；排除优先于 JSON。不接受模型、消息、最大输出、连接、Key 或工具覆盖。</p>
+<div class="rmt-theme-presets"><button type="button" data-rmt-advanced-save>保存高级参数</button><button type="button" data-rmt-advanced-revert>撤销编辑</button><button type="button" data-rmt-advanced-reset>关闭并重置</button></div>
+<div data-rmt-advanced-status role="status" aria-live="polite"></div></div></details>`;
+}
+function bindAdvancedGenerationUi(panel) {
+    const section = panel.querySelector('[data-rmt-settings-section="advanced-generation"]'); if (!section) return;
+    const query = selector => section.querySelector(selector), status = query('[data-rmt-advanced-status]');
+    const refresh = () => {
+        const settings = settingsApi.getPluginSettings();
+        query('[data-rmt-advanced-enabled]').checked = settings.advancedGenerationEnabled;
+        query('[data-rmt-advanced-effort]').value = settings.advancedReasoningEffort;
+        query('[data-rmt-advanced-stream]').value = settings.advancedStreamMode;
+        query('[data-rmt-advanced-json]').value = settings.advancedExtraParams;
+        for (const input of section.querySelectorAll('[data-rmt-advanced-exclude]')) input.checked = settings.advancedExcludedParams.includes(input.dataset.rmtAdvancedExclude);
+    };
+    section.addEventListener('click', event => {
+        const button = event.target.closest?.('button'); if (!button) return;
+        if (button.hasAttribute('data-rmt-advanced-common') || button.hasAttribute('data-rmt-advanced-none')) {
+            const common = button.hasAttribute('data-rmt-advanced-common');
+            for (const input of section.querySelectorAll('[data-rmt-advanced-exclude]')) input.checked = common && advanced.EXCLUDABLE_PARAMETERS.slice(0,4).includes(input.dataset.rmtAdvancedExclude);
+            status.textContent = '选择已更新，尚未保存。'; return;
+        }
+        if (button.hasAttribute('data-rmt-advanced-revert')) { refresh(); status.textContent = '已撤销未保存编辑。'; return; }
+        if (button.hasAttribute('data-rmt-advanced-reset')) {
+            settingsApi.updatePluginSettings(advanced.advancedSettings()); refresh(); status.textContent = '已关闭并重置高级参数，原连接与输出额度不变。'; return;
+        }
+        if (!button.hasAttribute('data-rmt-advanced-save')) return;
+        try {
+            const candidate = { advancedGenerationEnabled: query('[data-rmt-advanced-enabled]').checked,
+                advancedReasoningEffort: query('[data-rmt-advanced-effort]').value, advancedStreamMode: query('[data-rmt-advanced-stream]').value,
+                advancedExtraParams: query('[data-rmt-advanced-json]').value,
+                advancedExcludedParams: [...section.querySelectorAll('[data-rmt-advanced-exclude]')].filter(input => input.checked).map(input => input.dataset.rmtAdvancedExclude) };
+            // Even a disabled draft cannot smuggle credentials into ordinary settings.
+            advanced.parseAdvancedGeneration({ ...candidate, advancedGenerationEnabled: true });
+            settingsApi.updatePluginSettings(candidate);
+            status.textContent = candidate.advancedGenerationEnabled ? '已保存；下次请求生效，不会自动请求。' : '已保存草稿；高级参数关闭，不发送这些参数。';
+        } catch (error) { status.textContent = text.safeErrorSummary(error); }
+    });
+    refresh();
+}
+
+__m_ui_advancedGenerationUi_js.advancedGenerationHtml = advancedGenerationHtml;
+__m_ui_advancedGenerationUi_js.bindAdvancedGenerationUi = bindAdvancedGenerationUi;
+}
+
 function __init_archive_sourceReadGuard_js() {
 // MODULE: archive/sourceReadGuard.js
 const contextApi = __m_core_context_js;
@@ -23601,6 +23742,7 @@ __m_core_selfUpdater_js.isProjectRemote = isProjectRemote;
 
 function __init_ui_settingsPanel_js() {
 // MODULE: ui/settingsPanel.js
+const advanced_ui = __m_ui_advancedGenerationUi_js;
 const output_budget = __m_core_outputBudget_js;
 const cg_format_ui = __m_ui_cgFormatControl_js;
 const archive_repository = __m_archive_repository_js;
@@ -23624,6 +23766,7 @@ const ui_archivePortal = __m_ui_archivePortal_js;
 const ui_overlay = __m_ui_overlay_js;
 const ui_styles = __m_ui_styles_js;
 const runtimeState = __m_core_state_js.state;
+
 
 
 // Heartbeat Memories r35 modular runtime.
@@ -23865,13 +24008,47 @@ function manualSettingsFromPanel(panel) {
     const keyInput = panel?.querySelector?.('[data-rmt-manual-api-key]');
     const baseInput = panel?.querySelector?.('[data-rmt-manual-api-base]');
     const modelInput = panel?.querySelector?.('[data-rmt-manual-api-model]');
+    const base = baseInput ? baseInput.value : current.manualApiBaseUrl;
+    let sameBase = false;
+    try { sameBase = core_independentApi.normalizeManualApiBaseUrl(base) === current.manualApiBaseUrl; } catch {}
     return {
         ...current,
         apiConnectionMode: 'manual',
-        manualApiBaseUrl: baseInput ? baseInput.value : current.manualApiBaseUrl,
-        manualApiKey: core_text.normalizeText(keyInput?.value, 4000) || current.manualApiKey,
+        manualApiBaseUrl: base,
+        manualApiKey: core_text.normalizeText(keyInput?.value, 4000) || (sameBase ? current.manualApiKey : ''),
+        manualApiSecretRef: sameBase ? current.manualApiSecretRef : '',
         manualApiModel: modelInput ? modelInput.value : current.manualApiModel,
     };
+}
+
+const manualAutosaves = new WeakMap();
+async function saveManualPanel(panel, activate = false) {
+    clearTimeout(manualAutosaves.get(panel)); manualAutosaves.delete(panel);
+    const status = panel.querySelector('[data-rmt-manual-save-status]');
+    const candidate = manualSettingsFromPanel(panel);
+    const keyInput = panel.querySelector('[data-rmt-manual-api-key]');
+    const typedKey = keyInput?.value || '';
+    if (status) status.textContent = '正在保存…';
+    try {
+        const result = await core_settings.saveManualApiConfiguration(candidate, { activate });
+        if (keyInput?.value === typedKey) keyInput.value = '';
+        if (keyInput) keyInput.placeholder = result.credentialSaved ? '已加密保存到本机；填写可替换' : 'API Key（可留空）';
+        if (status) status.textContent = result.credentialSaved ? '连接信息与 Key 已保存到本机；刷新后可用。' : '连接信息已保存；未填写 Key。';
+        if (activate) { panel.dataset.rmtApiEditor = 'manual'; panel.dataset.rmtManualDirty = '0'; refreshGenerationSettingsUi(); }
+        return result;
+    } catch (error) {
+        if (status) status.textContent = error?.name === 'AbortError' ? '配置已再次编辑，旧保存已停止。' : core_text.safeErrorSummary(error);
+        if (activate) globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 未保存');
+        return null;
+    }
+}
+function bindManualAutosave(panel) {
+    const schedule = event => {
+        if (!event.target.matches?.('[data-rmt-manual-api-base],[data-rmt-manual-api-key],[data-rmt-manual-api-model]')) return;
+        clearTimeout(manualAutosaves.get(panel));
+        manualAutosaves.set(panel, setTimeout(() => { void saveManualPanel(panel); }, event.type === 'change' ? 0 : 500));
+    };
+    panel.addEventListener('input', schedule); panel.addEventListener('change', schedule);
 }
 
 async function refreshManualModelOptions({ fetchRemote = false } = {}) {
@@ -23999,7 +24176,7 @@ function refreshGenerationSettingsUi() {
     if (!manualDirty && manualModel) manualModel.value = settings.manualApiModel;
     if (!manualDirty && manualKey) {
         manualKey.value = '';
-        manualKey.placeholder = settings.manualApiKey ? '本页已输入；刷新后需重填' : 'API Key（仅本页，不保存）';
+        manualKey.placeholder = settings.manualApiSecretRef ? '已加密保存到本机；填写可替换' : settings.manualApiKey ? '本页已有 Key；尚未确认持久保存' : 'API Key（可留空）';
     }
     if (maxTokens) maxTokens.value = String(settings.maxTokens);
     if (temperature) {
@@ -24195,6 +24372,7 @@ function mountSettings({ homeTarget = null } = {}) {
               <button type="button" class="menu_button rmt-model-refresh" data-rmt-manual-api-model-refresh>拉取模型</button>
             </div>
             <button type="button" class="menu_button rmt-settings-wide rmt-manual-save" data-rmt-manual-api-save>保存并使用</button>
+            <div data-rmt-manual-save-status role="status" aria-live="polite">填写后自动保存到本机，不随档案导出。</div>
             <label class="rmt-settings-check"><input type="checkbox" data-rmt-manual-streaming ${core_settings.getPluginSettings().manualApiStreaming ? 'checked' : ''}><span>使用流式输出（仅此手动 API）</span></label>
             <small>需要服务端支持 SSE；关闭时使用普通完整响应，不影响主聊天。</small>
           </div>
@@ -24207,6 +24385,7 @@ function mountSettings({ homeTarget = null } = {}) {
           <label class="rmt-settings-check"><input data-rmt-tt-display type="checkbox"><span>TT 顶部安全区</span></label>
           </div>
         </details>
+        ${advanced_ui.advancedGenerationHtml()}
         ${chatReadingSettingsHtml()}
         <details class="rmt-settings-card" data-rmt-settings-section="image">
           <summary class="rmt-settings-card-head"><span>CG</span><div><b>CG 生图</b><small>相簿 · ADV · 日常一格</small></div></summary>
@@ -24362,6 +24541,8 @@ function mountSettings({ homeTarget = null } = {}) {
         panel.querySelector('[data-rmt-creative-count]').textContent = settings.creativeSupplement.length.toLocaleString() + ' / 20,000';
     };
     refreshCreative();
+    advanced_ui.bindAdvancedGenerationUi(panel);
+    bindManualAutosave(panel);
     panel.addEventListener('change', async event => {
         if (cg_format_ui.handleCgFormatChange(event)) return;
         const target = event.target;
@@ -24728,38 +24909,15 @@ function mountSettings({ homeTarget = null } = {}) {
         }
         const manualClearButton = event.target.closest?.('[data-rmt-manual-api-key-clear]');
         if (manualClearButton) {
-            const keyInput = panel.querySelector('[data-rmt-manual-api-key]');
-            if (keyInput) keyInput.value = '';
-            core_settings.updatePluginSettings({ manualApiKey: '' });
-            if (keyInput) keyInput.placeholder = 'API Key（仅本页，不保存）';
-            refreshGenerationSettingsUi();
-            globalThis.toastr?.success?.('手动 API Key 已清除。', '心迹回廊');
-            return;
-        }
-        const manualSaveButton = event.target.closest?.('[data-rmt-manual-api-save]');
-        if (manualSaveButton) {
-            try {
-                const candidate = manualSettingsFromPanel(panel);
-                const manualApiBaseUrl = core_independentApi.assertManualApiCredentialTransport(candidate.manualApiBaseUrl, candidate.manualApiKey);
-                const manualApiModel = core_text.normalizeText(candidate.manualApiModel, 240);
-                if (!manualApiModel) throw core_text.safeUserError('请填写手动 API 的模型 ID。', 'RMT_MANUAL_MODEL');
-                core_settings.updatePluginSettings({
-                    apiConnectionMode: 'manual',
-                    manualApiBaseUrl,
-                    manualApiKey: candidate.manualApiKey,
-                    manualApiModel,
-                });
-                panel.dataset.rmtApiEditor = 'manual';
-                panel.dataset.rmtManualDirty = '0';
-                const keyInput = panel.querySelector('[data-rmt-manual-api-key]');
-                if (keyInput) keyInput.value = '';
+            clearTimeout(manualAutosaves.get(panel)); manualAutosaves.delete(panel);
+            const keyInput = panel.querySelector('[data-rmt-manual-api-key]'); if (keyInput) keyInput.value = '';
+            void core_settings.forgetManualApiCredential().then(() => {
                 refreshGenerationSettingsUi();
-                globalThis.toastr?.success?.('手动 API 已启用；Key 仅保留在本页，刷新后需重填。', '心迹回廊');
-            } catch (error) {
-                globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
-            }
+                const status = panel.querySelector('[data-rmt-manual-save-status]'); if (status) status.textContent = '本插件手动 Key 已清除，主聊天连接未改。';
+            }).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
             return;
         }
+        if (event.target.closest?.('[data-rmt-manual-api-save]')) { void saveManualPanel(panel, true); return; }
         const manualRefreshButton = event.target.closest?.('[data-rmt-manual-api-model-refresh]');
         if (manualRefreshButton) {
             refreshManualModelOptions({ fetchRemote: true })
@@ -30260,7 +30418,7 @@ async function regeneratePhoneApp(session, app, context, memoryBank, origin, tas
         entries: (app.entries || []).map(entry => ({ id: entry.id, title: entry.title, meta: entry.meta })),
     };
     const plan = phonePlanFromSession(session, planApp);
-    const presentationContext = await generation_client.buildWorldPresentationContext(context, memoryBank, core_constants.MODE.PHONE);
+    const presentationContext = await generation_client.buildWorldPresentationContext(context, memoryBank, core_constants.MODE.PHONE, origin);
     assertPhoneRegenerationOrigin(origin, memoryBank);
     const raw = await generation_client.requestValidatedSegment(
         modes_phone.phoneAppPrompt(context, memoryBank, plan, planApp),
@@ -30276,7 +30434,7 @@ async function regeneratePhoneEntry(session, app, entry, context, memoryBank, or
     assertPhoneRegenerationOrigin(origin, memoryBank);
     const planApp = { id: app.id, label: app.label, kind: app.kind, summary: app.summary, incremental: true, entries: [{ id: entry.id, title: entry.title, meta: entry.meta }] };
     const plan = phonePlanFromSession(session, planApp);
-    const presentationContext = await generation_client.buildWorldPresentationContext(context, memoryBank, core_constants.MODE.PHONE);
+    const presentationContext = await generation_client.buildWorldPresentationContext(context, memoryBank, core_constants.MODE.PHONE, origin);
     assertPhoneRegenerationOrigin(origin, memoryBank);
     const raw = await generation_client.requestValidatedSegment(
         modes_phone.phoneAppPrompt(context, memoryBank, plan, planApp),
@@ -30885,6 +31043,8 @@ __m_ui_contentManager_js.renderContentManager = renderContentManager;
 
 function __init_generation_client_js() {
 // MODULE: generation/client.js
+const advanced_generation = __m_core_advancedGeneration_js;
+const recovery_source = __m_core_recoverySourcePolicy_js;
 const output_budget = __m_core_outputBudget_js;
 const archive_requestBudget = __m_archive_requestBudget_js;
 const cg_policy = __m_generation_cgPromptPolicy_js;
@@ -30935,6 +31095,8 @@ const ui_settingsPanel = __m_ui_settingsPanel_js;
 const ui_contentManager = __m_ui_contentManager_js;
 const navigation_bookmark = __m_ui_navigationBookmark_js;
 const runtimeState = __m_core_state_js.state;
+
+
 
 
 
@@ -31041,7 +31203,10 @@ async function collectFittingSelectedSetting(context, budget = core_constants.MA
     };
 }
 
-async function buildWorldPresentationContext(context, memoryBank, mode) {
+async function buildWorldPresentationContext(context, memoryBank, mode, origin = null) {
+    return generation_recovery.frozenGenerationInput(origin, `presentation:${mode}`, () => buildWorldPresentationContextFresh(context, memoryBank, mode));
+}
+async function buildWorldPresentationContextFresh(context, memoryBank, mode) {
     const wantsSelectedSetting = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode);
     let selectedSetting = wantsSelectedSetting
         ? await collectFittingSelectedSetting(context)
@@ -31122,7 +31287,8 @@ async function requestValidatedSegment(prompt, status, options, validator) {
     try {
     const context = options?.context || core_context.currentCharacterGuard();
     options = { ...options, taskTrace, context, contextEnvelope: typeof options?.contextEnvelope === 'string'
-        ? options.contextEnvelope : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options?.mode, context) }) };
+        ? options.contextEnvelope : await generation_recovery.frozenGenerationInput(options?.origin, `context:${options?.mode || 'segment'}`,
+            () => core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options?.mode, context) })) };
     const result = await generation_recovery.withRecoverySegment(prompt, options, validator, async (prompt, options, accepted) => {
     let lastError = null;
     // Automatic retry is off by default. A failed segment used to silently re-run prompt
@@ -31376,7 +31542,9 @@ async function generateConfiguredJson(prompt, options = {}) {
     const lifecycleEpoch = options.origin?.lifecycleEpoch ?? runtimeState.runtimeLifecycleEpoch;
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     const context = options.context || core_context.currentCharacterGuard();
+    await core_settings.prepareManualCredential(context);
     const settings = core_settings.getPluginSettings(context);
+    const advanced = advanced_generation.parseAdvancedGeneration(settings);
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
     const originalExpanded = core_text.expandSafeRoleMacros(prompt, context);
     const expanded = core_contextTags.filterJsonPromptStrings(originalExpanded, core_contextTags.tagPolicyForSettings(settings));
@@ -31406,7 +31574,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
     const connectionMode = settings.apiConnectionMode === 'manual' ? 'manual' : 'profile';
     const service = context.ConnectionManagerRequestService;
     let selectedProfileFingerprint = '';
-    const overridePayload = {
+    let overridePayload = {
         temperature: Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : settings.temperature,
     };
     const modelOverride = core_text.normalizeText(options.model || (connectionMode === 'manual' ? settings.manualApiModel : settings.modelOverride), 240);
@@ -31425,6 +31593,8 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
         selectedProfileFingerprint = await core_settings.resolvedProfileTransportFingerprint(rawProfile);
         const apiMap = service.validateProfile(rawProfile);
         if (apiMap?.selected !== 'openai' || !apiMap?.source) throw core_text.safeUserError('当前一键连接不是可复用的 Chat Completion 配置。');
+        Object.assign(overridePayload, advanced_generation.advancedCarrier(advanced, apiMap.source));
+        overridePayload = advanced_generation.applyAdvancedExclusions(overridePayload, advanced);
     }
     const assertConfigurationCurrent = async () => {
         const latestSettings = core_settings.getPluginSettings(context);
@@ -31469,10 +31639,10 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
         assertRequestCurrent();
         core_taskTrace.beginStage(taskTrace, 'request');
         result = await core_requestCoordinator.runGenerationRequestWithTimeout(
-            () => {
+            async () => {
                 assertRequestCurrent();
                 core_taskTrace.recordProviderRequest(taskTrace);
-                return connectionMode === 'manual'
+                const returned = connectionMode === 'manual'
                 ? core_independentApi.requestManualApiCompletion(settings, context, messages, responseLength, {
                     signal: lifecycleController.signal,
                     model: modelOverride,
@@ -31482,9 +31652,10 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
                     settings.connectionProfileId,
                     messages,
                     responseLength,
-                    { stream: false, extractData: true, includePreset: false, includeInstruct: false, signal: lifecycleController.signal },
+                    { stream: advanced.streamMode === 'on', extractData: false, includePreset: false, includeInstruct: false, signal: lifecycleController.signal },
                     overridePayload,
                 );
+                return core_independentApi.readProfileCompletion(await returned, { signal: lifecycleController.signal });
             },
             lifecycleController,
             options.timeoutMs,
@@ -31496,6 +31667,8 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
         // Observe error envelopes (including HTTP-200 429s) before draining the queue.
         responsePayload = core_independentApi.assertIndependentResponsePayload(result);
     } catch (error) {
+        const shape = core_independentApi.transportFailureSummary(error);
+        if (shape) core_taskTrace.recordResponse(taskTrace, shape);
         throw normalizeConnectionManagerError(error);
     } finally {
         try { releaseProviderPermit?.(); } catch {}
@@ -31605,6 +31778,10 @@ function recoverySettingsIdentity(context) {
 async function beginModeRecovery(mode, context, bank, origin, options = {}) {
     const identity = recoverySettingsIdentity(context);
     const existing = options.existing === undefined ? core_cache.loadGenerationRecovery(mode, context, options.archiveTarget?.cache) : options.existing;
+    const sourceValues = JSON.stringify(recovery_source.recoverySourceValues(context));
+    await recovery_source.assertRecoverySourcePolicy(existing, context, origin);
+    const sourcePolicy = await recovery_source.recoverySourcePolicy(context);
+    if (JSON.stringify(recovery_source.recoverySourceValues(context)) !== sourceValues) throw new DOMException('Source changed', 'AbortError');
     const operation = cg_policy.cgRecoveryOperation(mode, options.operation || { kind: 'mode', mode }, existing,
         options.cgPromptFormat || core_settings.getPluginSettings(context).cgPromptFormat);
     cg_policy.bindCgPromptFormat(origin, operation.cgPromptFormat, operation.cgPromptDialect || 'legacy');
@@ -31615,11 +31792,14 @@ async function beginModeRecovery(mode, context, bank, origin, options = {}) {
         ? structuredClone(core_cache.archiveBackupEntryForContext(context, bank, { expectedTaskOrigin: origin, previousMemory: bank })) : null);
     const handle = await generation_recovery.createGenerationRecovery({
         origin: { ...origin, archiveTargetEntryId: options.archiveTarget?.entryId || archiveEntry?.entryId || origin.archiveTargetEntryId || '' },
-        mode, settingsIdentity: identity, existing, continueRequested: !!existing,
+        mode, settingsIdentity: identity, existing, continueRequested: !!existing, sourcePolicy,
+        confirmLegacyRestart: () => ui_overlay.confirmExplicitAction('保留旧失败记录，按当前背景重新尝试？',
+            '旧版任务没有保存最初的世界书背景，且没有任何成功分段或截断正文。确定会保留旧失败记录并使用当前背景重新请求；取消不发送。', { destructive: false }),
         taskScopes: [`${origin.characterKey}|${origin.chatId}`, `archive-target:${options.archiveTarget?.entryId || archiveEntry?.entryId || origin.archiveTargetEntryId || ''}`],
         assertCurrent: () => {
             if (!core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch) || options.stillCurrent?.() === false
-                || recoverySettingsIdentity(context) !== identity) return false;
+                || recoverySettingsIdentity(context) !== identity
+                || JSON.stringify(recovery_source.recoverySourceValues(context)) !== sourceValues) return false;
             const live = core_context.getContext();
             if (!options.archiveTarget && core_context.deferredCommitOriginMatchesContext(origin, live)) {
                 return archive_repository.getImportedMemory(live)?.archiveRevision === bank.archiveRevision
@@ -31918,7 +32098,7 @@ async function generateMode(mode, options = {}) {
         let session;
         let presentationContext = null;
         if (time_stories.isTimeStoryMode(mode) || (mode === core_constants.MODE.ITEMS && previousSession && allowPersonaExpansion) || [core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode)) {
-            presentationContext = await buildWorldPresentationContext(context, memoryBank, mode);
+            presentationContext = await buildWorldPresentationContext(context, memoryBank, mode, origin);
             // Degrading is fine, degrading silently is not: the user picked these entries
             // by hand and deserves to know which of them this request could actually carry.
             if (!options.automatic && presentationContext.selectedSetting?.note) {
@@ -32184,12 +32364,16 @@ __m_generation_client_js.GENERATED_PHRASE_EVIDENCE_KEYS = GENERATED_PHRASE_EVIDE
 
 function __init_archive_importRecovery_js() {
 // MODULE: archive/importRecovery.js
+const local_store = __m_core_localRecoveryStore_js;
+const constants = __m_core_constants_js;
 const recovery = __m_generation_recovery_js;
 const client = __m_generation_client_js;
 const text = __m_core_text_js;
 const taskTrace = __m_core_taskTrace_js;
-// Page-only checkpoints for archive extraction / cover editing. These are not
-// archives, MODE sessions, pending commits, or evidence. No host storage is used.
+
+
+// Draft checkpoints are separate from formal archives and evidence. Lazy local
+// persistence begins only at an explicit archive operation, never at bootstrap.
 
 
 
@@ -32198,10 +32382,100 @@ const ARCHIVE_RECOVERY_PAGE_NOTICE = '档案整理草稿仅本页保留，请勿
 const ARCHIVE_RECOVERY_MAX_DRAFTS = 4;
 const drafts = new Map();
 const tickets = new WeakSet();
+const scopes = new Map();
+const lanes = new Map();
+const loaded = new Set();
+function storageFailure() { return text.safeUserError('未能把本次整理草稿保存到本机；成功分段仍在当前页面。请先导出，保存成功前不要刷新。', 'RMT_ARCHIVE_DRAFT_STORAGE'); }
+function scopeRows(key) {
+    return [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`)).map(([id,entry]) => [id, { ...entry, active: false, durable: true }]);
+}
+async function saveScope(key) {
+    if (!local_store.localRecoveryStorageAvailable()) return false;
+    const run = (lanes.get(key) || Promise.resolve()).catch(() => {}).then(async () => {
+        const state = scopes.get(key); if (!state) throw storageFailure();
+        const rows = scopeRows(key);
+        const encoded = JSON.stringify({ version: 1, rows });
+        if (new TextEncoder().encode(encoded).byteLength > constants.MAX_CACHE_SOURCE_BYTES) throw storageFailure();
+        state.revision = await local_store.compareLocalRecoveryRecord(state.id, state.revision, rows.length ? JSON.parse(encoded) : null);
+        for (const [id] of rows) if (drafts.has(id)) drafts.get(id).durable = true;
+        return true;
+    });
+    lanes.set(key, run);
+    try { return await run; } catch { for (const [id] of scopeRows(key)) if (drafts.has(id)) drafts.get(id).durable = false; throw storageFailure(); }
+    finally { if (lanes.get(key) === run) lanes.delete(key); }
+}
+function scheduleSave(key) { void saveScope(key).catch(() => {}); }
+async function flushArchiveRecovery(origin, operation = 'import') {
+    const key = draftKey(origin, operation); if (!key) return false;
+    if (lanes.has(key)) await lanes.get(key);
+    return local_store.localRecoveryStorageAvailable() ? saveScope(key) : false;
+}
+function resetArchiveRecoveryMemoryForTests() { drafts.clear(); scopes.clear(); loaded.clear(); lanes.clear(); }
+async function hydrateArchiveRecovery(origin, operation = 'import') {
+    const key = draftKey(origin, operation); if (!key || loaded.has(key) || !local_store.localRecoveryStorageAvailable()) return false;
+    const id = `draft:${await recovery.generationRecoveryDigest(key)}`;
+    let record;
+    try { record = await local_store.readLocalRecoveryRecord(id); } catch { throw storageFailure(); }
+    if (loaded.has(key)) return true;
+    const payload = record?.payload;
+    if (payload) {
+        if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > constants.MAX_CACHE_SOURCE_BYTES
+            || payload.version !== 1 || !Array.isArray(payload.rows) || payload.rows.length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure();
+        const checked = [];
+        for (const [rowKey, value] of payload.rows) {
+            if (typeof rowKey !== 'string' || (rowKey !== key && !rowKey.startsWith(`${key}:paused:`))
+                || !validStoredEntry(value, key, origin, operation)) throw storageFailure();
+            const entry = structuredClone(value); entry.active = false; entry.durable = true;
+            // A saved draft is never a formal commit. If the intended bank wasn't
+            // committed, replay validated pieces and the normal CAS path on click.
+            if (entry.stage === 'awaiting-commit' && entry.committedRevision !== origin.archiveRevision) entry.stage = 'segments';
+            checked.push([rowKey, entry]);
+        }
+        if (drafts.size + checked.filter(([id]) => !drafts.has(id)).length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure();
+        for (const [id,entry] of checked) if (!drafts.has(id)) drafts.set(id,entry);
+    }
+    scopes.set(key, { id, revision: record?.revision || 0 }); loaded.add(key);
+    acknowledgeArchiveRecoveryCommit(origin);
+    return true;
+}
+function validStoredEntry(entry, key, origin, operation) {
+    const identity = entry?.journal?.identity;
+    return entry && entry.key === key && entry.operation === operation && /^[a-f0-9]{64}$/.test(entry.sourceHash || '')
+        && ['segments','awaiting-commit','profile-only'].includes(entry.stage)
+        && typeof entry.fullRebuild === 'boolean' && recovery.generationRecoverySummary(entry.journal)
+        && identity.mode === (operation === 'import' ? 'archive-import' : 'archive-profile')
+        && identity.archiveRevision === `archive-draft:${entry.sourceHash}`
+        && ['characterKey','characterId','characterAvatar','chatId'].every(field => (identity[field] || '') === (origin[field] || ''));
+}
+async function importArchiveRecoveryData(origin, data) {
+    const key = draftKey(origin, 'import');
+    if (!key || !data || !['hearttrace-unarchived-results-v1','hearttrace-unarchived-results-v2'].includes(data.format)
+        || !Array.isArray(data.pageDrafts) || !data.pageDrafts.length
+        || new TextEncoder().encode(JSON.stringify(data)).byteLength > constants.MAX_CACHE_SOURCE_BYTES) throw storageFailure();
+    await hydrateArchiveRecovery(origin);
+    if (drafts.has(key)) throw text.safeUserError('当前聊天已有整理草稿，导入没有覆盖它。请先导出并明确处理现有草稿。', 'RMT_RECOVERY_BUSY');
+    if (drafts.size + data.pageDrafts.length > ARCHIVE_RECOVERY_MAX_DRAFTS) throw storageFailure();
+    const values = data.pageDrafts.map(row => {
+        const sourceHash = String(row?.journal?.identity?.archiveRevision || '').replace(/^archive-draft:/, '');
+        const entry = { key, operation:'import', sourceHash, fullRebuild: row.fullRebuild === true,
+            stage:'segments', journal: structuredClone(row.journal), active:false, durable:false, importedUnverified:true };
+        if (!validStoredEntry(entry, key, origin, 'import')) throw incompatible();
+        return entry;
+    });
+    // Imported fragments are data, never new evidence authority. Initial dispatch
+    // must rebuild current sources and match exact source/request hashes.
+    values.forEach((entry,index) => drafts.set(index ? `${key}:paused:import:${index}` : key, entry));
+    const durable = await saveScope(key);
+    return { count: values.length, completed: recovery.generationRecoverySummary(values[0].journal)?.completed || 0, durable };
+}
+
 
 function draftKey(origin, operation) {
     if (!['import', 'profile'].includes(operation) || !origin?.characterKey || !origin?.chatId) return '';
-    return JSON.stringify([origin.characterKey, String(origin.characterId ?? ''), origin.characterAvatar || '', origin.chatId, operation]);
+    // Stable locator only; the record's full runtime character fingerprint is
+    // still checked before restore/dispatch. A card edit must not hide the old
+    // draft by changing its lookup key and accidentally start a new paid task.
+    return JSON.stringify([String(origin.characterId ?? ''), origin.characterAvatar || origin.characterKey, origin.chatId, operation]);
 }
 
 function incompatible() {
@@ -32217,7 +32491,8 @@ function archiveRecoverySummary(origin, operation = 'import') {
         completed: summary?.completed || 0, truncated: summary?.truncated || 0,
         canContinue: entry.stage === 'segments' && !!summary?.canContinue,
         canRetry: entry.stage === 'profile-only' || !!summary?.canRetry,
-        failureCode: summary?.failureCode || '', pageOnly: true, notice: ARCHIVE_RECOVERY_PAGE_NOTICE };
+        failureCode: summary?.failureCode || '', pageOnly: entry.durable !== true, notice: entry.durable === true
+            ? '成功分段与原任务输入已保存到本机；刷新后可继续未完成部分，不重做已保存分段。换设备前请导出。' : ARCHIVE_RECOVERY_PAGE_NOTICE };
 }
 
 // Called only after a real saved bank of exactly this revision is observed.
@@ -32227,12 +32502,13 @@ function acknowledgeArchiveRecoveryCommit(origin) {
     if (!entry || entry.stage !== 'awaiting-commit' || entry.committedRevision !== origin?.archiveRevision) return false;
     if (entry.profilePending) entry.stage = 'profile-only';
     else drafts.delete(key);
+    scheduleSave(key);
     return true;
 }
 
-function archiveRecoveryInputs(origin) {
-    const entry = drafts.get(draftKey(origin, 'import'));
-    return entry?.stage === 'segments' && entry.inputs ? structuredClone(entry.inputs) : null;
+function archiveRecoveryInputs(origin, operation = 'import') {
+    const entry = drafts.get(draftKey(origin, operation));
+    return entry?.stage === 'segments' && !entry.importedUnverified && entry.inputs ? structuredClone(entry.inputs) : null;
 }
 
 function parkArchiveRecovery(origin) {
@@ -32242,19 +32518,22 @@ function parkArchiveRecovery(origin) {
     if (drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) throw text.safeUserError('本页已保留四份草稿，旧成果没有被挤掉；请先导出并明确处理旧草稿。', 'RMT_RECOVERY_LIMIT');
     drafts.delete(key);
     drafts.set(`${key}:paused:${Date.now()}:${drafts.size}`, entry);
+    scheduleSave(key);
     return true;
 }
 
 function exportArchiveRecovery(origin) {
     const key = draftKey(origin, 'import');
     return [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`))
-        .map(([, entry]) => ({ stage: entry.stage, fullRebuild: entry.fullRebuild, journal: structuredClone(entry.journal) }));
+        .map(([, entry]) => ({ stage: entry.stage, fullRebuild: entry.fullRebuild, journal: structuredClone(entry.journal), ...(entry.inputs ? { inputs: structuredClone(entry.inputs) } : {}) }));
 }
 
 async function beginArchiveRecovery({ origin, operation = 'import', sourceIdentity, sourceFragments = [], settingsIdentity,
     fullRebuild = false, continueApproved = false, inputs = null, assertCurrent = () => true } = {}) {
     const key = draftKey(origin, operation);
     if (!key) throw text.safeUserError('无法确定档案整理草稿属于哪个聊天，本次没有发送请求。', 'RMT_RECOVERY_IDENTITY');
+    await hydrateArchiveRecovery(origin, operation);
+    if (assertCurrent() === false) throw new DOMException('Archive origin changed', 'AbortError');
     const existing = drafts.get(key);
     if (existing?.active) throw text.safeUserError('这份档案草稿正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
     if (existing && (!continueApproved || existing.stage !== 'segments')) throw incompatible();
@@ -32278,23 +32557,24 @@ async function beginArchiveRecovery({ origin, operation = 'import', sourceIdenti
     let attached = false;
     const stillCurrent = () => (!attached || drafts.get(key) === entry) && assertCurrent() !== false;
     const handle = await recovery.createGenerationRecovery({ origin: recoveryOrigin,
-        mode: operation === 'import' ? 'archive-import' : 'archive-profile', settingsIdentity, pageOnly: true,
+        mode: operation === 'import' ? 'archive-import' : 'archive-profile', settingsIdentity, pageOnly: !local_store.localRecoveryStorageAvailable(),
         existing: entry.journal, continueRequested: !!existing, assertCurrent: stillCurrent,
         save: async journal => {
-            // Returning false is intentional: memory survives closing the overlay,
-            // not page refresh. The engine must never describe this as durable.
             if (drafts.get(key) !== entry) throw new DOMException('Archive draft cleared', 'AbortError');
             entry.journal = journal;
-            return false;
+            return saveScope(key);
         } });
     if (drafts.get(key) && drafts.get(key) !== existing) throw incompatible();
     if (existing?.active) throw text.safeUserError('这份档案草稿正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
     if (!existing && drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) throw text.safeUserError('本页档案整理草稿已满，旧草稿仍保留。', 'RMT_RECOVERY_LIMIT');
-    if (!existing && inputs) entry.inputs = structuredClone(inputs);
+    if ((!existing || entry.importedUnverified) && inputs) entry.inputs = structuredClone(inputs);
+    entry.importedUnverified = false;
     entry.active = true;
     entry.journal = recovery.generationRecoverySnapshot(handle);
     drafts.set(key, entry);
     attached = true;
+    try { await saveScope(key); } catch (error) { entry.active = false; throw error; }
+    if (assertCurrent() === false) { entry.active = false; throw new DOMException('Archive origin changed', 'AbortError'); }
     recovery.attachGenerationRecovery(recoveryOrigin, handle);
     const ticket = { key, entry, origin: recoveryOrigin, handle, assertCurrent: stillCurrent, released: false };
     tickets.add(ticket);
@@ -32328,6 +32608,7 @@ function stageArchiveRecoveryCommit(ticket, revision, { profilePending = false }
     ticket.entry.stage = 'awaiting-commit';
     ticket.entry.committedRevision = String(revision);
     ticket.entry.profilePending = !!profilePending;
+    scheduleSave(ticket.key);
     return true;
 }
 
@@ -32336,6 +32617,7 @@ function finishArchiveProfileRecovery(ticket, committedOrigin) {
     drafts.delete(ticket.key);
     const importKey = draftKey(committedOrigin, 'import'), pending = drafts.get(importKey);
     if (pending?.stage === 'profile-only' && pending.committedRevision === committedOrigin.archiveRevision) drafts.delete(importKey);
+    scheduleSave(ticket.key); if (importKey !== ticket.key) scheduleSave(importKey);
     return true;
 }
 
@@ -32344,6 +32626,7 @@ function releaseArchiveRecovery(ticket) {
     ticket.released = true;
     ticket.entry.active = false;
     recovery.detachGenerationRecovery(ticket.origin);
+    scheduleSave(ticket.key);
 }
 
 // An explicit user discard / destructive archive action may invoke this. Merely
@@ -32353,11 +32636,38 @@ function clearArchiveRecovery(origin, operation = null) {
         const key = draftKey(origin, kind);
         drafts.delete(key);
         for (const id of drafts.keys()) if (id.startsWith(`${key}:paused:`)) drafts.delete(id);
+        scheduleSave(key);
     }
 }
 
+// Explicit discard awaits the tombstone; failed persistence restores visible data.
+async function clearArchiveRecoveryDurably(origin, operation = null) {
+    for (const kind of operation ? [operation] : ['import','profile']) {
+        await hydrateArchiveRecovery(origin, kind);
+        const key = draftKey(origin, kind);
+        if (!key) continue;
+        if (lanes.has(key)) await lanes.get(key).catch(() => {});
+        const previous = [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`));
+        if (previous.some(([,entry]) => entry.active)) throw text.safeUserError('当前请求尚未结束，草稿没有清除。', 'RMT_RECOVERY_BUSY');
+        for (const [id] of previous) drafts.delete(id);
+        try { await saveScope(key); }
+        catch (error) { for (const [id,entry] of previous) drafts.set(id,entry); throw error; }
+    }
+    return true;
+}
+
+function discardArchiveRecovery(origin, operation = null) {
+    if (!local_store.localRecoveryStorageAvailable()) { clearArchiveRecovery(origin, operation); return true; }
+    return clearArchiveRecoveryDurably(origin, operation);
+}
+
+__m_archive_importRecovery_js.flushArchiveRecovery = flushArchiveRecovery;
+__m_archive_importRecovery_js.hydrateArchiveRecovery = hydrateArchiveRecovery;
+__m_archive_importRecovery_js.importArchiveRecoveryData = importArchiveRecoveryData;
 __m_archive_importRecovery_js.beginArchiveRecovery = beginArchiveRecovery;
 __m_archive_importRecovery_js.requestArchiveRecoverySegment = requestArchiveRecoverySegment;
+__m_archive_importRecovery_js.clearArchiveRecoveryDurably = clearArchiveRecoveryDurably;
+__m_archive_importRecovery_js.resetArchiveRecoveryMemoryForTests = resetArchiveRecoveryMemoryForTests;
 __m_archive_importRecovery_js.archiveRecoverySummary = archiveRecoverySummary;
 __m_archive_importRecovery_js.acknowledgeArchiveRecoveryCommit = acknowledgeArchiveRecoveryCommit;
 __m_archive_importRecovery_js.archiveRecoveryInputs = archiveRecoveryInputs;
@@ -32367,6 +32677,7 @@ __m_archive_importRecovery_js.stageArchiveRecoveryCommit = stageArchiveRecoveryC
 __m_archive_importRecovery_js.finishArchiveProfileRecovery = finishArchiveProfileRecovery;
 __m_archive_importRecovery_js.releaseArchiveRecovery = releaseArchiveRecovery;
 __m_archive_importRecovery_js.clearArchiveRecovery = clearArchiveRecovery;
+__m_archive_importRecovery_js.discardArchiveRecovery = discardArchiveRecovery;
 __m_archive_importRecovery_js.ARCHIVE_RECOVERY_PAGE_NOTICE = ARCHIVE_RECOVERY_PAGE_NOTICE;
 __m_archive_importRecovery_js.ARCHIVE_RECOVERY_MAX_DRAFTS = ARCHIVE_RECOVERY_MAX_DRAFTS;
 }
@@ -34618,6 +34929,7 @@ function showChooser({ section = null } = {}) {
             ${ready ? `<div class="rmt-archive-meta">上次归档：${core_text.esc(formatArchiveTime(memory.updatedAt || memory.createdAt))}</div>` : ''}
           </div>
           <div class="rmt-current-archive-actions">
+            <button type="button" class="rmt-btn" data-rmt-archive-import-draft>导入整理草稿</button>
             <button class="rmt-btn rmt-archive-update" type="button" data-rmt-action="import-memory" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>${core_text.esc(requirePreflight ? '先扫描记忆 / 摘要' : (ready ? '增量更新当前窗口档案' : importLabel))}</button>
             ${ready ? `<button class="rmt-btn" type="button" data-rmt-action="full-rebuild-memory" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>完全重建档案</button><button class="rmt-btn" type="button" data-rmt-action="current-archive-delete" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>删除当前档案</button>` : ''}
           </div>
@@ -35049,6 +35361,25 @@ function handleOverlayClick(event) {
     if (timeStoryButton) return void time_stories_view.handleTimeStoryAction(timeStoryButton.dataset.rmtTimeStory, timeStoryButton.dataset.rmtTimeStoryId);
     const discardButton = event.target.closest?.('[data-rmt-recovery-discard]');
     if (discardButton) return void generation_client.discardSavedGeneration(discardButton.dataset.rmtRecoveryDiscard).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    if (event.target.closest?.('[data-rmt-archive-import-draft]')) {
+        if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !archive_library.requireWritableArchiveAction()) return;
+        const context = core_context.currentCharacterGuard();
+        const origin = core_context.captureTaskOrigin(context, archive_repository.getImportedMemory(context)?.archiveRevision || '');
+        const input = document.createElement('input'); input.type = 'file'; input.accept = '.json,application/json';
+        input.addEventListener('change', async () => {
+            try {
+                const file = input.files?.[0]; if (!file) return;
+                if (file.size > core_constants.MAX_CACHE_SOURCE_BYTES) throw core_text.safeUserError('整理草稿超过 12MB 安全范围，原数据未动。', 'RMT_RECOVERY_LIMIT');
+                const data = JSON.parse(await file.text());
+                if (!core_context.isCurrentTaskOrigin(origin)) throw new DOMException('Chat changed', 'AbortError');
+                if (!confirmExplicitAction('导入原聊天的整理草稿？', '只导入待校验草稿，不覆盖正式记忆，不发起模型请求。继续时仍会验证聊天、来源与原请求。', { destructive: false })) return;
+                const result = await archive_repository.importCurrentArchiveRecoveryFile(data, context);
+                globalThis.toastr?.success?.(`已导入 ${result.completed} 个成功分段；${result.durable ? '已保存到本机' : '仅本页保留，请勿刷新'}。点击继续才处理未完成部分。`, '心迹回廊');
+                showChooser();
+            } catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 未导入'); }
+        }, { once: true });
+        input.click(); return;
+    }
     if (event.target.closest?.('[data-rmt-archive-export-pending]')) {
         try {
             const value = archive_repository.exportCurrentArchiveImportProgress();
@@ -35062,16 +35393,18 @@ function handleOverlayClick(event) {
     if (event.target.closest?.('[data-rmt-archive-restart]')) {
         if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return;
         if (!confirmExplicitAction('按当前条件另起整理任务？',
-            '正式档案与旧 Mxxx 保持不变。当前未提交草稿暂停并仅在本页保留，可导出；已保存的批次检查点随下一次成功保存一并保留。新任务使用当前来源与配置，可能重新处理旧任务尚未正式入档的片段并消耗额度。零成功草稿也可这样重新开始。',
+            '正式档案与旧 Mxxx 保持不变。当前未提交草稿暂停并保留，可导出；是否已保存到本机请看草稿状态。已保存的批次检查点随下一次成功保存一并保留。新任务使用当前来源与配置，可能重新处理旧任务尚未正式入档的片段并消耗额度。零成功草稿也可这样重新开始。',
             { destructive: false })) return;
         return void archive_repository.restartCurrentArchiveImport().catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
     }
     if (event.target.closest?.('[data-rmt-archive-discard]')) {
         if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return;
-        if (!confirmExplicitAction('放弃本页整理草稿？', '仅清除当前聊天尚未提交的档案整理/简介草稿，不能恢复。不删除已保存的正式记忆、模块或图片，也不会自动发起新请求。', { destructive: true })) return;
+        if (!confirmExplicitAction('放弃整理草稿？', '仅清除当前聊天尚未提交的档案整理/简介草稿，不能恢复。不删除已保存的正式记忆、模块或图片，也不会自动发起新请求。', { destructive: true })) return;
         const context = core_context.currentCharacterGuard();
         try {
-            if (archive_repository.discardCurrentArchiveImportRecovery(context)) return showChooser();
+            return void Promise.resolve(archive_repository.discardCurrentArchiveImportRecovery(context)).then(cleared => {
+                if (cleared && core_context.getContext() === context) showChooser();
+            }).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 草稿未放弃'));
         } catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 草稿未放弃'); }
         return;
     }
@@ -37660,6 +37993,7 @@ __m_archive_qianqianjie_js.QQJ_BRIDGE = QQJ_BRIDGE;
 
 function __init_archive_repository_js() {
 // MODULE: archive/repository.js
+const advanced_generation = __m_core_advancedGeneration_js;
 const context_tags = __m_core_contextTags_js;
 const archive_batches = __m_archive_importBatches_js;
 const archive_requestBudget = __m_archive_requestBudget_js;
@@ -37688,6 +38022,7 @@ const ui_overlay = __m_ui_overlay_js;
 const ui_settingsPanel = __m_ui_settingsPanel_js;
 const archive_avatars = __m_ui_archiveAvatars_js;
 const runtimeState = __m_core_state_js.state;
+
 
 
 
@@ -39302,6 +39637,7 @@ function archiveRecoverySettingsIdentity(context) {
         'manualApiModel', 'manualApiKey', 'manualApiStreaming', 'chatReadRange', 'useActivatedWorldInfo', 'maxTokens', 'temperature', 'useCurrentChatExternalMemory', 'excludedContextTags',
         'bannedGeneratedPhrases', 'creativeSupplementEnabled', 'creativeSupplement'].map(key => [key, settings[key]]));
     Object.assign(generationSettings, context_tags.savedTagSelection(settings));
+    if (settings.advancedGenerationEnabled === true) generationSettings.advancedGeneration = advanced_generation.advancedFingerprint(settings);
     return JSON.stringify({ settings: generationSettings, worldInfoSelection: getMemoryWorldInfoSelection(context).books,
         profile: settings.apiConnectionMode === 'profile'
         ? core_settings.rawConnectionProfile(settings.connectionProfileId, context) : null });
@@ -39383,11 +39719,19 @@ function exportCurrentArchiveImportProgress(context = core_context.currentCharac
     const bank = getImportedMemory(context);
     const origin = core_context.captureTaskOrigin(context, bank?.archiveRevision || '');
     const pending = currentPendingArchiveSave(context);
-    return { format: 'hearttrace-unarchived-results-v1', exportedAt: new Date().toISOString(),
+    return { format: 'hearttrace-unarchived-results-v2', exportedAt: new Date().toISOString(),
         notice: '这是含私人档案内容的成果导出，不是脱敏诊断。待入档或待保存结果尚不是正式证据；导出不会推进进度或请求模型。',
         pendingSave: pending ? { memoryBank: structuredClone(pending.item.memoryBank), formallyCommitted: false } : null,
         progress: bank?.[archive_batches.IMPORT_PROGRESS_KEY] || null,
         paused: bank?.archiveImportPaused || [], pageDrafts: archive_importRecovery.exportArchiveRecovery(origin) };
+}
+
+async function importCurrentArchiveRecoveryFile(data, context = core_context.currentCharacterGuard()) {
+    if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) throw core_text.safeUserError('当前有请求进行中，未导入。', 'RMT_RECOVERY_BUSY');
+    const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
+    const result = await archive_importRecovery.importArchiveRecoveryData(origin, data);
+    if (!core_context.isCurrentTaskOrigin(origin)) throw new DOMException('Chat changed', 'AbortError');
+    return result;
 }
 
 async function restartCurrentArchiveImport() {
@@ -39425,7 +39769,7 @@ function getCurrentArchiveImportRecoverySummary(context = core_context.getContex
                 batchProgress: totals, capacityBlocked: capacity,
                 notice: detail + (capacity ? `档案已达容量边界；${totals.pendingMemories} 条已校验结果另存为待入档，不编号、不算完成。可导出保留，未处理来源未发送。`
                     : '本批完成后会停止；下一批需明确点击。已保存成果现在即可阅读。')
-                    + (summary && !summary.profileOnly ? ` ${archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE}` : '') };
+                    + (summary && !summary.profileOnly ? ` ${summary.notice}` : '') };
         }
         return summary;
     } catch { return null; }
@@ -39459,8 +39803,7 @@ function discardCurrentArchiveImportRecovery(context = core_context.currentChara
             }
         }
     }
-    archive_importRecovery.clearArchiveRecovery(core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || ''));
-    return true;
+    return archive_importRecovery.discardArchiveRecovery(core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || ''));
 }
 
 async function retryCurrentArchiveSave(context, taskTrace) {
@@ -39599,6 +39942,11 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace) {
     if (!existing) return { status: 'blocked' };
     const memory = structuredClone(existing);
     const origin = core_context.captureTaskOrigin(context, memory.archiveRevision);
+    await core_settings.prepareManualCredential(context);
+    await archive_importRecovery.hydrateArchiveRecovery(origin);
+    await archive_importRecovery.hydrateArchiveRecovery(origin, 'profile');
+    if (!core_context.isCurrentTaskOrigin(origin)) throw new DOMException('Chat changed', 'AbortError');
+    if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return { status: 'blocked' };
     const pendingImport = getCurrentArchiveImportRecoverySummary(context);
     const pendingProfile = getCurrentArchiveProfileRecoverySummary(context);
     if (pendingImport?.profileOnly && pendingImport.committedRevision !== memory.archiveRevision) {
@@ -39607,7 +39955,7 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace) {
     }
     if ((pendingProfile || pendingImport?.profileOnly) && !ui_overlay.confirmExplicitAction(
         pendingProfile?.canContinue ? '继续未写完的档案简介？' : '仅重试档案简介？',
-        `${pendingImport?.profileOnly ? '记忆分块已保存，这次只重新生成简介，不会重导聊天或重做成功记忆。' : '此前成功内容保留，只处理这段简介。'} 会额外使用文本生成额度。\n${archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE}`,
+        `${pendingImport?.profileOnly ? '记忆分块已保存，这次只重新生成简介，不会重导聊天或重做成功记忆。' : '此前成功内容保留，只处理这段简介。'} 会额外使用文本生成额度。\n${pendingProfile?.notice || pendingImport?.notice || archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE}`,
         { destructive: false })) return { status: 'cancelled' };
     const controller = new AbortController();
     let recoveryTicket = null;
@@ -39625,12 +39973,19 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace) {
         ui_overlay.setBusyUi(true, runtimeState.activeTaskLabel);
         await core_cache.ensureCacheHydrated(context);
         if (!stillCurrent()) throw new DOMException('Archive changed', 'AbortError');
-        const contextEnvelope = await core_cache.buildControlledContextEnvelope(context);
+        const profileInputs = archive_importRecovery.archiveRecoveryInputs(origin, 'profile');
+        const ownerIdentity = archiveSourceOwnerIdentity(context);
+        if (profileInputs?.ownerIdentity && profileInputs.ownerIdentity !== ownerIdentity) {
+            const error = core_text.safeUserError('角色卡或 Persona 与原简介任务不同；已保存成果与草稿保留。', 'RMT_RECOVERY_INPUT_CHANGED');
+            error.archiveInputCategory = 'character';
+            throw error;
+        }
+        const contextEnvelope = profileInputs?.ownerIdentity ? profileInputs.contextEnvelope : await core_cache.buildControlledContextEnvelope(context);
         if (!stillCurrent()) throw new DOMException('Archive changed', 'AbortError');
         const settings = core_settings.getPluginSettings(context);
         const settingsIdentity = archiveRecoverySettingsIdentity(context);
         recoveryTicket = await archive_importRecovery.beginArchiveRecovery({ origin, operation: 'profile',
-            sourceIdentity: memory.archiveRevision, sourceFragments: [JSON.stringify(memory.memories), contextEnvelope], settingsIdentity,
+            sourceIdentity: memory.archiveRevision, sourceFragments: [JSON.stringify(memory.memories), contextEnvelope], settingsIdentity, inputs: { contextEnvelope, ownerIdentity },
             continueApproved: !!pendingProfile, assertCurrent: () => stillCurrent() && archiveRecoverySettingsIdentity(context) === settingsIdentity });
         const profile = await archive_importRecovery.requestArchiveRecoverySegment(recoveryTicket, 'profile',
             archiveProfilePrompt(context, memory.memories), {
@@ -39651,10 +40006,12 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace) {
     } catch (error) {
         core_taskTrace.endTaskTrace(taskTrace, isArchiveCancellation(error) ? 'cancelled' : 'failed', error);
         globalThis.toastr?.warning?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊 · 简介未更新');
-        if (getCurrentArchiveProfileRecoverySummary(context)) globalThis.toastr?.info?.(archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '心迹回廊 · 简介草稿');
+        if (getCurrentArchiveProfileRecoverySummary(context)) globalThis.toastr?.info?.(getCurrentArchiveProfileRecoverySummary(context)?.notice || archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '心迹回廊 · 简介草稿');
         return { status: isArchiveCancellation(error) ? 'cancelled' : 'failed' };
     } finally {
         archive_importRecovery.releaseArchiveRecovery(recoveryTicket);
+        if (recoveryTicket) try { await archive_importRecovery.flushArchiveRecovery(origin, recoveryTicket.entry.operation); }
+        catch (error) { globalThis.toastr?.warning?.(core_text.safeErrorSummary(error), '心迹回廊 · 草稿保存'); }
         runtimeState.busy = false;
         if (runtimeState.activeTaskOrigin === origin) runtimeState.activeTaskOrigin = null;
         if (runtimeState.activeTaskAbortController === controller) runtimeState.activeTaskAbortController = null;
@@ -39885,7 +40242,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
                 && core_context.comparableChatId(core_context.getChatId(context)) === origin.chatId
                 && (getImportedMemory(context)?.archiveRevision || '') === origin.archiveRevision
                 && archiveRecoverySettingsIdentity(context) === settingsIdentity });
-        if (!automatic) globalThis.toastr?.info?.(archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '心迹回廊 · 档案整理');
+        if (!automatic) globalThis.toastr?.info?.(archive_importRecovery.archiveRecoverySummary(origin)?.notice || archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '心迹回廊 · 档案整理');
         const fresh = [];
         for (let i = 0; i < chunks.length; i += 1) {
             runtimeState.activeTaskLabel = `正在${actionLabel}新增聊天 · ${i + 1} / ${chunks.length}`;
@@ -40103,7 +40460,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         if (profilePending) globalThis.toastr?.info?.((core_context.isCurrentTaskOrigin(origin)
             ? '回忆已保存。可点“仅重试档案简介”，不会重新抽取成功记忆。'
             : '整理结果已保留，正在等待原聊天写回；写回后可仅重试档案简介。')
-            + archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '心迹回廊 · 简介待重试');
+            + (archive_importRecovery.archiveRecoverySummary(origin)?.notice || archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE), '心迹回廊 · 简介待重试');
         runtimeState.activeTaskBackgrounded = false;
         if (!automatic) { runtimeState.activeMode = null; runtimeState.activeSession = null; }
         if (core_context.isCurrentTaskOrigin(origin)) {
@@ -40128,11 +40485,13 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             runtimeState.activeTaskBackgrounded = false;
             if (!automatic && !wasBackgrounded) ui_overlay.showMemoryImportError(core_text.safeErrorSummary(error));
             globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
-            if (archive_importRecovery.archiveRecoverySummary(origin)) globalThis.toastr?.info?.(archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '心迹回廊 · 档案整理草稿');
+            if (archive_importRecovery.archiveRecoverySummary(origin)) globalThis.toastr?.info?.(archive_importRecovery.archiveRecoverySummary(origin)?.notice || archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '心迹回廊 · 档案整理草稿');
         }
         return { status: cancelled ? 'cancelled' : 'failed' };
     } finally {
         archive_importRecovery.releaseArchiveRecovery(recoveryTicket);
+        if (recoveryTicket) try { await archive_importRecovery.flushArchiveRecovery(origin, recoveryTicket.entry.operation); }
+        catch (error) { globalThis.toastr?.warning?.(core_text.safeErrorSummary(error), '心迹回廊 · 草稿保存'); }
         if (runtimeState.activeTaskAbortController === importController) runtimeState.activeTaskAbortController = null;
         if (runtimeState.activeTaskOrigin === origin) runtimeState.activeTaskOrigin = null;
         runtimeState.activeTaskLabel = '';
@@ -40196,6 +40555,28 @@ async function runArchiveImport(context, options = {}, taskTrace = null) {
     if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) {
         throw new Error('当前还有内容生成任务在进行，请等生成结束后再创建/更新档案。');
     }
+    // Reserve admission BEFORE asynchronous credential/draft hydration. A second
+    // click or another mode must not enter while the first action is preparing.
+    const admission = {};
+    runtimeState.archivePreparationToken = admission;
+    runtimeState.busy = true;
+    try { return await runArchiveImportPrepared(context, options, taskTrace, admission); }
+    finally {
+        if (runtimeState.archivePreparationToken === admission) {
+            runtimeState.archivePreparationToken = null; runtimeState.busy = false;
+            ui_overlay.setBusyUi(false);
+        }
+    }
+}
+async function runArchiveImportPrepared(context, options, taskTrace, admission) {
+    const releasePreparation = () => {
+        if (runtimeState.archivePreparationToken === admission) {
+            runtimeState.archivePreparationToken = null; runtimeState.busy = false;
+        }
+    };
+    const initialOrigin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
+    await core_settings.prepareManualCredential(context);
+    if (!core_context.isCurrentTaskOrigin(initialOrigin)) throw new DOMException('Chat changed', 'AbortError');
     let existing = getImportedMemory(context);
     if (Object.prototype.hasOwnProperty.call(context.chatMetadata || {}, core_constants.MEMORY_KEY) && !existing) {
         const mismatch = mismatchedArchiveInfo(context);
@@ -40221,6 +40602,10 @@ async function runArchiveImport(context, options = {}, taskTrace = null) {
                 : '当前聊天中的档案标识或格式不匹配，已停止生成并保留原数据。', 'RMT_ARCHIVE_SOURCE_MISMATCH');
         }
     }
+    const hydrationOrigin = core_context.captureTaskOrigin(context, existing?.archiveRevision || '');
+    await archive_importRecovery.hydrateArchiveRecovery(hydrationOrigin);
+    if (!core_context.isCurrentTaskOrigin(hydrationOrigin)) throw new DOMException('Chat changed', 'AbortError');
+    if (runtimeState.archivePreparationToken !== admission || core_requestCoordinator.hasGenerationTasks()) return { status: 'blocked' };
     const pending = getCurrentArchiveImportRecoverySummary(context);
     if (pending && !options.restartImport) {
         if (options.automatic === true) return { status: 'blocked' };
@@ -40228,12 +40613,13 @@ async function runArchiveImport(context, options = {}, taskTrace = null) {
             globalThis.toastr?.warning?.(pending.notice, '心迹回廊 · 容量边界');
             return { status: 'blocked' };
         }
-        if (pending.profileOnly) return rewriteCurrentArchiveVerdict();
+        if (pending.profileOnly) { releasePreparation(); return rewriteCurrentArchiveVerdict(); }
         if (pending.awaitingCommit) {
+            releasePreparation();
             return retryCurrentArchiveSave(context, taskTrace);
         }
         if (!ui_overlay.confirmExplicitAction(pending.canContinue ? '继续档案整理？' : '重试未完成分块？',
-            pending.batchProgress ? pending.notice : `本页已保留 ${pending.completed} 个通过校验的分块；只处理未完成部分，不重做成功项。继续会使用文本生成额度。\n${archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE}`,
+            pending.batchProgress ? pending.notice : `已保留 ${pending.completed} 个通过校验的分块；只处理未完成部分，不重做成功项。继续会使用文本生成额度。\n${pending.notice}`,
             { destructive: false })) return { status: 'cancelled' };
         options = { ...options, fullRebuild: pending.fullRebuild, continueRecovery: true };
     }
@@ -40246,7 +40632,7 @@ async function runArchiveImport(context, options = {}, taskTrace = null) {
             archivePresent: !!existing,
         },
     };
-    const token = {};
+    const token = admission;
     runtimeState.archivePreparationToken = token;
     runtimeState.busy = true;
     runtimeState.activeTaskTrace = taskTrace;
@@ -40287,6 +40673,7 @@ __m_archive_repository_js.showMemoryWorldInfoPicker = showMemoryWorldInfoPicker;
 __m_archive_repository_js.expandMemoryWorldInfoBook = expandMemoryWorldInfoBook;
 __m_archive_repository_js.flushDeferredCommitsForCurrentChat = flushDeferredCommitsForCurrentChat;
 __m_archive_repository_js.collectCurrentChatExternalMemory = collectCurrentChatExternalMemory;
+__m_archive_repository_js.importCurrentArchiveRecoveryFile = importCurrentArchiveRecoveryFile;
 __m_archive_repository_js.restartCurrentArchiveImport = restartCurrentArchiveImport;
 __m_archive_repository_js.generateArchiveImportSegment = generateArchiveImportSegment;
 __m_archive_repository_js.rewriteCurrentArchiveVerdict = rewriteCurrentArchiveVerdict;
@@ -43072,8 +43459,481 @@ __m_archive_groups_js.touchAvatarVisit = touchAvatarVisit;
 __m_archive_groups_js.upsertArchiveIndex = upsertArchiveIndex;
 }
 
+function __init_core_context_js() {
+// MODULE: core/context.js
+const core_digest = __m_core_digest_js;
+const archive_groups = __m_archive_groups_js;
+const core_constants = __m_core_constants_js;
+const core_evidence = __m_core_evidence_js;
+const core_text = __m_core_text_js;
+const core_contextTags = __m_core_contextTags_js;
+const chat_read_range = __m_core_chatReadRange_js;
+const runtimeState = __m_core_state_js.state;
+// Heartbeat Memories r35 modular runtime.
+// Extracted from r34 without changing archive/cache storage contracts.
+
+
+
+
+
+function getContext() {
+    const context = globalThis.SillyTavern?.getContext?.();
+    if (!context) throw new Error('未检测到 SillyTavern 扩展上下文。');
+    return context;
+}
+
+function currentCharacterGuard() {
+    const context = getContext();
+    if (context.groupId) {
+        throw new Error('“心迹回廊”当前只支持单角色聊天，请打开一个角色对话后再使用。');
+    }
+    if (context.characterId === undefined || context.characterId === null) {
+        throw new Error('请先打开一个角色聊天。');
+    }
+    return context;
+}
+
+function getChatId(context = getContext()) {
+    try {
+        const id = context.getCurrentChatId?.() ?? context.chatId;
+        return core_text.normalizeText(id, 240);
+    } catch {
+        return core_text.normalizeText(context.chatId, 240);
+    }
+}
+
+function yieldToUi() {
+    return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+function runtimeLifecycleStillCurrent(lifecycleEpoch) {
+    return Number(lifecycleEpoch) === runtimeState.runtimeLifecycleEpoch;
+}
+
+function assertRuntimeLifecycleCurrent(lifecycleEpoch) {
+    if (!runtimeLifecycleStillCurrent(lifecycleEpoch)) {
+        throw new DOMException('Runtime destroyed', 'AbortError');
+    }
+    return true;
+}
+
+// ST/TT hide normal dialogue by toggling is_system, not by removing a floor.
+// Recover only explicitly attributed dialogue, never system/tool messages or guessed names.
+function isArchiveDialogueMessage(message, context) {
+    if (!message?.is_system) return true;
+    if (typeof message.is_user !== 'boolean' || ['system', 'tool', 'developer'].includes(message.role)
+        || message.extra?.type || message.extra?.uses_system_ui || message.extra?.tool_invocations) return false;
+    const name = core_text.normalizeText(message.name, 120);
+    const expected = core_text.normalizeText(message.is_user ? context?.name1 : context?.name2, 120);
+    return !!name && !!expected && name === expected;
+}
+
+async function buildChatSnapshot(context = currentCharacterGuard(), options = {}) {
+    const rawChat = Array.isArray(context.chat) ? context.chat : [];
+    const tagPolicy = core_contextTags.tagPolicyForContext(context);
+    const usable = [];
+    const fullSignatures = [];
+    const prefixCount = Math.max(0, Math.floor(Number(options.prefixCount) || 0));
+    let fingerprint = 2166136261;
+    let prefixFingerprint = 2166136261;
+    const mix = (state, value) => {
+        let next = state >>> 0;
+        for (const ch of String(value ?? '')) {
+            next ^= ch.codePointAt(0);
+            next = Math.imul(next, 16777619);
+        }
+        return next >>> 0;
+    };
+    const chatId = comparableChatId(options.expectedChatId) || comparableChatId(getChatId(context));
+    const assertStillCurrent = () => {
+        if (typeof options.stillCurrent === 'function' && options.stillCurrent() === false) {
+            throw new DOMException('Chat changed', 'AbortError');
+        }
+    };
+    assertStillCurrent();
+    fingerprint = mix(fingerprint, chatId);
+    prefixFingerprint = mix(prefixFingerprint, chatId);
+    for (let index = 0; index < rawChat.length; index += 1) {
+        const message = rawChat[index];
+        const text = core_text.normalizeText(message?.mes, 8000);
+        if (text && isArchiveDialogueMessage(message, context)) {
+            const isUser = message?.is_user === true;
+            const item = {
+                index: index + 1,
+                role: isUser ? 'user' : 'char',
+                name: core_text.normalizeText(message?.name || (isUser ? context.name1 : context.name2), 120),
+                date: core_text.normalizeText(message?.send_date || message?.date || '', 80),
+                text: options.completeSource === true ? core_text.normalizeText(message?.mes, Number.MAX_SAFE_INTEGER) : text,
+            };
+            usable.push(item);
+            const signature = `${item.index}|${item.role}|${item.date}|${text}`;
+            if (options.completeSource === true) fullSignatures.push(`${item.index}|${item.role}|${item.date}|${item.text}`);
+            fingerprint = mix(fingerprint, signature);
+            if (usable.length <= prefixCount) prefixFingerprint = mix(prefixFingerprint, signature);
+        }
+        if (index && index % 60 === 0) {
+            await yieldToUi();
+            assertStillCurrent();
+        }
+    }
+    const totalMessages = usable.length;
+    fingerprint = mix(fingerprint, String(totalMessages));
+    if (prefixCount > 0) prefixFingerprint = mix(prefixFingerprint, String(Math.min(prefixCount, totalMessages)));
+
+    const capMessages = source => {
+        if (options.completeSource === true) return { selected: source,
+            selectedChars: source.reduce((sum, item) => sum + item.text.length + item.name.length + item.date.length + 32, 0), truncated: false };
+        const cappedByCount = source.length > core_constants.MAX_IMPORT_MESSAGES ? core_evidence.evenlySample(source, core_constants.MAX_IMPORT_MESSAGES) : source;
+        let selected = cappedByCount;
+        let selectedChars = selected.reduce((sum, item) => sum + item.text.length + item.name.length + item.date.length + 32, 0);
+        if (selectedChars > core_constants.MAX_IMPORT_TOTAL_CHARS) {
+            const ratio = core_constants.MAX_IMPORT_TOTAL_CHARS / Math.max(1, selectedChars);
+            const limit = Math.max(64, Math.floor(selected.length * ratio));
+            selected = core_evidence.evenlySample(selected, limit);
+            selectedChars = selected.reduce((sum, item) => sum + item.text.length + item.name.length + item.date.length + 32, 0);
+        }
+        return { selected, selectedChars, truncated: source.length > selected.length };
+    };
+
+    // Selection controls model input only: keep the full canonical history and prefix
+    // fingerprints above intact for stale-write protection and existing archive baselines.
+    const selectedFloors = options.readRange ? new Set(chat_read_range.selectChatReadRange(context, options.readRange).map(row => row.index)) : null;
+    const selectedUsable = selectedFloors ? usable.filter(item => selectedFloors.has(item.index)) : usable;
+    const full = capMessages(selectedUsable);
+    const incrementalRaw = prefixCount > 0 && totalMessages >= prefixCount ? usable.slice(prefixCount) : usable;
+    const incremental = capMessages(selectedFloors ? incrementalRaw.filter(item => selectedFloors.has(item.index)) : incrementalRaw);
+    assertStillCurrent();
+    return {
+        chatId,
+        ...(options.completeSource === true ? {
+            fullFingerprint: core_digest.sha256Bytes(new TextEncoder().encode(JSON.stringify([chatId, fullSignatures]))),
+            fullPrefixFingerprint: core_digest.sha256Bytes(new TextEncoder().encode(JSON.stringify([chatId, fullSignatures.slice(0, prefixCount)]))),
+        } : {}),
+        totalMessages,
+        usedMessages: full.selected.length,
+        usedChars: full.selectedChars,
+        truncated: full.truncated,
+        coverageMode: options.readRange ? 'selected-floors' : full.truncated ? 'evenly-sampled-full-window' : 'full-window',
+        readRange: options.readRange ? chat_read_range.normalizeChatReadRange(options.readRange) : null,
+        messages: full.selected.map(item => ({ ...item, text: core_contextTags.filterContextTags(item.text, tagPolicy) })),
+        fingerprint: String(fingerprint >>> 0),
+        prefixCount,
+        prefixFingerprint: prefixCount > 0 && totalMessages >= prefixCount ? String(prefixFingerprint >>> 0) : '',
+        incrementalMessages: incremental.selected.map(item => ({ ...item, text: core_contextTags.filterContextTags(item.text, tagPolicy) })),
+        incrementalUsedMessages: incremental.selected.length,
+        incrementalUsedChars: incremental.selectedChars,
+        incrementalTruncated: incremental.truncated,
+    };
+}
+
+// Used only while a batch is explicitly committing (including its deferred save),
+// never by ordinary startup or message listeners. Mirrors the full snapshot identity.
+function completeArchiveChatFingerprint(context = currentCharacterGuard()) {
+    const signatures = [];
+    const chat = Array.isArray(context.chat) ? context.chat : [];
+    for (let index = 0; index < chat.length; index++) {
+        const message = chat[index];
+        const value = core_text.normalizeText(message?.mes, Number.MAX_SAFE_INTEGER);
+        if (value && isArchiveDialogueMessage(message, context)) {
+            const role = message?.is_user === true ? 'user' : 'char';
+            const date = core_text.normalizeText(message?.send_date || message?.date || '', 80);
+            signatures.push(`${index + 1}|${role}|${date}|${value}`);
+        }
+    }
+    return core_digest.sha256Bytes(new TextEncoder().encode(JSON.stringify([comparableChatId(getChatId(context)), signatures])));
+}
+
+function comparableChatId(value) {
+    return core_text.normalizeText(value, 260).replace(/\.jsonl$/i, '').trim();
+}
+
+function contextCharacterAvatar(context = getContext(), preferredName = '') {
+    const characters = Array.isArray(context?.characters) ? context.characters : [];
+    const id = context?.characterId;
+    const requestedName = core_text.normalizeText(preferredName, 120);
+    const currentName = core_text.normalizeText(context?.name2, 120);
+    const preferred = requestedName || currentName;
+    const direct = id !== undefined && id !== null ? characters[id] : null;
+    const candidates = [];
+    if (requestedName) {
+        const byName = characters.find(item => core_text.normalizeText(item?.name || item?.data?.name, 120) === requestedName);
+        if (byName) candidates.push(byName);
+        const directName = core_text.normalizeText(direct?.name || direct?.data?.name, 120);
+        if (direct && directName === requestedName && direct !== byName) candidates.push(direct);
+    } else {
+        if (direct) candidates.push(direct);
+        if (preferred) {
+            const byName = characters.find(item => core_text.normalizeText(item?.name || item?.data?.name, 120) === preferred);
+            if (byName && byName !== direct) candidates.push(byName);
+        }
+    }
+    for (const item of candidates) {
+        const avatar = core_text.normalizeText(item?.avatar || item?.data?.avatar, 300);
+        if (avatar) return avatar;
+    }
+    return '';
+}
+
+function archiveEntryAvatarName(entry, context = getContext()) {
+    const stored = core_text.normalizeText(entry?.avatar, 300);
+    if (stored) return stored;
+    const key = core_text.normalizeText(entry?.characterKey, 300);
+    if (key && !key.startsWith('character:')) return key;
+    return contextCharacterAvatar(context, core_text.normalizeText(entry?.characterName, 120));
+}
+
+function archiveCanonicalCharacterKey(entry, context = getContext()) {
+    return archiveEntryAvatarName(entry, context) || core_text.normalizeText(entry?.characterKey, 300);
+}
+
+function stableArchiveHash(value) {
+    const text = String(value ?? '');
+    let hash = 2166136261;
+    for (let i = 0; i < text.length; i += 1) {
+        hash ^= text.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+}
+
+function archiveStoredAvatar(entry) {
+    const avatar = core_text.normalizeText(entry?.avatar, 300);
+    if (avatar) return avatar;
+    const key = core_text.normalizeText(entry?.characterKey, 300);
+    return key && !key.startsWith('character:') ? key : '';
+}
+
+function archiveSourceIdentityKey(entry) {
+    const fingerprint = core_text.normalizeText(entry?.characterFingerprint, 160);
+    const characterIndexHint = Number.isInteger(Number(entry?.characterIndexHint)) ? Number(entry.characterIndexHint) : -1;
+    if (fingerprint) return `fingerprint:${fingerprint}${characterIndexHint >= 0 ? `\u001fcharacter:${characterIndexHint}` : ''}`;
+    const avatar = archiveStoredAvatar(entry);
+    const name = core_text.normalizeText(entry?.characterName, 120).toLocaleLowerCase();
+    const fallback = core_text.normalizeText(entry?.characterKey, 300);
+    return `${avatar || fallback}\u001f${name}`;
+}
+
+function archiveAutoGroupId(entry) {
+    return `auto:${stableArchiveHash(archiveSourceIdentityKey(entry))}`;
+}
+
+function archiveLegacyScanKey(entry) {
+    const avatar = archiveStoredAvatar(entry) || core_text.normalizeText(entry?.characterKey, 300);
+    const name = core_text.normalizeText(entry?.characterName, 120).toLocaleLowerCase();
+    return `${avatar}\u001f${name}\u001f${comparableChatId(entry?.chatId)}`;
+}
+
+function archiveIndexEntryId(entry) {
+    const existing = core_text.normalizeText(entry?.entryId, 120);
+    if (existing) return existing;
+    return `AE:${stableArchiveHash(`${archiveSourceIdentityKey(entry)}\u001f${comparableChatId(entry?.chatId)}`)}`;
+}
+
+function archiveEntryMatchesContextCharacter(entry, context = getContext()) {
+    if (!entry || !context) return false;
+    const entryName = core_text.normalizeText(entry?.characterName, 120);
+    const descriptor = archive_groups.characterDescriptor(context, Number(context?.characterId));
+    const currentName = core_text.normalizeText(context?.name2 || descriptor?.name, 120);
+    const entryAvatar = archiveStoredAvatar(entry);
+    const currentAvatar = core_text.normalizeText(context?.characters?.[context?.characterId]?.avatar || context?.characters?.[context?.characterId]?.data?.avatar, 300);
+    if (entryAvatar && currentAvatar && entryAvatar !== currentAvatar) return false;
+    const entryHint = Number.isInteger(Number(entry?.characterIndexHint)) ? Number(entry.characterIndexHint) : -1;
+    const currentHint = Number.isInteger(Number(context?.characterId)) ? Number(context.characterId) : -1;
+    // A character slot is only a locator, never a complete identity proof. SillyTavern can
+    // reuse the same slot (and even the same avatar/chat filename) for a different card.
+    if (entryHint >= 0 && currentHint >= 0 && entryHint !== currentHint) return false;
+    if (entryName && entryName !== '未命名角色' && currentName && entryName !== currentName) return false;
+    const entryFingerprint = core_text.normalizeText(entry?.characterFingerprint, 160);
+    const currentFingerprint = core_text.normalizeText(descriptor?.fingerprint, 160);
+    if (entryFingerprint && currentFingerprint) {
+        if (entryFingerprint !== currentFingerprint) return false;
+        const sameFingerprint = (Array.isArray(context?.characters) ? context.characters : [])
+            .map((_, index) => archive_groups.characterDescriptor(context, index))
+            .filter(item => item?.fingerprint === entryFingerprint);
+        if (sameFingerprint.length !== 1) return false;
+    }
+    if (entryName || entryAvatar || entryHint >= 0) return true;
+    return core_text.normalizeText(entry?.characterKey, 300) === `character:${String(context?.characterId ?? '')}`;
+}
+
+function currentCharacterKey(context = currentCharacterGuard()) {
+    const avatar = core_text.normalizeText(context.characters?.[context.characterId]?.avatar || context.characters?.[context.characterId]?.data?.avatar, 300);
+    return avatar || `character:${String(context.characterId ?? '')}`;
+}
+
+function currentCharacterAvatar(context = currentCharacterGuard()) {
+    return core_text.normalizeText(context.characters?.[context.characterId]?.avatar || context.characters?.[context.characterId]?.data?.avatar, 300);
+}
+
+function currentCharacterRuntimeKey(context = currentCharacterGuard()) {
+    const descriptor = archive_groups.characterDescriptor(context, Number(context.characterId));
+    const identity = descriptor?.fingerprint || `${currentCharacterKey(context)}\u001f${core_text.normalizeText(context.name2, 120)}`;
+    return `${identity}\u001fcharacter:${String(context.characterId ?? '')}`;
+}
+
+function chatScopeKey(context = currentCharacterGuard(), chatId = getChatId(context)) {
+    return `${currentCharacterRuntimeKey(context)}|${comparableChatId(chatId)}`;
+}
+
+function captureTaskOrigin(context = currentCharacterGuard(), archiveRevision = '') {
+    const rawCache = context?.__rmtArchiveTargetEntryId
+        ? context?.chatMetadata?.[core_constants.CACHE_KEY]
+        : runtimeState.runtimeSessionCache.get(chatScopeKey(context)) || context?.chatMetadata?.[core_constants.CACHE_KEY];
+    const rawFences = rawCache && typeof rawCache === 'object' && rawCache[core_constants.MODE_WRITE_FENCES_CACHE_KEY]
+        && typeof rawCache[core_constants.MODE_WRITE_FENCES_CACHE_KEY] === 'object'
+        ? rawCache[core_constants.MODE_WRITE_FENCES_CACHE_KEY]
+        : {};
+    const modeWriteFences = Object.create(null);
+    for (const mode of Object.values(core_constants.MODE)) {
+        const fence = rawFences[mode];
+        const generation = Math.max(0, Math.floor(Number(fence?.generation) || 0));
+        const token = core_text.normalizeText(fence?.token, 160);
+        if (generation > 0 && token) modeWriteFences[mode] = { generation, token };
+    }
+    return {
+        startedAt: Date.now(),
+        lifecycleEpoch: runtimeState.runtimeLifecycleEpoch,
+        characterKey: currentCharacterRuntimeKey(context),
+        characterAvatar: currentCharacterAvatar(context),
+        characterId: String(context.characterId ?? ''),
+        characterName: core_text.normalizeText(context.name2, 120),
+        chatId: comparableChatId(getChatId(context)),
+        archiveRevision: core_text.normalizeText(archiveRevision, 240),
+        archivePresent: !!core_text.normalizeText(archiveRevision, 240),
+        modeWriteFences,
+    };
+}
+
+function deferredCommitOriginMatchesContext(origin, context = getContext()) {
+    try {
+        if (!origin || comparableChatId(getChatId(context)) !== comparableChatId(origin.chatId)) return false;
+        const originCharacterId = core_text.normalizeText(origin.characterId, 40);
+        if (originCharacterId && originCharacterId !== String(context?.characterId ?? '')) return false;
+        if (currentCharacterRuntimeKey(context) === origin.characterKey) return true;
+        const originAvatar = core_text.normalizeText(origin.characterAvatar, 300);
+        const currentAvatar = currentCharacterAvatar(context);
+        if (!originAvatar || originAvatar !== currentAvatar) return false;
+        // Modern deferred rows capture the live SillyTavern card slot. Once that exact
+        // slot and its avatar still agree, ordinary edits/renames are safe even when a
+        // second card intentionally uses the same avatar. A different slot already
+        // failed above, so cloned cards can never inherit each other's completed work.
+        if (originCharacterId) {
+            const expectedRevision = core_text.normalizeText(origin.archiveRevision, 240);
+            const liveMemory = context?.chatMetadata?.[core_constants.MEMORY_KEY];
+            const liveCache = runtimeState.runtimeSessionCache.get(chatScopeKey(context))
+                || context?.chatMetadata?.[core_constants.CACHE_KEY];
+            const liveRevision = core_text.normalizeText(liveMemory?.archiveRevision || liveCache?.archiveRevision, 240);
+            return !!expectedRevision
+                && liveRevision === expectedRevision
+                && comparableChatId(liveMemory?.chatId || liveCache?.chatId) === comparableChatId(origin.chatId);
+        }
+        const matches = (Array.isArray(context.characters) ? context.characters : []).filter((character, index) => {
+            const avatar = core_text.normalizeText(character?.avatar || character?.data?.avatar, 300);
+            return avatar === originAvatar && characterDescriptorExists(context, index);
+        });
+        return matches.length === 1;
+    } catch {
+        return false;
+    }
+}
+
+function characterDescriptorExists(context, index) {
+    return !!archive_groups.characterDescriptor(context, Number(index));
+}
+
+function isCurrentTaskOrigin(origin, context = getContext()) {
+    try {
+        return !!origin
+            && Number(origin.lifecycleEpoch) === runtimeState.runtimeLifecycleEpoch
+            && currentCharacterRuntimeKey(context) === origin.characterKey
+            && comparableChatId(getChatId(context)) === origin.chatId;
+    } catch {
+        return false;
+    }
+}
+
+__m_core_context_js.buildChatSnapshot = buildChatSnapshot;
+__m_core_context_js.getContext = getContext;
+__m_core_context_js.currentCharacterGuard = currentCharacterGuard;
+__m_core_context_js.getChatId = getChatId;
+__m_core_context_js.yieldToUi = yieldToUi;
+__m_core_context_js.runtimeLifecycleStillCurrent = runtimeLifecycleStillCurrent;
+__m_core_context_js.assertRuntimeLifecycleCurrent = assertRuntimeLifecycleCurrent;
+__m_core_context_js.isArchiveDialogueMessage = isArchiveDialogueMessage;
+__m_core_context_js.completeArchiveChatFingerprint = completeArchiveChatFingerprint;
+__m_core_context_js.comparableChatId = comparableChatId;
+__m_core_context_js.contextCharacterAvatar = contextCharacterAvatar;
+__m_core_context_js.archiveEntryAvatarName = archiveEntryAvatarName;
+__m_core_context_js.archiveCanonicalCharacterKey = archiveCanonicalCharacterKey;
+__m_core_context_js.stableArchiveHash = stableArchiveHash;
+__m_core_context_js.archiveStoredAvatar = archiveStoredAvatar;
+__m_core_context_js.archiveSourceIdentityKey = archiveSourceIdentityKey;
+__m_core_context_js.archiveAutoGroupId = archiveAutoGroupId;
+__m_core_context_js.archiveLegacyScanKey = archiveLegacyScanKey;
+__m_core_context_js.archiveIndexEntryId = archiveIndexEntryId;
+__m_core_context_js.archiveEntryMatchesContextCharacter = archiveEntryMatchesContextCharacter;
+__m_core_context_js.currentCharacterKey = currentCharacterKey;
+__m_core_context_js.currentCharacterAvatar = currentCharacterAvatar;
+__m_core_context_js.currentCharacterRuntimeKey = currentCharacterRuntimeKey;
+__m_core_context_js.chatScopeKey = chatScopeKey;
+__m_core_context_js.captureTaskOrigin = captureTaskOrigin;
+__m_core_context_js.deferredCommitOriginMatchesContext = deferredCommitOriginMatchesContext;
+__m_core_context_js.isCurrentTaskOrigin = isCurrentTaskOrigin;
+}
+
+function __init_core_recoverySourcePolicy_js() {
+// MODULE: core/recoverySourcePolicy.js
+const contextApi = __m_core_context_js;
+const settingsApi = __m_core_settings_js;
+const repository = __m_archive_repository_js;
+const recovery = __m_generation_recovery_js;
+const text = __m_core_text_js;
+
+
+
+
+
+function recoverySourceValues(context) {
+    const settings = settingsApi.getPluginSettings(context);
+    return {
+        character: JSON.stringify(context.characters?.[context.characterId]?.data || context.characters?.[context.characterId] || null),
+        persona: JSON.stringify([context.name1, context.userAvatar || context.personaAvatar || context.user_avatar || globalThis.user_avatar || '', context.powerUserSettings?.persona_description || '']),
+        selection: JSON.stringify([repository.getMemoryWorldInfoSelection(context).books, settings.useActivatedWorldInfo,
+            settings.useCurrentChatExternalMemory, settings.excludedContextTags, settings.contextTagMode || '', settings.retainedContextTags || []]),
+    };
+}
+async function recoverySourcePolicy(context) {
+    const values = recoverySourceValues(context);
+    return Object.fromEntries(await Promise.all(Object.entries(values).map(async ([key,value]) => [key, await recovery.generationRecoveryDigest(value)])));
+}
+async function assertRecoverySourcePolicy(journal, context, origin = null) {
+    if (!journal || !recovery.generationRecoverySummary(journal)) return;
+    const current = origin || contextApi.captureTaskOrigin(context, journal.identity.archiveRevision);
+    const pairs = [['characterKey','角色身份'], ['characterId','角色身份'], ['characterAvatar','角色身份'], ['chatId','聊天身份'], ['archiveRevision','档案版本']];
+    for (const [key,label] of pairs) if ((journal.identity[key] || '') !== (current[key] || '')) {
+        const error = text.safeUserError(`${label}与原任务不同；成功内容及草稿保留，未发起新请求。请回到原任务或明确另建任务。`, 'RMT_RECOVERY_SOURCE_CHANGED');
+        error.archiveInputCategory = key === 'chatId' ? 'chat' : key === 'archiveRevision' ? 'archive' : 'character';
+        throw error;
+    }
+    if (!journal.sourcePolicy) return;
+    const actual = await recoverySourcePolicy(context);
+    for (const [key,label] of [['character','角色卡'], ['persona','Persona'], ['selection','来源选择或标签设置']]) {
+        if (journal.sourcePolicy[key] !== actual[key]) {
+            const error = text.safeUserError(`${label}与原任务不同；成功内容及草稿保留，未发起新请求。请恢复原设置，或明确另建任务。`, 'RMT_RECOVERY_SOURCE_CHANGED');
+            error.archiveInputCategory = key;
+            throw error;
+        }
+    }
+}
+
+__m_core_recoverySourcePolicy_js.recoverySourcePolicy = recoverySourcePolicy;
+__m_core_recoverySourcePolicy_js.assertRecoverySourcePolicy = assertRecoverySourcePolicy;
+__m_core_recoverySourcePolicy_js.recoverySourceValues = recoverySourceValues;
+}
+
 function __init_core_cache_js() {
 // MODULE: core/cache.js
+const recovery_source = __m_core_recoverySourcePolicy_js;
 const archive_groups = __m_archive_groups_js;
 const archive_backupStore = __m_archive_backupStore_js;
 const archive_repository = __m_archive_repository_js;
@@ -43096,6 +43956,7 @@ const modes_timeStories = __m_modes_timeStories_js;
 const time_stories = __m_core_timeStoriesContract_js;
 const generation_recovery = __m_generation_recovery_js;
 const runtimeState = __m_core_state_js.state;
+
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 
@@ -44378,6 +45239,10 @@ async function claimLiveModeGeneration(mode, context = core_context.currentChara
     const expectedRevision = core_text.normalizeText(bank.archiveRevision, 240);
     const expectedRuntimeKey = core_context.currentCharacterRuntimeKey(context);
     try { await ensureCacheHydrated(context); } catch {}
+    // Check the raw retained journal before a changed character makes the normal
+    // identity-filtered loader hide it and before advancing any write fence.
+    await recovery_source.assertRecoverySourcePolicy(getCache(context)?.[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode],
+        context, core_context.captureTaskOrigin(context, bank.archiveRevision));
     const scope = cacheScopeFromContext(context);
     const entry = archiveBackupEntryForContext(context, bank);
     const stillCurrent = () => {
@@ -45271,22 +46136,23 @@ __m_heartbeatMemories_js.initMemoryTheater = initMemoryTheater;
 __m_heartbeatMemories_js.destroyMemoryTheater = destroyMemoryTheater;
 }
 
+__init_core_digest_js();
+__init_core_localRecoveryStore_js();
+__init_core_manualCredentialStore_js();
+__init_core_backupDiagnostics_js();
+__init_core_text_js();
+__init_core_advancedGeneration_js();
 __init_core_constants_js();
 __init_core_outputBudget_js();
-__init_core_digest_js();
-__init_core_evidence_js();
-__init_core_contextTags_js();
-__init_core_chatReadRange_js();
-__init_core_backupDiagnostics_js();
-__init_core_deferredCommitStore_js();
-__init_core_state_js();
-__init_core_context_js();
-__init_core_text_js();
 __init_core_cgPromptFormat_js();
 __init_core_independentApi_js();
 __init_core_theme_js();
+__init_core_contextTags_js();
 __init_core_autoUpdatePolicy_js();
 __init_core_creativeSupplement_js();
+__init_core_chatReadRange_js();
+__init_core_deferredCommitStore_js();
+__init_core_state_js();
 __init_core_settings_js();
 __init_ui_cgFormatControl_js();
 __init_archive_importBatches_js();
@@ -45296,6 +46162,7 @@ __init_core_castLooks_js();
 __init_generation_cgAppearance_js();
 __init_core_cgImagePatch_js();
 __init_core_archiveCover_js();
+__init_core_evidence_js();
 __init_core_incremental_js();
 __init_ui_workspaceState_js();
 __init_ui_heartReaderState_js();
@@ -45342,6 +46209,7 @@ __init_modes_ending_js();
 __init_modes_heart_js();
 __init_generation_prompts_js();
 __init_modes_achievements_js();
+__init_ui_advancedGenerationUi_js();
 __init_archive_sourceReadGuard_js();
 __init_ui_archiveAvatars_js();
 __init_ui_floatingAvatarButton_js();
@@ -45389,6 +46257,8 @@ __init_ui_workspace_js();
 __init_archive_backupStore_js();
 __init_archive_library_js();
 __init_archive_groups_js();
+__init_core_context_js();
+__init_core_recoverySourcePolicy_js();
 __init_core_cache_js();
 __init_heartbeatMemories_js();
 

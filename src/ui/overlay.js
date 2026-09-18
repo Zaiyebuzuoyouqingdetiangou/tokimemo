@@ -586,6 +586,7 @@ export function showChooser({ section = null } = {}) {
             ${ready ? `<div class="rmt-archive-meta">上次归档：${core_text.esc(formatArchiveTime(memory.updatedAt || memory.createdAt))}</div>` : ''}
           </div>
           <div class="rmt-current-archive-actions">
+            <button type="button" class="rmt-btn" data-rmt-archive-import-draft>导入整理草稿</button>
             <button class="rmt-btn rmt-archive-update" type="button" data-rmt-action="import-memory" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>${core_text.esc(requirePreflight ? '先扫描记忆 / 摘要' : (ready ? '增量更新当前窗口档案' : importLabel))}</button>
             ${ready ? `<button class="rmt-btn" type="button" data-rmt-action="full-rebuild-memory" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || requirePreflight ? 'disabled' : ''}>完全重建档案</button><button class="rmt-btn" type="button" data-rmt-action="current-archive-delete" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>删除当前档案</button>` : ''}
           </div>
@@ -1017,6 +1018,25 @@ export function handleOverlayClick(event) {
     if (timeStoryButton) return void time_stories_view.handleTimeStoryAction(timeStoryButton.dataset.rmtTimeStory, timeStoryButton.dataset.rmtTimeStoryId);
     const discardButton = event.target.closest?.('[data-rmt-recovery-discard]');
     if (discardButton) return void generation_client.discardSavedGeneration(discardButton.dataset.rmtRecoveryDiscard).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    if (event.target.closest?.('[data-rmt-archive-import-draft]')) {
+        if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !archive_library.requireWritableArchiveAction()) return;
+        const context = core_context.currentCharacterGuard();
+        const origin = core_context.captureTaskOrigin(context, archive_repository.getImportedMemory(context)?.archiveRevision || '');
+        const input = document.createElement('input'); input.type = 'file'; input.accept = '.json,application/json';
+        input.addEventListener('change', async () => {
+            try {
+                const file = input.files?.[0]; if (!file) return;
+                if (file.size > core_constants.MAX_CACHE_SOURCE_BYTES) throw core_text.safeUserError('整理草稿超过 12MB 安全范围，原数据未动。', 'RMT_RECOVERY_LIMIT');
+                const data = JSON.parse(await file.text());
+                if (!core_context.isCurrentTaskOrigin(origin)) throw new DOMException('Chat changed', 'AbortError');
+                if (!confirmExplicitAction('导入原聊天的整理草稿？', '只导入待校验草稿，不覆盖正式记忆，不发起模型请求。继续时仍会验证聊天、来源与原请求。', { destructive: false })) return;
+                const result = await archive_repository.importCurrentArchiveRecoveryFile(data, context);
+                globalThis.toastr?.success?.(`已导入 ${result.completed} 个成功分段；${result.durable ? '已保存到本机' : '仅本页保留，请勿刷新'}。点击继续才处理未完成部分。`, '心迹回廊');
+                showChooser();
+            } catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 未导入'); }
+        }, { once: true });
+        input.click(); return;
+    }
     if (event.target.closest?.('[data-rmt-archive-export-pending]')) {
         try {
             const value = archive_repository.exportCurrentArchiveImportProgress();
@@ -1030,16 +1050,18 @@ export function handleOverlayClick(event) {
     if (event.target.closest?.('[data-rmt-archive-restart]')) {
         if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return;
         if (!confirmExplicitAction('按当前条件另起整理任务？',
-            '正式档案与旧 Mxxx 保持不变。当前未提交草稿暂停并仅在本页保留，可导出；已保存的批次检查点随下一次成功保存一并保留。新任务使用当前来源与配置，可能重新处理旧任务尚未正式入档的片段并消耗额度。零成功草稿也可这样重新开始。',
+            '正式档案与旧 Mxxx 保持不变。当前未提交草稿暂停并保留，可导出；是否已保存到本机请看草稿状态。已保存的批次检查点随下一次成功保存一并保留。新任务使用当前来源与配置，可能重新处理旧任务尚未正式入档的片段并消耗额度。零成功草稿也可这样重新开始。',
             { destructive: false })) return;
         return void archive_repository.restartCurrentArchiveImport().catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
     }
     if (event.target.closest?.('[data-rmt-archive-discard]')) {
         if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return;
-        if (!confirmExplicitAction('放弃本页整理草稿？', '仅清除当前聊天尚未提交的档案整理/简介草稿，不能恢复。不删除已保存的正式记忆、模块或图片，也不会自动发起新请求。', { destructive: true })) return;
+        if (!confirmExplicitAction('放弃整理草稿？', '仅清除当前聊天尚未提交的档案整理/简介草稿，不能恢复。不删除已保存的正式记忆、模块或图片，也不会自动发起新请求。', { destructive: true })) return;
         const context = core_context.currentCharacterGuard();
         try {
-            if (archive_repository.discardCurrentArchiveImportRecovery(context)) return showChooser();
+            return void Promise.resolve(archive_repository.discardCurrentArchiveImportRecovery(context)).then(cleared => {
+                if (cleared && core_context.getContext() === context) showChooser();
+            }).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 草稿未放弃'));
         } catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 草稿未放弃'); }
         return;
     }

@@ -237,7 +237,7 @@ async function regeneratePhoneApp(session, app, context, memoryBank, origin, tas
         entries: (app.entries || []).map(entry => ({ id: entry.id, title: entry.title, meta: entry.meta })),
     };
     const plan = phonePlanFromSession(session, planApp);
-    const presentationContext = await generation_client.buildWorldPresentationContext(context, memoryBank, core_constants.MODE.PHONE);
+    const presentationContext = await generation_client.buildWorldPresentationContext(context, memoryBank, core_constants.MODE.PHONE, origin);
     assertPhoneRegenerationOrigin(origin, memoryBank);
     const raw = await generation_client.requestValidatedSegment(
         modes_phone.phoneAppPrompt(context, memoryBank, plan, planApp),
@@ -253,7 +253,7 @@ async function regeneratePhoneEntry(session, app, entry, context, memoryBank, or
     assertPhoneRegenerationOrigin(origin, memoryBank);
     const planApp = { id: app.id, label: app.label, kind: app.kind, summary: app.summary, incremental: true, entries: [{ id: entry.id, title: entry.title, meta: entry.meta }] };
     const plan = phonePlanFromSession(session, planApp);
-    const presentationContext = await generation_client.buildWorldPresentationContext(context, memoryBank, core_constants.MODE.PHONE);
+    const presentationContext = await generation_client.buildWorldPresentationContext(context, memoryBank, core_constants.MODE.PHONE, origin);
     assertPhoneRegenerationOrigin(origin, memoryBank);
     const raw = await generation_client.requestValidatedSegment(
         modes_phone.phoneAppPrompt(context, memoryBank, plan, planApp),

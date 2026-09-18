@@ -110,7 +110,7 @@ export async function generateTimeStoryWithRepair(mode, context, memory, origin,
             throw fail('SOURCE', '聊天或人物在读取生成资料前已变化，请从对应档案重新打开。');
     };
     assertSource();
-    const presentationContext = options.presentationContext || await generation.buildWorldPresentationContext(context, memory, mode);
+    const presentationContext = options.presentationContext || await generation.buildWorldPresentationContext(context, memory, mode, options.origin);
     assertSource();
     const prompt = timeStoryPrompt(mode, context, memory, previous, presentationContext.profile);
     const lastId = Math.max(0, ...(previous?.episodes || []).map(item => Number(item.id.slice(2))));

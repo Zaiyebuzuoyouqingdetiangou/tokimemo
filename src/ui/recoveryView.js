@@ -30,5 +30,5 @@ export function archiveRecoveryHtml(summary, { profile = false } = {}) {
 ${!capacity ? `<button type="button" class="rmt-btn" data-rmt-archive-recovery="${profile || summary.profileOnly ? 'profile' : 'import'}">${label}</button>` : ''}
 ${!profile && !summary.profileOnly ? '<button type="button" class="rmt-btn" data-rmt-archive-export-pending>导出待入档成果</button>' : ''}
 ${!profile && !summary.profileOnly && !summary.awaitingCommit && !capacity ? '<button type="button" class="rmt-btn" data-rmt-archive-restart>按当前条件另起任务</button>' : ''}
-${!batch ? '<button type="button" class="rmt-btn" data-rmt-archive-discard>放弃本页整理草稿</button>' : ''}</section>`;
+${!batch ? '<button type="button" class="rmt-btn" data-rmt-archive-discard>放弃整理草稿</button>' : ''}</section>`;
 }

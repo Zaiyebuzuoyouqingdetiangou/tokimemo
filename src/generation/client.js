@@ -1,3 +1,5 @@
+import * as advanced_generation from '../core/advancedGeneration.js';
+import * as recovery_source from '../core/recoverySourcePolicy.js';
 import * as output_budget from '../core/outputBudget.js';
 import * as archive_requestBudget from '../archive/requestBudget.js';
 import * as cg_policy from './cgPromptPolicy.js';
@@ -136,7 +138,10 @@ async function collectFittingSelectedSetting(context, budget = core_constants.MA
     };
 }
 
-export async function buildWorldPresentationContext(context, memoryBank, mode) {
+export async function buildWorldPresentationContext(context, memoryBank, mode, origin = null) {
+    return generation_recovery.frozenGenerationInput(origin, `presentation:${mode}`, () => buildWorldPresentationContextFresh(context, memoryBank, mode));
+}
+async function buildWorldPresentationContextFresh(context, memoryBank, mode) {
     const wantsSelectedSetting = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode);
     let selectedSetting = wantsSelectedSetting
         ? await collectFittingSelectedSetting(context)
@@ -217,7 +222,8 @@ export async function requestValidatedSegment(prompt, status, options, validator
     try {
     const context = options?.context || core_context.currentCharacterGuard();
     options = { ...options, taskTrace, context, contextEnvelope: typeof options?.contextEnvelope === 'string'
-        ? options.contextEnvelope : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options?.mode, context) }) };
+        ? options.contextEnvelope : await generation_recovery.frozenGenerationInput(options?.origin, `context:${options?.mode || 'segment'}`,
+            () => core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options?.mode, context) })) };
     const result = await generation_recovery.withRecoverySegment(prompt, options, validator, async (prompt, options, accepted) => {
     let lastError = null;
     // Automatic retry is off by default. A failed segment used to silently re-run prompt
@@ -471,7 +477,9 @@ export async function generateConfiguredJson(prompt, options = {}) {
     const lifecycleEpoch = options.origin?.lifecycleEpoch ?? runtimeState.runtimeLifecycleEpoch;
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     const context = options.context || core_context.currentCharacterGuard();
+    await core_settings.prepareManualCredential(context);
     const settings = core_settings.getPluginSettings(context);
+    const advanced = advanced_generation.parseAdvancedGeneration(settings);
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
     const originalExpanded = core_text.expandSafeRoleMacros(prompt, context);
     const expanded = core_contextTags.filterJsonPromptStrings(originalExpanded, core_contextTags.tagPolicyForSettings(settings));
@@ -501,7 +509,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
     const connectionMode = settings.apiConnectionMode === 'manual' ? 'manual' : 'profile';
     const service = context.ConnectionManagerRequestService;
     let selectedProfileFingerprint = '';
-    const overridePayload = {
+    let overridePayload = {
         temperature: Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : settings.temperature,
     };
     const modelOverride = core_text.normalizeText(options.model || (connectionMode === 'manual' ? settings.manualApiModel : settings.modelOverride), 240);
@@ -520,6 +528,8 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
         selectedProfileFingerprint = await core_settings.resolvedProfileTransportFingerprint(rawProfile);
         const apiMap = service.validateProfile(rawProfile);
         if (apiMap?.selected !== 'openai' || !apiMap?.source) throw core_text.safeUserError('当前一键连接不是可复用的 Chat Completion 配置。');
+        Object.assign(overridePayload, advanced_generation.advancedCarrier(advanced, apiMap.source));
+        overridePayload = advanced_generation.applyAdvancedExclusions(overridePayload, advanced);
     }
     const assertConfigurationCurrent = async () => {
         const latestSettings = core_settings.getPluginSettings(context);
@@ -564,10 +574,10 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
         assertRequestCurrent();
         core_taskTrace.beginStage(taskTrace, 'request');
         result = await core_requestCoordinator.runGenerationRequestWithTimeout(
-            () => {
+            async () => {
                 assertRequestCurrent();
                 core_taskTrace.recordProviderRequest(taskTrace);
-                return connectionMode === 'manual'
+                const returned = connectionMode === 'manual'
                 ? core_independentApi.requestManualApiCompletion(settings, context, messages, responseLength, {
                     signal: lifecycleController.signal,
                     model: modelOverride,
@@ -577,9 +587,10 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
                     settings.connectionProfileId,
                     messages,
                     responseLength,
-                    { stream: false, extractData: true, includePreset: false, includeInstruct: false, signal: lifecycleController.signal },
+                    { stream: advanced.streamMode === 'on', extractData: false, includePreset: false, includeInstruct: false, signal: lifecycleController.signal },
                     overridePayload,
                 );
+                return core_independentApi.readProfileCompletion(await returned, { signal: lifecycleController.signal });
             },
             lifecycleController,
             options.timeoutMs,
@@ -591,6 +602,8 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
         // Observe error envelopes (including HTTP-200 429s) before draining the queue.
         responsePayload = core_independentApi.assertIndependentResponsePayload(result);
     } catch (error) {
+        const shape = core_independentApi.transportFailureSummary(error);
+        if (shape) core_taskTrace.recordResponse(taskTrace, shape);
         throw normalizeConnectionManagerError(error);
     } finally {
         try { releaseProviderPermit?.(); } catch {}
@@ -700,6 +713,10 @@ function recoverySettingsIdentity(context) {
 export async function beginModeRecovery(mode, context, bank, origin, options = {}) {
     const identity = recoverySettingsIdentity(context);
     const existing = options.existing === undefined ? core_cache.loadGenerationRecovery(mode, context, options.archiveTarget?.cache) : options.existing;
+    const sourceValues = JSON.stringify(recovery_source.recoverySourceValues(context));
+    await recovery_source.assertRecoverySourcePolicy(existing, context, origin);
+    const sourcePolicy = await recovery_source.recoverySourcePolicy(context);
+    if (JSON.stringify(recovery_source.recoverySourceValues(context)) !== sourceValues) throw new DOMException('Source changed', 'AbortError');
     const operation = cg_policy.cgRecoveryOperation(mode, options.operation || { kind: 'mode', mode }, existing,
         options.cgPromptFormat || core_settings.getPluginSettings(context).cgPromptFormat);
     cg_policy.bindCgPromptFormat(origin, operation.cgPromptFormat, operation.cgPromptDialect || 'legacy');
@@ -710,11 +727,14 @@ export async function beginModeRecovery(mode, context, bank, origin, options = {
         ? structuredClone(core_cache.archiveBackupEntryForContext(context, bank, { expectedTaskOrigin: origin, previousMemory: bank })) : null);
     const handle = await generation_recovery.createGenerationRecovery({
         origin: { ...origin, archiveTargetEntryId: options.archiveTarget?.entryId || archiveEntry?.entryId || origin.archiveTargetEntryId || '' },
-        mode, settingsIdentity: identity, existing, continueRequested: !!existing,
+        mode, settingsIdentity: identity, existing, continueRequested: !!existing, sourcePolicy,
+        confirmLegacyRestart: () => ui_overlay.confirmExplicitAction('保留旧失败记录，按当前背景重新尝试？',
+            '旧版任务没有保存最初的世界书背景，且没有任何成功分段或截断正文。确定会保留旧失败记录并使用当前背景重新请求；取消不发送。', { destructive: false }),
         taskScopes: [`${origin.characterKey}|${origin.chatId}`, `archive-target:${options.archiveTarget?.entryId || archiveEntry?.entryId || origin.archiveTargetEntryId || ''}`],
         assertCurrent: () => {
             if (!core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch) || options.stillCurrent?.() === false
-                || recoverySettingsIdentity(context) !== identity) return false;
+                || recoverySettingsIdentity(context) !== identity
+                || JSON.stringify(recovery_source.recoverySourceValues(context)) !== sourceValues) return false;
             const live = core_context.getContext();
             if (!options.archiveTarget && core_context.deferredCommitOriginMatchesContext(origin, live)) {
                 return archive_repository.getImportedMemory(live)?.archiveRevision === bank.archiveRevision
@@ -1013,7 +1033,7 @@ export async function generateMode(mode, options = {}) {
         let session;
         let presentationContext = null;
         if (time_stories.isTimeStoryMode(mode) || (mode === core_constants.MODE.ITEMS && previousSession && allowPersonaExpansion) || [core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode)) {
-            presentationContext = await buildWorldPresentationContext(context, memoryBank, mode);
+            presentationContext = await buildWorldPresentationContext(context, memoryBank, mode, origin);
             // Degrading is fine, degrading silently is not: the user picked these entries
             // by hand and deserves to know which of them this request could actually carry.
             if (!options.automatic && presentationContext.selectedSetting?.note) {

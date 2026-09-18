@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.100-tt-cg-r84.24-user-settings",
+  "js": "index.js?heartbeat=0.8.101-tt-cg-r84.25-recovery-models",
   "author": "Toto",
-  "version": "0.8.100",
+  "version": "0.8.101",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.24：最大输出尊重用户填写；标签勾选保留与全选／反选；世界书选择固定关闭按钮。保留原档案与安全保护。",
+  "description": "r84.25：固定原任务背景续接；档案成功分段本机保存与旧草稿导入；手动连接加密保存；可选高级生成参数及多种返回格式。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

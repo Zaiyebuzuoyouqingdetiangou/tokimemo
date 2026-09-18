@@ -43,6 +43,14 @@ export function toastText(value, max = 800) {
 }
 
 const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
+    RMT_LOCAL_STORAGE: '本机记录未能保存；旧记录与当前页面内容保留，请勿刷新未保存的页面。',
+    RMT_LOCAL_CAS: '本机记录已被另一操作更新；没有覆盖旧记录，请重新打开后继续。',
+    RMT_MANUAL_KEY_STORAGE: 'Key 未能保存或取回；没有明文落盘或借用其他连接。请保留页面并检查本机存储。',
+    RMT_ADVANCED_PARAMETERS: '高级参数无效或包含受保护字段；只允许采样与推理配置，不能覆盖模型、消息、最大输出、连接、Key 或工具。',
+    RMT_ADVANCED_BACKEND: '非空排参／附加 JSON 需要手动 API 或自定义 Chat Completions Profile；本次没有改连接或静默忽略参数。',
+    RMT_RECOVERY_SOURCE_CHANGED: '角色卡、Persona 或来源选择与原任务不同；原成果与草稿保留，未发起请求。',
+    RMT_ARCHIVE_DRAFT_STORAGE: '整理草稿尚未确认保存到本机；成功分段仍保留在当前页面，请先导出，勿刷新。',
+
     ...core_backupDiagnostics.BACKUP_FAILURE_MESSAGES,
     RMT_DEFERRED_QUOTA: '浏览器可用存储空间不足，待写回结果仅保留在当前页面。',
     RMT_DEFERRED_SECURITY: '浏览器权限或隐私设置阻止保存待写回结果；结果仅保留在当前页面。',
@@ -124,7 +132,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_LEDGER_UNAVAILABLE: '浏览器来源存储暂时不可用。请退出隐私模式或关闭旧页后重试；不要清除站点数据。',
     RMT_BANNED_GENERATED_PHRASE: '模型新生成内容命中了本地禁用词；本次结果没有保存。',
     RMT_JSON_EMPTY_FINAL: '模型没有返回最终正文 JSON；旧内容未被覆盖。',
-    RMT_JSON_EMPTY_FINAL_WITH_REASONING: '模型产生了推理内容，但没有返回最终正文 JSON；旧内容未被覆盖。',
+    RMT_JSON_EMPTY_FINAL_WITH_REASONING: '本次响应只有推理字段，没有最终正文 JSON；未采用推理内容，也没有自动重试。可核对渠道支持的推理／流式参数后手动再试，旧内容保留。',
     RMT_RESPONSE_FORMAT: '当前连接返回了未识别的正文包装；旧内容保留，请导出诊断以核对返回格式。',
     RMT_JSON_NOT_FOUND: '模型最终正文中没有完整 JSON；旧内容未被覆盖。',
     RMT_JSON_TRUNCATED: '模型返回的 JSON 疑似被截断；旧内容未被覆盖。',
@@ -210,7 +218,7 @@ export function safeErrorSummary(error, max = 520) {
     const categories = { chat: '聊天正文或聊天身份', character: '角色身份或角色卡', persona: '用户 Persona',
         archive: '正式档案版本', range: '聊天读取范围', selection: '来源选择', configuration: '生成配置',
         sources: '已捕获来源快照', unknown: '旧格式草稿身份' };
-    if (error?.code === 'RMT_RECOVERY_INPUT_CHANGED' && Object.hasOwn(categories, error.archiveInputCategory)) {
+    if (['RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_SOURCE_CHANGED'].includes(error?.code) && Object.hasOwn(categories, error.archiveInputCategory)) {
         return `${categories[error.archiveInputCategory]}与原任务不一致；已保存成果和未提交草稿保留。可恢复原条件继续，或明确选择按当前条件另起任务。`;
     }
     if (['RMT_ARCHIVE_CONTEXT_BUDGET', 'RMT_ARCHIVE_OUTPUT_BUDGET'].includes(error?.code) && error.archiveBudget) {

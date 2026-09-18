@@ -1,3 +1,5 @@
+import * as manual_credentials from './manualCredentialStore.js';
+import * as advanced_generation from './advancedGeneration.js';
 import * as output_budget from './outputBudget.js';
 import * as cg_format from './cgPromptFormat.js';
 // Heartbeat Memories r35 modular runtime.
@@ -40,6 +42,8 @@ export function getPluginSettings(context = core_context.getContext()) {
         modelOverride: core_text.normalizeText(settings.modelOverride, 240),
         manualApiBaseUrl,
         manualApiModel: core_text.normalizeText(settings.manualApiModel, 240),
+        manualApiSecretRef: manual_credentials.validManualSecretRef(settings.manualApiSecretRef),
+        ...advanced_generation.advancedSettings(settings),
         manualApiStreaming: settings.manualApiStreaming === true,
         chatReadRange: chat_read_range.normalizeChatReadRange(settings),
         maxTokens: output_budget.normalizeOutputTokens(settings.maxTokens),
@@ -80,6 +84,10 @@ export function updatePluginSettings(patch) {
     const previousApiFingerprint = core_independentApi.apiConfigurationFingerprint(current);
     const supplied = patch && typeof patch === 'object' ? { ...patch } : {};
     if (Object.hasOwn(supplied, 'creativeSupplement')) supplied.creativeSupplement = creative_supplement.normalizeCreativeSupplement(supplied.creativeSupplement);
+    if (Object.hasOwn(supplied, 'manualApiBaseUrl')) {
+        const nextBase = core_independentApi.normalizeManualApiBaseUrl(supplied.manualApiBaseUrl);
+        if (nextBase !== current.manualApiBaseUrl) { runtimeState.manualApiKey = ''; supplied.manualApiSecretRef = ''; }
+    }
     if (Object.prototype.hasOwnProperty.call(supplied, 'manualApiKey')) {
         runtimeState.manualApiKey = core_text.normalizeText(supplied.manualApiKey, 4000);
         delete supplied.manualApiKey;
@@ -98,6 +106,56 @@ export function updatePluginSettings(patch) {
         }
     }
     return normalized;
+}
+
+// Called only by an explicit manual action or before an authorized request.
+// No plaintext is returned to UI, ordinary settings, logs or export paths.
+export async function prepareManualCredential(context = core_context.getContext()) {
+    const before = getPluginSettings(context);
+    if (before.manualApiKey || !before.manualApiSecretRef || before.apiConnectionMode !== 'manual') return;
+    const key = await manual_credentials.readManualCredential(before.manualApiBaseUrl, before.manualApiSecretRef);
+    const latest = getPluginSettings(context);
+    if (core_context.getContext().extensionSettings !== context.extensionSettings || latest.manualApiBaseUrl !== before.manualApiBaseUrl
+        || latest.manualApiSecretRef !== before.manualApiSecretRef || (latest.manualApiKey && latest.manualApiKey !== key)) throw new DOMException('Credential binding changed', 'AbortError');
+    runtimeState.manualApiKey = key;
+}
+let manualSaveLane = Promise.resolve();
+export function saveManualApiConfiguration(candidate, { activate = false } = {}) {
+    const context = core_context.getContext();
+    const current = getPluginSettings(context);
+    const base = core_independentApi.assertManualApiCredentialTransport(candidate.manualApiBaseUrl, candidate.manualApiKey);
+    const model = core_text.normalizeText(candidate.manualApiModel, 240);
+    const key = core_text.normalizeText(candidate.manualApiKey, 4000);
+    if (activate && !model) throw core_text.safeUserError('请填写手动 API 的模型 ID。', 'RMT_MANUAL_MODEL');
+    const updated = updatePluginSettings({ manualApiBaseUrl: base, manualApiModel: model, ...(key ? { manualApiKey: key } : {}),
+        ...(activate ? { apiConnectionMode: 'manual' } : {}) });
+    const reference = base === current.manualApiBaseUrl ? current.manualApiSecretRef : '';
+    const run = manualSaveLane.catch(() => {}).then(async () => {
+        // The user may have changed address/key while encryption was pending.
+        const stillCurrent = () => core_context.getContext().extensionSettings === context.extensionSettings
+            && getPluginSettings(context).manualApiBaseUrl === base && getPluginSettings(context).manualApiKey === updated.manualApiKey;
+        if (!stillCurrent()) throw new DOMException('Manual save superseded', 'AbortError');
+        let ref = reference;
+        if (key) ref = await manual_credentials.saveManualCredential(base, key, reference);
+        if (!stillCurrent()) {
+            // A first save can finish after Clear/endpoint change. Remove its
+            // newly-created orphan only; never delete an existing shared ref.
+            if (ref && ref !== reference) await manual_credentials.clearManualCredential(ref);
+            throw new DOMException('Manual save superseded', 'AbortError');
+        }
+        if (ref && ref !== getPluginSettings(context).manualApiSecretRef) updatePluginSettings({ manualApiSecretRef: ref });
+        return { credentialSaved: !!ref, modelSaved: !!model };
+    });
+    manualSaveLane = run;
+    return run;
+}
+export async function forgetManualApiCredential() {
+    const context = core_context.getContext(), before = getPluginSettings(context);
+    // Stop stale callers first; deletion is scoped to this exact opaque reference.
+    updatePluginSettings({ manualApiKey: '', manualApiSecretRef: '' });
+    await manualSaveLane.catch(() => {});
+    if (before.manualApiSecretRef) await manual_credentials.clearManualCredential(before.manualApiSecretRef);
+    return true;
 }
 
 export function beginApiConfigurationOperation() {

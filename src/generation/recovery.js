@@ -50,7 +50,7 @@ function primitiveString(value, max, required = false) {
 }
 
 // Own JSON data only: no getters, toJSON hooks, prototypes, cycles, or executable data.
-function jsonData(value, maxChars = GENERATION_RECOVERY_LIMITS.segmentChars) {
+function jsonData(value, maxChars = GENERATION_RECOVERY_LIMITS.segmentChars, preserveOrder = false) {
     let nodes = 0;
     const active = new Set();
     const copy = (item, depth) => {
@@ -73,7 +73,7 @@ function jsonData(value, maxChars = GENERATION_RECOVERY_LIMITS.segmentChars) {
             }
         } else {
             result = Object.create(null);
-            for (const key of Object.keys(descriptors).sort()) {
+            for (const key of (preserveOrder ? Object.keys(descriptors) : Object.keys(descriptors).sort())) {
                 if (['__proto__', 'constructor', 'prototype', 'toJSON'].includes(key)) throw new Error('key');
                 const descriptor = descriptors[key];
                 if (!Object.hasOwn(descriptor, 'value')) throw new Error('accessor');
@@ -122,8 +122,18 @@ function validJournal(raw, now) {
             || !DIGEST.test(journal.settingsHash || '') || !Array.isArray(journal.segments)
             || journal.segments.length > GENERATION_RECOVERY_LIMITS.segments
             || !Number.isFinite(journal.createdAt) || !Number.isFinite(journal.updatedAt)
-            || journal.createdAt > now || journal.updatedAt < journal.createdAt || journal.updatedAt > now
-            || now - journal.updatedAt > GENERATION_RECOVERY_LIMITS.maxAgeMs) return null;
+            || journal.createdAt > now || journal.updatedAt < journal.createdAt || journal.updatedAt > now) return null;
+        if (journal.frozenInputs !== undefined) {
+            if (!journal.frozenInputs || typeof journal.frozenInputs !== 'object' || Array.isArray(journal.frozenInputs)) return null;
+            for (const [key, value] of Object.entries(journal.frozenInputs)) {
+                if (!/^[a-zA-Z0-9:_-]{1,100}$/.test(key) || typeof value !== 'string'
+                    || value.length > GENERATION_RECOVERY_LIMITS.requestChars) return null;
+                const data = JSON.parse(value);
+                jsonData(data, GENERATION_RECOVERY_LIMITS.requestChars, true);
+            }
+        }
+        if (journal.sourcePolicy !== undefined && (!journal.sourcePolicy || Array.isArray(journal.sourcePolicy)
+            || Object.keys(journal.sourcePolicy).some(key => !['character', 'persona', 'selection'].includes(key) || !DIGEST.test(journal.sourcePolicy[key])))) return null;
         const slots = new Set();
         for (const segment of journal.segments) {
             if (!primitiveString(segment.slot, 1000, true) || slots.has(segment.slot)
@@ -166,7 +176,7 @@ export function generationRecoverySummary(raw, now = Date.now()) {
 }
 
 export async function createGenerationRecovery({ origin, mode, settingsIdentity, existing = null,
-    continueRequested = false, save, assertCurrent = () => true, now = () => Date.now(), pageOnly = false, taskScopes = [] } = {}) {
+    continueRequested = false, save, assertCurrent = () => true, now = () => Date.now(), pageOnly = false, taskScopes = [], sourcePolicy = null, confirmLegacyRestart = null } = {}) {
     const identity = recoveryIdentity(origin, mode);
     if (!identity) throw recoveryError('RMT_RECOVERY_IDENTITY', '续写缺少当前档案身份，未发送请求，也没有改写旧内容。');
     const settingsHash = await generationRecoveryDigest(settingsIdentity ?? '');
@@ -177,7 +187,10 @@ export async function createGenerationRecovery({ origin, mode, settingsIdentity,
     }
     journal ||= { kind: 'generation-recovery', version: 1, identity, settingsHash,
         createdAt: clock, updatedAt: clock, segments: [], failureCode: '' };
+    const legacyWithoutInputs = !!existing && !existing.frozenInputs;
+    if (sourcePolicy) journal.sourcePolicy = sourcePolicy;
     const handle = { journal, save, assertCurrent, now, continueRequested: continueRequested === true,
+        legacyWithoutInputs, confirmLegacyRestart, pendingInputs: new Map(),
         taskScopes: (Array.isArray(taskScopes) ? taskScopes : []).filter(scope => typeof scope === 'string' && scope && scope.length <= 1800).slice(0, 4).sort((a,b) => b.length - a.length),
         pageOnly: pageOnly === true, durable: false, lane: Promise.resolve(), activeSlots: new Set() };
     internalHandles.add(handle);
@@ -220,6 +233,33 @@ function currentAttachedJournal(origin, handle) {
     }
     checkCurrent(handle);
     return journal;
+}
+
+// A code-owned input snapshot, never model-owned routing or evidence authority.
+// Store an order-preserving JSON string: canonical digest sorting must not rewrite
+// presentation objects later interpolated into an unchanged prompt.
+export async function frozenGenerationInput(origin, key, produce) {
+    const handle = origin && handles.get(origin);
+    if (!handle) return produce();
+    if (!/^[a-zA-Z0-9:_-]{1,100}$/.test(key) || typeof produce !== 'function') throw recoveryError('RMT_RECOVERY_DATA', '不能识别任务背景，旧草稿保留。');
+    const read = () => {
+        const journal = currentAttachedJournal(origin, handle);
+        return typeof journal.frozenInputs?.[key] === 'string' ? JSON.parse(journal.frozenInputs[key]) : undefined;
+    };
+    const previous = read();
+    if (previous !== undefined) return previous;
+    if (handle.pendingInputs.has(key)) return structuredClone(await handle.pendingInputs.get(key));
+    const pending = (async () => {
+        const value = await produce(); checkCurrent(handle);
+        const serialized = jsonData(value, GENERATION_RECOVERY_LIMITS.requestChars, true);
+        const saved = await changeJournal(handle, journal => {
+            journal.frozenInputs = { ...(journal.frozenInputs || {}), [key]: serialized };
+        });
+        if (!saved && !handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '本轮背景未能保存，已停止模型请求；旧内容和草稿仍保留。');
+        return JSON.parse(serialized);
+    })();
+    handle.pendingInputs.set(key, pending);
+    try { return structuredClone(await pending); } finally { handle.pendingInputs.delete(key); }
 }
 
 // Planning data only, never acceptance authority. Callers must still replay each
@@ -324,7 +364,22 @@ export async function withRecoverySegment(prompt, options, validator, run) {
         const contract = compatibilityContract(options, handle, slot);
         const upgrading = previous && previous.requestHash !== requestHash;
         if (upgrading && !await permitsLegacyRequest(previous, options, handle, contract)) {
-            throw recoveryError('RMT_RECOVERY_INPUT_CHANGED', '这一段的来源或提示词已经变化，原成功内容与草稿仍保留；没有自动重新生成。');
+            // Legacy versions did not capture background. Only an empty failed
+            // attempt may be explicitly restarted; retain the entire prior record.
+            const restartable = handle.legacyWithoutInputs && handle.continueRequested
+                && previous.state === 'retry' && handle.journal.segments.every(row => row.state === 'retry');
+            if (!restartable || typeof handle.confirmLegacyRestart !== 'function' || !await handle.confirmLegacyRestart()) {
+                throw recoveryError('RMT_RECOVERY_INPUT_CHANGED', '这一段的来源或提示词已经变化，原成功内容与草稿仍保留；没有自动重新生成。');
+            }
+            checkCurrent(handle);
+            const saved = await changeJournal(handle, journal => {
+                journal.previousAttempts = [...(journal.previousAttempts || []), {
+                    updatedAt: journal.updatedAt, segments: journal.segments, failureCode: journal.failureCode,
+                }];
+                journal.segments = []; journal.failureCode = '';
+            });
+            if (!saved && !handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '旧失败记录未能保存，未重新请求。');
+            handle.legacyWithoutInputs = false;
         }
         if (previous?.state === 'complete') {
             let value;
