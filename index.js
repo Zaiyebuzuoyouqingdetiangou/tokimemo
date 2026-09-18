@@ -1,5 +1,5 @@
-const VERSION = '0.8.96';
-const BUILD = '0.8.96-tt-cg-r84.20-visual-authoring';
+const VERSION = '0.8.97';
+const BUILD = '0.8.97-tt-cg-r84.21-response-routing';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

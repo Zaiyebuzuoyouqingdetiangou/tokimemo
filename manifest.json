@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.96-tt-cg-r84.20-visual-authoring",
+  "js": "index.js?heartbeat=0.8.97-tt-cg-r84.21-response-routing",
   "author": "Toto",
-  "version": "0.8.96",
+  "version": "0.8.97",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.20：统一生图视觉提炼与竖向分镜；保留用户编辑、确认发送与旧图。",
+  "description": "r84.21：手动API按同一响应有界识别JSON与流式数据，保留原请求和存档保护。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

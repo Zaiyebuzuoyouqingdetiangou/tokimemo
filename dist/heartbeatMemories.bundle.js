@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 117
-// Source SHA-256: a491b3a8db53d7c90d363c4e6023fb152d902e40d20b51961d6c68030c60e85b
+// Source SHA-256: 22ed779a8b0dfecd8a73eaf928c48e07668e4d8f7d1e35dee370878c8fe709c3
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -2804,6 +2804,9 @@ async function readManualApiStream(response, options = {}) {
     const consumeLine = () => {
         if (!line) dispatch();
         else if (!line.startsWith(':')) {
+            // A transport wrapper is not an SSE field; do not fish valid events
+            // out of an HTML page merely because its header/comment looks SSE-like.
+            if (line.trimStart().startsWith('<')) throw apiError('模型服务返回了 HTML 页面，响应正文已隐藏。', 'RMT_RESPONSE_HTML');
             const colon = line.indexOf(':');
             const field = colon < 0 ? line : line.slice(0, colon);
             let value = colon < 0 ? '' : line.slice(colon + 1);
@@ -2845,7 +2848,7 @@ async function readManualApiStream(response, options = {}) {
     } catch (error) {
         if (signal?.aborted || error?.name === 'AbortError') throw streamAbortReason(signal);
         if (!content.trim()) {
-            if (['RMT_MANUAL_INVALID_JSON', 'RMT_MANUAL_PROVIDER_ERROR', 'RMT_MANUAL_RESPONSE_TOO_LARGE'].includes(error?.code)) throw error;
+            if (['RMT_MANUAL_INVALID_JSON', 'RMT_MANUAL_PROVIDER_ERROR', 'RMT_MANUAL_RESPONSE_TOO_LARGE', 'RMT_RESPONSE_HTML'].includes(error?.code)) throw error;
             throw streamReadError();
         }
         // Previously dispatched visible text may be recoverable; never append the
@@ -2863,6 +2866,116 @@ async function readManualApiStream(response, options = {}) {
         throw error;
     }
     return streamCompletion(content, finishReason, interrupted);
+}
+
+// The host may forward SSE without Content-Type, or a provider may answer a
+// streaming request with ordinary JSON. Inspect only a bounded prefix of this
+// response, then replay every consumed byte into the existing parser. No tee,
+// second fetch, persistent setting change or provider-body diagnostics are used.
+const MANUAL_RESPONSE_SNIFF_BYTES = 8192;
+
+function manualResponseKind(prefix, ended, contentType) {
+    const head = prefix.replace(/^\uFEFF/, '').trimStart();
+    if (!head) return ended ? (contentType.includes('text/event-stream') ? 'sse' : 'json') : '';
+    // JSON always wins over a misleading event-stream header. HTML goes through
+    // the existing whole-document HTML rejection, never a JSON-island search.
+    if ('{["<'.includes(head[0]) || /[0-9tfn-]/.test(head[0])) return 'json';
+    if (head.startsWith(':')) return 'sse';
+    for (const field of ['data', 'event', 'id', 'retry']) {
+        if (head.startsWith(`${field}:`) || head.startsWith(`${field}\n`) || head.startsWith(`${field}\r`)) return 'sse';
+        if (!ended && field.startsWith(head)) return '';
+    }
+    // With a real SSE header, unknown SSE fields retain their original handling.
+    // Without it, unknown/plain content is not upgraded to a model completion.
+    return contentType.includes('text/event-stream') ? 'sse' : 'json';
+}
+
+async function readManualCompletionResponse(response, options = {}) {
+    const maxBytes = core_constants.MAX_MANUAL_API_RESPONSE_BYTES;
+    const contentType = String(response?.headers?.get?.('content-type') || '').toLowerCase();
+    const declaredBytes = Number(response?.headers?.get?.('content-length'));
+    if (contentType.includes('text/html')) {
+        try { void response?.body?.cancel?.()?.catch?.(() => {}); } catch {}
+        throw apiError('模型服务返回了 HTML 页面，响应正文已隐藏。', 'RMT_RESPONSE_HTML', Number(response?.status) || 0);
+    }
+    if (Number.isFinite(declaredBytes) && declaredBytes > maxBytes) {
+        try { void response?.body?.cancel?.()?.catch?.(() => {}); } catch {}
+        throw apiError('模型服务返回内容过大，已停止读取。', 'RMT_MANUAL_RESPONSE_TOO_LARGE', Number(response?.status) || 0);
+    }
+    const signal = options.signal || null;
+    let reader = response?.body?.getReader?.();
+    if (!reader) {
+        // Older fetch shims may only expose text(). Preserve their bounded read;
+        // turn that single result into a replayable local byte reader, not IO.
+        const text = await boundedResponseText(response, maxBytes);
+        const bytes = new TextEncoder().encode(text);
+        let used = false;
+        reader = {
+            read: async () => used ? { done: true } : (used = true, { done: false, value: bytes }),
+            cancel: async () => { used = true; },
+            releaseLock: () => {},
+        };
+    }
+    const buffered = [];
+    let cursor = 0, ended = false, cancelled = false;
+    const cancel = () => {
+        if (cancelled) return;
+        cancelled = true;
+        try { void reader.cancel()?.catch?.(() => {}); } catch {}
+    };
+    const onAbort = () => { cancel(); };
+    const replay = {
+        read: async () => {
+            if (signal?.aborted) throw streamAbortReason(signal);
+            if (cursor < buffered.length) {
+                const value = buffered[cursor];
+                buffered[cursor++] = null;
+                return { done: false, value };
+            }
+            return ended ? { done: true } : await reader.read();
+        },
+        cancel: async () => { cancel(); },
+        releaseLock: () => {}, // The owner below releases the original lock once.
+    };
+    const replayResponse = {
+        status: response?.status, headers: response?.headers,
+        body: { getReader: () => replay, cancel: async () => { cancel(); } },
+    };
+    signal?.addEventListener?.('abort', onAbort, { once: true });
+    try {
+        if (signal?.aborted) throw streamAbortReason(signal);
+        const decoder = new TextDecoder('utf-8');
+        let prefix = '', prefixBytes = 0, receivedBytes = 0, kind = '';
+        while (!kind) {
+            const { value, done } = await reader.read();
+            if (signal?.aborted) throw streamAbortReason(signal);
+            if (done) { ended = true; prefix += decoder.decode(); }
+            else {
+                receivedBytes += value?.byteLength || 0;
+                if (receivedBytes > maxBytes) throw apiError('模型服务返回内容过大，已停止读取。', 'RMT_MANUAL_RESPONSE_TOO_LARGE');
+                if (value?.byteLength) {
+                    buffered.push(value);
+                    const head = value.subarray(0, Math.max(0, MANUAL_RESPONSE_SNIFF_BYTES - prefixBytes));
+                    prefixBytes += head.byteLength;
+                    prefix += decoder.decode(head, { stream: true });
+                }
+            }
+            kind = manualResponseKind(prefix, ended || prefixBytes >= MANUAL_RESPONSE_SNIFF_BYTES, contentType);
+        }
+        if (kind === 'sse') return { streaming: true, payload: await readManualApiStream(replayResponse, options) };
+        const payload = await boundedJson(replayResponse, maxBytes);
+        if (signal?.aborted) throw streamAbortReason(signal);
+        return { streaming: false, payload };
+    } catch (error) {
+        if (signal?.aborted || error?.name === 'AbortError') throw streamAbortReason(signal);
+        if (error?.safeToDisplay === true) throw error;
+        throw streamReadError();
+    } finally {
+        signal?.removeEventListener?.('abort', onAbort);
+        cancel();
+        buffered.length = 0;
+        try { reader.releaseLock(); } catch {}
+    }
 }
 
 async function fetchManualApiModels(settings, context, options = {}) {
@@ -2956,9 +3069,9 @@ async function requestManualApiCompletion(settings, context, messages, maxTokens
         try { await response?.body?.cancel?.(); } catch {}
         throw httpFailure(response);
     }
-    const contentType = String(response?.headers?.get?.('content-type') || '').toLowerCase();
-    if (body.stream && contentType.includes('text/event-stream')) return await readManualApiStream(response, options);
-    const payload = await boundedJson(response, core_constants.MAX_MANUAL_API_RESPONSE_BYTES);
+    const decoded = await readManualCompletionResponse(response, options);
+    if (decoded.streaming) return decoded.payload;
+    const payload = decoded.payload;
     if (payloadHasProviderError(payload)) throw providerEnvelopeFailure(payload);
     const content = extractIndependentResponseContent(payload);
     if (typeof content === 'string' && !content.trim()) throw apiError('手动 API 没有返回可见正文。', 'RMT_MANUAL_EMPTY');
