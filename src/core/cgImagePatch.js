@@ -3,6 +3,7 @@
 import * as constants from './constants.js';
 import * as text from './text.js';
 import * as appearance from '../generation/cgAppearance.js';
+import * as cg_visual from './cgVisualRules.js';
 
 const IMAGE_MODES = new Set([constants.MODE.ALBUM, constants.MODE.ADV, constants.MODE.HEART]);
 
@@ -39,9 +40,14 @@ export function cgItemInSession(mode, session, itemId) {
 }
 
 export function cgItemSignature(item) {
-    return JSON.stringify([item?.id, item?.title, item?.date, item?.desc, item?.cgDesc,
+    const fields = [item?.id, item?.title, item?.date, item?.desc, item?.cgDesc,
         item?.subtitle, item?.imagePrompt, item?.visualSeed, item?.panelCount, item?.panels,
-        normalizeCgImageRecord(item?.cgImage)]);
+        normalizeCgImageRecord(item?.cgImage)];
+    // A newly generated draft is part of the captured visual target. Do not let
+    // an older result overwrite a replacement draft; legacy item signatures stay exact.
+    const draft = cg_visual.normalizeGeneratedCgDraft(item?.cgPromptDraft);
+    if (draft) fields.push(draft);
+    return JSON.stringify(fields);
 }
 
 export function normalizeCgImagePatch(value) {

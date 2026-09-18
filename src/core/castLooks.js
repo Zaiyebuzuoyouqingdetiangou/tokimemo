@@ -1,3 +1,4 @@
+import * as cg_visual from './cgVisualRules.js';
 // Per-chat cast appearance.
 //
 // Stored under its own chat-metadata key, which gives three properties the image prompt
@@ -36,7 +37,7 @@ export function lookFromDescription(description, limit = CAST_LOOKS_FIELD_LIMIT)
     const picked = [];
     let used = 0;
     for (const part of raw.split(LOOK_SPLIT)) {
-        const clause = core_text.normalizeText(part, 160);
+        const clause = cg_visual.automaticAppearanceClause(core_text.normalizeText(part, 160));
         if (!clause || !LOOK_KEEP.test(clause) || LOOK_DROP.test(clause)) continue;
         if (picked.includes(clause)) continue;
         if (used + clause.length + 1 > limit) break;
@@ -181,6 +182,7 @@ export function castLooksPromptLine(record, context = null) {
     if (!record) return '';
     let live = context;
     if (!live) { try { live = core_context.getContext(); } catch { live = null; } }
+    if (record.manual !== true) record = { ...record, char: lookFromDescription(record.char), user: lookFromDescription(record.user) };
     const rows = [];
     if (record.char) rows.push(`${core_text.normalizeText(live?.name2, 60) || 'character'}: ${record.char}`);
     if (record.user) rows.push(`${core_text.normalizeText(live?.name1, 60) || 'the other person'}: ${record.user}`);

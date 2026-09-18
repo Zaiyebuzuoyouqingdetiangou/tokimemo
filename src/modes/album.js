@@ -1,3 +1,4 @@
+import * as cg_visual from '../core/cgVisualRules.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_cache from '../core/cache.js';
@@ -190,6 +191,7 @@ export function normalizeAlbumIndex(data, memoryBank, sourceMemoryIds = null) {
             sourceMemoryAnchor: reference.sourceMemoryAnchor,
             visualSeed: visualSeed.length >= 4 ? visualSeed : [...visualSeed, '光影', '人物', '环境', '物件'].slice(0, 4),
             imagePrompt: core_text.normalizeText(item?.imagePrompt, core_constants.MAX_CG_IMAGE_PROMPT_CHARS),
+            ...cg_visual.generatedCgDraftFields(item),
             comments: [],
             hintLines,
         };
@@ -385,6 +387,7 @@ ${hintLines.join('；')}`, memoryBank, 1);
             sourceMemoryAnchor: reference.sourceMemoryAnchor,
             visualSeed: visualSeed.length >= 4 ? visualSeed : [...visualSeed, '光影', '人物', '环境', '物件'].slice(0, 4),
             imagePrompt: core_text.normalizeText(item?.imagePrompt, core_constants.MAX_CG_IMAGE_PROMPT_CHARS),
+            ...cg_visual.generatedCgDraftFields(item),
             cgImage: generation_imageGeneration.normalizeCgImageRecord(item?.cgImage),
             comments,
             hintLines,

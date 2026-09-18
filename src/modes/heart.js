@@ -1,3 +1,4 @@
+import * as cg_visual from '../core/cgVisualRules.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_library from '../archive/library.js';
@@ -530,6 +531,7 @@ export function normalizeHeartStripsPart(data) {
             panels,
             visualSeed,
             imagePrompt,
+            ...cg_visual.generatedCgDraftFields(item),
             cgImage: generation_imageGeneration.normalizeCgImageRecord(item?.cgImage),
         };
     }).filter(Boolean);
@@ -1591,6 +1593,7 @@ export function normalizeHeart(data, memoryBank) {
             panels,
             visualSeed,
             imagePrompt,
+            ...cg_visual.generatedCgDraftFields(item),
             cgImage: generation_imageGeneration.normalizeCgImageRecord(item?.cgImage),
             sourceArchiveMemoryIds: core_text.cleanArray(item?.sourceArchiveMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40),
             incrementBatchId: core_text.normalizeText(item?.incrementBatchId, 80),
