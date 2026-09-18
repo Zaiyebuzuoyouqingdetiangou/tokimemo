@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.98-tt-cg-r84.22-archive-batches",
+  "js": "index.js?heartbeat=0.8.100-tt-cg-r84.24-user-settings",
   "author": "Toto",
-  "version": "0.8.98",
+  "version": "0.8.100",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.22：建档完整请求计量、手动分批同存检查点和草稿续接；240条边界保留待入档结果，不改其他功能或响应分流。",
+  "description": "r84.24：最大输出尊重用户填写；标签勾选保留与全选／反选；世界书选择固定关闭按钮。保留原档案与安全保护。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

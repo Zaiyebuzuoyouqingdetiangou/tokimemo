@@ -1,7 +1,9 @@
+import * as output_budget from '../core/outputBudget.js';
 import * as cg_format_ui from './cgFormatControl.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_repository from '../archive/repository.js';
+import * as source_guard from '../archive/sourceReadGuard.js';
 import * as archive_library from '../archive/library.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as core_constants from '../core/constants.js';
@@ -582,7 +584,7 @@ export function mountSettings({ homeTarget = null } = {}) {
             <small>需要服务端支持 SSE；关闭时使用普通完整响应，不影响主聊天。</small>
           </div>
           <div class="rmt-api-grid">
-            <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1024" max="60000" step="1"></label>
+            <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1" step="1" placeholder="默认 60000"></label>
             <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
           </div>
           <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
@@ -611,12 +613,13 @@ export function mountSettings({ homeTarget = null } = {}) {
           </div>
         </details>
         <details class="rmt-settings-card" data-rmt-settings-section="filter">
-          <summary class="rmt-settings-card-head"><span>TAG</span><div><b>标签过滤</b><small>思考与变量块</small></div></summary>
+          <summary class="rmt-settings-card-head"><span>TAG</span><div><b>按用户所选标签保存</b><small>勾选保留</small></div></summary>
           <div class="rmt-settings-section-body">
-            <p>只过滤送出的副本，不修改聊天。扫描后点选标签，保存后从下一次生成生效。</p>
-            <textarea class="text_pole" data-rmt-tag-draft aria-label="要排除的标签名" placeholder="thinking, 版权水印, bbi_image"></textarea>
-            <div class="rmt-theme-presets"><button type="button" data-rmt-tag-scan>扫描当前聊天</button><button type="button" data-rmt-tag-clear>清空选择</button><button type="button" data-rmt-tag-cancel>撤销编辑</button><button type="button" data-rmt-tag-save>保存过滤</button></div>
-            <div data-rmt-tag-results role="status"></div>
+            <p>勾选的标签块参与后续整理；未选外层块连同内部略过，无标签正文保留。不改聊天和旧档案。</p>
+            <textarea class="text_pole" data-rmt-tag-draft aria-label="要保存的标签名" placeholder="正文, content, dialogue"></textarea>
+            <div class="rmt-theme-presets"><button type="button" data-rmt-tag-scan>扫描当前聊天</button><button type="button" data-rmt-tag-all>全选</button><button type="button" data-rmt-tag-invert>反选</button><button type="button" data-rmt-tag-clear>清空选择</button><button type="button" data-rmt-tag-cancel>撤销编辑</button><button type="button" data-rmt-tag-save>保存选择</button></div>
+            <div data-rmt-tag-status role="status"></div>
+            <div data-rmt-tag-results></div>
           </div>
         </details>
         <details class="rmt-settings-card rmt-theme-box" data-rmt-settings-section="theme">
@@ -688,7 +691,55 @@ export function mountSettings({ homeTarget = null } = {}) {
       </div>`;
     mount.appendChild(panel);
     refreshThemeUi();
-    panel.querySelector('[data-rmt-tag-draft]').value = core_settings.getPluginSettings().excludedContextTags.join(', ');
+    const tagDraft = panel.querySelector('[data-rmt-tag-draft]');
+    const tagStatus = panel.querySelector('[data-rmt-tag-status]');
+    let tagChoices = new Map(), tagScanned = false, tagEdited = false, tagScanEpoch = 0;
+    const savedTagDraft = () => {
+        const settings = core_settings.getPluginSettings();
+        return settings.contextTagMode === 'keep' ? settings.retainedContextTags
+            : [...tagChoices.keys()].filter(name => !settings.excludedContextTags.includes(name));
+    };
+    const renderTagChoices = () => {
+        const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
+        for (const name of selected) if (!tagChoices.has(name)) tagChoices.set(name, 0);
+        const result = panel.querySelector('[data-rmt-tag-results]');
+        // Empty/legacy initial state does not need to allocate a tag subtree.
+        if (!tagChoices.size) { result.textContent = ''; return; }
+        const fragment = document.createDocumentFragment();
+        for (const [name, count] of tagChoices) {
+            const label = document.createElement('label'); label.className = 'rmt-tag-choice';
+            const input = document.createElement('input'); input.type = 'checkbox'; input.dataset.rmtTagName = name;
+            input.checked = selected.has(name);
+            const text = document.createElement('span'); text.textContent = name + (count ? ' · ' + count : '');
+            label.append(input, text); fragment.appendChild(label);
+        }
+        result.replaceChildren(fragment);
+    };
+    tagDraft.value = savedTagDraft().join(', ');
+    tagStatus.textContent = core_settings.getPluginSettings().contextTagMode === 'keep'
+        ? '已保存的选择从下一次整理生效。' : '当前沿用旧排除设置；扫描后可选择要保留的标签。';
+    renderTagChoices();
+    const scanTagChoices = async () => {
+        const epoch = ++tagScanEpoch, context = core_context.currentCharacterGuard();
+        const scope = core_context.chatScopeKey(context), chat = context.chat, length = chat?.length;
+        const lifecycle = runtimeState.runtimeLifecycleEpoch;
+        const sourceSignature = source_guard.sourceReadSignature(context);
+        const assertCurrent = () => {
+            if (epoch !== tagScanEpoch || !panel.isConnected || lifecycle !== runtimeState.runtimeLifecycleEpoch
+                || core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope
+                || core_context.getContext().chat !== chat || chat?.length !== length
+                || source_guard.sourceReadSignature(core_context.getContext()) !== sourceSignature) throw new DOMException('Changed', 'AbortError');
+        };
+        tagStatus.textContent = '正在扫描当前聊天的标签…';
+        const scanned = await core_contextTags.scanContextTagChoices(chat, { assertCurrent });
+        assertCurrent();
+        const names = new Map(scanned.tags.map(tag => [tag.name, tag.count]));
+        for (const name of core_contextTags.normalizeExcludedTags(tagDraft.value)) if (!names.has(name)) names.set(name, 0);
+        tagChoices = names; tagScanned = true;
+        if (!tagEdited) tagDraft.value = savedTagDraft().join(', ');
+        renderTagChoices();
+        tagStatus.textContent = '已扫描 ' + scanned.usedMessages + ' 条消息／' + scanned.tags.length + ' 种标签；选择后保存生效。';
+    };
     const refreshCreative = () => {
         const settings = core_settings.getPluginSettings();
         panel.querySelector('[data-rmt-creative-text]').value = settings.creativeSupplement;
@@ -699,6 +750,14 @@ export function mountSettings({ homeTarget = null } = {}) {
     panel.addEventListener('change', async event => {
         if (cg_format_ui.handleCgFormatChange(event)) return;
         const target = event.target;
+        if (target.matches?.('[data-rmt-tag-name]')) {
+            ++tagScanEpoch;
+            const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
+            if (target.checked) selected.add(target.dataset.rmtTagName); else selected.delete(target.dataset.rmtTagName);
+            tagDraft.value = [...selected].join(', '); tagEdited = true;
+            tagStatus.textContent = '选择已更新；尚未保存。';
+            return;
+        }
         if (target.matches?.('[data-rmt-source-external]')) {
             core_settings.updatePluginSettings({ useCurrentChatExternalMemory: !!target.checked });
             return;
@@ -826,7 +885,12 @@ export function mountSettings({ homeTarget = null } = {}) {
             return;
         }
         if (target.matches?.('[data-rmt-api-max-tokens]')) {
-            core_settings.updatePluginSettings({ maxTokens: Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(target.value) || core_constants.DEFAULT_SETTINGS.maxTokens)) });
+            if (target.validity?.badInput || (target.value.trim() && !output_budget.isValidOutputTokens(target.value))) {
+                globalThis.toastr?.warning?.('最大输出请填写正整数；原设置未改动。', '心迹回廊');
+                target.value = String(core_settings.getPluginSettings().maxTokens);
+                return;
+            }
+            core_settings.updatePluginSettings({ maxTokens: output_budget.normalizeOutputTokens(target.value) });
             refreshGenerationSettingsUi();
             return;
         }
@@ -893,6 +957,13 @@ export function mountSettings({ homeTarget = null } = {}) {
         }
     });
     panel.addEventListener('input', event => {
+        if (event.target === tagDraft) {
+            ++tagScanEpoch; tagEdited = true;
+            const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
+            for (const input of panel.querySelectorAll('[data-rmt-tag-name]')) input.checked = selected.has(input.dataset.rmtTagName);
+            tagStatus.textContent = '选择已更新；尚未保存。';
+            return;
+        }
         if (event.target.matches?.('[data-rmt-creative-text]')) panel.querySelector('[data-rmt-creative-count]').textContent = event.target.value.length.toLocaleString() + ' / 20,000';
         if (event.target.matches?.('[data-rmt-manual-api-base],[data-rmt-manual-api-key],[data-rmt-manual-api-model]')) {
             panel.dataset.rmtManualDirty = '1';
@@ -930,37 +1001,37 @@ export function mountSettings({ homeTarget = null } = {}) {
             });
             return;
         }
-        const tagAction = event.target.closest?.('[data-rmt-tag-save],[data-rmt-tag-cancel],[data-rmt-tag-clear],[data-rmt-tag-scan],[data-rmt-tag-name]');
+        const tagAction = event.target.closest?.('[data-rmt-tag-save],[data-rmt-tag-cancel],[data-rmt-tag-clear],[data-rmt-tag-scan],[data-rmt-tag-all],[data-rmt-tag-invert]');
         if (tagAction) {
-            const draft = panel.querySelector('[data-rmt-tag-draft]');
-            const result = panel.querySelector('[data-rmt-tag-results]');
-            if (tagAction.hasAttribute('data-rmt-tag-save')) {
-                const tags = core_contextTags.normalizeExcludedTags(draft.value);
-                core_settings.updatePluginSettings({ excludedContextTags: tags });
-                draft.value = tags.join(', ');
-                result.textContent = '已保存 ' + tags.length + ' 个标签；下次生成生效。';
-            } else if (tagAction.hasAttribute('data-rmt-tag-cancel')) {
-                draft.value = core_settings.getPluginSettings().excludedContextTags.join(', ');
-                result.textContent = '已撤销未保存编辑。';
-            } else if (tagAction.hasAttribute('data-rmt-tag-clear')) draft.value = '';
-            else if (tagAction.hasAttribute('data-rmt-tag-name')) {
-                const tags = core_contextTags.normalizeExcludedTags(draft.value);
-                const name = tagAction.dataset.rmtTagName;
-                draft.value = core_contextTags.normalizeExcludedTags(tags.includes(name) ? tags.filter(tag => tag !== name) : [...tags, name]).join(', ');
-                tagAction.setAttribute('aria-pressed', String(!tags.includes(name)));
-            } else {
-                const scanned = core_contextTags.scanContextTags(core_context.getContext()?.chat);
-                result.replaceChildren(document.createTextNode('扫描最近最多 500 条 / 256,000 字符。点选后还需保存。'));
-                const selected = new Set(core_contextTags.normalizeExcludedTags(draft.value));
-                for (const tag of scanned.tags) {
-                    const button = document.createElement('button');
-                    button.type = 'button';
-                    button.dataset.rmtTagName = tag.name;
-                    button.setAttribute('aria-pressed', String(selected.has(tag.name)));
-                    button.textContent = tag.name + ' · ' + tag.count;
-                    result.appendChild(button);
-                }
-            }
+            void (async () => {
+                try {
+                    if (tagAction.hasAttribute('data-rmt-tag-save')) {
+                        ++tagScanEpoch;
+                        const tags = core_contextTags.normalizeExcludedTags(tagDraft.value);
+                        core_settings.updatePluginSettings({ contextTagMode: 'keep', retainedContextTags: tags });
+                        tagDraft.value = tags.join(', '); tagEdited = false; renderTagChoices();
+                        tagStatus.textContent = '已保存 ' + tags.length + ' 个标签；下次整理生效，聊天和旧档案未改动。';
+                    } else if (tagAction.hasAttribute('data-rmt-tag-cancel')) {
+                        ++tagScanEpoch; tagEdited = false; tagDraft.value = savedTagDraft().join(', '); renderTagChoices();
+                        tagStatus.textContent = '已撤销未保存编辑。';
+                    } else if (tagAction.hasAttribute('data-rmt-tag-clear')) {
+                        ++tagScanEpoch; tagEdited = true; tagDraft.value = ''; renderTagChoices();
+                        tagStatus.textContent = '已清空选择；尚未保存。';
+                    } else if (tagAction.hasAttribute('data-rmt-tag-scan')) {
+                        tagAction.disabled = true;
+                        await scanTagChoices();
+                    } else {
+                        tagAction.disabled = true;
+                        if (!tagScanned) await scanTagChoices();
+                        ++tagScanEpoch;
+                        const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
+                        tagDraft.value = [...tagChoices.keys()].filter(name => tagAction.hasAttribute('data-rmt-tag-all') || !selected.has(name)).join(', ');
+                        tagEdited = true; renderTagChoices(); tagStatus.textContent = '选择已更新；尚未保存。';
+                    }
+                } catch (error) {
+                    if (error?.name !== 'AbortError') tagStatus.textContent = core_text.safeErrorSummary(error);
+                } finally { tagAction.disabled = false; }
+            })();
             return;
         }
         const preset = event.target.closest?.('[data-rmt-theme-preset]');

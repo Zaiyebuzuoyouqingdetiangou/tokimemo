@@ -1,3 +1,4 @@
+import * as output_budget from '../core/outputBudget.js';
 import * as archive_requestBudget from '../archive/requestBudget.js';
 import * as cg_policy from './cgPromptPolicy.js';
 import * as core_butterflyContract from '../core/butterflyContract.js';
@@ -108,12 +109,12 @@ async function collectFittingSelectedSetting(context, budget = core_constants.MA
         console.warn('[HeartbeatMemories] selected setting unavailable', core_text.safeErrorDiagnostic(error));
         return { ...empty, complete: false, note: '本次没能读取所选设定世界书，已改用角色卡证据继续生成。' };
     }
-    const excluded = core_contextTags.excludedTagsForContext(context);
+    const excluded = core_contextTags.tagPolicyForContext(context);
     const kept = [];
     let chars = 0;
     let total = 0;
     for (const entry of selected.entries) {
-        const text = core_contextTags.stripExcludedTags(entry.content, excluded);
+        const text = core_contextTags.filterContextTags(entry.content, excluded);
         if (!text) continue;
         total += 1;
         if (chars + text.length + 1 > budget) continue;
@@ -473,7 +474,7 @@ export async function generateConfiguredJson(prompt, options = {}) {
     const settings = core_settings.getPluginSettings(context);
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
     const originalExpanded = core_text.expandSafeRoleMacros(prompt, context);
-    const expanded = core_contextTags.filterJsonPromptStrings(originalExpanded, settings.excludedContextTags);
+    const expanded = core_contextTags.filterJsonPromptStrings(originalExpanded, core_contextTags.tagPolicyForSettings(settings));
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
         : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context) });
@@ -483,7 +484,8 @@ export async function generateConfiguredJson(prompt, options = {}) {
 ${expanded}${creativeSupplement}${phrasePolicy}`;
     if (options.archiveRequestBudget === true) {
         const budget = await archive_requestBudget.measureArchiveRequest(context, controlledPrompt,
-            { signal: options.signal, stamp: options.archiveBudgetStamp });
+            { signal: options.signal, stamp: options.archiveBudgetStamp,
+                tokenCountState: options.skipTokenCount === true ? { unavailable: true } : null });
         core_taskTrace.recordInput(taskTrace, budget.utf16Chars, budget.inputTokens);
         if (taskTrace) taskTrace.archiveBudget = archive_requestBudget.publicBudget(budget);
         archive_requestBudget.assertArchiveRequestBudget(budget);
@@ -495,7 +497,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
     core_taskTrace.markStage(taskTrace, 'prompt');
     // The value configured in the dedicated secondary-API UI is the actual provider max output.
     // Per-feature options.maxTokens values are legacy sizing hints only and must not silently lower it.
-    const responseLength = Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens));
+    const responseLength = output_budget.normalizeOutputTokens(settings.maxTokens);
     const connectionMode = settings.apiConnectionMode === 'manual' ? 'manual' : 'profile';
     const service = context.ConnectionManagerRequestService;
     let selectedProfileFingerprint = '';
@@ -692,6 +694,7 @@ function recoverySettingsIdentity(context) {
     // Writing rules and evidence filters must not silently change accepted content.
     return JSON.stringify({ creativeSupplementEnabled: settings.creativeSupplementEnabled,
         creativeSupplement: settings.creativeSupplement, excludedContextTags: settings.excludedContextTags,
+        ...core_contextTags.savedTagSelection(settings),
         bannedGeneratedPhrases: settings.bannedGeneratedPhrases });
 }
 export async function beginModeRecovery(mode, context, bank, origin, options = {}) {

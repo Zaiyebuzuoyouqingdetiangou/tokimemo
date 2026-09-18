@@ -24,8 +24,8 @@ function plain(value, limit) {
 
 function sourceText(value, context) {
     if (typeof value !== 'string') return '';
-    return plain(context_tags.stripExcludedTags(value.slice(0, 16000),
-        context_tags.excludedTagsForContext(context)), 5000);
+    return plain(context_tags.filterContextTags(value.slice(0, 16000),
+        context_tags.tagPolicyForContext(context)), 5000);
 }
 
 function libraryCharacters(api) {

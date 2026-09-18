@@ -1,3 +1,4 @@
+import * as output_budget from '../core/outputBudget.js';
 // Archive-only accounting of the exact request. No provider calls, model changes,
 // output reductions, character-to-token conversion, or automatic retries.
 import * as constants from '../core/constants.js';
@@ -11,12 +12,12 @@ const hash = value => digest.sha256Bytes(encoder.encode(value));
 
 export function requestedOutput(context) {
     const settings = settingsApi.getPluginSettings(context);
-    return Math.max(1024, Math.min(constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || constants.DEFAULT_SETTINGS.maxTokens));
+    return output_budget.normalizeOutputTokens(settings.maxTokens);
 }
 
 export function composeArchiveRequest(context, prompt, contextEnvelope) {
     const settings = settingsApi.getPluginSettings(context);
-    const expanded = tags.filterJsonPromptStrings(text.expandSafeRoleMacros(prompt, context), settings.excludedContextTags);
+    const expanded = tags.filterJsonPromptStrings(text.expandSafeRoleMacros(prompt, context), tags.tagPolicyForSettings(settings));
     return `${contextEnvelope}\n${expanded}${creative.creativeSupplementBlock(settings)}`;
 }
 
@@ -60,8 +61,9 @@ export async function measureArchiveRequest(context, actualPrompt, { signal = nu
         contextTokens, maximumOutputTokens, exceeded: null };
     if (maximumOutputTokens && outputTokens > maximumOutputTokens) result.exceeded = 'output';
     else if (contextTokens && result.combinedTokens !== null && result.combinedTokens > contextTokens) result.exceeded = 'context';
-    else if (utf16Chars > constants.MAX_GENERATION_INPUT_CHARS) result.exceeded = 'characters';
-    else if (inputTokens !== null && inputTokens > constants.MAX_GENERATION_INPUT_TOKENS) result.exceeded = 'tokens';
+    // Unknown model capacity stays unknown. The host tokenizer is diagnostic,
+    // not a universal 32k input limit; characters are not model tokens either.
+    // Source batching and storage keep their independent, existing resource bounds.
     return result;
 }
 

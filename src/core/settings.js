@@ -1,3 +1,4 @@
+import * as output_budget from './outputBudget.js';
 import * as cg_format from './cgPromptFormat.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -41,7 +42,7 @@ export function getPluginSettings(context = core_context.getContext()) {
         manualApiModel: core_text.normalizeText(settings.manualApiModel, 240),
         manualApiStreaming: settings.manualApiStreaming === true,
         chatReadRange: chat_read_range.normalizeChatReadRange(settings),
-        maxTokens: Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens)),
+        maxTokens: output_budget.normalizeOutputTokens(settings.maxTokens),
         temperature: Math.max(0, Math.min(2, Number.isFinite(Number(settings.temperature)) ? Number(settings.temperature) : core_constants.DEFAULT_SETTINGS.temperature)),
         roomLifeAutoDaily: settings.roomLifeAutoDaily !== false,
         autoUpdates: core_autoUpdatePolicy.normalizeAutoUpdates(settings.autoUpdates),
@@ -57,6 +58,7 @@ export function getPluginSettings(context = core_context.getContext()) {
         floatingAvatarPosition: normalizeFloatingAvatarPosition(settings.floatingAvatarPosition),
         themeMode: core_constants.THEME_MODES.has(settings.themeMode) ? settings.themeMode : 'default',
         excludedContextTags: core_contextTags.normalizeExcludedTags(settings.excludedContextTags === undefined ? core_contextTags.DEFAULT_EXCLUDED_TAGS : settings.excludedContextTags),
+        ...core_contextTags.savedTagSelection(settings),
         themeAlpha: Math.max(0.72, Math.min(1, Number.isFinite(Number(settings.themeAlpha)) ? Number(settings.themeAlpha) : core_constants.DEFAULT_SETTINGS.themeAlpha)),
         themeCustom: core_theme.normalizeThemeCustom(settings.themeCustom),
         bannedGeneratedPhrases: settings.bannedGeneratedPhrases === undefined

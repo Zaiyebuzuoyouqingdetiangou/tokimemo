@@ -1,5 +1,5 @@
-const VERSION = '0.8.98';
-const BUILD = '0.8.98-tt-cg-r84.22-archive-batches';
+const VERSION = '0.8.100';
+const BUILD = '0.8.100-tt-cg-r84.24-user-settings';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

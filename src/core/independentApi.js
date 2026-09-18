@@ -1,3 +1,4 @@
+import * as output_budget from './outputBudget.js';
 // Heartbeat Memories independent API transport boundary.
 // Manual providers are reached only through SillyTavern's fixed same-origin custom backend.
 import * as core_constants from './constants.js';
@@ -874,7 +875,7 @@ export async function requestManualApiCompletion(settings, context, messages, ma
     const body = {
         model,
         messages,
-        max_tokens: Math.max(1, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens)),
+        max_tokens: output_budget.normalizeOutputTokens(maxTokens),
         temperature: Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : settings?.temperature,
         stream: settings?.manualApiStreaming === true,
         chat_completion_source: 'custom',

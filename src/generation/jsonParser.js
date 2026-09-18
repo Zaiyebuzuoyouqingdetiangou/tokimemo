@@ -1,3 +1,4 @@
+import * as output_budget from '../core/outputBudget.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_constants from '../core/constants.js';
@@ -50,12 +51,12 @@ export function extractBalancedJsonObjects(text) {
 
 export function jsonOutputBudgetSummary({ requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {
     const requestMax = Math.max(0, Math.floor(Number(requestMaxTokens) || 0));
-    const configuredMax = Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Math.floor(Number(configuredMaxTokens) || core_constants.MAX_GENERATION_OUTPUT_TOKENS)));
-    const actual = requestMax ? Math.min(requestMax, configuredMax) : configuredMax;
+    const configuredMax = output_budget.normalizeOutputTokens(configuredMaxTokens);
+    const actual = requestMax || configuredMax;
     const segmentNote = actual < configuredMax
         ? `本段实际请求上限 ${actual.toLocaleString()} tokens（该功能使用较小的分段上限）`
         : `本段实际请求上限 ${actual.toLocaleString()} tokens`;
-    return `${segmentNote}；当前插件设置 ${configuredMax.toLocaleString()} tokens；插件允许最高 ${core_constants.MAX_GENERATION_OUTPUT_TOKENS.toLocaleString()} tokens。`;
+    return `${segmentNote}；当前插件设置 ${configuredMax.toLocaleString()} tokens；实际可用额度由所选模型／渠道决定。`;
 }
 
 export function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {

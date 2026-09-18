@@ -2,6 +2,7 @@
 import * as contextApi from '../core/context.js';
 import * as settingsApi from '../core/settings.js';
 import * as constants from '../core/constants.js';
+import * as contextTags from '../core/contextTags.js';
 import * as stateModule from '../core/state.js';
 
 export function sourceReadSignature(context) {
@@ -12,6 +13,7 @@ export function sourceReadSignature(context) {
         String(context?.powerUserSettings?.persona_description ?? ''),
         settings.useCurrentChatExternalMemory === true, settings.useActivatedWorldInfo !== false,
         context?.chatMetadata?.[constants.MEMORY_WORLD_INFO_SETTINGS_KEY]?.books || [],
+        contextTags.tagPolicyForSettings(settings),
     ]);
 }
 

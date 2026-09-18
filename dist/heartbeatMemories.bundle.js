@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 119
-// Source SHA-256: 5c4293ec7e4750d93f0899d3013105412017931e863f8257895f1161800ade00
+// Source modules: 120
+// Source SHA-256: dca7b52a3814e85182f51d770c667276d6bdb6c4dd202728cfec67aea65813d9
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -41,6 +41,7 @@ const __m_core_heartLanguage_js = Object.create(null);
 const __m_core_incremental_js = Object.create(null);
 const __m_core_independentApi_js = Object.create(null);
 const __m_core_narrativeAuthority_js = Object.create(null);
+const __m_core_outputBudget_js = Object.create(null);
 const __m_core_pastLivesContract_js = Object.create(null);
 const __m_core_presentExpression_js = Object.create(null);
 const __m_core_relationshipSafety_js = Object.create(null);
@@ -123,64 +124,6 @@ const __m_ui_workspace_js = Object.create(null);
 const __m_ui_workspaceState_js = Object.create(null);
 const __m_ui_workspaceStyles_js = Object.create(null);
 
-function __init_core_digest_js() {
-// MODULE: core/digest.js
-
-// SHA-256 for content identity, including HTTP LAN hosts where SubtleCrypto is
-// unavailable. No credentials, network, dependency download or weaker hash fallback.
-let roundConstants;
-let initialWords;
-function constants() {
-    if (roundConstants) return;
-    const primes = [];
-    for (let n = 2; primes.length < 64; n++) {
-        if (!primes.some(p => p * p <= n && n % p === 0)) primes.push(n);
-    }
-    const fraction = value => Math.floor((value - Math.floor(value)) * 0x100000000) >>> 0;
-    roundConstants = primes.map(n => fraction(Math.cbrt(n)));
-    initialWords = primes.slice(0, 8).map(n => fraction(Math.sqrt(n)));
-}
-const rotate = (n, bits) => (n >>> bits) | (n << (32 - bits));
-function sha256Bytes(bytes) {
-    constants();
-    const padded = new Uint8Array(Math.ceil((bytes.length + 9) / 64) * 64);
-    padded.set(bytes); padded[bytes.length] = 0x80;
-    const view = new DataView(padded.buffer);
-    view.setUint32(padded.length - 8, Math.floor(bytes.length / 0x20000000));
-    view.setUint32(padded.length - 4, (bytes.length * 8) >>> 0);
-    const hash = initialWords.slice(), words = new Uint32Array(64);
-    for (let offset = 0; offset < padded.length; offset += 64) {
-        for (let i = 0; i < 16; i++) words[i] = view.getUint32(offset + i * 4);
-        for (let i = 16; i < 64; i++) {
-            const x = words[i - 15], y = words[i - 2];
-            words[i] = (words[i - 16] + (rotate(x, 7) ^ rotate(x, 18) ^ (x >>> 3)) + words[i - 7]
-                + (rotate(y, 17) ^ rotate(y, 19) ^ (y >>> 10))) >>> 0;
-        }
-        let [a,b,c,d,e,f,g,h] = hash;
-        for (let i = 0; i < 64; i++) {
-            const one = (h + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25)) + ((e & f) ^ (~e & g)) + roundConstants[i] + words[i]) >>> 0;
-            const two = ((rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
-            h=g; g=f; f=e; e=(d+one)>>>0; d=c; c=b; b=a; a=(one+two)>>>0;
-        }
-        [a,b,c,d,e,f,g,h].forEach((value, i) => { hash[i] = (hash[i] + value) >>> 0; });
-    }
-    return hash.map(value => value.toString(16).padStart(8, '0')).join('');
-}
-async function sha256Text(input) {
-    const bytes = new TextEncoder().encode(input);
-    if (globalThis.crypto?.subtle) {
-        try {
-            const result = await globalThis.crypto.subtle.digest('SHA-256', bytes);
-            return [...new Uint8Array(result)].map(value => value.toString(16).padStart(2, '0')).join('');
-        } catch { /* Some host webviews expose the API but reject its use. */ }
-    }
-    return sha256Bytes(bytes);
-}
-
-__m_core_digest_js.sha256Text = sha256Text;
-__m_core_digest_js.sha256Bytes = sha256Bytes;
-}
-
 function __init_core_constants_js() {
 // MODULE: core/constants.js
 
@@ -260,6 +203,7 @@ const MAX_INCREMENTAL_EXISTING_INDEX_ITEMS = 120;
 
 const MAX_GENERATION_INPUT_TOKENS = 32000;
 
+// Legacy per-feature sizing hint only; never clamp the user's output setting to it.
 const MAX_GENERATION_OUTPUT_TOKENS = 60000;
 
 const MAX_GENERATION_OUTPUT_CHARS = 600000;
@@ -364,7 +308,7 @@ const DEFAULT_SETTINGS = Object.freeze({
     manualApiModel: '',
     manualApiStreaming: false,
     chatReadRange: Object.freeze({ mode: 'recent', recent: 50, start: 1, end: 100, includeHidden: false }),
-    maxTokens: 16384,
+    maxTokens: 60000,
     temperature: 0.9,
     roomLifeAutoDaily: true,
     useCurrentChatExternalMemory: true,
@@ -648,6 +592,85 @@ __m_core_constants_js.ARCHIVE_SNAPSHOT_CACHE_MAX = ARCHIVE_SNAPSHOT_CACHE_MAX;
 __m_core_constants_js.RUNTIME_SESSION_CACHE_MAX = RUNTIME_SESSION_CACHE_MAX;
 }
 
+function __init_core_outputBudget_js() {
+// MODULE: core/outputBudget.js
+const constants = __m_core_constants_js;
+// The UI value is a requested output allowance, not a model capability.
+// Keep positive safe integers exactly; missing/invalid persisted values use the default.
+// Response-size, timeout, cancellation and storage protections are separate contracts.
+
+function isValidOutputTokens(value) {
+    if (typeof value !== 'number' && typeof value !== 'string') return false;
+    if (typeof value === 'string' && !value.trim()) return false;
+    const count = Number(value);
+    return Number.isSafeInteger(count) && count > 0;
+}
+function normalizeOutputTokens(value) {
+    return isValidOutputTokens(value) ? Number(value) : constants.DEFAULT_SETTINGS.maxTokens;
+}
+
+__m_core_outputBudget_js.isValidOutputTokens = isValidOutputTokens;
+__m_core_outputBudget_js.normalizeOutputTokens = normalizeOutputTokens;
+}
+
+function __init_core_digest_js() {
+// MODULE: core/digest.js
+
+// SHA-256 for content identity, including HTTP LAN hosts where SubtleCrypto is
+// unavailable. No credentials, network, dependency download or weaker hash fallback.
+let roundConstants;
+let initialWords;
+function constants() {
+    if (roundConstants) return;
+    const primes = [];
+    for (let n = 2; primes.length < 64; n++) {
+        if (!primes.some(p => p * p <= n && n % p === 0)) primes.push(n);
+    }
+    const fraction = value => Math.floor((value - Math.floor(value)) * 0x100000000) >>> 0;
+    roundConstants = primes.map(n => fraction(Math.cbrt(n)));
+    initialWords = primes.slice(0, 8).map(n => fraction(Math.sqrt(n)));
+}
+const rotate = (n, bits) => (n >>> bits) | (n << (32 - bits));
+function sha256Bytes(bytes) {
+    constants();
+    const padded = new Uint8Array(Math.ceil((bytes.length + 9) / 64) * 64);
+    padded.set(bytes); padded[bytes.length] = 0x80;
+    const view = new DataView(padded.buffer);
+    view.setUint32(padded.length - 8, Math.floor(bytes.length / 0x20000000));
+    view.setUint32(padded.length - 4, (bytes.length * 8) >>> 0);
+    const hash = initialWords.slice(), words = new Uint32Array(64);
+    for (let offset = 0; offset < padded.length; offset += 64) {
+        for (let i = 0; i < 16; i++) words[i] = view.getUint32(offset + i * 4);
+        for (let i = 16; i < 64; i++) {
+            const x = words[i - 15], y = words[i - 2];
+            words[i] = (words[i - 16] + (rotate(x, 7) ^ rotate(x, 18) ^ (x >>> 3)) + words[i - 7]
+                + (rotate(y, 17) ^ rotate(y, 19) ^ (y >>> 10))) >>> 0;
+        }
+        let [a,b,c,d,e,f,g,h] = hash;
+        for (let i = 0; i < 64; i++) {
+            const one = (h + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25)) + ((e & f) ^ (~e & g)) + roundConstants[i] + words[i]) >>> 0;
+            const two = ((rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
+            h=g; g=f; f=e; e=(d+one)>>>0; d=c; c=b; b=a; a=(one+two)>>>0;
+        }
+        [a,b,c,d,e,f,g,h].forEach((value, i) => { hash[i] = (hash[i] + value) >>> 0; });
+    }
+    return hash.map(value => value.toString(16).padStart(8, '0')).join('');
+}
+async function sha256Text(input) {
+    const bytes = new TextEncoder().encode(input);
+    if (globalThis.crypto?.subtle) {
+        try {
+            const result = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+            return [...new Uint8Array(result)].map(value => value.toString(16).padStart(2, '0')).join('');
+        } catch { /* Some host webviews expose the API but reject its use. */ }
+    }
+    return sha256Bytes(bytes);
+}
+
+__m_core_digest_js.sha256Text = sha256Text;
+__m_core_digest_js.sha256Bytes = sha256Bytes;
+}
+
 function __init_core_evidence_js() {
 // MODULE: core/evidence.js
 const core_constants = __m_core_constants_js;
@@ -787,7 +810,7 @@ const DEFAULT_EXCLUDED_TAGS = Object.freeze(['thinking', 'updatevariable', 'upda
 function normalizeExcludedTags(value) {
     const parts = Array.isArray(value) ? value : String(value || '').split(/[\s,，]+/);
     return [...new Set(parts.map(item => String(item).trim().replace(/^<\/?|\/?\s*>$/g, '').toLowerCase())
-        .filter(item => /^[\p{L}][\p{L}\p{N}\p{M}._:-]{0,63}$/u.test(item)))].slice(0, 32);
+        .filter(item => /^[\p{L}][\p{L}\p{N}\p{M}._:-]{0,63}$/u.test(item)))];
 }
 function excludedTagsForContext(context) {
     const source = context?.extensionSettings?.heartbeatMemories?.excludedContextTags;
@@ -830,31 +853,106 @@ function tagAt(source, start) {
 }
 // Preserve original bytes outside selected blocks, including HTML entities.
 // Malformed/unclosed selected openers fail closed; nesting never releases early.
-function stripExcludedTags(value, tags) {
+function stripExcludedTags(value, tags, onRetainedSpan = null) {
     const source = String(value || ''), excluded = new Set(normalizeExcludedTags(tags));
-    if (!excluded.size) return source;
+    if (!excluded.size) { if (source.length) onRetainedSpan?.(0, source.length); return source; }
     const stack = [];
     let out = '', cursor = 0, index = 0;
+    const retain = (start, end) => {
+        if (end > start) { out += source.slice(start, end); onRetainedSpan?.(start, end); }
+    };
     while (index < source.length) {
         if (source[index] !== '<' && source[index] !== '&') { index++; continue; }
         const token = tagAt(source, index);
         if (!token) { index++; continue; }
         if (token.incomplete) {
-            if (stack.length || (excluded.has(token.name) && !token.closing)) return out + (stack.length ? '' : source.slice(cursor, index));
+            if (stack.length || (excluded.has(token.name) && !token.closing)) {
+                if (!stack.length) retain(cursor, index);
+                return out;
+            }
             index = Math.max(index + 1, token.end);
             continue;
         }
-        if (!stack.length) out += source.slice(cursor, index);
+        if (!stack.length) retain(cursor, index);
         if (stack.length) {
             if (token.closing && stack[stack.length - 1] === token.name) stack.pop();
             else if (!token.closing && !token.selfClosing) stack.push(token.name);
         } else if (excluded.has(token.name)) {
             if (!token.closing && !token.selfClosing) stack.push(token.name);
-        } else out += source.slice(index, token.end);
+        } else retain(index, token.end);
         cursor = token.end;
         index = cursor;
     }
-    return out + (stack.length ? '' : source.slice(cursor));
+    if (!stack.length) retain(cursor, source.length);
+    return out;
+}
+// Only an explicit save enables keep mode. Legacy exclusion settings are not inverted.
+function savedTagSelection(settings) {
+    return settings?.contextTagMode === 'keep'
+        ? { contextTagMode: 'keep', retainedContextTags: normalizeExcludedTags(settings.retainedContextTags) } : {};
+}
+function tagPolicyForSettings(settings) {
+    return settings?.contextTagMode === 'keep'
+        ? { mode: 'keep', tags: normalizeExcludedTags(settings.retainedContextTags) }
+        : normalizeExcludedTags(settings?.excludedContextTags === undefined ? DEFAULT_EXCLUDED_TAGS : settings.excludedContextTags);
+}
+function tagPolicyForContext(context) {
+    return tagPolicyForSettings(context?.extensionSettings?.heartbeatMemories);
+}
+// Resolve the complement from the actual source, including tags absent from the UI
+// scan. Reuse the original isolator: an unselected outer block includes its children.
+// Plain text outside tags is never discarded and source strings are never mutated.
+function filterContextTags(value, policy, onRetainedSpan = null) {
+    if (policy?.mode !== 'keep') return stripExcludedTags(value, policy, onRetainedSpan);
+    const source = String(value || ''), retained = new Set(normalizeExcludedTags(policy.tags)), excluded = new Set();
+    for (let index = 0; index < source.length; index++) {
+        if (source[index] !== '<' && source[index] !== '&') continue;
+        const token = tagAt(source, index);
+        if (!token) continue;
+        if (!retained.has(token.name)) excluded.add(token.name);
+        index = Math.max(index, token.end - 1);
+    }
+    return stripExcludedTags(source, [...excluded], onRetainedSpan);
+}
+// Filter whole original records before splitting, while keeping each original
+// fragment position (and therefore its evidence ID). A tag spanning fragments
+// must not leak its middle as apparently untagged text. This is a read projection;
+// original ledger bytes and the isolator's nesting/escaping rules stay unchanged.
+function filterContextTagSegments(value, policy, size) {
+    const source = String(value || '');
+    if (!Number.isSafeInteger(size) || size < 1) throw new TypeError('Invalid fragment size');
+    const segments = Array.from({ length: Math.ceil(source.length / size) }, () => '');
+    filterContextTags(source, policy, (start, end) => {
+        while (start < end) {
+            const part = Math.floor(start / size), stop = Math.min(end, (part + 1) * size);
+            segments[part] += source.slice(start, stop); start = stop;
+        }
+    });
+    return segments;
+}
+// Explicit UI scan only. Complete chat, no silent 32/100-tag truncation, with
+// cooperative yielding and a caller-owned scope/lifecycle guard. No model or I/O.
+async function scanContextTagChoices(messages, { assertCurrent = () => {} } = {}) {
+    const counts = new Map(); let usedMessages = 0, usedChars = 0, nextYield = Date.now() + 12;
+    for (const message of Array.isArray(messages) ? messages : []) {
+        assertCurrent();
+        const source = String(message?.mes || ''); usedMessages++; usedChars += source.length;
+        for (let index = 0; index < source.length; index++) {
+            if ((index & 4095) === 0 && Date.now() >= nextYield) {
+                await new Promise(resolve => setTimeout(resolve, 0)); assertCurrent(); nextYield = Date.now() + 12;
+            }
+            if (source[index] !== '<' && source[index] !== '&') continue;
+            const token = tagAt(source, index);
+            if (!token) continue;
+            if (!token.closing) counts.set(token.name, (counts.get(token.name) || 0) + 1);
+            index = Math.max(index, token.end - 1);
+        }
+        if (Date.now() >= nextYield) {
+            await new Promise(resolve => setTimeout(resolve, 0)); assertCurrent(); nextYield = Date.now() + 12;
+        }
+    }
+    assertCurrent();
+    return { tags: [...counts].map(([name, count]) => ({ name, count })), usedMessages, usedChars, bounded: false };
 }
 // Only JSON string VALUES are filtered; property names and surrounding task
 // schema remain intact, including when a source string has an unclosed tag.
@@ -862,7 +960,7 @@ function filterJsonPromptStrings(prompt, tags) {
     const source = String(prompt || '');
     return source.replace(/"(?:\\.|[^"\\])*"/g, (literal, offset) => {
         if (/^\s*:/.test(source.slice(offset + literal.length, offset + literal.length + 80))) return literal;
-        try { return JSON.stringify(stripExcludedTags(JSON.parse(literal), tags)); } catch { return literal; }
+        try { return JSON.stringify(filterContextTags(JSON.parse(literal), tags)); } catch { return literal; }
     });
 }
 function scanContextTags(messages, maxChars = 256000) {
@@ -883,9 +981,15 @@ function scanContextTags(messages, maxChars = 256000) {
     return { tags: [...counts].map(([name, count]) => ({ name, count })), usedMessages: used, bounded: true };
 }
 
+__m_core_contextTags_js.scanContextTagChoices = scanContextTagChoices;
 __m_core_contextTags_js.normalizeExcludedTags = normalizeExcludedTags;
 __m_core_contextTags_js.excludedTagsForContext = excludedTagsForContext;
 __m_core_contextTags_js.stripExcludedTags = stripExcludedTags;
+__m_core_contextTags_js.savedTagSelection = savedTagSelection;
+__m_core_contextTags_js.tagPolicyForSettings = tagPolicyForSettings;
+__m_core_contextTags_js.tagPolicyForContext = tagPolicyForContext;
+__m_core_contextTags_js.filterContextTags = filterContextTags;
+__m_core_contextTags_js.filterContextTagSegments = filterContextTagSegments;
 __m_core_contextTags_js.filterJsonPromptStrings = filterJsonPromptStrings;
 __m_core_contextTags_js.scanContextTags = scanContextTags;
 __m_core_contextTags_js.DEFAULT_EXCLUDED_TAGS = DEFAULT_EXCLUDED_TAGS;
@@ -1506,6 +1610,7 @@ function isArchiveDialogueMessage(message, context) {
 
 async function buildChatSnapshot(context = currentCharacterGuard(), options = {}) {
     const rawChat = Array.isArray(context.chat) ? context.chat : [];
+    const tagPolicy = core_contextTags.tagPolicyForContext(context);
     const usable = [];
     const fullSignatures = [];
     const prefixCount = Math.max(0, Math.floor(Number(options.prefixCount) || 0));
@@ -1590,11 +1695,11 @@ async function buildChatSnapshot(context = currentCharacterGuard(), options = {}
         truncated: full.truncated,
         coverageMode: options.readRange ? 'selected-floors' : full.truncated ? 'evenly-sampled-full-window' : 'full-window',
         readRange: options.readRange ? chat_read_range.normalizeChatReadRange(options.readRange) : null,
-        messages: full.selected.map(item => ({ ...item, text: core_contextTags.stripExcludedTags(item.text, core_contextTags.excludedTagsForContext(context)) })),
+        messages: full.selected.map(item => ({ ...item, text: core_contextTags.filterContextTags(item.text, tagPolicy) })),
         fingerprint: String(fingerprint >>> 0),
         prefixCount,
         prefixFingerprint: prefixCount > 0 && totalMessages >= prefixCount ? String(prefixFingerprint >>> 0) : '',
-        incrementalMessages: incremental.selected.map(item => ({ ...item, text: core_contextTags.stripExcludedTags(item.text, core_contextTags.excludedTagsForContext(context)) })),
+        incrementalMessages: incremental.selected.map(item => ({ ...item, text: core_contextTags.filterContextTags(item.text, tagPolicy) })),
         incrementalUsedMessages: incremental.selected.length,
         incrementalUsedChars: incremental.selectedChars,
         incrementalTruncated: incremental.truncated,
@@ -1995,7 +2100,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_PHONE_EVIDENCE: '这项终端内容缺少完整的条目或来源证据；旧内容保留，可继续补齐。',
     RMT_PHONE_SOURCE_EMPTY: '当前来源不足以收录终端内容；请补充来源并更新档案后再生成，不会编造记录。',
     RMT_PHONE_SOURCE_CHANGED: '终端草稿的来源已变化，已完成内容未删除。请恢复原来的设定来源后继续，或明确重新生成终端。',
-    RMT_ARCHIVE_CONTEXT_BUDGET: '完整建档请求超出本地输入或已确认上下文预算，未发送；来源与草稿保留，没有降低输出。',
+    RMT_ARCHIVE_CONTEXT_BUDGET: '完整建档请求超出已确认的模型上下文预算，未发送；来源与草稿保留，没有降低输出。',
     RMT_ARCHIVE_OUTPUT_BUDGET: '请求的最大输出超过已确认能力，未发送且没有擅自降低输出。',
     RMT_ARCHIVE_CHECKPOINT: '建档检查点格式或容量异常，旧成果保留，未自动重建。',
     RMT_ARCHIVE_SOURCE_CAPACITY: '全部来源超过账本容量，未仅截取前半部分冒充完成。',
@@ -2274,8 +2379,10 @@ __m_core_cgPromptFormat_js.CG_PROMPT_FORMATS = CG_PROMPT_FORMATS;
 
 function __init_core_independentApi_js() {
 // MODULE: core/independentApi.js
+const output_budget = __m_core_outputBudget_js;
 const core_constants = __m_core_constants_js;
 const core_text = __m_core_text_js;
+
 // Heartbeat Memories independent API transport boundary.
 // Manual providers are reached only through SillyTavern's fixed same-origin custom backend.
 
@@ -3151,7 +3258,7 @@ async function requestManualApiCompletion(settings, context, messages, maxTokens
     const body = {
         model,
         messages,
-        max_tokens: Math.max(1, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens)),
+        max_tokens: output_budget.normalizeOutputTokens(maxTokens),
         temperature: Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : settings?.temperature,
         stream: settings?.manualApiStreaming === true,
         chat_completion_source: 'custom',
@@ -3574,6 +3681,7 @@ __m_core_creativeSupplement_js.MAX_CREATIVE_SUPPLEMENT_CHARS = MAX_CREATIVE_SUPP
 
 function __init_core_settings_js() {
 // MODULE: core/settings.js
+const output_budget = __m_core_outputBudget_js;
 const cg_format = __m_core_cgPromptFormat_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
@@ -3585,6 +3693,7 @@ const core_autoUpdatePolicy = __m_core_autoUpdatePolicy_js;
 const creative_supplement = __m_core_creativeSupplement_js;
 const chat_read_range = __m_core_chatReadRange_js;
 const runtimeState = __m_core_state_js.state;
+
 
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -3621,7 +3730,7 @@ function getPluginSettings(context = core_context.getContext()) {
         manualApiModel: core_text.normalizeText(settings.manualApiModel, 240),
         manualApiStreaming: settings.manualApiStreaming === true,
         chatReadRange: chat_read_range.normalizeChatReadRange(settings),
-        maxTokens: Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens)),
+        maxTokens: output_budget.normalizeOutputTokens(settings.maxTokens),
         temperature: Math.max(0, Math.min(2, Number.isFinite(Number(settings.temperature)) ? Number(settings.temperature) : core_constants.DEFAULT_SETTINGS.temperature)),
         roomLifeAutoDaily: settings.roomLifeAutoDaily !== false,
         autoUpdates: core_autoUpdatePolicy.normalizeAutoUpdates(settings.autoUpdates),
@@ -3637,6 +3746,7 @@ function getPluginSettings(context = core_context.getContext()) {
         floatingAvatarPosition: normalizeFloatingAvatarPosition(settings.floatingAvatarPosition),
         themeMode: core_constants.THEME_MODES.has(settings.themeMode) ? settings.themeMode : 'default',
         excludedContextTags: core_contextTags.normalizeExcludedTags(settings.excludedContextTags === undefined ? core_contextTags.DEFAULT_EXCLUDED_TAGS : settings.excludedContextTags),
+        ...core_contextTags.savedTagSelection(settings),
         themeAlpha: Math.max(0.72, Math.min(1, Number.isFinite(Number(settings.themeAlpha)) ? Number(settings.themeAlpha) : core_constants.DEFAULT_SETTINGS.themeAlpha)),
         themeCustom: core_theme.normalizeThemeCustom(settings.themeCustom),
         bannedGeneratedPhrases: settings.bannedGeneratedPhrases === undefined
@@ -4466,12 +4576,14 @@ __m_archive_importBatches_js.IMPORT_BATCH_VERSION = IMPORT_BATCH_VERSION;
 
 function __init_archive_requestBudget_js() {
 // MODULE: archive/requestBudget.js
+const output_budget = __m_core_outputBudget_js;
 const constants = __m_core_constants_js;
 const settingsApi = __m_core_settings_js;
 const text = __m_core_text_js;
 const tags = __m_core_contextTags_js;
 const creative = __m_core_creativeSupplement_js;
 const digest = __m_core_digest_js;
+
 // Archive-only accounting of the exact request. No provider calls, model changes,
 // output reductions, character-to-token conversion, or automatic retries.
 
@@ -4485,12 +4597,12 @@ const hash = value => digest.sha256Bytes(encoder.encode(value));
 
 function requestedOutput(context) {
     const settings = settingsApi.getPluginSettings(context);
-    return Math.max(1024, Math.min(constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || constants.DEFAULT_SETTINGS.maxTokens));
+    return output_budget.normalizeOutputTokens(settings.maxTokens);
 }
 
 function composeArchiveRequest(context, prompt, contextEnvelope) {
     const settings = settingsApi.getPluginSettings(context);
-    const expanded = tags.filterJsonPromptStrings(text.expandSafeRoleMacros(prompt, context), settings.excludedContextTags);
+    const expanded = tags.filterJsonPromptStrings(text.expandSafeRoleMacros(prompt, context), tags.tagPolicyForSettings(settings));
     return `${contextEnvelope}\n${expanded}${creative.creativeSupplementBlock(settings)}`;
 }
 
@@ -4534,8 +4646,9 @@ async function measureArchiveRequest(context, actualPrompt, { signal = null, con
         contextTokens, maximumOutputTokens, exceeded: null };
     if (maximumOutputTokens && outputTokens > maximumOutputTokens) result.exceeded = 'output';
     else if (contextTokens && result.combinedTokens !== null && result.combinedTokens > contextTokens) result.exceeded = 'context';
-    else if (utf16Chars > constants.MAX_GENERATION_INPUT_CHARS) result.exceeded = 'characters';
-    else if (inputTokens !== null && inputTokens > constants.MAX_GENERATION_INPUT_TOKENS) result.exceeded = 'tokens';
+    // Unknown model capacity stays unknown. The host tokenizer is diagnostic,
+    // not a universal 32k input limit; characters are not model tokens either.
+    // Source batching and storage keep their independent, existing resource bounds.
     return result;
 }
 
@@ -4830,7 +4943,7 @@ function ensureCastLooks(context = null) {
     if (existing?.manual === true) return existing;
     let card = {};
     try { card = live?.getCharacterCardFields?.() || {}; } catch { return existing; }
-    const clean = value => context_tags.stripExcludedTags(String(value || '').slice(0, 16000), context_tags.excludedTagsForContext(live));
+    const clean = value => context_tags.filterContextTags(String(value || '').slice(0, 16000), context_tags.tagPolicyForContext(live));
     const char = lookFromDescription([clean(card.description), clean(card.personality)].filter(Boolean).join('\n'));
     const user = lookFromDescription(clean(card.persona || live?.powerUserSettings?.persona_description || ''));
     if (!char && !user) return existing;
@@ -4896,8 +5009,8 @@ function plain(value, limit) {
 
 function sourceText(value, context) {
     if (typeof value !== 'string') return '';
-    return plain(context_tags.stripExcludedTags(value.slice(0, 16000),
-        context_tags.excludedTagsForContext(context)), 5000);
+    return plain(context_tags.filterContextTags(value.slice(0, 16000),
+        context_tags.tagPolicyForContext(context)), 5000);
 }
 
 function libraryCharacters(api) {
@@ -6919,8 +7032,10 @@ __m_core_worldPresentation_js.controlledEvidenceContains = controlledEvidenceCon
 
 function __init_generation_jsonParser_js() {
 // MODULE: generation/jsonParser.js
+const output_budget = __m_core_outputBudget_js;
 const core_constants = __m_core_constants_js;
 const core_text = __m_core_text_js;
+
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 
@@ -6972,12 +7087,12 @@ function extractBalancedJsonObjects(text) {
 
 function jsonOutputBudgetSummary({ requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {
     const requestMax = Math.max(0, Math.floor(Number(requestMaxTokens) || 0));
-    const configuredMax = Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Math.floor(Number(configuredMaxTokens) || core_constants.MAX_GENERATION_OUTPUT_TOKENS)));
-    const actual = requestMax ? Math.min(requestMax, configuredMax) : configuredMax;
+    const configuredMax = output_budget.normalizeOutputTokens(configuredMaxTokens);
+    const actual = requestMax || configuredMax;
     const segmentNote = actual < configuredMax
         ? `本段实际请求上限 ${actual.toLocaleString()} tokens（该功能使用较小的分段上限）`
         : `本段实际请求上限 ${actual.toLocaleString()} tokens`;
-    return `${segmentNote}；当前插件设置 ${configuredMax.toLocaleString()} tokens；插件允许最高 ${core_constants.MAX_GENERATION_OUTPUT_TOKENS.toLocaleString()} tokens。`;
+    return `${segmentNote}；当前插件设置 ${configuredMax.toLocaleString()} tokens；实际可用额度由所选模型／渠道决定。`;
 }
 
 function extractJson(raw, { reasoning = '', requestMaxTokens = 0, configuredMaxTokens = 0 } = {}) {
@@ -12452,7 +12567,18 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-archive-portal.empty .rmt-portal-status{color:#9aa4ad}
 .rmt-archive-generate-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 13px;border:1px dashed #c7dce6;border-radius:14px;background:rgba(249,252,253,.82)}
 .rmt-archive-generate{min-width:220px}.rmt-archive-generate-row small{font-size:10px;line-height:1.55;color:#7d8b99}
-.rmt-external-memory-row{display:grid;gap:5px;margin:10px 0 2px;padding:10px 12px;border:1px solid #dbe7ec;border-radius:13px;background:rgba(250,253,254,.84);color:#66798a}.rmt-external-memory-toggle{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:750}.rmt-external-memory-row small{font-size:10px;line-height:1.55;color:#8794a0}.rmt-memory-wi-picker{position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(242,248,251,.88);backdrop-filter:blur(7px)}.rmt-memory-wi-picker-card{width:min(780px,96vw);max-height:min(78vh,780px);overflow:auto;padding:16px;border:1px solid #d6e4ea;border-radius:18px;background:#fff;box-shadow:0 18px 50px rgba(55,78,92,.18)}.rmt-memory-wi-picker-head,.rmt-memory-wi-book-row{display:flex;align-items:center;justify-content:space-between;gap:10px}.rmt-memory-wi-picker-head small{display:block;margin-top:3px;color:#8795a1}.rmt-memory-wi-picker-note{margin:10px 0;padding:9px 11px;border-radius:11px;background:#f6fafc;color:#71818d;font-size:11px;line-height:1.55}.rmt-memory-wi-books{display:grid;gap:8px}.rmt-memory-wi-book{padding:10px;border:1px solid #e0e9ed;border-radius:13px;background:#fbfdfe}.rmt-memory-wi-book-row label{font-size:12px}.rmt-memory-wi-entry-list{display:grid;gap:7px;margin-top:9px}.rmt-memory-wi-entry{display:flex;gap:8px;align-items:flex-start;padding:8px;border-radius:10px;background:#fff;border:1px solid #e8eef1}.rmt-memory-wi-entry span{display:grid;gap:2px;min-width:0}.rmt-memory-wi-entry small{font-size:10px;color:#8b98a2}.rmt-memory-wi-entry em{font-style:normal;font-size:10px;line-height:1.45;color:#65747f}.rmt-memory-wi-empty{padding:18px;text-align:center;color:#8b98a2}.rmt-archive-group-manager{position:absolute;inset:0;z-index:61;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(242,248,251,.9);backdrop-filter:blur(7px)}.rmt-archive-group-create{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;margin:10px 0}.rmt-archive-group-entries{display:grid;gap:8px}.rmt-archive-group-entry{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.8fr);gap:10px;align-items:center;padding:10px;border:1px solid #e0e9ed;border-radius:13px;background:#fbfdfe}.rmt-archive-group-entry b{display:block;color:#5c7083}.rmt-archive-group-entry small{display:block;margin-top:3px;color:#8a98a4;font-size:9px}.rmt-archive-group-entry-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}@media(max-width:720px){.rmt-archive-group-create,.rmt-archive-group-entry{grid-template-columns:1fr}.rmt-archive-group-entry-actions{grid-template-columns:1fr auto}}
+.rmt-external-memory-row{display:grid;gap:5px;margin:10px 0 2px;padding:10px 12px;border:1px solid #dbe7ec;border-radius:13px;background:rgba(250,253,254,.84);color:#66798a}.rmt-external-memory-toggle{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:750}.rmt-external-memory-row small{font-size:10px;line-height:1.55;color:#8794a0}.rmt-memory-wi-picker{position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(242,248,251,.88);backdrop-filter:blur(7px)}.rmt-memory-wi-picker-card{width:min(780px,96vw);max-height:min(78vh,780px);overflow:auto;padding:16px;border:1px solid #d6e4ea;border-radius:18px;background:#fff;box-shadow:0 18px 50px rgba(55,78,92,.18)}.rmt-memory-wi-picker-head,.rmt-memory-wi-book-row{display:flex;align-items:center;justify-content:space-between;gap:10px}.rmt-memory-wi-picker-head small{display:block;margin-top:3px;color:#8795a1}.rmt-memory-wi-picker-note{margin:10px 0;padding:9px 11px;border-radius:11px;background:#f6fafc;color:#71818d;font-size:11px;line-height:1.55}.rmt-memory-wi-books{display:grid;gap:8px}.rmt-memory-wi-book{padding:10px;border:1px solid #e0e9ed;border-radius:13px;background:#fbfdfe}.rmt-memory-wi-book-row label{font-size:12px}.rmt-memory-wi-entry-list{display:grid;gap:7px;margin-top:9px}.rmt-memory-wi-entry{display:flex;gap:8px;align-items:flex-start;padding:8px;border-radius:10px;background:#fff;border:1px solid #e8eef1}.rmt-memory-wi-entry span{display:grid;gap:2px;min-width:0}.rmt-memory-wi-entry small{font-size:10px;color:#8b98a2}.rmt-memory-wi-entry em{font-style:normal;font-size:10px;line-height:1.45;color:#65747f}/* r84.24 picker-only scroll container; shared archive-group cards are unchanged. */
+.rmt-memory-wi-picker>.rmt-memory-wi-picker-card{display:flex;flex-direction:column;overflow:hidden;max-height:min(78vh,780px);max-height:min(78dvh,780px);min-height:0;max-width:100%}
+.rmt-memory-wi-picker .rmt-memory-wi-picker-head{flex:none;background:var(--rmt-theme-surface,#fff);color:var(--rmt-theme-text,#34495d);min-width:0;padding-bottom:8px}
+.rmt-memory-wi-picker .rmt-memory-wi-picker-head>div{min-width:0;overflow-wrap:anywhere}
+.rmt-memory-wi-picker [data-rmt-action="memory-worldinfo-close"]{flex:none;min-height:44px;white-space:nowrap}
+.rmt-memory-wi-picker-scroll{overflow:auto;min-height:0;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-gutter:stable}
+.rmt-memory-wi-picker .rmt-memory-wi-book-row{flex-wrap:wrap}
+.rmt-memory-wi-picker .rmt-memory-wi-book-row label{min-width:0;overflow-wrap:anywhere}
+.rmt-home-settings [data-rmt-tag-results]{display:flex;flex-wrap:wrap;gap:8px}
+.rmt-home-settings .rmt-tag-choice{display:flex;align-items:center;gap:7px;min-height:44px;padding:6px 10px;border:1px solid var(--rmt-theme-border,#cfdae5);border-radius:10px;max-width:100%;overflow-wrap:anywhere;cursor:pointer}
+.rmt-home-settings .rmt-tag-choice input{flex:none;width:18px;height:18px;margin:0}
+.rmt-memory-wi-empty{padding:18px;text-align:center;color:#8b98a2}.rmt-archive-group-manager{position:absolute;inset:0;z-index:61;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(242,248,251,.9);backdrop-filter:blur(7px)}.rmt-archive-group-create{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;margin:10px 0}.rmt-archive-group-entries{display:grid;gap:8px}.rmt-archive-group-entry{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.8fr);gap:10px;align-items:center;padding:10px;border:1px solid #e0e9ed;border-radius:13px;background:#fbfdfe}.rmt-archive-group-entry b{display:block;color:#5c7083}.rmt-archive-group-entry small{display:block;margin-top:3px;color:#8a98a4;font-size:9px}.rmt-archive-group-entry-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}@media(max-width:720px){.rmt-archive-group-create,.rmt-archive-group-entry{grid-template-columns:1fr}.rmt-archive-group-entry-actions{grid-template-columns:1fr auto}}
 #${core_constants.SETTINGS_ID} .rmt-open-archive-room{width:100%!important;min-height:48px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;background:linear-gradient(90deg,#fff6fa,#f2faff)!important;border:1px solid #d4e2e9!important;color:#566a80!important;font-weight:850!important}
 #${core_constants.SETTINGS_ID} .rmt-settings-archive-actions{display:grid;gap:8px;margin-top:10px}.rmt-current-archive-card{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.rmt-current-archive-card>div:first-child{display:grid;gap:4px}.rmt-current-archive-card small{font-size:10px;color:#8794a0}.rmt-current-archive-actions{display:flex;gap:8px;flex-wrap:wrap}
 .rmt-archive-portal-items .rmt-portal-avatar{background:linear-gradient(145deg,#ddb991,#b99168)}
@@ -17735,6 +17861,65 @@ __m_modes_achievements_js.achievementMergeKey = achievementMergeKey;
 __m_modes_achievements_js.achievementMergeKeys = achievementMergeKeys;
 __m_modes_achievements_js.mergeAchievementsIncremental = mergeAchievementsIncremental;
 __m_modes_achievements_js.renderAchievements = renderAchievements;
+}
+
+function __init_archive_sourceReadGuard_js() {
+// MODULE: archive/sourceReadGuard.js
+const contextApi = __m_core_context_js;
+const settingsApi = __m_core_settings_js;
+const constants = __m_core_constants_js;
+const contextTags = __m_core_contextTags_js;
+const stateModule = __m_core_state_js;
+// User-triggered reads only. No module-load discovery, timers, storage, or model calls.
+
+
+
+
+
+function sourceReadSignature(context) {
+    const settings = settingsApi.getPluginSettings(context);
+    return JSON.stringify([
+        contextApi.chatScopeKey(context), stateModule.state.runtimeLifecycleEpoch,
+        String(context?.userAvatar ?? context?.personaAvatar ?? context?.user_avatar ?? globalThis.user_avatar ?? ''), String(context?.name1 ?? ''),
+        String(context?.powerUserSettings?.persona_description ?? ''),
+        settings.useCurrentChatExternalMemory === true, settings.useActivatedWorldInfo !== false,
+        context?.chatMetadata?.[constants.MEMORY_WORLD_INFO_SETTINGS_KEY]?.books || [],
+        contextTags.tagPolicyForSettings(settings),
+    ]);
+}
+
+function createSourceReadGuard(context, expectedChatId = contextApi.getChatId(context), signal = null) {
+    const signature = sourceReadSignature(context);
+    const chatId = contextApi.comparableChatId(expectedChatId);
+    return () => {
+        if (signal?.aborted) throw new DOMException('Read cancelled', 'AbortError');
+        let current;
+        try { current = contextApi.currentCharacterGuard(); } catch { throw new DOMException('Source changed', 'AbortError'); }
+        if (!chatId || contextApi.comparableChatId(contextApi.getChatId(current)) !== chatId
+            || sourceReadSignature(current) !== signature) throw new DOMException('Source changed', 'AbortError');
+    };
+}
+
+function boundedSourceRead(read, signal = null, timeoutMs = 15000) {
+    if (signal?.aborted) return Promise.reject(new DOMException('Read cancelled', 'AbortError'));
+    return new Promise((resolve, reject) => {
+        let done = false;
+        const finish = (fn, value) => {
+            if (done) return;
+            done = true; clearTimeout(timer); signal?.removeEventListener?.('abort', abort);
+            fn(value);
+        };
+        const abort = () => finish(reject, new DOMException('Read cancelled', 'AbortError'));
+        const timer = setTimeout(() => finish(reject, Object.assign(new Error('Memory reader timed out'), { code: 'RMT_MEMORY_READ_TIMEOUT' })),
+            Math.max(1, Math.min(15000, Number(timeoutMs) || 15000)));
+        signal?.addEventListener?.('abort', abort, { once: true });
+        Promise.resolve().then(() => done ? undefined : read()).then(value => finish(resolve, value), error => finish(reject, error));
+    });
+}
+
+__m_archive_sourceReadGuard_js.sourceReadSignature = sourceReadSignature;
+__m_archive_sourceReadGuard_js.createSourceReadGuard = createSourceReadGuard;
+__m_archive_sourceReadGuard_js.boundedSourceRead = boundedSourceRead;
 }
 
 function __init_ui_archiveAvatars_js() {
@@ -23416,8 +23601,10 @@ __m_core_selfUpdater_js.isProjectRemote = isProjectRemote;
 
 function __init_ui_settingsPanel_js() {
 // MODULE: ui/settingsPanel.js
+const output_budget = __m_core_outputBudget_js;
 const cg_format_ui = __m_ui_cgFormatControl_js;
 const archive_repository = __m_archive_repository_js;
+const source_guard = __m_archive_sourceReadGuard_js;
 const archive_library = __m_archive_library_js;
 const generation_imageGeneration = __m_generation_imageGeneration_js;
 const core_constants = __m_core_constants_js;
@@ -23438,8 +23625,10 @@ const ui_overlay = __m_ui_overlay_js;
 const ui_styles = __m_ui_styles_js;
 const runtimeState = __m_core_state_js.state;
 
+
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
 
 
 
@@ -24010,7 +24199,7 @@ function mountSettings({ homeTarget = null } = {}) {
             <small>需要服务端支持 SSE；关闭时使用普通完整响应，不影响主聊天。</small>
           </div>
           <div class="rmt-api-grid">
-            <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1024" max="60000" step="1"></label>
+            <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1" step="1" placeholder="默认 60000"></label>
             <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
           </div>
           <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
@@ -24039,12 +24228,13 @@ function mountSettings({ homeTarget = null } = {}) {
           </div>
         </details>
         <details class="rmt-settings-card" data-rmt-settings-section="filter">
-          <summary class="rmt-settings-card-head"><span>TAG</span><div><b>标签过滤</b><small>思考与变量块</small></div></summary>
+          <summary class="rmt-settings-card-head"><span>TAG</span><div><b>按用户所选标签保存</b><small>勾选保留</small></div></summary>
           <div class="rmt-settings-section-body">
-            <p>只过滤送出的副本，不修改聊天。扫描后点选标签，保存后从下一次生成生效。</p>
-            <textarea class="text_pole" data-rmt-tag-draft aria-label="要排除的标签名" placeholder="thinking, 版权水印, bbi_image"></textarea>
-            <div class="rmt-theme-presets"><button type="button" data-rmt-tag-scan>扫描当前聊天</button><button type="button" data-rmt-tag-clear>清空选择</button><button type="button" data-rmt-tag-cancel>撤销编辑</button><button type="button" data-rmt-tag-save>保存过滤</button></div>
-            <div data-rmt-tag-results role="status"></div>
+            <p>勾选的标签块参与后续整理；未选外层块连同内部略过，无标签正文保留。不改聊天和旧档案。</p>
+            <textarea class="text_pole" data-rmt-tag-draft aria-label="要保存的标签名" placeholder="正文, content, dialogue"></textarea>
+            <div class="rmt-theme-presets"><button type="button" data-rmt-tag-scan>扫描当前聊天</button><button type="button" data-rmt-tag-all>全选</button><button type="button" data-rmt-tag-invert>反选</button><button type="button" data-rmt-tag-clear>清空选择</button><button type="button" data-rmt-tag-cancel>撤销编辑</button><button type="button" data-rmt-tag-save>保存选择</button></div>
+            <div data-rmt-tag-status role="status"></div>
+            <div data-rmt-tag-results></div>
           </div>
         </details>
         <details class="rmt-settings-card rmt-theme-box" data-rmt-settings-section="theme">
@@ -24116,7 +24306,55 @@ function mountSettings({ homeTarget = null } = {}) {
       </div>`;
     mount.appendChild(panel);
     refreshThemeUi();
-    panel.querySelector('[data-rmt-tag-draft]').value = core_settings.getPluginSettings().excludedContextTags.join(', ');
+    const tagDraft = panel.querySelector('[data-rmt-tag-draft]');
+    const tagStatus = panel.querySelector('[data-rmt-tag-status]');
+    let tagChoices = new Map(), tagScanned = false, tagEdited = false, tagScanEpoch = 0;
+    const savedTagDraft = () => {
+        const settings = core_settings.getPluginSettings();
+        return settings.contextTagMode === 'keep' ? settings.retainedContextTags
+            : [...tagChoices.keys()].filter(name => !settings.excludedContextTags.includes(name));
+    };
+    const renderTagChoices = () => {
+        const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
+        for (const name of selected) if (!tagChoices.has(name)) tagChoices.set(name, 0);
+        const result = panel.querySelector('[data-rmt-tag-results]');
+        // Empty/legacy initial state does not need to allocate a tag subtree.
+        if (!tagChoices.size) { result.textContent = ''; return; }
+        const fragment = document.createDocumentFragment();
+        for (const [name, count] of tagChoices) {
+            const label = document.createElement('label'); label.className = 'rmt-tag-choice';
+            const input = document.createElement('input'); input.type = 'checkbox'; input.dataset.rmtTagName = name;
+            input.checked = selected.has(name);
+            const text = document.createElement('span'); text.textContent = name + (count ? ' · ' + count : '');
+            label.append(input, text); fragment.appendChild(label);
+        }
+        result.replaceChildren(fragment);
+    };
+    tagDraft.value = savedTagDraft().join(', ');
+    tagStatus.textContent = core_settings.getPluginSettings().contextTagMode === 'keep'
+        ? '已保存的选择从下一次整理生效。' : '当前沿用旧排除设置；扫描后可选择要保留的标签。';
+    renderTagChoices();
+    const scanTagChoices = async () => {
+        const epoch = ++tagScanEpoch, context = core_context.currentCharacterGuard();
+        const scope = core_context.chatScopeKey(context), chat = context.chat, length = chat?.length;
+        const lifecycle = runtimeState.runtimeLifecycleEpoch;
+        const sourceSignature = source_guard.sourceReadSignature(context);
+        const assertCurrent = () => {
+            if (epoch !== tagScanEpoch || !panel.isConnected || lifecycle !== runtimeState.runtimeLifecycleEpoch
+                || core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope
+                || core_context.getContext().chat !== chat || chat?.length !== length
+                || source_guard.sourceReadSignature(core_context.getContext()) !== sourceSignature) throw new DOMException('Changed', 'AbortError');
+        };
+        tagStatus.textContent = '正在扫描当前聊天的标签…';
+        const scanned = await core_contextTags.scanContextTagChoices(chat, { assertCurrent });
+        assertCurrent();
+        const names = new Map(scanned.tags.map(tag => [tag.name, tag.count]));
+        for (const name of core_contextTags.normalizeExcludedTags(tagDraft.value)) if (!names.has(name)) names.set(name, 0);
+        tagChoices = names; tagScanned = true;
+        if (!tagEdited) tagDraft.value = savedTagDraft().join(', ');
+        renderTagChoices();
+        tagStatus.textContent = '已扫描 ' + scanned.usedMessages + ' 条消息／' + scanned.tags.length + ' 种标签；选择后保存生效。';
+    };
     const refreshCreative = () => {
         const settings = core_settings.getPluginSettings();
         panel.querySelector('[data-rmt-creative-text]').value = settings.creativeSupplement;
@@ -24127,6 +24365,14 @@ function mountSettings({ homeTarget = null } = {}) {
     panel.addEventListener('change', async event => {
         if (cg_format_ui.handleCgFormatChange(event)) return;
         const target = event.target;
+        if (target.matches?.('[data-rmt-tag-name]')) {
+            ++tagScanEpoch;
+            const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
+            if (target.checked) selected.add(target.dataset.rmtTagName); else selected.delete(target.dataset.rmtTagName);
+            tagDraft.value = [...selected].join(', '); tagEdited = true;
+            tagStatus.textContent = '选择已更新；尚未保存。';
+            return;
+        }
         if (target.matches?.('[data-rmt-source-external]')) {
             core_settings.updatePluginSettings({ useCurrentChatExternalMemory: !!target.checked });
             return;
@@ -24254,7 +24500,12 @@ function mountSettings({ homeTarget = null } = {}) {
             return;
         }
         if (target.matches?.('[data-rmt-api-max-tokens]')) {
-            core_settings.updatePluginSettings({ maxTokens: Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(target.value) || core_constants.DEFAULT_SETTINGS.maxTokens)) });
+            if (target.validity?.badInput || (target.value.trim() && !output_budget.isValidOutputTokens(target.value))) {
+                globalThis.toastr?.warning?.('最大输出请填写正整数；原设置未改动。', '心迹回廊');
+                target.value = String(core_settings.getPluginSettings().maxTokens);
+                return;
+            }
+            core_settings.updatePluginSettings({ maxTokens: output_budget.normalizeOutputTokens(target.value) });
             refreshGenerationSettingsUi();
             return;
         }
@@ -24321,6 +24572,13 @@ function mountSettings({ homeTarget = null } = {}) {
         }
     });
     panel.addEventListener('input', event => {
+        if (event.target === tagDraft) {
+            ++tagScanEpoch; tagEdited = true;
+            const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
+            for (const input of panel.querySelectorAll('[data-rmt-tag-name]')) input.checked = selected.has(input.dataset.rmtTagName);
+            tagStatus.textContent = '选择已更新；尚未保存。';
+            return;
+        }
         if (event.target.matches?.('[data-rmt-creative-text]')) panel.querySelector('[data-rmt-creative-count]').textContent = event.target.value.length.toLocaleString() + ' / 20,000';
         if (event.target.matches?.('[data-rmt-manual-api-base],[data-rmt-manual-api-key],[data-rmt-manual-api-model]')) {
             panel.dataset.rmtManualDirty = '1';
@@ -24358,37 +24616,37 @@ function mountSettings({ homeTarget = null } = {}) {
             });
             return;
         }
-        const tagAction = event.target.closest?.('[data-rmt-tag-save],[data-rmt-tag-cancel],[data-rmt-tag-clear],[data-rmt-tag-scan],[data-rmt-tag-name]');
+        const tagAction = event.target.closest?.('[data-rmt-tag-save],[data-rmt-tag-cancel],[data-rmt-tag-clear],[data-rmt-tag-scan],[data-rmt-tag-all],[data-rmt-tag-invert]');
         if (tagAction) {
-            const draft = panel.querySelector('[data-rmt-tag-draft]');
-            const result = panel.querySelector('[data-rmt-tag-results]');
-            if (tagAction.hasAttribute('data-rmt-tag-save')) {
-                const tags = core_contextTags.normalizeExcludedTags(draft.value);
-                core_settings.updatePluginSettings({ excludedContextTags: tags });
-                draft.value = tags.join(', ');
-                result.textContent = '已保存 ' + tags.length + ' 个标签；下次生成生效。';
-            } else if (tagAction.hasAttribute('data-rmt-tag-cancel')) {
-                draft.value = core_settings.getPluginSettings().excludedContextTags.join(', ');
-                result.textContent = '已撤销未保存编辑。';
-            } else if (tagAction.hasAttribute('data-rmt-tag-clear')) draft.value = '';
-            else if (tagAction.hasAttribute('data-rmt-tag-name')) {
-                const tags = core_contextTags.normalizeExcludedTags(draft.value);
-                const name = tagAction.dataset.rmtTagName;
-                draft.value = core_contextTags.normalizeExcludedTags(tags.includes(name) ? tags.filter(tag => tag !== name) : [...tags, name]).join(', ');
-                tagAction.setAttribute('aria-pressed', String(!tags.includes(name)));
-            } else {
-                const scanned = core_contextTags.scanContextTags(core_context.getContext()?.chat);
-                result.replaceChildren(document.createTextNode('扫描最近最多 500 条 / 256,000 字符。点选后还需保存。'));
-                const selected = new Set(core_contextTags.normalizeExcludedTags(draft.value));
-                for (const tag of scanned.tags) {
-                    const button = document.createElement('button');
-                    button.type = 'button';
-                    button.dataset.rmtTagName = tag.name;
-                    button.setAttribute('aria-pressed', String(selected.has(tag.name)));
-                    button.textContent = tag.name + ' · ' + tag.count;
-                    result.appendChild(button);
-                }
-            }
+            void (async () => {
+                try {
+                    if (tagAction.hasAttribute('data-rmt-tag-save')) {
+                        ++tagScanEpoch;
+                        const tags = core_contextTags.normalizeExcludedTags(tagDraft.value);
+                        core_settings.updatePluginSettings({ contextTagMode: 'keep', retainedContextTags: tags });
+                        tagDraft.value = tags.join(', '); tagEdited = false; renderTagChoices();
+                        tagStatus.textContent = '已保存 ' + tags.length + ' 个标签；下次整理生效，聊天和旧档案未改动。';
+                    } else if (tagAction.hasAttribute('data-rmt-tag-cancel')) {
+                        ++tagScanEpoch; tagEdited = false; tagDraft.value = savedTagDraft().join(', '); renderTagChoices();
+                        tagStatus.textContent = '已撤销未保存编辑。';
+                    } else if (tagAction.hasAttribute('data-rmt-tag-clear')) {
+                        ++tagScanEpoch; tagEdited = true; tagDraft.value = ''; renderTagChoices();
+                        tagStatus.textContent = '已清空选择；尚未保存。';
+                    } else if (tagAction.hasAttribute('data-rmt-tag-scan')) {
+                        tagAction.disabled = true;
+                        await scanTagChoices();
+                    } else {
+                        tagAction.disabled = true;
+                        if (!tagScanned) await scanTagChoices();
+                        ++tagScanEpoch;
+                        const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
+                        tagDraft.value = [...tagChoices.keys()].filter(name => tagAction.hasAttribute('data-rmt-tag-all') || !selected.has(name)).join(', ');
+                        tagEdited = true; renderTagChoices(); tagStatus.textContent = '选择已更新；尚未保存。';
+                    }
+                } catch (error) {
+                    if (error?.name !== 'AbortError') tagStatus.textContent = core_text.safeErrorSummary(error);
+                } finally { tagAction.disabled = false; }
+            })();
             return;
         }
         const preset = event.target.closest?.('[data-rmt-theme-preset]');
@@ -30627,6 +30885,7 @@ __m_ui_contentManager_js.renderContentManager = renderContentManager;
 
 function __init_generation_client_js() {
 // MODULE: generation/client.js
+const output_budget = __m_core_outputBudget_js;
 const archive_requestBudget = __m_archive_requestBudget_js;
 const cg_policy = __m_generation_cgPromptPolicy_js;
 const core_butterflyContract = __m_core_butterflyContract_js;
@@ -30676,6 +30935,7 @@ const ui_settingsPanel = __m_ui_settingsPanel_js;
 const ui_contentManager = __m_ui_contentManager_js;
 const navigation_bookmark = __m_ui_navigationBookmark_js;
 const runtimeState = __m_core_state_js.state;
+
 
 
 
@@ -30754,12 +31014,12 @@ async function collectFittingSelectedSetting(context, budget = core_constants.MA
         console.warn('[HeartbeatMemories] selected setting unavailable', core_text.safeErrorDiagnostic(error));
         return { ...empty, complete: false, note: '本次没能读取所选设定世界书，已改用角色卡证据继续生成。' };
     }
-    const excluded = core_contextTags.excludedTagsForContext(context);
+    const excluded = core_contextTags.tagPolicyForContext(context);
     const kept = [];
     let chars = 0;
     let total = 0;
     for (const entry of selected.entries) {
-        const text = core_contextTags.stripExcludedTags(entry.content, excluded);
+        const text = core_contextTags.filterContextTags(entry.content, excluded);
         if (!text) continue;
         total += 1;
         if (chars + text.length + 1 > budget) continue;
@@ -31119,7 +31379,7 @@ async function generateConfiguredJson(prompt, options = {}) {
     const settings = core_settings.getPluginSettings(context);
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
     const originalExpanded = core_text.expandSafeRoleMacros(prompt, context);
-    const expanded = core_contextTags.filterJsonPromptStrings(originalExpanded, settings.excludedContextTags);
+    const expanded = core_contextTags.filterJsonPromptStrings(originalExpanded, core_contextTags.tagPolicyForSettings(settings));
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
         : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context) });
@@ -31129,7 +31389,8 @@ async function generateConfiguredJson(prompt, options = {}) {
 ${expanded}${creativeSupplement}${phrasePolicy}`;
     if (options.archiveRequestBudget === true) {
         const budget = await archive_requestBudget.measureArchiveRequest(context, controlledPrompt,
-            { signal: options.signal, stamp: options.archiveBudgetStamp });
+            { signal: options.signal, stamp: options.archiveBudgetStamp,
+                tokenCountState: options.skipTokenCount === true ? { unavailable: true } : null });
         core_taskTrace.recordInput(taskTrace, budget.utf16Chars, budget.inputTokens);
         if (taskTrace) taskTrace.archiveBudget = archive_requestBudget.publicBudget(budget);
         archive_requestBudget.assertArchiveRequestBudget(budget);
@@ -31141,7 +31402,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
     core_taskTrace.markStage(taskTrace, 'prompt');
     // The value configured in the dedicated secondary-API UI is the actual provider max output.
     // Per-feature options.maxTokens values are legacy sizing hints only and must not silently lower it.
-    const responseLength = Math.max(1024, Math.min(core_constants.MAX_GENERATION_OUTPUT_TOKENS, Number(settings.maxTokens) || core_constants.DEFAULT_SETTINGS.maxTokens));
+    const responseLength = output_budget.normalizeOutputTokens(settings.maxTokens);
     const connectionMode = settings.apiConnectionMode === 'manual' ? 'manual' : 'profile';
     const service = context.ConnectionManagerRequestService;
     let selectedProfileFingerprint = '';
@@ -31338,6 +31599,7 @@ function recoverySettingsIdentity(context) {
     // Writing rules and evidence filters must not silently change accepted content.
     return JSON.stringify({ creativeSupplementEnabled: settings.creativeSupplementEnabled,
         creativeSupplement: settings.creativeSupplement, excludedContextTags: settings.excludedContextTags,
+        ...core_contextTags.savedTagSelection(settings),
         bannedGeneratedPhrases: settings.bannedGeneratedPhrases });
 }
 async function beginModeRecovery(mode, context, bank, origin, options = {}) {
@@ -32051,7 +32313,9 @@ async function requestArchiveRecoverySegment(ticket, slot, prompt, options, vali
         async (effectivePrompt, requestOptions, accepted) => {
             // Archive extraction owns runtimeState.busy, so requestJson's module
             // task gate is deliberately not used. Same provider/parser, no retries.
-            const raw = await client.generateConfiguredJson(effectivePrompt, requestOptions);
+            // Apply the archive budget even to legacy page drafts. Do this only
+            // at dispatch: keep the recovery identity and source validators intact.
+            const raw = await client.generateConfiguredJson(effectivePrompt, { ...requestOptions, archiveRequestBudget: true });
             if (ticket.assertCurrent() === false) throw new DOMException('Archive recovery origin changed', 'AbortError');
             const result = await checked(raw);
             await accepted(raw);
@@ -37273,62 +37537,6 @@ __m_archive_memoryProviders_js.findBaibaoPublicApi = findBaibaoPublicApi;
 __m_archive_memoryProviders_js.readBaibaoCurrentChat = readBaibaoCurrentChat;
 }
 
-function __init_archive_sourceReadGuard_js() {
-// MODULE: archive/sourceReadGuard.js
-const contextApi = __m_core_context_js;
-const settingsApi = __m_core_settings_js;
-const constants = __m_core_constants_js;
-const stateModule = __m_core_state_js;
-// User-triggered reads only. No module-load discovery, timers, storage, or model calls.
-
-
-
-
-function sourceReadSignature(context) {
-    const settings = settingsApi.getPluginSettings(context);
-    return JSON.stringify([
-        contextApi.chatScopeKey(context), stateModule.state.runtimeLifecycleEpoch,
-        String(context?.userAvatar ?? context?.personaAvatar ?? context?.user_avatar ?? globalThis.user_avatar ?? ''), String(context?.name1 ?? ''),
-        String(context?.powerUserSettings?.persona_description ?? ''),
-        settings.useCurrentChatExternalMemory === true, settings.useActivatedWorldInfo !== false,
-        context?.chatMetadata?.[constants.MEMORY_WORLD_INFO_SETTINGS_KEY]?.books || [],
-    ]);
-}
-
-function createSourceReadGuard(context, expectedChatId = contextApi.getChatId(context), signal = null) {
-    const signature = sourceReadSignature(context);
-    const chatId = contextApi.comparableChatId(expectedChatId);
-    return () => {
-        if (signal?.aborted) throw new DOMException('Read cancelled', 'AbortError');
-        let current;
-        try { current = contextApi.currentCharacterGuard(); } catch { throw new DOMException('Source changed', 'AbortError'); }
-        if (!chatId || contextApi.comparableChatId(contextApi.getChatId(current)) !== chatId
-            || sourceReadSignature(current) !== signature) throw new DOMException('Source changed', 'AbortError');
-    };
-}
-
-function boundedSourceRead(read, signal = null, timeoutMs = 15000) {
-    if (signal?.aborted) return Promise.reject(new DOMException('Read cancelled', 'AbortError'));
-    return new Promise((resolve, reject) => {
-        let done = false;
-        const finish = (fn, value) => {
-            if (done) return;
-            done = true; clearTimeout(timer); signal?.removeEventListener?.('abort', abort);
-            fn(value);
-        };
-        const abort = () => finish(reject, new DOMException('Read cancelled', 'AbortError'));
-        const timer = setTimeout(() => finish(reject, Object.assign(new Error('Memory reader timed out'), { code: 'RMT_MEMORY_READ_TIMEOUT' })),
-            Math.max(1, Math.min(15000, Number(timeoutMs) || 15000)));
-        signal?.addEventListener?.('abort', abort, { once: true });
-        Promise.resolve().then(() => done ? undefined : read()).then(value => finish(resolve, value), error => finish(reject, error));
-    });
-}
-
-__m_archive_sourceReadGuard_js.sourceReadSignature = sourceReadSignature;
-__m_archive_sourceReadGuard_js.createSourceReadGuard = createSourceReadGuard;
-__m_archive_sourceReadGuard_js.boundedSourceRead = boundedSourceRead;
-}
-
 function __init_archive_qianqianjie_js() {
 // MODULE: archive/qianqianjie.js
 const constants = __m_core_constants_js;
@@ -37452,6 +37660,7 @@ __m_archive_qianqianjie_js.QQJ_BRIDGE = QQJ_BRIDGE;
 
 function __init_archive_repository_js() {
 // MODULE: archive/repository.js
+const context_tags = __m_core_contextTags_js;
 const archive_batches = __m_archive_importBatches_js;
 const archive_requestBudget = __m_archive_requestBudget_js;
 const core_cache = __m_core_cache_js;
@@ -37479,6 +37688,7 @@ const ui_overlay = __m_ui_overlay_js;
 const ui_settingsPanel = __m_ui_settingsPanel_js;
 const archive_avatars = __m_ui_archiveAvatars_js;
 const runtimeState = __m_core_state_js.state;
+
 
 
 // Heartbeat Memories r35 modular runtime.
@@ -37649,7 +37859,7 @@ function externalMemoryFromSourceLedger(ledger, options = {}) {
         .filter(record => options.useCurrentChatExternalMemory !== false || !archive_memoryProviders.registeredMemoryProvider(record.provider))
         .filter(record => !options.excludeProviders?.has(record.provider));
     const selected = current;
-    const records = normalizeExternalMemoryRecords(selected, { complete: true });
+    const records = normalizeExternalMemoryRecords(selected, { complete: true, tagPolicy: options.tagPolicy });
     const sources = (ledger?.sources || []).map(item => {
         const storedRows = current.filter(record => record.provider === item.provider);
         const selectedRows = selected.filter(record => record.provider === item.provider);
@@ -37658,8 +37868,8 @@ function externalMemoryFromSourceLedger(ledger, options = {}) {
         const promptChars = promptRows.reduce((sum, record) => sum + record.content.length, 0);
         const coverage = archive_sourceLedger.normalizeMemorySourceCoverage(item.coverage);
         if (selectedRows.length < storedRows.length || promptChars < storedChars) {
-            const limitReason = `来源账本保存完整；本次档案生成选取 ${selectedRows.length}/${storedRows.length} 条来源记录，送入 ${promptRows.length} 个片段、${promptChars.toLocaleString()}/${storedChars.toLocaleString()} 字符`;
-            coverage.status = 'truncated';
+            const limitReason = `${options.tagPolicy?.mode === 'keep' ? '按已保存标签选择整理；' : ''}来源账本保存完整；本次档案生成选取 ${selectedRows.length}/${storedRows.length} 条来源记录，送入 ${promptRows.length} 个片段、${promptChars.toLocaleString()}/${storedChars.toLocaleString()} 字符`;
+            if (options.tagPolicy?.mode !== 'keep') coverage.status = 'truncated';
             coverage.returned = selectedRows.length;
             coverage.total = storedRows.length;
             coverage.reason = coverage.reason ? `${coverage.reason}；${limitReason}` : limitReason;
@@ -37700,6 +37910,7 @@ async function currentMemorySourceLedgerExternal(context = core_context.currentC
     return externalMemoryFromSourceLedger(await currentMemorySourceLedger(context), {
         worldInfoSelection: getMemoryWorldInfoSelection(context),
         useCurrentChatExternalMemory: core_settings.getPluginSettings(context).useCurrentChatExternalMemory,
+        tagPolicy: context_tags.tagPolicyForContext(context),
     });
 }
 
@@ -38169,7 +38380,7 @@ async function showMemoryWorldInfoPicker() {
     const selected = new Map(selection.books.map(book => [book.name, book]));
     const modal = document.createElement('div');
     modal.className = 'rmt-memory-wi-picker';
-    modal.innerHTML = `<div class="rmt-memory-wi-picker-card"><div class="rmt-memory-wi-picker-head"><div><b>记忆相关世界书</b><small>整本导入，或展开后精确选择条目</small></div><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-close">完成</button></div><div class="rmt-memory-wi-picker-note">记录已发生剧情的书，请选“作为历史摘要”；普通设定书保持不勾选。历史来源完整保存在本地账本，本次建档用量会另行显示。</div><div class="rmt-memory-wi-books">${names.length ? names.map(name => { const book=selected.get(name); const precise=book && !book.all ? book.entryUids.length : 0; return `<section class="rmt-memory-wi-book" data-rmt-memory-wi-book="${core_text.esc(name)}"><div class="rmt-memory-wi-book-row"><label><input type="checkbox" data-rmt-memory-wi-all="${core_text.esc(name)}" ${book?.all ? 'checked' : ''}> <b>${core_text.esc(name)}</b> · 整本导入</label><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-expand" data-rmt-memory-world="${core_text.esc(name)}">展开条目${precise ? ` · 已选${precise}` : ''}</button></div><label class="rmt-settings-check"><input type="checkbox" data-rmt-memory-wi-history="${core_text.esc(name)}" ${book?.historySource ? 'checked' : ''} ${book ? '' : 'disabled'}> 作为历史摘要</label><div class="rmt-memory-wi-entry-list" hidden></div></section>`; }).join('') : '<div class="rmt-memory-wi-empty">当前没有可读取的世界书。</div>'}</div></div>`;
+    modal.innerHTML = `<div class="rmt-memory-wi-picker-card"><div class="rmt-memory-wi-picker-head"><div><b>记忆相关世界书</b><small>整本导入，或展开后精确选择条目</small></div><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-close" aria-label="关闭世界书选择">完成／关闭</button></div><div class="rmt-memory-wi-picker-scroll"><div class="rmt-memory-wi-picker-note">记录已发生剧情的书，请选“作为历史摘要”；普通设定书保持不勾选。历史来源完整保存在本地账本，本次建档用量会另行显示。</div><div class="rmt-memory-wi-books">${names.length ? names.map(name => { const book=selected.get(name); const precise=book && !book.all ? book.entryUids.length : 0; return `<section class="rmt-memory-wi-book" data-rmt-memory-wi-book="${core_text.esc(name)}"><div class="rmt-memory-wi-book-row"><label><input type="checkbox" data-rmt-memory-wi-all="${core_text.esc(name)}" ${book?.all ? 'checked' : ''}> <b>${core_text.esc(name)}</b> · 整本导入</label><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-expand" data-rmt-memory-world="${core_text.esc(name)}">展开条目${precise ? ` · 已选${precise}` : ''}</button></div><label class="rmt-settings-check"><input type="checkbox" data-rmt-memory-wi-history="${core_text.esc(name)}" ${book?.historySource ? 'checked' : ''} ${book ? '' : 'disabled'}> 作为历史摘要</label><div class="rmt-memory-wi-entry-list" hidden></div></section>`; }).join('') : '<div class="rmt-memory-wi-empty">当前没有可读取的世界书。</div>'}</div></div></div>`;
     overlay.appendChild(modal);
 }
 
@@ -38544,7 +38755,7 @@ function externalMemorySourceSummary(context = core_context.getContext()) {
     return unique.slice(0, 24);
 }
 
-function normalizeExternalMemoryRecords(records, { complete = false } = {}) {
+function normalizeExternalMemoryRecords(records, { complete = false, tagPolicy = null } = {}) {
     // Complete snapshots are bounded by the existing source-ledger contract. An
     // over-limit snapshot fails visibly rather than being silently sampled/truncated.
     const itemLimit = complete ? Number.MAX_SAFE_INTEGER : core_constants.MAX_EXTERNAL_MEMORY_ITEMS;
@@ -38577,14 +38788,18 @@ function normalizeExternalMemoryRecords(records, { complete = false } = {}) {
             : `${providerPrefix}${compactLocalId(rawIdValue)}`;
         const partSize = core_constants.MAX_MEMORY_SOURCE_FRAGMENT_CHARS;
         const partCount = Math.max(1, Math.ceil(fullContent.length / partSize));
+        const selectedParts = tagPolicy?.mode === 'keep' ? context_tags.filterContextTagSegments(fullContent, tagPolicy, partSize) : null;
         for (let part = 0; part < partCount; part += 1) {
             if (!complete && (out.length >= itemLimit || totalChars >= charLimit)) break;
             const remaining = charLimit - totalChars;
-            const content = fullContent.slice(part * partSize, (part + 1) * partSize).slice(0, remaining);
-            if (!content.length) continue;
-            const key = `${baseId}|${part + 1}|${content.replace(/\s+/g, ' ').toLowerCase()}`;
+            const originalContent = fullContent.slice(part * partSize, (part + 1) * partSize).slice(0, remaining);
+            const content = selectedParts ? selectedParts[part].slice(0, remaining) : originalContent;
+            if (!originalContent.length) continue;
+            const key = `${baseId}|${part + 1}|${originalContent.replace(/\s+/g, ' ').toLowerCase()}`;
             if (seen.has(key)) continue;
             seen.add(key);
+            if (selectedParts) totalChars += originalContent.length;
+            if (!content.length) continue;
             out.push({
                 externalId: partCount > 1 ? `${baseId}:part:${part + 1}` : baseId,
                 provider,
@@ -38593,7 +38808,7 @@ function normalizeExternalMemoryRecords(records, { complete = false } = {}) {
                 date: core_text.normalizeText(raw?.date ?? raw?.timestamp ?? raw?.create_time, 100),
                 content,
             });
-            totalChars += content.length;
+            if (!selectedParts) totalChars += content.length;
         }
     }
     return out;
@@ -38726,7 +38941,8 @@ async function collectCurrentChatExternalMemory(context, expectedChatId, signal)
         const saved = await archive_sourceLedger.readMemorySourceLedger(scope);
         assertCurrent();
         durable = externalMemoryFromSourceLedger(saved, { worldInfoSelection: getMemoryWorldInfoSelection(context),
-            useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory, excludeProviders: excluded });
+            useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory, excludeProviders: excluded,
+            tagPolicy: context_tags.tagPolicyForSettings(settings) });
         for (const item of durable.sources) {
             if (!excluded.has(item.id) && (settings.useCurrentChatExternalMemory || !archive_memoryProviders.registeredMemoryProvider(item.id))) mergeDurableSourceDescriptor(sources, item);
         }
@@ -38737,7 +38953,8 @@ async function collectCurrentChatExternalMemory(context, expectedChatId, signal)
             status: 'failed', returned: source.count, total: null, reason: '来源账本读回失败；未宣称已持久保存' };
     }
     const fallback = ledgerReadbackFailed ? scannedMemoryRecords : liveFallbackRecords;
-    const records = normalizeExternalMemoryRecords(ledgerReadbackFailed ? fallback : [...durable.records, ...fallback], { complete: true });
+    const selectedFallback = normalizeExternalMemoryRecords(fallback, { complete: true, tagPolicy: context_tags.tagPolicyForSettings(settings) });
+    const records = normalizeExternalMemoryRecords(ledgerReadbackFailed ? selectedFallback : [...durable.records, ...selectedFallback], { complete: true });
     const liveFingerprint = fallback.length ? String(core_text.hashString(JSON.stringify(fallback))) : 'none';
     const fingerprint = durable.ledgerFingerprint === 'none' && liveFingerprint === 'none' ? 'none'
         : String(core_text.hashString(`LEDGER:${durable.ledgerFingerprint}|LIVE:${liveFingerprint}`));
@@ -39084,6 +39301,7 @@ function archiveRecoverySettingsIdentity(context) {
     const generationSettings = Object.fromEntries(['apiConnectionMode', 'connectionProfileId', 'modelOverride', 'manualApiBaseUrl',
         'manualApiModel', 'manualApiKey', 'manualApiStreaming', 'chatReadRange', 'useActivatedWorldInfo', 'maxTokens', 'temperature', 'useCurrentChatExternalMemory', 'excludedContextTags',
         'bannedGeneratedPhrases', 'creativeSupplementEnabled', 'creativeSupplement'].map(key => [key, settings[key]]));
+    Object.assign(generationSettings, context_tags.savedTagSelection(settings));
     return JSON.stringify({ settings: generationSettings, worldInfoSelection: getMemoryWorldInfoSelection(context).books,
         profile: settings.apiConnectionMode === 'profile'
         ? core_settings.rawConnectionProfile(settings.connectionProfileId, context) : null });
@@ -39093,6 +39311,8 @@ function batchIdentity(context, snapshot) {
     const raw = JSON.parse(archiveRecoverySettingsIdentity(context));
     const range = raw.settings.chatReadRange;
     const selection = [raw.worldInfoSelection, raw.settings.useCurrentChatExternalMemory, raw.settings.excludedContextTags];
+    if (raw.settings.contextTagMode === 'keep') selection.push(context_tags.savedTagSelection(raw.settings));
+    delete raw.settings.contextTagMode; delete raw.settings.retainedContextTags;
     delete raw.settings.chatReadRange; delete raw.settings.useCurrentChatExternalMemory; delete raw.settings.excludedContextTags;
     delete raw.worldInfoSelection;
     const owner = JSON.parse(archiveSourceOwnerIdentity(context));
@@ -39129,7 +39349,7 @@ async function retainedBatchExternal(context, progress) {
     // Retained revisions, not just the newest projection. Exact per-fragment hashes
     // below select the captured revision. Current selection is checked before this read.
     const rows = (ledger?.records || []).map(row => ({ ...row, content: (row.fragments || []).join('') }));
-    const retained = normalizeExternalMemoryRecords(rows, { complete: true });
+    const retained = normalizeExternalMemoryRecords(rows, { complete: true, tagPolicy: context_tags.tagPolicyForContext(context) });
     const records = [...retained, ...(progress.fallbackRecords || [])];
     return { ...meta, records, worldInfo: progress.worldInfo || emptyMemoryWorldInfo('none') };
 }
@@ -44724,7 +44944,7 @@ async function buildControlledContextEnvelope(context, options = {}) {
     const pick = (...keys) => {
         for (const key of keys) {
             const value = card?.[key];
-            if (value !== undefined && value !== null && String(value).trim()) return core_contextTags.stripExcludedTags(core_text.normalizeText(value, 5000), core_contextTags.excludedTagsForContext(context));
+            if (value !== undefined && value !== null && String(value).trim()) return core_contextTags.filterContextTags(core_text.normalizeText(value, 5000), core_contextTags.tagPolicyForContext(context));
         }
         return '';
     };
@@ -44745,7 +44965,7 @@ async function buildControlledContextEnvelope(context, options = {}) {
     };
     const userData = {
         name: core_text.normalizeText(context.name1 || '{{user}}', 120),
-        personaDescription: core_contextTags.stripExcludedTags(core_text.normalizeText(context.powerUserSettings?.persona_description || '', 7000), core_contextTags.excludedTagsForContext(context)),
+        personaDescription: core_contextTags.filterContextTags(core_text.normalizeText(context.powerUserSettings?.persona_description || '', 7000), core_contextTags.tagPolicyForContext(context)),
     };
     let worldInfo = '';
     try {
@@ -44776,7 +44996,7 @@ async function buildControlledContextEnvelope(context, options = {}) {
                 }).filter(Boolean).join('\n');
                 worldText = [worldText, depthText].filter(Boolean).join('\n');
             }
-            worldInfo = core_contextTags.stripExcludedTags(core_text.normalizeText(worldText, 12000), core_contextTags.excludedTagsForContext(context));
+            worldInfo = core_contextTags.filterContextTags(core_text.normalizeText(worldText, 12000), core_contextTags.tagPolicyForContext(context));
         }
     } catch (error) {
         console.warn('[HeartbeatMemories] independent world-info dry run failed', core_text.safeErrorDiagnostic(error));
@@ -45051,8 +45271,9 @@ __m_heartbeatMemories_js.initMemoryTheater = initMemoryTheater;
 __m_heartbeatMemories_js.destroyMemoryTheater = destroyMemoryTheater;
 }
 
-__init_core_digest_js();
 __init_core_constants_js();
+__init_core_outputBudget_js();
+__init_core_digest_js();
 __init_core_evidence_js();
 __init_core_contextTags_js();
 __init_core_chatReadRange_js();
@@ -45121,6 +45342,7 @@ __init_modes_ending_js();
 __init_modes_heart_js();
 __init_generation_prompts_js();
 __init_modes_achievements_js();
+__init_archive_sourceReadGuard_js();
 __init_ui_archiveAvatars_js();
 __init_ui_floatingAvatarButton_js();
 __init_ui_navigationBookmark_js();
@@ -45161,7 +45383,6 @@ __init_core_requestCoordinator_js();
 __init_archive_sourceLedger_js();
 __init_archive_memoryFileImport_js();
 __init_archive_memoryProviders_js();
-__init_archive_sourceReadGuard_js();
 __init_archive_qianqianjie_js();
 __init_archive_repository_js();
 __init_ui_workspace_js();

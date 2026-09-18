@@ -63,6 +63,7 @@ export function isArchiveDialogueMessage(message, context) {
 
 export async function buildChatSnapshot(context = currentCharacterGuard(), options = {}) {
     const rawChat = Array.isArray(context.chat) ? context.chat : [];
+    const tagPolicy = core_contextTags.tagPolicyForContext(context);
     const usable = [];
     const fullSignatures = [];
     const prefixCount = Math.max(0, Math.floor(Number(options.prefixCount) || 0));
@@ -147,11 +148,11 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
         truncated: full.truncated,
         coverageMode: options.readRange ? 'selected-floors' : full.truncated ? 'evenly-sampled-full-window' : 'full-window',
         readRange: options.readRange ? chat_read_range.normalizeChatReadRange(options.readRange) : null,
-        messages: full.selected.map(item => ({ ...item, text: core_contextTags.stripExcludedTags(item.text, core_contextTags.excludedTagsForContext(context)) })),
+        messages: full.selected.map(item => ({ ...item, text: core_contextTags.filterContextTags(item.text, tagPolicy) })),
         fingerprint: String(fingerprint >>> 0),
         prefixCount,
         prefixFingerprint: prefixCount > 0 && totalMessages >= prefixCount ? String(prefixFingerprint >>> 0) : '',
-        incrementalMessages: incremental.selected.map(item => ({ ...item, text: core_contextTags.stripExcludedTags(item.text, core_contextTags.excludedTagsForContext(context)) })),
+        incrementalMessages: incremental.selected.map(item => ({ ...item, text: core_contextTags.filterContextTags(item.text, tagPolicy) })),
         incrementalUsedMessages: incremental.selected.length,
         incrementalUsedChars: incremental.selectedChars,
         incrementalTruncated: incremental.truncated,

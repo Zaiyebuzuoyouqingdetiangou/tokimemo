@@ -1858,7 +1858,7 @@ export async function buildControlledContextEnvelope(context, options = {}) {
     const pick = (...keys) => {
         for (const key of keys) {
             const value = card?.[key];
-            if (value !== undefined && value !== null && String(value).trim()) return core_contextTags.stripExcludedTags(core_text.normalizeText(value, 5000), core_contextTags.excludedTagsForContext(context));
+            if (value !== undefined && value !== null && String(value).trim()) return core_contextTags.filterContextTags(core_text.normalizeText(value, 5000), core_contextTags.tagPolicyForContext(context));
         }
         return '';
     };
@@ -1879,7 +1879,7 @@ export async function buildControlledContextEnvelope(context, options = {}) {
     };
     const userData = {
         name: core_text.normalizeText(context.name1 || '{{user}}', 120),
-        personaDescription: core_contextTags.stripExcludedTags(core_text.normalizeText(context.powerUserSettings?.persona_description || '', 7000), core_contextTags.excludedTagsForContext(context)),
+        personaDescription: core_contextTags.filterContextTags(core_text.normalizeText(context.powerUserSettings?.persona_description || '', 7000), core_contextTags.tagPolicyForContext(context)),
     };
     let worldInfo = '';
     try {
@@ -1910,7 +1910,7 @@ export async function buildControlledContextEnvelope(context, options = {}) {
                 }).filter(Boolean).join('\n');
                 worldText = [worldText, depthText].filter(Boolean).join('\n');
             }
-            worldInfo = core_contextTags.stripExcludedTags(core_text.normalizeText(worldText, 12000), core_contextTags.excludedTagsForContext(context));
+            worldInfo = core_contextTags.filterContextTags(core_text.normalizeText(worldText, 12000), core_contextTags.tagPolicyForContext(context));
         }
     } catch (error) {
         console.warn('[HeartbeatMemories] independent world-info dry run failed', core_text.safeErrorDiagnostic(error));

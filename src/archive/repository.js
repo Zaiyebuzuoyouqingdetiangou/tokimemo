@@ -1,3 +1,4 @@
+import * as context_tags from '../core/contextTags.js';
 import * as archive_batches from './importBatches.js';
 import * as archive_requestBudget from './requestBudget.js';
 // Heartbeat Memories r35 modular runtime.
@@ -183,7 +184,7 @@ export function externalMemoryFromSourceLedger(ledger, options = {}) {
         .filter(record => options.useCurrentChatExternalMemory !== false || !archive_memoryProviders.registeredMemoryProvider(record.provider))
         .filter(record => !options.excludeProviders?.has(record.provider));
     const selected = current;
-    const records = normalizeExternalMemoryRecords(selected, { complete: true });
+    const records = normalizeExternalMemoryRecords(selected, { complete: true, tagPolicy: options.tagPolicy });
     const sources = (ledger?.sources || []).map(item => {
         const storedRows = current.filter(record => record.provider === item.provider);
         const selectedRows = selected.filter(record => record.provider === item.provider);
@@ -192,8 +193,8 @@ export function externalMemoryFromSourceLedger(ledger, options = {}) {
         const promptChars = promptRows.reduce((sum, record) => sum + record.content.length, 0);
         const coverage = archive_sourceLedger.normalizeMemorySourceCoverage(item.coverage);
         if (selectedRows.length < storedRows.length || promptChars < storedChars) {
-            const limitReason = `来源账本保存完整；本次档案生成选取 ${selectedRows.length}/${storedRows.length} 条来源记录，送入 ${promptRows.length} 个片段、${promptChars.toLocaleString()}/${storedChars.toLocaleString()} 字符`;
-            coverage.status = 'truncated';
+            const limitReason = `${options.tagPolicy?.mode === 'keep' ? '按已保存标签选择整理；' : ''}来源账本保存完整；本次档案生成选取 ${selectedRows.length}/${storedRows.length} 条来源记录，送入 ${promptRows.length} 个片段、${promptChars.toLocaleString()}/${storedChars.toLocaleString()} 字符`;
+            if (options.tagPolicy?.mode !== 'keep') coverage.status = 'truncated';
             coverage.returned = selectedRows.length;
             coverage.total = storedRows.length;
             coverage.reason = coverage.reason ? `${coverage.reason}；${limitReason}` : limitReason;
@@ -234,6 +235,7 @@ export async function currentMemorySourceLedgerExternal(context = core_context.c
     return externalMemoryFromSourceLedger(await currentMemorySourceLedger(context), {
         worldInfoSelection: getMemoryWorldInfoSelection(context),
         useCurrentChatExternalMemory: core_settings.getPluginSettings(context).useCurrentChatExternalMemory,
+        tagPolicy: context_tags.tagPolicyForContext(context),
     });
 }
 
@@ -703,7 +705,7 @@ export async function showMemoryWorldInfoPicker() {
     const selected = new Map(selection.books.map(book => [book.name, book]));
     const modal = document.createElement('div');
     modal.className = 'rmt-memory-wi-picker';
-    modal.innerHTML = `<div class="rmt-memory-wi-picker-card"><div class="rmt-memory-wi-picker-head"><div><b>记忆相关世界书</b><small>整本导入，或展开后精确选择条目</small></div><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-close">完成</button></div><div class="rmt-memory-wi-picker-note">记录已发生剧情的书，请选“作为历史摘要”；普通设定书保持不勾选。历史来源完整保存在本地账本，本次建档用量会另行显示。</div><div class="rmt-memory-wi-books">${names.length ? names.map(name => { const book=selected.get(name); const precise=book && !book.all ? book.entryUids.length : 0; return `<section class="rmt-memory-wi-book" data-rmt-memory-wi-book="${core_text.esc(name)}"><div class="rmt-memory-wi-book-row"><label><input type="checkbox" data-rmt-memory-wi-all="${core_text.esc(name)}" ${book?.all ? 'checked' : ''}> <b>${core_text.esc(name)}</b> · 整本导入</label><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-expand" data-rmt-memory-world="${core_text.esc(name)}">展开条目${precise ? ` · 已选${precise}` : ''}</button></div><label class="rmt-settings-check"><input type="checkbox" data-rmt-memory-wi-history="${core_text.esc(name)}" ${book?.historySource ? 'checked' : ''} ${book ? '' : 'disabled'}> 作为历史摘要</label><div class="rmt-memory-wi-entry-list" hidden></div></section>`; }).join('') : '<div class="rmt-memory-wi-empty">当前没有可读取的世界书。</div>'}</div></div>`;
+    modal.innerHTML = `<div class="rmt-memory-wi-picker-card"><div class="rmt-memory-wi-picker-head"><div><b>记忆相关世界书</b><small>整本导入，或展开后精确选择条目</small></div><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-close" aria-label="关闭世界书选择">完成／关闭</button></div><div class="rmt-memory-wi-picker-scroll"><div class="rmt-memory-wi-picker-note">记录已发生剧情的书，请选“作为历史摘要”；普通设定书保持不勾选。历史来源完整保存在本地账本，本次建档用量会另行显示。</div><div class="rmt-memory-wi-books">${names.length ? names.map(name => { const book=selected.get(name); const precise=book && !book.all ? book.entryUids.length : 0; return `<section class="rmt-memory-wi-book" data-rmt-memory-wi-book="${core_text.esc(name)}"><div class="rmt-memory-wi-book-row"><label><input type="checkbox" data-rmt-memory-wi-all="${core_text.esc(name)}" ${book?.all ? 'checked' : ''}> <b>${core_text.esc(name)}</b> · 整本导入</label><button type="button" class="rmt-btn" data-rmt-action="memory-worldinfo-expand" data-rmt-memory-world="${core_text.esc(name)}">展开条目${precise ? ` · 已选${precise}` : ''}</button></div><label class="rmt-settings-check"><input type="checkbox" data-rmt-memory-wi-history="${core_text.esc(name)}" ${book?.historySource ? 'checked' : ''} ${book ? '' : 'disabled'}> 作为历史摘要</label><div class="rmt-memory-wi-entry-list" hidden></div></section>`; }).join('') : '<div class="rmt-memory-wi-empty">当前没有可读取的世界书。</div>'}</div></div></div>`;
     overlay.appendChild(modal);
 }
 
@@ -1078,7 +1080,7 @@ export function externalMemorySourceSummary(context = core_context.getContext())
     return unique.slice(0, 24);
 }
 
-export function normalizeExternalMemoryRecords(records, { complete = false } = {}) {
+export function normalizeExternalMemoryRecords(records, { complete = false, tagPolicy = null } = {}) {
     // Complete snapshots are bounded by the existing source-ledger contract. An
     // over-limit snapshot fails visibly rather than being silently sampled/truncated.
     const itemLimit = complete ? Number.MAX_SAFE_INTEGER : core_constants.MAX_EXTERNAL_MEMORY_ITEMS;
@@ -1111,14 +1113,18 @@ export function normalizeExternalMemoryRecords(records, { complete = false } = {
             : `${providerPrefix}${compactLocalId(rawIdValue)}`;
         const partSize = core_constants.MAX_MEMORY_SOURCE_FRAGMENT_CHARS;
         const partCount = Math.max(1, Math.ceil(fullContent.length / partSize));
+        const selectedParts = tagPolicy?.mode === 'keep' ? context_tags.filterContextTagSegments(fullContent, tagPolicy, partSize) : null;
         for (let part = 0; part < partCount; part += 1) {
             if (!complete && (out.length >= itemLimit || totalChars >= charLimit)) break;
             const remaining = charLimit - totalChars;
-            const content = fullContent.slice(part * partSize, (part + 1) * partSize).slice(0, remaining);
-            if (!content.length) continue;
-            const key = `${baseId}|${part + 1}|${content.replace(/\s+/g, ' ').toLowerCase()}`;
+            const originalContent = fullContent.slice(part * partSize, (part + 1) * partSize).slice(0, remaining);
+            const content = selectedParts ? selectedParts[part].slice(0, remaining) : originalContent;
+            if (!originalContent.length) continue;
+            const key = `${baseId}|${part + 1}|${originalContent.replace(/\s+/g, ' ').toLowerCase()}`;
             if (seen.has(key)) continue;
             seen.add(key);
+            if (selectedParts) totalChars += originalContent.length;
+            if (!content.length) continue;
             out.push({
                 externalId: partCount > 1 ? `${baseId}:part:${part + 1}` : baseId,
                 provider,
@@ -1127,7 +1133,7 @@ export function normalizeExternalMemoryRecords(records, { complete = false } = {
                 date: core_text.normalizeText(raw?.date ?? raw?.timestamp ?? raw?.create_time, 100),
                 content,
             });
-            totalChars += content.length;
+            if (!selectedParts) totalChars += content.length;
         }
     }
     return out;
@@ -1260,7 +1266,8 @@ export async function collectCurrentChatExternalMemory(context, expectedChatId, 
         const saved = await archive_sourceLedger.readMemorySourceLedger(scope);
         assertCurrent();
         durable = externalMemoryFromSourceLedger(saved, { worldInfoSelection: getMemoryWorldInfoSelection(context),
-            useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory, excludeProviders: excluded });
+            useCurrentChatExternalMemory: settings.useCurrentChatExternalMemory, excludeProviders: excluded,
+            tagPolicy: context_tags.tagPolicyForSettings(settings) });
         for (const item of durable.sources) {
             if (!excluded.has(item.id) && (settings.useCurrentChatExternalMemory || !archive_memoryProviders.registeredMemoryProvider(item.id))) mergeDurableSourceDescriptor(sources, item);
         }
@@ -1271,7 +1278,8 @@ export async function collectCurrentChatExternalMemory(context, expectedChatId, 
             status: 'failed', returned: source.count, total: null, reason: '来源账本读回失败；未宣称已持久保存' };
     }
     const fallback = ledgerReadbackFailed ? scannedMemoryRecords : liveFallbackRecords;
-    const records = normalizeExternalMemoryRecords(ledgerReadbackFailed ? fallback : [...durable.records, ...fallback], { complete: true });
+    const selectedFallback = normalizeExternalMemoryRecords(fallback, { complete: true, tagPolicy: context_tags.tagPolicyForSettings(settings) });
+    const records = normalizeExternalMemoryRecords(ledgerReadbackFailed ? selectedFallback : [...durable.records, ...selectedFallback], { complete: true });
     const liveFingerprint = fallback.length ? String(core_text.hashString(JSON.stringify(fallback))) : 'none';
     const fingerprint = durable.ledgerFingerprint === 'none' && liveFingerprint === 'none' ? 'none'
         : String(core_text.hashString(`LEDGER:${durable.ledgerFingerprint}|LIVE:${liveFingerprint}`));
@@ -1618,6 +1626,7 @@ function archiveRecoverySettingsIdentity(context) {
     const generationSettings = Object.fromEntries(['apiConnectionMode', 'connectionProfileId', 'modelOverride', 'manualApiBaseUrl',
         'manualApiModel', 'manualApiKey', 'manualApiStreaming', 'chatReadRange', 'useActivatedWorldInfo', 'maxTokens', 'temperature', 'useCurrentChatExternalMemory', 'excludedContextTags',
         'bannedGeneratedPhrases', 'creativeSupplementEnabled', 'creativeSupplement'].map(key => [key, settings[key]]));
+    Object.assign(generationSettings, context_tags.savedTagSelection(settings));
     return JSON.stringify({ settings: generationSettings, worldInfoSelection: getMemoryWorldInfoSelection(context).books,
         profile: settings.apiConnectionMode === 'profile'
         ? core_settings.rawConnectionProfile(settings.connectionProfileId, context) : null });
@@ -1627,6 +1636,8 @@ function batchIdentity(context, snapshot) {
     const raw = JSON.parse(archiveRecoverySettingsIdentity(context));
     const range = raw.settings.chatReadRange;
     const selection = [raw.worldInfoSelection, raw.settings.useCurrentChatExternalMemory, raw.settings.excludedContextTags];
+    if (raw.settings.contextTagMode === 'keep') selection.push(context_tags.savedTagSelection(raw.settings));
+    delete raw.settings.contextTagMode; delete raw.settings.retainedContextTags;
     delete raw.settings.chatReadRange; delete raw.settings.useCurrentChatExternalMemory; delete raw.settings.excludedContextTags;
     delete raw.worldInfoSelection;
     const owner = JSON.parse(archiveSourceOwnerIdentity(context));
@@ -1663,7 +1674,7 @@ async function retainedBatchExternal(context, progress) {
     // Retained revisions, not just the newest projection. Exact per-fragment hashes
     // below select the captured revision. Current selection is checked before this read.
     const rows = (ledger?.records || []).map(row => ({ ...row, content: (row.fragments || []).join('') }));
-    const retained = normalizeExternalMemoryRecords(rows, { complete: true });
+    const retained = normalizeExternalMemoryRecords(rows, { complete: true, tagPolicy: context_tags.tagPolicyForContext(context) });
     const records = [...retained, ...(progress.fallbackRecords || [])];
     return { ...meta, records, worldInfo: progress.worldInfo || emptyMemoryWorldInfo('none') };
 }

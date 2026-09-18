@@ -168,7 +168,7 @@ export function ensureCastLooks(context = null) {
     if (existing?.manual === true) return existing;
     let card = {};
     try { card = live?.getCharacterCardFields?.() || {}; } catch { return existing; }
-    const clean = value => context_tags.stripExcludedTags(String(value || '').slice(0, 16000), context_tags.excludedTagsForContext(live));
+    const clean = value => context_tags.filterContextTags(String(value || '').slice(0, 16000), context_tags.tagPolicyForContext(live));
     const char = lookFromDescription([clean(card.description), clean(card.personality)].filter(Boolean).join('\n'));
     const user = lookFromDescription(clean(card.persona || live?.powerUserSettings?.persona_description || ''));
     if (!char && !user) return existing;

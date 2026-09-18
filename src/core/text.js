@@ -134,7 +134,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_PHONE_EVIDENCE: '这项终端内容缺少完整的条目或来源证据；旧内容保留，可继续补齐。',
     RMT_PHONE_SOURCE_EMPTY: '当前来源不足以收录终端内容；请补充来源并更新档案后再生成，不会编造记录。',
     RMT_PHONE_SOURCE_CHANGED: '终端草稿的来源已变化，已完成内容未删除。请恢复原来的设定来源后继续，或明确重新生成终端。',
-    RMT_ARCHIVE_CONTEXT_BUDGET: '完整建档请求超出本地输入或已确认上下文预算，未发送；来源与草稿保留，没有降低输出。',
+    RMT_ARCHIVE_CONTEXT_BUDGET: '完整建档请求超出已确认的模型上下文预算，未发送；来源与草稿保留，没有降低输出。',
     RMT_ARCHIVE_OUTPUT_BUDGET: '请求的最大输出超过已确认能力，未发送且没有擅自降低输出。',
     RMT_ARCHIVE_CHECKPOINT: '建档检查点格式或容量异常，旧成果保留，未自动重建。',
     RMT_ARCHIVE_SOURCE_CAPACITY: '全部来源超过账本容量，未仅截取前半部分冒充完成。',

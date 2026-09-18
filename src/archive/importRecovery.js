@@ -124,7 +124,9 @@ export async function requestArchiveRecoverySegment(ticket, slot, prompt, option
         async (effectivePrompt, requestOptions, accepted) => {
             // Archive extraction owns runtimeState.busy, so requestJson's module
             // task gate is deliberately not used. Same provider/parser, no retries.
-            const raw = await client.generateConfiguredJson(effectivePrompt, requestOptions);
+            // Apply the archive budget even to legacy page drafts. Do this only
+            // at dispatch: keep the recovery identity and source validators intact.
+            const raw = await client.generateConfiguredJson(effectivePrompt, { ...requestOptions, archiveRequestBudget: true });
             if (ticket.assertCurrent() === false) throw new DOMException('Archive recovery origin changed', 'AbortError');
             const result = await checked(raw);
             await accepted(raw);
