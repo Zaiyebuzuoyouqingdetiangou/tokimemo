@@ -46,6 +46,22 @@ export function archiveRecoveryInputs(origin) {
     return entry?.stage === 'segments' && entry.inputs ? structuredClone(entry.inputs) : null;
 }
 
+export function parkArchiveRecovery(origin) {
+    const key = draftKey(origin, 'import'), entry = drafts.get(key);
+    if (!entry) return false;
+    if (entry.active || entry.stage === 'awaiting-commit') throw text.safeUserError('请先完成当前请求或仅重试保存；未改动草稿。', 'RMT_RECOVERY_BUSY');
+    if (drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) throw text.safeUserError('本页已保留四份草稿，旧成果没有被挤掉；请先导出并明确处理旧草稿。', 'RMT_RECOVERY_LIMIT');
+    drafts.delete(key);
+    drafts.set(`${key}:paused:${Date.now()}:${drafts.size}`, entry);
+    return true;
+}
+
+export function exportArchiveRecovery(origin) {
+    const key = draftKey(origin, 'import');
+    return [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`))
+        .map(([, entry]) => ({ stage: entry.stage, fullRebuild: entry.fullRebuild, journal: structuredClone(entry.journal) }));
+}
+
 export async function beginArchiveRecovery({ origin, operation = 'import', sourceIdentity, sourceFragments = [], settingsIdentity,
     fullRebuild = false, continueApproved = false, inputs = null, assertCurrent = () => true } = {}) {
     const key = draftKey(origin, operation);
@@ -145,5 +161,6 @@ export function clearArchiveRecovery(origin, operation = null) {
     for (const kind of operation ? [operation] : ['import', 'profile']) {
         const key = draftKey(origin, kind);
         drafts.delete(key);
+        for (const id of drafts.keys()) if (id.startsWith(`${key}:paused:`)) drafts.delete(id);
     }
 }

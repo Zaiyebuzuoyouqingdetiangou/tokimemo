@@ -28,6 +28,7 @@ const CODES = new Set([
     'RMT_ARCHIVE_VERDICT', 'RMT_BANNED_GENERATED_PHRASE', 'RMT_CACHE_CAS_CONFLICT', 'RMT_CONNECTION_AUTH',
     'RMT_CONNECTION_CONFIG', 'RMT_CONNECTION_CONTEXT_LIMIT', 'RMT_CONNECTION_FAILED', 'RMT_CONNECTION_INVALID_REQUEST',
     'RMT_CONNECTION_NETWORK', 'RMT_CONNECTION_QUOTA', 'RMT_CONNECTION_RATE_LIMIT', 'RMT_CONNECTION_SERVER',
+    'RMT_ARCHIVE_CONTEXT_BUDGET', 'RMT_ARCHIVE_OUTPUT_BUDGET', 'RMT_ARCHIVE_CHECKPOINT', 'RMT_ARCHIVE_SOURCE_CAPACITY', 'RMT_ARCHIVE_RESULT_CAPACITY',
     'RMT_INPUT_BUDGET', 'RMT_JSON_EMPTY_FINAL', 'RMT_JSON_EMPTY_FINAL_WITH_REASONING', 'RMT_JSON_INVALID',
     'RMT_JSON_NOT_FOUND', 'RMT_JSON_TRUNCATED', 'RMT_LEDGER_UNAVAILABLE', 'RMT_LOCAL_OPERATION',
     'RMT_MANUAL_API_TRANSPORT', 'RMT_MANUAL_API_URL', 'RMT_MANUAL_EMPTY', 'RMT_MANUAL_FETCH_UNAVAILABLE',
@@ -217,6 +218,12 @@ function snapshotEntries(entries, includeRequests = false) {
         activeStage: STAGES.includes(entry.activeStage) ? entry.activeStage : '',
         providerRequests: count(entry.providerRequests),
         durations: snapshotDurations(entry),
+        ...(entry.archiveBudget ? { archiveBudget: {
+            ...Object.fromEntries(['utf16Chars', 'unicodeCharacters', 'utf8Bytes', 'inputTokens', 'outputTokens', 'combinedTokens', 'contextTokens', 'maximumOutputTokens']
+                .map(key => [key, entry.archiveBudget[key] === null ? null : bounded(entry.archiveBudget[key], 100000000)])),
+            tokenBasis: entry.archiveBudget.tokenBasis === 'host-tokenizer-estimate' ? 'host-tokenizer-estimate' : 'unavailable',
+            exceeded: ['output', 'context', 'characters', 'tokens'].includes(entry.archiveBudget.exceeded) ? entry.archiveBudget.exceeded : null,
+        } } : {}),
         ...(entry.attempt ? { attempt: bounded(entry.attempt, 9999) } : {}),
         ...(CODES.has(entry.retryCode) || entry.retryCode === 'RMT_UNCODED' ? { retryCode: entry.retryCode } : {}),
         ...(entry.storage ? { storage: core_backupDiagnostics.backupFailureDiagnostic({

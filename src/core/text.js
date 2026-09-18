@@ -55,7 +55,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_MANUAL_API_TRANSPORT: '远程手动 API 必须使用 HTTPS；只有本机地址可以使用 HTTP。',
     RMT_MANUAL_RESPONSE_TOO_LARGE: '模型服务返回内容过大，已停止读取。',
     RMT_RESPONSE_HTML: '上游返回了非 API 的 HTML 页面；响应正文已隐藏。',
-    RMT_MANUAL_INVALID_JSON: '模型服务没有返回可解析的 JSON；响应正文已隐藏。',
+    RMT_MANUAL_INVALID_JSON: '接口响应封装无法解析；尚不能判断是模型正文格式、代理错误页或传输损坏，响应正文已隐藏。',
     RMT_MANUAL_HTTP: '手动 API 请求失败；请检查手动配置与服务状态。',
     RMT_MANUAL_PROVIDER_ERROR: '手动 API 返回了错误状态；响应详情已隐藏，请检查服务配置后重试。',
     RMT_MANUAL_FETCH_UNAVAILABLE: '当前环境没有可用的网络请求能力。',
@@ -134,6 +134,11 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_PHONE_EVIDENCE: '这项终端内容缺少完整的条目或来源证据；旧内容保留，可继续补齐。',
     RMT_PHONE_SOURCE_EMPTY: '当前来源不足以收录终端内容；请补充来源并更新档案后再生成，不会编造记录。',
     RMT_PHONE_SOURCE_CHANGED: '终端草稿的来源已变化，已完成内容未删除。请恢复原来的设定来源后继续，或明确重新生成终端。',
+    RMT_ARCHIVE_CONTEXT_BUDGET: '完整建档请求超出本地输入或已确认上下文预算，未发送；来源与草稿保留，没有降低输出。',
+    RMT_ARCHIVE_OUTPUT_BUDGET: '请求的最大输出超过已确认能力，未发送且没有擅自降低输出。',
+    RMT_ARCHIVE_CHECKPOINT: '建档检查点格式或容量异常，旧成果保留，未自动重建。',
+    RMT_ARCHIVE_SOURCE_CAPACITY: '全部来源超过账本容量，未仅截取前半部分冒充完成。',
+    RMT_ARCHIVE_RESULT_CAPACITY: '本段结果超过原校验容量，未截取结果或推进完成进度。',
     RMT_INPUT_BUDGET: '本次输入超过安全预算，已在发送前拦截。',
     RMT_TOKEN_COUNT_TIMEOUT: '输入检查超时，本段未发送；旧内容保留，可重试。',
     RMT_TOKEN_COUNT_UNAVAILABLE: '本地计数暂不可用。',
@@ -201,6 +206,16 @@ export function safeErrorDiagnostic(error) {
 export function safeErrorSummary(error, max = 520) {
     if (core_backupDiagnostics.backupFailureDiagnostic(error)) {
         return normalizeText(core_backupDiagnostics.backupFailureSummary(error).message, max);
+    }
+    const categories = { chat: '聊天正文或聊天身份', character: '角色身份或角色卡', persona: '用户 Persona',
+        archive: '正式档案版本', range: '聊天读取范围', selection: '来源选择', configuration: '生成配置',
+        sources: '已捕获来源快照', unknown: '旧格式草稿身份' };
+    if (error?.code === 'RMT_RECOVERY_INPUT_CHANGED' && Object.hasOwn(categories, error.archiveInputCategory)) {
+        return `${categories[error.archiveInputCategory]}与原任务不一致；已保存成果和未提交草稿保留。可恢复原条件继续，或明确选择按当前条件另起任务。`;
+    }
+    if (['RMT_ARCHIVE_CONTEXT_BUDGET', 'RMT_ARCHIVE_OUTPUT_BUDGET'].includes(error?.code) && error.archiveBudget) {
+        const b = error.archiveBudget, n = value => Number.isFinite(value) && value >= 0 ? Math.floor(value).toLocaleString() : '未知';
+        return `${SAFE_ERROR_CODE_MESSAGES[error.code]} 完整输入 ${n(b.utf16Chars)} 字符（UTF-16）、${n(b.utf8Bytes)} UTF-8 字节；输入 token ${n(b.inputTokens)}（宿主计数估算）、请求最大输出 ${n(b.outputTokens)} token；模型上下文 ${n(b.contextTokens)}。`;
     }
     const raw = normalizeText(error?.message, 12000);
     const status = safeErrorStatus(error);

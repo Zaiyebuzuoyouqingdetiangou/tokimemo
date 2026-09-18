@@ -1,5 +1,6 @@
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+import * as core_digest from './digest.js';
 import * as archive_groups from '../archive/groups.js';
 import * as core_constants from './constants.js';
 import * as core_evidence from './evidence.js';
@@ -63,6 +64,7 @@ export function isArchiveDialogueMessage(message, context) {
 export async function buildChatSnapshot(context = currentCharacterGuard(), options = {}) {
     const rawChat = Array.isArray(context.chat) ? context.chat : [];
     const usable = [];
+    const fullSignatures = [];
     const prefixCount = Math.max(0, Math.floor(Number(options.prefixCount) || 0));
     let fingerprint = 2166136261;
     let prefixFingerprint = 2166136261;
@@ -93,10 +95,11 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
                 role: isUser ? 'user' : 'char',
                 name: core_text.normalizeText(message?.name || (isUser ? context.name1 : context.name2), 120),
                 date: core_text.normalizeText(message?.send_date || message?.date || '', 80),
-                text,
+                text: options.completeSource === true ? core_text.normalizeText(message?.mes, Number.MAX_SAFE_INTEGER) : text,
             };
             usable.push(item);
-            const signature = `${item.index}|${item.role}|${item.date}|${item.text}`;
+            const signature = `${item.index}|${item.role}|${item.date}|${text}`;
+            if (options.completeSource === true) fullSignatures.push(`${item.index}|${item.role}|${item.date}|${item.text}`);
             fingerprint = mix(fingerprint, signature);
             if (usable.length <= prefixCount) prefixFingerprint = mix(prefixFingerprint, signature);
         }
@@ -110,6 +113,8 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
     if (prefixCount > 0) prefixFingerprint = mix(prefixFingerprint, String(Math.min(prefixCount, totalMessages)));
 
     const capMessages = source => {
+        if (options.completeSource === true) return { selected: source,
+            selectedChars: source.reduce((sum, item) => sum + item.text.length + item.name.length + item.date.length + 32, 0), truncated: false };
         const cappedByCount = source.length > core_constants.MAX_IMPORT_MESSAGES ? core_evidence.evenlySample(source, core_constants.MAX_IMPORT_MESSAGES) : source;
         let selected = cappedByCount;
         let selectedChars = selected.reduce((sum, item) => sum + item.text.length + item.name.length + item.date.length + 32, 0);
@@ -132,6 +137,10 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
     assertStillCurrent();
     return {
         chatId,
+        ...(options.completeSource === true ? {
+            fullFingerprint: core_digest.sha256Bytes(new TextEncoder().encode(JSON.stringify([chatId, fullSignatures]))),
+            fullPrefixFingerprint: core_digest.sha256Bytes(new TextEncoder().encode(JSON.stringify([chatId, fullSignatures.slice(0, prefixCount)]))),
+        } : {}),
         totalMessages,
         usedMessages: full.selected.length,
         usedChars: full.selectedChars,
@@ -147,6 +156,23 @@ export async function buildChatSnapshot(context = currentCharacterGuard(), optio
         incrementalUsedChars: incremental.selectedChars,
         incrementalTruncated: incremental.truncated,
     };
+}
+
+// Used only while a batch is explicitly committing (including its deferred save),
+// never by ordinary startup or message listeners. Mirrors the full snapshot identity.
+export function completeArchiveChatFingerprint(context = currentCharacterGuard()) {
+    const signatures = [];
+    const chat = Array.isArray(context.chat) ? context.chat : [];
+    for (let index = 0; index < chat.length; index++) {
+        const message = chat[index];
+        const value = core_text.normalizeText(message?.mes, Number.MAX_SAFE_INTEGER);
+        if (value && isArchiveDialogueMessage(message, context)) {
+            const role = message?.is_user === true ? 'user' : 'char';
+            const date = core_text.normalizeText(message?.send_date || message?.date || '', 80);
+            signatures.push(`${index + 1}|${role}|${date}|${value}`);
+        }
+    }
+    return core_digest.sha256Bytes(new TextEncoder().encode(JSON.stringify([comparableChatId(getChatId(context)), signatures])));
 }
 
 export function comparableChatId(value) {

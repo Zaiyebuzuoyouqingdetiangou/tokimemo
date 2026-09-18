@@ -361,14 +361,15 @@ export function requestCurrentArchiveImport() {
     const existing = archive_repository.getImportedMemory(context);
     const settings = core_settings.getPluginSettings(context);
     const detected = archive_repository.externalMemorySourceSummary(context);
-    if (settings.useCurrentChatExternalMemory && detected.length && !archive_repository.getMemoryPreflight(context)) {
+    if (settings.useCurrentChatExternalMemory && detected.length && !archive_repository.getMemoryPreflight(context)
+        && !archive_repository.getCurrentArchiveImportRecoverySummary(context)) {
         showChooser();
         globalThis.toastr?.info?.('检测到当前窗口记忆 / 摘要来源。请先点“扫描记忆 / 摘要”，确认读取范围后再生成/更新当前窗口档案。', '心迹回廊');
         return false;
     }
     const title = existing ? '增量更新当前窗口档案？' : '生成当前窗口档案？';
     const detail = existing
-        ? '默认只整理“上次档案之后新增的聊天”和发生变化的当前窗口记忆/摘要。已有 Mxxx 记忆 ID 不重排，已生成的回忆相簿、CG、ADV、房间、ENDING、储物、私人终端会继续保留。若检测到旧聊天被编辑/删除，本次会停止并要求你明确选择“完全重建档案”。'
+        ? '默认只整理“上次档案之后新增的聊天”和发生变化的当前窗口记忆/摘要。已有 Mxxx 记忆 ID 不重排，已生成的回忆相簿、CG、ADV、房间、ENDING、储物、私人终端会继续保留。若检测到旧聊天被编辑/删除，本次会停止并保留成果，说明变更类别，由你选择如何处理。'
         : '这会读取当前聊天窗口并建立一份只属于这个窗口的心迹回廊档案。聊天正文不会被修改；之后也只有你手动更新时档案才会变化。';
     if (!confirmExplicitAction(title, detail, { destructive: false })) return false;
     void archive_repository.importCurrentChatMemory({ fullRebuild: false }).catch(error => {
@@ -1016,6 +1017,23 @@ export function handleOverlayClick(event) {
     if (timeStoryButton) return void time_stories_view.handleTimeStoryAction(timeStoryButton.dataset.rmtTimeStory, timeStoryButton.dataset.rmtTimeStoryId);
     const discardButton = event.target.closest?.('[data-rmt-recovery-discard]');
     if (discardButton) return void generation_client.discardSavedGeneration(discardButton.dataset.rmtRecoveryDiscard).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    if (event.target.closest?.('[data-rmt-archive-export-pending]')) {
+        try {
+            const value = archive_repository.exportCurrentArchiveImportProgress();
+            const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob), link = document.createElement('a');
+            link.href = url; link.download = 'hearttrace-unarchived-results.json';
+            link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); }
+        return;
+    }
+    if (event.target.closest?.('[data-rmt-archive-restart]')) {
+        if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return;
+        if (!confirmExplicitAction('按当前条件另起整理任务？',
+            '正式档案与旧 Mxxx 保持不变。当前未提交草稿暂停并仅在本页保留，可导出；已保存的批次检查点随下一次成功保存一并保留。新任务使用当前来源与配置，可能重新处理旧任务尚未正式入档的片段并消耗额度。零成功草稿也可这样重新开始。',
+            { destructive: false })) return;
+        return void archive_repository.restartCurrentArchiveImport().catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    }
     if (event.target.closest?.('[data-rmt-archive-discard]')) {
         if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return;
         if (!confirmExplicitAction('放弃本页整理草稿？', '仅清除当前聊天尚未提交的档案整理/简介草稿，不能恢复。不删除已保存的正式记忆、模块或图片，也不会自动发起新请求。', { destructive: true })) return;

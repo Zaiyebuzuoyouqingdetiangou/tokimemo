@@ -1,3 +1,4 @@
+import * as archive_requestBudget from '../archive/requestBudget.js';
 import * as cg_policy from './cgPromptPolicy.js';
 import * as core_butterflyContract from '../core/butterflyContract.js';
 // Heartbeat Memories r35 modular runtime.
@@ -480,9 +481,17 @@ export async function generateConfiguredJson(prompt, options = {}) {
     const creativeSupplement = creative_supplement.creativeSupplementBlock(settings);
     const controlledPrompt = `${contextEnvelope}
 ${expanded}${creativeSupplement}${phrasePolicy}`;
-    await assertPromptBudget(context, controlledPrompt,
-        { skipTokenCount: options.skipTokenCount === true, signal: options.signal,
-            tokenCountTimeoutMs: options.tokenCountTimeoutMs, taskTrace });
+    if (options.archiveRequestBudget === true) {
+        const budget = await archive_requestBudget.measureArchiveRequest(context, controlledPrompt,
+            { signal: options.signal, stamp: options.archiveBudgetStamp });
+        core_taskTrace.recordInput(taskTrace, budget.utf16Chars, budget.inputTokens);
+        if (taskTrace) taskTrace.archiveBudget = archive_requestBudget.publicBudget(budget);
+        archive_requestBudget.assertArchiveRequestBudget(budget);
+    } else {
+        await assertPromptBudget(context, controlledPrompt,
+            { skipTokenCount: options.skipTokenCount === true, signal: options.signal,
+                tokenCountTimeoutMs: options.tokenCountTimeoutMs, taskTrace });
+    }
     core_taskTrace.markStage(taskTrace, 'prompt');
     // The value configured in the dedicated secondary-API UI is the actual provider max output.
     // Per-feature options.maxTokens values are legacy sizing hints only and must not silently lower it.

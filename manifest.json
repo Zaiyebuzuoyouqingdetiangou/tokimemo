@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.97-tt-cg-r84.21-response-routing",
+  "js": "index.js?heartbeat=0.8.98-tt-cg-r84.22-archive-batches",
   "author": "Toto",
-  "version": "0.8.97",
+  "version": "0.8.98",
   "auto_update": true,
   "minimum_client_version": "1.18.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.21：手动API按同一响应有界识别JSON与流式数据，保留原请求和存档保护。",
+  "description": "r84.22：建档完整请求计量、手动分批同存检查点和草稿续接；240条边界保留待入档结果，不改其他功能或响应分流。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
