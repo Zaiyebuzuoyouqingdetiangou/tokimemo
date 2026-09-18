@@ -43,6 +43,8 @@ const CODES = new Set(['RMT_LOCAL_STORAGE','RMT_LOCAL_CAS','RMT_MANUAL_KEY_STORA
 ]);
 
 const RESPONSE_SHAPES = new Set(['text', 'choices', 'message', 'content', 'output_text', 'output', 'candidates', 'text_fallback', 'wrapped', 'unsupported', 'empty', 'error']);
+const RECOVERY_CATEGORIES = new Set(['chat', 'character', 'persona', 'archive', 'selection', 'configuration', 'record', 'target', 'operation', 'request', 'attachment', 'unknown']);
+const RECOVERY_PHASES = new Set(['initialization', 'source', 'operation', 'request', 'attachment']);
 const FINISH_REASONS = new Set(['stop', 'end_turn', 'stop_sequence', 'length', 'max_tokens', 'content_filter', 'tool_calls', 'function_call', 'completed', 'incomplete', 'done', 'unknown', 'none']);
 const count = value => Math.floor(Math.max(0, Math.min(1000000, Number(value) || 0)));
 const duration = value => Math.floor(Math.max(0, Math.min(MAX_DURATION_MS, Number(value) || 0)));
@@ -143,6 +145,7 @@ export function finishSegmentTrace(parent, child, outcome, error = null) {
     parent.response = child.response;
     parent.attempt = child.attempt;
     parent.retryCode = child.retryCode;
+    if (child.recovery) parent.recovery = { ...child.recovery };
     parent.durations ||= {};
     for (const [stage, ms] of Object.entries(snapshotDurations(child))) {
         parent.durations[stage] = duration(duration(parent.durations[stage]) + ms);
@@ -181,6 +184,12 @@ export function markChunks(entry, { total = 0, ok = 0, failed = 0, pending = 0 }
 
 export function recordTaskFailure(entry, error) {
     if (!entry || !error) return entry;
+    if (['RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_SOURCE_CHANGED', 'RMT_RECOVERY_OPERATION_CHANGED'].includes(error.code)) {
+        entry.recovery = {
+            phase: RECOVERY_PHASES.has(error.recoveryPhase) ? error.recoveryPhase : 'initialization',
+            category: RECOVERY_CATEGORIES.has(error.archiveInputCategory) ? error.archiveInputCategory : 'unknown',
+        };
+    }
     const storage = core_backupDiagnostics.backupFailureDiagnostic(error);
     if (storage) {
         entry.code = storage.code;
@@ -223,6 +232,10 @@ function snapshotEntries(entries, includeRequests = false) {
                 .map(key => [key, entry.archiveBudget[key] === null ? null : bounded(entry.archiveBudget[key], 100000000)])),
             tokenBasis: entry.archiveBudget.tokenBasis === 'host-tokenizer-estimate' ? 'host-tokenizer-estimate' : 'unavailable',
             exceeded: ['output', 'context', 'characters', 'tokens'].includes(entry.archiveBudget.exceeded) ? entry.archiveBudget.exceeded : null,
+        } } : {}),
+        ...(entry.recovery ? { recovery: {
+            phase: RECOVERY_PHASES.has(entry.recovery.phase) ? entry.recovery.phase : 'initialization',
+            category: RECOVERY_CATEGORIES.has(entry.recovery.category) ? entry.recovery.category : 'unknown',
         } } : {}),
         ...(entry.attempt ? { attempt: bounded(entry.attempt, 9999) } : {}),
         ...(CODES.has(entry.retryCode) || entry.retryCode === 'RMT_UNCODED' ? { retryCode: entry.retryCode } : {}),

@@ -37,6 +37,15 @@ function recoveryError(code, message) {
     return error;
 }
 
+export function generationRecoveryMismatch(category = 'unknown', phase = 'initialization', code = 'RMT_RECOVERY_INPUT_CHANGED') {
+    const categories = ['chat', 'character', 'persona', 'archive', 'selection', 'configuration', 'record', 'target', 'operation', 'request', 'attachment', 'unknown'];
+    const phases = ['initialization', 'source', 'operation', 'request', 'attachment'];
+    const error = recoveryError(code, '原任务的兼容校验未通过；成功内容与原草稿保留，没有自动重新生成。');
+    error.archiveInputCategory = categories.includes(category) ? category : 'unknown';
+    error.recoveryPhase = phases.includes(phase) ? phase : 'initialization';
+    return error;
+}
+
 function recoveryFailureCode(error) {
     // A provider can supply an arbitrary code, including an RMT-prefixed value.
     // Persist only fixed local classifications, never raw error fields.
@@ -132,6 +141,7 @@ function validJournal(raw, now) {
                 jsonData(data, GENERATION_RECOVERY_LIMITS.requestChars, true);
             }
         }
+        if (journal.inputSnapshotVersion !== undefined && journal.inputSnapshotVersion !== 1) return null;
         if (journal.sourcePolicy !== undefined && (!journal.sourcePolicy || Array.isArray(journal.sourcePolicy)
             || Object.keys(journal.sourcePolicy).some(key => !['character', 'persona', 'selection'].includes(key) || !DIGEST.test(journal.sourcePolicy[key])))) return null;
         const slots = new Set();
@@ -172,7 +182,21 @@ export function generationRecoverySummary(raw, now = Date.now()) {
         mode: journal.identity.mode, completed, truncated, failed, updatedAt: journal.updatedAt,
         canContinue, canRetry: failed > 0 || (!canContinue && !!journal.failureCode),
         failureCode: journal.failureCode || '',
+        ...(journal.failureCategory ? { failureCategory: journal.failureCategory, failurePhase: journal.failurePhase } : {}),
     };
+}
+
+// Explicit user export only. Do not include arbitrary top-level properties or
+// settings/provider objects. This is inert recovery data, not import authority.
+export function exportGenerationRecovery(raw) {
+    const journal = validJournal(raw, Date.now());
+    if (!journal) throw generationRecoveryMismatch('record');
+    const keys = ['kind', 'version', 'identity', 'settingsHash', 'createdAt', 'updatedAt', 'segments',
+        'failureCode', 'failureCategory', 'failurePhase', 'frozenInputs', 'inputSnapshotVersion', 'sourcePolicy',
+        'operation', 'replaceExisting'];
+    const pick = item => Object.fromEntries(keys.filter(key => Object.hasOwn(item, key)).map(key => [key, item[key]]));
+    return { kind: 'hearttrace-module-recovery-export', version: 1, journal: pick(journal),
+        previousAttempts: (Array.isArray(journal.previousAttempts) ? journal.previousAttempts : []).map(pick) };
 }
 
 export async function createGenerationRecovery({ origin, mode, settingsIdentity, existing = null,
@@ -182,15 +206,27 @@ export async function createGenerationRecovery({ origin, mode, settingsIdentity,
     const settingsHash = await generationRecoveryDigest(settingsIdentity ?? '');
     const clock = now();
     let journal = continueRequested ? validJournal(existing, clock) : null;
-    if (continueRequested && (!journal || jsonData(journal.identity) !== jsonData(identity) || journal.settingsHash !== settingsHash)) {
-        throw recoveryError('RMT_RECOVERY_INPUT_CHANGED', '这份草稿与当前聊天、档案或生成设置不一致，已保留草稿；没有重做成功项。');
+    if (continueRequested) {
+        if (!journal) throw generationRecoveryMismatch('record');
+        const categories = { characterKey: 'character', characterId: 'character', characterAvatar: 'character',
+            chatId: 'chat', archiveRevision: 'archive', archiveTargetEntryId: 'target', mode: 'operation' };
+        for (const [key, category] of Object.entries(categories)) {
+            if ((journal.identity[key] ?? '') !== identity[key]) throw generationRecoveryMismatch(category);
+        }
+        if (jsonData(journal.identity) !== jsonData(identity)) throw generationRecoveryMismatch('record');
+        if (journal.settingsHash !== settingsHash) throw generationRecoveryMismatch('configuration');
     }
     journal ||= { kind: 'generation-recovery', version: 1, identity, settingsHash,
-        createdAt: clock, updatedAt: clock, segments: [], failureCode: '' };
-    const legacyWithoutInputs = !!existing && !existing.frozenInputs;
-    if (sourcePolicy) journal.sourcePolicy = sourcePolicy;
+        inputSnapshotVersion: 1, createdAt: clock, updatedAt: clock, segments: [], failureCode: '' };
+    // Old versions could write a fresh input snapshot before verifying a legacy
+    // request. A retry-only, unmarked record may still need explicit restart.
+    // Never restart complete or truncated segments and never infer equivalence.
+    const legacyWithoutInputs = !!existing && (!existing.frozenInputs || !existing.inputSnapshotVersion);
+    if (sourcePolicy && !journal.sourcePolicy && (!legacyWithoutInputs || !journal.segments.length)) journal.sourcePolicy = sourcePolicy;
     const handle = { journal, save, assertCurrent, now, continueRequested: continueRequested === true,
-        legacyWithoutInputs, confirmLegacyRestart, pendingInputs: new Map(),
+        legacyWithoutInputs, confirmLegacyRestart, pendingInputs: new Map(), stagedInputs: new Map(),
+        unverifiedLegacySlots: new Set(legacyWithoutInputs ? journal.segments.map(row => row.slot) : []),
+        stagedSourcePolicy: !journal.sourcePolicy && sourcePolicy ? sourcePolicy : null,
         taskScopes: (Array.isArray(taskScopes) ? taskScopes : []).filter(scope => typeof scope === 'string' && scope && scope.length <= 1800).slice(0, 4).sort((a,b) => b.length - a.length),
         pageOnly: pageOnly === true, durable: false, lane: Promise.resolve(), activeSlots: new Set() };
     internalHandles.add(handle);
@@ -229,7 +265,7 @@ function currentAttachedJournal(origin, handle) {
     }, journal?.identity?.mode);
     if (!journal || !binding || !identity || jsonData(journal.identity) !== binding.identity
         || jsonData(identity) !== binding.identity || journal.settingsHash !== binding.settingsHash) {
-        throw recoveryError('RMT_RECOVERY_INPUT_CHANGED', '这份草稿与当前聊天、档案或生成设置不一致，已保留草稿；没有重做成功项。');
+        throw generationRecoveryMismatch('attachment', 'attachment');
     }
     checkCurrent(handle);
     return journal;
@@ -248,10 +284,18 @@ export async function frozenGenerationInput(origin, key, produce) {
     };
     const previous = read();
     if (previous !== undefined) return previous;
+    if (handle.stagedInputs.has(key)) return JSON.parse(handle.stagedInputs.get(key));
     if (handle.pendingInputs.has(key)) return structuredClone(await handle.pendingInputs.get(key));
     const pending = (async () => {
         const value = await produce(); checkCurrent(handle);
         const serialized = jsonData(value, GENERATION_RECOVERY_LIMITS.requestChars, true);
+        // No durable mutation of a legacy recipe until its retained requests
+        // have actually matched. Cancelling or a hash mismatch must not poison
+        // the next attempt with a background the original task never used.
+        if (handle.unverifiedLegacySlots.size) {
+            handle.stagedInputs.set(key, serialized);
+            return JSON.parse(serialized);
+        }
         const saved = await changeJournal(handle, journal => {
             journal.frozenInputs = { ...(journal.frozenInputs || {}), [key]: serialized };
         });
@@ -260,6 +304,19 @@ export async function frozenGenerationInput(origin, key, produce) {
     })();
     handle.pendingInputs.set(key, pending);
     try { return structuredClone(await pending); } finally { handle.pendingInputs.delete(key); }
+}
+
+async function acceptPreparedInputs(handle, slot) {
+    handle.unverifiedLegacySlots.delete(slot);
+    if (handle.unverifiedLegacySlots.size || (!handle.stagedInputs.size && !handle.stagedSourcePolicy)) return;
+    const staged = Object.fromEntries(handle.stagedInputs);
+    const saved = await changeJournal(handle, journal => {
+        journal.frozenInputs = { ...(journal.frozenInputs || {}), ...staged };
+        if (handle.stagedSourcePolicy) journal.sourcePolicy = handle.stagedSourcePolicy;
+        journal.inputSnapshotVersion = 1;
+    });
+    if (!saved && !handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '本轮背景未能保存，已停止模型请求；旧内容和草稿仍保留。');
+    handle.stagedInputs.clear(); handle.stagedSourcePolicy = null;
 }
 
 // Planning data only, never acceptance authority. Callers must still replay each
@@ -369,18 +426,25 @@ export async function withRecoverySegment(prompt, options, validator, run) {
             const restartable = handle.legacyWithoutInputs && handle.continueRequested
                 && previous.state === 'retry' && handle.journal.segments.every(row => row.state === 'retry');
             if (!restartable || typeof handle.confirmLegacyRestart !== 'function' || !await handle.confirmLegacyRestart()) {
-                throw recoveryError('RMT_RECOVERY_INPUT_CHANGED', '这一段的来源或提示词已经变化，原成功内容与草稿仍保留；没有自动重新生成。');
+                throw generationRecoveryMismatch('request', 'request');
             }
             checkCurrent(handle);
             const saved = await changeJournal(handle, journal => {
-                journal.previousAttempts = [...(journal.previousAttempts || []), {
-                    updatedAt: journal.updatedAt, segments: journal.segments, failureCode: journal.failureCode,
-                }];
+                // Keep the entire old recipe, not just a list of failed slots.
+                const { previousAttempts, ...prior } = journal;
+                journal.previousAttempts = [...(previousAttempts || []), prior];
                 journal.segments = []; journal.failureCode = '';
+                journal.frozenInputs = { ...(journal.frozenInputs || {}), ...Object.fromEntries(handle.stagedInputs) };
+                if (handle.stagedSourcePolicy) journal.sourcePolicy = handle.stagedSourcePolicy;
+                journal.inputSnapshotVersion = 1;
             });
             if (!saved && !handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '旧失败记录未能保存，未重新请求。');
             handle.legacyWithoutInputs = false;
+            handle.unverifiedLegacySlots.clear(); handle.stagedInputs.clear(); handle.stagedSourcePolicy = null;
         }
+        // Exact hash (or a mode-owned bounded compatibility recipe) was proved.
+        // No successful or truncated legacy content can enter the restart path.
+        await acceptPreparedInputs(handle, slot);
         if (previous?.state === 'complete') {
             let value;
             try {
@@ -465,5 +529,12 @@ export async function noteGenerationRecoveryFailure(origin, error) {
     const handle = origin && handles.get(origin);
     if (!handle || error?.name === 'AbortError') return false;
     const code = recoveryFailureCode(error);
-    return changeJournal(handle, journal => { journal.failureCode = code; });
+    return changeJournal(handle, journal => {
+        journal.failureCode = code;
+        delete journal.failureCategory; delete journal.failurePhase;
+        if (['RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_SOURCE_CHANGED', 'RMT_RECOVERY_OPERATION_CHANGED'].includes(code)) {
+            const safe = generationRecoveryMismatch(error.archiveInputCategory, error.recoveryPhase, code);
+            journal.failureCategory = safe.archiveInputCategory; journal.failurePhase = safe.recoveryPhase;
+        }
+    });
 }

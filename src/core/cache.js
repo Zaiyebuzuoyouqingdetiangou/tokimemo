@@ -441,7 +441,13 @@ export function loadGenerationRecovery(mode, context = core_context.getContext()
             || raw.identity?.chatId !== core_context.comparableChatId(core_context.getChatId(context))
             || raw.identity?.archiveRevision !== bank.archiveRevision
             || raw[core_constants.SESSION_MODE_WRITE_FENCE_KEY] !== modeWriteFenceForCache(cache, mode)) return null;
-        return cloneCacheValue(raw);
+        // The loader has proved the exact character/chat/revision, canonical
+        // entry and write fence above. Older V1 journals allowed this derived ID
+        // to be empty. Fill only that absence on a COPY, never an explicit mismatch.
+        // All callers (mode, subtask and continuation buttons) receive one identity.
+        const journal = cloneCacheValue(raw);
+        if (!journal.identity.archiveTargetEntryId) journal.identity.archiveTargetEntryId = entryId;
+        return journal;
     } catch { return null; }
 }
 export async function saveGenerationRecovery(context, bank, mode, journal, origin, options = {}) {

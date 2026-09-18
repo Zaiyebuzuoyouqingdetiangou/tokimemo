@@ -702,13 +702,9 @@ export async function generateArchiveChunkJson(prompt, options, label) {
 }
 
 function recoverySettingsIdentity(context) {
-    const settings = core_settings.getPluginSettings(context);
-    // Connection/model/output limits may be repaired before an explicit continuation.
-    // Writing rules and evidence filters must not silently change accepted content.
-    return JSON.stringify({ creativeSupplementEnabled: settings.creativeSupplementEnabled,
-        creativeSupplement: settings.creativeSupplement, excludedContextTags: settings.excludedContextTags,
-        ...core_contextTags.savedTagSelection(settings),
-        bannedGeneratedPhrases: settings.bannedGeneratedPhrases });
+    // Shared with admission so a failed comparison never advances a write fence.
+    // Serialization remains byte-identical to the earlier settings fingerprint.
+    return recovery_source.recoverySettingsIdentity(context);
 }
 export async function beginModeRecovery(mode, context, bank, origin, options = {}) {
     const identity = recoverySettingsIdentity(context);
@@ -721,7 +717,7 @@ export async function beginModeRecovery(mode, context, bank, origin, options = {
         options.cgPromptFormat || core_settings.getPluginSettings(context).cgPromptFormat);
     cg_policy.bindCgPromptFormat(origin, operation.cgPromptFormat, operation.cgPromptDialect || 'legacy');
     if (existing?.operation && await generation_recovery.generationRecoveryDigest(existing.operation) !== await generation_recovery.generationRecoveryDigest(operation)) {
-        throw core_text.safeUserError('这项还保留着另一入口的草稿，请从“继续生成”回到原来的任务；旧内容与草稿未改动。', 'RMT_RECOVERY_OPERATION_CHANGED');
+        throw generation_recovery.generationRecoveryMismatch('operation', 'operation', 'RMT_RECOVERY_OPERATION_CHANGED');
     }
     const archiveEntry = options.archiveEntry || (!options.archiveTarget
         ? structuredClone(core_cache.archiveBackupEntryForContext(context, bank, { expectedTaskOrigin: origin, previousMemory: bank })) : null);
@@ -729,7 +725,7 @@ export async function beginModeRecovery(mode, context, bank, origin, options = {
         origin: { ...origin, archiveTargetEntryId: options.archiveTarget?.entryId || archiveEntry?.entryId || origin.archiveTargetEntryId || '' },
         mode, settingsIdentity: identity, existing, continueRequested: !!existing, sourcePolicy,
         confirmLegacyRestart: () => ui_overlay.confirmExplicitAction('保留旧失败记录，按当前背景重新尝试？',
-            '旧版任务没有保存最初的世界书背景，且没有任何成功分段或截断正文。确定会保留旧失败记录并使用当前背景重新请求；取消不发送。', { destructive: false }),
+            '旧版失败记录没有可验证的原背景配对，且没有任何成功分段或截断正文。确定会保留原失败记录，按本次已读取的背景重新请求；取消不发送。', { destructive: false }),
         taskScopes: [`${origin.characterKey}|${origin.chatId}`, `archive-target:${options.archiveTarget?.entryId || archiveEntry?.entryId || origin.archiveTargetEntryId || ''}`],
         assertCurrent: () => {
             if (!core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch) || options.stillCurrent?.() === false
@@ -788,6 +784,22 @@ export async function continueSavedGeneration(mode, options = {}) {
     runtimeState.activeMode = mode;
     runtimeState.activeSession = session;
     return routes[operation.kind]();
+}
+
+export async function exportSavedGeneration(mode) {
+    if (!Object.values(core_constants.MODE).includes(mode)) throw generation_recovery.generationRecoveryMismatch('operation', 'operation');
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    const context = snapshot ? archive_library.archiveTargetGenerationOptions(snapshot).context : core_context.currentCharacterGuard();
+    const bank = archive_repository.requireArchive(context);
+    const origin = core_context.captureTaskOrigin(context, bank.archiveRevision);
+    if (!snapshot) await core_cache.ensureCacheHydrated(context);
+    if (!core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)
+        || (snapshot ? runtimeState.activeArchiveSnapshot !== snapshot : !core_context.isCurrentTaskOrigin(origin))) {
+        throw new DOMException('Recovery export scope changed', 'AbortError');
+    }
+    const journal = core_cache.loadGenerationRecovery(mode, context, snapshot?.cache);
+    if (!journal) throw generation_recovery.generationRecoveryMismatch('record');
+    return generation_recovery.exportGenerationRecovery(journal);
 }
 
 export async function discardSavedGeneration(mode) {

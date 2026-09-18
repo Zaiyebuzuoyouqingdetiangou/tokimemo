@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 125
-// Source SHA-256: fe0fed9a489d610cd9aac95e65b3d86af96dd65aab9ddb11bbe12297eaaa2379
+// Source SHA-256: 88b813dbf2a53e62f56b1b881df85330bc533aa74cdde56015a3068a2191bbc1
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -727,9 +727,14 @@ function safeErrorSummary(error, max = 520) {
     }
     const categories = { chat: '聊天正文或聊天身份', character: '角色身份或角色卡', persona: '用户 Persona',
         archive: '正式档案版本', range: '聊天读取范围', selection: '来源选择', configuration: '生成配置',
-        sources: '已捕获来源快照', unknown: '旧格式草稿身份' };
-    if (['RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_SOURCE_CHANGED'].includes(error?.code) && Object.hasOwn(categories, error.archiveInputCategory)) {
-        return `${categories[error.archiveInputCategory]}与原任务不一致；已保存成果和未提交草稿保留。可恢复原条件继续，或明确选择按当前条件另起任务。`;
+        sources: '已捕获来源快照', record: '旧草稿结构', target: '内部档案目标',
+        operation: '原任务入口', request: '原分段请求配方', attachment: '运行中的恢复绑定', unknown: '旧格式草稿身份' };
+    if (['RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_SOURCE_CHANGED', 'RMT_RECOVERY_OPERATION_CHANGED'].includes(error?.code) && Object.hasOwn(categories, error.archiveInputCategory)) {
+        if (error.archiveInputCategory === 'operation') return '原任务属于另一生成入口；请使用“继续未完成内容”返回原任务。成功内容与草稿保留，没有发起新请求。';
+        if (['record', 'target', 'request', 'attachment', 'unknown'].includes(error.archiveInputCategory)) {
+            return `${categories[error.archiveInputCategory]}未通过兼容核对；不等于你修改了设置。成功内容与原草稿保留，没有自动重做，可先导出未提交草稿。`;
+        }
+        return `${categories[error.archiveInputCategory]}与原任务不一致；已保存成果和未提交草稿保留。可恢复原条件继续，或先导出草稿再明确处理。`;
     }
     if (['RMT_ARCHIVE_CONTEXT_BUDGET', 'RMT_ARCHIVE_OUTPUT_BUDGET'].includes(error?.code) && error.archiveBudget) {
         const b = error.archiveBudget, n = value => Number.isFinite(value) && value >= 0 ? Math.floor(value).toLocaleString() : '未知';
@@ -5898,6 +5903,15 @@ function recoveryError(code, message) {
     return error;
 }
 
+function generationRecoveryMismatch(category = 'unknown', phase = 'initialization', code = 'RMT_RECOVERY_INPUT_CHANGED') {
+    const categories = ['chat', 'character', 'persona', 'archive', 'selection', 'configuration', 'record', 'target', 'operation', 'request', 'attachment', 'unknown'];
+    const phases = ['initialization', 'source', 'operation', 'request', 'attachment'];
+    const error = recoveryError(code, '原任务的兼容校验未通过；成功内容与原草稿保留，没有自动重新生成。');
+    error.archiveInputCategory = categories.includes(category) ? category : 'unknown';
+    error.recoveryPhase = phases.includes(phase) ? phase : 'initialization';
+    return error;
+}
+
 function recoveryFailureCode(error) {
     // A provider can supply an arbitrary code, including an RMT-prefixed value.
     // Persist only fixed local classifications, never raw error fields.
@@ -5993,6 +6007,7 @@ function validJournal(raw, now) {
                 jsonData(data, GENERATION_RECOVERY_LIMITS.requestChars, true);
             }
         }
+        if (journal.inputSnapshotVersion !== undefined && journal.inputSnapshotVersion !== 1) return null;
         if (journal.sourcePolicy !== undefined && (!journal.sourcePolicy || Array.isArray(journal.sourcePolicy)
             || Object.keys(journal.sourcePolicy).some(key => !['character', 'persona', 'selection'].includes(key) || !DIGEST.test(journal.sourcePolicy[key])))) return null;
         const slots = new Set();
@@ -6033,7 +6048,21 @@ function generationRecoverySummary(raw, now = Date.now()) {
         mode: journal.identity.mode, completed, truncated, failed, updatedAt: journal.updatedAt,
         canContinue, canRetry: failed > 0 || (!canContinue && !!journal.failureCode),
         failureCode: journal.failureCode || '',
+        ...(journal.failureCategory ? { failureCategory: journal.failureCategory, failurePhase: journal.failurePhase } : {}),
     };
+}
+
+// Explicit user export only. Do not include arbitrary top-level properties or
+// settings/provider objects. This is inert recovery data, not import authority.
+function exportGenerationRecovery(raw) {
+    const journal = validJournal(raw, Date.now());
+    if (!journal) throw generationRecoveryMismatch('record');
+    const keys = ['kind', 'version', 'identity', 'settingsHash', 'createdAt', 'updatedAt', 'segments',
+        'failureCode', 'failureCategory', 'failurePhase', 'frozenInputs', 'inputSnapshotVersion', 'sourcePolicy',
+        'operation', 'replaceExisting'];
+    const pick = item => Object.fromEntries(keys.filter(key => Object.hasOwn(item, key)).map(key => [key, item[key]]));
+    return { kind: 'hearttrace-module-recovery-export', version: 1, journal: pick(journal),
+        previousAttempts: (Array.isArray(journal.previousAttempts) ? journal.previousAttempts : []).map(pick) };
 }
 
 async function createGenerationRecovery({ origin, mode, settingsIdentity, existing = null,
@@ -6043,15 +6072,27 @@ async function createGenerationRecovery({ origin, mode, settingsIdentity, existi
     const settingsHash = await generationRecoveryDigest(settingsIdentity ?? '');
     const clock = now();
     let journal = continueRequested ? validJournal(existing, clock) : null;
-    if (continueRequested && (!journal || jsonData(journal.identity) !== jsonData(identity) || journal.settingsHash !== settingsHash)) {
-        throw recoveryError('RMT_RECOVERY_INPUT_CHANGED', '这份草稿与当前聊天、档案或生成设置不一致，已保留草稿；没有重做成功项。');
+    if (continueRequested) {
+        if (!journal) throw generationRecoveryMismatch('record');
+        const categories = { characterKey: 'character', characterId: 'character', characterAvatar: 'character',
+            chatId: 'chat', archiveRevision: 'archive', archiveTargetEntryId: 'target', mode: 'operation' };
+        for (const [key, category] of Object.entries(categories)) {
+            if ((journal.identity[key] ?? '') !== identity[key]) throw generationRecoveryMismatch(category);
+        }
+        if (jsonData(journal.identity) !== jsonData(identity)) throw generationRecoveryMismatch('record');
+        if (journal.settingsHash !== settingsHash) throw generationRecoveryMismatch('configuration');
     }
     journal ||= { kind: 'generation-recovery', version: 1, identity, settingsHash,
-        createdAt: clock, updatedAt: clock, segments: [], failureCode: '' };
-    const legacyWithoutInputs = !!existing && !existing.frozenInputs;
-    if (sourcePolicy) journal.sourcePolicy = sourcePolicy;
+        inputSnapshotVersion: 1, createdAt: clock, updatedAt: clock, segments: [], failureCode: '' };
+    // Old versions could write a fresh input snapshot before verifying a legacy
+    // request. A retry-only, unmarked record may still need explicit restart.
+    // Never restart complete or truncated segments and never infer equivalence.
+    const legacyWithoutInputs = !!existing && (!existing.frozenInputs || !existing.inputSnapshotVersion);
+    if (sourcePolicy && !journal.sourcePolicy && (!legacyWithoutInputs || !journal.segments.length)) journal.sourcePolicy = sourcePolicy;
     const handle = { journal, save, assertCurrent, now, continueRequested: continueRequested === true,
-        legacyWithoutInputs, confirmLegacyRestart, pendingInputs: new Map(),
+        legacyWithoutInputs, confirmLegacyRestart, pendingInputs: new Map(), stagedInputs: new Map(),
+        unverifiedLegacySlots: new Set(legacyWithoutInputs ? journal.segments.map(row => row.slot) : []),
+        stagedSourcePolicy: !journal.sourcePolicy && sourcePolicy ? sourcePolicy : null,
         taskScopes: (Array.isArray(taskScopes) ? taskScopes : []).filter(scope => typeof scope === 'string' && scope && scope.length <= 1800).slice(0, 4).sort((a,b) => b.length - a.length),
         pageOnly: pageOnly === true, durable: false, lane: Promise.resolve(), activeSlots: new Set() };
     internalHandles.add(handle);
@@ -6090,7 +6131,7 @@ function currentAttachedJournal(origin, handle) {
     }, journal?.identity?.mode);
     if (!journal || !binding || !identity || jsonData(journal.identity) !== binding.identity
         || jsonData(identity) !== binding.identity || journal.settingsHash !== binding.settingsHash) {
-        throw recoveryError('RMT_RECOVERY_INPUT_CHANGED', '这份草稿与当前聊天、档案或生成设置不一致，已保留草稿；没有重做成功项。');
+        throw generationRecoveryMismatch('attachment', 'attachment');
     }
     checkCurrent(handle);
     return journal;
@@ -6109,10 +6150,18 @@ async function frozenGenerationInput(origin, key, produce) {
     };
     const previous = read();
     if (previous !== undefined) return previous;
+    if (handle.stagedInputs.has(key)) return JSON.parse(handle.stagedInputs.get(key));
     if (handle.pendingInputs.has(key)) return structuredClone(await handle.pendingInputs.get(key));
     const pending = (async () => {
         const value = await produce(); checkCurrent(handle);
         const serialized = jsonData(value, GENERATION_RECOVERY_LIMITS.requestChars, true);
+        // No durable mutation of a legacy recipe until its retained requests
+        // have actually matched. Cancelling or a hash mismatch must not poison
+        // the next attempt with a background the original task never used.
+        if (handle.unverifiedLegacySlots.size) {
+            handle.stagedInputs.set(key, serialized);
+            return JSON.parse(serialized);
+        }
         const saved = await changeJournal(handle, journal => {
             journal.frozenInputs = { ...(journal.frozenInputs || {}), [key]: serialized };
         });
@@ -6121,6 +6170,19 @@ async function frozenGenerationInput(origin, key, produce) {
     })();
     handle.pendingInputs.set(key, pending);
     try { return structuredClone(await pending); } finally { handle.pendingInputs.delete(key); }
+}
+
+async function acceptPreparedInputs(handle, slot) {
+    handle.unverifiedLegacySlots.delete(slot);
+    if (handle.unverifiedLegacySlots.size || (!handle.stagedInputs.size && !handle.stagedSourcePolicy)) return;
+    const staged = Object.fromEntries(handle.stagedInputs);
+    const saved = await changeJournal(handle, journal => {
+        journal.frozenInputs = { ...(journal.frozenInputs || {}), ...staged };
+        if (handle.stagedSourcePolicy) journal.sourcePolicy = handle.stagedSourcePolicy;
+        journal.inputSnapshotVersion = 1;
+    });
+    if (!saved && !handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '本轮背景未能保存，已停止模型请求；旧内容和草稿仍保留。');
+    handle.stagedInputs.clear(); handle.stagedSourcePolicy = null;
 }
 
 // Planning data only, never acceptance authority. Callers must still replay each
@@ -6230,18 +6292,25 @@ async function withRecoverySegment(prompt, options, validator, run) {
             const restartable = handle.legacyWithoutInputs && handle.continueRequested
                 && previous.state === 'retry' && handle.journal.segments.every(row => row.state === 'retry');
             if (!restartable || typeof handle.confirmLegacyRestart !== 'function' || !await handle.confirmLegacyRestart()) {
-                throw recoveryError('RMT_RECOVERY_INPUT_CHANGED', '这一段的来源或提示词已经变化，原成功内容与草稿仍保留；没有自动重新生成。');
+                throw generationRecoveryMismatch('request', 'request');
             }
             checkCurrent(handle);
             const saved = await changeJournal(handle, journal => {
-                journal.previousAttempts = [...(journal.previousAttempts || []), {
-                    updatedAt: journal.updatedAt, segments: journal.segments, failureCode: journal.failureCode,
-                }];
+                // Keep the entire old recipe, not just a list of failed slots.
+                const { previousAttempts, ...prior } = journal;
+                journal.previousAttempts = [...(previousAttempts || []), prior];
                 journal.segments = []; journal.failureCode = '';
+                journal.frozenInputs = { ...(journal.frozenInputs || {}), ...Object.fromEntries(handle.stagedInputs) };
+                if (handle.stagedSourcePolicy) journal.sourcePolicy = handle.stagedSourcePolicy;
+                journal.inputSnapshotVersion = 1;
             });
             if (!saved && !handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '旧失败记录未能保存，未重新请求。');
             handle.legacyWithoutInputs = false;
+            handle.unverifiedLegacySlots.clear(); handle.stagedInputs.clear(); handle.stagedSourcePolicy = null;
         }
+        // Exact hash (or a mode-owned bounded compatibility recipe) was proved.
+        // No successful or truncated legacy content can enter the restart path.
+        await acceptPreparedInputs(handle, slot);
         if (previous?.state === 'complete') {
             let value;
             try {
@@ -6326,7 +6395,14 @@ async function noteGenerationRecoveryFailure(origin, error) {
     const handle = origin && handles.get(origin);
     if (!handle || error?.name === 'AbortError') return false;
     const code = recoveryFailureCode(error);
-    return changeJournal(handle, journal => { journal.failureCode = code; });
+    return changeJournal(handle, journal => {
+        journal.failureCode = code;
+        delete journal.failureCategory; delete journal.failurePhase;
+        if (['RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_SOURCE_CHANGED', 'RMT_RECOVERY_OPERATION_CHANGED'].includes(code)) {
+            const safe = generationRecoveryMismatch(error.archiveInputCategory, error.recoveryPhase, code);
+            journal.failureCategory = safe.archiveInputCategory; journal.failurePhase = safe.recoveryPhase;
+        }
+    });
 }
 
 __m_generation_recovery_js.generationRecoveryDigest = generationRecoveryDigest;
@@ -6335,7 +6411,9 @@ __m_generation_recovery_js.frozenGenerationInput = frozenGenerationInput;
 __m_generation_recovery_js.withRecoverySegment = withRecoverySegment;
 __m_generation_recovery_js.recordRecoveryTruncation = recordRecoveryTruncation;
 __m_generation_recovery_js.noteGenerationRecoveryFailure = noteGenerationRecoveryFailure;
+__m_generation_recovery_js.generationRecoveryMismatch = generationRecoveryMismatch;
 __m_generation_recovery_js.generationRecoverySummary = generationRecoverySummary;
+__m_generation_recovery_js.exportGenerationRecovery = exportGenerationRecovery;
 __m_generation_recovery_js.attachGenerationRecovery = attachGenerationRecovery;
 __m_generation_recovery_js.detachGenerationRecovery = detachGenerationRecovery;
 __m_generation_recovery_js.generationRecoverySnapshot = generationRecoverySnapshot;
@@ -6521,6 +6599,8 @@ const CODES = new Set(['RMT_LOCAL_STORAGE','RMT_LOCAL_CAS','RMT_MANUAL_KEY_STORA
 ]);
 
 const RESPONSE_SHAPES = new Set(['text', 'choices', 'message', 'content', 'output_text', 'output', 'candidates', 'text_fallback', 'wrapped', 'unsupported', 'empty', 'error']);
+const RECOVERY_CATEGORIES = new Set(['chat', 'character', 'persona', 'archive', 'selection', 'configuration', 'record', 'target', 'operation', 'request', 'attachment', 'unknown']);
+const RECOVERY_PHASES = new Set(['initialization', 'source', 'operation', 'request', 'attachment']);
 const FINISH_REASONS = new Set(['stop', 'end_turn', 'stop_sequence', 'length', 'max_tokens', 'content_filter', 'tool_calls', 'function_call', 'completed', 'incomplete', 'done', 'unknown', 'none']);
 const count = value => Math.floor(Math.max(0, Math.min(1000000, Number(value) || 0)));
 const duration = value => Math.floor(Math.max(0, Math.min(MAX_DURATION_MS, Number(value) || 0)));
@@ -6621,6 +6701,7 @@ function finishSegmentTrace(parent, child, outcome, error = null) {
     parent.response = child.response;
     parent.attempt = child.attempt;
     parent.retryCode = child.retryCode;
+    if (child.recovery) parent.recovery = { ...child.recovery };
     parent.durations ||= {};
     for (const [stage, ms] of Object.entries(snapshotDurations(child))) {
         parent.durations[stage] = duration(duration(parent.durations[stage]) + ms);
@@ -6659,6 +6740,12 @@ function markChunks(entry, { total = 0, ok = 0, failed = 0, pending = 0 } = {}) 
 
 function recordTaskFailure(entry, error) {
     if (!entry || !error) return entry;
+    if (['RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_SOURCE_CHANGED', 'RMT_RECOVERY_OPERATION_CHANGED'].includes(error.code)) {
+        entry.recovery = {
+            phase: RECOVERY_PHASES.has(error.recoveryPhase) ? error.recoveryPhase : 'initialization',
+            category: RECOVERY_CATEGORIES.has(error.archiveInputCategory) ? error.archiveInputCategory : 'unknown',
+        };
+    }
     const storage = core_backupDiagnostics.backupFailureDiagnostic(error);
     if (storage) {
         entry.code = storage.code;
@@ -6701,6 +6788,10 @@ function snapshotEntries(entries, includeRequests = false) {
                 .map(key => [key, entry.archiveBudget[key] === null ? null : bounded(entry.archiveBudget[key], 100000000)])),
             tokenBasis: entry.archiveBudget.tokenBasis === 'host-tokenizer-estimate' ? 'host-tokenizer-estimate' : 'unavailable',
             exceeded: ['output', 'context', 'characters', 'tokens'].includes(entry.archiveBudget.exceeded) ? entry.archiveBudget.exceeded : null,
+        } } : {}),
+        ...(entry.recovery ? { recovery: {
+            phase: RECOVERY_PHASES.has(entry.recovery.phase) ? entry.recovery.phase : 'initialization',
+            category: RECOVERY_CATEGORIES.has(entry.recovery.category) ? entry.recovery.category : 'unknown',
         } } : {}),
         ...(entry.attempt ? { attempt: bounded(entry.attempt, 9999) } : {}),
         ...(CODES.has(entry.retryCode) || entry.retryCode === 'RMT_UNCODED' ? { retryCode: entry.retryCode } : {}),
@@ -10921,8 +11012,8 @@ function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
         const summary = generation_recovery.generationRecoverySummary(journal);
         if (!summary || (!summary.completed && !summary.truncated && !summary.failed)) return '';
         const label = summary.canContinue ? '继续生成' : '重试未完成部分';
-        const reason = summary.canContinue ? '正文未写完' : summary.failureCode ? text.safeErrorSummary({ code: summary.failureCode }) : '任务尚未完成';
-        return `<section class="rmt-recovery-status" role="status"><b>${text.esc(constants.MODE_LABEL[mode] || mode)} · 已保留 ${summary.completed} 个成功分段</b><p>${text.esc(reason.replace(/[。\s]+$/, ''))}。继续会使用生成额度。</p><button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(mode)}">${label}</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(mode)}">放弃未提交草稿</button></section>`;
+        const reason = summary.canContinue ? '正文未写完' : summary.failureCode ? text.safeErrorSummary({ code: summary.failureCode, archiveInputCategory: summary.failureCategory, recoveryPhase: summary.failurePhase }) : '任务尚未完成';
+        return `<section class="rmt-recovery-status" role="status"><b>${text.esc(constants.MODE_LABEL[mode] || mode)} · 已保留 ${summary.completed} 个成功分段</b><p>上次记录：${text.esc(reason.replace(/[。\s]+$/, ''))}。继续会使用生成额度。</p><button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(mode)}">${label}</button> <button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(mode)}">导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(mode)}">放弃未提交草稿</button></section>`;
     }).join('');
 }
 
@@ -31777,13 +31868,9 @@ async function generateArchiveChunkJson(prompt, options, label) {
 }
 
 function recoverySettingsIdentity(context) {
-    const settings = core_settings.getPluginSettings(context);
-    // Connection/model/output limits may be repaired before an explicit continuation.
-    // Writing rules and evidence filters must not silently change accepted content.
-    return JSON.stringify({ creativeSupplementEnabled: settings.creativeSupplementEnabled,
-        creativeSupplement: settings.creativeSupplement, excludedContextTags: settings.excludedContextTags,
-        ...core_contextTags.savedTagSelection(settings),
-        bannedGeneratedPhrases: settings.bannedGeneratedPhrases });
+    // Shared with admission so a failed comparison never advances a write fence.
+    // Serialization remains byte-identical to the earlier settings fingerprint.
+    return recovery_source.recoverySettingsIdentity(context);
 }
 async function beginModeRecovery(mode, context, bank, origin, options = {}) {
     const identity = recoverySettingsIdentity(context);
@@ -31796,7 +31883,7 @@ async function beginModeRecovery(mode, context, bank, origin, options = {}) {
         options.cgPromptFormat || core_settings.getPluginSettings(context).cgPromptFormat);
     cg_policy.bindCgPromptFormat(origin, operation.cgPromptFormat, operation.cgPromptDialect || 'legacy');
     if (existing?.operation && await generation_recovery.generationRecoveryDigest(existing.operation) !== await generation_recovery.generationRecoveryDigest(operation)) {
-        throw core_text.safeUserError('这项还保留着另一入口的草稿，请从“继续生成”回到原来的任务；旧内容与草稿未改动。', 'RMT_RECOVERY_OPERATION_CHANGED');
+        throw generation_recovery.generationRecoveryMismatch('operation', 'operation', 'RMT_RECOVERY_OPERATION_CHANGED');
     }
     const archiveEntry = options.archiveEntry || (!options.archiveTarget
         ? structuredClone(core_cache.archiveBackupEntryForContext(context, bank, { expectedTaskOrigin: origin, previousMemory: bank })) : null);
@@ -31804,7 +31891,7 @@ async function beginModeRecovery(mode, context, bank, origin, options = {}) {
         origin: { ...origin, archiveTargetEntryId: options.archiveTarget?.entryId || archiveEntry?.entryId || origin.archiveTargetEntryId || '' },
         mode, settingsIdentity: identity, existing, continueRequested: !!existing, sourcePolicy,
         confirmLegacyRestart: () => ui_overlay.confirmExplicitAction('保留旧失败记录，按当前背景重新尝试？',
-            '旧版任务没有保存最初的世界书背景，且没有任何成功分段或截断正文。确定会保留旧失败记录并使用当前背景重新请求；取消不发送。', { destructive: false }),
+            '旧版失败记录没有可验证的原背景配对，且没有任何成功分段或截断正文。确定会保留原失败记录，按本次已读取的背景重新请求；取消不发送。', { destructive: false }),
         taskScopes: [`${origin.characterKey}|${origin.chatId}`, `archive-target:${options.archiveTarget?.entryId || archiveEntry?.entryId || origin.archiveTargetEntryId || ''}`],
         assertCurrent: () => {
             if (!core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch) || options.stillCurrent?.() === false
@@ -31863,6 +31950,22 @@ async function continueSavedGeneration(mode, options = {}) {
     runtimeState.activeMode = mode;
     runtimeState.activeSession = session;
     return routes[operation.kind]();
+}
+
+async function exportSavedGeneration(mode) {
+    if (!Object.values(core_constants.MODE).includes(mode)) throw generation_recovery.generationRecoveryMismatch('operation', 'operation');
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    const context = snapshot ? archive_library.archiveTargetGenerationOptions(snapshot).context : core_context.currentCharacterGuard();
+    const bank = archive_repository.requireArchive(context);
+    const origin = core_context.captureTaskOrigin(context, bank.archiveRevision);
+    if (!snapshot) await core_cache.ensureCacheHydrated(context);
+    if (!core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)
+        || (snapshot ? runtimeState.activeArchiveSnapshot !== snapshot : !core_context.isCurrentTaskOrigin(origin))) {
+        throw new DOMException('Recovery export scope changed', 'AbortError');
+    }
+    const journal = core_cache.loadGenerationRecovery(mode, context, snapshot?.cache);
+    if (!journal) throw generation_recovery.generationRecoveryMismatch('record');
+    return generation_recovery.exportGenerationRecovery(journal);
 }
 
 async function discardSavedGeneration(mode) {
@@ -32360,6 +32463,7 @@ __m_generation_client_js.requestJson = requestJson;
 __m_generation_client_js.generateArchiveChunkJson = generateArchiveChunkJson;
 __m_generation_client_js.beginModeRecovery = beginModeRecovery;
 __m_generation_client_js.continueSavedGeneration = continueSavedGeneration;
+__m_generation_client_js.exportSavedGeneration = exportSavedGeneration;
 __m_generation_client_js.discardSavedGeneration = discardSavedGeneration;
 __m_generation_client_js.generateMode = generateMode;
 __m_generation_client_js.generationWorldInfoScanTerms = generationWorldInfoScanTerms;
@@ -35461,6 +35565,14 @@ function handleOverlayClick(event) {
     if (pastLivesButton) return void past_lives_view.handlePastLivesAction(pastLivesButton.dataset.rmtPastLives, pastLivesButton.dataset.rmtPastLivesId);
     const timeStoryButton = event.target.closest?.('[data-rmt-time-story]');
     if (timeStoryButton) return void time_stories_view.handleTimeStoryAction(timeStoryButton.dataset.rmtTimeStory, timeStoryButton.dataset.rmtTimeStoryId);
+    const exportRecoveryButton = event.target.closest?.('[data-rmt-recovery-export]');
+    if (exportRecoveryButton) return void generation_client.exportSavedGeneration(exportRecoveryButton.dataset.rmtRecoveryExport).then(value => {
+        const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob), link = document.createElement('a');
+        link.href = url; link.download = 'hearttrace-module-recovery.json';
+        link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+        globalThis.toastr?.info?.('草稿文件包含任务背景与未提交内容，请勿公开分享。', '心迹回廊');
+    }).catch(error => { if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); });
     const discardButton = event.target.closest?.('[data-rmt-recovery-discard]');
     if (discardButton) return void generation_client.discardSavedGeneration(discardButton.dataset.rmtRecoveryDiscard).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
     if (event.target.closest?.('[data-rmt-archive-read-drafts]')) {
@@ -44068,10 +44180,26 @@ const settingsApi = __m_core_settings_js;
 const repository = __m_archive_repository_js;
 const recovery = __m_generation_recovery_js;
 const text = __m_core_text_js;
+const contextTags = __m_core_contextTags_js;
 
 
 
 
+
+
+function recoverySettingsIdentity(context) {
+    const settings = settingsApi.getPluginSettings(context);
+    return JSON.stringify({ creativeSupplementEnabled: settings.creativeSupplementEnabled,
+        creativeSupplement: settings.creativeSupplement, excludedContextTags: settings.excludedContextTags,
+        ...contextTags.savedTagSelection(settings), bannedGeneratedPhrases: settings.bannedGeneratedPhrases });
+}
+
+async function assertRecoverySettings(journal, context) {
+    if (journal && recovery.generationRecoverySummary(journal)
+        && journal.settingsHash !== await recovery.generationRecoveryDigest(recoverySettingsIdentity(context))) {
+        throw recovery.generationRecoveryMismatch('configuration', 'initialization');
+    }
+}
 
 function recoverySourceValues(context) {
     const settings = settingsApi.getPluginSettings(context);
@@ -44093,21 +44221,26 @@ async function assertRecoverySourcePolicy(journal, context, origin = null) {
     for (const [key,label] of pairs) if ((journal.identity[key] || '') !== (current[key] || '')) {
         const error = text.safeUserError(`${label}与原任务不同；成功内容及草稿保留，未发起新请求。请回到原任务或明确另建任务。`, 'RMT_RECOVERY_SOURCE_CHANGED');
         error.archiveInputCategory = key === 'chatId' ? 'chat' : key === 'archiveRevision' ? 'archive' : 'character';
+        error.recoveryPhase = 'source';
         throw error;
     }
+    await assertRecoverySettings(journal, context);
     if (!journal.sourcePolicy) return;
     const actual = await recoverySourcePolicy(context);
     for (const [key,label] of [['character','角色卡'], ['persona','Persona'], ['selection','来源选择或标签设置']]) {
         if (journal.sourcePolicy[key] !== actual[key]) {
             const error = text.safeUserError(`${label}与原任务不同；成功内容及草稿保留，未发起新请求。请恢复原设置，或明确另建任务。`, 'RMT_RECOVERY_SOURCE_CHANGED');
             error.archiveInputCategory = key;
+            error.recoveryPhase = 'source';
             throw error;
         }
     }
 }
 
+__m_core_recoverySourcePolicy_js.assertRecoverySettings = assertRecoverySettings;
 __m_core_recoverySourcePolicy_js.recoverySourcePolicy = recoverySourcePolicy;
 __m_core_recoverySourcePolicy_js.assertRecoverySourcePolicy = assertRecoverySourcePolicy;
+__m_core_recoverySourcePolicy_js.recoverySettingsIdentity = recoverySettingsIdentity;
 __m_core_recoverySourcePolicy_js.recoverySourceValues = recoverySourceValues;
 }
 
@@ -44567,7 +44700,13 @@ function loadGenerationRecovery(mode, context = core_context.getContext(), suppl
             || raw.identity?.chatId !== core_context.comparableChatId(core_context.getChatId(context))
             || raw.identity?.archiveRevision !== bank.archiveRevision
             || raw[core_constants.SESSION_MODE_WRITE_FENCE_KEY] !== modeWriteFenceForCache(cache, mode)) return null;
-        return cloneCacheValue(raw);
+        // The loader has proved the exact character/chat/revision, canonical
+        // entry and write fence above. Older V1 journals allowed this derived ID
+        // to be empty. Fill only that absence on a COPY, never an explicit mismatch.
+        // All callers (mode, subtask and continuation buttons) receive one identity.
+        const journal = cloneCacheValue(raw);
+        if (!journal.identity.archiveTargetEntryId) journal.identity.archiveTargetEntryId = entryId;
+        return journal;
     } catch { return null; }
 }
 async function saveGenerationRecovery(context, bank, mode, journal, origin, options = {}) {

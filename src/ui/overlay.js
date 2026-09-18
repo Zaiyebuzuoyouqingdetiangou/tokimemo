@@ -1055,6 +1055,14 @@ export function handleOverlayClick(event) {
     if (pastLivesButton) return void past_lives_view.handlePastLivesAction(pastLivesButton.dataset.rmtPastLives, pastLivesButton.dataset.rmtPastLivesId);
     const timeStoryButton = event.target.closest?.('[data-rmt-time-story]');
     if (timeStoryButton) return void time_stories_view.handleTimeStoryAction(timeStoryButton.dataset.rmtTimeStory, timeStoryButton.dataset.rmtTimeStoryId);
+    const exportRecoveryButton = event.target.closest?.('[data-rmt-recovery-export]');
+    if (exportRecoveryButton) return void generation_client.exportSavedGeneration(exportRecoveryButton.dataset.rmtRecoveryExport).then(value => {
+        const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob), link = document.createElement('a');
+        link.href = url; link.download = 'hearttrace-module-recovery.json';
+        link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+        globalThis.toastr?.info?.('草稿文件包含任务背景与未提交内容，请勿公开分享。', '心迹回廊');
+    }).catch(error => { if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); });
     const discardButton = event.target.closest?.('[data-rmt-recovery-discard]');
     if (discardButton) return void generation_client.discardSavedGeneration(discardButton.dataset.rmtRecoveryDiscard).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
     if (event.target.closest?.('[data-rmt-archive-read-drafts]')) {

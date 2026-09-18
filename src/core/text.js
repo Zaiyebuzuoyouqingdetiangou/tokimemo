@@ -219,9 +219,14 @@ export function safeErrorSummary(error, max = 520) {
     }
     const categories = { chat: '聊天正文或聊天身份', character: '角色身份或角色卡', persona: '用户 Persona',
         archive: '正式档案版本', range: '聊天读取范围', selection: '来源选择', configuration: '生成配置',
-        sources: '已捕获来源快照', unknown: '旧格式草稿身份' };
-    if (['RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_SOURCE_CHANGED'].includes(error?.code) && Object.hasOwn(categories, error.archiveInputCategory)) {
-        return `${categories[error.archiveInputCategory]}与原任务不一致；已保存成果和未提交草稿保留。可恢复原条件继续，或明确选择按当前条件另起任务。`;
+        sources: '已捕获来源快照', record: '旧草稿结构', target: '内部档案目标',
+        operation: '原任务入口', request: '原分段请求配方', attachment: '运行中的恢复绑定', unknown: '旧格式草稿身份' };
+    if (['RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_SOURCE_CHANGED', 'RMT_RECOVERY_OPERATION_CHANGED'].includes(error?.code) && Object.hasOwn(categories, error.archiveInputCategory)) {
+        if (error.archiveInputCategory === 'operation') return '原任务属于另一生成入口；请使用“继续未完成内容”返回原任务。成功内容与草稿保留，没有发起新请求。';
+        if (['record', 'target', 'request', 'attachment', 'unknown'].includes(error.archiveInputCategory)) {
+            return `${categories[error.archiveInputCategory]}未通过兼容核对；不等于你修改了设置。成功内容与原草稿保留，没有自动重做，可先导出未提交草稿。`;
+        }
+        return `${categories[error.archiveInputCategory]}与原任务不一致；已保存成果和未提交草稿保留。可恢复原条件继续，或先导出草稿再明确处理。`;
     }
     if (['RMT_ARCHIVE_CONTEXT_BUDGET', 'RMT_ARCHIVE_OUTPUT_BUDGET'].includes(error?.code) && error.archiveBudget) {
         const b = error.archiveBudget, n = value => Number.isFinite(value) && value >= 0 ? Math.floor(value).toLocaleString() : '未知';
