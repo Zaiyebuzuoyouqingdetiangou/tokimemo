@@ -128,3 +128,76 @@ export async function generateTimeStoryWithRepair(mode, context, memory, origin,
     contract.timeStoriesStoredData(next);
     return next;
 }
+
+export function projectTimeStoriesProgress({ segments, memoryBank, context, previousSession, frozenInputs = {} }) {
+    const mode = 'timeEcho';
+    const segment = segments.findLast(item => item.has('/title') || item.has('/opening') || item.items('/lines').length);
+    if (!segment) return null;
+    const profile = frozenInputs['presentation:' + mode]?.profile || 'neutral';
+    const lastId = Math.max(0, ...(previousSession?.episodes || []).map(item => Number(item.id.slice(2))));
+    const id = localId('TS', lastId);
+    let episode;
+    try { episode = normalizeTimeStoryEpisode(mode, segment.value, memoryBank, { id, profile }); }
+    catch {
+        const raw = segment.value;
+        episode = { id, fiction: true, generationIncomplete: true, title: '', opening: '', closing: '', message: '', motif: '',
+            presentation: contract.timeStoryPresentation(profile), palette: contract.TIME_STORY_PALETTES.includes(raw?.palette) ? raw.palette : 'slate',
+            medium: null, ends: [], lines: [] };
+        for (const [key, maximum] of Object.entries({ title: L.title, opening: L.prose, closing: L.prose, message: 1800, motif: 160 })) {
+            if (!segment.has('/' + key)) continue;
+            try { episode[key] = fictionalText(raw[key], memoryBank, maximum); } catch { /* Original field remains a draft. */ }
+        }
+        if (segment.has('/medium') && contract.timeStoryMediumKinds(profile).includes(raw.medium?.kind)) {
+            try { episode.medium = { kind: raw.medium.kind, label: fictionalText(raw.medium.label, memoryBank, L.title, true) }; } catch {}
+        }
+        episode.ends = segment.items('/ends').flatMap(end => {
+            if (!end || !['char', 'user'].includes(end.role)) return [];
+            try { return [{ role: end.role, time: fictionalText(end.time, memoryBank, 240, true) }]; } catch { return []; }
+        });
+        for (const line of segment.items('/lines')) {
+            if (!line || !['a', 'b', 'narrator'].includes(line.speaker)) continue;
+            const end = line.speaker === 'a' ? episode.ends[0] : line.speaker === 'b' ? episode.ends[1] : null;
+            if (line.speaker !== 'narrator' && !end) continue;
+            try { episode.lines.push({ speaker: line.speaker, text: fictionalText(line.text, memoryBank, L.line, true, end?.role || 'char') }); } catch {}
+        }
+        if (!episode.title && !episode.opening && !episode.lines.length) return null;
+    }
+    const session = previousSession ? structuredClone(previousSession) : emptyTimeStories(mode, memoryBank, context);
+    session.episodes = [...session.episodes.filter(item => item.id !== id), episode];
+    Object.assign(session, { selectedId: id, selectedEntryId: '', view: 'story', dialogueIndex: 0, reading: false, tab: 'story' });
+    return session;
+}
+
+export function readableTimeStoriesProgressSession(value, memory) {
+    try {
+        if (value?.readableProgress?.version !== 1 || value.readableProgress.complete !== false) return null;
+        const raw = contract.timeStoryData(value);
+        if (raw.chatId !== memory?.chatId || raw.archiveRevision !== memory?.archiveRevision
+            || raw.characterName !== memory?.characterName || raw.userName !== memory?.userName || !Array.isArray(raw.episodes)) return null;
+        const completed = raw.episodes.filter(item => item.generationIncomplete !== true);
+        contract.timeStoriesStoredData({ ...raw, episodes: completed });
+        const ids = new Set(completed.map(item => item.id));
+        for (const episode of raw.episodes.filter(item => item.generationIncomplete === true)) {
+            if (!/^TS\d{2,4}$/u.test(episode.id || '') || ids.has(episode.id) || episode.fiction !== true
+                || !contract.TIME_STORY_PRESENTATIONS.includes(episode.presentation) || !contract.TIME_STORY_PALETTES.includes(episode.palette)) return null;
+            ids.add(episode.id);
+            if (episode.medium !== null) {
+                if (!episode.medium || !['phone', 'terminal', 'relic', 'object', 'voice'].includes(episode.medium.kind)) return null;
+                fictionalText(episode.medium.label, memory, L.title, true);
+            }
+            for (const [key, maximum] of Object.entries({ title: L.title, opening: L.prose, closing: L.prose, message: 1800, motif: 160 }))
+                fictionalText(episode[key], memory, maximum);
+            for (const end of contract.timeStoryArray(episode.ends, 2)) {
+                if (!['char', 'user'].includes(end?.role)) return null;
+                fictionalText(end.time, memory, 240, true);
+            }
+            for (const line of contract.timeStoryArray(episode.lines, L.lines)) {
+                if (!['a', 'b', 'narrator'].includes(line?.speaker)) return null;
+                const end = line.speaker === 'a' ? episode.ends[0] : line.speaker === 'b' ? episode.ends[1] : null;
+                if (line.speaker !== 'narrator' && !end) return null;
+                fictionalText(line.text, memory, L.line, true, end?.role || 'char');
+            }
+        }
+        return value;
+    } catch { return null; }
+}

@@ -206,6 +206,64 @@ function normalizedMainNode(node, memoryBank, context) {
     };
 }
 
+export function projectButterflyProgress({ segments = [], memoryBank, context = {}, previousSession = null }) {
+    const nodes = [];
+    const labels = new Set(), signatures = new Set(), monologues = new Set();
+    const addBranch = (raw, index, incremental = false) => {
+        const node = normalizeButterflyBranch(raw, index, memoryBank, context, { incremental });
+        const label = core_incremental.normalizedContentKey(node.label, 180);
+        const signature = butterflyWorldSignature(node);
+        const monologue = core_incremental.normalizedContentKey(node.monologue, 12000);
+        if (labels.has(label) || signatures.has(signature) || monologues.has(monologue)) return;
+        labels.add(label); signatures.add(signature); monologues.add(monologue); nodes.push(node);
+    };
+    const partialNode = (raw, index) => {
+        if (!raw) return null;
+        const fields = {};
+        for (const key of ['label', 'monologue', 'intervention', 'systemNote']) {
+            const value = core_text.normalizeText(raw[key], key === 'label' ? 120 : key === 'systemNote' ? 5000 : 12000);
+            if (!value || core_text.isPlaceholderText(value)) { fields[key] = ''; continue; }
+            assertButterflyRelationshipSafety(value, context, `观测片段 ${key}`);
+            fields[key] = value;
+        }
+        if (!fields.label || ![fields.monologue, fields.intervention, fields.systemNote].some(Boolean)) return null;
+        const reference = core_evidence.normalizeMemoryReference(raw.sourceMemoryIds, raw.sourceMemoryAnchor,
+            Object.values(fields).join('\n'), memoryBank, index === 0 ? 1 : 0);
+        if (index === 0 && (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor)) return null;
+        const omega = index !== 0 && isOmegaCandidate(raw);
+        if (omega && fields.monologue) return null;
+        let world = {};
+        if (index && !omega && raw.worldSpec) {
+            try { const worldSpec = normalizeButterflyWorldSpec(raw); world = { worldSpec, primaryAxis: worldSpec.primaryAxis }; } catch {}
+        }
+        return { id: index === 0 ? 'MAIN' : omega ? 'OMEGA' : `EG${String(index).padStart(2, '0')}`,
+            code: index === 0 ? '> SIMULATION RECORD #MAIN' : `> SIMULATION RECORD #${index}`,
+            locked: index === 0, trueEnding: omega, ...fields, ...reference, ...world, progressPending: ['观测节点正文'] };
+    };
+    for (const segment of [...segments].sort((a, b) => Number(a.slot.match(/:slot:(\d+)$/u)?.[1] || 0) - Number(b.slot.match(/:slot:(\d+)$/u)?.[1] || 0))) {
+        if (/:slot:\d+$/u.test(segment.slot)) {
+            const raw = segment.at?.('/node') ?? segment.value?.node;
+            const index = Number(segment.slot.match(/:slot:(\d+)$/u)[1]);
+            try {
+                if (!segment.has('/node')) throw new Error('partial');
+                if (index === 0) nodes.push(normalizedMainNode(raw, memoryBank, context));
+                else if (isOmegaCandidate(raw)) nodes.push(normalizeButterflyOmega(raw, context));
+                else addBranch(raw, index);
+            } catch { try { const node = partialNode(raw, index); if (node) nodes.push(node); } catch {} }
+        } else if (/:increment$/u.test(segment.slot)) {
+            if (!nodes.length && previousSession?.nodes?.[0]) nodes.push(structuredClone(previousSession.nodes[0]));
+            for (const [index, raw] of segment.items('/nodes').entries()) {
+                try { addBranch(raw, index + 1, true); } catch {}
+            }
+            if (segment.has('/omega')) { try { nodes.push(normalizeButterflyOmega(segment.value.omega, context)); } catch {} }
+        }
+    }
+    if (!nodes.length || nodes[0].id !== 'MAIN') return null;
+    return { kind: core_constants.MODE.BUTTERFLY, title: '平行时空观测终端', subject: context.name2 || memoryBank?.characterName || '',
+        status: 'UNSTABLE', nodes, omegaHistory: [], selected: nodes.length > 1 ? 1 : 0,
+        progressPending: nodes.some(node => node.trueEnding) ? [] : ['Ω 观测收尾'] };
+}
+
 export function normalizeButterfly(data, memoryBank, context = {}, options = {}) {
     const rawNodes = Array.isArray(data?.nodes) ? data.nodes.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS) : [];
     if (rawNodes.length < 2) throw new Error('当前观测尚未收尾：需要主线与唯一 Ω，已完成内容仍保留。');

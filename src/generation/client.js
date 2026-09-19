@@ -11,6 +11,7 @@ import * as archive_library from '../archive/library.js';
 import * as archive_repository from '../archive/repository.js';
 import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_cache from '../core/cache.js';
+import * as core_participants from '../core/participants.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
@@ -20,6 +21,7 @@ import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
 import * as creative_supplement from '../core/creativeSupplement.js';
 import * as generation_recovery from './recovery.js';
+import * as generation_progress from './partialProgress.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as core_taskTrace from '../core/taskTrace.js';
@@ -55,6 +57,92 @@ import * as navigation_bookmark from '../ui/navigationBookmark.js';
 
 // Only in-flight bindings; never persisted or exported. Clear at the owning mode's finally.
 const modeTaskTraces = new Map();
+const contentContextSources = new WeakMap();
+const CONTENT_SETTING_KEYS = ['creativeSupplementEnabled', 'creativeSupplement', 'excludedContextTags',
+    'contextTagMode', 'retainedContextTags', 'bannedGeneratedPhrases', 'useActivatedWorldInfo', 'useCurrentChatExternalMemory', 'cgPromptFormat'];
+export function generationContentSettings(settings = {}) {
+    return Object.fromEntries(CONTENT_SETTING_KEYS.filter(key => settings[key] !== undefined).map(key => [key, structuredClone(settings[key])]));
+}
+function snapshotGenerationContent(value) {
+    const snapshot = structuredClone(value), seen = new WeakSet();
+    // Internal sessions may contain optional undefined fields. Preserve the
+    // same absent-object/null-array representation as their existing JSON
+    // storage, without changing the source or relaxing the journal validator.
+    const visit = item => {
+        if (!item || typeof item !== 'object' || seen.has(item)) return;
+        seen.add(item);
+        if (Array.isArray(item)) {
+            for (let index = 0; index < item.length; index++) {
+                if (item[index] === undefined) item[index] = null;
+                else visit(item[index]);
+            }
+        } else if (Object.getPrototypeOf(item) === Object.prototype || Object.getPrototypeOf(item) === null) {
+            for (const key of Object.keys(item)) {
+                if (item[key] === undefined) delete item[key];
+                else visit(item[key]);
+            }
+        }
+    };
+    visit(snapshot);
+    return snapshot;
+}
+function captureGenerationContent(context, bank) {
+    const fields = {};
+    for (const key of ['characterId', 'name1', 'name2', 'userAvatar', 'personaAvatar', 'user_avatar', 'maxContext']) {
+        if (context[key] !== undefined) fields[key] = structuredClone(context[key]);
+    }
+    if (Array.isArray(context.characters)) {
+        fields.characters = Array.from(context.characters, (character, index) => {
+            if (!character) return null;
+            if (String(index) === String(context.characterId)) return structuredClone(character);
+            // Other cards are used only for name/avatar and duplicate identity
+            // lookup. Preserve exactly the existing descriptor inputs, without
+            // copying their unrelated world books, extensions or other payloads.
+            const data = character.data && typeof character.data === 'object' ? character.data : character;
+            // Keep one following non-space character when truncating: the
+            // descriptor trims before slicing, so a boundary space must survive
+            // its later normalization too. These are identity inputs only.
+            const identityInput = (value, length) => {
+                const text = core_text.normalizeText(value, Number.MAX_SAFE_INTEGER);
+                return text.length > length ? text.slice(0, length) + text.slice(length).trimStart().slice(0, 1) : text;
+            };
+            return { name: identityInput(character.name || data.name, 120), avatar: identityInput(character.avatar || data.avatar, 300), data: Object.fromEntries(
+                ['description', 'personality', 'scenario', 'first_mes', 'mes_example']
+                    .map(key => [key, identityInput(data[key] || character[key], 5000)])) };
+        });
+    } else if (context.characters !== undefined) fields.characters = structuredClone(context.characters);
+    // Frozen historical targets intentionally keep only their original character
+    // index. JSON already represents skipped array positions as null; materialize
+    // that representation in the internal snapshot without changing host data.
+    if (Array.isArray(fields.characters)) for (let index = 0; index < fields.characters.length; index++) {
+        if (!Object.hasOwn(fields.characters, index)) fields.characters[index] = null;
+    }
+    fields.powerUserSettings = { persona_description: context.powerUserSettings?.persona_description || '' };
+    let cardFields = {};
+    try { cardFields = structuredClone(context.getCharacterCardFields?.() || {}); } catch {}
+    return { version: 1, fields, cardFields, memoryBank: structuredClone(bank),
+        contentSettings: generationContentSettings(core_settings.getPluginSettings(context)) };
+}
+export function generationContentContext(origin, context) {
+    const snapshot = generation_recovery.generationContentSnapshotForOrigin(origin);
+    if (!snapshot?.fields) return context;
+    const source = contentContextSources.get(context) || context;
+    // Historical contexts inherit transport capabilities from the host. Keep
+    // that chain while shadowing only the frozen content fields on this view.
+    const view = Object.create(source, Object.getOwnPropertyDescriptors({ ...source, ...structuredClone(snapshot.fields),
+        powerUserSettings: { ...source.powerUserSettings, ...structuredClone(snapshot.fields.powerUserSettings || {}) },
+        getCharacterCardFields: () => structuredClone(snapshot.cardFields || {}) }));
+    view.__rmtGenerationContentSnapshot = { mode: generation_recovery.generationRecoveryForOrigin(origin)?.mode,
+        memoryBank: snapshot.memoryBank, contentInputs: snapshot.contentInputs };
+    view.extensionSettings = { ...source.extensionSettings };
+    Object.defineProperty(view.extensionSettings, core_constants.EXTENSION_SETTINGS_KEY, {
+        configurable: true, enumerable: true,
+        get: () => ({ ...(source.extensionSettings?.[core_constants.EXTENSION_SETTINGS_KEY] || {}), ...snapshot.contentSettings }),
+        set: () => {},
+    });
+    contentContextSources.set(view, source);
+    return view;
+}
 function generationTrace(options = {}) {
     const parentKey = options.parentTaskKey || core_requestCoordinator.activeModeBuildScopeForTask(options.taskKey || '');
     return options.taskTrace || modeTaskTraces.get(parentKey || options.taskKey) || null;
@@ -139,7 +227,20 @@ async function collectFittingSelectedSetting(context, budget = core_constants.MA
 }
 
 export async function buildWorldPresentationContext(context, memoryBank, mode, origin = null) {
+    context = generationContentContext(origin, context);
     return generation_recovery.frozenGenerationInput(origin, `presentation:${mode}`, () => buildWorldPresentationContextFresh(context, memoryBank, mode));
+}
+
+export async function captureRoomParticipantSnapshot(context, origin, { existing = null, participantSnapshot } = {}) {
+    // Keep legacy recipes and single-card journals byte-for-byte free of the
+    // multiplayer input key. Only explicit multiplayer work freezes a roster.
+    if (existing && !Object.hasOwn(existing.frozenInputs || {}, 'participants:room')) return null;
+    const snapshot = existing
+        ? core_participants.normalizeParticipantSnapshot(JSON.parse(existing.frozenInputs['participants:room']))
+        : participantSnapshot !== undefined ? core_participants.normalizeParticipantSnapshot(participantSnapshot)
+            : core_participants.selectedParticipantSnapshot(core_cache.readParticipantRoster(context));
+    if (!snapshot) return null;
+    return generation_recovery.frozenGenerationInput(origin, 'participants:room', () => snapshot);
 }
 async function buildWorldPresentationContextFresh(context, memoryBank, mode) {
     const wantsSelectedSetting = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode);
@@ -213,6 +314,13 @@ export async function mapGenerationConcurrent(items, limit, worker) {
 }
 
 export async function requestValidatedSegment(prompt, status, options, validator) {
+    const logicalTask = core_requestCoordinator.logicalGenerationTaskForOrigin(options?.origin);
+    core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
+    if (logicalTask?.participantSnapshot && !options?.participantPromptApplied) {
+        const block = core_participants.participantPromptBlock(logicalTask.participantSnapshot);
+        if (!prompt.includes(block)) prompt += block;
+        options = { ...options, participantPromptApplied: true };
+    }
     prompt = cg_policy.cgPromptForSegment(prompt, options);
     validator = cg_policy.cgSegmentValidator(validator, options);
     const parentTrace = generationTrace(options);
@@ -220,7 +328,7 @@ export async function requestValidatedSegment(prompt, status, options, validator
     core_taskTrace.markStage(taskTrace, 'start');
     core_taskTrace.beginStage(taskTrace, 'prompt');
     try {
-    const context = options?.context || core_context.currentCharacterGuard();
+    const context = generationContentContext(options?.origin, options?.context || core_context.currentCharacterGuard());
     options = { ...options, taskTrace, context, contextEnvelope: typeof options?.contextEnvelope === 'string'
         ? options.contextEnvelope : await generation_recovery.frozenGenerationInput(options?.origin, `context:${options?.mode || 'segment'}`,
             () => core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options?.mode, context) })) };
@@ -471,25 +579,60 @@ export function normalizeConnectionManagerError(error) {
 }
 
 export async function generateConfiguredJson(prompt, options = {}) {
+    const logicalTask = core_requestCoordinator.logicalGenerationTaskForOrigin(options.origin);
+    if (!logicalTask) return generateConfiguredJsonOperation(prompt, options);
+    core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
+    const controller = new AbortController();
+    const signals = [...new Set([options.signal, logicalTask.signal].filter(Boolean))];
+    const abort = () => controller.abort(core_requestCoordinator.createGenerationAbortError());
+    for (const signal of signals) {
+        if (signal.aborted) abort();
+        else signal.addEventListener('abort', abort, { once: true });
+    }
+    if (logicalTask.participantSnapshot && !options.participantPromptApplied) {
+        const block = core_participants.participantPromptBlock(logicalTask.participantSnapshot);
+        if (!prompt.includes(block)) prompt += block;
+        if (typeof options.recoveryBasePrompt === 'string' && !options.recoveryBasePrompt.includes(block)) {
+            options = { ...options, recoveryBasePrompt: options.recoveryBasePrompt + block };
+        }
+    }
+    try {
+        const result = await generateConfiguredJsonOperation(prompt, { ...options, signal: controller.signal });
+        core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
+        return result;
+    } finally {
+        for (const signal of signals) signal.removeEventListener('abort', abort);
+    }
+}
+
+async function generateConfiguredJsonOperation(prompt, options = {}) {
     const taskTrace = options.taskTrace || null;
     core_taskTrace.beginRequestAttempt(taskTrace);
     core_taskTrace.beginStage(taskTrace, 'prompt');
     const lifecycleEpoch = options.origin?.lifecycleEpoch ?? runtimeState.runtimeLifecycleEpoch;
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
-    const context = options.context || core_context.currentCharacterGuard();
-    await core_settings.prepareManualCredential(context);
-    const settings = core_settings.getPluginSettings(context);
+    const context = generationContentContext(options.origin, options.context || core_context.currentCharacterGuard());
+    const transportContext = contentContextSources.get(context) || context;
+    await core_settings.prepareManualCredential(transportContext);
+    const settings = core_settings.getPluginSettings(transportContext);
+    const savedContent = options.recoveryContentSettings || generation_recovery.generationContentSnapshotForOrigin(options.origin)?.contentSettings;
+    let contentSettings = { ...settings, ...(savedContent || {}) };
     const advanced = advanced_generation.parseAdvancedGeneration(settings);
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
-    const originalExpanded = core_text.expandSafeRoleMacros(prompt, context);
-    const expanded = core_contextTags.filterJsonPromptStrings(originalExpanded, core_contextTags.tagPolicyForSettings(settings));
+    const originalExpanded = core_text.expandSafeRoleMacros(options.recoveryBasePrompt ?? prompt, context);
+    const expanded = core_contextTags.filterJsonPromptStrings(originalExpanded, core_contextTags.tagPolicyForSettings(contentSettings));
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
         : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context) });
-    const phrasePolicy = options.enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(settings) : '';
-    const creativeSupplement = creative_supplement.creativeSupplementBlock(settings);
-    const controlledPrompt = `${contextEnvelope}
-${expanded}${creativeSupplement}${phrasePolicy}`;
+    const phrasePolicy = options.enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(contentSettings) : '';
+    const creativeSupplement = creative_supplement.creativeSupplementBlock(contentSettings);
+    const prepared = await generation_recovery.freezeRecoveryRequestPayload(options, {
+        actualPrompt: typeof options.recoveryPreparedPrompt === 'string' ? options.recoveryPreparedPrompt : `${contextEnvelope}
+${expanded}${creativeSupplement}${phrasePolicy}`,
+        contentSettings: generationContentSettings(contentSettings),
+    });
+    contentSettings = { ...settings, ...prepared.contentSettings };
+    const controlledPrompt = generation_recovery.generationContinuationPrompt(prepared.actualPrompt, options.recoveryContinuationPartial);
     if (options.archiveRequestBudget === true) {
         const budget = await archive_requestBudget.measureArchiveRequest(context, controlledPrompt,
             { signal: options.signal, stamp: options.archiveBudgetStamp,
@@ -539,7 +682,6 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
             catch { latestProfileFingerprint = 'missing'; }
         }
         if (core_independentApi.apiConfigurationFingerprint(latestSettings) !== configurationFingerprint
-            || creative_supplement.creativeSupplementBlock(latestSettings) !== creativeSupplement
             || (connectionMode === 'profile' && latestProfileFingerprint !== selectedProfileFingerprint)) {
             const error = new Error('API 配置或创作补充词在生成期间发生变化，本次旧请求已停止。');
             error.code = 'RMT_API_CONFIG_CHANGED';
@@ -609,7 +751,8 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
         try { releaseProviderPermit?.(); } catch {}
         try { externalSignal?.removeEventListener?.('abort', forwardAbort); } catch {}
     }
-    await assertConfigurationCurrent();
+    // A settings edit cannot invalidate a reply that the selected provider has
+    // already returned. Keep that paid result; the next request reads the new API.
     if (externalSignal?.aborted) forwardAbort();
     assertRequestCurrent();
     let parsed;
@@ -623,7 +766,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`;
         await generation_recovery.recordRecoveryTruncation(options, responsePayload, error);
         throw error;
     }
-    if (options.enforceGeneratedPhrasePolicy === true) assertNoBannedGeneratedPhrase(parsed, settings, {
+    if (options.enforceGeneratedPhrasePolicy === true) assertNoBannedGeneratedPhrase(parsed, contentSettings, {
         mode: options.mode, settingText: core_worldPresentation.controlledWorldEvidence(contextEnvelope, null),
     });
     core_taskTrace.markStage(taskTrace, 'parse');
@@ -706,13 +849,48 @@ function recoverySettingsIdentity(context) {
     // Serialization remains byte-identical to the earlier settings fingerprint.
     return recovery_source.recoverySettingsIdentity(context);
 }
+
+function recoveryModeTaskScopes(mode, context, bank, origin, entryId, existing, contentSnapshot) {
+    // Scheduler lanes belong to the current write target; recovery segments
+    // belong to the original task. Enumerate only this validated owner's known
+    // source/current revisions, including the pre-index fallback serialization.
+    const chatId = core_context.comparableChatId(origin.chatId);
+    const modeName = core_text.normalizeText(mode, 80);
+    const entries = new Set([core_text.normalizeText(entryId, 120)]);
+    for (const memory of [bank, contentSnapshot?.memoryBank]) {
+        if (memory && core_context.comparableChatId(memory.chatId) === chatId) {
+            entries.add(`archive:${core_context.stableArchiveHash(`${chatId}\u001f${core_text.normalizeText(memory.characterName, 120)}`)}`);
+        }
+    }
+    const revisions = new Set([origin.archiveRevision, existing?.identity?.archiveRevision,
+        existing?.sourceIdentity?.archiveRevision, contentSnapshot?.memoryBank?.archiveRevision]
+        .map(value => core_text.normalizeText(value, 240)).filter(Boolean));
+    const scopes = new Set([core_requestCoordinator.generationTaskKeyForMode(mode, context)]);
+    for (const entry of entries) if (entry) for (const revision of revisions) scopes.add(`mode:${entry}|${chatId}|${revision}:${modeName}`);
+    return [...scopes];
+}
+
 export async function beginModeRecovery(mode, context, bank, origin, options = {}) {
     const identity = recoverySettingsIdentity(context);
-    const existing = options.existing === undefined ? core_cache.loadGenerationRecovery(mode, context, options.archiveTarget?.cache) : options.existing;
+    const existing = options.existing === undefined ? core_cache.loadGenerationRecovery(mode, context, options.archiveTarget?.cache,
+        { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) }) : options.existing;
+    let partialSeed = null;
+    if (!existing && options.partialSource?.draftId) {
+        const parent = core_cache.loadGenerationRecovery(mode, context, options.archiveTarget?.cache, { draftId: options.partialSource.draftId });
+        const snapshot = generation_recovery.readGenerationContentSnapshot(parent);
+        if (!snapshot?.memoryBank || !snapshot.fields
+            || snapshot.memoryBank.chatId !== bank.chatId || snapshot.memoryBank.archiveRevision !== bank.archiveRevision) {
+            throw core_text.safeUserError('原部分成果的完整资料无法核对，旧内容与草稿保留，没有换用当前资料生成。', 'RMT_RECOVERY_SOURCE_SNAPSHOT_MISSING');
+        }
+        partialSeed = { snapshot, frozenInputs: structuredClone(parent.frozenInputs || {}) };
+    }
+    const contentSnapshot = generation_recovery.readGenerationContentSnapshot(existing)
+        || (!existing ? snapshotGenerationContent({ ...(partialSeed?.snapshot || captureGenerationContent(context, bank)),
+            ...(options.contentInputs ? { contentInputs: { ...(partialSeed?.snapshot?.contentInputs || {}), ...options.contentInputs } } : {}) }) : null);
     const sourceValues = JSON.stringify(recovery_source.recoverySourceValues(context));
     await recovery_source.assertRecoverySourcePolicy(existing, context, origin);
     const sourcePolicy = await recovery_source.recoverySourcePolicy(context);
-    if (JSON.stringify(recovery_source.recoverySourceValues(context)) !== sourceValues) throw new DOMException('Source changed', 'AbortError');
+    if (!contentSnapshot && JSON.stringify(recovery_source.recoverySourceValues(context)) !== sourceValues) throw new DOMException('Source changed', 'AbortError');
     const operation = cg_policy.cgRecoveryOperation(mode, options.operation || { kind: 'mode', mode }, existing,
         options.cgPromptFormat || core_settings.getPluginSettings(context).cgPromptFormat);
     cg_policy.bindCgPromptFormat(origin, operation.cgPromptFormat, operation.cgPromptDialect || 'legacy');
@@ -724,13 +902,19 @@ export async function beginModeRecovery(mode, context, bank, origin, options = {
     const handle = await generation_recovery.createGenerationRecovery({
         origin: { ...origin, archiveTargetEntryId: options.archiveTarget?.entryId || archiveEntry?.entryId || origin.archiveTargetEntryId || '' },
         mode, settingsIdentity: identity, existing, continueRequested: !!existing, sourcePolicy,
+        contentSnapshot,
+        draftId: existing?.draftId || options.draftId || `generation-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`,
+        pageId: existing?.pageId || options.pageId || options.participantRegeneration?.pageId || mode,
         confirmLegacyRestart: () => ui_overlay.confirmExplicitAction('保留旧失败记录，按当前背景重新尝试？',
             '旧版失败记录没有可验证的原背景配对，且没有任何成功分段或截断正文。确定会保留原失败记录，按本次已读取的背景重新请求；取消不发送。', { destructive: false }),
         taskScopes: [`${origin.characterKey}|${origin.chatId}`, `archive-target:${options.archiveTarget?.entryId || archiveEntry?.entryId || origin.archiveTargetEntryId || ''}`],
+        modeTaskScopes: recoveryModeTaskScopes(mode, context, bank, origin,
+            options.archiveTarget?.entryId || archiveEntry?.entryId || origin.archiveTargetEntryId || '', existing, contentSnapshot),
         assertCurrent: () => {
-            if (!core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch) || options.stillCurrent?.() === false
-                || recoverySettingsIdentity(context) !== identity
-                || JSON.stringify(recovery_source.recoverySourceValues(context)) !== sourceValues) return false;
+            if (!core_requestCoordinator.isLogicalGenerationTaskCurrent(origin)
+                || !core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch) || options.stillCurrent?.() === false
+                || (!contentSnapshot && (recoverySettingsIdentity(context) !== identity
+                || JSON.stringify(recovery_source.recoverySourceValues(context)) !== sourceValues))) return false;
             const live = core_context.getContext();
             if (!options.archiveTarget && core_context.deferredCommitOriginMatchesContext(origin, live)) {
                 return archive_repository.getImportedMemory(live)?.archiveRevision === bank.archiveRevision
@@ -740,8 +924,49 @@ export async function beginModeRecovery(mode, context, bank, origin, options = {
         },
         save: journal => core_cache.saveGenerationRecovery(context, bank, mode, journal
             ? { ...journal, operation, replaceExisting: options.replaceExisting === true } : null, origin, { ...options, archiveEntry }),
+        onProgress: async journal => {
+            // A managed child has its own one-item response contract. Its paid
+            // segments remain in the journal for the independent draft reader;
+            // they must not masquerade as a complete-mode projection of parent.
+            if (journal.operation?.kind === 'content-item' && journal.operation.sourceDraftId) {
+                try { await ui_overlay.refreshContentRegenerationDraftView?.(journal, contentContextSources.get(context) || context,
+                    { archiveTarget: options.archiveTarget }); } catch { /* Received child data is already durable. */ }
+                return;
+            }
+            const snapshot = generation_recovery.readGenerationContentSnapshot(journal);
+            // A legacy journal without its original source cannot acquire new
+            // evidence merely because a current archive is available to read.
+            if (!snapshot?.memoryBank || !snapshot.fields) return;
+            const session = await generation_progress.projectGenerationProgress(journal, {
+                context: generationContentContext(origin, context), memoryBank: snapshot.memoryBank,
+                contentInputs: snapshot.contentInputs || {}, pageId: journal.pageId,
+            });
+            if (!session) return;
+            const targetContext = contentContextSources.get(context) || context;
+            await core_cache.saveGenerationTaskResult(targetContext, mode, session, origin, {
+                draftId: journal.draftId, pageId: journal.pageId,
+                archiveTarget: options.archiveTarget, memoryBank: bank,
+                sourceMemory: snapshot.memoryBank, complete: false, stillCurrent: options.stillCurrent,
+            });
+            // Storage acknowledgment is independent of whether this page is
+            // currently open. Reopening reads the saved result from the cache.
+            try { await ui_overlay.refreshPartialGenerationView?.(mode, targetContext, {
+                draftId: journal.draftId, pageId: journal.pageId, archiveTarget: options.archiveTarget,
+                readerStillCurrent: options.partialReaderStillCurrent,
+            }); } catch { /* A view failure never invalidates received content. */ }
+        },
     });
+    handle.journal.operation = structuredClone(operation);
+    handle.journal.replaceExisting = options.replaceExisting === true;
+    if (partialSeed) handle.journal.frozenInputs = partialSeed.frozenInputs;
     generation_recovery.attachGenerationRecovery(origin, handle);
+    origin.generationRecoveryDraftId = handle.journal.draftId;
+    handle.contentContext = generationContentContext(origin, context);
+    handle.contentBank = contentSnapshot?.memoryBank ? structuredClone(contentSnapshot.memoryBank) : bank;
+    handle.contentSettings = contentSnapshot?.contentSettings ? structuredClone(contentSnapshot.contentSettings) : null;
+    handle.contentInputs = contentSnapshot?.contentInputs ? structuredClone(contentSnapshot.contentInputs) : null;
+    if (!existing || contentSnapshot?.memoryBank) await generation_recovery.persistGenerationRecovery(handle);
+    await generation_recovery.publishGenerationRecoveryProgress(handle);
     return handle;
 }
 
@@ -752,15 +977,18 @@ export async function continueSavedGeneration(mode, options = {}) {
     const targetOptions = snapshot ? archive_library.archiveTargetGenerationOptions(snapshot) : {};
     const context = targetOptions.context || options.context || core_context.currentCharacterGuard();
     const bank = archive_repository.requireArchive(context);
-    const existing = core_cache.loadGenerationRecovery(mode, context, targetOptions.archiveTarget?.cache);
+    const existing = core_cache.loadGenerationRecovery(mode, context, targetOptions.archiveTarget?.cache,
+        { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
     if (!existing) { globalThis.toastr?.info?.('当前档案没有可继续的草稿，不会发起新请求。', '心迹回廊'); return; }
     if (!ui_overlay.confirmExplicitAction('继续未完成内容？', '只补原任务未完成的内容，会使用文本生成额度。认证或额度问题需要先在设置里解决；取消不改动草稿。', { destructive: false })) return;
     const operation = existing.operation || { kind: 'mode', mode };
-    const resumeOptions = { ...options, ...targetOptions, existing, continueRecovery: true };
+    const resumeOptions = { ...options, ...targetOptions, existing, continueRecovery: true,
+        ...(operation.participantRegeneration ? { participantRegeneration: operation.participantRegeneration } : {}) };
     if (operation.kind === 'mode') return generateMode(mode, { ...resumeOptions,
         background: !(runtimeState.activeMode === mode && (time_stories.isTimeStoryMode(mode)
             || mode === core_constants.MODE.THEME_SONG
             || (mode === core_constants.MODE.PHONE && runtimeState.activeSession?._rmtEmptyTerminal === true))) });
+    if (operation.kind === 'content-item' && operation.sourceDraftId) return ui_contentManager.resumeContentRegeneration(resumeOptions);
     let session = core_cache.loadSession(mode, { context, memoryBank: bank, cache: targetOptions.archiveTarget?.cache, clone: true });
     const stored = targetOptions.archiveTarget?.cache || core_cache.getCache(context);
     if (!session && mode === core_constants.MODE.HEART && !stored?.[mode]
@@ -786,7 +1014,7 @@ export async function continueSavedGeneration(mode, options = {}) {
     return routes[operation.kind]();
 }
 
-export async function exportSavedGeneration(mode) {
+export async function exportSavedGeneration(mode, options = {}) {
     if (!Object.values(core_constants.MODE).includes(mode)) throw generation_recovery.generationRecoveryMismatch('operation', 'operation');
     const snapshot = runtimeState.activeArchiveSnapshot;
     const context = snapshot ? archive_library.archiveTargetGenerationOptions(snapshot).context : core_context.currentCharacterGuard();
@@ -797,12 +1025,13 @@ export async function exportSavedGeneration(mode) {
         || (snapshot ? runtimeState.activeArchiveSnapshot !== snapshot : !core_context.isCurrentTaskOrigin(origin))) {
         throw new DOMException('Recovery export scope changed', 'AbortError');
     }
-    const journal = core_cache.loadGenerationRecovery(mode, context, snapshot?.cache);
+    const journal = core_cache.loadGenerationRecovery(mode, context, snapshot?.cache,
+        { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
     if (!journal) throw generation_recovery.generationRecoveryMismatch('record');
     return generation_recovery.exportGenerationRecovery(journal);
 }
 
-export async function discardSavedGeneration(mode) {
+export async function discardSavedGeneration(mode, options = {}) {
     if (!Object.values(core_constants.MODE).includes(mode)) return;
     if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || runtimeState.activeModeBuildScopes.size) {
         globalThis.toastr?.info?.('请等当前生成任务结束后，再放弃未提交草稿。', '心迹回廊'); return;
@@ -812,15 +1041,44 @@ export async function discardSavedGeneration(mode) {
     const opts = snapshot ? archive_library.archiveTargetGenerationOptions(snapshot) : {};
     const context = opts.context || core_context.currentCharacterGuard();
     const bank = archive_repository.requireArchive(context);
-    if (!core_cache.loadGenerationRecovery(mode, context, opts.archiveTarget?.cache)) return;
+    const retained = core_cache.loadGenerationRecovery(mode, context, opts.archiveTarget?.cache,
+        { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
+    if (!retained) return;
     if (!ui_overlay.confirmExplicitAction('放弃这轮未提交草稿？', '仅清除此轮分段恢复记录，不删除已保存的模块、正式记忆或图片。未提交的成功分段也会放弃，不能恢复；不会自动重新生成。终端原有的逐 App 草稿另行保留。', { destructive: true })) return;
     const origin = { ...core_context.captureTaskOrigin(context, bank.archiveRevision), archiveTargetEntryId: opts.archiveTarget?.entryId || '' };
-    await core_cache.saveGenerationRecovery(context, bank, mode, null, origin, opts);
+    origin.generationRecoveryDraftId = retained.draftId;
+    await core_cache.saveGenerationRecovery(context, bank, mode, null, origin, { ...opts, draftId: retained.draftId, discardDraft: true });
     if (snapshot) await ui_overlay.refreshArchiveTargetSnapshotView(snapshot.entryId);
     else ui_overlay.showChooser();
 }
 
 export async function generateMode(mode, options = {}) {
+    if (!Object.values(core_constants.MODE).includes(mode)) return;
+    const context = options.context || core_context.currentCharacterGuard();
+    const origin = core_context.captureTaskOrigin(context, archive_repository.getImportedMemory(context)?.archiveRevision || '');
+    let logicalTask;
+    try {
+        logicalTask = core_requestCoordinator.beginLogicalGenerationTask({ kind: 'mode', mode,
+            pageId: options.participantRegeneration?.pageId || mode, context, origin,
+            taskKey: core_requestCoordinator.generationTaskKeyForMode(mode, context), parentTaskId: options.logicalParentTaskId });
+    } catch (error) {
+        if (error?.code !== 'RMT_LOGICAL_TASK_BUSY') throw error;
+        globalThis.toastr?.info?.(`「${core_constants.MODE_LABEL[mode]}」已经在生成/补齐中。`, '心迹回廊');
+        return options.participantRegeneration ? { status: 'blocked' } : undefined;
+    }
+    let result;
+    try {
+        result = await generateModeOperation(mode, { ...options, logicalTask });
+        if (options.participantRegeneration && !result) result = { status: 'noop' };
+        return result;
+    } catch (error) {
+        result = { status: error?.name === 'AbortError' ? 'cancelled' : 'failed' };
+        if (options.participantRegeneration) return { ...result, error };
+        throw error;
+    } finally { core_requestCoordinator.finishLogicalGenerationTask(logicalTask, result); }
+}
+
+async function generateModeOperation(mode, options = {}) {
     if (!Object.values(core_constants.MODE).includes(mode)) return;
     // Capture once, before any archive/network/storage await. A destroyed invocation must never
     // adopt the next runtime lifetime and re-register itself as a fresh paid task.
@@ -853,12 +1111,22 @@ export async function generateMode(mode, options = {}) {
     let replaceExisting = options.replaceExisting === true;
     let recoveryHandle = null;
     let recoveryExisting = null;
-    if (mode === core_constants.MODE.THEME_SONG && replaceExisting) throw song_contract.songError('REPLACE', '印象曲每次追加新作品，不会整册覆盖。');
-    if (mode === core_constants.MODE.INBOX && replaceExisting) throw new Error('邮箱只追加新信，不支持整箱重新生成。');
+    if (mode === core_constants.MODE.THEME_SONG && replaceExisting && !options.participantRegeneration) throw song_contract.songError('REPLACE', '印象曲每次追加新作品，不会整册覆盖。');
+    if (mode === core_constants.MODE.INBOX && replaceExisting && !options.participantRegeneration) throw new Error('邮箱只追加新信，不支持整箱重新生成。');
     const archiveTarget = options.archiveTarget && typeof options.archiveTarget === 'object' ? options.archiveTarget : null;
     if (archiveTarget?.backupOnly) throw new Error('独立备份是永久只读快照，不能生成或写入派生内容。');
-    const context = archiveTarget ? options.context : (options.context || core_context.currentCharacterGuard());
+    let context = archiveTarget ? options.context : (options.context || core_context.currentCharacterGuard());
     if (!context) throw new Error('无法构建档案专用生成上下文。');
+    core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
+    let replacementTicket = null;
+    if (options.participantRegeneration) {
+        replacementTicket = await core_cache.assertArchiveVersionReplacement(context, options.participantRegeneration, mode);
+        const snapshot = core_participants.normalizeParticipantSnapshot(options.participantRegeneration.participantSnapshot);
+        if (!snapshot) throw new Error('明确重做缺少本次已确认的人物快照。');
+        options.participantRegeneration = { ...replacementTicket, participantSnapshot: snapshot };
+        core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, options.logicalTask.origin, { participantSnapshot: snapshot });
+        replaceExisting = true;
+    }
     if (archiveTarget) {
         if (typeof options.revalidateArchiveTarget !== 'function') throw new Error('档案专用读取边界不可用，本次没有发起模型请求。');
         const latestTarget = await options.revalidateArchiveTarget(archiveTarget, lifecycleEpoch);
@@ -871,6 +1139,7 @@ export async function generateMode(mode, options = {}) {
     }
     const expectedChatId = core_context.getChatId(context);
     let memoryBank = archive_repository.requireArchive(context);
+    let targetMemoryBank = memoryBank;
     const expectedArchiveRevision = memoryBank.archiveRevision;
     const promptFactory = generation_prompts.PROMPTS[mode];
     if (!promptFactory && !time_stories.isTimeStoryMode(mode) && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode)) return;
@@ -891,6 +1160,7 @@ export async function generateMode(mode, options = {}) {
     let roomSchemaUpgrade = false;
     let allowPersonaExpansion = options.automatic !== true && [core_constants.MODE.ROOM, core_constants.MODE.ITEMS, core_constants.MODE.TRAVEL].includes(mode);
     const modeHasNoIncrementalWork = () => {
+        if (replacementTicket) return false;
         if (options.continueRecovery) return false;
         if (allowPersonaExpansion && previousSession) return false;
         if (mode === core_constants.MODE.INBOX) return !modes_inbox.inboxPlan(memoryBank, previousSession, inboxDate).length;
@@ -929,15 +1199,33 @@ export async function generateMode(mode, options = {}) {
     // A no-op must not advance the durable mode fence. In another tab, doing so would cancel a
     // real in-flight build for the same frozen archive even though this invocation never calls a
     // provider. Preflight against the freshly revalidated snapshot, then repeat after the CAS.
-    recoveryExisting = core_cache.loadGenerationRecovery(mode, context, archiveTarget?.cache);
+    recoveryExisting = options.existing || core_cache.loadGenerationRecovery(mode, context, archiveTarget?.cache,
+        { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
+    // The whole-page entry must not resume the newest one-item child instead
+    // of its page. Explicit draft buttons and legacy formal-item recovery keep
+    // their existing routing; the child's paid journal remains independently saved.
+    if (!options.automatic && !options.existing && !options.draftId
+        && recoveryExisting?.operation?.kind === 'content-item' && recoveryExisting.operation.sourceDraftId) {
+        recoveryExisting = core_cache.loadGenerationRecovery(mode, context, archiveTarget?.cache,
+            { draftId: recoveryExisting.operation.sourceDraftId, pageId: recoveryExisting.pageId });
+    }
     if (recoveryExisting) {
+        if (replacementTicket && !options.continueRecovery) throw new Error('原分段草稿尚未保留到旧版本，本次没有重新请求。');
         if (options.automatic) return { status: 'noop' };
-        if (recoveryExisting.operation?.kind && recoveryExisting.operation.kind !== 'mode') return continueSavedGeneration(mode, options);
+        if (recoveryExisting.operation?.kind && recoveryExisting.operation.kind !== 'mode') return continueSavedGeneration(mode,
+            { ...options, draftId: recoveryExisting.draftId, pageId: recoveryExisting.pageId });
         if (!options.continueRecovery && !ui_overlay.confirmExplicitAction('继续未完成内容？', '这项还保留着上次的分段草稿。继续只补未完成部分，会使用文本生成额度；取消不会改动草稿或旧内容。', { destructive: false })) return;
         options.continueRecovery = true;
         replaceExisting = recoveryExisting.replaceExisting === true;
         const savedOperation = recoveryExisting.operation;
         if (savedOperation?.kind === 'mode') {
+            if (savedOperation.participantRegeneration && !replacementTicket) {
+                replacementTicket = await core_cache.assertArchiveVersionReplacement(context, savedOperation.participantRegeneration, mode);
+                const participantSnapshot = core_participants.normalizeParticipantSnapshot(savedOperation.participantRegeneration.participantSnapshot);
+                if (!participantSnapshot) throw new Error('重做草稿缺少原人物快照。');
+                options.participantRegeneration = { ...replacementTicket, participantSnapshot };
+                core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, options.logicalTask.origin, { participantSnapshot });
+            }
             if (mode === core_constants.MODE.INBOX && typeof savedOperation.inboxDate === 'string' && Number.isFinite(Date.parse(savedOperation.inboxDate))) inboxDate = new Date(savedOperation.inboxDate);
             if (mode === core_constants.MODE.CALENDAR) {
                 // Existing recovery keeps its exact recipe/date; never silently restarts paid work.
@@ -965,6 +1253,7 @@ export async function generateMode(mode, options = {}) {
     }
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     let origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId), archiveTargetEntryId: core_text.normalizeText(archiveTarget?.entryId, 120) };
+    core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin);
     const targetEpochKey = archiveTarget ? `${origin.archiveTargetEntryId}:${mode}` : '';
     const targetEpoch = archiveTarget ? (Number(runtimeState.archiveTargetTaskEpochs.get(targetEpochKey)) || 0) + 1 : 0;
     if (archiveTarget) runtimeState.archiveTargetTaskEpochs.set(targetEpochKey, targetEpoch);
@@ -975,11 +1264,11 @@ export async function generateMode(mode, options = {}) {
     core_requestCoordinator.registerArchiveTargetReservation(taskKey, { archiveTarget }, mode,
         archiveTarget ? `${archiveTarget.characterName} · ${archiveTarget.archiveName} · ${core_constants.MODE_LABEL[mode]}生成中` : '');
     if (archiveTarget) queueMicrotask(() => ui_overlay.refreshArchiveTargetSnapshotView(archiveTarget.entryId));
-    const archiveTargetStillCurrent = () => !archiveTarget || (
+    const archiveTargetStillCurrent = () => core_requestCoordinator.isLogicalGenerationTaskCurrent(options.logicalTask) && (!archiveTarget || (
         core_context.runtimeLifecycleStillCurrent(lifecycleEpoch)
         && runtimeState.archiveTargetTaskEpochs.get(targetEpochKey) === targetEpoch
         && runtimeState.activeModeBuildScopes.has(taskKey)
-    );
+    ));
     core_requestCoordinator.refreshConcurrentTaskUi(mode, origin);
     if (!background && (!scopedReaderMode || timeReaderVisible())) {
         ui_overlay.openOverlay();
@@ -994,12 +1283,17 @@ export async function generateMode(mode, options = {}) {
             archiveTarget.cache = claimed.cache;
             context.chatMetadata[core_constants.CACHE_KEY] = structuredClone(claimed.cache);
         } else {
-            await core_cache.claimLiveModeGeneration(mode, context, memoryBank);
+            await core_cache.claimLiveModeGeneration(mode, context, memoryBank, {
+                draftId: options.draftId || recoveryExisting?.draftId,
+                pageId: options.pageId || recoveryExisting?.pageId || mode,
+            });
         }
         // A claim is a real IndexedDB CAS boundary. Another page may have committed the same
         // archive revision after the UI snapshot was opened, so every incremental/base input must
         // be reloaded from the claimed canonical cache before the first provider request.
         memoryBank = archive_repository.requireArchive(context);
+        targetMemoryBank = memoryBank;
+        core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
         previousSession = replaceExisting ? null : core_cache.loadSession(mode, {
             context,
             chatId: expectedChatId,
@@ -1032,17 +1326,49 @@ export async function generateMode(mode, options = {}) {
         }
         if (mode === core_constants.MODE.THEME_SONG) {
             const stored = core_cache.getCache(context);
-            if (!previousSession && stored?.[mode]) throw song_contract.songError('SOURCE', '已有印象曲暂不可读取，原作品保留。');
+            if (!previousSession && stored?.[mode] && !replacementTicket) throw song_contract.songError('SOURCE', '已有印象曲暂不可读取，原作品保留。');
             themeSongPlan = recoveryExisting?.operation?.themeSongPlan
                 ? modes_song.validateThemeSongPlan(recoveryExisting.operation.themeSongPlan, memoryBank)
                 : modes_song.validateThemeSongPlan(modes_song.createThemeSongPlan(options.songOptions, memoryBank, previousSession), memoryBank);
         }
         origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId), archiveTargetEntryId: core_text.normalizeText(archiveTarget?.entryId, 120) };
+        core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin);
+        // A room replacement intentionally has no incremental previousSession.
+        // Keep its unselected life/pets and linked physical IDs independently of
+        // that prompt input. The already-validated version also repairs older
+        // replacement drafts that never captured this separate preservation data.
+        let linkedRoomSession = null;
+        if (replacementTicket && mode === core_constants.MODE.ROOM) {
+            const savedInputs = generation_recovery.readGenerationContentSnapshot(recoveryExisting)?.contentInputs;
+            linkedRoomSession = savedInputs && Object.hasOwn(savedInputs, 'linkedRoomSession')
+                ? structuredClone(savedInputs.linkedRoomSession)
+                : (await core_cache.readArchiveVersion(context, replacementTicket.versionId)).cache[mode] || null;
+        }
         recoveryHandle = await beginModeRecovery(mode, context, memoryBank, origin, { ...options, archiveTarget, stillCurrent: archiveTargetStillCurrent, existing: recoveryExisting, replaceExisting,
+            partialReaderStillCurrent: scopedReaderMode ? () => !background && timeReaderVisible() : null,
+            contentInputs: { previousSession, roomSession, focusObject, ...(linkedRoomSession ? { linkedRoomSession } : {}) },
             operation: recoveryExisting?.operation || { kind: 'mode', mode, ...(themeSongPlan ? { themeSongPlan } : {}), inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
                 ...(mode === core_constants.MODE.CALENDAR ? { calendarTimeBasis: 'story' } : {}),
-                allowPersonaExpansion, visualOnly: options.visualOnly === true, fillMissing: options.fillMissing === true, focusObjectId: core_text.normalizeText(options.focusObjectId, 120) } });
+                allowPersonaExpansion, visualOnly: options.visualOnly === true, fillMissing: options.fillMissing === true, focusObjectId: core_text.normalizeText(options.focusObjectId, 120),
+                ...(replacementTicket ? { participantRegeneration: options.participantRegeneration } : {}) } });
+        context = recoveryHandle.contentContext;
+        memoryBank = recoveryHandle.contentBank;
+        if (recoveryHandle.contentInputs) {
+            previousSession = recoveryHandle.contentInputs.previousSession;
+            roomSession = recoveryHandle.contentInputs.roomSession;
+            focusObject = recoveryHandle.contentInputs.focusObject;
+        }
+        if (!segmentedMode && mode !== core_constants.MODE.RELATIONS) {
+            generationPrompt = core_constants.ROOM_DEEP_MODES.includes(mode) && mode !== core_constants.MODE.PHONE
+                ? generation_prompts.roomDeepGenerationPrompt(mode, context, memoryBank, roomSession, focusObject)
+                : mode === core_constants.MODE.CALENDAR
+                    ? (calendarLegacyDate ? generation_prompts.calendarPrompt : generation_prompts.calendarStoryPrompt)(context, memoryBank, { currentDate: calendarCurrentDate })
+                    : promptFactory(context, memoryBank);
+        }
         let session;
+        const participantSnapshot = mode === core_constants.MODE.ROOM
+            ? await captureRoomParticipantSnapshot(context, origin, { existing: recoveryExisting,
+                participantSnapshot: options.participantRegeneration?.participantSnapshot }) : null;
         let presentationContext = null;
         if (time_stories.isTimeStoryMode(mode) || (mode === core_constants.MODE.ITEMS && previousSession && allowPersonaExpansion) || [core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode)) {
             presentationContext = await buildWorldPresentationContext(context, memoryBank, mode, origin);
@@ -1067,11 +1393,11 @@ export async function generateMode(mode, options = {}) {
                 ? await modes_butterfly.generateButterflyIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession)
                 : await modes_butterfly.generateButterflyWithRepair(context, memoryBank, origin, taskKey);
         } else if (mode === core_constants.MODE.ROOM && options.visualOnly && previousSession) {
-            session = await modes_room.refreshRoomFigure(context, memoryBank, origin, taskKey, previousSession, { presentationContext });
+            session = await modes_room.refreshRoomFigure(context, memoryBank, origin, taskKey, previousSession, { presentationContext, participantSnapshot });
         } else if (mode === core_constants.MODE.ROOM && previousSession) {
-            session = await modes_room.generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext, allowPersonaExpansion });
+            session = await modes_room.generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext, allowPersonaExpansion, participantSnapshot });
         } else if (mode === core_constants.MODE.ROOM) {
-            session = await modes_room.generateRoomWithRepair(context, memoryBank, origin, taskKey, { presentationContext });
+            session = await modes_room.generateRoomWithRepair(context, memoryBank, origin, taskKey, { presentationContext, participantSnapshot });
         } else if (mode === core_constants.MODE.ITEMS && previousSession) {
             session = await modes_items.generateItemsIncrementalWithRepair(context, memoryBank, roomSession, focusObject, origin, taskKey, previousSession, { presentationContext, allowPersonaExpansion });
         } else if (mode === core_constants.MODE.ENDING) {
@@ -1099,7 +1425,8 @@ export async function generateMode(mode, options = {}) {
         } else if (mode === core_constants.MODE.TRAVEL) {
             session = await modes_travel.generateTravelWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, presentationContext, allowPersonaExpansion });
         } else if (mode === core_constants.MODE.RELATIONS) {
-            const selectedBooks = await archive_repository.collectSelectedMemoryWorldInfo(context, expectedChatId, null, { settingsOnly: true });
+            const selectedBooks = await generation_recovery.frozenGenerationInput(origin, 'relations:setting-books',
+                () => archive_repository.collectSelectedMemoryWorldInfo(context, expectedChatId, null, { settingsOnly: true }));
             const settingSelection = modes_relations.fitRelationSettingEntries(selectedBooks.entries, { coverage: selectedBooks.coverage });
             // Same rule as the setting envelope: an unreadable or oversized book means
             // "fewer people to draw from", not "refuse to refresh the garden".
@@ -1132,7 +1459,8 @@ export async function generateMode(mode, options = {}) {
             session = await modes_achievements.generateAchievementsWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else {
             const contextEnvelope = mode === core_constants.MODE.CALENDAR
-                ? await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(mode, context) })
+                ? await generation_recovery.frozenGenerationInput(origin, 'context:calendar',
+                    () => core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(mode, context) }))
                 : presentationContext?.contextEnvelope;
             const effectivePrompt = mode === core_constants.MODE.ROOM
                 ? `${generationPrompt}\nCONTROLLED_WORLD_PRESENTATION_JSON:\n${JSON.stringify(presentationContext?.profile || {}, null, 2)}\n明确的外貌设定优先采用角色卡/世界书原文；本轮不生成宠物；不要依据生成的房间名、物件或用户 persona 猜测。`
@@ -1164,6 +1492,13 @@ export async function generateMode(mode, options = {}) {
             if (mode === core_constants.MODE.CABINET && previousSession) session = modes_cabinet.mergeCabinet(previousSession, session);
         }
         core_taskTrace.markStage(taskTrace, 'validate');
+        core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
+        if (replacementTicket) {
+            if (mode === core_constants.MODE.ROOM) {
+                session = modes_room.preserveRoomLinkedContent(linkedRoomSession, session);
+            }
+            session[core_cache.PARTICIPANT_REPLACEMENT_KEY] = replacementTicket;
+        }
         if (!core_incremental.incrementalPartRecord(session, incrementalPart)) {
             const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank, incrementalPart);
             const added = previousSession ? 0 : 1;
@@ -1171,8 +1506,19 @@ export async function generateMode(mode, options = {}) {
         }
         const generatedSongId = mode === core_constants.MODE.THEME_SONG ? session.songs[0]?.id || '' : '';
         session.chatId = expectedChatId;
+        if (memoryBank.archiveRevision !== expectedArchiveRevision) {
+            session.archiveRevision = memoryBank.archiveRevision;
+            const pending = await core_cache.saveGenerationTaskResult(context, mode, session, origin, {
+                draftId: origin.generationRecoveryDraftId, pageId: recoveryHandle?.journal.pageId || mode,
+                archiveTarget, memoryBank: targetMemoryBank, sourceMemory: memoryBank, complete: true,
+            });
+            core_taskTrace.endTaskTrace(taskTrace, 'ok');
+            await ui_overlay.presentGenerationTaskResult(pending.draftId, contentContextSources.get(context) || context);
+            return pending;
+        }
         session.archiveRevision = expectedArchiveRevision;
         await core_context.yieldToUi();
+        core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
         core_taskTrace.beginStage(taskTrace, 'save');
         let committed = false;
         if (archiveTarget) {
@@ -1193,13 +1539,20 @@ export async function generateMode(mode, options = {}) {
                 core_taskTrace.recordTaskFailure(taskTrace, error);
             }
         }
-        if (!committed && !archiveTarget) core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [mode]: session } });
+        if (!committed && !archiveTarget) {
+            core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
+            core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [mode]: session } });
+        }
 
         if (committed && recoveryHandle) await core_cache.saveGenerationRecovery(context, memoryBank, mode, null, origin, { archiveTarget, stillCurrent: archiveTargetStillCurrent });
         if (committed && [core_constants.MODE.INBOX, core_constants.MODE.THEME_SONG].includes(mode)) {
             session = archiveTarget
                 ? core_cache.loadSession(mode, { chatId: expectedChatId, memoryBank, cache: runtimeState.activeArchiveSnapshot?.entryId === archiveTarget.entryId ? runtimeState.activeArchiveSnapshot.cache : archiveTarget.cache }) || session
                 : core_cache.loadSession(mode) || session;
+        }
+        if (replacementTicket) {
+            core_taskTrace.endTaskTrace(taskTrace, committed ? 'ok' : 'deferred');
+            return { status: committed ? 'committed' : 'deferred', session };
         }
         core_taskTrace.markStage(taskTrace, 'save', committed);
         if (!committed) core_taskTrace.markStage(taskTrace, 'deferred');
@@ -1239,6 +1592,10 @@ export async function generateMode(mode, options = {}) {
         return session;
     } catch (error) {
         core_taskTrace.endTaskTrace(taskTrace, error?.name === 'AbortError' ? 'cancelled' : 'failed', error?.failure || error);
+        if (replacementTicket) {
+            await generation_recovery.noteGenerationRecoveryFailure(origin, error);
+            return { status: error?.name === 'AbortError' ? 'cancelled' : 'failed', error };
+        }
         if (recoveryHandle) { try { await generation_recovery.noteGenerationRecoveryFailure(origin, error?.failure || error); } catch {} }
         if (error?.name === 'AbortError') {
             console.warn('[HeartbeatMemories] generation aborted by extension/task cancellation', { mode });

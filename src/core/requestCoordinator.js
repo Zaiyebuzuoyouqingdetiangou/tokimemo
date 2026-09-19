@@ -13,6 +13,101 @@ import * as ui_settingsPanel from '../ui/settingsPanel.js';
 
 let deferredDurabilityWarningShown = false;
 
+// Whole operations outlive their individual provider requests. A cancellation
+// remains latched through preparation, gaps between segments and final writes.
+const logicalGenerationTasks = new Map();
+const logicalTaskOrigins = new WeakMap();
+const cancelledLogicalOrigins = [];
+let logicalTaskSequence = 0;
+
+function exactLogicalOrigin(left, right) {
+    return !!left && !!right && ['startedAt', 'characterKey', 'characterId', 'characterAvatar', 'chatId', 'archiveRevision']
+        .every(key => String(left[key] ?? '') === String(right[key] ?? ''));
+}
+
+export function beginLogicalGenerationTask({ kind = 'mode', mode = '', pageId = '', pageIds = [], context = null, origin = null, taskKey = '', label = '', parentTaskId = '', signal = null } = {}) {
+    if (taskKey && [...logicalGenerationTasks.values()].some(task => task.taskKey === taskKey)) {
+        throw core_text.safeUserError('这一项仍在处理，请等待当前任务完全结束。', 'RMT_LOGICAL_TASK_BUSY');
+    }
+    const controller = new AbortController();
+    let resolveSettled;
+    const settled = new Promise(resolve => { resolveSettled = resolve; });
+    const parent = parentTaskId ? logicalGenerationTasks.get(parentTaskId) : null;
+    if (parentTaskId && !parent) throw createGenerationAbortError();
+    const externalSignal = signal || parent?.signal || null;
+    const forwardAbort = () => controller.abort(createGenerationAbortError());
+    if (externalSignal?.aborted) throw createGenerationAbortError();
+    externalSignal?.addEventListener?.('abort', forwardAbort, { once: true });
+    const handle = { id: `logical-generation-${++logicalTaskSequence}`, kind, mode, pageId, pageIds: [...pageIds], parentTaskId,
+        label: label || core_constants.MODE_LABEL[mode] || kind, taskKey, controller,
+        signal: controller.signal, settled, resolveSettled, lifecycleEpoch: runtimeState.runtimeLifecycleEpoch,
+        scope: context ? core_context.chatScopeKey(context) : '', origin: null, origins: [], status: 'running',
+        releaseParent: () => externalSignal?.removeEventListener?.('abort', forwardAbort) };
+    logicalGenerationTasks.set(handle.id, handle);
+    if (origin) bindLogicalGenerationTask(handle, origin);
+    return handle;
+}
+
+export function bindLogicalGenerationTask(handle, origin, options = {}) {
+    if (!handle || logicalGenerationTasks.get(handle.id) !== handle) throw createGenerationAbortError();
+    assertLogicalGenerationTaskCurrent(handle);
+    if (origin && typeof origin === 'object') {
+        logicalTaskOrigins.set(origin, handle);
+        handle.origin = structuredClone(origin);
+        handle.origins.push(handle.origin);
+    }
+    if (options.taskKey) handle.taskKey = options.taskKey;
+    if (Object.hasOwn(options, 'participantSnapshot')) handle.participantSnapshot = structuredClone(options.participantSnapshot);
+    return handle;
+}
+
+export function logicalGenerationTaskForOrigin(origin) {
+    if (!origin || typeof origin !== 'object') return null;
+    const exact = logicalTaskOrigins.get(origin);
+    if (exact) return exact;
+    const cancelled = cancelledLogicalOrigins.find(task => task.lifecycleEpoch === runtimeState.runtimeLifecycleEpoch
+        && task.origins.some(known => exactLogicalOrigin(known, origin)));
+    if (cancelled) return cancelled;
+    return [...logicalGenerationTasks.values()].reverse().find(task => task.origins.some(known => exactLogicalOrigin(known, origin))) || null;
+}
+
+export function isLogicalGenerationTaskCurrent(handleOrOrigin) {
+    const handle = handleOrOrigin?.settled && handleOrOrigin?.signal ? handleOrOrigin : logicalGenerationTaskForOrigin(handleOrOrigin);
+    return !handle || (!handle.signal.aborted && core_context.runtimeLifecycleStillCurrent(handle.lifecycleEpoch));
+}
+
+export function assertLogicalGenerationTaskCurrent(handleOrOrigin) {
+    if (!isLogicalGenerationTaskCurrent(handleOrOrigin)) throw createGenerationAbortError();
+}
+
+export function finishLogicalGenerationTask(handle, result = null) {
+    if (!handle || logicalGenerationTasks.get(handle.id) !== handle) return;
+    handle.status = result?.status || (handle.signal.aborted ? 'cancelled' : 'settled');
+    handle.releaseParent();
+    if (handle.signal.aborted) cancelledLogicalOrigins.push(handle);
+    logicalGenerationTasks.delete(handle.id);
+    handle.resolveSettled({ id: handle.id, kind: handle.kind, mode: handle.mode, pageId: handle.pageId, status: handle.status });
+}
+
+export function queryParticipantGenerationTasks(context = core_context.getContext()) {
+    const scope = core_context.chatScopeKey(context);
+    return [...logicalGenerationTasks.values()].filter(task => task.scope === scope).map(task => ({
+        id: task.id, kind: task.kind, mode: task.mode, pageId: task.pageId, pageIds: [...task.pageIds], parentTaskId: task.parentTaskId, label: task.label,
+        origin: task.origin ? structuredClone(task.origin) : null, status: task.status,
+    }));
+}
+
+export async function cancelParticipantGenerationTasks(ids) {
+    const selected = [...new Set(Array.isArray(ids) ? ids : [])].map(id => logicalGenerationTasks.get(id)).filter(Boolean);
+    for (const task of selected) {
+        task.status = 'cancelling';
+        task.controller.abort(createGenerationAbortError());
+    }
+    // A provider abort only settles a segment. The owner resolves this promise
+    // after its final draft/storage cleanup; a new roster must wait for that.
+    return Promise.all(selected.map(task => task.settled));
+}
+
 function sameDeferredOrigin(left, right) {
     if (!left || !right) return false;
     return ['startedAt', 'characterKey', 'characterAvatar', 'characterId', 'chatId', 'archiveRevision', 'archivePresent', 'sourceMessageCount']
@@ -48,8 +143,10 @@ export function queueDeferredCommitRecord(origin, commit) {
         const patch = image_patch.normalizeCgImagePatch(commit.patch);
         if (!patch) return { durable: false, key: '', item: null };
         const previous = list.find(item => item.kind === 'cgImagePatch' && sameDeferredOrigin(item.origin, origin)
-            && item.patch?.mode === patch.mode && item.patch?.itemId === patch.itemId);
-        const item = { kind: 'cgImagePatch', patch, origin, queuedAt: Date.now() };
+            && item.patch?.mode === patch.mode && item.patch?.itemId === patch.itemId
+            && (item.draftId || '') === (commit.draftId || ''));
+        const item = { kind: 'cgImagePatch', patch, origin, queuedAt: Date.now(),
+            ...(typeof commit.draftId === 'string' && commit.draftId ? { draftId: commit.draftId } : {}) };
         runtimeState.deferredChatCommits.set(key, [...list.filter(row => row !== previous), item]);
         return { durable: reportDeferredDurability(), key, item };
     }

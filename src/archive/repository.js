@@ -25,10 +25,12 @@ import * as sourceGuard from './sourceReadGuard.js';
 import * as archive_sourceLedger from './sourceLedger.js';
 import * as archive_importRecovery from './importRecovery.js';
 import * as generation_client from '../generation/client.js';
+import * as generation_jsonParser from '../generation/jsonParser.js';
 import * as modes_heart from '../modes/heart.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as ui_settingsPanel from '../ui/settingsPanel.js';
 import * as archive_avatars from '../ui/archiveAvatars.js';
+import * as participants from '../core/participants.js';
 
 export function archiveSchemaVersion(memory) {
     const version = Number(memory?.version);
@@ -322,22 +324,25 @@ export function hasMemoryWorldInfoSelection(context = core_context.currentCharac
     return getMemoryWorldInfoSelection(context).books.length > 0;
 }
 
-export function normalizeMemoryWorldInfoEntry(world, entry, fallbackUid = '', { historySource = false } = {}) {
+export function normalizeMemoryWorldInfoEntry(world, entry, fallbackUid = '', { historySource = false, participantSource = false } = {}) {
     if (!entry || typeof entry !== 'object') return null;
-    const uid = core_text.normalizeText(safeOwnDataValue(entry, 'uid') ?? fallbackUid, 120);
-    const rawContent = String(safeOwnDataValue(entry, 'content') ?? '').replace(/\u0000/g, '').trim();
+    const readLabel = (value, length) => participantSource ? String(value ?? '') : core_text.normalizeText(value, length);
+    const uid = readLabel(safeOwnDataValue(entry, 'uid') ?? fallbackUid, 120);
+    const rawContent = participantSource ? String(safeOwnDataValue(entry, 'content') ?? '')
+        : String(safeOwnDataValue(entry, 'content') ?? '').replace(/\u0000/g, '').trim();
     const originalChars = rawContent.length;
-    const limit = historySource ? core_constants.MAX_MEMORY_SOURCE_LEDGER_CHARS : core_constants.MAX_MEMORY_WORLD_INFO_CHARS;
+    const limit = participantSource ? Infinity : historySource ? core_constants.MAX_MEMORY_SOURCE_LEDGER_CHARS : core_constants.MAX_MEMORY_WORLD_INFO_CHARS;
     const contentTruncated = originalChars > limit;
     const content = contentTruncated
         ? rawContent.slice(0, limit + 1)
         : rawContent;
     if (!uid || !content) return null;
-    const title = core_text.normalizeText(safeOwnDataValue(entry, 'comment') ?? safeOwnDataValue(entry, 'title') ?? safeOwnDataValue(entry, 'name'), 180) || `条目 ${uid}`;
+    const title = readLabel(safeOwnDataValue(entry, 'comment') ?? safeOwnDataValue(entry, 'title') ?? safeOwnDataValue(entry, 'name'), 180) || `条目 ${uid}`;
     const primaryKeys = safeOwnDataValue(entry, 'key');
     const secondaryKeys = safeOwnDataValue(entry, 'keysecondary');
-    const keys = core_text.cleanArray([...(Array.isArray(primaryKeys) ? primaryKeys : []), ...(Array.isArray(secondaryKeys) ? secondaryKeys : [])], 12, 120);
-    return { world: core_text.normalizeText(world, 240), uid, title, keys, content, originalChars, contentTruncated, disabled: safeOwnDataValue(entry, 'disable') === true };
+    const rawKeys = [...(Array.isArray(primaryKeys) ? primaryKeys : []), ...(Array.isArray(secondaryKeys) ? secondaryKeys : [])];
+    const keys = participantSource ? rawKeys.filter(key => typeof key === 'string') : core_text.cleanArray(rawKeys, 12, 120);
+    return { world: readLabel(world, 240), uid, title, keys, content, originalChars, contentTruncated, disabled: safeOwnDataValue(entry, 'disable') === true };
 }
 
 export function worldInfoEntriesFromData(world, data, options = {}) {
@@ -352,8 +357,10 @@ export function worldInfoEntriesFromData(world, data, options = {}) {
 export async function loadMemoryWorldInfoBook(context, worldName, signal = null, options = {}) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     if (typeof context.loadWorldInfo !== 'function') throw new Error('当前 SillyTavern 没有公开的世界书读取接口。');
-    const name = core_text.normalizeText(worldName, 240);
-    const names = typeof context.getWorldInfoNames === 'function' ? core_text.cleanArray(await sourceGuard.boundedSourceRead(() => context.getWorldInfoNames(), signal), 500, 240) : [];
+    const name = options.participantSource ? String(worldName ?? '') : core_text.normalizeText(worldName, 240);
+    const rawNames = typeof context.getWorldInfoNames === 'function' ? await sourceGuard.boundedSourceRead(() => context.getWorldInfoNames(), signal) : [];
+    const names = options.participantSource ? (Array.isArray(rawNames) ? rawNames.filter(value => typeof value === 'string') : [])
+        : core_text.cleanArray(rawNames, 500, 240);
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     if (!name || (typeof context.getWorldInfoNames === 'function' && !names.includes(name))) throw new Error('所选世界书已经不存在，或当前 SillyTavern 无法读取。');
     const data = await sourceGuard.boundedSourceRead(() => context.loadWorldInfo(name), signal);
@@ -1004,12 +1011,19 @@ export async function flushDeferredCommitsForCurrentChat() {
                     continue;
                 }
                 let patchStatus = '';
-                const saved = await core_cache.commitSessionMutation(patch.mode, item.origin.chatId, item.origin, (latest, liveMemory) => {
+                const mutate = (latest, liveMemory) => {
                     if (liveMemory.archiveRevision !== item.origin.archiveRevision) return null;
                     const result = image_patch.applyCgImagePatch(latest, patch);
                     patchStatus = result.status;
                     return result.session;
-                });
+                };
+                let saved = null;
+                if (item.draftId) saved = await core_cache.commitGenerationTaskResultMutation(context, item.draftId, mutate,
+                    { expectedTaskOrigin: item.origin });
+                const draft = item.draftId && core_cache.getCache(context)?.[core_cache.GENERATION_DRAFTS_CACHE_KEY]?.records?.[item.draftId];
+                if (!saved && (!item.draftId || draft?.status === 'complete')) {
+                    saved = await core_cache.commitSessionMutation(patch.mode, item.origin.chatId, item.origin, mutate);
+                }
                 if (saved) {
                     globalThis.toastr?.success?.('之前窗口的图片已保存。', '心迹回廊');
                     acknowledge = true;
@@ -1634,6 +1648,49 @@ function archiveRecoverySettingsIdentity(context) {
         ? core_settings.rawConnectionProfile(settings.connectionProfileId, context) : null });
 }
 
+// Content belongs to the captured task. Connection profiles, endpoints, models
+// and credentials deliberately remain on the live request context.
+const ARCHIVE_CONTENT_SETTING_KEYS = ['temperature', 'maxTokens', 'chatReadRange', 'useActivatedWorldInfo',
+    'useCurrentChatExternalMemory', 'excludedContextTags', 'contextTagMode', 'retainedContextTags',
+    'bannedGeneratedPhrases', 'creativeSupplementEnabled', 'creativeSupplement'];
+function archiveContentSettings(context) {
+    const settings = core_settings.getPluginSettings(context);
+    return structuredClone(Object.fromEntries(ARCHIVE_CONTENT_SETTING_KEYS.filter(key => settings[key] !== undefined)
+        .map(key => [key, settings[key]])));
+}
+function archiveTaskBinding(context) {
+    const origin = core_context.captureTaskOrigin(context);
+    return Object.fromEntries(['characterKey', 'characterId', 'characterAvatar', 'chatId'].map(key => [key, origin[key]]));
+}
+function captureArchiveTaskInput(context, payload) {
+    const data = { ...payload, binding: archiveTaskBinding(context),
+        names: { name1: context.name1, name2: context.name2 }, contentSettings: archiveContentSettings(context) };
+    return { version: 1, digest: archive_batches.sourceHash(JSON.stringify(data)), data };
+}
+function checkedArchiveTaskInput(value, context, { completedSaveOnly = false } = {}) {
+    if (!value) return null;
+    if (value.version !== 1 || !value.data || value.digest !== archive_batches.sourceHash(JSON.stringify(value.data))) {
+        throw core_text.safeUserError('原任务资料未通过完整性校验，原草稿保留。', 'RMT_RECOVERY_DATA');
+    }
+    const actual = archiveTaskBinding(context);
+    for (const key of Object.keys(actual)) if (value.data.binding?.[key] !== actual[key]) {
+        // The existing completed-save path permits a display-name change only.
+        // Keep the captured payload intact and prove unchanged card facts plus
+        // slot/avatar before accepting that one runtime-key difference.
+        if (completedSaveOnly && key === 'characterKey' && value.data.identity?.characterFacts && value.data.identity?.characterLocator) {
+            const current = batchIdentity(context, { fullFingerprint: value.data.snapshotForIdentity?.fullFingerprint || '' });
+            if (current.characterFacts === value.data.identity.characterFacts && current.characterLocator === value.data.identity.characterLocator) continue;
+        }
+        throw archive_batches.changedInput(key === 'chatId' ? 'chat' : 'character');
+    }
+    return structuredClone(value.data);
+}
+function archiveContentContext(context, taskInput) {
+    if (!taskInput) return context;
+    return { ...context, ...taskInput.names, extensionSettings: { ...context.extensionSettings,
+        [core_constants.EXTENSION_SETTINGS_KEY]: { ...core_settings.getPluginSettings(context), ...taskInput.contentSettings } } };
+}
+
 function batchIdentity(context, snapshot) {
     const raw = JSON.parse(archiveRecoverySettingsIdentity(context));
     const range = raw.settings.chatReadRange;
@@ -1658,6 +1715,11 @@ function batchIdentity(context, snapshot) {
 function assertBatchCommitIdentity(context, bank, { completedSaveOnly = false } = {}) {
     const progress = bank?.[archive_batches.IMPORT_PROGRESS_KEY];
     if (!progress) return;
+    const captured = checkedArchiveTaskInput(progress.taskInputV1, context, { completedSaveOnly });
+    if (captured) {
+        archive_batches.assertIdentity(progress.identity, captured.identity);
+        return;
+    }
     const actual = batchIdentity(context, { fullFingerprint: core_context.completeArchiveChatFingerprint(context) });
     const expected = progress.identity;
     // An already completed, explicitly retried save keeps the established same-slot
@@ -1717,6 +1779,95 @@ export function exportCurrentArchiveImportProgress(context = core_context.curren
         paused: bank?.archiveImportPaused || [], pageDrafts: archive_importRecovery.exportArchiveRecovery(origin) };
 }
 
+function archiveDraftParts(entry, context) {
+    const inputs = entry.inputs || {}, captured = checkedArchiveTaskInput(inputs.taskInputV1, context);
+    const progress = inputs.progress;
+    if (progress && captured?.snapshot?.messages && captured?.external?.records) {
+        return archive_batches.resolveBatchParts(progress, captured.snapshot.messages, captured.external.records);
+    }
+    return [];
+}
+
+function archiveSourceBank(memory) {
+    if (!memory) return null;
+    const saved = structuredClone(memory);
+    // The evidence/cover baseline is independent of previous task recipes.
+    // Do not recursively copy earlier full chat snapshots into every batch.
+    delete saved[archive_batches.IMPORT_PROGRESS_KEY];
+    delete saved.archiveImportPaused;
+    return saved;
+}
+
+function archivedRequestJson(segment, marker) {
+    const prompt = segment?.requestRecipe?.identity?.prompt;
+    if (typeof prompt !== 'string') return null;
+    const at = prompt.lastIndexOf(marker);
+    if (at < 0) return null;
+    try { const value = JSON.parse(prompt.slice(at + marker.length)); return Array.isArray(value) ? value : null; }
+    catch { return null; }
+}
+
+// No formal M IDs, archive revision or completion markers are assigned here.
+// Only closed model values are displayed, using the original source chunk and
+// the same per-memory normalizers as the production import.
+export async function readCurrentArchiveRecoveryDraft(draftId, context = core_context.currentCharacterGuard()) {
+    const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
+    try { await hydrateCurrentArchiveRecovery(context); }
+    catch (error) {
+        // An already received in-page segment remains readable when its durable
+        // acknowledgement fails. This fallback does not enable generation.
+        try { archive_importRecovery.readArchiveRecoveryDraft(origin, draftId); } catch { throw error; }
+    }
+    const entry = archive_importRecovery.readArchiveRecoveryDraft(origin, draftId);
+    let parts = [];
+    try { parts = archiveDraftParts(entry, context); } catch { /* Reading raw saved values never substitutes newer source rows. */ }
+    const sections = [];
+    for (const segment of entry.journal?.segments || []) {
+        const raw = segment.state === 'complete' ? segment.rawJson : segment.state === 'truncated' ? segment.partial : '';
+        if (!raw) continue;
+        const parsed = generation_jsonParser.parsePartialJsonObject(raw);
+        if (segment.slot === 'profile') {
+            const fields = {};
+            for (const key of ['archiveName', 'archiveSummary', 'archiveVerdict', 'verdictStyle']) {
+                if (parsed.has(`/${key}`) && typeof parsed.at(`/${key}`) === 'string') fields[key] = parsed.at(`/${key}`);
+            }
+            const readings = {};
+            for (const key of ['char', 'user', 'relation', 'tension', 'direction']) if (parsed.has(`/relationshipReading/${key}`)
+                && typeof parsed.at(`/relationshipReading/${key}`) === 'string') readings[key] = parsed.at(`/relationshipReading/${key}`);
+            const keywords = parsed.items('/keywords').filter(value => typeof value === 'string');
+            if (Object.keys(fields).length || Object.keys(readings).length || keywords.length) sections.push({ kind: 'profile',
+                complete: segment.state === 'complete', fields, readings, keywords });
+            continue;
+        }
+        const match = /^(chat|external):(\d+)$/.exec(segment.slot);
+        if (!match) continue;
+        const [, kind, rawIndex] = match, index = Number(rawIndex);
+        const selected = parts.filter(part => part.kind === kind)[index];
+        const source = selected?.data || archivedRequestJson(segment, kind === 'chat' ? 'UNTRUSTED_CHAT_JSON:\n' : 'EXTERNAL_MEMORY_JSON:\n');
+        const rows = parsed.items('/memories');
+        if (!source) {
+            if (rows.length) sections.push({ kind: 'unverified', label: `${kind === 'chat' ? '聊天' : '外部资料'}分块 ${index + 1}`,
+                items: rows.filter(item => typeof item?.title === 'string' && typeof item?.summary === 'string')
+                    .map(item => ({ title: item.title, summary: item.summary })) });
+            continue;
+        }
+        const items = rows.flatMap(row => kind === 'chat' ? normalizeImportedChunk({ memories: [row] }, source)
+            : normalizeExternalImportedMemories({ memories: [row] }, source));
+        if (items.length) sections.push({ kind: 'memories', label: `${kind === 'chat' ? '聊天' : '外部资料'}分块 ${index + 1}`,
+            complete: segment.state === 'complete', items });
+    }
+    return { draftId, operation: entry.operation, stage: entry.stage, paused: entry.paused, active: entry.active,
+        durable: entry.durable, createdAt: entry.journal.createdAt, updatedAt: entry.journal.updatedAt, sections,
+        ...(entry.profileResult ? { profileResult: structuredClone(entry.profileResult) } : {}),
+        ...(entry.archiveResult ? { archiveResult: structuredClone(entry.archiveResult), profilePending: entry.profilePending,
+            hasNextBatch: archive_batches.hasPendingBatches(entry.archiveResult.memoryBank?.[archive_batches.IMPORT_PROGRESS_KEY]) } : {}) };
+}
+
+function refreshArchiveRecoveryReading() {
+    try { Promise.resolve(ui_overlay.refreshArchiveRecoveryView?.()).catch(() => {}); }
+    catch { /* Reading failure must not repeat a received model segment. */ }
+}
+
 // Explicit current-archive view/read actions only. No sources, credentials or
 // providers are touched here; loaded checkpoints are not formal archive writes.
 export async function hydrateCurrentArchiveRecovery(context = core_context.currentCharacterGuard(), { operation = null, force = false } = {}) {
@@ -1759,7 +1910,7 @@ export async function saveCurrentArchiveRecovery(context = core_context.currentC
     if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) throw core_text.safeUserError('当前请求尚未结束，草稿仍保留。', 'RMT_RECOVERY_BUSY');
     const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
     await hydrateCurrentArchiveRecovery(context, { operation });
-    if (!archive_importRecovery.archiveRecoverySummary(origin, operation)) {
+    if (!archive_importRecovery.listArchiveRecoveryDrafts(origin, operation).length) {
         throw core_text.safeUserError('没有找到当前整理草稿，未修改原记录。', 'RMT_ARCHIVE_DRAFT_NOT_FOUND');
     }
     if (!await archive_importRecovery.flushArchiveRecovery(origin, operation)) {
@@ -1780,13 +1931,9 @@ export async function importCurrentArchiveRecoveryFile(data, context = core_cont
     return result;
 }
 
-export async function restartCurrentArchiveImport() {
-    const context = core_context.currentCharacterGuard();
+export async function restartCurrentArchiveImport(options = {}) {
     if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return { status: 'blocked' };
-    const bank = getImportedMemory(context);
-    const origin = core_context.captureTaskOrigin(context, bank?.archiveRevision || '');
-    archive_importRecovery.parkArchiveRecovery(origin);
-    return importCurrentChatMemory({ restartImport: true });
+    return importCurrentChatMemory({ ...options, restartImport: true, parkPriorDraft: true });
 }
 
 export function getCurrentArchiveImportRecoverySummary(context = core_context.getContext()) {
@@ -1794,7 +1941,7 @@ export function getCurrentArchiveImportRecoverySummary(context = core_context.ge
         const bank = getImportedMemory(context);
         const origin = core_context.captureTaskOrigin(context, bank?.archiveRevision || '');
         archive_importRecovery.acknowledgeArchiveRecoveryCommit(origin);
-        const summary = archive_importRecovery.archiveRecoverySummary(origin);
+        const summary = archive_importRecovery.archiveRecoverySummary(origin, 'import', { includeArchived: true });
         const pending = currentPendingArchiveSave(context);
         if (pending) return { ...summary, operation: 'import', profileOnly: false, awaitingCommit: true,
             committedRevision: pending.item.memoryBank.archiveRevision,
@@ -1810,7 +1957,7 @@ export function getCurrentArchiveImportRecoverySummary(context = core_context.ge
             const pageProcessed = pageParts.reduce((n, part) => n + part.refs.length, 0);
             const processed = Math.min(totals.total, totals.processed + pageProcessed);
             const detail = `来源 ${totals.total} 片段 / ${totals.chars.toLocaleString()} 字符；已处理 ${processed}、已正式保存 ${totals.saved}、未完成 ${totals.remaining}（其中待发送 ${totals.total - processed}）。批次 ${totals.currentBatch}/${totals.batches}。`;
-            return { ...summary, operation: 'import', profileOnly: false, awaitingCommit: false, fullRebuild: false,
+            return { ...summary, operation: 'import', profileOnly: false, onlyArchivedDrafts: false, awaitingCommit: false, fullRebuild: false,
                 completed: summary?.completed || 0, canContinue: !capacity, canRetry: !capacity, pageOnly: false,
                 batchProgress: totals, capacityBlocked: capacity,
                 notice: detail + (capacity ? `档案已达容量边界；${totals.pendingMemories} 条已校验结果另存为待入档，不编号、不算完成。可导出保留，未处理来源未发送。`
@@ -1923,21 +2070,21 @@ async function retryCurrentArchiveSave(context, taskTrace) {
 }
 
 export function getCurrentArchiveProfileRecoverySummary(context = core_context.getContext()) {
-    try { return archive_importRecovery.archiveRecoverySummary(core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || ''), 'profile'); }
+    try { return archive_importRecovery.archiveRecoverySummary(core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || ''), 'profile', { includeArchived: true }); }
     catch { return null; }
 }
 
-export function continueCurrentArchiveImport() {
-    if (!getCurrentArchiveImportRecoverySummary()) return Promise.resolve({ status: 'blocked' });
-    return importCurrentChatMemory({ continueRecovery: true });
+export function continueCurrentArchiveImport(options = {}) {
+    if (!options.draftId && !getCurrentArchiveImportRecoverySummary()) return Promise.resolve({ status: 'blocked' });
+    return importCurrentChatMemory({ ...options, continueRecovery: true });
 }
 
 // Shared production seam: successful checkpoints contain the model JSON, but
 // every replay re-enters these same source-aware normalizers before any save.
 export async function generateArchiveImportSegment(ticket, context, chunk, { index = 0, total = 1,
     external = false, worldInfo = null, requestOptions = {} } = {}) {
-    const prompt = external ? externalMemoryImportPrompt(context, chunk, worldInfo)
-        : memoryImportPrompt(context, chunk, index, total);
+    const prompt = requestOptions.recoveryPrompt ?? (external ? externalMemoryImportPrompt(context, chunk, worldInfo)
+        : memoryImportPrompt(context, chunk, index, total));
     return archive_importRecovery.requestArchiveRecoverySegment(ticket, `${external ? 'external' : 'chat'}:${index}`, prompt,
         { ...requestOptions, context }, raw => {
             if (!Array.isArray(raw?.memories)) throw core_text.safeUserError('当前分块缺少记忆列表，成功部分仍保留。', 'RMT_ARCHIVE_CHUNK');
@@ -1966,44 +2113,96 @@ function isArchiveCancellation(error) {
     return error?.name === 'AbortError' && !core_backupDiagnostics.backupFailureDiagnostic(error);
 }
 
-export async function rewriteCurrentArchiveVerdict() {
+export async function rewriteCurrentArchiveVerdict(options = {}) {
+    const context = options.context || core_context.currentCharacterGuard();
+    const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
+    const logicalTask = core_requestCoordinator.beginLogicalGenerationTask({ kind: 'archive-profile', pageId: 'archiveProfile',
+        context, origin, taskKey: `archive-profile:${core_context.chatScopeKey(context)}`, label: '档案名称与简介', parentTaskId: options.logicalParentTaskId });
     const taskTrace = core_taskTrace.startTaskTrace('archive-profile', 'archive-profile');
     core_taskTrace.markStage(taskTrace, 'start');
+    let result;
     try {
-        const result = await rewriteCurrentArchiveVerdictOperation(taskTrace);
+        result = await rewriteCurrentArchiveVerdictOperation(taskTrace, { ...options, logicalTask });
         finishArchiveTaskTrace(taskTrace, result);
         return result;
     } catch (error) {
         core_taskTrace.endTaskTrace(taskTrace, isArchiveCancellation(error) ? 'cancelled' : 'failed', error);
+        result = { status: isArchiveCancellation(error) ? 'cancelled' : 'failed', error };
+        if (options.participantRegeneration) return result;
         throw error;
     } finally {
         if (runtimeState.activeTaskTrace === taskTrace) runtimeState.activeTaskTrace = null;
+        core_requestCoordinator.finishLogicalGenerationTask(logicalTask, result);
     }
 }
 
-async function rewriteCurrentArchiveVerdictOperation(taskTrace) {
+async function rewriteCurrentArchiveVerdictOperation(taskTrace, options = {}) {
     if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return { status: 'blocked' };
     const context = core_context.currentCharacterGuard();
     const existing = getImportedMemory(context);
     if (!existing) return { status: 'blocked' };
     const memory = structuredClone(existing);
     const origin = core_context.captureTaskOrigin(context, memory.archiveRevision);
+    core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin);
+    let replacementTicket = null;
+    if (options.participantRegeneration) {
+        replacementTicket = await core_cache.assertArchiveVersionReplacement(context, options.participantRegeneration);
+        const snapshot = participants.normalizeParticipantSnapshot(options.participantRegeneration.participantSnapshot);
+        if (!snapshot) throw new Error('明确重做缺少本次已确认的人物快照。');
+        options.participantRegeneration = { ...replacementTicket, participantSnapshot: snapshot };
+    }
     await core_settings.prepareManualCredential(context);
     await archive_importRecovery.hydrateArchiveRecovery(origin);
     await archive_importRecovery.hydrateArchiveRecovery(origin, 'profile');
+    core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
     if (!core_context.isCurrentTaskOrigin(origin)) throw new DOMException('Chat changed', 'AbortError');
     if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return { status: 'blocked' };
-    const pendingImport = getCurrentArchiveImportRecoverySummary(context);
-    const pendingProfile = getCurrentArchiveProfileRecoverySummary(context);
-    if (pendingImport?.profileOnly && pendingImport.committedRevision !== memory.archiveRevision) {
-        globalThis.toastr?.warning?.('原档案简介待重试记录与当前档案版本不一致；旧草稿保留，没有重新生成。', '心迹回廊');
-        return { status: 'blocked' };
+    let pendingImport = getCurrentArchiveImportRecoverySummary(context);
+    let pendingProfile = getCurrentArchiveProfileRecoverySummary(context);
+    let selectedProfile = null;
+    if (!replacementTicket) {
+        const selectedDraft = options.draftId ? archive_importRecovery.readArchiveRecoveryDraft(origin, options.draftId) : null;
+        selectedProfile = selectedDraft?.operation === 'profile' ? selectedDraft : null;
+        const importProfile = selectedDraft ? (selectedDraft.operation === 'import' && (selectedDraft.stage === 'profile-only'
+            || selectedDraft.stage === 'archive-result' && selectedDraft.profilePending) ? selectedDraft : null)
+            : pendingImport?.profileOnly ? archive_importRecovery.readArchiveRecoveryDraft(origin,
+                pendingImport.drafts.find(row => !row.paused)?.draftId) : null;
+        if (importProfile) return continueImportedArchiveProfile(context, memory, origin, importProfile, options, taskTrace);
     }
+    if (pendingProfile?.onlyArchivedDrafts) pendingProfile = null;
+    if (selectedProfile) pendingProfile = { canContinue: selectedProfile.journal.segments.some(segment => segment.state === 'truncated'),
+        notice: '继续选中的原简介草稿，其他草稿与正式档案保持原样。' };
+    if (replacementTicket) {
+        // An explicit replacement owns a new draft; the old paid profile and
+        // any import's profile-only checkpoint remain in their durable slots.
+        // Flush both scopes even after a failed prior park: its active slot may
+        // already be empty, but the paused record still needs acknowledgement.
+        for (const operation of ['profile', 'import']) {
+            if (operation === 'profile' ? pendingProfile : pendingImport?.profileOnly) {
+                archive_importRecovery.parkArchiveRecovery(origin, operation);
+            }
+            try {
+                if (!await archive_importRecovery.flushArchiveRecovery(origin, operation)) {
+                    throw core_text.safeUserError('原简介草稿未确认保存，本次没有重新生成。', 'RMT_ARCHIVE_DRAFT_STORAGE');
+                }
+            } catch (error) {
+                if (error?.name === 'AbortError' || error?.code === 'RMT_ARCHIVE_DRAFT_STORAGE') throw error;
+                // A queued storage transaction can reject before flush reaches
+                // its own normalized save path; surface that as a save failure.
+                throw core_text.safeUserError('原简介草稿未确认保存，本次没有重新生成。', 'RMT_ARCHIVE_DRAFT_STORAGE');
+            }
+            core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
+            if (!core_context.isCurrentTaskOrigin(origin)) throw new DOMException('Chat changed', 'AbortError');
+        }
+        pendingImport = getCurrentArchiveImportRecoverySummary(context);
+        pendingProfile = getCurrentArchiveProfileRecoverySummary(context);
+    }
+    if (pendingProfile?.onlyArchivedDrafts) pendingProfile = null;
     if ((pendingProfile || pendingImport?.profileOnly) && !ui_overlay.confirmExplicitAction(
         pendingProfile?.canContinue ? '继续未写完的档案简介？' : '仅重试档案简介？',
         `${pendingImport?.profileOnly ? '记忆分块已保存，这次只重新生成简介，不会重导聊天或重做成功记忆。' : '此前成功内容保留，只处理这段简介。'} 会额外使用文本生成额度。\n${pendingProfile?.notice || pendingImport?.notice || archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE}`,
         { destructive: false })) return { status: 'cancelled' };
-    const controller = new AbortController();
+    const controller = options.logicalTask.controller;
     let recoveryTicket = null;
     runtimeState.busy = true;
     runtimeState.activeTaskTrace = taskTrace;
@@ -2011,7 +2210,7 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace) {
     runtimeState.activeTaskAbortController = controller;
     runtimeState.activeTaskLabel = '正在读懂双方经历，重写档案简介…';
     const stillCurrent = () => {
-        try { return core_context.isCurrentTaskOrigin(origin)
+        try { return core_requestCoordinator.isLogicalGenerationTaskCurrent(options.logicalTask) && core_context.isCurrentTaskOrigin(origin)
             && getImportedMemory(core_context.currentCharacterGuard())?.archiveRevision === memory.archiveRevision; }
         catch { return false; }
     };
@@ -2019,30 +2218,54 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace) {
         ui_overlay.setBusyUi(true, runtimeState.activeTaskLabel);
         await core_cache.ensureCacheHydrated(context);
         if (!stillCurrent()) throw new DOMException('Archive changed', 'AbortError');
-        const profileInputs = archive_importRecovery.archiveRecoveryInputs(origin, 'profile');
-        const ownerIdentity = archiveSourceOwnerIdentity(context);
-        if (profileInputs?.ownerIdentity && profileInputs.ownerIdentity !== ownerIdentity) {
+        const profileInputs = selectedProfile?.inputs || archive_importRecovery.archiveRecoveryInputs(origin, 'profile');
+        let taskInputV1 = profileInputs?.taskInputV1 || null;
+        const capturedInput = checkedArchiveTaskInput(taskInputV1, context);
+        const profileMemory = capturedInput?.memory || memory;
+        const sourceRevisionChanged = profileMemory.archiveRevision !== memory.archiveRevision;
+        const contentContext = archiveContentContext(context, capturedInput);
+        const ownerIdentity = capturedInput?.ownerIdentity || archiveSourceOwnerIdentity(context);
+        if (!capturedInput && profileInputs?.ownerIdentity && profileInputs.ownerIdentity !== ownerIdentity) {
             const error = core_text.safeUserError('角色卡或 Persona 与原简介任务不同；已保存成果与草稿保留。', 'RMT_RECOVERY_INPUT_CHANGED');
             error.archiveInputCategory = 'character';
             throw error;
         }
-        const contextEnvelope = profileInputs?.ownerIdentity ? profileInputs.contextEnvelope : await core_cache.buildControlledContextEnvelope(context);
+        const contextEnvelope = capturedInput?.contextEnvelope ?? (profileInputs?.ownerIdentity ? profileInputs.contextEnvelope
+            : await core_cache.buildControlledContextEnvelope(context)
+                + (replacementTicket ? participants.participantPromptBlock(options.participantRegeneration.participantSnapshot) : ''));
         if (!stillCurrent()) throw new DOMException('Archive changed', 'AbortError');
-        const settings = core_settings.getPluginSettings(context);
+        const settings = core_settings.getPluginSettings(contentContext);
+        const profilePrompt = capturedInput?.profilePrompt || archiveProfilePrompt(contentContext, profileMemory.memories);
+        // A pre-snapshot legacy draft remains on its exact-hash compatibility path.
+        if (!taskInputV1 && !profileInputs) taskInputV1 = captureArchiveTaskInput(context, {
+            operation: 'profile', memory: profileMemory, ownerIdentity, contextEnvelope, profilePrompt });
         const settingsIdentity = archiveRecoverySettingsIdentity(context);
         recoveryTicket = await archive_importRecovery.beginArchiveRecovery({ origin, operation: 'profile',
-            sourceIdentity: memory.archiveRevision, sourceFragments: [JSON.stringify(memory.memories), contextEnvelope], settingsIdentity, inputs: { contextEnvelope, ownerIdentity },
-            continueApproved: !!pendingProfile, assertCurrent: () => stillCurrent() && archiveRecoverySettingsIdentity(context) === settingsIdentity });
+            sourceIdentity: profileMemory.archiveRevision, sourceFragments: [JSON.stringify(profileMemory.memories), contextEnvelope], settingsIdentity, inputs: { contextEnvelope, ownerIdentity,
+                ...(taskInputV1 ? { taskInputV1 } : {}),
+                ...(replacementTicket ? { participantRegeneration: options.participantRegeneration } : {}) },
+            continueApproved: !!pendingProfile, onProgress: refreshArchiveRecoveryReading, draftId: selectedProfile?.draftId || '',
+            assertCurrent: () => stillCurrent() && (taskInputV1 || archiveRecoverySettingsIdentity(context) === settingsIdentity) });
+        core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, recoveryTicket.origin);
+        core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin);
         const profile = await archive_importRecovery.requestArchiveRecoverySegment(recoveryTicket, 'profile',
-            archiveProfilePrompt(context, memory.memories), {
+            profilePrompt, {
                 maxTokens: 3000, temperature: Math.min(settings.temperature, 0.65), contextEnvelope, archiveRequestBudget: true, signal: controller.signal, context, taskTrace,
-            }, raw => checkedArchiveProfile(raw, memory.memories));
+                ...(taskInputV1 ? { recoveryContentSettings: taskInputV1.data.contentSettings } : {}),
+            }, raw => checkedArchiveProfile(raw, profileMemory.memories));
         core_taskTrace.markStage(taskTrace, 'profile');
         if (!stillCurrent()) throw new DOMException('Archive changed', 'AbortError');
+        if (sourceRevisionChanged) {
+            const saved = await archive_importRecovery.retainCompletedArchiveProfile(recoveryTicket, profile, profileMemory);
+            refreshArchiveRecoveryReading();
+            return saved;
+        }
         core_taskTrace.beginStage(taskTrace, 'save');
         await core_cache.saveImportedMemory(context, { ...memory, archiveName: profile.archiveName,
             archiveVerdict: profile.archiveVerdict, archiveCoverUpdatedAt: Date.now() }, memory.chatId, {
             presentationOnly: true, preserveDerivedCache: true, expectedTaskOrigin: origin,
+            ...(replacementTicket ? { participantRegeneration: replacementTicket } : {}),
+            assertTaskCurrent: () => core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask),
             expectedPreviousArchiveState: { present: true, revision: memory.archiveRevision },
         });
         core_taskTrace.markStage(taskTrace, 'save');
@@ -2071,14 +2294,79 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace) {
     }
 }
 
-async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic = false, continueRecovery = false, restartImport = false } = {}, preparation) {
+async function continueImportedArchiveProfile(context, memory, origin, draft, options, taskTrace) {
+    if (!ui_overlay.confirmExplicitAction('继续原来未完成的档案简介？',
+        '沿用首次建档的原资料与已收到正文，只处理原简介的未完成部分；已有记忆和封面保留。', { destructive: false })) return { status: 'cancelled' };
+    const settingsIdentity = archiveRecoverySettingsIdentity(context);
+    const profileSegment = draft.journal?.segments?.find(segment => segment.slot === 'profile');
+    const recipe = profileSegment?.requestRecipe;
+    const captured = checkedArchiveTaskInput(draft.inputs?.taskInputV1, context);
+    const originalMemories = archivedRequestJson(profileSegment, 'UNTRUSTED_MEMORY_LIST:\n');
+    const sourceMemory = draft.profileMemory || (draft.committedRevision === memory.archiveRevision ? memory
+        : originalMemories ? { ...memory, archiveRevision: draft.committedRevision, memories: originalMemories,
+            characterName: captured?.names?.name2 || memory.characterName, userName: captured?.names?.name1 || memory.userName } : null);
+    if (!sourceMemory) throw core_text.safeUserError('这份旧简介缺少可还原的原记忆资料；原文仍可查看，未用当前资料替换。', 'RMT_RECOVERY_SOURCE_SNAPSHOT_MISSING');
+    const stillCurrent = () => core_requestCoordinator.isLogicalGenerationTaskCurrent(options.logicalTask)
+        && core_context.isCurrentTaskOrigin(origin) && getImportedMemory(context)?.archiveRevision === memory.archiveRevision;
+    let ticket = null;
+    runtimeState.busy = true; runtimeState.activeTaskTrace = taskTrace; runtimeState.activeTaskOrigin = origin;
+    runtimeState.activeTaskAbortController = options.logicalTask.controller; runtimeState.activeTaskLabel = '正在继续原档案简介…';
+    try {
+        ui_overlay.setBusyUi(true, runtimeState.activeTaskLabel);
+        ticket = await archive_importRecovery.resumeArchiveImportProfile({ origin, draftId: draft.draftId,
+            settingsIdentity, assertCurrent: stillCurrent, onProgress: refreshArchiveRecoveryReading });
+        core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, ticket.origin);
+        core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin);
+        const contentContext = archiveContentContext(context, captured);
+        const settings = core_settings.getPluginSettings(contentContext);
+        const profile = await archive_importRecovery.requestArchiveRecoverySegment(ticket, 'profile',
+            recipe?.identity?.prompt || archiveProfilePrompt(contentContext, sourceMemory.memories), {
+                maxTokens: recipe?.identity?.maxTokens ?? 8192, temperature: recipe?.identity?.temperature ?? Math.min(settings.temperature, 0.35),
+                contextEnvelope: recipe?.identity?.contextEnvelope ?? draft.inputs?.contextEnvelope ?? '',
+                ...(captured ? { recoveryContentSettings: captured.contentSettings } : {}),
+                context, archiveRequestBudget: true, taskTrace, signal: options.logicalTask.signal,
+            }, raw => checkedArchiveProfile(raw, sourceMemory.memories));
+        if (!stillCurrent()) throw new DOMException('Archive changed', 'AbortError');
+        if (sourceMemory.archiveRevision !== memory.archiveRevision) {
+            return await archive_importRecovery.retainCompletedArchiveProfile(ticket, profile, sourceMemory);
+        }
+        await core_cache.saveImportedMemory(context, { ...memory, archiveName: profile.archiveName,
+            archiveVerdict: profile.archiveVerdict, archiveCoverUpdatedAt: Date.now() }, memory.chatId, {
+            presentationOnly: true, preserveDerivedCache: true, expectedTaskOrigin: origin,
+            expectedPreviousArchiveState: { present: true, revision: memory.archiveRevision },
+            assertTaskCurrent: () => core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask),
+        });
+        archive_importRecovery.finishArchiveProfileRecovery(ticket, origin);
+        return { status: 'committed' };
+    } catch (error) {
+        core_taskTrace.endTaskTrace(taskTrace, isArchiveCancellation(error) ? 'cancelled' : 'failed', error);
+        globalThis.toastr?.warning?.(core_text.safeErrorSummary(error), '心迹回廊 · 原简介继续保留');
+        return { status: isArchiveCancellation(error) ? 'cancelled' : 'failed' };
+    } finally {
+        archive_importRecovery.releaseArchiveRecovery(ticket);
+        if (ticket) try { await archive_importRecovery.flushArchiveRecovery(origin, 'import'); } catch (error) {
+            globalThis.toastr?.warning?.(core_text.safeErrorSummary(error), '心迹回廊 · 草稿保存');
+        }
+        runtimeState.busy = false; runtimeState.activeTaskLabel = '';
+        if (runtimeState.activeTaskOrigin === origin) runtimeState.activeTaskOrigin = null;
+        if (runtimeState.activeTaskAbortController === options.logicalTask.controller) runtimeState.activeTaskAbortController = null;
+        ui_overlay.setBusyUi(false); refreshArchiveRecoveryReading();
+        if (stillCurrent() && runtimeState.archiveViewLevel === 'chooser' && !runtimeState.activeMode
+            && !document.getElementById(core_constants.OVERLAY_ID)?.hidden) ui_overlay.showChooser();
+    }
+}
+
+async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic = false, continueRecovery = false, restartImport = false, participantRoster, logicalTask,
+    draftId = '', selectedDraft = null, independentResult = false, nextIndependentBatch = false, baseMemoryMissing = false } = {}, preparation) {
     const context = preparation.context;
-    const existing = preparation.existing;
+    const existing = Object.hasOwn(preparation, 'sourceExisting') ? preparation.sourceExisting : preparation.existing;
     // Capture before any await; a later chat/Persona switch cannot rebind this bank.
-    const userAvatar = fullRebuild ? archive_avatars.currentUserAvatar(context)
+    let userAvatar = fullRebuild ? archive_avatars.currentUserAvatar(context)
         : archive_avatars.archiveUserAvatar(existing) || archive_avatars.currentUserAvatar(context);
     const taskTrace = preparation.taskTrace;
-    const preparationStillCurrent = () => core_context.isCurrentTaskOrigin(preparation.origin, core_context.currentCharacterGuard());
+    core_requestCoordinator.bindLogicalGenerationTask(logicalTask, preparation.origin);
+    const preparationStillCurrent = () => core_requestCoordinator.isLogicalGenerationTaskCurrent(logicalTask)
+        && core_context.isCurrentTaskOrigin(preparation.origin, core_context.currentCharacterGuard());
     if (automatic) {
         if (!existing) return { status: 'blocked' };
         await core_cache.ensureCacheHydrated(context);
@@ -2089,6 +2377,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         }
     }
     const assertPreparationCurrent = () => {
+        core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
         let live;
         try { live = core_context.currentCharacterGuard(); } catch { live = null; }
         if (!live || !core_context.isCurrentTaskOrigin(preparation.origin, live)) {
@@ -2098,28 +2387,33 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     };
     const incrementalUpdate = !!existing && !fullRebuild;
     const actionLabel = fullRebuild ? '完全重建' : existing ? '增量更新' : '创建';
-    const settings = core_settings.getPluginSettings(context);
-    const pinnedInputs = continueRecovery ? archive_importRecovery.archiveRecoveryInputs(preparation.origin) : null;
+    const pinnedInputs = selectedDraft ? selectedDraft.inputs : continueRecovery ? archive_importRecovery.archiveRecoveryInputs(preparation.origin) : null;
     const legacyDraft = !!pinnedInputs && !pinnedInputs.batchVersion;
     const storedProgress = archive_batches.checkedProgress(existing?.[archive_batches.IMPORT_PROGRESS_KEY]);
-    let progress = pinnedInputs?.progress || (!restartImport && archive_batches.hasPendingBatches(storedProgress) ? storedProgress : null);
-    const inputOwner = archiveSourceOwnerIdentity(context);
-    if (pinnedInputs?.inputOwner && pinnedInputs.inputOwner !== inputOwner) {
+    let progress = nextIndependentBatch ? existing?.[archive_batches.IMPORT_PROGRESS_KEY]
+        : pinnedInputs?.progress || (!restartImport && archive_batches.hasPendingBatches(storedProgress) ? storedProgress : null);
+    let taskInputV1 = continueRecovery || selectedDraft ? pinnedInputs?.taskInputV1 || progress?.taskInputV1 || null : null;
+    const capturedInput = checkedArchiveTaskInput(taskInputV1, context);
+    const contentContext = archiveContentContext(context, capturedInput);
+    const settings = core_settings.getPluginSettings(contentContext);
+    if (capturedInput) userAvatar = capturedInput.userAvatar;
+    const inputOwner = capturedInput?.inputOwner || archiveSourceOwnerIdentity(context);
+    if (!capturedInput && pinnedInputs?.inputOwner && pinnedInputs.inputOwner !== inputOwner) {
         const was = JSON.parse(pinnedInputs.inputOwner), now = JSON.parse(inputOwner);
         throw archive_batches.changedInput(JSON.stringify(was.character) !== JSON.stringify(now.character) ? 'character' : 'persona');
     }
-    const snapshotForIdentity = await core_context.buildChatSnapshot(context, {
+    const snapshotForIdentity = capturedInput?.snapshotForIdentity || await core_context.buildChatSnapshot(context, {
         completeSource: true, readRange: settings.chatReadRange, expectedChatId: preparation.origin.chatId,
         stillCurrent: preparationStillCurrent });
     assertPreparationCurrent();
-    const identity = batchIdentity(context, snapshotForIdentity);
+    const identity = capturedInput?.identity || batchIdentity(context, snapshotForIdentity);
     if (progress) {
         archive_batches.assertIdentity(progress.identity, identity);
         if (progress.archiveRevision !== (existing?.archiveRevision || '')) throw archive_batches.changedInput('archive');
     }
     if (pinnedInputs?.identity) archive_batches.assertIdentity(pinnedInputs.identity, identity);
     const shouldScan = settings.useCurrentChatExternalMemory || hasMemoryWorldInfoSelection(context);
-    let external = pinnedInputs?.external || (progress ? await retainedBatchExternal(context, progress) : (shouldScan
+    let external = capturedInput?.external || pinnedInputs?.external || (progress ? await retainedBatchExternal(context, progress) : (shouldScan
         ? await readCurrentChatMemoryPlugins({ automatic: true, preparationToken: runtimeState.archivePreparationToken })
         : await currentMemorySourceLedgerExternal(context).catch(() => {
             globalThis.toastr?.info?.('来源账本暂不可读，本批仅处理已取得的聊天；没有宣称账本来源已全部归档。', '心迹回廊');
@@ -2147,8 +2441,16 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         }
     }
 
+    // A resumed batch owns its original choice, including the absence of a roster.
+    // A current selection belongs to later requests, never to an older checkpoint.
+    const archiveRoster = participants.normalizeParticipantRoster(pinnedInputs
+        ? pinnedInputs.participantRoster ?? null
+        : progress ? progress.participantRoster ?? null
+            : participantRoster !== undefined ? participantRoster : core_cache.readParticipantRoster(context));
+    const participantSnapshot = participants.selectedParticipantSnapshot(archiveRoster);
+
     const previousMessageCount = incrementalUpdate ? Math.max(0, Number(existing?.sourceMessageCount) || 0) : 0;
-    const snapshot = await core_context.buildChatSnapshot(context, {
+    const snapshot = capturedInput?.snapshot || await core_context.buildChatSnapshot(context, {
         completeSource: !legacyDraft,
         prefixCount: previousMessageCount,
         readRange: settings.chatReadRange,
@@ -2161,7 +2463,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     if (!snapshot.chatId) throw new Error('无法识别当前聊天窗口 ID，请先保存或打开一个具体聊天。');
     if (!archiveInputAvailable(snapshot, external)) throw new Error('当前聊天窗口没有可用于创建档案的角色/用户消息或已绑定的外部历史。');
 
-    if (incrementalUpdate) {
+    if (incrementalUpdate && !capturedInput) {
         const oldChatFingerprint = archivedChatFingerprint(existing);
         if (!oldChatFingerprint || previousMessageCount > snapshot.totalMessages || snapshot.prefixFingerprint !== oldChatFingerprint
             || (existing?.fullSourceFingerprint && snapshot.fullPrefixFingerprint && snapshot.fullPrefixFingerprint !== existing.fullSourceFingerprint)) {
@@ -2189,11 +2491,12 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     core_taskTrace.markChunks(taskTrace, { total: totalChunks, pending: totalChunks });
     const origin = {
         ...preparation.origin,
-        archivePresent: !!existing,
+        archivePresent: !!preparation.existing,
         sourceMessageCount: snapshot.totalMessages,
     };
 
-    const importController = new AbortController();
+    core_requestCoordinator.bindLogicalGenerationTask(logicalTask, origin);
+    const importController = logicalTask.controller;
     let recoveryTicket = null;
     let profilePending = false;
     runtimeState.activeTaskAbortController = importController;
@@ -2211,17 +2514,18 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     await core_context.yieldToUi();
     try {
         const liveEnvelopeContext = assertPreparationCurrent();
-        const contextEnvelope = pinnedInputs?.contextEnvelope ?? progress?.contextEnvelope ??
-            await core_cache.buildControlledContextEnvelope(liveEnvelopeContext, { includeWorldInfoDepth: true });
+        const contextEnvelope = capturedInput?.contextEnvelope ?? pinnedInputs?.contextEnvelope ?? progress?.contextEnvelope ??
+            (await core_cache.buildControlledContextEnvelope(liveEnvelopeContext, { includeWorldInfoDepth: true })
+                + participants.participantPromptBlock(participantSnapshot));
         assertPreparationCurrent();
         const chatEnvelope = legacyDraft ? contextEnvelope : contextEnvelope + memoryWorldInfoPromptBlock(external.worldInfo);
         const measuredRequests = new Map();
         const tokenCountState = {};
         const inspect = async (kind, rows, index, total) => {
-            const prompt = kind === 'external' ? externalMemoryImportPrompt(context, rows, external.worldInfo) : memoryImportPrompt(context, rows, index, total);
-            const actual = archive_requestBudget.composeArchiveRequest(context, prompt, kind === 'external' ? contextEnvelope : chatEnvelope);
+            const prompt = kind === 'external' ? externalMemoryImportPrompt(contentContext, rows, external.worldInfo) : memoryImportPrompt(contentContext, rows, index, total);
+            const actual = archive_requestBudget.composeArchiveRequest(contentContext, prompt, kind === 'external' ? contextEnvelope : chatEnvelope);
             const key = archive_batches.sourceHash(actual);
-            const budget = measuredRequests.get(key) || await archive_requestBudget.measureArchiveRequest(context, actual, { signal: importController.signal, tokenCountState });
+            const budget = measuredRequests.get(key) || await archive_requestBudget.measureArchiveRequest(contentContext, actual, { signal: importController.signal, tokenCountState });
             measuredRequests.set(key, budget);
             taskTrace.archiveBudget = archive_requestBudget.publicBudget(budget);
             return budget;
@@ -2246,7 +2550,8 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
                     baseUsedMessages: incrementalUpdate ? Number(existing?.usedMessageCount) || 0 : 0,
                     baseUsedChars: incrementalUpdate ? Number(existing?.usedCharacterCount) || 0 : 0,
                     ...(external.ledgerAvailable === false ? { fallbackRecords: external.records } : {}),
-                    capacityPending: [], createdAt: Date.now() };
+                    capacityPending: [], createdAt: Date.now(),
+                    ...(archiveRoster ? { participantRoster: archiveRoster } : {}) };
                 archive_batches.checkedProgress(progress);
             }
             if (progress.capacityPending?.length || (incrementalUpdate && existing.memories.length >= core_constants.MAX_MEMORY_ITEMS)) {
@@ -2261,6 +2566,12 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             totalChunks = chunks.length + externalChunks.length;
             core_taskTrace.markChunks(taskTrace, { total: totalChunks, pending: totalChunks });
         }
+        if (!legacyDraft && !taskInputV1) {
+            taskInputV1 = captureArchiveTaskInput(context, { operation: 'import', snapshot, snapshotForIdentity,
+                external, contextEnvelope, inputOwner, identity, userAvatar,
+                participantRoster: archiveRoster });
+        }
+        if (progress && taskInputV1) progress.taskInputV1 = structuredClone(taskInputV1);
         assertPreparationCurrent();
         if (progress) assertBatchCommitIdentity(context, { [archive_batches.IMPORT_PROGRESS_KEY]: progress });
         if (!automatic && !continueRecovery) {
@@ -2278,16 +2589,21 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         recoveryTicket = await archive_importRecovery.beginArchiveRecovery({ origin,
             sourceIdentity: JSON.stringify({ fullRebuild, archivePresent: !!existing, baseRevision: existing?.archiveRevision || '',
                 snapshotFingerprint: snapshot.fingerprint, prefixFingerprint: snapshot.prefixFingerprint,
-                sourceMessageCount: snapshot.totalMessages, externalFingerprint: external.fingerprint, contextEnvelope }),
+                sourceMessageCount: snapshot.totalMessages, externalFingerprint: external.fingerprint, contextEnvelope,
+                ...(archiveRoster ? { participantRoster: archiveRoster } : {}) }),
             sourceFragments: [...chunks.map(chunk => JSON.stringify(chunk)), ...externalChunks.map(chunk => JSON.stringify(chunk))],
-            settingsIdentity, fullRebuild, continueApproved: continueRecovery,
+            settingsIdentity, fullRebuild, continueApproved: continueRecovery, onProgress: refreshArchiveRecoveryReading,
+            draftId, nextIndependentBatch,
             inputs: legacyDraft ? pinnedInputs : { external, contextEnvelope, inputOwner, identity,
-                batchVersion: archive_batches.IMPORT_BATCH_VERSION, progress, pausedProgress },
-            assertCurrent: () => core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)
+                batchVersion: archive_batches.IMPORT_BATCH_VERSION, progress, pausedProgress,
+                baseMemory: archiveSourceBank(existing),
+                ...(taskInputV1 ? { taskInputV1 } : {}),
+                ...(archiveRoster ? { participantRoster: archiveRoster } : {}) },
+            assertCurrent: () => core_requestCoordinator.isLogicalGenerationTaskCurrent(logicalTask) && core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)
                 && core_context.currentCharacterRuntimeKey(context) === origin.characterKey
                 && core_context.comparableChatId(core_context.getChatId(context)) === origin.chatId
                 && (getImportedMemory(context)?.archiveRevision || '') === origin.archiveRevision
-                && archiveRecoverySettingsIdentity(context) === settingsIdentity });
+                && (taskInputV1 || archiveRecoverySettingsIdentity(context) === settingsIdentity) });
         if (!automatic) globalThis.toastr?.info?.(archive_importRecovery.archiveRecoverySummary(origin)?.notice || archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '心迹回廊 · 档案整理');
         const fresh = [];
         for (let i = 0; i < chunks.length; i += 1) {
@@ -2299,6 +2615,8 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             chunkInFlight = true;
             const normalized = await generateArchiveImportSegment(recoveryTicket, context, chunks[i], { index: i, total: chunks.length,
                 requestOptions: { maxTokens: core_constants.MAX_GENERATION_OUTPUT_TOKENS, temperature: Math.min(settings.temperature, 0.35),
+                    ...(taskInputV1 ? { recoveryContentSettings: taskInputV1.data.contentSettings,
+                        recoveryPrompt: memoryImportPrompt(contentContext, chunks[i], i, chunks.length) } : {}),
                     contextEnvelope: chatEnvelope, signal: importController.signal, skipTokenCount: legacyDraft,
                     archiveRequestBudget: !legacyDraft, archiveBudgetStamp: batchBudgets[i], automatic, taskTrace } });
             fresh.push(...normalized);
@@ -2316,6 +2634,8 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             const normalized = await generateArchiveImportSegment(recoveryTicket, context, externalChunks[i], { index: i, total: externalChunks.length,
                 external: true, worldInfo: external.worldInfo,
                 requestOptions: { maxTokens: core_constants.MAX_GENERATION_OUTPUT_TOKENS, temperature: Math.min(settings.temperature, 0.35),
+                    ...(taskInputV1 ? { recoveryContentSettings: taskInputV1.data.contentSettings,
+                        recoveryPrompt: externalMemoryImportPrompt(contentContext, externalChunks[i], external.worldInfo) } : {}),
                     contextEnvelope, signal: importController.signal, skipTokenCount: legacyDraft,
                     archiveRequestBudget: !legacyDraft, archiveBudgetStamp: batchBudgets[chunks.length + i], automatic, taskTrace } });
             fresh.push(...normalized);
@@ -2381,8 +2701,9 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         } else if (!memories.length) {
             profile = normalizeArchiveProfile({}, memories);
         } else try {
-            profile = await archive_importRecovery.requestArchiveRecoverySegment(recoveryTicket, 'profile', archiveProfilePrompt(context, memories),
+            profile = await archive_importRecovery.requestArchiveRecoverySegment(recoveryTicket, 'profile', archiveProfilePrompt(contentContext, memories),
                 { maxTokens: 8192, temperature: Math.min(settings.temperature, 0.35), contextEnvelope,
+                    ...(taskInputV1 ? { recoveryContentSettings: taskInputV1.data.contentSettings } : {}),
                     archiveRequestBudget: !legacyDraft, signal: importController.signal, context, taskTrace },
                 raw => checkedArchiveProfile(raw, memories));
         } catch (error) {
@@ -2404,14 +2725,14 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         if (!profilePending) core_taskTrace.markStage(taskTrace, 'profile');
         // Capture the chat's cast appearance here, where the card is already in hand.
         // A record the user confirmed by hand is never replaced by this.
-        try { cast_looks.ensureCastLooks(context); } catch {}
+        if (!archiveRoster) { try { cast_looks.ensureCastLooks(context); } catch {} }
         if (incrementalUpdate) profile.archiveName = existing.archiveName || fallbackArchiveName(memories);
         const now = Date.now();
         const memoryBank = {
             version: core_constants.MEMORY_VERSION,
             chatId: snapshot.chatId,
-            characterName: core_text.normalizeText(context.name2, 120),
-            userName: core_text.normalizeText(context.name1, 120),
+            characterName: core_text.normalizeText(contentContext.name2, 120),
+            userName: core_text.normalizeText(contentContext.name1, 120),
             ...(userAvatar ? { userAvatar } : {}),
             archiveName: profile.archiveName,
             archiveSummary: profile.archiveSummary,
@@ -2439,7 +2760,9 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             coverageMode: incrementalUpdate ? 'incremental-append' : snapshot.coverageMode,
             truncated: incrementalUpdate ? (!!existing?.truncated || (rangeChanged ? snapshot.truncated : snapshot.incrementalTruncated)) : snapshot.truncated,
             memories,
+            ...(archiveRoster ? { [participants.PARTICIPANTS_KEY]: archiveRoster } : {}),
         };
+        const unfinishedProfile = profilePending;
         if (progress) {
             const staged = archive_batches.advanceProgress(progress, { pending: capacityPending, archiveRevision: memoryBank.archiveRevision });
             memoryBank[archive_batches.IMPORT_PROGRESS_KEY] = staged;
@@ -2451,17 +2774,26 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             memoryBank.usedMessageCount = (staged.baseUsedMessages || 0) + new Set(savedRefs.filter(ref => ref.kind === 'chat').map(ref => ref.index)).size;
             memoryBank.usedCharacterCount = (staged.baseUsedChars || 0) + savedRefs.reduce((sum, ref) => sum + ref.length, 0);
             memoryBank.coverageMode = archive_batches.hasPendingBatches(staged) ? 'batched-pending' : 'batched-complete';
-            // A pending cover must not occupy the import draft slot and block the next
-            // explicit batch. The cover action can always retry from saved Mxxx only.
+            // A pending cover must not occupy the import draft slot and block the
+            // next explicit batch. Its original recipe/prefix is retained separately.
             if (archive_batches.hasPendingBatches(staged)) profilePending = false;
         }
         const assertBatchSaveCurrent = () => {
+            core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
             if (!core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)) throw new DOMException('Runtime destroyed', 'AbortError');
             const live = core_context.currentCharacterGuard();
             if (!core_context.isCurrentTaskOrigin(origin, live)) throw archive_batches.changedInput('archive');
             assertBatchCommitIdentity(live, memoryBank);
         };
+        core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
         if (progress && core_context.isCurrentTaskOrigin(origin)) assertBatchSaveCurrent();
+        if (independentResult || draftId && !core_context.isCurrentTaskOrigin(origin)) {
+            const saved = await archive_importRecovery.retainCompletedArchiveImport(recoveryTicket, memoryBank,
+                { sourceMemory: archiveSourceBank(existing), profilePending: unfinishedProfile, baseMemoryMissing });
+            refreshArchiveRecoveryReading();
+            globalThis.toastr?.success?.('原任务本批成果已独立保存，当前档案没有被覆盖。', '心迹回廊');
+            return saved;
+        }
         const commitIntent = core_requestCoordinator.queueDeferredCommitRecord(origin, {
             kind: 'archive',
             memoryBank,
@@ -2469,7 +2801,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             profilePending,
             completedChunks,
         });
-        if (commitIntent.item) archive_importRecovery.stageArchiveRecoveryCommit(recoveryTicket, memoryBank.archiveRevision, { profilePending });
+        if (commitIntent.item) archive_importRecovery.stageArchiveRecoveryCommit(recoveryTicket, memoryBank.archiveRevision, { profilePending, profileMemory: memoryBank });
         let wasBackgrounded = runtimeState.activeTaskBackgrounded || !core_context.isCurrentTaskOrigin(origin);
         if (core_context.isCurrentTaskOrigin(origin)) {
             try {
@@ -2477,7 +2809,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
                 await core_cache.saveImportedMemory(core_context.currentCharacterGuard(), memoryBank, snapshot.chatId, {
                     preserveDerivedCache: incrementalUpdate,
                     expectedTaskOrigin: origin,
-                    ...(progress ? { assertTaskCurrent: assertBatchSaveCurrent } : {}),
+                    assertTaskCurrent: () => { core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask); if (progress) assertBatchSaveCurrent(); },
                     explicitCreate: origin.archivePresent === false,
                     expectedPreviousArchiveState: {
                         present: origin.archivePresent === true,
@@ -2498,10 +2830,10 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             if (taskTrace?.activeStage === 'save') core_taskTrace.markStage(taskTrace, 'save', false);
             core_taskTrace.markStage(taskTrace, 'deferred');
         }
-        archive_importRecovery.stageArchiveRecoveryCommit(recoveryTicket, memoryBank.archiveRevision, { profilePending });
+        archive_importRecovery.stageArchiveRecoveryCommit(recoveryTicket, memoryBank.archiveRevision, { profilePending, profileMemory: memoryBank });
         if (core_context.isCurrentTaskOrigin(origin)) {
             const saved = getImportedMemory(core_context.currentCharacterGuard());
-            if (saved?.archiveRevision === memoryBank.archiveRevision) archive_importRecovery.acknowledgeArchiveRecoveryCommit({ ...origin, archiveRevision: saved.archiveRevision });
+            if (saved?.archiveRevision === memoryBank.archiveRevision) archive_importRecovery.acknowledgeArchiveRecoveryCommit({ ...origin, archiveRevision: saved.archiveRevision }, draftId);
         }
         if (profilePending) globalThis.toastr?.info?.((core_context.isCurrentTaskOrigin(origin)
             ? '回忆已保存。可点“仅重试档案简介”，不会重新抽取成功记忆。'
@@ -2546,19 +2878,32 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
 
 export async function importCurrentChatMemory(options = {}) {
     const context = core_context.currentCharacterGuard();
+    const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
+    const logicalTask = core_requestCoordinator.beginLogicalGenerationTask({ kind: 'archive-import', pageId: 'archiveImport', context, origin,
+        taskKey: `archive-import:${core_context.chatScopeKey(context)}`, label: '聊天经历整理', parentTaskId: options.logicalParentTaskId });
     // Without this the stage marks below have nothing to attach to, and the diagnostic
     // report shows an empty task list even after a run that clearly happened.
     const taskTrace = core_taskTrace.startTaskTrace(`archive:${core_context.getChatId(context)}`, 'archive');
     core_taskTrace.markStage(taskTrace, 'start');
+    let result;
     try {
-        const result = await runArchiveImport(context, options, taskTrace);
+        if (options.parkPriorDraft) {
+            await archive_importRecovery.hydrateArchiveRecovery(origin);
+            core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
+            if (archive_importRecovery.parkArchiveRecovery(origin)
+                && !await archive_importRecovery.flushArchiveRecovery(origin)) throw new Error('原整理草稿未确认保存，本次没有重新生成。');
+        }
+        result = await runArchiveImport(context, { ...options, logicalTask }, taskTrace);
         finishArchiveTaskTrace(taskTrace, result);
         return result;
     } catch (error) {
         core_taskTrace.endTaskTrace(taskTrace, isArchiveCancellation(error) ? 'cancelled' : 'failed', error);
+        result = { status: isArchiveCancellation(error) ? 'cancelled' : 'failed', error };
+        if (options.parkPriorDraft || isArchiveCancellation(error)) return result;
         throw error;
     } finally {
         if (runtimeState.activeTaskTrace === taskTrace) runtimeState.activeTaskTrace = null;
+        core_requestCoordinator.finishLogicalGenerationTask(logicalTask, result);
     }
 }
 
@@ -2615,6 +2960,7 @@ async function runArchiveImport(context, options = {}, taskTrace = null) {
     }
 }
 async function runArchiveImportPrepared(context, options, taskTrace, admission) {
+    core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
     const releasePreparation = () => {
         if (runtimeState.archivePreparationToken === admission) {
             runtimeState.archivePreparationToken = null; runtimeState.busy = false;
@@ -2622,6 +2968,7 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
     };
     const initialOrigin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
     await core_settings.prepareManualCredential(context);
+    core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
     if (!core_context.isCurrentTaskOrigin(initialOrigin)) throw new DOMException('Chat changed', 'AbortError');
     let existing = getImportedMemory(context);
     if (Object.prototype.hasOwnProperty.call(context.chatMetadata || {}, core_constants.MEMORY_KEY) && !existing) {
@@ -2650,16 +2997,64 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
     }
     const hydrationOrigin = core_context.captureTaskOrigin(context, existing?.archiveRevision || '');
     await archive_importRecovery.hydrateArchiveRecovery(hydrationOrigin);
+    core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
     if (!core_context.isCurrentTaskOrigin(hydrationOrigin)) throw new DOMException('Chat changed', 'AbortError');
     if (runtimeState.archivePreparationToken !== admission || core_requestCoordinator.hasGenerationTasks()) return { status: 'blocked' };
     const pending = getCurrentArchiveImportRecoverySummary(context);
-    if (pending && !options.restartImport) {
+    let selectedDraft = null, sourceExisting;
+    if (options.draftId) selectedDraft = archive_importRecovery.readArchiveRecoveryDraft(hydrationOrigin, options.draftId);
+    // A completed pending result already owns its validated content. Its local
+    // save retry must precede source-journal admission (including a card rename).
+    else if (!options.restartImport && pending && !pending.onlyArchivedDrafts && !pending.awaitingCommit) {
+        const active = archive_importRecovery.listArchiveRecoveryDrafts(hydrationOrigin, 'import').find(row => !row.paused && row.stage === 'segments');
+        if (active) selectedDraft = archive_importRecovery.readArchiveRecoveryDraft(hydrationOrigin, active.draftId);
+    }
+    if (selectedDraft) {
+        if (selectedDraft.operation !== 'import') throw core_text.safeUserError('请选择这份建档草稿的继续入口。', 'RMT_RECOVERY_DATA');
+        if (options.automatic) return { status: 'blocked' };
+        if (selectedDraft.stage === 'profile-only') {
+            releasePreparation();
+            return rewriteCurrentArchiveVerdict({ draftId: selectedDraft.draftId, logicalParentTaskId: options.logicalTask.id });
+        }
+        const previousResult = selectedDraft.stage === 'archive-result' ? selectedDraft.archiveResult : null;
+        if (previousResult && !archive_batches.hasPendingBatches(previousResult.memoryBank?.[archive_batches.IMPORT_PROGRESS_KEY])) {
+            // A received independent result is not a successful durable save
+            // until this exact scope acknowledges it; retry is local only.
+            await archive_importRecovery.flushArchiveRecovery(hydrationOrigin, 'import');
+            return { status: 'independent', draftId: selectedDraft.draftId };
+        }
+        const captured = checkedArchiveTaskInput(selectedDraft.inputs?.taskInputV1, context);
+        const baseRevision = selectedDraft.inputs?.progress?.archiveRevision || '';
+        let baseMemoryMissing = selectedDraft.archiveResult?.baseMemoryMissing === true;
+        if (previousResult) sourceExisting = structuredClone(previousResult.memoryBank);
+        else if (Object.hasOwn(selectedDraft.inputs || {}, 'baseMemory')) sourceExisting = structuredClone(selectedDraft.inputs.baseMemory);
+        else if (baseRevision === (existing?.archiveRevision || '')) sourceExisting = existing;
+        else if (captured) {
+            // Earlier snapshots retained all request sources but not the archive
+            // baseline. Continue those exact chunks; never invent the old bank
+            // from a different current archive. The independent reader says so.
+            baseMemoryMissing = true;
+            sourceExisting = baseRevision ? { version: core_constants.MEMORY_VERSION, archiveRevision: baseRevision,
+                chatId: captured.snapshot.chatId, characterName: captured.names.name2, userName: captured.names.name1,
+                sourceMessageCount: selectedDraft.inputs.progress?.baseChatEndFloor || 0,
+                usedMessageCount: selectedDraft.inputs.progress?.baseUsedMessages || 0,
+                usedCharacterCount: selectedDraft.inputs.progress?.baseUsedChars || 0, memories: [] } : null;
+        } else sourceExisting = existing; // Truly legacy drafts retain the original strict recipe checks.
+        const independentResult = !!previousResult || baseMemoryMissing
+            || (sourceExisting?.archiveRevision || '') !== (existing?.archiveRevision || '');
+        if (!ui_overlay.confirmExplicitAction('继续这份原建档草稿？',
+            `${previousResult ? '继续原任务的下一批。' : '保留已成功分块，仅处理这份草稿尚未完成的部分。'}${independentResult ? '完成后独立保存，当前档案不会被覆盖。' : ''}`, { destructive: false })) return { status: 'cancelled' };
+        options = { ...options, draftId: selectedDraft.draftId, selectedDraft,
+            fullRebuild: previousResult ? false : selectedDraft.fullRebuild,
+            continueRecovery: !previousResult, independentResult, nextIndependentBatch: !!previousResult, baseMemoryMissing };
+    }
+    if (!selectedDraft && pending && !pending.onlyArchivedDrafts && !options.restartImport) {
         if (options.automatic === true) return { status: 'blocked' };
         if (pending.capacityBlocked) {
             globalThis.toastr?.warning?.(pending.notice, '心迹回廊 · 容量边界');
             return { status: 'blocked' };
         }
-        if (pending.profileOnly) { releasePreparation(); return rewriteCurrentArchiveVerdict(); }
+        if (pending.profileOnly) { releasePreparation(); return rewriteCurrentArchiveVerdict({ logicalParentTaskId: options.logicalTask.id }); }
         if (pending.awaitingCommit) {
             releasePreparation();
             return retryCurrentArchiveSave(context, taskTrace);
@@ -2672,6 +3067,7 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
     const preparation = {
         context,
         existing,
+        ...(selectedDraft ? { sourceExisting } : {}),
         taskTrace,
         origin: {
             ...core_context.captureTaskOrigin(context, existing?.archiveRevision || ''),

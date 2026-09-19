@@ -30,7 +30,12 @@ export function roomFigureSvg(profile = {}) {
     const unknown = shape === 'unspecified' && (!profile.outfit || profile.outfit === 'unspecified');
     return `<g transform="scale(${width} 1)" data-rmt-local-figure="${unknown ? 'silhouette' : 'profile'}"><ellipse cy="86" rx="38" ry="10" fill="#00000022"/>${long ? `<path d="M-22-74Q-3-108 27-69L33 31Q-8 58-34 21Z" fill="${hair}"/>` : ''}<path d="M-22 23-29 84h16L1 39 18 84h17L24 23" fill="#424858"/><path d="M-27-28Q0-44 27-28L44 17 30 24 23-7 32 ${robe?'69':'35'}Q0 53-32 35L-23-7-33 24-46 18Z" fill="${coat}"/><ellipse cy="-65" rx="23" ry="29" fill="${unknown ? '#657184' : '#c9ad9d'}"/><path d="M-24-59Q-32-102 3-99 33-97 27-52L17-80Q-3-63-24-59Z" fill="${hair}"/>${shape==='tied' ? `<path d="M23-86Q67-59 30-14l7-27Q49-67 23-78Z" fill="${hair}"/>` : ''}</g>`;
 }
-export function roomInteriorHtml(layout, { figure = {}, personIsHere = false, charName = '', selectedId = '', world = 'neutral' } = {}) {
+export function roomInteriorHtml(layout, { figure = {}, personIsHere = false, charName = '', selectedId = '', world = 'neutral', participants = null } = {}) {
+    if (Array.isArray(participants)) {
+        const interior = roomInteriorHtml(layout, { selectedId, world });
+        const figures = participants.map(person => `<button type="button" class="rmt-room-resident-figure" data-rmt-action="room-participant" data-rmt-participant-id="${text.esc(person.id)}" aria-label="听${text.esc(person.name)}说话"><svg viewBox="-70 -115 140 220" role="img" aria-label="${text.esc(person.name)}的侧后轮廓">${roomFigureSvg(person.figure)}</svg><b>${text.esc(person.name)}</b></button>`).join('');
+        return `<div class="rmt-room-shared-interior">${interior}<div class="rmt-room-resident-figures">${figures}</div></div>`;
+    }
     const entries = (Array.isArray(layout) ? layout : []).slice(0, 40);
     const selectedIndex = Math.max(0, entries.findIndex(entry => entry.id === selectedId));
     const pageStart = Math.floor(selectedIndex / 6) * 6;

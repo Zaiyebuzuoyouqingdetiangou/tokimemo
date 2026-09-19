@@ -20,6 +20,8 @@ import * as generation_client from '../generation/client.js';
 import * as generation_contentRegeneration from '../generation/contentRegeneration.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as cg_editor from './cgPromptEditor.js';
+import * as participant_picker from './participantPicker.js';
+import * as participant_contract from '../core/participants.js';
 import * as image_viewer from './cgImageViewer.js';
 import * as navigation_bookmark from './navigationBookmark.js';
 import * as floating_archive from './floatingArchive.js';
@@ -192,6 +194,7 @@ export function openOverlay() {
 }
 
 export function closeOverlay() {
+    participant_picker.closeParticipantPicker();
     image_viewer.closeCgImageViewer({ restoreFocus: false });
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
     // Mobile close gestures can deliver both an early event and a click. Only
@@ -351,7 +354,7 @@ export function confirmRoomLifeRefresh() {
     );
 }
 
-export function requestCurrentArchiveImport() {
+export function requestCurrentArchiveImport({ cardTypeConfirmed = false, participantRoster } = {}) {
     let context;
     try { context = core_context.currentCharacterGuard(); }
     catch (error) {
@@ -359,6 +362,23 @@ export function requestCurrentArchiveImport() {
         return false;
     }
     const existing = archive_repository.getImportedMemory(context);
+    if (!existing && !cardTypeConfirmed && !archive_repository.getCurrentArchiveImportRecoverySummary(context)) {
+        return participant_picker.showArchiveCardTypePicker({ context,
+            onSingle: () => {
+                void core_cache.discardParticipantDraft(context).then(() => requestCurrentArchiveImport({ cardTypeConfirmed: true, participantRoster: null }))
+                    .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
+            },
+            onMultiple: () => {
+                void participant_picker.showParticipantPicker({ context, requireSelection: true, confirmLabel: '确认人物并建档',
+                    onConfirm: async (roster, expectedRevision) => {
+                        const saved = await core_cache.commitParticipantRoster(context, roster, { expectedRevision });
+                        participant_picker.closeParticipantPicker();
+                        requestCurrentArchiveImport({ cardTypeConfirmed: true, participantRoster: saved });
+                    },
+                }).catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
+            },
+        });
+    }
     const settings = core_settings.getPluginSettings(context);
     const detected = archive_repository.externalMemorySourceSummary(context);
     if (settings.useCurrentChatExternalMemory && detected.length && !archive_repository.getMemoryPreflight(context)
@@ -372,11 +392,145 @@ export function requestCurrentArchiveImport() {
         ? '默认只整理“上次档案之后新增的聊天”和发生变化的当前窗口记忆/摘要。已有 Mxxx 记忆 ID 不重排，已生成的回忆相簿、CG、ADV、房间、ENDING、储物、私人终端会继续保留。若检测到旧聊天被编辑/删除，本次会停止并保留成果，说明变更类别，由你选择如何处理。'
         : '这会读取当前聊天窗口并建立一份只属于这个窗口的心迹回廊档案。聊天正文不会被修改；之后也只有你手动更新时档案才会变化。';
     if (!confirmExplicitAction(title, detail, { destructive: false })) return false;
-    void archive_repository.importCurrentChatMemory({ fullRebuild: false }).catch(error => {
+    void archive_repository.importCurrentChatMemory({ fullRebuild: false,
+        ...(participantRoster !== undefined ? { participantRoster } : {}),
+    }).catch(error => {
         console.error('[HeartbeatMemories] current archive import action failed', core_text.safeErrorDiagnostic(error));
         globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊');
     });
     return true;
+}
+
+export async function requestParticipantSelection() {
+    if (!archive_library.requireWritableArchiveAction()) return false;
+    const context = core_context.currentCharacterGuard();
+    const scope = core_context.chatScopeKey(context);
+    const assertCurrent = () => {
+        if (core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
+    };
+    return participant_picker.showParticipantPicker({ context,
+        onConfirm: async (roster, expectedRevision) => {
+            assertCurrent();
+            const previous = core_cache.readParticipantRoster(context);
+            const tasks = core_requestCoordinator.queryParticipantGenerationTasks(context).filter(task => !task.parentTaskId);
+            const bank = archive_repository.getImportedMemory(context);
+            if (!bank && !tasks.length) {
+                await core_cache.commitParticipantRoster(context, roster, { expectedRevision });
+                globalThis.toastr?.success?.('人物选择已暂存；建档时会随本次任务输入保存。', '心迹回廊');
+                return true;
+            }
+            if (JSON.stringify(previous) === JSON.stringify(roster)) return true;
+            const appended = participant_contract.appendParticipantSelection(previous, roster);
+            const scopes = bank ? participantRegenerationScopes() : [{ id: 'archiveImport', label: '重新生成本次人物档案' }];
+            const decision = await participant_picker.chooseParticipantChange({ context, tasks, scopes,
+                appendedNames: participant_contract.selectedParticipantSnapshot(appended).people.map(person => person.name),
+                selectedNames: participant_contract.selectedParticipantSnapshot(roster).people.map(person => person.name),
+            });
+            if (!decision || decision.action === 'continue') return false;
+            assertCurrent();
+            if (decision.action === 'append') {
+                await core_cache.commitParticipantRoster(context, appended, { expectedRevision });
+                globalThis.toastr?.success?.('追加名单已保存；已有内容保留。需要新内容时，请在对应页面点击生成。', '心迹回廊');
+                return true;
+            }
+            if (!roster.selectedIds.length) throw new Error('请先选好要加入回廊的人物，再开始生成。');
+            await runParticipantRegeneration({ context, roster, expectedRevision, pages: decision.pages, tasks, assertCurrent });
+            return true;
+        },
+    });
+}
+
+export function participantRegenerationScopes() {
+    return [
+        ['archiveProfile', '档案名称与简介（不重抽记忆）'], ['room', '他的房间'], ['roomLife', '今日生活'],
+        ['items', '他的物品'], ['phone', '他的私人终端'], ['inbox', '你的邮箱'], ['themeSong', '角色印象曲'],
+        ['album', '回忆相簿'], ['adv', 'ADV EVENT'], ['cabinet', '两个人的陈列柜'], ['travel', '他的出行路线'],
+        ['language', '基础语言'], ['spring', '春'], ['summer', '夏'], ['autumn', '秋'], ['winter', '冬'],
+        ['strips', '日常一格'], ['fireflies', '萤火虫栖息地'], ['postending', '未来／后日谈'],
+        ['ending', 'ENDING'], ['calendar', '两个人的日历'], ['relations', '人际庭园'],
+        ['achievements', '成就库'], ['butterfly', '蝴蝶效应'], ['pastLives', '前世今生'], ['timeEcho', '时空回响'],
+    ].map(([id, label]) => ({ id, label }));
+}
+
+export async function runParticipantRegeneration({ context, roster, expectedRevision, pages, tasks, assertCurrent }) {
+    const labels = new Map([...participantRegenerationScopes(), { id: 'archiveImport', label: '人物档案' }].map(page => [page.id, page.label]));
+    const before = archive_repository.getImportedMemory(context);
+    const origin = core_context.captureTaskOrigin(context, before?.archiveRevision || '');
+    const plan = core_requestCoordinator.beginLogicalGenerationTask({ kind: 'participant-plan', context, origin,
+        pageIds: pages, label: '按所选人物重做：' + pages.map(page => labels.get(page) || page).join('、') });
+    let outcome = { status: 'failed' };
+    const results = [];
+    try {
+        // Stop the old tasks listed in the user's confirmation. The new page
+        // selection controls what to generate next, not which old task survives.
+        const ids = tasks.map(task => task.id);
+        await core_requestCoordinator.cancelParticipantGenerationTasks(ids);
+        assertCurrent();
+        core_requestCoordinator.assertLogicalGenerationTaskCurrent(plan);
+        const bank = archive_repository.getImportedMemory(context);
+        const version = bank ? await core_cache.saveArchiveVersion(context, {
+            reason: '人物名单变更前', selectedPages: pages, expectedRosterRevision: expectedRevision, parkDrafts: true,
+        }) : null;
+        assertCurrent();
+        core_requestCoordinator.assertLogicalGenerationTaskCurrent(plan);
+        const saved = await core_cache.commitParticipantRoster(context, roster, { expectedRevision });
+        const participantSnapshot = participant_contract.selectedParticipantSnapshot(saved);
+        for (const pageId of pages) {
+            assertCurrent();
+            core_requestCoordinator.assertLogicalGenerationTaskCurrent(plan);
+            const options = { background: true, logicalParentTaskId: plan.id,
+                participantRegeneration: { versionId: version?.versionId || '', pageId, participantSnapshot } };
+            let result;
+            try {
+                if (pageId === 'archiveImport') result = await archive_repository.restartCurrentArchiveImport({ participantRoster: saved, logicalParentTaskId: plan.id });
+                else if (pageId === 'archiveProfile') result = await archive_repository.rewriteCurrentArchiveVerdict(options);
+                else if (pageId === 'roomLife') result = await modes_room.ensureRoomLifePlan({ ...options, force: true });
+                else if (['language','spring','summer','autumn','winter','strips','fireflies','postending'].includes(pageId)) result = await modes_heart.regenerateHeartPage(pageId, options);
+                else result = await generation_client.generateMode(pageId, { ...options, replaceExisting: true });
+                core_requestCoordinator.assertLogicalGenerationTaskCurrent(plan);
+                results.push({ pageId, status: result?.status || 'unconfirmed' });
+            } catch (error) {
+                core_requestCoordinator.assertLogicalGenerationTaskCurrent(plan);
+                results.push({ pageId, status: 'failed', message: core_text.safeErrorSummary(error) });
+            }
+        }
+        outcome = { status: results.every(row => row.status === 'committed') ? 'committed' : 'partial', results };
+        const message = results.map(row => `${labels.get(row.pageId) || row.pageId}：${row.status === 'committed' ? '已保存' : row.status === 'deferred' ? '已生成，等待回原窗口保存' : row.status === 'cancelled' ? '已中断，旧内容保留' : '未完成，旧内容保留'}${row.message ? '（' + row.message + '）' : ''}`).join('\n');
+        globalThis.toastr?.[outcome.status === 'committed' ? 'success' : 'warning']?.(message, '心迹回廊 · 本次重做结果');
+        return outcome;
+    } catch (error) {
+        outcome = { status: error?.name === 'AbortError' ? 'cancelled' : 'failed', results };
+        throw error;
+    } finally {
+        core_requestCoordinator.finishLogicalGenerationTask(plan, outcome);
+    }
+}
+
+export async function requestParticipantVersions() {
+    const context = core_context.currentCharacterGuard();
+    const scope = core_context.chatScopeKey(context);
+    const versions = await core_cache.listArchiveVersions(context);
+    if (core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) return false;
+    return participant_picker.showParticipantVersions({ context, versions,
+        onOpen: version => archive_library.openArchiveVersion(version.versionId, context)
+            .catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊')),
+    });
+}
+
+export async function presentGenerationTaskResult(draftId, context = core_context.currentCharacterGuard()) {
+    const scope = core_context.chatScopeKey(context);
+    const record = await core_cache.readGenerationTaskResult(context, draftId);
+    if (core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) return { status: 'awaiting-choice', draftId };
+    const decision = await participant_picker.chooseGenerationTaskResult({ context,
+        title: `${core_constants.MODE_LABEL[record.mode] || '旧任务'}已生成完成` });
+    if (!decision || core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) return { status: 'awaiting-choice', draftId };
+    const result = await core_cache.resolveGenerationTaskResult(context, draftId, decision);
+    if (decision === 'independent') await archive_library.openGenerationTaskResult(draftId, context);
+    else {
+        globalThis.toastr?.success?.('已更新对应页面；替换前的内容和原任务成果都已保留。', '心迹回廊');
+        showChooser();
+    }
+    return result;
 }
 
 export function requestCurrentArchiveFullRebuild() {
@@ -419,9 +573,10 @@ export function formatArchiveTime(value) {
     }
 }
 
-function calendarQuickAccessHtml({ ready = false, generated = false, generating = false, readOnly = false } = {}) {
+function calendarQuickAccessHtml({ ready = false, generated = false, generating = false, partial = false, readOnly = false } = {}) {
     const status = !ready
         ? '先建立当前聊天档案后，就可以整理日历。'
+        : partial ? '已整理部分内容 · 可以先打开查看'
         : generating
             ? (generated ? '正在刷新 · 旧日历仍可查看' : '正在整理日历…')
             : generated
@@ -473,6 +628,10 @@ export async function loadChooserArchiveRecovery(context = core_context.getConte
     } finally {
         if (stillVisible()) region.setAttribute('aria-busy', 'false');
     }
+}
+
+export function readableModePortals(portals, options = {}) {
+    return portals.map(portal => ({ ...portal, session: core_cache.loadSession(portal.mode, { ...options, includePartial: true }) || portal.session }));
 }
 
 export function showChooser({ section = null } = {}) {
@@ -545,12 +704,13 @@ export function showChooser({ section = null } = {}) {
     const keywords = ready ? core_text.cleanArray(memory.archiveKeywords, 10, 80) : [];
     const pendingClass = ready && (state.pendingMessages > 0 || state.sourceChanged) ? 'pending' : 'ready';
     const cachedRead = ready ? { context, chatId: core_context.getChatId(context), memoryBank: memory, clone: false } : null;
-    const portals = ready ? archive_snapshots.baseModeAvailability(cachedRead) : core_constants.ARCHIVE_PORTAL_MODES.map(mode => ({ mode, session: null, meta: archive_snapshots.modePortalMeta(mode) }));
-    const generatedCount = portals.filter(item => !!item.session).length;
+    const portals = ready ? readableModePortals(archive_snapshots.baseModeAvailability(cachedRead), cachedRead) : core_constants.ARCHIVE_PORTAL_MODES.map(mode => ({ mode, session: null, meta: archive_snapshots.modePortalMeta(mode) }));
+    const generatedCount = portals.filter(item => !!item.session && !item.session.readableProgress).length;
     const calendarPortal = portals.find(item => item.mode === core_constants.MODE.CALENDAR) || { session: null };
     const calendarGenerated = !!calendarPortal.session;
     const calendarGenerating = core_requestCoordinator.isModeGenerating(core_constants.MODE.CALENDAR);
-    const calendarQuick = calendarQuickAccessHtml({ ready, generated: calendarGenerated, generating: calendarGenerating, readOnly: false });
+    const calendarQuick = calendarQuickAccessHtml({ ready, generated: calendarGenerated, generating: calendarGenerating,
+        partial: !!calendarPortal.session?.readableProgress, readOnly: false });
     const concurrentLabels = core_requestCoordinator.generationTaskLabels();
     const anyRunning = runtimeState.busy || concurrentLabels.length > 0;
     topTitle(anyRunning ? `心迹回廊 · 档案室 · ${runtimeState.busy ? '档案整理中' : `${concurrentLabels.length}项生成中`}` : `心迹回廊 · 档案室${ready ? ` · ${archiveName}` : ''}`);
@@ -560,14 +720,14 @@ export function showChooser({ section = null } = {}) {
         const generating = core_requestCoordinator.isModeGenerating(mode);
         const capacityReached = core_requestCoordinator.activeLogicalGenerationCount() >= core_constants.MAX_CONCURRENT_GENERATION_TASKS && !generating;
         const isCalendar = mode === core_constants.MODE.CALENDAR;
-        const statusText = generating
+        const statusText = session?.readableProgress ? '已生成部分内容 · 可以先查看' : generating
             ? (generated ? (isCalendar ? '刷新中 · 旧日历仍可查看' : '增量追加中 · 旧内容仍可查看') : '后台生成中 · 可继续启动其他入口')
             : generated ? (isCalendar ? '已整理 · 点击查看日历' : '已生成 · 点击头像查看') : '尚未生成';
         const draft = mode === core_constants.MODE.PHONE && ready ? core_cache.loadPhoneGenerationDraft(context) : null;
         const actionText = mode === core_constants.MODE.INBOX ? (generating ? '收信中…' : '收取新信') : generating ? '生成中…' : draft ? '重试未完成项' : generated ? (isCalendar ? '刷新日历' : '增量追加') : (isCalendar ? '生成日历' : '生成这一项');
         return `<article class="rmt-archive-portal ${generated ? 'ready' : 'empty'} ${generating ? 'generating' : ''} rmt-archive-portal-${core_text.esc(meta.accent)}">
           <button type="button" class="rmt-portal-open" ${generated || (ready && [core_constants.MODE.INBOX, core_constants.MODE.PHONE, core_constants.MODE.HEART].includes(mode)) ? `data-rmt-mode="${core_text.esc(mode)}"` : 'disabled'}>
-            <span class="rmt-portal-avatar"><i class="fa-solid ${core_text.esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
+            <span class="rmt-portal-avatar"><i class="fa-solid ${core_text.esc(meta.icon)}"></i>${generated ? `<span class="rmt-portal-ready-dot">${session?.readableProgress ? '…' : '✓'}</span>` : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
             <span class="rmt-portal-title">${core_text.esc(meta.title)}</span>
             <span class="rmt-portal-subtitle">${core_text.esc(meta.subtitle)}</span>
             <span class="rmt-portal-status">${core_text.esc(statusText)}</span>
@@ -608,11 +768,11 @@ export function showChooser({ section = null } = {}) {
       <div class="rmt-archive-room">
         ${busyBanner}
         <div data-rmt-archive-recoveries aria-live="polite">
-        ${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveImportRecoverySummary(context))}
-        ${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveProfileRecoverySummary(context), { profile: true })}
+        <div data-rmt-archive-recoveries>${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveImportRecoverySummary(context))}
+        ${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveProfileRecoverySummary(context), { profile: true })}</div>
         </div>
-        ${ready ? recovery_view.recoveryBannerHtml(core_cache.getCache(context), memory) : ''}
-        ${calendarQuick}
+        <div data-rmt-generation-recoveries>${ready ? recovery_view.recoveryBannerHtml(core_cache.getCache(context), memory) : ''}</div>
+        <div data-rmt-calendar-quick>${calendarQuick}</div>
         <section class="rmt-memory-gate rmt-archive-card">
           <div class="rmt-memory-gate-text">
             <div class="rmt-archive-kicker">PRIVATE MEMORY ARCHIVE</div>
@@ -761,7 +921,7 @@ export function openCachedOrGenerate(mode, options = {}) {
     if (runtimeState.activeArchiveSnapshot) {
         const snapshot = runtimeState.activeArchiveSnapshot;
         const stored = snapshot.cache || {};
-        const cached = core_cache.loadSession(mode, { chatId: snapshot.chatId, memoryBank: snapshot.memory, cache: stored, clone: true });
+        const cached = core_cache.loadSession(mode, { chatId: snapshot.chatId, memoryBank: snapshot.memory, cache: stored, clone: true, includePartial: true });
         const session = cached || (!stored[mode] ? emptyArchiveMode(mode, snapshot.memory, null, stored) : null);
         if (session) {
             runtimeState.activeMode = mode; runtimeState.activeSession = session;
@@ -791,7 +951,7 @@ export function openCachedOrGenerate(mode, options = {}) {
         });
     }
     const stored = core_cache.getCache(context);
-    const cached = core_cache.loadSession(mode, { context, memoryBank: memory, clone: true });
+    const cached = core_cache.loadSession(mode, { context, memoryBank: memory, clone: true, includePartial: true });
     const session = cached || (!stored?.[mode] ? emptyArchiveMode(mode, memory, context, stored) : null);
     if (session) {
         runtimeState.activeMode = mode; runtimeState.activeSession = session;
@@ -809,6 +969,142 @@ export function decorateReadOnlyModeUi() {
     control.className = 'rmt-archive-readonly-control';
     control.innerHTML = `<label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''}> 只读查看</label>`;
     body.prepend(control);
+}
+
+export async function refreshArchiveRecoveryView() {
+    const host = document.getElementById(core_constants.OVERLAY_ID), body = bodyEl();
+    if (!host || host.hidden || !body || runtimeState.activeArchiveSnapshot) return false;
+    const context = core_context.getContext(), scope = core_context.chatScopeKey(context);
+    const reader = body.querySelector('[data-rmt-archive-draft-reader]');
+    if (reader) {
+        const draftId = reader.getAttribute('data-rmt-archive-draft-reader');
+        const record = await archive_repository.readCurrentArchiveRecoveryDraft(draftId, context);
+        if (bodyEl() !== body || body.querySelector('[data-rmt-archive-draft-reader]') !== reader
+            || host.hidden || core_context.chatScopeKey(core_context.getContext()) !== scope) return false;
+        const scrollTop = body.scrollTop;
+        body.innerHTML = archive_library.archiveRecoveryDraftHtml(record);
+        body.scrollTop = scrollTop;
+        return true;
+    }
+    const banners = body.querySelector('[data-rmt-archive-recoveries]');
+    if (!banners) return false;
+    banners.innerHTML = recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveImportRecoverySummary(context))
+        + recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveProfileRecoverySummary(context), { profile: true });
+    return true;
+}
+
+export function refreshContentRegenerationDraftView(journal, context, { archiveTarget = null } = {}) {
+    const host = document.getElementById(core_constants.OVERLAY_ID), body = bodyEl();
+    const reader = body?.querySelector?.('[data-rmt-content-draft-reader]');
+    if (!host || host.hidden || !reader || reader.getAttribute('data-rmt-content-draft-reader') !== journal?.draftId) return false;
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    if (snapshot ? !archiveTarget || snapshot.entryId !== archiveTarget.entryId
+        : core_context.chatScopeKey(core_context.getContext()) !== core_context.chatScopeKey(context)) return false;
+    const scrollTop = body.scrollTop;
+    body.innerHTML = archive_library.contentRegenerationDraftHtml(journal);
+    body.scrollTop = scrollTop;
+    return true;
+}
+
+export async function refreshPartialGenerationView(mode, context, { draftId, pageId, archiveTarget = null, readerStillCurrent = null } = {}) {
+    const host = document.getElementById(core_constants.OVERLAY_ID);
+    if (!host || host.hidden) return false;
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    if (snapshot?.taskResultDraftId && snapshot.taskResultDraftId !== draftId) return false;
+    if (snapshot && !snapshot.taskResultDraftId) {
+        if (snapshot.historyVersionId || snapshot.backupOnly || !archiveTarget
+            || snapshot.entryId !== archiveTarget.entryId
+            || snapshot.memory?.archiveRevision !== archiveTarget.memory?.archiveRevision
+            || core_context.comparableChatId(snapshot.chatId) !== core_context.comparableChatId(archiveTarget.chatId)) return false;
+        snapshot.cache = structuredClone(archiveTarget.cache);
+        if (!runtimeState.activeMode) {
+            const scrollTop = bodyEl()?.scrollTop || 0;
+            archive_library.showIndexedArchiveSnapshot(snapshot);
+            if (bodyEl()) bodyEl().scrollTop = scrollTop;
+            return true;
+        }
+    }
+    if (!snapshot && core_context.chatScopeKey(context) !== core_context.chatScopeKey(core_context.getContext())) return false;
+    if (!snapshot && !runtimeState.activeMode && runtimeState.archiveViewLevel === 'chooser') {
+        if (ui_workspaceState.workspace.tab === 'content') {
+            const scrollTop = bodyEl()?.scrollTop || 0;
+            showChooser({ section: 'content' });
+            if (bodyEl()) bodyEl().scrollTop = scrollTop;
+        } else {
+            // Archive source selections may be half edited. Refresh only the
+            // received-content controls, leaving those inputs in place.
+            const memory = archive_repository.getImportedMemory(context);
+            const stored = core_cache.getCache(context);
+            const recovery = bodyEl()?.querySelector?.('[data-rmt-generation-recoveries]');
+            if (recovery) recovery.innerHTML = recovery_view.recoveryBannerHtml(stored, memory);
+            const session = core_cache.loadSession(mode, { context, memoryBank: memory, includePartial: true });
+            const portal = bodyEl()?.querySelector?.(`.rmt-archive-portal [data-rmt-mode="${mode}"]`)
+                ?.closest?.('.rmt-archive-portal')
+                || bodyEl()?.querySelector?.(`[data-rmt-generate-mode="${mode}"]`)?.closest?.('.rmt-archive-portal');
+            if (session && portal) {
+                portal.classList.remove('empty'); portal.classList.add('ready');
+                const open = portal.querySelector('.rmt-portal-open');
+                open.disabled = false; open.setAttribute('data-rmt-mode', mode);
+                const status = portal.querySelector('.rmt-portal-status');
+                if (status) status.textContent = '已生成部分内容 · 可以先查看';
+                const dot = portal.querySelector('.rmt-portal-lock, .rmt-portal-ready-dot');
+                if (dot) { dot.className = 'rmt-portal-ready-dot'; dot.textContent = '…'; }
+            }
+            if (mode === core_constants.MODE.CALENDAR) {
+                const quick = bodyEl()?.querySelector?.('[data-rmt-calendar-quick]');
+                if (quick) quick.innerHTML = calendarQuickAccessHtml({ ready: !!memory, generated: !!session,
+                    generating: core_requestCoordinator.isModeGenerating(mode), partial: !!session?.readableProgress });
+            }
+        }
+        return true;
+    }
+    if (runtimeState.activeMode !== mode) return false;
+    const prior = runtimeState.activeSession;
+    // A full-page/background task does not own every later reader of its mode.
+    // An explicitly opened view of this very draft can keep receiving progress;
+    // otherwise the caller's original reader and position must still be current.
+    const ownsDraft = snapshot?.taskResultDraftId === draftId
+        || (prior?.readableProgress?.complete === false && prior.readableProgress.draftId === draftId);
+    if (!ownsDraft && typeof readerStillCurrent === 'function' && !readerStillCurrent()) return false;
+    if (mode === core_constants.MODE.HEART && pageId && pageId !== 'heart') {
+        const shownPage = ui_workspaceState.workspace.route === 'heart'
+            ? heart_reader.heartReaderSession(prior)?.selectedSeason || 'spring' : ui_workspaceState.workspace.route;
+        if (shownPage !== pageId) return false;
+    }
+    let memory, stored;
+    if (snapshot?.taskResultDraftId) {
+        const result = await core_cache.readGenerationTaskResult(context, draftId);
+        if (runtimeState.activeArchiveSnapshot !== snapshot || runtimeState.activeSession !== prior
+            || runtimeState.activeMode !== mode || host.hidden) return false;
+        memory = result.sourceMemory;
+        stored = { chatId: memory.chatId, archiveRevision: memory.archiveRevision, [mode]: result.session };
+        snapshot.memory = structuredClone(memory); snapshot.cache = structuredClone(stored);
+    } else if (snapshot) {
+        memory = snapshot.memory; stored = snapshot.cache;
+    } else {
+        memory = archive_repository.getImportedMemory(context); stored = core_cache.getCache(context);
+    }
+    const session = core_cache.loadSession(mode, { context, chatId: memory?.chatId, memoryBank: memory, cache: stored, clone: true, includePartial: true });
+    if (!session?.readableProgress) return false;
+    if (!snapshot && stored?.[core_cache.GENERATION_DRAFTS_CACHE_KEY]?.records?.[draftId]?.result?.sourceMemory?.archiveRevision !== memory?.archiveRevision) return false;
+    for (const key of ['selectedId', 'selectedEntryId', 'selectedContainerId', 'selectedNodeId', 'category', 'page', 'viewPath',
+        'selectedMonth', 'selectedDateKey', 'view', 'tab', 'reading', 'dialogueIndex', 'sharedMemory',
+        'selectedSeason', 'selectedVoiceId', 'selectedScenarioId', 'selectedStripId', 'selectedFireflyId', 'selectedDramaKey']) {
+        if (prior && Object.hasOwn(prior, key)) session[key] = structuredClone(prior[key]);
+    }
+    const body = bodyEl(), scrollTop = body?.scrollTop || 0;
+    // The generation caller uses this reference to recognize its original
+    // foreground reader at the final save. Progress is a refresh of that same
+    // reader, not navigation to a replacement reader.
+    if (prior && typeof readerStillCurrent === 'function') {
+        for (const key of Object.keys(prior)) delete prior[key];
+        Object.assign(prior, session);
+        runtimeState.activeSession = prior;
+    } else runtimeState.activeSession = session;
+    ui_workspaceState.workspace.empty = null;
+    renderActive();
+    if (body) body.scrollTop = scrollTop;
+    return true;
 }
 
 export function renderActive() {
@@ -840,6 +1136,14 @@ export function renderActive() {
     else if (runtimeState.activeMode === core_constants.MODE.HEART) ui_heartView.renderHeart();
     else if (runtimeState.activeMode === 'pastLives') past_lives_view.renderPastLives();
     else if (time_stories.isTimeStoryMode(runtimeState.activeMode)) time_stories_view.renderTimeStories();
+    const progress = runtimeState.activeSession?.readableProgress;
+    if (progress?.version === 1 && progress.complete === false && bodyEl()) {
+        const note = document.createElement('section');
+        note.className = 'rmt-recovery-status';
+        note.setAttribute('role', 'status');
+        note.innerHTML = `<b>已生成部分内容 · 本次任务尚未完成</b><p>这里显示已收到的内容。后续失败或关闭页面，不会清除已保存部分；继续生成只补未完成部分。</p>`;
+        bodyEl().prepend(note);
+    }
     cg_format_ui.mountCgFormatControl(bodyEl(), runtimeState.activeMode, ui_workspaceState.workspace.route, !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly);
     decorateReadOnlyModeUi();
     workspace_ui.syncWorkspaceChrome();
@@ -857,6 +1161,17 @@ function managedTargetRecord(type, id, parentId = '') {
 function markUserManaged(session) {
     if (session && typeof session === 'object') session.userManaged = true;
     return session;
+}
+
+function managedItemFromSession(session, type, id, parentId = '') {
+    if (type === 'room-life') return session?.lifePlan || null;
+    if (type === 'calendar-draft' || type === 'calendar-manual-todo') {
+        const field = type === 'calendar-draft' ? 'drafts' : 'manualTodos';
+        return modes_calendar.calendarDayPage(session, parentId)?.[field]?.find(item => item.id === id) || null;
+    }
+    const baseType = { 'album-image': 'album-entry', 'adv-image': 'adv-event', 'heart-strip-image': 'heart-strip' }[type] || type;
+    try { return generation_contentRegeneration.contentRegenerationTarget(session, baseType, id, parentId).item; }
+    catch { return null; }
 }
 
 function deleteManagedTargetFromSession(session, type, id, parentId = '') {
@@ -953,6 +1268,8 @@ async function commitManagedSession(updated, expectedChatId, expectedArchiveRevi
 
 async function deleteManagedTarget(type, id, parentId = '') {
     if (!archive_library.requireWritableArchiveAction()) return;
+    const shownSession = runtimeState.activeSession, mode = runtimeState.activeMode;
+    const shownSnapshot = runtimeState.activeArchiveSnapshot;
     const record = managedTargetRecord(type, id, parentId);
     if (!record || !ui_contentManager.isManageableTargetType(type) || record.canDelete === false) return;
     if (!confirmExplicitActionTwice(
@@ -961,6 +1278,43 @@ async function deleteManagedTarget(type, id, parentId = '') {
         { destructive: true },
     )) return;
     try {
+        if (shownSession?.readableProgress?.complete === false) {
+            const targetRuntime = shownSnapshot ? await archive_library.prepareArchiveTargetSubtask(mode, `delete:${type}:${parentId}:${id}`, shownSnapshot) : null;
+            const context = targetRuntime?.context || core_context.currentCharacterGuard();
+            const resolved = await core_cache.resolveGenerationProgressTarget(context, shownSession,
+                session => managedItemFromSession(session, type, id, parentId), { cache: targetRuntime?.archiveTarget?.cache });
+            if (!resolved) throw new Error('刚才选中的内容已经变化，未删除其他版本的同编号内容。请查看当前内容后再操作。');
+            const expected = JSON.stringify(managedItemFromSession(resolved.session, type, id, parentId));
+            const mutate = latest => {
+                if (JSON.stringify(managedItemFromSession(latest, type, id, parentId)) !== expected) {
+                    throw new Error('刚才选中的内容已被更新，本次没有删除新内容。');
+                }
+                return deleteManagedTargetFromSession(latest, type, id, parentId);
+            };
+            const bank = targetRuntime?.memoryBank || archive_repository.requireArchive(context);
+            const origin = targetRuntime?.origin || core_context.captureTaskOrigin(context, bank.archiveRevision);
+            let committed;
+            if (resolved.draftId) {
+                committed = await core_cache.commitGenerationTaskResultMutation(context, resolved.draftId, mutate, {
+                    expectedTaskOrigin: origin, archiveTarget: targetRuntime?.archiveTarget,
+                    stillCurrent: targetRuntime?.stillCurrent,
+                });
+            } else if (targetRuntime) {
+                const result = await targetRuntime.options.commitArchiveTargetMutation(targetRuntime.archiveTarget, mode, origin, mutate, resolved.session, targetRuntime.stillCurrent);
+                archive_library.syncArchiveTargetSubtask(targetRuntime, result.snapshot);
+                committed = result.session;
+            } else committed = await core_cache.commitSessionMutation(mode, core_context.getChatId(context), origin, mutate, resolved.session);
+            if (!committed) throw new Error('这份内容的保存状态已变化，未删除其他版本。请重新打开当前内容后再操作。');
+            if (runtimeState.activeMode === mode && (shownSnapshot
+                ? runtimeState.activeArchiveSnapshot?.entryId === shownSnapshot.entryId : core_context.isCurrentTaskOrigin(origin))) {
+                if (targetRuntime) runtimeState.activeArchiveSnapshot.cache = structuredClone(targetRuntime.archiveTarget.cache);
+                runtimeState.activeSession = core_cache.loadSession(mode, { context, memoryBank: bank,
+                    cache: targetRuntime?.archiveTarget?.cache, clone: true, includePartial: true }) || committed;
+                ui_contentManager.renderContentManager();
+            }
+            globalThis.toastr?.success?.(`已删除：${record.label}`, '心迹回廊');
+            return;
+        }
         const context = core_context.currentCharacterGuard();
         const expectedChatId = core_context.getChatId(context);
         const memoryBank = archive_repository.requireArchive(context);
@@ -1051,12 +1405,24 @@ async function regenerateManagedCategory() {
 
 export function handleOverlayClick(event) {
     if (workspace_ui.handleWorkspaceClick(event) || language_view.handleLanguageClick(event)) return;
+    const contentDraftOpen = event.target.closest?.('[data-rmt-content-draft-open]');
+    if (contentDraftOpen) return void archive_library.openContentRegenerationDraft(
+        contentDraftOpen.dataset.rmtContentDraftOpen, core_context.getContext(), { snapshot: runtimeState.activeArchiveSnapshot },
+    ).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    const resultChoice = event.target.closest?.('[data-rmt-task-result-choose]');
+    if (resultChoice) return void presentGenerationTaskResult(resultChoice.dataset.rmtTaskResultChoose)
+        .catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    const resultOpen = event.target.closest?.('[data-rmt-task-result-open]');
+    if (resultOpen) return void archive_library.openGenerationTaskResult(resultOpen.dataset.rmtTaskResultOpen, core_context.getContext(), { snapshot: runtimeState.activeArchiveSnapshot })
+        .catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
     const pastLivesButton = event.target.closest?.('[data-rmt-past-lives]');
     if (pastLivesButton) return void past_lives_view.handlePastLivesAction(pastLivesButton.dataset.rmtPastLives, pastLivesButton.dataset.rmtPastLivesId);
     const timeStoryButton = event.target.closest?.('[data-rmt-time-story]');
     if (timeStoryButton) return void time_stories_view.handleTimeStoryAction(timeStoryButton.dataset.rmtTimeStory, timeStoryButton.dataset.rmtTimeStoryId);
     const exportRecoveryButton = event.target.closest?.('[data-rmt-recovery-export]');
-    if (exportRecoveryButton) return void generation_client.exportSavedGeneration(exportRecoveryButton.dataset.rmtRecoveryExport).then(value => {
+    if (exportRecoveryButton) return void generation_client.exportSavedGeneration(exportRecoveryButton.dataset.rmtRecoveryExport, {
+        draftId: exportRecoveryButton.dataset.rmtRecoveryDraftId || '', pageId: exportRecoveryButton.dataset.rmtRecoveryPageId || '',
+    }).then(value => {
         const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob), link = document.createElement('a');
         link.href = url; link.download = 'hearttrace-module-recovery.json';
@@ -1064,10 +1430,16 @@ export function handleOverlayClick(event) {
         globalThis.toastr?.info?.('草稿文件包含任务背景与未提交内容，请勿公开分享。', '心迹回廊');
     }).catch(error => { if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); });
     const discardButton = event.target.closest?.('[data-rmt-recovery-discard]');
-    if (discardButton) return void generation_client.discardSavedGeneration(discardButton.dataset.rmtRecoveryDiscard).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    if (discardButton) return void generation_client.discardSavedGeneration(discardButton.dataset.rmtRecoveryDiscard, {
+        draftId: discardButton.dataset.rmtRecoveryDraftId || '', pageId: discardButton.dataset.rmtRecoveryPageId || '',
+    }).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
     if (event.target.closest?.('[data-rmt-archive-read-drafts]')) {
         return void loadChooserArchiveRecovery(core_context.getContext(), { showEmpty: true });
     }
+    const archiveDraftOpen = event.target.closest?.('[data-rmt-archive-draft-open]');
+    if (archiveDraftOpen) return void archive_library.openArchiveRecoveryDraft(
+        archiveDraftOpen.dataset.rmtArchiveDraftOpen, core_context.getContext(),
+    ).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
     const saveDraftButton = event.target.closest?.('[data-rmt-archive-save-draft]');
     if (saveDraftButton) {
         if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !archive_library.requireWritableArchiveAction()) return;
@@ -1126,10 +1498,13 @@ export function handleOverlayClick(event) {
         return;
     }
     const recoveryButton = event.target.closest?.('[data-rmt-recovery-mode]');
-    if (recoveryButton) return void generation_client.continueSavedGeneration(recoveryButton.dataset.rmtRecoveryMode).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    if (recoveryButton) return void generation_client.continueSavedGeneration(recoveryButton.dataset.rmtRecoveryMode, {
+        draftId: recoveryButton.dataset.rmtRecoveryDraftId || '', pageId: recoveryButton.dataset.rmtRecoveryPageId || '',
+    }).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
     const archiveRecoveryButton = event.target.closest?.('[data-rmt-archive-recovery]');
     if (archiveRecoveryButton) return void (archiveRecoveryButton.dataset.rmtArchiveRecovery === 'profile'
-        ? archive_repository.rewriteCurrentArchiveVerdict() : archive_repository.continueCurrentArchiveImport()).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+        ? archive_repository.rewriteCurrentArchiveVerdict({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })
+        : archive_repository.continueCurrentArchiveImport({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
     const songButton = event.target.closest?.('[data-rmt-song]');
     if (songButton) return void song_view.handleThemeSongAction(songButton.dataset.rmtSong, songButton.dataset.rmtSongId);
     const mailButton = event.target.closest?.('[data-rmt-inbox]');
@@ -1415,6 +1790,8 @@ export function handleOverlayClick(event) {
     if (action === 'manage-delete-target') return void deleteManagedTarget(actionEl.dataset.rmtManageType, actionEl.dataset.rmtManageId, actionEl.dataset.rmtManageParent);
     if (action === 'rebuild-archive-index') return void archive_library.rebuildArchiveIndexFromExisting();
     if (action === 'import-memory') return requestCurrentArchiveImport();
+    if (action === 'participants-picker') return void requestParticipantSelection().catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
+    if (action === 'participants-versions') return void requestParticipantVersions().catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
     if (action === 'full-rebuild-memory') return requestCurrentArchiveFullRebuild();
     if (action === 'archive-overview-refresh') return archive_snapshots.renderArchiveOverviewAsync({ force: true });
     if (action === 'regenerate') {
@@ -1499,6 +1876,7 @@ export function handleOverlayClick(event) {
         return modes_advEvent.generateAdvForSelected();
     }
     if (action === 'room-presence') return modes_room.roomPresenceNext();
+    if (action === 'room-participant') return modes_room.roomSelectParticipant(actionEl.dataset.rmtParticipantId);
     if (action === 'room-find-presence') return modes_room.roomFindPresence();
     if (action === 'room-life-refresh') {
         if (!confirmRoomLifeRefresh()) return;

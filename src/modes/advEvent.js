@@ -230,6 +230,59 @@ export function normalizeAdvBatch(data, events, options = {}) {
     return results;
 }
 
+export function projectAdvProgress({ segments = [], memoryBank, previousSession = null, contentInputs = {}, operation = {} }) {
+    const base = previousSession || contentInputs?.previousSession || contentInputs?.baseSession || contentInputs?.session;
+    const index = segments.find(segment => /:index$/u.test(segment.slot));
+    let session = index ? normalizeEventList({ ...index.value, events: index.items('/events') }, memoryBank, { allowPartial: true })
+        : base?.kind === core_constants.MODE.ADV ? structuredClone(base) : null;
+    if (!session?.events?.length) return null;
+    const relevantIds = new Set(operation.eventIds || (operation.eventId ? [operation.eventId] : session.events.map(event => event.id)));
+    let newText = false;
+    const apply = (segment, prefix, eventId) => {
+        const event = session.events.find(item => item.id === eventId && relevantIds.has(item.id));
+        if (!event) return;
+        const raw = segment.at?.(prefix) ?? (prefix ? null : segment.value);
+        if (!raw || core_text.normalizeText(raw.narrator, 40) !== 'char_first_person') return;
+        try {
+            if (segment.has(prefix)) {
+                event.adv = normalizeAdv(raw, { minParagraphs: operation.kind === 'adv-bulk' ? 12 : 18 });
+                event.progressPending = []; newText = true; return;
+            }
+        } catch {}
+        const paragraphs = [], coverageTypes = [], seen = new Set();
+        for (let i = 0; ; i++) {
+            const path = `${prefix}/sections/${i}`;
+            const section = segment.at?.(path) ?? segment.items(`${prefix}/sections`)[i];
+            if (!section) break;
+            const type = core_text.normalizeText(section.type, 20).toLowerCase();
+            if (!ADV_SECTION_TYPE_SET.has(type) || seen.has(type)) continue;
+            const lines = core_text.cleanArray(segment.items(`${path}/paragraphs`), 32, 4000);
+            if (!lines.length) continue;
+            seen.add(type); coverageTypes.push(type); paragraphs.push(...lines);
+        }
+        if (paragraphs.length) { event.adv = { paragraphs, coverageTypes }; event.progressPending = ['ADV 正文']; newText = true; }
+    };
+    for (const segment of segments) {
+        if (segment === index) continue;
+        if (operation.kind === 'adv-bulk' || segment.slot.startsWith('adv-bulk:')) {
+            for (let i = 0; ; i++) {
+                const row = segment.at?.(`/items/${i}`) ?? segment.items('/items')[i];
+                if (!row) break;
+                apply(segment, `/items/${i}`, String(row.eventId || ''));
+            }
+        } else {
+            const eventId = operation.eventId || [...relevantIds].find(id => segment.slot.endsWith(`:${id}`));
+            if (eventId) apply(segment, '', eventId);
+        }
+    }
+    if (!index && !newText) return null;
+    if (newText) {
+        session.selectedId = session.events.find(item => relevantIds.has(item.id) && item.adv?.paragraphs?.length)?.id || session.selectedId;
+        session.view = 'adv'; session.paragraphIndex = 0;
+    }
+    return session;
+}
+
 export function normalizeAdv(data, { minParagraphs = 18 } = {}) {
     if (core_text.normalizeText(data?.narrator, 40) !== 'char_first_person') {
         throw new Error('ADV 视角不合格：必须以角色第一人称生成。');
@@ -499,7 +552,7 @@ async function beginAdvSubtask(targetRuntime) {
     }
 }
 
-async function startAdvRecovery(targetRuntime, operation, options = {}) {
+async function startAdvRecovery(targetRuntime, operation, options = {}, baseSession = null) {
     const existing = options.existing === undefined
         ? core_cache.loadGenerationRecovery(core_constants.MODE.ADV, targetRuntime.context, targetRuntime.archiveTarget?.cache)
         : options.existing;
@@ -508,6 +561,7 @@ async function startAdvRecovery(targetRuntime, operation, options = {}) {
     targetRuntime.recoveryArchiveEntry = targetRuntime.archiveTarget || core_cache.archiveBackupEntryForContext(targetRuntime.context, targetRuntime.memoryBank);
     return generation_client.beginModeRecovery(core_constants.MODE.ADV, targetRuntime.context, targetRuntime.memoryBank, targetRuntime.origin, {
         ...options, existing, operation: retainedOperation, archiveTarget: targetRuntime.archiveTarget,
+        contentInputs: { previousSession: baseSession },
         archiveEntry: targetRuntime.recoveryArchiveEntry,
         stillCurrent: targetRuntime.archiveTarget ? targetRuntime.stillCurrent : undefined,
     });
@@ -585,7 +639,7 @@ export async function generateAllAdvForSession(options = {}) {
     let batchAccepted = false;
     const completedBatch = new Map();
     try {
-        await startAdvRecovery(targetRuntime, { kind: 'adv-bulk', eventIds: pending.map(event => event.id) }, options);
+        await startAdvRecovery(targetRuntime, { kind: 'adv-bulk', eventIds: pending.map(event => event.id) }, options, session);
         try {
             const batch = await generation_client.requestValidatedSegment(
                 advBatchPrompt(context, pending, memoryBank),
@@ -736,7 +790,7 @@ export async function repairFailedAdvForSession(options = {}) {
     }
     let repaired = 0;
     try {
-        await startAdvRecovery(targetRuntime, { kind: 'adv-repair', eventIds: failed.map(event => event.id) }, options);
+        await startAdvRecovery(targetRuntime, { kind: 'adv-repair', eventIds: failed.map(event => event.id) }, options, session);
         for (let i = 0; i < failed.length; i += 1) {
             const event = failed[i];
             if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(true, advTargetStatus(targetRuntime, `逐个补完 ${i + 1} / ${failed.length}：${event.title}`));
@@ -868,7 +922,7 @@ export async function generateAdvForSelected(options = {}) {
     const memoryBank = targetRuntime.memoryBank;
     if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(true, advTargetStatus(targetRuntime, `正在为「${event.title}」生成长篇 ADV…`));
     try {
-        await startAdvRecovery(targetRuntime, { kind: 'adv-single', eventId }, options);
+        await startAdvRecovery(targetRuntime, { kind: 'adv-single', eventId }, options, session);
         const generatedAdv = await generation_client.requestValidatedSegment(
             advPrompt(context, event, memoryBank), `正在根据当前聊天档案生成「${event.title}」ADV…`,
             { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV], temperature: 0.55, context, origin, taskKey, mode: core_constants.MODE.ADV, background: true, segmentMaxAttempts: 1 },

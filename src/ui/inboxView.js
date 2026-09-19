@@ -51,12 +51,16 @@ export function assertShownInboxTarget() {
     if (shown?.kind !== 'inbox' || runtimeState.activeMode !== 'inbox') throw new Error('邮箱已关闭。');
     const snapshot = runtimeState.activeArchiveSnapshot;
     if (snapshot) {
-        if (shown.chatId !== snapshot.chatId || shown.archiveRevision !== snapshot.memory?.archiveRevision || shown.sender !== snapshot.memory?.characterName || shown.recipient !== snapshot.memory?.userName) throw new Error('显示的邮箱与目标档案不一致。');
+        const source = cache.generationPageReadingSource(shown, 'inbox', snapshot.memory);
+        if (shown.chatId !== snapshot.chatId || shown.archiveRevision !== snapshot.memory?.archiveRevision
+            || source.session.sender !== source.memoryBank?.characterName || source.session.recipient !== source.memoryBank?.userName) throw new Error('显示的邮箱与目标档案不一致。');
         return;
     }
     const context = contextApi.currentCharacterGuard(), memory = repository.requireArchive(context);
-    if (shown.chatId !== memory.chatId || shown.archiveRevision !== memory.archiveRevision || shown.sender !== memory.characterName || shown.recipient !== memory.userName
-        || (shown.ownerKey && shown.ownerKey !== contextApi.currentCharacterRuntimeKey(context))) throw new Error('聊天或角色已切换，请重新打开对应邮箱。');
+    const source = cache.generationPageReadingSource(shown, 'inbox', memory);
+    if (shown.chatId !== memory.chatId || shown.archiveRevision !== memory.archiveRevision
+        || source.session.sender !== source.memoryBank.characterName || source.session.recipient !== source.memoryBank.userName
+        || (!source.source && shown.ownerKey && shown.ownerKey !== contextApi.currentCharacterRuntimeKey(context))) throw new Error('聊天或角色已切换，请重新打开对应邮箱。');
 }
 export async function mutateInbox(mutator) {
     assertShownInboxTarget();
@@ -70,27 +74,42 @@ export async function mutateInbox(mutator) {
     if (snapshot) {
         const options = library.archiveTargetGenerationOptions(snapshot);
         const target = await options.revalidateArchiveTarget(options.archiveTarget);
-        if (shown.chatId !== target.chatId || shown.archiveRevision !== target.memory.archiveRevision || shown.sender !== target.memory.characterName || shown.recipient !== target.memory.userName) throw new Error('显示的邮箱与目标档案不一致。');
+        const reading = cache.generationPageReadingSource(shown, 'inbox', target.memory);
+        if (shown.chatId !== target.chatId || shown.archiveRevision !== target.memory.archiveRevision
+            || reading.session.sender !== reading.memoryBank.characterName || reading.session.recipient !== reading.memoryBank.userName) throw new Error('显示的邮箱与目标档案不一致。');
         // Capture the canonical cache fence, including an in-flight generation's fence.
         options.context.chatMetadata[constants.MEMORY_KEY] = target.memory;
         options.context.chatMetadata[constants.CACHE_KEY] = target.cache;
         const origin = contextApi.captureTaskOrigin(options.context, target.memory.archiveRevision);
-        const result = await options.commitArchiveTargetMutation(target, 'inbox', origin,
-            latest => mutator(latest?.kind === 'inbox' ? latest : inbox.emptyInbox(target.memory, options.context), target.memory, target.cache),
-            inbox.emptyInbox(target.memory, options.context), () => contextApi.runtimeLifecycleStillCurrent(lifecycle));
-        updated = result.session;
+        if (shown.readableProgress?.complete === false && shown.readableProgress.draftId) {
+            updated = await cache.commitGenerationTaskResultMutation(options.context, shown.readableProgress.draftId,
+                (latest, sourceMemory) => mutator(latest, sourceMemory, target.cache),
+                { expectedTaskOrigin: origin, archiveTarget: target, stillCurrent: () => contextApi.runtimeLifecycleStillCurrent(lifecycle) });
+            if (runtimeState.activeArchiveSnapshot?.entryId === snapshot.entryId) runtimeState.activeArchiveSnapshot.cache = target.cache;
+        } else {
+            const result = await options.commitArchiveTargetMutation(target, 'inbox', origin,
+                latest => mutator(latest?.kind === 'inbox' ? latest : inbox.emptyInbox(target.memory, options.context), reading.memoryBank, target.cache),
+                inbox.emptyInbox(target.memory, options.context), () => contextApi.runtimeLifecycleStillCurrent(lifecycle));
+            updated = result.session;
+        }
     } else {
         const context = contextApi.currentCharacterGuard(), memory = repository.requireArchive(context);
+        const reading = cache.generationPageReadingSource(shown, 'inbox', memory);
         if (shown.chatId !== memory.chatId || shown.archiveRevision !== memory.archiveRevision
-            || shown.sender !== memory.characterName || shown.recipient !== memory.userName
-            || (shown.ownerKey && shown.ownerKey !== contextApi.currentCharacterRuntimeKey(context)))
+            || reading.session.sender !== reading.memoryBank.characterName || reading.session.recipient !== reading.memoryBank.userName
+            || (!reading.source && shown.ownerKey && shown.ownerKey !== contextApi.currentCharacterRuntimeKey(context)))
             throw new Error('聊天或角色已切换，请重新打开对应邮箱。');
         const origin = contextApi.captureTaskOrigin(context, memory.archiveRevision);
         writeOrigin = origin;
-        updated = await cache.commitSessionMutation('inbox', memory.chatId, origin,
-            (latest, bank) => mutator(latest?.kind === 'inbox' ? latest : inbox.emptyInbox(bank, context), bank, cache.getCache(context)), inbox.emptyInbox(memory, context));
+        updated = shown.readableProgress?.complete === false && shown.readableProgress.draftId
+            ? await cache.commitGenerationTaskResultMutation(context, shown.readableProgress.draftId,
+                (latest, sourceMemory) => mutator(latest, sourceMemory, cache.getCache(context)), { expectedTaskOrigin: origin })
+            : await cache.commitSessionMutation('inbox', memory.chatId, origin,
+                (latest, bank) => mutator(latest?.kind === 'inbox' ? latest : inbox.emptyInbox(bank, context),
+                    cache.generationPageSourceMemory(latest, 'inbox', bank), cache.getCache(context)), inbox.emptyInbox(memory, context));
         if (!updated) throw new Error('聊天或档案已经切换，本次操作没有写入。');
     }
+    if (!updated) throw new Error('未能确认这次邮箱操作已保存，原信件仍保留。');
     if (runtimeState.activeMode === 'inbox' && shownScope === sessionScope(runtimeState.activeSession)
         && (snapshot ? runtimeState.activeArchiveSnapshot?.entryId === snapshot.entryId : !runtimeState.activeArchiveSnapshot && contextApi.isCurrentTaskOrigin(writeOrigin))) {
         runtimeState.activeSession = updated;

@@ -11,6 +11,43 @@ import * as time_stories_view from './timeStoriesView.js';
 import * as ui_immersionStyles from './immersionStyles.js';
 import * as ui_readingStyles from './readingStyles.js';
 
+export function participantPickerCss() {
+    const root = '#' + core_constants.OVERLAY_ID;
+    return `
+${root} .rmt-participant-backdrop{position:absolute;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,23,42,.4);box-sizing:border-box}
+${root} .rmt-participant-dialog{display:flex;flex-direction:column;gap:14px;width:min(760px,100%);max-height:100%;overflow:auto;box-sizing:border-box;padding:24px;border-radius:20px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#334155);line-height:1.6;overscroll-behavior:contain;scroll-padding-block:16px}
+${root} .rmt-participant-dialog :is(header,footer){display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+${root} .rmt-participant-dialog :is(h2,h3,p){margin:0;overflow-wrap:anywhere}
+${root} .rmt-participant-dialog label{display:flex;flex-direction:column;gap:6px;min-width:0}
+${root} .rmt-participant-dialog :is(input[type=text],select){box-sizing:border-box;width:100%;min-width:0;min-height:44px;font:inherit;color:inherit;background:var(--rmt-theme-surface-solid,#fff);border:1px solid var(--rmt-theme-border,#cbdce6);border-radius:8px;padding:8px}
+${root} .rmt-participant-dialog :is(button,summary){min-height:44px;white-space:normal;overflow-wrap:anywhere}
+${root} .rmt-participant-dialog .rmt-participant-select{flex-direction:row;align-items:center;min-height:44px;gap:10px;cursor:pointer}
+${root} .rmt-participant-select input{width:20px;height:20px;flex:0 0 20px}
+${root} .rmt-participant-card-types{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+${root} .rmt-participant-card-types button{display:flex;flex-direction:column;gap:8px;padding:18px}
+${root} .rmt-participant-card-types span{font-size:14px;font-weight:normal}
+${root} .rmt-participant-entries:empty{display:none}
+${root} :is(.rmt-participant-entry,.rmt-participant-person){display:flex;flex-direction:column;gap:8px;min-width:0;padding:14px 0;border-bottom:1px solid var(--rmt-theme-border,#cbdce6)}
+${root} .rmt-participant-entry details p{white-space:pre-wrap;overflow-wrap:anywhere}
+${root} .rmt-participant-dialog small{font-size:13px;color:var(--rmt-theme-muted,#59677a);overflow-wrap:anywhere}
+${root} .rmt-participant-dialog :is(button,input,select,summary):focus-visible{outline:3px solid var(--rmt-theme-accent-ink,#5f5770);outline-offset:3px}
+${root} .rmt-participant-dialog [role=alert]{font-weight:600}
+${root} .rmt-participant-scope-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:6px 16px;margin-block:12px}
+${root} :is(.rmt-room-participants,.rmt-room-resident-figures){display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}
+${root} .rmt-room-resident-figure{position:static;display:flex;flex-direction:column;align-items:center;min-height:44px;max-width:100%;gap:8px}
+${root} .rmt-room-resident-figure svg{height:110px;width:90px;max-width:100%}
+${root} .rmt-room-participant small{display:block}
+${root} .rmt-room-participant-states{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px}
+${root} .rmt-cg-person{display:grid;gap:8px;padding:12px 0;border-bottom:1px solid var(--rmt-theme-border,#cbdce6)}
+${root} .rmt-cg-person label{display:grid;gap:4px}
+${root} .rmt-cg-person :is(input[type=text],textarea){width:100%;min-width:0;box-sizing:border-box}
+${root} .rmt-cg-person label:has(input[type=checkbox]){display:flex;align-items:center;gap:6px}
+${root} [data-rmt-cg-cast]{border:0;padding:0;min-width:0}
+${root} [data-rmt-cg-cast] legend{font-weight:600}
+@media(max-width:480px){${root} .rmt-participant-backdrop{padding:8px}${root} .rmt-participant-dialog{padding:16px;border-radius:14px}${root} .rmt-participant-card-types{grid-template-columns:1fr}}
+`;
+}
+
 export function homeAndReadingCss() {
     const root = '#' + core_constants.OVERLAY_ID;
     const settings = root + ' #' + core_constants.SETTINGS_ID;
@@ -1099,6 +1136,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 }
 `;
     style.textContent += homeAndReadingCss();
+    style.textContent += participantPickerCss();
     style.textContent += ui_immersionStyles.immersionCss('#' + core_constants.OVERLAY_ID);
     style.textContent += ui_readingStyles.readingCss('#' + core_constants.OVERLAY_ID);
     style.textContent += ui_workspaceStyles.workspaceCss('#' + core_constants.OVERLAY_ID);

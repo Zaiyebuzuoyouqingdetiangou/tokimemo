@@ -23,6 +23,55 @@ export function compactAlbumExisting(session) {
     }));
 }
 
+// A reading projection is separate from the complete-result validator and from
+// the canonical album. Only closed JSON records can supply new content here.
+export function projectAlbumProgress({ segments = [], memoryBank }) {
+    const index = segments.find(segment => /:index$/u.test(segment.slot));
+    if (!index) return null;
+    const rows = index.items('/entries');
+    const entries = [];
+    const unlockedSeed = rows.find(row => {
+        try { return row.unlocked && normalizeAlbumIndex({ entries: [row] }, memoryBank).entries.length; } catch { return false; }
+    });
+    for (const [i, row] of rows.entries()) {
+        try {
+            const raw = { ...row, id: row.id || `CG${String(i + 1).padStart(2, '0')}` };
+            const normalized = normalizeAlbumIndex({ entries: raw.unlocked ? [raw] : [unlockedSeed, raw].filter(Boolean) }, memoryBank).entries;
+            const item = normalized.find(entry => entry.id === core_text.safeId(raw.id, ''));
+            if (item) entries.push(item);
+        } catch {}
+    }
+    if (!entries.length) return null;
+    let relationshipSnapshot = null;
+    const relationship = segments.find(segment => /:relationship-scan$/u.test(segment.slot));
+    if (relationship?.complete) {
+        try { relationshipSnapshot = normalizeAlbumRelationshipSnapshot(relationship.value, memoryBank); } catch {}
+    }
+    for (const entry of entries) {
+        if (!entry.unlocked) continue;
+        entry.progressPending = ['共同回忆'];
+        entry.relationshipSnapshot = relationshipSnapshot;
+        for (const segment of segments.filter(item => /:comments:\d+$/u.test(item.slot))) {
+            // at() also exposes closed comments inside the last, still-open row.
+            for (let i = 0; ; i++) {
+                const row = segment.at?.(`/items/${i}`) ?? segment.items('/items')[i];
+                if (!row) break;
+                if (core_text.safeId(row.id, '') !== entry.id) continue;
+                entry.comments = core_text.cleanArray(segment.items(`/items/${i}/comments`), 8, 1200);
+                try {
+                    const complete = normalizeAlbumCommentsBatch({ items: [row] }, [entry]);
+                    if (segment.has(`/items/${i}`)) {
+                        entry.comments = complete.get(entry.id);
+                        entry.progressPending = [];
+                    }
+                } catch {}
+            }
+        }
+    }
+    return { kind: core_constants.MODE.ALBUM, title: core_text.normalizeText(index.value?.title, 120) || '回忆相簿', entries,
+        category: '全部', page: 1, pageSize: 6, selectedId: entries[0].id, sharedMemory: false, dialogueIndex: 0, hintVisible: false };
+}
+
 const ALBUM_RELATIONSHIP_HINT_RE = /(?:喜欢|爱|恋|暧昧|告白|表白|交往|恋人|伴侣|信赖|依赖|陪伴|亲密|疏远|冲突|争吵|和好|拒绝|同居|约定|关系|like|love|dating|relationship|trust|confess)/i;
 
 // Relationship scanning must inspect the complete stored timeline, not only the CG-local or

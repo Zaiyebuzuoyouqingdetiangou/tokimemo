@@ -125,7 +125,7 @@ function recoveryIdentity(origin, mode) {
 function validJournal(raw, now) {
     try {
         // Bound the persisted object before inspecting it. JSON data cannot acquire authority.
-        const journal = JSON.parse(jsonData(raw, GENERATION_RECOVERY_LIMITS.journalChars));
+        const journal = JSON.parse(jsonData(raw, GENERATION_RECOVERY_LIMITS.journalChars, true));
         if (journal.kind !== 'generation-recovery' || journal.version !== 1
             || !recoveryIdentity(journal.identity, journal.identity?.mode)
             || !DIGEST.test(journal.settingsHash || '') || !Array.isArray(journal.segments)
@@ -142,6 +142,11 @@ function validJournal(raw, now) {
             }
         }
         if (journal.inputSnapshotVersion !== undefined && journal.inputSnapshotVersion !== 1) return null;
+        if (journal.contentSnapshotVersion !== undefined && (journal.contentSnapshotVersion !== 1
+            || !journal.contentSnapshot || typeof journal.contentSnapshot !== 'object' || Array.isArray(journal.contentSnapshot))) return null;
+        if (journal.draftId !== undefined && !primitiveString(journal.draftId, 240, true)) return null;
+        if (journal.pageId !== undefined && !primitiveString(journal.pageId, 120, true)) return null;
+        if (journal.sourceIdentity !== undefined && !recoveryIdentity(journal.sourceIdentity, journal.sourceIdentity?.mode)) return null;
         if (journal.sourcePolicy !== undefined && (!journal.sourcePolicy || Array.isArray(journal.sourcePolicy)
             || Object.keys(journal.sourcePolicy).some(key => !['character', 'persona', 'selection'].includes(key) || !DIGEST.test(journal.sourcePolicy[key])))) return null;
         const slots = new Set();
@@ -159,8 +164,9 @@ function validJournal(raw, now) {
             }
             // Error messages, request bodies, credentials and arbitrary fields do not re-enter storage.
             for (const key of Object.keys(segment)) {
-                if (!['slot', 'requestHash', 'state', 'rawJson', 'partial', 'failureCode', 'contract'].includes(key)) return null;
+                if (!['slot', 'requestHash', 'state', 'rawJson', 'partial', 'failureCode', 'contract', 'requestRecipe'].includes(key)) return null;
             }
+            if (segment.requestRecipe !== undefined && !validRequestRecipe(segment.requestRecipe)) return null;
             if (Object.hasOwn(segment, 'contract')) {
                 const contract = typeof segment.contract === 'string' && Object.hasOwn(COMPATIBILITY_CONTRACTS, segment.contract) && COMPATIBILITY_CONTRACTS[segment.contract];
                 if (!contract || contract.mode !== journal.identity.mode || !contract.slot.test(segment.slot)) return null;
@@ -193,14 +199,15 @@ export function exportGenerationRecovery(raw) {
     if (!journal) throw generationRecoveryMismatch('record');
     const keys = ['kind', 'version', 'identity', 'settingsHash', 'createdAt', 'updatedAt', 'segments',
         'failureCode', 'failureCategory', 'failurePhase', 'frozenInputs', 'inputSnapshotVersion', 'sourcePolicy',
-        'operation', 'replaceExisting'];
+        'operation', 'replaceExisting', 'draftId', 'pageId', 'sourceIdentity', 'contentSnapshotVersion', 'contentSnapshot'];
     const pick = item => Object.fromEntries(keys.filter(key => Object.hasOwn(item, key)).map(key => [key, item[key]]));
     return { kind: 'hearttrace-module-recovery-export', version: 1, journal: pick(journal),
         previousAttempts: (Array.isArray(journal.previousAttempts) ? journal.previousAttempts : []).map(pick) };
 }
 
 export async function createGenerationRecovery({ origin, mode, settingsIdentity, existing = null,
-    continueRequested = false, save, assertCurrent = () => true, now = () => Date.now(), pageOnly = false, taskScopes = [], sourcePolicy = null, confirmLegacyRestart = null } = {}) {
+    continueRequested = false, save, assertCurrent = () => true, now = () => Date.now(), pageOnly = false, taskScopes = [], sourcePolicy = null, confirmLegacyRestart = null,
+    contentSnapshot = null, draftId = '', pageId = '', onProgress = null, modeTaskScopes = [] } = {}) {
     const identity = recoveryIdentity(origin, mode);
     if (!identity) throw recoveryError('RMT_RECOVERY_IDENTITY', '续写缺少当前档案身份，未发送请求，也没有改写旧内容。');
     const settingsHash = await generationRecoveryDigest(settingsIdentity ?? '');
@@ -211,13 +218,23 @@ export async function createGenerationRecovery({ origin, mode, settingsIdentity,
         const categories = { characterKey: 'character', characterId: 'character', characterAvatar: 'character',
             chatId: 'chat', archiveRevision: 'archive', archiveTargetEntryId: 'target', mode: 'operation' };
         for (const [key, category] of Object.entries(categories)) {
+            if (key === 'archiveRevision' && readGenerationContentSnapshot(journal) && journal.identity[key] !== identity[key]) {
+                journal.sourceIdentity ||= structuredClone(journal.identity);
+                journal.identity = { ...journal.identity, archiveRevision: identity.archiveRevision };
+            }
             if ((journal.identity[key] ?? '') !== identity[key]) throw generationRecoveryMismatch(category);
         }
         if (jsonData(journal.identity) !== jsonData(identity)) throw generationRecoveryMismatch('record');
-        if (journal.settingsHash !== settingsHash) throw generationRecoveryMismatch('configuration');
+        if (!readGenerationContentSnapshot(journal) && journal.settingsHash !== settingsHash) throw generationRecoveryMismatch('configuration');
     }
     journal ||= { kind: 'generation-recovery', version: 1, identity, settingsHash,
         inputSnapshotVersion: 1, createdAt: clock, updatedAt: clock, segments: [], failureCode: '' };
+    if (!continueRequested && contentSnapshot) {
+        journal.contentSnapshot = JSON.parse(jsonData(contentSnapshot, GENERATION_RECOVERY_LIMITS.requestChars, true));
+        journal.contentSnapshotVersion = 1;
+    }
+    if (!journal.draftId && draftId) journal.draftId = draftId;
+    if (!journal.pageId && pageId) journal.pageId = pageId;
     // Old versions could write a fresh input snapshot before verifying a legacy
     // request. A retry-only, unmarked record may still need explicit restart.
     // Never restart complete or truncated segments and never infer equivalence.
@@ -228,9 +245,12 @@ export async function createGenerationRecovery({ origin, mode, settingsIdentity,
         unverifiedLegacySlots: new Set(legacyWithoutInputs ? journal.segments.map(row => row.slot) : []),
         stagedSourcePolicy: !journal.sourcePolicy && sourcePolicy ? sourcePolicy : null,
         taskScopes: (Array.isArray(taskScopes) ? taskScopes : []).filter(scope => typeof scope === 'string' && scope && scope.length <= 1800).slice(0, 4).sort((a,b) => b.length - a.length),
-        pageOnly: pageOnly === true, durable: false, lane: Promise.resolve(), activeSlots: new Set() };
+        modeTaskScopes: (Array.isArray(modeTaskScopes) ? modeTaskScopes : []).filter(scope => typeof scope === 'string' && scope).sort((a,b) => b.length - a.length),
+        pageOnly: pageOnly === true, durable: false, lane: Promise.resolve(), activeSlots: new Set(),
+        onProgress: typeof onProgress === 'function' ? onProgress : null,
+        progressLane: Promise.resolve(), publishedProgress: '' };
     internalHandles.add(handle);
-    handleBindings.set(handle, { identity: jsonData(identity), settingsHash });
+    handleBindings.set(handle, { identity: jsonData(identity), settingsHash: journal.settingsHash });
     checkCurrent(handle);
     return handle;
 }
@@ -246,7 +266,77 @@ export function detachGenerationRecovery(origin) {
 }
 
 export function generationRecoverySnapshot(handle) {
-    return internalHandles.has(handle) ? JSON.parse(jsonData(handle.journal, GENERATION_RECOVERY_LIMITS.journalChars)) : null;
+    return internalHandles.has(handle) ? JSON.parse(jsonData(handle.journal, GENERATION_RECOVERY_LIMITS.journalChars, true)) : null;
+}
+
+export function readGenerationContentSnapshot(value) {
+    const journal = internalHandles.has(value) ? value.journal : value;
+    if (journal?.contentSnapshotVersion !== 1 || !journal.contentSnapshot || typeof journal.contentSnapshot !== 'object' || Array.isArray(journal.contentSnapshot)) return null;
+    try { return JSON.parse(jsonData(journal.contentSnapshot, GENERATION_RECOVERY_LIMITS.requestChars, true)); } catch { return null; }
+}
+
+export function generationContentSnapshotForOrigin(origin) {
+    const handle = origin && handles.get(origin);
+    return handle ? readGenerationContentSnapshot(currentAttachedJournal(origin, handle)) : null;
+}
+
+export async function persistGenerationRecovery(handle) {
+    if (!internalHandles.has(handle)) return false;
+    const saved = await changeJournal(handle, () => {});
+    if (!saved && !handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '原任务资料未能保存，未发起生成请求；旧内容和草稿仍保留。');
+    return saved;
+}
+
+// Publish after the journal acknowledges durable storage. A separate lane keeps
+// projections ordered without re-entering the journal's storage transaction.
+// Failure here must never turn a received complete segment back into a retry.
+export async function publishGenerationRecoveryProgress(handle) {
+    if (!internalHandles.has(handle) || !handle.onProgress) return false;
+    const operation = handle.progressLane.catch(() => {}).then(async () => {
+        checkCurrent(handle);
+        if (!handle.durable) return false;
+        const journal = generationRecoverySnapshot(handle);
+        const received = journal.segments.filter(row => row.state === 'complete' || row.state === 'truncated');
+        if (!received.length) return false;
+        const signature = JSON.stringify({ segments: received.map(row => ({ slot: row.slot,
+            state: row.state, rawJson: row.rawJson, partial: row.partial })),
+            operation: journal.operation, frozenInputs: journal.frozenInputs });
+        if (signature === handle.publishedProgress) return true;
+        try {
+            await handle.onProgress(journal);
+            checkCurrent(handle);
+            handle.publishedProgress = signature;
+            return true;
+        } catch (error) {
+            if (error?.name === 'AbortError') throw error;
+            throw recoveryError('RMT_RECOVERY_PROGRESS_STORAGE', '已收到的正文和成功分段仍在草稿中，但可阅读成果暂未保存成功；已停止后续请求，可检查本地存储后继续，不会重做成功段。');
+        }
+    });
+    handle.progressLane = operation;
+    return operation;
+}
+
+function validRequestRecipe(recipe) {
+    return !!recipe && recipe.version === 1 && typeof recipe.identity?.prompt === 'string'
+        && typeof recipe.identity?.contextEnvelope === 'string'
+        && (recipe.actualPrompt === undefined || typeof recipe.actualPrompt === 'string')
+        && Object.keys(recipe).every(key => ['version', 'identity', 'actualPrompt', 'contentSettings'].includes(key));
+}
+
+// Called at the transport boundary after macro expansion and content policy have
+// been applied. Credentials, profiles and provider options never enter this record.
+export async function freezeRecoveryRequestPayload(options, payload) {
+    const record = options?.[TOKEN] && requestTokens.get(options[TOKEN]);
+    if (!record || !readGenerationContentSnapshot(record.handle)) return payload;
+    if (record.recipe?.actualPrompt !== undefined) return structuredClone({ actualPrompt: record.recipe.actualPrompt, contentSettings: record.recipe.contentSettings || {} });
+    const safe = JSON.parse(jsonData({ actualPrompt: payload.actualPrompt, contentSettings: payload.contentSettings || {} }, GENERATION_RECOVERY_LIMITS.requestChars, true));
+    record.recipe = { ...record.recipe, ...safe };
+    const saved = await changeJournal(record.handle, journal => {
+        const prior = journal.segments.find(row => row.slot === record.slot);
+        replaceSegment(journal, { ...(prior || { slot: record.slot, requestHash: record.requestHash, state: 'retry' }), requestRecipe: record.recipe });
+    });
+    if (!saved && !record.handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '本段原始请求未能保存，未发起模型请求；旧内容和草稿仍保留。');
+    return safe;
 }
 
 export function generationRecoveryForOrigin(origin) {
@@ -341,7 +431,7 @@ async function changeJournal(handle, mutate) {
         const next = generationRecoverySnapshot(handle);
         mutate(next);
         next.updatedAt = handle.now();
-        const serialized = jsonData(next, GENERATION_RECOVERY_LIMITS.journalChars);
+        const serialized = jsonData(next, GENERATION_RECOVERY_LIMITS.journalChars, true);
         if (next.segments.length > GENERATION_RECOVERY_LIMITS.segments) {
             throw recoveryError('RMT_RECOVERY_LIMIT', '本轮续写草稿已达到分段上限，此前成功部分和旧内容仍保留。');
         }
@@ -402,6 +492,14 @@ async function permitsLegacyRequest(previous, options, handle, contract) {
 
 // `run` owns the real request/retry policy. It MUST invoke accepted(raw) only after its
 // production validator succeeds. On replay we invoke that very validator again.
+function recoverySegmentSlot(handle, value) {
+    for (const scope of handle.modeTaskScopes) {
+        if (value === scope || value.startsWith(`${scope}:`)) return `mode:@origin:${handle.journal.identity.mode}${value.slice(scope.length)}`;
+    }
+    for (const scope of handle.taskScopes) value = value.replace(scope, '@origin');
+    return value;
+}
+
 export async function withRecoverySegment(prompt, options, validator, run) {
     const handle = options?.origin && handles.get(options.origin);
     if (!handle) return run(prompt, options, async () => {});
@@ -410,12 +508,22 @@ export async function withRecoverySegment(prompt, options, validator, run) {
     if (!slot) return run(prompt, options, async () => {});
     // Live chat and its indexed view have different scheduler keys but the same
     // frozen archive identity. Normalize only code-owned scope components.
-    for (const scope of handle.taskScopes) slot = slot.replace(scope, '@origin');
-    if (handle.activeSlots.has(slot)) throw recoveryError('RMT_RECOVERY_BUSY', '这一段已经在继续生成，请等当前请求结束。');
-    handle.activeSlots.add(slot);
+    const slotKey = recoverySegmentSlot(handle, slot);
+    // Compare legacy raw scopes without rewriting their persisted slot/hash.
+    const retained = handle.journal.segments.find(segment => recoverySegmentSlot(handle, segment.slot) === slotKey);
+    slot = retained?.slot || slotKey;
+    if (handle.activeSlots.has(slotKey)) throw recoveryError('RMT_RECOVERY_BUSY', '这一段已经在继续生成，请等当前请求结束。');
+    handle.activeSlots.add(slotKey);
     let token;
     try {
-        const requestHash = await generationRecoveryDigest(requestIdentity(prompt, options));
+        let recipe = retained?.requestRecipe || null;
+        if (recipe) {
+            if (await generationRecoveryDigest(recipe.identity) !== retained.requestHash) throw generationRecoveryMismatch('record', 'request');
+            prompt = recipe.identity.prompt;
+            options = { ...options, contextEnvelope: recipe.identity.contextEnvelope,
+                ...(recipe.contentSettings ? { recoveryContentSettings: recipe.contentSettings } : {}) };
+        }
+        const requestHash = await generationRecoveryDigest(recipe?.identity || requestIdentity(prompt, options));
         checkCurrent(handle);
         const previous = handle.journal.segments.find(segment => segment.slot === slot);
         const contract = compatibilityContract(options, handle, slot);
@@ -461,22 +569,33 @@ export async function withRecoverySegment(prompt, options, validator, run) {
                 });
                 if (!saved && !handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '此前成功段已通过当前校验，但浏览器未能保存兼容进度；已停止后续请求，原正文仍保留。');
             }
+            await publishGenerationRecoveryProgress(handle);
             return value;
         }
         const partial = handle.continueRequested && previous?.state === 'truncated' ? previous.partial : '';
+        if (!recipe && readGenerationContentSnapshot(handle)) {
+            recipe = { version: 1, identity: requestIdentity(prompt, options) };
+            const saved = await changeJournal(handle, journal => {
+                replaceSegment(journal, { ...(previous || { slot, requestHash, state: 'retry' }), requestRecipe: recipe });
+            });
+            if (!saved && !handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '本段原始请求未能保存，未发起模型请求；旧内容和草稿仍保留。');
+        }
         token = {};
-        requestTokens.set(token, { handle, slot, requestHash, contract });
-        const requestOptions = { ...options, [TOKEN]: token };
+        const requestRecord = { handle, slot, requestHash, contract, recipe };
+        requestTokens.set(token, requestRecord);
+        const requestOptions = { ...options, [TOKEN]: token,
+            ...(recipe ? { recoveryBasePrompt: prompt, recoveryContinuationPartial: partial } : {}) };
         let accepted = false;
         const onAccepted = async raw => {
             const rawJson = jsonData(raw);
             if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw recoveryError('RMT_RECOVERY_DATA', '续写返回的结构不可保存，旧内容仍保留。');
             const saved = await changeJournal(handle, journal => {
-                replaceSegment(journal, { slot, requestHash, state: 'complete', rawJson, ...(contract ? { contract } : {}) });
+                replaceSegment(journal, { slot, requestHash, state: 'complete', rawJson, ...(contract ? { contract } : {}), ...(requestRecord.recipe ? { requestRecipe: requestRecord.recipe } : {}) });
                 journal.failureCode = '';
             });
             if (!saved && !handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '本段已返回，但浏览器没有成功保存进度；已停止后续请求。旧内容仍在，请检查本地存储后重试。');
             accepted = true;
+            await publishGenerationRecoveryProgress(handle);
         };
         try {
             const result = await run(generationContinuationPrompt(prompt, partial), requestOptions, onAccepted);
@@ -490,7 +609,7 @@ export async function withRecoverySegment(prompt, options, validator, run) {
                     const saved = journal.segments.find(segment => segment.slot === slot);
                     const code = recoveryFailureCode(error);
                     // Preserve a genuine truncated draft across later auth/rate/validation errors.
-                    if (saved?.state !== 'complete' && saved?.state !== 'truncated') replaceSegment(journal, { slot, requestHash, state: 'retry', failureCode: code, ...(contract ? { contract } : {}) });
+                    if (saved?.state !== 'complete' && saved?.state !== 'truncated') replaceSegment(journal, { slot, requestHash, state: 'retry', failureCode: code, ...(contract ? { contract } : {}), ...(requestRecord.recipe ? { requestRecipe: requestRecord.recipe } : {}) });
                     journal.failureCode = code;
                 });
             }
@@ -498,7 +617,7 @@ export async function withRecoverySegment(prompt, options, validator, run) {
         }
     } finally {
         if (token) requestTokens.delete(token);
-        handle.activeSlots.delete(slot);
+        handle.activeSlots.delete(slotKey);
     }
 }
 
@@ -510,7 +629,7 @@ export async function recordRecoveryTruncation(options, raw, error) {
     }
     await changeJournal(record.handle, journal => {
         replaceSegment(journal, { slot: record.slot, requestHash: record.requestHash,
-            state: 'truncated', partial: raw, failureCode: 'RMT_JSON_TRUNCATED', ...(record.contract ? { contract: record.contract } : {}) });
+            state: 'truncated', partial: raw, failureCode: 'RMT_JSON_TRUNCATED', ...(record.contract ? { contract: record.contract } : {}), ...(record.recipe ? { requestRecipe: record.recipe } : {}) });
         journal.failureCode = 'RMT_JSON_TRUNCATED';
     });
     // No hidden second paid request after a captured truncation; continuation is explicit.
@@ -522,6 +641,7 @@ export async function recordRecoveryTruncation(options, raw, error) {
         : record.handle.pageOnly ? '本段正文未写完，草稿和此前成功分段暂存于当前页面。请勿刷新页面；可点击“继续生成”补齐当前段。'
         : '本段正文未写完，但浏览器没有成功保存这段草稿；旧内容仍在，请检查本地存储后重试。';
     error.message = error.safeUserMessage;
+    await publishGenerationRecoveryProgress(record.handle);
     return true;
 }
 

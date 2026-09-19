@@ -7,6 +7,7 @@ import * as recovery from '../generation/recovery.js';
 import * as client from '../generation/client.js';
 import * as text from '../core/text.js';
 import * as taskTrace from '../core/taskTrace.js';
+import * as digest from '../core/digest.js';
 
 export const ARCHIVE_RECOVERY_PAGE_NOTICE = '档案整理草稿仅本页保留，请勿刷新；关闭心迹回廊可保留。';
 export const ARCHIVE_RECOVERY_MAX_DRAFTS = 4;
@@ -16,6 +17,11 @@ const scopes = new Map();
 const lanes = new Map();
 const loaded = new Set();
 const hydrationLanes = new Map();
+function inputsDigest(inputs) { return digest.sha256Bytes(new TextEncoder().encode(JSON.stringify(inputs))); }
+function inputsMatchJournal(entry) {
+    const expected = entry?.journal?.contentSnapshot?.archiveInputsHash;
+    return !expected || (!!entry.inputs && expected === inputsDigest(entry.inputs));
+}
 function storageFailure(phase = 'save') {
     return text.safeUserError(phase === 'read'
         ? '本机草稿读取未完成，不能认定没有记录；原记录未修改，也没有请求模型。请重新读取，不要清除数据。'
@@ -121,8 +127,8 @@ async function hydrateArchiveRecoveryScope(key, origin, operation, force) {
 function validStoredEntry(entry, key, origin, operation) {
     const identity = entry?.journal?.identity;
     return entry && entry.key === key && entry.operation === operation && /^[a-f0-9]{64}$/.test(entry.sourceHash || '')
-        && ['segments','awaiting-commit','profile-only'].includes(entry.stage)
-        && typeof entry.fullRebuild === 'boolean' && recovery.generationRecoverySummary(entry.journal)
+        && ['segments','awaiting-commit','profile-only','profile-result','archive-result'].includes(entry.stage)
+        && typeof entry.fullRebuild === 'boolean' && recovery.generationRecoverySummary(entry.journal) && inputsMatchJournal(entry)
         && identity.mode === (operation === 'import' ? 'archive-import' : 'archive-profile')
         && identity.archiveRevision === `archive-draft:${entry.sourceHash}`
         && ['characterKey','characterId','characterAvatar','chatId'].every(field => (identity[field] || '') === (origin[field] || ''));
@@ -162,9 +168,44 @@ function incompatible() {
     return text.safeUserError('这份档案整理草稿与当前来源、档案或生成设置不一致。原草稿仍保留，本次没有重新生成成功分块。', 'RMT_RECOVERY_INPUT_CHANGED');
 }
 
-export function archiveRecoverySummary(origin, operation = 'import') {
+function archiveDraftId(key) {
+    const entry = drafts.get(key);
+    // Stable when the same task moves to a paused slot, distinct when a later
+    // task reuses its operation's active slot.
+    return entry?.draftId || `archive-draft-${inputsDigest([entry?.key || key, entry?.sourceHash || '', entry?.journal?.createdAt || 0])}`;
+}
+
+// Reading a checkpoint never promotes it to archive evidence or invokes a model.
+export function listArchiveRecoveryDrafts(origin, operation = null) {
+    return (operation ? [operation] : ['import', 'profile']).flatMap(kind => {
+        const key = draftKey(origin, kind);
+        return [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`)).map(([id, entry]) => ({
+            draftId: archiveDraftId(id), operation: kind, stage: entry.stage, paused: id !== key,
+            active: entry.active === true, durable: entry.durable === true,
+            createdAt: entry.journal?.createdAt || 0, updatedAt: entry.journal?.updatedAt || 0,
+            completed: recovery.generationRecoverySummary(entry.journal)?.completed || 0,
+        }));
+    });
+}
+
+export function readArchiveRecoveryDraft(origin, draftId) {
+    for (const operation of ['import', 'profile']) {
+        const key = draftKey(origin, operation);
+        const found = [...drafts].find(([id]) => (id === key || id.startsWith(`${key}:paused:`)) && archiveDraftId(id) === draftId);
+        if (found) {
+            const [id, entry] = found;
+            if (!validStoredEntry(entry, key, origin, operation)) throw incompatible();
+            return { ...structuredClone(entry), draftId, paused: id !== key };
+        }
+    }
+    throw text.safeUserError('找不到这份整理草稿；原档案没有改动。', 'RMT_ARCHIVE_DRAFT_NOT_FOUND');
+}
+
+export function archiveRecoverySummary(origin, operation = 'import', { includeArchived = false } = {}) {
     const entry = drafts.get(draftKey(origin, operation));
-    if (!entry) return null;
+    const retained = listArchiveRecoveryDrafts(origin, operation);
+    if (!entry) return includeArchived && retained.length ? { operation, drafts: retained, onlyArchivedDrafts: true, completed: 0,
+        notice: '另起任务前的草稿仍保留，可以打开查看；不会自动请求模型。' } : null;
     const summary = recovery.generationRecoverySummary(entry.journal);
     const savedCompleted = scopes.get(draftKey(origin, operation))?.completed?.get(draftKey(origin, operation)) || 0;
     return { operation, fullRebuild: entry.fullRebuild, profileOnly: entry.stage === 'profile-only',
@@ -172,29 +213,42 @@ export function archiveRecoverySummary(origin, operation = 'import') {
         savedCompleted, completed: summary?.completed || 0, truncated: summary?.truncated || 0,
         canContinue: entry.stage === 'segments' && !!summary?.canContinue,
         canRetry: entry.stage === 'profile-only' || !!summary?.canRetry,
-        failureCode: summary?.failureCode || '', pageOnly: entry.durable !== true, notice: entry.durable === true
+        failureCode: summary?.failureCode || '', drafts: retained, onlyArchivedDrafts: ['profile-result','archive-result'].includes(entry.stage), pageOnly: entry.durable !== true, notice: entry.durable === true
             ? '成功分段与原任务输入已保存到本机；刷新后可继续未完成部分，不重做已保存分段。换设备前请导出。'
             : `本机已确认保存 ${savedCompleted} 个成功分段；当前页面共有 ${summary?.completed || 0} 个。尚未确认保存的成果请先导出，不要刷新。` };
 }
 
 // Called only after a real saved bank of exactly this revision is observed.
 // Deferred archive writes must not discard checkpoints before their origin commits.
-export function acknowledgeArchiveRecoveryCommit(origin) {
-    const key = draftKey(origin, 'import'), entry = drafts.get(key);
+export function acknowledgeArchiveRecoveryCommit(origin, draftId = '') {
+    const storageKey = draftKey(origin, 'import');
+    const key = draftId ? [...drafts.keys()].find(id => (id === storageKey || id.startsWith(`${storageKey}:paused:`)) && archiveDraftId(id) === draftId) : storageKey;
+    const entry = drafts.get(key);
     if (!entry || entry.stage !== 'awaiting-commit' || entry.committedRevision !== origin?.archiveRevision) return false;
     if (entry.profilePending) entry.stage = 'profile-only';
-    else drafts.delete(key);
-    scheduleSave(key);
+    else {
+        // A batch can commit before its cover does. Keep that received cover in
+        // a separate readable checkpoint without occupying the next batch slot.
+        const profile = entry.journal?.segments?.find(segment => segment.slot === 'profile');
+        if (profile && profile.state !== 'complete') {
+            entry.stage = 'profile-only'; entry.active = false;
+            entry.draftId = archiveDraftId(key);
+            drafts.set(`${storageKey}:paused:profile:${entry.journal.createdAt}`, entry);
+        }
+        drafts.delete(key);
+    }
+    scheduleSave(storageKey);
     return true;
 }
 
 export function archiveRecoveryInputs(origin, operation = 'import') {
     const entry = drafts.get(draftKey(origin, operation));
+    if (entry && !inputsMatchJournal(entry)) throw incompatible();
     return entry?.stage === 'segments' && !entry.importedUnverified && entry.inputs ? structuredClone(entry.inputs) : null;
 }
 
-export function parkArchiveRecovery(origin) {
-    const key = draftKey(origin, 'import'), entry = drafts.get(key);
+export function parkArchiveRecovery(origin, operation = 'import') {
+    const key = draftKey(origin, operation), entry = drafts.get(key);
     if (!entry) return false;
     if (entry.active || entry.stage === 'awaiting-commit') throw text.safeUserError('请先完成当前请求或仅重试保存；未改动草稿。', 'RMT_RECOVERY_BUSY');
     if (drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) throw text.safeUserError('本页已保留四份草稿，旧成果没有被挤掉；请先导出并明确处理旧草稿。', 'RMT_RECOVERY_LIMIT');
@@ -204,22 +258,36 @@ export function parkArchiveRecovery(origin) {
     return true;
 }
 
-export function exportArchiveRecovery(origin) {
-    const key = draftKey(origin, 'import');
+export function exportArchiveRecovery(origin, operation = 'import') {
+    const key = draftKey(origin, operation);
     return [...drafts].filter(([id]) => id === key || id.startsWith(`${key}:paused:`))
         .map(([, entry]) => ({ stage: entry.stage, fullRebuild: entry.fullRebuild, journal: structuredClone(entry.journal), ...(entry.inputs ? { inputs: structuredClone(entry.inputs) } : {}) }));
 }
 
 export async function beginArchiveRecovery({ origin, operation = 'import', sourceIdentity, sourceFragments = [], settingsIdentity,
-    fullRebuild = false, continueApproved = false, inputs = null, assertCurrent = () => true } = {}) {
-    const key = draftKey(origin, operation);
-    if (!key) throw text.safeUserError('无法确定档案整理草稿属于哪个聊天，本次没有发送请求。', 'RMT_RECOVERY_IDENTITY');
+    fullRebuild = false, continueApproved = false, inputs = null, assertCurrent = () => true, onProgress = null, draftId = '', nextIndependentBatch = false } = {}) {
+    const storageKey = draftKey(origin, operation);
+    if (!storageKey) throw text.safeUserError('无法确定档案整理草稿属于哪个聊天，本次没有发送请求。', 'RMT_RECOVERY_IDENTITY');
     await hydrateArchiveRecovery(origin, operation);
     if (assertCurrent() === false) throw new DOMException('Archive origin changed', 'AbortError');
-    const existing = drafts.get(key);
+    const key = draftId ? [...drafts.keys()].find(id => (id === storageKey || id.startsWith(`${storageKey}:paused:`)) && archiveDraftId(id) === draftId) : storageKey;
+    if (!key) throw incompatible();
+    let existing = drafts.get(key);
+    let priorResult = null, inheritedDraftId = '';
+    if (existing?.stage === 'archive-result' && nextIndependentBatch) {
+        if (existing.active) throw text.safeUserError('这份整理草稿正在处理。', 'RMT_RECOVERY_BUSY');
+        priorResult = existing.archiveResult; inheritedDraftId = archiveDraftId(key);
+    } else if (['profile-result','archive-result'].includes(existing?.stage)) {
+        // Starting a new explicit task must not overwrite an independent result.
+        parkArchiveRecovery(origin, operation);
+        await flushArchiveRecovery(origin, operation);
+        existing = null;
+    }
+    const expectedEntry = existing;
+    if (priorResult) existing = null;
     if (existing?.active) throw text.safeUserError('这份档案草稿正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
     if (existing && (!continueApproved || existing.stage !== 'segments')) throw incompatible();
-    if (!existing && drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) {
+    if (!existing && !priorResult && drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) {
         throw text.safeUserError('本页已保留 4 份未完成的档案整理草稿。请先完成或明确放弃其中一份；旧草稿没有被挤掉。', 'RMT_RECOVERY_LIMIT');
     }
     if (!Array.isArray(sourceFragments) || sourceFragments.length > recovery.GENERATION_RECOVERY_LIMITS.segments) {
@@ -235,33 +303,89 @@ export async function beginArchiveRecovery({ origin, operation = 'import', sourc
     // Here it is ONLY a draft fingerprint, never an origin for archive/cache writes.
     // An initial import has no bank and must remain that way until normal commit.
     const recoveryOrigin = { ...origin, archiveRevision: `archive-draft:${sourceHash}` };
-    const entry = existing || { key, operation, sourceHash, fullRebuild: !!fullRebuild, stage: 'segments', journal: null, active: false };
+    const entry = existing || { key: storageKey, operation, sourceHash, fullRebuild: !!fullRebuild, stage: 'segments', journal: null, active: false,
+        ...(priorResult ? { archiveResult: structuredClone(priorResult), draftId: inheritedDraftId } : {}) };
     let attached = false;
     const stillCurrent = () => (!attached || drafts.get(key) === entry) && assertCurrent() !== false;
     const handle = await recovery.createGenerationRecovery({ origin: recoveryOrigin,
         mode: operation === 'import' ? 'archive-import' : 'archive-profile', settingsIdentity, pageOnly: false,
-        existing: entry.journal, continueRequested: !!existing, assertCurrent: stillCurrent,
+        ...(!existing && inputs?.taskInputV1 ? { contentSnapshot: { version: 1, archiveInputsHash: inputsDigest(inputs) } } : {}),
+        existing: entry.journal, continueRequested: !!existing, assertCurrent: stillCurrent, onProgress,
         save: async journal => {
             if (drafts.get(key) !== entry) throw new DOMException('Archive draft cleared', 'AbortError');
             entry.journal = journal;
             entry.durable = false;
-            return saveScope(key);
+            return saveScope(storageKey);
         } });
-    if (drafts.get(key) && drafts.get(key) !== existing) throw incompatible();
+    if (drafts.get(key) && drafts.get(key) !== expectedEntry) throw incompatible();
     if (existing?.active) throw text.safeUserError('这份档案草稿正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
-    if (!existing && drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) throw text.safeUserError('本页档案整理草稿已满，旧草稿仍保留。', 'RMT_RECOVERY_LIMIT');
+    if (!existing && !priorResult && drafts.size >= ARCHIVE_RECOVERY_MAX_DRAFTS) throw text.safeUserError('本页档案整理草稿已满，旧草稿仍保留。', 'RMT_RECOVERY_LIMIT');
     if ((!existing || entry.importedUnverified) && inputs) entry.inputs = structuredClone(inputs);
+    if (priorResult && expectedEntry.profilePending) {
+        const profileCopy = { ...structuredClone(expectedEntry), stage: 'profile-only', active: false,
+            draftId: `${inheritedDraftId}-profile`, profileMemory: structuredClone(priorResult.memoryBank) };
+        delete profileCopy.archiveResult;
+        drafts.set(`${storageKey}:paused:profile:${expectedEntry.journal.createdAt}`, profileCopy);
+    }
     entry.importedUnverified = false;
     entry.active = true;
     entry.journal = recovery.generationRecoverySnapshot(handle);
     drafts.set(key, entry);
     attached = true;
-    try { await saveScope(key); } catch (error) { entry.active = false; throw error; }
+    try { await saveScope(storageKey); } catch (error) { entry.active = false; throw error; }
     if (assertCurrent() === false) { entry.active = false; throw new DOMException('Archive origin changed', 'AbortError'); }
     recovery.attachGenerationRecovery(recoveryOrigin, handle);
-    const ticket = { key, entry, origin: recoveryOrigin, handle, assertCurrent: stillCurrent, released: false };
+    const ticket = { key, storageKey, entry, origin: recoveryOrigin, handle, assertCurrent: stillCurrent, released: false };
     tickets.add(ticket);
     return ticket;
+}
+
+// A first import's cover is still the very same request after memories commit.
+// Its original identity, recipe and paid prefix stay attached to the import slot.
+export async function resumeArchiveImportProfile({ origin, draftId = '', settingsIdentity = '', assertCurrent = () => true, onProgress = null } = {}) {
+    await hydrateArchiveRecovery(origin, 'import');
+    const key = draftKey(origin, 'import');
+    const found = draftId ? [...drafts].find(([id]) => (id === key || id.startsWith(`${key}:paused:`)) && archiveDraftId(id) === draftId)
+        : drafts.has(key) ? [key, drafts.get(key)] : null;
+    if (!found || !(found[1].stage === 'profile-only' || found[1].stage === 'archive-result' && found[1].profilePending)
+        || !inputsMatchJournal(found[1])) throw incompatible();
+    const [recordKey, entry] = found;
+    if (entry.active) throw text.safeUserError('这份简介正在处理，请等当前请求结束。', 'RMT_RECOVERY_BUSY');
+    const recoveryOrigin = { ...origin, ...entry.journal.identity };
+    const stillCurrent = () => drafts.get(recordKey) === entry && assertCurrent() !== false;
+    const handle = await recovery.createGenerationRecovery({ origin: recoveryOrigin, mode: 'archive-import',
+        existing: entry.journal, continueRequested: true, settingsIdentity, assertCurrent: stillCurrent, onProgress,
+        save: async journal => { entry.journal = journal; entry.durable = false; return saveScope(key); } });
+    entry.active = true;
+    recovery.attachGenerationRecovery(recoveryOrigin, handle);
+    const ticket = { key: recordKey, storageKey: key, entry, origin: recoveryOrigin, handle, assertCurrent: stillCurrent, released: false };
+    tickets.add(ticket);
+    return ticket;
+}
+
+export async function retainCompletedArchiveProfile(ticket, profile, sourceMemory) {
+    if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry) throw incompatible();
+    ticket.entry.profileResult = { profile: structuredClone(profile), sourceMemory: structuredClone(sourceMemory), completedAt: Date.now() };
+    if (ticket.entry.archiveResult) {
+        Object.assign(ticket.entry.archiveResult.memoryBank, { archiveName: profile.archiveName,
+            archiveSummary: profile.archiveSummary, archiveVerdict: structuredClone(profile.archiveVerdict), archiveKeywords: structuredClone(profile.keywords) });
+        ticket.entry.profilePending = false;
+    } else ticket.entry.stage = 'profile-result';
+    ticket.entry.durable = false;
+    await saveScope(ticket.storageKey || ticket.key);
+    return { status: 'independent', draftId: archiveDraftId(ticket.key) };
+}
+
+export async function retainCompletedArchiveImport(ticket, memoryBank, { sourceMemory = null, profilePending = false, baseMemoryMissing = false } = {}) {
+    if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry) throw incompatible();
+    ticket.entry.archiveResult = { memoryBank: structuredClone(memoryBank),
+        sourceMemory: sourceMemory ? structuredClone(sourceMemory) : null, completedAt: Date.now(), baseMemoryMissing };
+    ticket.entry.profileMemory = structuredClone(Object.fromEntries(['version','chatId','archiveRevision','characterName','userName','memories']
+        .filter(key => Object.hasOwn(memoryBank,key)).map(key => [key,memoryBank[key]])));
+    ticket.entry.profilePending = profilePending;
+    ticket.entry.stage = 'archive-result'; ticket.entry.durable = false;
+    await saveScope(ticket.storageKey || ticket.key);
+    return { status: 'independent', draftId: archiveDraftId(ticket.key) };
 }
 
 export async function requestArchiveRecoverySegment(ticket, slot, prompt, options, validator) {
@@ -286,21 +410,25 @@ export async function requestArchiveRecoverySegment(ticket, slot, prompt, option
         });
 }
 
-export function stageArchiveRecoveryCommit(ticket, revision, { profilePending = false } = {}) {
+export function stageArchiveRecoveryCommit(ticket, revision, { profilePending = false, profileMemory = null } = {}) {
     if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry || !revision) return false;
     ticket.entry.stage = 'awaiting-commit';
     ticket.entry.committedRevision = String(revision);
     ticket.entry.profilePending = !!profilePending;
-    scheduleSave(ticket.key);
+    if (profileMemory && ticket.entry.journal?.segments?.some(segment => segment.slot === 'profile' && segment.state !== 'complete')) {
+        ticket.entry.profileMemory = structuredClone(Object.fromEntries(['version', 'chatId', 'archiveRevision', 'characterName', 'userName', 'memories']
+            .filter(key => Object.hasOwn(profileMemory, key)).map(key => [key, profileMemory[key]])));
+    }
+    scheduleSave(ticket.storageKey || ticket.key);
     return true;
 }
 
 export function finishArchiveProfileRecovery(ticket, committedOrigin) {
     if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry) return false;
     drafts.delete(ticket.key);
-    const importKey = draftKey(committedOrigin, 'import'), pending = drafts.get(importKey);
-    if (pending?.stage === 'profile-only' && pending.committedRevision === committedOrigin.archiveRevision) drafts.delete(importKey);
-    scheduleSave(ticket.key); if (importKey !== ticket.key) scheduleSave(importKey);
+    // Only this exact task finished. A separately selected/paused profile does
+    // not own another import's paid cover checkpoint, even at the same revision.
+    scheduleSave(ticket.storageKey || ticket.key);
     return true;
 }
 
@@ -309,7 +437,7 @@ export function releaseArchiveRecovery(ticket) {
     ticket.released = true;
     ticket.entry.active = false;
     recovery.detachGenerationRecovery(ticket.origin);
-    scheduleSave(ticket.key);
+    scheduleSave(ticket.storageKey || ticket.key);
 }
 
 // An explicit user discard / destructive archive action may invoke this. Merely

@@ -332,12 +332,13 @@ export function renderEnding() {
     ui_overlay.setBackVisible(true, runtimeState.activeArchiveSnapshot ? (runtimeState.activeArchiveReadOnly ? '只读档案' : '档案') : '当前档案');
     ui_overlay.topTitle(core_constants.MODE_LABEL[core_constants.MODE.ENDING]);
     const replays = Array.isArray(session.confessionReplays) ? session.confessionReplays : [];
+    const partial = session.readableProgress?.complete === false;
     const readOnlyArchive = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
     const view = session.view === 'confessions' ? 'confessions' : 'routes';
     session.view = view;
     const tabs = `<div class="rmt-ending-tabs"><button type="button" class="rmt-ending-tab ${view === 'routes' ? 'active' : ''}" data-rmt-ending-view="routes">结局路线 <span>${session.endings.length}</span></button><button type="button" class="rmt-ending-tab ${view === 'confessions' ? 'active' : ''}" data-rmt-ending-view="confessions">告白回看 <span>${replays.length}</span></button></div>`;
     const confessionRefreshAction = view === 'confessions' && !readOnlyArchive ? '<button type="button" class="rmt-btn" data-rmt-action="refresh-ending-confessions"><i class="fa-solid fa-rotate"></i> 只重新读取告白</button>' : '';
-    const summary = `<section class="rmt-ending-summary"><b>${core_text.esc(session.relationshipState)}</b><p>${core_text.esc(session.relationshipSummary)}</p><div class="rmt-ending-extra-actions">${confessionRefreshAction}</div></section>`;
+    const summary = `<section class="rmt-ending-summary">${partial ? '<p role="status">未完成 · 已生成的路线、终章和后日谈可以阅读，缺少的阶段仍待续生成。</p>' : ''}<b>${core_text.esc(session.relationshipState)}</b><p>${core_text.esc(session.relationshipSummary)}</p><div class="rmt-ending-extra-actions">${confessionRefreshAction}</div></section>`;
     if (view === 'confessions') {
         const selectedReplay = selectedConfessionReplay();
         if (selectedReplay) session.selectedConfessionId = selectedReplay.id;
@@ -348,11 +349,15 @@ export function renderEnding() {
                ${selectedReplay.responseSummary ? `<section class="rmt-ending-section"><small>当时的回应</small><p>${core_text.esc(selectedReplay.responseSummary)}</p></section>` : ''}
                ${selectedReplay.afterEffect ? `<section class="rmt-ending-section"><small>之后</small><p>${core_text.esc(selectedReplay.afterEffect)}</p></section>` : ''}`
             : `<div class="rmt-ending-lock"><b>还没有可回看的告白。</b></div>`;
-        ui_overlay.bodyEl().innerHTML = `<div class="rmt-ending">${summary}${tabs}<nav class="rmt-ending-list" aria-label="告白回看">${replayList || '<div class="rmt-ending-lock">没有检测到可验证的告白记录。</div>'}</nav><main class="rmt-ending-detail">${replayDetail}</main></div>`;
+        ui_overlay.bodyEl().innerHTML = `<div class="rmt-ending">${summary}${tabs}<nav class="rmt-ending-list" aria-label="告白回看">${replayList || (session.progressPending?.includes('告白扫描') ? '<div class="rmt-ending-lock">告白扫描尚未完成。</div>' : '<div class="rmt-ending-lock">没有检测到可验证的告白记录。</div>')}</nav><main class="rmt-ending-detail">${replayDetail}</main></div>`;
         return;
     }
     const selected = selectedEndingRoute();
     if (!selected) {
+        if (partial) {
+            ui_overlay.bodyEl().innerHTML = `<div class="rmt-ending">${summary}${tabs}<p role="status">路线目录尚未完成。</p></div>`;
+            return;
+        }
         ui_overlay.bodyEl().innerHTML = `<div class="rmt-ending">${summary}${tabs}<nav class="rmt-ending-list" aria-label="结局路线"><div class="rmt-ending-lock">当前没有结局路线。</div></nav><main class="rmt-ending-detail"><div class="rmt-ending-lock"><b>结局路线已全部移除。</b><br>可从顶部管理器重新生成整个“结局与后日谈”；告白回看若仍存在，也可切换上方标签继续查看。</div></main></div>`;
         return;
     }
@@ -360,7 +365,7 @@ export function renderEnding() {
     const typeLabel = { route: '当前路线', romance: '恋爱', reverse: '逆转告白', bond: '羁绊', open: '开放', personal: '个人' };
     const routes = session.endings.map(item => `<button type="button" class="rmt-ending-route ${item.id === selected.id ? 'active' : ''} ${item.available ? '' : 'locked'}" data-rmt-ending-id="${core_text.esc(item.id)}"><b>${item.id === session.recommendedEndingId ? '♥ ' : ''}${core_text.esc(item.title)}</b><span>${core_text.esc(item.subtitle || typeLabel[item.type] || '路线')}</span><em>${item.available ? '可观测 · 未来推演' : '未解锁'}</em></button>`).join('');
     const detail = selected.available
-        ? `<div class="rmt-ending-head"><div><h2>${core_text.esc(selected.title)}</h2><div class="rmt-ending-subtitle">${core_text.esc(selected.subtitle || typeLabel[selected.type] || '')}</div></div><span>未来路线推演</span></div>
+        ? `${selected.progressPending?.length ? '<p role="status">本路线未完成 · 以下仅展示已生成的内容。</p>' : ''}<div class="rmt-ending-head"><div><h2>${core_text.esc(selected.title)}</h2><div class="rmt-ending-subtitle">${core_text.esc(selected.subtitle || typeLabel[selected.type] || '')}</div></div><span>未来路线推演</span></div>
            <section class="rmt-ending-section"><small>终章</small>${endingProseHtml(selected.endingScene)}${selected.creditsLine ? `<div class="rmt-ending-final">— ${core_text.esc(selected.creditsLine)}</div>` : ''}</section>
            <section class="rmt-ending-section"><small>EPILOGUE // 后日谈 · ${core_text.esc(selected.epilogue?.timeSkip || '未来')}</small><div class="rmt-ending-epilogue">${(selected.epilogue?.scenes || []).map(scene => `<article><b>${core_text.esc(scene.title)}</b>${endingProseHtml(scene.text)}</article>`).join('')}</div>${selected.epilogue?.finalLine ? `<div class="rmt-ending-final">${core_text.esc(selected.epilogue.finalLine)}</div>` : ''}</section>
            `

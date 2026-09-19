@@ -655,6 +655,30 @@ export function normalizeRelations(data, memoryBank, context = null) {
     };
 }
 
+export function projectRelationsProgress({ segments, memoryBank, context, previousSession, frozenInputs = {} }) {
+    const keys = ['relationships', 'discoveries', 'settingRelationships'];
+    const segment = segments.findLast(item => keys.some(key => item.items('/' + key).length));
+    if (!segment) return null;
+    const relationships = segment.items('/relationships').filter(item => {
+        try { return normalizeRelations({ relationships: [item], discoveries: [] }, memoryBank, context).relationships.length > 0; }
+        catch { return false; }
+    });
+    const raw = { ...segment.value, relationships, discoveries: segment.items('/discoveries') };
+    const fresh = normalizeRelations(raw, memoryBank, context);
+    const selected = frozenInputs['relations:setting-books'] || {};
+    fresh.settingRelationships = normalizeSettingRelationships(segment.items('/settingRelationships'), selected.entries || [], context);
+    if (!fresh.relationships.length && !fresh.discoveries.length && !fresh.settingRelationships.length) return null;
+    fresh.characterName = memoryBank.characterName;
+    if (!previousSession) return fresh;
+    const next = { ...structuredClone(previousSession), ...fresh };
+    for (const key of keys) {
+        const values = new Map((previousSession[key] || []).map(item => [item.id || item.name, structuredClone(item)]));
+        for (const item of fresh[key] || []) values.set(item.id || item.name, item);
+        next[key] = [...values.values()];
+    }
+    return next;
+}
+
 function currentProfileForContext(context) {
     try {
         const memory = archive_repository.getImportedMemory(context);

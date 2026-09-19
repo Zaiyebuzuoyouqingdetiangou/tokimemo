@@ -383,7 +383,10 @@ async function idbPut(record, expected = null, options = {}) {
             const replacingProvenInvalidCache = options.seed === true && options.replaceInvalidCache === true;
             if (Number.isFinite(Number(options.expectedCacheOrder))) {
                 const expectedCacheOrder = Math.max(0, Math.floor(Number(options.expectedCacheOrder) || 0));
-                const currentCacheOrder = previousRevision === record.archiveRevision ? cacheCommitOrder(previous?.cache) : 0;
+                const comparePreviousCache = options.comparePreviousCache === true
+                    && expected?.present === true && previousRevision === expectedRevision;
+                const currentCacheOrder = previousRevision === record.archiveRevision || comparePreviousCache
+                    ? cacheCommitOrder(previous?.cache) : 0;
                 if (currentCacheOrder !== expectedCacheOrder) {
                     abortReason = new Error('独立档案备份的派生缓存已被另一个页面更新，本次将重新合并。');
                     abortReason.code = 'RMT_CACHE_CAS_CONFLICT';

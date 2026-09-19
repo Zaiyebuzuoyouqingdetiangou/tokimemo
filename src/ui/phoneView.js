@@ -7,6 +7,7 @@ import * as core_context from '../core/context.js';
 import * as modes_phone from '../modes/phone.js';
 import * as modes_room from '../modes/room.js';
 import * as ui_overlay from './overlay.js';
+import * as recovery_view from './recoveryView.js';
 
 const PHONE_HOME_APP_ID = '__PHONE_HOME__';
 const PHONE_VIEW_VALUES = new Set(['home', 'list', 'detail']);
@@ -334,7 +335,7 @@ export function renderPhone() {
         : '<button type="button" class="rmt-btn rmt-phone-increment" disabled title="关闭只读查看后可增量追加"><i class="fa-solid fa-lock"></i> 只读 · 无法增量</button>';
     const reversePrivacyGate = `<section class="rmt-reverse-terminal-gate" aria-label="反查终端隐私状态"><i class="fa-solid fa-user-shield" aria-hidden="true"></i><div><b>反查终端 · 隐私保护未开放</b><p>当前架构还不能可靠区分用户人设、正式档案与模拟内容，所以不会替你生成私人事实。</p></div><span>BLOCKED SAFELY</span></section>`;
     const completion = modes_phone.phoneCompletionSummary({ apps });
-    const sourceNotice = `<div class="rmt-phone-draft-status"><span role="status">已有 ${completion.readableItems} 项内容</span>${completion.missingItems ? `<details><summary>另有 ${completion.missingItems} 项未通过校验</summary><p>不影响阅读已有内容。${phoneWritable ? '<button type="button" class="rmt-btn" data-rmt-action="phone-fill-missing">重试未完成项</button>' : ''}</p></details>` : ''}</div>`;
+    const sourceNotice = recovery_view.readableProgressHtml(session) + `<div class="rmt-phone-draft-status"><span role="status">已有 ${completion.readableItems} 项内容</span>${completion.missingItems ? `<details><summary>另有 ${completion.missingItems} 项未通过校验</summary><p>不影响阅读已有内容。${phoneWritable ? '<button type="button" class="rmt-btn" data-rmt-action="phone-fill-missing">重试未完成项</button>' : ''}</p></details>` : ''}</div>`;
     ui_overlay.bodyEl().innerHTML = `<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="back">← 返回档案</button>${incrementalButton}</div>${sourceNotice}<div class="rmt-phone"><div class="rmt-phone-shell rmt-device-${kind} rmt-phone-view-${view} ${profileClasses}" data-rmt-phone-daypart="${core_text.esc(live.key)}">${phoneHardware(kind)}<div class="rmt-phone-screen">${phoneStatusBar(now, kind)}<main class="rmt-phone-content rmt-phone-content-single">${page}</main></div></div></div>`;
     startPhoneClock();
 }

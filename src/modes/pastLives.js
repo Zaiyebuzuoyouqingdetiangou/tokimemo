@@ -167,6 +167,98 @@ export function pastLivesHasSource(memory) {
         /^M\d+$/u.test(String(item?.id || '')) && evidence.memoryEvidenceTerms(memory, [item.id]).length > 0);
 }
 
+function pastLivesProgressFinale(raw, memory, dossiers, options = {}) {
+    const clueIds = new Set(dossiers.flatMap(item => item.clues.map(clue => clue.id)));
+    const echoes = [];
+    for (const [index, echo] of (raw.echoes || []).entries()) {
+        try {
+            let item;
+            if (echo.kind === 'memory') {
+                const reference = exactReference(echo, memory);
+                const quote = clean(echo.text, L.prose, true);
+                if (!sourceText(memory, reference.sourceMemoryIds).includes(quote)) continue;
+                const source = memory.memories.find(entry => entry.id === reference.sourceMemoryIds[0]);
+                item = { kind: 'memory', title: text.normalizeText(source?.title || reference.sourceMemoryAnchor, L.title),
+                    text: quote, reflection: presentText(echo.reflection, memory, 1800, false, options), ...reference };
+            } else if (echo.kind === 'possibility') {
+                const prose = presentText(echo.text, memory, L.prose, true, options);
+                if (!/(?:可能|也许|或许|如果|假如|愿|希望|未必|不一定)/u.test(prose)) continue;
+                item = { kind: 'possibility', title: presentText(echo.title, memory, L.title, true, options), text: prose,
+                    reflection: presentText(echo.reflection, memory, 1800, false, options), sourceMemoryIds: [], sourceMemoryAnchor: '' };
+            }
+            if (item) echoes.push({ id: localId('E', index), ...item });
+        } catch {}
+    }
+    const annotations = [];
+    for (const [index, annotation] of (raw.annotations || []).entries()) {
+        try {
+            const afterClueIds = [...new Set(list(annotation.afterClueIds, L.dossiers * L.clues))];
+            if (afterClueIds.some(id => typeof id !== 'string' || !clueIds.has(id))) continue;
+            annotations.push({ id: localId('A', index), afterClueIds, text: annotationText(annotation.text, memory) });
+        } catch {}
+    }
+    let closing = null;
+    if (raw.closing) {
+        try { closing = normalizePastLivesFinale({ echoes: [], annotations: [], closing: raw.closing }, memory, dossiers, options).closing; } catch {}
+    }
+    return { echoes, annotations, closing };
+}
+
+export function projectPastLivesProgress({ segments = [], memoryBank, context = {}, previousSession = null, frozenInputs = {} }) {
+    const segment = segments.find(item => /:past-lives-plan$/u.test(item.slot));
+    if (!segment?.has('/opening') || !segment.has('/title')) return null;
+    let plan;
+    try { plan = normalizePastLivesPlan({ ...segment.value, dossiers: segment.items('/dossiers') }, memoryBank); } catch { return null; }
+    const presentationContext = frozenInputs['presentation:pastLives'];
+    const presentation = contract.pastLivesPresentation(presentationContext?.profile);
+    const dossiers = [];
+    const pending = [];
+    for (const slot of plan.dossiers) {
+        const part = segments.find(item => item.slot.endsWith(`:past-lives-dossier:${slot.id}`));
+        try {
+            if (!part?.has('/synopsis')) throw new Error('pending');
+            const dossier = normalizePastLivesDossier({ ...part.value, clues: part.items('/clues') }, memoryBank, slot);
+            if (!part.complete) dossier.progressPending = ['卷宗线索'];
+            dossiers.push(dossier);
+        } catch { pending.push(slot.title); }
+    }
+    const finale = segments.find(item => /:past-lives-finale$/u.test(item.slot));
+    const controlledEvidence = presentationContext?.settingEvidence || '';
+    const final = pastLivesProgressFinale({ echoes: finale?.items('/echoes') || [], annotations: finale?.items('/annotations') || [],
+        closing: finale?.has('/closing') ? finale.value.closing : null }, memoryBank, dossiers, { controlledEvidence });
+    const episode = { id: localId('PL', previousSession?.episodes?.length || 0), title: plan.title, presentation, fiction: true,
+        opening: plan.opening, dossiers, ...final,
+        progressPending: [...(!segment.complete ? ['卷宗计划'] : []), ...pending.map(title => `卷宗：${title}`), ...(!finale?.complete ? ['今生回响与落款'] : [])] };
+    return { ...emptyPastLives(memoryBank, context), presentation, progressSettingEvidence: controlledEvidence, episodes: [episode], selectedId: episode.id,
+        selectedEntryId: dossiers[0]?.id || '', view: 'draw', pastLivesDrawn: true };
+}
+
+// Partial reading is opt-in and never makes an incomplete draft a full result.
+export function readablePastLivesProgressSession(value, memory) {
+    try {
+        const raw = contract.pastLivesData(value);
+        if (raw.readableProgress?.version !== 1 || raw.readableProgress.complete !== false
+            || raw.kind !== PAST_LIVES_MODE || raw.version !== PAST_LIVES_VERSION
+            || raw.chatId !== memory?.chatId || raw.archiveRevision !== memory?.archiveRevision
+            || raw.characterName !== memory?.characterName || raw.userName !== memory?.userName
+            || !Array.isArray(raw.episodes) || !raw.episodes.length) return null;
+        for (const episode of raw.episodes) {
+            if (!/^PL\d+$/u.test(episode.id) || episode.fiction !== true || !Array.isArray(episode.dossiers)
+                || !Array.isArray(episode.echoes) || !Array.isArray(episode.annotations)) return null;
+            fictionalText(episode.title, memory, L.title, true);
+            normalizePastLivesOpening(episode.opening, memory);
+            for (const dossier of episode.dossiers) {
+                if (!/^D\d+$/u.test(dossier.id)) return null;
+                normalizePastLivesDossier(dossier, memory, { id: dossier.id });
+            }
+            const checked = pastLivesProgressFinale(episode, memory, episode.dossiers, { controlledEvidence: raw.progressSettingEvidence || '' });
+            if (checked.echoes.length !== episode.echoes.length || checked.annotations.length !== episode.annotations.length
+                || (episode.closing && !checked.closing)) return null;
+        }
+        return value;
+    } catch { return null; }
+}
+
 const GENERATION_RULES = `前世是明确标注的虚构番外，可写另一段人生；不能用它证明轮回、真实命理或今生已发生的事。不要求生日，不编四柱。
 围绕角色与用户，遵循人物性格；不加前任或第三人恋爱婚姻。前世只是假设，今生关系不升级、不回填主聊天、不生成新的 Mxxx。
 签、卷、线索和回响数量由内容决定；数组可为空，不凑最低数量或字数。不要用固定先凶后吉、永世相守代替人物选择。

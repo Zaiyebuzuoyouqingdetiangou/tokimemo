@@ -72,6 +72,7 @@ export function renderAlbum() {
     </aside>` : '<aside class="rmt-info">当前分类没有条目。</aside>';
     const body = ui_overlay.bodyEl();
     body.innerHTML = `<div class="rmt-album">
+      ${session.readableProgress?.complete === false ? '<p role="status">未完成 · 已生成的画面和对白已保留，可继续阅读。</p>' : ''}
       <div class="rmt-album-head"><h2>${core_text.esc(session.title)}</h2><span class="rmt-count">已解锁 ${unlocked} / 总数 ${session.entries.length}</span><div class="rmt-filter">${filters}</div></div>
       ${generation_imageGeneration.cgImageProviderBar({ readOnly: readOnlyArchive })}
       <div class="rmt-album-layout">
@@ -196,11 +197,12 @@ export function renderSharedMemory() {
       </div>
       <div class="rmt-memory-caption"><b>${core_text.esc(item.title)}</b><span>${core_text.esc(item.date)}</span><p>${core_text.esc(item.desc)}</p></div>
       <div class="rmt-dialogue">
+        ${item.progressPending?.length ? `<p role="status">共同回忆未完成 · 已生成 ${comments.length} 段对白。</p>` : ''}
         <div class="rmt-dialogue-speaker">${core_text.esc(charName)}</div>
-        <div class="rmt-dialogue-text">${core_text.esc(comments[session.dialogueIndex] || '')}</div>
+        <div class="rmt-dialogue-text">${core_text.esc(comments[session.dialogueIndex] || (item.progressPending?.length ? '对白尚未生成，画面描述已保留。' : ''))}</div>
         <div class="rmt-dialogue-actions">
           <button type="button" class="rmt-btn" data-rmt-action="shared-back">返回相簿</button>
-          <button type="button" class="rmt-btn" data-rmt-action="${last ? 'shared-replay' : 'shared-next'}">${last ? '重看' : '下一句'}</button>
+          <button type="button" class="rmt-btn" data-rmt-action="${last ? 'shared-replay' : 'shared-next'}" ${!comments.length ? 'disabled' : ''}>${last ? '重看' : '下一句'}</button>
         </div>
       </div>
       ${readOnly ? '' : '<div class="rmt-cg-card-actions rmt-cg-memory-actions"><button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt">图片设置</button></div>'}

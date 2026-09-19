@@ -13,6 +13,7 @@ import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
+import * as generation_jsonParser from '../generation/jsonParser.js';
 import * as modes_room from '../modes/room.js';
 import * as modes_relations from '../modes/relations.js';
 import * as ui_overlay from '../ui/overlay.js';
@@ -213,6 +214,165 @@ export function rememberArchiveSnapshot(snapshot) {
     return snapshot;
 }
 
+// Saved versions never read /api/chats/get and never enter the live snapshot
+// cache. The existing permanent read-only capability protects every old reader.
+export async function openArchiveVersion(versionId, context = core_context.currentCharacterGuard()) {
+    const lifecycle = runtimeState.runtimeLifecycleEpoch;
+    const scope = core_context.chatScopeKey(context);
+    const record = await core_cache.readArchiveVersion(context, versionId);
+    core_context.assertRuntimeLifecycleCurrent(lifecycle);
+    if (core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
+    const snapshot = {
+        ...record.entry,
+        entryId: `${record.entryId}:version:${record.versionId}`,
+        archiveGroupId: record.entry.archiveGroupId || archive_groups.archiveGroupKeyForEntry(record.entry),
+        chatId: record.chatId, archiveName: record.memory.archiveName || '未命名档案',
+        characterName: record.memory.characterName || record.entry.characterName,
+        memory: structuredClone(record.memory), cache: structuredClone(record.cache),
+        historyVersionId: record.versionId, historyCreatedAt: record.createdAt,
+        historyReason: record.reason, historySelectedPages: [...record.selectedPages],
+        historyDrafts: structuredClone(record.drafts),
+        backupOnly: true, sourceError: '', sourceMirrorLagging: false, settingBookSelection: { books: [] },
+        loadedAt: Date.now(),
+    };
+    showIndexedArchiveSnapshot(snapshot);
+    return snapshot;
+}
+
+export async function openGenerationTaskResult(draftId, context = core_context.currentCharacterGuard(), { snapshot: sourceSnapshot = null } = {}) {
+    const lifecycle = runtimeState.runtimeLifecycleEpoch;
+    const scope = core_context.chatScopeKey(context);
+    const record = await core_cache.readGenerationTaskResult(context, draftId, sourceSnapshot ? { cache: sourceSnapshot.cache } : {});
+    core_context.assertRuntimeLifecycleCurrent(lifecycle);
+    if (sourceSnapshot ? runtimeState.activeArchiveSnapshot !== sourceSnapshot
+        : core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
+    const memory = structuredClone(record.sourceMemory);
+    if (!memory?.memories || !record.session) throw new Error('这份成果的原始资料暂时无法读取，已保存的成果仍保留。');
+    const entry = record.targetEntry || core_cache.archiveBackupEntryForContext(context, memory);
+    const snapshot = {
+        ...entry, entryId: `${record.entryId || entry.entryId}:task:${draftId}`,
+        archiveGroupId: entry.archiveGroupId || archive_groups.archiveGroupKeyForEntry(entry),
+        chatId: memory.chatId, archiveName: `${core_constants.MODE_LABEL[record.mode] || '旧任务'} · 独立成果`,
+        characterName: memory.characterName || entry.characterName,
+        memory, cache: { chatId: memory.chatId, archiveRevision: memory.archiveRevision, [record.mode]: structuredClone(record.session) },
+        taskResultDraftId: draftId, historyVersionId: `task:${draftId}`, historyCreatedAt: record.createdAt,
+        historyReason: '按原任务资料生成，独立保留的成果', historySelectedPages: [record.pageId],
+        backupOnly: true, sourceError: '', sourceMirrorLagging: false, settingBookSelection: { books: [] }, loadedAt: Date.now(),
+    };
+    showIndexedArchiveSnapshot(snapshot);
+    return snapshot;
+}
+
+const CONTENT_DRAFT_FIELD_LABELS = Object.freeze({
+    title: '标题', subtitle: '副标题', label: '名称', name: '名称', date: '日期', setting: '场景', scene: '场景',
+    description: '说明', desc: '画面说明', summary: '摘要', text: '正文', line: '台词', lines: '台词',
+    body: '正文', greeting: '称呼', closing: '结尾', monologue: '独白', intervention: '回应', systemNote: '观测批语',
+    preview: '摘要', detail: '正文', caption: '图片说明', imageCaption: '图片说明', cgDesc: '画面说明',
+    unlockCondition: '达成条件', hint: '提示', hintLines: '提示', comments: '共同回忆',
+    lyrics: '歌词', vocalDescription: '演唱描述', styleDescription: '音乐描述',
+    speaker: '说话人', role: '说话人', value: '内容', content: '正文', message: '留言',
+    dialogueLines: '台词', script: '对话', action: '动作', narration: '叙述',
+    endingScene: '终章', confession: '告白', confessionText: '告白', confessionLines: '告白台词',
+    creditsLine: '落幕语', timeSkip: '时间跨度', finalLine: '结语', unlockHint: '解锁提示',
+    responseSummary: '回应', afterEffect: '后续影响', statusLine: '状态', logs: '记录', poem: '短句',
+    pulse: '心跳反馈', hover: '悬停反馈', reveal: '揭示反馈', stabilize: '稳定反馈', pause: '暂停反馈', resume: '继续反馈',
+    tags: '标签', opening: '开场', location: '地点', ending: '结尾',
+    imagePrompt: '生图提示', flatPrompt: '生图提示', sceneTags: '场景标签', tag: '人物标签', nl: '画面描述',
+});
+
+export function contentRegenerationDraftHtml(journal) {
+    const esc = core_text.esc;
+    const sections = [];
+    const pointerPart = key => String(key).replace(/~/g, '~0').replace(/\//g, '~1');
+    for (const segment of journal?.segments || []) {
+        if (!['complete', 'truncated'].includes(segment.state)) continue;
+        const parsed = generation_jsonParser.parsePartialJsonObject(segment.state === 'complete' ? segment.rawJson : segment.partial);
+        const fields = [];
+        const visit = (value, pointer = '', field = '') => {
+            if (typeof value === 'string') {
+                if (value && CONTENT_DRAFT_FIELD_LABELS[field] && parsed.has(pointer)) fields.push(
+                    `<article data-rmt-content-draft-field="${esc(pointer)}"><h4>${esc(CONTENT_DRAFT_FIELD_LABELS[field])}</h4><p style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(value)}</p></article>`);
+            } else if (Array.isArray(value)) value.forEach((item, index) => visit(item, `${pointer}/${index}`, field));
+            else if (value && typeof value === 'object') for (const [key, item] of Object.entries(value)) visit(item, `${pointer}/${pointerPart(key)}`, key);
+        };
+        visit(parsed.partialValue);
+        if (fields.length) sections.push(`<section class="rmt-archive-card"><h3>第 ${sections.length + 1} 段 · ${segment.state === 'complete' ? '已保存的分段' : '已收到的完整字段'}</h3>${fields.join('')}</section>`);
+    }
+    return `<div class="rmt-content-draft-reader" data-rmt-content-draft-reader="${esc(journal?.draftId || '')}"><section class="rmt-recovery-status"><h2>单项重新生成 · 已收到的正文</h2><p>本项尚未完成，父草稿中的原内容没有被替换。这里只展示已完整收到的字段和段落；未写完的字段仍保存在原草稿中。</p><p>查看不会调用生成 API。完成本项校验并保存后，才会替换原草稿中的对应内容。</p></section>${sections.join('') || '<p>尚未收到可独立阅读的完整字段或段落，原草稿仍保留。</p>'}</div>`;
+}
+
+export async function openContentRegenerationDraft(draftId, context = core_context.currentCharacterGuard(), { snapshot: sourceSnapshot = null } = {}) {
+    const lifecycle = runtimeState.runtimeLifecycleEpoch, scope = core_context.chatScopeKey(context);
+    const targetContext = sourceSnapshot ? archiveTargetGenerationOptions(sourceSnapshot).context : context;
+    const bank = archive_repository.requireArchive(targetContext);
+    const entry = sourceSnapshot || core_cache.archiveBackupEntryForContext(targetContext, bank);
+    // Read the acknowledged local checkpoint, including a child that failed
+    // after the last visible historical snapshot was rendered. No host/model
+    // request is needed merely to open already received prose.
+    const stored = await archive_backupStore.readArchiveBackupState(entry);
+    core_context.assertRuntimeLifecycleCurrent(lifecycle);
+    if (sourceSnapshot ? runtimeState.activeArchiveSnapshot !== sourceSnapshot
+        : core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
+    if (stored.deleted || !stored.record) throw new Error('这份草稿所属的本机档案已不存在。');
+    const savedCache = await hydrateSnapshotCache(stored.record.cache, stored.record.memory, bank.chatId, lifecycle);
+    const row = core_cache.generationDraftRows(savedCache, bank).find(item => item.draftId === draftId);
+    const journal = row && core_cache.loadGenerationRecovery(row.mode, targetContext, savedCache, { draftId });
+    if (!journal || journal.operation?.kind !== 'content-item' || !journal.operation.sourceDraftId) throw new Error('找不到对应的单项重新生成草稿；没有请求模型，也没有改写原内容。');
+    core_context.assertRuntimeLifecycleCurrent(lifecycle);
+    if (sourceSnapshot ? runtimeState.activeArchiveSnapshot !== sourceSnapshot
+        : core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
+    if (sourceSnapshot && sourceSnapshot.memory?.archiveRevision === stored.record.archiveRevision) sourceSnapshot.cache = structuredClone(savedCache);
+    ui_endingView.closeEndingEasterEgg({ restoreFocus: false }); modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock();
+    runtimeState.activeMode = null; runtimeState.activeSession = null; runtimeState.contentManagerOpen = false;
+    // Retain the actual B snapshot while A remains the live host chat. The
+    // existing back/continuation routes must still refer to B after reading.
+    runtimeState.activeArchiveSnapshot = sourceSnapshot;
+    runtimeState.archiveViewLevel = sourceSnapshot ? 'snapshot' : 'recovery';
+    ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setManageVisible(false); ui_overlay.setBackVisible(true);
+    ui_overlay.topTitle('心迹回廊 · 单项草稿正文');
+    const body = ui_overlay.bodyEl(); if (body) body.innerHTML = contentRegenerationDraftHtml(journal);
+    return journal;
+}
+
+// An archive checkpoint is a reader, never a formal bank or writable archive
+// snapshot. Its values were received from the original request; opening it does
+// not issue a provider request or assign memory IDs to uncommitted entries.
+export function archiveRecoveryDraftHtml(record) {
+    const esc = core_text.esc;
+    const paragraph = value => `<p style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(value || '')}</p>`;
+    const fields = { archiveName: '档案名称', archiveSummary: '已收到的摘要', archiveVerdict: '档案简介', verdictStyle: '叙述风格' };
+    const readings = { char: '人物', user: '你', relation: '关系', tension: '张力', direction: '走向' };
+    const sections = (record.sections || []).map(section => {
+        if (section.kind === 'profile') return `<section class="rmt-archive-card"><h3>简介 · ${section.complete ? '已收到完整回复' : '已收到的完整字段'}</h3>${Object.entries(section.fields).map(([key, value]) => `<h4>${esc(fields[key] || key)}</h4>${paragraph(value)}`).join('')}${Object.entries(section.readings).map(([key, value]) => `<h4>${esc(readings[key] || key)}</h4>${paragraph(value)}`).join('')}${section.keywords.length ? paragraph(section.keywords.join(' · ')) : ''}</section>`;
+        return `<section class="rmt-archive-card"><h3>${esc(section.label)}</h3>${section.kind === 'unverified' ? '<p>原来源字段不足以复核；以下仅为已收到的完整条目，尚未作为正式记忆。</p>' : '<p>以下条目已收到并通过单条来源检查；整批尚未正式保存。</p>'}${section.items.map(item => `<article data-rmt-archive-draft-memory><h4>${esc(item.title)}</h4>${paragraph(item.date || '')}${paragraph(item.summary)}${item.anchors?.length ? `<p>原文锚点：${esc(item.anchors.join(' · '))}</p>` : ''}</article>`).join('')}</section>`;
+    }).join('');
+    const profile = record.profileResult?.profile;
+    const independent = profile ? `<section class="rmt-archive-card"><h3>独立保存的简介成果</h3><h4>${esc(profile.archiveName)}</h4>${paragraph(profile.archiveVerdict?.text || profile.archiveSummary)}<p>使用原任务资料完成，当前正式档案未被覆盖。</p></section>` : '';
+    const bank = record.archiveResult?.memoryBank;
+    const archive = bank ? `<section class="rmt-archive-card" data-rmt-independent-archive-result><h3>${esc(bank.archiveName || '原任务独立记忆成果')}</h3><p>本任务整理成果独立保存，当前正式档案未被覆盖。${record.hasNextBatch ? '原任务还有下一批，可单独继续。' : '本任务的来源批次已处理。'}${record.archiveResult.baseMemoryMissing ? '旧版草稿未保存原档案基线，这里仅显示本任务收到的条目，未拿当前记忆补写。' : ''}</p>${paragraph(bank.archiveVerdict?.text || bank.archiveSummary)}${(bank.memories || []).map(item => `<article data-rmt-independent-archive-memory><h4>${esc(item.id || '')} ${esc(item.title)}</h4>${paragraph(item.date)}${paragraph(item.summary)}${item.anchors?.length ? `<p>原文锚点：${esc(item.anchors.join(' · '))}</p>` : ''}</article>`).join('')}</section>` : '';
+    const canImport = record.operation === 'import' && record.stage !== 'profile-only' && record.stage !== 'profile-result'
+        && (record.stage !== 'archive-result' || record.hasNextBatch);
+    const canProfile = record.operation === 'profile' && record.stage !== 'profile-result'
+        || record.stage === 'profile-only' || record.stage === 'archive-result' && record.profilePending;
+    const continuation = !record.active ? `${canImport ? `<button type="button" class="rmt-btn" data-rmt-archive-recovery="import" data-rmt-archive-recovery-draft-id="${esc(record.draftId)}">${record.stage === 'archive-result' ? '继续原任务下一批' : '继续这份原建档草稿'}</button>` : ''}${canProfile ? `<button type="button" class="rmt-btn" data-rmt-archive-recovery="profile" data-rmt-archive-recovery-draft-id="${esc(record.draftId)}">继续这份原简介草稿</button>` : ''}${!record.durable ? `<button type="button" class="rmt-btn" data-rmt-archive-save-draft="${record.operation}">保存已收到内容（不生成）</button>` : ''}` : '';
+    return `<div class="rmt-archive-draft-reader" data-rmt-archive-draft-reader="${esc(record.draftId)}"><section class="rmt-recovery-status"><h2>${record.operation === 'profile' || record.stage === 'profile-only' || record.stage === 'profile-result' ? '名称与简介' : '建档'} · 草稿正文</h2><p>原档案与已生成内容保持原样。这里只展示已完整收到的条目或字段；未完成回复不会被标为生成完成。</p><p>${record.durable ? '本机已保存。' : '本页可阅读；尚未确认本机保存，刷新前请先保存或导出。'}${record.active ? ' 原任务正在继续，收到完整片段后更新。' : ''}</p>${continuation}</section>${archive}${independent}${sections || (!archive && !independent ? '<p>尚未收到可独立阅读的完整条目或字段，原草稿仍保留。</p>' : '')}</div>`;
+}
+
+export async function openArchiveRecoveryDraft(draftId, context = core_context.currentCharacterGuard()) {
+    const lifecycle = runtimeState.runtimeLifecycleEpoch, scope = core_context.chatScopeKey(context);
+    const record = await archive_repository.readCurrentArchiveRecoveryDraft(draftId, context);
+    core_context.assertRuntimeLifecycleCurrent(lifecycle);
+    if (core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
+    ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
+    modes_room.stopRoomClock(); ui_phoneView.stopPhoneClock();
+    runtimeState.activeMode = null; runtimeState.activeSession = null; runtimeState.activeArchiveSnapshot = null;
+    runtimeState.activeArchiveReadOnly = true; runtimeState.archiveViewLevel = 'recovery';
+    ui_overlay.openOverlay(); ui_overlay.setRegenerateVisible(false); ui_overlay.setManageVisible(false); ui_overlay.setBackVisible(true);
+    ui_overlay.topTitle('心迹回廊 · 已收到的草稿正文');
+    const body = ui_overlay.bodyEl(); if (body) body.innerHTML = archiveRecoveryDraftHtml(record);
+    return record;
+}
+
 async function hydrateSnapshotCache(stored, memory, wantedChatId, lifecycleEpoch) {
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     let cache = {};
@@ -233,6 +393,7 @@ async function hydrateSnapshotCache(stored, memory, wantedChatId, lifecycleEpoch
 }
 
 export async function fetchIndexedArchiveSnapshot(entry, context = core_context.getContext(), options = {}) {
+    if (entry?.historyVersionId) throw new Error('旧版本是独立只读记录，不能刷新为当前聊天内容。');
     const lifecycleEpoch = Number.isFinite(Number(options.lifecycleEpoch))
         ? Number(options.lifecycleEpoch)
         : runtimeState.runtimeLifecycleEpoch;
@@ -623,6 +784,11 @@ export function syncArchiveTargetSubtask(targetRuntime, snapshot) {
 
 export function setArchiveReadOnly(readOnly) {
     if (!runtimeState.activeArchiveSnapshot) return;
+    if (runtimeState.activeArchiveSnapshot.historyVersionId) {
+        runtimeState.activeArchiveReadOnly = true;
+        if (readOnly === false) globalThis.toastr?.info?.(runtimeState.activeArchiveSnapshot.taskResultDraftId ? '当前是独立保存的成果；请返回当前档案继续操作。' : '旧版本永久只读；请返回当前档案继续操作。', '心迹回廊');
+        return showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot);
+    }
     if (runtimeState.activeArchiveSnapshot.backupOnly && readOnly === false) {
         runtimeState.activeArchiveReadOnly = true;
         globalThis.toastr?.info?.('源聊天暂不可读，当前查看只读备份。请重试读取源聊天；备份本身不能解除只读或绑定到其他聊天。', '心迹回廊');
@@ -656,6 +822,11 @@ export function snapshotWriteBlockMessage() {
 
 export function promoteSnapshotToLiveIfCurrent() {
     if (!runtimeState.activeArchiveSnapshot) return true;
+    if (runtimeState.activeArchiveSnapshot.historyVersionId) {
+        runtimeState.activeArchiveReadOnly = true;
+        globalThis.toastr?.info?.(runtimeState.activeArchiveSnapshot.taskResultDraftId ? '当前查看的是独立保存的成果；请返回当前档案继续操作。' : '当前查看的是重做前旧版本；请返回当前档案，旧版本不能覆盖或绑定为当前内容。', '心迹回廊');
+        return false;
+    }
     if (runtimeState.activeArchiveSnapshot.backupOnly) {
         runtimeState.activeArchiveReadOnly = true;
         globalThis.toastr?.warning?.('当前查看的是只读备份，不能重新绑定或写入当前聊天；请重试读取源聊天。', '心迹回廊');
@@ -732,12 +903,13 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
     ui_overlay.setRegenerateVisible(false);
     ui_overlay.setManageVisible(false);
     ui_overlay.setBackVisible(true, '角色档案');
-    ui_overlay.topTitle(`心迹回廊 · ${snapshot.characterName} · ${snapshot.backupOnly ? '独立备份' : runtimeState.activeArchiveReadOnly ? '只读档案' : '编辑待命'}`);
+    ui_overlay.topTitle(`心迹回廊 · ${snapshot.characterName} · ${snapshot.taskResultDraftId ? '独立生成成果 · 只读' : snapshot.historyVersionId ? '重做前旧版本 · 只读' : snapshot.backupOnly ? '独立备份' : runtimeState.activeArchiveReadOnly ? '只读档案' : '编辑待命'}`);
     const body = ui_overlay.bodyEl();
     if (!body) return;
     const memory = snapshot.memory;
-    const portals = archive_snapshots.baseModeAvailability({ chatId: snapshot.chatId, memoryBank: memory, cache: snapshot.cache, clone: false });
-    const generatedCount = portals.filter(item => !!item.session).length;
+    const cachedRead = { chatId: snapshot.chatId, memoryBank: memory, cache: snapshot.cache, clone: false };
+    const portals = ui_overlay.readableModePortals(archive_snapshots.baseModeAvailability(cachedRead), cachedRead);
+    const generatedCount = portals.filter(item => !!item.session && !item.session.readableProgress).length;
     const canGenerateDerived = snapshot.backupOnly !== true;
     const calendarPortal = portals.find(item => item.mode === core_constants.MODE.CALENDAR) || { session: null };
     const calendarGenerating = core_requestCoordinator.isArchiveTargetModeGenerating(core_constants.MODE.CALENDAR, snapshot);
@@ -751,32 +923,55 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
             <span class="rmt-portal-avatar"><i class="fa-solid ${core_text.esc(meta.icon)}"></i>${generated ? '<span class="rmt-portal-ready-dot">✓</span>' : '<span class="rmt-portal-lock"><i class="fa-solid fa-lock"></i></span>'}</span>
             <span class="rmt-portal-title">${core_text.esc(meta.title)}</span>
             <span class="rmt-portal-subtitle">${core_text.esc(meta.subtitle)}</span>
-            <span class="rmt-portal-status">${generating ? `正在为 ${core_text.esc(snapshot.characterName)} · ${core_text.esc(snapshot.archiveName)} 生成` : generated ? (runtimeState.activeArchiveReadOnly ? '已生成 · 安全写回本档案' : '已生成 · 可从新增档案继续追加') : (canGenerateDerived ? '尚未生成 · 可安全写回本档案' : '这份备份尚未生成')}</span>
+            <span class="rmt-portal-status">${session?.readableProgress ? '部分内容已保存 · 可以先查看' : snapshot.taskResultDraftId ? (generated ? '独立成果已保存 · 只读查看' : '不属于这份独立成果') : snapshot.historyVersionId ? (generated ? '旧版本已保存 · 只读查看' : '这份旧版本尚未生成') : generating ? `正在为 ${core_text.esc(snapshot.characterName)} · ${core_text.esc(snapshot.archiveName)} 生成` : generated ? (runtimeState.activeArchiveReadOnly ? '已生成 · 安全写回本档案' : '已生成 · 可从新增档案继续追加') : (canGenerateDerived ? '尚未生成 · 可安全写回本档案' : '这份备份尚未生成')}</span>
           </button>
           ${editAction}
         </article>`;
     }).join('');
     body.innerHTML = `<div class="rmt-archive-room">
-      ${recovery_view.recoveryBannerHtml(snapshot.cache, memory, { readOnly: snapshot.backupOnly })}
+      ${recovery_view.recoveryBannerHtml(snapshot.cache, memory, { readOnly: runtimeState.activeArchiveReadOnly || snapshot.backupOnly })}
       <section class="rmt-memory-gate rmt-archive-card">
         <div class="rmt-memory-gate-text">
-          <div class="rmt-archive-kicker">${snapshot.backupOnly ? 'RECOVERED LOCAL BACKUP' : 'READ-ONLY ARCHIVE'}</div>
+          <div class="rmt-archive-kicker">${snapshot.taskResultDraftId ? 'SAVED TASK RESULT' : snapshot.historyVersionId ? 'SAVED PREVIOUS VERSION' : snapshot.backupOnly ? 'RECOVERED LOCAL BACKUP' : 'READ-ONLY ARCHIVE'}</div>
           <strong class="rmt-archive-title">${core_text.esc(snapshot.archiveName)}</strong>
           ${core_archiveCover.archiveCoverHtml(memory, { writable: !snapshot.backupOnly && core_context.getChatId(core_context.getContext()) === snapshot.chatId && !runtimeState.activeArchiveReadOnly, busy: runtimeState.busy || core_requestCoordinator.hasGenerationTasks() })}
-          <div class="rmt-memory-status ready">${snapshot.backupOnly ? '源聊天暂不可读 · 当前查看只读备份' : runtimeState.activeArchiveReadOnly ? '只读查看' : '编辑待命'} · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${core_constants.ARCHIVE_PORTAL_MODES.length}</div>
-          <div class="rmt-archive-meta">${snapshot.backupOnly ? `本机备份 · ${core_text.esc(snapshot.sourceError || '源聊天无法读取')}` : (runtimeState.activeArchiveReadOnly ? '当前为只读档案' : '写入前会再次验证目标聊天')}</div>
+          <div class="rmt-memory-status ready">${snapshot.taskResultDraftId ? '独立生成成果 · 只读查看' : snapshot.historyVersionId ? '重做前旧版本 · 永久只读' : snapshot.backupOnly ? '源聊天暂不可读 · 当前查看只读备份' : runtimeState.activeArchiveReadOnly ? '只读查看' : '编辑待命'} · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${core_constants.ARCHIVE_PORTAL_MODES.length}</div>
+          <div class="rmt-archive-meta">${snapshot.historyVersionId ? `${core_text.esc(new Date(snapshot.historyCreatedAt).toLocaleString())} · ${core_text.esc(snapshot.historyReason || '按选择重新生成前保存')} · 未完成草稿另行保留，不计作完整作品` : snapshot.backupOnly ? `本机备份 · ${core_text.esc(snapshot.sourceError || '源聊天无法读取')}` : (runtimeState.activeArchiveReadOnly ? '当前为只读档案' : '写入前会再次验证目标聊天')}</div>
           <div class="rmt-archive-readonly-control">
             <label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''} ${snapshot.backupOnly ? 'disabled' : ''}> 只读查看</label>
-            <small>${snapshot.backupOnly ? '备份只读，不代表原聊天已删除' : runtimeState.activeArchiveReadOnly ? '关闭只读后可显示编辑操作' : '编辑待命'}</small>
-            ${snapshot.backupOnly ? `<button type="button" class="rmt-btn" data-rmt-indexed-character="${core_text.esc(snapshot.characterKey)}" data-rmt-indexed-chat="${core_text.esc(snapshot.chatId)}" data-rmt-indexed-entry="${core_text.esc(snapshot.entryId)}">重试读取源聊天</button>` : ''}
+            <small>${snapshot.taskResultDraftId ? '按原任务资料查看，当前档案与作品保留' : snapshot.historyVersionId ? '旧版本只读，当前档案与新作品不受影响' : snapshot.backupOnly ? '备份只读，不代表原聊天已删除' : runtimeState.activeArchiveReadOnly ? '关闭只读后可显示编辑操作' : '编辑待命'}</small>
+            ${snapshot.backupOnly && !snapshot.historyVersionId ? `<button type="button" class="rmt-btn" data-rmt-indexed-character="${core_text.esc(snapshot.characterKey)}" data-rmt-indexed-chat="${core_text.esc(snapshot.chatId)}" data-rmt-indexed-entry="${core_text.esc(snapshot.entryId)}">重试读取源聊天</button>` : ''}
           </div>
         </div>
       </section>
       ${calendarQuick}
       <section class="rmt-archive-portals" aria-label="只读档案内容入口">${portalHtml}</section>
+      ${archiveVersionDraftsHtml(snapshot)}
     </div>`;
     workspace_ui.arrangeArchiveWorkspace(body, { portals, ready: true, snapshot });
 
+}
+
+export function archiveVersionDraftsHtml(snapshot) {
+    if (!snapshot?.historyVersionId || !snapshot.historyDrafts) return '';
+    const parts = [];
+    const seen = new Set();
+    const show = (label, value) => `<details class="rmt-archive-card"><summary>${core_text.esc(label)}</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${core_text.esc(value)}</pre></details>`;
+    const appendJournal = (mode, journal) => {
+        const key = journal?.draftId || JSON.stringify(journal);
+        if (seen.has(key)) return;
+        seen.add(key);
+        const label = core_constants.MODE_LABEL[mode] || mode;
+        for (const [index, segment] of (journal?.segments || []).entries()) {
+            const value = segment.state === 'complete' ? segment.rawJson : segment.state === 'truncated' ? segment.partial : '';
+            if (typeof value !== 'string' || !value) continue;
+            parts.push(show(`${label} · 第 ${index + 1} 段 · ${segment.state === 'complete' ? '已生成片段' : '未完成片段'}`, value));
+        }
+    };
+    for (const journal of Object.values(snapshot.historyDrafts.tasks || {})) appendJournal(journal?.identity?.mode || journal?.operation?.mode || '草稿', journal);
+    for (const [mode, journal] of Object.entries(snapshot.historyDrafts.modules || {})) appendJournal(mode, journal);
+    if (snapshot.historyDrafts.phone && Object.keys(snapshot.historyDrafts.phone).length) parts.push(show('私人终端 · 保存的未完成草稿', JSON.stringify(snapshot.historyDrafts.phone, null, 2)));
+    return parts.length ? `<section data-rmt-version-drafts><h3>重做前的未完成草稿</h3><p>以下是原任务已收到的内容，可能尚未组成完整作品；查看不会调用 API。</p>${parts.join('')}</section>` : '';
 }
 
 export async function openIndexedArchive(characterKey, chatId, entryId = '') {

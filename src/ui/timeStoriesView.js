@@ -4,6 +4,7 @@ import * as text from '../core/text.js';
 import * as constants from '../core/constants.js';
 import * as contextApi from '../core/context.js';
 import * as repository from '../archive/repository.js';
+import * as library from '../archive/library.js';
 import * as cache from '../core/cache.js';
 import * as coordinator from '../core/requestCoordinator.js';
 import { state as runtimeState } from '../core/state.js';
@@ -49,7 +50,7 @@ export function timeStoriesHtml(session, { readOnly: locked = false, busy = fals
         const inStory = !!selected && ui.view === 'story';
         const generate = locked || inStory ? '' : `<button type="button" class="rmt-btn" data-rmt-generate-mode="${mode}" ${busy ? 'disabled' : ''}>${busy ? '正在写下故事…' : session.episodes.length ? '再写一篇' : '生成第一篇'}</button>`;
         const returnButton = '<button type="button" class="rmt-btn" data-rmt-mode="phone">返回终端</button>';
-        const header = `<header class="rmt-time-head"><div><small>时空番外${locked ? ' · 只读' : ''}</small><h2>${esc(label)}</h2></div><div class="rmt-time-actions">${generate}${returnButton}</div></header>`;
+        const header = `<header class="rmt-time-head"><div><small>时空番外${locked ? ' · 只读' : ''}</small><h2>${esc(label)}</h2></div><div class="rmt-time-actions">${generate}${returnButton}</div></header>${selected?.generationIncomplete ? '<p class="rmt-recovery-status" role="status">这篇尚未完成，已收到的开篇和对话可以先读；后续内容仍待生成。</p>' : ''}`;
         const content = inStory
             ? `<div class="rmt-time-story-head">${button('library', '返回篇章')}<div><small>${esc(selected.motif)}</small><h3>${esc(selected.title)}</h3></div></div>${echoHtml(session, selected, ui)}`
             : session.episodes.length ? `<div class="rmt-time-library">${session.episodes.map(episode => `<button type="button" class="rmt-time-cover" data-rmt-time-story="open" data-rmt-time-story-id="${esc(episode.id)}"><i class="fa-solid ${mediumIcon(episode.medium?.kind)}" aria-hidden="true"></i><span><small>${esc(episode.motif)}</small><b>${esc(episode.title)}</b><small>${esc(episode.medium?.label || '')}</small></span><span aria-hidden="true">›</span></button>`).join('')}</div>`
@@ -63,14 +64,54 @@ function assertShownTarget() {
     if (!contract.isTimeStoryMode(runtimeState.activeMode) || shown?.kind !== runtimeState.activeMode) throw new Error('故事已经关闭。');
     const snapshot = runtimeState.activeArchiveSnapshot;
     const context = snapshot ? null : contextApi.currentCharacterGuard();
-    const memory = snapshot ? snapshot.memory : repository.requireArchive(context);
-    if (!memory || shown.chatId !== memory.chatId || shown.archiveRevision !== memory.archiveRevision
-        || shown.characterName !== memory.characterName || shown.userName !== memory.userName
+    const currentMemory = snapshot ? snapshot.memory : repository.requireArchive(context);
+    const readingSource = cache.generationPageReadingSource(shown, shown.kind, currentMemory);
+    const memory = readingSource.memoryBank, reading = readingSource.session;
+    if (!memory || shown.chatId !== currentMemory?.chatId || shown.archiveRevision !== currentMemory?.archiveRevision
+        || reading.chatId !== memory.chatId || reading.archiveRevision !== memory.archiveRevision
+        || reading.characterName !== memory.characterName || reading.userName !== memory.userName
         || (snapshot && shown.chatId !== snapshot.chatId)
-        || (!snapshot && shown.ownerKey && shown.ownerKey !== contextApi.currentCharacterRuntimeKey(context)))
+        || (!snapshot && !readingSource.source && shown.ownerKey && shown.ownerKey !== contextApi.currentCharacterRuntimeKey(context)))
         throw new Error('档案或角色已经变化，请重新打开对应故事。');
-    if (!modes.readableTimeStoriesSession(shown, memory)) throw new Error('这篇故事暂时无法读取，原内容仍保留。');
+    if (!(shown.readableProgress?.version === 1 ? modes.readableTimeStoriesProgressSession(reading, memory)
+        : modes.readableTimeStoriesSession(reading, memory))) throw new Error('这篇故事暂时无法读取，原内容仍保留。');
     return { context, memory };
+}
+
+async function persistPartialTimeStoryReading(shown) {
+    try {
+        if (readOnly() || shown.readableProgress?.complete !== false || !shown.readableProgress.draftId) return true;
+        const lifecycle = runtimeState.runtimeLifecycleEpoch, snapshot = runtimeState.activeArchiveSnapshot;
+        const patch = contract.timeStoryReadingState(shown);
+        let context, target = null;
+        if (snapshot) {
+            const options = library.archiveTargetGenerationOptions(snapshot);
+            target = await options.revalidateArchiveTarget(options.archiveTarget, lifecycle);
+            context = options.context;
+            context.chatMetadata[constants.MEMORY_KEY] = target.memory;
+            context.chatMetadata[constants.CACHE_KEY] = target.cache;
+        } else context = contextApi.currentCharacterGuard();
+        const memory = target?.memory || repository.requireArchive(context);
+        const origin = contextApi.captureTaskOrigin(context, memory.archiveRevision);
+        const updated = await cache.commitGenerationTaskResultMutation(context, shown.readableProgress.draftId,
+            (latest, sourceMemory) => {
+                if (!modes.readableTimeStoriesProgressSession(latest, sourceMemory)) return null;
+                Object.assign(latest, patch);
+                Object.assign(latest, contract.timeStoryReadingState(latest));
+                return latest;
+            }, { expectedTaskOrigin: origin, archiveTarget: target, stillCurrent: () => contextApi.runtimeLifecycleStillCurrent(lifecycle) });
+        if (!updated) throw new Error('阅读位置尚未确认保存，已收到的故事仍保留。');
+        if (snapshot && runtimeState.activeArchiveSnapshot?.entryId === snapshot.entryId) runtimeState.activeArchiveSnapshot.cache = target.cache;
+        // A newer click owns its own reading position; do not move it backwards
+        // when an earlier asynchronous save acknowledgment arrives.
+        if (runtimeState.activeSession === shown && JSON.stringify(contract.timeStoryReadingState(shown)) === JSON.stringify(patch)) {
+            runtimeState.activeSession = updated;
+        }
+        return true;
+    } catch (error) {
+        globalThis.toastr?.error?.(text.toastText(text.safeErrorSummary(error)), '心迹回廊 · 时空番外');
+        return false;
+    }
 }
 
 export function renderTimeStories() {
@@ -90,7 +131,7 @@ export function renderTimeStories() {
 
 export function closeTimeStoryDetail() {
     if (!contract.isTimeStoryMode(runtimeState.activeMode) || runtimeState.activeSession?.view !== 'story') return false;
-    try { assertShownTarget(); runtimeState.activeSession.view = 'library'; renderTimeStories(); return true; } catch { return false; }
+    try { assertShownTarget(); runtimeState.activeSession.view = 'library'; renderTimeStories(); void persistPartialTimeStoryReading(runtimeState.activeSession); return true; } catch { return false; }
 }
 
 // Only scalar reading state changes here. Generation is handled by the existing
@@ -120,7 +161,7 @@ export function handleTimeStoryAction(action, id = '') {
         const matching = [...nodes].find(node => node.dataset.rmtTimeStory === action && node.dataset.rmtTimeStoryId === id && !node.disabled);
         const focus = matching || body?.querySelector?.('.rmt-time-line, .rmt-time-closing, .rmt-time-library');
         if (focus) { if (!matching) focus.tabIndex = -1; focus.focus?.({ preventScroll: true }); }
-        return true;
+        return session.readableProgress?.complete === false && !readOnly() ? persistPartialTimeStoryReading(session) : true;
     } catch (error) { globalThis.toastr?.error?.(text.toastText(text.safeErrorSummary(error)), '心迹回廊 · 时空番外'); return false; }
 }
 

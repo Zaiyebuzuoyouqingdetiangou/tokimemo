@@ -111,6 +111,28 @@ export async function generateInbox(context, memory, origin, taskKey, previous, 
     fresh.ownerKey = contextApi.currentCharacterRuntimeKey(context);
     return mergeInboxLatest(previous, fresh);
 }
+
+export function projectInboxProgress({ segments, memoryBank, context, previousSession, operation = {}, frozenInputs = {}, createdAt }) {
+    const segment = segments.findLast(item => item.items('/letters').length);
+    if (!segment) return null;
+    const date = new Date(operation.inboxDate || createdAt);
+    if (!Number.isFinite(date.getTime())) return null;
+    const plan = inboxPlan(memoryBank, previousSession, date);
+    const incoming = emptyInbox(memoryBank, context);
+    const seen = new Set();
+    for (const value of segment.items('/letters')) {
+        const slot = plan.find(item => item.slot === value?.slot);
+        if (!slot || seen.has(slot.slot)) continue;
+        try {
+            const normalized = normalizeInboxLetters({ letters: [value] }, memoryBank, [slot], date, {
+                controlledEvidence: frozenInputs['presentation:inbox']?.settingEvidence || '',
+            });
+            incoming.letters.push(...normalized.letters); seen.add(slot.slot);
+        } catch { /* An incomplete or invalid letter remains in the original recovery draft. */ }
+    }
+    if (!incoming.letters.length) return null;
+    return mergeInboxLatest(previousSession, incoming);
+}
 export function postcardInboxItem(location, travel, memory, date = new Date()) {
     if (travel?.chatId !== memory.chatId || travel?.archiveRevision !== memory.archiveRevision
         || !travel.locations?.some(item => item.id === location?.id)) throw new Error('明信片不属于这份当前档案。');
