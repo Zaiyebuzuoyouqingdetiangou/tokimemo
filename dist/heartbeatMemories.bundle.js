@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 128
-// Source SHA-256: ce9e9c63a9f559f8911ce1eb02a07046c332894c316e8333934080a247f0a262
+// Source modules: 130
+// Source SHA-256: 1e4c4202abe10011d2042bc4271d64ff023ebd70b3e2b1de0aa0b9cb0c911096
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -54,6 +54,7 @@ const __m_core_requestCoordinator_js = Object.create(null);
 const __m_core_selfUpdater_js = Object.create(null);
 const __m_core_settings_js = Object.create(null);
 const __m_core_state_js = Object.create(null);
+const __m_core_storyChronology_js = Object.create(null);
 const __m_core_taskTrace_js = Object.create(null);
 const __m_core_text_js = Object.create(null);
 const __m_core_theme_js = Object.create(null);
@@ -71,6 +72,7 @@ const __m_generation_normalizers_js = Object.create(null);
 const __m_generation_partialProgress_js = Object.create(null);
 const __m_generation_prompts_js = Object.create(null);
 const __m_generation_recovery_js = Object.create(null);
+const __m_generation_recoveryPayload_js = Object.create(null);
 const __m_heartbeatMemories_js = Object.create(null);
 const __m_modes_achievements_js = Object.create(null);
 const __m_modes_advEvent_js = Object.create(null);
@@ -5645,12 +5647,85 @@ __m_core_archiveCover_js.archiveCoverHtml = archiveCoverHtml;
 __m_core_archiveCover_js.ARCHIVE_INTRO_STYLES = ARCHIVE_INTRO_STYLES;
 }
 
+function __init_core_storyChronology_js() {
+// MODULE: core/storyChronology.js
+
+// Presentation/request order only. Do not rewrite stored IDs, dates or progress.
+// Missing years, relative dates and incomparable calendars stay in their slots.
+function positiveInteger(value) {
+    if (/^\d+$/u.test(value)) {
+        const number = Number(value);
+        return Number.isSafeInteger(number) && number > 0 ? number : null;
+    }
+    if (value === '元') return 1;
+    const digits = { 零: 0, 〇: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+    if (/^[零〇一二三四五六七八九]+$/u.test(value)) {
+        const number = Number([...value].map(char => digits[char]).join(''));
+        return Number.isSafeInteger(number) && number > 0 ? number : null;
+    }
+    const units = { 十: 10, 百: 100, 千: 1000 };
+    let total = 0, digit = 0, lastUnit = Infinity;
+    for (const char of value) {
+        if (Object.hasOwn(digits, char)) { digit = digits[char]; continue; }
+        const unit = units[char];
+        if (!unit || unit >= lastUnit) return null;
+        total += (digit || 1) * unit;
+        digit = 0;
+        lastUnit = unit;
+    }
+    const result = total + digit;
+    return Number.isSafeInteger(result) && result > 0 ? result : null;
+}
+
+function comparableStoryDate(value) {
+    if (typeof value !== 'string') return null;
+    const text = value.trim();
+    const numeric = /^(\d{4,})[-/.](\d{1,2})[-/.](\d{1,2})$/u.exec(text)
+        || /^(\d{4,})年(\d{1,2})月(\d{1,2})日?$/u.exec(text);
+    if (numeric) {
+        const [year, month, day] = numeric.slice(1).map(positiveInteger);
+        if (!year || !month || !day || month > 12) return null;
+        const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+        if (day > [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]) return null;
+        return { calendar: 'gregorian', parts: [year, month, day] };
+    }
+    // A named fictional/historical calendar is comparable only with itself.
+    // No conversion, assumed era order, Gregorian month cap or current year.
+    const era = /^([^\d年月日]+?)([零〇一二三四五六七八九十百千两元\d]+)年([零〇一二三四五六七八九十两元\d]+)月(?:初)?([零〇一二三四五六七八九十两\d]+)日?$/u.exec(text);
+    if (!era) return null;
+    const parts = era.slice(2).map(positiveInteger);
+    return parts.every(Boolean) ? { calendar: `era:${era[1].trim()}`, parts } : null;
+}
+
+function sortByStoryDate(items) {
+    const result = Array.isArray(items) ? [...items] : [];
+    const calendars = new Map();
+    result.forEach((item, index) => {
+        const date = comparableStoryDate(item?.date);
+        if (!date) return;
+        if (!calendars.has(date.calendar)) calendars.set(date.calendar, []);
+        calendars.get(date.calendar).push({ item, index, parts: date.parts });
+    });
+    for (const rows of calendars.values()) {
+        const sorted = [...rows].sort((left, right) => left.parts[0] - right.parts[0]
+            || left.parts[1] - right.parts[1] || left.parts[2] - right.parts[2] || left.index - right.index);
+        rows.forEach((row, index) => { result[row.index] = sorted[index].item; });
+    }
+    return result;
+}
+
+__m_core_storyChronology_js.comparableStoryDate = comparableStoryDate;
+__m_core_storyChronology_js.sortByStoryDate = sortByStoryDate;
+}
+
 function __init_core_evidence_js() {
 // MODULE: core/evidence.js
 const core_constants = __m_core_constants_js;
 const core_text = __m_core_text_js;
+const story_chronology = __m_core_storyChronology_js;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
 
 
 function memoryIdSet(memoryBank) {
@@ -5726,7 +5801,7 @@ function memoryPayload(memoryBank, onlyIds = null, limit = core_constants.MAX_ME
     const source = (memoryBank?.memories || []).filter(item => !filter || filter.has(item.id));
     const safeLimit = Math.max(1, Math.min(core_constants.MAX_MEMORY_ITEMS, Number(limit) || core_constants.MAX_MEMORY_PROMPT_ITEMS));
     const selected = filter ? source.slice(0, safeLimit) : evenlySample(source, safeLimit);
-    return selected.map(item => ({
+    return story_chronology.sortByStoryDate(selected).map(item => ({
         id: core_text.normalizeText(item?.id, 40),
         date: core_text.normalizeText(item?.date, 60),
         title: core_text.normalizeText(item?.title, 100),
@@ -6182,13 +6257,100 @@ __m_ui_heartReaderState_js.clearHeartReaderPositions = clearHeartReaderPositions
 __m_ui_heartReaderState_js.enterHeartReader = enterHeartReader;
 }
 
+function __init_generation_recoveryPayload_js() {
+// MODULE: generation/recoveryPayload.js
+
+// Lossless storage representation only. Never rebuild requests from current settings.
+// Callers validate own JSON data before invoking this codec.
+const has = (value, key) => Object.hasOwn(value, key);
+const size = value => JSON.stringify(value).length;
+const invalid = () => { throw new Error('Invalid recovery payload encoding'); };
+const exactKeys = (value, keys) => value && typeof value === 'object' && !Array.isArray(value)
+    && Object.keys(value).length === keys.length && keys.every(key => has(value, key));
+
+function spliceFrom(base, actual) {
+    let prefixChars = 0, suffixChars = 0;
+    while (prefixChars < base.length && prefixChars < actual.length && base[prefixChars] === actual[prefixChars]) prefixChars++;
+    while (suffixChars < base.length - prefixChars && suffixChars < actual.length - prefixChars
+        && base[base.length - suffixChars - 1] === actual[actual.length - suffixChars - 1]) suffixChars++;
+    const patch = { prefixChars, removeChars: base.length - prefixChars - suffixChars,
+        insertText: actual.slice(prefixChars, actual.length - suffixChars) };
+    return size(patch) < size(actual) ? patch : actual;
+}
+
+function packRecoveryPayload(journal) {
+    if (!journal || typeof journal !== 'object' || has(journal, 'requestEncoding') || has(journal, 'requestContextTable')) return journal;
+    const plain = { ...journal };
+    if (Array.isArray(journal.previousAttempts)) plain.previousAttempts = journal.previousAttempts.map(packRecoveryPayload);
+    if (!Array.isArray(plain.segments)) return plain;
+    const table = [], indexes = new Map();
+    const segments = plain.segments.map(segment => {
+        const recipe = segment.requestRecipe, identity = recipe?.identity;
+        if (recipe?.version !== 1 || typeof identity?.contextEnvelope !== 'string' || typeof identity.prompt !== 'string') return segment;
+        const context = identity.contextEnvelope;
+        let storedContext = context;
+        if (context) {
+            if (!indexes.has(context)) { indexes.set(context, table.length); table.push(context); }
+            storedContext = { textRef: indexes.get(context) };
+        }
+        return { ...segment, requestRecipe: { ...recipe, identity: { ...identity, contextEnvelope: storedContext },
+            ...(typeof recipe.actualPrompt === 'string' ? { actualPrompt: spliceFrom(context + '\n' + identity.prompt, recipe.actualPrompt) } : {}) } };
+    });
+    const packed = { ...plain, segments, requestEncoding: 1, requestContextTable: table };
+    // No new size threshold: keep whichever representation actually occupies less space.
+    return size(packed) < size(plain) ? packed : plain;
+}
+
+function unpackRecoveryPayload(journal, requestChars) {
+    if (!journal || typeof journal !== 'object') return journal;
+    const decoded = { ...journal };
+    if (Array.isArray(journal.previousAttempts)) decoded.previousAttempts = journal.previousAttempts.map(value => unpackRecoveryPayload(value, requestChars));
+    if (!has(journal, 'requestEncoding') && !has(journal, 'requestContextTable')) return decoded;
+    if (journal.requestEncoding !== 1 || !Array.isArray(journal.requestContextTable) || !Array.isArray(journal.segments)) invalid();
+    const table = journal.requestContextTable;
+    if (table.some(value => typeof value !== 'string' || value.length > requestChars)) invalid();
+    decoded.segments = journal.segments.map(segment => {
+        const recipe = segment.requestRecipe;
+        if (!recipe) return segment;
+        const identity = recipe.identity;
+        if (!identity || typeof identity.prompt !== 'string') invalid();
+        let context = identity.contextEnvelope;
+        if (typeof context !== 'string') {
+            if (!exactKeys(context, ['textRef']) || !Number.isSafeInteger(context.textRef)
+                || context.textRef < 0 || context.textRef >= table.length) invalid();
+            context = table[context.textRef];
+        }
+        let actual = recipe.actualPrompt;
+        if (actual !== undefined && typeof actual !== 'string') {
+            if (!exactKeys(actual, ['prefixChars', 'removeChars', 'insertText']) || typeof actual.insertText !== 'string'
+                || !Number.isSafeInteger(actual.prefixChars) || !Number.isSafeInteger(actual.removeChars)
+                || actual.prefixChars < 0 || actual.removeChars < 0) invalid();
+            const base = context + '\n' + identity.prompt;
+            if (actual.prefixChars > base.length || actual.removeChars > base.length - actual.prefixChars
+                || base.length - actual.removeChars + actual.insertText.length > requestChars) invalid();
+            actual = base.slice(0, actual.prefixChars) + actual.insertText + base.slice(actual.prefixChars + actual.removeChars);
+        }
+        return { ...segment, requestRecipe: { ...recipe, identity: { ...identity, contextEnvelope: context },
+            ...(has(recipe, 'actualPrompt') ? { actualPrompt: actual } : {}) } };
+    });
+    delete decoded.requestEncoding;
+    delete decoded.requestContextTable;
+    return decoded;
+}
+
+__m_generation_recoveryPayload_js.packRecoveryPayload = packRecoveryPayload;
+__m_generation_recoveryPayload_js.unpackRecoveryPayload = unpackRecoveryPayload;
+}
+
 function __init_generation_recovery_js() {
 // MODULE: generation/recovery.js
 const core_digest = __m_core_digest_js;
 const core_text = __m_core_text_js;
+const recovery_payload = __m_generation_recoveryPayload_js;
 // Request-segment recovery, not a second normalizer or a source of archive facts.
 // Storage is supplied by the existing origin/revision/fence-aware cache boundary.
 // Model text stays inert and is never put on Error objects, in logs, or in DOM.
+
 
 
 const GENERATION_RECOVERY_CACHE_KEY = '__generationRecoveryV1';
@@ -6310,10 +6472,19 @@ function recoveryIdentity(origin, mode) {
     return Object.values(identity).some(value => value === null) ? null : identity;
 }
 
+// Validate JSON ownership first; apply the existing storage limit to the lossless
+// stored representation, not to duplicate in-memory copies of shared requests.
+function recoveryJournalData(raw) {
+    const safe = JSON.parse(jsonData(raw, Number.MAX_SAFE_INTEGER, true));
+    const expanded = recovery_payload.unpackRecoveryPayload(safe, GENERATION_RECOVERY_LIMITS.requestChars);
+    const stored = jsonData(recovery_payload.packRecoveryPayload(expanded), GENERATION_RECOVERY_LIMITS.journalChars, true);
+    return { expanded, stored };
+}
+
 function validJournal(raw, now) {
     try {
-        // Bound the persisted object before inspecting it. JSON data cannot acquire authority.
-        const journal = JSON.parse(jsonData(raw, GENERATION_RECOVERY_LIMITS.journalChars, true));
+        // Decode only structurally checked JSON; request/result validation remains unchanged.
+        const journal = recoveryJournalData(raw).expanded;
         if (journal.kind !== 'generation-recovery' || journal.version !== 1
             || !recoveryIdentity(journal.identity, journal.identity?.mode)
             || !DIGEST.test(journal.settingsHash || '') || !Array.isArray(journal.segments)
@@ -6388,7 +6559,7 @@ function exportGenerationRecovery(raw) {
     const keys = ['kind', 'version', 'identity', 'settingsHash', 'createdAt', 'updatedAt', 'segments',
         'failureCode', 'failureCategory', 'failurePhase', 'frozenInputs', 'inputSnapshotVersion', 'sourcePolicy',
         'operation', 'replaceExisting', 'draftId', 'pageId', 'sourceIdentity', 'contentSnapshotVersion', 'contentSnapshot'];
-    const pick = item => Object.fromEntries(keys.filter(key => Object.hasOwn(item, key)).map(key => [key, item[key]]));
+    const pick = item => recovery_payload.packRecoveryPayload(Object.fromEntries(keys.filter(key => Object.hasOwn(item, key)).map(key => [key, item[key]])));
     return { kind: 'hearttrace-module-recovery-export', version: 1, journal: pick(journal),
         previousAttempts: (Array.isArray(journal.previousAttempts) ? journal.previousAttempts : []).map(pick) };
 }
@@ -6454,7 +6625,7 @@ function detachGenerationRecovery(origin) {
 }
 
 function generationRecoverySnapshot(handle) {
-    return internalHandles.has(handle) ? JSON.parse(jsonData(handle.journal, GENERATION_RECOVERY_LIMITS.journalChars, true)) : null;
+    return internalHandles.has(handle) ? recoveryJournalData(handle.journal).expanded : null;
 }
 
 function readGenerationContentSnapshot(value) {
@@ -6619,14 +6790,14 @@ async function changeJournal(handle, mutate) {
         const next = generationRecoverySnapshot(handle);
         mutate(next);
         next.updatedAt = handle.now();
-        const serialized = jsonData(next, GENERATION_RECOVERY_LIMITS.journalChars, true);
+        const { expanded, stored } = recoveryJournalData(next);
         if (next.segments.length > GENERATION_RECOVERY_LIMITS.segments) {
             throw recoveryError('RMT_RECOVERY_LIMIT', '本轮续写草稿已达到分段上限，此前成功部分和旧内容仍保留。');
         }
         checkCurrent(handle);
         // Preserve an in-page copy even if durable storage is temporarily unavailable.
-        handle.journal = JSON.parse(serialized);
-        try { handle.durable = typeof handle.save === 'function' && await handle.save(JSON.parse(serialized)) !== false; }
+        handle.journal = expanded;
+        try { handle.durable = typeof handle.save === 'function' && await handle.save(JSON.parse(stored)) !== false; }
         catch (error) {
             handle.durable = false;
             if (error?.name === 'AbortError') throw error;
@@ -17038,6 +17209,7 @@ __m_ui_styles_js.abstractStyle = abstractStyle;
 function __init_ui_albumView_js() {
 // MODULE: ui/albumView.js
 const cg_format_ui = __m_ui_cgFormatControl_js;
+const story_chronology = __m_core_storyChronology_js;
 const ui_albumCategory = __m_ui_albumCategory_js;
 const archive_library = __m_archive_library_js;
 const core_constants = __m_core_constants_js;
@@ -17050,6 +17222,7 @@ const ui_styles = __m_ui_styles_js;
 const runtimeState = __m_core_state_js.state;
 
 
+
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 
@@ -17059,7 +17232,8 @@ const runtimeState = __m_core_state_js.state;
 function filteredAlbumEntries() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ALBUM) return [];
     const category = runtimeState.activeSession.category || '全部';
-    return category === '全部' ? runtimeState.activeSession.entries : runtimeState.activeSession.entries.filter(x => ui_albumCategory.albumDisplayCategory(x) === category);
+    const entries = story_chronology.sortByStoryDate(runtimeState.activeSession.entries);
+    return category === '全部' ? entries : entries.filter(x => ui_albumCategory.albumDisplayCategory(x) === category);
 }
 
 function selectedAlbumEntry() {
@@ -18075,6 +18249,7 @@ __m_generation_imageGeneration_js.IMAGE_GENERATION_COMMAND_NAMES = IMAGE_GENERAT
 function __init_modes_album_js() {
 // MODULE: modes/album.js
 const cg_visual = __m_core_cgVisualRules_js;
+const story_chronology = __m_core_storyChronology_js;
 const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
@@ -18086,6 +18261,7 @@ const core_text = __m_core_text_js;
 const generation_client = __m_generation_client_js;
 const generation_imageGeneration = __m_generation_imageGeneration_js;
 const generation_prompts = __m_generation_prompts_js;
+
 
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -18101,7 +18277,7 @@ const generation_prompts = __m_generation_prompts_js;
 
 
 function compactAlbumExisting(session) {
-    return core_evidence.evenlySample(Array.isArray(session?.entries) ? session.entries : [], core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
+    return story_chronology.sortByStoryDate(core_evidence.evenlySample(Array.isArray(session?.entries) ? session.entries : [], core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS)).map(item => ({
         id: core_text.normalizeText(item?.id, 40),
         title: core_text.normalizeText(item?.title, 80),
         unlocked: !!item?.unlocked,
@@ -18177,13 +18353,14 @@ function albumRelationshipArchiveSlice(memoryBank) {
         ...core_evidence.evenlySample(relevant, 12).map(record => record.index),
         ...indexed.slice(-12).map(record => record.index),
     ]);
+    const ordered = story_chronology.sortByStoryDate(indexed.map(record => ({ ...record, date: record.item?.date })));
     return JSON.stringify({
         archiveName: core_text.normalizeText(memoryBank?.archiveName, 120),
         archiveSummary: core_text.normalizeText(memoryBank?.archiveSummary, 1000),
         archiveKeywords: core_text.cleanArray(memoryBank?.archiveKeywords, 8, 60),
         memoryColumns: ['id', 'evidenceAnchor'],
-        memories: indexed.map(record => [core_text.normalizeText(record.item?.id, 40), record.evidenceAnchor]),
-        relationshipDetails: indexed.filter(record => detailedIndexes.has(record.index)).map(record => ({
+        memories: ordered.map(record => [core_text.normalizeText(record.item?.id, 40), record.evidenceAnchor]),
+        relationshipDetails: ordered.filter(record => detailedIndexes.has(record.index)).map(record => ({
             id: core_text.normalizeText(record.item?.id, 40),
             date: core_text.normalizeText(record.item?.date, 30),
             title: record.title,
@@ -52266,10 +52443,12 @@ __init_core_participants_js();
 __init_generation_cgAppearance_js();
 __init_core_cgImagePatch_js();
 __init_core_archiveCover_js();
+__init_core_storyChronology_js();
 __init_core_evidence_js();
 __init_core_incremental_js();
 __init_ui_workspaceState_js();
 __init_ui_heartReaderState_js();
+__init_generation_recoveryPayload_js();
 __init_generation_recovery_js();
 __init_generation_cgPromptPolicy_js();
 __init_core_butterflyContract_js();

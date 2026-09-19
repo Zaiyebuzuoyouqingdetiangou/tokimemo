@@ -3,6 +3,7 @@
 // Model text stays inert and is never put on Error objects, in logs, or in DOM.
 import * as core_digest from '../core/digest.js';
 import * as core_text from '../core/text.js';
+import * as recovery_payload from './recoveryPayload.js';
 export const GENERATION_RECOVERY_CACHE_KEY = '__generationRecoveryV1';
 export const GENERATION_RECOVERY_LIMITS = Object.freeze({
     segments: 128, segmentChars: 600000, journalChars: 1800000,
@@ -122,10 +123,19 @@ function recoveryIdentity(origin, mode) {
     return Object.values(identity).some(value => value === null) ? null : identity;
 }
 
+// Validate JSON ownership first; apply the existing storage limit to the lossless
+// stored representation, not to duplicate in-memory copies of shared requests.
+function recoveryJournalData(raw) {
+    const safe = JSON.parse(jsonData(raw, Number.MAX_SAFE_INTEGER, true));
+    const expanded = recovery_payload.unpackRecoveryPayload(safe, GENERATION_RECOVERY_LIMITS.requestChars);
+    const stored = jsonData(recovery_payload.packRecoveryPayload(expanded), GENERATION_RECOVERY_LIMITS.journalChars, true);
+    return { expanded, stored };
+}
+
 function validJournal(raw, now) {
     try {
-        // Bound the persisted object before inspecting it. JSON data cannot acquire authority.
-        const journal = JSON.parse(jsonData(raw, GENERATION_RECOVERY_LIMITS.journalChars, true));
+        // Decode only structurally checked JSON; request/result validation remains unchanged.
+        const journal = recoveryJournalData(raw).expanded;
         if (journal.kind !== 'generation-recovery' || journal.version !== 1
             || !recoveryIdentity(journal.identity, journal.identity?.mode)
             || !DIGEST.test(journal.settingsHash || '') || !Array.isArray(journal.segments)
@@ -200,7 +210,7 @@ export function exportGenerationRecovery(raw) {
     const keys = ['kind', 'version', 'identity', 'settingsHash', 'createdAt', 'updatedAt', 'segments',
         'failureCode', 'failureCategory', 'failurePhase', 'frozenInputs', 'inputSnapshotVersion', 'sourcePolicy',
         'operation', 'replaceExisting', 'draftId', 'pageId', 'sourceIdentity', 'contentSnapshotVersion', 'contentSnapshot'];
-    const pick = item => Object.fromEntries(keys.filter(key => Object.hasOwn(item, key)).map(key => [key, item[key]]));
+    const pick = item => recovery_payload.packRecoveryPayload(Object.fromEntries(keys.filter(key => Object.hasOwn(item, key)).map(key => [key, item[key]])));
     return { kind: 'hearttrace-module-recovery-export', version: 1, journal: pick(journal),
         previousAttempts: (Array.isArray(journal.previousAttempts) ? journal.previousAttempts : []).map(pick) };
 }
@@ -266,7 +276,7 @@ export function detachGenerationRecovery(origin) {
 }
 
 export function generationRecoverySnapshot(handle) {
-    return internalHandles.has(handle) ? JSON.parse(jsonData(handle.journal, GENERATION_RECOVERY_LIMITS.journalChars, true)) : null;
+    return internalHandles.has(handle) ? recoveryJournalData(handle.journal).expanded : null;
 }
 
 export function readGenerationContentSnapshot(value) {
@@ -431,14 +441,14 @@ async function changeJournal(handle, mutate) {
         const next = generationRecoverySnapshot(handle);
         mutate(next);
         next.updatedAt = handle.now();
-        const serialized = jsonData(next, GENERATION_RECOVERY_LIMITS.journalChars, true);
+        const { expanded, stored } = recoveryJournalData(next);
         if (next.segments.length > GENERATION_RECOVERY_LIMITS.segments) {
             throw recoveryError('RMT_RECOVERY_LIMIT', '本轮续写草稿已达到分段上限，此前成功部分和旧内容仍保留。');
         }
         checkCurrent(handle);
         // Preserve an in-page copy even if durable storage is temporarily unavailable.
-        handle.journal = JSON.parse(serialized);
-        try { handle.durable = typeof handle.save === 'function' && await handle.save(JSON.parse(serialized)) !== false; }
+        handle.journal = expanded;
+        try { handle.durable = typeof handle.save === 'function' && await handle.save(JSON.parse(stored)) !== false; }
         catch (error) {
             handle.durable = false;
             if (error?.name === 'AbortError') throw error;

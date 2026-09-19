@@ -1,4 +1,5 @@
 import * as cg_format_ui from './cgFormatControl.js';
+import * as story_chronology from '../core/storyChronology.js';
 import * as ui_albumCategory from './albumCategory.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -14,7 +15,8 @@ import * as ui_styles from './styles.js';
 export function filteredAlbumEntries() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ALBUM) return [];
     const category = runtimeState.activeSession.category || '全部';
-    return category === '全部' ? runtimeState.activeSession.entries : runtimeState.activeSession.entries.filter(x => ui_albumCategory.albumDisplayCategory(x) === category);
+    const entries = story_chronology.sortByStoryDate(runtimeState.activeSession.entries);
+    return category === '全部' ? entries : entries.filter(x => ui_albumCategory.albumDisplayCategory(x) === category);
 }
 
 export function selectedAlbumEntry() {

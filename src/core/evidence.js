@@ -2,6 +2,7 @@
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_constants from './constants.js';
 import * as core_text from './text.js';
+import * as story_chronology from './storyChronology.js';
 
 export function memoryIdSet(memoryBank) {
     return new Set((memoryBank?.memories || []).map(item => String(item.id)));
@@ -76,7 +77,7 @@ export function memoryPayload(memoryBank, onlyIds = null, limit = core_constants
     const source = (memoryBank?.memories || []).filter(item => !filter || filter.has(item.id));
     const safeLimit = Math.max(1, Math.min(core_constants.MAX_MEMORY_ITEMS, Number(limit) || core_constants.MAX_MEMORY_PROMPT_ITEMS));
     const selected = filter ? source.slice(0, safeLimit) : evenlySample(source, safeLimit);
-    return selected.map(item => ({
+    return story_chronology.sortByStoryDate(selected).map(item => ({
         id: core_text.normalizeText(item?.id, 40),
         date: core_text.normalizeText(item?.date, 60),
         title: core_text.normalizeText(item?.title, 100),

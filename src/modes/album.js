@@ -1,4 +1,5 @@
 import * as cg_visual from '../core/cgVisualRules.js';
+import * as story_chronology from '../core/storyChronology.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_cache from '../core/cache.js';
@@ -14,7 +15,7 @@ import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as generation_prompts from '../generation/prompts.js';
 
 export function compactAlbumExisting(session) {
-    return core_evidence.evenlySample(Array.isArray(session?.entries) ? session.entries : [], core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
+    return story_chronology.sortByStoryDate(core_evidence.evenlySample(Array.isArray(session?.entries) ? session.entries : [], core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS)).map(item => ({
         id: core_text.normalizeText(item?.id, 40),
         title: core_text.normalizeText(item?.title, 80),
         unlocked: !!item?.unlocked,
@@ -90,13 +91,14 @@ export function albumRelationshipArchiveSlice(memoryBank) {
         ...core_evidence.evenlySample(relevant, 12).map(record => record.index),
         ...indexed.slice(-12).map(record => record.index),
     ]);
+    const ordered = story_chronology.sortByStoryDate(indexed.map(record => ({ ...record, date: record.item?.date })));
     return JSON.stringify({
         archiveName: core_text.normalizeText(memoryBank?.archiveName, 120),
         archiveSummary: core_text.normalizeText(memoryBank?.archiveSummary, 1000),
         archiveKeywords: core_text.cleanArray(memoryBank?.archiveKeywords, 8, 60),
         memoryColumns: ['id', 'evidenceAnchor'],
-        memories: indexed.map(record => [core_text.normalizeText(record.item?.id, 40), record.evidenceAnchor]),
-        relationshipDetails: indexed.filter(record => detailedIndexes.has(record.index)).map(record => ({
+        memories: ordered.map(record => [core_text.normalizeText(record.item?.id, 40), record.evidenceAnchor]),
+        relationshipDetails: ordered.filter(record => detailedIndexes.has(record.index)).map(record => ({
             id: core_text.normalizeText(record.item?.id, 40),
             date: core_text.normalizeText(record.item?.date, 30),
             title: record.title,
