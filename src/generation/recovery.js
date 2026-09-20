@@ -1,3 +1,5 @@
+import * as recovery_merge from './recoveryMerge.js';
+import * as partial_progress from './partialProgress.js';
 // Request-segment recovery, not a second normalizer or a source of archive facts.
 // Storage is supplied by the existing origin/revision/fence-aware cache boundary.
 // Model text stays inert and is never put on Error objects, in logs, or in DOM.
@@ -123,6 +125,70 @@ function recoveryIdentity(origin, mode) {
     return Object.values(identity).some(value => value === null) ? null : identity;
 }
 
+// Volatile page-level holds for replies that arrived but could not enter the
+// journal within its existing total capacity. This is not a new storage tier:
+// bounded volatile page memory only, cleared on discard, and exposed solely
+// through the existing explicit user export path. No limit is raised and no
+// old draft is dropped to make room.
+const unsavedReplyHolds = new Map();
+const UNSAVED_REPLY_HOLD_LIMITS = Object.freeze({ perIdentity: 8, identities: 16 });
+const HELD_REPLY_EXPORT_HINT = '本次新收到的成果已保留在当前页面，可通过恢复区“导出未提交草稿”一并导出。';
+
+// Accurate only where a hold actually succeeded; best effort on the error
+// object itself so a frozen/host-owned error never masks the hold.
+function noteHeldReplyExport(error) {
+    try {
+        error.message = `${typeof error.message === 'string' ? error.message : ''}${HELD_REPLY_EXPORT_HINT}`;
+        if (typeof error.safeUserMessage === 'string') error.safeUserMessage = `${error.safeUserMessage}${HELD_REPLY_EXPORT_HINT}`;
+    } catch { /* A read-only error object keeps its original message. */ }
+}
+
+function unsavedReplyHoldKey(identitySource, mode) {
+    const identity = recoveryIdentity(identitySource, mode);
+    return identity ? JSON.stringify(identity) : null;
+}
+
+function holdUnsavedReply(handle, slot, rawJson) {
+    // rawJson already passed the jsonData segment bound; assert defensively.
+    if (typeof slot !== 'string' || !slot || typeof rawJson !== 'string' || !rawJson
+        || rawJson.length > GENERATION_RECOVERY_LIMITS.segmentChars) return false;
+    const key = unsavedReplyHoldKey(handle?.journal?.identity, handle?.journal?.identity?.mode);
+    if (!key) return false;
+    const previous = unsavedReplyHolds.get(key) || [];
+    if (previous.some(entry => entry.slot === slot && entry.rawJson === rawJson)) return true;
+    const entries = [...previous, { slot, rawJson, at: typeof handle.now === 'function' ? handle.now() : Date.now() }]
+        .slice(-UNSAVED_REPLY_HOLD_LIMITS.perIdentity);
+    unsavedReplyHolds.delete(key);
+    unsavedReplyHolds.set(key, entries);
+    while (unsavedReplyHolds.size > UNSAVED_REPLY_HOLD_LIMITS.identities) unsavedReplyHolds.delete(unsavedReplyHolds.keys().next().value);
+    return true;
+}
+
+export function generationRecoveryHeldReplies(origin, mode) {
+    const key = unsavedReplyHoldKey(origin, mode);
+    const entries = key ? unsavedReplyHolds.get(key) : null;
+    return entries ? entries.map(entry => ({ ...entry })) : [];
+}
+
+export function discardGenerationRecoveryHeldReplies(origin, mode) {
+    const key = unsavedReplyHoldKey(origin, mode);
+    if (key) unsavedReplyHolds.delete(key);
+}
+
+// Best-effort page projection of a held reply. The view is never written back
+// to the journal and handle.publishedProgress is left untouched; a failing
+// projection never drops the hold. AbortError still stops the task.
+async function projectHeldReply(handle, slot, requestHash, rawJson) {
+    if (!handle.onProgress) return;
+    checkCurrent(handle);
+    const snapshot = generationRecoverySnapshot(handle);
+    if (!snapshot) return;
+    const view = snapshot.segments.some(row => row.slot === slot) ? snapshot
+        : { ...snapshot, segments: [...snapshot.segments, { slot, requestHash, state: 'truncated', partial: rawJson }] };
+    try { await handle.onProgress(view); }
+    catch (error) { if (error?.name === 'AbortError') throw error; }
+}
+
 // Validate JSON ownership first; apply the existing storage limit to the lossless
 // stored representation, not to duplicate in-memory copies of shared requests.
 function recoveryJournalData(raw) {
@@ -174,8 +240,11 @@ function validJournal(raw, now) {
             }
             // Error messages, request bodies, credentials and arbitrary fields do not re-enter storage.
             for (const key of Object.keys(segment)) {
-                if (!['slot', 'requestHash', 'state', 'rawJson', 'partial', 'failureCode', 'contract', 'requestRecipe'].includes(key)) return null;
+                if (!['slot', 'requestHash', 'state', 'rawJson', 'partial', 'retainedPartials', 'failureCode', 'contract', 'requestRecipe'].includes(key)) return null;
             }
+            if (segment.retainedPartials !== undefined && (!Array.isArray(segment.retainedPartials)
+                || segment.retainedPartials.some(value => typeof value !== 'string' || !value.trim()
+                    || value.length > GENERATION_RECOVERY_LIMITS.segmentChars))) return null;
             if (segment.requestRecipe !== undefined && !validRequestRecipe(segment.requestRecipe)) return null;
             if (Object.hasOwn(segment, 'contract')) {
                 const contract = typeof segment.contract === 'string' && Object.hasOwn(COMPATIBILITY_CONTRACTS, segment.contract) && COMPATIBILITY_CONTRACTS[segment.contract];
@@ -309,7 +378,7 @@ export async function publishGenerationRecoveryProgress(handle) {
         const received = journal.segments.filter(row => row.state === 'complete' || row.state === 'truncated');
         if (!received.length) return false;
         const signature = JSON.stringify({ segments: received.map(row => ({ slot: row.slot,
-            state: row.state, rawJson: row.rawJson, partial: row.partial })),
+            state: row.state, rawJson: row.rawJson, partial: row.partial, retainedPartials: row.retainedPartials })),
             operation: journal.operation, frozenInputs: journal.frozenInputs });
         if (signature === handle.publishedProgress) return true;
         try {
@@ -595,14 +664,63 @@ export async function withRecoverySegment(prompt, options, validator, run) {
         requestTokens.set(token, requestRecord);
         const requestOptions = { ...options, [TOKEN]: token,
             ...(recipe ? { recoveryBasePrompt: prompt, recoveryContinuationPartial: partial } : {}) };
-        let accepted = false;
+        let accepted = false, acceptedValue, mergedAcceptance = false;
         const onAccepted = async raw => {
-            const rawJson = jsonData(raw);
+            const originalJson = jsonData(raw);
+            let merged, rawJson = originalJson;
+            try {
+                const prior = handle.journal.segments.find(row => row.slot === slot);
+                merged = await partial_progress.mergeGenerationRecoveryResponse(handle.journal, prior, JSON.parse(originalJson), validator, options.recoveryProgressSchema);
+                // The merged result must fit the original complete-segment bound too.
+                // Check inside the preservation path so a paid reply is not lost on size failure.
+                if (merged) rawJson = jsonData(merged.raw);
+                checkCurrent(handle);
+            } catch (error) {
+                if (error?.name === 'AbortError') throw error;
+                // A paid, complete reply is retained too when safe merging cannot
+                // finish. The prior truncated row keeps its original state/bytes.
+                try {
+                    await changeJournal(handle, journal => {
+                        const prior = journal.segments.find(row => row.slot === slot);
+                        if (prior) {
+                            const retainedPartials = [...new Set([...(prior.retainedPartials || []), originalJson])];
+                            assertRetainedSize(prior.partial || prior.rawJson || '', retainedPartials);
+                            replaceSegment(journal, { ...prior, retainedPartials });
+                        }
+                    });
+                } catch (retainedError) {
+                    if (retainedError?.code !== 'RMT_RECOVERY_LIMIT') throw retainedError;
+                    // The retention row itself exceeded the journal's existing
+                    // total capacity. Hold the paid reply in bounded page memory
+                    // and surface the original merge failure, not the capacity
+                    // error, so the real conflict stays visible.
+                    if (holdUnsavedReply(handle, slot, originalJson)) {
+                        noteHeldReplyExport(error);
+                        await projectHeldReply(handle, slot, requestHash, originalJson);
+                    }
+                }
+                throw error;
+            }
+            if (merged) { raw = merged.raw; acceptedValue = merged.value; mergedAcceptance = true; }
             if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw recoveryError('RMT_RECOVERY_DATA', '续写返回的结构不可保存，旧内容仍保留。');
-            const saved = await changeJournal(handle, journal => {
-                replaceSegment(journal, { slot, requestHash, state: 'complete', rawJson, ...(contract ? { contract } : {}), ...(requestRecord.recipe ? { requestRecipe: requestRecord.recipe } : {}) });
-                journal.failureCode = '';
-            });
+            let saved;
+            try {
+                saved = await changeJournal(handle, journal => {
+                    replaceSegment(journal, { slot, requestHash, state: 'complete', rawJson, ...(contract ? { contract } : {}), ...(requestRecord.recipe ? { requestRecipe: requestRecord.recipe } : {}) });
+                    journal.failureCode = '';
+                });
+            } catch (error) {
+                // The paid reply did not fit the journal's existing total
+                // capacity. Hold it in bounded page memory and project it so the
+                // user can read/export it; the capacity error still stops later
+                // requests and nothing is regenerated automatically.
+                if (error?.code !== 'RMT_RECOVERY_LIMIT') throw error;
+                if (holdUnsavedReply(handle, slot, rawJson)) {
+                    noteHeldReplyExport(error);
+                    await projectHeldReply(handle, slot, requestHash, rawJson);
+                }
+                throw error;
+            }
             if (!saved && !handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '本段已返回，但浏览器没有成功保存进度；已停止后续请求。旧内容仍在，请检查本地存储后重试。');
             accepted = true;
             await publishGenerationRecoveryProgress(handle);
@@ -612,7 +730,7 @@ export async function withRecoverySegment(prompt, options, validator, run) {
             checkCurrent(handle);
             // Callers outside the common validated seam remain deliberately non-cacheable.
             if (!accepted) return result;
-            return result;
+            return mergedAcceptance ? acceptedValue : result;
         } catch (error) {
             if (error?.name !== 'AbortError') {
                 await changeJournal(handle, journal => {
@@ -637,11 +755,26 @@ export async function recordRecoveryTruncation(options, raw, error) {
     if (raw.length > GENERATION_RECOVERY_LIMITS.segmentChars) {
         throw recoveryError('RMT_RECOVERY_LIMIT', '截断草稿过长，无法完整保存；此前成功部分和旧内容仍保留，请勿关闭当前页面。');
     }
-    await changeJournal(record.handle, journal => {
-        replaceSegment(journal, { slot: record.slot, requestHash: record.requestHash,
-            state: 'truncated', partial: raw, failureCode: 'RMT_JSON_TRUNCATED', ...(record.contract ? { contract: record.contract } : {}), ...(record.recipe ? { requestRecipe: record.recipe } : {}) });
-        journal.failureCode = 'RMT_JSON_TRUNCATED';
-    });
+    try {
+        await changeJournal(record.handle, journal => {
+            const previous = journal.segments.find(row => row.slot === record.slot);
+            const retainedPartials = recovery_merge.retainedRecoveryPartials(previous, raw);
+            assertRetainedSize(raw, retainedPartials);
+            replaceSegment(journal, { slot: record.slot, requestHash: record.requestHash,
+                state: 'truncated', partial: raw, ...(retainedPartials.length ? { retainedPartials } : {}), failureCode: 'RMT_JSON_TRUNCATED', ...(record.contract ? { contract: record.contract } : {}), ...(record.recipe ? { requestRecipe: record.recipe } : {}) });
+            journal.failureCode = 'RMT_JSON_TRUNCATED';
+        });
+    } catch (changeError) {
+        // The truncated draft did not fit the journal's existing total capacity.
+        // Hold it in bounded page memory and project it; the capacity error
+        // still propagates and stops later requests.
+        if (changeError?.code !== 'RMT_RECOVERY_LIMIT') throw changeError;
+        if (holdUnsavedReply(record.handle, record.slot, raw)) {
+            noteHeldReplyExport(changeError);
+            await projectHeldReply(record.handle, record.slot, record.requestHash, raw);
+        }
+        throw changeError;
+    }
     // No hidden second paid request after a captured truncation; continuation is explicit.
     error.retryableJson = false;
     error.retryable = false;
@@ -667,4 +800,11 @@ export async function noteGenerationRecoveryFailure(origin, error) {
             journal.failureCategory = safe.archiveInputCategory; journal.failurePhase = safe.recoveryPhase;
         }
     });
+}
+
+function assertRetainedSize(raw, retained) {
+    // Each received reply keeps the pre-existing per-reply bound. The journal's
+    // existing total bound is applied by changeJournal; no new history-total cap.
+    if ([raw, ...retained].some(value => value.length > GENERATION_RECOVERY_LIMITS.segmentChars))
+        throw recoveryError('RMT_RECOVERY_LIMIT', '恢复片段超过原有单段保存范围；旧草稿未被覆盖，请先导出保留。');
 }

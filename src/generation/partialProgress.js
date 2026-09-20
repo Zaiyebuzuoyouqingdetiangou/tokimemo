@@ -1,6 +1,8 @@
 // A view projection of received JSON, never a second generation or a relaxed
 // final-response validator. Domain modules own validation of each readable item.
 import * as json_parser from './jsonParser.js';
+import * as recovery_merge from './recoveryMerge.js';
+import * as recovery_adapters from './recoveryAdapters.js';
 import * as album from '../modes/album.js';
 import * as butterfly from '../modes/butterfly.js';
 import * as ending from '../modes/ending.js';
@@ -19,10 +21,13 @@ import * as calendar from '../modes/calendar.js';
 import * as relations from '../modes/relations.js';
 import * as achievements from '../modes/achievements.js';
 
-export function generationProgressSegments(journal) {
+export function generationProgressSegments(journal, options = {}) {
     return (Array.isArray(journal?.segments) ? journal.segments : []).filter(segment =>
         segment.state === 'complete' || segment.state === 'truncated').map(segment => {
-        const parsed = json_parser.parsePartialJsonObject(segment.state === 'complete' ? segment.rawJson : segment.partial);
+        const latest = segment.state === 'complete' ? segment.rawJson : segment.partial;
+        const parsed = segment.retainedPartials?.length
+            ? recovery_merge.mergeRecoveryPartials([...segment.retainedPartials, latest], generationRecoverySchema(journal, segment, options), { final: segment.state === 'complete' })
+            : json_parser.parsePartialJsonObject(latest);
         return { slot: segment.slot, state: segment.state, contract: segment.contract, value: parsed.value, partialValue: parsed.partialValue,
             complete: segment.state === 'complete' && parsed.complete,
             items: parsed.items, has: parsed.has, at: parsed.at };
@@ -46,7 +51,7 @@ function projectorFor(mode) {
 export async function projectGenerationProgress(journal, options = {}) {
     const mode = journal?.identity?.mode, project = projectorFor(mode);
     if (typeof project !== 'function') return null;
-    const segments = generationProgressSegments(journal);
+    const segments = generationProgressSegments(journal, options);
     if (!segments.some(segment => segment.value && typeof segment.value === 'object')) return null;
     const frozenInputs = {};
     for (const [key, value] of Object.entries(journal.frozenInputs || {})) {
@@ -65,4 +70,71 @@ export async function projectGenerationProgress(journal, options = {}) {
     if (!session || typeof session !== 'object' || Array.isArray(session)) return null;
     return { ...session, chatId: memoryBank.chatId, archiveRevision: memoryBank.archiveRevision,
         readableProgress: { version: 1, complete: false, draftId: journal.draftId || '', pageId } };
+}
+
+// Schemas are code-owned recovery adapters. The frozen archive, never a model
+// identity or the current UI selection, supplies the validation context.
+export function generationRecoverySchema(journal, segment, options = {}) {
+    const snapshot = journal.contentSnapshotVersion === 1 ? journal.contentSnapshot : null;
+    const frozenInputs = {};
+    for (const [key, value] of Object.entries(journal.frozenInputs || {})) {
+        try { frozenInputs[key] = JSON.parse(value); } catch { /* No substitution from live settings. */ }
+    }
+    const contentInputs = options.contentInputs || snapshot?.contentInputs || {};
+    return recovery_adapters.recoveryProgressSchema(journal?.identity?.mode, { slot: segment.slot, contract: segment.contract,
+        memoryBank: options.memoryBank || snapshot?.memoryBank, context: options.context || snapshot?.fields, frozenInputs, contentInputs,
+        previousSession: options.previousSession !== undefined ? options.previousSession : contentInputs.previousSession || contentInputs.baseSession || null,
+        operation: journal.operation || {}, createdAt: journal.createdAt, segments: journal.segments || [] });
+}
+
+function rawStrings(raws) {
+    const values = new Set();
+    const visit = value => {
+        if (typeof value === 'string') values.add(value.trim());
+        else if (value && typeof value === 'object') Object.values(value).forEach(visit);
+    };
+    raws.forEach(raw => visit(json_parser.parsePartialJsonObject(raw).partialValue));
+    return values;
+}
+function receivedFacts(value, observed, facts = new Map(), field = '') {
+    const ignored = new Set(['id', 'selectedId', 'selectedEntryId', 'selectedSpaceId', 'selectedObjectId', 'selectedContainerId',
+        'selectedMonth', 'selectedDateKey', 'progressPending', 'generationIncomplete', 'readableProgress',
+        'generatedAt', 'createdAt', 'updatedAt', 'draftId', 'pageId', 'ownerKey', 'chatId', 'archiveRevision']);
+    if (ignored.has(field)) return facts;
+    if (typeof value === 'string' && value.trim() && observed.has(value.trim())) {
+        const key = `${field}\u001f${value.trim()}`; facts.set(key, (facts.get(key) || 0) + 1);
+    } else if (Array.isArray(value)) value.forEach(item => receivedFacts(item, observed, facts, field));
+    else if (value && typeof value === 'object') Object.entries(value).forEach(([key, item]) => receivedFacts(item, observed, facts, key));
+    return facts;
+}
+function containsFacts(container, required) {
+    return [...required].every(([key, count]) => (container.get(key) || 0) >= count);
+}
+export async function mergeGenerationRecoveryResponse(journal, segment, raw, validator, schemaOverride) {
+    const oldRaws = [...(segment?.retainedPartials || []), ...(typeof segment?.partial === 'string' ? [segment.partial] : [])];
+    if (!oldRaws.length) return null;
+    const schema = schemaOverride || generationRecoverySchema(journal, segment);
+    if (!schema) return null; // No partially readable units in whole-plan stages.
+    const nextRaw = JSON.stringify(raw);
+    const merged = recovery_merge.mergeRecoveryPartials([...oldRaws, nextRaw], schema, { final: true });
+    if (merged.conflicts.length) throw Object.assign(new Error('恢复内容的原人物、证据或父对象与新回复不同；双方草稿已保留，未拼接到错误对象。'),
+        { code: 'RMT_RECOVERY_MERGE_CONFLICT', safeToDisplay: true });
+    const combined = merged.value;
+    const normalized = await validator(combined);
+    // Check actual accepted content rather than character counts. A normalizer
+    // must not silently slice old or newly accepted records off a merged array.
+    const observedNew = rawStrings([nextRaw]);
+    for (const value of merged.ignoredNewStrings) observedNew.delete(value);
+    const fresh = await validator(raw);
+    if (!containsFacts(receivedFacts(normalized, observedNew), receivedFacts(fresh, observedNew)))
+        throw Object.assign(new Error('合并会超过原有内容范围或遗漏本次有效成果；双方草稿已保留，未覆盖旧进度。'),
+            { code: 'RMT_RECOVERY_MERGE_CONFLICT', safeToDisplay: true });
+    const withRow = row => ({ ...journal, segments: journal.segments.map(value => value.slot === row.slot ? row : value) });
+    const oldSession = await projectGenerationProgress(journal);
+    const newSession = await projectGenerationProgress(withRow({ ...segment, state: 'complete', rawJson: JSON.stringify(combined), retainedPartials: [] }));
+    const observedOld = rawStrings(oldRaws);
+    if (oldSession && !containsFacts(receivedFacts(newSession, observedOld), receivedFacts(oldSession, observedOld)))
+        throw Object.assign(new Error('本次合并未能保留此前已验证的可读内容；双方草稿已保留，没有重置进度。'),
+            { code: 'RMT_RECOVERY_MERGE_CONFLICT', safeToDisplay: true });
+    return { raw: combined, value: normalized };
 }

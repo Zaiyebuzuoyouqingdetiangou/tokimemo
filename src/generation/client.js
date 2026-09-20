@@ -86,15 +86,29 @@ function snapshotGenerationContent(value) {
     visit(snapshot);
     return snapshot;
 }
+// Host cards can carry executable or proxied fields that structuredClone rejects.
+// Degrade only the offending field to its JSON-safe representation instead of
+// failing the whole capture; a field that cannot be copied either way makes the
+// source snapshot unverifiable, so generation stops with a coded error and never
+// substitutes unchecked current data.
+function cloneContentField(value) {
+    try { return structuredClone(value); }
+    catch {
+        try { return JSON.parse(JSON.stringify(value)); }
+        catch {
+            throw core_text.safeUserError('角色卡资料无法完整快照，本次没有发起模型请求；旧内容与草稿保留。', 'RMT_RECOVERY_SOURCE_SNAPSHOT_MISSING');
+        }
+    }
+}
 function captureGenerationContent(context, bank) {
     const fields = {};
     for (const key of ['characterId', 'name1', 'name2', 'userAvatar', 'personaAvatar', 'user_avatar', 'maxContext']) {
-        if (context[key] !== undefined) fields[key] = structuredClone(context[key]);
+        if (context[key] !== undefined) fields[key] = cloneContentField(context[key]);
     }
     if (Array.isArray(context.characters)) {
         fields.characters = Array.from(context.characters, (character, index) => {
             if (!character) return null;
-            if (String(index) === String(context.characterId)) return structuredClone(character);
+            if (String(index) === String(context.characterId)) return cloneContentField(character);
             // Other cards are used only for name/avatar and duplicate identity
             // lookup. Preserve exactly the existing descriptor inputs, without
             // copying their unrelated world books, extensions or other payloads.
@@ -110,7 +124,7 @@ function captureGenerationContent(context, bank) {
                 ['description', 'personality', 'scenario', 'first_mes', 'mes_example']
                     .map(key => [key, identityInput(data[key] || character[key], 5000)])) };
         });
-    } else if (context.characters !== undefined) fields.characters = structuredClone(context.characters);
+    } else if (context.characters !== undefined) fields.characters = cloneContentField(context.characters);
     // Frozen historical targets intentionally keep only their original character
     // index. JSON already represents skipped array positions as null; materialize
     // that representation in the internal snapshot without changing host data.
@@ -1044,7 +1058,14 @@ export async function exportSavedGeneration(mode, options = {}) {
     const journal = core_cache.loadGenerationRecovery(mode, context, snapshot?.cache,
         { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
     if (!journal) throw generation_recovery.generationRecoveryMismatch('record');
-    return generation_recovery.exportGenerationRecovery(journal);
+    const exported = generation_recovery.exportGenerationRecovery(journal);
+    // Replies held in-page because the journal's existing total capacity rejected
+    // them leave only through this explicit user export, as inert data. The
+    // loaded record's own validated identity is the hold key; the live origin
+    // above may legitimately omit the canonical archive-target entry ID.
+    const held = generation_recovery.generationRecoveryHeldReplies(journal.identity, journal.identity?.mode || mode);
+    return held.length ? { ...exported,
+        unsavedReplies: held.map(entry => ({ slot: entry.slot, state: 'received-unsaved', rawJson: entry.rawJson })) } : exported;
 }
 
 export async function discardSavedGeneration(mode, options = {}) {
@@ -1064,6 +1085,7 @@ export async function discardSavedGeneration(mode, options = {}) {
     const origin = { ...core_context.captureTaskOrigin(context, bank.archiveRevision), archiveTargetEntryId: opts.archiveTarget?.entryId || '' };
     origin.generationRecoveryDraftId = retained.draftId;
     await core_cache.saveGenerationRecovery(context, bank, mode, null, origin, { ...opts, draftId: retained.draftId, discardDraft: true });
+    generation_recovery.discardGenerationRecoveryHeldReplies(retained.identity, retained.identity?.mode || mode);
     if (snapshot) await ui_overlay.refreshArchiveTargetSnapshotView(snapshot.entryId);
     else ui_overlay.showChooser();
 }

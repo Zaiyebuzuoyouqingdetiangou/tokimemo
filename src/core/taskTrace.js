@@ -20,7 +20,7 @@ const mergedSegments = new WeakMap();
 const traceParents = new WeakMap();
 const MODES = new Set(['archive', 'archive-profile', 'room', 'album', 'image', 'advEvent', 'heart', 'phone', 'butterfly', 'adv', 'items', 'cabinet', 'inbox', 'themeSong', 'pastLives', 'timeEcho', 'travel', 'ending', 'calendar', 'relations', 'achievements', 'character-profile']);
 const OUTCOMES = new Set(['running', 'ok', 'failed', 'cancelled', 'deferred', 'blocked', 'noop']);
-const CODES = new Set(['RMT_LOCAL_STORAGE','RMT_LOCAL_CAS','RMT_MANUAL_KEY_STORAGE','RMT_ADVANCED_PARAMETERS','RMT_ADVANCED_BACKEND','RMT_RECOVERY_SOURCE_CHANGED','RMT_ARCHIVE_DRAFT_STORAGE','RMT_ARCHIVE_DRAFT_READ','RMT_ARCHIVE_DRAFT_CONFLICT',
+const CODES = new Set(['RMT_LOCAL_STORAGE','RMT_LOCAL_CAS','RMT_MANUAL_KEY_STORAGE','RMT_ADVANCED_PARAMETERS','RMT_ADVANCED_BACKEND','RMT_RECOVERY_SOURCE_CHANGED','RMT_ARCHIVE_DRAFT_STORAGE','RMT_ARCHIVE_DRAFT_READ','RMT_ARCHIVE_DRAFT_CONFLICT','RMT_ARCHIVE_DRAFT_CAPACITY',
     ...Object.keys(core_backupDiagnostics.BACKUP_FAILURE_MESSAGES),
     'RMT_DEFERRED_QUOTA', 'RMT_DEFERRED_SECURITY', 'RMT_DEFERRED_UNAVAILABLE',
     'RMT_DEFERRED_LIMIT', 'RMT_DEFERRED_SERIALIZE', 'RMT_DEFERRED_UNKNOWN',
@@ -40,6 +40,8 @@ const CODES = new Set(['RMT_LOCAL_STORAGE','RMT_LOCAL_CAS','RMT_MANUAL_KEY_STORA
     'RMT_RECOVERY_STORAGE', 'RMT_RECOVERY_UNAVAILABLE', 'RMT_RECOVERY_VALIDATION_CHANGED',
     'RMT_TIME_STORY_STRUCTURE', 'RMT_TIME_STORY_RELATIONSHIP', 'RMT_TIME_STORY_WORLD', 'RMT_TIME_STORY_SOURCE', 'RMT_TIME_STORY_VERSION', 'RMT_TIME_STORY_LIMIT',
     'RMT_REQUEST_TIMEOUT', 'RMT_RESPONSE_FORMAT', 'RMT_RESPONSE_HTML', 'RMT_SEGMENT_VALIDATION', 'RMT_TOKEN_COUNT_TIMEOUT',
+    'RMT_CACHE_BACKUP_CORRUPT', 'RMT_RECOVERY_SOURCE_SNAPSHOT_MISSING', 'RMT_RECOVERY_PROGRESS_STORAGE',
+    'RMT_TOKEN_COUNT_UNAVAILABLE', 'RMT_RECOVERY_FAILED',
 ]);
 
 const RESPONSE_SHAPES = new Set(['text', 'choices', 'message', 'content', 'output_text', 'output', 'candidates', 'text_fallback', 'wrapped', 'unsupported', 'empty', 'error']);

@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.104-tt-cg-phase11-tag-exclusion",
+  "js": "index.js?heartbeat=0.8.106-tt-cg-r84.30-overflow-outlet-preflight",
   "author": "Toto",
-  "version": "0.8.104",
+  "version": "0.8.106",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.28：统一旧任务兼容与续接；安全补全旧内部标识，原背景匹配前不写回，保留成功片段与真实身份校验。",
+  "description": "r84.30：草稿容量满时新收到成果页面内保全并可随导出带出；建档保存失败按容量/空间/冲突分类提示；生成准备环节错误补码，未安全保存不发起请求。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

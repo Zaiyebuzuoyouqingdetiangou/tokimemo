@@ -22,10 +22,24 @@ function inputsMatchJournal(entry) {
     const expected = entry?.journal?.contentSnapshot?.archiveInputsHash;
     return !expected || (!!entry.inputs && expected === inputsDigest(entry.inputs));
 }
-function storageFailure(phase = 'save') {
-    return text.safeUserError(phase === 'read'
-        ? '本机草稿读取未完成，不能认定没有记录；原记录未修改，也没有请求模型。请重新读取，不要清除数据。'
-        : '未能把本次整理草稿保存到本机；已停止后续模型请求，成功分段仍在当前页面。请先导出，保存成功前不要刷新。', phase === 'read' ? 'RMT_ARCHIVE_DRAFT_READ' : 'RMT_ARCHIVE_DRAFT_STORAGE');
+function storageFailure(phase = 'save', cause = null) {
+    if (phase === 'read') return text.safeUserError('本机草稿读取未完成，不能认定没有记录；原记录未修改，也没有请求模型。请重新读取，不要清除数据。', 'RMT_ARCHIVE_DRAFT_READ');
+    // Recoverable storage conditions get their exact manual remedy. No automatic
+    // retry is added for any of them; the user decides when to save again.
+    if (cause?.quota === true || cause?.name === 'QuotaExceededError') {
+        return text.safeUserError('本机存储空间不足，整理草稿未能保存；已停止后续模型请求，成功分段仍在当前页面，原记录未修改。清理浏览器站点数据后可点保存重试。', 'RMT_ARCHIVE_DRAFT_STORAGE');
+    }
+    if (cause?.code === 'RMT_LOCAL_CAS') {
+        return text.safeUserError('本机草稿正被另一页面或操作写入，本次没有覆盖任何记录；已停止后续模型请求，成功分段仍在当前页面。请重新打开本页后重试保存。', 'RMT_ARCHIVE_DRAFT_STORAGE');
+    }
+    return text.safeUserError('未能把本次整理草稿保存到本机；已停止后续模型请求，成功分段仍在当前页面。请先导出，保存成功前不要刷新。', 'RMT_ARCHIVE_DRAFT_STORAGE');
+}
+function capacityFailure() {
+    return text.safeUserError('本次来源超过本机草稿保存上限（12MB），未请求模型；可缩小读取范围或分批建档，已保留原记录。', 'RMT_ARCHIVE_DRAFT_CAPACITY');
+}
+export function archiveDraftCapacityFailure() { return capacityFailure(); }
+function ackMismatchFailure() {
+    return text.safeUserError('本机草稿保存回执与预期不一致，不能认定已保存；已停止后续模型请求，成功分段仍在当前页面，原记录未修改。请重新打开本页后重试保存。', 'RMT_ARCHIVE_DRAFT_STORAGE');
 }
 function conflictFailure() {
     return text.safeUserError('本机草稿版本已变化；页面成果与本机记录均保留，未覆盖或重新生成。请先导出本页成果，再重新打开原聊天读取。', 'RMT_ARCHIVE_DRAFT_CONFLICT');
@@ -42,11 +56,11 @@ async function saveScope(key) {
         if (!state || !local_store.localRecoveryStorageAvailable()) throw storageFailure();
         const rows = scopeRows(key);
         const encoded = JSON.stringify({ version: 1, rows });
-        if (new TextEncoder().encode(encoded).byteLength > constants.MAX_CACHE_SOURCE_BYTES) throw storageFailure();
+        if (new TextEncoder().encode(encoded).byteLength > constants.MAX_CACHE_SOURCE_BYTES) throw capacityFailure();
         const revision = await local_store.compareLocalRecoveryRecord(state.id, state.revision, rows.length ? JSON.parse(encoded) : null);
         // Only the transaction's exact CAS acknowledgement confirms this write.
         // false/undefined must not be mistaken for a saved checkpoint in a host.
-        if (revision !== state.revision + 1) throw storageFailure();
+        if (revision !== state.revision + 1) throw ackMismatchFailure();
         state.revision = revision;
         confirmCounts(state, rows);
         for (const [id, saved] of rows) {
@@ -59,10 +73,29 @@ async function saveScope(key) {
         return true;
     });
     lanes.set(key, run);
-    try { return await run; } catch { for (const [id] of scopeRows(key)) if (drafts.has(id)) drafts.get(id).durable = false; throw storageFailure(); }
+    try { return await run; } catch (error) {
+        for (const [id] of scopeRows(key)) if (drafts.has(id)) drafts.get(id).durable = false;
+        // Failures already classified above keep their exact code and guidance.
+        if (['RMT_ARCHIVE_DRAFT_STORAGE', 'RMT_ARCHIVE_DRAFT_READ', 'RMT_ARCHIVE_DRAFT_CAPACITY'].includes(error?.code)) throw error;
+        throw storageFailure('save', error);
+    }
     finally { if (lanes.get(key) === run) lanes.delete(key); }
 }
 function scheduleSave(key) { void saveScope(key).catch(() => {}); }
+// Pre-flight estimate with the exact serialization and byte limit saveScope
+// applies. Callers can fail before any storage transaction or model request.
+// The authoritative check remains inside saveScope: an in-memory scope may not
+// reflect every stored row until hydration, and the live journal adds bytes.
+export function archiveRecoveryDraftPlanExceedsCapacity(origin, operation = 'import', inputs = null) {
+    const key = draftKey(origin, operation);
+    if (!key || !inputs) return false;
+    const rows = scopeRows(key);
+    const planned = rows.some(([id]) => id === key)
+        ? rows.map(([id, entry]) => [id, id === key ? { ...entry, inputs } : entry])
+        : [...rows, [key, { key, operation, inputs }]];
+    try { return new TextEncoder().encode(JSON.stringify({ version: 1, rows: planned })).byteLength > constants.MAX_CACHE_SOURCE_BYTES; }
+    catch { return false; }
+}
 export async function flushArchiveRecovery(origin, operation = 'import') {
     const key = draftKey(origin, operation); if (!key) return false;
     if (lanes.has(key)) await lanes.get(key);

@@ -1803,6 +1803,18 @@ function archiveSourceBank(memory) {
     return saved;
 }
 
+// A draft row must not store the same full source snapshot twice. The live
+// progress object keeps its own copy for the archive-bank commit (later batches
+// read it back from the bank); only the serialized draft inputs drop the
+// duplicate. Matching digests prove the two copies are identical, so a
+// mismatched older manifest is never silently stripped.
+function progressForDraftRow(progress, taskInputV1) {
+    if (!progress?.taskInputV1 || !taskInputV1 || progress.taskInputV1.digest !== taskInputV1.digest) return progress;
+    const stored = { ...progress };
+    delete stored.taskInputV1;
+    return stored;
+}
+
 function archivedRequestJson(segment, marker) {
     const prompt = segment?.requestRecipe?.identity?.prompt;
     if (typeof prompt !== 'string') return null;
@@ -2245,10 +2257,16 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace, options = {}) {
         if (!taskInputV1 && !profileInputs) taskInputV1 = captureArchiveTaskInput(context, {
             operation: 'profile', memory: profileMemory, ownerIdentity, contextEnvelope, profilePrompt });
         const settingsIdentity = archiveRecoverySettingsIdentity(context);
+        const profileDraftInputs = { contextEnvelope, ownerIdentity,
+            ...(taskInputV1 ? { taskInputV1 } : {}),
+            ...(replacementTicket ? { participantRegeneration: options.participantRegeneration } : {}) };
+        // Same serialization and byte limit as the draft save itself. Fail before
+        // any storage transaction or model request; existing records stay untouched.
+        if (archive_importRecovery.archiveRecoveryDraftPlanExceedsCapacity(origin, 'profile', profileDraftInputs)) {
+            throw archive_importRecovery.archiveDraftCapacityFailure();
+        }
         recoveryTicket = await archive_importRecovery.beginArchiveRecovery({ origin, operation: 'profile',
-            sourceIdentity: profileMemory.archiveRevision, sourceFragments: [JSON.stringify(profileMemory.memories), contextEnvelope], settingsIdentity, inputs: { contextEnvelope, ownerIdentity,
-                ...(taskInputV1 ? { taskInputV1 } : {}),
-                ...(replacementTicket ? { participantRegeneration: options.participantRegeneration } : {}) },
+            sourceIdentity: profileMemory.archiveRevision, sourceFragments: [JSON.stringify(profileMemory.memories), contextEnvelope], settingsIdentity, inputs: profileDraftInputs,
             continueApproved: !!pendingProfile, onProgress: refreshArchiveRecoveryReading, draftId: selectedProfile?.draftId || '',
             assertCurrent: () => stillCurrent() && (taskInputV1 || archiveRecoverySettingsIdentity(context) === settingsIdentity) });
         core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, recoveryTicket.origin);
@@ -2394,6 +2412,13 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     const actionLabel = fullRebuild ? '完全重建' : existing ? '增量更新' : '创建';
     const pinnedInputs = selectedDraft ? selectedDraft.inputs : continueRecovery ? archive_importRecovery.archiveRecoveryInputs(preparation.origin) : null;
     const legacyDraft = !!pinnedInputs && !pinnedInputs.batchVersion;
+    // Drafts saved by this version keep the full source snapshot only at
+    // inputs.taskInputV1; older drafts stored a second copy inside
+    // inputs.progress. Rebuild the in-page alias so resuming either shape
+    // behaves identically. The stored row itself is never re-inflated.
+    if (pinnedInputs?.taskInputV1 && pinnedInputs.progress && !pinnedInputs.progress.taskInputV1) {
+        pinnedInputs.progress = { ...pinnedInputs.progress, taskInputV1: pinnedInputs.taskInputV1 };
+    }
     const storedProgress = archive_batches.checkedProgress(existing?.[archive_batches.IMPORT_PROGRESS_KEY]);
     let progress = nextIndependentBatch ? existing?.[archive_batches.IMPORT_PROGRESS_KEY]
         : pinnedInputs?.progress || (!restartImport && archive_batches.hasPendingBatches(storedProgress) ? storedProgress : null);
@@ -2591,6 +2616,19 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             assertPreparationCurrent();
         }
         const settingsIdentity = archiveRecoverySettingsIdentity(context);
+        const draftInputs = legacyDraft ? pinnedInputs : { external, contextEnvelope, inputOwner, identity,
+            batchVersion: archive_batches.IMPORT_BATCH_VERSION,
+            // One snapshot copy per draft row: inputs.taskInputV1 only. The live
+            // progress object keeps its own copy for the archive-bank commit.
+            progress: progressForDraftRow(progress, taskInputV1), pausedProgress,
+            baseMemory: archiveSourceBank(existing),
+            ...(taskInputV1 ? { taskInputV1 } : {}),
+            ...(archiveRoster ? { participantRoster: archiveRoster } : {}) };
+        // Same serialization and byte limit as the draft save itself. Fail before
+        // any storage transaction or model request; existing records stay untouched.
+        if (archive_importRecovery.archiveRecoveryDraftPlanExceedsCapacity(origin, 'import', draftInputs)) {
+            throw archive_importRecovery.archiveDraftCapacityFailure();
+        }
         recoveryTicket = await archive_importRecovery.beginArchiveRecovery({ origin,
             sourceIdentity: JSON.stringify({ fullRebuild, archivePresent: !!existing, baseRevision: existing?.archiveRevision || '',
                 snapshotFingerprint: snapshot.fingerprint, prefixFingerprint: snapshot.prefixFingerprint,
@@ -2599,11 +2637,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             sourceFragments: [...chunks.map(chunk => JSON.stringify(chunk)), ...externalChunks.map(chunk => JSON.stringify(chunk))],
             settingsIdentity, fullRebuild, continueApproved: continueRecovery, onProgress: refreshArchiveRecoveryReading,
             draftId, nextIndependentBatch,
-            inputs: legacyDraft ? pinnedInputs : { external, contextEnvelope, inputOwner, identity,
-                batchVersion: archive_batches.IMPORT_BATCH_VERSION, progress, pausedProgress,
-                baseMemory: archiveSourceBank(existing),
-                ...(taskInputV1 ? { taskInputV1 } : {}),
-                ...(archiveRoster ? { participantRoster: archiveRoster } : {}) },
+            inputs: draftInputs,
             assertCurrent: () => core_requestCoordinator.isLogicalGenerationTaskCurrent(logicalTask) && core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)
                 && core_context.currentCharacterRuntimeKey(context) === origin.characterKey
                 && core_context.comparableChatId(core_context.getChatId(context)) === origin.chatId
