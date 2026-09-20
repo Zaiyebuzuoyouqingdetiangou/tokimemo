@@ -358,25 +358,7 @@ function ensureBootstrapStyle() {
     if (document.getElementById(BOOTSTRAP_STYLE_ID)) return;
     const style = document.createElement('style');
     style.id = BOOTSTRAP_STYLE_ID;
-    style.textContent = `
-#${SETTINGS_ID}[data-rmt-bootstrap="1"]{box-sizing:border-box;width:100%;max-width:100%;min-width:0;height:auto!important;min-height:0;margin-top:10px;padding:10px;border:1px solid rgba(142,191,213,.52);border-radius:12px;background:linear-gradient(135deg,rgba(255,248,251,.92),rgba(244,251,255,.92));color:#596b80;display:grid;align-self:start;align-content:start;flex:0 0 auto!important;gap:8px}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;min-width:0;gap:6px 8px;writing-mode:horizontal-tb}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-head b{min-width:0}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-head small{opacity:.68;font-size:9px;letter-spacing:.08em;white-space:nowrap;word-break:keep-all;writing-mode:horizontal-tb}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-actions{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr);width:100%;min-width:0;gap:7px}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-actions>button.menu_button{box-sizing:border-box;display:flex!important;align-items:center;justify-content:center;width:100%!important;max-width:100%!important;min-width:0!important;min-height:46px!important;height:auto!important;margin:0!important;padding:9px 12px!important;border-radius:9px;font-size:clamp(14px,4vw,16px);line-height:1.25;text-align:center;white-space:nowrap!important;word-break:keep-all!important;overflow-wrap:normal!important;writing-mode:horizontal-tb!important;text-orientation:mixed!important;touch-action:manipulation}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-note{min-width:0;max-width:100%;font-size:9px;line-height:1.5;opacity:.7;white-space:normal;word-break:normal;overflow-wrap:anywhere;writing-mode:horizontal-tb}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-diagnostic{box-sizing:border-box;display:grid;min-width:0;max-width:100%;gap:6px}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-diagnostic[hidden]{display:none!important}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-diagnostic-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;font-size:10px;writing-mode:horizontal-tb}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-diagnostic-close{box-sizing:border-box;min-width:88px!important;min-height:40px!important;height:auto!important;margin:0!important;padding:7px 10px!important;white-space:nowrap!important;word-break:keep-all!important;writing-mode:horizontal-tb!important;touch-action:manipulation}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] pre{box-sizing:border-box;min-width:0;max-width:100%;margin:0;padding:8px;max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:9px;line-height:1.45;border-radius:8px;background:rgba(38,49,63,.07);writing-mode:horizontal-tb}
-#${MENU_ID}[data-rmt-bootstrap="1"]{cursor:pointer}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"]{background:inherit!important;color:inherit!important;border-color:currentColor!important;font-family:inherit}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] :is(b,small,span,div,button,pre){color:inherit!important;-webkit-text-fill-color:currentColor!important;text-shadow:none!important;opacity:1!important}
-#${SETTINGS_ID}[data-rmt-bootstrap="1"] :is(.rmt-bootstrap-note,.rmt-bootstrap-head small){font-size:12px!important}
-@media(min-width:768px){#${SETTINGS_ID}[data-rmt-bootstrap="1"] .rmt-bootstrap-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
-`;
+    style.textContent = `#${MENU_ID}[data-rmt-bootstrap="1"]{cursor:pointer}`;
     document.head.appendChild(style);
 }
 
@@ -401,34 +383,6 @@ function mountBootstrapMenu() {
     return true;
 }
 
-function mountBootstrapSettings() {
-    if (document.getElementById(SETTINGS_ID)) return true;
-    const mount = document.querySelector('#extensions_settings2');
-    if (!mount) return false;
-    const panel = document.createElement('div');
-    panel.id = SETTINGS_ID;
-    panel.dataset.rmtBootstrap = '1';
-    panel.innerHTML = `
-      <div class="rmt-bootstrap-head"><b>心迹回廊</b></div>
-      <div class="rmt-bootstrap-actions">
-        <button type="button" class="menu_button" data-rmt-bootstrap-load-settings>配置独立 API</button>
-        <button type="button" class="menu_button" data-rmt-bootstrap-update>检查并更新插件</button>
-        <small data-rmt-bootstrap-update-status role="status"></small>
-      </div>`;
-    panel.addEventListener('click', event => {
-        const updateButton = event.target.closest?.('[data-rmt-bootstrap-update]');
-        if (updateButton) {
-            void import(`./src/core/selfUpdater.js?heartbeat=${BUILD}`).then(module => module.updateFromButton(updateButton, panel.querySelector('[data-rmt-bootstrap-update-status]'), { moduleUrl: import.meta.url, isBusy: () => runtimeModule?.isGenerationBusy?.() || false })).catch(showBootError);
-            return;
-        }
-        if (event.target.closest?.('[data-rmt-bootstrap-load-settings]')) {
-            void ensureRuntime('settings').then(() => runtimeModule?.openSettingsHome?.()).catch(showBootError);
-        }
-    });
-    mount.appendChild(panel);
-    return true;
-}
-
 function removeBootstrapShells() {
     const settings = document.getElementById(SETTINGS_ID);
     if (settings?.dataset?.rmtBootstrap === '1') settings.remove();
@@ -447,9 +401,8 @@ function mountBootstrapEntrypoints() {
     if (runtimeLoadFailed) mountExternalDiagnostic();
     if (runtimeModule) return;
     ensureBootstrapStyle();
-    const settingsMounted = mountBootstrapSettings();
     const menuMounted = mountBootstrapMenu();
-    if (settingsMounted && menuMounted) stopBootstrapMountTimer();
+    if (menuMounted) stopBootstrapMountTimer();
 }
 
 function bindBootstrapEarlyOpen() {
@@ -622,13 +575,13 @@ function startBootstrap() {
     void startBootstrapAutoUpdates();
     mountBootstrapEntrypoints();
     bindBootstrapEarlyOpen();
-    if (!document.getElementById(SETTINGS_ID) || !document.getElementById(MENU_ID)) {
+    if (!document.getElementById(MENU_ID)) {
         stopBootstrapMountTimer();
         let tries = 0;
         bootstrapTimer = setInterval(() => {
             tries += 1;
             mountBootstrapEntrypoints();
-            if (runtimeModule || disabled || (document.getElementById(SETTINGS_ID) && document.getElementById(MENU_ID)) || tries >= 30) {
+            if (runtimeModule || disabled || document.getElementById(MENU_ID) || tries >= 30) {
                 stopBootstrapMountTimer();
             }
         }, 500);

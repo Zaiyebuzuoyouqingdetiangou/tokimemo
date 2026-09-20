@@ -18,6 +18,7 @@ import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_recovery from '../generation/recovery.js';
+import * as recovery_view from './recoveryView.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as ui_overlay from './overlay.js';
 import * as image_viewer from './cgImageViewer.js';
@@ -237,8 +238,12 @@ export function selectedHeartStrip() {
 export function renderHeartScriptLines(lines, identity = {}) {
     const charAvatar = identity.charAvatar ?? heartCharacterAvatarUrl(runtimeState.activeArchiveSnapshot);
     const userAvatar = identity.userAvatar ?? heartUserAvatarUrl();
-    const charName = core_text.normalizeText(identity.characterName ?? runtimeState.activeArchiveSnapshot?.characterName ?? core_context.getContext().name2, 120) || '角色';
-    const userName = core_text.normalizeText(identity.userName ?? runtimeState.activeArchiveSnapshot?.memory?.userName ?? core_context.getContext().name1, 120) || '你';
+    const route = ui_workspaceState.workspace.route;
+    const page = ['language', 'strips', 'fireflies', 'postending'].includes(route) ? route : runtimeState.activeSession?.selectedSeason;
+    const sourceMemory = core_cache.generationPageSourceMemory(runtimeState.activeSession, page,
+        core_cache.generationPageSourceMemory(runtimeState.activeSession, 'heart', null));
+    const charName = core_text.normalizeText(identity.characterName ?? sourceMemory?.characterName ?? runtimeState.activeArchiveSnapshot?.characterName ?? core_context.getContext().name2, 120) || '角色';
+    const userName = core_text.normalizeText(identity.userName ?? sourceMemory?.userName ?? runtimeState.activeArchiveSnapshot?.memory?.userName ?? core_context.getContext().name1, 120) || '你';
     return `<div class="rmt-heart-script">${core_dialogue.normalizeDialogueRows(lines, { characterName: charName, userName }).map(line => {
         if (line.speaker === 'narrator') return `<div class="rmt-heart-narration">${core_text.esc(line.text)}</div>`;
         const isUser = line.speaker === 'user';
@@ -558,6 +563,6 @@ export function renderHeart() {
     }
 
     heart_reader.rememberHeartReader(session);
-    ui_overlay.bodyEl().innerHTML = `<div class="rmt-heart">${summary}${tabs}${content}</div>`;
+    ui_overlay.bodyEl().innerHTML = `<div class="rmt-heart">${recovery_view.readableProgressHtml(session)}${summary}${tabs}${content}</div>`;
     cg_format_ui.mountCgFormatControl(ui_overlay.bodyEl(), 'heart', view === 'strips' ? 'strips' : '', readOnly);
 }

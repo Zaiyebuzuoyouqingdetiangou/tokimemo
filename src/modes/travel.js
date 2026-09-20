@@ -568,6 +568,24 @@ export function mergeTravelIncremental(previous, fresh) {
     return { session: merged, added };
 }
 
+export function projectTravelProgress({ segments, memoryBank, previousSession, frozenInputs = {}, operation = {} }) {
+    const segment = segments.findLast(item => item.items('/locations').length);
+    if (!segment) return null;
+    const presentation = frozenInputs['presentation:travel'] || {};
+    const fresh = normalizeTravel({ ...segment.value, locations: segment.items('/locations') }, memoryBank, {
+        allowPartial: true,
+        sourceMemoryIds: previousSession ? core_incremental.derivedExpansionMemoryIds(previousSession, memoryBank, 'mode') : null,
+        allowPersonaExpansion: operation.allowPersonaExpansion === true,
+        worldPresentation: presentation.profile,
+        controlledEvidence: presentation.settingEvidence || '',
+        structuredDesign: segment.contract === 'travel-structured-design-r8416' || segment.contract === 'travel-sketch-design-r8418',
+    });
+    if (!fresh.locations.length) return null;
+    if (!previousSession) return fresh;
+    const merged = mergeTravelIncremental(previousSession, fresh);
+    return merged.session || merged;
+}
+
 export async function generateTravelWithRepair(context, memoryBank, origin, taskKey, options = {}) {
     const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.TRAVEL, {
         context, chatId: core_context.getChatId(context), memoryBank, clone: true,

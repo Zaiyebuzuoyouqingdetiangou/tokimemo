@@ -24,7 +24,7 @@ export function renderAdvMode() {
         : '';
     if (!scope) try { scope = core_context.chatScopeKey(core_context.currentCharacterGuard()); } catch {}
     const bulkRunning = scope ? runtimeState.activeAdvBulkScopes.has(scope) : false;
-    const completedAdv = session.events.filter(item => item.adv?.paragraphs?.length).length;
+    const completedAdv = session.events.filter(item => item.adv?.paragraphs?.length && !item.progressPending?.length).length;
     const readOnlyArchive = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
     const canGenerateDerived = !runtimeState.activeArchiveSnapshot || runtimeState.activeArchiveSnapshot.backupOnly !== true;
     const selectedIndex = Math.max(0, session.events.findIndex(item => item.id === selected?.id));
@@ -62,7 +62,7 @@ export function renderAdvMode() {
     const expandButton = canGenerateDerived && completedAdv >= session.events.length && session.events.length < core_constants.MAX_DERIVED_CONTENT_ITEMS
         ? '<button type="button" class="rmt-btn" data-rmt-generate-mode="adv" data-rmt-regenerate="true">同一记忆 · 追加新镜头</button>' : '';
     const libraryTools = `<details class="rmt-adv-library-tools"><summary>生成与补全 · ${completedAdv}/${session.events.length}</summary><div>${bulkBar}${expandButton}${generation_imageGeneration.cgImageProviderBar({ readOnly: readOnlyArchive })}</div></details>`;
-    body.innerHTML = `<div class="rmt-adv ${reading ? 'rmt-adv-reading' : 'rmt-cg-only'}"><aside class="rmt-event-list">${mobilePicker}${libraryTools}<div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail">${detail}</section><div class="rmt-inline-status" hidden></div></div>`;
+    body.innerHTML = `<div class="rmt-adv ${reading ? 'rmt-adv-reading' : 'rmt-cg-only'}"><aside class="rmt-event-list">${mobilePicker}${libraryTools}<div class="rmt-event-items">${list}</div></aside><section class="rmt-event-detail">${session.readableProgress?.complete === false ? '<p role="status">未完成 · 已生成的事件和正文可继续阅读。</p>' : ''}${selected?.progressPending?.length ? '<p role="status">这篇 ADV 正文尚未完成。</p>' : ''}${detail}</section><div class="rmt-inline-status" hidden></div></div>`;
     cg_format_ui.mountCgFormatControl(body, 'adv', '', readOnlyArchive);
 }
 

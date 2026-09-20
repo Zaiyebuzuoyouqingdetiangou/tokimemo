@@ -13,6 +13,7 @@ export function recoverySettingsIdentity(context) {
 }
 
 export async function assertRecoverySettings(journal, context) {
+    if (recovery.readGenerationContentSnapshot(journal)) return;
     if (journal && recovery.generationRecoverySummary(journal)
         && journal.settingsHash !== await recovery.generationRecoveryDigest(recoverySettingsIdentity(context))) {
         throw recovery.generationRecoveryMismatch('configuration', 'initialization');
@@ -37,12 +38,14 @@ export async function assertRecoverySourcePolicy(journal, context, origin = null
     const current = origin || contextApi.captureTaskOrigin(context, journal.identity.archiveRevision);
     const pairs = [['characterKey','角色身份'], ['characterId','角色身份'], ['characterAvatar','角色身份'], ['chatId','聊天身份'], ['archiveRevision','档案版本']];
     for (const [key,label] of pairs) if ((journal.identity[key] || '') !== (current[key] || '')) {
+        if (key === 'archiveRevision' && recovery.readGenerationContentSnapshot(journal)) continue;
         const error = text.safeUserError(`${label}与原任务不同；成功内容及草稿保留，未发起新请求。请回到原任务或明确另建任务。`, 'RMT_RECOVERY_SOURCE_CHANGED');
         error.archiveInputCategory = key === 'chatId' ? 'chat' : key === 'archiveRevision' ? 'archive' : 'character';
         error.recoveryPhase = 'source';
         throw error;
     }
     await assertRecoverySettings(journal, context);
+    if (recovery.readGenerationContentSnapshot(journal)) return;
     if (!journal.sourcePolicy) return;
     const actual = await recoverySourcePolicy(context);
     for (const [key,label] of [['character','角色卡'], ['persona','Persona'], ['selection','来源选择或标签设置']]) {

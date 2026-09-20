@@ -703,6 +703,8 @@ export function mountSettings({ homeTarget = null } = {}) {
           <label class="rmt-settings-check"><input type="checkbox" data-rmt-source-world-info ${core_settings.getPluginSettings().useActivatedWorldInfo !== false ? 'checked' : ''}><span>读取自动激活的世界书</span></label>
           <p>聊天范围只控制聊天摘录。外部摘要、自动激活世界书分别由上方开关控制；手动选择的世界书仍按下方来源设置读取。已有档案不会被删除，派生模块仍使用已经归档的记忆。</p>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-action="memory-worldinfo-picker" ${runtimeState.busy || core_requestCoordinator.hasGenerationTasks() ? 'disabled' : ''}>选择记忆相关世界书</button>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-action="participants-picker">选择加入回廊的人物</button>
+          <button type="button" class="menu_button rmt-settings-wide" data-rmt-action="participants-versions">查看重做前的旧版本</button>
           <input type="file" accept=".json,.jsonl,.txt,.md,.markdown,application/json,text/plain,text/markdown" data-rmt-memory-file-input hidden>
           <div class="rmt-api-status" data-rmt-memory-ingress-status role="status">展开记忆来源后查看状态；不会自动导入或生成。</div>
           <div class="rmt-api-source-panel" data-rmt-memory-file-preview hidden>

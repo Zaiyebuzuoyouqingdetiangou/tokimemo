@@ -21,15 +21,543 @@ import * as core_settings from './settings.js';
 import * as backup_diagnostics from './backupDiagnostics.js';
 import * as modes_pastLives from '../modes/pastLives.js';
 import * as modes_timeStories from '../modes/timeStories.js';
+import * as modes_themeSong from '../modes/themeSong.js';
 import * as time_stories from './timeStoriesContract.js';
 import * as generation_recovery from '../generation/recovery.js';
+import * as participant_contract from './participants.js';
 
 // Per-fence clear markers survive cache merges: an older metadata mirror must not
 // resurrect a completed/deleted journal merely because its cache clock is newer.
 const GENERATION_RECOVERY_CLEARED_KEY = '__generationRecoveryClearedV1';
+export const GENERATION_DRAFTS_CACHE_KEY = '__generationDraftsV2';
+
+function generationDraftRecords(cache) {
+    const pool = cache?.[GENERATION_DRAFTS_CACHE_KEY];
+    return pool?.version === 1 && pool.records && typeof pool.records === 'object' && !Array.isArray(pool.records)
+        ? pool.records : {};
+}
+
+function recoveryDraftId(journal, mode) {
+    return typeof journal?.draftId === 'string' && journal.draftId
+        ? journal.draftId : `legacy:${mode}:${core_context.stableArchiveHash(JSON.stringify([journal?.identity, journal?.createdAt]))}`;
+}
+
+function retainCanonicalGenerationDrafts(target, canonical) {
+    if (Object.hasOwn(canonical || {}, GENERATION_DRAFTS_CACHE_KEY)) {
+        target[GENERATION_DRAFTS_CACHE_KEY] = cloneCacheValue(canonical[GENERATION_DRAFTS_CACHE_KEY]);
+    } else delete target[GENERATION_DRAFTS_CACHE_KEY];
+}
+
+function retainLegacyGenerationDraft(cache, mode) {
+    const journal = cache?.[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode];
+    if (!generation_recovery.generationRecoverySummary(journal) || recoveryCleared(cache, mode)) return;
+    const draftId = recoveryDraftId(journal, mode);
+    const records = generationDraftRecords(cache);
+    if (Object.hasOwn(records, draftId)) return;
+    cache[GENERATION_DRAFTS_CACHE_KEY] = { version: 1, records: { ...records,
+        [draftId]: { journal: cloneCacheValue(journal), status: 'open' } } };
+}
+
+function finishGenerationDraftInCache(cache, mode, draftId, discarded = false) {
+    if (!draftId) return false;
+    retainLegacyGenerationDraft(cache, mode);
+    const records = generationDraftRecords(cache), record = records[draftId];
+    if (!record || (record.journal?.identity?.mode || record.mode) !== mode) return false;
+    if (record.status !== 'open') return true;
+    cache[GENERATION_DRAFTS_CACHE_KEY] = { version: 1, records: { ...records,
+        [draftId]: { status: discarded ? 'discarded' : 'complete', mode,
+            pageId: record.journal.pageId || recoveryPageForVersion(mode, record.journal.operation), closedAt: Date.now() } } };
+    const legacy = cache?.[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode];
+    if (legacy && recoveryDraftId(legacy, mode) === draftId) clearRecoveryInCache(cache, mode);
+    return true;
+}
+
+// A draft owns its original inputs. A newer page/fence must not erase another
+// unfinished operation merely because both operations use the same mode.
+export function generationDraftRows(stored, bank, { mode = '' } = {}) {
+    if (!bank) return [];
+    const rows = [], seen = new Set();
+    const add = (draftId, journal, status = 'open') => {
+        if (seen.has(draftId)) return;
+        seen.add(draftId);
+        const summary = generation_recovery.generationRecoverySummary(journal);
+        if (status !== 'open' || !summary || journal.identity.chatId !== bank.chatId
+            || (mode && journal.identity.mode !== mode) || !Object.values(core_constants.MODE).includes(journal.identity.mode)) return;
+        rows.push({ draftId, pageId: journal.pageId || recoveryPageForVersion(journal.identity.mode, journal.operation),
+            mode: journal.identity.mode, createdAt: journal.createdAt, ...summary, journal: cloneCacheValue(journal) });
+    };
+    for (const [id, record] of Object.entries(generationDraftRecords(stored))) add(id, record.journal, record.status);
+    for (const [legacyMode, journal] of Object.entries(stored?.[generation_recovery.GENERATION_RECOVERY_CACHE_KEY] || {})) {
+        if (!recoveryCleared(stored, legacyMode)) add(recoveryDraftId(journal, legacyMode), journal);
+    }
+    return rows.sort((left, right) => right.updatedAt - left.updatedAt || right.createdAt - left.createdAt);
+}
+
+export function listGenerationDrafts(context = core_context.getContext(), suppliedCache = null, mode = '') {
+    try { return generationDraftRows(suppliedCache || getCache(context), archive_repository.requireArchive(context), { mode }); }
+    catch { return []; }
+}
+
+export function listGenerationTaskResults(context = core_context.getContext(), suppliedCache = null) {
+    const stored = suppliedCache || getCache(context);
+    return Object.entries(generationDraftRecords(stored)).filter(([, row]) => !!row.result)
+        .map(([draftId, row]) => ({ draftId, status: row.status, mode: row.result.mode, pageId: row.result.pageId,
+            createdAt: row.result.createdAt, sourceArchiveRevision: row.result.sourceMemory?.archiveRevision || '' }));
+}
+
+export async function readGenerationTaskResult(context, draftId, { cache: suppliedCache = null } = {}) {
+    const current = suppliedCache ? { cache: suppliedCache } : await currentArchiveVersionState(context);
+    const record = generationDraftRecords(current.cache)[draftId];
+    if (!record?.result) throw core_text.safeUserError('找不到已保存的任务成果，未请求模型。', 'RMT_RECOVERY_RESULT_MISSING');
+    return { draftId, status: record.status, ...cloneCacheValue(record.result) };
+}
+
+function sameProgressItemValue(left, right) {
+    if (left === right) return true;
+    if (!left || !right || typeof left !== 'object' || typeof right !== 'object'
+        || Array.isArray(left) !== Array.isArray(right)) return false;
+    if (Array.isArray(left) && left.length !== right.length) return false;
+    const keys = Object.keys(left);
+    return keys.length === Object.keys(right).length
+        && keys.every(key => Object.hasOwn(right, key) && sameProgressItemValue(left[key], right[key]));
+}
+
+// Callers supply a code-owned selector, never a model-authored path. A merged
+// reader can contain several HEART pages; its last marker does not own them all.
+export async function resolveGenerationProgressTarget(context, shownSession, selectItem, { cache: suppliedCache = null } = {}) {
+    if (typeof selectItem !== 'function' || !shownSession?.kind) return null;
+    const current = suppliedCache ? { cache: suppliedCache, memory: archive_repository.requireArchive(context) }
+        : await currentArchiveVersionState(context);
+    const bank = current.memory, stored = current.cache, mode = shownSession.kind;
+    if (!bank || shownSession.chatId !== bank.chatId) return null;
+    const select = session => { try { return session ? selectItem(session) : null; } catch { return null; } };
+    const shown = select(shownSession);
+    if (shown == null) return null;
+    const equal = value => value != null && sameProgressItemValue(value, shown);
+    if (shownSession.readableProgress?.explicitDraft === true) {
+        const draftId = shownSession.readableProgress.draftId, row = generationDraftRecords(stored)[draftId];
+        if (row?.status !== 'open' || row.result?.mode !== mode || row.result.sourceMemory?.chatId !== bank.chatId
+            || !equal(select(generationTaskResultSession({ draftId, ...row.result })))) return null;
+        return { draftId, pageId: row.result.pageId, status: 'open', session: cloneCacheValue(row.result.session),
+            sourceMemory: cloneCacheValue(row.result.sourceMemory), sourceContext: cloneCacheValue(row.result.sourceContext || {}),
+            contentSnapshot: generation_recovery.readGenerationContentSnapshot(row.journal),
+            frozenInputs: cloneCacheValue(row.journal?.frozenInputs || {}), journal: cloneCacheValue(row.journal) };
+    }
+    if (shownSession.archiveRevision !== bank.archiveRevision) return null;
+    const visible = loadReadableGenerationProgress(mode, { context, cache: stored, memoryBank: bank, chatId: bank.chatId }) || stored?.[mode];
+    if (!equal(select(visible))) return null;
+    const rows = Object.entries(generationDraftRecords(stored)).filter(([, row]) => row.status === 'open'
+        && row.result?.mode === mode && row.result.sourceMemory?.archiveRevision === bank.archiveRevision
+        && core_context.comparableChatId(row.result.sourceMemory?.chatId) === core_context.comparableChatId(bank.chatId)
+        && row.result.session?.readableProgress?.version === 1 && row.result.session.readableProgress.complete === false)
+        .sort((left, right) => left[1].result.createdAt - right[1].result.createdAt).reverse();
+    const marker = shownSession.readableProgress?.draftId;
+    // A later result that actually owns this target shadows earlier rows even
+    // if the old shown value happens to match a different stale draft.
+    const candidates = rows.filter(([, row]) => select(applySavedTaskPage(null, row.result)) != null);
+    const actual = candidates[0];
+    if (actual) {
+        const marked = actual[0] === marker && equal(select(applySavedTaskPage(null, actual[1].result))) ? actual : null;
+        const [draftId, row] = marked || actual;
+        if (!equal(select(applySavedTaskPage(null, row.result)))) return null;
+        return { draftId, pageId: row.result.pageId, status: 'open', session: cloneCacheValue(row.result.session),
+            sourceMemory: cloneCacheValue(row.result.sourceMemory), sourceContext: cloneCacheValue(row.result.sourceContext || {}),
+            contentSnapshot: generation_recovery.readGenerationContentSnapshot(row.journal),
+            frozenInputs: cloneCacheValue(row.journal?.frozenInputs || {}), journal: cloneCacheValue(row.journal) };
+    }
+    const formal = stored?.[mode];
+    if (!equal(select(formal))) return null;
+    let pageId = mode, reading = generationPageReadingSource(formal, mode, bank);
+    for (const page of Object.keys(formal.generationSources || {})) {
+        if (equal(select(applySavedTaskPage(null, { mode, pageId: page, session: formal, sourceMemory: bank })))) {
+            pageId = page; reading = generationPageReadingSource(formal, page, bank); break;
+        }
+    }
+    return { draftId: '', pageId, status: 'formal', session: cloneCacheValue(formal),
+        sourceMemory: cloneCacheValue(reading.memoryBank), sourceContext: {}, contentSnapshot: null, frozenInputs: {} };
+}
+
+const PROGRESS_READING_FIELDS = Object.freeze(['view', 'selectedId', 'selectedKey', 'selectedAppId', 'selectedEntryId',
+    'selectedSpaceId', 'selectedObjectId', 'selectedParticipantId', 'presenceIndex', 'selectedSeason', 'selectedVoiceId',
+    'selectedScenarioId', 'selectedDramaKey', 'selectedStripId', 'selectedFireflyId', 'selectedDossierId',
+    'selectedConfessionId', 'pastLivesReadMask', 'pastLivesDrawn', 'pastLivesClosing', 'dialogueIndex', 'reading']);
+
+function progressPathValue(session, path) {
+    let value = session;
+    for (const part of path || []) {
+        value = typeof part === 'string' || typeof part === 'number' ? (value && Object.hasOwn(value, part) ? value[part] : undefined)
+            : Array.isArray(value) ? value.find(item => item?.id === part?.id
+                && (!part?.calendarPageKey || modes_calendar.calendarEntryPageKey(item) === part.calendarPageKey)) : undefined;
+    }
+    return value;
+}
+
+function collectProgressFieldClears(before, after, path = [], cleared = []) {
+    if (Array.isArray(before) && Array.isArray(after)) {
+        for (const item of before) if (typeof item?.id === 'string') {
+            const next = after.find(candidate => candidate?.id === item.id);
+            if (next) collectProgressFieldClears(item, next, [...path, { id: item.id }], cleared);
+        }
+    } else if (before && after && typeof before === 'object' && typeof after === 'object'
+        && !Array.isArray(before) && !Array.isArray(after)) {
+        for (const key of Object.keys(before)) {
+            if (['readableProgress', 'generationSources'].includes(key)) continue;
+            if (!Array.isArray(before[key]) && before[key] != null
+                && (!Object.hasOwn(after, key) || after[key] === null)) {
+                cleared.push({ path: [...path, key], ...(Object.hasOwn(after, key) ? { value: null } : { remove: true }) });
+            } else if (Object.hasOwn(after, key)) collectProgressFieldClears(before[key], after[key], [...path, key], cleared);
+        }
+    }
+    return cleared;
+}
+
+// Record only changed local fields; never copy task inputs into every edit.
+function collectProgressEdits(before, after, path = [], edits = []) {
+    if (sameProgressItemValue(before, after)) return edits;
+    if (Array.isArray(before) && Array.isArray(after)) {
+        after.forEach((value, index) => {
+            const id = typeof value?.id === 'string' ? value.id : null;
+            const previous = id ? before.find(item => item?.id === id) : before[index];
+            collectProgressEdits(previous, value, [...path, id ? { id } : index], edits);
+        });
+    } else if (before && after && typeof before === 'object' && typeof after === 'object'
+        && !Array.isArray(before) && !Array.isArray(after)) {
+        for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+            if (['generationSources', 'readableProgress', 'progressPending', ...PROGRESS_READING_FIELDS].includes(key)) continue;
+            collectProgressEdits(before[key], after[key], [...path, key], edits);
+        }
+    } else if (path.length) edits.push({ path, ...(after === undefined ? { remove: true } : { value: structuredClone(after) }) });
+    return edits;
+}
+
+function applyProgressOverrides(session, metadata) {
+    for (const edit of metadata?.manualFieldsV1 || []) {
+        const parent = progressPathValue(session, edit.path.slice(0, -1)), key = edit.path.at(-1);
+        if (!parent || typeof parent !== 'object' || !['string', 'number'].includes(typeof key)) continue;
+        if (edit.remove) delete parent[key];
+        else Object.defineProperty(parent, key, { value: structuredClone(edit.value), enumerable: true, configurable: true, writable: true });
+    }
+
+    for (const override of metadata?.textOverridesV1 || []) {
+        const item = progressPathValue(session, override.path);
+        if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+        for (const [key, value] of Object.entries(override.set || {})) Object.defineProperty(item, key,
+            { value: structuredClone(value), enumerable: true, configurable: true, writable: true });
+        for (const key of override.unset || []) delete item[key];
+    }
+    for (const clear of metadata?.clearedFieldsV1 || []) {
+        const parent = progressPathValue(session, clear.path?.slice(0, -1)), key = clear.path?.at(-1);
+        if (!parent || typeof parent !== 'object' || typeof key !== 'string') continue;
+        if (clear.remove) delete parent[key]; else parent[key] = null;
+    }
+}
+
+function progressMutationMetadata(before, next, contentOverride) {
+    const metadata = cloneCacheValue(before.readableProgress || {});
+    const localEdits = new Map((metadata.manualFieldsV1 || []).map(edit => [JSON.stringify(edit.path), edit]));
+    for (const edit of collectProgressEdits(before, next)) localEdits.set(JSON.stringify(edit.path), edit);
+    if (localEdits.size) metadata.manualFieldsV1 = [...localEdits.values()];
+    const clears = new Map((metadata.clearedFieldsV1 || []).filter(clear => {
+        const value = progressPathValue(next, clear.path);
+        return clear.remove ? value === undefined : value === null;
+    }).map(clear => [JSON.stringify(clear.path), clear]));
+    for (const clear of collectProgressFieldClears(before, next)) clears.set(JSON.stringify(clear.path), clear);
+    if (clears.size) metadata.clearedFieldsV1 = [...clears.values()]; else delete metadata.clearedFieldsV1;
+    const overrides = new Map((metadata.textOverridesV1 || []).map(override => {
+        const updated = cloneCacheValue(override), previous = progressPathValue(before, override.path), current = progressPathValue(next, override.path);
+        // A later explicit local action (for example drawing a new CG after a
+        // regeneration cleared it) supersedes the older field override.
+        if (previous && current) for (const key of new Set([...Object.keys(updated.set || {}), ...(updated.unset || [])])) {
+            if (Object.hasOwn(previous, key) !== Object.hasOwn(current, key) || JSON.stringify(previous[key]) !== JSON.stringify(current[key])) {
+                updated.set ||= {}; updated.unset = (updated.unset || []).filter(item => item !== key);
+                if (Object.hasOwn(current, key)) updated.set[key] = structuredClone(current[key]);
+                else { delete updated.set[key]; updated.unset.push(key); }
+            }
+        }
+        return [JSON.stringify([updated.pageId, updated.target?.type, updated.target?.parentId || '', updated.target?.id]), updated];
+    }));
+    if (contentOverride) {
+        const override = cloneCacheValue(contentOverride);
+        if (override.pageId !== metadata.pageId || !Array.isArray(override.path) || !override.path.length
+            || !override.target?.type || !override.target?.id || !progressPathValue(next, override.path)) throw new TypeError('重新生成结果缺少对应的原页面和稳定目标。');
+        const current = progressPathValue(next, override.path);
+        if (Object.entries(override.set || {}).some(([key, value]) => !Object.hasOwn(current, key) || JSON.stringify(current[key]) !== JSON.stringify(value))
+            || (override.unset || []).some(key => Object.hasOwn(current, key))) throw new TypeError('重新生成覆盖必须与本次已校验并提交的内容一致。');
+        overrides.set(JSON.stringify([override.pageId, override.target.type, override.target.parentId || '', override.target.id]), override);
+    }
+    if (overrides.size) metadata.textOverridesV1 = [...overrides.values()];
+    return metadata;
+}
+
+function collectProgressDeletions(before, after, path = [], deleted = []) {
+    if (Array.isArray(before) && Array.isArray(after)) {
+        const nextIds = new Set(after.filter(item => typeof item?.id === 'string').map(item => item.id));
+        const ids = before.filter(item => typeof item?.id === 'string' && !nextIds.has(item.id)).map(item => item.id);
+        if (ids.length) deleted.push({ path, ids });
+        for (const item of before) if (typeof item?.id === 'string' && nextIds.has(item.id)) {
+            collectProgressDeletions(item, after.find(next => next?.id === item.id), [...path, { id: item.id }], deleted);
+        }
+    } else if (before && after && typeof before === 'object' && typeof after === 'object') {
+        for (const key of Object.keys(before)) if (Object.hasOwn(after, key)
+            && !['readableProgress', 'generationSources', 'cgImage', 'cgPromptDraft', 'cgPromptMetadata'].includes(key)) {
+            collectProgressDeletions(before[key], after[key], [...path, key], deleted);
+        }
+    }
+    return deleted;
+}
+
+function applyProgressDeletions(session, deletions) {
+    for (const deletion of deletions || []) {
+        if (!Array.isArray(deletion.path) || !Array.isArray(deletion.ids) || !deletion.path.length) continue;
+        let parent = session;
+        for (const part of deletion.path.slice(0, -1)) {
+            parent = typeof part === 'string' ? parent?.[part]
+                : Array.isArray(parent) ? parent.find(item => item?.id === part?.id) : null;
+        }
+        const key = deletion.path.at(-1);
+        if (parent && typeof key === 'string' && Array.isArray(parent[key])) {
+            parent[key] = parent[key].filter(item => !deletion.ids.includes(item?.id));
+        }
+    }
+    return session;
+}
+
+function preserveProgressLocalState(incoming, saved) {
+    if (!saved || !incoming || typeof incoming !== 'object') return incoming;
+    if (Array.isArray(incoming)) {
+        const byId = new Map((Array.isArray(saved) ? saved : []).filter(item => item && typeof item.id === 'string').map(item => [item.id, item]));
+        return incoming.map(item => item?.id && byId.has(item.id) ? preserveProgressLocalState(item, byId.get(item.id)) : item);
+    }
+    const next = { ...incoming };
+    for (const key of ['cgImage', 'cgPromptDraft', 'cgPromptMetadata', 'favorite', 'readAt', 'unlocked', 'userManaged', ...PROGRESS_READING_FIELDS]) {
+        if (Object.hasOwn(saved, key)) next[key] = structuredClone(saved[key]);
+    }
+    for (const [key, value] of Object.entries(next)) {
+        if (Array.isArray(value) && Array.isArray(saved[key])) next[key] = preserveProgressLocalState(value, saved[key]);
+        else if (value && typeof value === 'object' && !Array.isArray(value) && saved[key] && typeof saved[key] === 'object'
+            && !['generationSources', 'readableProgress', 'cgImage', 'cgPromptDraft', 'cgPromptMetadata'].includes(key)) next[key] = preserveProgressLocalState(value, saved[key]);
+    }
+    applyProgressOverrides(next, saved.readableProgress);
+    if (next.readableProgress) for (const key of ['textOverridesV1', 'clearedFieldsV1', 'manualFieldsV1']) {
+        if (saved.readableProgress?.[key]) next.readableProgress[key] = cloneCacheValue(saved.readableProgress[key]);
+    }
+    const deletions = saved.readableProgress?.deletedItems;
+    if (Array.isArray(deletions) && deletions.length) {
+        applyProgressDeletions(next, deletions);
+        if (next.readableProgress) next.readableProgress = { ...next.readableProgress, deletedItems: structuredClone(deletions) };
+    }
+    return next;
+}
+
+export async function commitGenerationTaskResultMutation(context, draftId, mutate, { expectedTaskOrigin = null, stillCurrent = null, archiveTarget = null, contentOverride = null } = {}) {
+    if (typeof mutate !== 'function') return null;
+    if (archiveTarget?.historyVersionId || archiveTarget?.taskResultDraftId || archiveTarget?.backupOnly) return null;
+    const bank = archiveTarget?.memory || archive_repository.requireArchive(context);
+    const entry = archiveTarget || archiveBackupEntryForContext(context, bank);
+    if (archiveTarget && (!entry.entryId || !bank?.archiveRevision || !Array.isArray(bank.memories)
+        || core_context.comparableChatId(entry.chatId) !== core_context.comparableChatId(bank.chatId))) return null;
+    const origin = expectedTaskOrigin || core_context.captureTaskOrigin(context, bank.archiveRevision);
+    const current = () => (archiveTarget ? core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)
+        && (!origin.archiveTargetEntryId || origin.archiveTargetEntryId === entry.entryId) : core_context.isCurrentTaskOrigin(origin))
+        && core_requestCoordinator.isLogicalGenerationTaskCurrent(origin) && (typeof stillCurrent !== 'function' || stillCurrent());
+    let session = null;
+    const committed = await serializeArchiveCommitOperation(entry, bank, () => commitArchiveCacheMutation(entry, bank, {}, value => {
+        const record = generationDraftRecords(value)[draftId];
+        if (record?.status !== 'open' || !record.result?.session || core_context.comparableChatId(record.result.sourceMemory?.chatId) !== core_context.comparableChatId(bank.chatId)) return false;
+        const before = cloneCacheValue(record.result.session), next = mutate(cloneCacheValue(before), cloneCacheValue(record.result.sourceMemory));
+        if (!next || next.kind !== before.kind || next.chatId !== before.chatId || next.archiveRevision !== before.archiveRevision) return false;
+        const deletedItems = [...(before.readableProgress?.deletedItems || []), ...collectProgressDeletions(before, next)];
+        session = { ...cloneCacheValue(next), readableProgress: { ...progressMutationMetadata(before, next, contentOverride),
+            ...(deletedItems.length ? { deletedItems } : {}) } };
+        record.result.session = session;
+    }, current, { requireExisting: true, generationDraftMutation: true, preserveCanonicalMemory: true }));
+    if (committed.unchanged || !session || !current()) return null;
+    if (archiveTarget) {
+        archiveTarget.cache = cloneCacheValue(committed.cache);
+        return cloneCacheValue(session);
+    }
+    rememberRuntimeSessionCache(cacheScopeFromContext(context), committed.cache);
+    context.chatMetadata[core_constants.CACHE_KEY] = cloneCacheValue(committed.stored);
+    await saveMetadataDurably(context);
+    return cloneCacheValue(session);
+}
+
+export async function saveGenerationProgressReadingState(context, session) {
+    const draftId = session?.readableProgress?.draftId;
+    if (!draftId || session.readableProgress.complete !== false) return null;
+    const bank = archive_repository.requireArchive(context), entry = archiveBackupEntryForContext(context, bank);
+    const origin = core_context.captureTaskOrigin(context, bank.archiveRevision);
+    const patch = Object.fromEntries(PROGRESS_READING_FIELDS.filter(key => Object.hasOwn(session, key)
+        && ['string', 'number', 'boolean'].includes(typeof session[key])).map(key => [key, session[key]]));
+    const committed = await serializeArchiveCommitOperation(entry, bank, () => commitArchiveCacheMutation(entry, bank, {}, value => {
+        const record = generationDraftRecords(value)[draftId];
+        if (!record?.result?.session || record.status !== 'open') return false;
+        Object.assign(record.result.session, patch);
+    }, () => core_context.isCurrentTaskOrigin(origin), { requireExisting: true, generationDraftMutation: true, preserveCanonicalMemory: true }));
+    if (committed.unchanged) return null;
+    rememberRuntimeSessionCache(cacheScopeFromContext(context), committed.cache);
+    context.chatMetadata[core_constants.CACHE_KEY] = cloneCacheValue(committed.stored);
+    await saveMetadataDurably(context);
+    return structuredClone(session);
+}
+
+// Read a page against the evidence that actually produced it. This view never
+// changes the current archive or the inputs of a later generation request.
+export function generationPageReadingSource(session, pageId, fallbackMemory) {
+    const source = session?.generationSources?.[pageId];
+    const memoryBank = source?.sourceMemory;
+    if (!memoryBank || !Array.isArray(memoryBank.memories)) return { session, memoryBank: fallbackMemory, source: null };
+    return { source, memoryBank, session: { ...session, chatId: memoryBank.chatId, archiveRevision: memoryBank.archiveRevision } };
+}
+
+export function generationPageSourceMemory(session, pageId, fallbackMemory) {
+    return generationPageReadingSource(session, pageId, fallbackMemory).memoryBank;
+}
+
+function roomReadingBlueprint(session) {
+    const result = {};
+    for (const key of ['spaces', 'dayparts', 'residents', 'participantSnapshot', 'visualProfile', 'presenceLines', 'homeName', 'homeSummary', 'pets']) {
+        if (Object.hasOwn(session || {}, key)) result[key] = structuredClone(session[key]);
+    }
+    return result;
+}
+
+export async function saveGenerationTaskResult(context, mode, session, origin, options = {}) {
+    const draftId = options.draftId || origin?.generationRecoveryDraftId;
+    if (!draftId || !session || !Object.values(core_constants.MODE).includes(mode)) throw new TypeError('任务成果缺少明确草稿和页面。');
+    const bank = cloneCacheValue(options.memoryBank || archive_repository.requireArchive(context));
+    const entry = options.archiveTarget || archiveBackupEntryForContext(context, bank);
+    const stillCurrent = () => core_requestCoordinator.isLogicalGenerationTaskCurrent(origin)
+        && core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch) && (options.stillCurrent?.() !== false);
+    const committed = await serializeArchiveCommitOperation(entry, bank, () => commitArchiveCacheMutation(entry, bank, {}, value => {
+        const records = generationDraftRecords(value), record = records[draftId];
+        if (!record || !['open', 'awaiting-choice'].includes(record.status)) throw core_text.safeUserError('任务成果对应的草稿已结束，旧返回没有覆盖保存记录。', 'RMT_RECOVERY_CLEARED');
+        const snapshot = generation_recovery.readGenerationContentSnapshot(record.journal);
+        const sourceMemory = options.sourceMemory || snapshot?.memoryBank;
+        if (!sourceMemory || !Array.isArray(sourceMemory.memories)) throw core_text.safeUserError('旧草稿没有保留完整原资料，成果与草稿保留，需要明确旧资料的兼容方式。', 'RMT_RECOVERY_SOURCE_SNAPSHOT_MISSING');
+        const result = { mode, pageId: options.pageId || record.journal.pageId || recoveryPageForVersion(mode, record.journal.operation),
+            createdAt: record.result?.createdAt || Date.now(), entryId: entry.entryId, targetEntry: cloneCacheValue(entry),
+            session: preserveProgressLocalState(cloneCacheValue(session), record.result?.session), sourceMemory: cloneCacheValue(sourceMemory),
+            sourceContext: cloneCacheValue(snapshot?.fields || {}),
+            sourceIdentity: cloneCacheValue(record.journal.sourceIdentity || record.journal.identity),
+            targetIdentity: cloneCacheValue(record.journal.identity) };
+        value[GENERATION_DRAFTS_CACHE_KEY] = { version: 1, records: { ...records,
+            [draftId]: { ...record, result, status: options.complete === false ? 'open' : 'awaiting-choice' } } };
+    }, stillCurrent, { requireExisting: true, generationDraftMutation: true, preserveCanonicalMemory: true }));
+    if (options.archiveTarget) options.archiveTarget.cache = cloneCacheValue(committed.cache);
+    try {
+        const live = core_context.currentCharacterGuard();
+        if (core_context.deferredCommitOriginMatchesContext(origin, live)) {
+            rememberRuntimeSessionCache(cacheScopeFromContext(live), committed.cache);
+            live.chatMetadata[core_constants.CACHE_KEY] = cloneCacheValue(committed.stored);
+            await saveMetadataDurably(live);
+        }
+    } catch { /* The task result was acknowledged by canonical storage. */ }
+    return { status: options.complete === false ? 'partial-result' : 'awaiting-choice', draftId,
+        pageId: generationDraftRecords(committed.cache)[draftId].result.pageId };
+}
+
+export function generationTaskResultSession(record) {
+    const session = cloneCacheValue(record.session);
+    session.readableProgress = { ...session.readableProgress, explicitDraft: true, draftId: record.draftId };
+    session.generationSources = { ...(session.generationSources || {}), [record.pageId || record.mode]: {
+        sourceMemory: cloneCacheValue(record.sourceMemory), sourceIdentity: cloneCacheValue(record.sourceIdentity) } };
+    return session;
+}
+
+function applySavedTaskPage(latest, result) {
+    const page = result.pageId, incoming = cloneCacheValue(result.session), current = cloneCacheValue(latest || {});
+    let next;
+    if (result.mode === core_constants.MODE.HEART && page === 'heart') {
+        next = incoming;
+    } else if (result.mode === core_constants.MODE.HEART) {
+        next = current;
+        const fields = page === 'language' ? ['greetings', 'specialDays', 'birthdayMmDd', 'userBirthdayMmDd', 'relationshipState', 'relationshipSummary', 'relationshipSourceMemoryIds', 'relationshipSourceMemoryAnchor']
+            : page === 'strips' ? ['dailyStrips'] : page === 'fireflies' ? ['fireflyVoices'] : [];
+        for (const key of fields) if (Object.hasOwn(incoming, key)) next[key] = structuredClone(incoming[key]);
+        if (['spring', 'summer', 'autumn', 'winter', 'postending'].includes(page)) {
+            next.voiceDramas = [...(current.voiceDramas || []).filter(item => item.kind !== page), ...(incoming.voiceDramas || []).filter(item => item.kind === page)];
+            if (page !== 'postending') next.scenarioDramas = [...(current.scenarioDramas || []).filter(item => item.season !== page), ...(incoming.scenarioDramas || []).filter(item => item.season === page)];
+        }
+    } else if (page === 'roomLife') {
+        // A life task can start from a still-partial room. Its source blueprint
+        // remains explicitly partial if no completed current room exists yet.
+        next = current.spaces?.length ? current : incoming;
+        for (const key of ['lifePlan', 'lifePlanAttempt']) if (Object.hasOwn(incoming, key)) next[key] = cloneCacheValue(incoming[key]);
+    } else {
+        next = incoming;
+        if (page === 'room') for (const key of ['lifePlan', 'lifePlanAttempt']) {
+            if (Object.hasOwn(current, key)) next[key] = cloneCacheValue(current[key]);
+            else delete next[key];
+        }
+    }
+    // Keep provenance per page: old M identifiers never acquire the meaning of
+    // a rebuilt archive's same-spelled M identifiers.
+    next.generationSources = { ...(current.generationSources || {}), [page]: {
+        sourceMemory: cloneCacheValue(result.sourceMemory), sourceIdentity: cloneCacheValue(result.sourceIdentity),
+        ...(page === 'roomLife' ? { roomBlueprint: roomReadingBlueprint(incoming) } : {}) } };
+    if (page === 'room' && current.lifePlan && !next.generationSources.roomLife?.roomBlueprint) {
+        next.generationSources.roomLife = { ...(current.generationSources?.roomLife || {}),
+            sourceMemory: cloneCacheValue(current.generationSources?.roomLife?.sourceMemory || result.targetMemory || result.sourceMemory),
+            roomBlueprint: roomReadingBlueprint(current) };
+    }
+    return next;
+}
+
+function preserveLifeFromPartialRoom(next, current) {
+    if (next?.kind !== core_constants.MODE.ROOM || current?.readableProgress?.complete !== false || !current.lifePlan || next.lifePlan) return next;
+    const result = { ...next, lifePlan: cloneCacheValue(current.lifePlan) };
+    if (current.lifePlanAttempt) result.lifePlanAttempt = cloneCacheValue(current.lifePlanAttempt);
+    result.generationSources = { ...(next.generationSources || {}), ...(current.generationSources?.roomLife
+        ? { roomLife: cloneCacheValue(current.generationSources.roomLife) } : {}) };
+    return result;
+}
+
+export async function resolveGenerationTaskResult(context, draftId, choice) {
+    if (!['independent', 'apply'].includes(choice)) throw new TypeError('请选择独立保存或更新当前页面并保留旧版。');
+    const bank = cloneCacheValue(archive_repository.requireArchive(context));
+    const entry = archiveBackupEntryForContext(context, bank), scope = cacheScopeFromContext(context);
+    const origin = core_context.captureTaskOrigin(context, bank.archiveRevision);
+    const current = () => core_context.isCurrentTaskOrigin(origin);
+    const committed = await serializeArchiveCommitOperation(entry, bank, () => serializeCacheScopeOperation(scope,
+        () => commitArchiveCacheMutation(entry, bank, {}, (value, canonicalMemory) => {
+            const records = generationDraftRecords(value), record = records[draftId];
+            if (!record?.result || !['awaiting-choice', 'independent'].includes(record.status)) throw core_text.safeUserError('这份任务成果不在等待选择状态，原结果仍保留。', 'RMT_RECOVERY_RESULT_MISSING');
+            if (choice === 'apply') {
+                const prior = cloneCacheValue(value);
+                delete prior[ARCHIVE_VERSIONS_CACHE_KEY]; delete prior[GENERATION_DRAFTS_CACHE_KEY];
+                const drafts = { modules: cloneCacheValue(prior[generation_recovery.GENERATION_RECOVERY_CACHE_KEY] || {}),
+                    tasks: Object.fromEntries(Object.entries(records).filter(([, item]) => item.status === 'open')
+                        .map(([id, item]) => [id, cloneCacheValue(item.journal)])),
+                    phone: prior[core_constants.PHONE_DRAFT_CACHE_KEY] ? cloneCacheValue(prior[core_constants.PHONE_DRAFT_CACHE_KEY]) : null };
+                delete prior[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]; delete prior[core_constants.PHONE_DRAFT_CACHE_KEY];
+                const versionId = globalThis.crypto?.randomUUID?.() || `version-${Date.now()}-${Math.random()}`;
+                value[ARCHIVE_VERSIONS_CACHE_KEY] = [...archiveVersions(value), { version: 1, versionId, createdAt: Date.now(), reason: '应用原资料任务成果前',
+                    selectedPages: [record.result.pageId], entryId: entry.entryId, chatId: bank.chatId, archiveRevision: bank.archiveRevision,
+                    entry: cloneCacheValue(entry), memory: cloneCacheValue(canonicalMemory), cache: prior,
+                    roster: participantRoster(value[participant_contract.PARTICIPANTS_KEY]), drafts }];
+                const next = applySavedTaskPage(value[record.result.mode], { ...record.result, targetMemory: canonicalMemory });
+                next.kind = record.result.mode; next.chatId = bank.chatId; next.archiveRevision = bank.archiveRevision;
+                next[core_constants.SESSION_MODE_WRITE_FENCE_KEY] = modeWriteFenceForCache(value, record.result.mode);
+                value[record.result.mode] = next;
+            }
+            // Keep the independently viewable result and its original evidence,
+            // but not a redundant completed request/input journal.
+            value[GENERATION_DRAFTS_CACHE_KEY] = { version: 1, records: { ...records,
+                [draftId]: { status: choice === 'apply' ? 'applied' : 'independent', result: record.result, closedAt: Date.now() } } };
+        }, current, { requireExisting: true, generationDraftMutation: true, archiveVersionMutation: true, preserveCanonicalMemory: true })));
+    const live = core_context.currentCharacterGuard();
+    rememberRuntimeSessionCache(scope, committed.cache);
+    live.chatMetadata[core_constants.CACHE_KEY] = cloneCacheValue(committed.stored);
+    await saveMetadataDurably(live);
+    return { status: choice === 'apply' ? 'applied' : 'independent', draftId };
+}
 // Retired story data remains inert in existing saves; it is never an active mode.
 const RETIRED_STORY_MODE = 'timeJourney';
 const STORED_MODES = Object.freeze([...Object.values(core_constants.MODE), RETIRED_STORY_MODE]);
+// Before an archive exists this is only a foreground, host-queued selection.
+// The archive recovery recipe freezes its own input before generation starts.
+export const PARTICIPANT_DRAFT_METADATA_KEY = 'heartbeat_memories_participants_draft_v1';
 
 function recoveryCleared(cache, mode) {
     const cleared = cache?.[GENERATION_RECOVERY_CLEARED_KEY];
@@ -43,7 +571,15 @@ function clearRecoveryInCache(cache, mode) {
         [mode]: modeWriteFenceForCache(cache, mode) };
 }
 
-function clearCompletedRecovery(cache, mode) {
+function clearCompletedRecovery(cache, mode, origin = null) {
+    if (origin?.generationRecoveryDraftId) {
+        const record = generationDraftRecords(cache)[origin.generationRecoveryDraftId];
+        const summary = generation_recovery.generationRecoverySummary(record?.journal);
+        if (summary && !summary.failureCode && !summary.truncated && !summary.failed) {
+            finishGenerationDraftInCache(cache, mode, origin.generationRecoveryDraftId);
+        }
+        return;
+    }
     const journal = cache?.[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode];
     const summary = generation_recovery.generationRecoverySummary(journal);
     if (summary && summary.mode === mode && !summary.failureCode && !summary.truncated && !summary.failed
@@ -56,6 +592,28 @@ function cloneCacheValue(value) {
     if (!value || typeof value !== 'object') return {};
     if (typeof structuredClone === 'function') return structuredClone(value);
     return JSON.parse(JSON.stringify(value));
+}
+
+function participantRoster(value) {
+    return participant_contract.normalizeParticipantRoster(value);
+}
+
+function participantConflict() {
+    return core_text.safeUserError('参与人物已由另一次保存更新，请重新打开选择；本次没有覆盖新名单。', 'RMT_PARTICIPANTS_CAS_CONFLICT');
+}
+
+function participantOriginChanged() {
+    return core_text.safeUserError('选择人物期间原聊天或档案已经变化，本次没有写入其他档案。', 'RMT_RECOVERY_ORIGIN_CHANGED');
+}
+
+function participantDraft(context) {
+    const draft = context?.chatMetadata?.[PARTICIPANT_DRAFT_METADATA_KEY];
+    return draft?.scope === cacheScopeFromContext(context) ? participantRoster(draft.roster) : null;
+}
+
+function retainCanonicalParticipants(cache, canonical) {
+    const key = participant_contract.PARTICIPANTS_KEY;
+    if (Object.prototype.hasOwnProperty.call(canonical || {}, key)) cache[key] = cloneCacheValue(canonical[key]);
 }
 
 export function migrateLegacyTravelSession(session) {
@@ -162,6 +720,10 @@ function discardSessionsBehindModeFences(cache) {
 
 function mergeCacheSnapshotsWithModeFences(primary, secondary, supplied, canonical) {
     const merged = cloneCacheValue(primary || {});
+    // Content clocks do not grant authority to edit the independently selected cast.
+    retainCanonicalParticipants(merged, canonical);
+    retainCanonicalArchiveVersions(merged, canonical);
+    retainCanonicalGenerationDrafts(merged, canonical);
     const fallback = secondary && typeof secondary === 'object' ? secondary : {};
     const mergedFences = mergeModeWriteFences(supplied, canonical);
     if (Object.keys(mergedFences).length) merged[core_constants.MODE_WRITE_FENCES_CACHE_KEY] = mergedFences;
@@ -425,10 +987,29 @@ export async function savePhoneGenerationDraft(context, memoryBank, plan, comple
 }
 
 // Independent recovery journal; never used as formal memories or as a completed mode.
-export function loadGenerationRecovery(mode, context = core_context.getContext(), suppliedCache = null) {
+export function loadGenerationRecovery(mode, context = core_context.getContext(), suppliedCache = null, options = {}) {
     try {
         const bank = archive_repository.requireArchive(context);
         const cache = suppliedCache || getCache(context);
+        if (options.draftId || options.pageId || cache?.[GENERATION_DRAFTS_CACHE_KEY]) {
+            const selected = generationDraftRows(cache, bank, { mode }).find(row =>
+                (!options.draftId || row.draftId === options.draftId) && (!options.pageId || row.pageId === options.pageId));
+            if (!selected) return null;
+            const raw = selected.journal;
+            const origin = core_context.captureTaskOrigin(context, bank.archiveRevision);
+            const entryId = context?.__rmtArchiveTargetEntryId || archiveBackupEntryForContext(context, bank, { expectedTaskOrigin: origin, previousMemory: bank }).entryId;
+            if (raw.identity?.mode !== mode
+                || ['characterKey', 'characterId', 'characterAvatar', 'chatId'].some(key => raw.identity?.[key] !== origin[key])
+                || (raw.identity?.archiveTargetEntryId && raw.identity.archiveTargetEntryId !== entryId)
+                || (raw.identity?.archiveRevision !== bank.archiveRevision && !generation_recovery.readGenerationContentSnapshot(raw))) return null;
+            if (!Object.hasOwn(generationDraftRecords(cache), selected.draftId)
+                && raw[core_constants.SESSION_MODE_WRITE_FENCE_KEY] !== modeWriteFenceForCache(cache, mode)) return null;
+            // A selected pool task can reclaim a newer mode fence. Its content
+            // still belongs to the exact character/chat/entry recorded above.
+            const journal = { ...raw, draftId: selected.draftId, pageId: selected.pageId };
+            if (!journal.identity.archiveTargetEntryId) journal.identity.archiveTargetEntryId = entryId;
+            return journal;
+        }
         const raw = cache?.[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode];
         const origin = core_context.captureTaskOrigin(context, bank.archiveRevision);
         const entryId = context?.__rmtArchiveTargetEntryId || archiveBackupEntryForContext(context, bank, { expectedTaskOrigin: origin, previousMemory: bank }).entryId;
@@ -445,7 +1026,8 @@ export function loadGenerationRecovery(mode, context = core_context.getContext()
         // entry and write fence above. Older V1 journals allowed this derived ID
         // to be empty. Fill only that absence on a COPY, never an explicit mismatch.
         // All callers (mode, subtask and continuation buttons) receive one identity.
-        const journal = cloneCacheValue(raw);
+        const journal = { ...cloneCacheValue(raw), draftId: recoveryDraftId(raw, mode),
+            pageId: raw.pageId || recoveryPageForVersion(mode, raw.operation) };
         if (!journal.identity.archiveTargetEntryId) journal.identity.archiveTargetEntryId = entryId;
         return journal;
     } catch { return null; }
@@ -461,6 +1043,7 @@ export async function saveGenerationRecovery(context, bank, mode, journal, origi
     const chatId = core_context.comparableChatId(memoryBank.chatId);
     if (!revision || revision !== expectedOrigin.archiveRevision || chatId !== expectedOrigin.chatId) return false;
     const frozenJournal = journal ? cloneCacheValue(journal) : null;
+    const draftId = frozenJournal?.draftId || options.draftId || expectedOrigin.generationRecoveryDraftId || '';
     if (frozenJournal) {
         const identity = frozenJournal.identity;
         if (!generation_recovery.generationRecoverySummary(frozenJournal) || identity.mode !== mode
@@ -492,6 +1075,21 @@ export async function saveGenerationRecovery(context, bank, mode, journal, origi
         && (typeof options.stillCurrent !== 'function' || options.stillCurrent());
     const mutate = cache => {
         const fence = assertModeWriteFence(cache, mode, expectedOrigin, null);
+        if (draftId) {
+            retainLegacyGenerationDraft(cache, mode);
+            if (!frozenJournal) {
+                finishGenerationDraftInCache(cache, mode, draftId, options.discardDraft === true);
+                return;
+            }
+            const records = generationDraftRecords(cache), previous = records[draftId];
+            if (previous && previous.status !== 'open') throw core_text.safeUserError('这份草稿已结束，旧回调没有覆盖保存记录。', 'RMT_RECOVERY_CLEARED');
+            const next = { ...frozenJournal, draftId, pageId: frozenJournal.pageId || recoveryPageForVersion(mode, frozenJournal.operation),
+                [core_constants.SESSION_MODE_WRITE_FENCE_KEY]: fence };
+            cache[GENERATION_DRAFTS_CACHE_KEY] = { version: 1, records: { ...records, [draftId]: { ...previous, journal: next, status: 'open' } } };
+            const legacy = cache?.[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode];
+            if (legacy) clearRecoveryInCache(cache, mode); // Its complete copy was retained in the same transaction above.
+            return;
+        }
         if (!frozenJournal) { clearRecoveryInCache(cache, mode); return; }
         if (recoveryCleared(cache, mode)) {
             throw core_text.safeUserError('这轮生成已完成或被清除，旧草稿不会重新写回。', 'RMT_RECOVERY_CLEARED');
@@ -502,7 +1100,8 @@ export async function saveGenerationRecovery(context, bank, mode, journal, origi
         cache[generation_recovery.GENERATION_RECOVERY_CACHE_KEY] = journals;
     };
     return serializeArchiveCommitOperation(entry, memoryBank, async () => {
-        const result = await commitArchiveCacheMutation(entry, memoryBank, {}, mutate, stillCurrent, { requireExisting: true });
+        const result = await commitArchiveCacheMutation(entry, memoryBank, {}, mutate, stillCurrent,
+            { requireExisting: true, generationDraftMutation: !!draftId });
         if (detachedTarget) detachedTarget.cache = cloneCacheValue(result.cache);
         // A background checkpoint is durable even when it has no current-chat mirror.
         // Mirror only after re-reading the actual host and proving the same origin.
@@ -938,6 +1537,293 @@ export function getCache(context) {
     return {};
 }
 
+// As with loadSession, callers hydrate a compressed archive before opening its
+// editor. Commits always reread the canonical IndexedDB record before comparing.
+export function readParticipantRoster(context = core_context.getContext()) {
+    const memory = archive_repository.getImportedMemory(context);
+    if (!memory) return participantDraft(context);
+    const cache = getCache(context);
+    const matches = (!cache.chatId || core_context.comparableChatId(cache.chatId) === core_context.comparableChatId(memory.chatId))
+        && (!cache.archiveRevision || cache.archiveRevision === memory.archiveRevision);
+    return (matches && participantRoster(cache[participant_contract.PARTICIPANTS_KEY]))
+        || participantRoster(memory[participant_contract.PARTICIPANTS_KEY]);
+}
+
+export const ARCHIVE_VERSIONS_CACHE_KEY = '__archiveVersionsV1';
+export const PARTICIPANT_REPLACEMENT_KEY = '__participantReplacementV1';
+const VERSION_PAGE_MODES = Object.freeze({ archiveProfile: '', room: 'room', roomLife: 'room', items: 'items',
+    phone: 'phone', inbox: 'inbox', themeSong: 'themeSong', album: 'album', adv: 'adv', cabinet: 'cabinet',
+    travel: 'travel', ending: 'ending', calendar: 'calendar', relations: 'relations', achievements: 'achievements',
+    butterfly: 'butterfly', pastLives: 'pastLives', timeEcho: 'timeEcho', language: 'heart', seasons: 'heart',
+    spring: 'heart', summer: 'heart', autumn: 'heart', winter: 'heart', strips: 'heart', fireflies: 'heart', postending: 'heart' });
+
+function archiveVersions(cache) {
+    const raw = cache?.[ARCHIVE_VERSIONS_CACHE_KEY];
+    if (raw === undefined) return [];
+    if (!Array.isArray(raw) || raw.some(item => !item || item.version !== 1 || typeof item.versionId !== 'string'
+        || !item.versionId || !item.memory || !item.cache || !Array.isArray(item.selectedPages))) {
+        throw core_text.safeUserError('旧版本记录不可读取，现有内容没有被覆盖。', 'RMT_ARCHIVE_VERSION_INVALID');
+    }
+    return raw;
+}
+
+function retainCanonicalArchiveVersions(target, canonical) {
+    if (canonical?.[ARCHIVE_VERSIONS_CACHE_KEY] !== undefined) {
+        target[ARCHIVE_VERSIONS_CACHE_KEY] = cloneCacheValue(archiveVersions(canonical));
+    } else delete target[ARCHIVE_VERSIONS_CACHE_KEY];
+}
+
+function archiveVersionSummary(record) {
+    return { versionId: record.versionId, createdAt: record.createdAt, reason: record.reason,
+        archiveRevision: record.archiveRevision, archiveName: record.memory.archiveName || '',
+        selectedPages: [...record.selectedPages], draftModes: Object.keys(record.drafts?.modules || {}),
+        hasPhoneDraft: !!record.drafts?.phone, roster: cloneCacheValue(record.roster) };
+}
+
+async function currentArchiveVersionState(context) {
+    const memory = archive_repository.requireArchive(context);
+    const entry = context?.__rmtArchiveTargetEntryId
+        ? { ...archiveBackupEntryForContext(context, memory), entryId: context.__rmtArchiveTargetEntryId }
+        : archiveBackupEntryForContext(context, memory);
+    const state = await archive_backupStore.readArchiveBackupState(entry);
+    if (state.deleted || !state.record || state.record.archiveRevision !== memory.archiveRevision) {
+        throw core_text.safeUserError('当前档案已变化，无法读取这份旧版本。', 'RMT_RECOVERY_ORIGIN_CHANGED');
+    }
+    return { entry, memory: cloneCacheValue(state.record.memory),
+        cache: await hydrateBackupCacheValue(state.record.cache, memory.chatId, memory.archiveRevision) || {} };
+}
+
+export async function listArchiveVersions(context = core_context.getContext()) {
+    if (!archive_repository.getImportedMemory(context)) return [];
+    return archiveVersions((await currentArchiveVersionState(context)).cache).map(archiveVersionSummary);
+}
+
+export async function readArchiveVersion(context, versionId) {
+    const current = await currentArchiveVersionState(context);
+    const record = archiveVersions(current.cache).find(item => item.versionId === versionId);
+    if (!record) throw core_text.safeUserError('找不到已保存的旧版本，当前内容没有被覆盖。', 'RMT_ARCHIVE_VERSION_MISSING');
+    return cloneCacheValue(record);
+}
+
+// A version is committed before a replacement request. Its drafts are a separate,
+// immutable record, not a recovery journal that later success can clear.
+export async function saveArchiveVersion(context, { reason = '', selectedPages = [], expectedRosterRevision,
+    parkDrafts = false } = {}) {
+    if (!Array.isArray(selectedPages) || selectedPages.some(page => !Object.hasOwn(VERSION_PAGE_MODES, page))) {
+        throw new TypeError('旧版本保存需要明确的页面范围。');
+    }
+    const pages = [...new Set(selectedPages)];
+    const memory = cloneCacheValue(archive_repository.requireArchive(context));
+    const entry = archiveBackupEntryForContext(context, memory);
+    const scope = cacheScopeFromContext(context), epoch = runtimeState.runtimeLifecycleEpoch;
+    const current = () => {
+        try { const live = core_context.currentCharacterGuard(); return !context?.__rmtArchiveTargetEntryId
+            && epoch === runtimeState.runtimeLifecycleEpoch && cacheScopeFromContext(live) === scope
+            && archive_repository.requireArchive(live).archiveRevision === memory.archiveRevision; } catch { return false; }
+    };
+    const versionId = globalThis.crypto?.randomUUID?.() || `version-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    return serializeArchiveCommitOperation(entry, memory, () => serializeCacheScopeOperation(scope, async () => {
+        if (!current()) throw participantOriginChanged();
+        let saved;
+        const committed = await commitArchiveCacheMutation(entry, memory, getCache(context), (value, canonicalMemory) => {
+            const roster = participantRoster(value[participant_contract.PARTICIPANTS_KEY]) || participantRoster(canonicalMemory[participant_contract.PARTICIPANTS_KEY]);
+            if (expectedRosterRevision !== undefined && (roster?.revision || '') !== expectedRosterRevision) throw participantConflict();
+            const oldCache = cloneCacheValue(value);
+            delete oldCache[ARCHIVE_VERSIONS_CACHE_KEY];
+            const drafts = { modules: cloneCacheValue(oldCache[generation_recovery.GENERATION_RECOVERY_CACHE_KEY] || {}),
+                phone: oldCache[core_constants.PHONE_DRAFT_CACHE_KEY] ? cloneCacheValue(oldCache[core_constants.PHONE_DRAFT_CACHE_KEY]) : null,
+                ...(oldCache[GENERATION_DRAFTS_CACHE_KEY] ? { tasks: Object.fromEntries(Object.entries(generationDraftRecords(oldCache))
+                    .filter(([, record]) => record.status === 'open').map(([id, record]) => [id, cloneCacheValue(record.journal)])) } : {}) };
+            delete oldCache[generation_recovery.GENERATION_RECOVERY_CACHE_KEY];
+            delete oldCache[core_constants.PHONE_DRAFT_CACHE_KEY];
+            delete oldCache[GENERATION_DRAFTS_CACHE_KEY];
+            saved = { version: 1, versionId, createdAt: Date.now(), reason: String(reason), selectedPages: pages,
+                entryId: core_context.archiveIndexEntryId(entry), chatId: memory.chatId, archiveRevision: memory.archiveRevision,
+                entry: cloneCacheValue(entry), memory: cloneCacheValue(canonicalMemory), cache: oldCache, roster: cloneCacheValue(roster), drafts };
+            value[ARCHIVE_VERSIONS_CACHE_KEY] = [...archiveVersions(value), saved];
+            if (parkDrafts) {
+                for (const mode of new Set(pages.map(page => VERSION_PAGE_MODES[page]).filter(Boolean))) {
+                    const operation = drafts.modules[mode]?.operation;
+                    const page = recoveryPageForVersion(mode, operation);
+                    if (!operation || pages.includes(page)) {
+                        retainLegacyGenerationDraft(value, mode);
+                        clearRecoveryInCache(value, mode);
+                    }
+                }
+                if (pages.includes('phone')) delete value[core_constants.PHONE_DRAFT_CACHE_KEY];
+            }
+        }, current, { requireExisting: true, archiveVersionMutation: true, preserveCanonicalMemory: true, generationDraftMutation: parkDrafts });
+        if (!current()) throw participantOriginChanged();
+        const live = core_context.currentCharacterGuard();
+        rememberRuntimeSessionCache(scope, committed.cache);
+        live.chatMetadata[core_constants.CACHE_KEY] = cloneCacheValue(committed.stored);
+        try { await saveMetadataDurably(live); } catch (error) {
+            console.warn('[HeartbeatMemories] version metadata mirror failed', core_text.safeErrorDiagnostic(error));
+        }
+        return archiveVersionSummary(saved);
+    }));
+}
+
+function recoveryPageForVersion(mode, operation) {
+    if (operation?.participantRegeneration?.pageId) return operation.participantRegeneration.pageId;
+    if (mode === 'room') return operation?.kind === 'room-daily-life' ? 'roomLife' : 'room';
+    if (mode !== 'heart') return mode;
+    if (operation?.kind === 'heart-season') return operation.season;
+    if (operation?.kind === 'heart-fireflies') return 'fireflies';
+    if (operation?.kind === 'heart-section') return operation.part === 'dialogues' ? 'language' : operation.part;
+    if (operation?.kind === 'mode') return 'language';
+    return '';
+}
+
+function replacementPageValue(session, page) {
+    if (!session) return null;
+    if (page === 'roomLife') return { lifePlan: session.lifePlan || null, lifePlanAttempt: session.lifePlanAttempt || null };
+    if (['spring', 'summer', 'autumn', 'winter', 'postending', 'seasons'].includes(page)) {
+        const matches = value => page === 'seasons' ? value !== 'postending' : value === page;
+        return { voiceDramas: (session.voiceDramas || []).filter(item => matches(item.kind)),
+            scenarioDramas: (session.scenarioDramas || []).filter(item => matches(item.season)) };
+    }
+    if (page === 'strips') return session.dailyStrips || [];
+    if (page === 'fireflies') return session.fireflyVoices || [];
+    if (page === 'language') return Object.fromEntries(['greetings', 'specialDays', 'birthdayMmDd', 'userBirthdayMmDd',
+        'relationshipState', 'relationshipSummary', 'relationshipSourceMemoryIds', 'relationshipSourceMemoryAnchor']
+        .map(key => [key, session[key] ?? null]));
+    const value = cloneCacheValue(session);
+    for (const key of [core_constants.SESSION_MODE_WRITE_FENCE_KEY, PARTICIPANT_REPLACEMENT_KEY, 'generationMeta',
+        'view', 'page', 'paragraphIndex', 'dialogueIndex', 'confessionLineIndex', 'presenceIndex',
+        ...Object.keys(value).filter(key => key.startsWith('selected'))]) delete value[key];
+    if (page === 'room') { delete value.lifePlan; delete value.lifePlanAttempt; }
+    return value;
+}
+
+function assertReplacementInCache(cache, memory, ticket, mode, replaySession = null) {
+    if (!ticket || typeof ticket.versionId !== 'string' || typeof ticket.pageId !== 'string'
+        || !Object.hasOwn(VERSION_PAGE_MODES, ticket.pageId) || VERSION_PAGE_MODES[ticket.pageId] !== mode) {
+        throw core_text.safeUserError('重新生成缺少已保存旧版本和明确页面范围，当前内容保留。', 'RMT_ARCHIVE_VERSION_REQUIRED');
+    }
+    const version = archiveVersions(cache).find(item => item.versionId === ticket.versionId);
+    if (!version || version.archiveRevision !== memory.archiveRevision
+        || core_context.comparableChatId(version.chatId) !== core_context.comparableChatId(memory.chatId)
+        || !version.selectedPages.includes(ticket.pageId)) {
+        throw core_text.safeUserError('旧版本不属于本次档案或所选页面，当前内容保留。', 'RMT_ARCHIVE_VERSION_REQUIRED');
+    }
+    const previous = mode ? replacementPageValue(version.cache[mode], ticket.pageId)
+        : [version.memory.archiveName, version.memory.archiveVerdict, version.memory.archiveCoverUpdatedAt];
+    const latest = mode ? replacementPageValue(cache[mode], ticket.pageId)
+        : [memory.archiveName, memory.archiveVerdict, memory.archiveCoverUpdatedAt];
+    // A durable commit can precede mirror/deferred acknowledgement. Replaying
+    // exactly that accepted result is safe; any different later content is not.
+    const exactReplay = mode && replaySession
+        && JSON.stringify(replacementPageValue(replaySession, ticket.pageId)) === JSON.stringify(latest);
+    if (JSON.stringify(previous) !== JSON.stringify(latest) && !exactReplay) {
+        throw core_text.safeUserError('所选页面在保存旧版本后已被更新，请重新选择；较新的内容保留。', 'RMT_RECOVERY_TARGET_CHANGED');
+    }
+    return { versionId: ticket.versionId, pageId: ticket.pageId };
+}
+
+export async function assertArchiveVersionReplacement(context, ticket, mode = VERSION_PAGE_MODES[ticket?.pageId]) {
+    const current = await currentArchiveVersionState(context);
+    return assertReplacementInCache(current.cache, current.memory, ticket, mode);
+}
+
+// Choosing the original single-card path discards only an unbuilt picker draft.
+// It never removes a roster from an existing archive or alters generated content.
+export async function discardParticipantDraft(context = core_context.currentCharacterGuard()) {
+    if (archive_repository.getImportedMemory(context)) return false;
+    const scope = cacheScopeFromContext(context);
+    return serializeCacheScopeOperation(scope, async () => {
+        const live = core_context.currentCharacterGuard();
+        if (cacheScopeFromContext(live) !== scope) throw participantOriginChanged();
+        if (archive_repository.getImportedMemory(live) || !participantDraft(live)) return false;
+        const metadata = live.chatMetadata, previous = metadata[PARTICIPANT_DRAFT_METADATA_KEY];
+        delete metadata[PARTICIPANT_DRAFT_METADATA_KEY];
+        try { await live.saveMetadataDebounced?.(); }
+        catch (error) {
+            if (!Object.hasOwn(metadata, PARTICIPANT_DRAFT_METADATA_KEY)) metadata[PARTICIPANT_DRAFT_METADATA_KEY] = previous;
+            throw error;
+        }
+        return true;
+    });
+}
+
+export async function commitParticipantRoster(context, nextRoster, { expectedRevision = '' } = {}) {
+    const desired = participantRoster(nextRoster);
+    if (!desired) throw new TypeError('参与人物保存需要明确的多人名单。');
+    const scope = cacheScopeFromContext(context);
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    const originalMemory = archive_repository.getImportedMemory(context);
+    const sameOrigin = () => {
+        let live;
+        try { live = core_context.currentCharacterGuard(); } catch { return false; }
+        return !context?.__rmtArchiveTargetEntryId && runtimeState.runtimeLifecycleEpoch === lifecycleEpoch
+            && cacheScopeFromContext(live) === scope;
+    };
+    if (!sameOrigin()) throw participantOriginChanged();
+    const next = () => ({ ...cloneCacheValue(desired), revision: globalThis.crypto?.randomUUID?.()
+        || `participants-${Date.now()}-${Math.random().toString(36).slice(2)}` });
+
+    if (!originalMemory) {
+        const staged = await serializeCacheScopeOperation(scope, async () => {
+            if (!sameOrigin()) throw participantOriginChanged();
+            const live = core_context.currentCharacterGuard();
+            // An archive may have finished while this foreground edit waited.
+            // Leave the cache lane before entering the archive commit lane.
+            if (archive_repository.getImportedMemory(live)) return null;
+            if (!live.chatMetadata || typeof live.chatMetadata !== 'object') throw participantOriginChanged();
+            const metadata = live.chatMetadata;
+            const current = participantDraft(live);
+            if ((current?.revision || '') !== expectedRevision) throw participantConflict();
+            const hadDraft = Object.prototype.hasOwnProperty.call(metadata, PARTICIPANT_DRAFT_METADATA_KEY);
+            const previous = metadata[PARTICIPANT_DRAFT_METADATA_KEY];
+            const roster = next();
+            const draft = { scope, roster };
+            metadata[PARTICIPANT_DRAFT_METADATA_KEY] = draft;
+            try {
+                // This is intentionally host-queued staging, not an acknowledged
+                // durable save. Never call a whole-chat save from this picker.
+                await live.saveMetadataDebounced?.();
+                if (!sameOrigin()) throw participantOriginChanged();
+            } catch (error) {
+                if (metadata[PARTICIPANT_DRAFT_METADATA_KEY] === draft) {
+                    if (hadDraft) metadata[PARTICIPANT_DRAFT_METADATA_KEY] = previous;
+                    else delete metadata[PARTICIPANT_DRAFT_METADATA_KEY];
+                }
+                throw error;
+            }
+            return cloneCacheValue(roster);
+        });
+        if (staged) return staged;
+        return commitParticipantRoster(core_context.currentCharacterGuard(), desired, { expectedRevision });
+    }
+
+    const revision = core_text.normalizeText(originalMemory.archiveRevision, 240);
+    const entry = archiveBackupEntryForContext(context, originalMemory);
+    const stillCurrent = () => sameOrigin()
+        && core_text.normalizeText(archive_repository.getImportedMemory(core_context.getContext())?.archiveRevision, 240) === revision;
+    return serializeArchiveCommitOperation(entry, originalMemory, () => serializeCacheScopeOperation(scope, async () => {
+        if (!stillCurrent()) throw participantOriginChanged();
+        const live = core_context.currentCharacterGuard();
+        await ensureCacheHydrated(live);
+        if (!stillCurrent()) throw participantOriginChanged();
+        let savedRoster;
+        const committed = await commitArchiveCacheMutation(entry, originalMemory, getCache(live), cache => {
+            const current = participantRoster(cache[participant_contract.PARTICIPANTS_KEY])
+                || participantRoster(originalMemory[participant_contract.PARTICIPANTS_KEY]);
+            if ((current?.revision || '') !== expectedRevision) throw participantConflict();
+            savedRoster = next();
+            cache[participant_contract.PARTICIPANTS_KEY] = savedRoster;
+        }, stillCurrent, { participantRosterMutation: true });
+        if (!stillCurrent()) throw participantOriginChanged();
+        rememberRuntimeSessionCache(scope, committed.cache);
+        live.chatMetadata[core_constants.CACHE_KEY] = cloneCacheValue(committed.stored);
+        // The acknowledged canonical write above is authoritative. A failed
+        // optional host mirror must not be reported as a lost selection.
+        try { await saveMetadataDurably(live); }
+        catch (error) { console.warn('[HeartbeatMemories] participant metadata mirror failed', core_text.safeErrorDiagnostic(error)); }
+        return cloneCacheValue(savedRoster);
+    }));
+}
+
 export async function prepareCacheBackupValue(cache) {
     if (!cache || typeof cache !== 'object') return null;
     if (isCompressedCacheRecord(cache)) {
@@ -973,6 +1859,7 @@ function assertArchiveCommitState(context, expectedState) {
 
 function assertExpectedTaskOrigin(context, origin) {
     if (!origin) return;
+    core_requestCoordinator.assertLogicalGenerationTaskCurrent?.(origin);
     if (!core_context.deferredCommitOriginMatchesContext(origin, context)) {
         throw core_text.safeUserError('后台档案对应的角色已经切换，本次结果没有写入其他角色；请回到原角色后重试保存。', 'RMT_RECOVERY_ORIGIN_CHANGED');
     }
@@ -1027,10 +1914,27 @@ async function saveImportedMemoryOperation(context, memoryBank, expectedChatId =
     const preserveDerivedCache = !!options.preserveDerivedCache && !!previousMemory;
     const stagedMemory = cloneCacheValue(memoryBank);
     stagedMemory.version = core_constants.ARCHIVE_SCHEMA_VERSION;
+    // A full rebuild clears generated modes, but it does not erase the user's
+    // independently saved cast. Read it even when this request predates the
+    // first participant edit in another window.
+    const participantBackupState = await archive_backupStore.readArchiveBackupState(backupEntry);
+    const participantBackup = participantBackupState.record;
+    const participantCache = participantBackup?.archiveRevision === core_text.normalizeText(previousMemory?.archiveRevision, 240)
+        ? await hydrateBackupCacheValue(participantBackup.cache, expectedChatId, participantBackup.archiveRevision) : null;
+    const participantKey = participant_contract.PARTICIPANTS_KEY;
+    const currentRoster = participantRoster(participantCache?.[participantKey])
+        || participantRoster(previousMemory?.[participantKey]) || participantDraft(currentContext)
+        || participantRoster(stagedMemory[participantKey]);
+    const savedVersions = archiveVersions(participantCache);
+    const draftSource = cloneCacheValue(participantCache);
+    for (const mode of Object.values(core_constants.MODE)) retainLegacyGenerationDraft(draftSource, mode);
+    const savedDrafts = draftSource[GENERATION_DRAFTS_CACHE_KEY];
+    if (options.participantRegeneration) assertReplacementInCache(participantCache, previousMemory,
+        options.participantRegeneration, '');
     let preservedCache = null;
     if (preserveDerivedCache) {
         let candidate = getCache(context);
-        const backupState = await archive_backupStore.readArchiveBackupState(backupEntry);
+        const backupState = participantBackupState;
         if (backupState.deleted) {
             const error = new Error('这份档案已被明确删除，旧任务不能迁移它的派生内容。');
             error.code = 'RMT_ARCHIVE_DELETED_FENCE';
@@ -1071,6 +1975,28 @@ async function saveImportedMemoryOperation(context, memoryBank, expectedChatId =
         }
     }
 
+    if (currentRoster) {
+        if (!preservedCache) {
+            preservedCache = { chatId: expectedChatId, archiveRevision: stagedMemory.archiveRevision };
+            stampCacheCommit(preservedCache, initialScope);
+        }
+        preservedCache[participantKey] = cloneCacheValue(currentRoster);
+    }
+    if (savedVersions.length) {
+        if (!preservedCache) {
+            preservedCache = { chatId: expectedChatId, archiveRevision: stagedMemory.archiveRevision };
+            stampCacheCommit(preservedCache, initialScope);
+        }
+        preservedCache[ARCHIVE_VERSIONS_CACHE_KEY] = cloneCacheValue(savedVersions);
+    }
+    if (savedDrafts) {
+        if (!preservedCache) {
+            preservedCache = { chatId: expectedChatId, archiveRevision: stagedMemory.archiveRevision };
+            stampCacheCommit(preservedCache, initialScope);
+        }
+        preservedCache[GENERATION_DRAFTS_CACHE_KEY] = cloneCacheValue(savedDrafts);
+    }
+
     const storedCache = preservedCache ? await prepareCacheBackupValue(preservedCache) : null;
     currentContext = core_context.currentCharacterGuard();
     if (core_context.comparableChatId(core_context.getChatId(currentContext)) !== targetChatId || cacheScopeFromContext(currentContext) !== initialScope) {
@@ -1087,8 +2013,12 @@ async function saveImportedMemoryOperation(context, memoryBank, expectedChatId =
     }
     options.assertTaskCurrent?.();
     await archive_backupStore.replaceArchiveBackup(backupEntry, stagedMemory, storedCache, expectedState, {
-        ...(typeof options.assertTaskCurrent === 'function'
-            ? { stillCurrent: () => { options.assertTaskCurrent(); return true; } } : {}),
+        ...((currentRoster || savedVersions.length || savedDrafts) && expectedState.present === true
+            && participantBackup?.archiveRevision === expectedState.revision
+            ? { expectedCacheOrder: cacheOrderValue(participantBackup.cache), comparePreviousCache: true } : {}),
+        ...(typeof options.assertTaskCurrent === 'function' || options.expectedTaskOrigin
+            ? { stillCurrent: () => { options.assertTaskCurrent?.();
+                return core_requestCoordinator.isLogicalGenerationTaskCurrent?.(options.expectedTaskOrigin) !== false; } } : {}),
         allowMissingPrevious: expectedState.present === true,
         allowCharacterRename: backupEntry.allowCharacterRename === true,
         allowIdempotentRetry: !!options.expectedTaskOrigin,
@@ -1226,7 +2156,22 @@ async function commitArchiveCacheMutation(entry, memoryBank, baseCache, mutate, 
             discardSessionsBehindModeFences(starting);
         }
         const cache = cloneCacheValue(starting);
-        if (mutate(cache) === false) return { cache, stored: null, unchanged: true };
+        retainCanonicalArchiveVersions(cache, canonical);
+        retainCanonicalGenerationDrafts(cache, canonical);
+        const participantKey = participant_contract.PARTICIPANTS_KEY;
+        const canonicalRoster = participantRoster(canonical?.[participantKey])
+            || participantRoster(latest?.memory?.[participantKey]) || participantRoster(memoryBank?.[participantKey]);
+        if (canonicalRoster) cache[participantKey] = cloneCacheValue(canonicalRoster);
+        else delete cache[participantKey];
+        if (mutate(cache, cloneCacheValue(latest?.memory || memoryBank)) === false) return { cache, stored: null, unchanged: true };
+        if (options.archiveVersionMutation !== true) retainCanonicalArchiveVersions(cache, canonical);
+        if (options.generationDraftMutation !== true) retainCanonicalGenerationDrafts(cache, canonical);
+        // Only the explicit selection API may replace the current roster.
+        // Generation/recovery/cache snapshots carry historical input, not this authority.
+        if (options.participantRosterMutation !== true) {
+            if (canonicalRoster) cache[participantKey] = cloneCacheValue(canonicalRoster);
+            else delete cache[participantKey];
+        }
         cache.chatId = chatId;
         cache.archiveRevision = revision;
         stampCacheCommit(cache, tokenScope);
@@ -1234,11 +2179,12 @@ async function commitArchiveCacheMutation(entry, memoryBank, baseCache, mutate, 
         if (typeof stillCurrent === 'function' && !stillCurrent()) throw new Error('同一档案已启动更新的任务，本次旧结果没有写入。');
         try {
             const writeOptions = { expectedCacheOrder: cacheOrderValue(latest?.cache), stillCurrent };
+            const savedMemory = options.preserveCanonicalMemory === true && latest?.memory ? latest.memory : memoryBank;
             if (options.requireExisting) {
-                await archive_backupStore.replaceArchiveBackup(entry, memoryBank, stored, { present: true, revision }, {
+                await archive_backupStore.replaceArchiveBackup(entry, savedMemory, stored, { present: true, revision }, {
                     ...writeOptions, allowMissingPrevious: false, allowCharacterRename: entry?.allowCharacterRename === true,
                 });
-            } else await archive_backupStore.updateArchiveBackupCache(entry, memoryBank, stored, writeOptions);
+            } else await archive_backupStore.updateArchiveBackupCache(entry, savedMemory, stored, writeOptions);
             if (typeof stillCurrent === 'function' && !stillCurrent()) throw new Error('同一档案已启动更新的任务，本次旧结果没有写入。');
             return { cache, stored };
         } catch (error) {
@@ -1293,7 +2239,18 @@ function advanceModeWriteFence(cache, mode) {
     return signature;
 }
 
-export async function claimLiveModeGeneration(mode, context = core_context.currentCharacterGuard(), memoryBank = null) {
+function recoveryJournalForAdmission(cache, mode, options) {
+    const candidates = Object.entries(generationDraftRecords(cache)).filter(([draftId, record]) => record.status === 'open'
+        && record.journal?.identity?.mode === mode && (!options.draftId || draftId === options.draftId)
+        && (!options.pageId || (record.journal.pageId || recoveryPageForVersion(mode, record.journal.operation)) === options.pageId))
+        .map(([, record]) => record.journal);
+    const legacy = cache?.[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode];
+    if (legacy && !recoveryCleared(cache, mode) && (!options.draftId || recoveryDraftId(legacy, mode) === options.draftId)
+        && (!options.pageId || (legacy.pageId || recoveryPageForVersion(mode, legacy.operation)) === options.pageId)) candidates.push(legacy);
+    return candidates.sort((left, right) => (right.updatedAt || right.createdAt || 0) - (left.updatedAt || left.createdAt || 0))[0] || null;
+}
+
+export async function claimLiveModeGeneration(mode, context = core_context.currentCharacterGuard(), memoryBank = null, options = {}) {
     const bank = memoryBank || archive_repository.requireArchive(context);
     const expectedChatId = core_context.getChatId(context);
     const expectedRevision = core_text.normalizeText(bank.archiveRevision, 240);
@@ -1301,10 +2258,13 @@ export async function claimLiveModeGeneration(mode, context = core_context.curre
     try { await ensureCacheHydrated(context); } catch {}
     // Check the raw retained journal before a changed character makes the normal
     // identity-filtered loader hide it and before advancing any write fence.
-    await recovery_source.assertRecoverySourcePolicy(getCache(context)?.[generation_recovery.GENERATION_RECOVERY_CACHE_KEY]?.[mode],
-        context, core_context.captureTaskOrigin(context, bank.archiveRevision));
+    const rawRecovery = recoveryJournalForAdmission(getCache(context), mode, options);
+    await recovery_source.assertRecoverySourcePolicy(rawRecovery, context, core_context.captureTaskOrigin(context, bank.archiveRevision));
     const scope = cacheScopeFromContext(context);
     const entry = archiveBackupEntryForContext(context, bank);
+    if (rawRecovery?.identity?.archiveTargetEntryId && rawRecovery.identity.archiveTargetEntryId !== entry.entryId) {
+        throw core_text.safeUserError('草稿所属档案与当前目标不同；原内容及草稿保留，未发起新请求。', 'RMT_RECOVERY_SOURCE_CHANGED');
+    }
     const stillCurrent = () => {
         let live;
         try { live = core_context.currentCharacterGuard(); } catch { return false; }
@@ -1513,6 +2473,28 @@ export async function ensureCurrentArchiveBackup(context = null) {
                 try { liveRecovered = await hydrateBackupCacheValue(refreshedLive.stored, expectedChatId, expectedRevision); } catch {}
             }
         }
+        if (backupRecovered?.[GENERATION_DRAFTS_CACHE_KEY] || liveRecovered?.[GENERATION_DRAFTS_CACHE_KEY]
+            || backupRecovered?.[ARCHIVE_VERSIONS_CACHE_KEY] || liveRecovered?.[ARCHIVE_VERSIONS_CACHE_KEY]
+            || participantRoster(backupRecovered?.[participant_contract.PARTICIPANTS_KEY])
+            || participantRoster(liveRecovered?.[participant_contract.PARTICIPANTS_KEY])
+            || participantRoster(currentMemory?.[participant_contract.PARTICIPANTS_KEY])) {
+            // A later content clock on a host mirror cannot authorize an older
+            // participant choice or erase a durable draft's readable result.
+            // Use the same canonical merge/CAS as content saves.
+            const stillCurrent = () => {
+                let live;
+                try { live = core_context.currentCharacterGuard(); } catch { return false; }
+                return originalMirrorStillPresent(live)
+                    && !archive_groups.isCurrentCharacterDeletedFromLibrary(live, archive_repository.getImportedMemory(live));
+            };
+            const committed = await commitArchiveCacheMutation(backupEntry, currentMemory, liveRecovered || {}, () => true, stillCurrent);
+            if (!stillCurrent()) return false;
+            currentContext = core_context.currentCharacterGuard();
+            rememberRuntimeSessionCache(scope, committed.cache);
+            currentContext.chatMetadata[core_constants.CACHE_KEY] = cloneCacheValue(committed.stored);
+            await saveMetadataDurably(currentContext);
+            return true;
+        }
         const backupWins = !!backupRecovered && cacheOrderValue(backupCache) > cacheOrderValue(liveCandidate.stored);
         if (backupWins) {
             try { currentContext = core_context.currentCharacterGuard(); } catch { return false; }
@@ -1610,6 +2592,12 @@ export async function deleteSession(mode, expectedChatId = '') {
 }
 
 export function saveSession(mode, session, expectedChatId = core_text.normalizeText(session?.chatId, 240), expectedTaskOrigin = null) {
+    if (session?.readableProgress?.version === 1 && session.readableProgress.complete === false) {
+        const context = core_context.getContext();
+        if (core_context.getChatId(context) !== expectedChatId || (expectedTaskOrigin && !core_context.deferredCommitOriginMatchesContext(expectedTaskOrigin, context))) return false;
+        void saveGenerationProgressReadingState(context, session).catch(() => {});
+        return true;
+    }
     try {
         const context = core_context.currentCharacterGuard();
         if (expectedTaskOrigin && !core_context.deferredCommitOriginMatchesContext(expectedTaskOrigin, context)) {
@@ -1673,6 +2661,7 @@ export async function commitSessionMutation(mode, expectedChatId, expectedTaskOr
         try { memoryBank = archive_repository.requireArchive(context); } catch { return null; }
         const stillCurrent = () => {
             if (!core_context.runtimeLifecycleStillCurrent(mutationLifecycle)) return false;
+            if (core_requestCoordinator.isLogicalGenerationTaskCurrent?.(expectedTaskOrigin) === false) return false;
             let live;
             try { live = core_context.currentCharacterGuard(); } catch { return false; }
             if (expectedTaskOrigin && !core_context.deferredCommitOriginMatchesContext(expectedTaskOrigin, live)) return false;
@@ -1684,6 +2673,7 @@ export async function commitSessionMutation(mode, expectedChatId, expectedTaskOr
         let stagedSession = null;
         const committed = await commitArchiveCacheMutation(entry, memoryBank, getCache(context), cache => {
             const fence = assertModeWriteFence(cache, mode, expectedTaskOrigin, fallbackSession);
+            const replacement = options.participantRegeneration || fallbackSession?.[PARTICIPANT_REPLACEMENT_KEY];
             const cached = cache?.[mode]?.kind === mode
                 && core_context.comparableChatId(cache[mode].chatId) === core_context.comparableChatId(expectedChatId)
                 && core_text.normalizeText(cache[mode].archiveRevision, 240) === core_text.normalizeText(memoryBank.archiveRevision, 240)
@@ -1691,14 +2681,21 @@ export async function commitSessionMutation(mode, expectedChatId, expectedTaskOr
                 : cloneCacheValue(fallbackSession);
             const mutated = mutateSession(cached, memoryBank);
             if (!mutated || typeof mutated !== 'object') return false;
+            if (mutated.readableProgress?.version === 1 && mutated.readableProgress.complete === false) return false;
+            if (replacement) assertReplacementInCache(cache, memoryBank, replacement, mode, mutated);
             stagedSession = cloneCacheValue(mutated);
+            stagedSession = preserveLifeFromPartialRoom(stagedSession, cache[mode]);
+            if (options.completeGeneration === true && expectedTaskOrigin?.generationRecoveryDraftId) {
+                stagedSession = preserveProgressLocalState(stagedSession, generationDraftRecords(cache)[expectedTaskOrigin.generationRecoveryDraftId]?.result?.session);
+            }
+            delete stagedSession[PARTICIPANT_REPLACEMENT_KEY];
             stagedSession.chatId = expectedChatId;
             stagedSession.archiveRevision = memoryBank.archiveRevision;
             stagedSession[core_constants.SESSION_MODE_WRITE_FENCE_KEY] = fence;
             cache[mode] = stagedSession;
-            if (options.completeGeneration === true) clearCompletedRecovery(cache, mode);
+            if (options.completeGeneration === true) clearCompletedRecovery(cache, mode, expectedTaskOrigin);
             if (mode === core_constants.MODE.PHONE) delete cache[core_constants.PHONE_DRAFT_CACHE_KEY];
-        }, stillCurrent);
+        }, stillCurrent, { generationDraftMutation: options.completeGeneration === true && !!expectedTaskOrigin?.generationRecoveryDraftId });
         if (committed.unchanged || !stagedSession || !stillCurrent()) return null;
         context = core_context.currentCharacterGuard();
         const previousStored = cloneCacheValue(context.chatMetadata?.[core_constants.CACHE_KEY]);
@@ -1728,16 +2725,26 @@ export async function commitSessionMutation(mode, expectedChatId, expectedTaskOr
 }
 
 export async function commitSession(mode, session, expectedChatId = core_text.normalizeText(session?.chatId, 240), expectedTaskOrigin = null) {
+    if (session?.readableProgress?.version === 1 && session.readableProgress.complete === false) {
+        const context = core_context.getContext();
+        if (core_context.getChatId(context) !== expectedChatId || (expectedTaskOrigin && !core_context.deferredCommitOriginMatchesContext(expectedTaskOrigin, context))) return false;
+        return !!await saveGenerationProgressReadingState(context, session);
+    }
     const expectedRevision = core_text.normalizeText(session?.archiveRevision, 240);
+    const replacement = session?.[PARTICIPANT_REPLACEMENT_KEY];
     const committed = await commitSessionMutation(mode, expectedChatId, expectedTaskOrigin, (_latest, memoryBank) => {
         if (expectedRevision && expectedRevision !== core_text.normalizeText(memoryBank.archiveRevision, 240)) return null;
+        if (replacement) return session;
         return mode === core_constants.MODE.THEME_SONG ? song_contract.mergeThemeSongs(_latest, session)
             : mode === core_constants.MODE.INBOX ? modes_inbox.mergeInboxLatest(_latest, session) : session;
-    }, session, { completeGeneration: true });
+    }, session, { completeGeneration: true, ...(replacement ? { participantRegeneration: replacement } : {}) });
     return !!committed;
 }
 
 export async function commitDetachedArchiveSessionMutation(target, mode, expectedTaskOrigin, mutateSession, fallbackSession = null, stillCurrent = null, options = {}) {
+    const suppliedCurrent = stillCurrent;
+    stillCurrent = () => core_requestCoordinator.isLogicalGenerationTaskCurrent?.(expectedTaskOrigin) !== false
+        && (typeof suppliedCurrent !== 'function' || suppliedCurrent());
     if (typeof mutateSession !== 'function') throw new Error('后台派生内容缺少安全合并函数，本次结果没有写入。');
     const entryId = core_text.normalizeText(target?.entryId, 120);
     const chatId = core_context.comparableChatId(target?.chatId);
@@ -1761,31 +2768,41 @@ export async function commitDetachedArchiveSessionMutation(target, mode, expecte
         let stagedSession = null;
         const committed = await commitArchiveCacheMutation(entry, memoryBank, target?.cache || {}, cache => {
             const fence = assertModeWriteFence(cache, mode, expectedTaskOrigin, fallbackSession);
-            const latest = loadSession(mode, { cache, chatId, memoryBank, clone: true }) || cloneCacheValue(fallbackSession);
+            const replacement = options.participantRegeneration || fallbackSession?.[PARTICIPANT_REPLACEMENT_KEY];
+            const latest = replacement ? cloneCacheValue(cache[mode] || fallbackSession)
+                : loadSession(mode, { cache, chatId, memoryBank, clone: true }) || cloneCacheValue(fallbackSession);
             const mutated = mutateSession(latest, memoryBank);
             if (!mutated || typeof mutated !== 'object') return false;
+            if (mutated.readableProgress?.version === 1 && mutated.readableProgress.complete === false) return false;
+            if (replacement) assertReplacementInCache(cache, memoryBank, replacement, mode, mutated);
             stagedSession = cloneCacheValue(mutated);
+            stagedSession = preserveLifeFromPartialRoom(stagedSession, cache[mode]);
+            if (options.completeGeneration === true && expectedTaskOrigin?.generationRecoveryDraftId) {
+                stagedSession = preserveProgressLocalState(stagedSession, generationDraftRecords(cache)[expectedTaskOrigin.generationRecoveryDraftId]?.result?.session);
+            }
+            delete stagedSession[PARTICIPANT_REPLACEMENT_KEY];
             stagedSession.chatId = chatId;
             stagedSession.archiveRevision = revision;
             stagedSession[core_constants.SESSION_MODE_WRITE_FENCE_KEY] = fence;
             cache[mode] = stagedSession;
-            if (options.completeGeneration === true) clearCompletedRecovery(cache, mode);
+            if (options.completeGeneration === true) clearCompletedRecovery(cache, mode, expectedTaskOrigin);
             if (mode === core_constants.MODE.PHONE) delete cache[core_constants.PHONE_DRAFT_CACHE_KEY];
-        }, stillCurrent);
+        }, stillCurrent, { generationDraftMutation: options.completeGeneration === true && !!expectedTaskOrigin?.generationRecoveryDraftId });
         return { ...committed, session: cloneCacheValue(stagedSession) };
     });
 }
 
 export async function commitDetachedArchiveSession(target, mode, session, stillCurrent = null, expectedTaskOrigin = null) {
+    const replacement = session?.[PARTICIPANT_REPLACEMENT_KEY];
     return commitDetachedArchiveSessionMutation(
         target,
         mode,
         expectedTaskOrigin,
-        latest => mode === core_constants.MODE.THEME_SONG ? song_contract.mergeThemeSongs(latest, session)
+        latest => replacement ? session : mode === core_constants.MODE.THEME_SONG ? song_contract.mergeThemeSongs(latest, session)
             : mode === core_constants.MODE.INBOX ? modes_inbox.mergeInboxLatest(latest, session) : session,
         session,
         stillCurrent,
-        { completeGeneration: true },
+        { completeGeneration: true, ...(replacement ? { participantRegeneration: replacement } : {}) },
     );
 }
 
@@ -1811,44 +2828,85 @@ export async function flushSessionCacheNow(expectedChatId = '', expectedTaskOrig
     return persistCompressedCacheNow(context, cache, scope);
 }
 
+export function loadReadableGenerationProgress(mode, { context = null, cache: suppliedCache = null, memoryBank = null, chatId = '' } = {}) {
+    const cache = suppliedCache || (context ? getCache(context) : null);
+    if (!cache || !memoryBank) return null;
+    const targetChatId = core_context.comparableChatId(chatId || memoryBank.chatId);
+    const rows = Object.values(generationDraftRecords(cache)).filter(record => record.status === 'open'
+        && record.result?.mode === mode && record.result.sourceMemory?.archiveRevision === memoryBank.archiveRevision
+        && core_context.comparableChatId(record.result.sourceMemory?.chatId) === targetChatId
+        && record.result.session?.readableProgress?.version === 1 && record.result.session.readableProgress.complete === false)
+        .sort((left, right) => left.result.createdAt - right.result.createdAt);
+    if (!rows.length) return null;
+    let session = cache[mode] ? cloneCacheValue(cache[mode]) : null;
+    for (const row of rows) {
+        session = applySavedTaskPage(session, row.result);
+        session.readableProgress = cloneCacheValue(row.result.session.readableProgress);
+    }
+    session.kind = mode; session.chatId = targetChatId; session.archiveRevision = memoryBank.archiveRevision;
+    return session;
+}
+
 export function loadSession(mode, options = {}) {
     if (!Object.values(core_constants.MODE).includes(mode)) return null;
     try {
         const suppliedCache = options.cache && typeof options.cache === 'object' ? options.cache : null;
         const context = options.context || (suppliedCache ? null : core_context.currentCharacterGuard());
         const chatId = core_text.normalizeText(options.chatId, 240) || (context ? core_context.getChatId(context) : '');
-        const memoryBank = options.memoryBank || (context ? archive_repository.requireArchive(context) : null);
+        const contentSnapshot = context?.__rmtGenerationContentSnapshot;
+        const memoryBank = options.memoryBank || contentSnapshot?.memoryBank || (context ? archive_repository.requireArchive(context) : null);
         if (!chatId || !memoryBank) return null;
+        if (contentSnapshot?.memoryBank?.archiveRevision === memoryBank.archiveRevision
+            && contentSnapshot.memoryBank.chatId === chatId) {
+            const inputs = contentSnapshot.contentInputs || {};
+            const key = mode === contentSnapshot.mode ? Object.hasOwn(inputs, 'previousSession') ? 'previousSession'
+                : mode === core_constants.MODE.HEART && Object.hasOwn(inputs, 'baseSession') ? 'baseSession' : ''
+                : mode === core_constants.MODE.ROOM && Object.hasOwn(inputs, 'roomSession') ? 'roomSession' : '';
+            // Explicit null means this original task had no earlier page; never
+            // fall through to a newly generated page in the live archive.
+            if (key) return inputs[key] == null ? null : structuredClone(inputs[key]);
+        }
         const cache = suppliedCache || getCache(context);
-        let session = cache?.[mode];
+        let session = options.includePartial === true
+            ? loadReadableGenerationProgress(mode, { context, cache, memoryBank, chatId }) || cache?.[mode] : cache?.[mode];
         if (!session || session.kind !== mode) return null;
+        if (session.readableProgress?.version === 1 && session.readableProgress.complete === false
+            && options.includePartial !== true) return null;
         if (core_text.normalizeText(cache.chatId, 240) !== chatId) return null;
         if (core_text.normalizeText(session.chatId, 240) !== chatId) return null;
         if (cache.archiveRevision !== memoryBank.archiveRevision) return null;
         if (session.archiveRevision !== memoryBank.archiveRevision) return null;
-        if (mode === core_constants.MODE.PAST_LIVES && !modes_pastLives.readablePastLivesSession(session, memoryBank)) return null;
-        if (time_stories.isTimeStoryMode(mode) && !modes_timeStories.readableTimeStoriesSession(session, memoryBank)) return null;
+        const reading = generationPageReadingSource(session, mode, memoryBank);
+        const partial = session.readableProgress?.version === 1 && session.readableProgress.complete === false;
+        if (mode === core_constants.MODE.PAST_LIVES && !(partial
+            ? modes_pastLives.readablePastLivesProgressSession?.(reading.session, reading.memoryBank)
+            : modes_pastLives.readablePastLivesSession(reading.session, reading.memoryBank))) return null;
+        if (time_stories.isTimeStoryMode(mode) && !(partial
+            ? modes_timeStories.readableTimeStoriesProgressSession?.(reading.session, reading.memoryBank)
+            : modes_timeStories.readableTimeStoriesSession(reading.session, reading.memoryBank))) return null;
         if (mode === core_constants.MODE.INBOX && (session.inboxVersion !== modes_inbox.INBOX_VERSION || !Array.isArray(session.letters))) return null;
-        if (mode === core_constants.MODE.THEME_SONG && (!song_contract.readableThemeSongs(session, memoryBank)
+        if (mode === core_constants.MODE.THEME_SONG && (!(partial
+            ? modes_themeSong.readableThemeSongProgressSession?.(reading.session, reading.memoryBank)
+            : song_contract.readableThemeSongs(reading.session, reading.memoryBank))
             || (context && session.ownerKey && session.ownerKey !== core_context.currentCharacterRuntimeKey(context)))) return null;
         const userManaged = session.userManaged === true;
         if (mode === core_constants.MODE.ROOM && (!Array.isArray(session.spaces) || (!userManaged && session.spaces.length < 1))) return null;
         if (mode === core_constants.MODE.ITEMS && (!Array.isArray(session.containers) || (!userManaged && session.containers.length < 1))) return null;
         if (mode === core_constants.MODE.CABINET && !Array.isArray(session.items)) return null;
         if (mode === core_constants.MODE.PHONE) {
-            session = modes_phone.migrateLegacyPhoneSession(session, memoryBank);
+            session = partial ? session : modes_phone.migrateLegacyPhoneSession(session, reading.memoryBank);
             // A legacy phone may legitimately fall below the new generated minimum when the retired
             // calendar/schedule App is removed. Cache loading therefore checks structural readability
             // only; fresh generation still enforces its device-specific 4/5-App minimum in phone.js.
             if (!session || !Array.isArray(session.apps) || session.apps.length < 1) return null;
         }
-        if (mode === core_constants.MODE.ENDING && (!Array.isArray(session.endings) || (!userManaged && session.endings.length < 5))) return null;
+        if (mode === core_constants.MODE.ENDING && (!Array.isArray(session.endings) || (!userManaged && !partial && session.endings.length < 5))) return null;
         if (mode === core_constants.MODE.TRAVEL) {
             session = migrateLegacyTravelSession(session);
             if (!session || !Array.isArray(session.locations) || (!userManaged && session.locations.length < 1)) return null;
         }
         if (mode === core_constants.MODE.CALENDAR) {
-            session = modes_calendar.migrateCalendarSession(session, memoryBank);
+            session = modes_calendar.migrateCalendarSession(session, reading.memoryBank);
             if (!session || !Array.isArray(session.entries) || !session.dayPages || session.calendarVersion !== core_constants.CALENDAR_SESSION_VERSION) return null;
         }
         if (mode === core_constants.MODE.HEART) {

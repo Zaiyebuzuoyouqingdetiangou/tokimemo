@@ -1,4 +1,6 @@
+import * as core_participants from '../core/participants.js';
 import * as cg_visual from '../core/cgVisualRules.js';
+import * as story_chronology from '../core/storyChronology.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_cache from '../core/cache.js';
@@ -13,14 +15,106 @@ import * as generation_client from '../generation/client.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
 import * as generation_prompts from '../generation/prompts.js';
 
+
+// Per-entry identities omit worldbook prose; full generation sources are frozen
+// once by the task/session rather than copied again for every CG.
+export function albumSpeakerIdentities(snapshot) {
+    return snapshot ? { version: 1, people: snapshot.people.map(({ id, name }) => ({ id, name })) } : null;
+}
+
+export function normalizeAlbumSpeakerSnapshot(snapshot) {
+    return snapshot ? core_participants.normalizeParticipantSnapshot({ ...snapshot,
+        people: snapshot.people.map(person => ({ ...person, sourceRefs: [] })) }) : null;
+}
+
+// Keep legacy string arrays intact. Multiplayer attribution lives beside the text,
+// so old exports/editors and already generated prose retain their existing shape.
+export function normalizeAlbumDialogue(raw, participantSnapshot = null, savedSpeakers = []) {
+    const snapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
+    if (!snapshot) return { comments: core_text.cleanArray(raw, 8, 1200) };
+    const comments = [], commentSpeakers = [];
+    for (const [index, line] of (Array.isArray(raw) ? raw : []).slice(0, 8).entries()) {
+        const text = core_text.normalizeText(typeof line === 'string' ? line : line?.text, 1200);
+        if (!text) continue;
+        const id = typeof line === 'object' ? line?.speakerId : savedSpeakers[index]?.speakerId;
+        const person = snapshot.people.find(person => person.id === id);
+        comments.push(text);
+        commentSpeakers.push({ speakerId: person?.id || '', speakerName: person?.name || '' });
+    }
+    return { comments, commentSpeakers };
+}
+
+function participantRelationshipBank(memoryBank, person) {
+    // Generic "both" clauses in another person's memory cannot establish this pair.
+    // Keep explicitly named evidence and records whose participants bind this person.
+    const named = value => !!person.name && typeof value === 'string' && value.includes(person.name);
+    return { ...memoryBank, characterName: person.name,
+        archiveSummary: String(memoryBank?.archiveSummary || '').split(/[。！？\n]/u).filter(named).join('。'),
+        memories: (memoryBank?.memories || []).filter(memory =>
+            memory.participants?.includes(person.name) || named(memory.title) || named(memory.summary)),
+    };
+}
+
 export function compactAlbumExisting(session) {
-    return core_evidence.evenlySample(Array.isArray(session?.entries) ? session.entries : [], core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
+    return story_chronology.sortByStoryDate(core_evidence.evenlySample(Array.isArray(session?.entries) ? session.entries : [], core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS)).map(item => ({
         id: core_text.normalizeText(item?.id, 40),
         title: core_text.normalizeText(item?.title, 80),
         unlocked: !!item?.unlocked,
         sourceMemoryIds: core_text.cleanArray(item?.sourceMemoryIds, 8, 40),
         sourceMemoryAnchor: core_text.normalizeText(item?.sourceMemoryAnchor, 120),
     }));
+}
+
+// A reading projection is separate from the complete-result validator and from
+// the canonical album. Only closed JSON records can supply new content here.
+export function projectAlbumProgress({ segments = [], memoryBank, frozenInputs = {} }) {
+    const participantSnapshot = core_participants.normalizeParticipantSnapshot(frozenInputs['participants:album'] || null);
+    const index = segments.find(segment => /:index$/u.test(segment.slot));
+    if (!index) return null;
+    const rows = index.items('/entries');
+    const entries = [];
+    const unlockedSeed = rows.find(row => {
+        try { return row.unlocked && normalizeAlbumIndex({ entries: [row] }, memoryBank).entries.length; } catch { return false; }
+    });
+    for (const [i, row] of rows.entries()) {
+        try {
+            const raw = { ...row, id: row.id || `CG${String(i + 1).padStart(2, '0')}` };
+            const normalized = normalizeAlbumIndex({ entries: raw.unlocked ? [raw] : [unlockedSeed, raw].filter(Boolean) }, memoryBank).entries;
+            const item = normalized.find(entry => entry.id === core_text.safeId(raw.id, ''));
+            if (item) entries.push(item);
+        } catch {}
+    }
+    if (!entries.length) return null;
+    let relationshipSnapshot = null;
+    const relationship = segments.find(segment => /:relationship-scan$/u.test(segment.slot));
+    if (relationship?.complete) {
+        try { relationshipSnapshot = normalizeAlbumRelationshipSnapshot(relationship.value, memoryBank, participantSnapshot); } catch {}
+    }
+    for (const entry of entries) {
+        if (!entry.unlocked) continue;
+        entry.progressPending = ['共同回忆'];
+        entry.relationshipSnapshot = relationshipSnapshot;
+        if (participantSnapshot) entry.speakerSnapshot = albumSpeakerIdentities(participantSnapshot);
+        for (const segment of segments.filter(item => /:comments:\d+$/u.test(item.slot))) {
+            // at() also exposes closed comments inside the last, still-open row.
+            for (let i = 0; ; i++) {
+                const row = segment.at?.(`/items/${i}`) ?? segment.items('/items')[i];
+                if (!row) break;
+                if (core_text.safeId(row.id, '') !== entry.id) continue;
+                Object.assign(entry, normalizeAlbumDialogue(segment.items(`/items/${i}/comments`), participantSnapshot));
+                try {
+                    const complete = normalizeAlbumCommentsBatch({ items: [row] }, [entry], participantSnapshot);
+                    if (segment.has(`/items/${i}`)) {
+                        if (participantSnapshot) Object.assign(entry, complete.get(entry.id));
+                        else entry.comments = complete.get(entry.id);
+                        entry.progressPending = [];
+                    }
+                } catch {}
+            }
+        }
+    }
+    return { ...(participantSnapshot ? { participantSnapshot } : {}), kind: core_constants.MODE.ALBUM, title: core_text.normalizeText(index.value?.title, 120) || '回忆相簿', entries,
+        category: '全部', page: 1, pageSize: 6, selectedId: entries[0].id, sharedMemory: false, dialogueIndex: 0, hintVisible: false };
 }
 
 const ALBUM_RELATIONSHIP_HINT_RE = /(?:喜欢|爱|恋|暧昧|告白|表白|交往|恋人|伴侣|信赖|依赖|陪伴|亲密|疏远|冲突|争吵|和好|拒绝|同居|约定|关系|like|love|dating|relationship|trust|confess)/i;
@@ -41,13 +135,14 @@ export function albumRelationshipArchiveSlice(memoryBank) {
         ...core_evidence.evenlySample(relevant, 12).map(record => record.index),
         ...indexed.slice(-12).map(record => record.index),
     ]);
+    const ordered = story_chronology.sortByStoryDate(indexed.map(record => ({ ...record, date: record.item?.date })));
     return JSON.stringify({
         archiveName: core_text.normalizeText(memoryBank?.archiveName, 120),
         archiveSummary: core_text.normalizeText(memoryBank?.archiveSummary, 1000),
         archiveKeywords: core_text.cleanArray(memoryBank?.archiveKeywords, 8, 60),
         memoryColumns: ['id', 'evidenceAnchor'],
-        memories: indexed.map(record => [core_text.normalizeText(record.item?.id, 40), record.evidenceAnchor]),
-        relationshipDetails: indexed.filter(record => detailedIndexes.has(record.index)).map(record => ({
+        memories: ordered.map(record => [core_text.normalizeText(record.item?.id, 40), record.evidenceAnchor]),
+        relationshipDetails: ordered.filter(record => detailedIndexes.has(record.index)).map(record => ({
             id: core_text.normalizeText(record.item?.id, 40),
             date: core_text.normalizeText(record.item?.date, 30),
             title: record.title,
@@ -57,7 +152,16 @@ export function albumRelationshipArchiveSlice(memoryBank) {
     });
 }
 
-export function albumRelationshipScanPrompt(context, memoryBank) {
+export function albumRelationshipScanPrompt(context, memoryBank, participantSnapshot = null) {
+    const snapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
+    if (snapshot) return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 2：当下关系扫描')}
+本请求扫描完整档案，分别判定每位选定人物与 {{user}} 的当下关系；不写 CG 或对白，不预演未来。角色卡名称是场景标题，不能充当人物姓名。
+${core_participants.participantPromptBlock(snapshot)}
+ALBUM_RELATIONSHIP_FULL_ARCHIVE_JSON:
+${albumRelationshipArchiveSlice(memoryBank)}
+严格输出 {"people":[{"speakerId":"名单中的原始 id","charState":"该人物已证实的态度","userState":"用户对该人物已明确表达的态度，未知写未确认","relationshipState":"该人物与用户的关系阶段","relationshipSummary":"该人物与用户的证据总结","relationshipSourceMemoryIds":["M001"],"relationshipSourceMemoryAnchor":"该记忆的原样锚点"}]}。
+每位选定人物各返回一条，用 speakerId 对应。每人的证据和关系分别核对，不能把甲的恋爱关系、行为或内心套给乙；不替用户创造回应。引用必须来自上方档案，只输出 JSON。`;
+
     return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 2：当下关系扫描')}
 本请求只做一件事：在写共同回忆对话前，扫描当前完整档案时间线，判定 {{char}} 与 {{user}} 双方已有证据的感情状态和当前关系。不写 CG，不写对话，不预演未来。
 ALBUM_RELATIONSHIP_FULL_ARCHIVE_JSON:
@@ -80,7 +184,23 @@ ${albumRelationshipArchiveSlice(memoryBank)}
 - 不得因为人设、世界书或期待就把暧昧升级为恋人/伴侣。只输出 JSON。`;
 }
 
-export function normalizeAlbumRelationshipSnapshot(data, memoryBank) {
+export function normalizeAlbumRelationshipSnapshot(data, memoryBank, participantSnapshot = null, relationshipBank = memoryBank) {
+    const snapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
+    if (snapshot) return { people: snapshot.people.map(person => {
+        const row = Array.isArray(data?.people) ? data.people.find(row => row?.speakerId === person.id) : null;
+        const scopedBank = participantRelationshipBank(memoryBank, person);
+        if (!row) return { speakerId: person.id, speakerName: person.name, relationshipTier: 0,
+            charState: '未确认', userState: '未确认', relationshipState: '关系未确认',
+            relationshipSummary: '尚无该人物的已保存关系扫描；不预设双方恋爱。',
+            relationshipSourceMemoryIds: [], relationshipSourceMemoryAnchor: '' };
+        if (!row.relationshipSourceMemoryIds?.length) return { ...row, speakerId: person.id, speakerName: person.name,
+            relationshipTier: 0, charState: '未确认', userState: '未确认', relationshipState: '关系未确认' };
+        // Verify citations against the original archive, but derive the relationship
+        // only from evidence belonging to this person rather than the sandbox title.
+        const result = normalizeAlbumRelationshipSnapshot(row, { ...memoryBank, characterName: person.name }, null, scopedBank);
+        return { ...result, speakerId: person.id, speakerName: person.name };
+    }) };
+
     const charState = core_text.normalizeText(data?.charState, 1200);
     const userState = core_text.normalizeText(data?.userState, 1200);
     const relationshipState = core_text.normalizeText(data?.relationshipState, 120) || '关系仍在发展';
@@ -101,7 +221,7 @@ export function normalizeAlbumRelationshipSnapshot(data, memoryBank) {
     // The model-selected citation is an audit trail, not permission to hide a later breakup or
     // cherry-pick an earlier relationship peak. Current state is derived locally from the full
     // ordered archive; relationshipExpressionTier ignores unrelated third-party clauses.
-    const tier = core_presentExpression.relationshipExpressionTier(memoryBank);
+    const tier = core_presentExpression.relationshipExpressionTier(relationshipBank);
     const owner = core_text.normalizeText(memoryBank?.characterName, 80) || '{{char}}';
     const reader = core_text.normalizeText(memoryBank?.userName, 80) || '{{user}}';
     const localState = [
@@ -206,7 +326,19 @@ export function normalizeAlbumIndex(data, memoryBank, sourceMemoryIds = null) {
     return { title: core_text.normalizeText(data?.title, 120) || '回忆相簿', entries };
 }
 
-export function albumCommentsPrompt(context, memoryBank, entries, relationshipSnapshot = null) {
+export function albumCommentsPrompt(context, memoryBank, entries, relationshipSnapshot = null, participantSnapshot = null) {
+    const snapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
+    if (snapshot) return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 3：当下共同回忆')}
+本请求给 ${entries.length} 张已解锁的过去 CG 写一起翻相簿的当下对白。不同人物可以轮流说话，每句话由实际说话人的 speakerId 对应姓名。角色卡名不是人物。
+${core_participants.participantPromptBlock(snapshot)}
+CURRENT_RELATIONSHIP_SCAN_JSON:
+${JSON.stringify(normalizeAlbumRelationshipSnapshot(relationshipSnapshot, memoryBank, snapshot), null, 2)}
+UNTRUSTED_ALBUM_COMMENT_CONTEXT_JSON:
+${JSON.stringify({ entries: entries.map(item => ({ id: item.id, title: item.title, date: item.date, desc: item.desc, sourceMemoryIds: item.sourceMemoryIds, sourceMemoryAnchor: item.sourceMemoryAnchor, visualSeed: item.visualSeed })), memories: core_evidence.memoryPayload(memoryBank, [...new Set(entries.flatMap(item => item.sourceMemoryIds || []))].slice(0, 20), 20) }, null, 2)}
+严格输出 {"items":[{"id":"CG01","comments":[{"speakerId":"名单中的原始 id","text":"该人物的当下对白"}]}]}。
+每个输入 id 原样返回一次；每张 CG 写 6～8 段，每段约 35～120 个汉字。只让与该记忆有据可查的人物评论各自所知内容，不要求所有人物都出场。speakerId 必须来自上方名单，不以名字猜 ID，不替 {{user}} 生成现在的回应。
+每句话的称呼和亲密程度服从该 speakerId 自己的关系扫描，不挪用其他人的关系。至少覆盖画面细节、当时没说出口的想法和现在的理解；不新增过去事实，不写 ADV 过去独白，不修改记忆证据。只输出 JSON。`;
+
     const ids = [...new Set(entries.flatMap(item => item.sourceMemoryIds || []))].slice(0, 20);
     const storedSnapshot = relationshipSnapshot || entries.find(item => item?.relationshipSnapshot)?.relationshipSnapshot || null;
     const safeSnapshot = storedSnapshot ? normalizeAlbumRelationshipSnapshot(storedSnapshot, memoryBank) : {
@@ -240,15 +372,15 @@ ${JSON.stringify(payload, null, 2)}
 - 只输出 JSON。`;
 }
 
-export function normalizeAlbumCommentsBatch(data, expectedEntries) {
+export function normalizeAlbumCommentsBatch(data, expectedEntries, participantSnapshot = null) {
     const expected = new Map(expectedEntries.map(item => [item.id, item]));
     const raw = Array.isArray(data?.items) ? data.items : [];
     const out = new Map();
     for (const item of raw) {
         const id = core_text.safeId(item?.id, '');
         if (!expected.has(id) || out.has(id)) continue;
-        const comments = core_text.cleanArray(item?.comments, 8, 1200);
-        if (comments.length >= 6) out.set(id, comments);
+        const dialogue = normalizeAlbumDialogue(item?.comments, participantSnapshot, item?.commentSpeakers);
+        if (dialogue.comments.length >= 6) out.set(id, participantSnapshot ? dialogue : dialogue.comments);
     }
     for (const item of expectedEntries) {
         if (!out.has(item.id)) throw new Error(`相簿“${item.title}”的共同回忆不足 6 段。`);
@@ -305,6 +437,7 @@ export function mergeAlbumIncremental(previous, fresh, memoryBank) {
     // old session byte-for-byte at the field level and only replace the append-only entries array.
     return {
         ...structuredClone(previous),
+        ...(fresh.participantSnapshot ? { participantSnapshot: structuredClone(fresh.participantSnapshot) } : {}),
         kind: core_constants.MODE.ALBUM,
         title: previous.title || fresh.title || '回忆相簿',
         entries: merged.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS),
@@ -312,6 +445,7 @@ export function mergeAlbumIncremental(previous, fresh, memoryBank) {
 }
 
 export async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, options = {}) {
+    const participantSnapshot = core_participants.normalizeParticipantSnapshot(options.participantSnapshot || null);
     const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ALBUM, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
     const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
     const index = await generation_client.requestValidatedSegment(
@@ -330,26 +464,29 @@ export async function generateAlbumWithRepair(context, memoryBank, origin, taskK
     }
     const unlocked = index.entries.filter(item => item.unlocked);
     const relationshipSnapshot = await generation_client.requestValidatedSegment(
-        albumRelationshipScanPrompt(context, memoryBank),
+        albumRelationshipScanPrompt(context, memoryBank, participantSnapshot),
         '回忆相簿 2/3 · 正在扫描双方当下感情状态…',
         { maxTokens: 3200, temperature: 0.25, context, origin, taskKey: `${taskKey}:relationship-scan`, mode: core_constants.MODE.ALBUM, background: true },
-        raw => normalizeAlbumRelationshipSnapshot(raw, memoryBank),
+        raw => normalizeAlbumRelationshipSnapshot(raw, memoryBank, participantSnapshot),
     );
     const batches = generation_client.chunkForGeneration(unlocked, 3);
     const commentMaps = await generation_client.mapGenerationConcurrent(batches, core_constants.SEGMENT_REQUEST_CONCURRENCY,
         (batch, batchIndex) => generation_client.requestValidatedSegment(
-            albumCommentsPrompt(context, memoryBank, batch, relationshipSnapshot),
+            albumCommentsPrompt(context, memoryBank, batch, relationshipSnapshot, participantSnapshot),
             `回忆相簿 3/3 · 共同回忆 ${batchIndex + 1}/${batches.length}…`,
             { maxTokens: 6000, context, origin, taskKey: `${taskKey}:comments:${batchIndex}`, mode: core_constants.MODE.ALBUM, background: true },
-            data => normalizeAlbumCommentsBatch(data, batch),
+            data => normalizeAlbumCommentsBatch(data, batch, participantSnapshot),
         ));
     const allComments = new Map();
     for (const map of commentMaps) for (const [id, comments] of map.entries()) allComments.set(id, comments);
     const fresh = normalizeAlbum({
         title: index.title,
+        ...(participantSnapshot ? { participantSnapshot } : {}),
         entries: index.entries.map(item => ({
             ...item,
-            comments: item.unlocked ? (allComments.get(item.id) || []) : [],
+            ...(participantSnapshot ? { speakerSnapshot: albumSpeakerIdentities(participantSnapshot),
+                ...(item.unlocked ? (allComments.get(item.id) || { comments: [], commentSpeakers: [] }) : { comments: [] }) }
+                : { comments: item.unlocked ? (allComments.get(item.id) || []) : [] }),
             relationshipSnapshot: item.unlocked ? structuredClone(relationshipSnapshot) : null,
         })),
     }, memoryBank);
@@ -367,10 +504,13 @@ export function normalizeAlbum(data, memoryBank) {
         const visualSeed = core_text.cleanArray(item?.visualSeed, 12, 80);
         const title = core_text.normalizeText(item?.title, 80) || `回忆 ${index + 1}`;
         const desc = core_text.normalizeText(item?.desc, 1200);
-        const comments = unlocked ? core_text.cleanArray(item?.comments, 8, 1200) : [];
+        const participantSnapshot = item?.speakerSnapshot ? normalizeAlbumSpeakerSnapshot(item.speakerSnapshot)
+            : core_participants.normalizeParticipantSnapshot(data?.participantSnapshot || null);
+        const dialogue = normalizeAlbumDialogue(unlocked ? item?.comments : [], participantSnapshot, item?.commentSpeakers);
+        const comments = dialogue.comments;
         const hintLines = unlocked ? [] : core_text.cleanArray(item?.hintLines, 4, 1200);
         const relationshipSnapshot = unlocked && item?.relationshipSnapshot
-            ? normalizeAlbumRelationshipSnapshot(item.relationshipSnapshot, memoryBank)
+            ? normalizeAlbumRelationshipSnapshot(item.relationshipSnapshot, memoryBank, participantSnapshot)
             : null;
         const reference = core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, `${title}
 ${desc}
@@ -390,6 +530,7 @@ ${hintLines.join('；')}`, memoryBank, 1);
             ...cg_visual.generatedCgDraftFields(item),
             cgImage: generation_imageGeneration.normalizeCgImageRecord(item?.cgImage),
             comments,
+            ...(participantSnapshot ? { speakerSnapshot: albumSpeakerIdentities(participantSnapshot), commentSpeakers: dialogue.commentSpeakers } : {}),
             hintLines,
             relationshipSnapshot,
         };
@@ -409,6 +550,7 @@ ${hintLines.join('；')}`, memoryBank, 1);
     }
     return {
         kind: core_constants.MODE.ALBUM,
+        ...(data?.participantSnapshot ? { participantSnapshot: core_participants.normalizeParticipantSnapshot(data.participantSnapshot) } : {}),
         title: core_text.normalizeText(data?.title, 120) || '回忆相簿',
         entries,
         category: '全部',

@@ -69,3 +69,12 @@ export function renderCabinet() {
     ui_overlay.topTitle('两个人的陈列柜');
     ui_overlay.bodyEl().innerHTML = cabinetHtml(runtimeState.activeSession);
 }
+
+// Reading projection only: the complete-response validator and save path stay unchanged.
+export function projectCabinetProgress({ segments, memoryBank, previousSession }) {
+    const segment = segments.findLast(item => item.items('/items').length);
+    if (!segment) return null;
+    const fresh = normalizeCabinet({ items: segment.items('/items') }, memoryBank);
+    if (!fresh.items.length) return null;
+    return previousSession ? mergeCabinet(previousSession, fresh) : fresh;
+}

@@ -1,4 +1,5 @@
 import * as contract from '../core/themeSongContract.js';
+import * as songMode from '../modes/themeSong.js';
 import * as contextApi from '../core/context.js';
 import * as constants from '../core/constants.js';
 import * as cache from '../core/cache.js';
@@ -44,11 +45,35 @@ function busy() {
 export function assertThemeSongReader() {
     const session = runtimeState.activeSession, memory = shownMemory();
     if (runtimeState.activeMode !== MODE || !session || !memory) throw contract.songError('SOURCE', '请重新打开对应档案的印象曲。');
-    contract.normalizeStoredThemeSongs(session, memory);
-    if (!runtimeState.activeArchiveSnapshot && session.ownerKey
+    if (session.chatId !== memory.chatId || session.archiveRevision !== memory.archiveRevision)
+        throw contract.songError('SOURCE', '显示的印象曲与目标档案不一致。');
+    const source = cache.generationPageReadingSource(session, MODE, memory);
+    if (session.readableProgress?.version === 1) {
+        if (!songMode.readableThemeSongProgressSession(source.session, source.memoryBank)) throw contract.songError('SOURCE', '这份歌曲草稿暂时无法读取，原内容仍保留。');
+    } else contract.normalizeStoredThemeSongs(source.session, source.memoryBank);
+    if (!runtimeState.activeArchiveSnapshot && !source.source && session.ownerKey
         && session.ownerKey !== contextApi.currentCharacterRuntimeKey(contextApi.getContext()))
         throw contract.songError('SOURCE', '当前角色已经切换，请重新打开印象曲。');
     return session;
+}
+
+async function mutatePartialSong(shown, mutate) {
+    const snapshot = runtimeState.activeArchiveSnapshot, lifecycle = runtimeState.runtimeLifecycleEpoch;
+    let context, target = null;
+    if (snapshot) {
+        const options = library.archiveTargetGenerationOptions(snapshot);
+        target = await options.revalidateArchiveTarget(options.archiveTarget, lifecycle);
+        context = options.context;
+        context.chatMetadata[constants.MEMORY_KEY] = target.memory;
+        context.chatMetadata[constants.CACHE_KEY] = target.cache;
+    } else context = contextApi.currentCharacterGuard();
+    const memory = target?.memory || repository.requireArchive(context);
+    const origin = contextApi.captureTaskOrigin(context, memory.archiveRevision);
+    const updated = await cache.commitGenerationTaskResultMutation(context, shown.readableProgress.draftId, mutate,
+        { expectedTaskOrigin: origin, archiveTarget: target, stillCurrent: () => contextApi.runtimeLifecycleStillCurrent(lifecycle) });
+    if (!updated) throw contract.songError('SAVE', '未能确认歌曲阅读操作已保存，原作品保留。');
+    if (snapshot && runtimeState.activeArchiveSnapshot?.entryId === snapshot.entryId) runtimeState.activeArchiveSnapshot.cache = target.cache;
+    return updated;
 }
 export function syncSongLanguageInput(body = overlay.bodyEl()) {
     const selected = body?.querySelector('[data-rmt-song-language]');
@@ -77,7 +102,7 @@ export function renderThemeSongs() {
     const button = (action, label) => `<button type="button" class="rmt-btn" data-rmt-song="${action}" data-rmt-song-id="${esc(selected.id)}">${label}</button>`;
     const formatDetails = selected ? `<article class="rmt-song-sheet" data-rmt-song-presentation="format"><header><small>${esc(selected.subject === 'event' ? '事件印象曲' : '角色印象曲')} · ${esc(selected.subjectTitle)}</small><h2>${esc(selected.title)}</h2><p><b>演唱者</b> ${esc(selected.singer)} <span>· ${esc(contract.songLanguageLabel(selected))}</span></p><p>${esc(selected.vocalDescription)}</p></header>
       <section class="rmt-song-style"><h3>曲风</h3><p>${esc(selected.styleDescription)}</p><div class="rmt-song-toolbar">${button('copy-title','复制歌名')}${button('copy-style','复制曲风')}</div><pre>${esc(selected.stylePrompt)}</pre></section>
-      <section class="rmt-song-lyrics"><div class="rmt-song-toolbar"><h3>完整歌词</h3>${button('copy-lyrics','复制歌词')}</div><pre>${esc(selected.lyrics)}</pre></section>
+      <section class="rmt-song-lyrics"><div class="rmt-song-toolbar"><h3>${selected.generationIncomplete ? '已收到的歌词 · 未完成' : '完整歌词'}</h3>${button('copy-lyrics','复制歌词')}</div><pre>${esc(selected.lyrics)}</pre></section>
       <footer class="rmt-song-toolbar">${button('copy-all','复制全部')}${button('export','导出文本')}${readonly() ? '' : `<button type="button" class="rmt-btn" data-rmt-song="delete" data-rmt-song-id="${esc(selected.id)}" ${busy() ? 'disabled' : ''}>删除这首</button>`}</footer>
       <div data-rmt-song-copy-fallback></div></article>` : '<div class="rmt-song-empty"><span aria-hidden="true">♫</span><h3>让故事有自己的旋律</h3><p>为角色写一首，或选一段真实回忆作为起点。</p></div>';
     const readDetails = selected ? `<article class="rmt-song-sheet rmt-song-readable" data-rmt-song-presentation="read"><header>
@@ -92,8 +117,10 @@ export function renderThemeSongs() {
     const switcher = `<div class="rmt-song-display-switch" role="group" aria-label="歌曲显示模式"><button type="button" class="rmt-btn" data-rmt-song="view-read" aria-pressed="${displayMode === 'read'}">阅读模式</button><button type="button" class="rmt-btn" data-rmt-song="view-format" aria-pressed="${displayMode === 'format'}">创作格式</button></div>`;
     const list = session.songs.length ? `<nav class="rmt-song-list" aria-label="已保存的印象曲">${[...session.songs].reverse().map(song => `<button type="button" class="${song.id === selected?.id ? 'active' : ''}" data-rmt-song="select" data-rmt-song-id="${esc(song.id)}" aria-current="${song.id === selected?.id ? 'page' : 'false'}"><span aria-hidden="true">♪</span><span><b>${esc(song.title)}</b><small>${esc(song.singer)}</small></span></button>`).join('')}</nav>` : '';
     const allCache = runtimeState.activeArchiveSnapshot?.cache || cache.getCache(contextApi.getContext());
-    const recovery = recoveryView.recoveryBannerHtml({ __generationRecoveryV1: { [MODE]: allCache?.__generationRecoveryV1?.[MODE] } }, memory, { readOnly: readonly() });
-    overlay.bodyEl().innerHTML = `<main class="rmt-theme-song"><header class="rmt-song-heading"><div class="rmt-song-emblem" aria-hidden="true">♫</div><div><h2>角色印象曲</h2><p>${session.songs.length ? `已收录 ${session.songs.length} 首` : '歌名 · 曲风 · 完整歌词'}</p></div></header><p class="rmt-song-note">生成歌曲文本与编曲说明，不生成音频。</p>${switcher}${recovery}${form}<div class="rmt-song-layout ${list ? 'has-songs' : ''}">${list}${details}</div></main>`;
+    const recovery = recoveryView.recoveryBannerHtml(allCache, memory, { readOnly: readonly() });
+    const partial = selected?.generationIncomplete ? '<p class="rmt-recovery-status" role="status">这首歌尚未写完；已收到的歌名、曲风和歌词分别保留，空白部分仍待生成。</p>' : '';
+    const completedCount = session.songs.filter(song => !song.generationIncomplete).length;
+    overlay.bodyEl().innerHTML = `<main class="rmt-theme-song"><header class="rmt-song-heading"><div class="rmt-song-emblem" aria-hidden="true">♫</div><div><h2>角色印象曲</h2><p>${session.songs.length ? `已收录 ${completedCount} 首${completedCount < session.songs.length ? ' · 另有未完成草稿' : ''}` : '歌名 · 曲风 · 完整歌词'}</p></div></header><p class="rmt-song-note">生成歌曲文本与编曲说明，不生成音频。</p>${partial}${switcher}${recovery}${form}<div class="rmt-song-layout ${list ? 'has-songs' : ''}">${list}${details}</div></main>`;
     overlay.bodyEl().querySelector('[data-rmt-song-language]')?.addEventListener('change', () => syncSongLanguageInput());
 }
 export async function deleteThemeSong(id) {
@@ -109,16 +136,23 @@ export async function deleteThemeSong(id) {
     const fingerprint = JSON.stringify(targetSong);
     const sameView = () => runtimeState.activeMode === MODE && scope(runtimeState.activeSession) === shownScope
         && (runtimeState.activeArchiveSnapshot?.entryId || '') === (snapshot?.entryId || '') && contextApi.runtimeLifecycleStillCurrent(lifecycle);
-    const mutate = latest => {
+    const mutate = (latest, memory) => {
         if (!latest || busy() && sameView()) throw contract.songError('BUSY', '印象曲正在生成或状态已变化，暂未删除。');
-        const current = contract.normalizeStoredThemeSongs(latest);
+        let current;
+        if (latest.readableProgress?.complete === false) {
+            const source = cache.generationPageReadingSource(latest, MODE, memory || shownMemory());
+            if (!songMode.readableThemeSongProgressSession(source.session, source.memoryBank)) throw contract.songError('SOURCE', '这份歌曲草稿暂时无法读取，原内容仍保留。');
+            current = structuredClone(latest);
+        } else current = contract.normalizeStoredThemeSongs(latest);
         if (JSON.stringify(current.songs.find(song => song.id === id)) !== fingerprint) throw contract.songError('CONFLICT', '这首印象曲已变化，请重新确认。');
         current.songs = current.songs.filter(song => song.id !== id);
         if (current.selectedId === id) current.selectedId = current.songs[0]?.id || '';
         return current;
     };
     let updated;
-    if (snapshot) {
+    if (shown.readableProgress?.complete === false && shown.readableProgress.draftId) {
+        updated = await mutatePartialSong(shown, mutate);
+    } else if (snapshot) {
         const options = library.archiveTargetGenerationOptions(snapshot);
         const target = await options.revalidateArchiveTarget(options.archiveTarget, lifecycle);
         if (!sameView() || readonly()) return false;
@@ -160,7 +194,16 @@ export async function handleThemeSongAction(action, id = '') {
             return;
         }
         if (action === 'select') {
-            if (session.songs.some(song => song.id === id)) { session.selectedId = id; renderThemeSongs(); }
+            if (session.songs.some(song => song.id === id)) {
+                if (session.readableProgress?.complete === false && session.readableProgress.draftId && !readonly()) {
+                    const updated = await mutatePartialSong(session, latest => {
+                        if (latest.songs.some(song => song.id === id)) latest.selectedId = id;
+                        return latest;
+                    });
+                    if (runtimeState.activeSession === session) runtimeState.activeSession = updated;
+                } else session.selectedId = id;
+                if (runtimeState.activeMode === MODE) renderThemeSongs();
+            }
             return;
         }
         if (action === 'generate') {

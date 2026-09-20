@@ -1138,3 +1138,26 @@ export function normalizeCalendar(data, memoryBank, options = {}) {
         generatedAt: Date.now(),
     };
 }
+
+export function projectCalendarProgress({ segments, memoryBank, previousSession, frozenInputs = {}, operation = {}, createdAt }) {
+    const keys = ['past', 'promised', 'future', 'stickyNotes', 'moodNotes', 'holidayCards'];
+    const segment = segments.findLast(item => keys.some(key => item.items('/' + key).length));
+    if (!segment) return null;
+    const raw = Object.fromEntries(keys.map(key => [key, segment.items('/' + key)]));
+    if (segment.has('/title')) raw.title = segment.value.title;
+    const envelope = frozenInputs['context:calendar'] || '';
+    const fresh = normalizeCalendar(raw, memoryBank, {
+        currentDate: operation.calendarDate || '', dateBasis: operation.calendarDate && operation.calendarTimeBasis !== 'story' ? 'legacy-local' : 'story',
+        futureEvidenceText: core_worldPresentation.controlledCalendarEvidence(envelope),
+        holidayEvidenceText: core_worldPresentation.controlledSettingEvidence(envelope),
+    });
+    const hasNotes = Object.values(fresh.dayPages).some(page => ['stickyNotes', 'moodNotes', 'holidayCards'].some(key => page[key]?.length));
+    if (!fresh.entries.length && !hasNotes) return null;
+    if (Number.isFinite(createdAt)) fresh.generatedAt = createdAt;
+    if (!previousSession) return fresh;
+    const entries = new Map((previousSession.entries || []).map(item => [item.id, structuredClone(item)]));
+    for (const item of fresh.entries) entries.set(item.id, item);
+    // Rebuild page membership against the whole readable entry collection before
+    // merging old notes/cards, so a partial refresh cannot strand an old entry.
+    return mergeCalendarRefresh(previousSession, { ...fresh, entries: [...entries.values()] }, memoryBank);
+}

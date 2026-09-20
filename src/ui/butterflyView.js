@@ -9,15 +9,17 @@ import * as ui_overlay from './overlay.js';
 export function renderButterfly() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.BUTTERFLY) return;
-    session.selected = Math.max(1, Math.min(Number(session.selected) || 1, session.nodes.length - 1));
+    const partial = session.readableProgress?.complete === false;
+    const firstIndex = partial ? 0 : 1;
+    session.selected = Math.max(firstIndex, Math.min(Number(session.selected) || firstIndex, session.nodes.length - 1));
     const selected = session.nodes[session.selected];
     ui_overlay.topTitle(core_constants.MODE_LABEL[core_constants.MODE.BUTTERFLY]);
     const main = session.nodes[0];
-    const branches = session.nodes.slice(1, -1);
-    const ending = session.nodes[session.nodes.length - 1];
+    const ending = session.nodes.at(-1)?.trueEnding ? session.nodes.at(-1) : null;
+    const branches = session.nodes.slice(1, ending ? -1 : undefined);
     const branchNodes = branches.map((node, index) => `<button type="button" class="rmt-node rmt-branch-node ${index + 1 === session.selected ? 'active' : ''}" data-rmt-node="${index + 1}"><span>${String(index + 1).padStart(2, '0')}</span>${core_text.esc(node.label)}</button>`).join('');
     const endingIndex = session.nodes.length - 1;
-    const isOmega = session.selected === endingIndex || !!selected.trueEnding;
+    const isOmega = !!selected.trueEnding;
     const observerName = core_text.esc(session.subject || runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext().name2 || '{{char}}');
     const observationPanel = isOmega
         ? `<section class="rmt-terminal-block rmt-observation-screen rmt-omega-screen">
@@ -37,6 +39,7 @@ export function renderButterfly() {
           <section class="rmt-terminal-block rmt-system-block"><div class="rmt-terminal-section-title">V. SYSTEM NOTE // 系统评估</div><div class="rmt-system-note">${core_text.esc(selected.systemNote)}</div></section>`;
     const body = ui_overlay.bodyEl();
     body.innerHTML = `<div class="rmt-crt"><div class="rmt-crt-content">
+      ${partial ? '<p role="status">未完成 · 已写出的观测记录可以阅读，后续节点仍待续生成。</p>' : ''}
       <section class="rmt-terminal-block rmt-terminal-header-block">
         <div class="rmt-terminal-section-title">I. TERMINAL HEADER // 终端抬头</div>
         <div class="rmt-terminal-head">&gt; TEMPORAL OBSERVATION UNIT // SUBJECT: ${observerName} // STATUS: UNSTABLE</div>
@@ -44,10 +47,10 @@ export function renderButterfly() {
       </section>
       <section class="rmt-terminal-block rmt-divergence-map-block">
         <div class="rmt-terminal-section-title">II. DIVERGENCE MAP // 时间分歧树</div>
-        <div class="rmt-tree-root"><button type="button" class="rmt-node rmt-main-node" disabled><span>MAIN</span>${core_text.esc(main.label)} <em>LOCKED</em></button></div>
+        <div class="rmt-tree-root"><button type="button" class="rmt-node rmt-main-node" ${partial ? 'data-rmt-node="0"' : 'disabled'}><span>MAIN</span>${core_text.esc(main.label)} ${partial ? '' : '<em>LOCKED</em>'}</button></div>
         <div class="rmt-tree-trunk" aria-hidden="true"></div>
         <div class="rmt-tree-branches">${branchNodes}</div>
-        <div class="rmt-tree-ending"><button type="button" class="rmt-node true-ending ${endingIndex === session.selected ? 'active' : ''}" data-rmt-node="${endingIndex}"><span>Ω</span>${core_text.esc(ending.label)}</button></div>
+        <div class="rmt-tree-ending">${ending ? `<button type="button" class="rmt-node true-ending ${endingIndex === session.selected ? 'active' : ''}" data-rmt-node="${endingIndex}"><span>Ω</span>${core_text.esc(ending.label)}</button>` : '<p role="status">Ω 观测收尾尚未完成。</p>'}</div>
       </section>
       ${observationPanel}
     </div></div>`;
@@ -55,7 +58,8 @@ export function renderButterfly() {
 
 export function selectButterflyNode(index) {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.BUTTERFLY) return;
-    const next = Math.max(1, Math.min(Number(index) || 1, runtimeState.activeSession.nodes.length - 1));
+    const firstIndex = runtimeState.activeSession.readableProgress?.complete === false ? 0 : 1;
+    const next = Math.max(firstIndex, Math.min(Number(index) || firstIndex, runtimeState.activeSession.nodes.length - 1));
     if (runtimeState.butterflyTransitionTimer) clearTimeout(runtimeState.butterflyTransitionTimer);
     const signal = document.querySelector('[data-rmt-signal]');
     document.querySelectorAll(`#${core_constants.OVERLAY_ID} [data-rmt-node]`).forEach(button => { button.disabled = true; });

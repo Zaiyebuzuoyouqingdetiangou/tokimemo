@@ -117,6 +117,17 @@ export function normalizeAchievements(data, memoryBank, { allowPartial = false, 
     };
 }
 
+export function projectAchievementsProgress({ segments, memoryBank, previousSession }) {
+    const segment = segments.findLast(item => item.items('/entries').length);
+    if (!segment) return null;
+    const fresh = normalizeAchievements({ ...segment.value, entries: segment.items('/entries') }, memoryBank, {
+        allowPartial: true,
+        sourceMemoryIds: previousSession ? core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank, 'mode') : null,
+    });
+    if (!fresh.entries.length) return null;
+    return previousSession ? mergeAchievementsIncremental(previousSession, fresh, memoryBank) : fresh;
+}
+
 export function achievementMergeKey(item) {
     const title = core_text.normalizeText(item?.title, 100).trim().toLowerCase();
     return title || `${core_text.cleanArray(item?.sourceMemoryIds, 8, 40).sort().join(',')}|${core_text.normalizeText(item?.sourceMemoryAnchor, 160).toLowerCase()}`;

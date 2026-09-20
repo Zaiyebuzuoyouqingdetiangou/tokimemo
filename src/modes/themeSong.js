@@ -74,3 +74,56 @@ export async function generateThemeSong(context, memory, origin, taskKey, previo
     // Return only the new song. The normal cache CAS merges it into the latest collection.
     return { ...contract.emptyThemeSongs(memory, contextApi.currentCharacterRuntimeKey(context)), songs: [song], selectedId: song.id };
 }
+
+export function projectThemeSongProgress({ segments, memoryBank, context, previousSession, operation = {} }) {
+    let plan;
+    try { plan = validateThemeSongPlan(operation.themeSongPlan, memoryBank); }
+    catch { return null; }
+    const keys = { title: L.title, vocalDescription: L.vocal, styleDescription: L.description, stylePrompt: L.style, lyrics: L.lyrics };
+    const segment = segments.findLast(item => Object.keys(keys).some(key => item.has('/' + key)));
+    if (!segment) return null;
+    let song;
+    try { song = normalizeGeneratedSong(segment.value, plan, memoryBank); }
+    catch {
+        song = { id: plan.id, subject: plan.subject, subjectTitle: plan.subjectTitle, language: plan.language,
+            ...(plan.language === 'custom' ? { customLanguage: plan.customLanguage } : {}),
+            voice: plan.voice, singer: plan.singer, createdAt: plan.createdAt, sourceMemoryIds: plan.sourceMemoryIds,
+            sourceMemoryAnchor: plan.sourceMemoryAnchor, fiction: true, generationIncomplete: true };
+        for (const [key, maximum] of Object.entries(keys)) {
+            song[key] = '';
+            if (!segment.has('/' + key)) continue;
+            try {
+                const value = contract.songText(segment.value[key], maximum);
+                if (key !== 'stylePrompt' || !/[^\x09\x0a\x0d\x20-\x7e]/u.test(value)) song[key] = value;
+            } catch { /* Keep the unaccepted field in the original draft, never fabricate a replacement. */ }
+        }
+        if (!Object.keys(keys).some(key => song[key])) return null;
+    }
+    const session = previousSession ? structuredClone(previousSession)
+        : contract.emptyThemeSongs(memoryBank, contextApi.currentCharacterRuntimeKey(context));
+    session.songs = [...session.songs.filter(item => item.id !== song.id), song];
+    session.selectedId = song.id;
+    return session;
+}
+
+// This reader accepts an explicitly marked unfinished song, never a final saved song.
+export function readableThemeSongProgressSession(value, memory) {
+    try {
+        if (value?.readableProgress?.version !== 1 || value.readableProgress.complete !== false) return null;
+        const raw = contract.songData(value);
+        const completed = raw.songs.filter(song => song.generationIncomplete !== true);
+        contract.normalizeStoredThemeSongs({ ...raw, songs: completed }, memory);
+        const ids = new Set(completed.map(song => song.id));
+        for (const song of raw.songs.filter(song => song.generationIncomplete === true)) {
+            if (!/^SONG_[a-z0-9_-]{1,80}$/u.test(song.id || '') || ids.has(song.id) || song.fiction !== true
+                || !Object.hasOwn(contract.SONG_LANGUAGES, song.language) || !Object.hasOwn(contract.SONG_VOICES, song.voice)
+                || !['character', 'event'].includes(song.subject) || !Number.isFinite(song.createdAt)) return null;
+            ids.add(song.id);
+            if (song.language === 'custom') contract.customSongLanguage(song.customLanguage);
+            for (const [key, maximum] of Object.entries({ title: L.title, vocalDescription: L.vocal, styleDescription: L.description, stylePrompt: L.style, lyrics: L.lyrics }))
+                contract.songText(song[key], maximum);
+            if (/[^\x09\x0a\x0d\x20-\x7e]/u.test(song.stylePrompt || '')) return null;
+        }
+        return value;
+    } catch { return null; }
+}

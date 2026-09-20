@@ -309,6 +309,55 @@ ${JSON.stringify(compactEndingRoutesExisting(previous), null, 2)}
 - type 只能 route/romance/reverse/bond/open/personal。禁止前任、第三方恋爱、威胁和强迫。只输出 JSON。`;
 }
 
+export function projectEndingProgress({ segments = [], memoryBank, previousSession = null }) {
+    const segment = segments.find(item => /:(?:increment-)?outline$/u.test(item.slot));
+    if (!segment) return null;
+    const ids = (memoryBank?.memories || []).map(item => item.id);
+    let outline;
+    try { outline = normalizeEndingIncrementOutline({ ...segment.value, endings: [] }, memoryBank, ids); } catch { return null; }
+    const usedIds = new Set(previousSession?.endings?.map(item => item.id) || []);
+    const incremental = /:increment-outline$/u.test(segment.slot);
+    const endings = [];
+    for (const [index, raw] of segment.items('/endings').entries()) {
+        try {
+            const route = normalizeEndingIncrementOutline({ ...segment.value, endings: [{ ...raw,
+                id: raw.id || (incremental ? `END_NEW_${String(index + 1).padStart(2, '0')}` : `END${String(index + 1).padStart(2, '0')}`) }] }, memoryBank, ids).endings[0];
+            if (!route) continue;
+            if (incremental) route.id = core_incremental.uniqueGeneratedId(route.id, usedIds, 'END');
+            route.progressPending = route.available ? ['终章正文', '后日谈'] : [];
+            // Empty strings/arrays are absent stages, never generated filler prose.
+            route.epilogue.title = '';
+            const detail = segments.find(item => item.slot.endsWith(`${incremental ? ':increment-route:' : ':route:'}${route.id}`));
+            if (detail) {
+                const prefix = detail.value?.ending && typeof detail.value.ending === 'object' ? '/ending' : '';
+                const data = prefix ? detail.value.ending : detail.value;
+                try {
+                    if (detail.complete) {
+                        Object.assign(route, normalizeEndingRouteDetail(data, route));
+                        route.progressPending = [];
+                    }
+                } catch {}
+                if (route.progressPending.length && (!data.id || core_text.safeId(data.id, '') === route.id)) {
+                    if (detail.has(`${prefix}/endingScene`)) route.endingScene = core_text.normalizeText(data.endingScene, 12000);
+                    if (detail.has(`${prefix}/creditsLine`)) route.creditsLine = core_text.normalizeText(data.creditsLine, 600);
+                    route.epilogue = {
+                        title: core_text.normalizeText(data.epilogue?.title, 120), timeSkip: core_text.normalizeText(data.epilogue?.timeSkip, 200),
+                        scenes: detail.items(`${prefix}/epilogue/scenes`).map(scene => ({ title: core_text.normalizeText(scene.title, 120), text: core_text.normalizeText(scene.text, 5000) })).filter(scene => scene.text),
+                        finalLine: core_text.normalizeText(data.epilogue?.finalLine, 1200),
+                    };
+                }
+            }
+            endings.push(route);
+        } catch {}
+    }
+    const confession = segments.find(item => /:(?:increment-)?confession$/u.test(item.slot));
+    const confessionReplays = confession ? normalizeEndingConfessionReplays(confession.items('/confessionReplays'), memoryBank) : [];
+    return { ...outline, kind: core_constants.MODE.ENDING, endings, confessionReplays, relationshipHistory: [],
+        selectedId: endings.find(item => item.id === outline.recommendedEndingId)?.id || endings[0]?.id || '',
+        selectedConfessionId: confessionReplays[0]?.id || '', confessionLineIndex: 0, view: 'routes',
+        progressPending: [...(!segment.complete ? ['路线目录'] : []), ...(!confession?.complete ? ['告白扫描'] : [])] };
+}
+
 export function normalizeEndingIncrementOutline(data, memoryBank, sourceMemoryIds) {
     const relationshipState = core_text.normalizeText(data?.relationshipState, 120) || '关系继续发展';
     const relationshipSummary = core_text.normalizeText(data?.relationshipSummary, 2400);

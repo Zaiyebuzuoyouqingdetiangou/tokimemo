@@ -7,6 +7,7 @@ import { state as state } from '../core/state.js';
 import * as overlay from './overlay.js';
 import * as heartView from './heartView.js';
 import * as ui_workspaceState from './workspaceState.js';
+import * as recovery_view from './recoveryView.js';
 const labels = { morning:'早晨', noon:'白天', evening:'傍晚', night:'夜晚', weekend:'周末', birthday:'角色生日', userBirthday:'你的生日', holiday:'节日', absenceWorry:'久别关心', absenceSulky:'久别闹别扭', absenceJealous:'久别吃醋' };
 let reader = { owner: '', category: 'morning', index: 0 };
 function ownerKey(session) { return JSON.stringify([state.activeArchiveSnapshot?.entryId || '', session?.chatId || '', session?.archiveRevision || '']); }
@@ -28,6 +29,11 @@ export function renderLanguage() {
     const dialogue = values.length ? heartView.renderHeartScriptLines([{speaker:'char', text:values[index]}]) : '<div class="rmt-heart-empty">这个类别还没有台词。</div>';
     overlay.setBackVisible(true, '内容'); overlay.topTitle('基础语言'); overlay.setRegenerateVisible(false);
     overlay.bodyEl().innerHTML = `<section class="rmt-language-reader"><header class="rmt-workspace-section-head"><h2>基础语言</h2><span>已有 ${status.total} 句</span></header><label class="rmt-settings-field"><span>语言类别</span><select class="text_pole" data-rmt-language-category aria-label="选择语言类别">${options}</select></label>${dialogue}<div class="rmt-language-pager"><button type="button" class="rmt-btn" data-rmt-language-step="-1" ${values.length<2?'disabled':''}>上一句</button><span>${values.length ? `${index+1} / ${values.length}` : '尚未生成'}</span><button type="button" class="rmt-btn" data-rmt-language-step="1" ${values.length<2?'disabled':''}>下一句</button></div>${canGenerate ? `<div class="rmt-heart-top-actions"><button type="button" class="rmt-btn" data-rmt-action="heart-add-language">${values.length?'追加当前类别':'生成当前类别'}</button>${status.hasContent?'<button type="button" class="rmt-btn" data-rmt-action="heart-generate-language" data-rmt-heart-language-replace="1">重新生成全部基础语言</button>':''}</div>`:''}</section>`;
+    if (session.readableProgress?.complete === false) {
+        const body = overlay.bodyEl(), notice = recovery_view.readableProgressHtml(session);
+        if (typeof body.insertAdjacentHTML === 'function') body.insertAdjacentHTML('afterbegin', notice);
+        else body.innerHTML = notice + body.innerHTML;
+    }
     overlay.decorateReadOnlyModeUi(); return true;
 }
 export function handleLanguageClick(event) {

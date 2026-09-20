@@ -229,6 +229,47 @@ export async function generateItemsIncrementalWithRepair(context, memoryBank, ro
     return core_incremental.stampIncrementalCoverage(session, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
+export function projectItemsProgress({ segments, memoryBank, previousSession, operation = {} }) {
+    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previousSession, memoryBank, 'mode');
+    for (const segment of [...segments].reverse()) {
+        const containers = [];
+        const receivedNodes = path => {
+            const nodes = [];
+            for (let index = 0; ; index += 1) {
+                const itemPath = path + '/' + index, value = segment.at(itemPath);
+                if (!value || typeof value !== 'object') break;
+                if (segment.has(itemPath)) { nodes.push(value); continue; }
+                if (value.kind !== 'container' || !['kind', 'label', 'summary', 'line'].every(key => segment.has(itemPath + '/' + key))) continue;
+                const children = receivedNodes(itemPath + '/children');
+                if (children.length) nodes.push({ ...value, children });
+            }
+            return nodes;
+        };
+        // A parent container need not have closed for its earlier children to be readable.
+        for (let index = 0; ; index += 1) {
+            const path = '/containers/' + index, box = segment.at(path);
+            if (!box || typeof box !== 'object') break;
+            const nodes = receivedNodes(path + '/nodes');
+            if (!nodes.length) continue;
+            const raw = { containers: [{ ...box, nodes }] };
+            try {
+                const normalized = previousSession && operation.allowPersonaExpansion
+                    ? normalizeItemsIncrementPatch(raw, previousSession, memoryBank, sourceMemoryIds, { allowPersonaExpansion: true })
+                    : normalizeItems(raw, memoryBank);
+                containers.push(...normalized.containers);
+            } catch { /* Original raw data stays in recovery; only readable nodes are projected. */ }
+        }
+        if (!containers.length) continue;
+        const fresh = { kind: core_constants.MODE.ITEMS, title: segment.has('/title') ? core_text.normalizeText(segment.value.title, 100) : '他的物品',
+            containers, selectedContainerId: containers[0].id, selectedNodeId: containers[0].nodes[0]?.id || '', viewPath: [] };
+        if (!previousSession) return fresh;
+        return mergeItemsIncremental(previousSession, fresh, sourceMemoryIds, {
+            allowPersonaExpansion: operation.allowPersonaExpansion === true, memoryBank,
+        }).session;
+    }
+    return null;
+}
+
 export function selectedItemsContainer() {
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ITEMS) return null;
     return runtimeState.activeSession.containers.find(box => box.id === runtimeState.activeSession.selectedContainerId) || runtimeState.activeSession.containers[0] || null;

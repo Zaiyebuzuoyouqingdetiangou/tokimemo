@@ -25,6 +25,8 @@ export function pastLivesHtml(value, { readOnly = false, busy = false, notice = 
         if (session.kind !== MODE || session.version !== contract.PAST_LIVES_VERSION || !Array.isArray(session.episodes)) throw new Error('shape');
         const ui = contract.pastLivesReadingState(session);
         const selected = session.episodes.find(item => item.id === ui.selectedId);
+        const partial = session.readableProgress?.complete === false;
+        if (partial && !notice) notice = '未完成 · 已生成的引子、卷宗和回响已保留，后续内容仍待续生成。';
         const labels = contract.pastLivesLabels(selected?.presentation || session.presentation);
         const generate = readOnly ? '' : button('generate', busy ? '正在续写篇章…' : session.episodes.length ? '再写一篇番外' : '写下第一篇番外', '', busy ? 'disabled' : '');
         const header = `<header class="rmt-past-head"><div><small>另一段人生 · 此刻的你我</small><h2>前世今生</h2><p>${esc(session.characterName || '角色')} 与 ${esc(session.userName || '你')}的番外卷宗</p></div><div class="rmt-past-actions">${generate}</div></header>`;
@@ -57,13 +59,13 @@ export function pastLivesHtml(value, { readOnly = false, busy = false, notice = 
                     ${chosenClue ? `<article class="rmt-past-evidence" id="rmt-past-current-evidence"><small>${esc(clueLabel(chosenClue.kind))}${chosenClue.kind === 'testimony' ? ' · ' + esc(chosenClue.speaker === 'char' ? session.characterName : chosenClue.speaker === 'user' ? session.userName : '卷内记述') : ''} · 虚构</small><h3>${esc(chosenClue.title)}</h3>${paragraphs(chosenClue.text)}${chosenClue.kind === 'missing' ? readIds.has(chosenClue.id)
                         ? `<div class="rmt-past-revealed" role="status"><small>字迹已显</small>${paragraphs(chosenClue.revealedText)}</div>`
                         : button('reveal', labels.missing, chosenClue.id) : ''}</article>` : dossier.clues.length ? '<p class="rmt-past-hint">选一件线索，读它留下的痕迹。</p>' : '<p class="rmt-past-hint">这一卷的文字已经完整，无需额外寻证。</p>'}`
-                    : '<article class="rmt-past-paper"><h3>这一篇，写在引子与回响之间</h3><p>没有另设卷宗，可继续读今生回响。</p></article>';
+                    : partial ? '<article class="rmt-past-paper"><h3>卷宗尚未完成</h3><p>已生成的引子仍可阅读。</p></article>' : '<article class="rmt-past-paper"><h3>这一篇，写在引子与回响之间</h3><p>没有另设卷宗，可继续读今生回响。</p></article>';
                 scene += `<div class="rmt-past-actions">${button('tab', '看看今生回响', 'echoes')}${button('read-all', '略过探索，读完整旁批')}</div>`;
             } else if (ui.view === 'echoes') {
-                scene = `<div class="rmt-past-echoes">${selected.echoes.map(echo => `<article class="rmt-past-echo"><small>${echo.kind === 'memory' ? '今生真实记忆' : '未来的一种可能'}</small><h3>${esc(echo.title)}</h3>${paragraphs(echo.text)}${echo.reflection ? `<div class="rmt-past-reflection">${paragraphs(echo.reflection)}</div>` : ''}${echo.kind === 'memory' ? `<details class="rmt-past-source"><summary>记忆来源</summary><p>${esc(echo.sourceMemoryAnchor)}</p><small>${esc(echo.sourceMemoryIds.join(' · '))}</small></details>` : ''}</article>`).join('') || '<article class="rmt-past-paper"><h3>让回声停在纸上</h3><p>这一篇没有另写今生回响，也没有把虚构故事当成已经应验的往事。</p></article>'}</div><div class="rmt-past-actions">${button('tab', `翻到${labels.closing}`, 'closing')}</div>`;
+                scene = `<div class="rmt-past-echoes">${selected.echoes.map(echo => `<article class="rmt-past-echo"><small>${echo.kind === 'memory' ? '今生真实记忆' : '未来的一种可能'}</small><h3>${esc(echo.title)}</h3>${paragraphs(echo.text)}${echo.reflection ? `<div class="rmt-past-reflection">${paragraphs(echo.reflection)}</div>` : ''}${echo.kind === 'memory' ? `<details class="rmt-past-source"><summary>记忆来源</summary><p>${esc(echo.sourceMemoryAnchor)}</p><small>${esc(echo.sourceMemoryIds.join(' · '))}</small></details>` : ''}</article>`).join('') || (partial ? '<article class="rmt-past-paper"><h3>今生回响尚未完成</h3><p>已生成的引子与卷宗仍可阅读。</p></article>' : '<article class="rmt-past-paper"><h3>让回声停在纸上</h3><p>这一篇没有另写今生回响，也没有把虚构故事当成已经应验的往事。</p></article>')}</div><div class="rmt-past-actions">${button('tab', `翻到${labels.closing}`, 'closing')}</div>`;
             } else {
                 scene = `<article class="rmt-past-closing"><small>${esc(labels.closing)} · 今生仍可选择</small><h3>${esc(selected.title)}</h3>${ui.pastLivesClosing
-                    ? `${paragraphs(selected.closing.text)}<footer>${esc(selected.closing.signature || session.characterName)}</footer>`
+                    ? selected.closing ? `${paragraphs(selected.closing.text)}<footer>${esc(selected.closing.signature || session.characterName)}</footer>` : '<p role="status">落款尚未完成。</p>'
                     : `<p>卷宗读到这里，留下最后一处字迹。</p>${button('closing', `读${labels.closing}`)}`}</article>`;
             }
             content = `<div class="rmt-past-actions rmt-past-reader-back">${button('library', '返回篇章架')}<span>${esc(selected.title)}</span></div>${tabs}<div class="rmt-past-reader"><div class="rmt-past-main">${scene}</div><aside class="rmt-past-margin" aria-label="${esc(labels.annotation)}"><h3>${esc(labels.annotation)}</h3>${annotationHtml || '<p class="rmt-past-hint">这页暂未留下旁批。</p>'}${hiddenCount ? `<p class="rmt-past-hint">线索里还藏着 ${hiddenCount} 处补记；也可直接读完整旁批。</p>` : ''}${allClues.length && !ui.pastLivesClosing ? button('read-all', '读完整旁批') : ''}</aside></div>`;
@@ -77,18 +79,22 @@ export function assertShownPastLivesTarget() {
     if (runtimeState.activeMode !== MODE || shown?.kind !== MODE) throw new Error('前世今生已关闭。');
     const snapshot = runtimeState.activeArchiveSnapshot;
     if (snapshot) {
-        if (shown.chatId !== snapshot.chatId || shown.archiveRevision !== snapshot.memory?.archiveRevision
-            || shown.characterName !== snapshot.memory?.characterName || shown.userName !== snapshot.memory?.userName)
+        if (shown.chatId !== snapshot.chatId || shown.archiveRevision !== snapshot.memory?.archiveRevision)
             throw new Error('显示的番外与目标档案不一致，请重新打开。');
-        return { memory: snapshot.memory, context: null };
+        const source = cache.generationPageReadingSource(shown, MODE, snapshot.memory);
+        if (source.session.characterName !== source.memoryBank?.characterName || source.session.userName !== source.memoryBank?.userName)
+            throw new Error('显示的番外与原生成资料不一致，请重新打开。');
+        return { memory: source.memoryBank, session: source.session, context: null };
     }
     const context = contextApi.currentCharacterGuard();
     const memory = repository.requireArchive(context);
     if (shown.chatId !== memory.chatId || shown.archiveRevision !== memory.archiveRevision
-        || shown.characterName !== memory.characterName || shown.userName !== memory.userName
         || (shown.ownerKey && shown.ownerKey !== contextApi.currentCharacterRuntimeKey(context)))
         throw new Error('聊天或角色已切换，请重新打开对应番外。');
-    return { memory, context };
+    const source = cache.generationPageReadingSource(shown, MODE, memory);
+    if (source.session.characterName !== source.memoryBank?.characterName || source.session.userName !== source.memoryBank?.userName)
+        throw new Error('显示的番外与原生成资料不一致，请重新打开。');
+    return { memory: source.memoryBank, session: source.session, context };
 }
 
 export function renderPastLives() {
@@ -99,11 +105,12 @@ export function renderPastLives() {
     const body = overlay.bodyEl();
     if (!body) return;
     try {
-        const { memory, context } = assertShownPastLivesTarget();
-        if (!pastLives.readablePastLivesSession(runtimeState.activeSession, memory)) throw new Error('这份番外暂不可读取，原记录保持不变。');
+        const { memory, session, context } = assertShownPastLivesTarget();
+        if (!(session.readableProgress?.complete === false ? pastLives.readablePastLivesProgressSession(session, memory)
+            : pastLives.readablePastLivesSession(session, memory))) throw new Error('这份番外暂不可读取，原记录保持不变。');
         const stored = runtimeState.activeArchiveSnapshot?.cache || (context ? cache.getCache(context) : null);
         const recovery = stored ? recoveryView.recoveryBannerHtml({ ...stored, __generationRecoveryV1: { [MODE]: stored.__generationRecoveryV1?.[MODE] } }, memory, { readOnly: readonly() }) : '';
-        body.innerHTML = recovery + pastLivesHtml(runtimeState.activeSession, { readOnly: readonly(), busy: coordinator.isModeGenerating(MODE, context) });
+        body.innerHTML = recovery + pastLivesHtml(session, { readOnly: readonly(), busy: coordinator.isModeGenerating(MODE, context) });
     } catch (error) {
         body.innerHTML = `<section class="rmt-past-lives"><h2>前世今生</h2><p role="status">${esc(text.safeErrorSummary(error))}</p></section>`;
     }

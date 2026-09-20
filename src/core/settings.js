@@ -101,9 +101,9 @@ export function updatePluginSettings(patch) {
         runtimeState.apiConfigurationEpoch += 1;
         runtimeState.connectionModelCache.clear();
         runtimeState.connectionModelRequestEpochs.clear();
-        for (const task of runtimeState.activeGenerationTasks.values()) {
-            try { task?.controller?.abort?.(new DOMException('API configuration changed', 'AbortError')); } catch {}
-        }
+        // An already dispatched request owns its captured connection. Let its
+        // paid response finish; subsequent requests read the newly saved API.
+        // Explicit cancellation and runtime teardown retain their own signals.
     }
     return normalized;
 }

@@ -47,7 +47,7 @@ export function baiBaiImageState() {
         }
         const status = api.getBackendStatus();
         if (status?.configured !== true) return { available: false, detected: true, reason: MESSAGES.BBI_NOT_CONFIGURED, code: 'BBI_NOT_CONFIGURED' };
-        return { api, supportsCharacters: status.supportsCharacters === true,
+        return { api, backend: status.backend, supportsCharacters: status.supportsCharacters === true,
             available: true, detected: true, reason: '柏宝绘已连接 · API v1', code: '' };
     } catch {
         return { available: false, detected: false, reason: MESSAGES.BBI_BACKEND_ERROR, code: 'BBI_BACKEND_ERROR' };
@@ -104,7 +104,7 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
         request.characters = metadata.characters.filter(character => character.tag)
             .map(({ name, tag, nl }) => ({ name, tag, ...(nl ? { nl } : {}) }));
     }
-    const formatted = appearance.formattedCgProviderPrompts(visual, metadata, state.supportsCharacters);
+    const formatted = appearance.formattedCgProviderPrompts(visual, metadata, state.supportsCharacters, state.backend);
     if (formatted) {
         request.prompt = formatted.prompt; request.nl = formatted.nl;
         if (formatted.characters) request.characters = formatted.characters;

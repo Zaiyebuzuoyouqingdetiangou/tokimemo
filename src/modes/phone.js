@@ -914,6 +914,66 @@ export function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, so
     };
 }
 
+export function projectPhoneProgress({ segments = [], memoryBank, previousSession = null, contentInputs = {}, frozenInputs = {}, operation = {} }) {
+    const previous = contentInputs.previousSession ?? previousSession;
+    const presentation = frozenInputs['presentation:phone'] || {};
+    let plan = contentInputs.phoneDraft?.plan || null;
+    let incremental = false;
+    for (const segment of segments) {
+        if (!segment.has('') || !/(?:^|:)(?:increment-)?plan$/.test(segment.slot || '')) continue;
+        try {
+            incremental = /:increment-plan$/.test(segment.slot);
+            plan = incremental && previous ? normalizePhoneIncrementPlan(segment.value, previous)
+                : normalizePhonePlan(segment.value, memoryBank, { worldPresentation: presentation.profile || null });
+        } catch { /* A directory must pass its unchanged production contract. */ }
+    }
+    if (!plan && previous && operation.fillMissing === true) plan = { ...previous, apps: previous.apps || [] };
+    if (!plan) return null;
+    const accepted = new Map();
+    const sourceIds = incremental ? core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode') : null;
+    for (const segment of segments) {
+        if (/(?:^|:)(?:increment-)?plan$/.test(segment.slot || '')) continue;
+        const raw = segment.at?.('/app') || segment.value || {};
+        const planApp = plan.apps.find(app => app.id === raw?.id);
+        if (!planApp) continue;
+        const rows = segment.items(segment.at?.('/app') ? '/app/entries' : '/entries');
+        for (const row of rows) {
+            const planned = planApp.entries.find(entry => entry.id === row?.id);
+            if (!planned) continue;
+            try {
+                const app = normalizePhoneDraftApp({ ...raw, entries: [row] }, { ...planApp, entries: [planned] }, memoryBank, plan.deviceKind,
+                    sourceIds, { controlledEvidence: presentation.settingEvidence || '', requireLifestyleContent: !incremental, allowPartial: false });
+                const entry = app.entries[0];
+                if (!entry || isUnavailablePhoneEntry(entry)) continue;
+                const prior = accepted.get(app.id);
+                if (prior) { if (!prior.entries.some(item => item.id === entry.id)) prior.entries.push(entry); }
+                else accepted.set(app.id, { ...app, entries: [entry], omittedEntryIds: [] });
+            } catch { /* One invalid sibling cannot hide a validated, closed entry. */ }
+        }
+    }
+    if (!accepted.size) return null;
+    const apps = [...accepted.values()];
+    if (previous && incremental) {
+        try { return mergePhoneIncremental(previous, apps, memoryBank, { controlledEvidence: presentation.settingEvidence || '' }).session; }
+        catch { return null; }
+    }
+    const session = previous ? structuredClone(previous) : {
+        ...structuredClone(plan), kind: core_constants.MODE.PHONE, ownerName: phoneConversationOwnerName(memoryBank),
+        selectedAppId: apps[0].id, selectedEntryId: '', view: 'home', apps: [] };
+    for (const app of apps) {
+        const old = session.apps.find(item => item.id === app.id);
+        if (old) {
+            for (const entry of app.entries) {
+                const index = old.entries.findIndex(item => item.id === entry.id);
+                if (index < 0) old.entries.push(entry);
+                else if (isUnavailablePhoneEntry(old.entries[index])) old.entries[index] = entry;
+            }
+        } else session.apps.push(app);
+    }
+    session.chatId = memoryBank.chatId; session.archiveRevision = memoryBank.archiveRevision;
+    return session;
+}
+
 export async function generatePhoneWithRepair(context, memoryBank, origin, taskKey, options = {}) {
     const roomSession = core_cache.loadSession(core_constants.MODE.ROOM, { context, chatId: core_context.getChatId(context), memoryBank, clone: false });
     const resumeDraft = options.continueDraft === true ? core_cache.loadPhoneGenerationDraft(context, memoryBank) : null;

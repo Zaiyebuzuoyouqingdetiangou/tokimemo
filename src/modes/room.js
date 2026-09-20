@@ -7,6 +7,7 @@ import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
+import * as core_participants from '../core/participants.js';
 import * as core_narrativeAuthority from '../core/narrativeAuthority.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
@@ -18,6 +19,7 @@ import * as generation_prompts from '../generation/prompts.js';
 import * as generation_recovery from '../generation/recovery.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as room_interior from '../ui/roomInterior.js';
+import * as recovery_view from '../ui/recoveryView.js';
 
 const ROOM_VISUAL_PROFILE_VERSION = 1;
 const ROOM_VISUAL_VALUES = Object.freeze({
@@ -429,7 +431,33 @@ export function normalizeRoom(data, memoryBank, options = {}) {
     }
 }
 
-function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentation = null, controlledEvidence = null, characterEvidence = null, relaxStructure = false } = {}) {
+function normalizeRoomSpaceObjects(rawObjects, spaceId, memoryBank, participantSnapshot = null) {
+    const userName = core_text.normalizeText(memoryBank?.userName, 120), usedObjectIds = new Set();
+    return rawObjects.slice(0, 8).map((item, objectIndex) => {
+        const basis = core_constants.ROOM_BASIS_VALUES.has(item?.basis) ? item.basis : '设定';
+        const label = core_text.normalizeText(item?.label, 60) || `角落 ${objectIndex + 1}`;
+        const description = core_text.normalizeText(item?.description, 1600);
+        const line = core_text.normalizeText(item?.line, 800);
+        if (basis !== '记忆' && [label, description, line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) return null;
+        const reference = basis === '记忆'
+            ? core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, `${item?.label || ''}\n${description}\n${line}`, memoryBank, 1)
+            : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
+        const sourceMemoryIds = reference.sourceMemoryIds;
+        const fallbackObjectId = `${spaceId}_OBJ${String(objectIndex + 1).padStart(2, '0')}`;
+        let objectId = core_text.safeId(item?.id, fallbackObjectId);
+        if (usedObjectIds.has(objectId)) objectId = fallbackObjectId;
+        while (usedObjectIds.has(objectId)) objectId = `${fallbackObjectId}_${usedObjectIds.size + 1}`;
+        usedObjectIds.add(objectId);
+        return { id: objectId, label,
+            zone: core_constants.ROOM_ZONE_VALUES.has(item?.zone) ? item.zone : ['左上', '右上', '左下', '右下', '中央', '近景'][objectIndex % 6],
+            basis, searchable: core_evidence.isSearchableRoomObject(item), description, line,
+            ...(participantSnapshot ? { speakerId: roomParticipantId(participantSnapshot, item?.speakerId, !participantSnapshot.people.length) } : {}),
+            sourceMemoryIds, sourceMemoryAnchor: reference.sourceMemoryAnchor };
+    }).filter(item => item && item.description && item.line && (item.basis !== '记忆' || (item.sourceMemoryIds.length >= 1 && item.sourceMemoryAnchor)));
+}
+
+function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentation = null, controlledEvidence = null, characterEvidence = null, relaxStructure = false, participantSnapshot = null } = {}) {
+    participantSnapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
     // Minimums for the character's own space. Truth-claim checks below ignore this entirely.
     const minObjects = 1;
     const minSpaces = 1;
@@ -444,36 +472,7 @@ function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentati
         while (usedSpaceIds.has(spaceId)) spaceId = `${fallbackSpaceId}_${usedSpaceIds.size + 1}`;
         usedSpaceIds.add(spaceId);
         const rawObjects = Array.isArray(space?.objects) ? space.objects : [];
-        const usedObjectIds = new Set();
-        const objects = rawObjects.slice(0, 8).map((item, objectIndex) => {
-            const basis = core_constants.ROOM_BASIS_VALUES.has(item?.basis) ? item.basis : '设定';
-            const label = core_text.normalizeText(item?.label, 60) || `角落 ${objectIndex + 1}`;
-            const description = core_text.normalizeText(item?.description, 1600);
-            const line = core_text.normalizeText(item?.line, 800);
-            if (basis !== '记忆' && [label, description, line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) return null;
-            const reference = basis === '记忆'
-                ? core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, `${item?.label || ''}
-${description}
-${line}`, memoryBank, 1)
-                : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
-            const sourceMemoryIds = reference.sourceMemoryIds;
-            const fallbackObjectId = `${spaceId}_OBJ${String(objectIndex + 1).padStart(2, '0')}`;
-            let objectId = core_text.safeId(item?.id, fallbackObjectId);
-            if (usedObjectIds.has(objectId)) objectId = fallbackObjectId;
-            while (usedObjectIds.has(objectId)) objectId = `${fallbackObjectId}_${usedObjectIds.size + 1}`;
-            usedObjectIds.add(objectId);
-            return {
-                id: objectId,
-                label,
-                zone: core_constants.ROOM_ZONE_VALUES.has(item?.zone) ? item.zone : ['左上', '右上', '左下', '右下', '中央', '近景'][objectIndex % 6],
-                basis,
-                searchable: core_evidence.isSearchableRoomObject(item),
-                description,
-                line,
-                sourceMemoryIds,
-                sourceMemoryAnchor: reference.sourceMemoryAnchor,
-            };
-        }).filter(item => item && item.description && item.line && (item.basis !== '记忆' || (item.sourceMemoryIds.length >= 1 && item.sourceMemoryAnchor)));
+        const objects = normalizeRoomSpaceObjects(rawObjects, spaceId, memoryBank, participantSnapshot);
         const requestedAtmosphere = core_text.normalizeText(space?.atmosphere, 1800);
         return {
             id: spaceId,
@@ -503,7 +502,7 @@ ${line}`, memoryBank, 1)
 
     const spaceById = new Map(spaces.map(space => [space.id, space]));
     const dayparts = {};
-    for (const key of core_constants.ROOM_DAYPART_KEYS) {
+    for (const key of participantSnapshot ? [] : core_constants.ROOM_DAYPART_KEYS) {
         const raw = data?.dayparts?.[key] || {};
         const rawSpaceId = core_text.safeId(raw?.spaceId, '');
         const space = spaceById.get(rawSpaceId) || spaces[0];
@@ -517,7 +516,7 @@ ${line}`, memoryBank, 1)
         }
         dayparts[key] = { spaceId: space.id, activity, line, focusObjectId };
     }
-    const presenceLines = core_text.cleanArray(data?.presenceLines, 12, 900)
+    const presenceLines = core_text.cleanArray(participantSnapshot ? [] : data?.presenceLines, 12, 900)
         .filter(line => !roomNarrativeClaimsSharedHistory(line, userName));
     if (presenceLines.length < minPresenceLines) throw new Error(`“他的房间”角色互动台词不足：${presenceLines.length} 句，至少需要 ${minPresenceLines} 句。`);
     const initialDaypart = roomDaypartState();
@@ -546,11 +545,16 @@ ${line}`, memoryBank, 1)
         selectedSpaceId: initialSpace.id,
         selectedObjectId: initialSpace.objects[0]?.id || '',
         presenceIndex: 0,
+        ...(participantSnapshot ? {
+            participantSnapshot,
+            residents: normalizeRoomResidents(data?.residents, participantSnapshot, spaces, memoryBank, { identityKey, worldPresentation }),
+            selectedParticipantId: '',
+        } : {}),
     };
 }
 
 // Paths are code-owned arrays. Neither model keys nor raw exception messages become diagnostics.
-export function roomCandidateRepairSlots(data, memoryBank) {
+export function roomCandidateRepairSlots(data, memoryBank, options = {}) {
     const slots = [];
     const check = (path, value, history = true) => {
         if (!core_text.normalizeText(value, 6000) || history && roomNarrativeClaimsSharedHistory(value, memoryBank?.userName)) {
@@ -562,10 +566,17 @@ export function roomCandidateRepairSlots(data, memoryBank) {
             for (const key of ['label', 'description', 'line']) check(['spaces', i, 'objects', j, key], item?.[key], item?.basis !== '记忆');
         });
     });
-    for (const key of core_constants.ROOM_DAYPART_KEYS) {
+    for (const key of options.participantSnapshot ? [] : core_constants.ROOM_DAYPART_KEYS) {
         for (const field of ['activity', 'line']) check(['dayparts', key, field], data?.dayparts?.[key]?.[field]);
     }
-    for (let i = 0; i < Math.min(12, data?.presenceLines?.length || 0); i++) check(['presenceLines', i], data?.presenceLines?.[i]);
+    if (options.participantSnapshot) {
+        (Array.isArray(data?.residents) ? data.residents : []).forEach((resident, index) => {
+            for (const key of core_constants.ROOM_DAYPART_KEYS) {
+                for (const field of ['activity', 'line']) check(['residents', index, 'dayparts', key, field], resident?.dayparts?.[key]?.[field]);
+            }
+            (Array.isArray(resident?.presenceLines) ? resident.presenceLines : []).forEach((line, i) => check(['residents', index, 'presenceLines', i], line));
+        });
+    } else for (let i = 0; i < Math.min(12, data?.presenceLines?.length || 0); i++) check(['presenceLines', i], data?.presenceLines?.[i]);
     return slots;
 }
 
@@ -590,12 +601,87 @@ export function applyRoomTextRepairs(candidate, slots, response) {
     return result;
 }
 
+export function projectRoomProgress({ segments = [], memoryBank, previousSession = null, contentInputs = {}, frozenInputs = {}, pageId = 'room', operation = {}, createdAt = 0 }) {
+    const previous = contentInputs.previousSession || contentInputs.roomSession || previousSession;
+    const presentation = frozenInputs['presentation:room'] || {};
+    const snapshot = frozenInputs['participants:room'] || previous?.participantSnapshot || null;
+    const options = { worldPresentation: presentation.profile, controlledEvidence: presentation.settingEvidence,
+        characterEvidence: presentation.characterEvidence, participantSnapshot: snapshot };
+    let session = previous ? structuredClone(previous) : { kind: core_constants.MODE.ROOM, roomVersion: core_constants.ROOM_SESSION_VERSION,
+        title: '他的房间', homeName: '', homeSummary: '', spaces: [], pets: [], dayparts: {}, presenceLines: [], residents: [],
+        visualProfile: normalizeRoomVisualProfile({}), selectedSpaceId: '', selectedObjectId: '', presenceIndex: 0,
+        ...(snapshot ? { participantSnapshot: structuredClone(snapshot), selectedParticipantId: '' } : {}) };
+    let added = false;
+    if (pageId === 'roomLife') {
+        const blueprint = frozenInputs['room:daily-blueprint'] || contentInputs.roomSession || previous;
+        if (!blueprint?.spaces?.length || !/^\d{4}-\d{2}-\d{2}$/.test(operation.dateKey || '')) return null;
+        const beats = segments.flatMap(segment => segment.items('/beats'));
+        const accepted = [];
+        for (const beat of beats) {
+            try {
+                const actors = snapshot && Array.isArray(beat.participants)
+                    ? { ...snapshot, people: snapshot.people.filter(person => beat.participants.some(row => row.participantId === person.id)) } : snapshot;
+                const plan = normalizeRoomLifePlan({ beats: [beat] }, blueprint, memoryBank, new Date(`${operation.dateKey}T12:00:00`), { participantSnapshot: actors });
+                accepted.push(...plan.beats);
+            } catch { /* A closed life node retains its original evidence checks. */ }
+        }
+        if (!accepted.length) return null;
+        session = { ...structuredClone(blueprint), lifePlan: { dateKey: operation.dateKey, archiveRevision: memoryBank.archiveRevision,
+            generatedAt: createdAt, beats: accepted.sort((a, b) => a.minute - b.minute), ...(snapshot ? { participantSnapshot: structuredClone(snapshot) } : {}) } };
+        added = true;
+    } else for (const segment of segments) {
+        if (segment.has('')) {
+            try { session = normalizeRoom(segment.value, memoryBank, options); added = true; continue; } catch { /* Project valid units below. */ }
+        }
+        for (let index = 0; index < 10; index++) {
+            const path = `/spaces/${index}`, raw = segment.at?.(path);
+            if (!raw || !segment.has(`${path}/id`) || !segment.has(`${path}/label`)) continue;
+            const id = core_text.safeId(raw.id, '');
+            if (!id) continue;
+            let objects;
+            try { objects = normalizeRoomSpaceObjects(segment.items(`${path}/objects`), id, memoryBank, snapshot); } catch { continue; }
+            if (!objects.length) continue;
+            const old = session.spaces.find(space => space.id === id);
+            const space = old || { id, label: core_text.normalizeText(raw.label, 60), spaceType: core_text.normalizeText(raw.spaceType, 80) || core_text.normalizeText(raw.label, 60),
+                atmosphere: segment.has(`${path}/atmosphere`) && !roomNarrativeClaimsSharedHistory(raw.atmosphere, memoryBank.userName) ? core_text.normalizeText(raw.atmosphere, 1800) : '', objects: [] };
+            for (const item of objects) if (!space.objects.some(saved => saved.id === item.id)) space.objects.push(item);
+            if (!old) session.spaces.push(space);
+            added = true;
+        }
+        if (snapshot && session.spaces.length) for (const resident of segment.items('/residents')) {
+            const person = snapshot.people.find(row => row.id === resident?.participantId);
+            if (!person) continue;
+            try {
+                const normalized = normalizeRoomResidents([resident], { ...snapshot, people: [person] }, session.spaces, memoryBank, options)[0];
+                const index = (session.residents || []).findIndex(row => row.participantId === person.id);
+                session.residents ||= [];
+                if (index < 0) session.residents.push(normalized); else session.residents[index] = normalized;
+                added = true;
+            } catch { /* Incomplete resident remains pending; no substitute dialogue. */ }
+        }
+        if (previous && segment.items('/additions').length) {
+            for (const addition of segment.items('/additions')) try {
+                const ids = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+                const fresh = normalizeRoomIncrementPatch({ additions: [addition] }, previous, memoryBank, ids, { ...options, allowPersonaExpansion: operation.allowPersonaExpansion });
+                session = mergeRoomIncremental(session, fresh, ids, { memoryBank, allowPersonaExpansion: operation.allowPersonaExpansion }).session; added = true;
+            } catch { /* Invalid additions do not suppress other closed items. */ }
+        }
+    }
+    if (!added || !session.spaces.length) return null;
+    session.selectedSpaceId ||= session.spaces[0].id; session.selectedObjectId ||= session.spaces[0].objects[0]?.id || '';
+    session.kind = core_constants.MODE.ROOM; session.chatId = memoryBank.chatId; session.archiveRevision = memoryBank.archiveRevision;
+    return session;
+}
+
 export async function generateRoomWithRepair(context, memoryBank, origin, taskKey, options = {}) {
+    const participantSnapshot = core_participants.normalizeParticipantSnapshot(options.participantSnapshot);
     const presentation = options.presentationContext || {};
     const request = options.request || generation_client.requestValidatedSegment;
     const normalizeOptions = { identityKey: core_context.currentCharacterRuntimeKey(context), worldPresentation: presentation.profile,
-        controlledEvidence: presentation.settingEvidence, characterEvidence: presentation.characterEvidence };
-    const prompt = generation_prompts.PROMPTS[core_constants.MODE.ROOM](context, memoryBank)
+        controlledEvidence: presentation.settingEvidence, characterEvidence: presentation.characterEvidence, participantSnapshot };
+    const prompt = (participantSnapshot
+        ? generation_prompts.multiplayerRoomPrompt(context, memoryBank, participantSnapshot, ROOM_VISUAL_VALUES)
+        : generation_prompts.PROMPTS[core_constants.MODE.ROOM](context, memoryBank))
         + '\nCONTROLLED_WORLD_PRESENTATION_JSON:\n' + JSON.stringify(presentation.profile || {});
     const requestOptions = { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], context, contextEnvelope: presentation.contextEnvelope, origin, taskKey, mode: core_constants.MODE.ROOM, background: true };
     let raw = await request(prompt, '他的房间 · 正在整理空间…', requestOptions, value => {
@@ -609,7 +695,7 @@ export async function generateRoomWithRepair(context, memoryBank, origin, taskKe
         }
         return value;
     });
-    const slots = roomCandidateRepairSlots(raw, memoryBank);
+    const slots = roomCandidateRepairSlots(raw, memoryBank, { participantSnapshot });
     // Small fixed groups keep feedback/repair output bounded; good fields are never regenerated.
     for (let offset = 0; offset < slots.length; offset += 6) {
         const group = slots.slice(offset, offset + 6);
@@ -620,7 +706,7 @@ export async function generateRoomWithRepair(context, memoryBank, origin, taskKe
         '他的房间 · 只补齐待确认字段…', { ...requestOptions, maxTokens: 3000, taskKey: taskKey + ':fields:' + offset },
         value => {
             const repaired = applyRoomTextRepairs(raw, group, value);
-            const unresolved = new Set(roomCandidateRepairSlots(repaired, memoryBank).map(slot => JSON.stringify(slot.path)));
+            const unresolved = new Set(roomCandidateRepairSlots(repaired, memoryBank, { participantSnapshot }).map(slot => JSON.stringify(slot.path)));
             if (group.some(slot => unresolved.has(JSON.stringify(slot.path)))) throw core_text.safeUserError('房间待补字段仍不能确认。', 'RMT_ROOM_FIELDS');
             return repaired;
         });
@@ -629,7 +715,7 @@ export async function generateRoomWithRepair(context, memoryBank, origin, taskKe
     for (;;) {
         try { return normalizeRoom(raw, memoryBank, normalizeOptions); }
         catch (error) {
-            const field = 'spaces';
+            const field = participantSnapshot && error?.participantField === 'residents' ? 'residents' : 'spaces';
             if (repairedGroups.has(field) || repairedGroups.size >= 2) throw error;
             repairedGroups.add(field);
             raw = await request(prompt + '\n【最终局部修复】仅返回 {"' + field + '":修复后的该字段完整值}。其他已通过字段由本地保留。'
@@ -639,10 +725,10 @@ export async function generateRoomWithRepair(context, memoryBank, origin, taskKe
             value => {
                 if (!Array.isArray(value?.[field])) throw core_text.safeUserError('房间局部修复不完整。', 'RMT_ROOM_FIELDS');
                 const repaired = { ...raw, [field]: value[field] };
-                if (roomCandidateRepairSlots(repaired, memoryBank).length) throw core_text.safeUserError('房间局部修复仍有无据描述。', 'RMT_ROOM_FIELDS');
+                if (roomCandidateRepairSlots(repaired, memoryBank, { participantSnapshot }).length) throw core_text.safeUserError('房间局部修复仍有无据描述。', 'RMT_ROOM_FIELDS');
                 try { normalizeRoom(repaired, memoryBank, normalizeOptions); }
                 catch (nextError) {
-                    const nextField = 'spaces';
+                    const nextField = participantSnapshot && nextError?.participantField === 'residents' ? 'residents' : 'spaces';
                     if (nextField === field || repairedGroups.has(nextField)) throw nextError;
                     // This group passed; the other group can be repaired once next. Nothing commits here.
                 }
@@ -798,6 +884,7 @@ export function mergeRoomIncremental(previous, fresh, sourceMemoryIds, { memoryB
 }
 
 export async function refreshRoomFigure(context, memoryBank, origin, taskKey, previous, options = {}) {
+    if (options.participantSnapshot) return refreshRoomParticipantFigures(context, memoryBank, origin, taskKey, previous, options);
     const presentation = options.presentationContext || {};
     const request = options.request || generation_client.requestValidatedSegment;
     const visualProfile = await request(
@@ -813,6 +900,7 @@ export async function refreshRoomFigure(context, memoryBank, origin, taskKey, pr
 }
 
 export async function generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previous, options = {}) {
+    if (options.participantSnapshot) return generateRoomParticipantsIncrement(context, memoryBank, origin, taskKey, previous, options);
     const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
     const presentationContext = options.presentationContext || {};
     const worldPresentation = previous?.worldPresentation || presentationContext.profile
@@ -884,7 +972,8 @@ export function roomBlueprintPayload(session) {
     };
 }
 
-export function roomLifePrompt(context, session, memoryBank, date = new Date()) {
+export function roomLifePrompt(context, session, memoryBank, date = new Date(), options = {}) {
+    if (options.participantSnapshot) return roomParticipantsLifePrompt(context, session, memoryBank, date, options.participantSnapshot);
     const dateKey = localDateKey(date);
     const weekday = new Intl.DateTimeFormat('zh-CN', { weekday: 'long' }).format(date);
     const referencedMemoryIds = [...new Set([
@@ -992,7 +1081,8 @@ function roomLifeNarrativeEvidenceState(beat, memoryBank) {
     return { safe, reference, activity, line, ambient, trace, temporaryObjects };
 }
 
-export function normalizeRoomLifePlan(data, session, memoryBank, expectedDate) {
+export function normalizeRoomLifePlan(data, session, memoryBank, expectedDate, options = {}) {
+    if (options.participantSnapshot) return normalizeRoomParticipantsLifePlan(data, session, memoryBank, expectedDate, options.participantSnapshot);
     const dateKey = localDateKey(expectedDate);
     const spaceById = new Map(session.spaces.map(space => [space.id, space]));
     const raw = Array.isArray(data?.beats) ? data.beats : [];
@@ -1042,6 +1132,16 @@ export function fallbackRoomLifePlan(session, date = new Date()) {
         ['17:30', 'evening'],
         ['22:30', 'night'],
     ];
+    if (session.participantSnapshot) {
+        const snapshot = core_participants.normalizeParticipantSnapshot(session.participantSnapshot);
+        const beats = presets.map(([time, key], index) => ({ id: `MULTI_FALLBACK_${index + 1}`,
+            minute: parseClockMinutes(time), time,
+            participants: snapshot.people.flatMap(person => {
+                const slot = (session.residents || []).find(row => row.participantId === person.id)?.dayparts?.[key];
+                return slot ? [{ ...structuredClone(slot), participantId: person.id }] : [];
+            }) }));
+        return { dateKey: localDateKey(date), archiveRevision: session.archiveRevision || '', generatedAt: 0, participantSnapshot: snapshot, beats };
+    }
     const beats = presets.map(([time, key], index) => {
         const slot = session.dayparts?.[key];
         return {
@@ -1069,6 +1169,8 @@ export function fallbackRoomLifePlan(session, date = new Date()) {
 
 export function roomLifeBeat(session = runtimeState.activeSession, date = new Date()) {
     if (!session || session.kind !== core_constants.MODE.ROOM) return null;
+    if (roomLifeUsesDifferentBlueprint(session)) return null;
+    if (session.readableProgress?.complete === false && !session.lifePlan) return null;
     const dateKey = localDateKey(date);
     const plan = session.lifePlan?.dateKey === dateKey ? session.lifePlan : fallbackRoomLifePlan(session, date);
     const minute = date.getHours() * 60 + date.getMinutes();
@@ -1083,22 +1185,89 @@ export function roomLifeBeat(session = runtimeState.activeSession, date = new Da
     if (!memoryBank) {
         try { memoryBank = archive_repository.requireArchive(core_context.currentCharacterGuard()); } catch {}
     }
+    memoryBank = core_cache.generationPageSourceMemory(session, 'roomLife', memoryBank);
     if (!roomLifeNarrativeEvidenceState(current, memoryBank || { memories: [], userName: '' }).safe) return null;
     return current;
 }
 
+export function roomLifeUsesDifferentBlueprint(session) {
+    const source = session?.generationSources?.roomLife?.roomBlueprint;
+    return !!source && JSON.stringify(source.spaces || []) !== JSON.stringify(session.spaces || []);
+}
+
+export function roomPreservedLifeHtml(session) {
+    const source = session?.generationSources?.roomLife;
+    if (!source?.roomBlueprint || !roomLifeUsesDifferentBlueprint(session) || !session.lifePlan?.beats?.length) return '';
+    const blueprint = source.roomBlueprint, snapshot = blueprint.participantSnapshot;
+    const e = core_text.esc;
+    const rows = session.lifePlan.beats.map(beat => {
+        const actors = Array.isArray(beat.participants) ? beat.participants : [beat];
+        return actors.map(actor => {
+            const space = (blueprint.spaces || []).find(row => row.id === actor.spaceId);
+            const object = (space?.objects || []).find(row => row.id === actor.focusObjectId);
+            const name = snapshot ? core_participants.participantName(snapshot, actor.participantId) : source.sourceMemory?.characterName || '';
+            return `<article><b>${e(beat.time || '')} · ${e(name)} · ${e(space?.label || actor.spaceId || '')}</b><p>${e(actor.activity || '')}</p><p>${e(actor.line || '')}</p>${object ? `<small>原房间物件：${e(object.label)} · ${e(object.description)}</small>` : ''}${actor.sourceMemoryAnchor ? `<p>原资料：${e(actor.sourceMemoryAnchor)}</p>` : ''}</article>`;
+        }).join('');
+    }).join('');
+    return `<details data-rmt-preserved-room-life><summary>生活记录使用生成时的房间 · 查看原空间与时间线</summary>${rows}</details>`;
+}
+
 export async function ensureRoomLifePlan(options = {}) {
+    if (!options.participantRegeneration && !options.roomSession && runtimeState.activeSession?.kind !== core_constants.MODE.ROOM) return null;
+    if (runtimeState.roomLifeRefreshPromise) return options.participantRegeneration ? { status: 'blocked' } : runtimeState.roomLifeRefreshPromise;
+    const context = options.context || core_context.currentCharacterGuard();
+    const roomSession = options.roomSession || (options.participantRegeneration
+        ? core_cache.loadSession(core_constants.MODE.ROOM, { context, memoryBank: archive_repository.requireArchive(context), clone: true })
+        : runtimeState.activeSession);
+    if (!roomSession || roomSession.kind !== core_constants.MODE.ROOM) return options.participantRegeneration ? { status: 'blocked' } : null;
+    const origin = core_context.captureTaskOrigin(context, archive_repository.getImportedMemory(context)?.archiveRevision || '');
+    const logicalTask = core_requestCoordinator.beginLogicalGenerationTask({ kind: 'room-daily-life', mode: core_constants.MODE.ROOM,
+        pageId: 'roomLife', context, origin, taskKey: `room-life-operation:${core_context.chatScopeKey(context)}`,
+        parentTaskId: options.logicalParentTaskId, label: '今日生活' });
+    let result;
+    try {
+        result = await ensureRoomLifePlanOperation({ ...options, roomSession, logicalTask,
+            ...(options.participantRegeneration ? { force: true } : {}) });
+        return result;
+    } catch (error) {
+        result = { status: error?.name === 'AbortError' ? 'cancelled' : 'failed', error };
+        if (options.participantRegeneration) return result;
+        throw error;
+    } finally { core_requestCoordinator.finishLogicalGenerationTask(logicalTask, result); }
+}
+
+async function ensureRoomLifePlanOperation(options = {}) {
     const { force = false, quiet = false } = options;
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ROOM) return null;
-    const roomSession = runtimeState.activeSession;
-    const targetRuntime = await archive_library.prepareArchiveTargetSubtask(core_constants.MODE.ROOM, 'daily-life');
-    const context = targetRuntime?.context || core_context.currentCharacterGuard();
+    const originalRoom = options.roomSession;
+    let roomSession = structuredClone(originalRoom);
+    const targetRuntime = options.context ? null : await archive_library.prepareArchiveTargetSubtask(core_constants.MODE.ROOM, 'daily-life');
+    core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
+    let context = targetRuntime?.context || options.context || core_context.currentCharacterGuard();
     const chatId = core_context.getChatId(context);
-    const memoryBank = targetRuntime?.memoryBank || archive_repository.requireArchive(context);
+    let memoryBank = targetRuntime?.memoryBank || archive_repository.requireArchive(context);
+    const targetMemoryBank = memoryBank, targetContext = context;
     const archiveRevision = memoryBank.archiveRevision;
-    const settings = core_settings.getPluginSettings(context);
     const existingRecovery = options.existing === undefined
-        ? core_cache.loadGenerationRecovery(core_constants.MODE.ROOM, context, targetRuntime?.archiveTarget?.cache) : options.existing;
+        ? options.participantRegeneration && !options.draftId && !options.continueRecovery ? null
+            : core_cache.loadGenerationRecovery(core_constants.MODE.ROOM, context, targetRuntime?.archiveTarget?.cache,
+                { pageId: 'roomLife', ...(options.draftId ? { draftId: options.draftId } : {}) }) : options.existing;
+    const originalMemory = generation_recovery.readGenerationContentSnapshot(existingRecovery)?.memoryBank;
+    const crossesRevision = originalMemory?.archiveRevision && originalMemory.archiveRevision !== archiveRevision;
+    let replacementTicket = null;
+    if (options.participantRegeneration) {
+        if (crossesRevision) {
+            const version = await core_cache.readArchiveVersion(context, options.participantRegeneration.versionId);
+            if (!version.selectedPages.includes('roomLife')) throw core_text.safeUserError('旧任务没有这一页的保存版本，草稿保留。', 'RMT_ARCHIVE_VERSION_REQUIRED');
+            replacementTicket = { versionId: version.versionId, pageId: 'roomLife' };
+        } else replacementTicket = await core_cache.assertArchiveVersionReplacement(context, options.participantRegeneration, core_constants.MODE.ROOM);
+    }
+    if (replacementTicket) {
+        const snapshot = core_participants.normalizeParticipantSnapshot(options.participantRegeneration.participantSnapshot);
+        if (!snapshot) throw new Error('明确重做缺少本次已确认的人物快照。');
+        options.participantRegeneration = { ...replacementTicket, participantSnapshot: snapshot };
+        core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, options.logicalTask.origin, { participantSnapshot: snapshot });
+    }
+    const settings = core_settings.getPluginSettings(context);
     const previousDate = existingRecovery?.operation?.kind === 'room-daily-life' ? existingRecovery.operation.dateKey : '';
     const today = /^\d{4}-\d{2}-\d{2}$/.test(previousDate) ? new Date(`${previousDate}T12:00:00`) : new Date();
     const dateKey = localDateKey(today);
@@ -1114,7 +1283,9 @@ export async function ensureRoomLifePlan(options = {}) {
         const last = [...existingRecovery.segments].reverse().find(segment => segment.state === 'complete');
         let matches = false;
         try {
-            const accepted = normalizeRoomLifePlan(JSON.parse(last.rawJson), roomSession, memoryBank, today);
+            const savedParticipants = existingRecovery.frozenInputs?.['participants:room'];
+            const accepted = normalizeRoomLifePlan(JSON.parse(last.rawJson), roomSession, memoryBank, today,
+                { participantSnapshot: typeof savedParticipants === 'string' ? JSON.parse(savedParticipants) : null });
             matches = JSON.stringify(accepted.beats) === JSON.stringify(current.beats);
         } catch { /* An unmatched old plan is not proof that this task committed. */ }
         if (matches) {
@@ -1136,14 +1307,16 @@ export async function ensureRoomLifePlan(options = {}) {
     }
     if (!settings.roomLifeAutoDaily && !force) return current || null;
     // Restoring the room must not spend another request on a saved failure.
-    if (existingRecovery && !force && !options.continueRecovery) return current || null;
+    if (!force && !options.continueRecovery && (existingRecovery
+        || core_cache.loadGenerationRecovery(core_constants.MODE.ROOM, context, targetRuntime?.archiveTarget?.cache))) return current || null;
     if (runtimeState.roomLifeRefreshPromise) return runtimeState.roomLifeRefreshPromise;
     const taskKey = `room-life:${targetRuntime?.scope || core_context.chatScopeKey(context)}:${dateKey}`;
     if (core_requestCoordinator.isModeGenerating(core_constants.MODE.ROOM, context) || !core_requestCoordinator.canStartGenerationTask(taskKey)) {
         if (!quiet && force) globalThis.toastr?.info?.('当前生成队列较忙，等房间主体/其他任务完成后再更新今日生活。', '心迹回廊');
-        return current || fallbackRoomLifePlan(roomSession, today);
+        return replacementTicket ? { status: 'blocked' } : current || fallbackRoomLifePlan(roomSession, today);
     }
     let origin = targetRuntime?.origin || { ...core_context.captureTaskOrigin(context, archiveRevision), chatId: core_context.comparableChatId(chatId) };
+    core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin);
     const archiveEntry = targetRuntime?.archiveTarget || core_cache.archiveBackupEntryForContext(context, memoryBank);
     runtimeState.roomLifeRefreshOrigin = origin;
     runtimeState.roomLifeRefreshPromise = (async () => {
@@ -1152,24 +1325,44 @@ export async function ensureRoomLifePlan(options = {}) {
                 await archive_library.beginArchiveTargetSubtask(targetRuntime);
                 origin = targetRuntime.origin;
             } else {
-                await core_cache.claimLiveModeGeneration(core_constants.MODE.ROOM, context, memoryBank);
+                await core_cache.claimLiveModeGeneration(core_constants.MODE.ROOM, context, memoryBank,
+                    { pageId: 'roomLife', draftId: options.draftId || existingRecovery?.draftId || '' });
                 origin = core_context.captureTaskOrigin(context, archiveRevision);
             }
+            core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin);
             runtimeState.roomLifeRefreshOrigin = origin;
-            await generation_client.beginModeRecovery(core_constants.MODE.ROOM, context, memoryBank, origin, {
-                ...options, existing: existingRecovery, operation: { kind: 'room-daily-life', dateKey },
+            const handle = await generation_client.beginModeRecovery(core_constants.MODE.ROOM, context, memoryBank, origin, {
+                ...options, existing: existingRecovery, pageId: 'roomLife', contentInputs: { previousSession: roomSession, roomSession }, operation: { kind: 'room-daily-life', dateKey,
+                    ...(replacementTicket ? { participantRegeneration: options.participantRegeneration } : {}) },
                 archiveTarget: targetRuntime?.archiveTarget, archiveEntry,
                 stillCurrent: targetRuntime?.stillCurrent,
             });
+            context = handle.contentContext; memoryBank = handle.contentBank;
+            roomSession = structuredClone(handle.contentInputs?.roomSession || handle.contentInputs?.previousSession || roomSession);
+            const participantSnapshot = await generation_client.captureRoomParticipantSnapshot(context, origin, { existing: existingRecovery,
+                participantSnapshot: options.participantRegeneration?.participantSnapshot });
+            const inputRoom = participantSnapshot
+                ? await generation_recovery.frozenGenerationInput(origin, 'room:daily-blueprint', () => structuredClone(roomSession)) : roomSession;
             if (!quiet) ui_overlay.setInnerLoading(true, `正在生成 ${dateKey} 的生活时间线…`);
             const plan = await generation_client.requestValidatedSegment(
-                roomLifePrompt(context, roomSession, memoryBank, today),
+                roomLifePrompt(context, inputRoom, memoryBank, today, { participantSnapshot }),
                 `正在让“他的房间”进入 ${dateKey} 的生活状态…`,
                 { maxTokens: 6144, context, origin, taskKey, mode: core_constants.MODE.ROOM, background: true },
-                raw => normalizeRoomLifePlan(raw, roomSession, memoryBank, today),
+                raw => normalizeRoomLifePlan(raw, inputRoom, memoryBank, today, { participantSnapshot }),
             );
+            core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
+            if (participantSnapshot) roomSession.participantSnapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
             roomSession.lifePlan = plan;
             roomSession.lifePlanAttempt = { dateKey, count: 0, failedAt: 0 };
+            if (memoryBank.archiveRevision !== archiveRevision || handle.contentInputs?.roomSession?.readableProgress?.complete === false) {
+                const pending = await core_cache.saveGenerationTaskResult(targetContext, core_constants.MODE.ROOM, roomSession, origin,
+                    { pageId: 'roomLife', memoryBank: targetMemoryBank, sourceMemory: memoryBank,
+                        archiveTarget: targetRuntime?.archiveTarget, stillCurrent: targetRuntime?.stillCurrent });
+                try { Promise.resolve(ui_overlay.presentGenerationTaskResult?.(pending.draftId, targetContext)).catch(() => {}); }
+                catch { /* The result is durable; a reader failure never retries paid generation. */ }
+                return pending;
+            }
+            if (replacementTicket) roomSession[core_cache.PARTICIPANT_REPLACEMENT_KEY] = replacementTicket;
             let committed = false;
             if (targetRuntime) {
                 const result = await targetRuntime.options.commitArchiveTarget(targetRuntime.archiveTarget, core_constants.MODE.ROOM, roomSession, targetRuntime.stillCurrent, origin);
@@ -1178,26 +1371,39 @@ export async function ensureRoomLifePlan(options = {}) {
             } else if (core_context.isCurrentTaskOrigin(origin)) {
                 try { const latestMemory = archive_repository.requireArchive(core_context.currentCharacterGuard()); if (latestMemory.archiveRevision === archiveRevision) committed = await core_cache.commitSession(core_constants.MODE.ROOM, roomSession, chatId, origin); } catch {}
             }
-            if (!committed) core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [core_constants.MODE.ROOM]: roomSession } });
-            if (committed) await core_cache.saveGenerationRecovery(context, memoryBank, core_constants.MODE.ROOM, null, origin, {
+            if (!committed) {
+                core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
+                core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [core_constants.MODE.ROOM]: roomSession } });
+            }
+            if (committed) await core_cache.saveGenerationRecovery(targetContext, targetMemoryBank, core_constants.MODE.ROOM, null, origin, {
                 archiveTarget: targetRuntime?.archiveTarget, archiveEntry, stillCurrent: targetRuntime?.stillCurrent,
             });
-            if (committed && runtimeState.activeMode === core_constants.MODE.ROOM && runtimeState.activeSession === roomSession && !document.getElementById(core_constants.OVERLAY_ID)?.hidden) renderRoom();
+            if (committed && runtimeState.activeMode === core_constants.MODE.ROOM && runtimeState.activeSession === originalRoom && !document.getElementById(core_constants.OVERLAY_ID)?.hidden) {
+                runtimeState.activeSession = roomSession;
+                renderRoom();
+            }
             else globalThis.toastr?.success?.(`今日生活后台生成完成：${dateKey}${committed ? '' : '（回到原窗口自动写入）'}`, '心迹回廊');
-            return roomSession.lifePlan;
+            return replacementTicket ? { status: committed ? 'committed' : 'deferred', session: roomSession } : roomSession.lifePlan;
         } catch (error) {
             await generation_recovery.noteGenerationRecoveryFailure(origin, error);
+            if (error?.name === 'AbortError' || !core_requestCoordinator.isLogicalGenerationTaskCurrent(options.logicalTask)) {
+                return replacementTicket ? { status: 'cancelled' } : null;
+            }
+            if (replacementTicket) return { status: 'failed', error };
             console.warn('[HeartbeatMemories] room life plan failed, using one-day fallback without automatic retry', core_text.safeErrorDiagnostic(error));
             try {
                 const latestContext = core_context.currentCharacterGuard();
                 const latestMemory = archive_repository.requireArchive(latestContext);
-                if (!targetRuntime && core_context.isCurrentTaskOrigin(origin) && core_context.getChatId(latestContext) === chatId && latestMemory.archiveRevision === archiveRevision) {
+                if (!targetRuntime && memoryBank.archiveRevision === archiveRevision && core_context.isCurrentTaskOrigin(origin) && core_context.getChatId(latestContext) === chatId && latestMemory.archiveRevision === archiveRevision) {
                     const previousCount = roomSession.lifePlanAttempt?.dateKey === dateKey ? Number(roomSession.lifePlanAttempt.count) || 0 : 0;
                     roomSession.lifePlanAttempt = { dateKey, count: previousCount + 1, failedAt: Date.now() };
                     // A failed refresh must not replace an already generated daily plan.
                     if (!roomSession.lifePlan) roomSession.lifePlan = fallbackRoomLifePlan(roomSession, today);
                     await core_cache.commitSession(core_constants.MODE.ROOM, roomSession, chatId, origin);
-                    if (runtimeState.activeMode === core_constants.MODE.ROOM && runtimeState.activeSession === roomSession && !document.getElementById(core_constants.OVERLAY_ID)?.hidden) renderRoom();
+                    if (runtimeState.activeMode === core_constants.MODE.ROOM && runtimeState.activeSession === originalRoom && !document.getElementById(core_constants.OVERLAY_ID)?.hidden) {
+                        runtimeState.activeSession = roomSession;
+                        renderRoom();
+                    }
                 }
             } catch (guardError) {
                 console.warn('[HeartbeatMemories] skipped fallback save after chat/session change', guardError);
@@ -1346,6 +1552,11 @@ ${root} .rmt-room-layout-caption{position:relative;z-index:1;margin:12px 0 0;tex
 
 export function roomCurrentSlot(session = runtimeState.activeSession, date = new Date()) {
     if (!session || session.kind !== core_constants.MODE.ROOM) return null;
+    if (session.participantSnapshot) {
+        const slots = roomParticipantSlots(session, date);
+        return { id: JSON.stringify(slots.map(slot => [slot.participantId, slot.id, slot.spaceId, slot.activity, slot.line])),
+            participants: slots };
+    }
     const live = roomLifeBeat(session, date);
     if (live) return live;
     const state = roomDaypartState(date);
@@ -1498,16 +1709,16 @@ export function roomObjectSafeForPresentation(item, memoryBank, userName) {
 export function roomDeepAvailability() {
     const options = runtimeState.activeArchiveSnapshot ? { chatId: runtimeState.activeArchiveSnapshot.chatId, memoryBank: runtimeState.activeArchiveSnapshot.memory, cache: runtimeState.activeArchiveSnapshot.cache, clone: true } : {};
     return {
-        items: core_cache.loadSession(core_constants.MODE.ITEMS, options),
-        phone: core_cache.loadSession(core_constants.MODE.PHONE, options),
+        items: core_cache.loadSession(core_constants.MODE.ITEMS, { ...options, includePartial: true }),
+        phone: core_cache.loadSession(core_constants.MODE.PHONE, { ...options, includePartial: true }),
     };
 }
 
 export function openRoomDeepMode(mode) {
     if (!core_constants.ROOM_DEEP_MODES.includes(mode)) return;
     const snapshotOptions = runtimeState.activeArchiveSnapshot ? { chatId: runtimeState.activeArchiveSnapshot.chatId, memoryBank: runtimeState.activeArchiveSnapshot.memory, cache: runtimeState.activeArchiveSnapshot.cache, clone: true } : null;
-    const room = runtimeState.activeMode === core_constants.MODE.ROOM && runtimeState.activeSession?.kind === core_constants.MODE.ROOM ? runtimeState.activeSession : core_cache.loadSession(core_constants.MODE.ROOM, snapshotOptions || {});
-    const deep = core_cache.loadSession(mode, snapshotOptions || {});
+    const room = runtimeState.activeMode === core_constants.MODE.ROOM && runtimeState.activeSession?.kind === core_constants.MODE.ROOM ? runtimeState.activeSession : core_cache.loadSession(core_constants.MODE.ROOM, { ...snapshotOptions, includePartial: true });
+    const deep = core_cache.loadSession(mode, { ...snapshotOptions, includePartial: true });
     if (!room) {
         globalThis.toastr?.info?.('请先生成“他的房间”。', '心迹回廊');
         return;
@@ -1591,15 +1802,16 @@ export function returnToRoomFromDeep() {
 export function renderRoom() {
     const session = runtimeState.activeSession;
     if (!session || session.kind !== core_constants.MODE.ROOM || !Array.isArray(session.spaces) || !session.spaces.length) return;
+    if (session.participantSnapshot) return renderRoomParticipants(session);
     ui_overlay.setBackVisible(true, runtimeState.activeArchiveSnapshot ? (runtimeState.activeArchiveReadOnly ? '只读档案' : '档案') : '当前档案');
     ui_overlay.topTitle(core_constants.MODE_LABEL[core_constants.MODE.ROOM]);
     const now = new Date();
     const daypart = roomDaypartState(now);
     const slot = roomCurrentSlot(session, now);
     const presentSpace = session.spaces.find(space => space.id === slot?.spaceId) || session.spaces[0];
-    const roomMemoryBank = runtimeState.activeArchiveSnapshot?.memory || (() => {
+    const roomMemoryBank = core_cache.generationPageSourceMemory(session, 'room', runtimeState.activeArchiveSnapshot?.memory || (() => {
         try { return archive_repository.requireArchive(core_context.currentCharacterGuard()); } catch { return null; }
-    })();
+    })());
     const roomUserName = core_text.normalizeText(roomMemoryBank?.userName || core_context.getContext()?.name1, 120);
     const selectedSpaceRaw = selectedRoomSpace() || presentSpace;
     const selectedSpace = {
@@ -1704,6 +1916,11 @@ export function renderRoom() {
         </section>
       </div>
     </div>`;
+    const readingNotice = recovery_view.readableProgressHtml(session) + roomPreservedLifeHtml(session);
+    if (readingNotice) {
+        if (typeof body.insertAdjacentHTML === 'function') body.insertAdjacentHTML('afterbegin', readingNotice);
+        else body.innerHTML = readingNotice + body.innerHTML;
+    }
     startRoomClock();
 }
 
@@ -1745,7 +1962,331 @@ export function roomSelect(id) {
 }
 
 export function roomPresenceNext() {
+    if (runtimeState.activeSession?.participantSnapshot) return roomSelectParticipant(runtimeState.activeSession.selectedParticipantId);
     if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.ROOM || !runtimeState.activeSession.presenceLines.length) return;
     runtimeState.activeSession.presenceIndex = (Math.max(0, Number(runtimeState.activeSession.presenceIndex) || 0) + 1) % runtimeState.activeSession.presenceLines.length;
     renderRoom();
+}
+
+function roomParticipantError(message, field = 'residents') {
+    const error = core_text.safeUserError(message, 'RMT_ROOM_PARTICIPANTS');
+    error.participantField = field;
+    return error;
+}
+
+function roomParticipantId(snapshot, value, allowEmpty = false, field = 'spaces') {
+    if (allowEmpty && (value === undefined || value === '')) return '';
+    if (typeof value !== 'string' || !snapshot.people.some(person => person.id === value)) {
+        throw roomParticipantError('房间说话人或人物身份与本次所选名单不匹配。', field);
+    }
+    return value;
+}
+
+function roomParticipantText(value, memoryBank) {
+    if (typeof value !== 'string' || !value.trim()) throw roomParticipantError('人物当前动作或对白没有写完整。');
+    if (roomNarrativeClaimsSharedHistory(value, memoryBank?.userName)) {
+        throw roomParticipantError('人物当前状态混入了没有档案证据的既往共同经历。');
+    }
+    return value;
+}
+
+function participantVisualProfile(raw, person, { identityKey = '', worldPresentation = null } = {}) {
+    return normalizeRoomVisualProfile(raw, {
+        identitySeed: `${identityKey}|${person.id}`, bindPersona: true, worldPresentation,
+        controlledEvidence: person.sourceRefs.map(ref => ref.content).join('\n'),
+    });
+}
+
+export function normalizeRoomResidents(raw, snapshot, spaces, memoryBank, options = {}) {
+    snapshot = core_participants.normalizeParticipantSnapshot(snapshot);
+    if (!snapshot) return [];
+    if (!Array.isArray(raw)) throw roomParticipantError('房间缺少按人物区分的生活状态。');
+    const byId = new Map();
+    for (const row of raw) {
+        const id = roomParticipantId(snapshot, row?.participantId, false, 'residents');
+        if (byId.has(id)) throw roomParticipantError('房间中同一人物身份出现了重复条目。');
+        byId.set(id, row);
+    }
+    const spacesById = new Map(spaces.map(space => [space.id, space]));
+    return snapshot.people.map(person => {
+        const row = byId.get(person.id);
+        if (!row) throw roomParticipantError('房间遗漏了本次选定人物的生活状态。');
+        const dayparts = {};
+        for (const key of core_constants.ROOM_DAYPART_KEYS) {
+            const input = row.dayparts?.[key];
+            const space = spacesById.get(input?.spaceId);
+            if (!space) throw roomParticipantError('人物当前所在空间没有对应房间。');
+            const focusObjectId = space.objects.some(item => item.id === input?.focusObjectId) ? input.focusObjectId : '';
+            dayparts[key] = { spaceId: space.id,
+                activity: roomParticipantText(input?.activity, memoryBank),
+                line: roomParticipantText(input?.line, memoryBank), focusObjectId };
+        }
+        if (row.presenceLines !== undefined && !Array.isArray(row.presenceLines)) throw roomParticipantError('人物互动台词格式不完整。');
+        return { participantId: person.id, name: person.name,
+            visualProfile: participantVisualProfile(row.visualProfile, person, options), dayparts,
+            presenceLines: (row.presenceLines || []).map(line => roomParticipantText(line, memoryBank)), presenceIndex: 0 };
+    });
+}
+
+function mergeRoomParticipantState(previous, snapshot, freshResidents = []) {
+    const residents = structuredClone(previous.residents || []);
+    for (const resident of freshResidents) {
+        if (!residents.some(old => old.participantId === resident.participantId)) residents.push(structuredClone(resident));
+    }
+    return { participantSnapshot: core_participants.normalizeParticipantSnapshot(snapshot), residents,
+        selectedParticipantId: snapshot.people.some(person => person.id === previous.selectedParticipantId) ? previous.selectedParticipantId : '' };
+}
+
+// A room-only replacement does not own the saved daily plan or the ITEMS page.
+// Preserve their exact targets. Generated IDs are local to the new response and
+// are remapped on collision; similar names never establish physical identity.
+export function preserveRoomLinkedContent(previous, fresh) {
+    if (!previous) return fresh;
+    const session = structuredClone(fresh);
+    const usedSpaces = new Set((previous.spaces || []).map(space => space.id));
+    const usedObjects = new Set((previous.spaces || []).flatMap(space => (space.objects || []).map(item => item.id)));
+    const spaceIds = new Map(), objectIds = new Map();
+    for (const space of session.spaces || []) {
+        const originalId = space.id;
+        space.id = core_incremental.uniqueGeneratedId(space.id, usedSpaces, 'SP');
+        spaceIds.set(originalId, space.id);
+        for (const object of space.objects || []) {
+            const oldId = object.id;
+            object.id = core_incremental.uniqueGeneratedId(object.id, usedObjects, 'OBJ');
+            objectIds.set(JSON.stringify([originalId, oldId]), object.id);
+        }
+    }
+    const remapSlot = slot => {
+        if (!slot) return;
+        const oldSpace = slot.spaceId;
+        slot.spaceId = spaceIds.get(oldSpace) || oldSpace;
+        if (slot.focusObjectId) slot.focusObjectId = objectIds.get(JSON.stringify([oldSpace, slot.focusObjectId])) || slot.focusObjectId;
+    };
+    for (const slot of Object.values(session.dayparts || {})) remapSlot(slot);
+    for (const resident of session.residents || []) for (const slot of Object.values(resident.dayparts || {})) remapSlot(slot);
+    session.selectedObjectId = objectIds.get(JSON.stringify([session.selectedSpaceId, session.selectedObjectId])) || session.selectedObjectId;
+    session.selectedSpaceId = spaceIds.get(session.selectedSpaceId) || session.selectedSpaceId;
+    session.spaces.push(...structuredClone(previous.spaces || []));
+    for (const key of ['lifePlan', 'lifePlanAttempt', 'pets']) {
+        if (Object.hasOwn(previous, key)) session[key] = structuredClone(previous[key]);
+    }
+    return session;
+}
+
+async function generateRoomParticipantsIncrement(context, memoryBank, origin, taskKey, previous, options) {
+    const snapshot = core_participants.normalizeParticipantSnapshot(options.participantSnapshot);
+    const request = options.request || generation_client.requestValidatedSegment;
+    const presentation = options.presentationContext || {};
+    const sourceMemoryIds = core_incremental.incrementalArchiveMemoryIds(previous, memoryBank, 'mode');
+    const oldResidents = previous.residents || [];
+    const newPeople = snapshot.people.filter(person => !oldResidents.some(resident => resident.participantId === person.id));
+    const newSnapshot = { version: 1, people: newPeople };
+    const prompt = generation_prompts.multiplayerRoomPrompt(context, memoryBank, snapshot, ROOM_VISUAL_VALUES)
+        + '\n本轮已有房间只增补，不返回完整 spaces。返回 {"additions":[{"spaceId":"已有空间id","objects":["按上文物件结构填写，含speakerId"]}],"residents":["仅为 NEW_RESIDENT_IDS_JSON 中的人填写上文完整人物结构"]}。'
+        + '\n旧房间、旧人物状态、旧台词与图片由本地原样保留。只在现有空间中补充物件，不新建空间。'
+        + (options.allowPersonaExpansion === true ? '\n新物件可 basis=推演，依据选定人物设定描写当下；不捏造用户过去行为。basis=记忆 必须由本轮新增记忆支持。' : '\n新物件仅允许 basis=记忆，必须由本轮新增记忆支持；没有合适内容时 additions=[]。')
+        + '\nNEW_RESIDENT_IDS_JSON:' + JSON.stringify(newPeople.map(person => person.id))
+        + '\nEXISTING_ROOM_INDEX_JSON:' + JSON.stringify(compactRoomExisting(previous))
+        + '\nUNTRUSTED_INCREMENTAL_ROOM_ARCHIVE_JSON:' + core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS);
+    const fresh = await request(prompt, '正在更新共同房间，保留已有内容…', {
+        maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], temperature: 0.45, context, origin,
+        contextEnvelope: presentation.contextEnvelope, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ROOM, background: true,
+    }, raw => {
+        const normalized = normalizeRoomIncrementPatch(raw, previous, memoryBank, sourceMemoryIds, options);
+        for (let i = 0; i < normalized.spaces.length; i++) {
+            normalized.spaces[i].objects.forEach((item, j) => { item.speakerId = roomParticipantId(snapshot, raw.additions[i].objects[j].speakerId, !snapshot.people.length); });
+        }
+        normalized.residents = normalizeRoomResidents(raw.residents || [], newSnapshot, previous.spaces, memoryBank,
+            { identityKey: core_context.currentCharacterRuntimeKey(context), worldPresentation: presentation.profile });
+        return normalized;
+    });
+    const { session, added } = mergeRoomIncremental(previous, fresh, sourceMemoryIds, { memoryBank, allowPersonaExpansion: options.allowPersonaExpansion === true });
+    Object.assign(session, mergeRoomParticipantState(previous, snapshot, fresh.residents));
+    return core_incremental.stampIncrementalCoverage(session, previous, memoryBank, 'mode', sourceMemoryIds, added);
+}
+
+async function refreshRoomParticipantFigures(context, memoryBank, origin, taskKey, previous, options) {
+    const snapshot = core_participants.normalizeParticipantSnapshot(options.participantSnapshot);
+    const presentation = options.presentationContext || {};
+    const request = options.request || generation_client.requestValidatedSegment;
+    const figures = await request(`仅更新所选人物各自外形，不生成房间、对白或故事。一次返回 {"residents":[{"participantId":"原id","visualProfile":{"figure":{},"explicitFields":[],"explicitEvidence":{}}}]}。
+${core_participants.participantPromptBlock(snapshot)}
+枚举：${JSON.stringify(ROOM_VISUAL_VALUES)}。每人只使用自己的来源设定作外貌证据；explicitEvidence 必须原样复制对应人物所选世界书内容。缺乏证据的外貌用 unspecified，detail 用 none，不借用其他人物或玩家外貌。`,
+    '正在更新所选人物外形，保留房间内容…', { context, contextEnvelope: presentation.contextEnvelope, origin,
+        taskKey: `${taskKey}:figure`, mode: core_constants.MODE.ROOM, maxTokens: 2500, background: true }, raw => {
+        if (!Array.isArray(raw?.residents)) throw roomParticipantError('人物外形列表不完整。');
+        const seen = new Set();
+        const result = raw.residents.map(row => {
+            const id = roomParticipantId(snapshot, row?.participantId);
+            if (seen.has(id)) throw roomParticipantError('人物外形身份重复。');
+            seen.add(id);
+            const person = snapshot.people.find(person => person.id === id);
+            return { participantId: id, name: person.name,
+                visualProfile: participantVisualProfile(row.visualProfile, person,
+                    { identityKey: core_context.currentCharacterRuntimeKey(context), worldPresentation: presentation.profile }) };
+        });
+        if (seen.size !== snapshot.people.length) throw roomParticipantError('人物外形遗漏了所选人物。');
+        return result;
+    });
+    const session = structuredClone(previous);
+    Object.assign(session, mergeRoomParticipantState(previous, snapshot));
+    for (const figure of figures) {
+        const resident = session.residents.find(person => person.participantId === figure.participantId);
+        if (resident) resident.visualProfile = figure.visualProfile;
+        else session.residents.push({ ...figure, dayparts: {}, presenceLines: [], presenceIndex: 0 });
+    }
+    return session;
+}
+
+function roomParticipantsLifePrompt(context, session, memoryBank, date, snapshot) {
+    const dateKey = localDateKey(date);
+    const referencedMemoryIds = [...new Set([
+        ...core_evidence.roomReferencedMemoryIds(session),
+        ...(Array.isArray(session?.pets) ? session.pets : []).flatMap(pet => core_text.cleanArray(pet?.sourceMemoryIds, 12, 40)),
+    ])].slice(0, 24);
+    const lifeMemories = referencedMemoryIds.length
+        ? core_evidence.memoryPayload(memoryBank, referencedMemoryIds, 24)
+        : core_evidence.memoryPayload(memoryBank, null, 12);
+    return `${generation_prompts.promptSafetyBoundary(context, '共同房间的今日生活')}
+${core_participants.participantPromptBlock(snapshot)}
+为 ${dateKey} 生成同一住处的共享生活时间线，一次返回所有选定人物。只使用已有空间/物件；各人可以一起活动或分别处在不同空间，不替用户行动或回应。
+INPUT_JSON:
+${JSON.stringify({ date: dateKey, home: roomBlueprintPayload(session), memories: lifeMemories }, null, 2)}
+仅输出 {"date":"${dateKey}","beats":[{"time":"HH:MM","participants":[{"participantId":"选定人物id","spaceId":"已有空间id","activity":"该人的当下动作","line":"该人当下对白","focusObjectId":"该空间物件id","ambient":"当时氛围","trace":"当时留下的生活痕迹","visualState":{"lighting":"soft","window":"closed","order":"used","surface":"clear"},"temporaryObjects":[],"sourceMemoryIds":[],"sourceMemoryAnchor":""}]}]}。
+同一时刻有多人的动作与台词时，放在同一个节点的 participants 数组，不能只写一个人。每位所选人物都要有自己的状态。time 是 HH:MM，按时间排列。visualState 枚举：lighting=bright/soft/warm/dim/dark，window=open/closed/curtained，order=tidy/used/messy，surface=clear/drink/meal/work。不得输出 CSS、URL 或代码。
+世界书只是人物设定，不是过去事件。任何声称与用户已经共同发生的往事都必须绑定真实 sourceMemoryIds，sourceMemoryAnchor 要原样来自该记忆且出现在可见文字中；不引用往事则来源字段为空。保留原房间与其他历史内容，不生成新房间。`;
+}
+
+export function normalizeRoomParticipantsLifePlan(data, session, memoryBank, expectedDate, snapshot) {
+    snapshot = core_participants.normalizeParticipantSnapshot(snapshot);
+    if (!Array.isArray(data?.beats)) throw roomParticipantError('多人生活时间线格式不完整。');
+    const spaceById = new Map(session.spaces.map(space => [space.id, space]));
+    const byMinute = new Map();
+    const seenPeople = new Set();
+    for (const beat of data.beats) {
+        const minute = parseClockMinutes(beat?.time);
+        if (minute === null || !Array.isArray(beat?.participants)) throw roomParticipantError('多人生活时间或人物列表不完整。');
+        const actors = beat.participants.map(raw => {
+            const participantId = roomParticipantId(snapshot, raw?.participantId);
+            const space = spaceById.get(raw?.spaceId);
+            if (!space) throw roomParticipantError('人物生活节点指向不存在的空间。');
+            for (const field of ['activity', 'line', 'ambient', 'trace']) {
+                if (typeof raw[field] !== 'string' || !raw[field].trim()) throw roomParticipantError('人物生活节点正文未写完整。');
+            }
+            if (raw.temporaryObjects !== undefined && (!Array.isArray(raw.temporaryObjects) || raw.temporaryObjects.some(item => typeof item !== 'string'))) {
+                throw roomParticipantError('人物生活节点临时物件格式不完整。');
+            }
+            const temporaryObjects = raw.temporaryObjects || [];
+            const visible = [raw.activity, raw.line, raw.ambient, raw.trace, ...temporaryObjects];
+            const reference = Array.isArray(raw.sourceMemoryIds) && raw.sourceMemoryIds.length
+                ? core_evidence.normalizeExactMemoryReference(raw.sourceMemoryIds, raw.sourceMemoryAnchor, memoryBank, 1)
+                : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
+            const fold = value => String(value).replace(/\s+/gu, '').toLowerCase();
+            if (roomNarrativeClaimsSharedHistory(visible, memoryBank?.userName)
+                && (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor || !fold(visible.join('\n')).includes(fold(reference.sourceMemoryAnchor)))) {
+                throw roomParticipantError('人物生活节点混入无据既往共同经历。');
+            }
+            seenPeople.add(participantId);
+            return { participantId, spaceId: space.id, activity: raw.activity, line: raw.line,
+                focusObjectId: space.objects.some(item => item.id === raw.focusObjectId) ? raw.focusObjectId : '',
+                ambient: raw.ambient, trace: raw.trace, visualState: normalizeRoomVisualState(raw.visualState),
+                temporaryObjects: [...temporaryObjects],
+                sourceMemoryIds: reference.sourceMemoryIds, sourceMemoryAnchor: reference.sourceMemoryAnchor };
+        });
+        if (!byMinute.has(minute)) byMinute.set(minute, { id: `MULTI_LIFE_${minute}`, minute, time: formatClockMinutes(minute), participants: [] });
+        byMinute.get(minute).participants.push(...actors);
+    }
+    if (snapshot.people.some(person => !seenPeople.has(person.id))) throw roomParticipantError('今日生活遗漏了本次所选人物。');
+    return { dateKey: localDateKey(expectedDate), archiveRevision: memoryBank.archiveRevision, generatedAt: Date.now(),
+        participantSnapshot: snapshot, beats: [...byMinute.values()].sort((a, b) => a.minute - b.minute) };
+}
+
+export function roomParticipantSlots(session, date = new Date()) {
+    const snapshot = core_participants.normalizeParticipantSnapshot(session?.participantSnapshot);
+    if (!snapshot) return [];
+    const minute = date.getHours() * 60 + date.getMinutes();
+    const plan = !roomLifeUsesDifferentBlueprint(session) && session.lifePlan?.dateKey === localDateKey(date) ? session.lifePlan : null;
+    const beats = Array.isArray(plan?.beats) ? plan.beats : [];
+    const daypart = roomDaypartState(date).key;
+    return snapshot.people.map(person => {
+        const resident = (session.residents || []).find(row => row.participantId === person.id);
+        let slot = resident?.dayparts?.[daypart] || null;
+        for (const beat of beats) {
+            if (beat.minute > minute) break;
+            const rows = (beat.participants || []).filter(row => row.participantId === person.id);
+            if (rows.length) slot = { ...rows[rows.length - 1], id: beat.id, time: beat.time,
+                activity: rows.map(row => row.activity).join('\n'), line: rows.map(row => row.line).join('\n') };
+        }
+        return { ...(slot || {}), participantId: person.id, name: person.name,
+            visualProfile: resident?.visualProfile || null, resident };
+    });
+}
+
+function roomSpeakerName(session, speakerId) {
+    return core_participants.participantName(session.participantSnapshot, speakerId)
+        || (session.residents || []).find(row => row.participantId === speakerId)?.name || '';
+}
+
+export function roomSelectParticipant(id) {
+    const session = runtimeState.activeSession;
+    if (!session?.participantSnapshot || !session.participantSnapshot.people.some(person => person.id === id)) return;
+    const alreadySelected = session.selectedParticipantId === id;
+    session.selectedParticipantId = id;
+    const resident = (session.residents || []).find(row => row.participantId === id);
+    if (alreadySelected && resident?.presenceLines?.length) resident.presenceIndex = ((Number(resident.presenceIndex) || 0) + 1) % resident.presenceLines.length;
+    const slot = roomParticipantSlots(session).find(row => row.participantId === id);
+    if (session.spaces.some(space => space.id === slot?.spaceId)) session.selectedSpaceId = slot.spaceId;
+    renderRoom();
+}
+
+export function renderRoomParticipants(session = runtimeState.activeSession) {
+    if (!session?.participantSnapshot || !session.spaces?.length) return;
+    ui_overlay.setBackVisible(true, runtimeState.activeArchiveSnapshot ? '档案' : '当前档案');
+    ui_overlay.topTitle(core_constants.MODE_LABEL[core_constants.MODE.ROOM]);
+    const now = new Date(), slots = roomParticipantSlots(session, now), current = roomCurrentSlot(session, now);
+    const storedSpace = session.spaces.find(space => space.id === session.selectedSpaceId) || session.spaces[0];
+    let memoryBank = runtimeState.activeArchiveSnapshot?.memory || null;
+    if (!memoryBank) { try { memoryBank = archive_repository.requireArchive(core_context.currentCharacterGuard()); } catch {} }
+    memoryBank = core_cache.generationPageSourceMemory(session, 'room', memoryBank);
+    const selectedSpace = { ...storedSpace,
+        objects: (storedSpace.objects || []).filter(item => roomObjectSafeForPresentation(item, memoryBank, memoryBank?.userName || '')) };
+    const selected = selectedRoomObject(selectedSpace);
+    const present = slots.filter(slot => slot.spaceId === selectedSpace.id);
+    const layout = roomObjectLayout(selectedSpace);
+    const visual = normalizeRoomVisualProfile(session.visualProfile);
+    const readOnly = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
+    const deep = roomDeepAvailability();
+    const e = core_text.esc;
+    const speaker = roomSpeakerName(session, selected?.speakerId);
+    const people = slots.map(slot => `<button type="button" class="rmt-btn rmt-room-participant ${session.selectedParticipantId === slot.participantId ? 'active' : ''}" data-rmt-action="room-participant" data-rmt-participant-id="${e(slot.participantId)}" aria-pressed="${session.selectedParticipantId === slot.participantId}"><b>${e(slot.name)}</b><small>${e(session.spaces.find(space => space.id === slot.spaceId)?.label || '尚无当前空间记录')}</small></button>`).join('');
+    const locations = session.spaces.map(space => `<button type="button" class="rmt-room-space ${space.id === selectedSpace.id ? 'active' : ''}" data-rmt-room-space="${e(space.id)}"><b>${e(space.label)}</b><small>${e(slots.filter(slot => slot.spaceId === space.id).map(slot => slot.name).join('、'))}</small></button>`).join('');
+    const lines = present.map(slot => {
+        const index = Number(slot.resident?.presenceIndex) || 0;
+        const clickedLine = session.selectedParticipantId === slot.participantId ? slot.resident?.presenceLines?.[index] : '';
+        return `<div class="rmt-room-participant-state" data-rmt-participant-state="${e(slot.participantId)}"><b>${e(slot.name)}</b><p>${e(slot.activity || '')}</p><p>${e(clickedLine || slot.line || '')}</p>${slot.ambient ? `<small>${e(slot.ambient)}</small>` : ''}${slot.trace ? `<p>${e(slot.trace)}</p>` : ''}</div>`;
+    }).join('');
+    const legacyLines = [...(session.presenceLines || []),
+        ...Object.values(session.dayparts || {}).flatMap(slot => [slot.activity, slot.line]),
+        ...(session.lifePlan?.beats || []).filter(beat => !Array.isArray(beat.participants)).flatMap(beat => [beat.activity, beat.line, beat.ambient, beat.trace]),
+    ].filter(value => typeof value === 'string' && value);
+    const legacy = legacyLines.length ? `<details class="rmt-room-legacy-lines"><summary>旧记录 · 未标注说话人</summary>${legacyLines.map(line => `<p>${e(line)}</p>`).join('')}</details>` : '';
+    const searchable = core_evidence.isSearchableRoomObject(selected);
+    const body = ui_overlay.bodyEl();
+    if (!body) return;
+    body.innerHTML = `<style data-rmt-room-layout-css>${roomLayoutCss()}</style><div class="rmt-room-view rmt-room-multi-view" data-rmt-room-world="${e(visual.worldStyle)}" data-rmt-room-palette="${e(visual.palette)}" data-rmt-room-material="${e(visual.material)}" data-rmt-room-density="${e(visual.density)}">
+      <div class="rmt-room-participants" aria-label="本次房间中的人物">${people}</div><div class="rmt-room-map">${locations}</div>
+      <div class="rmt-room-location"><b>${e(session.homeName)}</b><span data-rmt-room-clock>${e(roomDaypartState(now).label)} · ${e(roomClockText(now))}</span>${readOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="room-refresh-figure">更新人物外形 · 保留房间内容</button><button type="button" class="rmt-btn" data-rmt-action="room-life-refresh">更新今日生活</button>'}</div>
+      <div class="rmt-room-flow"><section class="rmt-room-stage"><div class="rmt-room-stage-head"><b>${e(selectedSpace.label)}</b></div><div class="rmt-room-scene rmt-room-layout-scene" data-rmt-room-beat="${e(current.id)}">
+        ${room_interior.roomInteriorHtml(layout, { selectedId: selected?.id, world: visual.worldStyle, participants: present.map(slot => ({ id: slot.participantId, name: slot.name, figure: slot.visualProfile?.figure || {} })) })}
+        ${(session.pets || []).filter(pet => pet.spaceId === selectedSpace.id).map(roomPetNodeHtml).join('')}</div>
+        <div class="rmt-room-object-rail">${layout.map(entry => roomObjectLayoutButtonHtml(entry, 'rail', selected?.id)).join('')}</div><div class="rmt-room-participant-states">${lines}</div></section>
+      <section class="rmt-room-card" id="${core_constants.OVERLAY_ID}_room_object_detail"><div class="rmt-room-card-kicker">物品介绍</div><b>${e(selected?.label || selectedSpace.label)}</b><p>${e(selected?.description || selectedSpace.atmosphere)}</p>${selected?.line ? `<div class="rmt-room-object-line"><b>${e(speaker ? `${speaker}的话` : '未标注说话人')}</b><p>${e(selected.line)}</p></div>` : ''}</section>
+      <section class="rmt-room-card"><div class="rmt-room-card-kicker">房间介绍</div><p>${e(selectedSpace.atmosphere)}</p><p>${e(session.homeSummary)}</p>${legacy}</section>
+      <section class="rmt-room-card"><button type="button" class="rmt-btn" data-rmt-action="room-open-items" ${!searchable || (readOnly && !deep.items) ? 'disabled' : ''}>${e(searchable ? `翻找「${selected.label}」` : '先选中盒子 / 抽屉 / 柜子等收纳物')}</button></section></div></div>`;
+    const readingNotice = recovery_view.readableProgressHtml(session) + roomPreservedLifeHtml(session);
+    if (readingNotice) {
+        if (typeof body.insertAdjacentHTML === 'function') body.insertAdjacentHTML('afterbegin', readingNotice);
+        else body.innerHTML = readingNotice + body.innerHTML;
+    }
+    startRoomClock();
 }
