@@ -1065,6 +1065,7 @@ export async function refreshPartialGenerationView(mode, context, { draftId, pag
     // otherwise the caller's original reader and position must still be current.
     const ownsDraft = snapshot?.taskResultDraftId === draftId
         || (prior?.readableProgress?.complete === false && prior.readableProgress.draftId === draftId);
+    if (prior?.readableProgress?.explicitDraft && !ownsDraft) return false;
     if (!ownsDraft && typeof readerStillCurrent === 'function' && !readerStillCurrent()) return false;
     if (mode === core_constants.MODE.HEART && pageId && pageId !== 'heart') {
         const shownPage = ui_workspaceState.workspace.route === 'heart'
@@ -1084,9 +1085,11 @@ export async function refreshPartialGenerationView(mode, context, { draftId, pag
     } else {
         memory = archive_repository.getImportedMemory(context); stored = core_cache.getCache(context);
     }
-    const session = core_cache.loadSession(mode, { context, chatId: memory?.chatId, memoryBank: memory, cache: stored, clone: true, includePartial: true });
+    const exactResult = prior?.readableProgress?.explicitDraft ? stored?.[core_cache.GENERATION_DRAFTS_CACHE_KEY]?.records?.[prior.readableProgress.draftId]?.result : null;
+    const session = exactResult ? core_cache.generationTaskResultSession({ draftId: prior.readableProgress.draftId, ...exactResult })
+        : core_cache.loadSession(mode, { context, chatId: memory?.chatId, memoryBank: memory, cache: stored, clone: true, includePartial: true });
     if (!session?.readableProgress) return false;
-    if (!snapshot && stored?.[core_cache.GENERATION_DRAFTS_CACHE_KEY]?.records?.[draftId]?.result?.sourceMemory?.archiveRevision !== memory?.archiveRevision) return false;
+    if (!snapshot && !exactResult && stored?.[core_cache.GENERATION_DRAFTS_CACHE_KEY]?.records?.[draftId]?.result?.sourceMemory?.archiveRevision !== memory?.archiveRevision) return false;
     for (const key of ['selectedId', 'selectedEntryId', 'selectedContainerId', 'selectedNodeId', 'category', 'page', 'viewPath',
         'selectedMonth', 'selectedDateKey', 'view', 'tab', 'reading', 'dialogueIndex', 'sharedMemory',
         'selectedSeason', 'selectedVoiceId', 'selectedScenarioId', 'selectedStripId', 'selectedFireflyId', 'selectedDramaKey']) {
@@ -1105,6 +1108,45 @@ export async function refreshPartialGenerationView(mode, context, { draftId, pag
     renderActive();
     if (body) body.scrollTop = scrollTop;
     return true;
+}
+
+export function openPartialTaskSession(record) {
+    runtimeState.activeArchiveSnapshot = null;
+    runtimeState.activeArchiveReadOnly = false;
+    runtimeState.activeMode = record.mode;
+    runtimeState.activeSession = core_cache.generationTaskResultSession(record);
+    runtimeState.archiveViewLevel = 'content';
+    ui_workspaceState.prepareWorkspaceSession(record.mode, runtimeState.activeSession, record.pageId);
+    renderActive();
+}
+
+// Persist a local change to the precise draft/formal item that the user saw.
+export async function saveActiveSessionEdit(mutator, { select = value => value } = {}) {
+    if (!archive_library.requireWritableArchiveAction()) return null;
+    const shown = runtimeState.activeSession, mode = runtimeState.activeMode;
+    const context = core_context.currentCharacterGuard(), bank = archive_repository.requireArchive(context);
+    const origin = core_context.captureTaskOrigin(context, bank.archiveRevision);
+    const resolved = await core_cache.resolveGenerationProgressTarget(context, shown, select);
+    if (!resolved) throw new Error('这项内容已经变化，请重新打开后编辑；没有修改其他版本。');
+    const expected = JSON.stringify(select(resolved.session));
+    const mutate = latest => {
+        if (JSON.stringify(select(latest)) !== expected) throw new Error('这项内容刚被更新，已保留最新内容，请重新打开后编辑。');
+        return mutator(latest);
+    };
+    const committed = resolved.draftId
+        ? await core_cache.commitGenerationTaskResultMutation(context, resolved.draftId, mutate, { expectedTaskOrigin: origin })
+        : await core_cache.commitSessionMutation(mode, core_context.getChatId(context), origin, mutate, resolved.session);
+    if (!committed) throw new Error('本次修改尚未保存，请重新打开这项内容后再试。');
+    if (runtimeState.activeSession === shown && core_context.isCurrentTaskOrigin(origin)) {
+        const next = structuredClone(committed);
+        if (shown.readableProgress?.explicitDraft && next.readableProgress) next.readableProgress.explicitDraft = true;
+        if (shown.generationSources) next.generationSources = structuredClone(shown.generationSources);
+        for (const key of ['selectedId','selectedEntryId','selectedStripId','view','page','dialogueIndex','sharedMemory']) {
+            if (Object.hasOwn(shown, key)) next[key] = structuredClone(shown[key]);
+        }
+        runtimeState.activeSession = next;
+    }
+    return committed;
 }
 
 export function renderActive() {
@@ -1141,7 +1183,7 @@ export function renderActive() {
         const note = document.createElement('section');
         note.className = 'rmt-recovery-status';
         note.setAttribute('role', 'status');
-        note.innerHTML = `<b>已生成部分内容 · 本次任务尚未完成</b><p>这里显示已收到的内容。后续失败或关闭页面，不会清除已保存部分；继续生成只补未完成部分。</p>`;
+        note.innerHTML = `<b>已生成部分内容 · 本次任务尚未完成</b><p>这里显示已收到的内容。后续失败或关闭页面，不会清除已保存部分；继续生成只补未完成部分。</p>${!runtimeState.activeArchiveSnapshot ? '<button type="button" class="rmt-btn" data-rmt-edit-partial>编辑已生成内容</button>' : ''}`;
         bodyEl().prepend(note);
     }
     cg_format_ui.mountCgFormatControl(bodyEl(), runtimeState.activeMode, ui_workspaceState.workspace.route, !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly);
@@ -1308,7 +1350,9 @@ async function deleteManagedTarget(type, id, parentId = '') {
             if (runtimeState.activeMode === mode && (shownSnapshot
                 ? runtimeState.activeArchiveSnapshot?.entryId === shownSnapshot.entryId : core_context.isCurrentTaskOrigin(origin))) {
                 if (targetRuntime) runtimeState.activeArchiveSnapshot.cache = structuredClone(targetRuntime.archiveTarget.cache);
-                runtimeState.activeSession = core_cache.loadSession(mode, { context, memoryBank: bank,
+                runtimeState.activeSession = shownSession.readableProgress?.explicitDraft
+                    ? { ...committed, readableProgress: { ...committed.readableProgress, explicitDraft: true }, generationSources: shownSession.generationSources }
+                    : core_cache.loadSession(mode, { context, memoryBank: bank,
                     cache: targetRuntime?.archiveTarget?.cache, clone: true, includePartial: true }) || committed;
                 ui_contentManager.renderContentManager();
             }
@@ -1405,6 +1449,7 @@ async function regenerateManagedCategory() {
 
 export function handleOverlayClick(event) {
     if (workspace_ui.handleWorkspaceClick(event) || language_view.handleLanguageClick(event)) return;
+    if (event.target.closest?.('[data-rmt-edit-partial]')) return ui_contentManager.renderPartialContentEditor();
     const contentDraftOpen = event.target.closest?.('[data-rmt-content-draft-open]');
     if (contentDraftOpen) return void archive_library.openContentRegenerationDraft(
         contentDraftOpen.dataset.rmtContentDraftOpen, core_context.getContext(), { snapshot: runtimeState.activeArchiveSnapshot },

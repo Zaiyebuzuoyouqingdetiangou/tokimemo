@@ -55,7 +55,7 @@ export function captureCgAppearanceEvidence(context, { api = globalThis.STBaiBai
             // Evidence is explicitly bound by ID. A same-name library match is
             // insufficient to identify one of several distinct sandbox people.
             return Object.freeze({ participantId: person.id, name: person.name,
-                description: known ? '' : person.sourceRefs.map(ref => participantSourceText(ref.content, context)).filter(Boolean).join('\n'),
+                description: plain(known?.tag, CG_APPEARANCE_TAG_LIMIT) ? '' : person.sourceRefs.map(ref => participantSourceText(ref.content, context)).filter(Boolean).join('\n'),
                 knownTag: plain(known?.tag, CG_APPEARANCE_TAG_LIMIT), knownNl: '' });
         });
         return Object.freeze({ castSnapshot: snapshot, characters: Object.freeze(characters),
@@ -257,12 +257,19 @@ export function appearanceEvidenceForFormat(evidence, promptFormat) {
         return { ...row, description: evidence?.castSnapshot ? description : description.slice(0, 6000), knownTag: '', knownNl: '' };
     }) };
 }
-export function appearanceEvidenceWithDraft(evidence, draft) {
+export function appearanceEvidenceWithDraft(evidence, draft, context = null) {
     if (!draft || typeof draft !== 'object' || Array.isArray(draft)) return evidence;
     return { ...evidence, characters: (evidence?.characters || []).map(row => {
         if (evidence.castSnapshot) {
             if (!Object.hasOwn(draft, row.participantId) || typeof draft[row.participantId] !== 'string') return row;
-            return { ...row, knownTag: plain(draft[row.participantId], CG_APPEARANCE_TAG_LIMIT), knownNl: '' };
+            const knownTag = plain(draft[row.participantId], CG_APPEARANCE_TAG_LIMIT);
+            // Clearing a saved tag means re-extract from this person's sources,
+            // not that the corresponding worldbook description disappeared.
+            const description = !knownTag && row.knownTag && !row.description
+                ? (evidence.castSnapshot.people.find(person => person.id === row.participantId)?.sourceRefs || [])
+                    .map(ref => participantSourceText(ref.content, context)).filter(Boolean).join('\n')
+                : row.description;
+            return { ...row, description, knownTag, knownNl: '' };
         }
         if (!ROLES.includes(row.role) || !Object.hasOwn(draft, row.role) || typeof draft[row.role] !== 'string') return row;
         return { ...row, knownTag: plain(draft[row.role], CG_APPEARANCE_TAG_LIMIT), knownNl: '' };

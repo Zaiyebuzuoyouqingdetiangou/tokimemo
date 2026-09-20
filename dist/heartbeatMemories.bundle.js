@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 130
-// Source SHA-256: c970872e6bdb1f81bfc04c28d31dfd25b18175b7c5d15059c890de93da01319d
+// Source SHA-256: 28310740dc3a25fe681aa1181cc585b444edcbcc83d2c6757f789863c93fd0e1
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -5167,7 +5167,7 @@ function captureCgAppearanceEvidence(context, { api = globalThis.STBaiBaiImage, 
             // Evidence is explicitly bound by ID. A same-name library match is
             // insufficient to identify one of several distinct sandbox people.
             return Object.freeze({ participantId: person.id, name: person.name,
-                description: known ? '' : person.sourceRefs.map(ref => participantSourceText(ref.content, context)).filter(Boolean).join('\n'),
+                description: plain(known?.tag, CG_APPEARANCE_TAG_LIMIT) ? '' : person.sourceRefs.map(ref => participantSourceText(ref.content, context)).filter(Boolean).join('\n'),
                 knownTag: plain(known?.tag, CG_APPEARANCE_TAG_LIMIT), knownNl: '' });
         });
         return Object.freeze({ castSnapshot: snapshot, characters: Object.freeze(characters),
@@ -5369,12 +5369,19 @@ function appearanceEvidenceForFormat(evidence, promptFormat) {
         return { ...row, description: evidence?.castSnapshot ? description : description.slice(0, 6000), knownTag: '', knownNl: '' };
     }) };
 }
-function appearanceEvidenceWithDraft(evidence, draft) {
+function appearanceEvidenceWithDraft(evidence, draft, context = null) {
     if (!draft || typeof draft !== 'object' || Array.isArray(draft)) return evidence;
     return { ...evidence, characters: (evidence?.characters || []).map(row => {
         if (evidence.castSnapshot) {
             if (!Object.hasOwn(draft, row.participantId) || typeof draft[row.participantId] !== 'string') return row;
-            return { ...row, knownTag: plain(draft[row.participantId], CG_APPEARANCE_TAG_LIMIT), knownNl: '' };
+            const knownTag = plain(draft[row.participantId], CG_APPEARANCE_TAG_LIMIT);
+            // Clearing a saved tag means re-extract from this person's sources,
+            // not that the corresponding worldbook description disappeared.
+            const description = !knownTag && row.knownTag && !row.description
+                ? (evidence.castSnapshot.people.find(person => person.id === row.participantId)?.sourceRefs || [])
+                    .map(ref => participantSourceText(ref.content, context)).filter(Boolean).join('\n')
+                : row.description;
+            return { ...row, description, knownTag, knownNl: '' };
         }
         if (!ROLES.includes(row.role) || !Object.hasOwn(draft, row.role) || typeof draft[row.role] !== 'string') return row;
         return { ...row, knownTag: plain(draft[row.role], CG_APPEARANCE_TAG_LIMIT), knownNl: '' };
@@ -8211,7 +8218,7 @@ function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
         const resultHtml = cache.listGenerationTaskResults(null, stored).map(row => {
             const label = pages[row.pageId] || constants.MODE_LABEL[row.mode] || row.pageId || row.mode;
             const pending = row.status === 'awaiting-choice';
-            return `<section class="rmt-recovery-status" role="status"><b>${text.esc(label)} · ${pending ? '成果已保存，等待选择去向' : row.status === 'open' ? '已保存部分成果，原草稿可继续' : '独立生成成果'}</b><p>按原资料生成，原资料出处随成果保留。</p><button type="button" class="rmt-btn" data-rmt-task-result-open="${text.esc(row.draftId)}">查看已保存成果</button>${!readOnly && (pending || row.status === 'independent') ? ` <button type="button" class="rmt-btn" data-rmt-task-result-choose="${text.esc(row.draftId)}">选择保存去向</button>` : ''}</section>`;
+            return `<section class="rmt-recovery-status" role="status"><b>${text.esc(label)} · ${pending ? '成果已保存，等待选择去向' : row.status === 'open' ? '已保存部分成果，原草稿可继续' : '独立生成成果'}</b><p>按原资料生成，原资料出处随成果保留。</p><button type="button" class="rmt-btn" data-rmt-task-result-open="${text.esc(row.draftId)}">${row.status === 'open' ? '打开已生成内容' : '查看已保存成果'}</button>${!readOnly && (pending || row.status === 'independent') ? ` <button type="button" class="rmt-btn" data-rmt-task-result-choose="${text.esc(row.draftId)}">选择保存去向</button>` : ''}</section>`;
         }).join('');
         return draftHtml + resultHtml;
     }
@@ -9246,7 +9253,7 @@ function busyEditor(active) {
     editor.busy = active;
     editor.element.setAttribute('aria-busy', String(active));
     for (const field of editor.element.querySelectorAll('[data-rmt-cg-prompt-input], [data-rmt-cg-scene-tags], [data-rmt-cg-tag-input], [data-rmt-cg-flat-prompt], [data-rmt-cg-editor-format], [data-rmt-cg-person-selected], [data-rmt-cg-person-name], [data-rmt-cg-person-tag]')) field.disabled = active;
-    for (const button of editor.element.querySelectorAll('[data-rmt-cg-prompt-action="reconceive"], [data-rmt-cg-prompt-action="draw"], [data-rmt-cg-prompt-action="clear"], [data-rmt-cg-prompt-action="retry"], [data-rmt-cg-prompt-action="save-looks"], [data-rmt-cg-prompt-action="restore-draft"], [data-rmt-cg-prompt-action="add-person"], [data-rmt-cg-prompt-action="add-user"]')) button.disabled = active;
+    for (const button of editor.element.querySelectorAll('[data-rmt-cg-prompt-action="reconceive"], [data-rmt-cg-prompt-action="draw"], [data-rmt-cg-prompt-action="clear"], [data-rmt-cg-prompt-action="retry"], [data-rmt-cg-prompt-action="save-looks"], [data-rmt-cg-prompt-action="restore-draft"], [data-rmt-cg-prompt-action="add-person"], [data-rmt-cg-prompt-action="add-user"], [data-rmt-cg-prompt-action="use-current-cast"]')) button.disabled = active;
 }
 
 function readParticipantFields(current) {
@@ -9287,6 +9294,23 @@ function renderParticipantFields(current) {
         name.addEventListener('input', changed);
         tag.addEventListener('input', changed);
     }
+}
+
+function appearanceFieldsHtml(multi) {
+    return multi ? '<fieldset data-rmt-cg-cast><legend>本图出镜人物</legend><p>勾选只影响这张图。姓名可改，也可补充档案名单外的人物；同名人物独立保存。</p><div data-rmt-cg-cast-list></div><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-person">补充人物</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-user">添加用户为候选</button></fieldset>' : `<p><label for="rmt-cg-char-tags" data-rmt-cg-tag-name="char">角色 · 外貌 tag</label><textarea id="rmt-cg-char-tags" data-rmt-cg-tag-input="char" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p>
+            <p><label for="rmt-cg-user-tags" data-rmt-cg-tag-name="user">用户 · 外貌 tag</label><textarea id="rmt-cg-user-tags" data-rmt-cg-tag-input="user" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p>`;
+}
+
+function changeEditorCastMode(current, multi) {
+    if (current.multi === multi) return;
+    current.multi = multi;
+    current.element.querySelector('[data-rmt-cg-appearance-fields]').innerHTML = appearanceFieldsHtml(multi);
+    if (!multi) for (const field of current.element.querySelectorAll('[data-rmt-cg-tag-input]')) {
+        field.addEventListener('input', () => { invalidateFlatPrompt(current); updatePreparedPreview(current); });
+    }
+    const context = core_context.currentCharacterGuard();
+    current.looksSignature = multi ? cast_looks.participantLooksSignature(cast_looks.readParticipantLooks(context))
+        : cast_looks.castLooksSignature(cast_looks.readCastLooks(context));
 }
 
 function editorMetadata(current) {
@@ -9394,7 +9418,8 @@ function openCgPromptEditor({ heartStrip = false } = {}) {
         const context = core_context.currentCharacterGuard();
         const initialMetadata = appearance.initialCgAppearanceMetadata(selected, context);
         const multi = !!initialMetadata?.castSnapshot;
-        const roster = multi && !selected.cgImage ? cache.readParticipantRoster(context) : null;
+        const currentRoster = cache.readParticipantRoster(context);
+        const roster = multi && !selected.cgImage ? currentRoster : null;
         const participantLooks = multi ? cast_looks.readParticipantLooks(context) : null;
         const canRetry = images.hasPendingCgImage(target);
         const element = document.createElement('div');
@@ -9409,8 +9434,8 @@ function openCgPromptEditor({ heartStrip = false } = {}) {
           <div id="rmt-cg-prompt-count" data-rmt-cg-prompt-count></div>
           <details class="rmt-cg-prompt-scene" data-rmt-cg-appearance>
             <summary>人物外貌与场景标签</summary>
-            ${multi ? '<fieldset data-rmt-cg-cast><legend>本图出镜人物</legend><p>勾选只影响这张图。姓名可改，也可补充档案名单外的人物；同名人物独立保存。</p><div data-rmt-cg-cast-list></div><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-person">补充人物</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-user">添加用户为候选</button></fieldset>' : `<p><label for="rmt-cg-char-tags" data-rmt-cg-tag-name="char">角色 · 外貌 tag</label><textarea id="rmt-cg-char-tags" data-rmt-cg-tag-input="char" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p>
-            <p><label for="rmt-cg-user-tags" data-rmt-cg-tag-name="user">用户 · 外貌 tag</label><textarea id="rmt-cg-user-tags" data-rmt-cg-tag-input="user" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p>`}
+            <div data-rmt-cg-appearance-fields>${appearanceFieldsHtml(multi)}</div>
+            ${selected.cgImage && participants.selectedParticipantSnapshot(currentRoster) ? '<button type="button" class="rmt-btn" data-rmt-cg-prompt-action="use-current-cast">从当前档案选择本图人物</button>' : ''}
             <button type="button" class="rmt-btn" data-rmt-cg-prompt-action="save-looks">保存外貌</button>
             <p><label for="rmt-cg-scene-tags">场景 tag</label><textarea id="rmt-cg-scene-tags" data-rmt-cg-scene-tags rows="2" maxlength="${appearance.CG_SCENE_TAG_LIMIT}" placeholder="人物动作、场景与构图"></textarea></p>
             <p><label for="rmt-cg-flat-prompt">通用后端完整提示</label><textarea id="rmt-cg-flat-prompt" data-rmt-cg-flat-prompt rows="4" maxlength="${appearance.CG_FLAT_PROMPT_LIMIT}" placeholder="包含双方外貌、动作与场景的完整提示"></textarea></p>
@@ -9495,12 +9520,30 @@ async function handleCgPromptEditorAction(action) {
             current.element.querySelector(`[data-rmt-cg-person-name="${current.people.length - 1}"]`).focus();
             return;
         }
+        if (action === 'use-current-cast') {
+            const context = core_context.currentCharacterGuard();
+            const roster = cache.readParticipantRoster(context);
+            const snapshot = participants.selectedParticipantSnapshot(roster);
+            if (!snapshot) return;
+            const previous = snapshotEditorDraft(current);
+            const saved = cast_looks.readParticipantLooks(context);
+            rememberEditorDraft(current, previous);
+            changeEditorCastMode(current, true);
+            current.people = roster.people.map(person => ({ ...person, selected: false,
+                tag: saved?.characters.find(row => row.participantId === person.id)?.tag || '' }));
+            fillEditorMetadata(current, { promptFormat: current.promptFormat, sceneTags: previous.metadata?.sceneTags || '',
+                castSnapshot: snapshot, characters: saved?.characters || [] });
+            current.element.querySelector('[data-rmt-cg-appearance]').open = true;
+            current.element.querySelector('[data-rmt-cg-prompt-status]').textContent = '已载入当前档案人物，请勾选本图出镜者。原图和原提示未改动；重新构思后再确认绘图。';
+            return;
+        }
         if (action === 'restore-draft') {
             const draft = current.previousDraft;
             if (!draft) return;
             current.promptFormat = draft.promptFormat;
             current.element.querySelector('[data-rmt-cg-editor-format]').value = draft.promptFormat;
             current.element.querySelector('[data-rmt-cg-prompt-input]').value = draft.scene;
+            changeEditorCastMode(current, !!draft.metadata?.castSnapshot);
             fillEditorMetadata(current, draft.metadata);
             current.element.querySelector('[data-rmt-cg-prompt-count]').textContent = `${draft.scene.length} / ${core_constants.MAX_CG_IMAGE_PROMPT_CHARS} 字符`;
             rememberEditorDraft(current, null);
@@ -17208,6 +17251,9 @@ __m_ui_styles_js.abstractStyle = abstractStyle;
 
 function __init_ui_albumView_js() {
 // MODULE: ui/albumView.js
+const modes_album = __m_modes_album_js;
+const core_participants = __m_core_participants_js;
+const core_cache = __m_core_cache_js;
 const cg_format_ui = __m_ui_cgFormatControl_js;
 const story_chronology = __m_core_storyChronology_js;
 const ui_albumCategory = __m_ui_albumCategory_js;
@@ -17220,6 +17266,9 @@ const ui_cgPromptEditor = __m_ui_cgPromptEditor_js;
 const ui_overlay = __m_ui_overlay_js;
 const ui_styles = __m_ui_styles_js;
 const runtimeState = __m_core_state_js.state;
+
+
+
 
 
 
@@ -17398,6 +17447,33 @@ function enterSharedMemory() {
     renderSharedMemory();
 }
 
+function albumSpeakerSnapshot(item, session = runtimeState.activeSession) {
+    // A saved item's identities win over a later roster edit. Legacy rows may be
+    // attributed manually using the active archive's explicitly selected people.
+    return modes_album.normalizeAlbumSpeakerSnapshot(item?.speakerSnapshot)
+        || core_participants.normalizeParticipantSnapshot(session?.participantSnapshot || null)
+        || core_participants.selectedParticipantSnapshot(runtimeState.activeArchiveSnapshot
+            ? runtimeState.activeArchiveSnapshot.cache?.participantsV1 || runtimeState.activeArchiveSnapshot.memory?.participantsV1
+            : core_cache.readParticipantRoster(core_context.getContext()));
+}
+
+async function albumSetCommentSpeaker(entryId, index, speakerId) {
+    if (!archive_library.requireWritableArchiveAction()) return;
+    const item = runtimeState.activeSession?.entries?.find(entry => entry.id === entryId);
+    const snapshot = albumSpeakerSnapshot(item);
+    const person = snapshot?.people.find(person => person.id === speakerId);
+    if (!item || !Number.isInteger(index) || index < 0 || index >= item.comments.length || (speakerId && !person)) return;
+    await ui_overlay.saveActiveSessionEdit(session => {
+        const latest = session.entries.find(entry => entry.id === entryId);
+        latest.speakerSnapshot = modes_album.albumSpeakerIdentities(snapshot);
+        latest.commentSpeakers = latest.comments.map((_, lineIndex) => lineIndex === index
+            ? { speakerId: person?.id || '', speakerName: person?.name || '' }
+            : latest.commentSpeakers?.[lineIndex] || { speakerId: '', speakerName: '' });
+        return session;
+    }, { select: session => session.entries?.find(entry => entry.id === entryId) });
+    renderSharedMemory();
+}
+
 function renderSharedMemory() {
     const session = runtimeState.activeSession;
     const item = selectedAlbumEntry();
@@ -17405,7 +17481,10 @@ function renderSharedMemory() {
     const comments = item.comments;
     session.dialogueIndex = Math.max(0, Math.min(session.dialogueIndex, comments.length - 1));
     const last = session.dialogueIndex >= comments.length - 1;
-    const charName = core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext()?.name2, 80) || '他';
+    const snapshot = albumSpeakerSnapshot(item, session);
+    const speaker = snapshot?.people.find(person => person.id === item.commentSpeakers?.[session.dialogueIndex]?.speakerId);
+    const charName = snapshot ? (speaker?.name || '未标注人物')
+        : core_text.normalizeText(runtimeState.activeArchiveSnapshot?.characterName || core_context.getContext()?.name2, 80) || '他';
     const readOnly = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
     ui_overlay.setBackVisible(true, '回忆相簿');
     ui_overlay.topTitle(`共同回忆 · ${item.title}`);
@@ -17418,6 +17497,7 @@ function renderSharedMemory() {
       <div class="rmt-dialogue">
         ${item.progressPending?.length ? `<p role="status">共同回忆未完成 · 已生成 ${comments.length} 段对白。</p>` : ''}
         <div class="rmt-dialogue-speaker">${core_text.esc(charName)}</div>
+        ${snapshot && comments.length && !readOnly ? `<label>本句说话人 <select data-rmt-album-speaker="${core_text.esc(item.id)}" data-rmt-dialogue-index="${session.dialogueIndex}"><option value="">未标注人物</option>${snapshot.people.map(person => `<option value="${core_text.esc(person.id)}"${person.id === speaker?.id ? ' selected' : ''}>${core_text.esc(person.name)}</option>`).join('')}</select></label>` : ''}
         <div class="rmt-dialogue-text">${core_text.esc(comments[session.dialogueIndex] || (item.progressPending?.length ? '对白尚未生成，画面描述已保留。' : ''))}</div>
         <div class="rmt-dialogue-actions">
           <button type="button" class="rmt-btn" data-rmt-action="shared-back">返回相簿</button>
@@ -17427,8 +17507,14 @@ function renderSharedMemory() {
       ${readOnly ? '' : '<div class="rmt-cg-card-actions rmt-cg-memory-actions"><button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt">图片设置</button></div>'}
       ${generation_imageGeneration.cgImageProgressHtml()}
     </div>`;
+    body.querySelector?.('[data-rmt-album-speaker]')?.addEventListener('change', event => {
+        const select = event.currentTarget;
+        void albumSetCommentSpeaker(select.dataset.rmtAlbumSpeaker, Number(select.dataset.rmtDialogueIndex), select.value)
+            .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
+    });
 }
 
+__m_ui_albumView_js.albumSetCommentSpeaker = albumSetCommentSpeaker;
 __m_ui_albumView_js.filteredAlbumEntries = filteredAlbumEntries;
 __m_ui_albumView_js.selectedAlbumEntry = selectedAlbumEntry;
 __m_ui_albumView_js.renderAlbum = renderAlbum;
@@ -17440,6 +17526,7 @@ __m_ui_albumView_js.albumFilter = albumFilter;
 __m_ui_albumView_js.albumPage = albumPage;
 __m_ui_albumView_js.showAlbumHint = showAlbumHint;
 __m_ui_albumView_js.enterSharedMemory = enterSharedMemory;
+__m_ui_albumView_js.albumSpeakerSnapshot = albumSpeakerSnapshot;
 __m_ui_albumView_js.renderSharedMemory = renderSharedMemory;
 }
 
@@ -17673,16 +17760,19 @@ function captureCgImageTarget(target = selectedCgTarget()) {
     const context = core_context.currentCharacterGuard();
     const memory = archive_repository.requireArchive(context);
     if (core_context.comparableChatId(session.chatId) !== core_context.comparableChatId(core_context.getChatId(context))
-        || session.archiveRevision !== memory.archiveRevision) return null;
+        || (!session.readableProgress?.explicitDraft && session.archiveRevision !== memory.archiveRevision)) return null;
     let draftId = '';
     if (session.readableProgress?.complete === false) {
         const records = core_cache.getCache(context)?.[core_cache.GENERATION_DRAFTS_CACHE_KEY]?.records || {};
-        const candidates = Object.entries(records).filter(([, row]) => row.status === 'open'
-            && row.result?.mode === mode && row.result.sourceMemory?.archiveRevision === memory.archiveRevision
+        const candidates = Object.entries(records).filter(([id, row]) => row.status === 'open'
+            && row.result?.mode === mode && (session.readableProgress?.explicitDraft
+                ? id === session.readableProgress.draftId && row.result.sourceMemory?.chatId === memory.chatId
+                : row.result.sourceMemory?.archiveRevision === memory.archiveRevision)
             && cgItemSignature(cgItemInSession(mode, row.result.session, item.id)) === cgItemSignature(item));
         candidates.sort(([left, a], [right, b]) => Number(right === session.readableProgress.draftId)
             - Number(left === session.readableProgress.draftId) || b.result.createdAt - a.result.createdAt);
         draftId = candidates[0]?.[0] || '';
+        if (!draftId && session.readableProgress?.explicitDraft) return null;
         if (!draftId && cgItemSignature(cgItemInSession(mode,
             core_cache.loadSession(mode, { context, memoryBank: memory, clone: false }), item.id)) !== cgItemSignature(item)) return null;
     }
@@ -17750,7 +17840,7 @@ async function reconceiveCgImagePrompt(target, { promptFormat = '', appearanceDr
     const selectedCast = castSnapshot === undefined
         ? cg_appearance.initialCgAppearanceMetadata(item, context)?.castSnapshot || null : castSnapshot;
     const appearance = cg_appearance.appearanceEvidenceForFormat(
-        cg_appearance.appearanceEvidenceWithDraft(cg_appearance.captureCgAppearanceEvidence(context, { castSnapshot: selectedCast }), appearanceDraft), promptFormat);
+        cg_appearance.appearanceEvidenceWithDraft(cg_appearance.captureCgAppearanceEvidence(context, { castSnapshot: selectedCast }), appearanceDraft, context), promptFormat);
     const prompt = buildCgReconceptPrompt(item, context, target.mode, appearance, promptFormat);
     // One explicit text request extracts both appearances and composes the scene.
     // Only public card/persona fields and optional public character tags are used.
@@ -17946,7 +18036,9 @@ async function commitCapturedCgImage(captured, image) {
     assertCgImageTargetCurrent(captured, { requireSelection: false });
     const context = core_context.currentCharacterGuard();
     const mutate = (latest, memory) => {
-            if (memory.archiveRevision !== captured.revision) return null;
+            const expectedRevision = captured.draftId && cgDraftRecord(context, captured.draftId)?.status === 'open'
+                ? captured.session.archiveRevision : captured.revision;
+            if (memory.archiveRevision !== expectedRevision) return null;
             const result = image_patch.applyCgImagePatch(latest, { version: 1, mode: captured.mode,
                 itemId: captured.itemId, expectedSignature: captured.signature, image });
             return result.session;
@@ -17969,7 +18061,8 @@ async function commitCapturedCgImage(captured, image) {
         && archive_repository.getImportedMemory(core_context.getContext())?.archiveRevision === captured.revision) {
         // Copy only this image into views that still show the captured item.
         for (const session of new Set([captured.session, runtimeState.activeSession])) {
-            if (session?.kind !== captured.mode || session.archiveRevision !== captured.revision
+            if (session?.kind !== captured.mode || (session.archiveRevision !== captured.revision
+                && !(captured.draftId && session.readableProgress?.draftId === captured.draftId))
                 || core_context.comparableChatId(session.chatId) !== core_context.comparableChatId(captured.origin.chatId)) continue;
             const item = cgItemInSession(captured.mode, session, captured.itemId);
             if (item && cgItemSignature(item) === captured.signature) item.cgImage = image;
@@ -18113,7 +18206,7 @@ async function drawSelectedCgImage({ promptOverride, promptMetadata, promptForma
             ...(metadata ? { promptMetadata: metadata } : {}),
         };
         if (!core_context.isCurrentTaskOrigin(origin)) {
-            if (session.archiveRevision !== captured.revision || cgItemSignature(item) !== captured.signature) {
+            if (session.archiveRevision !== captured.session.archiveRevision || cgItemSignature(item) !== captured.signature) {
                 throw core_text.safeUserError('原回忆已变化，新图片没有替换旧图；可以在生图插件图库中查看。', 'RMT_CG_TARGET_CHANGED');
             }
             const { durable } = deferCgImageIfOriginChanged(captured, nextImage);
@@ -18248,6 +18341,7 @@ __m_generation_imageGeneration_js.IMAGE_GENERATION_COMMAND_NAMES = IMAGE_GENERAT
 
 function __init_modes_album_js() {
 // MODULE: modes/album.js
+const core_participants = __m_core_participants_js;
 const cg_visual = __m_core_cgVisualRules_js;
 const story_chronology = __m_core_storyChronology_js;
 const core_cache = __m_core_cache_js;
@@ -18263,6 +18357,7 @@ const generation_imageGeneration = __m_generation_imageGeneration_js;
 const generation_prompts = __m_generation_prompts_js;
 
 
+
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 
@@ -18276,6 +18371,45 @@ const generation_prompts = __m_generation_prompts_js;
 
 
 
+// Per-entry identities omit worldbook prose; full generation sources are frozen
+// once by the task/session rather than copied again for every CG.
+function albumSpeakerIdentities(snapshot) {
+    return snapshot ? { version: 1, people: snapshot.people.map(({ id, name }) => ({ id, name })) } : null;
+}
+
+function normalizeAlbumSpeakerSnapshot(snapshot) {
+    return snapshot ? core_participants.normalizeParticipantSnapshot({ ...snapshot,
+        people: snapshot.people.map(person => ({ ...person, sourceRefs: [] })) }) : null;
+}
+
+// Keep legacy string arrays intact. Multiplayer attribution lives beside the text,
+// so old exports/editors and already generated prose retain their existing shape.
+function normalizeAlbumDialogue(raw, participantSnapshot = null, savedSpeakers = []) {
+    const snapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
+    if (!snapshot) return { comments: core_text.cleanArray(raw, 8, 1200) };
+    const comments = [], commentSpeakers = [];
+    for (const [index, line] of (Array.isArray(raw) ? raw : []).slice(0, 8).entries()) {
+        const text = core_text.normalizeText(typeof line === 'string' ? line : line?.text, 1200);
+        if (!text) continue;
+        const id = typeof line === 'object' ? line?.speakerId : savedSpeakers[index]?.speakerId;
+        const person = snapshot.people.find(person => person.id === id);
+        comments.push(text);
+        commentSpeakers.push({ speakerId: person?.id || '', speakerName: person?.name || '' });
+    }
+    return { comments, commentSpeakers };
+}
+
+function participantRelationshipBank(memoryBank, person) {
+    // Generic "both" clauses in another person's memory cannot establish this pair.
+    // Keep explicitly named evidence and records whose participants bind this person.
+    const named = value => !!person.name && typeof value === 'string' && value.includes(person.name);
+    return { ...memoryBank, characterName: person.name,
+        archiveSummary: String(memoryBank?.archiveSummary || '').split(/[。！？\n]/u).filter(named).join('。'),
+        memories: (memoryBank?.memories || []).filter(memory =>
+            memory.participants?.includes(person.name) || named(memory.title) || named(memory.summary)),
+    };
+}
+
 function compactAlbumExisting(session) {
     return story_chronology.sortByStoryDate(core_evidence.evenlySample(Array.isArray(session?.entries) ? session.entries : [], core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS)).map(item => ({
         id: core_text.normalizeText(item?.id, 40),
@@ -18288,7 +18422,8 @@ function compactAlbumExisting(session) {
 
 // A reading projection is separate from the complete-result validator and from
 // the canonical album. Only closed JSON records can supply new content here.
-function projectAlbumProgress({ segments = [], memoryBank }) {
+function projectAlbumProgress({ segments = [], memoryBank, frozenInputs = {} }) {
+    const participantSnapshot = core_participants.normalizeParticipantSnapshot(frozenInputs['participants:album'] || null);
     const index = segments.find(segment => /:index$/u.test(segment.slot));
     if (!index) return null;
     const rows = index.items('/entries');
@@ -18308,30 +18443,32 @@ function projectAlbumProgress({ segments = [], memoryBank }) {
     let relationshipSnapshot = null;
     const relationship = segments.find(segment => /:relationship-scan$/u.test(segment.slot));
     if (relationship?.complete) {
-        try { relationshipSnapshot = normalizeAlbumRelationshipSnapshot(relationship.value, memoryBank); } catch {}
+        try { relationshipSnapshot = normalizeAlbumRelationshipSnapshot(relationship.value, memoryBank, participantSnapshot); } catch {}
     }
     for (const entry of entries) {
         if (!entry.unlocked) continue;
         entry.progressPending = ['共同回忆'];
         entry.relationshipSnapshot = relationshipSnapshot;
+        if (participantSnapshot) entry.speakerSnapshot = albumSpeakerIdentities(participantSnapshot);
         for (const segment of segments.filter(item => /:comments:\d+$/u.test(item.slot))) {
             // at() also exposes closed comments inside the last, still-open row.
             for (let i = 0; ; i++) {
                 const row = segment.at?.(`/items/${i}`) ?? segment.items('/items')[i];
                 if (!row) break;
                 if (core_text.safeId(row.id, '') !== entry.id) continue;
-                entry.comments = core_text.cleanArray(segment.items(`/items/${i}/comments`), 8, 1200);
+                Object.assign(entry, normalizeAlbumDialogue(segment.items(`/items/${i}/comments`), participantSnapshot));
                 try {
-                    const complete = normalizeAlbumCommentsBatch({ items: [row] }, [entry]);
+                    const complete = normalizeAlbumCommentsBatch({ items: [row] }, [entry], participantSnapshot);
                     if (segment.has(`/items/${i}`)) {
-                        entry.comments = complete.get(entry.id);
+                        if (participantSnapshot) Object.assign(entry, complete.get(entry.id));
+                        else entry.comments = complete.get(entry.id);
                         entry.progressPending = [];
                     }
                 } catch {}
             }
         }
     }
-    return { kind: core_constants.MODE.ALBUM, title: core_text.normalizeText(index.value?.title, 120) || '回忆相簿', entries,
+    return { ...(participantSnapshot ? { participantSnapshot } : {}), kind: core_constants.MODE.ALBUM, title: core_text.normalizeText(index.value?.title, 120) || '回忆相簿', entries,
         category: '全部', page: 1, pageSize: 6, selectedId: entries[0].id, sharedMemory: false, dialogueIndex: 0, hintVisible: false };
 }
 
@@ -18370,7 +18507,16 @@ function albumRelationshipArchiveSlice(memoryBank) {
     });
 }
 
-function albumRelationshipScanPrompt(context, memoryBank) {
+function albumRelationshipScanPrompt(context, memoryBank, participantSnapshot = null) {
+    const snapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
+    if (snapshot) return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 2：当下关系扫描')}
+本请求扫描完整档案，分别判定每位选定人物与 {{user}} 的当下关系；不写 CG 或对白，不预演未来。角色卡名称是场景标题，不能充当人物姓名。
+${core_participants.participantPromptBlock(snapshot)}
+ALBUM_RELATIONSHIP_FULL_ARCHIVE_JSON:
+${albumRelationshipArchiveSlice(memoryBank)}
+严格输出 {"people":[{"speakerId":"名单中的原始 id","charState":"该人物已证实的态度","userState":"用户对该人物已明确表达的态度，未知写未确认","relationshipState":"该人物与用户的关系阶段","relationshipSummary":"该人物与用户的证据总结","relationshipSourceMemoryIds":["M001"],"relationshipSourceMemoryAnchor":"该记忆的原样锚点"}]}。
+每位选定人物各返回一条，用 speakerId 对应。每人的证据和关系分别核对，不能把甲的恋爱关系、行为或内心套给乙；不替用户创造回应。引用必须来自上方档案，只输出 JSON。`;
+
     return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 2：当下关系扫描')}
 本请求只做一件事：在写共同回忆对话前，扫描当前完整档案时间线，判定 {{char}} 与 {{user}} 双方已有证据的感情状态和当前关系。不写 CG，不写对话，不预演未来。
 ALBUM_RELATIONSHIP_FULL_ARCHIVE_JSON:
@@ -18393,7 +18539,23 @@ ${albumRelationshipArchiveSlice(memoryBank)}
 - 不得因为人设、世界书或期待就把暧昧升级为恋人/伴侣。只输出 JSON。`;
 }
 
-function normalizeAlbumRelationshipSnapshot(data, memoryBank) {
+function normalizeAlbumRelationshipSnapshot(data, memoryBank, participantSnapshot = null, relationshipBank = memoryBank) {
+    const snapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
+    if (snapshot) return { people: snapshot.people.map(person => {
+        const row = Array.isArray(data?.people) ? data.people.find(row => row?.speakerId === person.id) : null;
+        const scopedBank = participantRelationshipBank(memoryBank, person);
+        if (!row) return { speakerId: person.id, speakerName: person.name, relationshipTier: 0,
+            charState: '未确认', userState: '未确认', relationshipState: '关系未确认',
+            relationshipSummary: '尚无该人物的已保存关系扫描；不预设双方恋爱。',
+            relationshipSourceMemoryIds: [], relationshipSourceMemoryAnchor: '' };
+        if (!row.relationshipSourceMemoryIds?.length) return { ...row, speakerId: person.id, speakerName: person.name,
+            relationshipTier: 0, charState: '未确认', userState: '未确认', relationshipState: '关系未确认' };
+        // Verify citations against the original archive, but derive the relationship
+        // only from evidence belonging to this person rather than the sandbox title.
+        const result = normalizeAlbumRelationshipSnapshot(row, { ...memoryBank, characterName: person.name }, null, scopedBank);
+        return { ...result, speakerId: person.id, speakerName: person.name };
+    }) };
+
     const charState = core_text.normalizeText(data?.charState, 1200);
     const userState = core_text.normalizeText(data?.userState, 1200);
     const relationshipState = core_text.normalizeText(data?.relationshipState, 120) || '关系仍在发展';
@@ -18414,7 +18576,7 @@ function normalizeAlbumRelationshipSnapshot(data, memoryBank) {
     // The model-selected citation is an audit trail, not permission to hide a later breakup or
     // cherry-pick an earlier relationship peak. Current state is derived locally from the full
     // ordered archive; relationshipExpressionTier ignores unrelated third-party clauses.
-    const tier = core_presentExpression.relationshipExpressionTier(memoryBank);
+    const tier = core_presentExpression.relationshipExpressionTier(relationshipBank);
     const owner = core_text.normalizeText(memoryBank?.characterName, 80) || '{{char}}';
     const reader = core_text.normalizeText(memoryBank?.userName, 80) || '{{user}}';
     const localState = [
@@ -18519,7 +18681,19 @@ function normalizeAlbumIndex(data, memoryBank, sourceMemoryIds = null) {
     return { title: core_text.normalizeText(data?.title, 120) || '回忆相簿', entries };
 }
 
-function albumCommentsPrompt(context, memoryBank, entries, relationshipSnapshot = null) {
+function albumCommentsPrompt(context, memoryBank, entries, relationshipSnapshot = null, participantSnapshot = null) {
+    const snapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
+    if (snapshot) return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 3：当下共同回忆')}
+本请求给 ${entries.length} 张已解锁的过去 CG 写一起翻相簿的当下对白。不同人物可以轮流说话，每句话由实际说话人的 speakerId 对应姓名。角色卡名不是人物。
+${core_participants.participantPromptBlock(snapshot)}
+CURRENT_RELATIONSHIP_SCAN_JSON:
+${JSON.stringify(normalizeAlbumRelationshipSnapshot(relationshipSnapshot, memoryBank, snapshot), null, 2)}
+UNTRUSTED_ALBUM_COMMENT_CONTEXT_JSON:
+${JSON.stringify({ entries: entries.map(item => ({ id: item.id, title: item.title, date: item.date, desc: item.desc, sourceMemoryIds: item.sourceMemoryIds, sourceMemoryAnchor: item.sourceMemoryAnchor, visualSeed: item.visualSeed })), memories: core_evidence.memoryPayload(memoryBank, [...new Set(entries.flatMap(item => item.sourceMemoryIds || []))].slice(0, 20), 20) }, null, 2)}
+严格输出 {"items":[{"id":"CG01","comments":[{"speakerId":"名单中的原始 id","text":"该人物的当下对白"}]}]}。
+每个输入 id 原样返回一次；每张 CG 写 6～8 段，每段约 35～120 个汉字。只让与该记忆有据可查的人物评论各自所知内容，不要求所有人物都出场。speakerId 必须来自上方名单，不以名字猜 ID，不替 {{user}} 生成现在的回应。
+每句话的称呼和亲密程度服从该 speakerId 自己的关系扫描，不挪用其他人的关系。至少覆盖画面细节、当时没说出口的想法和现在的理解；不新增过去事实，不写 ADV 过去独白，不修改记忆证据。只输出 JSON。`;
+
     const ids = [...new Set(entries.flatMap(item => item.sourceMemoryIds || []))].slice(0, 20);
     const storedSnapshot = relationshipSnapshot || entries.find(item => item?.relationshipSnapshot)?.relationshipSnapshot || null;
     const safeSnapshot = storedSnapshot ? normalizeAlbumRelationshipSnapshot(storedSnapshot, memoryBank) : {
@@ -18553,15 +18727,15 @@ ${JSON.stringify(payload, null, 2)}
 - 只输出 JSON。`;
 }
 
-function normalizeAlbumCommentsBatch(data, expectedEntries) {
+function normalizeAlbumCommentsBatch(data, expectedEntries, participantSnapshot = null) {
     const expected = new Map(expectedEntries.map(item => [item.id, item]));
     const raw = Array.isArray(data?.items) ? data.items : [];
     const out = new Map();
     for (const item of raw) {
         const id = core_text.safeId(item?.id, '');
         if (!expected.has(id) || out.has(id)) continue;
-        const comments = core_text.cleanArray(item?.comments, 8, 1200);
-        if (comments.length >= 6) out.set(id, comments);
+        const dialogue = normalizeAlbumDialogue(item?.comments, participantSnapshot, item?.commentSpeakers);
+        if (dialogue.comments.length >= 6) out.set(id, participantSnapshot ? dialogue : dialogue.comments);
     }
     for (const item of expectedEntries) {
         if (!out.has(item.id)) throw new Error(`相簿“${item.title}”的共同回忆不足 6 段。`);
@@ -18618,6 +18792,7 @@ function mergeAlbumIncremental(previous, fresh, memoryBank) {
     // old session byte-for-byte at the field level and only replace the append-only entries array.
     return {
         ...structuredClone(previous),
+        ...(fresh.participantSnapshot ? { participantSnapshot: structuredClone(fresh.participantSnapshot) } : {}),
         kind: core_constants.MODE.ALBUM,
         title: previous.title || fresh.title || '回忆相簿',
         entries: merged.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS),
@@ -18625,6 +18800,7 @@ function mergeAlbumIncremental(previous, fresh, memoryBank) {
 }
 
 async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, options = {}) {
+    const participantSnapshot = core_participants.normalizeParticipantSnapshot(options.participantSnapshot || null);
     const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ALBUM, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
     const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
     const index = await generation_client.requestValidatedSegment(
@@ -18643,26 +18819,29 @@ async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, opt
     }
     const unlocked = index.entries.filter(item => item.unlocked);
     const relationshipSnapshot = await generation_client.requestValidatedSegment(
-        albumRelationshipScanPrompt(context, memoryBank),
+        albumRelationshipScanPrompt(context, memoryBank, participantSnapshot),
         '回忆相簿 2/3 · 正在扫描双方当下感情状态…',
         { maxTokens: 3200, temperature: 0.25, context, origin, taskKey: `${taskKey}:relationship-scan`, mode: core_constants.MODE.ALBUM, background: true },
-        raw => normalizeAlbumRelationshipSnapshot(raw, memoryBank),
+        raw => normalizeAlbumRelationshipSnapshot(raw, memoryBank, participantSnapshot),
     );
     const batches = generation_client.chunkForGeneration(unlocked, 3);
     const commentMaps = await generation_client.mapGenerationConcurrent(batches, core_constants.SEGMENT_REQUEST_CONCURRENCY,
         (batch, batchIndex) => generation_client.requestValidatedSegment(
-            albumCommentsPrompt(context, memoryBank, batch, relationshipSnapshot),
+            albumCommentsPrompt(context, memoryBank, batch, relationshipSnapshot, participantSnapshot),
             `回忆相簿 3/3 · 共同回忆 ${batchIndex + 1}/${batches.length}…`,
             { maxTokens: 6000, context, origin, taskKey: `${taskKey}:comments:${batchIndex}`, mode: core_constants.MODE.ALBUM, background: true },
-            data => normalizeAlbumCommentsBatch(data, batch),
+            data => normalizeAlbumCommentsBatch(data, batch, participantSnapshot),
         ));
     const allComments = new Map();
     for (const map of commentMaps) for (const [id, comments] of map.entries()) allComments.set(id, comments);
     const fresh = normalizeAlbum({
         title: index.title,
+        ...(participantSnapshot ? { participantSnapshot } : {}),
         entries: index.entries.map(item => ({
             ...item,
-            comments: item.unlocked ? (allComments.get(item.id) || []) : [],
+            ...(participantSnapshot ? { speakerSnapshot: albumSpeakerIdentities(participantSnapshot),
+                ...(item.unlocked ? (allComments.get(item.id) || { comments: [], commentSpeakers: [] }) : { comments: [] }) }
+                : { comments: item.unlocked ? (allComments.get(item.id) || []) : [] }),
             relationshipSnapshot: item.unlocked ? structuredClone(relationshipSnapshot) : null,
         })),
     }, memoryBank);
@@ -18680,10 +18859,13 @@ function normalizeAlbum(data, memoryBank) {
         const visualSeed = core_text.cleanArray(item?.visualSeed, 12, 80);
         const title = core_text.normalizeText(item?.title, 80) || `回忆 ${index + 1}`;
         const desc = core_text.normalizeText(item?.desc, 1200);
-        const comments = unlocked ? core_text.cleanArray(item?.comments, 8, 1200) : [];
+        const participantSnapshot = item?.speakerSnapshot ? normalizeAlbumSpeakerSnapshot(item.speakerSnapshot)
+            : core_participants.normalizeParticipantSnapshot(data?.participantSnapshot || null);
+        const dialogue = normalizeAlbumDialogue(unlocked ? item?.comments : [], participantSnapshot, item?.commentSpeakers);
+        const comments = dialogue.comments;
         const hintLines = unlocked ? [] : core_text.cleanArray(item?.hintLines, 4, 1200);
         const relationshipSnapshot = unlocked && item?.relationshipSnapshot
-            ? normalizeAlbumRelationshipSnapshot(item.relationshipSnapshot, memoryBank)
+            ? normalizeAlbumRelationshipSnapshot(item.relationshipSnapshot, memoryBank, participantSnapshot)
             : null;
         const reference = core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, `${title}
 ${desc}
@@ -18703,6 +18885,7 @@ ${hintLines.join('；')}`, memoryBank, 1);
             ...cg_visual.generatedCgDraftFields(item),
             cgImage: generation_imageGeneration.normalizeCgImageRecord(item?.cgImage),
             comments,
+            ...(participantSnapshot ? { speakerSnapshot: albumSpeakerIdentities(participantSnapshot), commentSpeakers: dialogue.commentSpeakers } : {}),
             hintLines,
             relationshipSnapshot,
         };
@@ -18722,6 +18905,7 @@ ${hintLines.join('；')}`, memoryBank, 1);
     }
     return {
         kind: core_constants.MODE.ALBUM,
+        ...(data?.participantSnapshot ? { participantSnapshot: core_participants.normalizeParticipantSnapshot(data.participantSnapshot) } : {}),
         title: core_text.normalizeText(data?.title, 120) || '回忆相簿',
         entries,
         category: '全部',
@@ -18735,6 +18919,9 @@ ${hintLines.join('；')}`, memoryBank, 1);
 }
 
 __m_modes_album_js.generateAlbumWithRepair = generateAlbumWithRepair;
+__m_modes_album_js.albumSpeakerIdentities = albumSpeakerIdentities;
+__m_modes_album_js.normalizeAlbumSpeakerSnapshot = normalizeAlbumSpeakerSnapshot;
+__m_modes_album_js.normalizeAlbumDialogue = normalizeAlbumDialogue;
 __m_modes_album_js.compactAlbumExisting = compactAlbumExisting;
 __m_modes_album_js.projectAlbumProgress = projectAlbumProgress;
 __m_modes_album_js.albumRelationshipArchiveSlice = albumRelationshipArchiveSlice;
@@ -33645,6 +33832,100 @@ const MANAGEABLE_TARGET_TYPES = new Set([
     'achievement', 'calendar-entry', 'calendar-note', 'calendar-mood', 'butterfly-node',
 ]);
 
+const EDITABLE_CONTENT_LABELS = Object.freeze({
+    title: '标题', subtitle: '副标题', label: '名称', name: '名称', date: '日期', setting: '场景', scene: '场景',
+    description: '说明', desc: '画面说明', summary: '摘要', text: '正文', line: '台词', lines: '台词',
+    body: '正文', greeting: '称呼', closing: '结尾', monologue: '独白', intervention: '回应', systemNote: '观测批语',
+    preview: '摘要', detail: '正文', caption: '图片说明', imageCaption: '图片说明', cgDesc: '画面说明',
+    unlockCondition: '达成条件', hint: '提示', hintLines: '提示', comments: '共同回忆', lyrics: '歌词',
+    vocalDescription: '演唱描述', styleDescription: '音乐描述', value: '内容', content: '正文', message: '留言',
+    dialogueLines: '台词', script: '对话', action: '动作', narration: '叙述', synopsis: '梗概', reflection: '感想',
+    endingScene: '终章', confession: '告白', confessionText: '告白', confessionLines: '告白台词',
+    creditsLine: '落幕语', timeSkip: '时间跨度', finalLine: '结语', unlockHint: '解锁提示',
+    responseSummary: '回应', afterEffect: '后续影响', statusLine: '状态', logs: '记录', poem: '短句',
+    opening: '开场', location: '地点', ending: '结尾', revealedText: '揭示内容',
+    morning: '早安', afternoon: '午后', evening: '晚间', night: '晚安', bedtime: '睡前',
+    atmosphere: '氛围', activity: '活动', npcPerspective: '人物视角', relation: '关系',
+});
+const EDITOR_INTERNAL_FIELDS = new Set(['generationSources', 'readableProgress', 'participantSnapshot', 'speakerSnapshot',
+    'cgImage', 'cgPromptDraft', 'cgPromptMetadata', 'sourceMemory', 'sourceContext', 'sourceIdentity', 'progressPending']);
+
+function partialContentFields(session) {
+    const fields = [];
+    const visit = (value, path = [], field = '', label = '') => {
+        if (typeof value === 'string' && EDITABLE_CONTENT_LABELS[field]) {
+            fields.push({ path, label: `${label ? `${label} · ` : ''}${EDITABLE_CONTENT_LABELS[field]}`, value });
+        } else if (Array.isArray(value)) value.forEach((item, index) => visit(item,
+            [...path, typeof item?.id === 'string' ? { id: item.id } : index], field, item?.title || item?.name || `${label} ${index + 1}`.trim()));
+        else if (value && typeof value === 'object') for (const [key, item] of Object.entries(value)) {
+            if (!EDITOR_INTERNAL_FIELDS.has(key)) visit(item, [...path, key], key, label);
+        }
+    };
+    visit(session);
+    return fields;
+}
+
+function editorPathValue(session, path) {
+    return path.reduce((value, part) => typeof part === 'object'
+        ? value?.find?.(item => item?.id === part.id) : value?.[part], session);
+}
+
+async function savePartialContentField(field, value) {
+    return ui_overlay.saveActiveSessionEdit(session => {
+        const parent = editorPathValue(session, field.path.slice(0, -1));
+        parent[field.path.at(-1)] = value;
+        return session;
+    }, { select: session => editorPathValue(session, field.path) });
+}
+
+async function deletePartialContentItem(path) {
+    return ui_overlay.saveActiveSessionEdit(session => {
+        const parent = editorPathValue(session, path.slice(0, -1)), target = path.at(-1);
+        const index = parent.findIndex(item => item?.id === target.id);
+        if (index >= 0) parent.splice(index, 1);
+        return session;
+    }, { select: session => editorPathValue(session, path) });
+}
+
+function renderPartialContentEditor() {
+    if (!archive_library.requireWritableArchiveAction()) return;
+    const body = ui_overlay.bodyEl(), fields = partialContentFields(runtimeState.activeSession);
+    const items = new Map();
+    for (const field of fields) {
+        const index = field.path.findLastIndex(part => part && typeof part === 'object' && part.id);
+        if (index < 0) continue;
+        const path = field.path.slice(0, index + 1), item = editorPathValue(runtimeState.activeSession, path);
+        items.set(JSON.stringify(path), { path, label: item.title || item.name || item.label || item.id });
+    }
+    const deletable = [...items.values()];
+    if (!body) return;
+    runtimeState.contentManagerOpen = true;
+    ui_overlay.topTitle('编辑已生成内容');
+    ui_overlay.setBackVisible(true, '返回内容');
+    body.innerHTML = `<section class="rmt-manage-shell"><p>直接修改已生成的文字，不调用 API。继续生成会保留你的修改。生图仍在原来的图片设置中。</p>
+      <button type="button" class="rmt-btn" data-rmt-partial-editor-back>返回内容</button>
+      ${fields.map((field, index) => `<article class="rmt-manage-row" style="display:block"><label>${core_text.esc(field.label)}
+      <textarea data-rmt-partial-field="${index}" style="display:block;width:100%;min-height:6em">${core_text.esc(field.value)}</textarea></label>
+      <button type="button" class="rmt-btn" data-rmt-partial-save="${index}">保存此项</button></article>`).join('')}
+      ${deletable.map((item, index) => `<button type="button" class="rmt-btn" data-rmt-partial-delete="${index}">删除条目：${core_text.esc(item.label)}</button>`).join('')}</section>`;
+    body.querySelector?.('[data-rmt-partial-editor-back]')?.addEventListener('click', () => ui_overlay.renderActive());
+    body.querySelectorAll?.('[data-rmt-partial-save]').forEach(button => button.addEventListener('click', async () => {
+        const index = Number(button.dataset.rmtPartialSave), field = fields[index];
+        const value = body.querySelector(`[data-rmt-partial-field="${index}"]`).value;
+        try {
+            await savePartialContentField(field, value);
+            field.value = value;
+            globalThis.toastr?.success?.('修改已保存，继续生成会保留。', '心迹回廊');
+        } catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); }
+    }));
+    body.querySelectorAll?.('[data-rmt-partial-delete]').forEach(button => button.addEventListener('click', async () => {
+        const item = deletable[Number(button.dataset.rmtPartialDelete)];
+        if (!ui_overlay.confirmExplicitActionTwice(`删除「${item.label}」？`, '只删除这份任务中的这一条，继续生成也不会把它恢复。', { destructive: true })) return;
+        try { await deletePartialContentItem(item.path); renderPartialContentEditor(); }
+        catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); }
+    }));
+}
+
 function isManageableTargetType(value) {
     return MANAGEABLE_TARGET_TYPES.has(core_text.normalizeText(value, 60));
 }
@@ -34059,8 +34340,12 @@ function renderContentManager() {
     </div>`;
 }
 
+__m_ui_contentManager_js.savePartialContentField = savePartialContentField;
+__m_ui_contentManager_js.deletePartialContentItem = deletePartialContentItem;
 __m_ui_contentManager_js.runContentRegeneration = runContentRegeneration;
 __m_ui_contentManager_js.resumeContentRegeneration = resumeContentRegeneration;
+__m_ui_contentManager_js.partialContentFields = partialContentFields;
+__m_ui_contentManager_js.renderPartialContentEditor = renderPartialContentEditor;
 __m_ui_contentManager_js.isManageableTargetType = isManageableTargetType;
 __m_ui_contentManager_js.managementTargetsForSession = managementTargetsForSession;
 __m_ui_contentManager_js.renderContentManager = renderContentManager;
@@ -34338,6 +34623,17 @@ async function captureRoomParticipantSnapshot(context, origin, { existing = null
             : core_participants.selectedParticipantSnapshot(core_cache.readParticipantRoster(context));
     if (!snapshot) return null;
     return generation_recovery.frozenGenerationInput(origin, 'participants:room', () => snapshot);
+}
+async function captureAlbumParticipantSnapshot(context, origin, { existing = null, participantSnapshot } = {}) {
+    // Keep legacy recipes and single-card journals byte-for-byte free of the
+    // multiplayer input key. Only explicit multiplayer work freezes a roster.
+    if (existing && !Object.hasOwn(existing.frozenInputs || {}, 'participants:album')) return null;
+    const snapshot = existing
+        ? core_participants.normalizeParticipantSnapshot(JSON.parse(existing.frozenInputs['participants:album']))
+        : participantSnapshot !== undefined ? core_participants.normalizeParticipantSnapshot(participantSnapshot)
+            : core_participants.selectedParticipantSnapshot(core_cache.readParticipantRoster(context));
+    if (!snapshot) return null;
+    return generation_recovery.frozenGenerationInput(origin, 'participants:album', () => snapshot);
 }
 async function buildWorldPresentationContextFresh(context, memoryBank, mode) {
     const wantsSelectedSetting = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode);
@@ -35465,7 +35761,12 @@ async function generateModeOperation(mode, options = {}) {
         let session;
         const participantSnapshot = mode === core_constants.MODE.ROOM
             ? await captureRoomParticipantSnapshot(context, origin, { existing: recoveryExisting,
+                participantSnapshot: options.participantRegeneration?.participantSnapshot })
+            : mode === core_constants.MODE.ALBUM ? await captureAlbumParticipantSnapshot(context, origin, { existing: recoveryExisting,
                 participantSnapshot: options.participantRegeneration?.participantSnapshot }) : null;
+        if (mode === core_constants.MODE.ALBUM && participantSnapshot) {
+            core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin, { participantSnapshot });
+        }
         let presentationContext = null;
         if (time_stories.isTimeStoryMode(mode) || (mode === core_constants.MODE.ITEMS && previousSession && allowPersonaExpansion) || [core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode)) {
             presentationContext = await buildWorldPresentationContext(context, memoryBank, mode, origin);
@@ -35500,7 +35801,7 @@ async function generateModeOperation(mode, options = {}) {
         } else if (mode === core_constants.MODE.ENDING) {
             session = await modes_ending.generateEndingWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.ALBUM) {
-            session = await modes_album.generateAlbumWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
+            session = await modes_album.generateAlbumWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, participantSnapshot });
         } else if (mode === core_constants.MODE.HEART) {
             session = await modes_heart.generateHeartWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.PHONE) {
@@ -35744,6 +36045,7 @@ async function generateModeOperation(mode, options = {}) {
 
 __m_generation_client_js.buildWorldPresentationContext = buildWorldPresentationContext;
 __m_generation_client_js.captureRoomParticipantSnapshot = captureRoomParticipantSnapshot;
+__m_generation_client_js.captureAlbumParticipantSnapshot = captureAlbumParticipantSnapshot;
 __m_generation_client_js.mapGenerationConcurrent = mapGenerationConcurrent;
 __m_generation_client_js.requestValidatedSegment = requestValidatedSegment;
 __m_generation_client_js.assertPromptBudget = assertPromptBudget;
@@ -39410,6 +39712,7 @@ async function refreshPartialGenerationView(mode, context, { draftId, pageId, ar
     // otherwise the caller's original reader and position must still be current.
     const ownsDraft = snapshot?.taskResultDraftId === draftId
         || (prior?.readableProgress?.complete === false && prior.readableProgress.draftId === draftId);
+    if (prior?.readableProgress?.explicitDraft && !ownsDraft) return false;
     if (!ownsDraft && typeof readerStillCurrent === 'function' && !readerStillCurrent()) return false;
     if (mode === core_constants.MODE.HEART && pageId && pageId !== 'heart') {
         const shownPage = ui_workspaceState.workspace.route === 'heart'
@@ -39429,9 +39732,11 @@ async function refreshPartialGenerationView(mode, context, { draftId, pageId, ar
     } else {
         memory = archive_repository.getImportedMemory(context); stored = core_cache.getCache(context);
     }
-    const session = core_cache.loadSession(mode, { context, chatId: memory?.chatId, memoryBank: memory, cache: stored, clone: true, includePartial: true });
+    const exactResult = prior?.readableProgress?.explicitDraft ? stored?.[core_cache.GENERATION_DRAFTS_CACHE_KEY]?.records?.[prior.readableProgress.draftId]?.result : null;
+    const session = exactResult ? core_cache.generationTaskResultSession({ draftId: prior.readableProgress.draftId, ...exactResult })
+        : core_cache.loadSession(mode, { context, chatId: memory?.chatId, memoryBank: memory, cache: stored, clone: true, includePartial: true });
     if (!session?.readableProgress) return false;
-    if (!snapshot && stored?.[core_cache.GENERATION_DRAFTS_CACHE_KEY]?.records?.[draftId]?.result?.sourceMemory?.archiveRevision !== memory?.archiveRevision) return false;
+    if (!snapshot && !exactResult && stored?.[core_cache.GENERATION_DRAFTS_CACHE_KEY]?.records?.[draftId]?.result?.sourceMemory?.archiveRevision !== memory?.archiveRevision) return false;
     for (const key of ['selectedId', 'selectedEntryId', 'selectedContainerId', 'selectedNodeId', 'category', 'page', 'viewPath',
         'selectedMonth', 'selectedDateKey', 'view', 'tab', 'reading', 'dialogueIndex', 'sharedMemory',
         'selectedSeason', 'selectedVoiceId', 'selectedScenarioId', 'selectedStripId', 'selectedFireflyId', 'selectedDramaKey']) {
@@ -39450,6 +39755,45 @@ async function refreshPartialGenerationView(mode, context, { draftId, pageId, ar
     renderActive();
     if (body) body.scrollTop = scrollTop;
     return true;
+}
+
+function openPartialTaskSession(record) {
+    runtimeState.activeArchiveSnapshot = null;
+    runtimeState.activeArchiveReadOnly = false;
+    runtimeState.activeMode = record.mode;
+    runtimeState.activeSession = core_cache.generationTaskResultSession(record);
+    runtimeState.archiveViewLevel = 'content';
+    ui_workspaceState.prepareWorkspaceSession(record.mode, runtimeState.activeSession, record.pageId);
+    renderActive();
+}
+
+// Persist a local change to the precise draft/formal item that the user saw.
+async function saveActiveSessionEdit(mutator, { select = value => value } = {}) {
+    if (!archive_library.requireWritableArchiveAction()) return null;
+    const shown = runtimeState.activeSession, mode = runtimeState.activeMode;
+    const context = core_context.currentCharacterGuard(), bank = archive_repository.requireArchive(context);
+    const origin = core_context.captureTaskOrigin(context, bank.archiveRevision);
+    const resolved = await core_cache.resolveGenerationProgressTarget(context, shown, select);
+    if (!resolved) throw new Error('这项内容已经变化，请重新打开后编辑；没有修改其他版本。');
+    const expected = JSON.stringify(select(resolved.session));
+    const mutate = latest => {
+        if (JSON.stringify(select(latest)) !== expected) throw new Error('这项内容刚被更新，已保留最新内容，请重新打开后编辑。');
+        return mutator(latest);
+    };
+    const committed = resolved.draftId
+        ? await core_cache.commitGenerationTaskResultMutation(context, resolved.draftId, mutate, { expectedTaskOrigin: origin })
+        : await core_cache.commitSessionMutation(mode, core_context.getChatId(context), origin, mutate, resolved.session);
+    if (!committed) throw new Error('本次修改尚未保存，请重新打开这项内容后再试。');
+    if (runtimeState.activeSession === shown && core_context.isCurrentTaskOrigin(origin)) {
+        const next = structuredClone(committed);
+        if (shown.readableProgress?.explicitDraft && next.readableProgress) next.readableProgress.explicitDraft = true;
+        if (shown.generationSources) next.generationSources = structuredClone(shown.generationSources);
+        for (const key of ['selectedId','selectedEntryId','selectedStripId','view','page','dialogueIndex','sharedMemory']) {
+            if (Object.hasOwn(shown, key)) next[key] = structuredClone(shown[key]);
+        }
+        runtimeState.activeSession = next;
+    }
+    return committed;
 }
 
 function renderActive() {
@@ -39486,7 +39830,7 @@ function renderActive() {
         const note = document.createElement('section');
         note.className = 'rmt-recovery-status';
         note.setAttribute('role', 'status');
-        note.innerHTML = `<b>已生成部分内容 · 本次任务尚未完成</b><p>这里显示已收到的内容。后续失败或关闭页面，不会清除已保存部分；继续生成只补未完成部分。</p>`;
+        note.innerHTML = `<b>已生成部分内容 · 本次任务尚未完成</b><p>这里显示已收到的内容。后续失败或关闭页面，不会清除已保存部分；继续生成只补未完成部分。</p>${!runtimeState.activeArchiveSnapshot ? '<button type="button" class="rmt-btn" data-rmt-edit-partial>编辑已生成内容</button>' : ''}`;
         bodyEl().prepend(note);
     }
     cg_format_ui.mountCgFormatControl(bodyEl(), runtimeState.activeMode, ui_workspaceState.workspace.route, !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly);
@@ -39653,7 +39997,9 @@ async function deleteManagedTarget(type, id, parentId = '') {
             if (runtimeState.activeMode === mode && (shownSnapshot
                 ? runtimeState.activeArchiveSnapshot?.entryId === shownSnapshot.entryId : core_context.isCurrentTaskOrigin(origin))) {
                 if (targetRuntime) runtimeState.activeArchiveSnapshot.cache = structuredClone(targetRuntime.archiveTarget.cache);
-                runtimeState.activeSession = core_cache.loadSession(mode, { context, memoryBank: bank,
+                runtimeState.activeSession = shownSession.readableProgress?.explicitDraft
+                    ? { ...committed, readableProgress: { ...committed.readableProgress, explicitDraft: true }, generationSources: shownSession.generationSources }
+                    : core_cache.loadSession(mode, { context, memoryBank: bank,
                     cache: targetRuntime?.archiveTarget?.cache, clone: true, includePartial: true }) || committed;
                 ui_contentManager.renderContentManager();
             }
@@ -39750,6 +40096,7 @@ async function regenerateManagedCategory() {
 
 function handleOverlayClick(event) {
     if (workspace_ui.handleWorkspaceClick(event) || language_view.handleLanguageClick(event)) return;
+    if (event.target.closest?.('[data-rmt-edit-partial]')) return ui_contentManager.renderPartialContentEditor();
     const contentDraftOpen = event.target.closest?.('[data-rmt-content-draft-open]');
     if (contentDraftOpen) return void archive_library.openContentRegenerationDraft(
         contentDraftOpen.dataset.rmtContentDraftOpen, core_context.getContext(), { snapshot: runtimeState.activeArchiveSnapshot },
@@ -40353,6 +40700,7 @@ __m_ui_overlay_js.presentGenerationTaskResult = presentGenerationTaskResult;
 __m_ui_overlay_js.loadChooserArchiveRecovery = loadChooserArchiveRecovery;
 __m_ui_overlay_js.refreshArchiveRecoveryView = refreshArchiveRecoveryView;
 __m_ui_overlay_js.refreshPartialGenerationView = refreshPartialGenerationView;
+__m_ui_overlay_js.saveActiveSessionEdit = saveActiveSessionEdit;
 __m_ui_overlay_js.handleOverlayChange = handleOverlayChange;
 __m_ui_overlay_js.isArchiveMobileViewport = isArchiveMobileViewport;
 __m_ui_overlay_js.archiveMobileSafeTopFallback = archiveMobileSafeTopFallback;
@@ -40390,6 +40738,7 @@ __m_ui_overlay_js.showInlineError = showInlineError;
 __m_ui_overlay_js.openCachedOrGenerate = openCachedOrGenerate;
 __m_ui_overlay_js.decorateReadOnlyModeUi = decorateReadOnlyModeUi;
 __m_ui_overlay_js.refreshContentRegenerationDraftView = refreshContentRegenerationDraftView;
+__m_ui_overlay_js.openPartialTaskSession = openPartialTaskSession;
 __m_ui_overlay_js.renderActive = renderActive;
 __m_ui_overlay_js.handleOverlayClick = handleOverlayClick;
 }
@@ -46983,6 +47332,15 @@ async function openGenerationTaskResult(draftId, context = core_context.currentC
         : core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
     const memory = structuredClone(record.sourceMemory);
     if (!memory?.memories || !record.session) throw new Error('这份成果的原始资料暂时无法读取，已保存的成果仍保留。');
+    if (record.status === 'open' && record.session.readableProgress?.complete === false
+        && (!sourceSnapshot || (!sourceSnapshot.historyVersionId && !sourceSnapshot.backupOnly
+            && generation_imageGeneration.indexedArchiveMatchesCurrentChat(sourceSnapshot, context)))) {
+        const current = sourceSnapshot ? await core_cache.readGenerationTaskResult(context, draftId) : record;
+        core_context.assertRuntimeLifecycleCurrent(lifecycle);
+        if (core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
+        ui_overlay.openPartialTaskSession(current);
+        return current;
+    }
     const entry = record.targetEntry || core_cache.archiveBackupEntryForContext(context, memory);
     const snapshot = {
         ...entry, entryId: `${record.entryId || entry.entryId}:task:${draftId}`,
@@ -49320,11 +49678,21 @@ async function resolveGenerationProgressTarget(context, shownSession, selectItem
     const current = suppliedCache ? { cache: suppliedCache, memory: archive_repository.requireArchive(context) }
         : await currentArchiveVersionState(context);
     const bank = current.memory, stored = current.cache, mode = shownSession.kind;
-    if (!bank || shownSession.chatId !== bank.chatId || shownSession.archiveRevision !== bank.archiveRevision) return null;
+    if (!bank || shownSession.chatId !== bank.chatId) return null;
     const select = session => { try { return session ? selectItem(session) : null; } catch { return null; } };
     const shown = select(shownSession);
     if (shown == null) return null;
     const equal = value => value != null && sameProgressItemValue(value, shown);
+    if (shownSession.readableProgress?.explicitDraft === true) {
+        const draftId = shownSession.readableProgress.draftId, row = generationDraftRecords(stored)[draftId];
+        if (row?.status !== 'open' || row.result?.mode !== mode || row.result.sourceMemory?.chatId !== bank.chatId
+            || !equal(select(generationTaskResultSession({ draftId, ...row.result })))) return null;
+        return { draftId, pageId: row.result.pageId, status: 'open', session: cloneCacheValue(row.result.session),
+            sourceMemory: cloneCacheValue(row.result.sourceMemory), sourceContext: cloneCacheValue(row.result.sourceContext || {}),
+            contentSnapshot: generation_recovery.readGenerationContentSnapshot(row.journal),
+            frozenInputs: cloneCacheValue(row.journal?.frozenInputs || {}), journal: cloneCacheValue(row.journal) };
+    }
+    if (shownSession.archiveRevision !== bank.archiveRevision) return null;
     const visible = loadReadableGenerationProgress(mode, { context, cache: stored, memoryBank: bank, chatId: bank.chatId }) || stored?.[mode];
     if (!equal(select(visible))) return null;
     const rows = Object.entries(generationDraftRecords(stored)).filter(([, row]) => row.status === 'open'
@@ -49366,7 +49734,7 @@ const PROGRESS_READING_FIELDS = Object.freeze(['view', 'selectedId', 'selectedKe
 function progressPathValue(session, path) {
     let value = session;
     for (const part of path || []) {
-        value = typeof part === 'string' ? (value && Object.hasOwn(value, part) ? value[part] : undefined)
+        value = typeof part === 'string' || typeof part === 'number' ? (value && Object.hasOwn(value, part) ? value[part] : undefined)
             : Array.isArray(value) ? value.find(item => item?.id === part?.id
                 && (!part?.calendarPageKey || modes_calendar.calendarEntryPageKey(item) === part.calendarPageKey)) : undefined;
     }
@@ -49392,7 +49760,33 @@ function collectProgressFieldClears(before, after, path = [], cleared = []) {
     return cleared;
 }
 
+// Record only changed local fields; never copy task inputs into every edit.
+function collectProgressEdits(before, after, path = [], edits = []) {
+    if (sameProgressItemValue(before, after)) return edits;
+    if (Array.isArray(before) && Array.isArray(after)) {
+        after.forEach((value, index) => {
+            const id = typeof value?.id === 'string' ? value.id : null;
+            const previous = id ? before.find(item => item?.id === id) : before[index];
+            collectProgressEdits(previous, value, [...path, id ? { id } : index], edits);
+        });
+    } else if (before && after && typeof before === 'object' && typeof after === 'object'
+        && !Array.isArray(before) && !Array.isArray(after)) {
+        for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+            if (['generationSources', 'readableProgress', 'progressPending', ...PROGRESS_READING_FIELDS].includes(key)) continue;
+            collectProgressEdits(before[key], after[key], [...path, key], edits);
+        }
+    } else if (path.length) edits.push({ path, ...(after === undefined ? { remove: true } : { value: structuredClone(after) }) });
+    return edits;
+}
+
 function applyProgressOverrides(session, metadata) {
+    for (const edit of metadata?.manualFieldsV1 || []) {
+        const parent = progressPathValue(session, edit.path.slice(0, -1)), key = edit.path.at(-1);
+        if (!parent || typeof parent !== 'object' || !['string', 'number'].includes(typeof key)) continue;
+        if (edit.remove) delete parent[key];
+        else Object.defineProperty(parent, key, { value: structuredClone(edit.value), enumerable: true, configurable: true, writable: true });
+    }
+
     for (const override of metadata?.textOverridesV1 || []) {
         const item = progressPathValue(session, override.path);
         if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
@@ -49409,6 +49803,9 @@ function applyProgressOverrides(session, metadata) {
 
 function progressMutationMetadata(before, next, contentOverride) {
     const metadata = cloneCacheValue(before.readableProgress || {});
+    const localEdits = new Map((metadata.manualFieldsV1 || []).map(edit => [JSON.stringify(edit.path), edit]));
+    for (const edit of collectProgressEdits(before, next)) localEdits.set(JSON.stringify(edit.path), edit);
+    if (localEdits.size) metadata.manualFieldsV1 = [...localEdits.values()];
     const clears = new Map((metadata.clearedFieldsV1 || []).filter(clear => {
         const value = progressPathValue(next, clear.path);
         return clear.remove ? value === undefined : value === null;
@@ -49490,7 +49887,7 @@ function preserveProgressLocalState(incoming, saved) {
             && !['generationSources', 'readableProgress', 'cgImage', 'cgPromptDraft', 'cgPromptMetadata'].includes(key)) next[key] = preserveProgressLocalState(value, saved[key]);
     }
     applyProgressOverrides(next, saved.readableProgress);
-    if (next.readableProgress) for (const key of ['textOverridesV1', 'clearedFieldsV1']) {
+    if (next.readableProgress) for (const key of ['textOverridesV1', 'clearedFieldsV1', 'manualFieldsV1']) {
         if (saved.readableProgress?.[key]) next.readableProgress[key] = cloneCacheValue(saved.readableProgress[key]);
     }
     const deletions = saved.readableProgress?.deletedItems;
@@ -49515,7 +49912,7 @@ async function commitGenerationTaskResultMutation(context, draftId, mutate, { ex
     let session = null;
     const committed = await serializeArchiveCommitOperation(entry, bank, () => commitArchiveCacheMutation(entry, bank, {}, value => {
         const record = generationDraftRecords(value)[draftId];
-        if (record?.status !== 'open' || !record.result?.session || record.result.sourceMemory?.archiveRevision !== bank.archiveRevision) return false;
+        if (record?.status !== 'open' || !record.result?.session || core_context.comparableChatId(record.result.sourceMemory?.chatId) !== core_context.comparableChatId(bank.chatId)) return false;
         const before = cloneCacheValue(record.result.session), next = mutate(cloneCacheValue(before), cloneCacheValue(record.result.sourceMemory));
         if (!next || next.kind !== before.kind || next.chatId !== before.chatId || next.archiveRevision !== before.archiveRevision) return false;
         const deletedItems = [...(before.readableProgress?.deletedItems || []), ...collectProgressDeletions(before, next)];
@@ -49607,6 +50004,14 @@ async function saveGenerationTaskResult(context, mode, session, origin, options 
     } catch { /* The task result was acknowledged by canonical storage. */ }
     return { status: options.complete === false ? 'partial-result' : 'awaiting-choice', draftId,
         pageId: generationDraftRecords(committed.cache)[draftId].result.pageId };
+}
+
+function generationTaskResultSession(record) {
+    const session = cloneCacheValue(record.session);
+    session.readableProgress = { ...session.readableProgress, explicitDraft: true, draftId: record.draftId };
+    session.generationSources = { ...(session.generationSources || {}), [record.pageId || record.mode]: {
+        sourceMemory: cloneCacheValue(record.sourceMemory), sourceIdentity: cloneCacheValue(record.sourceIdentity) } };
+    return session;
 }
 
 function applySavedTaskPage(latest, result) {
@@ -52178,6 +52583,7 @@ __m_core_cache_js.listGenerationDrafts = listGenerationDrafts;
 __m_core_cache_js.listGenerationTaskResults = listGenerationTaskResults;
 __m_core_cache_js.generationPageReadingSource = generationPageReadingSource;
 __m_core_cache_js.generationPageSourceMemory = generationPageSourceMemory;
+__m_core_cache_js.generationTaskResultSession = generationTaskResultSession;
 __m_core_cache_js.migrateLegacyTravelSession = migrateLegacyTravelSession;
 __m_core_cache_js.modeWriteFenceSignature = modeWriteFenceSignature;
 __m_core_cache_js.modeWriteFenceForCache = modeWriteFenceForCache;

@@ -25,6 +25,100 @@ const MANAGEABLE_TARGET_TYPES = new Set([
     'achievement', 'calendar-entry', 'calendar-note', 'calendar-mood', 'butterfly-node',
 ]);
 
+const EDITABLE_CONTENT_LABELS = Object.freeze({
+    title: '标题', subtitle: '副标题', label: '名称', name: '名称', date: '日期', setting: '场景', scene: '场景',
+    description: '说明', desc: '画面说明', summary: '摘要', text: '正文', line: '台词', lines: '台词',
+    body: '正文', greeting: '称呼', closing: '结尾', monologue: '独白', intervention: '回应', systemNote: '观测批语',
+    preview: '摘要', detail: '正文', caption: '图片说明', imageCaption: '图片说明', cgDesc: '画面说明',
+    unlockCondition: '达成条件', hint: '提示', hintLines: '提示', comments: '共同回忆', lyrics: '歌词',
+    vocalDescription: '演唱描述', styleDescription: '音乐描述', value: '内容', content: '正文', message: '留言',
+    dialogueLines: '台词', script: '对话', action: '动作', narration: '叙述', synopsis: '梗概', reflection: '感想',
+    endingScene: '终章', confession: '告白', confessionText: '告白', confessionLines: '告白台词',
+    creditsLine: '落幕语', timeSkip: '时间跨度', finalLine: '结语', unlockHint: '解锁提示',
+    responseSummary: '回应', afterEffect: '后续影响', statusLine: '状态', logs: '记录', poem: '短句',
+    opening: '开场', location: '地点', ending: '结尾', revealedText: '揭示内容',
+    morning: '早安', afternoon: '午后', evening: '晚间', night: '晚安', bedtime: '睡前',
+    atmosphere: '氛围', activity: '活动', npcPerspective: '人物视角', relation: '关系',
+});
+const EDITOR_INTERNAL_FIELDS = new Set(['generationSources', 'readableProgress', 'participantSnapshot', 'speakerSnapshot',
+    'cgImage', 'cgPromptDraft', 'cgPromptMetadata', 'sourceMemory', 'sourceContext', 'sourceIdentity', 'progressPending']);
+
+export function partialContentFields(session) {
+    const fields = [];
+    const visit = (value, path = [], field = '', label = '') => {
+        if (typeof value === 'string' && EDITABLE_CONTENT_LABELS[field]) {
+            fields.push({ path, label: `${label ? `${label} · ` : ''}${EDITABLE_CONTENT_LABELS[field]}`, value });
+        } else if (Array.isArray(value)) value.forEach((item, index) => visit(item,
+            [...path, typeof item?.id === 'string' ? { id: item.id } : index], field, item?.title || item?.name || `${label} ${index + 1}`.trim()));
+        else if (value && typeof value === 'object') for (const [key, item] of Object.entries(value)) {
+            if (!EDITOR_INTERNAL_FIELDS.has(key)) visit(item, [...path, key], key, label);
+        }
+    };
+    visit(session);
+    return fields;
+}
+
+function editorPathValue(session, path) {
+    return path.reduce((value, part) => typeof part === 'object'
+        ? value?.find?.(item => item?.id === part.id) : value?.[part], session);
+}
+
+export async function savePartialContentField(field, value) {
+    return ui_overlay.saveActiveSessionEdit(session => {
+        const parent = editorPathValue(session, field.path.slice(0, -1));
+        parent[field.path.at(-1)] = value;
+        return session;
+    }, { select: session => editorPathValue(session, field.path) });
+}
+
+export async function deletePartialContentItem(path) {
+    return ui_overlay.saveActiveSessionEdit(session => {
+        const parent = editorPathValue(session, path.slice(0, -1)), target = path.at(-1);
+        const index = parent.findIndex(item => item?.id === target.id);
+        if (index >= 0) parent.splice(index, 1);
+        return session;
+    }, { select: session => editorPathValue(session, path) });
+}
+
+export function renderPartialContentEditor() {
+    if (!archive_library.requireWritableArchiveAction()) return;
+    const body = ui_overlay.bodyEl(), fields = partialContentFields(runtimeState.activeSession);
+    const items = new Map();
+    for (const field of fields) {
+        const index = field.path.findLastIndex(part => part && typeof part === 'object' && part.id);
+        if (index < 0) continue;
+        const path = field.path.slice(0, index + 1), item = editorPathValue(runtimeState.activeSession, path);
+        items.set(JSON.stringify(path), { path, label: item.title || item.name || item.label || item.id });
+    }
+    const deletable = [...items.values()];
+    if (!body) return;
+    runtimeState.contentManagerOpen = true;
+    ui_overlay.topTitle('编辑已生成内容');
+    ui_overlay.setBackVisible(true, '返回内容');
+    body.innerHTML = `<section class="rmt-manage-shell"><p>直接修改已生成的文字，不调用 API。继续生成会保留你的修改。生图仍在原来的图片设置中。</p>
+      <button type="button" class="rmt-btn" data-rmt-partial-editor-back>返回内容</button>
+      ${fields.map((field, index) => `<article class="rmt-manage-row" style="display:block"><label>${core_text.esc(field.label)}
+      <textarea data-rmt-partial-field="${index}" style="display:block;width:100%;min-height:6em">${core_text.esc(field.value)}</textarea></label>
+      <button type="button" class="rmt-btn" data-rmt-partial-save="${index}">保存此项</button></article>`).join('')}
+      ${deletable.map((item, index) => `<button type="button" class="rmt-btn" data-rmt-partial-delete="${index}">删除条目：${core_text.esc(item.label)}</button>`).join('')}</section>`;
+    body.querySelector?.('[data-rmt-partial-editor-back]')?.addEventListener('click', () => ui_overlay.renderActive());
+    body.querySelectorAll?.('[data-rmt-partial-save]').forEach(button => button.addEventListener('click', async () => {
+        const index = Number(button.dataset.rmtPartialSave), field = fields[index];
+        const value = body.querySelector(`[data-rmt-partial-field="${index}"]`).value;
+        try {
+            await savePartialContentField(field, value);
+            field.value = value;
+            globalThis.toastr?.success?.('修改已保存，继续生成会保留。', '心迹回廊');
+        } catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); }
+    }));
+    body.querySelectorAll?.('[data-rmt-partial-delete]').forEach(button => button.addEventListener('click', async () => {
+        const item = deletable[Number(button.dataset.rmtPartialDelete)];
+        if (!ui_overlay.confirmExplicitActionTwice(`删除「${item.label}」？`, '只删除这份任务中的这一条，继续生成也不会把它恢复。', { destructive: true })) return;
+        try { await deletePartialContentItem(item.path); renderPartialContentEditor(); }
+        catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); }
+    }));
+}
+
 export function isManageableTargetType(value) {
     return MANAGEABLE_TARGET_TYPES.has(core_text.normalizeText(value, 60));
 }

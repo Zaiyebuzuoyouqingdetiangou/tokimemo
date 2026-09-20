@@ -247,6 +247,17 @@ export async function captureRoomParticipantSnapshot(context, origin, { existing
     if (!snapshot) return null;
     return generation_recovery.frozenGenerationInput(origin, 'participants:room', () => snapshot);
 }
+export async function captureAlbumParticipantSnapshot(context, origin, { existing = null, participantSnapshot } = {}) {
+    // Keep legacy recipes and single-card journals byte-for-byte free of the
+    // multiplayer input key. Only explicit multiplayer work freezes a roster.
+    if (existing && !Object.hasOwn(existing.frozenInputs || {}, 'participants:album')) return null;
+    const snapshot = existing
+        ? core_participants.normalizeParticipantSnapshot(JSON.parse(existing.frozenInputs['participants:album']))
+        : participantSnapshot !== undefined ? core_participants.normalizeParticipantSnapshot(participantSnapshot)
+            : core_participants.selectedParticipantSnapshot(core_cache.readParticipantRoster(context));
+    if (!snapshot) return null;
+    return generation_recovery.frozenGenerationInput(origin, 'participants:album', () => snapshot);
+}
 async function buildWorldPresentationContextFresh(context, memoryBank, mode) {
     const wantsSelectedSetting = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode);
     let selectedSetting = wantsSelectedSetting
@@ -1373,7 +1384,12 @@ async function generateModeOperation(mode, options = {}) {
         let session;
         const participantSnapshot = mode === core_constants.MODE.ROOM
             ? await captureRoomParticipantSnapshot(context, origin, { existing: recoveryExisting,
+                participantSnapshot: options.participantRegeneration?.participantSnapshot })
+            : mode === core_constants.MODE.ALBUM ? await captureAlbumParticipantSnapshot(context, origin, { existing: recoveryExisting,
                 participantSnapshot: options.participantRegeneration?.participantSnapshot }) : null;
+        if (mode === core_constants.MODE.ALBUM && participantSnapshot) {
+            core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin, { participantSnapshot });
+        }
         let presentationContext = null;
         if (time_stories.isTimeStoryMode(mode) || (mode === core_constants.MODE.ITEMS && previousSession && allowPersonaExpansion) || [core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode)) {
             presentationContext = await buildWorldPresentationContext(context, memoryBank, mode, origin);
@@ -1408,7 +1424,7 @@ async function generateModeOperation(mode, options = {}) {
         } else if (mode === core_constants.MODE.ENDING) {
             session = await modes_ending.generateEndingWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.ALBUM) {
-            session = await modes_album.generateAlbumWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
+            session = await modes_album.generateAlbumWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, participantSnapshot });
         } else if (mode === core_constants.MODE.HEART) {
             session = await modes_heart.generateHeartWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.PHONE) {

@@ -129,11 +129,21 @@ export async function resolveGenerationProgressTarget(context, shownSession, sel
     const current = suppliedCache ? { cache: suppliedCache, memory: archive_repository.requireArchive(context) }
         : await currentArchiveVersionState(context);
     const bank = current.memory, stored = current.cache, mode = shownSession.kind;
-    if (!bank || shownSession.chatId !== bank.chatId || shownSession.archiveRevision !== bank.archiveRevision) return null;
+    if (!bank || shownSession.chatId !== bank.chatId) return null;
     const select = session => { try { return session ? selectItem(session) : null; } catch { return null; } };
     const shown = select(shownSession);
     if (shown == null) return null;
     const equal = value => value != null && sameProgressItemValue(value, shown);
+    if (shownSession.readableProgress?.explicitDraft === true) {
+        const draftId = shownSession.readableProgress.draftId, row = generationDraftRecords(stored)[draftId];
+        if (row?.status !== 'open' || row.result?.mode !== mode || row.result.sourceMemory?.chatId !== bank.chatId
+            || !equal(select(generationTaskResultSession({ draftId, ...row.result })))) return null;
+        return { draftId, pageId: row.result.pageId, status: 'open', session: cloneCacheValue(row.result.session),
+            sourceMemory: cloneCacheValue(row.result.sourceMemory), sourceContext: cloneCacheValue(row.result.sourceContext || {}),
+            contentSnapshot: generation_recovery.readGenerationContentSnapshot(row.journal),
+            frozenInputs: cloneCacheValue(row.journal?.frozenInputs || {}), journal: cloneCacheValue(row.journal) };
+    }
+    if (shownSession.archiveRevision !== bank.archiveRevision) return null;
     const visible = loadReadableGenerationProgress(mode, { context, cache: stored, memoryBank: bank, chatId: bank.chatId }) || stored?.[mode];
     if (!equal(select(visible))) return null;
     const rows = Object.entries(generationDraftRecords(stored)).filter(([, row]) => row.status === 'open'
@@ -175,7 +185,7 @@ const PROGRESS_READING_FIELDS = Object.freeze(['view', 'selectedId', 'selectedKe
 function progressPathValue(session, path) {
     let value = session;
     for (const part of path || []) {
-        value = typeof part === 'string' ? (value && Object.hasOwn(value, part) ? value[part] : undefined)
+        value = typeof part === 'string' || typeof part === 'number' ? (value && Object.hasOwn(value, part) ? value[part] : undefined)
             : Array.isArray(value) ? value.find(item => item?.id === part?.id
                 && (!part?.calendarPageKey || modes_calendar.calendarEntryPageKey(item) === part.calendarPageKey)) : undefined;
     }
@@ -201,7 +211,33 @@ function collectProgressFieldClears(before, after, path = [], cleared = []) {
     return cleared;
 }
 
+// Record only changed local fields; never copy task inputs into every edit.
+function collectProgressEdits(before, after, path = [], edits = []) {
+    if (sameProgressItemValue(before, after)) return edits;
+    if (Array.isArray(before) && Array.isArray(after)) {
+        after.forEach((value, index) => {
+            const id = typeof value?.id === 'string' ? value.id : null;
+            const previous = id ? before.find(item => item?.id === id) : before[index];
+            collectProgressEdits(previous, value, [...path, id ? { id } : index], edits);
+        });
+    } else if (before && after && typeof before === 'object' && typeof after === 'object'
+        && !Array.isArray(before) && !Array.isArray(after)) {
+        for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+            if (['generationSources', 'readableProgress', 'progressPending', ...PROGRESS_READING_FIELDS].includes(key)) continue;
+            collectProgressEdits(before[key], after[key], [...path, key], edits);
+        }
+    } else if (path.length) edits.push({ path, ...(after === undefined ? { remove: true } : { value: structuredClone(after) }) });
+    return edits;
+}
+
 function applyProgressOverrides(session, metadata) {
+    for (const edit of metadata?.manualFieldsV1 || []) {
+        const parent = progressPathValue(session, edit.path.slice(0, -1)), key = edit.path.at(-1);
+        if (!parent || typeof parent !== 'object' || !['string', 'number'].includes(typeof key)) continue;
+        if (edit.remove) delete parent[key];
+        else Object.defineProperty(parent, key, { value: structuredClone(edit.value), enumerable: true, configurable: true, writable: true });
+    }
+
     for (const override of metadata?.textOverridesV1 || []) {
         const item = progressPathValue(session, override.path);
         if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
@@ -218,6 +254,9 @@ function applyProgressOverrides(session, metadata) {
 
 function progressMutationMetadata(before, next, contentOverride) {
     const metadata = cloneCacheValue(before.readableProgress || {});
+    const localEdits = new Map((metadata.manualFieldsV1 || []).map(edit => [JSON.stringify(edit.path), edit]));
+    for (const edit of collectProgressEdits(before, next)) localEdits.set(JSON.stringify(edit.path), edit);
+    if (localEdits.size) metadata.manualFieldsV1 = [...localEdits.values()];
     const clears = new Map((metadata.clearedFieldsV1 || []).filter(clear => {
         const value = progressPathValue(next, clear.path);
         return clear.remove ? value === undefined : value === null;
@@ -299,7 +338,7 @@ function preserveProgressLocalState(incoming, saved) {
             && !['generationSources', 'readableProgress', 'cgImage', 'cgPromptDraft', 'cgPromptMetadata'].includes(key)) next[key] = preserveProgressLocalState(value, saved[key]);
     }
     applyProgressOverrides(next, saved.readableProgress);
-    if (next.readableProgress) for (const key of ['textOverridesV1', 'clearedFieldsV1']) {
+    if (next.readableProgress) for (const key of ['textOverridesV1', 'clearedFieldsV1', 'manualFieldsV1']) {
         if (saved.readableProgress?.[key]) next.readableProgress[key] = cloneCacheValue(saved.readableProgress[key]);
     }
     const deletions = saved.readableProgress?.deletedItems;
@@ -324,7 +363,7 @@ export async function commitGenerationTaskResultMutation(context, draftId, mutat
     let session = null;
     const committed = await serializeArchiveCommitOperation(entry, bank, () => commitArchiveCacheMutation(entry, bank, {}, value => {
         const record = generationDraftRecords(value)[draftId];
-        if (record?.status !== 'open' || !record.result?.session || record.result.sourceMemory?.archiveRevision !== bank.archiveRevision) return false;
+        if (record?.status !== 'open' || !record.result?.session || core_context.comparableChatId(record.result.sourceMemory?.chatId) !== core_context.comparableChatId(bank.chatId)) return false;
         const before = cloneCacheValue(record.result.session), next = mutate(cloneCacheValue(before), cloneCacheValue(record.result.sourceMemory));
         if (!next || next.kind !== before.kind || next.chatId !== before.chatId || next.archiveRevision !== before.archiveRevision) return false;
         const deletedItems = [...(before.readableProgress?.deletedItems || []), ...collectProgressDeletions(before, next)];
@@ -416,6 +455,14 @@ export async function saveGenerationTaskResult(context, mode, session, origin, o
     } catch { /* The task result was acknowledged by canonical storage. */ }
     return { status: options.complete === false ? 'partial-result' : 'awaiting-choice', draftId,
         pageId: generationDraftRecords(committed.cache)[draftId].result.pageId };
+}
+
+export function generationTaskResultSession(record) {
+    const session = cloneCacheValue(record.session);
+    session.readableProgress = { ...session.readableProgress, explicitDraft: true, draftId: record.draftId };
+    session.generationSources = { ...(session.generationSources || {}), [record.pageId || record.mode]: {
+        sourceMemory: cloneCacheValue(record.sourceMemory), sourceIdentity: cloneCacheValue(record.sourceIdentity) } };
+    return session;
 }
 
 function applySavedTaskPage(latest, result) {

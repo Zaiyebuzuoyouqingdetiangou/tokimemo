@@ -28,7 +28,7 @@ export function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
         const resultHtml = cache.listGenerationTaskResults(null, stored).map(row => {
             const label = pages[row.pageId] || constants.MODE_LABEL[row.mode] || row.pageId || row.mode;
             const pending = row.status === 'awaiting-choice';
-            return `<section class="rmt-recovery-status" role="status"><b>${text.esc(label)} · ${pending ? '成果已保存，等待选择去向' : row.status === 'open' ? '已保存部分成果，原草稿可继续' : '独立生成成果'}</b><p>按原资料生成，原资料出处随成果保留。</p><button type="button" class="rmt-btn" data-rmt-task-result-open="${text.esc(row.draftId)}">查看已保存成果</button>${!readOnly && (pending || row.status === 'independent') ? ` <button type="button" class="rmt-btn" data-rmt-task-result-choose="${text.esc(row.draftId)}">选择保存去向</button>` : ''}</section>`;
+            return `<section class="rmt-recovery-status" role="status"><b>${text.esc(label)} · ${pending ? '成果已保存，等待选择去向' : row.status === 'open' ? '已保存部分成果，原草稿可继续' : '独立生成成果'}</b><p>按原资料生成，原资料出处随成果保留。</p><button type="button" class="rmt-btn" data-rmt-task-result-open="${text.esc(row.draftId)}">${row.status === 'open' ? '打开已生成内容' : '查看已保存成果'}</button>${!readOnly && (pending || row.status === 'independent') ? ` <button type="button" class="rmt-btn" data-rmt-task-result-choose="${text.esc(row.draftId)}">选择保存去向</button>` : ''}</section>`;
         }).join('');
         return draftHtml + resultHtml;
     }

@@ -248,6 +248,15 @@ export async function openGenerationTaskResult(draftId, context = core_context.c
         : core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
     const memory = structuredClone(record.sourceMemory);
     if (!memory?.memories || !record.session) throw new Error('这份成果的原始资料暂时无法读取，已保存的成果仍保留。');
+    if (record.status === 'open' && record.session.readableProgress?.complete === false
+        && (!sourceSnapshot || (!sourceSnapshot.historyVersionId && !sourceSnapshot.backupOnly
+            && generation_imageGeneration.indexedArchiveMatchesCurrentChat(sourceSnapshot, context)))) {
+        const current = sourceSnapshot ? await core_cache.readGenerationTaskResult(context, draftId) : record;
+        core_context.assertRuntimeLifecycleCurrent(lifecycle);
+        if (core_context.chatScopeKey(core_context.currentCharacterGuard()) !== scope) throw new DOMException('Chat changed', 'AbortError');
+        ui_overlay.openPartialTaskSession(current);
+        return current;
+    }
     const entry = record.targetEntry || core_cache.archiveBackupEntryForContext(context, memory);
     const snapshot = {
         ...entry, entryId: `${record.entryId || entry.entryId}:task:${draftId}`,

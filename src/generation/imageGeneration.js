@@ -212,16 +212,19 @@ export function captureCgImageTarget(target = selectedCgTarget()) {
     const context = core_context.currentCharacterGuard();
     const memory = archive_repository.requireArchive(context);
     if (core_context.comparableChatId(session.chatId) !== core_context.comparableChatId(core_context.getChatId(context))
-        || session.archiveRevision !== memory.archiveRevision) return null;
+        || (!session.readableProgress?.explicitDraft && session.archiveRevision !== memory.archiveRevision)) return null;
     let draftId = '';
     if (session.readableProgress?.complete === false) {
         const records = core_cache.getCache(context)?.[core_cache.GENERATION_DRAFTS_CACHE_KEY]?.records || {};
-        const candidates = Object.entries(records).filter(([, row]) => row.status === 'open'
-            && row.result?.mode === mode && row.result.sourceMemory?.archiveRevision === memory.archiveRevision
+        const candidates = Object.entries(records).filter(([id, row]) => row.status === 'open'
+            && row.result?.mode === mode && (session.readableProgress?.explicitDraft
+                ? id === session.readableProgress.draftId && row.result.sourceMemory?.chatId === memory.chatId
+                : row.result.sourceMemory?.archiveRevision === memory.archiveRevision)
             && cgItemSignature(cgItemInSession(mode, row.result.session, item.id)) === cgItemSignature(item));
         candidates.sort(([left, a], [right, b]) => Number(right === session.readableProgress.draftId)
             - Number(left === session.readableProgress.draftId) || b.result.createdAt - a.result.createdAt);
         draftId = candidates[0]?.[0] || '';
+        if (!draftId && session.readableProgress?.explicitDraft) return null;
         if (!draftId && cgItemSignature(cgItemInSession(mode,
             core_cache.loadSession(mode, { context, memoryBank: memory, clone: false }), item.id)) !== cgItemSignature(item)) return null;
     }
@@ -289,7 +292,7 @@ export async function reconceiveCgImagePrompt(target, { promptFormat = '', appea
     const selectedCast = castSnapshot === undefined
         ? cg_appearance.initialCgAppearanceMetadata(item, context)?.castSnapshot || null : castSnapshot;
     const appearance = cg_appearance.appearanceEvidenceForFormat(
-        cg_appearance.appearanceEvidenceWithDraft(cg_appearance.captureCgAppearanceEvidence(context, { castSnapshot: selectedCast }), appearanceDraft), promptFormat);
+        cg_appearance.appearanceEvidenceWithDraft(cg_appearance.captureCgAppearanceEvidence(context, { castSnapshot: selectedCast }), appearanceDraft, context), promptFormat);
     const prompt = buildCgReconceptPrompt(item, context, target.mode, appearance, promptFormat);
     // One explicit text request extracts both appearances and composes the scene.
     // Only public card/persona fields and optional public character tags are used.
@@ -485,7 +488,9 @@ async function commitCapturedCgImage(captured, image) {
     assertCgImageTargetCurrent(captured, { requireSelection: false });
     const context = core_context.currentCharacterGuard();
     const mutate = (latest, memory) => {
-            if (memory.archiveRevision !== captured.revision) return null;
+            const expectedRevision = captured.draftId && cgDraftRecord(context, captured.draftId)?.status === 'open'
+                ? captured.session.archiveRevision : captured.revision;
+            if (memory.archiveRevision !== expectedRevision) return null;
             const result = image_patch.applyCgImagePatch(latest, { version: 1, mode: captured.mode,
                 itemId: captured.itemId, expectedSignature: captured.signature, image });
             return result.session;
@@ -508,7 +513,8 @@ async function commitCapturedCgImage(captured, image) {
         && archive_repository.getImportedMemory(core_context.getContext())?.archiveRevision === captured.revision) {
         // Copy only this image into views that still show the captured item.
         for (const session of new Set([captured.session, runtimeState.activeSession])) {
-            if (session?.kind !== captured.mode || session.archiveRevision !== captured.revision
+            if (session?.kind !== captured.mode || (session.archiveRevision !== captured.revision
+                && !(captured.draftId && session.readableProgress?.draftId === captured.draftId))
                 || core_context.comparableChatId(session.chatId) !== core_context.comparableChatId(captured.origin.chatId)) continue;
             const item = cgItemInSession(captured.mode, session, captured.itemId);
             if (item && cgItemSignature(item) === captured.signature) item.cgImage = image;
@@ -652,7 +658,7 @@ export async function drawSelectedCgImage({ promptOverride, promptMetadata, prom
             ...(metadata ? { promptMetadata: metadata } : {}),
         };
         if (!core_context.isCurrentTaskOrigin(origin)) {
-            if (session.archiveRevision !== captured.revision || cgItemSignature(item) !== captured.signature) {
+            if (session.archiveRevision !== captured.session.archiveRevision || cgItemSignature(item) !== captured.signature) {
                 throw core_text.safeUserError('原回忆已变化，新图片没有替换旧图；可以在生图插件图库中查看。', 'RMT_CG_TARGET_CHANGED');
             }
             const { durable } = deferCgImageIfOriginChanged(captured, nextImage);
