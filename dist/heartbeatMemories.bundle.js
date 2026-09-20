@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 130
-// Source SHA-256: 1e4c4202abe10011d2042bc4271d64ff023ebd70b3e2b1de0aa0b9cb0c911096
+// Source SHA-256: c970872e6bdb1f81bfc04c28d31dfd25b18175b7c5d15059c890de93da01319d
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -34212,7 +34212,12 @@ function captureGenerationContent(context, bank) {
     fields.powerUserSettings = { persona_description: context.powerUserSettings?.persona_description || '' };
     let cardFields = {};
     try { cardFields = structuredClone(context.getCharacterCardFields?.() || {}); } catch {}
-    return { version: 1, fields, cardFields, memoryBank: structuredClone(bank),
+    // Archive import checkpoints retain their own source material in the original
+    // bank. Derived content needs the archive facts, not another copy of that log.
+    const memoryBank = structuredClone(bank);
+    delete memoryBank.archiveImportProgress;
+    delete memoryBank.archiveImportPaused;
+    return { version: 1, fields, cardFields, memoryBank,
         contentSettings: generationContentSettings(core_settings.getPluginSettings(context)) };
 }
 function generationContentContext(origin, context) {

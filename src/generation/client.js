@@ -120,7 +120,12 @@ function captureGenerationContent(context, bank) {
     fields.powerUserSettings = { persona_description: context.powerUserSettings?.persona_description || '' };
     let cardFields = {};
     try { cardFields = structuredClone(context.getCharacterCardFields?.() || {}); } catch {}
-    return { version: 1, fields, cardFields, memoryBank: structuredClone(bank),
+    // Archive import checkpoints retain their own source material in the original
+    // bank. Derived content needs the archive facts, not another copy of that log.
+    const memoryBank = structuredClone(bank);
+    delete memoryBank.archiveImportProgress;
+    delete memoryBank.archiveImportPaused;
+    return { version: 1, fields, cardFields, memoryBank,
         contentSettings: generationContentSettings(core_settings.getPluginSettings(context)) };
 }
 export function generationContentContext(origin, context) {
