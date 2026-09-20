@@ -23,12 +23,12 @@ export function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
             const attrs = `data-rmt-recovery-draft-id="${text.esc(row.draftId)}" data-rmt-recovery-page-id="${text.esc(row.pageId)}"`;
             const childReader = row.journal.operation?.kind === 'content-item' && row.journal.operation.sourceDraftId
                 ? ` <button type="button" class="rmt-btn" data-rmt-content-draft-open="${text.esc(row.draftId)}">查看单项草稿正文</button>` : '';
-            return `<section class="rmt-recovery-status" role="status"><b>${text.esc(pageLabel)} · 已保留 ${summary.completed} 个成功分段</b><p>${text.esc(new Date(row.createdAt).toLocaleString())} · ${text.esc(reason.replace(/[。\s]+$/, ''))}。继续只补这份草稿未完成的内容，会使用生成额度。</p><button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(row.mode)}" ${attrs}>${label}</button>${childReader} <button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(row.mode)}" ${attrs}>导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(row.mode)}" ${attrs}>放弃这份草稿</button></section>`;
+            return `<section class="rmt-recovery-status" role="status"><b>${text.esc(pageLabel)} · 已保留 ${summary.completed} 个成功分段</b><p>${text.esc(new Date(row.createdAt).toLocaleString())} · ${text.esc(reason.replace(/[。\s]+$/, ''))}。继续只补这份草稿未完成的内容，会使用生成额度。</p><div class="rmt-recovery-actions"><button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(row.mode)}" ${attrs}>${label}</button>${childReader} <button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(row.mode)}" ${attrs}>导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(row.mode)}" ${attrs}>放弃这份草稿</button></div></section>`;
         }).join('');
         const resultHtml = cache.listGenerationTaskResults(null, stored).map(row => {
             const label = pages[row.pageId] || constants.MODE_LABEL[row.mode] || row.pageId || row.mode;
             const pending = row.status === 'awaiting-choice';
-            return `<section class="rmt-recovery-status" role="status"><b>${text.esc(label)} · ${pending ? '成果已保存，等待选择去向' : row.status === 'open' ? '已保存部分成果，原草稿可继续' : '独立生成成果'}</b><p>按原资料生成，原资料出处随成果保留。</p><button type="button" class="rmt-btn" data-rmt-task-result-open="${text.esc(row.draftId)}">${row.status === 'open' ? '打开已生成内容' : '查看已保存成果'}</button>${!readOnly && (pending || row.status === 'independent') ? ` <button type="button" class="rmt-btn" data-rmt-task-result-choose="${text.esc(row.draftId)}">选择保存去向</button>` : ''}</section>`;
+            return `<section class="rmt-recovery-status" role="status"><b>${text.esc(label)} · ${pending ? '成果已保存，等待选择去向' : row.status === 'open' ? '已保存部分成果，原草稿可继续' : '独立生成成果'}</b><p>按原资料生成，原资料出处随成果保留。</p><div class="rmt-recovery-actions"><button type="button" class="rmt-btn" data-rmt-task-result-open="${text.esc(row.draftId)}">${row.status === 'open' ? '打开已生成内容' : '查看已保存成果'}</button>${!readOnly && (pending || row.status === 'independent') ? ` <button type="button" class="rmt-btn" data-rmt-task-result-choose="${text.esc(row.draftId)}">选择保存去向</button>` : ''}</div></section>`;
         }).join('');
         return draftHtml + resultHtml;
     }
@@ -41,24 +41,24 @@ export function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
         if (!summary || (!summary.completed && !summary.truncated && !summary.failed)) return '';
         const label = summary.canContinue ? '继续生成' : '重试未完成部分';
         const reason = summary.canContinue ? '正文未写完' : summary.failureCode ? text.safeErrorSummary({ code: summary.failureCode, archiveInputCategory: summary.failureCategory, recoveryPhase: summary.failurePhase }) : '任务尚未完成';
-        return `<section class="rmt-recovery-status" role="status"><b>${text.esc(constants.MODE_LABEL[mode] || mode)} · 已保留 ${summary.completed} 个成功分段</b><p>上次记录：${text.esc(reason.replace(/[。\s]+$/, ''))}。继续会使用生成额度。</p><button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(mode)}">${label}</button> <button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(mode)}">导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(mode)}">放弃未提交草稿</button></section>`;
+        return `<section class="rmt-recovery-status" role="status"><b>${text.esc(constants.MODE_LABEL[mode] || mode)} · 已保留 ${summary.completed} 个成功分段</b><p>上次记录：${text.esc(reason.replace(/[。\s]+$/, ''))}。继续会使用生成额度。</p><div class="rmt-recovery-actions"><button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(mode)}">${label}</button> <button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(mode)}">导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(mode)}">放弃未提交草稿</button></div></section>`;
     }).join('');
 }
 
 export function archiveRecoveryHtml(summary, { profile = false } = {}) {
     if (!summary) return '';
     const draftLinks = (summary.drafts || []).map(draft => `<button type="button" class="rmt-btn" data-rmt-archive-draft-open="${text.esc(draft.draftId)}">查看${draft.stage === 'profile-only' || draft.stage === 'profile-result' || draft.operation === 'profile' ? '简介' : '建档'}${draft.paused ? '旧' : ''}草稿正文</button>`).join(' ');
-    if (summary.onlyArchivedDrafts) return `<section class="rmt-recovery-status"><p>${text.esc(summary.notice)}</p>${draftLinks}</section>`;
+    if (summary.onlyArchivedDrafts) return `<section class="rmt-recovery-status"><p>${text.esc(summary.notice)}</p><div class="rmt-recovery-actions">${draftLinks}</div></section>`;
     const label = profile || summary.profileOnly ? '仅重试档案简介' : summary.awaitingCommit ? '仅重试保存'
         : summary.batchProgress ? '继续下一批' : summary.canContinue ? '继续整理档案' : '重试未完成分块';
     const capacity = summary.capacityBlocked === true;
     const batch = summary.batchProgress;
     const heading = batch ? `批次 ${batch.currentBatch}/${batch.batches} · 已正式保存 ${batch.saved} 个来源片段`
         : `${label} · 已保留 ${Number(summary.completed) || 0} 个成功分段`;
-    return `<section class="rmt-recovery-status" role="status"><b>${text.esc(heading)}</b><p>${text.esc(summary.notice)}</p>${summary.failureCode ? `<p>${text.esc(text.safeErrorSummary({ code: summary.failureCode }))}</p>` : ''}${draftLinks}
+    return `<section class="rmt-recovery-status" role="status"><b>${text.esc(heading)}</b><p>${text.esc(summary.notice)}</p>${summary.failureCode ? `<p>${text.esc(text.safeErrorSummary({ code: summary.failureCode }))}</p>` : ''}<div class="rmt-recovery-actions">${draftLinks}
 ${summary.pageOnly && !summary.awaitingCommit ? `<button type="button" class="rmt-btn" data-rmt-archive-save-draft="${profile ? 'profile' : 'import'}">保存本页草稿（不生成）</button>` : ''}
 ${!capacity ? `<button type="button" class="rmt-btn" data-rmt-archive-recovery="${profile || summary.profileOnly ? 'profile' : 'import'}">${label}</button>` : ''}
 ${!profile && !summary.profileOnly ? '<button type="button" class="rmt-btn" data-rmt-archive-export-pending>导出待入档成果</button>' : ''}
 ${!profile && !summary.profileOnly && !summary.awaitingCommit && !capacity ? '<button type="button" class="rmt-btn" data-rmt-archive-restart>按当前条件另起任务</button>' : ''}
-${!batch ? '<button type="button" class="rmt-btn" data-rmt-archive-discard>放弃整理草稿</button>' : ''}</section>`;
+${!batch ? '<button type="button" class="rmt-btn" data-rmt-archive-discard>放弃整理草稿</button>' : ''}</div></section>`;
 }

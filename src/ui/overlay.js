@@ -1887,6 +1887,13 @@ export function handleOverlayClick(event) {
         }
         return;
     }
+    if (action === 'shared-prev') {
+        if (runtimeState.activeSession?.kind === core_constants.MODE.ALBUM) {
+            runtimeState.activeSession.dialogueIndex = Math.max(0, runtimeState.activeSession.dialogueIndex - 1);
+            ui_albumView.renderSharedMemory();
+        }
+        return;
+    }
     if (action === 'shared-next') {
         if (runtimeState.activeSession?.kind === core_constants.MODE.ALBUM) {
             runtimeState.activeSession.dialogueIndex += 1;

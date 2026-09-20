@@ -237,8 +237,8 @@ export function renderSharedMemory() {
         ${snapshot && comments.length && !readOnly ? `<label>本句说话人 <select data-rmt-album-speaker="${core_text.esc(item.id)}" data-rmt-dialogue-index="${session.dialogueIndex}"><option value="">未标注人物</option>${snapshot.people.map(person => `<option value="${core_text.esc(person.id)}"${person.id === speaker?.id ? ' selected' : ''}>${core_text.esc(person.name)}</option>`).join('')}</select></label>` : ''}
         <div class="rmt-dialogue-text">${core_text.esc(comments[session.dialogueIndex] || (item.progressPending?.length ? '对白尚未生成，画面描述已保留。' : ''))}</div>
         <div class="rmt-dialogue-actions">
-          <button type="button" class="rmt-btn" data-rmt-action="shared-back">返回相簿</button>
-          <button type="button" class="rmt-btn" data-rmt-action="${last ? 'shared-replay' : 'shared-next'}" ${!comments.length ? 'disabled' : ''}>${last ? '重看' : '下一句'}</button>
+          <button type="button" class="rmt-btn" data-rmt-action="shared-prev" ${!comments.length || session.dialogueIndex <= 0 ? 'disabled' : ''}>上一句</button>
+          <button type="button" class="rmt-btn" data-rmt-action="shared-next" ${!comments.length || last ? 'disabled' : ''}>下一句</button>
         </div>
       </div>
       ${readOnly ? '' : '<div class="rmt-cg-card-actions rmt-cg-memory-actions"><button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt">图片设置</button></div>'}

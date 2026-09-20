@@ -34,7 +34,8 @@ export function normalizeParticipantLooks(value) {
             throw core_text.safeUserError('人物外貌标识重复或缺失，请重新打开图片设置。', 'RMT_CAST_LOOKS_INVALID');
         }
         ids.add(row.participantId);
-        return { participantId: row.participantId, tag: core_text.normalizeText(row.tag, CAST_LOOKS_FIELD_LIMIT) };
+        return { participantId: row.participantId, tag: core_text.normalizeText(row.tag, CAST_LOOKS_FIELD_LIMIT),
+            ...(Object.hasOwn(row, 'nl') ? { nl: core_text.normalizeText(row.nl, CAST_LOOKS_FIELD_LIMIT) } : {}) };
     });
     return { version: 1, chatId: String(value.chatId || ''), identity: String(value.identity || ''),
         updatedAt: Number(value.updatedAt) || 0, characters };

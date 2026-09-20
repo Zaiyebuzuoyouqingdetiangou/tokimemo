@@ -456,6 +456,15 @@ export function connectionManagerSettings(context = core_context.getContext()) {
     return manager;
 }
 
+export function oneClickConnectionCapability(context = core_context.getContext()) {
+    try {
+        core_independentApi.assertConnectionManagerProfileSupport(context.ConnectionManagerRequestService);
+        return { available: true, message: '当前酒馆支持配置与密钥绑定，可使用一键连接或手动独立 API。' };
+    } catch (error) {
+        return { available: false, message: error.safeUserMessage || '当前酒馆不支持凭证绑定，请使用手动独立 API。' };
+    }
+}
+
 export function slashCommandObject(command, context = core_context.getContext()) {
     const key = core_text.normalizeText(command, 80);
     const value = key ? context.SlashCommandParser?.commands?.[key] : null;

@@ -373,6 +373,8 @@ export function refreshGenerationSettingsUi() {
     panel.dataset.rmtApiEditor = editorMode;
     const profile = panel.querySelector('[data-rmt-api-profile]');
     const oneClick = panel.querySelector('[data-rmt-api-import-current]');
+    const capability = panel.querySelector('[data-rmt-api-host-capability]');
+    if (capability) capability.textContent = core_settings.oneClickConnectionCapability().message;
     const manualChoice = panel.querySelector('[data-rmt-api-select-manual]');
     const profilePanel = panel.querySelector('[data-rmt-api-profile-panel]');
     const manualPanel = panel.querySelector('[data-rmt-api-manual-panel]');
@@ -473,7 +475,7 @@ export function refreshGenerationSettingsUi() {
         status.textContent = `${ready ? '●' : '○'} ${ready
             ? core_settings.generationSourceLabel(settings)
             : connectionMode === 'manual' ? '手动配置未完成'
-            : settings.connectionProfileId ? '需要 1.1.18 能力' : '一键连接未配置'}`;
+            : settings.connectionProfileId ? '需凭证绑定能力，可改用手动配置' : '一键连接未配置'}`;
     }
     void refreshModelOptions();
     void refreshManualModelOptions();
@@ -593,12 +595,13 @@ export function mountSettings({ homeTarget = null } = {}) {
       </div>
       <div class="inline-drawer-content rmt-settings-content">
         <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="api">
-          <summary class="rmt-settings-card-head"><span>API</span><div><b>独立 API</b><small>1.1.18 一键配置 · 手动配置</small></div></summary>
+          <summary class="rmt-settings-card-head"><span>API</span><div><b>独立 API</b><small>一键配置 · 手动配置</small></div></summary>
           <div class="rmt-settings-section-body">
           <div class="rmt-api-source-grid" role="group" aria-label="独立 API 配置方式">
-            <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-import-current aria-pressed="false"><span class="rmt-api-source-badge">要求</span><b>1.1.18 一键配置</b><small>读取酒馆当前连接</small></button>
+            <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-import-current aria-pressed="false"><span class="rmt-api-source-badge">凭证绑定</span><b>一键配置</b><small>读取酒馆当前连接</small></button>
             <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-select-manual aria-pressed="false"><span class="rmt-api-source-badge">OPENAI</span><b>手动配置</b><small>URL · Key · 模型</small></button>
           </div>
+          <div data-rmt-api-host-capability role="status"></div>
           <div class="rmt-api-status" data-rmt-api-status role="status">○ 一键连接未配置</div>
           <div class="rmt-api-source-panel" data-rmt-api-profile-panel>
             <label class="rmt-settings-field"><span>连接配置</span><select class="text_pole" data-rmt-api-profile><option value="">选择 Connection Manager 配置</option></select></label>
@@ -650,10 +653,10 @@ export function mountSettings({ homeTarget = null } = {}) {
           </div>
         </details>
         <details class="rmt-settings-card" data-rmt-settings-section="filter">
-          <summary class="rmt-settings-card-head"><span>TAG</span><div><b>按用户所选标签保存</b><small>勾选保留</small></div></summary>
+          <summary class="rmt-settings-card-head"><span>TAG</span><div><b>过滤标签</b><small>勾选即不读取</small></div></summary>
           <div class="rmt-settings-section-body">
-            <p>勾选的标签块参与后续整理；未选外层块连同内部略过，无标签正文保留。不改聊天和旧档案。</p>
-            <textarea class="text_pole" data-rmt-tag-draft aria-label="要保存的标签名" placeholder="正文, content, dialogue"></textarea>
+            <p>勾选的标签及其中全部内容不参与后续读取；未勾选的内容和无标签正文保留。可排除正文内嵌的标签块，不改聊天和旧档案。</p>
+            <textarea class="text_pole" data-rmt-tag-draft aria-label="不读取的标签名" placeholder="thinking, 绘图提示词标签"></textarea>
             <div class="rmt-theme-presets"><button type="button" data-rmt-tag-scan>扫描当前聊天</button><button type="button" data-rmt-tag-all>全选</button><button type="button" data-rmt-tag-invert>反选</button><button type="button" data-rmt-tag-clear>清空选择</button><button type="button" data-rmt-tag-cancel>撤销编辑</button><button type="button" data-rmt-tag-save>保存选择</button></div>
             <div data-rmt-tag-status role="status"></div>
             <div data-rmt-tag-results></div>
@@ -735,8 +738,7 @@ export function mountSettings({ homeTarget = null } = {}) {
     let tagChoices = new Map(), tagScanned = false, tagEdited = false, tagScanEpoch = 0;
     const savedTagDraft = () => {
         const settings = core_settings.getPluginSettings();
-        return settings.contextTagMode === 'keep' ? settings.retainedContextTags
-            : [...tagChoices.keys()].filter(name => !settings.excludedContextTags.includes(name));
+        return settings.excludedContextTags;
     };
     const renderTagChoices = () => {
         const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
@@ -756,7 +758,8 @@ export function mountSettings({ homeTarget = null } = {}) {
     };
     tagDraft.value = savedTagDraft().join(', ');
     tagStatus.textContent = core_settings.getPluginSettings().contextTagMode === 'keep'
-        ? '已保存的选择从下一次整理生效。' : '当前沿用旧排除设置；扫描后可选择要保留的标签。';
+        ? '旧版保留规则尚未更改。当前显示原有排除名单；请自行勾选并保存，之后勾选的标签内容不读取。'
+        : '勾选的标签内容不读取；保存后用于后续整理。';
     renderTagChoices();
     const scanTagChoices = async () => {
         const epoch = ++tagScanEpoch, context = core_context.currentCharacterGuard();
@@ -1049,9 +1052,9 @@ export function mountSettings({ homeTarget = null } = {}) {
                     if (tagAction.hasAttribute('data-rmt-tag-save')) {
                         ++tagScanEpoch;
                         const tags = core_contextTags.normalizeExcludedTags(tagDraft.value);
-                        core_settings.updatePluginSettings({ contextTagMode: 'keep', retainedContextTags: tags });
+                        core_settings.updatePluginSettings({ contextTagMode: 'exclude', excludedContextTags: tags });
                         tagDraft.value = tags.join(', '); tagEdited = false; renderTagChoices();
-                        tagStatus.textContent = '已保存 ' + tags.length + ' 个标签；下次整理生效，聊天和旧档案未改动。';
+                        tagStatus.textContent = '已保存 ' + tags.length + ' 个过滤标签，标签内的内容不读取；下次整理生效，聊天和旧档案未改动。';
                     } else if (tagAction.hasAttribute('data-rmt-tag-cancel')) {
                         ++tagScanEpoch; tagEdited = false; tagDraft.value = savedTagDraft().join(', '); renderTagChoices();
                         tagStatus.textContent = '已撤销未保存编辑。';

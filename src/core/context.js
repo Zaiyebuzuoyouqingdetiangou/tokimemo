@@ -8,11 +8,14 @@ import { state as runtimeState } from './state.js';
 import * as core_text from './text.js';
 import * as core_contextTags from './contextTags.js';
 import * as chat_read_range from './chatReadRange.js';
+import * as host_compatibility from './hostCompatibility.js';
+
+const adaptHostContext = host_compatibility.createHostContextAdapter({ getEpoch: () => runtimeState.runtimeLifecycleEpoch });
 
 export function getContext() {
     const context = globalThis.SillyTavern?.getContext?.();
     if (!context) throw new Error('未检测到 SillyTavern 扩展上下文。');
-    return context;
+    return adaptHostContext(context);
 }
 
 export function currentCharacterGuard() {

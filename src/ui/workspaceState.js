@@ -49,7 +49,7 @@ export const WORKSPACE_ROUTES = Object.freeze({
     postending: { mode: 'heart', title: '未来 / 后日谈', group: 'stories', view: 'seasons', season: 'postending' },
     butterfly: { mode: 'butterfly', title: '蝴蝶效应', group: 'stories' },
     pastLives: { mode: 'pastLives', title: '前世今生', group: 'stories' },
-    calendar: { mode: 'calendar', title: '两个人的日历', group: 'life', deep: true },
+    calendar: { mode: 'calendar', title: '两个人的日历', group: 'life' },
     items: { mode: 'items', title: '他的物品', group: 'life', deep: true },
     timeEcho: { mode: 'timeEcho', title: '时空回响', group: 'stories', deep: true },
 });

@@ -111,6 +111,7 @@ export function arrangeArchiveWorkspace(body, { portals = [], ready = false, sna
     const gate = old.querySelector('.rmt-memory-gate');
     const sources = old.querySelector('.rmt-external-memory-row');
     const calendar = old.querySelector('.rmt-calendar-quick');
+    calendar?.remove();
     const oldPortals = old.querySelector('.rmt-archive-portals'); oldPortals?.remove();
     const notices = [...old.children].filter(el => el !== gate && el !== sources && el !== calendar);
     const main = document.createElement('main'); main.className = 'rmt-archive-room rmt-workspace-page';
@@ -158,7 +159,6 @@ export function arrangeArchiveWorkspace(body, { portals = [], ready = false, sna
             }
             main.appendChild(gate);
         }
-        if (calendar) main.appendChild(calendar);
         const browse = document.createElement('button'); browse.type = 'button'; browse.className = 'rmt-btn rmt-workspace-browse'; browse.dataset.rmtWorkspaceTab = 'content'; browse.textContent = ready ? '浏览已生成内容' : '先浏览功能'; main.appendChild(browse);
     }
     body.replaceChildren(main); syncWorkspaceChrome();

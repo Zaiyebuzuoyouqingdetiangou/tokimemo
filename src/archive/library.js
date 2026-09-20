@@ -21,6 +21,7 @@ import * as archive_avatars from '../ui/archiveAvatars.js';
 import * as ui_phoneView from '../ui/phoneView.js';
 import * as ui_endingView from '../ui/endingView.js';
 import * as recovery_view from '../ui/recoveryView.js';
+import * as host_compatibility from '../core/hostCompatibility.js';
 
 let archiveLibraryRenderSequence = 0;
 let indexedArchiveOpenSequence = 0;
@@ -1054,15 +1055,40 @@ export async function rebuildArchiveIndexFromExisting() {
     const existingByChatFile = new Map(existing.map(item => [`${core_context.archiveStoredAvatar(item)}\u001f${item.chatId}`, item]));
     const found = [];
     ui_overlay.openOverlay(); const body = ui_overlay.bodyEl(); ui_overlay.topTitle('心迹回廊 · 扫描旧档案');
+    const controller = new AbortController();
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    let cancelled = false, failedReads = 0;
+    const cancelScan = event => {
+        if (event.target.closest?.('[data-rmt-cancel-legacy-scan]')) controller.abort();
+    };
+    const scanStillCurrent = () => lifecycleEpoch === runtimeState.runtimeLifecycleEpoch;
+    body?.addEventListener('click', cancelScan);
     const avatarEntries = [...byAvatar.entries()];
+    try {
     for (let i = 0; i < avatarEntries.length; i += 1) {
         const [avatar, avatarDescriptors] = avatarEntries[i];
-        if (body) body.innerHTML = `<div class="rmt-loading"><div class="rmt-loading-card"><b>正在扫描旧档案 ${i + 1} / ${avatarEntries.length}</b><div class="rmt-loading-note">同头像只读取一次聊天列表；能唯一匹配角色卡时记录本地指纹，无法唯一判断时保持待手动分类。不会切换宿主聊天。</div></div></div>`;
+        if (body) body.innerHTML = `<div class="rmt-loading"><div class="rmt-loading-card"><b>正在扫描旧档案 ${i + 1} / ${avatarEntries.length}</b><div class="rmt-loading-note">同头像只读取一次聊天列表；旧酒馆按需只读聊天文件。能唯一匹配角色卡时记录本地指纹，无法唯一判断时保持待手动分类。不会切换宿主聊天。</div><div data-rmt-legacy-scan-progress role="status"></div><button type="button" class="rmt-btn" data-rmt-cancel-legacy-scan>停止扫描</button></div></div>`;
         try {
-            const response = await fetch('/api/characters/chats', { method:'POST', headers:context.getRequestHeaders(), cache:'no-cache', body:JSON.stringify({ avatar_url:avatar, metadata:true }) });
-            if (!response.ok) continue;
+            if (controller.signal.aborted || !scanStillCurrent()) throw new DOMException('Archive scan cancelled', 'AbortError');
+            const response = await fetch('/api/characters/chats', { method:'POST', headers:context.getRequestHeaders(), cache:'no-cache', signal:controller.signal, body:JSON.stringify({ avatar_url:avatar, metadata:true }) });
+            if (!response.ok) { failedReads++; continue; }
             const rows = await response.json();
-            for (const row of Array.isArray(rows) ? rows : []) {
+            const listedRows = Array.isArray(rows) ? rows : [];
+            if (!Array.isArray(rows)) failedReads++;
+            for (let rowIndex = 0; rowIndex < listedRows.length; rowIndex++) {
+                const progress = body?.querySelector('[data-rmt-legacy-scan-progress]');
+                if (progress) progress.textContent = `聊天 ${rowIndex + 1} / ${listedRows.length}`;
+                let row;
+                try {
+                    row = await host_compatibility.readArchiveRowMetadata(context, avatar, listedRows[rowIndex], {
+                        signal: controller.signal, isCurrent: scanStillCurrent,
+                    });
+                } catch (error) {
+                    if (error?.name === 'AbortError') throw error;
+                    failedReads++;
+                    console.warn('[HeartbeatMemories] legacy archive chat read failed', core_text.safeErrorDiagnostic(error));
+                    continue;
+                }
                 const mem = archive_repository.migrateArchiveInMemory(row?.chat_metadata?.[core_constants.MEMORY_KEY]);
                 if (!mem) continue;
                 const chatId = core_context.comparableChatId(row.file_id || row.file_name);
@@ -1094,10 +1120,16 @@ export async function rebuildArchiveIndexFromExisting() {
                     && !await archive_backupStore.hasArchiveBackupDeletionFence(candidate)) found.push(candidate);
             }
         } catch (error) {
+            if (error?.name === 'AbortError') { cancelled = true; break; }
+            failedReads++;
             console.warn('[HeartbeatMemories] legacy archive index scan skipped avatar', { avatar: core_text.normalizeText(avatar, 300), ...core_text.safeErrorDiagnostic(error) });
         }
         await core_context.yieldToUi();
     }
+    } finally {
+        body?.removeEventListener('click', cancelScan);
+    }
+    if (!scanStillCurrent()) return;
     // Keep previously indexed rows whose avatar could not be scanned this time; an intermittent
     // server/listing failure must never silently erase the user's library index.
     const seen = new Set(found.map(item => `${core_context.archiveStoredAvatar(item)}\u001f${item.chatId}`));
@@ -1108,6 +1140,8 @@ export async function rebuildArchiveIndexFromExisting() {
     }
     archive_groups.setArchiveIndex(context, found.sort((a,b) => b.updatedAt - a.updatedAt));
     archive_groups.autoClassifyArchiveIndex(context, { confirm: false });
-    globalThis.toastr?.success?.(`旧档案扫描完成：索引 ${found.length} 个聊天档案。无法唯一判断的同头像/同名旧档案已单独列为“待手动分类”。`, '心迹回廊');
+    const scanMessage = `旧档案扫描${cancelled ? '已停止' : failedReads ? '部分完成' : '完成'}：索引 ${found.length} 个聊天档案。${failedReads ? `有 ${failedReads} 处读取失败，可再次手动扫描；` : ''}${cancelled ? '已保留读到的索引和原有索引；' : ''}无法唯一判断的同头像/同名旧档案已单独列为“待手动分类”。`;
+    if (cancelled || failedReads) globalThis.toastr?.warning?.(scanMessage, '心迹回廊');
+    else globalThis.toastr?.success?.(scanMessage, '心迹回廊');
     showArchiveLibrary();
 }
