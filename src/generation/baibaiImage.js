@@ -84,6 +84,7 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
     const fullVisual = appearance.cgPreparedVisualPrompt(visual, metadata);
     let primaryPrompt = !state.supportsCharacters && metadata
         ? metadata.flatPrompt || fullVisual : metadata?.sceneTags || visual;
+    if (!state.supportsCharacters) primaryPrompt = appearance.cgFlatPromptWithNaturalLooks(primaryPrompt, metadata);
     // Daily-comic constraints come from the local mode wrapper. Providers that only
     // consume prompt must receive the same panel actions as those that consume nl.
     const sceneMarker = '\n[SCENE] ';
@@ -101,7 +102,7 @@ export async function generateBaiBaiImage(prompt, { signal = null, orientation =
         save: true, character: core_text.normalizeText(characterName, 120) || '心迹回廊 CG',
     };
     if (state.supportsCharacters && metadata?.characters?.length) {
-        request.characters = metadata.characters.filter(character => character.tag)
+        request.characters = metadata.characters.filter(character => character.tag || (metadata.castSnapshot && character.nl))
             .map(({ name, tag, nl }) => ({ name, tag, ...(nl ? { nl } : {}) }));
     }
     const formatted = appearance.formattedCgProviderPrompts(visual, metadata, state.supportsCharacters, state.backend);
