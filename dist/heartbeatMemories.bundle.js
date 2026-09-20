@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 130
-// Source SHA-256: b952c3e01e660f19e040881a47b0c82306bd89e1e89cd644cfc72936a32ffb42
+// Source modules: 131
+// Source SHA-256: a171f71739a21c59e39265a62aa75e65786cda66c65c7cbaa25bc7a74e98b56b
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -39,6 +39,7 @@ const __m_core_dialogue_js = Object.create(null);
 const __m_core_digest_js = Object.create(null);
 const __m_core_evidence_js = Object.create(null);
 const __m_core_heartLanguage_js = Object.create(null);
+const __m_core_hostCompatibility_js = Object.create(null);
 const __m_core_incremental_js = Object.create(null);
 const __m_core_independentApi_js = Object.create(null);
 const __m_core_localRecoveryStore_js = Object.create(null);
@@ -1524,7 +1525,7 @@ const core_text = __m_core_text_js;
 // Manual providers are reached only through SillyTavern's fixed same-origin custom backend.
 
 
-const PROFILE_ONE_CLICK_UI_VERSION = '1.1.18';
+const PROFILE_ONE_CLICK_UI_VERSION = '凭证绑定';
 
 const MANUAL_STATUS_ENDPOINT = '/api/backends/chat-completions/status';
 const MANUAL_GENERATE_ENDPOINT = '/api/backends/chat-completions/generate';
@@ -1565,7 +1566,7 @@ function assertConnectionManagerProfileSupport(service) {
     const validService = typeof service?.validateProfile === 'function' && typeof service?.sendRequest === 'function';
     if (validService && connectionManagerHasProfileSecrets(service) && connectionManagerSupportsRequestOverrides(service)) return true;
     throw apiError(
-        `一键配置要求 ${PROFILE_ONE_CLICK_UI_VERSION} 的 Connection Manager 能力。当前页面未提供安全的 Profile Secret 与模型覆盖能力；本次没有发送请求。`,
+        '当前酒馆没有一键配置所需的配置与密钥绑定能力（Profile Secret）或模型覆盖能力。请使用手动独立 API，填写地址、密钥和模型；不会改动主聊天连接。本次没有发送请求。',
         'RMT_PROFILE_CAPABILITY',
     );
 }
@@ -3989,6 +3990,15 @@ function connectionManagerSettings(context = core_context.getContext()) {
     return manager;
 }
 
+function oneClickConnectionCapability(context = core_context.getContext()) {
+    try {
+        core_independentApi.assertConnectionManagerProfileSupport(context.ConnectionManagerRequestService);
+        return { available: true, message: '当前酒馆支持配置与密钥绑定，可使用一键连接或手动独立 API。' };
+    } catch (error) {
+        return { available: false, message: error.safeUserMessage || '当前酒馆不支持凭证绑定，请使用手动独立 API。' };
+    }
+}
+
 function slashCommandObject(command, context = core_context.getContext()) {
     const key = core_text.normalizeText(command, 80);
     const value = key ? context.SlashCommandParser?.commands?.[key] : null;
@@ -4166,6 +4176,7 @@ __m_core_settings_js.savedModelsForProfile = savedModelsForProfile;
 __m_core_settings_js.profileModelCacheKey = profileModelCacheKey;
 __m_core_settings_js.connectionStatusPayload = connectionStatusPayload;
 __m_core_settings_js.connectionManagerSettings = connectionManagerSettings;
+__m_core_settings_js.oneClickConnectionCapability = oneClickConnectionCapability;
 __m_core_settings_js.slashCommandObject = slashCommandObject;
 __m_core_settings_js.profileFingerprint = profileFingerprint;
 __m_core_settings_js.uniqueImportedProfileName = uniqueImportedProfileName;
@@ -5009,6 +5020,7 @@ function people(raw) {
         return {
             id,
             name: string(person.name, 'person.name'),
+            ...(person.identity === 'user' ? { identity: 'user' } : {}),
             sourceRefs: array(person.sourceRefs, 'person.sourceRefs').map(sourceRef),
         };
     });
@@ -5145,8 +5157,34 @@ function sourceText(value, context) {
 
 function participantSourceText(value, context) {
     if (typeof value !== 'string') return '';
-    const filtered = context_tags.filterContextTags(value, context_tags.tagPolicyForContext(context));
-    return plain(filtered, filtered.length);
+    // These entries were explicitly selected as person settings. Chat-body tag
+    // selection must not erase their XML-wrapped descriptions.
+    const unwrapped = value.replace(/&(?:amp;)*(lt;|gt;|#0*60;|#0*62;|#x0*3c;|#x0*3e;)/gi,
+        (_, entity) => /^(lt;|#0*60;|#x0*3c;)$/i.test(entity) ? '<' : '>').replace(/<[^>]*>/g, ' ');
+    return plain(unwrapped, unwrapped.length);
+}
+
+function userPersona(context) {
+    let card = {};
+    try { card = context?.getCharacterCardFields?.() || {}; } catch {}
+    return typeof card.persona === 'string' && card.persona.trim() ? card.persona
+        : typeof context?.powerUserSettings?.persona_description === 'string' ? context.powerUserSettings.persona_description : '';
+}
+
+function createCgUserParticipant(context, existingPeople = []) {
+    const ids = new Set(existingPeople.map(person => person.id));
+    let id = 'rmt-current-user', suffix = 0;
+    while (ids.has(id)) id = `rmt-current-user-${++suffix}`;
+    const content = userPersona(context);
+    return { id, name: String(context?.name1 || ''), identity: 'user',
+        sourceRefs: content ? [{ world: '用户人设', uid: 'persona', title: String(context?.name1 || '用户'), content }] : [] };
+}
+
+function participantAppearanceSource(person, context) {
+    const sources = person.sourceRefs.map(ref => participantSourceText(ref.content, context)).filter(Boolean);
+    // An explicit user identity is required; equal names never imply user identity.
+    if (!person.sourceRefs.length && person.identity === 'user') sources.push(participantSourceText(userPersona(context), context));
+    return sources.join('\n');
 }
 
 function libraryCharacters(api) {
@@ -5168,7 +5206,7 @@ function captureCgAppearanceEvidence(context, { api = globalThis.STBaiBaiImage, 
             // Evidence is explicitly bound by ID. A same-name library match is
             // insufficient to identify one of several distinct sandbox people.
             return Object.freeze({ participantId: person.id, name: person.name,
-                description: plain(known?.tag, CG_APPEARANCE_TAG_LIMIT) ? '' : person.sourceRefs.map(ref => participantSourceText(ref.content, context)).filter(Boolean).join('\n'),
+                description: plain(known?.tag, CG_APPEARANCE_TAG_LIMIT) ? '' : participantAppearanceSource(person, context),
                 knownTag: plain(known?.tag, CG_APPEARANCE_TAG_LIMIT), knownNl: plain(known?.nl, CG_APPEARANCE_TAG_LIMIT) });
         });
         return Object.freeze({ castSnapshot: snapshot, characters: Object.freeze(characters),
@@ -5389,8 +5427,7 @@ function appearanceEvidenceWithDraft(evidence, draft, context = null) {
             // Clearing a saved tag means re-extract from this person's sources,
             // not that the corresponding worldbook description disappeared.
             const description = !knownTag && row.knownTag && !row.description
-                ? (evidence.castSnapshot.people.find(person => person.id === row.participantId)?.sourceRefs || [])
-                    .map(ref => participantSourceText(ref.content, context)).filter(Boolean).join('\n')
+                ? participantAppearanceSource(evidence.castSnapshot.people.find(person => person.id === row.participantId), context)
                 : row.description;
             return { ...row, description, knownTag, knownNl };
         }
@@ -5457,6 +5494,7 @@ function formattedCgProviderPrompts(scene, rawMetadata, supportsCharacters = fal
     return { prompt, nl, ...(characters ? {characters} : {}) };
 }
 
+__m_generation_cgAppearance_js.createCgUserParticipant = createCgUserParticipant;
 __m_generation_cgAppearance_js.captureCgAppearanceEvidence = captureCgAppearanceEvidence;
 __m_generation_cgAppearance_js.buildCgAppearanceInstructions = buildCgAppearanceInstructions;
 __m_generation_cgAppearance_js.initialCgAppearanceMetadata = initialCgAppearanceMetadata;
@@ -5678,6 +5716,110 @@ __m_core_archiveCover_js.normalizeArchiveVerdict = normalizeArchiveVerdict;
 __m_core_archiveCover_js.archiveVerdictText = archiveVerdictText;
 __m_core_archiveCover_js.archiveCoverHtml = archiveCoverHtml;
 __m_core_archiveCover_js.ARCHIVE_INTRO_STYLES = ARCHIVE_INTRO_STYLES;
+}
+
+function __init_core_hostCompatibility_js() {
+// MODULE: core/hostCompatibility.js
+
+// Public host capabilities only. Do not replace host save timers or change its connection.
+const adaptedWorldInfoNameReaders = new WeakSet();
+
+function isAdaptedWorldInfoNameReader(reader) {
+    return typeof reader === 'function' && adaptedWorldInfoNameReaders.has(reader);
+}
+
+function createHostContextAdapter(options = {}) {
+    const currentContext = options.getContext || (() => globalThis.SillyTavern?.getContext?.());
+    const loadExtensions = options.loadExtensions || (() => import('/scripts/extensions.js'));
+    const loadWorldInfo = options.loadWorldInfo || (() => import('/scripts/world-info.js'));
+    const getEpoch = options.getEpoch || (() => 0);
+    const reportSaveError = options.onSaveError || (() => {
+        console.warn('[HeartbeatMemories] host metadata save adapter unavailable');
+        globalThis.toastr?.warning?.('酒馆附带档案暂未保存。请保留本机独立备份，刷新后重试；本次没有改写聊天正文。', '心迹回廊');
+    });
+    let extensions = null, extensionsPromise = null, worldInfoPromise = null;
+    const extensionModule = () => {
+        if (!extensionsPromise) extensionsPromise = Promise.resolve().then(loadExtensions).then(module => {
+            if (typeof module?.saveMetadataDebounced !== 'function') throw new Error('Host metadata debounce unavailable');
+            extensions = module;
+            return module;
+        }).catch(error => { extensionsPromise = null; throw error; });
+        return extensionsPromise;
+    };
+    const worldModule = () => {
+        if (!worldInfoPromise) worldInfoPromise = Promise.resolve().then(loadWorldInfo).catch(error => {
+            worldInfoPromise = null;
+            throw error;
+        });
+        return worldInfoPromise;
+    };
+    return function adapt(context) {
+        if (!context) return context;
+        if (typeof context.getWorldInfoNames !== 'function') {
+            context.getWorldInfoNames = async () => {
+                const module = await worldModule();
+                if (!Array.isArray(module?.world_names)) throw new Error('酒馆世界书列表暂不可读取，请刷新后重试。');
+                // Read the live export each time; do not cache a stale list or expose the host array.
+                return [...module.world_names];
+            };
+            adaptedWorldInfoNameReaders.add(context.getWorldInfoNames);
+        }
+        if (typeof context.saveMetadataDebounced !== 'function') {
+            context.saveMetadataDebounced = () => {
+                const epoch = getEpoch();
+                const chatId = context.getCurrentChatId?.() ?? context.chatId;
+                const metadata = context.chatMetadata;
+                const stillCurrent = () => {
+                    const live = currentContext();
+                    return getEpoch() === epoch && !!live && live.characterId === context.characterId
+                        && live.groupId === context.groupId && live.chatMetadata === metadata
+                        && (live.getCurrentChatId?.() ?? live.chatId) === chatId;
+                };
+                const queue = module => {
+                    // An import may finish after clearChat cancelled the host timer. Never requeue
+                    // that old mirror on the new chat. The local archive remains authoritative.
+                    if (!stillCurrent()) return false;
+                    module.saveMetadataDebounced();
+                    return true;
+                };
+                try {
+                    // Once loaded, call synchronously so the host's clearChat cancellation owns it.
+                    if (extensions) return queue(extensions);
+                    return extensionModule().then(queue).catch(() => { reportSaveError(); return false; });
+                } catch {
+                    reportSaveError();
+                    return false;
+                }
+            };
+        }
+        return context;
+    };
+}
+
+async function readArchiveRowMetadata(context, avatar, row, options = {}) {
+    const assertCurrent = () => {
+        if (options.signal?.aborted || options.isCurrent?.() === false) throw new DOMException('Archive scan cancelled', 'AbortError');
+    };
+    assertCurrent();
+    if (row?.chat_metadata && typeof row.chat_metadata === 'object') return row;
+    const chatId = String(row?.file_id || row?.file_name || '').replace(/\.jsonl$/i, '');
+    if (!chatId || !avatar) return row;
+    const response = await (options.fetchImpl || globalThis.fetch)('/api/chats/get', {
+        method: 'POST', headers: context.getRequestHeaders(), cache: 'no-cache',
+        signal: options.signal,
+        body: JSON.stringify({ avatar_url: avatar, file_name: chatId }),
+    });
+    assertCurrent();
+    if (!response.ok) throw new Error(`读取旧档案聊天失败：HTTP ${response.status}`);
+    const data = await response.json();
+    assertCurrent();
+    const metadata = (Array.isArray(data) ? data[0] : data)?.chat_metadata;
+    return { ...row, chat_metadata: metadata && typeof metadata === 'object' ? metadata : {} };
+}
+
+__m_core_hostCompatibility_js.readArchiveRowMetadata = readArchiveRowMetadata;
+__m_core_hostCompatibility_js.isAdaptedWorldInfoNameReader = isAdaptedWorldInfoNameReader;
+__m_core_hostCompatibility_js.createHostContextAdapter = createHostContextAdapter;
 }
 
 function __init_core_storyChronology_js() {
@@ -7999,6 +8141,349 @@ __m_ui_albumCategory_js.albumDisplayCategory = albumDisplayCategory;
 __m_ui_albumCategory_js.ALBUM_DISPLAY_CATEGORIES = ALBUM_DISPLAY_CATEGORIES;
 }
 
+function __init_ui_participantPicker_js() {
+// MODULE: ui/participantPicker.js
+const contextApi = __m_core_context_js;
+const constants = __m_core_constants_js;
+const cache = __m_core_cache_js;
+const people = __m_core_participants_js;
+const repository = __m_archive_repository_js;
+const text = __m_core_text_js;
+
+
+
+
+
+
+let activePicker = null;
+
+function closeParticipantPicker() {
+    const current = activePicker;
+    if (!current) return false;
+    activePicker = null;
+    current.controller.abort();
+    current.element.remove();
+    if (current.opener?.isConnected) current.opener.focus();
+    current.onClose?.();
+    return true;
+}
+
+function dialog(context, title, body) {
+    const host = document.getElementById(constants.OVERLAY_ID);
+    if (!host) return null;
+    closeParticipantPicker();
+    const element = document.createElement('div');
+    element.className = 'rmt-participant-backdrop';
+    element.innerHTML = `<section class="rmt-participant-dialog" role="dialog" aria-modal="true" aria-labelledby="rmt-participant-title" tabindex="-1">
+      <header><h2 id="rmt-participant-title">${text.esc(title)}</h2><button type="button" class="rmt-btn" data-rmt-participant-close>取消</button></header>
+      ${body}<p data-rmt-participant-status role="status" aria-live="polite"></p></section>`;
+    const current = { element, context, scope: contextApi.chatScopeKey(context),
+        controller: new AbortController(), opener: document.activeElement };
+    activePicker = current;
+    current.isCurrent = () => {
+        if (activePicker !== current || !element.isConnected || current.controller.signal.aborted) return false;
+        try { return current.scope === contextApi.chatScopeKey(contextApi.currentCharacterGuard()); }
+        catch { return false; }
+    };
+    element.querySelector('[data-rmt-participant-close]').addEventListener('click', event => {
+        event.stopPropagation(); closeParticipantPicker();
+    });
+    element.addEventListener('keydown', event => {
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeParticipantPicker(); return; }
+        if (event.key !== 'Tab') return;
+        const fields = [...element.querySelectorAll('button, input, select, textarea, summary, [tabindex="0"]')]
+            .filter(field => !field.disabled && !field.hidden && field.getClientRects().length);
+        if (!fields.length) { event.preventDefault(); return; }
+        const first = fields[0], last = fields.at(-1);
+        if (event.shiftKey && (document.activeElement === first || !element.contains(document.activeElement))) {
+            event.preventDefault(); last.focus();
+        } else if (!event.shiftKey && (document.activeElement === last || !element.contains(document.activeElement))) {
+            event.preventDefault(); first.focus();
+        }
+    });
+    host.appendChild(element);
+    element.querySelector('section').focus();
+    return current;
+}
+
+function status(current, message, error = false) {
+    if (!current.isCurrent()) return;
+    const node = current.element.querySelector('[data-rmt-participant-status]');
+    node.setAttribute('role', error ? 'alert' : 'status');
+    node.textContent = message;
+}
+
+function showArchiveCardTypePicker({ context = contextApi.currentCharacterGuard(), onSingle, onMultiple } = {}) {
+    const current = dialog(context, '这是一张单人卡，还是多人卡？', `
+      <div class="rmt-participant-card-types">
+        <button type="button" class="rmt-btn" data-rmt-card-type="single"><b>单人卡</b><span>沿用原来的建档方式</span></button>
+        <button type="button" class="rmt-btn" data-rmt-card-type="multi"><b>多人卡</b><span>从世界书勾选要加入回廊的人物</span></button>
+      </div>`);
+    if (!current) return false;
+    for (const button of current.element.querySelectorAll('[data-rmt-card-type]')) button.addEventListener('click', event => {
+        event.stopPropagation();
+        if (!current.isCurrent()) return;
+        const callback = button.dataset.rmtCardType === 'single' ? onSingle : onMultiple;
+        closeParticipantPicker();
+        callback?.();
+    });
+    return true;
+}
+
+const sourceKey = ref => JSON.stringify([ref.world, String(ref.uid)]);
+const copySource = entry => ({ world: entry.world, uid: String(entry.uid), title: entry.title,
+    content: entry.content, keys: [...(entry.keys || [])] });
+
+// Selection is local until the caller explicitly commits it. Loading books, naming
+// people, toggling checkboxes and closing this dialog never request generation.
+async function showParticipantPicker({ context = contextApi.currentCharacterGuard(), roster,
+    onConfirm, requireSelection = false, title = '选择加入回廊的人物', confirmLabel = '保存人物名单' } = {}) {
+    const originalScope = contextApi.chatScopeKey(context);
+    if (roster === undefined) {
+        if (repository.getImportedMemory(context)) await cache.ensureCurrentArchiveBackup(context);
+        await cache.ensureCacheHydrated(context);
+        if (originalScope !== contextApi.chatScopeKey(contextApi.currentCharacterGuard())) return false;
+        roster = cache.readParticipantRoster(context);
+    }
+    const initial = people.normalizeParticipantRoster(roster);
+    const draft = initial || { version: 1, cardType: 'multi', revision: '', people: [], selectedIds: [] };
+    const current = dialog(context, title, `
+      <p>勾选世界书中的人物条目，核对下方姓名。一个条目可以加入多个人物，也可以为同一人物补充多个条目。</p>
+      <p>选人、改名不调用生成 API。人物设定不会作为已经发生的剧情写入记忆。</p>
+      <label class="rmt-participant-book-label">世界书<select data-rmt-participant-book aria-label="人物来源世界书"><option value="">正在读取世界书列表…</option></select></label>
+      <div class="rmt-participant-entries" data-rmt-participant-entries></div>
+      <h3>人物名单</h3><div data-rmt-participant-people></div>
+      <button type="button" class="rmt-btn" data-rmt-participant-add>手动补充人物</button>
+      <footer><span data-rmt-participant-count></span><button type="button" class="rmt-btn" data-rmt-participant-confirm>${text.esc(confirmLabel)}</button></footer>`);
+    if (!current) return false;
+    current.draft = draft;
+    current.entries = [];
+    current.loading = 0;
+    current.busy = false;
+    const selected = id => draft.selectedIds.includes(id);
+    const setSelected = (id, checked) => {
+        draft.selectedIds = checked ? [...new Set([...draft.selectedIds, id])] : draft.selectedIds.filter(value => value !== id);
+    };
+    const addPerson = (name, refs = []) => {
+        const person = { id: people.createParticipantId(), name, sourceRefs: refs.map(copySource) };
+        draft.people.push(person); setSelected(person.id, true);
+        return person;
+    };
+    function renderPeople() {
+        current.element.querySelector('[data-rmt-participant-people]').innerHTML = draft.people.length ? draft.people.map((person, index) => `
+          <article class="rmt-participant-person" data-rmt-participant-person="${index}">
+            <label class="rmt-participant-select"><input type="checkbox" data-rmt-participant-selected="${index}" ${selected(person.id) ? 'checked' : ''}> 加入回廊</label>
+            <label>人物名字<input type="text" data-rmt-participant-name="${index}" value="${text.esc(person.name)}"></label>
+            <small>${person.sourceRefs.length ? person.sourceRefs.map(ref => `${text.esc(ref.world)} · ${text.esc(ref.title)} (#${text.esc(ref.uid)})`).join('<br>') : '手动补充，未关联世界书条目'}</small>
+            ${person.sourceRefs.length ? `<button type="button" class="rmt-btn" data-rmt-participant-duplicate="${index}">这些条目里还有其他人物</button>` : ''}
+          </article>`).join('') : '<p>尚未加入人物。展开世界书条目后勾选，或手动补充。</p>';
+        current.element.querySelector('[data-rmt-participant-count]').textContent = `已勾选 ${draft.selectedIds.length} 人`;
+    }
+    function renderEntries() {
+        const node = current.element.querySelector('[data-rmt-participant-entries]');
+        node.innerHTML = current.entries.length ? current.entries.map((entry, index) => {
+            const linked = draft.people.filter(person => person.sourceRefs.some(ref => sourceKey(ref) === sourceKey(entry)));
+            const checked = linked.some(person => selected(person.id));
+            return `<section class="rmt-participant-entry">
+              <label class="rmt-participant-select"><input type="checkbox" data-rmt-participant-entry="${index}" ${checked ? 'checked' : ''}><b>${text.esc(entry.title)}</b></label>
+              <small>#${text.esc(entry.uid)}${entry.disabled ? ' · 世界书原条目已禁用' : ''}</small>
+              <details><summary>查看条目内容</summary><p>${text.esc(entry.content)}</p></details>
+              ${draft.people.length ? `<label>也可作为人物的补充资料<select data-rmt-participant-link="${index}"><option value="">选择已有的人物…</option>${draft.people.map((person, i) => `<option value="${i}">${text.esc(person.name || '未填写姓名')} · ${i + 1}</option>`).join('')}</select></label>` : ''}
+            </section>`;
+        }).join('') : '<p>这本世界书没有可读取的文字条目。</p>';
+    }
+    function changed({ entries = true } = {}) { renderPeople(); if (entries) renderEntries(); status(current, ''); }
+    current.element.addEventListener('input', event => {
+        const index = event.target?.dataset?.rmtParticipantName;
+        if (index === undefined || current.busy || !current.isCurrent()) return;
+        event.stopPropagation();
+        draft.people[Number(index)].name = event.target.value;
+        // Do not rerender the input being typed in: preserve caret/IME composition.
+    });
+    current.element.addEventListener('change', event => {
+        if (current.busy || !current.isCurrent()) return;
+        const data = event.target?.dataset || {};
+        if (data.rmtParticipantSelected !== undefined) {
+            event.stopPropagation(); setSelected(draft.people[Number(data.rmtParticipantSelected)].id, event.target.checked); changed();
+        } else if (data.rmtParticipantEntry !== undefined) {
+            event.stopPropagation();
+            const entry = current.entries[Number(data.rmtParticipantEntry)];
+            const linked = draft.people.filter(person => person.sourceRefs.some(ref => sourceKey(ref) === sourceKey(entry)));
+            if (event.target.checked && !linked.length) addPerson(entry.title, [entry]);
+            else for (const person of linked) {
+                if (event.target.checked) person.sourceRefs = person.sourceRefs.map(ref => sourceKey(ref) === sourceKey(entry) ? copySource(entry) : ref);
+                setSelected(person.id, event.target.checked);
+            }
+            changed();
+        } else if (data.rmtParticipantLink !== undefined && event.target.value !== '') {
+            event.stopPropagation();
+            const person = draft.people[Number(event.target.value)], entry = current.entries[Number(data.rmtParticipantLink)];
+            if (!person.sourceRefs.some(ref => sourceKey(ref) === sourceKey(entry))) person.sourceRefs.push(copySource(entry));
+            else person.sourceRefs = person.sourceRefs.map(ref => sourceKey(ref) === sourceKey(entry) ? copySource(entry) : ref);
+            changed();
+        }
+    });
+    current.element.addEventListener('click', event => {
+        const button = event.target?.closest?.('[data-rmt-participant-add], [data-rmt-participant-duplicate]');
+        if (!button || current.busy || !current.isCurrent()) return;
+        event.stopPropagation();
+        const index = button.dataset.rmtParticipantDuplicate;
+        const person = index === undefined ? addPerson('') : addPerson('', draft.people[Number(index)].sourceRefs);
+        changed();
+        current.element.querySelector(`[data-rmt-participant-name="${draft.people.indexOf(person)}"]`)?.focus();
+    });
+    current.element.querySelector('[data-rmt-participant-book]').addEventListener('change', async event => {
+        event.stopPropagation();
+        if (!current.isCurrent() || current.busy) return;
+        const serial = ++current.loading, world = event.target.value;
+        if (!world) { current.entries = []; current.element.querySelector('[data-rmt-participant-entries]').textContent = ''; return; }
+        current.element.querySelector('[data-rmt-participant-entries]').textContent = '正在读取条目…';
+        try {
+            const entries = await repository.loadMemoryWorldInfoBook(context, world, current.controller.signal, { participantSource: true });
+            if (!current.isCurrent() || serial !== current.loading) return;
+            current.entries = entries; renderEntries();
+        } catch (error) { if (current.isCurrent() && serial === current.loading) status(current, `读取失败：${text.safeErrorSummary(error)}`, true); }
+    });
+    current.element.querySelector('[data-rmt-participant-confirm]').addEventListener('click', async event => {
+        event.stopPropagation();
+        if (!current.isCurrent() || current.busy) return;
+        // Explicit user decision: a multi-person archive needs a manual selection.
+        if (requireSelection && !draft.selectedIds.length) {
+            status(current, '请先勾选要加入回廊的人物，再开始建档。', true); return;
+        }
+        const snapshot = people.normalizeParticipantRoster(draft);
+        current.busy = true;
+        for (const field of current.element.querySelectorAll('button:not([data-rmt-participant-close]), input, select')) field.disabled = true;
+        status(current, '正在确认人物选择…');
+        try {
+            const accepted = await onConfirm?.(snapshot, initial?.revision || '');
+            if (current.isCurrent() && accepted !== false) closeParticipantPicker();
+            else if (current.isCurrent()) {
+                current.busy = false;
+                for (const field of current.element.querySelectorAll('button, input, select')) field.disabled = false;
+                status(current, '名单尚未更改，可以继续调整或取消。');
+            }
+        } catch (error) {
+            if (current.isCurrent()) {
+                current.busy = false;
+                for (const field of current.element.querySelectorAll('button, input, select')) field.disabled = false;
+                status(current, text.safeErrorSummary(error), true);
+            } else globalThis.toastr?.error?.(text.safeErrorSummary(error), '心迹回廊');
+        }
+    });
+    renderPeople();
+    try {
+        if (typeof context.getWorldInfoNames !== 'function') throw new Error('酒馆当前未提供世界书列表，请确认世界书已加载。');
+        const raw = await context.getWorldInfoNames();
+        if (!current.isCurrent()) return false;
+        const names = [...new Set((Array.isArray(raw) ? raw : []).filter(name => typeof name === 'string' && name))];
+        current.element.querySelector('[data-rmt-participant-book]').innerHTML = '<option value="">请选择世界书…</option>'
+            + names.map(name => `<option value="${text.esc(name)}">${text.esc(name)}</option>`).join('');
+        if (!names.length) status(current, '当前没有可读取的世界书。可载入世界书后重开选人页，或手动补充人物。');
+    } catch (error) {
+        if (current.isCurrent()) {
+            current.element.querySelector('[data-rmt-participant-book]').innerHTML = '<option value="">世界书列表暂不可用</option>';
+            status(current, text.safeErrorSummary(error), true);
+        }
+    }
+    return true;
+}
+
+// These decisions occur before either a roster write or a new paid request.
+function chooseParticipantChange({ context, tasks = [], scopes = [], appendedNames = [], selectedNames = [] }) {
+    return new Promise(resolve => {
+        const running = tasks.length > 0;
+        const current = dialog(context, running ? '正在按原名单生成' : '怎样应用这次人物选择？', `
+          ${running ? `<p>以下任务仍按开始时的名单生成：${tasks.map(task => text.esc(task.label || task.mode || '档案')).join('、')}。</p>
+          <p>继续原任务会保留原名单。中断后重做会重新调用 API；已经发送的请求仍可能计费。</p>
+          ${tasks.some(task => task.kind === 'participant-plan') ? '<p>中断正在执行的重做计划，也会停止这份计划中尚未开始的页面。接下来只生成你重新勾选的范围。</p>' : ''}
+          <button type="button" class="rmt-btn" data-rmt-participant-decision="continue">继续原任务，不更改名单</button>`
+          : `<p>追加会把新勾选的人加入原名单，原来的人和已有内容保留。只保存名单，不调用生成 API。</p>
+          <p>追加后的名单：${appendedNames.map(name => text.esc(name || '未填写姓名')).join('、')}</p>
+          <button type="button" class="rmt-btn" data-rmt-participant-decision="append">确认追加新人物</button>`}
+          <button type="button" class="rmt-btn" data-rmt-participant-decision="select-scopes">${running ? '选择中断并重做的范围' : '选择重新生成的范围'}</button>
+          <section data-rmt-participant-regenerate-options hidden>
+            <p>本轮使用当前勾选的名单：${selectedNames.map(name => text.esc(name || '未填写姓名')).join('、')}</p>
+            <p>只重做你勾选的页面；未勾选的内容保留。重做前保存可查看的旧版本，不会自动重新绘制旧图片。</p>
+            <p>只重做房间时，旧生活和物品所依赖的空间、物件仍保留，避免原记录失去对应位置。</p>
+            <div class="rmt-participant-scope-options">${scopes.map(scope => `<label class="rmt-participant-select"><input type="checkbox" data-rmt-participant-scope="${text.esc(scope.id)}">${text.esc(scope.label)}</label>`).join('')}</div>
+            <p>勾选多个页面会依次执行各自的生成流程；部分页面本来需要多段请求，不是一次 API 完成全部。生成失败时保留已保存的旧版。</p>
+            <button type="button" class="rmt-btn" data-rmt-participant-decision="regenerate">确认所选范围并生成</button>
+          </section>`);
+        if (!current) { resolve(null); return; }
+        current.onClose = () => resolve(null);
+        const finish = value => {
+            current.onClose = null;
+            closeParticipantPicker();
+            resolve(value);
+        };
+        current.element.addEventListener('click', event => {
+            const button = event.target?.closest?.('[data-rmt-participant-decision]');
+            if (!button) return;
+            event.stopPropagation();
+            if (!current.isCurrent()) { finish(null); return; }
+            const action = button.dataset.rmtParticipantDecision;
+            if (action === 'select-scopes') {
+                current.element.querySelector('[data-rmt-participant-regenerate-options]').hidden = false;
+                current.element.querySelector('[data-rmt-participant-scope]')?.focus();
+                return;
+            }
+            if (action === 'regenerate') {
+                const pages = [...current.element.querySelectorAll('[data-rmt-participant-scope]:checked')].map(node => node.dataset.rmtParticipantScope);
+                if (!pages.length) { status(current, '请勾选本次要重做的范围，或者取消。'); return; }
+                finish({ action, pages });
+            } else finish({ action });
+        });
+    });
+}
+
+function showParticipantVersions({ context, versions, onOpen }) {
+    const current = dialog(context, '重做前的旧版本', `
+      <p>这里保留重做前已经生成的内容。打开后查看旧版本，不会替换当前内容。</p>
+      ${versions.length ? versions.map((version, index) => `<button type="button" class="rmt-btn" data-rmt-participant-version="${index}">${text.esc(version.label || version.reason || '重做前版本')} · ${text.esc(version.createdAt ? new Date(version.createdAt).toLocaleString() : '保存时间未记录')}</button>`).join('') : '<p>还没有保存的旧版本。</p>'}`);
+    if (!current) return false;
+    current.element.addEventListener('click', event => {
+        const button = event.target?.closest?.('[data-rmt-participant-version]');
+        if (!button || !current.isCurrent()) return;
+        event.stopPropagation();
+        const version = versions[Number(button.dataset.rmtParticipantVersion)];
+        if (!version) return;
+        closeParticipantPicker();
+        void onOpen(version);
+    });
+    return true;
+}
+
+function chooseGenerationTaskResult({ context, title = '旧任务已生成完成' }) {
+    return new Promise(resolve => {
+        const current = dialog(context, title, `
+          <p>结果已经保存。它沿用旧任务的原资料，当前档案已有较新的版本。</p>
+          <p>你可以单独保留这份成果，也可以更新对应的当前页面；更新前会保留当前页面的旧版本。</p>
+          <button type="button" class="rmt-btn" data-rmt-task-result-decision="independent">保存为独立成果并查看</button>
+          <button type="button" class="rmt-btn" data-rmt-task-result-decision="apply">更新当前页面，并保留旧版</button>
+          <p>关闭此页可以稍后决定，已生成的结果不会丢失。这里的选择不会调用生成 API。</p>`);
+        if (!current) { resolve(null); return; }
+        current.onClose = () => resolve(null);
+        current.element.addEventListener('click', event => {
+            const button = event.target?.closest?.('[data-rmt-task-result-decision]');
+            if (!button || !current.isCurrent()) return;
+            event.stopPropagation();
+            const decision = button.dataset.rmtTaskResultDecision;
+            current.onClose = null;
+            closeParticipantPicker();
+            resolve(decision);
+        });
+    });
+}
+
+__m_ui_participantPicker_js.showParticipantPicker = showParticipantPicker;
+__m_ui_participantPicker_js.closeParticipantPicker = closeParticipantPicker;
+__m_ui_participantPicker_js.showArchiveCardTypePicker = showArchiveCardTypePicker;
+__m_ui_participantPicker_js.chooseParticipantChange = chooseParticipantChange;
+__m_ui_participantPicker_js.showParticipantVersions = showParticipantVersions;
+__m_ui_participantPicker_js.chooseGenerationTaskResult = chooseGenerationTaskResult;
+}
+
 function __init_ui_cgImageViewer_js() {
 // MODULE: ui/cgImageViewer.js
 const core_constants = __m_core_constants_js;
@@ -8240,12 +8725,12 @@ function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
             const attrs = `data-rmt-recovery-draft-id="${text.esc(row.draftId)}" data-rmt-recovery-page-id="${text.esc(row.pageId)}"`;
             const childReader = row.journal.operation?.kind === 'content-item' && row.journal.operation.sourceDraftId
                 ? ` <button type="button" class="rmt-btn" data-rmt-content-draft-open="${text.esc(row.draftId)}">查看单项草稿正文</button>` : '';
-            return `<section class="rmt-recovery-status" role="status"><b>${text.esc(pageLabel)} · 已保留 ${summary.completed} 个成功分段</b><p>${text.esc(new Date(row.createdAt).toLocaleString())} · ${text.esc(reason.replace(/[。\s]+$/, ''))}。继续只补这份草稿未完成的内容，会使用生成额度。</p><button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(row.mode)}" ${attrs}>${label}</button>${childReader} <button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(row.mode)}" ${attrs}>导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(row.mode)}" ${attrs}>放弃这份草稿</button></section>`;
+            return `<section class="rmt-recovery-status" role="status"><b>${text.esc(pageLabel)} · 已保留 ${summary.completed} 个成功分段</b><p>${text.esc(new Date(row.createdAt).toLocaleString())} · ${text.esc(reason.replace(/[。\s]+$/, ''))}。继续只补这份草稿未完成的内容，会使用生成额度。</p><div class="rmt-recovery-actions"><button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(row.mode)}" ${attrs}>${label}</button>${childReader} <button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(row.mode)}" ${attrs}>导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(row.mode)}" ${attrs}>放弃这份草稿</button></div></section>`;
         }).join('');
         const resultHtml = cache.listGenerationTaskResults(null, stored).map(row => {
             const label = pages[row.pageId] || constants.MODE_LABEL[row.mode] || row.pageId || row.mode;
             const pending = row.status === 'awaiting-choice';
-            return `<section class="rmt-recovery-status" role="status"><b>${text.esc(label)} · ${pending ? '成果已保存，等待选择去向' : row.status === 'open' ? '已保存部分成果，原草稿可继续' : '独立生成成果'}</b><p>按原资料生成，原资料出处随成果保留。</p><button type="button" class="rmt-btn" data-rmt-task-result-open="${text.esc(row.draftId)}">${row.status === 'open' ? '打开已生成内容' : '查看已保存成果'}</button>${!readOnly && (pending || row.status === 'independent') ? ` <button type="button" class="rmt-btn" data-rmt-task-result-choose="${text.esc(row.draftId)}">选择保存去向</button>` : ''}</section>`;
+            return `<section class="rmt-recovery-status" role="status"><b>${text.esc(label)} · ${pending ? '成果已保存，等待选择去向' : row.status === 'open' ? '已保存部分成果，原草稿可继续' : '独立生成成果'}</b><p>按原资料生成，原资料出处随成果保留。</p><div class="rmt-recovery-actions"><button type="button" class="rmt-btn" data-rmt-task-result-open="${text.esc(row.draftId)}">${row.status === 'open' ? '打开已生成内容' : '查看已保存成果'}</button>${!readOnly && (pending || row.status === 'independent') ? ` <button type="button" class="rmt-btn" data-rmt-task-result-choose="${text.esc(row.draftId)}">选择保存去向</button>` : ''}</div></section>`;
         }).join('');
         return draftHtml + resultHtml;
     }
@@ -8258,26 +8743,26 @@ function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
         if (!summary || (!summary.completed && !summary.truncated && !summary.failed)) return '';
         const label = summary.canContinue ? '继续生成' : '重试未完成部分';
         const reason = summary.canContinue ? '正文未写完' : summary.failureCode ? text.safeErrorSummary({ code: summary.failureCode, archiveInputCategory: summary.failureCategory, recoveryPhase: summary.failurePhase }) : '任务尚未完成';
-        return `<section class="rmt-recovery-status" role="status"><b>${text.esc(constants.MODE_LABEL[mode] || mode)} · 已保留 ${summary.completed} 个成功分段</b><p>上次记录：${text.esc(reason.replace(/[。\s]+$/, ''))}。继续会使用生成额度。</p><button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(mode)}">${label}</button> <button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(mode)}">导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(mode)}">放弃未提交草稿</button></section>`;
+        return `<section class="rmt-recovery-status" role="status"><b>${text.esc(constants.MODE_LABEL[mode] || mode)} · 已保留 ${summary.completed} 个成功分段</b><p>上次记录：${text.esc(reason.replace(/[。\s]+$/, ''))}。继续会使用生成额度。</p><div class="rmt-recovery-actions"><button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(mode)}">${label}</button> <button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(mode)}">导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(mode)}">放弃未提交草稿</button></div></section>`;
     }).join('');
 }
 
 function archiveRecoveryHtml(summary, { profile = false } = {}) {
     if (!summary) return '';
     const draftLinks = (summary.drafts || []).map(draft => `<button type="button" class="rmt-btn" data-rmt-archive-draft-open="${text.esc(draft.draftId)}">查看${draft.stage === 'profile-only' || draft.stage === 'profile-result' || draft.operation === 'profile' ? '简介' : '建档'}${draft.paused ? '旧' : ''}草稿正文</button>`).join(' ');
-    if (summary.onlyArchivedDrafts) return `<section class="rmt-recovery-status"><p>${text.esc(summary.notice)}</p>${draftLinks}</section>`;
+    if (summary.onlyArchivedDrafts) return `<section class="rmt-recovery-status"><p>${text.esc(summary.notice)}</p><div class="rmt-recovery-actions">${draftLinks}</div></section>`;
     const label = profile || summary.profileOnly ? '仅重试档案简介' : summary.awaitingCommit ? '仅重试保存'
         : summary.batchProgress ? '继续下一批' : summary.canContinue ? '继续整理档案' : '重试未完成分块';
     const capacity = summary.capacityBlocked === true;
     const batch = summary.batchProgress;
     const heading = batch ? `批次 ${batch.currentBatch}/${batch.batches} · 已正式保存 ${batch.saved} 个来源片段`
         : `${label} · 已保留 ${Number(summary.completed) || 0} 个成功分段`;
-    return `<section class="rmt-recovery-status" role="status"><b>${text.esc(heading)}</b><p>${text.esc(summary.notice)}</p>${summary.failureCode ? `<p>${text.esc(text.safeErrorSummary({ code: summary.failureCode }))}</p>` : ''}${draftLinks}
+    return `<section class="rmt-recovery-status" role="status"><b>${text.esc(heading)}</b><p>${text.esc(summary.notice)}</p>${summary.failureCode ? `<p>${text.esc(text.safeErrorSummary({ code: summary.failureCode }))}</p>` : ''}<div class="rmt-recovery-actions">${draftLinks}
 ${summary.pageOnly && !summary.awaitingCommit ? `<button type="button" class="rmt-btn" data-rmt-archive-save-draft="${profile ? 'profile' : 'import'}">保存本页草稿（不生成）</button>` : ''}
 ${!capacity ? `<button type="button" class="rmt-btn" data-rmt-archive-recovery="${profile || summary.profileOnly ? 'profile' : 'import'}">${label}</button>` : ''}
 ${!profile && !summary.profileOnly ? '<button type="button" class="rmt-btn" data-rmt-archive-export-pending>导出待入档成果</button>' : ''}
 ${!profile && !summary.profileOnly && !summary.awaitingCommit && !capacity ? '<button type="button" class="rmt-btn" data-rmt-archive-restart>按当前条件另起任务</button>' : ''}
-${!batch ? '<button type="button" class="rmt-btn" data-rmt-archive-discard>放弃整理草稿</button>' : ''}</section>`;
+${!batch ? '<button type="button" class="rmt-btn" data-rmt-archive-discard>放弃整理草稿</button>' : ''}</div></section>`;
 }
 
 __m_ui_recoveryView_js.readableProgressHtml = readableProgressHtml;
@@ -9227,6 +9712,7 @@ const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_text = __m_core_text_js;
 const cast_looks = __m_core_castLooks_js;
+const participant_picker = __m_ui_participantPicker_js;
 const participants = __m_core_participants_js;
 const cache = __m_core_cache_js;
 const images = __m_generation_imageGeneration_js;
@@ -9247,7 +9733,9 @@ const runtimeState = __m_core_state_js.state;
 let editor = null;
 
 function snapshotEditorDraft(current) {
-    return { promptFormat: current.promptFormat, scene: current.element.querySelector('[data-rmt-cg-prompt-input]').value, metadata: editorMetadata(current) };
+    const metadata = editorMetadata(current);
+    return { promptFormat: current.promptFormat, scene: current.element.querySelector('[data-rmt-cg-prompt-input]').value, metadata,
+        ...(current.multi ? { people: structuredClone(current.people) } : {}) };
 }
 function rememberEditorDraft(current, value) {
     current.previousDraft = value;
@@ -9261,6 +9749,7 @@ function closeCgPromptEditor({ restoreFocus = true } = {}) {
     const previous = editor;
     if (!previous) return;
     editor = null;
+    if (previous.sourcePickerOpen) participant_picker.closeParticipantPicker();
     const task = runtimeState.activeGenerationTasks.get(previous.taskKey);
     if (task?.origin === previous.target.origin) task.controller?.abort();
     previous.host.removeEventListener('cancel', previous.cancel, true);
@@ -9280,7 +9769,7 @@ function busyEditor(active) {
     editor.busy = active;
     editor.element.setAttribute('aria-busy', String(active));
     for (const field of editor.element.querySelectorAll('[data-rmt-cg-prompt-input], [data-rmt-cg-scene-tags], [data-rmt-cg-tag-input], [data-rmt-cg-flat-prompt], [data-rmt-cg-editor-format], [data-rmt-cg-person-selected], [data-rmt-cg-person-name], [data-rmt-cg-person-tag], [data-rmt-cg-person-nl]')) field.disabled = active;
-    for (const button of editor.element.querySelectorAll('[data-rmt-cg-prompt-action="reconceive"], [data-rmt-cg-prompt-action="draw"], [data-rmt-cg-prompt-action="clear"], [data-rmt-cg-prompt-action="retry"], [data-rmt-cg-prompt-action="save-looks"], [data-rmt-cg-prompt-action="restore-draft"], [data-rmt-cg-prompt-action="add-person"], [data-rmt-cg-prompt-action="add-user"], [data-rmt-cg-prompt-action="use-current-cast"]')) button.disabled = active;
+    for (const button of editor.element.querySelectorAll('[data-rmt-cg-prompt-action="reconceive"], [data-rmt-cg-prompt-action="draw"], [data-rmt-cg-prompt-action="clear"], [data-rmt-cg-prompt-action="retry"], [data-rmt-cg-prompt-action="save-looks"], [data-rmt-cg-prompt-action="restore-draft"], [data-rmt-cg-prompt-action="add-person"], [data-rmt-cg-prompt-action="add-user"], [data-rmt-cg-prompt-action="use-current-cast"], [data-rmt-cg-prompt-action="select-sources"]')) button.disabled = active;
 }
 
 function readParticipantFields(current) {
@@ -9294,13 +9783,24 @@ function readParticipantFields(current) {
     }
 }
 
+function ensureUserCandidate(current) {
+    let user = current.people.find(person => person.identity === 'user');
+    if (user) return user;
+    const context = core_context.currentCharacterGuard();
+    user = appearance.createCgUserParticipant(context, current.people);
+    const saved = cast_looks.readParticipantLooks(context)?.characters.find(row => row.participantId === user.id);
+    user = { ...user, selected: false, tag: saved?.tag || cast_looks.readCastLooks(context)?.user || '', nl: saved?.nl || '' };
+    current.people.push(user);
+    return user;
+}
+
 function renderParticipantFields(current) {
     const list = current.element.querySelector('[data-rmt-cg-cast-list]');
     if (!list) return;
     list.innerHTML = current.people.map((person, index) => `<div class="rmt-cg-person" data-rmt-cg-person="${index}">
       <label><input type="checkbox" data-rmt-cg-person-selected="${index}">本图出镜 · 人物 ${index + 1}</label>
       <label>姓名<input type="text" data-rmt-cg-person-name="${index}" aria-label="人物 ${index + 1} 姓名"></label>
-      <small>${core_text.esc(person.sourceRefs.length ? person.sourceRefs.map(ref => `${ref.world} · ${ref.title || ref.uid}`).join('；') : '手动补充的人物')}</small>
+      <small>${core_text.esc(person.identity === 'user' && !person.sourceRefs.length ? '当前用户人设' : person.sourceRefs.length ? person.sourceRefs.map(ref => `${ref.world} · ${ref.title || ref.uid}`).join('；') : '手动补充的人物')}</small>
       <label>外貌 tag<textarea data-rmt-cg-person-tag="${index}" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" aria-label="人物 ${index + 1} 外貌 tag" placeholder="未知可留空，不会移除已勾选人物"></textarea></label>
       <label>外貌描述<textarea data-rmt-cg-person-nl="${index}" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" aria-label="人物 ${index + 1} 外貌描述" placeholder="保留已提取的外貌描述，也可以编辑"></textarea></label>
     </div>`).join('');
@@ -9330,7 +9830,7 @@ function renderParticipantFields(current) {
 }
 
 function appearanceFieldsHtml(multi) {
-    return multi ? '<fieldset data-rmt-cg-cast><legend>本图出镜人物</legend><p>勾选只影响这张图。姓名可改，也可补充档案名单外的人物；同名人物独立保存。</p><div data-rmt-cg-cast-list></div><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-person">补充人物</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-user">添加用户为候选</button></fieldset>' : `<p><label for="rmt-cg-char-tags" data-rmt-cg-tag-name="char">角色 · 外貌 tag</label><textarea id="rmt-cg-char-tags" data-rmt-cg-tag-input="char" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p>
+    return multi ? '<fieldset data-rmt-cg-cast><legend>本图出镜人物</legend><p>勾选只影响这张图。姓名可改，也可补充档案名单外的人物；同名人物独立保存。</p><div data-rmt-cg-cast-list></div><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-person">补充人物</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-user">定位用户候选</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="select-sources">重新选择外貌来源</button></fieldset>' : `<p><label for="rmt-cg-char-tags" data-rmt-cg-tag-name="char">角色 · 外貌 tag</label><textarea id="rmt-cg-char-tags" data-rmt-cg-tag-input="char" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p>
             <p><label for="rmt-cg-user-tags" data-rmt-cg-tag-name="user">用户 · 外貌 tag</label><textarea id="rmt-cg-user-tags" data-rmt-cg-tag-input="user" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p>`;
 }
 
@@ -9353,7 +9853,7 @@ function editorMetadata(current) {
         return appearance.normalizeCgPromptMetadata({ promptFormat: current.promptFormat,
             sceneTags: current.element.querySelector('[data-rmt-cg-scene-tags]').value,
             flatPrompt: current.element.querySelector('[data-rmt-cg-flat-prompt]').value,
-            castSnapshot: { version: 1, people: selected.map(({ id, name, sourceRefs }) => ({ id, name, sourceRefs })) },
+            castSnapshot: { version: 1, people: selected.map(({ id, name, sourceRefs, identity }) => ({ id, name, sourceRefs, ...(identity === 'user' ? { identity } : {}) })) },
             characters: selected.map(person => ({ participantId: person.id, tag: person.tag || '', nl: person.nl || '' })) });
     }
     return appearance.normalizeCgPromptMetadata({
@@ -9414,6 +9914,7 @@ function fillEditorMetadata(current, raw) {
             tag: metadata?.characters.find(row => row.participantId === person.id)?.tag || '',
             nl: metadata?.characters.find(row => row.participantId === person.id)?.nl || '' })),
         ...[...known.values()].filter(person => !selected.has(person.id)).map(person => ({ ...person, selected: false }))];
+        ensureUserCandidate(current);
         renderParticipantFields(current);
         updatePreparedPreview(current);
         return;
@@ -9547,11 +10048,39 @@ async function handleCgPromptEditorAction(action) {
         if (current.multi && (action === 'add-person' || action === 'add-user')) {
             readParticipantFields(current);
             const context = core_context.currentCharacterGuard();
-            current.people.push({ id: participants.createParticipantId(), name: action === 'add-user' ? String(context.name1 || '') : '',
-                sourceRefs: [], selected: false,
-                tag: action === 'add-user' ? cast_looks.readCastLooks(context)?.user || '' : '' });
+            const person = action === 'add-user' ? ensureUserCandidate(current)
+                : { id: participants.createParticipantId(), name: '', sourceRefs: [], selected: false, tag: '', nl: '' };
+            if (action !== 'add-user') current.people.push(person);
             renderParticipantFields(current);
-            current.element.querySelector(`[data-rmt-cg-person-name="${current.people.length - 1}"]`).focus();
+            current.element.querySelector(`[data-rmt-cg-person-name="${current.people.indexOf(person)}"]`).focus();
+            return;
+        }
+        if (current.multi && action === 'select-sources') {
+            readParticipantFields(current);
+            const previous = snapshotEditorDraft(current);
+            const beforePeople = structuredClone(current.people);
+            const context = core_context.currentCharacterGuard();
+            current.sourcePickerOpen = true;
+            await participant_picker.showParticipantPicker({ context,
+                title: '重新选择本图人物外貌来源', confirmLabel: '应用到本图草稿',
+                roster: { version: 1, cardType: 'multi', revision: '',
+                    people: current.people, selectedIds: current.people.filter(person => person.selected).map(person => person.id) },
+                onConfirm: snapshot => {
+                    if (editor !== current || !current.element.isConnected) return false;
+                    images.assertCgImageTargetCurrent(current.target);
+                    const old = new Map(beforePeople.map(person => [person.id, person]));
+                    const selected = new Set(snapshot.selectedIds);
+                    rememberEditorDraft(current, previous);
+                    current.people = snapshot.people.map(person => ({ ...person, selected: selected.has(person.id),
+                        tag: old.get(person.id)?.tag || '', nl: old.get(person.id)?.nl || '' }));
+                    ensureUserCandidate(current);
+                    renderParticipantFields(current);
+                    invalidateFlatPrompt(current);
+                    updatePreparedPreview(current);
+                    current.sourcePickerOpen = false;
+                    current.element.querySelector('[data-rmt-cg-prompt-status]').textContent = '本图来源已更新；原图、档案名单和已保存外貌未改动。点击重新构思后才提取外貌。';
+                    return true;
+                } });
             return;
         }
         if (action === 'use-current-cast') {
@@ -9578,6 +10107,7 @@ async function handleCgPromptEditorAction(action) {
             current.element.querySelector('[data-rmt-cg-editor-format]').value = draft.promptFormat;
             current.element.querySelector('[data-rmt-cg-prompt-input]').value = draft.scene;
             changeEditorCastMode(current, !!draft.metadata?.castSnapshot);
+            if (draft.people) current.people = structuredClone(draft.people);
             fillEditorMetadata(current, draft.metadata);
             current.element.querySelector('[data-rmt-cg-prompt-count]').textContent = `${draft.scene.length} / ${core_constants.MAX_CG_IMAGE_PROMPT_CHARS} 字符`;
             rememberEditorDraft(current, null);
@@ -9978,7 +10508,38 @@ ${r} .rmt-phone-page-header{grid-template-columns:44px 42px minmax(0,1fr)!import
 `;
 }
 
+
+// Layout only. Keep full labels and existing actions, including modal controls
+// outside .rmt-body. This runs after theme/component styles to avoid conflicts.
+function capsuleCss(root = '#heartbeat_memories_overlay') {
+    const r = root + '.rmt-workspace[data-rmt-theme-mode]';
+    const groups = ':is(.rmt-recovery-actions,.rmt-actions,.rmt-mode-actions,.rmt-filter,.rmt-cg-card-actions,.rmt-cg-prompt-actions,.rmt-cg-prompt-secondary,.rmt-manage-actions,.rmt-manage-category-actions,.rmt-mail-actions,.rmt-mail-filters,.rmt-heart-top-actions,.rmt-heart-summary-actions,.rmt-room-heading-actions,.rmt-room-location-actions,.rmt-dialogue-actions,.rmt-loading-actions,.rmt-travel-dialogue-actions,.rmt-ending-confession-actions,.rmt-ending-easter-controls,.rmt-current-archive-actions)';
+    return `
+${r} .rmt-btn,${r} .rmt-body button.rmt-btn{display:inline-flex;align-items:center!important;justify-content:center!important;gap:6px;box-sizing:border-box!important;min-width:0;max-width:100%;min-height:44px!important;height:auto!important;padding:10px 14px!important;margin:0!important;border-radius:24px!important;font-family:inherit!important;font-size:15px!important;line-height:1.4!important;letter-spacing:normal!important;white-space:normal!important;word-break:normal;overflow-wrap:anywhere;text-align:center;vertical-align:middle;touch-action:manipulation}
+${r} .rmt-btn>i,${r} .rmt-btn>svg{flex-shrink:0}
+${r} .rmt-btn[hidden]{display:none!important}
+${r} ${groups}{display:flex;align-items:stretch;justify-content:flex-start;flex-wrap:wrap;gap:8px;min-width:0;max-width:100%}
+${r} ${groups}>.rmt-btn{flex:0 1 auto;width:auto;min-width:0;max-width:100%}
+${r} :is(.rmt-recovery-actions,.rmt-cg-prompt-actions)>.rmt-btn{flex:1 1 auto;width:auto!important}
+${r} .rmt-recovery-actions{margin-top:12px}
+${r} .rmt-cg-prompt-secondary>small{flex-basis:100%}
+${r} :is(.rmt-participant-dialog,.rmt-cg-prompt-dialog) .rmt-btn{color:var(--rmt-theme-text);background:var(--rmt-theme-surface-solid);border:1px solid var(--rmt-theme-border)}
+${r} .rmt-participant-dialog footer{justify-content:flex-end;gap:8px}
+${r} :is(.rmt-workspace-tabs,.rmt-workspace-groups,.rmt-layout-switch) button{box-sizing:border-box;max-width:100%;min-width:0;line-height:1.4;white-space:normal;word-break:normal;overflow-wrap:anywhere;text-align:center}
+${r} :is(.rmt-filter,.rmt-workspace-groups) button{flex:0 1 auto}
+${r} .rmt-layout-switch{flex-wrap:wrap;max-width:100%}
+${r} .rmt-btn:focus-visible{outline:2px solid var(--rmt-theme-accent-ink);outline-offset:3px}
+@media(max-width:600px){
+ ${r} .rmt-body .rmt-current-archive-actions{display:flex!important;gap:8px}
+ ${r} .rmt-body .rmt-current-archive-actions>.rmt-btn{flex:1 1 144px;width:auto!important}
+ ${r} .rmt-body :is(.rmt-travel-dialogue-actions,.rmt-ending-confession-actions,.rmt-ending-easter-controls){display:flex;flex-wrap:wrap;gap:8px}
+ ${r} .rmt-body :is(.rmt-travel-dialogue-actions,.rmt-ending-confession-actions,.rmt-ending-easter-controls)>.rmt-btn{flex:1 1 112px}
+}
+`;
+}
+
 __m_ui_workspaceStyles_js.workspaceCss = workspaceCss;
+__m_ui_workspaceStyles_js.capsuleCss = capsuleCss;
 }
 
 function __init_modes_postcardDesign_js() {
@@ -16305,6 +16866,7 @@ function ensureSettingsStyles() {
 #${core_constants.SETTINGS_ID}_launcher button{min-height:44px!important;width:100%;padding:10px!important;white-space:normal!important}
 #${core_constants.SETTINGS_ID}_launcher button:focus-visible{outline:3px solid currentColor;outline-offset:3px}
 `;
+    style.textContent += ui_workspaceStyles.capsuleCss('#' + core_constants.OVERLAY_ID);
     document.head.appendChild(style);
 }
 
@@ -17263,6 +17825,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
     style.textContent += ui_readingStyles.readingCss('#' + core_constants.OVERLAY_ID);
     style.textContent += ui_workspaceStyles.workspaceCss('#' + core_constants.OVERLAY_ID);
     style.textContent += postcard_design_view.postcardDesignCss('#' + core_constants.OVERLAY_ID);
+    style.textContent += ui_workspaceStyles.capsuleCss('#' + core_constants.OVERLAY_ID);
     document.head.appendChild(style);
 }
 
@@ -27302,6 +27865,8 @@ function refreshGenerationSettingsUi() {
     panel.dataset.rmtApiEditor = editorMode;
     const profile = panel.querySelector('[data-rmt-api-profile]');
     const oneClick = panel.querySelector('[data-rmt-api-import-current]');
+    const capability = panel.querySelector('[data-rmt-api-host-capability]');
+    if (capability) capability.textContent = core_settings.oneClickConnectionCapability().message;
     const manualChoice = panel.querySelector('[data-rmt-api-select-manual]');
     const profilePanel = panel.querySelector('[data-rmt-api-profile-panel]');
     const manualPanel = panel.querySelector('[data-rmt-api-manual-panel]');
@@ -27402,7 +27967,7 @@ function refreshGenerationSettingsUi() {
         status.textContent = `${ready ? '●' : '○'} ${ready
             ? core_settings.generationSourceLabel(settings)
             : connectionMode === 'manual' ? '手动配置未完成'
-            : settings.connectionProfileId ? '需要 1.1.18 能力' : '一键连接未配置'}`;
+            : settings.connectionProfileId ? '需凭证绑定能力，可改用手动配置' : '一键连接未配置'}`;
     }
     void refreshModelOptions();
     void refreshManualModelOptions();
@@ -27522,12 +28087,13 @@ function mountSettings({ homeTarget = null } = {}) {
       </div>
       <div class="inline-drawer-content rmt-settings-content">
         <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="api">
-          <summary class="rmt-settings-card-head"><span>API</span><div><b>独立 API</b><small>1.1.18 一键配置 · 手动配置</small></div></summary>
+          <summary class="rmt-settings-card-head"><span>API</span><div><b>独立 API</b><small>一键配置 · 手动配置</small></div></summary>
           <div class="rmt-settings-section-body">
           <div class="rmt-api-source-grid" role="group" aria-label="独立 API 配置方式">
-            <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-import-current aria-pressed="false"><span class="rmt-api-source-badge">要求</span><b>1.1.18 一键配置</b><small>读取酒馆当前连接</small></button>
+            <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-import-current aria-pressed="false"><span class="rmt-api-source-badge">凭证绑定</span><b>一键配置</b><small>读取酒馆当前连接</small></button>
             <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-select-manual aria-pressed="false"><span class="rmt-api-source-badge">OPENAI</span><b>手动配置</b><small>URL · Key · 模型</small></button>
           </div>
+          <div data-rmt-api-host-capability role="status"></div>
           <div class="rmt-api-status" data-rmt-api-status role="status">○ 一键连接未配置</div>
           <div class="rmt-api-source-panel" data-rmt-api-profile-panel>
             <label class="rmt-settings-field"><span>连接配置</span><select class="text_pole" data-rmt-api-profile><option value="">选择 Connection Manager 配置</option></select></label>
@@ -36616,349 +37182,6 @@ __m_archive_importRecovery_js.ARCHIVE_RECOVERY_PAGE_NOTICE = ARCHIVE_RECOVERY_PA
 __m_archive_importRecovery_js.ARCHIVE_RECOVERY_MAX_DRAFTS = ARCHIVE_RECOVERY_MAX_DRAFTS;
 }
 
-function __init_ui_participantPicker_js() {
-// MODULE: ui/participantPicker.js
-const contextApi = __m_core_context_js;
-const constants = __m_core_constants_js;
-const cache = __m_core_cache_js;
-const people = __m_core_participants_js;
-const repository = __m_archive_repository_js;
-const text = __m_core_text_js;
-
-
-
-
-
-
-let activePicker = null;
-
-function closeParticipantPicker() {
-    const current = activePicker;
-    if (!current) return false;
-    activePicker = null;
-    current.controller.abort();
-    current.element.remove();
-    if (current.opener?.isConnected) current.opener.focus();
-    current.onClose?.();
-    return true;
-}
-
-function dialog(context, title, body) {
-    const host = document.getElementById(constants.OVERLAY_ID);
-    if (!host) return null;
-    closeParticipantPicker();
-    const element = document.createElement('div');
-    element.className = 'rmt-participant-backdrop';
-    element.innerHTML = `<section class="rmt-participant-dialog" role="dialog" aria-modal="true" aria-labelledby="rmt-participant-title" tabindex="-1">
-      <header><h2 id="rmt-participant-title">${text.esc(title)}</h2><button type="button" class="rmt-btn" data-rmt-participant-close>取消</button></header>
-      ${body}<p data-rmt-participant-status role="status" aria-live="polite"></p></section>`;
-    const current = { element, context, scope: contextApi.chatScopeKey(context),
-        controller: new AbortController(), opener: document.activeElement };
-    activePicker = current;
-    current.isCurrent = () => {
-        if (activePicker !== current || !element.isConnected || current.controller.signal.aborted) return false;
-        try { return current.scope === contextApi.chatScopeKey(contextApi.currentCharacterGuard()); }
-        catch { return false; }
-    };
-    element.querySelector('[data-rmt-participant-close]').addEventListener('click', event => {
-        event.stopPropagation(); closeParticipantPicker();
-    });
-    element.addEventListener('keydown', event => {
-        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeParticipantPicker(); return; }
-        if (event.key !== 'Tab') return;
-        const fields = [...element.querySelectorAll('button, input, select, textarea, summary, [tabindex="0"]')]
-            .filter(field => !field.disabled && !field.hidden && field.getClientRects().length);
-        if (!fields.length) { event.preventDefault(); return; }
-        const first = fields[0], last = fields.at(-1);
-        if (event.shiftKey && (document.activeElement === first || !element.contains(document.activeElement))) {
-            event.preventDefault(); last.focus();
-        } else if (!event.shiftKey && (document.activeElement === last || !element.contains(document.activeElement))) {
-            event.preventDefault(); first.focus();
-        }
-    });
-    host.appendChild(element);
-    element.querySelector('section').focus();
-    return current;
-}
-
-function status(current, message, error = false) {
-    if (!current.isCurrent()) return;
-    const node = current.element.querySelector('[data-rmt-participant-status]');
-    node.setAttribute('role', error ? 'alert' : 'status');
-    node.textContent = message;
-}
-
-function showArchiveCardTypePicker({ context = contextApi.currentCharacterGuard(), onSingle, onMultiple } = {}) {
-    const current = dialog(context, '这是一张单人卡，还是多人卡？', `
-      <div class="rmt-participant-card-types">
-        <button type="button" class="rmt-btn" data-rmt-card-type="single"><b>单人卡</b><span>沿用原来的建档方式</span></button>
-        <button type="button" class="rmt-btn" data-rmt-card-type="multi"><b>多人卡</b><span>从世界书勾选要加入回廊的人物</span></button>
-      </div>`);
-    if (!current) return false;
-    for (const button of current.element.querySelectorAll('[data-rmt-card-type]')) button.addEventListener('click', event => {
-        event.stopPropagation();
-        if (!current.isCurrent()) return;
-        const callback = button.dataset.rmtCardType === 'single' ? onSingle : onMultiple;
-        closeParticipantPicker();
-        callback?.();
-    });
-    return true;
-}
-
-const sourceKey = ref => JSON.stringify([ref.world, String(ref.uid)]);
-const copySource = entry => ({ world: entry.world, uid: String(entry.uid), title: entry.title,
-    content: entry.content, keys: [...(entry.keys || [])] });
-
-// Selection is local until the caller explicitly commits it. Loading books, naming
-// people, toggling checkboxes and closing this dialog never request generation.
-async function showParticipantPicker({ context = contextApi.currentCharacterGuard(), roster,
-    onConfirm, requireSelection = false, title = '选择加入回廊的人物', confirmLabel = '保存人物名单' } = {}) {
-    const originalScope = contextApi.chatScopeKey(context);
-    if (roster === undefined) {
-        if (repository.getImportedMemory(context)) await cache.ensureCurrentArchiveBackup(context);
-        await cache.ensureCacheHydrated(context);
-        if (originalScope !== contextApi.chatScopeKey(contextApi.currentCharacterGuard())) return false;
-        roster = cache.readParticipantRoster(context);
-    }
-    const initial = people.normalizeParticipantRoster(roster);
-    const draft = initial || { version: 1, cardType: 'multi', revision: '', people: [], selectedIds: [] };
-    const current = dialog(context, title, `
-      <p>勾选世界书中的人物条目，核对下方姓名。一个条目可以加入多个人物，也可以为同一人物补充多个条目。</p>
-      <p>选人、改名不调用生成 API。人物设定不会作为已经发生的剧情写入记忆。</p>
-      <label class="rmt-participant-book-label">世界书<select data-rmt-participant-book aria-label="人物来源世界书"><option value="">正在读取世界书列表…</option></select></label>
-      <div class="rmt-participant-entries" data-rmt-participant-entries></div>
-      <h3>人物名单</h3><div data-rmt-participant-people></div>
-      <button type="button" class="rmt-btn" data-rmt-participant-add>手动补充人物</button>
-      <footer><span data-rmt-participant-count></span><button type="button" class="rmt-btn" data-rmt-participant-confirm>${text.esc(confirmLabel)}</button></footer>`);
-    if (!current) return false;
-    current.draft = draft;
-    current.entries = [];
-    current.loading = 0;
-    current.busy = false;
-    const selected = id => draft.selectedIds.includes(id);
-    const setSelected = (id, checked) => {
-        draft.selectedIds = checked ? [...new Set([...draft.selectedIds, id])] : draft.selectedIds.filter(value => value !== id);
-    };
-    const addPerson = (name, refs = []) => {
-        const person = { id: people.createParticipantId(), name, sourceRefs: refs.map(copySource) };
-        draft.people.push(person); setSelected(person.id, true);
-        return person;
-    };
-    function renderPeople() {
-        current.element.querySelector('[data-rmt-participant-people]').innerHTML = draft.people.length ? draft.people.map((person, index) => `
-          <article class="rmt-participant-person" data-rmt-participant-person="${index}">
-            <label class="rmt-participant-select"><input type="checkbox" data-rmt-participant-selected="${index}" ${selected(person.id) ? 'checked' : ''}> 加入回廊</label>
-            <label>人物名字<input type="text" data-rmt-participant-name="${index}" value="${text.esc(person.name)}"></label>
-            <small>${person.sourceRefs.length ? person.sourceRefs.map(ref => `${text.esc(ref.world)} · ${text.esc(ref.title)} (#${text.esc(ref.uid)})`).join('<br>') : '手动补充，未关联世界书条目'}</small>
-            ${person.sourceRefs.length ? `<button type="button" class="rmt-btn" data-rmt-participant-duplicate="${index}">这些条目里还有其他人物</button>` : ''}
-          </article>`).join('') : '<p>尚未加入人物。展开世界书条目后勾选，或手动补充。</p>';
-        current.element.querySelector('[data-rmt-participant-count]').textContent = `已勾选 ${draft.selectedIds.length} 人`;
-    }
-    function renderEntries() {
-        const node = current.element.querySelector('[data-rmt-participant-entries]');
-        node.innerHTML = current.entries.length ? current.entries.map((entry, index) => {
-            const linked = draft.people.filter(person => person.sourceRefs.some(ref => sourceKey(ref) === sourceKey(entry)));
-            const checked = linked.some(person => selected(person.id));
-            return `<section class="rmt-participant-entry">
-              <label class="rmt-participant-select"><input type="checkbox" data-rmt-participant-entry="${index}" ${checked ? 'checked' : ''}><b>${text.esc(entry.title)}</b></label>
-              <small>#${text.esc(entry.uid)}${entry.disabled ? ' · 世界书原条目已禁用' : ''}</small>
-              <details><summary>查看条目内容</summary><p>${text.esc(entry.content)}</p></details>
-              ${draft.people.length ? `<label>也可作为人物的补充资料<select data-rmt-participant-link="${index}"><option value="">选择已有的人物…</option>${draft.people.map((person, i) => `<option value="${i}">${text.esc(person.name || '未填写姓名')} · ${i + 1}</option>`).join('')}</select></label>` : ''}
-            </section>`;
-        }).join('') : '<p>这本世界书没有可读取的文字条目。</p>';
-    }
-    function changed({ entries = true } = {}) { renderPeople(); if (entries) renderEntries(); status(current, ''); }
-    current.element.addEventListener('input', event => {
-        const index = event.target?.dataset?.rmtParticipantName;
-        if (index === undefined || current.busy || !current.isCurrent()) return;
-        event.stopPropagation();
-        draft.people[Number(index)].name = event.target.value;
-        // Do not rerender the input being typed in: preserve caret/IME composition.
-    });
-    current.element.addEventListener('change', event => {
-        if (current.busy || !current.isCurrent()) return;
-        const data = event.target?.dataset || {};
-        if (data.rmtParticipantSelected !== undefined) {
-            event.stopPropagation(); setSelected(draft.people[Number(data.rmtParticipantSelected)].id, event.target.checked); changed();
-        } else if (data.rmtParticipantEntry !== undefined) {
-            event.stopPropagation();
-            const entry = current.entries[Number(data.rmtParticipantEntry)];
-            const linked = draft.people.filter(person => person.sourceRefs.some(ref => sourceKey(ref) === sourceKey(entry)));
-            if (event.target.checked && !linked.length) addPerson(entry.title, [entry]);
-            else for (const person of linked) {
-                if (event.target.checked) person.sourceRefs = person.sourceRefs.map(ref => sourceKey(ref) === sourceKey(entry) ? copySource(entry) : ref);
-                setSelected(person.id, event.target.checked);
-            }
-            changed();
-        } else if (data.rmtParticipantLink !== undefined && event.target.value !== '') {
-            event.stopPropagation();
-            const person = draft.people[Number(event.target.value)], entry = current.entries[Number(data.rmtParticipantLink)];
-            if (!person.sourceRefs.some(ref => sourceKey(ref) === sourceKey(entry))) person.sourceRefs.push(copySource(entry));
-            else person.sourceRefs = person.sourceRefs.map(ref => sourceKey(ref) === sourceKey(entry) ? copySource(entry) : ref);
-            changed();
-        }
-    });
-    current.element.addEventListener('click', event => {
-        const button = event.target?.closest?.('[data-rmt-participant-add], [data-rmt-participant-duplicate]');
-        if (!button || current.busy || !current.isCurrent()) return;
-        event.stopPropagation();
-        const index = button.dataset.rmtParticipantDuplicate;
-        const person = index === undefined ? addPerson('') : addPerson('', draft.people[Number(index)].sourceRefs);
-        changed();
-        current.element.querySelector(`[data-rmt-participant-name="${draft.people.indexOf(person)}"]`)?.focus();
-    });
-    current.element.querySelector('[data-rmt-participant-book]').addEventListener('change', async event => {
-        event.stopPropagation();
-        if (!current.isCurrent() || current.busy) return;
-        const serial = ++current.loading, world = event.target.value;
-        if (!world) { current.entries = []; current.element.querySelector('[data-rmt-participant-entries]').textContent = ''; return; }
-        current.element.querySelector('[data-rmt-participant-entries]').textContent = '正在读取条目…';
-        try {
-            const entries = await repository.loadMemoryWorldInfoBook(context, world, current.controller.signal, { participantSource: true });
-            if (!current.isCurrent() || serial !== current.loading) return;
-            current.entries = entries; renderEntries();
-        } catch (error) { if (current.isCurrent() && serial === current.loading) status(current, `读取失败：${text.safeErrorSummary(error)}`, true); }
-    });
-    current.element.querySelector('[data-rmt-participant-confirm]').addEventListener('click', async event => {
-        event.stopPropagation();
-        if (!current.isCurrent() || current.busy) return;
-        // Explicit user decision: a multi-person archive needs a manual selection.
-        if (requireSelection && !draft.selectedIds.length) {
-            status(current, '请先勾选要加入回廊的人物，再开始建档。', true); return;
-        }
-        const snapshot = people.normalizeParticipantRoster(draft);
-        current.busy = true;
-        for (const field of current.element.querySelectorAll('button:not([data-rmt-participant-close]), input, select')) field.disabled = true;
-        status(current, '正在确认人物选择…');
-        try {
-            const accepted = await onConfirm?.(snapshot, initial?.revision || '');
-            if (current.isCurrent() && accepted !== false) closeParticipantPicker();
-            else if (current.isCurrent()) {
-                current.busy = false;
-                for (const field of current.element.querySelectorAll('button, input, select')) field.disabled = false;
-                status(current, '名单尚未更改，可以继续调整或取消。');
-            }
-        } catch (error) {
-            if (current.isCurrent()) {
-                current.busy = false;
-                for (const field of current.element.querySelectorAll('button, input, select')) field.disabled = false;
-                status(current, text.safeErrorSummary(error), true);
-            } else globalThis.toastr?.error?.(text.safeErrorSummary(error), '心迹回廊');
-        }
-    });
-    renderPeople();
-    try {
-        if (typeof context.getWorldInfoNames !== 'function') throw new Error('酒馆当前未提供世界书列表，请确认世界书已加载。');
-        const raw = await context.getWorldInfoNames();
-        if (!current.isCurrent()) return false;
-        const names = [...new Set((Array.isArray(raw) ? raw : []).filter(name => typeof name === 'string' && name))];
-        current.element.querySelector('[data-rmt-participant-book]').innerHTML = '<option value="">请选择世界书…</option>'
-            + names.map(name => `<option value="${text.esc(name)}">${text.esc(name)}</option>`).join('');
-        if (!names.length) status(current, '当前没有可读取的世界书。可载入世界书后重开选人页，或手动补充人物。');
-    } catch (error) {
-        if (current.isCurrent()) {
-            current.element.querySelector('[data-rmt-participant-book]').innerHTML = '<option value="">世界书列表暂不可用</option>';
-            status(current, text.safeErrorSummary(error), true);
-        }
-    }
-    return true;
-}
-
-// These decisions occur before either a roster write or a new paid request.
-function chooseParticipantChange({ context, tasks = [], scopes = [], appendedNames = [], selectedNames = [] }) {
-    return new Promise(resolve => {
-        const running = tasks.length > 0;
-        const current = dialog(context, running ? '正在按原名单生成' : '怎样应用这次人物选择？', `
-          ${running ? `<p>以下任务仍按开始时的名单生成：${tasks.map(task => text.esc(task.label || task.mode || '档案')).join('、')}。</p>
-          <p>继续原任务会保留原名单。中断后重做会重新调用 API；已经发送的请求仍可能计费。</p>
-          ${tasks.some(task => task.kind === 'participant-plan') ? '<p>中断正在执行的重做计划，也会停止这份计划中尚未开始的页面。接下来只生成你重新勾选的范围。</p>' : ''}
-          <button type="button" class="rmt-btn" data-rmt-participant-decision="continue">继续原任务，不更改名单</button>`
-          : `<p>追加会把新勾选的人加入原名单，原来的人和已有内容保留。只保存名单，不调用生成 API。</p>
-          <p>追加后的名单：${appendedNames.map(name => text.esc(name || '未填写姓名')).join('、')}</p>
-          <button type="button" class="rmt-btn" data-rmt-participant-decision="append">确认追加新人物</button>`}
-          <button type="button" class="rmt-btn" data-rmt-participant-decision="select-scopes">${running ? '选择中断并重做的范围' : '选择重新生成的范围'}</button>
-          <section data-rmt-participant-regenerate-options hidden>
-            <p>本轮使用当前勾选的名单：${selectedNames.map(name => text.esc(name || '未填写姓名')).join('、')}</p>
-            <p>只重做你勾选的页面；未勾选的内容保留。重做前保存可查看的旧版本，不会自动重新绘制旧图片。</p>
-            <p>只重做房间时，旧生活和物品所依赖的空间、物件仍保留，避免原记录失去对应位置。</p>
-            <div class="rmt-participant-scope-options">${scopes.map(scope => `<label class="rmt-participant-select"><input type="checkbox" data-rmt-participant-scope="${text.esc(scope.id)}">${text.esc(scope.label)}</label>`).join('')}</div>
-            <p>勾选多个页面会依次执行各自的生成流程；部分页面本来需要多段请求，不是一次 API 完成全部。生成失败时保留已保存的旧版。</p>
-            <button type="button" class="rmt-btn" data-rmt-participant-decision="regenerate">确认所选范围并生成</button>
-          </section>`);
-        if (!current) { resolve(null); return; }
-        current.onClose = () => resolve(null);
-        const finish = value => {
-            current.onClose = null;
-            closeParticipantPicker();
-            resolve(value);
-        };
-        current.element.addEventListener('click', event => {
-            const button = event.target?.closest?.('[data-rmt-participant-decision]');
-            if (!button) return;
-            event.stopPropagation();
-            if (!current.isCurrent()) { finish(null); return; }
-            const action = button.dataset.rmtParticipantDecision;
-            if (action === 'select-scopes') {
-                current.element.querySelector('[data-rmt-participant-regenerate-options]').hidden = false;
-                current.element.querySelector('[data-rmt-participant-scope]')?.focus();
-                return;
-            }
-            if (action === 'regenerate') {
-                const pages = [...current.element.querySelectorAll('[data-rmt-participant-scope]:checked')].map(node => node.dataset.rmtParticipantScope);
-                if (!pages.length) { status(current, '请勾选本次要重做的范围，或者取消。'); return; }
-                finish({ action, pages });
-            } else finish({ action });
-        });
-    });
-}
-
-function showParticipantVersions({ context, versions, onOpen }) {
-    const current = dialog(context, '重做前的旧版本', `
-      <p>这里保留重做前已经生成的内容。打开后查看旧版本，不会替换当前内容。</p>
-      ${versions.length ? versions.map((version, index) => `<button type="button" class="rmt-btn" data-rmt-participant-version="${index}">${text.esc(version.label || version.reason || '重做前版本')} · ${text.esc(version.createdAt ? new Date(version.createdAt).toLocaleString() : '保存时间未记录')}</button>`).join('') : '<p>还没有保存的旧版本。</p>'}`);
-    if (!current) return false;
-    current.element.addEventListener('click', event => {
-        const button = event.target?.closest?.('[data-rmt-participant-version]');
-        if (!button || !current.isCurrent()) return;
-        event.stopPropagation();
-        const version = versions[Number(button.dataset.rmtParticipantVersion)];
-        if (!version) return;
-        closeParticipantPicker();
-        void onOpen(version);
-    });
-    return true;
-}
-
-function chooseGenerationTaskResult({ context, title = '旧任务已生成完成' }) {
-    return new Promise(resolve => {
-        const current = dialog(context, title, `
-          <p>结果已经保存。它沿用旧任务的原资料，当前档案已有较新的版本。</p>
-          <p>你可以单独保留这份成果，也可以更新对应的当前页面；更新前会保留当前页面的旧版本。</p>
-          <button type="button" class="rmt-btn" data-rmt-task-result-decision="independent">保存为独立成果并查看</button>
-          <button type="button" class="rmt-btn" data-rmt-task-result-decision="apply">更新当前页面，并保留旧版</button>
-          <p>关闭此页可以稍后决定，已生成的结果不会丢失。这里的选择不会调用生成 API。</p>`);
-        if (!current) { resolve(null); return; }
-        current.onClose = () => resolve(null);
-        current.element.addEventListener('click', event => {
-            const button = event.target?.closest?.('[data-rmt-task-result-decision]');
-            if (!button || !current.isCurrent()) return;
-            event.stopPropagation();
-            const decision = button.dataset.rmtTaskResultDecision;
-            current.onClose = null;
-            closeParticipantPicker();
-            resolve(decision);
-        });
-    });
-}
-
-__m_ui_participantPicker_js.showParticipantPicker = showParticipantPicker;
-__m_ui_participantPicker_js.closeParticipantPicker = closeParticipantPicker;
-__m_ui_participantPicker_js.showArchiveCardTypePicker = showArchiveCardTypePicker;
-__m_ui_participantPicker_js.chooseParticipantChange = chooseParticipantChange;
-__m_ui_participantPicker_js.showParticipantVersions = showParticipantVersions;
-__m_ui_participantPicker_js.chooseGenerationTaskResult = chooseGenerationTaskResult;
-}
-
 function __init_ui_butterflyView_js() {
 // MODULE: ui/butterflyView.js
 const core_constants = __m_core_constants_js;
@@ -42947,6 +43170,7 @@ const core_archiveCover = __m_core_archiveCover_js;
 const core_constants = __m_core_constants_js;
 const cast_looks = __m_core_castLooks_js;
 const core_context = __m_core_context_js;
+const host_compatibility = __m_core_hostCompatibility_js;
 const core_evidence = __m_core_evidence_js;
 const core_incremental = __m_core_incremental_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
@@ -42974,6 +43198,7 @@ const runtimeState = __m_core_state_js.state;
 
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
 
 
 
@@ -43311,11 +43536,15 @@ async function loadMemoryWorldInfoBook(context, worldName, signal = null, option
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     if (typeof context.loadWorldInfo !== 'function') throw new Error('当前 SillyTavern 没有公开的世界书读取接口。');
     const name = options.participantSource ? String(worldName ?? '') : core_text.normalizeText(worldName, 240);
-    const rawNames = typeof context.getWorldInfoNames === 'function' ? await sourceGuard.boundedSourceRead(() => context.getWorldInfoNames(), signal) : [];
+    // Old hosts could already read an explicitly selected book by name. Adding the
+    // interactive list adapter must not make that existing path depend on listing.
+    const validateListedName = typeof context.getWorldInfoNames === 'function'
+        && !host_compatibility.isAdaptedWorldInfoNameReader(context.getWorldInfoNames);
+    const rawNames = validateListedName ? await sourceGuard.boundedSourceRead(() => context.getWorldInfoNames(), signal) : [];
     const names = options.participantSource ? (Array.isArray(rawNames) ? rawNames.filter(value => typeof value === 'string') : [])
         : core_text.cleanArray(rawNames, 500, 240);
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    if (!name || (typeof context.getWorldInfoNames === 'function' && !names.includes(name))) throw new Error('所选世界书已经不存在，或当前 SillyTavern 无法读取。');
+    if (!name || (validateListedName && !names.includes(name))) throw new Error('所选世界书已经不存在，或当前 SillyTavern 无法读取。');
     const data = await sourceGuard.boundedSourceRead(() => context.loadWorldInfo(name), signal);
     const entries = safeOwnDataValue(data, 'entries');
     if (!entries || typeof entries !== 'object') throw new Error('世界书未返回有效条目列表。');
@@ -47132,6 +47361,7 @@ const archive_avatars = __m_ui_archiveAvatars_js;
 const ui_phoneView = __m_ui_phoneView_js;
 const ui_endingView = __m_ui_endingView_js;
 const recovery_view = __m_ui_recoveryView_js;
+const host_compatibility = __m_core_hostCompatibility_js;
 const runtimeState = __m_core_state_js.state;
 
 // Heartbeat Memories r35 modular runtime.
@@ -48178,15 +48408,40 @@ async function rebuildArchiveIndexFromExisting() {
     const existingByChatFile = new Map(existing.map(item => [`${core_context.archiveStoredAvatar(item)}\u001f${item.chatId}`, item]));
     const found = [];
     ui_overlay.openOverlay(); const body = ui_overlay.bodyEl(); ui_overlay.topTitle('心迹回廊 · 扫描旧档案');
+    const controller = new AbortController();
+    const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
+    let cancelled = false, failedReads = 0;
+    const cancelScan = event => {
+        if (event.target.closest?.('[data-rmt-cancel-legacy-scan]')) controller.abort();
+    };
+    const scanStillCurrent = () => lifecycleEpoch === runtimeState.runtimeLifecycleEpoch;
+    body?.addEventListener('click', cancelScan);
     const avatarEntries = [...byAvatar.entries()];
+    try {
     for (let i = 0; i < avatarEntries.length; i += 1) {
         const [avatar, avatarDescriptors] = avatarEntries[i];
-        if (body) body.innerHTML = `<div class="rmt-loading"><div class="rmt-loading-card"><b>正在扫描旧档案 ${i + 1} / ${avatarEntries.length}</b><div class="rmt-loading-note">同头像只读取一次聊天列表；能唯一匹配角色卡时记录本地指纹，无法唯一判断时保持待手动分类。不会切换宿主聊天。</div></div></div>`;
+        if (body) body.innerHTML = `<div class="rmt-loading"><div class="rmt-loading-card"><b>正在扫描旧档案 ${i + 1} / ${avatarEntries.length}</b><div class="rmt-loading-note">同头像只读取一次聊天列表；旧酒馆按需只读聊天文件。能唯一匹配角色卡时记录本地指纹，无法唯一判断时保持待手动分类。不会切换宿主聊天。</div><div data-rmt-legacy-scan-progress role="status"></div><button type="button" class="rmt-btn" data-rmt-cancel-legacy-scan>停止扫描</button></div></div>`;
         try {
-            const response = await fetch('/api/characters/chats', { method:'POST', headers:context.getRequestHeaders(), cache:'no-cache', body:JSON.stringify({ avatar_url:avatar, metadata:true }) });
-            if (!response.ok) continue;
+            if (controller.signal.aborted || !scanStillCurrent()) throw new DOMException('Archive scan cancelled', 'AbortError');
+            const response = await fetch('/api/characters/chats', { method:'POST', headers:context.getRequestHeaders(), cache:'no-cache', signal:controller.signal, body:JSON.stringify({ avatar_url:avatar, metadata:true }) });
+            if (!response.ok) { failedReads++; continue; }
             const rows = await response.json();
-            for (const row of Array.isArray(rows) ? rows : []) {
+            const listedRows = Array.isArray(rows) ? rows : [];
+            if (!Array.isArray(rows)) failedReads++;
+            for (let rowIndex = 0; rowIndex < listedRows.length; rowIndex++) {
+                const progress = body?.querySelector('[data-rmt-legacy-scan-progress]');
+                if (progress) progress.textContent = `聊天 ${rowIndex + 1} / ${listedRows.length}`;
+                let row;
+                try {
+                    row = await host_compatibility.readArchiveRowMetadata(context, avatar, listedRows[rowIndex], {
+                        signal: controller.signal, isCurrent: scanStillCurrent,
+                    });
+                } catch (error) {
+                    if (error?.name === 'AbortError') throw error;
+                    failedReads++;
+                    console.warn('[HeartbeatMemories] legacy archive chat read failed', core_text.safeErrorDiagnostic(error));
+                    continue;
+                }
                 const mem = archive_repository.migrateArchiveInMemory(row?.chat_metadata?.[core_constants.MEMORY_KEY]);
                 if (!mem) continue;
                 const chatId = core_context.comparableChatId(row.file_id || row.file_name);
@@ -48218,10 +48473,16 @@ async function rebuildArchiveIndexFromExisting() {
                     && !await archive_backupStore.hasArchiveBackupDeletionFence(candidate)) found.push(candidate);
             }
         } catch (error) {
+            if (error?.name === 'AbortError') { cancelled = true; break; }
+            failedReads++;
             console.warn('[HeartbeatMemories] legacy archive index scan skipped avatar', { avatar: core_text.normalizeText(avatar, 300), ...core_text.safeErrorDiagnostic(error) });
         }
         await core_context.yieldToUi();
     }
+    } finally {
+        body?.removeEventListener('click', cancelScan);
+    }
+    if (!scanStillCurrent()) return;
     // Keep previously indexed rows whose avatar could not be scanned this time; an intermittent
     // server/listing failure must never silently erase the user's library index.
     const seen = new Set(found.map(item => `${core_context.archiveStoredAvatar(item)}\u001f${item.chatId}`));
@@ -48232,7 +48493,9 @@ async function rebuildArchiveIndexFromExisting() {
     }
     archive_groups.setArchiveIndex(context, found.sort((a,b) => b.updatedAt - a.updatedAt));
     archive_groups.autoClassifyArchiveIndex(context, { confirm: false });
-    globalThis.toastr?.success?.(`旧档案扫描完成：索引 ${found.length} 个聊天档案。无法唯一判断的同头像/同名旧档案已单独列为“待手动分类”。`, '心迹回廊');
+    const scanMessage = `旧档案扫描${cancelled ? '已停止' : failedReads ? '部分完成' : '完成'}：索引 ${found.length} 个聊天档案。${failedReads ? `有 ${failedReads} 处读取失败，可再次手动扫描；` : ''}${cancelled ? '已保留读到的索引和原有索引；' : ''}无法唯一判断的同头像/同名旧档案已单独列为“待手动分类”。`;
+    if (cancelled || failedReads) globalThis.toastr?.warning?.(scanMessage, '心迹回廊');
+    else globalThis.toastr?.success?.(scanMessage, '心迹回廊');
     showArchiveLibrary();
 }
 
@@ -49087,6 +49350,7 @@ const core_evidence = __m_core_evidence_js;
 const core_text = __m_core_text_js;
 const core_contextTags = __m_core_contextTags_js;
 const chat_read_range = __m_core_chatReadRange_js;
+const host_compatibility = __m_core_hostCompatibility_js;
 const runtimeState = __m_core_state_js.state;
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -49095,10 +49359,12 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+const adaptHostContext = host_compatibility.createHostContextAdapter({ getEpoch: () => runtimeState.runtimeLifecycleEpoch });
+
 function getContext() {
     const context = globalThis.SillyTavern?.getContext?.();
     if (!context) throw new Error('未检测到 SillyTavern 扩展上下文。');
-    return context;
+    return adaptHostContext(context);
 }
 
 function currentCharacterGuard() {
@@ -52894,6 +53160,7 @@ __init_core_participants_js();
 __init_generation_cgAppearance_js();
 __init_core_cgImagePatch_js();
 __init_core_archiveCover_js();
+__init_core_hostCompatibility_js();
 __init_core_storyChronology_js();
 __init_core_evidence_js();
 __init_core_incremental_js();
@@ -52908,6 +53175,7 @@ __init_core_presentExpression_js();
 __init_generation_baibaiImage_js();
 __init_ui_advEventView_js();
 __init_ui_albumCategory_js();
+__init_ui_participantPicker_js();
 __init_ui_cgImageViewer_js();
 __init_core_heartLanguage_js();
 __init_ui_recoveryView_js();
@@ -52975,7 +53243,6 @@ __init_generation_contentRegeneration_js();
 __init_ui_contentManager_js();
 __init_generation_client_js();
 __init_archive_importRecovery_js();
-__init_ui_participantPicker_js();
 __init_ui_butterflyView_js();
 __init_ui_calendarView_js();
 __init_ui_themeSongView_js();

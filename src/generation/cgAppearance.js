@@ -32,8 +32,34 @@ function sourceText(value, context) {
 
 function participantSourceText(value, context) {
     if (typeof value !== 'string') return '';
-    const filtered = context_tags.filterContextTags(value, context_tags.tagPolicyForContext(context));
-    return plain(filtered, filtered.length);
+    // These entries were explicitly selected as person settings. Chat-body tag
+    // selection must not erase their XML-wrapped descriptions.
+    const unwrapped = value.replace(/&(?:amp;)*(lt;|gt;|#0*60;|#0*62;|#x0*3c;|#x0*3e;)/gi,
+        (_, entity) => /^(lt;|#0*60;|#x0*3c;)$/i.test(entity) ? '<' : '>').replace(/<[^>]*>/g, ' ');
+    return plain(unwrapped, unwrapped.length);
+}
+
+function userPersona(context) {
+    let card = {};
+    try { card = context?.getCharacterCardFields?.() || {}; } catch {}
+    return typeof card.persona === 'string' && card.persona.trim() ? card.persona
+        : typeof context?.powerUserSettings?.persona_description === 'string' ? context.powerUserSettings.persona_description : '';
+}
+
+export function createCgUserParticipant(context, existingPeople = []) {
+    const ids = new Set(existingPeople.map(person => person.id));
+    let id = 'rmt-current-user', suffix = 0;
+    while (ids.has(id)) id = `rmt-current-user-${++suffix}`;
+    const content = userPersona(context);
+    return { id, name: String(context?.name1 || ''), identity: 'user',
+        sourceRefs: content ? [{ world: '用户人设', uid: 'persona', title: String(context?.name1 || '用户'), content }] : [] };
+}
+
+function participantAppearanceSource(person, context) {
+    const sources = person.sourceRefs.map(ref => participantSourceText(ref.content, context)).filter(Boolean);
+    // An explicit user identity is required; equal names never imply user identity.
+    if (!person.sourceRefs.length && person.identity === 'user') sources.push(participantSourceText(userPersona(context), context));
+    return sources.join('\n');
 }
 
 function libraryCharacters(api) {
@@ -55,7 +81,7 @@ export function captureCgAppearanceEvidence(context, { api = globalThis.STBaiBai
             // Evidence is explicitly bound by ID. A same-name library match is
             // insufficient to identify one of several distinct sandbox people.
             return Object.freeze({ participantId: person.id, name: person.name,
-                description: plain(known?.tag, CG_APPEARANCE_TAG_LIMIT) ? '' : person.sourceRefs.map(ref => participantSourceText(ref.content, context)).filter(Boolean).join('\n'),
+                description: plain(known?.tag, CG_APPEARANCE_TAG_LIMIT) ? '' : participantAppearanceSource(person, context),
                 knownTag: plain(known?.tag, CG_APPEARANCE_TAG_LIMIT), knownNl: plain(known?.nl, CG_APPEARANCE_TAG_LIMIT) });
         });
         return Object.freeze({ castSnapshot: snapshot, characters: Object.freeze(characters),
@@ -276,8 +302,7 @@ export function appearanceEvidenceWithDraft(evidence, draft, context = null) {
             // Clearing a saved tag means re-extract from this person's sources,
             // not that the corresponding worldbook description disappeared.
             const description = !knownTag && row.knownTag && !row.description
-                ? (evidence.castSnapshot.people.find(person => person.id === row.participantId)?.sourceRefs || [])
-                    .map(ref => participantSourceText(ref.content, context)).filter(Boolean).join('\n')
+                ? participantAppearanceSource(evidence.castSnapshot.people.find(person => person.id === row.participantId), context)
                 : row.description;
             return { ...row, description, knownTag, knownNl };
         }

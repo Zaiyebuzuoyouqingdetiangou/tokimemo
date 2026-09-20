@@ -373,6 +373,8 @@ export function refreshGenerationSettingsUi() {
     panel.dataset.rmtApiEditor = editorMode;
     const profile = panel.querySelector('[data-rmt-api-profile]');
     const oneClick = panel.querySelector('[data-rmt-api-import-current]');
+    const capability = panel.querySelector('[data-rmt-api-host-capability]');
+    if (capability) capability.textContent = core_settings.oneClickConnectionCapability().message;
     const manualChoice = panel.querySelector('[data-rmt-api-select-manual]');
     const profilePanel = panel.querySelector('[data-rmt-api-profile-panel]');
     const manualPanel = panel.querySelector('[data-rmt-api-manual-panel]');
@@ -473,7 +475,7 @@ export function refreshGenerationSettingsUi() {
         status.textContent = `${ready ? '●' : '○'} ${ready
             ? core_settings.generationSourceLabel(settings)
             : connectionMode === 'manual' ? '手动配置未完成'
-            : settings.connectionProfileId ? '需要 1.1.18 能力' : '一键连接未配置'}`;
+            : settings.connectionProfileId ? '需凭证绑定能力，可改用手动配置' : '一键连接未配置'}`;
     }
     void refreshModelOptions();
     void refreshManualModelOptions();
@@ -593,12 +595,13 @@ export function mountSettings({ homeTarget = null } = {}) {
       </div>
       <div class="inline-drawer-content rmt-settings-content">
         <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="api">
-          <summary class="rmt-settings-card-head"><span>API</span><div><b>独立 API</b><small>1.1.18 一键配置 · 手动配置</small></div></summary>
+          <summary class="rmt-settings-card-head"><span>API</span><div><b>独立 API</b><small>一键配置 · 手动配置</small></div></summary>
           <div class="rmt-settings-section-body">
           <div class="rmt-api-source-grid" role="group" aria-label="独立 API 配置方式">
-            <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-import-current aria-pressed="false"><span class="rmt-api-source-badge">要求</span><b>1.1.18 一键配置</b><small>读取酒馆当前连接</small></button>
+            <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-import-current aria-pressed="false"><span class="rmt-api-source-badge">凭证绑定</span><b>一键配置</b><small>读取酒馆当前连接</small></button>
             <button type="button" class="menu_button rmt-api-source-card" data-rmt-api-select-manual aria-pressed="false"><span class="rmt-api-source-badge">OPENAI</span><b>手动配置</b><small>URL · Key · 模型</small></button>
           </div>
+          <div data-rmt-api-host-capability role="status"></div>
           <div class="rmt-api-status" data-rmt-api-status role="status">○ 一键连接未配置</div>
           <div class="rmt-api-source-panel" data-rmt-api-profile-panel>
             <label class="rmt-settings-field"><span>连接配置</span><select class="text_pole" data-rmt-api-profile><option value="">选择 Connection Manager 配置</option></select></label>

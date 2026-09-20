@@ -216,3 +216,33 @@ ${r} .rmt-phone-page-header{grid-template-columns:44px 42px minmax(0,1fr)!import
 @media(prefers-reduced-motion:reduce){${r} :is(.rmt-workspace-card,.rmt-interior-hotspot){transition:none!important}}
 `;
 }
+
+
+// Layout only. Keep full labels and existing actions, including modal controls
+// outside .rmt-body. This runs after theme/component styles to avoid conflicts.
+export function capsuleCss(root = '#heartbeat_memories_overlay') {
+    const r = root + '.rmt-workspace[data-rmt-theme-mode]';
+    const groups = ':is(.rmt-recovery-actions,.rmt-actions,.rmt-mode-actions,.rmt-filter,.rmt-cg-card-actions,.rmt-cg-prompt-actions,.rmt-cg-prompt-secondary,.rmt-manage-actions,.rmt-manage-category-actions,.rmt-mail-actions,.rmt-mail-filters,.rmt-heart-top-actions,.rmt-heart-summary-actions,.rmt-room-heading-actions,.rmt-room-location-actions,.rmt-dialogue-actions,.rmt-loading-actions,.rmt-travel-dialogue-actions,.rmt-ending-confession-actions,.rmt-ending-easter-controls,.rmt-current-archive-actions)';
+    return `
+${r} .rmt-btn,${r} .rmt-body button.rmt-btn{display:inline-flex;align-items:center!important;justify-content:center!important;gap:6px;box-sizing:border-box!important;min-width:0;max-width:100%;min-height:44px!important;height:auto!important;padding:10px 14px!important;margin:0!important;border-radius:24px!important;font-family:inherit!important;font-size:15px!important;line-height:1.4!important;letter-spacing:normal!important;white-space:normal!important;word-break:normal;overflow-wrap:anywhere;text-align:center;vertical-align:middle;touch-action:manipulation}
+${r} .rmt-btn>i,${r} .rmt-btn>svg{flex-shrink:0}
+${r} .rmt-btn[hidden]{display:none!important}
+${r} ${groups}{display:flex;align-items:stretch;justify-content:flex-start;flex-wrap:wrap;gap:8px;min-width:0;max-width:100%}
+${r} ${groups}>.rmt-btn{flex:0 1 auto;width:auto;min-width:0;max-width:100%}
+${r} :is(.rmt-recovery-actions,.rmt-cg-prompt-actions)>.rmt-btn{flex:1 1 auto;width:auto!important}
+${r} .rmt-recovery-actions{margin-top:12px}
+${r} .rmt-cg-prompt-secondary>small{flex-basis:100%}
+${r} :is(.rmt-participant-dialog,.rmt-cg-prompt-dialog) .rmt-btn{color:var(--rmt-theme-text);background:var(--rmt-theme-surface-solid);border:1px solid var(--rmt-theme-border)}
+${r} .rmt-participant-dialog footer{justify-content:flex-end;gap:8px}
+${r} :is(.rmt-workspace-tabs,.rmt-workspace-groups,.rmt-layout-switch) button{box-sizing:border-box;max-width:100%;min-width:0;line-height:1.4;white-space:normal;word-break:normal;overflow-wrap:anywhere;text-align:center}
+${r} :is(.rmt-filter,.rmt-workspace-groups) button{flex:0 1 auto}
+${r} .rmt-layout-switch{flex-wrap:wrap;max-width:100%}
+${r} .rmt-btn:focus-visible{outline:2px solid var(--rmt-theme-accent-ink);outline-offset:3px}
+@media(max-width:600px){
+ ${r} .rmt-body .rmt-current-archive-actions{display:flex!important;gap:8px}
+ ${r} .rmt-body .rmt-current-archive-actions>.rmt-btn{flex:1 1 144px;width:auto!important}
+ ${r} .rmt-body :is(.rmt-travel-dialogue-actions,.rmt-ending-confession-actions,.rmt-ending-easter-controls){display:flex;flex-wrap:wrap;gap:8px}
+ ${r} .rmt-body :is(.rmt-travel-dialogue-actions,.rmt-ending-confession-actions,.rmt-ending-easter-controls)>.rmt-btn{flex:1 1 112px}
+}
+`;
+}

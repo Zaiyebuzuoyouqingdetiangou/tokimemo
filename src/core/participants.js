@@ -47,6 +47,7 @@ function people(raw) {
         return {
             id,
             name: string(person.name, 'person.name'),
+            ...(person.identity === 'user' ? { identity: 'user' } : {}),
             sourceRefs: array(person.sourceRefs, 'person.sourceRefs').map(sourceRef),
         };
     });

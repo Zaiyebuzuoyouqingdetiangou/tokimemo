@@ -10,6 +10,7 @@ import * as core_archiveCover from '../core/archiveCover.js';
 import * as core_constants from '../core/constants.js';
 import * as cast_looks from '../core/castLooks.js';
 import * as core_context from '../core/context.js';
+import * as host_compatibility from '../core/hostCompatibility.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
@@ -358,11 +359,15 @@ export async function loadMemoryWorldInfoBook(context, worldName, signal = null,
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     if (typeof context.loadWorldInfo !== 'function') throw new Error('当前 SillyTavern 没有公开的世界书读取接口。');
     const name = options.participantSource ? String(worldName ?? '') : core_text.normalizeText(worldName, 240);
-    const rawNames = typeof context.getWorldInfoNames === 'function' ? await sourceGuard.boundedSourceRead(() => context.getWorldInfoNames(), signal) : [];
+    // Old hosts could already read an explicitly selected book by name. Adding the
+    // interactive list adapter must not make that existing path depend on listing.
+    const validateListedName = typeof context.getWorldInfoNames === 'function'
+        && !host_compatibility.isAdaptedWorldInfoNameReader(context.getWorldInfoNames);
+    const rawNames = validateListedName ? await sourceGuard.boundedSourceRead(() => context.getWorldInfoNames(), signal) : [];
     const names = options.participantSource ? (Array.isArray(rawNames) ? rawNames.filter(value => typeof value === 'string') : [])
         : core_text.cleanArray(rawNames, 500, 240);
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    if (!name || (typeof context.getWorldInfoNames === 'function' && !names.includes(name))) throw new Error('所选世界书已经不存在，或当前 SillyTavern 无法读取。');
+    if (!name || (validateListedName && !names.includes(name))) throw new Error('所选世界书已经不存在，或当前 SillyTavern 无法读取。');
     const data = await sourceGuard.boundedSourceRead(() => context.loadWorldInfo(name), signal);
     const entries = safeOwnDataValue(data, 'entries');
     if (!entries || typeof entries !== 'object') throw new Error('世界书未返回有效条目列表。');

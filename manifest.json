@@ -1,11 +1,11 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.104-tt-cg-r84.28-task-recovery",
+  "js": "index.js?heartbeat=0.8.104-tt-cg-phase9-host-appearance-layout",
   "author": "Toto",
   "version": "0.8.104",
   "auto_update": true,
-  "minimum_client_version": "1.18.0",
+  "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"

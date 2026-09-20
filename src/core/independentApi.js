@@ -6,7 +6,7 @@ import * as output_budget from './outputBudget.js';
 import * as core_constants from './constants.js';
 import * as core_text from './text.js';
 
-export const PROFILE_ONE_CLICK_UI_VERSION = '1.1.18';
+export const PROFILE_ONE_CLICK_UI_VERSION = '凭证绑定';
 
 const MANUAL_STATUS_ENDPOINT = '/api/backends/chat-completions/status';
 const MANUAL_GENERATE_ENDPOINT = '/api/backends/chat-completions/generate';
@@ -47,7 +47,7 @@ export function assertConnectionManagerProfileSupport(service) {
     const validService = typeof service?.validateProfile === 'function' && typeof service?.sendRequest === 'function';
     if (validService && connectionManagerHasProfileSecrets(service) && connectionManagerSupportsRequestOverrides(service)) return true;
     throw apiError(
-        `一键配置要求 ${PROFILE_ONE_CLICK_UI_VERSION} 的 Connection Manager 能力。当前页面未提供安全的 Profile Secret 与模型覆盖能力；本次没有发送请求。`,
+        '当前酒馆没有一键配置所需的配置与密钥绑定能力（Profile Secret）或模型覆盖能力。请使用手动独立 API，填写地址、密钥和模型；不会改动主聊天连接。本次没有发送请求。',
         'RMT_PROFILE_CAPABILITY',
     );
 }

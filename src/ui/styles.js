@@ -183,6 +183,7 @@ export function ensureSettingsStyles() {
 #${core_constants.SETTINGS_ID}_launcher button{min-height:44px!important;width:100%;padding:10px!important;white-space:normal!important}
 #${core_constants.SETTINGS_ID}_launcher button:focus-visible{outline:3px solid currentColor;outline-offset:3px}
 `;
+    style.textContent += ui_workspaceStyles.capsuleCss('#' + core_constants.OVERLAY_ID);
     document.head.appendChild(style);
 }
 
@@ -1141,6 +1142,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
     style.textContent += ui_readingStyles.readingCss('#' + core_constants.OVERLAY_ID);
     style.textContent += ui_workspaceStyles.workspaceCss('#' + core_constants.OVERLAY_ID);
     style.textContent += postcard_design_view.postcardDesignCss('#' + core_constants.OVERLAY_ID);
+    style.textContent += ui_workspaceStyles.capsuleCss('#' + core_constants.OVERLAY_ID);
     document.head.appendChild(style);
 }
 
