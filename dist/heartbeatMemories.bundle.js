@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 140
-// Source SHA-256: 5ecad32d83b87647466ad9d9be94a6d04eadca06239f2209dd2bd13f67010611
+// Source SHA-256: 3219993a9371994b89c22ed9abc2e7c834ed4bf43c3a33f79871c0b0f5367d49
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -13075,7 +13075,7 @@ function structuralThemeCss(root) {
         'archive-card','character-card','archive-portal','portal-card','calendar-quick','choice-card','card','info','event-list','event','cg-caption','adv-reader','adv-bulkbar',
         'memory-gate','memory-settings-status','task-banner','external-memory-row','archive-readonly-control','archive-overview-item','archive-group-entry',
         'settings-header','settings-content','settings-card','api-source-card','api-source-panel','api-status','performance-diagnostic-output',
-        'avatar-dialog-card','avatar-dialog-bubble','memory-wi-picker-card','memory-wi-book','memory-wi-entry','loading-card',
+        'avatar-dialog-card','avatar-dialog-bubble','memory-wi-picker-card','memory-wi-book','memory-wi-entry','loading-card','task-center','workspace-empty','cg-format','inline-status',
         'heart-summary','heart-current-line','heart-greeting-group','heart-drama-card','heart-strip-card','heart-single-drama','heart-season-stage','heart-setting','heart-script-bubble','heart-panel','heart-panel-line',
         'ending-summary','ending-route','ending-detail','ending-confession','ending-epilogue','confession-card','ending-confession-stage','ending-confession-bubble','achievement-card',
         'calendar-hero','calendar-paper','calendar-month-head','calendar-day','calendar-pending','calendar-todo','calendar-filter','calendar-sticky-panel','calendar-master-todo','calendar-special-notes','calendar-mood-section','calendar-sticky','calendar-mood-note',
@@ -15115,19 +15115,25 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-topbar button:active,.rmt-btn:active{transform:translateY(0)}
 .rmt-topbar button:disabled,.rmt-btn:disabled{opacity:.42;cursor:not-allowed;transform:none;box-shadow:none}
 .rmt-topbar button[data-rmt-action="back"]{white-space:nowrap}
-.rmt-topbar button[data-rmt-action="tasks"]{position:relative}
-.rmt-task-count{display:inline-grid;place-items:center;min-width:16px;height:16px;margin-left:4px;padding:0 4px;border-radius:999px;background:#e89ab8;color:#fff;font-size:10px;line-height:1}
+.rmt-topbar button[data-rmt-action="tasks"]{position:relative;display:inline-grid;place-items:center;width:36px;height:36px;padding:0}
+.rmt-topbar button[data-rmt-action="tasks"] i{font-size:15px;line-height:1;pointer-events:none}
+.rmt-task-count{display:inline-grid;place-items:center;min-width:16px;height:16px;margin-left:4px;padding:0 4px;border-radius:999px;background:var(--rmt-theme-accent,#e89ab8);color:var(--rmt-theme-wash-ink,#fff);font-size:10px;line-height:1}
+.rmt-topbar button[data-rmt-action="tasks"] .rmt-task-count{position:absolute;top:-4px;right:-4px;margin:0}
 .rmt-task-count[hidden]{display:none!important}
-.rmt-task-center{position:absolute;z-index:30;top:62px;right:12px;width:min(420px,calc(100% - 24px));max-height:min(70vh,560px);overflow:auto;padding:12px 12px 14px;border:1px solid #c9dbe5;border-radius:16px;background:#fff;box-shadow:0 16px 40px rgba(13,22,34,.18)}
+.rmt-task-center{position:absolute;z-index:30;top:62px;right:12px;width:min(420px,calc(100% - 24px));max-height:min(70vh,560px);overflow:auto;padding:12px 12px 14px;border:1px solid var(--rmt-theme-border,#c9dbe5);border-radius:16px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#243246);box-shadow:0 16px 40px var(--rmt-theme-shadow,rgba(13,22,34,.18))}
 .rmt-task-center[hidden]{display:none!important}
 .rmt-task-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
-.rmt-task-note,.rmt-task-empty{margin:0 0 10px;color:#728093;font-size:12px;line-height:1.5}
-.rmt-task-center h3{margin:12px 0 8px;font-size:13px;color:#50627b}
-.rmt-task-row{padding:10px 0;border-top:1px solid #e4eef3}
+.rmt-task-note,.rmt-task-empty{margin:0 0 10px;color:var(--rmt-theme-muted,#728093);font-size:12px;line-height:1.5}
+.rmt-task-center h3{margin:12px 0 8px;font-size:13px;color:var(--rmt-theme-text,#50627b)}
+.rmt-task-row{padding:10px 0;border-top:1px solid var(--rmt-theme-border,#e4eef3)}
 .rmt-task-row header{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
-.rmt-task-row header span{flex:0 0 auto;color:#9d6d82;font-size:12px}
-.rmt-task-row p{margin:4px 0 0;color:#728093;font-size:12px;line-height:1.45}
+.rmt-task-row header span{flex:0 0 auto;color:var(--rmt-theme-accent-ink,#9d6d82);font-size:12px}
+.rmt-task-row p{margin:4px 0 0;color:var(--rmt-theme-muted,#728093);font-size:12px;line-height:1.45}
 .rmt-task-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.rmt-queue-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:4px 0 12px}
+.rmt-queue-bar small{color:var(--rmt-theme-muted,#728093);font-size:12px;line-height:1.45}
+.rmt-queue-pick{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:8px;min-height:32px;color:var(--rmt-theme-text,#52647a);font-size:12px;cursor:pointer}
+.rmt-queue-pick input{width:16px;height:16px;accent-color:var(--rmt-theme-accent-ink,#9d6d82)}
 .rmt-body{
   position:relative;z-index:4;flex:1;min-height:0;overflow:auto;
   background:
@@ -15200,13 +15206,13 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-choice-card:disabled{opacity:.43;cursor:not-allowed;transform:none!important;box-shadow:none}
 .rmt-choice-card b{font-size:17px;color:#4f6179;padding-right:34px}.rmt-choice-card p{color:#6f7d8f;line-height:1.65;margin:0}
 .rmt-choice-card small{margin-top:auto;color:#9aa5b0}
-.rmt-loading,.rmt-error{min-height:360px;display:grid;place-items:center;text-align:center;padding:28px;line-height:1.7;color:#5e6d80}
+.rmt-loading,.rmt-error{min-height:360px;display:grid;place-items:center;text-align:center;padding:28px;line-height:1.7;color:var(--rmt-theme-text,#5e6d80)}
 .rmt-spinner{
   width:40px;height:40px;border:3px solid rgba(113,155,175,.18);border-top-color:var(--gs-pink);
   border-right-color:var(--gs-blue);border-radius:50%;animation:rmtSpin .8s linear infinite;margin:auto auto 14px
 }
 @keyframes rmtSpin{to{transform:rotate(360deg)}}
-.rmt-inline-status{position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:rgba(247,251,253,.94);backdrop-filter:none;font-weight:700;color:#5c6d82}
+.rmt-inline-status{position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:color-mix(in srgb,var(--rmt-theme-bg,#f7fbfd) 92%,transparent);backdrop-filter:none;font-weight:700;color:var(--rmt-theme-text,#5c6d82)}
 .rmt-inline-status[hidden]{display:none}
 .rmt-inline-error{margin:10px;padding:10px 12px;border:1px solid #e9a7b5;border-radius:12px;background:#fff5f7;color:#8f4d5f;white-space:pre-wrap}
 
@@ -15675,7 +15681,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 #${core_constants.SETTINGS_ID} .rmt-settings-check{font-size:10px!important;line-height:1.45;color:#6f7d8c}
 #${core_constants.SETTINGS_ID} .rmt-api-note{font-size:9px;line-height:1.55;opacity:.72;color:#758493}
 #${core_constants.SETTINGS_ID} .rmt-memory-settings-status{font-size:10px;line-height:1.55;color:#718092;white-space:pre-wrap;padding:7px 8px;border-radius:9px;background:#f6fafc}
-.rmt-loading-card{max-width:560px;padding:24px 26px;border:1px solid #d3e3ea;border-radius:18px;background:rgba(255,255,255,.82);box-shadow:0 10px 30px rgba(67,91,108,.08)}
+.rmt-loading-card{max-width:560px;padding:24px 26px;border:1px solid var(--rmt-theme-border,#d3e3ea);border-radius:18px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#334155);box-shadow:0 10px 30px var(--rmt-theme-shadow,rgba(67,91,108,.08))}
 .rmt-task-banner{margin:0 0 12px;padding:10px 13px;border:1px solid #cfe3eb;border-radius:13px;background:linear-gradient(90deg,rgba(250,219,232,.72),rgba(218,239,247,.72));display:flex;align-items:center;gap:10px;color:#536679}.rmt-task-banner b{display:block;font-size:12px}.rmt-task-banner small{display:block;margin-top:2px;font-size:10px;line-height:1.45;color:#758795}.rmt-task-dot{width:9px;height:9px;border-radius:50%;background:#ed9fbe;box-shadow:0 0 0 4px rgba(237,159,190,.16);animation:rmtPulse 1.5s ease-in-out infinite}
 .rmt-loading-note{opacity:.66;margin-top:8px;font-size:11px;line-height:1.55}.rmt-loading-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:15px}
 #${core_constants.MENU_ID}{cursor:pointer}
@@ -15960,6 +15966,20 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
     // CG controls are structural UI, not part of the generated artwork. Keep the
     // editor opaque and locally scoped so host themes cannot wash out its text.
     style.textContent += `
+#${core_constants.OVERLAY_ID} .rmt-task-center,#${core_constants.OVERLAY_ID} .rmt-loading-card,#${core_constants.OVERLAY_ID} .rmt-workspace-empty,#${core_constants.OVERLAY_ID} .rmt-cg-format{background:var(--rmt-theme-surface-solid)!important;color:var(--rmt-theme-text)!important;border-color:var(--rmt-theme-border)!important;-webkit-text-fill-color:currentColor!important}
+#${core_constants.OVERLAY_ID} .rmt-inline-status{background:color-mix(in srgb,var(--rmt-theme-bg) 92%,transparent)!important;color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important}
+#${core_constants.OVERLAY_ID} .rmt-loading{color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important;background:transparent!important}
+#${core_constants.OVERLAY_ID} :is(.rmt-task-note,.rmt-task-empty,.rmt-task-row p,.rmt-task-center h3,.rmt-queue-bar small,.rmt-cg-format small){color:var(--rmt-theme-muted)!important;-webkit-text-fill-color:currentColor!important}
+#${core_constants.OVERLAY_ID} :is(.rmt-task-head b,.rmt-task-row header b,.rmt-queue-pick){color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important}
+#${core_constants.OVERLAY_ID} .rmt-task-row{border-color:var(--rmt-theme-border)!important}
+#${core_constants.OVERLAY_ID} .rmt-task-row header span{color:var(--rmt-theme-accent-ink)!important;-webkit-text-fill-color:currentColor!important}
+#${core_constants.OVERLAY_ID} .rmt-topbar button[data-rmt-action="tasks"]{width:36px;height:36px;padding:0!important}
+#${core_constants.OVERLAY_ID} .rmt-topbar button[data-rmt-action="tasks"] i{font-size:15px!important;line-height:1!important;-webkit-text-fill-color:currentColor!important}
+#${core_constants.OVERLAY_ID} .rmt-topbar button[data-rmt-action="tasks"] .rmt-task-count{font-size:10px!important;color:var(--rmt-theme-wash-ink,#fff)!important;-webkit-text-fill-color:currentColor!important;background:var(--rmt-theme-accent)!important}
+#${core_constants.OVERLAY_ID} :is(.rmt-adv,.rmt-event-list,.rmt-event,.rmt-event-detail){color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important}
+#${core_constants.OVERLAY_ID} .rmt-adv{background:var(--rmt-theme-bg)!important}
+#${core_constants.OVERLAY_ID} :is(.rmt-event-list,.rmt-event){background:var(--rmt-theme-surface-alpha)!important;border-color:var(--rmt-theme-border)!important}
+#${core_constants.OVERLAY_ID} .rmt-event:hover,#${core_constants.OVERLAY_ID} .rmt-event.active{background:var(--rmt-theme-soft)!important;color:var(--rmt-theme-text)!important;border-color:var(--rmt-theme-border)!important}
 #${core_constants.OVERLAY_ID} .rmt-recovery-status{margin:12px 0;padding:16px;border:1px solid var(--rmt-theme-border,#cbdce6);border-left:4px solid var(--rmt-theme-accent-ink,#5f5770);border-radius:12px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#334155);font-size:14px;line-height:1.65;overflow-wrap:anywhere}
 #${core_constants.OVERLAY_ID} .rmt-recovery-status p{margin:8px 0;white-space:pre-wrap}
 #${core_constants.OVERLAY_ID} .rmt-recovery-status .rmt-btn{min-height:44px;font-size:14px;max-width:100%;white-space:normal}
@@ -40835,7 +40855,10 @@ const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
 const core_text = __m_core_text_js;
+const generation_client = __m_generation_client_js;
 const ui_overlay = __m_ui_overlay_js;
+const runtimeState = __m_core_state_js.state;
+
 
 
 
@@ -40844,6 +40867,161 @@ const ui_overlay = __m_ui_overlay_js;
 
 
 let painting = false;
+let pumping = false;
+const queue = [];
+const picks = new Set();
+let pickScope = '';
+const QUEUE_STATUS = { queued: '排队', running: '进行中', done: '完成', failed: '失败', cancelled: '已取消' };
+
+function currentScope() {
+    try { return core_context.chatScopeKey(); }
+    catch { return ''; }
+}
+
+function syncPickScope() {
+    const scope = currentScope();
+    if (pickScope && scope && pickScope !== scope) picks.clear();
+    if (scope) pickScope = scope;
+}
+
+function queuePickHtml(mode) {
+    syncPickScope();
+    const checked = picks.has(mode) ? 'checked' : '';
+    return `<label class="rmt-queue-pick"><input type="checkbox" data-rmt-queue-mode="${core_text.esc(mode)}" ${checked}>排队</label>`;
+}
+
+function setQueuePick(mode, on) {
+    syncPickScope();
+    if (!mode || mode === core_constants.MODE.HEART) return;
+    if (on) picks.add(mode);
+    else picks.delete(mode);
+}
+
+function queuedForScope(scope = currentScope()) {
+    return queue.filter(item => item.scope === scope && item.status === 'queued');
+}
+
+function dropForeignQueue() {
+    const scope = currentScope();
+    if (!scope) return;
+    for (const item of queue) {
+        if (item.scope !== scope && (item.status === 'queued' || item.status === 'running')) item.status = 'cancelled';
+    }
+}
+
+function trimQueue() {
+    const settled = queue.filter(item => item.status !== 'queued' && item.status !== 'running');
+    const extra = settled.length - 8;
+    if (extra <= 0) return;
+    let removed = 0;
+    for (let i = 0; i < queue.length && removed < extra; i += 1) {
+        if (queue[i].status !== 'queued' && queue[i].status !== 'running') {
+            queue.splice(i, 1);
+            i -= 1;
+            removed += 1;
+        }
+    }
+}
+
+function enqueueSelectedModes(modes) {
+    const scope = currentScope();
+    if (!scope) return 0;
+    let added = 0;
+    for (const mode of modes) {
+        if (!mode || mode === core_constants.MODE.HEART || !Object.values(core_constants.MODE).includes(mode)) continue;
+        if (queue.some(item => item.scope === scope && item.mode === mode && (item.status === 'queued' || item.status === 'running'))) continue;
+        queue.push({
+            id: `queue-${Date.now().toString(36)}-${queue.length}`,
+            mode,
+            label: core_constants.MODE_LABEL[mode] || mode,
+            scope,
+            status: 'queued',
+            attached: false,
+        });
+        picks.delete(mode);
+        added += 1;
+    }
+    trimQueue();
+    refreshTaskCenterView();
+    void pumpQueue();
+    return added;
+}
+
+function cancelQueuedItem(id) {
+    const item = queue.find(row => row.id === id && row.status === 'queued');
+    if (!item) return false;
+    item.status = 'cancelled';
+    trimQueue();
+    refreshTaskCenterView();
+    return true;
+}
+
+function cancelQueuedForCurrentScope() {
+    for (const item of queuedForScope()) item.status = 'cancelled';
+    trimQueue();
+}
+
+async function pumpQueue() {
+    if (pumping) return;
+    pumping = true;
+    try {
+        for (;;) {
+            dropForeignQueue();
+            const scope = currentScope();
+            const attached = queue.find(item => item.status === 'running' && item.attached && item.scope === scope);
+            if (attached) {
+                if (core_requestCoordinator.isModeGenerating(attached.mode) || runtimeState.busy) return;
+                attached.status = 'done';
+                attached.attached = false;
+                trimQueue();
+                refreshTaskCenterView();
+            }
+            const next = queue.find(item => item.status === 'queued' && item.scope === scope);
+            if (!next || runtimeState.busy) return;
+            if (core_requestCoordinator.isModeGenerating(next.mode)) {
+                next.status = 'running';
+                next.attached = true;
+                refreshTaskCenterView();
+                return;
+            }
+            next.status = 'running';
+            next.attached = false;
+            refreshTaskCenterView();
+            let result;
+            try {
+                result = await generation_client.generateMode(next.mode, { background: true });
+            } catch (error) {
+                if (next.status === 'running') next.status = error?.name === 'AbortError' ? 'cancelled' : 'failed';
+                trimQueue();
+                refreshTaskCenterView();
+                if (currentScope() !== scope) return;
+                continue;
+            }
+            if (next.status !== 'running') {
+                trimQueue();
+                refreshTaskCenterView();
+                continue;
+            }
+            if (result == null && core_requestCoordinator.isModeGenerating(next.mode)) {
+                next.attached = true;
+                refreshTaskCenterView();
+                return;
+            }
+            if (result?.status === 'cancelled') next.status = 'cancelled';
+            else if (result?.status === 'failed' || result?.status === 'blocked') next.status = 'failed';
+            else if (result != null) next.status = 'done';
+            else {
+                const settled = core_requestCoordinator.listChatTaskSnapshot().find(row => !row.running && row.label === next.label);
+                next.status = settled?.phase === 'cancelled' || settled?.phaseLabel === '已取消' ? 'cancelled' : 'failed';
+            }
+            trimQueue();
+            refreshTaskCenterView();
+            if (currentScope() !== scope) return;
+        }
+    } finally {
+        pumping = false;
+    }
+}
 
 function taskPanel() {
     return document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-task-center]`);
@@ -40861,7 +41039,7 @@ function ensureTaskCenterChrome(overlay) {
         button.dataset.rmtAction = 'tasks';
         button.setAttribute('aria-label', '任务');
         button.title = '任务';
-        button.innerHTML = '任务 <span class="rmt-task-count" data-rmt-task-count hidden>0</span>';
+        button.innerHTML = '<i class="fa-solid fa-list-check" aria-hidden="true"></i><span class="rmt-task-count" data-rmt-task-count hidden>0</span>';
         const close = bar.querySelector('[data-rmt-action="close"]');
         if (close) bar.insertBefore(button, close);
         else bar.appendChild(button);
@@ -40884,12 +41062,14 @@ function hideTaskCenter() {
 
 function syncTaskCenterBadge() {
     const running = core_requestCoordinator.listChatTaskSnapshot().filter(row => row.running).length;
+    const waiting = queuedForScope().length;
+    const total = running + waiting;
     const badge = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-task-count]`);
     if (!badge) return;
-    badge.hidden = running <= 0;
-    badge.textContent = String(Math.min(99, running));
+    badge.hidden = total <= 0;
+    badge.textContent = String(Math.min(99, total));
     const button = taskButton();
-    if (button) button.setAttribute('aria-label', running ? `任务，${running} 项进行中` : '任务');
+    if (button) button.setAttribute('aria-label', total ? `任务，${running} 项进行中，${waiting} 项排队` : '任务');
 }
 
 function paintTaskCenter(panel) {
@@ -40907,15 +41087,29 @@ function paintTaskCenter(panel) {
         ${row.canOpen ? `<button type="button" class="rmt-btn" data-rmt-action="task-open" data-rmt-task-id="${esc(row.id)}">回到原聊天并打开结果</button>` : ''}
       </div>
     </article>`;
+    const scope = currentScope();
+    const mine = queue.filter(item => item.scope === scope);
+    const waiting = mine.filter(item => item.status === 'queued');
+    const active = mine.find(item => item.status === 'running');
+    const recentQueue = mine.filter(item => item.status !== 'queued' && item.status !== 'running').slice(-4);
+    const queueRow = (item, order) => `<article class="rmt-task-row">
+      <header><b>${order ? `${order}. ` : ''}${esc(item.label)}</b><span>${esc(QUEUE_STATUS[item.status] || item.status)}</span></header>
+      <p>当前聊天 · 串行队列</p>
+      ${item.status === 'queued' ? `<div class="rmt-task-actions"><button type="button" class="rmt-btn" data-rmt-action="task-queue-remove" data-rmt-queue-id="${esc(item.id)}">移出队列</button></div>` : ''}
+    </article>`;
+    const queueHtml = (active || waiting.length || recentQueue.length)
+        ? `<h3>排队</h3>${active ? `<p class="rmt-task-note">正在串行处理「${esc(active.label)}」，完成后才开始下一项。</p>` : ''}${waiting.map((item, index) => queueRow(item, index + 1)).join('')}${recentQueue.map(item => queueRow(item, 0)).join('')}`
+        : '';
     const top = panel.scrollTop;
     panel.innerHTML = `<div class="rmt-task-head">
       <b>任务</b>
       <button type="button" class="rmt-btn" data-rmt-action="task-center-close">关闭</button>
     </div>
-    <p class="rmt-task-note">这里只显示任务名称、阶段和是否落盘。不会显示密钥、提示词或世界书正文。</p>
+    <p class="rmt-task-note">这里只显示任务名称、阶段和是否落盘。不会显示密钥、提示词或世界书正文。档案整理完成后可以多选，再按顺序一次生成一项。</p>
+    ${queueHtml}
     ${running.length ? running.map(rowHtml).join('') : '<p class="rmt-task-empty">当前没有进行中的任务。</p>'}
     <div class="rmt-task-actions">
-      <button type="button" class="rmt-btn" data-rmt-action="task-cancel-current" ${currentNames.length ? '' : 'disabled'}>取消当前聊天全部任务</button>
+      <button type="button" class="rmt-btn" data-rmt-action="task-cancel-current" ${currentNames.length || waiting.length ? '' : 'disabled'}>取消当前聊天全部任务</button>
     </div>
     ${settled.length ? `<h3>刚结束</h3>${settled.map(rowHtml).join('')}` : ''}`;
     panel.scrollTop = top;
@@ -40925,12 +41119,15 @@ function refreshTaskCenterView() {
     if (painting) return;
     painting = true;
     try {
+        syncPickScope();
+        dropForeignQueue();
         syncTaskCenterBadge();
         const panel = taskPanel();
         if (panel && !panel.hidden) paintTaskCenter(panel);
     } finally {
         painting = false;
     }
+    if (!pumping) void pumpQueue();
 }
 
 // The bundle initializes this file before requestCoordinator finishes, because the
@@ -41008,11 +41205,34 @@ function handleTaskCenterAction(action, actionEl) {
         refreshTaskCenterView();
         return;
     }
+    if (action === 'task-queue-remove') {
+        cancelQueuedItem(actionEl?.dataset?.rmtQueueId || '');
+        return;
+    }
+    if (action === 'queue-selected') {
+        syncPickScope();
+        const order = core_constants.ARCHIVE_PORTAL_MODES;
+        const added = enqueueSelectedModes([...picks].sort((a, b) => order.indexOf(a) - order.indexOf(b)));
+        if (!added) {
+            globalThis.toastr?.info?.('先勾选要排队的项目。已经在队列里的不会重复加入。', '心迹回廊');
+            return;
+        }
+        const panel = taskPanel();
+        if (panel) {
+            panel.hidden = false;
+            paintTaskCenter(panel);
+        }
+        globalThis.toastr?.info?.(`已把 ${added} 项排进任务中心，会按顺序一次生成一项。`, '心迹回廊');
+        return;
+    }
     if (action === 'task-cancel-current') {
         const names = core_requestCoordinator.currentChatBlockingTasks();
-        if (!names.length) return;
-        if (!ui_overlay.confirmExplicitAction('取消当前聊天的全部任务？', `会中止这些任务：\n${names.map(label => `· ${label}`).join('\n')}\n\n其他聊天的任务不受影响。已落盘成果保留，未完成部分停止，不会自动重试。`, { destructive: true })) return;
-        core_requestCoordinator.cancelCurrentChatBlockingTasks(null, 'task-center');
+        const waiting = queuedForScope().map(item => item.label);
+        if (!names.length && !waiting.length) return;
+        const lines = [...names, ...waiting.filter(label => !names.includes(label))];
+        if (!ui_overlay.confirmExplicitAction('取消当前聊天的全部任务？', `会中止这些任务：\n${lines.map(label => `· ${label}`).join('\n')}\n\n还在排队、尚未开始的项目也会移出。其他聊天的任务不受影响。已落盘成果保留，未完成部分停止，不会自动重试。`, { destructive: true })) return;
+        cancelQueuedForCurrentScope();
+        if (names.length) core_requestCoordinator.cancelCurrentChatBlockingTasks(null, 'task-center');
         globalThis.toastr?.info?.('已中止当前聊天的任务。', '心迹回廊');
         refreshTaskCenterView();
         return;
@@ -41025,6 +41245,9 @@ function handleTaskCenterAction(action, actionEl) {
     }
 }
 
+__m_ui_taskCenter_js.queuePickHtml = queuePickHtml;
+__m_ui_taskCenter_js.setQueuePick = setQueuePick;
+__m_ui_taskCenter_js.enqueueSelectedModes = enqueueSelectedModes;
 __m_ui_taskCenter_js.ensureTaskCenterChrome = ensureTaskCenterChrome;
 __m_ui_taskCenter_js.hideTaskCenter = hideTaskCenter;
 __m_ui_taskCenter_js.syncTaskCenterChrome = syncTaskCenterChrome;
@@ -42930,7 +43153,7 @@ function openOverlay() {
               <button type="button" data-rmt-action="workspace-expand" aria-label="展开窗口" title="展开窗口"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>
               <button type="button" data-rmt-action="regenerate" hidden aria-label="增量追加" title="增量追加">＋</button>
               <button type="button" data-rmt-action="manage" hidden aria-label="管理" title="管理">⋯</button>
-              <button type="button" data-rmt-action="tasks" aria-label="任务" title="任务">任务 <span class="rmt-task-count" data-rmt-task-count hidden>0</span></button>
+              <button type="button" data-rmt-action="tasks" aria-label="任务" title="任务"><i class="fa-solid fa-list-check" aria-hidden="true"></i><span class="rmt-task-count" data-rmt-task-count hidden>0</span></button>
               <button type="button" data-rmt-action="close" aria-label="关闭档案室">×</button>
             </div>
             ${workspace_ui.workspaceNavHtml()}
@@ -44424,6 +44647,14 @@ function handleOverlayClick(event) {
     if (songButton) return void song_view.handleThemeSongAction(songButton.dataset.rmtSong, songButton.dataset.rmtSongId);
     const mailButton = event.target.closest?.('[data-rmt-inbox]');
     if (mailButton) return void ui_inboxView.handleInboxAction(mailButton.dataset.rmtInbox, mailButton.dataset.rmtInboxId);
+    const queuePick = event.target.closest?.('.rmt-queue-pick');
+    if (queuePick) {
+        const input = queuePick.querySelector('[data-rmt-queue-mode]');
+        queueMicrotask(() => {
+            if (input) ui_taskCenter.setQueuePick(input.dataset.rmtQueueMode, input.checked);
+        });
+        return;
+    }
     const generateModeButton = event.target.closest?.('[data-rmt-generate-mode]');
     if (generateModeButton) {
         const mode = generateModeButton.dataset.rmtGenerateMode;
@@ -44559,7 +44790,7 @@ function handleOverlayClick(event) {
     if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
     if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
     if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
-    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open') {
+    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-queue-remove' || action === 'queue-selected') {
         return ui_taskCenter.handleTaskCenterAction(action, actionEl);
     }
     if (action === 'close') return closeArchiveOverlayFromUser();
@@ -49965,6 +50196,7 @@ const overlay = __m_ui_overlay_js;
 const home = __m_ui_homeView_js;
 const bookmark = __m_ui_navigationBookmark_js;
 const cgEditor = __m_ui_cgPromptEditor_js;
+const ui_taskCenter = __m_ui_taskCenter_js;
 const ui_workspaceState = __m_ui_workspaceState_js;
 const state = __m_core_state_js.state;
 
@@ -50058,18 +50290,21 @@ function countStatus(key, session) {
         : session.entries || session.events || session.letters || session.locations || session.episodes;
     return Array.isArray(collection) ? `已有 ${collection.length} ${key === 'fireflies' ? '颗光' : '项内容'}` : '已有内容';
 }
-function workspaceCatalogueHtml(portals = [], snapshot = null) {
+function workspaceCatalogueHtml(portals = [], snapshot = null, { ready: archiveReady = false } = {}) {
     ui_workspaceState.loadWorkspacePreferences();
     const sessionMap = new Map(portals.map(item => [item.mode, item.session]));
+    const canQueue = archiveReady && !snapshot;
     const cards = Object.entries(ui_workspaceState.WORKSPACE_ROUTES).filter(([,spec]) => !spec.deep && spec.group === ui_workspaceState.workspace.group).map(([key,spec]) => {
         const meta = { ...snapshots.modePortalMeta(spec.mode), ...(ALIAS_META[key] || {}) };
         const session = sessionMap.get(spec.mode);
         const running = snapshot ? coordinator.isArchiveTargetModeGenerating(spec.mode, snapshot) : coordinator.isModeGenerating(spec.mode);
         const ready = routeHasContent(key, session);
         const status = running ? (ready ? '生成中 · 已有内容可读' : '正在生成') : countStatus(key, session);
-        return `<article class="rmt-archive-portal rmt-workspace-card ${ready ? 'ready' : 'empty'} rmt-archive-portal-${esc(meta.accent)}"><button type="button" class="rmt-portal-open" data-rmt-workspace-route="${key}"><span class="rmt-portal-avatar"><i class="fa-solid ${esc(meta.icon)}" aria-hidden="true"></i></span><span class="rmt-portal-title">${esc(spec.title)}</span><span class="rmt-portal-subtitle">${esc(meta.subtitle)}</span><span class="rmt-portal-status">${esc(status)}</span><span class="rmt-workspace-enter" aria-hidden="true">›</span></button></article>`;
+        const queueable = canQueue && spec.mode && spec.mode !== constants.MODE.HEART;
+        return `<article class="rmt-archive-portal rmt-workspace-card ${ready ? 'ready' : 'empty'} rmt-archive-portal-${esc(meta.accent)}"><button type="button" class="rmt-portal-open" data-rmt-workspace-route="${key}"><span class="rmt-portal-avatar"><i class="fa-solid ${esc(meta.icon)}" aria-hidden="true"></i></span><span class="rmt-portal-title">${esc(spec.title)}</span><span class="rmt-portal-subtitle">${esc(meta.subtitle)}</span><span class="rmt-portal-status">${esc(status)}</span><span class="rmt-workspace-enter" aria-hidden="true">›</span></button>${queueable ? ui_taskCenter.queuePickHtml(spec.mode) : ''}</article>`;
     }).join('');
-    return `<section class="rmt-workspace-catalogue"><header class="rmt-workspace-section-head"><div><h2>内容</h2><p>选择你想看的那一页</p></div><div class="rmt-layout-switch" aria-label="目录显示方式">${[['cards','卡片'],['list','列表']].map(([k,t])=>`<button type="button" data-rmt-workspace-layout="${k}" aria-pressed="${ui_workspaceState.workspace.layout === k}" class="${ui_workspaceState.workspace.layout === k ? 'active' : ''}">${t}</button>`).join('')}</div></header><nav class="rmt-workspace-groups" aria-label="内容分组">${GROUPS.map(([k,t])=>`<button type="button" data-rmt-workspace-group="${k}" class="${ui_workspaceState.workspace.group === k ? 'active' : ''}" aria-current="${ui_workspaceState.workspace.group === k ? 'page' : 'false'}">${t}</button>`).join('')}</nav><div class="rmt-archive-portals rmt-workspace-portals" data-rmt-layout="${ui_workspaceState.workspace.layout}">${cards}</div></section>`;
+    const queueBar = canQueue ? `<div class="rmt-queue-bar"><button type="button" class="rmt-btn" data-rmt-action="queue-selected">把勾选的项目排进任务中心</button><small>换分组后，勾选仍然保留。按目录顺序一次只生成一项。</small></div>` : '';
+    return `<section class="rmt-workspace-catalogue"><header class="rmt-workspace-section-head"><div><h2>内容</h2><p>选择你想看的那一页</p></div><div class="rmt-layout-switch" aria-label="目录显示方式">${[['cards','卡片'],['list','列表']].map(([k,t])=>`<button type="button" data-rmt-workspace-layout="${k}" aria-pressed="${ui_workspaceState.workspace.layout === k}" class="${ui_workspaceState.workspace.layout === k ? 'active' : ''}">${t}</button>`).join('')}</div></header><nav class="rmt-workspace-groups" aria-label="内容分组">${GROUPS.map(([k,t])=>`<button type="button" data-rmt-workspace-group="${k}" class="${ui_workspaceState.workspace.group === k ? 'active' : ''}" aria-current="${ui_workspaceState.workspace.group === k ? 'page' : 'false'}">${t}</button>`).join('')}</nav>${queueBar}<div class="rmt-archive-portals rmt-workspace-portals" data-rmt-layout="${ui_workspaceState.workspace.layout}">${cards}</div></section>`;
 }
 // Move existing validated markup, never replace the underlying archive or task objects.
 function arrangeArchiveWorkspace(body, { portals = [], ready = false, snapshot = null } = {}) {
@@ -50087,7 +50322,7 @@ function arrangeArchiveWorkspace(body, { portals = [], ready = false, snapshot =
     if (ui_workspaceState.workspace.tab === 'content') {
         const readOnlyControl = gate?.querySelector('.rmt-archive-readonly-control');
         if (readOnlyControl) main.appendChild(readOnlyControl);
-        const section = document.createElement('div'); section.innerHTML = workspaceCatalogueHtml(portals, snapshot);
+        const section = document.createElement('div'); section.innerHTML = workspaceCatalogueHtml(portals, snapshot, { ready });
         main.appendChild(section);
     } else {
         ui_workspaceState.workspace.tab = 'archive';

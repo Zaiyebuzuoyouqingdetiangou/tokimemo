@@ -4,9 +4,166 @@ import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_text from '../core/text.js';
+import * as generation_client from '../generation/client.js';
+import { state as runtimeState } from '../core/state.js';
 import * as ui_overlay from './overlay.js';
 
 let painting = false;
+let pumping = false;
+const queue = [];
+const picks = new Set();
+let pickScope = '';
+const QUEUE_STATUS = { queued: '排队', running: '进行中', done: '完成', failed: '失败', cancelled: '已取消' };
+
+function currentScope() {
+    try { return core_context.chatScopeKey(); }
+    catch { return ''; }
+}
+
+function syncPickScope() {
+    const scope = currentScope();
+    if (pickScope && scope && pickScope !== scope) picks.clear();
+    if (scope) pickScope = scope;
+}
+
+export function queuePickHtml(mode) {
+    syncPickScope();
+    const checked = picks.has(mode) ? 'checked' : '';
+    return `<label class="rmt-queue-pick"><input type="checkbox" data-rmt-queue-mode="${core_text.esc(mode)}" ${checked}>排队</label>`;
+}
+
+export function setQueuePick(mode, on) {
+    syncPickScope();
+    if (!mode || mode === core_constants.MODE.HEART) return;
+    if (on) picks.add(mode);
+    else picks.delete(mode);
+}
+
+function queuedForScope(scope = currentScope()) {
+    return queue.filter(item => item.scope === scope && item.status === 'queued');
+}
+
+function dropForeignQueue() {
+    const scope = currentScope();
+    if (!scope) return;
+    for (const item of queue) {
+        if (item.scope !== scope && (item.status === 'queued' || item.status === 'running')) item.status = 'cancelled';
+    }
+}
+
+function trimQueue() {
+    const settled = queue.filter(item => item.status !== 'queued' && item.status !== 'running');
+    const extra = settled.length - 8;
+    if (extra <= 0) return;
+    let removed = 0;
+    for (let i = 0; i < queue.length && removed < extra; i += 1) {
+        if (queue[i].status !== 'queued' && queue[i].status !== 'running') {
+            queue.splice(i, 1);
+            i -= 1;
+            removed += 1;
+        }
+    }
+}
+
+export function enqueueSelectedModes(modes) {
+    const scope = currentScope();
+    if (!scope) return 0;
+    let added = 0;
+    for (const mode of modes) {
+        if (!mode || mode === core_constants.MODE.HEART || !Object.values(core_constants.MODE).includes(mode)) continue;
+        if (queue.some(item => item.scope === scope && item.mode === mode && (item.status === 'queued' || item.status === 'running'))) continue;
+        queue.push({
+            id: `queue-${Date.now().toString(36)}-${queue.length}`,
+            mode,
+            label: core_constants.MODE_LABEL[mode] || mode,
+            scope,
+            status: 'queued',
+            attached: false,
+        });
+        picks.delete(mode);
+        added += 1;
+    }
+    trimQueue();
+    refreshTaskCenterView();
+    void pumpQueue();
+    return added;
+}
+
+function cancelQueuedItem(id) {
+    const item = queue.find(row => row.id === id && row.status === 'queued');
+    if (!item) return false;
+    item.status = 'cancelled';
+    trimQueue();
+    refreshTaskCenterView();
+    return true;
+}
+
+function cancelQueuedForCurrentScope() {
+    for (const item of queuedForScope()) item.status = 'cancelled';
+    trimQueue();
+}
+
+async function pumpQueue() {
+    if (pumping) return;
+    pumping = true;
+    try {
+        for (;;) {
+            dropForeignQueue();
+            const scope = currentScope();
+            const attached = queue.find(item => item.status === 'running' && item.attached && item.scope === scope);
+            if (attached) {
+                if (core_requestCoordinator.isModeGenerating(attached.mode) || runtimeState.busy) return;
+                attached.status = 'done';
+                attached.attached = false;
+                trimQueue();
+                refreshTaskCenterView();
+            }
+            const next = queue.find(item => item.status === 'queued' && item.scope === scope);
+            if (!next || runtimeState.busy) return;
+            if (core_requestCoordinator.isModeGenerating(next.mode)) {
+                next.status = 'running';
+                next.attached = true;
+                refreshTaskCenterView();
+                return;
+            }
+            next.status = 'running';
+            next.attached = false;
+            refreshTaskCenterView();
+            let result;
+            try {
+                result = await generation_client.generateMode(next.mode, { background: true });
+            } catch (error) {
+                if (next.status === 'running') next.status = error?.name === 'AbortError' ? 'cancelled' : 'failed';
+                trimQueue();
+                refreshTaskCenterView();
+                if (currentScope() !== scope) return;
+                continue;
+            }
+            if (next.status !== 'running') {
+                trimQueue();
+                refreshTaskCenterView();
+                continue;
+            }
+            if (result == null && core_requestCoordinator.isModeGenerating(next.mode)) {
+                next.attached = true;
+                refreshTaskCenterView();
+                return;
+            }
+            if (result?.status === 'cancelled') next.status = 'cancelled';
+            else if (result?.status === 'failed' || result?.status === 'blocked') next.status = 'failed';
+            else if (result != null) next.status = 'done';
+            else {
+                const settled = core_requestCoordinator.listChatTaskSnapshot().find(row => !row.running && row.label === next.label);
+                next.status = settled?.phase === 'cancelled' || settled?.phaseLabel === '已取消' ? 'cancelled' : 'failed';
+            }
+            trimQueue();
+            refreshTaskCenterView();
+            if (currentScope() !== scope) return;
+        }
+    } finally {
+        pumping = false;
+    }
+}
 
 function taskPanel() {
     return document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-task-center]`);
@@ -24,7 +181,7 @@ export function ensureTaskCenterChrome(overlay) {
         button.dataset.rmtAction = 'tasks';
         button.setAttribute('aria-label', '任务');
         button.title = '任务';
-        button.innerHTML = '任务 <span class="rmt-task-count" data-rmt-task-count hidden>0</span>';
+        button.innerHTML = '<i class="fa-solid fa-list-check" aria-hidden="true"></i><span class="rmt-task-count" data-rmt-task-count hidden>0</span>';
         const close = bar.querySelector('[data-rmt-action="close"]');
         if (close) bar.insertBefore(button, close);
         else bar.appendChild(button);
@@ -47,12 +204,14 @@ export function hideTaskCenter() {
 
 function syncTaskCenterBadge() {
     const running = core_requestCoordinator.listChatTaskSnapshot().filter(row => row.running).length;
+    const waiting = queuedForScope().length;
+    const total = running + waiting;
     const badge = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-task-count]`);
     if (!badge) return;
-    badge.hidden = running <= 0;
-    badge.textContent = String(Math.min(99, running));
+    badge.hidden = total <= 0;
+    badge.textContent = String(Math.min(99, total));
     const button = taskButton();
-    if (button) button.setAttribute('aria-label', running ? `任务，${running} 项进行中` : '任务');
+    if (button) button.setAttribute('aria-label', total ? `任务，${running} 项进行中，${waiting} 项排队` : '任务');
 }
 
 function paintTaskCenter(panel) {
@@ -70,15 +229,29 @@ function paintTaskCenter(panel) {
         ${row.canOpen ? `<button type="button" class="rmt-btn" data-rmt-action="task-open" data-rmt-task-id="${esc(row.id)}">回到原聊天并打开结果</button>` : ''}
       </div>
     </article>`;
+    const scope = currentScope();
+    const mine = queue.filter(item => item.scope === scope);
+    const waiting = mine.filter(item => item.status === 'queued');
+    const active = mine.find(item => item.status === 'running');
+    const recentQueue = mine.filter(item => item.status !== 'queued' && item.status !== 'running').slice(-4);
+    const queueRow = (item, order) => `<article class="rmt-task-row">
+      <header><b>${order ? `${order}. ` : ''}${esc(item.label)}</b><span>${esc(QUEUE_STATUS[item.status] || item.status)}</span></header>
+      <p>当前聊天 · 串行队列</p>
+      ${item.status === 'queued' ? `<div class="rmt-task-actions"><button type="button" class="rmt-btn" data-rmt-action="task-queue-remove" data-rmt-queue-id="${esc(item.id)}">移出队列</button></div>` : ''}
+    </article>`;
+    const queueHtml = (active || waiting.length || recentQueue.length)
+        ? `<h3>排队</h3>${active ? `<p class="rmt-task-note">正在串行处理「${esc(active.label)}」，完成后才开始下一项。</p>` : ''}${waiting.map((item, index) => queueRow(item, index + 1)).join('')}${recentQueue.map(item => queueRow(item, 0)).join('')}`
+        : '';
     const top = panel.scrollTop;
     panel.innerHTML = `<div class="rmt-task-head">
       <b>任务</b>
       <button type="button" class="rmt-btn" data-rmt-action="task-center-close">关闭</button>
     </div>
-    <p class="rmt-task-note">这里只显示任务名称、阶段和是否落盘。不会显示密钥、提示词或世界书正文。</p>
+    <p class="rmt-task-note">这里只显示任务名称、阶段和是否落盘。不会显示密钥、提示词或世界书正文。档案整理完成后可以多选，再按顺序一次生成一项。</p>
+    ${queueHtml}
     ${running.length ? running.map(rowHtml).join('') : '<p class="rmt-task-empty">当前没有进行中的任务。</p>'}
     <div class="rmt-task-actions">
-      <button type="button" class="rmt-btn" data-rmt-action="task-cancel-current" ${currentNames.length ? '' : 'disabled'}>取消当前聊天全部任务</button>
+      <button type="button" class="rmt-btn" data-rmt-action="task-cancel-current" ${currentNames.length || waiting.length ? '' : 'disabled'}>取消当前聊天全部任务</button>
     </div>
     ${settled.length ? `<h3>刚结束</h3>${settled.map(rowHtml).join('')}` : ''}`;
     panel.scrollTop = top;
@@ -88,12 +261,15 @@ function refreshTaskCenterView() {
     if (painting) return;
     painting = true;
     try {
+        syncPickScope();
+        dropForeignQueue();
         syncTaskCenterBadge();
         const panel = taskPanel();
         if (panel && !panel.hidden) paintTaskCenter(panel);
     } finally {
         painting = false;
     }
+    if (!pumping) void pumpQueue();
 }
 
 // The bundle initializes this file before requestCoordinator finishes, because the
@@ -171,11 +347,34 @@ export function handleTaskCenterAction(action, actionEl) {
         refreshTaskCenterView();
         return;
     }
+    if (action === 'task-queue-remove') {
+        cancelQueuedItem(actionEl?.dataset?.rmtQueueId || '');
+        return;
+    }
+    if (action === 'queue-selected') {
+        syncPickScope();
+        const order = core_constants.ARCHIVE_PORTAL_MODES;
+        const added = enqueueSelectedModes([...picks].sort((a, b) => order.indexOf(a) - order.indexOf(b)));
+        if (!added) {
+            globalThis.toastr?.info?.('先勾选要排队的项目。已经在队列里的不会重复加入。', '心迹回廊');
+            return;
+        }
+        const panel = taskPanel();
+        if (panel) {
+            panel.hidden = false;
+            paintTaskCenter(panel);
+        }
+        globalThis.toastr?.info?.(`已把 ${added} 项排进任务中心，会按顺序一次生成一项。`, '心迹回廊');
+        return;
+    }
     if (action === 'task-cancel-current') {
         const names = core_requestCoordinator.currentChatBlockingTasks();
-        if (!names.length) return;
-        if (!ui_overlay.confirmExplicitAction('取消当前聊天的全部任务？', `会中止这些任务：\n${names.map(label => `· ${label}`).join('\n')}\n\n其他聊天的任务不受影响。已落盘成果保留，未完成部分停止，不会自动重试。`, { destructive: true })) return;
-        core_requestCoordinator.cancelCurrentChatBlockingTasks(null, 'task-center');
+        const waiting = queuedForScope().map(item => item.label);
+        if (!names.length && !waiting.length) return;
+        const lines = [...names, ...waiting.filter(label => !names.includes(label))];
+        if (!ui_overlay.confirmExplicitAction('取消当前聊天的全部任务？', `会中止这些任务：\n${lines.map(label => `· ${label}`).join('\n')}\n\n还在排队、尚未开始的项目也会移出。其他聊天的任务不受影响。已落盘成果保留，未完成部分停止，不会自动重试。`, { destructive: true })) return;
+        cancelQueuedForCurrentScope();
+        if (names.length) core_requestCoordinator.cancelCurrentChatBlockingTasks(null, 'task-center');
         globalThis.toastr?.info?.('已中止当前聊天的任务。', '心迹回廊');
         refreshTaskCenterView();
         return;

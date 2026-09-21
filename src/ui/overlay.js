@@ -170,7 +170,7 @@ export function openOverlay() {
               <button type="button" data-rmt-action="workspace-expand" aria-label="展开窗口" title="展开窗口"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>
               <button type="button" data-rmt-action="regenerate" hidden aria-label="增量追加" title="增量追加">＋</button>
               <button type="button" data-rmt-action="manage" hidden aria-label="管理" title="管理">⋯</button>
-              <button type="button" data-rmt-action="tasks" aria-label="任务" title="任务">任务 <span class="rmt-task-count" data-rmt-task-count hidden>0</span></button>
+              <button type="button" data-rmt-action="tasks" aria-label="任务" title="任务"><i class="fa-solid fa-list-check" aria-hidden="true"></i><span class="rmt-task-count" data-rmt-task-count hidden>0</span></button>
               <button type="button" data-rmt-action="close" aria-label="关闭档案室">×</button>
             </div>
             ${workspace_ui.workspaceNavHtml()}
@@ -1664,6 +1664,14 @@ export function handleOverlayClick(event) {
     if (songButton) return void song_view.handleThemeSongAction(songButton.dataset.rmtSong, songButton.dataset.rmtSongId);
     const mailButton = event.target.closest?.('[data-rmt-inbox]');
     if (mailButton) return void ui_inboxView.handleInboxAction(mailButton.dataset.rmtInbox, mailButton.dataset.rmtInboxId);
+    const queuePick = event.target.closest?.('.rmt-queue-pick');
+    if (queuePick) {
+        const input = queuePick.querySelector('[data-rmt-queue-mode]');
+        queueMicrotask(() => {
+            if (input) ui_taskCenter.setQueuePick(input.dataset.rmtQueueMode, input.checked);
+        });
+        return;
+    }
     const generateModeButton = event.target.closest?.('[data-rmt-generate-mode]');
     if (generateModeButton) {
         const mode = generateModeButton.dataset.rmtGenerateMode;
@@ -1799,7 +1807,7 @@ export function handleOverlayClick(event) {
     if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
     if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
     if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
-    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open') {
+    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-queue-remove' || action === 'queue-selected') {
         return ui_taskCenter.handleTaskCenterAction(action, actionEl);
     }
     if (action === 'close') return closeArchiveOverlayFromUser();

@@ -5,7 +5,7 @@ export function structuralThemeCss(root) {
         'archive-card','character-card','archive-portal','portal-card','calendar-quick','choice-card','card','info','event-list','event','cg-caption','adv-reader','adv-bulkbar',
         'memory-gate','memory-settings-status','task-banner','external-memory-row','archive-readonly-control','archive-overview-item','archive-group-entry',
         'settings-header','settings-content','settings-card','api-source-card','api-source-panel','api-status','performance-diagnostic-output',
-        'avatar-dialog-card','avatar-dialog-bubble','memory-wi-picker-card','memory-wi-book','memory-wi-entry','loading-card',
+        'avatar-dialog-card','avatar-dialog-bubble','memory-wi-picker-card','memory-wi-book','memory-wi-entry','loading-card','task-center','workspace-empty','cg-format','inline-status',
         'heart-summary','heart-current-line','heart-greeting-group','heart-drama-card','heart-strip-card','heart-single-drama','heart-season-stage','heart-setting','heart-script-bubble','heart-panel','heart-panel-line',
         'ending-summary','ending-route','ending-detail','ending-confession','ending-epilogue','confession-card','ending-confession-stage','ending-confession-bubble','achievement-card',
         'calendar-hero','calendar-paper','calendar-month-head','calendar-day','calendar-pending','calendar-todo','calendar-filter','calendar-sticky-panel','calendar-master-todo','calendar-special-notes','calendar-mood-section','calendar-sticky','calendar-mood-note',

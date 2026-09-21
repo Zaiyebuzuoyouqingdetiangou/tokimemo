@@ -14,6 +14,7 @@ import * as home from './homeView.js';
 import * as bookmark from './navigationBookmark.js';
 import * as cgEditor from './cgPromptEditor.js';
 import { state as state } from '../core/state.js';
+import * as ui_taskCenter from './taskCenter.js';
 import * as ui_workspaceState from './workspaceState.js';
 const esc = text.esc;
 const GROUPS = [['memory', '回忆'], ['life', '生活'], ['interaction', '互动'], ['stories', '番外']];
@@ -90,18 +91,21 @@ function countStatus(key, session) {
         : session.entries || session.events || session.letters || session.locations || session.episodes;
     return Array.isArray(collection) ? `已有 ${collection.length} ${key === 'fireflies' ? '颗光' : '项内容'}` : '已有内容';
 }
-export function workspaceCatalogueHtml(portals = [], snapshot = null) {
+export function workspaceCatalogueHtml(portals = [], snapshot = null, { ready: archiveReady = false } = {}) {
     ui_workspaceState.loadWorkspacePreferences();
     const sessionMap = new Map(portals.map(item => [item.mode, item.session]));
+    const canQueue = archiveReady && !snapshot;
     const cards = Object.entries(ui_workspaceState.WORKSPACE_ROUTES).filter(([,spec]) => !spec.deep && spec.group === ui_workspaceState.workspace.group).map(([key,spec]) => {
         const meta = { ...snapshots.modePortalMeta(spec.mode), ...(ALIAS_META[key] || {}) };
         const session = sessionMap.get(spec.mode);
         const running = snapshot ? coordinator.isArchiveTargetModeGenerating(spec.mode, snapshot) : coordinator.isModeGenerating(spec.mode);
         const ready = routeHasContent(key, session);
         const status = running ? (ready ? '生成中 · 已有内容可读' : '正在生成') : countStatus(key, session);
-        return `<article class="rmt-archive-portal rmt-workspace-card ${ready ? 'ready' : 'empty'} rmt-archive-portal-${esc(meta.accent)}"><button type="button" class="rmt-portal-open" data-rmt-workspace-route="${key}"><span class="rmt-portal-avatar"><i class="fa-solid ${esc(meta.icon)}" aria-hidden="true"></i></span><span class="rmt-portal-title">${esc(spec.title)}</span><span class="rmt-portal-subtitle">${esc(meta.subtitle)}</span><span class="rmt-portal-status">${esc(status)}</span><span class="rmt-workspace-enter" aria-hidden="true">›</span></button></article>`;
+        const queueable = canQueue && spec.mode && spec.mode !== constants.MODE.HEART;
+        return `<article class="rmt-archive-portal rmt-workspace-card ${ready ? 'ready' : 'empty'} rmt-archive-portal-${esc(meta.accent)}"><button type="button" class="rmt-portal-open" data-rmt-workspace-route="${key}"><span class="rmt-portal-avatar"><i class="fa-solid ${esc(meta.icon)}" aria-hidden="true"></i></span><span class="rmt-portal-title">${esc(spec.title)}</span><span class="rmt-portal-subtitle">${esc(meta.subtitle)}</span><span class="rmt-portal-status">${esc(status)}</span><span class="rmt-workspace-enter" aria-hidden="true">›</span></button>${queueable ? ui_taskCenter.queuePickHtml(spec.mode) : ''}</article>`;
     }).join('');
-    return `<section class="rmt-workspace-catalogue"><header class="rmt-workspace-section-head"><div><h2>内容</h2><p>选择你想看的那一页</p></div><div class="rmt-layout-switch" aria-label="目录显示方式">${[['cards','卡片'],['list','列表']].map(([k,t])=>`<button type="button" data-rmt-workspace-layout="${k}" aria-pressed="${ui_workspaceState.workspace.layout === k}" class="${ui_workspaceState.workspace.layout === k ? 'active' : ''}">${t}</button>`).join('')}</div></header><nav class="rmt-workspace-groups" aria-label="内容分组">${GROUPS.map(([k,t])=>`<button type="button" data-rmt-workspace-group="${k}" class="${ui_workspaceState.workspace.group === k ? 'active' : ''}" aria-current="${ui_workspaceState.workspace.group === k ? 'page' : 'false'}">${t}</button>`).join('')}</nav><div class="rmt-archive-portals rmt-workspace-portals" data-rmt-layout="${ui_workspaceState.workspace.layout}">${cards}</div></section>`;
+    const queueBar = canQueue ? `<div class="rmt-queue-bar"><button type="button" class="rmt-btn" data-rmt-action="queue-selected">把勾选的项目排进任务中心</button><small>换分组后，勾选仍然保留。按目录顺序一次只生成一项。</small></div>` : '';
+    return `<section class="rmt-workspace-catalogue"><header class="rmt-workspace-section-head"><div><h2>内容</h2><p>选择你想看的那一页</p></div><div class="rmt-layout-switch" aria-label="目录显示方式">${[['cards','卡片'],['list','列表']].map(([k,t])=>`<button type="button" data-rmt-workspace-layout="${k}" aria-pressed="${ui_workspaceState.workspace.layout === k}" class="${ui_workspaceState.workspace.layout === k ? 'active' : ''}">${t}</button>`).join('')}</div></header><nav class="rmt-workspace-groups" aria-label="内容分组">${GROUPS.map(([k,t])=>`<button type="button" data-rmt-workspace-group="${k}" class="${ui_workspaceState.workspace.group === k ? 'active' : ''}" aria-current="${ui_workspaceState.workspace.group === k ? 'page' : 'false'}">${t}</button>`).join('')}</nav>${queueBar}<div class="rmt-archive-portals rmt-workspace-portals" data-rmt-layout="${ui_workspaceState.workspace.layout}">${cards}</div></section>`;
 }
 // Move existing validated markup, never replace the underlying archive or task objects.
 export function arrangeArchiveWorkspace(body, { portals = [], ready = false, snapshot = null } = {}) {
@@ -119,7 +123,7 @@ export function arrangeArchiveWorkspace(body, { portals = [], ready = false, sna
     if (ui_workspaceState.workspace.tab === 'content') {
         const readOnlyControl = gate?.querySelector('.rmt-archive-readonly-control');
         if (readOnlyControl) main.appendChild(readOnlyControl);
-        const section = document.createElement('div'); section.innerHTML = workspaceCatalogueHtml(portals, snapshot);
+        const section = document.createElement('div'); section.innerHTML = workspaceCatalogueHtml(portals, snapshot, { ready });
         main.appendChild(section);
     } else {
         ui_workspaceState.workspace.tab = 'archive';
