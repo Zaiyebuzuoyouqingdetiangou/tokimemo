@@ -1939,18 +1939,23 @@ async function generateModeOperation(mode, options = {}) {
 }
 
 const autoContinuedDrafts = new Set();
-generation_recovery.setTruncationContinueHandler(item => {
-    const key = `${item?.mode || ''}:${item?.draftId || ''}`;
-    if (!item?.mode || !item?.draftId || autoContinuedDrafts.has(key)) return;
-    autoContinuedDrafts.add(key);
-    setTimeout(() => {
-        continueSavedGeneration(item.mode, {
-            draftId: item.draftId,
-            pageId: item.pageId || '',
-            skipConfirm: true,
-            background: true,
-        }).catch(error => {
-            console.warn('[HeartbeatMemories] automatic continuation did not start', error?.code || error?.name || 'failed');
-        });
-    }, 400);
+// Recovery is a dependency of this module, but the bundle initializes this file first
+// when the import cycle is cut. Register after the current init turn so the export exists.
+queueMicrotask(() => {
+    if (typeof generation_recovery.setTruncationContinueHandler !== 'function') return;
+    generation_recovery.setTruncationContinueHandler(item => {
+        const key = `${item?.mode || ''}:${item?.draftId || ''}`;
+        if (!item?.mode || !item?.draftId || autoContinuedDrafts.has(key)) return;
+        autoContinuedDrafts.add(key);
+        setTimeout(() => {
+            continueSavedGeneration(item.mode, {
+                draftId: item.draftId,
+                pageId: item.pageId || '',
+                skipConfirm: true,
+                background: true,
+            }).catch(error => {
+                console.warn('[HeartbeatMemories] automatic continuation did not start', error?.code || error?.name || 'failed');
+            });
+        }, 400);
+    });
 });

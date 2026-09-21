@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 140
-// Source SHA-256: e0e8a1e54d4c3c087cf9409259b1d676fc5e215a9afbd41ff5c0ad3a329650c4
+// Source SHA-256: e6f7ca9fb3088e2207ea5bc5485734829fe62f48bfb002237ff5dd5076d6e858
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -38595,20 +38595,25 @@ async function generateModeOperation(mode, options = {}) {
 }
 
 const autoContinuedDrafts = new Set();
-generation_recovery.setTruncationContinueHandler(item => {
-    const key = `${item?.mode || ''}:${item?.draftId || ''}`;
-    if (!item?.mode || !item?.draftId || autoContinuedDrafts.has(key)) return;
-    autoContinuedDrafts.add(key);
-    setTimeout(() => {
-        continueSavedGeneration(item.mode, {
-            draftId: item.draftId,
-            pageId: item.pageId || '',
-            skipConfirm: true,
-            background: true,
-        }).catch(error => {
-            console.warn('[HeartbeatMemories] automatic continuation did not start', error?.code || error?.name || 'failed');
-        });
-    }, 400);
+// Recovery is a dependency of this module, but the bundle initializes this file first
+// when the import cycle is cut. Register after the current init turn so the export exists.
+queueMicrotask(() => {
+    if (typeof generation_recovery.setTruncationContinueHandler !== 'function') return;
+    generation_recovery.setTruncationContinueHandler(item => {
+        const key = `${item?.mode || ''}:${item?.draftId || ''}`;
+        if (!item?.mode || !item?.draftId || autoContinuedDrafts.has(key)) return;
+        autoContinuedDrafts.add(key);
+        setTimeout(() => {
+            continueSavedGeneration(item.mode, {
+                draftId: item.draftId,
+                pageId: item.pageId || '',
+                skipConfirm: true,
+                background: true,
+            }).catch(error => {
+                console.warn('[HeartbeatMemories] automatic continuation did not start', error?.code || error?.name || 'failed');
+            });
+        }, 400);
+    });
 });
 
 __m_generation_client_js.buildWorldPresentationContext = buildWorldPresentationContext;
