@@ -1666,9 +1666,9 @@ export function handleOverlayClick(event) {
     if (mailButton) return void ui_inboxView.handleInboxAction(mailButton.dataset.rmtInbox, mailButton.dataset.rmtInboxId);
     const queuePick = event.target.closest?.('.rmt-queue-pick');
     if (queuePick) {
-        const input = queuePick.querySelector('[data-rmt-queue-mode]');
+        const input = queuePick.querySelector('[data-rmt-queue-route]');
         queueMicrotask(() => {
-            if (input) ui_taskCenter.setQueuePick(input.dataset.rmtQueueMode, input.checked);
+            if (input) ui_taskCenter.setQueuePick(input.dataset.rmtQueueRoute, input.checked);
         });
         return;
     }

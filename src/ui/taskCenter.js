@@ -1,5 +1,6 @@
 import * as archive_groups from '../archive/groups.js';
 import * as archive_library from '../archive/library.js';
+import * as archive_repository from '../archive/repository.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
@@ -7,8 +8,10 @@ import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
+import * as modes_heart from '../modes/heart.js';
 import { state as runtimeState } from '../core/state.js';
 import * as ui_overlay from './overlay.js';
+import * as ui_workspaceState from './workspaceState.js';
 
 let painting = false;
 let pumping = false;
@@ -29,17 +32,18 @@ function syncPickScope() {
     if (scope) pickScope = scope;
 }
 
-export function queuePickHtml(mode) {
+export function queuePickHtml(route) {
     syncPickScope();
-    const checked = picks.has(mode) ? 'checked' : '';
-    return `<label class="rmt-queue-pick"><input type="checkbox" data-rmt-queue-mode="${core_text.esc(mode)}" ${checked}>排队</label>`;
+    const checked = picks.has(route) ? 'checked' : '';
+    return `<label class="rmt-queue-pick"><input type="checkbox" data-rmt-queue-route="${core_text.esc(route)}" aria-label="加入队列" ${checked}></label>`;
 }
 
-export function setQueuePick(mode, on) {
+export function setQueuePick(route, on) {
     syncPickScope();
-    if (!mode || mode === core_constants.MODE.HEART) return;
-    if (on) picks.add(mode);
-    else picks.delete(mode);
+    const spec = ui_workspaceState.WORKSPACE_ROUTES[route];
+    if (!spec?.mode || spec.deep) return;
+    if (on) picks.add(route);
+    else picks.delete(route);
 }
 
 function queuedForScope(scope = currentScope()) {
@@ -101,22 +105,24 @@ export function noteRetryableGeneration(info) {
     setTimeout(() => { void pumpQueue(); }, 0);
 }
 
-export function enqueueSelectedModes(modes) {
+export function enqueueSelectedModes(routes) {
     const scope = currentScope();
     if (!scope) return 0;
     let added = 0;
-    for (const mode of modes) {
-        if (!mode || mode === core_constants.MODE.HEART || !Object.values(core_constants.MODE).includes(mode)) continue;
-        if (queue.some(item => item.scope === scope && item.mode === mode && (item.status === 'queued' || item.status === 'running'))) continue;
+    for (const route of routes) {
+        const spec = ui_workspaceState.WORKSPACE_ROUTES[route];
+        if (!spec?.mode || spec.deep) continue;
+        if (queue.some(item => item.scope === scope && item.route === route && (item.status === 'queued' || item.status === 'running'))) continue;
         queue.push({
             id: `queue-${Date.now().toString(36)}-${queue.length}`,
-            mode,
-            label: core_constants.MODE_LABEL[mode] || mode,
+            route,
+            mode: spec.mode,
+            label: spec.title,
             scope,
             status: 'queued',
             attached: false,
         });
-        picks.delete(mode);
+        picks.delete(route);
         added += 1;
     }
     trimQueue();
@@ -174,6 +180,9 @@ async function pumpQueue() {
                 continue;
             }
             if (core_requestCoordinator.isModeGenerating(next.mode)) {
+                // Heart pages share one mode id but are different jobs. Wait for the
+                // current page instead of treating the next page as already running.
+                if (next.mode === core_constants.MODE.HEART) return;
                 next.status = 'running';
                 next.attached = true;
                 refreshTaskCenterView();
@@ -184,7 +193,7 @@ async function pumpQueue() {
             refreshTaskCenterView();
             let result;
             try {
-                result = await generation_client.generateMode(next.mode, { background: true });
+                result = await runQueuedGeneration(next);
             } catch (error) {
                 if (next.status === 'running') next.status = error?.name === 'AbortError' ? 'cancelled' : 'failed';
                 trimQueue();
@@ -216,6 +225,25 @@ async function pumpQueue() {
     } finally {
         pumping = false;
     }
+}
+
+async function runQueuedGeneration(item) {
+    if (item.mode !== core_constants.MODE.HEART || item.route === 'language') {
+        return generation_client.generateMode(item.mode, { background: true });
+    }
+    if (runtimeState.activeSession?.kind !== core_constants.MODE.HEART) {
+        const created = await generation_client.generateMode(core_constants.MODE.HEART, { background: true });
+        if (runtimeState.activeSession?.kind !== core_constants.MODE.HEART) return created ?? { status: 'failed' };
+    }
+    const selected = runtimeState.activeSession?.selectedSeason;
+    const season = ['spring', 'summer', 'autumn', 'winter'].includes(selected) ? selected : 'spring';
+    let result;
+    if (item.route === 'fireflies') result = await modes_heart.generateHeartFirefliesSection({ background: true });
+    else if (item.route === 'strips') result = await modes_heart.generateHeartSection('strips', { background: true });
+    else if (item.route === 'postending') result = await modes_heart.generateHeartSeasonSection('postending', { background: true });
+    else if (item.route === 'heart') result = await modes_heart.generateHeartSeasonSection(season, { background: true });
+    else result = await generation_client.generateMode(core_constants.MODE.HEART, { background: true });
+    return result ?? { status: 'done' };
 }
 
 function taskPanel() {
@@ -255,16 +283,43 @@ export function hideTaskCenter() {
     if (panel) panel.hidden = true;
 }
 
+let unfinishedCache = { at: 0, count: 0 };
+
+function unfinishedReminderCount() {
+    const now = Date.now();
+    if (now - unfinishedCache.at < 1500) return unfinishedCache.count;
+    let count = 0;
+    try {
+        count += core_cache.listGenerationDrafts().filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).length;
+    } catch { /* A missing archive has nothing unfinished to badge. */ }
+    try {
+        if (archive_repository.getCurrentArchiveImportRecoverySummary()) count += 1;
+        if (archive_repository.getCurrentArchiveProfileRecoverySummary()) count += 1;
+    } catch { /* Archive recovery is optional until a chat is open. */ }
+    unfinishedCache = { at: now, count };
+    return count;
+}
+
 function syncTaskCenterBadge() {
     const running = core_requestCoordinator.listChatTaskSnapshot().filter(row => row.running).length;
     const waiting = queuedForScope().length;
-    const total = running + waiting;
+    const unfinished = unfinishedReminderCount();
+    const total = running + waiting + unfinished;
     const badge = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-task-count]`);
-    if (!badge) return;
-    badge.hidden = total <= 0;
-    badge.textContent = String(Math.min(99, total));
     const button = taskButton();
-    if (button) button.setAttribute('aria-label', total ? `任务，${running} 项进行中，${waiting} 项排队` : '任务');
+    if (badge) {
+        badge.hidden = total <= 0;
+        badge.textContent = String(Math.min(99, total));
+        badge.classList.toggle('rmt-task-count-alert', unfinished > 0);
+    }
+    if (button) {
+        button.classList.toggle('rmt-task-alert', unfinished > 0);
+        const parts = [];
+        if (unfinished) parts.push(`${unfinished} 项未完成`);
+        if (running) parts.push(`${running} 项进行中`);
+        if (waiting) parts.push(`${waiting} 项排队`);
+        button.setAttribute('aria-label', parts.length ? `任务，${parts.join('，')}` : '任务');
+    }
 }
 
 function recoverySectionHtml(esc) {
@@ -439,7 +494,7 @@ export function handleTaskCenterAction(action, actionEl) {
     }
     if (action === 'queue-selected') {
         syncPickScope();
-        const order = core_constants.ARCHIVE_PORTAL_MODES;
+        const order = Object.keys(ui_workspaceState.WORKSPACE_ROUTES);
         const added = enqueueSelectedModes([...picks].sort((a, b) => order.indexOf(a) - order.indexOf(b)));
         if (!added) {
             globalThis.toastr?.info?.('先勾选要排队的项目。已经在队列里的不会重复加入。', '心迹回廊');
