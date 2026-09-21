@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 140
-// Source SHA-256: 3219993a9371994b89c22ed9abc2e7c834ed4bf43c3a33f79871c0b0f5367d49
+// Source SHA-256: 43f59808083f654f5d78cca138dac909a0a6bc245439037eaa097606fa3e38ee
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -1159,6 +1159,8 @@ const DEFAULT_SETTINGS = Object.freeze({
     // not exposed through the current context registry. Off by default; when enabled we may use
     // the public executeSlashCommandsWithOptions('/sd quiet=true ...') path with a sanitized prompt.
     imageGenerationManualEnabled: false,
+    autoRetryEnabled: false,
+    autoRetryCount: 1,
     creativeSupplementEnabled: false,
     creativeSupplement: '',
     imageGenerationProvider: 'baibai-image',
@@ -3643,6 +3645,12 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+function normalizeAutoRetryCount(value) {
+    const count = Math.floor(Number(value));
+    if (!Number.isFinite(count)) return 1;
+    return Math.max(1, Math.min(5, count));
+}
+
 function normalizeBannedGeneratedPhrases(value) {
     const source = Array.isArray(value) ? value : String(value ?? '').split(/[\n,，]+/g);
     return [...new Set(source.map(item => core_text.normalizeText(item, 40).trim()).filter(Boolean))]
@@ -3684,6 +3692,8 @@ function getPluginSettings(context = core_context.getContext()) {
         imageGenerationManualEnabled: false,
         imageGenerationProvider: 'baibai-image',
         cgPromptFormat: cg_format.normalizeCgPromptFormat(settings.cgPromptFormat, 'nai5-natural'),
+        autoRetryEnabled: settings.autoRetryEnabled === true,
+        autoRetryCount: normalizeAutoRetryCount(settings.autoRetryCount),
         creativeSupplementEnabled: settings.creativeSupplementEnabled === true,
         creativeSupplement: creative_supplement.normalizeCreativeSupplement(settings.creativeSupplement),
         ttDisplayMode: settings.ttDisplayMode === true,
@@ -4256,6 +4266,7 @@ __m_core_settings_js.fetchModelsForManualConnection = fetchModelsForManualConnec
 __m_core_settings_js.invokeSlashCommandCapture = invokeSlashCommandCapture;
 __m_core_settings_js.readCurrentSlashSetting = readCurrentSlashSetting;
 __m_core_settings_js.importCurrentSillyTavernConnection = importCurrentSillyTavernConnection;
+__m_core_settings_js.normalizeAutoRetryCount = normalizeAutoRetryCount;
 __m_core_settings_js.normalizeBannedGeneratedPhrases = normalizeBannedGeneratedPhrases;
 __m_core_settings_js.normalizeFloatingAvatarPosition = normalizeFloatingAvatarPosition;
 __m_core_settings_js.getPluginSettings = getPluginSettings;
@@ -28158,19 +28169,29 @@ const runtimeState = __m_core_state_js.state;
 
 
 const STYLE_ID = 'heartbeat_memories_scene_picker_styles';
+const PAGE_SIZE = 40;
 let lastScenes = [];
 let selectedIds = new Set();
+let searchIndex = new Map();
 let mode = 'check';
+let filterText = '';
+let filterProvider = 'all';
+let filterDate = 'all';
+let page = 0;
+let renderTimer = 0;
 
 function ensureStyles() {
     if (document.getElementById(STYLE_ID)) return;
     const style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
-.rmt-scene-picker{display:grid;gap:10px;margin-top:12px;padding:12px;border:1px solid var(--rmt-theme-border,#d4e1e7);border-radius:14px;background:rgba(255,255,255,.72)}
+.rmt-scene-picker{display:grid;gap:10px;margin-top:12px;padding:12px;border:1px solid var(--rmt-theme-border,#d4e1e7);border-radius:14px;background:var(--rmt-theme-surface-solid,var(--rmt-theme-bg,#fff));color:var(--rmt-theme-text,#52677b)}
 .rmt-scene-picker h3{margin:0;font-size:14px;color:var(--rmt-theme-text,#52677b)}
-.rmt-scene-picker-toolbar,.rmt-scene-picker-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.rmt-scene-item{border:1px solid var(--rmt-theme-border,#d8e3e8);border-radius:12px;padding:8px 10px;background:var(--rmt-theme-surface,#fff)}
+.rmt-scene-picker-toolbar,.rmt-scene-picker-actions,.rmt-scene-filters,.rmt-scene-pager{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.rmt-scene-filters input,.rmt-scene-filters select{min-height:36px;box-sizing:border-box}
+.rmt-scene-filters input{flex:1 1 180px;min-width:0}
+.rmt-scene-list{display:grid;gap:8px;max-height:min(62vh,720px);overflow:auto}
+.rmt-scene-item{border:1px solid var(--rmt-theme-border,#d8e3e8);border-radius:12px;padding:8px 10px;background:var(--rmt-theme-surface,#fff);color:var(--rmt-theme-text,#52677b)}
 .rmt-scene-item summary{display:flex;gap:8px;align-items:flex-start;cursor:pointer;list-style:none}
 .rmt-scene-item summary::-webkit-details-marker{display:none}
 .rmt-scene-item em{display:block;margin-top:8px;white-space:pre-wrap;font-style:normal;color:var(--rmt-theme-muted,#718092);font-size:12px;line-height:1.65}
@@ -28191,25 +28212,71 @@ function selectedScenes() {
     return archive_storyScenes.sortScenes(chosen).slice(0, archive_storyScenes.SCENE_BATCH_SIZE);
 }
 
+function indexScenes(scenes) {
+    searchIndex = new Map();
+    for (const scene of scenes) {
+        searchIndex.set(scene.id, `${scene.title || ''} ${scene.timeLabel || ''} ${scene.date || ''} ${scene.provider || ''} ${scene.world || ''} ${(scene.plot || '').slice(0, 400)}`.toLowerCase());
+    }
+}
+
+function filteredScenes() {
+    const query = filterText.trim().toLowerCase();
+    return lastScenes.filter(scene => {
+        if (filterProvider !== 'all' && scene.provider !== filterProvider) return false;
+        const unlabeled = !String(scene.date || '').trim();
+        if (filterDate === 'dated' && unlabeled) return false;
+        if (filterDate === 'unlabeled' && !unlabeled) return false;
+        if (query && !(searchIndex.get(scene.id) || '').includes(query)) return false;
+        return true;
+    });
+}
+
+function scheduleRender(root) {
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(() => renderList(root), 180);
+}
+
+function fillScenePlot(details) {
+    if (!details?.open || details.dataset.rmtScenePlot === '1') return;
+    const scene = lastScenes.find(item => item.id === details.dataset.rmtSceneId);
+    const plot = document.createElement('em');
+    plot.textContent = scene?.plot || '这条场景没有正文。';
+    details.appendChild(plot);
+    details.dataset.rmtScenePlot = '1';
+}
+
 function renderList(root) {
-    const unlabeled = lastScenes.filter(scene => !scene.date || !scene.date.trim()).length;
-    const rows = archive_storyScenes.sortScenes(lastScenes).map(scene => {
-        const unlabeledItem = !scene.date;
-        const checked = mode === 'earliest'
-            ? archive_storyScenes.earliestScenes(lastScenes).some(item => item.id === scene.id)
-            : selectedIds.has(scene.id);
+    if (!root?.querySelector) return;
+    const unlabeled = lastScenes.filter(scene => !String(scene.date || '').trim()).length;
+    const visible = filteredScenes();
+    const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+    page = Math.max(0, Math.min(page, pageCount - 1));
+    const earliestIds = mode === 'earliest'
+        ? new Set(archive_storyScenes.earliestScenes(lastScenes).map(item => item.id))
+        : null;
+    const slice = visible.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+    const rows = slice.map(scene => {
+        const unlabeledItem = !String(scene.date || '').trim();
+        const checked = earliestIds ? earliestIds.has(scene.id) : selectedIds.has(scene.id);
+        const provider = scene.provider === 'baibai' ? '柏宝书' : scene.provider === 'qianqianjie' ? '千千结' : scene.provider === 'worldbook' ? '世界书' : scene.provider;
         return `<details class="rmt-scene-item ${unlabeledItem ? 'rmt-scene-unlabeled' : ''}" data-rmt-scene-id="${core_text.esc(scene.id)}">
           <summary><label><input type="checkbox" data-rmt-scene-check="${core_text.esc(scene.id)}" ${checked ? 'checked' : ''} ${mode === 'earliest' ? 'disabled' : ''}> <b>${core_text.esc(scene.title || scene.timeLabel || scene.id)}</b></label>
-          <small>${core_text.esc(scene.provider)} · ${core_text.esc(scene.timeLabel || '未标注时间')} · ${core_text.esc(scene.date || '未标注日期')}</small></summary>
+          <small>${core_text.esc(provider)} · ${core_text.esc(scene.timeLabel || '未标注时间')} · ${core_text.esc(scene.date || '未标注日期')}</small></summary>
           <input type="text" data-rmt-scene-date="${core_text.esc(scene.id)}" value="${core_text.esc(scene.date || '')}" placeholder="手填公历 YYYY/MM/DD 或历年，例如庆历四年二月初五日">
-          <em>${core_text.esc(scene.plot || '')}</em>
         </details>`;
     }).join('');
-    root.querySelector('[data-rmt-scene-list]').innerHTML = rows || '<p>还没有扫描到时间场景。先选世界书或确认柏宝书/千千结可读，再点「扫描场景」。</p>';
+    const list = root.querySelector('[data-rmt-scene-list]');
+    if (list) list.innerHTML = rows || '<p>没有符合筛选的场景。</p>';
+    const pager = root.querySelector('[data-rmt-scene-pager]');
+    if (pager) {
+        pager.hidden = visible.length <= PAGE_SIZE;
+        const label = pager.querySelector('[data-rmt-scene-page-label]');
+        if (label) label.textContent = `第 ${page + 1} / ${pageCount} 页`;
+    }
     const status = root.querySelector('[data-rmt-scene-status]');
     if (status) {
         status.textContent = lastScenes.length
-            ? `共 ${lastScenes.length} 条场景，未标注 ${unlabeled}。勾选最多 20 条，或改用从早到晚 20 条。扫描不请求模型。`
+            ? `共 ${lastScenes.length} 条，筛选后 ${visible.length} 条，未标注 ${unlabeled}。本页 ${slice.length} 条；正文在展开时才读取。勾选最多 20 条。`
             : '尚未扫描。';
     }
 }
@@ -28226,8 +28293,27 @@ function mountScenePicker(target) {
         <button type="button" class="menu_button" data-rmt-scene-scan>扫描场景</button>
         <button type="button" class="menu_button" data-rmt-scene-estimate>用 AI 估日期</button>
       </div>
+      <div class="rmt-scene-filters">
+        <input type="search" data-rmt-scene-filter placeholder="筛选标题、时间或正文开头" value="${core_text.esc(filterText)}">
+        <select data-rmt-scene-provider aria-label="来源">
+          <option value="all" ${filterProvider === 'all' ? 'selected' : ''}>全部来源</option>
+          <option value="worldbook" ${filterProvider === 'worldbook' ? 'selected' : ''}>世界书</option>
+          <option value="baibai" ${filterProvider === 'baibai' ? 'selected' : ''}>柏宝书</option>
+          <option value="qianqianjie" ${filterProvider === 'qianqianjie' ? 'selected' : ''}>千千结</option>
+        </select>
+        <select data-rmt-scene-date-filter aria-label="日期">
+          <option value="all" ${filterDate === 'all' ? 'selected' : ''}>全部日期</option>
+          <option value="dated" ${filterDate === 'dated' ? 'selected' : ''}>已标注</option>
+          <option value="unlabeled" ${filterDate === 'unlabeled' ? 'selected' : ''}>未标注</option>
+        </select>
+      </div>
       <div data-rmt-scene-status role="status">展开后扫描。扫描本身不收费。</div>
-      <div data-rmt-scene-list></div>
+      <div class="rmt-scene-list" data-rmt-scene-list></div>
+      <div class="rmt-scene-pager" data-rmt-scene-pager hidden>
+        <button type="button" class="menu_button" data-rmt-scene-page="prev">上一页</button>
+        <span data-rmt-scene-page-label>第 1 / 1 页</span>
+        <button type="button" class="menu_button" data-rmt-scene-page="next">下一页</button>
+      </div>
       <div class="rmt-scene-picker-actions">
         <button type="button" class="menu_button rmt-settings-wide" data-rmt-scene-import>用当前选择建档</button>
       </div>
@@ -28239,7 +28325,9 @@ async function scanScenes(root) {
     const status = root.querySelector('[data-rmt-scene-status]');
     if (status) status.textContent = '正在扫描世界书 / 柏宝书 / 千千结…';
     lastScenes = await archive_storyScenes.collectStoryScenes();
+    indexScenes(lastScenes);
     selectedIds = new Set();
+    page = 0;
     renderList(root);
 }
 
@@ -28275,6 +28363,7 @@ async function estimateDates(root) {
         if (next.date) byId.set(scene.id, next);
     }
     lastScenes = archive_storyScenes.sortScenes([...byId.values()]);
+    indexScenes(lastScenes);
     renderList(root);
 }
 
@@ -28304,6 +28393,38 @@ async function handleScenePickerEvent(event) {
         renderList(root);
         return true;
     }
+    const pageButton = event.target.closest?.('[data-rmt-scene-page]');
+    if (pageButton) {
+        page += pageButton.dataset.rmtScenePage === 'next' ? 1 : -1;
+        renderList(root);
+        return true;
+    }
+    const filterInput = event.target.closest?.('[data-rmt-scene-filter]');
+    if (filterInput && event.type === 'input') {
+        filterText = filterInput.value || '';
+        page = 0;
+        scheduleRender(root);
+        return true;
+    }
+    const providerSelect = event.target.closest?.('[data-rmt-scene-provider]');
+    if (providerSelect && event.type === 'change') {
+        filterProvider = ['worldbook', 'baibai', 'qianqianjie'].includes(providerSelect.value) ? providerSelect.value : 'all';
+        page = 0;
+        renderList(root);
+        return true;
+    }
+    const dateSelect = event.target.closest?.('[data-rmt-scene-date-filter]');
+    if (dateSelect && event.type === 'change') {
+        filterDate = ['dated', 'unlabeled'].includes(dateSelect.value) ? dateSelect.value : 'all';
+        page = 0;
+        renderList(root);
+        return true;
+    }
+    const summary = event.target.closest?.('summary');
+    const details = summary?.closest?.('details.rmt-scene-item');
+    if (details && !event.target.closest?.('[data-rmt-scene-check]')) {
+        queueMicrotask(() => fillScenePlot(details));
+    }
     const check = event.target.closest?.('[data-rmt-scene-check]');
     if (check) {
         if (check.checked) {
@@ -28322,6 +28443,7 @@ async function handleScenePickerEvent(event) {
         if (scene) {
             Object.assign(scene, archive_storyScenes.applySceneDate(scene, dateInput.value));
             lastScenes = archive_storyScenes.sortScenes(lastScenes);
+            indexScenes(lastScenes);
             renderList(root);
         }
         return true;
@@ -29005,6 +29127,9 @@ function mountSettings({ homeTarget = null } = {}) {
             <small>最大输出是模型最多写多长，默认 60000，不拦输入。输入预算是发送前本地保险，默认 60000 tokens，范围 8000–200000，越大越贵；与最大输出无关。</small>
             <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
           </div>
+          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-retry ${core_settings.getPluginSettings().autoRetryEnabled ? 'checked' : ''}><span>失败后自动重试未完成部分</span></label>
+          <label class="rmt-settings-field"><span>自动重试次数</span><input class="text_pole" data-rmt-auto-retry-count type="number" min="1" max="5" step="1" value="${core_settings.getPluginSettings().autoRetryCount}" ${core_settings.getPluginSettings().autoRetryEnabled ? '' : 'disabled'}></label>
+          <small>默认关闭。打开后，新出现的「重试未完成部分」会自动再试，默认 1 次，可改成 1–5 次。每次都使用生成额度。超限草稿和已经写好、只差继续的草稿不会自动重试。</small>
           <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
           <p>打开房间只读已有内容；“今日生活”由房间里的手动更新按钮触发，不会在进入时自动请求。</p>
           <label class="rmt-settings-check"><input data-rmt-tt-display type="checkbox"><span>TT 顶部安全区</span></label>
@@ -29193,6 +29318,17 @@ function mountSettings({ homeTarget = null } = {}) {
         }
         if (target.matches?.('[data-rmt-manual-streaming]')) {
             core_settings.updatePluginSettings({ manualApiStreaming: !!target.checked });
+            return;
+        }
+        if (target.matches?.('[data-rmt-auto-retry]')) {
+            core_settings.updatePluginSettings({ autoRetryEnabled: !!target.checked });
+            const count = panel.querySelector('[data-rmt-auto-retry-count]');
+            if (count) count.disabled = !target.checked;
+            return;
+        }
+        if (target.matches?.('[data-rmt-auto-retry-count]')) {
+            core_settings.updatePluginSettings({ autoRetryCount: target.value });
+            target.value = String(core_settings.getPluginSettings().autoRetryCount);
             return;
         }
         if (target.matches?.('[data-rmt-read-mode], [data-rmt-read-recent], [data-rmt-read-start], [data-rmt-read-end], [data-rmt-read-hidden]')) {
@@ -29392,6 +29528,10 @@ function mountSettings({ homeTarget = null } = {}) {
         }
     });
     panel.addEventListener('input', event => {
+        if (event.target.closest?.('[data-rmt-scene-picker-root]')) {
+            void ui_scenePicker.handleScenePickerEvent(event);
+            return;
+        }
         if (event.target === tagDraft) {
             ++tagScanEpoch; tagEdited = true;
             const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
@@ -37526,12 +37666,12 @@ async function continueSavedGeneration(mode, options = {}) {
     const existing = core_cache.loadGenerationRecovery(mode, context, targetOptions.archiveTarget?.cache,
         { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
     if (!existing) { globalThis.toastr?.info?.('当前档案没有可继续的草稿，不会发起新请求。', '心迹回廊'); return; }
-    if (!ui_overlay.confirmExplicitAction('继续未完成内容？', '只补原任务未完成的内容，会使用文本生成额度。认证或额度问题需要先在设置里解决；取消不改动草稿。', { destructive: false })) return;
+    if (options.skipConfirm !== true && !ui_overlay.confirmExplicitAction('继续未完成内容？', '只补原任务未完成的内容，会使用文本生成额度。认证或额度问题需要先在设置里解决；取消不改动草稿。', { destructive: false })) return;
     const operation = existing.operation || { kind: 'mode', mode };
     const resumeOptions = { ...options, ...targetOptions, existing, continueRecovery: true,
         ...(operation.participantRegeneration ? { participantRegeneration: operation.participantRegeneration } : {}) };
     if (operation.kind === 'mode') return generateMode(mode, { ...resumeOptions,
-        background: !(runtimeState.activeMode === mode && (time_stories.isTimeStoryMode(mode)
+        background: options.skipConfirm === true || !(runtimeState.activeMode === mode && (time_stories.isTimeStoryMode(mode)
             || mode === core_constants.MODE.THEME_SONG
             || (mode === core_constants.MODE.PHONE && runtimeState.activeSession?._rmtEmptyTerminal === true))) });
     if (operation.kind === 'content-item' && operation.sourceDraftId) return ui_contentManager.resumeContentRegeneration(resumeOptions);
@@ -38165,6 +38305,19 @@ async function generateModeOperation(mode, options = {}) {
             return { status: error?.name === 'AbortError' ? 'cancelled' : 'failed', error };
         }
         if (recoveryHandle) { try { await generation_recovery.noteGenerationRecoveryFailure(origin, error?.failure || error); } catch {} }
+        if (recoveryHandle && error?.name !== 'AbortError') {
+            try {
+                const summary = generation_recovery.generationRecoverySummary(recoveryHandle.journal);
+                if (summary?.canRetry && !summary.canContinue && !summary.oversized && !summary.blocked) {
+                    core_requestCoordinator.noteRetryableGeneration({
+                        mode,
+                        draftId: recoveryHandle.journal.draftId || '',
+                        pageId: recoveryHandle.journal.pageId || mode,
+                        label: core_constants.MODE_LABEL[mode] || mode,
+                    });
+                }
+            } catch { /* A missed auto-retry leaves the manual button in the task center. */ }
+        }
         if (error?.name === 'AbortError') {
             console.warn('[HeartbeatMemories] generation aborted by extension/task cancellation', { mode });
             return null;
@@ -40851,9 +41004,11 @@ function __init_ui_taskCenter_js() {
 // MODULE: ui/taskCenter.js
 const archive_groups = __m_archive_groups_js;
 const archive_library = __m_archive_library_js;
+const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
+const core_settings = __m_core_settings_js;
 const core_text = __m_core_text_js;
 const generation_client = __m_generation_client_js;
 const ui_overlay = __m_ui_overlay_js;
@@ -40866,9 +41021,12 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+
+
 let painting = false;
 let pumping = false;
 const queue = [];
+const autoRetryUsed = new Map();
 const picks = new Set();
 let pickScope = '';
 const QUEUE_STATUS = { queued: '排队', running: '进行中', done: '完成', failed: '失败', cancelled: '已取消' };
@@ -40921,6 +41079,39 @@ function trimQueue() {
             removed += 1;
         }
     }
+}
+
+function noteRetryableGeneration(info) {
+    const settings = core_settings.getPluginSettings();
+    if (settings.autoRetryEnabled !== true) return;
+    const mode = info?.mode;
+    const draftId = info?.draftId || '';
+    const pageId = info?.pageId || mode;
+    if (!mode || !draftId || !Object.values(core_constants.MODE).includes(mode)) return;
+    const scope = currentScope();
+    if (!scope) return;
+    const key = `${scope}|${draftId}|${pageId}|${mode}`;
+    const used = autoRetryUsed.get(key) || 0;
+    if (used >= settings.autoRetryCount) return;
+    if (queue.some(item => item.kind === 'recovery' && item.draftId === draftId && item.pageId === pageId && item.status === 'queued')) return;
+    autoRetryUsed.set(key, used + 1);
+    queue.push({
+        id: `retry-${Date.now().toString(36)}-${queue.length}`,
+        kind: 'recovery',
+        mode,
+        draftId,
+        pageId,
+        label: info.label || core_constants.MODE_LABEL[mode] || mode,
+        scope,
+        status: 'queued',
+        attached: false,
+        automatic: true,
+    });
+    trimQueue();
+    refreshTaskCenterView();
+    // The failed task is still registered until its own finally runs. Start the
+    // retry on the next turn so it does not overlap that same mode.
+    setTimeout(() => { void pumpQueue(); }, 0);
 }
 
 function enqueueSelectedModes(modes) {
@@ -40978,6 +41169,23 @@ async function pumpQueue() {
             }
             const next = queue.find(item => item.status === 'queued' && item.scope === scope);
             if (!next || runtimeState.busy) return;
+            if (next.kind === 'recovery') {
+                if (core_requestCoordinator.isModeGenerating(next.mode)) return;
+                next.status = 'running';
+                refreshTaskCenterView();
+                try {
+                    const result = await generation_client.continueSavedGeneration(next.mode, {
+                        draftId: next.draftId, pageId: next.pageId, skipConfirm: true, background: true,
+                    });
+                    if (next.status === 'running') next.status = result == null ? 'failed' : 'done';
+                } catch (error) {
+                    if (next.status === 'running') next.status = error?.name === 'AbortError' ? 'cancelled' : 'failed';
+                }
+                trimQueue();
+                refreshTaskCenterView();
+                if (currentScope() !== scope) return;
+                continue;
+            }
             if (core_requestCoordinator.isModeGenerating(next.mode)) {
                 next.status = 'running';
                 next.attached = true;
@@ -41072,6 +41280,34 @@ function syncTaskCenterBadge() {
     if (button) button.setAttribute('aria-label', total ? `任务，${running} 项进行中，${waiting} 项排队` : '任务');
 }
 
+function recoverySectionHtml(esc) {
+    let drafts = [];
+    try { drafts = core_cache.listGenerationDrafts(); }
+    catch { drafts = []; }
+    const visible = drafts.filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).slice(0, 8);
+    if (!visible.length) return '';
+    return `<h3>未完成草稿</h3>${visible.map(row => {
+        const oversized = row.oversized === true;
+        const name = core_constants.MODE_LABEL[row.mode] || row.pageId || row.mode;
+        const action = row.canContinue ? '继续生成' : '重试未完成部分';
+        const reason = oversized
+            ? '草稿超出本地保存上限，不能继续生成'
+            : row.failureCode
+                ? core_text.safeErrorSummary({ code: row.failureCode, archiveInputCategory: row.failureCategory, recoveryPhase: row.failurePhase })
+                : (row.canContinue ? '正文未写完' : '任务尚未完成');
+        const attrs = `data-rmt-recovery-draft-id="${esc(row.draftId)}" data-rmt-recovery-page-id="${esc(row.pageId || '')}"`;
+        const retry = oversized ? '' : `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${esc(row.mode)}" ${attrs}>${action}</button>`;
+        return `<article class="rmt-task-row">
+          <header><b>${esc(name)} · 已保留 ${Number(row.completed) || 0} 个成功分段</b><span>${oversized ? '只能导出' : action}</span></header>
+          <p>${esc(String(reason || '').replace(/[。\s]+$/, ''))}</p>
+          <div class="rmt-task-actions">${retry}
+            <button type="button" class="rmt-btn" data-rmt-recovery-export="${esc(row.mode)}" ${attrs}>导出未提交草稿</button>
+            <button type="button" class="rmt-btn" data-rmt-recovery-discard="${esc(row.mode)}" ${attrs}>放弃这份草稿</button>
+          </div>
+        </article>`;
+    }).join('')}`;
+}
+
 function paintTaskCenter(panel) {
     const rows = core_requestCoordinator.listChatTaskSnapshot();
     const running = rows.filter(row => row.running);
@@ -41094,9 +41330,10 @@ function paintTaskCenter(panel) {
     const recentQueue = mine.filter(item => item.status !== 'queued' && item.status !== 'running').slice(-4);
     const queueRow = (item, order) => `<article class="rmt-task-row">
       <header><b>${order ? `${order}. ` : ''}${esc(item.label)}</b><span>${esc(QUEUE_STATUS[item.status] || item.status)}</span></header>
-      <p>当前聊天 · 串行队列</p>
+      <p>${item.kind === 'recovery' ? '自动重试未完成部分' : '当前聊天 · 串行队列'}</p>
       ${item.status === 'queued' ? `<div class="rmt-task-actions"><button type="button" class="rmt-btn" data-rmt-action="task-queue-remove" data-rmt-queue-id="${esc(item.id)}">移出队列</button></div>` : ''}
     </article>`;
+    const recoveryHtml = recoverySectionHtml(esc);
     const queueHtml = (active || waiting.length || recentQueue.length)
         ? `<h3>排队</h3>${active ? `<p class="rmt-task-note">正在串行处理「${esc(active.label)}」，完成后才开始下一项。</p>` : ''}${waiting.map((item, index) => queueRow(item, index + 1)).join('')}${recentQueue.map(item => queueRow(item, 0)).join('')}`
         : '';
@@ -41107,6 +41344,7 @@ function paintTaskCenter(panel) {
     </div>
     <p class="rmt-task-note">这里只显示任务名称、阶段和是否落盘。不会显示密钥、提示词或世界书正文。档案整理完成后可以多选，再按顺序一次生成一项。</p>
     ${queueHtml}
+    ${recoveryHtml}
     ${running.length ? running.map(rowHtml).join('') : '<p class="rmt-task-empty">当前没有进行中的任务。</p>'}
     <div class="rmt-task-actions">
       <button type="button" class="rmt-btn" data-rmt-action="task-cancel-current" ${currentNames.length || waiting.length ? '' : 'disabled'}>取消当前聊天全部任务</button>
@@ -41135,6 +41373,9 @@ function refreshTaskCenterView() {
 function bindTaskCenterRefresh() {
     if (typeof core_requestCoordinator.setTaskCenterRefresh === 'function') {
         core_requestCoordinator.setTaskCenterRefresh(refreshTaskCenterView);
+    }
+    if (typeof core_requestCoordinator.setAutoRetryHandler === 'function') {
+        core_requestCoordinator.setAutoRetryHandler(noteRetryableGeneration);
     }
 }
 
@@ -41247,6 +41488,7 @@ function handleTaskCenterAction(action, actionEl) {
 
 __m_ui_taskCenter_js.queuePickHtml = queuePickHtml;
 __m_ui_taskCenter_js.setQueuePick = setQueuePick;
+__m_ui_taskCenter_js.noteRetryableGeneration = noteRetryableGeneration;
 __m_ui_taskCenter_js.enqueueSelectedModes = enqueueSelectedModes;
 __m_ui_taskCenter_js.ensureTaskCenterChrome = ensureTaskCenterChrome;
 __m_ui_taskCenter_js.hideTaskCenter = hideTaskCenter;
@@ -46566,6 +46808,24 @@ async function waitBeforeSegmentRetry(error, attempt = 0) {
     await core_context.yieldToUi();
 }
 
+let autoRetryHandler = null;
+const pendingAutoRetries = [];
+
+function setAutoRetryHandler(handler) {
+    autoRetryHandler = typeof handler === 'function' ? handler : null;
+    if (!autoRetryHandler) return;
+    const pending = pendingAutoRetries.splice(0);
+    for (const item of pending) autoRetryHandler(item);
+}
+
+function noteRetryableGeneration(item) {
+    if (!item?.mode || !item?.draftId) return;
+    if (typeof autoRetryHandler === 'function') autoRetryHandler(item);
+    else if (pendingAutoRetries.length < 8) pendingAutoRetries.push({
+        mode: item.mode, draftId: item.draftId, pageId: item.pageId || item.mode, label: item.label || item.mode,
+    });
+}
+
 function refreshConcurrentTaskUi(taskMode = '', origin = null) {
     // Detached ArchiveTarget work must never touch the currently open chat merely to refresh
     // task chrome. The lightweight status path reads active task records only; it does not call
@@ -46648,6 +46908,8 @@ __m_core_requestCoordinator_js.shouldRetrySegmentRequest = shouldRetrySegmentReq
 __m_core_requestCoordinator_js.stopsCompositeGeneration = stopsCompositeGeneration;
 __m_core_requestCoordinator_js.validateGeneratedSegment = validateGeneratedSegment;
 __m_core_requestCoordinator_js.segmentRetryDelayMs = segmentRetryDelayMs;
+__m_core_requestCoordinator_js.setAutoRetryHandler = setAutoRetryHandler;
+__m_core_requestCoordinator_js.noteRetryableGeneration = noteRetryableGeneration;
 __m_core_requestCoordinator_js.refreshConcurrentTaskUi = refreshConcurrentTaskUi;
 __m_core_requestCoordinator_js.MAX_SEGMENT_ATTEMPTS = MAX_SEGMENT_ATTEMPTS;
 __m_core_requestCoordinator_js.MAX_RATE_LIMIT_ATTEMPTS = MAX_RATE_LIMIT_ATTEMPTS;

@@ -1070,6 +1070,24 @@ export async function waitBeforeSegmentRetry(error, attempt = 0) {
     await core_context.yieldToUi();
 }
 
+let autoRetryHandler = null;
+const pendingAutoRetries = [];
+
+export function setAutoRetryHandler(handler) {
+    autoRetryHandler = typeof handler === 'function' ? handler : null;
+    if (!autoRetryHandler) return;
+    const pending = pendingAutoRetries.splice(0);
+    for (const item of pending) autoRetryHandler(item);
+}
+
+export function noteRetryableGeneration(item) {
+    if (!item?.mode || !item?.draftId) return;
+    if (typeof autoRetryHandler === 'function') autoRetryHandler(item);
+    else if (pendingAutoRetries.length < 8) pendingAutoRetries.push({
+        mode: item.mode, draftId: item.draftId, pageId: item.pageId || item.mode, label: item.label || item.mode,
+    });
+}
+
 export function refreshConcurrentTaskUi(taskMode = '', origin = null) {
     // Detached ArchiveTarget work must never touch the currently open chat merely to refresh
     // task chrome. The lightweight status path reads active task records only; it does not call

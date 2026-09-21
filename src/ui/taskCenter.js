@@ -1,8 +1,10 @@
 import * as archive_groups from '../archive/groups.js';
 import * as archive_library from '../archive/library.js';
+import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
+import * as core_settings from '../core/settings.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
 import { state as runtimeState } from '../core/state.js';
@@ -11,6 +13,7 @@ import * as ui_overlay from './overlay.js';
 let painting = false;
 let pumping = false;
 const queue = [];
+const autoRetryUsed = new Map();
 const picks = new Set();
 let pickScope = '';
 const QUEUE_STATUS = { queued: '排队', running: '进行中', done: '完成', failed: '失败', cancelled: '已取消' };
@@ -63,6 +66,39 @@ function trimQueue() {
             removed += 1;
         }
     }
+}
+
+export function noteRetryableGeneration(info) {
+    const settings = core_settings.getPluginSettings();
+    if (settings.autoRetryEnabled !== true) return;
+    const mode = info?.mode;
+    const draftId = info?.draftId || '';
+    const pageId = info?.pageId || mode;
+    if (!mode || !draftId || !Object.values(core_constants.MODE).includes(mode)) return;
+    const scope = currentScope();
+    if (!scope) return;
+    const key = `${scope}|${draftId}|${pageId}|${mode}`;
+    const used = autoRetryUsed.get(key) || 0;
+    if (used >= settings.autoRetryCount) return;
+    if (queue.some(item => item.kind === 'recovery' && item.draftId === draftId && item.pageId === pageId && item.status === 'queued')) return;
+    autoRetryUsed.set(key, used + 1);
+    queue.push({
+        id: `retry-${Date.now().toString(36)}-${queue.length}`,
+        kind: 'recovery',
+        mode,
+        draftId,
+        pageId,
+        label: info.label || core_constants.MODE_LABEL[mode] || mode,
+        scope,
+        status: 'queued',
+        attached: false,
+        automatic: true,
+    });
+    trimQueue();
+    refreshTaskCenterView();
+    // The failed task is still registered until its own finally runs. Start the
+    // retry on the next turn so it does not overlap that same mode.
+    setTimeout(() => { void pumpQueue(); }, 0);
 }
 
 export function enqueueSelectedModes(modes) {
@@ -120,6 +156,23 @@ async function pumpQueue() {
             }
             const next = queue.find(item => item.status === 'queued' && item.scope === scope);
             if (!next || runtimeState.busy) return;
+            if (next.kind === 'recovery') {
+                if (core_requestCoordinator.isModeGenerating(next.mode)) return;
+                next.status = 'running';
+                refreshTaskCenterView();
+                try {
+                    const result = await generation_client.continueSavedGeneration(next.mode, {
+                        draftId: next.draftId, pageId: next.pageId, skipConfirm: true, background: true,
+                    });
+                    if (next.status === 'running') next.status = result == null ? 'failed' : 'done';
+                } catch (error) {
+                    if (next.status === 'running') next.status = error?.name === 'AbortError' ? 'cancelled' : 'failed';
+                }
+                trimQueue();
+                refreshTaskCenterView();
+                if (currentScope() !== scope) return;
+                continue;
+            }
             if (core_requestCoordinator.isModeGenerating(next.mode)) {
                 next.status = 'running';
                 next.attached = true;
@@ -214,6 +267,34 @@ function syncTaskCenterBadge() {
     if (button) button.setAttribute('aria-label', total ? `任务，${running} 项进行中，${waiting} 项排队` : '任务');
 }
 
+function recoverySectionHtml(esc) {
+    let drafts = [];
+    try { drafts = core_cache.listGenerationDrafts(); }
+    catch { drafts = []; }
+    const visible = drafts.filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).slice(0, 8);
+    if (!visible.length) return '';
+    return `<h3>未完成草稿</h3>${visible.map(row => {
+        const oversized = row.oversized === true;
+        const name = core_constants.MODE_LABEL[row.mode] || row.pageId || row.mode;
+        const action = row.canContinue ? '继续生成' : '重试未完成部分';
+        const reason = oversized
+            ? '草稿超出本地保存上限，不能继续生成'
+            : row.failureCode
+                ? core_text.safeErrorSummary({ code: row.failureCode, archiveInputCategory: row.failureCategory, recoveryPhase: row.failurePhase })
+                : (row.canContinue ? '正文未写完' : '任务尚未完成');
+        const attrs = `data-rmt-recovery-draft-id="${esc(row.draftId)}" data-rmt-recovery-page-id="${esc(row.pageId || '')}"`;
+        const retry = oversized ? '' : `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${esc(row.mode)}" ${attrs}>${action}</button>`;
+        return `<article class="rmt-task-row">
+          <header><b>${esc(name)} · 已保留 ${Number(row.completed) || 0} 个成功分段</b><span>${oversized ? '只能导出' : action}</span></header>
+          <p>${esc(String(reason || '').replace(/[。\s]+$/, ''))}</p>
+          <div class="rmt-task-actions">${retry}
+            <button type="button" class="rmt-btn" data-rmt-recovery-export="${esc(row.mode)}" ${attrs}>导出未提交草稿</button>
+            <button type="button" class="rmt-btn" data-rmt-recovery-discard="${esc(row.mode)}" ${attrs}>放弃这份草稿</button>
+          </div>
+        </article>`;
+    }).join('')}`;
+}
+
 function paintTaskCenter(panel) {
     const rows = core_requestCoordinator.listChatTaskSnapshot();
     const running = rows.filter(row => row.running);
@@ -236,9 +317,10 @@ function paintTaskCenter(panel) {
     const recentQueue = mine.filter(item => item.status !== 'queued' && item.status !== 'running').slice(-4);
     const queueRow = (item, order) => `<article class="rmt-task-row">
       <header><b>${order ? `${order}. ` : ''}${esc(item.label)}</b><span>${esc(QUEUE_STATUS[item.status] || item.status)}</span></header>
-      <p>当前聊天 · 串行队列</p>
+      <p>${item.kind === 'recovery' ? '自动重试未完成部分' : '当前聊天 · 串行队列'}</p>
       ${item.status === 'queued' ? `<div class="rmt-task-actions"><button type="button" class="rmt-btn" data-rmt-action="task-queue-remove" data-rmt-queue-id="${esc(item.id)}">移出队列</button></div>` : ''}
     </article>`;
+    const recoveryHtml = recoverySectionHtml(esc);
     const queueHtml = (active || waiting.length || recentQueue.length)
         ? `<h3>排队</h3>${active ? `<p class="rmt-task-note">正在串行处理「${esc(active.label)}」，完成后才开始下一项。</p>` : ''}${waiting.map((item, index) => queueRow(item, index + 1)).join('')}${recentQueue.map(item => queueRow(item, 0)).join('')}`
         : '';
@@ -249,6 +331,7 @@ function paintTaskCenter(panel) {
     </div>
     <p class="rmt-task-note">这里只显示任务名称、阶段和是否落盘。不会显示密钥、提示词或世界书正文。档案整理完成后可以多选，再按顺序一次生成一项。</p>
     ${queueHtml}
+    ${recoveryHtml}
     ${running.length ? running.map(rowHtml).join('') : '<p class="rmt-task-empty">当前没有进行中的任务。</p>'}
     <div class="rmt-task-actions">
       <button type="button" class="rmt-btn" data-rmt-action="task-cancel-current" ${currentNames.length || waiting.length ? '' : 'disabled'}>取消当前聊天全部任务</button>
@@ -277,6 +360,9 @@ function refreshTaskCenterView() {
 function bindTaskCenterRefresh() {
     if (typeof core_requestCoordinator.setTaskCenterRefresh === 'function') {
         core_requestCoordinator.setTaskCenterRefresh(refreshTaskCenterView);
+    }
+    if (typeof core_requestCoordinator.setAutoRetryHandler === 'function') {
+        core_requestCoordinator.setAutoRetryHandler(noteRetryableGeneration);
     }
 }
 

@@ -9,19 +9,29 @@ import * as generation_client from '../generation/client.js';
 import { state as runtimeState } from '../core/state.js';
 
 const STYLE_ID = 'heartbeat_memories_scene_picker_styles';
+const PAGE_SIZE = 40;
 let lastScenes = [];
 let selectedIds = new Set();
+let searchIndex = new Map();
 let mode = 'check';
+let filterText = '';
+let filterProvider = 'all';
+let filterDate = 'all';
+let page = 0;
+let renderTimer = 0;
 
 function ensureStyles() {
     if (document.getElementById(STYLE_ID)) return;
     const style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
-.rmt-scene-picker{display:grid;gap:10px;margin-top:12px;padding:12px;border:1px solid var(--rmt-theme-border,#d4e1e7);border-radius:14px;background:rgba(255,255,255,.72)}
+.rmt-scene-picker{display:grid;gap:10px;margin-top:12px;padding:12px;border:1px solid var(--rmt-theme-border,#d4e1e7);border-radius:14px;background:var(--rmt-theme-surface-solid,var(--rmt-theme-bg,#fff));color:var(--rmt-theme-text,#52677b)}
 .rmt-scene-picker h3{margin:0;font-size:14px;color:var(--rmt-theme-text,#52677b)}
-.rmt-scene-picker-toolbar,.rmt-scene-picker-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.rmt-scene-item{border:1px solid var(--rmt-theme-border,#d8e3e8);border-radius:12px;padding:8px 10px;background:var(--rmt-theme-surface,#fff)}
+.rmt-scene-picker-toolbar,.rmt-scene-picker-actions,.rmt-scene-filters,.rmt-scene-pager{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.rmt-scene-filters input,.rmt-scene-filters select{min-height:36px;box-sizing:border-box}
+.rmt-scene-filters input{flex:1 1 180px;min-width:0}
+.rmt-scene-list{display:grid;gap:8px;max-height:min(62vh,720px);overflow:auto}
+.rmt-scene-item{border:1px solid var(--rmt-theme-border,#d8e3e8);border-radius:12px;padding:8px 10px;background:var(--rmt-theme-surface,#fff);color:var(--rmt-theme-text,#52677b)}
 .rmt-scene-item summary{display:flex;gap:8px;align-items:flex-start;cursor:pointer;list-style:none}
 .rmt-scene-item summary::-webkit-details-marker{display:none}
 .rmt-scene-item em{display:block;margin-top:8px;white-space:pre-wrap;font-style:normal;color:var(--rmt-theme-muted,#718092);font-size:12px;line-height:1.65}
@@ -42,25 +52,71 @@ function selectedScenes() {
     return archive_storyScenes.sortScenes(chosen).slice(0, archive_storyScenes.SCENE_BATCH_SIZE);
 }
 
+function indexScenes(scenes) {
+    searchIndex = new Map();
+    for (const scene of scenes) {
+        searchIndex.set(scene.id, `${scene.title || ''} ${scene.timeLabel || ''} ${scene.date || ''} ${scene.provider || ''} ${scene.world || ''} ${(scene.plot || '').slice(0, 400)}`.toLowerCase());
+    }
+}
+
+function filteredScenes() {
+    const query = filterText.trim().toLowerCase();
+    return lastScenes.filter(scene => {
+        if (filterProvider !== 'all' && scene.provider !== filterProvider) return false;
+        const unlabeled = !String(scene.date || '').trim();
+        if (filterDate === 'dated' && unlabeled) return false;
+        if (filterDate === 'unlabeled' && !unlabeled) return false;
+        if (query && !(searchIndex.get(scene.id) || '').includes(query)) return false;
+        return true;
+    });
+}
+
+function scheduleRender(root) {
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(() => renderList(root), 180);
+}
+
+function fillScenePlot(details) {
+    if (!details?.open || details.dataset.rmtScenePlot === '1') return;
+    const scene = lastScenes.find(item => item.id === details.dataset.rmtSceneId);
+    const plot = document.createElement('em');
+    plot.textContent = scene?.plot || '这条场景没有正文。';
+    details.appendChild(plot);
+    details.dataset.rmtScenePlot = '1';
+}
+
 function renderList(root) {
-    const unlabeled = lastScenes.filter(scene => !scene.date || !scene.date.trim()).length;
-    const rows = archive_storyScenes.sortScenes(lastScenes).map(scene => {
-        const unlabeledItem = !scene.date;
-        const checked = mode === 'earliest'
-            ? archive_storyScenes.earliestScenes(lastScenes).some(item => item.id === scene.id)
-            : selectedIds.has(scene.id);
+    if (!root?.querySelector) return;
+    const unlabeled = lastScenes.filter(scene => !String(scene.date || '').trim()).length;
+    const visible = filteredScenes();
+    const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+    page = Math.max(0, Math.min(page, pageCount - 1));
+    const earliestIds = mode === 'earliest'
+        ? new Set(archive_storyScenes.earliestScenes(lastScenes).map(item => item.id))
+        : null;
+    const slice = visible.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+    const rows = slice.map(scene => {
+        const unlabeledItem = !String(scene.date || '').trim();
+        const checked = earliestIds ? earliestIds.has(scene.id) : selectedIds.has(scene.id);
+        const provider = scene.provider === 'baibai' ? '柏宝书' : scene.provider === 'qianqianjie' ? '千千结' : scene.provider === 'worldbook' ? '世界书' : scene.provider;
         return `<details class="rmt-scene-item ${unlabeledItem ? 'rmt-scene-unlabeled' : ''}" data-rmt-scene-id="${core_text.esc(scene.id)}">
           <summary><label><input type="checkbox" data-rmt-scene-check="${core_text.esc(scene.id)}" ${checked ? 'checked' : ''} ${mode === 'earliest' ? 'disabled' : ''}> <b>${core_text.esc(scene.title || scene.timeLabel || scene.id)}</b></label>
-          <small>${core_text.esc(scene.provider)} · ${core_text.esc(scene.timeLabel || '未标注时间')} · ${core_text.esc(scene.date || '未标注日期')}</small></summary>
+          <small>${core_text.esc(provider)} · ${core_text.esc(scene.timeLabel || '未标注时间')} · ${core_text.esc(scene.date || '未标注日期')}</small></summary>
           <input type="text" data-rmt-scene-date="${core_text.esc(scene.id)}" value="${core_text.esc(scene.date || '')}" placeholder="手填公历 YYYY/MM/DD 或历年，例如庆历四年二月初五日">
-          <em>${core_text.esc(scene.plot || '')}</em>
         </details>`;
     }).join('');
-    root.querySelector('[data-rmt-scene-list]').innerHTML = rows || '<p>还没有扫描到时间场景。先选世界书或确认柏宝书/千千结可读，再点「扫描场景」。</p>';
+    const list = root.querySelector('[data-rmt-scene-list]');
+    if (list) list.innerHTML = rows || '<p>没有符合筛选的场景。</p>';
+    const pager = root.querySelector('[data-rmt-scene-pager]');
+    if (pager) {
+        pager.hidden = visible.length <= PAGE_SIZE;
+        const label = pager.querySelector('[data-rmt-scene-page-label]');
+        if (label) label.textContent = `第 ${page + 1} / ${pageCount} 页`;
+    }
     const status = root.querySelector('[data-rmt-scene-status]');
     if (status) {
         status.textContent = lastScenes.length
-            ? `共 ${lastScenes.length} 条场景，未标注 ${unlabeled}。勾选最多 20 条，或改用从早到晚 20 条。扫描不请求模型。`
+            ? `共 ${lastScenes.length} 条，筛选后 ${visible.length} 条，未标注 ${unlabeled}。本页 ${slice.length} 条；正文在展开时才读取。勾选最多 20 条。`
             : '尚未扫描。';
     }
 }
@@ -77,8 +133,27 @@ export function mountScenePicker(target) {
         <button type="button" class="menu_button" data-rmt-scene-scan>扫描场景</button>
         <button type="button" class="menu_button" data-rmt-scene-estimate>用 AI 估日期</button>
       </div>
+      <div class="rmt-scene-filters">
+        <input type="search" data-rmt-scene-filter placeholder="筛选标题、时间或正文开头" value="${core_text.esc(filterText)}">
+        <select data-rmt-scene-provider aria-label="来源">
+          <option value="all" ${filterProvider === 'all' ? 'selected' : ''}>全部来源</option>
+          <option value="worldbook" ${filterProvider === 'worldbook' ? 'selected' : ''}>世界书</option>
+          <option value="baibai" ${filterProvider === 'baibai' ? 'selected' : ''}>柏宝书</option>
+          <option value="qianqianjie" ${filterProvider === 'qianqianjie' ? 'selected' : ''}>千千结</option>
+        </select>
+        <select data-rmt-scene-date-filter aria-label="日期">
+          <option value="all" ${filterDate === 'all' ? 'selected' : ''}>全部日期</option>
+          <option value="dated" ${filterDate === 'dated' ? 'selected' : ''}>已标注</option>
+          <option value="unlabeled" ${filterDate === 'unlabeled' ? 'selected' : ''}>未标注</option>
+        </select>
+      </div>
       <div data-rmt-scene-status role="status">展开后扫描。扫描本身不收费。</div>
-      <div data-rmt-scene-list></div>
+      <div class="rmt-scene-list" data-rmt-scene-list></div>
+      <div class="rmt-scene-pager" data-rmt-scene-pager hidden>
+        <button type="button" class="menu_button" data-rmt-scene-page="prev">上一页</button>
+        <span data-rmt-scene-page-label>第 1 / 1 页</span>
+        <button type="button" class="menu_button" data-rmt-scene-page="next">下一页</button>
+      </div>
       <div class="rmt-scene-picker-actions">
         <button type="button" class="menu_button rmt-settings-wide" data-rmt-scene-import>用当前选择建档</button>
       </div>
@@ -90,7 +165,9 @@ async function scanScenes(root) {
     const status = root.querySelector('[data-rmt-scene-status]');
     if (status) status.textContent = '正在扫描世界书 / 柏宝书 / 千千结…';
     lastScenes = await archive_storyScenes.collectStoryScenes();
+    indexScenes(lastScenes);
     selectedIds = new Set();
+    page = 0;
     renderList(root);
 }
 
@@ -126,6 +203,7 @@ async function estimateDates(root) {
         if (next.date) byId.set(scene.id, next);
     }
     lastScenes = archive_storyScenes.sortScenes([...byId.values()]);
+    indexScenes(lastScenes);
     renderList(root);
 }
 
@@ -155,6 +233,38 @@ export async function handleScenePickerEvent(event) {
         renderList(root);
         return true;
     }
+    const pageButton = event.target.closest?.('[data-rmt-scene-page]');
+    if (pageButton) {
+        page += pageButton.dataset.rmtScenePage === 'next' ? 1 : -1;
+        renderList(root);
+        return true;
+    }
+    const filterInput = event.target.closest?.('[data-rmt-scene-filter]');
+    if (filterInput && event.type === 'input') {
+        filterText = filterInput.value || '';
+        page = 0;
+        scheduleRender(root);
+        return true;
+    }
+    const providerSelect = event.target.closest?.('[data-rmt-scene-provider]');
+    if (providerSelect && event.type === 'change') {
+        filterProvider = ['worldbook', 'baibai', 'qianqianjie'].includes(providerSelect.value) ? providerSelect.value : 'all';
+        page = 0;
+        renderList(root);
+        return true;
+    }
+    const dateSelect = event.target.closest?.('[data-rmt-scene-date-filter]');
+    if (dateSelect && event.type === 'change') {
+        filterDate = ['dated', 'unlabeled'].includes(dateSelect.value) ? dateSelect.value : 'all';
+        page = 0;
+        renderList(root);
+        return true;
+    }
+    const summary = event.target.closest?.('summary');
+    const details = summary?.closest?.('details.rmt-scene-item');
+    if (details && !event.target.closest?.('[data-rmt-scene-check]')) {
+        queueMicrotask(() => fillScenePlot(details));
+    }
     const check = event.target.closest?.('[data-rmt-scene-check]');
     if (check) {
         if (check.checked) {
@@ -173,6 +283,7 @@ export async function handleScenePickerEvent(event) {
         if (scene) {
             Object.assign(scene, archive_storyScenes.applySceneDate(scene, dateInput.value));
             lastScenes = archive_storyScenes.sortScenes(lastScenes);
+            indexScenes(lastScenes);
             renderList(root);
         }
         return true;

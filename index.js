@@ -1,5 +1,5 @@
-const VERSION = '0.94';
-const BUILD = '0.94-tt-cg-r84.40-theme-queue';
+const VERSION = '0.95';
+const BUILD = '0.95-tt-cg-r84.41-retry-scenes';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

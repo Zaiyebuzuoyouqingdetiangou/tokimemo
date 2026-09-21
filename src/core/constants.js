@@ -201,6 +201,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
     // not exposed through the current context registry. Off by default; when enabled we may use
     // the public executeSlashCommandsWithOptions('/sd quiet=true ...') path with a sanitized prompt.
     imageGenerationManualEnabled: false,
+    autoRetryEnabled: false,
+    autoRetryCount: 1,
     creativeSupplementEnabled: false,
     creativeSupplement: '',
     imageGenerationProvider: 'baibai-image',

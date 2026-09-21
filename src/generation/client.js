@@ -1212,12 +1212,12 @@ export async function continueSavedGeneration(mode, options = {}) {
     const existing = core_cache.loadGenerationRecovery(mode, context, targetOptions.archiveTarget?.cache,
         { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
     if (!existing) { globalThis.toastr?.info?.('当前档案没有可继续的草稿，不会发起新请求。', '心迹回廊'); return; }
-    if (!ui_overlay.confirmExplicitAction('继续未完成内容？', '只补原任务未完成的内容，会使用文本生成额度。认证或额度问题需要先在设置里解决；取消不改动草稿。', { destructive: false })) return;
+    if (options.skipConfirm !== true && !ui_overlay.confirmExplicitAction('继续未完成内容？', '只补原任务未完成的内容，会使用文本生成额度。认证或额度问题需要先在设置里解决；取消不改动草稿。', { destructive: false })) return;
     const operation = existing.operation || { kind: 'mode', mode };
     const resumeOptions = { ...options, ...targetOptions, existing, continueRecovery: true,
         ...(operation.participantRegeneration ? { participantRegeneration: operation.participantRegeneration } : {}) };
     if (operation.kind === 'mode') return generateMode(mode, { ...resumeOptions,
-        background: !(runtimeState.activeMode === mode && (time_stories.isTimeStoryMode(mode)
+        background: options.skipConfirm === true || !(runtimeState.activeMode === mode && (time_stories.isTimeStoryMode(mode)
             || mode === core_constants.MODE.THEME_SONG
             || (mode === core_constants.MODE.PHONE && runtimeState.activeSession?._rmtEmptyTerminal === true))) });
     if (operation.kind === 'content-item' && operation.sourceDraftId) return ui_contentManager.resumeContentRegeneration(resumeOptions);
@@ -1851,6 +1851,19 @@ async function generateModeOperation(mode, options = {}) {
             return { status: error?.name === 'AbortError' ? 'cancelled' : 'failed', error };
         }
         if (recoveryHandle) { try { await generation_recovery.noteGenerationRecoveryFailure(origin, error?.failure || error); } catch {} }
+        if (recoveryHandle && error?.name !== 'AbortError') {
+            try {
+                const summary = generation_recovery.generationRecoverySummary(recoveryHandle.journal);
+                if (summary?.canRetry && !summary.canContinue && !summary.oversized && !summary.blocked) {
+                    core_requestCoordinator.noteRetryableGeneration({
+                        mode,
+                        draftId: recoveryHandle.journal.draftId || '',
+                        pageId: recoveryHandle.journal.pageId || mode,
+                        label: core_constants.MODE_LABEL[mode] || mode,
+                    });
+                }
+            } catch { /* A missed auto-retry leaves the manual button in the task center. */ }
+        }
         if (error?.name === 'AbortError') {
             console.warn('[HeartbeatMemories] generation aborted by extension/task cancellation', { mode });
             return null;

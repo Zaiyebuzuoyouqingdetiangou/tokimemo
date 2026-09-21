@@ -15,6 +15,12 @@ import * as core_autoUpdatePolicy from './autoUpdatePolicy.js';
 import * as creative_supplement from './creativeSupplement.js';
 import * as chat_read_range from './chatReadRange.js';
 
+export function normalizeAutoRetryCount(value) {
+    const count = Math.floor(Number(value));
+    if (!Number.isFinite(count)) return 1;
+    return Math.max(1, Math.min(5, count));
+}
+
 export function normalizeBannedGeneratedPhrases(value) {
     const source = Array.isArray(value) ? value : String(value ?? '').split(/[\n,，]+/g);
     return [...new Set(source.map(item => core_text.normalizeText(item, 40).trim()).filter(Boolean))]
@@ -56,6 +62,8 @@ export function getPluginSettings(context = core_context.getContext()) {
         imageGenerationManualEnabled: false,
         imageGenerationProvider: 'baibai-image',
         cgPromptFormat: cg_format.normalizeCgPromptFormat(settings.cgPromptFormat, 'nai5-natural'),
+        autoRetryEnabled: settings.autoRetryEnabled === true,
+        autoRetryCount: normalizeAutoRetryCount(settings.autoRetryCount),
         creativeSupplementEnabled: settings.creativeSupplementEnabled === true,
         creativeSupplement: creative_supplement.normalizeCreativeSupplement(settings.creativeSupplement),
         ttDisplayMode: settings.ttDisplayMode === true,

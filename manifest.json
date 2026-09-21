@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.94-tt-cg-r84.40-theme-queue",
+  "js": "index.js?heartbeat=0.95-tt-cg-r84.41-retry-scenes",
   "author": "Toto",
-  "version": "0.94",
+  "version": "0.95",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.40：任务中心和生成页跟随主题色；任务改为图标；档案整理完成后可多选并串行排队。",
+  "description": "r84.41：未完成草稿进入任务中心，自动重试默认关闭；按时间建档扫描后分页筛选，避免一次画上千条。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
