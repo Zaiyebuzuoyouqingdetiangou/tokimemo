@@ -1224,6 +1224,7 @@ export async function ensureRoomLifePlan(options = {}) {
     const logicalTask = core_requestCoordinator.beginLogicalGenerationTask({ kind: 'room-daily-life', mode: core_constants.MODE.ROOM,
         pageId: 'roomLife', context, origin, taskKey: `room-life-operation:${core_context.chatScopeKey(context)}`,
         parentTaskId: options.logicalParentTaskId, label: '今日生活' });
+    if (roomSession.participantSnapshot) logicalTask.participantPromptIndexed = true;
     let result;
     try {
         result = await ensureRoomLifePlanOperation({ ...options, roomSession, logicalTask,
@@ -2110,7 +2111,7 @@ async function refreshRoomParticipantFigures(context, memoryBank, origin, taskKe
     const presentation = options.presentationContext || {};
     const request = options.request || generation_client.requestValidatedSegment;
     const figures = await request(`仅更新所选人物各自外形，不生成房间、对白或故事。一次返回 {"residents":[{"participantId":"原id","visualProfile":{"figure":{},"explicitFields":[],"explicitEvidence":{}}}]}。
-${core_participants.participantPromptBlock(snapshot)}
+${core_participants.participantIndexPromptBlock(snapshot)}
 枚举：${JSON.stringify(ROOM_VISUAL_VALUES)}。每人只使用自己的来源设定作外貌证据；explicitEvidence 必须原样复制对应人物所选世界书内容。缺乏证据的外貌用 unspecified，detail 用 none，不借用其他人物或玩家外貌。`,
     '正在更新所选人物外形，保留房间内容…', { context, contextEnvelope: presentation.contextEnvelope, origin,
         taskKey: `${taskKey}:figure`, mode: core_constants.MODE.ROOM, maxTokens: 2500, background: true }, raw => {
@@ -2148,7 +2149,7 @@ function roomParticipantsLifePrompt(context, session, memoryBank, date, snapshot
         ? core_evidence.memoryPayload(memoryBank, referencedMemoryIds, 24)
         : core_evidence.memoryPayload(memoryBank, null, 12);
     return `${generation_prompts.promptSafetyBoundary(context, '共同房间的今日生活')}
-${core_participants.participantPromptBlock(snapshot)}
+${core_participants.participantIndexPromptBlock(snapshot)}
 为 ${dateKey} 生成同一住处的共享生活时间线，一次返回所有选定人物。只使用已有空间/物件；各人可以一起活动或分别处在不同空间，不替用户行动或回应。
 INPUT_JSON:
 ${JSON.stringify({ date: dateKey, home: roomBlueprintPayload(session), memories: lifeMemories }, null, 2)}

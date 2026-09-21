@@ -134,6 +134,7 @@ export function bindOverlayCloseFallback(overlay) {
 
 export function revealArchiveOverlay(overlay) {
     if (!overlay) return;
+    try { runtimeState.renderedChatScope = core_context.chatScopeKey(core_context.currentCharacterGuard()); } catch {}
     overlay.hidden = false;
     overlay.removeAttribute('aria-hidden');
     if (typeof globalThis.HTMLDialogElement === 'function' && overlay instanceof globalThis.HTMLDialogElement) {
@@ -193,13 +194,18 @@ export function openOverlay() {
     return overlay;
 }
 
-export function closeOverlay() {
+export function closeOverlay(options = {}) {
+    const remember = options.remember !== false;
     participant_picker.closeParticipantPicker();
     image_viewer.closeCgImageViewer({ restoreFocus: false });
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
+    const focused = document.activeElement;
+    if (focused && overlay?.contains?.(focused)) {
+        try { focused.blur(); } catch {}
+    }
     // Mobile close gestures can deliver both an early event and a click. Only
     // the first close records the page; later events must not replace it.
-    if (overlay && !overlay.hidden) {
+    if (remember && overlay && !overlay.hidden) {
         floating_archive.rememberFloatingArchive();
         navigation_bookmark.rememberReadingPosition();
     }
@@ -220,6 +226,25 @@ export function closeOverlay() {
     runtimeState.activeSession = null;
     runtimeState.contentManagerOpen = false;
     floating_archive.refreshFloatingArchive();
+}
+
+export function invalidateArchiveViewForChatNavigation(nextChatId = '') {
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    const snapshotChat = snapshot ? core_context.comparableChatId(snapshot.chatId) : '';
+    const next = core_context.comparableChatId(nextChatId);
+    closeOverlay({ remember: false });
+    if (!snapshot || snapshotChat !== next) {
+        runtimeState.activeArchiveSnapshot = null;
+        runtimeState.activeArchiveReadOnly = true;
+    }
+    runtimeState.archiveViewLevel = 'chooser';
+    runtimeState.renderedChatScope = '';
+    runtimeState.pendingArchiveEntry = 'chooser';
+    runtimeState.contentManagerOpen = false;
+    if (runtimeState.chooserRefreshTimer) {
+        clearTimeout(runtimeState.chooserRefreshTimer);
+        runtimeState.chooserRefreshTimer = 0;
+    }
 }
 
 export function bodyEl() {
@@ -914,15 +939,43 @@ export function showInlineError(message) {
         detail.prepend(box);
     }
     box.textContent = message;
-    if (runtimeState.activeMode) {
+    refreshVisibleRecoveryHost();
+}
+
+export function showInlinePreflight(summary, detailText, { error = false } = {}) {
+    const detail = document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-event-detail`) || bodyEl();
+    if (!detail) return;
+    let box = detail.querySelector('.rmt-inline-preflight');
+    if (!box) {
+        box = document.createElement('div');
+        box.className = 'rmt-inline-preflight';
+        detail.prepend(box);
+    }
+    box.classList.toggle('rmt-inline-error', error === true);
+    box.replaceChildren();
+    const details = document.createElement('details');
+    details.open = error === true;
+    const summaryEl = document.createElement('summary');
+    summaryEl.textContent = summary;
+    const body = document.createElement('pre');
+    body.textContent = detailText || '';
+    details.append(summaryEl, body);
+    box.append(details);
+}
+
+function refreshVisibleRecoveryHost() {
+    if (!runtimeState.activeMode) return;
+    const root = bodyEl();
+    if (!root) return;
+    const host = recovery_view.ensureRecoveryHost(root);
+    if (!host) return;
+    try {
         const context = core_context.getContext();
         const snapshot = runtimeState.activeArchiveSnapshot;
         const bank = snapshot?.memory || archive_repository.getImportedMemory(context);
         const all = snapshot?.cache || core_cache.getCache(context);
-        const host = document.createElement('div');
-        host.innerHTML = recovery_view.recoveryBannerHtml({ ...all, __generationRecoveryV1: { [runtimeState.activeMode]: all?.__generationRecoveryV1?.[runtimeState.activeMode] } }, bank, { readOnly: snapshot?.backupOnly });
-        box.appendChild(host);
-    }
+        host.innerHTML = recovery_view.recoveryBannerHtml(all, bank, { readOnly: snapshot?.backupOnly === true, mode: runtimeState.activeMode });
+    } catch {}
 }
 
 function emptyArchiveMode(mode, memory, context, stored) {
@@ -1178,6 +1231,12 @@ export async function saveActiveSessionEdit(mutator, { select = value => value }
 }
 
 export function renderActive() {
+    const overlay = document.getElementById(core_constants.OVERLAY_ID);
+    if (!overlay || overlay.hidden) return;
+    try {
+        const scope = core_context.chatScopeKey(core_context.currentCharacterGuard());
+        if (runtimeState.renderedChatScope && runtimeState.renderedChatScope !== scope) return;
+    } catch { return; }
     if (workspace_ui.renderEmptyWorkspace()) return;
     image_viewer.closeCgImageViewer({ restoreFocus: false });
     runtimeState.contentManagerOpen = false;

@@ -3051,7 +3051,10 @@ export async function buildControlledContextEnvelope(context, options = {}) {
     const selectedSettingText = typeof options.selectedSettingText === 'string' ? options.selectedSettingText : '';
     const hasHandPickedSettings = !!selectedSettingText.trim();
     const participantSnapshot = options.participantSnapshot || null;
-    try {
+    const controlledWorldText = typeof options.controlledWorldText === 'string' ? options.controlledWorldText : '';
+    if (controlledWorldText) {
+        worldInfo = controlledWorldText;
+    } else try {
         const extraWorldInfoScanTerms = core_text.cleanArray(options?.worldInfoScanTerms, 24, 80);
         const worldInfoScan = extraWorldInfoScanTerms;
         const globalScanData = {
@@ -3078,7 +3081,7 @@ export async function buildControlledContextEnvelope(context, options = {}) {
     } catch (error) {
         console.warn('[HeartbeatMemories] independent world-info dry run failed', core_text.safeErrorDiagnostic(error));
     }
-    if (hasHandPickedSettings) {
+    if (!controlledWorldText && hasHandPickedSettings) {
         const settingText = core_text.normalizeText(selectedSettingText, core_constants.MAX_SELECTED_SETTING_CHARS);
         const room = Math.max(0, core_constants.MAX_CONTROLLED_WORLD_TOTAL_CHARS - settingText.length - 1);
         worldInfo = [core_text.normalizeText(worldInfo, room), settingText].filter(Boolean).join('\n');
@@ -3090,7 +3093,7 @@ export async function buildControlledContextEnvelope(context, options = {}) {
                 id: core_text.normalizeText(person.id, 80),
                 name: core_text.normalizeText(person.name, 80),
                 identity: person.identity === 'user' ? 'user' : 'character',
-                summary: core_text.normalizeText(person.summary || person.description || person.content, 800),
+                summary: core_text.normalizeText((person.sourceRefs || []).map(ref => ref?.title).filter(Boolean).join('、'), 240),
             })),
         };
     }

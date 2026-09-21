@@ -12,6 +12,8 @@ import * as archive_repository from '../archive/repository.js';
 import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_cache from '../core/cache.js';
 import * as core_participants from '../core/participants.js';
+import * as core_controlledSources from '../core/controlledSources.js';
+import * as core_inputLedger from '../core/inputLedger.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
@@ -302,9 +304,9 @@ async function collectFittingSelectedSetting(context, budget = core_constants.MA
     };
 }
 
-export async function buildWorldPresentationContext(context, memoryBank, mode, origin = null) {
+export async function buildWorldPresentationContext(context, memoryBank, mode, origin = null, participantSnapshot = null) {
     context = generationContentContext(origin, context);
-    return generation_recovery.frozenGenerationInput(origin, `presentation:${mode}`, () => buildWorldPresentationContextFresh(context, memoryBank, mode));
+    return generation_recovery.frozenGenerationInput(origin, `presentation:${mode}`, () => buildWorldPresentationContextFresh(context, memoryBank, mode, participantSnapshot));
 }
 
 export async function captureRoomParticipantSnapshot(context, origin, { existing = null, participantSnapshot } = {}) {
@@ -329,8 +331,72 @@ export async function captureAlbumParticipantSnapshot(context, origin, { existin
     if (!snapshot) return null;
     return generation_recovery.frozenGenerationInput(origin, 'participants:album', () => snapshot);
 }
-async function buildWorldPresentationContextFresh(context, memoryBank, mode) {
+async function activatedWorldInfoText(context, mode) {
+    if (core_settings.getPluginSettings(context).useActivatedWorldInfo === false || typeof context.getWorldInfoPrompt !== 'function') return '';
+    try {
+        const result = await context.getWorldInfoPrompt(generationWorldInfoScanTerms(mode, context), Math.max(2048, Math.min(32768, Number(context.maxContext) || 8192)), true, {});
+        const worldText = result?.worldInfoString || [result?.worldInfoBefore, result?.worldInfoAfter].filter(Boolean).join('\n');
+        return core_contextTags.filterContextTags(core_text.normalizeText(worldText, 12000), core_contextTags.tagPolicyForContext(context));
+    } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        console.warn('[HeartbeatMemories] activated world info unavailable', core_text.safeErrorDiagnostic(error));
+        return '';
+    }
+}
+
+async function collectSelectedSettingEntries(context) {
+    try {
+        const selected = await archive_repository.collectSelectedMemoryWorldInfo(context, core_context.getChatId(context), null, { settingsOnly: true });
+        const excluded = core_contextTags.tagPolicyForContext(context);
+        const entries = [];
+        for (const entry of selected.entries || []) {
+            const content = core_contextTags.filterContextTags(entry.content, excluded);
+            if (!content) continue;
+            entries.push({ ...entry, content });
+        }
+        return { entries, incomplete: selected.coverage?.status !== 'complete', reason: core_text.normalizeText(selected.coverage?.reason, 200) };
+    } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        console.warn('[HeartbeatMemories] selected setting entries unavailable', core_text.safeErrorDiagnostic(error));
+        return { entries: [], incomplete: true, reason: '本次没能读取所选设定世界书。' };
+    }
+}
+
+async function buildWorldPresentationContextFresh(context, memoryBank, mode, participantSnapshot = null) {
     const wantsSelectedSetting = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode);
+    if (participantSnapshot?.people?.length) {
+        const selected = wantsSelectedSetting ? await collectSelectedSettingEntries(context) : { entries: [], incomplete: false, reason: '' };
+        const activatedText = selected.entries.length ? '' : await activatedWorldInfoText(context, mode);
+        const assembled = core_controlledSources.assembleControlledSources({
+            participantSnapshot,
+            selectedEntries: selected.entries,
+            activatedText,
+            budgetChars: core_constants.MAX_CONTROLLED_WORLD_TOTAL_CHARS,
+        });
+        const contextEnvelope = await core_cache.buildControlledContextEnvelope(context, {
+            worldInfoScanTerms: generationWorldInfoScanTerms(mode, context),
+            participantSnapshot,
+            controlledWorldText: assembled.worldText,
+        });
+        const notes = [assembled.note, selected.incomplete ? selected.reason : ''].filter(Boolean);
+        return {
+            contextEnvelope,
+            profile: core_worldPresentation.resolveWorldPresentation(contextEnvelope, memoryBank, worldPresentationProfileBinding(context)),
+            settingEvidence: core_worldPresentation.controlledWorldEvidence(contextEnvelope, null),
+            characterEvidence: core_worldPresentation.controlledCharacterEvidence(contextEnvelope),
+            selectedSetting: {
+                text: assembled.worldText,
+                used: assembled.used,
+                total: assembled.total,
+                dropped: assembled.dropped,
+                complete: assembled.complete && !selected.incomplete,
+                note: notes.join('；'),
+                deduplicatedChars: assembled.deduplicatedChars,
+                included: assembled.included,
+                excluded: assembled.excluded,
+            },
+        };
+    }
     let selectedSetting = wantsSelectedSetting
         ? await collectFittingSelectedSetting(context)
         : { text: '', used: 0, total: 0, dropped: 0, complete: true, note: '' };
@@ -404,9 +470,14 @@ export async function requestValidatedSegment(prompt, status, options, validator
     const logicalTask = core_requestCoordinator.logicalGenerationTaskForOrigin(options?.origin);
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
     if (logicalTask?.participantSnapshot && !options?.participantPromptApplied) {
-        const block = core_participants.participantPromptBlock(logicalTask.participantSnapshot);
-        if (!prompt.includes(block)) prompt += block;
+        const block = logicalTask.participantPromptIndexed
+            ? core_participants.participantIndexPromptBlock(logicalTask.participantSnapshot)
+            : core_participants.participantPromptBlock(logicalTask.participantSnapshot);
+        if (block && !prompt.includes(block)) prompt += block;
         options = { ...options, participantPromptApplied: true };
+    }
+    if (core_requestCoordinator.chatScopeCancellationBlocksOrigin(options?.origin)) {
+        throw core_requestCoordinator.createGenerationAbortError();
     }
     prompt = cg_policy.cgPromptForSegment(prompt, options);
     validator = cg_policy.cgSegmentValidator(validator, options);
@@ -494,6 +565,39 @@ function countPromptTokens(context, prompt, signal, timeoutMs) {
     });
 }
 
+function enrichInputBudgetError(error, logicalTask, prompt) {
+    if (error?.code !== 'RMT_INPUT_BUDGET') return error;
+    const packing = logicalTask?.inputPacking || null;
+    const ledger = core_inputLedger.accountFinalPrompt(prompt, packing);
+    const detail = core_inputLedger.preflightDetailText({ ledger, packing, budget: error.inputBudget });
+    const dropped = packing?.dropped > 0 ? `设定已发送 ${packing.used}/${packing.total}，未送入条目见同一次说明。` : '';
+    const largest = ledger.largest?.chars ? `最大占用段：${ledger.largest.label} ${ledger.largest.chars.toLocaleString()} 字符。` : '';
+    const message = [error.safeUserMessage || error.message, dropped, largest, '可以减少人物、减少设定，或在设置中提高输入预算。'].filter(Boolean).join('');
+    error.message = message;
+    error.safeUserMessage = message;
+    error.preflightDetail = detail;
+    if (logicalTask) logicalTask.preflightNotified = true;
+    return error;
+}
+
+function preflightSurfaceVisible(mode) {
+    const overlay = document.getElementById(core_constants.OVERLAY_ID);
+    return !!overlay && !overlay.hidden && !!mode && runtimeState.activeMode === mode;
+}
+
+function notifyInputPackingOnce(logicalTask, budget, prompt, options) {
+    if (!logicalTask || logicalTask.preflightNotified) return;
+    const packing = logicalTask.inputPacking;
+    if (!packing || !(packing.dropped > 0) || !packing.note) return;
+    logicalTask.preflightNotified = true;
+    const ledger = core_inputLedger.accountFinalPrompt(prompt, packing);
+    const summary = packing.note;
+    const detail = core_inputLedger.preflightDetailText({ ledger, packing, budget });
+    if (options?.automatic === true) return;
+    if (preflightSurfaceVisible(options?.mode) && options?.background !== true) ui_overlay.showInlinePreflight(summary, detail, { error: false });
+    else globalThis.toastr?.info?.(summary, `心迹回廊 · ${core_constants.MODE_LABEL[options?.mode] || '生成'}`);
+}
+
 export async function assertPromptBudget(context, prompt, { skipTokenCount = false, signal = null,
     tokenCountTimeoutMs = TOKEN_COUNT_TIMEOUT_MS, taskTrace = null } = {}) {
     if (signal?.aborted) throw core_requestCoordinator.createGenerationAbortError();
@@ -503,37 +607,44 @@ export async function assertPromptBudget(context, prompt, { skipTokenCount = fal
     budgetTokens = output_budget.normalizeInputBudgetTokens(budgetTokens);
     const charCap = output_budget.generationInputCharCap(budgetTokens);
     core_taskTrace.recordInput(taskTrace, prompt.length);
-    const budgetError = (message, tokens = null) => {
+    const budgetError = (message, tokens = null, tokensKnown = false) => {
         const error = core_text.safeUserError(message, 'RMT_INPUT_BUDGET');
-        error.inputBudget = { chars: prompt.length, tokens, budgetTokens, charCap };
+        error.inputBudget = { chars: prompt.length, tokens, tokensKnown, budgetTokens, charCap };
         return error;
     };
     if (prompt.length > charCap) {
-        throw budgetError(`本次输入 ${prompt.length.toLocaleString()} 字符，预算 ${budgetTokens.toLocaleString()} tokens，字符顶 ${charCap.toLocaleString()}。已在发送前拦截。打开设置 → 输入预算。`);
+        throw budgetError(`本次输入 ${prompt.length.toLocaleString()} 字符，预算 ${budgetTokens.toLocaleString()} tokens，字符顶 ${charCap.toLocaleString()}。tokens 未知，已按字符安全顶判断。已在发送前拦截。`);
     }
+    let tokens = null;
+    let tokensKnown = false;
     if (!skipTokenCount && typeof context.getTokenCountAsync === 'function') {
         core_taskTrace.beginStage(taskTrace, 'token-count');
         try {
             const timeout = Math.max(1, Math.min(TOKEN_COUNT_TIMEOUT_MS, Number(tokenCountTimeoutMs) || TOKEN_COUNT_TIMEOUT_MS));
             const count = await countPromptTokens(context, prompt, signal, timeout);
-            const tokens = (typeof count === 'number' || (typeof count === 'string' && count.trim())) ? Number(count) : NaN;
-            if (!Number.isFinite(tokens) || tokens < 0) {
+            const counted = (typeof count === 'number' || (typeof count === 'string' && count.trim())) ? Number(count) : NaN;
+            if (!Number.isFinite(counted) || counted < 0) {
                 throw core_text.safeUserError('本地计数暂不可用。', 'RMT_TOKEN_COUNT_UNAVAILABLE');
             }
+            tokens = Math.round(counted);
+            tokensKnown = true;
             core_taskTrace.recordInput(taskTrace, prompt.length, tokens);
-            if (Number.isFinite(tokens) && tokens > budgetTokens) {
-                throw budgetError(`本次输入 ${prompt.length.toLocaleString()} 字符 / ${Math.round(tokens).toLocaleString()} tokens，预算 ${budgetTokens.toLocaleString()}。已在发送前拦截。打开设置 → 输入预算。`, Math.round(tokens));
+            if (tokens > budgetTokens) {
+                throw budgetError(`本次输入 ${prompt.length.toLocaleString()} 字符 / ${tokens.toLocaleString()} tokens，预算 ${budgetTokens.toLocaleString()}。已在发送前拦截。`, tokens, true);
             }
             core_taskTrace.markStage(taskTrace, 'token-count');
         } catch (error) {
             core_taskTrace.markStage(taskTrace, 'token-count', false);
             if (signal?.aborted || error?.name === 'AbortError') throw core_requestCoordinator.createGenerationAbortError();
             if (error?.code === 'RMT_INPUT_BUDGET') throw error;
+            tokens = null;
+            tokensKnown = false;
             core_taskTrace.markStage(taskTrace, 'token-count-fallback');
             console.warn('[HeartbeatMemories] input token count unavailable; using character budget only', core_text.safeErrorDiagnostic(error));
         }
     }
     if (signal?.aborted) throw core_requestCoordinator.createGenerationAbortError();
+    return { chars: prompt.length, tokens, tokensKnown, budgetTokens, charCap };
 }
 
 export const GENERATED_PHRASE_EVIDENCE_KEYS = new Set([
@@ -687,11 +798,16 @@ export async function generateConfiguredJson(prompt, options = {}) {
         else signal.addEventListener('abort', abort, { once: true });
     }
     if (logicalTask.participantSnapshot && !options.participantPromptApplied) {
-        const block = core_participants.participantPromptBlock(logicalTask.participantSnapshot);
-        if (!prompt.includes(block)) prompt += block;
-        if (typeof options.recoveryBasePrompt === 'string' && !options.recoveryBasePrompt.includes(block)) {
+        const block = logicalTask.participantPromptIndexed
+            ? core_participants.participantIndexPromptBlock(logicalTask.participantSnapshot)
+            : core_participants.participantPromptBlock(logicalTask.participantSnapshot);
+        if (block && !prompt.includes(block)) prompt += block;
+        if (typeof options.recoveryBasePrompt === 'string' && block && !options.recoveryBasePrompt.includes(block)) {
             options = { ...options, recoveryBasePrompt: options.recoveryBasePrompt + block };
         }
+    }
+    if (core_requestCoordinator.chatScopeCancellationBlocksOrigin(options.origin)) {
+        throw core_requestCoordinator.createGenerationAbortError();
     }
     try {
         const result = await generateConfiguredJsonOperation(prompt, { ...options, signal: controller.signal });
@@ -738,9 +854,16 @@ ${expanded}${creativeSupplement}${phrasePolicy}`,
         if (taskTrace) taskTrace.archiveBudget = archive_requestBudget.publicBudget(budget);
         archive_requestBudget.assertArchiveRequestBudget(budget);
     } else {
-        await assertPromptBudget(context, controlledPrompt,
-            { skipTokenCount: options.skipTokenCount === true, signal: options.signal,
-                tokenCountTimeoutMs: options.tokenCountTimeoutMs, taskTrace });
+        const logicalTask = core_requestCoordinator.logicalGenerationTaskForOrigin(options.origin);
+        let budget;
+        try {
+            budget = await assertPromptBudget(context, controlledPrompt,
+                { skipTokenCount: options.skipTokenCount === true, signal: options.signal,
+                    tokenCountTimeoutMs: options.tokenCountTimeoutMs, taskTrace });
+        } catch (error) {
+            throw enrichInputBudgetError(error, logicalTask, controlledPrompt);
+        }
+        notifyInputPackingOnce(logicalTask, budget, controlledPrompt, options);
     }
     core_taskTrace.markStage(taskTrace, 'prompt');
     // The value configured in the dedicated secondary-API UI is the actual provider max output.
@@ -886,6 +1009,7 @@ export async function requestJson(prompt, statusText = '正在根据当前聊天
     const controller = new AbortController();
     const requestContext = options.context || core_context.currentCharacterGuard();
     const origin = options.origin || core_context.captureTaskOrigin(requestContext, archive_repository.getImportedMemory(requestContext)?.archiveRevision || '');
+    if (core_requestCoordinator.chatScopeCancellationBlocksOrigin(origin)) throw core_requestCoordinator.createGenerationAbortError();
     core_context.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
     const externalSignal = options.signal || null;
     const forwardAbort = () => {
@@ -1476,17 +1600,14 @@ async function generateModeOperation(mode, options = {}) {
                 participantSnapshot: options.participantRegeneration?.participantSnapshot })
             : mode === core_constants.MODE.ALBUM ? await captureAlbumParticipantSnapshot(context, origin, { existing: recoveryExisting,
                 participantSnapshot: options.participantRegeneration?.participantSnapshot }) : null;
-        if (mode === core_constants.MODE.ALBUM && participantSnapshot) {
+        if (participantSnapshot && options.logicalTask) {
+            if (mode === core_constants.MODE.ROOM) options.logicalTask.participantPromptIndexed = true;
             core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin, { participantSnapshot });
         }
         let presentationContext = null;
         if (time_stories.isTimeStoryMode(mode) || (mode === core_constants.MODE.ITEMS && previousSession && allowPersonaExpansion) || [core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode)) {
-            presentationContext = await buildWorldPresentationContext(context, memoryBank, mode, origin);
-            // Degrading is fine, degrading silently is not: the user picked these entries
-            // by hand and deserves to know which of them this request could actually carry.
-            if (!options.automatic && presentationContext.selectedSetting?.note) {
-                globalThis.toastr?.info?.(presentationContext.selectedSetting.note, `心迹回廊 · ${core_constants.MODE_LABEL[mode]}`);
-            }
+            presentationContext = await buildWorldPresentationContext(context, memoryBank, mode, origin, mode === core_constants.MODE.ROOM ? participantSnapshot : null);
+            if (options.logicalTask && presentationContext.selectedSetting) options.logicalTask.inputPacking = presentationContext.selectedSetting;
         }
         if (mode === core_constants.MODE.THEME_SONG) {
             session = await modes_song.generateThemeSong(context, memoryBank, origin, taskKey, previousSession, { plan: themeSongPlan, presentationContext });
@@ -1540,8 +1661,18 @@ async function generateModeOperation(mode, options = {}) {
             const settingSelection = modes_relations.fitRelationSettingEntries(selectedBooks.entries, { coverage: selectedBooks.coverage });
             // Same rule as the setting envelope: an unreadable or oversized book means
             // "fewer people to draw from", not "refuse to refresh the garden".
-            if (settingSelection.coverage.status !== 'complete' && !options.automatic) {
-                globalThis.toastr?.info?.(`本次按输入容量整理部分世界书条目；未送出的旧人物仅在来源仍有效时保留。${core_text.normalizeText(settingSelection.coverage?.reason, 160)}`, '心迹回廊 · 人际庭园');
+            if (settingSelection.coverage.status !== 'complete' && options.logicalTask) {
+                const kept = settingSelection.entries?.length || 0;
+                const total = (selectedBooks.entries || []).length;
+                options.logicalTask.inputPacking = {
+                    used: kept,
+                    total,
+                    dropped: Math.max(0, total - kept),
+                    note: `已发送 ${kept}/${total} 条人际设定，未送出的旧人物仅在来源仍有效时保留。${core_text.normalizeText(settingSelection.coverage?.reason, 160)}`,
+                    deduplicatedChars: 0,
+                    included: [],
+                    excluded: [],
+                };
             }
             const settingEntries = settingSelection.entries;
             const raw = await requestValidatedSegment(
@@ -1712,7 +1843,7 @@ async function generateModeOperation(mode, options = {}) {
             console.warn('[HeartbeatMemories] generation aborted by extension/task cancellation', { mode });
             return null;
         }
-        const safeError = core_text.safeErrorSummary(error);
+        const safeError = core_text.safeErrorSummary(error, 800);
         console.error('[HeartbeatMemories] generation failed', {
             mode,
             ...core_text.safeErrorDiagnostic(error),
@@ -1739,7 +1870,8 @@ async function generateModeOperation(mode, options = {}) {
             error.notified = true;
             return null;
         }
-        ui_overlay.showInlineError(safeError);
+        if (error.preflightDetail) ui_overlay.showInlinePreflight(safeError, error.preflightDetail, { error: true });
+        else ui_overlay.showInlineError(safeError);
         error.notified = true;
         return null;
     } finally {

@@ -652,7 +652,7 @@ export function multiplayerRoomPrompt(context, memoryBank, snapshot, visualValue
     return `${promptSafetyBoundary(context, '共同居住的房间')}
 本请求生成所选人物共同使用的一套房间蓝图，只返回一个 JSON；不按人物分别生成房间，也不生成手机或储物内容。
 ${core_narrativeAuthority.NARRATIVE_AUTHORITY_PROMPT}
-${core_participants.participantPromptBlock(snapshot)}
+${core_participants.participantIndexPromptBlock(snapshot)}
 UNTRUSTED_ROOM_ARCHIVE_JSON:
 ${promptArchiveSlice(memoryBank, 24)}
 只使用选定人物的 id 作为 participantId/speakerId；人物名字来自所选资料，不是角色卡总标题。根据他们各自的设定与共同居住条件安排共享或独立区域，不推断用户已经来访或同居。

@@ -78,8 +78,10 @@ export function resetArchiveOverviewForCharacter(context = core_context.currentC
 export function scheduleChooserRefresh(delay = 40) {
     if (runtimeState.archiveViewLevel !== 'chooser') return;
     if (runtimeState.chooserRefreshTimer) clearTimeout(runtimeState.chooserRefreshTimer);
+    const epoch = runtimeState.chatNavigationEpoch;
     runtimeState.chooserRefreshTimer = setTimeout(() => {
         runtimeState.chooserRefreshTimer = 0;
+        if (runtimeState.chatNavigationEpoch !== epoch) return;
         if (runtimeState.archiveViewLevel !== 'chooser') return;
         if (runtimeState.activeMode || runtimeState.activeSession) return;
         if (runtimeState.activeArchiveSnapshot && runtimeState.archiveViewLevel === 'snapshot') return;
@@ -89,6 +91,7 @@ export function scheduleChooserRefresh(delay = 40) {
         try { context = core_context.currentCharacterGuard(); } catch { ui_overlay.showChooser(); return; }
         const scope = core_cache.cacheScopeFromContext(context);
         void core_cache.ensureCacheHydrated(context).then(() => {
+            if (runtimeState.chatNavigationEpoch !== epoch) return;
             if (runtimeState.archiveViewLevel !== 'chooser') return;
             if (runtimeState.activeMode || runtimeState.activeSession) return;
             if (runtimeState.activeArchiveSnapshot && runtimeState.archiveViewLevel === 'snapshot') return;

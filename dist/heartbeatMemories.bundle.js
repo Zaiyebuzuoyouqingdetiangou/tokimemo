@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 137
-// Source SHA-256: 9d28a7a6e7eae4ec2f05ea55afd3eb8e714e81993d79da331dd532ed59d6449e
+// Source modules: 139
+// Source SHA-256: 59b697234850a6927ae5bf9ba30d52035806ee2b12ca309cadd1281e86ced9f5
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -35,6 +35,7 @@ const __m_core_chatReadRange_js = Object.create(null);
 const __m_core_constants_js = Object.create(null);
 const __m_core_context_js = Object.create(null);
 const __m_core_contextTags_js = Object.create(null);
+const __m_core_controlledSources_js = Object.create(null);
 const __m_core_creativeSupplement_js = Object.create(null);
 const __m_core_deferredCommitStore_js = Object.create(null);
 const __m_core_diagnosticReport_js = Object.create(null);
@@ -45,6 +46,7 @@ const __m_core_heartLanguage_js = Object.create(null);
 const __m_core_hostCompatibility_js = Object.create(null);
 const __m_core_incremental_js = Object.create(null);
 const __m_core_independentApi_js = Object.create(null);
+const __m_core_inputLedger_js = Object.create(null);
 const __m_core_localRecoveryStore_js = Object.create(null);
 const __m_core_manualCredentialStore_js = Object.create(null);
 const __m_core_narrativeAuthority_js = Object.create(null);
@@ -3535,6 +3537,12 @@ const core_deferredCommitStore = __m_core_deferredCommitStore_js;
 
 const state = {
   runtimeLifecycleEpoch: 0,
+  chatNavigationEpoch: 0,
+  chatNavigationPermit: null,
+  chatNavigationScope: '',
+  renderedChatScope: '',
+  pendingArchiveEntry: '',
+  cancelledChatScopeAt: new Map(),
   apiConfigurationEpoch: 0,
   manualApiKey: '',
   busy: false,
@@ -5316,6 +5324,27 @@ function appendParticipantSelection(previous, draft) {
         selectedIds: [...new Set([...before.selectedIds, ...next.selectedIds])] });
 }
 
+function participantIndexPayload(raw) {
+    const snapshot = normalizeParticipantSnapshot(raw);
+    if (!snapshot) return null;
+    return {
+        version: 1,
+        people: snapshot.people.map(person => ({
+            id: person.id,
+            name: person.name,
+            identity: person.identity === 'user' ? 'user' : 'character',
+            summary: person.sourceRefs.map(ref => ref.title).filter(Boolean).join('、').slice(0, 240),
+            sourceKeys: person.sourceRefs.map(ref => ({ world: ref.world, uid: ref.uid, title: ref.title })),
+        })),
+    };
+}
+
+function participantIndexPromptBlock(raw) {
+    const payload = participantIndexPayload(raw);
+    if (!payload) return '';
+    return `\nUNTRUSTED_SELECTED_PARTICIPANTS_JSON:\n${JSON.stringify(payload, null, 2)}\n\n以上是用户选定人物的索引。每人只有姓名、短标题和来源键；正文只在受控来源段出现一次，这里不是证据全文。不能把角色卡名称当作选定人物的姓名。保留其他已有历史，不因这份人物名单而删除或改写。\n`;
+}
+
 function participantPromptBlock(raw) {
     const snapshot = normalizeParticipantSnapshot(raw);
     if (!snapshot) return '';
@@ -5351,6 +5380,8 @@ __m_core_participants_js.normalizeParticipantRoster = normalizeParticipantRoster
 __m_core_participants_js.normalizeParticipantSnapshot = normalizeParticipantSnapshot;
 __m_core_participants_js.selectedParticipantSnapshot = selectedParticipantSnapshot;
 __m_core_participants_js.appendParticipantSelection = appendParticipantSelection;
+__m_core_participants_js.participantIndexPayload = participantIndexPayload;
+__m_core_participants_js.participantIndexPromptBlock = participantIndexPromptBlock;
 __m_core_participants_js.participantPromptBlock = participantPromptBlock;
 __m_core_participants_js.createParticipantId = createParticipantId;
 __m_core_participants_js.participantName = participantName;
@@ -7818,6 +7849,341 @@ __m_core_butterflyContract_js.BUTTERFLY_PRIMARY_AXES = BUTTERFLY_PRIMARY_AXES;
 __m_core_butterflyContract_js.BUTTERFLY_LIMITS = BUTTERFLY_LIMITS;
 __m_core_butterflyContract_js.BUTTERFLY_READABLE_R62_CONTRACT = BUTTERFLY_READABLE_R62_CONTRACT;
 __m_core_butterflyContract_js.BUTTERFLY_GENERATION_CONTRACT = BUTTERFLY_GENERATION_CONTRACT;
+}
+
+function __init_core_controlledSources_js() {
+// MODULE: core/controlledSources.js
+
+// One frozen body per world-book source. This module does not read the host,
+// write world books, or keep a copy outside the current generation input.
+
+function textOf(value) {
+    return String(value ?? '').replace(/\u0000/g, '').replace(/\r\n?/g, '\n').trim();
+}
+
+function sourceIdentity(ref, ownerId, index) {
+    const world = textOf(ref?.world);
+    const uid = textOf(ref?.uid);
+    if (world && uid) return { key: `world\u001f${world}\u001f${uid}`, world, uid, manual: false };
+    const title = textOf(ref?.title) || `manual-${index}`;
+    return { key: `manual\u001f${textOf(ownerId) || 'person'}\u001f${index}\u001f${title}`, world: world || 'manual', uid: uid || `${textOf(ownerId) || 'person'}:${index}`, manual: true };
+}
+
+function priorityOf(source) {
+    if (source.relatedParticipantIds.length) return 0;
+    if (source.selectedAsSetting) return 1;
+    return 2;
+}
+
+function blockText(source) {
+    const who = source.relatedParticipantIds.length ? ` participants=${source.relatedParticipantIds.join(',')}` : '';
+    const role = source.relatedParticipantIds.length ? 'participant' : source.selectedAsSetting ? 'selected' : 'activated';
+    return `[${source.world}/${source.uid} ${source.title} role=${role}${who}]\n${source.content}`;
+}
+
+function addSource(registry, spec) {
+    const content = textOf(spec.content);
+    if (!content) return 0;
+    const existing = registry.get(spec.key);
+    if (!existing) {
+        registry.set(spec.key, {
+            key: spec.key,
+            world: spec.world,
+            uid: spec.uid,
+            title: textOf(spec.title) || spec.uid,
+            content,
+            relatedParticipantIds: spec.participantId ? [spec.participantId] : [],
+            selectedAsSetting: spec.selectedAsSetting === true,
+            activated: spec.activated === true,
+            sourceOrder: spec.sourceOrder,
+            manual: spec.manual === true,
+            revision: spec.revision || '',
+        });
+        return 0;
+    }
+    if (spec.participantId && !existing.relatedParticipantIds.includes(spec.participantId)) existing.relatedParticipantIds.push(spec.participantId);
+    if (spec.selectedAsSetting) existing.selectedAsSetting = true;
+    if (spec.activated) existing.activated = true;
+    if (existing.content !== content) {
+        existing.revision = existing.revision || 'frozen-first';
+        return content.length;
+    }
+    return content.length;
+}
+
+function participantIndexPeople(snapshot) {
+    const people = Array.isArray(snapshot?.people) ? snapshot.people : [];
+    return people.map(person => ({
+        id: textOf(person?.id),
+        name: textOf(person?.name),
+        identity: person?.identity === 'user' ? 'user' : 'character',
+        summary: textOf((person?.sourceRefs || []).map(ref => textOf(ref?.title)).filter(Boolean).join('、')).slice(0, 240),
+        sourceKeys: (person?.sourceRefs || []).map(ref => ({
+            world: textOf(ref?.world),
+            uid: textOf(ref?.uid),
+            title: textOf(ref?.title),
+        })).filter(ref => ref.world || ref.uid || ref.title),
+    })).filter(person => person.id);
+}
+
+function assembleControlledSources({ participantSnapshot = null, selectedEntries = [], activatedText = '', budgetChars = 16000 } = {}) {
+    const registry = new Map();
+    let order = 0;
+    let deduplicatedChars = 0;
+    const people = Array.isArray(participantSnapshot?.people) ? participantSnapshot.people : [];
+    for (const person of people) {
+        const refs = Array.isArray(person?.sourceRefs) ? person.sourceRefs : [];
+        refs.forEach((ref, index) => {
+            const identity = sourceIdentity(ref, person?.id, index);
+            deduplicatedChars += addSource(registry, {
+                ...identity,
+                title: ref?.title,
+                content: ref?.content,
+                participantId: textOf(person?.id),
+                selectedAsSetting: false,
+                sourceOrder: order,
+                revision: textOf(ref?.revision),
+            });
+            order += 1;
+        });
+    }
+    for (const entry of selectedEntries) {
+        const identity = sourceIdentity(entry, 'selected', order);
+        deduplicatedChars += addSource(registry, {
+            ...identity,
+            title: entry?.title,
+            content: entry?.content,
+            participantId: '',
+            selectedAsSetting: true,
+            sourceOrder: order,
+        });
+        order += 1;
+    }
+    let activated = textOf(activatedText);
+    for (const source of registry.values()) {
+        if (source.content && activated.includes(source.content)) {
+            deduplicatedChars += source.content.length * (activated.split(source.content).length - 1);
+            activated = activated.split(source.content).join('');
+        }
+    }
+    activated = activated.trim();
+    if (activated) {
+        deduplicatedChars += addSource(registry, {
+            key: 'activated\u001fdry-run',
+            world: 'activated',
+            uid: 'dry-run',
+            title: '补充世界书',
+            content: activated,
+            participantId: '',
+            selectedAsSetting: false,
+            activated: true,
+            manual: true,
+            sourceOrder: order,
+        });
+    }
+    const ordered = [...registry.values()].sort((left, right) => priorityOf(left) - priorityOf(right) || left.sourceOrder - right.sourceOrder);
+    const included = [];
+    const excluded = [];
+    let usedChars = 0;
+    const budget = Math.max(0, Math.floor(Number(budgetChars) || 0));
+    for (const source of ordered) {
+        const block = blockText(source);
+        const next = included.length ? usedChars + 2 + block.length : block.length;
+        const reason = source.relatedParticipantIds.length ? 'participant' : source.selectedAsSetting ? 'selected' : 'activated';
+        const row = { world: source.world, uid: source.uid, title: source.title, chars: source.content.length, reason };
+        if (next > budget) {
+            excluded.push({ ...row, reason: 'capacity' });
+            continue;
+        }
+        included.push({ source, row });
+        usedChars = next;
+    }
+    const selectedBlocks = included.filter(item => item.source.relatedParticipantIds.length || item.source.selectedAsSetting).map(item => blockText(item.source));
+    const activatedBlocks = included.filter(item => !item.source.relatedParticipantIds.length && !item.source.selectedAsSetting).map(item => blockText(item.source));
+    const worldText = `WORLD_INFO_SELECTED:\n${selectedBlocks.join('\n\n')}\nWORLD_INFO_ACTIVATED:\n${activatedBlocks.join('\n\n')}`;
+    const total = ordered.length;
+    const dropped = excluded.length;
+    return {
+        worldText,
+        deduplicatedChars,
+        used: included.length,
+        total,
+        dropped,
+        complete: dropped === 0,
+        included: included.map(item => item.row),
+        excluded,
+        note: dropped > 0 ? `已发送 ${included.length}/${total} 条来源，其余整条未送入` : '',
+    };
+}
+
+__m_core_controlledSources_js.participantIndexPeople = participantIndexPeople;
+__m_core_controlledSources_js.assembleControlledSources = assembleControlledSources;
+}
+
+function __init_core_inputLedger_js() {
+// MODULE: core/inputLedger.js
+
+// Character accounting for one final prompt. Token totals stay with the host
+// tokenizer; this module never adds section estimates together and calls them tokens.
+
+const LEDGER_SECTION_NAMES = Object.freeze([
+    'promptTemplate',
+    'archiveSlice',
+    'characterEnvelope',
+    'personaEnvelope',
+    'selectedSettings',
+    'activatedWorldInfo',
+    'participantPayload',
+    'worldPresentation',
+    'other',
+]);
+
+const SECTION_LABELS = Object.freeze({
+    promptTemplate: '任务说明',
+    archiveSlice: '档案片段',
+    characterEnvelope: '角色信封',
+    personaEnvelope: '用户人设',
+    selectedSettings: '手选与人物来源',
+    activatedWorldInfo: '补充世界书',
+    participantPayload: '人物索引',
+    worldPresentation: '世界呈现',
+    other: '分隔与其余',
+});
+
+function emptySections() {
+    return Object.fromEntries(LEDGER_SECTION_NAMES.map(name => [name, {
+        name,
+        label: SECTION_LABELS[name],
+        chars: 0,
+        includedItems: 0,
+        excludedItems: 0,
+        deduplicatedChars: 0,
+        truncated: false,
+        dropped: false,
+        reason: '',
+    }]));
+}
+
+function claim(owner, name, start, end) {
+    if (start < 0 || end <= start) return;
+    for (let index = start; index < end && index < owner.length; index += 1) {
+        if (owner[index] === 'other') owner[index] = name;
+    }
+}
+
+function sectionEnd(text, start, tokenLength) {
+    const headers = [
+        '\nCHARACTER_CARD_JSON:',
+        '\nUSER_PERSONA_JSON:',
+        '\nWORLD_INFO_TEXT:',
+        '\nWORLD_INFO_SELECTED:',
+        '\nWORLD_INFO_ACTIVATED:',
+        '\n【上下文结束】',
+        '\nUNTRUSTED_SELECTED_PARTICIPANTS_JSON:',
+        '\nCONTROLLED_WORLD_PRESENTATION_JSON:',
+        '\nUNTRUSTED_ROOM_ARCHIVE_JSON:',
+        '\nUNTRUSTED_INCREMENTAL_ROOM_ARCHIVE_JSON:',
+        '\nCURRENT_ROOM_CONTEXT_JSON:',
+        '\nRELATED_MEMORIES_JSON',
+        '\nINPUT_JSON:',
+        '\nNEW_RESIDENT_IDS_JSON:',
+        '\nEXISTING_ROOM_INDEX_JSON:',
+        '\nALBUM_RELATIONSHIP_FULL_ARCHIVE_JSON:',
+    ];
+    let end = text.length;
+    for (const header of headers) {
+        const found = text.indexOf(header, start + tokenLength);
+        if (found >= 0 && found < end) end = found;
+    }
+    return end;
+}
+
+function claimToken(text, owner, name, token) {
+    let from = 0;
+    while (from < text.length) {
+        const start = text.indexOf(token, from);
+        if (start < 0) return;
+        claim(owner, name, start, sectionEnd(text, start, token.length));
+        from = start + token.length;
+    }
+}
+
+function accountFinalPrompt(finalPrompt, packing = null) {
+    const text = String(finalPrompt ?? '');
+    const owner = new Array(text.length).fill('other');
+    claimToken(text, owner, 'characterEnvelope', 'CHARACTER_CARD_JSON:');
+    claimToken(text, owner, 'personaEnvelope', 'USER_PERSONA_JSON:');
+    claimToken(text, owner, 'selectedSettings', 'WORLD_INFO_SELECTED:');
+    claimToken(text, owner, 'activatedWorldInfo', 'WORLD_INFO_ACTIVATED:');
+    claimToken(text, owner, 'activatedWorldInfo', 'WORLD_INFO_TEXT:');
+    claimToken(text, owner, 'participantPayload', 'UNTRUSTED_SELECTED_PARTICIPANTS_JSON:');
+    claimToken(text, owner, 'worldPresentation', 'CONTROLLED_WORLD_PRESENTATION_JSON:');
+    for (const token of ['UNTRUSTED_ROOM_ARCHIVE_JSON:', 'UNTRUSTED_INCREMENTAL_ROOM_ARCHIVE_JSON:', 'CURRENT_ROOM_CONTEXT_JSON:', 'RELATED_MEMORIES_JSON', 'INPUT_JSON:', 'ALBUM_RELATIONSHIP_FULL_ARCHIVE_JSON:']) {
+        claimToken(text, owner, 'archiveSlice', token);
+    }
+    const instructionStart = text.indexOf('【');
+    if (instructionStart > 0) claim(owner, 'promptTemplate', 0, instructionStart);
+    const contextStart = text.indexOf('【心迹回廊受控');
+    const contextEnd = text.indexOf('【上下文结束】');
+    if (contextEnd >= 0) {
+        const after = contextEnd + '【上下文结束】'.length;
+        claim(owner, 'promptTemplate', after, text.length);
+    } else if (contextStart < 0) {
+        claim(owner, 'promptTemplate', 0, text.length);
+    }
+    const sections = emptySections();
+    for (const name of owner) sections[name].chars += 1;
+    if (packing) {
+        sections.selectedSettings.includedItems = packing.used || 0;
+        sections.selectedSettings.excludedItems = packing.dropped || 0;
+        sections.selectedSettings.deduplicatedChars = packing.deduplicatedChars || 0;
+        sections.selectedSettings.dropped = (packing.dropped || 0) > 0;
+        sections.selectedSettings.reason = packing.note || '';
+        sections.activatedWorldInfo.deduplicatedChars = 0;
+    }
+    const totalChars = LEDGER_SECTION_NAMES.reduce((sum, name) => sum + sections[name].chars, 0);
+    if (totalChars !== text.length) {
+        const drift = text.length - totalChars;
+        sections.other.chars += drift;
+    }
+    const largest = LEDGER_SECTION_NAMES.map(name => sections[name]).reduce((best, section) => section.chars > best.chars ? section : best, sections.other);
+    return {
+        sections: LEDGER_SECTION_NAMES.map(name => sections[name]),
+        totalChars: text.length,
+        largest: { name: largest.name, label: largest.label, chars: largest.chars },
+        deduplicatedChars: Math.max(0, Number(packing?.deduplicatedChars) || 0),
+    };
+}
+
+function preflightDetailText({ ledger, packing, budget }) {
+    const lines = [];
+    const chars = Number(budget?.chars ?? ledger?.totalChars) || 0;
+    const tokensKnown = budget?.tokensKnown === true && Number.isFinite(budget?.tokens);
+    lines.push(`总字符 ${chars.toLocaleString()}`);
+    lines.push(tokensKnown ? `总 tokens ${Math.round(budget.tokens).toLocaleString()}` : 'tokens 未知');
+    if (Number.isFinite(budget?.budgetTokens)) lines.push(`当前 token 预算 ${Math.round(budget.budgetTokens).toLocaleString()}`);
+    if (Number.isFinite(budget?.charCap)) lines.push(`字符顶 ${Math.round(budget.charCap).toLocaleString()}`);
+    for (const section of ledger?.sections || []) {
+        if (!section.chars) continue;
+        const share = chars ? Math.round((section.chars / chars) * 100) : 0;
+        lines.push(`${section.label} ${section.chars.toLocaleString()} 字符（${share}%）`);
+    }
+    if (packing?.included?.length || packing?.excluded?.length) {
+        const sent = (packing.included || []).map(item => `${item.title || item.uid} · ${item.chars} 字符 · ${item.reason}`);
+        const held = (packing.excluded || []).map(item => `${item.title || item.uid} · ${item.chars} 字符 · ${item.reason}`);
+        if (sent.length) lines.push(`已送：${sent.join('；')}`);
+        if (held.length) lines.push(`未送：${held.join('；')}`);
+    }
+    if ((packing?.deduplicatedChars || ledger?.deduplicatedChars) > 0) {
+        lines.push(`去重节省 ${(packing?.deduplicatedChars || ledger.deduplicatedChars).toLocaleString()} 字符`);
+    }
+    lines.push('可以减少人物、减少设定，或在设置中提高输入预算。');
+    return lines.join('\n');
+}
+
+__m_core_inputLedger_js.accountFinalPrompt = accountFinalPrompt;
+__m_core_inputLedger_js.preflightDetailText = preflightDetailText;
+__m_core_inputLedger_js.LEDGER_SECTION_NAMES = LEDGER_SECTION_NAMES;
 }
 
 function __init_core_taskTrace_js() {
@@ -10706,17 +11072,36 @@ const generation_recovery = __m_generation_recovery_js;
 
 
 
+function ensureRecoveryHost(root) {
+    const overlayBody = root?.closest?.('.rmt-body') || root;
+    const existing = overlayBody?.querySelector?.('[data-rmt-generation-recoveries]');
+    if (existing) return existing;
+    if (!root) return null;
+    const host = document.createElement('div');
+    host.setAttribute('data-rmt-generation-recoveries', '');
+    root.appendChild(host);
+    return host;
+}
+
 function readableProgressHtml(session) {
     return session?.readableProgress?.version === 1 && session.readableProgress.complete === false
         ? '<p class="rmt-recovery-status" role="status" data-rmt-readable-progress>生成尚未完成，已写好的内容可以先阅读；原草稿和未完成部分仍保留。</p>' : '';
 }
 
 // Display only. A clicked action still reloads the canonical source and validates identity.
-function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
+function recoveryBannerHtml(stored, bank, { readOnly = false, mode = '' } = {}) {
     if (!bank) return '';
+    const seen = new Set();
+    const keep = row => {
+        if (mode && row?.mode !== mode) return false;
+        const key = `${row?.draftId || ''}|${row?.pageId || ''}|${row?.mode || ''}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    };
     if (stored?.[cache.GENERATION_DRAFTS_CACHE_KEY]) {
         const pages = { language: '基础语言', strips: '日常一格', fireflies: '萤火虫', spring: '春', summer: '夏', autumn: '秋', winter: '冬', postending: '后日谈', roomLife: '今日生活' };
-        const draftHtml = readOnly ? '' : cache.generationDraftRows(stored, bank).map(row => {
+        const draftHtml = readOnly ? '' : cache.generationDraftRows(stored, bank).filter(keep).map(row => {
             const summary = generation_recovery.generationRecoverySummary(row.journal);
             if (!summary || (!summary.completed && !summary.truncated && !summary.failed && !summary.failureCode && !summary.oversized)) return '';
             // An oversized draft can never continue; it still gets export and
@@ -10739,7 +11124,7 @@ function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
             const tail = oversized ? '。' : '。继续只补这份草稿未完成的内容，会使用生成额度。';
             return `<section class="rmt-recovery-status" role="status"><b>${text.esc(pageLabel)} · 已保留 ${summary.completed} 个成功分段</b><p>${text.esc(new Date(row.createdAt).toLocaleString())} · ${text.esc(reason.replace(/[。\s]+$/, ''))}${tail}</p><div class="rmt-recovery-actions">${continueButton}${childReader} <button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(row.mode)}" ${attrs}>导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(row.mode)}" ${attrs}>放弃这份草稿</button></div></section>`;
         }).join('');
-        const resultHtml = cache.listGenerationTaskResults(null, stored).map(row => {
+        const resultHtml = cache.listGenerationTaskResults(null, stored).filter(keep).map(row => {
             const label = pages[row.pageId] || constants.MODE_LABEL[row.mode] || row.pageId || row.mode;
             const pending = row.status === 'awaiting-choice';
             return `<section class="rmt-recovery-status" role="status"><b>${text.esc(label)} · ${pending ? '成果已保存，等待选择去向' : row.status === 'open' ? '已保存部分成果，原草稿可继续' : '独立生成成果'}</b><p>按原资料生成，原资料出处随成果保留。</p><div class="rmt-recovery-actions"><button type="button" class="rmt-btn" data-rmt-task-result-open="${text.esc(row.draftId)}">${row.status === 'open' ? '打开已生成内容' : '查看已保存成果'}</button>${!readOnly && (pending || row.status === 'independent') ? ` <button type="button" class="rmt-btn" data-rmt-task-result-choose="${text.esc(row.draftId)}">选择保存去向</button>` : ''}</div></section>`;
@@ -10747,12 +11132,15 @@ function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
         return draftHtml + resultHtml;
     }
     if (readOnly) return '';
-    return Object.values(constants.MODE).map(mode => {
-        const journal = stored?.__generationRecoveryV1?.[mode];
+    return Object.values(constants.MODE).filter(item => !mode || item === mode).map(item => {
+        const journal = stored?.__generationRecoveryV1?.[item];
         if (journal?.identity?.chatId !== bank.chatId || journal?.identity?.archiveRevision !== bank.archiveRevision
-            || journal?.[constants.SESSION_MODE_WRITE_FENCE_KEY] !== cache.modeWriteFenceForCache(stored, mode)) return '';
+            || journal?.[constants.SESSION_MODE_WRITE_FENCE_KEY] !== cache.modeWriteFenceForCache(stored, item)) return '';
         const summary = generation_recovery.generationRecoverySummary(journal);
         if (!summary || (!summary.completed && !summary.truncated && !summary.failed && !summary.oversized)) return '';
+        const rowKey = `${journal.draftId || item}|${journal.pageId || item}|${item}`;
+        if (seen.has(rowKey)) return '';
+        seen.add(rowKey);
         const oversized = summary.oversized === true;
         const snapshotNote = summary.snapshotBudget
             ? `快照投影 ${Number(summary.snapshotBudget.snapshotChars || 0).toLocaleString()} / ${Number(summary.snapshotBudget.budgetChars || 0).toLocaleString()} 字符`
@@ -10762,9 +11150,9 @@ function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
             ? (summary.blocked ? `${snapshotNote || '续写资料包超限'}，不能继续生成；已保留的内容不受影响，请导出留存后明确放弃`
                 : '草稿超出本地保存上限，不能继续生成；已保留的内容不受影响，请导出留存后明确放弃')
             : summary.canContinue ? '正文未写完' : summary.failureCode ? text.safeErrorSummary({ code: summary.failureCode, archiveInputCategory: summary.failureCategory, recoveryPhase: summary.failurePhase }) : '任务尚未完成';
-        const continueButton = oversized ? '' : `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(mode)}">${label}</button> `;
+        const continueButton = oversized ? '' : `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(item)}">${label}</button> `;
         const tail = oversized ? '。' : '。继续会使用生成额度。';
-        return `<section class="rmt-recovery-status" role="status"><b>${text.esc(constants.MODE_LABEL[mode] || mode)} · 已保留 ${summary.completed} 个成功分段</b><p>上次记录：${text.esc(reason.replace(/[。\s]+$/, ''))}${tail}</p><div class="rmt-recovery-actions">${continueButton}<button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(mode)}">导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(mode)}">放弃未提交草稿</button></div></section>`;
+        return `<section class="rmt-recovery-status" role="status"><b>${text.esc(constants.MODE_LABEL[item] || item)} · 已保留 ${summary.completed} 个成功分段</b><p>上次记录：${text.esc(reason.replace(/[。\s]+$/, ''))}${tail}</p><div class="rmt-recovery-actions">${continueButton}<button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(item)}">导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(item)}">放弃未提交草稿</button></div></section>`;
     }).join('');
 }
 
@@ -10786,6 +11174,7 @@ ${!profile && !summary.profileOnly && !summary.awaitingCommit && !capacity ? '<b
 ${!batch ? '<button type="button" class="rmt-btn" data-rmt-archive-discard>放弃整理草稿</button>' : ''}</div></section>`;
 }
 
+__m_ui_recoveryView_js.ensureRecoveryHost = ensureRecoveryHost;
 __m_ui_recoveryView_js.readableProgressHtml = readableProgressHtml;
 __m_ui_recoveryView_js.recoveryBannerHtml = recoveryBannerHtml;
 __m_ui_recoveryView_js.archiveRecoveryHtml = archiveRecoveryHtml;
@@ -19578,7 +19967,7 @@ function multiplayerRoomPrompt(context, memoryBank, snapshot, visualValues) {
     return `${promptSafetyBoundary(context, '共同居住的房间')}
 本请求生成所选人物共同使用的一套房间蓝图，只返回一个 JSON；不按人物分别生成房间，也不生成手机或储物内容。
 ${core_narrativeAuthority.NARRATIVE_AUTHORITY_PROMPT}
-${core_participants.participantPromptBlock(snapshot)}
+${core_participants.participantIndexPromptBlock(snapshot)}
 UNTRUSTED_ROOM_ARCHIVE_JSON:
 ${promptArchiveSlice(memoryBank, 24)}
 只使用选定人物的 id 作为 participantId/speakerId；人物名字来自所选资料，不是角色卡总标题。根据他们各自的设定与共同居住条件安排共享或独立区域，不推断用户已经来访或同居。
@@ -22412,6 +22801,7 @@ async function ensureRoomLifePlan(options = {}) {
     const logicalTask = core_requestCoordinator.beginLogicalGenerationTask({ kind: 'room-daily-life', mode: core_constants.MODE.ROOM,
         pageId: 'roomLife', context, origin, taskKey: `room-life-operation:${core_context.chatScopeKey(context)}`,
         parentTaskId: options.logicalParentTaskId, label: '今日生活' });
+    if (roomSession.participantSnapshot) logicalTask.participantPromptIndexed = true;
     let result;
     try {
         result = await ensureRoomLifePlanOperation({ ...options, roomSession, logicalTask,
@@ -23298,7 +23688,7 @@ async function refreshRoomParticipantFigures(context, memoryBank, origin, taskKe
     const presentation = options.presentationContext || {};
     const request = options.request || generation_client.requestValidatedSegment;
     const figures = await request(`仅更新所选人物各自外形，不生成房间、对白或故事。一次返回 {"residents":[{"participantId":"原id","visualProfile":{"figure":{},"explicitFields":[],"explicitEvidence":{}}}]}。
-${core_participants.participantPromptBlock(snapshot)}
+${core_participants.participantIndexPromptBlock(snapshot)}
 枚举：${JSON.stringify(ROOM_VISUAL_VALUES)}。每人只使用自己的来源设定作外貌证据；explicitEvidence 必须原样复制对应人物所选世界书内容。缺乏证据的外貌用 unspecified，detail 用 none，不借用其他人物或玩家外貌。`,
     '正在更新所选人物外形，保留房间内容…', { context, contextEnvelope: presentation.contextEnvelope, origin,
         taskKey: `${taskKey}:figure`, mode: core_constants.MODE.ROOM, maxTokens: 2500, background: true }, raw => {
@@ -23336,7 +23726,7 @@ function roomParticipantsLifePrompt(context, session, memoryBank, date, snapshot
         ? core_evidence.memoryPayload(memoryBank, referencedMemoryIds, 24)
         : core_evidence.memoryPayload(memoryBank, null, 12);
     return `${generation_prompts.promptSafetyBoundary(context, '共同房间的今日生活')}
-${core_participants.participantPromptBlock(snapshot)}
+${core_participants.participantIndexPromptBlock(snapshot)}
 为 ${dateKey} 生成同一住处的共享生活时间线，一次返回所有选定人物。只使用已有空间/物件；各人可以一起活动或分别处在不同空间，不替用户行动或回应。
 INPUT_JSON:
 ${JSON.stringify({ date: dateKey, home: roomBlueprintPayload(session), memories: lifeMemories }, null, 2)}
@@ -25668,6 +26058,11 @@ function archiveOpenButtonFromEvent(event) {
 function safeShowArchiveLibrary(source = 'unknown') {
     try {
         ui_workspaceState.loadWorkspacePreferences();
+        if (runtimeState.pendingArchiveEntry === 'chooser') {
+            runtimeState.pendingArchiveEntry = '';
+            ui_overlay.showChooser();
+            return true;
+        }
         if (ui_workspaceState.workspace.restore && navigation_bookmark.restorePagePosition({ home: showHome, chooser: ui_overlay.showChooser,
             library: archive_library.showArchiveLibrary, character: archive_library.showArchiveCharacter })) return true;
         if (ui_workspaceState.workspace.restore && navigation_bookmark.restoreReadingPosition({ open: ui_overlay.openOverlay, render: ui_overlay.renderActive, stopAutomaticLife: room.stopRoomClock })) return true;
@@ -25774,12 +26169,29 @@ function bindDiagnosticCopy() {
 function bindGenerationNavigationGuards() {
     try { globalThis.__heartbeatMemoriesNavigationGuardCleanup?.(); } catch {}
     const navigationGuard = event => {
-        if (!hostChatNavigationTargetFromEvent(event)) return;
+        const target = hostChatNavigationTargetFromEvent(event);
+        if (!target) return;
         if (!core_requestCoordinator.hasCurrentChatBlockingTask()) return;
-        // Host chat navigation always remains available. Every generated result is now
-        // identity-bound and either commits durably before success or waits in the durable
-        // origin queue, so Heartbeat must never trap the user inside the current chat.
-        runtimeState.activeTaskBackgrounded = true;
+        const tasks = core_requestCoordinator.currentChatBlockingTasks();
+        const confirmed = ui_overlay.confirmExplicitAction(
+            '切换聊天会中止当前任务',
+            `当前聊天还有这些任务：\n${tasks.map(label => `· ${label}`).join('\n')}\n\n继续切换会中止它们。已经确认落盘的成果会保留，未完成部分会停止，不会自动重试。`,
+            { destructive: true },
+        );
+        if (!confirmed) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return;
+        }
+        let scope = '';
+        try { scope = core_context.chatScopeKey(core_context.currentCharacterGuard()); } catch {}
+        runtimeState.chatNavigationPermit = {
+            scope,
+            at: Date.now(),
+            targetKind: String(target.id || target.className || 'host-nav').slice(0, 80),
+        };
+        core_requestCoordinator.cancelCurrentChatBlockingTasks(null, 'chat-navigation-confirm');
+        ui_overlay.invalidateArchiveViewForChatNavigation('');
     };
 
     const unloadGuard = event => {
@@ -25855,6 +26267,7 @@ function bindChatStateEvents() {
         return;
     }
 
+    try { runtimeState.chatNavigationScope = core_context.chatScopeKey(core_context.currentCharacterGuard()); } catch {}
     const chatEvents = [types.CHAT_CHANGED, types.CHAT_LOADED].filter(Boolean);
     const messageEvents = [
         types.MESSAGE_SENT,
@@ -25865,27 +26278,29 @@ function bindChatStateEvents() {
     ].filter(Boolean);
 
     const chatHandler = () => {
+        runtimeState.chatNavigationEpoch += 1;
         ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
-        // Chat navigation must not cancel a request that is already running. Results are
-        // bound to their origin chat and are committed when that chat is current again.
-        if (runtimeState.busy) runtimeState.activeTaskBackgrounded = true;
-        runtimeState.activeMode = null;
-        runtimeState.activeSession = null;
-        ui_settingsPanel.refreshSettingsMemoryStatus({ lightweight: true });
-        const overlay = document.getElementById(core_constants.OVERLAY_ID);
+        let nextScope = '';
+        let nextChatId = '';
         try {
             const latest = core_context.currentCharacterGuard();
-            // Keep ordinary chat entry extremely light. Archive overview bookkeeping is only
-            // needed while the Heartbeat UI is visible. IMPORTANT: do not compress, hydrate,
-            // scan or migrate theater caches here; chat startup/navigation must remain inert.
-            if (overlay && !overlay.hidden) {
-                archive_snapshots.resetArchiveOverviewForCharacter(latest);
-                archive_snapshots.syncArchiveOverviewCurrentRow(latest);
-            }
+            nextScope = core_context.chatScopeKey(latest);
+            nextChatId = core_context.comparableChatId(core_context.getChatId(latest));
         } catch {}
-        // SillyTavern emits CHAT_CHANGED and CHAT_LOADED during one navigation. Do not
-        // synchronously rebuild the whole archive UI inside its awaited event path.
-        if (overlay && !overlay.hidden) archive_snapshots.scheduleChooserRefresh(80);
+        const previousScope = runtimeState.chatNavigationScope || '';
+        const permit = runtimeState.chatNavigationPermit;
+        const permitFresh = !!permit && permit.scope === previousScope && Date.now() - permit.at < 8000;
+        runtimeState.chatNavigationPermit = null;
+        if (previousScope && previousScope !== nextScope) {
+            const result = core_requestCoordinator.cancelBlockingTasksForScope(previousScope, 'chat-changed');
+            if (result.cancelled > 0 && !permitFresh) {
+                globalThis.toastr?.warning?.('已切换聊天，原聊天未完成任务已中止。已保存的成果保留，未完成部分不会自动重试。', '心迹回廊');
+            }
+            ui_overlay.invalidateArchiveViewForChatNavigation(nextChatId);
+        }
+        runtimeState.chatNavigationScope = nextScope;
+        ui_settingsPanel.refreshSettingsMemoryStatus({ lightweight: true });
+        // Chat events must not hydrate the new chat or reopen the archive.
         setTimeout(() => {
             void core_cache.flushPendingCompressedCacheForCurrentChat().catch(error => {
                 console.warn('[HeartbeatMemories] pending compressed cache flush failed', core_text.safeErrorDiagnostic(error));
@@ -35826,6 +36241,8 @@ const archive_repository = __m_archive_repository_js;
 const archive_snapshots = __m_archive_snapshots_js;
 const core_cache = __m_core_cache_js;
 const core_participants = __m_core_participants_js;
+const core_controlledSources = __m_core_controlledSources_js;
+const core_inputLedger = __m_core_inputLedger_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_evidence = __m_core_evidence_js;
@@ -35876,6 +36293,8 @@ const runtimeState = __m_core_state_js.state;
 
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
+
 
 
 
@@ -36140,9 +36559,9 @@ async function collectFittingSelectedSetting(context, budget = core_constants.MA
     };
 }
 
-async function buildWorldPresentationContext(context, memoryBank, mode, origin = null) {
+async function buildWorldPresentationContext(context, memoryBank, mode, origin = null, participantSnapshot = null) {
     context = generationContentContext(origin, context);
-    return generation_recovery.frozenGenerationInput(origin, `presentation:${mode}`, () => buildWorldPresentationContextFresh(context, memoryBank, mode));
+    return generation_recovery.frozenGenerationInput(origin, `presentation:${mode}`, () => buildWorldPresentationContextFresh(context, memoryBank, mode, participantSnapshot));
 }
 
 async function captureRoomParticipantSnapshot(context, origin, { existing = null, participantSnapshot } = {}) {
@@ -36167,8 +36586,72 @@ async function captureAlbumParticipantSnapshot(context, origin, { existing = nul
     if (!snapshot) return null;
     return generation_recovery.frozenGenerationInput(origin, 'participants:album', () => snapshot);
 }
-async function buildWorldPresentationContextFresh(context, memoryBank, mode) {
+async function activatedWorldInfoText(context, mode) {
+    if (core_settings.getPluginSettings(context).useActivatedWorldInfo === false || typeof context.getWorldInfoPrompt !== 'function') return '';
+    try {
+        const result = await context.getWorldInfoPrompt(generationWorldInfoScanTerms(mode, context), Math.max(2048, Math.min(32768, Number(context.maxContext) || 8192)), true, {});
+        const worldText = result?.worldInfoString || [result?.worldInfoBefore, result?.worldInfoAfter].filter(Boolean).join('\n');
+        return core_contextTags.filterContextTags(core_text.normalizeText(worldText, 12000), core_contextTags.tagPolicyForContext(context));
+    } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        console.warn('[HeartbeatMemories] activated world info unavailable', core_text.safeErrorDiagnostic(error));
+        return '';
+    }
+}
+
+async function collectSelectedSettingEntries(context) {
+    try {
+        const selected = await archive_repository.collectSelectedMemoryWorldInfo(context, core_context.getChatId(context), null, { settingsOnly: true });
+        const excluded = core_contextTags.tagPolicyForContext(context);
+        const entries = [];
+        for (const entry of selected.entries || []) {
+            const content = core_contextTags.filterContextTags(entry.content, excluded);
+            if (!content) continue;
+            entries.push({ ...entry, content });
+        }
+        return { entries, incomplete: selected.coverage?.status !== 'complete', reason: core_text.normalizeText(selected.coverage?.reason, 200) };
+    } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        console.warn('[HeartbeatMemories] selected setting entries unavailable', core_text.safeErrorDiagnostic(error));
+        return { entries: [], incomplete: true, reason: '本次没能读取所选设定世界书。' };
+    }
+}
+
+async function buildWorldPresentationContextFresh(context, memoryBank, mode, participantSnapshot = null) {
     const wantsSelectedSetting = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode);
+    if (participantSnapshot?.people?.length) {
+        const selected = wantsSelectedSetting ? await collectSelectedSettingEntries(context) : { entries: [], incomplete: false, reason: '' };
+        const activatedText = selected.entries.length ? '' : await activatedWorldInfoText(context, mode);
+        const assembled = core_controlledSources.assembleControlledSources({
+            participantSnapshot,
+            selectedEntries: selected.entries,
+            activatedText,
+            budgetChars: core_constants.MAX_CONTROLLED_WORLD_TOTAL_CHARS,
+        });
+        const contextEnvelope = await core_cache.buildControlledContextEnvelope(context, {
+            worldInfoScanTerms: generationWorldInfoScanTerms(mode, context),
+            participantSnapshot,
+            controlledWorldText: assembled.worldText,
+        });
+        const notes = [assembled.note, selected.incomplete ? selected.reason : ''].filter(Boolean);
+        return {
+            contextEnvelope,
+            profile: core_worldPresentation.resolveWorldPresentation(contextEnvelope, memoryBank, worldPresentationProfileBinding(context)),
+            settingEvidence: core_worldPresentation.controlledWorldEvidence(contextEnvelope, null),
+            characterEvidence: core_worldPresentation.controlledCharacterEvidence(contextEnvelope),
+            selectedSetting: {
+                text: assembled.worldText,
+                used: assembled.used,
+                total: assembled.total,
+                dropped: assembled.dropped,
+                complete: assembled.complete && !selected.incomplete,
+                note: notes.join('；'),
+                deduplicatedChars: assembled.deduplicatedChars,
+                included: assembled.included,
+                excluded: assembled.excluded,
+            },
+        };
+    }
     let selectedSetting = wantsSelectedSetting
         ? await collectFittingSelectedSetting(context)
         : { text: '', used: 0, total: 0, dropped: 0, complete: true, note: '' };
@@ -36242,9 +36725,14 @@ async function requestValidatedSegment(prompt, status, options, validator) {
     const logicalTask = core_requestCoordinator.logicalGenerationTaskForOrigin(options?.origin);
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
     if (logicalTask?.participantSnapshot && !options?.participantPromptApplied) {
-        const block = core_participants.participantPromptBlock(logicalTask.participantSnapshot);
-        if (!prompt.includes(block)) prompt += block;
+        const block = logicalTask.participantPromptIndexed
+            ? core_participants.participantIndexPromptBlock(logicalTask.participantSnapshot)
+            : core_participants.participantPromptBlock(logicalTask.participantSnapshot);
+        if (block && !prompt.includes(block)) prompt += block;
         options = { ...options, participantPromptApplied: true };
+    }
+    if (core_requestCoordinator.chatScopeCancellationBlocksOrigin(options?.origin)) {
+        throw core_requestCoordinator.createGenerationAbortError();
     }
     prompt = cg_policy.cgPromptForSegment(prompt, options);
     validator = cg_policy.cgSegmentValidator(validator, options);
@@ -36332,6 +36820,39 @@ function countPromptTokens(context, prompt, signal, timeoutMs) {
     });
 }
 
+function enrichInputBudgetError(error, logicalTask, prompt) {
+    if (error?.code !== 'RMT_INPUT_BUDGET') return error;
+    const packing = logicalTask?.inputPacking || null;
+    const ledger = core_inputLedger.accountFinalPrompt(prompt, packing);
+    const detail = core_inputLedger.preflightDetailText({ ledger, packing, budget: error.inputBudget });
+    const dropped = packing?.dropped > 0 ? `设定已发送 ${packing.used}/${packing.total}，未送入条目见同一次说明。` : '';
+    const largest = ledger.largest?.chars ? `最大占用段：${ledger.largest.label} ${ledger.largest.chars.toLocaleString()} 字符。` : '';
+    const message = [error.safeUserMessage || error.message, dropped, largest, '可以减少人物、减少设定，或在设置中提高输入预算。'].filter(Boolean).join('');
+    error.message = message;
+    error.safeUserMessage = message;
+    error.preflightDetail = detail;
+    if (logicalTask) logicalTask.preflightNotified = true;
+    return error;
+}
+
+function preflightSurfaceVisible(mode) {
+    const overlay = document.getElementById(core_constants.OVERLAY_ID);
+    return !!overlay && !overlay.hidden && !!mode && runtimeState.activeMode === mode;
+}
+
+function notifyInputPackingOnce(logicalTask, budget, prompt, options) {
+    if (!logicalTask || logicalTask.preflightNotified) return;
+    const packing = logicalTask.inputPacking;
+    if (!packing || !(packing.dropped > 0) || !packing.note) return;
+    logicalTask.preflightNotified = true;
+    const ledger = core_inputLedger.accountFinalPrompt(prompt, packing);
+    const summary = packing.note;
+    const detail = core_inputLedger.preflightDetailText({ ledger, packing, budget });
+    if (options?.automatic === true) return;
+    if (preflightSurfaceVisible(options?.mode) && options?.background !== true) ui_overlay.showInlinePreflight(summary, detail, { error: false });
+    else globalThis.toastr?.info?.(summary, `心迹回廊 · ${core_constants.MODE_LABEL[options?.mode] || '生成'}`);
+}
+
 async function assertPromptBudget(context, prompt, { skipTokenCount = false, signal = null,
     tokenCountTimeoutMs = TOKEN_COUNT_TIMEOUT_MS, taskTrace = null } = {}) {
     if (signal?.aborted) throw core_requestCoordinator.createGenerationAbortError();
@@ -36341,37 +36862,44 @@ async function assertPromptBudget(context, prompt, { skipTokenCount = false, sig
     budgetTokens = output_budget.normalizeInputBudgetTokens(budgetTokens);
     const charCap = output_budget.generationInputCharCap(budgetTokens);
     core_taskTrace.recordInput(taskTrace, prompt.length);
-    const budgetError = (message, tokens = null) => {
+    const budgetError = (message, tokens = null, tokensKnown = false) => {
         const error = core_text.safeUserError(message, 'RMT_INPUT_BUDGET');
-        error.inputBudget = { chars: prompt.length, tokens, budgetTokens, charCap };
+        error.inputBudget = { chars: prompt.length, tokens, tokensKnown, budgetTokens, charCap };
         return error;
     };
     if (prompt.length > charCap) {
-        throw budgetError(`本次输入 ${prompt.length.toLocaleString()} 字符，预算 ${budgetTokens.toLocaleString()} tokens，字符顶 ${charCap.toLocaleString()}。已在发送前拦截。打开设置 → 输入预算。`);
+        throw budgetError(`本次输入 ${prompt.length.toLocaleString()} 字符，预算 ${budgetTokens.toLocaleString()} tokens，字符顶 ${charCap.toLocaleString()}。tokens 未知，已按字符安全顶判断。已在发送前拦截。`);
     }
+    let tokens = null;
+    let tokensKnown = false;
     if (!skipTokenCount && typeof context.getTokenCountAsync === 'function') {
         core_taskTrace.beginStage(taskTrace, 'token-count');
         try {
             const timeout = Math.max(1, Math.min(TOKEN_COUNT_TIMEOUT_MS, Number(tokenCountTimeoutMs) || TOKEN_COUNT_TIMEOUT_MS));
             const count = await countPromptTokens(context, prompt, signal, timeout);
-            const tokens = (typeof count === 'number' || (typeof count === 'string' && count.trim())) ? Number(count) : NaN;
-            if (!Number.isFinite(tokens) || tokens < 0) {
+            const counted = (typeof count === 'number' || (typeof count === 'string' && count.trim())) ? Number(count) : NaN;
+            if (!Number.isFinite(counted) || counted < 0) {
                 throw core_text.safeUserError('本地计数暂不可用。', 'RMT_TOKEN_COUNT_UNAVAILABLE');
             }
+            tokens = Math.round(counted);
+            tokensKnown = true;
             core_taskTrace.recordInput(taskTrace, prompt.length, tokens);
-            if (Number.isFinite(tokens) && tokens > budgetTokens) {
-                throw budgetError(`本次输入 ${prompt.length.toLocaleString()} 字符 / ${Math.round(tokens).toLocaleString()} tokens，预算 ${budgetTokens.toLocaleString()}。已在发送前拦截。打开设置 → 输入预算。`, Math.round(tokens));
+            if (tokens > budgetTokens) {
+                throw budgetError(`本次输入 ${prompt.length.toLocaleString()} 字符 / ${tokens.toLocaleString()} tokens，预算 ${budgetTokens.toLocaleString()}。已在发送前拦截。`, tokens, true);
             }
             core_taskTrace.markStage(taskTrace, 'token-count');
         } catch (error) {
             core_taskTrace.markStage(taskTrace, 'token-count', false);
             if (signal?.aborted || error?.name === 'AbortError') throw core_requestCoordinator.createGenerationAbortError();
             if (error?.code === 'RMT_INPUT_BUDGET') throw error;
+            tokens = null;
+            tokensKnown = false;
             core_taskTrace.markStage(taskTrace, 'token-count-fallback');
             console.warn('[HeartbeatMemories] input token count unavailable; using character budget only', core_text.safeErrorDiagnostic(error));
         }
     }
     if (signal?.aborted) throw core_requestCoordinator.createGenerationAbortError();
+    return { chars: prompt.length, tokens, tokensKnown, budgetTokens, charCap };
 }
 
 const GENERATED_PHRASE_EVIDENCE_KEYS = new Set([
@@ -36525,11 +37053,16 @@ async function generateConfiguredJson(prompt, options = {}) {
         else signal.addEventListener('abort', abort, { once: true });
     }
     if (logicalTask.participantSnapshot && !options.participantPromptApplied) {
-        const block = core_participants.participantPromptBlock(logicalTask.participantSnapshot);
-        if (!prompt.includes(block)) prompt += block;
-        if (typeof options.recoveryBasePrompt === 'string' && !options.recoveryBasePrompt.includes(block)) {
+        const block = logicalTask.participantPromptIndexed
+            ? core_participants.participantIndexPromptBlock(logicalTask.participantSnapshot)
+            : core_participants.participantPromptBlock(logicalTask.participantSnapshot);
+        if (block && !prompt.includes(block)) prompt += block;
+        if (typeof options.recoveryBasePrompt === 'string' && block && !options.recoveryBasePrompt.includes(block)) {
             options = { ...options, recoveryBasePrompt: options.recoveryBasePrompt + block };
         }
+    }
+    if (core_requestCoordinator.chatScopeCancellationBlocksOrigin(options.origin)) {
+        throw core_requestCoordinator.createGenerationAbortError();
     }
     try {
         const result = await generateConfiguredJsonOperation(prompt, { ...options, signal: controller.signal });
@@ -36576,9 +37109,16 @@ ${expanded}${creativeSupplement}${phrasePolicy}`,
         if (taskTrace) taskTrace.archiveBudget = archive_requestBudget.publicBudget(budget);
         archive_requestBudget.assertArchiveRequestBudget(budget);
     } else {
-        await assertPromptBudget(context, controlledPrompt,
-            { skipTokenCount: options.skipTokenCount === true, signal: options.signal,
-                tokenCountTimeoutMs: options.tokenCountTimeoutMs, taskTrace });
+        const logicalTask = core_requestCoordinator.logicalGenerationTaskForOrigin(options.origin);
+        let budget;
+        try {
+            budget = await assertPromptBudget(context, controlledPrompt,
+                { skipTokenCount: options.skipTokenCount === true, signal: options.signal,
+                    tokenCountTimeoutMs: options.tokenCountTimeoutMs, taskTrace });
+        } catch (error) {
+            throw enrichInputBudgetError(error, logicalTask, controlledPrompt);
+        }
+        notifyInputPackingOnce(logicalTask, budget, controlledPrompt, options);
     }
     core_taskTrace.markStage(taskTrace, 'prompt');
     // The value configured in the dedicated secondary-API UI is the actual provider max output.
@@ -36724,6 +37264,7 @@ async function requestJson(prompt, statusText = '正在根据当前聊天档案�
     const controller = new AbortController();
     const requestContext = options.context || core_context.currentCharacterGuard();
     const origin = options.origin || core_context.captureTaskOrigin(requestContext, archive_repository.getImportedMemory(requestContext)?.archiveRevision || '');
+    if (core_requestCoordinator.chatScopeCancellationBlocksOrigin(origin)) throw core_requestCoordinator.createGenerationAbortError();
     core_context.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
     const externalSignal = options.signal || null;
     const forwardAbort = () => {
@@ -37314,17 +37855,14 @@ async function generateModeOperation(mode, options = {}) {
                 participantSnapshot: options.participantRegeneration?.participantSnapshot })
             : mode === core_constants.MODE.ALBUM ? await captureAlbumParticipantSnapshot(context, origin, { existing: recoveryExisting,
                 participantSnapshot: options.participantRegeneration?.participantSnapshot }) : null;
-        if (mode === core_constants.MODE.ALBUM && participantSnapshot) {
+        if (participantSnapshot && options.logicalTask) {
+            if (mode === core_constants.MODE.ROOM) options.logicalTask.participantPromptIndexed = true;
             core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin, { participantSnapshot });
         }
         let presentationContext = null;
         if (time_stories.isTimeStoryMode(mode) || (mode === core_constants.MODE.ITEMS && previousSession && allowPersonaExpansion) || [core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode)) {
-            presentationContext = await buildWorldPresentationContext(context, memoryBank, mode, origin);
-            // Degrading is fine, degrading silently is not: the user picked these entries
-            // by hand and deserves to know which of them this request could actually carry.
-            if (!options.automatic && presentationContext.selectedSetting?.note) {
-                globalThis.toastr?.info?.(presentationContext.selectedSetting.note, `心迹回廊 · ${core_constants.MODE_LABEL[mode]}`);
-            }
+            presentationContext = await buildWorldPresentationContext(context, memoryBank, mode, origin, mode === core_constants.MODE.ROOM ? participantSnapshot : null);
+            if (options.logicalTask && presentationContext.selectedSetting) options.logicalTask.inputPacking = presentationContext.selectedSetting;
         }
         if (mode === core_constants.MODE.THEME_SONG) {
             session = await modes_song.generateThemeSong(context, memoryBank, origin, taskKey, previousSession, { plan: themeSongPlan, presentationContext });
@@ -37378,8 +37916,18 @@ async function generateModeOperation(mode, options = {}) {
             const settingSelection = modes_relations.fitRelationSettingEntries(selectedBooks.entries, { coverage: selectedBooks.coverage });
             // Same rule as the setting envelope: an unreadable or oversized book means
             // "fewer people to draw from", not "refuse to refresh the garden".
-            if (settingSelection.coverage.status !== 'complete' && !options.automatic) {
-                globalThis.toastr?.info?.(`本次按输入容量整理部分世界书条目；未送出的旧人物仅在来源仍有效时保留。${core_text.normalizeText(settingSelection.coverage?.reason, 160)}`, '心迹回廊 · 人际庭园');
+            if (settingSelection.coverage.status !== 'complete' && options.logicalTask) {
+                const kept = settingSelection.entries?.length || 0;
+                const total = (selectedBooks.entries || []).length;
+                options.logicalTask.inputPacking = {
+                    used: kept,
+                    total,
+                    dropped: Math.max(0, total - kept),
+                    note: `已发送 ${kept}/${total} 条人际设定，未送出的旧人物仅在来源仍有效时保留。${core_text.normalizeText(settingSelection.coverage?.reason, 160)}`,
+                    deduplicatedChars: 0,
+                    included: [],
+                    excluded: [],
+                };
             }
             const settingEntries = settingSelection.entries;
             const raw = await requestValidatedSegment(
@@ -37550,7 +38098,7 @@ async function generateModeOperation(mode, options = {}) {
             console.warn('[HeartbeatMemories] generation aborted by extension/task cancellation', { mode });
             return null;
         }
-        const safeError = core_text.safeErrorSummary(error);
+        const safeError = core_text.safeErrorSummary(error, 800);
         console.error('[HeartbeatMemories] generation failed', {
             mode,
             ...core_text.safeErrorDiagnostic(error),
@@ -37577,7 +38125,8 @@ async function generateModeOperation(mode, options = {}) {
             error.notified = true;
             return null;
         }
-        ui_overlay.showInlineError(safeError);
+        if (error.preflightDetail) ui_overlay.showInlinePreflight(safeError, error.preflightDetail, { error: true });
+        else ui_overlay.showInlineError(safeError);
         error.notified = true;
         return null;
     } finally {
@@ -42066,6 +42615,7 @@ function bindOverlayCloseFallback(overlay) {
 
 function revealArchiveOverlay(overlay) {
     if (!overlay) return;
+    try { runtimeState.renderedChatScope = core_context.chatScopeKey(core_context.currentCharacterGuard()); } catch {}
     overlay.hidden = false;
     overlay.removeAttribute('aria-hidden');
     if (typeof globalThis.HTMLDialogElement === 'function' && overlay instanceof globalThis.HTMLDialogElement) {
@@ -42125,13 +42675,18 @@ function openOverlay() {
     return overlay;
 }
 
-function closeOverlay() {
+function closeOverlay(options = {}) {
+    const remember = options.remember !== false;
     participant_picker.closeParticipantPicker();
     image_viewer.closeCgImageViewer({ restoreFocus: false });
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
+    const focused = document.activeElement;
+    if (focused && overlay?.contains?.(focused)) {
+        try { focused.blur(); } catch {}
+    }
     // Mobile close gestures can deliver both an early event and a click. Only
     // the first close records the page; later events must not replace it.
-    if (overlay && !overlay.hidden) {
+    if (remember && overlay && !overlay.hidden) {
         floating_archive.rememberFloatingArchive();
         navigation_bookmark.rememberReadingPosition();
     }
@@ -42152,6 +42707,25 @@ function closeOverlay() {
     runtimeState.activeSession = null;
     runtimeState.contentManagerOpen = false;
     floating_archive.refreshFloatingArchive();
+}
+
+function invalidateArchiveViewForChatNavigation(nextChatId = '') {
+    const snapshot = runtimeState.activeArchiveSnapshot;
+    const snapshotChat = snapshot ? core_context.comparableChatId(snapshot.chatId) : '';
+    const next = core_context.comparableChatId(nextChatId);
+    closeOverlay({ remember: false });
+    if (!snapshot || snapshotChat !== next) {
+        runtimeState.activeArchiveSnapshot = null;
+        runtimeState.activeArchiveReadOnly = true;
+    }
+    runtimeState.archiveViewLevel = 'chooser';
+    runtimeState.renderedChatScope = '';
+    runtimeState.pendingArchiveEntry = 'chooser';
+    runtimeState.contentManagerOpen = false;
+    if (runtimeState.chooserRefreshTimer) {
+        clearTimeout(runtimeState.chooserRefreshTimer);
+        runtimeState.chooserRefreshTimer = 0;
+    }
 }
 
 function bodyEl() {
@@ -42846,15 +43420,43 @@ function showInlineError(message) {
         detail.prepend(box);
     }
     box.textContent = message;
-    if (runtimeState.activeMode) {
+    refreshVisibleRecoveryHost();
+}
+
+function showInlinePreflight(summary, detailText, { error = false } = {}) {
+    const detail = document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-event-detail`) || bodyEl();
+    if (!detail) return;
+    let box = detail.querySelector('.rmt-inline-preflight');
+    if (!box) {
+        box = document.createElement('div');
+        box.className = 'rmt-inline-preflight';
+        detail.prepend(box);
+    }
+    box.classList.toggle('rmt-inline-error', error === true);
+    box.replaceChildren();
+    const details = document.createElement('details');
+    details.open = error === true;
+    const summaryEl = document.createElement('summary');
+    summaryEl.textContent = summary;
+    const body = document.createElement('pre');
+    body.textContent = detailText || '';
+    details.append(summaryEl, body);
+    box.append(details);
+}
+
+function refreshVisibleRecoveryHost() {
+    if (!runtimeState.activeMode) return;
+    const root = bodyEl();
+    if (!root) return;
+    const host = recovery_view.ensureRecoveryHost(root);
+    if (!host) return;
+    try {
         const context = core_context.getContext();
         const snapshot = runtimeState.activeArchiveSnapshot;
         const bank = snapshot?.memory || archive_repository.getImportedMemory(context);
         const all = snapshot?.cache || core_cache.getCache(context);
-        const host = document.createElement('div');
-        host.innerHTML = recovery_view.recoveryBannerHtml({ ...all, __generationRecoveryV1: { [runtimeState.activeMode]: all?.__generationRecoveryV1?.[runtimeState.activeMode] } }, bank, { readOnly: snapshot?.backupOnly });
-        box.appendChild(host);
-    }
+        host.innerHTML = recovery_view.recoveryBannerHtml(all, bank, { readOnly: snapshot?.backupOnly === true, mode: runtimeState.activeMode });
+    } catch {}
 }
 
 function emptyArchiveMode(mode, memory, context, stored) {
@@ -43110,6 +43712,12 @@ async function saveActiveSessionEdit(mutator, { select = value => value } = {}) 
 }
 
 function renderActive() {
+    const overlay = document.getElementById(core_constants.OVERLAY_ID);
+    if (!overlay || overlay.hidden) return;
+    try {
+        const scope = core_context.chatScopeKey(core_context.currentCharacterGuard());
+        if (runtimeState.renderedChatScope && runtimeState.renderedChatScope !== scope) return;
+    } catch { return; }
     if (workspace_ui.renderEmptyWorkspace()) return;
     image_viewer.closeCgImageViewer({ restoreFocus: false });
     runtimeState.contentManagerOpen = false;
@@ -44053,6 +44661,7 @@ __m_ui_overlay_js.bindOverlayCloseFallback = bindOverlayCloseFallback;
 __m_ui_overlay_js.revealArchiveOverlay = revealArchiveOverlay;
 __m_ui_overlay_js.openOverlay = openOverlay;
 __m_ui_overlay_js.closeOverlay = closeOverlay;
+__m_ui_overlay_js.invalidateArchiveViewForChatNavigation = invalidateArchiveViewForChatNavigation;
 __m_ui_overlay_js.bodyEl = bodyEl;
 __m_ui_overlay_js.topTitle = topTitle;
 __m_ui_overlay_js.setBackVisible = setBackVisible;
@@ -44077,6 +44686,7 @@ __m_ui_overlay_js.setBusyUi = setBusyUi;
 __m_ui_overlay_js.setInnerLoading = setInnerLoading;
 __m_ui_overlay_js.refreshArchiveTargetSnapshotView = refreshArchiveTargetSnapshotView;
 __m_ui_overlay_js.showInlineError = showInlineError;
+__m_ui_overlay_js.showInlinePreflight = showInlinePreflight;
 __m_ui_overlay_js.openCachedOrGenerate = openCachedOrGenerate;
 __m_ui_overlay_js.decorateReadOnlyModeUi = decorateReadOnlyModeUi;
 __m_ui_overlay_js.refreshContentRegenerationDraftView = refreshContentRegenerationDraftView;
@@ -44174,8 +44784,10 @@ function resetArchiveOverviewForCharacter(context = core_context.currentCharacte
 function scheduleChooserRefresh(delay = 40) {
     if (runtimeState.archiveViewLevel !== 'chooser') return;
     if (runtimeState.chooserRefreshTimer) clearTimeout(runtimeState.chooserRefreshTimer);
+    const epoch = runtimeState.chatNavigationEpoch;
     runtimeState.chooserRefreshTimer = setTimeout(() => {
         runtimeState.chooserRefreshTimer = 0;
+        if (runtimeState.chatNavigationEpoch !== epoch) return;
         if (runtimeState.archiveViewLevel !== 'chooser') return;
         if (runtimeState.activeMode || runtimeState.activeSession) return;
         if (runtimeState.activeArchiveSnapshot && runtimeState.archiveViewLevel === 'snapshot') return;
@@ -44185,6 +44797,7 @@ function scheduleChooserRefresh(delay = 40) {
         try { context = core_context.currentCharacterGuard(); } catch { ui_overlay.showChooser(); return; }
         const scope = core_cache.cacheScopeFromContext(context);
         void core_cache.ensureCacheHydrated(context).then(() => {
+            if (runtimeState.chatNavigationEpoch !== epoch) return;
             if (runtimeState.archiveViewLevel !== 'chooser') return;
             if (runtimeState.activeMode || runtimeState.activeSession) return;
             if (runtimeState.activeArchiveSnapshot && runtimeState.archiveViewLevel === 'snapshot') return;
@@ -44708,7 +45321,71 @@ function currentChatBlockingTasks(context = null) {
         && (!runtimeState.roomLifeRefreshOrigin || core_context.isCurrentTaskOrigin(runtimeState.roomLifeRefreshOrigin, liveContext))) {
         push('今日生活生成');
     }
+    const liveScope = core_context.chatScopeKey(liveContext);
+    for (const scope of runtimeState.activeAdvBulkScopes) {
+        if (scope === liveScope) push('ADV 批量生成');
+    }
     return labels;
+}
+
+function originMatchesChatScope(origin, scope) {
+    if (!origin || !scope) return false;
+    if (core_text.normalizeText(origin.archiveTargetEntryId, 120)) return false;
+    const chatId = core_context.comparableChatId(origin.chatId);
+    const characterKey = String(origin.characterKey || '');
+    return !!chatId && !!characterKey && scope === `${characterKey}|${chatId}`;
+}
+
+function abortTaskController(controller, seen) {
+    if (!controller || seen.has(controller) || controller.signal?.aborted) return false;
+    seen.add(controller);
+    try { controller.abort(createGenerationAbortError()); } catch {}
+    return true;
+}
+
+// Abort every in-flight task bound to one chat. Callers do not wait for the
+// network promise; owners still record cancelled and clear their busy flags.
+function cancelBlockingTasksForScope(scope, reason = 'chat-navigation') {
+    const target = String(scope || '');
+    if (!target) return { cancelled: 0, reason };
+    runtimeState.cancelledChatScopeAt.set(target, Date.now());
+    const seen = new Set();
+    let cancelled = 0;
+    const busyOrigin = runtimeState.activeTaskOrigin;
+    const busyMatches = runtimeState.busy && (!busyOrigin || originMatchesChatScope(busyOrigin, target));
+    if (busyMatches && abortTaskController(runtimeState.activeTaskAbortController, seen)) cancelled += 1;
+    for (const task of logicalGenerationTasks.values()) {
+        const matches = task.scope === target || originMatchesChatScope(task.origin, target);
+        if (!matches || core_text.normalizeText(task.origin?.archiveTargetEntryId, 120)) continue;
+        task.status = 'cancelling';
+        if (abortTaskController(task.controller, seen)) cancelled += 1;
+    }
+    for (const task of runtimeState.activeGenerationTasks.values()) {
+        if (!originMatchesChatScope(task.origin, target)) continue;
+        if (abortTaskController(task.controller, seen)) cancelled += 1;
+    }
+    for (const task of runtimeState.activeCgImageTasks.values()) {
+        if (!originMatchesChatScope(task.origin, target)) continue;
+        if (abortTaskController(task.controller, seen)) cancelled += 1;
+    }
+    return { cancelled, reason };
+}
+
+function cancelCurrentChatBlockingTasks(context = null, reason = 'chat-navigation') {
+    let live = context;
+    if (!live) {
+        try { live = core_context.getContext(); } catch { live = null; }
+    }
+    if (!live) return { cancelled: 0, reason };
+    return cancelBlockingTasksForScope(core_context.chatScopeKey(live), reason);
+}
+
+function chatScopeCancellationBlocksOrigin(origin) {
+    if (!origin?.startedAt) return false;
+    let scope = '';
+    try { scope = `${origin.characterKey}|${core_context.comparableChatId(origin.chatId)}`; } catch { return false; }
+    const cancelledAt = runtimeState.cancelledChatScopeAt.get(scope);
+    return !!cancelledAt && Number(origin.startedAt) <= cancelledAt;
 }
 
 function hasCurrentChatBlockingTask(context = null) {
@@ -45114,6 +45791,9 @@ __m_core_requestCoordinator_js.hasGenerationTasks = hasGenerationTasks;
 __m_core_requestCoordinator_js.hasAnyTask = hasAnyTask;
 __m_core_requestCoordinator_js.hasUnloadRisk = hasUnloadRisk;
 __m_core_requestCoordinator_js.currentChatBlockingTasks = currentChatBlockingTasks;
+__m_core_requestCoordinator_js.cancelBlockingTasksForScope = cancelBlockingTasksForScope;
+__m_core_requestCoordinator_js.cancelCurrentChatBlockingTasks = cancelCurrentChatBlockingTasks;
+__m_core_requestCoordinator_js.chatScopeCancellationBlocksOrigin = chatScopeCancellationBlocksOrigin;
 __m_core_requestCoordinator_js.hasCurrentChatBlockingTask = hasCurrentChatBlockingTask;
 __m_core_requestCoordinator_js.isGenerationTaskRunning = isGenerationTaskRunning;
 __m_core_requestCoordinator_js.isModeGenerating = isModeGenerating;
@@ -55252,7 +55932,10 @@ async function buildControlledContextEnvelope(context, options = {}) {
     const selectedSettingText = typeof options.selectedSettingText === 'string' ? options.selectedSettingText : '';
     const hasHandPickedSettings = !!selectedSettingText.trim();
     const participantSnapshot = options.participantSnapshot || null;
-    try {
+    const controlledWorldText = typeof options.controlledWorldText === 'string' ? options.controlledWorldText : '';
+    if (controlledWorldText) {
+        worldInfo = controlledWorldText;
+    } else try {
         const extraWorldInfoScanTerms = core_text.cleanArray(options?.worldInfoScanTerms, 24, 80);
         const worldInfoScan = extraWorldInfoScanTerms;
         const globalScanData = {
@@ -55279,7 +55962,7 @@ async function buildControlledContextEnvelope(context, options = {}) {
     } catch (error) {
         console.warn('[HeartbeatMemories] independent world-info dry run failed', core_text.safeErrorDiagnostic(error));
     }
-    if (hasHandPickedSettings) {
+    if (!controlledWorldText && hasHandPickedSettings) {
         const settingText = core_text.normalizeText(selectedSettingText, core_constants.MAX_SELECTED_SETTING_CHARS);
         const room = Math.max(0, core_constants.MAX_CONTROLLED_WORLD_TOTAL_CHARS - settingText.length - 1);
         worldInfo = [core_text.normalizeText(worldInfo, room), settingText].filter(Boolean).join('\n');
@@ -55291,7 +55974,7 @@ async function buildControlledContextEnvelope(context, options = {}) {
                 id: core_text.normalizeText(person.id, 80),
                 name: core_text.normalizeText(person.name, 80),
                 identity: person.identity === 'user' ? 'user' : 'character',
-                summary: core_text.normalizeText(person.summary || person.description || person.content, 800),
+                summary: core_text.normalizeText((person.sourceRefs || []).map(ref => ref?.title).filter(Boolean).join('、'), 240),
             })),
         };
     }
@@ -55622,6 +56305,8 @@ __init_core_themeSongContract_js();
 __init_core_presentExpression_js();
 __init_generation_cgPromptPolicy_js();
 __init_core_butterflyContract_js();
+__init_core_controlledSources_js();
+__init_core_inputLedger_js();
 __init_core_taskTrace_js();
 __init_core_worldPresentation_js();
 __init_core_narrativeAuthority_js();

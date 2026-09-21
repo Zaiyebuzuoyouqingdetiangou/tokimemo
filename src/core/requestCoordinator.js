@@ -344,7 +344,71 @@ export function currentChatBlockingTasks(context = null) {
         && (!runtimeState.roomLifeRefreshOrigin || core_context.isCurrentTaskOrigin(runtimeState.roomLifeRefreshOrigin, liveContext))) {
         push('今日生活生成');
     }
+    const liveScope = core_context.chatScopeKey(liveContext);
+    for (const scope of runtimeState.activeAdvBulkScopes) {
+        if (scope === liveScope) push('ADV 批量生成');
+    }
     return labels;
+}
+
+function originMatchesChatScope(origin, scope) {
+    if (!origin || !scope) return false;
+    if (core_text.normalizeText(origin.archiveTargetEntryId, 120)) return false;
+    const chatId = core_context.comparableChatId(origin.chatId);
+    const characterKey = String(origin.characterKey || '');
+    return !!chatId && !!characterKey && scope === `${characterKey}|${chatId}`;
+}
+
+function abortTaskController(controller, seen) {
+    if (!controller || seen.has(controller) || controller.signal?.aborted) return false;
+    seen.add(controller);
+    try { controller.abort(createGenerationAbortError()); } catch {}
+    return true;
+}
+
+// Abort every in-flight task bound to one chat. Callers do not wait for the
+// network promise; owners still record cancelled and clear their busy flags.
+export function cancelBlockingTasksForScope(scope, reason = 'chat-navigation') {
+    const target = String(scope || '');
+    if (!target) return { cancelled: 0, reason };
+    runtimeState.cancelledChatScopeAt.set(target, Date.now());
+    const seen = new Set();
+    let cancelled = 0;
+    const busyOrigin = runtimeState.activeTaskOrigin;
+    const busyMatches = runtimeState.busy && (!busyOrigin || originMatchesChatScope(busyOrigin, target));
+    if (busyMatches && abortTaskController(runtimeState.activeTaskAbortController, seen)) cancelled += 1;
+    for (const task of logicalGenerationTasks.values()) {
+        const matches = task.scope === target || originMatchesChatScope(task.origin, target);
+        if (!matches || core_text.normalizeText(task.origin?.archiveTargetEntryId, 120)) continue;
+        task.status = 'cancelling';
+        if (abortTaskController(task.controller, seen)) cancelled += 1;
+    }
+    for (const task of runtimeState.activeGenerationTasks.values()) {
+        if (!originMatchesChatScope(task.origin, target)) continue;
+        if (abortTaskController(task.controller, seen)) cancelled += 1;
+    }
+    for (const task of runtimeState.activeCgImageTasks.values()) {
+        if (!originMatchesChatScope(task.origin, target)) continue;
+        if (abortTaskController(task.controller, seen)) cancelled += 1;
+    }
+    return { cancelled, reason };
+}
+
+export function cancelCurrentChatBlockingTasks(context = null, reason = 'chat-navigation') {
+    let live = context;
+    if (!live) {
+        try { live = core_context.getContext(); } catch { live = null; }
+    }
+    if (!live) return { cancelled: 0, reason };
+    return cancelBlockingTasksForScope(core_context.chatScopeKey(live), reason);
+}
+
+export function chatScopeCancellationBlocksOrigin(origin) {
+    if (!origin?.startedAt) return false;
+    let scope = '';
+    try { scope = `${origin.characterKey}|${core_context.comparableChatId(origin.chatId)}`; } catch { return false; }
+    const cancelledAt = runtimeState.cancelledChatScopeAt.get(scope);
+    return !!cancelledAt && Number(origin.startedAt) <= cancelledAt;
 }
 
 export function hasCurrentChatBlockingTask(context = null) {

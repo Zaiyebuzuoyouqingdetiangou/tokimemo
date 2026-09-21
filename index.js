@@ -1,5 +1,5 @@
-const VERSION = '0.9.0';
-const BUILD = '0.9.0-tt-cg-r84.36-budget-capacity-scenes';
+const VERSION = '0.91';
+const BUILD = '0.91-tt-cg-r84.37-chat-room-budget';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

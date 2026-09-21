@@ -101,6 +101,27 @@ export function appendParticipantSelection(previous, draft) {
         selectedIds: [...new Set([...before.selectedIds, ...next.selectedIds])] });
 }
 
+export function participantIndexPayload(raw) {
+    const snapshot = normalizeParticipantSnapshot(raw);
+    if (!snapshot) return null;
+    return {
+        version: 1,
+        people: snapshot.people.map(person => ({
+            id: person.id,
+            name: person.name,
+            identity: person.identity === 'user' ? 'user' : 'character',
+            summary: person.sourceRefs.map(ref => ref.title).filter(Boolean).join('、').slice(0, 240),
+            sourceKeys: person.sourceRefs.map(ref => ({ world: ref.world, uid: ref.uid, title: ref.title })),
+        })),
+    };
+}
+
+export function participantIndexPromptBlock(raw) {
+    const payload = participantIndexPayload(raw);
+    if (!payload) return '';
+    return `\nUNTRUSTED_SELECTED_PARTICIPANTS_JSON:\n${JSON.stringify(payload, null, 2)}\n\n以上是用户选定人物的索引。每人只有姓名、短标题和来源键；正文只在受控来源段出现一次，这里不是证据全文。不能把角色卡名称当作选定人物的姓名。保留其他已有历史，不因这份人物名单而删除或改写。\n`;
+}
+
 export function participantPromptBlock(raw) {
     const snapshot = normalizeParticipantSnapshot(raw);
     if (!snapshot) return '';
