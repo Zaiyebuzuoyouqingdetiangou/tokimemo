@@ -191,17 +191,21 @@ async function projectHeldReply(handle, slot, requestHash, rawJson) {
 
 // Validate JSON ownership first; apply the existing storage limit to the lossless
 // stored representation, not to duplicate in-memory copies of shared requests.
-function recoveryJournalData(raw) {
+// The journal-total limit stays enforced on every write. Read/export/discard
+// egress for a journal that already exceeds it passes enforceJournalLimit:false
+// so the user can still see, export, and discard it; it can never continue.
+function recoveryJournalData(raw, { enforceJournalLimit = true } = {}) {
     const safe = JSON.parse(jsonData(raw, Number.MAX_SAFE_INTEGER, true));
     const expanded = recovery_payload.unpackRecoveryPayload(safe, GENERATION_RECOVERY_LIMITS.requestChars);
-    const stored = jsonData(recovery_payload.packRecoveryPayload(expanded), GENERATION_RECOVERY_LIMITS.journalChars, true);
+    const stored = jsonData(recovery_payload.packRecoveryPayload(expanded),
+        enforceJournalLimit ? GENERATION_RECOVERY_LIMITS.journalChars : Number.MAX_SAFE_INTEGER, true);
     return { expanded, stored };
 }
 
-function validJournal(raw, now) {
+function validJournal(raw, now, { enforceJournalLimit = true } = {}) {
     try {
         // Decode only structurally checked JSON; request/result validation remains unchanged.
-        const journal = recoveryJournalData(raw).expanded;
+        const journal = recoveryJournalData(raw, { enforceJournalLimit }).expanded;
         if (journal.kind !== 'generation-recovery' || journal.version !== 1
             || !recoveryIdentity(journal.identity, journal.identity?.mode)
             || !DIGEST.test(journal.settingsHash || '') || !Array.isArray(journal.segments)
@@ -256,17 +260,28 @@ function validJournal(raw, now) {
     } catch { return null; }
 }
 
+// Read-path-only view of a journal that fails the strict total-size re-check.
+// The strict and lenient passes differ only in the journal-total limit, so a
+// journal that is readable here but invalid strictly is exactly an oversized
+// one: shown for export/discard, never resumed or written back.
+function readableJournal(raw, now) {
+    return validJournal(raw, now, { enforceJournalLimit: false });
+}
+
 export function generationRecoverySummary(raw, now = Date.now()) {
-    const journal = validJournal(raw, now);
+    const strict = validJournal(raw, now);
+    const journal = strict || readableJournal(raw, now);
     if (!journal) return null;
+    const oversized = !strict;
     const completed = journal.segments.filter(segment => segment.state === 'complete').length;
     const truncated = journal.segments.filter(segment => segment.state === 'truncated').length;
     const failed = journal.segments.filter(segment => segment.state === 'retry').length;
-    const canContinue = truncated > 0 && (!journal.failureCode || journal.failureCode === 'RMT_JSON_TRUNCATED');
+    const canContinue = !oversized && truncated > 0 && (!journal.failureCode || journal.failureCode === 'RMT_JSON_TRUNCATED');
     return {
         mode: journal.identity.mode, completed, truncated, failed, updatedAt: journal.updatedAt,
-        canContinue, canRetry: failed > 0 || (!canContinue && !!journal.failureCode),
+        canContinue, canRetry: !oversized && (failed > 0 || (!canContinue && !!journal.failureCode)),
         failureCode: journal.failureCode || '',
+        ...(oversized ? { oversized: true } : {}),
         ...(journal.failureCategory ? { failureCategory: journal.failureCategory, failurePhase: journal.failurePhase } : {}),
     };
 }
@@ -274,14 +289,19 @@ export function generationRecoverySummary(raw, now = Date.now()) {
 // Explicit user export only. Do not include arbitrary top-level properties or
 // settings/provider objects. This is inert recovery data, not import authority.
 export function exportGenerationRecovery(raw) {
-    const journal = validJournal(raw, Date.now());
+    const strict = validJournal(raw, Date.now());
+    const journal = strict || readableJournal(raw, Date.now());
     if (!journal) throw generationRecoveryMismatch('record');
     const keys = ['kind', 'version', 'identity', 'settingsHash', 'createdAt', 'updatedAt', 'segments',
         'failureCode', 'failureCategory', 'failurePhase', 'frozenInputs', 'inputSnapshotVersion', 'sourcePolicy',
         'operation', 'replaceExisting', 'draftId', 'pageId', 'sourceIdentity', 'contentSnapshotVersion', 'contentSnapshot'];
     const pick = item => recovery_payload.packRecoveryPayload(Object.fromEntries(keys.filter(key => Object.hasOwn(item, key)).map(key => [key, item[key]])));
-    return { kind: 'hearttrace-module-recovery-export', version: 1, journal: pick(journal),
+    const bundle = { kind: 'hearttrace-module-recovery-export', version: 1, journal: pick(journal),
         previousAttempts: (Array.isArray(journal.previousAttempts) ? journal.previousAttempts : []).map(pick) };
+    // An oversized journal leaves only through this explicit export; mark it so
+    // the receiving side never mistakes it for a continuable record.
+    if (!strict) bundle.oversized = true;
+    return bundle;
 }
 
 export async function createGenerationRecovery({ origin, mode, settingsIdentity, existing = null,
@@ -293,7 +313,13 @@ export async function createGenerationRecovery({ origin, mode, settingsIdentity,
     const clock = now();
     let journal = continueRequested ? validJournal(existing, clock) : null;
     if (continueRequested) {
-        if (!journal) throw generationRecoveryMismatch('record');
+        if (!journal) {
+            // A structurally valid journal that only fails the total-size
+            // re-check is oversized: never resumed, but honestly classified.
+            if (readableJournal(existing, clock)) throw recoveryError('RMT_RECOVERY_OVERSIZED',
+                '这份草稿超出本地可安全续写的范围，不能继续生成；已保留的内容不受影响，请导出未提交草稿后明确放弃。');
+            throw generationRecoveryMismatch('record');
+        }
         const categories = { characterKey: 'character', characterId: 'character', characterAvatar: 'character',
             chatId: 'chat', archiveRevision: 'archive', archiveTargetEntryId: 'target', mode: 'operation' };
         for (const [key, category] of Object.entries(categories)) {
@@ -309,7 +335,16 @@ export async function createGenerationRecovery({ origin, mode, settingsIdentity,
     journal ||= { kind: 'generation-recovery', version: 1, identity, settingsHash,
         inputSnapshotVersion: 1, createdAt: clock, updatedAt: clock, segments: [], failureCode: '' };
     if (!continueRequested && contentSnapshot) {
-        journal.contentSnapshot = JSON.parse(jsonData(contentSnapshot, GENERATION_RECOVERY_LIMITS.requestChars, true));
+        // A source snapshot that itself exceeds the request bound is a distinct
+        // failure from a draft that filled its capacity mid-stream: no request
+        // was sent, no draft was created, and no old content was touched.
+        try {
+            journal.contentSnapshot = JSON.parse(jsonData(contentSnapshot, GENERATION_RECOVERY_LIMITS.requestChars, true));
+        } catch (error) {
+            if (error?.code === 'RMT_RECOVERY_LIMIT') throw recoveryError('RMT_RECOVERY_SNAPSHOT_TOO_LARGE',
+                '当前角色档案与卡片资料本身超过续写保护范围，未发送请求，也没有产生草稿；请精简档案内容后重试。');
+            throw error;
+        }
         journal.contentSnapshotVersion = 1;
     }
     if (!journal.draftId && draftId) journal.draftId = draftId;

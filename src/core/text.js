@@ -115,6 +115,8 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_RECOVERY_VALIDATION_CHANGED: '已保存片段暂未通过当前校验；草稿仍保留，没有重新收费生成。',
     RMT_RECOVERY_STORAGE: '这一段已返回，但浏览器没有保存成功；已停止后续生成，请检查存储后重试。',
     RMT_RECOVERY_LIMIT: '这一段超出草稿保存容量；此前成功部分与旧内容保留。',
+    RMT_RECOVERY_SNAPSHOT_TOO_LARGE: '当前角色档案与卡片资料本身超过续写保护范围，未发送请求，也没有产生草稿；请精简档案内容后重试。',
+    RMT_RECOVERY_OVERSIZED: '这份草稿超出本地可安全续写的范围，不能继续生成；已保留的内容不受影响，请导出未提交草稿后明确放弃。',
     RMT_RECOVERY_UNAVAILABLE: '当前环境无法建立可靠的续写记录；请保留页面与已有内容。',
     RMT_RECOVERY_DATA: '这一段的返回结构无法保存；此前成功部分与旧内容保留。',
     RMT_BUTTERFLY_systemNote: '该节点缺少完整的系统结局判定；旧内容保留，可单独重试。',

@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 133
-// Source SHA-256: e68527fb0356bcd3a29dd9cd8a545260a0dec8e03a02db852412fb9aa617fa68
+// Source SHA-256: 26a25529c46a178e62a846fbbc4b7e0654cb0a9d6536d34e890139348f922eef
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -637,6 +637,8 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_RECOVERY_VALIDATION_CHANGED: '已保存片段暂未通过当前校验；草稿仍保留，没有重新收费生成。',
     RMT_RECOVERY_STORAGE: '这一段已返回，但浏览器没有保存成功；已停止后续生成，请检查存储后重试。',
     RMT_RECOVERY_LIMIT: '这一段超出草稿保存容量；此前成功部分与旧内容保留。',
+    RMT_RECOVERY_SNAPSHOT_TOO_LARGE: '当前角色档案与卡片资料本身超过续写保护范围，未发送请求，也没有产生草稿；请精简档案内容后重试。',
+    RMT_RECOVERY_OVERSIZED: '这份草稿超出本地可安全续写的范围，不能继续生成；已保留的内容不受影响，请导出未提交草稿后明确放弃。',
     RMT_RECOVERY_UNAVAILABLE: '当前环境无法建立可靠的续写记录；请保留页面与已有内容。',
     RMT_RECOVERY_DATA: '这一段的返回结构无法保存；此前成功部分与旧内容保留。',
     RMT_BUTTERFLY_systemNote: '该节点缺少完整的系统结局判定；旧内容保留，可单独重试。',
@@ -7588,6 +7590,7 @@ const CODES = new Set(['RMT_LOCAL_STORAGE','RMT_LOCAL_CAS','RMT_MANUAL_KEY_STORA
     'RMT_MODE_WRITE_FENCE', 'RMT_PHONE_EVIDENCE', 'RMT_PROFILE_CAPABILITY', 'RMT_PROFILE_PROXY_UNAVAILABLE',
     'RMT_RECOVERY_BUSY', 'RMT_RECOVERY_CLEARED', 'RMT_RECOVERY_DATA', 'RMT_RECOVERY_IDENTITY',
     'RMT_RECOVERY_INPUT_CHANGED', 'RMT_RECOVERY_LIMIT', 'RMT_RECOVERY_OPERATION_CHANGED', 'RMT_RECOVERY_ORIGIN_CHANGED',
+    'RMT_RECOVERY_OVERSIZED', 'RMT_RECOVERY_SNAPSHOT_TOO_LARGE',
     'RMT_RECOVERY_STORAGE', 'RMT_RECOVERY_UNAVAILABLE', 'RMT_RECOVERY_VALIDATION_CHANGED',
     'RMT_TIME_STORY_STRUCTURE', 'RMT_TIME_STORY_RELATIONSHIP', 'RMT_TIME_STORY_WORLD', 'RMT_TIME_STORY_SOURCE', 'RMT_TIME_STORY_VERSION', 'RMT_TIME_STORY_LIMIT',
     'RMT_REQUEST_TIMEOUT', 'RMT_RESPONSE_FORMAT', 'RMT_RESPONSE_HTML', 'RMT_SEGMENT_VALIDATION', 'RMT_TOKEN_COUNT_TIMEOUT',
@@ -10420,15 +10423,20 @@ function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
         const pages = { language: '基础语言', strips: '日常一格', fireflies: '萤火虫', spring: '春', summer: '夏', autumn: '秋', winter: '冬', postending: '后日谈', roomLife: '今日生活' };
         const draftHtml = readOnly ? '' : cache.generationDraftRows(stored, bank).map(row => {
             const summary = generation_recovery.generationRecoverySummary(row.journal);
-            if (!summary || (!summary.completed && !summary.truncated && !summary.failed && !summary.failureCode)) return '';
+            if (!summary || (!summary.completed && !summary.truncated && !summary.failed && !summary.failureCode && !summary.oversized)) return '';
+            // An oversized draft can never continue; it still gets export and
+            // discard so the user is never left without an exit.
+            const oversized = summary.oversized === true;
             const label = summary.canContinue ? '继续生成' : '重试未完成部分';
-            const reason = summary.canContinue ? '正文未写完' : summary.failureCode
+            const reason = oversized ? '草稿超出本地保存上限，不能继续生成；已保留的内容不受影响，请导出留存后明确放弃' : summary.canContinue ? '正文未写完' : summary.failureCode
                 ? text.safeErrorSummary({ code: summary.failureCode, archiveInputCategory: summary.failureCategory, recoveryPhase: summary.failurePhase }) : '任务尚未完成';
             const pageLabel = pages[row.pageId] || constants.MODE_LABEL[row.mode] || row.pageId || row.mode;
             const attrs = `data-rmt-recovery-draft-id="${text.esc(row.draftId)}" data-rmt-recovery-page-id="${text.esc(row.pageId)}"`;
-            const childReader = row.journal.operation?.kind === 'content-item' && row.journal.operation.sourceDraftId
+            const childReader = !oversized && row.journal.operation?.kind === 'content-item' && row.journal.operation.sourceDraftId
                 ? ` <button type="button" class="rmt-btn" data-rmt-content-draft-open="${text.esc(row.draftId)}">查看单项草稿正文</button>` : '';
-            return `<section class="rmt-recovery-status" role="status"><b>${text.esc(pageLabel)} · 已保留 ${summary.completed} 个成功分段</b><p>${text.esc(new Date(row.createdAt).toLocaleString())} · ${text.esc(reason.replace(/[。\s]+$/, ''))}。继续只补这份草稿未完成的内容，会使用生成额度。</p><div class="rmt-recovery-actions"><button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(row.mode)}" ${attrs}>${label}</button>${childReader} <button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(row.mode)}" ${attrs}>导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(row.mode)}" ${attrs}>放弃这份草稿</button></div></section>`;
+            const continueButton = oversized ? '' : `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(row.mode)}" ${attrs}>${label}</button>`;
+            const tail = oversized ? '。' : '。继续只补这份草稿未完成的内容，会使用生成额度。';
+            return `<section class="rmt-recovery-status" role="status"><b>${text.esc(pageLabel)} · 已保留 ${summary.completed} 个成功分段</b><p>${text.esc(new Date(row.createdAt).toLocaleString())} · ${text.esc(reason.replace(/[。\s]+$/, ''))}${tail}</p><div class="rmt-recovery-actions">${continueButton}${childReader} <button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(row.mode)}" ${attrs}>导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(row.mode)}" ${attrs}>放弃这份草稿</button></div></section>`;
         }).join('');
         const resultHtml = cache.listGenerationTaskResults(null, stored).map(row => {
             const label = pages[row.pageId] || constants.MODE_LABEL[row.mode] || row.pageId || row.mode;
@@ -10443,10 +10451,13 @@ function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
         if (journal?.identity?.chatId !== bank.chatId || journal?.identity?.archiveRevision !== bank.archiveRevision
             || journal?.[constants.SESSION_MODE_WRITE_FENCE_KEY] !== cache.modeWriteFenceForCache(stored, mode)) return '';
         const summary = generation_recovery.generationRecoverySummary(journal);
-        if (!summary || (!summary.completed && !summary.truncated && !summary.failed)) return '';
+        if (!summary || (!summary.completed && !summary.truncated && !summary.failed && !summary.oversized)) return '';
+        const oversized = summary.oversized === true;
         const label = summary.canContinue ? '继续生成' : '重试未完成部分';
-        const reason = summary.canContinue ? '正文未写完' : summary.failureCode ? text.safeErrorSummary({ code: summary.failureCode, archiveInputCategory: summary.failureCategory, recoveryPhase: summary.failurePhase }) : '任务尚未完成';
-        return `<section class="rmt-recovery-status" role="status"><b>${text.esc(constants.MODE_LABEL[mode] || mode)} · 已保留 ${summary.completed} 个成功分段</b><p>上次记录：${text.esc(reason.replace(/[。\s]+$/, ''))}。继续会使用生成额度。</p><div class="rmt-recovery-actions"><button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(mode)}">${label}</button> <button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(mode)}">导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(mode)}">放弃未提交草稿</button></div></section>`;
+        const reason = oversized ? '草稿超出本地保存上限，不能继续生成；已保留的内容不受影响，请导出留存后明确放弃' : summary.canContinue ? '正文未写完' : summary.failureCode ? text.safeErrorSummary({ code: summary.failureCode, archiveInputCategory: summary.failureCategory, recoveryPhase: summary.failurePhase }) : '任务尚未完成';
+        const continueButton = oversized ? '' : `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(mode)}">${label}</button> `;
+        const tail = oversized ? '。' : '。继续会使用生成额度。';
+        return `<section class="rmt-recovery-status" role="status"><b>${text.esc(constants.MODE_LABEL[mode] || mode)} · 已保留 ${summary.completed} 个成功分段</b><p>上次记录：${text.esc(reason.replace(/[。\s]+$/, ''))}${tail}</p><div class="rmt-recovery-actions">${continueButton}<button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(mode)}">导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(mode)}">放弃未提交草稿</button></div></section>`;
     }).join('');
 }
 
@@ -36732,17 +36743,21 @@ async function projectHeldReply(handle, slot, requestHash, rawJson) {
 
 // Validate JSON ownership first; apply the existing storage limit to the lossless
 // stored representation, not to duplicate in-memory copies of shared requests.
-function recoveryJournalData(raw) {
+// The journal-total limit stays enforced on every write. Read/export/discard
+// egress for a journal that already exceeds it passes enforceJournalLimit:false
+// so the user can still see, export, and discard it; it can never continue.
+function recoveryJournalData(raw, { enforceJournalLimit = true } = {}) {
     const safe = JSON.parse(jsonData(raw, Number.MAX_SAFE_INTEGER, true));
     const expanded = recovery_payload.unpackRecoveryPayload(safe, GENERATION_RECOVERY_LIMITS.requestChars);
-    const stored = jsonData(recovery_payload.packRecoveryPayload(expanded), GENERATION_RECOVERY_LIMITS.journalChars, true);
+    const stored = jsonData(recovery_payload.packRecoveryPayload(expanded),
+        enforceJournalLimit ? GENERATION_RECOVERY_LIMITS.journalChars : Number.MAX_SAFE_INTEGER, true);
     return { expanded, stored };
 }
 
-function validJournal(raw, now) {
+function validJournal(raw, now, { enforceJournalLimit = true } = {}) {
     try {
         // Decode only structurally checked JSON; request/result validation remains unchanged.
-        const journal = recoveryJournalData(raw).expanded;
+        const journal = recoveryJournalData(raw, { enforceJournalLimit }).expanded;
         if (journal.kind !== 'generation-recovery' || journal.version !== 1
             || !recoveryIdentity(journal.identity, journal.identity?.mode)
             || !DIGEST.test(journal.settingsHash || '') || !Array.isArray(journal.segments)
@@ -36797,17 +36812,28 @@ function validJournal(raw, now) {
     } catch { return null; }
 }
 
+// Read-path-only view of a journal that fails the strict total-size re-check.
+// The strict and lenient passes differ only in the journal-total limit, so a
+// journal that is readable here but invalid strictly is exactly an oversized
+// one: shown for export/discard, never resumed or written back.
+function readableJournal(raw, now) {
+    return validJournal(raw, now, { enforceJournalLimit: false });
+}
+
 function generationRecoverySummary(raw, now = Date.now()) {
-    const journal = validJournal(raw, now);
+    const strict = validJournal(raw, now);
+    const journal = strict || readableJournal(raw, now);
     if (!journal) return null;
+    const oversized = !strict;
     const completed = journal.segments.filter(segment => segment.state === 'complete').length;
     const truncated = journal.segments.filter(segment => segment.state === 'truncated').length;
     const failed = journal.segments.filter(segment => segment.state === 'retry').length;
-    const canContinue = truncated > 0 && (!journal.failureCode || journal.failureCode === 'RMT_JSON_TRUNCATED');
+    const canContinue = !oversized && truncated > 0 && (!journal.failureCode || journal.failureCode === 'RMT_JSON_TRUNCATED');
     return {
         mode: journal.identity.mode, completed, truncated, failed, updatedAt: journal.updatedAt,
-        canContinue, canRetry: failed > 0 || (!canContinue && !!journal.failureCode),
+        canContinue, canRetry: !oversized && (failed > 0 || (!canContinue && !!journal.failureCode)),
         failureCode: journal.failureCode || '',
+        ...(oversized ? { oversized: true } : {}),
         ...(journal.failureCategory ? { failureCategory: journal.failureCategory, failurePhase: journal.failurePhase } : {}),
     };
 }
@@ -36815,14 +36841,19 @@ function generationRecoverySummary(raw, now = Date.now()) {
 // Explicit user export only. Do not include arbitrary top-level properties or
 // settings/provider objects. This is inert recovery data, not import authority.
 function exportGenerationRecovery(raw) {
-    const journal = validJournal(raw, Date.now());
+    const strict = validJournal(raw, Date.now());
+    const journal = strict || readableJournal(raw, Date.now());
     if (!journal) throw generationRecoveryMismatch('record');
     const keys = ['kind', 'version', 'identity', 'settingsHash', 'createdAt', 'updatedAt', 'segments',
         'failureCode', 'failureCategory', 'failurePhase', 'frozenInputs', 'inputSnapshotVersion', 'sourcePolicy',
         'operation', 'replaceExisting', 'draftId', 'pageId', 'sourceIdentity', 'contentSnapshotVersion', 'contentSnapshot'];
     const pick = item => recovery_payload.packRecoveryPayload(Object.fromEntries(keys.filter(key => Object.hasOwn(item, key)).map(key => [key, item[key]])));
-    return { kind: 'hearttrace-module-recovery-export', version: 1, journal: pick(journal),
+    const bundle = { kind: 'hearttrace-module-recovery-export', version: 1, journal: pick(journal),
         previousAttempts: (Array.isArray(journal.previousAttempts) ? journal.previousAttempts : []).map(pick) };
+    // An oversized journal leaves only through this explicit export; mark it so
+    // the receiving side never mistakes it for a continuable record.
+    if (!strict) bundle.oversized = true;
+    return bundle;
 }
 
 async function createGenerationRecovery({ origin, mode, settingsIdentity, existing = null,
@@ -36834,7 +36865,13 @@ async function createGenerationRecovery({ origin, mode, settingsIdentity, existi
     const clock = now();
     let journal = continueRequested ? validJournal(existing, clock) : null;
     if (continueRequested) {
-        if (!journal) throw generationRecoveryMismatch('record');
+        if (!journal) {
+            // A structurally valid journal that only fails the total-size
+            // re-check is oversized: never resumed, but honestly classified.
+            if (readableJournal(existing, clock)) throw recoveryError('RMT_RECOVERY_OVERSIZED',
+                '这份草稿超出本地可安全续写的范围，不能继续生成；已保留的内容不受影响，请导出未提交草稿后明确放弃。');
+            throw generationRecoveryMismatch('record');
+        }
         const categories = { characterKey: 'character', characterId: 'character', characterAvatar: 'character',
             chatId: 'chat', archiveRevision: 'archive', archiveTargetEntryId: 'target', mode: 'operation' };
         for (const [key, category] of Object.entries(categories)) {
@@ -36850,7 +36887,16 @@ async function createGenerationRecovery({ origin, mode, settingsIdentity, existi
     journal ||= { kind: 'generation-recovery', version: 1, identity, settingsHash,
         inputSnapshotVersion: 1, createdAt: clock, updatedAt: clock, segments: [], failureCode: '' };
     if (!continueRequested && contentSnapshot) {
-        journal.contentSnapshot = JSON.parse(jsonData(contentSnapshot, GENERATION_RECOVERY_LIMITS.requestChars, true));
+        // A source snapshot that itself exceeds the request bound is a distinct
+        // failure from a draft that filled its capacity mid-stream: no request
+        // was sent, no draft was created, and no old content was touched.
+        try {
+            journal.contentSnapshot = JSON.parse(jsonData(contentSnapshot, GENERATION_RECOVERY_LIMITS.requestChars, true));
+        } catch (error) {
+            if (error?.code === 'RMT_RECOVERY_LIMIT') throw recoveryError('RMT_RECOVERY_SNAPSHOT_TOO_LARGE',
+                '当前角色档案与卡片资料本身超过续写保护范围，未发送请求，也没有产生草稿；请精简档案内容后重试。');
+            throw error;
+        }
         journal.contentSnapshotVersion = 1;
     }
     if (!journal.draftId && draftId) journal.draftId = draftId;
