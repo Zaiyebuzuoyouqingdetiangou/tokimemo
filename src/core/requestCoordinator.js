@@ -619,6 +619,17 @@ export function settledChatTaskRecord(id) {
     return row ? { ...row } : null;
 }
 
+export function clearCompletedChatTasks() {
+    const before = recentChatTasks.length;
+    for (let index = recentChatTasks.length - 1; index >= 0; index -= 1) {
+        const outcome = recentChatTasks[index].outcome;
+        if (outcome === 'done' || outcome === 'cancelled') recentChatTasks.splice(index, 1);
+    }
+    const removed = before - recentChatTasks.length;
+    try { refreshTaskCenter(); } catch {}
+    return removed;
+}
+
 export function currentChatBlockingTasks(context = null) {
     try {
         return listChatTaskSnapshot(context).filter(row => row.running && row.currentChat).map(row => row.label);

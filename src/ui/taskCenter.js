@@ -269,6 +269,14 @@ export function ensureTaskCenterChrome(overlay) {
     }
     bindTaskCenterRefresh();
     const shell = overlay?.querySelector?.('.rmt-shell');
+    const topbar = shell?.querySelector?.('.rmt-topbar');
+    if (shell && topbar && !shell.querySelector('[data-rmt-live-tasks]')) {
+        const strip = document.createElement('div');
+        strip.className = 'rmt-live-tasks';
+        strip.dataset.rmtLiveTasks = '';
+        strip.hidden = true;
+        topbar.insertAdjacentElement('afterend', strip);
+    }
     if (shell && !shell.querySelector('[data-rmt-task-center]')) {
         const panel = document.createElement('div');
         panel.className = 'rmt-task-center';
@@ -322,76 +330,208 @@ function syncTaskCenterBadge() {
     }
 }
 
-function recoverySectionHtml(esc) {
+const PAGE_LABELS = { language: '基础语言', strips: '日常一格', fireflies: '萤火虫', spring: '春', summer: '夏', autumn: '秋', winter: '冬', postending: '后日谈', roomLife: '今日生活', dialogues: '基础语言' };
+const CARD_RANK = { running: 0, queued: 1, retry: 2, failed: 3, done: 4, cancelled: 5 };
+const CARD_LABEL = { running: '进行中', queued: '排队', retry: '未完成', failed: '失败了', done: '完成', cancelled: '已取消' };
+
+function taskLabel(mode, pageId, fallback) {
+    return PAGE_LABELS[pageId] || core_constants.MODE_LABEL[mode] || fallback || pageId || mode || '任务';
+}
+
+function pageRoute(mode, pageId, label) {
+    const page = String(pageId || '');
+    if (page && ui_workspaceState.WORKSPACE_ROUTES[page]) return page;
+    if (mode === core_constants.MODE.HEART) {
+        if (['spring', 'summer', 'autumn', 'winter'].includes(page)) return 'heart';
+        if (page === 'language' || page === 'dialogues') return 'language';
+        if (page === 'strips') return 'strips';
+        if (page === 'fireflies') return 'fireflies';
+        if (page === 'postending') return 'postending';
+        return 'heart';
+    }
+    if (mode && ui_workspaceState.WORKSPACE_ROUTES[mode]) return mode;
+    const titled = Object.entries(ui_workspaceState.WORKSPACE_ROUTES).find(([, spec]) => spec.title === label);
+    if (titled) return titled[0];
+    const labeled = Object.entries(core_constants.MODE_LABEL).find(([, text]) => text === label);
+    if (labeled && ui_workspaceState.WORKSPACE_ROUTES[labeled[0]]) return labeled[0];
+    return '';
+}
+
+function sameJob(left, right) {
+    if (!left || !right) return false;
+    if (left.draftId && right.draftId && left.draftId === right.draftId) return true;
+    if (left.mode && right.mode && left.mode === right.mode) {
+        const leftPage = left.pageId || '';
+        const rightPage = right.pageId || '';
+        if (leftPage && rightPage) return leftPage === rightPage;
+        if (!leftPage && !rightPage) return true;
+    }
+    const leftLabel = left.label || '';
+    const rightLabel = right.label || '';
+    return !!leftLabel && !!rightLabel && (leftLabel === rightLabel || leftLabel.startsWith(rightLabel) || rightLabel.startsWith(leftLabel));
+}
+
+function draftCards() {
     let drafts = [];
     try { drafts = core_cache.listGenerationDrafts(); }
     catch { drafts = []; }
-    const visible = drafts.filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).slice(0, 8);
-    if (!visible.length) return '';
-    return `<h3>未完成草稿</h3>${visible.map(row => {
+    return drafts.filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).slice(0, 12).map(row => {
         const oversized = row.oversized === true;
-        const name = core_constants.MODE_LABEL[row.mode] || row.pageId || row.mode;
-        const action = row.canContinue ? '继续生成' : '重试未完成部分';
         const reason = oversized
             ? '草稿超出本地保存上限，不能继续生成'
             : row.failureCode
                 ? core_text.safeErrorSummary({ code: row.failureCode, archiveInputCategory: row.failureCategory, recoveryPhase: row.failurePhase })
                 : (row.canContinue ? '正文未写完' : '任务尚未完成');
-        const attrs = `data-rmt-recovery-draft-id="${esc(row.draftId)}" data-rmt-recovery-page-id="${esc(row.pageId || '')}"`;
-        const retry = oversized ? '' : `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${esc(row.mode)}" ${attrs}>${action}</button>`;
-        return `<article class="rmt-task-row">
-          <header><b>${esc(name)} · 已保留 ${Number(row.completed) || 0} 个成功分段</b><span>${oversized ? '只能导出' : action}</span></header>
-          <p>${esc(String(reason || '').replace(/[。\s]+$/, ''))}</p>
-          <div class="rmt-task-actions">${retry}
-            <button type="button" class="rmt-btn" data-rmt-recovery-export="${esc(row.mode)}" ${attrs}>导出未提交草稿</button>
-            <button type="button" class="rmt-btn" data-rmt-recovery-discard="${esc(row.mode)}" ${attrs}>放弃这份草稿</button>
-          </div>
-        </article>`;
-    }).join('')}`;
+        const attrs = `data-rmt-recovery-draft-id="${core_text.esc(row.draftId)}" data-rmt-recovery-page-id="${core_text.esc(row.pageId || '')}"`;
+        const retry = oversized ? '' : `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${core_text.esc(row.mode)}" ${attrs}>${row.canContinue ? '继续生成' : '重试未完成部分'}</button>`;
+        return {
+            state: oversized || row.failed || row.failureCode ? 'failed' : 'retry',
+            label: taskLabel(row.mode, row.pageId, row.mode),
+            mode: row.mode,
+            pageId: row.pageId || '',
+            draftId: row.draftId,
+            detail: `已保留 ${Number(row.completed) || 0} 个成功分段 · ${String(reason || '').replace(/[。\s]+$/, '')}`,
+            at: Number(row.updatedAt) || Number(row.createdAt) || 0,
+            actions: `${retry}<button type="button" class="rmt-btn" data-rmt-recovery-export="${core_text.esc(row.mode)}" ${attrs}>导出未提交草稿</button><button type="button" class="rmt-btn" data-rmt-recovery-discard="${core_text.esc(row.mode)}" ${attrs}>放弃这份草稿</button>`,
+        };
+    });
+}
+
+function openAction(record) {
+    if (!record?.id) return '';
+    if (record.outcome !== 'done' && record.outcome !== 'failed' && record.phase !== 'done' && record.phase !== 'failed') return '';
+    if (!pageRoute(record.mode, record.pageId, record.label) && !record.draftId) return '';
+    return `<button type="button" class="rmt-btn" data-rmt-action="task-open" data-rmt-task-id="${core_text.esc(record.id)}">打开结果</button>`;
+}
+
+function collectTaskCards() {
+    const cards = draftCards();
+    const rows = core_requestCoordinator.listChatTaskSnapshot();
+    for (const row of rows.filter(item => item.running)) {
+        const existing = cards.find(card => sameJob(card, row));
+        const next = {
+            state: 'running',
+            label: row.label,
+            mode: existing?.mode || '',
+            pageId: existing?.pageId || '',
+            draftId: existing?.draftId || '',
+            detail: [row.chatCaption, row.progressText].filter(Boolean).join(' · '),
+            at: Date.now(),
+            actions: `<button type="button" class="rmt-btn" data-rmt-action="task-cancel" data-rmt-task-id="${core_text.esc(row.id)}">取消这项</button>`,
+        };
+        if (existing) Object.assign(existing, next);
+        else cards.push(next);
+    }
+    const scope = currentScope();
+    const mine = queue.filter(item => item.scope === scope);
+    mine.filter(item => item.status === 'queued').forEach((item, index) => {
+        if (cards.some(card => sameJob(card, item) && card.state === 'running')) return;
+        const existing = cards.find(card => sameJob(card, item));
+        const next = {
+            state: 'queued',
+            label: item.label,
+            mode: item.mode || existing?.mode || '',
+            pageId: item.pageId || existing?.pageId || '',
+            draftId: item.draftId || existing?.draftId || '',
+            detail: item.kind === 'recovery' ? '自动重试未完成部分 · 排队等待' : '当前聊天 · 排队等待，上一项结束后才开始',
+            at: -index,
+            actions: `<button type="button" class="rmt-btn" data-rmt-action="task-queue-remove" data-rmt-queue-id="${core_text.esc(item.id)}">移出队列</button>`,
+        };
+        if (existing && existing.state !== 'running') Object.assign(existing, next, { actions: `${existing.actions || ''}${next.actions}` });
+        else if (!existing) cards.push(next);
+    });
+    for (const row of rows.filter(item => !item.running)) {
+        const record = core_requestCoordinator.settledChatTaskRecord(row.id) || {};
+        const state = row.phase === 'failed' || record.outcome === 'failed' ? 'failed' : row.phase === 'cancelled' || record.outcome === 'cancelled' ? 'cancelled' : 'done';
+        if (cards.some(card => sameJob(card, { label: row.label, mode: record.mode, pageId: record.pageId, draftId: record.draftId }))) continue;
+        cards.push({
+            state,
+            label: taskLabel(record.mode, record.pageId, row.label),
+            mode: record.mode || '',
+            pageId: record.pageId || '',
+            draftId: record.draftId || '',
+            detail: [row.chatCaption, row.progressText].filter(Boolean).join(' · '),
+            at: Number(record.endedAt) || 0,
+            actions: openAction({ ...record, id: row.id, label: row.label, outcome: record.outcome || state, phase: row.phase }),
+        });
+    }
+    for (const item of mine) {
+        if (item.status !== 'done' && item.status !== 'failed' && item.status !== 'cancelled') continue;
+        if (cards.some(card => sameJob(card, item))) continue;
+        cards.push({
+            state: item.status === 'failed' ? 'failed' : item.status === 'cancelled' ? 'cancelled' : 'done',
+            label: item.label,
+            mode: item.mode || '',
+            pageId: item.pageId || '',
+            draftId: item.draftId || '',
+            detail: item.kind === 'recovery' ? '自动重试未完成部分' : '当前聊天 · 串行队列',
+            at: 0,
+            actions: item.status === 'done' || item.status === 'failed' ? openAction({ id: '', mode: item.mode, pageId: item.pageId, label: item.label, outcome: item.status }) : '',
+        });
+    }
+    return cards.sort((left, right) => (CARD_RANK[left.state] ?? 9) - (CARD_RANK[right.state] ?? 9) || right.at - left.at);
+}
+
+function paintLiveStrip() {
+    const host = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-live-tasks]`);
+    if (!host) return;
+    const esc = core_text.esc;
+    let rows = [];
+    try { rows = core_requestCoordinator.listChatTaskSnapshot(); } catch { rows = []; }
+    const running = rows.filter(row => row.running);
+    const runningLabels = new Set(running.map(row => row.label));
+    const failed = rows.filter(row => !row.running && (row.phase === 'failed' || row.outcome === 'failed') && !runningLabels.has(row.label));
+    const chips = [];
+    if (runtimeState.busy && !running.some(row => row.id === 'archive-import' || row.kind === 'archive')) {
+        const text = core_text.normalizeText(runtimeState.activeTaskLabel, 80) || '正在整理聊天档案';
+        chips.push(`<button type="button" class="rmt-live-chip rmt-live-run" data-rmt-action="tasks"><i></i><b>档案整理</b><em>${esc(text)}</em></button>`);
+    }
+    for (const row of running) {
+        chips.push(`<button type="button" class="rmt-live-chip rmt-live-run" data-rmt-action="tasks"><i></i><b>${esc(row.label)}</b><em>${esc(row.phaseLabel || '进行中')}</em></button>`);
+    }
+    const failedLabels = failed.map(row => row.label);
+    for (const row of failed.slice(0, 4)) {
+        chips.push(`<button type="button" class="rmt-live-chip rmt-live-fail" data-rmt-action="tasks"><b>${esc(row.label)}</b><em>失败了</em></button>`);
+    }
+    for (const card of draftCards()) {
+        if (card.state !== 'failed' || runningLabels.has(card.label) || failedLabels.some(label => label === card.label || label.startsWith(card.label) || card.label.startsWith(label))) continue;
+        failedLabels.push(card.label);
+        chips.push(`<button type="button" class="rmt-live-chip rmt-live-fail" data-rmt-action="tasks"><b>${esc(card.label)}</b><em>失败了</em></button>`);
+    }
+    host.hidden = chips.length === 0;
+    host.innerHTML = chips.join('');
+}
+
+function hideMainRecoveryCards() {
+    document.querySelectorAll(`#${core_constants.OVERLAY_ID} [data-rmt-generation-recoveries]`).forEach(node => node.remove());
 }
 
 function paintTaskCenter(panel) {
-    const rows = core_requestCoordinator.listChatTaskSnapshot();
-    const running = rows.filter(row => row.running);
-    const settled = rows.filter(row => !row.running);
-    const currentNames = running.filter(row => row.currentChat).map(row => row.label);
+    const cards = collectTaskCards();
+    const open = cards.filter(card => card.state !== 'done' && card.state !== 'cancelled');
+    const finished = cards.filter(card => card.state === 'done' || card.state === 'cancelled');
+    const waiting = queuedForScope();
+    const runningNow = cards.some(card => card.state === 'running') || waiting.length > 0;
     const esc = core_text.esc;
-    const rowHtml = row => `<article class="rmt-task-row">
-      <header><b>${esc(row.label)}</b><span>${esc(row.phaseLabel)}</span></header>
-      <p>${esc(row.chatCaption)}</p>
-      <p>${esc(row.progressText)}</p>
-      <div class="rmt-task-actions">
-        ${row.running ? `<button type="button" class="rmt-btn" data-rmt-action="task-cancel" data-rmt-task-id="${esc(row.id)}">取消这项</button>` : ''}
-        ${row.canOpen ? `<button type="button" class="rmt-btn" data-rmt-action="task-open" data-rmt-task-id="${esc(row.id)}">回到原聊天并打开结果</button>` : ''}
-      </div>
+    const cardHtml = card => `<article class="rmt-task-card" data-state="${card.state}">
+      <div class="rmt-task-main"><b>${esc(card.label)}</b><span class="rmt-task-state" data-state="${card.state}">${esc(CARD_LABEL[card.state] || card.state)}</span></div>
+      <p>${esc(card.detail || '')}</p>
+      ${card.actions ? `<div class="rmt-task-actions">${card.actions}</div>` : ''}
     </article>`;
-    const scope = currentScope();
-    const mine = queue.filter(item => item.scope === scope);
-    const waiting = mine.filter(item => item.status === 'queued');
-    const active = mine.find(item => item.status === 'running');
-    const recentQueue = mine.filter(item => item.status !== 'queued' && item.status !== 'running').slice(-4);
-    const queueRow = (item, order) => `<article class="rmt-task-row">
-      <header><b>${order ? `${order}. ` : ''}${esc(item.label)}</b><span>${esc(QUEUE_STATUS[item.status] || item.status)}</span></header>
-      <p>${item.kind === 'recovery' ? '自动重试未完成部分' : '当前聊天 · 串行队列'}</p>
-      ${item.status === 'queued' ? `<div class="rmt-task-actions"><button type="button" class="rmt-btn" data-rmt-action="task-queue-remove" data-rmt-queue-id="${esc(item.id)}">移出队列</button></div>` : ''}
-    </article>`;
-    const recoveryHtml = recoverySectionHtml(esc);
-    const queueHtml = (active || waiting.length || recentQueue.length)
-        ? `<h3>排队</h3>${active ? `<p class="rmt-task-note">正在串行处理「${esc(active.label)}」，完成后才开始下一项。</p>` : ''}${waiting.map((item, index) => queueRow(item, index + 1)).join('')}${recentQueue.map(item => queueRow(item, 0)).join('')}`
-        : '';
     const top = panel.scrollTop;
     panel.innerHTML = `<div class="rmt-task-head">
       <b>任务</b>
-      <button type="button" class="rmt-btn" data-rmt-action="task-center-close">关闭</button>
+      <div class="rmt-task-head-actions">
+        <button type="button" class="rmt-btn" data-rmt-action="task-clear-done" ${finished.length ? '' : 'disabled'}>清空已完成</button>
+        <button type="button" class="rmt-btn" data-rmt-action="task-center-close">关闭</button>
+      </div>
     </div>
-    <p class="rmt-task-note">这里只显示任务名称、阶段和是否落盘。不会显示密钥、提示词或世界书正文。档案整理完成后可以多选，再按顺序一次生成一项。</p>
-    ${queueHtml}
-    ${recoveryHtml}
-    ${running.length ? running.map(rowHtml).join('') : '<p class="rmt-task-empty">当前没有进行中的任务。</p>'}
+    <p class="rmt-task-note">一项一行。进行中和未完成在上面，串行完成的在下面。不会显示密钥、提示词或世界书正文。</p>
+    ${open.length ? open.map(cardHtml).join('') : '<p class="rmt-task-empty">当前没有进行中或未完成的任务。</p>'}
     <div class="rmt-task-actions">
-      <button type="button" class="rmt-btn" data-rmt-action="task-cancel-current" ${currentNames.length || waiting.length ? '' : 'disabled'}>取消当前聊天全部任务</button>
+      <button type="button" class="rmt-btn" data-rmt-action="task-cancel-current" ${runningNow ? '' : 'disabled'}>取消当前聊天全部任务</button>
     </div>
-    ${settled.length ? `<h3>刚结束</h3>${settled.map(rowHtml).join('')}` : ''}`;
+    ${finished.length ? `<h3>已完成</h3>${finished.map(cardHtml).join('')}` : ''}`;
     panel.scrollTop = top;
 }
 
@@ -402,6 +542,8 @@ function refreshTaskCenterView() {
         syncPickScope();
         dropForeignQueue();
         syncTaskCenterBadge();
+        hideMainRecoveryCards();
+        paintLiveStrip();
         const panel = taskPanel();
         if (panel && !panel.hidden) paintTaskCenter(panel);
     } finally {
@@ -421,24 +563,42 @@ function bindTaskCenterRefresh() {
     }
 }
 
+export function syncLiveTaskStrip() {
+    paintLiveStrip();
+}
+
 export function syncTaskCenterChrome() {
     bindTaskCenterRefresh();
     refreshTaskCenterView();
 }
 
-async function openSettledTask(id) {
-    const row = core_requestCoordinator.settledChatTaskRecord(id);
-    if (!row?.chatId) {
-        globalThis.toastr?.info?.('这份任务没有可打开的原聊天结果。', '心迹回廊');
+async function openSavedTaskPage(row, context) {
+    if (row.draftId) {
+        try {
+            const listed = core_cache.listGenerationTaskResults(context);
+            if (listed.some(item => item.draftId === row.draftId)) return archive_library.openGenerationTaskResult(row.draftId, context);
+        } catch { /* The mode page is still the result when no separate draft result exists. */ }
+    }
+    const route = pageRoute(row.mode, row.pageId, row.label);
+    const spec = ui_workspaceState.WORKSPACE_ROUTES[route];
+    if (!spec?.mode) {
+        globalThis.toastr?.info?.(row.saved || row.received ? '这次结果还不能打开对应页面。' : '这次没有新的可保存分段，没有单独的结果页。', '心迹回廊');
         return;
     }
-    const live = core_context.currentCharacterGuard();
-    const same = core_context.comparableChatId(core_context.getChatId(live)) === row.chatId
-        && (!row.characterId || String(live.characterId ?? '') === row.characterId);
-    if (same) {
-        if (row.draftId) return archive_library.openGenerationTaskResult(row.draftId, live);
-        return ui_overlay.showChooser();
+    ui_overlay.openCachedOrGenerate(spec.mode, { workspaceRoute: route });
+}
+
+async function openSettledTask(id) {
+    const row = core_requestCoordinator.settledChatTaskRecord(id);
+    if (!row) {
+        globalThis.toastr?.info?.('这份任务已经不在列表里。', '心迹回廊');
+        return;
     }
+    hideTaskCenter();
+    const live = core_context.currentCharacterGuard();
+    const same = !row.chatId || (core_context.comparableChatId(core_context.getChatId(live)) === row.chatId
+        && (!row.characterId || String(live.characterId ?? '') === row.characterId));
+    if (same) return openSavedTaskPage(row, live);
     const opener = live.openCharacterChat;
     if (typeof opener === 'function') {
         await opener.call(live, row.chatId);
@@ -449,8 +609,7 @@ async function openSettledTask(id) {
             globalThis.toastr?.warning?.('酒馆没有切到原来的聊天，没有打开可写结果。', '心迹回廊');
             return openReadonlyTask(row);
         }
-        if (row.draftId) return archive_library.openGenerationTaskResult(row.draftId, next);
-        return ui_overlay.showChooser();
+        return openSavedTaskPage(row, next);
     }
     globalThis.toastr?.info?.('当前酒馆没有切回原聊天的入口，改为只读查看，不会改当前聊天。', '心迹回廊');
     return openReadonlyTask(row);
@@ -490,6 +649,19 @@ export function handleTaskCenterAction(action, actionEl) {
     }
     if (action === 'task-queue-remove') {
         cancelQueuedItem(actionEl?.dataset?.rmtQueueId || '');
+        return;
+    }
+    if (action === 'task-clear-done') {
+        let queueRemoved = 0;
+        for (let index = queue.length - 1; index >= 0; index -= 1) {
+            if (queue[index].status === 'done' || queue[index].status === 'cancelled') {
+                queue.splice(index, 1);
+                queueRemoved += 1;
+            }
+        }
+        const removed = core_requestCoordinator.clearCompletedChatTasks();
+        refreshTaskCenterView();
+        globalThis.toastr?.info?.(removed || queueRemoved ? '已清空完成的任务。未完成草稿还在。' : '没有可清空的已完成任务。', '心迹回廊');
         return;
     }
     if (action === 'queue-selected') {

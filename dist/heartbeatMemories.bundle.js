@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 140
-// Source SHA-256: 1bf64018022018ec4ad9d88b77ac862df085d2c799b5088d3975d05bb8c91524
+// Source SHA-256: 84cb7eec574fd2545615e266d27fbac45e6a69a18a9c7ca5f57fdc528591b321
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -15131,11 +15131,33 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-task-count{display:inline-grid;place-items:center;min-width:16px;height:16px;margin-left:4px;padding:0 4px;border-radius:999px;background:var(--rmt-theme-accent,#e89ab8);color:var(--rmt-theme-wash-ink,#fff);font-size:10px;line-height:1}
 .rmt-topbar button[data-rmt-action="tasks"] .rmt-task-count{position:absolute;top:-4px;right:-4px;margin:0}
 .rmt-task-count[hidden]{display:none!important}
-.rmt-task-center{position:absolute;z-index:30;top:62px;right:12px;width:min(420px,calc(100% - 24px));max-height:min(70vh,560px);overflow:auto;padding:12px 12px 14px;border:1px solid var(--rmt-theme-border,#c9dbe5);border-radius:16px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#243246);box-shadow:0 16px 40px var(--rmt-theme-shadow,rgba(13,22,34,.18))}
+.rmt-live-tasks{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--rmt-theme-border,#d7e6ee);background:color-mix(in srgb,var(--rmt-theme-surface-solid,#fff) 82%,var(--rmt-theme-accent,#e89ab8));position:relative;z-index:9}
+.rmt-live-tasks[hidden]{display:none!important}
+.rmt-live-chip{display:inline-flex;align-items:center;gap:8px;max-width:100%;min-height:32px;margin:0;padding:4px 12px;border:1px solid var(--rmt-theme-border,#d7e6ee);border-radius:999px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#243246);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.rmt-live-chip b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rmt-live-chip em{flex:0 0 auto;font-style:normal;font-weight:800;color:var(--rmt-theme-accent-ink,#9d6d82)}
+.rmt-live-chip i{width:8px;height:8px;border-radius:50%;background:#ed9fbe;box-shadow:0 0 0 3px rgba(237,159,190,.22);animation:rmtPulse 1.5s ease-in-out infinite}
+@keyframes rmtPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.72);opacity:.55}}
+.rmt-live-fail{background:#fff6f6;border-color:#f0c4c8}
+.rmt-live-fail em{color:#c24545}
+.rmt-task-center{position:absolute;z-index:30;top:62px;right:12px;width:min(460px,calc(100% - 24px));max-height:min(72vh,620px);overflow:auto;padding:14px;border:1px solid var(--rmt-theme-border,#c9dbe5);border-radius:18px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#243246);box-shadow:0 18px 48px var(--rmt-theme-shadow,rgba(13,22,34,.18))}
+.rmt-shell:has(.rmt-live-tasks:not([hidden])) .rmt-task-center{top:108px}
 .rmt-task-center[hidden]{display:none!important}
-.rmt-task-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.rmt-task-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.rmt-task-head-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .rmt-task-note,.rmt-task-empty{margin:0 0 10px;color:var(--rmt-theme-muted,#728093);font-size:12px;line-height:1.5}
-.rmt-task-center h3{margin:12px 0 8px;font-size:13px;color:var(--rmt-theme-text,#50627b)}
+.rmt-task-center h3{margin:14px 0 8px;font-size:12px;letter-spacing:.04em;color:var(--rmt-theme-muted,#728093)}
+.rmt-task-card{display:grid;gap:6px;margin:0 0 8px;padding:10px 12px;border:1px solid var(--rmt-theme-border,#e4eef3);border-radius:14px;background:color-mix(in srgb,var(--rmt-theme-surface-solid,#fff) 92%,var(--rmt-theme-bg,#f7fafc))}
+.rmt-task-card[data-state="failed"],.rmt-task-card[data-state="retry"]{border-color:#f0c4c8}
+.rmt-task-main{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.rmt-task-main b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.rmt-task-state{flex:0 0 auto;padding:2px 8px;border-radius:999px;background:var(--rmt-theme-soft,#f4e7ee);color:var(--rmt-theme-accent-ink,#9d6d82);font-size:11px;font-weight:800}
+.rmt-task-state[data-state="running"]{background:#fde7f0;color:#b85b7d}
+.rmt-task-state[data-state="failed"],.rmt-task-state[data-state="retry"]{background:#fde8ea;color:#c24545}
+.rmt-task-state[data-state="done"]{background:#e7f6ee;color:#3d7a55}
+.rmt-task-card p{margin:0;color:var(--rmt-theme-muted,#728093);font-size:12px;line-height:1.45}
+.rmt-task-center .rmt-task-actions{display:flex;flex-wrap:wrap;gap:6px;margin:0}
+.rmt-task-center .rmt-task-actions .rmt-btn,.rmt-task-head-actions .rmt-btn{min-height:32px;padding:4px 10px;font-size:12px}
 .rmt-task-row{padding:10px 0;border-top:1px solid var(--rmt-theme-border,#e4eef3)}
 .rmt-task-row header{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
 .rmt-task-row header span{flex:0 0 auto;color:var(--rmt-theme-accent-ink,#9d6d82);font-size:12px}
@@ -15854,6 +15876,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
   .rmt-shell:before{display:none}
   .rmt-topbar{min-height:48px;padding:6px 7px 6px 10px;gap:6px}.rmt-topbar-title{font-size:14px;letter-spacing:.025em}.rmt-topbar-title:after{display:none}
   .rmt-task-center{top:54px;right:8px;left:8px;width:auto;max-height:calc(100vh - 70px)}
+  .rmt-shell:has(.rmt-live-tasks:not([hidden])) .rmt-task-center{top:96px}
   .rmt-topbar button{padding:6px 8px;font-size:11px;min-width:0}
   .rmt-topbar-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rmt-topbar button[data-rmt-action="back"],.rmt-topbar button[data-rmt-action="home"],.rmt-topbar button[data-rmt-action="regenerate"],.rmt-topbar button[data-rmt-action="manage"],.rmt-topbar button[data-rmt-action="close"]{font-size:0;width:44px;height:44px;padding:0;display:grid;place-items:center;flex:0 0 44px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
@@ -15978,12 +16001,18 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
     // editor opaque and locally scoped so host themes cannot wash out its text.
     style.textContent += `
 #${core_constants.OVERLAY_ID} .rmt-task-center,#${core_constants.OVERLAY_ID} .rmt-loading-card,#${core_constants.OVERLAY_ID} .rmt-workspace-empty,#${core_constants.OVERLAY_ID} .rmt-cg-format{background:var(--rmt-theme-surface-solid)!important;color:var(--rmt-theme-text)!important;border-color:var(--rmt-theme-border)!important;-webkit-text-fill-color:currentColor!important}
+#${core_constants.OVERLAY_ID} .rmt-live-tasks{background:color-mix(in srgb,var(--rmt-theme-surface-solid) 84%,var(--rmt-theme-accent))!important;color:var(--rmt-theme-text)!important;border-color:var(--rmt-theme-border)!important;-webkit-text-fill-color:currentColor!important}
+#${core_constants.OVERLAY_ID} .rmt-live-chip{background:var(--rmt-theme-surface-solid)!important;color:var(--rmt-theme-text)!important;border-color:var(--rmt-theme-border)!important;-webkit-text-fill-color:currentColor!important}
+#${core_constants.OVERLAY_ID} .rmt-live-chip em{color:var(--rmt-theme-accent-ink)!important;-webkit-text-fill-color:currentColor!important}
+#${core_constants.OVERLAY_ID} .rmt-live-fail em{color:#c24545!important;-webkit-text-fill-color:#c24545!important}
+#${core_constants.OVERLAY_ID} .rmt-task-card{background:var(--rmt-theme-bg)!important;border-color:var(--rmt-theme-border)!important;color:var(--rmt-theme-text)!important}
 #${core_constants.OVERLAY_ID} .rmt-inline-status{background:color-mix(in srgb,var(--rmt-theme-bg) 92%,transparent)!important;color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important}
 #${core_constants.OVERLAY_ID} .rmt-loading{color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important;background:transparent!important}
-#${core_constants.OVERLAY_ID} :is(.rmt-task-note,.rmt-task-empty,.rmt-task-row p,.rmt-task-center h3,.rmt-queue-bar small,.rmt-cg-format small){color:var(--rmt-theme-muted)!important;-webkit-text-fill-color:currentColor!important}
-#${core_constants.OVERLAY_ID} :is(.rmt-task-head b,.rmt-task-row header b,.rmt-queue-pick){color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important}
-#${core_constants.OVERLAY_ID} .rmt-task-row{border-color:var(--rmt-theme-border)!important}
-#${core_constants.OVERLAY_ID} .rmt-task-row header span{color:var(--rmt-theme-accent-ink)!important;-webkit-text-fill-color:currentColor!important}
+#${core_constants.OVERLAY_ID} :is(.rmt-task-note,.rmt-task-empty,.rmt-task-row p,.rmt-task-card p,.rmt-task-center h3,.rmt-queue-bar small,.rmt-cg-format small){color:var(--rmt-theme-muted)!important;-webkit-text-fill-color:currentColor!important}
+#${core_constants.OVERLAY_ID} :is(.rmt-task-head b,.rmt-task-main b,.rmt-task-row header b,.rmt-queue-pick){color:var(--rmt-theme-text)!important;-webkit-text-fill-color:currentColor!important}
+#${core_constants.OVERLAY_ID} .rmt-task-row,.rmt-task-card{border-color:var(--rmt-theme-border)!important}
+#${core_constants.OVERLAY_ID} .rmt-task-state,.rmt-task-row header span{color:var(--rmt-theme-accent-ink)!important;-webkit-text-fill-color:currentColor!important;background:var(--rmt-theme-soft)!important}
+#${core_constants.OVERLAY_ID} .rmt-task-state[data-state="failed"],#${core_constants.OVERLAY_ID} .rmt-task-state[data-state="retry"]{color:#c24545!important;-webkit-text-fill-color:#c24545!important;background:#fde8ea!important}
 #${core_constants.OVERLAY_ID} .rmt-topbar button[data-rmt-action="tasks"]{width:36px;height:36px;padding:0!important}
 #${core_constants.OVERLAY_ID} .rmt-topbar button[data-rmt-action="tasks"] i{font-size:15px!important;line-height:1!important;-webkit-text-fill-color:currentColor!important}
 #${core_constants.OVERLAY_ID} .rmt-topbar button[data-rmt-action="tasks"] .rmt-task-count{font-size:10px!important;color:var(--rmt-theme-wash-ink,#fff)!important;-webkit-text-fill-color:currentColor!important;background:var(--rmt-theme-accent)!important}
@@ -41293,6 +41322,14 @@ function ensureTaskCenterChrome(overlay) {
     }
     bindTaskCenterRefresh();
     const shell = overlay?.querySelector?.('.rmt-shell');
+    const topbar = shell?.querySelector?.('.rmt-topbar');
+    if (shell && topbar && !shell.querySelector('[data-rmt-live-tasks]')) {
+        const strip = document.createElement('div');
+        strip.className = 'rmt-live-tasks';
+        strip.dataset.rmtLiveTasks = '';
+        strip.hidden = true;
+        topbar.insertAdjacentElement('afterend', strip);
+    }
     if (shell && !shell.querySelector('[data-rmt-task-center]')) {
         const panel = document.createElement('div');
         panel.className = 'rmt-task-center';
@@ -41346,76 +41383,208 @@ function syncTaskCenterBadge() {
     }
 }
 
-function recoverySectionHtml(esc) {
+const PAGE_LABELS = { language: '基础语言', strips: '日常一格', fireflies: '萤火虫', spring: '春', summer: '夏', autumn: '秋', winter: '冬', postending: '后日谈', roomLife: '今日生活', dialogues: '基础语言' };
+const CARD_RANK = { running: 0, queued: 1, retry: 2, failed: 3, done: 4, cancelled: 5 };
+const CARD_LABEL = { running: '进行中', queued: '排队', retry: '未完成', failed: '失败了', done: '完成', cancelled: '已取消' };
+
+function taskLabel(mode, pageId, fallback) {
+    return PAGE_LABELS[pageId] || core_constants.MODE_LABEL[mode] || fallback || pageId || mode || '任务';
+}
+
+function pageRoute(mode, pageId, label) {
+    const page = String(pageId || '');
+    if (page && ui_workspaceState.WORKSPACE_ROUTES[page]) return page;
+    if (mode === core_constants.MODE.HEART) {
+        if (['spring', 'summer', 'autumn', 'winter'].includes(page)) return 'heart';
+        if (page === 'language' || page === 'dialogues') return 'language';
+        if (page === 'strips') return 'strips';
+        if (page === 'fireflies') return 'fireflies';
+        if (page === 'postending') return 'postending';
+        return 'heart';
+    }
+    if (mode && ui_workspaceState.WORKSPACE_ROUTES[mode]) return mode;
+    const titled = Object.entries(ui_workspaceState.WORKSPACE_ROUTES).find(([, spec]) => spec.title === label);
+    if (titled) return titled[0];
+    const labeled = Object.entries(core_constants.MODE_LABEL).find(([, text]) => text === label);
+    if (labeled && ui_workspaceState.WORKSPACE_ROUTES[labeled[0]]) return labeled[0];
+    return '';
+}
+
+function sameJob(left, right) {
+    if (!left || !right) return false;
+    if (left.draftId && right.draftId && left.draftId === right.draftId) return true;
+    if (left.mode && right.mode && left.mode === right.mode) {
+        const leftPage = left.pageId || '';
+        const rightPage = right.pageId || '';
+        if (leftPage && rightPage) return leftPage === rightPage;
+        if (!leftPage && !rightPage) return true;
+    }
+    const leftLabel = left.label || '';
+    const rightLabel = right.label || '';
+    return !!leftLabel && !!rightLabel && (leftLabel === rightLabel || leftLabel.startsWith(rightLabel) || rightLabel.startsWith(leftLabel));
+}
+
+function draftCards() {
     let drafts = [];
     try { drafts = core_cache.listGenerationDrafts(); }
     catch { drafts = []; }
-    const visible = drafts.filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).slice(0, 8);
-    if (!visible.length) return '';
-    return `<h3>未完成草稿</h3>${visible.map(row => {
+    return drafts.filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).slice(0, 12).map(row => {
         const oversized = row.oversized === true;
-        const name = core_constants.MODE_LABEL[row.mode] || row.pageId || row.mode;
-        const action = row.canContinue ? '继续生成' : '重试未完成部分';
         const reason = oversized
             ? '草稿超出本地保存上限，不能继续生成'
             : row.failureCode
                 ? core_text.safeErrorSummary({ code: row.failureCode, archiveInputCategory: row.failureCategory, recoveryPhase: row.failurePhase })
                 : (row.canContinue ? '正文未写完' : '任务尚未完成');
-        const attrs = `data-rmt-recovery-draft-id="${esc(row.draftId)}" data-rmt-recovery-page-id="${esc(row.pageId || '')}"`;
-        const retry = oversized ? '' : `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${esc(row.mode)}" ${attrs}>${action}</button>`;
-        return `<article class="rmt-task-row">
-          <header><b>${esc(name)} · 已保留 ${Number(row.completed) || 0} 个成功分段</b><span>${oversized ? '只能导出' : action}</span></header>
-          <p>${esc(String(reason || '').replace(/[。\s]+$/, ''))}</p>
-          <div class="rmt-task-actions">${retry}
-            <button type="button" class="rmt-btn" data-rmt-recovery-export="${esc(row.mode)}" ${attrs}>导出未提交草稿</button>
-            <button type="button" class="rmt-btn" data-rmt-recovery-discard="${esc(row.mode)}" ${attrs}>放弃这份草稿</button>
-          </div>
-        </article>`;
-    }).join('')}`;
+        const attrs = `data-rmt-recovery-draft-id="${core_text.esc(row.draftId)}" data-rmt-recovery-page-id="${core_text.esc(row.pageId || '')}"`;
+        const retry = oversized ? '' : `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${core_text.esc(row.mode)}" ${attrs}>${row.canContinue ? '继续生成' : '重试未完成部分'}</button>`;
+        return {
+            state: oversized || row.failed || row.failureCode ? 'failed' : 'retry',
+            label: taskLabel(row.mode, row.pageId, row.mode),
+            mode: row.mode,
+            pageId: row.pageId || '',
+            draftId: row.draftId,
+            detail: `已保留 ${Number(row.completed) || 0} 个成功分段 · ${String(reason || '').replace(/[。\s]+$/, '')}`,
+            at: Number(row.updatedAt) || Number(row.createdAt) || 0,
+            actions: `${retry}<button type="button" class="rmt-btn" data-rmt-recovery-export="${core_text.esc(row.mode)}" ${attrs}>导出未提交草稿</button><button type="button" class="rmt-btn" data-rmt-recovery-discard="${core_text.esc(row.mode)}" ${attrs}>放弃这份草稿</button>`,
+        };
+    });
+}
+
+function openAction(record) {
+    if (!record?.id) return '';
+    if (record.outcome !== 'done' && record.outcome !== 'failed' && record.phase !== 'done' && record.phase !== 'failed') return '';
+    if (!pageRoute(record.mode, record.pageId, record.label) && !record.draftId) return '';
+    return `<button type="button" class="rmt-btn" data-rmt-action="task-open" data-rmt-task-id="${core_text.esc(record.id)}">打开结果</button>`;
+}
+
+function collectTaskCards() {
+    const cards = draftCards();
+    const rows = core_requestCoordinator.listChatTaskSnapshot();
+    for (const row of rows.filter(item => item.running)) {
+        const existing = cards.find(card => sameJob(card, row));
+        const next = {
+            state: 'running',
+            label: row.label,
+            mode: existing?.mode || '',
+            pageId: existing?.pageId || '',
+            draftId: existing?.draftId || '',
+            detail: [row.chatCaption, row.progressText].filter(Boolean).join(' · '),
+            at: Date.now(),
+            actions: `<button type="button" class="rmt-btn" data-rmt-action="task-cancel" data-rmt-task-id="${core_text.esc(row.id)}">取消这项</button>`,
+        };
+        if (existing) Object.assign(existing, next);
+        else cards.push(next);
+    }
+    const scope = currentScope();
+    const mine = queue.filter(item => item.scope === scope);
+    mine.filter(item => item.status === 'queued').forEach((item, index) => {
+        if (cards.some(card => sameJob(card, item) && card.state === 'running')) return;
+        const existing = cards.find(card => sameJob(card, item));
+        const next = {
+            state: 'queued',
+            label: item.label,
+            mode: item.mode || existing?.mode || '',
+            pageId: item.pageId || existing?.pageId || '',
+            draftId: item.draftId || existing?.draftId || '',
+            detail: item.kind === 'recovery' ? '自动重试未完成部分 · 排队等待' : '当前聊天 · 排队等待，上一项结束后才开始',
+            at: -index,
+            actions: `<button type="button" class="rmt-btn" data-rmt-action="task-queue-remove" data-rmt-queue-id="${core_text.esc(item.id)}">移出队列</button>`,
+        };
+        if (existing && existing.state !== 'running') Object.assign(existing, next, { actions: `${existing.actions || ''}${next.actions}` });
+        else if (!existing) cards.push(next);
+    });
+    for (const row of rows.filter(item => !item.running)) {
+        const record = core_requestCoordinator.settledChatTaskRecord(row.id) || {};
+        const state = row.phase === 'failed' || record.outcome === 'failed' ? 'failed' : row.phase === 'cancelled' || record.outcome === 'cancelled' ? 'cancelled' : 'done';
+        if (cards.some(card => sameJob(card, { label: row.label, mode: record.mode, pageId: record.pageId, draftId: record.draftId }))) continue;
+        cards.push({
+            state,
+            label: taskLabel(record.mode, record.pageId, row.label),
+            mode: record.mode || '',
+            pageId: record.pageId || '',
+            draftId: record.draftId || '',
+            detail: [row.chatCaption, row.progressText].filter(Boolean).join(' · '),
+            at: Number(record.endedAt) || 0,
+            actions: openAction({ ...record, id: row.id, label: row.label, outcome: record.outcome || state, phase: row.phase }),
+        });
+    }
+    for (const item of mine) {
+        if (item.status !== 'done' && item.status !== 'failed' && item.status !== 'cancelled') continue;
+        if (cards.some(card => sameJob(card, item))) continue;
+        cards.push({
+            state: item.status === 'failed' ? 'failed' : item.status === 'cancelled' ? 'cancelled' : 'done',
+            label: item.label,
+            mode: item.mode || '',
+            pageId: item.pageId || '',
+            draftId: item.draftId || '',
+            detail: item.kind === 'recovery' ? '自动重试未完成部分' : '当前聊天 · 串行队列',
+            at: 0,
+            actions: item.status === 'done' || item.status === 'failed' ? openAction({ id: '', mode: item.mode, pageId: item.pageId, label: item.label, outcome: item.status }) : '',
+        });
+    }
+    return cards.sort((left, right) => (CARD_RANK[left.state] ?? 9) - (CARD_RANK[right.state] ?? 9) || right.at - left.at);
+}
+
+function paintLiveStrip() {
+    const host = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-live-tasks]`);
+    if (!host) return;
+    const esc = core_text.esc;
+    let rows = [];
+    try { rows = core_requestCoordinator.listChatTaskSnapshot(); } catch { rows = []; }
+    const running = rows.filter(row => row.running);
+    const runningLabels = new Set(running.map(row => row.label));
+    const failed = rows.filter(row => !row.running && (row.phase === 'failed' || row.outcome === 'failed') && !runningLabels.has(row.label));
+    const chips = [];
+    if (runtimeState.busy && !running.some(row => row.id === 'archive-import' || row.kind === 'archive')) {
+        const text = core_text.normalizeText(runtimeState.activeTaskLabel, 80) || '正在整理聊天档案';
+        chips.push(`<button type="button" class="rmt-live-chip rmt-live-run" data-rmt-action="tasks"><i></i><b>档案整理</b><em>${esc(text)}</em></button>`);
+    }
+    for (const row of running) {
+        chips.push(`<button type="button" class="rmt-live-chip rmt-live-run" data-rmt-action="tasks"><i></i><b>${esc(row.label)}</b><em>${esc(row.phaseLabel || '进行中')}</em></button>`);
+    }
+    const failedLabels = failed.map(row => row.label);
+    for (const row of failed.slice(0, 4)) {
+        chips.push(`<button type="button" class="rmt-live-chip rmt-live-fail" data-rmt-action="tasks"><b>${esc(row.label)}</b><em>失败了</em></button>`);
+    }
+    for (const card of draftCards()) {
+        if (card.state !== 'failed' || runningLabels.has(card.label) || failedLabels.some(label => label === card.label || label.startsWith(card.label) || card.label.startsWith(label))) continue;
+        failedLabels.push(card.label);
+        chips.push(`<button type="button" class="rmt-live-chip rmt-live-fail" data-rmt-action="tasks"><b>${esc(card.label)}</b><em>失败了</em></button>`);
+    }
+    host.hidden = chips.length === 0;
+    host.innerHTML = chips.join('');
+}
+
+function hideMainRecoveryCards() {
+    document.querySelectorAll(`#${core_constants.OVERLAY_ID} [data-rmt-generation-recoveries]`).forEach(node => node.remove());
 }
 
 function paintTaskCenter(panel) {
-    const rows = core_requestCoordinator.listChatTaskSnapshot();
-    const running = rows.filter(row => row.running);
-    const settled = rows.filter(row => !row.running);
-    const currentNames = running.filter(row => row.currentChat).map(row => row.label);
+    const cards = collectTaskCards();
+    const open = cards.filter(card => card.state !== 'done' && card.state !== 'cancelled');
+    const finished = cards.filter(card => card.state === 'done' || card.state === 'cancelled');
+    const waiting = queuedForScope();
+    const runningNow = cards.some(card => card.state === 'running') || waiting.length > 0;
     const esc = core_text.esc;
-    const rowHtml = row => `<article class="rmt-task-row">
-      <header><b>${esc(row.label)}</b><span>${esc(row.phaseLabel)}</span></header>
-      <p>${esc(row.chatCaption)}</p>
-      <p>${esc(row.progressText)}</p>
-      <div class="rmt-task-actions">
-        ${row.running ? `<button type="button" class="rmt-btn" data-rmt-action="task-cancel" data-rmt-task-id="${esc(row.id)}">取消这项</button>` : ''}
-        ${row.canOpen ? `<button type="button" class="rmt-btn" data-rmt-action="task-open" data-rmt-task-id="${esc(row.id)}">回到原聊天并打开结果</button>` : ''}
-      </div>
+    const cardHtml = card => `<article class="rmt-task-card" data-state="${card.state}">
+      <div class="rmt-task-main"><b>${esc(card.label)}</b><span class="rmt-task-state" data-state="${card.state}">${esc(CARD_LABEL[card.state] || card.state)}</span></div>
+      <p>${esc(card.detail || '')}</p>
+      ${card.actions ? `<div class="rmt-task-actions">${card.actions}</div>` : ''}
     </article>`;
-    const scope = currentScope();
-    const mine = queue.filter(item => item.scope === scope);
-    const waiting = mine.filter(item => item.status === 'queued');
-    const active = mine.find(item => item.status === 'running');
-    const recentQueue = mine.filter(item => item.status !== 'queued' && item.status !== 'running').slice(-4);
-    const queueRow = (item, order) => `<article class="rmt-task-row">
-      <header><b>${order ? `${order}. ` : ''}${esc(item.label)}</b><span>${esc(QUEUE_STATUS[item.status] || item.status)}</span></header>
-      <p>${item.kind === 'recovery' ? '自动重试未完成部分' : '当前聊天 · 串行队列'}</p>
-      ${item.status === 'queued' ? `<div class="rmt-task-actions"><button type="button" class="rmt-btn" data-rmt-action="task-queue-remove" data-rmt-queue-id="${esc(item.id)}">移出队列</button></div>` : ''}
-    </article>`;
-    const recoveryHtml = recoverySectionHtml(esc);
-    const queueHtml = (active || waiting.length || recentQueue.length)
-        ? `<h3>排队</h3>${active ? `<p class="rmt-task-note">正在串行处理「${esc(active.label)}」，完成后才开始下一项。</p>` : ''}${waiting.map((item, index) => queueRow(item, index + 1)).join('')}${recentQueue.map(item => queueRow(item, 0)).join('')}`
-        : '';
     const top = panel.scrollTop;
     panel.innerHTML = `<div class="rmt-task-head">
       <b>任务</b>
-      <button type="button" class="rmt-btn" data-rmt-action="task-center-close">关闭</button>
+      <div class="rmt-task-head-actions">
+        <button type="button" class="rmt-btn" data-rmt-action="task-clear-done" ${finished.length ? '' : 'disabled'}>清空已完成</button>
+        <button type="button" class="rmt-btn" data-rmt-action="task-center-close">关闭</button>
+      </div>
     </div>
-    <p class="rmt-task-note">这里只显示任务名称、阶段和是否落盘。不会显示密钥、提示词或世界书正文。档案整理完成后可以多选，再按顺序一次生成一项。</p>
-    ${queueHtml}
-    ${recoveryHtml}
-    ${running.length ? running.map(rowHtml).join('') : '<p class="rmt-task-empty">当前没有进行中的任务。</p>'}
+    <p class="rmt-task-note">一项一行。进行中和未完成在上面，串行完成的在下面。不会显示密钥、提示词或世界书正文。</p>
+    ${open.length ? open.map(cardHtml).join('') : '<p class="rmt-task-empty">当前没有进行中或未完成的任务。</p>'}
     <div class="rmt-task-actions">
-      <button type="button" class="rmt-btn" data-rmt-action="task-cancel-current" ${currentNames.length || waiting.length ? '' : 'disabled'}>取消当前聊天全部任务</button>
+      <button type="button" class="rmt-btn" data-rmt-action="task-cancel-current" ${runningNow ? '' : 'disabled'}>取消当前聊天全部任务</button>
     </div>
-    ${settled.length ? `<h3>刚结束</h3>${settled.map(rowHtml).join('')}` : ''}`;
+    ${finished.length ? `<h3>已完成</h3>${finished.map(cardHtml).join('')}` : ''}`;
     panel.scrollTop = top;
 }
 
@@ -41426,6 +41595,8 @@ function refreshTaskCenterView() {
         syncPickScope();
         dropForeignQueue();
         syncTaskCenterBadge();
+        hideMainRecoveryCards();
+        paintLiveStrip();
         const panel = taskPanel();
         if (panel && !panel.hidden) paintTaskCenter(panel);
     } finally {
@@ -41445,24 +41616,42 @@ function bindTaskCenterRefresh() {
     }
 }
 
+function syncLiveTaskStrip() {
+    paintLiveStrip();
+}
+
 function syncTaskCenterChrome() {
     bindTaskCenterRefresh();
     refreshTaskCenterView();
 }
 
-async function openSettledTask(id) {
-    const row = core_requestCoordinator.settledChatTaskRecord(id);
-    if (!row?.chatId) {
-        globalThis.toastr?.info?.('这份任务没有可打开的原聊天结果。', '心迹回廊');
+async function openSavedTaskPage(row, context) {
+    if (row.draftId) {
+        try {
+            const listed = core_cache.listGenerationTaskResults(context);
+            if (listed.some(item => item.draftId === row.draftId)) return archive_library.openGenerationTaskResult(row.draftId, context);
+        } catch { /* The mode page is still the result when no separate draft result exists. */ }
+    }
+    const route = pageRoute(row.mode, row.pageId, row.label);
+    const spec = ui_workspaceState.WORKSPACE_ROUTES[route];
+    if (!spec?.mode) {
+        globalThis.toastr?.info?.(row.saved || row.received ? '这次结果还不能打开对应页面。' : '这次没有新的可保存分段，没有单独的结果页。', '心迹回廊');
         return;
     }
-    const live = core_context.currentCharacterGuard();
-    const same = core_context.comparableChatId(core_context.getChatId(live)) === row.chatId
-        && (!row.characterId || String(live.characterId ?? '') === row.characterId);
-    if (same) {
-        if (row.draftId) return archive_library.openGenerationTaskResult(row.draftId, live);
-        return ui_overlay.showChooser();
+    ui_overlay.openCachedOrGenerate(spec.mode, { workspaceRoute: route });
+}
+
+async function openSettledTask(id) {
+    const row = core_requestCoordinator.settledChatTaskRecord(id);
+    if (!row) {
+        globalThis.toastr?.info?.('这份任务已经不在列表里。', '心迹回廊');
+        return;
     }
+    hideTaskCenter();
+    const live = core_context.currentCharacterGuard();
+    const same = !row.chatId || (core_context.comparableChatId(core_context.getChatId(live)) === row.chatId
+        && (!row.characterId || String(live.characterId ?? '') === row.characterId));
+    if (same) return openSavedTaskPage(row, live);
     const opener = live.openCharacterChat;
     if (typeof opener === 'function') {
         await opener.call(live, row.chatId);
@@ -41473,8 +41662,7 @@ async function openSettledTask(id) {
             globalThis.toastr?.warning?.('酒馆没有切到原来的聊天，没有打开可写结果。', '心迹回廊');
             return openReadonlyTask(row);
         }
-        if (row.draftId) return archive_library.openGenerationTaskResult(row.draftId, next);
-        return ui_overlay.showChooser();
+        return openSavedTaskPage(row, next);
     }
     globalThis.toastr?.info?.('当前酒馆没有切回原聊天的入口，改为只读查看，不会改当前聊天。', '心迹回廊');
     return openReadonlyTask(row);
@@ -41514,6 +41702,19 @@ function handleTaskCenterAction(action, actionEl) {
     }
     if (action === 'task-queue-remove') {
         cancelQueuedItem(actionEl?.dataset?.rmtQueueId || '');
+        return;
+    }
+    if (action === 'task-clear-done') {
+        let queueRemoved = 0;
+        for (let index = queue.length - 1; index >= 0; index -= 1) {
+            if (queue[index].status === 'done' || queue[index].status === 'cancelled') {
+                queue.splice(index, 1);
+                queueRemoved += 1;
+            }
+        }
+        const removed = core_requestCoordinator.clearCompletedChatTasks();
+        refreshTaskCenterView();
+        globalThis.toastr?.info?.(removed || queueRemoved ? '已清空完成的任务。未完成草稿还在。' : '没有可清空的已完成任务。', '心迹回廊');
         return;
     }
     if (action === 'queue-selected') {
@@ -41558,6 +41759,7 @@ __m_ui_taskCenter_js.noteRetryableGeneration = noteRetryableGeneration;
 __m_ui_taskCenter_js.enqueueSelectedModes = enqueueSelectedModes;
 __m_ui_taskCenter_js.ensureTaskCenterChrome = ensureTaskCenterChrome;
 __m_ui_taskCenter_js.hideTaskCenter = hideTaskCenter;
+__m_ui_taskCenter_js.syncLiveTaskStrip = syncLiveTaskStrip;
 __m_ui_taskCenter_js.syncTaskCenterChrome = syncTaskCenterChrome;
 __m_ui_taskCenter_js.handleTaskCenterAction = handleTaskCenterAction;
 }
@@ -43464,6 +43666,7 @@ function openOverlay() {
               <button type="button" data-rmt-action="tasks" aria-label="任务" title="任务"><i class="fa-solid fa-list-check" aria-hidden="true"></i><span class="rmt-task-count" data-rmt-task-count hidden>0</span></button>
               <button type="button" data-rmt-action="close" aria-label="关闭档案室">×</button>
             </div>
+            <div class="rmt-live-tasks" data-rmt-live-tasks hidden></div>
             ${workspace_ui.workspaceNavHtml()}
             <div class="rmt-task-center" data-rmt-task-center hidden></div>
             <div class="rmt-body"></div>
@@ -44062,8 +44265,7 @@ function showChooser({ section = null } = {}) {
         partial: !!calendarPortal.session?.readableProgress, readOnly: false });
     const concurrentLabels = core_requestCoordinator.generationTaskLabels();
     const anyRunning = runtimeState.busy || concurrentLabels.length > 0;
-    topTitle(anyRunning ? `心迹回廊 · 档案室 · ${runtimeState.busy ? '档案整理中' : `${concurrentLabels.length}项生成中`}` : `心迹回廊 · 档案室${ready ? ` · ${archiveName}` : ''}`);
-    const busyBanner = anyRunning ? `<div class="rmt-task-banner"><span class="rmt-task-dot"></span><div><b>${runtimeState.busy ? '档案整理进行中' : `${concurrentLabels.length} 项后台生成中`}</b><small>${core_text.esc(runtimeState.busy ? (runtimeState.activeTaskLabel || '正在整理聊天档案…') : concurrentLabels.join(' · '))}</small></div></div>` : '';
+    topTitle(`心迹回廊 · 档案室${ready ? ` · ${archiveName}` : ''}`);
     const portalHtml = portals.filter(item => item.mode !== core_constants.MODE.CALENDAR).map(({ mode, session, meta }) => {
         const generated = !!session;
         const generating = core_requestCoordinator.isModeGenerating(mode);
@@ -44115,12 +44317,10 @@ function showChooser({ section = null } = {}) {
 
     body.innerHTML = `
       <div class="rmt-archive-room">
-        ${busyBanner}
         <div data-rmt-archive-recoveries aria-live="polite">
         <div data-rmt-archive-recoveries>${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveImportRecoverySummary(context))}
         ${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveProfileRecoverySummary(context), { profile: true })}</div>
         </div>
-        <div data-rmt-generation-recoveries>${ready ? recovery_view.recoveryBannerHtml(core_cache.getCache(context), memory) : ''}</div>
         <div data-rmt-calendar-quick>${calendarQuick}</div>
         <section class="rmt-memory-gate rmt-archive-card">
           <div class="rmt-memory-gate-text">
@@ -44176,11 +44376,8 @@ function showMemoryImportError(message) {
 }
 
 function updateBackgroundTaskLabel(text) {
-    const label = core_text.normalizeText(text, 240);
-    const title = document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-topbar-title`);
-    if (title && !runtimeState.activeMode) title.textContent = '心迹回廊 · 档案室 · 后台整理中';
-    const banner = document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-task-banner small`);
-    if (banner) banner.textContent = `${label} · 可以关闭档案室继续聊天。`;
+    runtimeState.activeTaskLabel = core_text.normalizeText(text, 240) || runtimeState.activeTaskLabel;
+    ui_taskCenter.syncLiveTaskStrip();
 }
 
 function setBusyUi(isBusy, text = '') {
@@ -44196,10 +44393,8 @@ function setBusyUi(isBusy, text = '') {
         '[data-rmt-action="read-memory-plugins"]',
     ].join(',');
     document.querySelectorAll(requestSelectors).forEach(el => { el.disabled = !!isBusy; });
-    if (isBusy && text) {
-        const title = document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-topbar-title`);
-        if (title && !runtimeState.activeMode) title.textContent = '心迹回廊 · 档案室 · 后台生成中';
-    }
+    if (isBusy && text) runtimeState.activeTaskLabel = core_text.normalizeText(text, 240) || runtimeState.activeTaskLabel;
+    ui_taskCenter.syncLiveTaskStrip();
     ui_settingsPanel.refreshSettingsMemoryStatus();
 }
 
@@ -44261,18 +44456,9 @@ function showInlinePreflight(summary, detailText, { error = false } = {}) {
 }
 
 function refreshVisibleRecoveryHost() {
-    if (!runtimeState.activeMode) return;
-    const root = bodyEl();
-    if (!root) return;
-    const host = recovery_view.ensureRecoveryHost(root);
-    if (!host) return;
-    try {
-        const context = core_context.getContext();
-        const snapshot = runtimeState.activeArchiveSnapshot;
-        const bank = snapshot?.memory || archive_repository.getImportedMemory(context);
-        const all = snapshot?.cache || core_cache.getCache(context);
-        host.innerHTML = recovery_view.recoveryBannerHtml(all, bank, { readOnly: snapshot?.backupOnly === true, mode: runtimeState.activeMode });
-    } catch {}
+    // Unfinished generation drafts are handled in the task center. Leaving the
+    // banner in the reader made the same retry card appear twice.
+    document.querySelectorAll(`#${core_constants.OVERLAY_ID} [data-rmt-generation-recoveries]`).forEach(node => node.remove());
 }
 
 function emptyArchiveMode(mode, memory, context, stored) {
@@ -45098,7 +45284,7 @@ function handleOverlayClick(event) {
     if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
     if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
     if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
-    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-queue-remove' || action === 'queue-selected') {
+    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-queue-remove' || action === 'task-clear-done' || action === 'queue-selected') {
         return ui_taskCenter.handleTaskCenterAction(action, actionEl);
     }
     if (action === 'close') return closeArchiveOverlayFromUser();
@@ -46423,6 +46609,17 @@ function settledChatTaskRecord(id) {
     return row ? { ...row } : null;
 }
 
+function clearCompletedChatTasks() {
+    const before = recentChatTasks.length;
+    for (let index = recentChatTasks.length - 1; index >= 0; index -= 1) {
+        const outcome = recentChatTasks[index].outcome;
+        if (outcome === 'done' || outcome === 'cancelled') recentChatTasks.splice(index, 1);
+    }
+    const removed = before - recentChatTasks.length;
+    try { refreshTaskCenter(); } catch {}
+    return removed;
+}
+
 function currentChatBlockingTasks(context = null) {
     try {
         return listChatTaskSnapshot(context).filter(row => row.running && row.currentChat).map(row => row.label);
@@ -46941,6 +47138,7 @@ __m_core_requestCoordinator_js.closeAdvBulkCancellation = closeAdvBulkCancellati
 __m_core_requestCoordinator_js.listChatTaskSnapshot = listChatTaskSnapshot;
 __m_core_requestCoordinator_js.rememberStandaloneChatTask = rememberStandaloneChatTask;
 __m_core_requestCoordinator_js.settledChatTaskRecord = settledChatTaskRecord;
+__m_core_requestCoordinator_js.clearCompletedChatTasks = clearCompletedChatTasks;
 __m_core_requestCoordinator_js.currentChatBlockingTasks = currentChatBlockingTasks;
 __m_core_requestCoordinator_js.cancelChatTask = cancelChatTask;
 __m_core_requestCoordinator_js.cancelBlockingTasksForScope = cancelBlockingTasksForScope;

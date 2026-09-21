@@ -173,6 +173,7 @@ export function openOverlay() {
               <button type="button" data-rmt-action="tasks" aria-label="任务" title="任务"><i class="fa-solid fa-list-check" aria-hidden="true"></i><span class="rmt-task-count" data-rmt-task-count hidden>0</span></button>
               <button type="button" data-rmt-action="close" aria-label="关闭档案室">×</button>
             </div>
+            <div class="rmt-live-tasks" data-rmt-live-tasks hidden></div>
             ${workspace_ui.workspaceNavHtml()}
             <div class="rmt-task-center" data-rmt-task-center hidden></div>
             <div class="rmt-body"></div>
@@ -771,8 +772,7 @@ export function showChooser({ section = null } = {}) {
         partial: !!calendarPortal.session?.readableProgress, readOnly: false });
     const concurrentLabels = core_requestCoordinator.generationTaskLabels();
     const anyRunning = runtimeState.busy || concurrentLabels.length > 0;
-    topTitle(anyRunning ? `心迹回廊 · 档案室 · ${runtimeState.busy ? '档案整理中' : `${concurrentLabels.length}项生成中`}` : `心迹回廊 · 档案室${ready ? ` · ${archiveName}` : ''}`);
-    const busyBanner = anyRunning ? `<div class="rmt-task-banner"><span class="rmt-task-dot"></span><div><b>${runtimeState.busy ? '档案整理进行中' : `${concurrentLabels.length} 项后台生成中`}</b><small>${core_text.esc(runtimeState.busy ? (runtimeState.activeTaskLabel || '正在整理聊天档案…') : concurrentLabels.join(' · '))}</small></div></div>` : '';
+    topTitle(`心迹回廊 · 档案室${ready ? ` · ${archiveName}` : ''}`);
     const portalHtml = portals.filter(item => item.mode !== core_constants.MODE.CALENDAR).map(({ mode, session, meta }) => {
         const generated = !!session;
         const generating = core_requestCoordinator.isModeGenerating(mode);
@@ -824,12 +824,10 @@ export function showChooser({ section = null } = {}) {
 
     body.innerHTML = `
       <div class="rmt-archive-room">
-        ${busyBanner}
         <div data-rmt-archive-recoveries aria-live="polite">
         <div data-rmt-archive-recoveries>${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveImportRecoverySummary(context))}
         ${recovery_view.archiveRecoveryHtml(archive_repository.getCurrentArchiveProfileRecoverySummary(context), { profile: true })}</div>
         </div>
-        <div data-rmt-generation-recoveries>${ready ? recovery_view.recoveryBannerHtml(core_cache.getCache(context), memory) : ''}</div>
         <div data-rmt-calendar-quick>${calendarQuick}</div>
         <section class="rmt-memory-gate rmt-archive-card">
           <div class="rmt-memory-gate-text">
@@ -885,11 +883,8 @@ export function showMemoryImportError(message) {
 }
 
 export function updateBackgroundTaskLabel(text) {
-    const label = core_text.normalizeText(text, 240);
-    const title = document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-topbar-title`);
-    if (title && !runtimeState.activeMode) title.textContent = '心迹回廊 · 档案室 · 后台整理中';
-    const banner = document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-task-banner small`);
-    if (banner) banner.textContent = `${label} · 可以关闭档案室继续聊天。`;
+    runtimeState.activeTaskLabel = core_text.normalizeText(text, 240) || runtimeState.activeTaskLabel;
+    ui_taskCenter.syncLiveTaskStrip();
 }
 
 export function setBusyUi(isBusy, text = '') {
@@ -905,10 +900,8 @@ export function setBusyUi(isBusy, text = '') {
         '[data-rmt-action="read-memory-plugins"]',
     ].join(',');
     document.querySelectorAll(requestSelectors).forEach(el => { el.disabled = !!isBusy; });
-    if (isBusy && text) {
-        const title = document.querySelector(`#${core_constants.OVERLAY_ID} .rmt-topbar-title`);
-        if (title && !runtimeState.activeMode) title.textContent = '心迹回廊 · 档案室 · 后台生成中';
-    }
+    if (isBusy && text) runtimeState.activeTaskLabel = core_text.normalizeText(text, 240) || runtimeState.activeTaskLabel;
+    ui_taskCenter.syncLiveTaskStrip();
     ui_settingsPanel.refreshSettingsMemoryStatus();
 }
 
@@ -970,18 +963,9 @@ export function showInlinePreflight(summary, detailText, { error = false } = {})
 }
 
 function refreshVisibleRecoveryHost() {
-    if (!runtimeState.activeMode) return;
-    const root = bodyEl();
-    if (!root) return;
-    const host = recovery_view.ensureRecoveryHost(root);
-    if (!host) return;
-    try {
-        const context = core_context.getContext();
-        const snapshot = runtimeState.activeArchiveSnapshot;
-        const bank = snapshot?.memory || archive_repository.getImportedMemory(context);
-        const all = snapshot?.cache || core_cache.getCache(context);
-        host.innerHTML = recovery_view.recoveryBannerHtml(all, bank, { readOnly: snapshot?.backupOnly === true, mode: runtimeState.activeMode });
-    } catch {}
+    // Unfinished generation drafts are handled in the task center. Leaving the
+    // banner in the reader made the same retry card appear twice.
+    document.querySelectorAll(`#${core_constants.OVERLAY_ID} [data-rmt-generation-recoveries]`).forEach(node => node.remove());
 }
 
 function emptyArchiveMode(mode, memory, context, stored) {
@@ -1807,7 +1791,7 @@ export function handleOverlayClick(event) {
     if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
     if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
     if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
-    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-queue-remove' || action === 'queue-selected') {
+    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-queue-remove' || action === 'task-clear-done' || action === 'queue-selected') {
         return ui_taskCenter.handleTaskCenterAction(action, actionEl);
     }
     if (action === 'close') return closeArchiveOverlayFromUser();

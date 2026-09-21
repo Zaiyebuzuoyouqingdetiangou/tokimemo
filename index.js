@@ -1,5 +1,5 @@
-const VERSION = '0.96';
-const BUILD = '0.96-tt-cg-r84.42-queue-badge';
+const VERSION = '0.97';
+const BUILD = '0.97-tt-cg-r84.43-task-strip';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
