@@ -5,7 +5,10 @@ import * as core_text from './text.js';
 import * as story_chronology from './storyChronology.js';
 
 export function memoryIdSet(memoryBank) {
-    return new Set((memoryBank?.memories || []).map(item => String(item.id)));
+    return new Set([
+        ...(memoryBank?.memories || []),
+        ...(memoryBank?.coldArchive || []),
+    ].map(item => String(item.id)));
 }
 
 export function normalizeSourceMemoryIds(value, memoryBank, minimum = 1) {
@@ -19,7 +22,7 @@ export function normalizeSourceMemoryIds(value, memoryBank, minimum = 1) {
 export function memoryEvidenceTerms(memoryBank, sourceMemoryIds) {
     const ids = new Set(sourceMemoryIds || []);
     const terms = [];
-    for (const memory of memoryBank?.memories || []) {
+    for (const memory of [...(memoryBank?.memories || []), ...(memoryBank?.coldArchive || [])]) {
         if (!ids.has(String(memory?.id))) continue;
         const title = core_text.normalizeText(memory?.title, 100);
         if (title.length >= 2) terms.push(title);

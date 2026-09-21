@@ -27,6 +27,11 @@ function floorWindow(totalFloors, range) {
     return start > end ? { start: 0, end: 0 } : { start, end };
 }
 
+// The 1-based host floor window a normalized range selects, {start:0,end:0} when empty.
+export function chatReadRangeWindow(totalFloors, range = {}) {
+    return floorWindow(Math.max(0, Number(totalFloors) || 0), normalizeChatReadRange(range));
+}
+
 export function isChatReadRangeHidden(message) {
     return !!message?.is_system || message?.is_hidden === true || message?.extra?.is_hidden === true;
 }

@@ -13,5 +13,5 @@ export function albumIsPrivate(entry) {
         return EXPLICIT.test(line);
     }));
 }
-export function albumDisplayCategory(entry) { return albumIsPrivate(entry) ? '私密' : ['日常','约会','结局'].includes(entry?.category) ? entry.category : '日常'; }
-export const ALBUM_DISPLAY_CATEGORIES = Object.freeze(['全部','日常','约会','私密','结局']);
+export function albumDisplayCategory(entry) { return albumIsPrivate(entry) ? '私密' : ['日常','约会','结局','待分类'].includes(entry?.category) ? entry.category : '待分类'; }
+export const ALBUM_DISPLAY_CATEGORIES = Object.freeze(['全部','日常','约会','私密','结局','待分类']);

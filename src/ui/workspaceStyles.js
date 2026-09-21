@@ -237,6 +237,12 @@ ${r} .rmt-participant-dialog footer{justify-content:flex-end;gap:8px}
 ${r} :is(.rmt-workspace-tabs,.rmt-workspace-groups,.rmt-layout-switch) button{box-sizing:border-box;max-width:100%;min-width:0;line-height:1.4;white-space:normal;word-break:normal;overflow-wrap:anywhere;text-align:center}
 ${r} :is(.rmt-filter,.rmt-workspace-groups) button{flex:0 1 auto}
 ${r} .rmt-layout-switch{flex-wrap:wrap;max-width:100%}
+${r} .rmt-body .rmt-dialogue-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:12px!important;width:min(100%,320px)!important;margin:20px auto 0!important;justify-content:center!important}
+${r} .rmt-body .rmt-dialogue-actions>.rmt-btn{width:100%!important;min-width:0!important;white-space:nowrap!important}
+${r} .rmt-body .rmt-cg-card-actions{justify-content:center!important;align-items:center!important;gap:12px!important}
+${r} .rmt-cg-prompt-dialog [data-rmt-cg-cast]{padding:0!important;border:0!important;margin:0!important;min-width:0!important}
+${r} .rmt-cg-cast-actions{display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:10px!important;width:100%!important;margin:10px 0!important}
+${r} .rmt-cg-cast-actions>.rmt-btn{box-sizing:border-box!important;width:100%!important;min-height:44px!important;margin:0!important;font-size:14px!important;padding:10px 12px!important;border-radius:22px!important}
 ${r} .rmt-btn:focus-visible{outline:2px solid var(--rmt-theme-accent-ink);outline-offset:3px}
 @media(max-width:600px){
  ${r} .rmt-body .rmt-current-archive-actions{display:flex!important;gap:8px}

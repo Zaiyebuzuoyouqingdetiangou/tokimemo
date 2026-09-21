@@ -33,6 +33,31 @@ export function normalizeCgImageRecord(value) {
         ...(promptMetadata ? { promptMetadata } : {}) };
 }
 
+// Bounded per-item version history of previously applied image records. Entries
+// are references only (same whitelist normalization as the live record): never
+// dataURLs, never external hosts, never traversal (raw dot segments or encoded
+// separators are refused at the same raw-string bar as savedLocalImagePath),
+// deduplicated by url, oldest evicted first.
+export function normalizeCgImageHistory(value) {
+    const rows = Array.isArray(value) ? value : [];
+    const history = [];
+    for (const row of rows) {
+        const raw = typeof row?.url === 'string' ? row.url : '';
+        if (/(?:^|\/)\.{1,2}(?:\/|$)/.test(raw) || /%(?:2f|5c|2e|25|0[0-9a-f]|1[0-9a-f]|7f)/i.test(raw)) continue;
+        const record = normalizeCgImageRecord(row);
+        if (record && !history.some(kept => kept.url === record.url)) history.push(record);
+    }
+    return history.slice(-constants.CG_IMAGE_HISTORY_LIMIT);
+}
+
+// Returns the next history array with `record` appended (or null when empty).
+export function cgImageHistoryWith(history, record) {
+    const next = normalizeCgImageHistory(history);
+    const image = normalizeCgImageRecord(record);
+    if (image && !next.some(kept => kept.url === image.url)) next.push(image);
+    return next.length ? next.slice(-constants.CG_IMAGE_HISTORY_LIMIT) : null;
+}
+
 export function cgItemInSession(mode, session, itemId) {
     const rows = mode === constants.MODE.ALBUM ? session?.entries : mode === constants.MODE.ADV
         ? session?.events : mode === constants.MODE.HEART ? session?.dailyStrips : null;
@@ -77,8 +102,37 @@ export function applyCgImagePatch(session, raw) {
         return { status: 'already-applied', session };
     }
     const updated = JSON.parse(JSON.stringify(session));
-    cgItemInSession(patch.mode, updated, patch.itemId).cgImage = patch.image;
+    const target = cgItemInSession(patch.mode, updated, patch.itemId);
+    const previousImage = normalizeCgImageRecord(target.cgImage);
+    if (previousImage && previousImage.url !== patch.image.url) {
+        const history = cgImageHistoryWith(target.cgImageHistory, previousImage);
+        if (history) target.cgImageHistory = history;
+    } else {
+        const history = normalizeCgImageHistory(target.cgImageHistory);
+        if (history.length) target.cgImageHistory = history; else delete target.cgImageHistory;
+    }
+    target.cgImage = patch.image;
     return { status: 'applied', session: updated };
+}
+
+// Promote one history entry back to the live image, in place. Pointer swap
+// only: the current record is demoted into the history, nothing is deleted and
+// no image file or provider is touched. Returns the previous {image, history}
+// for rollback, or null when the url is not in the item's history.
+export function swapCgImageToVersion(item, url) {
+    if (!item || typeof item !== 'object') return null;
+    const history = normalizeCgImageHistory(item.cgImageHistory);
+    const wantedUrl = normalizeCgImageUrl(url);
+    const index = wantedUrl ? history.findIndex(record => record.url === wantedUrl) : -1;
+    if (index < 0) return null;
+    const before = { image: item.cgImage, history: item.cgImageHistory };
+    const [chosen] = history.splice(index, 1);
+    const currentImage = normalizeCgImageRecord(item.cgImage);
+    const nextHistory = currentImage && currentImage.url !== chosen.url
+        ? cgImageHistoryWith(history, currentImage) : (history.length ? history : null);
+    item.cgImage = chosen;
+    if (nextHistory) item.cgImageHistory = nextHistory; else delete item.cgImageHistory;
+    return before;
 }
 
 // Shared host resolution for provider results, stored records and image display.

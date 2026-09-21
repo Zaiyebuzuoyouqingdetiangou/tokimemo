@@ -185,7 +185,14 @@ function recordsFromContainer(value, provider, revision, out = []) {
                 sourceId: archive_sourceLedger.normalizeMemorySourceId(safeOwn(current, 'sourceId') ?? safeOwn(current, 'id') ?? safeOwn(current, 'uid') ?? safeOwn(current, 'uuid') ?? safeOwn(current, 'nodeId')),
                 revision: archive_sourceLedger.normalizeMemorySourceRevision(safeOwn(current, 'revision') ?? safeOwn(current, 'version')) || revision,
                 type: core_text.normalizeText(safeOwn(current, 'type') ?? safeOwn(current, 'category'), 80),
-                date: core_text.normalizeText(safeOwn(current, 'date') ?? safeOwn(current, 'timestamp') ?? safeOwn(current, 'createdAt'), 100),
+                date: core_text.normalizeText(
+                    safeOwn(current, 'timeStart') ?? safeOwn(current, 'timeEnd') ?? safeOwn(current, 'timeLabel')
+                    ?? safeOwn(current, 'date') ?? safeOwn(current, 'timestamp') ?? safeOwn(current, 'createdAt'),
+                    100,
+                ),
+                timeStart: core_text.normalizeText(safeOwn(current, 'timeStart'), 100),
+                timeEnd: core_text.normalizeText(safeOwn(current, 'timeEnd'), 100),
+                timeLabel: core_text.normalizeText(safeOwn(current, 'timeLabel'), 180),
                 title: core_text.normalizeText(safeOwn(current, 'title') ?? safeOwn(current, 'name'), 180),
                 content,
             })) break;

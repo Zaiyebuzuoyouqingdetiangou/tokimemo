@@ -4,6 +4,7 @@ import * as cg_format_ui from './cgFormatControl.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_repository from '../archive/repository.js';
+import * as archive_coverage from '../archive/coverageRanges.js';
 import * as source_guard from '../archive/sourceReadGuard.js';
 import * as archive_library from '../archive/library.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
@@ -23,6 +24,7 @@ import * as core_contextTags from '../core/contextTags.js';
 import * as core_chatReadRange from '../core/chatReadRange.js';
 import * as ui_archivePortal from './archivePortal.js';
 import * as ui_overlay from './overlay.js';
+import * as ui_scenePicker from './scenePicker.js';
 import * as ui_styles from './styles.js';
 
 let imageProviderEventCleanup = null;
@@ -382,6 +384,7 @@ export function refreshGenerationSettingsUi() {
     const manualKey = panel.querySelector('[data-rmt-manual-api-key]');
     const manualModel = panel.querySelector('[data-rmt-manual-api-model]');
     const maxTokens = panel.querySelector('[data-rmt-api-max-tokens]');
+    const inputBudget = panel.querySelector('[data-rmt-api-input-budget]');
     const temperature = panel.querySelector('[data-rmt-api-temperature]');
     const roomDaily = panel.querySelector('[data-rmt-room-life-auto]');
     const manualStreaming = panel.querySelector('[data-rmt-manual-streaming]');
@@ -424,6 +427,7 @@ export function refreshGenerationSettingsUi() {
         manualKey.placeholder = settings.manualApiSecretRef ? '已加密保存到本机；填写可替换' : settings.manualApiKey ? '本页已有 Key；尚未确认持久保存' : 'API Key（可留空）';
     }
     if (maxTokens) maxTokens.value = String(settings.maxTokens);
+    if (inputBudget) inputBudget.value = String(settings.inputBudgetTokens);
     if (temperature) {
         temperature.value = String(settings.temperature);
         temperature.disabled = false;
@@ -485,7 +489,11 @@ export function hydrateSettingsPanel({ memory = false } = {}) {
     const panel = document.getElementById(core_constants.SETTINGS_ID);
     if (!panel) return false;
     refreshSettingsMemoryStatus({ lightweight: true });
-    if (memory) void refreshMemoryIngressUi();
+    if (memory) {
+        void refreshMemoryIngressUi();
+        const picker = panel.querySelector('[data-rmt-scene-picker]');
+        if (picker && !picker.querySelector('[data-rmt-scene-picker-root]')) ui_scenePicker.mountScenePicker(picker);
+    }
     if (panel.dataset.rmtHydrated === '1') return true;
     refreshGenerationSettingsUi();
     panel.dataset.rmtHydrated = '1';
@@ -624,6 +632,8 @@ export function mountSettings({ homeTarget = null } = {}) {
           </div>
           <div class="rmt-api-grid">
             <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1" step="1" placeholder="默认 60000"></label>
+            <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="8000" max="200000" step="1" placeholder="默认 60000"></label>
+            <small>最大输出是模型最多写多长，默认 60000，不拦输入。输入预算是发送前本地保险，默认 60000 tokens，范围 8000–200000，越大越贵；与最大输出无关。</small>
             <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
           </div>
           <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
@@ -653,10 +663,10 @@ export function mountSettings({ homeTarget = null } = {}) {
           </div>
         </details>
         <details class="rmt-settings-card" data-rmt-settings-section="filter">
-          <summary class="rmt-settings-card-head"><span>TAG</span><div><b>按用户所选标签保存</b><small>勾选保留</small></div></summary>
+          <summary class="rmt-settings-card-head"><span>TAG</span><div><b>过滤标签</b><small>勾选即不读取</small></div></summary>
           <div class="rmt-settings-section-body">
-            <p>勾选的标签块参与后续整理；未选外层块连同内部略过，无标签正文保留。不改聊天和旧档案。</p>
-            <textarea class="text_pole" data-rmt-tag-draft aria-label="要保存的标签名" placeholder="正文, content, dialogue"></textarea>
+            <p>勾选的标签及其中全部内容不参与后续读取；未勾选的内容和无标签正文保留。可排除正文内嵌的标签块，不改聊天和旧档案。</p>
+            <textarea class="text_pole" data-rmt-tag-draft aria-label="不读取的标签名" placeholder="thinking, 绘图提示词标签"></textarea>
             <div class="rmt-theme-presets"><button type="button" data-rmt-tag-scan>扫描当前聊天</button><button type="button" data-rmt-tag-all>全选</button><button type="button" data-rmt-tag-invert>反选</button><button type="button" data-rmt-tag-clear>清空选择</button><button type="button" data-rmt-tag-cancel>撤销编辑</button><button type="button" data-rmt-tag-save>保存选择</button></div>
             <div data-rmt-tag-status role="status"></div>
             <div data-rmt-tag-results></div>
@@ -722,6 +732,7 @@ export function mountSettings({ homeTarget = null } = {}) {
             <div data-rmt-memory-source-list>暂无持久化来源。</div>
             <div data-rmt-memory-history-books></div>
           </details>
+          <div data-rmt-scene-picker></div>
           <button type="button" class="menu_button rmt-settings-wide" data-rmt-memory-source-clear>清除当前聊天已导入来源</button>
           <small>只清除心迹回廊自己的来源账本；不会删除聊天、第三方记忆或正式 Mxxx。</small>
           </div>
@@ -738,8 +749,7 @@ export function mountSettings({ homeTarget = null } = {}) {
     let tagChoices = new Map(), tagScanned = false, tagEdited = false, tagScanEpoch = 0;
     const savedTagDraft = () => {
         const settings = core_settings.getPluginSettings();
-        return settings.contextTagMode === 'keep' ? settings.retainedContextTags
-            : [...tagChoices.keys()].filter(name => !settings.excludedContextTags.includes(name));
+        return settings.excludedContextTags;
     };
     const renderTagChoices = () => {
         const selected = new Set(core_contextTags.normalizeExcludedTags(tagDraft.value));
@@ -759,7 +769,8 @@ export function mountSettings({ homeTarget = null } = {}) {
     };
     tagDraft.value = savedTagDraft().join(', ');
     tagStatus.textContent = core_settings.getPluginSettings().contextTagMode === 'keep'
-        ? '已保存的选择从下一次整理生效。' : '当前沿用旧排除设置；扫描后可选择要保留的标签。';
+        ? '旧版保留规则尚未更改。当前显示原有排除名单；请自行勾选并保存，之后勾选的标签内容不读取。'
+        : '勾选的标签内容不读取；保存后用于后续整理。';
     renderTagChoices();
     const scanTagChoices = async () => {
         const epoch = ++tagScanEpoch, context = core_context.currentCharacterGuard();
@@ -792,6 +803,7 @@ export function mountSettings({ homeTarget = null } = {}) {
     advanced_ui.bindAdvancedGenerationUi(panel);
     bindManualAutosave(panel);
     panel.addEventListener('change', async event => {
+        if (await ui_scenePicker.handleScenePickerEvent(event)) return;
         if (cg_format_ui.handleCgFormatChange(event)) return;
         const target = event.target;
         if (target.matches?.('[data-rmt-tag-name]')) {
@@ -938,6 +950,16 @@ export function mountSettings({ homeTarget = null } = {}) {
             refreshGenerationSettingsUi();
             return;
         }
+        if (target.matches?.('[data-rmt-api-input-budget]')) {
+            if (target.validity?.badInput || (target.value.trim() && !output_budget.isValidInputBudgetTokens(target.value))) {
+                globalThis.toastr?.warning?.('输入预算请填写 8000–200000 的整数；原设置未改动。打开设置 → 输入预算，不是最大输出。', '心迹回廊');
+                target.value = String(core_settings.getPluginSettings().inputBudgetTokens);
+                return;
+            }
+            core_settings.updatePluginSettings({ inputBudgetTokens: output_budget.normalizeInputBudgetTokens(target.value) });
+            refreshGenerationSettingsUi();
+            return;
+        }
         if (target.matches?.('[data-rmt-api-temperature]')) {
             core_settings.updatePluginSettings({ temperature: Math.max(0, Math.min(2, Number.isFinite(Number(target.value)) ? Number(target.value) : core_constants.DEFAULT_SETTINGS.temperature)) });
             refreshGenerationSettingsUi();
@@ -1022,11 +1044,22 @@ export function mountSettings({ homeTarget = null } = {}) {
         }
     });
     panel.addEventListener('click', event => {
+        if (event.target.closest?.('[data-rmt-scene-picker-root]')) {
+            void ui_scenePicker.handleScenePickerEvent(event);
+            return;
+        }
         if (event.target.closest?.('[data-rmt-read-preview]')) {
             const status = panel.querySelector('[data-rmt-read-preview-status]');
             try {
-                const preview = core_chatReadRange.readRangePreview(core_context.currentCharacterGuard(), core_settings.getPluginSettings());
-                status.textContent = `${preview.label} · 共 ${preview.totalFloors} 楼，选中 ${preview.selectedFloors} 楼（普通 ${preview.visibleCount} / 隐藏 ${preview.hiddenCount}），约 ${preview.characters.toLocaleString()} 字符。仅本地预览，未发起生成。`;
+                const context = core_context.currentCharacterGuard();
+                const preview = core_chatReadRange.readRangePreview(context, core_settings.getPluginSettings());
+                const bank = archive_repository.getImportedMemory(context);
+                const coverage = archive_coverage.archiveCoverageSummary(bank, preview.start ? preview : null);
+                const coverageNote = !bank ? ''
+                    : coverage.covered.length ? `档案已整理 ${archive_coverage.formatCoveredRanges(coverage.covered)}。` : '档案尚未记录已整理楼层区间。';
+                const gapNote = !coverageNote ? '' : coverage.gaps.length ? `本次范围内缺口：${archive_coverage.formatFloorGaps(coverage.gaps)}。` : (preview.start ? '本次范围内没有缺口。' : '');
+                const suggestNote = coverageNote && coverage.suggested ? `建议下一段补录范围：第 ${coverage.suggested.start}–${coverage.suggested.end} 楼（切换为“指定楼号范围”后填写）。` : '';
+                status.textContent = `${preview.label} · 共 ${preview.totalFloors} 楼，选中 ${preview.selectedFloors} 楼（普通 ${preview.visibleCount} / 隐藏 ${preview.hiddenCount}），约 ${preview.characters.toLocaleString()} 字符。仅本地预览，未发起生成。${coverageNote}${gapNote}${suggestNote}`;
             } catch (error) { status.textContent = core_text.safeErrorSummary(error); }
             return;
         }
@@ -1052,9 +1085,9 @@ export function mountSettings({ homeTarget = null } = {}) {
                     if (tagAction.hasAttribute('data-rmt-tag-save')) {
                         ++tagScanEpoch;
                         const tags = core_contextTags.normalizeExcludedTags(tagDraft.value);
-                        core_settings.updatePluginSettings({ contextTagMode: 'keep', retainedContextTags: tags });
+                        core_settings.updatePluginSettings({ contextTagMode: 'exclude', excludedContextTags: tags });
                         tagDraft.value = tags.join(', '); tagEdited = false; renderTagChoices();
-                        tagStatus.textContent = '已保存 ' + tags.length + ' 个标签；下次整理生效，聊天和旧档案未改动。';
+                        tagStatus.textContent = '已保存 ' + tags.length + ' 个过滤标签，标签内的内容不读取；下次整理生效，聊天和旧档案未改动。';
                     } else if (tagAction.hasAttribute('data-rmt-tag-cancel')) {
                         ++tagScanEpoch; tagEdited = false; tagDraft.value = savedTagDraft().join(', '); renderTagChoices();
                         tagStatus.textContent = '已撤销未保存编辑。';

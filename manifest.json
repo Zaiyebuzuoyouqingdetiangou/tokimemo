@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.104-tt-cg-phase9-host-appearance-layout",
+  "js": "index.js?heartbeat=0.9.0-tt-cg-r84.36-budget-capacity-scenes",
   "author": "Toto",
-  "version": "0.8.104",
+  "version": "0.9.0",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.28：统一旧任务兼容与续接；安全补全旧内部标识，原背景匹配前不写回，保留成功片段与真实身份校验。",
+  "description": "r84.36：输入预算默认 6 万；快照改投影；热位 240 滚动+锁定+冷归档 100；按时间场景勾选建档。Prompt/身份/CAS/删除栅栏/不自动重试不变。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

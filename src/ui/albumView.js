@@ -7,6 +7,7 @@ import * as ui_albumCategory from './albumCategory.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_library from '../archive/library.js';
+import * as archive_repository from '../archive/repository.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import { state as runtimeState } from '../core/state.js';
@@ -64,15 +65,28 @@ export function renderAlbum() {
     </article>`;
     }).join('');
     const hint = selected && !selected.unlocked && session.hintVisible ? selected.hintLines.join('\n') : '';
+    const bank = !readOnlyArchive ? archive_repository.getImportedMemory() : null;
+    const sourceLocks = selected?.unlocked && !readOnlyArchive && Array.isArray(selected.sourceMemoryIds)
+        ? selected.sourceMemoryIds.map(id => {
+            const item = (bank?.memories || []).concat(bank?.coldArchive || []).find(row => String(row?.id) === id);
+            const locked = item?.locked === true;
+            return `<button type="button" class="rmt-btn" data-rmt-memory-lock="${core_text.esc(id)}" aria-pressed="${locked}">${core_text.esc(id)} ${locked ? '已锁定' : '锁定'}</button>`;
+        }).join('')
+        : '';
+    const categoryEditor = selected && !readOnlyArchive
+        ? `<label>分类 <select data-rmt-album-category="${core_text.esc(selected.id)}">${[...core_constants.CATEGORY_VALUES].map(cat => `<option value="${core_text.esc(cat)}"${cat === selected.category ? ' selected' : ''}>${core_text.esc(cat)}</option>`).join('')}</select>${selected.categoryManual === true ? '（手动）' : ''}</label>`
+        : '';
     const info = selected ? `<aside class="rmt-info">
       <h3>${core_text.esc(selected.unlocked ? selected.title : `（未解锁）${selected.title}`)}</h3>
       <div class="rmt-info-date">${core_text.esc(selected.date)} · ${core_text.esc(ui_albumCategory.albumDisplayCategory(selected))}</div>
+      ${categoryEditor}
       <div class="rmt-info-desc">${core_text.esc(selected.desc)}</div>
       <div class="rmt-actions">
         <button type="button" class="rmt-btn rmt-memory-primary" data-rmt-action="shared-memory" ${selected.unlocked ? '' : 'disabled'}>${selected.unlocked ? '走进共同回忆' : '尚未解锁'}</button>
         ${selected.unlocked ? '' : '<button type="button" class="rmt-btn" data-rmt-action="show-hint">解锁提示</button>'}
         <button type="button" class="rmt-btn" data-rmt-action="album-cancel">取消选择</button>
       </div>
+      ${sourceLocks ? `<div class="rmt-memory-lock-row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${sourceLocks}</div>` : ''}
       <div class="rmt-hint" ${hint ? '' : 'hidden'}>${core_text.esc(hint)}</div>
     </aside>` : '<aside class="rmt-info">当前分类没有条目。</aside>';
     const body = ui_overlay.bodyEl();
@@ -87,6 +101,11 @@ export function renderAlbum() {
         ${info}
       </div>
     </div>`;
+    body.querySelector?.('[data-rmt-album-category]')?.addEventListener?.('change', event => {
+        const select = event.currentTarget;
+        void albumSetCategory(select.dataset.rmtAlbumCategory, select.value)
+            .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
+    });
     cg_format_ui.mountCgFormatControl(body, 'album', '', readOnlyArchive);
 }
 
@@ -211,6 +230,21 @@ export async function albumSetCommentSpeaker(entryId, index, speakerId) {
     renderSharedMemory();
 }
 
+export async function albumSetCategory(entryId, category) {
+    if (!archive_library.requireWritableArchiveAction()) return;
+    if (!core_constants.CATEGORY_VALUES.has(category)) return;
+    const item = runtimeState.activeSession?.entries?.find(entry => entry.id === entryId);
+    if (!item || item.category === category) return;
+    await ui_overlay.saveActiveSessionEdit(session => {
+        const latest = session.entries.find(entry => entry.id === entryId);
+        // Manual choice wins over every later model merge/regeneration.
+        latest.category = category;
+        latest.categoryManual = true;
+        return session;
+    }, { select: session => session.entries?.find(entry => entry.id === entryId) });
+    renderAlbum();
+}
+
 export function renderSharedMemory() {
     const session = runtimeState.activeSession;
     const item = selectedAlbumEntry();
@@ -237,8 +271,8 @@ export function renderSharedMemory() {
         ${snapshot && comments.length && !readOnly ? `<label>本句说话人 <select data-rmt-album-speaker="${core_text.esc(item.id)}" data-rmt-dialogue-index="${session.dialogueIndex}"><option value="">未标注人物</option>${snapshot.people.map(person => `<option value="${core_text.esc(person.id)}"${person.id === speaker?.id ? ' selected' : ''}>${core_text.esc(person.name)}</option>`).join('')}</select></label>` : ''}
         <div class="rmt-dialogue-text">${core_text.esc(comments[session.dialogueIndex] || (item.progressPending?.length ? '对白尚未生成，画面描述已保留。' : ''))}</div>
         <div class="rmt-dialogue-actions">
-          <button type="button" class="rmt-btn" data-rmt-action="shared-back">返回相簿</button>
-          <button type="button" class="rmt-btn" data-rmt-action="${last ? 'shared-replay' : 'shared-next'}" ${!comments.length ? 'disabled' : ''}>${last ? '重看' : '下一句'}</button>
+          <button type="button" class="rmt-btn" data-rmt-action="shared-prev" ${!comments.length || session.dialogueIndex <= 0 ? 'disabled' : ''}>上一句</button>
+          <button type="button" class="rmt-btn" data-rmt-action="shared-next" ${!comments.length || last ? 'disabled' : ''}>下一句</button>
         </div>
       </div>
       ${readOnly ? '' : '<div class="rmt-cg-card-actions rmt-cg-memory-actions"><button type="button" class="rmt-btn" data-rmt-action="edit-cg-prompt">图片设置</button></div>'}

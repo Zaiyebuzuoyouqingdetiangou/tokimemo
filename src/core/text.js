@@ -52,6 +52,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_ARCHIVE_DRAFT_READ: '本机草稿读取未完成，不能认定没有记录；原记录未修改，本次没有请求模型。请重新读取，不要清数据或重做。',
     RMT_ARCHIVE_DRAFT_CONFLICT: '本机草稿版本已变化；页面成果与本机记录均保留，没有覆盖或重新生成。请先导出本页成果，再重新打开原聊天读取。',
     RMT_ARCHIVE_DRAFT_STORAGE: '整理草稿尚未确认保存到本机；成功分段仍保留在当前页面，请先导出，勿刷新。',
+    RMT_ARCHIVE_DRAFT_CAPACITY: '本次来源超过本机草稿保存上限（12MB），未请求模型；可缩小读取范围或分批建档，已保留原记录。',
 
     ...core_backupDiagnostics.BACKUP_FAILURE_MESSAGES,
     RMT_DEFERRED_QUOTA: '浏览器可用存储空间不足，待写回结果仅保留在当前页面。',
@@ -114,6 +115,8 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_RECOVERY_VALIDATION_CHANGED: '已保存片段暂未通过当前校验；草稿仍保留，没有重新收费生成。',
     RMT_RECOVERY_STORAGE: '这一段已返回，但浏览器没有保存成功；已停止后续生成，请检查存储后重试。',
     RMT_RECOVERY_LIMIT: '这一段超出草稿保存容量；此前成功部分与旧内容保留。',
+    RMT_RECOVERY_SNAPSHOT_TOO_LARGE: '续写资料包超过 120 万字符兜底，未发送请求。',
+    RMT_RECOVERY_OVERSIZED: '这份未完成草稿不能继续生成，只能导出或放弃。',
     RMT_RECOVERY_UNAVAILABLE: '当前环境无法建立可靠的续写记录；请保留页面与已有内容。',
     RMT_RECOVERY_DATA: '这一段的返回结构无法保存；此前成功部分与旧内容保留。',
     RMT_BUTTERFLY_systemNote: '该节点缺少完整的系统结局判定；旧内容保留，可单独重试。',
@@ -149,7 +152,8 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_ARCHIVE_CHECKPOINT: '建档检查点格式或容量异常，旧成果保留，未自动重建。',
     RMT_ARCHIVE_SOURCE_CAPACITY: '全部来源超过账本容量，未仅截取前半部分冒充完成。',
     RMT_ARCHIVE_RESULT_CAPACITY: '本段结果超过原校验容量，未截取结果或推进完成进度。',
-    RMT_INPUT_BUDGET: '本次输入超过安全预算，已在发送前拦截。',
+    RMT_INPUT_BUDGET: '本次输入超过输入预算，已在发送前拦截。请打开设置 → 输入预算。',
+    RMT_CAPACITY_LOCKED: '热位已满且均为锁定。新结果在待入档，可导出。已有相簿/ADV/房间仍可生成。',
     RMT_TOKEN_COUNT_TIMEOUT: '输入检查超时，本段未发送；旧内容保留，可重试。',
     RMT_TOKEN_COUNT_UNAVAILABLE: '本地计数暂不可用。',
     RMT_JSON_INVALID: '模型没有返回完整、可解析的 JSON；响应正文已隐藏。',
@@ -232,6 +236,15 @@ export function safeErrorSummary(error, max = 520) {
         const b = error.archiveBudget, n = value => Number.isFinite(value) && value >= 0 ? Math.floor(value).toLocaleString() : '未知';
         return `${SAFE_ERROR_CODE_MESSAGES[error.code]} 完整输入 ${n(b.utf16Chars)} 字符（UTF-16）、${n(b.utf8Bytes)} UTF-8 字节；输入 token ${n(b.inputTokens)}（宿主计数估算）、请求最大输出 ${n(b.outputTokens)} token；模型上下文 ${n(b.contextTokens)}。`;
     }
+    if (error?.code === 'RMT_INPUT_BUDGET' && error.inputBudget) {
+        const b = error.inputBudget, n = value => Number.isFinite(value) && value >= 0 ? Math.floor(value).toLocaleString() : '未知';
+        const trusted = sanitizedTrustedErrorMessage(error?.safeUserMessage || error?.message, max);
+        return normalizeText(trusted || `本次输入 ${n(b.chars)} 字符 / ${n(b.tokens)} tokens，预算 ${n(b.budgetTokens)}，字符顶 ${n(b.charCap)}。打开设置 → 输入预算。`, max);
+    }
+    if (error?.code === 'RMT_RECOVERY_SNAPSHOT_TOO_LARGE' && error.snapshotBudget) {
+        const b = error.snapshotBudget, n = value => Number.isFinite(value) && value >= 0 ? Math.floor(value).toLocaleString() : '未知';
+        return normalizeText(`续写资料包 ${n(b.snapshotChars)} / ${n(b.budgetChars)} 字符，未发请求。角色卡 ${n(b.cardChars)}，记忆投影 ${n(b.memoryChars)}。`, max);
+    }
     const raw = normalizeText(error?.message, 12000);
     const status = safeErrorStatus(error);
     const code = safeErrorCode(error);
@@ -254,7 +267,14 @@ export function safeErrorSummary(error, max = 520) {
     const blocked = /cloudflare|sorry,? you have been blocked|attention required|unable to access/i.test(raw);
     const unauthorized = /unauthorized|authentication|invalid api key|\b401\b/i.test(raw) || status === 401;
     const forbidden = /forbidden|\b403\b/i.test(raw) || status === 403;
-    if (code && SAFE_ERROR_CODE_MESSAGES[code]) return normalizeText(SAFE_ERROR_CODE_MESSAGES[code], max);
+    if (code && SAFE_ERROR_CODE_MESSAGES[code] && !['RMT_INPUT_BUDGET', 'RMT_RECOVERY_SNAPSHOT_TOO_LARGE', 'RMT_RECOVERY_OVERSIZED', 'RMT_CAPACITY_LOCKED'].includes(code)) {
+        return normalizeText(SAFE_ERROR_CODE_MESSAGES[code], max);
+    }
+    if (['RMT_INPUT_BUDGET', 'RMT_RECOVERY_SNAPSHOT_TOO_LARGE', 'RMT_RECOVERY_OVERSIZED', 'RMT_CAPACITY_LOCKED'].includes(code)) {
+        const trusted = error?.safeToDisplay === true ? sanitizedTrustedErrorMessage(error?.safeUserMessage || raw, max) : '';
+        if (trusted) return trusted;
+        if (SAFE_ERROR_CODE_MESSAGES[code]) return normalizeText(SAFE_ERROR_CODE_MESSAGES[code], max);
+    }
     if (looksHtml) {
         const details = [];
         if (status) details.push(`HTTP ${status}`);

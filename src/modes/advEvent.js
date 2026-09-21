@@ -478,7 +478,8 @@ async function persistAdvMutation(targetRuntime, mutateSession, fallbackSession)
     if (staged) {
         staged.chatId = expectedChatId;
         staged.archiveRevision = targetRuntime.expectedArchiveRevision;
-        core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [core_constants.MODE.ADV]: staged } });
+        const deferredDurable = core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [core_constants.MODE.ADV]: staged } });
+        core_requestCoordinator.notifyDeferredCommitNotDurable(deferredDurable);
     }
     return { session: staged, committed: false };
 }

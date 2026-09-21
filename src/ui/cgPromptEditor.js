@@ -57,7 +57,7 @@ function busyEditor(active) {
     editor.busy = active;
     editor.element.setAttribute('aria-busy', String(active));
     for (const field of editor.element.querySelectorAll('[data-rmt-cg-prompt-input], [data-rmt-cg-scene-tags], [data-rmt-cg-tag-input], [data-rmt-cg-flat-prompt], [data-rmt-cg-editor-format], [data-rmt-cg-person-selected], [data-rmt-cg-person-name], [data-rmt-cg-person-tag], [data-rmt-cg-person-nl]')) field.disabled = active;
-    for (const button of editor.element.querySelectorAll('[data-rmt-cg-prompt-action="reconceive"], [data-rmt-cg-prompt-action="draw"], [data-rmt-cg-prompt-action="clear"], [data-rmt-cg-prompt-action="retry"], [data-rmt-cg-prompt-action="save-looks"], [data-rmt-cg-prompt-action="restore-draft"], [data-rmt-cg-prompt-action="add-person"], [data-rmt-cg-prompt-action="add-user"], [data-rmt-cg-prompt-action="use-current-cast"], [data-rmt-cg-prompt-action="select-sources"]')) button.disabled = active;
+    for (const button of editor.element.querySelectorAll('[data-rmt-cg-prompt-action="reconceive"], [data-rmt-cg-prompt-action="draw"], [data-rmt-cg-prompt-action="clear"], [data-rmt-cg-prompt-action="retry"], [data-rmt-cg-prompt-action="save-looks"], [data-rmt-cg-prompt-action="restore-draft"], [data-rmt-cg-prompt-action="add-person"], [data-rmt-cg-prompt-action="add-user"], [data-rmt-cg-prompt-action="use-current-cast"], [data-rmt-cg-prompt-action="select-sources"], [data-rmt-cg-history-view], [data-rmt-cg-history-restore]')) button.disabled = active;
 }
 
 function readParticipantFields(current) {
@@ -118,7 +118,7 @@ function renderParticipantFields(current) {
 }
 
 function appearanceFieldsHtml(multi) {
-    return multi ? '<fieldset data-rmt-cg-cast><legend>本图出镜人物</legend><p>勾选只影响这张图。姓名可改，也可补充档案名单外的人物；同名人物独立保存。</p><div data-rmt-cg-cast-list></div><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-person">补充人物</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-user">定位用户候选</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="select-sources">重新选择外貌来源</button></fieldset>' : `<p><label for="rmt-cg-char-tags" data-rmt-cg-tag-name="char">角色 · 外貌 tag</label><textarea id="rmt-cg-char-tags" data-rmt-cg-tag-input="char" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p>
+    return multi ? '<fieldset data-rmt-cg-cast><legend>本图出镜人物</legend><p>勾选只影响这张图。姓名可改，也可补充档案名单外的人物；同名人物独立保存。</p><div data-rmt-cg-cast-list></div><div class="rmt-cg-cast-actions"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-person">补充人物</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="add-user">定位用户候选</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="select-sources">重新选择外貌来源</button></div></fieldset>' : `<p><label for="rmt-cg-char-tags" data-rmt-cg-tag-name="char">角色 · 外貌 tag</label><textarea id="rmt-cg-char-tags" data-rmt-cg-tag-input="char" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p>
             <p><label for="rmt-cg-user-tags" data-rmt-cg-tag-name="user">用户 · 外貌 tag</label><textarea id="rmt-cg-user-tags" data-rmt-cg-tag-input="user" rows="2" maxlength="${appearance.CG_APPEARANCE_TAG_LIMIT}" placeholder="重新构思时提取，或手动填写"></textarea></p>`;
 }
 
@@ -245,6 +245,7 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
         const roster = multi && !selected.cgImage ? currentRoster : null;
         const participantLooks = multi ? cast_looks.readParticipantLooks(context) : null;
         const canRetry = images.hasPendingCgImage(target);
+        const historyRows = images.normalizeCgImageHistory(selected.cgImageHistory);
         const element = document.createElement('div');
         element.className = 'rmt-cg-prompt-backdrop';
         element.innerHTML = `<section class="rmt-cg-prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="rmt-cg-prompt-title" aria-describedby="rmt-cg-prompt-help" tabindex="-1">
@@ -258,8 +259,8 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
           <details class="rmt-cg-prompt-scene" data-rmt-cg-appearance>
             <summary>人物外貌与场景标签</summary>
             <div data-rmt-cg-appearance-fields>${appearanceFieldsHtml(multi)}</div>
-            ${selected.cgImage && participants.selectedParticipantSnapshot(currentRoster) ? '<button type="button" class="rmt-btn" data-rmt-cg-prompt-action="use-current-cast">从当前档案选择本图人物</button>' : ''}
-            <button type="button" class="rmt-btn" data-rmt-cg-prompt-action="save-looks">保存外貌</button>
+            <div class="rmt-cg-cast-actions">${selected.cgImage && participants.selectedParticipantSnapshot(currentRoster) ? '<button type="button" class="rmt-btn" data-rmt-cg-prompt-action="use-current-cast">从当前档案选择本图人物</button>' : ''}
+            <button type="button" class="rmt-btn" data-rmt-cg-prompt-action="save-looks">保存外貌</button></div>
             <p><label for="rmt-cg-scene-tags">场景 tag</label><textarea id="rmt-cg-scene-tags" data-rmt-cg-scene-tags rows="2" maxlength="${appearance.CG_SCENE_TAG_LIMIT}" placeholder="人物动作、场景与构图"></textarea></p>
             <p><label for="rmt-cg-flat-prompt">通用后端完整提示</label><textarea id="rmt-cg-flat-prompt" data-rmt-cg-flat-prompt rows="4" maxlength="${appearance.CG_FLAT_PROMPT_LIMIT}" placeholder="包含双方外貌、动作与场景的完整提示"></textarea></p>
           </details>
@@ -270,6 +271,7 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
           <button type="button" class="rmt-btn" data-rmt-cg-prompt-action="restore-draft" hidden>还原上次草稿</button>
           ${canRetry ? '<div class="rmt-cg-prompt-secondary"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="retry">回填已生成图片（不再生图）</button></div>' : ''}
           ${savedImage ? `<div class="rmt-cg-prompt-secondary"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="view">查看完整原图</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="clear">${target.mode === core_constants.MODE.HEART ? '恢复文字版' : '恢复抽象图'}</button><small>仅移除本档案的图片引用，不删除柏宝绘图库文件。</small></div>` : ''}
+          ${historyRows.length ? `<div class="rmt-cg-prompt-secondary"><small>历史版本（${historyRows.length}，v1 最旧）</small><div data-rmt-cg-history-list>${historyRows.map((record, index) => `<span class="rmt-cg-history-item"><button type="button" class="rmt-btn" data-rmt-cg-history-view="${core_text.esc(record.url)}">查看 v${index + 1}</button><button type="button" class="rmt-btn" data-rmt-cg-history-restore="${core_text.esc(record.url)}">恢复 v${index + 1}</button></span>`).join('')}</div><small>恢复只切换档案里的图片引用：当前图片转入历史版本，不重新生图、不删除任何已保存的图片文件。</small></div>` : ''}
         </section>`;
         const cancel = event => {
             event.preventDefault(); event.stopImmediatePropagation();
@@ -308,6 +310,9 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
         if (multi) element.querySelector('[data-rmt-cg-appearance]').open = true;
         element.addEventListener('click', event => {
             event.stopPropagation();
+            const historyViewUrl = event.target.closest?.('[data-rmt-cg-history-view]')?.dataset.rmtCgHistoryView;
+            const historyRestoreUrl = event.target.closest?.('[data-rmt-cg-history-restore]')?.dataset.rmtCgHistoryRestore;
+            if (historyViewUrl || historyRestoreUrl) { void handleCgHistoryAction(historyViewUrl || '', historyRestoreUrl || '', event.target); return; }
             const action = event.target.closest?.('[data-rmt-cg-prompt-action]')?.dataset.rmtCgPromptAction;
             if (action) void handleCgPromptEditorAction(action);
         });
@@ -325,6 +330,23 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
         updateCount();
         textarea.focus();
     } catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); }
+}
+
+export async function handleCgHistoryAction(viewUrl, restoreUrl, sourceEl = null) {
+    const current = editor;
+    if (!current || current.busy) return;
+    const item = images.cgItemInSession(current.target.mode, current.target.session, current.target.itemId);
+    const history = images.normalizeCgImageHistory(item?.cgImageHistory);
+    if (viewUrl) {
+        const record = history.find(row => row.url === viewUrl);
+        if (record) image_viewer.openCgImageViewer(record, item?.title, { opener: sourceEl });
+        return;
+    }
+    if (!restoreUrl || !history.some(row => row.url === restoreUrl)) return;
+    busyEditor(true);
+    const committed = await images.restoreSelectedCgImageVersion(restoreUrl);
+    if (committed === true) closeCgPromptEditor();
+    else busyEditor(false);
 }
 
 export async function handleCgPromptEditorAction(action) {

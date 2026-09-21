@@ -80,7 +80,7 @@ export async function readQianQianJieCurrentChat(context, { signal = null, asser
             if (chars > constants.MAX_MEMORY_SOURCE_LEDGER_CHARS) {
                 const result = unavailable('read-failed'); result.coverage.reason = '千千结摘要超过本地来源字符上限，未截断冒充完整'; return result;
             }
-            records.push({ sourceId, content, type: 'summary', title: `第 ${messageIndex + 1} 楼摘要` });
+            records.push({ sourceId, content, type: 'summary', title: `第 ${messageIndex + 1} 楼摘要`, messageIndex });
         }
         // Hash content too: user-edited summaries must not be mistaken for the old scan.
         const revision = ledger.normalizeMemorySourceRevision(`${sourceKey}:${checkpoint}:${text.hashString(JSON.stringify(records))}`);

@@ -64,6 +64,10 @@ export const IMPORT_CHUNK_CHARS = 30000;
 
 export const MAX_MEMORY_ITEMS = 240;
 
+export const MAX_COLD_ARCHIVE_ITEMS = 100;
+
+export const MAX_ROLLING_EVICT_PER_BATCH = 20;
+
 export const MAX_MEMORY_PROMPT_ITEMS = 64;
 
 export const DERIVED_INCREMENTAL_SCHEMA_VERSION = 1;
@@ -72,14 +76,22 @@ export const MAX_DERIVED_CONTENT_ITEMS = MAX_MEMORY_ITEMS;
 
 export const MAX_INCREMENTAL_EXISTING_INDEX_ITEMS = 120;
 
-export const MAX_GENERATION_INPUT_TOKENS = 32000;
+export const MAX_GENERATION_INPUT_TOKENS = 60000;
+
+export const LEGACY_DEFAULT_INPUT_BUDGET_TOKENS = 32000;
+
+// Bounds for the user-adjustable input budget. Values outside this range are refused
+// at save time so a mistyped number cannot run away; per-request cost scales with input.
+export const MIN_USER_INPUT_BUDGET_TOKENS = 8000;
+
+export const MAX_USER_INPUT_BUDGET_TOKENS = 200000;
 
 // Legacy per-feature sizing hint only; never clamp the user's output setting to it.
 export const MAX_GENERATION_OUTPUT_TOKENS = 60000;
 
 export const MAX_GENERATION_OUTPUT_CHARS = 600000;
 
-export const MAX_GENERATION_INPUT_CHARS = 96000;
+export const MAX_GENERATION_INPUT_CHARS = 180000;
 
 export const MAX_EXTERNAL_MEMORY_ITEMS = 256;
 
@@ -136,7 +148,7 @@ export const MAX_BANNED_GENERATED_PHRASES = 24;
 
 export const MEMORY_WORLD_INFO_SETTINGS_KEY = 'heartbeatMemoriesMemoryWorldInfoV1';
 
-export const MAX_MEMORY_WORLD_INFO_BOOKS = 8;
+export const MAX_MEMORY_WORLD_INFO_BOOKS = 200;
 
 export const MAX_MEMORY_WORLD_INFO_ENTRIES = 160;
 
@@ -180,6 +192,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     manualApiStreaming: false,
     chatReadRange: Object.freeze({ mode: 'recent', recent: 50, start: 1, end: 100, includeHidden: false }),
     maxTokens: 60000,
+    inputBudgetTokens: 60000,
     temperature: 0.9,
     roomLifeAutoDaily: true,
     useCurrentChatExternalMemory: true,
@@ -270,7 +283,7 @@ export const CREATIVE_EXPANSION_MODES = Object.freeze([MODE.ADV, MODE.BUTTERFLY,
 
 export const ARCHIVE_OVERVIEW_CACHE_MS = 60000;
 
-export const CATEGORY_VALUES = new Set(['日常', '约会', '结局']);
+export const CATEGORY_VALUES = new Set(['日常', '约会', '结局', '待分类']);
 
 export const ROOM_ZONE_VALUES = new Set(['左上', '右上', '左下', '右下', '中央', '近景']);
 
@@ -300,6 +313,7 @@ export const ENDING_TYPES = new Set(['route', 'romance', 'reverse', 'bond', 'ope
 export const CONFESSION_REPLAY_TYPES = new Set(['true', 'mutual', 'friendship', 'indirect', 'relationship', 'rejected', 'other']);
 
 export const CG_IMAGE_PROVIDER = 'sillytavern-imagine';
+export const CG_IMAGE_HISTORY_LIMIT = 5;
 
 export const MAX_CG_IMAGE_PROMPT_CHARS = 1800;
 

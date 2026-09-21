@@ -15,15 +15,26 @@ export function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
         const pages = { language: '基础语言', strips: '日常一格', fireflies: '萤火虫', spring: '春', summer: '夏', autumn: '秋', winter: '冬', postending: '后日谈', roomLife: '今日生活' };
         const draftHtml = readOnly ? '' : cache.generationDraftRows(stored, bank).map(row => {
             const summary = generation_recovery.generationRecoverySummary(row.journal);
-            if (!summary || (!summary.completed && !summary.truncated && !summary.failed && !summary.failureCode)) return '';
+            if (!summary || (!summary.completed && !summary.truncated && !summary.failed && !summary.failureCode && !summary.oversized)) return '';
+            // An oversized draft can never continue; it still gets export and
+            // discard so the user is never left without an exit.
+            const oversized = summary.oversized === true;
+            const snapshotNote = summary.snapshotBudget
+                ? `快照投影 ${Number(summary.snapshotBudget.snapshotChars || 0).toLocaleString()} / ${Number(summary.snapshotBudget.budgetChars || 0).toLocaleString()} 字符`
+                : '';
             const label = summary.canContinue ? '继续生成' : '重试未完成部分';
-            const reason = summary.canContinue ? '正文未写完' : summary.failureCode
+            const reason = oversized
+                ? (summary.blocked ? `${snapshotNote || '续写资料包超限'}，不能继续生成；已保留的内容不受影响，请导出留存后明确放弃`
+                    : '草稿超出本地保存上限，不能继续生成；已保留的内容不受影响，请导出留存后明确放弃')
+                : summary.canContinue ? '正文未写完' : summary.failureCode
                 ? text.safeErrorSummary({ code: summary.failureCode, archiveInputCategory: summary.failureCategory, recoveryPhase: summary.failurePhase }) : '任务尚未完成';
             const pageLabel = pages[row.pageId] || constants.MODE_LABEL[row.mode] || row.pageId || row.mode;
             const attrs = `data-rmt-recovery-draft-id="${text.esc(row.draftId)}" data-rmt-recovery-page-id="${text.esc(row.pageId)}"`;
-            const childReader = row.journal.operation?.kind === 'content-item' && row.journal.operation.sourceDraftId
+            const childReader = !oversized && row.journal.operation?.kind === 'content-item' && row.journal.operation.sourceDraftId
                 ? ` <button type="button" class="rmt-btn" data-rmt-content-draft-open="${text.esc(row.draftId)}">查看单项草稿正文</button>` : '';
-            return `<section class="rmt-recovery-status" role="status"><b>${text.esc(pageLabel)} · 已保留 ${summary.completed} 个成功分段</b><p>${text.esc(new Date(row.createdAt).toLocaleString())} · ${text.esc(reason.replace(/[。\s]+$/, ''))}。继续只补这份草稿未完成的内容，会使用生成额度。</p><div class="rmt-recovery-actions"><button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(row.mode)}" ${attrs}>${label}</button>${childReader} <button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(row.mode)}" ${attrs}>导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(row.mode)}" ${attrs}>放弃这份草稿</button></div></section>`;
+            const continueButton = oversized ? '' : `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(row.mode)}" ${attrs}>${label}</button>`;
+            const tail = oversized ? '。' : '。继续只补这份草稿未完成的内容，会使用生成额度。';
+            return `<section class="rmt-recovery-status" role="status"><b>${text.esc(pageLabel)} · 已保留 ${summary.completed} 个成功分段</b><p>${text.esc(new Date(row.createdAt).toLocaleString())} · ${text.esc(reason.replace(/[。\s]+$/, ''))}${tail}</p><div class="rmt-recovery-actions">${continueButton}${childReader} <button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(row.mode)}" ${attrs}>导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(row.mode)}" ${attrs}>放弃这份草稿</button></div></section>`;
         }).join('');
         const resultHtml = cache.listGenerationTaskResults(null, stored).map(row => {
             const label = pages[row.pageId] || constants.MODE_LABEL[row.mode] || row.pageId || row.mode;
@@ -38,10 +49,19 @@ export function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
         if (journal?.identity?.chatId !== bank.chatId || journal?.identity?.archiveRevision !== bank.archiveRevision
             || journal?.[constants.SESSION_MODE_WRITE_FENCE_KEY] !== cache.modeWriteFenceForCache(stored, mode)) return '';
         const summary = generation_recovery.generationRecoverySummary(journal);
-        if (!summary || (!summary.completed && !summary.truncated && !summary.failed)) return '';
+        if (!summary || (!summary.completed && !summary.truncated && !summary.failed && !summary.oversized)) return '';
+        const oversized = summary.oversized === true;
+        const snapshotNote = summary.snapshotBudget
+            ? `快照投影 ${Number(summary.snapshotBudget.snapshotChars || 0).toLocaleString()} / ${Number(summary.snapshotBudget.budgetChars || 0).toLocaleString()} 字符`
+            : '';
         const label = summary.canContinue ? '继续生成' : '重试未完成部分';
-        const reason = summary.canContinue ? '正文未写完' : summary.failureCode ? text.safeErrorSummary({ code: summary.failureCode, archiveInputCategory: summary.failureCategory, recoveryPhase: summary.failurePhase }) : '任务尚未完成';
-        return `<section class="rmt-recovery-status" role="status"><b>${text.esc(constants.MODE_LABEL[mode] || mode)} · 已保留 ${summary.completed} 个成功分段</b><p>上次记录：${text.esc(reason.replace(/[。\s]+$/, ''))}。继续会使用生成额度。</p><div class="rmt-recovery-actions"><button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(mode)}">${label}</button> <button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(mode)}">导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(mode)}">放弃未提交草稿</button></div></section>`;
+        const reason = oversized
+            ? (summary.blocked ? `${snapshotNote || '续写资料包超限'}，不能继续生成；已保留的内容不受影响，请导出留存后明确放弃`
+                : '草稿超出本地保存上限，不能继续生成；已保留的内容不受影响，请导出留存后明确放弃')
+            : summary.canContinue ? '正文未写完' : summary.failureCode ? text.safeErrorSummary({ code: summary.failureCode, archiveInputCategory: summary.failureCategory, recoveryPhase: summary.failurePhase }) : '任务尚未完成';
+        const continueButton = oversized ? '' : `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(mode)}">${label}</button> `;
+        const tail = oversized ? '。' : '。继续会使用生成额度。';
+        return `<section class="rmt-recovery-status" role="status"><b>${text.esc(constants.MODE_LABEL[mode] || mode)} · 已保留 ${summary.completed} 个成功分段</b><p>上次记录：${text.esc(reason.replace(/[。\s]+$/, ''))}${tail}</p><div class="rmt-recovery-actions">${continueButton}<button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(mode)}">导出未提交草稿</button> <button type="button" class="rmt-btn" data-rmt-recovery-discard="${text.esc(mode)}">放弃未提交草稿</button></div></section>`;
     }).join('');
 }
 

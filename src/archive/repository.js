@@ -1,6 +1,7 @@
 import * as advanced_generation from '../core/advancedGeneration.js';
 import * as context_tags from '../core/contextTags.js';
 import * as archive_batches from './importBatches.js';
+import * as archive_coverage from './coverageRanges.js';
 import * as archive_requestBudget from './requestBudget.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -25,6 +26,8 @@ import * as qianqianjie from './qianqianjie.js';
 import * as sourceGuard from './sourceReadGuard.js';
 import * as archive_sourceLedger from './sourceLedger.js';
 import * as archive_importRecovery from './importRecovery.js';
+import * as archive_capacity from './capacity.js';
+import * as archive_storyScenes from './storyScenes.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_jsonParser from '../generation/jsonParser.js';
 import * as modes_heart from '../modes/heart.js';
@@ -1759,18 +1762,8 @@ function progressWorldInfo(worldInfo) {
 }
 
 
-function admitArchiveBatch(existingMemories, fresh) {
-    const old = (existingMemories || []).map(item => structuredClone(item));
-    const seen = new Set(old.map(importedMemoryStableKey));
-    const unique = [];
-    for (const value of fresh) {
-        const item = structuredClone(value); delete item.id;
-        const key = importedMemoryStableKey(item);
-        if (!seen.has(key)) { seen.add(key); unique.push(item); }
-    }
-    const room = Math.max(0, core_constants.MAX_MEMORY_ITEMS - old.length);
-    return { memories: appendImportedMemoriesStable(old, unique.slice(0, room), Math.max(old.length, core_constants.MAX_MEMORY_ITEMS)),
-        pending: unique.slice(room) };
+function admitArchiveBatch(existingMemories, fresh, existingCold = []) {
+    return archive_capacity.admitArchiveMemories(existingMemories, fresh, existingCold);
 }
 
 export function exportCurrentArchiveImportProgress(context = core_context.currentCharacterGuard()) {
@@ -1801,6 +1794,18 @@ function archiveSourceBank(memory) {
     delete saved[archive_batches.IMPORT_PROGRESS_KEY];
     delete saved.archiveImportPaused;
     return saved;
+}
+
+// A draft row must not store the same full source snapshot twice. The live
+// progress object keeps its own copy for the archive-bank commit (later batches
+// read it back from the bank); only the serialized draft inputs drop the
+// duplicate. Matching digests prove the two copies are identical, so a
+// mismatched older manifest is never silently stripped.
+function progressForDraftRow(progress, taskInputV1) {
+    if (!progress?.taskInputV1 || !taskInputV1 || progress.taskInputV1.digest !== taskInputV1.digest) return progress;
+    const stored = { ...progress };
+    delete stored.taskInputV1;
+    return stored;
 }
 
 function archivedRequestJson(segment, marker) {
@@ -1956,7 +1961,7 @@ export function getCurrentArchiveImportRecoverySummary(context = core_context.ge
         const progress = bank?.[archive_batches.IMPORT_PROGRESS_KEY];
         if (archive_batches.hasPendingBatches(progress)) {
             const totals = archive_batches.progressTotals(progress);
-            const capacity = totals.pendingMemories > 0 || bank.memories.length >= core_constants.MAX_MEMORY_ITEMS;
+            const capacity = totals.pendingMemories > 0;
             const pageParts = !totals.pendingMemories && summary && !summary.profileOnly
                 ? progress.batches[progress.nextBatch].slice(0, summary.completed) : [];
             const pageProcessed = pageParts.reduce((n, part) => n + part.refs.length, 0);
@@ -1965,7 +1970,9 @@ export function getCurrentArchiveImportRecoverySummary(context = core_context.ge
             return { ...summary, operation: 'import', profileOnly: false, onlyArchivedDrafts: false, awaitingCommit: false, fullRebuild: false,
                 completed: summary?.completed || 0, canContinue: !capacity, canRetry: !capacity, pageOnly: false,
                 batchProgress: totals, capacityBlocked: capacity,
-                notice: detail + (capacity ? `档案已达容量边界；${totals.pendingMemories} 条已校验结果另存为待入档，不编号、不算完成。可导出保留，未处理来源未发送。`
+                notice: detail + (capacity ? `热位已满且本批有 ${totals.pendingMemories} 条已校验结果在待入档，不编号、不算完成。可导出保留；锁上的 Mxxx 未动。`
+                    : !archive_capacity.canAdmitToHot(bank.memories) && bank.memories.length >= core_constants.MAX_MEMORY_ITEMS
+                        ? '热位已满且均为锁定。下一批新结果会进待入档，可导出；已有相簿/ADV/房间仍可生成。'
                     : '本批完成后会停止；下一批需明确点击。已保存成果现在即可阅读。')
                     + (summary && !summary.profileOnly ? ` ${summary.notice}` : '') };
         }
@@ -2245,10 +2252,16 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace, options = {}) {
         if (!taskInputV1 && !profileInputs) taskInputV1 = captureArchiveTaskInput(context, {
             operation: 'profile', memory: profileMemory, ownerIdentity, contextEnvelope, profilePrompt });
         const settingsIdentity = archiveRecoverySettingsIdentity(context);
+        const profileDraftInputs = { contextEnvelope, ownerIdentity,
+            ...(taskInputV1 ? { taskInputV1 } : {}),
+            ...(replacementTicket ? { participantRegeneration: options.participantRegeneration } : {}) };
+        // Same serialization and byte limit as the draft save itself. Fail before
+        // any storage transaction or model request; existing records stay untouched.
+        if (archive_importRecovery.archiveRecoveryDraftPlanExceedsCapacity(origin, 'profile', profileDraftInputs)) {
+            throw archive_importRecovery.archiveDraftCapacityFailure();
+        }
         recoveryTicket = await archive_importRecovery.beginArchiveRecovery({ origin, operation: 'profile',
-            sourceIdentity: profileMemory.archiveRevision, sourceFragments: [JSON.stringify(profileMemory.memories), contextEnvelope], settingsIdentity, inputs: { contextEnvelope, ownerIdentity,
-                ...(taskInputV1 ? { taskInputV1 } : {}),
-                ...(replacementTicket ? { participantRegeneration: options.participantRegeneration } : {}) },
+            sourceIdentity: profileMemory.archiveRevision, sourceFragments: [JSON.stringify(profileMemory.memories), contextEnvelope], settingsIdentity, inputs: profileDraftInputs,
             continueApproved: !!pendingProfile, onProgress: refreshArchiveRecoveryReading, draftId: selectedProfile?.draftId || '',
             assertCurrent: () => stillCurrent() && (taskInputV1 || archiveRecoverySettingsIdentity(context) === settingsIdentity) });
         core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, recoveryTicket.origin);
@@ -2362,7 +2375,7 @@ async function continueImportedArchiveProfile(context, memory, origin, draft, op
 }
 
 async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic = false, continueRecovery = false, restartImport = false, participantRoster, logicalTask,
-    draftId = '', selectedDraft = null, independentResult = false, nextIndependentBatch = false, baseMemoryMissing = false } = {}, preparation) {
+    draftId = '', selectedDraft = null, independentResult = false, nextIndependentBatch = false, baseMemoryMissing = false, sceneRecords = null } = {}, preparation) {
     const context = preparation.context;
     const existing = Object.hasOwn(preparation, 'sourceExisting') ? preparation.sourceExisting : preparation.existing;
     // Capture before any await; a later chat/Persona switch cannot rebind this bank.
@@ -2391,9 +2404,15 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         return live;
     };
     const incrementalUpdate = !!existing && !fullRebuild;
-    const actionLabel = fullRebuild ? '完全重建' : existing ? '增量更新' : '创建';
     const pinnedInputs = selectedDraft ? selectedDraft.inputs : continueRecovery ? archive_importRecovery.archiveRecoveryInputs(preparation.origin) : null;
     const legacyDraft = !!pinnedInputs && !pinnedInputs.batchVersion;
+    // Drafts saved by this version keep the full source snapshot only at
+    // inputs.taskInputV1; older drafts stored a second copy inside
+    // inputs.progress. Rebuild the in-page alias so resuming either shape
+    // behaves identically. The stored row itself is never re-inflated.
+    if (pinnedInputs?.taskInputV1 && pinnedInputs.progress && !pinnedInputs.progress.taskInputV1) {
+        pinnedInputs.progress = { ...pinnedInputs.progress, taskInputV1: pinnedInputs.taskInputV1 };
+    }
     const storedProgress = archive_batches.checkedProgress(existing?.[archive_batches.IMPORT_PROGRESS_KEY]);
     let progress = nextIndependentBatch ? existing?.[archive_batches.IMPORT_PROGRESS_KEY]
         : pinnedInputs?.progress || (!restartImport && archive_batches.hasPendingBatches(storedProgress) ? storedProgress : null);
@@ -2426,6 +2445,17 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
                 readStatus: 'unavailable', coverage: { status: 'failed', reason: '账本读取未完成' } }], fingerprint: 'none', ledgerAvailable: false };
         })));
     external.worldInfo ||= emptyMemoryWorldInfo('none');
+    const sceneOnly = Array.isArray(sceneRecords) && sceneRecords.length > 0 && !capturedInput && !progress;
+    if (sceneOnly) {
+        external = {
+            records: sceneRecords.map(item => structuredClone(item)),
+            sources: [{ id: 'story-scenes', label: '时间场景', count: sceneRecords.length,
+                coverage: { status: 'complete', reason: '用户勾选的时间场景' } }],
+            fingerprint: archive_batches.sourceHash(JSON.stringify(sceneRecords.map(item => item.externalId || item.title))),
+            worldInfo: emptyMemoryWorldInfo('none'),
+            ledgerAvailable: false,
+        };
+    }
     assertPreparationCurrent();
     if (automatic && (external?.sources?.some(source => source.coverage?.status === 'failed'
         && !['api-unavailable', 'disabled', 'not-ready', 'empty', 'unavailable', 'syncing'].includes(source.readStatus)) || external?.worldInfo?.books?.some(book => book.error))) {
@@ -2477,9 +2507,13 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     }
 
     const rangeChanged = incrementalUpdate && JSON.stringify(existing?.chatReadRange || null) !== JSON.stringify(snapshot.readRange);
+    // Label only: backfill vs incremental never changes what is read or merged below.
+    const operationKind = archive_coverage.archiveOperationKind({ existing, fullRebuild, rangeChanged });
+    const actionLabel = fullRebuild ? '完全重建' : existing ? archive_coverage.OPERATION_KIND_LABEL[operationKind] : '创建';
+    const coverageWindow = archive_coverage.runCoverageWindow(snapshot, { incrementalUpdate, rangeChanged, previousMessageCount });
     // Broader/revised choices may explicitly add older selected floors. The merge below
     // deduplicates already archived content and never deletes records outside the range.
-    const chatInput = progress || restartImport ? snapshot.messages : incrementalUpdate && !rangeChanged ? snapshot.incrementalMessages : snapshot.messages;
+    const chatInput = sceneOnly ? [] : (progress || restartImport ? snapshot.messages : incrementalUpdate && !rangeChanged ? snapshot.incrementalMessages : snapshot.messages);
     const externalChanged = !!progress || restartImport || !incrementalUpdate || core_text.normalizeText(existing?.externalMemoryFingerprint, 240) !== core_text.normalizeText(external.fingerprint, 240);
     if (!progress && incrementalUpdate && !chatInput.length && !externalChanged) {
         clearMemoryPreflight(context);
@@ -2559,9 +2593,13 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
                     ...(archiveRoster ? { participantRoster: archiveRoster } : {}) };
                 archive_batches.checkedProgress(progress);
             }
-            if (progress.capacityPending?.length || (incrementalUpdate && existing.memories.length >= core_constants.MAX_MEMORY_ITEMS)) {
-                globalThis.toastr?.warning?.('档案已达到 240 条容量边界，旧 Mxxx 与待处理来源保留；本次未请求模型。可导出待入档成果，不必完全重建。', '心迹回廊');
+            if (progress.capacityPending?.length) {
+                globalThis.toastr?.warning?.('已有待入档成果未处理。请先导出；锁上的热位记忆不会被顶掉。', '心迹回廊');
                 return { status: 'blocked' };
+            }
+            if (incrementalUpdate && existing.memories.length >= core_constants.MAX_MEMORY_ITEMS
+                && !archive_capacity.canAdmitToHot(existing.memories)) {
+                globalThis.toastr?.info?.('热位已满且均为锁定。本批新结果会进待入档，可导出；已有相簿/ADV/房间仍可生成。', '心迹回廊');
             }
             const parts = archive_batches.resolveBatchParts(progress, snapshot.messages, external.records);
             chunks = parts.filter(part => part.kind === 'chat').map(part => part.data);
@@ -2586,11 +2624,24 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
                 : snapshot.readRange?.mode === 'recent' ? `最近 ${snapshot.readRange.recent} 楼`
                     : `第 ${snapshot.readRange?.start}–${snapshot.readRange?.end} 楼`;
             if (!ui_overlay.confirmExplicitAction('确认本次读取范围',
-                `${progress ? `本次为第 ${progress.nextBatch + 1}/${progress.batches.length} 批，完成后停止。` : ''}${rangeLabel}；已捕获 ${chatInput.length} 条聊天正文，约 ${chatCharacters.toLocaleString()} 字符。${snapshot.readRange?.includeHidden ? '包含隐藏普通对话' : '不含隐藏对话'}。\n外部摘要独立选择：${externalChunks.length} 个分块，约 ${externalCharacters.toLocaleString()} 字符；角色/用户设定与世界书背景每次请求约 ${contextEnvelope.length.toLocaleString()} 字符。\n分块整理后还有档案概述步骤；字符数不是精确 token 或费用。已有 ${existing?.memories?.length || 0} 条档案记忆保留，不会因缩小范围而删除。`,
+                `${progress ? `本次为第 ${progress.nextBatch + 1}/${progress.batches.length} 批，完成后停止。` : ''}【${archive_coverage.OPERATION_KIND_LABEL[operationKind]}】${rangeLabel}；已捕获 ${chatInput.length} 条聊天正文，约 ${chatCharacters.toLocaleString()} 字符。${snapshot.readRange?.includeHidden ? '包含隐藏普通对话' : '不含隐藏对话'}。\n外部摘要独立选择：${externalChunks.length} 个分块，约 ${externalCharacters.toLocaleString()} 字符；角色/用户设定与世界书背景每次请求约 ${contextEnvelope.length.toLocaleString()} 字符。\n分块整理后还有档案概述步骤；字符数不是精确 token 或费用。已有 ${existing?.memories?.length || 0} 条档案记忆保留，不会因缩小范围而删除。`,
                 { destructive: false })) return { status: 'cancelled' };
             assertPreparationCurrent();
         }
         const settingsIdentity = archiveRecoverySettingsIdentity(context);
+        const draftInputs = legacyDraft ? pinnedInputs : { external, contextEnvelope, inputOwner, identity,
+            batchVersion: archive_batches.IMPORT_BATCH_VERSION,
+            // One snapshot copy per draft row: inputs.taskInputV1 only. The live
+            // progress object keeps its own copy for the archive-bank commit.
+            progress: progressForDraftRow(progress, taskInputV1), pausedProgress,
+            baseMemory: archiveSourceBank(existing),
+            ...(taskInputV1 ? { taskInputV1 } : {}),
+            ...(archiveRoster ? { participantRoster: archiveRoster } : {}) };
+        // Same serialization and byte limit as the draft save itself. Fail before
+        // any storage transaction or model request; existing records stay untouched.
+        if (archive_importRecovery.archiveRecoveryDraftPlanExceedsCapacity(origin, 'import', draftInputs)) {
+            throw archive_importRecovery.archiveDraftCapacityFailure();
+        }
         recoveryTicket = await archive_importRecovery.beginArchiveRecovery({ origin,
             sourceIdentity: JSON.stringify({ fullRebuild, archivePresent: !!existing, baseRevision: existing?.archiveRevision || '',
                 snapshotFingerprint: snapshot.fingerprint, prefixFingerprint: snapshot.prefixFingerprint,
@@ -2599,13 +2650,9 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             sourceFragments: [...chunks.map(chunk => JSON.stringify(chunk)), ...externalChunks.map(chunk => JSON.stringify(chunk))],
             settingsIdentity, fullRebuild, continueApproved: continueRecovery, onProgress: refreshArchiveRecoveryReading,
             draftId, nextIndependentBatch,
-            inputs: legacyDraft ? pinnedInputs : { external, contextEnvelope, inputOwner, identity,
-                batchVersion: archive_batches.IMPORT_BATCH_VERSION, progress, pausedProgress,
-                baseMemory: archiveSourceBank(existing),
-                ...(taskInputV1 ? { taskInputV1 } : {}),
-                ...(archiveRoster ? { participantRoster: archiveRoster } : {}) },
+            inputs: draftInputs,
             assertCurrent: () => core_requestCoordinator.isLogicalGenerationTaskCurrent(logicalTask) && core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)
-                && core_context.currentCharacterRuntimeKey(context) === origin.characterKey
+                && core_context.isCurrentTaskRunOrigin(origin, context)
                 && core_context.comparableChatId(core_context.getChatId(context)) === origin.chatId
                 && (getImportedMemory(context)?.archiveRevision || '') === origin.archiveRevision
                 && (taskInputV1 || archiveRecoverySettingsIdentity(context) === settingsIdentity) });
@@ -2650,7 +2697,11 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         }
 
         core_taskTrace.beginStage(taskTrace, 'merge');
-        const admitted = admitArchiveBatch(incrementalUpdate ? existing.memories : [], fresh);
+        const admitted = admitArchiveBatch(
+            incrementalUpdate ? existing.memories : [],
+            fresh,
+            incrementalUpdate ? existing.coldArchive : [],
+        );
         const memories = admitted.memories;
         capacityPending = admitted.pending;
         if (legacyDraft && !progress) {
@@ -2765,6 +2816,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             coverageMode: incrementalUpdate ? 'incremental-append' : snapshot.coverageMode,
             truncated: incrementalUpdate ? (!!existing?.truncated || (rangeChanged ? snapshot.truncated : snapshot.incrementalTruncated)) : snapshot.truncated,
             memories,
+            coldArchive: Array.isArray(admitted.coldArchive) ? admitted.coldArchive : [],
             ...(archiveRoster ? { [participants.PARTICIPANTS_KEY]: archiveRoster } : {}),
         };
         const unfinishedProfile = profilePending;
@@ -2783,6 +2835,11 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             // next explicit batch. Its original recipe/prefix is retained separately.
             if (archive_batches.hasPendingBatches(staged)) profilePending = false;
         }
+        // Floor coverage ledger: append only intervals whose paid batch is durably
+        // checkpointed in this save; a full rebuild restarts from what it re-read.
+        const coveredRanges = archive_coverage.coveredRangesForSave(fullRebuild ? null : existing, { window: coverageWindow,
+            kind: operationKind, revision: memoryBank.archiveRevision, progress: memoryBank[archive_batches.IMPORT_PROGRESS_KEY] || null });
+        if (coveredRanges.length) memoryBank.coveredRanges = coveredRanges;
         const assertBatchSaveCurrent = () => {
             core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
             if (!core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)) throw new DOMException('Runtime destroyed', 'AbortError');
@@ -2850,7 +2907,9 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             ui_settingsPanel.refreshSettingsMemoryStatus();
         }
         const added = Math.max(0, memories.length - (incrementalUpdate ? existing.memories.length : 0));
-        globalThis.toastr?.success?.(core_text.toastText(`${progress && archive_batches.hasPendingBatches(memoryBank[archive_batches.IMPORT_PROGRESS_KEY]) ? (capacityPending.length ? '本批部分结果入档，余下结果待入档' : '本批已保存，后续批次待点击') : `${actionLabel}完成`}：${memoryBank.archiveName} · 当前 ${memories.length} 条记忆${incrementalUpdate ? ` · 新增 ${added} 条 · 已保留原 ADV EVENT 等缓存` : ''}${!core_context.isCurrentTaskOrigin(origin) ? '（待回到原窗口写入，尚未正式保存）' : ''}`), '心迹回廊');
+        const rollingNotice = archive_capacity.capacityNotice(admitted);
+        globalThis.toastr?.success?.(core_text.toastText(`${progress && archive_batches.hasPendingBatches(memoryBank[archive_batches.IMPORT_PROGRESS_KEY]) ? `【${archive_coverage.OPERATION_KIND_LABEL[operationKind]}】${capacityPending.length ? '本批部分结果入档，余下结果待入档' : '本批已保存，后续批次待点击'}` : `${actionLabel}完成`}：${memoryBank.archiveName} · 当前热位 ${memories.length} 条${memoryBank.coldArchive?.length ? ` · 冷归档 ${memoryBank.coldArchive.length}` : ''}${incrementalUpdate ? ` · 新增 ${added} 条 · 已保留原 ADV EVENT 等缓存` : ''}${!core_context.isCurrentTaskOrigin(origin) ? '（待回到原窗口写入，尚未正式保存）' : ''}`), '心迹回廊');
+        if (rollingNotice) globalThis.toastr?.info?.(rollingNotice, '心迹回廊 · 容量');
         return { status: core_context.isCurrentTaskOrigin(origin) ? 'committed' : 'deferred' };
     } catch (error) {
         const cancelled = isArchiveCancellation(error);
@@ -2879,6 +2938,31 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         if (runtimeState.activeTaskOrigin === origin) runtimeState.activeTaskOrigin = null;
         runtimeState.activeTaskLabel = '';
     }
+}
+
+export async function importSelectedStoryScenes(scenes, options = {}) {
+    const records = archive_storyScenes.scenesToExternalRecords(scenes);
+    if (!records.length) {
+        globalThis.toastr?.info?.('没有可建档的时间场景。', '心迹回廊');
+        return { status: 'noop' };
+    }
+    return importCurrentChatMemory({ ...options, sceneRecords: records, parkPriorDraft: true });
+}
+
+export async function patchImportedMemoryFields(id, patch = {}) {
+    const context = core_context.currentCharacterGuard();
+    const memory = getImportedMemory(context);
+    if (!memory) throw core_text.safeUserError('当前没有可改的档案记忆。', 'RMT_ARCHIVE_MISSING');
+    const item = archive_capacity.findMemoryById(memory, id);
+    if (!item) throw core_text.safeUserError('没有找到这条记忆。', 'RMT_ARCHIVE_MISSING');
+    if (Object.hasOwn(patch, 'locked')) item.locked = patch.locked === true;
+    if (Object.hasOwn(patch, 'date')) item.date = core_text.normalizeText(patch.date, 100);
+    memory.updatedAt = Date.now();
+    await core_cache.saveImportedMemory(context, memory, memory.chatId, {
+        preserveDerivedCache: true,
+        expectedPreviousArchiveState: { present: true, revision: memory.archiveRevision },
+    });
+    return item;
 }
 
 export async function importCurrentChatMemory(options = {}) {

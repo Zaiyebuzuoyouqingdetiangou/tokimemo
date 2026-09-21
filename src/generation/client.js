@@ -86,22 +86,29 @@ function snapshotGenerationContent(value) {
     visit(snapshot);
     return snapshot;
 }
+// Host cards can carry executable or proxied fields that structuredClone rejects.
+// Degrade only the offending field to its JSON-safe representation instead of
+// failing the whole capture; a field that cannot be copied either way makes the
+// source snapshot unverifiable, so generation stops with a coded error and never
+// substitutes unchecked current data.
+function cloneContentField(value) {
+    try { return structuredClone(value); }
+    catch {
+        try { return JSON.parse(JSON.stringify(value)); }
+        catch {
+            throw core_text.safeUserError('角色卡资料无法完整快照，本次没有发起模型请求；旧内容与草稿保留。', 'RMT_RECOVERY_SOURCE_SNAPSHOT_MISSING');
+        }
+    }
+}
 function captureGenerationContent(context, bank) {
     const fields = {};
     for (const key of ['characterId', 'name1', 'name2', 'userAvatar', 'personaAvatar', 'user_avatar', 'maxContext']) {
-        if (context[key] !== undefined) fields[key] = structuredClone(context[key]);
+        if (context[key] !== undefined) fields[key] = cloneContentField(context[key]);
     }
     if (Array.isArray(context.characters)) {
         fields.characters = Array.from(context.characters, (character, index) => {
             if (!character) return null;
-            if (String(index) === String(context.characterId)) return structuredClone(character);
-            // Other cards are used only for name/avatar and duplicate identity
-            // lookup. Preserve exactly the existing descriptor inputs, without
-            // copying their unrelated world books, extensions or other payloads.
             const data = character.data && typeof character.data === 'object' ? character.data : character;
-            // Keep one following non-space character when truncating: the
-            // descriptor trims before slicing, so a boundary space must survive
-            // its later normalization too. These are identity inputs only.
             const identityInput = (value, length) => {
                 const text = core_text.normalizeText(value, Number.MAX_SAFE_INTEGER);
                 return text.length > length ? text.slice(0, length) + text.slice(length).trimStart().slice(0, 1) : text;
@@ -110,7 +117,7 @@ function captureGenerationContent(context, bank) {
                 ['description', 'personality', 'scenario', 'first_mes', 'mes_example']
                     .map(key => [key, identityInput(data[key] || character[key], 5000)])) };
         });
-    } else if (context.characters !== undefined) fields.characters = structuredClone(context.characters);
+    } else if (context.characters !== undefined) fields.characters = cloneContentField(context.characters);
     // Frozen historical targets intentionally keep only their original character
     // index. JSON already represents skipped array positions as null; materialize
     // that representation in the internal snapshot without changing host data.
@@ -119,14 +126,78 @@ function captureGenerationContent(context, bank) {
     }
     fields.powerUserSettings = { persona_description: context.powerUserSettings?.persona_description || '' };
     let cardFields = {};
-    try { cardFields = structuredClone(context.getCharacterCardFields?.() || {}); } catch {}
-    // Archive import checkpoints retain their own source material in the original
-    // bank. Derived content needs the archive facts, not another copy of that log.
-    const memoryBank = structuredClone(bank);
-    delete memoryBank.archiveImportProgress;
-    delete memoryBank.archiveImportPaused;
+    try {
+        const rawFields = context.getCharacterCardFields?.() || {};
+        cardFields = Object.fromEntries(['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example', 'system', 'system_prompt', 'post_history_instructions']
+            .filter(key => rawFields[key] !== undefined)
+            .map(key => [key, core_text.normalizeText(rawFields[key], 5000)]));
+    } catch {}
+    const sourceBank = bank && typeof bank === 'object' ? bank : {};
+    const memoryBank = {
+        version: sourceBank.version,
+        chatId: sourceBank.chatId,
+        characterName: sourceBank.characterName,
+        userName: sourceBank.userName,
+        archiveName: sourceBank.archiveName,
+        archiveRevision: sourceBank.archiveRevision,
+        archiveSummary: core_text.normalizeText(sourceBank.archiveSummary, 2000),
+        archiveKeywords: Array.isArray(sourceBank.archiveKeywords) ? sourceBank.archiveKeywords.slice(0, 16) : [],
+        usedMessageCount: sourceBank.usedMessageCount,
+        usedCharacterCount: sourceBank.usedCharacterCount,
+        sourceMessageCount: sourceBank.sourceMessageCount,
+        sourceFingerprint: sourceBank.sourceFingerprint,
+        memories: (Array.isArray(sourceBank.memories) ? sourceBank.memories : []).map(item => ({
+            id: item?.id,
+            title: core_text.normalizeText(item?.title, 100),
+            date: core_text.normalizeText(item?.date, 100),
+            locked: item?.locked === true,
+            anchors: core_text.cleanArray(item?.anchors, 8, 120),
+            participants: core_text.cleanArray(item?.participants, 8, 80),
+            messageStart: item?.messageStart,
+            messageEnd: item?.messageEnd,
+            sourceKind: core_text.normalizeText(item?.sourceKind, 80),
+            externalSourceIds: core_text.cleanArray(item?.externalSourceIds, 8, 100),
+            summary: core_text.normalizeText(item?.summary, 700),
+        })),
+        coldArchive: (Array.isArray(sourceBank.coldArchive) ? sourceBank.coldArchive : []).map(item => ({
+            id: item?.id, title: core_text.normalizeText(item?.title, 100), date: core_text.normalizeText(item?.date, 100),
+            locked: item?.locked === true, summary: core_text.normalizeText(item?.summary, 200),
+        })),
+    };
     return { version: 1, fields, cardFields, memoryBank,
         contentSettings: generationContentSettings(core_settings.getPluginSettings(context)) };
+}
+// A full archive at the legitimate item cap can serialize beyond the recovery
+// snapshot budget, which would otherwise block every derived task before any
+// request. Slim only what no snapshot consumer can observe beyond the existing
+// prompt contract: prompts are built from the live bank through memoryPayload
+// (summary 700 chars), while recovery validators key on id/title/anchors and
+// bank-level fields — all kept whole. The cap itself is unchanged: if even the
+// distilled form exceeds it, the existing too-large failure still fires.
+// Snapshots already within budget stay byte-identical.
+export function fitGenerationContentSnapshot(snapshot) {
+    const fits = value => {
+        try { return JSON.stringify(value).length <= generation_recovery.GENERATION_RECOVERY_LIMITS.requestChars; }
+        catch { return false; }
+    };
+    if (fits(snapshot)) return snapshot;
+    const fullBank = snapshot?.memoryBank;
+    if (!fullBank || typeof fullBank !== 'object' || !Array.isArray(fullBank.memories)) return snapshot;
+    // Prefer the gentlest trim that fits: 1200 keeps the largest reader window
+    // any snapshot consumer uses; 700 matches the existing memoryPayload prompt
+    // contract exactly. Both keep id/title/anchors/participants and every
+    // bank-level field byte-identical, so evidence validation is unchanged.
+    for (const summaryLimit of [1200, 700]) {
+        const distilled = { ...snapshot, memoryBank: structuredClone(fullBank), memoryBankDistilled: true,
+            memoryBankDigest: core_context.stableArchiveHash(JSON.stringify(fullBank)), memoryBankSummaryChars: summaryLimit };
+        for (const memory of distilled.memoryBank.memories) {
+            if (memory && typeof memory === 'object' && typeof memory.summary === 'string' && memory.summary.length > summaryLimit) {
+                memory.summary = core_text.normalizeText(memory.summary, summaryLimit);
+            }
+        }
+        if (summaryLimit === 700 || fits(distilled)) return distilled;
+    }
+    return snapshot;
 }
 export function generationContentContext(origin, context) {
     const snapshot = generation_recovery.generationContentSnapshotForOrigin(origin);
@@ -426,9 +497,19 @@ function countPromptTokens(context, prompt, signal, timeoutMs) {
 export async function assertPromptBudget(context, prompt, { skipTokenCount = false, signal = null,
     tokenCountTimeoutMs = TOKEN_COUNT_TIMEOUT_MS, taskTrace = null } = {}) {
     if (signal?.aborted) throw core_requestCoordinator.createGenerationAbortError();
+    let budgetTokens = core_constants.MAX_GENERATION_INPUT_TOKENS;
+    try { budgetTokens = core_settings.getPluginSettings(context).inputBudgetTokens; }
+    catch { /* fixtures without a settings host keep the default */ }
+    budgetTokens = output_budget.normalizeInputBudgetTokens(budgetTokens);
+    const charCap = output_budget.generationInputCharCap(budgetTokens);
     core_taskTrace.recordInput(taskTrace, prompt.length);
-    if (prompt.length > core_constants.MAX_GENERATION_INPUT_CHARS) {
-        throw core_text.safeUserError(`本次心迹回廊输入过大（${prompt.length.toLocaleString()} 字符），已在发送前拦截。请更新/精简档案或减少世界书内容。`, 'RMT_INPUT_BUDGET');
+    const budgetError = (message, tokens = null) => {
+        const error = core_text.safeUserError(message, 'RMT_INPUT_BUDGET');
+        error.inputBudget = { chars: prompt.length, tokens, budgetTokens, charCap };
+        return error;
+    };
+    if (prompt.length > charCap) {
+        throw budgetError(`本次输入 ${prompt.length.toLocaleString()} 字符，预算 ${budgetTokens.toLocaleString()} tokens，字符顶 ${charCap.toLocaleString()}。已在发送前拦截。打开设置 → 输入预算。`);
     }
     if (!skipTokenCount && typeof context.getTokenCountAsync === 'function') {
         core_taskTrace.beginStage(taskTrace, 'token-count');
@@ -440,8 +521,8 @@ export async function assertPromptBudget(context, prompt, { skipTokenCount = fal
                 throw core_text.safeUserError('本地计数暂不可用。', 'RMT_TOKEN_COUNT_UNAVAILABLE');
             }
             core_taskTrace.recordInput(taskTrace, prompt.length, tokens);
-            if (Number.isFinite(tokens) && tokens > core_constants.MAX_GENERATION_INPUT_TOKENS) {
-                throw core_text.safeUserError(`本次心迹回廊输入约 ${Math.round(tokens).toLocaleString()} tokens，超过 ${core_constants.MAX_GENERATION_INPUT_TOKENS.toLocaleString()} 的安全预算，已在发送前拦截。`, 'RMT_INPUT_BUDGET');
+            if (Number.isFinite(tokens) && tokens > budgetTokens) {
+                throw budgetError(`本次输入 ${prompt.length.toLocaleString()} 字符 / ${Math.round(tokens).toLocaleString()} tokens，预算 ${budgetTokens.toLocaleString()}。已在发送前拦截。打开设置 → 输入预算。`, Math.round(tokens));
             }
             core_taskTrace.markStage(taskTrace, 'token-count');
         } catch (error) {
@@ -901,8 +982,8 @@ export async function beginModeRecovery(mode, context, bank, origin, options = {
         partialSeed = { snapshot, frozenInputs: structuredClone(parent.frozenInputs || {}) };
     }
     const contentSnapshot = generation_recovery.readGenerationContentSnapshot(existing)
-        || (!existing ? snapshotGenerationContent({ ...(partialSeed?.snapshot || captureGenerationContent(context, bank)),
-            ...(options.contentInputs ? { contentInputs: { ...(partialSeed?.snapshot?.contentInputs || {}), ...options.contentInputs } } : {}) }) : null);
+        || (!existing ? fitGenerationContentSnapshot(snapshotGenerationContent({ ...(partialSeed?.snapshot || captureGenerationContent(context, bank)),
+            ...(options.contentInputs ? { contentInputs: { ...(partialSeed?.snapshot?.contentInputs || {}), ...options.contentInputs } } : {}) })) : null);
     const sourceValues = JSON.stringify(recovery_source.recoverySourceValues(context));
     await recovery_source.assertRecoverySourcePolicy(existing, context, origin);
     const sourcePolicy = await recovery_source.recoverySourcePolicy(context);
@@ -1044,7 +1125,14 @@ export async function exportSavedGeneration(mode, options = {}) {
     const journal = core_cache.loadGenerationRecovery(mode, context, snapshot?.cache,
         { ...(options.draftId ? { draftId: options.draftId } : {}), ...(options.pageId ? { pageId: options.pageId } : {}) });
     if (!journal) throw generation_recovery.generationRecoveryMismatch('record');
-    return generation_recovery.exportGenerationRecovery(journal);
+    const exported = generation_recovery.exportGenerationRecovery(journal);
+    // Replies held in-page because the journal's existing total capacity rejected
+    // them leave only through this explicit user export, as inert data. The
+    // loaded record's own validated identity is the hold key; the live origin
+    // above may legitimately omit the canonical archive-target entry ID.
+    const held = generation_recovery.generationRecoveryHeldReplies(journal.identity, journal.identity?.mode || mode);
+    return held.length ? { ...exported,
+        unsavedReplies: held.map(entry => ({ slot: entry.slot, state: 'received-unsaved', rawJson: entry.rawJson })) } : exported;
 }
 
 export async function discardSavedGeneration(mode, options = {}) {
@@ -1064,6 +1152,7 @@ export async function discardSavedGeneration(mode, options = {}) {
     const origin = { ...core_context.captureTaskOrigin(context, bank.archiveRevision), archiveTargetEntryId: opts.archiveTarget?.entryId || '' };
     origin.generationRecoveryDraftId = retained.draftId;
     await core_cache.saveGenerationRecovery(context, bank, mode, null, origin, { ...opts, draftId: retained.draftId, discardDraft: true });
+    generation_recovery.discardGenerationRecoveryHeldReplies(retained.identity, retained.identity?.mode || mode);
     if (snapshot) await ui_overlay.refreshArchiveTargetSnapshotView(snapshot.entryId);
     else ui_overlay.showChooser();
 }
@@ -1562,7 +1651,8 @@ async function generateModeOperation(mode, options = {}) {
         }
         if (!committed && !archiveTarget) {
             core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
-            core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [mode]: session } });
+            const deferredDurable = core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [mode]: session } });
+            core_requestCoordinator.notifyDeferredCommitNotDurable(deferredDurable);
         }
 
         if (committed && recoveryHandle) await core_cache.saveGenerationRecovery(context, memoryBank, mode, null, origin, { archiveTarget, stillCurrent: archiveTargetStillCurrent });
@@ -1639,16 +1729,18 @@ async function generateModeOperation(mode, options = {}) {
                 core_text.toastText(`${archiveTarget.characterName} · ${archiveTarget.archiveName} · ${core_constants.MODE_LABEL[mode]}：${safeError}`),
                 '心迹回廊 · 档案生成失败',
             );
+            error.notified = true;
             return null;
         }
         if (background || document.getElementById(core_constants.OVERLAY_ID)?.hidden || runtimeState.activeMode !== mode
             || (scopedReaderMode && !timeReaderVisible())) {
             const targetPrefix = archiveTarget ? `${archiveTarget.characterName} · ${archiveTarget.archiveName} · ` : '';
             globalThis.toastr?.error?.(core_text.toastText(`${targetPrefix}${safeError}`), `心迹回廊 · ${core_constants.MODE_LABEL[mode]}生成失败`);
+            error.notified = true;
             return null;
         }
         ui_overlay.showInlineError(safeError);
-        globalThis.toastr?.error?.(core_text.toastText(safeError), '心迹回廊');
+        error.notified = true;
         return null;
     } finally {
         core_taskTrace.endTaskTrace(taskTrace, 'noop');

@@ -23,7 +23,7 @@ function taskOptions(mode, context, origin, taskKey, maxTokens = 6000, temperatu
 }
 
 const CONTENT_TARGETS = Object.freeze({
-    'album-entry': ['album', 'entries'], 'adv-event': ['adv', 'events'], 'adv-text': ['adv', 'events'],
+    'album-entry': ['album', 'entries'], 'album-category': ['album', 'entries'], 'adv-event': ['adv', 'events'], 'adv-text': ['adv', 'events'],
     'phone-app': ['phone', 'apps'], 'phone-entry': ['phone', 'apps'],
     'ending-route': ['ending', 'endings'], 'ending-confession': ['ending', 'confessionReplays'],
     'heart-voice': ['heart', 'voiceDramas'], 'heart-scenario': ['heart', 'scenarioDramas'],
@@ -111,7 +111,30 @@ TRUSTED_EVENT_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
         );
         comments = rawComments.get(item.id) || [];
     }
-    return { ...candidate, id: item.id, sourceMemoryIds: [...item.sourceMemoryIds], sourceMemoryAnchor: item.sourceMemoryAnchor, comments, relationshipSnapshot, cgImage: null };
+    // A manual category and an already drawn CG image are user results; a text
+    // regeneration must not destroy either.
+    return { ...candidate, id: item.id, sourceMemoryIds: [...item.sourceMemoryIds], sourceMemoryAnchor: item.sourceMemoryAnchor, comments, relationshipSnapshot,
+        category: item.categoryManual === true ? item.category : candidate.category,
+        ...(item.categoryManual === true ? { categoryManual: true } : {}),
+        cgImage: item.cgImage || null };
+}
+
+// Lightweight category re-judgement for legacy entries: the model only returns a
+// category; prose, comments and the CG image are never sent for rewrite nor touched.
+async function regenerateAlbumCategory(session, item, context, memoryBank, origin, taskKey) {
+    const evidence = core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 12);
+    const prompt = `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 单项重新判断分类')}
+只重新判断下面这张相簿卡的分类。不得改动标题、正文、共同回忆或图片，不要输出实图 URL。
+CURRENT_ITEM_JSON:\n${JSON.stringify({ id: item.id, title: item.title, date: item.date, desc: item.desc, category: item.category, unlocked: !!item.unlocked, sourceMemoryAnchor: item.sourceMemoryAnchor }, null, 2)}
+TRUSTED_EVENT_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
+category 只能是“日常”“约会”“结局”之一；无法判断就返回“待分类”。
+严格输出：{"category":"..."}
+只输出 JSON。`;
+    const category = await generation_client.requestValidatedSegment(
+        prompt, `重新判断「${item.title}」分类…`, taskOptions(core_constants.MODE.ALBUM, context, origin, `${taskKey}:category`, 800, 0.2),
+        raw => modes_album.normalizeAlbumCategory(raw?.category),
+    );
+    return { ...item, category };
 }
 
 async function regenerateAdvEvent(session, item, context, memoryBank, origin, taskKey) {
@@ -481,6 +504,10 @@ export async function regenerateManagedTarget(session, type, id, parentId, optio
         const index = updated.entries?.findIndex(item => item.id === id) ?? -1;
         if (index < 0) throw new Error('找不到这张相簿卡。');
         updated.entries[index] = await regenerateAlbumEntry(updated, updated.entries[index], context, memoryBank, origin, taskKey);
+    } else if (type === 'album-category') {
+        const index = updated.entries?.findIndex(item => item.id === id) ?? -1;
+        if (index < 0) throw new Error('找不到这张相簿卡。');
+        updated.entries[index] = await regenerateAlbumCategory(updated, updated.entries[index], context, memoryBank, origin, taskKey);
     } else if (type === 'adv-event') {
         const index = updated.events?.findIndex(item => item.id === id) ?? -1;
         if (index < 0) throw new Error('找不到这个 ADV EVENT。');

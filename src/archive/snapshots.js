@@ -21,7 +21,7 @@ export function memoryStateLabel(state, autoSync = false) {
     } else if (state.sourceChanged) {
         pending = '当前聊天内容与上次记录点有修改；编辑不会增加楼层，档案保留已归档版本。';
     }
-    return `已收录 ${memory.memories.length} 条记忆，记录到 ${memory.sourceMessageCount} 条聊天消息${suffix}。${pending}`;
+    return `已收录热位 ${memory.memories.length}/${core_constants.MAX_MEMORY_ITEMS} 条记忆${memory.coldArchive?.length ? `，冷归档 ${memory.coldArchive.length}` : ''}，记录到 ${memory.sourceMessageCount} 条聊天消息${suffix}。${pending}`;
 }
 
 export function currentCharacterAvatar(context = core_context.currentCharacterGuard()) {

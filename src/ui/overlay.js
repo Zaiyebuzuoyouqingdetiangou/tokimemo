@@ -634,6 +634,33 @@ export function readableModePortals(portals, options = {}) {
     return portals.map(portal => ({ ...portal, session: core_cache.loadSession(portal.mode, { ...options, includePartial: true }) || portal.session }));
 }
 
+function memoryLockPanelHtml(memory, { readOnly = false } = {}) {
+    const hot = Array.isArray(memory?.memories) ? memory.memories : [];
+    if (!hot.length) return '';
+    const cold = Array.isArray(memory?.coldArchive) ? memory.coldArchive.length : 0;
+    const rows = hot.map(item => `<div class="rmt-memory-lock-row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0">
+      <button type="button" class="rmt-btn" data-rmt-memory-lock="${core_text.esc(item.id)}" ${readOnly ? 'disabled' : ''} aria-pressed="${item.locked === true}">${item.locked === true ? '已锁定' : '锁定'}</button>
+      <b>${core_text.esc(item.id)}</b>
+      <span>${core_text.esc(item.title || '')}</span>
+      <input type="text" data-rmt-memory-date="${core_text.esc(item.id)}" value="${core_text.esc(item.date || '')}" ${readOnly ? 'disabled' : ''} placeholder="公历 YYYY/MM/DD 或历年" style="min-width:160px;flex:1">
+    </div>`).join('');
+    return `<details class="rmt-memory-lock-panel"><summary>热位记忆 ${hot.length}/${core_constants.MAX_MEMORY_ITEMS}${cold ? ` · 冷归档 ${cold}` : ''}</summary><div style="max-height:240px;overflow:auto">${rows}</div></details>`;
+}
+
+function refreshAfterMemoryPatch() {
+    if (runtimeState.activeMode === core_constants.MODE.ALBUM) return ui_albumView.renderAlbum();
+    if (runtimeState.archiveViewLevel === 'chooser' && !runtimeState.activeMode) return showChooser();
+}
+
+async function applyMemoryPatch(id, patch) {
+    try {
+        await archive_repository.patchImportedMemoryFields(id, patch);
+        refreshAfterMemoryPatch();
+    } catch (error) {
+        globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+    }
+}
+
 export function showChooser({ section = null } = {}) {
     const priorTab = ui_workspaceState.workspace.tab;
     ui_workspaceState.leaveWorkspaceReader();
@@ -781,6 +808,7 @@ export function showChooser({ section = null } = {}) {
             ${keywords.length ? `<div class="rmt-archive-keywords">${keywords.map(word => `<span>${core_text.esc(word)}</span>`).join('')}</div>` : ''}
             <div class="rmt-memory-status ${pendingClass}">${core_text.esc(archive_snapshots.memoryStateLabel(state, settings.autoUpdates?.archive?.enabled))}</div>
             ${ready ? `<div class="rmt-archive-meta">上次归档：${core_text.esc(formatArchiveTime(memory.updatedAt || memory.createdAt))}</div>` : ''}
+            ${ready ? memoryLockPanelHtml(memory) : ''}
           </div>
           <div class="rmt-current-archive-actions">
             <button type="button" class="rmt-btn" data-rmt-archive-read-drafts>读取已保存草稿（不生成）</button>
@@ -1401,6 +1429,18 @@ async function regenerateManagedTarget(type, id, parentId = '') {
     return ui_contentManager.runContentRegeneration(type, id, parentId, { confirmed: true });
 }
 
+async function recategorizeManagedTarget(id, parentId = '') {
+    if (!archive_library.requireWritableArchiveAction()) return;
+    const record = managedTargetRecord('album-category', id, parentId);
+    if (!record || record.canRegenerate === false) return;
+    if (!confirmExplicitActionTwice(
+        `重新判断「${record.label}」？`,
+        '只重新判断分类并写回这一项；标题、正文、共同回忆和已生成图片都保留。模型成功返回并通过校验后才保存。',
+        { destructive: false },
+    )) return;
+    return ui_contentManager.runContentRegeneration('album-category', id, parentId, { confirmed: true });
+}
+
 async function deleteManagedCategory() {
     if (!runtimeState.activeMode || !archive_library.requireWritableArchiveAction()) return;
     const mode = runtimeState.activeMode;
@@ -1448,6 +1488,11 @@ async function regenerateManagedCategory() {
 }
 
 export function handleOverlayClick(event) {
+    const lockBtn = event.target.closest?.('[data-rmt-memory-lock]');
+    if (lockBtn) {
+        const pressed = lockBtn.getAttribute('aria-pressed') === 'true';
+        return void applyMemoryPatch(lockBtn.dataset.rmtMemoryLock, { locked: !pressed });
+    }
     if (workspace_ui.handleWorkspaceClick(event) || language_view.handleLanguageClick(event)) return;
     if (event.target.closest?.('[data-rmt-edit-partial]')) return ui_contentManager.renderPartialContentEditor();
     const contentDraftOpen = event.target.closest?.('[data-rmt-content-draft-open]');
@@ -1570,7 +1615,7 @@ export function handleOverlayClick(event) {
                     const targetOptions = archive_library.archiveTargetGenerationOptions(snapshot);
                     await generation_client.generateMode(mode, { background, ...targetOptions });
                 } catch (error) {
-                    globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+                    if (!error?.notified) globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
                 }
             })();
             return;
@@ -1748,7 +1793,9 @@ export function handleOverlayClick(event) {
         if (!archive_library.requireWritableArchiveAction()) return;
         const mode = action === 'phone-fill-missing' ? core_constants.MODE.PHONE : core_constants.MODE.ROOM;
         const extra = runtimeState.activeArchiveSnapshot ? archive_library.archiveTargetGenerationOptions(runtimeState.activeArchiveSnapshot) : {};
-        return void generation_client.generateMode(mode, { ...extra, background: false, fillMissing: action === 'phone-fill-missing', visualOnly: action === 'room-refresh-figure' }).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+        return void generation_client.generateMode(mode, { ...extra, background: false, fillMissing: action === 'phone-fill-missing', visualOnly: action === 'room-refresh-figure' }).catch(error => {
+            if (!error?.notified) globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+        });
     }
     if (action === 'memory-worldinfo-picker') return void archive_repository.showMemoryWorldInfoPicker();
     if (action === 'memory-worldinfo-close') {
@@ -1832,6 +1879,7 @@ export function handleOverlayClick(event) {
     if (action === 'manage-regenerate-category') return void regenerateManagedCategory();
     if (action === 'manage-delete-category') return void deleteManagedCategory();
     if (action === 'manage-regenerate-target') return void regenerateManagedTarget(actionEl.dataset.rmtManageType, actionEl.dataset.rmtManageId, actionEl.dataset.rmtManageParent);
+    if (action === 'manage-recategorize-target') return void recategorizeManagedTarget(actionEl.dataset.rmtManageId, actionEl.dataset.rmtManageParent);
     if (action === 'manage-delete-target') return void deleteManagedTarget(actionEl.dataset.rmtManageType, actionEl.dataset.rmtManageId, actionEl.dataset.rmtManageParent);
     if (action === 'rebuild-archive-index') return void archive_library.rebuildArchiveIndexFromExisting();
     if (action === 'import-memory') return requestCurrentArchiveImport();
@@ -1884,6 +1932,13 @@ export function handleOverlayClick(event) {
         if (runtimeState.activeSession?.kind === core_constants.MODE.ALBUM) {
             runtimeState.activeSession.sharedMemory = false;
             ui_albumView.renderAlbum();
+        }
+        return;
+    }
+    if (action === 'shared-prev') {
+        if (runtimeState.activeSession?.kind === core_constants.MODE.ALBUM) {
+            runtimeState.activeSession.dialogueIndex = Math.max(0, runtimeState.activeSession.dialogueIndex - 1);
+            ui_albumView.renderSharedMemory();
         }
         return;
     }
@@ -1957,6 +2012,8 @@ function refreshMemoryWorldInfoBookControls(context, world, section, expectedSco
 }
 
 export async function handleOverlayChange(event) {
+    const dateInput = event.target.closest?.('[data-rmt-memory-date]');
+    if (dateInput) return void applyMemoryPatch(dateInput.dataset.rmtMemoryDate, { date: dateInput.value });
     if (cg_format_ui.handleCgFormatChange(event)) return;
     if (workspace_ui.handleWorkspaceChange(event) || language_view.handleLanguageChange(event)) return;
     const advSelectEl = event.target.closest?.('[data-rmt-adv-select]');

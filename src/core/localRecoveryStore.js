@@ -7,10 +7,16 @@ export function setLocalRecoveryBackendForTests(value) { testBackend = value; }
 export function localRecoveryStorageAvailable() {
     try { return !!testBackend || typeof globalThis.indexedDB?.open === 'function'; } catch { return false; }
 }
-function failure(code = 'RMT_LOCAL_STORAGE') {
+function failure(code = 'RMT_LOCAL_STORAGE', quota = false) {
     const error = new Error(code === 'RMT_LOCAL_CAS' ? '本机保存版本已变化；原记录保留，请重新打开后继续。' : '浏览器未能保存本机记录；原记录保留，请勿刷新未保存的页面。');
-    Object.assign(error, { code, safeToDisplay: true, safeUserMessage: error.message, retryable: false, retryableJson: false });
+    // quota is a content-free boolean marker so callers can name the remedy
+    // (clearing site data) without exposing raw browser error text.
+    Object.assign(error, { code, safeToDisplay: true, safeUserMessage: error.message, retryable: false, retryableJson: false,
+        ...(quota ? { quota: true } : {}) });
     return error;
+}
+function quotaFailureOf(tx, code) {
+    return failure(code, tx?.error?.name === 'QuotaExceededError');
 }
 async function database() {
     return new Promise((resolve, reject) => {
@@ -67,7 +73,7 @@ export async function compareLocalRecoveryRecord(key, expectedRevision, payload)
                 store.put({ key, revision: expectedRevision + 1, payload });
             };
             tx.oncomplete = () => { clearTimeout(timer); resolve(expectedRevision + 1); };
-            tx.onabort = tx.onerror = () => { clearTimeout(timer); reject(failure(mismatch ? 'RMT_LOCAL_CAS' : 'RMT_LOCAL_STORAGE')); };
+            tx.onabort = tx.onerror = () => { clearTimeout(timer); reject(quotaFailureOf(tx, mismatch ? 'RMT_LOCAL_CAS' : 'RMT_LOCAL_STORAGE')); };
         });
     } finally { db.close(); }
 }
