@@ -16,7 +16,7 @@ import * as generation_recovery from '../generation/recovery.js';
 import * as content_regeneration from '../generation/contentRegeneration.js';
 
 const MANAGEABLE_TARGET_TYPES = new Set([
-    'album-entry', 'album-image',
+    'album-entry', 'album-image', 'album-category',
     'adv-event', 'adv-text', 'adv-image',
     'room-life',
     'phone-app', 'phone-entry',
@@ -167,6 +167,7 @@ export function managementTargetsForSession(session) {
     if (mode === core_constants.MODE.ALBUM) {
         return (session.entries || []).flatMap(item => [
             target('album-entry', item.id, item.title, `${item.date || ''} · ${item.category || ''}`),
+            target('album-category', item.id, `${item.title} · 分类`, `只重新判断分类（当前：${item.category || '待分类'}${item.categoryManual === true ? '，手动指定' : ''}）；标题、正文、共同回忆和已生成图片保留。`),
             ...(item.cgImage ? [target('album-image', item.id, `${item.title} · CG 图片`, '只处理这张实图，不删除相簿条目。')] : []),
         ]);
     }
@@ -233,7 +234,7 @@ function managedProgressOverride(type, id, parentId, before, after, pageId) {
     // Paths come from the same fixed UI target types as the existing manager.
     // Generated data may supply field values, never a path or a destination ID.
     const fields = {
-        'album-entry': 'entries', 'adv-event': 'events', 'adv-text': 'events',
+        'album-entry': 'entries', 'album-category': 'entries', 'adv-event': 'events', 'adv-text': 'events',
         'phone-app': 'apps', 'ending-route': 'endings', 'ending-confession': 'confessionReplays',
         'heart-voice': 'voiceDramas', 'heart-scenario': 'scenarioDramas',
         'heart-strip': 'dailyStrips', 'heart-firefly': 'fireflyVoices',
@@ -513,9 +514,9 @@ export function renderContentManager() {
     const scope = ui_workspaceState.workspaceManagementScope(session, managementTargetsForSession(session));
     const targets = scope.targets;
     const title = scope.title || core_constants.MODE_LABEL[mode] || mode;
-    const rows = targets.map(item => `<article class="rmt-manage-row">
+    const rows = targets.filter(item => item.type !== 'album-category').map(item => `<article class="rmt-manage-row">
       <div class="rmt-manage-copy"><b>${core_text.esc(item.label)}</b>${item.detail ? `<small>${core_text.esc(item.detail)}</small>` : ''}</div>
-      <div class="rmt-manage-actions">${actionButton('manage-regenerate-target', item, '重新生成')}${actionButton('manage-delete-target', item, '删除', true)}</div>
+      <div class="rmt-manage-actions">${actionButton('manage-regenerate-target', item, '重新生成')}${item.type === 'album-entry' ? actionButton('manage-recategorize-target', item, '重判分类') : ''}${actionButton('manage-delete-target', item, '删除', true)}</div>
     </article>`).join('');
     ui_overlay.topTitle(`${title} · 管理`);
     const dependentNote = mode === core_constants.MODE.ROOM

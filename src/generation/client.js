@@ -139,8 +139,41 @@ function captureGenerationContent(context, bank) {
     const memoryBank = structuredClone(bank);
     delete memoryBank.archiveImportProgress;
     delete memoryBank.archiveImportPaused;
+    delete memoryBank.coveredRanges;
     return { version: 1, fields, cardFields, memoryBank,
         contentSettings: generationContentSettings(core_settings.getPluginSettings(context)) };
+}
+// A full archive at the legitimate item cap can serialize beyond the recovery
+// snapshot budget, which would otherwise block every derived task before any
+// request. Slim only what no snapshot consumer can observe beyond the existing
+// prompt contract: prompts are built from the live bank through memoryPayload
+// (summary 700 chars), while recovery validators key on id/title/anchors and
+// bank-level fields — all kept whole. The cap itself is unchanged: if even the
+// distilled form exceeds it, the existing too-large failure still fires.
+// Snapshots already within budget stay byte-identical.
+export function fitGenerationContentSnapshot(snapshot) {
+    const fits = value => {
+        try { return JSON.stringify(value).length <= generation_recovery.GENERATION_RECOVERY_LIMITS.requestChars; }
+        catch { return false; }
+    };
+    if (fits(snapshot)) return snapshot;
+    const fullBank = snapshot?.memoryBank;
+    if (!fullBank || typeof fullBank !== 'object' || !Array.isArray(fullBank.memories)) return snapshot;
+    // Prefer the gentlest trim that fits: 1200 keeps the largest reader window
+    // any snapshot consumer uses; 700 matches the existing memoryPayload prompt
+    // contract exactly. Both keep id/title/anchors/participants and every
+    // bank-level field byte-identical, so evidence validation is unchanged.
+    for (const summaryLimit of [1200, 700]) {
+        const distilled = { ...snapshot, memoryBank: structuredClone(fullBank), memoryBankDistilled: true,
+            memoryBankDigest: core_context.stableArchiveHash(JSON.stringify(fullBank)), memoryBankSummaryChars: summaryLimit };
+        for (const memory of distilled.memoryBank.memories) {
+            if (memory && typeof memory === 'object' && typeof memory.summary === 'string' && memory.summary.length > summaryLimit) {
+                memory.summary = core_text.normalizeText(memory.summary, summaryLimit);
+            }
+        }
+        if (summaryLimit === 700 || fits(distilled)) return distilled;
+    }
+    return snapshot;
 }
 export function generationContentContext(origin, context) {
     const snapshot = generation_recovery.generationContentSnapshotForOrigin(origin);
@@ -919,8 +952,8 @@ export async function beginModeRecovery(mode, context, bank, origin, options = {
         partialSeed = { snapshot, frozenInputs: structuredClone(parent.frozenInputs || {}) };
     }
     const contentSnapshot = generation_recovery.readGenerationContentSnapshot(existing)
-        || (!existing ? snapshotGenerationContent({ ...(partialSeed?.snapshot || captureGenerationContent(context, bank)),
-            ...(options.contentInputs ? { contentInputs: { ...(partialSeed?.snapshot?.contentInputs || {}), ...options.contentInputs } } : {}) }) : null);
+        || (!existing ? fitGenerationContentSnapshot(snapshotGenerationContent({ ...(partialSeed?.snapshot || captureGenerationContent(context, bank)),
+            ...(options.contentInputs ? { contentInputs: { ...(partialSeed?.snapshot?.contentInputs || {}), ...options.contentInputs } } : {}) })) : null);
     const sourceValues = JSON.stringify(recovery_source.recoverySourceValues(context));
     await recovery_source.assertRecoverySourcePolicy(existing, context, origin);
     const sourcePolicy = await recovery_source.recoverySourcePolicy(context);
@@ -1588,7 +1621,8 @@ async function generateModeOperation(mode, options = {}) {
         }
         if (!committed && !archiveTarget) {
             core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
-            core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [mode]: session } });
+            const deferredDurable = core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [mode]: session } });
+            core_requestCoordinator.notifyDeferredCommitNotDurable(deferredDurable);
         }
 
         if (committed && recoveryHandle) await core_cache.saveGenerationRecovery(context, memoryBank, mode, null, origin, { archiveTarget, stillCurrent: archiveTargetStillCurrent });

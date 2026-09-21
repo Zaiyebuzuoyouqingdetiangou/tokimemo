@@ -439,6 +439,7 @@ function renderCapturedCgMode(target) {
 export function deferCgSessionIfOriginChanged(origin, mode, session) {
     if (core_context.isCurrentTaskOrigin(origin)) return null;
     const durable = core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [mode]: session } });
+    core_requestCoordinator.notifyDeferredCommitNotDurable(durable);
     return { deferred: true, durable };
 }
 
@@ -665,7 +666,7 @@ export async function drawSelectedCgImage({ promptOverride, promptMetadata, prom
             globalThis.toastr?.[durable ? 'success' : 'warning']?.(
                 durable
                     ? `CG 已绘制并安全等待写回：${item.title}；回到原聊天后会自动保存引用。`
-                    : `CG 已绘制：${item.title}；结果暂存在当前页面，回到原聊天前不要刷新。`,
+                    : `CG 已绘制：${item.title}；保存未确认，结果暂存在当前页面，请先导出未提交草稿，回到原聊天前不要刷新。`,
                 '心迹回廊',
             );
             return;

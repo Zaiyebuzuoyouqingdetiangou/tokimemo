@@ -1401,6 +1401,18 @@ async function regenerateManagedTarget(type, id, parentId = '') {
     return ui_contentManager.runContentRegeneration(type, id, parentId, { confirmed: true });
 }
 
+async function recategorizeManagedTarget(id, parentId = '') {
+    if (!archive_library.requireWritableArchiveAction()) return;
+    const record = managedTargetRecord('album-category', id, parentId);
+    if (!record || record.canRegenerate === false) return;
+    if (!confirmExplicitActionTwice(
+        `重新判断「${record.label}」？`,
+        '只重新判断分类并写回这一项；标题、正文、共同回忆和已生成图片都保留。模型成功返回并通过校验后才保存。',
+        { destructive: false },
+    )) return;
+    return ui_contentManager.runContentRegeneration('album-category', id, parentId, { confirmed: true });
+}
+
 async function deleteManagedCategory() {
     if (!runtimeState.activeMode || !archive_library.requireWritableArchiveAction()) return;
     const mode = runtimeState.activeMode;
@@ -1832,6 +1844,7 @@ export function handleOverlayClick(event) {
     if (action === 'manage-regenerate-category') return void regenerateManagedCategory();
     if (action === 'manage-delete-category') return void deleteManagedCategory();
     if (action === 'manage-regenerate-target') return void regenerateManagedTarget(actionEl.dataset.rmtManageType, actionEl.dataset.rmtManageId, actionEl.dataset.rmtManageParent);
+    if (action === 'manage-recategorize-target') return void recategorizeManagedTarget(actionEl.dataset.rmtManageId, actionEl.dataset.rmtManageParent);
     if (action === 'manage-delete-target') return void deleteManagedTarget(actionEl.dataset.rmtManageType, actionEl.dataset.rmtManageId, actionEl.dataset.rmtManageParent);
     if (action === 'rebuild-archive-index') return void archive_library.rebuildArchiveIndexFromExisting();
     if (action === 'import-memory') return requestCurrentArchiveImport();

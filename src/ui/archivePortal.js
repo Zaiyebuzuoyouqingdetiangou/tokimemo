@@ -5,6 +5,7 @@ import * as ui_workspace from './workspace.js';
 import * as archive_library from '../archive/library.js';
 import * as archive_repository from '../archive/repository.js';
 import * as archive_snapshots from '../archive/snapshots.js';
+import * as archive_importRecovery from '../archive/importRecovery.js';
 import * as core_cache from '../core/cache.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
@@ -185,12 +186,61 @@ export function bindGenerationNavigationGuards() {
     };
 }
 
+// Emergency persist when the page is about to be frozen: switching to another
+// app/tab, locking the screen, or the host page being discarded. This only
+// re-saves data that has already been received; it never starts, cancels or
+// retries a task, and it deliberately does not touch runtimeLifecycleEpoch —
+// bumping the epoch here would kill in-flight tasks and their deferred writeback.
+export async function persistPendingResultsForBackground(reason = 'hidden') {
+    try { runtimeState.deferredChatCommits?.persistNow?.(); } catch (error) {
+        console.warn(`[HeartbeatMemories] background deferred-commit persist failed (${core_text.normalizeText(reason, 40)})`, core_text.safeErrorDiagnostic(error));
+    }
+    void core_cache.flushPendingCompressedCacheForCurrentChat().catch(error => {
+        console.warn('[HeartbeatMemories] background pending cache flush failed', core_text.safeErrorDiagnostic(error));
+    });
+    const origins = [];
+    try { origins.push(core_context.captureTaskOrigin(core_context.currentCharacterGuard(), '')); } catch {}
+    if (runtimeState.activeTaskOrigin?.characterKey && runtimeState.activeTaskOrigin?.chatId) origins.push(runtimeState.activeTaskOrigin);
+    const seen = new Set();
+    for (const origin of origins) {
+        const fingerprint = JSON.stringify([origin?.characterId ?? '', origin?.characterAvatar || origin?.characterKey || '', origin?.chatId || '']);
+        if (seen.has(fingerprint)) continue;
+        seen.add(fingerprint);
+        for (const operation of ['import', 'profile']) {
+            try {
+                if (!archive_importRecovery.listArchiveRecoveryDrafts(origin, operation).length) continue;
+                await archive_importRecovery.flushArchiveRecovery(origin, operation);
+            } catch (error) {
+                console.warn('[HeartbeatMemories] background archive draft flush failed', core_text.safeErrorDiagnostic(error));
+            }
+        }
+    }
+}
+
+function bindBackgroundLifecycleGuards() {
+    const onVisibility = () => {
+        if (globalThis.document?.visibilityState !== 'hidden') return;
+        void persistPendingResultsForBackground('hidden');
+    };
+    const onPageHide = () => { void persistPendingResultsForBackground('pagehide'); };
+    globalThis.document?.addEventListener?.('visibilitychange', onVisibility);
+    globalThis.addEventListener?.('pagehide', onPageHide);
+    return () => {
+        globalThis.document?.removeEventListener?.('visibilitychange', onVisibility);
+        globalThis.removeEventListener?.('pagehide', onPageHide);
+    };
+}
+
 export function bindChatStateEvents() {
     try { globalThis.__heartbeatMemoriesEventCleanup?.(); } catch {}
+    const backgroundCleanup = bindBackgroundLifecycleGuards();
     const context = core_context.getContext();
     const source = context.eventSource;
     const types = context.eventTypes || context.event_types || {};
-    if (!source?.on) return;
+    if (!source?.on) {
+        globalThis.__heartbeatMemoriesEventCleanup = backgroundCleanup;
+        return;
+    }
 
     const chatEvents = [types.CHAT_CHANGED, types.CHAT_LOADED].filter(Boolean);
     const messageEvents = [
@@ -252,6 +302,7 @@ export function bindChatStateEvents() {
         console.warn('[HeartbeatMemories] initial deferred commit recovery failed', core_text.safeErrorDiagnostic(error));
     });
     globalThis.__heartbeatMemoriesEventCleanup = () => {
+        backgroundCleanup();
         for (const type of chatEvents) {
             try { source.off?.(type, chatHandler); } catch {}
         }

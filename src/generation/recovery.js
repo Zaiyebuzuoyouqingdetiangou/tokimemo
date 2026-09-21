@@ -322,14 +322,29 @@ export async function createGenerationRecovery({ origin, mode, settingsIdentity,
         }
         const categories = { characterKey: 'character', characterId: 'character', characterAvatar: 'character',
             chatId: 'chat', archiveRevision: 'archive', archiveTargetEntryId: 'target', mode: 'operation' };
+        // characterKey embeds a card-content fingerprint. The draft lookup key
+        // (characterId + avatar + chatId) already proved same person and chat,
+        // and frozen inputs pin the original card text, so ordinary card edits
+        // that only drift the fingerprint must not be misread as a character
+        // switch. A real switch changes the slot id or avatar and still blocks.
+        let fingerprintDriftOnly = false;
         for (const [key, category] of Object.entries(categories)) {
             if (key === 'archiveRevision' && readGenerationContentSnapshot(journal) && journal.identity[key] !== identity[key]) {
                 journal.sourceIdentity ||= structuredClone(journal.identity);
                 journal.identity = { ...journal.identity, archiveRevision: identity.archiveRevision };
             }
-            if ((journal.identity[key] ?? '') !== identity[key]) throw generationRecoveryMismatch(category);
+            if ((journal.identity[key] ?? '') !== identity[key]) {
+                if (key === 'characterKey' && identity.characterAvatar
+                    && (journal.identity.characterId ?? '') === identity.characterId
+                    && (journal.identity.characterAvatar ?? '') === identity.characterAvatar
+                    && (journal.identity.chatId ?? '') === identity.chatId) {
+                    fingerprintDriftOnly = true;
+                    continue;
+                }
+                throw generationRecoveryMismatch(category);
+            }
         }
-        if (jsonData(journal.identity) !== jsonData(identity)) throw generationRecoveryMismatch('record');
+        if (!fingerprintDriftOnly && jsonData(journal.identity) !== jsonData(identity)) throw generationRecoveryMismatch('record');
         if (!readGenerationContentSnapshot(journal) && journal.settingsHash !== settingsHash) throw generationRecoveryMismatch('configuration');
     }
     journal ||= { kind: 'generation-recovery', version: 1, identity, settingsHash,
@@ -756,7 +771,18 @@ export async function withRecoverySegment(prompt, options, validator, run) {
                 }
                 throw error;
             }
-            if (!saved && !handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '本段已返回，但浏览器没有成功保存进度；已停止后续请求。旧内容仍在，请检查本地存储后重试。');
+            if (!saved && !handle.pageOnly) {
+                // A paid reply whose journal save failed (non-capacity) reuses the
+                // capacity path's holdUnsavedReply retention: hold the raw reply in
+                // bounded page memory and attach the export hint so the user can
+                // export it from the recovery area. Unlike the capacity path there is
+                // no projection here: a failed durable journal write never publishes a
+                // readable result. The RMT_RECOVERY_STORAGE classification still stops
+                // later requests and nothing is regenerated automatically.
+                const error = recoveryError('RMT_RECOVERY_STORAGE', '本段已返回，但浏览器没有成功保存进度；已停止后续请求。旧内容仍在，请检查本地存储后重试。');
+                if (holdUnsavedReply(handle, slot, rawJson)) noteHeldReplyExport(error);
+                throw error;
+            }
             accepted = true;
             await publishGenerationRecoveryProgress(handle);
         };

@@ -4,6 +4,7 @@ import * as workspace_ui from '../ui/workspace.js';
 import * as archive_groups from './groups.js';
 import * as archive_backupStore from './backupStore.js';
 import * as archive_repository from './repository.js';
+import * as archive_coverage from './coverageRanges.js';
 import * as archive_snapshots from './snapshots.js';
 import * as core_cache from '../core/cache.js';
 import * as core_archiveCover from '../core/archiveCover.js';
@@ -924,6 +925,7 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
     const calendarPortal = portals.find(item => item.mode === core_constants.MODE.CALENDAR) || { session: null };
     const calendarGenerating = core_requestCoordinator.isArchiveTargetModeGenerating(core_constants.MODE.CALENDAR, snapshot);
     const calendarQuick = snapshotCalendarQuickAccessHtml({ generated: !!calendarPortal.session, readOnly: runtimeState.activeArchiveReadOnly, canGenerate: canGenerateDerived, generating: calendarGenerating });
+    const archiveCoverageText = archive_coverage.archiveCoverageText(memory);
     const portalHtml = portals.filter(item => item.mode !== core_constants.MODE.CALENDAR).map(({ mode, session, meta }) => {
         const generated = !!session;
         const generating = core_requestCoordinator.isArchiveTargetModeGenerating(mode, snapshot);
@@ -947,6 +949,7 @@ export function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchive
           ${core_archiveCover.archiveCoverHtml(memory, { writable: !snapshot.backupOnly && core_context.getChatId(core_context.getContext()) === snapshot.chatId && !runtimeState.activeArchiveReadOnly, busy: runtimeState.busy || core_requestCoordinator.hasGenerationTasks() })}
           <div class="rmt-memory-status ready">${snapshot.taskResultDraftId ? '独立生成成果 · 只读查看' : snapshot.historyVersionId ? '重做前旧版本 · 永久只读' : snapshot.backupOnly ? '源聊天暂不可读 · 当前查看只读备份' : runtimeState.activeArchiveReadOnly ? '只读查看' : '编辑待命'} · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${core_constants.ARCHIVE_PORTAL_MODES.length}</div>
           <div class="rmt-archive-meta">${snapshot.historyVersionId ? `${core_text.esc(new Date(snapshot.historyCreatedAt).toLocaleString())} · ${core_text.esc(snapshot.historyReason || '按选择重新生成前保存')} · 未完成草稿另行保留，不计作完整作品` : snapshot.backupOnly ? `本机备份 · ${core_text.esc(snapshot.sourceError || '源聊天无法读取')}` : (runtimeState.activeArchiveReadOnly ? '当前为只读档案' : '写入前会再次验证目标聊天')}</div>
+          ${archiveCoverageText ? `<div class="rmt-archive-meta" data-rmt-archive-coverage>${core_text.esc(archiveCoverageText)}</div>` : ''}
           <div class="rmt-archive-readonly-control">
             <label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''} ${snapshot.backupOnly ? 'disabled' : ''}> 只读查看</label>
             <small>${snapshot.taskResultDraftId ? '按原任务资料查看，当前档案与作品保留' : snapshot.historyVersionId ? '旧版本只读，当前档案与新作品不受影响' : snapshot.backupOnly ? '备份只读，不代表原聊天已删除' : runtimeState.activeArchiveReadOnly ? '关闭只读后可显示编辑操作' : '编辑待命'}</small>

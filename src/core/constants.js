@@ -277,7 +277,7 @@ export const CREATIVE_EXPANSION_MODES = Object.freeze([MODE.ADV, MODE.BUTTERFLY,
 
 export const ARCHIVE_OVERVIEW_CACHE_MS = 60000;
 
-export const CATEGORY_VALUES = new Set(['日常', '约会', '结局']);
+export const CATEGORY_VALUES = new Set(['日常', '约会', '结局', '待分类']);
 
 export const ROOM_ZONE_VALUES = new Set(['左上', '右上', '左下', '右下', '中央', '近景']);
 

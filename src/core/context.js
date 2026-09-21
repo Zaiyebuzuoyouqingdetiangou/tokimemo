@@ -377,11 +377,46 @@ function characterDescriptorExists(context, index) {
     return !!archive_groups.characterDescriptor(context, Number(index));
 }
 
+// Same-person check for task gates. The runtime key embeds a card-content
+// fingerprint, so any ordinary card edit (or host-side normalization on save)
+// drifts it even though the person, the slot, and the chat are unchanged —
+// the archive grouping layer and the deferred-commit lane already treat such
+// edits as the same person. Once the exact card slot and a non-empty avatar
+// still agree, fingerprint drift alone does not abort or block a task. A real
+// character switch changes the slot (or the avatar) and still hard-fails.
+export function taskOriginCharacterMatches(origin, context = getContext()) {
+    try {
+        if (!origin) return false;
+        if (currentCharacterRuntimeKey(context) === origin.characterKey) return true;
+        const originCharacterId = core_text.normalizeText(origin.characterId, 40);
+        if (!originCharacterId || originCharacterId !== String(context?.characterId ?? '')) return false;
+        const originAvatar = core_text.normalizeText(origin.characterAvatar, 300);
+        return !!originAvatar && originAvatar === currentCharacterAvatar(context);
+    } catch {
+        return false;
+    }
+}
+
 export function isCurrentTaskOrigin(origin, context = getContext()) {
     try {
         return !!origin
             && Number(origin.lifecycleEpoch) === runtimeState.runtimeLifecycleEpoch
             && currentCharacterRuntimeKey(context) === origin.characterKey
+            && comparableChatId(getChatId(context)) === origin.chatId;
+    } catch {
+        return false;
+    }
+}
+
+// Task-run gates that only need the person binding, not the card text: epoch +
+// same-person (card edits tolerated) + same chat. Late read/repaint paths keep
+// the stricter isCurrentTaskOrigin so a view opened under one card never
+// rebinds under edited card text mid-read.
+export function isCurrentTaskRunOrigin(origin, context = getContext()) {
+    try {
+        return !!origin
+            && Number(origin.lifecycleEpoch) === runtimeState.runtimeLifecycleEpoch
+            && taskOriginCharacterMatches(origin, context)
             && comparableChatId(getChatId(context)) === origin.chatId;
     } catch {
         return false;

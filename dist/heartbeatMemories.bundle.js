@@ -1,9 +1,10 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 133
-// Source SHA-256: 26a25529c46a178e62a846fbbc4b7e0654cb0a9d6536d34e890139348f922eef
+// Source modules: 134
+// Source SHA-256: a1300cd54acae64ea877a6cf65fe76dc0fee63e2e5643c6880810be35c77aeb0
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
+const __m_archive_coverageRanges_js = Object.create(null);
 const __m_archive_groups_js = Object.create(null);
 const __m_archive_importBatches_js = Object.create(null);
 const __m_archive_importRecovery_js = Object.create(null);
@@ -1211,7 +1212,7 @@ const CREATIVE_EXPANSION_MODES = Object.freeze([MODE.ADV, MODE.BUTTERFLY, MODE.H
 
 const ARCHIVE_OVERVIEW_CACHE_MS = 60000;
 
-const CATEGORY_VALUES = new Set(['日常', '约会', '结局']);
+const CATEGORY_VALUES = new Set(['日常', '约会', '结局', '待分类']);
 
 const ROOM_ZONE_VALUES = new Set(['左上', '右上', '左下', '右下', '中央', '近景']);
 
@@ -3209,6 +3210,11 @@ function floorWindow(totalFloors, range) {
     return start > end ? { start: 0, end: 0 } : { start, end };
 }
 
+// The 1-based host floor window a normalized range selects, {start:0,end:0} when empty.
+function chatReadRangeWindow(totalFloors, range = {}) {
+    return floorWindow(Math.max(0, Number(totalFloors) || 0), normalizeChatReadRange(range));
+}
+
 function isChatReadRangeHidden(message) {
     return !!message?.is_system || message?.is_hidden === true || message?.extra?.is_hidden === true;
 }
@@ -3262,6 +3268,7 @@ function readRangePreview(context, settings = {}) {
 }
 
 __m_core_chatReadRange_js.normalizeChatReadRange = normalizeChatReadRange;
+__m_core_chatReadRange_js.chatReadRangeWindow = chatReadRangeWindow;
 __m_core_chatReadRange_js.isChatReadRangeHidden = isChatReadRangeHidden;
 __m_core_chatReadRange_js.isChatReadRangeDialogue = isChatReadRangeDialogue;
 __m_core_chatReadRange_js.selectChatReadRange = selectChatReadRange;
@@ -4525,6 +4532,164 @@ __m_archive_importBatches_js.resolveBatchParts = resolveBatchParts;
 __m_archive_importBatches_js.advanceProgress = advanceProgress;
 __m_archive_importBatches_js.IMPORT_PROGRESS_KEY = IMPORT_PROGRESS_KEY;
 __m_archive_importBatches_js.IMPORT_BATCH_VERSION = IMPORT_BATCH_VERSION;
+}
+
+function __init_archive_coverageRanges_js() {
+// MODULE: archive/coverageRanges.js
+const chat_read_range = __m_core_chatReadRange_js;
+// Pure archive floor-coverage bookkeeping: which 1-based host floor intervals a
+// bank has actually organized, the gaps inside a selected range, and the next
+// suggested backfill segment. No chat/storage mutation or provider work.
+
+const COVERAGE_KINDS = Object.freeze(['backfill', 'incremental', 'full']);
+const COVERAGE_KIND_LABEL = Object.freeze({ backfill: '补录历史', incremental: '增量更新', full: '全量整理' });
+const OPERATION_KIND_LABEL = COVERAGE_KIND_LABEL;
+
+function archiveOperationKind({ existing = null, fullRebuild = false, rangeChanged = false } = {}) {
+    return fullRebuild || !existing ? 'full' : rangeChanged ? 'backfill' : 'incremental';
+}
+
+function floor(value) {
+    const number = Number(value);
+    return Number.isFinite(number) && number >= 1 ? Math.floor(number) : 0;
+}
+
+// Merge overlapping or directly adjacent intervals. When two kinds meet, the
+// interval covering more floors keeps its label; a tie keeps the newer entry.
+function mergeCoveredRanges(ranges) {
+    const sorted = (Array.isArray(ranges) ? ranges : []).filter(row => floor(row?.start) && floor(row?.end) && floor(row.start) <= floor(row.end))
+        .map(row => ({ start: floor(row.start), end: floor(row.end),
+            revision: typeof row?.revision === 'string' ? row.revision.slice(0, 240) : '',
+            kind: COVERAGE_KINDS.includes(row?.kind) ? row.kind : 'full' }))
+        .sort((a, b) => a.start - b.start || a.end - b.end);
+    const merged = [];
+    for (const row of sorted) {
+        const last = merged.at(-1);
+        if (!last || row.start > last.end + 1) { merged.push({ ...row }); continue; }
+        const rowSpan = row.end - row.start, lastSpan = last.end - last.start;
+        if (row.kind !== last.kind && rowSpan >= lastSpan) last.kind = row.kind;
+        if (row.end > last.end) { last.end = row.end; if (row.revision) last.revision = row.revision; }
+    }
+    return merged;
+}
+
+function normalizeCoveredRanges(value) {
+    return mergeCoveredRanges(Array.isArray(value) ? value : []);
+}
+
+// Conservative legacy migration: only a bank that provably read the complete
+// window (full-window, not truncated/sampled) yields one initial interval.
+// Anything less certain starts recording from the next real run instead of
+// fabricating precision the old record never had.
+function legacyCoveredRanges(bank) {
+    const total = Math.max(0, Number(bank?.sourceMessageCount) || 0);
+    if (!total || bank?.coverageMode !== 'full-window' || bank?.truncated) return [];
+    return [{ start: 1, end: total, revision: typeof bank?.archiveRevision === 'string' ? bank.archiveRevision : '', kind: 'full' }];
+}
+
+function bankCoveredRanges(bank) {
+    if (Array.isArray(bank?.coveredRanges)) return normalizeCoveredRanges(bank.coveredRanges);
+    return legacyCoveredRanges(bank);
+}
+
+// The chat floor window this run actually reads. A plain incremental update only
+// covers floors appended after the archived baseline; a changed/rebuilt selection
+// covers its whole window again.
+function runCoverageWindow(snapshot, { incrementalUpdate = false, rangeChanged = false, previousMessageCount = 0 } = {}) {
+    const total = Math.max(0, Number(snapshot?.totalMessages) || 0);
+    if (!total) return null;
+    if (incrementalUpdate && !rangeChanged) {
+        const start = Math.max(1, Math.floor(Number(previousMessageCount) || 0) + 1);
+        return start > total ? null : { start, end: total };
+    }
+    const range = snapshot?.readRange;
+    if (!range) return { start: 1, end: total };
+    const { start, end } = chat_read_range.chatReadRangeWindow(total, range);
+    return start ? { start, end } : null;
+}
+
+// Only floors whose paid batch is durably checkpointed count as covered: a
+// pending batch plan never claims its unread tail, and a later failure cannot
+// roll back or double-charge an already saved interval.
+function coveredRangesForSave(existingBank, { window = null, kind = 'full', revision = '', progress = null } = {}) {
+    const base = bankCoveredRanges(existingBank);
+    if (!window?.start || !window?.end) return base;
+    let covered = { start: window.start, end: window.end };
+    if (progress && Array.isArray(progress.batches)) {
+        const saved = progress.batches.slice(0, Math.max(0, Number(progress.nextBatch) || 0))
+            .flatMap(parts => (Array.isArray(parts) ? parts : []).flatMap(part => Array.isArray(part?.refs) ? part.refs : []))
+            .filter(ref => ref?.kind === 'chat' && floor(ref.index) >= window.start && floor(ref.index) <= window.end)
+            .map(ref => floor(ref.index));
+        if (!saved.length) return base;
+        covered = { start: Math.min(...saved), end: Math.max(...saved) };
+    }
+    return mergeCoveredRanges([...base, { ...covered, revision: String(revision || ''), kind }]);
+}
+
+function rangeGaps(covered, start, end) {
+    const first = floor(start), last = floor(end);
+    if (!first || !last || first > last) return [];
+    const gaps = [];
+    let cursor = first;
+    for (const row of normalizeCoveredRanges(covered)) {
+        if (row.end < cursor) continue;
+        if (row.start > last) break;
+        if (row.start > cursor) gaps.push({ start: cursor, end: Math.min(row.start - 1, last) });
+        cursor = Math.max(cursor, row.end + 1);
+        if (cursor > last) break;
+    }
+    if (cursor <= last) gaps.push({ start: cursor, end: last });
+    return gaps;
+}
+
+function suggestNextRange(covered, start, end, size = 100) {
+    const gap = rangeGaps(covered, start, end)[0];
+    if (!gap) return null;
+    const span = Math.max(1, Math.floor(Number(size)) || 100);
+    return { start: gap.start, end: Math.min(gap.end, gap.start + span - 1) };
+}
+
+// window: {start,end} of the currently selected floors (readRangePreview shape).
+function archiveCoverageSummary(bank, window = null) {
+    const covered = bankCoveredRanges(bank);
+    const gaps = window?.start ? rangeGaps(covered, window.start, window.end) : [];
+    const suggested = window?.start ? suggestNextRange(covered, window.start, window.end, Math.max(1, window.end - window.start + 1)) : null;
+    return { covered, gaps, suggested };
+}
+
+function formatCoveredRanges(ranges) {
+    return normalizeCoveredRanges(ranges).map(row => `第 ${row.start}–${row.end} 楼（${COVERAGE_KIND_LABEL[row.kind]}）`).join('、');
+}
+
+function formatFloorGaps(gaps) {
+    return (Array.isArray(gaps) ? gaps : []).map(gap => `第 ${gap.start}–${gap.end} 楼`).join('、');
+}
+
+// Display-only coverage line for archive views; empty when nothing is recorded yet.
+function archiveCoverageText(bank) {
+    const covered = bankCoveredRanges(bank);
+    if (!covered.length) return '';
+    const total = Math.max(0, Number(bank?.sourceMessageCount) || 0);
+    const gaps = total ? rangeGaps(covered, 1, total) : [];
+    return `楼层覆盖：已整理 ${formatCoveredRanges(covered)}${total ? (gaps.length ? `；缺口 ${formatFloorGaps(gaps)}` : `；第 1–${total} 楼无缺口`) : ''}`;
+}
+
+__m_archive_coverageRanges_js.archiveOperationKind = archiveOperationKind;
+__m_archive_coverageRanges_js.mergeCoveredRanges = mergeCoveredRanges;
+__m_archive_coverageRanges_js.normalizeCoveredRanges = normalizeCoveredRanges;
+__m_archive_coverageRanges_js.legacyCoveredRanges = legacyCoveredRanges;
+__m_archive_coverageRanges_js.bankCoveredRanges = bankCoveredRanges;
+__m_archive_coverageRanges_js.runCoverageWindow = runCoverageWindow;
+__m_archive_coverageRanges_js.coveredRangesForSave = coveredRangesForSave;
+__m_archive_coverageRanges_js.rangeGaps = rangeGaps;
+__m_archive_coverageRanges_js.suggestNextRange = suggestNextRange;
+__m_archive_coverageRanges_js.archiveCoverageSummary = archiveCoverageSummary;
+__m_archive_coverageRanges_js.formatCoveredRanges = formatCoveredRanges;
+__m_archive_coverageRanges_js.formatFloorGaps = formatFloorGaps;
+__m_archive_coverageRanges_js.archiveCoverageText = archiveCoverageText;
+__m_archive_coverageRanges_js.COVERAGE_KINDS = COVERAGE_KINDS;
+__m_archive_coverageRanges_js.COVERAGE_KIND_LABEL = COVERAGE_KIND_LABEL;
+__m_archive_coverageRanges_js.OPERATION_KIND_LABEL = OPERATION_KIND_LABEL;
 }
 
 function __init_archive_requestBudget_js() {
@@ -9897,8 +10062,8 @@ function albumIsPrivate(entry) {
         return EXPLICIT.test(line);
     }));
 }
-function albumDisplayCategory(entry) { return albumIsPrivate(entry) ? '私密' : ['日常','约会','结局'].includes(entry?.category) ? entry.category : '日常'; }
-const ALBUM_DISPLAY_CATEGORIES = Object.freeze(['全部','日常','约会','私密','结局']);
+function albumDisplayCategory(entry) { return albumIsPrivate(entry) ? '私密' : ['日常','约会','结局','待分类'].includes(entry?.category) ? entry.category : '待分类'; }
+const ALBUM_DISPLAY_CATEGORIES = Object.freeze(['全部','日常','约会','私密','结局','待分类']);
 
 __m_ui_albumCategory_js.albumIsPrivate = albumIsPrivate;
 __m_ui_albumCategory_js.albumDisplayCategory = albumDisplayCategory;
@@ -10270,6 +10435,8 @@ function closeCgImageViewer({ restoreFocus = true } = {}) {
     current.document.removeEventListener('keydown', current.onKeydown, true);
     current.host.removeEventListener('cancel', current.onCancel, true);
     current.element.removeEventListener('click', current.onClick);
+    current.element.removeEventListener('pointerdown', current.onEarlyClose, true);
+    current.element.removeEventListener('touchstart', current.onEarlyClose, true);
     current.image.removeEventListener('load', current.onLoad);
     current.image.removeEventListener('error', current.onError);
     current.element.remove();
@@ -10327,12 +10494,27 @@ function openCgImageViewer(record, title = '原图', { opener = null } = {}) {
     element.appendChild(status);
     element.appendChild(stage);
     const current = { element, host, document: doc, image, opener: previousOpener, observer: null };
+    let lastEarlyDismissAt = 0;
     const dismiss = event => {
         event.preventDefault();
         event.stopImmediatePropagation();
         closeCgImageViewer();
     };
     current.onCancel = dismiss;
+    // Touch fallback for the close button: iOS/TT WebViews can swallow the click
+    // after pinch or momentum-scroll gestures. Mirror overlay.js
+    // bindOverlayCloseFallback: capture-phase pointerdown/touchstart runs the same
+    // dismiss path, deduped with the click path within 500ms. The viewer must be
+    // exitable while loading, zoomed, or after dragging, so no state is checked.
+    current.onEarlyClose = event => {
+        if (event.type === 'pointerdown' && (Number(event.button ?? 0) !== 0 || event.isPrimary === false)) return;
+        const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+        if (!path.includes(close) && event.target !== close && !close.contains(event.target)) return;
+        const now = Date.now();
+        if (now - lastEarlyDismissAt < 500) return;
+        lastEarlyDismissAt = now;
+        dismiss(event);
+    };
     current.onKeydown = event => {
         if (event.key === 'Escape') { dismiss(event); return; }
         if (event.key !== 'Tab') return;
@@ -10347,7 +10529,11 @@ function openCgImageViewer(record, title = '原图', { opener = null } = {}) {
     };
     current.onClick = event => {
         event.stopPropagation();
-        if (event.target === close) { dismiss(event); return; }
+        // Swallow the trailing synthetic click when the touch fallback just dismissed.
+        if (event.target === close) {
+            if (Date.now() - lastEarlyDismissAt >= 500) dismiss(event);
+            return;
+        }
         if (event.target !== toggle || toggle.disabled) return;
         const native = !element.classList.contains('rmt-cg-viewer-native');
         element.classList.toggle('rmt-cg-viewer-native', native);
@@ -10373,6 +10559,8 @@ function openCgImageViewer(record, title = '原图', { opener = null } = {}) {
     image.addEventListener('load', current.onLoad);
     image.addEventListener('error', current.onError);
     element.addEventListener('click', current.onClick);
+    element.addEventListener('pointerdown', current.onEarlyClose, true);
+    element.addEventListener('touchstart', current.onEarlyClose, { capture: true, passive: false });
     doc.addEventListener('keydown', current.onKeydown, true);
     host.addEventListener('cancel', current.onCancel, true);
     shell.appendChild(element);
@@ -14017,8 +14205,13 @@ function __init_ui_readingStyles_js() {
 
 // Reading-only presentation. No persistence, provider calls or generated styles.
 function readingCss(root) {
+    // CG viewer touch-action tradeoff: root uses manipulation (blocks double-tap
+    // zoom) and the stage drops pinch-zoom for pan-x pan-y only. iOS page-level
+    // pinch-zoom pushes the position:fixed toolbar off-screen with no reset path,
+    // so a guaranteed-reachable close button wins over in-page pinch. Desktop
+    // zoom and the fit/native toggle are unaffected (they never use touch-action).
     return `
-${root} .rmt-cg-viewer{position:fixed;inset:0;z-index:140;display:flex;flex-direction:column;gap:8px;box-sizing:border-box;min-width:0;min-height:0;overflow:hidden;padding:10px;padding:max(10px,env(safe-area-inset-top),var(--rmt-mobile-safe-top,0px)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));background:#11151c!important;color:#f5f7fa!important;font:16px/1.5 system-ui,-apple-system,sans-serif;isolation:isolate}
+${root} .rmt-cg-viewer{position:fixed;inset:0;z-index:140;display:flex;flex-direction:column;gap:8px;box-sizing:border-box;min-width:0;min-height:0;overflow:hidden;padding:10px;padding:max(10px,env(safe-area-inset-top),var(--rmt-mobile-safe-top,0px)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));background:#11151c!important;color:#f5f7fa!important;font:16px/1.5 system-ui,-apple-system,sans-serif;isolation:isolate;touch-action:manipulation}
 ${root} .rmt-cg-viewer-toolbar{display:flex;flex:none;align-items:center;gap:8px;min-width:0}
 ${root} .rmt-cg-viewer-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;color:inherit}
 ${root} .rmt-cg-viewer button{flex:none;min-width:58px;min-height:46px;box-sizing:border-box;border:1px solid #718097;border-radius:10px;padding:8px 12px;background:#263142!important;color:#f5f7fa!important;-webkit-text-fill-color:currentColor!important;font:inherit;cursor:pointer}
@@ -14026,7 +14219,7 @@ ${root} .rmt-cg-viewer button:disabled{opacity:.55;cursor:default}
 ${root} .rmt-cg-viewer :is(button,[tabindex]):focus-visible{outline:3px solid #a9d9ff;outline-offset:-3px}
 ${root} .rmt-cg-viewer-status{flex:none;margin:0;text-align:center;color:inherit;overflow-wrap:anywhere;font-size:14px}
 ${root} .rmt-cg-viewer-status:empty{display:none}
-${root} .rmt-cg-viewer-stage{display:flex;flex:1 1 0%;min-width:0;min-height:0;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y pinch-zoom}
+${root} .rmt-cg-viewer-stage{display:flex;flex:1 1 0%;min-width:0;min-height:0;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
 ${root} .rmt-cg-viewer-image{position:static!important;display:block;flex:none;max-width:100%!important;max-height:100%!important;width:auto!important;height:auto!important;margin:auto;object-fit:contain;transform:none!important;box-sizing:border-box}
 ${root} .rmt-cg-viewer-image[hidden]{display:none!important}
 ${root} .rmt-cg-viewer-native .rmt-cg-viewer-image{max-width:none!important;max-height:none!important}
@@ -15359,9 +15552,13 @@ function renderAlbum() {
     </article>`;
     }).join('');
     const hint = selected && !selected.unlocked && session.hintVisible ? selected.hintLines.join('\n') : '';
+    const categoryEditor = selected && !readOnlyArchive
+        ? `<label>分类 <select data-rmt-album-category="${core_text.esc(selected.id)}">${[...core_constants.CATEGORY_VALUES].map(cat => `<option value="${core_text.esc(cat)}"${cat === selected.category ? ' selected' : ''}>${core_text.esc(cat)}</option>`).join('')}</select>${selected.categoryManual === true ? '（手动）' : ''}</label>`
+        : '';
     const info = selected ? `<aside class="rmt-info">
       <h3>${core_text.esc(selected.unlocked ? selected.title : `（未解锁）${selected.title}`)}</h3>
       <div class="rmt-info-date">${core_text.esc(selected.date)} · ${core_text.esc(ui_albumCategory.albumDisplayCategory(selected))}</div>
+      ${categoryEditor}
       <div class="rmt-info-desc">${core_text.esc(selected.desc)}</div>
       <div class="rmt-actions">
         <button type="button" class="rmt-btn rmt-memory-primary" data-rmt-action="shared-memory" ${selected.unlocked ? '' : 'disabled'}>${selected.unlocked ? '走进共同回忆' : '尚未解锁'}</button>
@@ -15382,6 +15579,11 @@ function renderAlbum() {
         ${info}
       </div>
     </div>`;
+    body.querySelector?.('[data-rmt-album-category]')?.addEventListener?.('change', event => {
+        const select = event.currentTarget;
+        void albumSetCategory(select.dataset.rmtAlbumCategory, select.value)
+            .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
+    });
     cg_format_ui.mountCgFormatControl(body, 'album', '', readOnlyArchive);
 }
 
@@ -15506,6 +15708,21 @@ async function albumSetCommentSpeaker(entryId, index, speakerId) {
     renderSharedMemory();
 }
 
+async function albumSetCategory(entryId, category) {
+    if (!archive_library.requireWritableArchiveAction()) return;
+    if (!core_constants.CATEGORY_VALUES.has(category)) return;
+    const item = runtimeState.activeSession?.entries?.find(entry => entry.id === entryId);
+    if (!item || item.category === category) return;
+    await ui_overlay.saveActiveSessionEdit(session => {
+        const latest = session.entries.find(entry => entry.id === entryId);
+        // Manual choice wins over every later model merge/regeneration.
+        latest.category = category;
+        latest.categoryManual = true;
+        return session;
+    }, { select: session => session.entries?.find(entry => entry.id === entryId) });
+    renderAlbum();
+}
+
 function renderSharedMemory() {
     const session = runtimeState.activeSession;
     const item = selectedAlbumEntry();
@@ -15547,6 +15764,7 @@ function renderSharedMemory() {
 }
 
 __m_ui_albumView_js.albumSetCommentSpeaker = albumSetCommentSpeaker;
+__m_ui_albumView_js.albumSetCategory = albumSetCategory;
 __m_ui_albumView_js.filteredAlbumEntries = filteredAlbumEntries;
 __m_ui_albumView_js.selectedAlbumEntry = selectedAlbumEntry;
 __m_ui_albumView_js.renderAlbum = renderAlbum;
@@ -16019,6 +16237,7 @@ function renderCapturedCgMode(target) {
 function deferCgSessionIfOriginChanged(origin, mode, session) {
     if (core_context.isCurrentTaskOrigin(origin)) return null;
     const durable = core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [mode]: session } });
+    core_requestCoordinator.notifyDeferredCommitNotDurable(durable);
     return { deferred: true, durable };
 }
 
@@ -16245,7 +16464,7 @@ async function drawSelectedCgImage({ promptOverride, promptMetadata, promptForma
             globalThis.toastr?.[durable ? 'success' : 'warning']?.(
                 durable
                     ? `CG 已绘制并安全等待写回：${item.title}；回到原聊天后会自动保存引用。`
-                    : `CG 已绘制：${item.title}；结果暂存在当前页面，回到原聊天前不要刷新。`,
+                    : `CG 已绘制：${item.title}；保存未确认，结果暂存在当前页面，请先导出未提交草稿，回到原聊天前不要刷新。`,
                 '心迹回廊',
             );
             return;
@@ -25164,6 +25383,7 @@ const ui_workspace = __m_ui_workspace_js;
 const archive_library = __m_archive_library_js;
 const archive_repository = __m_archive_repository_js;
 const archive_snapshots = __m_archive_snapshots_js;
+const archive_importRecovery = __m_archive_importRecovery_js;
 const core_cache = __m_core_cache_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
@@ -25181,6 +25401,7 @@ const runtimeState = __m_core_state_js.state;
 
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
 
 
 
@@ -25357,12 +25578,61 @@ function bindGenerationNavigationGuards() {
     };
 }
 
+// Emergency persist when the page is about to be frozen: switching to another
+// app/tab, locking the screen, or the host page being discarded. This only
+// re-saves data that has already been received; it never starts, cancels or
+// retries a task, and it deliberately does not touch runtimeLifecycleEpoch —
+// bumping the epoch here would kill in-flight tasks and their deferred writeback.
+async function persistPendingResultsForBackground(reason = 'hidden') {
+    try { runtimeState.deferredChatCommits?.persistNow?.(); } catch (error) {
+        console.warn(`[HeartbeatMemories] background deferred-commit persist failed (${core_text.normalizeText(reason, 40)})`, core_text.safeErrorDiagnostic(error));
+    }
+    void core_cache.flushPendingCompressedCacheForCurrentChat().catch(error => {
+        console.warn('[HeartbeatMemories] background pending cache flush failed', core_text.safeErrorDiagnostic(error));
+    });
+    const origins = [];
+    try { origins.push(core_context.captureTaskOrigin(core_context.currentCharacterGuard(), '')); } catch {}
+    if (runtimeState.activeTaskOrigin?.characterKey && runtimeState.activeTaskOrigin?.chatId) origins.push(runtimeState.activeTaskOrigin);
+    const seen = new Set();
+    for (const origin of origins) {
+        const fingerprint = JSON.stringify([origin?.characterId ?? '', origin?.characterAvatar || origin?.characterKey || '', origin?.chatId || '']);
+        if (seen.has(fingerprint)) continue;
+        seen.add(fingerprint);
+        for (const operation of ['import', 'profile']) {
+            try {
+                if (!archive_importRecovery.listArchiveRecoveryDrafts(origin, operation).length) continue;
+                await archive_importRecovery.flushArchiveRecovery(origin, operation);
+            } catch (error) {
+                console.warn('[HeartbeatMemories] background archive draft flush failed', core_text.safeErrorDiagnostic(error));
+            }
+        }
+    }
+}
+
+function bindBackgroundLifecycleGuards() {
+    const onVisibility = () => {
+        if (globalThis.document?.visibilityState !== 'hidden') return;
+        void persistPendingResultsForBackground('hidden');
+    };
+    const onPageHide = () => { void persistPendingResultsForBackground('pagehide'); };
+    globalThis.document?.addEventListener?.('visibilitychange', onVisibility);
+    globalThis.addEventListener?.('pagehide', onPageHide);
+    return () => {
+        globalThis.document?.removeEventListener?.('visibilitychange', onVisibility);
+        globalThis.removeEventListener?.('pagehide', onPageHide);
+    };
+}
+
 function bindChatStateEvents() {
     try { globalThis.__heartbeatMemoriesEventCleanup?.(); } catch {}
+    const backgroundCleanup = bindBackgroundLifecycleGuards();
     const context = core_context.getContext();
     const source = context.eventSource;
     const types = context.eventTypes || context.event_types || {};
-    if (!source?.on) return;
+    if (!source?.on) {
+        globalThis.__heartbeatMemoriesEventCleanup = backgroundCleanup;
+        return;
+    }
 
     const chatEvents = [types.CHAT_CHANGED, types.CHAT_LOADED].filter(Boolean);
     const messageEvents = [
@@ -25424,6 +25694,7 @@ function bindChatStateEvents() {
         console.warn('[HeartbeatMemories] initial deferred commit recovery failed', core_text.safeErrorDiagnostic(error));
     });
     globalThis.__heartbeatMemoriesEventCleanup = () => {
+        backgroundCleanup();
         for (const type of chatEvents) {
             try { source.off?.(type, chatHandler); } catch {}
         }
@@ -25452,6 +25723,7 @@ function scheduleMounts(initialSettingsMounted = false, initialMenuMounted = fal
     globalThis.__heartbeatMemoriesMountTimer = timer;
 }
 
+__m_ui_archivePortal_js.persistPendingResultsForBackground = persistPendingResultsForBackground;
 __m_ui_archivePortal_js.mountMenuItem = mountMenuItem;
 __m_ui_archivePortal_js.archiveOpenButtonFromEvent = archiveOpenButtonFromEvent;
 __m_ui_archivePortal_js.safeShowArchiveLibrary = safeShowArchiveLibrary;
@@ -25846,6 +26118,7 @@ const advanced_ui = __m_ui_advancedGenerationUi_js;
 const output_budget = __m_core_outputBudget_js;
 const cg_format_ui = __m_ui_cgFormatControl_js;
 const archive_repository = __m_archive_repository_js;
+const archive_coverage = __m_archive_coverageRanges_js;
 const source_guard = __m_archive_sourceReadGuard_js;
 const archive_library = __m_archive_library_js;
 const generation_imageGeneration = __m_generation_imageGeneration_js;
@@ -25871,6 +26144,7 @@ const runtimeState = __m_core_state_js.state;
 
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
 
 
 
@@ -26896,8 +27170,15 @@ function mountSettings({ homeTarget = null } = {}) {
         if (event.target.closest?.('[data-rmt-read-preview]')) {
             const status = panel.querySelector('[data-rmt-read-preview-status]');
             try {
-                const preview = core_chatReadRange.readRangePreview(core_context.currentCharacterGuard(), core_settings.getPluginSettings());
-                status.textContent = `${preview.label} · 共 ${preview.totalFloors} 楼，选中 ${preview.selectedFloors} 楼（普通 ${preview.visibleCount} / 隐藏 ${preview.hiddenCount}），约 ${preview.characters.toLocaleString()} 字符。仅本地预览，未发起生成。`;
+                const context = core_context.currentCharacterGuard();
+                const preview = core_chatReadRange.readRangePreview(context, core_settings.getPluginSettings());
+                const bank = archive_repository.getImportedMemory(context);
+                const coverage = archive_coverage.archiveCoverageSummary(bank, preview.start ? preview : null);
+                const coverageNote = !bank ? ''
+                    : coverage.covered.length ? `档案已整理 ${archive_coverage.formatCoveredRanges(coverage.covered)}。` : '档案尚未记录已整理楼层区间。';
+                const gapNote = !coverageNote ? '' : coverage.gaps.length ? `本次范围内缺口：${archive_coverage.formatFloorGaps(coverage.gaps)}。` : (preview.start ? '本次范围内没有缺口。' : '');
+                const suggestNote = coverageNote && coverage.suggested ? `建议下一段补录范围：第 ${coverage.suggested.start}–${coverage.suggested.end} 楼（切换为“指定楼号范围”后填写）。` : '';
+                status.textContent = `${preview.label} · 共 ${preview.totalFloors} 楼，选中 ${preview.selectedFloors} 楼（普通 ${preview.visibleCount} / 隐藏 ${preview.hiddenCount}），约 ${preview.characters.toLocaleString()} 字符。仅本地预览，未发起生成。${coverageNote}${gapNote}${suggestNote}`;
             } catch (error) { status.textContent = core_text.safeErrorSummary(error); }
             return;
         }
@@ -27635,7 +27916,8 @@ async function persistAdvMutation(targetRuntime, mutateSession, fallbackSession)
     if (staged) {
         staged.chatId = expectedChatId;
         staged.archiveRevision = targetRuntime.expectedArchiveRevision;
-        core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [core_constants.MODE.ADV]: staged } });
+        const deferredDurable = core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [core_constants.MODE.ADV]: staged } });
+        core_requestCoordinator.notifyDeferredCommitNotDurable(deferredDurable);
     }
     return { session: staged, committed: false };
 }
@@ -32625,7 +32907,7 @@ function taskOptions(mode, context, origin, taskKey, maxTokens = 6000, temperatu
 }
 
 const CONTENT_TARGETS = Object.freeze({
-    'album-entry': ['album', 'entries'], 'adv-event': ['adv', 'events'], 'adv-text': ['adv', 'events'],
+    'album-entry': ['album', 'entries'], 'album-category': ['album', 'entries'], 'adv-event': ['adv', 'events'], 'adv-text': ['adv', 'events'],
     'phone-app': ['phone', 'apps'], 'phone-entry': ['phone', 'apps'],
     'ending-route': ['ending', 'endings'], 'ending-confession': ['ending', 'confessionReplays'],
     'heart-voice': ['heart', 'voiceDramas'], 'heart-scenario': ['heart', 'scenarioDramas'],
@@ -32713,7 +32995,30 @@ TRUSTED_EVENT_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
         );
         comments = rawComments.get(item.id) || [];
     }
-    return { ...candidate, id: item.id, sourceMemoryIds: [...item.sourceMemoryIds], sourceMemoryAnchor: item.sourceMemoryAnchor, comments, relationshipSnapshot, cgImage: null };
+    // A manual category and an already drawn CG image are user results; a text
+    // regeneration must not destroy either.
+    return { ...candidate, id: item.id, sourceMemoryIds: [...item.sourceMemoryIds], sourceMemoryAnchor: item.sourceMemoryAnchor, comments, relationshipSnapshot,
+        category: item.categoryManual === true ? item.category : candidate.category,
+        ...(item.categoryManual === true ? { categoryManual: true } : {}),
+        cgImage: item.cgImage || null };
+}
+
+// Lightweight category re-judgement for legacy entries: the model only returns a
+// category; prose, comments and the CG image are never sent for rewrite nor touched.
+async function regenerateAlbumCategory(session, item, context, memoryBank, origin, taskKey) {
+    const evidence = core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 12);
+    const prompt = `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 单项重新判断分类')}
+只重新判断下面这张相簿卡的分类。不得改动标题、正文、共同回忆或图片，不要输出实图 URL。
+CURRENT_ITEM_JSON:\n${JSON.stringify({ id: item.id, title: item.title, date: item.date, desc: item.desc, category: item.category, unlocked: !!item.unlocked, sourceMemoryAnchor: item.sourceMemoryAnchor }, null, 2)}
+TRUSTED_EVENT_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
+category 只能是“日常”“约会”“结局”之一；无法判断就返回“待分类”。
+严格输出：{"category":"..."}
+只输出 JSON。`;
+    const category = await generation_client.requestValidatedSegment(
+        prompt, `重新判断「${item.title}」分类…`, taskOptions(core_constants.MODE.ALBUM, context, origin, `${taskKey}:category`, 800, 0.2),
+        raw => modes_album.normalizeAlbumCategory(raw?.category),
+    );
+    return { ...item, category };
 }
 
 async function regenerateAdvEvent(session, item, context, memoryBank, origin, taskKey) {
@@ -33083,6 +33388,10 @@ async function regenerateManagedTarget(session, type, id, parentId, options) {
         const index = updated.entries?.findIndex(item => item.id === id) ?? -1;
         if (index < 0) throw new Error('找不到这张相簿卡。');
         updated.entries[index] = await regenerateAlbumEntry(updated, updated.entries[index], context, memoryBank, origin, taskKey);
+    } else if (type === 'album-category') {
+        const index = updated.entries?.findIndex(item => item.id === id) ?? -1;
+        if (index < 0) throw new Error('找不到这张相簿卡。');
+        updated.entries[index] = await regenerateAlbumCategory(updated, updated.entries[index], context, memoryBank, origin, taskKey);
     } else if (type === 'adv-event') {
         const index = updated.events?.findIndex(item => item.id === id) ?? -1;
         if (index < 0) throw new Error('找不到这个 ADV EVENT。');
@@ -33188,7 +33497,7 @@ const runtimeState = __m_core_state_js.state;
 
 
 const MANAGEABLE_TARGET_TYPES = new Set([
-    'album-entry', 'album-image',
+    'album-entry', 'album-image', 'album-category',
     'adv-event', 'adv-text', 'adv-image',
     'room-life',
     'phone-app', 'phone-entry',
@@ -33339,6 +33648,7 @@ function managementTargetsForSession(session) {
     if (mode === core_constants.MODE.ALBUM) {
         return (session.entries || []).flatMap(item => [
             target('album-entry', item.id, item.title, `${item.date || ''} · ${item.category || ''}`),
+            target('album-category', item.id, `${item.title} · 分类`, `只重新判断分类（当前：${item.category || '待分类'}${item.categoryManual === true ? '，手动指定' : ''}）；标题、正文、共同回忆和已生成图片保留。`),
             ...(item.cgImage ? [target('album-image', item.id, `${item.title} · CG 图片`, '只处理这张实图，不删除相簿条目。')] : []),
         ]);
     }
@@ -33405,7 +33715,7 @@ function managedProgressOverride(type, id, parentId, before, after, pageId) {
     // Paths come from the same fixed UI target types as the existing manager.
     // Generated data may supply field values, never a path or a destination ID.
     const fields = {
-        'album-entry': 'entries', 'adv-event': 'events', 'adv-text': 'events',
+        'album-entry': 'entries', 'album-category': 'entries', 'adv-event': 'events', 'adv-text': 'events',
         'phone-app': 'apps', 'ending-route': 'endings', 'ending-confession': 'confessionReplays',
         'heart-voice': 'voiceDramas', 'heart-scenario': 'scenarioDramas',
         'heart-strip': 'dailyStrips', 'heart-firefly': 'fireflyVoices',
@@ -33685,9 +33995,9 @@ function renderContentManager() {
     const scope = ui_workspaceState.workspaceManagementScope(session, managementTargetsForSession(session));
     const targets = scope.targets;
     const title = scope.title || core_constants.MODE_LABEL[mode] || mode;
-    const rows = targets.map(item => `<article class="rmt-manage-row">
+    const rows = targets.filter(item => item.type !== 'album-category').map(item => `<article class="rmt-manage-row">
       <div class="rmt-manage-copy"><b>${core_text.esc(item.label)}</b>${item.detail ? `<small>${core_text.esc(item.detail)}</small>` : ''}</div>
-      <div class="rmt-manage-actions">${actionButton('manage-regenerate-target', item, '重新生成')}${actionButton('manage-delete-target', item, '删除', true)}</div>
+      <div class="rmt-manage-actions">${actionButton('manage-regenerate-target', item, '重新生成')}${item.type === 'album-entry' ? actionButton('manage-recategorize-target', item, '重判分类') : ''}${actionButton('manage-delete-target', item, '删除', true)}</div>
     </article>`).join('');
     ui_overlay.topTitle(`${title} · 管理`);
     const dependentNote = mode === core_constants.MODE.ROOM
@@ -33881,8 +34191,41 @@ function captureGenerationContent(context, bank) {
     const memoryBank = structuredClone(bank);
     delete memoryBank.archiveImportProgress;
     delete memoryBank.archiveImportPaused;
+    delete memoryBank.coveredRanges;
     return { version: 1, fields, cardFields, memoryBank,
         contentSettings: generationContentSettings(core_settings.getPluginSettings(context)) };
+}
+// A full archive at the legitimate item cap can serialize beyond the recovery
+// snapshot budget, which would otherwise block every derived task before any
+// request. Slim only what no snapshot consumer can observe beyond the existing
+// prompt contract: prompts are built from the live bank through memoryPayload
+// (summary 700 chars), while recovery validators key on id/title/anchors and
+// bank-level fields — all kept whole. The cap itself is unchanged: if even the
+// distilled form exceeds it, the existing too-large failure still fires.
+// Snapshots already within budget stay byte-identical.
+function fitGenerationContentSnapshot(snapshot) {
+    const fits = value => {
+        try { return JSON.stringify(value).length <= generation_recovery.GENERATION_RECOVERY_LIMITS.requestChars; }
+        catch { return false; }
+    };
+    if (fits(snapshot)) return snapshot;
+    const fullBank = snapshot?.memoryBank;
+    if (!fullBank || typeof fullBank !== 'object' || !Array.isArray(fullBank.memories)) return snapshot;
+    // Prefer the gentlest trim that fits: 1200 keeps the largest reader window
+    // any snapshot consumer uses; 700 matches the existing memoryPayload prompt
+    // contract exactly. Both keep id/title/anchors/participants and every
+    // bank-level field byte-identical, so evidence validation is unchanged.
+    for (const summaryLimit of [1200, 700]) {
+        const distilled = { ...snapshot, memoryBank: structuredClone(fullBank), memoryBankDistilled: true,
+            memoryBankDigest: core_context.stableArchiveHash(JSON.stringify(fullBank)), memoryBankSummaryChars: summaryLimit };
+        for (const memory of distilled.memoryBank.memories) {
+            if (memory && typeof memory === 'object' && typeof memory.summary === 'string' && memory.summary.length > summaryLimit) {
+                memory.summary = core_text.normalizeText(memory.summary, summaryLimit);
+            }
+        }
+        if (summaryLimit === 700 || fits(distilled)) return distilled;
+    }
+    return snapshot;
 }
 function generationContentContext(origin, context) {
     const snapshot = generation_recovery.generationContentSnapshotForOrigin(origin);
@@ -34661,8 +35004,8 @@ async function beginModeRecovery(mode, context, bank, origin, options = {}) {
         partialSeed = { snapshot, frozenInputs: structuredClone(parent.frozenInputs || {}) };
     }
     const contentSnapshot = generation_recovery.readGenerationContentSnapshot(existing)
-        || (!existing ? snapshotGenerationContent({ ...(partialSeed?.snapshot || captureGenerationContent(context, bank)),
-            ...(options.contentInputs ? { contentInputs: { ...(partialSeed?.snapshot?.contentInputs || {}), ...options.contentInputs } } : {}) }) : null);
+        || (!existing ? fitGenerationContentSnapshot(snapshotGenerationContent({ ...(partialSeed?.snapshot || captureGenerationContent(context, bank)),
+            ...(options.contentInputs ? { contentInputs: { ...(partialSeed?.snapshot?.contentInputs || {}), ...options.contentInputs } } : {}) })) : null);
     const sourceValues = JSON.stringify(recovery_source.recoverySourceValues(context));
     await recovery_source.assertRecoverySourcePolicy(existing, context, origin);
     const sourcePolicy = await recovery_source.recoverySourcePolicy(context);
@@ -35330,7 +35673,8 @@ async function generateModeOperation(mode, options = {}) {
         }
         if (!committed && !archiveTarget) {
             core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
-            core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [mode]: session } });
+            const deferredDurable = core_requestCoordinator.queueDeferredCommit(origin, { kind: 'sessions', sessions: { [mode]: session } });
+            core_requestCoordinator.notifyDeferredCommitNotDurable(deferredDurable);
         }
 
         if (committed && recoveryHandle) await core_cache.saveGenerationRecovery(context, memoryBank, mode, null, origin, { archiveTarget, stillCurrent: archiveTargetStillCurrent });
@@ -35449,6 +35793,7 @@ __m_generation_client_js.exportSavedGeneration = exportSavedGeneration;
 __m_generation_client_js.discardSavedGeneration = discardSavedGeneration;
 __m_generation_client_js.generateMode = generateMode;
 __m_generation_client_js.generationContentSettings = generationContentSettings;
+__m_generation_client_js.fitGenerationContentSnapshot = fitGenerationContentSnapshot;
 __m_generation_client_js.generationContentContext = generationContentContext;
 __m_generation_client_js.generationWorldInfoScanTerms = generationWorldInfoScanTerms;
 __m_generation_client_js.chunkForGeneration = chunkForGeneration;
@@ -35764,12 +36109,29 @@ ${JSON.stringify(compactAlbumExisting(previousSession), null, 2)}
 - 不要输出 comments；共同回忆会在后续更小的请求里生成。只输出 JSON。`;
 }
 
+// Model output is free text: fold casing/whitespace and known aliases onto the
+// fixed set. Anything unrecognized becomes 待分类 instead of silently landing in 日常.
+const ALBUM_CATEGORY_ALIASES = new Map(Object.entries({
+    daily: '日常', everyday: '日常', routine: '日常', sliceoflife: '日常', 'slice of life': '日常',
+    '日常': '日常', '日常生活': '日常', '生活': '日常', '平常': '日常', '普通': '日常', '琐事': '日常',
+    date: '约会', dating: '约会', outing: '约会', rendezvous: '约会',
+    '约会': '约会', '约会日': '约会', '浪漫': '约会', '出游': '约会',
+    ending: '结局', finale: '结局', end: '结局', epilogue: '结局',
+    '结局': '结局', '终章': '结局', '终局': '结局', '尾声': '结局',
+}));
+
+function normalizeAlbumCategory(value) {
+    const text = core_text.normalizeText(value, 40).toLowerCase();
+    if (core_constants.CATEGORY_VALUES.has(text)) return text;
+    return ALBUM_CATEGORY_ALIASES.get(text) || '待分类';
+}
+
 function normalizeAlbumIndex(data, memoryBank, sourceMemoryIds = null) {
     const incrementalIds = sourceMemoryIds ? core_text.cleanArray(sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40) : null;
     const raw = Array.isArray(data?.entries) ? data.entries : [];
     const entries = raw.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const unlocked = !!item?.unlocked;
-        const category = core_constants.CATEGORY_VALUES.has(item?.category) ? item.category : '日常';
+        const category = normalizeAlbumCategory(item?.category);
         const visualSeed = core_text.cleanArray(item?.visualSeed, 12, 80);
         const title = core_text.normalizeText(item?.title, 80) || `回忆 ${index + 1}`;
         const desc = core_text.normalizeText(item?.desc, 1200);
@@ -35895,6 +36257,9 @@ function mergeAlbumIncremental(previous, fresh, memoryBank) {
                     ...old,
                     ...item,
                     id: old.id,
+                    // A manually chosen category is never overwritten by a model merge.
+                    category: old.categoryManual === true ? old.category : item.category,
+                    ...(old.categoryManual === true ? { categoryManual: true } : {}),
                     cgImage: generation_imageGeneration.normalizeCgImageRecord(old.cgImage) || generation_imageGeneration.normalizeCgImageRecord(item.cgImage),
                 };
             }
@@ -35976,7 +36341,7 @@ function normalizeAlbum(data, memoryBank) {
     const raw = Array.isArray(data?.entries) ? data.entries : [];
     const entries = raw.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const unlocked = !!item?.unlocked;
-        const category = core_constants.CATEGORY_VALUES.has(item?.category) ? item.category : '日常';
+        const category = normalizeAlbumCategory(item?.category);
         const visualSeed = core_text.cleanArray(item?.visualSeed, 12, 80);
         const title = core_text.normalizeText(item?.title, 80) || `回忆 ${index + 1}`;
         const desc = core_text.normalizeText(item?.desc, 1200);
@@ -36009,6 +36374,8 @@ ${hintLines.join('；')}`, memoryBank, 1);
             ...(participantSnapshot ? { speakerSnapshot: albumSpeakerIdentities(participantSnapshot), commentSpeakers: dialogue.commentSpeakers } : {}),
             hintLines,
             relationshipSnapshot,
+            // A manually chosen category survives re-normalization and later merges.
+            ...(item?.categoryManual === true ? { categoryManual: true } : {}),
         };
     }).filter(item => item.desc && item.sourceMemoryIds.length >= 1);
     const unlockedCount = entries.filter(x => x.unlocked).length;
@@ -36049,6 +36416,7 @@ __m_modes_album_js.albumRelationshipArchiveSlice = albumRelationshipArchiveSlice
 __m_modes_album_js.albumRelationshipScanPrompt = albumRelationshipScanPrompt;
 __m_modes_album_js.normalizeAlbumRelationshipSnapshot = normalizeAlbumRelationshipSnapshot;
 __m_modes_album_js.albumIndexPrompt = albumIndexPrompt;
+__m_modes_album_js.normalizeAlbumCategory = normalizeAlbumCategory;
 __m_modes_album_js.normalizeAlbumIndex = normalizeAlbumIndex;
 __m_modes_album_js.albumCommentsPrompt = albumCommentsPrompt;
 __m_modes_album_js.normalizeAlbumCommentsBatch = normalizeAlbumCommentsBatch;
@@ -36874,14 +37242,29 @@ async function createGenerationRecovery({ origin, mode, settingsIdentity, existi
         }
         const categories = { characterKey: 'character', characterId: 'character', characterAvatar: 'character',
             chatId: 'chat', archiveRevision: 'archive', archiveTargetEntryId: 'target', mode: 'operation' };
+        // characterKey embeds a card-content fingerprint. The draft lookup key
+        // (characterId + avatar + chatId) already proved same person and chat,
+        // and frozen inputs pin the original card text, so ordinary card edits
+        // that only drift the fingerprint must not be misread as a character
+        // switch. A real switch changes the slot id or avatar and still blocks.
+        let fingerprintDriftOnly = false;
         for (const [key, category] of Object.entries(categories)) {
             if (key === 'archiveRevision' && readGenerationContentSnapshot(journal) && journal.identity[key] !== identity[key]) {
                 journal.sourceIdentity ||= structuredClone(journal.identity);
                 journal.identity = { ...journal.identity, archiveRevision: identity.archiveRevision };
             }
-            if ((journal.identity[key] ?? '') !== identity[key]) throw generationRecoveryMismatch(category);
+            if ((journal.identity[key] ?? '') !== identity[key]) {
+                if (key === 'characterKey' && identity.characterAvatar
+                    && (journal.identity.characterId ?? '') === identity.characterId
+                    && (journal.identity.characterAvatar ?? '') === identity.characterAvatar
+                    && (journal.identity.chatId ?? '') === identity.chatId) {
+                    fingerprintDriftOnly = true;
+                    continue;
+                }
+                throw generationRecoveryMismatch(category);
+            }
         }
-        if (jsonData(journal.identity) !== jsonData(identity)) throw generationRecoveryMismatch('record');
+        if (!fingerprintDriftOnly && jsonData(journal.identity) !== jsonData(identity)) throw generationRecoveryMismatch('record');
         if (!readGenerationContentSnapshot(journal) && journal.settingsHash !== settingsHash) throw generationRecoveryMismatch('configuration');
     }
     journal ||= { kind: 'generation-recovery', version: 1, identity, settingsHash,
@@ -37308,7 +37691,18 @@ async function withRecoverySegment(prompt, options, validator, run) {
                 }
                 throw error;
             }
-            if (!saved && !handle.pageOnly) throw recoveryError('RMT_RECOVERY_STORAGE', '本段已返回，但浏览器没有成功保存进度；已停止后续请求。旧内容仍在，请检查本地存储后重试。');
+            if (!saved && !handle.pageOnly) {
+                // A paid reply whose journal save failed (non-capacity) reuses the
+                // capacity path's holdUnsavedReply retention: hold the raw reply in
+                // bounded page memory and attach the export hint so the user can
+                // export it from the recovery area. Unlike the capacity path there is
+                // no projection here: a failed durable journal write never publishes a
+                // readable result. The RMT_RECOVERY_STORAGE classification still stops
+                // later requests and nothing is regenerated automatically.
+                const error = recoveryError('RMT_RECOVERY_STORAGE', '本段已返回，但浏览器没有成功保存进度；已停止后续请求。旧内容仍在，请检查本地存储后重试。');
+                if (holdUnsavedReply(handle, slot, rawJson)) noteHeldReplyExport(error);
+                throw error;
+            }
             accepted = true;
             await publishGenerationRecoveryProgress(handle);
         };
@@ -41093,6 +41487,18 @@ async function regenerateManagedTarget(type, id, parentId = '') {
     return ui_contentManager.runContentRegeneration(type, id, parentId, { confirmed: true });
 }
 
+async function recategorizeManagedTarget(id, parentId = '') {
+    if (!archive_library.requireWritableArchiveAction()) return;
+    const record = managedTargetRecord('album-category', id, parentId);
+    if (!record || record.canRegenerate === false) return;
+    if (!confirmExplicitActionTwice(
+        `重新判断「${record.label}」？`,
+        '只重新判断分类并写回这一项；标题、正文、共同回忆和已生成图片都保留。模型成功返回并通过校验后才保存。',
+        { destructive: false },
+    )) return;
+    return ui_contentManager.runContentRegeneration('album-category', id, parentId, { confirmed: true });
+}
+
 async function deleteManagedCategory() {
     if (!runtimeState.activeMode || !archive_library.requireWritableArchiveAction()) return;
     const mode = runtimeState.activeMode;
@@ -41524,6 +41930,7 @@ function handleOverlayClick(event) {
     if (action === 'manage-regenerate-category') return void regenerateManagedCategory();
     if (action === 'manage-delete-category') return void deleteManagedCategory();
     if (action === 'manage-regenerate-target') return void regenerateManagedTarget(actionEl.dataset.rmtManageType, actionEl.dataset.rmtManageId, actionEl.dataset.rmtManageParent);
+    if (action === 'manage-recategorize-target') return void recategorizeManagedTarget(actionEl.dataset.rmtManageId, actionEl.dataset.rmtManageParent);
     if (action === 'manage-delete-target') return void deleteManagedTarget(actionEl.dataset.rmtManageType, actionEl.dataset.rmtManageId, actionEl.dataset.rmtManageParent);
     if (action === 'rebuild-archive-index') return void archive_library.rebuildArchiveIndexFromExisting();
     if (action === 'import-memory') return requestCurrentArchiveImport();
@@ -42254,6 +42661,15 @@ function queueDeferredCommit(origin, commit) {
     return queueDeferredCommitRecord(origin, commit).durable;
 }
 
+// A deferred (or rejected) commit whose durability was not confirmed lives only
+// in volatile page memory. Say so explicitly at the point it is queued, in the
+// established wording style; the queueing logic itself is unchanged.
+function notifyDeferredCommitNotDurable(durable) {
+    if (durable) return false;
+    globalThis.toastr?.warning?.('生成结果已保留在当前页面，但保存未确认；请先导出未提交草稿，确认保存前不要刷新页面。', '心迹回廊');
+    return true;
+}
+
 function acknowledgeDeferredCommit(key, completedItem) {
     const list = runtimeState.deferredChatCommits.get(key);
     if (!Array.isArray(list) || !completedItem) return false;
@@ -42639,23 +43055,44 @@ function runGenerationRequestWithTimeout(factory, controller, timeoutMs, statusT
     return new Promise((resolve, reject) => {
         let settled = false;
         let timer = 0;
+        // Clock-stamp timeout, not a bare setTimeout callback. A backgrounded or
+        // locked page parks timers and then fires the overdue callback all at once
+        // on resume, which used to abort requests that were still transferring
+        // normally. Judge by real visible elapsed time: while the page is hidden
+        // no timeout is declared, and time spent hidden does not count against the
+        // limit. The RMT_REQUEST_TIMEOUT code and retryable=false semantics are
+        // unchanged for requests that genuinely overstay while visible.
+        const startedAt = Date.now();
+        let hiddenAt = 0;
+        let hiddenMs = 0;
+        const pageHidden = () => {
+            try { return globalThis.document?.visibilityState === 'hidden'; } catch { return false; }
+        };
+        const visibleElapsedMs = () => Date.now() - startedAt - hiddenMs - (hiddenAt ? Date.now() - hiddenAt : 0);
         const finish = (handler, value) => {
             if (settled) return;
             settled = true;
             if (timer) clearTimeout(timer);
             try { controller.signal.removeEventListener('abort', onAbort); } catch {}
+            try { globalThis.document?.removeEventListener?.('visibilitychange', onVisibility); } catch {}
             handler(value);
         };
         const onAbort = () => {
             const reason = controller.signal.reason;
             finish(reject, reason instanceof Error ? reason : createGenerationAbortError());
         };
-        controller.signal.addEventListener('abort', onAbort, { once: true });
-        if (controller.signal.aborted) {
-            onAbort();
-            return;
-        }
-        timer = setTimeout(() => {
+        const armTimer = () => {
+            if (settled) return;
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(onTimer, Math.max(1, duration - visibleElapsedMs()));
+        };
+        const onTimer = () => {
+            timer = 0;
+            // Never declare a timeout while the page is backgrounded/frozen, and
+            // re-evaluate by the real clock after a resume instead of trusting the
+            // parked callback. A request that was already overtime while visible
+            // still times out as soon as the page is visible again.
+            if (pageHidden() || visibleElapsedMs() < duration) { armTimer(); return; }
             const seconds = Math.round(duration / 1000);
             const label = core_text.normalizeText(statusText, 120);
             const error = new Error(`${label ? `${label}：` : ''}模型请求超过 ${seconds} 秒仍未完成，已停止等待并释放任务位。请稍后重试；若反复发生，请检查代理/模型速度或降低单次输出上限。`);
@@ -42663,7 +43100,26 @@ function runGenerationRequestWithTimeout(factory, controller, timeoutMs, statusT
             error.retryable = false;
             finish(reject, error);
             try { controller.abort(error); } catch {}
-        }, duration);
+        };
+        const onVisibility = () => {
+            if (settled) return;
+            if (pageHidden()) {
+                if (!hiddenAt) hiddenAt = Date.now();
+                return;
+            }
+            if (hiddenAt) { hiddenMs += Date.now() - hiddenAt; hiddenAt = 0; }
+            // One explicit re-evaluation on return to foreground for requests that
+            // crossed a freeze: hidden time is excluded, then the timer is re-armed.
+            armTimer();
+        };
+        controller.signal.addEventListener('abort', onAbort, { once: true });
+        if (controller.signal.aborted) {
+            onAbort();
+            return;
+        }
+        try { globalThis.document?.addEventListener?.('visibilitychange', onVisibility); } catch {}
+        if (pageHidden()) hiddenAt = startedAt;
+        armTimer();
         Promise.resolve()
             .then(factory)
             .then(value => finish(resolve, value), error => finish(reject, error));
@@ -42683,9 +43139,16 @@ function segmentAttemptBudget(error) {
     return isRateLimitError(error) ? MAX_RATE_LIMIT_ATTEMPTS : MAX_SEGMENT_ATTEMPTS;
 }
 
+// Errors whose paid outcome is unknowable locally: the request may already have
+// reached the provider (or been cut mid-transfer) without a definitive answer.
+// They NEVER auto-retry, regardless of any auto-retry opt-in — an explicit
+// user-clicked retry goes through a fresh task and is unaffected.
+const UNKNOWN_OUTCOME_REQUEST_CODES = new Set(['RMT_CONNECTION_FAILED', 'RMT_CONNECTION_NETWORK', 'RMT_CONNECTION_SERVER']);
+
 function shouldRetrySegmentRequest(error, attempt = 0) {
     if (!error || error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') return false;
     if (['RMT_REQUEST_TIMEOUT', 'RMT_CONNECTION_AUTH', 'RMT_CONNECTION_QUOTA', 'RMT_CONNECTION_CONTEXT_LIMIT', 'RMT_CONNECTION_CONFIG', 'RMT_CONNECTION_INVALID_REQUEST'].includes(error?.code)) return false;
+    if (UNKNOWN_OUTCOME_REQUEST_CODES.has(error?.code)) return false;
     if (attempt + 1 >= segmentAttemptBudget(error)) return false;
     // Give up only when the endpoint itself says the wait is longer than we should
     // hold a generation slot. (Unchanged 60s contract.)
@@ -42756,6 +43219,7 @@ __m_core_requestCoordinator_js.finishLogicalGenerationTask = finishLogicalGenera
 __m_core_requestCoordinator_js.queryParticipantGenerationTasks = queryParticipantGenerationTasks;
 __m_core_requestCoordinator_js.queueDeferredCommitRecord = queueDeferredCommitRecord;
 __m_core_requestCoordinator_js.queueDeferredCommit = queueDeferredCommit;
+__m_core_requestCoordinator_js.notifyDeferredCommitNotDurable = notifyDeferredCommitNotDurable;
 __m_core_requestCoordinator_js.acknowledgeDeferredCommit = acknowledgeDeferredCommit;
 __m_core_requestCoordinator_js.deferredCommitPersistenceStatus = deferredCommitPersistenceStatus;
 __m_core_requestCoordinator_js.generationTaskKeyForMode = generationTaskKeyForMode;
@@ -43952,6 +44416,7 @@ function __init_archive_repository_js() {
 const advanced_generation = __m_core_advancedGeneration_js;
 const context_tags = __m_core_contextTags_js;
 const archive_batches = __m_archive_importBatches_js;
+const archive_coverage = __m_archive_coverageRanges_js;
 const archive_requestBudget = __m_archive_requestBudget_js;
 const core_cache = __m_core_cache_js;
 const image_patch = __m_core_cgImagePatch_js;
@@ -43981,6 +44446,7 @@ const ui_settingsPanel = __m_ui_settingsPanel_js;
 const archive_avatars = __m_ui_archiveAvatars_js;
 const participants = __m_core_participants_js;
 const runtimeState = __m_core_state_js.state;
+
 
 
 
@@ -46375,7 +46841,6 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         return live;
     };
     const incrementalUpdate = !!existing && !fullRebuild;
-    const actionLabel = fullRebuild ? '完全重建' : existing ? '增量更新' : '创建';
     const pinnedInputs = selectedDraft ? selectedDraft.inputs : continueRecovery ? archive_importRecovery.archiveRecoveryInputs(preparation.origin) : null;
     const legacyDraft = !!pinnedInputs && !pinnedInputs.batchVersion;
     // Drafts saved by this version keep the full source snapshot only at
@@ -46468,6 +46933,10 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     }
 
     const rangeChanged = incrementalUpdate && JSON.stringify(existing?.chatReadRange || null) !== JSON.stringify(snapshot.readRange);
+    // Label only: backfill vs incremental never changes what is read or merged below.
+    const operationKind = archive_coverage.archiveOperationKind({ existing, fullRebuild, rangeChanged });
+    const actionLabel = fullRebuild ? '完全重建' : existing ? archive_coverage.OPERATION_KIND_LABEL[operationKind] : '创建';
+    const coverageWindow = archive_coverage.runCoverageWindow(snapshot, { incrementalUpdate, rangeChanged, previousMessageCount });
     // Broader/revised choices may explicitly add older selected floors. The merge below
     // deduplicates already archived content and never deletes records outside the range.
     const chatInput = progress || restartImport ? snapshot.messages : incrementalUpdate && !rangeChanged ? snapshot.incrementalMessages : snapshot.messages;
@@ -46577,7 +47046,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
                 : snapshot.readRange?.mode === 'recent' ? `最近 ${snapshot.readRange.recent} 楼`
                     : `第 ${snapshot.readRange?.start}–${snapshot.readRange?.end} 楼`;
             if (!ui_overlay.confirmExplicitAction('确认本次读取范围',
-                `${progress ? `本次为第 ${progress.nextBatch + 1}/${progress.batches.length} 批，完成后停止。` : ''}${rangeLabel}；已捕获 ${chatInput.length} 条聊天正文，约 ${chatCharacters.toLocaleString()} 字符。${snapshot.readRange?.includeHidden ? '包含隐藏普通对话' : '不含隐藏对话'}。\n外部摘要独立选择：${externalChunks.length} 个分块，约 ${externalCharacters.toLocaleString()} 字符；角色/用户设定与世界书背景每次请求约 ${contextEnvelope.length.toLocaleString()} 字符。\n分块整理后还有档案概述步骤；字符数不是精确 token 或费用。已有 ${existing?.memories?.length || 0} 条档案记忆保留，不会因缩小范围而删除。`,
+                `${progress ? `本次为第 ${progress.nextBatch + 1}/${progress.batches.length} 批，完成后停止。` : ''}【${archive_coverage.OPERATION_KIND_LABEL[operationKind]}】${rangeLabel}；已捕获 ${chatInput.length} 条聊天正文，约 ${chatCharacters.toLocaleString()} 字符。${snapshot.readRange?.includeHidden ? '包含隐藏普通对话' : '不含隐藏对话'}。\n外部摘要独立选择：${externalChunks.length} 个分块，约 ${externalCharacters.toLocaleString()} 字符；角色/用户设定与世界书背景每次请求约 ${contextEnvelope.length.toLocaleString()} 字符。\n分块整理后还有档案概述步骤；字符数不是精确 token 或费用。已有 ${existing?.memories?.length || 0} 条档案记忆保留，不会因缩小范围而删除。`,
                 { destructive: false })) return { status: 'cancelled' };
             assertPreparationCurrent();
         }
@@ -46605,7 +47074,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             draftId, nextIndependentBatch,
             inputs: draftInputs,
             assertCurrent: () => core_requestCoordinator.isLogicalGenerationTaskCurrent(logicalTask) && core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)
-                && core_context.currentCharacterRuntimeKey(context) === origin.characterKey
+                && core_context.isCurrentTaskRunOrigin(origin, context)
                 && core_context.comparableChatId(core_context.getChatId(context)) === origin.chatId
                 && (getImportedMemory(context)?.archiveRevision || '') === origin.archiveRevision
                 && (taskInputV1 || archiveRecoverySettingsIdentity(context) === settingsIdentity) });
@@ -46783,6 +47252,11 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             // next explicit batch. Its original recipe/prefix is retained separately.
             if (archive_batches.hasPendingBatches(staged)) profilePending = false;
         }
+        // Floor coverage ledger: append only intervals whose paid batch is durably
+        // checkpointed in this save; a full rebuild restarts from what it re-read.
+        const coveredRanges = archive_coverage.coveredRangesForSave(fullRebuild ? null : existing, { window: coverageWindow,
+            kind: operationKind, revision: memoryBank.archiveRevision, progress: memoryBank[archive_batches.IMPORT_PROGRESS_KEY] || null });
+        if (coveredRanges.length) memoryBank.coveredRanges = coveredRanges;
         const assertBatchSaveCurrent = () => {
             core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
             if (!core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)) throw new DOMException('Runtime destroyed', 'AbortError');
@@ -46850,7 +47324,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             ui_settingsPanel.refreshSettingsMemoryStatus();
         }
         const added = Math.max(0, memories.length - (incrementalUpdate ? existing.memories.length : 0));
-        globalThis.toastr?.success?.(core_text.toastText(`${progress && archive_batches.hasPendingBatches(memoryBank[archive_batches.IMPORT_PROGRESS_KEY]) ? (capacityPending.length ? '本批部分结果入档，余下结果待入档' : '本批已保存，后续批次待点击') : `${actionLabel}完成`}：${memoryBank.archiveName} · 当前 ${memories.length} 条记忆${incrementalUpdate ? ` · 新增 ${added} 条 · 已保留原 ADV EVENT 等缓存` : ''}${!core_context.isCurrentTaskOrigin(origin) ? '（待回到原窗口写入，尚未正式保存）' : ''}`), '心迹回廊');
+        globalThis.toastr?.success?.(core_text.toastText(`${progress && archive_batches.hasPendingBatches(memoryBank[archive_batches.IMPORT_PROGRESS_KEY]) ? `【${archive_coverage.OPERATION_KIND_LABEL[operationKind]}】${capacityPending.length ? '本批部分结果入档，余下结果待入档' : '本批已保存，后续批次待点击'}` : `${actionLabel}完成`}：${memoryBank.archiveName} · 当前 ${memories.length} 条记忆${incrementalUpdate ? ` · 新增 ${added} 条 · 已保留原 ADV EVENT 等缓存` : ''}${!core_context.isCurrentTaskOrigin(origin) ? '（待回到原窗口写入，尚未正式保存）' : ''}`), '心迹回廊');
         return { status: core_context.isCurrentTaskOrigin(origin) ? 'committed' : 'deferred' };
     } catch (error) {
         const cancelled = isArchiveCancellation(error);
@@ -48168,6 +48642,7 @@ const workspace_ui = __m_ui_workspace_js;
 const archive_groups = __m_archive_groups_js;
 const archive_backupStore = __m_archive_backupStore_js;
 const archive_repository = __m_archive_repository_js;
+const archive_coverage = __m_archive_coverageRanges_js;
 const archive_snapshots = __m_archive_snapshots_js;
 const core_cache = __m_core_cache_js;
 const core_archiveCover = __m_core_archiveCover_js;
@@ -48189,6 +48664,7 @@ const runtimeState = __m_core_state_js.state;
 
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
 
 
 
@@ -49100,6 +49576,7 @@ function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchiveSnapsho
     const calendarPortal = portals.find(item => item.mode === core_constants.MODE.CALENDAR) || { session: null };
     const calendarGenerating = core_requestCoordinator.isArchiveTargetModeGenerating(core_constants.MODE.CALENDAR, snapshot);
     const calendarQuick = snapshotCalendarQuickAccessHtml({ generated: !!calendarPortal.session, readOnly: runtimeState.activeArchiveReadOnly, canGenerate: canGenerateDerived, generating: calendarGenerating });
+    const archiveCoverageText = archive_coverage.archiveCoverageText(memory);
     const portalHtml = portals.filter(item => item.mode !== core_constants.MODE.CALENDAR).map(({ mode, session, meta }) => {
         const generated = !!session;
         const generating = core_requestCoordinator.isArchiveTargetModeGenerating(mode, snapshot);
@@ -49123,6 +49600,7 @@ function showIndexedArchiveSnapshot(snapshot = runtimeState.activeArchiveSnapsho
           ${core_archiveCover.archiveCoverHtml(memory, { writable: !snapshot.backupOnly && core_context.getChatId(core_context.getContext()) === snapshot.chatId && !runtimeState.activeArchiveReadOnly, busy: runtimeState.busy || core_requestCoordinator.hasGenerationTasks() })}
           <div class="rmt-memory-status ready">${snapshot.taskResultDraftId ? '独立生成成果 · 只读查看' : snapshot.historyVersionId ? '重做前旧版本 · 永久只读' : snapshot.backupOnly ? '源聊天暂不可读 · 当前查看只读备份' : runtimeState.activeArchiveReadOnly ? '只读查看' : '编辑待命'} · ${memory.memories.length} 条记忆 · 已生成 ${generatedCount}/${core_constants.ARCHIVE_PORTAL_MODES.length}</div>
           <div class="rmt-archive-meta">${snapshot.historyVersionId ? `${core_text.esc(new Date(snapshot.historyCreatedAt).toLocaleString())} · ${core_text.esc(snapshot.historyReason || '按选择重新生成前保存')} · 未完成草稿另行保留，不计作完整作品` : snapshot.backupOnly ? `本机备份 · ${core_text.esc(snapshot.sourceError || '源聊天无法读取')}` : (runtimeState.activeArchiveReadOnly ? '当前为只读档案' : '写入前会再次验证目标聊天')}</div>
+          ${archiveCoverageText ? `<div class="rmt-archive-meta" data-rmt-archive-coverage>${core_text.esc(archiveCoverageText)}</div>` : ''}
           <div class="rmt-archive-readonly-control">
             <label><input type="checkbox" data-rmt-readonly-toggle ${runtimeState.activeArchiveReadOnly ? 'checked' : ''} ${snapshot.backupOnly ? 'disabled' : ''}> 只读查看</label>
             <small>${snapshot.taskResultDraftId ? '按原任务资料查看，当前档案与作品保留' : snapshot.historyVersionId ? '旧版本只读，当前档案与新作品不受影响' : snapshot.backupOnly ? '备份只读，不代表原聊天已删除' : runtimeState.activeArchiveReadOnly ? '关闭只读后可显示编辑操作' : '编辑待命'}</small>
@@ -50549,11 +51027,46 @@ function characterDescriptorExists(context, index) {
     return !!archive_groups.characterDescriptor(context, Number(index));
 }
 
+// Same-person check for task gates. The runtime key embeds a card-content
+// fingerprint, so any ordinary card edit (or host-side normalization on save)
+// drifts it even though the person, the slot, and the chat are unchanged —
+// the archive grouping layer and the deferred-commit lane already treat such
+// edits as the same person. Once the exact card slot and a non-empty avatar
+// still agree, fingerprint drift alone does not abort or block a task. A real
+// character switch changes the slot (or the avatar) and still hard-fails.
+function taskOriginCharacterMatches(origin, context = getContext()) {
+    try {
+        if (!origin) return false;
+        if (currentCharacterRuntimeKey(context) === origin.characterKey) return true;
+        const originCharacterId = core_text.normalizeText(origin.characterId, 40);
+        if (!originCharacterId || originCharacterId !== String(context?.characterId ?? '')) return false;
+        const originAvatar = core_text.normalizeText(origin.characterAvatar, 300);
+        return !!originAvatar && originAvatar === currentCharacterAvatar(context);
+    } catch {
+        return false;
+    }
+}
+
 function isCurrentTaskOrigin(origin, context = getContext()) {
     try {
         return !!origin
             && Number(origin.lifecycleEpoch) === runtimeState.runtimeLifecycleEpoch
             && currentCharacterRuntimeKey(context) === origin.characterKey
+            && comparableChatId(getChatId(context)) === origin.chatId;
+    } catch {
+        return false;
+    }
+}
+
+// Task-run gates that only need the person binding, not the card text: epoch +
+// same-person (card edits tolerated) + same chat. Late read/repaint paths keep
+// the stricter isCurrentTaskOrigin so a view opened under one card never
+// rebinds under edited card text mid-read.
+function isCurrentTaskRunOrigin(origin, context = getContext()) {
+    try {
+        return !!origin
+            && Number(origin.lifecycleEpoch) === runtimeState.runtimeLifecycleEpoch
+            && taskOriginCharacterMatches(origin, context)
             && comparableChatId(getChatId(context)) === origin.chatId;
     } catch {
         return false;
@@ -50586,7 +51099,9 @@ __m_core_context_js.currentCharacterRuntimeKey = currentCharacterRuntimeKey;
 __m_core_context_js.chatScopeKey = chatScopeKey;
 __m_core_context_js.captureTaskOrigin = captureTaskOrigin;
 __m_core_context_js.deferredCommitOriginMatchesContext = deferredCommitOriginMatchesContext;
+__m_core_context_js.taskOriginCharacterMatches = taskOriginCharacterMatches;
 __m_core_context_js.isCurrentTaskOrigin = isCurrentTaskOrigin;
+__m_core_context_js.isCurrentTaskRunOrigin = isCurrentTaskRunOrigin;
 }
 
 function __init_core_recoverySourcePolicy_js() {
@@ -54073,6 +54588,7 @@ __init_core_state_js();
 __init_core_settings_js();
 __init_ui_cgFormatControl_js();
 __init_archive_importBatches_js();
+__init_archive_coverageRanges_js();
 __init_archive_requestBudget_js();
 __init_core_cgVisualRules_js();
 __init_core_castLooks_js();

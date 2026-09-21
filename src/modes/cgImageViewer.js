@@ -16,6 +16,8 @@ export function closeCgImageViewer({ restoreFocus = true } = {}) {
     current.document.removeEventListener('keydown', current.onKeydown, true);
     current.host.removeEventListener('cancel', current.onCancel, true);
     current.element.removeEventListener('click', current.onClick);
+    current.element.removeEventListener('pointerdown', current.onEarlyClose, true);
+    current.element.removeEventListener('touchstart', current.onEarlyClose, true);
     current.image.removeEventListener('load', current.onLoad);
     current.image.removeEventListener('error', current.onError);
     current.element.remove();
@@ -73,12 +75,27 @@ export function openCgImageViewer(record, title = '原图', { opener = null } = 
     element.appendChild(status);
     element.appendChild(stage);
     const current = { element, host, document: doc, image, opener: previousOpener, observer: null };
+    let lastEarlyDismissAt = 0;
     const dismiss = event => {
         event.preventDefault();
         event.stopImmediatePropagation();
         closeCgImageViewer();
     };
     current.onCancel = dismiss;
+    // Touch fallback for the close button: iOS/TT WebViews can swallow the click
+    // after pinch or momentum-scroll gestures. Mirror overlay.js
+    // bindOverlayCloseFallback: capture-phase pointerdown/touchstart runs the same
+    // dismiss path, deduped with the click path within 500ms. The viewer must be
+    // exitable while loading, zoomed, or after dragging, so no state is checked.
+    current.onEarlyClose = event => {
+        if (event.type === 'pointerdown' && (Number(event.button ?? 0) !== 0 || event.isPrimary === false)) return;
+        const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+        if (!path.includes(close) && event.target !== close && !close.contains(event.target)) return;
+        const now = Date.now();
+        if (now - lastEarlyDismissAt < 500) return;
+        lastEarlyDismissAt = now;
+        dismiss(event);
+    };
     current.onKeydown = event => {
         if (event.key === 'Escape') { dismiss(event); return; }
         if (event.key !== 'Tab') return;
@@ -93,7 +110,11 @@ export function openCgImageViewer(record, title = '原图', { opener = null } = 
     };
     current.onClick = event => {
         event.stopPropagation();
-        if (event.target === close) { dismiss(event); return; }
+        // Swallow the trailing synthetic click when the touch fallback just dismissed.
+        if (event.target === close) {
+            if (Date.now() - lastEarlyDismissAt >= 500) dismiss(event);
+            return;
+        }
         if (event.target !== toggle || toggle.disabled) return;
         const native = !element.classList.contains('rmt-cg-viewer-native');
         element.classList.toggle('rmt-cg-viewer-native', native);
@@ -119,6 +140,8 @@ export function openCgImageViewer(record, title = '原图', { opener = null } = 
     image.addEventListener('load', current.onLoad);
     image.addEventListener('error', current.onError);
     element.addEventListener('click', current.onClick);
+    element.addEventListener('pointerdown', current.onEarlyClose, true);
+    element.addEventListener('touchstart', current.onEarlyClose, { capture: true, passive: false });
     doc.addEventListener('keydown', current.onKeydown, true);
     host.addEventListener('cancel', current.onCancel, true);
     shell.appendChild(element);

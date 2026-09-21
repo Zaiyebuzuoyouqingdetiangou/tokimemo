@@ -1,9 +1,9 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.108-tt-cg-r84.32-oversize-egress",
+  "js": "index.js?heartbeat=0.8.110-tt-cg-r84.34-p0-quad-fix",
   "author": "Toto",
-  "version": "0.8.108",
+  "version": "0.8.110",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {

@@ -288,12 +288,29 @@ ${JSON.stringify(compactAlbumExisting(previousSession), null, 2)}
 - 不要输出 comments；共同回忆会在后续更小的请求里生成。只输出 JSON。`;
 }
 
+// Model output is free text: fold casing/whitespace and known aliases onto the
+// fixed set. Anything unrecognized becomes 待分类 instead of silently landing in 日常.
+const ALBUM_CATEGORY_ALIASES = new Map(Object.entries({
+    daily: '日常', everyday: '日常', routine: '日常', sliceoflife: '日常', 'slice of life': '日常',
+    '日常': '日常', '日常生活': '日常', '生活': '日常', '平常': '日常', '普通': '日常', '琐事': '日常',
+    date: '约会', dating: '约会', outing: '约会', rendezvous: '约会',
+    '约会': '约会', '约会日': '约会', '浪漫': '约会', '出游': '约会',
+    ending: '结局', finale: '结局', end: '结局', epilogue: '结局',
+    '结局': '结局', '终章': '结局', '终局': '结局', '尾声': '结局',
+}));
+
+export function normalizeAlbumCategory(value) {
+    const text = core_text.normalizeText(value, 40).toLowerCase();
+    if (core_constants.CATEGORY_VALUES.has(text)) return text;
+    return ALBUM_CATEGORY_ALIASES.get(text) || '待分类';
+}
+
 export function normalizeAlbumIndex(data, memoryBank, sourceMemoryIds = null) {
     const incrementalIds = sourceMemoryIds ? core_text.cleanArray(sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40) : null;
     const raw = Array.isArray(data?.entries) ? data.entries : [];
     const entries = raw.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const unlocked = !!item?.unlocked;
-        const category = core_constants.CATEGORY_VALUES.has(item?.category) ? item.category : '日常';
+        const category = normalizeAlbumCategory(item?.category);
         const visualSeed = core_text.cleanArray(item?.visualSeed, 12, 80);
         const title = core_text.normalizeText(item?.title, 80) || `回忆 ${index + 1}`;
         const desc = core_text.normalizeText(item?.desc, 1200);
@@ -419,6 +436,9 @@ export function mergeAlbumIncremental(previous, fresh, memoryBank) {
                     ...old,
                     ...item,
                     id: old.id,
+                    // A manually chosen category is never overwritten by a model merge.
+                    category: old.categoryManual === true ? old.category : item.category,
+                    ...(old.categoryManual === true ? { categoryManual: true } : {}),
                     cgImage: generation_imageGeneration.normalizeCgImageRecord(old.cgImage) || generation_imageGeneration.normalizeCgImageRecord(item.cgImage),
                 };
             }
@@ -500,7 +520,7 @@ export function normalizeAlbum(data, memoryBank) {
     const raw = Array.isArray(data?.entries) ? data.entries : [];
     const entries = raw.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const unlocked = !!item?.unlocked;
-        const category = core_constants.CATEGORY_VALUES.has(item?.category) ? item.category : '日常';
+        const category = normalizeAlbumCategory(item?.category);
         const visualSeed = core_text.cleanArray(item?.visualSeed, 12, 80);
         const title = core_text.normalizeText(item?.title, 80) || `回忆 ${index + 1}`;
         const desc = core_text.normalizeText(item?.desc, 1200);
@@ -533,6 +553,8 @@ ${hintLines.join('；')}`, memoryBank, 1);
             ...(participantSnapshot ? { speakerSnapshot: albumSpeakerIdentities(participantSnapshot), commentSpeakers: dialogue.commentSpeakers } : {}),
             hintLines,
             relationshipSnapshot,
+            // A manually chosen category survives re-normalization and later merges.
+            ...(item?.categoryManual === true ? { categoryManual: true } : {}),
         };
     }).filter(item => item.desc && item.sourceMemoryIds.length >= 1);
     const unlockedCount = entries.filter(x => x.unlocked).length;

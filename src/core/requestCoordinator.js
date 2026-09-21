@@ -180,6 +180,15 @@ export function queueDeferredCommit(origin, commit) {
     return queueDeferredCommitRecord(origin, commit).durable;
 }
 
+// A deferred (or rejected) commit whose durability was not confirmed lives only
+// in volatile page memory. Say so explicitly at the point it is queued, in the
+// established wording style; the queueing logic itself is unchanged.
+export function notifyDeferredCommitNotDurable(durable) {
+    if (durable) return false;
+    globalThis.toastr?.warning?.('生成结果已保留在当前页面，但保存未确认；请先导出未提交草稿，确认保存前不要刷新页面。', '心迹回廊');
+    return true;
+}
+
 export function acknowledgeDeferredCommit(key, completedItem) {
     const list = runtimeState.deferredChatCommits.get(key);
     if (!Array.isArray(list) || !completedItem) return false;
@@ -565,23 +574,44 @@ export function runGenerationRequestWithTimeout(factory, controller, timeoutMs, 
     return new Promise((resolve, reject) => {
         let settled = false;
         let timer = 0;
+        // Clock-stamp timeout, not a bare setTimeout callback. A backgrounded or
+        // locked page parks timers and then fires the overdue callback all at once
+        // on resume, which used to abort requests that were still transferring
+        // normally. Judge by real visible elapsed time: while the page is hidden
+        // no timeout is declared, and time spent hidden does not count against the
+        // limit. The RMT_REQUEST_TIMEOUT code and retryable=false semantics are
+        // unchanged for requests that genuinely overstay while visible.
+        const startedAt = Date.now();
+        let hiddenAt = 0;
+        let hiddenMs = 0;
+        const pageHidden = () => {
+            try { return globalThis.document?.visibilityState === 'hidden'; } catch { return false; }
+        };
+        const visibleElapsedMs = () => Date.now() - startedAt - hiddenMs - (hiddenAt ? Date.now() - hiddenAt : 0);
         const finish = (handler, value) => {
             if (settled) return;
             settled = true;
             if (timer) clearTimeout(timer);
             try { controller.signal.removeEventListener('abort', onAbort); } catch {}
+            try { globalThis.document?.removeEventListener?.('visibilitychange', onVisibility); } catch {}
             handler(value);
         };
         const onAbort = () => {
             const reason = controller.signal.reason;
             finish(reject, reason instanceof Error ? reason : createGenerationAbortError());
         };
-        controller.signal.addEventListener('abort', onAbort, { once: true });
-        if (controller.signal.aborted) {
-            onAbort();
-            return;
-        }
-        timer = setTimeout(() => {
+        const armTimer = () => {
+            if (settled) return;
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(onTimer, Math.max(1, duration - visibleElapsedMs()));
+        };
+        const onTimer = () => {
+            timer = 0;
+            // Never declare a timeout while the page is backgrounded/frozen, and
+            // re-evaluate by the real clock after a resume instead of trusting the
+            // parked callback. A request that was already overtime while visible
+            // still times out as soon as the page is visible again.
+            if (pageHidden() || visibleElapsedMs() < duration) { armTimer(); return; }
             const seconds = Math.round(duration / 1000);
             const label = core_text.normalizeText(statusText, 120);
             const error = new Error(`${label ? `${label}：` : ''}模型请求超过 ${seconds} 秒仍未完成，已停止等待并释放任务位。请稍后重试；若反复发生，请检查代理/模型速度或降低单次输出上限。`);
@@ -589,7 +619,26 @@ export function runGenerationRequestWithTimeout(factory, controller, timeoutMs, 
             error.retryable = false;
             finish(reject, error);
             try { controller.abort(error); } catch {}
-        }, duration);
+        };
+        const onVisibility = () => {
+            if (settled) return;
+            if (pageHidden()) {
+                if (!hiddenAt) hiddenAt = Date.now();
+                return;
+            }
+            if (hiddenAt) { hiddenMs += Date.now() - hiddenAt; hiddenAt = 0; }
+            // One explicit re-evaluation on return to foreground for requests that
+            // crossed a freeze: hidden time is excluded, then the timer is re-armed.
+            armTimer();
+        };
+        controller.signal.addEventListener('abort', onAbort, { once: true });
+        if (controller.signal.aborted) {
+            onAbort();
+            return;
+        }
+        try { globalThis.document?.addEventListener?.('visibilitychange', onVisibility); } catch {}
+        if (pageHidden()) hiddenAt = startedAt;
+        armTimer();
         Promise.resolve()
             .then(factory)
             .then(value => finish(resolve, value), error => finish(reject, error));
@@ -609,9 +658,16 @@ export function segmentAttemptBudget(error) {
     return isRateLimitError(error) ? MAX_RATE_LIMIT_ATTEMPTS : MAX_SEGMENT_ATTEMPTS;
 }
 
+// Errors whose paid outcome is unknowable locally: the request may already have
+// reached the provider (or been cut mid-transfer) without a definitive answer.
+// They NEVER auto-retry, regardless of any auto-retry opt-in — an explicit
+// user-clicked retry goes through a fresh task and is unaffected.
+const UNKNOWN_OUTCOME_REQUEST_CODES = new Set(['RMT_CONNECTION_FAILED', 'RMT_CONNECTION_NETWORK', 'RMT_CONNECTION_SERVER']);
+
 export function shouldRetrySegmentRequest(error, attempt = 0) {
     if (!error || error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') return false;
     if (['RMT_REQUEST_TIMEOUT', 'RMT_CONNECTION_AUTH', 'RMT_CONNECTION_QUOTA', 'RMT_CONNECTION_CONTEXT_LIMIT', 'RMT_CONNECTION_CONFIG', 'RMT_CONNECTION_INVALID_REQUEST'].includes(error?.code)) return false;
+    if (UNKNOWN_OUTCOME_REQUEST_CODES.has(error?.code)) return false;
     if (attempt + 1 >= segmentAttemptBudget(error)) return false;
     // Give up only when the endpoint itself says the wait is longer than we should
     // hold a generation slot. (Unchanged 60s contract.)

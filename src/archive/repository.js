@@ -1,6 +1,7 @@
 import * as advanced_generation from '../core/advancedGeneration.js';
 import * as context_tags from '../core/contextTags.js';
 import * as archive_batches from './importBatches.js';
+import * as archive_coverage from './coverageRanges.js';
 import * as archive_requestBudget from './requestBudget.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -2409,7 +2410,6 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         return live;
     };
     const incrementalUpdate = !!existing && !fullRebuild;
-    const actionLabel = fullRebuild ? '完全重建' : existing ? '增量更新' : '创建';
     const pinnedInputs = selectedDraft ? selectedDraft.inputs : continueRecovery ? archive_importRecovery.archiveRecoveryInputs(preparation.origin) : null;
     const legacyDraft = !!pinnedInputs && !pinnedInputs.batchVersion;
     // Drafts saved by this version keep the full source snapshot only at
@@ -2502,6 +2502,10 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
     }
 
     const rangeChanged = incrementalUpdate && JSON.stringify(existing?.chatReadRange || null) !== JSON.stringify(snapshot.readRange);
+    // Label only: backfill vs incremental never changes what is read or merged below.
+    const operationKind = archive_coverage.archiveOperationKind({ existing, fullRebuild, rangeChanged });
+    const actionLabel = fullRebuild ? '完全重建' : existing ? archive_coverage.OPERATION_KIND_LABEL[operationKind] : '创建';
+    const coverageWindow = archive_coverage.runCoverageWindow(snapshot, { incrementalUpdate, rangeChanged, previousMessageCount });
     // Broader/revised choices may explicitly add older selected floors. The merge below
     // deduplicates already archived content and never deletes records outside the range.
     const chatInput = progress || restartImport ? snapshot.messages : incrementalUpdate && !rangeChanged ? snapshot.incrementalMessages : snapshot.messages;
@@ -2611,7 +2615,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
                 : snapshot.readRange?.mode === 'recent' ? `最近 ${snapshot.readRange.recent} 楼`
                     : `第 ${snapshot.readRange?.start}–${snapshot.readRange?.end} 楼`;
             if (!ui_overlay.confirmExplicitAction('确认本次读取范围',
-                `${progress ? `本次为第 ${progress.nextBatch + 1}/${progress.batches.length} 批，完成后停止。` : ''}${rangeLabel}；已捕获 ${chatInput.length} 条聊天正文，约 ${chatCharacters.toLocaleString()} 字符。${snapshot.readRange?.includeHidden ? '包含隐藏普通对话' : '不含隐藏对话'}。\n外部摘要独立选择：${externalChunks.length} 个分块，约 ${externalCharacters.toLocaleString()} 字符；角色/用户设定与世界书背景每次请求约 ${contextEnvelope.length.toLocaleString()} 字符。\n分块整理后还有档案概述步骤；字符数不是精确 token 或费用。已有 ${existing?.memories?.length || 0} 条档案记忆保留，不会因缩小范围而删除。`,
+                `${progress ? `本次为第 ${progress.nextBatch + 1}/${progress.batches.length} 批，完成后停止。` : ''}【${archive_coverage.OPERATION_KIND_LABEL[operationKind]}】${rangeLabel}；已捕获 ${chatInput.length} 条聊天正文，约 ${chatCharacters.toLocaleString()} 字符。${snapshot.readRange?.includeHidden ? '包含隐藏普通对话' : '不含隐藏对话'}。\n外部摘要独立选择：${externalChunks.length} 个分块，约 ${externalCharacters.toLocaleString()} 字符；角色/用户设定与世界书背景每次请求约 ${contextEnvelope.length.toLocaleString()} 字符。\n分块整理后还有档案概述步骤；字符数不是精确 token 或费用。已有 ${existing?.memories?.length || 0} 条档案记忆保留，不会因缩小范围而删除。`,
                 { destructive: false })) return { status: 'cancelled' };
             assertPreparationCurrent();
         }
@@ -2639,7 +2643,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             draftId, nextIndependentBatch,
             inputs: draftInputs,
             assertCurrent: () => core_requestCoordinator.isLogicalGenerationTaskCurrent(logicalTask) && core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)
-                && core_context.currentCharacterRuntimeKey(context) === origin.characterKey
+                && core_context.isCurrentTaskRunOrigin(origin, context)
                 && core_context.comparableChatId(core_context.getChatId(context)) === origin.chatId
                 && (getImportedMemory(context)?.archiveRevision || '') === origin.archiveRevision
                 && (taskInputV1 || archiveRecoverySettingsIdentity(context) === settingsIdentity) });
@@ -2817,6 +2821,11 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             // next explicit batch. Its original recipe/prefix is retained separately.
             if (archive_batches.hasPendingBatches(staged)) profilePending = false;
         }
+        // Floor coverage ledger: append only intervals whose paid batch is durably
+        // checkpointed in this save; a full rebuild restarts from what it re-read.
+        const coveredRanges = archive_coverage.coveredRangesForSave(fullRebuild ? null : existing, { window: coverageWindow,
+            kind: operationKind, revision: memoryBank.archiveRevision, progress: memoryBank[archive_batches.IMPORT_PROGRESS_KEY] || null });
+        if (coveredRanges.length) memoryBank.coveredRanges = coveredRanges;
         const assertBatchSaveCurrent = () => {
             core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
             if (!core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)) throw new DOMException('Runtime destroyed', 'AbortError');
@@ -2884,7 +2893,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             ui_settingsPanel.refreshSettingsMemoryStatus();
         }
         const added = Math.max(0, memories.length - (incrementalUpdate ? existing.memories.length : 0));
-        globalThis.toastr?.success?.(core_text.toastText(`${progress && archive_batches.hasPendingBatches(memoryBank[archive_batches.IMPORT_PROGRESS_KEY]) ? (capacityPending.length ? '本批部分结果入档，余下结果待入档' : '本批已保存，后续批次待点击') : `${actionLabel}完成`}：${memoryBank.archiveName} · 当前 ${memories.length} 条记忆${incrementalUpdate ? ` · 新增 ${added} 条 · 已保留原 ADV EVENT 等缓存` : ''}${!core_context.isCurrentTaskOrigin(origin) ? '（待回到原窗口写入，尚未正式保存）' : ''}`), '心迹回廊');
+        globalThis.toastr?.success?.(core_text.toastText(`${progress && archive_batches.hasPendingBatches(memoryBank[archive_batches.IMPORT_PROGRESS_KEY]) ? `【${archive_coverage.OPERATION_KIND_LABEL[operationKind]}】${capacityPending.length ? '本批部分结果入档，余下结果待入档' : '本批已保存，后续批次待点击'}` : `${actionLabel}完成`}：${memoryBank.archiveName} · 当前 ${memories.length} 条记忆${incrementalUpdate ? ` · 新增 ${added} 条 · 已保留原 ADV EVENT 等缓存` : ''}${!core_context.isCurrentTaskOrigin(origin) ? '（待回到原窗口写入，尚未正式保存）' : ''}`), '心迹回廊');
         return { status: core_context.isCurrentTaskOrigin(origin) ? 'committed' : 'deferred' };
     } catch (error) {
         const cancelled = isArchiveCancellation(error);

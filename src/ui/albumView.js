@@ -64,9 +64,13 @@ export function renderAlbum() {
     </article>`;
     }).join('');
     const hint = selected && !selected.unlocked && session.hintVisible ? selected.hintLines.join('\n') : '';
+    const categoryEditor = selected && !readOnlyArchive
+        ? `<label>分类 <select data-rmt-album-category="${core_text.esc(selected.id)}">${[...core_constants.CATEGORY_VALUES].map(cat => `<option value="${core_text.esc(cat)}"${cat === selected.category ? ' selected' : ''}>${core_text.esc(cat)}</option>`).join('')}</select>${selected.categoryManual === true ? '（手动）' : ''}</label>`
+        : '';
     const info = selected ? `<aside class="rmt-info">
       <h3>${core_text.esc(selected.unlocked ? selected.title : `（未解锁）${selected.title}`)}</h3>
       <div class="rmt-info-date">${core_text.esc(selected.date)} · ${core_text.esc(ui_albumCategory.albumDisplayCategory(selected))}</div>
+      ${categoryEditor}
       <div class="rmt-info-desc">${core_text.esc(selected.desc)}</div>
       <div class="rmt-actions">
         <button type="button" class="rmt-btn rmt-memory-primary" data-rmt-action="shared-memory" ${selected.unlocked ? '' : 'disabled'}>${selected.unlocked ? '走进共同回忆' : '尚未解锁'}</button>
@@ -87,6 +91,11 @@ export function renderAlbum() {
         ${info}
       </div>
     </div>`;
+    body.querySelector?.('[data-rmt-album-category]')?.addEventListener?.('change', event => {
+        const select = event.currentTarget;
+        void albumSetCategory(select.dataset.rmtAlbumCategory, select.value)
+            .catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'));
+    });
     cg_format_ui.mountCgFormatControl(body, 'album', '', readOnlyArchive);
 }
 
@@ -209,6 +218,21 @@ export async function albumSetCommentSpeaker(entryId, index, speakerId) {
         return session;
     }, { select: session => session.entries?.find(entry => entry.id === entryId) });
     renderSharedMemory();
+}
+
+export async function albumSetCategory(entryId, category) {
+    if (!archive_library.requireWritableArchiveAction()) return;
+    if (!core_constants.CATEGORY_VALUES.has(category)) return;
+    const item = runtimeState.activeSession?.entries?.find(entry => entry.id === entryId);
+    if (!item || item.category === category) return;
+    await ui_overlay.saveActiveSessionEdit(session => {
+        const latest = session.entries.find(entry => entry.id === entryId);
+        // Manual choice wins over every later model merge/regeneration.
+        latest.category = category;
+        latest.categoryManual = true;
+        return session;
+    }, { select: session => session.entries?.find(entry => entry.id === entryId) });
+    renderAlbum();
 }
 
 export function renderSharedMemory() {

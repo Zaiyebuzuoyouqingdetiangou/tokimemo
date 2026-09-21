@@ -4,6 +4,7 @@ import * as cg_format_ui from './cgFormatControl.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_repository from '../archive/repository.js';
+import * as archive_coverage from '../archive/coverageRanges.js';
 import * as source_guard from '../archive/sourceReadGuard.js';
 import * as archive_library from '../archive/library.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
@@ -1039,8 +1040,15 @@ export function mountSettings({ homeTarget = null } = {}) {
         if (event.target.closest?.('[data-rmt-read-preview]')) {
             const status = panel.querySelector('[data-rmt-read-preview-status]');
             try {
-                const preview = core_chatReadRange.readRangePreview(core_context.currentCharacterGuard(), core_settings.getPluginSettings());
-                status.textContent = `${preview.label} · 共 ${preview.totalFloors} 楼，选中 ${preview.selectedFloors} 楼（普通 ${preview.visibleCount} / 隐藏 ${preview.hiddenCount}），约 ${preview.characters.toLocaleString()} 字符。仅本地预览，未发起生成。`;
+                const context = core_context.currentCharacterGuard();
+                const preview = core_chatReadRange.readRangePreview(context, core_settings.getPluginSettings());
+                const bank = archive_repository.getImportedMemory(context);
+                const coverage = archive_coverage.archiveCoverageSummary(bank, preview.start ? preview : null);
+                const coverageNote = !bank ? ''
+                    : coverage.covered.length ? `档案已整理 ${archive_coverage.formatCoveredRanges(coverage.covered)}。` : '档案尚未记录已整理楼层区间。';
+                const gapNote = !coverageNote ? '' : coverage.gaps.length ? `本次范围内缺口：${archive_coverage.formatFloorGaps(coverage.gaps)}。` : (preview.start ? '本次范围内没有缺口。' : '');
+                const suggestNote = coverageNote && coverage.suggested ? `建议下一段补录范围：第 ${coverage.suggested.start}–${coverage.suggested.end} 楼（切换为“指定楼号范围”后填写）。` : '';
+                status.textContent = `${preview.label} · 共 ${preview.totalFloors} 楼，选中 ${preview.selectedFloors} 楼（普通 ${preview.visibleCount} / 隐藏 ${preview.hiddenCount}），约 ${preview.characters.toLocaleString()} 字符。仅本地预览，未发起生成。${coverageNote}${gapNote}${suggestNote}`;
             } catch (error) { status.textContent = core_text.safeErrorSummary(error); }
             return;
         }
