@@ -111,7 +111,7 @@ ${root} :is(.rmt-api-status,.rmt-progress,.rmt-archive-meta,.rmt-api-note){font-
 ${root} :is(input:not([type="checkbox"]):not([type="color"]):not([type="range"]),textarea,select){font-size:16px!important}
 ${root} button:disabled{opacity:.55!important;cursor:default}
 ${root} .rmt-avatar-dialog-close{width:44px;height:44px}
-@media(max-width:700px){${root} .rmt-topbar button[data-rmt-action]{font-size:0!important}}
+@media(max-width:700px){${root} .rmt-topbar button[data-rmt-action]:not(.rmt-live-chip){font-size:0!important}}
 ${root} .rmt-theme-custom-panel{grid-template-columns:repeat(2,minmax(0,1fr))}
 ${root} .rmt-theme-custom-panel label{padding:10px;background:var(--rmt-theme-surface-solid);border-color:var(--rmt-theme-border)}
 ${root} .rmt-theme-custom-panel input[type="color"]{width:100%;height:44px;min-height:44px;padding:3px;border:1px solid var(--rmt-theme-border)}

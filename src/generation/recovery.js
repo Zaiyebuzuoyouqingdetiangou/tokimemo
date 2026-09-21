@@ -16,6 +16,11 @@ const handles = new WeakMap();
 const handleBindings = new WeakMap();
 const requestTokens = new WeakMap();
 const internalHandles = new WeakSet();
+let truncationContinueHandler = null;
+
+export function setTruncationContinueHandler(handler) {
+    truncationContinueHandler = typeof handler === 'function' ? handler : null;
+}
 const TOKEN = Symbol('generation-recovery-request');
 const DIGEST = /^[a-f0-9]{64}$/;
 const FAILURE_CODE = /^(?:RMT_[A-Z0-9_]{1,80}|RMT_BUTTERFLY_(?:systemNote|monologue|intervention|omega|worldSpec|relationship|unique))$/;
@@ -886,16 +891,30 @@ export async function recordRecoveryTruncation(options, raw, error) {
         }
         throw changeError;
     }
-    // No hidden second paid request after a captured truncation; continuation is explicit.
+    // Empty replies reroll the whole segment. A half-written reply is continued once,
+    // keeping the partial instead of discarding it.
     error.retryableJson = false;
     error.retryable = false;
     error.safeToDisplay = true;
     error.safeUserMessage = record.handle.durable
-        ? '本段正文未写完，草稿和此前成功分段已保存。可点击“继续生成”补齐当前段，不重做成功项。'
-        : record.handle.pageOnly ? '本段正文未写完，草稿和此前成功分段暂存于当前页面。请勿刷新页面；可点击“继续生成”补齐当前段。'
+        ? '本段正文写到一半。已保留写好的部分，并会自动接着补；也可以在任务中心点“继续生成”。'
+        : record.handle.pageOnly ? '本段正文写到一半，草稿暂存在当前页面。请勿刷新；会自动接着补，也可以点“继续生成”。'
         : '本段正文未写完，但浏览器没有成功保存这段草稿；旧内容仍在，请检查本地存储后重试。';
     error.message = error.safeUserMessage;
     await publishGenerationRecoveryProgress(record.handle);
+    if (record.handle.durable && typeof truncationContinueHandler === 'function') {
+        const journal = record.handle.journal;
+        const summary = generationRecoverySummary(journal);
+        if (summary?.canContinue && summary.mode && journal?.draftId) {
+            try {
+                truncationContinueHandler({
+                    mode: summary.mode,
+                    draftId: journal.draftId,
+                    pageId: typeof journal.pageId === 'string' ? journal.pageId : '',
+                });
+            } catch { /* The task center still offers 继续生成. */ }
+        }
+    }
     return true;
 }
 

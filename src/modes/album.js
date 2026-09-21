@@ -10,6 +10,7 @@ import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
 import * as core_presentExpression from '../core/presentExpression.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
+import * as core_settings from '../core/settings.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_imageGeneration from '../generation/imageGeneration.js';
@@ -467,6 +468,10 @@ export function mergeAlbumIncremental(previous, fresh, memoryBank) {
 export async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, options = {}) {
     const participantSnapshot = core_participants.normalizeParticipantSnapshot(options.participantSnapshot || null);
     const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ALBUM, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
+    const fillCommentsNow = options.secondStep === true || core_settings.getPluginSettings().autoSecondPass === true;
+    if (options.secondStep === true && previous?.entries?.length) {
+        return fillAlbumComments(context, memoryBank, origin, taskKey, previous, participantSnapshot);
+    }
     const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
     const index = await generation_client.requestValidatedSegment(
         albumIndexPrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
@@ -482,6 +487,20 @@ export async function generateAlbumWithRepair(context, memoryBank, origin, taskK
     if (previous && !index.entries.length) {
         return core_incremental.stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0);
     }
+    if (!fillCommentsNow) {
+        const fresh = normalizeAlbum({
+            title: index.title,
+            ...(participantSnapshot ? { participantSnapshot } : {}),
+            entries: index.entries.map(item => ({ ...item, comments: [], relationshipSnapshot: null })),
+        }, memoryBank, { catalogOnly: true });
+        core_requestCoordinator.noteSecondStepOffer(origin, {
+            label: '共同回忆', kind: 'album-comments', mode: core_constants.MODE.ALBUM, pageId: core_constants.MODE.ALBUM,
+        });
+        const merged = mergeAlbumIncremental(previous, fresh, memoryBank);
+        const added = Math.max(0, merged.entries.length - (previous?.entries?.length || 0));
+        return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
+    }
+    core_requestCoordinator.noteSecondStepOffer(origin, null);
     const unlocked = index.entries.filter(item => item.unlocked);
     const relationshipSnapshot = await generation_client.requestValidatedSegment(
         albumRelationshipScanPrompt(context, memoryBank, participantSnapshot),
@@ -516,7 +535,45 @@ export async function generateAlbumWithRepair(context, memoryBank, origin, taskK
     return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
-export function normalizeAlbum(data, memoryBank) {
+async function fillAlbumComments(context, memoryBank, origin, taskKey, previous, participantSnapshot) {
+    core_requestCoordinator.noteSecondStepOffer(origin, null);
+    const unlocked = previous.entries.filter(item => item.unlocked && (item.comments?.length || 0) < 4);
+    if (!unlocked.length) return previous;
+    const relationshipSnapshot = await generation_client.requestValidatedSegment(
+        albumRelationshipScanPrompt(context, memoryBank, participantSnapshot),
+        '回忆相簿 · 正在扫描双方当下感情状态…',
+        { maxTokens: 3200, temperature: 0.25, context, origin, taskKey: `${taskKey}:relationship-scan`, mode: core_constants.MODE.ALBUM, background: true },
+        raw => normalizeAlbumRelationshipSnapshot(raw, memoryBank, participantSnapshot),
+    );
+    const batches = generation_client.chunkForGeneration(unlocked, 3);
+    const commentMaps = await generation_client.mapGenerationConcurrent(batches, core_constants.SEGMENT_REQUEST_CONCURRENCY,
+        (batch, batchIndex) => generation_client.requestValidatedSegment(
+            albumCommentsPrompt(context, memoryBank, batch, relationshipSnapshot, participantSnapshot),
+            `回忆相簿 · 共同回忆 ${batchIndex + 1}/${batches.length}…`,
+            { maxTokens: 6000, context, origin, taskKey: `${taskKey}:comments:${batchIndex}`, mode: core_constants.MODE.ALBUM, background: true },
+            data => normalizeAlbumCommentsBatch(data, batch, participantSnapshot),
+        ));
+    const allComments = new Map();
+    for (const map of commentMaps) for (const [id, comments] of map.entries()) allComments.set(id, comments);
+    const fresh = normalizeAlbum({
+        title: previous.title,
+        ...(participantSnapshot ? { participantSnapshot } : {}),
+        entries: previous.entries.map(item => {
+            const packed = allComments.get(item.id);
+            const commentFields = participantSnapshot
+                ? (packed && !Array.isArray(packed) ? packed : { comments: item.comments || [], commentSpeakers: item.commentSpeakers || [] })
+                : { comments: Array.isArray(packed) ? packed : (item.comments || []) };
+            return {
+                ...item,
+                ...commentFields,
+                relationshipSnapshot: item.unlocked ? structuredClone(relationshipSnapshot) : item.relationshipSnapshot,
+            };
+        }),
+    }, memoryBank);
+    return fresh;
+}
+
+export function normalizeAlbum(data, memoryBank, options = {}) {
     const raw = Array.isArray(data?.entries) ? data.entries : [];
     const entries = raw.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS).map((item, index) => {
         const unlocked = !!item?.unlocked;
@@ -563,7 +620,7 @@ ${hintLines.join('；')}`, memoryBank, 1);
     }
     for (const item of entries) {
         const minimumComments = item.relationshipSnapshot ? 6 : 4;
-        if (item.unlocked && item.comments.length < minimumComments) {
+        if (!options.catalogOnly && item.unlocked && item.comments.length < minimumComments) {
             throw new Error(`已解锁条目“${item.title}”的共同回忆不足 ${minimumComments} 段。`);
         }
         if (!item.unlocked && item.hintLines.length < 1) {

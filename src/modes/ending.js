@@ -6,6 +6,7 @@ import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
+import * as core_settings from '../core/settings.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
@@ -442,7 +443,7 @@ export function mergeEndingConfessions(previousList, freshList) {
     return { items: merged, added };
 }
 
-export function mergeEndingIncremental(previous, outline, detailed, freshConfessions, memoryBank, revisit = false) {
+export function mergeEndingIncremental(previous, outline, detailed, freshConfessions, memoryBank, revisit = false, catalogOnly = false) {
     if (revisit) outline = { ...outline, relationshipState: previous.relationshipState, relationshipSummary: previous.relationshipSummary,
         relationshipSourceMemoryIds: previous.relationshipSourceMemoryIds, relationshipSourceMemoryAnchor: previous.relationshipSourceMemoryAnchor };
     const merged = structuredClone(previous);
@@ -494,7 +495,7 @@ export function mergeEndingIncremental(previous, outline, detailed, freshConfess
     const confessionMerge = mergeEndingConfessions(previous.confessionReplays, freshConfessions);
     merged.confessionReplays = confessionMerge.items;
     merged.recommendedEndingId = recommended;
-    const normalized = normalizeEnding(merged, memoryBank);
+    const normalized = normalizeEnding(merged, memoryBank, { catalogOnly });
     // Expansion identity is local metadata, never authority accepted from model output.
     const localRounds = new Map(merged.endings.map(item => [item.id, item.expansionRound]));
     normalized.endings.forEach(item => { if (localRounds.get(item.id)) item.expansionRound = localRounds.get(item.id); });
@@ -621,9 +622,58 @@ export function normalizeEndingRouteDetail(data, route) {
     };
 }
 
+function endingNeedsScenes(session) {
+    return !!session?.endings?.some(item => item.available && String(item.endingScene || '').length < 320);
+}
+
+async function fillEndingScenes(context, memoryBank, origin, taskKey, previous) {
+    core_requestCoordinator.noteSecondStepOffer(origin, null);
+    const available = previous.endings.filter(item => item.available && String(item.endingScene || '').length < 320);
+    if (!available.length) return previous;
+    const outline = {
+        title: previous.title,
+        relationshipState: previous.relationshipState,
+        relationshipSummary: previous.relationshipSummary,
+        relationshipSourceMemoryIds: previous.relationshipSourceMemoryIds,
+        relationshipSourceMemoryAnchor: previous.relationshipSourceMemoryAnchor,
+        recommendedEndingId: previous.recommendedEndingId,
+        endings: previous.endings,
+    };
+    const detailed = await generation_client.mapGenerationConcurrent(available, core_constants.SEGMENT_REQUEST_CONCURRENCY,
+        (route, index) => generation_client.requestValidatedSegment(
+            endingRouteDetailPrompt(context, memoryBank, outline, route),
+            `ENDING · 路线正文 ${index + 1}/${available.length}：${route.title}…`,
+            { maxTokens: 9000, context, origin, taskKey: `${taskKey}:route:${route.id}`, mode: core_constants.MODE.ENDING, background: true },
+            raw => normalizeEndingRouteDetail(raw, route),
+        ));
+    let confessionReplays = previous.confessionReplays || [];
+    try {
+        confessionReplays = await generation_client.requestValidatedSegment(
+            endingConfessionRefreshPrompt(context, memoryBank, previous),
+            'ENDING · 正在扫描已发生告白…',
+            { maxTokens: 8000, temperature: 0.35, context, origin, taskKey: `${taskKey}:confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
+            raw => normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank),
+        );
+    } catch (error) {
+        if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE'
+            || error?.code === 'RMT_JSON_TRUNCATED' || String(error?.code || '').startsWith('RMT_RECOVERY_')) throw error;
+        confessionReplays = previous.confessionReplays || [];
+    }
+    const detailedById = new Map(detailed.map(item => [item.id, item]));
+    return normalizeEnding({
+        ...previous,
+        confessionReplays,
+        endings: previous.endings.map(route => detailedById.get(route.id) || route),
+    }, memoryBank);
+}
+
 export async function generateEndingWithRepair(context, memoryBank, origin, taskKey, options = {}) {
     const previous = options.replaceExisting === true ? null : core_cache.loadSession(core_constants.MODE.ENDING, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
     const sourceMemoryIds = core_incremental.derivedExpansionMemoryIds(previous, memoryBank, 'mode');
+    const fillNow = options.secondStep === true || core_settings.getPluginSettings().autoSecondPass === true;
+    if (options.secondStep === true && endingNeedsScenes(previous)) {
+        return fillEndingScenes(context, memoryBank, origin, taskKey, previous);
+    }
     if (previous) {
         const outline = await generation_client.requestValidatedSegment(
             endingIncrementOutlinePrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
@@ -646,6 +696,17 @@ export async function generateEndingWithRepair(context, memoryBank, origin, task
             const originalId = route.id;
             route.id = core_incremental.uniqueGeneratedId(route.id, usedIds, 'END');
             if (originalRecommended === originalId) outline.recommendedEndingId = route.id;
+        }
+        if (!fillNow) {
+            if (!outline.endings.length) {
+                return core_incremental.stampIncrementalCoverage(structuredClone(previous), previous, memoryBank, 'mode', sourceMemoryIds, 0);
+            }
+            const catalog = mergeEndingIncremental(previous, outline, [], [], memoryBank, revisit, true);
+            core_requestCoordinator.noteSecondStepOffer(origin, {
+                label: '路线正文', kind: 'ending-scenes', mode: core_constants.MODE.ENDING, pageId: core_constants.MODE.ENDING,
+            });
+            core_incremental.stampIncrementalCoverage(catalog.session, previous, memoryBank, 'mode', sourceMemoryIds, catalog.added);
+            return catalog.session;
         }
         const available = outline.endings.filter(item => item.available);
         const detailed = await generation_client.mapGenerationConcurrent(available, core_constants.SEGMENT_REQUEST_CONCURRENCY, async (route, index) => generation_client.requestValidatedSegment(
@@ -683,6 +744,15 @@ export async function generateEndingWithRepair(context, memoryBank, origin, task
         { maxTokens: 7000, temperature: 0.35, context, origin, taskKey: `${taskKey}:outline`, mode: core_constants.MODE.ENDING, background: true },
         raw => normalizeEndingOutline(raw, memoryBank),
     );
+    if (!fillNow) {
+        const normalized = normalizeEnding({ ...outline, confessionReplays: [] }, memoryBank, { catalogOnly: true });
+        core_requestCoordinator.noteSecondStepOffer(origin, {
+            label: '路线正文', kind: 'ending-scenes', mode: core_constants.MODE.ENDING, pageId: core_constants.MODE.ENDING,
+        });
+        core_incremental.stampIncrementalCoverage(normalized, null, memoryBank, 'mode', sourceMemoryIds, normalized.endings.length);
+        return normalized;
+    }
+    core_requestCoordinator.noteSecondStepOffer(origin, null);
     const available = outline.endings.filter(item => item.available);
     const detailed = await generation_client.mapGenerationConcurrent(available, core_constants.SEGMENT_REQUEST_CONCURRENCY,
         (route, index) => generation_client.requestValidatedSegment(
@@ -766,7 +836,7 @@ export function normalizeEndingConfessionReplays(rawList, memoryBank) {
     }).filter(Boolean);
 }
 
-export function normalizeEnding(data, memoryBank) {
+export function normalizeEnding(data, memoryBank, options = {}) {
     const relationshipState = core_text.normalizeText(data?.relationshipState, 120) || '关系仍在发展';
     const relationshipSummary = core_text.normalizeText(data?.relationshipSummary, 2400);
     if (!relationshipSummary) throw new Error('结局档案缺少当前关系摘要。');
@@ -810,10 +880,10 @@ ${relationshipSummary}`,
         const evidenceText = `${relationshipState}\n${relationshipSummary}\n${title}\n${subtitle}\n${unlockHint}\n${endingScene}\n${confession}`;
         const reference = core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, evidenceText, memoryBank, 1);
         if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) return null;
-        if (available) {
+        if (available && !options.catalogOnly) {
             if (endingScene.length < 320) throw new Error(`已解锁结局“${title}”的终章场景不足 320 字。`);
             if (epilogueScenes.length < 3) throw new Error(`已解锁结局“${title}”的后日谈不足 3 段。`);
-        } else if (!unlockHint) {
+        } else if (!available && !unlockHint) {
             throw new Error(`未解锁结局“${title}”缺少解锁提示。`);
         }
         return {

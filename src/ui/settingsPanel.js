@@ -636,6 +636,7 @@ export function mountSettings({ homeTarget = null } = {}) {
             <small>最大输出是模型最多写多长，默认 60000，不拦输入。输入预算是发送前本地保险，默认 60000 tokens，范围 8000–200000，越大越贵；与最大输出无关。</small>
             <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
           </div>
+          <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-second ${core_settings.getPluginSettings().autoSecondPass ? 'checked' : ''}><span>第一次完成后，自动进行第二次生成</span></label>
           <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-retry ${core_settings.getPluginSettings().autoRetryEnabled ? 'checked' : ''}><span>失败后自动重试未完成部分</span></label>
           <label class="rmt-settings-field"><span>自动重试次数</span><input class="text_pole" data-rmt-auto-retry-count type="number" min="1" max="5" step="1" value="${core_settings.getPluginSettings().autoRetryCount}" ${core_settings.getPluginSettings().autoRetryEnabled ? '' : 'disabled'}></label>
           <small>默认关闭。打开后，新出现的「重试未完成部分」会自动再试，默认 1 次，可改成 1–5 次。每次都使用生成额度。超限草稿和已经写好、只差继续的草稿不会自动重试。</small>
@@ -827,6 +828,10 @@ export function mountSettings({ homeTarget = null } = {}) {
         }
         if (target.matches?.('[data-rmt-manual-streaming]')) {
             core_settings.updatePluginSettings({ manualApiStreaming: !!target.checked });
+            return;
+        }
+        if (target.matches?.('[data-rmt-auto-second]')) {
+            core_settings.updatePluginSettings({ autoSecondPass: !!target.checked });
             return;
         }
         if (target.matches?.('[data-rmt-auto-retry]')) {

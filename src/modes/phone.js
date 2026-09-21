@@ -7,6 +7,7 @@ import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
 import * as core_narrativeAuthority from '../core/narrativeAuthority.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
+import * as core_settings from '../core/settings.js';
 import * as core_text from '../core/text.js';
 import * as core_worldPresentation from '../core/worldPresentation.js';
 import * as generation_client from '../generation/client.js';
@@ -997,6 +998,19 @@ export async function generatePhoneWithRepair(context, memoryBank, origin, taskK
     if (!resumeDraft && !await core_cache.savePhoneGenerationDraft(context, memoryBank, plan, [], '', '', origin, draftOptions)) {
         throw new Error('私人终端目录已经生成，但无法确认续写断点已安全保存；本次已停止，避免虚假提示可续写。');
     }
+    const fillAppsNow = options.secondStep === true || !!resumeDraft || core_settings.getPluginSettings().autoSecondPass === true;
+    if (!fillAppsNow) {
+        const placeholders = plan.apps.map(app => ({
+            ...app,
+            entries: (Array.isArray(app.entries) ? app.entries : []).map(entry => unavailablePhoneEntry(entry.id)),
+        }));
+        const directory = normalizePhone({ ...plan, apps: placeholders }, memoryBank, { worldPresentation, trustedStored: true, directoryOnly: true });
+        core_requestCoordinator.noteSecondStepOffer(origin, {
+            label: '各应用正文', kind: 'phone-apps', mode: core_constants.MODE.PHONE, pageId: core_constants.MODE.PHONE,
+        });
+        return directory;
+    }
+    core_requestCoordinator.noteSecondStepOffer(origin, null);
 
     for (let index = 0; index < plan.apps.length; index += 1) {
         const app = plan.apps[index];
@@ -1310,7 +1324,7 @@ export async function generatePhoneIncrementalWithRepair(context, memoryBank, or
     return core_incremental.stampIncrementalCoverage(session, previous, memoryBank, 'mode', sourceMemoryIds, added);
 }
 
-export function normalizePhone(data, memoryBank, { worldPresentation = null, controlledEvidence = '', trustedStored = false, preservedApps = null } = {}) {
+export function normalizePhone(data, memoryBank, { worldPresentation = null, controlledEvidence = '', trustedStored = false, preservedApps = null, directoryOnly = false } = {}) {
     const controlledProfile = worldPresentation || data?.worldPresentation || null;
     let requestedDeviceName = core_text.normalizeText(data?.deviceName, 100) || '私人终端';
     const requestedKind = core_text.normalizeText(data?.deviceKind, 40).toLowerCase();
@@ -1430,7 +1444,7 @@ export function normalizePhone(data, memoryBank, { worldPresentation = null, con
     if (apps.length < limits.minApps) throw new Error(`“他的私人终端”分区不足：得到 ${apps.length} 个，当前设备至少需要 ${limits.minApps} 个。`);
     const totalEntries = apps.reduce((sum, app) => sum + app.entries.length, 0);
     if (totalEntries < limits.minEntries) throw new Error(`“他的私人终端”内容过少：只有 ${totalEntries} 个可读条目，至少需要 ${limits.minEntries} 个。`);
-    if (!apps.some(app => app.entries.some(entry => entry.sourceStatus !== 'unavailable'))) {
+    if (!directoryOnly && !apps.some(app => app.entries.some(entry => entry.sourceStatus !== 'unavailable'))) {
         throw core_text.safeUserError('目录没有可核实原文。', 'RMT_PHONE_SOURCE_EMPTY');
     }
 

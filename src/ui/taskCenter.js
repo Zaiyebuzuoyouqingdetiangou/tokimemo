@@ -270,12 +270,19 @@ export function ensureTaskCenterChrome(overlay) {
     bindTaskCenterRefresh();
     const shell = overlay?.querySelector?.('.rmt-shell');
     const topbar = shell?.querySelector?.('.rmt-topbar');
-    if (shell && topbar && !shell.querySelector('[data-rmt-live-tasks]')) {
-        const strip = document.createElement('div');
-        strip.className = 'rmt-live-tasks';
-        strip.dataset.rmtLiveTasks = '';
-        strip.hidden = true;
-        topbar.insertAdjacentElement('afterend', strip);
+    if (topbar) {
+        let strip = shell.querySelector('[data-rmt-live-tasks]');
+        if (!strip) {
+            strip = document.createElement('div');
+            strip.className = 'rmt-live-tasks';
+            strip.dataset.rmtLiveTasks = '';
+            strip.hidden = true;
+        }
+        const title = topbar.querySelector('.rmt-topbar-title');
+        if (strip.parentElement !== topbar) {
+            if (title) title.insertAdjacentElement('afterend', strip);
+            else topbar.prepend(strip);
+        }
     }
     if (shell && !shell.querySelector('[data-rmt-task-center]')) {
         const panel = document.createElement('div');
@@ -381,7 +388,7 @@ function draftCards() {
             ? '草稿超出本地保存上限，不能继续生成'
             : row.failureCode
                 ? core_text.safeErrorSummary({ code: row.failureCode, archiveInputCategory: row.failureCategory, recoveryPhase: row.failurePhase })
-                : (row.canContinue ? '正文未写完' : '任务尚未完成');
+                : (row.canContinue ? '正文写到一半，可以继续补完' : (row.failed ? '这次输出没有通过' : '已保存成功部分'));
         const attrs = `data-rmt-recovery-draft-id="${core_text.esc(row.draftId)}" data-rmt-recovery-page-id="${core_text.esc(row.pageId || '')}"`;
         const retry = oversized ? '' : `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${core_text.esc(row.mode)}" ${attrs}>${row.canContinue ? '继续生成' : '重试未完成部分'}</button>`;
         return {
@@ -395,6 +402,11 @@ function draftCards() {
             actions: `${retry}<button type="button" class="rmt-btn" data-rmt-recovery-export="${core_text.esc(row.mode)}" ${attrs}>导出未提交草稿</button><button type="button" class="rmt-btn" data-rmt-recovery-discard="${core_text.esc(row.mode)}" ${attrs}>放弃这份草稿</button>`,
         };
     });
+}
+
+function secondStepButton(record, id) {
+    if (!record?.secondStepKind || !record?.secondStepLabel || !id) return '';
+    return `<button type="button" class="rmt-btn" data-rmt-action="task-second-step" data-rmt-task-id="${core_text.esc(id)}">第二次生成${core_text.esc(record.secondStepLabel)}</button>`;
 }
 
 function openAction(record) {
@@ -452,7 +464,7 @@ function collectTaskCards() {
             draftId: record.draftId || '',
             detail: [row.chatCaption, row.progressText].filter(Boolean).join(' · '),
             at: Number(record.endedAt) || 0,
-            actions: openAction({ ...record, id: row.id, label: row.label, outcome: record.outcome || state, phase: row.phase }),
+            actions: `${secondStepButton(record, row.id)}${openAction({ ...record, id: row.id, label: row.label, outcome: record.outcome || state, phase: row.phase })}`,
         });
     }
     for (const item of mine) {
@@ -582,7 +594,7 @@ async function openSavedTaskPage(row, context) {
     const route = pageRoute(row.mode, row.pageId, row.label);
     const spec = ui_workspaceState.WORKSPACE_ROUTES[route];
     if (!spec?.mode) {
-        globalThis.toastr?.info?.(row.saved || row.received ? '这次结果还不能打开对应页面。' : '这次没有新的可保存分段，没有单独的结果页。', '心迹回廊');
+        globalThis.toastr?.info?.(row.failureSummary || '这次没有对应的结果页。', '心迹回廊');
         return;
     }
     ui_overlay.openCachedOrGenerate(spec.mode, { workspaceRoute: route });
@@ -695,6 +707,30 @@ export function handleTaskCenterAction(action, actionEl) {
     if (action === 'task-open') {
         const id = actionEl?.dataset?.rmtTaskId || '';
         void openSettledTask(id).catch(error => {
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+        });
+        return;
+    }
+    if (action === 'task-second-step') {
+        const id = actionEl?.dataset?.rmtTaskId || '';
+        const record = core_requestCoordinator.settledChatTaskRecord(id);
+        if (!record?.secondStepKind) return;
+        hideTaskCenter();
+        const run = record.secondStepKind === 'heart-scenario'
+            ? modes_heart.generateHeartSeasonSection(record.secondStepPageId || record.pageId, { secondStep: true })
+            : record.secondStepKind === 'phone-apps'
+                ? generation_client.generateMode(core_constants.MODE.PHONE, { continueDraft: true, secondStep: true, background: true })
+                : record.secondStepKind === 'album-comments'
+                    ? generation_client.generateMode(core_constants.MODE.ALBUM, { secondStep: true, background: true })
+                    : record.secondStepKind === 'room-lines'
+                        ? generation_client.generateMode(core_constants.MODE.ROOM, { fillRoomText: true, background: true })
+                        : record.secondStepKind === 'ending-scenes'
+                            ? generation_client.generateMode(core_constants.MODE.ENDING, { secondStep: true, background: true })
+                            : record.secondStepKind === 'adv-scripts'
+                                ? generation_client.startAdvScriptSecondStep()
+                                : null;
+        if (!run) return;
+        void Promise.resolve(run).catch(error => {
             if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
         });
     }

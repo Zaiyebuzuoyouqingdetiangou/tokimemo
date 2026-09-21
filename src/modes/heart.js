@@ -12,6 +12,7 @@ import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
 import * as core_participants from '../core/participants.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
+import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
@@ -1032,8 +1033,14 @@ export async function regenerateHeartPage(page, options = {}) {
             const voices = await request(postending ? heartPostVoicePrompt(context, memoryBank, base)
                 : heartSeasonVoicePrompt(context, memoryBank, base, pageId), 'voice',
                 { maxTokens: postending ? 3800 : 3000, temperature: 0.65 }, raw => normalizeVoiceDramaPart(raw, [pageId], memoryBank));
-            const scenarios = postending ? [] : await request(heartSeasonScenarioPrompt(context, memoryBank, base, pageId), 'scenario',
-                { maxTokens: 3200, temperature: 0.65 }, raw => normalizeScenarioDramaPart(raw, pageId, memoryBank));
+            const runScenario = !postending && (options.secondStep === true || core_settings.getPluginSettings().autoSecondPass === true);
+            const scenarios = runScenario ? await request(heartSeasonScenarioPrompt(context, memoryBank, base, pageId), 'scenario',
+                { maxTokens: 3200, temperature: 0.65 }, raw => normalizeScenarioDramaPart(raw, pageId, memoryBank)) : [];
+            if (!postending && !runScenario) {
+                core_requestCoordinator.noteSecondStepOffer(origin, {
+                    label: '小事件', kind: 'heart-scenario', mode: core_constants.MODE.HEART, pageId,
+                });
+            }
             replacement = { voiceDramas: voices.map(enrich), scenarioDramas: scenarios.map(enrich) };
         }
         core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
@@ -1049,7 +1056,7 @@ export async function regenerateHeartPage(page, options = {}) {
         if (targetRuntime?.origin) {
             try { await generation_recovery.noteGenerationRecoveryFailure(targetRuntime.origin, error); } catch { /* Preserve the original generation/commit error. */ }
         }
-        outcome = { ...outcome, status: error?.name === 'AbortError' ? 'cancelled' : 'failed' };
+        outcome = { ...outcome, status: error?.name === 'AbortError' ? 'cancelled' : 'failed', error };
         throw error;
     } finally {
         try {
@@ -1084,6 +1091,10 @@ async function runOrdinaryHeartLogicalTask(pageId, options, run) {
     }
     try {
         return await run(logicalTask);
+    } catch (error) {
+        logicalTask.failureCode = core_text.normalizeText(error?.code, 80);
+        logicalTask.failureSummary = core_text.safeErrorSummary(error);
+        throw error;
     } finally {
         // Includes preparation, all child requests, recovery and persistence cleanup.
         core_requestCoordinator.finishLogicalGenerationTask(logicalTask);
@@ -1799,6 +1810,7 @@ async function generateHeartSeasonSectionOperation(normalizedSeason, options, lo
     const errors = [];
     let savedParts = 0;
     let allCommitted = true;
+    let offeredSecond = false;
     try {
         const recovery = await startHeartRecovery(targetRuntime, { kind: 'heart-season', season: normalizedSeason, batchId }, { ...options, existing: existingRecovery });
         context = recovery.contentContext; memoryBank = recovery.contentBank;
@@ -1844,7 +1856,14 @@ async function generateHeartSeasonSectionOperation(normalizedSeason, options, lo
             }
 
             scenario = latest.scenarioDramas?.find(item => item.season === normalizedSeason && item.incrementBatchId === batchId) || scenario;
-            if (!scenario && !errors.some(recoveryStopsHeart)) {
+            const runScenario = options.secondStep === true || core_settings.getPluginSettings().autoSecondPass === true;
+            if (!scenario && voice && !runScenario && !errors.length) {
+                offeredSecond = true;
+                core_requestCoordinator.noteSecondStepOffer(origin, {
+                    label: '小事件', kind: 'heart-scenario', mode: core_constants.MODE.HEART, pageId: normalizedSeason,
+                });
+            }
+            if (!scenario && runScenario && !errors.some(recoveryStopsHeart)) {
                 try {
                     scenario = enrichScenario((await requestHeartPart(
                         heartSeasonScenarioPrompt(context, memoryBank, latest, normalizedSeason, heartSeasonRequestBase(latest, normalizedSeason, batchId), null),
@@ -1870,7 +1889,8 @@ async function generateHeartSeasonSectionOperation(normalizedSeason, options, lo
         } else {
             await finishHeartRecovery(targetRuntime, allCommitted);
             globalThis.toastr?.[allCommitted ? 'success' : 'info']?.(heartTargetMessage(targetRuntime, allCommitted
-                ? `已保存 ${ui_heartView.heartSeasonLabel(normalizedSeason)} 的新增篇章。` : '篇章已生成，但尚未确认保存；草稿保留。'), '心迹回廊');
+                ? (offeredSecond ? `已保存 ${ui_heartView.heartSeasonLabel(normalizedSeason)} 的 Voice。可以第二次生成小事件。` : `已保存 ${ui_heartView.heartSeasonLabel(normalizedSeason)} 的新增篇章。`)
+                : '篇章已生成，但尚未确认保存；草稿保留。'), '心迹回廊');
         }
     } catch (error) {
         await generation_recovery.noteGenerationRecoveryFailure(origin, error);

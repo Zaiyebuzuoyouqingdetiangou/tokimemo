@@ -166,6 +166,7 @@ export function openOverlay() {
             <div class="rmt-topbar">
               <button type="button" data-rmt-action="back" hidden aria-label="返回上级">‹</button>
               <div class="rmt-topbar-title">心迹回廊</div>
+              <div class="rmt-live-tasks" data-rmt-live-tasks hidden></div>
               <button type="button" data-rmt-action="library-home" aria-label="打开档案室" title="档案室"><i class="fa-regular fa-folder" aria-hidden="true"></i></button>
               <button type="button" data-rmt-action="workspace-expand" aria-label="展开窗口" title="展开窗口"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>
               <button type="button" data-rmt-action="regenerate" hidden aria-label="增量追加" title="增量追加">＋</button>
@@ -173,7 +174,6 @@ export function openOverlay() {
               <button type="button" data-rmt-action="tasks" aria-label="任务" title="任务"><i class="fa-solid fa-list-check" aria-hidden="true"></i><span class="rmt-task-count" data-rmt-task-count hidden>0</span></button>
               <button type="button" data-rmt-action="close" aria-label="关闭档案室">×</button>
             </div>
-            <div class="rmt-live-tasks" data-rmt-live-tasks hidden></div>
             ${workspace_ui.workspaceNavHtml()}
             <div class="rmt-task-center" data-rmt-task-center hidden></div>
             <div class="rmt-body"></div>
@@ -1791,7 +1791,7 @@ export function handleOverlayClick(event) {
     if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
     if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
     if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
-    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-queue-remove' || action === 'task-clear-done' || action === 'queue-selected') {
+    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open' || action === 'task-second-step' || action === 'task-queue-remove' || action === 'task-clear-done' || action === 'queue-selected') {
         return ui_taskCenter.handleTaskCenterAction(action, actionEl);
     }
     if (action === 'close') return closeArchiveOverlayFromUser();

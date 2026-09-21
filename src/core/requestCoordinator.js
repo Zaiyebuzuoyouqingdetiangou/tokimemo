@@ -98,6 +98,10 @@ export function assertLogicalGenerationTaskCurrent(handleOrOrigin) {
 export function finishLogicalGenerationTask(handle, result = null) {
     if (!handle || logicalGenerationTasks.get(handle.id) !== handle) return;
     handle.status = result?.status || (handle.signal.aborted ? 'cancelled' : 'settled');
+    if (result?.error) {
+        handle.failureCode = core_text.normalizeText(result.error.code, 80);
+        handle.failureSummary = core_text.safeErrorSummary(result.error);
+    }
     rememberSettledTask(handle, handle.status);
     handle.releaseParent();
     if (handle.signal.aborted) cancelledLogicalOrigins.push(handle);
@@ -560,7 +564,7 @@ export function listChatTaskSnapshot(context = null) {
         currentChat: sameSettledChat(row, live),
         archiveTarget: row.archiveTarget === true,
         chatCaption: settledCaption(row, live),
-        progressText: row.received || row.saved ? `已收到 ${row.received} 段，已落盘 ${row.saved} 段` : '没有新的可保存分段',
+        progressText: settledProgressText(row),
         outcome: row.outcome,
         canOpen: !!row.chatId && (row.outcome === 'done' || row.outcome === 'failed' || row.received > 0),
     }));
@@ -580,11 +584,40 @@ function settledCaption(row, context) {
     return `${name} · 其他聊天 ${chatTail(row.chatId)}`;
 }
 
+function settledProgressText(row) {
+    if (row.outcome === 'cancelled' || row.phase === 'cancelled') return '已取消';
+    if (row.outcome === 'failed' || row.phase === 'failed') return row.failureSummary || '这次输出没有通过';
+    if (row.secondStepLabel) return `第一次已完成，可以第二次生成${row.secondStepLabel}`;
+    if (row.received || row.saved) return `已收到 ${row.received} 段，已落盘 ${row.saved} 段`;
+    if (row.outcome === 'done' || row.phase === 'done') return '已生成';
+    return '这次没有留下可保存的分段';
+}
+
+export function noteSecondStepOffer(origin, offer) {
+    const payload = offer?.label ? {
+        label: core_text.normalizeText(offer.label, 48),
+        kind: core_text.normalizeText(offer.kind, 40),
+        mode: core_text.normalizeText(offer.mode, 40),
+        pageId: core_text.normalizeText(offer.pageId, 40),
+    } : null;
+    const task = logicalGenerationTaskForOrigin(origin);
+    if (task) task.secondStepOffer = payload;
+    if (origin && typeof origin === 'object') origin.rmtSecondStepOffer = payload;
+}
+
 function rememberSettledTask(source, outcome) {
     const origin = source?.origin || null;
     const aborted = outcome === 'cancelled' || source?.signal?.aborted;
     const status = aborted ? 'cancelled' : outcome === 'failed' || outcome === 'blocked' ? 'failed' : 'done';
     const progress = generation_recovery.generationRecoveryProgress(origin);
+    const recovery = generation_recovery.generationRecoveryForOrigin(origin);
+    const offer = status === 'done' ? (source?.secondStepOffer || origin?.rmtSecondStepOffer || null) : null;
+    const failureCode = core_text.normalizeText(recovery?.failureCode || source?.failureCode, 80);
+    const failureSummary = status === 'failed'
+        ? (failureCode
+            ? core_text.safeErrorSummary({ code: failureCode, archiveInputCategory: recovery?.failureCategory, recoveryPhase: recovery?.failurePhase })
+            : core_text.normalizeText(source?.failureSummary, 240))
+        : '';
     const row = {
         id: `settled-${++settledTaskSequence}`,
         label: core_text.normalizeText(source?.label || core_constants.MODE_LABEL[source?.mode] || '任务', 120),
@@ -594,11 +627,16 @@ function rememberSettledTask(source, outcome) {
         characterName: core_text.normalizeText(origin?.characterName, 120),
         characterId: String(origin?.characterId ?? ''),
         chatId: core_context.comparableChatId(origin?.chatId),
-        mode: core_text.normalizeText(source?.mode || progress?.mode, 80),
+        mode: core_text.normalizeText(source?.mode || offer?.mode || progress?.mode, 80),
         draftId: core_text.normalizeText(origin?.generationRecoveryDraftId || progress?.draftId, 240),
-        pageId: core_text.normalizeText(progress?.pageId, 80),
+        pageId: core_text.normalizeText(offer?.pageId || progress?.pageId, 80),
         received: Number(progress?.received) || 0,
         saved: Number(progress?.saved) || 0,
+        failureCode,
+        failureSummary,
+        secondStepLabel: offer?.label || '',
+        secondStepKind: offer?.kind || '',
+        secondStepPageId: offer?.pageId || '',
         archiveTarget: !!core_text.normalizeText(origin?.archiveTargetEntryId, 120),
         endedAt: Date.now(),
     };

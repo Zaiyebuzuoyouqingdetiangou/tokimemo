@@ -203,6 +203,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     imageGenerationManualEnabled: false,
     autoRetryEnabled: false,
     autoRetryCount: 1,
+    autoSecondPass: false,
     creativeSupplementEnabled: false,
     creativeSupplement: '',
     imageGenerationProvider: 'baibai-image',

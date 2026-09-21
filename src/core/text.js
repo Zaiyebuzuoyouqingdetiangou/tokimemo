@@ -137,7 +137,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_LEDGER_UNAVAILABLE: '浏览器来源存储暂时不可用。请退出隐私模式或关闭旧页后重试；不要清除站点数据。',
     RMT_BANNED_GENERATED_PHRASE: '模型新生成内容命中了本地禁用词；本次结果没有保存。',
     RMT_JSON_EMPTY_FINAL: '模型没有返回最终正文 JSON；旧内容未被覆盖。',
-    RMT_JSON_EMPTY_FINAL_WITH_REASONING: '本次响应只有推理字段，没有最终正文 JSON；未采用推理内容，也没有自动重试。可核对渠道支持的推理／流式参数后手动再试，旧内容保留。',
+    RMT_JSON_EMPTY_FINAL_WITH_REASONING: '本次响应只有推理字段，没有最终正文 JSON；未采用推理内容。空回会自动整段重来一次，旧内容保留。',
     RMT_RESPONSE_FORMAT: '当前连接返回了未识别的正文包装；旧内容保留，请导出诊断以核对返回格式。',
     RMT_JSON_NOT_FOUND: '模型最终正文中没有完整 JSON；旧内容未被覆盖。',
     RMT_JSON_TRUNCATED: '模型返回的 JSON 疑似被截断；旧内容未被覆盖。',

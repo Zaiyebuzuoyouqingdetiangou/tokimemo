@@ -87,7 +87,8 @@ export function timeStoryPrompt(mode, context, memory, previous = null, profile 
     const modePrompt = `不同时间的两人，或同一人的不同时期，通过联络传递关键信息并试图改变命运；让信息影响选择，成败由人物与故事决定。媒介 kind 仅可用 ${contract.timeStoryMediumKinds(profile).join('|')}，label 沿用世界已有通讯方式或熟悉器物；未知时代用器物/声音承载这次异常，不硬添手机或魔法体系。
 ends 按 a、b 顺序写两端人物与不同的时间，role 可相同；lines 按通话顺序写双方发言与必要叙述，message 写传递的关键信息，closing 写这次联络的后续。
 输出 {"title":"篇名","opening":"开场","closing":"完整结尾","palette":"配色","motif":"意象","medium":{"kind":"允许的媒介","label":"器物名称"},"ends":[{"role":"char|user","time":"一端时间"},{"role":"char|user","time":"另一端时间"}],"lines":[{"speaker":"a|b|narrator","text":"正文"}],"message":"关键信息"}。`;
-    return `${common}${modePrompt}
+    return `${prompts.promptSafetyBoundary(context, contract.timeStoryLabel(mode))}
+${common}${modePrompt}
 UNTRUSTED_EXISTING_TITLES_JSON:
 ${JSON.stringify((previous?.episodes || []).map(item => ({ title: item.title, motif: item.motif })))}
 UNTRUSTED_CURRENT_ARCHIVE_JSON:

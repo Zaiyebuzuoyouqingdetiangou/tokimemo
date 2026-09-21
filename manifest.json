@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.97-tt-cg-r84.43-task-strip",
+  "js": "index.js?heartbeat=0.98-tt-cg-r84.44-second-step",
   "author": "Toto",
-  "version": "0.97",
+  "version": "0.98",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.43：后台任务固定在顶端，失败会标在旁边；任务中心一项一行，打开结果会进入对应页面，已完成可一键清空。",
+  "description": "r84.44：第一次格式合法就标完成，第二次生成要勾选才会自动接着做；空回整段重来，写到一半会接着补。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

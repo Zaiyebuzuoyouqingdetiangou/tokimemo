@@ -9,6 +9,7 @@ import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
+import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
@@ -405,6 +406,16 @@ export async function generateAdvIndexWithRepair(context, memoryBank, origin, ex
     const added = Math.max(0, merged.events.length - (previous?.events?.length || 0));
     core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, added);
     if (revisit) merged.generationMeta.expansionRound = (Number(previous?.generationMeta?.expansionRound) || 0) + 1;
+    if (merged.events?.some(event => !event.adv?.paragraphs?.length)) {
+        if (core_settings.getPluginSettings().autoSecondPass === true) {
+            const task = core_requestCoordinator.logicalGenerationTaskForOrigin(origin);
+            if (task) task.autoAdvScripts = true;
+        } else {
+            core_requestCoordinator.noteSecondStepOffer(origin, {
+                label: '事件正文', kind: 'adv-scripts', mode: core_constants.MODE.ADV, pageId: core_constants.MODE.ADV,
+            });
+        }
+    }
     return merged;
 }
 

@@ -64,6 +64,7 @@ export function getPluginSettings(context = core_context.getContext()) {
         cgPromptFormat: cg_format.normalizeCgPromptFormat(settings.cgPromptFormat, 'nai5-natural'),
         autoRetryEnabled: settings.autoRetryEnabled === true,
         autoRetryCount: normalizeAutoRetryCount(settings.autoRetryCount),
+        autoSecondPass: settings.autoSecondPass === true,
         creativeSupplementEnabled: settings.creativeSupplementEnabled === true,
         creativeSupplement: creative_supplement.normalizeCreativeSupplement(settings.creativeSupplement),
         ttDisplayMode: settings.ttDisplayMode === true,

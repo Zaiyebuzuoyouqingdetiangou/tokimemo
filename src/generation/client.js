@@ -497,9 +497,10 @@ export async function requestValidatedSegment(prompt, status, options, validator
     // failure into minutes of extra billing the user could not stop. Successful segments
     // are already kept by the recovery draft, so the run stops and waits for「续写」.
     const allowAutoRetry = options?.allowAutoRetry === true;
-    const maxAttempts = allowAutoRetry
+    const configuredAttempts = allowAutoRetry
         ? Math.max(1, Math.min(core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS, Number(options?.segmentMaxAttempts) || core_requestCoordinator.MAX_RATE_LIMIT_ATTEMPTS))
         : 1;
+    const maxAttempts = Math.max(configuredAttempts, 2);
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const retryNote = attempt && lastError
             ? '\n\n【本地校验反馈】' + (core_butterflyContract.butterflyValidationFeedback(lastError) || core_text.normalizeText(lastError?.repairHint, 600) || (lastError?.code === 'RMT_JSON_NOT_FOUND' || lastError?.code === 'RMT_JSON_INVALID' ? '上一轮你返回的是散文，没有任何可解析的 JSON 对象。本轮只输出一个 JSON 对象：第一个字符必须是 {，最后一个字符必须是 }。不要前言、不要解释、不要引用来源、不要代码围栏。' : String(lastError.code || '').startsWith('RMT_ROOM_') ? core_text.safeErrorSummary(lastError) : '上一轮结构或完整度没有通过。')) + ' 请严格按原硬性要求重新输出完整 JSON，不要解释，也不要引用这条反馈作为内容。'
@@ -513,9 +514,11 @@ export async function requestValidatedSegment(prompt, status, options, validator
             return value;
         } catch (error) {
             if (options.taskTrace?.activeStage === 'validate') core_taskTrace.markStage(options.taskTrace, 'validate', false);
-            if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE') throw error;
+            if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE' || error?.code === 'RMT_JSON_TRUNCATED') throw error;
             lastError = error;
-            if (attempt + 1 < maxAttempts && core_requestCoordinator.shouldRetrySegmentRequest(error, attempt)) {
+            const emptyReroll = attempt === 0 && ['RMT_JSON_EMPTY_FINAL', 'RMT_JSON_EMPTY_FINAL_WITH_REASONING', 'RMT_JSON_NOT_FOUND'].includes(error?.code);
+            const configuredRetry = attempt + 1 < configuredAttempts && core_requestCoordinator.shouldRetrySegmentRequest(error, attempt);
+            if (attempt + 1 < maxAttempts && (emptyReroll || configuredRetry)) {
                 core_taskTrace.recordRetry(options.taskTrace, error);
                 core_taskTrace.beginStage(options.taskTrace, 'retry');
                 try { await core_requestCoordinator.waitBeforeSegmentRetry(error, attempt); }
@@ -833,7 +836,10 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     const advanced = advanced_generation.parseAdvancedGeneration(settings);
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
     const originalExpanded = core_text.expandSafeRoleMacros(options.recoveryBasePrompt ?? prompt, context);
-    const expanded = core_contextTags.filterJsonPromptStrings(originalExpanded, core_contextTags.tagPolicyForSettings(contentSettings));
+    const expandedBody = core_contextTags.filterJsonPromptStrings(originalExpanded, core_contextTags.tagPolicyForSettings(contentSettings));
+    const expanded = options.recoveryContinuationPartial || /【输出】\n只输出一个 JSON 对象/.test(expandedBody)
+        ? expandedBody
+        : `${expandedBody}\n\n${generation_prompts.jsonOutputSeal()}`;
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
         : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context) });
@@ -1312,10 +1318,24 @@ export async function generateMode(mode, options = {}) {
         if (options.participantRegeneration && !result) result = { status: 'noop' };
         return result;
     } catch (error) {
-        result = { status: error?.name === 'AbortError' ? 'cancelled' : 'failed' };
+        result = { status: error?.name === 'AbortError' ? 'cancelled' : 'failed', error };
         if (options.participantRegeneration) return { ...result, error };
         throw error;
-    } finally { core_requestCoordinator.finishLogicalGenerationTask(logicalTask, result); }
+    } finally {
+        const autoAdvScripts = logicalTask?.autoAdvScripts === true && result?.status !== 'failed' && result?.status !== 'cancelled';
+        core_requestCoordinator.finishLogicalGenerationTask(logicalTask, result);
+        if (autoAdvScripts) setTimeout(() => { startAdvScriptSecondStep().catch(() => {}); }, 600);
+    }
+}
+
+export async function startAdvScriptSecondStep() {
+    const context = core_context.currentCharacterGuard();
+    const memoryBank = archive_repository.requireArchive(context);
+    const session = core_cache.loadSession(core_constants.MODE.ADV, { context, chatId: core_context.getChatId(context), memoryBank, clone: true });
+    if (!session?.events?.some(event => !event.adv?.paragraphs?.length)) return;
+    runtimeState.activeMode = core_constants.MODE.ADV;
+    runtimeState.activeSession = session;
+    return modes_advEvent.generateAllAdvForSession({ background: true });
 }
 
 async function generateModeOperation(mode, options = {}) {
@@ -1634,18 +1654,20 @@ async function generateModeOperation(mode, options = {}) {
             session = previousSession
                 ? await modes_butterfly.generateButterflyIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession)
                 : await modes_butterfly.generateButterflyWithRepair(context, memoryBank, origin, taskKey);
+        } else if (mode === core_constants.MODE.ROOM && options.fillRoomText && previousSession) {
+            session = await modes_room.generateRoomWithRepair(context, memoryBank, origin, taskKey, { presentationContext, participantSnapshot, fillExisting: true, existingSession: previousSession, secondStep: true });
         } else if (mode === core_constants.MODE.ROOM && options.visualOnly && previousSession) {
             session = await modes_room.refreshRoomFigure(context, memoryBank, origin, taskKey, previousSession, { presentationContext, participantSnapshot });
         } else if (mode === core_constants.MODE.ROOM && previousSession) {
             session = await modes_room.generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext, allowPersonaExpansion, participantSnapshot });
         } else if (mode === core_constants.MODE.ROOM) {
-            session = await modes_room.generateRoomWithRepair(context, memoryBank, origin, taskKey, { presentationContext, participantSnapshot });
+            session = await modes_room.generateRoomWithRepair(context, memoryBank, origin, taskKey, { presentationContext, participantSnapshot, secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.ITEMS && previousSession) {
             session = await modes_items.generateItemsIncrementalWithRepair(context, memoryBank, roomSession, focusObject, origin, taskKey, previousSession, { presentationContext, allowPersonaExpansion });
         } else if (mode === core_constants.MODE.ENDING) {
-            session = await modes_ending.generateEndingWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
+            session = await modes_ending.generateEndingWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.ALBUM) {
-            session = await modes_album.generateAlbumWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, participantSnapshot });
+            session = await modes_album.generateAlbumWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, participantSnapshot, secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.HEART) {
             session = await modes_heart.generateHeartWithRepair(context, memoryBank, origin, taskKey, { replaceExisting });
         } else if (mode === core_constants.MODE.PHONE) {
@@ -1660,6 +1682,7 @@ async function generateModeOperation(mode, options = {}) {
                 ? await modes_phone.generatePhoneIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext })
                 : await modes_phone.generatePhoneWithRepair(context, memoryBank, origin, taskKey, {
                     continueDraft: options.continueDraft === true,
+                    secondStep: options.secondStep === true,
                     archiveTarget,
                     stillCurrent: archiveTargetStillCurrent,
                     presentationContext,
@@ -1914,3 +1937,20 @@ async function generateModeOperation(mode, options = {}) {
         if (!background && targetVisible && (!scopedReaderMode || timeReaderVisible())) ui_overlay.setInnerLoading(false);
     }
 }
+
+const autoContinuedDrafts = new Set();
+generation_recovery.setTruncationContinueHandler(item => {
+    const key = `${item?.mode || ''}:${item?.draftId || ''}`;
+    if (!item?.mode || !item?.draftId || autoContinuedDrafts.has(key)) return;
+    autoContinuedDrafts.add(key);
+    setTimeout(() => {
+        continueSavedGeneration(item.mode, {
+            draftId: item.draftId,
+            pageId: item.pageId || '',
+            skipConfirm: true,
+            background: true,
+        }).catch(error => {
+            console.warn('[HeartbeatMemories] automatic continuation did not start', error?.code || error?.name || 'failed');
+        });
+    }, 400);
+});

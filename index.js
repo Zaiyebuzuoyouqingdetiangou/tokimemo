@@ -1,5 +1,5 @@
-const VERSION = '0.97';
-const BUILD = '0.97-tt-cg-r84.43-task-strip';
+const VERSION = '0.98';
+const BUILD = '0.98-tt-cg-r84.44-second-step';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

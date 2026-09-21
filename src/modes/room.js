@@ -431,14 +431,17 @@ export function normalizeRoom(data, memoryBank, options = {}) {
     }
 }
 
-function normalizeRoomSpaceObjects(rawObjects, spaceId, memoryBank, participantSnapshot = null) {
+function normalizeRoomSpaceObjects(rawObjects, spaceId, memoryBank, participantSnapshot = null, structureOnly = false) {
     const userName = core_text.normalizeText(memoryBank?.userName, 120), usedObjectIds = new Set();
     return rawObjects.slice(0, 8).map((item, objectIndex) => {
         const basis = core_constants.ROOM_BASIS_VALUES.has(item?.basis) ? item.basis : '设定';
         const label = core_text.normalizeText(item?.label, 60) || `角落 ${objectIndex + 1}`;
-        const description = core_text.normalizeText(item?.description, 1600);
-        const line = core_text.normalizeText(item?.line, 800);
-        if (basis !== '记忆' && [label, description, line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) return null;
+        let description = core_text.normalizeText(item?.description, 1600);
+        let line = core_text.normalizeText(item?.line, 800);
+        if (structureOnly && basis !== '记忆') {
+            if (roomNarrativeClaimsSharedHistory(description, userName)) description = '';
+            if (roomNarrativeClaimsSharedHistory(line, userName)) line = '';
+        } else if (basis !== '记忆' && [label, description, line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) return null;
         const reference = basis === '记忆'
             ? core_evidence.normalizeMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, `${item?.label || ''}\n${description}\n${line}`, memoryBank, 1)
             : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
@@ -453,10 +456,10 @@ function normalizeRoomSpaceObjects(rawObjects, spaceId, memoryBank, participantS
             basis, searchable: core_evidence.isSearchableRoomObject(item), description, line,
             ...(participantSnapshot ? { speakerId: roomParticipantId(participantSnapshot, item?.speakerId, !participantSnapshot.people.length) } : {}),
             sourceMemoryIds, sourceMemoryAnchor: reference.sourceMemoryAnchor };
-    }).filter(item => item && item.description && item.line && (item.basis !== '记忆' || (item.sourceMemoryIds.length >= 1 && item.sourceMemoryAnchor)));
+    }).filter(item => item && (structureOnly ? item.label : (item.description && item.line)) && (item.basis !== '记忆' || (item.sourceMemoryIds.length >= 1 && item.sourceMemoryAnchor)));
 }
 
-function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentation = null, controlledEvidence = null, characterEvidence = null, relaxStructure = false, participantSnapshot = null } = {}) {
+function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentation = null, controlledEvidence = null, characterEvidence = null, relaxStructure = false, participantSnapshot = null, structureOnly = false } = {}) {
     participantSnapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
     // Minimums for the character's own space. Truth-claim checks below ignore this entirely.
     const minObjects = 1;
@@ -472,7 +475,7 @@ function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentati
         while (usedSpaceIds.has(spaceId)) spaceId = `${fallbackSpaceId}_${usedSpaceIds.size + 1}`;
         usedSpaceIds.add(spaceId);
         const rawObjects = Array.isArray(space?.objects) ? space.objects : [];
-        const objects = normalizeRoomSpaceObjects(rawObjects, spaceId, memoryBank, participantSnapshot);
+        const objects = normalizeRoomSpaceObjects(rawObjects, spaceId, memoryBank, participantSnapshot, structureOnly);
         const requestedAtmosphere = core_text.normalizeText(space?.atmosphere, 1800);
         return {
             id: spaceId,
@@ -506,13 +509,18 @@ function normalizeRoomData(data, memoryBank, { identityKey = '', worldPresentati
         const raw = data?.dayparts?.[key] || {};
         const rawSpaceId = core_text.safeId(raw?.spaceId, '');
         const space = spaceById.get(rawSpaceId) || spaces[0];
-        const activity = core_text.normalizeText(raw?.activity, 1000);
-        const line = core_text.normalizeText(raw?.line, 800);
+        let activity = core_text.normalizeText(raw?.activity, 1000);
+        let line = core_text.normalizeText(raw?.line, 800);
         const objectIds = new Set(space.objects.map(item => item.id));
         const focusObjectId = objectIds.has(String(raw?.focusObjectId || '')) ? String(raw.focusObjectId) : space.objects[0].id;
-        if (!activity || !line) throw new Error(`“他的房间”缺少 ${key} 时段的生活状态。`);
-        if ([activity, line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) {
-            throw new Error(`“他的房间”${key} 时段混入了没有档案证据的既往共同经历。`);
+        if (structureOnly) {
+            if (!activity || roomNarrativeClaimsSharedHistory(activity, userName)) activity = '在这个空间里';
+            if (!line || roomNarrativeClaimsSharedHistory(line, userName)) line = '……';
+        } else {
+            if (!activity || !line) throw new Error(`“他的房间”缺少 ${key} 时段的生活状态。`);
+            if ([activity, line].some(field => roomNarrativeClaimsSharedHistory(field, userName))) {
+                throw new Error(`“他的房间”${key} 时段混入了没有档案证据的既往共同经历。`);
+            }
         }
         dayparts[key] = { spaceId: space.id, activity, line, focusObjectId };
     }
@@ -684,7 +692,8 @@ export async function generateRoomWithRepair(context, memoryBank, origin, taskKe
         : generation_prompts.PROMPTS[core_constants.MODE.ROOM](context, memoryBank))
         + '\nCONTROLLED_WORLD_PRESENTATION_JSON:\n' + JSON.stringify(presentation.profile || {});
     const requestOptions = { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], context, contextEnvelope: presentation.contextEnvelope, origin, taskKey, mode: core_constants.MODE.ROOM, background: true };
-    let raw = await request(prompt, '他的房间 · 正在整理空间…', requestOptions, value => {
+    const fillTextNow = options.secondStep === true || options.fillExisting === true || core_settings.getPluginSettings().autoSecondPass === true;
+    let raw = options.fillExisting && options.existingSession ? structuredClone(options.existingSession) : await request(prompt, '他的房间 · 正在整理空间…', requestOptions, value => {
         // This pre-check only decides whether a response is worth normalising at all, so it
         // must not be stricter than the normaliser's own relaxed fallback — otherwise the
         // fallback is unreachable and a slightly thin room is rejected before it is tried.
@@ -695,6 +704,27 @@ export async function generateRoomWithRepair(context, memoryBank, origin, taskKe
         }
         return value;
     });
+    if (!fillTextNow) {
+        try {
+            const session = normalizeRoom(raw, memoryBank, normalizeOptions);
+            core_requestCoordinator.noteSecondStepOffer(origin, null);
+            return session;
+        } catch (error) {
+            try {
+                const session = normalizeRoom(raw, memoryBank, { ...normalizeOptions, structureOnly: true });
+                core_requestCoordinator.noteSecondStepOffer(origin, {
+                    label: '对白和描述',
+                    kind: 'room-lines',
+                    mode: core_constants.MODE.ROOM,
+                    pageId: core_constants.MODE.ROOM,
+                });
+                return session;
+            } catch {
+                throw error;
+            }
+        }
+    }
+    core_requestCoordinator.noteSecondStepOffer(origin, null);
     const slots = roomCandidateRepairSlots(raw, memoryBank, { participantSnapshot });
     // Small fixed groups keep feedback/repair output bounded; good fields are never regenerated.
     for (let offset = 0; offset < slots.length; offset += 6) {
