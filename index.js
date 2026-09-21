@@ -1,5 +1,5 @@
-const VERSION = '0.92';
-const BUILD = '0.92-tt-cg-r84.38-task-center';
+const VERSION = '0.93';
+const BUILD = '0.93-tt-cg-r84.39-task-center-boot';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

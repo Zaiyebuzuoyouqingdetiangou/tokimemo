@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 140
-// Source SHA-256: b28f97bfc6bc40c53efabfe96db35a704808f97844ee2b538ad13c2b463f7874
+// Source SHA-256: 5ecad32d83b87647466ad9d9be94a6d04eadca06239f2209dd2bd13f67010611
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -40866,6 +40866,7 @@ function ensureTaskCenterChrome(overlay) {
         if (close) bar.insertBefore(button, close);
         else bar.appendChild(button);
     }
+    bindTaskCenterRefresh();
     const shell = overlay?.querySelector?.('.rmt-shell');
     if (shell && !shell.querySelector('[data-rmt-task-center]')) {
         const panel = document.createElement('div');
@@ -40932,9 +40933,16 @@ function refreshTaskCenterView() {
     }
 }
 
-core_requestCoordinator.setTaskCenterRefresh(refreshTaskCenterView);
+// The bundle initializes this file before requestCoordinator finishes, because the
+// two modules import each other through the overlay. Register only after open.
+function bindTaskCenterRefresh() {
+    if (typeof core_requestCoordinator.setTaskCenterRefresh === 'function') {
+        core_requestCoordinator.setTaskCenterRefresh(refreshTaskCenterView);
+    }
+}
 
 function syncTaskCenterChrome() {
+    bindTaskCenterRefresh();
     refreshTaskCenterView();
 }
 

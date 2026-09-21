@@ -29,6 +29,7 @@ export function ensureTaskCenterChrome(overlay) {
         if (close) bar.insertBefore(button, close);
         else bar.appendChild(button);
     }
+    bindTaskCenterRefresh();
     const shell = overlay?.querySelector?.('.rmt-shell');
     if (shell && !shell.querySelector('[data-rmt-task-center]')) {
         const panel = document.createElement('div');
@@ -95,9 +96,16 @@ function refreshTaskCenterView() {
     }
 }
 
-core_requestCoordinator.setTaskCenterRefresh(refreshTaskCenterView);
+// The bundle initializes this file before requestCoordinator finishes, because the
+// two modules import each other through the overlay. Register only after open.
+function bindTaskCenterRefresh() {
+    if (typeof core_requestCoordinator.setTaskCenterRefresh === 'function') {
+        core_requestCoordinator.setTaskCenterRefresh(refreshTaskCenterView);
+    }
+}
 
 export function syncTaskCenterChrome() {
+    bindTaskCenterRefresh();
     refreshTaskCenterView();
 }
 

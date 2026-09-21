@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.92-tt-cg-r84.38-task-center",
+  "js": "index.js?heartbeat=0.93-tt-cg-r84.39-task-center-boot",
   "author": "Toto",
-  "version": "0.92",
+  "version": "0.93",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.38：心迹回廊顶部增加统一任务中心，可查看阶段和落盘并单项或按当前聊天取消。切聊确认使用同一份任务名单。身份/CAS/删除栅栏/不自动重试不变。",
+  "description": "r84.39：修复任务中心在运行时初始化完成前登记刷新，导致心迹回廊整包加载失败、界面打不开。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
