@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 139
-// Source SHA-256: 59b697234850a6927ae5bf9ba30d52035806ee2b12ca309cadd1281e86ced9f5
+// Source modules: 140
+// Source SHA-256: b28f97bfc6bc40c53efabfe96db35a704808f97844ee2b538ad13c2b463f7874
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -134,6 +134,7 @@ const __m_ui_roomInterior_js = Object.create(null);
 const __m_ui_scenePicker_js = Object.create(null);
 const __m_ui_settingsPanel_js = Object.create(null);
 const __m_ui_styles_js = Object.create(null);
+const __m_ui_taskCenter_js = Object.create(null);
 const __m_ui_themeSongStyles_js = Object.create(null);
 const __m_ui_themeSongView_js = Object.create(null);
 const __m_ui_themeSurfaces_js = Object.create(null);
@@ -3556,6 +3557,8 @@ const state = {
   archiveViewLevel: 'library',
   roomLifeRefreshPromise: null,
   roomLifeRefreshOrigin: null,
+  roomLifeAbortController: null,
+  activeAdvBulkControllers: new Map(),
   activeTaskAbortController: null,
   activeTaskLabel: '',
   activeTaskTrace: null,
@@ -15112,6 +15115,19 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-topbar button:active,.rmt-btn:active{transform:translateY(0)}
 .rmt-topbar button:disabled,.rmt-btn:disabled{opacity:.42;cursor:not-allowed;transform:none;box-shadow:none}
 .rmt-topbar button[data-rmt-action="back"]{white-space:nowrap}
+.rmt-topbar button[data-rmt-action="tasks"]{position:relative}
+.rmt-task-count{display:inline-grid;place-items:center;min-width:16px;height:16px;margin-left:4px;padding:0 4px;border-radius:999px;background:#e89ab8;color:#fff;font-size:10px;line-height:1}
+.rmt-task-count[hidden]{display:none!important}
+.rmt-task-center{position:absolute;z-index:30;top:62px;right:12px;width:min(420px,calc(100% - 24px));max-height:min(70vh,560px);overflow:auto;padding:12px 12px 14px;border:1px solid #c9dbe5;border-radius:16px;background:#fff;box-shadow:0 16px 40px rgba(13,22,34,.18)}
+.rmt-task-center[hidden]{display:none!important}
+.rmt-task-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.rmt-task-note,.rmt-task-empty{margin:0 0 10px;color:#728093;font-size:12px;line-height:1.5}
+.rmt-task-center h3{margin:12px 0 8px;font-size:13px;color:#50627b}
+.rmt-task-row{padding:10px 0;border-top:1px solid #e4eef3}
+.rmt-task-row header{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.rmt-task-row header span{flex:0 0 auto;color:#9d6d82;font-size:12px}
+.rmt-task-row p{margin:4px 0 0;color:#728093;font-size:12px;line-height:1.45}
+.rmt-task-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .rmt-body{
   position:relative;z-index:4;flex:1;min-height:0;overflow:auto;
   background:
@@ -15820,6 +15836,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
   }
   .rmt-shell:before{display:none}
   .rmt-topbar{min-height:48px;padding:6px 7px 6px 10px;gap:6px}.rmt-topbar-title{font-size:14px;letter-spacing:.025em}.rmt-topbar-title:after{display:none}
+  .rmt-task-center{top:54px;right:8px;left:8px;width:auto;max-height:calc(100vh - 70px)}
   .rmt-topbar button{padding:6px 8px;font-size:11px;min-width:0}
   .rmt-topbar-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rmt-topbar button[data-rmt-action="back"],.rmt-topbar button[data-rmt-action="home"],.rmt-topbar button[data-rmt-action="regenerate"],.rmt-topbar button[data-rmt-action="manage"],.rmt-topbar button[data-rmt-action="close"]{font-size:0;width:44px;height:44px;padding:0;display:grid;place-items:center;flex:0 0 44px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
@@ -16981,9 +16998,12 @@ async function drawSelectedCgImage({ promptOverride, promptMetadata, promptForma
         origin,
         label: dailyStrip ? '日常一格绘制' : mode === core_constants.MODE.ALBUM ? '相簿 CG 绘制' : 'ADV CG 绘制',
         startedAt: Date.now(),
+        phase: 'request',
         controller,
     });
+    core_requestCoordinator.noteChatTaskPhase('request', { taskKey, origin });
     let completedImage = null;
+    let imageOutcome = 'done';
     try {
         if (typeof onAccepted === 'function') onAccepted();
         renderCapturedCgMode(captured);
@@ -17026,6 +17046,7 @@ async function drawSelectedCgImage({ promptOverride, promptMetadata, promptForma
         completedImage = null;
         globalThis.toastr?.success?.(`CG 已绘制：${item.title}`, '心迹回廊');
     } catch (error) {
+        imageOutcome = error?.name === 'AbortError' ? 'cancelled' : 'failed';
         if (completedImage && isCgImageTargetCurrent(captured, { requireSelection: false })) {
             if (pendingCgImages.size >= 32) pendingCgImages.delete(pendingCgImages.keys().next().value);
             pendingCgImages.set(taskKey, { key: taskKey, target: captured, image: completedImage, busy: false });
@@ -17036,6 +17057,10 @@ async function drawSelectedCgImage({ promptOverride, promptMetadata, promptForma
         }
     } finally {
         runtimeState.activeCgImageTasks.delete(taskKey);
+        core_requestCoordinator.rememberStandaloneChatTask({
+            label: dailyStrip ? '日常一格绘制' : mode === core_constants.MODE.ALBUM ? '相簿 CG 绘制' : 'ADV CG 绘制',
+            mode, origin, outcome: imageOutcome, kind: 'cg',
+        });
         renderCapturedCgMode(captured);
     }
 }
@@ -22896,6 +22921,8 @@ async function ensureRoomLifePlanOperation(options = {}) {
     let origin = targetRuntime?.origin || { ...core_context.captureTaskOrigin(context, archiveRevision), chatId: core_context.comparableChatId(chatId) };
     core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin);
     const archiveEntry = targetRuntime?.archiveTarget || core_cache.archiveBackupEntryForContext(context, memoryBank);
+    const lifeCancel = new AbortController();
+    runtimeState.roomLifeAbortController = lifeCancel;
     runtimeState.roomLifeRefreshOrigin = origin;
     runtimeState.roomLifeRefreshPromise = (async () => {
         try {
@@ -22922,10 +22949,11 @@ async function ensureRoomLifePlanOperation(options = {}) {
             const inputRoom = participantSnapshot
                 ? await generation_recovery.frozenGenerationInput(origin, 'room:daily-blueprint', () => structuredClone(roomSession)) : roomSession;
             if (!quiet) ui_overlay.setInnerLoading(true, `正在生成 ${dateKey} 的生活时间线…`);
+            if (lifeCancel.signal.aborted) throw core_requestCoordinator.createGenerationAbortError();
             const plan = await generation_client.requestValidatedSegment(
                 roomLifePrompt(context, inputRoom, memoryBank, today, { participantSnapshot }),
                 `正在让“他的房间”进入 ${dateKey} 的生活状态…`,
-                { maxTokens: 6144, context, origin, taskKey, mode: core_constants.MODE.ROOM, background: true },
+                { maxTokens: 6144, context, origin, signal: lifeCancel.signal, taskKey, mode: core_constants.MODE.ROOM, background: true },
                 raw => normalizeRoomLifePlan(raw, inputRoom, memoryBank, today, { participantSnapshot }),
             );
             core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
@@ -22992,6 +23020,7 @@ async function ensureRoomLifePlanOperation(options = {}) {
             generation_recovery.detachGenerationRecovery(origin);
             if (!quiet) ui_overlay.setInnerLoading(false);
             runtimeState.roomLifeRefreshPromise = null;
+            if (runtimeState.roomLifeAbortController === lifeCancel) runtimeState.roomLifeAbortController = null;
             if (runtimeState.roomLifeRefreshOrigin === origin) runtimeState.roomLifeRefreshOrigin = null;
         }
     })();
@@ -30250,6 +30279,7 @@ async function generateAllAdvForSession(options = {}) {
         return;
     }
     runtimeState.activeAdvBulkScopes.add(scope);
+    const bulkCancel = core_requestCoordinator.openAdvBulkCancellation(scope);
     core_requestCoordinator.registerArchiveTargetReservation(bulkTaskKey, targetRuntime, core_constants.MODE.ADV,
         advTargetMessage(targetRuntime, 'ADV 批量生成中'));
     try {
@@ -30281,6 +30311,7 @@ async function generateAllAdvForSession(options = {}) {
     try {
         await startAdvRecovery(targetRuntime, { kind: 'adv-bulk', eventIds: pending.map(event => event.id) }, options, session);
         try {
+            if (bulkCancel.signal.aborted) throw core_requestCoordinator.createGenerationAbortError();
             const batch = await generation_client.requestValidatedSegment(
                 advBatchPrompt(context, pending, memoryBank),
                 `正在生成本批 ${pending.length} 篇 ADV…`,
@@ -30289,6 +30320,7 @@ async function generateAllAdvForSession(options = {}) {
                     temperature: 0.55,
                     context,
                     origin,
+                    signal: bulkCancel.signal,
                     taskKey: bulkTaskKey,
                     mode: core_constants.MODE.ADV,
                     background: true,
@@ -30365,6 +30397,7 @@ async function generateAllAdvForSession(options = {}) {
     } finally {
         generation_recovery.detachGenerationRecovery(origin);
         runtimeState.activeAdvBulkScopes.delete(scope);
+        core_requestCoordinator.closeAdvBulkCancellation(scope, bulkCancel);
         core_requestCoordinator.unregisterArchiveTargetReservation(bulkTaskKey);
         if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
         core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.ADV, origin);
@@ -30372,6 +30405,7 @@ async function generateAllAdvForSession(options = {}) {
     }
     } finally {
         runtimeState.activeAdvBulkScopes.delete(scope);
+        core_requestCoordinator.closeAdvBulkCancellation(scope, bulkCancel);
         core_requestCoordinator.unregisterArchiveTargetReservation(bulkTaskKey);
         if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
         refreshAdvArchiveTarget(targetRuntime);
@@ -30409,6 +30443,7 @@ async function repairFailedAdvForSession(options = {}) {
 
     const memoryBank = targetRuntime.memoryBank;
     runtimeState.activeAdvBulkScopes.add(scope);
+    const bulkCancel = core_requestCoordinator.openAdvBulkCancellation(scope);
     core_requestCoordinator.registerArchiveTargetReservation(bulkTaskKey, targetRuntime, core_constants.MODE.ADV,
         advTargetMessage(targetRuntime, 'ADV 失败项补完中'));
     try {
@@ -30432,6 +30467,7 @@ async function repairFailedAdvForSession(options = {}) {
     try {
         await startAdvRecovery(targetRuntime, { kind: 'adv-repair', eventIds: failed.map(event => event.id) }, options, session);
         for (let i = 0; i < failed.length; i += 1) {
+            if (bulkCancel.signal.aborted) throw core_requestCoordinator.createGenerationAbortError();
             const event = failed[i];
             if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(true, advTargetStatus(targetRuntime, `逐个补完 ${i + 1} / ${failed.length}：${event.title}`));
             let adv;
@@ -30444,6 +30480,7 @@ async function repairFailedAdvForSession(options = {}) {
                         temperature: 0.55,
                         context,
                         origin,
+                        signal: bulkCancel.signal,
                         taskKey: `adv-user-repair:${scope}:${core_text.safeId(event.id, String(i + 1))}`,
                         mode: core_constants.MODE.ADV,
                         background: true,
@@ -30493,6 +30530,7 @@ async function repairFailedAdvForSession(options = {}) {
     } finally {
         generation_recovery.detachGenerationRecovery(origin);
         runtimeState.activeAdvBulkScopes.delete(scope);
+        core_requestCoordinator.closeAdvBulkCancellation(scope, bulkCancel);
         core_requestCoordinator.unregisterArchiveTargetReservation(bulkTaskKey);
         if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
         core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.ADV, origin);
@@ -30500,6 +30538,7 @@ async function repairFailedAdvForSession(options = {}) {
     }
     } finally {
         runtimeState.activeAdvBulkScopes.delete(scope);
+        core_requestCoordinator.closeAdvBulkCancellation(scope, bulkCancel);
         core_requestCoordinator.unregisterArchiveTargetReservation(bulkTaskKey);
         if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
         refreshAdvArchiveTarget(targetRuntime);
@@ -37181,6 +37220,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`,
     try {
         assertRequestCurrent();
         core_taskTrace.beginStage(taskTrace, 'queue');
+        core_requestCoordinator.noteChatTaskPhase('queue', { taskKey: options.taskKey, origin: options.origin });
         releaseProviderPermit = await core_requestCoordinator.acquireProviderRequestPermit(lifecycleController.signal);
         core_taskTrace.markStage(taskTrace, 'queue');
         core_taskTrace.beginStage(taskTrace, 'pacing');
@@ -37190,6 +37230,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`,
         await assertConfigurationCurrent();
         assertRequestCurrent();
         core_taskTrace.beginStage(taskTrace, 'request');
+        core_requestCoordinator.noteChatTaskPhase('request', { taskKey: options.taskKey, origin: options.origin });
         result = await core_requestCoordinator.runGenerationRequestWithTimeout(
             async () => {
                 assertRequestCurrent();
@@ -37245,6 +37286,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`,
         mode: options.mode, settingText: core_worldPresentation.controlledWorldEvidence(contextEnvelope, null),
     });
     core_taskTrace.markStage(taskTrace, 'parse');
+    core_requestCoordinator.noteChatTaskPhase('validate', { taskKey: options.taskKey, origin: options.origin });
     return parsed;
 }
 
@@ -37276,16 +37318,18 @@ async function requestJson(prompt, statusText = '正在根据当前聊天档案�
     const displayStatus = targetLabel ? `正在为：${targetLabel} · ${core_text.normalizeText(statusText, 180)}` : statusText;
     runtimeState.activeGenerationTasks.set(taskKey, {
         key: taskKey, controller, origin, label: core_text.normalizeText(displayStatus, 360),
-        mode: core_text.normalizeText(options.mode, 80), parentTaskKey, startedAt: Date.now(),
+        mode: core_text.normalizeText(options.mode, 80), parentTaskKey, startedAt: Date.now(), phase: 'prepare',
     });
+    core_requestCoordinator.noteChatTaskPhase('prepare', { taskKey, origin });
     core_requestCoordinator.refreshConcurrentTaskUi(core_text.normalizeText(options.mode, 80), origin);
     const inheritedTrace = generationTrace(options);
     const taskTrace = inheritedTrace || core_taskTrace.startTaskTrace(taskKey, options.mode);
     if (!inheritedTrace) core_taskTrace.markStage(taskTrace, 'start');
+    let requestOutcome = 'done';
     try {
         core_context.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
         const result = await generateConfiguredJson(prompt, {
-            ...options, taskTrace, origin, context: requestContext,
+            ...options, taskKey, taskTrace, origin, context: requestContext,
             signal: controller.signal,
             statusText,
             enforceGeneratedPhrasePolicy: options.enforceGeneratedPhrasePolicy !== false,
@@ -37293,6 +37337,7 @@ async function requestJson(prompt, statusText = '正在根据当前聊天档案�
         if (!inheritedTrace) core_taskTrace.endTaskTrace(taskTrace, 'ok');
         return result;
     } catch (error) {
+        requestOutcome = error?.name === 'AbortError' ? 'cancelled' : 'failed';
         if (!inheritedTrace) core_taskTrace.endTaskTrace(taskTrace, error?.name === 'AbortError' ? 'cancelled' : 'failed', error);
         else if (taskTrace.activeStage) core_taskTrace.markStage(taskTrace, taskTrace.activeStage, false);
         throw error;
@@ -37300,6 +37345,11 @@ async function requestJson(prompt, statusText = '正在根据当前聊天档案�
         try { externalSignal?.removeEventListener?.('abort', forwardAbort); } catch {}
         const current = runtimeState.activeGenerationTasks.get(taskKey);
         if (current?.controller === controller) runtimeState.activeGenerationTasks.delete(taskKey);
+        core_requestCoordinator.rememberStandaloneChatTask({
+            label: core_text.normalizeText(displayStatus, 120),
+            mode: core_text.normalizeText(options.mode, 80),
+            origin, outcome: requestOutcome, kind: 'generation',
+        });
         core_requestCoordinator.refreshConcurrentTaskUi(core_text.normalizeText(options.mode, 80), origin);
     }
 }
@@ -38016,6 +38066,7 @@ async function generateModeOperation(mode, options = {}) {
         await core_context.yieldToUi();
         core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
         core_taskTrace.beginStage(taskTrace, 'save');
+        core_requestCoordinator.noteChatTaskPhase('save', { taskKey, origin });
         let committed = false;
         if (archiveTarget) {
             const stillCurrent = archiveTargetStillCurrent;
@@ -39788,6 +39839,28 @@ function generationRecoveryForOrigin(origin) {
     return handle ? { ...generationRecoverySummary(handle.journal, handle.now()), durable: handle.durable } : null;
 }
 
+// Counts and ids only. Callers must not receive segment text, prompts, or evidence.
+function generationRecoveryProgress(origin) {
+    try {
+        const handle = origin && handles.get(origin);
+        if (!handle?.journal) return null;
+        const summary = generationRecoverySummary(handle.journal, typeof handle.now === 'function' ? handle.now() : Date.now());
+        if (!summary) return null;
+        const segments = Array.isArray(handle.journal.segments) ? handle.journal.segments : [];
+        return {
+            draftId: typeof handle.journal.draftId === 'string' ? handle.journal.draftId.slice(0, 240) : '',
+            pageId: typeof handle.journal.pageId === 'string' ? handle.journal.pageId.slice(0, 80) : '',
+            mode: summary.mode,
+            received: summary.completed + summary.truncated,
+            saved: handle.durable === true ? summary.completed : 0,
+            total: segments.length,
+            durable: handle.durable === true,
+        };
+    } catch {
+        return null;
+    }
+}
+
 function currentAttachedJournal(origin, handle) {
     checkCurrent(handle);
     const journal = validJournal(handle.journal, handle.now());
@@ -40205,6 +40278,7 @@ __m_generation_recovery_js.generationRecoverySnapshot = generationRecoverySnapsh
 __m_generation_recovery_js.readGenerationContentSnapshot = readGenerationContentSnapshot;
 __m_generation_recovery_js.generationContentSnapshotForOrigin = generationContentSnapshotForOrigin;
 __m_generation_recovery_js.generationRecoveryForOrigin = generationRecoveryForOrigin;
+__m_generation_recovery_js.generationRecoveryProgress = generationRecoveryProgress;
 __m_generation_recovery_js.generationRecoverySegmentsForOrigin = generationRecoverySegmentsForOrigin;
 __m_generation_recovery_js.generationContinuationPrompt = generationContinuationPrompt;
 __m_generation_recovery_js.GENERATION_RECOVERY_CACHE_KEY = GENERATION_RECOVERY_CACHE_KEY;
@@ -40751,6 +40825,202 @@ __m_archive_importRecovery_js.clearArchiveRecovery = clearArchiveRecovery;
 __m_archive_importRecovery_js.discardArchiveRecovery = discardArchiveRecovery;
 __m_archive_importRecovery_js.ARCHIVE_RECOVERY_PAGE_NOTICE = ARCHIVE_RECOVERY_PAGE_NOTICE;
 __m_archive_importRecovery_js.ARCHIVE_RECOVERY_MAX_DRAFTS = ARCHIVE_RECOVERY_MAX_DRAFTS;
+}
+
+function __init_ui_taskCenter_js() {
+// MODULE: ui/taskCenter.js
+const archive_groups = __m_archive_groups_js;
+const archive_library = __m_archive_library_js;
+const core_constants = __m_core_constants_js;
+const core_context = __m_core_context_js;
+const core_requestCoordinator = __m_core_requestCoordinator_js;
+const core_text = __m_core_text_js;
+const ui_overlay = __m_ui_overlay_js;
+
+
+
+
+
+
+
+let painting = false;
+
+function taskPanel() {
+    return document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-task-center]`);
+}
+
+function taskButton() {
+    return document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-action="tasks"]`);
+}
+
+function ensureTaskCenterChrome(overlay) {
+    const bar = overlay?.querySelector?.('.rmt-topbar');
+    if (bar && !bar.querySelector('[data-rmt-action="tasks"]')) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.rmtAction = 'tasks';
+        button.setAttribute('aria-label', '任务');
+        button.title = '任务';
+        button.innerHTML = '任务 <span class="rmt-task-count" data-rmt-task-count hidden>0</span>';
+        const close = bar.querySelector('[data-rmt-action="close"]');
+        if (close) bar.insertBefore(button, close);
+        else bar.appendChild(button);
+    }
+    const shell = overlay?.querySelector?.('.rmt-shell');
+    if (shell && !shell.querySelector('[data-rmt-task-center]')) {
+        const panel = document.createElement('div');
+        panel.className = 'rmt-task-center';
+        panel.dataset.rmtTaskCenter = '';
+        panel.hidden = true;
+        shell.appendChild(panel);
+    }
+}
+
+function hideTaskCenter() {
+    const panel = taskPanel();
+    if (panel) panel.hidden = true;
+}
+
+function syncTaskCenterBadge() {
+    const running = core_requestCoordinator.listChatTaskSnapshot().filter(row => row.running).length;
+    const badge = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-task-count]`);
+    if (!badge) return;
+    badge.hidden = running <= 0;
+    badge.textContent = String(Math.min(99, running));
+    const button = taskButton();
+    if (button) button.setAttribute('aria-label', running ? `任务，${running} 项进行中` : '任务');
+}
+
+function paintTaskCenter(panel) {
+    const rows = core_requestCoordinator.listChatTaskSnapshot();
+    const running = rows.filter(row => row.running);
+    const settled = rows.filter(row => !row.running);
+    const currentNames = running.filter(row => row.currentChat).map(row => row.label);
+    const esc = core_text.esc;
+    const rowHtml = row => `<article class="rmt-task-row">
+      <header><b>${esc(row.label)}</b><span>${esc(row.phaseLabel)}</span></header>
+      <p>${esc(row.chatCaption)}</p>
+      <p>${esc(row.progressText)}</p>
+      <div class="rmt-task-actions">
+        ${row.running ? `<button type="button" class="rmt-btn" data-rmt-action="task-cancel" data-rmt-task-id="${esc(row.id)}">取消这项</button>` : ''}
+        ${row.canOpen ? `<button type="button" class="rmt-btn" data-rmt-action="task-open" data-rmt-task-id="${esc(row.id)}">回到原聊天并打开结果</button>` : ''}
+      </div>
+    </article>`;
+    const top = panel.scrollTop;
+    panel.innerHTML = `<div class="rmt-task-head">
+      <b>任务</b>
+      <button type="button" class="rmt-btn" data-rmt-action="task-center-close">关闭</button>
+    </div>
+    <p class="rmt-task-note">这里只显示任务名称、阶段和是否落盘。不会显示密钥、提示词或世界书正文。</p>
+    ${running.length ? running.map(rowHtml).join('') : '<p class="rmt-task-empty">当前没有进行中的任务。</p>'}
+    <div class="rmt-task-actions">
+      <button type="button" class="rmt-btn" data-rmt-action="task-cancel-current" ${currentNames.length ? '' : 'disabled'}>取消当前聊天全部任务</button>
+    </div>
+    ${settled.length ? `<h3>刚结束</h3>${settled.map(rowHtml).join('')}` : ''}`;
+    panel.scrollTop = top;
+}
+
+function refreshTaskCenterView() {
+    if (painting) return;
+    painting = true;
+    try {
+        syncTaskCenterBadge();
+        const panel = taskPanel();
+        if (panel && !panel.hidden) paintTaskCenter(panel);
+    } finally {
+        painting = false;
+    }
+}
+
+core_requestCoordinator.setTaskCenterRefresh(refreshTaskCenterView);
+
+function syncTaskCenterChrome() {
+    refreshTaskCenterView();
+}
+
+async function openSettledTask(id) {
+    const row = core_requestCoordinator.settledChatTaskRecord(id);
+    if (!row?.chatId) {
+        globalThis.toastr?.info?.('这份任务没有可打开的原聊天结果。', '心迹回廊');
+        return;
+    }
+    const live = core_context.currentCharacterGuard();
+    const same = core_context.comparableChatId(core_context.getChatId(live)) === row.chatId
+        && (!row.characterId || String(live.characterId ?? '') === row.characterId);
+    if (same) {
+        if (row.draftId) return archive_library.openGenerationTaskResult(row.draftId, live);
+        return ui_overlay.showChooser();
+    }
+    const opener = live.openCharacterChat;
+    if (typeof opener === 'function') {
+        await opener.call(live, row.chatId);
+        const next = core_context.currentCharacterGuard();
+        const matched = core_context.comparableChatId(core_context.getChatId(next)) === row.chatId
+            && (!row.characterId || String(next.characterId ?? '') === row.characterId);
+        if (!matched) {
+            globalThis.toastr?.warning?.('酒馆没有切到原来的聊天，没有打开可写结果。', '心迹回廊');
+            return openReadonlyTask(row);
+        }
+        if (row.draftId) return archive_library.openGenerationTaskResult(row.draftId, next);
+        return ui_overlay.showChooser();
+    }
+    globalThis.toastr?.info?.('当前酒馆没有切回原聊天的入口，改为只读查看，不会改当前聊天。', '心迹回廊');
+    return openReadonlyTask(row);
+}
+
+function openReadonlyTask(row) {
+    const context = core_context.getContext();
+    const index = archive_groups.getArchiveIndex(context);
+    const entry = index.find(item => core_context.comparableChatId(item?.chatId) === row.chatId
+        && (!row.characterName || core_text.normalizeText(item?.characterName, 120) === row.characterName));
+    if (!entry) {
+        globalThis.toastr?.info?.('原聊天的档案索引里还没有这份结果。', '心迹回廊');
+        return;
+    }
+    return archive_library.openIndexedArchive(entry.characterKey, entry.chatId, core_context.archiveIndexEntryId(entry));
+}
+
+function handleTaskCenterAction(action, actionEl) {
+    if (action === 'tasks') {
+        const panel = taskPanel();
+        if (!panel) return;
+        panel.hidden = !panel.hidden;
+        if (!panel.hidden) paintTaskCenter(panel);
+        syncTaskCenterBadge();
+        return;
+    }
+    if (action === 'task-center-close') return hideTaskCenter();
+    if (action === 'task-cancel') {
+        const id = actionEl?.dataset?.rmtTaskId || '';
+        const row = core_requestCoordinator.listChatTaskSnapshot().find(item => item.id === id && item.running);
+        if (!row) return;
+        if (!ui_overlay.confirmExplicitAction(`取消「${row.label}」？`, '只会中止这一项。已经确认落盘的成果保留，未完成部分停止，不会自动重试。同聊天的其他任务继续。', { destructive: true })) return;
+        const result = core_requestCoordinator.cancelChatTask(id, 'task-center');
+        globalThis.toastr?.info?.(result.cancelled ? `已中止「${row.label}」。` : `「${row.label}」已在结束。`, '心迹回廊');
+        refreshTaskCenterView();
+        return;
+    }
+    if (action === 'task-cancel-current') {
+        const names = core_requestCoordinator.currentChatBlockingTasks();
+        if (!names.length) return;
+        if (!ui_overlay.confirmExplicitAction('取消当前聊天的全部任务？', `会中止这些任务：\n${names.map(label => `· ${label}`).join('\n')}\n\n其他聊天的任务不受影响。已落盘成果保留，未完成部分停止，不会自动重试。`, { destructive: true })) return;
+        core_requestCoordinator.cancelCurrentChatBlockingTasks(null, 'task-center');
+        globalThis.toastr?.info?.('已中止当前聊天的任务。', '心迹回廊');
+        refreshTaskCenterView();
+        return;
+    }
+    if (action === 'task-open') {
+        const id = actionEl?.dataset?.rmtTaskId || '';
+        void openSettledTask(id).catch(error => {
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+        });
+    }
+}
+
+__m_ui_taskCenter_js.ensureTaskCenterChrome = ensureTaskCenterChrome;
+__m_ui_taskCenter_js.hideTaskCenter = hideTaskCenter;
+__m_ui_taskCenter_js.syncTaskCenterChrome = syncTaskCenterChrome;
+__m_ui_taskCenter_js.handleTaskCenterAction = handleTaskCenterAction;
 }
 
 function __init_ui_butterflyView_js() {
@@ -42478,6 +42748,7 @@ const core_archiveCover = __m_core_archiveCover_js;
 const core_constants = __m_core_constants_js;
 const core_context = __m_core_context_js;
 const core_requestCoordinator = __m_core_requestCoordinator_js;
+const ui_taskCenter = __m_ui_taskCenter_js;
 const core_settings = __m_core_settings_js;
 const core_text = __m_core_text_js;
 const core_theme = __m_core_theme_js;
@@ -42532,6 +42803,7 @@ const runtimeState = __m_core_state_js.state;
 
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
 
 
 
@@ -42650,9 +42922,11 @@ function openOverlay() {
               <button type="button" data-rmt-action="workspace-expand" aria-label="展开窗口" title="展开窗口"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>
               <button type="button" data-rmt-action="regenerate" hidden aria-label="增量追加" title="增量追加">＋</button>
               <button type="button" data-rmt-action="manage" hidden aria-label="管理" title="管理">⋯</button>
+              <button type="button" data-rmt-action="tasks" aria-label="任务" title="任务">任务 <span class="rmt-task-count" data-rmt-task-count hidden>0</span></button>
               <button type="button" data-rmt-action="close" aria-label="关闭档案室">×</button>
             </div>
             ${workspace_ui.workspaceNavHtml()}
+            <div class="rmt-task-center" data-rmt-task-center hidden></div>
             <div class="rmt-body"></div>
           </div>`;
         document.body.appendChild(overlay);
@@ -42667,8 +42941,10 @@ function openOverlay() {
             });
         }
     }
+    ui_taskCenter.ensureTaskCenterChrome(overlay);
     applyArchiveMobileSafeArea(overlay);
     try { core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings(core_context.getContext())); } catch {}
+    ui_taskCenter.syncTaskCenterChrome();
     bindOverlayCloseFallback(overlay);
     revealArchiveOverlay(overlay);
     workspace_ui.syncWorkspaceChrome();
@@ -42694,6 +42970,7 @@ function closeOverlay(options = {}) {
     cg_editor.closeCgPromptEditor({ restoreFocus: false });
     modes_room.stopRoomClock();
     ui_phoneView.stopPhoneClock();
+    ui_taskCenter.hideTaskCenter();
     ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     if (overlay) {
         if (typeof globalThis.HTMLDialogElement === 'function' && overlay instanceof globalThis.HTMLDialogElement && overlay.open) {
@@ -44274,6 +44551,9 @@ function handleOverlayClick(event) {
     if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
     if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
     if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
+    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open') {
+        return ui_taskCenter.handleTaskCenterAction(action, actionEl);
+    }
     if (action === 'close') return closeArchiveOverlayFromUser();
     if (action === 'home') {
         if (runtimeState.busy) runtimeState.activeTaskBackgrounded = true;
@@ -44977,6 +45257,7 @@ const core_context = __m_core_context_js;
 const image_patch = __m_core_cgImagePatch_js;
 const core_taskTrace = __m_core_taskTrace_js;
 const core_text = __m_core_text_js;
+const generation_recovery = __m_generation_recovery_js;
 const modes_heart = __m_modes_heart_js;
 const modes_room = __m_modes_room_js;
 const ui_settingsPanel = __m_ui_settingsPanel_js;
@@ -44995,7 +45276,21 @@ let deferredDurabilityWarningShown = false;
 const logicalGenerationTasks = new Map();
 const logicalTaskOrigins = new WeakMap();
 const cancelledLogicalOrigins = [];
+const recentChatTasks = [];
 let logicalTaskSequence = 0;
+let settledTaskSequence = 0;
+let refreshTaskCenter = () => {};
+const TASK_PHASE_LABEL = Object.freeze({
+    prepare: '准备',
+    queue: '等待 provider',
+    request: '请求',
+    validate: '校验',
+    save: '保存',
+    cancelling: '取消中',
+    done: '完成',
+    failed: '失败',
+    cancelled: '已取消',
+});
 
 function exactLogicalOrigin(left, right) {
     return !!left && !!right && ['startedAt', 'characterKey', 'characterId', 'characterAvatar', 'chatId', 'archiveRevision']
@@ -45018,7 +45313,7 @@ function beginLogicalGenerationTask({ kind = 'mode', mode = '', pageId = '', pag
     const handle = { id: `logical-generation-${++logicalTaskSequence}`, kind, mode, pageId, pageIds: [...pageIds], parentTaskId,
         label: label || core_constants.MODE_LABEL[mode] || kind, taskKey, controller,
         signal: controller.signal, settled, resolveSettled, lifecycleEpoch: runtimeState.runtimeLifecycleEpoch,
-        scope: context ? core_context.chatScopeKey(context) : '', origin: null, origins: [], status: 'running',
+        scope: context ? core_context.chatScopeKey(context) : '', origin: null, origins: [], status: 'running', phase: 'prepare',
         releaseParent: () => externalSignal?.removeEventListener?.('abort', forwardAbort) };
     logicalGenerationTasks.set(handle.id, handle);
     if (origin) bindLogicalGenerationTask(handle, origin);
@@ -45060,6 +45355,7 @@ function assertLogicalGenerationTaskCurrent(handleOrOrigin) {
 function finishLogicalGenerationTask(handle, result = null) {
     if (!handle || logicalGenerationTasks.get(handle.id) !== handle) return;
     handle.status = result?.status || (handle.signal.aborted ? 'cancelled' : 'settled');
+    rememberSettledTask(handle, handle.status);
     handle.releaseParent();
     if (handle.signal.aborted) cancelledLogicalOrigins.push(handle);
     logicalGenerationTasks.delete(handle.id);
@@ -45286,46 +45582,322 @@ function hasUnloadRisk() {
 // "is anything still tied to THIS chat right now?".
 // ---------------------------------------------------------------------------
 
-function currentChatBlockingTasks(context = null) {
-    const labels = [];
-    const seen = new Set();
-    const push = label => {
-        const text = core_text.normalizeText(label, 120);
-        if (!text || seen.has(text)) return;
-        seen.add(text);
-        labels.push(text);
+function setTaskCenterRefresh(refresh) {
+    refreshTaskCenter = typeof refresh === 'function' ? refresh : () => {};
+}
+
+function noteChatTaskPhase(phase, { taskKey = '', origin = null } = {}) {
+    const next = TASK_PHASE_LABEL[phase] ? phase : 'prepare';
+    const key = core_text.normalizeText(taskKey, 240);
+    if (key) {
+        const task = runtimeState.activeGenerationTasks.get(key);
+        if (task) task.phase = next;
+        const image = runtimeState.activeCgImageTasks.get(key);
+        if (image) image.phase = next;
+    }
+    const logical = origin ? logicalGenerationTaskForOrigin(origin) : null;
+    if (logical && logicalGenerationTasks.get(logical.id) === logical) logical.phase = next;
+    else if (key) {
+        for (const task of logicalGenerationTasks.values()) {
+            if (task.taskKey === key) task.phase = next;
+        }
+    }
+    try { refreshTaskCenter(); } catch {}
+}
+
+function openAdvBulkCancellation(scope) {
+    const controller = new AbortController();
+    runtimeState.activeAdvBulkControllers.set(String(scope || ''), controller);
+    return controller;
+}
+
+function closeAdvBulkCancellation(scope, controller) {
+    const key = String(scope || '');
+    if (runtimeState.activeAdvBulkControllers.get(key) === controller) runtimeState.activeAdvBulkControllers.delete(key);
+}
+
+function liveTaskContext(context) {
+    if (context) return context;
+    try { return core_context.getContext(); } catch { return null; }
+}
+
+function chatTail(chatId) {
+    const id = core_context.comparableChatId(chatId);
+    return id ? `…${id.slice(-8)}` : '';
+}
+
+function deferredCountForOrigin(origin) {
+    const key = origin?.characterKey && origin?.chatId ? `${origin.characterKey}|${core_context.comparableChatId(origin.chatId)}` : '';
+    const list = key ? runtimeState.deferredChatCommits.get(key) : null;
+    return Array.isArray(list) ? list.length : 0;
+}
+
+function progressText(progress, deferred, kind) {
+    if (kind === 'cg') return deferred ? `绘制中；另有 ${deferred} 项待写回` : '绘制中';
+    const received = Number(progress?.received) || 0;
+    const saved = Number(progress?.saved) || 0;
+    const base = received || saved ? `已收到 ${received} 段，已落盘 ${saved} 段` : '尚未收到可保存分段';
+    return deferred ? `${base}；另有 ${deferred} 项待写回` : base;
+}
+
+function phaseOf(record) {
+    if (record?.status === 'cancelling' || record?.controller?.signal?.aborted || record?.signal?.aborted) return 'cancelling';
+    return TASK_PHASE_LABEL[record?.phase] ? record.phase : 'prepare';
+}
+
+function publicTaskRow(row) {
+    return {
+        id: row.id,
+        label: row.label,
+        kind: row.kind,
+        phase: row.phase,
+        phaseLabel: TASK_PHASE_LABEL[row.phase] || '准备',
+        running: true,
+        currentChat: row.currentChat === true,
+        archiveTarget: row.archiveTarget === true,
+        chatCaption: row.chatCaption,
+        progressText: row.progressText,
+        outcome: '',
+        canOpen: false,
     };
-    let liveContext = context;
-    if (!liveContext) {
-        try { liveContext = core_context.getContext(); } catch { liveContext = null; }
+}
+
+function logicalOwnsGeneration(logical, task, taskKey) {
+    if (!logical || !task) return false;
+    if (logical.taskKey && (taskKey === logical.taskKey || taskKey.startsWith(`${logical.taskKey}:`) || task.parentTaskKey === logical.taskKey)) return true;
+    const bound = logicalGenerationTaskForOrigin(task.origin);
+    return bound?.id === logical.id && logicalGenerationTasks.get(logical.id) === logical;
+}
+
+function collectChatTaskRows(context = null) {
+    const live = liveTaskContext(context);
+    let liveScope = '';
+    try { liveScope = live ? core_context.chatScopeKey(live) : ''; } catch { liveScope = ''; }
+    const rows = [];
+    const claimedControllers = new Set();
+    const claimedGeneration = new Set();
+    const claimedCg = new Set();
+    const claim = controller => { if (controller) claimedControllers.add(controller); };
+    for (const logical of logicalGenerationTasks.values()) {
+        const origin = logical.origin;
+        const archiveTarget = !!core_text.normalizeText(origin?.archiveTargetEntryId, 120);
+        const currentChat = !archiveTarget && (!!logical.scope && logical.scope === liveScope || originMatchesChatScope(origin, liveScope));
+        const controllers = [];
+        if (logical.controller) controllers.push(logical.controller);
+        for (const [taskKey, task] of runtimeState.activeGenerationTasks.entries()) {
+            if (!logicalOwnsGeneration(logical, task, taskKey)) continue;
+            claimedGeneration.add(taskKey);
+            if (task.controller) controllers.push(task.controller);
+        }
+        for (const [taskKey, task] of runtimeState.activeCgImageTasks.entries()) {
+            if (!logicalOwnsGeneration(logical, task, taskKey)) continue;
+            claimedCg.add(taskKey);
+            if (task.controller) controllers.push(task.controller);
+        }
+        if (logical.taskKey?.startsWith('room-life:') && runtimeState.roomLifeAbortController) controllers.push(runtimeState.roomLifeAbortController);
+        controllers.forEach(claim);
+        const progress = generation_recovery.generationRecoveryProgress(origin);
+        const name = core_text.normalizeText(origin?.characterName, 120) || '未命名角色';
+        rows.push({
+            id: logical.id,
+            logicalId: logical.id,
+            label: core_text.normalizeText(logical.label, 120) || '内容生成',
+            kind: 'logical',
+            phase: phaseOf(logical),
+            running: true,
+            currentChat,
+            archiveTarget,
+            controllers,
+            chatCaption: archiveTarget ? `${name} · 指定档案` : currentChat ? `${name} · 当前聊天` : `${name} · 其他聊天 ${chatTail(origin?.chatId)}`,
+            progressText: progressText(progress, deferredCountForOrigin(origin), 'logical'),
+        });
     }
-    if (!liveContext) return labels;
-    // The archive import path owns the exclusive `busy` flag and always targets
-    // the chat it was started from.
-    if (runtimeState.busy && (!runtimeState.activeTaskOrigin || core_context.isCurrentTaskOrigin(runtimeState.activeTaskOrigin, liveContext))) {
-        push(runtimeState.activeTaskLabel || '正在整理聊天档案');
+    const pushLoose = (id, task, kind, label) => {
+        const origin = task?.origin || null;
+        const archiveTarget = !!core_text.normalizeText(origin?.archiveTargetEntryId, 120);
+        const currentChat = !archiveTarget && originMatchesChatScope(origin, liveScope);
+        const controllers = task?.controller ? [task.controller] : [];
+        controllers.forEach(claim);
+        const progress = generation_recovery.generationRecoveryProgress(origin);
+        const name = core_text.normalizeText(origin?.characterName, 120) || '未命名角色';
+        rows.push({
+            id, logicalId: '', label, kind, phase: phaseOf(task), running: true, currentChat, archiveTarget, controllers,
+            chatCaption: archiveTarget ? `${name} · 指定档案` : currentChat ? `${name} · 当前聊天` : `${name} · 其他聊天 ${chatTail(origin?.chatId)}`,
+            progressText: progressText(progress, deferredCountForOrigin(origin), kind),
+        });
+    };
+    for (const [taskKey, task] of runtimeState.activeGenerationTasks.entries()) {
+        if (claimedGeneration.has(taskKey)) continue;
+        const fallback = taskKey.startsWith('room-life:') ? '今日生活生成'
+            : taskKey.startsWith('adv-bulk:') || taskKey.startsWith('adv-user-repair:') ? 'ADV 批量生成'
+            : core_text.normalizeText(task?.label || task?.mode, 120) || '内容生成';
+        pushLoose(`gen:${taskKey}`, task, taskKey.startsWith('room-life:') ? 'room-life' : 'generation', fallback);
     }
-    for (const task of runtimeState.activeGenerationTasks.values()) {
-        // ArchiveTarget requests are detached from the host's currently open chat. They must
-        // remain an unload risk, but must never trigger the "do not leave this chat" navigation
-        // warning or imply that returning to A is required for the IndexedDB commit.
-        if (core_text.normalizeText(task?.origin?.archiveTargetEntryId, 120)) continue;
-        if (task?.origin && !core_context.isCurrentTaskOrigin(task.origin, liveContext)) continue;
-        push(task?.label || task?.mode || '内容生成');
+    for (const [taskKey, task] of runtimeState.activeCgImageTasks.entries()) {
+        if (claimedCg.has(taskKey) || runtimeState.activeGenerationTasks.has(taskKey)) continue;
+        pushLoose(`cg:${taskKey}`, task, 'cg', core_text.normalizeText(task?.label, 120) || 'CG 绘制');
     }
-    for (const task of runtimeState.activeCgImageTasks.values()) {
-        if (task?.origin && !core_context.isCurrentTaskOrigin(task.origin, liveContext)) continue;
-        push(task?.label || 'CG 绘制');
+    if (runtimeState.busy && runtimeState.activeTaskAbortController && !claimedControllers.has(runtimeState.activeTaskAbortController)) {
+        const origin = runtimeState.activeTaskOrigin;
+        const currentChat = !origin || originMatchesChatScope(origin, liveScope);
+        const name = core_text.normalizeText(origin?.characterName, 120) || '未命名角色';
+        claim(runtimeState.activeTaskAbortController);
+        rows.push({
+            id: 'archive-import',
+            logicalId: '',
+            label: core_text.normalizeText(runtimeState.activeTaskLabel, 120) || '正在整理聊天档案',
+            kind: 'archive',
+            phase: phaseOf({ controller: runtimeState.activeTaskAbortController, phase: 'prepare' }),
+            running: true,
+            currentChat: currentChat !== false,
+            archiveTarget: false,
+            controllers: [runtimeState.activeTaskAbortController],
+            chatCaption: currentChat ? `${name} · 当前聊天` : `${name} · 其他聊天 ${chatTail(origin?.chatId)}`,
+            progressText: progressText(generation_recovery.generationRecoveryProgress(origin), deferredCountForOrigin(origin), 'archive'),
+        });
     }
-    if (runtimeState.roomLifeRefreshPromise
-        && (!runtimeState.roomLifeRefreshOrigin || core_context.isCurrentTaskOrigin(runtimeState.roomLifeRefreshOrigin, liveContext))) {
-        push('今日生活生成');
+    const roomOrigin = runtimeState.roomLifeRefreshOrigin;
+    const roomRepresented = [...runtimeState.activeGenerationTasks.keys()].some(key => key.startsWith('room-life:'))
+        || [...rows].some(row => runtimeState.roomLifeAbortController && row.controllers.includes(runtimeState.roomLifeAbortController));
+    if (runtimeState.roomLifeRefreshPromise && !roomRepresented) {
+        const archiveTarget = !!core_text.normalizeText(roomOrigin?.archiveTargetEntryId, 120);
+        const currentChat = !archiveTarget && (!roomOrigin || originMatchesChatScope(roomOrigin, liveScope));
+        const controllers = [];
+        if (runtimeState.roomLifeAbortController) controllers.push(runtimeState.roomLifeAbortController);
+        for (const [taskKey, task] of runtimeState.activeGenerationTasks.entries()) {
+            if (taskKey.startsWith('room-life:') && task.controller && !controllers.includes(task.controller)) controllers.push(task.controller);
+        }
+        const name = core_text.normalizeText(roomOrigin?.characterName, 120) || '未命名角色';
+        rows.push({
+            id: 'room-life',
+            logicalId: '',
+            label: '今日生活生成',
+            kind: 'room-life',
+            phase: phaseOf({ controller: runtimeState.roomLifeAbortController, phase: 'prepare' }),
+            running: true,
+            currentChat,
+            archiveTarget,
+            controllers,
+            chatCaption: currentChat ? `${name} · 当前聊天` : `${name} · 其他聊天 ${chatTail(roomOrigin?.chatId)}`,
+            progressText: progressText(generation_recovery.generationRecoveryProgress(roomOrigin), deferredCountForOrigin(roomOrigin), 'room-life'),
+        });
     }
-    const liveScope = core_context.chatScopeKey(liveContext);
     for (const scope of runtimeState.activeAdvBulkScopes) {
-        if (scope === liveScope) push('ADV 批量生成');
+        if ([...runtimeState.activeGenerationTasks.keys()].some(key => key === `adv-bulk:${scope}` || key.startsWith(`adv-user-repair:${scope}:`))) continue;
+        const controller = runtimeState.activeAdvBulkControllers.get(scope);
+        const currentChat = scope === liveScope;
+        rows.push({
+            id: `adv-bulk:${scope}`,
+            logicalId: '',
+            label: 'ADV 批量生成',
+            kind: 'adv-bulk',
+            phase: phaseOf({ controller, phase: 'prepare' }),
+            running: true,
+            currentChat,
+            archiveTarget: false,
+            controllers: controller ? [controller] : [],
+            chatCaption: currentChat ? '当前聊天' : '其他聊天',
+            progressText: '准备中，尚未发出本批请求',
+        });
     }
-    return labels;
+    return rows;
+}
+
+function listChatTaskSnapshot(context = null) {
+    let running = [];
+    try { running = collectChatTaskRows(context).map(publicTaskRow); } catch { running = []; }
+    const live = liveTaskContext(context);
+    const settled = recentChatTasks.map(row => ({
+        id: row.id,
+        label: row.label,
+        kind: row.kind,
+        phase: row.phase,
+        phaseLabel: TASK_PHASE_LABEL[row.phase] || '完成',
+        running: false,
+        currentChat: sameSettledChat(row, live),
+        archiveTarget: row.archiveTarget === true,
+        chatCaption: settledCaption(row, live),
+        progressText: row.received || row.saved ? `已收到 ${row.received} 段，已落盘 ${row.saved} 段` : '没有新的可保存分段',
+        outcome: row.outcome,
+        canOpen: !!row.chatId && (row.outcome === 'done' || row.outcome === 'failed' || row.received > 0),
+    }));
+    return [...running, ...settled];
+}
+
+function sameSettledChat(row, context) {
+    if (!row?.chatId || !context) return false;
+    if (core_context.comparableChatId(core_context.getChatId(context)) !== row.chatId) return false;
+    return !row.characterId || String(context.characterId ?? '') === row.characterId;
+}
+
+function settledCaption(row, context) {
+    const name = row.characterName || '未命名角色';
+    if (row.archiveTarget) return `${name} · 指定档案`;
+    if (sameSettledChat(row, context)) return `${name} · 当前聊天`;
+    return `${name} · 其他聊天 ${chatTail(row.chatId)}`;
+}
+
+function rememberSettledTask(source, outcome) {
+    const origin = source?.origin || null;
+    const aborted = outcome === 'cancelled' || source?.signal?.aborted;
+    const status = aborted ? 'cancelled' : outcome === 'failed' || outcome === 'blocked' ? 'failed' : 'done';
+    const progress = generation_recovery.generationRecoveryProgress(origin);
+    const row = {
+        id: `settled-${++settledTaskSequence}`,
+        label: core_text.normalizeText(source?.label || core_constants.MODE_LABEL[source?.mode] || '任务', 120),
+        kind: source?.kind || 'logical',
+        phase: status === 'cancelled' ? 'cancelled' : status === 'failed' ? 'failed' : 'done',
+        outcome: status,
+        characterName: core_text.normalizeText(origin?.characterName, 120),
+        characterId: String(origin?.characterId ?? ''),
+        chatId: core_context.comparableChatId(origin?.chatId),
+        mode: core_text.normalizeText(source?.mode || progress?.mode, 80),
+        draftId: core_text.normalizeText(origin?.generationRecoveryDraftId || progress?.draftId, 240),
+        pageId: core_text.normalizeText(progress?.pageId, 80),
+        received: Number(progress?.received) || 0,
+        saved: Number(progress?.saved) || 0,
+        archiveTarget: !!core_text.normalizeText(origin?.archiveTargetEntryId, 120),
+        endedAt: Date.now(),
+    };
+    if (!row.label) return;
+    recentChatTasks.unshift(row);
+    while (recentChatTasks.length > 8) recentChatTasks.pop();
+    try { refreshTaskCenter(); } catch {}
+}
+
+function rememberStandaloneChatTask(record) {
+    const logical = logicalGenerationTaskForOrigin(record?.origin);
+    if (logical && logicalGenerationTasks.get(logical.id) === logical) return;
+    rememberSettledTask(record, record?.outcome);
+}
+
+function settledChatTaskRecord(id) {
+    const row = recentChatTasks.find(item => item.id === id);
+    return row ? { ...row } : null;
+}
+
+function currentChatBlockingTasks(context = null) {
+    try {
+        return listChatTaskSnapshot(context).filter(row => row.running && row.currentChat).map(row => row.label);
+    } catch {
+        return [];
+    }
+}
+
+function cancelChatTask(id, reason = 'task-center') {
+    const row = collectChatTaskRows().find(item => item.id === String(id || '') && item.running);
+    if (!row) return { cancelled: 0, reason };
+    if (row.logicalId) {
+        const task = logicalGenerationTasks.get(row.logicalId);
+        if (task) task.status = 'cancelling';
+    }
+    const seen = new Set();
+    let cancelled = 0;
+    for (const controller of row.controllers) {
+        if (abortTaskController(controller, seen)) cancelled += 1;
+    }
+    try { refreshTaskCenter(); } catch {}
+    return { cancelled, reason };
 }
 
 function originMatchesChatScope(origin, scope) {
@@ -45367,6 +45939,12 @@ function cancelBlockingTasksForScope(scope, reason = 'chat-navigation') {
     for (const task of runtimeState.activeCgImageTasks.values()) {
         if (!originMatchesChatScope(task.origin, target)) continue;
         if (abortTaskController(task.controller, seen)) cancelled += 1;
+    }
+    for (const [scope, controller] of runtimeState.activeAdvBulkControllers.entries()) {
+        if (scope === target && abortTaskController(controller, seen)) cancelled += 1;
+    }
+    if (!runtimeState.roomLifeRefreshOrigin || originMatchesChatScope(runtimeState.roomLifeRefreshOrigin, target)) {
+        if (abortTaskController(runtimeState.roomLifeAbortController, seen)) cancelled += 1;
     }
     return { cancelled, reason };
 }
@@ -45765,6 +46343,7 @@ function refreshConcurrentTaskUi(taskMode = '', origin = null) {
         return;
     }
     if (!runtimeState.activeMode) archive_snapshots.scheduleChooserRefresh(30);
+    try { refreshTaskCenter(); } catch {}
 }
 
 __m_core_requestCoordinator_js.cancelParticipantGenerationTasks = cancelParticipantGenerationTasks;
@@ -45790,7 +46369,15 @@ __m_core_requestCoordinator_js.isArchiveTargetModeGenerating = isArchiveTargetMo
 __m_core_requestCoordinator_js.hasGenerationTasks = hasGenerationTasks;
 __m_core_requestCoordinator_js.hasAnyTask = hasAnyTask;
 __m_core_requestCoordinator_js.hasUnloadRisk = hasUnloadRisk;
+__m_core_requestCoordinator_js.setTaskCenterRefresh = setTaskCenterRefresh;
+__m_core_requestCoordinator_js.noteChatTaskPhase = noteChatTaskPhase;
+__m_core_requestCoordinator_js.openAdvBulkCancellation = openAdvBulkCancellation;
+__m_core_requestCoordinator_js.closeAdvBulkCancellation = closeAdvBulkCancellation;
+__m_core_requestCoordinator_js.listChatTaskSnapshot = listChatTaskSnapshot;
+__m_core_requestCoordinator_js.rememberStandaloneChatTask = rememberStandaloneChatTask;
+__m_core_requestCoordinator_js.settledChatTaskRecord = settledChatTaskRecord;
 __m_core_requestCoordinator_js.currentChatBlockingTasks = currentChatBlockingTasks;
+__m_core_requestCoordinator_js.cancelChatTask = cancelChatTask;
 __m_core_requestCoordinator_js.cancelBlockingTasksForScope = cancelBlockingTasksForScope;
 __m_core_requestCoordinator_js.cancelCurrentChatBlockingTasks = cancelCurrentChatBlockingTasks;
 __m_core_requestCoordinator_js.chatScopeCancellationBlocksOrigin = chatScopeCancellationBlocksOrigin;
@@ -56385,6 +56972,7 @@ __init_generation_partialProgress_js();
 __init_generation_recoveryPayload_js();
 __init_generation_recovery_js();
 __init_archive_importRecovery_js();
+__init_ui_taskCenter_js();
 __init_ui_butterflyView_js();
 __init_ui_calendarView_js();
 __init_ui_themeSongView_js();

@@ -7,6 +7,7 @@ import * as image_patch from './cgImagePatch.js';
 import { state as runtimeState } from './state.js';
 import * as core_taskTrace from './taskTrace.js';
 import * as core_text from './text.js';
+import * as generation_recovery from '../generation/recovery.js';
 import * as modes_heart from '../modes/heart.js';
 import * as modes_room from '../modes/room.js';
 import * as ui_settingsPanel from '../ui/settingsPanel.js';
@@ -18,7 +19,21 @@ let deferredDurabilityWarningShown = false;
 const logicalGenerationTasks = new Map();
 const logicalTaskOrigins = new WeakMap();
 const cancelledLogicalOrigins = [];
+const recentChatTasks = [];
 let logicalTaskSequence = 0;
+let settledTaskSequence = 0;
+let refreshTaskCenter = () => {};
+const TASK_PHASE_LABEL = Object.freeze({
+    prepare: '准备',
+    queue: '等待 provider',
+    request: '请求',
+    validate: '校验',
+    save: '保存',
+    cancelling: '取消中',
+    done: '完成',
+    failed: '失败',
+    cancelled: '已取消',
+});
 
 function exactLogicalOrigin(left, right) {
     return !!left && !!right && ['startedAt', 'characterKey', 'characterId', 'characterAvatar', 'chatId', 'archiveRevision']
@@ -41,7 +56,7 @@ export function beginLogicalGenerationTask({ kind = 'mode', mode = '', pageId = 
     const handle = { id: `logical-generation-${++logicalTaskSequence}`, kind, mode, pageId, pageIds: [...pageIds], parentTaskId,
         label: label || core_constants.MODE_LABEL[mode] || kind, taskKey, controller,
         signal: controller.signal, settled, resolveSettled, lifecycleEpoch: runtimeState.runtimeLifecycleEpoch,
-        scope: context ? core_context.chatScopeKey(context) : '', origin: null, origins: [], status: 'running',
+        scope: context ? core_context.chatScopeKey(context) : '', origin: null, origins: [], status: 'running', phase: 'prepare',
         releaseParent: () => externalSignal?.removeEventListener?.('abort', forwardAbort) };
     logicalGenerationTasks.set(handle.id, handle);
     if (origin) bindLogicalGenerationTask(handle, origin);
@@ -83,6 +98,7 @@ export function assertLogicalGenerationTaskCurrent(handleOrOrigin) {
 export function finishLogicalGenerationTask(handle, result = null) {
     if (!handle || logicalGenerationTasks.get(handle.id) !== handle) return;
     handle.status = result?.status || (handle.signal.aborted ? 'cancelled' : 'settled');
+    rememberSettledTask(handle, handle.status);
     handle.releaseParent();
     if (handle.signal.aborted) cancelledLogicalOrigins.push(handle);
     logicalGenerationTasks.delete(handle.id);
@@ -309,46 +325,322 @@ export function hasUnloadRisk() {
 // "is anything still tied to THIS chat right now?".
 // ---------------------------------------------------------------------------
 
-export function currentChatBlockingTasks(context = null) {
-    const labels = [];
-    const seen = new Set();
-    const push = label => {
-        const text = core_text.normalizeText(label, 120);
-        if (!text || seen.has(text)) return;
-        seen.add(text);
-        labels.push(text);
+export function setTaskCenterRefresh(refresh) {
+    refreshTaskCenter = typeof refresh === 'function' ? refresh : () => {};
+}
+
+export function noteChatTaskPhase(phase, { taskKey = '', origin = null } = {}) {
+    const next = TASK_PHASE_LABEL[phase] ? phase : 'prepare';
+    const key = core_text.normalizeText(taskKey, 240);
+    if (key) {
+        const task = runtimeState.activeGenerationTasks.get(key);
+        if (task) task.phase = next;
+        const image = runtimeState.activeCgImageTasks.get(key);
+        if (image) image.phase = next;
+    }
+    const logical = origin ? logicalGenerationTaskForOrigin(origin) : null;
+    if (logical && logicalGenerationTasks.get(logical.id) === logical) logical.phase = next;
+    else if (key) {
+        for (const task of logicalGenerationTasks.values()) {
+            if (task.taskKey === key) task.phase = next;
+        }
+    }
+    try { refreshTaskCenter(); } catch {}
+}
+
+export function openAdvBulkCancellation(scope) {
+    const controller = new AbortController();
+    runtimeState.activeAdvBulkControllers.set(String(scope || ''), controller);
+    return controller;
+}
+
+export function closeAdvBulkCancellation(scope, controller) {
+    const key = String(scope || '');
+    if (runtimeState.activeAdvBulkControllers.get(key) === controller) runtimeState.activeAdvBulkControllers.delete(key);
+}
+
+function liveTaskContext(context) {
+    if (context) return context;
+    try { return core_context.getContext(); } catch { return null; }
+}
+
+function chatTail(chatId) {
+    const id = core_context.comparableChatId(chatId);
+    return id ? `…${id.slice(-8)}` : '';
+}
+
+function deferredCountForOrigin(origin) {
+    const key = origin?.characterKey && origin?.chatId ? `${origin.characterKey}|${core_context.comparableChatId(origin.chatId)}` : '';
+    const list = key ? runtimeState.deferredChatCommits.get(key) : null;
+    return Array.isArray(list) ? list.length : 0;
+}
+
+function progressText(progress, deferred, kind) {
+    if (kind === 'cg') return deferred ? `绘制中；另有 ${deferred} 项待写回` : '绘制中';
+    const received = Number(progress?.received) || 0;
+    const saved = Number(progress?.saved) || 0;
+    const base = received || saved ? `已收到 ${received} 段，已落盘 ${saved} 段` : '尚未收到可保存分段';
+    return deferred ? `${base}；另有 ${deferred} 项待写回` : base;
+}
+
+function phaseOf(record) {
+    if (record?.status === 'cancelling' || record?.controller?.signal?.aborted || record?.signal?.aborted) return 'cancelling';
+    return TASK_PHASE_LABEL[record?.phase] ? record.phase : 'prepare';
+}
+
+function publicTaskRow(row) {
+    return {
+        id: row.id,
+        label: row.label,
+        kind: row.kind,
+        phase: row.phase,
+        phaseLabel: TASK_PHASE_LABEL[row.phase] || '准备',
+        running: true,
+        currentChat: row.currentChat === true,
+        archiveTarget: row.archiveTarget === true,
+        chatCaption: row.chatCaption,
+        progressText: row.progressText,
+        outcome: '',
+        canOpen: false,
     };
-    let liveContext = context;
-    if (!liveContext) {
-        try { liveContext = core_context.getContext(); } catch { liveContext = null; }
+}
+
+function logicalOwnsGeneration(logical, task, taskKey) {
+    if (!logical || !task) return false;
+    if (logical.taskKey && (taskKey === logical.taskKey || taskKey.startsWith(`${logical.taskKey}:`) || task.parentTaskKey === logical.taskKey)) return true;
+    const bound = logicalGenerationTaskForOrigin(task.origin);
+    return bound?.id === logical.id && logicalGenerationTasks.get(logical.id) === logical;
+}
+
+function collectChatTaskRows(context = null) {
+    const live = liveTaskContext(context);
+    let liveScope = '';
+    try { liveScope = live ? core_context.chatScopeKey(live) : ''; } catch { liveScope = ''; }
+    const rows = [];
+    const claimedControllers = new Set();
+    const claimedGeneration = new Set();
+    const claimedCg = new Set();
+    const claim = controller => { if (controller) claimedControllers.add(controller); };
+    for (const logical of logicalGenerationTasks.values()) {
+        const origin = logical.origin;
+        const archiveTarget = !!core_text.normalizeText(origin?.archiveTargetEntryId, 120);
+        const currentChat = !archiveTarget && (!!logical.scope && logical.scope === liveScope || originMatchesChatScope(origin, liveScope));
+        const controllers = [];
+        if (logical.controller) controllers.push(logical.controller);
+        for (const [taskKey, task] of runtimeState.activeGenerationTasks.entries()) {
+            if (!logicalOwnsGeneration(logical, task, taskKey)) continue;
+            claimedGeneration.add(taskKey);
+            if (task.controller) controllers.push(task.controller);
+        }
+        for (const [taskKey, task] of runtimeState.activeCgImageTasks.entries()) {
+            if (!logicalOwnsGeneration(logical, task, taskKey)) continue;
+            claimedCg.add(taskKey);
+            if (task.controller) controllers.push(task.controller);
+        }
+        if (logical.taskKey?.startsWith('room-life:') && runtimeState.roomLifeAbortController) controllers.push(runtimeState.roomLifeAbortController);
+        controllers.forEach(claim);
+        const progress = generation_recovery.generationRecoveryProgress(origin);
+        const name = core_text.normalizeText(origin?.characterName, 120) || '未命名角色';
+        rows.push({
+            id: logical.id,
+            logicalId: logical.id,
+            label: core_text.normalizeText(logical.label, 120) || '内容生成',
+            kind: 'logical',
+            phase: phaseOf(logical),
+            running: true,
+            currentChat,
+            archiveTarget,
+            controllers,
+            chatCaption: archiveTarget ? `${name} · 指定档案` : currentChat ? `${name} · 当前聊天` : `${name} · 其他聊天 ${chatTail(origin?.chatId)}`,
+            progressText: progressText(progress, deferredCountForOrigin(origin), 'logical'),
+        });
     }
-    if (!liveContext) return labels;
-    // The archive import path owns the exclusive `busy` flag and always targets
-    // the chat it was started from.
-    if (runtimeState.busy && (!runtimeState.activeTaskOrigin || core_context.isCurrentTaskOrigin(runtimeState.activeTaskOrigin, liveContext))) {
-        push(runtimeState.activeTaskLabel || '正在整理聊天档案');
+    const pushLoose = (id, task, kind, label) => {
+        const origin = task?.origin || null;
+        const archiveTarget = !!core_text.normalizeText(origin?.archiveTargetEntryId, 120);
+        const currentChat = !archiveTarget && originMatchesChatScope(origin, liveScope);
+        const controllers = task?.controller ? [task.controller] : [];
+        controllers.forEach(claim);
+        const progress = generation_recovery.generationRecoveryProgress(origin);
+        const name = core_text.normalizeText(origin?.characterName, 120) || '未命名角色';
+        rows.push({
+            id, logicalId: '', label, kind, phase: phaseOf(task), running: true, currentChat, archiveTarget, controllers,
+            chatCaption: archiveTarget ? `${name} · 指定档案` : currentChat ? `${name} · 当前聊天` : `${name} · 其他聊天 ${chatTail(origin?.chatId)}`,
+            progressText: progressText(progress, deferredCountForOrigin(origin), kind),
+        });
+    };
+    for (const [taskKey, task] of runtimeState.activeGenerationTasks.entries()) {
+        if (claimedGeneration.has(taskKey)) continue;
+        const fallback = taskKey.startsWith('room-life:') ? '今日生活生成'
+            : taskKey.startsWith('adv-bulk:') || taskKey.startsWith('adv-user-repair:') ? 'ADV 批量生成'
+            : core_text.normalizeText(task?.label || task?.mode, 120) || '内容生成';
+        pushLoose(`gen:${taskKey}`, task, taskKey.startsWith('room-life:') ? 'room-life' : 'generation', fallback);
     }
-    for (const task of runtimeState.activeGenerationTasks.values()) {
-        // ArchiveTarget requests are detached from the host's currently open chat. They must
-        // remain an unload risk, but must never trigger the "do not leave this chat" navigation
-        // warning or imply that returning to A is required for the IndexedDB commit.
-        if (core_text.normalizeText(task?.origin?.archiveTargetEntryId, 120)) continue;
-        if (task?.origin && !core_context.isCurrentTaskOrigin(task.origin, liveContext)) continue;
-        push(task?.label || task?.mode || '内容生成');
+    for (const [taskKey, task] of runtimeState.activeCgImageTasks.entries()) {
+        if (claimedCg.has(taskKey) || runtimeState.activeGenerationTasks.has(taskKey)) continue;
+        pushLoose(`cg:${taskKey}`, task, 'cg', core_text.normalizeText(task?.label, 120) || 'CG 绘制');
     }
-    for (const task of runtimeState.activeCgImageTasks.values()) {
-        if (task?.origin && !core_context.isCurrentTaskOrigin(task.origin, liveContext)) continue;
-        push(task?.label || 'CG 绘制');
+    if (runtimeState.busy && runtimeState.activeTaskAbortController && !claimedControllers.has(runtimeState.activeTaskAbortController)) {
+        const origin = runtimeState.activeTaskOrigin;
+        const currentChat = !origin || originMatchesChatScope(origin, liveScope);
+        const name = core_text.normalizeText(origin?.characterName, 120) || '未命名角色';
+        claim(runtimeState.activeTaskAbortController);
+        rows.push({
+            id: 'archive-import',
+            logicalId: '',
+            label: core_text.normalizeText(runtimeState.activeTaskLabel, 120) || '正在整理聊天档案',
+            kind: 'archive',
+            phase: phaseOf({ controller: runtimeState.activeTaskAbortController, phase: 'prepare' }),
+            running: true,
+            currentChat: currentChat !== false,
+            archiveTarget: false,
+            controllers: [runtimeState.activeTaskAbortController],
+            chatCaption: currentChat ? `${name} · 当前聊天` : `${name} · 其他聊天 ${chatTail(origin?.chatId)}`,
+            progressText: progressText(generation_recovery.generationRecoveryProgress(origin), deferredCountForOrigin(origin), 'archive'),
+        });
     }
-    if (runtimeState.roomLifeRefreshPromise
-        && (!runtimeState.roomLifeRefreshOrigin || core_context.isCurrentTaskOrigin(runtimeState.roomLifeRefreshOrigin, liveContext))) {
-        push('今日生活生成');
+    const roomOrigin = runtimeState.roomLifeRefreshOrigin;
+    const roomRepresented = [...runtimeState.activeGenerationTasks.keys()].some(key => key.startsWith('room-life:'))
+        || [...rows].some(row => runtimeState.roomLifeAbortController && row.controllers.includes(runtimeState.roomLifeAbortController));
+    if (runtimeState.roomLifeRefreshPromise && !roomRepresented) {
+        const archiveTarget = !!core_text.normalizeText(roomOrigin?.archiveTargetEntryId, 120);
+        const currentChat = !archiveTarget && (!roomOrigin || originMatchesChatScope(roomOrigin, liveScope));
+        const controllers = [];
+        if (runtimeState.roomLifeAbortController) controllers.push(runtimeState.roomLifeAbortController);
+        for (const [taskKey, task] of runtimeState.activeGenerationTasks.entries()) {
+            if (taskKey.startsWith('room-life:') && task.controller && !controllers.includes(task.controller)) controllers.push(task.controller);
+        }
+        const name = core_text.normalizeText(roomOrigin?.characterName, 120) || '未命名角色';
+        rows.push({
+            id: 'room-life',
+            logicalId: '',
+            label: '今日生活生成',
+            kind: 'room-life',
+            phase: phaseOf({ controller: runtimeState.roomLifeAbortController, phase: 'prepare' }),
+            running: true,
+            currentChat,
+            archiveTarget,
+            controllers,
+            chatCaption: currentChat ? `${name} · 当前聊天` : `${name} · 其他聊天 ${chatTail(roomOrigin?.chatId)}`,
+            progressText: progressText(generation_recovery.generationRecoveryProgress(roomOrigin), deferredCountForOrigin(roomOrigin), 'room-life'),
+        });
     }
-    const liveScope = core_context.chatScopeKey(liveContext);
     for (const scope of runtimeState.activeAdvBulkScopes) {
-        if (scope === liveScope) push('ADV 批量生成');
+        if ([...runtimeState.activeGenerationTasks.keys()].some(key => key === `adv-bulk:${scope}` || key.startsWith(`adv-user-repair:${scope}:`))) continue;
+        const controller = runtimeState.activeAdvBulkControllers.get(scope);
+        const currentChat = scope === liveScope;
+        rows.push({
+            id: `adv-bulk:${scope}`,
+            logicalId: '',
+            label: 'ADV 批量生成',
+            kind: 'adv-bulk',
+            phase: phaseOf({ controller, phase: 'prepare' }),
+            running: true,
+            currentChat,
+            archiveTarget: false,
+            controllers: controller ? [controller] : [],
+            chatCaption: currentChat ? '当前聊天' : '其他聊天',
+            progressText: '准备中，尚未发出本批请求',
+        });
     }
-    return labels;
+    return rows;
+}
+
+export function listChatTaskSnapshot(context = null) {
+    let running = [];
+    try { running = collectChatTaskRows(context).map(publicTaskRow); } catch { running = []; }
+    const live = liveTaskContext(context);
+    const settled = recentChatTasks.map(row => ({
+        id: row.id,
+        label: row.label,
+        kind: row.kind,
+        phase: row.phase,
+        phaseLabel: TASK_PHASE_LABEL[row.phase] || '完成',
+        running: false,
+        currentChat: sameSettledChat(row, live),
+        archiveTarget: row.archiveTarget === true,
+        chatCaption: settledCaption(row, live),
+        progressText: row.received || row.saved ? `已收到 ${row.received} 段，已落盘 ${row.saved} 段` : '没有新的可保存分段',
+        outcome: row.outcome,
+        canOpen: !!row.chatId && (row.outcome === 'done' || row.outcome === 'failed' || row.received > 0),
+    }));
+    return [...running, ...settled];
+}
+
+function sameSettledChat(row, context) {
+    if (!row?.chatId || !context) return false;
+    if (core_context.comparableChatId(core_context.getChatId(context)) !== row.chatId) return false;
+    return !row.characterId || String(context.characterId ?? '') === row.characterId;
+}
+
+function settledCaption(row, context) {
+    const name = row.characterName || '未命名角色';
+    if (row.archiveTarget) return `${name} · 指定档案`;
+    if (sameSettledChat(row, context)) return `${name} · 当前聊天`;
+    return `${name} · 其他聊天 ${chatTail(row.chatId)}`;
+}
+
+function rememberSettledTask(source, outcome) {
+    const origin = source?.origin || null;
+    const aborted = outcome === 'cancelled' || source?.signal?.aborted;
+    const status = aborted ? 'cancelled' : outcome === 'failed' || outcome === 'blocked' ? 'failed' : 'done';
+    const progress = generation_recovery.generationRecoveryProgress(origin);
+    const row = {
+        id: `settled-${++settledTaskSequence}`,
+        label: core_text.normalizeText(source?.label || core_constants.MODE_LABEL[source?.mode] || '任务', 120),
+        kind: source?.kind || 'logical',
+        phase: status === 'cancelled' ? 'cancelled' : status === 'failed' ? 'failed' : 'done',
+        outcome: status,
+        characterName: core_text.normalizeText(origin?.characterName, 120),
+        characterId: String(origin?.characterId ?? ''),
+        chatId: core_context.comparableChatId(origin?.chatId),
+        mode: core_text.normalizeText(source?.mode || progress?.mode, 80),
+        draftId: core_text.normalizeText(origin?.generationRecoveryDraftId || progress?.draftId, 240),
+        pageId: core_text.normalizeText(progress?.pageId, 80),
+        received: Number(progress?.received) || 0,
+        saved: Number(progress?.saved) || 0,
+        archiveTarget: !!core_text.normalizeText(origin?.archiveTargetEntryId, 120),
+        endedAt: Date.now(),
+    };
+    if (!row.label) return;
+    recentChatTasks.unshift(row);
+    while (recentChatTasks.length > 8) recentChatTasks.pop();
+    try { refreshTaskCenter(); } catch {}
+}
+
+export function rememberStandaloneChatTask(record) {
+    const logical = logicalGenerationTaskForOrigin(record?.origin);
+    if (logical && logicalGenerationTasks.get(logical.id) === logical) return;
+    rememberSettledTask(record, record?.outcome);
+}
+
+export function settledChatTaskRecord(id) {
+    const row = recentChatTasks.find(item => item.id === id);
+    return row ? { ...row } : null;
+}
+
+export function currentChatBlockingTasks(context = null) {
+    try {
+        return listChatTaskSnapshot(context).filter(row => row.running && row.currentChat).map(row => row.label);
+    } catch {
+        return [];
+    }
+}
+
+export function cancelChatTask(id, reason = 'task-center') {
+    const row = collectChatTaskRows().find(item => item.id === String(id || '') && item.running);
+    if (!row) return { cancelled: 0, reason };
+    if (row.logicalId) {
+        const task = logicalGenerationTasks.get(row.logicalId);
+        if (task) task.status = 'cancelling';
+    }
+    const seen = new Set();
+    let cancelled = 0;
+    for (const controller of row.controllers) {
+        if (abortTaskController(controller, seen)) cancelled += 1;
+    }
+    try { refreshTaskCenter(); } catch {}
+    return { cancelled, reason };
 }
 
 function originMatchesChatScope(origin, scope) {
@@ -390,6 +682,12 @@ export function cancelBlockingTasksForScope(scope, reason = 'chat-navigation') {
     for (const task of runtimeState.activeCgImageTasks.values()) {
         if (!originMatchesChatScope(task.origin, target)) continue;
         if (abortTaskController(task.controller, seen)) cancelled += 1;
+    }
+    for (const [scope, controller] of runtimeState.activeAdvBulkControllers.entries()) {
+        if (scope === target && abortTaskController(controller, seen)) cancelled += 1;
+    }
+    if (!runtimeState.roomLifeRefreshOrigin || originMatchesChatScope(runtimeState.roomLifeRefreshOrigin, target)) {
+        if (abortTaskController(runtimeState.roomLifeAbortController, seen)) cancelled += 1;
     }
     return { cancelled, reason };
 }
@@ -788,4 +1086,5 @@ export function refreshConcurrentTaskUi(taskMode = '', origin = null) {
         return;
     }
     if (!runtimeState.activeMode) archive_snapshots.scheduleChooserRefresh(30);
+    try { refreshTaskCenter(); } catch {}
 }

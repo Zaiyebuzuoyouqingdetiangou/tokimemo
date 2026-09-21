@@ -501,6 +501,28 @@ export function generationRecoveryForOrigin(origin) {
     return handle ? { ...generationRecoverySummary(handle.journal, handle.now()), durable: handle.durable } : null;
 }
 
+// Counts and ids only. Callers must not receive segment text, prompts, or evidence.
+export function generationRecoveryProgress(origin) {
+    try {
+        const handle = origin && handles.get(origin);
+        if (!handle?.journal) return null;
+        const summary = generationRecoverySummary(handle.journal, typeof handle.now === 'function' ? handle.now() : Date.now());
+        if (!summary) return null;
+        const segments = Array.isArray(handle.journal.segments) ? handle.journal.segments : [];
+        return {
+            draftId: typeof handle.journal.draftId === 'string' ? handle.journal.draftId.slice(0, 240) : '',
+            pageId: typeof handle.journal.pageId === 'string' ? handle.journal.pageId.slice(0, 80) : '',
+            mode: summary.mode,
+            received: summary.completed + summary.truncated,
+            saved: handle.durable === true ? summary.completed : 0,
+            total: segments.length,
+            durable: handle.durable === true,
+        };
+    } catch {
+        return null;
+    }
+}
+
 function currentAttachedJournal(origin, handle) {
     checkCurrent(handle);
     const journal = validJournal(handle.journal, handle.now());

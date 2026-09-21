@@ -270,6 +270,19 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 .rmt-topbar button:active,.rmt-btn:active{transform:translateY(0)}
 .rmt-topbar button:disabled,.rmt-btn:disabled{opacity:.42;cursor:not-allowed;transform:none;box-shadow:none}
 .rmt-topbar button[data-rmt-action="back"]{white-space:nowrap}
+.rmt-topbar button[data-rmt-action="tasks"]{position:relative}
+.rmt-task-count{display:inline-grid;place-items:center;min-width:16px;height:16px;margin-left:4px;padding:0 4px;border-radius:999px;background:#e89ab8;color:#fff;font-size:10px;line-height:1}
+.rmt-task-count[hidden]{display:none!important}
+.rmt-task-center{position:absolute;z-index:30;top:62px;right:12px;width:min(420px,calc(100% - 24px));max-height:min(70vh,560px);overflow:auto;padding:12px 12px 14px;border:1px solid #c9dbe5;border-radius:16px;background:#fff;box-shadow:0 16px 40px rgba(13,22,34,.18)}
+.rmt-task-center[hidden]{display:none!important}
+.rmt-task-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.rmt-task-note,.rmt-task-empty{margin:0 0 10px;color:#728093;font-size:12px;line-height:1.5}
+.rmt-task-center h3{margin:12px 0 8px;font-size:13px;color:#50627b}
+.rmt-task-row{padding:10px 0;border-top:1px solid #e4eef3}
+.rmt-task-row header{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.rmt-task-row header span{flex:0 0 auto;color:#9d6d82;font-size:12px}
+.rmt-task-row p{margin:4px 0 0;color:#728093;font-size:12px;line-height:1.45}
+.rmt-task-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .rmt-body{
   position:relative;z-index:4;flex:1;min-height:0;overflow:auto;
   background:
@@ -978,6 +991,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
   }
   .rmt-shell:before{display:none}
   .rmt-topbar{min-height:48px;padding:6px 7px 6px 10px;gap:6px}.rmt-topbar-title{font-size:14px;letter-spacing:.025em}.rmt-topbar-title:after{display:none}
+  .rmt-task-center{top:54px;right:8px;left:8px;width:auto;max-height:calc(100vh - 70px)}
   .rmt-topbar button{padding:6px 8px;font-size:11px;min-width:0}
   .rmt-topbar-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rmt-topbar button[data-rmt-action="back"],.rmt-topbar button[data-rmt-action="home"],.rmt-topbar button[data-rmt-action="regenerate"],.rmt-topbar button[data-rmt-action="manage"],.rmt-topbar button[data-rmt-action="close"]{font-size:0;width:44px;height:44px;padding:0;display:grid;place-items:center;flex:0 0 44px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}

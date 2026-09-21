@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.91-tt-cg-r84.37-chat-room-budget",
+  "js": "index.js?heartbeat=0.92-tt-cg-r84.38-task-center",
   "author": "Toto",
-  "version": "0.91",
+  "version": "0.92",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.37：有任务时切聊先确认并中止当前聊天任务；多人房间同一来源正文只发一次；预算与裁剪合并成一次提示；同一恢复草稿只留一套按钮。身份/CAS/删除栅栏/不自动重试不变。",
+  "description": "r84.38：心迹回廊顶部增加统一任务中心，可查看阶段和落盘并单项或按当前聊天取消。切聊确认使用同一份任务名单。身份/CAS/删除栅栏/不自动重试不变。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

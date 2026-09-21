@@ -12,6 +12,7 @@ import * as core_archiveCover from '../core/archiveCover.js';
 import * as core_constants from '../core/constants.js';
 import * as core_context from '../core/context.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
+import * as ui_taskCenter from './taskCenter.js';
 import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
 import * as core_text from '../core/text.js';
@@ -169,9 +170,11 @@ export function openOverlay() {
               <button type="button" data-rmt-action="workspace-expand" aria-label="展开窗口" title="展开窗口"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>
               <button type="button" data-rmt-action="regenerate" hidden aria-label="增量追加" title="增量追加">＋</button>
               <button type="button" data-rmt-action="manage" hidden aria-label="管理" title="管理">⋯</button>
+              <button type="button" data-rmt-action="tasks" aria-label="任务" title="任务">任务 <span class="rmt-task-count" data-rmt-task-count hidden>0</span></button>
               <button type="button" data-rmt-action="close" aria-label="关闭档案室">×</button>
             </div>
             ${workspace_ui.workspaceNavHtml()}
+            <div class="rmt-task-center" data-rmt-task-center hidden></div>
             <div class="rmt-body"></div>
           </div>`;
         document.body.appendChild(overlay);
@@ -186,8 +189,10 @@ export function openOverlay() {
             });
         }
     }
+    ui_taskCenter.ensureTaskCenterChrome(overlay);
     applyArchiveMobileSafeArea(overlay);
     try { core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings(core_context.getContext())); } catch {}
+    ui_taskCenter.syncTaskCenterChrome();
     bindOverlayCloseFallback(overlay);
     revealArchiveOverlay(overlay);
     workspace_ui.syncWorkspaceChrome();
@@ -213,6 +218,7 @@ export function closeOverlay(options = {}) {
     cg_editor.closeCgPromptEditor({ restoreFocus: false });
     modes_room.stopRoomClock();
     ui_phoneView.stopPhoneClock();
+    ui_taskCenter.hideTaskCenter();
     ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     if (overlay) {
         if (typeof globalThis.HTMLDialogElement === 'function' && overlay instanceof globalThis.HTMLDialogElement && overlay.open) {
@@ -1793,6 +1799,9 @@ export function handleOverlayClick(event) {
     if (action === 'travel-dialogue-prev') return ui_travelView.travelDialogueStep(-1);
     if (action === 'travel-dialogue-next') return ui_travelView.travelDialogueStep(1);
     if (action === 'travel-dialogue-replay') return ui_travelView.replayTravelDialogue();
+    if (action === 'tasks' || action === 'task-center-close' || action === 'task-cancel' || action === 'task-cancel-current' || action === 'task-open') {
+        return ui_taskCenter.handleTaskCenterAction(action, actionEl);
+    }
     if (action === 'close') return closeArchiveOverlayFromUser();
     if (action === 'home') {
         if (runtimeState.busy) runtimeState.activeTaskBackgrounded = true;

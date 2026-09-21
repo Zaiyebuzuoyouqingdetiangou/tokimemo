@@ -23,6 +23,8 @@ export const state = {
   archiveViewLevel: 'library',
   roomLifeRefreshPromise: null,
   roomLifeRefreshOrigin: null,
+  roomLifeAbortController: null,
+  activeAdvBulkControllers: new Map(),
   activeTaskAbortController: null,
   activeTaskLabel: '',
   activeTaskTrace: null,

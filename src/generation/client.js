@@ -926,6 +926,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`,
     try {
         assertRequestCurrent();
         core_taskTrace.beginStage(taskTrace, 'queue');
+        core_requestCoordinator.noteChatTaskPhase('queue', { taskKey: options.taskKey, origin: options.origin });
         releaseProviderPermit = await core_requestCoordinator.acquireProviderRequestPermit(lifecycleController.signal);
         core_taskTrace.markStage(taskTrace, 'queue');
         core_taskTrace.beginStage(taskTrace, 'pacing');
@@ -935,6 +936,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`,
         await assertConfigurationCurrent();
         assertRequestCurrent();
         core_taskTrace.beginStage(taskTrace, 'request');
+        core_requestCoordinator.noteChatTaskPhase('request', { taskKey: options.taskKey, origin: options.origin });
         result = await core_requestCoordinator.runGenerationRequestWithTimeout(
             async () => {
                 assertRequestCurrent();
@@ -990,6 +992,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`,
         mode: options.mode, settingText: core_worldPresentation.controlledWorldEvidence(contextEnvelope, null),
     });
     core_taskTrace.markStage(taskTrace, 'parse');
+    core_requestCoordinator.noteChatTaskPhase('validate', { taskKey: options.taskKey, origin: options.origin });
     return parsed;
 }
 
@@ -1021,16 +1024,18 @@ export async function requestJson(prompt, statusText = '正在根据当前聊天
     const displayStatus = targetLabel ? `正在为：${targetLabel} · ${core_text.normalizeText(statusText, 180)}` : statusText;
     runtimeState.activeGenerationTasks.set(taskKey, {
         key: taskKey, controller, origin, label: core_text.normalizeText(displayStatus, 360),
-        mode: core_text.normalizeText(options.mode, 80), parentTaskKey, startedAt: Date.now(),
+        mode: core_text.normalizeText(options.mode, 80), parentTaskKey, startedAt: Date.now(), phase: 'prepare',
     });
+    core_requestCoordinator.noteChatTaskPhase('prepare', { taskKey, origin });
     core_requestCoordinator.refreshConcurrentTaskUi(core_text.normalizeText(options.mode, 80), origin);
     const inheritedTrace = generationTrace(options);
     const taskTrace = inheritedTrace || core_taskTrace.startTaskTrace(taskKey, options.mode);
     if (!inheritedTrace) core_taskTrace.markStage(taskTrace, 'start');
+    let requestOutcome = 'done';
     try {
         core_context.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
         const result = await generateConfiguredJson(prompt, {
-            ...options, taskTrace, origin, context: requestContext,
+            ...options, taskKey, taskTrace, origin, context: requestContext,
             signal: controller.signal,
             statusText,
             enforceGeneratedPhrasePolicy: options.enforceGeneratedPhrasePolicy !== false,
@@ -1038,6 +1043,7 @@ export async function requestJson(prompt, statusText = '正在根据当前聊天
         if (!inheritedTrace) core_taskTrace.endTaskTrace(taskTrace, 'ok');
         return result;
     } catch (error) {
+        requestOutcome = error?.name === 'AbortError' ? 'cancelled' : 'failed';
         if (!inheritedTrace) core_taskTrace.endTaskTrace(taskTrace, error?.name === 'AbortError' ? 'cancelled' : 'failed', error);
         else if (taskTrace.activeStage) core_taskTrace.markStage(taskTrace, taskTrace.activeStage, false);
         throw error;
@@ -1045,6 +1051,11 @@ export async function requestJson(prompt, statusText = '正在根据当前聊天
         try { externalSignal?.removeEventListener?.('abort', forwardAbort); } catch {}
         const current = runtimeState.activeGenerationTasks.get(taskKey);
         if (current?.controller === controller) runtimeState.activeGenerationTasks.delete(taskKey);
+        core_requestCoordinator.rememberStandaloneChatTask({
+            label: core_text.normalizeText(displayStatus, 120),
+            mode: core_text.normalizeText(options.mode, 80),
+            origin, outcome: requestOutcome, kind: 'generation',
+        });
         core_requestCoordinator.refreshConcurrentTaskUi(core_text.normalizeText(options.mode, 80), origin);
     }
 }
@@ -1761,6 +1772,7 @@ async function generateModeOperation(mode, options = {}) {
         await core_context.yieldToUi();
         core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
         core_taskTrace.beginStage(taskTrace, 'save');
+        core_requestCoordinator.noteChatTaskPhase('save', { taskKey, origin });
         let committed = false;
         if (archiveTarget) {
             const stillCurrent = archiveTargetStillCurrent;

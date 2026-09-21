@@ -1319,6 +1319,8 @@ async function ensureRoomLifePlanOperation(options = {}) {
     let origin = targetRuntime?.origin || { ...core_context.captureTaskOrigin(context, archiveRevision), chatId: core_context.comparableChatId(chatId) };
     core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin);
     const archiveEntry = targetRuntime?.archiveTarget || core_cache.archiveBackupEntryForContext(context, memoryBank);
+    const lifeCancel = new AbortController();
+    runtimeState.roomLifeAbortController = lifeCancel;
     runtimeState.roomLifeRefreshOrigin = origin;
     runtimeState.roomLifeRefreshPromise = (async () => {
         try {
@@ -1345,10 +1347,11 @@ async function ensureRoomLifePlanOperation(options = {}) {
             const inputRoom = participantSnapshot
                 ? await generation_recovery.frozenGenerationInput(origin, 'room:daily-blueprint', () => structuredClone(roomSession)) : roomSession;
             if (!quiet) ui_overlay.setInnerLoading(true, `正在生成 ${dateKey} 的生活时间线…`);
+            if (lifeCancel.signal.aborted) throw core_requestCoordinator.createGenerationAbortError();
             const plan = await generation_client.requestValidatedSegment(
                 roomLifePrompt(context, inputRoom, memoryBank, today, { participantSnapshot }),
                 `正在让“他的房间”进入 ${dateKey} 的生活状态…`,
-                { maxTokens: 6144, context, origin, taskKey, mode: core_constants.MODE.ROOM, background: true },
+                { maxTokens: 6144, context, origin, signal: lifeCancel.signal, taskKey, mode: core_constants.MODE.ROOM, background: true },
                 raw => normalizeRoomLifePlan(raw, inputRoom, memoryBank, today, { participantSnapshot }),
             );
             core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
@@ -1415,6 +1418,7 @@ async function ensureRoomLifePlanOperation(options = {}) {
             generation_recovery.detachGenerationRecovery(origin);
             if (!quiet) ui_overlay.setInnerLoading(false);
             runtimeState.roomLifeRefreshPromise = null;
+            if (runtimeState.roomLifeAbortController === lifeCancel) runtimeState.roomLifeAbortController = null;
             if (runtimeState.roomLifeRefreshOrigin === origin) runtimeState.roomLifeRefreshOrigin = null;
         }
     })();

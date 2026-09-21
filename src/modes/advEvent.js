@@ -611,6 +611,7 @@ export async function generateAllAdvForSession(options = {}) {
         return;
     }
     runtimeState.activeAdvBulkScopes.add(scope);
+    const bulkCancel = core_requestCoordinator.openAdvBulkCancellation(scope);
     core_requestCoordinator.registerArchiveTargetReservation(bulkTaskKey, targetRuntime, core_constants.MODE.ADV,
         advTargetMessage(targetRuntime, 'ADV 批量生成中'));
     try {
@@ -642,6 +643,7 @@ export async function generateAllAdvForSession(options = {}) {
     try {
         await startAdvRecovery(targetRuntime, { kind: 'adv-bulk', eventIds: pending.map(event => event.id) }, options, session);
         try {
+            if (bulkCancel.signal.aborted) throw core_requestCoordinator.createGenerationAbortError();
             const batch = await generation_client.requestValidatedSegment(
                 advBatchPrompt(context, pending, memoryBank),
                 `正在生成本批 ${pending.length} 篇 ADV…`,
@@ -650,6 +652,7 @@ export async function generateAllAdvForSession(options = {}) {
                     temperature: 0.55,
                     context,
                     origin,
+                    signal: bulkCancel.signal,
                     taskKey: bulkTaskKey,
                     mode: core_constants.MODE.ADV,
                     background: true,
@@ -726,6 +729,7 @@ export async function generateAllAdvForSession(options = {}) {
     } finally {
         generation_recovery.detachGenerationRecovery(origin);
         runtimeState.activeAdvBulkScopes.delete(scope);
+        core_requestCoordinator.closeAdvBulkCancellation(scope, bulkCancel);
         core_requestCoordinator.unregisterArchiveTargetReservation(bulkTaskKey);
         if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
         core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.ADV, origin);
@@ -733,6 +737,7 @@ export async function generateAllAdvForSession(options = {}) {
     }
     } finally {
         runtimeState.activeAdvBulkScopes.delete(scope);
+        core_requestCoordinator.closeAdvBulkCancellation(scope, bulkCancel);
         core_requestCoordinator.unregisterArchiveTargetReservation(bulkTaskKey);
         if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
         refreshAdvArchiveTarget(targetRuntime);
@@ -770,6 +775,7 @@ export async function repairFailedAdvForSession(options = {}) {
 
     const memoryBank = targetRuntime.memoryBank;
     runtimeState.activeAdvBulkScopes.add(scope);
+    const bulkCancel = core_requestCoordinator.openAdvBulkCancellation(scope);
     core_requestCoordinator.registerArchiveTargetReservation(bulkTaskKey, targetRuntime, core_constants.MODE.ADV,
         advTargetMessage(targetRuntime, 'ADV 失败项补完中'));
     try {
@@ -793,6 +799,7 @@ export async function repairFailedAdvForSession(options = {}) {
     try {
         await startAdvRecovery(targetRuntime, { kind: 'adv-repair', eventIds: failed.map(event => event.id) }, options, session);
         for (let i = 0; i < failed.length; i += 1) {
+            if (bulkCancel.signal.aborted) throw core_requestCoordinator.createGenerationAbortError();
             const event = failed[i];
             if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(true, advTargetStatus(targetRuntime, `逐个补完 ${i + 1} / ${failed.length}：${event.title}`));
             let adv;
@@ -805,6 +812,7 @@ export async function repairFailedAdvForSession(options = {}) {
                         temperature: 0.55,
                         context,
                         origin,
+                        signal: bulkCancel.signal,
                         taskKey: `adv-user-repair:${scope}:${core_text.safeId(event.id, String(i + 1))}`,
                         mode: core_constants.MODE.ADV,
                         background: true,
@@ -854,6 +862,7 @@ export async function repairFailedAdvForSession(options = {}) {
     } finally {
         generation_recovery.detachGenerationRecovery(origin);
         runtimeState.activeAdvBulkScopes.delete(scope);
+        core_requestCoordinator.closeAdvBulkCancellation(scope, bulkCancel);
         core_requestCoordinator.unregisterArchiveTargetReservation(bulkTaskKey);
         if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
         core_requestCoordinator.refreshConcurrentTaskUi(core_constants.MODE.ADV, origin);
@@ -861,6 +870,7 @@ export async function repairFailedAdvForSession(options = {}) {
     }
     } finally {
         runtimeState.activeAdvBulkScopes.delete(scope);
+        core_requestCoordinator.closeAdvBulkCancellation(scope, bulkCancel);
         core_requestCoordinator.unregisterArchiveTargetReservation(bulkTaskKey);
         if (advTargetVisible(targetRuntime, origin)) ui_overlay.setInnerLoading(false);
         refreshAdvArchiveTarget(targetRuntime);

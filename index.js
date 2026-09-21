@@ -1,5 +1,5 @@
-const VERSION = '0.91';
-const BUILD = '0.91-tt-cg-r84.37-chat-room-budget';
+const VERSION = '0.92';
+const BUILD = '0.92-tt-cg-r84.38-task-center';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

@@ -635,9 +635,12 @@ export async function drawSelectedCgImage({ promptOverride, promptMetadata, prom
         origin,
         label: dailyStrip ? '日常一格绘制' : mode === core_constants.MODE.ALBUM ? '相簿 CG 绘制' : 'ADV CG 绘制',
         startedAt: Date.now(),
+        phase: 'request',
         controller,
     });
+    core_requestCoordinator.noteChatTaskPhase('request', { taskKey, origin });
     let completedImage = null;
+    let imageOutcome = 'done';
     try {
         if (typeof onAccepted === 'function') onAccepted();
         renderCapturedCgMode(captured);
@@ -680,6 +683,7 @@ export async function drawSelectedCgImage({ promptOverride, promptMetadata, prom
         completedImage = null;
         globalThis.toastr?.success?.(`CG 已绘制：${item.title}`, '心迹回廊');
     } catch (error) {
+        imageOutcome = error?.name === 'AbortError' ? 'cancelled' : 'failed';
         if (completedImage && isCgImageTargetCurrent(captured, { requireSelection: false })) {
             if (pendingCgImages.size >= 32) pendingCgImages.delete(pendingCgImages.keys().next().value);
             pendingCgImages.set(taskKey, { key: taskKey, target: captured, image: completedImage, busy: false });
@@ -690,6 +694,10 @@ export async function drawSelectedCgImage({ promptOverride, promptMetadata, prom
         }
     } finally {
         runtimeState.activeCgImageTasks.delete(taskKey);
+        core_requestCoordinator.rememberStandaloneChatTask({
+            label: dailyStrip ? '日常一格绘制' : mode === core_constants.MODE.ALBUM ? '相簿 CG 绘制' : 'ADV CG 绘制',
+            mode, origin, outcome: imageOutcome, kind: 'cg',
+        });
         renderCapturedCgMode(captured);
     }
 }
