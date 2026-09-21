@@ -1,5 +1,5 @@
 const VERSION = '0.98';
-const BUILD = '0.98-tt-cg-r84.44-second-step';
+const BUILD = '0.98-tt-cg-r84.44-load-fix';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

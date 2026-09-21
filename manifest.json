@@ -1,7 +1,7 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.98-tt-cg-r84.44-second-step",
+  "js": "index.js?heartbeat=0.98-tt-cg-r84.44-load-fix",
   "author": "Toto",
   "version": "0.98",
   "auto_update": true,
