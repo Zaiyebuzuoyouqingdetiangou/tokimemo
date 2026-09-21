@@ -299,7 +299,7 @@ function collectProgressDeletions(before, after, path = [], deleted = []) {
         }
     } else if (before && after && typeof before === 'object' && typeof after === 'object') {
         for (const key of Object.keys(before)) if (Object.hasOwn(after, key)
-            && !['readableProgress', 'generationSources', 'cgImage', 'cgPromptDraft', 'cgPromptMetadata'].includes(key)) {
+            && !['readableProgress', 'generationSources', 'cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata'].includes(key)) {
             collectProgressDeletions(before[key], after[key], [...path, key], deleted);
         }
     }
@@ -329,13 +329,13 @@ function preserveProgressLocalState(incoming, saved) {
         return incoming.map(item => item?.id && byId.has(item.id) ? preserveProgressLocalState(item, byId.get(item.id)) : item);
     }
     const next = { ...incoming };
-    for (const key of ['cgImage', 'cgPromptDraft', 'cgPromptMetadata', 'favorite', 'readAt', 'unlocked', 'userManaged', ...PROGRESS_READING_FIELDS]) {
+    for (const key of ['cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata', 'favorite', 'readAt', 'unlocked', 'userManaged', ...PROGRESS_READING_FIELDS]) {
         if (Object.hasOwn(saved, key)) next[key] = structuredClone(saved[key]);
     }
     for (const [key, value] of Object.entries(next)) {
         if (Array.isArray(value) && Array.isArray(saved[key])) next[key] = preserveProgressLocalState(value, saved[key]);
         else if (value && typeof value === 'object' && !Array.isArray(value) && saved[key] && typeof saved[key] === 'object'
-            && !['generationSources', 'readableProgress', 'cgImage', 'cgPromptDraft', 'cgPromptMetadata'].includes(key)) next[key] = preserveProgressLocalState(value, saved[key]);
+            && !['generationSources', 'readableProgress', 'cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata'].includes(key)) next[key] = preserveProgressLocalState(value, saved[key]);
     }
     applyProgressOverrides(next, saved.readableProgress);
     if (next.readableProgress) for (const key of ['textOverridesV1', 'clearedFieldsV1', 'manualFieldsV1']) {

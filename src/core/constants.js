@@ -307,6 +307,7 @@ export const ENDING_TYPES = new Set(['route', 'romance', 'reverse', 'bond', 'ope
 export const CONFESSION_REPLAY_TYPES = new Set(['true', 'mutual', 'friendship', 'indirect', 'relationship', 'rejected', 'other']);
 
 export const CG_IMAGE_PROVIDER = 'sillytavern-imagine';
+export const CG_IMAGE_HISTORY_LIMIT = 5;
 
 export const MAX_CG_IMAGE_PROMPT_CHARS = 1800;
 

@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 134
-// Source SHA-256: a1300cd54acae64ea877a6cf65fe76dc0fee63e2e5643c6880810be35c77aeb0
+// Source SHA-256: faf7eb92e76db68491df47011f8e0fecc233b6d161e9f5ea2e97b59a1f9241b9
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -1242,6 +1242,7 @@ const ENDING_TYPES = new Set(['route', 'romance', 'reverse', 'bond', 'open', 'pe
 const CONFESSION_REPLAY_TYPES = new Set(['true', 'mutual', 'friendship', 'indirect', 'relationship', 'rejected', 'other']);
 
 const CG_IMAGE_PROVIDER = 'sillytavern-imagine';
+const CG_IMAGE_HISTORY_LIMIT = 5;
 
 const MAX_CG_IMAGE_PROMPT_CHARS = 1800;
 
@@ -1384,6 +1385,7 @@ __m_core_constants_js.ROOM_DAYPART_KEYS = ROOM_DAYPART_KEYS;
 __m_core_constants_js.ENDING_TYPES = ENDING_TYPES;
 __m_core_constants_js.CONFESSION_REPLAY_TYPES = CONFESSION_REPLAY_TYPES;
 __m_core_constants_js.CG_IMAGE_PROVIDER = CG_IMAGE_PROVIDER;
+__m_core_constants_js.CG_IMAGE_HISTORY_LIMIT = CG_IMAGE_HISTORY_LIMIT;
 __m_core_constants_js.MAX_CG_IMAGE_PROMPT_CHARS = MAX_CG_IMAGE_PROMPT_CHARS;
 __m_core_constants_js.HEART_GREETING_KEYS = HEART_GREETING_KEYS;
 __m_core_constants_js.HEART_VOICE_KINDS = HEART_VOICE_KINDS;
@@ -5523,6 +5525,9 @@ function normalizeCgPromptMetadata(value) {
     const rows = Array.isArray(value.characters) ? value.characters.slice(0, 8) : [];
     const characters = ROLES.flatMap(role => {
         const matches = rows.filter(row => row && typeof row === 'object' && !Array.isArray(row) && row.role === role);
+        // Same strictness as the snapshot path above: duplicated roles indicate
+        // crossed identity data and must surface instead of being silently dropped.
+        if (matches.length > 1) throw text.safeUserError('同一个人物出现了重复外貌记录，请核对图片设置。', 'RMT_CG_PROMPT_INVALID');
         if (matches.length !== 1) return [];
         const row = matches[0], name = plain(row.name, 120), tag = plain(row.tag, CG_APPEARANCE_TAG_LIMIT);
         return name && tag ? [{ role, name, tag, nl: plain(row.nl, CG_APPEARANCE_TAG_LIMIT) }] : [];
@@ -5754,6 +5759,31 @@ function normalizeCgImageRecord(value) {
         ...(promptMetadata ? { promptMetadata } : {}) };
 }
 
+// Bounded per-item version history of previously applied image records. Entries
+// are references only (same whitelist normalization as the live record): never
+// dataURLs, never external hosts, never traversal (raw dot segments or encoded
+// separators are refused at the same raw-string bar as savedLocalImagePath),
+// deduplicated by url, oldest evicted first.
+function normalizeCgImageHistory(value) {
+    const rows = Array.isArray(value) ? value : [];
+    const history = [];
+    for (const row of rows) {
+        const raw = typeof row?.url === 'string' ? row.url : '';
+        if (/(?:^|\/)\.{1,2}(?:\/|$)/.test(raw) || /%(?:2f|5c|2e|25|0[0-9a-f]|1[0-9a-f]|7f)/i.test(raw)) continue;
+        const record = normalizeCgImageRecord(row);
+        if (record && !history.some(kept => kept.url === record.url)) history.push(record);
+    }
+    return history.slice(-constants.CG_IMAGE_HISTORY_LIMIT);
+}
+
+// Returns the next history array with `record` appended (or null when empty).
+function cgImageHistoryWith(history, record) {
+    const next = normalizeCgImageHistory(history);
+    const image = normalizeCgImageRecord(record);
+    if (image && !next.some(kept => kept.url === image.url)) next.push(image);
+    return next.length ? next.slice(-constants.CG_IMAGE_HISTORY_LIMIT) : null;
+}
+
 function cgItemInSession(mode, session, itemId) {
     const rows = mode === constants.MODE.ALBUM ? session?.entries : mode === constants.MODE.ADV
         ? session?.events : mode === constants.MODE.HEART ? session?.dailyStrips : null;
@@ -5798,8 +5828,37 @@ function applyCgImagePatch(session, raw) {
         return { status: 'already-applied', session };
     }
     const updated = JSON.parse(JSON.stringify(session));
-    cgItemInSession(patch.mode, updated, patch.itemId).cgImage = patch.image;
+    const target = cgItemInSession(patch.mode, updated, patch.itemId);
+    const previousImage = normalizeCgImageRecord(target.cgImage);
+    if (previousImage && previousImage.url !== patch.image.url) {
+        const history = cgImageHistoryWith(target.cgImageHistory, previousImage);
+        if (history) target.cgImageHistory = history;
+    } else {
+        const history = normalizeCgImageHistory(target.cgImageHistory);
+        if (history.length) target.cgImageHistory = history; else delete target.cgImageHistory;
+    }
+    target.cgImage = patch.image;
     return { status: 'applied', session: updated };
+}
+
+// Promote one history entry back to the live image, in place. Pointer swap
+// only: the current record is demoted into the history, nothing is deleted and
+// no image file or provider is touched. Returns the previous {image, history}
+// for rollback, or null when the url is not in the item's history.
+function swapCgImageToVersion(item, url) {
+    if (!item || typeof item !== 'object') return null;
+    const history = normalizeCgImageHistory(item.cgImageHistory);
+    const wantedUrl = normalizeCgImageUrl(url);
+    const index = wantedUrl ? history.findIndex(record => record.url === wantedUrl) : -1;
+    if (index < 0) return null;
+    const before = { image: item.cgImage, history: item.cgImageHistory };
+    const [chosen] = history.splice(index, 1);
+    const currentImage = normalizeCgImageRecord(item.cgImage);
+    const nextHistory = currentImage && currentImage.url !== chosen.url
+        ? cgImageHistoryWith(history, currentImage) : (history.length ? history : null);
+    item.cgImage = chosen;
+    if (nextHistory) item.cgImageHistory = nextHistory; else delete item.cgImageHistory;
+    return before;
 }
 
 // Shared host resolution for provider results, stored records and image display.
@@ -5835,10 +5894,13 @@ function savedLocalImagePath(raw, base = imageResourceBase()) {
 
 __m_core_cgImagePatch_js.normalizeCgImageUrl = normalizeCgImageUrl;
 __m_core_cgImagePatch_js.normalizeCgImageRecord = normalizeCgImageRecord;
+__m_core_cgImagePatch_js.normalizeCgImageHistory = normalizeCgImageHistory;
+__m_core_cgImagePatch_js.cgImageHistoryWith = cgImageHistoryWith;
 __m_core_cgImagePatch_js.cgItemInSession = cgItemInSession;
 __m_core_cgImagePatch_js.cgItemSignature = cgItemSignature;
 __m_core_cgImagePatch_js.normalizeCgImagePatch = normalizeCgImagePatch;
 __m_core_cgImagePatch_js.applyCgImagePatch = applyCgImagePatch;
+__m_core_cgImagePatch_js.swapCgImageToVersion = swapCgImageToVersion;
 __m_core_cgImagePatch_js.imageResourceBase = imageResourceBase;
 __m_core_cgImagePatch_js.isSameImageHost = isSameImageHost;
 __m_core_cgImagePatch_js.savedLocalImagePath = savedLocalImagePath;
@@ -10747,6 +10809,7 @@ const archive_library = __m_archive_library_js;
 const archive_repository = __m_archive_repository_js;
 const archive_snapshots = __m_archive_snapshots_js;
 const core_cache = __m_core_cache_js;
+const core_cgImagePatch = __m_core_cgImagePatch_js;
 const core_constants = __m_core_constants_js;
 const core_heartLanguage = __m_core_heartLanguage_js;
 const core_dialogue = __m_core_dialogue_js;
@@ -10766,6 +10829,7 @@ const runtimeState = __m_core_state_js.state;
 
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
+
 
 
 
@@ -11035,13 +11099,17 @@ async function clearHeartStripImage(stripId) {
     if (generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, item.id)) return globalThis.toastr?.info?.('请先取消正在绘制的图片，再移除旧图引用。', '心迹回廊');
     if (!ui_overlay.confirmExplicitActionTwice(`恢复「${item.title}」的文字/抽象小剧场？`, '只会移除心迹回廊缓存中的图片引用，不会删除 SillyTavern 已保存的图片文件。', { destructive: true })) return;
     const previous = item.cgImage;
+    const previousHistory = item.cgImageHistory;
+    const clearedHistory = core_cgImagePatch.cgImageHistoryWith(item.cgImageHistory, previous);
     item.cgImage = null;
+    if (clearedHistory) item.cgImageHistory = clearedHistory;
     const context = core_context.currentCharacterGuard();
     const memoryBank = archive_repository.requireArchive(context);
     const expectedChatId = core_context.getChatId(context);
     const origin = { ...core_context.captureTaskOrigin(context, memoryBank.archiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
     if (!await core_cache.commitSession(core_constants.MODE.HEART, runtimeState.activeSession, expectedChatId, origin)) {
         item.cgImage = previous;
+        if (previousHistory === undefined) delete item.cgImageHistory; else item.cgImageHistory = previousHistory;
         return globalThis.toastr?.error?.('当前档案状态已变化，未修改图片引用。', '心迹回廊');
     }
     renderHeart();
@@ -11422,7 +11490,7 @@ function busyEditor(active) {
     editor.busy = active;
     editor.element.setAttribute('aria-busy', String(active));
     for (const field of editor.element.querySelectorAll('[data-rmt-cg-prompt-input], [data-rmt-cg-scene-tags], [data-rmt-cg-tag-input], [data-rmt-cg-flat-prompt], [data-rmt-cg-editor-format], [data-rmt-cg-person-selected], [data-rmt-cg-person-name], [data-rmt-cg-person-tag], [data-rmt-cg-person-nl]')) field.disabled = active;
-    for (const button of editor.element.querySelectorAll('[data-rmt-cg-prompt-action="reconceive"], [data-rmt-cg-prompt-action="draw"], [data-rmt-cg-prompt-action="clear"], [data-rmt-cg-prompt-action="retry"], [data-rmt-cg-prompt-action="save-looks"], [data-rmt-cg-prompt-action="restore-draft"], [data-rmt-cg-prompt-action="add-person"], [data-rmt-cg-prompt-action="add-user"], [data-rmt-cg-prompt-action="use-current-cast"], [data-rmt-cg-prompt-action="select-sources"]')) button.disabled = active;
+    for (const button of editor.element.querySelectorAll('[data-rmt-cg-prompt-action="reconceive"], [data-rmt-cg-prompt-action="draw"], [data-rmt-cg-prompt-action="clear"], [data-rmt-cg-prompt-action="retry"], [data-rmt-cg-prompt-action="save-looks"], [data-rmt-cg-prompt-action="restore-draft"], [data-rmt-cg-prompt-action="add-person"], [data-rmt-cg-prompt-action="add-user"], [data-rmt-cg-prompt-action="use-current-cast"], [data-rmt-cg-prompt-action="select-sources"], [data-rmt-cg-history-view], [data-rmt-cg-history-restore]')) button.disabled = active;
 }
 
 function readParticipantFields(current) {
@@ -11610,6 +11678,7 @@ function openCgPromptEditor({ heartStrip = false } = {}) {
         const roster = multi && !selected.cgImage ? currentRoster : null;
         const participantLooks = multi ? cast_looks.readParticipantLooks(context) : null;
         const canRetry = images.hasPendingCgImage(target);
+        const historyRows = images.normalizeCgImageHistory(selected.cgImageHistory);
         const element = document.createElement('div');
         element.className = 'rmt-cg-prompt-backdrop';
         element.innerHTML = `<section class="rmt-cg-prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="rmt-cg-prompt-title" aria-describedby="rmt-cg-prompt-help" tabindex="-1">
@@ -11635,6 +11704,7 @@ function openCgPromptEditor({ heartStrip = false } = {}) {
           <button type="button" class="rmt-btn" data-rmt-cg-prompt-action="restore-draft" hidden>还原上次草稿</button>
           ${canRetry ? '<div class="rmt-cg-prompt-secondary"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="retry">回填已生成图片（不再生图）</button></div>' : ''}
           ${savedImage ? `<div class="rmt-cg-prompt-secondary"><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="view">查看完整原图</button><button type="button" class="rmt-btn" data-rmt-cg-prompt-action="clear">${target.mode === core_constants.MODE.HEART ? '恢复文字版' : '恢复抽象图'}</button><small>仅移除本档案的图片引用，不删除柏宝绘图库文件。</small></div>` : ''}
+          ${historyRows.length ? `<div class="rmt-cg-prompt-secondary"><small>历史版本（${historyRows.length}，v1 最旧）</small><div data-rmt-cg-history-list>${historyRows.map((record, index) => `<span class="rmt-cg-history-item"><button type="button" class="rmt-btn" data-rmt-cg-history-view="${core_text.esc(record.url)}">查看 v${index + 1}</button><button type="button" class="rmt-btn" data-rmt-cg-history-restore="${core_text.esc(record.url)}">恢复 v${index + 1}</button></span>`).join('')}</div><small>恢复只切换档案里的图片引用：当前图片转入历史版本，不重新生图、不删除任何已保存的图片文件。</small></div>` : ''}
         </section>`;
         const cancel = event => {
             event.preventDefault(); event.stopImmediatePropagation();
@@ -11673,6 +11743,9 @@ function openCgPromptEditor({ heartStrip = false } = {}) {
         if (multi) element.querySelector('[data-rmt-cg-appearance]').open = true;
         element.addEventListener('click', event => {
             event.stopPropagation();
+            const historyViewUrl = event.target.closest?.('[data-rmt-cg-history-view]')?.dataset.rmtCgHistoryView;
+            const historyRestoreUrl = event.target.closest?.('[data-rmt-cg-history-restore]')?.dataset.rmtCgHistoryRestore;
+            if (historyViewUrl || historyRestoreUrl) { void handleCgHistoryAction(historyViewUrl || '', historyRestoreUrl || '', event.target); return; }
             const action = event.target.closest?.('[data-rmt-cg-prompt-action]')?.dataset.rmtCgPromptAction;
             if (action) void handleCgPromptEditorAction(action);
         });
@@ -11690,6 +11763,23 @@ function openCgPromptEditor({ heartStrip = false } = {}) {
         updateCount();
         textarea.focus();
     } catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); }
+}
+
+async function handleCgHistoryAction(viewUrl, restoreUrl, sourceEl = null) {
+    const current = editor;
+    if (!current || current.busy) return;
+    const item = images.cgItemInSession(current.target.mode, current.target.session, current.target.itemId);
+    const history = images.normalizeCgImageHistory(item?.cgImageHistory);
+    if (viewUrl) {
+        const record = history.find(row => row.url === viewUrl);
+        if (record) image_viewer.openCgImageViewer(record, item?.title, { opener: sourceEl });
+        return;
+    }
+    if (!restoreUrl || !history.some(row => row.url === restoreUrl)) return;
+    busyEditor(true);
+    const committed = await images.restoreSelectedCgImageVersion(restoreUrl);
+    if (committed === true) closeCgPromptEditor();
+    else busyEditor(false);
 }
 
 async function handleCgPromptEditorAction(action) {
@@ -11875,6 +11965,7 @@ async function handleCgPromptEditorAction(action) {
     }
 }
 
+__m_ui_cgPromptEditor_js.handleCgHistoryAction = handleCgHistoryAction;
 __m_ui_cgPromptEditor_js.handleCgPromptEditorAction = handleCgPromptEditorAction;
 __m_ui_cgPromptEditor_js.hasCgPromptEditor = hasCgPromptEditor;
 __m_ui_cgPromptEditor_js.closeCgPromptEditor = closeCgPromptEditor;
@@ -15872,6 +15963,10 @@ function normalizeCgImageRecord(value) {
     return image_patch.normalizeCgImageRecord(value);
 }
 
+function normalizeCgImageHistory(value) {
+    return image_patch.normalizeCgImageHistory(value);
+}
+
 function sanitizeCgVisualText(value, limit = core_constants.MAX_CG_IMAGE_PROMPT_CHARS) {
     let text = core_text.normalizeText(value, limit);
     if (!text) return '';
@@ -16379,7 +16474,7 @@ async function drawSelectedCgImage({ promptOverride, promptMetadata, promptForma
     const confirmDraw = previous ? ui_overlay.confirmExplicitActionTwice : ui_overlay.confirmExplicitAction;
     const confirmed = confirmDraw(
         previous ? `重新绘制「${item.title}」CG？` : `绘制「${item.title}」CG？`,
-        `${previous ? '新的图片成功后会替换当前 CG 图片引用；旧图片文件不会由心迹回廊主动删除。\n\n' : ''}这会调用${imageState.providerLabel || '已配置的生图插件'}，可能消耗本地算力、额度或付费点数。只会发送这张 CG 的可见画面提示，不发送聊天原文、档案原文、世界书原文、私人终端内容或任何 API 凭据。`,
+        `${previous ? '新的图片成功后会替换当前 CG 图片引用；旧版本引用会保留在图片设置的历史版本中，旧图片文件不会由心迹回廊主动删除。\n\n' : ''}这会调用${imageState.providerLabel || '已配置的生图插件'}，可能消耗本地算力、额度或付费点数。只会发送这张 CG 的可见画面提示，不发送聊天原文、档案原文、世界书原文、私人终端内容或任何 API 凭据。`,
         { destructive: !!previous },
     );
     if (!confirmed) return;
@@ -16504,7 +16599,10 @@ async function clearSelectedCgImage() {
     const captured = captureCgImageTarget(target);
     if (!captured) return;
     const previousImage = item.cgImage;
+    const previousHistory = item.cgImageHistory;
+    const clearedHistory = image_patch.cgImageHistoryWith(item.cgImageHistory, previousImage);
     item.cgImage = null;
+    if (clearedHistory) item.cgImageHistory = clearedHistory;
     const expectedChatId = core_text.normalizeText(session.chatId, 240);
     const context = core_context.currentCharacterGuard();
     const memoryBank = archive_repository.requireArchive(context);
@@ -16513,15 +16611,62 @@ async function clearSelectedCgImage() {
         ? await core_cache.commitGenerationTaskResultMutation(context, captured.draftId, latest => {
             const savedItem = cgItemInSession(mode, latest, item.id);
             if (!savedItem || cgItemSignature(savedItem) !== captured.signature) return null;
-            savedItem.cgImage = null; return latest;
+            const history = image_patch.cgImageHistoryWith(savedItem.cgImageHistory, savedItem.cgImage);
+            savedItem.cgImage = null;
+            if (history) savedItem.cgImageHistory = history;
+            return latest;
         }, { expectedTaskOrigin: origin })
         : await core_cache.commitSession(mode, session, expectedChatId, origin);
     if (!committed) {
         item.cgImage = previousImage;
+        if (previousHistory === undefined) delete item.cgImageHistory; else item.cgImageHistory = previousHistory;
         globalThis.toastr?.error?.('当前档案版本已经变化，未移除 CG 图片引用。', '心迹回廊');
         return;
     }
     renderCurrentCgMode(mode, session);
+}
+
+// Promote one saved version back to the live image. Pure pointer swap through
+// the same capture/CAS commit path as clearing: no redraw, no request, no file
+// deletion, and the demoted current image stays in the bounded history.
+async function restoreSelectedCgImageVersion(url) {
+    if (!archive_library.requireWritableArchiveAction()) return;
+    const target = selectedCgTarget();
+    if (!target) return;
+    const { mode, session, item } = target;
+    if (isCgImageDrawing(mode, item.id)) return globalThis.toastr?.info?.('请先取消正在绘制的图片，再恢复历史版本。', '心迹回廊');
+    const wantedUrl = image_patch.normalizeCgImageUrl(url);
+    if (!wantedUrl || !image_patch.normalizeCgImageHistory(item.cgImageHistory).some(record => record.url === wantedUrl)) return;
+    if (!ui_overlay.confirmExplicitActionTwice(
+        `把「${item.title}」恢复为这个历史版本？`,
+        '只切换档案里保存的图片引用：当前图片会转入历史版本，不重新生图、不删除任何已保存的图片文件。',
+        { destructive: false },
+    )) return;
+    const captured = captureCgImageTarget(target);
+    if (!captured) return;
+    const previousImage = item.cgImage;
+    const previousHistory = item.cgImageHistory;
+    if (!image_patch.swapCgImageToVersion(item, url)) return;
+    const expectedChatId = core_text.normalizeText(session.chatId, 240);
+    const context = core_context.currentCharacterGuard();
+    const memoryBank = archive_repository.requireArchive(context);
+    const origin = { ...core_context.captureTaskOrigin(context, memoryBank.archiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
+    const committed = captured.draftId
+        ? await core_cache.commitGenerationTaskResultMutation(context, captured.draftId, latest => {
+            const savedItem = cgItemInSession(mode, latest, item.id);
+            if (!savedItem || cgItemSignature(savedItem) !== captured.signature) return null;
+            return image_patch.swapCgImageToVersion(savedItem, url) ? latest : null;
+        }, { expectedTaskOrigin: origin })
+        : await core_cache.commitSession(mode, session, expectedChatId, origin);
+    if (!committed) {
+        item.cgImage = previousImage;
+        if (previousHistory === undefined) delete item.cgImageHistory; else item.cgImageHistory = previousHistory;
+        globalThis.toastr?.error?.('当前档案版本已经变化，未恢复历史版本。', '心迹回廊');
+        return;
+    }
+    globalThis.toastr?.success?.('已恢复所选历史版本，原图已转入历史版本。', '心迹回廊');
+    renderCurrentCgMode(mode, session);
+    return true;
 }
 
 function handleOverlayMediaError(event) {
@@ -16550,11 +16695,13 @@ __m_generation_imageGeneration_js.reconceiveCgImagePrompt = reconceiveCgImagePro
 __m_generation_imageGeneration_js.retryPendingCgImage = retryPendingCgImage;
 __m_generation_imageGeneration_js.drawSelectedCgImage = drawSelectedCgImage;
 __m_generation_imageGeneration_js.clearSelectedCgImage = clearSelectedCgImage;
+__m_generation_imageGeneration_js.restoreSelectedCgImageVersion = restoreSelectedCgImageVersion;
 __m_generation_imageGeneration_js.imageGenerationCommand = imageGenerationCommand;
 __m_generation_imageGeneration_js.imageGenerationUiState = imageGenerationUiState;
 __m_generation_imageGeneration_js.sanitizeImageGenerationSlashPrompt = sanitizeImageGenerationSlashPrompt;
 __m_generation_imageGeneration_js.normalizeCgImageUrl = normalizeCgImageUrl;
 __m_generation_imageGeneration_js.normalizeCgImageRecord = normalizeCgImageRecord;
+__m_generation_imageGeneration_js.normalizeCgImageHistory = normalizeCgImageHistory;
 __m_generation_imageGeneration_js.sanitizeCgVisualText = sanitizeCgVisualText;
 __m_generation_imageGeneration_js.cgImagePromptForItem = cgImagePromptForItem;
 __m_generation_imageGeneration_js.cgImageTaskKey = cgImageTaskKey;
@@ -33522,7 +33669,7 @@ const EDITABLE_CONTENT_LABELS = Object.freeze({
     atmosphere: '氛围', activity: '活动', npcPerspective: '人物视角', relation: '关系',
 });
 const EDITOR_INTERNAL_FIELDS = new Set(['generationSources', 'readableProgress', 'participantSnapshot', 'speakerSnapshot',
-    'cgImage', 'cgPromptDraft', 'cgPromptMetadata', 'sourceMemory', 'sourceContext', 'sourceIdentity', 'progressPending']);
+    'cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata', 'sourceMemory', 'sourceContext', 'sourceIdentity', 'progressPending']);
 
 function partialContentFields(session) {
     const fields = [];
@@ -51492,7 +51639,7 @@ function collectProgressDeletions(before, after, path = [], deleted = []) {
         }
     } else if (before && after && typeof before === 'object' && typeof after === 'object') {
         for (const key of Object.keys(before)) if (Object.hasOwn(after, key)
-            && !['readableProgress', 'generationSources', 'cgImage', 'cgPromptDraft', 'cgPromptMetadata'].includes(key)) {
+            && !['readableProgress', 'generationSources', 'cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata'].includes(key)) {
             collectProgressDeletions(before[key], after[key], [...path, key], deleted);
         }
     }
@@ -51522,13 +51669,13 @@ function preserveProgressLocalState(incoming, saved) {
         return incoming.map(item => item?.id && byId.has(item.id) ? preserveProgressLocalState(item, byId.get(item.id)) : item);
     }
     const next = { ...incoming };
-    for (const key of ['cgImage', 'cgPromptDraft', 'cgPromptMetadata', 'favorite', 'readAt', 'unlocked', 'userManaged', ...PROGRESS_READING_FIELDS]) {
+    for (const key of ['cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata', 'favorite', 'readAt', 'unlocked', 'userManaged', ...PROGRESS_READING_FIELDS]) {
         if (Object.hasOwn(saved, key)) next[key] = structuredClone(saved[key]);
     }
     for (const [key, value] of Object.entries(next)) {
         if (Array.isArray(value) && Array.isArray(saved[key])) next[key] = preserveProgressLocalState(value, saved[key]);
         else if (value && typeof value === 'object' && !Array.isArray(value) && saved[key] && typeof saved[key] === 'object'
-            && !['generationSources', 'readableProgress', 'cgImage', 'cgPromptDraft', 'cgPromptMetadata'].includes(key)) next[key] = preserveProgressLocalState(value, saved[key]);
+            && !['generationSources', 'readableProgress', 'cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata'].includes(key)) next[key] = preserveProgressLocalState(value, saved[key]);
     }
     applyProgressOverrides(next, saved.readableProgress);
     if (next.readableProgress) for (const key of ['textOverridesV1', 'clearedFieldsV1', 'manualFieldsV1']) {

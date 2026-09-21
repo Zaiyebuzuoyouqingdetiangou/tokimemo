@@ -41,7 +41,7 @@ const EDITABLE_CONTENT_LABELS = Object.freeze({
     atmosphere: '氛围', activity: '活动', npcPerspective: '人物视角', relation: '关系',
 });
 const EDITOR_INTERNAL_FIELDS = new Set(['generationSources', 'readableProgress', 'participantSnapshot', 'speakerSnapshot',
-    'cgImage', 'cgPromptDraft', 'cgPromptMetadata', 'sourceMemory', 'sourceContext', 'sourceIdentity', 'progressPending']);
+    'cgImage', 'cgImageHistory', 'cgPromptDraft', 'cgPromptMetadata', 'sourceMemory', 'sourceContext', 'sourceIdentity', 'progressPending']);
 
 export function partialContentFields(session) {
     const fields = [];

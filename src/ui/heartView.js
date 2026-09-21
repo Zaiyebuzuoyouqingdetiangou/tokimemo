@@ -9,6 +9,7 @@ import * as archive_library from '../archive/library.js';
 import * as archive_repository from '../archive/repository.js';
 import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_cache from '../core/cache.js';
+import * as core_cgImagePatch from '../core/cgImagePatch.js';
 import * as core_constants from '../core/constants.js';
 import * as core_heartLanguage from '../core/heartLanguage.js';
 import * as core_dialogue from '../core/dialogue.js';
@@ -281,13 +282,17 @@ export async function clearHeartStripImage(stripId) {
     if (generation_imageGeneration.isCgImageDrawing(core_constants.MODE.HEART, item.id)) return globalThis.toastr?.info?.('请先取消正在绘制的图片，再移除旧图引用。', '心迹回廊');
     if (!ui_overlay.confirmExplicitActionTwice(`恢复「${item.title}」的文字/抽象小剧场？`, '只会移除心迹回廊缓存中的图片引用，不会删除 SillyTavern 已保存的图片文件。', { destructive: true })) return;
     const previous = item.cgImage;
+    const previousHistory = item.cgImageHistory;
+    const clearedHistory = core_cgImagePatch.cgImageHistoryWith(item.cgImageHistory, previous);
     item.cgImage = null;
+    if (clearedHistory) item.cgImageHistory = clearedHistory;
     const context = core_context.currentCharacterGuard();
     const memoryBank = archive_repository.requireArchive(context);
     const expectedChatId = core_context.getChatId(context);
     const origin = { ...core_context.captureTaskOrigin(context, memoryBank.archiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
     if (!await core_cache.commitSession(core_constants.MODE.HEART, runtimeState.activeSession, expectedChatId, origin)) {
         item.cgImage = previous;
+        if (previousHistory === undefined) delete item.cgImageHistory; else item.cgImageHistory = previousHistory;
         return globalThis.toastr?.error?.('当前档案状态已变化，未修改图片引用。', '心迹回廊');
     }
     renderHeart();

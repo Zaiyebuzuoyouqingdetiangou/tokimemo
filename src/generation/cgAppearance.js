@@ -197,6 +197,9 @@ export function normalizeCgPromptMetadata(value) {
     const rows = Array.isArray(value.characters) ? value.characters.slice(0, 8) : [];
     const characters = ROLES.flatMap(role => {
         const matches = rows.filter(row => row && typeof row === 'object' && !Array.isArray(row) && row.role === role);
+        // Same strictness as the snapshot path above: duplicated roles indicate
+        // crossed identity data and must surface instead of being silently dropped.
+        if (matches.length > 1) throw text.safeUserError('同一个人物出现了重复外貌记录，请核对图片设置。', 'RMT_CG_PROMPT_INVALID');
         if (matches.length !== 1) return [];
         const row = matches[0], name = plain(row.name, 120), tag = plain(row.tag, CG_APPEARANCE_TAG_LIMIT);
         return name && tag ? [{ role, name, tag, nl: plain(row.nl, CG_APPEARANCE_TAG_LIMIT) }] : [];

@@ -74,6 +74,10 @@ export function normalizeCgImageRecord(value) {
     return image_patch.normalizeCgImageRecord(value);
 }
 
+export function normalizeCgImageHistory(value) {
+    return image_patch.normalizeCgImageHistory(value);
+}
+
 export function sanitizeCgVisualText(value, limit = core_constants.MAX_CG_IMAGE_PROMPT_CHARS) {
     let text = core_text.normalizeText(value, limit);
     if (!text) return '';
@@ -581,7 +585,7 @@ export async function drawSelectedCgImage({ promptOverride, promptMetadata, prom
     const confirmDraw = previous ? ui_overlay.confirmExplicitActionTwice : ui_overlay.confirmExplicitAction;
     const confirmed = confirmDraw(
         previous ? `重新绘制「${item.title}」CG？` : `绘制「${item.title}」CG？`,
-        `${previous ? '新的图片成功后会替换当前 CG 图片引用；旧图片文件不会由心迹回廊主动删除。\n\n' : ''}这会调用${imageState.providerLabel || '已配置的生图插件'}，可能消耗本地算力、额度或付费点数。只会发送这张 CG 的可见画面提示，不发送聊天原文、档案原文、世界书原文、私人终端内容或任何 API 凭据。`,
+        `${previous ? '新的图片成功后会替换当前 CG 图片引用；旧版本引用会保留在图片设置的历史版本中，旧图片文件不会由心迹回廊主动删除。\n\n' : ''}这会调用${imageState.providerLabel || '已配置的生图插件'}，可能消耗本地算力、额度或付费点数。只会发送这张 CG 的可见画面提示，不发送聊天原文、档案原文、世界书原文、私人终端内容或任何 API 凭据。`,
         { destructive: !!previous },
     );
     if (!confirmed) return;
@@ -706,7 +710,10 @@ export async function clearSelectedCgImage() {
     const captured = captureCgImageTarget(target);
     if (!captured) return;
     const previousImage = item.cgImage;
+    const previousHistory = item.cgImageHistory;
+    const clearedHistory = image_patch.cgImageHistoryWith(item.cgImageHistory, previousImage);
     item.cgImage = null;
+    if (clearedHistory) item.cgImageHistory = clearedHistory;
     const expectedChatId = core_text.normalizeText(session.chatId, 240);
     const context = core_context.currentCharacterGuard();
     const memoryBank = archive_repository.requireArchive(context);
@@ -715,15 +722,62 @@ export async function clearSelectedCgImage() {
         ? await core_cache.commitGenerationTaskResultMutation(context, captured.draftId, latest => {
             const savedItem = cgItemInSession(mode, latest, item.id);
             if (!savedItem || cgItemSignature(savedItem) !== captured.signature) return null;
-            savedItem.cgImage = null; return latest;
+            const history = image_patch.cgImageHistoryWith(savedItem.cgImageHistory, savedItem.cgImage);
+            savedItem.cgImage = null;
+            if (history) savedItem.cgImageHistory = history;
+            return latest;
         }, { expectedTaskOrigin: origin })
         : await core_cache.commitSession(mode, session, expectedChatId, origin);
     if (!committed) {
         item.cgImage = previousImage;
+        if (previousHistory === undefined) delete item.cgImageHistory; else item.cgImageHistory = previousHistory;
         globalThis.toastr?.error?.('当前档案版本已经变化，未移除 CG 图片引用。', '心迹回廊');
         return;
     }
     renderCurrentCgMode(mode, session);
+}
+
+// Promote one saved version back to the live image. Pure pointer swap through
+// the same capture/CAS commit path as clearing: no redraw, no request, no file
+// deletion, and the demoted current image stays in the bounded history.
+export async function restoreSelectedCgImageVersion(url) {
+    if (!archive_library.requireWritableArchiveAction()) return;
+    const target = selectedCgTarget();
+    if (!target) return;
+    const { mode, session, item } = target;
+    if (isCgImageDrawing(mode, item.id)) return globalThis.toastr?.info?.('请先取消正在绘制的图片，再恢复历史版本。', '心迹回廊');
+    const wantedUrl = image_patch.normalizeCgImageUrl(url);
+    if (!wantedUrl || !image_patch.normalizeCgImageHistory(item.cgImageHistory).some(record => record.url === wantedUrl)) return;
+    if (!ui_overlay.confirmExplicitActionTwice(
+        `把「${item.title}」恢复为这个历史版本？`,
+        '只切换档案里保存的图片引用：当前图片会转入历史版本，不重新生图、不删除任何已保存的图片文件。',
+        { destructive: false },
+    )) return;
+    const captured = captureCgImageTarget(target);
+    if (!captured) return;
+    const previousImage = item.cgImage;
+    const previousHistory = item.cgImageHistory;
+    if (!image_patch.swapCgImageToVersion(item, url)) return;
+    const expectedChatId = core_text.normalizeText(session.chatId, 240);
+    const context = core_context.currentCharacterGuard();
+    const memoryBank = archive_repository.requireArchive(context);
+    const origin = { ...core_context.captureTaskOrigin(context, memoryBank.archiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
+    const committed = captured.draftId
+        ? await core_cache.commitGenerationTaskResultMutation(context, captured.draftId, latest => {
+            const savedItem = cgItemInSession(mode, latest, item.id);
+            if (!savedItem || cgItemSignature(savedItem) !== captured.signature) return null;
+            return image_patch.swapCgImageToVersion(savedItem, url) ? latest : null;
+        }, { expectedTaskOrigin: origin })
+        : await core_cache.commitSession(mode, session, expectedChatId, origin);
+    if (!committed) {
+        item.cgImage = previousImage;
+        if (previousHistory === undefined) delete item.cgImageHistory; else item.cgImageHistory = previousHistory;
+        globalThis.toastr?.error?.('当前档案版本已经变化，未恢复历史版本。', '心迹回廊');
+        return;
+    }
+    globalThis.toastr?.success?.('已恢复所选历史版本，原图已转入历史版本。', '心迹回廊');
+    renderCurrentCgMode(mode, session);
+    return true;
 }
 
 export function handleOverlayMediaError(event) {
