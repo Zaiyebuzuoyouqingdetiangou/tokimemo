@@ -47,6 +47,7 @@ export function getPluginSettings(context = core_context.getContext()) {
         manualApiStreaming: settings.manualApiStreaming === true,
         chatReadRange: chat_read_range.normalizeChatReadRange(settings),
         maxTokens: output_budget.normalizeOutputTokens(settings.maxTokens),
+        inputBudgetTokens: output_budget.normalizeInputBudgetTokens(settings.inputBudgetTokens),
         temperature: Math.max(0, Math.min(2, Number.isFinite(Number(settings.temperature)) ? Number(settings.temperature) : core_constants.DEFAULT_SETTINGS.temperature)),
         roomLifeAutoDaily: settings.roomLifeAutoDaily !== false,
         autoUpdates: core_autoUpdatePolicy.normalizeAutoUpdates(settings.autoUpdates),

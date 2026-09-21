@@ -74,6 +74,12 @@ export const MAX_INCREMENTAL_EXISTING_INDEX_ITEMS = 120;
 
 export const MAX_GENERATION_INPUT_TOKENS = 32000;
 
+// Bounds for the user-adjustable input budget. Values outside this range are refused
+// at save time so a mistyped number cannot run away; per-request cost scales with input.
+export const MIN_USER_INPUT_BUDGET_TOKENS = 8000;
+
+export const MAX_USER_INPUT_BUDGET_TOKENS = 128000;
+
 // Legacy per-feature sizing hint only; never clamp the user's output setting to it.
 export const MAX_GENERATION_OUTPUT_TOKENS = 60000;
 
@@ -180,6 +186,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     manualApiStreaming: false,
     chatReadRange: Object.freeze({ mode: 'recent', recent: 50, start: 1, end: 100, includeHidden: false }),
     maxTokens: 60000,
+    inputBudgetTokens: 32000,
     temperature: 0.9,
     roomLifeAutoDaily: true,
     useCurrentChatExternalMemory: true,

@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.8.106-tt-cg-r84.30-overflow-outlet-preflight",
+  "js": "index.js?heartbeat=0.8.107-tt-cg-r84.31-input-budget-setting",
   "author": "Toto",
-  "version": "0.8.106",
+  "version": "0.8.107",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.30：草稿容量满时新收到成果页面内保全并可随导出带出；建档保存失败按容量/空间/冲突分类提示；生成准备环节错误补码，未安全保存不发起请求。",
+  "description": "r84.31：输入预算开放为用户设置（默认32000不变，可调8000–128000，越界拒绝保存），拦截文案附带可行动建议；其余保护与Prompt不变。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

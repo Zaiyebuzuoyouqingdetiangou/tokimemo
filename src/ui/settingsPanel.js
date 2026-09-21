@@ -382,6 +382,7 @@ export function refreshGenerationSettingsUi() {
     const manualKey = panel.querySelector('[data-rmt-manual-api-key]');
     const manualModel = panel.querySelector('[data-rmt-manual-api-model]');
     const maxTokens = panel.querySelector('[data-rmt-api-max-tokens]');
+    const inputBudget = panel.querySelector('[data-rmt-api-input-budget]');
     const temperature = panel.querySelector('[data-rmt-api-temperature]');
     const roomDaily = panel.querySelector('[data-rmt-room-life-auto]');
     const manualStreaming = panel.querySelector('[data-rmt-manual-streaming]');
@@ -424,6 +425,7 @@ export function refreshGenerationSettingsUi() {
         manualKey.placeholder = settings.manualApiSecretRef ? '已加密保存到本机；填写可替换' : settings.manualApiKey ? '本页已有 Key；尚未确认持久保存' : 'API Key（可留空）';
     }
     if (maxTokens) maxTokens.value = String(settings.maxTokens);
+    if (inputBudget) inputBudget.value = String(settings.inputBudgetTokens);
     if (temperature) {
         temperature.value = String(settings.temperature);
         temperature.disabled = false;
@@ -624,6 +626,8 @@ export function mountSettings({ homeTarget = null } = {}) {
           </div>
           <div class="rmt-api-grid">
             <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1" step="1" placeholder="默认 60000"></label>
+            <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="8000" max="128000" step="1" placeholder="默认 32000"></label>
+            <small>输入越大单次请求费用越高；范围 8000–128000，留空为默认 32000。</small>
             <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
           </div>
           <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
@@ -935,6 +939,16 @@ export function mountSettings({ homeTarget = null } = {}) {
                 return;
             }
             core_settings.updatePluginSettings({ maxTokens: output_budget.normalizeOutputTokens(target.value) });
+            refreshGenerationSettingsUi();
+            return;
+        }
+        if (target.matches?.('[data-rmt-api-input-budget]')) {
+            if (target.validity?.badInput || (target.value.trim() && !output_budget.isValidInputBudgetTokens(target.value))) {
+                globalThis.toastr?.warning?.('输入预算请填写 8000–128000 的整数；原设置未改动。', '心迹回廊');
+                target.value = String(core_settings.getPluginSettings().inputBudgetTokens);
+                return;
+            }
+            core_settings.updatePluginSettings({ inputBudgetTokens: output_budget.normalizeInputBudgetTokens(target.value) });
             refreshGenerationSettingsUi();
             return;
         }

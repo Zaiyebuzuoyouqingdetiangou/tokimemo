@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 133
-// Source SHA-256: 68ecfff6291a565b08d8a147795a8c636bcdfa7fa8264a3a127e146957de4136
+// Source SHA-256: e68527fb0356bcd3a29dd9cd8a545260a0dec8e03a02db852412fb9aa617fa68
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -672,7 +672,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_ARCHIVE_CHECKPOINT: '建档检查点格式或容量异常，旧成果保留，未自动重建。',
     RMT_ARCHIVE_SOURCE_CAPACITY: '全部来源超过账本容量，未仅截取前半部分冒充完成。',
     RMT_ARCHIVE_RESULT_CAPACITY: '本段结果超过原校验容量，未截取结果或推进完成进度。',
-    RMT_INPUT_BUDGET: '本次输入超过安全预算，已在发送前拦截。',
+    RMT_INPUT_BUDGET: '本次输入超过安全预算，已在发送前拦截；请精简档案或减少世界书，或在设置中提高输入预算。',
     RMT_TOKEN_COUNT_TIMEOUT: '输入检查超时，本段未发送；旧内容保留，可重试。',
     RMT_TOKEN_COUNT_UNAVAILABLE: '本地计数暂不可用。',
     RMT_JSON_INVALID: '模型没有返回完整、可解析的 JSON；响应正文已隐藏。',
@@ -1006,6 +1006,12 @@ const MAX_INCREMENTAL_EXISTING_INDEX_ITEMS = 120;
 
 const MAX_GENERATION_INPUT_TOKENS = 32000;
 
+// Bounds for the user-adjustable input budget. Values outside this range are refused
+// at save time so a mistyped number cannot run away; per-request cost scales with input.
+const MIN_USER_INPUT_BUDGET_TOKENS = 8000;
+
+const MAX_USER_INPUT_BUDGET_TOKENS = 128000;
+
 // Legacy per-feature sizing hint only; never clamp the user's output setting to it.
 const MAX_GENERATION_OUTPUT_TOKENS = 60000;
 
@@ -1112,6 +1118,7 @@ const DEFAULT_SETTINGS = Object.freeze({
     manualApiStreaming: false,
     chatReadRange: Object.freeze({ mode: 'recent', recent: 50, start: 1, end: 100, includeHidden: false }),
     maxTokens: 60000,
+    inputBudgetTokens: 32000,
     temperature: 0.9,
     roomLifeAutoDaily: true,
     useCurrentChatExternalMemory: true,
@@ -1313,6 +1320,8 @@ __m_core_constants_js.DERIVED_INCREMENTAL_SCHEMA_VERSION = DERIVED_INCREMENTAL_S
 __m_core_constants_js.MAX_DERIVED_CONTENT_ITEMS = MAX_DERIVED_CONTENT_ITEMS;
 __m_core_constants_js.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS = MAX_INCREMENTAL_EXISTING_INDEX_ITEMS;
 __m_core_constants_js.MAX_GENERATION_INPUT_TOKENS = MAX_GENERATION_INPUT_TOKENS;
+__m_core_constants_js.MIN_USER_INPUT_BUDGET_TOKENS = MIN_USER_INPUT_BUDGET_TOKENS;
+__m_core_constants_js.MAX_USER_INPUT_BUDGET_TOKENS = MAX_USER_INPUT_BUDGET_TOKENS;
 __m_core_constants_js.MAX_GENERATION_OUTPUT_TOKENS = MAX_GENERATION_OUTPUT_TOKENS;
 __m_core_constants_js.MAX_GENERATION_OUTPUT_CHARS = MAX_GENERATION_OUTPUT_CHARS;
 __m_core_constants_js.MAX_GENERATION_INPUT_CHARS = MAX_GENERATION_INPUT_CHARS;
@@ -1411,9 +1420,24 @@ function isValidOutputTokens(value) {
 function normalizeOutputTokens(value) {
     return isValidOutputTokens(value) ? Number(value) : constants.DEFAULT_SETTINGS.maxTokens;
 }
+// The input budget is the user's requested input ceiling, not a model capability.
+// Missing/invalid persisted values fall back to the default 32,000.
+function isValidInputBudgetTokens(value) {
+    if (typeof value !== 'number' && typeof value !== 'string') return false;
+    if (typeof value === 'string' && !value.trim()) return false;
+    const count = Number(value);
+    return Number.isSafeInteger(count)
+        && count >= constants.MIN_USER_INPUT_BUDGET_TOKENS
+        && count <= constants.MAX_USER_INPUT_BUDGET_TOKENS;
+}
+function normalizeInputBudgetTokens(value) {
+    return isValidInputBudgetTokens(value) ? Number(value) : constants.MAX_GENERATION_INPUT_TOKENS;
+}
 
 __m_core_outputBudget_js.isValidOutputTokens = isValidOutputTokens;
 __m_core_outputBudget_js.normalizeOutputTokens = normalizeOutputTokens;
+__m_core_outputBudget_js.isValidInputBudgetTokens = isValidInputBudgetTokens;
+__m_core_outputBudget_js.normalizeInputBudgetTokens = normalizeInputBudgetTokens;
 }
 
 function __init_core_cgPromptFormat_js() {
@@ -3590,6 +3614,7 @@ function getPluginSettings(context = core_context.getContext()) {
         manualApiStreaming: settings.manualApiStreaming === true,
         chatReadRange: chat_read_range.normalizeChatReadRange(settings),
         maxTokens: output_budget.normalizeOutputTokens(settings.maxTokens),
+        inputBudgetTokens: output_budget.normalizeInputBudgetTokens(settings.inputBudgetTokens),
         temperature: Math.max(0, Math.min(2, Number.isFinite(Number(settings.temperature)) ? Number(settings.temperature) : core_constants.DEFAULT_SETTINGS.temperature)),
         roomLifeAutoDaily: settings.roomLifeAutoDaily !== false,
         autoUpdates: core_autoUpdatePolicy.normalizeAutoUpdates(settings.autoUpdates),
@@ -26203,6 +26228,7 @@ function refreshGenerationSettingsUi() {
     const manualKey = panel.querySelector('[data-rmt-manual-api-key]');
     const manualModel = panel.querySelector('[data-rmt-manual-api-model]');
     const maxTokens = panel.querySelector('[data-rmt-api-max-tokens]');
+    const inputBudget = panel.querySelector('[data-rmt-api-input-budget]');
     const temperature = panel.querySelector('[data-rmt-api-temperature]');
     const roomDaily = panel.querySelector('[data-rmt-room-life-auto]');
     const manualStreaming = panel.querySelector('[data-rmt-manual-streaming]');
@@ -26245,6 +26271,7 @@ function refreshGenerationSettingsUi() {
         manualKey.placeholder = settings.manualApiSecretRef ? '已加密保存到本机；填写可替换' : settings.manualApiKey ? '本页已有 Key；尚未确认持久保存' : 'API Key（可留空）';
     }
     if (maxTokens) maxTokens.value = String(settings.maxTokens);
+    if (inputBudget) inputBudget.value = String(settings.inputBudgetTokens);
     if (temperature) {
         temperature.value = String(settings.temperature);
         temperature.disabled = false;
@@ -26445,6 +26472,8 @@ function mountSettings({ homeTarget = null } = {}) {
           </div>
           <div class="rmt-api-grid">
             <label class="rmt-settings-field"><span>最大输出</span><input class="text_pole" data-rmt-api-max-tokens type="number" min="1" step="1" placeholder="默认 60000"></label>
+            <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="8000" max="128000" step="1" placeholder="默认 32000"></label>
+            <small>输入越大单次请求费用越高；范围 8000–128000，留空为默认 32000。</small>
             <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
           </div>
           <label class="rmt-settings-field"><span>生成禁用词</span><input class="text_pole" data-rmt-banned-generated-phrases type="text" placeholder="用逗号分隔，例如：老子"></label>
@@ -26756,6 +26785,16 @@ function mountSettings({ homeTarget = null } = {}) {
                 return;
             }
             core_settings.updatePluginSettings({ maxTokens: output_budget.normalizeOutputTokens(target.value) });
+            refreshGenerationSettingsUi();
+            return;
+        }
+        if (target.matches?.('[data-rmt-api-input-budget]')) {
+            if (target.validity?.badInput || (target.value.trim() && !output_budget.isValidInputBudgetTokens(target.value))) {
+                globalThis.toastr?.warning?.('输入预算请填写 8000–128000 的整数；原设置未改动。', '心迹回廊');
+                target.value = String(core_settings.getPluginSettings().inputBudgetTokens);
+                return;
+            }
+            core_settings.updatePluginSettings({ inputBudgetTokens: output_budget.normalizeInputBudgetTokens(target.value) });
             refreshGenerationSettingsUi();
             return;
         }
@@ -34132,6 +34171,10 @@ function countPromptTokens(context, prompt, signal, timeoutMs) {
 async function assertPromptBudget(context, prompt, { skipTokenCount = false, signal = null,
     tokenCountTimeoutMs = TOKEN_COUNT_TIMEOUT_MS, taskTrace = null } = {}) {
     if (signal?.aborted) throw core_requestCoordinator.createGenerationAbortError();
+    let budgetTokens = core_constants.MAX_GENERATION_INPUT_TOKENS;
+    try { budgetTokens = core_settings.getPluginSettings(context).inputBudgetTokens; }
+    catch { /* fixtures without a settings host keep the default */ }
+    budgetTokens = output_budget.normalizeInputBudgetTokens(budgetTokens);
     core_taskTrace.recordInput(taskTrace, prompt.length);
     if (prompt.length > core_constants.MAX_GENERATION_INPUT_CHARS) {
         throw core_text.safeUserError(`本次心迹回廊输入过大（${prompt.length.toLocaleString()} 字符），已在发送前拦截。请更新/精简档案或减少世界书内容。`, 'RMT_INPUT_BUDGET');
@@ -34146,8 +34189,8 @@ async function assertPromptBudget(context, prompt, { skipTokenCount = false, sig
                 throw core_text.safeUserError('本地计数暂不可用。', 'RMT_TOKEN_COUNT_UNAVAILABLE');
             }
             core_taskTrace.recordInput(taskTrace, prompt.length, tokens);
-            if (Number.isFinite(tokens) && tokens > core_constants.MAX_GENERATION_INPUT_TOKENS) {
-                throw core_text.safeUserError(`本次心迹回廊输入约 ${Math.round(tokens).toLocaleString()} tokens，超过 ${core_constants.MAX_GENERATION_INPUT_TOKENS.toLocaleString()} 的安全预算，已在发送前拦截。`, 'RMT_INPUT_BUDGET');
+            if (Number.isFinite(tokens) && tokens > budgetTokens) {
+                throw core_text.safeUserError(`本次心迹回廊输入约 ${Math.round(tokens).toLocaleString()} tokens，超过当前输入预算 ${budgetTokens.toLocaleString()}，已在发送前拦截。请更新/精简档案或减少世界书内容，或在心迹回廊设置中提高输入预算。`, 'RMT_INPUT_BUDGET');
             }
             core_taskTrace.markStage(taskTrace, 'token-count');
         } catch (error) {

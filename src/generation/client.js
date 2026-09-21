@@ -440,6 +440,10 @@ function countPromptTokens(context, prompt, signal, timeoutMs) {
 export async function assertPromptBudget(context, prompt, { skipTokenCount = false, signal = null,
     tokenCountTimeoutMs = TOKEN_COUNT_TIMEOUT_MS, taskTrace = null } = {}) {
     if (signal?.aborted) throw core_requestCoordinator.createGenerationAbortError();
+    let budgetTokens = core_constants.MAX_GENERATION_INPUT_TOKENS;
+    try { budgetTokens = core_settings.getPluginSettings(context).inputBudgetTokens; }
+    catch { /* fixtures without a settings host keep the default */ }
+    budgetTokens = output_budget.normalizeInputBudgetTokens(budgetTokens);
     core_taskTrace.recordInput(taskTrace, prompt.length);
     if (prompt.length > core_constants.MAX_GENERATION_INPUT_CHARS) {
         throw core_text.safeUserError(`本次心迹回廊输入过大（${prompt.length.toLocaleString()} 字符），已在发送前拦截。请更新/精简档案或减少世界书内容。`, 'RMT_INPUT_BUDGET');
@@ -454,8 +458,8 @@ export async function assertPromptBudget(context, prompt, { skipTokenCount = fal
                 throw core_text.safeUserError('本地计数暂不可用。', 'RMT_TOKEN_COUNT_UNAVAILABLE');
             }
             core_taskTrace.recordInput(taskTrace, prompt.length, tokens);
-            if (Number.isFinite(tokens) && tokens > core_constants.MAX_GENERATION_INPUT_TOKENS) {
-                throw core_text.safeUserError(`本次心迹回廊输入约 ${Math.round(tokens).toLocaleString()} tokens，超过 ${core_constants.MAX_GENERATION_INPUT_TOKENS.toLocaleString()} 的安全预算，已在发送前拦截。`, 'RMT_INPUT_BUDGET');
+            if (Number.isFinite(tokens) && tokens > budgetTokens) {
+                throw core_text.safeUserError(`本次心迹回廊输入约 ${Math.round(tokens).toLocaleString()} tokens，超过当前输入预算 ${budgetTokens.toLocaleString()}，已在发送前拦截。请更新/精简档案或减少世界书内容，或在心迹回廊设置中提高输入预算。`, 'RMT_INPUT_BUDGET');
             }
             core_taskTrace.markStage(taskTrace, 'token-count');
         } catch (error) {

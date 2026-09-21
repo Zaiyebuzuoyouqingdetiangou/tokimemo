@@ -1,5 +1,5 @@
-const VERSION = '0.8.106';
-const BUILD = '0.8.106-tt-cg-r84.30-overflow-outlet-preflight';
+const VERSION = '0.8.107';
+const BUILD = '0.8.107-tt-cg-r84.31-input-budget-setting';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

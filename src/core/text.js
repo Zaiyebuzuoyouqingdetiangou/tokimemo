@@ -150,7 +150,7 @@ const SAFE_ERROR_CODE_MESSAGES = Object.freeze({
     RMT_ARCHIVE_CHECKPOINT: '建档检查点格式或容量异常，旧成果保留，未自动重建。',
     RMT_ARCHIVE_SOURCE_CAPACITY: '全部来源超过账本容量，未仅截取前半部分冒充完成。',
     RMT_ARCHIVE_RESULT_CAPACITY: '本段结果超过原校验容量，未截取结果或推进完成进度。',
-    RMT_INPUT_BUDGET: '本次输入超过安全预算，已在发送前拦截。',
+    RMT_INPUT_BUDGET: '本次输入超过安全预算，已在发送前拦截；请精简档案或减少世界书，或在设置中提高输入预算。',
     RMT_TOKEN_COUNT_TIMEOUT: '输入检查超时，本段未发送；旧内容保留，可重试。',
     RMT_TOKEN_COUNT_UNAVAILABLE: '本地计数暂不可用。',
     RMT_JSON_INVALID: '模型没有返回完整、可解析的 JSON；响应正文已隐藏。',
