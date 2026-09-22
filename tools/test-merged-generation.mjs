@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { composeOutgoingGenerationPrompt } from '../src/generation/client.js';
 import {
-    assembleMergedPrompt, buildMergeTask, createPendingStore, planTogether, runMergedBatch, runMergedRepair, sharedBackgroundText,
+    MERGED_NOW, acquireGenerationScopes, assembleMergedPrompt, buildMergeTask, createPendingStore, estimateTokens, planTogether, runMergedBatch, runMergedRepair, sharedBackgroundText,
 } from '../src/generation/mergedGeneration.js';
 
 const memory = {
@@ -195,9 +196,87 @@ test('pages that depend on each other stay separate requests', () => {
     assert.equal(plan.solo.some(item => item.route === 'room'), true);
     assert.equal(plan.requestCount, 2);
     assert.equal(plan.summary.includes('预计请求 2 次'), true);
+    assert.equal(plan.summary.includes('这次还没接入合并'), true);
+    assert.equal(plan.summary.includes(MERGED_NOW), true);
+    assert.equal(plan.summary.includes('以后都不能'), false);
     const tight = planTogether(routes, { tasks: pageTasks, sharedBackground: shared, maxOutputTokens: 5000, inputBudgetTokens: 60000 });
     assert.equal(tight.requestCount > 1, true);
     assert.equal(tight.summary.includes('没有缩短'), true);
+});
+
+test('pending rows for other tasks stay when this batch records a gap', async () => {
+    const pending = createPendingStore(storage());
+    pending.write(memory.chatId, [{ route: 'room', mode: 'room', label: '他的房间', kind: 'invalid', reason: '上一轮留下的' }]);
+    const pageTasks = tasks().filter(task => task.route === 'cabinet');
+    const model = api(() => ({ modules: { cabinet: null } }));
+    await runMergedBatch({
+        prompt: 'unused', tasks: pageTasks, request: model.request, save: disk().save, pending, chatId: memory.chatId,
+    });
+    const rows = pending.read(memory.chatId);
+    assert.equal(rows.some(row => row.route === 'room' && row.reason === '上一轮留下的'), true);
+    assert.equal(rows.some(row => row.route === 'cabinet' && row.kind === 'invalid'), true);
+});
+
+test('a repair that checks out but fails to save becomes save-only', async () => {
+    const song = tasks().find(task => task.route === 'themeSong');
+    const pending = createPendingStore(storage());
+    pending.write(memory.chatId, [{ route: 'themeSong', mode: 'themeSong', label: song.label, kind: 'invalid', reason: '这一页没有返回' }]);
+    const model = api(() => modules().themeSong);
+    await assert.rejects(() => runMergedRepair({
+        item: pending.read(memory.chatId)[0], request: model.request,
+        save: async () => { throw new Error('磁盘忙'); },
+        pending, chatId: memory.chatId, singlePrompt: song.singlePrompt, accept: song.accept,
+    }));
+    assert.equal(model.count, 1);
+    const waiting = pending.read(memory.chatId);
+    assert.equal(waiting.length, 1);
+    assert.equal(waiting[0].kind, 'unsaved');
+    assert.equal(typeof waiting[0].session, 'object');
+    const again = api(() => { throw new Error('不应再请求'); });
+    const store = disk();
+    await runMergedRepair({
+        item: waiting[0], request: again.request, save: store.save, pending, chatId: memory.chatId,
+        singlePrompt: song.singlePrompt, accept: song.accept,
+    });
+    assert.equal(again.count, 0);
+    assert.equal(store.load('themeSong').songs.length, 1);
+    assert.equal(pending.read(memory.chatId).length, 0);
+});
+
+test('a failed generation-status check releases scopes already taken', () => {
+    const held = new Set();
+    assert.throws(() => acquireGenerationScopes(['cabinet', 'inbox'], {
+        running: mode => { if (mode === 'inbox') throw new Error('状态读失败'); return false; },
+        keyFor: mode => mode,
+        add: key => held.add(key),
+        remove: key => held.delete(key),
+    }), /状态读失败/);
+    assert.equal(held.size, 0);
+});
+
+test('input preview counts the final outgoing request', () => {
+    const pageTasks = tasks();
+    const shared = sharedBackgroundText(context, memory);
+    const measure = groupTasks => `ENVELOPE_MARKER\n${assembleMergedPrompt({ sharedBackground: shared, tasks: groupTasks })}`;
+    const plan = planTogether(routes, { tasks: pageTasks, sharedBackground: shared, maxOutputTokens: 60000, inputBudgetTokens: 60000, measure });
+    const full = measure(pageTasks);
+    assert.equal(plan.summary.includes(`输入约 ${estimateTokens(full)} tokens`), true);
+    assert.equal(estimateTokens(full) > estimateTokens(assembleMergedPrompt({ sharedBackground: shared, tasks: pageTasks })), true);
+    const outgoing = composeOutgoingGenerationPrompt(assembleMergedPrompt({ sharedBackground: shared, tasks: pageTasks.slice(0, 1) }), context, {}, 'ENVELOPE_MARKER');
+    assert.equal(outgoing.startsWith('ENVELOPE_MARKER\n'), true);
+    assert.equal(outgoing.includes('【输出】\n只输出一个 JSON 对象'), true);
+    assert.equal(outgoing.split('【最短合法例子】').length - 1, 1);
+});
+
+test('provider request count follows real sends', async () => {
+    let sends = 0;
+    const outcome = await runMergedBatch({
+        prompt: 'unused', tasks: tasks().filter(task => task.route === 'cabinet'),
+        request: async () => { sends += 2; return { modules: { cabinet: modules().cabinet } }; },
+        save: disk().save, pending: createPendingStore(storage()), chatId: memory.chatId,
+        sends: { read: () => sends },
+    });
+    assert.equal(outcome.providerRequests, 2);
 });
 
 test('merged generation does not launch the old generators together', async () => {

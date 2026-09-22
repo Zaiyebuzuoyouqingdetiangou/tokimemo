@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 145
-// Source SHA-256: acdb577db39d3badc91d4aeb6c12654ac3592ec1f16c1f7281010d4612796984
+// Source SHA-256: 835d7b773917957d8f01ebd2628ee6a3d22da03bec97b0aa4ba87cc2f071710b
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -38453,6 +38453,23 @@ async function generateConfiguredJson(prompt, options = {}) {
     }
 }
 
+// The text that will actually be sent: macros, tag filter, output seal, shape example,
+// shared envelope, creative supplement. Preview and the provider call both use this.
+function composeOutgoingGenerationPrompt(prompt, context, contentSettings = {}, contextEnvelope = '', { enforceGeneratedPhrasePolicy = false } = {}) {
+    const originalExpanded = core_text.expandSafeRoleMacros(prompt, context);
+    const expandedBody = core_contextTags.filterJsonPromptStrings(originalExpanded, core_contextTags.tagPolicyForSettings(contentSettings));
+    const sealed = /【输出】\n只输出一个 JSON 对象/.test(expandedBody)
+        ? expandedBody
+        : `${expandedBody}\n\n${generation_prompts.jsonOutputSeal()}`;
+    const shapeExample = expandedBody.includes('【最短合法例子】')
+        ? ''
+        : generation_jsonShapeExamples.jsonShapeExampleBlock(expandedBody);
+    const expanded = shapeExample ? `${sealed}\n\n${shapeExample}` : sealed;
+    const phrasePolicy = enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(contentSettings) : '';
+    const creativeSupplement = creative_supplement.creativeSupplementBlock(contentSettings);
+    return `${contextEnvelope}\n${expanded}${creativeSupplement}${phrasePolicy}`;
+}
+
 async function generateConfiguredJsonOperation(prompt, options = {}) {
     const taskTrace = options.taskTrace || null;
     core_taskTrace.beginRequestAttempt(taskTrace);
@@ -38467,23 +38484,23 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     let contentSettings = { ...settings, ...(savedContent || {}) };
     const advanced = advanced_generation.parseAdvancedGeneration(settings);
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
-    const originalExpanded = core_text.expandSafeRoleMacros(options.recoveryBasePrompt ?? prompt, context);
-    const expandedBody = core_contextTags.filterJsonPromptStrings(originalExpanded, core_contextTags.tagPolicyForSettings(contentSettings));
-    const sealed = options.recoveryContinuationPartial || /【输出】\n只输出一个 JSON 对象/.test(expandedBody)
-        ? expandedBody
-        : `${expandedBody}\n\n${generation_prompts.jsonOutputSeal()}`;
-    const shapeExample = options.recoveryContinuationPartial || expandedBody.includes('【最短合法例子】')
-        ? ''
-        : generation_jsonShapeExamples.jsonShapeExampleBlock(expandedBody);
-    const expanded = shapeExample ? `${sealed}\n\n${shapeExample}` : sealed;
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
         : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context) });
-    const phrasePolicy = options.enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(contentSettings) : '';
-    const creativeSupplement = creative_supplement.creativeSupplementBlock(contentSettings);
+    let actualPrompt;
+    if (typeof options.recoveryPreparedPrompt === 'string') actualPrompt = options.recoveryPreparedPrompt;
+    else if (options.recoveryContinuationPartial) {
+        const originalExpanded = core_text.expandSafeRoleMacros(options.recoveryBasePrompt ?? prompt, context);
+        const expandedBody = core_contextTags.filterJsonPromptStrings(originalExpanded, core_contextTags.tagPolicyForSettings(contentSettings));
+        const phrasePolicy = options.enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(contentSettings) : '';
+        actualPrompt = `${contextEnvelope}\n${expandedBody}${creative_supplement.creativeSupplementBlock(contentSettings)}${phrasePolicy}`;
+    } else {
+        actualPrompt = composeOutgoingGenerationPrompt(options.recoveryBasePrompt ?? prompt, context, contentSettings, contextEnvelope, {
+            enforceGeneratedPhrasePolicy: options.enforceGeneratedPhrasePolicy === true,
+        });
+    }
     const prepared = await generation_recovery.freezeRecoveryRequestPayload(options, {
-        actualPrompt: typeof options.recoveryPreparedPrompt === 'string' ? options.recoveryPreparedPrompt : `${contextEnvelope}
-${expanded}${creativeSupplement}${phrasePolicy}`,
+        actualPrompt,
         contentSettings: generationContentSettings(contentSettings),
     });
     contentSettings = { ...settings, ...prepared.contentSettings };
@@ -39629,6 +39646,7 @@ __m_generation_client_js.generatedPhrasePolicyText = generatedPhrasePolicyText;
 __m_generation_client_js.findBannedGeneratedPhrase = findBannedGeneratedPhrase;
 __m_generation_client_js.assertNoBannedGeneratedPhrase = assertNoBannedGeneratedPhrase;
 __m_generation_client_js.normalizeConnectionManagerError = normalizeConnectionManagerError;
+__m_generation_client_js.composeOutgoingGenerationPrompt = composeOutgoingGenerationPrompt;
 __m_generation_client_js.TOKEN_COUNT_TIMEOUT_MS = TOKEN_COUNT_TIMEOUT_MS;
 __m_generation_client_js.GENERATED_PHRASE_EVIDENCE_KEYS = GENERATED_PHRASE_EVIDENCE_KEYS;
 }
@@ -42439,8 +42457,10 @@ const core_settings = __m_core_settings_js;
 const core_text = __m_core_text_js;
 const song_contract = __m_core_themeSongContract_js;
 const archive_repository = __m_archive_repository_js;
+const core_taskTrace = __m_core_taskTrace_js;
 const generation_client = __m_generation_client_js;
 const generation_prompts = __m_generation_prompts_js;
+const generation_recovery = __m_generation_recovery_js;
 const modes_achievements = __m_modes_achievements_js;
 const modes_cabinet = __m_modes_cabinet_js;
 const modes_inbox = __m_modes_inbox_js;
@@ -42461,6 +42481,7 @@ const runtimeState = __m_core_state_js.state;
 const PENDING_KEY = 'heartbeatMemoriesMergedPendingV1';
 
 const MERGEABLE_ROUTES = Object.freeze(['cabinet', 'achievements', 'inbox', 'themeSong']);
+const MERGED_NOW = '目前接入合并的只有：两个人的陈列柜、成就库、你的邮箱、角色印象曲。其他页这次按单项发送，以后还可以继续接入。';
 
 const OUTPUT_RESERVE = Object.freeze({
     cabinet: 1500,
@@ -42468,26 +42489,7 @@ const OUTPUT_RESERVE = Object.freeze({
     inbox: 2000,
     themeSong: 4500,
 });
-
-const SOLO_REASON = Object.freeze({
-    album: '回忆相簿先写目录，再写共同回忆。',
-    adv: 'ADV 先写事件索引，再写正文。',
-    room: '他的房间还要单独补对白。',
-    phone: '私人终端要先有计划，再写各个应用。',
-    travel: '出行要逐站核对锚点和正文。',
-    heart: '春夏秋冬后一段依赖前一段。',
-    language: '基础语言和萤火虫、日常一格写在同一份互动存档里。',
-    fireflies: '萤火虫和基础语言、日常一格写在同一份互动存档里。',
-    strips: '日常一格和基础语言、萤火虫写在同一份互动存档里。',
-    postending: '后日谈和春夏秋冬写在同一份互动存档里。',
-    relations: '人际庭园是判断页，温度上限和创作页不同。',
-    ending: '结局先写路线目录，再写正文。',
-    butterfly: '蝴蝶效应后一段依赖前一段。',
-    pastLives: '前世今生后一段依赖前一段。',
-    calendar: '日历要按故事日期逐条核对。',
-    items: '他的物品依赖已经生成的房间。',
-    timeEcho: '时空回响后一段依赖前一段。',
-});
+const NOT_ADAPTED = '这次还没接入合并，先按单项发送。';
 
 function estimateTokens(text) {
     return Math.max(1, Math.ceil(String(text || '').length / 3));
@@ -42600,7 +42602,12 @@ function buildMergeTask(route, context, memoryBank, previous = null, date = new 
     return null;
 }
 
-function packRoutes(routes, tasksByRoute, sharedBackground, maxOutputTokens, inputBudgetTokens) {
+function groupPrompt(sharedBackground, routes, tasksByRoute, measure) {
+    const groupTasks = routes.map(route => tasksByRoute.get(route));
+    return typeof measure === 'function' ? measure(groupTasks) : assembleMergedPrompt({ sharedBackground, tasks: groupTasks });
+}
+
+function packRoutes(routes, tasksByRoute, sharedBackground, maxOutputTokens, inputBudgetTokens, measure) {
     const notes = [];
     const outputGroups = [];
     let current = [];
@@ -42632,7 +42639,7 @@ function packRoutes(routes, tasksByRoute, sharedBackground, maxOutputTokens, inp
         let batch = [];
         for (const route of outputGroup) {
             const trial = batch.concat(route);
-            const prompt = assembleMergedPrompt({ sharedBackground, tasks: trial.map(item => tasksByRoute.get(item)) });
+            const prompt = groupPrompt(sharedBackground, trial, tasksByRoute, measure);
             if (batch.length && estimateTokens(prompt) > inputBudgetTokens) {
                 groups.push(batch);
                 notes.push('合并后的输入超过你设置的输入预算，多出来的页另发一次，没有裁掉背景或正文要求。');
@@ -42644,32 +42651,31 @@ function packRoutes(routes, tasksByRoute, sharedBackground, maxOutputTokens, inp
     return { groups, notes };
 }
 
-function planTogether(selectedRoutes, { tasks = [], sharedBackground = '', maxOutputTokens = 60000, inputBudgetTokens = 60000 } = {}) {
+function planTogether(selectedRoutes, { tasks = [], sharedBackground = '', maxOutputTokens = 60000, inputBudgetTokens = 60000, measure = null } = {}) {
     const order = Object.keys(ui_workspaceState.WORKSPACE_ROUTES);
     const routes = [...selectedRoutes].filter(route => ui_workspaceState.WORKSPACE_ROUTES[route]).sort((a, b) => order.indexOf(a) - order.indexOf(b));
     const tasksByRoute = new Map(tasks.map(task => [task.route, task]));
     const solo = [];
     const mergeable = [];
     for (const route of routes) {
-        if (SOLO_REASON[route]) solo.push({ route, label: routeTitle(route), reason: SOLO_REASON[route] });
-        else if (!tasksByRoute.has(route)) solo.push({ route, label: routeTitle(route), reason: '这一页现在不能和别的页放进同一次回复。' });
+        if (!MERGEABLE_ROUTES.includes(route)) solo.push({ route, label: routeTitle(route), reason: NOT_ADAPTED });
+        else if (!tasksByRoute.has(route)) solo.push({ route, label: routeTitle(route), reason: '这一页这次没能接进合并，先按单项发送。' });
         else mergeable.push(route);
     }
-    const packed = mergeable.length ? packRoutes(mergeable, tasksByRoute, sharedBackground, maxOutputTokens, inputBudgetTokens) : { groups: [], notes: [] };
+    const packed = mergeable.length ? packRoutes(mergeable, tasksByRoute, sharedBackground, maxOutputTokens, inputBudgetTokens, measure) : { groups: [], notes: [] };
     const mergedGroups = packed.groups.filter(group => group.length >= 2);
     const singleRoutes = packed.groups.filter(group => group.length < 2).flat();
     for (const route of singleRoutes) {
-        const task = tasksByRoute.get(route);
-        const alone = estimateTokens(assembleMergedPrompt({ sharedBackground, tasks: [task] }));
+        const alone = estimateTokens(groupPrompt(sharedBackground, [route], tasksByRoute, measure));
         solo.push({
             route, label: routeTitle(route),
             reason: alone > inputBudgetTokens ? '这一项单独发送也会按现有输入预算拦截，不会裁短内容。' : '这一项单独发送。',
         });
     }
     const requestCount = mergedGroups.length + solo.length;
-    const lines = [`预计请求 ${requestCount} 次。最大输出仍是你设置的 ${maxOutputTokens}，这几页共用这一次回复的额度。`];
+    const lines = [MERGED_NOW, `预计请求 ${requestCount} 次。最大输出仍是你设置的 ${maxOutputTokens}，这几页共用这一次回复的额度。`];
     mergedGroups.forEach((group, index) => {
-        const prompt = assembleMergedPrompt({ sharedBackground, tasks: group.map(route => tasksByRoute.get(route)) });
+        const prompt = groupPrompt(sharedBackground, group, tasksByRoute, measure);
         lines.push(`第 ${index + 1} 次：${group.map(routeTitle).join('、')}。输入约 ${estimateTokens(prompt)} tokens（上限 ${inputBudgetTokens}）。`);
     });
     for (const item of solo) lines.push(`单独发送：${item.label}。${item.reason}`);
@@ -42702,6 +42708,19 @@ function createPendingStore(storage = globalThis.localStorage) {
             data[chatId] = items;
             writeAll(data);
         },
+        replaceRoutes(chatId, routes, items) {
+            const replacing = new Set(routes);
+            const data = readAll();
+            const kept = (Array.isArray(data[chatId]) ? data[chatId] : []).filter(item => !replacing.has(item.route));
+            data[chatId] = kept.concat(items);
+            writeAll(data);
+        },
+        upsert(chatId, item) {
+            const data = readAll();
+            const kept = (Array.isArray(data[chatId]) ? data[chatId] : []).filter(row => row.route !== item.route);
+            data[chatId] = kept.concat([item]);
+            writeAll(data);
+        },
         remove(chatId, route) {
             const data = readAll();
             data[chatId] = (Array.isArray(data[chatId]) ? data[chatId] : []).filter(item => item.route !== route);
@@ -42721,7 +42740,8 @@ async function saveWithRetry(save, mode, session) {
     throw lastError || new Error('保存没有写上');
 }
 
-async function runMergedBatch({ prompt, tasks, request, save, pending, chatId }) {
+async function runMergedBatch({ prompt, tasks, request, save, pending, chatId, sends = null }) {
+    const before = typeof sends?.read === 'function' ? Number(sends.read()) || 0 : null;
     const raw = await request(prompt);
     const body = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (!body || typeof body.modules !== 'object' || Array.isArray(body.modules)) {
@@ -42750,8 +42770,9 @@ async function runMergedBatch({ prompt, tasks, request, save, pending, chatId })
             failed.push({ route: task.route, mode: task.mode, label: task.label, kind: 'unsaved', reason: core_text.safeErrorSummary(error), session });
         }
     }
-    if (pending && chatId) pending.write(chatId, failed);
-    return { saved, failed, providerRequests: 1 };
+    if (pending && chatId) pending.replaceRoutes(chatId, tasks.map(task => task.route), failed);
+    const providerRequests = before == null ? 1 : Math.max(0, (Number(sends.read()) || 0) - before);
+    return { saved, failed, providerRequests };
 }
 
 async function runMergedRepair({ item, request, save, pending, chatId, singlePrompt, accept }) {
@@ -42764,9 +42785,14 @@ async function runMergedRepair({ item, request, save, pending, chatId, singlePro
     const raw = await request(singlePrompt);
     const body = typeof raw === 'string' ? JSON.parse(raw) : raw;
     const session = accept(body);
-    await saveWithRetry(save, item.mode, session);
+    try {
+        await saveWithRetry(save, item.mode, session);
+    } catch (error) {
+        pending?.upsert(chatId, { ...item, kind: 'unsaved', session, reason: core_text.safeErrorSummary(error) });
+        throw error;
+    }
     pending?.remove(chatId, item.route);
-    return { requested: true };
+    return { requested: true, saved: true };
 }
 
 function previousSession(mode, context, memoryBank) {
@@ -42774,17 +42800,98 @@ function previousSession(mode, context, memoryBank) {
     catch { return null; }
 }
 
-function holdModes(context, modes) {
+function acquireGenerationScopes(modes, { running, keyFor, add, remove }) {
     const keys = [];
-    for (const mode of modes) {
-        if (core_requestCoordinator.isModeGenerating(mode, context)) {
-            throw core_text.safeUserError(`${core_constants.MODE_LABEL[mode] || mode}正在生成，等它结束再一起生成。`, 'RMT_LOGICAL_TASK_BUSY');
+    try {
+        for (const mode of modes) {
+            if (running(mode)) {
+                throw core_text.safeUserError(`${core_constants.MODE_LABEL[mode] || mode}正在生成，等它结束再一起生成。`, 'RMT_LOGICAL_TASK_BUSY');
+            }
+            const key = keyFor(mode);
+            add(key);
+            keys.push(key);
         }
-        const key = core_requestCoordinator.generationTaskKeyForMode(mode, context);
-        runtimeState.activeModeBuildScopes.add(key);
-        keys.push(key);
+    } catch (error) {
+        for (const key of keys) remove(key);
+        throw error;
     }
-    return () => { for (const key of keys) runtimeState.activeModeBuildScopes.delete(key); };
+    let released = false;
+    return () => {
+        if (released) return;
+        released = true;
+        for (const key of keys) remove(key);
+    };
+}
+
+function holdModes(context, modes) {
+    const scopes = runtimeState.activeModeBuildScopes;
+    return acquireGenerationScopes(modes, {
+        running: mode => core_requestCoordinator.isModeGenerating(mode, context),
+        keyFor: mode => core_requestCoordinator.generationTaskKeyForMode(mode, context),
+        add: key => scopes.add(key),
+        remove: key => scopes.delete(key),
+    });
+}
+
+function mergedOrigin(context, memoryBank) {
+    const origin = core_context.captureTaskOrigin(context, memoryBank.archiveRevision);
+    origin.chatId = core_context.comparableChatId(memoryBank.chatId);
+    return origin;
+}
+
+async function clearFreshJournals(context, memoryBank, opened) {
+    for (const row of opened) {
+        if (!row.fresh) continue;
+        try { await core_cache.saveGenerationRecovery(context, memoryBank, row.mode, null, row.origin); }
+        catch { /* A draft that could not be cleared stays; nothing new was sent. */ }
+        generation_recovery.detachGenerationRecovery(row.origin);
+    }
+}
+
+async function openMergedRecoveries(context, memoryBank, modes, envelope) {
+    const logical = core_requestCoordinator.beginLogicalGenerationTask({
+        kind: 'mode', mode: modes[0], pageIds: [...modes], context,
+        taskKey: `merged:${core_context.comparableChatId(memoryBank.chatId)}:${modes.join(',')}`,
+        label: `一起生成：${modes.map(mode => core_constants.MODE_LABEL[mode] || mode).join('、')}`,
+    });
+    const opened = [];
+    try {
+        for (const mode of modes) {
+            const origin = mergedOrigin(context, memoryBank);
+            core_requestCoordinator.bindLogicalGenerationTask(logical, origin);
+            const handle = await generation_client.beginModeRecovery(mode, context, memoryBank, origin, {
+                operation: { kind: 'mode', mode },
+                contentInputs: { mergedWith: modes },
+            });
+            opened.push({ mode, origin, fresh: handle?.continueRequested !== true });
+        }
+        await generation_recovery.frozenGenerationInput(opened[0].origin, 'context:merged', async () => envelope);
+        return { logical, opened };
+    } catch (error) {
+        await clearFreshJournals(context, memoryBank, opened);
+        for (const row of opened) generation_recovery.detachGenerationRecovery(row.origin);
+        core_requestCoordinator.finishLogicalGenerationTask(logical, { status: 'failed', error });
+        throw error;
+    }
+}
+
+async function dropFailedJournals(context, memoryBank, opened, failed, primaryMode) {
+    const modes = new Set(failed.map(item => item.mode));
+    for (const row of opened) {
+        if (!modes.has(row.mode)) continue;
+        if (row.mode !== primaryMode && !row.fresh) continue;
+        try { await core_cache.saveGenerationRecovery(context, memoryBank, row.mode, null, row.origin); }
+        catch { /* The pending row already keeps this page. */ }
+    }
+}
+
+function saveMergedSession(context, memoryBank, origin) {
+    return async (mode, session) => {
+        session.chatId = memoryBank.chatId;
+        session.archiveRevision = memoryBank.archiveRevision;
+        const committed = await core_cache.commitSession(mode, session, memoryBank.chatId, origin);
+        if (!committed) throw core_text.safeUserError('这一页的结果已经通过校验，但还没有写上。', 'RMT_MERGED_SAVE');
+    };
 }
 
 async function startTogether(routes, { confirm = null, date = new Date() } = {}) {
@@ -42797,50 +42904,81 @@ async function startTogether(routes, { confirm = null, date = new Date() } = {})
     const tasks = [];
     const blocked = [];
     for (const route of routes) {
-        if (SOLO_REASON[route] || !MERGEABLE_ROUTES.includes(route)) continue;
+        if (!MERGEABLE_ROUTES.includes(route)) continue;
         try { tasks.push(buildMergeTask(route, context, memoryBank, previousSession(ui_workspaceState.WORKSPACE_ROUTES[route].mode, context, memoryBank), date)); }
         catch (error) { blocked.push({ route, label: routeTitle(route), reason: core_text.safeErrorSummary(error) }); }
     }
-    const plan = planTogether(routes, { tasks, sharedBackground, maxOutputTokens, inputBudgetTokens });
-    for (const item of blocked) if (!plan.solo.some(row => row.route === item.route)) plan.solo.push(item);
+    const previewModes = [...new Set(tasks.map(task => task.mode))];
+    const previewTerms = [...new Set(previewModes.flatMap(mode => generation_client.generationWorldInfoScanTerms(mode, context)))];
+    const envelope = previewModes.length ? await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: previewTerms }) : '';
+    const measure = groupTasks => generation_client.composeOutgoingGenerationPrompt(
+        assembleMergedPrompt({ sharedBackground, tasks: groupTasks }), context, settings, envelope);
+    const plan = planTogether(routes, { tasks, sharedBackground, maxOutputTokens, inputBudgetTokens, measure });
+    for (const item of blocked) {
+        const existing = plan.solo.find(row => row.route === item.route);
+        if (existing) {
+            plan.summary = plan.summary.replace(`${existing.label}。${existing.reason}`, `${existing.label}。${item.reason}`);
+            existing.reason = item.reason;
+        } else plan.solo.push(item);
+    }
     plan.requestCount = plan.mergedGroups.length + plan.solo.length;
     if (!plan.mergedGroups.length && plan.solo.length) {
-        plan.summary = `这几项不能放进同一次回复。预计请求 ${plan.solo.length} 次，仍按原来的单项生成逐项发送。\n${plan.solo.map(item => `单独发送：${item.label}。${item.reason}`).join('\n')}`;
-    } else if (blocked.length) {
-        plan.summary += `\n${blocked.map(item => `单独发送：${item.label}。${item.reason}`).join('\n')}`;
+        plan.summary = `${MERGED_NOW}\n这几项这次还没接入合并。预计请求 ${plan.solo.length} 次，按原来的单项生成逐项发送。\n${plan.solo.map(item => `单独发送：${item.label}。${item.reason}`).join('\n')}`;
     }
     const approved = typeof confirm === 'function' ? confirm(plan) : ui_overlay.confirmExplicitAction('一起生成', plan.summary);
     if (!approved) return { cancelled: true, plan, providerRequests: 0 };
     const modes = plan.mergedGroups.flat().map(route => ui_workspaceState.WORKSPACE_ROUTES[route].mode);
-    const release = holdModes(context, modes);
     const pending = createPendingStore();
+    const chatId = core_context.comparableChatId(memoryBank.chatId);
+    if (!modes.length) return { cancelled: false, plan, providerRequests: 0, soloRoutes: plan.solo.map(item => item.route), pending: pending.read(chatId) };
+    const release = holdModes(context, modes);
+    const trace = core_taskTrace.startTaskTrace('', modes[0]);
     let providerRequests = 0;
+    let failure = null;
+    let openedTask = null;
     try {
-        const terms = [...new Set(modes.flatMap(mode => generation_client.generationWorldInfoScanTerms(mode, context)))];
-        const envelope = modes.length ? await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: terms }) : '';
+        openedTask = await openMergedRecoveries(context, memoryBank, modes, envelope);
         for (const group of plan.mergedGroups) {
             const groupTasks = group.map(route => tasks.find(task => task.route === route));
+            const primary = openedTask.opened.find(row => row.mode === groupTasks[0].mode);
             const prompt = assembleMergedPrompt({ sharedBackground, tasks: groupTasks });
-            const outcome = await runMergedBatch({
-                prompt, tasks: groupTasks, pending, chatId: core_context.comparableChatId(memoryBank.chatId),
-                request: text => generation_client.requestValidatedSegment(text, '一起生成 · 同一次回复交回各页…', {
-                    context, contextEnvelope: envelope, origin: null, mode: groupTasks[0].mode, background: true,
-                }, value => {
-                    if (!value || typeof value.modules !== 'object' || Array.isArray(value.modules)) throw core_text.safeUserError('一起生成没有返回各页结果。', 'RMT_MERGED_SHAPE');
-                    return value;
-                }),
-                save: async (mode, session) => {
-                    session.chatId = memoryBank.chatId;
-                    session.archiveRevision = memoryBank.archiveRevision;
-                    const origin = { ...core_context.captureTaskOrigin(context, memoryBank.archiveRevision), chatId: core_context.comparableChatId(memoryBank.chatId) };
-                    const committed = await core_cache.commitSession(mode, session, memoryBank.chatId, origin);
-                    if (!committed) throw core_text.safeUserError('这一页的结果已经通过校验，但还没有写上。', 'RMT_MERGED_SAVE');
-                },
-            });
-            providerRequests += outcome.providerRequests;
+            const before = Number(trace.providerRequests) || 0;
+            try {
+                const outcome = await runMergedBatch({
+                    prompt, tasks: groupTasks, pending, chatId, sends: { read: () => trace.providerRequests },
+                    request: text => generation_client.requestValidatedSegment(text, '一起生成 · 同一次回复交回各页…', {
+                        context, contextEnvelope: envelope, origin: primary.origin, mode: primary.mode, background: true, taskTrace: trace,
+                        taskKey: core_requestCoordinator.generationTaskKeyForMode(primary.mode, context),
+                    }, value => {
+                        if (!value || typeof value.modules !== 'object' || Array.isArray(value.modules)) throw core_text.safeUserError('一起生成没有返回各页结果。', 'RMT_MERGED_SHAPE');
+                        return value;
+                    }),
+                    save: async (mode, session) => saveMergedSession(context, memoryBank, openedTask.opened.find(row => row.mode === mode).origin)(mode, session),
+                });
+                providerRequests += outcome.providerRequests;
+                await dropFailedJournals(context, memoryBank, openedTask.opened.filter(row => groupTasks.some(task => task.mode === row.mode)), outcome.failed, primary.mode);
+            } catch (error) {
+                providerRequests += Math.max(0, (Number(trace.providerRequests) || 0) - before);
+                const laterModes = new Set(plan.mergedGroups.slice(plan.mergedGroups.indexOf(group) + 1).flat()
+                    .map(route => ui_workspaceState.WORKSPACE_ROUTES[route].mode));
+                const groupModes = new Set(groupTasks.map(task => task.mode));
+                await clearFreshJournals(context, memoryBank, openedTask.opened.filter(row => row.mode !== primary.mode
+                    && (groupModes.has(row.mode) || laterModes.has(row.mode))));
+                throw error;
+            }
         }
-    } finally { release(); }
-    return { cancelled: false, plan, providerRequests, soloRoutes: plan.solo.map(item => item.route), pending: pending.read(core_context.comparableChatId(memoryBank.chatId)) };
+    } catch (error) {
+        failure = error;
+        throw error;
+    } finally {
+        if (openedTask) {
+            for (const row of openedTask.opened) generation_recovery.detachGenerationRecovery(row.origin);
+            core_requestCoordinator.finishLogicalGenerationTask(openedTask.logical, failure ? { status: failure?.name === 'AbortError' ? 'cancelled' : 'failed', error: failure } : { status: 'settled' });
+        }
+        core_taskTrace.endTaskTrace(trace, failure ? (failure?.name === 'AbortError' ? 'cancelled' : 'failed') : 'ok', failure);
+        release();
+    }
+    return { cancelled: false, plan, providerRequests, soloRoutes: plan.solo.map(item => item.route), pending: pending.read(chatId) };
 }
 
 async function repairPending(route) {
@@ -42850,24 +42988,50 @@ async function repairPending(route) {
     const chatId = core_context.comparableChatId(memoryBank.chatId);
     const item = pending.read(chatId).find(row => row.route === route);
     if (!item) return { requested: false };
-    const save = async (mode, session) => {
-        session.chatId = memoryBank.chatId;
-        session.archiveRevision = memoryBank.archiveRevision;
-        const origin = { ...core_context.captureTaskOrigin(context, memoryBank.archiveRevision), chatId: core_context.comparableChatId(memoryBank.chatId) };
-        const committed = await core_cache.commitSession(mode, session, memoryBank.chatId, origin);
-        if (!committed) throw core_text.safeUserError('这一页的结果已经通过校验，但还没有写上。', 'RMT_MERGED_SAVE');
-    };
-    if (item.kind === 'unsaved') return runMergedRepair({ item, save, pending, chatId });
-    const task = buildMergeTask(route, context, memoryBank, previousSession(item.mode, context, memoryBank));
-    const release = holdModes(context, [task.mode]);
+    const release = holdModes(context, [item.mode]);
+    const origin = mergedOrigin(context, memoryBank);
+    const trace = core_taskTrace.startTaskTrace('', item.mode);
+    let logical = null;
+    let failure = null;
     try {
-        return await runMergedRepair({
-            item, save, pending, chatId, singlePrompt: task.singlePrompt, accept: task.accept,
-            request: text => generation_client.requestValidatedSegment(text, `一起生成 · 只补${task.label}…`, {
-                context, origin: null, mode: task.mode, background: true,
-            }, value => value),
+        logical = core_requestCoordinator.beginLogicalGenerationTask({
+            kind: 'mode', mode: item.mode, context, origin,
+            taskKey: `merged-repair:${chatId}:${route}`,
+            label: item.label || route,
         });
-    } finally { release(); }
+        const save = saveMergedSession(context, memoryBank, origin);
+        if (item.kind === 'unsaved') return await runMergedRepair({ item, save, pending, chatId });
+        await generation_client.beginModeRecovery(item.mode, context, memoryBank, origin, {
+            operation: { kind: 'mode', mode: item.mode },
+        });
+        const task = buildMergeTask(route, context, memoryBank, previousSession(item.mode, context, memoryBank));
+        const before = Number(trace.providerRequests) || 0;
+        try {
+            const outcome = await runMergedRepair({
+                item, save, pending, chatId, singlePrompt: task.singlePrompt, accept: task.accept,
+                request: text => generation_client.requestValidatedSegment(text, `一起生成 · 只补${task.label}…`, {
+                    context, origin, mode: task.mode, background: true, taskTrace: trace,
+                    taskKey: core_requestCoordinator.generationTaskKeyForMode(task.mode, context),
+                }, value => value),
+            });
+            return { ...outcome, providerRequests: Math.max(0, (Number(trace.providerRequests) || 0) - before) };
+        } catch (error) {
+            const current = pending.read(chatId).find(row => row.route === route);
+            if (current?.kind === 'unsaved') {
+                try { await core_cache.saveGenerationRecovery(context, memoryBank, item.mode, null, origin); }
+                catch { /* The save-only row already holds the checked session. */ }
+            }
+            throw error;
+        }
+    } catch (error) {
+        failure = error;
+        throw error;
+    } finally {
+        generation_recovery.detachGenerationRecovery(origin);
+        if (logical) core_requestCoordinator.finishLogicalGenerationTask(logical, failure ? { status: failure?.name === 'AbortError' ? 'cancelled' : 'failed', error: failure } : { status: 'settled' });
+        core_taskTrace.endTaskTrace(trace, failure ? (failure?.name === 'AbortError' ? 'cancelled' : 'failed') : 'ok', failure);
+        release();
+    }
 }
 
 function pendingNote(chatId, store = createPendingStore()) {
@@ -42887,9 +43051,10 @@ __m_generation_mergedGeneration_js.assembleMergedPrompt = assembleMergedPrompt;
 __m_generation_mergedGeneration_js.buildMergeTask = buildMergeTask;
 __m_generation_mergedGeneration_js.planTogether = planTogether;
 __m_generation_mergedGeneration_js.createPendingStore = createPendingStore;
+__m_generation_mergedGeneration_js.acquireGenerationScopes = acquireGenerationScopes;
 __m_generation_mergedGeneration_js.pendingNote = pendingNote;
 __m_generation_mergedGeneration_js.MERGEABLE_ROUTES = MERGEABLE_ROUTES;
-__m_generation_mergedGeneration_js.SOLO_REASON = SOLO_REASON;
+__m_generation_mergedGeneration_js.MERGED_NOW = MERGED_NOW;
 }
 
 function __init_ui_taskCenter_js() {
@@ -52808,7 +52973,7 @@ function workspaceCatalogueHtml(portals = [], snapshot = null, { ready: archiveR
             }
         } catch { /* Pending notes appear after the archive can be read. */ }
     }
-    const queueBar = canQueue ? `<div class="rmt-queue-bar"><button type="button" class="rmt-btn" data-rmt-action="queue-selected">把勾选的项目排进任务中心</button><button type="button" class="rmt-btn" data-rmt-action="generate-together">一起生成</button><small>勾选两项以上可以一起生成：先看分成几次请求。单项生成仍按目录顺序，一次一项。</small></div>${pendingBar}` : '';
+    const queueBar = canQueue ? `<div class="rmt-queue-bar"><button type="button" class="rmt-btn" data-rmt-action="queue-selected">把勾选的项目排进任务中心</button><button type="button" class="rmt-btn" data-rmt-action="generate-together">一起生成</button><small>目前能一起生成的是陈列柜、成就库、邮箱和印象曲。勾选两项以上会先看分成几次请求。其他页这次仍按单项发送。单项生成仍按目录顺序，一次一项。</small></div>${pendingBar}` : '';
     return `<section class="rmt-workspace-catalogue"><header class="rmt-workspace-section-head"><div><h2>内容</h2><p>选择你想看的那一页</p></div><div class="rmt-layout-switch" aria-label="目录显示方式">${[['cards','卡片'],['list','列表']].map(([k,t])=>`<button type="button" data-rmt-workspace-layout="${k}" aria-pressed="${ui_workspaceState.workspace.layout === k}" class="${ui_workspaceState.workspace.layout === k ? 'active' : ''}">${t}</button>`).join('')}</div></header><nav class="rmt-workspace-groups" aria-label="内容分组">${GROUPS.map(([k,t])=>`<button type="button" data-rmt-workspace-group="${k}" class="${ui_workspaceState.workspace.group === k ? 'active' : ''}" aria-current="${ui_workspaceState.workspace.group === k ? 'page' : 'false'}">${t}</button>`).join('')}</nav>${queueBar}<div class="rmt-archive-portals rmt-workspace-portals" data-rmt-layout="${ui_workspaceState.workspace.layout}">${cards}</div></section>`;
 }
 // Move existing validated markup, never replace the underlying archive or task objects.

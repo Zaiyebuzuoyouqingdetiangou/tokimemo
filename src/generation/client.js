@@ -823,6 +823,23 @@ export async function generateConfiguredJson(prompt, options = {}) {
     }
 }
 
+// The text that will actually be sent: macros, tag filter, output seal, shape example,
+// shared envelope, creative supplement. Preview and the provider call both use this.
+export function composeOutgoingGenerationPrompt(prompt, context, contentSettings = {}, contextEnvelope = '', { enforceGeneratedPhrasePolicy = false } = {}) {
+    const originalExpanded = core_text.expandSafeRoleMacros(prompt, context);
+    const expandedBody = core_contextTags.filterJsonPromptStrings(originalExpanded, core_contextTags.tagPolicyForSettings(contentSettings));
+    const sealed = /【输出】\n只输出一个 JSON 对象/.test(expandedBody)
+        ? expandedBody
+        : `${expandedBody}\n\n${generation_prompts.jsonOutputSeal()}`;
+    const shapeExample = expandedBody.includes('【最短合法例子】')
+        ? ''
+        : generation_jsonShapeExamples.jsonShapeExampleBlock(expandedBody);
+    const expanded = shapeExample ? `${sealed}\n\n${shapeExample}` : sealed;
+    const phrasePolicy = enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(contentSettings) : '';
+    const creativeSupplement = creative_supplement.creativeSupplementBlock(contentSettings);
+    return `${contextEnvelope}\n${expanded}${creativeSupplement}${phrasePolicy}`;
+}
+
 async function generateConfiguredJsonOperation(prompt, options = {}) {
     const taskTrace = options.taskTrace || null;
     core_taskTrace.beginRequestAttempt(taskTrace);
@@ -837,23 +854,23 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     let contentSettings = { ...settings, ...(savedContent || {}) };
     const advanced = advanced_generation.parseAdvancedGeneration(settings);
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
-    const originalExpanded = core_text.expandSafeRoleMacros(options.recoveryBasePrompt ?? prompt, context);
-    const expandedBody = core_contextTags.filterJsonPromptStrings(originalExpanded, core_contextTags.tagPolicyForSettings(contentSettings));
-    const sealed = options.recoveryContinuationPartial || /【输出】\n只输出一个 JSON 对象/.test(expandedBody)
-        ? expandedBody
-        : `${expandedBody}\n\n${generation_prompts.jsonOutputSeal()}`;
-    const shapeExample = options.recoveryContinuationPartial || expandedBody.includes('【最短合法例子】')
-        ? ''
-        : generation_jsonShapeExamples.jsonShapeExampleBlock(expandedBody);
-    const expanded = shapeExample ? `${sealed}\n\n${shapeExample}` : sealed;
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
         : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context) });
-    const phrasePolicy = options.enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(contentSettings) : '';
-    const creativeSupplement = creative_supplement.creativeSupplementBlock(contentSettings);
+    let actualPrompt;
+    if (typeof options.recoveryPreparedPrompt === 'string') actualPrompt = options.recoveryPreparedPrompt;
+    else if (options.recoveryContinuationPartial) {
+        const originalExpanded = core_text.expandSafeRoleMacros(options.recoveryBasePrompt ?? prompt, context);
+        const expandedBody = core_contextTags.filterJsonPromptStrings(originalExpanded, core_contextTags.tagPolicyForSettings(contentSettings));
+        const phrasePolicy = options.enforceGeneratedPhrasePolicy === true ? generatedPhrasePolicyText(contentSettings) : '';
+        actualPrompt = `${contextEnvelope}\n${expandedBody}${creative_supplement.creativeSupplementBlock(contentSettings)}${phrasePolicy}`;
+    } else {
+        actualPrompt = composeOutgoingGenerationPrompt(options.recoveryBasePrompt ?? prompt, context, contentSettings, contextEnvelope, {
+            enforceGeneratedPhrasePolicy: options.enforceGeneratedPhrasePolicy === true,
+        });
+    }
     const prepared = await generation_recovery.freezeRecoveryRequestPayload(options, {
-        actualPrompt: typeof options.recoveryPreparedPrompt === 'string' ? options.recoveryPreparedPrompt : `${contextEnvelope}
-${expanded}${creativeSupplement}${phrasePolicy}`,
+        actualPrompt,
         contentSettings: generationContentSettings(contentSettings),
     });
     contentSettings = { ...settings, ...prepared.contentSettings };
