@@ -32,6 +32,7 @@ import * as core_worldPresentation from '../core/worldPresentation.js';
 import * as generation_jsonParser from './jsonParser.js';
 import * as generation_normalizers from './normalizers.js';
 import * as generation_prompts from './prompts.js';
+import * as generation_jsonShapeExamples from './jsonShapeExamples.js';
 import * as modes_achievements from '../modes/achievements.js';
 import * as modes_advEvent from '../modes/advEvent.js';
 import * as modes_album from '../modes/album.js';
@@ -837,9 +838,13 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
     const originalExpanded = core_text.expandSafeRoleMacros(options.recoveryBasePrompt ?? prompt, context);
     const expandedBody = core_contextTags.filterJsonPromptStrings(originalExpanded, core_contextTags.tagPolicyForSettings(contentSettings));
-    const expanded = options.recoveryContinuationPartial || /【输出】\n只输出一个 JSON 对象/.test(expandedBody)
+    const sealed = options.recoveryContinuationPartial || /【输出】\n只输出一个 JSON 对象/.test(expandedBody)
         ? expandedBody
         : `${expandedBody}\n\n${generation_prompts.jsonOutputSeal()}`;
+    const shapeExample = options.recoveryContinuationPartial || expandedBody.includes('【最短合法例子】')
+        ? ''
+        : generation_jsonShapeExamples.jsonShapeExampleBlock(expandedBody);
+    const expanded = shapeExample ? `${sealed}\n\n${shapeExample}` : sealed;
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
         : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context) });

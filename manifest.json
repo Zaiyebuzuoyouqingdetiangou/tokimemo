@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.2-tt-cg-r84.47-p0",
+  "js": "index.js?heartbeat=0.99.3-tt-cg-r84.48-json-example",
   "author": "Toto",
-  "version": "0.99.2",
+  "version": "0.99.3",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.47：提示词按档案主角/真名；手动重试写明失败原因，空通讯也可在任务中心重试。",
+  "description": "r84.48：每一页在输出合同后附最短合法 JSON 例子；占位短句不放宽字数下限。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
