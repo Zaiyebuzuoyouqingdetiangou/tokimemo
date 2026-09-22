@@ -943,7 +943,7 @@ export async function generateRoomIncrementalWithRepair(context, memoryBank, ori
     const fresh = await generation_client.requestValidatedSegment(
         `${roomIncrementPrompt(context, memoryBank, previous, sourceMemoryIds, options)}\nCONTROLLED_WORLD_PRESENTATION_JSON:\n${JSON.stringify(worldPresentation, null, 2)}`,
         '他的房间 · 正在从新增档案追加生活痕迹…',
-        { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], temperature: 0.45, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ROOM, background: true },
+        { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], temperature: 0.4, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ROOM, background: true },
         raw => normalizeRoomIncrementPatch(raw, previous, memoryBank, sourceMemoryIds, {
             allowPersonaExpansion: options.allowPersonaExpansion === true,
             identityKey: core_context.currentCharacterRuntimeKey(context),
@@ -2126,7 +2126,7 @@ async function generateRoomParticipantsIncrement(context, memoryBank, origin, ta
         + '\nEXISTING_ROOM_INDEX_JSON:' + JSON.stringify(compactRoomExisting(previous))
         + '\nUNTRUSTED_INCREMENTAL_ROOM_ARCHIVE_JSON:' + core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS);
     const fresh = await request(prompt, '正在更新共同房间，保留已有内容…', {
-        maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], temperature: 0.45, context, origin,
+        maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], temperature: 0.4, context, origin,
         contextEnvelope: presentation.contextEnvelope, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ROOM, background: true,
     }, raw => {
         const normalized = normalizeRoomIncrementPatch(raw, previous, memoryBank, sourceMemoryIds, options);

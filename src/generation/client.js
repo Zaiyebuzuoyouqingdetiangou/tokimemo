@@ -33,6 +33,7 @@ import * as generation_jsonParser from './jsonParser.js';
 import * as generation_normalizers from './normalizers.js';
 import * as generation_prompts from './prompts.js';
 import * as generation_jsonShapeExamples from './jsonShapeExamples.js';
+import * as generation_jsonPageTemperature from './jsonPageTemperature.js';
 import * as modes_achievements from '../modes/achievements.js';
 import * as modes_advEvent from '../modes/advEvent.js';
 import * as modes_album from '../modes/album.js';
@@ -889,7 +890,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`,
     const service = context.ConnectionManagerRequestService;
     let selectedProfileFingerprint = '';
     let overridePayload = {
-        temperature: Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : settings.temperature,
+        temperature: generation_jsonPageTemperature.jsonPageTemperature(options.temperature, settings.temperature),
     };
     const modelOverride = core_text.normalizeText(options.model || (connectionMode === 'manual' ? settings.manualApiModel : settings.modelOverride), 240);
     if (modelOverride) overridePayload.model = modelOverride;

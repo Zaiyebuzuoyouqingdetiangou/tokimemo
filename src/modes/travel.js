@@ -604,7 +604,7 @@ export async function generateTravelWithRepair(context, memoryBank, origin, task
             + (previous && options.allowPersonaExpansion !== true ? '\n本轮只同步历史：所有新地点必须 basis=记忆，引用本轮 incrementalMemoryIds；不补人设推演地点。' : ''),
         previous ? '他的出行路线 · 正在把新增地点标到地图上…' : '他的出行路线 · 正在绘制生活地图…',
         {
-            maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.TRAVEL], temperature: 0.45,
+            maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.TRAVEL], temperature: 0.4,
             context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:travel-map`, mode: core_constants.MODE.TRAVEL, background: true,
             recoveryCompatibility: structuredDesign ? { contract: designContract, legacyPrompts: [] }
                 : { contract: 'travel-postcard-design-r8415', legacyPrompts: [

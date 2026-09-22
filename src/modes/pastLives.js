@@ -295,7 +295,7 @@ export async function generatePastLivesWithRepair(context, memory, origin, taskK
     const presentationContext = options.presentationContext || await generation.buildWorldPresentationContext(context, memory, PAST_LIVES_MODE, options.origin);
     assertContextRead();
     const presentation = contract.pastLivesPresentation(presentationContext.profile);
-    const baseOptions = { context, contextEnvelope: presentationContext.contextEnvelope, origin, mode: PAST_LIVES_MODE, background: true, temperature: 0.75 };
+    const baseOptions = { context, contextEnvelope: presentationContext.contextEnvelope, origin, mode: PAST_LIVES_MODE, background: true, temperature: 0.4 };
     // r62 changes only the validator for this mode, not its r61 prompt recipe.
     // The exact legacy prompt authenticates replay; it is not a general hash bypass.
     const planPrompt = pastLivesPlanPrompt(context, memory, previous, presentation);
