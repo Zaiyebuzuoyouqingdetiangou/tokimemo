@@ -279,8 +279,21 @@ test('provider request count follows real sends', async () => {
     assert.equal(outcome.providerRequests, 2);
 });
 
+test('the sent request keeps the phrase policy the preview must count', () => {
+    const body = assembleMergedPrompt({ sharedBackground: '背景', tasks: tasks().slice(0, 1) });
+    const plain = composeOutgoingGenerationPrompt(body, context, { bannedGeneratedPhrases: ['不许说'] }, 'ENVELOPE_MARKER');
+    const sent = composeOutgoingGenerationPrompt(body, context, { bannedGeneratedPhrases: ['不许说'] }, 'ENVELOPE_MARKER', { enforceGeneratedPhrasePolicy: true });
+    assert.equal(plain.includes('不许说'), false);
+    assert.equal(sent.startsWith('ENVELOPE_MARKER\n'), true);
+    assert.equal(sent.includes('【新生成文本禁用词】'), true);
+    assert.equal(sent.includes('不许说'), true);
+    assert.equal(sent.split('【最短合法例子】').length - 1, 1);
+});
+
 test('merged generation does not launch the old generators together', async () => {
     const source = await readFile(new URL('../src/generation/mergedGeneration.js', import.meta.url), 'utf8');
     assert.equal(source.includes('Promise.all'), false);
     assert.equal(source.includes('generateMode'), false);
+    assert.equal(source.includes('enforceGeneratedPhrasePolicy: true'), true);
+    assert.equal(source.includes('未提交的生成草稿'), true);
 });

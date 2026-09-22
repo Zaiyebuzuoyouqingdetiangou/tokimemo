@@ -695,21 +695,33 @@ export function handleTaskCenterAction(action, actionEl) {
                 if (!result.soloRoutes?.includes(route)) picks.delete(route);
             }
             if (result.soloRoutes?.length) enqueueSelectedModes(result.soloRoutes);
-            const waiting = result.pending?.length || 0;
-            globalThis.toastr?.success?.(waiting
-                ? `一起生成已写上通过的页面。还有 ${waiting} 项待补，刷新后仍能看到。`
-                : '一起生成已写上。各页仍可以分别打开。', '心迹回廊');
+            const waiting = result.waiting?.length || 0;
+            const sent = result.providerRequests || 0;
+            if (sent || waiting) {
+                globalThis.toastr?.success?.(waiting
+                    ? `一起生成实际发送 ${sent} 次。通过的页面已写上，还有 ${waiting} 项待补。`
+                    : `一起生成实际发送 ${sent} 次，各页已写上。`, '心迹回廊');
+            } else if (result.soloRoutes?.length) {
+                globalThis.toastr?.info?.('这几项这次按单项发送。', '心迹回廊');
+            }
+            try { ui_overlay.showChooser({ section: 'content' }); } catch { /* The saved pages and pending rows are already stored. */ }
         }).catch(error => {
             if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+            try { ui_overlay.showChooser({ section: 'content' }); } catch { /* Pending rows stay readable after a refresh. */ }
         });
         return;
     }
     if (action === 'merged-repair' || action === 'merged-resave') {
         const route = actionEl?.dataset?.rmtRoute || '';
-        void generation_merged.repairPending(route).then(() => {
-            globalThis.toastr?.success?.(action === 'merged-resave' ? '已重新保存，没有再次生成。' : '已只补这一项。', '心迹回廊');
+        void generation_merged.repairPending(route).then(result => {
+            const sent = result?.providerRequests || 0;
+            globalThis.toastr?.success?.(action === 'merged-resave' || result?.requested === false
+                ? '已重新保存，没有再次生成。'
+                : `已只补这一项，实际发送 ${sent} 次。`, '心迹回廊');
         }).catch(error => {
             if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+        }).finally(() => {
+            try { ui_overlay.showChooser({ section: 'content' }); } catch { /* The pending row is already stored. */ }
         });
         return;
     }

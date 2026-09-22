@@ -447,16 +447,26 @@ export async function startTogether(routes, { confirm = null, date = new Date() 
     const sharedBackground = sharedBackgroundText(context, memoryBank);
     const tasks = [];
     const blocked = [];
+    const held = [];
     for (const route of routes) {
         if (!MERGEABLE_ROUTES.includes(route)) continue;
-        try { tasks.push(buildMergeTask(route, context, memoryBank, previousSession(ui_workspaceState.WORKSPACE_ROUTES[route].mode, context, memoryBank), date)); }
+        const mode = ui_workspaceState.WORKSPACE_ROUTES[route].mode;
+        let openDraft = false;
+        try { openDraft = !!core_cache.loadGenerationRecovery(mode, context); }
+        catch { openDraft = false; }
+        if (openDraft) {
+            held.push({ route, label: routeTitle(route), reason: '这一页还有未提交的生成草稿，先续写或放弃。这次不放进同一次回复，也不会自动另开一项。' });
+            continue;
+        }
+        try { tasks.push(buildMergeTask(route, context, memoryBank, previousSession(mode, context, memoryBank), date)); }
         catch (error) { blocked.push({ route, label: routeTitle(route), reason: core_text.safeErrorSummary(error) }); }
     }
     const previewModes = [...new Set(tasks.map(task => task.mode))];
     const previewTerms = [...new Set(previewModes.flatMap(mode => generation_client.generationWorldInfoScanTerms(mode, context)))];
     const envelope = previewModes.length ? await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: previewTerms }) : '';
     const measure = groupTasks => generation_client.composeOutgoingGenerationPrompt(
-        assembleMergedPrompt({ sharedBackground, tasks: groupTasks }), context, settings, envelope);
+        assembleMergedPrompt({ sharedBackground, tasks: groupTasks }), context, settings, envelope,
+        { enforceGeneratedPhrasePolicy: true });
     const plan = planTogether(routes, { tasks, sharedBackground, maxOutputTokens, inputBudgetTokens, measure });
     for (const item of blocked) {
         const existing = plan.solo.find(row => row.route === item.route);
@@ -465,19 +475,28 @@ export async function startTogether(routes, { confirm = null, date = new Date() 
             existing.reason = item.reason;
         } else plan.solo.push(item);
     }
+    for (const item of held) {
+        plan.summary = plan.summary.replace(`单独发送：${item.label}。这一页这次没能接进合并，先按单项发送。`, `${item.label}：${item.reason}`);
+        plan.solo = plan.solo.filter(row => row.route !== item.route);
+    }
     plan.requestCount = plan.mergedGroups.length + plan.solo.length;
     if (!plan.mergedGroups.length && plan.solo.length) {
         plan.summary = `${MERGED_NOW}\n这几项这次还没接入合并。预计请求 ${plan.solo.length} 次，按原来的单项生成逐项发送。\n${plan.solo.map(item => `单独发送：${item.label}。${item.reason}`).join('\n')}`;
+    }
+    for (const item of held) {
+        const line = `${item.label}：${item.reason}`;
+        if (!plan.summary.includes(line)) plan.summary += `\n${line}`;
     }
     const approved = typeof confirm === 'function' ? confirm(plan) : ui_overlay.confirmExplicitAction('一起生成', plan.summary);
     if (!approved) return { cancelled: true, plan, providerRequests: 0 };
     const modes = plan.mergedGroups.flat().map(route => ui_workspaceState.WORKSPACE_ROUTES[route].mode);
     const pending = createPendingStore();
     const chatId = core_context.comparableChatId(memoryBank.chatId);
-    if (!modes.length) return { cancelled: false, plan, providerRequests: 0, soloRoutes: plan.solo.map(item => item.route), pending: pending.read(chatId) };
+    if (!modes.length) return { cancelled: false, plan, providerRequests: 0, waiting: [], soloRoutes: plan.solo.map(item => item.route), pending: pending.read(chatId) };
     const release = holdModes(context, modes);
     const trace = core_taskTrace.startTaskTrace('', modes[0]);
     let providerRequests = 0;
+    const waiting = [];
     let failure = null;
     let openedTask = null;
     try {
@@ -492,6 +511,7 @@ export async function startTogether(routes, { confirm = null, date = new Date() 
                     prompt, tasks: groupTasks, pending, chatId, sends: { read: () => trace.providerRequests },
                     request: text => generation_client.requestValidatedSegment(text, '一起生成 · 同一次回复交回各页…', {
                         context, contextEnvelope: envelope, origin: primary.origin, mode: primary.mode, background: true, taskTrace: trace,
+                        enforceGeneratedPhrasePolicy: true,
                         taskKey: core_requestCoordinator.generationTaskKeyForMode(primary.mode, context),
                     }, value => {
                         if (!value || typeof value.modules !== 'object' || Array.isArray(value.modules)) throw core_text.safeUserError('一起生成没有返回各页结果。', 'RMT_MERGED_SHAPE');
@@ -500,6 +520,7 @@ export async function startTogether(routes, { confirm = null, date = new Date() 
                     save: async (mode, session) => saveMergedSession(context, memoryBank, openedTask.opened.find(row => row.mode === mode).origin)(mode, session),
                 });
                 providerRequests += outcome.providerRequests;
+                waiting.push(...outcome.failed);
                 await dropFailedJournals(context, memoryBank, openedTask.opened.filter(row => groupTasks.some(task => task.mode === row.mode)), outcome.failed, primary.mode);
             } catch (error) {
                 providerRequests += Math.max(0, (Number(trace.providerRequests) || 0) - before);
@@ -522,7 +543,7 @@ export async function startTogether(routes, { confirm = null, date = new Date() 
         core_taskTrace.endTaskTrace(trace, failure ? (failure?.name === 'AbortError' ? 'cancelled' : 'failed') : 'ok', failure);
         release();
     }
-    return { cancelled: false, plan, providerRequests, soloRoutes: plan.solo.map(item => item.route), pending: pending.read(chatId) };
+    return { cancelled: false, plan, providerRequests, waiting, soloRoutes: plan.solo.map(item => item.route), pending: pending.read(chatId) };
 }
 
 export async function repairPending(route) {
@@ -555,6 +576,7 @@ export async function repairPending(route) {
                 item, save, pending, chatId, singlePrompt: task.singlePrompt, accept: task.accept,
                 request: text => generation_client.requestValidatedSegment(text, `一起生成 · 只补${task.label}…`, {
                     context, origin, mode: task.mode, background: true, taskTrace: trace,
+                    enforceGeneratedPhrasePolicy: true,
                     taskKey: core_requestCoordinator.generationTaskKeyForMode(task.mode, context),
                 }, value => value),
             });

@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.9-tt-cg-r84.54-merged-recovery",
+  "js": "index.js?heartbeat=0.99.10-tt-cg-r84.55-merged-preview",
   "author": "Toto",
-  "version": "0.99.9",
+  "version": "0.99.10",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.54：一起生成接回任务身份和恢复；待补按页保留。目前接入合并的是陈列柜、成就库、邮箱、印象曲。",
+  "description": "r84.55：一起生成的输入预览含实际附上的禁用词；已有草稿的页不并进这次回复。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
