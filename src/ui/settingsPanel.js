@@ -431,7 +431,9 @@ export function refreshGenerationSettingsUi() {
     if (temperature) {
         temperature.value = String(settings.temperature);
         temperature.disabled = false;
-        temperature.title = '覆盖心迹回廊专用连接的温度';
+        temperature.title = '心迹回廊所有生成都使用这个温度';
+        const temperatureNote = panel.querySelector('[data-rmt-temperature-note]');
+        if (temperatureNote) temperatureNote.textContent = '写正文、对白和剧情时使用这里的温度。整理档案、判断关系、逐字核对证据的步骤会自动用更低的温度，以免抄错原文；你调得更低时，这些步骤也会跟着更低。';
     }
     if (roomDaily) roomDaily.checked = settings.roomLifeAutoDaily;
     if (manualStreaming) manualStreaming.checked = settings.manualApiStreaming === true;
@@ -635,6 +637,7 @@ export function mountSettings({ homeTarget = null } = {}) {
             <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="8000" max="200000" step="1" placeholder="默认 60000"></label>
             <small>最大输出是模型最多写多长，默认 60000，不拦输入。输入预算是发送前本地保险，默认 60000 tokens，范围 8000–200000，越大越贵；与最大输出无关。</small>
             <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
+            <small data-rmt-temperature-note></small>
           </div>
           <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-second ${core_settings.getPluginSettings().autoSecondPass ? 'checked' : ''}><span>第一次完成后，自动进行第二次生成</span></label>
           <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-retry ${core_settings.getPluginSettings().autoRetryEnabled ? 'checked' : ''}><span>失败后自动重试未完成部分</span></label>

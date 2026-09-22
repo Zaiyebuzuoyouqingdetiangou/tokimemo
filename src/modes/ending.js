@@ -651,7 +651,7 @@ async function fillEndingScenes(context, memoryBank, origin, taskKey, previous) 
         confessionReplays = await generation_client.requestValidatedSegment(
             endingConfessionRefreshPrompt(context, memoryBank, previous),
             'ENDING · 正在扫描已发生告白…',
-            { maxTokens: 8000, temperature: 0.35, context, origin, taskKey: `${taskKey}:confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
+            { maxTokens: 8000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
             raw => normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank),
         );
     } catch (error) {
@@ -678,7 +678,7 @@ export async function generateEndingWithRepair(context, memoryBank, origin, task
         const outline = await generation_client.requestValidatedSegment(
             endingIncrementOutlinePrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
             'ENDING · 正在从新增档案判断新路线…',
-            { maxTokens: 5000, temperature: 0.35, context, origin, taskKey: `${taskKey}:increment-outline`, mode: core_constants.MODE.ENDING, background: true },
+            { maxTokens: 5000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:increment-outline`, mode: core_constants.MODE.ENDING, background: true },
             raw => normalizeEndingIncrementOutline(raw, memoryBank, sourceMemoryIds),
         );
         const usedIds = new Set(previous.endings.map(item => item.id));
@@ -721,7 +721,7 @@ export async function generateEndingWithRepair(context, memoryBank, origin, task
             freshConfessions = revisit ? [] : await generation_client.requestValidatedSegment(
                 endingConfessionRefreshPrompt(context, memoryBank, previous, sourceMemoryIds),
                 'ENDING · 正在从新增档案扫描新告白…',
-                { maxTokens: 8000, temperature: 0.35, context, origin, taskKey: `${taskKey}:increment-confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
+                { maxTokens: 8000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:increment-confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
                 raw => normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank)
                     .filter(item => core_incremental.usesIncrementalMemoryId(item.sourceMemoryIds, sourceMemoryIds)),
             );
@@ -741,7 +741,7 @@ export async function generateEndingWithRepair(context, memoryBank, origin, task
     const outline = await generation_client.requestValidatedSegment(
         endingOutlinePrompt(context, memoryBank),
         'ENDING · 正在判断关系与路线目录…',
-        { maxTokens: 7000, temperature: 0.35, context, origin, taskKey: `${taskKey}:outline`, mode: core_constants.MODE.ENDING, background: true },
+        { maxTokens: 7000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:outline`, mode: core_constants.MODE.ENDING, background: true },
         raw => normalizeEndingOutline(raw, memoryBank),
     );
     if (!fillNow) {
@@ -767,7 +767,7 @@ export async function generateEndingWithRepair(context, memoryBank, origin, task
         confessionReplays = await generation_client.requestValidatedSegment(
             endingConfessionRefreshPrompt(context, memoryBank),
             'ENDING · 正在扫描已发生告白…',
-            { maxTokens: 10000, temperature: 0.35, context, origin, taskKey: `${taskKey}:confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
+            { maxTokens: 10000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
             raw => normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank),
         );
         confessionScanSucceeded = true;

@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
-// Source modules: 143
-// Source SHA-256: b38bdd9fede4252a4ed9f52e15b713f2c9ba920b177e1d91cf435d069c8162c8
+// Source modules: 144
+// Source SHA-256: 5eaccca4168cc4d7b986e495d46c2884482133ddb5c52d04d40379a77c6d46a3
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -83,6 +83,7 @@ const __m_generation_recovery_js = Object.create(null);
 const __m_generation_recoveryAdapters_js = Object.create(null);
 const __m_generation_recoveryMerge_js = Object.create(null);
 const __m_generation_recoveryPayload_js = Object.create(null);
+const __m_generation_requestTemperature_js = Object.create(null);
 const __m_heartbeatMemories_js = Object.create(null);
 const __m_modes_achievements_js = Object.create(null);
 const __m_modes_advEvent_js = Object.create(null);
@@ -10064,7 +10065,7 @@ async function fillEndingScenes(context, memoryBank, origin, taskKey, previous) 
         confessionReplays = await generation_client.requestValidatedSegment(
             endingConfessionRefreshPrompt(context, memoryBank, previous),
             'ENDING · 正在扫描已发生告白…',
-            { maxTokens: 8000, temperature: 0.35, context, origin, taskKey: `${taskKey}:confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
+            { maxTokens: 8000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
             raw => normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank),
         );
     } catch (error) {
@@ -10091,7 +10092,7 @@ async function generateEndingWithRepair(context, memoryBank, origin, taskKey, op
         const outline = await generation_client.requestValidatedSegment(
             endingIncrementOutlinePrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
             'ENDING · 正在从新增档案判断新路线…',
-            { maxTokens: 5000, temperature: 0.35, context, origin, taskKey: `${taskKey}:increment-outline`, mode: core_constants.MODE.ENDING, background: true },
+            { maxTokens: 5000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:increment-outline`, mode: core_constants.MODE.ENDING, background: true },
             raw => normalizeEndingIncrementOutline(raw, memoryBank, sourceMemoryIds),
         );
         const usedIds = new Set(previous.endings.map(item => item.id));
@@ -10134,7 +10135,7 @@ async function generateEndingWithRepair(context, memoryBank, origin, taskKey, op
             freshConfessions = revisit ? [] : await generation_client.requestValidatedSegment(
                 endingConfessionRefreshPrompt(context, memoryBank, previous, sourceMemoryIds),
                 'ENDING · 正在从新增档案扫描新告白…',
-                { maxTokens: 8000, temperature: 0.35, context, origin, taskKey: `${taskKey}:increment-confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
+                { maxTokens: 8000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:increment-confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
                 raw => normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank)
                     .filter(item => core_incremental.usesIncrementalMemoryId(item.sourceMemoryIds, sourceMemoryIds)),
             );
@@ -10154,7 +10155,7 @@ async function generateEndingWithRepair(context, memoryBank, origin, taskKey, op
     const outline = await generation_client.requestValidatedSegment(
         endingOutlinePrompt(context, memoryBank),
         'ENDING · 正在判断关系与路线目录…',
-        { maxTokens: 7000, temperature: 0.35, context, origin, taskKey: `${taskKey}:outline`, mode: core_constants.MODE.ENDING, background: true },
+        { maxTokens: 7000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:outline`, mode: core_constants.MODE.ENDING, background: true },
         raw => normalizeEndingOutline(raw, memoryBank),
     );
     if (!fillNow) {
@@ -10180,7 +10181,7 @@ async function generateEndingWithRepair(context, memoryBank, origin, taskKey, op
         confessionReplays = await generation_client.requestValidatedSegment(
             endingConfessionRefreshPrompt(context, memoryBank),
             'ENDING · 正在扫描已发生告白…',
-            { maxTokens: 10000, temperature: 0.35, context, origin, taskKey: `${taskKey}:confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
+            { maxTokens: 10000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:confession`, mode: core_constants.MODE.ENDING, background: true, segmentMaxAttempts: 1 },
             raw => normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank),
         );
         confessionScanSucceeded = true;
@@ -14232,11 +14233,11 @@ async function generatePastLivesWithRepair(context, memory, origin, taskKey, opt
     const presentationContext = options.presentationContext || await generation.buildWorldPresentationContext(context, memory, PAST_LIVES_MODE, options.origin);
     assertContextRead();
     const presentation = contract.pastLivesPresentation(presentationContext.profile);
-    const baseOptions = { context, contextEnvelope: presentationContext.contextEnvelope, origin, mode: PAST_LIVES_MODE, background: true, temperature: 0.75 };
+    const baseOptions = { context, contextEnvelope: presentationContext.contextEnvelope, origin, mode: PAST_LIVES_MODE, background: true };
     // r62 changes only the validator for this mode, not its r61 prompt recipe.
     // The exact legacy prompt authenticates replay; it is not a general hash bypass.
     const planPrompt = pastLivesPlanPrompt(context, memory, previous, presentation);
-    const compatibility = prompt => ({ contract: 'past-lives-readable-r62', legacyPrompts: [prompt] });
+    const compatibility = prompt => ({ contract: 'past-lives-readable-r62', legacyPrompts: [prompt], legacyTemperatures: [0.75] });
     const plan = await generation.requestValidatedSegment(planPrompt, '前世今生 · 正在写下入卷引子…',
         { ...baseOptions, taskKey: `${taskKey}:past-lives-plan`, maxTokens: 4200, recoveryCompatibility: compatibility(planPrompt) }, raw => normalizePastLivesPlan(raw, memory));
     const dossiers = [];
@@ -14814,7 +14815,7 @@ async function generateTimeStoryWithRepair(mode, context, memory, origin, taskKe
     const nextId = localId('TS', lastId);
     const episode = await generation.requestValidatedSegment(prompt, `${contract.timeStoryLabel(mode)} · 正在写下这一篇…`,
         { context, contextEnvelope: presentationContext.contextEnvelope, origin, mode, taskKey: `${taskKey}:time-story`,
-            maxTokens: 12000, temperature: 0.75, background: true },
+            maxTokens: 12000, background: true },
         raw => normalizeTimeStoryEpisode(mode, raw, memory, { id: nextId, profile: presentationContext.profile }));
     contextApi.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
     const next = previous ? structuredClone(previous) : emptyTimeStories(mode, memory, context);
@@ -18478,7 +18479,7 @@ async function generateHeartWithRepair(context, memoryBank, origin, taskKey, opt
         const core = await generation_client.requestValidatedSegment(
             heartCoreIncrementPrompt(context, memoryBank, existing, sourceMemoryIds) + core_incremental.derivedExpansionDirective(existing, memoryBank, 'dialogues'),
             '角色互动 · 正在从新增档案追加时期对话…',
-            { maxTokens: 4500, temperature: 0.4, context, origin, taskKey: `${taskKey}:dialogues-increment`, mode: core_constants.MODE.HEART, background: true },
+            { maxTokens: 4500, temperatureCeiling: 0.4, context, origin, taskKey: `${taskKey}:dialogues-increment`, mode: core_constants.MODE.HEART, background: true },
             raw => normalizeHeartCoreIncrement(raw, memoryBank, sourceMemoryIds),
         );
         const preserveRelationship = !core.relationshipSourceMemoryIds?.length
@@ -18491,8 +18492,8 @@ async function generateHeartWithRepair(context, memoryBank, origin, taskKey, opt
     const core = await generation_client.requestValidatedSegment(
         heartCorePrompt(context, memoryBank),
         '角色互动 · 正在生成时期对话…',
-        { maxTokens: 6000, temperature: 0.35, context, origin, taskKey: `${taskKey}:dialogues`, mode: core_constants.MODE.HEART, background: true,
-            recoveryCompatibility: { contract: 'heart-language-birthday-r8412', legacyPrompts: [heartCoreLegacyPrompt(context, memoryBank)] } },
+        { maxTokens: 6000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:dialogues`, mode: core_constants.MODE.HEART, background: true,
+            recoveryCompatibility: { contract: 'heart-language-birthday-r8412', legacyPrompts: [heartCoreLegacyPrompt(context, memoryBank)], legacyTemperatures: [0.35] } },
         raw => normalizeHeartCore(raw, memoryBank),
     );
     // Generic/automatic admission only fills an incomplete library. Explicit
@@ -18804,21 +18805,21 @@ async function regenerateHeartPage(page, options = {}) {
         let replacement;
         if (pageId === 'language') {
             replacement = await request(heartCorePrompt(context, memoryBank), 'dialogues-full',
-                { maxTokens: 6000, temperature: 0.35 }, raw => normalizeHeart(makeHeartSession(normalizeHeartCore(raw, memoryBank)), memoryBank));
+                { maxTokens: 6000, temperatureCeiling: 0.35 }, raw => normalizeHeart(makeHeartSession(normalizeHeartCore(raw, memoryBank)), memoryBank));
         } else if (pageId === 'strips' || pageId === 'fireflies') {
             const strips = pageId === 'strips';
             const batch = await request(strips ? heartStripsPrompt(context, memoryBank, base) : heartFireflyPrompt(context, memoryBank, base),
-                pageId, strips ? { maxTokens: 5000 } : { maxTokens: 5200, temperature: 0.8 },
+                pageId, strips ? { maxTokens: 5000 } : { maxTokens: 5200 },
                 raw => normalizeHeartCollectionBatch(raw, pageId));
             replacement = { [strips ? 'dailyStrips' : 'fireflyVoices']: batch.items.map(enrich), rejectedCount: batch.rejectedCount };
         } else {
             const postending = pageId === 'postending';
             const voices = await request(postending ? heartPostVoicePrompt(context, memoryBank, base)
                 : heartSeasonVoicePrompt(context, memoryBank, base, pageId), 'voice',
-                { maxTokens: postending ? 3800 : 3000, temperature: 0.65 }, raw => normalizeVoiceDramaPart(raw, [pageId], memoryBank));
+                { maxTokens: postending ? 3800 : 3000 }, raw => normalizeVoiceDramaPart(raw, [pageId], memoryBank));
             const runScenario = !postending && (options.secondStep === true || core_settings.getPluginSettings().autoSecondPass === true);
             const scenarios = runScenario ? await request(heartSeasonScenarioPrompt(context, memoryBank, base, pageId), 'scenario',
-                { maxTokens: 3200, temperature: 0.65 }, raw => normalizeScenarioDramaPart(raw, pageId, memoryBank)) : [];
+                { maxTokens: 3200 }, raw => normalizeScenarioDramaPart(raw, pageId, memoryBank)) : [];
             if (!postending && !runScenario) {
                 core_requestCoordinator.noteSecondStepOffer(origin, {
                     label: '小事件', kind: 'heart-scenario', mode: core_constants.MODE.HEART, pageId,
@@ -19250,8 +19251,8 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
                 const core = await generation_client.requestValidatedSegment(
                     heartCorePrompt(context, memoryBank) + categoryLanguagePrompt(category),
                     partsDialoguesReady(base) ? '角色互动 · 正在重新生成基础语言…' : '角色互动 · 正在生成基础语言…',
-                    { maxTokens: 6000, temperature: 0.35, context, origin, taskKey: `${taskKey}:dialogues-full`, mode: core_constants.MODE.HEART, background: true,
-                        recoveryCompatibility: { contract: 'heart-language-birthday-r8412', legacyPrompts: [heartCoreLegacyPrompt(context, memoryBank) + categoryLanguagePrompt(category)] } },
+                    { maxTokens: 6000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:dialogues-full`, mode: core_constants.MODE.HEART, background: true,
+                        recoveryCompatibility: { contract: 'heart-language-birthday-r8412', legacyPrompts: [heartCoreLegacyPrompt(context, memoryBank) + categoryLanguagePrompt(category)], legacyTemperatures: [0.35] } },
                     raw => normalizeHeartCore(categoryLanguageInput(raw, category), memoryBank),
                 );
                 const fullCoverage = {
@@ -19264,7 +19265,7 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
                 const core = await generation_client.requestValidatedSegment(
                     heartCoreIncrementPrompt(context, memoryBank, base, sourceMemoryIds) + core_incremental.derivedExpansionDirective(base, memoryBank, 'dialogues') + categoryLanguagePrompt(category),
                     '角色互动 · 追加时期对话',
-                    { maxTokens: 4500, temperature: 0.4, context, origin, taskKey: `${taskKey}:dialogues`, mode: core_constants.MODE.HEART, background: true },
+                    { maxTokens: 4500, temperatureCeiling: 0.4, context, origin, taskKey: `${taskKey}:dialogues`, mode: core_constants.MODE.HEART, background: true },
                     raw => normalizeHeartCoreIncrement(categoryLanguageInput(raw, category), memoryBank, sourceMemoryIds),
                 );
                 persisted = await persistHeartPartialPatch('dialogues', { type: 'dialogues-increment', core, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
@@ -19382,7 +19383,7 @@ async function generateHeartFirefliesSectionOperation(options, logicalTask) {
             const upgraded = await requestHeartPart(
                 heartFireflyUpgradePrompt(context, base, legacyBatch),
                 '角色互动 · 正在把旧版萤火虫升级为 GS4 式追加约会会话…',
-                { maxTokens: 5200, temperature: 0.72, context, origin, taskKey: `${taskKey}:upgrade`, mode: core_constants.MODE.HEART, background: true },
+                { maxTokens: 5200, context, origin, taskKey: `${taskKey}:upgrade`, mode: core_constants.MODE.HEART, background: true },
                 raw => normalizeFireflyUpgradePart(raw, legacyBatch),
             );
             const result = await persistHeartPartialPatch('firefly-upgrade', { type: 'firefly-upgrade', fireflyVoices: upgraded }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
@@ -19452,7 +19453,7 @@ async function generateHeartFirefliesSectionOperation(options, logicalTask) {
         const batch = await requestHeartPart(
             heartFireflyPrompt(context, memoryBank, base, hasExisting ? base : null, sourceMemoryIds) + core_incremental.derivedExpansionDirective(base, memoryBank, 'fireflies'),
             hasExisting ? '角色互动 · 正在解锁新的萤火虫心声…' : '角色互动 · 正在点亮萤火虫栖息地…',
-            { maxTokens: 5200, temperature: 0.8, context, origin, taskKey, mode: core_constants.MODE.HEART, background: true },
+            { maxTokens: 5200, context, origin, taskKey, mode: core_constants.MODE.HEART, background: true },
             raw => normalizeHeartCollectionBatch(raw, 'fireflies'),
         );
         const batchId = core_incremental.incrementalBatchId('fireflies', sourceMemoryIds);
@@ -19603,7 +19604,7 @@ async function generateHeartSeasonSectionOperation(normalizedSeason, options, lo
                 const voice = enrichVoice((await requestHeartPart(
                     heartPostVoicePrompt(context, memoryBank, latest, latest, null),
                     '角色互动 · 追加未来 / 后日谈',
-                    { maxTokens: 3800, temperature: 0.65, context, origin, taskKey: `${taskKey}:voice`, mode: core_constants.MODE.HEART, background: true },
+                    { maxTokens: 3800, context, origin, taskKey: `${taskKey}:voice`, mode: core_constants.MODE.HEART, background: true },
                     raw => normalizeVoiceDramaPart(raw, ['postending'], memoryBank),
                 ))[0]);
                 const persisted = await persistHeartPartialPatch(`season:postending:${batchId}:voice`, { type: 'season', season: 'postending', voice }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
@@ -19623,9 +19624,9 @@ async function generateHeartSeasonSectionOperation(normalizedSeason, options, lo
                     voice = enrichVoice((await requestHeartPart(
                         heartSeasonVoicePrompt(context, memoryBank, latest, normalizedSeason, heartSeasonRequestBase(latest, normalizedSeason, batchId), null),
                         `角色互动 · 追加${ui_heartView.heartSeasonLabel(normalizedSeason)} Voice`,
-                        { maxTokens: 3000, temperature: 0.65, context, origin, taskKey: `${taskKey}:voice`, mode: core_constants.MODE.HEART, background: true,
+                        { maxTokens: 3000, context, origin, taskKey: `${taskKey}:voice`, mode: core_constants.MODE.HEART, background: true,
                             recoveryCompatibility: { contract: 'heart-season-siblings-r8412',
-                                legacyPrompts: [heartSeasonVoicePrompt(context, memoryBank, latest, normalizedSeason, latest, null)] } },
+                                legacyPrompts: [heartSeasonVoicePrompt(context, memoryBank, latest, normalizedSeason, latest, null)], legacyTemperatures: [0.65] } },
                         raw => normalizeVoiceDramaPart(raw, [normalizedSeason], memoryBank),
                     ))[0]);
                     const persisted = await persistHeartPartialPatch(`season:${normalizedSeason}:${batchId}:voice`, { type: 'season', season: normalizedSeason, voice }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
@@ -19651,9 +19652,9 @@ async function generateHeartSeasonSectionOperation(normalizedSeason, options, lo
                     scenario = enrichScenario((await requestHeartPart(
                         heartSeasonScenarioPrompt(context, memoryBank, latest, normalizedSeason, heartSeasonRequestBase(latest, normalizedSeason, batchId), null),
                         `角色互动 · 追加${ui_heartView.heartSeasonLabel(normalizedSeason)} Scenario`,
-                        { maxTokens: 3200, temperature: 0.65, context, origin, taskKey: `${taskKey}:scenario`, mode: core_constants.MODE.HEART, background: true,
+                        { maxTokens: 3200, context, origin, taskKey: `${taskKey}:scenario`, mode: core_constants.MODE.HEART, background: true,
                             recoveryCompatibility: { contract: 'heart-season-siblings-r8412',
-                                legacyPrompts: [heartSeasonScenarioPrompt(context, memoryBank, latest, normalizedSeason, latest, null)] } },
+                                legacyPrompts: [heartSeasonScenarioPrompt(context, memoryBank, latest, normalizedSeason, latest, null)], legacyTemperatures: [0.65] } },
                         raw => normalizeScenarioDramaPart(raw, normalizedSeason, memoryBank),
                     ))[0]);
                     const persisted = await persistHeartPartialPatch(`season:${normalizedSeason}:${batchId}:scenario`, { type: 'season', season: normalizedSeason, scenario }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
@@ -20786,7 +20787,7 @@ async function generateAchievementsWithRepair(context, memoryBank, origin, taskK
     const fresh = await generation_client.requestValidatedSegment(
         achievementsPrompt(context, memoryBank, previous, sourceMemoryIds),
         previous ? '成就库 · 正在从新增档案补充里程碑…' : '成就库 · 正在整理已解锁与未解锁里程碑…',
-        { maxTokens: 6000, temperature: 0.4, context, origin, taskKey: `${taskKey}:achievements`, mode: core_constants.MODE.ACHIEVEMENTS, background: true },
+        { maxTokens: 6000, temperatureCeiling: 0.4, context, origin, taskKey: `${taskKey}:achievements`, mode: core_constants.MODE.ACHIEVEMENTS, background: true },
         raw => normalizeAchievements(raw, memoryBank, { allowPartial: !!previous, sourceMemoryIds: previous ? sourceMemoryIds : null }),
     );
     const merged = mergeAchievementsIncremental(previous, fresh, memoryBank);
@@ -21973,7 +21974,7 @@ async function refreshEndingConfessionReplays() {
             '正在扫描新增档案里的告白 / 关系确认…',
             {
                 maxTokens: 10000,
-                temperature: 0.35,
+                temperatureCeiling: 0.35,
                 context,
                 origin,
                 taskKey: `ending-confessions:${scope}`,
@@ -23118,7 +23119,7 @@ async function generateRoomIncrementalWithRepair(context, memoryBank, origin, ta
     const fresh = await generation_client.requestValidatedSegment(
         `${roomIncrementPrompt(context, memoryBank, previous, sourceMemoryIds, options)}\nCONTROLLED_WORLD_PRESENTATION_JSON:\n${JSON.stringify(worldPresentation, null, 2)}`,
         '他的房间 · 正在从新增档案追加生活痕迹…',
-        { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], temperature: 0.45, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ROOM, background: true },
+        { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ROOM, background: true },
         raw => normalizeRoomIncrementPatch(raw, previous, memoryBank, sourceMemoryIds, {
             allowPersonaExpansion: options.allowPersonaExpansion === true,
             identityKey: core_context.currentCharacterRuntimeKey(context),
@@ -24301,7 +24302,7 @@ async function generateRoomParticipantsIncrement(context, memoryBank, origin, ta
         + '\nEXISTING_ROOM_INDEX_JSON:' + JSON.stringify(compactRoomExisting(previous))
         + '\nUNTRUSTED_INCREMENTAL_ROOM_ARCHIVE_JSON:' + core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS);
     const fresh = await request(prompt, '正在更新共同房间，保留已有内容…', {
-        maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], temperature: 0.45, context, origin,
+        maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ROOM], context, origin,
         contextEnvelope: presentation.contextEnvelope, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ROOM, background: true,
     }, raw => {
         const normalized = normalizeRoomIncrementPatch(raw, previous, memoryBank, sourceMemoryIds, options);
@@ -25746,7 +25747,7 @@ async function generatePhoneWithRepair(context, memoryBank, origin, taskKey, opt
     const plan = resumeDraft?.plan || await generation_client.requestValidatedSegment(
         phonePlanPrompt(context, memoryBank, roomSession, worldPresentation),
         '私人终端 1/2 · 正在生成设备与 App 目录…',
-        { maxTokens: 8000, temperature: 0.35, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:plan`, mode: core_constants.MODE.PHONE, background: true },
+        { maxTokens: 8000, temperatureCeiling: 0.35, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:plan`, mode: core_constants.MODE.PHONE, background: true },
         raw => normalizePhonePlan(raw, memoryBank, { worldPresentation, controlledEvidence: presentationContext.settingEvidence || '' }),
     );
     const completedById = new Map((resumeDraft?.completedApps || []).map(app => [app.id, app]));
@@ -26109,7 +26110,7 @@ async function generatePhoneIncrementalWithRepair(context, memoryBank, origin, t
     const plan = await generation_client.requestValidatedSegment(
         phoneIncrementPlanPrompt(context, memoryBank, previous, sourceMemoryIds),
         '私人终端 · 正在规划新增条目…',
-        { maxTokens: 4500, temperature: 0.35, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment-plan`, mode: core_constants.MODE.PHONE, background: true },
+        { maxTokens: 4500, temperatureCeiling: 0.35, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment-plan`, mode: core_constants.MODE.PHONE, background: true },
         raw => normalizePhoneIncrementPlan(raw, previous),
     );
     if (!plan.apps.length) {
@@ -29169,7 +29170,7 @@ async function estimateDates(root) {
     if (!globalThis.confirm?.(`将请求模型估计 ${preview.length} 条场景的日期。结果先预览，确认后才写入。继续？`)) return;
     const parsed = await generation_client.generateConfiguredJson(
         archive_storyScenes.estimateDatePrompt(preview),
-        { skipTokenCount: false, maxTokens: 4000, temperature: 0.2 },
+        { skipTokenCount: false, maxTokens: 4000, temperatureCeiling: 0.2 },
     );
     const rows = Array.isArray(parsed?.dates) ? parsed.dates : [];
     const lines = preview.map(scene => {
@@ -29745,7 +29746,9 @@ function refreshGenerationSettingsUi() {
     if (temperature) {
         temperature.value = String(settings.temperature);
         temperature.disabled = false;
-        temperature.title = '覆盖心迹回廊专用连接的温度';
+        temperature.title = '心迹回廊所有生成都使用这个温度';
+        const temperatureNote = panel.querySelector('[data-rmt-temperature-note]');
+        if (temperatureNote) temperatureNote.textContent = '写正文、对白和剧情时使用这里的温度。整理档案、判断关系、逐字核对证据的步骤会自动用更低的温度，以免抄错原文；你调得更低时，这些步骤也会跟着更低。';
     }
     if (roomDaily) roomDaily.checked = settings.roomLifeAutoDaily;
     if (manualStreaming) manualStreaming.checked = settings.manualApiStreaming === true;
@@ -29949,6 +29952,7 @@ function mountSettings({ homeTarget = null } = {}) {
             <label class="rmt-settings-field"><span>输入预算</span><input class="text_pole" data-rmt-api-input-budget type="number" min="8000" max="200000" step="1" placeholder="默认 60000"></label>
             <small>最大输出是模型最多写多长，默认 60000，不拦输入。输入预算是发送前本地保险，默认 60000 tokens，范围 8000–200000，越大越贵；与最大输出无关。</small>
             <label class="rmt-settings-field"><span>温度</span><input class="text_pole" data-rmt-api-temperature type="number" min="0" max="2" step="0.1"></label>
+            <small data-rmt-temperature-note></small>
           </div>
           <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-second ${core_settings.getPluginSettings().autoSecondPass ? 'checked' : ''}><span>第一次完成后，自动进行第二次生成</span></label>
           <label class="rmt-settings-check"><input type="checkbox" data-rmt-auto-retry ${core_settings.getPluginSettings().autoRetryEnabled ? 'checked' : ''}><span>失败后自动重试未完成部分</span></label>
@@ -31048,7 +31052,7 @@ async function generateAdvIndexWithRepair(context, memoryBank, origin, expectedC
     const fresh = await generation_client.requestValidatedSegment(
         advImportantIndexPrompt(context, memoryBank, previous, sourceMemoryIds),
         previous ? 'ADV EVENT · 正在从新增档案挑选新节点…' : 'ADV EVENT · 正在挑选重要节点…',
-        { maxTokens: 5500, temperature: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ADV, background: true },
+        { maxTokens: 5500, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ADV, background: true },
         raw => normalizeEventList(raw, memoryBank, { allowPartial: !!previous, sourceMemoryIds: previous ? sourceMemoryIds : null }),
     );
     const revisit = previous && !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
@@ -31317,7 +31321,6 @@ async function generateAllAdvForSession(options = {}) {
                 `正在生成本批 ${pending.length} 篇 ADV…`,
                 {
                     maxTokens: core_constants.MAX_GENERATION_OUTPUT_TOKENS,
-                    temperature: 0.55,
                     context,
                     origin,
                     signal: bulkCancel.signal,
@@ -31477,7 +31480,6 @@ async function repairFailedAdvForSession(options = {}) {
                     `正在补 ADV：${event.title}`,
                     {
                         maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV],
-                        temperature: 0.55,
                         context,
                         origin,
                         signal: bulkCancel.signal,
@@ -31604,7 +31606,7 @@ async function generateAdvForSelected(options = {}) {
         await startAdvRecovery(targetRuntime, { kind: 'adv-single', eventId }, options, session);
         const generatedAdv = await generation_client.requestValidatedSegment(
             advPrompt(context, event, memoryBank), `正在根据当前聊天档案生成「${event.title}」ADV…`,
-            { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV], temperature: 0.55, context, origin, taskKey, mode: core_constants.MODE.ADV, background: true, segmentMaxAttempts: 1 },
+            { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV], context, origin, taskKey, mode: core_constants.MODE.ADV, background: true, segmentMaxAttempts: 1 },
             raw => normalizeAdv(raw),
         );
         const persisted = await persistAdvMutation(targetRuntime, latest => {
@@ -32289,9 +32291,9 @@ async function generateButterflyWithRepair(context, memoryBank, origin, taskKey,
         const requestIndex = continueLegacyPlan && slot === 'OMEGA' ? legacyPlan.axes.length + 1 : index;
         const prompt = butterflySlotPrompt(context, memoryBank, index, slot, nodes, { readableR62 });
         const node = await request(prompt, '蝴蝶效应 · 节点 ' + (index + 1) + '/' + (index ? slots.length : '待定') + ' · ' + slot,
-            { maxTokens: 4096, temperature: 0.55, context, contextEnvelope, origin, taskKey: requestTaskKey + ':slot:' + requestIndex, mode: core_constants.MODE.BUTTERFLY, background: true,
+            { maxTokens: 4096, context, contextEnvelope, origin, taskKey: requestTaskKey + ':slot:' + requestIndex, mode: core_constants.MODE.BUTTERFLY, background: true,
                 ...(readableR62 ? { recoveryCompatibility: { contract: continueLegacyPlan ? 'butterfly-legacy-plan-r62' : 'butterfly-readable-r62',
-                    legacyPrompts: [legacy_recovery.legacyButterflySlotPrompt(context, memoryBank, requestIndex, nodes)] } } : {}) },
+                    legacyPrompts: [legacy_recovery.legacyButterflySlotPrompt(context, memoryBank, requestIndex, nodes)], legacyTemperatures: [0.55] } } : {}) },
             value => {
                 const raw = value?.node;
                 if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw core_butterflyContract.butterflyValidationError('worldSpec');
@@ -32505,10 +32507,10 @@ async function generateButterflyIncrementalWithRepair(context, memoryBank, origi
     const part = await generation_client.requestValidatedSegment(
         butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds, { readableR62 }) + core_incremental.derivedExpansionDirective(previous, memoryBank),
         '蝴蝶效应 · 正在追加新的平行分歧…',
-        { maxTokens: 9000, temperature: 0.55, context, origin, taskKey: `${taskKey}${readableR62 ? '' : NARRATIVE_SLOT_MARKER}:increment`, mode: core_constants.MODE.BUTTERFLY, background: true,
+        { maxTokens: 9000, context, origin, taskKey: `${taskKey}${readableR62 ? '' : NARRATIVE_SLOT_MARKER}:increment`, mode: core_constants.MODE.BUTTERFLY, background: true,
             ...(readableR62 ? { recoveryCompatibility: { contract: 'butterfly-readable-r62', legacyPrompts: [
                 legacy_recovery.legacyButterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
-            ] } } : {}) },
+            ], legacyTemperatures: [0.55] } } : {}) },
         raw => normalizeButterflyIncrementPart(raw, memoryBank, context),
     );
     const merged = mergeButterflyIncremental(previous, part, sourceMemoryIds);
@@ -33969,7 +33971,7 @@ async function generateItemsIncrementalWithRepair(context, memoryBank, roomSessi
             ? generation_prompts.promptSafetyBoundary(context, '他的物品 / 人设扩展', null, memoryBank) + '\n仅输出 {"containers":[{"id":"已有容器id","nodes":[{"id":"新id","kind":"item|container","label":"名称","basis":"记忆|推演","summary":"物件描述","line":"当下角色台词","sourceMemoryIds":[],"sourceMemoryAnchor":"","children":[]}]}]}。已有父节点只返回 id 与 children；新增节点必须有 label/summary/line，不扩写共同历史。没有新物件就 containers=[]。'
             : basePrompt, memoryBank, previous, sourceMemoryIds, options),
         '他的物品 · 正在从新增档案追加物件…',
-        { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ITEMS], temperature: 0.45, context, contextEnvelope: options.presentationContext?.contextEnvelope, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ITEMS, background: true },
+        { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ITEMS], context, contextEnvelope: options.presentationContext?.contextEnvelope, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ITEMS, background: true },
         raw => options.allowPersonaExpansion ? normalizeItemsIncrementPatch(raw, previous, memoryBank, sourceMemoryIds, options) : normalizeItems(raw, memoryBank),
     );
     const { session, added } = mergeItemsIncremental(previous, fresh, sourceMemoryIds, { ...options, memoryBank });
@@ -34555,7 +34557,7 @@ async function generateCharacterProfileForGroup(groupId) {
     const raw = await generation_client.requestValidatedSegment(
         characterProfilePrompt(sources),
         `正在整理「${sources.characterData.name}」的角色档案与固定关系资料…`,
-        { context: targetContext, contextEnvelope: characterProfileContextEnvelope(sources), maxTokens: 7000, temperature: 0.25, taskKey, mode: 'character-profile', background: true },
+        { context: targetContext, contextEnvelope: characterProfileContextEnvelope(sources), maxTokens: 7000, temperatureCeiling: 0.25, taskKey, mode: 'character-profile', background: true },
         value => normalizeCharacterProfile(value, sources, profileKey, sources.characterData.name, sources.characterData.avatar),
     );
     setCharacterProfile(context, raw);
@@ -35626,12 +35628,12 @@ async function generateTravelWithRepair(context, memoryBank, origin, taskKey, op
             + (previous && options.allowPersonaExpansion !== true ? '\n本轮只同步历史：所有新地点必须 basis=记忆，引用本轮 incrementalMemoryIds；不补人设推演地点。' : ''),
         previous ? '他的出行路线 · 正在把新增地点标到地图上…' : '他的出行路线 · 正在绘制生活地图…',
         {
-            maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.TRAVEL], temperature: 0.45,
+            maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.TRAVEL],
             context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:travel-map`, mode: core_constants.MODE.TRAVEL, background: true,
             recoveryCompatibility: structuredDesign ? { contract: designContract, legacyPrompts: [] }
                 : { contract: 'travel-postcard-design-r8415', legacyPrompts: [
                 legacyTravelRecoveryPromptR8415(context, memoryBank, previous, sourceMemoryIds, worldPresentation, options.allowPersonaExpansion),
-            ] },
+            ], legacyTemperatures: [0.45] },
         },
         raw => normalizeTravel(raw, memoryBank, {
             allowPartial: !!previous,
@@ -35974,6 +35976,22 @@ function jsonShapeExampleBlock(prompt) {
 }
 
 __m_generation_jsonShapeExamples_js.jsonShapeExampleBlock = jsonShapeExampleBlock;
+}
+
+function __init_generation_requestTemperature_js() {
+// MODULE: generation/requestTemperature.js
+
+// Page code never overrides the user's temperature. Cold judgement/evidence
+// steps may only lower it through a ceiling.
+function resolveRequestTemperature(options = {}, settings = {}) {
+    const user = Number.isFinite(Number(settings.temperature)) ? Number(settings.temperature) : 0.9;
+    const explicit = Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : null;
+    const base = explicit ?? user;
+    const ceiling = Number(options.temperatureCeiling);
+    return Number.isFinite(ceiling) ? Math.min(base, ceiling) : base;
+}
+
+__m_generation_requestTemperature_js.resolveRequestTemperature = resolveRequestTemperature;
 }
 
 function __init_modes_themeSong_js() {
@@ -36351,8 +36369,8 @@ const generation_recovery = __m_generation_recovery_js;
 
 
 
-function taskOptions(mode, context, origin, taskKey, maxTokens = 6000, temperature = 0.45) {
-    return { maxTokens, temperature, context, origin, taskKey, mode, background: true };
+function taskOptions(mode, context, origin, taskKey, maxTokens = 6000, temperatureCeiling = null) {
+    return { maxTokens, context, origin, taskKey, mode, background: true, ...(temperatureCeiling == null ? {} : { temperatureCeiling }) };
 }
 
 const CONTENT_TARGETS = Object.freeze({
@@ -36479,7 +36497,7 @@ TRUSTED_EVENT_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
 严格输出：{"events":[{"id":"${core_text.esc(item.id)}","title":"...","date":"...","cgDesc":"...","sourceMemoryIds":${JSON.stringify(item.sourceMemoryIds)},"sourceMemoryAnchor":${JSON.stringify(item.sourceMemoryAnchor)},"visualSeed":["..."],"imagePrompt":"..."}]}
 只输出 JSON。`;
     const raw = await generation_client.requestValidatedSegment(
-        prompt, `重新生成 ADV EVENT「${item.title}」…`, taskOptions(core_constants.MODE.ADV, context, origin, `${taskKey}:event`, 6000),
+        prompt, `重新生成 ADV EVENT「${item.title}」…`, taskOptions(core_constants.MODE.ADV, context, origin, `${taskKey}:event`, 6000, 0.35),
         data => {
             const normalized = modes_advEvent.normalizeEventList(data, memoryBank, { allowPartial: false });
             if (!normalized.events[0] || !sameEvidence(normalized.events[0], item)) throw new Error('重新生成的 ADV EVENT 没有保持原档案证据。');
@@ -36493,7 +36511,7 @@ TRUSTED_EVENT_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
 async function regenerateAdvText(item, context, memoryBank, origin, taskKey) {
     const raw = await generation_client.requestValidatedSegment(
         modes_advEvent.advPrompt(context, item, memoryBank),
-        `重新生成「${item.title}」ADV 正文…`, taskOptions(core_constants.MODE.ADV, context, origin, `${taskKey}:text`, 12000, 0.55),
+        `重新生成「${item.title}」ADV 正文…`, taskOptions(core_constants.MODE.ADV, context, origin, `${taskKey}:text`, 12000),
         modes_advEvent.normalizeAdv,
     );
     return raw;
@@ -36505,7 +36523,7 @@ async function regenerateHeartVoice(session, item, context, memoryBank, origin, 
         ? modes_heart.heartPostVoicePrompt(context, memoryBank, session, null, null)
         : modes_heart.heartSeasonVoicePrompt(context, memoryBank, session, kind, null, null);
     const list = await modes_heart.requestHeartPart(
-        prompt, `重新生成 ${item.title}…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:voice`, 8000, 0.65),
+        prompt, `重新生成 ${item.title}…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:voice`, 8000),
         raw => modes_heart.normalizeVoiceDramaPart(raw, [kind], memoryBank),
     );
     return { ...list[0], id: item.id, incrementBatchId: item.incrementBatchId || '', sourceArchiveMemoryIds: item.sourceArchiveMemoryIds || [], generatedAt: Date.now() };
@@ -36515,7 +36533,7 @@ async function regenerateHeartScenario(session, item, context, memoryBank, origi
     const season = core_text.normalizeText(item.season, 40).toLowerCase();
     const list = await modes_heart.requestHeartPart(
         modes_heart.heartSeasonScenarioPrompt(context, memoryBank, session, season, null, null),
-        `重新生成 ${item.title}…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:scenario`, 9000, 0.7),
+        `重新生成 ${item.title}…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:scenario`, 9000),
         raw => modes_heart.normalizeScenarioDramaPart(raw, season, memoryBank),
     );
     return { ...list[0], id: item.id, incrementBatchId: item.incrementBatchId || '', sourceArchiveMemoryIds: item.sourceArchiveMemoryIds || [], generatedAt: Date.now() };
@@ -36543,7 +36561,7 @@ ${JSON.stringify(item, null, 2)}
     const list = await modes_heart.requestHeartPart(
         prompt,
         '重新生成萤火虫追加约会会话…',
-        taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:firefly`, 4200, 0.75),
+        taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:firefly`, 4200),
         raw => {
             const list = modes_heart.normalizeFireflyVoicesPart(raw, { minTotal: 1, requireDistribution: false, requireRich: true });
             if (!list[0] || list[0].color !== color) throw new Error('重新生成的萤火虫会话没有保持原颜色。');
@@ -36557,7 +36575,7 @@ ${JSON.stringify(item, null, 2)}
 async function regenerateHeartStrip(session, item, context, memoryBank, origin, taskKey) {
     const list = await modes_heart.requestHeartPart(
         modes_heart.heartStripsPrompt(context, memoryBank, session, null, null),
-        `重新生成日常一格「${item.title}」…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:strip`, 7000, 0.7),
+        `重新生成日常一格「${item.title}」…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:strip`, 7000),
         modes_heart.normalizeHeartStripsPart,
     );
     const candidate = list[0];
@@ -36597,7 +36615,7 @@ async function regeneratePhoneApp(session, app, context, memoryBank, origin, tas
     assertPhoneRegenerationOrigin(origin, memoryBank);
     const raw = await generation_client.requestValidatedSegment(
         modes_phone.phoneAppPrompt(context, memoryBank, plan, planApp),
-        `重新生成 App「${app.label}」…`, { ...taskOptions(core_constants.MODE.PHONE, context, origin, `${taskKey}:app`, app.kind === 'chat' ? 12000 : 9000, 0.55), contextEnvelope: presentationContext.contextEnvelope },
+        `重新生成 App「${app.label}」…`, { ...taskOptions(core_constants.MODE.PHONE, context, origin, `${taskKey}:app`, app.kind === 'chat' ? 12000 : 9000), contextEnvelope: presentationContext.contextEnvelope },
         data => modes_phone.assertPhoneReplacementPreservesRecords(app,
             modes_phone.normalizePhoneDraftApp(data, planApp, memoryBank, session.deviceKind, null, { controlledEvidence: presentationContext.settingEvidence })),
     );
@@ -36613,7 +36631,7 @@ async function regeneratePhoneEntry(session, app, entry, context, memoryBank, or
     assertPhoneRegenerationOrigin(origin, memoryBank);
     const raw = await generation_client.requestValidatedSegment(
         modes_phone.phoneAppPrompt(context, memoryBank, plan, planApp),
-        `重新生成「${entry.title}」…`, { ...taskOptions(core_constants.MODE.PHONE, context, origin, `${taskKey}:entry`, 8000, 0.6), contextEnvelope: presentationContext.contextEnvelope },
+        `重新生成「${entry.title}」…`, { ...taskOptions(core_constants.MODE.PHONE, context, origin, `${taskKey}:entry`, 8000), contextEnvelope: presentationContext.contextEnvelope },
         data => modes_phone.assertPhoneReplacementPreservesRecords({ entries: [entry] },
             modes_phone.normalizePhoneDraftApp(data, planApp, memoryBank, session.deviceKind, null, { controlledEvidence: presentationContext.settingEvidence })),
     );
@@ -36625,7 +36643,7 @@ async function regenerateEndingRoute(session, item, context, memoryBank, origin,
     if (item.available) {
         return generation_client.requestValidatedSegment(
             modes_ending.endingRouteDetailPrompt(context, memoryBank, session, item),
-            `重新生成结局路线「${item.title}」…`, taskOptions(core_constants.MODE.ENDING, context, origin, `${taskKey}:route`, 14000, 0.65),
+            `重新生成结局路线「${item.title}」…`, taskOptions(core_constants.MODE.ENDING, context, origin, `${taskKey}:route`, 14000),
             raw => modes_ending.normalizeEndingRouteDetail(raw, item),
         );
     }
@@ -36636,7 +36654,7 @@ CURRENT_ROUTE_JSON:\n${JSON.stringify(item, null, 2)}
 TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
 严格输出：{"ending":{"title":"...","subtitle":"...","unlockHint":"..."}}。只输出 JSON。`;
     const raw = await generation_client.requestValidatedSegment(
-        prompt, `重新生成未解锁路线「${item.title}」…`, taskOptions(core_constants.MODE.ENDING, context, origin, `${taskKey}:locked-route`, 4000, 0.5),
+        prompt, `重新生成未解锁路线「${item.title}」…`, taskOptions(core_constants.MODE.ENDING, context, origin, `${taskKey}:locked-route`, 4000),
         data => {
             const route = data?.ending || {};
             const title = core_text.normalizeText(route.title, 100);
@@ -36659,7 +36677,7 @@ TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
 easterEgg 只允许上述结构化文字和 moduleType 枚举，不得输出 JavaScript、HTML、CSS、URL、事件处理器或任何代码；所有互动均由插件本地固定代码执行。
 只输出 JSON。`;
     const list = await generation_client.requestValidatedSegment(
-        prompt, `重新生成告白回看「${item.title || item.id}」…`, taskOptions(core_constants.MODE.ENDING, context, origin, `${taskKey}:confession`, 7000, 0.55),
+        prompt, `重新生成告白回看「${item.title || item.id}」…`, taskOptions(core_constants.MODE.ENDING, context, origin, `${taskKey}:confession`, 7000),
         raw => {
             const list = modes_ending.normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank);
             if (!list[0] || !sameEvidence(list[0], item)) throw new Error('重新生成的告白回看没有保持原档案证据。');
@@ -36679,7 +36697,7 @@ ${item.unlocked ? `TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}`
 严格输出：{"entries":[{"id":"${core_text.esc(item.id)}","title":"...","description":"...","category":"...","tier":"bronze","unlocked":${item.unlocked ? 'true' : 'false'},"unlockedAt":${JSON.stringify(item.unlockedAt || '')},"unlockCondition":${item.unlocked ? '"一句话说明做到或经历了什么才解锁，并受同一组证据支持"' : '""'},"sourceMemoryIds":${JSON.stringify(item.sourceMemoryIds || [])},"sourceMemoryAnchor":${JSON.stringify(item.sourceMemoryAnchor || '')},"hint":"..."}]}
 只输出 JSON。`;
     const normalized = await generation_client.requestValidatedSegment(
-        prompt, `重新生成成就「${item.title}」…`, taskOptions(core_constants.MODE.ACHIEVEMENTS, context, origin, `${taskKey}:achievement`, 5000, 0.6),
+        prompt, `重新生成成就「${item.title}」…`, taskOptions(core_constants.MODE.ACHIEVEMENTS, context, origin, `${taskKey}:achievement`, 5000),
         raw => {
             const normalized = modes_achievements.normalizeAchievements(raw, memoryBank, { allowPartial: false });
             const candidate = normalized.entries[0];
@@ -36750,7 +36768,7 @@ CURRENT_MOOD_NOTE_JSON:\n${JSON.stringify(item, null, 2)}
 TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
 严格输出：{"mood":{"text":"一两句、简短、第一人称"}}。只输出 JSON。`;
     const raw = await generation_client.requestValidatedSegment(
-        prompt, '重新生成一条页角随笔…', taskOptions(core_constants.MODE.CALENDAR, context, origin, `${taskKey}:calendar-mood`, 2200, 0.45),
+        prompt, '重新生成一条页角随笔…', taskOptions(core_constants.MODE.CALENDAR, context, origin, `${taskKey}:calendar-mood`, 2200),
         data => {
             const text = core_text.normalizeText(data?.mood?.text, 220);
             if (!text || text.length < 8) throw new Error('页角随笔重新生成内容不足。');
@@ -36821,7 +36839,7 @@ ${evidence.length ? `TRUSTED_MAIN_EVIDENCE_JSON:\n${JSON.stringify(evidence, nul
         : item.trueEnding ? 'Ω 的 monologue 为空，intervention 汇合实际已观测命运，回到与 {{user}} 的当下关系，形成有余韵的情绪落点；不擅自确立恋爱。' : '普通分歧 monologue 展开平行体第一人称的生活处境、关键选择及代价与情绪起伏；intervention 写现世 {{char}} 对照另一个我的触动与自省；systemNote 给出冷酷、明确的命运判定。不按字数或代词次数验收。'}禁止前任，禁止 {{char}} 与 {{user}} 以外的任何人恋爱、结婚或成家。只输出 JSON。`
         + (!readableR62 && item.trueEnding ? '\nVALIDATED_VOICES_JSON:' + JSON.stringify(observedNodes.filter(node => !node.trueEnding && !node.historicalObservation && !node.formerOmega).slice(-8).map(node => ({ label: node.label, monologue: core_text.normalizeText(node.monologue, 300), intervention: core_text.normalizeText(node.intervention, 200) }))) : '');
     const raw = await generation_client.requestValidatedSegment(
-        prompt, `重新生成「${item.label}」…`, taskOptions(core_constants.MODE.BUTTERFLY, context, origin, `${taskKey}${readableR62 ? '' : ':narrative-r84'}:butterfly`, 9000, 0.7),
+        prompt, `重新生成「${item.label}」…`, taskOptions(core_constants.MODE.BUTTERFLY, context, origin, `${taskKey}${readableR62 ? '' : ':narrative-r84'}:butterfly`, 9000),
         data => normalizeRegeneratedButterflyNode(item, data?.node, memoryBank, context),
     );
     return raw;
@@ -37509,6 +37527,7 @@ const generation_jsonParser = __m_generation_jsonParser_js;
 const generation_normalizers = __m_generation_normalizers_js;
 const generation_prompts = __m_generation_prompts_js;
 const generation_jsonShapeExamples = __m_generation_jsonShapeExamples_js;
+const generation_requestTemperature = __m_generation_requestTemperature_js;
 const modes_achievements = __m_modes_achievements_js;
 const modes_advEvent = __m_modes_advEvent_js;
 const modes_album = __m_modes_album_js;
@@ -38392,7 +38411,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`,
     const service = context.ConnectionManagerRequestService;
     let selectedProfileFingerprint = '';
     let overridePayload = {
-        temperature: Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : settings.temperature,
+        temperature: generation_requestTemperature.resolveRequestTemperature(options, settings),
     };
     const modelOverride = core_text.normalizeText(options.model || (connectionMode === 'manual' ? settings.manualApiModel : settings.modelOverride), 240);
     if (modelOverride) overridePayload.model = modelOverride;
@@ -39225,7 +39244,7 @@ async function generateModeOperation(mode, options = {}) {
             const raw = await requestValidatedSegment(
                 modes_relations.relationsPrompt(context, memoryBank, settingEntries),
                 '正在整理当前世界线的人际关系…',
-                { maxTokens: core_constants.MODE_TOKEN_CAPS[mode] || 7000, temperature: 0.3, context, origin, taskKey: `${taskKey}:relations`, mode, background: true },
+                { maxTokens: core_constants.MODE_TOKEN_CAPS[mode] || 7000, temperatureCeiling: 0.3, context, origin, taskKey: `${taskKey}:relations`, mode, background: true },
                 value => {
                     if (settingEntries.length && !Array.isArray(value?.settingRelationships)) throw new Error('设定人物列表缺失');
                     modes_relations.normalizeRelations(value, memoryBank, context);
@@ -40004,7 +40023,7 @@ async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, opt
     const index = await generation_client.requestValidatedSegment(
         albumIndexPrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
         previous ? '回忆相簿 1/3 · 正在从新增档案挑选新 CG…' : '回忆相簿 1/3 · 正在挑选重要 CG 节点…',
-        { maxTokens: 5500, temperature: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ALBUM, background: true },
+        { maxTokens: 5500, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ALBUM, background: true },
         raw => normalizeAlbumIndex(raw, memoryBank, previous ? sourceMemoryIds : null),
     );
     const revisit = previous && !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
@@ -40033,7 +40052,7 @@ async function generateAlbumWithRepair(context, memoryBank, origin, taskKey, opt
     const relationshipSnapshot = await generation_client.requestValidatedSegment(
         albumRelationshipScanPrompt(context, memoryBank, participantSnapshot),
         '回忆相簿 2/3 · 正在扫描双方当下感情状态…',
-        { maxTokens: 3200, temperature: 0.25, context, origin, taskKey: `${taskKey}:relationship-scan`, mode: core_constants.MODE.ALBUM, background: true },
+        { maxTokens: 3200, temperatureCeiling: 0.25, context, origin, taskKey: `${taskKey}:relationship-scan`, mode: core_constants.MODE.ALBUM, background: true },
         raw => normalizeAlbumRelationshipSnapshot(raw, memoryBank, participantSnapshot),
     );
     const batches = generation_client.chunkForGeneration(unlocked, 3);
@@ -40070,7 +40089,7 @@ async function fillAlbumComments(context, memoryBank, origin, taskKey, previous,
     const relationshipSnapshot = await generation_client.requestValidatedSegment(
         albumRelationshipScanPrompt(context, memoryBank, participantSnapshot),
         '回忆相簿 · 正在扫描双方当下感情状态…',
-        { maxTokens: 3200, temperature: 0.25, context, origin, taskKey: `${taskKey}:relationship-scan`, mode: core_constants.MODE.ALBUM, background: true },
+        { maxTokens: 3200, temperatureCeiling: 0.25, context, origin, taskKey: `${taskKey}:relationship-scan`, mode: core_constants.MODE.ALBUM, background: true },
         raw => normalizeAlbumRelationshipSnapshot(raw, memoryBank, participantSnapshot),
     );
     const batches = generation_client.chunkForGeneration(unlocked, 3);
@@ -41399,25 +41418,49 @@ function requestIdentity(prompt, options) {
         mode: options.mode ?? '', phrasePolicy: options.enforceGeneratedPhrasePolicy !== false };
 }
 
+function legacyTemperatures(value) {
+    if (value == null) return [];
+    if (!Array.isArray(value) || value.length > 3 || value.some(item => !Number.isFinite(Number(item)))) return null;
+    return value.map(item => Number(item));
+}
+
 function compatibilityContract(options, handle, slot) {
     const requested = options?.recoveryCompatibility;
     const contract = requested && typeof requested.contract === 'string' && Object.hasOwn(COMPATIBILITY_CONTRACTS, requested.contract)
         && COMPATIBILITY_CONTRACTS[requested.contract];
     if (!contract || contract.mode !== handle.journal.identity.mode || contract.mode !== options.mode || !contract.slot.test(slot)
         || !Array.isArray(requested.legacyPrompts) || requested.legacyPrompts.length > 3
-        || requested.legacyPrompts.some(prompt => !primitiveString(prompt, GENERATION_RECOVERY_LIMITS.requestChars, true))) return '';
+        || requested.legacyPrompts.some(prompt => !primitiveString(prompt, GENERATION_RECOVERY_LIMITS.requestChars, true))
+        || legacyTemperatures(requested.legacyTemperatures) == null) return '';
     return requested.contract;
+}
+
+async function legacyRecoveryPromptPermitted(previous, options) {
+    const temperatures = legacyTemperatures(options?.recoveryCompatibility?.legacyTemperatures);
+    if (!temperatures || !Array.isArray(options?.recoveryCompatibility?.legacyPrompts)) return false;
+    for (const prompt of options.recoveryCompatibility.legacyPrompts) {
+        const candidates = [options, ...temperatures.map(temperature => ({ ...options, temperature }))];
+        for (const candidate of candidates) {
+            if (await generationRecoveryDigest(requestIdentity(prompt, candidate)) === previous?.requestHash) return true;
+        }
+    }
+    return false;
 }
 
 async function permitsLegacyRequest(previous, options, handle, contract) {
     // No general hash bypass: only an unmarked legacy request whose exact old
-    // prompt is rebuilt by the owning mode. Every non-prompt input is unchanged.
+    // prompt is rebuilt by the owning mode. Older drafts may still carry the
+    // temperature that used to be hardcoded on this page.
     if (!contract || !handle.continueRequested || previous.contract) return false;
     currentAttachedJournal(options.origin, handle);
+    const temperatures = legacyTemperatures(options.recoveryCompatibility.legacyTemperatures) || [];
     for (const prompt of options.recoveryCompatibility.legacyPrompts) {
-        const legacyHash = await generationRecoveryDigest(requestIdentity(prompt, options));
-        currentAttachedJournal(options.origin, handle);
-        if (legacyHash === previous.requestHash) return true;
+        const candidates = [options, ...temperatures.map(temperature => ({ ...options, temperature }))];
+        for (const candidate of candidates) {
+            const legacyHash = await generationRecoveryDigest(requestIdentity(prompt, candidate));
+            currentAttachedJournal(options.origin, handle);
+            if (legacyHash === previous.requestHash) return true;
+        }
     }
     return false;
 }
@@ -41704,6 +41747,7 @@ __m_generation_recovery_js.persistGenerationRecovery = persistGenerationRecovery
 __m_generation_recovery_js.publishGenerationRecoveryProgress = publishGenerationRecoveryProgress;
 __m_generation_recovery_js.freezeRecoveryRequestPayload = freezeRecoveryRequestPayload;
 __m_generation_recovery_js.frozenGenerationInput = frozenGenerationInput;
+__m_generation_recovery_js.legacyRecoveryPromptPermitted = legacyRecoveryPromptPermitted;
 __m_generation_recovery_js.withRecoverySegment = withRecoverySegment;
 __m_generation_recovery_js.recordRecoveryTruncation = recordRecoveryTruncation;
 __m_generation_recovery_js.noteGenerationRecoveryFailure = noteGenerationRecoveryFailure;
@@ -59040,6 +59084,7 @@ __init_modes_relations_js();
 __init_modes_travel_js();
 __init_generation_normalizers_js();
 __init_generation_jsonShapeExamples_js();
+__init_generation_requestTemperature_js();
 __init_modes_themeSong_js();
 __init_modes_inbox_js();
 __init_generation_contentRegeneration_js();

@@ -186,7 +186,7 @@ async function estimateDates(root) {
     if (!globalThis.confirm?.(`将请求模型估计 ${preview.length} 条场景的日期。结果先预览，确认后才写入。继续？`)) return;
     const parsed = await generation_client.generateConfiguredJson(
         archive_storyScenes.estimateDatePrompt(preview),
-        { skipTokenCount: false, maxTokens: 4000, temperature: 0.2 },
+        { skipTokenCount: false, maxTokens: 4000, temperatureCeiling: 0.2 },
     );
     const rows = Array.isArray(parsed?.dates) ? parsed.dates : [];
     const lines = preview.map(scene => {

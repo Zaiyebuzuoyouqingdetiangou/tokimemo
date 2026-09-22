@@ -391,7 +391,7 @@ export async function generateAdvIndexWithRepair(context, memoryBank, origin, ex
     const fresh = await generation_client.requestValidatedSegment(
         advImportantIndexPrompt(context, memoryBank, previous, sourceMemoryIds),
         previous ? 'ADV EVENT · 正在从新增档案挑选新节点…' : 'ADV EVENT · 正在挑选重要节点…',
-        { maxTokens: 5500, temperature: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ADV, background: true },
+        { maxTokens: 5500, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ADV, background: true },
         raw => normalizeEventList(raw, memoryBank, { allowPartial: !!previous, sourceMemoryIds: previous ? sourceMemoryIds : null }),
     );
     const revisit = previous && !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
@@ -660,7 +660,6 @@ export async function generateAllAdvForSession(options = {}) {
                 `正在生成本批 ${pending.length} 篇 ADV…`,
                 {
                     maxTokens: core_constants.MAX_GENERATION_OUTPUT_TOKENS,
-                    temperature: 0.55,
                     context,
                     origin,
                     signal: bulkCancel.signal,
@@ -820,7 +819,6 @@ export async function repairFailedAdvForSession(options = {}) {
                     `正在补 ADV：${event.title}`,
                     {
                         maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV],
-                        temperature: 0.55,
                         context,
                         origin,
                         signal: bulkCancel.signal,
@@ -947,7 +945,7 @@ export async function generateAdvForSelected(options = {}) {
         await startAdvRecovery(targetRuntime, { kind: 'adv-single', eventId }, options, session);
         const generatedAdv = await generation_client.requestValidatedSegment(
             advPrompt(context, event, memoryBank), `正在根据当前聊天档案生成「${event.title}」ADV…`,
-            { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV], temperature: 0.55, context, origin, taskKey, mode: core_constants.MODE.ADV, background: true, segmentMaxAttempts: 1 },
+            { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV], context, origin, taskKey, mode: core_constants.MODE.ADV, background: true, segmentMaxAttempts: 1 },
             raw => normalizeAdv(raw),
         );
         const persisted = await persistAdvMutation(targetRuntime, latest => {

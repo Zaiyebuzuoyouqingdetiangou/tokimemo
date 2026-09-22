@@ -486,7 +486,7 @@ export async function generateAlbumWithRepair(context, memoryBank, origin, taskK
     const index = await generation_client.requestValidatedSegment(
         albumIndexPrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
         previous ? '回忆相簿 1/3 · 正在从新增档案挑选新 CG…' : '回忆相簿 1/3 · 正在挑选重要 CG 节点…',
-        { maxTokens: 5500, temperature: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ALBUM, background: true },
+        { maxTokens: 5500, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:index`, mode: core_constants.MODE.ALBUM, background: true },
         raw => normalizeAlbumIndex(raw, memoryBank, previous ? sourceMemoryIds : null),
     );
     const revisit = previous && !core_incremental.incrementalArchiveMemoryIds(previous, memoryBank).length;
@@ -515,7 +515,7 @@ export async function generateAlbumWithRepair(context, memoryBank, origin, taskK
     const relationshipSnapshot = await generation_client.requestValidatedSegment(
         albumRelationshipScanPrompt(context, memoryBank, participantSnapshot),
         '回忆相簿 2/3 · 正在扫描双方当下感情状态…',
-        { maxTokens: 3200, temperature: 0.25, context, origin, taskKey: `${taskKey}:relationship-scan`, mode: core_constants.MODE.ALBUM, background: true },
+        { maxTokens: 3200, temperatureCeiling: 0.25, context, origin, taskKey: `${taskKey}:relationship-scan`, mode: core_constants.MODE.ALBUM, background: true },
         raw => normalizeAlbumRelationshipSnapshot(raw, memoryBank, participantSnapshot),
     );
     const batches = generation_client.chunkForGeneration(unlocked, 3);
@@ -552,7 +552,7 @@ async function fillAlbumComments(context, memoryBank, origin, taskKey, previous,
     const relationshipSnapshot = await generation_client.requestValidatedSegment(
         albumRelationshipScanPrompt(context, memoryBank, participantSnapshot),
         '回忆相簿 · 正在扫描双方当下感情状态…',
-        { maxTokens: 3200, temperature: 0.25, context, origin, taskKey: `${taskKey}:relationship-scan`, mode: core_constants.MODE.ALBUM, background: true },
+        { maxTokens: 3200, temperatureCeiling: 0.25, context, origin, taskKey: `${taskKey}:relationship-scan`, mode: core_constants.MODE.ALBUM, background: true },
         raw => normalizeAlbumRelationshipSnapshot(raw, memoryBank, participantSnapshot),
     );
     const batches = generation_client.chunkForGeneration(unlocked, 3);

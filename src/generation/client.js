@@ -33,6 +33,7 @@ import * as generation_jsonParser from './jsonParser.js';
 import * as generation_normalizers from './normalizers.js';
 import * as generation_prompts from './prompts.js';
 import * as generation_jsonShapeExamples from './jsonShapeExamples.js';
+import * as generation_requestTemperature from './requestTemperature.js';
 import * as modes_achievements from '../modes/achievements.js';
 import * as modes_advEvent from '../modes/advEvent.js';
 import * as modes_album from '../modes/album.js';
@@ -889,7 +890,7 @@ ${expanded}${creativeSupplement}${phrasePolicy}`,
     const service = context.ConnectionManagerRequestService;
     let selectedProfileFingerprint = '';
     let overridePayload = {
-        temperature: Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : settings.temperature,
+        temperature: generation_requestTemperature.resolveRequestTemperature(options, settings),
     };
     const modelOverride = core_text.normalizeText(options.model || (connectionMode === 'manual' ? settings.manualApiModel : settings.modelOverride), 240);
     if (modelOverride) overridePayload.model = modelOverride;
@@ -1722,7 +1723,7 @@ async function generateModeOperation(mode, options = {}) {
             const raw = await requestValidatedSegment(
                 modes_relations.relationsPrompt(context, memoryBank, settingEntries),
                 '正在整理当前世界线的人际关系…',
-                { maxTokens: core_constants.MODE_TOKEN_CAPS[mode] || 7000, temperature: 0.3, context, origin, taskKey: `${taskKey}:relations`, mode, background: true },
+                { maxTokens: core_constants.MODE_TOKEN_CAPS[mode] || 7000, temperatureCeiling: 0.3, context, origin, taskKey: `${taskKey}:relations`, mode, background: true },
                 value => {
                     if (settingEntries.length && !Array.isArray(value?.settingRelationships)) throw new Error('设定人物列表缺失');
                     modes_relations.normalizeRelations(value, memoryBank, context);

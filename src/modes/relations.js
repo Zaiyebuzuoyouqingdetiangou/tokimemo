@@ -445,7 +445,7 @@ export async function generateCharacterProfileForGroup(groupId) {
     const raw = await generation_client.requestValidatedSegment(
         characterProfilePrompt(sources),
         `正在整理「${sources.characterData.name}」的角色档案与固定关系资料…`,
-        { context: targetContext, contextEnvelope: characterProfileContextEnvelope(sources), maxTokens: 7000, temperature: 0.25, taskKey, mode: 'character-profile', background: true },
+        { context: targetContext, contextEnvelope: characterProfileContextEnvelope(sources), maxTokens: 7000, temperatureCeiling: 0.25, taskKey, mode: 'character-profile', background: true },
         value => normalizeCharacterProfile(value, sources, profileKey, sources.characterData.name, sources.characterData.avatar),
     );
     setCharacterProfile(context, raw);

@@ -715,25 +715,49 @@ function requestIdentity(prompt, options) {
         mode: options.mode ?? '', phrasePolicy: options.enforceGeneratedPhrasePolicy !== false };
 }
 
+function legacyTemperatures(value) {
+    if (value == null) return [];
+    if (!Array.isArray(value) || value.length > 3 || value.some(item => !Number.isFinite(Number(item)))) return null;
+    return value.map(item => Number(item));
+}
+
 function compatibilityContract(options, handle, slot) {
     const requested = options?.recoveryCompatibility;
     const contract = requested && typeof requested.contract === 'string' && Object.hasOwn(COMPATIBILITY_CONTRACTS, requested.contract)
         && COMPATIBILITY_CONTRACTS[requested.contract];
     if (!contract || contract.mode !== handle.journal.identity.mode || contract.mode !== options.mode || !contract.slot.test(slot)
         || !Array.isArray(requested.legacyPrompts) || requested.legacyPrompts.length > 3
-        || requested.legacyPrompts.some(prompt => !primitiveString(prompt, GENERATION_RECOVERY_LIMITS.requestChars, true))) return '';
+        || requested.legacyPrompts.some(prompt => !primitiveString(prompt, GENERATION_RECOVERY_LIMITS.requestChars, true))
+        || legacyTemperatures(requested.legacyTemperatures) == null) return '';
     return requested.contract;
+}
+
+export async function legacyRecoveryPromptPermitted(previous, options) {
+    const temperatures = legacyTemperatures(options?.recoveryCompatibility?.legacyTemperatures);
+    if (!temperatures || !Array.isArray(options?.recoveryCompatibility?.legacyPrompts)) return false;
+    for (const prompt of options.recoveryCompatibility.legacyPrompts) {
+        const candidates = [options, ...temperatures.map(temperature => ({ ...options, temperature }))];
+        for (const candidate of candidates) {
+            if (await generationRecoveryDigest(requestIdentity(prompt, candidate)) === previous?.requestHash) return true;
+        }
+    }
+    return false;
 }
 
 async function permitsLegacyRequest(previous, options, handle, contract) {
     // No general hash bypass: only an unmarked legacy request whose exact old
-    // prompt is rebuilt by the owning mode. Every non-prompt input is unchanged.
+    // prompt is rebuilt by the owning mode. Older drafts may still carry the
+    // temperature that used to be hardcoded on this page.
     if (!contract || !handle.continueRequested || previous.contract) return false;
     currentAttachedJournal(options.origin, handle);
+    const temperatures = legacyTemperatures(options.recoveryCompatibility.legacyTemperatures) || [];
     for (const prompt of options.recoveryCompatibility.legacyPrompts) {
-        const legacyHash = await generationRecoveryDigest(requestIdentity(prompt, options));
-        currentAttachedJournal(options.origin, handle);
-        if (legacyHash === previous.requestHash) return true;
+        const candidates = [options, ...temperatures.map(temperature => ({ ...options, temperature }))];
+        for (const candidate of candidates) {
+            const legacyHash = await generationRecoveryDigest(requestIdentity(prompt, candidate));
+            currentAttachedJournal(options.origin, handle);
+            if (legacyHash === previous.requestHash) return true;
+        }
     }
     return false;
 }

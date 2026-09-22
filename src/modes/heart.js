@@ -705,7 +705,7 @@ export async function generateHeartWithRepair(context, memoryBank, origin, taskK
         const core = await generation_client.requestValidatedSegment(
             heartCoreIncrementPrompt(context, memoryBank, existing, sourceMemoryIds) + core_incremental.derivedExpansionDirective(existing, memoryBank, 'dialogues'),
             '角色互动 · 正在从新增档案追加时期对话…',
-            { maxTokens: 4500, temperature: 0.4, context, origin, taskKey: `${taskKey}:dialogues-increment`, mode: core_constants.MODE.HEART, background: true },
+            { maxTokens: 4500, temperatureCeiling: 0.4, context, origin, taskKey: `${taskKey}:dialogues-increment`, mode: core_constants.MODE.HEART, background: true },
             raw => normalizeHeartCoreIncrement(raw, memoryBank, sourceMemoryIds),
         );
         const preserveRelationship = !core.relationshipSourceMemoryIds?.length
@@ -718,8 +718,8 @@ export async function generateHeartWithRepair(context, memoryBank, origin, taskK
     const core = await generation_client.requestValidatedSegment(
         heartCorePrompt(context, memoryBank),
         '角色互动 · 正在生成时期对话…',
-        { maxTokens: 6000, temperature: 0.35, context, origin, taskKey: `${taskKey}:dialogues`, mode: core_constants.MODE.HEART, background: true,
-            recoveryCompatibility: { contract: 'heart-language-birthday-r8412', legacyPrompts: [heartCoreLegacyPrompt(context, memoryBank)] } },
+        { maxTokens: 6000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:dialogues`, mode: core_constants.MODE.HEART, background: true,
+            recoveryCompatibility: { contract: 'heart-language-birthday-r8412', legacyPrompts: [heartCoreLegacyPrompt(context, memoryBank)], legacyTemperatures: [0.35] } },
         raw => normalizeHeartCore(raw, memoryBank),
     );
     // Generic/automatic admission only fills an incomplete library. Explicit
@@ -1031,21 +1031,21 @@ export async function regenerateHeartPage(page, options = {}) {
         let replacement;
         if (pageId === 'language') {
             replacement = await request(heartCorePrompt(context, memoryBank), 'dialogues-full',
-                { maxTokens: 6000, temperature: 0.35 }, raw => normalizeHeart(makeHeartSession(normalizeHeartCore(raw, memoryBank)), memoryBank));
+                { maxTokens: 6000, temperatureCeiling: 0.35 }, raw => normalizeHeart(makeHeartSession(normalizeHeartCore(raw, memoryBank)), memoryBank));
         } else if (pageId === 'strips' || pageId === 'fireflies') {
             const strips = pageId === 'strips';
             const batch = await request(strips ? heartStripsPrompt(context, memoryBank, base) : heartFireflyPrompt(context, memoryBank, base),
-                pageId, strips ? { maxTokens: 5000 } : { maxTokens: 5200, temperature: 0.8 },
+                pageId, strips ? { maxTokens: 5000 } : { maxTokens: 5200 },
                 raw => normalizeHeartCollectionBatch(raw, pageId));
             replacement = { [strips ? 'dailyStrips' : 'fireflyVoices']: batch.items.map(enrich), rejectedCount: batch.rejectedCount };
         } else {
             const postending = pageId === 'postending';
             const voices = await request(postending ? heartPostVoicePrompt(context, memoryBank, base)
                 : heartSeasonVoicePrompt(context, memoryBank, base, pageId), 'voice',
-                { maxTokens: postending ? 3800 : 3000, temperature: 0.65 }, raw => normalizeVoiceDramaPart(raw, [pageId], memoryBank));
+                { maxTokens: postending ? 3800 : 3000 }, raw => normalizeVoiceDramaPart(raw, [pageId], memoryBank));
             const runScenario = !postending && (options.secondStep === true || core_settings.getPluginSettings().autoSecondPass === true);
             const scenarios = runScenario ? await request(heartSeasonScenarioPrompt(context, memoryBank, base, pageId), 'scenario',
-                { maxTokens: 3200, temperature: 0.65 }, raw => normalizeScenarioDramaPart(raw, pageId, memoryBank)) : [];
+                { maxTokens: 3200 }, raw => normalizeScenarioDramaPart(raw, pageId, memoryBank)) : [];
             if (!postending && !runScenario) {
                 core_requestCoordinator.noteSecondStepOffer(origin, {
                     label: '小事件', kind: 'heart-scenario', mode: core_constants.MODE.HEART, pageId,
@@ -1477,8 +1477,8 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
                 const core = await generation_client.requestValidatedSegment(
                     heartCorePrompt(context, memoryBank) + categoryLanguagePrompt(category),
                     partsDialoguesReady(base) ? '角色互动 · 正在重新生成基础语言…' : '角色互动 · 正在生成基础语言…',
-                    { maxTokens: 6000, temperature: 0.35, context, origin, taskKey: `${taskKey}:dialogues-full`, mode: core_constants.MODE.HEART, background: true,
-                        recoveryCompatibility: { contract: 'heart-language-birthday-r8412', legacyPrompts: [heartCoreLegacyPrompt(context, memoryBank) + categoryLanguagePrompt(category)] } },
+                    { maxTokens: 6000, temperatureCeiling: 0.35, context, origin, taskKey: `${taskKey}:dialogues-full`, mode: core_constants.MODE.HEART, background: true,
+                        recoveryCompatibility: { contract: 'heart-language-birthday-r8412', legacyPrompts: [heartCoreLegacyPrompt(context, memoryBank) + categoryLanguagePrompt(category)], legacyTemperatures: [0.35] } },
                     raw => normalizeHeartCore(categoryLanguageInput(raw, category), memoryBank),
                 );
                 const fullCoverage = {
@@ -1491,7 +1491,7 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
                 const core = await generation_client.requestValidatedSegment(
                     heartCoreIncrementPrompt(context, memoryBank, base, sourceMemoryIds) + core_incremental.derivedExpansionDirective(base, memoryBank, 'dialogues') + categoryLanguagePrompt(category),
                     '角色互动 · 追加时期对话',
-                    { maxTokens: 4500, temperature: 0.4, context, origin, taskKey: `${taskKey}:dialogues`, mode: core_constants.MODE.HEART, background: true },
+                    { maxTokens: 4500, temperatureCeiling: 0.4, context, origin, taskKey: `${taskKey}:dialogues`, mode: core_constants.MODE.HEART, background: true },
                     raw => normalizeHeartCoreIncrement(categoryLanguageInput(raw, category), memoryBank, sourceMemoryIds),
                 );
                 persisted = await persistHeartPartialPatch('dialogues', { type: 'dialogues-increment', core, ...coverage }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
@@ -1609,7 +1609,7 @@ async function generateHeartFirefliesSectionOperation(options, logicalTask) {
             const upgraded = await requestHeartPart(
                 heartFireflyUpgradePrompt(context, base, legacyBatch),
                 '角色互动 · 正在把旧版萤火虫升级为 GS4 式追加约会会话…',
-                { maxTokens: 5200, temperature: 0.72, context, origin, taskKey: `${taskKey}:upgrade`, mode: core_constants.MODE.HEART, background: true },
+                { maxTokens: 5200, context, origin, taskKey: `${taskKey}:upgrade`, mode: core_constants.MODE.HEART, background: true },
                 raw => normalizeFireflyUpgradePart(raw, legacyBatch),
             );
             const result = await persistHeartPartialPatch('firefly-upgrade', { type: 'firefly-upgrade', fireflyVoices: upgraded }, base, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
@@ -1679,7 +1679,7 @@ async function generateHeartFirefliesSectionOperation(options, logicalTask) {
         const batch = await requestHeartPart(
             heartFireflyPrompt(context, memoryBank, base, hasExisting ? base : null, sourceMemoryIds) + core_incremental.derivedExpansionDirective(base, memoryBank, 'fireflies'),
             hasExisting ? '角色互动 · 正在解锁新的萤火虫心声…' : '角色互动 · 正在点亮萤火虫栖息地…',
-            { maxTokens: 5200, temperature: 0.8, context, origin, taskKey, mode: core_constants.MODE.HEART, background: true },
+            { maxTokens: 5200, context, origin, taskKey, mode: core_constants.MODE.HEART, background: true },
             raw => normalizeHeartCollectionBatch(raw, 'fireflies'),
         );
         const batchId = core_incremental.incrementalBatchId('fireflies', sourceMemoryIds);
@@ -1830,7 +1830,7 @@ async function generateHeartSeasonSectionOperation(normalizedSeason, options, lo
                 const voice = enrichVoice((await requestHeartPart(
                     heartPostVoicePrompt(context, memoryBank, latest, latest, null),
                     '角色互动 · 追加未来 / 后日谈',
-                    { maxTokens: 3800, temperature: 0.65, context, origin, taskKey: `${taskKey}:voice`, mode: core_constants.MODE.HEART, background: true },
+                    { maxTokens: 3800, context, origin, taskKey: `${taskKey}:voice`, mode: core_constants.MODE.HEART, background: true },
                     raw => normalizeVoiceDramaPart(raw, ['postending'], memoryBank),
                 ))[0]);
                 const persisted = await persistHeartPartialPatch(`season:postending:${batchId}:voice`, { type: 'season', season: 'postending', voice }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
@@ -1850,9 +1850,9 @@ async function generateHeartSeasonSectionOperation(normalizedSeason, options, lo
                     voice = enrichVoice((await requestHeartPart(
                         heartSeasonVoicePrompt(context, memoryBank, latest, normalizedSeason, heartSeasonRequestBase(latest, normalizedSeason, batchId), null),
                         `角色互动 · 追加${ui_heartView.heartSeasonLabel(normalizedSeason)} Voice`,
-                        { maxTokens: 3000, temperature: 0.65, context, origin, taskKey: `${taskKey}:voice`, mode: core_constants.MODE.HEART, background: true,
+                        { maxTokens: 3000, context, origin, taskKey: `${taskKey}:voice`, mode: core_constants.MODE.HEART, background: true,
                             recoveryCompatibility: { contract: 'heart-season-siblings-r8412',
-                                legacyPrompts: [heartSeasonVoicePrompt(context, memoryBank, latest, normalizedSeason, latest, null)] } },
+                                legacyPrompts: [heartSeasonVoicePrompt(context, memoryBank, latest, normalizedSeason, latest, null)], legacyTemperatures: [0.65] } },
                         raw => normalizeVoiceDramaPart(raw, [normalizedSeason], memoryBank),
                     ))[0]);
                     const persisted = await persistHeartPartialPatch(`season:${normalizedSeason}:${batchId}:voice`, { type: 'season', season: normalizedSeason, voice }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);
@@ -1878,9 +1878,9 @@ async function generateHeartSeasonSectionOperation(normalizedSeason, options, lo
                     scenario = enrichScenario((await requestHeartPart(
                         heartSeasonScenarioPrompt(context, memoryBank, latest, normalizedSeason, heartSeasonRequestBase(latest, normalizedSeason, batchId), null),
                         `角色互动 · 追加${ui_heartView.heartSeasonLabel(normalizedSeason)} Scenario`,
-                        { maxTokens: 3200, temperature: 0.65, context, origin, taskKey: `${taskKey}:scenario`, mode: core_constants.MODE.HEART, background: true,
+                        { maxTokens: 3200, context, origin, taskKey: `${taskKey}:scenario`, mode: core_constants.MODE.HEART, background: true,
                             recoveryCompatibility: { contract: 'heart-season-siblings-r8412',
-                                legacyPrompts: [heartSeasonScenarioPrompt(context, memoryBank, latest, normalizedSeason, latest, null)] } },
+                                legacyPrompts: [heartSeasonScenarioPrompt(context, memoryBank, latest, normalizedSeason, latest, null)], legacyTemperatures: [0.65] } },
                         raw => normalizeScenarioDramaPart(raw, normalizedSeason, memoryBank),
                     ))[0]);
                     const persisted = await persistHeartPartialPatch(`season:${normalizedSeason}:${batchId}:scenario`, { type: 'season', season: normalizedSeason, scenario }, latest, memoryBank, origin, expectedChatId, expectedArchiveRevision, targetRuntime);

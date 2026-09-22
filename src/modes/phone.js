@@ -1156,7 +1156,7 @@ export async function generatePhoneWithRepair(context, memoryBank, origin, taskK
     const plan = resumeDraft?.plan || await generation_client.requestValidatedSegment(
         phonePlanPrompt(context, memoryBank, roomSession, worldPresentation),
         '私人终端 1/2 · 正在生成设备与 App 目录…',
-        { maxTokens: 8000, temperature: 0.35, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:plan`, mode: core_constants.MODE.PHONE, background: true },
+        { maxTokens: 8000, temperatureCeiling: 0.35, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:plan`, mode: core_constants.MODE.PHONE, background: true },
         raw => normalizePhonePlan(raw, memoryBank, { worldPresentation, controlledEvidence: presentationContext.settingEvidence || '' }),
     );
     const completedById = new Map((resumeDraft?.completedApps || []).map(app => [app.id, app]));
@@ -1519,7 +1519,7 @@ export async function generatePhoneIncrementalWithRepair(context, memoryBank, or
     const plan = await generation_client.requestValidatedSegment(
         phoneIncrementPlanPrompt(context, memoryBank, previous, sourceMemoryIds),
         '私人终端 · 正在规划新增条目…',
-        { maxTokens: 4500, temperature: 0.35, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment-plan`, mode: core_constants.MODE.PHONE, background: true },
+        { maxTokens: 4500, temperatureCeiling: 0.35, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment-plan`, mode: core_constants.MODE.PHONE, background: true },
         raw => normalizePhoneIncrementPlan(raw, previous),
     );
     if (!plan.apps.length) {

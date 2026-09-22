@@ -353,9 +353,9 @@ export async function generateButterflyWithRepair(context, memoryBank, origin, t
         const requestIndex = continueLegacyPlan && slot === 'OMEGA' ? legacyPlan.axes.length + 1 : index;
         const prompt = butterflySlotPrompt(context, memoryBank, index, slot, nodes, { readableR62 });
         const node = await request(prompt, '蝴蝶效应 · 节点 ' + (index + 1) + '/' + (index ? slots.length : '待定') + ' · ' + slot,
-            { maxTokens: 4096, temperature: 0.55, context, contextEnvelope, origin, taskKey: requestTaskKey + ':slot:' + requestIndex, mode: core_constants.MODE.BUTTERFLY, background: true,
+            { maxTokens: 4096, context, contextEnvelope, origin, taskKey: requestTaskKey + ':slot:' + requestIndex, mode: core_constants.MODE.BUTTERFLY, background: true,
                 ...(readableR62 ? { recoveryCompatibility: { contract: continueLegacyPlan ? 'butterfly-legacy-plan-r62' : 'butterfly-readable-r62',
-                    legacyPrompts: [legacy_recovery.legacyButterflySlotPrompt(context, memoryBank, requestIndex, nodes)] } } : {}) },
+                    legacyPrompts: [legacy_recovery.legacyButterflySlotPrompt(context, memoryBank, requestIndex, nodes)], legacyTemperatures: [0.55] } } : {}) },
             value => {
                 const raw = value?.node;
                 if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw core_butterflyContract.butterflyValidationError('worldSpec');
@@ -569,10 +569,10 @@ export async function generateButterflyIncrementalWithRepair(context, memoryBank
     const part = await generation_client.requestValidatedSegment(
         butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds, { readableR62 }) + core_incremental.derivedExpansionDirective(previous, memoryBank),
         '蝴蝶效应 · 正在追加新的平行分歧…',
-        { maxTokens: 9000, temperature: 0.55, context, origin, taskKey: `${taskKey}${readableR62 ? '' : NARRATIVE_SLOT_MARKER}:increment`, mode: core_constants.MODE.BUTTERFLY, background: true,
+        { maxTokens: 9000, context, origin, taskKey: `${taskKey}${readableR62 ? '' : NARRATIVE_SLOT_MARKER}:increment`, mode: core_constants.MODE.BUTTERFLY, background: true,
             ...(readableR62 ? { recoveryCompatibility: { contract: 'butterfly-readable-r62', legacyPrompts: [
                 legacy_recovery.legacyButterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds) + core_incremental.derivedExpansionDirective(previous, memoryBank),
-            ] } } : {}) },
+            ], legacyTemperatures: [0.55] } } : {}) },
         raw => normalizeButterflyIncrementPart(raw, memoryBank, context),
     );
     const merged = mergeButterflyIncremental(previous, part, sourceMemoryIds);
