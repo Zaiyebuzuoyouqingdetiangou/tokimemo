@@ -85,8 +85,10 @@ const PHONE_DEVICE_LABEL = Object.freeze({
 
 export const PHONE_COMMUNICATION_REPAIR_CONTRACT = '【通讯修订合同】本段只补当前通讯App的原ID。与当前用户的线程只写主人一侧至少一条未发送草稿：basis=推演、conversationMode=draft，禁止生成用户消息，不要求双向。已知普通NPC可写双向当下日常，标为daily，不能冒充历史；已发生的双向原话仅basis=记忆，每句及说话人归属必须在所引Mxxx逐字核对，摘要不够则降为主人未发送草稿。组卡设备名仍为卡名，owner的speaker必须用受控成员真名；旧目录没有ownerMembers时，本次app内返回ownerMembers:[{name:"成员真名",sourceEvidence:"本次受控角色卡/世界书里的逐字成员身份原文"}]，只接受本次已有受控资料可核验的成员，不得自编名单或引用用户Persona。没有合法对象的槽位省略，不重做其他已完成App。不得返回笼统的“按此App用途补齐”，每项明确contactName及草稿/daily。';
 
+export const PHONE_LIFESTYLE_REPAIR_CONTRACT = '【日常应用修订合同】本段只补当前App的原ID。备忘、工作、学习、阅读、账目、创作等是档案人物自己在用的记录，作者用受控成员真名，不是角色卡名称。当前用户若被提及，用档案显示名；Persona名只是同一人的别名。写正在使用的日常内容，不要替用户写已发送留言，不要编造共同历史。标题必须具体，不得返回“按此App用途与角色生活补齐”。';
+
 function verifiedPhoneOwnerMembers(rows, memoryBank, controlledEvidence) {
-    return (Array.isArray(rows) ? rows : []).filter(row => core_text.normalizeText(row?.name, 100) && row.name !== memoryBank?.userName
+    return (Array.isArray(rows) ? rows : []).filter(row => core_text.normalizeText(row?.name, 100) && !isPhoneUserName(row.name, memoryBank)
         && core_text.normalizeText(row?.sourceEvidence, 800).length >= 4
         && core_text.normalizeText(row?.sourceEvidence, 800).includes(core_text.normalizeText(row.name, 100))
         && core_worldPresentation.controlledEvidenceContains(controlledEvidence, row.sourceEvidence))
@@ -630,6 +632,7 @@ export function compactPhoneRoomContext(roomSession) {
 
 export function phonePlanPrompt(context, memoryBank, roomSession, worldPresentation = null) {
     const people = core_participants.archivePeopleNames(memoryBank);
+    const story = phoneStory(memoryBank, context);
     return `${generation_prompts.promptSafetyBoundary(context, '私人终端 / 分段 1：设备与 App 目录', people, memoryBank)}
 本请求只规划设备类型、四时段状态、App 与条目【目录】。不要写长正文、聊天 messages、联系人 fields 或照片长说明；这些会按 App 分开依次生成。
 先读取受控上下文中的世界书与角色卡：世界书若明确写了设备形态或角色审美，必须优先遵守；没有明确设定时，再按档案人物的时代、身份、职业、性格、兴趣、经济条件与生活习惯推导。角色卡名称只是设备/场景标题，不是人物。USER_PERSONA_JSON 描述的是用户，只能帮助识别与 {{user}} 有关的称呼或既有关系，不能拿来替代档案人物的设备人设。不同人物不应得到同一套固定 App 或固定配色。
@@ -646,7 +649,7 @@ UNTRUSTED_PHONE_ARCHIVE_JSON:\n${generation_prompts.promptArchiveSlice(memoryBan
 - kind 只能选 moments/chat/gallery/camera/notes/store/browser/contacts/music/work/study/health/fitness/training/reading/books/files/research/games/finance/security/creative/weather/tools/misc；icon 只能选 message/people/photo/camera/note/bag/globe/contact/music/briefcase/book/heart/activity/game/wallet/shield/palette/cloud/tool/spark/grid。
 - uiProfile 只能使用：palette=noir-gold/ink-blue/frost/moss/ember/lilac/sky/sand；wallpaper=smoke/rain/grid/starfield/library/aurora/minimal/paper；typography=modern/serif/mono；iconStyle=rounded/square/glyph/glass；density=compact/cozy/roomy；shellTone=graphite/silver/ivory/bronze/navy。上面的 *_TOKEN 只是占位符，必须换成某个允许值，不得原样照抄。这些是本地安全样式 token，不得输出颜色值、CSS、URL 或 class 名。
 - uiProfile.explicitFields 只允许 palette/wallpaper/typography/iconStyle/density/shellTone；只有世界书或角色卡对该项有明文时才列入。其余字段保持不在列表中，本地会依据 {{char}} 的人设、设备名和 App 组合稳定补全，防止不同角色照抄同一套合法模板。
-- 禁止生成 kind=schedule/calendar/location/travel/map/navigation/transit/route，或名为“日历/地图/导航/路线/行程/出行/旅行”的 App；日期手账和地图分别由独立「两个人的日历」与「他的出行路线」承担。私人终端 notes 可以有普通个人待办，但不要复制这两个入口。
+- 禁止生成 kind=schedule/calendar/location/travel/map/navigation/transit/route，或名为“日历/地图/导航/路线/行程/出行/旅行”的 App；日期手账和地图分别由独立「两个人的日历」与「他的出行路线」承担。私人终端 notes/work/study/reading 是 ${story.ownerNames[0] || '档案人物'} 自己的记录，不要写成角色卡名称的备忘，也不要替 ${story.userDisplay} 填写。${story.compatNote}
 - 顶层 ownerMembers 列出受控角色卡/世界书的成员显示名及逐字身份原文：[{"name":"成员真名","sourceEvidence":"受控资料原句"}]；不得列用户或未知人物。设备所属卡名与成员真名分开，组卡 owner 必须用名单中的一位真名。
 - chat entries 只写 id/title/meta/contactName/conversationMode；当前用户对象只规划 conversationMode=draft 的主人未发送草稿，已知普通 NPC 可规划 daily 日常。其他 entries 只写 id/title/meta。标题必须有生活区分，不要填 preview/detail/messages/fields/imageCaption。
 - deviceKind 只能 neutral/phone/watch/terminal/communicator/folio/relic，并且只能从 CONTROLLED_WORLD_PRESENTATION_JSON.allowedDevices 选择；证据不足时必须为 neutral。不要因为功能名叫“私人终端”就强塞现代手机。四个 liveStates 都要有。
@@ -768,8 +771,9 @@ UNTRUSTED_APP_PLAN_JSON:\n${JSON.stringify(app, null, 2)}
 - kind=chat：与当前用户只写 conversationMode=draft、basis=推演、主人一侧至少一条未发送草稿，不要求双向，绝不生成用户发言。已知普通 NPC 的当下日常可写 conversationMode=daily、至少2条双向消息，标为日常演绎。已发生双向原话仅 basis=记忆、conversationMode=history，每句和说话人归属都须在所引 Mxxx 逐字核对；摘要不支持的原话降为主人未发送草稿，不冒充历史。speakerRole 用 owner/contact；组卡 owner 使用 UNTRUSTED_APP_PLAN_JSON.ownerMembers 中的成员真名，不能把卡名作为所有成员姓名。contacts 私密字段仍只接受有据历史。
 - 设备所属角色卡名是 ${phoneStory(memoryBank, context).cardName}；当前用户是 ${phoneStory(memoryBank, context).userDisplay}。${phoneStory(memoryBank, context).compatNote}如果聊天对象就是当前用户，contactName 用档案里的显示名，只输出主人草稿，不替用户写消息。
 - kind=contacts 可收录受控人设/世界书明确存在的普通联系人，basis=设定，sourceSettingEvidence 逐字引述该联系人的设定。至少1个字段，职业/身份/关系必须由该联系人同一句设定明确支持；备注可以是当下计划。不编电话号码、地址、账号等私密字段；这些仍只接受 basis=记忆 的原文证据。gallery 用 imageCaption 写纯文字照片说明。
+- kind=notes/work/study/reading/books/files/research/creative/finance/tools：这是 ${phoneStory(memoryBank, context).ownerNames.join('、') || '档案人物'} 自己在用的记录，不是角色卡名称的备忘。当前用户是 ${phoneStory(memoryBank, context).userDisplay}。${phoneStory(memoryBank, context).compatNote}写主人自己的待办、摘录、工作学习或账目；提及用户时用档案显示名，不要替用户写已发送留言。
 - 禁止前任/前女友；禁止 {{char}} 与 {{user}} 之外的恋爱/婚姻对象。不输出 URL、HTML 或脚本。只输出 JSON。
-${app.kind === 'chat' ? PHONE_COMMUNICATION_REPAIR_CONTRACT : ''}`;
+${app.kind === 'chat' ? PHONE_COMMUNICATION_REPAIR_CONTRACT : PHONE_LIFESTYLE_REPAIR_CONTRACT}`;
 }
 
 export function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sourceMemoryIds = null, options = {}) {
@@ -1351,7 +1355,11 @@ export async function generatePhoneMissingWithRepair(context, memoryBank, origin
         const planApp = app.kind === 'chat'
             ? phoneMissingThreadPlan(app, previous, memoryBank, { controlledEvidence: presentation.settingEvidence || '', context })
             : { ...app, incremental: true, entries: entries.map(item => ({
-                id: item.id, title: isPhonePlaceholderTitle(item.title) ? `${app.label}日常` : item.title, meta: item.meta || '',
+                id: item.id,
+                title: isPhonePlaceholderTitle(item.title)
+                    ? `${phoneStory(memoryBank, context).ownerNames[0] || '主人'}的${app.label}`
+                    : item.title,
+                meta: item.meta || '日常',
             })) };
         if (!planApp.entries.length) { contentFailure = noPhoneConversation(); continue; }
         let fresh;
@@ -1410,7 +1418,7 @@ ${JSON.stringify(compactPhoneExisting(previous), null, 2)}
 - 总共规划 0～8 个真正由 incrementalMemoryIds 带来的新条目；每个相关 App 1～3 条即可。没有任何合适的新条目时必须返回 {"apps":[]}，该空增量会被本地正常记录，不要为了凑数复述旧内容。
 - app id/kind 必须对应现有 App；不得向 schedule/calendar/location/travel/map/navigation/transit/route 或日历/地图/导航/路线/行程/出行/旅行追加内容；不改变 deviceKind、设备名、锁屏或既有 liveStates。
 - 新条目的标题、对象、时间与主题必须避开 EXISTING_PHONE_INDEX_JSON；禁止把旧聊天、旧相册、旧笔记换措辞再说一次。
-- 与 {{user}} 的已发生共同历史必须在详情阶段使用 basis=记忆并引用 incrementalMemoryIds；但新增档案更多是用来确定“这段时间他在过什么日子”，由此规划的工作、兴趣、事务、草稿等当前状态条目应当用 basis=设定，不必逐条复述剧情。
+- 与 ${phoneStory(memoryBank, context).userDisplay} 的已发生共同历史必须在详情阶段使用 basis=记忆并引用 incrementalMemoryIds；工作、备忘、学习、阅读等当前状态条目用 basis=设定，作者是档案人物真名，不是卡名。${phoneStory(memoryBank, context).compatNote}
 - 禁止前任/第三方恋爱；只输出 JSON。`;
 }
 
