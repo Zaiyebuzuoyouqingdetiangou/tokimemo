@@ -118,7 +118,7 @@ export function endingConfessionRefreshPrompt(context, memoryBank, previous = nu
     const archiveBlock = previous
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         : generation_prompts.endingArchiveSlice(memoryBank, 64);
-    return `${generation_prompts.promptSafetyBoundary(context, '告白回看增量扫描')}
+    return `${generation_prompts.promptSafetyBoundary(context, '告白回看增量扫描', null, memoryBank)}
 本请求只重新读取 ENDING 里的【已发生告白回看】。不要生成或修改结局路线、recommendedEndingId、relationshipState、relationshipSummary、ENDING Scene、未来 confession 或 epilogue。
 
 旧告白由本地原样保留。本轮只提供尚未消费的增量档案；过去事实只能来自这里，没有新的真实告白证据就返回空数组。
@@ -171,7 +171,7 @@ ${JSON.stringify(compactEndingConfessionsExisting(previous), null, 2)}
 }
 
 export function endingOutlinePrompt(context, memoryBank) {
-    return `${generation_prompts.promptSafetyBoundary(context, '结局路线判定 / 分段 1')}
+    return `${generation_prompts.promptSafetyBoundary(context, '结局路线判定 / 分段 1', null, memoryBank)}
 本请求只做 ENDING 的【关系判定 + 路线目录】。不要写长篇 endingScene、未来 confession、epilogue，也不要生成 confessionReplays。
 这样做是为了把原本过长、容易 API failed 的 ENDING 拆成稳定的小请求；后续每条已解锁路线会单独生成长篇终章，已发生告白也会单独扫描。
 UNTRUSTED_ENDING_ARCHIVE_JSON:
@@ -292,7 +292,7 @@ export function compactEndingRoutesExisting(session) {
 }
 
 export function endingIncrementOutlinePrompt(context, memoryBank, previous, sourceMemoryIds) {
-    return `${generation_prompts.promptSafetyBoundary(context, '结局路线判定 / 增量目录')}
+    return `${generation_prompts.promptSafetyBoundary(context, '结局路线判定 / 增量目录', null, memoryBank)}
 旧路线、终章、后日谈和旧告白由本地原样保留。本请求只依据新增档案判断关系的新阶段，并提出 0～4 条真正新增的路线变体或刚刚从未解锁变为可观测的路线；禁止改写、润色或换标题复述旧路线。
 UNTRUSTED_INCREMENTAL_ENDING_ARCHIVE_JSON:
 ${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}
@@ -523,7 +523,7 @@ export function endingRouteDetailPrompt(context, memoryBank, outline, route) {
         },
         memories: core_evidence.memoryPayload(memoryBank, ids, 12),
     }, null, 2);
-    return `${generation_prompts.promptSafetyBoundary(context, '结局路线正文 / 分段详情')}
+    return `${generation_prompts.promptSafetyBoundary(context, '结局路线正文 / 分段详情', null, memoryBank)}
 本请求只写【一条已经判定 available=true 的未来结局路线】。路线可用性、关系阶段和证据已经在上一小段请求中确定；不要改 route id/type/available，也不要生成其他路线或过去告白回看。
 UNTRUSTED_ENDING_ROUTE_CONTEXT_JSON:
 ${evidence}

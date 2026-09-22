@@ -219,7 +219,7 @@ export async function generateItemsIncrementalWithRepair(context, memoryBank, ro
     const basePrompt = generation_prompts.roomDeepGenerationPrompt(core_constants.MODE.ITEMS, context, core_incremental.incrementalPromptMemoryBank(memoryBank, sourceMemoryIds), roomSession, focusObject);
     const fresh = await generation_client.requestValidatedSegment(
         itemsIncrementPrompt(options.allowPersonaExpansion
-            ? generation_prompts.promptSafetyBoundary(context, '他的物品 / 人设扩展') + '\n仅输出 {"containers":[{"id":"已有容器id","nodes":[{"id":"新id","kind":"item|container","label":"名称","basis":"记忆|推演","summary":"物件描述","line":"当下角色台词","sourceMemoryIds":[],"sourceMemoryAnchor":"","children":[]}]}]}。已有父节点只返回 id 与 children；新增节点必须有 label/summary/line，不扩写共同历史。没有新物件就 containers=[]。'
+            ? generation_prompts.promptSafetyBoundary(context, '他的物品 / 人设扩展', null, memoryBank) + '\n仅输出 {"containers":[{"id":"已有容器id","nodes":[{"id":"新id","kind":"item|container","label":"名称","basis":"记忆|推演","summary":"物件描述","line":"当下角色台词","sourceMemoryIds":[],"sourceMemoryAnchor":"","children":[]}]}]}。已有父节点只返回 id 与 children；新增节点必须有 label/summary/line，不扩写共同历史。没有新物件就 containers=[]。'
             : basePrompt, memoryBank, previous, sourceMemoryIds, options),
         '他的物品 · 正在从新增档案追加物件…',
         { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ITEMS], temperature: 0.45, context, contextEnvelope: options.presentationContext?.contextEnvelope, origin, taskKey: `${taskKey}:increment`, mode: core_constants.MODE.ITEMS, background: true },

@@ -266,7 +266,7 @@ const GENERATION_RULES = `前世是明确标注的虚构番外，可写另一段
 所有前世场景写在 opening/dossiers 中。今生 memory 回响的 text 必须逐字摘录所引 Mxxx 的 title/summary/anchors；reflection 只写当下解读。possibility 明确写可能、愿望或假设。旁批和落款写对虚构卷宗的解读与当下选择，不夹带未证实的今生历史。`;
 
 export function pastLivesPlanPrompt(context, memory, previous = null, presentation = 'neutral') {
-    return `${prompts.promptSafetyBoundary(context, '前世今生 · 独立虚构番外')}
+    return `${prompts.promptSafetyBoundary(context, '前世今生 · 独立虚构番外', null, memory)}
 ${GENERATION_RULES}
 从档案中一件可追溯的物品、话语或选择取引子，写新的入卷计划。表现风格：${presentation}。不复制已有篇章，不重写它们。
 输出 {"title":"篇名","opening":{"title":"引子名","motif":"画面意象","text":"短签文/旧信引子，属于虚构开卷","sourceMemoryIds":["真实Mxxx"],"sourceMemoryAnchor":"逐字完整anchor"},"dossiers":[{"title":"卷名","era":"另一人生的时代背景","intent":"这卷要揭示的选择或疑点"}]}。
@@ -304,7 +304,7 @@ export async function generatePastLivesWithRepair(context, memory, origin, taskK
         { ...baseOptions, taskKey: `${taskKey}:past-lives-plan`, maxTokens: 4200, recoveryCompatibility: compatibility(planPrompt) }, raw => normalizePastLivesPlan(raw, memory));
     const dossiers = [];
     for (const slot of plan.dossiers) {
-        const prompt = `${prompts.promptSafetyBoundary(context, '前世今生 · 虚构卷宗')}
+        const prompt = `${prompts.promptSafetyBoundary(context, '前世今生 · 虚构卷宗', null, memory)}
 ${GENERATION_RULES}
 只完成 LOCAL_DOSSIER_PLAN 中这一卷，不写今生真实历史、不提前输出其他卷。用物证、证词、缺页或旁记展开角色与用户的选择；可少写，不凑线索数量。
 输出 {"title":"卷名","era":"时代","synopsis":"这一卷的叙事正文","clues":[{"kind":"object|testimony|missing|note","title":"线索名","speaker":"char|user|narrator","text":"可见的线索正文","revealedText":"缺页点击后显示的完整字迹；其他类型可为空"}]}。
@@ -315,7 +315,7 @@ ${JSON.stringify({ opening: plan.opening, dossier: slot, presentation })}`;
             { ...baseOptions, taskKey: `${taskKey}:past-lives-dossier:${slot.id}`, maxTokens: 6800, recoveryCompatibility: compatibility(prompt) },
             raw => normalizePastLivesDossier(raw, memory, { id: slot.id, title: slot.title })));
     }
-    const finalePrompt = `${prompts.promptSafetyBoundary(context, '前世今生 · 今生回响与落款')}
+    const finalePrompt = `${prompts.promptSafetyBoundary(context, '前世今生 · 今生回响与落款', null, memory)}
 ${GENERATION_RULES}
 根据已完成卷宗，写今生回响、逐步出现的旁批和落款。annotations.afterClueIds 只用卷内提供的真实本地线索 id；空数组表示入卷即有的初批，有线索的旁批应补充或修正解读。读者可以略过探索直接看结尾，不设答题或付费解锁。
 输出 {"echoes":[{"kind":"memory|possibility","title":"可能的标题；memory标题由本地取真实记忆标题","text":"memory须逐字引用档案，possibility明确是可能","reflection":"当下解读，可为空","sourceMemoryIds":["仅memory需要真实Mxxx"],"sourceMemoryAnchor":"仅memory需要完整anchor"}],"annotations":[{"afterClueIds":["已有线索id"],"text":"对虚构故事的初解、补充或修正"}],"closing":{"text":"结尾与当下选择，不替双方定命","signature":"落款"}}。

@@ -458,7 +458,7 @@ export function travelPrompt(context, memoryBank, previous = null, sourceMemoryI
     const archiveBlock = incremental
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         : generation_prompts.promptArchiveSlice(memoryBank, 48);
-    return `${generation_prompts.promptSafetyBoundary(context, '他的出行路线 / 独立地图')}
+    return `${generation_prompts.promptSafetyBoundary(context, '他的出行路线 / 独立地图', null, memoryBank)}
 这是档案室里的独立地图，不是手机 App。请根据 {{char}} 的时代、身份、住处、职业、日常习惯和当前关系，整理他真正可能经过的路线。
 UNTRUSTED_TRAVEL_ARCHIVE_JSON:
 ${archiveBlock}
@@ -502,7 +502,7 @@ function travelPromptLegacyR8414(context, memoryBank, previous = null, sourceMem
     const archiveBlock = incremental
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         : generation_prompts.promptArchiveSlice(memoryBank, 48);
-    return `${generation_prompts.promptSafetyBoundary(context, '他的出行路线 / 独立地图')}
+    return `${generation_prompts.promptSafetyBoundary(context, '他的出行路线 / 独立地图', null, memoryBank)}
 这是档案室里的独立地图，不是手机 App。请根据 {{char}} 的时代、身份、住处、职业、日常习惯和当前关系，整理他真正可能经过的路线。
 UNTRUSTED_TRAVEL_ARCHIVE_JSON:
 ${archiveBlock}

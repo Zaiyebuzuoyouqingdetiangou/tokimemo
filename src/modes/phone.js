@@ -222,11 +222,50 @@ function unavailablePhoneEntry(id) {
 
 function isUnavailablePhoneEntry(entry) { return entry?.unavailable === true || entry?.sourceStatus === 'unavailable'; }
 
-function assertPhoneConversation(messages) {
+function assertPhoneConversation(messages, { userThread = false } = {}) {
+    if (userThread) {
+        if (!messages.some(message => message.speakerRole === 'owner')) {
+            throw core_text.safeUserError('给当前用户的线程至少需要一条主人未发送草稿。', 'RMT_PHONE_SPEAKERS');
+        }
+        return;
+    }
     const roles = new Set(messages.map(message => message.speakerRole));
     if (messages.length < 2 || !roles.has('owner') || !roles.has('contact')) {
         throw core_text.safeUserError('聊天没有同时出现设备主人和聊天对象；请保留有据的双方原话。', 'RMT_PHONE_SPEAKERS');
     }
+}
+
+function phoneStory(memoryBank, context = null) {
+    return core_participants.resolveStoryIdentities(memoryBank, context);
+}
+
+function isPhoneUserName(value, memoryBank, context = null) {
+    return core_participants.nameMatches(value, phoneStory(memoryBank, context).userAliases);
+}
+
+function isPhoneOwnerName(value, memoryBank, context = null) {
+    return core_participants.nameMatches(value, phoneStory(memoryBank, context).ownerNames);
+}
+
+function isPhonePlaceholderTitle(title) {
+    const text = core_text.normalizeText(title, 100);
+    return !text || text === '暂无可核实记录' || text === '按此 App 用途与角色生活补齐';
+}
+
+function applyPhoneChatContract(conversation, memoryBank, { basis = '' } = {}) {
+    const story = phoneStory(memoryBank);
+    const userThread = isPhoneUserName(conversation?.contactName, memoryBank);
+    if (!userThread) return { ...conversation, userThread: false };
+    const ownerName = story.ownerNames[0] || conversation.ownerName;
+    const messages = basis === '记忆'
+        ? conversation.messages
+        : (conversation.messages || []).filter(message => message.speakerRole === 'owner' && !isPhoneUserName(message.speaker, memoryBank))
+            .map(message => ({
+                ...message,
+                speakerRole: 'owner',
+                speaker: isPhoneOwnerName(message.speaker, memoryBank) ? message.speaker : ownerName,
+            }));
+    return { ...conversation, contactName: story.userDisplay, ownerName, messages, userThread: true };
 }
 
 export function migrateLegacyPhoneSession(session, memoryBank = null) {
@@ -330,8 +369,10 @@ export function migrateLegacyPhoneSession(session, memoryBank = null) {
     return migrated;
 }
 
-export function phoneConversationOwnerName(memoryBank) {
-    return core_text.normalizeText(memoryBank?.characterName, 100) || '角色';
+export function phoneConversationOwnerName(memoryBank, context = null) {
+    return phoneStory(memoryBank, context).ownerNames[0]
+        || core_text.normalizeText(memoryBank?.characterName, 100)
+        || '角色';
 }
 
 export function phoneControlledOwnerNames(memoryBank, options = {}) {
@@ -339,13 +380,13 @@ export function phoneControlledOwnerNames(memoryBank, options = {}) {
     // multi-card archives. Never substitute the card title for an empty roster.
     const roster = core_participants.normalizeParticipantRoster(memoryBank?.[core_participants.PARTICIPANTS_KEY]);
     if (roster) return roster.people.filter(person => roster.selectedIds.includes(person.id)
-        && person.identity !== 'user' && person.name !== memoryBank?.userName).map(person => person.name);
+        && person.identity !== 'user' && !isPhoneUserName(person.name, memoryBank)).map(person => person.name);
     const names = [];
     const evidence = String(options.controlledEvidence || '');
     for (const row of options.ownerMembers || []) {
         const name = core_text.normalizeText(row?.name, 100);
         const quote = core_text.normalizeText(row?.sourceEvidence, 800);
-        if (name && name !== memoryBank?.userName && quote.length >= 4 && quote.includes(name)
+        if (name && !isPhoneUserName(name, memoryBank) && quote.length >= 4 && quote.includes(name)
             && core_worldPresentation.controlledEvidenceContains(evidence, quote)) names.push(name);
     }
     return names.length ? [...new Set(names)] : [phoneConversationOwnerName(memoryBank)];
@@ -367,7 +408,7 @@ export function normalizePhoneChatEntry(entry, memoryBank, options = {}) {
     const messages = (Array.isArray(entry?.messages) ? entry.messages : []).filter(message => {
         if (core_text.normalizeText(message?.speakerRole, 20) !== 'owner') return true;
         const name = core_text.normalizeText(message?.speaker, 100);
-        return owners.includes(name) || (owners.length === 1 && isGenericOwnerLabel(name));
+        return owners.includes(name) || isPhoneOwnerName(name, memoryBank) || (owners.length === 1 && isGenericOwnerLabel(name));
     }).map(message => message.speakerRole === 'owner' && isGenericOwnerLabel(message.speaker)
         ? { ...message, speaker: owners[0] } : message);
     const candidate = { ...entry, contactName, messages };
@@ -380,12 +421,13 @@ export function normalizePhoneChatEntry(entry, memoryBank, options = {}) {
         && roles.has('owner') && roles.has('contact')
         && phoneMemoryStructuredFactsSupported('chat', conversation, conversation.messages, [], evidence, canonical);
     if (historical) return { ...candidate, conversationMode: 'history' };
-    const draft = contactName === memoryBank?.userName || entry?.basis === '记忆' || entry?.conversationMode === 'draft';
+    const draft = isPhoneUserName(contactName, memoryBank) || entry?.basis === '记忆' || entry?.conversationMode === 'draft';
+    const display = isPhoneUserName(contactName, memoryBank) ? phoneStory(memoryBank).userDisplay : contactName;
     const safeMessages = messages.filter(message => !phoneSpeaksAsUser([message], memoryBank)
         && (!draft || message.speakerRole === 'owner'));
     if (!safeMessages.some(message => message.speakerRole === 'owner' && core_text.normalizeText(message.text, 1200))) return unavailablePhoneEntry(entry.id);
-    if (!draft) return { ...candidate, messages: safeMessages, conversationMode: 'daily' };
-    return { ...candidate, basis: '推演', conversationMode: 'draft', title: `给${contactName}的未发送草稿`,
+    if (!draft) return { ...candidate, contactName: display, messages: safeMessages, conversationMode: 'daily' };
+    return { ...candidate, contactName: display, basis: '推演', conversationMode: 'draft', title: `给${display}的未发送草稿`,
         meta: '未发送草稿 · 不代表历史记录', preview: '主人尚未发送的话', detail: '', fields: [], imageCaption: '',
         sourceMemoryIds: [], sourceMemoryAnchor: '', sourceMemoryEvidence: '', sourceSettingEvidence: '',
         messages: safeMessages.map(message => ({ ...message, time: '' })) };
@@ -408,10 +450,11 @@ export function inferPhoneContactName(entry, memoryBank) {
     const explicit = core_text.normalizeText(entry?.contactName, 100).trim();
     if (explicit && explicit !== ownerName && !isGenericOwnerLabel(explicit) && !isGenericContactLabel(explicit)) return explicit;
 
-    const userName = core_text.normalizeText(memoryBank?.userName, 100).trim();
+    const story = phoneStory(memoryBank);
     const title = core_text.normalizeText(entry?.title, 100).trim();
     const meta = core_text.normalizeText(entry?.meta, 200).trim();
-    if (userName && userName !== ownerName && `${title} ${meta}`.includes(userName)) return userName;
+    const mentionedUser = story.userAliases.find(name => name && name !== ownerName && `${title} ${meta}`.includes(name));
+    if (mentionedUser) return story.userDisplay;
 
     for (const message of Array.isArray(entry?.messages) ? entry.messages : []) {
         const speaker = core_text.normalizeText(message?.speaker, 100).trim();
@@ -446,13 +489,13 @@ export function normalizePhoneConversationMessages(entry, memoryBank, { strict =
             throw new Error('私人终端聊天消息必须显式提供 speakerRole（owner/contact）。');
         }
         if (!PHONE_MESSAGE_ROLES.has(speakerRole)) {
-            if (rawSpeaker === ownerName || isGenericOwnerLabel(rawSpeaker)) speakerRole = 'owner';
+            if (isPhoneOwnerName(rawSpeaker, memoryBank) || isGenericOwnerLabel(rawSpeaker)) speakerRole = 'owner';
             else if (rawSpeaker && !isGenericContactLabel(rawSpeaker)) speakerRole = 'contact';
             else if (isGenericContactLabel(rawSpeaker)) speakerRole = 'contact';
             else speakerRole = '';
         }
         const speaker = speakerRole === 'owner'
-            ? (preserveOwnerNames && rawSpeaker && !isGenericOwnerLabel(rawSpeaker) ? rawSpeaker : ownerName)
+            ? ((preserveOwnerNames && rawSpeaker && !isGenericOwnerLabel(rawSpeaker)) || isPhoneOwnerName(rawSpeaker, memoryBank) ? rawSpeaker : ownerName)
             : speakerRole === 'contact'
                 ? (rawSpeaker && !isGenericOwnerLabel(rawSpeaker) && !isGenericContactLabel(rawSpeaker) ? rawSpeaker : contactName)
                 : (rawSpeaker || contactName);
@@ -586,9 +629,10 @@ export function compactPhoneRoomContext(roomSession) {
 }
 
 export function phonePlanPrompt(context, memoryBank, roomSession, worldPresentation = null) {
-    return `${generation_prompts.promptSafetyBoundary(context, '私人终端 / 分段 1：设备与 App 目录')}
+    const people = core_participants.archivePeopleNames(memoryBank);
+    return `${generation_prompts.promptSafetyBoundary(context, '私人终端 / 分段 1：设备与 App 目录', people, memoryBank)}
 本请求只规划设备类型、四时段状态、App 与条目【目录】。不要写长正文、聊天 messages、联系人 fields 或照片长说明；这些会按 App 分开依次生成。
-先读取受控上下文中的世界书与角色卡：世界书若明确写了设备形态或角色审美，必须优先遵守；没有明确设定时，再按 {{char}} 的时代、身份、职业、性格、兴趣、经济条件与生活习惯推导。USER_PERSONA_JSON 描述的是用户，只能帮助识别与 {{user}} 有关的称呼或既有关系，不能拿来替代 {{char}} 的设备人设。不同角色不应得到同一套固定 App 或固定配色。
+先读取受控上下文中的世界书与角色卡：世界书若明确写了设备形态或角色审美，必须优先遵守；没有明确设定时，再按档案人物的时代、身份、职业、性格、兴趣、经济条件与生活习惯推导。角色卡名称只是设备/场景标题，不是人物。USER_PERSONA_JSON 描述的是用户，只能帮助识别与 {{user}} 有关的称呼或既有关系，不能拿来替代档案人物的设备人设。不同人物不应得到同一套固定 App 或固定配色。
 UNTRUSTED_PHONE_ARCHIVE_JSON:\n${generation_prompts.promptArchiveSlice(memoryBank, 24)}
   CURRENT_ROOM_CONTEXT_JSON:\n${JSON.stringify(compactPhoneRoomContext(roomSession), null, 2)}
   CONTROLLED_WORLD_PRESENTATION_JSON:\n${JSON.stringify(worldPresentation || core_worldPresentation.resolveWorldPresentation('', memoryBank), null, 2)}
@@ -597,8 +641,8 @@ UNTRUSTED_PHONE_ARCHIVE_JSON:\n${generation_prompts.promptArchiveSlice(memoryBan
 {"title":"他的私人终端","deviceName":"设备名称","deviceKind":"phone","lockText":"...","uiProfile":{"explicitFields":[],"palette":"PALETTE_TOKEN","wallpaper":"WALLPAPER_TOKEN","typography":"TYPOGRAPHY_TOKEN","iconStyle":"ICON_STYLE_TOKEN","density":"DENSITY_TOKEN","shellTone":"SHELL_TONE_TOKEN"},"liveStates":{"morning":{"lockText":"...","statusLine":"...","badgeCounts":{}},"daytime":{},"evening":{},"night":{}},"apps":[{"id":"CHAT","label":"通讯","kind":"chat","icon":"message","summary":"...","entries":[{"id":"C01","title":"条目标题","meta":"时间/对象/分类"}]}]}
 
 数量要求：
-- phone / terminal 规划1～10个入口，其余1～8个；每个1～4条目录即可。职业、兴趣、购物、草稿、工作学习、阅读、创作等可以依据 {{char}} 人设与世界观合理生成，不要求角色卡/世界书逐字写过这条日常。
-- chat 可以安排与受控人设/世界书或档案已知普通 NPC 的当下社交；实际历史原话才需 Mxxx。没有已知聊天对象时不建 chat，改为适合角色的其他 App。contacts 私密字段仍只用有据记录，不编造 User 已发消息、电话、地址、亲属。不要为了凑数规划明知只能留空的项目。不适合现代 App 的世界观使用符合时代的命名。
+- phone / terminal 规划1～10个入口，其余1～8个；每个1～4条目录即可。职业、兴趣、购物、草稿、工作学习、阅读、创作等可以依据档案人物人设与世界观合理生成，不要求角色卡/世界书逐字写过这条日常。
+- chat 可以安排与受控人设/世界书或档案已知普通 NPC 的当下社交；和当前用户的线程只规划主人未发送草稿，不要规划双向已发送记录。实际历史原话才需 Mxxx。没有已知聊天对象时不建 chat，改为适合人物的其他 App。contacts 私密字段仍只用有据记录，不编造 User 已发消息、电话、地址、亲属。不要为了凑数规划明知只能留空的项目。不适合现代 App 的世界观使用符合时代的命名。
 - kind 只能选 moments/chat/gallery/camera/notes/store/browser/contacts/music/work/study/health/fitness/training/reading/books/files/research/games/finance/security/creative/weather/tools/misc；icon 只能选 message/people/photo/camera/note/bag/globe/contact/music/briefcase/book/heart/activity/game/wallet/shield/palette/cloud/tool/spark/grid。
 - uiProfile 只能使用：palette=noir-gold/ink-blue/frost/moss/ember/lilac/sky/sand；wallpaper=smoke/rain/grid/starfield/library/aurora/minimal/paper；typography=modern/serif/mono；iconStyle=rounded/square/glyph/glass；density=compact/cozy/roomy；shellTone=graphite/silver/ivory/bronze/navy。上面的 *_TOKEN 只是占位符，必须换成某个允许值，不得原样照抄。这些是本地安全样式 token，不得输出颜色值、CSS、URL 或 class 名。
 - uiProfile.explicitFields 只允许 palette/wallpaper/typography/iconStyle/density/shellTone；只有世界书或角色卡对该项有明文时才列入。其余字段保持不在列表中，本地会依据 {{char}} 的人设、设备名和 App 组合稳定补全，防止不同角色照抄同一套合法模板。
@@ -610,9 +654,11 @@ UNTRUSTED_PHONE_ARCHIVE_JSON:\n${generation_prompts.promptArchiveSlice(memoryBan
 }
 
 function phoneDisplayText(value, limit, fallback, memoryBank) {
+    const story = phoneStory(memoryBank);
     const text = core_text.normalizeText(value, limit);
-    return text && !core_narrativeAuthority.narrativeClaimsSharedHistory(text, { userName: memoryBank?.userName })
-        ? text : fallback;
+    return text && !core_narrativeAuthority.narrativeClaimsSharedHistory(text, {
+        userName: story.userDisplay, userAliases: story.userAliases,
+    }) ? text : fallback;
 }
 
 export function normalizePhonePlan(data, memoryBank = null, { worldPresentation = null, controlledEvidence = '' } = {}) {
@@ -649,7 +695,7 @@ export function normalizePhonePlan(data, memoryBank = null, { worldPresentation 
                 title: phoneDisplayText(entry?.title, 100, `记录 ${index + 1}`, memoryBank),
                 meta: phoneDisplayText(entry?.meta, 200, '', memoryBank),
                 ...(kind === 'chat' ? { contactName: core_text.normalizeText(entry?.contactName, 100),
-                    conversationMode: entry?.contactName === memoryBank?.userName || entry?.conversationMode === 'draft' ? 'draft' : 'daily' } : {}),
+                    conversationMode: isPhoneUserName(entry?.contactName, memoryBank) || entry?.conversationMode === 'draft' ? 'draft' : 'daily' } : {}),
             });
         }
         if (!entries.length) continue;
@@ -699,10 +745,11 @@ export function normalizePhonePlan(data, memoryBank = null, { worldPresentation 
 }
 
 export function phoneAppPrompt(context, memoryBank, plan, app, sourceMemoryIds = null) {
+    const people = core_participants.archivePeopleNames(memoryBank);
     const archiveBlock = sourceMemoryIds
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         : generation_prompts.promptArchiveSlice(memoryBank, 24);
-    return `${generation_prompts.promptSafetyBoundary(context, '私人终端 / App 详情')}
+    return `${generation_prompts.promptSafetyBoundary(context, '私人终端 / App 详情', people, memoryBank)}
 本请求只生成一个 App 的详情。设备与 App 目录都在下面的 UNTRUSTED JSON 中；当前关系与历史只能依据当前档案，不要输出其他 App。
 UNTRUSTED_PHONE_APP_ARCHIVE_JSON:\n${archiveBlock}
 UNTRUSTED_PHONE_DEVICE_JSON:\n${JSON.stringify({ deviceName: plan.deviceName, deviceKind: plan.deviceKind }, null, 2)}
@@ -719,7 +766,7 @@ UNTRUSTED_APP_PLAN_JSON:\n${JSON.stringify(app, null, 2)}
 - 这是一台正在使用中的设备，绝大多数条目应当是 basis=设定 或 basis=推演 的日常内容：工作、兴趣、购物、提醒、草稿、未发送的话、阅读、创作等。basis=设定 可以按明确人设/世界观展开合理日常，不要求把生成正文压成设定原文摘录；有直接原文时填写 sourceSettingEvidence。若没有逐字来源也不要伪造，本地会安全降级为 basis=推演，不会因此删除内容。只有确实复述与 {{user}} 已发生的共同经历时才用 basis=记忆。
 - basis=记忆 时必须提供当前档案中有效 sourceMemoryIds + sourceMemoryAnchor${sourceMemoryIds ? '，并至少引用一个 incrementalMemoryIds' : ''}，并把直接支持条目的 Mxxx 原句逐字放入 sourceMemoryEvidence；chat 的联系人和每条消息、contacts 的每个字段值都必须在该原句或所引 Mxxx 中逐字出现，不能用真实 id/anchor 替无关新事实洗白。sourceSettingEvidence 留空。basis=设定/推演 不得冒充已经发生的共同历史，也不得替 {{user}} 生成其从未说过的消息。
 - kind=chat：与当前用户只写 conversationMode=draft、basis=推演、主人一侧至少一条未发送草稿，不要求双向，绝不生成用户发言。已知普通 NPC 的当下日常可写 conversationMode=daily、至少2条双向消息，标为日常演绎。已发生双向原话仅 basis=记忆、conversationMode=history，每句和说话人归属都须在所引 Mxxx 逐字核对；摘要不支持的原话降为主人未发送草稿，不冒充历史。speakerRole 用 owner/contact；组卡 owner 使用 UNTRUSTED_APP_PLAN_JSON.ownerMembers 中的成员真名，不能把卡名作为所有成员姓名。contacts 私密字段仍只接受有据历史。
-- 设备所属角色卡名是 ${core_text.normalizeText(context?.name2 || memoryBank?.characterName, 100) || '当前角色'}；当前用户是 ${core_text.normalizeText(context?.name1 || memoryBank?.userName, 100) || '当前用户'}。如果聊天对象就是当前用户，contactName 使用当前用户实际名字，但不替用户写消息。
+- 设备所属角色卡名是 ${phoneStory(memoryBank, context).cardName}；当前用户是 ${phoneStory(memoryBank, context).userDisplay}。${phoneStory(memoryBank, context).compatNote}如果聊天对象就是当前用户，contactName 用档案里的显示名，只输出主人草稿，不替用户写消息。
 - kind=contacts 可收录受控人设/世界书明确存在的普通联系人，basis=设定，sourceSettingEvidence 逐字引述该联系人的设定。至少1个字段，职业/身份/关系必须由该联系人同一句设定明确支持；备注可以是当下计划。不编电话号码、地址、账号等私密字段；这些仍只接受 basis=记忆 的原文证据。gallery 用 imageCaption 写纯文字照片说明。
 - 禁止前任/前女友；禁止 {{char}} 与 {{user}} 之外的恋爱/婚姻对象。不输出 URL、HTML 或脚本。只输出 JSON。
 ${app.kind === 'chat' ? PHONE_COMMUNICATION_REPAIR_CONTRACT : ''}`;
@@ -742,12 +789,14 @@ export function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sour
         }
         const preview = core_text.normalizeText(entry?.preview, 1200);
         const detail = core_text.normalizeText(entry?.detail, 5000);
-        const conversation = normalizePhoneConversationMessages(entry, memoryBank, { strict: planApp.kind === 'chat', preserveOwnerNames: planApp.kind === 'chat' });
-        const messages = conversation.messages;
+        let conversation = normalizePhoneConversationMessages(entry, memoryBank, { strict: planApp.kind === 'chat', preserveOwnerNames: planApp.kind === 'chat' });
+        let messages = conversation.messages;
         const fields = Array.isArray(entry?.fields) ? entry.fields.filter(field => core_text.normalizeText(field?.label, 100) && core_text.normalizeText(field?.value, 1000)).slice(0, 16) : [];
         const imageCaption = core_text.normalizeText(entry?.imageCaption, 1800);
         if (!preview || (!detail && !messages.length && !fields.length && !imageCaption)) continue;
         const basis = phoneEntryBasis(entry, planApp.kind, conversation, memoryBank, options);
+        conversation = applyPhoneChatContract(conversation, memoryBank, { basis });
+        messages = conversation.messages;
         const legacyStored = options.trustedStored === true && entry?.narrativeVersion !== 1;
         if (legacyStored) { seen.add(id); continue; }
         let memoryEvidence = '';
@@ -767,7 +816,9 @@ export function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sour
             if (!phoneInferredEntryAllowed(entry, planApp.kind, conversation, generatedText, memoryBank, options)) continue;
         }
         seen.add(id);
-        if (planApp.kind === 'chat' && entry.conversationMode !== 'draft') assertPhoneConversation(messages);
+        if (planApp.kind === 'chat') assertPhoneConversation(messages, {
+            userThread: entry.conversationMode === 'draft' || (conversation.userThread && basis !== '记忆'),
+        });
     }
     if (seen.size < expectedIds.size) throw core_text.safeUserError('终端详情不完整：请补齐对应 ID 的 App 内容。普通日常允许依据人设和世界书演绎；共同过去与私人字段才需要原文证据。', 'RMT_PHONE_EVIDENCE');
     return { ...raw, id: planApp.id, label: planApp.label, kind: planApp.kind };
@@ -777,12 +828,13 @@ export function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sour
 // dropped whole rather than rewritten: fewer entries is the safe direction.
 // An inferred thread may never contain a line attributed to the user.
 function phoneSpeaksAsUser(messages, memoryBank) {
-    const userName = core_text.normalizeText(memoryBank?.userName, 120).toLowerCase();
-    if (!userName || !Array.isArray(messages)) return false;
+    if (!Array.isArray(messages)) return false;
     return messages.some(message => {
-        const speaker = core_text.normalizeText(message?.speaker, 120).toLowerCase();
-        const ownerSelf = speaker === '我' && core_text.normalizeText(message?.speakerRole, 20).toLowerCase() === 'owner';
-        return speaker === userName || speaker === '{{user}}' || speaker === 'user' || (speaker === '我' && !ownerSelf);
+        const speaker = core_text.normalizeText(message?.speaker, 120);
+        const role = core_text.normalizeText(message?.speakerRole, 20).toLowerCase();
+        if (role === 'owner' && (isGenericOwnerLabel(speaker) || isPhoneOwnerName(speaker, memoryBank))) return false;
+        const ownerSelf = speaker === '我' && role === 'owner';
+        return isPhoneUserName(speaker, memoryBank) || speaker === '{{user}}' || speaker.toLowerCase() === 'user' || (speaker === '我' && !ownerSelf);
     });
 }
 
@@ -795,7 +847,7 @@ function settingContactAllowed(entry, conversation, generatedText, memoryBank, o
     if (!name || /^(?:联系人|contact)$/iu.test(name)) return false;
     // This new setting-only path is for ordinary contacts, not an additional
     // romantic partner for the character. Historical records keep their own path.
-    if (name !== memoryBank?.userName && /(?:前任|前妻|前夫|恋人|伴侣|妻子|丈夫|老婆|老公|夫君|娘子|配偶|女朋友|男朋友)|\b(?:wife|husband|spouse|lover|girlfriend|boyfriend)\b/iu.test(generatedText)) return false;
+    if (!isPhoneUserName(name, memoryBank) && /(?:前任|前妻|前夫|恋人|伴侣|妻子|丈夫|老婆|老公|夫君|娘子|配偶|女朋友|男朋友)|\b(?:wife|husband|spouse|lover|girlfriend|boyfriend)\b/iu.test(generatedText)) return false;
     const quote = normalizePhoneSettingEvidence(entry, { kind: 'contacts' }, conversation, generatedText,
         options.controlledEvidence, { trustedStored: false });
     if (!quote || !core_worldPresentation.controlledEvidenceContains(quote, name)) return false;
@@ -819,33 +871,36 @@ function settingContactAllowed(entry, conversation, generatedText, memoryBank, o
 }
 
 function phoneInferredEntryAllowed(entry, kind, conversation, text, memoryBank, options = {}) {
-    // Raw speaker names must be checked before owner/contact normalization can rename them.
-    if (phoneSpeaksAsUser(entry?.messages, memoryBank) || phoneSpeaksAsUser(conversation.messages, memoryBank)) return false;
+    const story = phoneStory(memoryBank);
+    const userThread = conversation?.userThread === true || isPhoneUserName(conversation?.contactName, memoryBank);
+    if (phoneSpeaksAsUser(conversation.messages, memoryBank)) return false;
+    if (!userThread && phoneSpeaksAsUser(entry?.messages, memoryBank)) return false;
     if (kind === 'contacts' && !settingContactAllowed(entry, conversation, text, memoryBank, options)) return false;
-    const userName = core_text.normalizeText(memoryBank?.userName, 120);
-    const attributed = userName ? String(text).split(userName).join('{{user}}') : String(text);
+    let attributed = String(text);
+    for (const alias of story.userAliases) attributed = attributed.split(alias).join('{{user}}');
     if (/(?:\{\{user\}\}|你)(?:的)?[^\n。！？]{0,12}(?:手机号码?|电话号码?|邮箱|住址|家庭地址|身份证号?|银行账号|银行卡号|密码|病历)[\s:：是为]+[^\s\n。！？]{3,}/u.test(attributed)) return false;
     if (kind === 'chat') {
         const name = conversation.contactName;
         const known = [options.controlledEvidence, phoneReferencedMemoryText({ sourceMemoryIds: (memoryBank?.memories || []).map(item => item.id) }, memoryBank)].filter(Boolean).join('\n');
-        const userDraft = name === memoryBank?.userName && entry.conversationMode === 'draft';
-        if (!name || (name === memoryBank?.userName && !userDraft)
+        const userDraft = (userThread || isPhoneUserName(name, memoryBank)) && (entry.conversationMode === 'draft' || userThread);
+        if (!name || (isPhoneUserName(name, memoryBank) && !userDraft)
             || (!userDraft && options.trustedStored !== true && !core_worldPresentation.controlledEvidenceContains(known, name))) return false;
         if (options.trustedStored !== true) {
             const ownerNames = new Set(phoneControlledOwnerNames(memoryBank, options));
             if ((entry?.messages || []).some(message => core_text.normalizeText(message?.speakerRole, 20).trim().toLowerCase() === 'owner'
-                && !ownerNames.has(core_text.normalizeText(message?.speaker, 100)) && !isGenericOwnerLabel(message?.speaker))) return false;
-            if (conversation.messages.some(message => message.speakerRole === 'contact'
+                && !ownerNames.has(core_text.normalizeText(message?.speaker, 100))
+                && !isPhoneOwnerName(message?.speaker, memoryBank)
+                && !isGenericOwnerLabel(message?.speaker))) return false;
+            if (!userDraft && conversation.messages.some(message => message.speakerRole === 'contact'
                 && !core_worldPresentation.controlledEvidenceContains(known, message.speaker))) return false;
         }
-        // Ordinary NPC talk uses "you" for that NPC, not the user. Explicit user names
-        // elsewhere still cannot smuggle in a past event or a fabricated received message.
-        if (entry.conversationMode === 'draft') {
-            if (!conversation.messages.length || conversation.messages.some(message => message.speakerRole !== 'owner')) return false;
+        if (userDraft || entry.conversationMode === 'draft') {
+            if (!conversation.messages.some(message => message.speakerRole === 'owner')) return false;
+            assertPhoneConversation(conversation.messages, { userThread: true });
         } else assertPhoneConversation(conversation.messages);
     }
     return !core_narrativeAuthority.narrativeClaimsSharedHistory(text, {
-        userName: memoryBank?.userName, secondPersonIsUser: kind !== 'chat',
+        userName: story.userDisplay, userAliases: story.userAliases, secondPersonIsUser: kind !== 'chat',
     });
 }
 
@@ -936,8 +991,9 @@ export function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, so
         let meta = core_text.normalizeText(entry?.meta, 200);
         let preview = core_text.normalizeText(entry?.preview, 1200);
         let detail = core_text.normalizeText(entry?.detail, 5000);
-        const conversation = normalizePhoneConversationMessages(entry, memoryBank, { strict: planApp.kind === 'chat', preserveOwnerNames: planApp.kind === 'chat' });
+        let conversation = normalizePhoneConversationMessages(entry, memoryBank, { strict: planApp.kind === 'chat', preserveOwnerNames: planApp.kind === 'chat' });
         basis = phoneEntryBasis(entry, planApp.kind, conversation, memoryBank, options);
+        conversation = applyPhoneChatContract(conversation, memoryBank, { basis });
         let messages = conversation.messages;
         let fields = (Array.isArray(entry?.fields) ? entry.fields : []).slice(0, 16).map(field => ({
             label: core_text.normalizeText(field?.label, 100),
@@ -945,10 +1001,10 @@ export function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, so
         })).filter(field => field.label && field.value);
         let imageCaption = core_text.normalizeText(entry?.imageCaption, 1800);
         const evidenceText = [title, meta, preview, detail, imageCaption, ...messages.map(message => `${message.speaker}:${message.text}`), ...fields.map(field => `${field.label}:${field.value}`)].join('\n');
-        const reference = basis === '记忆'
+        let reference = basis === '记忆'
             ? core_evidence.normalizeExactMemoryReference(entry?.sourceMemoryIds, entry?.sourceMemoryAnchor, memoryBank, 1)
             : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
-        const sourceMemoryEvidence = basis === '记忆'
+        let sourceMemoryEvidence = basis === '记忆'
             ? normalizePhoneMemoryEvidence(entry, reference, memoryBank, options)
             : '';
         const sourceSettingEvidence = basis === '设定'
@@ -959,23 +1015,36 @@ export function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, so
         // draft, a mundane exchange). It needs no quote, but must not smuggle in a past
         // with {{user}}. Archive-driven increments may also contain ordinary current life.
         const legacyStored = options.trustedStored === true && entry?.narrativeVersion !== 1;
-        if (!legacyStored && basis !== '记忆' && !phoneInferredEntryAllowed(entry, planApp.kind, conversation, evidenceText, memoryBank, options)) return null;
-        if (!preview || (!detail && !messages.length && !fields.length && !imageCaption)
-            || (!legacyStored && basis === '记忆' && (!reference.sourceMemoryIds.length || (options.trustedStored !== true && !sourceMemoryEvidence) || (sourceMemoryIds && !core_incremental.usesIncrementalMemoryId(reference.sourceMemoryIds, sourceMemoryIds))))) return null;
-        if (basis === '记忆' && options.trustedStored !== true) {
+        if (basis === '记忆' && !legacyStored && options.trustedStored !== true) {
             const canonical = phoneReferencedMemoryText(reference, memoryBank);
-            if (!phoneMemoryStructuredFactsSupported(planApp.kind, conversation, messages, fields, sourceMemoryEvidence, canonical)) return null;
-            messages = sanitizePhoneMemoryMessageTimes(messages, sourceMemoryEvidence, canonical);
-            title = core_worldPresentation.controlledEvidenceContains(sourceMemoryEvidence, title) ? title : `剧情摘录 ${index + 1}`;
-            preview = sourceMemoryEvidence;
-            detail = sourceMemoryEvidence;
-            meta = '';
-            imageCaption = '';
-            if (!['chat', 'contacts'].includes(planApp.kind)) {
-                messages = [];
-                fields = [];
+            const memoryOk = reference.sourceMemoryIds.length && sourceMemoryEvidence
+                && (!sourceMemoryIds || core_incremental.usesIncrementalMemoryId(reference.sourceMemoryIds, sourceMemoryIds))
+                && phoneMemoryStructuredFactsSupported(planApp.kind, conversation, messages, fields, sourceMemoryEvidence, canonical);
+            if (!memoryOk) {
+                conversation = applyPhoneChatContract(conversation, memoryBank, { basis: '推演' });
+                if (planApp.kind === 'chat' && conversation.userThread && conversation.messages.some(message => message.speakerRole === 'owner')) {
+                    basis = '推演';
+                    messages = conversation.messages;
+                    reference = { sourceMemoryIds: [], sourceMemoryAnchor: '' };
+                    sourceMemoryEvidence = '';
+                } else {
+                    return null;
+                }
+            } else {
+                messages = sanitizePhoneMemoryMessageTimes(messages, sourceMemoryEvidence, canonical);
+                title = core_worldPresentation.controlledEvidenceContains(sourceMemoryEvidence, title) ? title : `剧情摘录 ${index + 1}`;
+                preview = sourceMemoryEvidence;
+                detail = sourceMemoryEvidence;
+                meta = '';
+                imageCaption = '';
+                if (!['chat', 'contacts'].includes(planApp.kind)) {
+                    messages = [];
+                    fields = [];
+                }
             }
         }
+        if (!legacyStored && basis !== '记忆' && !phoneInferredEntryAllowed(entry, planApp.kind, conversation, evidenceText, memoryBank, options)) return null;
+        if (!preview || (!detail && !messages.length && !fields.length && !imageCaption)) return null;
         return {
             id,
             title,
@@ -1205,7 +1274,10 @@ export async function generatePhoneWithRepair(context, memoryBank, origin, taskK
 }
 
 export function phoneHasMissingEntries(session) {
-    return !!session?.apps?.some(app => app.entries?.some(isUnavailablePhoneEntry));
+    return !!session?.apps?.some(app => {
+        const omitted = new Set(app.omittedEntryIds || []);
+        return app.entries?.some(entry => isUnavailablePhoneEntry(entry) && !omitted.has(entry.id));
+    });
 }
 
 export function phoneCompletionSummary(value) {
@@ -1242,14 +1314,16 @@ export function mergePhoneMissingEntries(previous, fresh) {
 }
 
 export function phoneMissingThreadPlan(app, previous, memoryBank, options = {}) {
+    const story = phoneStory(memoryBank, options.context);
     const missing = (app.entries || []).filter(isUnavailablePhoneEntry);
     const known = [options.controlledEvidence, phoneReferencedMemoryText({ sourceMemoryIds: (memoryBank?.memories || []).map(row => row.id) }, memoryBank)].filter(Boolean).join('\n');
-    const allowed = name => name && name !== memoryBank?.characterName
-        && (name === memoryBank?.userName || core_worldPresentation.controlledEvidenceContains(known, name));
+    const allowed = name => name && !isPhoneOwnerName(name, memoryBank, options.context)
+        && !core_participants.nameMatches(name, [story.cardName])
+        && (isPhoneUserName(name, memoryBank, options.context) || core_worldPresentation.controlledEvidenceContains(known, name));
     const explicitTargets = missing.map(entry => entry.contactName || inferPhoneContactName(entry, memoryBank));
     const reserved = new Set(explicitTargets.filter(allowed));
     const targets = [...new Set([
-        memoryBank?.userName,
+        story.userDisplay,
         ...(previous.apps || []).flatMap(item => item.entries || []).map(entry => entry.contactName)]
         .filter(name => allowed(name) && !reserved.has(name)))];
     let nextTarget = 0;
@@ -1258,9 +1332,10 @@ export function phoneMissingThreadPlan(app, previous, memoryBank, options = {}) 
         // for the same person. Only genuinely empty slots receive a fallback target.
         const contactName = allowed(explicitTargets[index]) ? explicitTargets[index] : targets[nextTarget++];
         if (!contactName) return [];
-        const draft = contactName === memoryBank?.userName;
-        return [{ id: item.id, contactName, conversationMode: draft ? 'draft' : 'daily',
-            title: draft ? `给${contactName}的未发送草稿` : `与${contactName}的日常通讯`,
+        const draft = isPhoneUserName(contactName, memoryBank, options.context);
+        const display = draft ? story.userDisplay : contactName;
+        return [{ id: item.id, contactName: display, conversationMode: draft ? 'draft' : 'daily',
+            title: draft ? `给${display}的未发送草稿` : `与${display}的日常通讯`,
             meta: draft ? '只写主人一侧，不生成用户发言' : '已知普通联系人日常演绎，非历史记录' }];
     });
     return { ...app, incremental: true, entries, omittedEntryIds: missing.filter(item => !entries.some(entry => entry.id === item.id)).map(item => item.id) };
@@ -1273,15 +1348,17 @@ export async function generatePhoneMissingWithRepair(context, memoryBank, origin
     for (const app of previous.apps || []) {
         const entries = (app.entries || []).filter(isUnavailablePhoneEntry);
         if (!entries.length) continue;
-        const planApp = app.kind === 'chat' ? phoneMissingThreadPlan(app, previous, memoryBank, { controlledEvidence: presentation.settingEvidence || '' }) : { ...app, incremental: true, entries: entries.map(item => ({
-            id: item.id, title: '按此 App 用途与角色生活补齐', meta: '',
-        })) };
+        const planApp = app.kind === 'chat'
+            ? phoneMissingThreadPlan(app, previous, memoryBank, { controlledEvidence: presentation.settingEvidence || '', context })
+            : { ...app, incremental: true, entries: entries.map(item => ({
+                id: item.id, title: isPhonePlaceholderTitle(item.title) ? `${app.label}日常` : item.title, meta: item.meta || '',
+            })) };
         if (!planApp.entries.length) { contentFailure = noPhoneConversation(); continue; }
         let fresh;
         try { fresh = await generation_client.requestValidatedSegment(
             phoneAppPrompt(context, memoryBank, session, planApp),
-            `正在补齐「${app.label}」的 ${entries.length} 项内容…`,
-            { context, contextEnvelope: presentation.contextEnvelope, origin, taskKey: `${taskKey}:missing:${app.id}:${core_text.hashString(entries.map(entry => entry.id).join('\n'))}`,
+            `正在补齐「${app.label}」的 ${planApp.entries.length} 项内容…`,
+            { context, contextEnvelope: presentation.contextEnvelope, origin, taskKey: `${taskKey}:missing:${app.id}:${core_text.hashString(planApp.entries.map(entry => `${entry.id}\t${entry.title}\t${entry.contactName || ''}`).join('\n'))}`,
                 mode: core_constants.MODE.PHONE, maxTokens: 8000, background: true,
                 ...(app.kind === 'chat' ? { recoveryPhoneContract: 'phone-chat-p0' } : {}) },
             raw => normalizePhoneDraftApp(raw, planApp, memoryBank, session.deviceKind, null,
@@ -1319,7 +1396,7 @@ export function compactPhoneExisting(session) {
 }
 
 export function phoneIncrementPlanPrompt(context, memoryBank, previous, sourceMemoryIds) {
-    return `${generation_prompts.promptSafetyBoundary(context, '私人终端 / 增量目录')}
+    return `${generation_prompts.promptSafetyBoundary(context, '私人终端 / 增量目录', core_participants.archivePeopleNames(memoryBank), memoryBank)}
 旧设备、App、条目、聊天消息和照片说明由本地原样保留。本请求只根据新增档案规划少量新条目，不得重写、总结或换标题复述旧条目。
 UNTRUSTED_INCREMENTAL_PHONE_ARCHIVE_JSON:
 ${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}
@@ -1506,8 +1583,9 @@ export function normalizePhone(data, memoryBank, { worldPresentation = null, con
             let meta = core_text.normalizeText(entry?.meta, 200);
             let preview = core_text.normalizeText(entry?.preview, 1200);
             let detail = core_text.normalizeText(entry?.detail, 5000);
-            const conversation = normalizePhoneConversationMessages(entry, memoryBank, { strict: false, preserveOwnerNames: kind === 'chat' });
+            let conversation = normalizePhoneConversationMessages(entry, memoryBank, { strict: false, preserveOwnerNames: kind === 'chat' });
             basis = phoneEntryBasis(entry, kind, conversation, memoryBank, chatOptions);
+            conversation = applyPhoneChatContract(conversation, memoryBank, { basis });
             let messages = conversation.messages;
             let fields = (Array.isArray(entry?.fields) ? entry.fields : []).slice(0, 16).map(field => ({
                 label: core_text.normalizeText(field?.label, 100),
@@ -1530,7 +1608,7 @@ export function normalizePhone(data, memoryBank, { worldPresentation = null, con
             if (basis === '记忆' && !trustedStored) {
                 const canonical = phoneReferencedMemoryText(reference, memoryBank);
                 if (!phoneMemoryStructuredFactsSupported(kind, conversation, messages, fields, sourceMemoryEvidence, canonical)) return null;
-                if (kind === 'chat') assertPhoneConversation(messages);
+                if (kind === 'chat') assertPhoneConversation(messages, { userThread: conversation.userThread && basis !== '记忆' });
                 messages = sanitizePhoneMemoryMessageTimes(messages, sourceMemoryEvidence, canonical);
                 title = core_worldPresentation.controlledEvidenceContains(sourceMemoryEvidence, title) ? title : `剧情摘录 ${index + 1}`;
                 preview = sourceMemoryEvidence;

@@ -397,7 +397,7 @@ export function butterflyIncrementPrompt(context, memoryBank, previous, sourceMe
         primaryAxis: core_text.normalizeText(item?.primaryAxis || item?.worldSpec?.primaryAxis, 40),
         worldSpec: looseWorldSpec(item),
     }));
-    return `${generation_prompts.promptSafetyBoundary(context, '蝴蝶效应 / 增量分歧')}
+    return `${generation_prompts.promptSafetyBoundary(context, '蝴蝶效应 / 增量分歧', null, memoryBank)}
 ${options.readableR62 ? core_butterflyContract.BUTTERFLY_READABLE_R62_CONTRACT : core_butterflyContract.BUTTERFLY_GENERATION_CONTRACT}
 旧终端节点由本地原样保留。本请求只根据当前档案写确有不同的平行分歧，最多三个是容量上限，不是目标数量。没有新分歧可以只写新观测点 Ω；禁止改写或换措辞复述旧节点。
 UNTRUSTED_INCREMENTAL_TIMELINE_JSON:

@@ -24,8 +24,15 @@ const DIRECT_TEXT = /^(?:我|我们|咱们|你|您|那你|那我|要不|别|嗯|
 
 // One pure boundary for generated scripts and legacy display. No cache mutation,
 // host access or provider calls. Unknown attribution remains neutral.
-export function normalizeDialogueRows(raw, { characterName = '', userName = '', strict = false } = {}) {
-    const identities = [[core_text.normalizeText(characterName, 120), 'char'], [core_text.normalizeText(userName, 120), 'user'], ['{{char}}', 'char'], ['{{user}}', 'user']].filter(([name]) => name);
+export function normalizeDialogueRows(raw, { characterName = '', userName = '', userAliases = [], characterAliases = [], strict = false } = {}) {
+    const identities = [
+        ...(Array.isArray(characterAliases) ? characterAliases : []).map(name => [core_text.normalizeText(name, 120), 'char']),
+        ...(Array.isArray(userAliases) ? userAliases : []).map(name => [core_text.normalizeText(name, 120), 'user']),
+        [core_text.normalizeText(characterName, 120), 'char'],
+        [core_text.normalizeText(userName, 120), 'user'],
+        ['{{char}}', 'char'],
+        ['{{user}}', 'user'],
+    ].filter(([name]) => name);
     const inputs = Array.isArray(raw) ? raw : [];
     const overBudget = () => {
         if (strict) throw new Error('对话拆分后超过 120 行或 50400 字符，请减少脚本长度后重新生成。');

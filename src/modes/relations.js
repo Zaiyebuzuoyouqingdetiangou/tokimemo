@@ -504,7 +504,7 @@ export function mergeBudgetRetainedSettingRelations(generated, previous, selecti
 }
 
 export function relationsPrompt(context, memoryBank, settingEntries = []) {
-    return `${generation_prompts.promptSafetyBoundary(context, '本世界线人际庭园')}
+    return `${generation_prompts.promptSafetyBoundary(context, '本世界线人际庭园', null, memoryBank)}
 UNTRUSTED_RELATION_ARCHIVE_JSON:
 ${generation_prompts.promptArchiveSlice(memoryBank, 64)}
 EXPLICIT_SETTING_ENTRIES_JSON:

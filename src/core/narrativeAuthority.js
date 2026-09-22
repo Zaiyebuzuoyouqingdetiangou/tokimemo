@@ -11,12 +11,14 @@ const ACTION = /(?:送|赠|交|收|寄|写|画|拍|做|织|缝|刻|买|选|挑|�
 const COMPLETED = /(?:(?:送|赠|寄|写|画|拍|做|织|缝|刻|买|选|挑|带|救|拥抱|亲吻|接吻|告白|约定|结婚|同居|旅行|见|陪|看|去|走|住|交换)[^，,。！？!?；;\n]{0,18}(?:了|过)|第一次|初次|所赠|同游|\b(?:gave|sent|wrote|bought|visited|met|married|kissed|hugged|promised)\b)/iu;
 const PARTICIPANT = /(?:\{\{user\}\}|你|我们|咱们|两个人|彼此|共同|一起|\b(?:you|your|yours|we|us|our|ours|together)\b)/iu;
 
-export function narrativeClaimsSharedHistory(value, { userName = '', secondPersonIsUser = true } = {}) {
+export function narrativeClaimsSharedHistory(value, { userName = '', userAliases = [], secondPersonIsUser = true } = {}) {
     // Different schema fields have independent subjects and temporal scopes.
-    if (Array.isArray(value)) return value.some(item => narrativeClaimsSharedHistory(item, { userName, secondPersonIsUser }));
+    if (Array.isArray(value)) return value.some(item => narrativeClaimsSharedHistory(item, { userName, userAliases, secondPersonIsUser }));
     let text = core_text.normalizeText(value, 12000);
-    const name = core_text.normalizeText(userName, 120);
-    if (name) text = text.split(name).join('{{user}}');
+    const names = [...new Set([userName, ...(Array.isArray(userAliases) ? userAliases : [])]
+        .map(name => core_text.normalizeText(name, 120)).filter(Boolean))]
+        .sort((left, right) => right.length - left.length);
+    for (const name of names) text = text.split(name).join('{{user}}');
     const mentions = part => /\{\{user\}\}/u.test(part) || (secondPersonIsUser && PARTICIPANT.test(part));
     if (!text || !mentions(text)) return false;
     // Negated experiences do not claim that an episode occurred. Strip only this bounded

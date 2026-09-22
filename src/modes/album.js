@@ -155,7 +155,7 @@ export function albumRelationshipArchiveSlice(memoryBank) {
 
 export function albumRelationshipScanPrompt(context, memoryBank, participantSnapshot = null) {
     const snapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
-    if (snapshot) return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 2：当下关系扫描')}
+    if (snapshot) return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 2：当下关系扫描', snapshot.people, memoryBank)}
 本请求扫描完整档案，分别判定每位选定人物与 {{user}} 的当下关系；不写 CG 或对白，不预演未来。角色卡名称是场景标题，不能充当人物姓名。
 ${core_participants.participantPromptBlock(snapshot)}
 ALBUM_RELATIONSHIP_FULL_ARCHIVE_JSON:
@@ -163,8 +163,8 @@ ${albumRelationshipArchiveSlice(memoryBank)}
 严格输出 {"people":[{"speakerId":"名单中的原始 id","charState":"该人物已证实的态度","userState":"用户对该人物已明确表达的态度，未知写未确认","relationshipState":"该人物与用户的关系阶段","relationshipSummary":"该人物与用户的证据总结","relationshipSourceMemoryIds":["M001"],"relationshipSourceMemoryAnchor":"该记忆的原样锚点"}]}。
 每位选定人物各返回一条，用 speakerId 对应。每人的证据和关系分别核对，不能把甲的恋爱关系、行为或内心套给乙；不替用户创造回应。引用必须来自上方档案，只输出 JSON。`;
 
-    return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 2：当下关系扫描')}
-本请求只做一件事：在写共同回忆对话前，扫描当前完整档案时间线，判定 {{char}} 与 {{user}} 双方已有证据的感情状态和当前关系。不写 CG，不写对话，不预演未来。
+    return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 2：当下关系扫描', core_participants.archivePeopleNames(memoryBank), memoryBank)}
+本请求只做一件事：在写共同回忆对话前，扫描当前完整档案时间线，判定档案人物与 {{user}} 双方已有证据的感情状态和当前关系。角色卡名称不是人物。不写 CG，不写对话，不预演未来。
 ALBUM_RELATIONSHIP_FULL_ARCHIVE_JSON:
 ${albumRelationshipArchiveSlice(memoryBank)}
 
@@ -223,8 +223,9 @@ export function normalizeAlbumRelationshipSnapshot(data, memoryBank, participant
     // cherry-pick an earlier relationship peak. Current state is derived locally from the full
     // ordered archive; relationshipExpressionTier ignores unrelated third-party clauses.
     const tier = core_presentExpression.relationshipExpressionTier(relationshipBank);
-    const owner = core_text.normalizeText(memoryBank?.characterName, 80) || '{{char}}';
-    const reader = core_text.normalizeText(memoryBank?.userName, 80) || '{{user}}';
+    const story = core_participants.resolveStoryIdentities(memoryBank);
+    const owner = story.ownerNames[0] || core_text.normalizeText(memoryBank?.characterName, 80) || '{{char}}';
+    const reader = story.userDisplay || '{{user}}';
     const localState = [
         {
             charState: `完整档案尚未确认${owner}对${reader}的特殊感情。`,
@@ -261,7 +262,7 @@ export function albumIndexPrompt(context, memoryBank, previousSession = null, so
     const archiveBlock = previousSession
         ? core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)
         : generation_prompts.promptArchiveSlice(memoryBank, 48);
-    return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 重要 CG 节点')}
+    return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 重要 CG 节点', core_participants.archivePeopleNames(memoryBank), memoryBank)}
 本请求只挑本次增量档案里【尚未被相簿覆盖、真正值得成为一张 CG 的新节点】。旧相簿由本地代码原样保留；不要重写、润色或换标题复述旧条目。
 UNTRUSTED_INCREMENTAL_CG_ARCHIVE_JSON:
 ${archiveBlock}
@@ -346,7 +347,7 @@ export function normalizeAlbumIndex(data, memoryBank, sourceMemoryIds = null) {
 
 export function albumCommentsPrompt(context, memoryBank, entries, relationshipSnapshot = null, participantSnapshot = null) {
     const snapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
-    if (snapshot) return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 3：当下共同回忆')}
+    if (snapshot) return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 3：当下共同回忆', snapshot.people, memoryBank)}
 本请求给 ${entries.length} 张已解锁的过去 CG 写一起翻相簿的当下对白。不同人物可以轮流说话，每句话由实际说话人的 speakerId 对应姓名。角色卡名不是人物。
 ${core_participants.participantPromptBlock(snapshot)}
 CURRENT_RELATIONSHIP_SCAN_JSON:
@@ -371,7 +372,7 @@ ${JSON.stringify({ entries: entries.map(item => ({ id: item.id, title: item.titl
         })),
         memories: core_evidence.memoryPayload(memoryBank, ids, 20),
     };
-    return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 3：当下共同回忆')}
+    return `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 分段 3：当下共同回忆', core_participants.archivePeopleNames(memoryBank), memoryBank)}
 本请求只给下面 ${entries.length} 张【已经解锁的旧 CG】写一起翻相册时的当下对白。不要生成新 CG、不要改证据、不要写 ADV 式过去内心独白。
 CURRENT_RELATIONSHIP_SCAN_JSON:
 ${JSON.stringify(safeSnapshot, null, 2)}

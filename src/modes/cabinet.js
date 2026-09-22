@@ -6,7 +6,7 @@ import * as ui_overlay from '../ui/overlay.js';
 import { state as runtimeState } from '../core/state.js';
 
 export function cabinetPrompt(context, memoryBank) {
-    return generation_prompts.promptSafetyBoundary(context, '两个人的陈列柜') + '\n' +
+    return generation_prompts.promptSafetyBoundary(context, '两个人的陈列柜', null, memoryBank) + '\n' +
         generation_prompts.promptArchiveSlice(memoryBank, 64) +
         '\n只收记忆中真实出现、与两个人有关的具体物件，如曾交换的礼物、共同使用的物品、留下的票根。不是他的全部私人物品。不得从世界书推测，不得编造礼物。无证据时返回空 items。最多 12 件。输出 {"items":[{"name":"原文中的物件名","objectEvidence":"从所引记忆 summary/anchors/title 中逐字复制的一句，须含物件名及两人关联","sourceMemoryIds":["M001"],"sourceMemoryAnchor":"原样锚点"}]}。';
 }

@@ -56,8 +56,18 @@ export function normalizeHeartCore(data, memoryBank) {
     };
 }
 
+function heartStoryIdentities(memoryBank) {
+    const story = core_participants.resolveStoryIdentities(memoryBank);
+    return {
+        characterName: story.ownerNames[0] || memoryBank?.characterName || '',
+        userName: story.userDisplay,
+        userAliases: story.userAliases,
+        characterAliases: story.ownerNames,
+    };
+}
+
 export function heartCorePrompt(context, memoryBank) {
-    return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 时期对话')}
+    return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 时期对话', null, memoryBank)}
 本请求只生成【关系锚点 + 各种时期/时段的角色对话 + 特别日】。春夏秋冬 Drama 和日常一格都在各自入口单独生成。
 greetings 和 specialDays.line 是 {{char}} 直接对 {{user}} 说的话；只写台词，不混入动作、旁白或其他人的发言。
 UNTRUSTED_HEART_ARCHIVE_JSON:
@@ -90,7 +100,7 @@ export function compactHeartDialoguesExisting(session) {
 }
 
 export function heartCoreIncrementPrompt(context, memoryBank, existing, sourceMemoryIds) {
-    return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 时期对话增量')}
+    return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 时期对话增量', null, memoryBank)}
 旧关系时期记录和旧台词由本地原样保留。本请求只根据新增档案补充新的关系阶段说明与新台词，禁止改写、润色或换措辞复述旧台词。
 greetings 和 specialDays.line 是 {{char}} 直接对 {{user}} 说的话；只写台词，不混入动作、旁白或其他人的发言。
 UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:
@@ -227,7 +237,7 @@ export function compactHeartSeasonExisting(session, season) {
 }
 
 export function heartPostVoicePrompt(context, memoryBank, core, previous = null, sourceMemoryIds = null) {
-    return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / Drama：未来')}
+    return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / Drama：未来', null, memoryBank)}
 ${core_dialogue.DIALOGUE_CONTRACT}
 RELATIONSHIP_TONE_ONLY_JSON:
 ${heartDramaRelationshipOnlyContext(core)}
@@ -248,7 +258,7 @@ ${JSON.stringify(compactHeartSeasonExisting(previous, 'postending'), null, 2)}` 
 export function heartSeasonVoicePrompt(context, memoryBank, core, season, previous = null, sourceMemoryIds = null) {
     const labels = { spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
     const label = labels[season] || season;
-    return `${generation_prompts.promptSafetyBoundary(context, `角色互动 / Drama：${label} Voice`)}
+    return `${generation_prompts.promptSafetyBoundary(context, `角色互动 / Drama：${label} Voice`, null, memoryBank)}
 ${core_dialogue.DIALOGUE_CONTRACT}
 RELATIONSHIP_TONE_ONLY_JSON:
 ${heartDramaRelationshipOnlyContext(core)}
@@ -268,7 +278,7 @@ ${JSON.stringify(compactHeartSeasonExisting(previous, season), null, 2)}` : ''}
 export function heartSeasonScenarioPrompt(context, memoryBank, core, season, previous = null, sourceMemoryIds = null) {
     const labels = { spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
     const label = labels[season] || season;
-    return `${generation_prompts.promptSafetyBoundary(context, `角色互动 / Drama：${label} Scenario`)}
+    return `${generation_prompts.promptSafetyBoundary(context, `角色互动 / Drama：${label} Scenario`, null, memoryBank)}
 ${core_dialogue.DIALOGUE_CONTRACT}
 RELATIONSHIP_TONE_ONLY_JSON:
 ${heartDramaRelationshipOnlyContext(core)}
@@ -297,7 +307,7 @@ export function heartFireflyPrompt(context, memoryBank, core, previous = null, s
         ),
     }));
     const incremental = existing.length > 0;
-    return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 萤火虫栖息地')}
+    return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 萤火虫栖息地', null, memoryBank)}
 RELATIONSHIP_TONE_ONLY_JSON:
 ${heartDramaRelationshipOnlyContext(core)}
 ${incremental ? `UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:
@@ -421,7 +431,7 @@ export function heartFireflyUpgradePrompt(context, core, items) {
             700,
         ),
     }));
-    return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 旧版萤火虫升级为 GS4 式会话')}
+    return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 旧版萤火虫升级为 GS4 式会话', null, memoryBank)}
 RELATIONSHIP_TONE_ONLY_JSON:
 ${heartDramaRelationshipOnlyContext(core)}
 LEGACY_FIREFLY_BATCH_JSON:
@@ -455,7 +465,7 @@ export function normalizeFireflyUpgradePart(data, expectedItems) {
 }
 
 export function heartStripsPrompt(context, memoryBank, core, previous = null, sourceMemoryIds = null) {
-    return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 日常一格')}
+    return `${generation_prompts.promptSafetyBoundary(context, '角色互动 / 日常一格', null, memoryBank)}
 UNTRUSTED_HEART_RELATIONSHIP_JSON:
 ${heartDramaContext(core, memoryBank)}
 ${previous ? `UNTRUSTED_INCREMENTAL_HEART_ARCHIVE_JSON:\n${core_incremental.incrementalArchiveSlice(memoryBank, sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS)}\nEXISTING_STRIP_INDEX_JSON:\n${JSON.stringify((previous.dailyStrips || []).slice(-60).map(item => ({ id: item.id, title: item.title, subtitle: item.subtitle, visualSeed: item.visualSeed })), null, 2)}` : ''}
@@ -476,7 +486,7 @@ export function normalizeVoiceDramaPart(data, expectedKinds, memoryBank = {}) {
         if (!item) throw core_text.safeUserError(`Voice Drama 缺少 ${expected}。`, 'RMT_HEART_INCOMPLETE');
         const post = expected === 'postending';
         const script = normalizeHeartScript(item?.script, {
-            characterName: memoryBank.characterName, userName: memoryBank.userName,
+            ...heartStoryIdentities(memoryBank),
             minLines: post ? 8 : 5,
             maxLines: post ? 24 : 16,
             minChars: post ? 420 : 280,
@@ -502,7 +512,7 @@ export function normalizeScenarioDramaPart(data, expectedSeason = '', memoryBank
     for (const expected of seasons) {
         const item = raw.find(candidate => core_text.normalizeText(candidate?.season, 40).toLowerCase() === expected);
         if (!item) throw core_text.safeUserError(`Scenario Drama 缺少 ${expected}。`, 'RMT_HEART_INCOMPLETE');
-        const script = normalizeHeartScript(item?.script, { minLines: 6, maxLines: 20, minChars: 360, characterName: memoryBank.characterName, userName: memoryBank.userName });
+        const script = normalizeHeartScript(item?.script, { minLines: 6, maxLines: 20, minChars: 360, ...heartStoryIdentities(memoryBank) });
         if (!script.length) throw core_text.safeUserError(`Scenario Drama ${expected} 长度不足。`, 'RMT_HEART_INCOMPLETE');
         out.push({
             id: core_text.safeId(item?.id, `SCENE_${expected.toUpperCase()}`),
@@ -1910,9 +1920,9 @@ async function generateHeartSeasonSectionOperation(normalizedSeason, options, lo
     }
 }
 
-export function normalizeHeartScript(rawLines, { minLines = 8, minChars = 500, characterName = '', userName = '' } = {}) {
+export function normalizeHeartScript(rawLines, { minLines = 8, minChars = 500, characterName = '', userName = '', userAliases = [], characterAliases = [] } = {}) {
     // The shared post-split budget also applies on re-normalization; never slice an expanded script.
-    const lines = core_dialogue.normalizeDialogueRows(rawLines, { strict: true, characterName, userName });
+    const lines = core_dialogue.normalizeDialogueRows(rawLines, { strict: true, characterName, userName, userAliases, characterAliases });
     if (lines.length < minLines || lines.reduce((sum, line) => sum + line.text.length, 0) < minChars) return [];
     return lines;
 }
@@ -1951,7 +1961,7 @@ export function normalizeHeart(data, memoryBank) {
         const kind = core_constants.HEART_VOICE_KINDS.has(kindRaw) ? kindRaw : '';
         if (!kind) return null;
         const script = normalizeHeartScript(item?.script, {
-            characterName: memoryBank?.characterName, userName: memoryBank?.userName,
+            ...heartStoryIdentities(memoryBank),
             minLines: kind === 'postending' ? 8 : 5,
             maxLines: kind === 'postending' ? 24 : 16,
             minChars: kind === 'postending' ? 420 : 280,
@@ -1974,7 +1984,7 @@ export function normalizeHeart(data, memoryBank) {
         const seasonRaw = core_text.normalizeText(item?.season, 40).toLowerCase();
         const season = core_constants.HEART_SCENARIO_SEASONS.has(seasonRaw) ? seasonRaw : '';
         if (!season) return null;
-        const script = normalizeHeartScript(item?.script, { minLines: 6, maxLines: 20, minChars: 360, characterName: memoryBank?.characterName, userName: memoryBank?.userName });
+        const script = normalizeHeartScript(item?.script, { minLines: 6, maxLines: 20, minChars: 360, ...heartStoryIdentities(memoryBank) });
         if (!script.length) return null;
         return {
             id: core_text.safeId(item?.id, `SCENE${String(index + 1).padStart(2, '0')}`),
