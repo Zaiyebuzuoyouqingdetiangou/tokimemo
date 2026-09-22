@@ -179,6 +179,7 @@ function phoneRenderedSpeakerRole(message, session) {
 }
 
 function phoneConversationNeedsSpeakerRepair(entry, session) {
+    if (entry?.conversationMode === 'draft') return false;
     const messages = Array.isArray(entry?.messages) ? entry.messages : [];
     if (messages.length < 2) return false;
     const roles = new Set(messages.map(message => phoneRenderedSpeakerRole(message, session)));
@@ -193,7 +194,7 @@ export function renderPhoneEntryDetail(entry, app, session = runtimeState.active
     const messages = entry.messages?.length ? `<div class="rmt-phone-chat-thread">${entry.messages.map(message => {
         const role = phoneRenderedSpeakerRole(message, session);
         const speaker = role === 'owner'
-            ? (core_text.normalizeText(session?.ownerName, 100) || core_text.normalizeText(message?.speaker, 100) || '设备主人')
+            ? ((appKind === 'chat' ? core_text.normalizeText(message?.speaker, 100) : '') || core_text.normalizeText(session?.ownerName, 100) || core_text.normalizeText(message?.speaker, 100) || '设备主人')
             : (core_text.normalizeText(message?.speaker, 100) || core_text.normalizeText(entry?.contactName, 100) || '联系人');
         return `<div class="rmt-phone-message rmt-phone-message-${role}"><div><b>${core_text.esc(speaker)}</b>${message.time ? `<small>${core_text.esc(message.time)}</small>` : ''}</div><p>${core_text.esc(message.text)}</p></div>`;
     }).join('')}</div>` : '';
@@ -206,7 +207,7 @@ export function renderPhoneEntryDetail(entry, app, session = runtimeState.active
     // Layout is owned here; no invented balances, media URLs, or executable app content.
     // Provenance stays on stored entries and is not repeated inside immersive reading.
     let content;
-    if (appKind === 'chat') content = `<section class="rmt-phone-conversation"><header>${title}</header>${body}${messages}${fields}${gallery}</section>`;
+    if (appKind === 'chat') content = `<section class="rmt-phone-conversation"><header>${title}<p class="rmt-phone-conversation-status">${entry.conversationMode === 'draft' ? '未发送草稿 · 不代表已发生的聊天' : entry.legacyEvidenceUnverified ? '旧版记录 · 来源尚未核验' : entry.basis === '记忆' ? '已核对的历史原话' : '角色日常演绎 · 非历史聊天记录'}</p></header>${body}${messages}${fields}${gallery}</section>`;
     else if (['finance', 'store'].includes(appKind)) content = `<article class="rmt-phone-ledger"><header>${badge}<small>${core_text.esc(app?.label || '账本')}</small>${title}</header>${fields}<div class="rmt-phone-ledger-memo">${body}${gallery}${messages}</div></article>`;
     else if (appKind === 'notes') content = `<article class="rmt-phone-notepaper"><header>${title}</header>${body}${fields}${gallery}${messages}</article>`;
     else if (appKind === 'moments') content = `<article class="rmt-phone-feed-post"><header><span class="rmt-phone-contact-avatar" aria-hidden="true">${core_text.esc(String(session?.ownerName || '').slice(0, 1))}</span><b>${core_text.esc(session?.ownerName || '')}</b></header>${title}${body}${gallery}${fields}${messages}</article>`;

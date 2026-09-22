@@ -1,3 +1,19 @@
+当前完整候选：0.99.1 / 0.99.1-tt-cg-r84.46-p0
+当前ZIP：Hearttrace-0.99.1-r84.46-P0-full.zip，内部单根 tokimemo-main/。
+以 P0-修复说明.md 为准更新扩展文件并刷新页面；保留数据和旧包，勿清站点数据。
+下方旧候选的版本与文件名仅作历史，不是本次安装身份。
+
+---
+
+心迹回廊 TTS 完整本地候选 0.99
+加载标识：0.99-tt-cg-r84.45-mirror-tts
+当前包：Hearttrace-0.99-r84.45-MirrorTTS-full.zip；内部单根 tokimemo-main/。
+安装说明以 MIRROR-TTS.md 为准。沿用原扩展更新流程，保留旧包和数据，更新后刷新页面。
+需另行在同一酒馆页面启用镜译公开 TTS 接口并配置音色/API Key。未自动安装镜译、未上传酒馆、未推送 GitHub。
+以下为历史安装说明，仅保留其数据保全注意事项；旧版本号不代表本次候选。
+
+---
+
 心迹回廊 r84.28 完整本地测试候选
 加载标识：0.8.104-tt-cg-r84.28-task-recovery
 上传文件名：hearttrace-upload.zip；内部单根：tokimemo-main/。

@@ -21,6 +21,7 @@ import * as ui_floatingArchive from './ui/floatingArchive.js';
 import * as ui_phoneView from './ui/phoneView.js';
 import * as ui_settingsPanel from './ui/settingsPanel.js';
 import * as ui_styles from './ui/styles.js';
+import * as mirror_reader from './ui/mirrorTtsReader.js';
 
 export function openArchiveLibrary(source = 'runtime-api') {
     return ui_archivePortal.safeShowArchiveLibrary(source);
@@ -63,6 +64,7 @@ export function initMemoryTheater() {
 }
 
 export function destroyMemoryTheater() {
+    mirror_reader.disposeMirrorReader();
     ui_floatingArchive.destroyFloatingArchive();
     core_diagnosticReport.uninstallRuntimeDiagnostic();
     try { globalThis.__heartbeatMemoriesRemoveDiagnostics?.(); } catch {}

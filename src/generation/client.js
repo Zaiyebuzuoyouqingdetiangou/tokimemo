@@ -514,7 +514,7 @@ export async function requestValidatedSegment(prompt, status, options, validator
             return value;
         } catch (error) {
             if (options.taskTrace?.activeStage === 'validate') core_taskTrace.markStage(options.taskTrace, 'validate', false);
-            if (error?.name === 'AbortError' || error?.code === 'RMT_BANNED_GENERATED_PHRASE' || error?.code === 'RMT_JSON_TRUNCATED') throw error;
+            if (error?.name === 'AbortError' || error?.nonRetryable === true || error?.code === 'RMT_PHONE_NO_CONVERSATION' || error?.code === 'RMT_BANNED_GENERATED_PHRASE' || error?.code === 'RMT_JSON_TRUNCATED') throw error;
             lastError = error;
             const emptyReroll = attempt === 0 && ['RMT_JSON_EMPTY_FINAL', 'RMT_JSON_EMPTY_FINAL_WITH_REASONING', 'RMT_JSON_NOT_FOUND'].includes(error?.code);
             const configuredRetry = attempt + 1 < configuredAttempts && core_requestCoordinator.shouldRetrySegmentRequest(error, attempt);
@@ -851,7 +851,12 @@ ${expanded}${creativeSupplement}${phrasePolicy}`,
         contentSettings: generationContentSettings(contentSettings),
     });
     contentSettings = { ...settings, ...prepared.contentSettings };
-    const controlledPrompt = generation_recovery.generationContinuationPrompt(prepared.actualPrompt, options.recoveryContinuationPartial);
+    // Feedback is per attempt: preserve the frozen identity, then include the
+    // actual retry note in both the budget measurement and provider request.
+    const controlledPrompt = generation_recovery.generationRetryPrompt(
+        generation_recovery.generationPhoneRetryPrompt(
+            generation_recovery.generationContinuationPrompt(prepared.actualPrompt, options.recoveryContinuationPartial), options.recoveryPhoneRetryContract),
+        options.recoveryRetryFeedback);
     if (options.archiveRequestBudget === true) {
         const budget = await archive_requestBudget.measureArchiveRequest(context, controlledPrompt,
             { signal: options.signal, stamp: options.archiveBudgetStamp,

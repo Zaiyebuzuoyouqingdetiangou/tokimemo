@@ -1,4 +1,5 @@
 import * as cg_format_ui from './cgFormatControl.js';
+import * as mirror_reader from './mirrorTtsReader.js';
 import * as heart_reader from './heartReaderState.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -197,10 +198,12 @@ export function openOverlay() {
     bindOverlayCloseFallback(overlay);
     revealArchiveOverlay(overlay);
     workspace_ui.syncWorkspaceChrome();
+    mirror_reader.mountMirrorReader(overlay);
     return overlay;
 }
 
 export function closeOverlay(options = {}) {
+    mirror_reader.disposeMirrorReader();
     const remember = options.remember !== false;
     participant_picker.closeParticipantPicker();
     image_viewer.closeCgImageViewer({ restoreFocus: false });
