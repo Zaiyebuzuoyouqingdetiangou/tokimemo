@@ -63,29 +63,51 @@ function recoveryFailureCode(error) {
 
 // Only fixed classifications, never provider text or repairHint, enter feedback.
 const RETRY_FEEDBACK = Object.freeze({
-    json: '上一轮最终正文没有完整、可解析的 JSON。只输出原 schema 的一个完整 JSON 对象，不要散文、前言或代码围栏。',
+    json: '上一轮没有完整 JSON。只输出一个 JSON 对象，第一个字符必须是 {，最后一个字符必须是 }。不要散文、前言或代码围栏。',
     empty: '上一轮没有最终正文 JSON；推理字段不能代替正文。请输出原 schema 的完整 JSON。',
-    truncated: '上一轮 JSON 没有闭合。保留已有草稿的内容并按原 schema 补齐完整对象，不要只写尾巴。',
-    length: '上一轮剧本长度未通过校验：句数或字数未满足原要求。逐项核对原提示中的句数、字数和必需字段，不得降低门槛。',
-    structure: '上一轮结构或完整度未通过本地校验。逐项核对原 schema、必需条目、说话人以及句数和字数要求，不得放宽原限制。',
+    truncated: '上一轮 JSON 没有闭合。保留已写内容，按原 schema 补齐完整对象，不要只写尾巴。',
+    sentences: '上一轮句数不够。逐项核对原提示中的句数和节点数，不得减少。',
+    chars: '上一轮字数不够。逐项核对原提示中的字数和汉字下限，不得降低门槛。',
+    length: '上一轮句数或字数不够。逐项核对原提示中的句数、字数和必需字段，不得降低门槛。',
+    structure: '上一轮结构或完整度未通过。逐项核对原 schema、必需条目和说话人，不得放宽原限制。',
+    noconvo: '上一轮通讯没有留下可保存的对话：用户线程被剥空，或没有主人未发送草稿。本轮只写主人一侧至少一条未发送草稿，不要写用户发言，不要凑双向。标题写成给对方的未发送草稿，不要再用“按此 App 用途补齐”。',
 });
+function classifyLengthKind(text) {
+    const message = String(text || '');
+    if (!message) return '';
+    const sentences = /句数|台词不足|不足\s*\d+\s*句|少于.{0,12}句|节点不足|段落不足|不足\s*\d+\s*段|后日谈不足|共同回忆不足/.test(message);
+    const chars = /字数|汉字|不足\s*\d+\s*字(?!符)|不足\s*\d+\s*字符/.test(message);
+    const genericLength = /长度不足/.test(message);
+    if ((sentences && chars) || genericLength) return 'length';
+    if (sentences) return 'sentences';
+    if (chars) return 'chars';
+    return '';
+}
 function failureFeedback(code, error) {
     if (['RMT_JSON_NOT_FOUND', 'RMT_JSON_INVALID'].includes(code)) return 'json';
     if (['RMT_JSON_EMPTY_FINAL', 'RMT_JSON_EMPTY_FINAL_WITH_REASONING'].includes(code)) return 'empty';
     if (code === 'RMT_JSON_TRUNCATED') return 'truncated';
-    if (code === 'RMT_HEART_INCOMPLETE' && /^(?:Voice|Scenario) Drama (?:spring|summer|autumn|winter|postending) 长度不足。$/.test(error?.message || '')) return 'length';
-    if (['RMT_HEART_INCOMPLETE', 'RMT_SEGMENT_VALIDATION', 'RMT_PHONE_EVIDENCE', 'RMT_PHONE_SPEAKERS', 'RMT_ROOM_STRUCTURE', 'RMT_ROOM_FIELDS'].includes(code)) return 'structure';
+    // Resume without the original Error still needs a usable class; inspect only
+    // local validator copy we already wrote onto the object, never provider bodies.
+    const lengthKind = classifyLengthKind([error?.safeUserMessage, error?.message].filter(value => typeof value === 'string').join('\n'));
+    if (lengthKind) return lengthKind;
+    if (code === 'RMT_HEART_INCOMPLETE') return 'length';
+    if (code === 'RMT_PHONE_NO_CONVERSATION') return 'noconvo';
+    if (['RMT_SEGMENT_VALIDATION', 'RMT_PHONE_EVIDENCE', 'RMT_PHONE_SPEAKERS', 'RMT_ROOM_STRUCTURE', 'RMT_ROOM_FIELDS'].includes(code)) return 'structure';
     return '';
+}
+export function generationRetryFeedbackText(code, error) {
+    return RETRY_FEEDBACK[failureFeedback(code, error)] || '';
 }
 export function generationRetryPrompt(prompt, feedback) {
     if (!Object.hasOwn(RETRY_FEEDBACK, feedback || '')) return prompt;
-    return `${prompt}\n\n【本地上一轮失败反馈】${RETRY_FEEDBACK[feedback]} 本轮仍只处理当前未完成段，保留原人物身份、资料来源和全部硬性要求。不要把反馈写进正文。`;
+    return `【本地上一轮失败反馈】${RETRY_FEEDBACK[feedback]} 本轮仍只处理当前未完成段，保留原人物身份、资料来源和全部硬性要求。不要把反馈写进正文。\n\n${prompt}`;
 }
 
 export function generationPhoneRetryPrompt(prompt, contract) {
     if (contract !== 'phone-chat-p0') return prompt;
-    return `${prompt}\n\n【本地通讯校验合同修订：仅当前失败通讯段】本段采用以下修订，替代上文“所有线程至少双向”和“speaker 必须等于设备卡名”的冲突要求；其他 schema、人物来源和证据限制不变，已完成应用不得重做。
-- 对当前用户的线程只写设备主人一侧至少一条未发送草稿，不得编造用户已发送的发言；没有合法草稿则按原 unavailable 结构返回。
+    return `${prompt}\n\n【本地通讯校验合同修订：仅当前失败通讯段】本段采用以下修订，替代上文“所有线程至少双向”“按此 App 用途补齐”和“speaker 必须等于设备卡名”的冲突要求；其他 schema、人物来源和证据限制不变，已完成应用不得重做。
+- 对当前用户的线程只写设备主人一侧至少一条未发送草稿，不得编造用户已发送的发言；没有合法草稿则按原 unavailable 结构返回。标题写成给对方的未发送草稿。
 - 只有 basis=记忆且每句都在所引 Mxxx 原文逐字出现时，才可保存已发生的双向消息；摘要对不上逐字原话时只能写主人一侧草稿，不能把摘要当聊天记录。
 - 设备 ownerName 仍是原卡名；多人卡 owner 消息的 speaker 使用原受控资料明确出现的成员真名。可在当前 App 对象中输出 "ownerMembers":[{"name":"原资料里的成员显示名","sourceEvidence":"逐字抄录同时包含此姓名的原受控资料原句"}]；成员只能由本次冻结的受控资料验证，不得从模型猜测、新聊天或草稿推演取得。单人卡仍使用原人物名。
 - 联系人、线程对象、字段名和已有条目 ID 均遵从当前原任务；没有合法对象或没有主人草稿的条目返回 unavailable，不为凑数量编造记录。只输出当前 App 的 JSON，不输出这段说明。`;
@@ -313,11 +335,11 @@ export function generationRecoverySummary(raw, now = Date.now()) {
     const completed = journal.segments.filter(segment => segment.state === 'complete').length;
     const truncated = journal.segments.filter(segment => segment.state === 'truncated').length;
     const failed = journal.segments.filter(segment => segment.state === 'retry').length;
-    const retryableFailed = journal.segments.some(segment => segment.state === 'retry' && segment.failureCode !== 'RMT_PHONE_NO_CONVERSATION');
+    const retryableFailed = journal.segments.some(segment => segment.state === 'retry');
     const canContinue = !oversized && !blocked && truncated > 0 && (!journal.failureCode || journal.failureCode === 'RMT_JSON_TRUNCATED');
     return {
         mode: journal.identity.mode, completed, truncated, failed, updatedAt: journal.updatedAt,
-        canContinue, canRetry: !oversized && !blocked && (retryableFailed || (!canContinue && !!journal.failureCode && journal.failureCode !== 'RMT_PHONE_NO_CONVERSATION')),
+        canContinue, canRetry: !oversized && !blocked && (retryableFailed || (!canContinue && !!journal.failureCode)),
         failureCode: journal.failureCode || '',
         ...(oversized ? { oversized: true } : {}),
         ...(blocked ? { blocked: true, oversized: true } : {}),
@@ -788,9 +810,6 @@ export async function withRecoverySegment(prompt, options, validator, run) {
             await publishGenerationRecoveryProgress(handle);
             return value;
         }
-        if (handle.continueRequested && previous?.failureCode === 'RMT_PHONE_NO_CONVERSATION') {
-            throw recoveryError('RMT_PHONE_NO_CONVERSATION', '通讯没有可保存的对话；已完成的其他应用保留。请调整合法来源或线程后重新生成通讯。');
-        }
         const phoneContract = handle.continueRequested && previous?.state === 'retry'
             && handle.journal.identity.mode === 'phone' && options.mode === 'phone'
             && options.recoveryPhoneContract === 'phone-chat-p0' ? 'phone-chat-p0' : '';
@@ -922,7 +941,7 @@ export async function recordRecoveryTruncation(options, raw, error) {
             const retainedPartials = recovery_merge.retainedRecoveryPartials(previous, raw);
             assertRetainedSize(raw, retainedPartials);
             replaceSegment(journal, { slot: record.slot, requestHash: record.requestHash,
-                state: 'truncated', partial: raw, ...(retainedPartials.length ? { retainedPartials } : {}), failureCode: 'RMT_JSON_TRUNCATED', ...(record.contract ? { contract: record.contract } : {}), ...(record.recipe ? { requestRecipe: record.recipe } : {}) });
+                state: 'truncated', partial: raw, ...(retainedPartials.length ? { retainedPartials } : {}), failureCode: 'RMT_JSON_TRUNCATED', failureFeedback: 'truncated', ...(record.contract ? { contract: record.contract } : {}), ...(record.recipe ? { requestRecipe: record.recipe } : {}) });
             journal.failureCode = 'RMT_JSON_TRUNCATED';
         });
     } catch (changeError) {
