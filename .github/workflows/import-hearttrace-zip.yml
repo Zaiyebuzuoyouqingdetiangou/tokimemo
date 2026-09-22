@@ -1,0 +1,421 @@
+name: Hearttrace ZIP import
+
+'on':
+  push:
+    branches:
+      - main
+      - 测试
+    paths:
+      - hearttrace-upload.zip
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hearttrace-zip-import-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  import-zip:
+    if: >
+      github.repository == 'Zaiyebuzuoyouqingdetiangou/tokimemo' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/测试')
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Validate and import Hearttrace ZIP
+        shell: python
+        env:
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+          TARGET_BRANCH: ${{ github.ref_name }}
+        run: |
+          import json
+          import os
+          import stat
+          import subprocess
+          import sys
+          import zipfile
+          from pathlib import Path, PurePosixPath
+
+          root = Path.cwd().resolve()
+          archive = root / "hearttrace-upload.zip"
+
+          if not archive.is_file():
+              print("No hearttrace-upload.zip found; nothing to import.")
+              sys.exit(0)
+
+          if archive.is_symlink():
+              raise ValueError(
+                  "hearttrace-upload.zip must not be a symbolic link."
+              )
+
+          if archive.stat().st_size > 25 * 1024 * 1024:
+              raise ValueError(
+                  "hearttrace-upload.zip exceeds the 25 MiB limit."
+              )
+
+          # ------------------------------------------------------------
+          # Validate complete ZIP before changing repository files.
+          # ------------------------------------------------------------
+
+          with zipfile.ZipFile(archive) as z:
+              entries = [
+                  item
+                  for item in z.infolist()
+                  if not item.is_dir()
+                  and not item.filename.startswith("__MACOSX/")
+                  and PurePosixPath(item.filename).name != ".DS_Store"
+              ]
+
+              if not entries:
+                  raise ValueError("The ZIP is empty.")
+
+              if len(entries) > 5000:
+                  raise ValueError(
+                      "ZIP contains too many files."
+                  )
+
+              if sum(item.file_size for item in entries) > 100 * 1024 * 1024:
+                  raise ValueError(
+                      "Unpacked ZIP exceeds 100 MiB."
+                  )
+
+              filenames = [
+                  item.filename
+                  for item in entries
+              ]
+
+              # --------------------------------------------------------
+              # Detect plugin root.
+              #
+              # Accept:
+              #
+              # manifest.json
+              # index.js
+              # dist/...
+              #
+              # or one outer directory:
+              #
+              # tokimemo-main/manifest.json
+              # xxx/manifest.json
+              # --------------------------------------------------------
+
+              prefix = ""
+
+              if "manifest.json" not in filenames:
+                  top_level = {
+                      PurePosixPath(name).parts[0]
+                      for name in filenames
+                      if PurePosixPath(name).parts
+                  }
+
+                  if len(top_level) == 1:
+                      outer = next(iter(top_level))
+                      candidate = outer + "/"
+
+                      if candidate + "manifest.json" in filenames:
+                          prefix = candidate
+
+              payload = {}
+              seen = set()
+
+              for info in entries:
+                  if (
+                      prefix
+                      and not info.filename.startswith(prefix)
+                  ):
+                      raise ValueError(
+                          "ZIP contains files outside "
+                          "the detected plugin root: "
+                          + repr(info.filename)
+                      )
+
+                  name = (
+                      info.filename[len(prefix):]
+                      if prefix
+                      else info.filename
+                  )
+
+                  if not name:
+                      continue
+
+                  parts = PurePosixPath(name).parts
+
+                  if (
+                      "\\" in name
+                      or ":" in name
+                      or "\x00" in name
+                      or not parts
+                      or any(
+                          part in (
+                              "",
+                              ".",
+                              "..",
+                              ".git",
+                              ".github",
+                          )
+                          for part in parts
+                      )
+                      or parts[0].startswith(".git")
+                      or name == "hearttrace-upload.zip"
+                      or name.casefold() in seen
+                  ):
+                      raise ValueError(
+                          "Unsafe or duplicate ZIP path: "
+                          + repr(name)
+                      )
+
+                  mode = info.external_attr >> 16
+
+                  if stat.S_IFMT(mode) not in (
+                      0,
+                      stat.S_IFREG,
+                  ):
+                      raise ValueError(
+                          "Only regular files may be imported: "
+                          + repr(name)
+                      )
+
+                  destination = root.joinpath(*parts)
+
+                  if any(
+                      p.is_symlink()
+                      for p in [
+                          destination,
+                          *destination.parents
+                      ]
+                      if p != root
+                  ):
+                      raise ValueError(
+                          "Refusing to overwrite or "
+                          "follow a symbolic link."
+                      )
+
+                  if (
+                      destination.is_dir()
+                      or any(
+                          p.exists()
+                          and not p.is_dir()
+                          for p in destination.parents
+                          if p != root
+                      )
+                  ):
+                      raise ValueError(
+                          "File/directory conflict: "
+                          + repr(name)
+                      )
+
+                  seen.add(name.casefold())
+                  payload[name] = z.read(info)
+
+          # ------------------------------------------------------------
+          # Verify complete Hearttrace plugin package.
+          # ------------------------------------------------------------
+
+          required = (
+              "manifest.json",
+              "index.js",
+              "dist/heartbeatMemories.bundle.js",
+          )
+
+          missing = [
+              name
+              for name in required
+              if name not in payload
+              or not payload[name]
+          ]
+
+          if missing:
+              raise ValueError(
+                  "Not a complete Hearttrace plugin ZIP. "
+                  "Missing: "
+                  + ", ".join(missing)
+              )
+
+          manifest = json.loads(
+              payload["manifest.json"]
+              .decode("utf-8-sig")
+          )
+
+          expected_homepage = (
+              "https://github.com/"
+              + os.environ["EXPECTED_REPOSITORY"]
+          )
+
+          actual_homepage = str(
+              manifest.get("homePage", "")
+          ).rstrip("/")
+
+          if (
+              actual_homepage.lower()
+              != expected_homepage.lower()
+          ):
+              raise ValueError(
+                  "manifest.json homePage does not "
+                  "match this repository."
+              )
+
+          if (
+              str(
+                  manifest.get("js", "")
+              ).split("?", 1)[0]
+              != "index.js"
+          ):
+              raise ValueError(
+                  "Unexpected plugin entry point."
+              )
+
+          # ------------------------------------------------------------
+          # Reject conflicting file paths inside ZIP.
+          # ------------------------------------------------------------
+
+          for name in payload:
+              if any(
+                  str(parent).casefold() in seen
+                  for parent in PurePosixPath(name).parents
+                  if str(parent) != "."
+              ):
+                  raise ValueError(
+                      "Conflicting file paths inside ZIP: "
+                      + repr(name)
+                  )
+
+          # ------------------------------------------------------------
+          # Repository publishing filter.
+          #
+          # Keep these inside the delivery ZIP for verification,
+          # but do not publish them into repository branches.
+          # ------------------------------------------------------------
+
+          payload = {
+              name: content
+              for name, content in payload.items()
+              if not (
+                  name == "tests"
+                  or name.startswith("tests/")
+                  or name == "tools"
+                  or name.startswith("tools/")
+              )
+              and not (
+                  "/" not in name
+                  and name.startswith("RELEASE_VALIDATION-")
+                  and name.endswith(".md")
+              )
+          }
+
+          # ------------------------------------------------------------
+          # Overlay imported files.
+          # ------------------------------------------------------------
+
+          for name, content in payload.items():
+              target = root / name
+
+              target.parent.mkdir(
+                  parents=True,
+                  exist_ok=True
+              )
+
+              target.write_bytes(content)
+
+          # Remove transport ZIP.
+          archive.unlink()
+
+          # Stage imported files and ZIP deletion.
+          paths = [
+              *payload.keys(),
+              "hearttrace-upload.zip",
+          ]
+
+          subprocess.run(
+              [
+                  "git",
+                  "--literal-pathspecs",
+                  "add",
+                  "-f",
+                  "--pathspec-from-file=-",
+                  "--pathspec-file-nul",
+              ],
+              input=(
+                  b"\x00".join(
+                      path.encode("utf-8")
+                      for path in paths
+                  )
+                  + b"\x00"
+              ),
+              check=True,
+          )
+
+          branch = os.environ["TARGET_BRANCH"]
+
+          print(
+              f"Prepared {len(payload)} Hearttrace files "
+              f"for branch {branch}."
+          )
+
+          summary = os.environ.get(
+              "GITHUB_STEP_SUMMARY"
+          )
+
+          if summary:
+              with open(
+                  summary,
+                  "a",
+                  encoding="utf-8"
+              ) as f:
+                  f.write(
+                      "## Hearttrace ZIP import\n\n"
+                      f"- Target branch: `{branch}`\n"
+                      f"- Prepared files: **{len(payload)}**\n"
+                      "- `tests/` excluded\n"
+                      "- `tools/` excluded\n"
+                      "- `RELEASE_VALIDATION-*.md` excluded\n"
+                      "- upload ZIP removed after import\n"
+                  )
+
+      - name: Commit imported Hearttrace files
+        shell: bash
+        env:
+          TARGET_BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # Remove development-only material already present in repo.
+          git rm -r -f --ignore-unmatch -- tests tools
+          git rm -f --ignore-unmatch -- RELEASE_VALIDATION-*.md
+
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+            echo \
+              'Nothing changed; no import commit was created.' \
+              >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "Files to commit:"
+          git diff --cached --name-status
+
+          git \
+            -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            -c core.hooksPath=/dev/null \
+            -c commit.gpgsign=false \
+            commit \
+            -m "Import Hearttrace plugin ZIP (${TARGET_BRANCH})"
+
+          # Push only back to the branch that triggered this run.
+          # Never promote 测试 -> main automatically.
+          # Never force-push.
+          git push origin "HEAD:${TARGET_BRANCH}"
+
+          echo \
+            "Hearttrace import committed and pushed to \`${TARGET_BRANCH}\` successfully." \
+            >> "$GITHUB_STEP_SUMMARY"
