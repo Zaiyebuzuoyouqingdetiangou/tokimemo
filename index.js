@@ -1,5 +1,5 @@
-const VERSION = '0.99.3';
-const BUILD = '0.99.3-tt-cg-r84.48-json-example';
+const VERSION = '0.99.4';
+const BUILD = '0.99.4-tt-cg-r84.49-json-example-fix';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

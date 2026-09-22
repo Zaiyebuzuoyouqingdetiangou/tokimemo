@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 143
-// Source SHA-256: 5865698fd8adcf7a66bfd2d982b50622169e2e0c581d4a87ce382c2f8df6bd47
+// Source SHA-256: b38bdd9fede4252a4ed9f52e15b713f2c9ba920b177e1d91cf435d069c8162c8
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -35786,8 +35786,8 @@ const voiceScript = [{ speaker: 'char', text: '今天想出去走走。' }, { sp
 function voiceExample(kind, title) {
     return { voiceDramas: [{ id: 'VOICE_1', kind, title, subtitle: '一段未来日常', setting: '这是未来模拟', visualTone: 'soft', script: voiceScript }] };
 }
-function scenarioExample(kind, title) {
-    return { scenarioDramas: [{ id: 'SCENARIO_1', kind, title, subtitle: '一天里的一件小事', setting: '这是未来模拟', visualTone: 'clear', script: [...voiceScript, { speaker: 'narrator', text: '风从窗边过去。' }] }] };
+function scenarioExample(season, title) {
+    return { scenarioDramas: [{ id: `SCENE_${String(season).toUpperCase()}`, season, title, subtitle: '一天里的一件小事', setting: '这是未来模拟', visualTone: '从枚举里选', script: [...voiceScript, { speaker: 'narrator', text: '风从窗边过去。' }] }] };
 }
 
 const butterflyNode = {
@@ -35817,8 +35817,10 @@ const EXAMPLES = {
             { id: 'OMEGA', label: '观测点 Ω：回归现世', code: '> OBSERVATION POINT #OMEGA', locked: false, trueEnding: true, sourceMemoryIds: [], sourceMemoryAnchor: '', monologue: '', intervention: '看完之后，我还是想回到你身边。', systemNote: '观测结束，主体回归主时间线。' },
         ],
     },
-    '蝴蝶效应 / 增量分歧': butterflyNode,
-    '蝴蝶效应 / 单个观测节点重新生成': { node: { label: '另一条路', primaryAxis: 'decision', worldSpec: butterflyNode.node.worldSpec, monologue: '平行世界里的我这样过日子。', intervention: '现世的我看见后停了一下。', systemNote: '关键变量已经改变。' } },
+    '蝴蝶效应 / 增量分歧': {
+        nodes: [{ id: 'EG_NEW_01', label: '新的分歧点', primaryAxis: 'era', worldSpec: { ...butterflyNode.node.worldSpec, primaryAxis: 'era' }, sourceMemoryIds: [], sourceMemoryAnchor: '', monologue: '平行世界里的我这样过日子。', intervention: '现世的我看见后停了一下。', systemNote: '关键变量已经改变。' }],
+        omega: { id: 'OMEGA', label: '观测点 Ω：再次回归现世', monologue: '', intervention: '看完之后还是回到现在。', systemNote: '这次观测到此收束。' },
+    },
     '结局路线判定 / 分段 1': {
         title: 'ENDING / 结局档案', relationshipState: '关系仍在发展', relationshipSummary: '档案能证明的当前关系。', ...{ relationshipSourceMemoryIds: ['M001'], relationshipSourceMemoryAnchor: '从所引记忆原样复制的一句' },
         recommendedEndingId: 'END_ROUTE',
@@ -35837,8 +35839,6 @@ const EXAMPLES = {
         ending: { id: 'END_ROUTE', endingScene: '未来的一个下午，两个人仍按现在的关系相处。', creditsLine: '故事在这里先停下。', epilogue: { title: '后日谈', timeSkip: '数周后', scenes: [{ title: '寻常的一天', text: '生活照常继续。' }, { title: '另一天', text: '小事堆成习惯。' }, { title: '再后来', text: '关系没有被改写。' }], finalLine: '这样就好。' } },
     },
     '告白回看增量扫描': { confessionReplays: [] },
-    'ENDING / 未解锁路线单项重新生成': { ending: { title: '未解锁路线', subtitle: '还差一步', unlockHint: '需要档案里出现对应推进。' } },
-    'ENDING / 单个告白回看重新生成': { confessionReplays: [{ id: 'CONF_01', title: '那次告白', subtitle: '已经发生', type: 'other', date: '', ...anchor, scene: '当时的场景。', confessionText: '说出口的那句。', confessionLines: ['第一句。', '第二句。', '第三句。', '第四句。'], responseSummary: '对方当时的反应。', afterEffect: '之后的变化。', easterEgg: { moduleType: 'heartbeat_console', title: '此刻', statusLine: '还在跳', logs: ['日志一', '日志二', '日志三', '日志四'], monologue: ['没说完的话。', '还想再说一句。'], poem: ['一句。', '两句。', '三句。', '四句。'], feedback: { pulse: '碰一下', hover: '停一下', reveal: '看见了', stabilize: '稳下来', pause: '先停', resume: '继续' } } }] },
     '角色互动 / 时期对话': {
         title: '角色互动', relationshipState: '关系仍在发展', relationshipSummary: '按档案能证明的距离说话。', relationshipSourceMemoryIds: [], relationshipSourceMemoryAnchor: '', birthdayMmDd: '', userBirthdayMmDd: '', specialDays: [],
         greetings: { morning: ['早。'], noon: [], evening: ['回来了。'], night: [], weekend: [], birthday: [], userBirthday: [], holiday: [], absenceWorry: [], absenceSulky: [], absenceJealous: [] },
@@ -35848,24 +35848,18 @@ const EXAMPLES = {
         greetings: { morning: ['今天也早。'], noon: [], evening: [], night: [], weekend: [], birthday: [], userBirthday: [], holiday: [], absenceWorry: [], absenceSulky: [], absenceJealous: [] },
     },
     '角色互动 / Drama：未来': voiceExample('postending', '后日谈'),
-    '角色互动 / 萤火虫栖息地': { fireflyVoices: [{ id: 'F01', color: 'white', title: '喜欢的食物', script: [{ speaker: 'char', text: '我其实很挑食。' }, { speaker: 'user', text: '这样啊。' }, { speaker: 'char', text: '甜的容易腻。' }, { speaker: 'user_thought', text: '刚才那句像是心声。' }] }] },
-    '角色互动 / 单个萤火虫追加约会会话重新生成': { fireflyVoices: [{ id: 'F01', color: 'white', title: '喜欢的食物', script: [{ speaker: 'char', text: '我其实很挑食。' }, { speaker: 'user', text: '这样啊。' }, { speaker: 'char', text: '甜的容易腻。' }, { speaker: 'user_thought', text: '刚才那句像是心声。' }] }] },
+    '角色互动 / 萤火虫栖息地': { fireflyVoices: [{ id: 'F01', color: '从枚举里选', title: '喜欢的食物', script: [{ speaker: 'char', text: '我其实很挑食。' }, { speaker: 'user', text: '这样啊。' }, { speaker: 'char', text: '甜的容易腻。' }, { speaker: 'user_thought', text: '刚才那句像是心声。' }] }] },
     '角色互动 / 旧版萤火虫升级为 GS4 式会话': { fireflyVoices: [{ id: '原ID', color: '原颜色', title: '想靠近一点', script: [{ speaker: 'char', text: '坐近一点也没关系。' }, { speaker: 'user', text: '嗯。' }, { speaker: 'char', text: '我就说这一句。' }, { speaker: 'user_thought', text: '刚才那句像心声。' }] }] },
     '角色互动 / 日常一格': { dailyStrips: [{ id: 'STRIP01', title: '买菜回来', subtitle: '袋子还在门口。', panelCount: 1, panels: [{ caption: '刚到门口。', action: '把袋子放下。', charLine: '今天就这些。', userLine: '我来拿。' }], visualSeed: ['门口', '菜袋'], imagePrompt: 'Q版，门口，人物侧身放下菜袋，no text, no speech bubble, no watermark' }] },
     '回忆相簿 / 重要 CG 节点': { title: '回忆相簿', entries: [{ id: 'CG01', title: '雨天的车站', date: '待定', desc: '两个人站在屋檐下。', category: '日常', unlocked: true, ...anchor, visualSeed: ['雨', '屋檐', '车站', '侧身'], imagePrompt: '雨天车站屋檐下，两人侧身，湿地面，冷色光线。', hintLines: [] }] },
-    '回忆相簿 / 分段 2：当下关系扫描': { people: [{ speakerId: '所选人物id', charState: '态度克制', userState: '未确认', relationshipState: '关系仍在发展', relationshipSummary: '只写这条证据能证明的关系。', relationshipSourceMemoryIds: ['M001'], relationshipSourceMemoryAnchor: '从所引记忆原样复制的一句' }] },
-    '回忆相簿 / 分段 3：当下共同回忆': { items: [{ id: 'CG01', comments: [{ speakerId: '所选人物id', text: '那天的雨还没停。' }] }] },
-    '回忆相簿 / 单项重新生成': { entries: [{ id: 'CG01', title: '雨天的车站', date: '待定', desc: '两个人站在屋檐下。', category: '日常', unlocked: true, ...anchor, visualSeed: ['雨', '屋檐', '车站', '侧身'], imagePrompt: '雨天车站屋檐下，两人侧身。', hintLines: [] }] },
-    '回忆相簿 / 单项重新判断分类': { category: '日常' },
     'ADV EVENT 事件索引': { title: '回想：ADV EVENT', events: [{ id: 'EV01', title: '雨天车站', date: '待定', cgDesc: '屋檐下，两人侧身，雨线落在台阶上。', ...anchor, visualSeed: ['雨', '屋檐', '台阶', '侧身'], imagePrompt: '雨天车站屋檐，两人侧身，湿台阶。' }] },
     'ADV EVENT 重要事件索引': { title: '回想：ADV EVENT', events: [{ id: 'EV01', title: '雨天车站', date: '待定', cgDesc: '屋檐下，两人侧身，雨线落在台阶上。', ...anchor, visualSeed: ['雨', '屋檐', '台阶', '侧身'], imagePrompt: '雨天车站屋檐，两人侧身，湿台阶。' }] },
     'ADV EVENT 单条索引补齐': { event: { id: 'EV02', title: '夜路', date: '待定', cgDesc: '路灯下，一个人放慢了脚步。', ...anchor, visualSeed: ['路灯', '夜路', '脚步', '侧影'], imagePrompt: '夜路路灯下，人物侧影，脚步放慢。' } },
-    'ADV EVENT / 单个事件重新生成': { events: [{ id: 'EV01', title: '雨天车站', date: '待定', cgDesc: '屋檐下的侧身。', ...anchor, visualSeed: ['雨', '屋檐', '台阶', '侧身'], imagePrompt: '雨天车站屋檐，两人侧身。' }] },
     '单篇 ADV 正文': { narrator: 'char_first_person', sections: [{ type: 'during', paragraphs: ['我站在屋檐下。', '雨声比话多。'] }, { type: 'after', paragraphs: ['后来我还记得那一站。', '没把这句话说完。'] }] },
     '批量 ADV 正文': { items: [{ eventId: 'EV01', narrator: 'char_first_person', sections: [{ type: 'during', paragraphs: ['我站在屋檐下。', '雨声比话多。'] }, { type: 'after', paragraphs: ['后来我还记得。', '话没说完。'] }] }] },
     '他的房间': {
         title: '他的房间', homeName: '住处', homeSummary: '按现在的生活条件住着。',
-        visualProfile: { explicitFields: [], explicitEvidence: {}, worldStyle: 'contemporary', palette: 'mist', material: 'wood', density: 'balanced', figure: { build: 'unspecified', hairShape: 'unspecified', hairTone: 'unspecified', outfit: 'casual', detail: 'none', posture: 'reserved' } },
+        visualProfile: { explicitFields: [], explicitEvidence: {}, worldStyle: '从枚举里选', palette: '从枚举里选', material: '从枚举里选', density: '从枚举里选', figure: { build: '从枚举里选', hairShape: '从枚举里选', hairTone: '从枚举里选', outfit: '从枚举里选', detail: '从枚举里选', posture: '从枚举里选' } },
         spaces: [{ id: 'SP01', label: '房间', spaceType: '卧室', atmosphere: '灯还亮着。', objects: [{ id: 'OBJ01', label: '桌子', zone: '中央', basis: '设定', searchable: false, description: '桌上有杯子。', line: '先坐吧。', sourceMemoryIds: [], sourceMemoryAnchor: '' }] }],
         dayparts: { morning: { spaceId: 'SP01', activity: '拉开窗帘', line: '早。', focusObjectId: 'OBJ01' }, daytime: { spaceId: 'SP01', activity: '在桌边做事', line: '还有一点。', focusObjectId: 'OBJ01' }, evening: { spaceId: 'SP01', activity: '把灯打开', line: '回来了。', focusObjectId: 'OBJ01' }, night: { spaceId: 'SP01', activity: '靠在桌边', line: '还不睡。', focusObjectId: 'OBJ01' } },
         presenceLines: ['在这里。'],
@@ -35878,7 +35872,7 @@ const EXAMPLES = {
     '他的房间 / 增量物件': { additions: [{ spaceId: 'SP01', objects: [{ id: 'OBJ_NEW', label: '杯子', basis: '设定', zone: '中央', description: '用过的杯子。', line: '我的。', sourceMemoryIds: [], sourceMemoryAnchor: '' }] }] },
     '房间今日生活时间线': { date: 'YYYY-MM-DD', beats: [{ time: '08:10', spaceId: 'SP01', activity: '拉开窗帘', line: '早。', focusObjectId: 'OBJ01', ambient: '光从窗进来。', trace: '杯子还在桌上。', visualState: { lighting: 'soft', window: 'open', order: 'used', surface: 'drink' }, temporaryObjects: [], sourceMemoryIds: [], sourceMemoryAnchor: '' }] },
     '共同房间的今日生活': { date: 'YYYY-MM-DD', beats: [{ time: '08:10', participants: [{ participantId: '所选人物id', spaceId: 'SP01', activity: '拉开窗帘', line: '早。', focusObjectId: 'OBJ01', ambient: '光从窗进来。', trace: '杯子还在桌上。', visualState: { lighting: 'soft', window: 'open', order: 'used', surface: 'drink' }, temporaryObjects: [], sourceMemoryIds: [], sourceMemoryAnchor: '' }] }] },
-    '他的物品 / 储物': { title: '他的物品', containers: [{ id: 'BOX01', label: '床头柜', containerType: '抽屉', spaceLabel: '卧室', description: '随手放东西的地方。', nodes: [{ id: 'IT01', label: '票据', kind: 'item', basis: '设定', summary: '折过的纸。', line: '先别翻。', sourceMemoryIds: [], sourceMemoryAnchor: '', children: [] }] }] },
+    '他的物品 / 储物': { title: '他的物品', containers: [{ id: 'BOX01', label: '床头柜', containerType: '符合世界观的储物形态', spaceLabel: '卧室', description: '随手放东西的地方。', nodes: [{ id: 'IT01', label: '票据', kind: 'item', basis: '设定', summary: '折过的纸。', line: '先别翻。', sourceMemoryIds: [], sourceMemoryAnchor: '', children: [] }] }] },
     '他的物品 / 人设扩展': { containers: [{ id: '已有容器id', nodes: [{ id: 'IT_NEW', kind: 'item', label: '新物件', basis: '设定', summary: '符合人设的一件东西。', line: '这个留着。', sourceMemoryIds: [], sourceMemoryAnchor: '', children: [] }] }] },
     '两个人的陈列柜': { items: [{ name: '票根', objectEvidence: '从所引记忆原样复制、含物件名和两人关联的一句', ...anchor }] },
     '私人终端 / 分段 1：设备与 App 目录': {
@@ -35909,14 +35903,10 @@ const EXAMPLES = {
         settingRelationships: [],
     },
     '档案室 / 成就库': { title: '成就库', entries: [{ id: 'ACH01', title: '第一次一起出门', description: '档案里能核对的一次共同出门。', category: '事件', tier: 'bronze', unlocked: true, unlockedAt: '已解锁', unlockCondition: '一起出过一次门。', ...anchor, hint: '' }] },
-    '成就库 / 单项重新生成': { entries: [{ id: 'ACH01', title: '第一次一起出门', description: '档案里能核对的一次。', category: '事件', tier: 'bronze', unlocked: true, unlockedAt: '已解锁', unlockCondition: '一起出过一次门。', ...anchor, hint: '' }] },
     '前世今生 · 独立虚构番外': { title: '另一页', opening: { title: '引子', motif: '旧信', text: '这是虚构的开卷。', ...anchor }, dossiers: [{ title: '第一卷', era: '另一个时代', intent: '要看的那个选择' }] },
     '前世今生 · 虚构卷宗': { title: '第一卷', era: '另一个时代', synopsis: '这一卷是虚构的。', clues: [{ kind: 'note', title: '残页', speaker: 'narrator', text: '看得见的一行。', revealedText: '' }] },
     '前世今生 · 今生回响与落款': { echoes: [{ kind: 'possibility', title: '也许', text: '这只是可能。', reflection: '', sourceMemoryIds: [], sourceMemoryAnchor: '' }], annotations: [], closing: { text: '今生还没被写死。', signature: '落款' } },
-    '时空回响': { title: '一篇回响', opening: '两端还没对齐。', closing: '话送到了另一端。', palette: 'slate', motif: '旧线路', medium: { kind: 'object', label: '一封没有寄出的信' }, ends: [{ role: 'char', time: '过去的一个晚上' }, { role: 'user', time: '现在' }], lines: [{ speaker: 'a', text: '你听得到吗。' }, { speaker: 'b', text: '听到了。' }], message: '只说这一句。' },
-    '两个人的日历 / 单项重新整理': { entry: { title: '去水族馆', tags: ['约会'] } },
-    '两个人的日历 / 单张便签重新生成': { note: { title: '记得', text: '别排太满。' } },
-    '两个人的日历 / 页角随笔重新生成': { mood: { text: '今天的风很轻。' } },
+    '时空回响': { title: '一篇回响', opening: '两端还没对齐。', closing: '话送到了另一端。', palette: '从枚举里选', motif: '旧线路', medium: { kind: '从枚举里选', label: '一封没有寄出的信' }, ends: [{ role: 'char', time: '过去的一个晚上' }, { role: 'user', time: '现在' }], lines: [{ speaker: 'a', text: '你听得到吗。' }, { speaker: 'b', text: '听到了。' }], message: '只说这一句。' },
 };
 
 const PATTERNS = [
@@ -35932,10 +35922,39 @@ function taskLabel(prompt) {
     return String(prompt || '').match(/写出【([^】]{1,80})】/u)?.[1] || '';
 }
 
+function butterflySlotExample(text) {
+    let slot = {};
+    const match = text.match(/CURRENT_SLOT_JSON:(\{.*?\})/u);
+    if (match) { try { slot = JSON.parse(match[1]); } catch { slot = {}; } }
+    if (slot.kind === 'MAIN') {
+        return block({ node: { id: 'MAIN', label: '主时间线（锁定）：现世', code: '> SIMULATION RECORD #MAIN', locked: true, trueEnding: false, ...anchor, monologue: '现世的我记得我们怎么走到这里。', intervention: '这就是现在。', systemNote: '主时间线已锁定。', branchAxes: ['decision'] } });
+    }
+    if (slot.kind === 'OMEGA') {
+        return block({ node: { id: 'OMEGA', label: '观测点 Ω：回归现世', code: '> OBSERVATION POINT #OMEGA', locked: false, trueEnding: true, sourceMemoryIds: [], sourceMemoryAnchor: '', monologue: '', intervention: '看完之后，我还是想回到你身边。', systemNote: '观测结束，主体回归主时间线。' } });
+    }
+    const axis = slot.primaryAxis || '从枚举里选';
+    return block({ node: { id: 'EG01', label: '分歧点：另一条路', code: '> SIMULATION RECORD #EG-01', locked: false, trueEnding: false, sourceMemoryIds: [], sourceMemoryAnchor: '', worldSpec: { ...butterflyNode.node.worldSpec, primaryAxis: axis }, monologue: '平行世界里的我这样过日子。', intervention: '现世的我看见后停了一下。', systemNote: '关键变量已经改变。' } });
+}
+
+function albumShapeExample(label, text) {
+    const multi = text.includes('UNTRUSTED_SELECTED_PARTICIPANTS_JSON');
+    if (label === '回忆相簿 / 分段 2：当下关系扫描') {
+        return block(multi
+            ? { people: [{ speakerId: '所选人物id', charState: '态度克制', userState: '未确认', relationshipState: '关系仍在发展', relationshipSummary: '只写这条证据能证明的关系。', relationshipSourceMemoryIds: ['M001'], relationshipSourceMemoryAnchor: '从所引记忆原样复制的一句' }] }
+            : { charState: '可由档案证明的态度', userState: '未确认', relationshipState: '关系仍在发展', relationshipSummary: '只总结已经发生且能证明的关系。', relationshipSourceMemoryIds: ['M001'], relationshipSourceMemoryAnchor: '从所引记忆原样复制的一句' });
+    }
+    if (label === '回忆相簿 / 分段 3：当下共同回忆') {
+        return block(multi
+            ? { items: [{ id: 'CG01', comments: [{ speakerId: '所选人物id', text: '那天的雨还没停。' }] }] }
+            : { items: [{ id: 'CG01', comments: ['那天的雨还没停。', '屋檐还在滴水。', '当时没说出口。', '现在看就不一样了。', '画面停在台阶上。', '我还记得那一阵风。'] }] });
+    }
+    return '';
+}
+
 function jsonShapeExampleBlock(prompt) {
     const text = String(prompt || '');
     if (!text) return '';
-    if (text.includes('【本请求的分段输出规则替代上面的整批输出 schema】')) return block(butterflyNode);
+    if (text.includes('【本请求的分段输出规则替代上面的整批输出 schema】')) return butterflySlotExample(text);
     if (text.includes('为当前角色或所选真实事件创作一首原创')) {
         return block({ title: '原创歌名', vocalDescription: '中低音，说着唱。', styleDescription: '慢，钢琴和人声。', stylePrompt: 'slow piano ballad, intimate vocal, sparse arrangement', lyrics: '[Verse 1]\n一句歌词。\n[Chorus]\n一句副歌。\n[Outro]\n收住。\n[End]' });
     }
@@ -35943,7 +35962,9 @@ function jsonShapeExampleBlock(prompt) {
         return block({ letters: [{ slot: 'daily', title: '今天', greeting: '称呼', body: '顺手写的近况。', closing: '署名' }] });
     }
     const label = taskLabel(text);
-    if (!label) return '';
+    if (!label || /重新生成|重新整理|重新判断/u.test(label)) return '';
+    const album = albumShapeExample(label, text);
+    if (album) return album;
     if (Object.hasOwn(EXAMPLES, label)) return block(EXAMPLES[label]);
     for (const [pattern, build] of PATTERNS) {
         const match = label.match(pattern);
@@ -39529,7 +39550,16 @@ function normalizeAlbumSpeakerSnapshot(snapshot) {
 // so old exports/editors and already generated prose retain their existing shape.
 function normalizeAlbumDialogue(raw, participantSnapshot = null, savedSpeakers = []) {
     const snapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
-    if (!snapshot) return { comments: core_text.cleanArray(raw, 8, 1200) };
+    // Single-card comments are strings. An object must not become "[object Object]".
+    if (!snapshot) {
+        const comments = [];
+        for (const line of (Array.isArray(raw) ? raw : []).slice(0, 8)) {
+            if (typeof line !== 'string') continue;
+            const text = core_text.normalizeText(line, 1200);
+            if (text) comments.push(text);
+        }
+        return { comments };
+    }
     const comments = [], commentSpeakers = [];
     for (const [index, line] of (Array.isArray(raw) ? raw : []).slice(0, 8).entries()) {
         const text = core_text.normalizeText(typeof line === 'string' ? line : line?.text, 1200);

@@ -32,7 +32,16 @@ export function normalizeAlbumSpeakerSnapshot(snapshot) {
 // so old exports/editors and already generated prose retain their existing shape.
 export function normalizeAlbumDialogue(raw, participantSnapshot = null, savedSpeakers = []) {
     const snapshot = core_participants.normalizeParticipantSnapshot(participantSnapshot);
-    if (!snapshot) return { comments: core_text.cleanArray(raw, 8, 1200) };
+    // Single-card comments are strings. An object must not become "[object Object]".
+    if (!snapshot) {
+        const comments = [];
+        for (const line of (Array.isArray(raw) ? raw : []).slice(0, 8)) {
+            if (typeof line !== 'string') continue;
+            const text = core_text.normalizeText(line, 1200);
+            if (text) comments.push(text);
+        }
+        return { comments };
+    }
     const comments = [], commentSpeakers = [];
     for (const [index, line] of (Array.isArray(raw) ? raw : []).slice(0, 8).entries()) {
         const text = core_text.normalizeText(typeof line === 'string' ? line : line?.text, 1200);
