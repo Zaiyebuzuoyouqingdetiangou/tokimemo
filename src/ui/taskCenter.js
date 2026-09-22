@@ -8,6 +8,7 @@ import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
+import * as generation_merged from '../generation/mergedGeneration.js';
 import * as modes_heart from '../modes/heart.js';
 import { state as runtimeState } from '../core/state.js';
 import * as ui_overlay from './overlay.js';
@@ -36,6 +37,12 @@ export function queuePickHtml(route) {
     syncPickScope();
     const checked = picks.has(route) ? 'checked' : '';
     return `<label class="rmt-queue-pick"><input type="checkbox" data-rmt-queue-route="${core_text.esc(route)}" aria-label="加入队列" ${checked}></label>`;
+}
+
+export function selectedQueueRoutes() {
+    syncPickScope();
+    const order = Object.keys(ui_workspaceState.WORKSPACE_ROUTES);
+    return [...picks].sort((a, b) => order.indexOf(a) - order.indexOf(b));
 }
 
 export function setQueuePick(route, on) {
@@ -674,6 +681,36 @@ export function handleTaskCenterAction(action, actionEl) {
         const removed = core_requestCoordinator.clearCompletedChatTasks();
         refreshTaskCenterView();
         globalThis.toastr?.info?.(removed || queueRemoved ? '已清空完成的任务。未完成草稿还在。' : '没有可清空的已完成任务。', '心迹回廊');
+        return;
+    }
+    if (action === 'generate-together') {
+        const routes = selectedQueueRoutes();
+        if (routes.length < 2) {
+            globalThis.toastr?.info?.('先勾选至少两项，再一起生成。', '心迹回廊');
+            return;
+        }
+        void generation_merged.startTogether(routes).then(result => {
+            if (!result || result.cancelled) return;
+            for (const route of routes) {
+                if (!result.soloRoutes?.includes(route)) picks.delete(route);
+            }
+            if (result.soloRoutes?.length) enqueueSelectedModes(result.soloRoutes);
+            const waiting = result.pending?.length || 0;
+            globalThis.toastr?.success?.(waiting
+                ? `一起生成已写上通过的页面。还有 ${waiting} 项待补，刷新后仍能看到。`
+                : '一起生成已写上。各页仍可以分别打开。', '心迹回廊');
+        }).catch(error => {
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+        });
+        return;
+    }
+    if (action === 'merged-repair' || action === 'merged-resave') {
+        const route = actionEl?.dataset?.rmtRoute || '';
+        void generation_merged.repairPending(route).then(() => {
+            globalThis.toastr?.success?.(action === 'merged-resave' ? '已重新保存，没有再次生成。' : '已只补这一项。', '心迹回廊');
+        }).catch(error => {
+            if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
+        });
         return;
     }
     if (action === 'queue-selected') {

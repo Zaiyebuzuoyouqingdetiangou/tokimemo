@@ -16,6 +16,7 @@ import * as cgEditor from './cgPromptEditor.js';
 import { state as state } from '../core/state.js';
 import * as ui_taskCenter from './taskCenter.js';
 import * as ui_workspaceState from './workspaceState.js';
+import * as generation_merged from '../generation/mergedGeneration.js';
 const esc = text.esc;
 const GROUPS = [['memory', '回忆'], ['life', '生活'], ['interaction', '互动'], ['stories', '番外']];
 const ALIAS_META = {
@@ -100,11 +101,22 @@ export function workspaceCatalogueHtml(portals = [], snapshot = null, { ready: a
         const session = sessionMap.get(spec.mode);
         const running = snapshot ? coordinator.isArchiveTargetModeGenerating(spec.mode, snapshot) : coordinator.isModeGenerating(spec.mode);
         const ready = routeHasContent(key, session);
-        const status = running ? (ready ? '生成中 · 已有内容可读' : '正在生成') : countStatus(key, session);
+        const status = (running ? (ready ? '生成中 · 已有内容可读' : '正在生成') : countStatus(key, session))
+            + (generation_merged.MERGEABLE_ROUTES.includes(key) ? ' · 可合并' : '');
         const queueable = canQueue && spec.mode && !spec.deep;
         return `<article class="rmt-archive-portal rmt-workspace-card ${ready ? 'ready' : 'empty'} rmt-archive-portal-${esc(meta.accent)}"><button type="button" class="rmt-portal-open" data-rmt-workspace-route="${key}"><span class="rmt-portal-avatar"><i class="fa-solid ${esc(meta.icon)}" aria-hidden="true"></i></span><span class="rmt-portal-title">${esc(spec.title)}</span><span class="rmt-portal-subtitle">${esc(meta.subtitle)}</span><span class="rmt-portal-status">${esc(status)}</span><span class="rmt-workspace-enter" aria-hidden="true">›</span></button>${queueable ? ui_taskCenter.queuePickHtml(key) : ''}</article>`;
     }).join('');
-    const queueBar = canQueue ? `<div class="rmt-queue-bar"><button type="button" class="rmt-btn" data-rmt-action="queue-selected">把勾选的项目排进任务中心</button><small>换分组后，勾选仍然保留。按目录顺序一次只生成一项。</small></div>` : '';
+    let pendingBar = '';
+    if (canQueue) {
+        try {
+            const chatId = context.comparableChatId(context.getChatId());
+            const waiting = generation_merged.createPendingStore().read(chatId);
+            if (waiting.length) {
+                pendingBar = `<div class="rmt-queue-bar">${waiting.map(item => `<button type="button" class="rmt-btn" data-rmt-action="${item.kind === 'unsaved' ? 'merged-resave' : 'merged-repair'}" data-rmt-route="${esc(item.route)}">${esc(item.kind === 'unsaved' ? `重新保存${item.label}` : `只补${item.label}`)}</button>`).join('')}<small>${esc(generation_merged.pendingNote(chatId).join('；'))}</small></div>`;
+            }
+        } catch { /* Pending notes appear after the archive can be read. */ }
+    }
+    const queueBar = canQueue ? `<div class="rmt-queue-bar"><button type="button" class="rmt-btn" data-rmt-action="queue-selected">把勾选的项目排进任务中心</button><button type="button" class="rmt-btn" data-rmt-action="generate-together">一起生成</button><small>勾选两项以上可以一起生成：先看分成几次请求。单项生成仍按目录顺序，一次一项。</small></div>${pendingBar}` : '';
     return `<section class="rmt-workspace-catalogue"><header class="rmt-workspace-section-head"><div><h2>内容</h2><p>选择你想看的那一页</p></div><div class="rmt-layout-switch" aria-label="目录显示方式">${[['cards','卡片'],['list','列表']].map(([k,t])=>`<button type="button" data-rmt-workspace-layout="${k}" aria-pressed="${ui_workspaceState.workspace.layout === k}" class="${ui_workspaceState.workspace.layout === k ? 'active' : ''}">${t}</button>`).join('')}</div></header><nav class="rmt-workspace-groups" aria-label="内容分组">${GROUPS.map(([k,t])=>`<button type="button" data-rmt-workspace-group="${k}" class="${ui_workspaceState.workspace.group === k ? 'active' : ''}" aria-current="${ui_workspaceState.workspace.group === k ? 'page' : 'false'}">${t}</button>`).join('')}</nav>${queueBar}<div class="rmt-archive-portals rmt-workspace-portals" data-rmt-layout="${ui_workspaceState.workspace.layout}">${cards}</div></section>`;
 }
 // Move existing validated markup, never replace the underlying archive or task objects.
