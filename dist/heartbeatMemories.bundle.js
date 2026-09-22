@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 142
-// Source SHA-256: 35928876c6be642b949b7ea8ef5f4ab613ad14e24072483c93e602c1120882e7
+// Source SHA-256: a5a955425ab657e8ac0c8f8b3740b4cdfb403dede8b7b8e4e5447a0b926cee08
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -24676,6 +24676,10 @@ const PHONE_COMMUNICATION_REPAIR_CONTRACT = '【通讯修订合同】本段只�
 
 const PHONE_LIFESTYLE_REPAIR_CONTRACT = '【日常应用修订合同】本段只补当前App的原ID。备忘、工作、学习、阅读、账目、创作等是档案人物自己在用的记录，作者用受控成员真名，不是角色卡名称。当前用户若被提及，用档案显示名；Persona名只是同一人的别名。写正在使用的日常内容，不要替用户写已发送留言，不要编造共同历史。标题必须具体，不得返回“按此App用途与角色生活补齐”。';
 
+function phoneRecoveryContract(kind) {
+    return kind === 'chat' ? 'phone-chat-p0' : 'phone-notes-p0';
+}
+
 function verifiedPhoneOwnerMembers(rows, memoryBank, controlledEvidence) {
     return (Array.isArray(rows) ? rows : []).filter(row => core_text.normalizeText(row?.name, 100) && !isPhoneUserName(row.name, memoryBank)
         && core_text.normalizeText(row?.sourceEvidence, 800).length >= 4
@@ -25788,7 +25792,7 @@ async function generatePhoneWithRepair(context, memoryBank, origin, taskKey, opt
                     + '\n需要真实历史/私密字段却没有来源的项目才用 unavailable；普通日常继续按人设演绎，不重做已完成的其他 App。',
                 `私人终端 2/2 · ${index + 1}/${plan.apps.length} ${app.label}…`,
                 { maxTokens: app.kind === 'chat' ? 8000 : app.entries.length >= 8 ? 7000 : 5000, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:app:${app.id}:${core_text.hashString(missing.map(entry => entry.id).join('\n'))}`, mode: core_constants.MODE.PHONE, background: true, segmentMaxAttempts: 2,
-                    ...(app.kind === 'chat' ? { recoveryPhoneContract: 'phone-chat-p0' } : {}) },
+                    recoveryPhoneContract: phoneRecoveryContract(app.kind) },
                 raw => {
                     try { return normalizePhoneDraftApp(raw, requestApp, memoryBank, plan.deviceKind, null, evidenceOptions); }
                     catch (error) {
@@ -25957,7 +25961,7 @@ async function generatePhoneMissingWithRepair(context, memoryBank, origin, taskK
             `正在补齐「${app.label}」的 ${planApp.entries.length} 项内容…`,
             { context, contextEnvelope: presentation.contextEnvelope, origin, taskKey: `${taskKey}:missing:${app.id}:${core_text.hashString(planApp.entries.map(entry => `${entry.id}\t${entry.title}\t${entry.contactName || ''}`).join('\n'))}`,
                 mode: core_constants.MODE.PHONE, maxTokens: 8000, background: true,
-                ...(app.kind === 'chat' ? { recoveryPhoneContract: 'phone-chat-p0' } : {}) },
+                recoveryPhoneContract: phoneRecoveryContract(app.kind) },
             raw => normalizePhoneDraftApp(raw, planApp, memoryBank, session.deviceKind, null,
                 { controlledEvidence: presentation.settingEvidence || '', requireLifestyleContent: true, allowPartial: true }),
         ); } catch (error) {
@@ -26117,7 +26121,7 @@ async function generatePhoneIncrementalWithRepair(context, memoryBank, origin, t
             phoneAppPrompt(context, memoryBank, plan, app, sourceMemoryIds),
             `私人终端 · 新增详情 ${index + 1}/${plan.apps.length} ${app.label}…`,
             { maxTokens: app.kind === 'chat' ? 8000 : 5000, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment-app:${app.id}`, mode: core_constants.MODE.PHONE, background: true, segmentMaxAttempts: 1,
-                ...(app.kind === 'chat' ? { recoveryPhoneContract: 'phone-chat-p0' } : {}) },
+                recoveryPhoneContract: phoneRecoveryContract(app.kind) },
             raw => normalizePhoneDraftApp(raw, app, memoryBank, plan.deviceKind, sourceMemoryIds, {
                 controlledEvidence: presentationContext.settingEvidence || '',
                 allowPartial: true,
@@ -40527,6 +40531,8 @@ const RETRY_FEEDBACK = Object.freeze({
     length: '上一轮句数或字数不够。逐项核对原提示中的句数、字数和必需字段，不得降低门槛。',
     structure: '上一轮结构或完整度未通过。逐项核对原 schema、必需条目和说话人，不得放宽原限制。',
     noconvo: '上一轮通讯没有留下可保存的对话：用户线程被剥空，或没有主人未发送草稿。本轮只写主人一侧至少一条未发送草稿，不要写用户发言，不要凑双向。标题写成给对方的未发送草稿，不要再用“按此 App 用途补齐”。',
+    evidence: '上一轮终端条目缺少可保存的完整内容或来源证据。普通日常按人设写正在使用的记录，标题要具体；只有共同过去和私密字段才需要原文。不要返回“按此 App 用途补齐”。',
+    speakers: '上一轮说话人或对象未通过校验。当前用户线程只写主人草稿；普通联系人写真实姓名；组卡 owner 用成员真名，不用卡名。',
 });
 function classifyLengthKind(text) {
     const message = String(text || '');
@@ -40549,7 +40555,9 @@ function failureFeedback(code, error) {
     if (lengthKind) return lengthKind;
     if (code === 'RMT_HEART_INCOMPLETE') return 'length';
     if (code === 'RMT_PHONE_NO_CONVERSATION') return 'noconvo';
-    if (['RMT_SEGMENT_VALIDATION', 'RMT_PHONE_EVIDENCE', 'RMT_PHONE_SPEAKERS', 'RMT_ROOM_STRUCTURE', 'RMT_ROOM_FIELDS'].includes(code)) return 'structure';
+    if (code === 'RMT_PHONE_EVIDENCE') return 'evidence';
+    if (code === 'RMT_PHONE_SPEAKERS') return 'speakers';
+    if (['RMT_SEGMENT_VALIDATION', 'RMT_ROOM_STRUCTURE', 'RMT_ROOM_FIELDS'].includes(code)) return 'structure';
     return '';
 }
 function generationRetryFeedbackText(code, error) {
@@ -40561,9 +40569,15 @@ function generationRetryPrompt(prompt, feedback) {
 }
 
 function generationPhoneRetryPrompt(prompt, contract) {
+    if (contract === 'phone-notes-p0') {
+        return `${prompt}\n\n【本地日常应用校验合同修订：仅当前失败 App 段】本段采用以下修订，替代上文把卡名当作者、以及“按此 App 用途与角色生活补齐”的冲突要求；其他 schema、人物来源和证据限制不变，已完成应用不得重做。
+- 备忘、工作、学习、阅读、账目、创作等是档案人物自己在用的记录，作者用受控成员真名，不是角色卡名称。
+- 当前用户若被提及，用档案显示名；Persona 名只是同一人的别名。不要替用户写已发送留言，不要编造共同历史。
+- 标题必须具体，写成「xx的备忘」这类正在使用的条目，不得返回“按此 App 用途与角色生活补齐”。只输出当前 App 的 JSON，不输出这段说明。`;
+    }
     if (contract !== 'phone-chat-p0') return prompt;
-    return `${prompt}\n\n【本地通讯校验合同修订：仅当前失败通讯段】本段采用以下修订，替代上文“所有线程至少双向”和“speaker 必须等于设备卡名”的冲突要求；其他 schema、人物来源和证据限制不变，已完成应用不得重做。
-- 对当前用户的线程只写设备主人一侧至少一条未发送草稿，不得编造用户已发送的发言；没有合法草稿则按原 unavailable 结构返回。
+    return `${prompt}\n\n【本地通讯校验合同修订：仅当前失败通讯段】本段采用以下修订，替代上文“所有线程至少双向”“按此 App 用途补齐”和“speaker 必须等于设备卡名”的冲突要求；其他 schema、人物来源和证据限制不变，已完成应用不得重做。
+- 对当前用户的线程只写设备主人一侧至少一条未发送草稿，不得编造用户已发送的发言；没有合法草稿则按原 unavailable 结构返回。标题写成给对方的未发送草稿。
 - 只有 basis=记忆且每句都在所引 Mxxx 原文逐字出现时，才可保存已发生的双向消息；摘要对不上逐字原话时只能写主人一侧草稿，不能把摘要当聊天记录。
 - 设备 ownerName 仍是原卡名；多人卡 owner 消息的 speaker 使用原受控资料明确出现的成员真名。可在当前 App 对象中输出 "ownerMembers":[{"name":"原资料里的成员显示名","sourceEvidence":"逐字抄录同时包含此姓名的原受控资料原句"}]；成员只能由本次冻结的受控资料验证，不得从模型猜测、新聊天或草稿推演取得。单人卡仍使用原人物名。
 - 联系人、线程对象、字段名和已有条目 ID 均遵从当前原任务；没有合法对象或没有主人草稿的条目返回 unavailable，不为凑数量编造记录。只输出当前 App 的 JSON，不输出这段说明。`;
@@ -41268,9 +41282,10 @@ async function withRecoverySegment(prompt, options, validator, run) {
         }
         const phoneContract = handle.continueRequested && previous?.state === 'retry'
             && handle.journal.identity.mode === 'phone' && options.mode === 'phone'
-            && options.recoveryPhoneContract === 'phone-chat-p0' ? 'phone-chat-p0' : '';
+            && (options.recoveryPhoneContract === 'phone-chat-p0' || options.recoveryPhoneContract === 'phone-notes-p0')
+            ? options.recoveryPhoneContract : '';
         if (phoneContract && (!readGenerationContentSnapshot(handle) || typeof recipe?.actualPrompt !== 'string')) {
-            throw recoveryError('RMT_RECOVERY_SOURCE_SNAPSHOT_MISSING', '旧通讯草稿缺少完整的冻结请求和来源，无法安全修订后续写。请先导出保留草稿，再对通讯单独重新生成；已完成的其他应用保留。');
+            throw recoveryError('RMT_RECOVERY_SOURCE_SNAPSHOT_MISSING', '旧终端草稿缺少完整的冻结请求和来源，无法安全修订后续写。请先导出保留草稿，再对未完成应用单独重新生成；已完成的其他应用保留。');
         }
         const partial = handle.continueRequested && previous?.state === 'truncated' ? previous.partial : '';
         if (!recipe && readGenerationContentSnapshot(handle)) {

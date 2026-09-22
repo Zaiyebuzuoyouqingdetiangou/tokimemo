@@ -87,6 +87,10 @@ export const PHONE_COMMUNICATION_REPAIR_CONTRACT = '【通讯修订合同】本�
 
 export const PHONE_LIFESTYLE_REPAIR_CONTRACT = '【日常应用修订合同】本段只补当前App的原ID。备忘、工作、学习、阅读、账目、创作等是档案人物自己在用的记录，作者用受控成员真名，不是角色卡名称。当前用户若被提及，用档案显示名；Persona名只是同一人的别名。写正在使用的日常内容，不要替用户写已发送留言，不要编造共同历史。标题必须具体，不得返回“按此App用途与角色生活补齐”。';
 
+function phoneRecoveryContract(kind) {
+    return kind === 'chat' ? 'phone-chat-p0' : 'phone-notes-p0';
+}
+
 function verifiedPhoneOwnerMembers(rows, memoryBank, controlledEvidence) {
     return (Array.isArray(rows) ? rows : []).filter(row => core_text.normalizeText(row?.name, 100) && !isPhoneUserName(row.name, memoryBank)
         && core_text.normalizeText(row?.sourceEvidence, 800).length >= 4
@@ -1199,7 +1203,7 @@ export async function generatePhoneWithRepair(context, memoryBank, origin, taskK
                     + '\n需要真实历史/私密字段却没有来源的项目才用 unavailable；普通日常继续按人设演绎，不重做已完成的其他 App。',
                 `私人终端 2/2 · ${index + 1}/${plan.apps.length} ${app.label}…`,
                 { maxTokens: app.kind === 'chat' ? 8000 : app.entries.length >= 8 ? 7000 : 5000, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:app:${app.id}:${core_text.hashString(missing.map(entry => entry.id).join('\n'))}`, mode: core_constants.MODE.PHONE, background: true, segmentMaxAttempts: 2,
-                    ...(app.kind === 'chat' ? { recoveryPhoneContract: 'phone-chat-p0' } : {}) },
+                    recoveryPhoneContract: phoneRecoveryContract(app.kind) },
                 raw => {
                     try { return normalizePhoneDraftApp(raw, requestApp, memoryBank, plan.deviceKind, null, evidenceOptions); }
                     catch (error) {
@@ -1368,7 +1372,7 @@ export async function generatePhoneMissingWithRepair(context, memoryBank, origin
             `正在补齐「${app.label}」的 ${planApp.entries.length} 项内容…`,
             { context, contextEnvelope: presentation.contextEnvelope, origin, taskKey: `${taskKey}:missing:${app.id}:${core_text.hashString(planApp.entries.map(entry => `${entry.id}\t${entry.title}\t${entry.contactName || ''}`).join('\n'))}`,
                 mode: core_constants.MODE.PHONE, maxTokens: 8000, background: true,
-                ...(app.kind === 'chat' ? { recoveryPhoneContract: 'phone-chat-p0' } : {}) },
+                recoveryPhoneContract: phoneRecoveryContract(app.kind) },
             raw => normalizePhoneDraftApp(raw, planApp, memoryBank, session.deviceKind, null,
                 { controlledEvidence: presentation.settingEvidence || '', requireLifestyleContent: true, allowPartial: true }),
         ); } catch (error) {
@@ -1528,7 +1532,7 @@ export async function generatePhoneIncrementalWithRepair(context, memoryBank, or
             phoneAppPrompt(context, memoryBank, plan, app, sourceMemoryIds),
             `私人终端 · 新增详情 ${index + 1}/${plan.apps.length} ${app.label}…`,
             { maxTokens: app.kind === 'chat' ? 8000 : 5000, context, contextEnvelope: presentationContext.contextEnvelope, origin, taskKey: `${taskKey}:increment-app:${app.id}`, mode: core_constants.MODE.PHONE, background: true, segmentMaxAttempts: 1,
-                ...(app.kind === 'chat' ? { recoveryPhoneContract: 'phone-chat-p0' } : {}) },
+                recoveryPhoneContract: phoneRecoveryContract(app.kind) },
             raw => normalizePhoneDraftApp(raw, app, memoryBank, plan.deviceKind, sourceMemoryIds, {
                 controlledEvidence: presentationContext.settingEvidence || '',
                 allowPartial: true,
