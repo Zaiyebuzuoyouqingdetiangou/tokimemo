@@ -523,7 +523,7 @@ export async function generateAlbumWithRepair(context, memoryBank, origin, taskK
         (batch, batchIndex) => generation_client.requestValidatedSegment(
             albumCommentsPrompt(context, memoryBank, batch, relationshipSnapshot, participantSnapshot),
             `回忆相簿 3/3 · 共同回忆 ${batchIndex + 1}/${batches.length}…`,
-            { maxTokens: 6000, temperature: 0.4, context, origin, taskKey: `${taskKey}:comments:${batchIndex}`, mode: core_constants.MODE.ALBUM, background: true },
+            { maxTokens: 6000, context, origin, taskKey: `${taskKey}:comments:${batchIndex}`, mode: core_constants.MODE.ALBUM, background: true },
             data => normalizeAlbumCommentsBatch(data, batch, participantSnapshot),
         ));
     const allComments = new Map();
@@ -560,7 +560,7 @@ async function fillAlbumComments(context, memoryBank, origin, taskKey, previous,
         (batch, batchIndex) => generation_client.requestValidatedSegment(
             albumCommentsPrompt(context, memoryBank, batch, relationshipSnapshot, participantSnapshot),
             `回忆相簿 · 共同回忆 ${batchIndex + 1}/${batches.length}…`,
-            { maxTokens: 6000, temperature: 0.4, context, origin, taskKey: `${taskKey}:comments:${batchIndex}`, mode: core_constants.MODE.ALBUM, background: true },
+            { maxTokens: 6000, context, origin, taskKey: `${taskKey}:comments:${batchIndex}`, mode: core_constants.MODE.ALBUM, background: true },
             data => normalizeAlbumCommentsBatch(data, batch, participantSnapshot),
         ));
     const allComments = new Map();

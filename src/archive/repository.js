@@ -2261,7 +2261,7 @@ async function rewriteCurrentArchiveVerdictOperation(taskTrace, options = {}) {
         core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin);
         const profile = await archive_importRecovery.requestArchiveRecoverySegment(recoveryTicket, 'profile',
             profilePrompt, {
-                maxTokens: 3000, temperature: Math.min(settings.temperature, 0.4), contextEnvelope, archiveRequestBudget: true, signal: controller.signal, context, taskTrace,
+                maxTokens: 3000, temperature: Math.min(settings.temperature, 0.65), contextEnvelope, archiveRequestBudget: true, signal: controller.signal, context, taskTrace,
                 ...(taskInputV1 ? { recoveryContentSettings: taskInputV1.data.contentSettings } : {}),
             }, raw => checkedArchiveProfile(raw, profileMemory.memories));
         core_taskTrace.markStage(taskTrace, 'profile');

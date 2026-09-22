@@ -660,7 +660,7 @@ export async function generateAllAdvForSession(options = {}) {
                 `正在生成本批 ${pending.length} 篇 ADV…`,
                 {
                     maxTokens: core_constants.MAX_GENERATION_OUTPUT_TOKENS,
-                    temperature: 0.4,
+                    temperature: 0.55,
                     context,
                     origin,
                     signal: bulkCancel.signal,
@@ -820,7 +820,7 @@ export async function repairFailedAdvForSession(options = {}) {
                     `正在补 ADV：${event.title}`,
                     {
                         maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV],
-                        temperature: 0.4,
+                        temperature: 0.55,
                         context,
                         origin,
                         signal: bulkCancel.signal,
@@ -947,7 +947,7 @@ export async function generateAdvForSelected(options = {}) {
         await startAdvRecovery(targetRuntime, { kind: 'adv-single', eventId }, options, session);
         const generatedAdv = await generation_client.requestValidatedSegment(
             advPrompt(context, event, memoryBank), `正在根据当前聊天档案生成「${event.title}」ADV…`,
-            { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV], temperature: 0.4, context, origin, taskKey, mode: core_constants.MODE.ADV, background: true, segmentMaxAttempts: 1 },
+            { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ADV], temperature: 0.55, context, origin, taskKey, mode: core_constants.MODE.ADV, background: true, segmentMaxAttempts: 1 },
             raw => normalizeAdv(raw),
         );
         const persisted = await persistAdvMutation(targetRuntime, latest => {

@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.5-tt-cg-r84.50-json-temperature",
+  "js": "index.js?heartbeat=0.99.4-tt-cg-r84.49-json-example-fix",
   "author": "Toto",
-  "version": "0.99.5",
+  "version": "0.99.4",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.50：严格 JSON 页的温度不超过 0.4；更冷的页保持原值。",
+  "description": "r84.49：修正最短 JSON 例子的字段名和层数；单项重做不再附另一套例子。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

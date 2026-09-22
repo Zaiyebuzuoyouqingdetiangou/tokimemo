@@ -18,7 +18,7 @@ import * as generation_client from './client.js';
 import * as generation_prompts from './prompts.js';
 import * as generation_recovery from './recovery.js';
 
-function taskOptions(mode, context, origin, taskKey, maxTokens = 6000, temperature = 0.4) {
+function taskOptions(mode, context, origin, taskKey, maxTokens = 6000, temperature = 0.45) {
     return { maxTokens, temperature, context, origin, taskKey, mode, background: true };
 }
 
@@ -160,7 +160,7 @@ TRUSTED_EVENT_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
 async function regenerateAdvText(item, context, memoryBank, origin, taskKey) {
     const raw = await generation_client.requestValidatedSegment(
         modes_advEvent.advPrompt(context, item, memoryBank),
-        `重新生成「${item.title}」ADV 正文…`, taskOptions(core_constants.MODE.ADV, context, origin, `${taskKey}:text`, 12000, 0.4),
+        `重新生成「${item.title}」ADV 正文…`, taskOptions(core_constants.MODE.ADV, context, origin, `${taskKey}:text`, 12000, 0.55),
         modes_advEvent.normalizeAdv,
     );
     return raw;
@@ -172,7 +172,7 @@ async function regenerateHeartVoice(session, item, context, memoryBank, origin, 
         ? modes_heart.heartPostVoicePrompt(context, memoryBank, session, null, null)
         : modes_heart.heartSeasonVoicePrompt(context, memoryBank, session, kind, null, null);
     const list = await modes_heart.requestHeartPart(
-        prompt, `重新生成 ${item.title}…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:voice`, 8000, 0.4),
+        prompt, `重新生成 ${item.title}…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:voice`, 8000, 0.65),
         raw => modes_heart.normalizeVoiceDramaPart(raw, [kind], memoryBank),
     );
     return { ...list[0], id: item.id, incrementBatchId: item.incrementBatchId || '', sourceArchiveMemoryIds: item.sourceArchiveMemoryIds || [], generatedAt: Date.now() };
@@ -182,7 +182,7 @@ async function regenerateHeartScenario(session, item, context, memoryBank, origi
     const season = core_text.normalizeText(item.season, 40).toLowerCase();
     const list = await modes_heart.requestHeartPart(
         modes_heart.heartSeasonScenarioPrompt(context, memoryBank, session, season, null, null),
-        `重新生成 ${item.title}…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:scenario`, 9000, 0.4),
+        `重新生成 ${item.title}…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:scenario`, 9000, 0.7),
         raw => modes_heart.normalizeScenarioDramaPart(raw, season, memoryBank),
     );
     return { ...list[0], id: item.id, incrementBatchId: item.incrementBatchId || '', sourceArchiveMemoryIds: item.sourceArchiveMemoryIds || [], generatedAt: Date.now() };
@@ -210,7 +210,7 @@ ${JSON.stringify(item, null, 2)}
     const list = await modes_heart.requestHeartPart(
         prompt,
         '重新生成萤火虫追加约会会话…',
-        taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:firefly`, 4200, 0.4),
+        taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:firefly`, 4200, 0.75),
         raw => {
             const list = modes_heart.normalizeFireflyVoicesPart(raw, { minTotal: 1, requireDistribution: false, requireRich: true });
             if (!list[0] || list[0].color !== color) throw new Error('重新生成的萤火虫会话没有保持原颜色。');
@@ -224,7 +224,7 @@ ${JSON.stringify(item, null, 2)}
 async function regenerateHeartStrip(session, item, context, memoryBank, origin, taskKey) {
     const list = await modes_heart.requestHeartPart(
         modes_heart.heartStripsPrompt(context, memoryBank, session, null, null),
-        `重新生成日常一格「${item.title}」…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:strip`, 7000, 0.4),
+        `重新生成日常一格「${item.title}」…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:strip`, 7000, 0.7),
         modes_heart.normalizeHeartStripsPart,
     );
     const candidate = list[0];
@@ -264,7 +264,7 @@ async function regeneratePhoneApp(session, app, context, memoryBank, origin, tas
     assertPhoneRegenerationOrigin(origin, memoryBank);
     const raw = await generation_client.requestValidatedSegment(
         modes_phone.phoneAppPrompt(context, memoryBank, plan, planApp),
-        `重新生成 App「${app.label}」…`, { ...taskOptions(core_constants.MODE.PHONE, context, origin, `${taskKey}:app`, app.kind === 'chat' ? 12000 : 9000, 0.4), contextEnvelope: presentationContext.contextEnvelope },
+        `重新生成 App「${app.label}」…`, { ...taskOptions(core_constants.MODE.PHONE, context, origin, `${taskKey}:app`, app.kind === 'chat' ? 12000 : 9000, 0.55), contextEnvelope: presentationContext.contextEnvelope },
         data => modes_phone.assertPhoneReplacementPreservesRecords(app,
             modes_phone.normalizePhoneDraftApp(data, planApp, memoryBank, session.deviceKind, null, { controlledEvidence: presentationContext.settingEvidence })),
     );
@@ -280,7 +280,7 @@ async function regeneratePhoneEntry(session, app, entry, context, memoryBank, or
     assertPhoneRegenerationOrigin(origin, memoryBank);
     const raw = await generation_client.requestValidatedSegment(
         modes_phone.phoneAppPrompt(context, memoryBank, plan, planApp),
-        `重新生成「${entry.title}」…`, { ...taskOptions(core_constants.MODE.PHONE, context, origin, `${taskKey}:entry`, 8000, 0.4), contextEnvelope: presentationContext.contextEnvelope },
+        `重新生成「${entry.title}」…`, { ...taskOptions(core_constants.MODE.PHONE, context, origin, `${taskKey}:entry`, 8000, 0.6), contextEnvelope: presentationContext.contextEnvelope },
         data => modes_phone.assertPhoneReplacementPreservesRecords({ entries: [entry] },
             modes_phone.normalizePhoneDraftApp(data, planApp, memoryBank, session.deviceKind, null, { controlledEvidence: presentationContext.settingEvidence })),
     );
@@ -292,7 +292,7 @@ async function regenerateEndingRoute(session, item, context, memoryBank, origin,
     if (item.available) {
         return generation_client.requestValidatedSegment(
             modes_ending.endingRouteDetailPrompt(context, memoryBank, session, item),
-            `重新生成结局路线「${item.title}」…`, taskOptions(core_constants.MODE.ENDING, context, origin, `${taskKey}:route`, 14000, 0.4),
+            `重新生成结局路线「${item.title}」…`, taskOptions(core_constants.MODE.ENDING, context, origin, `${taskKey}:route`, 14000, 0.65),
             raw => modes_ending.normalizeEndingRouteDetail(raw, item),
         );
     }
@@ -303,7 +303,7 @@ CURRENT_ROUTE_JSON:\n${JSON.stringify(item, null, 2)}
 TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
 严格输出：{"ending":{"title":"...","subtitle":"...","unlockHint":"..."}}。只输出 JSON。`;
     const raw = await generation_client.requestValidatedSegment(
-        prompt, `重新生成未解锁路线「${item.title}」…`, taskOptions(core_constants.MODE.ENDING, context, origin, `${taskKey}:locked-route`, 4000, 0.4),
+        prompt, `重新生成未解锁路线「${item.title}」…`, taskOptions(core_constants.MODE.ENDING, context, origin, `${taskKey}:locked-route`, 4000, 0.5),
         data => {
             const route = data?.ending || {};
             const title = core_text.normalizeText(route.title, 100);
@@ -326,7 +326,7 @@ TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
 easterEgg 只允许上述结构化文字和 moduleType 枚举，不得输出 JavaScript、HTML、CSS、URL、事件处理器或任何代码；所有互动均由插件本地固定代码执行。
 只输出 JSON。`;
     const list = await generation_client.requestValidatedSegment(
-        prompt, `重新生成告白回看「${item.title || item.id}」…`, taskOptions(core_constants.MODE.ENDING, context, origin, `${taskKey}:confession`, 7000, 0.4),
+        prompt, `重新生成告白回看「${item.title || item.id}」…`, taskOptions(core_constants.MODE.ENDING, context, origin, `${taskKey}:confession`, 7000, 0.55),
         raw => {
             const list = modes_ending.normalizeEndingConfessionReplays(raw?.confessionReplays, memoryBank);
             if (!list[0] || !sameEvidence(list[0], item)) throw new Error('重新生成的告白回看没有保持原档案证据。');
@@ -346,7 +346,7 @@ ${item.unlocked ? `TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}`
 严格输出：{"entries":[{"id":"${core_text.esc(item.id)}","title":"...","description":"...","category":"...","tier":"bronze","unlocked":${item.unlocked ? 'true' : 'false'},"unlockedAt":${JSON.stringify(item.unlockedAt || '')},"unlockCondition":${item.unlocked ? '"一句话说明做到或经历了什么才解锁，并受同一组证据支持"' : '""'},"sourceMemoryIds":${JSON.stringify(item.sourceMemoryIds || [])},"sourceMemoryAnchor":${JSON.stringify(item.sourceMemoryAnchor || '')},"hint":"..."}]}
 只输出 JSON。`;
     const normalized = await generation_client.requestValidatedSegment(
-        prompt, `重新生成成就「${item.title}」…`, taskOptions(core_constants.MODE.ACHIEVEMENTS, context, origin, `${taskKey}:achievement`, 5000, 0.4),
+        prompt, `重新生成成就「${item.title}」…`, taskOptions(core_constants.MODE.ACHIEVEMENTS, context, origin, `${taskKey}:achievement`, 5000, 0.6),
         raw => {
             const normalized = modes_achievements.normalizeAchievements(raw, memoryBank, { allowPartial: false });
             const candidate = normalized.entries[0];
@@ -417,7 +417,7 @@ CURRENT_MOOD_NOTE_JSON:\n${JSON.stringify(item, null, 2)}
 TRUSTED_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
 严格输出：{"mood":{"text":"一两句、简短、第一人称"}}。只输出 JSON。`;
     const raw = await generation_client.requestValidatedSegment(
-        prompt, '重新生成一条页角随笔…', taskOptions(core_constants.MODE.CALENDAR, context, origin, `${taskKey}:calendar-mood`, 2200, 0.4),
+        prompt, '重新生成一条页角随笔…', taskOptions(core_constants.MODE.CALENDAR, context, origin, `${taskKey}:calendar-mood`, 2200, 0.45),
         data => {
             const text = core_text.normalizeText(data?.mood?.text, 220);
             if (!text || text.length < 8) throw new Error('页角随笔重新生成内容不足。');
@@ -488,7 +488,7 @@ ${evidence.length ? `TRUSTED_MAIN_EVIDENCE_JSON:\n${JSON.stringify(evidence, nul
         : item.trueEnding ? 'Ω 的 monologue 为空，intervention 汇合实际已观测命运，回到与 {{user}} 的当下关系，形成有余韵的情绪落点；不擅自确立恋爱。' : '普通分歧 monologue 展开平行体第一人称的生活处境、关键选择及代价与情绪起伏；intervention 写现世 {{char}} 对照另一个我的触动与自省；systemNote 给出冷酷、明确的命运判定。不按字数或代词次数验收。'}禁止前任，禁止 {{char}} 与 {{user}} 以外的任何人恋爱、结婚或成家。只输出 JSON。`
         + (!readableR62 && item.trueEnding ? '\nVALIDATED_VOICES_JSON:' + JSON.stringify(observedNodes.filter(node => !node.trueEnding && !node.historicalObservation && !node.formerOmega).slice(-8).map(node => ({ label: node.label, monologue: core_text.normalizeText(node.monologue, 300), intervention: core_text.normalizeText(node.intervention, 200) }))) : '');
     const raw = await generation_client.requestValidatedSegment(
-        prompt, `重新生成「${item.label}」…`, taskOptions(core_constants.MODE.BUTTERFLY, context, origin, `${taskKey}${readableR62 ? '' : ':narrative-r84'}:butterfly`, 9000, 0.4),
+        prompt, `重新生成「${item.label}」…`, taskOptions(core_constants.MODE.BUTTERFLY, context, origin, `${taskKey}${readableR62 ? '' : ':narrative-r84'}:butterfly`, 9000, 0.7),
         data => normalizeRegeneratedButterflyNode(item, data?.node, memoryBank, context),
     );
     return raw;

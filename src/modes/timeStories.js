@@ -126,7 +126,7 @@ export async function generateTimeStoryWithRepair(mode, context, memory, origin,
     const nextId = localId('TS', lastId);
     const episode = await generation.requestValidatedSegment(prompt, `${contract.timeStoryLabel(mode)} · 正在写下这一篇…`,
         { context, contextEnvelope: presentationContext.contextEnvelope, origin, mode, taskKey: `${taskKey}:time-story`,
-            maxTokens: 12000, temperature: 0.4, background: true },
+            maxTokens: 12000, temperature: 0.75, background: true },
         raw => normalizeTimeStoryEpisode(mode, raw, memory, { id: nextId, profile: presentationContext.profile }));
     contextApi.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
     const next = previous ? structuredClone(previous) : emptyTimeStories(mode, memory, context);
