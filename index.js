@@ -1,5 +1,5 @@
-const VERSION = '0.99.6';
-const BUILD = '0.99.6-tt-cg-r84.51-user-temperature';
+const VERSION = '0.99.7';
+const BUILD = '0.99.7-tt-cg-r84.52-items-catalog';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

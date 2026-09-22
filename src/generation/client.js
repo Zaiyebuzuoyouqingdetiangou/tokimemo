@@ -1673,8 +1673,12 @@ async function generateModeOperation(mode, options = {}) {
             session = await modes_room.generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext, allowPersonaExpansion, participantSnapshot });
         } else if (mode === core_constants.MODE.ROOM) {
             session = await modes_room.generateRoomWithRepair(context, memoryBank, origin, taskKey, { presentationContext, participantSnapshot, secondStep: options.secondStep === true });
+        } else if (mode === core_constants.MODE.ITEMS && options.fillItemsText && previousSession) {
+            session = await modes_items.fillItemsLines(context, memoryBank, origin, taskKey, previousSession);
         } else if (mode === core_constants.MODE.ITEMS && previousSession) {
             session = await modes_items.generateItemsIncrementalWithRepair(context, memoryBank, roomSession, focusObject, origin, taskKey, previousSession, { presentationContext, allowPersonaExpansion });
+        } else if (mode === core_constants.MODE.ITEMS) {
+            session = await modes_items.generateItemsWithRepair(context, memoryBank, origin, taskKey, generationPrompt, { secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.ENDING) {
             session = await modes_ending.generateEndingWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.ALBUM) {

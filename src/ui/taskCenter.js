@@ -724,11 +724,13 @@ export function handleTaskCenterAction(action, actionEl) {
                     ? generation_client.generateMode(core_constants.MODE.ALBUM, { secondStep: true, background: true })
                     : record.secondStepKind === 'room-lines'
                         ? generation_client.generateMode(core_constants.MODE.ROOM, { fillRoomText: true, background: true })
-                        : record.secondStepKind === 'ending-scenes'
-                            ? generation_client.generateMode(core_constants.MODE.ENDING, { secondStep: true, background: true })
-                            : record.secondStepKind === 'adv-scripts'
-                                ? generation_client.startAdvScriptSecondStep()
-                                : null;
+                        : record.secondStepKind === 'items-lines'
+                            ? generation_client.generateMode(core_constants.MODE.ITEMS, { fillItemsText: true, background: true })
+                            : record.secondStepKind === 'ending-scenes'
+                                ? generation_client.generateMode(core_constants.MODE.ENDING, { secondStep: true, background: true })
+                                : record.secondStepKind === 'adv-scripts'
+                                    ? generation_client.startAdvScriptSecondStep()
+                                    : null;
         if (!run) return;
         void Promise.resolve(run).catch(error => {
             if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');

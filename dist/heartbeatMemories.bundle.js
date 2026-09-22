@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 144
-// Source SHA-256: 5eaccca4168cc4d7b986e495d46c2884482133ddb5c52d04d40379a77c6d46a3
+// Source SHA-256: 1b6c0d975963d14b8c7e30e0d300abb93e23335f2666cb46621341f0be31cba0
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -33747,6 +33747,8 @@ const core_constants = __m_core_constants_js;
 const core_evidence = __m_core_evidence_js;
 const core_incremental = __m_core_incremental_js;
 const core_narrativeAuthority = __m_core_narrativeAuthority_js;
+const core_requestCoordinator = __m_core_requestCoordinator_js;
+const core_settings = __m_core_settings_js;
 const core_text = __m_core_text_js;
 const generation_client = __m_generation_client_js;
 const generation_prompts = __m_generation_prompts_js;
@@ -33759,7 +33761,7 @@ const runtimeState = __m_core_state_js.state;
 
 
 
-function normalizePossessionNode(node, memoryBank, depth = 0, fallbackId = 'IT01') {
+function normalizePossessionNode(node, memoryBank, depth = 0, fallbackId = 'IT01', { structureOnly = false } = {}) {
     if (!node || typeof node !== 'object' || depth > 3) return null;
     const kind = node?.kind === 'container' ? 'container' : 'item';
     const basis = core_constants.ROOM_BASIS_VALUES.has(node?.basis) ? node.basis : '设定';
@@ -33767,10 +33769,11 @@ function normalizePossessionNode(node, memoryBank, depth = 0, fallbackId = 'IT01
     const summary = core_text.normalizeText(node?.summary, 1600);
     const line = core_text.normalizeText(node?.line, 900);
     const reference = basis === '记忆' ? core_evidence.normalizeMemoryReference(node?.sourceMemoryIds, node?.sourceMemoryAnchor, `${label}\n${summary}\n${line}`, memoryBank, 1) : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
-    if (!summary || !line || (basis === '记忆' && !reference.sourceMemoryIds.length)) return null;
-    // The actual-count policy does not authorize fictional items to assert joint history.
+    // A missing quote still drops a memory item. A missing line does not, when this pass is only the catalog.
+    if (basis === '记忆' && !reference.sourceMemoryIds.length) return null;
     if (basis !== '记忆' && core_narrativeAuthority.narrativeClaimsSharedHistory([label, summary, line], { userName: memoryBank?.userName })) return null;
-    const children = (Array.isArray(node?.children) ? node.children : []).slice(0, 12).map((child, index) => normalizePossessionNode(child, memoryBank, depth + 1, `${fallbackId}_${index + 1}`)).filter(Boolean);
+    if (!structureOnly && (!summary || !line)) return null;
+    const children = (Array.isArray(node?.children) ? node.children : []).slice(0, 12).map((child, index) => normalizePossessionNode(child, memoryBank, depth + 1, `${fallbackId}_${index + 1}`, { structureOnly })).filter(Boolean);
     return { id: core_text.safeId(node?.id, fallbackId), label, kind, basis, summary, line, sourceMemoryIds: reference.sourceMemoryIds, sourceMemoryAnchor: reference.sourceMemoryAnchor, children };
 }
 
@@ -33781,18 +33784,121 @@ function countItemNodes(nodes) {
     );
 }
 
-function normalizeItems(data, memoryBank) {
+function normalizeItems(data, memoryBank, { structureOnly = false } = {}) {
     const raw = Array.isArray(data?.containers) ? data.containers : [];
     let totalNodes = 0;
     const containers = raw.slice(0, 10).map((box, boxIndex) => {
         const id = core_text.safeId(box?.id, `BOX${String(boxIndex + 1).padStart(2, '0')}`);
-        const nodes = (Array.isArray(box?.nodes) ? box.nodes : []).slice(0, 12).map((node, index) => normalizePossessionNode(node, memoryBank, 0, `${id}_IT${String(index + 1).padStart(2, '0')}`)).filter(Boolean);
+        const nodes = (Array.isArray(box?.nodes) ? box.nodes : []).slice(0, 12).map((node, index) => normalizePossessionNode(node, memoryBank, 0, `${id}_IT${String(index + 1).padStart(2, '0')}`, { structureOnly })).filter(Boolean);
         totalNodes += countItemNodes(nodes);
         return { id, label: core_text.normalizeText(box?.label, 80) || `收纳处 ${boxIndex + 1}`, containerType: core_text.normalizeText(box?.containerType, 100) || '私人收纳容器', spaceLabel: core_text.normalizeText(box?.spaceLabel, 100), description: core_text.normalizeText(box?.description, 1200) || '这是他日常会使用的收纳位置。', nodes };
     }).filter(box => box.nodes.length >= 1);
     if (containers.length < 1 || totalNodes < 1) throw new Error(`“他的物品”内容不足：${containers.length} 个容器 / ${totalNodes} 个节点。`);
     if (totalNodes > core_constants.MAX_DERIVED_CONTENT_ITEMS) throw new Error(`“他的物品”节点过多：${totalNodes} 个，最多允许 ${core_constants.MAX_DERIVED_CONTENT_ITEMS} 个，避免递归结构拖慢界面。`);
     return { kind: core_constants.MODE.ITEMS, title: core_text.normalizeText(data?.title, 100) || '他的物品', containers, selectedContainerId: containers[0].id, viewPath: [], selectedNodeId: containers[0].nodes[0]?.id || '' };
+}
+
+function collectPendingItemLines(nodes, out = []) {
+    for (const node of Array.isArray(nodes) ? nodes : []) {
+        if (!node?.summary || !node?.line) out.push({ id: node.id, label: node.label, basis: node.basis, summary: node.summary || '', line: node.line || '' });
+        collectPendingItemLines(node?.children, out);
+    }
+    return out;
+}
+
+function itemIdentityLines(session) {
+    const lines = [];
+    const walk = nodes => {
+        for (const node of Array.isArray(nodes) ? nodes : []) {
+            lines.push([node.id, node.basis, (node.sourceMemoryIds || []).join(','), node.sourceMemoryAnchor].join('|'));
+            walk(node.children);
+        }
+    };
+    for (const box of session?.containers || []) walk(box.nodes);
+    return lines.join('\n');
+}
+
+function applyItemLineRepairs(session, repairs) {
+    const byId = new Map();
+    for (const item of Array.isArray(repairs) ? repairs : []) {
+        const id = core_text.normalizeText(item?.id, 80);
+        if (id) byId.set(id, item);
+    }
+    const visit = node => {
+        const patch = byId.get(node.id);
+        return {
+            ...node,
+            summary: patch ? (core_text.normalizeText(patch.summary, 1600) || node.summary) : node.summary,
+            line: patch ? (core_text.normalizeText(patch.line, 900) || node.line) : node.line,
+            children: (node.children || []).map(visit),
+        };
+    };
+    return { ...session, containers: (session.containers || []).map(box => ({ ...box, nodes: (box.nodes || []).map(visit) })) };
+}
+
+async function fillItemsLines(context, memoryBank, origin, taskKey, session) {
+    const pending = (session?.containers || []).flatMap(box => collectPendingItemLines(box.nodes));
+    if (!pending.length) {
+        core_requestCoordinator.noteSecondStepOffer(origin, null);
+        return session;
+    }
+    const before = itemIdentityLines(session);
+    return generation_client.requestValidatedSegment(
+        generation_prompts.promptSafetyBoundary(context, '他的物品 / 补对白', null, memoryBank)
+        + '\n只补下面这些物件的 summary 和 line。不得改 id、basis、sourceMemoryIds、sourceMemoryAnchor，不得把没有档案证据的事写成已经发生。'
+        + '\n只输出 {"repairs":[{"id":"物件id","summary":"物件描述","line":"当下角色台词"}]}。'
+        + '\nPENDING_ITEMS_JSON:\n' + JSON.stringify(pending),
+        '他的物品 · 正在补物件对白…',
+        { maxTokens: 4000, context, origin, taskKey: `${taskKey}:lines`, mode: core_constants.MODE.ITEMS, background: true },
+        raw => {
+            const next = normalizeItems(applyItemLineRepairs(session, raw?.repairs), memoryBank);
+            if (itemIdentityLines(next) !== before) throw core_text.safeUserError('物件对白补写改动了依据或漏了物件。', 'RMT_ITEMS_FIELDS');
+            if (next.containers.some(box => collectPendingItemLines(box.nodes).length)) throw core_text.safeUserError('物件对白仍未补齐。', 'RMT_ITEMS_FIELDS');
+            core_requestCoordinator.noteSecondStepOffer(origin, null);
+            return next;
+        },
+    );
+}
+
+async function generateItemsWithRepair(context, memoryBank, origin, taskKey, prompt, options = {}) {
+    const fillNow = options.secondStep === true || core_settings.getPluginSettings().autoSecondPass === true;
+    const raw = await generation_client.requestValidatedSegment(
+        prompt,
+        '他的物品 · 正在整理收纳…',
+        { maxTokens: core_constants.MODE_TOKEN_CAPS[core_constants.MODE.ITEMS], context, origin, taskKey, mode: core_constants.MODE.ITEMS, background: true },
+        value => {
+            const usable = Array.isArray(value?.containers)
+                ? value.containers.filter(box => Array.isArray(box?.nodes) && box.nodes.some(node => core_text.normalizeText(node?.label, 80)))
+                : [];
+            if (!Array.isArray(value?.containers) || value.containers.length > 10 || usable.length < 1) {
+                throw core_text.safeUserError('物品收纳结构未写完整。', 'RMT_ITEMS_FIELDS');
+            }
+            return value;
+        },
+    );
+    try {
+        const session = normalizeItems(raw, memoryBank);
+        core_requestCoordinator.noteSecondStepOffer(origin, null);
+        return session;
+    } catch (error) {
+        if (fillNow) {
+            const catalog = normalizeItems(raw, memoryBank, { structureOnly: true });
+            core_requestCoordinator.noteSecondStepOffer(origin, null);
+            return fillItemsLines(context, memoryBank, origin, taskKey, catalog);
+        }
+        try {
+            const catalog = normalizeItems(raw, memoryBank, { structureOnly: true });
+            core_requestCoordinator.noteSecondStepOffer(origin, {
+                label: '对白和描述',
+                kind: 'items-lines',
+                mode: core_constants.MODE.ITEMS,
+                pageId: core_constants.MODE.ITEMS,
+            });
+            return catalog;
+        } catch {
+            throw error;
+        }
+    }
 }
 
 function compactItemsExisting(session) {
@@ -34077,6 +34183,8 @@ function itemsBack() {
     renderItems();
 }
 
+__m_modes_items_js.fillItemsLines = fillItemsLines;
+__m_modes_items_js.generateItemsWithRepair = generateItemsWithRepair;
 __m_modes_items_js.generateItemsIncrementalWithRepair = generateItemsIncrementalWithRepair;
 __m_modes_items_js.normalizePossessionNode = normalizePossessionNode;
 __m_modes_items_js.countItemNodes = countItemNodes;
@@ -39194,8 +39302,12 @@ async function generateModeOperation(mode, options = {}) {
             session = await modes_room.generateRoomIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession, { presentationContext, allowPersonaExpansion, participantSnapshot });
         } else if (mode === core_constants.MODE.ROOM) {
             session = await modes_room.generateRoomWithRepair(context, memoryBank, origin, taskKey, { presentationContext, participantSnapshot, secondStep: options.secondStep === true });
+        } else if (mode === core_constants.MODE.ITEMS && options.fillItemsText && previousSession) {
+            session = await modes_items.fillItemsLines(context, memoryBank, origin, taskKey, previousSession);
         } else if (mode === core_constants.MODE.ITEMS && previousSession) {
             session = await modes_items.generateItemsIncrementalWithRepair(context, memoryBank, roomSession, focusObject, origin, taskKey, previousSession, { presentationContext, allowPersonaExpansion });
+        } else if (mode === core_constants.MODE.ITEMS) {
+            session = await modes_items.generateItemsWithRepair(context, memoryBank, origin, taskKey, generationPrompt, { secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.ENDING) {
             session = await modes_ending.generateEndingWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.ALBUM) {
@@ -43054,11 +43166,13 @@ function handleTaskCenterAction(action, actionEl) {
                     ? generation_client.generateMode(core_constants.MODE.ALBUM, { secondStep: true, background: true })
                     : record.secondStepKind === 'room-lines'
                         ? generation_client.generateMode(core_constants.MODE.ROOM, { fillRoomText: true, background: true })
-                        : record.secondStepKind === 'ending-scenes'
-                            ? generation_client.generateMode(core_constants.MODE.ENDING, { secondStep: true, background: true })
-                            : record.secondStepKind === 'adv-scripts'
-                                ? generation_client.startAdvScriptSecondStep()
-                                : null;
+                        : record.secondStepKind === 'items-lines'
+                            ? generation_client.generateMode(core_constants.MODE.ITEMS, { fillItemsText: true, background: true })
+                            : record.secondStepKind === 'ending-scenes'
+                                ? generation_client.generateMode(core_constants.MODE.ENDING, { secondStep: true, background: true })
+                                : record.secondStepKind === 'adv-scripts'
+                                    ? generation_client.startAdvScriptSecondStep()
+                                    : null;
         if (!run) return;
         void Promise.resolve(run).catch(error => {
             if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
