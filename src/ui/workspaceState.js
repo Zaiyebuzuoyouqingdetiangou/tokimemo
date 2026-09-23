@@ -38,6 +38,8 @@ export const WORKSPACE_ROUTES = Object.freeze({
     phone: { mode: 'phone', title: '他的私人终端', group: 'life' },
     inbox: { mode: 'inbox', title: '你的邮箱', group: 'life' },
     travel: { mode: 'travel', title: '他的出行路线', group: 'life' },
+    mirrorCall: { mode:'mirrorCall', title:'想和现在的 TA 聊天吗？', group:'interaction', manualOnly:true },
+    mirrorVoice: { mode:'mirrorVoice', title:'镜译 · 语音设置', group:'interaction', manualOnly:true },
     themeSong: { mode: 'themeSong', title: '角色印象曲', group: 'interaction' },
     bedtime: { mode: 'bedtime', title: '睡前故事', group: 'stories' },
     heart: { mode: 'heart', title: '角色互动', group: 'interaction', view: 'seasons' },
@@ -50,7 +52,7 @@ export const WORKSPACE_ROUTES = Object.freeze({
     postending: { mode: 'heart', title: '未来 / 后日谈', group: 'stories', view: 'seasons', season: 'postending' },
     butterfly: { mode: 'butterfly', title: '蝴蝶效应', group: 'stories' },
     pastLives: { mode: 'pastLives', title: '前世今生', group: 'stories' },
-    calendar: { mode: 'calendar', title: '两个人的日历', group: 'life' },
+    calendar: { mode: 'calendar', title: '手帐 · 两个人的日历', group: 'life' },
     items: { mode: 'items', title: '他的物品', group: 'life', deep: true },
     timeEcho: { mode: 'timeEcho', title: '时空回响', group: 'stories', deep: true },
 });

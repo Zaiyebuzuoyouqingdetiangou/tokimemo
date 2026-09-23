@@ -13,6 +13,7 @@ import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
 import * as core_participants from '../core/participants.js';
+import * as routePeople from '../core/routeParticipants.js';
 import * as core_generationParticipants from '../core/generationParticipants.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
@@ -682,6 +683,7 @@ export function makeHeartSession(core, existing = null) {
         relationshipHistory: Array.isArray(existing?.relationshipHistory) ? existing.relationshipHistory : [],
         greetings: core.greetings || {},
         languageVisuals: cg_targets.normalizeLanguageCgVisuals(existing?.languageVisuals),
+        languagePortrait: cg_targets.normalizeLanguagePortrait(existing?.languagePortrait),
         photoshoots: normalizeHeartPhotoshoots(existing?.photoshoots),
         collectionIssues: core_heartLanguage.heartCollectionIssues(existing),
         voiceDramas: Array.isArray(existing?.voiceDramas) ? existing.voiceDramas : [],
@@ -1090,14 +1092,37 @@ export async function regenerateHeartPage(page, options = {}) {
 
 const ordinaryHeartLogicalTasks = new WeakMap();
 
+// A queued page owns a saved HEART target, independently of the page currently
+// visible in the overlay. An empty target is a local shell, not an extra model
+// request for unrelated foundation dialogue.
+export function captureHeartBackgroundTarget(context = core_context.currentCharacterGuard()) {
+    const memory = archive_repository.requireArchive(context);
+    const stored = core_cache.getCache(context);
+    const session = core_cache.loadSession(core_constants.MODE.HEART, { context, cache: stored,
+        chatId: memory.chatId, memoryBank: memory, clone: true });
+    if (!session && stored?.[core_constants.MODE.HEART]) throw core_text.safeUserError('原角色互动暂不可安全读取，旧内容保留。', 'RMT_HEART_SOURCE_CHANGED');
+    return { context, session: session || makeHeartShell(memory),
+        origin: core_context.captureTaskOrigin(context, memory.archiveRevision) };
+}
+
+function assertHeartBackgroundTarget(target) {
+    if (!target?.context || target.session?.kind !== core_constants.MODE.HEART
+        || !core_context.isCurrentTaskOrigin(target.origin)) throw core_requestCoordinator.createGenerationAbortError();
+    const memory = archive_repository.requireArchive(target.context);
+    if (core_context.comparableChatId(target.session.chatId) !== core_context.comparableChatId(memory.chatId)
+        || target.session.archiveRevision !== memory.archiveRevision) throw core_requestCoordinator.createGenerationAbortError();
+    return memory;
+}
+
 async function runOrdinaryHeartLogicalTask(pageId, options, run) {
     let logicalTask;
     try {
-        const context = runtimeState.activeArchiveSnapshot
-            ? archive_library.archiveTargetGenerationOptions().context : core_context.currentCharacterGuard();
+        if (options.backgroundTarget) assertHeartBackgroundTarget(options.backgroundTarget);
+        const context = options.backgroundTarget?.context || (runtimeState.activeArchiveSnapshot
+            ? archive_library.archiveTargetGenerationOptions().context : core_context.currentCharacterGuard());
         const memory = archive_repository.requireArchive(context);
         const origin = { ...core_context.captureTaskOrigin(context, memory.archiveRevision),
-            ...(runtimeState.activeArchiveSnapshot ? { archiveTargetEntryId: runtimeState.activeArchiveSnapshot.entryId } : {}) };
+            ...(!options.backgroundTarget && runtimeState.activeArchiveSnapshot ? { archiveTargetEntryId: runtimeState.activeArchiveSnapshot.entryId } : {}) };
         // Register before preparation yields. The existing per-part admission checks
         // still decide whether this ordinary append can actually start a request.
         logicalTask = core_requestCoordinator.beginLogicalGenerationTask({ kind: 'heart-page', mode: core_constants.MODE.HEART,
@@ -1127,13 +1152,14 @@ function bindOrdinaryHeartRuntime(targetRuntime, logicalTask) {
     return targetRuntime;
 }
 
-async function prepareHeartSubtaskRuntime(taskPart, logicalTask = null) {
+async function prepareHeartSubtaskRuntime(taskPart, logicalTask = null, backgroundTarget = null) {
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
-    const targetRuntime = await archive_library.prepareArchiveTargetSubtask(core_constants.MODE.HEART, taskPart);
+    if (backgroundTarget) assertHeartBackgroundTarget(backgroundTarget);
+    const targetRuntime = backgroundTarget ? null : await archive_library.prepareArchiveTargetSubtask(core_constants.MODE.HEART, taskPart);
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
     if (targetRuntime) return bindOrdinaryHeartRuntime(targetRuntime, logicalTask);
-    if (!archive_library.requireWritableArchiveAction()) throw new Error('当前档案尚未处于可写的真实聊天上下文。');
-    const context = core_context.currentCharacterGuard();
+    if (!backgroundTarget && !archive_library.requireWritableArchiveAction()) throw new Error('当前档案尚未处于可写的真实聊天上下文。');
+    const context = backgroundTarget?.context || core_context.currentCharacterGuard();
     const memoryBank = archive_repository.requireArchive(context);
     const expectedChatId = core_context.getChatId(context);
     const expectedArchiveRevision = memoryBank.archiveRevision;
@@ -1151,6 +1177,7 @@ async function prepareHeartSubtaskRuntime(taskPart, logicalTask = null) {
         origin,
         stillCurrent: () => core_context.isCurrentTaskOrigin(origin),
         options: null,
+        backgroundSession: backgroundTarget?.session || null,
     }, logicalTask);
 }
 
@@ -1163,7 +1190,7 @@ function latestHeartSessionForRuntime(targetRuntime, fallback = null) {
         clone: true,
     });
     if (!session && cache?.[core_constants.MODE.HEART]) throw core_text.safeUserError('原角色互动暂不可安全读取，旧内容保留。', 'RMT_HEART_SOURCE_CHANGED');
-    return session || structuredClone(fallback) || makeHeartShell(targetRuntime.memoryBank);
+    return session || structuredClone(targetRuntime.backgroundSession || (fallback?.kind === core_constants.MODE.HEART ? fallback : null)) || makeHeartShell(targetRuntime.memoryBank);
 }
 
 async function beginHeartSubtask(targetRuntime) {
@@ -1185,11 +1212,14 @@ async function beginHeartSubtask(targetRuntime) {
     }
 }
 
-async function freezeHeartParticipantSnapshot(targetRuntime, operation, existing, handle) {
+async function freezeHeartParticipantSnapshot(targetRuntime, operation, existing, handle, options = {}) {
     const frozenInputs = handle.journal?.frozenInputs || {};
     let snapshot;
     if (Object.hasOwn(frozenInputs, 'participants:heart')) {
         snapshot = core_generationParticipants.resolveGenerationParticipantSnapshot({ frozenSnapshot: JSON.parse(frozenInputs['participants:heart']) });
+    } else if (!existing && Object.hasOwn(options, 'participantSnapshot')) {
+        snapshot = core_generationParticipants.resolveGenerationParticipantSnapshot({frozenSnapshot: options.participantSnapshot});
+        snapshot = await generation_recovery.frozenGenerationInput(targetRuntime.origin, 'participants:heart', () => snapshot);
     } else if (operation?.participantRegeneration && Object.hasOwn(operation.participantRegeneration, 'participantSnapshot')) {
         snapshot = core_generationParticipants.resolveGenerationParticipantSnapshot({ frozenSnapshot: operation.participantRegeneration.participantSnapshot });
         snapshot = await generation_recovery.frozenGenerationInput(targetRuntime.origin, 'participants:heart', () => snapshot);
@@ -1216,6 +1246,11 @@ async function startHeartRecovery(targetRuntime, operation, options = {}) {
     targetRuntime.recoveryArchiveEntry = targetRuntime.archiveTarget || core_cache.archiveBackupEntryForContext(targetRuntime.context, targetRuntime.memoryBank);
     const pageId = operation.participantRegeneration?.pageId || (operation.kind === 'heart-season' ? operation.season
         : operation.kind === 'heart-fireflies' ? 'fireflies' : operation.part === 'dialogues' ? 'language' : operation.part);
+    const route = pageId === 'postending' ? 'postending' : ['spring','summer','autumn','winter'].includes(pageId) ? 'heart' : pageId;
+    if (!Object.hasOwn(options, 'participantSnapshot') && !options.existing && !options.draftId && !options.participantRegeneration
+        && !core_cache.loadGenerationRecovery(core_constants.MODE.HEART, targetRuntime.context, targetRuntime.archiveTarget?.cache, {pageId})) {
+        options = { ...options, participantSnapshot: routePeople.captureRoutePeople(route, targetRuntime.context, targetRuntime.memoryBank) };
+    }
     // An ordinary page click resumes that page's latest unfinished operation;
     // an explicit rebuild starts a separate attempt. Other pages remain saved.
     const existing = options.existing !== undefined ? options.existing : options.participantRegeneration && !options.draftId ? null
@@ -1227,7 +1262,7 @@ async function startHeartRecovery(targetRuntime, operation, options = {}) {
         archiveTarget: targetRuntime.archiveTarget, archiveEntry: targetRuntime.recoveryArchiveEntry,
         stillCurrent: targetRuntime.archiveTarget ? targetRuntime.stillCurrent : undefined,
     });
-    await freezeHeartParticipantSnapshot(targetRuntime, operation, existing, handle);
+    await freezeHeartParticipantSnapshot(targetRuntime, operation, existing, handle, options);
     targetRuntime.recoveryHandle = handle;
     return handle;
 }
@@ -1414,8 +1449,9 @@ export async function persistHeartPartialPatch(patchKey, patch, fallbackBase, me
 
 export async function generateHeartSection(part, options = {}) {
     if (heartParticipantRegeneration(options)) return regenerateHeartPage(part === 'seasons' ? runtimeState.activeSession?.selectedSeason || 'postending' : part, options);
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
-    if (part === 'seasons') return generateHeartSeasonSection(runtimeState.activeSession.selectedSeason || 'postending', options);
+    const sourceSession = options.backgroundTarget?.session || runtimeState.activeSession;
+    if (!sourceSession || sourceSession.kind !== core_constants.MODE.HEART) return;
+    if (part === 'seasons') return generateHeartSeasonSection(sourceSession.selectedSeason || 'postending', options);
     if (part === 'fireflies') return generateHeartFirefliesSection(options);
     if (!['dialogues', 'strips'].includes(part)) return;
     return runOrdinaryHeartLogicalTask(part === 'dialogues' ? 'language' : part, options,
@@ -1429,7 +1465,7 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
     if (!normalizedPart) return;
     const targetHint = heartPreparationTargetHint();
     let targetRuntime;
-    try { targetRuntime = await prepareHeartSubtaskRuntime(`part:${normalizedPart}`, logicalTask); }
+    try { targetRuntime = await prepareHeartSubtaskRuntime(`part:${normalizedPart}`, logicalTask, options.backgroundTarget); }
     catch (error) {
         if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetHint, core_text.safeErrorSummary(error))), '心迹回廊');
         return;
@@ -1552,9 +1588,11 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
             globalThis.toastr?.[rejected ? 'warning' : 'success']?.(heartTargetMessage(targetRuntime,
                 message + (rejected ? `本次另有 ${rejected} 条未通过校验，可选择重试；已有内容照常阅读。` : '')), '心迹回廊');
         }
+        return { status: persisted?.committed ? 'committed' : 'blocked', session: persisted?.updated };
     } catch (error) {
         await generation_recovery.noteGenerationRecoveryFailure(origin, error);
         if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心迹回廊');
+        return { status: error?.name === 'AbortError' ? 'cancelled' : 'failed' };
     } finally {
         generation_recovery.detachGenerationRecovery(origin);
         runtimeState.activeModeBuildScopes.delete(taskKey);
@@ -1564,6 +1602,7 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
     }
     } catch (error) {
         if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心迹回廊');
+        return { status: error?.name === 'AbortError' ? 'cancelled' : 'failed' };
     } finally {
         runtimeState.activeModeBuildScopes.delete(taskKey);
         core_requestCoordinator.unregisterArchiveTargetReservation(taskKey);
@@ -1574,7 +1613,7 @@ async function generateHeartSectionOperation(part, options, logicalTask) {
 
 export async function generateHeartFirefliesSection(options = {}) {
     if (heartParticipantRegeneration(options)) return regenerateHeartPage('fireflies', options);
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
+    if (!(options.backgroundTarget?.session || runtimeState.activeSession) || (options.backgroundTarget?.session || runtimeState.activeSession).kind !== core_constants.MODE.HEART) return;
     return runOrdinaryHeartLogicalTask('fireflies', options,
         logicalTask => generateHeartFirefliesSectionOperation(options, logicalTask));
 }
@@ -1582,7 +1621,7 @@ export async function generateHeartFirefliesSection(options = {}) {
 async function generateHeartFirefliesSectionOperation(options, logicalTask) {
     const targetHint = heartPreparationTargetHint();
     let targetRuntime;
-    try { targetRuntime = await prepareHeartSubtaskRuntime('fireflies', logicalTask); }
+    try { targetRuntime = await prepareHeartSubtaskRuntime('fireflies', logicalTask, options.backgroundTarget); }
     catch (error) {
         if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetHint, core_text.safeErrorSummary(error))), '心迹回廊');
         return;
@@ -1650,9 +1689,11 @@ async function generateHeartFirefliesSectionOperation(options, logicalTask) {
             await finishHeartRecovery(targetRuntime, result.committed);
             const remain = legacyFireflyVoices(result.updated || base).length;
             globalThis.toastr?.success?.(heartTargetMessage(targetRuntime, `已升级 ${upgraded.length} 个旧光点为追加约会会话${remain ? `，还剩 ${remain} 个可继续升级` : '，旧版独白光点已全部升级'}.`), '心迹回廊');
+            return { status: result.committed ? 'committed' : 'blocked', session: result.updated };
         } catch (error) {
             await generation_recovery.noteGenerationRecoveryFailure(origin, error);
             if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心迹回廊');
+            return { status: error?.name === 'AbortError' ? 'cancelled' : 'failed' };
         } finally {
             generation_recovery.detachGenerationRecovery(origin);
             runtimeState.activeModeBuildScopes.delete(taskKey);
@@ -1684,6 +1725,7 @@ async function generateHeartFirefliesSectionOperation(options, logicalTask) {
                 ui_heartView.renderHeart();
             }
             globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '已把旧版萤火虫保存为永久解锁基线。之后档案出现新的 Mxxx 时，只会继续追加新光点。'), '心迹回廊');
+            return { status: persisted ? 'committed' : 'blocked', session: persisted };
         } finally {
             runtimeState.activeModeBuildScopes.delete(taskKey);
             refreshHeartArchiveTarget(targetRuntime);
@@ -1730,9 +1772,11 @@ async function generateHeartFirefliesSectionOperation(options, logicalTask) {
         if (!result.committed) globalThis.toastr?.info?.(heartTargetMessage(targetRuntime, '光点已生成，但尚未确认保存；草稿保留。'), '心迹回廊');
         else globalThis.toastr?.[batch.rejectedCount ? 'warning' : 'success']?.(heartTargetMessage(targetRuntime,
             `已有 ${total} 个萤火虫光点，本次新增 ${addedNow} 个。` + (batch.rejectedCount ? `另有 ${batch.rejectedCount} 个话题未通过校验，可选择重试。` : '')), '心迹回廊');
+        return { status: result.committed ? 'committed' : 'blocked', session: result.updated };
     } catch (error) {
         await generation_recovery.noteGenerationRecoveryFailure(origin, error);
         if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), '心迹回廊');
+        return { status: error?.name === 'AbortError' ? 'cancelled' : 'failed' };
     } finally {
         generation_recovery.detachGenerationRecovery(origin);
         runtimeState.activeModeBuildScopes.delete(taskKey);
@@ -1783,7 +1827,7 @@ export function heartSeasonRequestBase(session, season, batchId) {
 
 export async function generateHeartSeasonSection(season, options = {}) {
     if (heartParticipantRegeneration(options)) return regenerateHeartPage(season, options);
-    if (!runtimeState.activeSession || runtimeState.activeSession.kind !== core_constants.MODE.HEART) return;
+    if (!(options.backgroundTarget?.session || runtimeState.activeSession) || (options.backgroundTarget?.session || runtimeState.activeSession).kind !== core_constants.MODE.HEART) return;
     const allowed = new Set(['postending', 'spring', 'summer', 'autumn', 'winter']);
     const normalizedSeason = allowed.has(season) ? season : '';
     if (!normalizedSeason) return;
@@ -1794,7 +1838,7 @@ export async function generateHeartSeasonSection(season, options = {}) {
 async function generateHeartSeasonSectionOperation(normalizedSeason, options, logicalTask) {
     const targetHint = heartPreparationTargetHint();
     let targetRuntime;
-    try { targetRuntime = await prepareHeartSubtaskRuntime(`season:${normalizedSeason}`, logicalTask); }
+    try { targetRuntime = await prepareHeartSubtaskRuntime(`season:${normalizedSeason}`, logicalTask, options.backgroundTarget); }
     catch (error) {
         if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetHint, core_text.safeErrorSummary(error))), '心迹回廊');
         return;
@@ -1936,9 +1980,11 @@ async function generateHeartSeasonSectionOperation(normalizedSeason, options, lo
                 ? (offeredSecond ? `已保存 ${ui_heartView.heartSeasonLabel(normalizedSeason)} 的 Voice。可以第二次生成小事件。` : `已保存 ${ui_heartView.heartSeasonLabel(normalizedSeason)} 的新增篇章。`)
                 : '篇章已生成，但尚未确认保存；草稿保留。'), '心迹回廊');
         }
+        return { status: errors.length ? 'failed' : allCommitted ? 'committed' : 'blocked', savedParts };
     } catch (error) {
         await generation_recovery.noteGenerationRecoveryFailure(origin, error);
         if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.toastText(heartTargetMessage(targetRuntime, core_text.safeErrorSummary(error))), `心迹回廊 · ${ui_heartView.heartSeasonLabel(normalizedSeason)} Drama`);
+        return { status: error?.name === 'AbortError' ? 'cancelled' : 'failed' };
     } finally {
         generation_recovery.detachGenerationRecovery(origin);
         runtimeState.activeModeBuildScopes.delete(taskKey);
@@ -2092,6 +2138,7 @@ export function normalizeHeart(data, memoryBank) {
         greetings,
         collectionIssues: core_heartLanguage.heartCollectionIssues(data),
         languageVisuals: cg_targets.normalizeLanguageCgVisuals(data?.languageVisuals),
+        languagePortrait: cg_targets.normalizeLanguagePortrait(data?.languagePortrait),
         photoshoots: normalizeHeartPhotoshoots(data?.photoshoots),
         voiceDramas,
         scenarioDramas,

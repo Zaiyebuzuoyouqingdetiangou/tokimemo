@@ -1,4 +1,5 @@
 import * as pixelFigure from './roomPixelFigure.js';
+import * as roomObjectDrawing from './roomObjectDrawing.js';
 // Code-owned SVG interior. Only bounded labels/IDs and existing local profile tokens are used.
 // Provider output cannot supply markup, CSS, colours, coordinates, URLs or SVG paths.
 import * as text from '../core/text.js';
@@ -14,7 +15,6 @@ const SHAPES = Object.freeze({
     book: '<path d="m-63 29 56-16 70 26-61 18Z" fill="var(--rmt-interior-fabric)"/><path d="m-62 15 55-15 68 27v12L-5 18l-57 12Z" fill="var(--rmt-interior-paper)"/><path d="M-6 1V19" stroke="var(--rmt-interior-line)"/>',
     cup: '<ellipse cy="50" rx="42" ry="10" fill="var(--rmt-interior-paper)"/><path d="M-23 0h43v33q-20 34-43 0Z" fill="var(--rmt-interior-fabric)"/><path d="M20 7q38-2 24 25L21 38" fill="none" stroke="var(--rmt-interior-fabric)" stroke-width="7"/>',
     art: '<rect x="-65" y="-70" width="127" height="99" rx="3" fill="var(--rmt-interior-paper)" stroke="var(--rmt-interior-wood)" stroke-width="7"/><circle cx="-25" cy="-42" r="12" fill="var(--rmt-interior-fabric)"/><path d="M-56 20-4-32 22-2 39-19 53 20Z" fill="var(--rmt-interior-glass)"/>',
-    other: '<path d="M-35 20 5 3l40 17v46L5 82l-40-16Z" fill="var(--rmt-interior-wood)"/><path d="M5 40v42m-40-62L5 40l40-20" stroke="var(--rmt-interior-line)" fill="none" stroke-width="3"/>',
 });
 export function roomFigureSvg(profile = {}) {
     return pixelFigure.pixelFigureSvg(profile);
@@ -25,7 +25,7 @@ export function roomInteriorHtml(layout, { figure = {}, personIsHere = false, ch
         const figures = participants.map(person => `<button type="button" class="rmt-room-resident-figure" data-rmt-action="room-participant" data-rmt-participant-id="${text.esc(person.id)}" aria-label="听${text.esc(person.name)}说话"><svg viewBox="-70 -115 140 220" role="img" aria-label="${text.esc(person.name)}的像素小人">${roomFigureSvg(person.figure)}</svg><b>${text.esc(person.name)}</b></button>`).join('');
         return `<div class="rmt-room-shared-interior">${interior}<div class="rmt-room-resident-figures">${figures}</div></div>`;
     }
-    const entries = (Array.isArray(layout) ? layout : []).slice(0, 40);
+    const entries = Array.isArray(layout) ? layout : [];
     const selectedIndex = Math.max(0, entries.findIndex(entry => entry.id === selectedId));
     const pageStart = Math.floor(selectedIndex / 6) * 6;
     const panels = [];
@@ -37,15 +37,13 @@ export function roomInteriorHtml(layout, { figure = {}, personIsHere = false, ch
             const [x,y] = positions[i];
             const label = text.normalizeText(entry.item?.label,100);
             // A location prefix (e.g. 窗边的椅子) is not the furnishing itself.
-            const kind = /书架|书柜|bookshelf|bookcase/iu.test(label) ? 'shelf'
-                : /(?:椅|沙发|凳|chair|sofa|stool)/iu.test(label) ? 'seat'
-                : Object.hasOwn(SHAPES,entry.visualKind) ? entry.visualKind : 'other';
-            return `<g transform="translate(${x} ${y}) scale(.88)" data-rmt-furniture="${kind}">${SHAPES[kind]}</g>`;
+            const kind = roomObjectDrawing.roomDrawingKind(label, entry.visualKind, SHAPES);
+            return `<g transform="translate(${x} ${y}) scale(.88)" data-rmt-furniture="${kind}">${roomObjectDrawing.ROOM_OBJECT_DRAWINGS[kind] || SHAPES[kind]}</g>`;
         }).join('');
         const hits = part.map((entry,i) => {
             const positions = [[25.6,58],[56.1,55],[80,58],[18.9,85],[49.4,85],[76.7,89]];
             const [x,y] = positions[i]; const label = text.normalizeText(entry.item?.label,100) || '物件';
-            const number = Math.max(1,Math.min(40,Math.floor(Number(entry.number)||start+i+1)));
+            const number = Math.max(1,Math.floor(Number(entry.number)||start+i+1));
             return `<button type="button" class="rmt-interior-hotspot ${entry.id === selectedId ? 'active' : ''}" style="left:${x}%;top:${y}%" data-rmt-room-id="${text.esc(entry.id)}" aria-pressed="${entry.id===selectedId}" aria-controls="heartbeat_memories_overlay_room_object_detail" aria-label="${number}. ${text.esc(label)}"><span>${number}</span><b>${text.esc(label)}</b></button>`;
         }).join('');
         panels.push(`<div class="rmt-interior" data-rmt-interior-world="${['historical','scifi','fantasy'].includes(world)?world:'neutral'}"><svg viewBox="0 0 900 550" class="rmt-interior-svg" role="img" aria-label="当前房间的内装示意"><path d="M0 0h900v396l-145-95H145L0 396Z" fill="var(--rmt-interior-wall)"/><path d="M145 0h610v301H145Z" fill="var(--rmt-interior-backwall)"/><path d="m0 396 145-95h610l145 95v154H0Z" fill="var(--rmt-interior-floor)"/><path d="M145 0v301L0 396m755-396v301l145 95M102 330h696M37 375h825M0 428h900M0 488h900M315 301 188 550m284-249-16 249m169-249 127 249" fill="none" stroke="var(--rmt-interior-line)" stroke-opacity=".22" stroke-width="3"/><ellipse cx="455" cy="411" rx="263" ry="72" fill="var(--rmt-interior-fabric)" opacity=".12"/>${world==='scifi'?'<path d="M150 26h600m-600 261h600" stroke="var(--rmt-interior-glass)" stroke-width="5"/>':world==='historical'?'<path d="M145 12h610M156 0v292m586-292v292" stroke="var(--rmt-interior-wood)" stroke-width="12"/>':''}${furniture}${personIsHere ? `<g transform="translate(840 326) scale(.82)">${roomFigureSvg(figure)}</g>`:''}</svg>${hits}${personIsHere ? `<button type="button" class="rmt-interior-person" data-rmt-action="room-presence" aria-label="听${text.esc(charName)}说话">${text.esc(charName)}</button>`:''}</div>`);

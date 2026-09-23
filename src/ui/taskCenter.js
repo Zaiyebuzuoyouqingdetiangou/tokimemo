@@ -1,3 +1,4 @@
+import * as routePeople from '../core/routeParticipants.js';
 import * as commonStatus from '../core/generationStatus.js';
 import * as statusView from './generationStatus.js';
 import * as composerOptions from '../core/generationOptions.js';
@@ -115,31 +116,33 @@ export function noteRetryableGeneration(info) {
     setTimeout(() => { void pumpQueue(); }, 0);
 }
 
-export function enqueueSelectedModes(routes) {
+export function enqueueSelectedModes(routes, frozenOptions = null) {
     const scope = currentScope();
     if (!scope) return 0;
-    let added = 0;
+    const pending = [];
     for (const route of routes) {
         const spec = ui_workspaceState.WORKSPACE_ROUTES[route];
-        if (!spec?.mode || spec.deep) continue;
-        if (queue.some(item => item.scope === scope && item.route === route && (item.status === 'queued' || item.status === 'running'))) continue;
-        queue.push({
-            id: `queue-${Date.now().toString(36)}-${queue.length}`,
+        if (!spec?.mode || spec.deep || spec.manualOnly) continue;
+        if ([...queue, ...pending].some(item => item.scope === scope && item.route === route && (item.status === 'queued' || item.status === 'running'))) continue;
+        pending.push({
+            id: `queue-${Date.now().toString(36)}-${queue.length + pending.length}`,
             route,
             mode: spec.mode,
             label: spec.title,
             scope,
             status: 'queued',
             attached: false,
-            songOptions: spec.mode === core_constants.MODE.THEME_SONG ? composerOptions.readSongOptions() : undefined,
+            songOptions: frozenOptions?.[route]?.songOptions ?? (spec.mode === core_constants.MODE.THEME_SONG ? structuredClone(composerOptions.readSongOptions()) : undefined),
+            participantSnapshot: frozenOptions && Object.hasOwn(frozenOptions, route) ? structuredClone(frozenOptions[route].participantSnapshot) : routePeople.captureRoutePeople(route),
         });
-        picks.delete(route);
-        added += 1;
+
     }
+    queue.push(...pending);
+    for (const item of pending) picks.delete(item.route);
     trimQueue();
     refreshTaskCenterView();
     void pumpQueue();
-    return added;
+    return pending.length;
 }
 
 function cancelQueuedItem(id) {
@@ -238,23 +241,21 @@ async function pumpQueue() {
     }
 }
 
-async function runQueuedGeneration(item) {
+export async function runQueuedGeneration(item) {
     if (item.mode !== core_constants.MODE.HEART || item.route === 'language') {
-        return generation_client.generateMode(item.mode, { background: true, songOptions: item.songOptions });
+        return generation_client.generateMode(item.mode, { background: true, songOptions: item.songOptions, participantSnapshot: item.participantSnapshot, workspaceRoute: item.route });
     }
-    if (runtimeState.activeSession?.kind !== core_constants.MODE.HEART) {
-        const created = await generation_client.generateMode(core_constants.MODE.HEART, { background: true });
-        if (runtimeState.activeSession?.kind !== core_constants.MODE.HEART) return created ?? { status: 'failed' };
-    }
-    const selected = runtimeState.activeSession?.selectedSeason;
+    const backgroundTarget = modes_heart.captureHeartBackgroundTarget();
+    const selected = backgroundTarget.session?.selectedSeason;
     const season = ['spring', 'summer', 'autumn', 'winter'].includes(selected) ? selected : 'spring';
+    const options = { background: true, participantSnapshot: item.participantSnapshot, backgroundTarget };
     let result;
-    if (item.route === 'fireflies') result = await modes_heart.generateHeartFirefliesSection({ background: true });
-    else if (item.route === 'strips') result = await modes_heart.generateHeartSection('strips', { background: true });
-    else if (item.route === 'postending') result = await modes_heart.generateHeartSeasonSection('postending', { background: true });
-    else if (item.route === 'heart') result = await modes_heart.generateHeartSeasonSection(season, { background: true });
-    else result = await generation_client.generateMode(core_constants.MODE.HEART, { background: true });
-    return result ?? { status: 'done' };
+    if (item.route === 'fireflies') result = await modes_heart.generateHeartFirefliesSection(options);
+    else if (item.route === 'strips') result = await modes_heart.generateHeartSection('strips', options);
+    else if (item.route === 'postending') result = await modes_heart.generateHeartSeasonSection('postending', options);
+    else if (item.route === 'heart') result = await modes_heart.generateHeartSeasonSection(season, options);
+    else result = { status: 'blocked' };
+    return result ?? { status: 'blocked' };
 }
 
 function taskPanel() {
@@ -586,15 +587,17 @@ function paintTaskCenter(panel) {
 
 function mergedNavigationMark() {
     return { scope: currentScope(), epoch: ui_workspaceState.workspace.epoch,
+        route: ui_workspaceState.workspace.route, mode: runtimeState.activeMode, session: runtimeState.activeSession,
         overlay: globalThis.document?.getElementById(core_constants.OVERLAY_ID) };
 }
 function refreshMergedCompletion(mark) {
     refreshTaskCenterView();
     const workspace = ui_workspaceState.workspace;
-    if (currentScope() === mark.scope && workspace.epoch === mark.epoch && workspace.tab === 'content' && !workspace.route
+    if (currentScope() === mark.scope && workspace.epoch === mark.epoch && workspace.tab === 'content' && workspace.route === mark.route
         && !runtimeState.activeArchiveSnapshot && mark.overlay?.isConnected && !mark.overlay.hidden
         && mark.overlay === globalThis.document?.getElementById(core_constants.OVERLAY_ID)) {
-        ui_overlay.showChooser({ section: 'content' });
+        if (!workspace.route) ui_overlay.showChooser({ section: 'content' });
+        else if (runtimeState.activeMode === mark.mode && runtimeState.activeSession === mark.session) ui_overlay.refreshSavedActiveSession();
     }
 }
 function exportMergedResult(id = '') {
@@ -752,7 +755,7 @@ export function handleTaskCenterAction(action, actionEl) {
             for (const route of routes) {
                 if (currentScope() === navigation.scope && !result.soloRoutes?.includes(route) && !result.heldRoutes?.includes(route)) picks.delete(route);
             }
-            if (result.soloRoutes?.length && currentScope() === navigation.scope) enqueueSelectedModes(result.soloRoutes);
+            if (result.soloRoutes?.length && currentScope() === navigation.scope) enqueueSelectedModes(result.soloRoutes, result.frozenOptions);
             const waiting = result.waiting?.length || 0;
             const sent = result.providerRequests || 0;
             if (sent || waiting) {
@@ -787,7 +790,9 @@ export function handleTaskCenterAction(action, actionEl) {
     if (action === 'queue-selected') {
         syncPickScope();
         const order = Object.keys(ui_workspaceState.WORKSPACE_ROUTES);
-        const added = enqueueSelectedModes([...picks].sort((a, b) => order.indexOf(a) - order.indexOf(b)));
+        let added;
+        try { added = enqueueSelectedModes([...picks].sort((a, b) => order.indexOf(a) - order.indexOf(b))); }
+        catch (error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'); return; }
         if (!added) {
             globalThis.toastr?.info?.('先勾选要排队的项目。已经在队列里的不会重复加入。', '心迹回廊');
             return;

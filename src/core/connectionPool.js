@@ -16,16 +16,19 @@ export function connectionPoolFingerprint(value) {
     return pool.connectionPoolEnabled ? JSON.stringify(pool.connectionPoolIds) : '';
 }
 
-export function selectConnectionTransport(settings, task = null) {
+export function selectConnectionTransport(settings, task = null, frozenSelection = null) {
     const pool = connectionPoolSettings(settings);
-    if (settings.apiConnectionMode === 'manual' || !pool.connectionPoolEnabled) return settings;
+    if (settings.apiConnectionMode === 'manual' || !pool.connectionPoolEnabled) {
+        if (frozenSelection) throw text.safeUserError('本次任务原来使用的轮询连接已停用；旧草稿保留，请恢复原连接池后继续。','RMT_API_CONFIG_CHANGED');
+        return settings;
+    }
     if (!pool.connectionPoolIds.length) throw text.safeUserError('轮询连接池还没有选择连接。请先勾选连接，或关闭轮询。','RMT_CONNECTION_POOL_EMPTY');
     const fingerprint = connectionPoolFingerprint(settings);
     const usableTask = task && typeof task === 'object';
-    const old = usableTask ? assigned.get(task) : null;
+    const old = frozenSelection || (usableTask ? assigned.get(task) : null);
     let id;
     if (old) {
-        if (old.fingerprint !== fingerprint) throw text.safeUserError('本次任务使用的连接池已经变化，请重试原任务。','RMT_API_CONFIG_CHANGED');
+        if (old.fingerprint !== fingerprint || !pool.connectionPoolIds.includes(old.id)) throw text.safeUserError('本次任务使用的连接池已经变化，请恢复原连接池后继续；旧草稿保留。','RMT_API_CONFIG_CHANGED');
         id = old.id;
     } else {
         id = pool.connectionPoolIds[cursor % pool.connectionPoolIds.length];

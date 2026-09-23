@@ -1,3 +1,4 @@
+import * as cg_targets from '../core/cgTargets.js';
 import * as core_butterflyContract from '../core/butterflyContract.js';
 // Targeted regeneration for user-managed derived content.
 // Targets are selected only from the currently normalized session; model output never chooses a cache path.
@@ -83,7 +84,7 @@ async function regenerateAlbumEntry(session, item, context, memoryBank, origin, 
     const evidence = core_evidence.memoryPayload(memoryBank, item.sourceMemoryIds, 12);
     const prompt = `${generation_prompts.promptSafetyBoundary(context, '回忆相簿 / 单项重新生成')}
 只重新生成下面这一张相簿卡的【表现文本和视觉提示】，它仍然必须描述同一个真实档案事件。不得把它改成别的事件，不得改变 sourceMemoryIds/sourceMemoryAnchor，也不要输出实图 URL。
-CURRENT_ITEM_JSON:\n${JSON.stringify({ ...item, cgImage: undefined, comments: undefined }, null, 2)}
+CURRENT_ITEM_JSON:\n${JSON.stringify({ ...item, cgImage: undefined, cgImageHistory: undefined, comments: undefined }, null, 2)}
 TRUSTED_EVENT_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
 严格输出：{"entries":[{"id":"${core_text.esc(item.id)}","title":"...","date":"...","desc":"...","category":${JSON.stringify(item.category || '日常')},"unlocked":${item.unlocked ? 'true' : 'false'},"sourceMemoryIds":${JSON.stringify(item.sourceMemoryIds)},"sourceMemoryAnchor":${JSON.stringify(item.sourceMemoryAnchor)},"visualSeed":["..."],"imagePrompt":"...","hintLines":${item.unlocked ? '[]' : '["重新生成解锁提示"]'}}]}
 只输出 JSON。`;
@@ -116,7 +117,8 @@ TRUSTED_EVENT_EVIDENCE_JSON:\n${JSON.stringify(evidence, null, 2)}
     return { ...candidate, id: item.id, sourceMemoryIds: [...item.sourceMemoryIds], sourceMemoryAnchor: item.sourceMemoryAnchor, comments, relationshipSnapshot,
         category: item.categoryManual === true ? item.category : candidate.category,
         ...(item.categoryManual === true ? { categoryManual: true } : {}),
-        cgImage: item.cgImage || null };
+        cgImage: item.cgImage || null,
+        ...(Array.isArray(item.cgImageHistory) ? { cgImageHistory: structuredClone(item.cgImageHistory) } : {}) };
 }
 
 // Lightweight category re-judgement for legacy entries: the model only returns a
@@ -175,7 +177,7 @@ async function regenerateHeartVoice(session, item, context, memoryBank, origin, 
         prompt, `重新生成 ${item.title}…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:voice`, 8000),
         raw => modes_heart.normalizeVoiceDramaPart(raw, [kind], memoryBank),
     );
-    return { ...list[0], id: item.id, incrementBatchId: item.incrementBatchId || '', sourceArchiveMemoryIds: item.sourceArchiveMemoryIds || [], generatedAt: Date.now() };
+    return cg_targets.preserveCgSlots(item, { ...list[0], id: item.id, incrementBatchId: item.incrementBatchId || '', sourceArchiveMemoryIds: item.sourceArchiveMemoryIds || [], generatedAt: Date.now() }, { kind: 'heart-voice' });
 }
 
 async function regenerateHeartScenario(session, item, context, memoryBank, origin, taskKey) {
@@ -185,7 +187,7 @@ async function regenerateHeartScenario(session, item, context, memoryBank, origi
         `重新生成 ${item.title}…`, taskOptions(core_constants.MODE.HEART, context, origin, `${taskKey}:scenario`, 9000),
         raw => modes_heart.normalizeScenarioDramaPart(raw, season, memoryBank),
     );
-    return { ...list[0], id: item.id, incrementBatchId: item.incrementBatchId || '', sourceArchiveMemoryIds: item.sourceArchiveMemoryIds || [], generatedAt: Date.now() };
+    return cg_targets.preserveCgSlots(item, { ...list[0], id: item.id, incrementBatchId: item.incrementBatchId || '', sourceArchiveMemoryIds: item.sourceArchiveMemoryIds || [], generatedAt: Date.now() }, { kind: 'heart-scenario' });
 }
 
 
@@ -334,7 +336,7 @@ easterEgg 只允许上述结构化文字和 moduleType 枚举，不得输出 Jav
         },
     );
     const candidate = list[0];
-    return { ...candidate, id: item.id, sourceMemoryIds: [...(item.sourceMemoryIds || [])], sourceMemoryAnchor: item.sourceMemoryAnchor || '' };
+    return cg_targets.preserveCgSlots(item, { ...candidate, id: item.id, sourceMemoryIds: [...(item.sourceMemoryIds || [])], sourceMemoryAnchor: item.sourceMemoryAnchor || '' }, { kind: 'ending-confession' });
 }
 
 async function regenerateAchievement(item, context, memoryBank, origin, taskKey) {

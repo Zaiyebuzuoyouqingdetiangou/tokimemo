@@ -4,6 +4,35 @@ import * as repository from '../archive/repository.js';
 import * as recovery from '../generation/recovery.js';
 import * as text from './text.js';
 import * as contextTags from './contextTags.js';
+import * as ui_overlay from '../ui/overlay.js';
+
+let confirmLegacyConfigurationRestart = async () => {
+    // Resolve UI only when the user starts recovery, after module initialization.
+    return ui_overlay.confirmExplicitAction('保留旧失败记录，按现在的设置重新尝试？',
+        '这份旧版记录没有收到成功正文或截断正文，也没有原始背景快照。当前设置已改变；确认后会完整保留旧失败记录，再按当前背景和设置请求。取消不发送。',
+        { destructive: false });
+};
+const restartApprovals = new WeakMap();
+export function setLegacyConfigurationRestartConfirmation(confirm) {
+    confirmLegacyConfigurationRestart = typeof confirm === 'function' ? confirm : null;
+}
+async function restartApprovalKey(journal, context) {
+    return recovery.generationRecoveryDigest({ identity: journal.identity, settingsHash: journal.settingsHash,
+        segments: journal.segments, frozenInputs: journal.frozenInputs || {}, sourcePolicy: journal.sourcePolicy || {},
+        currentSettings: recoverySettingsIdentity(context) });
+}
+export async function consumeLegacyConfigurationRestart(journal, context) {
+    if (!recovery.canRestartLegacyConfiguration(journal)) return false;
+    const approvals = restartApprovals.get(context);
+    const key = await restartApprovalKey(journal, context);
+    if (!approvals?.has(key)) return false;
+    approvals.delete(key);
+    return true;
+}
+export async function hasLegacyConfigurationRestartApproval(journal, context) {
+    return recovery.canRestartLegacyConfiguration(journal)
+        && restartApprovals.get(context)?.has(await restartApprovalKey(journal, context)) === true;
+}
 
 export function recoverySettingsIdentity(context) {
     const settings = settingsApi.getPluginSettings(context);
@@ -16,6 +45,17 @@ export async function assertRecoverySettings(journal, context) {
     if (recovery.readGenerationContentSnapshot(journal)) return;
     if (journal && recovery.generationRecoverySummary(journal)
         && journal.settingsHash !== await recovery.generationRecoveryDigest(recoverySettingsIdentity(context))) {
+        if (recovery.canRestartLegacyConfiguration(journal) && confirmLegacyConfigurationRestart) {
+            const key = await restartApprovalKey(journal, context);
+            const approvals = restartApprovals.get(context) || new Set();
+            if (approvals.has(key)) return;
+            if (await confirmLegacyConfigurationRestart()) {
+                // A setting change while the dialog was open cannot borrow its approval.
+                if (key !== await restartApprovalKey(journal, context)) throw recovery.generationRecoveryMismatch('configuration');
+                approvals.add(key); restartApprovals.set(context, approvals);
+                return;
+            }
+        }
         throw recovery.generationRecoveryMismatch('configuration', 'initialization');
     }
 }
@@ -44,16 +84,15 @@ export async function assertRecoverySourcePolicy(journal, context, origin = null
         error.recoveryPhase = 'source';
         throw error;
     }
-    await assertRecoverySettings(journal, context);
     if (recovery.readGenerationContentSnapshot(journal)) return;
-    if (!journal.sourcePolicy) return;
-    const actual = await recoverySourcePolicy(context);
+    const actual = journal.sourcePolicy ? await recoverySourcePolicy(context) : null;
     for (const [key,label] of [['character','角色卡'], ['persona','Persona'], ['selection','来源选择或标签设置']]) {
-        if (journal.sourcePolicy[key] !== actual[key]) {
+        if (actual && journal.sourcePolicy[key] !== actual[key]) {
             const error = text.safeUserError(`${label}与原任务不同；成功内容及草稿保留，未发起新请求。请恢复原设置，或明确另建任务。`, 'RMT_RECOVERY_SOURCE_CHANGED');
             error.archiveInputCategory = key;
             error.recoveryPhase = 'source';
             throw error;
         }
     }
+    await assertRecoverySettings(journal, context);
 }

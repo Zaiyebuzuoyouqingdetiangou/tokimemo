@@ -13,6 +13,16 @@ const PROSE = [
 ].join(',');
 const reader = mirror.createMirrorReader();
 let mounted = null;
+let preferredVoice = '';
+try { preferredVoice = globalThis.localStorage?.getItem('hearttraceReaderVoice') || ''; } catch {}
+export function showMirrorSettings(body) {
+    if (!mounted) return;
+    mounted.bar.hidden = false; mounted.bar.open = true; body.append(mounted.bar);
+}
+export function parkMirrorSettings() {
+    if (!mounted || mounted.bar.hidden && mounted.bar.parentElement === mounted.overlay) return;
+    mounted.bar.hidden = true; mounted.overlay.append(mounted.bar);
+}
 export function stopMirrorReader() { reader.stop('已切换到实时通话。'); }
 
 function readable(node, body) {
@@ -44,6 +54,7 @@ export function disposeMirrorReader() {
     mounted.unsubscribe();
     document.removeEventListener('selectionchange', mounted.selectionListener);
     window.removeEventListener('pagehide', mounted.pagehide);
+    mounted.overlay.removeEventListener('click', mounted.click);
     mounted.bar.remove();
     mounted = null;
 }
@@ -66,8 +77,8 @@ export function mountMirrorReader(overlay) {
       <p class="rmt-mirror-status" role="status" aria-live="polite"></p>
       <small>音色由镜译配置；本次朗读使用所选音色。语音生成使用镜译所连服务的额度。切页或关闭会停止；已提交的生成请求可能仍会计费。</small>
       <style>
-      .rmt-mirror-reader{flex:0 0 auto;min-width:0;max-height:50vh;overflow:auto;padding:8px 16px;border-bottom:1px solid var(--rmt-theme-border,#cbd5e1);color:var(--rmt-theme-text,#344454);background:var(--rmt-theme-bg,#fff);font-size:14px}
-      .rmt-mirror-reader summary{cursor:pointer;min-height:44px;display:list-item;align-content:center;font-weight:600}
+      .rmt-mirror-reader{flex:0 0 auto;min-width:0;max-height:none;overflow:visible;padding:8px 16px;border-bottom:1px solid var(--rmt-theme-border,#cbd5e1);color:var(--rmt-theme-text,#344454);background:var(--rmt-theme-bg,#fff);font-size:14px}
+      .rmt-mirror-reader[hidden]{display:none!important}.rmt-mirror-reader summary{cursor:pointer;min-height:44px;display:list-item;align-content:center;font-weight:600}
       .rmt-mirror-controls{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
       .rmt-mirror-controls button,.rmt-mirror-controls select{min-height:44px!important;height:auto!important;width:auto!important;max-width:100%;padding:8px 12px!important;border:1px solid var(--rmt-theme-border,#cbd5e1);border-radius:10px;color:inherit;background:var(--rmt-theme-surface-solid,#fff);font:inherit;white-space:normal}
       .rmt-mirror-controls label{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%}
@@ -77,7 +88,7 @@ export function mountMirrorReader(overlay) {
       .rmt-mirror-status{margin:8px 0;overflow-wrap:anywhere}
       .rmt-mirror-reader small{display:block;font-size:12px;line-height:1.6}
       </style>`;
-    body.before(bar);
+    bar.hidden = true; overlay.append(bar);
     const voice = bar.querySelector('select');
     const status = bar.querySelector('[role="status"]');
     let savedSelection = null;
@@ -85,7 +96,7 @@ export function mountMirrorReader(overlay) {
     let previousPhase = '';
     const connection = () => {
         const result = mirror.inspectMirror();
-        const previous = voice.value;
+        const previous = voice.value || preferredVoice;
         voice.replaceChildren(new Option('旁白（镜译默认）', ''));
         if (result.ok) {
             const names = new Set();
@@ -105,13 +116,13 @@ export function mountMirrorReader(overlay) {
         voice.disabled = state.locked;
         bar.querySelector('[data-reader="stop"]').disabled = !state.locked || state.phase === 'stopped';
         bar.querySelector('summary').textContent = state.locked ? '朗读 · 镜译（会话进行中）' : '朗读 · 镜译';
-        if (state.phase === 'error' && state.phase !== previousPhase) bar.open = true;
+        if (state.phase === 'error' && state.phase !== previousPhase) { bar.open = true; if (bar.hidden) globalThis.toastr?.error?.(state.message, '镜译朗读'); }
         previousPhase = state.phase;
     });
     const selectionListener = () => {
         const selection = document.getSelection();
         if (!selection?.rangeCount || selection.isCollapsed) {
-            if (!bar.contains(document.activeElement)) savedSelection = null;
+            if (!bar.contains(document.activeElement) && !document.activeElement?.closest?.('[data-rmt-toolbar-more-menu],[data-rmt-action=toolbar-more]')) savedSelection = null;
             return;
         }
         const range = selection.getRangeAt(0);
@@ -138,7 +149,7 @@ export function mountMirrorReader(overlay) {
         }
     });
     observer.observe(body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'aria-hidden', 'class', 'style', 'open'] });
-    bar.addEventListener('click', event => {
+    const click = event => {
         const action = event.target.closest('[data-reader]')?.dataset.reader;
         if (!action) return;
         event.preventDefault();
@@ -148,10 +159,12 @@ export function mountMirrorReader(overlay) {
         tracked = action === 'selection' ? (savedSelection || []).filter(item => readable(item.node, body) && item.node.textContent === item.original)
             : collectReadingNodes(body).map(node => ({ node, text: proseText(node, body), original: node.textContent }));
         void reader.read({ text: tracked.map(item => item.text).join(action === 'selection' ? '' : '\n'), speaker: voice.value });
-    });
+    };
+    voice.addEventListener('change', () => { preferredVoice = voice.value; try { globalThis.localStorage?.setItem('hearttraceReaderVoice', preferredVoice); } catch {} });
+    overlay.addEventListener('click', click);
     const pagehide = () => reader.stop('页面已离开。');
     document.addEventListener('selectionchange', selectionListener);
     window.addEventListener('pagehide', pagehide);
-    mounted = { overlay, bar, observer, unsubscribe, selectionListener, pagehide };
+    mounted = { overlay, bar, observer, unsubscribe, selectionListener, pagehide, click };
     connection();
 }

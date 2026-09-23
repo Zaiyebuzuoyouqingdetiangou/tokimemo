@@ -28,6 +28,8 @@ import * as bedtime_contract from '../core/bedtimeContract.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as ui_workspaceState from '../ui/workspaceState.js';
 
+import * as routePeople from '../core/routeParticipants.js';
+
 const PENDING_KEY = 'heartbeatMemoriesMergedPendingV1';
 
 export const MERGEABLE_ROUTES = Object.freeze(['cabinet', 'achievements', 'inbox', 'themeSong', 'bedtime']);
@@ -592,6 +594,8 @@ export async function startTogether(routes, { confirm = null, date = new Date() 
     const settings = core_settings.getPluginSettings(context);
     const maxOutputTokens = core_outputBudget.normalizeOutputTokens(settings.maxTokens);
     const inputBudgetTokens = core_outputBudget.normalizeInputBudgetTokens(settings.inputBudgetTokens);
+    const frozenOptions = Object.fromEntries(routes.map(route => [route, { participantSnapshot: routePeople.captureRoutePeople(route, context, memoryBank),
+        ...(route === 'themeSong' ? { songOptions: structuredClone(composerOptions.readSongOptions(context, memoryBank)) } : {}) }]));
     const sharedBackground = sharedBackgroundText(context, memoryBank) + '\n共同背景中的人物只提供参考。每一页末尾的人物名单分别有效，不要将其他页的选择套入这一页。';
     const tasks = [];
     const blocked = [];
@@ -606,7 +610,7 @@ export async function startTogether(routes, { confirm = null, date = new Date() 
             held.push({ route, label: routeTitle(route), reason: '这一页还有未提交的生成草稿，先续写或放弃。这次不放进同一次回复，也不会自动另开一项。' });
             continue;
         }
-        try { tasks.push(buildMergeTask(route, context, memoryBank, previousSession(mode, context, memoryBank), date)); }
+        try { tasks.push(buildMergeTask(route, context, memoryBank, previousSession(mode, context, memoryBank), date, frozenOptions[route])); }
         catch (error) { blocked.push({ route, label: routeTitle(route), reason: core_text.safeErrorSummary(error) }); }
     }
     const previewModes = [...new Set(tasks.map(task => task.mode))];
@@ -644,7 +648,7 @@ export async function startTogether(routes, { confirm = null, date = new Date() 
     const pending = createPendingStore();
     const chatId = core_context.comparableChatId(memoryBank.chatId);
     const pendingScope = currentPendingScope(context);
-    if (!modes.length) return { cancelled: false, plan, providerRequests: 0, waiting: [], heldRoutes: held.map(item => item.route), soloRoutes: plan.solo.map(item => item.route), pending: pending.readForOrigin(pendingScope) };
+    if (!modes.length) return { cancelled: false, plan, providerRequests: 0, waiting: [], heldRoutes: held.map(item => item.route), frozenOptions, soloRoutes: plan.solo.map(item => item.route), pending: pending.readForOrigin(pendingScope) };
     const release = holdModes(context, modes);
     const trace = core_taskTrace.startTaskTrace('', modes[0]);
     let providerRequests = 0;
@@ -683,7 +687,7 @@ export async function startTogether(routes, { confirm = null, date = new Date() 
         core_taskTrace.endTaskTrace(trace, failure ? (failure?.name === 'AbortError' ? 'cancelled' : 'failed') : 'ok', failure);
         release();
     }
-    return { cancelled: false, plan, providerRequests, waiting, soloRoutes: plan.solo.map(item => item.route), pending: pending.readForOrigin(pendingScope), heldRoutes: held.map(item => item.route) };
+    return { cancelled: false, plan, providerRequests, waiting, frozenOptions, soloRoutes: plan.solo.map(item => item.route), pending: pending.readForOrigin(pendingScope), heldRoutes: held.map(item => item.route) };
 }
 
 export async function resumeMergedGeneration(existing, options = {}) {

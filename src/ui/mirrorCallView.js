@@ -27,7 +27,7 @@ export function describeCurrentCall(speakerName, includeMemory = true) {
     const fields = card.data || card;
     const character = Object.fromEntries(['description','personality','scenario','mes_example'].map(key => [key, String(fields[key] ?? card[key] ?? '')]));
     const recent = (context.chat || []).filter(message => contextApi.isArchiveDialogueMessage(message, context))
-        .slice(-8).map(message => ({ name: message.name || (message.is_user ? identities.userDisplay : speaker), text: String(message.mes || '') }));
+        .map(message => ({ name: message.name || (message.is_user ? identities.userDisplay : speaker), text: String(message.mes || '') }));
     const facts = { speaker, user: identities.userDisplay, character, person: person || null,
         persona: String(context.powerUserSettings?.persona_description || ''), recent,
         archive: includeMemory && memory ? { summary: memory.archiveSummary || '', memories: evidence.memoryPayload(memory) } : null };
@@ -48,10 +48,10 @@ export function disposeMirrorCall() {
     view.overlay.removeEventListener('click', view.reading, true);
     view.overlay.removeEventListener('toggle', view.readingToggle, true);
 }
-export function mountMirrorCall(overlay) {
+export function mountMirrorCall(overlay, target = null) {
     if (mounted?.overlay === overlay) return;
     disposeMirrorCall();
-    const body = overlay.querySelector('.rmt-body');
+    const body = target || overlay.querySelector('.rmt-body');
     if (!body) return;
     const bar = document.createElement('details'); bar.className = 'rmt-live-call';
     bar.innerHTML = `<summary>想和现在的 TA 聊天吗？</summary>
@@ -62,15 +62,15 @@ export function mountMirrorCall(overlay) {
       <label class="rmt-call-input">也可以打字<textarea rows="2" aria-label="对 TA 说的话" placeholder="想对 TA 说什么？"></textarea></label>
       <div class="rmt-call-controls"><button type="button" data-call="send">发送</button><button type="button" data-call="record">开始说话</button>
       <button type="button" data-call="finish">说完了</button><button type="button" data-call="resume">继续播放</button><button type="button" data-call="interrupt">打断 TA</button><button type="button" data-call="download">保存通话文字</button></div>
-      <small>使用镜译实时通话测试版的连接与音色。点击连接不会自动扣费或开麦；发送后才调用模型和语音服务。背景含角色资料、最近 8 条聊天与现有记忆摘要。本次通话不写入主聊天；关闭前可保存文字。切页、切聊或关闭会停止通话。</small>
+      <small>使用镜译实时通话测试版的连接与音色。点击连接不会自动扣费或开麦；发送后才调用模型和语音服务。背景含角色资料、当前聊天记录与现有记忆摘要。本次通话不写入主聊天；关闭前可保存文字。切页、切聊或关闭会停止通话。</small>
       <style>.rmt-live-call{flex:0 0 auto;min-width:0;padding:6px 16px;border-bottom:1px solid var(--rmt-theme-border,#cbd5e1);font-size:14px;color:var(--rmt-theme-text,#344454);background:var(--rmt-theme-bg,#fff)}
-      .rmt-live-call[open]{max-height:62vh;overflow-y:auto;overscroll-behavior:contain}.rmt-live-call summary{min-height:44px;align-content:center;cursor:pointer;font-weight:600}
+      .rmt-live-call[open]{max-height:none;overflow:visible}.rmt-live-call>summary{display:none}.rmt-live-call summary{min-height:44px;align-content:center;cursor:pointer;font-weight:600}
       .rmt-call-controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.rmt-call-controls label{display:flex;align-items:center;gap:6px;min-width:0;max-width:100%}
       .rmt-live-call :is(button,select,textarea){font:inherit!important;color:inherit!important;background:var(--rmt-theme-surface-solid,#fff)!important;border:1px solid var(--rmt-theme-border,#cbd5e1)!important;border-radius:10px;min-height:44px;height:auto!important;max-width:100%;padding:8px!important;white-space:normal;box-sizing:border-box}
       .rmt-call-controls select{min-width:0;flex:1}.rmt-call-input{display:block;margin:8px 0}.rmt-live-call textarea{display:block;width:100%;font-size:16px!important}.rmt-live-call small{display:block;line-height:1.6;margin-top:8px}
       .rmt-call-transcript p{white-space:pre-wrap;overflow-wrap:anywhere;padding:8px 10px;border-left:2px solid var(--rmt-theme-border,#cbd5e1);margin:8px 0;line-height:1.7}
       .rmt-live-call button:disabled{opacity:.5}.rmt-live-call :focus-visible{outline:2px solid currentColor;outline-offset:2px}.rmt-live-call [role=status]{overflow-wrap:anywhere}</style>`;
-    body.before(bar);
+    bar.open = true; body.append(bar);
     const select = bar.querySelector('select'), memory = bar.querySelector('[data-call-memory]'), input = bar.querySelector('textarea');
     const status = bar.querySelector('[role=status]'), log = bar.querySelector('[role=log]');
     let activeScope = '', renderedTurns = '', active = false;
@@ -129,7 +129,7 @@ export function mountMirrorCall(overlay) {
     const readingToggle = event => { if (event.target.matches?.('.rmt-mirror-reader') && event.target.open) bar.open=false; };
     overlay.addEventListener('click', reading, true);
     overlay.addEventListener('toggle', readingToggle, true);
-    const observer = new MutationObserver(() => { if (active) controller.hangup(); refreshPeople(); });
+    const observer = new MutationObserver(() => { if (!bar.isConnected) disposeMirrorCall(); });
     observer.observe(body, {childList:true});
     const timer = setInterval(() => { if (active && activeScope !== currentScope()) controller.hangup(); }, 250);
     window.addEventListener('pagehide', pagehide);

@@ -1,11 +1,13 @@
 import * as constants from './constants.js';
 import * as text from './text.js';
 import * as photoshoots from './photoshootContract.js';
+import * as cg_image_patch from './cgImagePatch.js';
 
 const PREFIX = 'rmtcg2';
-const KINDS = new Set(['heart-voice', 'heart-scenario', 'heart-photoshoot', 'ending-ending', 'ending-epilogue', 'heart-language']);
+const KINDS = new Set(['heart-voice', 'heart-scenario', 'heart-photoshoot', 'ending-ending', 'ending-epilogue', 'ending-epilogue-scene', 'ending-confession', 'heart-language', 'heart-portrait']);
 const SLOT_BY_KIND = Object.freeze({
     'heart-voice': 'voice', 'heart-scenario': 'scenario', 'heart-photoshoot': 'grid', 'ending-ending': 'ending', 'ending-epilogue': 'epilogue', 'heart-language': 'language',
+    'ending-confession': 'confession', 'heart-portrait': 'portrait',
 });
 
 function encode(value) { return encodeURIComponent(String(value)); }
@@ -25,8 +27,10 @@ export function normalizeCgTargetDescriptor(value) {
     const containerId = safeId(value.containerId);
     const slot = normalized(value.slot, 160);
     const expectedSlot = SLOT_BY_KIND[kind];
-    if (!KINDS.has(kind) || !containerId || !slot || (kind !== 'heart-language' && slot !== expectedSlot)) return null;
+    if (!KINDS.has(kind) || !containerId || !slot || (!['heart-language','ending-epilogue-scene'].includes(kind) && slot !== expectedSlot)) return null;
+    if (kind === 'ending-epilogue-scene' && !/^scene:\d+$/.test(slot)) return null;
     if (kind === 'heart-language' && !constants.HEART_GREETING_KEYS.includes(containerId)) return null;
+    if (kind === 'heart-portrait' && containerId !== 'language') return null;
     const sourceHash = normalized(value.sourceHash, 120);
     return { version: 1, kind, containerId, slot, ...(sourceHash ? { sourceHash } : {}) };
 }
@@ -51,6 +55,8 @@ function sourceForDrama(item, kind) {
         (Array.isArray(item?.script) ? item.script : []).map(row => [row?.speaker, row?.text])]);
 }
 function sourceForEnding(route, slot) {
+    if (slot === 'confession') return JSON.stringify(['confession', safeId(route?.id), route?.title || '', route?.subtitle || '', route?.scene || '', route?.confessionText || '', route?.responseSummary || '', route?.afterEffect || '']);
+    if (slot.startsWith('scene:')) return JSON.stringify([slot, safeId(route?.id), route?.title, route?.epilogue?.scenes?.[Number(slot.slice(6))]]);
     const epilogue = route?.epilogue || {};
     const body = slot === 'ending'
         ? [route?.endingScene, route?.creditsLine]
@@ -86,9 +92,10 @@ function attachEndingVisual(owner, slot) {
         },
     };
 }
-function facade({ descriptor, visualRef, sourceHash, title, subtitle = '', scene = '', visualSeed = [] }) {
+function facade({ descriptor, visualRef, sourceHash, title, subtitle = '', scene = '', sourceText = scene, visualSeed = [] }) {
     const saved = visualRef.read();
-    const item = { id: cgTargetItemId(descriptor), title: normalized(title, 160), subtitle: normalized(subtitle, 600), desc: scene, cgDesc: scene,
+    const item = { id: cgTargetItemId(descriptor), title: normalized(title, 160), subtitle: normalized(subtitle, 600), desc: sourceText, cgDesc: scene,
+        cgSourceText: sourceText,
         imagePrompt: normalized(saved?.imagePrompt, constants.MAX_CG_IMAGE_PROMPT_CHARS), visualSeed, sourceHash,
         __rmtCgDescriptor: { ...descriptor, sourceHash } };
     Object.defineProperties(item, {
@@ -132,7 +139,8 @@ export function cgTargetInSession(mode, session, itemId) {
         if (!owner) return null;
         const sourceHash = hash(sourceForDrama(owner, descriptor.kind));
         return facade({ descriptor, visualRef: attachVisual(owner, 'visual'), sourceHash, title: owner.title, subtitle: owner.subtitle,
-            scene: `${normalized(owner.setting, 1800)}\n${scriptText(owner)}`, visualSeed: [isVoice ? owner.kind : owner.season, owner.visualTone] });
+            scene: [normalized(owner.setting, 1800), normalized(owner.visualTone, 600)].filter(Boolean).join('，'),
+            sourceText: `${normalized(owner.setting, 1800)}\n${scriptText(owner)}`, visualSeed: [isVoice ? owner.kind : owner.season, owner.visualTone] });
     }
     if (descriptor.kind === 'heart-photoshoot') {
         const owner = (session?.photoshoots || []).find(item => safeId(item?.id) === descriptor.containerId);
@@ -148,14 +156,30 @@ export function cgTargetInSession(mode, session, itemId) {
         item.__rmtCgPromptMetadata = plan.promptMetadata || null;
         return item;
     }
-    if (descriptor.kind === 'ending-ending' || descriptor.kind === 'ending-epilogue') {
-        const owner = (session?.endings || []).find(item => safeId(item?.id) === descriptor.containerId);
+    if (descriptor.kind.startsWith('ending-')) {
+        const owner = (descriptor.kind === 'ending-confession' ? session?.confessionReplays || [] : session?.endings || []).find(item => safeId(item?.id) === descriptor.containerId);
         if (!owner) return null;
         const slot = descriptor.slot;
+        const individual = descriptor.kind === 'ending-epilogue-scene' ? owner.epilogue?.scenes?.[Number(slot.slice(6))] : null;
+        if (descriptor.kind === 'ending-epilogue-scene' && !individual?.text) return null;
         const sourceHash = hash(sourceForEnding(owner, slot));
-        const scene = slot === 'ending' ? `${normalized(owner.endingScene, 12000)}\n${normalized(owner.creditsLine, 600)}` : sourceForEnding(owner, slot);
+        const sourceText = individual ? individual.text : slot === 'ending' ? `${normalized(owner.endingScene, 12000)}\n${normalized(owner.creditsLine, 600)}`
+            : slot === 'confession' ? `${owner.scene || ''}\n${owner.confessionText || ''}`
+                : (owner.epilogue?.scenes || []).map(row => `${row.title || ''}\n${row.text || ''}`).join('\n');
+        // The complete prose stays available to the explicit reconceive action.
+        // An initial image draft contains only authored visual/context labels.
+        const scene = [owner.title, individual ? individual.title : slot === 'epilogue' ? owner.epilogue?.title : owner.subtitle].filter(Boolean).join('，');
         return facade({ descriptor, visualRef: attachEndingVisual(owner, slot), sourceHash, title: owner.title,
-            subtitle: slot === 'ending' ? owner.subtitle : owner.epilogue?.title || '后日谈', scene, visualSeed: [owner.type, slot] });
+            subtitle: individual ? individual.title : slot === 'epilogue' ? owner.epilogue?.title || '后日谈' : owner.subtitle, scene, sourceText, visualSeed: [owner.type, slot] });
+    }
+    if (descriptor.kind === 'heart-portrait') {
+        const owner = object(session?.languagePortrait);
+        if (!owner?.scenePrompt) return null;
+        const sourceHash = hash(JSON.stringify(['language-portrait', owner.scenePrompt]));
+        const item = facade({ descriptor, visualRef: attachVisual(owner, 'visual'), sourceHash, title: '隔着屏幕的 TA',
+            subtitle: '基础语言 · 共用肖像', scene: owner.scenePrompt });
+        item.cgPortrait = true;
+        return item;
     }
     const line = (session?.greetings?.[descriptor.containerId] || []).find(value => heartLanguageLineHash(descriptor.containerId, value) === descriptor.slot);
     const owner = languageSidecar(session, descriptor.containerId, descriptor.slot);
@@ -181,11 +205,12 @@ export function expandedCgItem(session, descriptor) {
 // Call from a session normalizer before replacing a regenerated item. It keeps only
 // local image sidecars whose source hash still matches the regenerated prose.
 function safeLocalImage(value) {
-    if (!object(value) || typeof value.url !== 'string' || !/^\/user\/images\/[^?#\\]+\.(?:png|jpe?g|webp|gif)$/i.test(value.url)
-        || /(?:^|\/)\.{1,2}(?:\/|$)|%/i.test(value.url)) return null;
+    if (!object(value)) return null;
+    const url = cg_image_patch.savedLocalImagePath(value.url);
+    if (!url) return null;
     let promptMetadata = null;
     try { const json = JSON.stringify(value.promptMetadata); if (json && json.length <= 12000) promptMetadata = JSON.parse(json); } catch {}
-    return { url: value.url, prompt: normalized(value.prompt, constants.MAX_CG_IMAGE_PROMPT_CHARS),
+    return { url, prompt: normalized(value.prompt, constants.MAX_CG_IMAGE_PROMPT_CHARS),
         provider: value.provider === 'baibai-image' ? 'baibai-image' : constants.CG_IMAGE_PROVIDER,
         generatedAt: Math.max(0, Number(value.generatedAt) || 0), ...(promptMetadata ? { promptMetadata } : {}) };
 }
@@ -220,7 +245,7 @@ function appendPreviousVisuals(current, additions) {
     return safeVisualList([...(Array.isArray(current) ? current : []), ...(Array.isArray(additions) ? additions : [])]);
 }
 function expectedVisualHash(item, kind, slot) {
-    return kind === 'ending-ending' || kind === 'ending-epilogue' ? hash(sourceForEnding(item, slot || SLOT_BY_KIND[kind]))
+    return kind.startsWith('ending-') ? hash(sourceForEnding(item, slot || SLOT_BY_KIND[kind]))
         : kind === 'heart-voice' || kind === 'heart-scenario' ? hash(sourceForDrama(item, kind)) : '';
 }
 
@@ -229,17 +254,25 @@ export function preserveCgSlots(oldItem, newItem, { kind = '', slot = '' } = {})
     const expected = expectedVisualHash(newItem, kind, slot);
     const oldVisual = safeVisual(oldItem.visual);
     if (oldVisual && oldVisual.sourceHash === expected) newItem.visual = oldVisual;
-    else if (oldVisual) newItem.previousCgVisuals = appendPreviousVisuals(newItem.previousCgVisuals, [oldVisual]);
+    else if (oldVisual) {
+        delete newItem.visual;
+        newItem.previousCgVisuals = appendPreviousVisuals(newItem.previousCgVisuals, [oldVisual]);
+    }
     const inheritedPrevious = safeVisualList(oldItem.previousCgVisuals);
     if (inheritedPrevious.length) newItem.previousCgVisuals = appendPreviousVisuals(newItem.previousCgVisuals, inheritedPrevious);
+    if (object(newItem.visuals)) newItem.visuals = { ...newItem.visuals };
     const oldVisuals = object(oldItem.visuals);
-    if (oldVisuals) for (const targetSlot of ['ending', 'epilogue']) {
+    if (oldVisuals) for (const targetSlot of Object.keys(oldVisuals).filter(key => ['ending','epilogue','confession'].includes(key) || /^scene:\d+$/.test(key))) {
         const oldSlot = safeVisual(oldVisuals[targetSlot]);
         const wanted = expectedVisualHash(newItem, `ending-${targetSlot}`, targetSlot);
         if (oldSlot?.sourceHash === wanted) {
             if (!object(newItem.visuals)) newItem.visuals = {};
             newItem.visuals[targetSlot] = oldSlot;
-        } else if (oldSlot) newItem.previousCgVisuals = appendPreviousVisuals(newItem.previousCgVisuals, [oldSlot]);
+        } else if (oldSlot) {
+            newItem.visuals = { ...(object(newItem.visuals) || {}) };
+            delete newItem.visuals[targetSlot];
+            newItem.previousCgVisuals = appendPreviousVisuals(newItem.previousCgVisuals, [oldSlot]);
+        }
     }
     return newItem;
 }
@@ -248,10 +281,19 @@ export function normalizeLocalCgSlots(value) {
     if (!object(value)) return {};
     const visual = safeVisual(value.visual);
     const visuals = object(value.visuals);
-    const ending = safeVisual(visuals?.ending), epilogue = safeVisual(visuals?.epilogue);
+    const keptSlots = Object.fromEntries(Object.entries(visuals || {}).filter(([key]) => ['ending','epilogue','confession'].includes(key) || /^scene:\d+$/.test(key))
+        .map(([key,value]) => [key,safeVisual(value)]).filter(([,value]) => value));
     const previousCgVisuals = safeVisualList(value.previousCgVisuals);
-    return { ...(visual ? { visual } : {}), ...(ending || epilogue ? { visuals: { ...(ending ? { ending } : {}), ...(epilogue ? { epilogue } : {}) } } : {}),
+    return { ...(visual ? { visual } : {}), ...(Object.keys(keptSlots).length ? { visuals: keptSlots } : {}),
         ...(previousCgVisuals.length ? { previousCgVisuals } : {}) };
+}
+
+export function normalizeLanguagePortrait(value) {
+    if (!object(value)) return null;
+    const scenePrompt = normalized(value.scenePrompt, constants.MAX_CG_IMAGE_PROMPT_CHARS);
+    if (!scenePrompt) return null;
+    const previousSceneVisuals = safePreviousScenes(value.previousSceneVisuals);
+    return { scenePrompt, ...normalizeLocalCgSlots(value), ...(previousSceneVisuals.length ? { previousSceneVisuals } : {}) };
 }
 
 // HEART's language sidecar is separate from the generated greetings. This keeps

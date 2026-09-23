@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.12-r84.57-reviewed",
+  "js": "index.js?heartbeat=0.99.13-r84.58-reviewed",
   "author": "Toto",
-  "version": "0.99.12",
+  "version": "0.99.13",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.57：合并任务完整归属隔离、角色相关来信小画、前世今生手机阅读、镜译实时通话与累计修复；取消失败写真新建入口。",
+  "description": "r84.58：来信重复收取与画册、独立语音模块、图片提示与版本切换、记忆保全及后台队列修复。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

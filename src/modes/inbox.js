@@ -40,14 +40,19 @@ export function inboxPlan(memory, previous, date = new Date()) {
             if (!sent.has(eventKey)) plan.push({ slot: 'stage', eventKey, ...ref });
         }
     }
-    const eventKey = 'daily:' + localDay(date);
-    if (!sent.has(eventKey)) plan.push({ slot: 'daily', eventKey, sourceMemoryIds: [], sourceMemoryAnchor: '' });
+    // An explicit receive is a new letter, not a once-per-day entitlement. Keep
+    // the original key for the first letter, and derive a stable next identity
+    // from the frozen previous session so retries cannot duplicate that letter.
+    const dayKey = 'daily:' + localDay(date);
+    let eventKey = dayKey, sequence = 1;
+    while (sent.has(eventKey)) eventKey = `${dayKey}:${++sequence}`;
+    plan.push({ slot: 'daily', eventKey, sourceMemoryIds: [], sourceMemoryAnchor: '' });
     return plan;
 }
 export function inboxPrompt(memory, plan) {
     const owners = participants.resolveStoryIdentities(memory).ownerNames;
     return `写所选人物（${owners.join('、') || memory.characterName}）寄给 User 的私人来信。多人名单时可分别落款或共同署名，不能把角色卡名称当人物，也不能只默认名单第一人。只输出 {"letters":[{"slot":"daily或stage","title":"信件主题","greeting":"称呼","body":"正文","closing":"署名","letterIllustration":"可选的受控小画结构"}]}，逐项对应 LOCAL_MAIL_PLAN，每个 slot 一封。
-stage 是真实关系事件之后他此刻想说的话；daily 是今天顺手寄来的近况、关心或邀请，不需要虚构共同往事。正文约80～250字。不是通知报告、情书模板或档案总结；陌生、试探、单恋、争执、陪伴等关系各有语气，不能默认相爱或强迫关系升级。
+stage 是真实关系事件之后他此刻想说的话；daily 是此刻新写的一封近况、关心或邀请，同一天也可以寄来多封不同的新信，不需要虚构共同往事。篇幅由人物想说的话决定，写完整即可。不是通知报告、情书模板或档案总结；陌生、试探、单恋、争执、陪伴等关系各有语气，不能默认相爱或强迫关系升级。
 关系节点不等于关系升级：从初识、逐渐熟悉到确认关系，或争执、疏远、和好、告别，都只依据实际剧情。标题里出现“告白”不表示告白成功，出现“约定”不表示约定已经兑现；不套固定亲密度阶段。按完整档案判断双方当下态度，再写这一节点之后的短讯、邀约、解释、道歉或问候，不反过来改变他们的关系。
 根据当前 char 人设、所选世界书和已有关系写。使用时代相容的称呼与生活细节；不要擅造手机号码、地址或替 User 发消息。不要回放过去情节；如确需引述已发生的共同往事，只能直接引用真实记忆原句，不能用一个真实来源为另一件事背书。
 当下正在做什么、未发送的心情与未来邀请可以直接依人设创作；没有过去记录时照样能写信。角色个人旧物可以成为邀请话题，例如“明天一起看看去年我拍的照片”，这不等于两人去年一起拍过照片；不要将后者冒充事实。
@@ -70,10 +75,12 @@ export function normalizeInboxLetters(raw, memory, plan, date = new Date(), opti
         const matches = values.filter(value => value?.slot === item.slot);
         if (matches.length !== 1) throw new Error('来信类型重复或缺失。');
         const value = matches[0];
-        const title = clean(value.title, 120), greeting = clean(value.greeting, 160), body = clean(value.body, 1800), closing = clean(value.closing, 200);
-        if (!title || body.length < 20) throw new Error('来信正文还未写完。');
-        if (!inboxRelationshipAllows([title, greeting, body, closing].join('\n'), memory, options)) throw new Error('称呼超出了两人当前关系，请按真实关系写来信。');
-        if (String(value.body || '').length > 1800) throw new Error('来信过长，请完整收束在1800字内。');
+        const completeText = value => typeof value === 'string' ? value.replace(/\r\n?/g, '\n').replace(/\u0000/g, '') : '';
+        const title = completeText(value.title), greeting = completeText(value.greeting), body = completeText(value.body), closing = completeText(value.closing);
+        if (!title.trim() || !body.trim()) throw new Error('来信正文还未写完。');
+        if (!inboxRelationshipAllows([title, greeting, body, closing].join('\n'), memory, {
+            ...options, controlledEvidence: options.controlledEvidence || options.characterEvidence || '',
+        })) throw new Error('称呼超出了两人当前关系，请按真实关系写来信。');
         const historic = [title, greeting, body, closing].flatMap(part => part.split(/[。！？!?\n]+/u))
             .filter(part => narrative.narrativeClaimsSharedHistory(part, { userName: memory.userName }));
         if (historic.some(part => !sourceText(item.sourceMemoryIds).includes(part.trim()))
@@ -132,8 +139,10 @@ export function mergeInboxLatest(latest, incoming) {
         const postcardKey = postcardLetterKey(letter);
         if (keys.has(letter.eventKey) || (postcardKey && postcards.has(postcardKey))) continue;
         if (!letter.eventKey || !letter.id || ids.has(letter.id)) throw new Error('来信身份冲突，已有信件保持不变。');
-        if (merged.letters.length >= 1000) throw new Error('邮箱已满，请先备份档案；旧信未删除。');
-        merged.letters.push(structuredClone(letter)); keys.add(letter.eventKey); ids.add(letter.id);
+        const saved = structuredClone(letter);
+        // The next sheet changes colour without recolouring already saved mail.
+        if (!saved.paperTone) saved.paperTone = ['cream', 'rose', 'sky', 'sage', 'lilac', 'peach'][merged.letters.length % 6];
+        merged.letters.push(saved); keys.add(letter.eventKey); ids.add(letter.id);
         if (postcardKey) postcards.add(postcardKey);
     }
     return merged;

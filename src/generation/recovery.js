@@ -358,6 +358,15 @@ export function generationRecoverySummary(raw, now = Date.now()) {
     };
 }
 
+// Only a failed attempt with no received content may start again from current
+// inputs. A complete segment, truncated response or retained partial is paid
+// work and must never enter this compatibility escape hatch.
+export function canRestartLegacyConfiguration(raw) {
+    const journal = validJournal(raw, Date.now());
+    return !!journal && !readGenerationContentSnapshot(journal) && journal.segments.length > 0
+        && journal.segments.every(row => row.state === 'retry' && !row.rawJson && !row.partial && !row.retainedPartials?.length);
+}
+
 // Explicit user export only. Do not include arbitrary top-level properties or
 // settings/provider objects. This is inert recovery data, not import authority.
 export function exportGenerationRecovery(raw) {
@@ -385,6 +394,7 @@ export async function createGenerationRecovery({ origin, mode, settingsIdentity,
     const settingsHash = await generationRecoveryDigest(settingsIdentity ?? '');
     const clock = now();
     let journal = continueRequested ? validJournal(existing, clock) : null;
+    let configurationRestart = false;
     if (continueRequested) {
         if (!journal) {
             // A structurally valid journal that only fails the total-size
@@ -418,11 +428,22 @@ export async function createGenerationRecovery({ origin, mode, settingsIdentity,
             }
         }
         if (!fingerprintDriftOnly && jsonData(journal.identity) !== jsonData(identity)) throw generationRecoveryMismatch('record');
-        if (!readGenerationContentSnapshot(journal) && journal.settingsHash !== settingsHash) throw generationRecoveryMismatch('configuration');
+        if (!readGenerationContentSnapshot(journal) && journal.settingsHash !== settingsHash) {
+            if (!canRestartLegacyConfiguration(journal) || typeof confirmLegacyRestart !== 'function'
+                || !await confirmLegacyRestart({ reason: 'configuration' })) throw generationRecoveryMismatch('configuration');
+            if (assertCurrent() === false) throw new DOMException('Generation recovery origin changed', 'AbortError');
+            const { previousAttempts, ...prior } = journal;
+            journal = { ...journal, settingsHash, createdAt: clock, updatedAt: clock, segments: [], failureCode: '',
+                frozenInputs: {}, inputSnapshotVersion: 1,
+                previousAttempts: [...(previousAttempts || []), prior] };
+            delete journal.failureCategory; delete journal.failurePhase;
+            if (sourcePolicy) journal.sourcePolicy = sourcePolicy;
+            configurationRestart = true;
+        }
     }
     journal ||= { kind: 'generation-recovery', version: 1, identity, settingsHash,
         inputSnapshotVersion: 1, createdAt: clock, updatedAt: clock, segments: [], failureCode: '' };
-    if (!continueRequested && contentSnapshot) {
+    if ((!continueRequested || configurationRestart) && contentSnapshot) {
         // A source snapshot that itself exceeds the request bound is a distinct
         // failure from a draft that filled its capacity mid-stream: no request
         // was sent, no draft was created, and no old content was touched.
@@ -464,7 +485,7 @@ export async function createGenerationRecovery({ origin, mode, settingsIdentity,
     // Old versions could write a fresh input snapshot before verifying a legacy
     // request. A retry-only, unmarked record may still need explicit restart.
     // Never restart complete or truncated segments and never infer equivalence.
-    const legacyWithoutInputs = !!existing && (!existing.frozenInputs || !existing.inputSnapshotVersion);
+    const legacyWithoutInputs = !configurationRestart && !!existing && (!existing.frozenInputs || !existing.inputSnapshotVersion);
     if (sourcePolicy && !journal.sourcePolicy && (!legacyWithoutInputs || !journal.segments.length)) journal.sourcePolicy = sourcePolicy;
     const handle = { journal, save, assertCurrent, now, continueRequested: continueRequested === true,
         legacyWithoutInputs, confirmLegacyRestart, pendingInputs: new Map(), stagedInputs: new Map(),
@@ -478,6 +499,8 @@ export async function createGenerationRecovery({ origin, mode, settingsIdentity,
     internalHandles.add(handle);
     handleBindings.set(handle, { identity: jsonData(identity), settingsHash: journal.settingsHash });
     checkCurrent(handle);
+    // The prior record must be durably preserved before any request can run.
+    if (configurationRestart) await persistGenerationRecovery(handle);
     return handle;
 }
 

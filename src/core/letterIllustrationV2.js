@@ -1,8 +1,7 @@
 // Evidence-gated, local-only letter art. The model selects bounded facts and quotes
 // their source; it never supplies markup, geometry, colours, URLs, or executable code.
+import * as letterSketch from './letterSketch.js';
 export const VERSION = 2;
-export const MAX_FACTS = 6;
-export const MAX_BYTES = 4096;
 
 const FOCUS = Object.freeze(['person', 'object']);
 const SCENES = Object.freeze(['read', 'tea', 'rain', 'photo', 'music', 'flower', 'gift', 'window', 'lamp', 'cook', 'walk', 'write']);
@@ -113,7 +112,7 @@ export function normalize(value) {
         if (!raw || raw.version !== VERSION || !FOCUS.includes(raw.focus)) return null;
         const characterName = plainText(raw.characterName, 120);
         if (!characterName || !Array.isArray(raw.visualFacts) || Object.getPrototypeOf(raw.visualFacts) !== Array.prototype
-            || raw.visualFacts.length < 1 || raw.visualFacts.length > MAX_FACTS || Reflect.ownKeys(raw.visualFacts).length !== raw.visualFacts.length + 1) return null;
+            || raw.visualFacts.length < 1 || Reflect.ownKeys(raw.visualFacts).length !== raw.visualFacts.length + 1) return null;
         const visualFacts = [];
         for (let index = 0; index < raw.visualFacts.length; index += 1) {
             const descriptor = Object.getOwnPropertyDescriptor(raw.visualFacts, String(index));
@@ -128,7 +127,6 @@ export function normalize(value) {
         if (raw.focus === 'person' && !visualFacts.some(fact => APPEARANCE_KINDS.has(fact.kind))) return null;
         if (raw.focus === 'object' && !visualFacts.some(fact => fact.kind === 'signatureObject')) return null;
         const design = { version: VERSION, characterName, focus: raw.focus, visualFacts, scene };
-        if (new TextEncoder().encode(JSON.stringify(design)).byteLength > MAX_BYTES) return null;
         return design;
     } catch { return null; }
 }
@@ -153,7 +151,6 @@ function safeId(value) { return String(value ?? 'letter').replace(/[^a-zA-Z0-9_-
 function fact(design, kind) { return design.visualFacts.find(item => item.kind === kind)?.value || ''; }
 function colour(value, fallback = PALETTE.ink) { return SAFE_COLOURS[value] || fallback; }
 function stroke() { return `fill="none" stroke="${PALETTE.ink}" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"`; }
-function outline() { return `stroke="${PALETTE.ink}" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"`; }
 
 function sceneMotif(kind, x = 159, y = 67) {
     const s = stroke();
@@ -177,42 +174,6 @@ function signatureObject(kind, x = 110, y = 45) {
     return `<g data-rmt-letter-signature-object="${kind}">${sceneMotif(sceneForObject, x, y)}</g>`;
 }
 
-function person(design) {
-    const hairLength = fact(design, 'hairLength'), hairStyle = fact(design, 'hairStyle'), hairColor = fact(design, 'hairColor');
-    const eyeColor = fact(design, 'eyeColor'), outfitKind = fact(design, 'outfitKind'), outfitColor = fact(design, 'outfitColor');
-    const markers = design.visualFacts.filter(item => item.kind === 'marker').map(item => item.value);
-    const hairFill = hairColor ? colour(hairColor) : 'none';
-    const outfitFill = outfitColor ? colour(outfitColor) : PALETTE.paper;
-    const hairBottom = hairLength === 'long' ? 105 : hairLength === 'medium' ? 85 : 64;
-    const ponytail = hairStyle === 'ponytail' ? `<path d="M88 42q-23 9-14 38q13-10 11-29" fill="${hairFill}"/>` : '';
-    const braid = hairStyle === 'braid' ? `<path d="M84 54q-10 9 0 17q10 8 0 17q-8 8 1 18" stroke-width="5"/>` : '';
-    const bun = hairStyle === 'bun' ? `<circle cx="80" cy="24" r="12" fill="${hairFill}"/>` : '';
-    const texture = hairStyle === 'curly' ? `<path d="M57 55q-8 8 0 16q-8 8 0 16M106 55q8 8 0 16q8 8 0 16"/>`
-        : hairStyle === 'wavy' ? `<path d="M58 55q-7 8 0 16q7 8 0 16M105 55q7 8 0 16q-7 8 0 16"/>` : '';
-    const hasHair = hairLength || hairStyle || hairColor;
-    // The mass of the hair sits behind the paper-coloured face. A small fringe is
-    // drawn later, so long dark hair cannot turn the whole face into a dark mask.
-    const hairBack = hasHair ? `<g data-rmt-letter-hair="${hairLength || 'specified'}:${hairStyle || 'unspecified'}:${hairColor || 'unspecified'}" ${stroke()}><path d="M55 55q0-35 26-35q29 0 29 35v${hairBottom-55}q-13 6-20-6q-10 10-35 5z" fill="${hairFill}"/>${texture}${ponytail}${braid}${bun}</g>` : '';
-    const hairFront = hasHair ? `<path data-rmt-letter-hair-fringe="true" d="M59 47q0-27 22-27q25 0 25 28q-8-13-16-16q-10 11-29 13z" fill="${hairFill}" ${outline()}/>` : '';
-    const eyes = eyeColor ? `<g data-rmt-letter-eyes="${eyeColor}" fill="${colour(eyeColor)}"><circle cx="72" cy="50" r="2.2"/><circle cx="91" cy="50" r="2.2"/></g>` : '';
-    const outfitPath = ['dress', 'robe', 'coat'].includes(outfitKind) ? 'M54 81q27-17 54 0l17 52H37z' : 'M54 81q27-17 54 0l9 52H45z';
-    const outfitDetail = outfitKind === 'hoodie' ? `<path d="M61 83q20-17 40 0q-5 13-20 14q-15-1-20-14" ${stroke()}/>`
-        : ['jacket', 'coat', 'suit'].includes(outfitKind) ? `<path d="M63 81l18 22l18-22M81 103v30" ${stroke()}/>`
-            : outfitKind === 'uniform' ? `<path d="M61 84l20 16l20-16M69 91h24" ${stroke()}/>`
-                : outfitKind === 'sweater' ? `<path d="M51 97q30 9 61 0M49 110q31 9 65 0" ${stroke()}/>` : '';
-    const outfit = `<path data-rmt-letter-outfit="${outfitKind || 'unspecified'}:${outfitColor || 'unspecified'}" d="${outfitPath}" fill="${outfitFill}" ${outline()}/>${outfitDetail}`;
-    const markerSvg = [
-        markers.includes('glasses') ? `<g data-rmt-letter-marker="glasses" ${stroke()}><rect x="63" y="43" width="15" height="11" rx="5"/><rect x="85" y="43" width="15" height="11" rx="5"/><path d="M78 48h7"/></g>` : '',
-        markers.includes('freckles') ? `<g data-rmt-letter-marker="freckles" fill="${PALETTE.accent}"><circle cx="67" cy="59" r="1"/><circle cx="71" cy="61" r="1"/><circle cx="95" cy="59" r="1"/><circle cx="91" cy="61" r="1"/></g>` : '',
-        markers.includes('scar') ? `<path data-rmt-letter-marker="scar" d="M95 44l-8 17" fill="none" ${outline()}/>` : '',
-        markers.includes('earrings') ? `<g data-rmt-letter-marker="earrings" fill="${PALETTE.accent}"><circle cx="57" cy="59" r="3"/><circle cx="105" cy="59" r="3"/></g>` : '',
-        markers.includes('ribbon') ? `<path data-rmt-letter-marker="ribbon" d="M77 26q-15-15-16 2q8 8 18 3q12 7 20-3q-1-16-18-2z" fill="${PALETTE.accent}"/>` : '',
-        markers.includes('hat') ? `<path data-rmt-letter-marker="hat" d="M48 34h67M60 32l8-23h30l8 23" fill="${PALETTE.soft}" ${outline()}/>` : '',
-        markers.includes('scarf') ? `<path data-rmt-letter-marker="scarf" d="M58 76q24 13 48 0l-4 17q-22 9-40 0z" fill="${PALETTE.accent}" ${stroke()}/>` : '',
-    ].join('');
-    return `<g data-rmt-letter-person="true">${outfit}${hairBack}<path data-rmt-letter-face-opening="true" d="M61 47q0-24 20-24q21 0 21 24v11q-2 22-21 22q-18 0-20-22z" fill="${PALETTE.paper}" ${outline()}/>${hairFront}${eyes}${markerSvg}</g>`;
-}
-
 export function render(value, { idPrefix = 'rmt-letter', label = '' } = {}) {
     const design = normalize(value);
     if (!design) return '';
@@ -221,7 +182,14 @@ export function render(value, { idPrefix = 'rmt-letter', label = '' } = {}) {
     const title = named ? `<title id="${titleId}">${esc(label.slice(0, 160))}</title>` : '';
     const semantic = named ? `role="img" aria-labelledby="${titleId}"` : 'aria-hidden="true"';
     const signature = fact(design, 'signatureObject');
-    const foreground = design.focus === 'person' ? person(design) : signatureObject(signature);
-    const scene = design.focus === 'person' ? sceneMotif(design.scene.kind) : '';
-    return `<svg class="rmt-letter-illustration" data-rmt-letter-illustration-version="2" data-rmt-letter-focus="${design.focus}" data-rmt-letter-scene="${design.scene.kind}" width="220" height="150" viewBox="0 0 220 150" preserveAspectRatio="xMidYMid meet" ${semantic}>${title}<path d="M15 133q45-11 91 0t99-1" fill="none" stroke="${PALETTE.soft}" stroke-width="1.4" opacity=".65"/>${foreground}${scene}</svg>`;
+    const kind = design.scene.kind;
+    const foreground = design.focus === 'person' ? letterSketch.sketchPerson(design)
+        : `<g transform="translate(-2 18) scale(1.55)">${signatureObject(signature, 110, 85)}</g>`;
+    const held = ['read', 'tea', 'photo', 'flower', 'gift', 'write'].includes(kind);
+    const scene = design.focus === 'person'
+        ? sceneMotif(kind, held ? 151 : 245, held ? 172 : 192) : '';
+    const textureId = `${safeId(idPrefix)}-paper-grain`;
+    // A faint, fixed local hatch gives the drawing a pencil finish without
+    // filters, remote assets, or injecting provider-generated markup.
+    return `<svg class="rmt-letter-illustration" data-rmt-letter-illustration-version="2" data-rmt-letter-focus="${design.focus}" data-rmt-letter-scene="${kind}" width="320" height="280" viewBox="0 0 320 280" preserveAspectRatio="xMidYMid meet" ${semantic}>${title}<defs><pattern id="${textureId}" patternUnits="userSpaceOnUse" width="5" height="5"><path d="m0 4 4-4" stroke="#997b91" stroke-width=".45" opacity=".12"/></pattern></defs>${letterSketch.sketchBackdrop(kind, colour(fact(design, 'outfitColor'), '#c1a5ba'))}${foreground}${scene}<ellipse cx="166" cy="154" rx="137" ry="119" fill="url(#${textureId})" pointer-events="none"/></svg>`;
 }

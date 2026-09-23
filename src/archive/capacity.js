@@ -107,12 +107,15 @@ export function admitArchiveMemories(existingHot, fresh, existingCold = [], {
     const evicted = [];
     let remainingEvict = Math.max(0, maxEvict);
     for (const item of numbered) {
-        if (hot.length + admitted.length < maxHot) {
+        if (hot.length - evicted.length + admitted.length < maxHot) {
             admitted.push(item);
             continue;
         }
         if (remainingEvict <= 0) { pending.push(item); continue; }
-        const working = [...hot, ...admitted].filter(row => !evicted.some(gone => gone.id === row.id));
+        // Only records that existed before this batch may make room for it.
+        // Early story dates on newly admitted memories must not make them their
+        // own batch's eviction victims; overflow remains explicitly pending.
+        const working = hot.filter(row => !evicted.some(gone => gone.id === row.id));
         const [victim] = pickUnlockedForEviction(working, 1);
         if (!victim) { pending.push(item); continue; }
         evicted.push(victim);
@@ -128,7 +131,7 @@ export function admitArchiveMemories(existingHot, fresh, existingCold = [], {
         coldArchive: coldResult.coldArchive,
         coldDeleted: coldResult.deleted,
         rolled: evicted.length > 0,
-        lockedFull: pending.length > 0 && evicted.length === 0 && nextHot.length >= maxHot,
+        lockedFull: pending.length > 0 && nextHot.length >= maxHot && nextHot.every(isMemoryLocked),
     };
 }
 

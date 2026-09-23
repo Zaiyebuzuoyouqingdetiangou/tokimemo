@@ -574,7 +574,7 @@ export function normalizeEndingRouteDetail(data, route) {
         text: core_text.normalizeText(scene?.text, 5000),
     })).filter(scene => scene.text.length >= 90);
     if (scenes.length < 3) throw new Error(`已解锁结局“${route.title}”的后日谈不足 3 段。`);
-    return {
+    return cg_targets.preserveCgSlots(route, {
         ...route,
         endingScene,
         confession: '',
@@ -586,7 +586,7 @@ export function normalizeEndingRouteDetail(data, route) {
             scenes,
             finalLine: core_text.normalizeText(rawEpilogue?.finalLine, 1200),
         },
-    };
+    }, { kind: 'ending-ending' });
 }
 
 function endingNeedsScenes(session) {
@@ -797,6 +797,7 @@ export function normalizeEndingConfessionReplays(rawList, memoryBank) {
             confessionLines,
             responseSummary,
             afterEffect,
+            ...cg_targets.normalizeLocalCgSlots(item),
         };
         replay.easterEgg = normalizeEndingEasterEgg(item?.easterEgg, replay);
         return replay;

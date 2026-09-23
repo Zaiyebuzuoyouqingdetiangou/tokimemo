@@ -1,0 +1,22 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>r84.58 隔离交互验证</title><body><pre id="errors"></pre><script type="module">
+const errors=document.querySelector('#errors');window.addEventListener('error',e=>errors.textContent+=e.message+'\n');window.addEventListener('unhandledrejection',e=>errors.textContent+=e.reason+'\n');
+const host={characterId:0,name1:'阿宁',name2:'岚',chatId:'review-r8458',characters:[{name:'岚',avatar:'review.png',description:'黑色长发，蓝色长袍。'}],chat:[],chatMetadata:{},extensionSettings:{},powerUserSettings:{},saveMetadata:async()=>{},getCurrentChatId(){return this.chatId;}};
+globalThis.SillyTavern={getContext:()=>host};globalThis.toastr={error:m=>errors.textContent+=m+'\n',info:()=>{},success:()=>{}};
+const {state}=await import('../src/core/state.js');const constants=await import('../src/core/constants.js');
+const overlay=await import('../src/ui/overlay.js');const inbox=await import('../src/ui/inboxView.js');const workspace=await import('../src/ui/workspaceState.js');
+const memory={version:3,chatId:host.chatId,archiveRevision:'review-v1',characterName:'岚',userName:'阿宁',memories:[{id:'M001',title:'窗边的故事',summary:'岚与阿宁一起读完了窗边的故事。',anchors:['一起读完了窗边的故事'],participants:['岚','阿宁']}],archiveSummary:'一起读完了窗边的故事。',archiveKeywords:[],participantsV1:{version:1,cardType:'multi',revision:'r1',selectedIds:['lan'],people:[{id:'lan',name:'岚',identity:'character',sourceRefs:[]},{id:'cheng',name:'澄',identity:'character',sourceRefs:[]}]}};
+host.chatMetadata[constants.MEMORY_KEY]=memory;
+const letters=['read','tea','write','flower','window','walk'].map((kind,i)=>({id:'review-'+i,eventKey:'daily:review:'+i,type:'daily',title:['把结尾念给你听','等一盏茶凉','寄一封小小的信','路边新开的花','窗外有晚风','陪你走走'][i],greeting:'阿宁：',body:'窗外的风停了，我把新的便签放在门边。今天读到的故事还剩一页，等你回来时，我们再一起读完。',closing:'岚',paper:['cream','blush','sky','sage','lavender','peach'][i],createdAt:Date.now()+i,readAt:1,favorite:false,illustration:{version:2,characterName:'岚',focus:'person',visualFacts:[{kind:'hairLength',value:'long',evidence:'黑色长发'},{kind:'hairColor',value:'black',evidence:'黑色长发'},{kind:'outfitKind',value:'robe',evidence:'蓝色长袍'},{kind:'outfitColor',value:'blue',evidence:'蓝色长袍'}],scene:{kind,evidence:'测试画册场景'}}}));
+const session={kind:'inbox',chatId:host.chatId,archiveRevision:memory.archiveRevision,sender:'岚',recipient:'阿宁',letters};
+host.chatMetadata[constants.CACHE_KEY]={version:3,chatId:host.chatId,archiveRevision:memory.archiveRevision,inbox:session};
+state.activeMode='inbox';state.activeSession=session;state.activeArchiveSnapshot=null;state.activeArchiveReadOnly=false;
+overlay.openOverlay();workspace.workspace.tab='content';workspace.workspace.route='inbox';inbox.renderInbox();overlay.renderActive();
+if(new URLSearchParams(location.search).get('page')==='history') {
+ const images=await import('../src/generation/imageGeneration.js');
+ const image=(name,t)=>({url:'/tools/'+name+'.svg',generatedAt:t,prompt:'仅本地按钮验收样本',provider:'test'});
+ const item={id:'cg-review',title:'图片版本切换样本',unlocked:true,cgImage:image('review-b',2),cgImageHistory:[image('review-a',1)]};
+ state.activeMode='album';state.activeSession={kind:'album',entries:[item],chatId:host.chatId,archiveRevision:memory.archiveRevision};
+ state.activeArchiveSnapshot={memory,chatId:host.chatId,backupOnly:true};state.activeArchiveReadOnly=true;
+ overlay.topTitle('图片切换本地样本');overlay.bodyEl().innerHTML='<section style="padding:20px"><h2>已保存图片 · 不会调用生图</h2><div class="rmt-thumb" style="position:relative;width:100%;height:auto;aspect-ratio:4/3">'+images.cgImageLayerHtml(item,{lazy:false})+'</div></section>';
+}
+</script></body></html>

@@ -11,13 +11,20 @@ import * as text from '../core/text.js';
 import * as generation from '../generation/client.js';
 import * as overlay from './overlay.js';
 import * as travelView from './travelView.js';
+import * as mailGallery from '../core/mailGallery.js';
 
 let view = { scope: '', selected: '', filter: 'all' };
 const readonly = () => !!runtimeState.activeArchiveSnapshot && (runtimeState.activeArchiveReadOnly || runtimeState.activeArchiveSnapshot.backupOnly);
 const letterTypeLabel = type => type === 'stage' ? '阶段来信' : type === 'daily' ? '日常来信' : type === 'travel' ? '旅行明信片' : '来信';
 const PAPER_TONES = Object.freeze(['cream', 'rose', 'sky', 'sage', 'lilac', 'peach']);
 export function inboxPaperTone(letter) {
+    if (PAPER_TONES.includes(letter?.paperTone)) return letter.paperTone;
     return PAPER_TONES[(text.hashString(String(letter?.id || letter?.title || 'letter')) >>> 0) % PAPER_TONES.length];
+}
+const mailStamp = time => new Date(time).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+export function inboxGalleryHtml(session) {
+    const drawings = mailGallery.savedMailDrawings(session);
+    return `<section class="rmt-mail-gallery" aria-label="随信画册"><header><small>OUR LITTLE SKETCHBOOK</small><h3>信里的小小世界</h3><p>${drawings.length} 幅随信小画 · 每封有画的信都会留在这里</p></header><div class="rmt-mail-gallery-grid">${drawings.map(letter => `<button type="button" class="rmt-mail-drawing" data-rmt-paper="${inboxPaperTone(letter)}" data-rmt-inbox="read" data-rmt-inbox-id="${text.esc(letter.id)}" aria-label="查看来信：${text.esc(letter.title)}"><span class="rmt-mail-drawing-art">${letterArt.renderLetterIllustration(letter.illustration, { idPrefix: 'gallery-' + letter.id, label: letter.title || '随信小画' })}</span><strong>${text.esc(letter.title)}</strong><small>${text.esc(mailStamp(letter.createdAt))}</small></button>`).join('') || '<p class="rmt-mail-empty">画册还留着空白页。带画的新信收到后，会自动收藏到这里。</p>'}</div></section>`;
 }
 function sessionScope(session) { return JSON.stringify([session?.chatId, session?.archiveRevision, session?.ownerKey, session?.sender, session?.recipient]); }
 export function inboxSenderLabel(letter, session) {
@@ -41,14 +48,14 @@ export function renderInbox() {
     const selected = session.letters.find(letter => letter.id === view.selected);
     const letters = [...session.letters].reverse().filter(letter =>
         view.filter === 'unread' ? !letter.readAt : view.filter === 'favorite' ? letter.favorite : true);
-    const stamp = time => new Date(time).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    const stamp = mailStamp;
     const tab = (id, label) => `<button type="button" class="rmt-btn" data-rmt-inbox="filter" data-rmt-inbox-id="${id}" aria-pressed="${view.filter === id}">${label}</button>`;
     const detail = selected ? `<article class="rmt-mail-open">
         <div class="rmt-mail-actions"><button type="button" class="rmt-btn" data-rmt-inbox="back">← 收件箱</button><button type="button" class="rmt-btn" data-rmt-inbox="favorite" data-rmt-inbox-id="${text.esc(selected.id)}" aria-pressed="${selected.favorite}" ${readonly() ? 'disabled' : ''}>${selected.favorite ? '已收藏' : '收藏这封信'}</button></div>
         ${selected.travelSnapshot ? travelView.travelPostcardHtml(selected.travelSnapshot.location, selected.travelSnapshot, { recipient: session.recipient, closeAction: 'inbox-back' })
             : `<div class="rmt-mail-paper" data-rmt-paper="${inboxPaperTone(selected)}"><header><small>${letterTypeLabel(selected.type)} · TO ${text.esc(session.recipient || '你')} · ${text.esc(stamp(selected.createdAt))}</small><h2>${text.esc(selected.title)}</h2></header><b>${text.esc(selected.greeting)}</b><p>${text.esc(selected.body)}</p><figure class="rmt-letter-illustration" style="margin:24px auto;text-align:center">${letterArt.renderLetterIllustration(selected.illustration, { idPrefix: selected.id, label: '随信小画' })}</figure><footer>${text.esc(selected.closing || inboxSenderLabel(selected, session))}</footer></div>`}
-    </article>` : `<nav class="rmt-mail-filters" aria-label="筛选信件">${tab('all','全部')}${tab('unread','未读')}${tab('favorite','收藏')}</nav><div class="rmt-mail-list">${letters.map(letter =>
-        `<button type="button" class="rmt-mail-row ${letter.readAt ? '' : 'is-unread'}" data-rmt-inbox="read" data-rmt-inbox-id="${text.esc(letter.id)}"><span class="rmt-mail-seal" aria-hidden="true">${letter.type === 'travel' ? '▧' : '✉'}</span><span><small>${letterTypeLabel(letter.type)} · ${text.esc(inboxSenderLabel(letter, session))} · ${text.esc(stamp(letter.createdAt))}${letter.favorite ? ' · 收藏' : ''}${!letter.readAt ? ' · 未读' : ''}</small><b>${text.esc(letter.title)}</b><span>${text.esc(letter.body.slice(0, 90))}</span></span><i aria-hidden="true">›</i></button>`).join('') || '<div class="rmt-mail-empty"><span aria-hidden="true">✉</span><h3>信箱里留着位置</h3><p>可以收一封今天的来信，也可以把路线中的明信片收进来。</p></div>'}</div>`;
+    </article>` : `<nav class="rmt-mail-filters" aria-label="筛选信件">${tab('all','全部')}${tab('unread','未读')}${tab('favorite','收藏')}${tab('gallery','随信画册 · ' + mailGallery.savedMailDrawings(session).length)}</nav>${view.filter === 'gallery' ? inboxGalleryHtml(session) : `<div class="rmt-mail-list">${letters.map(letter =>
+        `<button type="button" class="rmt-mail-row ${letter.readAt ? '' : 'is-unread'}" data-rmt-inbox="read" data-rmt-inbox-id="${text.esc(letter.id)}"><span class="rmt-mail-seal" aria-hidden="true">${letter.type === 'travel' ? '▧' : '✉'}</span><span><small>${letterTypeLabel(letter.type)} · ${text.esc(inboxSenderLabel(letter, session))} · ${text.esc(stamp(letter.createdAt))}${letter.favorite ? ' · 收藏' : ''}${!letter.readAt ? ' · 未读' : ''}</small><b>${text.esc(letter.title)}</b><span>${text.esc(letter.body.slice(0, 90))}</span></span><i aria-hidden="true">›</i></button>`).join('') || '<div class="rmt-mail-empty"><span aria-hidden="true">✉</span><h3>信箱里留着位置</h3><p>可以收一封今天的来信，也可以把路线中的明信片收进来。</p></div>'}</div>`}`;
     overlay.bodyEl().innerHTML = `<section class="rmt-inbox"><header class="rmt-mail-header"><div><small>LETTERS TO YOU</small><h2>${text.esc(session.recipient || '你')}的邮箱</h2><p>${session.letters.length} 封来信 · ${session.letters.filter(item => !item.readAt).length} 封未读</p></div><div class="rmt-mail-actions"><button type="button" class="rmt-btn" data-rmt-inbox="receive" ${readonly() ? 'disabled' : ''}>收取新信</button><button type="button" class="rmt-btn" data-rmt-inbox="postcards" ${readonly() ? 'disabled' : ''}>收进路线明信片</button></div></header>${detail}</section>`;
 }
 // State changes use the same durable CAS as model output. Navigation never calls saveSession.
@@ -129,11 +136,11 @@ export async function handleInboxAction(action, id = '') {
         if (['read', 'favorite', 'postcards', 'receive'].includes(action)) assertShownInboxTarget();
         resetView(runtimeState.activeSession);
         if (action === 'back') { view.selected = ''; return renderInbox(); }
-        if (action === 'filter') { view.filter = ['all','unread','favorite'].includes(id) ? id : 'all'; view.selected = ''; return renderInbox(); }
+        if (action === 'filter') { view.filter = ['all','unread','favorite','gallery'].includes(id) ? id : 'all'; view.selected = ''; return renderInbox(); }
         if (action === 'read') {
             if (!runtimeState.activeSession.letters.some(letter => letter.id === id)) return;
             view.selected = id;
-            if (readonly()) return renderInbox();
+            if (readonly() || runtimeState.activeSession.letters.find(letter => letter.id === id)?.readAt) return renderInbox();
             return await mutateInbox(session => { const letter = session.letters.find(item => item.id === id); if (letter && !letter.readAt) letter.readAt = Date.now(); return session; });
         }
         if (action === 'favorite') return await mutateInbox(session => { const letter = session.letters.find(item => item.id === id); if (letter) letter.favorite = !letter.favorite; return session; });

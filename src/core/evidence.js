@@ -77,7 +77,15 @@ export function evenlySample(items, limit) {
 
 export function memoryPayload(memoryBank, onlyIds = null, limit = core_constants.MAX_MEMORY_PROMPT_ITEMS) {
     const filter = onlyIds ? new Set(onlyIds) : null;
-    const source = (memoryBank?.memories || []).filter(item => !filter || filter.has(item.id));
+    // Explicit references can point into either archive tier. Ordinary broad
+    // generation keeps the hot-tier sampling policy and its existing budget.
+    const candidates = [...(memoryBank?.memories || []), ...(filter ? memoryBank?.coldArchive || [] : [])];
+    const seen = new Set();
+    const source = candidates.filter(item => {
+        if ((filter && !filter.has(item.id)) || seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+    });
     const safeLimit = Math.max(1, Math.min(core_constants.MAX_MEMORY_ITEMS, Number(limit) || core_constants.MAX_MEMORY_PROMPT_ITEMS));
     const selected = filter ? source.slice(0, safeLimit) : evenlySample(source, safeLimit);
     return story_chronology.sortByStoryDate(selected).map(item => ({

@@ -23,6 +23,8 @@ import * as ui_advEventView from '../ui/advEventView.js';
 import * as ui_albumView from '../ui/albumView.js';
 import * as ui_heartView from '../ui/heartView.js';
 import * as ui_endingView from '../ui/endingView.js';
+import * as language_view from '../ui/languageView.js';
+import * as workspace_state from '../ui/workspaceState.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as ui_styles from '../ui/styles.js';
 
@@ -97,13 +99,13 @@ export function sanitizeCgVisualText(value, limit = core_constants.MAX_CG_IMAGE_
 export function cgImagePromptForItem(item, castLooksLine = '', promptFormat = '') {
     if (cg_format.normalizeCgPromptFormat(promptFormat)) {
         // A typed draft must not append Chinese descriptions or stale appearance.
-        return sanitizeCgVisualText(normalizeCgImageRecord(item?.cgImage)?.prompt || item?.imagePrompt || item?.cgDesc || item?.desc);
+        return sanitizeCgVisualText(normalizeCgImageRecord(item?.cgImage)?.prompt || item?.imagePrompt || item?.cgDesc || (item?.__rmtCgDescriptor ? '' : item?.desc));
     }
     const saved = sanitizeCgVisualText(normalizeCgImageRecord(item?.cgImage)?.prompt);
     if (saved) return saved;
     // Only the initial editable draft is composed here. Keep the event ahead of
     // optional design details; never read a live card or rewrite a confirmed image.
-    const scene = sanitizeCgVisualText(item?.cgDesc || item?.desc, 1100);
+    const scene = sanitizeCgVisualText(item?.cgDesc || (item?.__rmtCgDescriptor ? '' : item?.desc), 1100);
     const authored = sanitizeCgVisualText(item?.imagePrompt, core_constants.MAX_CG_IMAGE_PROMPT_CHARS);
     const seeds = core_text.cleanArray(item?.visualSeed, 10, 80).map(seed => sanitizeCgVisualText(seed, 80)).filter(Boolean);
     const style = item?.cgLayout === 'photoshoot-9-grid'
@@ -183,7 +185,44 @@ export function cgImageLayerHtml(item, { lazy = true } = {}) {
     const abstract = `<div class="rmt-abstract" style="${ui_styles.abstractStyle(item?.visualSeed, item?.id)}"></div>`;
     if (!image) return abstract;
     const alt = `${core_text.normalizeText(item?.title, 120) || 'CG'} · 实图`;
-    return `${abstract}<img class="rmt-cg-real" data-rmt-cg-image src="${core_text.esc(image.url)}" alt="${core_text.esc(alt)}" ${lazy ? 'loading="lazy"' : ''} decoding="async" referrerpolicy="no-referrer">`;
+    const versions = cgImageVersions(item), index = versions.findIndex(row => row.url === image.url);
+    const history = versions.length > 1 ? `<div class="rmt-cg-history-controls" data-rmt-cg-history-controls data-rmt-cg-item="${core_text.esc(item.id)}" aria-label="切换已保存图片"><button type="button" data-rmt-cg-history-step="-1" aria-label="上一张已保存图片">‹</button><span data-rmt-cg-history-count>${index + 1} / ${versions.length}</span><button type="button" data-rmt-cg-history-step="1" aria-label="下一张已保存图片">›</button></div>` : '';
+    return `${abstract}<img class="rmt-cg-real" data-rmt-cg-image src="${core_text.esc(image.url)}" alt="${core_text.esc(alt)}" ${lazy ? 'loading="lazy"' : ''} decoding="async" referrerpolicy="no-referrer">${history}`;
+}
+
+export function cgImageVersions(item) {
+    const rows = [...normalizeCgImageHistory(item?.cgImageHistory)];
+    const current = normalizeCgImageRecord(item?.cgImage);
+    if (current && !rows.some(row => row.url === current.url)) rows.push(current);
+    return rows.sort((a,b) => a.generatedAt - b.generatedAt || a.url.localeCompare(b.url));
+}
+
+export async function handleCgHistorySwitch(eventOrButton) {
+    const button = eventOrButton?.target?.closest?.('[data-rmt-cg-history-step]') || eventOrButton;
+    const controls = button?.closest?.('[data-rmt-cg-history-controls]');
+    if (!controls || button.disabled) return false;
+    const session = runtimeState.activeSession, mode = runtimeState.activeMode;
+    const item = cgItemInSession(mode,session,controls.dataset.rmtCgItem);
+    const versions = cgImageVersions(item);
+    const imageElement = controls.parentElement?.querySelector('[data-rmt-cg-image]');
+    if (!item || versions.length < 2 || !imageElement) return false;
+    eventOrButton?.preventDefault?.(); eventOrButton?.stopPropagation?.();
+    const shown = normalizeCgImageUrl(imageElement.getAttribute('src'));
+    const current = Math.max(0,versions.findIndex(row => row.url === shown));
+    const index = (current + (Number(button.dataset.rmtCgHistoryStep) < 0 ? -1 : 1) + versions.length) % versions.length;
+    if (runtimeState.activeArchiveSnapshot) {
+        // Historical/read-only browsing affects this image element only.
+        imageElement.src = versions[index].url;
+        controls.querySelector('[data-rmt-cg-history-count]').textContent = `${index+1} / ${versions.length}`;
+        return true;
+    }
+    button.disabled = true;
+    try {
+        const captured = captureCgImageTarget({mode,session,item});
+        if (!captured) return false;
+        return await restoreSelectedCgImageVersion(versions[index].url,captured,{confirm:false});
+    } catch(error) { globalThis.toastr?.error?.(core_text.safeErrorSummary(error),'心迹回廊'); return false; }
+    finally { if(button.isConnected)button.disabled=false; }
 }
 
 // Bind an editor/drawing operation to one local item. Neither model output nor a
@@ -284,7 +323,7 @@ export function buildCgReconceptPrompt(item, context, mode, appearance = null, p
     const visible = {
         title: sanitizeCgVisualText(item?.title, 160),
         date: sanitizeCgVisualText(item?.date, 80),
-        description: sanitizeCgVisualText(item?.cgDesc || item?.desc || item?.subtitle, 1800),
+        description: sanitizeCgVisualText(item?.cgSourceText || item?.cgDesc || item?.desc || item?.subtitle, item?.cgSourceText ? 12000 : 1800),
         characterName: core_text.normalizeText(context?.name2, 120),
         userName: core_text.normalizeText(context?.name1, 120),
     };
@@ -462,7 +501,7 @@ export async function prepareLanguageCgTarget({ category, line, scenePrompt } = 
         const previous = index >= 0 ? rows[index] : null;
         const next = { ...(previous || {}), category: key, lineHash, scenePrompt: prompt };
         if (previous?.scenePrompt && previous.scenePrompt !== prompt && previous.visual) {
-            const saved = Array.isArray(previous.previousSceneVisuals) ? previous.previousSceneVisuals.slice(-4) : [];
+            const saved = Array.isArray(previous.previousSceneVisuals) ? [...previous.previousSceneVisuals] : [];
             saved.push({ scenePrompt: previous.scenePrompt, visual: structuredClone(previous.visual) });
             next.previousSceneVisuals = saved;
             delete next.visual;
@@ -474,6 +513,32 @@ export async function prepareLanguageCgTarget({ category, line, scenePrompt } = 
     if (!updated) return null;
     if (runtimeState.activeSession === session) Object.assign(session, structuredClone(updated));
     return cg_targets.describeExpandedCgTarget(updated, { kind: 'heart-language', category: key, line: original }) || descriptor;
+}
+
+export const DEFAULT_LANGUAGE_PORTRAIT = '角色独自面向屏幕外的用户，与镜头平视、目光相接，像隔着屏幕陪伴彼此。半身肖像，保留角色原本的衣着与外貌；用户在镜头这一侧，不画成第二个出镜人物。';
+export async function prepareLanguagePortraitTarget({ scenePrompt = DEFAULT_LANGUAGE_PORTRAIT } = {}) {
+    if (!archive_library.requireWritableArchiveAction() || runtimeState.activeArchiveSnapshot) return null;
+    const session = runtimeState.activeSession;
+    if (runtimeState.activeMode !== core_constants.MODE.HEART || session?.kind !== core_constants.MODE.HEART) return null;
+    const prompt = sanitizeCgVisualText(scenePrompt);
+    if (!prompt) throw core_text.safeUserError('请填写你希望看到的肖像画面。', 'RMT_CG_LANGUAGE_SCENE_REQUIRED');
+    const context = core_context.currentCharacterGuard(), memory = archive_repository.requireArchive(context);
+    if (session.archiveRevision !== memory.archiveRevision || core_context.comparableChatId(session.chatId) !== core_context.comparableChatId(core_context.getChatId(context))) return null;
+    const origin = core_context.captureTaskOrigin(context, memory.archiveRevision);
+    const updated = await core_cache.commitSessionMutation(core_constants.MODE.HEART, core_context.getChatId(context), origin, latest => {
+        if (!latest || latest.kind !== core_constants.MODE.HEART) return null;
+        const previous = cg_targets.normalizeLanguagePortrait(latest.languagePortrait);
+        const next = { ...(previous || {}), scenePrompt: prompt };
+        if (previous?.visual && previous.scenePrompt !== prompt) {
+            next.previousSceneVisuals = [...(previous.previousSceneVisuals || []), {scenePrompt:previous.scenePrompt,visual:structuredClone(previous.visual)}];
+            delete next.visual;
+        }
+        latest.languagePortrait = next;
+        return latest;
+    }, session, { keepCommittedOnMirrorFailure: true });
+    if (!updated) return null;
+    if (runtimeState.activeSession === session) Object.assign(session, structuredClone(updated));
+    return cg_targets.describeExpandedCgTarget(updated, {kind:'heart-portrait',containerId:'language'});
 }
 
 // A photo plan is authored and saved before the editor opens. It is deliberately
@@ -517,6 +582,7 @@ export function renderCurrentCgMode(mode, session) {
     if (runtimeState.activeMode !== mode || runtimeState.activeSession !== session || document.getElementById(core_constants.OVERLAY_ID)?.hidden) return;
     if (mode === core_constants.MODE.ALBUM) ui_albumView.renderAlbum();
     else if (mode === core_constants.MODE.ADV) ui_advEventView.renderAdvMode();
+    else if (mode === core_constants.MODE.HEART && workspace_state.workspace.route === 'language') language_view.renderLanguage();
     else if (mode === core_constants.MODE.HEART) ui_heartView.renderHeart();
     else if (mode === core_constants.MODE.ENDING) ui_endingView.renderEnding();
 }
@@ -846,43 +912,41 @@ export async function clearSelectedCgImage(expectedTarget = null) {
 // Promote one saved version back to the live image. Pure pointer swap through
 // the same capture/CAS commit path as clearing: no redraw, no request, no file
 // deletion, and the demoted current image stays in the bounded history.
-export async function restoreSelectedCgImageVersion(url, expectedTarget = null) {
+export async function restoreSelectedCgImageVersion(url, expectedTarget = null, { confirm = true } = {}) {
     if (!archive_library.requireWritableArchiveAction()) return;
-    const target = expectedTarget?.targetDescriptor ? selectedCgTarget(expectedTarget.targetDescriptor) : selectedCgTarget();
-    if (!target) return;
+    const target = expectedTarget ? {mode:expectedTarget.mode,session:expectedTarget.session,
+        item:cgItemInSession(expectedTarget.mode,expectedTarget.session,expectedTarget.itemId)} : selectedCgTarget();
+    if (!target?.item) return;
     const { mode, session, item } = target;
     if (isCgImageDrawing(mode, item.id)) return globalThis.toastr?.info?.('请先取消正在绘制的图片，再恢复历史版本。', '心迹回廊');
     const wantedUrl = image_patch.normalizeCgImageUrl(url);
     if (!wantedUrl || !image_patch.normalizeCgImageHistory(item.cgImageHistory).some(record => record.url === wantedUrl)) return;
-    if (!ui_overlay.confirmExplicitActionTwice(
+    if (confirm && !ui_overlay.confirmExplicitAction(
         `把「${item.title}」恢复为这个历史版本？`,
         '只切换档案里保存的图片引用：当前图片会转入历史版本，不重新生图、不删除任何已保存的图片文件。',
         { destructive: false },
     )) return;
     const captured = expectedTarget || captureCgImageTarget(target);
     if (!captured) return;
-    const previousImage = item.cgImage;
-    const previousHistory = item.cgImageHistory;
-    if (!image_patch.swapCgImageToVersion(item, url)) return;
-    const expectedChatId = core_text.normalizeText(session.chatId, 240);
+    assertCgImageTargetCurrent(captured,{requireSelection:false});
     const context = core_context.currentCharacterGuard();
-    const memoryBank = archive_repository.requireArchive(context);
-    const origin = { ...core_context.captureTaskOrigin(context, memoryBank.archiveRevision), chatId: core_context.comparableChatId(expectedChatId) };
+    const mutate = latest => {
+        const savedItem = cgItemInSession(mode,latest,item.id);
+        if (!savedItem || cgItemSignature(savedItem) !== captured.signature) return null;
+        return image_patch.swapCgImageToVersion(savedItem,url) ? latest : null;
+    };
     const committed = captured.draftId
-        ? await core_cache.commitGenerationTaskResultMutation(context, captured.draftId, latest => {
-            const savedItem = cgItemInSession(mode, latest, item.id);
-            if (!savedItem || cgItemSignature(savedItem) !== captured.signature) return null;
-            return image_patch.swapCgImageToVersion(savedItem, url) ? latest : null;
-        }, { expectedTaskOrigin: origin })
-        : await core_cache.commitSession(mode, session, expectedChatId, origin);
+        ? await core_cache.commitGenerationTaskResultMutation(context,captured.draftId,mutate,{expectedTaskOrigin:captured.origin})
+        : await core_cache.commitSessionMutation(mode,core_context.getChatId(context),captured.origin,mutate,session,{keepCommittedOnMirrorFailure:true});
     if (!committed) {
-        item.cgImage = previousImage;
-        if (previousHistory === undefined) delete item.cgImageHistory; else item.cgImageHistory = previousHistory;
         globalThis.toastr?.error?.('当前档案版本已经变化，未恢复历史版本。', '心迹回廊');
         return;
     }
-    globalThis.toastr?.success?.('已恢复所选历史版本，原图已转入历史版本。', '心迹回廊');
-    renderCurrentCgMode(mode, session);
+    if (runtimeState.activeSession === session && core_context.isCurrentTaskOrigin(captured.origin)) {
+        Object.assign(session,structuredClone(committed));
+        renderCurrentCgMode(mode,session);
+    }
+    if (confirm) globalThis.toastr?.success?.('已恢复所选历史版本，原图已转入历史版本。', '心迹回廊');
     return true;
 }
 

@@ -1,3 +1,4 @@
+import * as routePeople from '../core/routeParticipants.js';
 import * as composerOptions from '../core/generationOptions.js';
 import * as connection_pool from '../core/connectionPool.js';
 import * as generation_merged from './mergedGeneration.js';
@@ -871,7 +872,15 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     const transportContext = contentContextSources.get(context) || context;
     await core_settings.prepareManualCredential(transportContext);
     const configuredSettings = core_settings.getPluginSettings(transportContext);
-    const settings = connection_pool.selectConnectionTransport(configuredSettings, options.origin || options);
+    // Persist only the selected profile's inert identifier, never credentials.
+    // A reopened recovery origin is a new object, so WeakMap pinning alone
+    // cannot preserve the provider chosen before a browser restart.
+    const frozenConnection = await generation_recovery.frozenGenerationInput(options.origin, 'transport:connection', () => {
+        if (configuredSettings.apiConnectionMode === 'manual' || !configuredSettings.connectionPoolEnabled) return null;
+        const selected = connection_pool.selectConnectionTransport(configuredSettings, options.origin || options);
+        return { id: selected.connectionProfileId, fingerprint: connection_pool.connectionPoolFingerprint(configuredSettings) };
+    });
+    const settings = connection_pool.selectConnectionTransport(configuredSettings, options.origin || options, frozenConnection);
     const savedContent = options.recoveryContentSettings || generation_recovery.generationContentSnapshotForOrigin(options.origin)?.contentSettings;
     let contentSettings = { ...settings, ...(savedContent || {}) };
     const advanced = advanced_generation.parseAdvancedGeneration(settings);
@@ -1172,11 +1181,15 @@ export async function beginModeRecovery(mode, context, bank, origin, options = {
         }
         partialSeed = { snapshot, frozenInputs: structuredClone(parent.frozenInputs || {}) };
     }
-    const contentSnapshot = generation_recovery.readGenerationContentSnapshot(existing)
+    let contentSnapshot = generation_recovery.readGenerationContentSnapshot(existing)
         || (!existing ? fitGenerationContentSnapshot(snapshotGenerationContent({ ...(partialSeed?.snapshot || captureGenerationContent(context, bank)),
             ...(options.contentInputs ? { contentInputs: { ...(partialSeed?.snapshot?.contentInputs || {}), ...options.contentInputs } } : {}) })) : null);
     const sourceValues = JSON.stringify(recovery_source.recoverySourceValues(context));
     await recovery_source.assertRecoverySourcePolicy(existing, context, origin);
+    if (!contentSnapshot && await recovery_source.hasLegacyConfigurationRestartApproval(existing, context)) {
+        contentSnapshot = fitGenerationContentSnapshot(snapshotGenerationContent({ ...captureGenerationContent(context, bank),
+            ...(options.contentInputs ? { contentInputs: options.contentInputs } : {}) }));
+    }
     const sourcePolicy = await recovery_source.recoverySourcePolicy(context);
     if (!contentSnapshot && JSON.stringify(recovery_source.recoverySourceValues(context)) !== sourceValues) throw new DOMException('Source changed', 'AbortError');
     const operation = cg_policy.cgRecoveryOperation(mode, options.operation || { kind: 'mode', mode }, existing,
@@ -1193,7 +1206,9 @@ export async function beginModeRecovery(mode, context, bank, origin, options = {
         contentSnapshot,
         draftId: existing?.draftId || options.draftId || `generation-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`,
         pageId: existing?.pageId || options.pageId || options.participantRegeneration?.pageId || mode,
-        confirmLegacyRestart: () => ui_overlay.confirmExplicitAction('保留旧失败记录，按当前背景重新尝试？',
+        confirmLegacyRestart: async ({ reason } = {}) => reason === 'configuration'
+            ? recovery_source.consumeLegacyConfigurationRestart(existing, context)
+            : ui_overlay.confirmExplicitAction('保留旧失败记录，按当前背景重新尝试？',
             '旧版失败记录没有可验证的原背景配对，且没有任何成功分段或截断正文。确定会保留原失败记录，按本次已读取的背景重新请求；取消不发送。', { destructive: false }),
         taskScopes: [`${origin.characterKey}|${origin.chatId}`, `archive-target:${options.archiveTarget?.entryId || archiveEntry?.entryId || origin.archiveTargetEntryId || ''}`],
         modeTaskScopes: recoveryModeTaskScopes(mode, context, bank, origin,
@@ -1352,6 +1367,10 @@ export async function discardSavedGeneration(mode, options = {}) {
 export async function generateMode(mode, options = {}) {
     if (!Object.values(core_constants.MODE).includes(mode)) return;
     const context = options.context || core_context.currentCharacterGuard();
+    if (!Object.hasOwn(options, 'participantSnapshot') && !options.existing && !options.draftId && !options.participantRegeneration && !options.archiveTarget
+        && !core_cache.loadGenerationRecovery(mode, context)) {
+        options = { ...options, participantSnapshot: routePeople.captureRoutePeople(options.workspaceRoute || mode, context, archive_repository.getImportedMemory(context)) };
+    }
     const origin = core_context.captureTaskOrigin(context, archive_repository.getImportedMemory(context)?.archiveRevision || '');
     let logicalTask;
     try {
@@ -1686,7 +1705,7 @@ async function generateModeOperation(mode, options = {}) {
         if (![core_constants.MODE.ROOM, core_constants.MODE.ALBUM].includes(mode)) {
             participantSnapshot = await captureModeParticipantSnapshot(mode, context, origin, {
                 existing: recoveryExisting,
-                participantSnapshot: options.participantRegeneration?.participantSnapshot,
+                participantSnapshot: options.participantRegeneration?.participantSnapshot ?? options.participantSnapshot,
                 memoryBank,
             });
             memoryBank = core_generationParticipants.deriveGenerationParticipantMemoryBank(memoryBank, participantSnapshot);
@@ -1702,9 +1721,9 @@ async function generateModeOperation(mode, options = {}) {
         let session;
         participantSnapshot = mode === core_constants.MODE.ROOM
             ? await captureRoomParticipantSnapshot(context, origin, { existing: recoveryExisting,
-                participantSnapshot: options.participantRegeneration?.participantSnapshot })
+                participantSnapshot: options.participantRegeneration?.participantSnapshot ?? options.participantSnapshot })
             : mode === core_constants.MODE.ALBUM ? await captureAlbumParticipantSnapshot(context, origin, { existing: recoveryExisting,
-                participantSnapshot: options.participantRegeneration?.participantSnapshot }) : participantSnapshot;
+                participantSnapshot: options.participantRegeneration?.participantSnapshot ?? options.participantSnapshot }) : participantSnapshot;
         if (participantSnapshot && options.logicalTask) {
             if (mode === core_constants.MODE.ROOM) options.logicalTask.participantPromptIndexed = true;
             core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin, { participantSnapshot });

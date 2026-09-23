@@ -213,6 +213,7 @@ export function openOverlay() {
               <button type="button" data-rmt-action="tasks" aria-label="任务" title="任务">${toolbarIcons.toolbarIcon('tasks')}<span class="rmt-task-count" data-rmt-task-count hidden>0</span></button>
               <button type="button" data-rmt-action="toolbar-more" aria-label="更多操作" aria-haspopup="menu" aria-controls="rmt-toolbar-more-menu" aria-expanded="false">${toolbarIcons.toolbarIcon('more')}</button>
               <div id="rmt-toolbar-more-menu" class="rmt-toolbar-more-menu" data-rmt-toolbar-more-menu role="menu" aria-label="更多操作" hidden>
+<button type="button" data-reader="page" role="menuitem">朗读本页</button><button type="button" data-reader="selection" role="menuitem">朗读选中文字</button><button type="button" data-reader="stop" role="menuitem">停止朗读</button><button type="button" data-rmt-workspace-route="mirrorVoice" role="menuitem">镜译 · 语音设置</button>
                 <button type="button" data-rmt-action="workspace-expand" role="menuitem">${toolbarIcons.toolbarIcon('expand')}<span>展开窗口</span></button>
                 <button type="button" data-rmt-action="regenerate" data-rmt-toolbar-more-item="regenerate" role="menuitem" hidden>${toolbarIcons.toolbarIcon('add')}<span>增量追加</span></button>
                 <button type="button" data-rmt-action="manage" data-rmt-toolbar-more-item="manage" role="menuitem" hidden>${toolbarIcons.toolbarIcon('manage')}<span>管理</span></button>
@@ -244,7 +245,7 @@ export function openOverlay() {
     revealArchiveOverlay(overlay);
     workspace_ui.syncWorkspaceChrome();
     mirror_reader.mountMirrorReader(overlay);
-    mirror_call.mountMirrorCall(overlay);
+
     return overlay;
 }
 
@@ -1041,6 +1042,7 @@ function emptyArchiveMode(mode, memory, context, stored) {
 
 let heartOpenRequest = 0;
 export function openCachedOrGenerate(mode, options = {}) {
+    if (['mirrorCall','mirrorVoice'].includes(mode)) return workspace_ui.openVoiceModule(mode);
     if (!Object.values(core_constants.MODE).includes(mode)) return;
     heart_reader.rememberHeartReader();
     const openRequest = ++heartOpenRequest;
@@ -1278,6 +1280,33 @@ export async function saveActiveSessionEdit(mutator, { select = value => value }
     return committed;
 }
 
+// Refresh only the live saved reader. Drafts and historical views own separate data.
+export function refreshSavedActiveSession() {
+    if (runtimeState.activeArchiveSnapshot || !runtimeState.activeSession || !runtimeState.activeMode
+        || (runtimeState.activeSession.readableProgress && runtimeState.activeSession.readableProgress.complete !== true) || runtimeState.contentManagerOpen) return false;
+    const body = bodyEl();
+    if (!body || body.querySelector('[data-rmt-cg-editor]')) return false;
+    // Never replace an in-progress form edit in order to show a background result.
+    if (body.contains(document.activeElement) && document.activeElement?.matches?.('input,textarea,select,[contenteditable=true]')) return false;
+    const context = core_context.currentCharacterGuard();
+    const memory = archive_repository.getImportedMemory(context);
+    const next = core_cache.loadSession(runtimeState.activeMode, { context, memoryBank: memory, clone: true });
+    if (!next) return false;
+    const position = navigation_bookmark.readingPosition(runtimeState.activeSession);
+    const scroll = body.scrollTop;
+    const controls = [...body.querySelectorAll('input,textarea,select')].map(el => ({
+        id: el.id, name: el.name, type: el.type, value: el.value, checked: el.checked,
+    })).filter(el => el.id || el.name);
+    runtimeState.activeSession = Object.assign(next, position);
+    renderActive();
+    for (const saved of controls) {
+        const control = [...body.querySelectorAll('input,textarea,select')].find(el => saved.id ? el.id === saved.id : el.name === saved.name && el.type === saved.type);
+        if (control) { control.value = saved.value; if ('checked' in control) control.checked = saved.checked; }
+    }
+    body.scrollTop = scroll;
+    return true;
+}
+
 export function renderActive() {
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
     if (!overlay || overlay.hidden) return;
@@ -1285,6 +1314,7 @@ export function renderActive() {
         const scope = core_context.chatScopeKey(core_context.currentCharacterGuard());
         if (runtimeState.renderedChatScope && runtimeState.renderedChatScope !== scope) return;
     } catch { return; }
+    if (['mirrorCall', 'mirrorVoice'].includes(runtimeState.activeMode)) return;
     if (workspace_ui.renderEmptyWorkspace()) return;
     image_viewer.closeCgImageViewer({ restoreFocus: false });
     runtimeState.contentManagerOpen = false;
@@ -1603,12 +1633,13 @@ async function regenerateManagedCategory() {
 }
 
 export function handleOverlayClick(event) {
+    if (event.target.closest?.('[data-rmt-cg-history-step]')) { event.preventDefault(); event.stopPropagation(); return void generation_imageGeneration.handleCgHistorySwitch(event); }
     const moreTrigger = event.target.closest?.('[data-rmt-action="toolbar-more"]');
     const overlay = event.currentTarget?.querySelector ? event.currentTarget : document.getElementById(core_constants.OVERLAY_ID);
     if (moreTrigger) return toggleToolbarMoreMenu(overlay);
     const moreMenu = toolbarMoreMenu(overlay);
     if (!moreMenu?.hidden && !event.target.closest?.('[data-rmt-toolbar-more-menu]')) closeToolbarMoreMenu(overlay);
-    else if (!moreMenu?.hidden && event.target.closest?.('[data-rmt-toolbar-more-menu] [data-rmt-action]')) closeToolbarMoreMenu(overlay);
+    else if (!moreMenu?.hidden && event.target.closest?.('[data-rmt-toolbar-more-menu] [data-rmt-action],[data-rmt-toolbar-more-menu] [data-reader],[data-rmt-toolbar-more-menu] [data-rmt-workspace-route]')) closeToolbarMoreMenu(overlay);
     const lockBtn = event.target.closest?.('[data-rmt-memory-lock]');
     if (lockBtn) {
         const pressed = lockBtn.getAttribute('aria-pressed') === 'true';
@@ -1751,7 +1782,7 @@ export function handleOverlayClick(event) {
             void (async () => {
                 try {
                     const targetOptions = archive_library.archiveTargetGenerationOptions(snapshot);
-                    await generation_client.generateMode(mode, { background, ...targetOptions, ...completionOptions });
+                    await generation_client.generateMode(mode, { workspaceRoute: ui_workspaceState.workspace.route || mode, background, ...targetOptions, ...completionOptions });
                 } catch (error) {
                     if (!error?.notified) globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
                 }
@@ -1760,7 +1791,7 @@ export function handleOverlayClick(event) {
         }
         if (!archive_library.requireWritableArchiveAction()) return;
         if (generateModeButton.dataset.rmtRegenerate === 'true' && !confirmModeRegeneration(mode)) return;
-        void generation_client.generateMode(mode, { background, ...completionOptions });
+        void generation_client.generateMode(mode, { workspaceRoute: ui_workspaceState.workspace.route || mode, background, ...completionOptions });
         return;
     }
     const modeButton = event.target.closest?.('[data-rmt-mode]');
