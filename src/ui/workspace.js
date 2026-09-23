@@ -24,6 +24,7 @@ import * as generation_merged from '../generation/mergedGeneration.js';
 const esc = text.esc;
 const GROUPS = [['memory', '回忆'], ['life', '生活'], ['interaction', '互动'], ['stories', '番外']];
 const ALIAS_META = {
+    journal: {icon:'fa-book-open',accent:'album',subtitle:'整页收录，或挑选已有内容制作'},
     mirrorCall: {icon:'fa-microphone',accent:'heart',subtitle:'说给 TA 听，也听 TA 回应'},
     mirrorVoice: {icon:'fa-volume-high',accent:'heart',subtitle:'配置朗读音色，在各页播放'},
     language: { icon: 'fa-comment', accent: 'heart', subtitle: '早晚、生日与特别时刻' },
@@ -37,7 +38,9 @@ export function syncWorkspaceChrome() {
     if (!host?.querySelectorAll || !host.classList?.add) return;
     ui_workspaceState.loadWorkspacePreferences();
     host.classList.add('rmt-workspace');
-    if (ui_workspaceState.workspace.route !== 'mirrorVoice') mirrorReader.parkMirrorSettings();
+    const voiceSettings = !state.activeMode && state.archiveViewLevel === 'home' ? host.querySelector('[data-rmt-voice-settings]') : null;
+    if (voiceSettings) mirrorReader.showMirrorSettings(voiceSettings);
+    else mirrorReader.parkMirrorSettings();
     if (ui_workspaceState.workspace.route !== 'mirrorCall') mirrorCall.disposeMirrorCall();
     host.classList.toggle('rmt-workspace-expanded', ui_workspaceState.workspace.expanded);
     const tab = state.activeMode ? 'content' : state.archiveViewLevel === 'home' ? 'settings'
@@ -206,7 +209,7 @@ export function arrangeSettingsHome(body) {
         const title = document.createElement('summary'); title.textContent = '更多设置'; more.appendChild(title);
         const sectionBody = document.createElement('div'); sectionBody.className = 'rmt-workspace-more-body'; more.appendChild(sectionBody);
         for (const card of [...content.querySelectorAll(':scope > [data-rmt-settings-section]')]) {
-            if (!['api','theme','image','reading'].includes(card.dataset.rmtSettingsSection)) sectionBody.appendChild(card);
+            if (!['api','theme','image','reading','voice'].includes(card.dataset.rmtSettingsSection)) sectionBody.appendChild(card);
         }
         if (sectionBody.children.length) content.appendChild(more);
         const preferences = [...content.querySelectorAll(':scope > .rmt-workspace-preferences')];
@@ -268,7 +271,8 @@ export function handleWorkspaceChange(event) {
 }
 
 export function openVoiceModule(route) {
-    if (!['mirrorCall','mirrorVoice'].includes(route)) return false;
+    if (route === 'mirrorVoice') return home.showHome({ section: 'voice' });
+    if (route !== 'mirrorCall') return false;
     const host = globalThis.document?.getElementById(constants.OVERLAY_ID);
     if (!host) return false;
     mirrorCall.disposeMirrorCall(); mirrorReader.parkMirrorSettings();
@@ -277,8 +281,7 @@ export function openVoiceModule(route) {
     overlay.setBackVisible(true,'内容'); overlay.setRegenerateVisible(false); overlay.setManageVisible(false);
     overlay.topTitle(ui_workspaceState.WORKSPACE_ROUTES[route].title);
     const body = overlay.bodyEl();
-    body.innerHTML = `<section class="rmt-voice-page"><h2>${esc(ui_workspaceState.WORKSPACE_ROUTES[route].title)}</h2>${route === 'mirrorVoice' ? '<p>连接和音色沿用镜译的配置。选好朗读音色后，可在各页的“…”菜单播放正文。</p>' : '<p>文字与语音都可以。连接后点“开始说话”，允许使用麦克风；说完后发送给 TA。</p>'}</section>`;
-    if (route === 'mirrorVoice') mirrorReader.showMirrorSettings(body.firstElementChild);
-    else mirrorCall.mountMirrorCall(host, body.firstElementChild);
+    body.innerHTML = `<section class="rmt-voice-page"><h2>${esc(ui_workspaceState.WORKSPACE_ROUTES[route].title)}</h2><p>文字与语音都可以。连接后点“开始说话”，允许使用麦克风；说完后发送给 TA。</p></section>`;
+    mirrorCall.mountMirrorCall(host, body.firstElementChild);
     syncWorkspaceChrome(); body.scrollTop = 0; return true;
 }

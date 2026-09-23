@@ -3,6 +3,8 @@ import * as song_styles from './themeSongStyles.js';
 export function workspaceCss(root = '#heartbeat_memories_overlay') {
     const r = root + '.rmt-workspace[data-rmt-theme-mode]';
     return `${song_styles.themeSongCss(r)}
+${r} [data-rmt-voice-settings] .rmt-mirror-reader{padding:0;border:0;background:transparent}
+${r} [data-rmt-voice-settings] .rmt-mirror-reader>summary{display:none}
 ${r} .rmt-cg-format{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;margin:0 0 14px;min-width:0;padding:10px 12px;border:1px solid var(--rmt-theme-border);border-radius:14px;background:var(--rmt-theme-surface-solid);color:var(--rmt-theme-text)}
 ${r} .rmt-cg-format>span{font-size:14px;font-weight:600}
 ${r} .rmt-cg-format select,${r} [data-rmt-cg-editor-format]{box-sizing:border-box;width:100%;min-width:0;max-width:100%;min-height:44px;font:inherit;font-size:15px;color:var(--rmt-theme-text);background:var(--rmt-theme-surface-solid);border:1px solid var(--rmt-theme-border);border-radius:10px;padding:8px}

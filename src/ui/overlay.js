@@ -1,3 +1,4 @@
+import * as handJournal from './handJournalView.js';
 import * as expanded_cg_view from './expandedCgView.js';
 import * as archive_inheritance_view from './archiveInheritance.js';
 import * as bedtime_contract from '../core/bedtimeContract.js';
@@ -1042,6 +1043,7 @@ function emptyArchiveMode(mode, memory, context, stored) {
 
 let heartOpenRequest = 0;
 export function openCachedOrGenerate(mode, options = {}) {
+    if (mode === 'journal') return handJournal.openHandJournal();
     if (['mirrorCall','mirrorVoice'].includes(mode)) return workspace_ui.openVoiceModule(mode);
     if (!Object.values(core_constants.MODE).includes(mode)) return;
     heart_reader.rememberHeartReader();
@@ -1314,7 +1316,7 @@ export function renderActive() {
         const scope = core_context.chatScopeKey(core_context.currentCharacterGuard());
         if (runtimeState.renderedChatScope && runtimeState.renderedChatScope !== scope) return;
     } catch { return; }
-    if (['mirrorCall', 'mirrorVoice'].includes(runtimeState.activeMode)) return;
+    if (['mirrorCall', 'mirrorVoice', 'journal'].includes(runtimeState.activeMode)) return;
     if (workspace_ui.renderEmptyWorkspace()) return;
     image_viewer.closeCgImageViewer({ restoreFocus: false });
     runtimeState.contentManagerOpen = false;

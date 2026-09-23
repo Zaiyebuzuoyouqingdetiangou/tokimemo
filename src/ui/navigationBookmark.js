@@ -11,7 +11,7 @@ import { state as runtimeState } from '../core/state.js';
 const positions = new Map();
 let restoreSequence = 0;
 const pages = new Set(['home', 'chooser', 'library', 'character']);
-const settingsSections = ['api', 'image', 'creative', 'filter', 'theme', 'auto', 'memory', 'reading'];
+const settingsSections = ['api', 'image', 'creative', 'filter', 'theme', 'auto', 'memory', 'reading', 'voice'];
 function settingsSection(key) {
     return document.querySelector('#' + constants.OVERLAY_ID + ` [data-rmt-settings-section="${key}"]`);
 }

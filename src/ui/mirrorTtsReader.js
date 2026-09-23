@@ -9,15 +9,18 @@ const PROSE = [
     '.rmt-past-reflection p', '.rmt-past-closing p', '.rmt-travel-artifact-copy > p',
     '.rmt-travel-postcard-copy > p', '.rmt-room-caption', '.rmt-room-object-desc',
     '.rmt-room-object-line', '.rmt-room-atmosphere', '.rmt-room-summary',
-    '.rmt-bedtime-chapter > p', '.rmt-past-paper > p', '.rmt-past-annotation p',
+    '.rmt-bedtime-chapter > p', '.rmt-past-paper > p', '.rmt-past-annotation p', '.rmt-journal-prose',
 ].join(',');
 const reader = mirror.createMirrorReader();
 let mounted = null;
 let preferredVoice = '';
 try { preferredVoice = globalThis.localStorage?.getItem('hearttraceReaderVoice') || ''; } catch {}
 export function showMirrorSettings(body) {
-    if (!mounted) return;
-    mounted.bar.hidden = false; mounted.bar.open = true; body.append(mounted.bar);
+    if (!mounted || !body) return false;
+    if (mounted.bar.parentElement !== body) body.append(mounted.bar);
+    if (mounted.bar.hidden) mounted.bar.hidden = false;
+    if (!mounted.bar.open) mounted.bar.open = true;
+    return true;
 }
 export function parkMirrorSettings() {
     if (!mounted || mounted.bar.hidden && mounted.bar.parentElement === mounted.overlay) return;

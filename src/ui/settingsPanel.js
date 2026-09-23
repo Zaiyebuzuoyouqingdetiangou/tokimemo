@@ -26,6 +26,7 @@ import * as ui_archivePortal from './archivePortal.js';
 import * as ui_overlay from './overlay.js';
 import * as ui_scenePicker from './scenePicker.js';
 import * as ui_styles from './styles.js';
+import * as mirrorReader from './mirrorTtsReader.js';
 
 let imageProviderEventCleanup = null;
 let homeSettingsPanel = null;
@@ -35,6 +36,7 @@ let memoryFilePreviewEpoch = 0;
 export const SETTINGS_LAUNCHER_ID = core_constants.SETTINGS_ID + '_launcher';
 
 export function clearHomeSettingsPanel() {
+    mirrorReader.parkMirrorSettings();
     homeSettingsPanel?.remove(); homeSettingsPanel = null; homeSettingsEpoch = -1;
     pendingMemoryFilePreview = null; memoryIngressRequestEpoch += 1; memoryFilePreviewEpoch += 1;
     homeSettingsScope = '';
@@ -50,6 +52,13 @@ export function refreshImageGenerationSettingsUi() {
     const statusNode = panel.querySelector('[data-rmt-image-generation-status]');
     const status = generation_imageGeneration.imageGenerationUiState();
     if (statusNode) statusNode.textContent = status.available ? '柏宝绘已连接 · 公开 API v1' : status.reason || '请单独安装、启用并配置柏宝绘公开 API v1。';
+}
+
+export function voiceSettingsHtml() {
+    return `<details class="rmt-settings-card" data-rmt-settings-section="voice">
+      <summary class="rmt-settings-card-head"><span>VOICE</span><div><b>镜译 · 语音设置</b><small>连接与朗读音色</small></div></summary>
+      <div class="rmt-settings-section-body"><p>在镜译中配置语音服务后，可从各内容页的更多菜单朗读正文或选中文字。</p><div data-rmt-voice-settings></div></div>
+    </details>`;
 }
 
 export function chatReadingSettingsHtml(settings = core_settings.getPluginSettings()) {
@@ -596,6 +605,7 @@ export function mountSettings({ homeTarget = null } = {}) {
     }
     if (existing) {
         homeTarget.appendChild(existing);
+        mirrorReader.showMirrorSettings(existing.querySelector('[data-rmt-voice-settings]'));
         refreshSettingsMemoryStatus({ lightweight: true });
         if (existing.dataset.rmtHydrated === '1') refreshGenerationSettingsUi();
         return true;
@@ -611,6 +621,7 @@ export function mountSettings({ homeTarget = null } = {}) {
         <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
       </div>
       <div class="inline-drawer-content rmt-settings-content">
+        ${voiceSettingsHtml()}
         <details class="rmt-settings-card rmt-api-box" data-rmt-settings-section="api">
           <summary class="rmt-settings-card-head"><span>API</span><div><b>独立 API</b><small>一键配置 · 手动配置</small></div></summary>
           <div class="rmt-settings-section-body">
@@ -758,6 +769,7 @@ export function mountSettings({ homeTarget = null } = {}) {
         </div>
       </div>`;
     mount.appendChild(panel);
+    mirrorReader.showMirrorSettings(panel.querySelector('[data-rmt-voice-settings]'));
     refreshThemeUi();
     const tagDraft = panel.querySelector('[data-rmt-tag-draft]');
     const tagStatus = panel.querySelector('[data-rmt-tag-status]');
@@ -1158,7 +1170,7 @@ export function mountSettings({ homeTarget = null } = {}) {
             return;
         }
         const settingsSummary = event.target.closest?.('[data-rmt-settings-section] > summary');
-        if (settingsSummary) hydrateSettingsPanel({ memory: settingsSummary.parentElement?.dataset.rmtSettingsSection === 'memory' });
+        if (settingsSummary && settingsSummary.parentElement?.dataset.rmtSettingsSection !== 'voice') hydrateSettingsPanel({ memory: settingsSummary.parentElement?.dataset.rmtSettingsSection === 'memory' });
         const themeReset = event.target.closest?.('[data-rmt-theme-reset]');
         if (themeReset) {
             core_settings.updatePluginSettings({ themeMode: 'default', themeAlpha: core_constants.DEFAULT_SETTINGS.themeAlpha, themeCustom: { ...core_constants.DEFAULT_THEME_PALETTE } });
@@ -1324,6 +1336,7 @@ export function mountSettings({ homeTarget = null } = {}) {
         }
     });
     panel.addEventListener('focusin', event => {
+        if (event.target.closest?.('[data-rmt-settings-section="voice"]')) return;
         if (panel.dataset.rmtHydrated !== '1' && event.target.matches?.('input,select,button,textarea')) hydrateSettingsPanel();
     });
     refreshSettingsMemoryStatus({ lightweight: true });
