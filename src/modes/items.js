@@ -1,6 +1,7 @@
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as core_constants from '../core/constants.js';
+import * as completion_ui from '../ui/generationCompletion.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
 import * as core_narrativeAuthority from '../core/narrativeAuthority.js';
@@ -395,7 +396,8 @@ export function renderItems() {
     const crumbs = [box?.label, ...parents.map(item => item.label)].filter(Boolean);
     const list = nodes.map(node => `<button type="button" class="rmt-item-node ${node.id === selected?.id ? 'active' : ''}" data-rmt-item-node="${core_text.esc(node.id)}"><i class="fa-solid ${node.kind === 'container' ? 'fa-box' : 'fa-tag'}"></i><span><b>${core_text.esc(node.label)}</b><small>${core_text.esc(node.basis === '记忆' ? `档案痕迹 · ${node.sourceMemoryAnchor}` : '生活设定')}</small></span>${node.kind === 'container' ? '<i class="fa-solid fa-chevron-right"></i>' : ''}</button>`).join('');
     const detail = selected ? `<div class="rmt-item-detail"><div class="rmt-item-detail-head"><b>${core_text.esc(selected.label)}</b><span>${core_text.esc(selected.kind === 'container' ? '可继续打开' : '物件')}</span></div><p>${core_text.esc(selected.summary)}</p><blockquote>${core_text.esc(selected.line)}</blockquote>${selected.kind === 'container' && selected.children.length ? `<button class="rmt-btn" type="button" data-rmt-action="items-open">打开 / 继续翻找</button>` : ''}</div>` : '<div class="rmt-item-detail">这里暂时没有可查看的东西。</div>';
-    ui_overlay.bodyEl().innerHTML = `<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="room-deep-back">← 返回他的房间</button><span>正在翻找他的私人收纳</span></div><div class="rmt-items"><aside class="rmt-items-boxes">${boxes}</aside><section class="rmt-items-main"><div class="rmt-items-toolbar"><span>${core_text.esc(crumbs.join(' › '))}</span>${session.viewPath.length ? '<button class="rmt-btn" type="button" data-rmt-action="items-back">返回上一层</button>' : ''}</div><div class="rmt-items-grid"><div class="rmt-items-list">${list}</div>${detail}</div></section></div>`;
+    const completion = completion_ui.generationCompletionHtml({ missing: session.containers.reduce((count, box) => count + collectPendingItemLines(box.nodes).length, 0), unit: '段物件对白', generateMode: 'items', actionData: { 'data-rmt-completion': 'items-lines' }, label: '只补物件对白', readOnly: !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly });
+    ui_overlay.bodyEl().innerHTML = `${completion}<div class="rmt-room-deep-toolbar"><button type="button" class="rmt-btn" data-rmt-action="room-deep-back">← 返回他的房间</button><span>正在翻找他的私人收纳</span></div><div class="rmt-items"><aside class="rmt-items-boxes">${boxes}</aside><section class="rmt-items-main"><div class="rmt-items-toolbar"><span>${core_text.esc(crumbs.join(' › '))}</span>${session.viewPath.length ? '<button class="rmt-btn" type="button" data-rmt-action="items-back">返回上一层</button>' : ''}</div><div class="rmt-items-grid"><div class="rmt-items-list">${list}</div>${detail}</div></section></div>`;
 }
 
 export function itemsSelectBox(id) {

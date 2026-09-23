@@ -1,0 +1,15 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>隔离合成样本</title><body><pre id="errors"></pre>
+<script type="module">
+const errors=document.querySelector('#errors');window.addEventListener('error',e=>errors.textContent+=e.message+'\n');window.addEventListener('unhandledrejection',e=>errors.textContent+=e.reason+'\n');
+const host={characterId:0,name1:'贝贝',name2:'小马',chatId:'preview',characters:[{name:'小马',avatar:'preview.png'}],chat:[],chatMetadata:{},extensionSettings:{},powerUserSettings:{},saveMetadata:async()=>{}};
+globalThis.SillyTavern={getContext:()=>host};globalThis.toastr={error:message=>errors.textContent+=message+'\n',info:()=>{}};
+const {state}=await import('../src/core/state.js');
+const overlay=await import('../src/ui/overlay.js');
+const inbox=await import('../src/ui/inboxView.js');
+const theme=await import('../src/core/theme.js');
+const memory={chatId:'preview',archiveRevision:'preview-v1',characterName:'小马',userName:'贝贝',memories:[]};
+const letter={id:'letter-preview',eventKey:'daily:preview',type:'daily',title:'和贝贝的好时光',greeting:'亲爱的贝贝：',body:'今天收到了贝贝的摸摸。小小的陪伴，让我好开心。\n\n今天的心情是：心里暖暖的。\n\n这幅小画，送给我的好朋友贝贝。',closing:'—— 你的小马',createdAt:Date.now(),readAt:null,favorite:false,illustration:{version:1,subject:'pony',action:'pet',palette:'lilac',accessories:['heart']}};
+function open(){state.activeMode='inbox';state.activeSession={kind:'inbox',chatId:'preview',archiveRevision:'preview-v1',sender:'小马',recipient:'贝贝',letters:[structuredClone(letter)]};state.activeArchiveSnapshot={entryId:'preview-entry',chatId:'preview',memory,cache:{},backupOnly:true};state.activeArchiveReadOnly=true;overlay.openOverlay();inbox.renderInbox();inbox.handleInboxAction('read',letter.id);overlay.setManageVisible(true);overlay.setRegenerateVisible(true);}
+let dark=new URLSearchParams(location.search).get("theme")==="night";open();if(dark)theme.applyThemeToElement(document.querySelector("#heartbeat_memories_overlay"),{themeMode:"night"});
+window.addEventListener('message',e=>{if(e.origin!==location.origin)return;if(e.data==='reopen')open();if(e.data==='theme'){dark=!dark;theme.applyThemeToElement(document.querySelector('#heartbeat_memories_overlay'),{themeMode:dark?'night':'default'});}});
+</script></body></html>

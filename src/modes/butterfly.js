@@ -1,3 +1,4 @@
+import * as storyParticipants from '../core/participants.js';
 import * as core_butterflyContract from '../core/butterflyContract.js';
 import * as core_cache from '../core/cache.js';
 // Heartbeat Memories r35 modular runtime.
@@ -259,11 +260,14 @@ export function projectButterflyProgress({ segments = [], memoryBank, context = 
         }
     }
     if (!nodes.length || nodes[0].id !== 'MAIN') return null;
-    return { kind: core_constants.MODE.BUTTERFLY, title: '平行时空观测终端', subject: context.name2 || memoryBank?.characterName || '',
+    return { kind: core_constants.MODE.BUTTERFLY, title: '平行时空观测终端', subject: butterflySubjectName(memoryBank, context),
         status: 'UNSTABLE', nodes, omegaHistory: [], selected: nodes.length > 1 ? 1 : 0,
         progressPending: nodes.some(node => node.trueEnding) ? [] : ['Ω 观测收尾'] };
 }
 
+export function butterflySubjectName(memoryBank, context) {
+    return storyParticipants.resolveStoryIdentities(memoryBank, context).ownerNames.join('、') || '{{char}}';
+}
 export function normalizeButterfly(data, memoryBank, context = {}, options = {}) {
     const rawNodes = Array.isArray(data?.nodes) ? data.nodes.slice(0, core_constants.MAX_DERIVED_CONTENT_ITEMS) : [];
     if (rawNodes.length < 2) throw new Error('当前观测尚未收尾：需要主线与唯一 Ω，已完成内容仍保留。');
@@ -296,7 +300,7 @@ export function normalizeButterfly(data, memoryBank, context = {}, options = {})
     return {
         kind: core_constants.MODE.BUTTERFLY,
         title: core_text.normalizeText(data?.title, 120) || '平行时空观测终端',
-        subject: core_text.normalizeText(context?.name2, 120) || '{{char}}',
+        subject: butterflySubjectName(memoryBank, context),
         status: 'UNSTABLE',
         nodes: [main, ...normalBranches, ending],
         omegaHistory: [],

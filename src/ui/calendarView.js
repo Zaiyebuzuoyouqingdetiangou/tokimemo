@@ -4,6 +4,7 @@ import * as core_text from '../core/text.js';
 import { state as runtimeState } from '../core/state.js';
 import * as modes_calendar from '../modes/calendar.js';
 import * as ui_overlay from './overlay.js';
+import * as ui_calendarPrint from './calendarPrint.js';
 
 const STATUS_META = Object.freeze({
     past: { label: '已经发生', short: '已发生', dot: 'past' },
@@ -563,18 +564,18 @@ export function renderCalendar() {
       <small>${selectedTags.size ? `已显示命中任一标签的 ${visibleEntries.length} 项` : '多选按“任一标签”显示'}</small>
     </section>` : '';
     const holidaySection = holidayCards.length
-        ? `<section class="rmt-calendar-holiday-section"><header><small>HOLIDAY CARD</small><h3>${core_text.esc(holidayCards[0]?.holidayLabel || '节日贺卡')}</h3></header><div class="rmt-calendar-holiday-cards">${holidayCards.map(holidayCardMarkup).join('')}</div></section>`
+        ? `<section class="rmt-calendar-holiday-section" data-rmt-calendar-export-block="holiday"><header><small>HOLIDAY CARD</small><h3>${core_text.esc(holidayCards[0]?.holidayLabel || '节日贺卡')}</h3></header><div class="rmt-calendar-holiday-cards">${holidayCards.map(holidayCardMarkup).join('')}</div></section>`
         : '';
 
-    body.innerHTML = `<div class="rmt-calendar-shell rmt-calendar-v3">
+    body.innerHTML = `<div class="rmt-calendar-shell rmt-calendar-v3" data-rmt-calendar-print-area>
       <section class="rmt-calendar-hero compact">
         <div><div class="rmt-archive-kicker">RELATIONSHIP CALENDAR</div><h2>${core_text.esc(session.title || '两个人的日历')}</h2><p>点选任意日期，查看他为这一天留下的备忘、自动待办、特别备注和页角随笔。</p></div>
-        <div class="rmt-calendar-counts"><span><b>${visibleEntries.filter(item => item.status === 'past').length}</b> 已发生</span><span><b>${allPromisedCount}</b> 待办</span><span><b>${visibleEntries.filter(item => item.status === 'future').length}</b> 提醒</span></div>
+        <div class="rmt-calendar-counts"><span><b>${visibleEntries.filter(item => item.status === 'past').length}</b> 已发生</span><span><b>${allPromisedCount}</b> 待办</span><span><b>${visibleEntries.filter(item => item.status === 'future').length}</b> 提醒</span><button type="button" class="rmt-btn" data-rmt-calendar-print>打印 / 导出 PDF</button></div>
       </section>
 
       ${tagFilterHtml}
 
-      <section class="rmt-calendar-paper">
+      <section class="rmt-calendar-paper" data-rmt-calendar-export-block="calendar">
         <header class="rmt-calendar-month-head">
           <button type="button" data-rmt-calendar-shift="-1" aria-label="上一个月" ${info ? '' : 'disabled'}>‹</button>
           <div><small>${session.storyDate ? '剧情日期 · ' + core_text.esc(session.storyDate) : info ? 'STORY CALENDAR' : ''}</small><h3>${core_text.esc(monthLabel(selectedMonth))}</h3></div>
@@ -592,18 +593,37 @@ export function renderCalendar() {
 
       ${holidaySection}
 
-      <section class="rmt-calendar-notebook-board">
-        <section class="rmt-calendar-sticky-panel">
+      <section class="rmt-calendar-notebook-board" data-rmt-calendar-export-group>
+        <section class="rmt-calendar-sticky-panel" data-rmt-calendar-export-block="memos">
           <header><div><small>CHARACTER MEMOS</small><h3>他的备忘</h3></div><span>${memoNotes.length}</span></header>
           <div class="rmt-calendar-sticky-grid">${memoBoard}</div>
         </section>
-        <section class="rmt-calendar-master-todo">
+        <section class="rmt-calendar-master-todo" data-rmt-calendar-export-block="todos">
           <header><div><small>CHARACTER TO DO LIST</small><h3>他的自动待办</h3></div><span>${promised.length}</span></header>
           <div class="rmt-calendar-master-todo-list">${todoBoard}${doneBoard}</div>
         </section>
       </section>
 
-      <section class="rmt-calendar-special-notes"><header><div><small>IMPORTANT / LITTLE THINGS</small><h3>特别备注</h3></div><span>${specialNotes.length}</span></header><div>${specialCards}</div></section>
-      <section class="rmt-calendar-mood-section"><header><div><small>MARGIN NOTES</small><h3>页角随笔</h3></div><span>${moodNotes.length}</span></header><div class="rmt-calendar-mood-grid">${moodCards}</div></section>
-    </div>`;
+      <section class="rmt-calendar-special-notes" data-rmt-calendar-export-block="special"><header><div><small>IMPORTANT / LITTLE THINGS</small><h3>特别备注</h3></div><span>${specialNotes.length}</span></header><div>${specialCards}</div></section>
+      <section class="rmt-calendar-mood-section" data-rmt-calendar-export-block="mood"><header><div><small>MARGIN NOTES</small><h3>页角随笔</h3></div><span>${moodNotes.length}</span></header><div class="rmt-calendar-mood-grid">${moodCards}</div></section>
+    </div>${ui_calendarPrint.calendarPrintSelectionPanelHtml({ counts: {
+        calendar: 1, holiday: holidayCards.length, memos: memoNotes.length,
+        todos: promised.length + completedEntries.length, special: specialNotes.length, mood: moodNotes.length,
+    }, imageCount: holidayCards.length })}`;
+    const exportPanel = body.querySelector?.('[data-rmt-calendar-export-panel]');
+    body.querySelector?.('[data-rmt-calendar-print]')?.addEventListener?.('click', () => {
+        if (!exportPanel) return;
+        exportPanel.hidden = false;
+        exportPanel.querySelector?.('[data-rmt-calendar-export-note]')?.focus?.();
+    });
+    exportPanel?.querySelector?.('[data-rmt-calendar-export-cancel]')?.addEventListener?.('click', () => {
+        exportPanel.hidden = true;
+    });
+    exportPanel?.querySelector?.('[data-rmt-calendar-export-confirm]')?.addEventListener?.('click', () => {
+        const selection = ui_calendarPrint.calendarPrintSelectionFromPanel(exportPanel);
+        const result = ui_calendarPrint.printCalendarSelection({ session, label: selectedDateLabel,
+            root: body.querySelector('[data-rmt-calendar-print-area]'), selection });
+        if (!result.opened) globalThis.toastr?.warning?.('无法打开打印窗口；请允许此页面打开本地打印窗口后重试。', '心迹回廊');
+        else exportPanel.hidden = true;
+    });
 }

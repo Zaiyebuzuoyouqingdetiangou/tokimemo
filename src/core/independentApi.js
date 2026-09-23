@@ -1,4 +1,5 @@
 import * as manual_credentials from './manualCredentialStore.js';
+import * as connection_pool from './connectionPool.js';
 import * as advanced_generation from './advancedGeneration.js';
 import * as output_budget from './outputBudget.js';
 // Heartbeat Memories independent API transport boundary.
@@ -148,6 +149,7 @@ export function apiConfigurationFingerprint(settings) {
         core_text.normalizeText(settings?.modelOverride, 240),
         Number(settings?.maxTokens) || 0,
         Number(settings?.temperature) || 0,
+        ...(connection_pool.connectionPoolFingerprint(settings) ? [connection_pool.connectionPoolFingerprint(settings)] : []),
         ...(advanced_generation.advancedFingerprint(settings) ? [advanced_generation.advancedFingerprint(settings)] : []),
     ]);
 }

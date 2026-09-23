@@ -1,5 +1,11 @@
+import * as expanded_cg_view from './expandedCgView.js';
+import * as archive_inheritance_view from './archiveInheritance.js';
+import * as bedtime_contract from '../core/bedtimeContract.js';
+import * as bedtime_view from './bedtimeView.js';
 import * as cg_format_ui from './cgFormatControl.js';
+import * as generation_status_view from './generationStatus.js';
 import * as mirror_reader from './mirrorTtsReader.js';
+import * as mirror_call from './mirrorCallView.js';
 import * as heart_reader from './heartReaderState.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
@@ -64,6 +70,7 @@ import * as ui_styles from './styles.js';
 import * as workspace_ui from './workspace.js';
 import * as language_view from './languageView.js';
 import * as ui_workspaceState from './workspaceState.js';
+import * as toolbarIcons from './toolbarIcons.js';
 
 export function isArchiveMobileViewport() {
     try {
@@ -104,6 +111,7 @@ export function overlayCloseButtonFromEvent(event, overlay) {
 
 export function closeArchiveOverlayFromUser() {
     if (image_viewer.closeCgImageViewer()) return;
+    if (runtimeState.activeMode === 'bedtime' && bedtime_view.closeBedtimeDetail()) return;
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
     if (!overlay || overlay.hidden) return closeOverlay();
     // Closing this reversible view is not cancelling a task. Native confirm may return
@@ -132,6 +140,36 @@ export function bindOverlayCloseFallback(overlay) {
     overlay.addEventListener('pointerdown', earlyHandler, true);
     overlay.addEventListener('touchstart', earlyHandler, { capture: true, passive: false });
     overlay.dataset.rmtEarlyCloseBound = 'true';
+}
+
+function toolbarMoreMenu(overlay) {
+    return overlay?.querySelector?.('[data-rmt-toolbar-more-menu]') || null;
+}
+function closeToolbarMoreMenu(overlay, { restoreFocus = false } = {}) {
+    const menu = toolbarMoreMenu(overlay);
+    const trigger = overlay?.querySelector?.('[data-rmt-action="toolbar-more"]');
+    if (!menu || menu.hidden) return false;
+    menu.hidden = true;
+    trigger?.setAttribute?.('aria-expanded', 'false');
+    if (restoreFocus) trigger?.focus?.();
+    return true;
+}
+function toggleToolbarMoreMenu(overlay) {
+    const menu = toolbarMoreMenu(overlay);
+    const trigger = overlay?.querySelector?.('[data-rmt-action="toolbar-more"]');
+    if (!menu || !trigger) return;
+    const open = menu.hidden;
+    menu.hidden = !open;
+    trigger.setAttribute('aria-expanded', String(open));
+    if (open) menu.querySelector('button:not([disabled])')?.focus?.();
+}
+function bindToolbarMoreMenu(overlay) {
+    if (!overlay || overlay.dataset.rmtToolbarMenuBound === 'true') return;
+    overlay.addEventListener('keydown', event => {
+        if (event.key !== 'Escape' || !closeToolbarMoreMenu(overlay, { restoreFocus: true })) return;
+        event.preventDefault(); event.stopPropagation();
+    });
+    overlay.dataset.rmtToolbarMenuBound = 'true';
 }
 
 export function revealArchiveOverlay(overlay) {
@@ -165,15 +203,21 @@ export function openOverlay() {
         overlay.innerHTML = `
           <div class="rmt-shell" role="dialog" aria-modal="true" aria-label="心迹回廊">
             <div class="rmt-topbar">
-              <button type="button" data-rmt-action="back" hidden aria-label="返回上级">‹</button>
+              <button type="button" data-rmt-action="back" hidden aria-label="返回上级">${toolbarIcons.toolbarIcon('back')}</button>
               <div class="rmt-topbar-title">心迹回廊</div>
               <div class="rmt-live-tasks" data-rmt-live-tasks hidden></div>
-              <button type="button" data-rmt-action="library-home" aria-label="打开档案室" title="档案室"><i class="fa-regular fa-folder" aria-hidden="true"></i></button>
-              <button type="button" data-rmt-action="workspace-expand" aria-label="展开窗口" title="展开窗口"><i class="fa-solid fa-expand" aria-hidden="true"></i></button>
-              <button type="button" data-rmt-action="regenerate" hidden aria-label="增量追加" title="增量追加">＋</button>
-              <button type="button" data-rmt-action="manage" hidden aria-label="管理" title="管理">⋯</button>
-              <button type="button" data-rmt-action="tasks" aria-label="任务" title="任务"><i class="fa-solid fa-list-check" aria-hidden="true"></i><span class="rmt-task-count" data-rmt-task-count hidden>0</span></button>
-              <button type="button" data-rmt-action="close" aria-label="关闭档案室">×</button>
+              <button type="button" data-rmt-action="library-home" aria-label="打开档案室" title="档案室">${toolbarIcons.toolbarIcon('library')}</button>
+              <button type="button" data-rmt-action="workspace-expand" aria-label="展开窗口" title="展开窗口">${toolbarIcons.toolbarIcon('expand')}</button>
+              <button type="button" data-rmt-action="regenerate" hidden aria-label="增量追加" title="增量追加">${toolbarIcons.toolbarIcon('add')}</button>
+              <button type="button" data-rmt-action="manage" hidden aria-label="管理" title="管理">${toolbarIcons.toolbarIcon('manage')}</button>
+              <button type="button" data-rmt-action="tasks" aria-label="任务" title="任务">${toolbarIcons.toolbarIcon('tasks')}<span class="rmt-task-count" data-rmt-task-count hidden>0</span></button>
+              <button type="button" data-rmt-action="toolbar-more" aria-label="更多操作" aria-haspopup="menu" aria-controls="rmt-toolbar-more-menu" aria-expanded="false">${toolbarIcons.toolbarIcon('more')}</button>
+              <div id="rmt-toolbar-more-menu" class="rmt-toolbar-more-menu" data-rmt-toolbar-more-menu role="menu" aria-label="更多操作" hidden>
+                <button type="button" data-rmt-action="workspace-expand" role="menuitem">${toolbarIcons.toolbarIcon('expand')}<span>展开窗口</span></button>
+                <button type="button" data-rmt-action="regenerate" data-rmt-toolbar-more-item="regenerate" role="menuitem" hidden>${toolbarIcons.toolbarIcon('add')}<span>增量追加</span></button>
+                <button type="button" data-rmt-action="manage" data-rmt-toolbar-more-item="manage" role="menuitem" hidden>${toolbarIcons.toolbarIcon('manage')}<span>管理</span></button>
+              </div>
+              <button type="button" data-rmt-action="close" aria-label="关闭档案室">${toolbarIcons.toolbarIcon('close')}</button>
             </div>
             ${workspace_ui.workspaceNavHtml()}
             <div class="rmt-task-center" data-rmt-task-center hidden></div>
@@ -196,18 +240,23 @@ export function openOverlay() {
     try { core_theme.applyThemeToElement(overlay, core_settings.getPluginSettings(core_context.getContext())); } catch {}
     ui_taskCenter.syncTaskCenterChrome();
     bindOverlayCloseFallback(overlay);
+    bindToolbarMoreMenu(overlay);
     revealArchiveOverlay(overlay);
     workspace_ui.syncWorkspaceChrome();
     mirror_reader.mountMirrorReader(overlay);
+    mirror_call.mountMirrorCall(overlay);
     return overlay;
 }
 
 export function closeOverlay(options = {}) {
+    archive_inheritance_view.clearArchiveInheritancePreview();
     mirror_reader.disposeMirrorReader();
+    mirror_call.disposeMirrorCall();
     const remember = options.remember !== false;
     participant_picker.closeParticipantPicker();
     image_viewer.closeCgImageViewer({ restoreFocus: false });
     const overlay = document.getElementById(core_constants.OVERLAY_ID);
+    closeToolbarMoreMenu(overlay);
     const focused = document.activeElement;
     if (focused && overlay?.contains?.(focused)) {
         try { focused.blur(); } catch {}
@@ -271,13 +320,14 @@ export function setBackVisible(visible, label = '返回上级') {
     const button = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-action="back"]`);
     if (!button) return;
     button.hidden = !visible;
-    button.textContent = '‹';
+    button.innerHTML = toolbarIcons.toolbarIcon('back');
     button.title = label;
     button.setAttribute('aria-label', label);
 }
 
 export function navigateBack() {
     if (image_viewer.closeCgImageViewer()) return;
+    if (runtimeState.activeMode === 'bedtime' && bedtime_view.closeBedtimeDetail()) return;
     if (runtimeState.activeMode === 'pastLives' && past_lives_view.closePastLivesDetail()) return;
     if (time_stories.isTimeStoryMode(runtimeState.activeMode) && time_stories_view.closeTimeStoryDetail()) return;
     if (runtimeState.activeMode === core_constants.MODE.TIME_ECHO) return openCachedOrGenerate(core_constants.MODE.PHONE);
@@ -315,15 +365,19 @@ export function navigateBack() {
 export function setManageVisible(visible) {
     const button = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-action="manage"]`);
     if (button) button.hidden = !visible;
+    const menuButton = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-toolbar-more-item="manage"]`);
+    if (menuButton) menuButton.hidden = !visible;
 }
 
 export function setRegenerateVisible(visible) {
     const button = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-action="regenerate"]`);
     if (button) {
         button.hidden = !visible;
-        button.textContent = '＋';
+        button.innerHTML = toolbarIcons.toolbarIcon('add');
         button.setAttribute('aria-label', '增量追加');
     }
+    const menuButton = document.querySelector(`#${core_constants.OVERLAY_ID} [data-rmt-toolbar-more-item="regenerate"]`);
+    if (menuButton) menuButton.hidden = !visible;
 }
 
 export function confirmExplicitAction(title, detail, { destructive = false, unavailableFallback = false } = {}) {
@@ -483,7 +537,7 @@ export function participantRegenerationScopes() {
         ['language', '基础语言'], ['spring', '春'], ['summer', '夏'], ['autumn', '秋'], ['winter', '冬'],
         ['strips', '日常一格'], ['fireflies', '萤火虫栖息地'], ['postending', '未来／后日谈'],
         ['ending', 'ENDING'], ['calendar', '两个人的日历'], ['relations', '人际庭园'],
-        ['achievements', '成就库'], ['butterfly', '蝴蝶效应'], ['pastLives', '前世今生'], ['timeEcho', '时空回响'],
+        ['achievements', '成就库'], ['butterfly', '蝴蝶效应'], ['pastLives', '前世今生'], ['timeEcho', '时空回响'], ['bedtime', '睡前故事'],
     ].map(([id, label]) => ({ id, label }));
 }
 
@@ -977,6 +1031,7 @@ function emptyArchiveMode(mode, memory, context, stored) {
     // Opening an empty reader is free. An unreadable existing record is not an
     // empty reader and never grants permission to overwrite saved material.
     if (stored?.[mode]) return null;
+    if (mode === 'bedtime') return bedtime_contract.emptyBedtime(memory, context ? core_context.currentCharacterRuntimeKey(context) : '');
     if (mode === core_constants.MODE.THEME_SONG) return song_contract.emptyThemeSongs(memory, context ? core_context.currentCharacterRuntimeKey(context) : '');
     if (mode === core_constants.MODE.HEART) return modes_heart.makeHeartShell(memory);
     if (time_stories.isTimeStoryMode(mode)) return modes_timeStories.emptyTimeStories(mode, memory, context);
@@ -1235,13 +1290,14 @@ export function renderActive() {
     runtimeState.contentManagerOpen = false;
     if (runtimeState.activeMode !== core_constants.MODE.ENDING) ui_endingView.closeEndingEasterEgg({ restoreFocus: false });
     if (!runtimeState.activeSession || !runtimeState.activeMode) return runtimeState.activeArchiveSnapshot ? archive_library.showIndexedArchiveSnapshot(runtimeState.activeArchiveSnapshot) : showChooser();
-    const supportsTopbarIncrement = !time_stories.isTimeStoryMode(runtimeState.activeMode) && ![core_constants.MODE.INBOX, core_constants.MODE.HEART, core_constants.MODE.THEME_SONG, 'pastLives'].includes(runtimeState.activeMode) && (!core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) || runtimeState.activeMode === core_constants.MODE.PHONE);
+    const supportsTopbarIncrement = !time_stories.isTimeStoryMode(runtimeState.activeMode) && ![core_constants.MODE.INBOX, core_constants.MODE.HEART, core_constants.MODE.THEME_SONG, 'pastLives', 'bedtime'].includes(runtimeState.activeMode) && (!core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) || runtimeState.activeMode === core_constants.MODE.PHONE);
     setRegenerateVisible((!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && supportsTopbarIncrement);
-    setManageVisible(!(runtimeState.activeMode === core_constants.MODE.HEART && ui_workspaceState.workspace.route === 'language') && (!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && !time_stories.isTimeStoryMode(runtimeState.activeMode) && ![core_constants.MODE.RELATIONS, core_constants.MODE.INBOX, core_constants.MODE.THEME_SONG, 'pastLives'].includes(runtimeState.activeMode));
+    setManageVisible(!(runtimeState.activeMode === core_constants.MODE.HEART && ui_workspaceState.workspace.route === 'language') && (!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly) && !time_stories.isTimeStoryMode(runtimeState.activeMode) && ![core_constants.MODE.RELATIONS, core_constants.MODE.INBOX, core_constants.MODE.THEME_SONG, 'pastLives', 'bedtime'].includes(runtimeState.activeMode));
     setBackVisible(true, runtimeState.activeArchiveSnapshot ? (runtimeState.activeArchiveReadOnly ? '只读档案' : '档案') : core_constants.ROOM_DEEP_MODES.includes(runtimeState.activeMode) ? '他的房间' : '当前档案');
     if (runtimeState.activeMode !== core_constants.MODE.ROOM) modes_room.stopRoomClock();
     if (runtimeState.activeMode !== core_constants.MODE.PHONE) ui_phoneView.stopPhoneClock();
-    if (runtimeState.activeMode === core_constants.MODE.BUTTERFLY) ui_butterflyView.renderButterfly();
+    if (runtimeState.activeMode === 'bedtime') bedtime_view.renderBedtime();
+    else if (runtimeState.activeMode === core_constants.MODE.BUTTERFLY) ui_butterflyView.renderButterfly();
     else if (runtimeState.activeMode === core_constants.MODE.ALBUM) ui_albumView.renderAlbum();
     else if (runtimeState.activeMode === core_constants.MODE.ADV) ui_advEventView.renderAdvMode();
     else if (runtimeState.activeMode === core_constants.MODE.ROOM) modes_room.renderRoom();
@@ -1265,6 +1321,13 @@ export function renderActive() {
         note.setAttribute('role', 'status');
         note.innerHTML = `<b>已生成部分内容 · 本次任务尚未完成</b><p>这里显示已收到的内容。后续失败或关闭页面，不会清除已保存部分；继续生成只补未完成部分。</p>${!runtimeState.activeArchiveSnapshot ? '<button type="button" class="rmt-btn" data-rmt-edit-partial>编辑已生成内容</button>' : ''}`;
         bodyEl().prepend(note);
+    }
+    const pageStatus = generation_status_view.routeGenerationStatus(ui_workspaceState.workspace.route || runtimeState.activeMode, runtimeState.activeMode, runtimeState.activeSession, { snapshot: runtimeState.activeArchiveSnapshot });
+    if (['unsaved', 'failed', 'retry'].includes(pageStatus.state) && bodyEl() && !bodyEl().querySelector('.rmt-generation-completion,.rmt-recovery-status')) {
+        const statusNote = document.createElement('section');
+        statusNote.className = 'rmt-generation-completion';
+        statusNote.innerHTML = `<h3>生成与补全</h3><p role="status">${core_text.esc(pageStatus.label)}</p>${!runtimeState.activeArchiveSnapshot ? '<button type="button" class="rmt-btn" data-rmt-action="tasks">打开任务中心</button>' : ''}`;
+        bodyEl().prepend(statusNote);
     }
     cg_format_ui.mountCgFormatControl(bodyEl(), runtimeState.activeMode, ui_workspaceState.workspace.route, !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly);
     decorateReadOnlyModeUi();
@@ -1540,6 +1603,12 @@ async function regenerateManagedCategory() {
 }
 
 export function handleOverlayClick(event) {
+    const moreTrigger = event.target.closest?.('[data-rmt-action="toolbar-more"]');
+    const overlay = event.currentTarget?.querySelector ? event.currentTarget : document.getElementById(core_constants.OVERLAY_ID);
+    if (moreTrigger) return toggleToolbarMoreMenu(overlay);
+    const moreMenu = toolbarMoreMenu(overlay);
+    if (!moreMenu?.hidden && !event.target.closest?.('[data-rmt-toolbar-more-menu]')) closeToolbarMoreMenu(overlay);
+    else if (!moreMenu?.hidden && event.target.closest?.('[data-rmt-toolbar-more-menu] [data-rmt-action]')) closeToolbarMoreMenu(overlay);
     const lockBtn = event.target.closest?.('[data-rmt-memory-lock]');
     if (lockBtn) {
         const pressed = lockBtn.getAttribute('aria-pressed') === 'true';
@@ -1647,6 +1716,10 @@ export function handleOverlayClick(event) {
     if (archiveRecoveryButton) return void (archiveRecoveryButton.dataset.rmtArchiveRecovery === 'profile'
         ? archive_repository.rewriteCurrentArchiveVerdict({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })
         : archive_repository.continueCurrentArchiveImport({ draftId: archiveRecoveryButton.dataset.rmtArchiveRecoveryDraftId || '' })).catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    const expandedCgButton = event.target.closest?.('[data-rmt-expanded-cg]');
+    if (expandedCgButton) return void expanded_cg_view.handleExpandedCgButton(expandedCgButton);
+    const bedtimeButton = event.target.closest?.('[data-rmt-bedtime]');
+    if (bedtimeButton && !bedtimeButton.disabled) return void bedtime_view.handleBedtimeAction(bedtimeButton.dataset.rmtBedtime, bedtimeButton.dataset.rmtBedtimeId || '');
     const songButton = event.target.closest?.('[data-rmt-song]');
     if (songButton) return void song_view.handleThemeSongAction(songButton.dataset.rmtSong, songButton.dataset.rmtSongId);
     const mailButton = event.target.closest?.('[data-rmt-inbox]');
@@ -1662,6 +1735,11 @@ export function handleOverlayClick(event) {
     const generateModeButton = event.target.closest?.('[data-rmt-generate-mode]');
     if (generateModeButton) {
         const mode = generateModeButton.dataset.rmtGenerateMode;
+        const completion = generateModeButton.dataset.rmtCompletion;
+        const completionOptions = completion === 'album-comments' && mode === core_constants.MODE.ALBUM
+            || completion === 'ending-scenes' && mode === core_constants.MODE.ENDING ? { secondStep: true }
+            : completion === 'room-lines' && mode === core_constants.MODE.ROOM ? { fillRoomText: true }
+                : completion === 'items-lines' && mode === core_constants.MODE.ITEMS ? { fillItemsText: true } : {};
         const background = !time_stories.isTimeStoryMode(mode) && generateModeButton.dataset.rmtReaderGeneration !== 'true';
         if (runtimeState.activeArchiveSnapshot) {
             if (runtimeState.activeArchiveSnapshot.backupOnly) {
@@ -1673,7 +1751,7 @@ export function handleOverlayClick(event) {
             void (async () => {
                 try {
                     const targetOptions = archive_library.archiveTargetGenerationOptions(snapshot);
-                    await generation_client.generateMode(mode, { background, ...targetOptions });
+                    await generation_client.generateMode(mode, { background, ...targetOptions, ...completionOptions });
                 } catch (error) {
                     if (!error?.notified) globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
                 }
@@ -1682,7 +1760,7 @@ export function handleOverlayClick(event) {
         }
         if (!archive_library.requireWritableArchiveAction()) return;
         if (generateModeButton.dataset.rmtRegenerate === 'true' && !confirmModeRegeneration(mode)) return;
-        void generation_client.generateMode(mode, { background });
+        void generation_client.generateMode(mode, { background, ...completionOptions });
         return;
     }
     const modeButton = event.target.closest?.('[data-rmt-mode]');
@@ -1780,6 +1858,32 @@ export function handleOverlayClick(event) {
     const actionEl = event.target.closest?.('[data-rmt-action]');
     const action = actionEl?.dataset?.rmtAction;
     if (!action) return;
+    if (!action.startsWith('archive-inheritance-')) archive_inheritance_view.clearArchiveInheritancePreview();
+    if (action === 'archive-inheritance-open') {
+        archive_inheritance_view.clearArchiveInheritancePreview();
+        if (bodyEl()) bodyEl().innerHTML = archive_inheritance_view.archiveInheritancePickerHtml();
+        return;
+    }
+    if (action === 'archive-inheritance-preview' || action === 'archive-inheritance-confirm') {
+        return void (async () => {
+        const targetBody = bodyEl(), epoch = ui_workspaceState.workspace.epoch;
+        const scope = core_context.chatScopeKey(core_context.getContext());
+        const stillHere = () => targetBody?.isConnected && bodyEl() === targetBody && ui_workspaceState.workspace.epoch === epoch
+            && core_context.chatScopeKey(core_context.getContext()) === scope && actionEl.isConnected;
+        actionEl.disabled = true;
+        try {
+            if (action === 'archive-inheritance-preview') {
+                const preview = await archive_inheritance_view.prepareArchiveInheritancePreview(actionEl.dataset.rmtInheritanceEntry);
+                if (stillHere()) targetBody.innerHTML = archive_inheritance_view.archiveInheritancePreviewHtml(preview);
+                else archive_inheritance_view.clearArchiveInheritancePreview();
+            } else {
+                await archive_inheritance_view.commitArchiveInheritance();
+                if (stillHere()) showChooser();
+            }
+        } catch (error) { globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊'); }
+        finally { if (actionEl.isConnected) actionEl.disabled = false; }
+        })();
+    }
     if (action === 'rewrite-archive-verdict') {
         if (runtimeState.activeArchiveSnapshot && !archive_library.requireWritableArchiveAction()) return;
         if (!confirmExplicitAction('重写这份档案的简介？', '只读取已归档经历，使用当前独立 API；记忆和其他已生成内容保持不变。')) return;
@@ -1820,7 +1924,7 @@ export function handleOverlayClick(event) {
     if (action === 'heart-generate-language') return void modes_heart.generateHeartSection('dialogues', {
         replaceDialogues: actionEl.dataset.rmtHeartLanguageReplace === '1',
     });
-    if (action === 'heart-generate-season') return void modes_heart.generateHeartSeasonSection(actionEl.dataset.rmtHeartSeasonTarget || 'postending');
+    if (action === 'heart-generate-season') return void modes_heart.generateHeartSeasonSection(actionEl.dataset.rmtHeartSeasonTarget || 'postending', { secondStep: actionEl.dataset.rmtHeartSecondStep === 'true' });
     if (action === 'heart-drama-prev') return ui_heartView.heartStepDrama(-1);
     if (action === 'heart-drama-next') return ui_heartView.heartStepDrama(1);
     if (action === 'heart-firefly-prev') return ui_heartView.heartStepFireflyPage(-1);
@@ -1887,6 +1991,12 @@ export function handleOverlayClick(event) {
             archive_library.showArchiveCharacter(groupId);
         }).catch(error => globalThis.toastr?.error?.(core_text.toastText(core_text.safeErrorSummary(error)), '心迹回廊 · Character Profile'));
         return;
+    }
+    if (action === 'relation-owner-select') {
+        if (runtimeState.activeMode !== core_constants.MODE.RELATIONS) return;
+        runtimeState.relationSelectedOwner = actionEl.dataset.rmtRelationOwner || '';
+        runtimeState.relationSelectedKey = '';
+        return modes_relations.renderRelations();
     }
     if (action === 'relation-select') {
         const key = core_text.normalizeText(actionEl.dataset.rmtRelationKey, 160);

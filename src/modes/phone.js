@@ -258,18 +258,21 @@ function isPhonePlaceholderTitle(title) {
     return !text || text === '暂无可核实记录' || text === '按此 App 用途与角色生活补齐';
 }
 
-function applyPhoneChatContract(conversation, memoryBank, { basis = '' } = {}) {
+function applyPhoneChatContract(conversation, memoryBank, { basis = '', ownerNames = [], preserveStoredOwner = false } = {}) {
     const story = phoneStory(memoryBank);
     const userThread = isPhoneUserName(conversation?.contactName, memoryBank);
     if (!userThread) return { ...conversation, userThread: false };
-    const ownerName = story.ownerNames[0] || conversation.ownerName;
+    const selectedOwner = core_text.normalizeText(conversation?.ownerName, 100);
+    const ownerName = preserveStoredOwner && selectedOwner
+        ? selectedOwner
+        : (ownerNames.includes(selectedOwner) ? selectedOwner : (story.ownerNames[0] || selectedOwner));
     const messages = basis === '记忆'
         ? conversation.messages
         : (conversation.messages || []).filter(message => message.speakerRole === 'owner' && !isPhoneUserName(message.speaker, memoryBank))
             .map(message => ({
                 ...message,
                 speakerRole: 'owner',
-                speaker: isPhoneOwnerName(message.speaker, memoryBank) ? message.speaker : ownerName,
+                speaker: ownerNames.includes(message.speaker) ? message.speaker : ownerName,
             }));
     return { ...conversation, contactName: story.userDisplay, ownerName, messages, userThread: true };
 }
@@ -414,7 +417,7 @@ export function normalizePhoneChatEntry(entry, memoryBank, options = {}) {
     const messages = (Array.isArray(entry?.messages) ? entry.messages : []).filter(message => {
         if (core_text.normalizeText(message?.speakerRole, 20) !== 'owner') return true;
         const name = core_text.normalizeText(message?.speaker, 100);
-        return owners.includes(name) || isPhoneOwnerName(name, memoryBank) || (owners.length === 1 && isGenericOwnerLabel(name));
+        return owners.includes(name) || (owners.length === 1 && isGenericOwnerLabel(name));
     }).map(message => message.speakerRole === 'owner' && isGenericOwnerLabel(message.speaker)
         ? { ...message, speaker: owners[0] } : message);
     const candidate = { ...entry, contactName, messages };
@@ -803,7 +806,9 @@ export function validatePhoneAppPart(data, planApp, memoryBank, deviceKind, sour
         const imageCaption = core_text.normalizeText(entry?.imageCaption, 1800);
         if (!preview || (!detail && !messages.length && !fields.length && !imageCaption)) continue;
         const basis = phoneEntryBasis(entry, planApp.kind, conversation, memoryBank, options);
-        conversation = applyPhoneChatContract(conversation, memoryBank, { basis });
+        conversation = applyPhoneChatContract(conversation, memoryBank, {
+            basis, ownerNames: phoneControlledOwnerNames(memoryBank, options), preserveStoredOwner: options.trustedStored === true,
+        });
         messages = conversation.messages;
         const legacyStored = options.trustedStored === true && entry?.narrativeVersion !== 1;
         if (legacyStored) { seen.add(id); continue; }
@@ -1001,7 +1006,9 @@ export function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, so
         let detail = core_text.normalizeText(entry?.detail, 5000);
         let conversation = normalizePhoneConversationMessages(entry, memoryBank, { strict: planApp.kind === 'chat', preserveOwnerNames: planApp.kind === 'chat' });
         basis = phoneEntryBasis(entry, planApp.kind, conversation, memoryBank, options);
-        conversation = applyPhoneChatContract(conversation, memoryBank, { basis });
+        conversation = applyPhoneChatContract(conversation, memoryBank, {
+            basis, ownerNames: phoneControlledOwnerNames(memoryBank, options), preserveStoredOwner: options.trustedStored === true,
+        });
         let messages = conversation.messages;
         let fields = (Array.isArray(entry?.fields) ? entry.fields : []).slice(0, 16).map(field => ({
             label: core_text.normalizeText(field?.label, 100),
@@ -1029,7 +1036,9 @@ export function normalizePhoneDraftApp(data, planApp, memoryBank, deviceKind, so
                 && (!sourceMemoryIds || core_incremental.usesIncrementalMemoryId(reference.sourceMemoryIds, sourceMemoryIds))
                 && phoneMemoryStructuredFactsSupported(planApp.kind, conversation, messages, fields, sourceMemoryEvidence, canonical);
             if (!memoryOk) {
-                conversation = applyPhoneChatContract(conversation, memoryBank, { basis: '推演' });
+                conversation = applyPhoneChatContract(conversation, memoryBank, {
+                    basis: '推演', ownerNames: phoneControlledOwnerNames(memoryBank, options), preserveStoredOwner: options.trustedStored === true,
+                });
                 if (planApp.kind === 'chat' && conversation.userThread && conversation.messages.some(message => message.speakerRole === 'owner')) {
                     basis = '推演';
                     messages = conversation.messages;
@@ -1331,7 +1340,9 @@ export function phoneMissingThreadPlan(app, previous, memoryBank, options = {}) 
     const explicitTargets = missing.map(entry => entry.contactName || inferPhoneContactName(entry, memoryBank));
     const reserved = new Set(explicitTargets.filter(allowed));
     const targets = [...new Set([
-        story.userDisplay,
+        // resolveStoryIdentities intentionally falls back to {{user}} for prompts.
+        // A repair must only create a concrete thread for an actually known user.
+        memoryBank?.userName ? story.userDisplay : '',
         ...(previous.apps || []).flatMap(item => item.entries || []).map(entry => entry.contactName)]
         .filter(name => allowed(name) && !reserved.has(name)))];
     let nextTarget = 0;
@@ -1597,7 +1608,9 @@ export function normalizePhone(data, memoryBank, { worldPresentation = null, con
             let detail = core_text.normalizeText(entry?.detail, 5000);
             let conversation = normalizePhoneConversationMessages(entry, memoryBank, { strict: false, preserveOwnerNames: kind === 'chat' });
             basis = phoneEntryBasis(entry, kind, conversation, memoryBank, chatOptions);
-            conversation = applyPhoneChatContract(conversation, memoryBank, { basis });
+            conversation = applyPhoneChatContract(conversation, memoryBank, {
+                basis, ownerNames: phoneControlledOwnerNames(memoryBank, chatOptions), preserveStoredOwner: trustedStored,
+            });
             let messages = conversation.messages;
             let fields = (Array.isArray(entry?.fields) ? entry.fields : []).slice(0, 16).map(field => ({
                 label: core_text.normalizeText(field?.label, 100),

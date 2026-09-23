@@ -1,3 +1,4 @@
+import * as pixelFigure from './roomPixelFigure.js';
 // Code-owned SVG interior. Only bounded labels/IDs and existing local profile tokens are used.
 // Provider output cannot supply markup, CSS, colours, coordinates, URLs or SVG paths.
 import * as text from '../core/text.js';
@@ -15,25 +16,13 @@ const SHAPES = Object.freeze({
     art: '<rect x="-65" y="-70" width="127" height="99" rx="3" fill="var(--rmt-interior-paper)" stroke="var(--rmt-interior-wood)" stroke-width="7"/><circle cx="-25" cy="-42" r="12" fill="var(--rmt-interior-fabric)"/><path d="M-56 20-4-32 22-2 39-19 53 20Z" fill="var(--rmt-interior-glass)"/>',
     other: '<path d="M-35 20 5 3l40 17v46L5 82l-40-16Z" fill="var(--rmt-interior-wood)"/><path d="M5 40v42m-40-62L5 40l40-20" stroke="var(--rmt-interior-line)" fill="none" stroke-width="3"/>',
 });
-const COLORS = Object.freeze({
-    hair: { dark:'#34313d', black:'#34313d', brown:'#6b4b3f', light:'#ccbea3', silver:'#bfc7d5', white:'#e7e8ec', red:'#8a4a45', blue:'#455979', fantasy_cool:'#455979', fantasy_warm:'#a2646b', unspecified:'#586373' },
-    coat: { historical:'#788b9b', academic:'#697585', artisan:'#8d785f',combat:'#566c61',ceremonial:'#9a758a',technical:'#586884',fantasy:'#907da8', robe:'#788b9b', uniform:'#526779', formal:'#595569', casual:'#a69cae', armor:'#6f7886', work:'#857557', unspecified:'#647183' },
-});
-function tokenColor(type, value) { return typeof value === 'string' && Object.hasOwn(COLORS[type],value) ? COLORS[type][value] : COLORS[type].unspecified; }
 export function roomFigureSvg(profile = {}) {
-    const shape = profile.hairShape || 'unspecified';
-    const long = ['long','tied'].includes(shape);
-    const robe = ['robe','historical','ceremonial','fantasy'].includes(profile.outfit);
-    const widths = {slender:.9,lean:.94,broad:1.16,compact:.92,soft:1.09};
-    const width = typeof profile.build === 'string' && Object.hasOwn(widths,profile.build) ? widths[profile.build] : 1;
-    const hair = tokenColor('hair', profile.hairTone); const coat = tokenColor('coat', profile.outfit);
-    const unknown = shape === 'unspecified' && (!profile.outfit || profile.outfit === 'unspecified');
-    return `<g transform="scale(${width} 1)" data-rmt-local-figure="${unknown ? 'silhouette' : 'profile'}"><ellipse cy="86" rx="38" ry="10" fill="#00000022"/>${long ? `<path d="M-22-74Q-3-108 27-69L33 31Q-8 58-34 21Z" fill="${hair}"/>` : ''}<path d="M-22 23-29 84h16L1 39 18 84h17L24 23" fill="#424858"/><path d="M-27-28Q0-44 27-28L44 17 30 24 23-7 32 ${robe?'69':'35'}Q0 53-32 35L-23-7-33 24-46 18Z" fill="${coat}"/><ellipse cy="-65" rx="23" ry="29" fill="${unknown ? '#657184' : '#c9ad9d'}"/><path d="M-24-59Q-32-102 3-99 33-97 27-52L17-80Q-3-63-24-59Z" fill="${hair}"/>${shape==='tied' ? `<path d="M23-86Q67-59 30-14l7-27Q49-67 23-78Z" fill="${hair}"/>` : ''}</g>`;
+    return pixelFigure.pixelFigureSvg(profile);
 }
 export function roomInteriorHtml(layout, { figure = {}, personIsHere = false, charName = '', selectedId = '', world = 'neutral', participants = null } = {}) {
     if (Array.isArray(participants)) {
         const interior = roomInteriorHtml(layout, { selectedId, world });
-        const figures = participants.map(person => `<button type="button" class="rmt-room-resident-figure" data-rmt-action="room-participant" data-rmt-participant-id="${text.esc(person.id)}" aria-label="听${text.esc(person.name)}说话"><svg viewBox="-70 -115 140 220" role="img" aria-label="${text.esc(person.name)}的侧后轮廓">${roomFigureSvg(person.figure)}</svg><b>${text.esc(person.name)}</b></button>`).join('');
+        const figures = participants.map(person => `<button type="button" class="rmt-room-resident-figure" data-rmt-action="room-participant" data-rmt-participant-id="${text.esc(person.id)}" aria-label="听${text.esc(person.name)}说话"><svg viewBox="-70 -115 140 220" role="img" aria-label="${text.esc(person.name)}的像素小人">${roomFigureSvg(person.figure)}</svg><b>${text.esc(person.name)}</b></button>`).join('');
         return `<div class="rmt-room-shared-interior">${interior}<div class="rmt-room-resident-figures">${figures}</div></div>`;
     }
     const entries = (Array.isArray(layout) ? layout : []).slice(0, 40);

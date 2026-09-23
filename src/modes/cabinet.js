@@ -2,6 +2,7 @@ import * as core_constants from '../core/constants.js';
 import * as core_text from '../core/text.js';
 import * as core_evidence from '../core/evidence.js';
 import * as generation_prompts from '../generation/prompts.js';
+import * as core_participants from '../core/participants.js';
 import * as ui_overlay from '../ui/overlay.js';
 import { state as runtimeState } from '../core/state.js';
 
@@ -21,10 +22,11 @@ export function normalizeCabinet(raw, memoryBank) {
         const reference = core_evidence.normalizeExactMemoryReference(item?.sourceMemoryIds, item?.sourceMemoryAnchor, memoryBank);
         const memories = (memoryBank?.memories || []).filter(memory => reference.sourceMemoryIds.includes(memory.id));
         const literal = memories.some(memory => [memory.title, memory.summary, ...(memory.anchors || [])].some(text => String(text || '').includes(evidence)));
-        const names = [memoryBank?.characterName, memoryBank?.userName];
-        const pair = names.every(value => value && evidence.includes(value))
+        const names = core_participants.resolveStoryIdentities(memoryBank).ownerNames;
+        const userName = memoryBank?.userName;
+        const pair = names.some(value => value && evidence.includes(value)) && userName && evidence.includes(userName)
             || (/两人|两个人|双方|彼此|我们/.test(evidence) && memories.some(memory =>
-                names.every(name => name && memory.participants?.includes(name)) && memory.participants.length === 2));
+                userName && memory.participants?.includes(userName) && names.some(name => name && memory.participants?.includes(name))));
         if (!name || evidence.length < 6 || !evidence.includes(name) || !literal || !pair || !reference.sourceMemoryAnchor || seen.has(name)) continue;
         seen.add(name);
         items.push({ id: 'KEEP_' + (items.length + 1), name, objectEvidence: evidence, ...reference });

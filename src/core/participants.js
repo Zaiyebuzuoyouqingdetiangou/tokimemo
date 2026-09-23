@@ -165,8 +165,7 @@ export function archivePeopleNames(memoryBank) {
     return uniqueNames(names);
 }
 
-// Archive protagonist first; Persona / frozen userName stay as aliases so a
-// forgotten persona switch still matches 南玺 and 星野南 as the same user.
+// Explicit archive user first; Persona stays an alias for the same user.
 export function resolveStoryIdentities(memoryBank = null, context = null, people = null) {
     const cardName = stringName(context?.name2 || memoryBank?.characterName, '{{char}}');
     const personaName = stringName(context?.name1);
@@ -177,24 +176,11 @@ export function resolveStoryIdentities(memoryBank = null, context = null, people
     const selected = selectedFromPeople.length
         ? selectedFromPeople
         : roster ? selectedParticipantSnapshot(roster).people : [];
-    const rosterNames = uniqueNames(selected.map(person => person?.name));
-    const characterSide = new Set([cardName, stringName(memoryBank?.characterName), ...rosterNames]
-        .map(nameKey).filter(key => key && key !== '{{char}}'));
-    const counts = new Map();
-    const display = new Map();
-    for (const memory of Array.isArray(memoryBank?.memories) ? memoryBank.memories : []) {
-        const parts = Array.isArray(memory?.participants) ? memory.participants.map(stringName).filter(Boolean) : [];
-        if (!parts.some(name => characterSide.has(nameKey(name)))) continue;
-        for (const text of parts) {
-            const key = nameKey(text);
-            if (!key || characterSide.has(key)) continue;
-            counts.set(key, (counts.get(key) || 0) + 1);
-            if (!display.has(key)) display.set(key, text);
-        }
-    }
-    const protagonist = display.get([...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0]) || '';
-    const userDisplay = protagonist || archivedUser || personaName || '{{user}}';
-    const userAliases = uniqueNames([userDisplay, protagonist, archivedUser, personaName]);
+    const rosterNames = uniqueNames(selected.filter(person => person?.identity !== 'user').map(person => person?.name));
+    const rosterUserNames = uniqueNames((roster?.people || []).filter(person => person.identity === 'user').map(person => person.name));
+    // Explicit archive/Persona identity establishes User; never infer from NPC frequency.
+    const userDisplay = archivedUser || rosterUserNames[0] || personaName || '{{user}}';
+    const userAliases = uniqueNames([userDisplay, archivedUser, ...rosterUserNames, personaName]);
     const ownerNames = rosterNames.length
         ? rosterNames
         : uniqueNames([stringName(memoryBank?.characterName), cardName === '{{char}}' ? '' : cardName]);

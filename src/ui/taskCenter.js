@@ -1,3 +1,6 @@
+import * as commonStatus from '../core/generationStatus.js';
+import * as statusView from './generationStatus.js';
+import * as composerOptions from '../core/generationOptions.js';
 import * as archive_groups from '../archive/groups.js';
 import * as archive_library from '../archive/library.js';
 import * as archive_repository from '../archive/repository.js';
@@ -36,7 +39,7 @@ function syncPickScope() {
 export function queuePickHtml(route) {
     syncPickScope();
     const checked = picks.has(route) ? 'checked' : '';
-    return `<label class="rmt-queue-pick"><input type="checkbox" data-rmt-queue-route="${core_text.esc(route)}" aria-label="加入队列" ${checked}></label>`;
+    return `<label class="rmt-queue-pick"><input type="checkbox" data-rmt-queue-route="${core_text.esc(route)}" aria-label="选择${core_text.esc(ui_workspaceState.WORKSPACE_ROUTES[route]?.title || route)}加入队列" ${checked}></label>`;
 }
 
 export function selectedQueueRoutes() {
@@ -48,7 +51,7 @@ export function selectedQueueRoutes() {
 export function setQueuePick(route, on) {
     syncPickScope();
     const spec = ui_workspaceState.WORKSPACE_ROUTES[route];
-    if (!spec?.mode || spec.deep) return;
+    if (!spec?.mode || spec.deep || spec.manualOnly) return;
     if (on) picks.add(route);
     else picks.delete(route);
 }
@@ -128,6 +131,7 @@ export function enqueueSelectedModes(routes) {
             scope,
             status: 'queued',
             attached: false,
+            songOptions: spec.mode === core_constants.MODE.THEME_SONG ? composerOptions.readSongOptions() : undefined,
         });
         picks.delete(route);
         added += 1;
@@ -236,7 +240,7 @@ async function pumpQueue() {
 
 async function runQueuedGeneration(item) {
     if (item.mode !== core_constants.MODE.HEART || item.route === 'language') {
-        return generation_client.generateMode(item.mode, { background: true });
+        return generation_client.generateMode(item.mode, { background: true, songOptions: item.songOptions });
     }
     if (runtimeState.activeSession?.kind !== core_constants.MODE.HEART) {
         const created = await generation_client.generateMode(core_constants.MODE.HEART, { background: true });
@@ -318,6 +322,10 @@ function unfinishedReminderCount() {
         if (archive_repository.getCurrentArchiveImportRecoverySummary()) count += 1;
         if (archive_repository.getCurrentArchiveProfileRecoverySummary()) count += 1;
     } catch { /* Archive recovery is optional until a chat is open. */ }
+    try {
+        const ids = new Set(core_cache.listGenerationDrafts().map(row => row.draftId));
+        count += statusView.currentPendingRows().filter(row => !ids.has(row.origin?.generationRecoveryDraftId || row.id)).length;
+    } catch { /* Corrupt raw data is exportable from the task card. */ }
     unfinishedCache = { at: now, count };
     return count;
 }
@@ -345,8 +353,8 @@ function syncTaskCenterBadge() {
 }
 
 const PAGE_LABELS = { language: '基础语言', strips: '日常一格', fireflies: '萤火虫', spring: '春', summer: '夏', autumn: '秋', winter: '冬', postending: '后日谈', roomLife: '今日生活', dialogues: '基础语言' };
-const CARD_RANK = { running: 0, queued: 1, retry: 2, failed: 3, done: 4, cancelled: 5 };
-const CARD_LABEL = { running: '进行中', queued: '排队', retry: '未完成', failed: '失败了', done: '完成', cancelled: '已取消' };
+const CARD_RANK = { running: 0, queued: 1, unsaved: 2, retry: 3, failed: 4, done: 5, cancelled: 6 };
+const CARD_LABEL = commonStatus.GENERATION_STATUS_LABELS;
 
 function taskLabel(mode, pageId, fallback) {
     return PAGE_LABELS[pageId] || core_constants.MODE_LABEL[mode] || fallback || pageId || mode || '任务';
@@ -423,8 +431,26 @@ function openAction(record) {
     return `<button type="button" class="rmt-btn" data-rmt-action="task-open" data-rmt-task-id="${core_text.esc(record.id)}">打开结果</button>`;
 }
 
+function mergedPendingCards() {
+    let rows;
+    try { rows = statusView.currentPendingRows(); }
+    catch { return [{ state: 'failed', label: '暂存区', detail: '读取失败，旧数据保留。请导出未归属的旧暂存记录。', actions: '<button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button>', at: 0 }]; }
+    const cards = rows.map(row => {
+        const state = row.kind === 'unsaved' ? 'unsaved' : 'retry';
+        const attrs = `data-rmt-pending-id="${core_text.esc(row.id)}" data-rmt-route="${core_text.esc(row.route)}"`;
+        return { state, label: row.label, mode: row.mode, pageId: row.route, draftId: row.origin?.generationRecoveryDraftId || row.id, at: Number(row.at) || 0,
+            detail: state === 'unsaved' ? '正文已生成，仅重新保存；不会再调用模型。' : '原批次仍保留，只补未完成的这一页。',
+            actions: `<button type="button" class="rmt-btn" data-rmt-action="${state === 'unsaved' ? 'merged-resave' : 'merged-repair'}" ${attrs} ${row.origin ? '' : 'disabled'}>${state === 'unsaved' ? '重新保存' : '只补这一页'}</button><button type="button" class="rmt-btn" data-rmt-action="merged-export" ${attrs}>导出成果</button>` };
+    });
+    let legacy = [];
+    try { legacy = statusView.currentUnattributedPendingRows(); } catch { /* The guarded export action remains available through read failure. */ }
+    if (legacy.length) cards.push({ state: 'failed', label: '未归属的旧暂存记录', detail: `有 ${legacy.length} 条旧记录缺少所属人物，已保留且不会显示为当前人物内容。`, actions: '<button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button>', at: 0 });
+    return cards;
+}
+
 function collectTaskCards() {
-    const cards = draftCards();
+    const cards = mergedPendingCards();
+    cards.push(...draftCards().filter(row => !cards.some(card => card.draftId && card.draftId === row.draftId)));
     const rows = core_requestCoordinator.listChatTaskSnapshot();
     for (const row of rows.filter(item => item.running)) {
         const existing = cards.find(card => sameJob(card, row));
@@ -517,6 +543,10 @@ function paintLiveStrip() {
         failedLabels.push(card.label);
         chips.push(`<button type="button" class="rmt-live-chip rmt-live-fail" data-rmt-action="tasks"><b>${esc(card.label)}</b><em>失败了</em></button>`);
     }
+    for (const card of mergedPendingCards()) {
+        if (runningLabels.has(card.label)) continue;
+        chips.push(`<button type="button" class="rmt-live-chip" data-rmt-action="tasks"><b>${esc(card.label)}</b><em>${esc(CARD_LABEL[card.state])}</em></button>`);
+    }
     host.hidden = chips.length === 0;
     host.innerHTML = chips.join('');
 }
@@ -552,6 +582,32 @@ function paintTaskCenter(panel) {
     </div>
     ${finished.length ? `<h3>已完成</h3>${finished.map(cardHtml).join('')}` : ''}`;
     panel.scrollTop = top;
+}
+
+function mergedNavigationMark() {
+    return { scope: currentScope(), epoch: ui_workspaceState.workspace.epoch,
+        overlay: globalThis.document?.getElementById(core_constants.OVERLAY_ID) };
+}
+function refreshMergedCompletion(mark) {
+    refreshTaskCenterView();
+    const workspace = ui_workspaceState.workspace;
+    if (currentScope() === mark.scope && workspace.epoch === mark.epoch && workspace.tab === 'content' && !workspace.route
+        && !runtimeState.activeArchiveSnapshot && mark.overlay?.isConnected && !mark.overlay.hidden
+        && mark.overlay === globalThis.document?.getElementById(core_constants.OVERLAY_ID)) {
+        ui_overlay.showChooser({ section: 'content' });
+    }
+}
+function exportMergedResult(id = '') {
+    const pending = generation_merged.createPendingStore();
+    const chatId = core_context.comparableChatId(core_context.getChatId());
+    let scope = null;
+    try { scope = generation_merged.currentPendingScope(core_context.getContext()); } catch { /* Export only non-attributed preservation rows. */ }
+    const entry = id ? pending.readForOrigin(scope).find(row => row.id === id) : null;
+    if (id && !entry) return;
+    const data = id ? JSON.stringify({ kind: 'hearttrace-merged-result', version: 1, entry }, null, 2) : pending.exportUnattributed(chatId);
+    const url = URL.createObjectURL(new Blob([data], { type: 'application/json;charset=utf-8' }));
+    const link = document.createElement('a'); link.href = url; link.download = 'Hearttrace-Merged-Result.json';
+    try { document.body.appendChild(link); link.click(); } finally { link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
 }
 
 function refreshTaskCenterView() {
@@ -683,7 +739,9 @@ export function handleTaskCenterAction(action, actionEl) {
         globalThis.toastr?.info?.(removed || queueRemoved ? '已清空完成的任务。未完成草稿还在。' : '没有可清空的已完成任务。', '心迹回廊');
         return;
     }
+    if (action === 'merged-export' || action === 'merged-export-legacy') { exportMergedResult(action === 'merged-export-legacy' ? '' : actionEl?.dataset?.rmtPendingId || ''); return; }
     if (action === 'generate-together') {
+        const navigation = mergedNavigationMark();
         const routes = selectedQueueRoutes();
         if (routes.length < 2) {
             globalThis.toastr?.info?.('先勾选至少两项，再一起生成。', '心迹回廊');
@@ -692,9 +750,9 @@ export function handleTaskCenterAction(action, actionEl) {
         void generation_merged.startTogether(routes).then(result => {
             if (!result || result.cancelled) return;
             for (const route of routes) {
-                if (!result.soloRoutes?.includes(route)) picks.delete(route);
+                if (currentScope() === navigation.scope && !result.soloRoutes?.includes(route) && !result.heldRoutes?.includes(route)) picks.delete(route);
             }
-            if (result.soloRoutes?.length) enqueueSelectedModes(result.soloRoutes);
+            if (result.soloRoutes?.length && currentScope() === navigation.scope) enqueueSelectedModes(result.soloRoutes);
             const waiting = result.waiting?.length || 0;
             const sent = result.providerRequests || 0;
             if (sent || waiting) {
@@ -704,16 +762,17 @@ export function handleTaskCenterAction(action, actionEl) {
             } else if (result.soloRoutes?.length) {
                 globalThis.toastr?.info?.('这几项这次按单项发送。', '心迹回廊');
             }
-            try { ui_overlay.showChooser({ section: 'content' }); } catch { /* The saved pages and pending rows are already stored. */ }
+            try { refreshMergedCompletion(navigation); } catch { /* Saved results remain durable. */ }
         }).catch(error => {
             if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
-            try { ui_overlay.showChooser({ section: 'content' }); } catch { /* Pending rows stay readable after a refresh. */ }
+            try { refreshMergedCompletion(navigation); } catch { /* Original drafts remain durable. */ }
         });
         return;
     }
     if (action === 'merged-repair' || action === 'merged-resave') {
+        const navigation = mergedNavigationMark();
         const route = actionEl?.dataset?.rmtRoute || '';
-        void generation_merged.repairPending(route).then(result => {
+        void generation_merged.repairPending(route, actionEl?.dataset?.rmtPendingId || '').then(result => {
             const sent = result?.providerRequests || 0;
             globalThis.toastr?.success?.(action === 'merged-resave' || result?.requested === false
                 ? '已重新保存，没有再次生成。'
@@ -721,7 +780,7 @@ export function handleTaskCenterAction(action, actionEl) {
         }).catch(error => {
             if (error?.name !== 'AbortError') globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊');
         }).finally(() => {
-            try { ui_overlay.showChooser({ section: 'content' }); } catch { /* The pending row is already stored. */ }
+            try { refreshMergedCompletion(navigation); } catch { /* Pending results remain available. */ }
         });
         return;
     }

@@ -217,11 +217,12 @@ function fillEditorMetadata(current, raw) {
     updatePreparedPreview(current);
 }
 
-export function openCgPromptEditor({ heartStrip = false } = {}) {
+export function openCgPromptEditor({ heartStrip = false, targetDescriptor = null } = {}) {
     try {
         if (!archive_library.requireWritableArchiveAction()) return;
         const item = heartStrip ? heart.selectedHeartStrip() : null;
-        const rawTarget = heartStrip && item
+        const rawTarget = targetDescriptor ? images.resolveCgImageTargetDescriptor(targetDescriptor)
+            : heartStrip && item
             ? { mode: core_constants.MODE.HEART, session: runtimeState.activeSession, item }
             : images.selectedCgTarget();
         const target = images.captureCgImageTarget(rawTarget);
@@ -239,10 +240,12 @@ export function openCgPromptEditor({ heartStrip = false } = {}) {
         const promptFormat = cg_format.normalizeCgPromptFormat(savedImage?.promptMetadata?.promptFormat, settings.getPluginSettings().cgPromptFormat);
         const draft = images.cgImagePromptForItem(selected, '', promptFormat);
         const context = core_context.currentCharacterGuard();
-        const initialMetadata = appearance.initialCgAppearanceMetadata(selected, context);
+        // Expanded plans carry the participant snapshot captured when the user
+        // saved the plan. Reopening must not substitute today's roster.
+        const initialMetadata = savedImage?.promptMetadata || selected.__rmtCgPromptMetadata || appearance.initialCgAppearanceMetadata(selected, context);
         const multi = !!initialMetadata?.castSnapshot;
         const currentRoster = cache.readParticipantRoster(context);
-        const roster = multi && !selected.cgImage ? currentRoster : null;
+        const roster = multi && !selected.cgImage && !selected.__rmtCgPromptMetadata ? currentRoster : null;
         const participantLooks = multi ? cast_looks.readParticipantLooks(context) : null;
         const canRetry = images.hasPendingCgImage(target);
         const historyRows = images.normalizeCgImageHistory(selected.cgImageHistory);
@@ -344,7 +347,7 @@ export async function handleCgHistoryAction(viewUrl, restoreUrl, sourceEl = null
     }
     if (!restoreUrl || !history.some(row => row.url === restoreUrl)) return;
     busyEditor(true);
-    const committed = await images.restoreSelectedCgImageVersion(restoreUrl);
+    const committed = await images.restoreSelectedCgImageVersion(restoreUrl, current.target);
     if (committed === true) closeCgPromptEditor();
     else busyEditor(false);
 }
@@ -472,8 +475,8 @@ export async function handleCgPromptEditorAction(action) {
         }
         if (action === 'clear') {
             busyEditor(true);
-            if (current.target.mode === core_constants.MODE.HEART) await heart.clearHeartStripImage(current.target.itemId);
-            else await images.clearSelectedCgImage();
+            if (current.target.mode === core_constants.MODE.HEART && !current.target.targetDescriptor) await heart.clearHeartStripImage(current.target.itemId);
+            else await images.clearSelectedCgImage(current.target);
             const item = images.cgItemInSession(current.target.mode, current.target.session, current.target.itemId);
             if (!images.normalizeCgImageRecord(item?.cgImage)) closeCgPromptEditor();
             return;
@@ -521,7 +524,7 @@ export async function handleCgPromptEditorAction(action) {
             // Existing drawing flow owns the explicit cost/replacement confirmation,
             // provider lock and durable commit; this editor never invokes a provider.
             const onAccepted = () => closeCgPromptEditor({ restoreFocus: false });
-            if (current.target.mode === core_constants.MODE.HEART) {
+            if (current.target.mode === core_constants.MODE.HEART && !current.target.targetDescriptor) {
                 await heart.drawHeartStripImage(current.target.itemId, { promptOverride: prompt, promptMetadata, promptFormat: current.promptFormat, expectedTarget: current.target, onAccepted });
             } else await images.drawSelectedCgImage({ promptOverride: prompt, promptMetadata, promptFormat: current.promptFormat, expectedTarget: current.target, onAccepted });
         }

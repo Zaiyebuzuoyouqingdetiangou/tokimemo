@@ -1,3 +1,4 @@
+import { buildMergeTask } from '../src/generation/mergedGeneration.js';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -85,7 +86,12 @@ for (const file of await sourceFiles(path.join(root, 'src'))) {
             const sampleText = `写出【${label}】的数据\n${part}`;
             const block = jsonShapeExampleBlock(sampleText);
             if (!block) continue;
-            assertKeysIn(source, parseExample(block), `${path.relative(root, file)} / ${label}`);
+            const mergedRoute = path.basename(file) === 'mergedGeneration.js' ? ({ '两个人的陈列柜': 'cabinet', '档案室 / 成就库': 'achievements' })[label] : null;
+            // The merged adapter calls each original prompt builder. Check the
+            // actual outgoing task text instead of searching only adapter source.
+            const actual = mergedRoute ? buildMergeTask(mergedRoute, { name1: '用户', name2: '角色' },
+                { chatId: 'fixture', archiveRevision: 'v1', characterName: '角色', userName: '用户', memories: [] }).taskText : source;
+            assertKeysIn(actual, parseExample(block), `${path.relative(root, file)} / ${label}`);
         }
     }
 }

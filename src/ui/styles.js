@@ -1,3 +1,4 @@
+import * as bedtime_view from './bedtimeView.js';
 import * as ui_workspaceStyles from './workspaceStyles.js';
 import * as postcard_design_view from './postcardDesignView.js';
 // Heartbeat Memories r35 modular runtime.
@@ -184,6 +185,36 @@ export function ensureSettingsStyles() {
 #${core_constants.SETTINGS_ID}_launcher button:focus-visible{outline:3px solid currentColor;outline-offset:3px}
 `;
     style.textContent += ui_workspaceStyles.capsuleCss('#' + core_constants.OVERLAY_ID);
+    style.textContent += `
+#${core_constants.OVERLAY_ID} .rmt-generation-completion{margin:12px 0 20px;padding:16px;border:1px solid var(--rmt-theme-border);border-left:4px solid var(--rmt-theme-accent-ink);border-radius:14px;background:var(--rmt-theme-soft);color:var(--rmt-theme-text)}
+#${core_constants.OVERLAY_ID} .rmt-generation-completion h3{margin:0 0 8px;font-size:17px}
+#${core_constants.OVERLAY_ID} .rmt-generation-completion p{margin:0 0 12px;font-size:14px;line-height:1.7;overflow-wrap:anywhere}
+#${core_constants.OVERLAY_ID} .rmt-generation-completion .rmt-btn{min-height:44px;white-space:normal}
+@media(max-width:760px){
+ #${core_constants.OVERLAY_ID}.rmt-workspace .rmt-topbar{flex-wrap:wrap!important}
+ #${core_constants.OVERLAY_ID}.rmt-workspace .rmt-topbar-title{max-width:none!important}
+ #${core_constants.OVERLAY_ID}.rmt-workspace .rmt-live-tasks:not([hidden]){display:flex!important;order:20;flex:1 0 100%;max-width:100%;margin:2px 0 0;padding:0;overflow-x:auto}
+ #${core_constants.OVERLAY_ID}.rmt-workspace .rmt-topbar .rmt-live-chip{min-width:0!important;min-height:44px!important;max-width:220px!important;flex:0 0 auto!important}
+}
+`;
+    style.textContent += bedtime_view.bedtimeCss();
+    style.textContent += `
+#${core_constants.OVERLAY_ID} .rmt-expanded-cg{margin:16px 0;max-width:100%}
+#${core_constants.OVERLAY_ID} .rmt-expanded-cg .rmt-thumb{height:auto;min-height:160px;max-height:540px;aspect-ratio:3/2;border-radius:16px;overflow:hidden}
+#${core_constants.OVERLAY_ID} .rmt-expanded-cg img{width:100%;height:100%;object-fit:contain}
+#${core_constants.OVERLAY_ID} .rmt-language-scene{padding:16px;margin:12px 0;border:1px solid var(--rmt-theme-border);border-radius:14px}
+#${core_constants.OVERLAY_ID} .rmt-language-scene label{display:grid;gap:8px;margin:12px 0}
+#${core_constants.OVERLAY_ID} .rmt-language-scene textarea{width:100%;min-height:96px;font-size:16px}
+#${core_constants.OVERLAY_ID} .rmt-language-scene p{font-size:14px;line-height:1.6}
+`;
+    style.textContent += `
+#${core_constants.OVERLAY_ID} .rmt-relation-garden-scroll{max-width:100%;overflow:auto;border-radius:20px;-webkit-overflow-scrolling:touch}
+#${core_constants.OVERLAY_ID} .rmt-relation-garden-group{aspect-ratio:auto;flex:none}
+#${core_constants.OVERLAY_ID} .rmt-relation-garden-group .rmt-relation-node{width:108px;min-height:90px;padding:6px 5px}
+#${core_constants.OVERLAY_ID} .rmt-relation-garden-group .rmt-relation-node-avatar{width:28px;height:28px}
+#${core_constants.OVERLAY_ID} .rmt-relation-garden-group .rmt-relation-node b{max-width:94px;font-size:12px}
+#${core_constants.OVERLAY_ID} .rmt-relation-garden-group .rmt-relation-node small{max-width:94px;font-size:11px}
+`;
     document.head.appendChild(style);
 }
 
@@ -1163,6 +1194,24 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 #${core_constants.OVERLAY_ID} .rmt-topbar button[data-rmt-action="tasks"].rmt-task-alert{color:#e15b70!important;-webkit-text-fill-color:#e15b70!important;border-color:#e15b70!important}
 #${core_constants.OVERLAY_ID} .rmt-topbar button[data-rmt-action="tasks"].rmt-task-alert i{color:#e15b70!important;-webkit-text-fill-color:#e15b70!important}
 #${core_constants.OVERLAY_ID} .rmt-topbar button[data-rmt-action="tasks"] .rmt-task-count.rmt-task-count-alert{background:#d64545!important;color:#fff!important;-webkit-text-fill-color:#fff!important}
+#${core_constants.OVERLAY_ID} .rmt-toolbar-icon{display:block;width:20px;height:20px;pointer-events:none;flex:0 0 auto}
+#${core_constants.OVERLAY_ID} .rmt-topbar>button:focus-visible{outline:3px solid var(--rmt-theme-accent-ink,#607c8d)!important;outline-offset:2px}
+#${core_constants.OVERLAY_ID} .rmt-topbar>button[data-rmt-action="toolbar-more"]{display:none}
+#${core_constants.OVERLAY_ID} .rmt-toolbar-more-menu{position:absolute;z-index:20;right:56px;top:calc(100% - 3px);display:grid;gap:5px;min-width:168px;padding:7px;border:1px solid var(--rmt-theme-border,#dce7ec);border-radius:12px;background:var(--rmt-theme-surface-solid,#fff);box-shadow:0 12px 28px rgba(36,50,70,.2)}
+#${core_constants.OVERLAY_ID} .rmt-toolbar-more-menu[hidden]{display:none!important}
+#${core_constants.OVERLAY_ID} .rmt-toolbar-more-menu button{display:flex;align-items:center;gap:9px;min-height:44px;padding:8px 10px;border:0;border-radius:8px;background:transparent;color:var(--rmt-theme-text,#526a80);font:inherit;font-size:14px;font-weight:700;text-align:left;cursor:pointer}
+#${core_constants.OVERLAY_ID} .rmt-toolbar-more-menu button:hover,#${core_constants.OVERLAY_ID} .rmt-toolbar-more-menu button:focus-visible{background:var(--rmt-theme-soft,#f3f8fa);outline:2px solid var(--rmt-theme-accent-ink,#607c8d);outline-offset:1px}
+@media(max-width:760px){
+  #${core_constants.OVERLAY_ID} .rmt-topbar{gap:4px;padding-right:6px}
+  #${core_constants.OVERLAY_ID} .rmt-topbar:before{font-size:16px;margin-right:0}
+  #${core_constants.OVERLAY_ID} .rmt-topbar-title{flex:1 1 0;min-width:0;font-size:13px}
+  #${core_constants.OVERLAY_ID} .rmt-live-tasks{display:none!important}
+  #${core_constants.OVERLAY_ID} .rmt-topbar>button:is([data-rmt-action="back"],[data-rmt-action="library-home"],[data-rmt-action="tasks"],[data-rmt-action="toolbar-more"],[data-rmt-action="close"]){display:grid!important;place-items:center;width:44px!important;height:44px!important;min-width:44px!important;padding:0!important;flex:0 0 44px}
+  #${core_constants.OVERLAY_ID} .rmt-topbar>button:is([data-rmt-action="workspace-expand"],[data-rmt-action="regenerate"],[data-rmt-action="manage"]){display:none!important}
+  #${core_constants.OVERLAY_ID} .rmt-topbar>button[hidden]{display:none!important}
+  #${core_constants.OVERLAY_ID} .rmt-topbar button[data-rmt-action="tasks"] .rmt-toolbar-icon{width:20px!important;height:20px!important}
+  #${core_constants.OVERLAY_ID} .rmt-toolbar-more-menu{right:52px;top:calc(100% - 2px);min-width:172px}
+}
 #${core_constants.OVERLAY_ID} .rmt-character-portals{grid-template-columns:repeat(auto-fit,minmax(220px,320px))!important;justify-content:center!important}
 #${core_constants.OVERLAY_ID} .rmt-character-portal-open{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:flex-start!important;text-align:center!important;gap:2px!important;grid-template-columns:none!important;grid-template-areas:none!important;width:100%!important;min-height:0!important;padding:8px 8px 4px!important}
 #${core_constants.OVERLAY_ID} .rmt-character-portal-open>.rmt-portal-avatar{position:relative!important;inset:auto!important;transform:none!important;grid-area:auto!important;grid-column:auto!important;display:grid!important;place-items:center!important;width:88px!important;height:88px!important;margin:4px auto 12px!important;overflow:visible!important;flex:0 0 auto!important;z-index:0}
@@ -1215,6 +1264,29 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
     style.textContent += ui_workspaceStyles.workspaceCss('#' + core_constants.OVERLAY_ID);
     style.textContent += postcard_design_view.postcardDesignCss('#' + core_constants.OVERLAY_ID);
     style.textContent += ui_workspaceStyles.capsuleCss('#' + core_constants.OVERLAY_ID);
+    // workspaceCss is appended above and makes every direct topbar button visible.
+    // Keep the narrow toolbar rule last, with matching root specificity.
+    style.textContent += `
+@media(max-width:760px){
+  #${core_constants.OVERLAY_ID}.rmt-workspace .rmt-topbar>button:is([data-rmt-action="workspace-expand"],[data-rmt-action="regenerate"],[data-rmt-action="manage"]){display:none!important}
+  #${core_constants.OVERLAY_ID}.rmt-workspace .rmt-topbar>button:is([data-rmt-action="back"],[data-rmt-action="library-home"],[data-rmt-action="home"],[data-rmt-action="tasks"],[data-rmt-action="toolbar-more"],[data-rmt-action="close"]){display:grid!important;place-items:center!important;width:44px!important;min-width:44px!important;max-width:44px!important;height:44px!important;min-height:44px!important;padding:0!important;flex:0 0 44px!important}
+  #${core_constants.OVERLAY_ID}.rmt-workspace .rmt-topbar button:before,#${core_constants.OVERLAY_ID}.rmt-workspace .rmt-topbar button:after{content:none!important;display:none!important}
+  #${core_constants.OVERLAY_ID}.rmt-workspace .rmt-toolbar-more-menu[hidden]{display:none!important}
+  #${core_constants.OVERLAY_ID}.rmt-workspace .rmt-toolbar-more-menu>button{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:10px!important;width:100%!important;min-width:0!important;max-width:none!important;height:auto!important;min-height:44px!important;padding:10px 14px!important;font-size:14px!important;white-space:nowrap!important;border-radius:8px!important}
+  #${core_constants.OVERLAY_ID}.rmt-workspace .rmt-toolbar-more-menu>button[hidden]{display:none!important}
+  #${core_constants.OVERLAY_ID}.rmt-workspace .rmt-toolbar-more-menu>button span{font-size:14px!important;white-space:nowrap!important}
+}
+`;
+    style.textContent += bedtime_view.bedtimeCss();
+    style.textContent += `
+#${core_constants.OVERLAY_ID} .rmt-expanded-cg{margin:16px 0;max-width:100%}
+#${core_constants.OVERLAY_ID} .rmt-expanded-cg .rmt-thumb{height:auto;min-height:160px;max-height:540px;aspect-ratio:3/2;border-radius:16px;overflow:hidden}
+#${core_constants.OVERLAY_ID} .rmt-expanded-cg img{width:100%;height:100%;object-fit:contain}
+#${core_constants.OVERLAY_ID} .rmt-language-scene{padding:16px;margin:12px 0;border:1px solid var(--rmt-theme-border);border-radius:14px}
+#${core_constants.OVERLAY_ID} .rmt-language-scene label{display:grid;gap:8px;margin:12px 0}
+#${core_constants.OVERLAY_ID} .rmt-language-scene textarea{width:100%;min-height:96px;font-size:16px}
+#${core_constants.OVERLAY_ID} .rmt-language-scene p{font-size:14px;line-height:1.6}
+`;
     document.head.appendChild(style);
 }
 

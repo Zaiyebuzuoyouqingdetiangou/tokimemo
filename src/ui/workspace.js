@@ -1,3 +1,4 @@
+import * as generationStatus from './generationStatus.js';
 import * as cg_format_ui from './cgFormatControl.js';
 // Production workspace: delegates every data operation to the existing module entry points.
 // This file contains no sample records, generation prompts, or alternate persistence path.
@@ -74,6 +75,8 @@ export function openWorkspaceTab(tab) {
 }
 export function routeHasContent(key, session) {
     if (!session) return false;
+    if (key === 'bedtime') return !!session.stories?.length;
+    if (key === 'failed-photoshoot') return !!session.photoshoots?.length;
     if (key === 'themeSong') return !!session.songs?.length;
     if (key === 'language') return heartLanguage.heartLanguageStatus(session).hasContent;
     if (key === 'strips') return !!session.dailyStrips?.length;
@@ -84,6 +87,8 @@ export function routeHasContent(key, session) {
 }
 function countStatus(key, session) {
     if (!routeHasContent(key, session)) return '尚未生成 · 可先进入';
+    if (key === 'bedtime') return `已有 ${session.stories.length} 篇故事`;
+    if (key === 'failed-photoshoot') return `已有 ${session.photoshoots?.length || 0} 张写真计划`;
     if (key === 'themeSong') return `已有 ${session.songs.length} 首`;
     if (key === 'language') return `已有 ${heartLanguage.heartLanguageStatus(session).total} 句`;
     if (key === 'heart') return `已有 ${(session.voiceDramas || []).filter(i => i.kind !== 'postending').length + (session.scenarioDramas || []).length} 篇`;
@@ -101,20 +106,25 @@ export function workspaceCatalogueHtml(portals = [], snapshot = null, { ready: a
         const session = sessionMap.get(spec.mode);
         const running = snapshot ? coordinator.isArchiveTargetModeGenerating(spec.mode, snapshot) : coordinator.isModeGenerating(spec.mode);
         const ready = routeHasContent(key, session);
-        const status = (running ? (ready ? '生成中 · 已有内容可读' : '正在生成') : countStatus(key, session))
+        const progress = generationStatus.routeGenerationStatus(key, spec.mode, session, { running, hasContent: ready, snapshot });
+        const status = (progress.state === 'done' || progress.state === 'empty' ? countStatus(key, session) : progress.label)
             + (generation_merged.MERGEABLE_ROUTES.includes(key) ? ' · 可合并' : '');
-        const queueable = canQueue && spec.mode && !spec.deep;
+        const queueable = canQueue && spec.mode && !spec.deep && !spec.manualOnly;
         return `<article class="rmt-archive-portal rmt-workspace-card ${ready ? 'ready' : 'empty'} rmt-archive-portal-${esc(meta.accent)}"><button type="button" class="rmt-portal-open" data-rmt-workspace-route="${key}"><span class="rmt-portal-avatar"><i class="fa-solid ${esc(meta.icon)}" aria-hidden="true"></i></span><span class="rmt-portal-title">${esc(spec.title)}</span><span class="rmt-portal-subtitle">${esc(meta.subtitle)}</span><span class="rmt-portal-status">${esc(status)}</span><span class="rmt-workspace-enter" aria-hidden="true">›</span></button>${queueable ? ui_taskCenter.queuePickHtml(key) : ''}</article>`;
     }).join('');
     let pendingBar = '';
     if (canQueue) {
         try {
             const chatId = context.comparableChatId(context.getChatId());
-            const waiting = generation_merged.createPendingStore().read(chatId);
+            const pending = generation_merged.createPendingStore();
+            const pendingScope = generation_merged.currentPendingScope(context.getContext());
+            const waiting = pending.readForOrigin(pendingScope);
             if (waiting.length) {
-                pendingBar = `<div class="rmt-queue-bar">${waiting.map(item => `<button type="button" class="rmt-btn" data-rmt-action="${item.kind === 'unsaved' ? 'merged-resave' : 'merged-repair'}" data-rmt-route="${esc(item.route)}">${esc(item.kind === 'unsaved' ? `重新保存${item.label}` : `只补${item.label}`)}</button>`).join('')}<small>${esc(generation_merged.pendingNote(chatId).join('；'))}</small></div>`;
+                pendingBar = `<div class="rmt-queue-bar">${waiting.map(item => `<button type="button" class="rmt-btn" data-rmt-action="${item.kind === 'unsaved' ? 'merged-resave' : 'merged-repair'}" data-rmt-route="${esc(item.route)}" data-rmt-pending-id="${esc(item.id)}">${esc(item.kind === 'unsaved' ? `重新保存${item.label}` : `只补${item.label}`)}</button><button type="button" class="rmt-btn" data-rmt-action="merged-export" data-rmt-pending-id="${esc(item.id)}">导出${esc(item.label)}成果</button>${item.session ? `<details><summary>查看保留的成果</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto">${esc(JSON.stringify(item.session, null, 2))}</pre></details>` : ''}`).join('')}<small>${esc(generation_merged.pendingNote(pendingScope).join('；'))}</small></div>`;
             }
-        } catch { /* Pending notes appear after the archive can be read. */ }
+            const legacy = pending.readUnattributed(chatId);
+            if (legacy.length) pendingBar += `<div class="rmt-queue-bar"><small>有 ${legacy.length} 条旧暂存记录缺少所属人物，已保留，不会显示为当前人物内容。</small><button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button></div>`;
+        } catch { pendingBar = '<div class="rmt-queue-bar" role="alert">暂存区读取失败，旧数据没有清空。<button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button></div>'; }
     }
     const queueBar = canQueue ? `<div class="rmt-queue-bar"><button type="button" class="rmt-btn" data-rmt-action="queue-selected">把勾选的项目排进任务中心</button><button type="button" class="rmt-btn" data-rmt-action="generate-together">一起生成</button><small>目前能一起生成的是陈列柜、成就库、邮箱和印象曲。勾选两项以上会先看分成几次请求。其他页这次仍按单项发送。单项生成仍按目录顺序，一次一项。</small></div>${pendingBar}` : '';
     return `<section class="rmt-workspace-catalogue"><header class="rmt-workspace-section-head"><div><h2>内容</h2><p>选择你想看的那一页</p></div><div class="rmt-layout-switch" aria-label="目录显示方式">${[['cards','卡片'],['list','列表']].map(([k,t])=>`<button type="button" data-rmt-workspace-layout="${k}" aria-pressed="${ui_workspaceState.workspace.layout === k}" class="${ui_workspaceState.workspace.layout === k ? 'active' : ''}">${t}</button>`).join('')}</div></header><nav class="rmt-workspace-groups" aria-label="内容分组">${GROUPS.map(([k,t])=>`<button type="button" data-rmt-workspace-group="${k}" class="${ui_workspaceState.workspace.group === k ? 'active' : ''}" aria-current="${ui_workspaceState.workspace.group === k ? 'page' : 'false'}">${t}</button>`).join('')}</nav>${queueBar}<div class="rmt-archive-portals rmt-workspace-portals" data-rmt-layout="${ui_workspaceState.workspace.layout}">${cards}</div></section>`;

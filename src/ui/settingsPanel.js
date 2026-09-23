@@ -409,6 +409,10 @@ export function refreshGenerationSettingsUi() {
         }
         profile.value = profiles.some(item => item.id === settings.connectionProfileId) ? settings.connectionProfileId : '';
     }
+    const poolEnabled = panel.querySelector('[data-rmt-api-pool-enabled]');
+    if (poolEnabled) poolEnabled.checked = settings.connectionPoolEnabled === true;
+    const poolChoices = panel.querySelector('[data-rmt-api-pool-choices]');
+    if (poolChoices) poolChoices.innerHTML = core_settings.supportedConnectionProfiles().map(item => `<label class="rmt-settings-check"><input type="checkbox" data-rmt-api-pool-profile="${core_text.esc(item.id)}" ${(settings.connectionPoolIds || []).includes(item.id) ? 'checked' : ''}><span>${core_text.esc(item.name)}${item.model ? ` · ${core_text.esc(item.model)}` : ''}</span></label>`).join('') || '<p>先在 Connection Manager 中保存可用连接。</p>';
     if (oneClick) {
         oneClick.classList.toggle('is-active', editorMode === 'profile');
         oneClick.setAttribute('aria-pressed', editorMode === 'profile' ? 'true' : 'false');
@@ -460,9 +464,12 @@ export function refreshGenerationSettingsUi() {
     }
     if (bannedPhrases) bannedPhrases.value = settings.bannedGeneratedPhrases.join('，');
     if (status) {
+        const profileConfigured = settings.connectionPoolEnabled === true
+            ? (settings.connectionPoolIds || []).some(id => core_settings.supportedConnectionProfiles().some(profile => profile.id === id))
+            : !!settings.connectionProfileId;
         let profileCapabilityReady = false;
         let manualConfigurationReady = false;
-        if (connectionMode === 'profile' && settings.connectionProfileId) {
+        if (connectionMode === 'profile' && profileConfigured) {
             try {
                 core_independentApi.assertConnectionManagerProfileSupport(core_context.getContext().ConnectionManagerRequestService);
                 profileCapabilityReady = true;
@@ -476,12 +483,12 @@ export function refreshGenerationSettingsUi() {
         }
         const ready = connectionMode === 'manual'
             ? manualConfigurationReady
-            : !!settings.connectionProfileId && profileCapabilityReady;
+            : profileConfigured && profileCapabilityReady;
         status.classList.toggle('is-ready', ready);
         status.textContent = `${ready ? '●' : '○'} ${ready
             ? core_settings.generationSourceLabel(settings)
             : connectionMode === 'manual' ? '手动配置未完成'
-            : settings.connectionProfileId ? '需凭证绑定能力，可改用手动配置' : '一键连接未配置'}`;
+            : profileConfigured ? '需凭证绑定能力，可改用手动配置' : '一键连接未配置'}`;
     }
     void refreshModelOptions();
     void refreshManualModelOptions();
@@ -615,6 +622,7 @@ export function mountSettings({ homeTarget = null } = {}) {
           <div class="rmt-api-status" data-rmt-api-status role="status">○ 一键连接未配置</div>
           <div class="rmt-api-source-panel" data-rmt-api-profile-panel>
             <label class="rmt-settings-field"><span>连接配置</span><select class="text_pole" data-rmt-api-profile><option value="">选择 Connection Manager 配置</option></select></label>
+            <details class="rmt-api-pool"><summary>多个连接轮流使用</summary><label class="rmt-settings-check"><input type="checkbox" data-rmt-api-pool-enabled><span>启用轮询连接池</span></label><div data-rmt-api-pool-choices></div><small>新任务依次使用勾选的连接及其模型；本次运行中的重试保持原连接；重新打开后续接会重新分配。可同时运行的任务数量沿用已有并发设置。</small></details>
             <div class="rmt-model-row">
               <label class="rmt-settings-field"><span>模型</span><select class="text_pole" data-rmt-api-model><option value="">请先选择专用连接</option></select></label>
               <button type="button" class="menu_button rmt-model-refresh" data-rmt-api-model-refresh>刷新模型</button>
@@ -954,6 +962,12 @@ export function mountSettings({ homeTarget = null } = {}) {
             core_settings.updatePluginSettings({ apiConnectionMode: 'profile', connectionProfileId, modelOverride: '' });
             refreshGenerationSettingsUi();
             void refreshModelOptions({ fetchRemote: !!connectionProfileId });
+            return;
+        }
+        if (target.matches?.('[data-rmt-api-pool-enabled], [data-rmt-api-pool-profile]')) {
+            const connectionPoolIds = [...panel.querySelectorAll('[data-rmt-api-pool-profile]:checked')].map(input => input.dataset.rmtApiPoolProfile);
+            core_settings.updatePluginSettings({connectionPoolEnabled:panel.querySelector('[data-rmt-api-pool-enabled]')?.checked === true,connectionPoolIds});
+            refreshGenerationSettingsUi();
             return;
         }
         if (target.matches?.('[data-rmt-api-model]')) {

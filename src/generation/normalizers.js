@@ -1,6 +1,7 @@
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as song_contract from '../core/themeSongContract.js';
+import * as bedtime_contract from '../core/bedtimeContract.js';
 import * as core_constants from '../core/constants.js';
 import * as modes_achievements from '../modes/achievements.js';
 import * as modes_advEvent from '../modes/advEvent.js';
@@ -21,6 +22,7 @@ import * as modes_travel from '../modes/travel.js';
 
 export function normalizeByMode(mode, data, memoryBank, context = null) {
     if (mode === core_constants.MODE.THEME_SONG) return song_contract.normalizeStoredThemeSongs(data, memoryBank);
+    if (mode === core_constants.MODE.BEDTIME) return bedtime_contract.normalizeStoredBedtime(data, memoryBank);
     if (time_stories.isTimeStoryMode(mode)) return modes_timeStories.normalizeTimeStories(data, memoryBank, { context });
     if (mode === core_constants.MODE.PAST_LIVES) return modes_pastLives.normalizePastLives(data, memoryBank, { context });
     if (mode === core_constants.MODE.CALENDAR) return modes_calendar.normalizeCalendar(data, memoryBank);

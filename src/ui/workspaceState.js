@@ -39,6 +39,7 @@ export const WORKSPACE_ROUTES = Object.freeze({
     inbox: { mode: 'inbox', title: '你的邮箱', group: 'life' },
     travel: { mode: 'travel', title: '他的出行路线', group: 'life' },
     themeSong: { mode: 'themeSong', title: '角色印象曲', group: 'interaction' },
+    bedtime: { mode: 'bedtime', title: '睡前故事', group: 'stories' },
     heart: { mode: 'heart', title: '角色互动', group: 'interaction', view: 'seasons' },
     language: { mode: 'heart', title: '基础语言', group: 'interaction' },
     fireflies: { mode: 'heart', title: '萤火虫栖息地', group: 'interaction', view: 'fireflies' },

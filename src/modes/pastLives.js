@@ -3,6 +3,7 @@ import * as text from '../core/text.js';
 import * as evidence from '../core/evidence.js';
 import * as narrative from '../core/narrativeAuthority.js';
 import * as contextApi from '../core/context.js';
+import * as participants from '../core/participants.js';
 import * as cache from '../core/cache.js';
 import * as incremental from '../core/incremental.js';
 import * as generation from '../generation/client.js';
@@ -16,7 +17,8 @@ const clean = contract.pastLivesText;
 const list = contract.pastLivesArray;
 const fail = contract.pastLivesError;
 const localId = (prefix, index) => `${prefix}${String(index + 1).padStart(2, '0')}`;
-const roleContext = memory => ({ name1: memory?.userName || '', name2: memory?.characterName || '' });
+const ownerLabel = memory => participants.resolveStoryIdentities(memory).ownerNames.join('、') || text.normalizeText(memory?.characterName, 120);
+const roleContext = memory => ({ name1: memory?.userName || '', name2: ownerLabel(memory) });
 
 function fictionalText(value, memory, max = L.prose, required = false, speaker = 'char') {
     const result = clean(value, max, required);
@@ -67,7 +69,7 @@ export function emptyPastLives(memoryBank, context = null) {
     return { kind: PAST_LIVES_MODE, version: PAST_LIVES_VERSION,
         chatId: text.normalizeText(memoryBank?.chatId, 240), archiveRevision: text.normalizeText(memoryBank?.archiveRevision, 240),
         ownerKey: context ? contextApi.currentCharacterRuntimeKey(context) : '',
-        characterName: text.normalizeText(memoryBank?.characterName, 120), userName: text.normalizeText(memoryBank?.userName, 120),
+        characterName: ownerLabel(memoryBank), userName: text.normalizeText(memoryBank?.userName, 120),
         title: '前世今生', presentation: 'neutral', episodes: [], selectedId: '', selectedEntryId: '', selectedKey: '',
         view: 'library', pastLivesReadMask: '', pastLivesDrawn: false, pastLivesClosing: false };
 }
@@ -126,7 +128,7 @@ export function normalizePastLivesFinale(value, memory, dossiers, options = {}) 
         return { id: localId('A', index), afterClueIds, text: annotationText(annotation.text, memory) };
     });
     return { echoes, annotations, closing: { text: presentText(raw.closing?.text, memory, L.prose, true, options),
-        signature: presentText(raw.closing?.signature, memory, 240, false, options) || text.normalizeText(memory.characterName, 120) } };
+        signature: presentText(raw.closing?.signature, memory, 240, false, options) || ownerLabel(memory) } };
 }
 
 export function normalizePastLivesEpisode(value, memory, { id = 'PL01', presentation = 'neutral', controlledEvidence = '' } = {}) {
@@ -143,6 +145,8 @@ export function normalizePastLives(value, memory, options = {}) {
     if ((raw.chatId && raw.chatId !== memory?.chatId) || (raw.archiveRevision && raw.archiveRevision !== memory?.archiveRevision))
         throw fail('SOURCE', '番外所属聊天或档案版本不一致，原记录保持不变。');
     const result = emptyPastLives(memory, options.context);
+    // Re-normalizing an older readable volume must not rewrite its saved reading label.
+    if ([ownerLabel(memory), memory?.characterName].includes(raw.characterName)) result.characterName = raw.characterName;
     result.ownerKey = result.ownerKey || clean(raw.ownerKey, 1200);
     result.presentation = ['classical', 'modern', 'fantasy', 'neutral'].includes(raw.presentation) ? raw.presentation : 'neutral';
     result.episodes = list(raw.episodes, L.episodes).map((episode, index) => normalizePastLivesEpisode(episode, memory,
@@ -157,7 +161,7 @@ export function readablePastLivesSession(value, memory) {
     try {
         const raw = contract.pastLivesStoredData(value);
         if (raw.chatId !== memory?.chatId || raw.archiveRevision !== memory?.archiveRevision
-            || raw.characterName !== memory?.characterName || raw.userName !== memory?.userName) return null;
+            || ![ownerLabel(memory), memory?.characterName].includes(raw.characterName) || raw.userName !== memory?.userName) return null;
         return value;
     } catch { return null; }
 }
@@ -240,7 +244,7 @@ export function readablePastLivesProgressSession(value, memory) {
         if (raw.readableProgress?.version !== 1 || raw.readableProgress.complete !== false
             || raw.kind !== PAST_LIVES_MODE || raw.version !== PAST_LIVES_VERSION
             || raw.chatId !== memory?.chatId || raw.archiveRevision !== memory?.archiveRevision
-            || raw.characterName !== memory?.characterName || raw.userName !== memory?.userName
+            || ![ownerLabel(memory), memory?.characterName].includes(raw.characterName) || raw.userName !== memory?.userName
             || !Array.isArray(raw.episodes) || !raw.episodes.length) return null;
         for (const episode of raw.episodes) {
             if (!/^PL\d+$/u.test(episode.id) || episode.fiction !== true || !Array.isArray(episode.dossiers)

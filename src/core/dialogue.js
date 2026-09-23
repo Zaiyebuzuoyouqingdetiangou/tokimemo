@@ -49,7 +49,7 @@ export function normalizeDialogueRows(raw, { characterName = '', userName = '', 
         if (rows.length >= 120 || chars > 50400) { overflow = true; return; }
         // Preserve the resolved local identity across normalize -> save -> render.
         // Otherwise a stripped name label could be re-attributed on the second pass.
-        const localName = speaker === 'char' ? core_text.normalizeText(characterName, 120) : speaker === 'user'
+        const localName = speaker === 'char' ? (namedOwner(speakerName) === 'char' ? core_text.normalizeText(speakerName, 120) : core_text.normalizeText(characterName, 120)) : speaker === 'user'
             ? core_text.normalizeText(userName, 120) : '';
         const resolvedName = localName && namedOwner(localName) === speaker ? localName : '';
         rows.push({ speaker, text, ...(unresolvedSpeaker ? { unresolvedSpeaker: true } : {}), ...(speaker === 'npc' ? { speakerName }
@@ -132,6 +132,7 @@ export function normalizeDialogueRows(raw, { characterName = '', userName = '', 
         } else if (nameOwner) speaker = nameOwner;
         else if (npcName && speaker !== 'npc') speaker = 'narrator';
         if (speaker === 'npc' && !npcName) speaker = 'narrator';
+        const identifiedCharacter = speaker === 'char' ? (nameOwner === 'char' ? npcName : directOwner === 'char' ? name : '') : '';
         if (speaker !== 'npc') npcName = '';
         const originalText = core_text.normalizeText(line?.text, 50401);
         const action = core_text.normalizeText(line?.action || line?.narration, 50401);
@@ -157,7 +158,7 @@ export function normalizeDialogueRows(raw, { characterName = '', userName = '', 
             const label = match[1].trim();
             const owner = namedOwner(label, npcName)
                 || (['char', 'user', 'narrator'].includes(label.toLowerCase()) ? label.toLowerCase() : '');
-            if (owner) return { speaker: owner, text: match[2] };
+            if (owner) return { speaker: owner, text: match[2], speakerName: namedOwner(label) === 'char' ? label : '' };
             // Speech/action leads with a colon are not unknown speaker labels.
             if (leadIn(`${label}：`, speaker, npcName)) return null;
             if (/^[\p{L}\p{N}_·]{1,12}$/u.test(label) && !/^(?:我|我们|你|您|我的|意思|例如|注意)/.test(label)) return { speaker: 'narrator', text: value };
@@ -172,7 +173,7 @@ export function normalizeDialogueRows(raw, { characterName = '', userName = '', 
             const tagged = hasLabels ? labelled(value) : null;
             const text = (tagged ? tagged.text : value).trim();
             let rowSpeaker = tagged ? tagged.speaker : hasLabels ? 'narrator' : speaker;
-            let rowNpcName = npcName;
+            let rowNpcName = tagged?.speakerName || npcName || identifiedCharacter;
             if (!text) continue;
             const narrative = looksNarrative(text, npcName);
             if (inherited && !tagged && !nameOwner && !directOwner && !npcName && !narrative

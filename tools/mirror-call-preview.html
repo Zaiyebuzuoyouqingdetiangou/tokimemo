@@ -1,0 +1,17 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>实时通话 · 隔离验证</title>
+<style>body{margin:0;font-family:system-ui;background:#edf2f5}#heartbeat_memories_overlay{display:flex;flex-direction:column;min-height:100dvh;--rmt-theme-bg:#fffdfb;--rmt-theme-text:#374151;--rmt-theme-border:#cbd5e1;--rmt-theme-surface-solid:#fff}.rmt-body{padding:20px}#fixture{padding:10px}#fixture button{min-height:44px;margin:4px}#evidence{white-space:pre-wrap;overflow-wrap:anywhere}</style>
+<div id="fixture"><strong>本地模拟接口，不开麦、不计费</strong><div><button id="switch">切换角色</button><button id="page">切换内容页</button><button id="missing">移除镜译接口</button></div><p id="evidence"></p></div>
+<main id="heartbeat_memories_overlay"><div class="rmt-body"><section class="rmt-bedtime-chapter"><p>街角的钟停在十一点五十九分。岚放下杯子，抬头看向窗外。</p></section></div></main><pre id="errors"></pre>
+<script type="module">
+const errorBox=document.querySelector('#errors');addEventListener('error',e=>errorBox.textContent+=e.message+'\n');addEventListener('unhandledrejection',e=>errorBox.textContent+=e.reason+'\n');
+let context={characterId:0,name2:'岚',name1:'阿宁',chatId:'call-preview',characters:[{name:'岚',avatar:'lan.png',description:'岚留着黑色短发，寡言但会认真听对方说完。',personality:'平静，惜字。'},{name:'月',avatar:'yue.png',description:'月戴银框眼镜，说话直率。'}],chatMetadata:{},extensionSettings:{},chat:[{is_user:true,name:'阿宁',mes:'今天下雨了。'}],powerUserSettings:{persona_description:'阿宁是岚的旧友。'},getCurrentChatId(){return this.chatId;}};
+globalThis.SillyTavern={getContext:()=>context};
+const stats={llm:0,mic:0,cancel:0,spoken:'',lastContext:false};const show=()=>document.querySelector('#evidence').textContent=JSON.stringify(stats);
+globalThis.__JINGYI__={tts:{apiVersion:1,status:()=>({enabled:true,hasKey:true,busy:false}),stream(){let end;const done=new Promise(r=>end=r);return{push:t=>{stats.spoken+=t;show();},end:()=>end(),cancel:()=>{stats.cancel++;show();end();},done,on:()=>()=>{}}}},stt:{status:()=>({available:true}),async start(){stats.mic++;show();return{stop:async()=> '你今天好吗？',cancel:()=>{stats.cancel++;show();}};}},llm:{status:()=>({connection:'模拟连接',streams:true}),async stream({messages,signal,onText}){stats.llm++;stats.lastContext=messages[0].content.includes(context.characters[context.characterId].description);show();const text='我在。慢慢说，我听着。';let value='';for(const part of text){await new Promise(r=>setTimeout(r,60));if(signal.aborted)throw new DOMException('cancel','AbortError');value+=part;onText(value);}return value;}}};
+globalThis.__JINGYI__.tts.speak=async ({text})=>{stats.spoken+=text;show();return {done:Promise.resolve(),playing:false,stop(){},onProgress(){return()=>{};}};};
+const reader=await import('../src/ui/mirrorTtsReader.js');reader.mountMirrorReader(document.querySelector('main'));
+const view=await import('../src/ui/mirrorCallView.js');view.mountMirrorCall(document.querySelector('main'));show();
+document.querySelector('#switch').onclick=()=>{context={...context,characterId:context.characterId===0?1:0};context.name2=context.characters[context.characterId].name;document.querySelector('.rmt-body').textContent='当前角色：'+context.name2;};
+document.querySelector('#page').onclick=()=>document.querySelector('.rmt-body').replaceChildren(document.createTextNode('切换后的阅读页面'));
+document.querySelector('#missing').onclick=()=>{view.disposeMirrorCall();delete globalThis.__JINGYI__;view.mountMirrorCall(document.querySelector('main'));};
+</script></html>

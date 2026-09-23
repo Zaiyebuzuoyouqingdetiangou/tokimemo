@@ -1,0 +1,14 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>日历打印隔离预览</title><body><pre id="errors"></pre>
+<script type="module">
+const errors=document.querySelector('#errors');window.addEventListener('error',e=>errors.textContent+=e.message+'\n');window.addEventListener('unhandledrejection',e=>errors.textContent+=e.reason+'\n');
+const host={characterId:0,name1:'安然',name2:'小马',chatId:'calendar-print-preview',characters:[{name:'小马',avatar:'preview.png'}],chat:[],chatMetadata:{},extensionSettings:{},powerUserSettings:{},saveMetadata:async()=>{}};
+globalThis.SillyTavern={getContext:()=>host};globalThis.toastr={error:message=>errors.textContent+=message+'\n',warning:message=>errors.textContent+=message+'\n',info:()=>{}};
+const {state}=await import('../src/core/state.js');
+const overlay=await import('../src/ui/overlay.js');
+const calendar=await import('../src/ui/calendarView.js?verification=r8456-print');
+const pageKey='date:2026/09/23';
+const longDiary='今天下班后绕到河边。风把便利贴的一角吹起来，我把它压回日历里。\n\n没有什么惊天动地的事，只是想把这段安静的路也留给你：灯刚亮，水面像一张慢慢展开的纸。';
+state.activeMode='calendar';state.activeSession={kind:'calendar',calendarVersion:6,chatId:'calendar-print-preview',archiveRevision:'preview-v1',title:'小马和安然的手帐',storyDate:'2026/09/23',selectedMonth:'2026-09',selectedDateKey:pageKey,entries:[{id:'CAL01',date:'2026/09/23',status:'past',title:'河边散步',tags:['日常']},{id:'CAL02',date:'2026/09/23',status:'promised',title:'一起做晚饭',tags:['约定']},{id:'CAL03',date:'2026/09/25',status:'future',title:'秋日市集',tags:['设定日']}],dayPages:{[pageKey]:{key:pageKey,kind:'date',date:'2026/09/23',entryIds:['CAL01','CAL02'],drafts:[],manualTodos:[],stickyNotes:[{id:'N1',kind:'memo',title:'今晚的备忘',text:longDiary,sourceLabel:'虚构预览档案',sourceType:'archive'}],moodNotes:[{id:'M1',text:'如果明天也有一点空闲，就再走一段。\n不要急着把每件事都解释清楚。',date:'2026/09/23',sourceLabel:'虚构预览档案'}],holidayCards:[{id:'H1',calendarEntryId:'CAL01',holidayLabel:'秋分小卡',expression:'mixed',calligraphy:'晚风也替我记住了。',message:'一张本地 SVG 生成的纸上小画，用于检查打印时的等比缩放。',signature:'—— 小马',motifs:['leaf','spark','ribbon'],art:{palette:'rose',medium:'card',flow:'horizontal',density:56,whitespace:42,asymmetry:58,visualWeight:45,stroke:'soft'}}]},'date:2026/09/25':{key:'date:2026/09/25',kind:'date',date:'2026/09/25',entryIds:['CAL03'],drafts:[],manualTodos:[],stickyNotes:[],moodNotes:[],holidayCards:[]}}};
+state.activeArchiveSnapshot={entryId:'preview-entry',chatId:'calendar-print-preview',memory:{chatId:'calendar-print-preview',archiveRevision:'preview-v1',characterName:'小马',userName:'安然',memories:[]},cache:{},backupOnly:true};state.activeArchiveReadOnly=true;
+overlay.openOverlay();calendar.renderCalendar();
+</script></body></html>

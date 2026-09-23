@@ -195,7 +195,7 @@ test('pages that depend on each other stay separate requests', () => {
     assert.equal(plan.mergedGroups.some(group => group.includes('room')), false);
     assert.equal(plan.solo.some(item => item.route === 'room'), true);
     assert.equal(plan.requestCount, 2);
-    assert.equal(plan.summary.includes('预计请求 2 次'), true);
+    assert.equal(plan.summary.includes('合计至少 2 个生成任务，实际请求次数另计'), true);
     assert.equal(plan.summary.includes('这次还没接入合并'), true);
     assert.equal(plan.summary.includes(MERGED_NOW), true);
     assert.equal(plan.summary.includes('以后都不能'), false);

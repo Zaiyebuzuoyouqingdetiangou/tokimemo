@@ -1,3 +1,6 @@
+import * as composerOptions from '../core/generationOptions.js';
+import * as connection_pool from '../core/connectionPool.js';
+import * as generation_merged from './mergedGeneration.js';
 import * as advanced_generation from '../core/advancedGeneration.js';
 import * as recovery_source from '../core/recoverySourcePolicy.js';
 import * as output_budget from '../core/outputBudget.js';
@@ -12,6 +15,7 @@ import * as archive_repository from '../archive/repository.js';
 import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_cache from '../core/cache.js';
 import * as core_participants from '../core/participants.js';
+import * as core_generationParticipants from '../core/generationParticipants.js';
 import * as core_controlledSources from '../core/controlledSources.js';
 import * as core_inputLedger from '../core/inputLedger.js';
 import * as core_constants from '../core/constants.js';
@@ -46,6 +50,8 @@ import * as modes_cabinet from '../modes/cabinet.js';
 import * as modes_phone from '../modes/phone.js';
 import * as modes_song from '../modes/themeSong.js';
 import * as song_contract from '../core/themeSongContract.js';
+import * as modes_bedtime from '../modes/bedtime.js';
+import * as bedtime_contract from '../core/bedtimeContract.js';
 import * as heart_reader from '../ui/heartReaderState.js';
 import * as modes_inbox from '../modes/inbox.js';
 import * as modes_pastLives from '../modes/pastLives.js';
@@ -333,6 +339,21 @@ export async function captureAlbumParticipantSnapshot(context, origin, { existin
     if (!snapshot) return null;
     return generation_recovery.frozenGenerationInput(origin, 'participants:album', () => snapshot);
 }
+
+export async function captureModeParticipantSnapshot(mode, context, origin, { existing = null, participantSnapshot, memoryBank = null } = {}) {
+    if ([core_constants.MODE.ROOM, core_constants.MODE.ALBUM].includes(mode)) return null;
+    const key = 'participants:mode';
+    // An old recovery recipe must remain byte-identical. Absence means the
+    // original request did not have a generic participant selection.
+    if (existing && !Object.hasOwn(existing.frozenInputs || {}, key)) return null;
+    const frozenSnapshot = existing ? JSON.parse(existing.frozenInputs[key])
+        : participantSnapshot !== undefined ? participantSnapshot : undefined;
+    const roster = memoryBank?.[core_participants.PARTICIPANTS_KEY] || core_cache.readParticipantRoster(context);
+    const snapshot = core_generationParticipants.resolveGenerationParticipantSnapshot({ roster, frozenSnapshot });
+    // New work freezes null too. That prevents a later roster edit from turning
+    // a single-person retry into a different prompt, without adding a prompt block.
+    return generation_recovery.frozenGenerationInput(origin, key, () => snapshot);
+}
 async function activatedWorldInfoText(context, mode) {
     if (core_settings.getPluginSettings(context).useActivatedWorldInfo === false || typeof context.getWorldInfoPrompt !== 'function') return '';
     try {
@@ -365,7 +386,7 @@ async function collectSelectedSettingEntries(context) {
 }
 
 async function buildWorldPresentationContextFresh(context, memoryBank, mode, participantSnapshot = null) {
-    const wantsSelectedSetting = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode);
+    const wantsSelectedSetting = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ROOM, core_constants.MODE.TRAVEL, core_constants.MODE.PHONE, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode);
     if (participantSnapshot?.people?.length) {
         const selected = wantsSelectedSetting ? await collectSelectedSettingEntries(context) : { entries: [], incomplete: false, reason: '' };
         const activatedText = selected.entries.length ? '' : await activatedWorldInfoText(context, mode);
@@ -849,11 +870,12 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
     const context = generationContentContext(options.origin, options.context || core_context.currentCharacterGuard());
     const transportContext = contentContextSources.get(context) || context;
     await core_settings.prepareManualCredential(transportContext);
-    const settings = core_settings.getPluginSettings(transportContext);
+    const configuredSettings = core_settings.getPluginSettings(transportContext);
+    const settings = connection_pool.selectConnectionTransport(configuredSettings, options.origin || options);
     const savedContent = options.recoveryContentSettings || generation_recovery.generationContentSnapshotForOrigin(options.origin)?.contentSettings;
     let contentSettings = { ...settings, ...(savedContent || {}) };
     const advanced = advanced_generation.parseAdvancedGeneration(settings);
-    const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(settings);
+    const configurationFingerprint = core_independentApi.apiConfigurationFingerprint(configuredSettings);
     const contextEnvelope = typeof options.contextEnvelope === 'string'
         ? options.contextEnvelope
         : await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: generationWorldInfoScanTerms(options.mode, context) });
@@ -932,7 +954,7 @@ async function generateConfiguredJsonOperation(prompt, options = {}) {
         const latestSettings = core_settings.getPluginSettings(context);
         let latestProfileFingerprint = '';
         if (connectionMode === 'profile') {
-            try { latestProfileFingerprint = await core_settings.resolvedProfileTransportFingerprint(core_settings.rawConnectionProfile(latestSettings.connectionProfileId, context)); }
+            try { latestProfileFingerprint = await core_settings.resolvedProfileTransportFingerprint(core_settings.rawConnectionProfile(settings.connectionProfileId, context)); }
             catch { latestProfileFingerprint = 'missing'; }
         }
         if (core_independentApi.apiConfigurationFingerprint(latestSettings) !== configurationFingerprint
@@ -1250,9 +1272,10 @@ export async function continueSavedGeneration(mode, options = {}) {
     const operation = existing.operation || { kind: 'mode', mode };
     const resumeOptions = { ...options, ...targetOptions, existing, continueRecovery: true,
         ...(operation.participantRegeneration ? { participantRegeneration: operation.participantRegeneration } : {}) };
+    if (operation.kind === 'merged') return generation_merged.resumeMergedGeneration(existing, resumeOptions);
     if (operation.kind === 'mode') return generateMode(mode, { ...resumeOptions,
         background: options.skipConfirm === true || !(runtimeState.activeMode === mode && (time_stories.isTimeStoryMode(mode)
-            || mode === core_constants.MODE.THEME_SONG
+            || mode === core_constants.MODE.THEME_SONG || mode === core_constants.MODE.BEDTIME
             || (mode === core_constants.MODE.PHONE && runtimeState.activeSession?._rmtEmptyTerminal === true))) });
     if (operation.kind === 'content-item' && operation.sourceDraftId) return ui_contentManager.resumeContentRegeneration(resumeOptions);
     let session = core_cache.loadSession(mode, { context, memoryBank: bank, cache: targetOptions.archiveTarget?.cache, clone: true });
@@ -1371,12 +1394,12 @@ async function generateModeOperation(mode, options = {}) {
     // Capture once, before any archive/network/storage await. A destroyed invocation must never
     // adopt the next runtime lifetime and re-register itself as a fresh paid task.
     const lifecycleEpoch = runtimeState.runtimeLifecycleEpoch;
-    if (mode === core_constants.MODE.THEME_SONG && options.automatic) return { status: 'noop' };
+    if ([core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode) && options.automatic) return { status: 'noop' };
     options = { ...options, cgPromptFormat: options.cgPromptFormat || core_settings.getPluginSettings(options.context || core_context.getContext()).cgPromptFormat };
     // Readers may belong to a historical archive while the host stays in another
     // chat. Only that exact, unchanged reader may receive a foreground result.
     const scopedReaderMode = time_stories.isTimeStoryMode(mode)
-        || mode === core_constants.MODE.THEME_SONG || mode === core_constants.MODE.HEART
+        || mode === core_constants.MODE.THEME_SONG || mode === core_constants.MODE.BEDTIME || mode === core_constants.MODE.HEART
         || (mode === core_constants.MODE.PHONE && runtimeState.activeSession?._rmtEmptyTerminal === true);
     const timeReader = scopedReaderMode && runtimeState.activeMode === mode && runtimeState.activeSession
         ? { session: runtimeState.activeSession, entryId: runtimeState.activeArchiveSnapshot?.entryId || '',
@@ -1393,6 +1416,7 @@ async function generateModeOperation(mode, options = {}) {
         } catch { return false; }
     };
     let themeSongPlan = null;
+    let bedtimePlan = null;
     let inboxDate = mode === core_constants.MODE.INBOX ? new Date() : null;
     core_context.assertRuntimeLifecycleCurrent(lifecycleEpoch);
     const background = options.background === true;
@@ -1400,6 +1424,7 @@ async function generateModeOperation(mode, options = {}) {
     let recoveryHandle = null;
     let recoveryExisting = null;
     if (mode === core_constants.MODE.THEME_SONG && replaceExisting && !options.participantRegeneration) throw song_contract.songError('REPLACE', '印象曲每次追加新作品，不会整册覆盖。');
+    if (mode === core_constants.MODE.BEDTIME && replaceExisting && !options.participantRegeneration) throw bedtime_contract.bedtimeError('REPLACE', '睡前故事只会新建故事或追加章节，不会整册覆盖。');
     if (mode === core_constants.MODE.INBOX && replaceExisting && !options.participantRegeneration) throw new Error('邮箱只追加新信，不支持整箱重新生成。');
     const archiveTarget = options.archiveTarget && typeof options.archiveTarget === 'object' ? options.archiveTarget : null;
     if (archiveTarget?.backupOnly) throw new Error('独立备份是永久只读快照，不能生成或写入派生内容。');
@@ -1430,8 +1455,8 @@ async function generateModeOperation(mode, options = {}) {
     let targetMemoryBank = memoryBank;
     const expectedArchiveRevision = memoryBank.archiveRevision;
     const promptFactory = generation_prompts.PROMPTS[mode];
-    if (!promptFactory && !time_stories.isTimeStoryMode(mode) && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode)) return;
-    const segmentedMode = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode);
+    if (!promptFactory && !time_stories.isTimeStoryMode(mode) && ![core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.RELATIONS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode)) return;
+    const segmentedMode = time_stories.isTimeStoryMode(mode) || [core_constants.MODE.ENDING, core_constants.MODE.ALBUM, core_constants.MODE.HEART, core_constants.MODE.PHONE, core_constants.MODE.ACHIEVEMENTS, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode);
     let calendarCurrentDate = mode === core_constants.MODE.CALENDAR ? modes_calendar.storyCalendarDate(memoryBank) : '';
     let calendarLegacyDate = false;
     let generationPrompt = segmentedMode || mode === core_constants.MODE.RELATIONS
@@ -1617,7 +1642,18 @@ async function generateModeOperation(mode, options = {}) {
             if (!previousSession && stored?.[mode] && !replacementTicket) throw song_contract.songError('SOURCE', '已有印象曲暂不可读取，原作品保留。');
             themeSongPlan = recoveryExisting?.operation?.themeSongPlan
                 ? modes_song.validateThemeSongPlan(recoveryExisting.operation.themeSongPlan, memoryBank)
-                : modes_song.validateThemeSongPlan(modes_song.createThemeSongPlan(options.songOptions, memoryBank, previousSession), memoryBank);
+                : modes_song.validateThemeSongPlan(modes_song.createThemeSongPlan(options.songOptions || composerOptions.readSongOptions(context, memoryBank), memoryBank, previousSession), memoryBank);
+        }
+        if (mode === core_constants.MODE.BEDTIME) {
+            const stored = core_cache.getCache(context);
+            if (!previousSession && stored?.[mode] && !replacementTicket) throw bedtime_contract.bedtimeError('SOURCE', '已有睡前故事暂不可读取，原作品仍保留。');
+            const recoverySnapshot = generation_recovery.readGenerationContentSnapshot(recoveryExisting);
+            const frozenInputs = recoverySnapshot?.contentInputs;
+            const planPrevious = frozenInputs && Object.hasOwn(frozenInputs, 'previousSession') ? frozenInputs.previousSession : previousSession;
+            const planMemory = recoverySnapshot?.memoryBank || memoryBank;
+            bedtimePlan = recoveryExisting?.operation?.bedtimePlan
+                ? modes_bedtime.validateBedtimePlan(recoveryExisting.operation.bedtimePlan, planMemory, planPrevious)
+                : modes_bedtime.validateBedtimePlan(modes_bedtime.createBedtimePlan(options.bedtimeOptions || {}, memoryBank, previousSession), memoryBank, previousSession);
         }
         origin = { ...core_context.captureTaskOrigin(context, expectedArchiveRevision), chatId: core_context.comparableChatId(expectedChatId), archiveTargetEntryId: core_text.normalizeText(archiveTarget?.entryId, 120) };
         core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin);
@@ -1635,7 +1671,7 @@ async function generateModeOperation(mode, options = {}) {
         recoveryHandle = await beginModeRecovery(mode, context, memoryBank, origin, { ...options, archiveTarget, stillCurrent: archiveTargetStillCurrent, existing: recoveryExisting, replaceExisting,
             partialReaderStillCurrent: scopedReaderMode ? () => !background && timeReaderVisible() : null,
             contentInputs: { previousSession, roomSession, focusObject, ...(linkedRoomSession ? { linkedRoomSession } : {}) },
-            operation: recoveryExisting?.operation || { kind: 'mode', mode, ...(themeSongPlan ? { themeSongPlan } : {}), inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
+            operation: recoveryExisting?.operation || { kind: 'mode', mode, ...(themeSongPlan ? { themeSongPlan } : {}), ...(bedtimePlan ? { bedtimePlan } : {}), inboxDate: inboxDate?.toISOString() || '', calendarDate: calendarCurrentDate,
                 ...(mode === core_constants.MODE.CALENDAR ? { calendarTimeBasis: 'story' } : {}),
                 allowPersonaExpansion, visualOnly: options.visualOnly === true, fillMissing: options.fillMissing === true, focusObjectId: core_text.normalizeText(options.focusObjectId, 120),
                 ...(replacementTicket ? { participantRegeneration: options.participantRegeneration } : {}) } });
@@ -1646,6 +1682,16 @@ async function generateModeOperation(mode, options = {}) {
             roomSession = recoveryHandle.contentInputs.roomSession;
             focusObject = recoveryHandle.contentInputs.focusObject;
         }
+        let participantSnapshot = null;
+        if (![core_constants.MODE.ROOM, core_constants.MODE.ALBUM].includes(mode)) {
+            participantSnapshot = await captureModeParticipantSnapshot(mode, context, origin, {
+                existing: recoveryExisting,
+                participantSnapshot: options.participantRegeneration?.participantSnapshot,
+                memoryBank,
+            });
+            memoryBank = core_generationParticipants.deriveGenerationParticipantMemoryBank(memoryBank, participantSnapshot);
+            if (participantSnapshot && options.logicalTask) core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin, { participantSnapshot });
+        }
         if (!segmentedMode && mode !== core_constants.MODE.RELATIONS) {
             generationPrompt = core_constants.ROOM_DEEP_MODES.includes(mode) && mode !== core_constants.MODE.PHONE
                 ? generation_prompts.roomDeepGenerationPrompt(mode, context, memoryBank, roomSession, focusObject)
@@ -1654,22 +1700,24 @@ async function generateModeOperation(mode, options = {}) {
                     : promptFactory(context, memoryBank);
         }
         let session;
-        const participantSnapshot = mode === core_constants.MODE.ROOM
+        participantSnapshot = mode === core_constants.MODE.ROOM
             ? await captureRoomParticipantSnapshot(context, origin, { existing: recoveryExisting,
                 participantSnapshot: options.participantRegeneration?.participantSnapshot })
             : mode === core_constants.MODE.ALBUM ? await captureAlbumParticipantSnapshot(context, origin, { existing: recoveryExisting,
-                participantSnapshot: options.participantRegeneration?.participantSnapshot }) : null;
+                participantSnapshot: options.participantRegeneration?.participantSnapshot }) : participantSnapshot;
         if (participantSnapshot && options.logicalTask) {
             if (mode === core_constants.MODE.ROOM) options.logicalTask.participantPromptIndexed = true;
             core_requestCoordinator.bindLogicalGenerationTask(options.logicalTask, origin, { participantSnapshot });
         }
         let presentationContext = null;
-        if (time_stories.isTimeStoryMode(mode) || (mode === core_constants.MODE.ITEMS && previousSession && allowPersonaExpansion) || [core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG].includes(mode)) {
-            presentationContext = await buildWorldPresentationContext(context, memoryBank, mode, origin, mode === core_constants.MODE.ROOM ? participantSnapshot : null);
+        if (time_stories.isTimeStoryMode(mode) || (mode === core_constants.MODE.ITEMS && previousSession && allowPersonaExpansion) || [core_constants.MODE.ROOM, core_constants.MODE.PHONE, core_constants.MODE.TRAVEL, core_constants.MODE.INBOX, core_constants.MODE.PAST_LIVES, core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode)) {
+            presentationContext = await buildWorldPresentationContext(context, memoryBank, mode, origin, participantSnapshot);
             if (options.logicalTask && presentationContext.selectedSetting) options.logicalTask.inputPacking = presentationContext.selectedSetting;
         }
         if (mode === core_constants.MODE.THEME_SONG) {
             session = await modes_song.generateThemeSong(context, memoryBank, origin, taskKey, previousSession, { plan: themeSongPlan, presentationContext });
+        } else if (mode === core_constants.MODE.BEDTIME) {
+            session = await modes_bedtime.generateBedtime(context, memoryBank, origin, taskKey, previousSession, { plan: bedtimePlan, presentationContext });
         } else if (mode === core_constants.MODE.INBOX) {
             session = await modes_inbox.generateInbox(context, memoryBank, origin, taskKey, previousSession, { presentationContext, date: inboxDate });
         } else if (time_stories.isTimeStoryMode(mode)) {
@@ -1854,7 +1902,7 @@ async function generateModeOperation(mode, options = {}) {
         }
 
         if (committed && recoveryHandle) await core_cache.saveGenerationRecovery(context, memoryBank, mode, null, origin, { archiveTarget, stillCurrent: archiveTargetStillCurrent });
-        if (committed && [core_constants.MODE.INBOX, core_constants.MODE.THEME_SONG].includes(mode)) {
+        if (committed && [core_constants.MODE.INBOX, core_constants.MODE.THEME_SONG, core_constants.MODE.BEDTIME].includes(mode)) {
             session = archiveTarget
                 ? core_cache.loadSession(mode, { chatId: expectedChatId, memoryBank, cache: runtimeState.activeArchiveSnapshot?.entryId === archiveTarget.entryId ? runtimeState.activeArchiveSnapshot.cache : archiveTarget.cache }) || session
                 : core_cache.loadSession(mode) || session;

@@ -1,4 +1,6 @@
 import * as cg_visual from '../core/cgVisualRules.js';
+import * as cg_targets from '../core/cgTargets.js';
+import * as photoshoots from '../core/photoshootContract.js';
 // Heartbeat Memories r35 modular runtime.
 // Extracted from r34 without changing archive/cache storage contracts.
 import * as archive_library from '../archive/library.js';
@@ -11,6 +13,7 @@ import * as core_context from '../core/context.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
 import * as core_participants from '../core/participants.js';
+import * as core_generationParticipants from '../core/generationParticipants.js';
 import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
 import { state as runtimeState } from '../core/state.js';
@@ -500,6 +503,7 @@ export function normalizeVoiceDramaPart(data, expectedKinds, memoryBank = {}) {
             setting: core_text.normalizeText(item?.setting, 1200),
             visualTone: core_constants.HEART_DRAMA_VISUAL_TONES.has(core_text.normalizeText(item?.visualTone, 20).toLowerCase()) ? core_text.normalizeText(item?.visualTone, 20).toLowerCase() : 'soft',
             script,
+            ...cg_targets.normalizeLocalCgSlots(item),
         });
     }
     return out;
@@ -522,6 +526,7 @@ export function normalizeScenarioDramaPart(data, expectedSeason = '', memoryBank
             setting: core_text.normalizeText(item?.setting, 1200),
             visualTone: core_constants.HEART_DRAMA_VISUAL_TONES.has(core_text.normalizeText(item?.visualTone, 20).toLowerCase()) ? core_text.normalizeText(item?.visualTone, 20).toLowerCase() : 'soft',
             script,
+            ...cg_targets.normalizeLocalCgSlots(item),
         });
     }
     return out;
@@ -676,6 +681,8 @@ export function makeHeartSession(core, existing = null) {
         specialDays: Array.isArray(core.specialDays) ? core.specialDays : [],
         relationshipHistory: Array.isArray(existing?.relationshipHistory) ? existing.relationshipHistory : [],
         greetings: core.greetings || {},
+        languageVisuals: cg_targets.normalizeLanguageCgVisuals(existing?.languageVisuals),
+        photoshoots: normalizeHeartPhotoshoots(existing?.photoshoots),
         collectionIssues: core_heartLanguage.heartCollectionIssues(existing),
         voiceDramas: Array.isArray(existing?.voiceDramas) ? existing.voiceDramas : [],
         scenarioDramas: Array.isArray(existing?.scenarioDramas) ? existing.scenarioDramas : [],
@@ -1178,6 +1185,32 @@ async function beginHeartSubtask(targetRuntime) {
     }
 }
 
+async function freezeHeartParticipantSnapshot(targetRuntime, operation, existing, handle) {
+    const frozenInputs = handle.journal?.frozenInputs || {};
+    let snapshot;
+    if (Object.hasOwn(frozenInputs, 'participants:heart')) {
+        snapshot = core_generationParticipants.resolveGenerationParticipantSnapshot({ frozenSnapshot: JSON.parse(frozenInputs['participants:heart']) });
+    } else if (operation?.participantRegeneration && Object.hasOwn(operation.participantRegeneration, 'participantSnapshot')) {
+        snapshot = core_generationParticipants.resolveGenerationParticipantSnapshot({ frozenSnapshot: operation.participantRegeneration.participantSnapshot });
+        snapshot = await generation_recovery.frozenGenerationInput(targetRuntime.origin, 'participants:heart', () => snapshot);
+    } else {
+        // A legacy recovery has no reproducible roster input. Keep its exact old
+        // recipe rather than reading today's picker state or adding a new key.
+        if (existing) return null;
+        const roster = core_participants.normalizeParticipantRoster(handle.contentBank?.[core_participants.PARTICIPANTS_KEY])
+            || core_cache.readParticipantRoster(targetRuntime.context);
+        snapshot = core_generationParticipants.resolveGenerationParticipantSnapshot({ roster });
+        if (!snapshot) return null;
+        snapshot = await generation_recovery.frozenGenerationInput(targetRuntime.origin, 'participants:heart', () => snapshot);
+    }
+    if (!snapshot) return null;
+    handle.contentBank = core_generationParticipants.deriveGenerationParticipantMemoryBank(handle.contentBank, snapshot);
+    const logicalTask = ordinaryHeartLogicalTasks.get(targetRuntime)
+        || core_requestCoordinator.logicalGenerationTaskForOrigin(targetRuntime.origin);
+    if (logicalTask) core_requestCoordinator.bindLogicalGenerationTask(logicalTask, targetRuntime.origin, { participantSnapshot: snapshot });
+    return snapshot;
+}
+
 async function startHeartRecovery(targetRuntime, operation, options = {}) {
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(targetRuntime.origin);
     targetRuntime.recoveryArchiveEntry = targetRuntime.archiveTarget || core_cache.archiveBackupEntryForContext(targetRuntime.context, targetRuntime.memoryBank);
@@ -1194,6 +1227,7 @@ async function startHeartRecovery(targetRuntime, operation, options = {}) {
         archiveTarget: targetRuntime.archiveTarget, archiveEntry: targetRuntime.recoveryArchiveEntry,
         stillCurrent: targetRuntime.archiveTarget ? targetRuntime.stillCurrent : undefined,
     });
+    await freezeHeartParticipantSnapshot(targetRuntime, operation, existing, handle);
     targetRuntime.recoveryHandle = handle;
     return handle;
 }
@@ -1927,6 +1961,13 @@ export function normalizeHeartScript(rawLines, { minLines = 8, minChars = 500, c
     return lines;
 }
 
+export function normalizeHeartPhotoshoots(rows) {
+    return (Array.isArray(rows) ? rows : []).map(raw => {
+        const plan = photoshoots.normalizePhotoshootPlan(raw);
+        return plan ? { ...plan, ...cg_targets.normalizeLocalCgSlots(raw) } : null;
+    }).filter(Boolean);
+}
+
 export function normalizeHeart(data, memoryBank) {
     const relationshipState = core_text.normalizeText(data?.relationshipState, 120) || '关系仍在发展';
     const relationshipSummary = core_text.normalizeText(data?.relationshipSummary, 1800);
@@ -1975,6 +2016,7 @@ export function normalizeHeart(data, memoryBank) {
             setting: core_text.normalizeText(item?.setting, 1200),
             visualTone: core_constants.HEART_DRAMA_VISUAL_TONES.has(core_text.normalizeText(item?.visualTone, 20).toLowerCase()) ? core_text.normalizeText(item?.visualTone, 20).toLowerCase() : 'soft',
             script,
+            ...cg_targets.normalizeLocalCgSlots(item),
             sourceArchiveMemoryIds: core_text.cleanArray(item?.sourceArchiveMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40),
             incrementBatchId: core_text.normalizeText(item?.incrementBatchId, 80),
             generatedAt: Math.max(0, Number(item?.generatedAt) || 0),
@@ -1994,6 +2036,7 @@ export function normalizeHeart(data, memoryBank) {
             setting: core_text.normalizeText(item?.setting, 1200),
             visualTone: core_constants.HEART_DRAMA_VISUAL_TONES.has(core_text.normalizeText(item?.visualTone, 20).toLowerCase()) ? core_text.normalizeText(item?.visualTone, 20).toLowerCase() : 'soft',
             script,
+            ...cg_targets.normalizeLocalCgSlots(item),
             sourceArchiveMemoryIds: core_text.cleanArray(item?.sourceArchiveMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40),
             incrementBatchId: core_text.normalizeText(item?.incrementBatchId, 80),
             generatedAt: Math.max(0, Number(item?.generatedAt) || 0),
@@ -2048,6 +2091,8 @@ export function normalizeHeart(data, memoryBank) {
         })).filter(item => item.relationshipSummary),
         greetings,
         collectionIssues: core_heartLanguage.heartCollectionIssues(data),
+        languageVisuals: cg_targets.normalizeLanguageCgVisuals(data?.languageVisuals),
+        photoshoots: normalizeHeartPhotoshoots(data?.photoshoots),
         voiceDramas,
         scenarioDramas,
         dailyStrips,

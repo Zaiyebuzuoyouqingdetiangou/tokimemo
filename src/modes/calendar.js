@@ -5,6 +5,7 @@
 import * as core_constants from '../core/constants.js';
 import * as core_evidence from '../core/evidence.js';
 import * as core_presentExpression from '../core/presentExpression.js';
+import * as core_participants from '../core/participants.js';
 import * as core_narrativeAuthority from '../core/narrativeAuthority.js';
 import * as core_text from '../core/text.js';
 import * as core_worldPresentation from '../core/worldPresentation.js';
@@ -558,13 +559,13 @@ function holidayAnchoredExcerpt(item, memoryBank) {
         const needle = folded(text, max);
         return needle.length >= 2 && anchor.includes(needle) ? text : '';
     };
-    const characterName = core_text.normalizeText(memoryBank?.characterName, 40);
+    const characterNames = core_participants.resolveStoryIdentities(memoryBank).ownerNames;
     const requestedSignature = core_text.normalizeText(item?.signature, 40);
     return {
         reference,
         message: supported(item?.message, 360),
         calligraphy: supported(item?.calligraphy, 80),
-        signature: requestedSignature && folded(requestedSignature, 80) === folded(characterName, 80) ? characterName : '',
+        signature: characterNames.find(name => requestedSignature && folded(requestedSignature, 80) === folded(name, 80)) || '',
     };
 }
 
@@ -579,7 +580,7 @@ function holidayPresentExpression(item, expression, memoryBank) {
     if (expression === 'text') message = fullLines.join('\n');
     else if (expression === 'writing' || expression === 'minimal') calligraphy = compact;
     else if (expression === 'mixed') message = fullLines.join('\n');
-    const characterName = core_text.normalizeText(memoryBank?.characterName, 40);
+    const characterName = core_participants.resolveStoryIdentities(memoryBank).ownerNames.join('、') || core_text.normalizeText(memoryBank?.characterName, 40);
     return {
         presentExpression,
         message,
@@ -1052,7 +1053,7 @@ export function migrateCalendarSession(session, memoryBank) {
         storyDate,
         selectedMonth: !session.dateBasis && !selectedDateKey && storyDate
             ? calendarMonthKey({ date: storyDate }) : session.selectedMonth,
-        dateBasis: session.dateBasis || 'story', 
+        dateBasis: session.dateBasis || 'story',
         calendarVersion: core_constants.CALENDAR_SESSION_VERSION,
         entries,
         dayPages,

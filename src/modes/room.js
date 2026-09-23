@@ -20,6 +20,7 @@ import * as generation_recovery from '../generation/recovery.js';
 import * as ui_overlay from '../ui/overlay.js';
 import * as room_interior from '../ui/roomInterior.js';
 import * as recovery_view from '../ui/recoveryView.js';
+import * as ui_generationCompletion from '../ui/generationCompletion.js';
 
 const ROOM_VISUAL_PROFILE_VERSION = 1;
 const ROOM_VISUAL_VALUES = Object.freeze({
@@ -1899,6 +1900,16 @@ export function renderRoom() {
     const deep = roomDeepAvailability();
     const itemsGenerating = core_requestCoordinator.isModeGenerating(core_constants.MODE.ITEMS);
     const readOnlyArchive = !!runtimeState.activeArchiveSnapshot && runtimeState.activeArchiveReadOnly;
+    // A partial/snapshot render can occur before its current source archive is available.
+    // Do not infer missing text without that source, because provenance checks need it.
+    const roomRepairSlots = roomMemoryBank && typeof roomMemoryBank === 'object'
+        ? roomCandidateRepairSlots(session, roomMemoryBank, { participantSnapshot: session.participantSnapshot }) : [];
+    const missingRoomLines = roomRepairSlots.filter(slot => slot.reason === 'missing_text').length;
+    const completionNotice = ui_generationCompletion.generationCompletionHtml({
+        missing: missingRoomLines, unit: '条房间描述或当下台词', generateMode: core_constants.MODE.ROOM,
+        actionData: { 'data-rmt-completion': 'room-lines' }, label: '重新尝试补全房间', readOnly: readOnlyArchive,
+        message: `有 ${missingRoomLines} 条房间描述或当下台词尚未通过校验；现有空间与物件保持可读。`, className: 'rmt-room-completion',
+    });
     const itemActionText = selectedSearchable
         ? (deep.items ? `翻找「${selected.label}」` : readOnlyArchive ? `「${selected.label}」尚未生成物品档案` : itemsGenerating ? '物品生成中…' : `生成并翻找「${selected.label}」`)
         : '先选中盒子 / 抽屉 / 柜子等收纳物';
@@ -1910,7 +1921,7 @@ export function renderRoom() {
     const sceneMotif = roomMotifToken(session, selectedSpace);
     const tempLine = temporaryObjects.length ? `<div class="rmt-room-temp-line">此刻临时物件：${temporaryObjects.map(item => core_text.esc(item)).join(' · ')}</div>` : '';
     const body = ui_overlay.bodyEl();
-    body.innerHTML = `<style data-rmt-room-layout-css>${roomLayoutCss()}</style>${!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly ? '<button type="button" class="rmt-btn" data-rmt-action="room-refresh-figure">更新人物外形 · 保留房间内容</button>' : ''}<div class="rmt-room-view" data-rmt-room-world="${core_text.esc(visualProfile.worldStyle)}" data-rmt-room-palette="${core_text.esc(visualProfile.palette)}" data-rmt-room-material="${core_text.esc(visualProfile.material)}" data-rmt-room-density="${core_text.esc(visualProfile.density)}" data-rmt-room-motif="${core_text.esc(sceneMotif)}">
+    body.innerHTML = `<style data-rmt-room-layout-css>${roomLayoutCss()}</style>${completionNotice}${!runtimeState.activeArchiveSnapshot || !runtimeState.activeArchiveReadOnly ? '<button type="button" class="rmt-btn" data-rmt-action="room-refresh-figure">更新人物外形 · 保留房间内容</button>' : ''}<div class="rmt-room-view" data-rmt-room-world="${core_text.esc(visualProfile.worldStyle)}" data-rmt-room-palette="${core_text.esc(visualProfile.palette)}" data-rmt-room-material="${core_text.esc(visualProfile.material)}" data-rmt-room-density="${core_text.esc(visualProfile.density)}" data-rmt-room-motif="${core_text.esc(sceneMotif)}">
       <div class="rmt-room-map" aria-label="私人空间地图">${map}</div>
       <div class="rmt-room-location"><div><b>${core_text.esc(currentLocationText)}</b><small>${core_text.esc(session.homeName)} · ${session.spaces.length} 个可观察区域</small></div><div class="rmt-room-location-actions">${!personIsHere ? `<button type="button" class="rmt-room-find" data-rmt-action="room-find-presence">去看看他</button>` : ''}${readOnlyArchive ? '' : `<button type="button" class="rmt-room-find" data-rmt-action="room-life-refresh" ${runtimeState.busy ? 'disabled' : ''}>更新今日生活</button>`}</div></div>
 
@@ -1949,7 +1960,7 @@ export function renderRoom() {
           <div class="rmt-room-deep-actions">
             <button type="button" class="rmt-btn" data-rmt-action="room-open-items" ${!selectedSearchable || itemsGenerating || (readOnlyArchive && !deep.items) ? 'disabled' : ''}><i class="fa-solid fa-box-open"></i> ${core_text.esc(itemActionText)}</button>
           </div>
-          
+
         </section>
       </div>
     </div>`;
@@ -2311,9 +2322,9 @@ export function renderRoomParticipants(session = runtimeState.activeSession) {
     const body = ui_overlay.bodyEl();
     if (!body) return;
     body.innerHTML = `<style data-rmt-room-layout-css>${roomLayoutCss()}</style><div class="rmt-room-view rmt-room-multi-view" data-rmt-room-world="${e(visual.worldStyle)}" data-rmt-room-palette="${e(visual.palette)}" data-rmt-room-material="${e(visual.material)}" data-rmt-room-density="${e(visual.density)}">
-      <div class="rmt-room-participants" aria-label="本次房间中的人物">${people}</div><div class="rmt-room-map">${locations}</div>
+      <details class="rmt-room-find-person"><summary>找人 · ${slots.length} 人</summary><div class="rmt-room-participants" aria-label="查找人物所在空间">${people}</div></details><nav class="rmt-room-map" aria-label="切换空间">${locations}</nav>
       <div class="rmt-room-location"><b>${e(session.homeName)}</b><span data-rmt-room-clock>${e(roomDaypartState(now).label)} · ${e(roomClockText(now))}</span>${readOnly ? '' : '<button type="button" class="rmt-btn" data-rmt-action="room-refresh-figure">更新人物外形 · 保留房间内容</button><button type="button" class="rmt-btn" data-rmt-action="room-life-refresh">更新今日生活</button>'}</div>
-      <div class="rmt-room-flow"><section class="rmt-room-stage"><div class="rmt-room-stage-head"><b>${e(selectedSpace.label)}</b></div><div class="rmt-room-scene rmt-room-layout-scene" data-rmt-room-beat="${e(current.id)}">
+      <div class="rmt-room-flow"><section class="rmt-room-stage"><div class="rmt-room-stage-head"><b>${e(selectedSpace.label)}</b><small>${e(present.length ? `在场：${present.map(slot => slot.name).join("、")}` : "此刻没有已记录的在场者")}</small></div><div class="rmt-room-scene rmt-room-layout-scene" data-rmt-room-beat="${e(current.id)}">
         ${room_interior.roomInteriorHtml(layout, { selectedId: selected?.id, world: visual.worldStyle, participants: present.map(slot => ({ id: slot.participantId, name: slot.name, figure: slot.visualProfile?.figure || {} })) })}
         ${(session.pets || []).filter(pet => pet.spaceId === selectedSpace.id).map(roomPetNodeHtml).join('')}</div>
         <div class="rmt-room-object-rail">${layout.map(entry => roomObjectLayoutButtonHtml(entry, 'rail', selected?.id)).join('')}</div><div class="rmt-room-participant-states">${lines}</div></section>

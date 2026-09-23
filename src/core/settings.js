@@ -1,4 +1,5 @@
 import * as manual_credentials from './manualCredentialStore.js';
+import * as connection_pool from './connectionPool.js';
 import * as advanced_generation from './advancedGeneration.js';
 import * as output_budget from './outputBudget.js';
 import * as cg_format from './cgPromptFormat.js';
@@ -45,6 +46,7 @@ export function getPluginSettings(context = core_context.getContext()) {
     const persisted = {
         apiConnectionMode: settings.apiConnectionMode === 'manual' ? 'manual' : 'profile',
         connectionProfileId: core_text.normalizeText(settings.connectionProfileId, 160),
+        ...connection_pool.connectionPoolSettings(settings),
         modelOverride: core_text.normalizeText(settings.modelOverride, 240),
         manualApiBaseUrl,
         manualApiModel: core_text.normalizeText(settings.manualApiModel, 240),
@@ -207,6 +209,7 @@ export function generationSourceLabel(settings = getPluginSettings()) {
         const model = core_text.normalizeText(settings.manualApiModel, 240);
         return model ? `手动 API · ${model}` : '手动 API · 未完成';
     }
+    if (settings.connectionPoolEnabled) return `轮询连接池 · ${settings.connectionPoolIds?.length || 0} 个连接`;
     let profile = supportedConnectionProfiles().find(item => item.id === settings.connectionProfileId);
     if (!profile && settings.connectionProfileId) {
         try {

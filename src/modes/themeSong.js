@@ -4,7 +4,9 @@ import * as evidence from '../core/evidence.js';
 import * as contextApi from '../core/context.js';
 import * as text from '../core/text.js';
 import * as generation from '../generation/client.js';
+import * as participants from '../core/participants.js';
 const L = contract.SONG_LIMITS;
+const ownerLabel = memory => participants.resolveStoryIdentities(memory).ownerNames.join('、') || text.normalizeText(memory?.characterName, 120);
 export function createThemeSongPlan(options = {}, memory, previous = null) {
     const subject = options.subject === 'event' ? 'event' : 'character';
     const language = Object.hasOwn(contract.SONG_LANGUAGES, options.language) ? options.language : 'zh';
@@ -31,14 +33,15 @@ export function validateThemeSongPlan(value, memory) {
     const ref = source ? evidence.normalizeExactMemoryReference([source.id], source.anchors?.[0] || source.title, memory, 1)
         : { sourceMemoryIds: [], sourceMemoryAnchor: '' };
     if (source && (!ref.sourceMemoryIds.length || !ref.sourceMemoryAnchor)) throw contract.songError('SOURCE', '所选事件缺少可核对来源，不能作为事件印象曲起点。');
-    const singer = p.voice === 'duet' ? `${memory.characterName} / ${memory.userName}`
-        : p.voice === 'narrator' ? '旁观者' : p.voice === 'ensemble' ? '群像' : memory.characterName;
-    return { ...p, ...ref, singer, subjectTitle: source ? text.normalizeText(source.title || ref.sourceMemoryAnchor, 240) : text.normalizeText(memory.characterName, 120) + '的角色印象' };
+    const owners = ownerLabel(memory);
+    const singer = p.voice === 'duet' ? `${owners} / ${memory.userName}`
+        : p.voice === 'narrator' ? '旁观者' : p.voice === 'ensemble' ? '群像' : owners;
+    return { ...p, ...ref, singer, subjectTitle: source ? text.normalizeText(source.title || ref.sourceMemoryAnchor, 240) : owners + '的角色印象' };
 }
 export function themeSongPrompt(plan, memory) {
     const source = plan.subject === 'event' ? evidence.memoryPayload(memory, plan.sourceMemoryIds, 1) : [];
     return `为当前角色或所选真实事件创作一首原创、可演唱的「角色印象曲」。只输出严格 JSON，不输出 Markdown 围栏、HTML、链接、平台名或解释。
-角色：${text.normalizeText(memory.characterName, 120)}；用户：${text.normalizeText(memory.userName, 120)}。
+角色：${ownerLabel(memory)}；用户：${text.normalizeText(memory.userName, 120)}。多人名单中的每个人都可成为声部或意象来源，不把角色卡名称当人物，也不只选择名单第一人。
 创作类别：${plan.subject === 'event' ? '事件主题曲' : '角色主题曲'}；歌词语言：${plan.language === 'custom' ? '采用 UNTRUSTED_LYRIC_LANGUAGE_JSON 中的语言名称' : contract.SONG_LANGUAGES[plan.language]}；演唱者设定：${plan.singer}。
 这是歌词与编曲指导，不是音频，不写回主聊天，不创建真实记忆。根据本次受控角色卡、人设与世界观展现角色独有的意象、语气、矛盾与情绪，不套通用情歌模板。
 角色主题曲可以只根据人设写，不要求已发生的生日祝福或共同经历；事件主题曲以所选事件为情绪起点，不编造另一个已经发生的共同事件。诗歌的隐喻、想象、愿望不是既成事实。不得增加与第三人的恋爱、婚姻、前任或擅定双方当前关系；不把合唱歌词当作用户的真实承诺。

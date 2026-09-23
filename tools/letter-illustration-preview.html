@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Letter illustration v2 preview</title>
+<style>
+body{margin:0;padding:24px;background:#e9dfcf;color:#554537;font:16px/1.55 system-ui,sans-serif}.page{max-width:980px;margin:auto}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:20px}.sheet{padding:28px;background:#fff8e9;box-shadow:0 10px 30px #80664b33;border-radius:12px}.sheet h2{margin:0 0 4px}.sheet p{min-height:3em;margin:0;color:#74665b}.art{margin:18px auto 0;max-width:330px;border-top:1px solid #d8cbb9}.rmt-letter-illustration{display:block;width:100%;height:auto}code{font:12px/1.4 ui-monospace,monospace;color:#80665d}
+</style>
+<main class="page"><h1>新邮箱插画 v2 视觉夹具</h1><p>相同的本地代码画风，不同角色由角色卡逐字证据改变发型、颜色、衣着和标志；信件逐字证据改变右侧场景。第三张是不具备人物外貌依据时的角色相关物件回退。</p><div id="grid" class="grid"></div></main>
+<script type="module">
+import { renderLetterIllustration } from '../src/core/letterIllustration.js';
+const fixtures = [
+  { title:'林深 · 灯下留信', note:'黑色长发、红色大衣、细框眼镜；本信写到留灯。', design:{version:2,characterName:'林深',focus:'person',visualFacts:[
+    {kind:'hairLength',value:'long',evidence:'林深留着黑色长发'},{kind:'hairColor',value:'black',evidence:'林深留着黑色长发'},
+    {kind:'outfitKind',value:'coat',evidence:'常穿红色大衣'},{kind:'outfitColor',value:'red',evidence:'常穿红色大衣'},
+    {kind:'marker',value:'glasses',evidence:'戴一副细框眼镜'}],scene:{kind:'lamp',evidence:'今晚先把灯留着'}}},
+  { title:'乔岚 · 寄来照片', note:'金色短发、蓝色西装、眼旁伤疤；本信写到照片。', design:{version:2,characterName:'乔岚',focus:'person',visualFacts:[
+    {kind:'hairLength',value:'short',evidence:'乔岚是金色短发'},{kind:'hairColor',value:'blonde',evidence:'乔岚是金色短发'},
+    {kind:'outfitKind',value:'suit',evidence:'穿蓝色西装'},{kind:'outfitColor',value:'blue',evidence:'穿蓝色西装'},
+    {kind:'marker',value:'scar',evidence:'右眼旁有一道伤疤'}],scene:{kind:'photo',evidence:'把照片放进信封'}}},
+  { title:'林深 · 旧相机', note:'没有足够人物外貌依据；只画角色卡明确的旧相机，且本信写到照片。', design:{version:2,characterName:'林深',focus:'object',visualFacts:[
+    {kind:'signatureObject',value:'camera',evidence:'林深随身带着一台旧相机'}],scene:{kind:'photo',evidence:'把今天的照片寄给你'}}},
+];
+document.querySelector('#grid').innerHTML=fixtures.map((item,index)=>`<article class="sheet"><h2>${item.title}</h2><p>${item.note}</p><div class="art">${renderLetterIllustration(item.design,{idPrefix:'fixture-'+index,label:item.title})}</div><code>focus=${item.design.focus} · scene=${item.design.scene.kind}</code></article>`).join('');
+</script>
+</html>

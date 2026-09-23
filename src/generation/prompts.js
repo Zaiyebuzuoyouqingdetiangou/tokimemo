@@ -112,7 +112,8 @@ export function calendarStoryPrompt(context, memoryBank, options = {}) {
         .replace('任务：生成的是【', 'CURRENT_STORY_DATE 仅来自当前聊天已归档的剧情日期；没有记录时为未提供。不得用电脑/手机日期、生成时间戳或日期页选择替代剧情时间，不改写已发生事项或已有约定的日期。\n\n任务：生成的是【');
 }
 export function calendarPrompt(context, memoryBank, options = {}) {
-    const charName = core_text.normalizeText(context.name2 || '{{char}}', 120);
+    const story = core_participants.resolveStoryIdentities(memoryBank, context);
+    const charName = story.ownerNames.join('、') || core_text.normalizeText(memoryBank?.characterName || context.name2 || '{{char}}', 120);
     const currentDate = core_text.normalizeText(options.currentDate, 20) || '未提供';
     return `${promptSafetyBoundary(context, '两个人的日历', null, memoryBank)}
 UNTRUSTED_CALENDAR_ARCHIVE_JSON:
@@ -120,8 +121,8 @@ ${calendarArchiveSlice(memoryBank, 64)}
 
 CURRENT_LOCAL_DATE: ${currentDate}
 
-任务：生成的是【${charName}自己的私人日历 / 手账页】，不是剧情目录。
-每一个日期都是一张独立手账页。选中哪一天，只能看到 ${charName} 为那一天留下的内容；页面只读，不提供 {{user}}、NPC 或其他人填写内容的输入窗口。整个日历会包含：
+任务：生成的是【${charName}自己的私人日历 / 手账页】，不是剧情目录。多人名单时这是他们共同维护、可分别署名的群像手账，不能把角色卡名称当作其中任何一个人物，也不能只挑名单第一人。
+每一个日期都是一张独立手账页。选中哪一天，只能看到 ${charName} 留下的内容；页面只读，不提供 {{user}}、NPC 或其他人填写内容的输入窗口。整个日历会包含：
 1. 真正会被圈起来的日期；
 2. 一块像便利贴墙一样的【便签 / 特别备注】；
 3. 根据该日期尚未兑现的剧情约定自动形成的【To-Do List】；

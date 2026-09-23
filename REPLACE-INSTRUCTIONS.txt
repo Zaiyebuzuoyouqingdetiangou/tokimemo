@@ -1,3 +1,12 @@
+本版 0.99.12-r84.57-reviewed：仅覆盖当前心迹回廊插件目录的代码文件，manifest.json 与 index.js 同级。保留聊天、档案与图片；不要清空浏览器数据。刷新后检查版本。实时通话另需镜译 beta/realtime-call，详见 MIRROR-TTS.md。
+
+当前本地候选：0.99.11 / 0.99.11-r84.56-local-repair
+当前ZIP：Hearttrace-0.99.11-r84.56-local-full.zip，单根 tokimemo-main/。
+按 LOCAL-REPAIR-r84.56.md 覆盖当前插件目录，保留原代码和全部数据。未部署或推送。
+下方全部为历史记录。
+
+---
+
 当前完整候选：0.99.1 / 0.99.1-tt-cg-r84.46-p0
 当前ZIP：Hearttrace-0.99.1-r84.46-P0-full.zip，内部单根 tokimemo-main/。
 以 P0-修复说明.md 为准更新扩展文件并刷新页面；保留数据和旧包，勿清站点数据。

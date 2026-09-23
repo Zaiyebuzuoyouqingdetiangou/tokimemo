@@ -55,6 +55,12 @@ ${r} .rmt-workspace-card .rmt-portal-avatar>i{font-size:24px!important}
 ${r} .rmt-workspace-card .rmt-portal-title{font-size:17px!important;margin:0!important;text-align:center;font-weight:600!important;line-height:1.4!important}
 ${r} .rmt-workspace-card .rmt-portal-subtitle{font-size:13px!important;line-height:1.5!important;margin:0!important;min-height:0!important;color:var(--rmt-theme-muted)!important;white-space:normal!important}
 ${r} .rmt-workspace-card .rmt-portal-status{font-size:12px!important;line-height:1.5!important;margin:3px 0 0!important;color:var(--rmt-theme-muted)!important;white-space:normal!important}
+${r} .rmt-workspace-card{position:relative}
+${r} .rmt-workspace-card .rmt-queue-pick{position:absolute;top:4px;right:4px;width:44px;height:44px;min-height:44px;margin:0;z-index:1}
+${r} .rmt-workspace-card .rmt-queue-pick input{width:20px;height:20px;cursor:pointer}
+${r} .rmt-workspace-card:has(.rmt-queue-pick) .rmt-portal-open{padding-top:40px!important}
+${r} .rmt-workspace-portals[data-rmt-layout="list"] .rmt-workspace-card:has(.rmt-queue-pick) .rmt-portal-open{padding:16px 52px 16px 16px!important}
+${r} .rmt-workspace-portals[data-rmt-layout="list"] .rmt-queue-pick{top:50%;transform:translateY(-50%)}
 ${r} .rmt-workspace-enter{display:none}
 ${r} .rmt-workspace-portals[data-rmt-layout="list"]{grid-template-columns:minmax(0,1fr)!important;gap:10px!important}
 ${r} .rmt-workspace-portals[data-rmt-layout="list"] .rmt-portal-open{display:grid!important;grid-template-columns:56px minmax(0,1fr) 22px;grid-template-rows:auto auto auto;min-height:100px!important;gap:2px 14px!important;align-items:center!important;justify-items:stretch!important;padding:16px!important;text-align:left!important}

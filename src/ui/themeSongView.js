@@ -1,3 +1,4 @@
+import * as composerOptions from '../core/generationOptions.js';
 import * as contract from '../core/themeSongContract.js';
 import * as songMode from '../modes/themeSong.js';
 import * as contextApi from '../core/context.js';
@@ -82,6 +83,15 @@ export function syncSongLanguageInput(body = overlay.bodyEl()) {
     if (row) row.hidden = selected?.value !== 'custom';
     if (input) input.disabled = selected?.value !== 'custom' || readonly() || busy();
 }
+export function captureSongComposer(body = overlay.bodyEl(), memory = shownMemory()) {
+    const subject = body?.querySelector('[data-rmt-song-subject]')?.value || 'character';
+    const options = { subject: subject.startsWith('event:') ? 'event' : 'character', eventId: subject.startsWith('event:') ? subject.slice(6) : '',
+        language: body?.querySelector('[data-rmt-song-language]')?.value || 'zh',
+        customLanguage: body?.querySelector('[data-rmt-song-custom-language]')?.value || '',
+        voice: body?.querySelector('[data-rmt-song-voice]')?.value || 'char', direction: body?.querySelector('[data-rmt-song-direction]')?.value || '' };
+    if (!readonly()) composerOptions.writeSongOptions(options, contextApi.getContext(), memory);
+    return options;
+}
 export function renderThemeSongs() {
     if (runtimeState.activeSession?.kind !== MODE) return;
     const session = runtimeState.activeSession, memory = shownMemory();
@@ -121,7 +131,17 @@ export function renderThemeSongs() {
     const partial = selected?.generationIncomplete ? '<p class="rmt-recovery-status" role="status">这首歌尚未写完；已收到的歌名、曲风和歌词分别保留，空白部分仍待生成。</p>' : '';
     const completedCount = session.songs.filter(song => !song.generationIncomplete).length;
     overlay.bodyEl().innerHTML = `<main class="rmt-theme-song"><header class="rmt-song-heading"><div class="rmt-song-emblem" aria-hidden="true">♫</div><div><h2>角色印象曲</h2><p>${session.songs.length ? `已收录 ${completedCount} 首${completedCount < session.songs.length ? ' · 另有未完成草稿' : ''}` : '歌名 · 曲风 · 完整歌词'}</p></div></header><p class="rmt-song-note">生成歌曲文本与编曲说明，不生成音频。</p>${partial}${switcher}${recovery}${form}<div class="rmt-song-layout ${list ? 'has-songs' : ''}">${list}${details}</div></main>`;
-    overlay.bodyEl().querySelector('[data-rmt-song-language]')?.addEventListener('change', () => syncSongLanguageInput());
+    const body = overlay.bodyEl(), draft = composerOptions.readSongOptions(contextApi.getContext(), memory);
+    const fields = { subject: draft.subject === 'event' ? `event:${draft.eventId}` : 'character', language: draft.language || 'zh',
+        'custom-language': draft.customLanguage || '', voice: draft.voice || 'char', direction: draft.direction || '' };
+    for (const [key, value] of Object.entries(fields)) {
+        const field = body.querySelector(`[data-rmt-song-${key}]`);
+        if (field) field.value = value;
+    }
+    syncSongLanguageInput(body);
+    const composer = body.querySelector('.rmt-song-composer');
+    composer?.addEventListener('input', () => captureSongComposer(body, memory));
+    composer?.addEventListener('change', () => { captureSongComposer(body, memory); syncSongLanguageInput(body); });
 }
 export async function deleteThemeSong(id) {
     const shown = assertThemeSongReader();
@@ -209,12 +229,7 @@ export async function handleThemeSongAction(action, id = '') {
         if (action === 'generate') {
             if (readonly() || busy()) return;
             const body = overlay.bodyEl();
-            const subject = body.querySelector('[data-rmt-song-subject]')?.value || 'character';
-            const songOptions = { subject: subject.startsWith('event:') ? 'event' : 'character', eventId: subject.startsWith('event:') ? subject.slice(6) : '',
-                language: body.querySelector('[data-rmt-song-language]')?.value || 'zh',
-                customLanguage: body.querySelector('[data-rmt-song-custom-language]')?.value || '',
-                voice: body.querySelector('[data-rmt-song-voice]')?.value || 'char',
-                direction: body.querySelector('[data-rmt-song-direction]')?.value || '' };
+            const songOptions = captureSongComposer(body);
             const target = runtimeState.activeArchiveSnapshot ? library.archiveTargetGenerationOptions(runtimeState.activeArchiveSnapshot) : {};
             return await generation.generateMode(MODE, { ...target, songOptions, background: false });
         }

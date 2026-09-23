@@ -9,9 +9,11 @@ const PROSE = [
     '.rmt-past-reflection p', '.rmt-past-closing p', '.rmt-travel-artifact-copy > p',
     '.rmt-travel-postcard-copy > p', '.rmt-room-caption', '.rmt-room-object-desc',
     '.rmt-room-object-line', '.rmt-room-atmosphere', '.rmt-room-summary',
+    '.rmt-bedtime-chapter > p', '.rmt-past-paper > p', '.rmt-past-annotation p',
 ].join(',');
 const reader = mirror.createMirrorReader();
 let mounted = null;
+export function stopMirrorReader() { reader.stop('已切换到实时通话。'); }
 
 function readable(node, body) {
     if (!node || !body.contains(node) || node.closest('input,textarea,select,button,[contenteditable]:not([contenteditable="false"]),[hidden],[aria-hidden="true"]')) return false;

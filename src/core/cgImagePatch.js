@@ -4,8 +4,9 @@ import * as constants from './constants.js';
 import * as text from './text.js';
 import * as appearance from '../generation/cgAppearance.js';
 import * as cg_visual from './cgVisualRules.js';
+import * as cg_targets from './cgTargets.js';
 
-const IMAGE_MODES = new Set([constants.MODE.ALBUM, constants.MODE.ADV, constants.MODE.HEART]);
+const IMAGE_MODES = new Set([constants.MODE.ALBUM, constants.MODE.ADV, constants.MODE.HEART, constants.MODE.ENDING]);
 
 export function normalizeCgImageUrl(value) {
     if (typeof value !== 'string' || value.length > 4096 || /[\\\u0000-\u001f\u007f]/.test(value)) return '';
@@ -59,15 +60,14 @@ export function cgImageHistoryWith(history, record) {
 }
 
 export function cgItemInSession(mode, session, itemId) {
-    const rows = mode === constants.MODE.ALBUM ? session?.entries : mode === constants.MODE.ADV
-        ? session?.events : mode === constants.MODE.HEART ? session?.dailyStrips : null;
-    return Array.isArray(rows) ? rows.find(item => item.id === itemId) || null : null;
+    return cg_targets.cgTargetInSession(mode, session, itemId);
 }
 
 export function cgItemSignature(item) {
     const fields = [item?.id, item?.title, item?.date, item?.desc, item?.cgDesc,
         item?.subtitle, item?.imagePrompt, item?.visualSeed, item?.panelCount, item?.panels,
         normalizeCgImageRecord(item?.cgImage)];
+    if (item?.sourceHash) fields.push(item.sourceHash);
     // A newly generated draft is part of the captured visual target. Do not let
     // an older result overwrite a replacement draft; legacy item signatures stay exact.
     const draft = cg_visual.normalizeGeneratedCgDraft(item?.cgPromptDraft);
@@ -109,7 +109,9 @@ export function applyCgImagePatch(session, raw) {
         if (history) target.cgImageHistory = history;
     } else {
         const history = normalizeCgImageHistory(target.cgImageHistory);
-        if (history.length) target.cgImageHistory = history; else delete target.cgImageHistory;
+        if (history.length) target.cgImageHistory = history;
+        else if (target.__rmtCgDescriptor) target.cgImageHistory = null;
+        else delete target.cgImageHistory;
     }
     target.cgImage = patch.image;
     return { status: 'applied', session: updated };
@@ -131,7 +133,9 @@ export function swapCgImageToVersion(item, url) {
     const nextHistory = currentImage && currentImage.url !== chosen.url
         ? cgImageHistoryWith(history, currentImage) : (history.length ? history : null);
     item.cgImage = chosen;
-    if (nextHistory) item.cgImageHistory = nextHistory; else delete item.cgImageHistory;
+    if (nextHistory) item.cgImageHistory = nextHistory;
+    else if (item.__rmtCgDescriptor) item.cgImageHistory = null;
+    else delete item.cgImageHistory;
     return before;
 }
 

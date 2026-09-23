@@ -83,3 +83,11 @@ export function formatDailyComicPrompt(item, scene, format) {
     if (result.length > 1800) throw text.safeUserError('分镜要求与提示词合计超过 1800 字符，请缩短后再绘图；没有发送请求。', 'RMT_CG_PROMPT_INVALID');
     return result;
 }
+
+export function formatPhotoshootPrompt(scene) {
+    const prefix = '9:16 vertical full image, readable 3 by 3 nine-cell photo-contact-sheet grid, exactly nine distinct candid moments, consistent people and setting, no text, no captions, no logo, no watermark';
+    const base = String(scene || '').trim();
+    const result = base.startsWith(prefix) ? base : `${prefix}\n${base}`;
+    if (result.length > 1800) throw text.safeUserError('九宫格的场景和画面要求合计超过 1800 字符，请缩短后再绘图；原计划保留，尚未发送请求。','RMT_CG_PROMPT_INVALID');
+    return result;
+}

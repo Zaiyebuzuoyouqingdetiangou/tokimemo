@@ -8,6 +8,7 @@ import * as archive_snapshots from '../archive/snapshots.js';
 import * as core_constants from './constants.js';
 import * as core_heartLanguage from './heartLanguage.js';
 import * as song_contract from './themeSongContract.js';
+import * as bedtime_contract from './bedtimeContract.js';
 import * as core_context from './context.js';
 import * as core_evidence from './evidence.js';
 import * as core_requestCoordinator from './requestCoordinator.js';
@@ -22,6 +23,7 @@ import * as backup_diagnostics from './backupDiagnostics.js';
 import * as modes_pastLives from '../modes/pastLives.js';
 import * as modes_timeStories from '../modes/timeStories.js';
 import * as modes_themeSong from '../modes/themeSong.js';
+import * as modes_bedtime from '../modes/bedtime.js';
 import * as time_stories from './timeStoriesContract.js';
 import * as generation_recovery from '../generation/recovery.js';
 import * as participant_contract from './participants.js';
@@ -2017,6 +2019,32 @@ async function saveImportedMemoryOperation(context, memoryBank, expectedChatId =
         }
     }
 
+    // Explicit cross-chat inheritance creates one new archive and its complete
+    // derived cache in a single commit. The caller must already have rebound the
+    // cache to the staged chat/revision and removed resumable jobs. Keeping this
+    // as an initial value avoids a sequence of per-mode writes that could expose
+    // a partially copied archive after a storage failure.
+    if (Object.prototype.hasOwnProperty.call(options, 'initialCache')) {
+        if (expectedState?.present !== false || previousMemory) {
+            throw core_text.safeUserError('目标聊天已经有档案或派生内容，继承操作没有覆盖它。', 'RMT_CACHE_CAS_CONFLICT');
+        }
+        const candidate = cloneCacheValue(options.initialCache);
+        const candidateChatId = core_context.comparableChatId(candidate?.chatId);
+        const candidateRevision = core_text.normalizeText(candidate?.archiveRevision, 240);
+        if (!candidate || typeof candidate !== 'object'
+            || candidateChatId !== targetChatId
+            || candidateRevision !== core_text.normalizeText(stagedMemory.archiveRevision, 240)) {
+            throw core_text.safeUserError('继承缓存与新档案身份不一致，目标聊天保持不变。', 'RMT_RECOVERY_ORIGIN_CHANGED');
+        }
+        if (Object.prototype.hasOwnProperty.call(candidate, generation_recovery.GENERATION_RECOVERY_CACHE_KEY)
+            || Object.prototype.hasOwnProperty.call(candidate, GENERATION_DRAFTS_CACHE_KEY)
+            || Object.prototype.hasOwnProperty.call(candidate, core_constants.PHONE_DRAFT_CACHE_KEY)) {
+            throw core_text.safeUserError('继承缓存仍含可续跑任务，目标聊天保持不变。', 'RMT_RECOVERY_ORIGIN_CHANGED');
+        }
+        preservedCache = candidate;
+        stampCacheCommit(preservedCache, initialScope);
+    }
+
     if (currentRoster) {
         if (!preservedCache) {
             preservedCache = { chatId: expectedChatId, archiveRevision: stagedMemory.archiveRevision };
@@ -2833,6 +2861,7 @@ export async function commitSession(mode, session, expectedChatId = core_text.no
         if (expectedRevision && expectedRevision !== core_text.normalizeText(memoryBank.archiveRevision, 240)) return null;
         if (replacement) return session;
         return mode === core_constants.MODE.THEME_SONG ? song_contract.mergeThemeSongs(_latest, session)
+            : mode === core_constants.MODE.BEDTIME ? bedtime_contract.mergeBedtime(_latest, session)
             : mode === core_constants.MODE.INBOX ? modes_inbox.mergeInboxLatest(_latest, session) : session;
     }, session, { completeGeneration: true, ...(replacement ? { participantRegeneration: replacement } : {}) });
     return !!committed;
@@ -2896,6 +2925,7 @@ export async function commitDetachedArchiveSession(target, mode, session, stillC
         mode,
         expectedTaskOrigin,
         latest => replacement ? session : mode === core_constants.MODE.THEME_SONG ? song_contract.mergeThemeSongs(latest, session)
+            : mode === core_constants.MODE.BEDTIME ? bedtime_contract.mergeBedtime(latest, session)
             : mode === core_constants.MODE.INBOX ? modes_inbox.mergeInboxLatest(latest, session) : session,
         session,
         stillCurrent,
@@ -2981,10 +3011,17 @@ export function loadSession(mode, options = {}) {
         if (time_stories.isTimeStoryMode(mode) && !(partial
             ? modes_timeStories.readableTimeStoriesProgressSession?.(reading.session, reading.memoryBank)
             : modes_timeStories.readableTimeStoriesSession(reading.session, reading.memoryBank))) return null;
-        if (mode === core_constants.MODE.INBOX && (session.inboxVersion !== modes_inbox.INBOX_VERSION || !Array.isArray(session.letters))) return null;
+        if (mode === core_constants.MODE.INBOX) {
+            session = modes_inbox.normalizeInboxSession(session);
+            if (!session) return null;
+        }
         if (mode === core_constants.MODE.THEME_SONG && (!(partial
             ? modes_themeSong.readableThemeSongProgressSession?.(reading.session, reading.memoryBank)
             : song_contract.readableThemeSongs(reading.session, reading.memoryBank))
+            || (context && session.ownerKey && session.ownerKey !== core_context.currentCharacterRuntimeKey(context)))) return null;
+        if (mode === core_constants.MODE.BEDTIME && (!(partial
+            ? modes_bedtime.readableBedtimeProgressSession?.(reading.session, reading.memoryBank)
+            : bedtime_contract.readableBedtime(reading.session, reading.memoryBank))
             || (context && session.ownerKey && session.ownerKey !== core_context.currentCharacterRuntimeKey(context)))) return null;
         const userManaged = session.userManaged === true;
         if (mode === core_constants.MODE.ROOM && (!Array.isArray(session.spaces) || (!userManaged && session.spaces.length < 1))) return null;

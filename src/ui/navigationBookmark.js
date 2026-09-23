@@ -30,6 +30,10 @@ function restoreScroll(mark) {
 }
 const fields = ['selectedId','selectedSpaceId','selectedObjectId','selectedContainerId','selectedAppId','selectedEntryId','selectedLocationId','selectedLetterId','selectedSeason','selectedVoiceId','selectedScenarioId','selectedDramaKey','selectedStripId','category','page','view','viewMode','sharedMemory','dialogueIndex','paragraphIndex','reading','cgOnly','tab','selectedDate','selectedKey','fireflyPage','pastLivesReadMask','pastLivesDrawn','pastLivesClosing'];
 export function readingPosition(session) {
+    // Chapter cursor is presentation-only, like paragraphIndex in other readers.
+    if (session?.kind === 'bedtime' && Number.isSafeInteger(session.chapterIndex) && session.chapterIndex >= 0) {
+        return {selectedId:session.selectedId,view:session.view,chapterIndex:session.chapterIndex};
+    }
     const result = {};
     for (const key of fields) {
         const value = session?.[key];
