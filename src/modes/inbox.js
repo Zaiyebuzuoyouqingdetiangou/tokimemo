@@ -78,22 +78,22 @@ export function inboxRelationshipAllows(prose, memory, options = {}) {
 }
 export function normalizeInboxLetters(raw, memory, plan, date = new Date(), options = {}) {
     const values = raw?.letters;
-    if (!Array.isArray(values) || values.length !== plan.length) throw new Error('来信未完整返回，请只补齐计划中的信件。');
+    if (!Array.isArray(values) || values.length !== plan.length) throw text.safeUserError('来信未完整返回，请只补齐计划中的信件。', 'RMT_SEGMENT_VALIDATION');
     const sourceText = ids => (memory.memories || []).filter(item => ids.includes(item.id)).map(item => [item.title, item.summary, ...(item.anchors || [])].join('\n')).join('\n');
     const letters = plan.map(item => {
         const matches = values.filter(value => value?.slot === item.slot);
-        if (matches.length !== 1) throw new Error('来信类型重复或缺失。');
+        if (matches.length !== 1) throw text.safeUserError('来信类型重复或缺失。', 'RMT_SEGMENT_VALIDATION');
         const value = matches[0];
         const completeText = value => typeof value === 'string' ? value.replace(/\r\n?/g, '\n').replace(/\u0000/g, '') : '';
         const title = completeText(value.title), greeting = completeText(value.greeting), body = completeText(value.body), closing = completeText(value.closing);
-        if (!title.trim() || !body.trim()) throw new Error('来信正文还未写完。');
+        if (!title.trim() || !body.trim()) throw text.safeUserError('来信正文还未写完。', 'RMT_SEGMENT_VALIDATION');
         if (!inboxRelationshipAllows([title, greeting, body, closing].join('\n'), memory, {
             ...options, controlledEvidence: options.controlledEvidence || options.characterEvidence || '',
-        })) throw new Error('称呼超出了两人当前关系，请按真实关系写来信。');
+        })) throw text.safeUserError('称呼超出了两人当前关系，请按真实关系写来信。', 'RMT_SEGMENT_VALIDATION');
         const historic = [title, greeting, body, closing].flatMap(part => part.split(/[。！？!?\n]+/u))
             .filter(part => narrative.narrativeClaimsSharedHistory(part, { userName: memory.userName }));
         if (historic.some(part => !sourceText(item.sourceMemoryIds).includes(part.trim()))
-            || (historic.length && !item.sourceMemoryIds.length)) throw new Error('来信把未有依据的共同往事写成了事实；请写当下心情或未来邀请。');
+            || (historic.length && !item.sourceMemoryIds.length)) throw text.safeUserError('来信把未有依据的共同往事写成了事实；请写当下心情或未来邀请。', 'RMT_SEGMENT_VALIDATION');
         const letterText = [title, greeting, body, closing].join('\n');
         return { id: 'mail-' + digest(item.eventKey), eventKey: item.eventKey, type: item.slot,
             title, greeting, body, closing, createdAt: date.getTime(), sourceArchiveRevision: memory.archiveRevision,
@@ -137,9 +137,9 @@ function postcardLetterKey(letter) {
         sourceMemoryIds: letter.sourceMemoryIds, sourceMemoryAnchor: letter.sourceMemoryAnchor });
 }
 export function mergeInboxLatest(latest, incoming) {
-    if (!incoming || incoming.kind !== 'inbox' || !Array.isArray(incoming.letters)) throw new Error('邮箱结构不可读取。');
+    if (!incoming || incoming.kind !== 'inbox' || !Array.isArray(incoming.letters)) throw text.safeUserError('邮箱结构不可读取。', 'RMT_LOCAL_OPERATION');
     if (latest?.kind === 'inbox' && (latest.chatId !== incoming.chatId || latest.archiveRevision !== incoming.archiveRevision || (latest.ownerKey && incoming.ownerKey && latest.ownerKey !== incoming.ownerKey)))
-        throw new Error('邮箱所属聊天或档案版本已变化。');
+        throw text.safeUserError('邮箱所属聊天或档案版本已变化。', 'RMT_LOCAL_OPERATION');
     const merged = structuredClone(latest?.kind === 'inbox' ? latest : { ...incoming, letters: [] });
     const keys = new Set(merged.letters.map(item => item.eventKey));
     const postcards = new Set(merged.letters.map(postcardLetterKey).filter(Boolean));
@@ -147,7 +147,7 @@ export function mergeInboxLatest(latest, incoming) {
     for (const letter of incoming.letters) {
         const postcardKey = postcardLetterKey(letter);
         if (keys.has(letter.eventKey) || (postcardKey && postcards.has(postcardKey))) continue;
-        if (!letter.eventKey || !letter.id || ids.has(letter.id)) throw new Error('来信身份冲突，已有信件保持不变。');
+        if (!letter.eventKey || !letter.id || ids.has(letter.id)) throw text.safeUserError('来信身份冲突，已有信件保持不变。', 'RMT_LOCAL_OPERATION');
         const saved = structuredClone(letter);
         // The next sheet changes colour without recolouring already saved mail.
         if (!saved.paperTone) saved.paperTone = ['cream', 'rose', 'sky', 'sage', 'lilac', 'peach'][merged.letters.length % 6];
@@ -190,11 +190,11 @@ export function projectInboxProgress({ segments, memoryBank, context, previousSe
 }
 export function postcardInboxItem(location, travel, memory, date = new Date()) {
     if (travel?.chatId !== memory.chatId || travel?.archiveRevision !== memory.archiveRevision
-        || !travel.locations?.some(item => item.id === location?.id)) throw new Error('明信片不属于这份当前档案。');
+        || !travel.locations?.some(item => item.id === location?.id)) throw text.safeUserError('明信片不属于这份当前档案。', 'RMT_LOCAL_OPERATION');
     const original = travel.locations.find(item => item.id === location.id);
     const canonical = travel_mode.travelKeepsakeForItem(original);
     const card = canonical?.kind === 'postcard' ? { ...canonical, postmark: canonical.mark, stampLabel: canonical.emblem } : null;
-    if (!card?.body) throw new Error('这处路线还没有明信片。');
+    if (!card?.body) throw text.safeUserError('这处路线还没有明信片。', 'RMT_LOCAL_OPERATION');
     const frozen = {};
     for (const key of ['id', 'name', 'region', 'summary', 'distanceLabel', 'sceneTheme', 'kind', 'basis'])
         frozen[key] = clean(original[key], key === 'summary' ? 1800 : key === 'id' ? 100 : 160);

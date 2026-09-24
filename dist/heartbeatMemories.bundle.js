@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 174
-// Source SHA-256: 58c51de165cd378ae8a603dec5f2b85606cba4fc54021f0b06bde5067db9b0b5
+// Source SHA-256: 832d4c2ecc10cbd08fc80ed3026d9b60b2274e8a65bf6d66b4aa95a2b52e4eee
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -7291,14 +7291,16 @@ function sketchPerson(design) {
     const texture=['curly','wavy'].includes(style)?`<path d="M105 95q-11 13 0 23q11 12-2 23M197 93q12 14 1 25q-9 12 4 22" ${line}/>`:'';
     const back=hairKnown?`<g data-rmt-letter-hair="${length||'specified'}:${style||'unspecified'}:${hair||'unspecified'}">${tail}${braid}${bun}<path d="M105 83q-2-48 45-48q49-2 50 49v${Math.max(12,hairBottom-83)}q-16 18-30 4q-20 19-43 4q-18 12-26-5z" fill="${hairFill}" ${outline}/>${texture}</g>`:'';
     const feet=seated?`<path d="M131 219q-21 3-27 15q11 10 34 1l18-13m10-2q7 17 27 18q18 0 10-11l-23-14" fill="${hairFill}" ${outline}/>`:`<path d="m135 218-4 23q-14 2-13 10h26l5-30m17-1 8 21q14 3 12 10h-25l-9-29" fill="${hairFill}" ${outline}/>`;
-    const robe=['robe','dress','coat'].includes(clothing);
+    const robe=['robe','dress','coat','ruqun'].includes(clothing);
     const body=`<path data-rmt-letter-outfit="${clothing||'unspecified'}:${clothingColour||'unspecified'}" d="M125 134q25-14 49 0l${robe?'25 91q-45 10-93 0':'13 85q-35 12-75 0'}z" fill="${dress}" ${outline}/>`;
     const details=clothing==='robe'?`<path d="m128 135 32 28 14-26m-40 51h48m-21-25-21 59" ${line}/><path d="m131 192 50-1" stroke="${ink}" stroke-width="5"/>`
         : clothing==='hoodie'?`<path d="M125 137q25 31 50 0m-44 57q20-12 40 0v12h-40zM143 148v20m13-20v20" ${line}/>`
         : ['suit','coat','jacket'].includes(clothing)?`<path d="m125 138 25 32 25-32m-45 6-6 20 26 6 25-6-6-20m-19 26v48" ${line}/>`
         : clothing==='uniform'?`<path d="m124 138 26 17 27-17m-40 8 13 11 14-11m-14 12v52" ${line}/><path d="m147 155-5 18 9 6 8-6-6-18" fill="${ink}" opacity=".65"/>`
+        : clothing==='martial'?`<path d="m130 136 20 18 20-18m-40 44h40" ${line}/><path d="m129 179h42" stroke="${ink}" stroke-width="5"/>`
+        : clothing==='ruqun'?`<path d="m128 150h44" stroke="${ink}" stroke-width="4"/><path d="M138 162l-7 58m19-58v60m12-60 7 58" ${line} opacity=".45"/>`
         : clothing==='sweater'?`<g ${line} opacity=".35"><path d="M124 159h52m-54 13h57m-59 13h61m-61 14h63"/></g>`
-        : `<path d="m130 136 20 16 20-16m-20 16v58" ${line} opacity=".45"/>`;
+        : ''; // 角色卡没有写明衣服时不画领口和门襟，避免每封信都是同一件外套
     const arms=kind==='walk'?`<path d="m125 143-16 26-10 24m76-50 11 19 19-13" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m102 190-5 8m106-51 8-5" stroke="${skin}" stroke-width="12" stroke-linecap="round"/>`
         : ['flower','gift'].includes(kind)?`<path d="m124 144-8 31 24 5m34-36 12 27-26 12" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m139 180 13 2m9 1-11 2" stroke="${skin}" stroke-width="12" stroke-linecap="round"/>`
         : kind==='window'?`<path d="m124 144-5 40 20 5m36-45 16 11 5-37" stroke="${dress}" stroke-width="17" fill="none" stroke-linecap="round"/><path d="m195 120 1-11m-57 79 8 0" stroke="${skin}" stroke-width="12" stroke-linecap="round"/>`
@@ -7307,13 +7309,18 @@ function sketchPerson(design) {
     const fringe=hairKnown?`<path data-rmt-letter-hair-fringe="true" d="M106 84q-8-49 45-49q47 0 48 47q-23-7-31-22q-14 21-39 27l6-12-26 14z" fill="${hairFill}" ${outline}/><path d="M123 53q14-12 29-8m10-1 15 11" stroke="#fff" stroke-width="4" opacity=".2" fill="none" stroke-linecap="round"/>`:'';
     const eyeFill=colour(eye,ink);
     const happy=['gift','flower','tea','walk'].includes(kind);
-    const eyes=happy?`<g data-rmt-letter-eyes="${eye||'unspecified'}" ${line} stroke-width="2.5"><path d="M123 97q7-10 14 0m26 0q7-10 14 0"/></g>`:`<g data-rmt-letter-eyes="${eye||'unspecified'}"><path d="M122 95q8-7 17 0m22 0q8-7 17 0" ${line}/><ellipse cx="131" cy="100" rx="5.2" ry="7.5" fill="${eyeFill}"/><ellipse cx="169" cy="100" rx="5.2" ry="7.5" fill="${eyeFill}"/><g fill="#fffaf6"><circle cx="129" cy="97" r="2"/><circle cx="167" cy="97" r="2"/></g></g>`;
+    const eyes=happy?`<g data-rmt-letter-eyes="${eye||'unspecified'}" stroke="${ink}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" fill="none"><path d="M123 97q7-10 14 0m26 0q7-10 14 0"/></g>`:`<g data-rmt-letter-eyes="${eye||'unspecified'}"><path d="M122 95q8-7 17 0m22 0q8-7 17 0" ${line}/><ellipse cx="131" cy="100" rx="5.2" ry="7.5" fill="${eyeFill}"/><ellipse cx="169" cy="100" rx="5.2" ry="7.5" fill="${eyeFill}"/><g fill="#fffaf6"><circle cx="129" cy="97" r="2"/><circle cx="167" cy="97" r="2"/></g></g>`;
     const expression=`<g data-rmt-letter-expression="${happy?'smile':'attentive'}"><ellipse cx="120" cy="111" rx="9" ry="4" fill="#eab5b5" opacity=".56"/><ellipse cx="181" cy="111" rx="9" ry="4" fill="#eab5b5" opacity=".56"/><path d="M143 117q7 ${happy?'8':'5'} 14 0" ${line}/><path d="m150 106-2 4h3" ${line} opacity=".4"/></g>`;
+    // 斗篷和背负的剑属于身后一层：先画，再由身体和手臂盖住，只露出两侧、剑柄与剑尖。
+    const behind=[
+        markers.includes('cloak')?`<g data-rmt-letter-marker="cloak" ${line}><path d="M121 136q-24 42-30 94h22M179 136q24 42 30 94h-22" fill="#aeb9cb" opacity=".9"/></g>`:'',
+        markers.includes('sword')?`<g data-rmt-letter-marker="sword"><path d="M196 110l-78 112" stroke="#9aa3b2" stroke-width="5" stroke-linecap="round"/><path d="M186 116l17 11" stroke="#b39153" stroke-width="4" stroke-linecap="round"/><path d="M204 98l-8 14" stroke="#5b4636" stroke-width="5" stroke-linecap="round"/><circle cx="206" cy="95" r="3.2" fill="#b39153"/></g>`:'',
+    ].join('');
     const marker=markers.map(value=>{
-        const body={glasses:`<rect x="117" y="89" width="26" height="21" rx="8"/><rect x="157" y="89" width="26" height="21" rx="8"/><path d="M143 97h14"/>`,freckles:`<path d="m119 110 1 0m6 4 1 0m-7 2 1 0m52-6 1 0m6 4 1 0m-7 2 1 0"/>`,scar:`<path d="m174 89-10 20m5-13 6 2m-9 5 6 2"/>`,earrings:`<circle cx="109" cy="113" r="4"/><circle cx="192" cy="113" r="4"/>`,ribbon:`<path d="M184 51q-25-22-26-3q11 13 26 8q10 15 24 5q8-19-24-10z" fill="#c98d9f"/>`,hat:`<path d="M100 65q49-14 102 1l-13-7-10-25h-54l-12 26z" fill="#b8cbb4"/>`,scarf:`<path d="M124 131q27 12 51-1l2 17q-23 13-54 0zM165 145l7 42 14-6-9-39" fill="#ca98a6"/>`}[value];
+        const body={glasses:`<rect x="117" y="89" width="26" height="21" rx="8"/><rect x="157" y="89" width="26" height="21" rx="8"/><path d="M143 97h14"/>`,freckles:`<path d="m119 110 1 0m6 4 1 0m-7 2 1 0m52-6 1 0m6 4 1 0m-7 2 1 0"/>`,scar:`<path d="m174 89-10 20m5-13 6 2m-9 5 6 2"/>`,earrings:`<circle cx="109" cy="113" r="4"/><circle cx="192" cy="113" r="4"/>`,ribbon:`<path d="M184 51q-25-22-26-3q11 13 26 8q10 15 24 5q8-19-24-10z" fill="#c98d9f"/>`,hat:`<path d="M100 65q49-14 102 1l-13-7-10-25h-54l-12 26z" fill="#b8cbb4"/>`,scarf:`<path d="M124 131q27 12 51-1l2 17q-23 13-54 0zM165 145l7 42 14-6-9-39" fill="#ca98a6"/>`,crown:`<path d="M138 40h24l-3-13h-18z" fill="#d8c27c"/><path d="M132 37h36M150 27v-5"/>`,hairpin:`<path d="M176 52l24-18" stroke-width="3"/><circle cx="202" cy="32" r="4" fill="#c98d9f"/>`,jade:`<path d="M160 188v18"/><circle cx="160" cy="212" r="6" fill="#a9cdb2"/><path d="M157 220l-2 9m5-9v9m3-9 2 9"/>`,fan:`<path d="M101 188l-15-22q17-11 33 0z" fill="#efe3c6"/><path d="M101 188l-8-20m8 20v-22m0 22 8-20"/>`}[value];
         return body?`<g data-rmt-letter-marker="${value}" ${line}>${body}</g>`:'';
     }).join('');
-    return `<g data-rmt-letter-person="true" data-rmt-letter-pose="${kind}" transform="rotate(${turn} 150 170)">${feet}${body}${details}${back}${face}${fringe}${eyes}${expression}${arms}${marker}</g>`;
+    return `<g data-rmt-letter-person="true" data-rmt-letter-pose="${kind}" transform="rotate(${turn} 150 170)">${behind}${feet}${body}${details}${back}${face}${fringe}${eyes}${expression}${arms}${marker}</g>`;
 }
 
 __m_core_letterSketch_js.sketchBackdrop = sketchBackdrop;
@@ -7335,14 +7342,14 @@ const FACT_VALUES = Object.freeze({
     hairStyle: ['straight', 'wavy', 'curly', 'ponytail', 'braid', 'bun'],
     hairColor: ['black', 'brown', 'blonde', 'red', 'white', 'gray', 'blue', 'pink', 'purple', 'green'],
     eyeColor: ['black', 'brown', 'blue', 'green', 'gray', 'amber', 'purple', 'red'],
-    outfitKind: ['shirt', 'sweater', 'hoodie', 'jacket', 'coat', 'dress', 'suit', 'uniform', 'robe'],
+    outfitKind: ['shirt', 'sweater', 'hoodie', 'jacket', 'coat', 'dress', 'suit', 'uniform', 'robe', 'martial', 'ruqun'],
     outfitColor: ['black', 'brown', 'white', 'gray', 'red', 'blue', 'green', 'pink', 'purple', 'cream', 'navy'],
-    marker: ['glasses', 'freckles', 'scar', 'earrings', 'ribbon', 'hat', 'scarf'],
+    marker: ['glasses', 'freckles', 'scar', 'earrings', 'ribbon', 'hat', 'scarf', 'crown', 'hairpin', 'jade', 'sword', 'fan', 'cloak'],
     signatureObject: ['book', 'cup', 'camera', 'umbrella', 'flower', 'instrument', 'letter', 'lamp'],
 });
 const APPEARANCE_KINDS = new Set(['hairLength', 'hairStyle', 'hairColor', 'eyeColor', 'outfitKind', 'outfitColor', 'marker']);
 
-const BASE_CONTRACT = '可选 letterIllustration，只能使用 v2：{"version":2,"characterName":"本信人物真名","focus":"person或object","visualFacts":[{"kind":"hairLength|hairStyle|hairColor|eyeColor|outfitKind|outfitColor|marker|signatureObject","value":"下列对应枚举值","evidence":"逐字摘录当前char原文"}],"scene":{"kind":"read|tea|rain|photo|music|flower|gift|window|lamp|cook|walk|write","evidence":"逐字摘录本封信正文"}}。value 枚举：hairLength=short|medium|long；hairStyle=straight|wavy|curly|ponytail|braid|bun；hairColor=black|brown|blonde|red|white|gray|blue|pink|purple|green；eyeColor=black|brown|blue|green|gray|amber|purple|red；outfitKind=shirt|sweater|hoodie|jacket|coat|dress|suit|uniform|robe；outfitColor=black|brown|white|gray|red|blue|green|pink|purple|cream|navy；marker=glasses|freckles|scar|earrings|ribbon|hat|scarf；signatureObject=book|cup|camera|umbrella|flower|instrument|letter|lamp。focus=person 时至少给一项有原文依据的外貌、衣着或标志特征；focus=object 时只能画char原文明确拥有或使用的 signatureObject。每项 evidence 必须直接支持对应值；本信没有可画场景，或char没有相应明确依据时，省略 letterIllustration。不得默认动物、宠物或通用人物，不得输出 version 1、HTML、SVG、CSS、URL、颜色、坐标或任何代码。';
+const BASE_CONTRACT = '可选 letterIllustration，只能使用 v2：{"version":2,"characterName":"本信人物真名","focus":"person或object","visualFacts":[{"kind":"hairLength|hairStyle|hairColor|eyeColor|outfitKind|outfitColor|marker|signatureObject","value":"下列对应枚举值","evidence":"逐字摘录当前char原文"}],"scene":{"kind":"read|tea|rain|photo|music|flower|gift|window|lamp|cook|walk|write","evidence":"逐字摘录本封信正文"}}。value 枚举：hairLength=short|medium|long；hairStyle=straight|wavy|curly|ponytail|braid|bun；hairColor=black|brown|blonde|red|white|gray|blue|pink|purple|green；eyeColor=black|brown|blue|green|gray|amber|purple|red；outfitKind=shirt|sweater|hoodie|jacket|coat|dress|suit|uniform|robe|martial|ruqun；outfitColor=black|brown|white|gray|red|blue|green|pink|purple|cream|navy；marker=glasses|freckles|scar|earrings|ribbon|hat|scarf|crown|hairpin|jade|sword|fan|cloak；signatureObject=book|cup|camera|umbrella|flower|instrument|letter|lamp。focus=person 时至少给一项有原文依据的外貌、衣着或标志特征；focus=object 时只能画char原文明确拥有或使用的 signatureObject。每项 evidence 必须直接支持对应值；本信没有可画场景，或char没有相应明确依据时，省略 letterIllustration。不得默认动物、宠物或通用人物，不得输出 version 1、HTML、SVG、CSS、URL、颜色、坐标或任何代码。';
 
 const VALUE_TOKENS = Object.freeze({
     hairLength: {
@@ -7352,7 +7359,7 @@ const VALUE_TOKENS = Object.freeze({
     hairStyle: {
         straight: ['直发', '直髮', 'ストレートヘア', 'straight hair'], wavy: ['波浪发', '波浪髮', 'ウェーブヘア', 'wavy hair'],
         curly: ['卷发', '捲髮', '卷髮', '巻き髪', 'curly hair'], ponytail: ['马尾', '馬尾', 'ポニーテール', 'ponytail'],
-        braid: ['辫子', '辮子', '编发', '編髮', '三つ編み', 'braid'], bun: ['发髻', '髮髻', '丸子头', 'お団子', 'bun'],
+        braid: ['辫子', '辮子', '编发', '編髮', '三つ編み', 'braid'], bun: ['发髻', '髮髻', '束发', '束髮', '盘发', '盤髮', '云髻', '雲髻', '丸子头', 'お団子', 'bun'],
     },
     hairColor: {}, eyeColor: {}, outfitColor: {},
     outfitKind: {
@@ -7360,12 +7367,20 @@ const VALUE_TOKENS = Object.freeze({
         hoodie: ['卫衣', '連帽衫', 'パーカー', 'hoodie'], jacket: ['夹克', '夾克', 'ジャケット', 'jacket'],
         coat: ['大衣', '外套', 'コート', 'coat'], dress: ['连衣裙', '連衣裙', '洋装', 'ドレス', 'dress'],
         suit: ['西装', '西裝', 'スーツ', 'suit'], uniform: ['制服', '校服', 'ユニフォーム', 'uniform'],
-        robe: ['长袍', '長袍', 'ローブ', 'robe'],
+        robe: ['长袍', '長袍', '长衫', '長衫', '衣袍', '锦袍', '錦袍', '道袍', '白袍', '青袍', '汉服', '漢服', '衣衫', '直裰', '深衣', '褙子', 'ローブ', 'robe'],
+        martial: ['劲装', '勁裝', '短打', '箭袖', '束袖', '夜行衣'],
+        ruqun: ['襦裙', '罗裙', '羅裙', '齐胸', '齊胸', '留仙裙', '马面裙', '馬面裙'],
     },
     marker: {
         glasses: ['眼镜', '眼鏡', 'メガネ', 'glasses'], freckles: ['雀斑', 'そばかす', 'freckles'], scar: ['伤疤', '傷疤', '疤痕', '傷跡', 'scar'],
         earrings: ['耳环', '耳環', '耳钉', '耳釘', 'ピアス', 'earrings'], ribbon: ['发带', '髮帶', '丝带', '絲帶', 'リボン', 'ribbon'],
         hat: ['帽子', 'ハット', 'hat'], scarf: ['围巾', '圍巾', 'マフラー', 'scarf'],
+        crown: ['发冠', '髮冠', '玉冠', '金冠', '银冠', '銀冠', '束冠'],
+        hairpin: ['发簪', '髮簪', '簪子', '玉簪', '木簪', '步摇', '步搖', '珠钗', '珠釵', '发钗', '髮釵'],
+        jade: ['玉佩', '腰佩', '玉坠', '玉墜', '禁步'],
+        sword: ['佩剑', '佩劍', '长剑', '長劍', '宝剑', '寶劍', '背剑', '背劍', '负剑', '負劍', '执剑', '執劍'],
+        fan: ['折扇', '团扇', '團扇', '羽扇', '纸扇', '紙扇'],
+        cloak: ['斗篷', '披风', '披風', '大氅', '鹤氅', '鶴氅', 'cloak'],
     },
     signatureObject: {
         book: ['书', '書', '本を', '本が', '本は', '一冊', 'book'], cup: ['杯', 'マグ', 'cup', 'mug'], camera: ['相机', '相機', 'カメラ', 'camera'],
@@ -7374,14 +7389,14 @@ const VALUE_TOKENS = Object.freeze({
     },
 });
 const COLOR_TOKENS = Object.freeze({
-    black: ['黑', '黒', 'black'], brown: ['棕', '褐', '茶色', 'brown'], blonde: ['金色', '金发', '金髮', '金髪', 'blonde', 'blond'],
-    red: ['红', '紅', '赤', 'red'], white: ['白', 'white'], gray: ['灰', '银灰', '銀灰', 'グレー', 'gray', 'grey'],
-    blue: ['蓝', '藍', '青い', 'blue'], green: ['绿', '綠', '緑', 'green'], pink: ['粉', '桃色', 'pink'],
-    purple: ['紫', 'purple'], cream: ['奶油色', '米白', 'クリーム', 'cream'], navy: ['藏青', '海军蓝', '海軍藍', 'ネイビー', 'navy'],
+    black: ['黑', '黒', '墨', '玄', '乌', '烏', '鸦', '鴉', 'black'], brown: ['棕', '褐', '赭', '茶色', 'brown'], blonde: ['金色', '金发', '金髮', '金髪', 'blonde', 'blond'],
+    red: ['红', '紅', '赤', '绯', '緋', '朱', '绛', '絳', '丹', 'red'], white: ['白', '素', '雪色', 'white'], gray: ['灰', '银', '銀', 'グレー', 'gray', 'grey'],
+    blue: ['蓝', '藍', '青', '靛', 'blue'], green: ['绿', '綠', '緑', '碧', '翠', 'green'], pink: ['粉', '桃色', 'pink'],
+    purple: ['紫', 'purple'], cream: ['奶油色', '米白', '米色', '杏色', 'クリーム', 'cream'], navy: ['藏青', '海军蓝', '海軍藍', 'ネイビー', 'navy'],
     amber: ['琥珀', 'amber'],
 });
 const CATEGORY_TOKENS = Object.freeze({
-    hairColor: ['发', '髮', '髪', 'hair'], eyeColor: ['眼', '眸', '瞳', 'eye'], outfitColor: ['穿', '着', '著', '衣', '服', '衫', '裙', '袍', '外套', '大衣', '西装', '西裝', '制服', 'wear', 'shirt', 'dress', 'robe', 'coat', 'suit', 'uniform'],
+    hairColor: ['发', '髮', '髪', 'hair'], eyeColor: ['眼', '眸', '瞳', 'eye'], outfitColor: ['穿', '着', '著', '衣', '服', '衫', '裙', '袍', '装', '裝', '裳', '袄', '襖', '襟', '袖', '氅', '斗篷', '披风', '披風', '外套', '大衣', '西装', '西裝', '制服', 'wear', 'shirt', 'dress', 'robe', 'coat', 'suit', 'uniform'],
 });
 const SCENE_TOKENS = Object.freeze({
     read: ['读', '讀', '看书', '看書', '阅读', '閱讀', '読む', 'read', 'book'], tea: ['茶', '咖啡', 'tea', 'coffee'],
@@ -7397,7 +7412,7 @@ const SCENE_TOKENS = Object.freeze({
 const SCENE_KEYWORD_HINT = Object.entries(SCENE_TOKENS)
     .map(([kind, tokens]) => `${kind}=${tokens.filter(token => /[\u4e00-\u9fff]/u.test(token)).join('/')}`)
     .join('；');
-const CONTRACT = `${BASE_CONTRACT}scene.evidence 必须原样包含所选 kind 的关键词之一（${SCENE_KEYWORD_HINT}），先在正文里找到关键词再选 kind；找不到任何关键词就省略 letterIllustration。visualFacts 的 evidence 必须原样包含直接说明该值的词，例如 long 需含「长发」、ponytail 需含「马尾」、robe 需含「长袍」、glasses 需含「眼镜」；原文没有这样的词就不要写这一项。`;
+const CONTRACT = `${BASE_CONTRACT}scene.evidence 必须原样包含所选 kind 的关键词之一（${SCENE_KEYWORD_HINT}），先在正文里找到关键词再选 kind；找不到任何关键词就省略 letterIllustration。visualFacts 的 evidence 必须原样包含直接说明该值的词，例如 long 需含「长发」、ponytail 需含「马尾」、robe 需含「长袍」、glasses 需含「眼镜」；原文没有这样的词就不要写这一项。古风人设按原文选：长衫、衣袍类用 robe，劲装、短打用 martial，襦裙、罗裙用 ruqun；配饰可用 crown(发冠/玉冠)、hairpin(发簪/步摇)、jade(玉佩)、sword(佩剑/长剑，「剑眉」不算)、fan(折扇/团扇)、cloak(斗篷/披风)，每项都要有人设原文依据，一个人可以写多项配饰。`;
 const OBJECT_SCENES = Object.freeze({ book:['read', 'write'], cup:['tea'], camera:['photo'], umbrella:['rain'], flower:['flower', 'gift'], instrument:['music'], letter:['write', 'gift'], lamp:['lamp'] });
 
 const PALETTE = Object.freeze({ paper: '#fff8e9', ink: '#66584f', accent: '#c96f7d', soft: '#91a995', blue: '#779aad' });
@@ -7464,13 +7479,19 @@ function normalize(value) {
 }
 
 function normalizeGenerated(value, { characterEvidence = '', letterText = '', characterNames = [] } = {}) {
-    const design = normalize(value);
-    if (!design) return null;
+    const normalized = normalize(value);
+    if (!normalized) return null;
     const names = Array.isArray(characterNames) ? characterNames.filter(name => typeof name === 'string' && name.trim()) : [];
-    if (!names.includes(design.characterName)) return null;
-    if (!design.visualFacts.every(fact => exactEvidence(characterEvidence, fact.evidence) && factSupported(fact))) return null;
-    if (!exactEvidence(letterText, design.scene.evidence) || !includesToken(design.scene.evidence, SCENE_TOKENS[design.scene.kind])) return null;
-    if (names.length > 1 && !design.visualFacts.every(fact => fact.evidence.includes(design.characterName) || fact.evidence.includes('{{char}}'))) return null;
+    if (!names.includes(normalized.characterName)) return null;
+    if (!exactEvidence(letterText, normalized.scene.evidence) || !includesToken(normalized.scene.evidence, SCENE_TOKENS[normalized.scene.kind])) return null;
+    // 每条外观都必须有人设原文依据；对不上的那一条单独丢掉，其余照画。
+    // 过去只要一条措辞不符就整张作废——模型写得越认真越容易拿不到小画。
+    // 人名、场景仍是整张的硬条件；一条有依据的外观都没有时仍不画。
+    const visualFacts = normalized.visualFacts.filter(fact => exactEvidence(characterEvidence, fact.evidence) && factSupported(fact)
+        && (names.length <= 1 || fact.evidence.includes(normalized.characterName) || fact.evidence.includes('{{char}}')));
+    if (!visualFacts.length) return null;
+    const design = normalize({ ...normalized, visualFacts });
+    if (!design) return null;
     if (design.focus === 'object') {
         const object = design.visualFacts.find(fact => fact.kind === 'signatureObject')?.value;
         if (!OBJECT_SCENES[object]?.includes(design.scene.kind)) return null;
@@ -12880,22 +12901,22 @@ function inboxRelationshipAllows(prose, memory, options = {}) {
 }
 function normalizeInboxLetters(raw, memory, plan, date = new Date(), options = {}) {
     const values = raw?.letters;
-    if (!Array.isArray(values) || values.length !== plan.length) throw new Error('来信未完整返回，请只补齐计划中的信件。');
+    if (!Array.isArray(values) || values.length !== plan.length) throw text.safeUserError('来信未完整返回，请只补齐计划中的信件。', 'RMT_SEGMENT_VALIDATION');
     const sourceText = ids => (memory.memories || []).filter(item => ids.includes(item.id)).map(item => [item.title, item.summary, ...(item.anchors || [])].join('\n')).join('\n');
     const letters = plan.map(item => {
         const matches = values.filter(value => value?.slot === item.slot);
-        if (matches.length !== 1) throw new Error('来信类型重复或缺失。');
+        if (matches.length !== 1) throw text.safeUserError('来信类型重复或缺失。', 'RMT_SEGMENT_VALIDATION');
         const value = matches[0];
         const completeText = value => typeof value === 'string' ? value.replace(/\r\n?/g, '\n').replace(/\u0000/g, '') : '';
         const title = completeText(value.title), greeting = completeText(value.greeting), body = completeText(value.body), closing = completeText(value.closing);
-        if (!title.trim() || !body.trim()) throw new Error('来信正文还未写完。');
+        if (!title.trim() || !body.trim()) throw text.safeUserError('来信正文还未写完。', 'RMT_SEGMENT_VALIDATION');
         if (!inboxRelationshipAllows([title, greeting, body, closing].join('\n'), memory, {
             ...options, controlledEvidence: options.controlledEvidence || options.characterEvidence || '',
-        })) throw new Error('称呼超出了两人当前关系，请按真实关系写来信。');
+        })) throw text.safeUserError('称呼超出了两人当前关系，请按真实关系写来信。', 'RMT_SEGMENT_VALIDATION');
         const historic = [title, greeting, body, closing].flatMap(part => part.split(/[。！？!?\n]+/u))
             .filter(part => narrative.narrativeClaimsSharedHistory(part, { userName: memory.userName }));
         if (historic.some(part => !sourceText(item.sourceMemoryIds).includes(part.trim()))
-            || (historic.length && !item.sourceMemoryIds.length)) throw new Error('来信把未有依据的共同往事写成了事实；请写当下心情或未来邀请。');
+            || (historic.length && !item.sourceMemoryIds.length)) throw text.safeUserError('来信把未有依据的共同往事写成了事实；请写当下心情或未来邀请。', 'RMT_SEGMENT_VALIDATION');
         const letterText = [title, greeting, body, closing].join('\n');
         return { id: 'mail-' + digest(item.eventKey), eventKey: item.eventKey, type: item.slot,
             title, greeting, body, closing, createdAt: date.getTime(), sourceArchiveRevision: memory.archiveRevision,
@@ -12939,9 +12960,9 @@ function postcardLetterKey(letter) {
         sourceMemoryIds: letter.sourceMemoryIds, sourceMemoryAnchor: letter.sourceMemoryAnchor });
 }
 function mergeInboxLatest(latest, incoming) {
-    if (!incoming || incoming.kind !== 'inbox' || !Array.isArray(incoming.letters)) throw new Error('邮箱结构不可读取。');
+    if (!incoming || incoming.kind !== 'inbox' || !Array.isArray(incoming.letters)) throw text.safeUserError('邮箱结构不可读取。', 'RMT_LOCAL_OPERATION');
     if (latest?.kind === 'inbox' && (latest.chatId !== incoming.chatId || latest.archiveRevision !== incoming.archiveRevision || (latest.ownerKey && incoming.ownerKey && latest.ownerKey !== incoming.ownerKey)))
-        throw new Error('邮箱所属聊天或档案版本已变化。');
+        throw text.safeUserError('邮箱所属聊天或档案版本已变化。', 'RMT_LOCAL_OPERATION');
     const merged = structuredClone(latest?.kind === 'inbox' ? latest : { ...incoming, letters: [] });
     const keys = new Set(merged.letters.map(item => item.eventKey));
     const postcards = new Set(merged.letters.map(postcardLetterKey).filter(Boolean));
@@ -12949,7 +12970,7 @@ function mergeInboxLatest(latest, incoming) {
     for (const letter of incoming.letters) {
         const postcardKey = postcardLetterKey(letter);
         if (keys.has(letter.eventKey) || (postcardKey && postcards.has(postcardKey))) continue;
-        if (!letter.eventKey || !letter.id || ids.has(letter.id)) throw new Error('来信身份冲突，已有信件保持不变。');
+        if (!letter.eventKey || !letter.id || ids.has(letter.id)) throw text.safeUserError('来信身份冲突，已有信件保持不变。', 'RMT_LOCAL_OPERATION');
         const saved = structuredClone(letter);
         // The next sheet changes colour without recolouring already saved mail.
         if (!saved.paperTone) saved.paperTone = ['cream', 'rose', 'sky', 'sage', 'lilac', 'peach'][merged.letters.length % 6];
@@ -12992,11 +13013,11 @@ function projectInboxProgress({ segments, memoryBank, context, previousSession, 
 }
 function postcardInboxItem(location, travel, memory, date = new Date()) {
     if (travel?.chatId !== memory.chatId || travel?.archiveRevision !== memory.archiveRevision
-        || !travel.locations?.some(item => item.id === location?.id)) throw new Error('明信片不属于这份当前档案。');
+        || !travel.locations?.some(item => item.id === location?.id)) throw text.safeUserError('明信片不属于这份当前档案。', 'RMT_LOCAL_OPERATION');
     const original = travel.locations.find(item => item.id === location.id);
     const canonical = travel_mode.travelKeepsakeForItem(original);
     const card = canonical?.kind === 'postcard' ? { ...canonical, postmark: canonical.mark, stampLabel: canonical.emblem } : null;
-    if (!card?.body) throw new Error('这处路线还没有明信片。');
+    if (!card?.body) throw text.safeUserError('这处路线还没有明信片。', 'RMT_LOCAL_OPERATION');
     const frozen = {};
     for (const key of ['id', 'name', 'region', 'summary', 'distanceLabel', 'sceneTheme', 'kind', 'basis'])
         frozen[key] = clean(original[key], key === 'summary' ? 1800 : key === 'id' ? 100 : 160);
@@ -26803,7 +26824,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 @keyframes rmtPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.72);opacity:.55}}
 .rmt-live-fail{background:#fff6f6;border-color:#f0c4c8}
 .rmt-live-fail em{color:#c24545}
-.rmt-task-center{position:absolute;z-index:30;top:62px;right:12px;width:min(460px,calc(100% - 24px));max-height:min(72vh,620px);overflow:auto;padding:14px;border:1px solid var(--rmt-theme-border,#c9dbe5);border-radius:18px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#243246);box-shadow:0 18px 48px var(--rmt-theme-shadow,rgba(13,22,34,.18))}
+.rmt-task-center{position:absolute;z-index:30;top:62px;right:12px;width:min(460px,calc(100% - 24px));max-height:min(72vh,620px,calc(100% - 74px));overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:14px;border:1px solid var(--rmt-theme-border,#c9dbe5);border-radius:18px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#243246);box-shadow:0 18px 48px var(--rmt-theme-shadow,rgba(13,22,34,.18))}
 .rmt-task-center[hidden]{display:none!important}
 .rmt-task-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .rmt-task-head-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
@@ -27537,7 +27558,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
   }
   .rmt-shell:before{display:none}
   .rmt-topbar{min-height:48px;padding:6px 7px 6px 10px;gap:6px}.rmt-topbar-title{font-size:14px;letter-spacing:.025em}.rmt-topbar-title:after{display:none}
-  .rmt-task-center{top:54px;right:8px;left:8px;width:auto;max-height:calc(100vh - 70px)}
+  .rmt-task-center{top:54px;right:8px;left:8px;width:auto;max-height:min(calc(100vh - 70px),calc(100% - 62px))}
   .rmt-topbar button{padding:6px 8px;font-size:11px;min-width:0}
   .rmt-topbar-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rmt-topbar button[data-rmt-action="back"],.rmt-topbar button[data-rmt-action="home"],.rmt-topbar button[data-rmt-action="regenerate"],.rmt-topbar button[data-rmt-action="manage"],.rmt-topbar button[data-rmt-action="close"]{font-size:0;width:44px;height:44px;padding:0;display:grid;place-items:center;flex:0 0 44px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
@@ -39490,7 +39511,7 @@ function buildMergeTaskBody(route, context, memoryBank, previous, date, options)
     if (route === 'inbox') {
         const plan = options.frozenPlan || modes_inbox.inboxPlan(memoryBank, previous, date);
         if (!plan.length) {
-            const error = new Error('邮箱今天没有新的可写来信。');
+            const error = core_text.safeUserError('邮箱今天的来信已经收过了，明天再来收新信吧。', 'RMT_LOCAL_OPERATION', { retryable: false });
             error.solo = true;
             throw error;
         }
@@ -39691,6 +39712,15 @@ function createPendingStore(storage = globalThis.localStorage) {
             const scope = pendingScopeForOrigin(scopeOrOrigin);
             if (!scope) return;
             update(scope.chatId, rows => rows.filter(row => row.id !== id || !pendingScopeMatches(row, scope)));
+        },
+        // 只删除调用方刚导出过的那几条未归属记录；导出之后新出现的记录不受影响，
+        // 有所属人物的记录永远不会被这里删除。
+        discardUnattributed(chatId, ids) {
+            const allowed = new Set((Array.isArray(ids) ? ids : []).filter(Boolean));
+            const targets = new Set(this.readUnattributed(chatId).map(row => row.id).filter(id => allowed.has(id)));
+            if (!targets.size) return 0;
+            update(chatId, rows => rows.filter(row => !targets.has(row.id)));
+            return targets.size;
         },
         exportUnattributed(chatId) {
             return JSON.stringify({ kind: 'hearttrace-merged-unattributed-pending', version: 1, chatId: core_context.comparableChatId(chatId), records: this.readUnattributed(chatId) }, null, 2);
@@ -48829,7 +48859,7 @@ function mergedPendingCards() {
     });
     let legacy = [];
     try { legacy = statusView.currentUnattributedPendingRows(); } catch { /* The guarded export action remains available through read failure. */ }
-    if (legacy.length) cards.push({ state: 'failed', label: '未归属的旧暂存记录', detail: `有 ${legacy.length} 条旧记录缺少所属人物，已保留且不会显示为当前人物内容。`, actions: '<button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button>', at: 0 });
+    if (legacy.length) cards.push({ state: 'failed', label: '未归属的旧暂存记录', detail: `有 ${legacy.length} 条旧记录缺少所属人物，已保留且不会显示为当前人物内容。`, actions: '<button type="button" class="rmt-btn" data-rmt-action="merged-export-legacy">导出旧暂存记录</button><button type="button" class="rmt-btn" data-rmt-action="merged-discard-legacy">导出并丢弃</button>', at: 0 });
     return cards;
 }
 
@@ -48997,6 +49027,23 @@ function exportMergedResult(id = '') {
     try { document.body.appendChild(link); link.click(); } finally { link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
 }
 
+// 旧暂存记录缺少所属人物，无法再重试。先把它们下载成 JSON 文件保存到本机，
+// 再从暂存区删除；删除范围只限于刚导出的这几条。
+function discardLegacyPending() {
+    const pending = generation_merged.createPendingStore();
+    const chatId = core_context.comparableChatId(core_context.getChatId());
+    const ids = pending.readUnattributed(chatId).map(row => row.id).filter(Boolean);
+    if (!ids.length) return false;
+    const ok = ui_overlay.confirmExplicitAction(`导出并清除 ${ids.length} 条旧暂存记录`,
+        '这些记录缺少所属人物，已经无法重试。会先把它们下载为 JSON 文件保存到本机，然后从暂存区删除；删除后只能靠这个文件找回。', { destructive: true });
+    if (!ok) return false;
+    exportMergedResult('');
+    const removed = pending.discardUnattributed(chatId, ids);
+    globalThis.toastr?.success?.(`已导出并清除 ${removed} 条旧暂存记录。`, '心迹回廊');
+    refreshTaskCenterView();
+    return true;
+}
+
 function refreshTaskCenterView() {
     if (painting) return;
     painting = true;
@@ -49126,6 +49173,7 @@ function handleTaskCenterAction(action, actionEl) {
         globalThis.toastr?.info?.(removed || queueRemoved ? '已清空完成的任务。未完成草稿还在。' : '没有可清空的已完成任务。', '心迹回廊');
         return;
     }
+    if (action === 'merged-discard-legacy') { discardLegacyPending(); return; }
     if (action === 'merged-export' || action === 'merged-export-legacy') { exportMergedResult(action === 'merged-export-legacy' ? '' : actionEl?.dataset?.rmtPendingId || ''); return; }
     if (action === 'generate-together') {
         const navigation = mergedNavigationMark();

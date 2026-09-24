@@ -318,7 +318,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
 @keyframes rmtPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.72);opacity:.55}}
 .rmt-live-fail{background:#fff6f6;border-color:#f0c4c8}
 .rmt-live-fail em{color:#c24545}
-.rmt-task-center{position:absolute;z-index:30;top:62px;right:12px;width:min(460px,calc(100% - 24px));max-height:min(72vh,620px);overflow:auto;padding:14px;border:1px solid var(--rmt-theme-border,#c9dbe5);border-radius:18px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#243246);box-shadow:0 18px 48px var(--rmt-theme-shadow,rgba(13,22,34,.18))}
+.rmt-task-center{position:absolute;z-index:30;top:62px;right:12px;width:min(460px,calc(100% - 24px));max-height:min(72vh,620px,calc(100% - 74px));overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:14px;border:1px solid var(--rmt-theme-border,#c9dbe5);border-radius:18px;background:var(--rmt-theme-surface-solid,#fff);color:var(--rmt-theme-text,#243246);box-shadow:0 18px 48px var(--rmt-theme-shadow,rgba(13,22,34,.18))}
 .rmt-task-center[hidden]{display:none!important}
 .rmt-task-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .rmt-task-head-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
@@ -1052,7 +1052,7 @@ dialog#${core_constants.OVERLAY_ID}::backdrop{background:transparent}
   }
   .rmt-shell:before{display:none}
   .rmt-topbar{min-height:48px;padding:6px 7px 6px 10px;gap:6px}.rmt-topbar-title{font-size:14px;letter-spacing:.025em}.rmt-topbar-title:after{display:none}
-  .rmt-task-center{top:54px;right:8px;left:8px;width:auto;max-height:calc(100vh - 70px)}
+  .rmt-task-center{top:54px;right:8px;left:8px;width:auto;max-height:min(calc(100vh - 70px),calc(100% - 62px))}
   .rmt-topbar button{padding:6px 8px;font-size:11px;min-width:0}
   .rmt-topbar-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rmt-topbar button[data-rmt-action="back"],.rmt-topbar button[data-rmt-action="home"],.rmt-topbar button[data-rmt-action="regenerate"],.rmt-topbar button[data-rmt-action="manage"],.rmt-topbar button[data-rmt-action="close"]{font-size:0;width:44px;height:44px;padding:0;display:grid;place-items:center;flex:0 0 44px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}

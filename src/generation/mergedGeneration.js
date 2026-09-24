@@ -159,7 +159,7 @@ function buildMergeTaskBody(route, context, memoryBank, previous, date, options)
     if (route === 'inbox') {
         const plan = options.frozenPlan || modes_inbox.inboxPlan(memoryBank, previous, date);
         if (!plan.length) {
-            const error = new Error('邮箱今天没有新的可写来信。');
+            const error = core_text.safeUserError('邮箱今天的来信已经收过了，明天再来收新信吧。', 'RMT_LOCAL_OPERATION', { retryable: false });
             error.solo = true;
             throw error;
         }
@@ -360,6 +360,15 @@ export function createPendingStore(storage = globalThis.localStorage) {
             const scope = pendingScopeForOrigin(scopeOrOrigin);
             if (!scope) return;
             update(scope.chatId, rows => rows.filter(row => row.id !== id || !pendingScopeMatches(row, scope)));
+        },
+        // 只删除调用方刚导出过的那几条未归属记录；导出之后新出现的记录不受影响，
+        // 有所属人物的记录永远不会被这里删除。
+        discardUnattributed(chatId, ids) {
+            const allowed = new Set((Array.isArray(ids) ? ids : []).filter(Boolean));
+            const targets = new Set(this.readUnattributed(chatId).map(row => row.id).filter(id => allowed.has(id)));
+            if (!targets.size) return 0;
+            update(chatId, rows => rows.filter(row => !targets.has(row.id)));
+            return targets.size;
         },
         exportUnattributed(chatId) {
             return JSON.stringify({ kind: 'hearttrace-merged-unattributed-pending', version: 1, chatId: core_context.comparableChatId(chatId), records: this.readUnattributed(chatId) }, null, 2);
