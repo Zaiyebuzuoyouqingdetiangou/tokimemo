@@ -735,7 +735,7 @@ function memoryLockPanelHtml(memory, { readOnly = false } = {}) {
       <span>${core_text.esc(item.title || '')}</span>
       <input type="text" data-rmt-memory-date="${core_text.esc(item.id)}" value="${core_text.esc(item.date || '')}" ${readOnly ? 'disabled' : ''} placeholder="公历 YYYY/MM/DD 或历年" style="min-width:160px;flex:1">
     </div>`).join('');
-    return `<details class="rmt-memory-lock-panel"><summary>热位记忆 ${hot.length}/${core_constants.MAX_MEMORY_ITEMS}${cold ? ` · 冷归档 ${cold}` : ''}</summary><div style="max-height:240px;overflow:auto">${rows}</div></details>`;
+    return `<details class="rmt-memory-lock-panel"><summary>档案记忆 ${hot.length} 条${cold ? ` · 冷归档 ${cold}` : ''}</summary><div style="max-height:240px;overflow:auto">${rows}</div></details>`;
 }
 
 function refreshAfterMemoryPatch() {

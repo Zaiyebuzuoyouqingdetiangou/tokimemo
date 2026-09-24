@@ -746,7 +746,7 @@ export async function expandMemoryWorldInfoBook(button) {
     }
 }
 
-export function mergeImportedMemories(items, limit = core_constants.MAX_MEMORY_ITEMS) {
+export function mergeImportedMemories(items, limit = core_constants.MAX_STORED_MEMORY_ITEMS) {
     const chat = [];
     const external = [];
     const seen = new Set();
@@ -763,6 +763,7 @@ export function mergeImportedMemories(items, limit = core_constants.MAX_MEMORY_I
     }
     if (!chat.length) return external.slice(0, limit);
     if (!external.length) return chat.slice(0, limit);
+    if (limit === Infinity) return [...chat, ...external];
 
     // Long chats can easily fill the archive cap before plugin memories are appended.
     // Reserve up to 40% for current-chat external memory, then fill any unused space
@@ -796,7 +797,7 @@ export function importedMemoryStableKey(item) {
     return `${sourceKind}|${messageRange}|${external}|${title}|${anchors || summary}`;
 }
 
-export function appendImportedMemoriesStable(existingMemories, freshMemories, limit = core_constants.MAX_MEMORY_ITEMS) {
+export function appendImportedMemoriesStable(existingMemories, freshMemories, limit = core_constants.MAX_STORED_MEMORY_ITEMS) {
     const out = (Array.isArray(existingMemories) ? existingMemories : []).slice(0, limit).map(item => structuredClone(item));
     const seen = new Set(out.map(importedMemoryStableKey));
     let nextNumber = out.reduce((max, item) => {
@@ -1971,11 +1972,9 @@ export function getCurrentArchiveImportRecoverySummary(context = core_context.ge
             const processed = Math.min(totals.total, totals.processed + pageProcessed);
             const detail = `来源 ${totals.total} 片段 / ${totals.chars.toLocaleString()} 字符；已处理 ${processed}、已正式保存 ${totals.saved}、未完成 ${totals.remaining}（其中待发送 ${totals.total - processed}）。批次 ${totals.currentBatch}/${totals.batches}。`;
             return { ...summary, operation: 'import', profileOnly: false, onlyArchivedDrafts: false, awaitingCommit: false, fullRebuild: false,
-                completed: summary?.completed || 0, canContinue: !capacity, canRetry: !capacity, pageOnly: false,
-                batchProgress: totals, capacityBlocked: capacity,
-                notice: detail + (capacity ? `热位已满且本批有 ${totals.pendingMemories} 条已校验结果在待入档，不编号、不算完成。可导出保留；锁上的 Mxxx 未动。`
-                    : !archive_capacity.canAdmitToHot(bank.memories) && bank.memories.length >= core_constants.MAX_MEMORY_ITEMS
-                        ? '热位已满且均为锁定。下一批新结果会进待入档，可导出；已有相簿/ADV/房间仍可生成。'
+                completed: summary?.completed || 0, canContinue: true, canRetry: true, pageOnly: false,
+                batchProgress: totals, capacityBlocked: false, pendingAdmission: capacity,
+                notice: detail + (capacity ? `本批有 ${totals.pendingMemories} 条已校验结果待保存。点击“保存待入档结果（不生成）”即可正式入档，不请求模型，不删除或顶掉旧记忆。`
                     : '本批完成后会停止；下一批需明确点击。已保存成果现在即可阅读。')
                     + (summary && !summary.profileOnly ? ` ${summary.notice}` : '') };
         }
@@ -2092,6 +2091,87 @@ export function getCurrentArchiveProfileRecoverySummary(context = core_context.g
 export function continueCurrentArchiveImport(options = {}) {
     if (!options.draftId && !getCurrentArchiveImportRecoverySummary()) return Promise.resolve({ status: 'blocked' });
     return importCurrentChatMemory({ ...options, continueRecovery: true });
+}
+
+// Old releases committed the validated overflow inside the canonical bank,
+// but left its source batch unfinished. Admit that exact local result, never
+// replay the source through a provider or evict old memories to make room.
+async function saveCurrentArchivePendingResults(context, existing, logicalTask, taskTrace) {
+    const origin = { ...core_context.captureTaskOrigin(context, existing.archiveRevision), archivePresent: true };
+    core_requestCoordinator.bindLogicalGenerationTask(logicalTask, origin);
+    const assertCurrent = () => {
+        core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
+        if (!core_context.isCurrentTaskOrigin(origin)) throw new DOMException('Chat or archive changed', 'AbortError');
+        if ((getImportedMemory(core_context.currentCharacterGuard())?.archiveRevision || '') !== existing.archiveRevision) {
+            throw archive_batches.changedInput('archive');
+        }
+        assertBatchCommitIdentity(core_context.currentCharacterGuard(), existing, { completedSaveOnly: true });
+        if (existing.fullSourceFingerprint && core_context.completeArchiveChatFingerprint(core_context.currentCharacterGuard()) !== existing.fullSourceFingerprint) {
+            throw archive_batches.changedInput('chat');
+        }
+    };
+    try {
+        const progress = archive_batches.checkedProgress(existing[archive_batches.IMPORT_PROGRESS_KEY]);
+        if (!progress?.capacityPending?.length || progress.nextBatch >= progress.batches.length
+            || progress.archiveRevision !== existing.archiveRevision) throw archive_batches.changedInput('archive');
+        assertCurrent();
+        core_taskTrace.beginStage(taskTrace, 'validate');
+        const snapshot = await core_context.buildChatSnapshot(context, { completeSource: true, expectedChatId: origin.chatId,
+            stillCurrent: () => { assertCurrent(); return true; } });
+        assertCurrent();
+        if (Number(existing.sourceMessageCount) !== snapshot.totalMessages
+            || (!existing.fullSourceFingerprint && archivedChatFingerprint(existing) !== snapshot.fingerprint)) throw archive_batches.changedInput('chat');
+        const captured = checkedArchiveTaskInput(progress.taskInputV1, context, { completedSaveOnly: true });
+        const external = captured?.external || await retainedBatchExternal(context, progress);
+        assertCurrent();
+        archive_batches.resolveBatchParts(progress, snapshot.messages, external.records);
+        const admitted = admitArchiveBatch(existing.memories, progress.capacityPending, existing.coldArchive);
+        if (admitted.pending.length) throw core_text.safeUserError('待入档结果未全部保存，原成果继续保留。', 'RMT_ARCHIVE_CHUNK');
+        const bank = structuredClone(existing);
+        bank.memories = admitted.memories;
+        bank.coldArchive = admitted.coldArchive;
+        bank.updatedAt = Date.now();
+        bank.archiveRevision = `${bank.updatedAt}-${snapshot.fingerprint}-admitted-${archive_batches.sourceHash(existing.archiveRevision).slice(0, 12)}`;
+        const staged = archive_batches.advanceProgress(progress, { archiveRevision: bank.archiveRevision });
+        bank[archive_batches.IMPORT_PROGRESS_KEY] = staged;
+        const savedRefs = archive_batches.savedSourceRefs(staged);
+        bank.usedMessageCount = (staged.baseUsedMessages || 0) + new Set(savedRefs.filter(ref => ref.kind === 'chat').map(ref => ref.index)).size;
+        bank.usedCharacterCount = (staged.baseUsedChars || 0) + savedRefs.reduce((sum, ref) => sum + ref.length, 0);
+        bank.coverageMode = archive_batches.hasPendingBatches(staged) ? 'batched-pending' : 'batched-complete';
+        bank.coveredRanges = archive_coverage.coveredRangesForSave(existing, {
+            window: { start: 1, end: snapshot.totalMessages }, revision: bank.archiveRevision, progress: staged });
+        core_taskTrace.markStage(taskTrace, 'validate');
+        core_taskTrace.beginStage(taskTrace, 'save');
+        core_requestCoordinator.noteChatTaskPhase('save', { origin });
+        // Retain the exact candidate for a metadata failure AFTER the independent
+        // backup committed. The existing local save retry can then satisfy the
+        // idempotent CAS without creating a new revision or re-admitting results.
+        const commitIntent = core_requestCoordinator.queueDeferredCommitRecord(origin, {
+            kind: 'archive', memoryBank: bank, preserveDerivedCache: true,
+            profilePending: false, completedChunks: progress.batches[progress.nextBatch].length,
+        });
+        await core_cache.saveImportedMemory(context, bank, origin.chatId, {
+            preserveDerivedCache: true, expectedTaskOrigin: origin, assertTaskCurrent: assertCurrent,
+            expectedPreviousArchiveState: { present: true, revision: existing.archiveRevision },
+        });
+        core_taskTrace.markStage(taskTrace, 'save');
+        core_requestCoordinator.acknowledgeDeferredCommit(commitIntent.key, commitIntent.item);
+        archive_importRecovery.acknowledgeArchiveRecoveryCommit({ ...origin, archiveRevision: bank.archiveRevision });
+        clearMemoryPreflight(context);
+        ui_settingsPanel.refreshSettingsMemoryStatus();
+        refreshArchiveRecoveryReading();
+        const overlay = document.getElementById(core_constants.OVERLAY_ID);
+        if (overlay && !overlay.hidden && !runtimeState.activeMode) ui_overlay.showChooser();
+        globalThis.toastr?.success?.(archive_batches.hasPendingBatches(staged)
+            ? '本批待入档结果已保存，旧记忆保留；可继续下一批。本次没有请求模型。'
+            : '待入档结果已全部保存，建档完成；旧记忆保留。本次没有请求模型。', '心迹回廊');
+        return { status: 'committed' };
+    } catch (error) {
+        const cancelled = isArchiveCancellation(error);
+        core_taskTrace.endTaskTrace(taskTrace, cancelled ? 'cancelled' : 'failed', error);
+        globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 原待入档结果保留');
+        return { status: cancelled ? 'cancelled' : 'failed', error };
+    }
 }
 
 // Shared production seam: successful checkpoints contain the model JSON, but
@@ -3090,7 +3170,9 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
         }
     };
     const initialOrigin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
-    if (!options.commitCompletedOnly) await core_settings.prepareManualCredential(context);
+    const localPendingAdmission = !options.draftId && !options.restartImport && !options.fullRebuild
+        && !!getImportedMemory(context)?.[archive_batches.IMPORT_PROGRESS_KEY]?.capacityPending?.length;
+    if (!options.commitCompletedOnly && !localPendingAdmission) await core_settings.prepareManualCredential(context);
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
     if (!core_context.isCurrentTaskOrigin(initialOrigin)) throw new DOMException('Chat changed', 'AbortError');
     let existing = getImportedMemory(context);
@@ -3124,6 +3206,16 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
     if (!core_context.isCurrentTaskOrigin(hydrationOrigin)) throw new DOMException('Chat changed', 'AbortError');
     if (runtimeState.archivePreparationToken !== admission || core_requestCoordinator.hasGenerationTasks()) return { status: 'blocked' };
     const pending = getCurrentArchiveImportRecoverySummary(context);
+    if (localPendingAdmission) {
+        if (options.automatic) return { status: 'blocked' };
+        if (pending?.awaitingCommit) {
+            releasePreparation();
+            return retryCurrentArchiveSave(context, taskTrace);
+        }
+        if (!ui_overlay.confirmExplicitAction('保存待入档结果？',
+            '只保存本批已校验结果，不请求模型、不删除旧记忆；保存成功后才推进批次。', { destructive: false })) return { status: 'cancelled' };
+        return saveCurrentArchivePendingResults(context, existing, options.logicalTask, taskTrace);
+    }
     let selectedDraft = null, sourceExisting;
     if (options.draftId) selectedDraft = archive_importRecovery.readArchiveRecoveryDraft(hydrationOrigin, options.draftId);
     // A completed pending result already owns its validated content. Its local

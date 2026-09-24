@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 176
-// Source SHA-256: 6ae3a87d9778397b1c4dae375065c131ba4ece71166722dc8c97e4032b9039ab
+// Source SHA-256: 6d4af5e5b5026966fc8fe1d5bebaf18b30c5ecca11cfa33558ee45b7aa1fe8e1
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -1209,6 +1209,10 @@ const IMPORT_CHUNK_CHARS = 30000;
 
 const MAX_MEMORY_ITEMS = 240;
 
+// Formal storage is not the model's per-request evidence/output budget.
+// Keep MAX_MEMORY_ITEMS bounded for existing prompt consumers only.
+const MAX_STORED_MEMORY_ITEMS = Infinity;
+
 const MAX_COLD_ARCHIVE_ITEMS = 100;
 
 const MAX_ROLLING_EVICT_PER_BATCH = 20;
@@ -1541,6 +1545,7 @@ __m_core_constants_js.MAX_IMPORT_MESSAGES = MAX_IMPORT_MESSAGES;
 __m_core_constants_js.MAX_IMPORT_TOTAL_CHARS = MAX_IMPORT_TOTAL_CHARS;
 __m_core_constants_js.IMPORT_CHUNK_CHARS = IMPORT_CHUNK_CHARS;
 __m_core_constants_js.MAX_MEMORY_ITEMS = MAX_MEMORY_ITEMS;
+__m_core_constants_js.MAX_STORED_MEMORY_ITEMS = MAX_STORED_MEMORY_ITEMS;
 __m_core_constants_js.MAX_COLD_ARCHIVE_ITEMS = MAX_COLD_ARCHIVE_ITEMS;
 __m_core_constants_js.MAX_ROLLING_EVICT_PER_BATCH = MAX_ROLLING_EVICT_PER_BATCH;
 __m_core_constants_js.MAX_MEMORY_PROMPT_ITEMS = MAX_MEMORY_PROMPT_ITEMS;
@@ -7186,11 +7191,11 @@ function archiveMemoryIds(memoryBank) {
     return (Array.isArray(memoryBank?.memories) ? memoryBank.memories : [])
         .map(item => core_text.normalizeText(item?.id, 40))
         .filter(Boolean)
-        .slice(0, core_constants.MAX_MEMORY_ITEMS);
+        .slice(0, core_constants.MAX_STORED_MEMORY_ITEMS);
 }
 
 function collectSessionEvidenceIds(value, out = new Set(), seen = new WeakSet(), depth = 0) {
-    if (!value || typeof value !== 'object' || depth > 10 || out.size >= core_constants.MAX_MEMORY_ITEMS) return out;
+    if (!value || typeof value !== 'object' || depth > 10) return out;
     if (seen.has(value)) return out;
     if (value.legacyEvidenceUnverified === true) return out;
     seen.add(value);
@@ -7200,7 +7205,7 @@ function collectSessionEvidenceIds(value, out = new Set(), seen = new WeakSet(),
     }
     for (const [key, item] of Object.entries(value)) {
         if (key === 'sourceMemoryIds' || key === 'sourceArchiveMemoryIds' || key === 'coveredMemoryIds') {
-            for (const id of core_text.cleanArray(item, core_constants.MAX_MEMORY_ITEMS, 40)) out.add(id);
+            for (const id of core_text.cleanArray(item, core_constants.MAX_STORED_MEMORY_ITEMS, 40)) out.add(id);
             continue;
         }
         if (key === 'generationMeta') continue;
@@ -7235,7 +7240,7 @@ function incrementalPartRecord(session, part = 'mode') {
     const raw = session?.generationMeta?.parts?.[part];
     if (!raw || typeof raw !== 'object') return null;
     return {
-        coveredMemoryIds: core_text.cleanArray(raw.coveredMemoryIds, core_constants.MAX_MEMORY_ITEMS, 40),
+        coveredMemoryIds: core_text.cleanArray(raw.coveredMemoryIds, core_constants.MAX_STORED_MEMORY_ITEMS, 40),
         archiveRevision: core_text.normalizeText(raw.archiveRevision, 240),
         updatedAt: Math.max(0, Number(raw.updatedAt) || 0),
     };
@@ -7281,7 +7286,7 @@ function incrementalArchiveMemoryIds(session, memoryBank, part = 'mode', limit =
 
 function usesIncrementalMemoryId(referenceIds, sourceMemoryIds) {
     const allowed = new Set(core_text.cleanArray(sourceMemoryIds, core_constants.MAX_MEMORY_PROMPT_ITEMS, 40));
-    return core_text.cleanArray(referenceIds, core_constants.MAX_MEMORY_ITEMS, 40).some(id => allowed.has(id));
+    return core_text.cleanArray(referenceIds, core_constants.MAX_STORED_MEMORY_ITEMS, 40).some(id => allowed.has(id));
 }
 
 // Creative expansion is not an archive update. Reuse bounded, real evidence
@@ -7330,7 +7335,7 @@ function stampIncrementalCoverage(session, previous, memoryBank, part, consumedM
         ? incrementalCoveredMemoryIds(previous, memoryBank, part)
         : [];
     const consumed = previous
-        ? core_text.cleanArray(consumedMemoryIds, core_constants.MAX_MEMORY_ITEMS, 40)
+        ? core_text.cleanArray(consumedMemoryIds, core_constants.MAX_STORED_MEMORY_ITEMS, 40)
         : archiveMemoryIds(memoryBank);
     const coveredMemoryIds = [...new Set([...priorCovered, ...consumed])].filter(id => currentIds.has(id));
     session.generationMeta = {
@@ -19079,9 +19084,9 @@ function storageState(context) {
         hasArchive: !!archive,
         ...archiveIdentityState(archive, context),
         memoryCount: Array.isArray(archive?.memories) ? count(archive.memories.length) : 0,
-        memoryCap: core_constants.MAX_MEMORY_ITEMS,
+        memoryCap: Number.isFinite(core_constants.MAX_STORED_MEMORY_ITEMS) ? core_constants.MAX_STORED_MEMORY_ITEMS : null,
         coldArchiveCount: Array.isArray(archive?.coldArchive) ? count(archive.coldArchive.length) : 0,
-        coldArchiveCap: core_constants.MAX_COLD_ARCHIVE_ITEMS,
+        coldArchiveCap: null,
         lockedCount: Array.isArray(archive?.memories) ? count(archive.memories.filter(item => item?.locked === true).length) : 0,
         inputBudgetTokens: count(context?.extensionSettings?.[core_constants.EXTENSION_SETTINGS_KEY]?.inputBudgetTokens),
         snapshotBudget: 1200000,
@@ -20762,6 +20767,7 @@ function archiveRecoveryHtml(summary, { profile = false } = {}) {
     const draftLinks = (summary.drafts || []).map(draft => `<button type="button" class="rmt-btn" data-rmt-archive-draft-open="${text.esc(draft.draftId)}">查看${draft.stage === 'profile-only' || draft.stage === 'profile-result' || draft.operation === 'profile' ? '简介' : '建档'}${draft.paused ? '旧' : ''}草稿正文</button>`).join(' ');
     if (summary.onlyArchivedDrafts) return `<section class="rmt-recovery-status"><p>${text.esc(summary.notice)}</p><div class="rmt-recovery-actions">${draftLinks} <button type="button" class="rmt-btn" data-rmt-archive-discard>清除这些旧草稿</button></div></section>`;
     const label = profile || summary.profileOnly ? '仅重试档案简介' : summary.awaitingCommit ? '仅重试保存'
+        : summary.pendingAdmission ? '保存待入档结果（不生成）'
         : summary.batchProgress ? '继续下一批' : summary.canContinue ? '继续整理档案' : '重试未完成分块';
     const capacity = summary.capacityBlocked === true;
     const batch = summary.batchProgress;
@@ -20772,7 +20778,7 @@ ${summary.pageOnly && !summary.awaitingCommit ? `<button type="button" class="rm
 ${!capacity ? `<button type="button" class="rmt-btn" data-rmt-archive-recovery="${profile || summary.profileOnly ? 'profile' : 'import'}">${label}</button>` : ''}
 ${!profile && !summary.profileOnly && !summary.awaitingCommit && summary.canCommitComplete ? '<button type="button" class="rmt-btn" data-rmt-archive-commit-complete>先将成功分段入档（不生成）</button>' : ''}
 ${!profile && !summary.profileOnly ? '<button type="button" class="rmt-btn" data-rmt-archive-export-pending>导出待入档成果</button>' : ''}
-${!profile && !summary.profileOnly && !summary.awaitingCommit && !capacity ? '<button type="button" class="rmt-btn" data-rmt-archive-restart>按当前条件另起任务</button>' : ''}
+${!profile && !summary.profileOnly && !summary.awaitingCommit && !capacity && !summary.pendingAdmission ? '<button type="button" class="rmt-btn" data-rmt-archive-restart>按当前条件另起任务</button>' : ''}
 ${!batch ? '<button type="button" class="rmt-btn" data-rmt-archive-discard>放弃整理草稿</button>' : ''}</div></section>`;
 }
 
@@ -22383,8 +22389,8 @@ function __init_archive_capacity_js() {
 const core_constants = __m_core_constants_js;
 const core_text = __m_core_text_js;
 const story_chronology = __m_core_storyChronology_js;
-// Hot 240 + lock + cold archive 100. Rolling eviction is explicit and never
-// silently deletes a locked Mxxx. New memories keep new ids.
+// Formal archives retain every validated result by default. Explicit bounded
+// callers retain the legacy rolling policy; no default admission evicts old IDs.
 
 
 
@@ -22414,7 +22420,7 @@ function nextMemoryNumber(hot, cold = []) {
 
 function canAdmitToHot(hot = []) {
     const list = Array.isArray(hot) ? hot : [];
-    if (list.length < core_constants.MAX_MEMORY_ITEMS) return true;
+    if (list.length < core_constants.MAX_STORED_MEMORY_ITEMS) return true;
     return list.some(item => !isMemoryLocked(item));
 }
 
@@ -22443,7 +22449,7 @@ function pickUnlockedForEviction(hot, count) {
     return ranked.slice(0, Math.max(0, count)).map(row => row.item);
 }
 
-function admitColdArchive(cold, incoming, { maxCold = core_constants.MAX_COLD_ARCHIVE_ITEMS } = {}) {
+function admitColdArchive(cold, incoming, { maxCold = core_constants.MAX_STORED_MEMORY_ITEMS } = {}) {
     const next = [...(Array.isArray(cold) ? cold.map(item => structuredClone(item)) : []),
         ...(Array.isArray(incoming) ? incoming.map(item => structuredClone(item)) : [])];
     const deleted = [];
@@ -22469,8 +22475,8 @@ function assignFreshMemoryIds(items, startNumber) {
 }
 
 function admitArchiveMemories(existingHot, fresh, existingCold = [], {
-    maxHot = core_constants.MAX_MEMORY_ITEMS,
-    maxCold = core_constants.MAX_COLD_ARCHIVE_ITEMS,
+    maxHot = core_constants.MAX_STORED_MEMORY_ITEMS,
+    maxCold = core_constants.MAX_STORED_MEMORY_ITEMS,
     maxEvict = core_constants.MAX_ROLLING_EVICT_PER_BATCH,
 } = {}) {
     const hot = (Array.isArray(existingHot) ? existingHot : []).map(item => structuredClone(item));
@@ -34126,7 +34132,7 @@ function heartStripKey(item) {
 
 function applyHeartPatchCoverage(updated, base, patch, added) {
     if (!patch?.coveragePart) return updated;
-    const ids = core_text.cleanArray(patch.archiveMemoryIds, core_constants.MAX_MEMORY_ITEMS, 40);
+    const ids = core_text.cleanArray(patch.archiveMemoryIds, core_constants.MAX_STORED_MEMORY_ITEMS, 40);
     const pseudoBank = {
         archiveRevision: core_text.normalizeText(patch.archiveRevision, 240),
         memories: ids.map(id => ({ id })),
@@ -34136,7 +34142,7 @@ function applyHeartPatchCoverage(updated, base, patch, added) {
         base,
         pseudoBank,
         core_text.normalizeText(patch.coveragePart, 80),
-        core_text.cleanArray(patch.coverageConsumedMemoryIds || patch.sourceMemoryIds, core_constants.MAX_MEMORY_ITEMS, 40),
+        core_text.cleanArray(patch.coverageConsumedMemoryIds || patch.sourceMemoryIds, core_constants.MAX_STORED_MEMORY_ITEMS, 40),
         added,
     );
 }
@@ -52497,7 +52503,7 @@ function memoryLockPanelHtml(memory, { readOnly = false } = {}) {
       <span>${core_text.esc(item.title || '')}</span>
       <input type="text" data-rmt-memory-date="${core_text.esc(item.id)}" value="${core_text.esc(item.date || '')}" ${readOnly ? 'disabled' : ''} placeholder="公历 YYYY/MM/DD 或历年" style="min-width:160px;flex:1">
     </div>`).join('');
-    return `<details class="rmt-memory-lock-panel"><summary>热位记忆 ${hot.length}/${core_constants.MAX_MEMORY_ITEMS}${cold ? ` · 冷归档 ${cold}` : ''}</summary><div style="max-height:240px;overflow:auto">${rows}</div></details>`;
+    return `<details class="rmt-memory-lock-panel"><summary>档案记忆 ${hot.length} 条${cold ? ` · 冷归档 ${cold}` : ''}</summary><div style="max-height:240px;overflow:auto">${rows}</div></details>`;
 }
 
 function refreshAfterMemoryPatch() {
@@ -54163,7 +54169,11 @@ function memoryStateLabel(state, autoSync = false) {
     } else if (state.sourceChanged) {
         pending = '当前聊天内容与上次记录点有修改；编辑不会增加楼层，档案保留已归档版本。';
     }
-    return `已收录热位 ${memory.memories.length}/${core_constants.MAX_MEMORY_ITEMS} 条记忆${memory.coldArchive?.length ? `，冷归档 ${memory.coldArchive.length}` : ''}，记录到 ${memory.sourceMessageCount} 条聊天消息${suffix}。${pending}`;
+    const progress = memory.archiveImportProgress;
+    const status = progress?.nextBatch < progress?.batches?.length
+        ? `建档尚未完成，已正式保存 ${memory.usedMessageCount || 0} 条来源消息；请继续待入档结果或下一批。`
+        : pending;
+    return `已收录 ${memory.memories.length} 条记忆${memory.coldArchive?.length ? `，冷归档 ${memory.coldArchive.length}` : ''}，来源共 ${memory.sourceMessageCount} 条聊天消息${suffix}。${status}`;
 }
 
 function currentCharacterAvatar(context = core_context.currentCharacterGuard()) {
@@ -54522,10 +54532,12 @@ function finishLogicalGenerationTask(handle, result = null) {
         handle.failureCode = core_text.normalizeText(result.error.code, 80);
         handle.failureSummary = core_text.safeErrorSummary(result.error);
     }
-    rememberSettledTask(handle, handle.status);
     handle.releaseParent();
     if (handle.signal.aborted) cancelledLogicalOrigins.push(handle);
     logicalGenerationTasks.delete(handle.id);
+    // The refresh inside rememberSettledTask must not see this finished task
+    // as still running; otherwise the archive chip remains stuck at “准备”.
+    rememberSettledTask(handle, handle.status);
     handle.resolveSettled({ id: handle.id, kind: handle.kind, mode: handle.mode, pageId: handle.pageId, status: handle.status });
 }
 
@@ -56663,7 +56675,7 @@ async function expandMemoryWorldInfoBook(button) {
     }
 }
 
-function mergeImportedMemories(items, limit = core_constants.MAX_MEMORY_ITEMS) {
+function mergeImportedMemories(items, limit = core_constants.MAX_STORED_MEMORY_ITEMS) {
     const chat = [];
     const external = [];
     const seen = new Set();
@@ -56680,6 +56692,7 @@ function mergeImportedMemories(items, limit = core_constants.MAX_MEMORY_ITEMS) {
     }
     if (!chat.length) return external.slice(0, limit);
     if (!external.length) return chat.slice(0, limit);
+    if (limit === Infinity) return [...chat, ...external];
 
     // Long chats can easily fill the archive cap before plugin memories are appended.
     // Reserve up to 40% for current-chat external memory, then fill any unused space
@@ -56713,7 +56726,7 @@ function importedMemoryStableKey(item) {
     return `${sourceKind}|${messageRange}|${external}|${title}|${anchors || summary}`;
 }
 
-function appendImportedMemoriesStable(existingMemories, freshMemories, limit = core_constants.MAX_MEMORY_ITEMS) {
+function appendImportedMemoriesStable(existingMemories, freshMemories, limit = core_constants.MAX_STORED_MEMORY_ITEMS) {
     const out = (Array.isArray(existingMemories) ? existingMemories : []).slice(0, limit).map(item => structuredClone(item));
     const seen = new Set(out.map(importedMemoryStableKey));
     let nextNumber = out.reduce((max, item) => {
@@ -57888,11 +57901,9 @@ function getCurrentArchiveImportRecoverySummary(context = core_context.getContex
             const processed = Math.min(totals.total, totals.processed + pageProcessed);
             const detail = `来源 ${totals.total} 片段 / ${totals.chars.toLocaleString()} 字符；已处理 ${processed}、已正式保存 ${totals.saved}、未完成 ${totals.remaining}（其中待发送 ${totals.total - processed}）。批次 ${totals.currentBatch}/${totals.batches}。`;
             return { ...summary, operation: 'import', profileOnly: false, onlyArchivedDrafts: false, awaitingCommit: false, fullRebuild: false,
-                completed: summary?.completed || 0, canContinue: !capacity, canRetry: !capacity, pageOnly: false,
-                batchProgress: totals, capacityBlocked: capacity,
-                notice: detail + (capacity ? `热位已满且本批有 ${totals.pendingMemories} 条已校验结果在待入档，不编号、不算完成。可导出保留；锁上的 Mxxx 未动。`
-                    : !archive_capacity.canAdmitToHot(bank.memories) && bank.memories.length >= core_constants.MAX_MEMORY_ITEMS
-                        ? '热位已满且均为锁定。下一批新结果会进待入档，可导出；已有相簿/ADV/房间仍可生成。'
+                completed: summary?.completed || 0, canContinue: true, canRetry: true, pageOnly: false,
+                batchProgress: totals, capacityBlocked: false, pendingAdmission: capacity,
+                notice: detail + (capacity ? `本批有 ${totals.pendingMemories} 条已校验结果待保存。点击“保存待入档结果（不生成）”即可正式入档，不请求模型，不删除或顶掉旧记忆。`
                     : '本批完成后会停止；下一批需明确点击。已保存成果现在即可阅读。')
                     + (summary && !summary.profileOnly ? ` ${summary.notice}` : '') };
         }
@@ -58009,6 +58020,87 @@ function getCurrentArchiveProfileRecoverySummary(context = core_context.getConte
 function continueCurrentArchiveImport(options = {}) {
     if (!options.draftId && !getCurrentArchiveImportRecoverySummary()) return Promise.resolve({ status: 'blocked' });
     return importCurrentChatMemory({ ...options, continueRecovery: true });
+}
+
+// Old releases committed the validated overflow inside the canonical bank,
+// but left its source batch unfinished. Admit that exact local result, never
+// replay the source through a provider or evict old memories to make room.
+async function saveCurrentArchivePendingResults(context, existing, logicalTask, taskTrace) {
+    const origin = { ...core_context.captureTaskOrigin(context, existing.archiveRevision), archivePresent: true };
+    core_requestCoordinator.bindLogicalGenerationTask(logicalTask, origin);
+    const assertCurrent = () => {
+        core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
+        if (!core_context.isCurrentTaskOrigin(origin)) throw new DOMException('Chat or archive changed', 'AbortError');
+        if ((getImportedMemory(core_context.currentCharacterGuard())?.archiveRevision || '') !== existing.archiveRevision) {
+            throw archive_batches.changedInput('archive');
+        }
+        assertBatchCommitIdentity(core_context.currentCharacterGuard(), existing, { completedSaveOnly: true });
+        if (existing.fullSourceFingerprint && core_context.completeArchiveChatFingerprint(core_context.currentCharacterGuard()) !== existing.fullSourceFingerprint) {
+            throw archive_batches.changedInput('chat');
+        }
+    };
+    try {
+        const progress = archive_batches.checkedProgress(existing[archive_batches.IMPORT_PROGRESS_KEY]);
+        if (!progress?.capacityPending?.length || progress.nextBatch >= progress.batches.length
+            || progress.archiveRevision !== existing.archiveRevision) throw archive_batches.changedInput('archive');
+        assertCurrent();
+        core_taskTrace.beginStage(taskTrace, 'validate');
+        const snapshot = await core_context.buildChatSnapshot(context, { completeSource: true, expectedChatId: origin.chatId,
+            stillCurrent: () => { assertCurrent(); return true; } });
+        assertCurrent();
+        if (Number(existing.sourceMessageCount) !== snapshot.totalMessages
+            || (!existing.fullSourceFingerprint && archivedChatFingerprint(existing) !== snapshot.fingerprint)) throw archive_batches.changedInput('chat');
+        const captured = checkedArchiveTaskInput(progress.taskInputV1, context, { completedSaveOnly: true });
+        const external = captured?.external || await retainedBatchExternal(context, progress);
+        assertCurrent();
+        archive_batches.resolveBatchParts(progress, snapshot.messages, external.records);
+        const admitted = admitArchiveBatch(existing.memories, progress.capacityPending, existing.coldArchive);
+        if (admitted.pending.length) throw core_text.safeUserError('待入档结果未全部保存，原成果继续保留。', 'RMT_ARCHIVE_CHUNK');
+        const bank = structuredClone(existing);
+        bank.memories = admitted.memories;
+        bank.coldArchive = admitted.coldArchive;
+        bank.updatedAt = Date.now();
+        bank.archiveRevision = `${bank.updatedAt}-${snapshot.fingerprint}-admitted-${archive_batches.sourceHash(existing.archiveRevision).slice(0, 12)}`;
+        const staged = archive_batches.advanceProgress(progress, { archiveRevision: bank.archiveRevision });
+        bank[archive_batches.IMPORT_PROGRESS_KEY] = staged;
+        const savedRefs = archive_batches.savedSourceRefs(staged);
+        bank.usedMessageCount = (staged.baseUsedMessages || 0) + new Set(savedRefs.filter(ref => ref.kind === 'chat').map(ref => ref.index)).size;
+        bank.usedCharacterCount = (staged.baseUsedChars || 0) + savedRefs.reduce((sum, ref) => sum + ref.length, 0);
+        bank.coverageMode = archive_batches.hasPendingBatches(staged) ? 'batched-pending' : 'batched-complete';
+        bank.coveredRanges = archive_coverage.coveredRangesForSave(existing, {
+            window: { start: 1, end: snapshot.totalMessages }, revision: bank.archiveRevision, progress: staged });
+        core_taskTrace.markStage(taskTrace, 'validate');
+        core_taskTrace.beginStage(taskTrace, 'save');
+        core_requestCoordinator.noteChatTaskPhase('save', { origin });
+        // Retain the exact candidate for a metadata failure AFTER the independent
+        // backup committed. The existing local save retry can then satisfy the
+        // idempotent CAS without creating a new revision or re-admitting results.
+        const commitIntent = core_requestCoordinator.queueDeferredCommitRecord(origin, {
+            kind: 'archive', memoryBank: bank, preserveDerivedCache: true,
+            profilePending: false, completedChunks: progress.batches[progress.nextBatch].length,
+        });
+        await core_cache.saveImportedMemory(context, bank, origin.chatId, {
+            preserveDerivedCache: true, expectedTaskOrigin: origin, assertTaskCurrent: assertCurrent,
+            expectedPreviousArchiveState: { present: true, revision: existing.archiveRevision },
+        });
+        core_taskTrace.markStage(taskTrace, 'save');
+        core_requestCoordinator.acknowledgeDeferredCommit(commitIntent.key, commitIntent.item);
+        archive_importRecovery.acknowledgeArchiveRecoveryCommit({ ...origin, archiveRevision: bank.archiveRevision });
+        clearMemoryPreflight(context);
+        ui_settingsPanel.refreshSettingsMemoryStatus();
+        refreshArchiveRecoveryReading();
+        const overlay = document.getElementById(core_constants.OVERLAY_ID);
+        if (overlay && !overlay.hidden && !runtimeState.activeMode) ui_overlay.showChooser();
+        globalThis.toastr?.success?.(archive_batches.hasPendingBatches(staged)
+            ? '本批待入档结果已保存，旧记忆保留；可继续下一批。本次没有请求模型。'
+            : '待入档结果已全部保存，建档完成；旧记忆保留。本次没有请求模型。', '心迹回廊');
+        return { status: 'committed' };
+    } catch (error) {
+        const cancelled = isArchiveCancellation(error);
+        core_taskTrace.endTaskTrace(taskTrace, cancelled ? 'cancelled' : 'failed', error);
+        globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊 · 原待入档结果保留');
+        return { status: cancelled ? 'cancelled' : 'failed', error };
+    }
 }
 
 // Shared production seam: successful checkpoints contain the model JSON, but
@@ -59007,7 +59099,9 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
         }
     };
     const initialOrigin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
-    if (!options.commitCompletedOnly) await core_settings.prepareManualCredential(context);
+    const localPendingAdmission = !options.draftId && !options.restartImport && !options.fullRebuild
+        && !!getImportedMemory(context)?.[archive_batches.IMPORT_PROGRESS_KEY]?.capacityPending?.length;
+    if (!options.commitCompletedOnly && !localPendingAdmission) await core_settings.prepareManualCredential(context);
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
     if (!core_context.isCurrentTaskOrigin(initialOrigin)) throw new DOMException('Chat changed', 'AbortError');
     let existing = getImportedMemory(context);
@@ -59041,6 +59135,16 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
     if (!core_context.isCurrentTaskOrigin(hydrationOrigin)) throw new DOMException('Chat changed', 'AbortError');
     if (runtimeState.archivePreparationToken !== admission || core_requestCoordinator.hasGenerationTasks()) return { status: 'blocked' };
     const pending = getCurrentArchiveImportRecoverySummary(context);
+    if (localPendingAdmission) {
+        if (options.automatic) return { status: 'blocked' };
+        if (pending?.awaitingCommit) {
+            releasePreparation();
+            return retryCurrentArchiveSave(context, taskTrace);
+        }
+        if (!ui_overlay.confirmExplicitAction('保存待入档结果？',
+            '只保存本批已校验结果，不请求模型、不删除旧记忆；保存成功后才推进批次。', { destructive: false })) return { status: 'cancelled' };
+        return saveCurrentArchivePendingResults(context, existing, options.logicalTask, taskTrace);
+    }
     let selectedDraft = null, sourceExisting;
     if (options.draftId) selectedDraft = archive_importRecovery.readArchiveRecoveryDraft(hydrationOrigin, options.draftId);
     // A completed pending result already owns its validated content. Its local
