@@ -1,3 +1,4 @@
+import * as inbox_art from '../core/letterIllustrationV2.js';
 import * as routePeople from '../core/routeParticipants.js';
 import * as composerOptions from '../core/generationOptions.js';
 import * as connection_pool from '../core/connectionPool.js';
@@ -407,7 +408,7 @@ async function buildWorldPresentationContextFresh(context, memoryBank, mode, par
             contextEnvelope,
             profile: core_worldPresentation.resolveWorldPresentation(contextEnvelope, memoryBank, worldPresentationProfileBinding(context)),
             settingEvidence: core_worldPresentation.controlledWorldEvidence(contextEnvelope, null),
-            characterEvidence: core_worldPresentation.controlledCharacterEvidence(contextEnvelope),
+            characterEvidence: mode === core_constants.MODE.INBOX ? inbox_art.captureEvidence(contextEnvelope, participantSnapshot) : core_worldPresentation.controlledCharacterEvidence(contextEnvelope),
             selectedSetting: {
                 text: assembled.worldText,
                 used: assembled.used,
@@ -451,7 +452,7 @@ async function buildWorldPresentationContextFresh(context, memoryBank, mode, par
         contextEnvelope,
         profile: core_worldPresentation.resolveWorldPresentation(contextEnvelope, memoryBank, worldPresentationProfileBinding(context)),
         settingEvidence,
-        characterEvidence: core_worldPresentation.controlledCharacterEvidence(contextEnvelope),
+        characterEvidence: mode === core_constants.MODE.INBOX ? inbox_art.captureEvidence(contextEnvelope, participantSnapshot) : core_worldPresentation.controlledCharacterEvidence(contextEnvelope),
         selectedSetting,
     };
 }

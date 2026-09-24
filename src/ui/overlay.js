@@ -1715,6 +1715,11 @@ export function handleOverlayClick(event) {
         }, { once: true });
         input.click(); return;
     }
+    if (event.target.closest?.('[data-rmt-archive-commit-complete]')) {
+        if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks() || !archive_library.requireWritableArchiveAction()) return;
+        return void archive_repository.continueCurrentArchiveImport({ commitCompletedOnly: true })
+            .catch(error => globalThis.toastr?.error?.(core_text.safeErrorSummary(error), '心迹回廊'));
+    }
     if (event.target.closest?.('[data-rmt-archive-export-pending]')) {
         return void archive_repository.exportCurrentArchiveRecoveryAfterLoad().then(value => {
             const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' });

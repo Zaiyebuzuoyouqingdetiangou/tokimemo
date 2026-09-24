@@ -1,3 +1,4 @@
+import * as inbox_art from '../core/letterIllustrationV2.js';
 import * as generationParticipants from '../core/generationParticipants.js';
 import * as participants from '../core/participants.js';
 import * as composerOptions from '../core/generationOptions.js';
@@ -15,7 +16,6 @@ import * as core_text from '../core/text.js';
 import * as song_contract from '../core/themeSongContract.js';
 import * as archive_repository from '../archive/repository.js';
 import * as core_taskTrace from '../core/taskTrace.js';
-import * as core_worldPresentation from '../core/worldPresentation.js';
 import * as generation_client from './client.js';
 import * as generation_prompts from './prompts.js';
 import * as generation_recovery from './recovery.js';
@@ -625,8 +625,7 @@ export async function startTogether(routes, { confirm = null, date = new Date() 
     const previewModes = [...new Set(tasks.map(task => task.mode))];
     const previewTerms = [...new Set(previewModes.flatMap(mode => generation_client.generationWorldInfoScanTerms(mode, context)))];
     const envelope = previewModes.length ? await core_cache.buildControlledContextEnvelope(context, { worldInfoScanTerms: previewTerms }) : '';
-    const inboxCharacterEvidence = core_worldPresentation.controlledCharacterEvidence(envelope);
-    for (const task of tasks) applyInboxEvidence(task, inboxCharacterEvidence);
+    for (const task of tasks) if (task.route === 'inbox') applyInboxEvidence(task, inbox_art.captureEvidence(envelope, task.participantSnapshot, (task.participantSnapshot?.people || []).flatMap(person => (person.sourceRefs || []).map(ref => ref.content)).join('\n')));
     const measure = groupTasks => generation_client.composeOutgoingGenerationPrompt(
         assembleMergedPrompt({ sharedBackground, tasks: groupTasks }), context, settings, envelope,
         { enforceGeneratedPhrasePolicy: true });

@@ -102,6 +102,7 @@ export function archiveRecoveryHtml(summary, { profile = false } = {}) {
     return `<section class="rmt-recovery-status" role="status"><b>${text.esc(heading)}</b><p>${text.esc(summary.notice)}</p>${summary.failureCode ? `<p>${text.esc(text.safeErrorSummary({ code: summary.failureCode }))}</p>` : ''}<div class="rmt-recovery-actions">${draftLinks}
 ${summary.pageOnly && !summary.awaitingCommit ? `<button type="button" class="rmt-btn" data-rmt-archive-save-draft="${profile ? 'profile' : 'import'}">保存本页草稿（不生成）</button>` : ''}
 ${!capacity ? `<button type="button" class="rmt-btn" data-rmt-archive-recovery="${profile || summary.profileOnly ? 'profile' : 'import'}">${label}</button>` : ''}
+${!profile && !summary.profileOnly && !summary.awaitingCommit && summary.canCommitComplete ? '<button type="button" class="rmt-btn" data-rmt-archive-commit-complete>先将成功分段入档（不生成）</button>' : ''}
 ${!profile && !summary.profileOnly ? '<button type="button" class="rmt-btn" data-rmt-archive-export-pending>导出待入档成果</button>' : ''}
 ${!profile && !summary.profileOnly && !summary.awaitingCommit && !capacity ? '<button type="button" class="rmt-btn" data-rmt-archive-restart>按当前条件另起任务</button>' : ''}
 ${!batch ? '<button type="button" class="rmt-btn" data-rmt-archive-discard>放弃整理草稿</button>' : ''}</div></section>`;

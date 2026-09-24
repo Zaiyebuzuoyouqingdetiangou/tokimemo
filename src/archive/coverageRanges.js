@@ -78,12 +78,21 @@ export function coveredRangesForSave(existingBank, { window = null, kind = 'full
     if (!window?.start || !window?.end) return base;
     let covered = { start: window.start, end: window.end };
     if (progress && Array.isArray(progress.batches)) {
-        const saved = progress.batches.slice(0, Math.max(0, Number(progress.nextBatch) || 0))
-            .flatMap(parts => (Array.isArray(parts) ? parts : []).flatMap(part => Array.isArray(part?.refs) ? part.refs : []))
-            .filter(ref => ref?.kind === 'chat' && floor(ref.index) >= window.start && floor(ref.index) <= window.end)
-            .map(ref => floor(ref.index));
-        if (!saved.length) return base;
-        covered = { start: Math.min(...saved), end: Math.max(...saved) };
+        // A split source floor is covered only after ALL of its fragments have
+        // committed. Never bridge a failed floor between two successful chunks.
+        const savedFloors = new Set(), pendingFloors = new Set();
+        for (const [batchIndex, parts] of progress.batches.entries()) {
+            for (const [partIndex, part] of parts.entries()) {
+                const saved = batchIndex < progress.nextBatch
+                    || batchIndex === progress.nextBatch && progress.partialParts?.includes(partIndex);
+                for (const ref of part.refs || []) if (ref.kind === 'chat'
+                    && floor(ref.index) >= window.start && floor(ref.index) <= window.end) {
+                    (saved ? savedFloors : pendingFloors).add(floor(ref.index));
+                }
+            }
+        }
+        const complete = [...savedFloors].filter(index => !pendingFloors.has(index));
+        return mergeCoveredRanges([...base, ...spansFromFloors(complete).map(span => ({ ...span, revision: String(revision || ''), kind }))]);
     }
     return mergeCoveredRanges([...base, { ...covered, revision: String(revision || ''), kind }]);
 }

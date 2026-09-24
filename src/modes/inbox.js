@@ -87,7 +87,7 @@ export function normalizeInboxLetters(raw, memory, plan, date = new Date(), opti
         const title = completeText(value.title), greeting = completeText(value.greeting), body = completeText(value.body), closing = completeText(value.closing);
         if (!title.trim() || !body.trim()) throw text.safeUserError('来信正文还未写完。', 'RMT_SEGMENT_VALIDATION');
         if (!inboxRelationshipAllows([title, greeting, body, closing].join('\n'), memory, {
-            ...options, controlledEvidence: options.controlledEvidence || options.characterEvidence || '',
+            ...options, controlledEvidence: options.controlledEvidence || letterArt.letterRelationshipEvidence(options.characterEvidence || ''),
         })) throw text.safeUserError('称呼超出了两人当前关系，请按真实关系写来信。', 'RMT_SEGMENT_VALIDATION');
         // 来信是衍生作品，不进入主聊天与记忆证据；信里自然地回忆往事不再校验出处。
         const letterText = [title, greeting, body, closing].join('\n');

@@ -17,12 +17,12 @@ const FACT_VALUES = Object.freeze({
 });
 const APPEARANCE_KINDS = new Set(['hairLength', 'hairStyle', 'hairColor', 'eyeColor', 'outfitKind', 'outfitColor', 'marker']);
 
-const BASE_CONTRACT = '可选 letterIllustration，只能使用 v2：{"version":2,"characterName":"本信人物真名","focus":"person或object","visualFacts":[{"kind":"hairLength|hairStyle|hairColor|eyeColor|outfitKind|outfitColor|marker|signatureObject","value":"下列对应枚举值","evidence":"逐字摘录当前char原文"}],"scene":{"kind":"read|tea|rain|photo|music|flower|gift|window|lamp|cook|walk|write","evidence":"逐字摘录本封信正文"}}。value 枚举：hairLength=short|medium|long；hairStyle=straight|wavy|curly|ponytail|braid|bun；hairColor=black|brown|blonde|red|white|gray|blue|pink|purple|green；eyeColor=black|brown|blue|green|gray|amber|purple|red；outfitKind=shirt|sweater|hoodie|jacket|coat|dress|suit|uniform|robe|martial|ruqun；outfitColor=black|brown|white|gray|red|blue|green|pink|purple|cream|navy；marker=glasses|freckles|scar|earrings|ribbon|hat|scarf|crown|hairpin|jade|sword|fan|cloak；signatureObject=book|cup|camera|umbrella|flower|instrument|letter|lamp。focus=person 时至少给一项有原文依据的外貌、衣着或标志特征；focus=object 时只能画char原文明确拥有或使用的 signatureObject。每项 evidence 必须直接支持对应值；本信没有可画场景，或char没有相应明确依据时，省略 letterIllustration。不得默认动物、宠物或通用人物，不得输出 version 1、HTML、SVG、CSS、URL、颜色、坐标或任何代码。';
+const BASE_CONTRACT = '有明确人物外貌和本信场景时请提供 letterIllustration，只能使用 v2：{"version":2,"characterName":"本信人物真名","focus":"person或object","visualFacts":[{"kind":"hairLength|hairStyle|hairColor|eyeColor|outfitKind|outfitColor|marker|signatureObject","value":"下列对应枚举值","evidence":"逐字摘录当前人物的角色卡或已提供世界书原文"}],"scene":{"kind":"read|tea|rain|photo|music|flower|gift|window|lamp|cook|walk|write","evidence":"逐字摘录本封信正文"}}。value 枚举：hairLength=short|medium|long；hairStyle=straight|wavy|curly|ponytail|braid|bun；hairColor=black|brown|blonde|red|white|gray|blue|pink|purple|green；eyeColor=black|brown|blue|green|gray|amber|purple|red；outfitKind=shirt|sweater|hoodie|jacket|coat|dress|suit|uniform|robe|martial|ruqun；outfitColor=black|brown|white|gray|red|blue|green|pink|purple|cream|navy；marker=glasses|freckles|scar|earrings|ribbon|hat|scarf|crown|hairpin|jade|sword|fan|cloak；signatureObject=book|cup|camera|umbrella|flower|instrument|letter|lamp。focus=person 时至少给一项有原文依据的外貌、衣着或标志特征；focus=object 时只能画当前人物的角色卡或已提供世界书原文明确拥有或使用的 signatureObject。每项 evidence 必须直接支持对应值；本信没有可画场景，或char没有相应明确依据时，省略 letterIllustration。不得默认动物、宠物或通用人物，不得输出 version 1、HTML、SVG、CSS、URL、颜色、坐标或任何代码。';
 
 const VALUE_TOKENS = Object.freeze({
     hairLength: {
-        short: ['短发', '短髮', 'ショートヘア', 'short hair'], medium: ['中长发', '中長髮', '及肩', '肩まで', 'medium hair', 'shoulder-length'],
-        long: ['长发', '長髮', '长髮', 'ロングヘア', '長い髪', 'long hair', 'waist-length'],
+        short: ['短发', '短髪', '短短的头发', '短髮', 'ショートヘア', 'short hair'], medium: ['中长发', '中長髮', '及肩', '肩まで', 'medium hair', 'shoulder-length'],
+        long: ['长发', '长髪', '长长的头发', '及腰', '及背', '披肩长', '乌发如瀑', '長髮', '长髮', 'ロングヘア', '長い髪', 'long hair', 'waist-length'],
     },
     hairStyle: {
         straight: ['直发', '直髮', 'ストレートヘア', 'straight hair'], wavy: ['波浪发', '波浪髮', 'ウェーブヘア', 'wavy hair'],
@@ -64,7 +64,7 @@ const COLOR_TOKENS = Object.freeze({
     amber: ['琥珀', 'amber'],
 });
 const CATEGORY_TOKENS = Object.freeze({
-    hairColor: ['发', '髮', '髪', 'hair'], eyeColor: ['眼', '眸', '瞳', 'eye'], outfitColor: ['穿', '着', '著', '衣', '服', '衫', '裙', '袍', '装', '裝', '裳', '袄', '襖', '襟', '袖', '氅', '斗篷', '披风', '披風', '外套', '大衣', '西装', '西裝', '制服', 'wear', 'shirt', 'dress', 'robe', 'coat', 'suit', 'uniform'],
+    hairColor: ['发', '髮', '髪', '青丝', '青絲', 'hair'], eyeColor: ['眼', '眸', '瞳', 'eye'], outfitColor: ['穿', '着', '著', '衣', '服', '衫', '裙', '袍', '装', '裝', '裳', '袄', '襖', '襟', '袖', '氅', '斗篷', '披风', '披風', '外套', '大衣', '西装', '西裝', '制服', 'wear', 'shirt', 'dress', 'robe', 'coat', 'suit', 'uniform'],
 });
 const SCENE_TOKENS = Object.freeze({
     read: ['读', '讀', '看书', '看書', '阅读', '閱讀', '読む', 'read', 'book'], tea: ['茶', '咖啡', 'tea', 'coffee'],
@@ -118,7 +118,7 @@ function factSupported(fact) {
     return includesToken(fact.evidence, COLOR_TOKENS[fact.value] || []) && includesToken(fact.evidence, CATEGORY_TOKENS[fact.kind]);
 }
 function exactEvidence(source, quote) {
-    return !!source && quote.length >= 2 && String(source).normalize('NFKC').includes(quote.normalize('NFKC'));
+    return !!source && quote.length >= 2 && String(source).normalize('NFKC').replace(/\s+/gu, ' ').includes(quote.normalize('NFKC').replace(/\s+/gu, ' '));
 }
 
 export function normalize(value) {
@@ -146,25 +146,44 @@ export function normalize(value) {
     } catch { return null; }
 }
 
-export function normalizeGenerated(value, { characterEvidence = '', letterText = '', characterNames = [] } = {}) {
-    const normalized = normalize(value);
-    if (!normalized) return null;
+export function normalizeGenerated(value, options = {}) {
+    const { characterEvidence = '', letterText = '', characterNames = [] } = options;
     const names = Array.isArray(characterNames) ? characterNames.filter(name => typeof name === 'string' && name.trim()) : [];
-    if (!names.includes(normalized.characterName)) return null;
-    if (!exactEvidence(letterText, normalized.scene.evidence) || !includesToken(normalized.scene.evidence, SCENE_TOKENS[normalized.scene.kind])) return null;
-    // 每条外观都必须有人设原文依据；对不上的那一条单独丢掉，其余照画。
-    // 过去只要一条措辞不符就整张作废——模型写得越认真越容易拿不到小画。
-    // 人名、场景仍是整张的硬条件；一条有依据的外观都没有时仍不画。
-    const visualFacts = normalized.visualFacts.filter(fact => exactEvidence(characterEvidence, fact.evidence) && factSupported(fact)
-        && (names.length <= 1 || fact.evidence.includes(normalized.characterName) || fact.evidence.includes('{{char}}')));
-    if (!visualFacts.length) return null;
-    const design = normalize({ ...normalized, visualFacts });
-    if (!design) return null;
-    if (design.focus === 'object') {
-        const object = design.visualFacts.find(fact => fact.kind === 'signatureObject')?.value;
-        if (!OBJECT_SCENES[object]?.includes(design.scene.kind)) return null;
+    const normalized = normalize(value);
+    if (normalized && names.includes(normalized.characterName)) {
+        const source = evidenceFor(characterEvidence, normalized.characterName, names);
+        if (exactEvidence(letterText, normalized.scene.evidence) && includesToken(normalized.scene.evidence, SCENE_TOKENS[normalized.scene.kind])) {
+            const visualFacts = normalized.visualFacts.filter(fact => exactEvidence(source, fact.evidence) && factSupported(fact));
+            const design = normalize({ ...normalized, visualFacts });
+            if (design && (design.focus !== 'object' || OBJECT_SCENES[design.visualFacts.find(fact => fact.kind === 'signatureObject')?.value]?.includes(design.scene.kind))) return design;
+        }
     }
-    return design;
+    // Optional model art must not make supported characters disappear. Recover only
+    // facts present in this frozen person's sources and a scene in this letter.
+    // No request, generic person, current-host lookup, or rewrite of old saved mail.
+    const namedInLetter = names.filter(name => String(letterText).includes(name));
+    const candidates = normalized && names.includes(normalized.characterName) ? [normalized.characterName] : names.length === 1 ? names : namedInLetter;
+    for (const name of candidates) {
+        const source = evidenceFor(characterEvidence, name, names);
+        const visualFacts = [];
+        for (const [kind, values] of Object.entries(FACT_VALUES)) {
+            for (const line of source.split(/\n|[。；;，,]/u)) {
+                const evidence = line.trim();
+                if (!evidence || evidence.length > 180 || /(?:不是|并非|没有|無|不戴|未穿|\bnot\b|\bwithout\b)/iu.test(evidence)) continue;
+                const matches = values.filter(value => factSupported({kind,value,evidence}));
+                if (matches.length === 1) { visualFacts.push({kind,value:matches[0],evidence}); break; }
+            }
+        }
+        const focus = visualFacts.some(fact => APPEARANCE_KINDS.has(fact.kind)) ? 'person' : 'object';
+        for (const [kind, tokens] of Object.entries(SCENE_TOKENS)) {
+            const evidence = String(letterText).split(/\n|[。；;]/u).map(line=>line.trim()).find(line => line.length <= 180 && includesToken(line,tokens));
+            if (!evidence) continue;
+            if (focus === 'object' && !OBJECT_SCENES[visualFacts.find(fact=>fact.kind==='signatureObject')?.value]?.includes(kind)) continue;
+            const design = normalize({version:VERSION,characterName:name,focus,visualFacts,scene:{kind,evidence}});
+            if (design) return design;
+        }
+    }
+    return null;
 }
 
 function esc(value) { return String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[char]); }
@@ -213,4 +232,63 @@ export function render(value, { idPrefix = 'rmt-letter', label = '' } = {}) {
     // A faint, fixed local hatch gives the drawing a pencil finish without
     // filters, remote assets, or injecting provider-generated markup.
     return `<svg class="rmt-letter-illustration" data-rmt-letter-illustration-version="2" data-rmt-letter-focus="${design.focus}" data-rmt-letter-scene="${kind}" width="320" height="280" viewBox="0 0 320 280" preserveAspectRatio="xMidYMid meet" ${semantic}>${title}<defs><pattern id="${textureId}" patternUnits="userSpaceOnUse" width="5" height="5"><path d="m0 4 4-4" stroke="#997b91" stroke-width=".45" opacity=".12"/></pattern></defs>${letterSketch.sketchBackdrop(kind, colour(fact(design, 'outfitColor'), '#c1a5ba'))}${foreground}${scene}<ellipse cx="166" cy="154" rx="137" ry="119" fill="url(#${textureId})" pointer-events="none"/></svg>`;
+}
+
+
+function rawSection(envelope, start, end) {
+    const from = String(envelope).indexOf(start);
+    if (from < 0) return '';
+    const offset = from + start.length, to = String(envelope).indexOf(end, offset);
+    return String(envelope).slice(offset, to < 0 ? undefined : to).trim();
+}
+function cardStrings(value, out = []) {
+    if (typeof value === 'string') out.push(value);
+    else if (Array.isArray(value)) value.forEach(item=>cardStrings(item,out));
+    else if (value && typeof value === 'object') Object.values(value).forEach(item=>cardStrings(item,out));
+    return out;
+}
+// Attribute named sections, never a whole multi-person book to everyone.
+function namedSource(source, name, names) {
+    let owner = '', result = [];
+    for (const line of String(source).split('\n')) {
+        const mentioned = names.filter(n => line.includes(n));
+        const heading = /^\s*[#【\[]/u.test(line) || mentioned.some(n=>line.trim().startsWith(n + '：') || line.trim().startsWith(n + ':'));
+        if (heading) owner = mentioned.length === 1 ? mentioned[0] : '';
+        if (mentioned.length ? mentioned.length === 1 && mentioned[0] === name : owner === name) result.push(line);
+    }
+    return result.join('\n');
+}
+export function captureEvidence(envelope, snapshot = null, additionalWorldText = '') {
+    let card = {};
+    try { card = JSON.parse(rawSection(envelope,'CHARACTER_CARD_JSON:', '\nUSER_PERSONA_JSON:')); } catch {}
+    const cardText = cardStrings(card).join('\n');
+    const world = [rawSection(envelope,'WORLD_INFO_TEXT:', '\n【上下文结束】'), additionalWorldText].filter(Boolean).join('\n');
+    const people = snapshot?.people || [];
+    const names = people.map(person=>person.name).filter(Boolean);
+    const characters = people.filter(person=>person.identity !== 'user').map(person=>{
+        const sources = [];
+        for (const ref of person.sourceRefs || []) {
+            const content = String(ref.content || '').replace(/\u0000/g, '').replace(/\r\n?/g, '\n').trim();
+            if (!content || !world.includes(content)) continue; // only sources actually sent
+            const shared = people.some(other=>other.id !== person.id && (other.sourceRefs || []).some(r=>r.content === content));
+            sources.push(shared ? namedSource(content,person.name,names) : content);
+        }
+        sources.push(namedSource(world,person.name,names));
+        return {name:person.name,text:sources.filter(Boolean).join('\n')};
+    });
+    return JSON.stringify({letterEvidenceVersion:1,cardText:people.length ? '' : cardText,worldText:people.length ? '' : world,characters});
+}
+function evidenceRecord(value) {
+    try { const row=JSON.parse(value); return row?.letterEvidenceVersion === 1 && Array.isArray(row.characters) ? row : null; } catch { return null; }
+}
+function evidenceFor(value, name, names) {
+    const row = evidenceRecord(value);
+    if (!row) return names.length === 1 ? String(value || '') : namedSource(value,name,names);
+    const owned = row.characters.filter(person=>person.name === name).map(person=>person.text).join('\n');
+    if (row.characters.length) return owned;
+    return [names.length === 1 ? row.cardText : namedSource(row.cardText,name,names), namedSource(row.worldText,name,names)].filter(Boolean).join('\n');
+}
+export function relationshipEvidence(value) {
+    const row = evidenceRecord(value);
+    return row ? row.cardText : value;
 }
