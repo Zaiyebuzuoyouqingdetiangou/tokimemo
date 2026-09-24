@@ -98,12 +98,15 @@ export function archiveRecoveryHtml(summary, { profile = false } = {}) {
         : summary.batchProgress ? '继续下一批' : summary.canContinue ? '继续整理档案' : '重试未完成分块';
     const capacity = summary.capacityBlocked === true;
     const batch = summary.batchProgress;
+    const commitFirst = !profile && !summary.profileOnly && !summary.awaitingCommit && summary.canCommitComplete;
+    const nextStep = commitFirst ? '建议：先点「先将成功分段入档」，再点「' + label + '」。'
+        : !capacity ? '建议：点「' + label + '」。' : '';
     const heading = batch ? `批次 ${batch.currentBatch}/${batch.batches} · 已正式保存 ${batch.saved} 个来源片段`
         : `${label} · 已保留 ${Number(summary.completed) || 0} 个成功分段`;
-    return `<section class="rmt-recovery-status" role="status"><b>${text.esc(heading)}</b><p>${text.esc(summary.notice)}</p>${summary.failureCode ? `<p>${text.esc(text.safeErrorSummary({ code: summary.failureCode }))}</p>` : ''}<div class="rmt-recovery-actions">${draftLinks}
+    return `<section class="rmt-recovery-status" role="status"><b>${text.esc(heading)}</b><p>${text.esc(summary.notice)}</p>${nextStep ? `<p><b>${text.esc(nextStep)}</b></p>` : ''}${summary.failureCode ? `<p>${text.esc(text.safeErrorSummary({ code: summary.failureCode }))}</p>` : ''}<div class="rmt-recovery-actions">${draftLinks}
 ${summary.pageOnly && !summary.awaitingCommit ? `<button type="button" class="rmt-btn" data-rmt-archive-save-draft="${profile ? 'profile' : 'import'}">保存本页草稿（不生成）</button>` : ''}
+${commitFirst ? '<button type="button" class="rmt-btn" data-rmt-archive-commit-complete>先将成功分段入档（不生成）</button>' : ''}
 ${!capacity ? `<button type="button" class="rmt-btn" data-rmt-archive-recovery="${profile || summary.profileOnly ? 'profile' : 'import'}">${label}</button>` : ''}
-${!profile && !summary.profileOnly && !summary.awaitingCommit && summary.canCommitComplete ? '<button type="button" class="rmt-btn" data-rmt-archive-commit-complete>先将成功分段入档（不生成）</button>' : ''}
 ${!profile && !summary.profileOnly ? '<button type="button" class="rmt-btn" data-rmt-archive-export-pending>导出待入档成果</button>' : ''}
 ${!profile && !summary.profileOnly && !summary.awaitingCommit && !capacity && !summary.pendingAdmission ? '<button type="button" class="rmt-btn" data-rmt-archive-restart>按当前条件另起任务</button>' : ''}
 ${!batch ? '<button type="button" class="rmt-btn" data-rmt-archive-discard>放弃整理草稿</button>' : ''}</div></section>`;

@@ -1,68 +1,438 @@
-✔ old duplicated source exceeds 12MB; projection fits without deleting authoritative text (540.997942ms)
-✔ a different embedded task is never silently removed (0.639848ms)
-✔ tampered task/input hash is rejected, not resealed (2.956469ms)
-✔ legacy entry projection preserves source hash, request hashes and complete replies (0.998028ms)
-✔ modern draft persists, reloads, and remains bounded; CAS acknowledgement is used (775.99069ms)
-✔ nonredundant drafts above the former 12MB boundary save, reload and import (2217.98901ms)
-✔ actual storage quota failure keeps the draft available and never reports durable success (12.661972ms)
-✔ local-only recovery cannot dispatch an incomplete slot (2.325047ms)
-✔ partial commit leaves failed middle ranges and batch unfinished (1.518511ms)
-✔ half of a split floor is never marked covered (0.477477ms)
-✔ invalid duplicate and out-of-range partial indexes are rejected (0.745605ms)
-✔ receipt cannot be reused for altered replies, a changed revision, or another draft (0.514172ms)
-✔ an unknown complete slot cannot be marked as covered or committed (0.27653ms)
-✔ cache compression and decompression round-trip data above the former storage ceiling (142.19134ms)
-✔ compressed data above former 4M base64 boundary remains readable (325.888263ms)
-✔ formal checkpoint and independent backup accept more than 12MB without bypassing write acknowledgement (114.395202ms)
-(node:13) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
-(Use `node --trace-warnings ...` to show where the warning was created)
-✔ 15 successes survive local partial commit, reload and continuation without duplicate requests (7442.275061ms)
-✔ a failed canonical write keeps the original draft and does not advance coverage (563.892726ms)
-✔ changed chat cannot receive partial results from an earlier source snapshot (547.854166ms)
-✔ export and import preserve successful recipes and sources, without model calls (660.029129ms)
-✔ importing a different source snapshot is rejected without writing (525.582225ms)
-✔ discarding the remaining draft after partial save does not re-request committed source parts (856.55658ms)
-✔ old duplicated snapshots migrate without altering successful request recipes (828.4349ms)
-✔ switching chats during draft persistence cannot write a partial archive (419.023415ms)
-✔ a concurrent formal archive write wins over a stale partial commit (557.354993ms)
-✔ rebuilt runtime bundle supports zero-request partial save and remaining-only continuation (937.670253ms)
-✔ switching at the partial commit boundary leaves the resumable original draft intact (709.361563ms)
-✔ external-source partial save retains validated anchors and never claims chat floor coverage (1064.02025ms)
-(node:14) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
-(Use `node --trace-warnings ...` to show where the warning was created)
-✔ 571 source fragments / 55 pending results save locally, preserving 240 locked and all cold memories (8930.886129ms)
-✔ storage failure keeps all pending results and retry is local only (1013.902607ms)
-✔ changed source cannot receive a pending batch (619.482547ms)
-✔ default admission no longer evicts or stalls at 240; prompt budgets stay bounded (201.610521ms)
-✔ task center refresh observes the task removed after settling (190.176224ms)
-✔ switching chats during pending-save backup cannot publish the candidate (746.658189ms)
-✔ a concurrent archive revision wins over pending-save CAS (709.614988ms)
-✔ metadata failure after backup retries the exact staged revision without re-admission (781.661752ms)
-✔ fresh extraction with 300 validated results saves every memory and reloads without truncation (471.822568ms)
-✔ pending admission preserves existing album content and its old evidence IDs (1079.184929ms)
-✔ the production batch planner keeps every source and creates multiple explicit batches (373.192533ms)
-✔ next batch remains explicit and does not resend the locally admitted batch (1025.340638ms)
-(node:30) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
-(Use `node --trace-warnings ...` to show where the warning was created)
-✔ single-card appearance after the old 20k JSON and 5k field cuts remains available (2.997721ms)
-✔ single-card omitted model illustration recovers only factual appearance and letter scene locally (2.50445ms)
-✔ multiplayer world-book source ownership does not require name in every quote (0.916648ms)
-✔ a shared world-book uses named sections and never lends another persons appearance (0.993902ms)
-✔ omitted art in a multi-person letter follows the named sender rather than first selected person (0.448064ms)
-✔ sources not sent, unknown names, missing facts and missing scenes cannot invent art (0.821206ms)
-✔ whitespace-normalized quoted appearance still matches frozen original text (0.306714ms)
-✔ single-card appearance from named selected world book is usable (0.292703ms)
-✔ normal inbox normalization saves local art and reopening preserves its exact drawing (18.859317ms)
-✔ malformed model markup is never used as SVG or executed (0.665686ms)
-✔ actual bundled single inbox preparation carries full card evidence to its normalizer (228.327815ms)
-✔ actual bundled multiplayer inbox preparation freezes world-book ownership (218.028018ms)
-✔ merged inbox receives its selected source bodies once and accepts their owned art (235.301446ms)
-✔ world-book CRLF normalization preserves the participant source binding (0.407293ms)
-ℹ tests 54
-ℹ suites 0
-ℹ pass 54
-ℹ fail 0
-ℹ cancelled 0
-ℹ skipped 0
-ℹ todo 0
-ℹ duration_ms 16284.924283
+TAP version 13
+# Subtest: old duplicated source exceeds 12MB; projection fits without deleting authoritative text
+ok 1 - old duplicated source exceeds 12MB; projection fits without deleting authoritative text
+  ---
+  duration_ms: 582.518356
+  type: 'test'
+  ...
+# Subtest: a different embedded task is never silently removed
+ok 2 - a different embedded task is never silently removed
+  ---
+  duration_ms: 0.537813
+  type: 'test'
+  ...
+# Subtest: tampered task/input hash is rejected, not resealed
+ok 3 - tampered task/input hash is rejected, not resealed
+  ---
+  duration_ms: 1.155633
+  type: 'test'
+  ...
+# Subtest: legacy entry projection preserves source hash, request hashes and complete replies
+ok 4 - legacy entry projection preserves source hash, request hashes and complete replies
+  ---
+  duration_ms: 0.803504
+  type: 'test'
+  ...
+# Subtest: modern draft persists, reloads, and remains bounded; CAS acknowledgement is used
+ok 5 - modern draft persists, reloads, and remains bounded; CAS acknowledgement is used
+  ---
+  duration_ms: 731.360687
+  type: 'test'
+  ...
+# Subtest: nonredundant drafts above the former 12MB boundary save, reload and import
+ok 6 - nonredundant drafts above the former 12MB boundary save, reload and import
+  ---
+  duration_ms: 2088.816253
+  type: 'test'
+  ...
+# Subtest: actual storage quota failure keeps the draft available and never reports durable success
+ok 7 - actual storage quota failure keeps the draft available and never reports durable success
+  ---
+  duration_ms: 3.677508
+  type: 'test'
+  ...
+# Subtest: local-only recovery cannot dispatch an incomplete slot
+ok 8 - local-only recovery cannot dispatch an incomplete slot
+  ---
+  duration_ms: 2.298485
+  type: 'test'
+  ...
+# Subtest: partial commit leaves failed middle ranges and batch unfinished
+ok 9 - partial commit leaves failed middle ranges and batch unfinished
+  ---
+  duration_ms: 1.618591
+  type: 'test'
+  ...
+# Subtest: half of a split floor is never marked covered
+ok 10 - half of a split floor is never marked covered
+  ---
+  duration_ms: 0.451693
+  type: 'test'
+  ...
+# Subtest: invalid duplicate and out-of-range partial indexes are rejected
+ok 11 - invalid duplicate and out-of-range partial indexes are rejected
+  ---
+  duration_ms: 0.587276
+  type: 'test'
+  ...
+# Subtest: receipt cannot be reused for altered replies, a changed revision, or another draft
+ok 12 - receipt cannot be reused for altered replies, a changed revision, or another draft
+  ---
+  duration_ms: 0.467876
+  type: 'test'
+  ...
+# Subtest: an unknown complete slot cannot be marked as covered or committed
+ok 13 - an unknown complete slot cannot be marked as covered or committed
+  ---
+  duration_ms: 0.265511
+  type: 'test'
+  ...
+# Subtest: cache compression and decompression round-trip data above the former storage ceiling
+ok 14 - cache compression and decompression round-trip data above the former storage ceiling
+  ---
+  duration_ms: 226.139193
+  type: 'test'
+  ...
+# Subtest: compressed data above former 4M base64 boundary remains readable
+ok 15 - compressed data above former 4M base64 boundary remains readable
+  ---
+  duration_ms: 294.975677
+  type: 'test'
+  ...
+# Subtest: formal checkpoint and independent backup accept more than 12MB without bypassing write acknowledgement
+ok 16 - formal checkpoint and independent backup accept more than 12MB without bypassing write acknowledgement
+  ---
+  duration_ms: 136.371127
+  type: 'test'
+  ...
+# (node:2234) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: 15 successes survive local partial commit, reload and continuation without duplicate requests
+ok 17 - 15 successes survive local partial commit, reload and continuation without duplicate requests
+  ---
+  duration_ms: 7125.575402
+  type: 'test'
+  ...
+# Subtest: a failed canonical write keeps the original draft and does not advance coverage
+ok 18 - a failed canonical write keeps the original draft and does not advance coverage
+  ---
+  duration_ms: 593.944102
+  type: 'test'
+  ...
+# Subtest: changed chat cannot receive partial results from an earlier source snapshot
+ok 19 - changed chat cannot receive partial results from an earlier source snapshot
+  ---
+  duration_ms: 497.186472
+  type: 'test'
+  ...
+# Subtest: export and import preserve successful recipes and sources, without model calls
+ok 20 - export and import preserve successful recipes and sources, without model calls
+  ---
+  duration_ms: 683.062333
+  type: 'test'
+  ...
+# Subtest: importing a different source snapshot is rejected without writing
+ok 21 - importing a different source snapshot is rejected without writing
+  ---
+  duration_ms: 427.057015
+  type: 'test'
+  ...
+# Subtest: discarding the remaining draft after partial save does not re-request committed source parts
+ok 22 - discarding the remaining draft after partial save does not re-request committed source parts
+  ---
+  duration_ms: 812.306609
+  type: 'test'
+  ...
+# Subtest: old duplicated snapshots migrate without altering successful request recipes
+ok 23 - old duplicated snapshots migrate without altering successful request recipes
+  ---
+  duration_ms: 840.181114
+  type: 'test'
+  ...
+# Subtest: switching chats during draft persistence cannot write a partial archive
+ok 24 - switching chats during draft persistence cannot write a partial archive
+  ---
+  duration_ms: 453.545519
+  type: 'test'
+  ...
+# Subtest: a concurrent formal archive write wins over a stale partial commit
+ok 25 - a concurrent formal archive write wins over a stale partial commit
+  ---
+  duration_ms: 572.420687
+  type: 'test'
+  ...
+# Subtest: rebuilt runtime bundle supports zero-request partial save and remaining-only continuation
+ok 26 - rebuilt runtime bundle supports zero-request partial save and remaining-only continuation
+  ---
+  duration_ms: 1043.499137
+  type: 'test'
+  ...
+# Subtest: switching at the partial commit boundary leaves the resumable original draft intact
+ok 27 - switching at the partial commit boundary leaves the resumable original draft intact
+  ---
+  duration_ms: 585.298289
+  type: 'test'
+  ...
+# Subtest: external-source partial save retains validated anchors and never claims chat floor coverage
+ok 28 - external-source partial save retains validated anchors and never claims chat floor coverage
+  ---
+  duration_ms: 967.348206
+  type: 'test'
+  ...
+# (node:2246) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: 571 source fragments / 55 pending results save locally, preserving 240 locked and all cold memories
+ok 29 - 571 source fragments / 55 pending results save locally, preserving 240 locked and all cold memories
+  ---
+  duration_ms: 8224.707907
+  type: 'test'
+  ...
+# Subtest: storage failure keeps all pending results and retry is local only
+ok 30 - storage failure keeps all pending results and retry is local only
+  ---
+  duration_ms: 938.286563
+  type: 'test'
+  ...
+# Subtest: changed source cannot receive a pending batch
+ok 31 - changed source cannot receive a pending batch
+  ---
+  duration_ms: 630.065513
+  type: 'test'
+  ...
+# Subtest: default admission no longer evicts or stalls at 240; prompt budgets stay bounded
+ok 32 - default admission no longer evicts or stalls at 240; prompt budgets stay bounded
+  ---
+  duration_ms: 217.245113
+  type: 'test'
+  ...
+# Subtest: task center refresh observes the task removed after settling
+ok 33 - task center refresh observes the task removed after settling
+  ---
+  duration_ms: 210.066387
+  type: 'test'
+  ...
+# Subtest: switching chats during pending-save backup cannot publish the candidate
+ok 34 - switching chats during pending-save backup cannot publish the candidate
+  ---
+  duration_ms: 777.128085
+  type: 'test'
+  ...
+# Subtest: a concurrent archive revision wins over pending-save CAS
+ok 35 - a concurrent archive revision wins over pending-save CAS
+  ---
+  duration_ms: 759.35185
+  type: 'test'
+  ...
+# Subtest: metadata failure after backup retries the exact staged revision without re-admission
+ok 36 - metadata failure after backup retries the exact staged revision without re-admission
+  ---
+  duration_ms: 1004.903613
+  type: 'test'
+  ...
+# Subtest: fresh extraction with 300 validated results saves every memory and reloads without truncation
+ok 37 - fresh extraction with 300 validated results saves every memory and reloads without truncation
+  ---
+  duration_ms: 461.381661
+  type: 'test'
+  ...
+# Subtest: pending admission preserves existing album content and its old evidence IDs
+ok 38 - pending admission preserves existing album content and its old evidence IDs
+  ---
+  duration_ms: 955.290319
+  type: 'test'
+  ...
+# Subtest: the production batch planner keeps every source and creates multiple explicit batches
+ok 39 - the production batch planner keeps every source and creates multiple explicit batches
+  ---
+  duration_ms: 377.539233
+  type: 'test'
+  ...
+# Subtest: next batch remains explicit and does not resend the locally admitted batch
+ok 40 - next batch remains explicit and does not resend the locally admitted batch
+  ---
+  duration_ms: 1095.87509
+  type: 'test'
+  ...
+# (node:2258) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: r84.71 default batches checkpoint about every 150k characters at request boundaries, cover only on the last batch
+ok 41 - r84.71 default batches checkpoint about every 150k characters at request boundaries, cover only on the last batch
+  ---
+  duration_ms: 5391.623696
+  type: 'test'
+  ...
+# Subtest: transient 502 / network failures are retried automatically and the batch still completes
+ok 42 - transient 502 / network failures are retried automatically and the batch still completes
+  ---
+  duration_ms: 1079.301968
+  type: 'test'
+  ...
+# Subtest: transient retries are bounded; more consecutive failures stop and keep the draft
+ok 43 - transient retries are bounded; more consecutive failures stop and keep the draft
+  ---
+  duration_ms: 421.560066
+  type: 'test'
+  ...
+# Subtest: unclassified connection failures are not retried automatically
+ok 44 - unclassified connection failures are not retried automatically
+  ---
+  duration_ms: 429.02778
+  type: 'test'
+  ...
+# Subtest: a failed chunk automatically saves the successful chunks without a model request; retry sends only the rest
+ok 45 - a failed chunk automatically saves the successful chunks without a model request; retry sends only the rest
+  ---
+  duration_ms: 6916.221497
+  type: 'test'
+  ...
+# Subtest: automatic partial save does not repeat when nothing new succeeded
+ok 46 - automatic partial save does not repeat when nothing new succeeded
+  ---
+  duration_ms: 5555.414467
+  type: 'test'
+  ...
+# Subtest: rebuilt runtime bundle: transient retry, small batches and automatic partial save
+ok 47 - rebuilt runtime bundle: transient retry, small batches and automatic partial save
+  ---
+  duration_ms: 3898.425059
+  type: 'test'
+  ...
+# Subtest: single card: appearance in an unnamed world-book entry is used
+ok 48 - single card: appearance in an unnamed world-book entry is used
+  ---
+  duration_ms: 2.551308
+  type: 'test'
+  ...
+# Subtest: single card: decorated card name still reads the sent world book
+ok 49 - single card: decorated card name still reads the sent world book
+  ---
+  duration_ms: 1.275613
+  type: 'test'
+  ...
+# Subtest: single card: named lines win over unnamed world-book lines
+ok 50 - single card: named lines win over unnamed world-book lines
+  ---
+  duration_ms: 0.749673
+  type: 'test'
+  ...
+# Subtest: mixed colours pick the colour nearest to hair / eyes
+ok 51 - mixed colours pick the colour nearest to hair / eyes
+  ---
+  duration_ms: 2.474006
+  type: 'test'
+  ...
+# Subtest: english appearance words are recognised
+ok 52 - english appearance words are recognised
+  ---
+  duration_ms: 0.517831
+  type: 'test'
+  ...
+# Subtest: substring traps and negations do not invent facts
+ok 53 - substring traps and negations do not invent facts
+  ---
+  duration_ms: 0.949957
+  type: 'test'
+  ...
+# Subtest: multi-person: card lines that name one person count for that person only
+ok 54 - multi-person: card lines that name one person count for that person only
+  ---
+  duration_ms: 0.842745
+  type: 'test'
+  ...
+# Subtest: multi-person: unnamed world book is still never lent across people
+ok 55 - multi-person: unnamed world book is still never lent across people
+  ---
+  duration_ms: 0.315291
+  type: 'test'
+  ...
+# Subtest: new letters without art record a plain reason; letters with art do not
+ok 56 - new letters without art record a plain reason; letters with art do not
+  ---
+  duration_ms: 27.502651
+  type: 'test'
+  ...
+# (node:2277) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: single-card appearance after the old 20k JSON and 5k field cuts remains available
+ok 57 - single-card appearance after the old 20k JSON and 5k field cuts remains available
+  ---
+  duration_ms: 2.12819
+  type: 'test'
+  ...
+# Subtest: single-card omitted model illustration recovers only factual appearance and letter scene locally
+ok 58 - single-card omitted model illustration recovers only factual appearance and letter scene locally
+  ---
+  duration_ms: 1.781766
+  type: 'test'
+  ...
+# Subtest: multiplayer world-book source ownership does not require name in every quote
+ok 59 - multiplayer world-book source ownership does not require name in every quote
+  ---
+  duration_ms: 0.936018
+  type: 'test'
+  ...
+# Subtest: a shared world-book uses named sections and never lends another persons appearance
+ok 60 - a shared world-book uses named sections and never lends another persons appearance
+  ---
+  duration_ms: 1.178626
+  type: 'test'
+  ...
+# Subtest: omitted art in a multi-person letter follows the named sender rather than first selected person
+ok 61 - omitted art in a multi-person letter follows the named sender rather than first selected person
+  ---
+  duration_ms: 0.456343
+  type: 'test'
+  ...
+# Subtest: sources not sent, unknown names, missing facts and missing scenes cannot invent art
+ok 62 - sources not sent, unknown names, missing facts and missing scenes cannot invent art
+  ---
+  duration_ms: 0.527806
+  type: 'test'
+  ...
+# Subtest: whitespace-normalized quoted appearance still matches frozen original text
+ok 63 - whitespace-normalized quoted appearance still matches frozen original text
+  ---
+  duration_ms: 0.197679
+  type: 'test'
+  ...
+# Subtest: single-card appearance from named selected world book is usable
+ok 64 - single-card appearance from named selected world book is usable
+  ---
+  duration_ms: 0.165305
+  type: 'test'
+  ...
+# Subtest: normal inbox normalization saves local art and reopening preserves its exact drawing
+ok 65 - normal inbox normalization saves local art and reopening preserves its exact drawing
+  ---
+  duration_ms: 16.182615
+  type: 'test'
+  ...
+# Subtest: malformed model markup is never used as SVG or executed
+ok 66 - malformed model markup is never used as SVG or executed
+  ---
+  duration_ms: 0.574412
+  type: 'test'
+  ...
+# Subtest: actual bundled single inbox preparation carries full card evidence to its normalizer
+ok 67 - actual bundled single inbox preparation carries full card evidence to its normalizer
+  ---
+  duration_ms: 273.234767
+  type: 'test'
+  ...
+# Subtest: actual bundled multiplayer inbox preparation freezes world-book ownership
+ok 68 - actual bundled multiplayer inbox preparation freezes world-book ownership
+  ---
+  duration_ms: 205.664503
+  type: 'test'
+  ...
+# Subtest: merged inbox receives its selected source bodies once and accepts their owned art
+ok 69 - merged inbox receives its selected source bodies once and accepts their owned art
+  ---
+  duration_ms: 203.597297
+  type: 'test'
+  ...
+# Subtest: world-book CRLF normalization preserves the participant source binding
+ok 70 - world-book CRLF normalization preserves the participant source binding
+  ---
+  duration_ms: 0.346835
+  type: 'test'
+  ...
+1..70
+# tests 70
+# suites 0
+# pass 70
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 59748.288889

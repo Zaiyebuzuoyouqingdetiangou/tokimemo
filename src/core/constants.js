@@ -63,6 +63,19 @@ export const MAX_IMPORT_TOTAL_CHARS = 1200000;
 
 export const IMPORT_CHUNK_CHARS = 30000;
 
+// r84.71: a formal archive checkpoint every ~5 chat requests instead of one
+// 1.2M-character batch. A single failed request can no longer hold back the
+// whole chat. Per-request size and model budgets are unchanged.
+export const ARCHIVE_BATCH_CHAT_CHARS = 150000;
+
+// Archive extraction reads ~30k characters per request and can legitimately
+// take longer than ordinary pages on slow proxies. Floor only; never shorter.
+export const ARCHIVE_REQUEST_TIMEOUT_MS = 360000;
+
+// Transient transport failures (5xx / network / timeout / rate limit) get a
+// bounded number of automatic retries for archive extraction only.
+export const ARCHIVE_TRANSIENT_RETRY_DELAYS_MS = Object.freeze([5000, 15000]);
+
 export const MAX_MEMORY_ITEMS = 240;
 
 // Formal storage is not the model's per-request evidence/output budget.

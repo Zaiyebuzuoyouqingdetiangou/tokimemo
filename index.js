@@ -1,5 +1,5 @@
-const VERSION = '0.99.18';
-const BUILD = '0.99.18-r84.70-pending-admission';
+const VERSION = '0.99.19';
+const BUILD = '0.99.19-r84.71-archive-resilience';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';

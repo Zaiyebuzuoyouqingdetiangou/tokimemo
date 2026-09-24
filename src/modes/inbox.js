@@ -91,14 +91,15 @@ export function normalizeInboxLetters(raw, memory, plan, date = new Date(), opti
         })) throw text.safeUserError('称呼超出了两人当前关系，请按真实关系写来信。', 'RMT_SEGMENT_VALIDATION');
         // 来信是衍生作品，不进入主聊天与记忆证据；信里自然地回忆往事不再校验出处。
         const letterText = [title, greeting, body, closing].join('\n');
+        const artOptions = { characterEvidence: options.characterEvidence || '', letterText, characterNames: frozenParticipantNames(memory) };
+        const illustration = letterArt.normalizeGeneratedLetterIllustration(value.letterIllustration, artOptions);
+        // r84.71: say why a new letter has no drawing. Display only; old letters untouched.
+        const illustrationMissing = illustration ? '' : letterArt.letterMissingReason(artOptions);
         return { id: 'mail-' + digest(item.eventKey), eventKey: item.eventKey, type: item.slot,
             title, greeting, body, closing, createdAt: date.getTime(), sourceArchiveRevision: memory.archiveRevision,
             sourceMemoryIds: [...item.sourceMemoryIds], sourceMemoryAnchor: item.sourceMemoryAnchor,
             readAt: null, favorite: false, travelSnapshot: null, participantNames: frozenParticipantNames(memory),
-            illustration: letterArt.normalizeGeneratedLetterIllustration(value.letterIllustration, {
-                characterEvidence: options.characterEvidence || '', letterText,
-                characterNames: frozenParticipantNames(memory),
-            }) };
+            illustration, ...(illustrationMissing ? { illustrationMissing } : {}) };
     });
     return { ...emptyInbox(memory), letters };
 }

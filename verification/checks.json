@@ -1,8 +1,13 @@
 {
-  "version": "0.99.18",
-  "syntaxFiles": 214,
+  "version": "0.99.19",
+  "build": "0.99.19-r84.71-archive-resilience",
+  "syntaxFiles": 216,
   "syntaxExit": 0,
-  "diffCheckExit": 0,
-  "bundleSha256": "ea361fbad92a281a066f9c3e5656cfd1b99f117fcf9e50677a444b3c477ce957",
+  "bundleModules": 176,
+  "bundleSha256": "f7d2259666c0616478699350816e06fb2b4e613ba5fda794cac28c0ffd570a76",
+  "bundleRebuildIdentical": true,
+  "tests": 70,
+  "pass": 70,
+  "fail": 0,
   "testedEnvironment": "Node VM production modules and bundle; host/provider/storage boundaries replaced; not phone or live SillyTavern"
 }

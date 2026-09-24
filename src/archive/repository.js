@@ -2853,7 +2853,16 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             profile = mergeExisting ? { archiveName: mergeExisting.archiveName || fallbackArchiveName(memories),
                 archiveSummary: mergeExisting.archiveSummary || fallbackArchiveSummary(memories), archiveVerdict: mergeExisting.archiveVerdict || null,
                 keywords: core_text.cleanArray(mergeExisting.archiveKeywords, 10, 80) } : normalizeArchiveProfile({}, memories);
-        } else if (preserveExisting) {
+        } else if ((!preserveExisting || progress?.coverDeferred === true) && progress && !capacityPending.length
+            && progress.nextBatch + 1 < progress.batches.length) {
+            // r84.71: a new archive now checkpoints in several smaller batches.
+            // Intermediate batches keep a local cover and defer the one paid
+            // cover request to the batch that completes the sources.
+            progress.coverDeferred = true;
+            profile = mergeExisting ? { archiveName: mergeExisting.archiveName || fallbackArchiveName(memories),
+                archiveSummary: mergeExisting.archiveSummary || fallbackArchiveSummary(memories), archiveVerdict: mergeExisting.archiveVerdict || null,
+                keywords: core_text.cleanArray(mergeExisting.archiveKeywords, 10, 80) } : normalizeArchiveProfile({}, memories);
+        } else if (preserveExisting && progress?.coverDeferred !== true) {
             // Incremental memory capture does not silently rewrite a user's existing cover.
             profile = { archiveName: mergeExisting.archiveName || fallbackArchiveName(memories),
                 archiveSummary: mergeExisting.archiveSummary || fallbackArchiveSummary(memories),
@@ -2866,6 +2875,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
                     ...(taskInputV1 ? { recoveryContentSettings: taskInputV1.data.contentSettings } : {}),
                     archiveRequestBudget: !legacyDraft, signal: importController.signal, context, taskTrace },
                 raw => checkedArchiveProfile(raw, memories));
+            if (progress?.coverDeferred === true) delete progress.coverDeferred;
         } catch (error) {
             // Only a real cancellation may discard the run. The memories were already
             // validated against the snapshot taken at import start, so a chat or setting
@@ -3079,7 +3089,52 @@ export async function patchImportedMemoryFields(id, patch = {}) {
     return item;
 }
 
+// r84.71: when a paid chunk fails after others succeeded, formally save the
+// successful chunks right away (same validated path as the manual
+// "先将成功分段入档" button, no model request). The failure is still reported and
+// the unfinished chunks stay in the draft for "重试未完成分块".
+let autoPartialCommitEnabled = true;
+// Test seam only: legacy fixtures exercise the manual button path.
+export function setAutoPartialCommitForTests(value) { autoPartialCommitEnabled = value !== false; }
+async function autoCommitCompletedArchiveChunks(options, outcome) {
+    if (!autoPartialCommitEnabled || options.commitCompletedOnly || options.automatic || options.restartImport || options.fullRebuild || options.parkPriorDraft) return null;
+    if (outcome?.status === 'cancelled' || isArchiveCancellation(outcome?.error)) return null;
+    if (outcome?.status && outcome.status !== 'failed') return null;
+    let context, summary;
+    try {
+        context = core_context.currentCharacterGuard();
+        summary = getCurrentArchiveImportRecoverySummary(context);
+    } catch { return null; }
+    if (!summary?.canCommitComplete || summary.awaitingCommit || summary.profileOnly) return null;
+    const committed = Number(getImportedMemory(context)?.archivePartialDraft?.slots?.length) || 0;
+    if ((Number(summary.completed) || 0) <= committed) return null;
+    if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return null;
+    try {
+        const saved = await importCurrentChatMemoryOnce({ commitCompletedOnly: true, continueRecovery: true, autoPartialCommit: true });
+        if (saved?.status === 'committed') {
+            globalThis.toastr?.success?.(`已自动把 ${summary.completed} 个成功分块正式入档，没有请求模型。未完成的部分点"重试未完成分块"即可，只会补发失败的那几块。`, '心迹回廊 · 档案整理');
+        }
+        return saved;
+    } catch (error) {
+        console.warn('[HeartbeatMemories] automatic partial archive commit skipped', core_text.safeErrorDiagnostic(error));
+        return null;
+    }
+}
+
 export async function importCurrentChatMemory(options = {}) {
+    let outcome;
+    try {
+        outcome = await importCurrentChatMemoryOnce(options);
+        return outcome;
+    } catch (error) {
+        outcome = { status: 'failed', error };
+        throw error;
+    } finally {
+        if (outcome?.status === 'failed') await autoCommitCompletedArchiveChunks(options, outcome);
+    }
+}
+
+async function importCurrentChatMemoryOnce(options = {}) {
     const context = core_context.currentCharacterGuard();
     const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
     const logicalTask = core_requestCoordinator.beginLogicalGenerationTask({ kind: 'archive-import', pageId: 'archiveImport', context, origin,
@@ -3259,7 +3314,7 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
         const independentResult = !!previousResult || baseMemoryMissing
             || (!partialBase && (sourceExisting?.archiveRevision || '') !== (existing?.archiveRevision || ''));
         if (options.commitCompletedOnly && (independentResult || selectedDraft.stage !== 'segments')) throw core_text.safeUserError('这份草稿不属于当前可写档案基线，原成果保留；请从原任务继续。', 'RMT_RECOVERY_INPUT_CHANGED');
-        if (!ui_overlay.confirmExplicitAction(options.commitCompletedOnly ? '先将成功分段入档？' : '继续这份原建档草稿？',
+        if (!options.autoPartialCommit && !ui_overlay.confirmExplicitAction(options.commitCompletedOnly ? '先将成功分段入档？' : '继续这份原建档草稿？',
             options.commitCompletedOnly ? '只保存通过原来源校验的完整分段，不请求模型；未完成分段与原草稿继续保留。' : `${previousResult ? '继续原任务的下一批。' : '保留已成功分块，仅处理这份草稿尚未完成的部分。'}${independentResult ? '完成后独立保存，当前档案不会被覆盖。' : ''}`, { destructive: false })) return { status: 'cancelled' };
         options = { ...options, draftId: selectedDraft.draftId, selectedDraft, partialBase,
             fullRebuild: previousResult ? false : selectedDraft.fullRebuild,

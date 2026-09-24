@@ -166,3 +166,4 @@ export function renderLetterIllustration(value, { idPrefix = 'rmt-letter', label
 }
 
 export function letterRelationshipEvidence(value) { return v2.relationshipEvidence(value); }
+export function letterMissingReason(options = {}) { return v2.missingReason(options); }
