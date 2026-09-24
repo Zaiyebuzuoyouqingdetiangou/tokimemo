@@ -163,7 +163,7 @@ function buildMergeTaskBody(route, context, memoryBank, previous, date, options)
             error.solo = true;
             throw error;
         }
-        const singlePrompt = modes_inbox.inboxPrompt(memoryBank, plan);
+        const singlePrompt = modes_inbox.inboxPrompt(memoryBank, plan, previous);
         return {
             plan, key: 'inbox', route, mode: core_constants.MODE.INBOX, label: routeTitle(route), outputReserve: OUTPUT_RESERVE.inbox,
             singlePrompt, taskText: inboxTaskText(singlePrompt),

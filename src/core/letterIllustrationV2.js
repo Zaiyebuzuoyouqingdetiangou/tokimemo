@@ -17,7 +17,7 @@ const FACT_VALUES = Object.freeze({
 });
 const APPEARANCE_KINDS = new Set(['hairLength', 'hairStyle', 'hairColor', 'eyeColor', 'outfitKind', 'outfitColor', 'marker']);
 
-export const CONTRACT = '可选 letterIllustration，只能使用 v2：{"version":2,"characterName":"本信人物真名","focus":"person或object","visualFacts":[{"kind":"hairLength|hairStyle|hairColor|eyeColor|outfitKind|outfitColor|marker|signatureObject","value":"下列对应枚举值","evidence":"逐字摘录当前char原文"}],"scene":{"kind":"read|tea|rain|photo|music|flower|gift|window|lamp|cook|walk|write","evidence":"逐字摘录本封信正文"}}。value 枚举：hairLength=short|medium|long；hairStyle=straight|wavy|curly|ponytail|braid|bun；hairColor=black|brown|blonde|red|white|gray|blue|pink|purple|green；eyeColor=black|brown|blue|green|gray|amber|purple|red；outfitKind=shirt|sweater|hoodie|jacket|coat|dress|suit|uniform|robe；outfitColor=black|brown|white|gray|red|blue|green|pink|purple|cream|navy；marker=glasses|freckles|scar|earrings|ribbon|hat|scarf；signatureObject=book|cup|camera|umbrella|flower|instrument|letter|lamp。focus=person 时至少给一项有原文依据的外貌、衣着或标志特征；focus=object 时只能画char原文明确拥有或使用的 signatureObject。每项 evidence 必须直接支持对应值；本信没有可画场景，或char没有相应明确依据时，省略 letterIllustration。不得默认动物、宠物或通用人物，不得输出 version 1、HTML、SVG、CSS、URL、颜色、坐标或任何代码。';
+const BASE_CONTRACT = '可选 letterIllustration，只能使用 v2：{"version":2,"characterName":"本信人物真名","focus":"person或object","visualFacts":[{"kind":"hairLength|hairStyle|hairColor|eyeColor|outfitKind|outfitColor|marker|signatureObject","value":"下列对应枚举值","evidence":"逐字摘录当前char原文"}],"scene":{"kind":"read|tea|rain|photo|music|flower|gift|window|lamp|cook|walk|write","evidence":"逐字摘录本封信正文"}}。value 枚举：hairLength=short|medium|long；hairStyle=straight|wavy|curly|ponytail|braid|bun；hairColor=black|brown|blonde|red|white|gray|blue|pink|purple|green；eyeColor=black|brown|blue|green|gray|amber|purple|red；outfitKind=shirt|sweater|hoodie|jacket|coat|dress|suit|uniform|robe；outfitColor=black|brown|white|gray|red|blue|green|pink|purple|cream|navy；marker=glasses|freckles|scar|earrings|ribbon|hat|scarf；signatureObject=book|cup|camera|umbrella|flower|instrument|letter|lamp。focus=person 时至少给一项有原文依据的外貌、衣着或标志特征；focus=object 时只能画char原文明确拥有或使用的 signatureObject。每项 evidence 必须直接支持对应值；本信没有可画场景，或char没有相应明确依据时，省略 letterIllustration。不得默认动物、宠物或通用人物，不得输出 version 1、HTML、SVG、CSS、URL、颜色、坐标或任何代码。';
 
 const VALUE_TOKENS = Object.freeze({
     hairLength: {
@@ -66,6 +66,13 @@ const SCENE_TOKENS = Object.freeze({
     cook: ['做饭', '做飯', '料理', '烹饪', '烹飪', 'cook'], walk: ['散步', '走走', '漫步', '歩く', 'walk'],
     write: ['写', '寫', '便签', '便簽', '便笺', '便箋', '書く', 'write', 'note'],
 });
+
+// 校验要求 scene.evidence 原样包含所选场景的关键词、外观 evidence 原样包含能说明该值的词。
+// 过去合同没有把这些词告诉模型，模型只能猜，猜错整张小画就被丢弃。这里只补充说明，校验本身不变。
+const SCENE_KEYWORD_HINT = Object.entries(SCENE_TOKENS)
+    .map(([kind, tokens]) => `${kind}=${tokens.filter(token => /[\u4e00-\u9fff]/u.test(token)).join('/')}`)
+    .join('；');
+export const CONTRACT = `${BASE_CONTRACT}scene.evidence 必须原样包含所选 kind 的关键词之一（${SCENE_KEYWORD_HINT}），先在正文里找到关键词再选 kind；找不到任何关键词就省略 letterIllustration。visualFacts 的 evidence 必须原样包含直接说明该值的词，例如 long 需含「长发」、ponytail 需含「马尾」、robe 需含「长袍」、glasses 需含「眼镜」；原文没有这样的词就不要写这一项。`;
 const OBJECT_SCENES = Object.freeze({ book:['read', 'write'], cup:['tea'], camera:['photo'], umbrella:['rain'], flower:['flower', 'gift'], instrument:['music'], letter:['write', 'gift'], lamp:['lamp'] });
 
 const PALETTE = Object.freeze({ paper: '#fff8e9', ink: '#66584f', accent: '#c96f7d', soft: '#91a995', blue: '#779aad' });

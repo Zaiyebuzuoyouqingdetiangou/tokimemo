@@ -180,13 +180,14 @@ export function dailyComicImagePrompt(item, promptOverride) {
     return `${instructions}\n${sceneMarker}${scene.slice(0, room)}`;
 }
 
-export function cgImageLayerHtml(item, { lazy = true } = {}) {
+// history=false 用于相簿网格小图：多版本切换只放在大图里，小图保持干净。
+export function cgImageLayerHtml(item, { lazy = true, history: showHistory = true } = {}) {
     const image = normalizeCgImageRecord(item?.cgImage);
     const abstract = `<div class="rmt-abstract" style="${ui_styles.abstractStyle(item?.visualSeed, item?.id)}"></div>`;
     if (!image) return abstract;
     const alt = `${core_text.normalizeText(item?.title, 120) || 'CG'} · 实图`;
     const versions = cgImageVersions(item), index = versions.findIndex(row => row.url === image.url);
-    const history = versions.length > 1 ? `<div class="rmt-cg-history-controls" data-rmt-cg-history-controls data-rmt-cg-item="${core_text.esc(item.id)}" aria-label="切换已保存图片"><button type="button" data-rmt-cg-history-step="-1" aria-label="上一张已保存图片">‹</button><span data-rmt-cg-history-count>${index + 1} / ${versions.length}</span><button type="button" data-rmt-cg-history-step="1" aria-label="下一张已保存图片">›</button></div>` : '';
+    const history = showHistory && versions.length > 1 ? `<div class="rmt-cg-history-controls" data-rmt-cg-history-controls data-rmt-cg-item="${core_text.esc(item.id)}" aria-label="切换已保存图片"><button type="button" data-rmt-cg-history-step="-1" aria-label="上一张已保存图片">‹</button><span data-rmt-cg-history-count>${index + 1} / ${versions.length}</span><button type="button" data-rmt-cg-history-step="1" aria-label="下一张已保存图片">›</button></div>` : '';
     return `${abstract}<img class="rmt-cg-real" data-rmt-cg-image src="${core_text.esc(image.url)}" alt="${core_text.esc(alt)}" ${lazy ? 'loading="lazy"' : ''} decoding="async" referrerpolicy="no-referrer">${history}`;
 }
 
@@ -943,7 +944,14 @@ export async function restoreSelectedCgImageVersion(url, expectedTarget = null, 
         return;
     }
     if (runtimeState.activeSession === session && core_context.isCurrentTaskOrigin(captured.origin)) {
-        Object.assign(session,structuredClone(committed));
+        // 切换图片版本只改存档里的图片引用。用存档数据刷新会话时必须保留当前界面位置
+        // （是否在共同回忆大图里、对白读到第几句、所选条目、页码），否则重新渲染会把人
+        // 从大图踢回相簿网格。字段与 overlay 保存后刷新会话时保留的一致。
+        const next = structuredClone(committed);
+        for (const key of ['selectedId','selectedEntryId','selectedStripId','view','page','dialogueIndex','sharedMemory']) {
+            if (Object.hasOwn(session, key)) next[key] = structuredClone(session[key]);
+        }
+        Object.assign(session,next);
         renderCurrentCgMode(mode,session);
     }
     if (confirm) globalThis.toastr?.success?.('已恢复所选历史版本，原图已转入历史版本。', '心迹回廊');
