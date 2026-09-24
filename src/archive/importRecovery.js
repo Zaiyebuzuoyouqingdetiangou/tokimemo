@@ -1,3 +1,4 @@
+import * as draft_inputs from './draftInputs.js';
 import * as local_store from '../core/localRecoveryStore.js';
 import * as constants from '../core/constants.js';
 // Draft checkpoints are separate from formal archives and evidence. Lazy local
@@ -27,7 +28,7 @@ function storageFailure(phase = 'save', cause = null) {
     // Recoverable storage conditions get their exact manual remedy. No automatic
     // retry is added for any of them; the user decides when to save again.
     if (cause?.quota === true || cause?.name === 'QuotaExceededError') {
-        return text.safeUserError('本机存储空间不足，整理草稿未能保存；已停止后续模型请求，成功分段仍在当前页面，原记录未修改。清理浏览器站点数据后可点保存重试。', 'RMT_ARCHIVE_DRAFT_STORAGE');
+        return text.safeUserError('本机存储空间不足，整理草稿未能保存；已停止后续模型请求，成功分段仍在当前页面，原记录未修改。请先导出成果，不要清除本站数据；释放设备空间后可重试保存。', 'RMT_ARCHIVE_DRAFT_STORAGE');
     }
     if (cause?.code === 'RMT_LOCAL_CAS') {
         return text.safeUserError('本机草稿正被另一页面或操作写入，本次没有覆盖任何记录；已停止后续模型请求，成功分段仍在当前页面。请重新打开本页后重试保存。', 'RMT_ARCHIVE_DRAFT_STORAGE');
@@ -35,7 +36,7 @@ function storageFailure(phase = 'save', cause = null) {
     return text.safeUserError('未能把本次整理草稿保存到本机；已停止后续模型请求，成功分段仍在当前页面。请先导出，保存成功前不要刷新。', 'RMT_ARCHIVE_DRAFT_STORAGE');
 }
 function capacityFailure() {
-    return text.safeUserError('本次来源超过本机草稿保存上限（12MB），未请求模型；可缩小读取范围或分批建档，已保留原记录。', 'RMT_ARCHIVE_DRAFT_CAPACITY');
+    return text.safeUserError('整理草稿未能保存，已停止后续请求，原记录保留。请先导出成果，保存成功前不要刷新。', 'RMT_ARCHIVE_DRAFT_CAPACITY');
 }
 export function archiveDraftCapacityFailure() { return capacityFailure(); }
 function ackMismatchFailure() {
@@ -62,6 +63,7 @@ async function saveScope(key) {
         // false/undefined must not be mistaken for a saved checkpoint in a host.
         if (revision !== state.revision + 1) throw ackMismatchFailure();
         state.revision = revision;
+        state.lastFailureCode = '';
         confirmCounts(state, rows);
         for (const [id, saved] of rows) {
             const live = drafts.get(id);
@@ -74,6 +76,8 @@ async function saveScope(key) {
     });
     lanes.set(key, run);
     try { return await run; } catch (error) {
+        const state = scopes.get(key);
+        if (state && error?.code === 'RMT_ARCHIVE_DRAFT_CAPACITY') state.lastFailureCode = error.code;
         for (const [id] of scopeRows(key)) if (drafts.has(id)) drafts.get(id).durable = false;
         // Failures already classified above keep their exact code and guidance.
         if (['RMT_ARCHIVE_DRAFT_STORAGE', 'RMT_ARCHIVE_DRAFT_READ', 'RMT_ARCHIVE_DRAFT_CAPACITY'].includes(error?.code)) throw error;
@@ -82,20 +86,9 @@ async function saveScope(key) {
     finally { if (lanes.get(key) === run) lanes.delete(key); }
 }
 function scheduleSave(key) { void saveScope(key).catch(() => {}); }
-// Pre-flight estimate with the exact serialization and byte limit saveScope
-// applies. Callers can fail before any storage transaction or model request.
-// The authoritative check remains inside saveScope: an in-memory scope may not
-// reflect every stored row until hydration, and the live journal adds bytes.
-export function archiveRecoveryDraftPlanExceedsCapacity(origin, operation = 'import', inputs = null) {
-    const key = draftKey(origin, operation);
-    if (!key || !inputs) return false;
-    const rows = scopeRows(key);
-    const planned = rows.some(([id]) => id === key)
-        ? rows.map(([id, entry]) => [id, id === key ? { ...entry, inputs } : entry])
-        : [...rows, [key, { key, operation, inputs }]];
-    try { return new TextEncoder().encode(JSON.stringify({ version: 1, rows: planned })).byteLength > constants.MAX_CACHE_SOURCE_BYTES; }
-    catch { return false; }
-}
+// Compatibility seam for older callers. No plugin byte ceiling; only an
+// acknowledged storage transaction can decide whether a draft was saved.
+export function archiveRecoveryDraftPlanExceedsCapacity() { return false; }
 export async function flushArchiveRecovery(origin, operation = 'import') {
     const key = draftKey(origin, operation); if (!key) return false;
     if (lanes.has(key)) await lanes.get(key);
@@ -142,7 +135,7 @@ async function hydrateArchiveRecoveryScope(key, origin, operation, force) {
         for (const [rowKey, value] of payload.rows) {
             if (typeof rowKey !== 'string' || (rowKey !== key && !rowKey.startsWith(`${key}:paused:`))
                 || !validStoredEntry(value, key, origin, operation)) throw storageFailure('read');
-            const entry = structuredClone(value); entry.active = false; entry.durable = true;
+            const entry = draft_inputs.compactArchiveEntry(structuredClone(value)); entry.active = false; entry.durable = true;
             // A saved draft is never a formal commit. If the intended bank wasn't
             // committed, replay validated pieces and the normal CAS path on click.
             if (entry.stage === 'awaiting-commit' && entry.committedRevision !== origin.archiveRevision) entry.stage = 'segments';
@@ -177,9 +170,10 @@ export async function importArchiveRecoveryData(origin, data) {
     const values = data.pageDrafts.map(row => {
         const sourceHash = String(row?.journal?.identity?.archiveRevision || '').replace(/^archive-draft:/, '');
         const entry = { key, operation:'import', sourceHash, fullRebuild: row.fullRebuild === true,
-            stage:'segments', journal: structuredClone(row.journal), active:false, durable:false, importedUnverified:true };
+            stage:'segments', journal: structuredClone(row.journal), active:false, durable:false, importedUnverified:true,
+            ...(row.inputs ? { inputs: structuredClone(row.inputs) } : {}) };
         if (!validStoredEntry(entry, key, origin, 'import')) throw incompatible();
-        return entry;
+        return draft_inputs.compactArchiveEntry(entry);
     });
     // Imported fragments are data, never new evidence authority. Initial dispatch
     // must rebuild current sources and match exact source/request hashes.
@@ -243,10 +237,14 @@ export function archiveRecoverySummary(origin, operation = 'import', { includeAr
     const savedCompleted = scopes.get(draftKey(origin, operation))?.completed?.get(draftKey(origin, operation)) || 0;
     return { operation, fullRebuild: entry.fullRebuild, profileOnly: entry.stage === 'profile-only',
         awaitingCommit: entry.stage === 'awaiting-commit', committedRevision: entry.committedRevision || '',
-        savedCompleted, completed: summary?.completed || 0, truncated: summary?.truncated || 0,
+        savedCompleted, completed: summary?.completed || 0,
+        canCommitComplete: entry.stage === 'segments' && !!entry.inputs?.progress && !!entry.inputs?.taskInputV1
+            && !(entry.fullRebuild && entry.inputs?.baseMemory)
+            && entry.journal.segments.some(row => /^(chat|external):\d+$/.test(row.slot) && row.state === 'complete'),
+        truncated: summary?.truncated || 0,
         canContinue: entry.stage === 'segments' && !!summary?.canContinue,
         canRetry: entry.stage === 'profile-only' || !!summary?.canRetry,
-        failureCode: summary?.failureCode || '', drafts: retained, onlyArchivedDrafts: ['profile-result','archive-result'].includes(entry.stage), pageOnly: entry.durable !== true, notice: entry.durable === true
+        failureCode: scopes.get(draftKey(origin, operation))?.lastFailureCode || summary?.failureCode || '', drafts: retained, onlyArchivedDrafts: ['profile-result','archive-result'].includes(entry.stage), pageOnly: entry.durable !== true, notice: entry.durable === true
             ? '成功分段与原任务输入已保存到本机；刷新后可继续未完成部分，不重做已保存分段。换设备前请导出。'
             : `本机已确认保存 ${savedCompleted} 个成功分段；当前页面共有 ${summary?.completed || 0} 个。尚未确认保存的成果请先导出，不要刷新。` };
 }
@@ -298,8 +296,9 @@ export function exportArchiveRecovery(origin, operation = 'import') {
 }
 
 export async function beginArchiveRecovery({ origin, operation = 'import', sourceIdentity, sourceFragments = [], settingsIdentity,
-    fullRebuild = false, continueApproved = false, inputs = null, assertCurrent = () => true, onProgress = null, draftId = '', nextIndependentBatch = false } = {}) {
+    fullRebuild = false, continueApproved = false, inputs = null, assertCurrent = () => true, onProgress = null, draftId = '', nextIndependentBatch = false, completedOnly = false } = {}) {
     const storageKey = draftKey(origin, operation);
+    inputs = draft_inputs.compactArchiveInputs(inputs);
     if (!storageKey) throw text.safeUserError('无法确定档案整理草稿属于哪个聊天，本次没有发送请求。', 'RMT_RECOVERY_IDENTITY');
     await hydrateArchiveRecovery(origin, operation);
     if (assertCurrent() === false) throw new DOMException('Archive origin changed', 'AbortError');
@@ -368,7 +367,7 @@ export async function beginArchiveRecovery({ origin, operation = 'import', sourc
     try { await saveScope(storageKey); } catch (error) { entry.active = false; throw error; }
     if (assertCurrent() === false) { entry.active = false; throw new DOMException('Archive origin changed', 'AbortError'); }
     recovery.attachGenerationRecovery(recoveryOrigin, handle);
-    const ticket = { key, storageKey, entry, origin: recoveryOrigin, handle, assertCurrent: stillCurrent, released: false };
+    const ticket = { key, storageKey, entry, origin: recoveryOrigin, handle, assertCurrent: stillCurrent, released: false, completedOnly };
     tickets.add(ticket);
     return ticket;
 }
@@ -391,7 +390,7 @@ export async function resumeArchiveImportProfile({ origin, draftId = '', setting
         save: async journal => { entry.journal = journal; entry.durable = false; return saveScope(key); } });
     entry.active = true;
     recovery.attachGenerationRecovery(recoveryOrigin, handle);
-    const ticket = { key: recordKey, storageKey: key, entry, origin: recoveryOrigin, handle, assertCurrent: stillCurrent, released: false };
+    const ticket = { key: recordKey, storageKey: key, entry, origin: recoveryOrigin, handle, assertCurrent: stillCurrent, released: false, completedOnly };
     tickets.add(ticket);
     return ticket;
 }
@@ -423,6 +422,7 @@ export async function retainCompletedArchiveImport(ticket, memoryBank, { sourceM
 
 export async function requestArchiveRecoverySegment(ticket, slot, prompt, options, validator) {
     if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry || !ticket.entry.active) throw incompatible();
+    if (ticket.completedOnly && !ticket.entry.journal.segments.some(row => row.slot === slot && row.state === 'complete')) throw incompatible();
     const checked = async raw => {
         taskTrace.beginStage(options?.taskTrace, 'validate');
         const result = await validator(raw);
@@ -435,6 +435,7 @@ export async function requestArchiveRecoverySegment(ticket, slot, prompt, option
             // task gate is deliberately not used. Same provider/parser, no retries.
             // Apply the archive budget even to legacy page drafts. Do this only
             // at dispatch: keep the recovery identity and source validators intact.
+            if (ticket.completedOnly) throw incompatible();
             const raw = await client.generateConfiguredJson(effectivePrompt, { ...requestOptions, archiveRequestBudget: true });
             if (ticket.assertCurrent() === false) throw new DOMException('Archive recovery origin changed', 'AbortError');
             const result = await checked(raw);

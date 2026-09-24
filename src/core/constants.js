@@ -40,9 +40,10 @@ export const ROOM_SESSION_VERSION = 3;
 
 export const TRAVEL_SESSION_VERSION = 4;
 
-export const MAX_CACHE_COMPRESSED_BASE64_CHARS = 4000000;
+// No plugin-defined byte ceiling: actual storage transactions decide success.
+export const MAX_CACHE_COMPRESSED_BASE64_CHARS = Infinity;
 
-export const MAX_CACHE_DECOMPRESSED_BYTES = 12000000;
+export const MAX_CACHE_DECOMPRESSED_BYTES = Infinity;
 
 export const MAX_CACHE_SOURCE_BYTES = MAX_CACHE_DECOMPRESSED_BYTES;
 

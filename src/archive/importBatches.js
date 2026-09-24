@@ -173,6 +173,13 @@ export function manifestFromBatches(batches) {
         refs: part.units.map(unit => unit.ref) })));
 }
 
+export function savedSourceRefs(progress) {
+    const batches = progress?.batches || [];
+    const saved = batches.slice(0, progress?.nextBatch || 0).flatMap(parts => parts.flatMap(part => part.refs));
+    for (const index of progress?.partialParts || []) saved.push(...(batches[progress.nextBatch]?.[index]?.refs || []));
+    return saved;
+}
+
 export function progressTotals(progress) {
     const batches = Array.isArray(progress?.batches) ? progress.batches : [];
     const count = parts => (parts || []).reduce((sum, part) => sum + part.refs.length, 0);
@@ -182,9 +189,9 @@ export function progressTotals(progress) {
     return { batches: batches.length, savedBatches: saved, currentBatch: Math.min(saved + 1, batches.length),
         total: batches.reduce((sum, parts) => sum + count(parts), 0),
         chars: batches.reduce((sum, parts) => sum + chars(parts), 0),
-        saved: batches.slice(0, saved).reduce((sum, parts) => sum + count(parts), 0),
-        processed: batches.slice(0, processed).reduce((sum, parts) => sum + count(parts), 0),
-        remaining: batches.slice(saved).reduce((sum, parts) => sum + count(parts), 0),
+        saved: savedSourceRefs(progress).length,
+        processed: Math.max(savedSourceRefs(progress).length, batches.slice(0, processed).reduce((sum, parts) => sum + count(parts), 0)),
+        remaining: batches.reduce((sum, parts) => sum + count(parts), 0) - savedSourceRefs(progress).length,
         pendingMemories: progress?.capacityPending?.length || 0 };
 }
 
@@ -201,6 +208,9 @@ export function checkedProgress(raw) {
         || utf8Bytes(JSON.stringify(data)) > constants.MAX_CACHE_SOURCE_BYTES) {
         throw text.safeUserError('建档检查点格式或容量异常；旧成果保留，未自动重建。', 'RMT_ARCHIVE_CHECKPOINT');
     }
+    if (data.partialParts !== undefined && (!Array.isArray(data.partialParts)
+        || new Set(data.partialParts).size !== data.partialParts.length
+        || data.partialParts.some(index => !Number.isInteger(index) || index < 0 || index >= (data.batches[data.nextBatch]?.length || 0)))) throw changedInput('sources');
     for (const parts of data.batches) {
         if (!Array.isArray(parts) || parts.length > 127) throw changedInput('sources');
         for (const part of parts) {
@@ -239,6 +249,7 @@ export function advanceProgress(progress, { pending = [], archiveRevision } = {}
     const next = structuredClone(progress);
     // This is only a staged candidate. The caller must commit it with the bank by
     // CAS; it must NEVER publish it in state on a failed canonical save.
+    delete next.partialParts;
     next.capacityPending = pending.map(item => { const copy = structuredClone(item); delete copy.id; return copy; });
     if (!pending.length) next.nextBatch += 1;
     next.archiveRevision = archiveRevision;

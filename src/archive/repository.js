@@ -1,5 +1,7 @@
 import * as advanced_generation from '../core/advancedGeneration.js';
 import * as context_tags from '../core/contextTags.js';
+import * as partial_import from './partialImport.js';
+import * as draft_inputs from './draftInputs.js';
 import * as archive_batches from './importBatches.js';
 import * as archive_coverage from './coverageRanges.js';
 import * as archive_requestBudget from './requestBudget.js';
@@ -1666,7 +1668,8 @@ function archiveTaskBinding(context) {
 function captureArchiveTaskInput(context, payload) {
     const data = { ...payload, binding: archiveTaskBinding(context),
         names: { name1: context.name1, name2: context.name2 }, contentSettings: archiveContentSettings(context) };
-    return { version: 1, digest: archive_batches.sourceHash(JSON.stringify(data)), data };
+    const taskInputV1 = { version: 1, digest: archive_batches.sourceHash(JSON.stringify(data)), data };
+    return payload.operation === 'import' ? draft_inputs.compactArchiveInputs({ batchVersion: 1, progress: {}, taskInputV1 }).taskInputV1 : taskInputV1;
 }
 function checkedArchiveTaskInput(value, context, { completedSaveOnly = false } = {}) {
     if (!value) return null;
@@ -1929,6 +1932,13 @@ export async function saveCurrentArchiveRecovery(context = core_context.currentC
 export async function importCurrentArchiveRecoveryFile(data, context = core_context.currentCharacterGuard()) {
     if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) throw core_text.safeUserError('当前有请求进行中，未导入。', 'RMT_RECOVERY_BUSY');
     const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
+    // Imported snapshots remain untrusted. Prove the same current source before
+    // retaining their original recipes; a different chat cannot import authority.
+    for (const row of data?.pageDrafts || []) {
+        const captured = checkedArchiveTaskInput(row?.inputs?.taskInputV1, context);
+        if (captured) archive_batches.assertIdentity(captured.identity,
+            batchIdentity(context, { fullFingerprint: core_context.completeArchiveChatFingerprint(context) }));
+    }
     const result = await archive_importRecovery.importArchiveRecoveryData(origin, data);
     if (!core_context.isCurrentTaskOrigin(origin)) throw new DOMException('Chat changed', 'AbortError');
     return result;
@@ -1952,7 +1962,7 @@ export function getCurrentArchiveImportRecoverySummary(context = core_context.ge
             canContinue: false, canRetry: true, pageOnly: true,
             notice: '整理已完成，尚未保存；仅重试保存不会请求模型。当前批不能标为已保存。' };
         const progress = bank?.[archive_batches.IMPORT_PROGRESS_KEY];
-        if (archive_batches.hasPendingBatches(progress)) {
+        if (archive_batches.hasPendingBatches(progress) && !(bank?.archivePartialDraft && summary && !summary.onlyArchivedDrafts)) {
             const totals = archive_batches.progressTotals(progress);
             const capacity = totals.pendingMemories > 0;
             const pageParts = !totals.pendingMemories && summary && !summary.profileOnly
@@ -2368,7 +2378,7 @@ async function continueImportedArchiveProfile(context, memory, origin, draft, op
 }
 
 async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic = false, continueRecovery = false, restartImport = false, participantRoster, logicalTask,
-    draftId = '', selectedDraft = null, independentResult = false, nextIndependentBatch = false, baseMemoryMissing = false, sceneRecords = null } = {}, preparation) {
+    draftId = '', selectedDraft = null, commitCompletedOnly = false, partialBase = null, independentResult = false, nextIndependentBatch = false, baseMemoryMissing = false, sceneRecords = null } = {}, preparation) {
     const context = preparation.context;
     const existing = Object.hasOwn(preparation, 'sourceExisting') ? preparation.sourceExisting : preparation.existing;
     // Capture before any await; a later chat/Persona switch cannot rebind this bank.
@@ -2397,6 +2407,16 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         return live;
     };
     const incrementalUpdate = !!existing && !fullRebuild;
+    const mergeExisting = partialBase || (incrementalUpdate || commitCompletedOnly ? existing : null);
+    const preserveExisting = !!mergeExisting;
+    const receiptBase = partialBase || (!selectedDraft && !fullRebuild && !restartImport ? existing : null);
+    const savedSlots = new Set(receiptBase?.archivePartialDraft?.slots?.map(row => row.slot) || []);
+    const receivedSlots = partial_import.completeSlots(selectedDraft);
+    if (commitCompletedOnly && fullRebuild && existing) throw core_text.safeUserError('完全重建草稿不能用部分成果替换完整旧档案，请继续原重建任务；成功分段仍保留。', 'RMT_RECOVERY_INPUT_CHANGED');
+    if (commitCompletedOnly && (!selectedDraft?.inputs?.progress || !selectedDraft.inputs.taskInputV1
+        || ![...receivedSlots].some(slot => !savedSlots.has(slot)))) {
+        throw core_text.safeUserError('这份草稿没有新的、可校验来源的完整分段可先入档；原成果保留。', 'RMT_ARCHIVE_CHUNK');
+    }
     const pinnedInputs = selectedDraft ? selectedDraft.inputs : continueRecovery ? archive_importRecovery.archiveRecoveryInputs(preparation.origin) : null;
     const legacyDraft = !!pinnedInputs && !pinnedInputs.batchVersion;
     // Drafts saved by this version keep the full source snapshot only at
@@ -2597,8 +2617,10 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             const parts = archive_batches.resolveBatchParts(progress, snapshot.messages, external.records);
             chunks = parts.filter(part => part.kind === 'chat').map(part => part.data);
             externalChunks = parts.filter(part => part.kind === 'external').map(part => part.data);
-            batchBudgets = await Promise.all(parts.map(part => inspect(part.kind, part.data, part.index, part.total)));
-            batchBudgets.forEach(archive_requestBudget.assertArchiveRequestBudget);
+            if (!commitCompletedOnly) {
+                batchBudgets = await Promise.all(parts.map(part => inspect(part.kind, part.data, part.index, part.total)));
+                batchBudgets.forEach(archive_requestBudget.assertArchiveRequestBudget);
+            }
             totalChunks = chunks.length + externalChunks.length;
             core_taskTrace.markChunks(taskTrace, { total: totalChunks, pending: totalChunks });
         }
@@ -2622,14 +2644,14 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             assertPreparationCurrent();
         }
         const settingsIdentity = archiveRecoverySettingsIdentity(context);
-        const draftInputs = legacyDraft ? pinnedInputs : { external, contextEnvelope, inputOwner, identity,
+        const draftInputs = draft_inputs.compactArchiveInputs(legacyDraft ? pinnedInputs : { external, contextEnvelope, inputOwner, identity,
             batchVersion: archive_batches.IMPORT_BATCH_VERSION,
             // One snapshot copy per draft row: inputs.taskInputV1 only. The live
             // progress object keeps its own copy for the archive-bank commit.
             progress: progressForDraftRow(progress, taskInputV1), pausedProgress,
             baseMemory: archiveSourceBank(existing),
             ...(taskInputV1 ? { taskInputV1 } : {}),
-            ...(archiveRoster ? { participantRoster: archiveRoster } : {}) };
+            ...(archiveRoster ? { participantRoster: archiveRoster } : {}) });
         // Same serialization and byte limit as the draft save itself. Fail before
         // any storage transaction or model request; existing records stay untouched.
         if (archive_importRecovery.archiveRecoveryDraftPlanExceedsCapacity(origin, 'import', draftInputs)) {
@@ -2643,7 +2665,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             sourceFragments: [...chunks.map(chunk => JSON.stringify(chunk)), ...externalChunks.map(chunk => JSON.stringify(chunk))],
             settingsIdentity, fullRebuild, continueApproved: continueRecovery, onProgress: refreshArchiveRecoveryReading,
             draftId, nextIndependentBatch,
-            inputs: draftInputs,
+            inputs: draftInputs, completedOnly: commitCompletedOnly,
             assertCurrent: () => core_requestCoordinator.isLogicalGenerationTaskCurrent(logicalTask) && core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)
                 && core_context.isCurrentTaskRunOrigin(origin, context)
                 && core_context.comparableChatId(core_context.getChatId(context)) === origin.chatId
@@ -2652,6 +2674,8 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         if (!automatic) globalThis.toastr?.info?.(archive_importRecovery.archiveRecoverySummary(origin)?.notice || archive_importRecovery.ARCHIVE_RECOVERY_PAGE_NOTICE, '心迹回廊 · 档案整理');
         const fresh = [];
         for (let i = 0; i < chunks.length; i += 1) {
+            if (savedSlots.has(`chat:${i}`)) { completedChunks += 1; continue; }
+            if (commitCompletedOnly && !receivedSlots.has(`chat:${i}`)) continue;
             runtimeState.activeTaskLabel = `正在${actionLabel}新增聊天 · ${i + 1} / ${chunks.length}`;
             ui_overlay.updateBackgroundTaskLabel(runtimeState.activeTaskLabel);
             await core_context.yieldToUi();
@@ -2670,6 +2694,8 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             core_taskTrace.markChunks(taskTrace, { total: totalChunks, ok: completedChunks, pending: totalChunks - completedChunks });
         }
         for (let i = 0; i < externalChunks.length; i += 1) {
+            if (savedSlots.has(`external:${i}`)) { completedChunks += 1; continue; }
+            if (commitCompletedOnly && !receivedSlots.has(`external:${i}`)) continue;
             runtimeState.activeTaskLabel = `正在${actionLabel}记忆 / 摘要资料 · ${i + 1} / ${externalChunks.length}`;
             ui_overlay.updateBackgroundTaskLabel(runtimeState.activeTaskLabel);
             await core_context.yieldToUi();
@@ -2691,12 +2717,13 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
 
         core_taskTrace.beginStage(taskTrace, 'merge');
         const admitted = admitArchiveBatch(
-            incrementalUpdate ? existing.memories : [],
+            mergeExisting?.memories || [],
             fresh,
-            incrementalUpdate ? existing.coldArchive : [],
+            mergeExisting?.coldArchive || [],
         );
         const memories = admitted.memories;
         capacityPending = admitted.pending;
+        if (commitCompletedOnly && capacityPending.length) throw core_text.safeUserError('成功分段超过当前档案可接收容量，未部分覆盖；请先导出成果并处理档案容量。', 'RMT_ARCHIVE_CHUNK');
         if (legacyDraft && !progress) {
             // Retain the exact old request/replay above, then queue every source not
             // covered by that draft. No old successful chunk is generated a second time.
@@ -2742,11 +2769,15 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         await core_context.yieldToUi();
         if (automatic) assertPreparationCurrent();
         let profile;
-        if (incrementalUpdate) {
+        if (commitCompletedOnly) {
+            profile = mergeExisting ? { archiveName: mergeExisting.archiveName || fallbackArchiveName(memories),
+                archiveSummary: mergeExisting.archiveSummary || fallbackArchiveSummary(memories), archiveVerdict: mergeExisting.archiveVerdict || null,
+                keywords: core_text.cleanArray(mergeExisting.archiveKeywords, 10, 80) } : normalizeArchiveProfile({}, memories);
+        } else if (preserveExisting) {
             // Incremental memory capture does not silently rewrite a user's existing cover.
-            profile = { archiveName: existing.archiveName || fallbackArchiveName(memories),
-                archiveSummary: existing.archiveSummary || fallbackArchiveSummary(memories),
-                archiveVerdict: existing.archiveVerdict || null, keywords: core_text.cleanArray(existing.archiveKeywords, 10, 80) };
+            profile = { archiveName: mergeExisting.archiveName || fallbackArchiveName(memories),
+                archiveSummary: mergeExisting.archiveSummary || fallbackArchiveSummary(memories),
+                archiveVerdict: mergeExisting.archiveVerdict || null, keywords: core_text.cleanArray(mergeExisting.archiveKeywords, 10, 80) };
         } else if (!memories.length) {
             profile = normalizeArchiveProfile({}, memories);
         } else try {
@@ -2775,7 +2806,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         // Capture the chat's cast appearance here, where the card is already in hand.
         // A record the user confirmed by hand is never replaced by this.
         if (!archiveRoster) { try { cast_looks.ensureCastLooks(context); } catch {} }
-        if (incrementalUpdate) profile.archiveName = existing.archiveName || fallbackArchiveName(memories);
+        if (preserveExisting) profile.archiveName = mergeExisting.archiveName || fallbackArchiveName(memories);
         const now = Date.now();
         const memoryBank = {
             version: core_constants.MEMORY_VERSION,
@@ -2787,7 +2818,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             archiveSummary: profile.archiveSummary,
             archiveVerdict: profile.archiveVerdict,
             archiveKeywords: profile.keywords,
-            createdAt: Number(existing?.createdAt) || now,
+            createdAt: Number(mergeExisting?.createdAt || existing?.createdAt) || now,
             updatedAt: now,
             archiveRevision: `${now}-${snapshot.fingerprint}-${external.fingerprint}`,
             sourceFingerprint: `${snapshot.fingerprint}:${external.fingerprint}`,
@@ -2814,13 +2845,16 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         };
         const unfinishedProfile = profilePending;
         if (progress) {
-            const staged = archive_batches.advanceProgress(progress, { pending: capacityPending, archiveRevision: memoryBank.archiveRevision });
+            const staged = commitCompletedOnly
+                ? partial_import.partialProgress(progress, receivedSlots, memoryBank.archiveRevision)
+                : archive_batches.advanceProgress(progress, { pending: capacityPending, archiveRevision: memoryBank.archiveRevision });
+            if (commitCompletedOnly) memoryBank.archivePartialDraft = partial_import.partialReceipt(selectedDraft, memoryBank.archiveRevision);
             memoryBank[archive_batches.IMPORT_PROGRESS_KEY] = staged;
             if (pausedProgress.length) memoryBank.archiveImportPaused = structuredClone(pausedProgress);
             memoryBank.fullSourceFingerprint = snapshotForIdentity.fullFingerprint;
             memoryBank.memoryWorldInfoEntryCount = progress.worldInfoEntryCount ?? memoryBank.memoryWorldInfoEntryCount;
             const totals = archive_batches.progressTotals(staged);
-            const savedRefs = staged.batches.slice(0, staged.nextBatch).flatMap(parts => parts.flatMap(part => part.refs));
+            const savedRefs = archive_batches.savedSourceRefs(staged);
             memoryBank.usedMessageCount = (staged.baseUsedMessages || 0) + new Set(savedRefs.filter(ref => ref.kind === 'chat').map(ref => ref.index)).size;
             memoryBank.usedCharacterCount = (staged.baseUsedChars || 0) + savedRefs.reduce((sum, ref) => sum + ref.length, 0);
             memoryBank.coverageMode = archive_batches.hasPendingBatches(staged) ? 'batched-pending' : 'batched-complete';
@@ -2830,7 +2864,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         }
         // Floor coverage ledger: append only intervals whose paid batch is durably
         // checkpointed in this save; a full rebuild restarts from what it re-read.
-        const coveredRanges = archive_coverage.coveredRangesForSave(fullRebuild ? null : existing, { window: coverageWindow,
+        const coveredRanges = archive_coverage.coveredRangesForSave(preserveExisting ? mergeExisting : null, { window: coverageWindow,
             kind: operationKind, revision: memoryBank.archiveRevision, progress: memoryBank[archive_batches.IMPORT_PROGRESS_KEY] || null });
         if (coveredRanges.length) memoryBank.coveredRanges = coveredRanges;
         const assertBatchSaveCurrent = () => {
@@ -2838,10 +2872,13 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             if (!core_context.runtimeLifecycleStillCurrent(origin.lifecycleEpoch)) throw new DOMException('Runtime destroyed', 'AbortError');
             const live = core_context.currentCharacterGuard();
             if (!core_context.isCurrentTaskOrigin(origin, live)) throw archive_batches.changedInput('archive');
+            if ((commitCompletedOnly || receiptBase?.archivePartialDraft)
+                && core_context.completeArchiveChatFingerprint(live) !== snapshotForIdentity.fullFingerprint) throw archive_batches.changedInput('chat');
             assertBatchCommitIdentity(live, memoryBank);
         };
         core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask);
         if (progress && core_context.isCurrentTaskOrigin(origin)) assertBatchSaveCurrent();
+        if (commitCompletedOnly && !core_context.isCurrentTaskOrigin(origin)) throw new DOMException('Chat changed before partial save', 'AbortError');
         if (independentResult || draftId && !core_context.isCurrentTaskOrigin(origin)) {
             const saved = await archive_importRecovery.retainCompletedArchiveImport(recoveryTicket, memoryBank,
                 { sourceMemory: archiveSourceBank(existing), profilePending: unfinishedProfile, baseMemoryMissing });
@@ -2852,17 +2889,17 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         const commitIntent = core_requestCoordinator.queueDeferredCommitRecord(origin, {
             kind: 'archive',
             memoryBank,
-            preserveDerivedCache: incrementalUpdate,
+            preserveDerivedCache: preserveExisting,
             profilePending,
             completedChunks,
         });
-        if (commitIntent.item) archive_importRecovery.stageArchiveRecoveryCommit(recoveryTicket, memoryBank.archiveRevision, { profilePending, profileMemory: memoryBank });
+        if (commitIntent.item && !commitCompletedOnly) archive_importRecovery.stageArchiveRecoveryCommit(recoveryTicket, memoryBank.archiveRevision, { profilePending, profileMemory: memoryBank });
         let wasBackgrounded = runtimeState.activeTaskBackgrounded || !core_context.isCurrentTaskOrigin(origin);
         if (core_context.isCurrentTaskOrigin(origin)) {
             try {
                 core_taskTrace.beginStage(taskTrace, 'save');
                 await core_cache.saveImportedMemory(core_context.currentCharacterGuard(), memoryBank, snapshot.chatId, {
-                    preserveDerivedCache: incrementalUpdate,
+                    preserveDerivedCache: preserveExisting,
                     expectedTaskOrigin: origin,
                     assertTaskCurrent: () => { core_requestCoordinator.assertLogicalGenerationTaskCurrent(logicalTask); if (progress) assertBatchSaveCurrent(); },
                     explicitCreate: origin.archivePresent === false,
@@ -2885,8 +2922,8 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             if (taskTrace?.activeStage === 'save') core_taskTrace.markStage(taskTrace, 'save', false);
             core_taskTrace.markStage(taskTrace, 'deferred');
         }
-        archive_importRecovery.stageArchiveRecoveryCommit(recoveryTicket, memoryBank.archiveRevision, { profilePending, profileMemory: memoryBank });
-        if (core_context.isCurrentTaskOrigin(origin)) {
+        if (!commitCompletedOnly) archive_importRecovery.stageArchiveRecoveryCommit(recoveryTicket, memoryBank.archiveRevision, { profilePending, profileMemory: memoryBank });
+        if (!commitCompletedOnly && core_context.isCurrentTaskOrigin(origin)) {
             const saved = getImportedMemory(core_context.currentCharacterGuard());
             if (saved?.archiveRevision === memoryBank.archiveRevision) archive_importRecovery.acknowledgeArchiveRecoveryCommit({ ...origin, archiveRevision: saved.archiveRevision }, draftId);
         }
@@ -2898,6 +2935,10 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
         if (!automatic) { runtimeState.activeMode = null; runtimeState.activeSession = null; }
         if (core_context.isCurrentTaskOrigin(origin)) {
             ui_settingsPanel.refreshSettingsMemoryStatus();
+        }
+        if (commitCompletedOnly) {
+            globalThis.toastr?.success?.('已将成功分段入档，未完成部分仍保留；继续时不会重做已入档分段。', '心迹回廊');
+            return { status: core_context.isCurrentTaskOrigin(origin) ? 'committed' : 'deferred' };
         }
         const added = Math.max(0, memories.length - (incrementalUpdate ? existing.memories.length : 0));
         const rollingNotice = archive_capacity.capacityNotice(admitted);
@@ -3049,7 +3090,7 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
         }
     };
     const initialOrigin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
-    await core_settings.prepareManualCredential(context);
+    if (!options.commitCompletedOnly) await core_settings.prepareManualCredential(context);
     core_requestCoordinator.assertLogicalGenerationTaskCurrent(options.logicalTask);
     if (!core_context.isCurrentTaskOrigin(initialOrigin)) throw new DOMException('Chat changed', 'AbortError');
     let existing = getImportedMemory(context);
@@ -3122,14 +3163,17 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
                 usedMessageCount: selectedDraft.inputs.progress?.baseUsedMessages || 0,
                 usedCharacterCount: selectedDraft.inputs.progress?.baseUsedChars || 0, memories: [] } : null;
         } else sourceExisting = existing; // Truly legacy drafts retain the original strict recipe checks.
+        const partialBase = partial_import.partialBaseForDraft(selectedDraft, existing);
         const independentResult = !!previousResult || baseMemoryMissing
-            || (sourceExisting?.archiveRevision || '') !== (existing?.archiveRevision || '');
-        if (!ui_overlay.confirmExplicitAction('继续这份原建档草稿？',
-            `${previousResult ? '继续原任务的下一批。' : '保留已成功分块，仅处理这份草稿尚未完成的部分。'}${independentResult ? '完成后独立保存，当前档案不会被覆盖。' : ''}`, { destructive: false })) return { status: 'cancelled' };
-        options = { ...options, draftId: selectedDraft.draftId, selectedDraft,
+            || (!partialBase && (sourceExisting?.archiveRevision || '') !== (existing?.archiveRevision || ''));
+        if (options.commitCompletedOnly && (independentResult || selectedDraft.stage !== 'segments')) throw core_text.safeUserError('这份草稿不属于当前可写档案基线，原成果保留；请从原任务继续。', 'RMT_RECOVERY_INPUT_CHANGED');
+        if (!ui_overlay.confirmExplicitAction(options.commitCompletedOnly ? '先将成功分段入档？' : '继续这份原建档草稿？',
+            options.commitCompletedOnly ? '只保存通过原来源校验的完整分段，不请求模型；未完成分段与原草稿继续保留。' : `${previousResult ? '继续原任务的下一批。' : '保留已成功分块，仅处理这份草稿尚未完成的部分。'}${independentResult ? '完成后独立保存，当前档案不会被覆盖。' : ''}`, { destructive: false })) return { status: 'cancelled' };
+        options = { ...options, draftId: selectedDraft.draftId, selectedDraft, partialBase,
             fullRebuild: previousResult ? false : selectedDraft.fullRebuild,
             continueRecovery: !previousResult, independentResult, nextIndependentBatch: !!previousResult, baseMemoryMissing };
     }
+    if (options.commitCompletedOnly && !selectedDraft) throw core_text.safeUserError('没有可先入档的原整理草稿，原记录未改动。', 'RMT_ARCHIVE_DRAFT_NOT_FOUND');
     if (!selectedDraft && pending && !pending.onlyArchivedDrafts && !options.restartImport) {
         if (options.automatic === true) return { status: 'blocked' };
         if (pending.capacityBlocked) {

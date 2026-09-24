@@ -1,0 +1,54 @@
+✔ old duplicated source exceeds 12MB; projection fits without deleting authoritative text (669.460501ms)
+✔ a different embedded task is never silently removed (0.64816ms)
+✔ tampered task/input hash is rejected, not resealed (1.244383ms)
+✔ legacy entry projection preserves source hash, request hashes and complete replies (0.994744ms)
+✔ modern draft persists, reloads, and remains bounded; CAS acknowledgement is used (641.104806ms)
+✔ nonredundant drafts above the former 12MB boundary save, reload and import (2220.703735ms)
+✔ actual storage quota failure keeps the draft available and never reports durable success (13.42655ms)
+✔ local-only recovery cannot dispatch an incomplete slot (3.664374ms)
+✔ partial commit leaves failed middle ranges and batch unfinished (1.750073ms)
+✔ half of a split floor is never marked covered (0.45882ms)
+✔ invalid duplicate and out-of-range partial indexes are rejected (0.605837ms)
+✔ receipt cannot be reused for altered replies, a changed revision, or another draft (0.544707ms)
+✔ an unknown complete slot cannot be marked as covered or committed (0.29045ms)
+✔ cache compression and decompression round-trip data above the former storage ceiling (158.447211ms)
+✔ compressed data above former 4M base64 boundary remains readable (307.173653ms)
+✔ formal checkpoint and independent backup accept more than 12MB without bypassing write acknowledgement (105.816413ms)
+(node:24) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ 15 successes survive local partial commit, reload and continuation without duplicate requests (7171.777327ms)
+✔ a failed canonical write keeps the original draft and does not advance coverage (484.604545ms)
+✔ changed chat cannot receive partial results from an earlier source snapshot (433.717383ms)
+✔ export and import preserve successful recipes and sources, without model calls (565.308435ms)
+✔ importing a different source snapshot is rejected without writing (339.452744ms)
+✔ discarding the remaining draft after partial save does not re-request committed source parts (699.90767ms)
+✔ old duplicated snapshots migrate without altering successful request recipes (697.004219ms)
+✔ switching chats during draft persistence cannot write a partial archive (410.723637ms)
+✔ a concurrent formal archive write wins over a stale partial commit (487.674953ms)
+✔ rebuilt runtime bundle supports zero-request partial save and remaining-only continuation (851.026297ms)
+✔ switching at the partial commit boundary leaves the resumable original draft intact (535.275704ms)
+✔ external-source partial save retains validated anchors and never claims chat floor coverage (753.445565ms)
+(node:25) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ single-card appearance after the old 20k JSON and 5k field cuts remains available (2.10625ms)
+✔ single-card omitted model illustration recovers only factual appearance and letter scene locally (1.679128ms)
+✔ multiplayer world-book source ownership does not require name in every quote (0.699226ms)
+✔ a shared world-book uses named sections and never lends another persons appearance (0.642352ms)
+✔ omitted art in a multi-person letter follows the named sender rather than first selected person (0.326864ms)
+✔ sources not sent, unknown names, missing facts and missing scenes cannot invent art (0.566209ms)
+✔ whitespace-normalized quoted appearance still matches frozen original text (0.176401ms)
+✔ single-card appearance from named selected world book is usable (0.218023ms)
+✔ normal inbox normalization saves local art and reopening preserves its exact drawing (13.440594ms)
+✔ malformed model markup is never used as SVG or executed (0.4653ms)
+✔ actual bundled single inbox preparation carries full card evidence to its normalizer (210.589857ms)
+✔ actual bundled multiplayer inbox preparation freezes world-book ownership (224.55408ms)
+✔ merged inbox receives its selected source bodies once and accepts their owned art (226.684014ms)
+✔ world-book CRLF normalization preserves the participant source binding (0.444629ms)
+ℹ tests 42
+ℹ suites 0
+ℹ pass 42
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 13551.204266

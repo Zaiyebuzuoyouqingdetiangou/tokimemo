@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.15-r84.67",
+  "js": "index.js?heartbeat=0.99.17-r84.69-mail-storage",
   "author": "Toto",
-  "version": "0.99.15",
+  "version": "0.99.17",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.60：失败原因留在任务上，手帐可改名删除，出行蝴蝶前世可先留目录再补正文，设置里可看楼层覆盖。",
+  "description": "r84.69：取消固定存储字节上限，修复角色卡与世界书随信小画，支持成功分段先入档。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

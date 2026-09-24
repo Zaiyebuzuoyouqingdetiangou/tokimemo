@@ -1,5 +1,5 @@
-const VERSION = '0.99.15';
-const BUILD = '0.99.15-r84.67';
+const VERSION = '0.99.17';
+const BUILD = '0.99.17-r84.69-mail-storage';
 
 const SETTINGS_ID = 'heartbeat_memories_settings';
 const MENU_ID = 'heartbeat_memories_menu_item';
