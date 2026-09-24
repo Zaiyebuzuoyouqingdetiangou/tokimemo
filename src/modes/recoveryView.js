@@ -16,7 +16,8 @@ export function recoveryBannerHtml(stored, bank, { readOnly = false } = {}) {
         // discard so the user is never left without an exit.
         const oversized = summary.oversized === true;
         const label = summary.canContinue ? '继续生成' : '重试未完成部分';
-        const reason = oversized ? '草稿超出本地保存上限，不能继续生成；已保留的内容不受影响，请导出留存后明确放弃' : summary.canContinue ? '正文未写完' : summary.failureCode ? text.safeErrorSummary({ code: summary.failureCode }) : '任务尚未完成';
+        const classified = generation_recovery.generationFailureReason(summary);
+        const reason = oversized ? '草稿超出本地保存上限，不能继续生成；已保留的内容不受影响，请导出留存后明确放弃' : classified || (summary.failureCode ? text.safeErrorSummary({ code: summary.failureCode }) : '任务尚未完成');
         const continueButton = oversized ? '' : `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${text.esc(mode)}">${label}</button> `;
         const exportButton = oversized ? `<button type="button" class="rmt-btn" data-rmt-recovery-export="${text.esc(mode)}">导出未提交草稿</button> ` : '';
         const tail = oversized ? '。' : '。继续会使用生成额度。';

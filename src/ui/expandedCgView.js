@@ -20,11 +20,13 @@ export function previousExpandedImagesHtml(session, descriptor) {
     return '<details class="rmt-cg-previous-scenes"><summary>先前内容的图片（' + pictures.length + '）</summary>' + pictures.map(picture => '<img loading="lazy" style="max-width:100%;height:auto" src="' + text.esc(picture.url) + '" alt="先前内容的已保存图片">').join('') + '</details>';
 }
 
-export function expandedCgHtml(session, input, readOnly = false) {
+// savedOnly：只在已经存过图片时才显示（用于已停用的整篇入口，避免旧图凭空消失）。
+export function expandedCgHtml(session, input, readOnly = false, { savedOnly = false } = {}) {
     const descriptor = targets.describeExpandedCgTarget(session, input);
     const resolved = descriptor && targets.expandedCgItem(session, descriptor);
     if (!resolved) return '';
     const saved = images.normalizeCgImageRecord(resolved.item.cgImage);
+    if (savedOnly && !saved) return '';
     const attrs = `data-rmt-expanded-cg="${text.esc(JSON.stringify(descriptor))}"`;
     return `<section class="rmt-expanded-cg">${saved ? `<div class="rmt-thumb">${images.cgImageLayerHtml(resolved.item)}</div>` : ''}<div class="rmt-cg-card-actions">${saved ? `<button type="button" class="rmt-btn" ${attrs} data-rmt-expanded-cg-view="1">查看已保存图片</button>` : ''}${readOnly ? '' : `<button type="button" class="rmt-btn" ${attrs}>${saved ? '编辑画面 / 再画一张' : '设置画面并预览生图'}</button>`}</div>${previousExpandedImagesHtml(session, descriptor)}</section>`;
 }

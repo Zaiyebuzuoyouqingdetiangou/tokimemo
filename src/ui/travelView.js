@@ -425,7 +425,7 @@ export function travelPostcardHtml(item, session, options = {}) {
           <small>POSTCARD FROM ${core_text.esc(item.region || item.name)}</small>
           <h3>${core_text.esc(card.title)}</h3>
           ${card.greeting ? `<b>${core_text.esc(card.greeting)}</b>` : ''}
-          <p>${core_text.esc(card.body)}</p>
+          <p>${core_text.esc(card.body || (item.prosePending ? '纪念文字还没写上。地点已经留下，可以再补这一段。' : ''))}</p>
           <footer>${core_text.esc(card.closing)}</footer>
         </div>
         <div class="rmt-travel-postcard-address"><span>TO</span><b>${core_text.esc(userName)}</b><small>${core_text.esc(item.distanceLabel)}</small></div>
@@ -466,7 +466,7 @@ function travelDialogueHtml(item, session) {
     return `<section class="rmt-travel-dialogue" role="dialog" aria-modal="false" aria-label="${core_text.esc(item.name)}的地点对话">
       <button type="button" class="rmt-travel-detail-close" data-rmt-action="travel-close-detail" aria-label="收起地点对话">×</button>
       <div class="rmt-travel-dialogue-place"><small>NEARBY STOP · ${core_text.esc(item.distanceLabel)}</small><h3>${core_text.esc(item.name)}</h3><p>${core_text.esc(item.summary)}</p></div>
-      <div class="rmt-travel-dialogue-bubble"><b>${core_text.esc(charName)}</b><p>${core_text.esc(lines[index] || '')}</p><span>${lines.length ? `${index + 1} / ${lines.length}` : '0 / 0'}</span></div>
+      <div class="rmt-travel-dialogue-bubble"><b>${core_text.esc(charName)}</b><p>${core_text.esc(lines[index] || (item.prosePending ? '对白还没写上。地点已经留下，可以再补这一段。' : ''))}</p><span>${lines.length ? `${index + 1} / ${lines.length}` : '0 / 0'}</span></div>
       <div class="rmt-travel-dialogue-actions">
         <button type="button" class="rmt-btn" data-rmt-action="travel-dialogue-prev" ${index <= 0 ? 'disabled' : ''}>上一句</button>
         <button type="button" class="rmt-btn" data-rmt-action="travel-dialogue-replay">重听</button>
@@ -533,7 +533,7 @@ export function travelDialogueStep(delta) {
     const session = runtimeState.activeSession;
     const item = selectedTravelLocation();
     if (!session || session.kind !== core_constants.MODE.TRAVEL || item?.kind !== 'near') return;
-    const max = Math.max(0, item.dialogueLines.length - 1);
+    const max = Math.max(0, (item.dialogueLines || []).length - 1);
     session.dialogueIndex = Math.max(0, Math.min(max, Math.floor(Number(session.dialogueIndex) || 0) + Number(delta || 0)));
     renderTravel();
 }

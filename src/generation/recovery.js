@@ -74,6 +74,18 @@ const RETRY_FEEDBACK = Object.freeze({
     evidence: '上一轮终端条目缺少可保存的完整内容或来源证据。普通日常按人设写正在使用的记录，标题要具体；只有共同过去和私密字段才需要原文。不要返回“按此 App 用途补齐”。',
     speakers: '上一轮说话人或对象未通过校验。当前用户线程只写主人草稿；普通联系人写真实姓名；组卡 owner 用成员真名，不用卡名。',
 });
+const FAILURE_DETAIL = Object.freeze({
+    json: '没有完整 JSON',
+    empty: '没有最终正文',
+    truncated: 'JSON 没有闭合',
+    sentences: '句数不够',
+    chars: '字数不够',
+    length: '句数或字数不够',
+    structure: '结构或完整度未通过',
+    noconvo: '通讯没有可保存的对话',
+    evidence: '缺少可保存的来源证据',
+    speakers: '说话人或对象未通过',
+});
 function classifyLengthKind(text) {
     const message = String(text || '');
     if (!message) return '';
@@ -98,6 +110,13 @@ function failureFeedback(code, error) {
     if (code === 'RMT_PHONE_EVIDENCE') return 'evidence';
     if (code === 'RMT_PHONE_SPEAKERS') return 'speakers';
     if (['RMT_SEGMENT_VALIDATION', 'RMT_ROOM_STRUCTURE', 'RMT_ROOM_FIELDS'].includes(code)) return 'structure';
+    return '';
+}
+export function generationFailureReason(summary) {
+    if (!summary) return '';
+    if (summary.canContinue) return '正文未写完';
+    if (summary.failureDetail) return summary.failureDetail;
+    if (summary.failed && !summary.failureCode) return '上次中断时还没有留下具体失败原因';
     return '';
 }
 export function generationRetryFeedbackText(code, error) {
@@ -346,11 +365,14 @@ export function generationRecoverySummary(raw, now = Date.now()) {
     const truncated = journal.segments.filter(segment => segment.state === 'truncated').length;
     const failed = journal.segments.filter(segment => segment.state === 'retry').length;
     const retryableFailed = journal.segments.some(segment => segment.state === 'retry');
+    const segmentFailure = [...journal.segments].reverse().find(segment => segment.state === 'retry' && (segment.failureCode || FAILURE_DETAIL[segment.failureFeedback]));
+    const failureCode = journal.failureCode || segmentFailure?.failureCode || '';
+    const failureDetail = FAILURE_DETAIL[segmentFailure?.failureFeedback] || FAILURE_DETAIL[failureFeedback(failureCode)] || '';
     const canContinue = !oversized && !blocked && truncated > 0 && (!journal.failureCode || journal.failureCode === 'RMT_JSON_TRUNCATED');
     return {
         mode: journal.identity.mode, completed, truncated, failed, updatedAt: journal.updatedAt,
-        canContinue, canRetry: !oversized && !blocked && (retryableFailed || (!canContinue && !!journal.failureCode)),
-        failureCode: journal.failureCode || '',
+        canContinue, canRetry: !oversized && !blocked && (retryableFailed || (!canContinue && !!failureCode)),
+        failureCode, ...(failureDetail ? { failureDetail } : {}),
         ...(oversized ? { oversized: true } : {}),
         ...(blocked ? { blocked: true, oversized: true } : {}),
         ...(journal.failureCategory ? { failureCategory: journal.failureCategory, failurePhase: journal.failurePhase } : {}),

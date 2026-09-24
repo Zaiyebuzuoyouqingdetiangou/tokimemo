@@ -8,6 +8,8 @@ import * as core_evidence from '../core/evidence.js';
 import * as core_incremental from '../core/incremental.js';
 import * as core_text from '../core/text.js';
 import * as core_relationshipSafety from '../core/relationshipSafety.js';
+import * as core_requestCoordinator from '../core/requestCoordinator.js';
+import * as core_settings from '../core/settings.js';
 import * as generation_client from '../generation/client.js';
 import * as generation_prompts from '../generation/prompts.js';
 import * as generation_recovery from '../generation/recovery.js';
@@ -113,6 +115,10 @@ export function assertButterflyColdSystemNote(value, label = 'SYSTEM NOTE') {
     return text;
 }
 
+function narrativeGap(error) {
+    return ['RMT_BUTTERFLY_monologue', 'RMT_BUTTERFLY_intervention', 'RMT_BUTTERFLY_systemNote'].includes(error?.code);
+}
+
 function normalizeNarrative(node, context, options = {}) {
     const label = core_text.normalizeText(node?.label, 120);
     const monologue = core_text.normalizeText(node?.monologue, 12000);
@@ -133,12 +139,38 @@ function normalizeNarrative(node, context, options = {}) {
 
 export function normalizeButterflyBranch(node, index, memoryBank, context = {}, options = {}) {
     const serial = String(Math.max(1, Number(index) || 1)).padStart(2, '0');
+    const incremental = options.incremental === true;
     const worldSpec = normalizeButterflyWorldSpec(node);
-    const narrative = normalizeNarrative(node, context, {
-        label: options.label || `平行分歧 ${serial}`,
-    });
     for (const [field, value] of Object.entries(worldSpec)) {
         if (field !== 'thirdPartyRomance') assertButterflyRelationshipSafety(value, context, `平行分歧 ${serial} worldSpec.${field}`);
+    }
+    let narrative;
+    try {
+        narrative = normalizeNarrative(node, context, {
+            label: options.label || `平行分歧 ${serial}`,
+        });
+    } catch (error) {
+        if (!narrativeGap(error)) throw error;
+        const label = core_text.normalizeText(node?.label, 120);
+        if (!label || core_text.isPlaceholderText(label)) throw error;
+        assertButterflyRelationshipSafety(label, context, `平行分歧 ${serial} label`);
+        const reference = core_evidence.normalizeMemoryReference(node?.sourceMemoryIds, node?.sourceMemoryAnchor, label, memoryBank, 0);
+        return {
+            id: incremental ? `EG_NEW_${serial}` : `EG${serial}`,
+            label,
+            code: incremental ? `> SIMULATION RECORD #NEW-${serial}` : `> SIMULATION RECORD #EG-${serial}`,
+            signal: 'IMAGE_DATA_CORRUPTED',
+            locked: false,
+            trueEnding: false,
+            primaryAxis: worldSpec.primaryAxis,
+            worldSpec,
+            sourceMemoryIds: reference.sourceMemoryIds,
+            sourceMemoryAnchor: reference.sourceMemoryAnchor,
+            monologue: '',
+            intervention: '',
+            systemNote: '',
+            prosePending: true,
+        };
     }
     const reference = core_evidence.normalizeMemoryReference(
         node?.sourceMemoryIds,
@@ -147,7 +179,6 @@ export function normalizeButterflyBranch(node, index, memoryBank, context = {}, 
         memoryBank,
         0,
     );
-    const incremental = options.incremental === true;
     return {
         id: incremental ? `EG_NEW_${serial}` : `EG${serial}`,
         label: narrative.label,
@@ -167,21 +198,29 @@ export function normalizeButterflyBranch(node, index, memoryBank, context = {}, 
 
 export function normalizeButterflyOmega(node, context = {}) {
     const label = core_text.normalizeText(node?.label, 120);
-    const monologue = core_text.normalizeText(node?.monologue, 12000);
-    const intervention = core_text.normalizeText(node?.intervention, 12000);
-    const systemNote = assertButterflyColdSystemNote(node?.systemNote, '观测点 Ω SYSTEM NOTE');
     if (!label || !/(?:观测点\s*Ω|TRUE\s*ENDING)/i.test(label)) throw core_butterflyContract.butterflyValidationError('omega');
-    if (monologue) throw core_butterflyContract.butterflyValidationError('omega');
-    if (!intervention || core_text.isPlaceholderText(intervention)) {
-        throw core_butterflyContract.butterflyValidationError('omega');
+    try {
+        const monologue = core_text.normalizeText(node?.monologue, 12000);
+        const intervention = core_text.normalizeText(node?.intervention, 12000);
+        const systemNote = assertButterflyColdSystemNote(node?.systemNote, '观测点 Ω SYSTEM NOTE');
+        if (monologue) throw core_butterflyContract.butterflyValidationError('omega');
+        if (!intervention || core_text.isPlaceholderText(intervention)) throw core_butterflyContract.butterflyValidationError('omega');
+        for (const [field, value] of Object.entries({ label, intervention, systemNote })) {
+            assertButterflyRelationshipSafety(value, context, `观测点 Ω ${field}`);
+        }
+        return {
+            id: 'OMEGA', label, code: '> OBSERVATION POINT #OMEGA', locked: false, trueEnding: true,
+            sourceMemoryIds: [], sourceMemoryAnchor: '', monologue: '', intervention, systemNote,
+        };
+    } catch (error) {
+        const missingBody = error?.code === 'RMT_BUTTERFLY_omega' || narrativeGap(error);
+        if (core_text.normalizeText(node?.monologue, 12000) || !missingBody) throw error;
+        assertButterflyRelationshipSafety(label, context, '观测点 Ω label');
+        return {
+            id: 'OMEGA', label, code: '> OBSERVATION POINT #OMEGA', locked: false, trueEnding: true,
+            sourceMemoryIds: [], sourceMemoryAnchor: '', monologue: '', intervention: '', systemNote: '', prosePending: true,
+        };
     }
-    for (const [field, value] of Object.entries({ label, intervention, systemNote })) {
-        assertButterflyRelationshipSafety(value, context, `观测点 Ω ${field}`);
-    }
-    return {
-        id: 'OMEGA', label, code: '> OBSERVATION POINT #OMEGA', locked: false, trueEnding: true,
-        sourceMemoryIds: [], sourceMemoryAnchor: '', monologue: '', intervention, systemNote,
-    };
 }
 
 function isOmegaCandidate(node) {
@@ -191,9 +230,23 @@ function isOmegaCandidate(node) {
 }
 
 function normalizedMainNode(node, memoryBank, context) {
-    const narrative = normalizeNarrative(node, context, {
-        label: '主时间线',
-    });
+    let narrative;
+    try {
+        narrative = normalizeNarrative(node, context, {
+            label: '主时间线',
+        });
+    } catch (error) {
+        if (!narrativeGap(error)) throw error;
+        const label = core_text.normalizeText(node?.label, 120);
+        if (!label || core_text.isPlaceholderText(label)) throw error;
+        const reference = core_evidence.normalizeMemoryReference(node?.sourceMemoryIds, node?.sourceMemoryAnchor, label, memoryBank, 1);
+        if (!reference.sourceMemoryIds.length || !reference.sourceMemoryAnchor) throw new Error('蝴蝶效应主时间线缺少有效档案锚点。');
+        return {
+            id: 'MAIN', label, code: '> SIMULATION RECORD #MAIN', locked: true, trueEnding: false,
+            sourceMemoryIds: reference.sourceMemoryIds, sourceMemoryAnchor: reference.sourceMemoryAnchor,
+            monologue: '', intervention: '', systemNote: '', prosePending: true,
+        };
+    }
     const reference = core_evidence.normalizeMemoryReference(
         node?.sourceMemoryIds, node?.sourceMemoryAnchor,
         `${narrative.label}\n${narrative.monologue}\n${narrative.intervention}\n${narrative.systemNote}`,
@@ -215,7 +268,7 @@ export function projectButterflyProgress({ segments = [], memoryBank, context = 
         const label = core_incremental.normalizedContentKey(node.label, 180);
         const signature = butterflyWorldSignature(node);
         const monologue = core_incremental.normalizedContentKey(node.monologue, 12000);
-        if (labels.has(label) || signatures.has(signature) || monologues.has(monologue)) return;
+        if (labels.has(label) || signatures.has(signature) || (monologue && monologues.has(monologue))) return;
         labels.add(label); signatures.add(signature); monologues.add(monologue); nodes.push(node);
     };
     const partialNode = (raw, index) => {
@@ -291,10 +344,10 @@ export function normalizeButterfly(data, memoryBank, context = {}, options = {})
         const monologueKey = core_incremental.normalizedContentKey(branch.monologue, 12000);
         if (!labelKey || labels.has(labelKey)) throw new Error('平行世界标题重复，不能只换节点编号。');
         if (!signature || signatures.has(signature)) throw new Error('平行世界 worldSpec 重复，必须是实质不同的生活轨迹。');
-        if (!monologueKey || monologues.has(monologueKey)) throw new Error('平行世界独白重复，不能只替换标题或设定标签。');
+        if (!branch.prosePending && (!monologueKey || monologues.has(monologueKey))) throw new Error('平行世界独白重复，不能只替换标题或设定标签。');
         labels.add(labelKey);
         signatures.add(signature);
-        monologues.add(monologueKey);
+        if (monologueKey) monologues.add(monologueKey);
     }
     const ending = normalizeButterflyOmega(rawNodes[rawNodes.length - 1], context);
     return {
@@ -323,6 +376,71 @@ export function butterflySlotPrompt(context, memoryBank, index, slot, nodes, opt
             : '\nMAIN 只写主时间线，并给 node.branchAxes 数组，从 era/identity/occupation/location/decision/encounter/bond/fate 选择至少一个值得展开的分歧维度，缺省为 decision。普通槽位使用指定 primaryAxis；OMEGA 只写终点。继续遵守上面的观测叙事、来源和关系要求。')
         + '\nEXISTING_VALID_WORLD_INDEX_JSON:' + JSON.stringify(existing)
         + (slot === 'OMEGA' ? '\nVALIDATED_VOICES_JSON:' + JSON.stringify(nodes.map(node => ({ label: node.label, monologue: node.monologue.slice(0, 700), intervention: node.intervention.slice(0, 500) }))) : '');
+}
+
+function pendingButterflyNodes(session) {
+    return (session?.nodes || []).filter(node => node.prosePending === true);
+}
+
+export async function fillButterflyProse(context, memoryBank, origin, taskKey, session, options = {}) {
+    const pending = pendingButterflyNodes(session);
+    if (!pending.length) {
+        core_requestCoordinator.noteSecondStepOffer(origin, null);
+        return session;
+    }
+    const request = options.request || generation_client.requestValidatedSegment;
+    return request(
+        generation_prompts.promptSafetyBoundary(context, '蝴蝶效应 / 补正文', null, memoryBank)
+        + '\n只补下面这些节点缺少的 monologue、intervention、systemNote。不得改 id、label、worldSpec、primaryAxis、sourceMemoryIds、sourceMemoryAnchor。'
+        + '\nOMEGA 的 monologue 必须为空。只输出 {"repairs":[{"id":"节点id","monologue":"","intervention":"","systemNote":""}]}。'
+        + '\nPENDING_NODES_JSON:\n' + JSON.stringify(pending.map(node => ({
+            id: node.id, label: node.label, primaryAxis: node.primaryAxis, trueEnding: node.trueEnding === true, worldSpec: node.worldSpec || null,
+        }))),
+        '蝴蝶效应 · 正在补观测正文…',
+        { maxTokens: 4096, context, contextEnvelope: options.contextEnvelope, origin, taskKey: `${taskKey}:butterfly-prose`, mode: core_constants.MODE.BUTTERFLY, background: true },
+        raw => {
+            const repairs = new Map((Array.isArray(raw?.repairs) ? raw.repairs : []).map(row => [core_text.normalizeText(row?.id, 80), row]));
+            const nodes = session.nodes.map((node, index) => {
+                if (!node.prosePending) return node;
+                const patch = repairs.get(node.id);
+                if (!patch) return node;
+                const draft = { ...node, monologue: patch.monologue, intervention: patch.intervention, systemNote: patch.systemNote };
+                delete draft.prosePending;
+                const normalized = node.id === 'MAIN'
+                    ? normalizedMainNode(draft, memoryBank, context)
+                    : node.trueEnding === true || node.id === 'OMEGA'
+                        ? normalizeButterflyOmega(draft, context)
+                        : normalizeButterflyBranch(draft, index, memoryBank, context);
+                if (normalized.prosePending) return node;
+                return {
+                    ...normalized,
+                    id: node.id,
+                    worldSpec: node.worldSpec,
+                    primaryAxis: node.primaryAxis,
+                    sourceMemoryIds: node.sourceMemoryIds,
+                    sourceMemoryAnchor: node.sourceMemoryAnchor,
+                };
+            });
+            if (nodes.some(node => node.prosePending)) throw core_butterflyContract.butterflyValidationError('monologue');
+            const checked = normalizeButterfly({ ...session, nodes }, memoryBank, context);
+            core_requestCoordinator.noteSecondStepOffer(origin, null);
+            return { ...session, nodes: checked.nodes };
+        },
+    );
+}
+
+async function settleButterflyProse(session, context, memoryBank, origin, taskKey, options = {}) {
+    if (!pendingButterflyNodes(session).length) {
+        core_requestCoordinator.noteSecondStepOffer(origin, null);
+        return session;
+    }
+    if (options.secondStep === true || core_settings.getPluginSettings().autoSecondPass === true) {
+        return fillButterflyProse(context, memoryBank, origin, taskKey, session, options);
+    }
+    core_requestCoordinator.noteSecondStepOffer(origin, {
+        label: '观测正文', kind: 'butterfly-prose', mode: core_constants.MODE.BUTTERFLY, pageId: core_constants.MODE.BUTTERFLY,
+    });
+    return session;
 }
 
 export async function generateButterflyWithRepair(context, memoryBank, origin, taskKey, dependencies = {}) {
@@ -374,7 +492,7 @@ export async function generateButterflyWithRepair(context, memoryBank, origin, t
                     const label = core_incremental.normalizedContentKey(candidate.label, 180);
                     const signature = butterflyWorldSignature(candidate);
                     const monologue = core_incremental.normalizedContentKey(candidate.monologue, 12000);
-                    if (candidate.primaryAxis !== slot || labels.has(label) || signatures.has(signature) || monologues.has(monologue)) {
+                    if (candidate.primaryAxis !== slot || labels.has(label) || signatures.has(signature) || (monologue && monologues.has(monologue))) {
                         throw core_butterflyContract.butterflyValidationError('unique');
                     }
                 }
@@ -388,10 +506,11 @@ export async function generateButterflyWithRepair(context, memoryBank, origin, t
         if (PRIMARY_AXIS_SET.has(slot)) {
             labels.add(core_incremental.normalizedContentKey(node.label, 180));
             signatures.add(butterflyWorldSignature(node));
-            monologues.add(core_incremental.normalizedContentKey(node.monologue, 12000));
+            const savedMonologue = core_incremental.normalizedContentKey(node.monologue, 12000);
+            if (savedMonologue) monologues.add(savedMonologue);
         }
     }
-    return normalizeButterfly({ nodes }, memoryBank, context, { expectedAxes: plannedAxes });
+    return settleButterflyProse(normalizeButterfly({ nodes }, memoryBank, context, { expectedAxes: plannedAxes }), context, memoryBank, origin, taskKey, dependencies);
 }
 export function butterflyIncrementPrompt(context, memoryBank, previous, sourceMemoryIds, options = {}) {
     const existing = (Array.isArray(previous?.nodes) ? previous.nodes.slice(1, -1) : []).slice(-core_constants.MAX_INCREMENTAL_EXISTING_INDEX_ITEMS).map(item => ({
@@ -436,12 +555,12 @@ export function normalizeButterflyIncrementPart(data, memoryBank, context = {}) 
         const signature = butterflyWorldSignature(branch);
         const labelKey = core_incremental.normalizedContentKey(branch.label, 180);
         const monologueKey = core_incremental.normalizedContentKey(branch.monologue, 12000);
-        if (!signature || signatures.has(signature) || !labelKey || labels.has(labelKey) || !monologueKey || monologues.has(monologueKey)) {
+        if (!signature || signatures.has(signature) || !labelKey || labels.has(labelKey) || (!branch.prosePending && (!monologueKey || monologues.has(monologueKey)))) {
             throw new Error('蝴蝶效应增量分歧彼此重复。');
         }
         signatures.add(signature);
         labels.add(labelKey);
-        monologues.add(monologueKey);
+        if (monologueKey) monologues.add(monologueKey);
     }
     if (!data?.omega || typeof data.omega !== 'object') throw new Error('蝴蝶效应增量缺少唯一观测点 Ω。');
     return { branches, omega: normalizeButterflyOmega(data.omega, context) };
@@ -514,10 +633,10 @@ export function mergeButterflyIncremental(previous, part, sourceMemoryIds) {
         const key = butterflyBranchKey(branch);
         const labelKey = core_incremental.normalizedContentKey(branch?.label, 180);
         const monologueKey = core_incremental.normalizedContentKey(branch?.monologue, 12000);
-        if (!key || seen.has(key) || !labelKey || seenLabels.has(labelKey) || !monologueKey || seenMonologues.has(monologueKey)) continue;
+        if (!key || seen.has(key) || !labelKey || seenLabels.has(labelKey) || (!branch.prosePending && (!monologueKey || seenMonologues.has(monologueKey)))) continue;
         seen.add(key);
         seenLabels.add(labelKey);
-        seenMonologues.add(monologueKey);
+        if (monologueKey) seenMonologues.add(monologueKey);
         const serial = String(previousBranches.length + addedBranches.length + 1).padStart(2, '0');
         addedBranches.push({
             ...structuredClone(branch),
@@ -580,5 +699,8 @@ export async function generateButterflyIncrementalWithRepair(context, memoryBank
         raw => normalizeButterflyIncrementPart(raw, memoryBank, context),
     );
     const merged = mergeButterflyIncremental(previous, part, sourceMemoryIds);
-    return core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, Math.max(0, merged.nodes.length - previous.nodes.length));
+    return settleButterflyProse(
+        core_incremental.stampIncrementalCoverage(merged, previous, memoryBank, 'mode', sourceMemoryIds, Math.max(0, merged.nodes.length - previous.nodes.length)),
+        context, memoryBank, origin, taskKey, {},
+    );
 }

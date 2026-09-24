@@ -1742,13 +1742,15 @@ async function generateModeOperation(mode, options = {}) {
         } else if (time_stories.isTimeStoryMode(mode)) {
             session = await modes_timeStories.generateTimeStoryWithRepair(mode, context, memoryBank, origin, taskKey, { previousSession, replaceExisting, presentationContext });
         } else if (mode === core_constants.MODE.PAST_LIVES) {
-            session = await modes_pastLives.generatePastLivesWithRepair(context, memoryBank, origin, taskKey, { previousSession, replaceExisting, presentationContext });
+            session = await modes_pastLives.generatePastLivesWithRepair(context, memoryBank, origin, taskKey, { previousSession, replaceExisting, presentationContext, secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.ADV) {
             session = await modes_advEvent.generateAdvIndexWithRepair(context, memoryBank, origin, expectedChatId, taskKey, { replaceExisting });
+        } else if (mode === core_constants.MODE.BUTTERFLY && options.fillButterflyText && previousSession) {
+            session = await modes_butterfly.fillButterflyProse(context, memoryBank, origin, taskKey, previousSession);
         } else if (mode === core_constants.MODE.BUTTERFLY) {
             session = previousSession
                 ? await modes_butterfly.generateButterflyIncrementalWithRepair(context, memoryBank, origin, taskKey, previousSession)
-                : await modes_butterfly.generateButterflyWithRepair(context, memoryBank, origin, taskKey);
+                : await modes_butterfly.generateButterflyWithRepair(context, memoryBank, origin, taskKey, { secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.ROOM && options.fillRoomText && previousSession) {
             session = await modes_room.generateRoomWithRepair(context, memoryBank, origin, taskKey, { presentationContext, participantSnapshot, fillExisting: true, existingSession: previousSession, secondStep: true });
         } else if (mode === core_constants.MODE.ROOM && options.visualOnly && previousSession) {
@@ -1786,8 +1788,12 @@ async function generateModeOperation(mode, options = {}) {
                     stillCurrent: archiveTargetStillCurrent,
                     presentationContext,
                 });
+        } else if (mode === core_constants.MODE.TRAVEL && options.fillTravelText && previousSession) {
+            session = await modes_travel.fillTravelProse(context, memoryBank, origin, taskKey, previousSession, {
+                contextEnvelope: presentationContext?.contextEnvelope, controlledEvidence: presentationContext?.settingEvidence || '',
+            });
         } else if (mode === core_constants.MODE.TRAVEL) {
-            session = await modes_travel.generateTravelWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, presentationContext, allowPersonaExpansion });
+            session = await modes_travel.generateTravelWithRepair(context, memoryBank, origin, taskKey, { replaceExisting, presentationContext, allowPersonaExpansion, secondStep: options.secondStep === true });
         } else if (mode === core_constants.MODE.RELATIONS) {
             const selectedBooks = await generation_recovery.frozenGenerationInput(origin, 'relations:setting-books',
                 () => archive_repository.collectSelectedMemoryWorldInfo(context, expectedChatId, null, { settingsOnly: true }));
