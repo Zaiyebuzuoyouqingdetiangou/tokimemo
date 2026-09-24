@@ -102,10 +102,12 @@ export function finishLogicalGenerationTask(handle, result = null) {
         handle.failureCode = core_text.normalizeText(result.error.code, 80);
         handle.failureSummary = core_text.safeErrorSummary(result.error);
     }
-    rememberSettledTask(handle, handle.status);
     handle.releaseParent();
     if (handle.signal.aborted) cancelledLogicalOrigins.push(handle);
     logicalGenerationTasks.delete(handle.id);
+    // The refresh inside rememberSettledTask must not see this finished task
+    // as still running; otherwise the archive chip remains stuck at “准备”.
+    rememberSettledTask(handle, handle.status);
     handle.resolveSettled({ id: handle.id, kind: handle.kind, mode: handle.mode, pageId: handle.pageId, status: handle.status });
 }
 

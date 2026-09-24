@@ -21,7 +21,11 @@ export function memoryStateLabel(state, autoSync = false) {
     } else if (state.sourceChanged) {
         pending = '当前聊天内容与上次记录点有修改；编辑不会增加楼层，档案保留已归档版本。';
     }
-    return `已收录热位 ${memory.memories.length}/${core_constants.MAX_MEMORY_ITEMS} 条记忆${memory.coldArchive?.length ? `，冷归档 ${memory.coldArchive.length}` : ''}，记录到 ${memory.sourceMessageCount} 条聊天消息${suffix}。${pending}`;
+    const progress = memory.archiveImportProgress;
+    const status = progress?.nextBatch < progress?.batches?.length
+        ? `建档尚未完成，已正式保存 ${memory.usedMessageCount || 0} 条来源消息；请继续待入档结果或下一批。`
+        : pending;
+    return `已收录 ${memory.memories.length} 条记忆${memory.coldArchive?.length ? `，冷归档 ${memory.coldArchive.length}` : ''}，来源共 ${memory.sourceMessageCount} 条聊天消息${suffix}。${status}`;
 }
 
 export function currentCharacterAvatar(context = core_context.currentCharacterGuard()) {

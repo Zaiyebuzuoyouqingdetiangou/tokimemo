@@ -65,6 +65,10 @@ export const IMPORT_CHUNK_CHARS = 30000;
 
 export const MAX_MEMORY_ITEMS = 240;
 
+// Formal storage is not the model's per-request evidence/output budget.
+// Keep MAX_MEMORY_ITEMS bounded for existing prompt consumers only.
+export const MAX_STORED_MEMORY_ITEMS = Infinity;
+
 export const MAX_COLD_ARCHIVE_ITEMS = 100;
 
 export const MAX_ROLLING_EVICT_PER_BATCH = 20;

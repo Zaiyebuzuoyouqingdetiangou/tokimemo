@@ -767,7 +767,7 @@ export function heartStripKey(item) {
 
 export function applyHeartPatchCoverage(updated, base, patch, added) {
     if (!patch?.coveragePart) return updated;
-    const ids = core_text.cleanArray(patch.archiveMemoryIds, core_constants.MAX_MEMORY_ITEMS, 40);
+    const ids = core_text.cleanArray(patch.archiveMemoryIds, core_constants.MAX_STORED_MEMORY_ITEMS, 40);
     const pseudoBank = {
         archiveRevision: core_text.normalizeText(patch.archiveRevision, 240),
         memories: ids.map(id => ({ id })),
@@ -777,7 +777,7 @@ export function applyHeartPatchCoverage(updated, base, patch, added) {
         base,
         pseudoBank,
         core_text.normalizeText(patch.coveragePart, 80),
-        core_text.cleanArray(patch.coverageConsumedMemoryIds || patch.sourceMemoryIds, core_constants.MAX_MEMORY_ITEMS, 40),
+        core_text.cleanArray(patch.coverageConsumedMemoryIds || patch.sourceMemoryIds, core_constants.MAX_STORED_MEMORY_ITEMS, 40),
         added,
     );
 }

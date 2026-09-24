@@ -1,6 +1,8 @@
 {
-  "tests": 42,
-  "syntax_files": 212,
-  "bundle_sha256": "a1220d96dbb987c72ca7d74acaacf685654849956e4a1ee0312efd599cbd174e",
-  "deterministic": true
+  "version": "0.99.18",
+  "syntaxFiles": 214,
+  "syntaxExit": 0,
+  "diffCheckExit": 0,
+  "bundleSha256": "ea361fbad92a281a066f9c3e5656cfd1b99f117fcf9e50677a444b3c477ce957",
+  "testedEnvironment": "Node VM production modules and bundle; host/provider/storage boundaries replaced; not phone or live SillyTavern"
 }

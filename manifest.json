@@ -3,13 +3,13 @@
   "loading_order": 110,
   "js": "index.js?heartbeat=0.99.17-r84.69-mail-storage",
   "author": "Toto",
-  "version": "0.99.17",
+  "version": "0.99.18",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.69：取消固定存储字节上限，修复角色卡与世界书随信小画，支持成功分段先入档。",
+  "description": "r84.70：待入档结果可直接保存，不调用模型；取消正式记忆条数阻塞，保留旧记忆与分批续做。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }

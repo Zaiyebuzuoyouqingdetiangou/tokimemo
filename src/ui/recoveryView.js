@@ -94,6 +94,7 @@ export function archiveRecoveryHtml(summary, { profile = false } = {}) {
     const draftLinks = (summary.drafts || []).map(draft => `<button type="button" class="rmt-btn" data-rmt-archive-draft-open="${text.esc(draft.draftId)}">查看${draft.stage === 'profile-only' || draft.stage === 'profile-result' || draft.operation === 'profile' ? '简介' : '建档'}${draft.paused ? '旧' : ''}草稿正文</button>`).join(' ');
     if (summary.onlyArchivedDrafts) return `<section class="rmt-recovery-status"><p>${text.esc(summary.notice)}</p><div class="rmt-recovery-actions">${draftLinks} <button type="button" class="rmt-btn" data-rmt-archive-discard>清除这些旧草稿</button></div></section>`;
     const label = profile || summary.profileOnly ? '仅重试档案简介' : summary.awaitingCommit ? '仅重试保存'
+        : summary.pendingAdmission ? '保存待入档结果（不生成）'
         : summary.batchProgress ? '继续下一批' : summary.canContinue ? '继续整理档案' : '重试未完成分块';
     const capacity = summary.capacityBlocked === true;
     const batch = summary.batchProgress;
@@ -104,6 +105,6 @@ ${summary.pageOnly && !summary.awaitingCommit ? `<button type="button" class="rm
 ${!capacity ? `<button type="button" class="rmt-btn" data-rmt-archive-recovery="${profile || summary.profileOnly ? 'profile' : 'import'}">${label}</button>` : ''}
 ${!profile && !summary.profileOnly && !summary.awaitingCommit && summary.canCommitComplete ? '<button type="button" class="rmt-btn" data-rmt-archive-commit-complete>先将成功分段入档（不生成）</button>' : ''}
 ${!profile && !summary.profileOnly ? '<button type="button" class="rmt-btn" data-rmt-archive-export-pending>导出待入档成果</button>' : ''}
-${!profile && !summary.profileOnly && !summary.awaitingCommit && !capacity ? '<button type="button" class="rmt-btn" data-rmt-archive-restart>按当前条件另起任务</button>' : ''}
+${!profile && !summary.profileOnly && !summary.awaitingCommit && !capacity && !summary.pendingAdmission ? '<button type="button" class="rmt-btn" data-rmt-archive-restart>按当前条件另起任务</button>' : ''}
 ${!batch ? '<button type="button" class="rmt-btn" data-rmt-archive-discard>放弃整理草稿</button>' : ''}</div></section>`;
 }
