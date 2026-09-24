@@ -10,14 +10,14 @@ const FACT_VALUES = Object.freeze({
     hairStyle: ['straight', 'wavy', 'curly', 'ponytail', 'braid', 'bun'],
     hairColor: ['black', 'brown', 'blonde', 'red', 'white', 'gray', 'blue', 'pink', 'purple', 'green'],
     eyeColor: ['black', 'brown', 'blue', 'green', 'gray', 'amber', 'purple', 'red'],
-    outfitKind: ['shirt', 'sweater', 'hoodie', 'jacket', 'coat', 'dress', 'suit', 'uniform', 'robe'],
+    outfitKind: ['shirt', 'sweater', 'hoodie', 'jacket', 'coat', 'dress', 'suit', 'uniform', 'robe', 'martial', 'ruqun'],
     outfitColor: ['black', 'brown', 'white', 'gray', 'red', 'blue', 'green', 'pink', 'purple', 'cream', 'navy'],
-    marker: ['glasses', 'freckles', 'scar', 'earrings', 'ribbon', 'hat', 'scarf'],
+    marker: ['glasses', 'freckles', 'scar', 'earrings', 'ribbon', 'hat', 'scarf', 'crown', 'hairpin', 'jade', 'sword', 'fan', 'cloak'],
     signatureObject: ['book', 'cup', 'camera', 'umbrella', 'flower', 'instrument', 'letter', 'lamp'],
 });
 const APPEARANCE_KINDS = new Set(['hairLength', 'hairStyle', 'hairColor', 'eyeColor', 'outfitKind', 'outfitColor', 'marker']);
 
-const BASE_CONTRACT = '可选 letterIllustration，只能使用 v2：{"version":2,"characterName":"本信人物真名","focus":"person或object","visualFacts":[{"kind":"hairLength|hairStyle|hairColor|eyeColor|outfitKind|outfitColor|marker|signatureObject","value":"下列对应枚举值","evidence":"逐字摘录当前char原文"}],"scene":{"kind":"read|tea|rain|photo|music|flower|gift|window|lamp|cook|walk|write","evidence":"逐字摘录本封信正文"}}。value 枚举：hairLength=short|medium|long；hairStyle=straight|wavy|curly|ponytail|braid|bun；hairColor=black|brown|blonde|red|white|gray|blue|pink|purple|green；eyeColor=black|brown|blue|green|gray|amber|purple|red；outfitKind=shirt|sweater|hoodie|jacket|coat|dress|suit|uniform|robe；outfitColor=black|brown|white|gray|red|blue|green|pink|purple|cream|navy；marker=glasses|freckles|scar|earrings|ribbon|hat|scarf；signatureObject=book|cup|camera|umbrella|flower|instrument|letter|lamp。focus=person 时至少给一项有原文依据的外貌、衣着或标志特征；focus=object 时只能画char原文明确拥有或使用的 signatureObject。每项 evidence 必须直接支持对应值；本信没有可画场景，或char没有相应明确依据时，省略 letterIllustration。不得默认动物、宠物或通用人物，不得输出 version 1、HTML、SVG、CSS、URL、颜色、坐标或任何代码。';
+const BASE_CONTRACT = '可选 letterIllustration，只能使用 v2：{"version":2,"characterName":"本信人物真名","focus":"person或object","visualFacts":[{"kind":"hairLength|hairStyle|hairColor|eyeColor|outfitKind|outfitColor|marker|signatureObject","value":"下列对应枚举值","evidence":"逐字摘录当前char原文"}],"scene":{"kind":"read|tea|rain|photo|music|flower|gift|window|lamp|cook|walk|write","evidence":"逐字摘录本封信正文"}}。value 枚举：hairLength=short|medium|long；hairStyle=straight|wavy|curly|ponytail|braid|bun；hairColor=black|brown|blonde|red|white|gray|blue|pink|purple|green；eyeColor=black|brown|blue|green|gray|amber|purple|red；outfitKind=shirt|sweater|hoodie|jacket|coat|dress|suit|uniform|robe|martial|ruqun；outfitColor=black|brown|white|gray|red|blue|green|pink|purple|cream|navy；marker=glasses|freckles|scar|earrings|ribbon|hat|scarf|crown|hairpin|jade|sword|fan|cloak；signatureObject=book|cup|camera|umbrella|flower|instrument|letter|lamp。focus=person 时至少给一项有原文依据的外貌、衣着或标志特征；focus=object 时只能画char原文明确拥有或使用的 signatureObject。每项 evidence 必须直接支持对应值；本信没有可画场景，或char没有相应明确依据时，省略 letterIllustration。不得默认动物、宠物或通用人物，不得输出 version 1、HTML、SVG、CSS、URL、颜色、坐标或任何代码。';
 
 const VALUE_TOKENS = Object.freeze({
     hairLength: {
@@ -27,7 +27,7 @@ const VALUE_TOKENS = Object.freeze({
     hairStyle: {
         straight: ['直发', '直髮', 'ストレートヘア', 'straight hair'], wavy: ['波浪发', '波浪髮', 'ウェーブヘア', 'wavy hair'],
         curly: ['卷发', '捲髮', '卷髮', '巻き髪', 'curly hair'], ponytail: ['马尾', '馬尾', 'ポニーテール', 'ponytail'],
-        braid: ['辫子', '辮子', '编发', '編髮', '三つ編み', 'braid'], bun: ['发髻', '髮髻', '丸子头', 'お団子', 'bun'],
+        braid: ['辫子', '辮子', '编发', '編髮', '三つ編み', 'braid'], bun: ['发髻', '髮髻', '束发', '束髮', '盘发', '盤髮', '云髻', '雲髻', '丸子头', 'お団子', 'bun'],
     },
     hairColor: {}, eyeColor: {}, outfitColor: {},
     outfitKind: {
@@ -35,12 +35,20 @@ const VALUE_TOKENS = Object.freeze({
         hoodie: ['卫衣', '連帽衫', 'パーカー', 'hoodie'], jacket: ['夹克', '夾克', 'ジャケット', 'jacket'],
         coat: ['大衣', '外套', 'コート', 'coat'], dress: ['连衣裙', '連衣裙', '洋装', 'ドレス', 'dress'],
         suit: ['西装', '西裝', 'スーツ', 'suit'], uniform: ['制服', '校服', 'ユニフォーム', 'uniform'],
-        robe: ['长袍', '長袍', 'ローブ', 'robe'],
+        robe: ['长袍', '長袍', '长衫', '長衫', '衣袍', '锦袍', '錦袍', '道袍', '白袍', '青袍', '汉服', '漢服', '衣衫', '直裰', '深衣', '褙子', 'ローブ', 'robe'],
+        martial: ['劲装', '勁裝', '短打', '箭袖', '束袖', '夜行衣'],
+        ruqun: ['襦裙', '罗裙', '羅裙', '齐胸', '齊胸', '留仙裙', '马面裙', '馬面裙'],
     },
     marker: {
         glasses: ['眼镜', '眼鏡', 'メガネ', 'glasses'], freckles: ['雀斑', 'そばかす', 'freckles'], scar: ['伤疤', '傷疤', '疤痕', '傷跡', 'scar'],
         earrings: ['耳环', '耳環', '耳钉', '耳釘', 'ピアス', 'earrings'], ribbon: ['发带', '髮帶', '丝带', '絲帶', 'リボン', 'ribbon'],
         hat: ['帽子', 'ハット', 'hat'], scarf: ['围巾', '圍巾', 'マフラー', 'scarf'],
+        crown: ['发冠', '髮冠', '玉冠', '金冠', '银冠', '銀冠', '束冠'],
+        hairpin: ['发簪', '髮簪', '簪子', '玉簪', '木簪', '步摇', '步搖', '珠钗', '珠釵', '发钗', '髮釵'],
+        jade: ['玉佩', '腰佩', '玉坠', '玉墜', '禁步'],
+        sword: ['佩剑', '佩劍', '长剑', '長劍', '宝剑', '寶劍', '背剑', '背劍', '负剑', '負劍', '执剑', '執劍'],
+        fan: ['折扇', '团扇', '團扇', '羽扇', '纸扇', '紙扇'],
+        cloak: ['斗篷', '披风', '披風', '大氅', '鹤氅', '鶴氅', 'cloak'],
     },
     signatureObject: {
         book: ['书', '書', '本を', '本が', '本は', '一冊', 'book'], cup: ['杯', 'マグ', 'cup', 'mug'], camera: ['相机', '相機', 'カメラ', 'camera'],
@@ -49,14 +57,14 @@ const VALUE_TOKENS = Object.freeze({
     },
 });
 const COLOR_TOKENS = Object.freeze({
-    black: ['黑', '黒', 'black'], brown: ['棕', '褐', '茶色', 'brown'], blonde: ['金色', '金发', '金髮', '金髪', 'blonde', 'blond'],
-    red: ['红', '紅', '赤', 'red'], white: ['白', 'white'], gray: ['灰', '银灰', '銀灰', 'グレー', 'gray', 'grey'],
-    blue: ['蓝', '藍', '青い', 'blue'], green: ['绿', '綠', '緑', 'green'], pink: ['粉', '桃色', 'pink'],
-    purple: ['紫', 'purple'], cream: ['奶油色', '米白', 'クリーム', 'cream'], navy: ['藏青', '海军蓝', '海軍藍', 'ネイビー', 'navy'],
+    black: ['黑', '黒', '墨', '玄', '乌', '烏', '鸦', '鴉', 'black'], brown: ['棕', '褐', '赭', '茶色', 'brown'], blonde: ['金色', '金发', '金髮', '金髪', 'blonde', 'blond'],
+    red: ['红', '紅', '赤', '绯', '緋', '朱', '绛', '絳', '丹', 'red'], white: ['白', '素', '雪色', 'white'], gray: ['灰', '银', '銀', 'グレー', 'gray', 'grey'],
+    blue: ['蓝', '藍', '青', '靛', 'blue'], green: ['绿', '綠', '緑', '碧', '翠', 'green'], pink: ['粉', '桃色', 'pink'],
+    purple: ['紫', 'purple'], cream: ['奶油色', '米白', '米色', '杏色', 'クリーム', 'cream'], navy: ['藏青', '海军蓝', '海軍藍', 'ネイビー', 'navy'],
     amber: ['琥珀', 'amber'],
 });
 const CATEGORY_TOKENS = Object.freeze({
-    hairColor: ['发', '髮', '髪', 'hair'], eyeColor: ['眼', '眸', '瞳', 'eye'], outfitColor: ['穿', '着', '著', '衣', '服', '衫', '裙', '袍', '外套', '大衣', '西装', '西裝', '制服', 'wear', 'shirt', 'dress', 'robe', 'coat', 'suit', 'uniform'],
+    hairColor: ['发', '髮', '髪', 'hair'], eyeColor: ['眼', '眸', '瞳', 'eye'], outfitColor: ['穿', '着', '著', '衣', '服', '衫', '裙', '袍', '装', '裝', '裳', '袄', '襖', '襟', '袖', '氅', '斗篷', '披风', '披風', '外套', '大衣', '西装', '西裝', '制服', 'wear', 'shirt', 'dress', 'robe', 'coat', 'suit', 'uniform'],
 });
 const SCENE_TOKENS = Object.freeze({
     read: ['读', '讀', '看书', '看書', '阅读', '閱讀', '読む', 'read', 'book'], tea: ['茶', '咖啡', 'tea', 'coffee'],
@@ -72,7 +80,7 @@ const SCENE_TOKENS = Object.freeze({
 const SCENE_KEYWORD_HINT = Object.entries(SCENE_TOKENS)
     .map(([kind, tokens]) => `${kind}=${tokens.filter(token => /[\u4e00-\u9fff]/u.test(token)).join('/')}`)
     .join('；');
-export const CONTRACT = `${BASE_CONTRACT}scene.evidence 必须原样包含所选 kind 的关键词之一（${SCENE_KEYWORD_HINT}），先在正文里找到关键词再选 kind；找不到任何关键词就省略 letterIllustration。visualFacts 的 evidence 必须原样包含直接说明该值的词，例如 long 需含「长发」、ponytail 需含「马尾」、robe 需含「长袍」、glasses 需含「眼镜」；原文没有这样的词就不要写这一项。`;
+export const CONTRACT = `${BASE_CONTRACT}scene.evidence 必须原样包含所选 kind 的关键词之一（${SCENE_KEYWORD_HINT}），先在正文里找到关键词再选 kind；找不到任何关键词就省略 letterIllustration。visualFacts 的 evidence 必须原样包含直接说明该值的词，例如 long 需含「长发」、ponytail 需含「马尾」、robe 需含「长袍」、glasses 需含「眼镜」；原文没有这样的词就不要写这一项。古风人设按原文选：长衫、衣袍类用 robe，劲装、短打用 martial，襦裙、罗裙用 ruqun；配饰可用 crown(发冠/玉冠)、hairpin(发簪/步摇)、jade(玉佩)、sword(佩剑/长剑，「剑眉」不算)、fan(折扇/团扇)、cloak(斗篷/披风)，每项都要有人设原文依据，一个人可以写多项配饰。`;
 const OBJECT_SCENES = Object.freeze({ book:['read', 'write'], cup:['tea'], camera:['photo'], umbrella:['rain'], flower:['flower', 'gift'], instrument:['music'], letter:['write', 'gift'], lamp:['lamp'] });
 
 const PALETTE = Object.freeze({ paper: '#fff8e9', ink: '#66584f', accent: '#c96f7d', soft: '#91a995', blue: '#779aad' });
@@ -139,13 +147,19 @@ export function normalize(value) {
 }
 
 export function normalizeGenerated(value, { characterEvidence = '', letterText = '', characterNames = [] } = {}) {
-    const design = normalize(value);
-    if (!design) return null;
+    const normalized = normalize(value);
+    if (!normalized) return null;
     const names = Array.isArray(characterNames) ? characterNames.filter(name => typeof name === 'string' && name.trim()) : [];
-    if (!names.includes(design.characterName)) return null;
-    if (!design.visualFacts.every(fact => exactEvidence(characterEvidence, fact.evidence) && factSupported(fact))) return null;
-    if (!exactEvidence(letterText, design.scene.evidence) || !includesToken(design.scene.evidence, SCENE_TOKENS[design.scene.kind])) return null;
-    if (names.length > 1 && !design.visualFacts.every(fact => fact.evidence.includes(design.characterName) || fact.evidence.includes('{{char}}'))) return null;
+    if (!names.includes(normalized.characterName)) return null;
+    if (!exactEvidence(letterText, normalized.scene.evidence) || !includesToken(normalized.scene.evidence, SCENE_TOKENS[normalized.scene.kind])) return null;
+    // 每条外观都必须有人设原文依据；对不上的那一条单独丢掉，其余照画。
+    // 过去只要一条措辞不符就整张作废——模型写得越认真越容易拿不到小画。
+    // 人名、场景仍是整张的硬条件；一条有依据的外观都没有时仍不画。
+    const visualFacts = normalized.visualFacts.filter(fact => exactEvidence(characterEvidence, fact.evidence) && factSupported(fact)
+        && (names.length <= 1 || fact.evidence.includes(normalized.characterName) || fact.evidence.includes('{{char}}')));
+    if (!visualFacts.length) return null;
+    const design = normalize({ ...normalized, visualFacts });
+    if (!design) return null;
     if (design.focus === 'object') {
         const object = design.visualFacts.find(fact => fact.kind === 'signatureObject')?.value;
         if (!OBJECT_SCENES[object]?.includes(design.scene.kind)) return null;
