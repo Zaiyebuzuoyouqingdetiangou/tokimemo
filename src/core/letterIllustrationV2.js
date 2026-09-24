@@ -21,8 +21,8 @@ const BASE_CONTRACT = '有明确人物外貌和本信场景时请提供 letterIl
 
 const VALUE_TOKENS = Object.freeze({
     hairLength: {
-        short: ['短发', '短髪', '短短的头发', '短髮', 'ショートヘア', 'short hair'], medium: ['中长发', '中長髮', '及肩', '肩まで', 'medium hair', 'shoulder-length'],
-        long: ['长发', '长髪', '长长的头发', '及腰', '及背', '披肩长', '乌发如瀑', '長髮', '长髮', 'ロングヘア', '長い髪', 'long hair', 'waist-length'],
+        short: ['短发', '短髪', '短短的头发', '短髮', '寸头', '板寸', '短碎发', 'ショートヘア', 'short hair', 'short-haired'], medium: ['中长发', '中長髮', '及肩', '齐肩', '齊肩', '肩まで', 'medium hair', 'shoulder-length'],
+        long: ['长发', '长髪', '长长的头发', '及腰', '及背', '披肩长', '乌发如瀑', '長髮', '长髮', 'ロングヘア', '長い髪', 'long hair', 'long-haired', 'waist-length'],
     },
     hairStyle: {
         straight: ['直发', '直髮', 'ストレートヘア', 'straight hair'], wavy: ['波浪发', '波浪髮', 'ウェーブヘア', 'wavy hair'],
@@ -57,11 +57,11 @@ const VALUE_TOKENS = Object.freeze({
     },
 });
 const COLOR_TOKENS = Object.freeze({
-    black: ['黑', '黒', '墨', '玄', '乌', '烏', '鸦', '鴉', 'black'], brown: ['棕', '褐', '赭', '茶色', 'brown'], blonde: ['金色', '金发', '金髮', '金髪', 'blonde', 'blond'],
-    red: ['红', '紅', '赤', '绯', '緋', '朱', '绛', '絳', '丹', 'red'], white: ['白', '素', '雪色', 'white'], gray: ['灰', '银', '銀', 'グレー', 'gray', 'grey'],
-    blue: ['蓝', '藍', '青', '靛', 'blue'], green: ['绿', '綠', '緑', '碧', '翠', 'green'], pink: ['粉', '桃色', 'pink'],
-    purple: ['紫', 'purple'], cream: ['奶油色', '米白', '米色', '杏色', 'クリーム', 'cream'], navy: ['藏青', '海军蓝', '海軍藍', 'ネイビー', 'navy'],
-    amber: ['琥珀', 'amber'],
+    black: ['黑', '黒', '墨', '玄', '乌', '烏', '鸦', '鴉', 'black', 'raven'], brown: ['棕', '褐', '赭', '茶色', 'brown', 'chestnut', 'hazel'], blonde: ['金色', '金发', '金髮', '金髪', 'blonde', 'blond', 'golden', 'gold'],
+    red: ['红', '紅', '赤', '绯', '緋', '朱', '绛', '絳', '丹', 'red', 'crimson', 'scarlet'], white: ['白', '素', '雪色', 'white', 'snow'], gray: ['灰', '银', '銀', 'グレー', 'gray', 'grey', 'silver'],
+    blue: ['蓝', '藍', '青', '靛', 'blue', 'azure', 'sapphire'], green: ['绿', '綠', '緑', '碧', '翠', 'green', 'emerald'], pink: ['粉', '桃色', 'pink'],
+    purple: ['紫', 'purple', 'violet', 'lilac'], cream: ['奶油色', '米白', '米色', '杏色', 'クリーム', 'cream'], navy: ['藏青', '海军蓝', '海軍藍', 'ネイビー', 'navy'],
+    amber: ['琥珀', '金', 'amber', 'golden', 'gold'],
 });
 const CATEGORY_TOKENS = Object.freeze({
     hairColor: ['发', '髮', '髪', '青丝', '青絲', 'hair'], eyeColor: ['眼', '眸', '瞳', 'eye'], outfitColor: ['穿', '着', '著', '衣', '服', '衫', '裙', '袍', '装', '裝', '裳', '袄', '襖', '襟', '袖', '氅', '斗篷', '披风', '披風', '外套', '大衣', '西装', '西裝', '制服', 'wear', 'shirt', 'dress', 'robe', 'coat', 'suit', 'uniform'],
@@ -117,6 +117,34 @@ function factSupported(fact) {
     if (!['hairColor', 'eyeColor', 'outfitColor'].includes(fact.kind)) return false;
     return includesToken(fact.evidence, COLOR_TOKENS[fact.value] || []) && includesToken(fact.evidence, CATEGORY_TOKENS[fact.kind]);
 }
+// r84.71: one local line may name several colours ("银白长发", "黑眸白发",
+// "silver hair and crimson eyes"). Pick the colour written closest to this
+// category's word instead of discarding the whole fact as ambiguous.
+function positions(text, tokens) {
+    const folded = String(text || '').toLocaleLowerCase(), found = [];
+    for (const token of tokens) {
+        const needle = token.toLocaleLowerCase();
+        for (let at = folded.indexOf(needle); at >= 0; at = folded.indexOf(needle, at + 1)) found.push([at, at + needle.length]);
+    }
+    return found;
+}
+function nearestColour(kind, values, evidence) {
+    const anchors = positions(evidence, CATEGORY_TOKENS[kind] || []);
+    if (!anchors.length) return '';
+    let best = '', bestDistance = Infinity, tie = false;
+    for (const value of values) {
+        let distance = Infinity;
+        for (const [start, end] of positions(evidence, COLOR_TOKENS[value] || [])) {
+            for (const [aStart, aEnd] of anchors) {
+                const gap = end <= aStart ? aStart - end : start >= aEnd ? start - aEnd : -1; // -1: token contains the word itself
+                distance = Math.min(distance, gap);
+            }
+        }
+        if (distance < bestDistance) { best = value; bestDistance = distance; tie = false; }
+        else if (distance === bestDistance) tie = true;
+    }
+    return best && !tie ? best : '';
+}
 function exactEvidence(source, quote) {
     return !!source && quote.length >= 2 && String(source).normalize('NFKC').replace(/\s+/gu, ' ').includes(quote.normalize('NFKC').replace(/\s+/gu, ' '));
 }
@@ -171,7 +199,9 @@ export function normalizeGenerated(value, options = {}) {
                 const evidence = line.trim();
                 if (!evidence || evidence.length > 180 || /(?:不是|并非|没有|無|不戴|未穿|\bnot\b|\bwithout\b)/iu.test(evidence)) continue;
                 const matches = values.filter(value => factSupported({kind,value,evidence}));
-                if (matches.length === 1) { visualFacts.push({kind,value:matches[0],evidence}); break; }
+                const chosen = matches.length === 1 ? matches[0]
+                    : matches.length > 1 && ['hairColor', 'eyeColor', 'outfitColor'].includes(kind) ? nearestColour(kind, matches, evidence) : '';
+                if (chosen) { visualFacts.push({kind,value:chosen,evidence}); break; }
             }
         }
         const focus = visualFacts.some(fact => APPEARANCE_KINDS.has(fact.kind)) ? 'person' : 'object';
@@ -274,6 +304,8 @@ export function captureEvidence(envelope, snapshot = null, additionalWorldText =
             sources.push(shared ? namedSource(content,person.name,names) : content);
         }
         sources.push(namedSource(world,person.name,names));
+        // r84.71: card lines that name exactly this person (e.g. "乙：白色短发").
+        sources.push(namedSource(cardText,person.name,names));
         return {name:person.name,text:sources.filter(Boolean).join('\n')};
     });
     return JSON.stringify({letterEvidenceVersion:1,cardText:people.length ? '' : cardText,worldText:people.length ? '' : world,characters});
@@ -286,9 +318,34 @@ function evidenceFor(value, name, names) {
     if (!row) return names.length === 1 ? String(value || '') : namedSource(value,name,names);
     const owned = row.characters.filter(person=>person.name === name).map(person=>person.text).join('\n');
     if (row.characters.length) return owned;
-    return [names.length === 1 ? row.cardText : namedSource(row.cardText,name,names), namedSource(row.worldText,name,names)].filter(Boolean).join('\n');
+    // r84.71: a single-person card owns the whole world book that was actually
+    // sent. Named lines come first, so they win over unnamed ones.
+    if (names.length <= 1) return [row.cardText, namedSource(row.worldText,name,names), row.worldText].filter(Boolean).join('\n');
+    return [namedSource(row.cardText,name,names), namedSource(row.worldText,name,names)].filter(Boolean).join('\n');
 }
 export function relationshipEvidence(value) {
     const row = evidenceRecord(value);
     return row ? row.cardText : value;
+}
+
+// r84.71: why a new letter has no drawing, so the page can say so plainly.
+// Returns 'appearance' (no drawable appearance in the sent card/world book),
+// 'scene' (letter has no drawable scene word) or '' (unknown / not applicable).
+export function missingReason({ characterEvidence = '', letterText = '', characterNames = [] } = {}) {
+    try {
+        const names = Array.isArray(characterNames) ? characterNames.filter(name => typeof name === 'string' && name.trim()) : [];
+        const candidates = names.length === 1 ? names : names.filter(name => String(letterText).includes(name));
+        const hasAppearance = candidates.some(name => {
+            const source = evidenceFor(characterEvidence, name, names);
+            return source.split(/\n|[。；;，,]/u).some(line => {
+                const evidence = line.trim();
+                if (!evidence || evidence.length > 180) return false;
+                return Object.entries(FACT_VALUES).some(([kind, values]) => values.some(value => factSupported({ kind, value, evidence })));
+            });
+        });
+        if (!hasAppearance) return 'appearance';
+        const hasScene = String(letterText).split(/\n|[。；;]/u).some(line => line.trim().length <= 180
+            && Object.values(SCENE_TOKENS).some(tokens => includesToken(line, tokens)));
+        return hasScene ? '' : 'scene';
+    } catch { return ''; }
 }

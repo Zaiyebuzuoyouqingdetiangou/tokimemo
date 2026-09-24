@@ -1,6 +1,6 @@
 // GENERATED FILE. Do not edit by hand.
 // Source modules: 176
-// Source SHA-256: 6d4af5e5b5026966fc8fe1d5bebaf18b30c5ecca11cfa33558ee45b7aa1fe8e1
+// Source SHA-256: 1d6c941407dd693bd8f2ff68c3a538cc1c9473372d98fa517d3afdac4f7b02ed
 // Build: node tools/build-runtime-bundle.mjs
 
 const __m_archive_backupStore_js = Object.create(null);
@@ -1207,6 +1207,19 @@ const MAX_IMPORT_TOTAL_CHARS = 1200000;
 
 const IMPORT_CHUNK_CHARS = 30000;
 
+// r84.71: a formal archive checkpoint every ~5 chat requests instead of one
+// 1.2M-character batch. A single failed request can no longer hold back the
+// whole chat. Per-request size and model budgets are unchanged.
+const ARCHIVE_BATCH_CHAT_CHARS = 150000;
+
+// Archive extraction reads ~30k characters per request and can legitimately
+// take longer than ordinary pages on slow proxies. Floor only; never shorter.
+const ARCHIVE_REQUEST_TIMEOUT_MS = 360000;
+
+// Transient transport failures (5xx / network / timeout / rate limit) get a
+// bounded number of automatic retries for archive extraction only.
+const ARCHIVE_TRANSIENT_RETRY_DELAYS_MS = Object.freeze([5000, 15000]);
+
 const MAX_MEMORY_ITEMS = 240;
 
 // Formal storage is not the model's per-request evidence/output budget.
@@ -1544,6 +1557,9 @@ __m_core_constants_js.MAX_CACHE_SOURCE_CHARS = MAX_CACHE_SOURCE_CHARS;
 __m_core_constants_js.MAX_IMPORT_MESSAGES = MAX_IMPORT_MESSAGES;
 __m_core_constants_js.MAX_IMPORT_TOTAL_CHARS = MAX_IMPORT_TOTAL_CHARS;
 __m_core_constants_js.IMPORT_CHUNK_CHARS = IMPORT_CHUNK_CHARS;
+__m_core_constants_js.ARCHIVE_BATCH_CHAT_CHARS = ARCHIVE_BATCH_CHAT_CHARS;
+__m_core_constants_js.ARCHIVE_REQUEST_TIMEOUT_MS = ARCHIVE_REQUEST_TIMEOUT_MS;
+__m_core_constants_js.ARCHIVE_TRANSIENT_RETRY_DELAYS_MS = ARCHIVE_TRANSIENT_RETRY_DELAYS_MS;
 __m_core_constants_js.MAX_MEMORY_ITEMS = MAX_MEMORY_ITEMS;
 __m_core_constants_js.MAX_STORED_MEMORY_ITEMS = MAX_STORED_MEMORY_ITEMS;
 __m_core_constants_js.MAX_COLD_ARCHIVE_ITEMS = MAX_COLD_ARCHIVE_ITEMS;
@@ -1656,6 +1672,9 @@ const encoder = new TextEncoder();
 const hash = value => digest.sha256Bytes(encoder.encode(String(value)));
 
 function sourceHash(value) { return hash(value); }
+let batchChatChars = constants.ARCHIVE_BATCH_CHAT_CHARS;
+// Test seam only: legacy fixtures pin the pre-r84.71 single large batch.
+function setArchiveBatchCharsForTests(value) { batchChatChars = Number(value) > 0 ? Number(value) : constants.ARCHIVE_BATCH_CHAT_CHARS; }
 function utf8Bytes(value) { return encoder.encode(String(value)).byteLength; }
 function changedInput(category = 'unknown') {
     const labels = { chat: '聊天正文或聊天身份', character: '角色身份或角色卡', persona: '用户 Persona',
@@ -1788,6 +1807,12 @@ async function planSourceBatches(units, inspect, { signal = null } = {}) {
         parts = []; counts = { chat: 0, external: 0 }; chars = { chat: 0, external: 0 };
     };
     for (const part of fitted) {
+        // Formal checkpoints close at request boundaries: a chat batch holds whole
+        // requests up to ARCHIVE_BATCH_CHAT_CHARS, so no request is cut in two.
+        if (part.kind === 'chat' && parts.length) {
+            const partChars = part.units.reduce((sum, unit) => sum + unit.ref.length, 0);
+            if (chars.chat + partChars > batchChatChars) flushBatch();
+        }
         for (const unit of part.units) {
             const kind = unit.ref.kind;
             const countLimit = kind === 'chat' ? constants.MAX_IMPORT_MESSAGES : constants.MAX_EXTERNAL_MEMORY_ITEMS;
@@ -1909,6 +1934,7 @@ function advanceProgress(progress, { pending = [], archiveRevision } = {}) {
 
 __m_archive_importBatches_js.planSourceBatches = planSourceBatches;
 __m_archive_importBatches_js.sourceHash = sourceHash;
+__m_archive_importBatches_js.setArchiveBatchCharsForTests = setArchiveBatchCharsForTests;
 __m_archive_importBatches_js.utf8Bytes = utf8Bytes;
 __m_archive_importBatches_js.changedInput = changedInput;
 __m_archive_importBatches_js.assertIdentity = assertIdentity;
@@ -7495,8 +7521,8 @@ const BASE_CONTRACT = '有明确人物外貌和本信场景时请提供 letterIl
 
 const VALUE_TOKENS = Object.freeze({
     hairLength: {
-        short: ['短发', '短髪', '短短的头发', '短髮', 'ショートヘア', 'short hair'], medium: ['中长发', '中長髮', '及肩', '肩まで', 'medium hair', 'shoulder-length'],
-        long: ['长发', '长髪', '长长的头发', '及腰', '及背', '披肩长', '乌发如瀑', '長髮', '长髮', 'ロングヘア', '長い髪', 'long hair', 'waist-length'],
+        short: ['短发', '短髪', '短短的头发', '短髮', '寸头', '板寸', '短碎发', 'ショートヘア', 'short hair', 'short-haired'], medium: ['中长发', '中長髮', '及肩', '齐肩', '齊肩', '肩まで', 'medium hair', 'shoulder-length'],
+        long: ['长发', '长髪', '长长的头发', '及腰', '及背', '披肩长', '乌发如瀑', '長髮', '长髮', 'ロングヘア', '長い髪', 'long hair', 'long-haired', 'waist-length'],
     },
     hairStyle: {
         straight: ['直发', '直髮', 'ストレートヘア', 'straight hair'], wavy: ['波浪发', '波浪髮', 'ウェーブヘア', 'wavy hair'],
@@ -7531,11 +7557,11 @@ const VALUE_TOKENS = Object.freeze({
     },
 });
 const COLOR_TOKENS = Object.freeze({
-    black: ['黑', '黒', '墨', '玄', '乌', '烏', '鸦', '鴉', 'black'], brown: ['棕', '褐', '赭', '茶色', 'brown'], blonde: ['金色', '金发', '金髮', '金髪', 'blonde', 'blond'],
-    red: ['红', '紅', '赤', '绯', '緋', '朱', '绛', '絳', '丹', 'red'], white: ['白', '素', '雪色', 'white'], gray: ['灰', '银', '銀', 'グレー', 'gray', 'grey'],
-    blue: ['蓝', '藍', '青', '靛', 'blue'], green: ['绿', '綠', '緑', '碧', '翠', 'green'], pink: ['粉', '桃色', 'pink'],
-    purple: ['紫', 'purple'], cream: ['奶油色', '米白', '米色', '杏色', 'クリーム', 'cream'], navy: ['藏青', '海军蓝', '海軍藍', 'ネイビー', 'navy'],
-    amber: ['琥珀', 'amber'],
+    black: ['黑', '黒', '墨', '玄', '乌', '烏', '鸦', '鴉', 'black', 'raven'], brown: ['棕', '褐', '赭', '茶色', 'brown', 'chestnut', 'hazel'], blonde: ['金色', '金发', '金髮', '金髪', 'blonde', 'blond', 'golden', 'gold'],
+    red: ['红', '紅', '赤', '绯', '緋', '朱', '绛', '絳', '丹', 'red', 'crimson', 'scarlet'], white: ['白', '素', '雪色', 'white', 'snow'], gray: ['灰', '银', '銀', 'グレー', 'gray', 'grey', 'silver'],
+    blue: ['蓝', '藍', '青', '靛', 'blue', 'azure', 'sapphire'], green: ['绿', '綠', '緑', '碧', '翠', 'green', 'emerald'], pink: ['粉', '桃色', 'pink'],
+    purple: ['紫', 'purple', 'violet', 'lilac'], cream: ['奶油色', '米白', '米色', '杏色', 'クリーム', 'cream'], navy: ['藏青', '海军蓝', '海軍藍', 'ネイビー', 'navy'],
+    amber: ['琥珀', '金', 'amber', 'golden', 'gold'],
 });
 const CATEGORY_TOKENS = Object.freeze({
     hairColor: ['发', '髮', '髪', '青丝', '青絲', 'hair'], eyeColor: ['眼', '眸', '瞳', 'eye'], outfitColor: ['穿', '着', '著', '衣', '服', '衫', '裙', '袍', '装', '裝', '裳', '袄', '襖', '襟', '袖', '氅', '斗篷', '披风', '披風', '外套', '大衣', '西装', '西裝', '制服', 'wear', 'shirt', 'dress', 'robe', 'coat', 'suit', 'uniform'],
@@ -7591,6 +7617,34 @@ function factSupported(fact) {
     if (!['hairColor', 'eyeColor', 'outfitColor'].includes(fact.kind)) return false;
     return includesToken(fact.evidence, COLOR_TOKENS[fact.value] || []) && includesToken(fact.evidence, CATEGORY_TOKENS[fact.kind]);
 }
+// r84.71: one local line may name several colours ("银白长发", "黑眸白发",
+// "silver hair and crimson eyes"). Pick the colour written closest to this
+// category's word instead of discarding the whole fact as ambiguous.
+function positions(text, tokens) {
+    const folded = String(text || '').toLocaleLowerCase(), found = [];
+    for (const token of tokens) {
+        const needle = token.toLocaleLowerCase();
+        for (let at = folded.indexOf(needle); at >= 0; at = folded.indexOf(needle, at + 1)) found.push([at, at + needle.length]);
+    }
+    return found;
+}
+function nearestColour(kind, values, evidence) {
+    const anchors = positions(evidence, CATEGORY_TOKENS[kind] || []);
+    if (!anchors.length) return '';
+    let best = '', bestDistance = Infinity, tie = false;
+    for (const value of values) {
+        let distance = Infinity;
+        for (const [start, end] of positions(evidence, COLOR_TOKENS[value] || [])) {
+            for (const [aStart, aEnd] of anchors) {
+                const gap = end <= aStart ? aStart - end : start >= aEnd ? start - aEnd : -1; // -1: token contains the word itself
+                distance = Math.min(distance, gap);
+            }
+        }
+        if (distance < bestDistance) { best = value; bestDistance = distance; tie = false; }
+        else if (distance === bestDistance) tie = true;
+    }
+    return best && !tie ? best : '';
+}
 function exactEvidence(source, quote) {
     return !!source && quote.length >= 2 && String(source).normalize('NFKC').replace(/\s+/gu, ' ').includes(quote.normalize('NFKC').replace(/\s+/gu, ' '));
 }
@@ -7645,7 +7699,9 @@ function normalizeGenerated(value, options = {}) {
                 const evidence = line.trim();
                 if (!evidence || evidence.length > 180 || /(?:不是|并非|没有|無|不戴|未穿|\bnot\b|\bwithout\b)/iu.test(evidence)) continue;
                 const matches = values.filter(value => factSupported({kind,value,evidence}));
-                if (matches.length === 1) { visualFacts.push({kind,value:matches[0],evidence}); break; }
+                const chosen = matches.length === 1 ? matches[0]
+                    : matches.length > 1 && ['hairColor', 'eyeColor', 'outfitColor'].includes(kind) ? nearestColour(kind, matches, evidence) : '';
+                if (chosen) { visualFacts.push({kind,value:chosen,evidence}); break; }
             }
         }
         const focus = visualFacts.some(fact => APPEARANCE_KINDS.has(fact.kind)) ? 'person' : 'object';
@@ -7748,6 +7804,8 @@ function captureEvidence(envelope, snapshot = null, additionalWorldText = '') {
             sources.push(shared ? namedSource(content,person.name,names) : content);
         }
         sources.push(namedSource(world,person.name,names));
+        // r84.71: card lines that name exactly this person (e.g. "乙：白色短发").
+        sources.push(namedSource(cardText,person.name,names));
         return {name:person.name,text:sources.filter(Boolean).join('\n')};
     });
     return JSON.stringify({letterEvidenceVersion:1,cardText:people.length ? '' : cardText,worldText:people.length ? '' : world,characters});
@@ -7760,11 +7818,36 @@ function evidenceFor(value, name, names) {
     if (!row) return names.length === 1 ? String(value || '') : namedSource(value,name,names);
     const owned = row.characters.filter(person=>person.name === name).map(person=>person.text).join('\n');
     if (row.characters.length) return owned;
-    return [names.length === 1 ? row.cardText : namedSource(row.cardText,name,names), namedSource(row.worldText,name,names)].filter(Boolean).join('\n');
+    // r84.71: a single-person card owns the whole world book that was actually
+    // sent. Named lines come first, so they win over unnamed ones.
+    if (names.length <= 1) return [row.cardText, namedSource(row.worldText,name,names), row.worldText].filter(Boolean).join('\n');
+    return [namedSource(row.cardText,name,names), namedSource(row.worldText,name,names)].filter(Boolean).join('\n');
 }
 function relationshipEvidence(value) {
     const row = evidenceRecord(value);
     return row ? row.cardText : value;
+}
+
+// r84.71: why a new letter has no drawing, so the page can say so plainly.
+// Returns 'appearance' (no drawable appearance in the sent card/world book),
+// 'scene' (letter has no drawable scene word) or '' (unknown / not applicable).
+function missingReason({ characterEvidence = '', letterText = '', characterNames = [] } = {}) {
+    try {
+        const names = Array.isArray(characterNames) ? characterNames.filter(name => typeof name === 'string' && name.trim()) : [];
+        const candidates = names.length === 1 ? names : names.filter(name => String(letterText).includes(name));
+        const hasAppearance = candidates.some(name => {
+            const source = evidenceFor(characterEvidence, name, names);
+            return source.split(/\n|[。；;，,]/u).some(line => {
+                const evidence = line.trim();
+                if (!evidence || evidence.length > 180) return false;
+                return Object.entries(FACT_VALUES).some(([kind, values]) => values.some(value => factSupported({ kind, value, evidence })));
+            });
+        });
+        if (!hasAppearance) return 'appearance';
+        const hasScene = String(letterText).split(/\n|[。；;]/u).some(line => line.trim().length <= 180
+            && Object.values(SCENE_TOKENS).some(tokens => includesToken(line, tokens)));
+        return hasScene ? '' : 'scene';
+    } catch { return ''; }
 }
 
 __m_core_letterIllustrationV2_js.normalize = normalize;
@@ -7772,6 +7855,7 @@ __m_core_letterIllustrationV2_js.normalizeGenerated = normalizeGenerated;
 __m_core_letterIllustrationV2_js.render = render;
 __m_core_letterIllustrationV2_js.captureEvidence = captureEvidence;
 __m_core_letterIllustrationV2_js.relationshipEvidence = relationshipEvidence;
+__m_core_letterIllustrationV2_js.missingReason = missingReason;
 __m_core_letterIllustrationV2_js.VERSION = VERSION;
 __m_core_letterIllustrationV2_js.CONTRACT = CONTRACT;
 }
@@ -7946,11 +8030,13 @@ function renderLetterIllustration(value, { idPrefix = 'rmt-letter', label = '' }
 }
 
 function letterRelationshipEvidence(value) { return v2.relationshipEvidence(value); }
+function letterMissingReason(options = {}) { return v2.missingReason(options); }
 
 __m_core_letterIllustration_js.normalizeLetterIllustration = normalizeLetterIllustration;
 __m_core_letterIllustration_js.normalizeGeneratedLetterIllustration = normalizeGeneratedLetterIllustration;
 __m_core_letterIllustration_js.renderLetterIllustration = renderLetterIllustration;
 __m_core_letterIllustration_js.letterRelationshipEvidence = letterRelationshipEvidence;
+__m_core_letterIllustration_js.letterMissingReason = letterMissingReason;
 __m_core_letterIllustration_js.LETTER_ILLUSTRATION_VERSION = LETTER_ILLUSTRATION_VERSION;
 __m_core_letterIllustration_js.LETTER_ILLUSTRATION_GENERATION_VERSION = LETTER_ILLUSTRATION_GENERATION_VERSION;
 __m_core_letterIllustration_js.LETTER_ILLUSTRATION_SUBJECTS = LETTER_ILLUSTRATION_SUBJECTS;
@@ -13140,14 +13226,15 @@ function normalizeInboxLetters(raw, memory, plan, date = new Date(), options = {
         })) throw text.safeUserError('称呼超出了两人当前关系，请按真实关系写来信。', 'RMT_SEGMENT_VALIDATION');
         // 来信是衍生作品，不进入主聊天与记忆证据；信里自然地回忆往事不再校验出处。
         const letterText = [title, greeting, body, closing].join('\n');
+        const artOptions = { characterEvidence: options.characterEvidence || '', letterText, characterNames: frozenParticipantNames(memory) };
+        const illustration = letterArt.normalizeGeneratedLetterIllustration(value.letterIllustration, artOptions);
+        // r84.71: say why a new letter has no drawing. Display only; old letters untouched.
+        const illustrationMissing = illustration ? '' : letterArt.letterMissingReason(artOptions);
         return { id: 'mail-' + digest(item.eventKey), eventKey: item.eventKey, type: item.slot,
             title, greeting, body, closing, createdAt: date.getTime(), sourceArchiveRevision: memory.archiveRevision,
             sourceMemoryIds: [...item.sourceMemoryIds], sourceMemoryAnchor: item.sourceMemoryAnchor,
             readAt: null, favorite: false, travelSnapshot: null, participantNames: frozenParticipantNames(memory),
-            illustration: letterArt.normalizeGeneratedLetterIllustration(value.letterIllustration, {
-                characterEvidence: options.characterEvidence || '', letterText,
-                characterNames: frozenParticipantNames(memory),
-            }) };
+            illustration, ...(illustrationMissing ? { illustrationMissing } : {}) };
     });
     return { ...emptyInbox(memory), letters };
 }
@@ -18881,6 +18968,46 @@ async function retainCompletedArchiveImport(ticket, memoryBank, { sourceMemory =
     return { status: 'independent', draftId: archiveDraftId(ticket.key) };
 }
 
+// r84.71: bounded automatic retry for transient transport failures only.
+// Unclassified failures, auth/config/context errors, validation failures and
+// cancellations still stop immediately and keep the draft for the user.
+const ARCHIVE_TRANSIENT_CODES = new Set(['RMT_CONNECTION_SERVER', 'RMT_CONNECTION_NETWORK', 'RMT_CONNECTION_RATE_LIMIT', 'RMT_REQUEST_TIMEOUT']);
+let transientRetryDelays = null;
+function setArchiveTransientRetryDelaysForTests(value) { transientRetryDelays = Array.isArray(value) ? [...value] : null; }
+function isArchiveTransientFailure(error) {
+    return !!error && error.name !== 'AbortError' && ARCHIVE_TRANSIENT_CODES.has(error.code);
+}
+function archiveRetryDelay(error, attempt) {
+    const ladder = transientRetryDelays || constants.ARCHIVE_TRANSIENT_RETRY_DELAYS_MS;
+    const base = Number(ladder[Math.min(attempt, ladder.length - 1)]) || 0;
+    const hinted = Number(error?.retryAfterMs);
+    return error?.code === 'RMT_CONNECTION_RATE_LIMIT' && Number.isFinite(hinted) && hinted > 0 && !transientRetryDelays
+        ? Math.min(60000, Math.max(base, hinted)) : base;
+}
+function waitArchiveRetry(ms, signal) {
+    if (!(ms > 0)) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+        if (signal?.aborted) { reject(new DOMException('Cancelled', 'AbortError')); return; }
+        const timer = setTimeout(() => { signal?.removeEventListener?.('abort', onAbort); resolve(); }, ms);
+        const onAbort = () => { clearTimeout(timer); reject(new DOMException('Cancelled', 'AbortError')); };
+        signal?.addEventListener?.('abort', onAbort, { once: true });
+    });
+}
+async function requestArchiveWithTransientRetry(prompt, options, ticket) {
+    const retries = (transientRetryDelays || constants.ARCHIVE_TRANSIENT_RETRY_DELAYS_MS).length;
+    for (let attempt = 0; ; attempt += 1) {
+        try {
+            return await client.generateConfiguredJson(prompt, options);
+        } catch (error) {
+            if (attempt >= retries || !isArchiveTransientFailure(error) || options?.signal?.aborted) throw error;
+            if (error.code === 'RMT_CONNECTION_RATE_LIMIT' && Number(error.retryAfterMs) > 60000) throw error;
+            taskTrace.recordRetry?.(options?.taskTrace, error);
+            await waitArchiveRetry(archiveRetryDelay(error, attempt), options?.signal);
+            if (ticket.assertCurrent() === false) throw new DOMException('Archive recovery origin changed', 'AbortError');
+        }
+    }
+}
+
 async function requestArchiveRecoverySegment(ticket, slot, prompt, options, validator) {
     if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry || !ticket.entry.active) throw incompatible();
     if (ticket.completedOnly && !ticket.entry.journal.segments.some(row => row.slot === slot && row.state === 'complete')) throw incompatible();
@@ -18893,11 +19020,13 @@ async function requestArchiveRecoverySegment(ticket, slot, prompt, options, vali
     return recovery.withRecoverySegment(prompt, { ...options, origin: ticket.origin, taskKey: slot }, checked,
         async (effectivePrompt, requestOptions, accepted) => {
             // Archive extraction owns runtimeState.busy, so requestJson's module
-            // task gate is deliberately not used. Same provider/parser, no retries.
+            // task gate is deliberately not used. Same provider/parser; only
+            // transient transport failures are retried (bounded, see above).
             // Apply the archive budget even to legacy page drafts. Do this only
             // at dispatch: keep the recovery identity and source validators intact.
             if (ticket.completedOnly) throw incompatible();
-            const raw = await client.generateConfiguredJson(effectivePrompt, { ...requestOptions, archiveRequestBudget: true });
+            const raw = await requestArchiveWithTransientRetry(effectivePrompt, { ...requestOptions, archiveRequestBudget: true,
+                timeoutMs: Math.max(Number(requestOptions?.timeoutMs) || 0, constants.ARCHIVE_REQUEST_TIMEOUT_MS) }, ticket);
             if (ticket.assertCurrent() === false) throw new DOMException('Archive recovery origin changed', 'AbortError');
             const result = await checked(raw);
             await accepted(raw);
@@ -18985,6 +19114,8 @@ __m_archive_importRecovery_js.acknowledgeArchiveRecoveryCommit = acknowledgeArch
 __m_archive_importRecovery_js.archiveRecoveryInputs = archiveRecoveryInputs;
 __m_archive_importRecovery_js.parkArchiveRecovery = parkArchiveRecovery;
 __m_archive_importRecovery_js.exportArchiveRecovery = exportArchiveRecovery;
+__m_archive_importRecovery_js.setArchiveTransientRetryDelaysForTests = setArchiveTransientRetryDelaysForTests;
+__m_archive_importRecovery_js.isArchiveTransientFailure = isArchiveTransientFailure;
 __m_archive_importRecovery_js.stageArchiveRecoveryCommit = stageArchiveRecoveryCommit;
 __m_archive_importRecovery_js.finishArchiveProfileRecovery = finishArchiveProfileRecovery;
 __m_archive_importRecovery_js.releaseArchiveRecovery = releaseArchiveRecovery;
@@ -20771,12 +20902,15 @@ function archiveRecoveryHtml(summary, { profile = false } = {}) {
         : summary.batchProgress ? '继续下一批' : summary.canContinue ? '继续整理档案' : '重试未完成分块';
     const capacity = summary.capacityBlocked === true;
     const batch = summary.batchProgress;
+    const commitFirst = !profile && !summary.profileOnly && !summary.awaitingCommit && summary.canCommitComplete;
+    const nextStep = commitFirst ? '建议：先点「先将成功分段入档」，再点「' + label + '」。'
+        : !capacity ? '建议：点「' + label + '」。' : '';
     const heading = batch ? `批次 ${batch.currentBatch}/${batch.batches} · 已正式保存 ${batch.saved} 个来源片段`
         : `${label} · 已保留 ${Number(summary.completed) || 0} 个成功分段`;
-    return `<section class="rmt-recovery-status" role="status"><b>${text.esc(heading)}</b><p>${text.esc(summary.notice)}</p>${summary.failureCode ? `<p>${text.esc(text.safeErrorSummary({ code: summary.failureCode }))}</p>` : ''}<div class="rmt-recovery-actions">${draftLinks}
+    return `<section class="rmt-recovery-status" role="status"><b>${text.esc(heading)}</b><p>${text.esc(summary.notice)}</p>${nextStep ? `<p><b>${text.esc(nextStep)}</b></p>` : ''}${summary.failureCode ? `<p>${text.esc(text.safeErrorSummary({ code: summary.failureCode }))}</p>` : ''}<div class="rmt-recovery-actions">${draftLinks}
 ${summary.pageOnly && !summary.awaitingCommit ? `<button type="button" class="rmt-btn" data-rmt-archive-save-draft="${profile ? 'profile' : 'import'}">保存本页草稿（不生成）</button>` : ''}
+${commitFirst ? '<button type="button" class="rmt-btn" data-rmt-archive-commit-complete>先将成功分段入档（不生成）</button>' : ''}
 ${!capacity ? `<button type="button" class="rmt-btn" data-rmt-archive-recovery="${profile || summary.profileOnly ? 'profile' : 'import'}">${label}</button>` : ''}
-${!profile && !summary.profileOnly && !summary.awaitingCommit && summary.canCommitComplete ? '<button type="button" class="rmt-btn" data-rmt-archive-commit-complete>先将成功分段入档（不生成）</button>' : ''}
 ${!profile && !summary.profileOnly ? '<button type="button" class="rmt-btn" data-rmt-archive-export-pending>导出待入档成果</button>' : ''}
 ${!profile && !summary.profileOnly && !summary.awaitingCommit && !capacity && !summary.pendingAdmission ? '<button type="button" class="rmt-btn" data-rmt-archive-restart>按当前条件另起任务</button>' : ''}
 ${!batch ? '<button type="button" class="rmt-btn" data-rmt-archive-discard>放弃整理草稿</button>' : ''}</div></section>`;
@@ -51505,6 +51639,12 @@ const runtimeState = __m_core_state_js.state;
 
 
 
+// r84.71: plain reason for a new letter without a drawing (display only).
+const MISSING_ART_NOTE = Object.freeze({
+    appearance: '这封没有小画：发送的角色卡/世界书里没找到可画的外貌（如"黑色长发""白衬衫"）。',
+    scene: '这封没有小画：信里没有可画的场景（如喝茶、下雨、窗边、写信）。',
+});
+
 let view = { scope: '', selected: '', filter: 'all' };
 const readonly = () => !!runtimeState.activeArchiveSnapshot && (runtimeState.activeArchiveReadOnly || runtimeState.activeArchiveSnapshot.backupOnly);
 const letterTypeLabel = type => type === 'stage' ? '阶段来信' : type === 'daily' ? '日常来信' : type === 'travel' ? '旅行明信片' : '来信';
@@ -51545,7 +51685,7 @@ function renderInbox() {
     const detail = selected ? `<article class="rmt-mail-open">
         <div class="rmt-mail-actions"><button type="button" class="rmt-btn" data-rmt-inbox="back">← 收件箱</button><button type="button" class="rmt-btn" data-rmt-inbox="favorite" data-rmt-inbox-id="${text.esc(selected.id)}" aria-pressed="${selected.favorite}" ${readonly() ? 'disabled' : ''}>${selected.favorite ? '已收藏' : '收藏这封信'}</button></div>
         ${selected.travelSnapshot ? travelView.travelPostcardHtml(selected.travelSnapshot.location, selected.travelSnapshot, { recipient: session.recipient, closeAction: 'inbox-back' })
-            : `<div class="rmt-mail-paper" data-rmt-paper="${inboxPaperTone(selected)}"><header><small>${letterTypeLabel(selected.type)} · TO ${text.esc(session.recipient || '你')} · ${text.esc(stamp(selected.createdAt))}</small><h2>${text.esc(selected.title)}</h2></header><b>${text.esc(selected.greeting)}</b><p>${text.esc(selected.body)}</p><figure class="rmt-letter-illustration" style="margin:24px auto;text-align:center">${letterArt.renderLetterIllustration(selected.illustration, { idPrefix: selected.id, label: '随信小画' })}</figure><footer>${text.esc(selected.closing || inboxSenderLabel(selected, session))}</footer></div>`}
+            : `<div class="rmt-mail-paper" data-rmt-paper="${inboxPaperTone(selected)}"><header><small>${letterTypeLabel(selected.type)} · TO ${text.esc(session.recipient || '你')} · ${text.esc(stamp(selected.createdAt))}</small><h2>${text.esc(selected.title)}</h2></header><b>${text.esc(selected.greeting)}</b><p>${text.esc(selected.body)}</p><figure class="rmt-letter-illustration" style="margin:24px auto;text-align:center">${letterArt.renderLetterIllustration(selected.illustration, { idPrefix: selected.id, label: '随信小画' })}${!selected.illustration && MISSING_ART_NOTE[selected.illustrationMissing] ? `<figcaption style="font-size:12px;opacity:.62">${text.esc(MISSING_ART_NOTE[selected.illustrationMissing])}</figcaption>` : ''}</figure><footer>${text.esc(selected.closing || inboxSenderLabel(selected, session))}</footer></div>`}
     </article>` : `<nav class="rmt-mail-filters" aria-label="筛选信件">${tab('all','全部')}${tab('unread','未读')}${tab('favorite','收藏')}${tab('gallery','随信画册 · ' + mailGallery.savedMailDrawings(session).length)}</nav>${view.filter === 'gallery' ? inboxGalleryHtml(session) : `<div class="rmt-mail-list">${letters.map(letter =>
         `<button type="button" class="rmt-mail-row ${letter.readAt ? '' : 'is-unread'}" data-rmt-inbox="read" data-rmt-inbox-id="${text.esc(letter.id)}"><span class="rmt-mail-seal" aria-hidden="true">${letter.type === 'travel' ? '▧' : '✉'}</span><span><small>${letterTypeLabel(letter.type)} · ${text.esc(inboxSenderLabel(letter, session))} · ${text.esc(stamp(letter.createdAt))}${letter.favorite ? ' · 收藏' : ''}${!letter.readAt ? ' · 未读' : ''}</small><b>${text.esc(letter.title)}</b><span>${text.esc(letter.body.slice(0, 90))}</span></span><i aria-hidden="true">›</i></button>`).join('') || '<div class="rmt-mail-empty"><span aria-hidden="true">✉</span><h3>信箱里留着位置</h3><p>可以收一封今天的来信，也可以把路线中的明信片收进来。</p></div>'}</div>`}`;
     overlay.bodyEl().innerHTML = `<section class="rmt-inbox"><header class="rmt-mail-header"><div><small>LETTERS TO YOU</small><h2>${text.esc(session.recipient || '你')}的邮箱</h2><p>${session.letters.length} 封来信 · ${session.letters.filter(item => !item.readAt).length} 封未读</p></div><div class="rmt-mail-actions"><button type="button" class="rmt-btn" data-rmt-inbox="receive" ${readonly() ? 'disabled' : ''}>收取新信</button><button type="button" class="rmt-btn" data-rmt-inbox="postcards" ${readonly() ? 'disabled' : ''}>收进路线明信片</button></div></header>${detail}</section>`;
@@ -58782,7 +58922,16 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
             profile = mergeExisting ? { archiveName: mergeExisting.archiveName || fallbackArchiveName(memories),
                 archiveSummary: mergeExisting.archiveSummary || fallbackArchiveSummary(memories), archiveVerdict: mergeExisting.archiveVerdict || null,
                 keywords: core_text.cleanArray(mergeExisting.archiveKeywords, 10, 80) } : normalizeArchiveProfile({}, memories);
-        } else if (preserveExisting) {
+        } else if ((!preserveExisting || progress?.coverDeferred === true) && progress && !capacityPending.length
+            && progress.nextBatch + 1 < progress.batches.length) {
+            // r84.71: a new archive now checkpoints in several smaller batches.
+            // Intermediate batches keep a local cover and defer the one paid
+            // cover request to the batch that completes the sources.
+            progress.coverDeferred = true;
+            profile = mergeExisting ? { archiveName: mergeExisting.archiveName || fallbackArchiveName(memories),
+                archiveSummary: mergeExisting.archiveSummary || fallbackArchiveSummary(memories), archiveVerdict: mergeExisting.archiveVerdict || null,
+                keywords: core_text.cleanArray(mergeExisting.archiveKeywords, 10, 80) } : normalizeArchiveProfile({}, memories);
+        } else if (preserveExisting && progress?.coverDeferred !== true) {
             // Incremental memory capture does not silently rewrite a user's existing cover.
             profile = { archiveName: mergeExisting.archiveName || fallbackArchiveName(memories),
                 archiveSummary: mergeExisting.archiveSummary || fallbackArchiveSummary(memories),
@@ -58795,6 +58944,7 @@ async function importCurrentChatMemoryOperation({ fullRebuild = false, automatic
                     ...(taskInputV1 ? { recoveryContentSettings: taskInputV1.data.contentSettings } : {}),
                     archiveRequestBudget: !legacyDraft, signal: importController.signal, context, taskTrace },
                 raw => checkedArchiveProfile(raw, memories));
+            if (progress?.coverDeferred === true) delete progress.coverDeferred;
         } catch (error) {
             // Only a real cancellation may discard the run. The memories were already
             // validated against the snapshot taken at import start, so a chat or setting
@@ -59008,7 +59158,52 @@ async function patchImportedMemoryFields(id, patch = {}) {
     return item;
 }
 
+// r84.71: when a paid chunk fails after others succeeded, formally save the
+// successful chunks right away (same validated path as the manual
+// "先将成功分段入档" button, no model request). The failure is still reported and
+// the unfinished chunks stay in the draft for "重试未完成分块".
+let autoPartialCommitEnabled = true;
+// Test seam only: legacy fixtures exercise the manual button path.
+function setAutoPartialCommitForTests(value) { autoPartialCommitEnabled = value !== false; }
+async function autoCommitCompletedArchiveChunks(options, outcome) {
+    if (!autoPartialCommitEnabled || options.commitCompletedOnly || options.automatic || options.restartImport || options.fullRebuild || options.parkPriorDraft) return null;
+    if (outcome?.status === 'cancelled' || isArchiveCancellation(outcome?.error)) return null;
+    if (outcome?.status && outcome.status !== 'failed') return null;
+    let context, summary;
+    try {
+        context = core_context.currentCharacterGuard();
+        summary = getCurrentArchiveImportRecoverySummary(context);
+    } catch { return null; }
+    if (!summary?.canCommitComplete || summary.awaitingCommit || summary.profileOnly) return null;
+    const committed = Number(getImportedMemory(context)?.archivePartialDraft?.slots?.length) || 0;
+    if ((Number(summary.completed) || 0) <= committed) return null;
+    if (runtimeState.busy || core_requestCoordinator.hasGenerationTasks()) return null;
+    try {
+        const saved = await importCurrentChatMemoryOnce({ commitCompletedOnly: true, continueRecovery: true, autoPartialCommit: true });
+        if (saved?.status === 'committed') {
+            globalThis.toastr?.success?.(`已自动把 ${summary.completed} 个成功分块正式入档，没有请求模型。未完成的部分点"重试未完成分块"即可，只会补发失败的那几块。`, '心迹回廊 · 档案整理');
+        }
+        return saved;
+    } catch (error) {
+        console.warn('[HeartbeatMemories] automatic partial archive commit skipped', core_text.safeErrorDiagnostic(error));
+        return null;
+    }
+}
+
 async function importCurrentChatMemory(options = {}) {
+    let outcome;
+    try {
+        outcome = await importCurrentChatMemoryOnce(options);
+        return outcome;
+    } catch (error) {
+        outcome = { status: 'failed', error };
+        throw error;
+    } finally {
+        if (outcome?.status === 'failed') await autoCommitCompletedArchiveChunks(options, outcome);
+    }
+}
+
+async function importCurrentChatMemoryOnce(options = {}) {
     const context = core_context.currentCharacterGuard();
     const origin = core_context.captureTaskOrigin(context, getImportedMemory(context)?.archiveRevision || '');
     const logicalTask = core_requestCoordinator.beginLogicalGenerationTask({ kind: 'archive-import', pageId: 'archiveImport', context, origin,
@@ -59188,7 +59383,7 @@ async function runArchiveImportPrepared(context, options, taskTrace, admission) 
         const independentResult = !!previousResult || baseMemoryMissing
             || (!partialBase && (sourceExisting?.archiveRevision || '') !== (existing?.archiveRevision || ''));
         if (options.commitCompletedOnly && (independentResult || selectedDraft.stage !== 'segments')) throw core_text.safeUserError('这份草稿不属于当前可写档案基线，原成果保留；请从原任务继续。', 'RMT_RECOVERY_INPUT_CHANGED');
-        if (!ui_overlay.confirmExplicitAction(options.commitCompletedOnly ? '先将成功分段入档？' : '继续这份原建档草稿？',
+        if (!options.autoPartialCommit && !ui_overlay.confirmExplicitAction(options.commitCompletedOnly ? '先将成功分段入档？' : '继续这份原建档草稿？',
             options.commitCompletedOnly ? '只保存通过原来源校验的完整分段，不请求模型；未完成分段与原草稿继续保留。' : `${previousResult ? '继续原任务的下一批。' : '保留已成功分块，仅处理这份草稿尚未完成的部分。'}${independentResult ? '完成后独立保存，当前档案不会被覆盖。' : ''}`, { destructive: false })) return { status: 'cancelled' };
         options = { ...options, draftId: selectedDraft.draftId, selectedDraft, partialBase,
             fullRebuild: previousResult ? false : selectedDraft.fullRebuild,
@@ -59333,6 +59528,7 @@ __m_archive_repository_js.getCurrentArchiveImportRecoverySummary = getCurrentArc
 __m_archive_repository_js.discardCurrentArchiveImportRecovery = discardCurrentArchiveImportRecovery;
 __m_archive_repository_js.getCurrentArchiveProfileRecoverySummary = getCurrentArchiveProfileRecoverySummary;
 __m_archive_repository_js.continueCurrentArchiveImport = continueCurrentArchiveImport;
+__m_archive_repository_js.setAutoPartialCommitForTests = setAutoPartialCommitForTests;
 __m_archive_repository_js.mismatchedArchiveInfo = mismatchedArchiveInfo;
 __m_archive_repository_js.claimMismatchedArchive = claimMismatchedArchive;
 }

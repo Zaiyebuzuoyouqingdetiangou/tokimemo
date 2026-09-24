@@ -420,6 +420,46 @@ export async function retainCompletedArchiveImport(ticket, memoryBank, { sourceM
     return { status: 'independent', draftId: archiveDraftId(ticket.key) };
 }
 
+// r84.71: bounded automatic retry for transient transport failures only.
+// Unclassified failures, auth/config/context errors, validation failures and
+// cancellations still stop immediately and keep the draft for the user.
+const ARCHIVE_TRANSIENT_CODES = new Set(['RMT_CONNECTION_SERVER', 'RMT_CONNECTION_NETWORK', 'RMT_CONNECTION_RATE_LIMIT', 'RMT_REQUEST_TIMEOUT']);
+let transientRetryDelays = null;
+export function setArchiveTransientRetryDelaysForTests(value) { transientRetryDelays = Array.isArray(value) ? [...value] : null; }
+export function isArchiveTransientFailure(error) {
+    return !!error && error.name !== 'AbortError' && ARCHIVE_TRANSIENT_CODES.has(error.code);
+}
+function archiveRetryDelay(error, attempt) {
+    const ladder = transientRetryDelays || constants.ARCHIVE_TRANSIENT_RETRY_DELAYS_MS;
+    const base = Number(ladder[Math.min(attempt, ladder.length - 1)]) || 0;
+    const hinted = Number(error?.retryAfterMs);
+    return error?.code === 'RMT_CONNECTION_RATE_LIMIT' && Number.isFinite(hinted) && hinted > 0 && !transientRetryDelays
+        ? Math.min(60000, Math.max(base, hinted)) : base;
+}
+function waitArchiveRetry(ms, signal) {
+    if (!(ms > 0)) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+        if (signal?.aborted) { reject(new DOMException('Cancelled', 'AbortError')); return; }
+        const timer = setTimeout(() => { signal?.removeEventListener?.('abort', onAbort); resolve(); }, ms);
+        const onAbort = () => { clearTimeout(timer); reject(new DOMException('Cancelled', 'AbortError')); };
+        signal?.addEventListener?.('abort', onAbort, { once: true });
+    });
+}
+async function requestArchiveWithTransientRetry(prompt, options, ticket) {
+    const retries = (transientRetryDelays || constants.ARCHIVE_TRANSIENT_RETRY_DELAYS_MS).length;
+    for (let attempt = 0; ; attempt += 1) {
+        try {
+            return await client.generateConfiguredJson(prompt, options);
+        } catch (error) {
+            if (attempt >= retries || !isArchiveTransientFailure(error) || options?.signal?.aborted) throw error;
+            if (error.code === 'RMT_CONNECTION_RATE_LIMIT' && Number(error.retryAfterMs) > 60000) throw error;
+            taskTrace.recordRetry?.(options?.taskTrace, error);
+            await waitArchiveRetry(archiveRetryDelay(error, attempt), options?.signal);
+            if (ticket.assertCurrent() === false) throw new DOMException('Archive recovery origin changed', 'AbortError');
+        }
+    }
+}
+
 export async function requestArchiveRecoverySegment(ticket, slot, prompt, options, validator) {
     if (!tickets.has(ticket) || ticket.released || drafts.get(ticket.key) !== ticket.entry || !ticket.entry.active) throw incompatible();
     if (ticket.completedOnly && !ticket.entry.journal.segments.some(row => row.slot === slot && row.state === 'complete')) throw incompatible();
@@ -432,11 +472,13 @@ export async function requestArchiveRecoverySegment(ticket, slot, prompt, option
     return recovery.withRecoverySegment(prompt, { ...options, origin: ticket.origin, taskKey: slot }, checked,
         async (effectivePrompt, requestOptions, accepted) => {
             // Archive extraction owns runtimeState.busy, so requestJson's module
-            // task gate is deliberately not used. Same provider/parser, no retries.
+            // task gate is deliberately not used. Same provider/parser; only
+            // transient transport failures are retried (bounded, see above).
             // Apply the archive budget even to legacy page drafts. Do this only
             // at dispatch: keep the recovery identity and source validators intact.
             if (ticket.completedOnly) throw incompatible();
-            const raw = await client.generateConfiguredJson(effectivePrompt, { ...requestOptions, archiveRequestBudget: true });
+            const raw = await requestArchiveWithTransientRetry(effectivePrompt, { ...requestOptions, archiveRequestBudget: true,
+                timeoutMs: Math.max(Number(requestOptions?.timeoutMs) || 0, constants.ARCHIVE_REQUEST_TIMEOUT_MS) }, ticket);
             if (ticket.assertCurrent() === false) throw new DOMException('Archive recovery origin changed', 'AbortError');
             const result = await checked(raw);
             await accepted(raw);

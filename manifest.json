@@ -1,15 +1,15 @@
 {
   "display_name": "心迹回廊",
   "loading_order": 110,
-  "js": "index.js?heartbeat=0.99.17-r84.69-mail-storage",
+  "js": "index.js?heartbeat=0.99.19-r84.71-archive-resilience",
   "author": "Toto",
-  "version": "0.99.18",
+  "version": "0.99.19",
   "auto_update": true,
   "minimum_client_version": "1.13.0",
   "hooks": {
     "disable": "onDisable",
     "clean": "onClean"
   },
-  "description": "r84.70：待入档结果可直接保存，不调用模型；取消正式记忆条数阻塞，保留旧记忆与分批续做。",
+  "description": "r84.71：建档按约 15 万字小批正式保存，临时网络错误自动重试，失败后自动保存成功分块；邮箱小画读取完整世界书并识别更多外貌写法。",
   "homePage": "https://github.com/Zaiyebuzuoyouqingdetiangou/tokimemo"
 }
