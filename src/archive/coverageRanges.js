@@ -127,6 +127,75 @@ export function formatFloorGaps(gaps) {
     return (Array.isArray(gaps) ? gaps : []).map(gap => `第 ${gap.start}–${gap.end} 楼`).join('、');
 }
 
+function spansFromFloors(floors) {
+    const sorted = [...new Set((Array.isArray(floors) ? floors : []).map(floor).filter(Boolean))].sort((a, b) => a - b);
+    const spans = [];
+    for (const value of sorted) {
+        const last = spans.at(-1);
+        if (last && value <= last.end + 1) last.end = value;
+        else spans.push({ start: value, end: value });
+    }
+    return spans;
+}
+
+export function memoryFloorSpans(memories) {
+    const spans = [];
+    for (const item of Array.isArray(memories) ? memories : []) {
+        const kind = String(item?.sourceKind || 'chat');
+        if (kind !== 'chat' && !kind.startsWith('chat')) continue;
+        const start = floor(item?.messageStart), end = floor(item?.messageEnd);
+        if (!start || !end || start > end) continue;
+        spans.push({ start, end });
+    }
+    return mergeCoveredRanges(spans).map(row => ({ start: row.start, end: row.end }));
+}
+
+function spanContains(spans, value) {
+    return spans.some(row => value >= row.start && value <= row.end);
+}
+
+// Three visible states, collapsed into runs. A floor already sent through an
+// archive window but never turned into its own Mxxx stays "scanned", so a gap
+// click does not offer to pay for it again.
+export function buildFloorCoverage({ totalFloors = 0, memories = [], summaryFloors = [], coveredRanges = [] } = {}) {
+    const total = Math.max(0, Math.floor(Number(totalFloors) || 0));
+    const memory = memoryFloorSpans(memories);
+    const summary = spansFromFloors(summaryFloors);
+    const scanned = normalizeCoveredRanges(coveredRanges);
+    const runs = [];
+    const push = (kind, value) => {
+        const last = runs.at(-1);
+        if (last && last.kind === kind && value === last.end + 1) last.end = value;
+        else runs.push({ kind, start: value, end: value });
+    };
+    for (let value = 1; value <= total; value += 1) {
+        const kind = spanContains(memory, value) ? 'memory'
+            : spanContains(summary, value) ? 'summary'
+                : spanContains(scanned, value) ? 'scanned' : 'open';
+        push(kind, value);
+    }
+    return runs;
+}
+
+export function coverageGapSlices(runs, size = 100) {
+    const span = Math.max(1, Math.floor(Number(size)) || 100);
+    return (Array.isArray(runs) ? runs : []).filter(row => row.kind === 'open' || row.kind === 'summary').map(row => ({
+        kind: row.kind,
+        start: row.start,
+        end: Math.min(row.end, row.start + span - 1),
+        fullEnd: row.end,
+    }));
+}
+
+export function summaryFloorsFromChat(chat) {
+    const floors = [];
+    (Array.isArray(chat) ? chat : []).forEach((message, index) => {
+        const leaf = message?.extra?.bbs_leaf;
+        if (typeof leaf === 'string' ? leaf.trim() : leaf && typeof leaf === 'object') floors.push(index + 1);
+    });
+    return floors;
+}
+
 // Display-only coverage line for archive views; empty when nothing is recorded yet.
 export function archiveCoverageText(bank) {
     const covered = bankCoveredRanges(bank);

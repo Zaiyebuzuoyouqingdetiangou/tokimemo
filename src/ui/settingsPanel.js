@@ -73,6 +73,8 @@ export function chatReadingSettingsHtml(settings = core_settings.getPluginSettin
         <p>每条消息为一楼，从 1 开始，隐藏楼层仍保留原楼号。只限制聊天正文；世界书与外部记忆摘要仍按“记忆来源”单独读取。不删除已有记忆。</p>
         <button type="button" class="menu_button rmt-settings-wide" data-rmt-read-preview>预览当前读取量（不生成）</button>
         <div data-rmt-read-preview-status role="status" aria-live="polite">默认只读最近 50 楼；可主动选择全部。</div>
+        <div data-rmt-coverage-map class="rmt-coverage-map"></div>
+        <p data-rmt-coverage-status role="status"></p>
       </div></details>`;
 }
 
@@ -88,6 +90,36 @@ function refreshReadingSettingsUi(panel) {
     const rangeRow = panel.querySelector('[data-rmt-read-range-row]');
     if (recentRow) recentRow.hidden = range.mode !== 'recent';
     if (rangeRow) rangeRow.hidden = range.mode !== 'range';
+    paintCoverageMap(panel);
+}
+
+function paintCoverageMap(panel) {
+    const host = panel.querySelector('[data-rmt-coverage-map]');
+    const status = panel.querySelector('[data-rmt-coverage-status]');
+    if (!host || !status) return;
+    let bank = null;
+    try { bank = archive_repository.getImportedMemory(core_context.currentCharacterGuard()); } catch { bank = null; }
+    const chat = core_context.getContext()?.chat;
+    const total = Array.isArray(chat) ? chat.length : Math.max(0, Number(bank?.sourceMessageCount) || 0);
+    if (!bank || !total) {
+        host.replaceChildren();
+        status.textContent = bank ? '' : '当前聊天还没有档案。建档之后，这里会标出已有记忆、只有摘要和还没整理的楼层。';
+        return;
+    }
+    const runs = archive_coverage.buildFloorCoverage({
+        totalFloors: total,
+        memories: [...(bank.memories || []), ...(bank.coldArchive || [])],
+        summaryFloors: archive_coverage.summaryFloorsFromChat(chat),
+        coveredRanges: archive_coverage.bankCoveredRanges(bank),
+    });
+    const gaps = archive_coverage.coverageGapSlices(runs).slice(0, 12);
+    const counts = runs.reduce((sum, row) => {
+        sum[row.kind] = (sum[row.kind] || 0) + (row.end - row.start + 1);
+        return sum;
+    }, {});
+    host.innerHTML = gaps.map(gap => `<button type="button" class="rmt-btn" data-rmt-coverage-gap="${gap.start}-${gap.end}">只整理第 ${gap.start}–${gap.end} 楼${gap.kind === 'summary' ? '（目前只有摘要）' : ''}${gap.fullEnd > gap.end ? '，这一段先取前 100 楼' : ''}</button>`).join('');
+    const more = archive_coverage.coverageGapSlices(runs).length - gaps.length;
+    status.textContent = `已有记忆 ${counts.memory || 0} 楼，只有摘要 ${counts.summary || 0} 楼，已扫过但没有单独记忆 ${counts.scanned || 0} 楼，还没整理 ${counts.open || 0} 楼。点上面的缺口只会把读取范围改成那一段，不会马上生成。${more > 0 ? `还有 ${more} 段缺口，整理完这一段后再看。` : ''}`;
 }
 
 export function bindImageProviderEvents() {
@@ -606,6 +638,7 @@ export function mountSettings({ homeTarget = null } = {}) {
     if (existing) {
         homeTarget.appendChild(existing);
         mirrorReader.showMirrorSettings(existing.querySelector('[data-rmt-voice-settings]'));
+        paintCoverageMap(existing);
         refreshSettingsMemoryStatus({ lightweight: true });
         if (existing.dataset.rmtHydrated === '1') refreshGenerationSettingsUi();
         return true;
@@ -770,6 +803,7 @@ export function mountSettings({ homeTarget = null } = {}) {
       </div>`;
     mount.appendChild(panel);
     mirrorReader.showMirrorSettings(panel.querySelector('[data-rmt-voice-settings]'));
+    paintCoverageMap(panel);
     refreshThemeUi();
     const tagDraft = panel.querySelector('[data-rmt-tag-draft]');
     const tagStatus = panel.querySelector('[data-rmt-tag-status]');
@@ -1098,6 +1132,17 @@ export function mountSettings({ homeTarget = null } = {}) {
     panel.addEventListener('click', event => {
         if (event.target.closest?.('[data-rmt-scene-picker-root]')) {
             void ui_scenePicker.handleScenePickerEvent(event);
+            return;
+        }
+        const coverageGap = event.target.closest?.('[data-rmt-coverage-gap]');
+        if (coverageGap) {
+            const [start, end] = String(coverageGap.dataset.rmtCoverageGap || '').split('-').map(Number);
+            if (!start || !end || start > end) return;
+            const current = core_settings.getPluginSettings().chatReadRange || {};
+            core_settings.updatePluginSettings({ chatReadRange: { ...current, mode: 'range', start, end } });
+            refreshReadingSettingsUi(panel);
+            const preview = panel.querySelector('[data-rmt-read-preview-status]');
+            if (preview) preview.textContent = `已把读取范围设为第 ${start}–${end} 楼。下次整理档案只读这一段，不会重做已有记忆，也还没有开始生成。`;
             return;
         }
         if (event.target.closest?.('[data-rmt-read-preview]')) {

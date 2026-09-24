@@ -9,6 +9,8 @@ import * as incremental from '../core/incremental.js';
 import * as generation from '../generation/client.js';
 import * as prompts from '../generation/prompts.js';
 import * as relationshipSafety from '../core/relationshipSafety.js';
+import * as requestCoordinator from '../core/requestCoordinator.js';
+import * as settings from '../core/settings.js';
 
 export const PAST_LIVES_VERSION = contract.PAST_LIVES_VERSION;
 export const PAST_LIVES_MODE = contract.PAST_LIVES_MODE;
@@ -74,15 +76,25 @@ export function emptyPastLives(memoryBank, context = null) {
         view: 'library', pastLivesReadMask: '', pastLivesDrawn: false, pastLivesClosing: false };
 }
 
-export function normalizePastLivesOpening(value, memory) {
+export function normalizePastLivesOpening(value, memory, options = {}) {
     const raw = contract.pastLivesData(value, L.episodeChars);
-    return { title: fictionalText(raw.title, memory, L.title, true), text: fictionalText(raw.text, memory, L.prose, true),
-        motif: fictionalText(raw.motif, memory, 300, true), ...exactReference(raw, memory) };
+    const title = fictionalText(raw.title, memory, L.title, true);
+    const motif = fictionalText(raw.motif, memory, 300, true);
+    const reference = exactReference(raw, memory);
+    const missingText = raw.text == null || (typeof raw.text === 'string' && !raw.text.trim());
+    try {
+        return { title, text: fictionalText(raw.text, memory, L.prose, true), motif, ...reference };
+    } catch (error) {
+        if (options.allowPending === true && missingText && error?.code === 'RMT_PAST_LIVES_STRUCTURE') {
+            return { title, motif, text: '', prosePending: true, ...reference };
+        }
+        throw error;
+    }
 }
 
 export function normalizePastLivesPlan(value, memory) {
     const raw = contract.pastLivesData(value, L.episodeChars);
-    return { title: fictionalText(raw.title, memory, L.title, true), opening: normalizePastLivesOpening(raw.opening, memory),
+    return { title: fictionalText(raw.title, memory, L.title, true), opening: normalizePastLivesOpening(raw.opening, memory, { allowPending: true }),
         dossiers: list(raw.dossiers, L.dossiers).map((item, index) => ({ id: localId('D', index),
             title: fictionalText(item.title, memory, L.title, true), era: fictionalText(item.era, memory, 240),
             intent: fictionalText(item.intent, memory, 1200, true) })) };
@@ -281,6 +293,77 @@ UNTRUSTED_CURRENT_ARCHIVE_JSON:
 ${prompts.promptArchiveSlice(memory, 48)}`;
 }
 
+function pendingPastLivesEpisode(session) {
+    return (session?.episodes || []).find(item => item?.opening?.prosePending === true) || null;
+}
+
+async function fillPastLivesOpeningText(context, memory, origin, taskKey, opening, baseOptions, compatibility) {
+    const prompt = `${prompts.promptSafetyBoundary(context, '前世今生 · 补引子正文', null, memory)}
+${GENERATION_RULES}
+只补这条引子缺少的 text。不得改 title、motif、sourceMemoryIds、sourceMemoryAnchor。
+只输出 {"text":"虚构开卷正文"}。
+FROZEN_OPENING_JSON:
+${JSON.stringify({ title: opening.title, motif: opening.motif, sourceMemoryIds: opening.sourceMemoryIds, sourceMemoryAnchor: opening.sourceMemoryAnchor })}`;
+    const text = await generation.requestValidatedSegment(prompt, '前世今生 · 正在补引子正文…',
+        { ...baseOptions, taskKey: `${taskKey}:past-lives-opening-text`, maxTokens: 2400, recoveryCompatibility: compatibility(prompt) },
+        raw => fictionalText(contract.pastLivesData(raw, L.episodeChars).text, memory, L.prose, true));
+    const next = { ...opening, text };
+    delete next.prosePending;
+    return next;
+}
+
+async function writePastLivesRemainder(context, memory, origin, taskKey, { title, opening, slots, presentation, presentationContext, baseOptions, compatibility }) {
+    const dossiers = [];
+    for (const slot of slots) {
+        const prompt = `${prompts.promptSafetyBoundary(context, '前世今生 · 虚构卷宗', null, memory)}
+${GENERATION_RULES}
+只完成 LOCAL_DOSSIER_PLAN 中这一卷，不写今生真实历史、不提前输出其他卷。用物证、证词、缺页或旁记展开角色与用户的选择；可少写，不凑线索数量。
+输出 {"title":"卷名","era":"时代","synopsis":"这一卷的叙事正文","clues":[{"kind":"object|testimony|missing|note","title":"线索名","speaker":"char|user|narrator","text":"可见的线索正文","revealedText":"缺页点击后显示的完整字迹；其他类型可为空"}]}。
+missing 必须有完整 revealedText，显字纯本地完成。每卷 clues 安全上限 ${L.clues}，不是配额。证词的 speaker 只表示虚构卷内的发言归属。
+LOCAL_DOSSIER_PLAN:
+${JSON.stringify({ opening, dossier: slot, presentation })}`;
+        dossiers.push(await generation.requestValidatedSegment(prompt, `前世今生 · 正在展开「${slot.title}」…`,
+            { ...baseOptions, taskKey: `${taskKey}:past-lives-dossier:${slot.id}`, maxTokens: 6800, recoveryCompatibility: compatibility(prompt) },
+            raw => normalizePastLivesDossier(raw, memory, { id: slot.id, title: slot.title })));
+    }
+    const finalePrompt = `${prompts.promptSafetyBoundary(context, '前世今生 · 今生回响与落款', null, memory)}
+${GENERATION_RULES}
+根据已完成卷宗，写今生回响、逐步出现的旁批和落款。annotations.afterClueIds 只用卷内提供的真实本地线索 id；空数组表示入卷即有的初批，有线索的旁批应补充或修正解读。读者可以略过探索直接看结尾，不设答题或付费解锁。
+输出 {"echoes":[{"kind":"memory|possibility","title":"可能的标题；memory标题由本地取真实记忆标题","text":"memory须逐字引用档案，possibility明确是可能","reflection":"当下解读，可为空","sourceMemoryIds":["仅memory需要真实Mxxx"],"sourceMemoryAnchor":"仅memory需要完整anchor"}],"annotations":[{"afterClueIds":["已有线索id"],"text":"对虚构故事的初解、补充或修正"}],"closing":{"text":"结尾与当下选择，不替双方定命","signature":"落款"}}。
+echoes、annotations 可为空，安全上限各 ${L.echoes}/${L.annotations}；不用固定结果。落款应完整，但没有字数闯关。
+UNTRUSTED_COMPLETED_STORY_JSON:
+${JSON.stringify({ title, opening, dossiers })}
+UNTRUSTED_CURRENT_ARCHIVE_JSON:
+${prompts.promptArchiveSlice(memory, 48)}`;
+    const finale = await generation.requestValidatedSegment(finalePrompt, '前世今生 · 正在写今生回响与落款…',
+        { ...baseOptions, taskKey: `${taskKey}:past-lives-finale`, maxTokens: 6400, recoveryCompatibility: compatibility(finalePrompt) }, raw => normalizePastLivesFinale(raw, memory, dossiers, { controlledEvidence: presentationContext.settingEvidence || '' }));
+    return { dossiers, ...finale };
+}
+
+function savePastLivesShell(previous, memory, context, presentation, plan, origin) {
+    const episode = {
+        id: localId('PL', previous?.episodes?.length || 0),
+        title: plan.title,
+        presentation,
+        fiction: true,
+        opening: plan.opening,
+        dossiers: [],
+        echoes: [],
+        annotations: [],
+        closing: { text: '', signature: ownerLabel(memory) },
+        plannedDossiers: plan.dossiers,
+    };
+    const next = previous ? structuredClone(previous) : emptyPastLives(memory, context);
+    next.presentation = presentation;
+    next.episodes.push(episode);
+    Object.assign(next, { selectedId: episode.id, selectedEntryId: '', selectedKey: '',
+        view: 'draw', pastLivesReadMask: '', pastLivesDrawn: false, pastLivesClosing: false });
+    requestCoordinator.noteSecondStepOffer(origin, {
+        label: '引子正文', kind: 'past-lives-prose', mode: PAST_LIVES_MODE, pageId: PAST_LIVES_MODE,
+    });
+    return next;
+}
+
 export async function generatePastLivesWithRepair(context, memory, origin, taskKey, options = {}) {
     if (!pastLivesHasSource(memory)) throw fail('SOURCE', '当前档案还没有可追溯的物件、话语或选择；先整理真实记忆，再写这篇番外。');
     const previous = options.previousSession || (options.replaceExisting ? null : cache.loadSession(PAST_LIVES_MODE, { context, chatId: memory.chatId, memoryBank: memory, clone: true }));
@@ -289,7 +372,8 @@ export async function generatePastLivesWithRepair(context, memory, origin, taskK
         throw fail('VERSION', '已有番外暂不可安全读取，原记录保持不变；请先备份检查，不能直接覆盖。');
     if (previous && !readablePastLivesSession(previous, memory))
         throw fail('VERSION', '已有番外暂不可安全读取，原记录保持不变；不能直接覆盖。');
-    if (previous?.episodes?.length >= L.episodes) throw fail('LIMIT', '番外篇章已达到本地容量上限；旧篇章仍保留，请先备份整理。');
+    const pendingEpisode = pendingPastLivesEpisode(previous);
+    if (previous?.episodes?.length >= L.episodes && !pendingEpisode) throw fail('LIMIT', '番外篇章已达到本地容量上限；旧篇章仍保留，请先备份整理。');
     const assertContextRead = () => {
         contextApi.assertRuntimeLifecycleCurrent(origin.lifecycleEpoch);
         if (!context.__rmtArchiveTargetEntryId && !contextApi.isCurrentTaskOrigin(origin))
@@ -304,37 +388,38 @@ export async function generatePastLivesWithRepair(context, memory, origin, taskK
     // The exact legacy prompt authenticates replay; it is not a general hash bypass.
     const planPrompt = pastLivesPlanPrompt(context, memory, previous, presentation);
     const compatibility = prompt => ({ contract: 'past-lives-readable-r62', legacyPrompts: [prompt], legacyTemperatures: [0.75] });
-    const plan = await generation.requestValidatedSegment(planPrompt, '前世今生 · 正在写下入卷引子…',
-        { ...baseOptions, taskKey: `${taskKey}:past-lives-plan`, maxTokens: 4200, recoveryCompatibility: compatibility(planPrompt) }, raw => normalizePastLivesPlan(raw, memory));
-    const dossiers = [];
-    for (const slot of plan.dossiers) {
-        const prompt = `${prompts.promptSafetyBoundary(context, '前世今生 · 虚构卷宗', null, memory)}
-${GENERATION_RULES}
-只完成 LOCAL_DOSSIER_PLAN 中这一卷，不写今生真实历史、不提前输出其他卷。用物证、证词、缺页或旁记展开角色与用户的选择；可少写，不凑线索数量。
-输出 {"title":"卷名","era":"时代","synopsis":"这一卷的叙事正文","clues":[{"kind":"object|testimony|missing|note","title":"线索名","speaker":"char|user|narrator","text":"可见的线索正文","revealedText":"缺页点击后显示的完整字迹；其他类型可为空"}]}。
-missing 必须有完整 revealedText，显字纯本地完成。每卷 clues 安全上限 ${L.clues}，不是配额。证词的 speaker 只表示虚构卷内的发言归属。
-LOCAL_DOSSIER_PLAN:
-${JSON.stringify({ opening: plan.opening, dossier: slot, presentation })}`;
-        dossiers.push(await generation.requestValidatedSegment(prompt, `前世今生 · 正在展开「${slot.title}」…`,
-            { ...baseOptions, taskKey: `${taskKey}:past-lives-dossier:${slot.id}`, maxTokens: 6800, recoveryCompatibility: compatibility(prompt) },
-            raw => normalizePastLivesDossier(raw, memory, { id: slot.id, title: slot.title })));
+    const shouldFillNow = options.secondStep === true || settings.getPluginSettings().autoSecondPass === true;
+    let plan = null;
+    let opening = pendingEpisode?.opening || null;
+    if (pendingEpisode) {
+        opening = await fillPastLivesOpeningText(context, memory, origin, taskKey, opening, baseOptions, compatibility);
+    } else {
+        plan = await generation.requestValidatedSegment(planPrompt, '前世今生 · 正在写下入卷引子…',
+            { ...baseOptions, taskKey: `${taskKey}:past-lives-plan`, maxTokens: 4200, recoveryCompatibility: compatibility(planPrompt) }, raw => normalizePastLivesPlan(raw, memory));
+        opening = plan.opening;
+        if (opening.prosePending && !shouldFillNow) {
+            const shell = savePastLivesShell(previous, memory, context, presentation, plan, origin);
+            const covered = incremental.derivedExpansionMemoryIds(previous, memory);
+            incremental.stampIncrementalCoverage(shell, previous, memory, 'mode', covered, 1);
+            contract.pastLivesData(shell);
+            return shell;
+        }
+        if (opening.prosePending) opening = await fillPastLivesOpeningText(context, memory, origin, taskKey, opening, baseOptions, compatibility);
     }
-    const finalePrompt = `${prompts.promptSafetyBoundary(context, '前世今生 · 今生回响与落款', null, memory)}
-${GENERATION_RULES}
-根据已完成卷宗，写今生回响、逐步出现的旁批和落款。annotations.afterClueIds 只用卷内提供的真实本地线索 id；空数组表示入卷即有的初批，有线索的旁批应补充或修正解读。读者可以略过探索直接看结尾，不设答题或付费解锁。
-输出 {"echoes":[{"kind":"memory|possibility","title":"可能的标题；memory标题由本地取真实记忆标题","text":"memory须逐字引用档案，possibility明确是可能","reflection":"当下解读，可为空","sourceMemoryIds":["仅memory需要真实Mxxx"],"sourceMemoryAnchor":"仅memory需要完整anchor"}],"annotations":[{"afterClueIds":["已有线索id"],"text":"对虚构故事的初解、补充或修正"}],"closing":{"text":"结尾与当下选择，不替双方定命","signature":"落款"}}。
-echoes、annotations 可为空，安全上限各 ${L.echoes}/${L.annotations}；不用固定结果。落款应完整，但没有字数闯关。
-UNTRUSTED_COMPLETED_STORY_JSON:
-${JSON.stringify({ title: plan.title, opening: plan.opening, dossiers })}
-UNTRUSTED_CURRENT_ARCHIVE_JSON:
-${prompts.promptArchiveSlice(memory, 48)}`;
-    const finale = await generation.requestValidatedSegment(finalePrompt, '前世今生 · 正在写今生回响与落款…',
-        { ...baseOptions, taskKey: `${taskKey}:past-lives-finale`, maxTokens: 6400, recoveryCompatibility: compatibility(finalePrompt) }, raw => normalizePastLivesFinale(raw, memory, dossiers, { controlledEvidence: presentationContext.settingEvidence || '' }));
-    const episode = normalizePastLivesEpisode({ title: plan.title, opening: plan.opening, dossiers, ...finale }, memory,
-        { id: localId('PL', previous?.episodes?.length || 0), presentation, controlledEvidence: presentationContext.settingEvidence || '' });
+    const slots = pendingEpisode?.plannedDossiers || plan?.dossiers || [];
+    const title = pendingEpisode?.title || plan.title;
+    const episodeId = pendingEpisode?.id || localId('PL', previous?.episodes?.length || 0);
+    const remainder = await writePastLivesRemainder(context, memory, origin, taskKey, {
+        title, opening, slots, presentation, presentationContext, baseOptions, compatibility,
+    });
+    const episode = normalizePastLivesEpisode({ title, opening, ...remainder }, memory,
+        { id: episodeId, presentation, controlledEvidence: presentationContext.settingEvidence || '' });
+    requestCoordinator.noteSecondStepOffer(origin, null);
     const next = previous ? structuredClone(previous) : emptyPastLives(memory, context);
     next.presentation = presentation;
-    next.episodes.push(episode);
+    const pendingIndex = next.episodes.findIndex(item => item?.id === episode.id && item?.opening?.prosePending === true);
+    if (pendingIndex >= 0) next.episodes.splice(pendingIndex, 1, episode);
+    else next.episodes.push(episode);
     // Reset only the new reader position; every previously saved episode remains intact.
     Object.assign(next, { selectedId: episode.id, selectedEntryId: episode.dossiers[0]?.id || '', selectedKey: '',
         view: 'draw', pastLivesReadMask: '', pastLivesDrawn: false, pastLivesClosing: false });

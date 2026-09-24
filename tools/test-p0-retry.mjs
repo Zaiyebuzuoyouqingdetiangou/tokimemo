@@ -26,6 +26,11 @@ test('manual retry carries prior JSON failure after frozen payload without chang
  });
  const after=recovery.generationRecoverySnapshot(f.handle);
  assert.equal(after.segments[0].requestHash,hash); assert.equal(after.segments[0].requestRecipe.actualPrompt,'FROZEN FULL PROMPT');
+ journal.failureCode='';
+ const summary=recovery.generationRecoverySummary(journal);
+ assert.equal(summary.failureCode,'RMT_JSON_NOT_FOUND');
+ assert.equal(summary.failureDetail,'没有完整 JSON');
+ assert.equal(recovery.generationFailureReason(summary),'没有完整 JSON');
 });
 test('heart length failure survives reopen as inert classification',async()=>{
  const journal=await fail('RMT_HEART_INCOMPLETE','Voice Drama spring 长度不足。');

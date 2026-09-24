@@ -77,6 +77,8 @@ ${settings} .rmt-settings-card-head>span{width:36px;height:36px;border-radius:12
 ${settings} .rmt-settings-card-head b{font-size:17px;line-height:1.5}
 ${settings} .rmt-settings-card-head small{font-size:13px;line-height:1.5;color:var(--rmt-theme-muted,#59677a)!important}
 ${settings} .rmt-settings-section-body{padding:6px 18px 20px;display:grid;gap:14px;min-width:0}
+${settings} .rmt-coverage-map{display:flex;flex-wrap:wrap;gap:8px}
+${settings} .rmt-coverage-map button{flex:1 1 180px}
 ${settings} :is(p,small,.rmt-settings-field,.rmt-settings-field>span,.rmt-settings-check,.rmt-api-status,.rmt-api-source-panel){color:var(--rmt-theme-text,#334155)!important;-webkit-text-fill-color:currentColor!important;font-size:14px;line-height:1.7;opacity:1}
 ${settings} :is(input,select,textarea){font-size:16px!important;max-width:100%!important;box-sizing:border-box}
 ${settings} :is(select,input:not([type="checkbox"]):not([type="range"]):not([type="color"])){min-height:44px!important}

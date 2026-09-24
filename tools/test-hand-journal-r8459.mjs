@@ -71,6 +71,19 @@ test('scope changes before transaction write abort, distinct chats remain isolat
  idb.rows.set('a',{scope:'a',version:1,pages:'broken'});const before=structuredClone(idb.rows.get('a'));await assert.rejects(store.read('a'),{code:'RMT_JOURNAL_DATA'});await assert.rejects(store.append('a',[page('new')]),{code:'RMT_JOURNAL_DATA'});assert.deepEqual(idb.rows.get('a'),before);
 });
 
+test('rename and delete change one saved page and leave the rest of the journal',async()=>{
+ const idb=idbFixture(),store=journal.createJournalStore({indexedDB:idb,currentScope:()=>'a'});
+ await store.append('a',[page('one'),page('two')]);
+ await store.rename('a','one','新题目');
+ assert.equal((await store.read('a'))[0].title,'新题目');
+ assert.equal((await store.read('a'))[1].id,'two');
+ await assert.rejects(store.rename('a','missing','别的'),/找不到这一页/);
+ await assert.rejects(store.remove('a','missing'),/找不到这一页/);
+ assert.equal((await store.read('a')).length,2);
+ await store.remove('a','one');
+ assert.deepEqual((await store.read('a')).map(item=>item.id),['two']);
+});
+
 test('quota-like put failure leaves old pages committed and incoming snapshots available for export',async()=>{
  const idb=idbFixture(),store=journal.createJournalStore({indexedDB:idb,currentScope:()=> 'a'});await store.append('a',[page('old')]);idb.failPut=true;const unsaved=page('new');await assert.rejects(store.append('a',[unsaved]),{code:'RMT_JOURNAL_STORAGE'});idb.failPut=false;assert.deepEqual((await store.read('a')).map(p=>p.id),['old']);assert.equal(journal.importJournal(journal.exportJournal([unsaved]))[0].id,'new');
 });

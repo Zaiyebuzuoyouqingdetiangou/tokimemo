@@ -12,6 +12,7 @@ import * as core_requestCoordinator from '../core/requestCoordinator.js';
 import * as core_settings from '../core/settings.js';
 import * as core_text from '../core/text.js';
 import * as generation_client from '../generation/client.js';
+import * as generation_recovery from '../generation/recovery.js';
 import * as generation_merged from '../generation/mergedGeneration.js';
 import * as modes_heart from '../modes/heart.js';
 import { state as runtimeState } from '../core/state.js';
@@ -400,11 +401,12 @@ function draftCards() {
     catch { drafts = []; }
     return drafts.filter(row => row.completed || row.truncated || row.failed || row.failureCode || row.oversized).slice(0, 12).map(row => {
         const oversized = row.oversized === true;
+        const classified = generation_recovery.generationFailureReason(row);
         const reason = oversized
             ? '草稿超出本地保存上限，不能继续生成'
-            : row.failureCode
+            : classified || (row.failureCode
                 ? core_text.safeErrorSummary({ code: row.failureCode, archiveInputCategory: row.failureCategory, recoveryPhase: row.failurePhase })
-                : (row.canContinue ? '正文写到一半，可以继续补完' : (row.failed ? '这次输出没有通过' : '已保存成功部分'));
+                : (row.canContinue ? '正文写到一半，可以继续补完' : '已保存成功部分'));
         const attrs = `data-rmt-recovery-draft-id="${core_text.esc(row.draftId)}" data-rmt-recovery-page-id="${core_text.esc(row.pageId || '')}"`;
         const retry = oversized ? '' : `<button type="button" class="rmt-btn" data-rmt-recovery-mode="${core_text.esc(row.mode)}" ${attrs}>${row.canContinue ? '继续生成' : '重试未完成部分'}</button>`;
         return {
@@ -839,6 +841,12 @@ export function handleTaskCenterAction(action, actionEl) {
                         ? generation_client.generateMode(core_constants.MODE.ROOM, { fillRoomText: true, background: true })
                         : record.secondStepKind === 'items-lines'
                             ? generation_client.generateMode(core_constants.MODE.ITEMS, { fillItemsText: true, background: true })
+                            : record.secondStepKind === 'travel-prose'
+                                ? generation_client.generateMode(core_constants.MODE.TRAVEL, { fillTravelText: true, background: true })
+                                : record.secondStepKind === 'butterfly-prose'
+                                    ? generation_client.generateMode(core_constants.MODE.BUTTERFLY, { fillButterflyText: true, background: true })
+                                    : record.secondStepKind === 'past-lives-prose'
+                                        ? generation_client.generateMode(core_constants.MODE.PAST_LIVES, { secondStep: true, background: true })
                             : record.secondStepKind === 'ending-scenes'
                                 ? generation_client.generateMode(core_constants.MODE.ENDING, { secondStep: true, background: true })
                                 : record.secondStepKind === 'adv-scripts'

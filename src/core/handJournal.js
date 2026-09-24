@@ -173,7 +173,7 @@ export function createJournalStore({ indexedDB = globalThis.indexedDB, currentSc
             } catch { stop(); }
         });
     }
-    async function transact(scope, additions) {
+    async function transact(scope, additions, edit) {
         guard(scope); const incoming = additions === undefined ? null : pages(additions);
         const db=await open();
         try {
@@ -181,7 +181,8 @@ export function createJournalStore({ indexedDB = globalThis.indexedDB, currentSc
             return await new Promise((resolve,reject) => {
                 let tx, result, error;
                 try {
-                    tx=db.transaction(STORE,incoming===null?'readonly':'readwrite');
+                    const writing = incoming !== null || !!edit?.remove || !!edit?.rename;
+                    tx=db.transaction(STORE,writing?'readwrite':'readonly');
                     tx.oncomplete=()=>resolve(freeze(result));
                     tx.onabort=tx.onerror=()=>reject(error || fail('RMT_JOURNAL_STORAGE','手帐保存未完成，原记录保留；请保留未保存页面后重试。'));
                     const store=tx.objectStore(STORE), request=store.get(scope);
@@ -191,6 +192,21 @@ export function createJournalStore({ indexedDB = globalThis.indexedDB, currentSc
                             const stored=request.result;
                             requireValue(stored===undefined || (object(stored) && stored.scope===scope && stored.version===1));
                             result=stored===undefined ? [] : pages(stored.pages);
+                            if (edit?.remove) {
+                                requireValue(result.some(page => page.id === edit.remove), '找不到这一页，原手帐没有改动。');
+                                result = result.filter(page => page.id !== edit.remove);
+                                store.put({scope,version:1,pages:result});
+                                return;
+                            }
+                            if (edit?.rename) {
+                                const index = result.findIndex(page => page.id === edit.rename.id);
+                                requireValue(index >= 0, '找不到这一页，原手帐没有改动。');
+                                const next = createJournalPage({ ...result[index], title: edit.rename.title });
+                                result = result.slice();
+                                result[index] = next;
+                                store.put({scope,version:1,pages:result});
+                                return;
+                            }
                             if(incoming===null)return;
                             const ids=new Map(result.map(page=>[page.id,page]));
                             for(const page of incoming){
@@ -205,5 +221,10 @@ export function createJournalStore({ indexedDB = globalThis.indexedDB, currentSc
             });
         } finally { db.close(); }
     }
-    return Object.freeze({read:scope=>transact(scope),append:(scope,value)=>transact(scope,value)});
+    return Object.freeze({
+        read:scope=>transact(scope),
+        append:(scope,value)=>transact(scope,value),
+        rename:(scope,id,title)=>transact(scope,undefined,{rename:{id,title:typeof title==='string'?title:''}}),
+        remove:(scope,id)=>transact(scope,undefined,{remove:id}),
+    });
 }
