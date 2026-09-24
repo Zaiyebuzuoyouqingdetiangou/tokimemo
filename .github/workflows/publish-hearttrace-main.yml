@@ -1,0 +1,823 @@
+name: "Hearttrace - 过滤发布到 main"
+run-name: "心迹回廊正式发布（测试 → main）"
+
+'on':
+  workflow_dispatch:
+    inputs:
+      confirm_main:
+        description: "确认测试通过后输入 main"
+        required: true
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hearttrace-test-to-main-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >
+      github.repository == 'Zaiyebuzuoyouqingdetiangou/tokimemo' &&
+      github.ref == 'refs/heads/main'
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout latest main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Validate, filter and publish 测试 to main
+        shell: python
+        env:
+          CONFIRM_MAIN: ${{ inputs.confirm_main }}
+        run: |
+          import json
+          import os
+          import posixpath
+          import re
+          import subprocess
+          import unicodedata
+          from pathlib import Path
+
+          REPOSITORY = "Zaiyebuzuoyouqingdetiangou/tokimemo"
+          SOURCE_BRANCH = "测试"
+          TARGET_BRANCH = "main"
+          HOMEPAGE = "https://github.com/" + REPOSITORY
+
+          ROOT = Path.cwd().resolve()
+
+          # ------------------------------------------------------------
+          # 正式版运行文件
+          # ------------------------------------------------------------
+
+          RUNTIME_DIRS = {
+              "src",
+              "dist",
+          }
+
+          RUNTIME_FILES = {
+              "index.js",
+              "manifest.json",
+          }
+
+          # ------------------------------------------------------------
+          # 正式仓库允许公开保留的文档
+          # ------------------------------------------------------------
+
+          PUBLIC_FILES = {
+              "README.md",
+              "CHANGELOG.md",
+              "LICENSE",
+              "NOTICE.md",
+              "SECURITY.md",
+              "REPLACE-INSTRUCTIONS.txt",
+          }
+
+          # main 自己掌管，测试分支绝不能覆盖
+          CONTROL_FILES = {
+              ".gitignore",
+              ".gitattributes",
+          }
+
+          MAX_TOTAL_BYTES = 100 * 1024 * 1024
+          MAX_FILE_BYTES = 20 * 1024 * 1024
+
+          def git(*args, data=None):
+              return subprocess.run(
+                  [
+                      "git",
+                      "-c",
+                      "core.hooksPath=/dev/null",
+                      *args,
+                  ],
+                  input=data,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.PIPE,
+                  check=True,
+              ).stdout
+
+          def text_git(*args):
+              return git(*args).decode(
+                  "utf-8"
+              ).strip()
+
+          def require(condition, message):
+              if not condition:
+                  raise SystemExit(message)
+
+          def summary(message):
+              print(message)
+
+              target = os.environ.get(
+                  "GITHUB_STEP_SUMMARY"
+              )
+
+              if target:
+                  with open(
+                      target,
+                      "a",
+                      encoding="utf-8",
+                  ) as stream:
+                      stream.write(
+                          message + "\n\n"
+                      )
+
+          def safe_name(name):
+              require(
+                  isinstance(name, str)
+                  and bool(name),
+                  "Empty repository path.",
+              )
+
+              require(
+                  not name.startswith("/")
+                  and "\\" not in name
+                  and ":" not in name
+                  and "\x00" not in name,
+                  "Unsafe repository path: "
+                  + repr(name),
+              )
+
+              parts = name.split("/")
+
+              require(
+                  all(
+                      part not in (
+                          "",
+                          ".",
+                          "..",
+                      )
+                      and not part.endswith(
+                          (" ", ".")
+                      )
+                      for part in parts
+                  ),
+                  "Unsafe repository path: "
+                  + repr(name),
+              )
+
+              return parts
+
+          def protected(name):
+              return (
+                  name.split("/")[0]
+                  == ".github"
+                  or name in CONTROL_FILES
+              )
+
+          def wanted(name):
+              if name in RUNTIME_FILES:
+                  return True
+
+              if name in PUBLIC_FILES:
+                  return True
+
+              top = name.split("/")[0]
+
+              if top in RUNTIME_DIRS:
+                  return True
+
+              return False
+
+          def unique_paths(names):
+              folded = {}
+
+              for name in names:
+                  safe_name(name)
+
+                  key = unicodedata.normalize(
+                      "NFC",
+                      name,
+                  ).casefold()
+
+                  require(
+                      key not in folded,
+                      "Duplicate/case-conflicting path: "
+                      + repr(name),
+                  )
+
+                  folded[key] = name
+
+              for key in folded:
+                  parent = posixpath.dirname(
+                      key
+                  )
+
+                  while parent:
+                      require(
+                          parent not in folded,
+                          "File/directory conflict: "
+                          + repr(folded[key]),
+                      )
+
+                      parent = posixpath.dirname(
+                          parent
+                      )
+
+          def tree_entries(sha):
+              result = {}
+
+              rows = git(
+                  "ls-tree",
+                  "-r",
+                  "-z",
+                  "--full-tree",
+                  sha,
+              ).split(b"\0")
+
+              for row in rows:
+                  if not row:
+                      continue
+
+                  meta, path = row.split(
+                      b"\t",
+                      1,
+                  )
+
+                  mode, kind, oid = (
+                      meta.decode("ascii").split()
+                  )
+
+                  name = path.decode("utf-8")
+
+                  safe_name(name)
+
+                  result[name] = (
+                      mode,
+                      kind,
+                      oid,
+                  )
+
+              return result
+
+          def blob(entry, name):
+              mode, kind, oid = entry
+
+              require(
+                  kind == "blob"
+                  and mode in (
+                      "100644",
+                      "100755",
+                  ),
+                  "Only regular files are accepted: "
+                  + repr(name),
+              )
+
+              content = git(
+                  "cat-file",
+                  "blob",
+                  oid,
+              )
+
+              require(
+                  len(content)
+                  <= MAX_FILE_BYTES,
+                  "File exceeds size limit: "
+                  + repr(name),
+              )
+
+              return content
+
+          def remote_tip(branch):
+              ref = (
+                  "refs/heads/"
+                  + branch
+              )
+
+              rows = text_git(
+                  "ls-remote",
+                  "--exit-code",
+                  "origin",
+                  ref,
+              ).splitlines()
+
+              require(
+                  len(rows) == 1,
+                  "Could not resolve branch: "
+                  + branch,
+              )
+
+              return rows[0].split()[0]
+
+          def local_safe(name):
+              parts = safe_name(name)
+
+              target = ROOT.joinpath(
+                  *parts
+              )
+
+              parent = ROOT
+
+              for part in parts:
+                  parent = parent / part
+
+                  require(
+                      not parent.is_symlink(),
+                      "Refusing symbolic link: "
+                      + repr(name),
+                  )
+
+              return target
+
+          # ------------------------------------------------------------
+          # 基础授权
+          # ------------------------------------------------------------
+
+          require(
+              os.environ.get(
+                  "GITHUB_REPOSITORY"
+              ) == REPOSITORY,
+              "Wrong repository.",
+          )
+
+          require(
+              os.environ.get(
+                  "GITHUB_EVENT_NAME"
+              ) == "workflow_dispatch",
+              "This workflow must be run manually.",
+          )
+
+          require(
+              os.environ.get(
+                  "CONFIRM_MAIN"
+              ) == "main",
+              "请输入 main 确认正式发布。",
+          )
+
+          require(
+              os.environ.get(
+                  "GITHUB_REF"
+              ) == "refs/heads/main",
+              "请从 main 分支运行本 workflow。",
+          )
+
+          require(
+              not text_git(
+                  "status",
+                  "--porcelain",
+              ),
+              "Checkout is not clean.",
+          )
+
+          MAIN_OLD_SHA = text_git(
+              "rev-parse",
+              "HEAD",
+          )
+
+          require(
+              remote_tip(
+                  TARGET_BRANCH
+              ) == MAIN_OLD_SHA,
+              "main 已经发生变化，请重新运行。",
+          )
+
+          # ------------------------------------------------------------
+          # 读取测试分支最新快照
+          # 不 checkout、不执行测试分支代码
+          # ------------------------------------------------------------
+
+          git(
+              "fetch",
+              "--no-tags",
+              "--depth=1",
+              "--refmap=",
+              "origin",
+              "refs/heads/"
+              + SOURCE_BRANCH,
+          )
+
+          SOURCE_SHA = text_git(
+              "rev-parse",
+              "FETCH_HEAD",
+          )
+
+          source_tree = tree_entries(
+              SOURCE_SHA
+          )
+
+          # ------------------------------------------------------------
+          # 测试分支不能还有待处理 ZIP
+          # ------------------------------------------------------------
+
+          pending_zip = [
+              name
+              for name in source_tree
+              if "/" not in name
+              and name.lower().endswith(
+                  ".zip"
+              )
+          ]
+
+          require(
+              not pending_zip,
+              "测试分支仍有未处理 ZIP："
+              + ", ".join(
+                  pending_zip
+              )
+              + "。请先完成 ZIP 导入。",
+          )
+
+          # ------------------------------------------------------------
+          # 只取正式允许发布的文件
+          # ------------------------------------------------------------
+
+          selected_names = [
+              name
+              for name in source_tree
+              if wanted(name)
+          ]
+
+          unique_paths(
+              selected_names
+          )
+
+          payload = {
+              name: blob(
+                  source_tree[name],
+                  name,
+              )
+              for name in selected_names
+          }
+
+          require(
+              sum(
+                  len(content)
+                  for content
+                  in payload.values()
+              )
+              <= MAX_TOTAL_BYTES,
+              "正式运行文件总大小超过 100 MiB。",
+          )
+
+          # ------------------------------------------------------------
+          # 必要文件验证
+          # ------------------------------------------------------------
+
+          required = (
+              "manifest.json",
+              "index.js",
+              "dist/heartbeatMemories.bundle.js",
+          )
+
+          missing = [
+              name
+              for name in required
+              if not payload.get(name)
+          ]
+
+          require(
+              not missing,
+              "测试分支不是完整心迹回廊运行包，缺少："
+              + ", ".join(
+                  missing
+              ),
+          )
+
+          manifest = json.loads(
+              payload[
+                  "manifest.json"
+              ].decode(
+                  "utf-8-sig"
+              )
+          )
+
+          require(
+              isinstance(
+                  manifest,
+                  dict,
+              ),
+              "manifest.json must be an object.",
+          )
+
+          require(
+              manifest.get(
+                  "display_name"
+              ) == "心迹回廊",
+              "测试分支不是心迹回廊。",
+          )
+
+          require(
+              str(
+                  manifest.get(
+                      "js",
+                      "",
+                  )
+              ).split(
+                  "?",
+                  1,
+              )[0]
+              == "index.js",
+              "Unexpected JS entry point.",
+          )
+
+          require(
+              str(
+                  manifest.get(
+                      "homePage",
+                      "",
+                  )
+              ).rstrip(
+                  "/"
+              ).lower()
+              == HOMEPAGE.lower(),
+              "manifest homePage 不匹配正式仓库。",
+          )
+
+          version = str(
+              manifest.get(
+                  "version",
+                  "",
+              )
+          ).strip()
+
+          require(
+              bool(
+                  re.fullmatch(
+                      r"[A-Za-z0-9][A-Za-z0-9._+\-]{0,79}",
+                      version,
+                  )
+              ),
+              "manifest version 无效。",
+          )
+
+          # ------------------------------------------------------------
+          # 检查 src 内字面量相对 import
+          #
+          # 超出仓库根目录的 ../../../../ script.js 属于 ST 宿主，
+          # 不作为仓库缺失文件。
+          # ------------------------------------------------------------
+
+          selected_set = set(
+              selected_names
+          )
+
+          import_pattern = re.compile(
+              r'''(?:from\s*|import\s*\(\s*|import\s*)['"]([^'"\n]+)['"]'''
+          )
+
+          missing_imports = set()
+          checked_imports = 0
+
+          for name in sorted(
+              selected_names
+          ):
+              if not name.endswith(
+                  (
+                      ".js",
+                      ".mjs",
+                  )
+              ):
+                  continue
+
+              content = payload[
+                  name
+              ].decode(
+                  "utf-8-sig"
+              )
+
+              for match in import_pattern.finditer(
+                  content
+              ):
+                  spec = (
+                      match.group(1)
+                      .split(
+                          "?",
+                          1,
+                      )[0]
+                      .split(
+                          "#",
+                          1,
+                      )[0]
+                  )
+
+                  if not spec.startswith(
+                      "."
+                  ):
+                      continue
+
+                  target = posixpath.normpath(
+                      posixpath.join(
+                          posixpath.dirname(
+                              name
+                          ),
+                          spec,
+                      )
+                  )
+
+                  # ST 宿主文件
+                  if target.startswith(
+                      "../"
+                  ):
+                      continue
+
+                  checked_imports += 1
+
+                  if (
+                      target
+                      not in selected_set
+                  ):
+                      missing_imports.add(
+                          name
+                          + " -> "
+                          + target
+                      )
+
+          require(
+              not missing_imports,
+              "正式发布后会缺少模块：\n"
+              + "\n".join(
+                  sorted(
+                      missing_imports
+                  )
+              ),
+          )
+
+          # ------------------------------------------------------------
+          # 计算 main 应保留/删除的内容
+          # ------------------------------------------------------------
+
+          main_tree = tree_entries(
+              MAIN_OLD_SHA
+          )
+
+          # 永远保留 main 自己的工作流和 Git 控制文件。
+          preserved_main = {
+              name
+              for name in main_tree
+              if protected(name)
+          }
+
+          # main 最终只留下：
+          # 1. 测试分支允许发布的正式文件
+          # 2. main 自己的 .github / Git 控制文件
+          removals = (
+              set(main_tree)
+              - set(payload)
+              - preserved_main
+          )
+
+          # ------------------------------------------------------------
+          # 所有目标先验证，再修改
+          # ------------------------------------------------------------
+
+          for name in (
+              set(payload)
+              | removals
+          ):
+              require(
+                  not protected(name),
+                  "Refusing to modify protected file: "
+                  + name,
+              )
+
+              local_safe(name)
+
+          # 删除正式版中已经不应存在的旧文件。
+          for name in sorted(
+              removals,
+              reverse=True,
+          ):
+              target = local_safe(
+                  name
+              )
+
+              if target.exists():
+                  target.unlink()
+
+          # 写入测试分支正式快照。
+          for name, content in payload.items():
+              target = local_safe(
+                  name
+              )
+
+              target.parent.mkdir(
+                  parents=True,
+                  exist_ok=True,
+              )
+
+              target.write_bytes(
+                  content
+              )
+
+              target.chmod(
+                  0o644
+              )
+
+          git(
+              "add",
+              "--all",
+              "--force",
+              "--",
+              ".",
+          )
+
+          staged = [
+              name.decode(
+                  "utf-8"
+              )
+              for name in git(
+                  "diff",
+                  "--cached",
+                  "--name-only",
+                  "-z",
+              ).split(
+                  b"\0"
+              )
+              if name
+          ]
+
+          require(
+              not any(
+                  protected(name)
+                  for name in staged
+              ),
+              "main 的 workflow/Git 控制文件被意外修改，已停止。",
+          )
+
+          # ------------------------------------------------------------
+          # 发布前再次检查两边没有变化
+          # ------------------------------------------------------------
+
+          require(
+              remote_tip(
+                  TARGET_BRANCH
+              ) == MAIN_OLD_SHA,
+              "main 在发布过程中发生变化，未推送。",
+          )
+
+          require(
+              remote_tip(
+                  SOURCE_BRANCH
+              ) == SOURCE_SHA,
+              "测试分支在发布过程中发生变化，未推送。请重新测试后再运行。",
+          )
+
+          if not staged:
+              summary(
+                  "main 已经与测试分支的正式过滤快照一致，没有需要提交的变化。"
+              )
+              raise SystemExit(0)
+
+          # ------------------------------------------------------------
+          # Commit + normal fast-forward push
+          # ------------------------------------------------------------
+
+          git(
+              "-c",
+              "user.name=github-actions[bot]",
+              "-c",
+              "user.email=41898282+github-actions[bot]@users.noreply.github.com",
+              "-c",
+              "commit.gpgsign=false",
+              "commit",
+              "-m",
+              (
+                  "Publish Hearttrace "
+                  + version
+                  + " (测试 → main)\n\n"
+                  + "Source-commit: "
+                  + SOURCE_SHA
+              ),
+          )
+
+          NEW_SHA = text_git(
+              "rev-parse",
+              "HEAD",
+          )
+
+          git(
+              "push",
+              "origin",
+              "HEAD:refs/heads/main",
+          )
+
+          require(
+              remote_tip(
+                  TARGET_BRANCH
+              ) == NEW_SHA,
+              "push 后 main 状态无法确认，请检查 Actions。",
+          )
+
+          summary(
+              "## Hearttrace clean publish\n"
+              f"- Source branch: `{SOURCE_BRANCH}`\n"
+              f"- Source commit: `{SOURCE_SHA}`\n"
+              f"- Version: `{version}`\n"
+              f"- Published files: {len(payload)}\n"
+              f"- Relative imports checked: {checked_imports}\n"
+              f"- Removed from main: {len(removals)}\n"
+              "- `src/`、`dist/` 完整同步\n"
+              "- `tests/`、`tools/`、内部开发报告未发布\n"
+              "- main `.github/` 保留\n"
+              "- 测试分支未修改\n"
+              "- 没有 force push，也没有 merge 测试分支历史\n"
+              f"- Published commit: `{NEW_SHA}`"
+          )
