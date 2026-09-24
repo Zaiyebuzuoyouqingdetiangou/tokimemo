@@ -73,6 +73,11 @@ const RETRY_FEEDBACK = Object.freeze({
     noconvo: '上一轮通讯没有留下可保存的对话：用户线程被剥空，或没有主人未发送草稿。本轮只写主人一侧至少一条未发送草稿，不要写用户发言，不要凑双向。标题写成给对方的未发送草稿，不要再用“按此 App 用途补齐”。',
     evidence: '上一轮终端条目缺少可保存的完整内容或来源证据。普通日常按人设写正在使用的记录，标题要具体；只有共同过去和私密字段才需要原文。不要返回“按此 App 用途补齐”。',
     speakers: '上一轮说话人或对象未通过校验。当前用户线程只写主人草稿；普通联系人写真实姓名；组卡 owner 用成员真名，不用卡名。',
+    mailCount: '上一轮来信封数与 LOCAL_MAIL_PLAN 不一致。每个 slot 恰好写一封，不多不少。',
+    mailSlot: '上一轮来信的 slot 重复或缺失。逐项对应 LOCAL_MAIL_PLAN，每个 slot 各写一封。',
+    mailEmpty: '上一轮有来信的标题或正文是空的。每封信都要写完整的标题和正文。',
+    mailAddress: '上一轮称呼或措辞超出了两人当前的真实关系。只用档案里已经成立的关系称呼对方，不要用尚未成立的亲密称呼。',
+    mailHistory: '上一轮把档案里没有依据的共同往事写成了事实。日常信只写今天此刻的心情、眼前的小事和接下来的打算；不要写「上次」「那天」「还记得」「昨天你说」这类回忆两人过去的句子，也不要提起以前来信里写过的事。',
 });
 const FAILURE_DETAIL = Object.freeze({
     json: '没有完整 JSON',
@@ -85,7 +90,17 @@ const FAILURE_DETAIL = Object.freeze({
     noconvo: '通讯没有可保存的对话',
     evidence: '缺少可保存的来源证据',
     speakers: '说话人或对象未通过',
+    mailCount: '来信封数不对',
+    mailSlot: '来信类型重复或缺失',
+    mailEmpty: '来信没有写完',
+    mailAddress: '称呼超出两人当前关系',
+    mailHistory: '写了档案里没有的往事',
 });
+// 邮箱校验失败时使用插件自己写死的提示文字（safeUserMessage），按原文细分原因。
+const MAIL_FAILURE = Object.freeze([
+    ['来信未完整返回', 'mailCount'], ['来信类型重复或缺失', 'mailSlot'], ['来信正文还未写完', 'mailEmpty'],
+    ['称呼超出了两人当前关系', 'mailAddress'], ['未有依据的共同往事', 'mailHistory'],
+]);
 function classifyLengthKind(text) {
     const message = String(text || '');
     if (!message) return '';
@@ -105,6 +120,10 @@ function failureFeedback(code, error) {
     // local validator copy we already wrote onto the object, never provider bodies.
     const lengthKind = classifyLengthKind([error?.safeUserMessage, error?.message].filter(value => typeof value === 'string').join('\n'));
     if (lengthKind) return lengthKind;
+    if (error?.safeToDisplay === true && typeof error.safeUserMessage === 'string') {
+        const mail = MAIL_FAILURE.find(([marker]) => error.safeUserMessage.includes(marker));
+        if (mail) return mail[1];
+    }
     if (code === 'RMT_HEART_INCOMPLETE') return 'length';
     if (code === 'RMT_PHONE_NO_CONVERSATION') return 'noconvo';
     if (code === 'RMT_PHONE_EVIDENCE') return 'evidence';
